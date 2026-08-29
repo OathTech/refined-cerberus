@@ -1,6 +1,6 @@
 # Port map: RefinedC layer map, typing-rule inventory, Lithium algorithm
 
-**DRAFT — orchestrator review then fresh-eyes review pending**
+**REV2 — review folded; re-mark by the original reviewer pending**
 
 Date: 2026-08-29. Provenance: [AGENT: arc-1 recon worker], read-only
 survey of `deps/refinedc` (checkout `25f706d417df2b18b23c5cbadde46468c1b1262c`,
@@ -12,6 +12,14 @@ unless marked UNVERIFIED. The predecessor lithium review
 was used as a LEAD; every claim reused from it was re-checked against
 the present source and is marked **[prior review, re-verified]** where
 the reading originated there.
+
+Revision block: **rev2, 2026-08-29** — revision folding the fresh-eyes
+review (`docs/2026-08-29_port-map-review.md`; all 4 MAJOR, 8 MINOR,
+4 NOTE findings). Provenance: [AGENT: revision worker]. Every folded
+review claim was re-verified against source before folding (the
+review's wrapping_add proof-term probe was re-run; its tallies
+reproduce), with one correction to the review's own recount: hooks.v
+carries **16** `Ltac *_hook` declarations, not 17 (§3.3).
 
 Method note (derived, labeled as such): the §1.3 interface list was
 produced mechanically — all top-level `Definition/Lemma/Class/Record/
@@ -65,11 +73,23 @@ frontend/          OCaml C→Caesium+annotations compiler (OUT OF SCOPE)
 
 Port mapping: **caesium is the layer we replace** (Core + attachment
 layer plays its role); **lithium and typing are ported as-is** (the
-normative spec). The inversion is good news for the port: Lithium's
-Lean reimplementation needs no semantics input at all, and the only
-things caesium takes from lithium are `base` utilities and the
+normative spec) — with one structural caveat: typing's place machinery
+(`find_place_ctx`, programs.v:257; `IntoPlaceCtx`, programs.v:278) and
+the automation's statement/expression dispatch (`liRStmt`/`liRExpr`,
+automation.v:145-247) are defined over caesium's reflected syntax
+`W.expr`/`W.stmt`, so "as-is" presupposes a Core-side
+reflected-syntax analog — attachment design work over *Core's*
+constructor set, not a literal port (agenda item 16). The inversion
+is good news for the port: Lithium's Lean reimplementation needs no
+semantics input at all. What caesium takes from lithium is wider than
+utilities, and is itself instructive: besides `base` and the
 `SimplifyHyp/SimplifyGoal` classes used to register bitfield
-simplification rules (`caesium/bitfield.v`).
+simplification rules, `caesium/bitfield.v` consumes `li_tactic`,
+registers a `LiEntails` Hint Extern (bitfield.v:300), a
+`NormalizeBitfield` extern (:316), and `CanSolve`-guarded
+simplification instances (:328-357) — the one existing example of a
+*semantics-layer* package feeding the Lithium hook surface, i.e. the
+exact pattern our attachment layer will use.
 
 ### 1.2 What each caesium file provides
 
@@ -90,12 +110,24 @@ simplification rules (`caesium/bitfield.v`).
 | `caesium/proofmode.v` | `wp_bind`/`wps_bind` tactics via W (proofmode.v:9-31,34-...) |
 | `caesium/builtins_specs.v` | pure specs for builtins (ffs/clz-style bit lemmas) |
 
-### 1.3 The consumed interface (exhaustive, mechanical)
+### 1.3 The consumed interface: the named-identifier stratum
 
 **247 named caesium identifiers are referenced by `theories/typing/`.**
-This is the exact surface our Core+Iris attachment layer must supply
-(modulo renaming) for the typing layer to port literally. Grouped
-list, `name:line` within each file (derived per the method note):
+This is the *named-identifier stratum* of the surface our Core+Iris
+attachment layer must supply — NOT the whole surface: the mechanical
+method (top-level declaration names ∩ typing/ word tokens) is blind
+to record projections, data constructors, silently-resolved typeclass
+instances, and Ltac/hint-database consumption; those strata are
+enumerated in §1.3.1–§1.3.4 below. Scope note (per the ratified
+"their proofs transfer" gauge): §1.3–§1.4 are **typing-scoped** —
+what `theories/typing/` consumes; the acceptance-ladder obligation
+set is a superset, because the generated example proofs import
+caesium surface typing/ never touches (e.g. `From caesium Require
+Import builtins_specs` in `generated_proof_wrapping_add.v`, with
+`Z_least_significant_one` in the spec text of its
+`generated_spec.v`; typing/*.v references `builtins_specs` zero
+times). Grouped list, `name:line` within each file (derived per the
+method note):
 
 - **bitfield.v**: `bf_cons:9` `bf_nil:7` `bf_cons_bool_singleton_false_iff:45` `bf_cons_bool_singleton_true_iff:53` `normalize_bitfield:289`
 - **byte.v**: `bits_per_byte:5` `byte0:16`
@@ -128,6 +160,82 @@ module `W` for reflective bind); (v) **adequacy plumbing**
 `heap_alloc_new_blocks_upd`, `typePreG` — used only by
 `typing/adequacy.v`).
 
+#### 1.3.1 Record projections consumed by typing/
+
+The name scan catches record *names* (`layout:5`, `int_type:7`,
+`function:90`, `state:99`) but not their fields, which typing/ uses
+pervasively in the very statements of its judgments. Mechanical sweep
+at this revision (all field names of caesium `Record`/`Class`
+declarations, `grep -lw` against `typing/*.v`; counts = typing files,
+derived):
+
+- `ly_size` (layout.v:5) — **10** typing files; `sl_members`
+  (struct.v:38) — 4; `f_args`/`f_local_vars` (lang.v:90) — 3 each;
+  `it_signed` (int_type.v:7), `f_init`, `st_heap` — 2 each;
+  `f_code`, `st_fntbl`, `ul_members` (struct.v:203), `sl_nodup`
+  (struct.v:38) — 1 each; `hs_heap`/`hs_allocs` (heap.v:229) — 1
+  each (adequacy.v).
+- Class projections (the `heapG`/`refinedcG` fields,
+  `caesium_config_enforce_alignment`) have zero direct word-token
+  hits in typing/ — they are consumed via TC resolution only
+  (§1.3.3).
+
+An attachment layer built to the 247-name list alone would lack the
+projections the typing layer's statements are written in.
+
+#### 1.3.2 Data constructors beyond §1.4's expr/stmt list
+
+- `MByte` (used in typing/bytes.v), `ProvAlloc` (typing/intptr.v),
+  `ProvFnPtr` (typing/adequacy.v) — each used in exactly one typing
+  file (`grep -lw`), none covered by §1.3 or §1.4.
+- `typing/programs.v` itself (not just the automation)
+  pattern-matches **W-module constructors**: `find_place_ctx`
+  (programs.v:257) is a `Fixpoint` over `W.expr` matching `W.Loc`,
+  `W.Deref`, `W.GetMember`, `W.GetMemberUnion`, `W.AnnotExpr`,
+  `W.LocInfoE`, `W.BinOp`, `W.UnOp`, `W.LValue`
+  (programs.v:257-276) — where the tactics.v row above lists only
+  `expr/to_expr/ectx_item/stmt/to_stmt/subst_stmt/to_stmt_subst`.
+
+#### 1.3.3 Silently-resolved typeclass instances
+
+Typing proofs depend on caesium instances that never appear as word
+tokens in typing/:
+
+- `Atomic` instances (lifting.v:39-50: `cas_atomic`, `skipe_atomic`,
+  `deref_atomic`, `use_atomic`) — consumed at programs.v:1389
+  (`iApply wp_atomic`) via TC resolution; the word "Atomic" occurs
+  **zero** times in typing/*.v.
+- `Persistent`/`Timeless` instances on the assertion layer
+  (ghost_state.v:65-131) and `Fractional`/`AsFractional`/`Timeless`
+  on `↦` (ghost_state.v:440-463) — required for
+  `iDestruct`/persistence/`iMod` moves to typecheck; typing/type.v's
+  fraction machinery names `Fractional` (4 word hits) but the
+  instances are caesium's.
+- `EqDecision`/`Countable`/`Inhabited` instances on caesium data
+  (loc.v:24-27, val.v:12, lang.v:724-732) — consumed silently by
+  every gmap, `bool_decide`, and `inhabitant` use over those types.
+
+These are attachment-layer proof obligations as real as the ~55 wp
+lemmas, and they are invisible to the name-scan method.
+
+#### 1.3.4 Ltac- and hint-database-level consumption
+
+- `W.of_expr`/`W.of_stmt` (Ltac reflection) — used at
+  typing/automation.v:159,226; Ltac, so no declaration-name hit.
+- The `bitfield_rewrite` rewrite HintDb (caesium/bitfield.v:260-282),
+  fed to Lithium's `normalize_hook` = `autorewrite` path.
+- The `LiEntails` Hint Extern for `normalize_bitfield` registered
+  **in caesium** (bitfield.v:300) but fired during typing's
+  automation; likewise the `NormalizeBitfield` extern
+  (bitfield.v:316).
+- `CanSolve`-guarded `SimplAnd`/`SimplBoth` instances
+  (bitfield.v:328-357) and the `CaesiumConfigEnforceAlignment` Hint
+  Extern (config/config.v:25-26).
+
+The projection/constructor strata (§1.3.1–§1.3.2) are mechanical to
+re-sweep; the instance/Ltac strata (§1.3.3–§1.3.4) need a targeted
+pass when the ledger rows are drawn.
+
 ### 1.4 Interface consumed via notation/constructors (not caught by the name scan)
 
 - Expression constructors used in typing judgments/rules: `Val`,
@@ -158,15 +266,15 @@ module `W` for reflective bind); (v) **adequacy plumbing**
 |---|---|---|
 | `base.v` (9) | I | re-exports lithium+caesium proofmode; `CoPsetFact` mask solver hook |
 | `type.v` (707) | I | **the `type` record** (type.v:249-297: `ty_own : own_state → loc → iProp`, `ty_own_val : val → iProp`, `ty_has_op_type`, sharing/alignment/size/deref/ref/memcast axioms), `own_state := Own \| Shr` (:122), `l ◁ₗ{β} ty` / `v ◁ᵥ ty` notations (:437-439), `heap_mapsto_own_state` `l ↦[β] v` (:129), refinement types `rtype`/`x @ r`/`ty_of_rty` (:464-506), `Copyable` (:367), `LocInBounds` (:377), `AllocAlive` (:399), type ⊑/≡ + `solve_type_proper` (:537-698) |
-| `programs.v` (1621) | I | **all program judgments** (§2.2) + generic structural rules and the judgment→typeclass hook (:628-651); `FindLoc/FindVal/FindValP/FindValOrLoc/FindLocInBounds/FindAllocAlive` contexts (:607-618) with their `FindInContext` instances; generic subsumption rules (loc_in_bounds/alloc_alive :747-815); statement rules `type_goto/assign/if/switch/assert/exprs/skips` (:1082-1195), `typed_block_rec` (:1200); expression rules `type_val/bin_op/un_op/call_syn/ife/logical_and/or/skipe/annot/use/read/write/addr_of_place` (:1224-1525); read/write dispatch `type_read_copy`, `type_write_own_copy/move` (:1418-1505) |
-| `function.v` (420) | I | `introduce_typed_stmt` (:5), `fn_ret`/`fn_params` records (:29,42), `typed_function fn fp` (:60), `function_ptr` type former (:106-121), `type_call_fnptr` (:131) — the call rule against an `A → fn_params` spec |
-| `adequacy.v` (~150) | I | `typePreG`/`typeΣ` (:10-25), `refinedc_adequacy` (:41) — see §5 |
-| `automation.v` (368) + `automation/` (877) | I | RefinedC's Lithium instantiation: hook overrides, `liRStep` driver, `split_blocks`/`start_function`; loc-eq solver, RefinedC simplification instances, proof-state markers (§3.6) |
-| `annotations.v` (39) | I | annotation payload types (`to_uninit_annot`, `stop_annot`, `share_annot`, `learn_annot`, `LockAnnot`, `reduce_annot`, …) consumed by `typed_annot_expr/stmt` rules |
+| `programs.v` (1621) | I | **all program judgments** (§2.2) + generic structural rules and the judgment→typeclass hook (:622-645); `FindLoc/FindVal/FindValP/FindValOrLoc/FindLocInBounds/FindAllocAlive` contexts (:607-618) with their `FindInContext` instances; generic subsumption rules (loc_in_bounds/alloc_alive :747-815); statement rules `type_goto/assign/if/switch/assert/exprs/skips` (:1082-1195), `typed_block_rec` (:1200); expression rules `type_val/bin_op/un_op/call_syn/ife/logical_and/or/skipe/annot/use/read/write/addr_of_place` (:1224-1525); read/write dispatch `type_read_copy`, `type_write_own_copy/move` (:1418-1505) |
+| `function.v` (420) | I | `introduce_typed_stmt` (:5), `fn_ret`/`fn_params` records (:29,42), `typed_function fn fp` (:59), `function_ptr` type former (:106-121), `type_call_fnptr` (:131) — the call rule against an `A → fn_params` spec |
+| `adequacy.v` (127) | I | `typePreG`/`typeΣ` (:10-25), `refinedc_adequacy` (:40) — see §5 |
+| `automation.v` (368) + `automation/` (525) | I | RefinedC's Lithium instantiation: hook overrides, `liRStep` driver, `split_blocks`/`start_function`; loc-eq solver, RefinedC simplification instances, proof-state markers (§3.6) |
+| `annotations.v` (27) | I | annotation payload types (`to_uninit_annot`, `stop_annot`, `share_annot`, `learn_annot`, `LockAnnot`, `reduce_annot`, …) consumed by `typed_annot_expr/stmt` rules |
 | `type_options.v` (14) | I | `Typeclasses Opaque` bundle for type definitions |
 | `naive_simpl.v` (338) | I | an alternative "naive" simplification engine (marked TODO/clean-up) |
-| `axioms.v` (8) | I | **`Axiom eq_rect_eq`** — UIP, used by fixpoint machinery (trust note: RefinedC's own Coq development is not axiom-free) |
-| `int.v` (470) | T | `int it` rtype over Z (:10-25), `offsetof` type (:407); constants, arith/relational/cast rules (32 `[instance]`s incl. `type_relop_int_int` :98, arith ops, if/switch/assert on ints) |
+| `axioms.v` (11) | I | **`Axiom eq_rect_eq`** — UIP, used by fixpoint machinery (trust note: RefinedC's own Coq development is not axiom-free) |
+| `int.v` (470) | T | `int it` rtype over Z (:10-25), `offsetof` type (:407); constants, arith/relational/cast rules (31 `[instance]`s incl. `type_relop_int_int` :98, arith ops, if/switch/assert on ints) |
 | `boolean.v` (276) | T | `generic_boolean`/`builtin_boolean` over bool with strictness (:52-81) |
 | `own.v` (713) | T | `frac_ptr β ty` (`&own`/`&shr`/`&frac{β}` :11-34,364-366), `ptr n` (:375-390), `null` (:451), place/deref/write rules for pointers (39 instances) |
 | `singleton.v` (258) | T | `value ot v` (exact-value type :8), `at_value`, `place l` (:172) |
@@ -177,7 +285,7 @@ module `W` for reflective bind); (v) **adequacy plumbing**
 | `union.v` (265) | T | `active_union` (:9), tagged `tunion`/`variant` via `tunion_info` (:56-225) |
 | `optional.v` (476) | T | `Optionable` class (:9), `optional ty optty` (:44-83), `optionalO` with option-refinement (:269-299) — the null-or-value idiom |
 | `constrained.v` (174) | T | `own_constrained P ty` (:14) + `OwnConstraint` (:5), persistent/nonshr constraints |
-| `exist.v` (~60) | T | `tyexists` — existential refinement type (:18-30) |
+| `exist.v` (111) | T | `tyexists` — existential refinement type (:18-30) |
 | `wand.v` (136) | T | `wand_ex`/`wand_val_ex` — magic-wand types (:11,66) |
 | `intptr.v` (190) | T | `intptr it` — integer-with-provenance (:8-29) |
 | `tagged_ptr.v` (~100) | T | `tagged_ptr β align ty` — low-bit tagging (:8-43) |
@@ -232,7 +340,7 @@ Places (l-values):
 - `copy_as l β ty T` — :35 (`CopyAs` :37)
 
 Functions:
-- `typed_function fn (fp : A → fn_params)` — function.v:60: ∀ spec
+- `typed_function fn (fp : A → fn_params)` — function.v:59: ∀ spec
   parameter `x`, given arg/local locations with `fp_atys`-typed args +
   `uninit` locals + precondition `fp_Pa`, the body typechecks against
   `fn_ret_prop` (∃-quantified return type + postcondition,
@@ -256,7 +364,17 @@ Count for the ledger: **23 program judgments** (programs.v) + 2
 semantic-base judgments (`◁ₗ`, `◁ᵥ`) + `typed_function` + 4
 Lithium meta-judgments; **~30 type formers** (§2.1 T-rows); several
 hundred `[instance]` rules across the T-files (e.g. own.v 39, int.v
-32, array.v 32 — derived counts from `[instance]` grep).
+31, array.v 32 — derived counts from `[instance]` grep). The row
+list additionally carries the registered `li_tactic`-class
+**operations** — each a rule-shaped extension point needing a ported
+counterpart: `li_vm_compute` (lithium/definitions.v:311-325),
+`normalize_bitfield` (caesium/bitfield.v:294-300),
+`compute_map_lookup` (lithium/solvers.v:140; driven by the `Goto`
+step via `unfold_code_marker_and_compute_map_lookup`,
+typing/automation/proof_state.v:28-29), and the loc-eq solver ops
+(`solve_loc_eq` plus the `FICLocSemantic` `FindHypEqual` Hint Extern
+and semantic `FindInContext` instances,
+typing/automation/loc_eq.v:46-70).
 
 ---
 
@@ -305,18 +423,30 @@ The engine is one step tactic `liStep` (`interpreter.v:1177-1201`): a
 liFindInContext | liCase | liTrace | liPersistent | liTrue | liFalse
 | liModal | liAccu | liDoneEvar | liUnfoldLetGoal` — each guarded by
 a `lazymatch goal` on the head connective. The driver is `repeat`
-(RefinedC's `liRStep`, typing/automation.v:257-268, puts its own
-statement/expression dispatch in front: `liRPopLocationInfo | liRStmt
-| liRIntroduceTypedStmt | liRExpr | liRJudgement | liStep`).
+(RefinedC's `liRStep`, typing/automation.v:257-268, whose full shape
+is `liEnsureInvariant; try liRIntroduceLetInGoal; first [...];
+liSimpl` — mandatory invariant maintenance *before* every step and
+simplification *after* it, with its own statement/expression dispatch
+at the head of the `first`: `liRPopLocationInfo | liRStmt |
+liRIntroduceTypedStmt | liRExpr | liRJudgement | liStep`; the donor's
+own Lithium tutorial calls `liEnsureInvariant` explicitly before
+single-stepping, tutorial/proofs/lithium/lithium_tutorial.v:30).
 
-Determinism is structural: the grammar's head connectives are
-syntactically disjoint, so at most one guard fires; each sub-tactic
-applies exactly one lemma (`notypeclasses refine (tac_...)`) and
-continues. No backtracking across steps. The three disciplined choice
-points **[prior review, re-verified]**:
+Step *selection* is structurally deterministic: the grammar's head
+connectives are syntactically disjoint, so at most one guard fires;
+each sub-tactic applies exactly one lemma
+(`notypeclasses refine (tac_...)`) and continues. No backtracking
+across steps. But the walk is **not solver-free**: several
+sub-tactics invoke the registered solver/hook surface mid-walk
+(§3.3), so step *outcomes* — which branches survive, which
+existentials get instantiated — co-vary with that surface. The three
+disciplined choice points **[prior review, re-verified]**:
 
 1. **Rule choice** (`liExtensible`, interpreter.v:195-211): the goal's
-   judgment is converted to a typeclass query (`_ : TypedBinOp ...`)
+   judgment is converted to a typeclass query (`_ : TypedBinOp ...`).
+   `liExtensible_to_i2p` handles `subsume` **natively** before
+   consulting the hook (built-in case, interpreter.v:195-200);
+   everything else dispatches
    via `liExtensible_to_i2p_hook` (RefinedC's 16-case lazymatch,
    typing/automation.v:49-87), resolved by `solve [typeclasses eauto]`
    and applied through `tac_apply_i2p` (interpreter.v:187-192). TC
@@ -326,34 +456,70 @@ points **[prior review, re-verified]**:
    wrong choices non-losing.
 2. **Context search** (`liFindInContext`, interpreter.v:577-592):
    `FindInContext` instances tried in priority order by exploiting
-   multi-success `typeclasses eauto`, wrapped in `once (...)` — first
-   instance whose continuation (`liFindHypOrTrue` — a linear scan of
-   the proof-mode environment unifying hypothesis vs pattern,
-   :537-575) succeeds is committed.
+   multi-success `typeclasses eauto`, wrapped in `once (...)` — the
+   first instance whose **entire continuation** succeeds is
+   committed. The continuation is `simpl; repeat liExist false;
+   liFindHypOrTrue key` (:589-591) — i.e. it opens existentials
+   *inside* the search — and `liFindHypOrTrue` (:571-575) tries
+   `tac_sep_true` *before* the hypothesis scan (`liFindHyp`, a
+   linear scan of the proof-mode environment unifying hypothesis vs
+   pattern, :537-570): "prove it from True/emp" beats "find it in
+   context". Both outcomes are trace-visible as
+   `tac_find_hyp`/`tac_find_in_context` proof-term nodes (§3.8).
 3. **Case splits** (`liCase`, interpreter.v:1101-1120): `case_if`/
    `case_destruct` produce both branches, then immediately prune with
    `repeat (liForall || liImpl); try by [exfalso; can_solve]` (an
-   in-code comment marks the pruning as performance-critical).
+   in-code comment marks the pruning as performance-critical) — note
+   `can_solve` here is the *full registered solver* (§3.3): branch
+   pruning is an in-walk solver call.
 
 Stuck goals just survive (`repeat` stops); `liShow`
 (interpreter.v:11) re-sugars them for the user — stop-with-goal
 semantics, no failure state.
 
-### 3.3 Side conditions and solvers (the syntax/solver separation)
+### 3.3 Side conditions and solvers (the in-walk solver surface)
 
-Pure side conditions are not solved during the walk beyond a cheap
-`done` fast path (`liSideCond`, interpreter.v:458-476): they are
-wrapped as `SHELVED_SIDECOND` and shelved (`shelve_sidecond`,
-proof_state.v:8-24). After the walk, `unshelve_sidecond` restores them
-and `solve_goal` attacks the batch (solvers.v; pipeline:
+The walk is **not** solver-free; drawing this boundary correctly is
+load-bearing for the replay lane (§3.8). Three solver/heuristic
+surfaces fire mid-walk:
+
+- **`liCase` pruning runs the full solver mid-walk.** The pruning of
+  §3.2(3) ends in `try by [exfalso; can_solve]`
+  (interpreter.v:1120), and RefinedC sets `can_solve_hook ::=
+  solve_goal` (typing/automation.v:45) — i.e. the complete
+  `normalize_and_simpl_goal`/`refined_solver lia` pipeline
+  (solvers.v:235-242) executes **during** the walk, and whether a
+  branch exists in the residual proof depends on its strength.
+- **`liSideCond` does more than `done` in-walk**
+  (interpreter.v:458-478): the plain pure-conjunct case tries `done`
+  then wraps the goal as `SHELVED_SIDECOND` and shelves it
+  (`shelve_sidecond`, proof_state.v:8-24); but under the `∃ₗ`
+  telescope it runs `normalize_hook` for progress, `liExInst`
+  (unification), and `tac_simpl_and_unsafe_envs` via `SimplAndUnsafe`
+  TC search — including *provability-losing* simplification,
+  in-walk.
+- **`li_tactic`/`LiEntails` goals run arbitrary registered Ltac
+  mid-walk** (e.g. `li_vm_compute` — definitions.v:311-325;
+  `normalize_bitfield` — bitfield.v:300; `compute_map_lookup` in the
+  `Goto` path — typing/automation.v:170-176 +
+  automation/proof_state.v:25-29), with results flowing into
+  subsequent goals.
+
+Consequence: the residual goal set is a function of the walk *and*
+the in-walk solver/hook surface, not of the grammar walk alone; §3.8
+gives the well-defined replacement notion of "same residual side
+conditions".
+
+After the walk, `unshelve_sidecond` restores the shelved batch and
+`solve_goal` attacks it (solvers.v; pipeline:
 `normalize_and_simpl_goal` — rewrite normalization via `normalize_hook`
 = `autorewrite` (normalize.v:27-58) or the typeclass normalizer
 (normalize.v:60-128), plus `SimplAndImpl`/`SimplAnd` typeclass
 simplification (simpl_classes.v) — then `enrich_context`
 (trigger-style saturation, solvers.v:153-186), then
 `refined_solver lia` (a fail-fast `naive_solver` variant,
-solvers.v:8-62)). Everything is behind ~14 named Ltac hooks
-(hooks.v:1-62: `can_solve_hook`, `normalize_hook`,
+solvers.v:8-62)). Everything is behind 16 named Ltac hooks
+(hooks.v:1-68: `can_solve_hook`, `normalize_hook`,
 `enrich_context_hook`, `generate_i2p_instance_to_tc_hook`,
 `liExtensible_to_i2p_hook`, `liTrace_hook`, …) that RefinedC overrides
 in typing/automation.v (`::=` at :18,45,47,49).
@@ -413,13 +579,21 @@ re-verified at the definition sites; internals spot-checked]**
   automation/proof_state.v) — `simpl` over the code map is called out
   in-source as exponential in block count.
 - Closed computation goes to `vm_compute` (`li_vm_compute`,
-  `reduce_closed_Z_hook`). **Port note:** in-Coq `vm_compute` is
-  inside their TCB; the house ban maps this to kernel-`decide`/
-  kernel-whnf substitutes — a known deviation to record in the
-  ledger (bin: real constraint, ours is a trust-policy constraint,
-  not a Cerberus-semantics constraint — flag for operator).
-- Proof terms are linear chains of `tac_apply_i2p rule` nodes; rules
-  are named constants.
+  `reduce_closed_Z_hook`) — and NOT only in the solver layer: it
+  sits in the **rule grammar** itself. `li_tactic (li_vm_compute …)`
+  occurs inside registered typing rules (`annot_reduce_int`,
+  int.v:386, carries it in the rule's continuation), and the `Goto`
+  step runs `compute_map_lookup` over the CODE_MARKER-wrapped label
+  map (typing/automation.v:170-176, automation/proof_state.v:25-29).
+  **Port note:** in-Coq `vm_compute` is inside their TCB; the house
+  ban therefore requires a kernel-legal computation story at the
+  *rule/interpreter* level, not merely a solver swap — a known
+  deviation to record in the ledger and priced accordingly (bin:
+  real constraint, ours is a trust-policy constraint, not a
+  Cerberus-semantics constraint — flag for operator).
+- Proof terms are chains of `tac_*` nodes of which `tac_apply_i2p`
+  marks the rule applications, with rules as named `*_inst`
+  constants (probe evidence and exact tallies: §3.8).
 
 ### 3.7 Scoping a Lean reimplementation (facts only, no design)
 
@@ -427,11 +601,11 @@ What a port must provide, mechanically: (i) the goal-grammar
 wrappers (trivial defs over iris-lean's BI); (ii) a step function
 dispatching on head symbol of the goal under `envs_entails`-analog —
 in Lean this is a MetaM tactic loop; (iii) an extensible
-rule-registration mechanism keyed by judgment head (Coq uses the TC
-database + Hint Mode; Lean has TC synthesis or attribute-fed
-DiscrTrees — choice for the attachment conversation, noting the prior
-review's observation that discrimination-tree retrieval is the
-Lean-native analog); (iv) committed-choice semantics incl. an ordered
+rule-registration mechanism keyed by judgment head — an open choice
+for the attachment conversation, to be argued from the donor's actual
+requirements (Hint-Mode-style input/output discipline, TC-priority
+ordering, the pervasive `Typeclasses Opaque` boundary — all in §3.4),
+not from any prior-era design lean; (iv) committed-choice semantics incl. an ordered
 multi-candidate `FindInContext` with once-committed first success and
 a linear context scan with unification per hypothesis; (v) the
 protected-existential telescope + controlled unification; (vi)
@@ -439,6 +613,41 @@ shelved side conditions + a batch pure solver (their `lia`+saturation
 pipeline maps onto Lean `omega`/simp-sets + custom extensions); (vii)
 the hook surface (Ltac hooks → function/attribute parameters);
 (viii) the let-binding discipline for environment and continuations.
+
+### 3.8 Replay evidence model (probe-backed)
+
+Probe (transcript-backed; the review's wrapping_add probe, re-run at
+this revision: the generated wrapping_add typing proof recompiled
+against the built donor `.refinedc-ws/_build` with a trailing
+`Print`, exit 0, ~1.4 s; tallies below derived from the printed
+term): **the compiled proof term of a real automation-closed donor
+proof is a complete, machine-readable step trace.**
+
+- Every interpreter step leaves a distinguishable `tac_*` node
+  (wrapping_add: ~30 distinct species; top of the sorted count:
+  14 `tac_ex_evar`, 13 `tac_sep_pure`, 13 `tac_apply_i2p`,
+  12 `tac_do_intro`, 10 `tac_li_apply`, 9 `tac_find_hyp`,
+  8 `tac_find_in_context`, …).
+- Committed rule choices appear as named `*_inst` constants
+  (`find_in_context_type_loc_id_inst` ×12, `type_read_copy_inst`,
+  `type_place_id_inst`, `copy_as_id_inst`, `type_add_int_int_inst`,
+  `macro_wrapping_add_inst`, `uninit_mono_inst`,
+  `simple_subsume_val_to_subsume_inst`).
+- FindInContext/hypothesis choices appear as
+  `tac_find_hyp`/`tac_find_in_context` nodes with their
+  instantiations (§3.2(2)).
+- In-walk solver discharges (§3.3) appear as embedded pure
+  subproofs.
+
+Under this model, "same residual side conditions" is well-defined:
+the `SHELVED_SIDECOND` set **plus** the recorded in-walk discharges,
+both extractable from the term. `liTrace_hook` (hooks.v:62) is the
+alternative instrumentation channel. **This is the basis the Lane L
+(replay) harness should scope against**: replay from the proof-term
+trace (or equivalently from `liTrace_hook` instrumentation), where
+all in-walk nondeterminism/heuristic outcomes are already resolved
+and recorded — never blind reproduction of Coq-side TC resolution,
+unification, and `lia` behavior.
 
 ---
 
@@ -556,8 +765,12 @@ Iris-over-Core instantiation must answer. Questions only; no designs.
     :162 specializes). Over Core: Core's ops are also relational at
     UB/ND points — does the `wp_*`/`wp_*_det(_pure)` split port
     unchanged?
-14. **Trust deltas** (for the ledger, flagged now): (a) their solver
-    layer leans on `vm_compute` (§3.6) — banned here; (b)
+14. **Trust deltas** (for the ledger, flagged now): (a) their
+    `vm_compute` reliance sits in the *rule grammar and interpreter*,
+    not only the solver layer (`annot_reduce_int` int.v:386; the
+    `Goto` `compute_map_lookup`; §3.6) — banned here, so the port
+    owes a kernel-legal computation story at the rule/interpreter
+    level, priced as such in the ledger; (b)
     `typing/axioms.v:5` assumes UIP (`eq_rect_eq`) — harmless in
     Lean (definitional proof irrelevance) but should be noted as a
     donor-side axiom our port does not need; (c) their adequacy
@@ -565,6 +778,46 @@ Iris-over-Core instantiation must answer. Questions only; no designs.
     acceptance statement shape at the adequacy boundary is an
     operator conversation (ties to the cerberus-lean differential
     ground truth).
+15. **The annotation carrier.** RefinedC's `typed_annot_expr`/
+    `typed_annot_stmt` rules (programs.v:41,46) fire on
+    `AnnotExpr`/`AnnotStmt` **syntax nodes** the frontend plants in
+    the program (notation.v:106-109), carrying the payloads of
+    `annotations.v` (share, stop, learn, lock, reduce, …); several
+    type formers' rules key on this channel (e.g. `annot_reduce_int`,
+    int.v:386 — also a `li_vm_compute` carrier, cf. item 14(a)).
+    Note the split: block/loop *invariants* survive without it —
+    they arrive via the `split_blocks` proof-script argument (a
+    `gmap label (iProp Σ)`, observed directly in the generated
+    wrapping_add proof) — but the in-program hint channel (sharing,
+    copy-to-uninit, lock annotations, reduce) has no Core story:
+    with the frontend out of scope and Core produced by Cerberus
+    elaboration of plain C, nothing plants these nodes. Over Core:
+    what plays the annotation carrier — Core/Ail annotations? a side
+    table keyed by location? magic calls? — and which
+    annotation-fired rules are in the port's first fragment at all?
+16. **Reflected syntax and syntax-directed dispatch.** Caesium ships
+    module `W` (reflected expr/stmt, `to_expr/of_expr` correctness,
+    context finders `find_expr_fill`/`find_stmt_fill`, tactics.v),
+    and typing is written against it: `find_place_ctx`/`IntoPlaceCtx`
+    (programs.v:257,278) are defined over `W.expr`, and
+    `liRStmt`/`liRExpr` (automation.v:145-247) dispatch on W
+    constructors after `W.of_stmt`/`W.of_expr` reflection (§1.1
+    caveat, §1.3.2). Over Core: what plays `W`, `find_expr_fill`,
+    and `find_place_ctx` over *Core's* constructor set — including
+    whether Core's already-sequenced form dissolves the bind layer,
+    shrinking the reflected-syntax obligation (to place contexts
+    only, or to nothing)?
+17. **Which Core, exactly — and Core's evaluation-order
+    nondeterminism.** Item 13 covers relational per-op ND only. Core
+    additionally has *unsequenced* composition (`Eunseq`, wseq/sseq)
+    — evaluation-order ND with UB at races, a fundamentally
+    different ND species than Caesium's per-op relational results
+    (Caesium fixes evaluation order via its ectx discipline). The
+    rules of engagement say "their evaluated/sequentialized fragment
+    first"; concretely: is the port's referent sequentialised Core
+    (which pass, pinned where), and what happens to the WP when
+    `Eunseq` is present? This decision shapes the language-instance
+    design (item 1).
 
 ---
 
@@ -645,7 +898,8 @@ structure; a precise per-file feature matrix is arc-2 work):
 4. **Allocation failure is modeled as divergence** via a Löb-proved
    WP for an infinite `AllocFailed` loop (lifting.v:52) — a
    partial-correctness dodge relevant to the malloc-null discussions.
-5. **Donor trust surface**: `vm_compute` inside the solver path and a
+5. **Donor trust surface**: `vm_compute` inside the rule grammar and
+   solver path (§3.6) and a
    UIP axiom (`typing/axioms.v:5`) — both need ledger entries where
    our port deliberately differs.
 6. **Lithium has evolved past the paper** (limodal goals, LiEntails
