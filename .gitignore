@@ -2,3 +2,5 @@
 /worktrees
 /.opamroot
 /.refinedc-ws
+.lia.cache
+.nia.cache
