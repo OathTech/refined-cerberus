@@ -364,3 +364,120 @@ goal (the donor's own lithium_tutorial.v documents the single-step,
 instead); reproduction of the 614-declaration count (the 247-name
 headline was consistency-checked against the list itself: 250 rows,
 247 unique names, dups = expr/stmt/subst_stmt across lang.v/W).
+
+---
+
+## Re-mark (rev2, 2026-08-29)
+
+Re-mark by the original fresh-eyes reviewer (author→professor→re-mark
+pattern) of port-map **rev2** (worktree branch `arc1-port-map-rev2`,
+commit `bf676d3`, 312 insertions / 58 deletions). Method: full read of
+the rev2 diff; every NEW cite the revision introduced was spot-checked
+against `deps/refinedc` @ `25f706d41` (transcripted greps/seds; ~20
+checks), including the three contested items below. No new probes were
+needed — the revision's re-run of the wrapping_add probe reproduces my
+tallies verbatim in §3.8.
+
+### Per-finding disposition
+
+| Finding | Disposition | Basis |
+|---|---|---|
+| MAJOR-1 (interface blind spots) | **ADDRESSED** | §1.3 retitled "named-identifier stratum"; new §1.3.1–§1.3.4 enumerate projections/constructors/instances/Ltac+hint-DBs. New cites verified: `sl_nodup`→typing/struct.v, `hs_heap`/`hs_allocs`→adequacy.v, W-constructor list at programs.v:257-276 exact (incl. `W.Loc`/`W.LocInfoE`/`W.LValue` my review missed), Atomic instance names `cas/skipe/deref/use_atomic` at lifting.v:39-50 exact. The revision *extended* the finding correctly (EqDecision/Countable/Inhabited stratum — see adjudication 3). |
+| MAJOR-2 (determinism boundary) | **ADDRESSED** | §3.2 now separates step *selection* (structural) from step *outcomes* (solver-coupled); §3.3 rewritten around the three in-walk surfaces with correct cites (can_solve_hook ::= solve_goal, automation.v:45; solvers.v:235-242; interpreter.v:458-478). |
+| MAJOR-3 (annotation carrier) | **ADDRESSED** | New agenda item 15. Question-form verified: states the frontend-plants-nodes fact, the invariants-survive-via-`split_blocks` split (correct — probe-observed), then asks carrier + first-fragment membership. No smuggled decision. |
+| MAJOR-4 (W-syntax dependence) | **ADDRESSED** | §1.1 port-mapping sentence now carries the structural caveat with cites; new agenda item 16 asks the dispatch/bind question, including the dissolution possibility, as alternatives — not a decision. |
+| MINOR-1 (liEnsureInvariant/liSimpl) | **ADDRESSED** | §3.2 gives liRStep's full shape; tutorial cite (lithium_tutorial.v:30) verified — `liEnsureInvariant.` is literally line 30. |
+| MINOR-2 (proof-term claim) | **ADDRESSED** | §3.6 corrected ("chains of `tac_*` nodes of which `tac_apply_i2p` marks the rule applications"); §3.8 carries the probe tallies, which match my transcript exactly. |
+| MINOR-3 (ladder-scope) | **ADDRESSED** | Typing-scoped vs ladder-superset scope note added to §1.3 intro with the builtins_specs evidence. |
+| MINOR-4 (caesium←lithium undersell) | **ADDRESSED** | §1.1 widened correctly; span corrected per adjudication 2 (upheld). |
+| MINOR-5 (tallies) | **ADDRESSED** | All re-checked in rev2: automation/ 525, annotations.v 27, exist.v 111, axioms.v 11, int.v 31, function.v:59, adequacy.v 127/:40, hook cite :622-645 (both places), hooks.v:1-68. Hook count now 16 — my 17 conceded (adjudication 1). |
+| MINOR-6 (vm_compute in rule grammar) | **ADDRESSED** | §3.6, agenda 14(a), and §6.5 all restated at the rule/interpreter level with correct cites. |
+| MINOR-7 (Eunseq/fragment) | **ADDRESSED** | New agenda item 17; question-form clean ("which pass, pinned where; what happens to the WP when `Eunseq` is present?"). |
+| MINOR-8 (FindInContext continuation) | **ADDRESSED** | §3.2(2) expanded; new spans verified: `liFindHyp` at interpreter.v:537 (so :537-570 correct), continuation `simpl; repeat liExist false; liFindHypOrTrue key` exactly at :589-591. |
+| NOTE-1 (DiscrTree lean) | **ADDRESSED** | §3.7(iii) rewritten as an open choice argued from donor requirements; the prior-era lean removed. |
+| NOTE-2 (native subsume case) | **ADDRESSED** | §3.2(1) now states the built-in `subsume` case before the hook. |
+| NOTE-3 (li_tactic operations) | **ADDRESSED** | §2.2 row-list paragraph now carries the operations; all four new cites verified (compute_map_lookup = lithium/solvers.v:140; unfold_code_marker_and_compute_map_lookup = automation/proof_state.v:28-29; normalize_bitfield LiEntails extern region :294-300; loc_eq.v:46-70 incl. the FICLocSemantic `FindHypEqual` extern at :69). |
+| NOTE-4 (verified-as-claimed record) | **ADDRESSED** (n/a) | Nothing to fold beyond the §6.5 vm_compute rewording, which is present and correct. |
+
+Tally: 16/16 ADDRESSED, 0 PARTIALLY, 0 NOT ADDRESSED.
+
+### The three adjudications
+
+1. **hooks.v count — CONCEDED, worker is right: 16.** Anchored
+   enumeration (`grep -n "^Ltac"` over hooks.v) yields exactly 16
+   `Ltac *_hook` declarations (can_solve, normalize, check_injection,
+   enrich_context, solve_goal_prepare, solve_goal_normalized_prepare,
+   reduce_closed_Z, li_pm_reduce, unfold_instantiated_evar,
+   solve_protected_eq, generate_i2p_instance_to_tc,
+   liUnfoldLetGoal, liExtensible_to_i2p, liExtensible, liTrace,
+   liToSyntax). My 17 was a regex artifact, though not the conjectured
+   one: my unanchored `Ltac.*hook` matched the *comment* at hooks.v:3
+   ("This file collects all Ltac hooks that Lithium provides."), not a
+   digit-miscount. Rev2's "16 named Ltac hooks (hooks.v:1-68)" is
+   correct.
+2. **bitfield.v CanSolve span :328-357 — UPHELD (worker's widening
+   correct).** `bf_range_empty_cons_inst` at bitfield.v:328 carries
+   three `CanSolve` premises (:329-331) on a `SimplAnd` instance; the
+   guarded family genuinely starts there. My :341-357 was the
+   truncated head of a `| head` pipe, not a considered boundary. Note
+   the widened span is also *tight*: `bf_range_empty_nil_inst` (:321)
+   is unguarded, so starting at :328 is exactly right, and the
+   SimplAnd/SimplBoth mixed description in §1.3.4 matches the source.
+3. **Fractional relocation + EqDecision/Countable/Inhabited stratum —
+   UPHELD, and a genuine improvement.** ghost_state.v:440-463 is
+   precisely the `Timeless`/`Fractional`/`AsFractional` family on
+   `heap_mapsto_mbyte` and `↦` (instances at :440, :443-444,
+   :452-453, :457, :459, :462-463); my original ":65-128" was correct
+   for the Persistent/Timeless assertion-layer instances but wrong to
+   imply Fractional lived there (and rev2's :65-131 is the tighter
+   truth — `fntbl_entry_tl` at :131 closes the run, past my :128).
+   The added decidability/inhabitation stratum verifies exactly:
+   loc.v:24-27 (`prov` Inhabited/EqDecision/Countable), val.v:12
+   (`mbyte_dec_eq`), lang.v:724-732 (the Inhabited family through
+   `state_inhabited`). This is a real further find within MAJOR-1's
+   class (c) that my review did not surface.
+
+### New agenda items and §3.8
+
+- **Items 15/16/17** state MAJOR-3/MAJOR-4/MINOR-7 correctly and stay
+  in question form; enumerated alternatives (side table vs Core/Ail
+  annotations; dissolution to place-contexts-only or nothing) are
+  posed as options, not answers. No smuggled decisions found.
+- **§3.8** reproduces my §D4 result accurately (same tallies, same
+  well-definedness formulation for "same residual side conditions",
+  same never-blind-reproduction directive). "Lane L" is an
+  established name in the DECISIONS register (the replay-disposition
+  entry), so no jargon violation; the "should scope against" sentence
+  is the one place §3 shades from fact into recommendation — tolerable
+  because the recommendation is this review's own and Lane L's
+  disposition is already [USER]-registered, but the Lane L charter
+  should restate it as its own decision rather than inherit it from a
+  recon document.
+
+### Residual nits (non-blocking; for the next natural revision, not a re-fold)
+
+- §3.3 still says RefinedC's overrides are "`::=` at :18,45,47,49";
+  the full site list in typing/automation.v is :18, :25, :42, :45,
+  :47, :49, :88 (solve_protected_eq_hook, liUnfoldLetGoal_hook,
+  liToSyntax_hook are the unlisted three; two of them ARE discussed
+  elsewhere in the doc). Incomplete enumeration, not an error.
+- §1.3's method note still opens "produced mechanically — …
+  intersected …" before the stratum caveat lands two sentences later;
+  a reader quoting the first sentence alone still over-trusts the
+  method. Cosmetic ordering.
+
+### Verdict
+
+**Rev2 is FIT to serve as the port-ledger foundation and as the basis
+for the attachment-layer scope conversation.** All 16 findings are
+addressed with source-verified cites; the two claims I called
+ledger-poisoning (the "exhaustive" interface claim and the misdrawn
+determinism boundary) are correctly repaired, and the revision's
+counter-corrections to my own review (hooks count, CanSolve span,
+Fractional location) are all themselves correct — the document now
+reads as more careful than its reviewer on those three points, which
+is the right failure mode. The residual nits above are recorded here
+per the no-silent-fixes rule and do not warrant another revision pass
+before the operator conversation.
+
+[AGENT: fresh-eyes reviewer, re-mark 2026-08-29]
