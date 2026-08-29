@@ -42,6 +42,33 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   work.
 - **2026-08-29 [USER] CLAUDE.md is working practices only**: design
   rulings live here, not there.
+- **2026-08-29 [USER] THE NORTH STAR** (ratified verbatim from the
+  metric/goal-collapse conversation): the product is a **Lean-native
+  C verification framework** — RefinedC's architecture (ownership/
+  refinement type system + Lithium-class goal-directed automation)
+  rebuilt natively in Lean on iris-lean, attached directly to the
+  cerberus-lean Core semantics, able to verify NEW C programs (specs
+  and proofs authored in Lean, kernel-certified against the
+  executable semantics, cost comparable to RefinedC's), extensible
+  past their fragment toward the parent project's Linux-stack aim.
+  Replay harnesses, transfer walls, and donor fidelity are
+  MECHANISMS in service of this — each retired or demoted to a
+  validation lane at parity, never reported as the product. (The
+  house parallel: the OCaml differential oracle drove the semantics
+  build and stayed a validation lane forever; replay is this port's
+  OCaml oracle.) Binding instruments: (1) TWO LEDGERS — wall/replay
+  metrics = the build ledger; the product ledger = a NATIVE
+  VERIFICATION EXHIBIT at every arc close (a never-seen C program,
+  in no donor corpus, verified end-to-end: Lean spec, our
+  automation, trio cone); arc reports carry both, never conflated.
+  (2) DISPOSITION-AT-INTRODUCTION — every scaffolding mechanism is
+  born with a recorded disposition (dies-at-parity or
+  demotes-to-validation-lane), decided at introduction; replay's
+  disposition: demotes to a differential lane. (3) ENGINE-NOT-
+  REPLAYER — the Lithium port is a free-running goal-solving
+  engine; replay is a test harness AROUND it (feed their goal,
+  compare outcomes), never a code path or mode INSIDE it. Carried
+  into the Lane L charter as a design constraint.
 - **2026-08-29 [AGENT] Arc-0 audit re-baseline**: the BI smoke
   lemma's axiom cone is empty (stronger than the trio bound); pinned
   as such at first build. Plant-test transcript in the arc-0 commit

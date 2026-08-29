@@ -1,11 +1,20 @@
 # refined-cerberus
 
-A port of the RefinedC reasoning system (type system + Lithium
-automation) onto the Cerberus C semantics, via the cerberus-lean
-Lean 4 port, with iris-lean as the intermediate program logic. The
-Iris program logic is instantiated directly over Core; RefinedC is
-the design target (not an end state); its frontend/annotation layer
-is out of scope.
+**NORTH STAR [USER 2026-08-29]: the product is a Lean-native C
+verification framework** — RefinedC's architecture (type system +
+Lithium-class automation) rebuilt natively in Lean on iris-lean,
+attached directly to the cerberus-lean Core semantics, able to
+verify NEW C programs with specs and proofs authored in Lean,
+kernel-certified against the executable semantics. Replay harnesses,
+transfer walls, and donor fidelity are MECHANISMS driving the build,
+never the product: the product gauge is the native-verification
+exhibit (a never-seen program verified end-to-end) at every arc
+close; build metrics and product capability live on separate
+ledgers. Full ruling + the three binding instruments: DECISIONS.md.
+
+The Iris program logic is instantiated directly over Core; RefinedC
+is the design target (not an end state); its frontend/annotation
+layer is out of scope.
 
 This file is WORKING PRACTICES ONLY. Design rulings live in
 `docs/DECISIONS.md` (append-only register, [USER]/[AGENT]
