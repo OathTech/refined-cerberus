@@ -69,4 +69,14 @@ if ! command -v systemd-run >/dev/null 2>&1; then
   echo "capped: WARNING — the D7 memory-cap rule is NOT enforced here" >&2
   run_reporting_kills "$@"
 fi
+# Sandbox fallback [USER 2026-08-29]: the nono profile denies the systemd
+# user bus, so the cap cannot be applied in-sandbox. Ruling: "run with
+# uncapped builds until we figure out the nono thing" — probe the bus
+# once; if unavailable, warn LOUDLY and proceed uncapped. Interim
+# mitigation is box discipline (serial heavy lanes, prompt commits).
+if ! systemd-run --user --scope --quiet -p MemoryMax=1G true >/dev/null 2>&1; then
+  echo "capped: WARNING — systemd user bus unavailable (sandbox); running UNCAPPED" >&2
+  echo "capped: WARNING — interim per [USER 2026-08-29] until a nono capping route exists" >&2
+  run_reporting_kills "$@"
+fi
 run_reporting_kills systemd-run --user --scope --quiet -p "MemoryMax=$MEM" -p "MemorySwapMax=0" "$@"

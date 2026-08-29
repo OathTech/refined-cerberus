@@ -127,9 +127,12 @@ is added when its mainline pin lands (see DECISIONS).
   outside-sandbox operator actions. KNOWN GAP: `scripts/capped`
   (systemd-run) needs systemd user-bus access the sandbox profile
   does not grant ([USER 2026-08-29]: bus-grant experiments rolled
-  back as out of scope) — in-sandbox capped invocations FAIL CLOSED.
-  Heavy Lean builds are outside-sandbox operator actions until a
-  capping route is ratified; never substitute uncapped runs.
+  back as out of scope). [USER 2026-08-29] ruling: **run builds
+  UNCAPPED in-sandbox for now** ("until we figure out the nono
+  thing") — `capped` detects the missing bus, warns loudly, and
+  proceeds uncapped; interim mitigation is box discipline (serial
+  heavy lanes, prompt commits). Revisit when a nono capping route
+  exists.
 
 ## Current state
 
