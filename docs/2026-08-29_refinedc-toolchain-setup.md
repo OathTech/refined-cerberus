@@ -58,6 +58,19 @@ iris-dev registered on the LOCAL root only.
   their code, not just reading it (interpreter experiments,
   goal-state dumps, trace hooks).
 
+## Donor baseline (pre-sandbox corpus build, 2026-08-29)
+
+`make generate_all` + `make all_with_examples`: exit 0 / exit 0.
+**44 `generated_spec.v`** regenerated (examples + tutorial — the
+transfer ladder's statement-oracle corpus, now on disk) and **253
+function-level `generated_proof_*.vo`** compiled — the donor's
+entire example suite closes under their Lithium automation on this
+toolchain. The suite includes `linux/pkvm/proofs/spinlock`
+(hyp_spin_lock/unlock) and the `mpool` allocator — RefinedC ships
+pKVM-adjacent case studies directly relevant to the parent
+project's target slate. This is the "their side is green" baseline
+every transfer-ladder row measures against.
+
 ## In-sandbox notes (the "later in-sandbox working" requirement)
 
 - Theory/proof builds (`dune build`, `coqc`, `make all`) need only
