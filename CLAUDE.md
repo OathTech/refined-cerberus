@@ -16,6 +16,22 @@ The Iris program logic is instantiated directly over Core; RefinedC
 is the design target (not an end state); its frontend/annotation
 layer is out of scope.
 
+**TRUST ARCHITECTURE [USER 2026-08-29]: the cerberus-lean
+operational semantics is the ONLY trusted semantics.** Everything
+above it — the relational layer, the WP, the type system, the
+automation — is DERIVED and has no independent semantic authority;
+any disagreement with the engine is by definition a defect in the
+derived layer. **The intended end state is an adequacy result stated
+EXCLUSIVELY over the cerberus-lean semantics.** The named failure
+mode ([USER], verbatim): "a big pile of RefinedC garbage" that
+doesn't couple to cerberus-lean "would have no value, irrespective
+how closely it matches RefinedC. We are building a reasoning
+capability for cerberus-lean's operational semantics — 'mirroring'
+without proof is valueless." Operational consequence: no ported
+layer counts as capability until its downward theorem into the
+engine exists — the adequacy spine is load-bearing from the first
+rung, built continuously, never retrofitted at the end.
+
 This file is WORKING PRACTICES ONLY. Design rulings live in
 `docs/DECISIONS.md` (append-only register, [USER]/[AGENT]
 provenance) — never here. Founding rationale:

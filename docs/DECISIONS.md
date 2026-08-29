@@ -73,3 +73,78 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   lemma's axiom cone is empty (stronger than the trio bound); pinned
   as such at first build. Plant-test transcript in the arc-0 commit
   message (`a7ff8b0`).
+
+## The attachment-targeting conversation (2026-08-29)
+
+- **2026-08-29 [USER] TRUST ARCHITECTURE** (verbatim): "the
+  cerberus-lean operational semantics is the ***only*** semantics
+  that we trust. The relational semantics is a derived layer on top
+  of it"; "we are going to build on top of the actual cerberus-lean
+  operational semantics… This will be legitimately built on
+  cerberus-lean, or it is off target"; "the intended end state of
+  all of this is an adequacy result that can be stated *exclusively*
+  over the cerberus-lean semantics… 'mirroring' without proof is
+  valueless." Named failure mode: a pile of RefinedC machinery not
+  coupled to cerberus-lean has no value regardless of donor
+  fidelity. Consequences: any layer/engine disagreement is by
+  definition a defect in the derived layer; no ported layer counts
+  as capability until its downward theorem exists (adequacy spine
+  load-bearing from rung one, never retrofitted); transfer-ladder
+  rows count only when the proof discharges through the spine into
+  an engine-only statement. Baked into CLAUDE.md header.
+- **2026-08-29 [USER] Calls = substitution at the attachment
+  layer**: substitution is reconstructed at the attachment layer and
+  the environment disappears — keeps typed_function/wp_call literal.
+  (Independently the failed prototype's final design conversation
+  reached the same conclusion — corroboration, not justification.)
+- **2026-08-29 [USER] Prototype relational-semantics work upgraded
+  to DESIGN DONOR** for the derived-layer question specifically ("we
+  may already have a design donor here") — evaluated on merits
+  against the criterion sane / legitimate / scales-to-RefinedC;
+  the untrusted-as-design default still governs everything else.
+- **2026-08-29 [AGENT] Targeting calls** (each derived from ratified
+  rulings; full statements in the port map §4 and the conversation
+  record): (1) fragment referent = sequentialised Core, Eunseq out
+  of fragment 1 [from "their sequentialized fragment first"];
+  (2) atomics stubbed with temporal ledger row [sequential-first;
+  ladder is gauge not goal]; (3) annotation payloads re-home to
+  Lean-side spec/proof-script channels, annotation-fired rules
+  become explicitly-invoked steps — a divergence CLASS whose forcing
+  fact is the ratified frontend-out-of-scope ruling; (4) provenance
+  referent = whatever the semantics pin runs; (5) allocation-failure
+  stance follows the pinned engine's actual create behavior;
+  (6) alignment recorded against the matching Caesium config;
+  (7) wp/wp_det relational split ports unchanged; (8) adequacy shape
+  mirrors theirs + an executable-layer corollary; (9) layouts/
+  op_types, mem_cast dissolve-or-port, liveness ghosts, RA bundle,
+  W-analog extent = fact-finding against the semantics, each ending
+  in a ledger row. Pre-registered fallback on calls: if the
+  substitution correspondence resists, an env-aware call rule as a
+  ledgered divergence — no heroic grinding past its value.
+- **2026-08-29 [AGENT] Statement-layer derisk plan** ([USER]
+  prompted: "danger of doing violence to our goals… derisk the
+  design"): empirical shape-correspondence study first (both
+  pipelines executable, C as join key), then two candidate designs
+  argued against the measured table under hostile review, then a
+  vertical spike with pre-registered kill criteria. Evidence:
+  `docs/2026-08-30_caesium-core-shape-study.md` (finding: sharp
+  statement-position grammar; control flow near-bijective via
+  save/run; shared Ail ancestry; bind layer dissolves by grammar;
+  divergences: pattern-shaped correspondence with inline UB
+  templates, per-iteration locals lifetime).
+- **2026-08-30 [AGENT] Relational-layer candidates memo delivered**
+  (`docs/2026-08-30_relational-semantics-candidates.md`, written
+  under the trust-architecture rulings): recommends the HYBRID —
+  the prototype's proved per-step spine (two-sided runner
+  characterization + engine-only adequacy path) as the trunk,
+  syntactic per-construct characterization lemmas grown on it as
+  the WP layer; pre-registered falsification probe (two exemplar
+  lemmas at ∀-configuration). NOT yet ratified — hostile review
+  pending. New facts of record: the Lean pipeline never calls
+  Core_sequentialise (verified: zero callers; test_exec.sh notes
+  it) → realizing the sequentialised fragment needs Lean-side
+  wiring + a validation lane, [USER] decision pending (cross-repo);
+  the trimmed relsemcore spine (runND_sound) survives
+  core/semantics-first; finalize runs a second evaluator
+  (Driver.hack) → result postconditions need a characterization
+  lemma family.
