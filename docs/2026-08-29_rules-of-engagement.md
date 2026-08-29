@@ -1,6 +1,9 @@
-# Refined-Cerberus: rules of engagement — DRAFT proposal
+# Refined-Cerberus: rules of engagement
 
-**Status: DRAFT — not blessed. Decision points marked [DECISION].**
+**Status: BLESSED [USER 2026-08-29] — all decision points ratified
+(the §7 validation pair by explicit "(1) agree, (2) agree").
+CLAUDE.md is the operating-manual form of this document; this file
+is the decision record.**
 Proposed by the orchestrating agent 2026-08-29, at operator direction
 ("we want arc / charter / orchestrator practices. But we want to be
 fairly skeptical of the more detailed things which were layered over
@@ -168,16 +171,16 @@ re-earns each item:
 
 ## 7. Validation referents
 
-- [DECISION] Proposed: **RefinedC's own examples/tutorial suite
-  (BSD) is the acceptance ladder** — the retrofit's gauge is "their
+- [USER 2026-08-29] **RefinedC's own examples/tutorial suite (BSD)
+  is the acceptance ladder** — the retrofit's gauge is "their
   proofs transfer." This is the gauge-failure fix: the instrument
   measures the target itself.
 - The semantics repo's differential lanes remain ground truth for
   everything at the adequacy boundary (unchanged, lives there).
-- [DECISION] The frozen 15-program corpus: proposed role =
-  secondary check once the port can express it, not a driver.
-  (Its specs were shaped by the failed era's doctrine; the programs
-  are still good C.)
+- [USER 2026-08-29] The frozen 15-program corpus: **secondary
+  check** once the port can express it, not a driver. (Its specs
+  were shaped by the failed era's doctrine; the programs are still
+  good C.)
 
 ## 8. Proposed first arcs
 
