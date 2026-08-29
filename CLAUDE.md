@@ -118,6 +118,16 @@ is added when its mainline pin lands (see DECISIONS).
 - Other agents work in sibling directories of the container: write
   ONLY inside `refined-cerberus/`; everything else is read-only
   reference.
+- **Sandbox regime** [USER 2026-08-29]: sessions run inside the nono
+  sandbox — no network; writes confined to this repo; `~/projects/`
+  readable (donor source, proof-quarry git, practice donors) but
+  read-only. Everything needed is local: opam/Lake/elan caches,
+  the repo-local toolchain, git redirects to read-only local repos.
+  opam `install`-class operations and network fetches are
+  outside-sandbox operator actions. Expect `scripts/capped` to fall
+  back loudly to uncapped in-sandbox (no systemd user bus) — the
+  sandbox's own limits are the backstop; the warning is expected,
+  not a broken environment.
 
 ## Current state
 
