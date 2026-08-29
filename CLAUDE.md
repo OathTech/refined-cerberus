@@ -21,9 +21,10 @@ cerberus-lean park branch `arc/segment-ladder`,
 |------|------|
 | `RefinedCerberus/` | the Lean package (Audit.lean = in-build axiom gate, last import of the lib root) |
 | `docs/` | dated records + `DECISIONS.md` (rulings register) |
-| `scripts/` | `capped` (cgroup-capped builds), `test_unit.sh` (gates), `new-worktree.sh` |
+| `scripts/` | `capped` (cgroup-capped builds), `test_unit.sh` (gates), `new-worktree.sh`, `setup-refinedc.sh`/`env-refinedc.sh`/`refinedc-pins.env` (donor toolchain) |
 | `worktrees/` | build-primed parallel checkouts (gitignored) |
-| `../deps/refinedc` | the NORMATIVE donor (BSD) — read-only |
+| `.refinedc-ws/`, `.opamroot/` | repo-local RUNNABLE RefinedC (Rocq 9.1 + frontend, gitignored; see docs/2026-08-29_refinedc-toolchain-setup.md) — donor questions can be answered by running their code |
+| `../deps/refinedc` | the NORMATIVE donor source (BSD) — read-only |
 | `../deps/iris-lean` | iris-lean checkout backing the Lake pin — read-only |
 | `../cerberus-lean` | the semantics repo — read-only from here |
 

@@ -1,2 +1,4 @@
 /.lake
 /worktrees
+/.opamroot
+/.refinedc-ws
