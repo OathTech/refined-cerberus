@@ -124,10 +124,12 @@ is added when its mainline pin lands (see DECISIONS).
   read-only. Everything needed is local: opam/Lake/elan caches,
   the repo-local toolchain, git redirects to read-only local repos.
   opam `install`-class operations and network fetches are
-  outside-sandbox operator actions. `scripts/capped`
-  (systemd-run) WORKS in-sandbox ([USER 2026-08-29]: in regular
-  use without issues); if it ever fails, report to the operator to
-  fix — do not accept uncapped runs as the new normal.
+  outside-sandbox operator actions. KNOWN GAP: `scripts/capped`
+  (systemd-run) needs systemd user-bus access the sandbox profile
+  does not grant ([USER 2026-08-29]: bus-grant experiments rolled
+  back as out of scope) — in-sandbox capped invocations FAIL CLOSED.
+  Heavy Lean builds are outside-sandbox operator actions until a
+  capping route is ratified; never substitute uncapped runs.
 
 ## Current state
 
