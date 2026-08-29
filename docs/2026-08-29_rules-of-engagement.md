@@ -99,6 +99,14 @@ than port. Containment rules for it:
   any fact relied on is re-verified against the semantics code
   first, and any *mechanism* proposed must be re-justified from the
   donor or the literature (classical names), never by "v1 did it".
+- [USER 2026-08-29] The proof-quarry amendment: the parked branches
+  carry substantial Lean proof text over Core — "there's a good
+  chance we have nearly the reasoning we want somewhere in the
+  repo, for any given bit of core wrangling." Untrusted-DESIGN and
+  quarry-the-PROOFS coexist: for concrete Core-wrangling
+  obligations, search the park branches before re-deriving;
+  quarried material re-enters only where the RefinedC-targeted
+  structure calls for it, re-verified in place.
 
 ## 4. Process kept: arc / charter / orchestrator (operator-ratified)
 

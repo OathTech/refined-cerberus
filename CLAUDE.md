@@ -24,6 +24,16 @@ repo (park branch `arc/segment-ladder`,
   about Cerberus/Core itself) are leads only — re-verify against
   the actual code before use. No mechanism is justified by "v1 did
   it".
+- **The park branches are a PROOF QUARRY** [USER 2026-08-29]:
+  several branches carry blobs of Lean proving properties over Core
+  (`arc/segment-ladder`, `arc/t5-seal`, tags `park/*` in
+  cerberus-lean) — "there's a good chance we have nearly the
+  reasoning we want somewhere in the repo, for any given bit of
+  core wrangling." When a concrete Core-wrangling obligation comes
+  up (step lemmas, inversions, totality facts, term manipulation),
+  SEARCH THE QUARRY before re-deriving. Quarried proofs are raw
+  material, not design: they re-enter only where the
+  RefinedC-targeted structure calls for them, re-verified in place.
 - **RefinedC's frontend/annotation layer is OUT OF SCOPE.** Port
   target = program-logic lifting + type system + Lithium-style
   automation. Specs and proofs are authored in Lean natively.
@@ -70,7 +80,11 @@ repo (park branch `arc/segment-ladder`,
   stops the work.
 - **Branches + ff-only merges** on explicit per-merge [USER]
   sign-off; the pre-merge audit ask is unconditional. No commits on
-  main after arc-0 scaffolding.
+  main after arc-0 scaffolding ([USER 2026-08-29]: main is fine
+  during setup; thereafter arc branches in WORKTREES —
+  `scripts/new-worktree.sh <branch>` creates a build-primed one
+  under `worktrees/` (gitignored) — so parallel streams never
+  collide on the primary checkout).
 - **No design pass dispatched before its scope is discussed with
   the operator.** A brief is a bundle of decisions, not a
   substitute for the conversation.
@@ -117,12 +131,27 @@ repo (park branch `arc/segment-ladder`,
   effort writes ONLY inside `refined-cerberus/`; the rest of the
   container is read-only reference.
 
+## Building
+
+```bash
+scripts/capped ~/.elan/bin/lake build   # NEVER uncapped; runs the in-build audit
+scripts/test_unit.sh                    # grep ban + capped build
+```
+Toolchain: Lean 4.32.2 (elan). Deps (batteries, Qq, iris @ 34390a0
+subDir Iris) resolve offline through the container's deps/gitconfig
+(capped self-loads it via the container env.sh). `lake update` only
+with `GIT_CONFIG_GLOBAL` set, and only to move a pin deliberately.
+
 ## Current state (2026-08-29)
 
-- Arc 0 (scaffolding) in flight: rules blessed, manual landed.
-  Pending: Lake skeleton + iris-lean pin + smoke build + minimal
-  gate runner; semantics dependency waits on the
-  `core/semantics-first` mainline landing.
+- Arc 0 scaffolding DONE except the semantics pin: rules blessed,
+  manual landed, Lake skeleton + iris-lean wiring green (full stack
+  builds: 303 modules), BI proof-mode smoke lemma proved (empty
+  axiom cone, pinned), in-build axiom sweep + curated pins live and
+  plant-tested (sorry-plant went red, revert went green),
+  new-worktree helper in place. PENDING: cerberus-lean dependency —
+  waits on the `core/semantics-first` mainline landing, then pin +
+  re-gate.
 - Arc 1 next: the port map — read-only recon of deps/refinedc
   (layer map, typing-rule inventory, Lithium algorithm note) →
   agenda for the attachment-layer scope conversation.

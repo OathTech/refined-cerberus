@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# capped — run a command inside its own cgroup with a hard memory cap.
+# Ported from golean (deps/golean CLAUDE.md "Never run a Lean build
+# uncapped", 2026-08-09) after this project's own OOM session kill
+# (arc-7 S5a: a whole-driver-run rfl ate a 125G box).
+#
+#   scripts/capped lake build ...
+#   CERB_MEM_MAX=32G scripts/capped lake env lean probe.lean
+#   CERB_MEM_MAX=none scripts/capped ...   # loud opt-out
+#
+# Why this mechanism: on breach the kernel kills INSIDE the scope, so the
+# build dies instead of the session (the OOM killer's badness score
+# otherwise picks the multiplexer/agent). Two knobs measured NOT to work
+# by golean, do not "simplify" back to them: `lean -M` (not enforced
+# during kernel reduction) and `prlimit --as` (kills Lean spuriously —
+# per-thread address-space reservation). Cgroup RSS is the honest knob.
+# The cap is a BLAST RADIUS, not a budget.
+set -euo pipefail
+# --- env self-load ([USER] env-trap tweak, arc-13 audit-fix batch) ----------
+# Idempotently source the container's scripts/env.sh (opam switch +
+# GIT_CONFIG_GLOBAL redirects) so `scripts/capped <cmd>` works from a fresh
+# shell with no prior sourcing. Resolution: walk up from this script's REAL
+# location to the first directory carrying scripts/env.sh (the container
+# root; the repo's own scripts/ has no env.sh). Graceful no-op with a
+# one-line note if none is found. Shell-scoped only — no global state.
+if [[ -z "${CERB_PROJ:-}" || -z "${GIT_CONFIG_GLOBAL:-}" ]]; then
+  _capped_self="$(readlink -f "${BASH_SOURCE[0]}")"
+  _d="$(cd "$(dirname "$_capped_self")" && pwd)"
+  _env_sh=""
+  while [[ "$_d" != "/" ]]; do
+    if [[ -f "$_d/scripts/env.sh" ]]; then _env_sh="$_d/scripts/env.sh"; break; fi
+    _d="$(dirname "$_d")"
+  done
+  if [[ -n "$_env_sh" ]]; then
+    # shellcheck source=/dev/null
+    source "$_env_sh"
+  else
+    echo "capped: note — no scripts/env.sh found above $(dirname "$_capped_self"); proceeding with the current environment" >&2
+  fi
+fi
+# --- the KILL banner (arc-17 S2 micro-item) ---------------------------------
+# Three exit-code misreadings in one arc family (the tail-pipe swallow, the
+# lem-gate chain, the S1 cgroup kills read as green) earned this: a killed
+# child must SHOUT. 137 = 128+SIGKILL (cgroup/OOM kill lands here),
+# 143 = 128+SIGTERM. The banner goes to stderr and the exit code is
+# propagated unchanged — this is a loudness feature, never a rescue.
+run_reporting_kills() {
+  local rc=0
+  "$@" || rc=$?
+  if [[ $rc -eq 137 || $rc -eq 143 ]]; then
+    echo "==============================================================" >&2
+    echo "capped: KILLED (exit $rc — cgroup/OOM or signal; NOT a pass)" >&2
+    echo "==============================================================" >&2
+  fi
+  exit $rc
+}
+MEM="${CERB_MEM_MAX:-64G}"
+if [[ "$MEM" == "none" ]]; then
+  echo "capped: CERB_MEM_MAX=none — running UNCAPPED (explicit opt-out)" >&2
+  run_reporting_kills "$@"
+fi
+# Portability fallback (arc-7 S5c, audit-1 F4): on hosts without
+# systemd-run (containers, non-systemd distros) warn LOUDLY and
+# proceed uncapped rather than break every routed script. The warning
+# is the tripwire: an uncapped run on the dev box means a broken
+# environment, not a policy change.
+if ! command -v systemd-run >/dev/null 2>&1; then
+  echo "capped: WARNING — systemd-run NOT FOUND; running UNCAPPED" >&2
+  echo "capped: WARNING — the D7 memory-cap rule is NOT enforced here" >&2
+  run_reporting_kills "$@"
+fi
+run_reporting_kills systemd-run --user --scope --quiet -p "MemoryMax=$MEM" -p "MemorySwapMax=0" "$@"
