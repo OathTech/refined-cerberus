@@ -695,4 +695,106 @@ hw : v = SpikeVal.annot [DA_pos [] fp] Vunit
 ```
 -/
 
+/-! ## EXHIBIT C ([USER 2026-08-30]): disjoint sequential stores
+
+`lets _ = store(x,5) in store(y,6)` on two distinct cells gives
+NON-CONFLICTING updates:
+
+    {x ↦ - ∗ y ↦ -} store(x,5); store(y,6) {x ↦ 5 ∗ y ↦ 6}
+
+The PROOF DISCIPLINE is the exhibit: each leg is the store small
+axiom FRAMED with the other cell (triple_frame + consequence), and
+the two legs are glued by SEQ (triple_seq, itself wp_sseq over the
+real Esseq). Nothing below unfolds Step/storeM/state_interp — the
+derivation is exactly the compositional surface. -/
+
+/-- The Core value `Specified(5)`, its memory value, its byte image. -/
+def fiveVal : value :=
+  Vloaded (LVspecified (OVinteger (CerbMem.integerIval 5)))
+
+def fiveMval : CerbMem.MemValue :=
+  CerbMem.integerValueMval (.Signed .Int_) (CerbMem.integerIval 5)
+
+def fiveBytes : List CerbMem.AbsByte :=
+  (CerbMem.memValueToBytes [] fiveMval).2
+
+theorem five_encodes :
+    memValueFromValue fmapEmpty (Ctype [] (unatomic_ intTy)) fiveVal =
+      some fiveMval := rfl
+
+theorem five_storable : StorableAt intTy fiveMval :=
+  ⟨rfl, fun _ => rfl, fun _ => rfl, fun _ => rfl, fun _ _ _ => rfl⟩
+
+/-- The Core value `Specified(6)`, its memory value, its byte image. -/
+def sixVal : value :=
+  Vloaded (LVspecified (OVinteger (CerbMem.integerIval 6)))
+
+def sixMval : CerbMem.MemValue :=
+  CerbMem.integerValueMval (.Signed .Int_) (CerbMem.integerIval 6)
+
+def sixBytes : List CerbMem.AbsByte :=
+  (CerbMem.memValueToBytes [] sixMval).2
+
+theorem six_encodes :
+    memValueFromValue fmapEmpty (Ctype [] (unatomic_ intTy)) sixVal =
+      some sixMval := rfl
+
+theorem six_storable : StorableAt intTy sixMval :=
+  ⟨rfl, fun _ => rfl, fun _ => rfl, fun _ => rfl, fun _ _ _ => rfl⟩
+
+/-- EXHIBIT C at the Iris triple level. Derivation (the point):
+    1. wp_store on x, FRAMED with y's cell (+ consequence to drop
+       the return-value annotation);
+    2. wp_store on y, FRAMED with x's now-updated cell (+ the same);
+    3. glued by triple_seq (= wp_sseq over the fragment's Esseq).
+    x and y are arbitrary distinct-cell pointers — distinctness is
+    never stated: the ∗ in the precondition carries it. -/
+theorem exhibitC_triple [SpikeGS hlc GF] (x y : CerbMem.PointerValue)
+    (loc loc' : CerbLocation.Loc) (ann ann' : core_run_annotation)
+    (mo mo' : memory_order) (bty : core_base_type)
+    (bsx bsy : List CerbMem.AbsByte) :
+    triple (GF := GF)
+      iprop(pointsToCell x (.own 1) intTy bsx ∗
+        pointsToCell y (.own 1) intTy bsy)
+      (sseqExpr bty (storeExpr loc ann intTy x fiveVal mo)
+        (storeExpr loc' ann' intTy y sixVal mo'))
+      (fun _ => iprop(pointsToCell x (.own 1) intTy fiveBytes ∗
+        pointsToCell y (.own 1) intTy sixBytes)) := by
+  -- leg 1: the store small axiom on x, FRAMED with y's cell
+  have hx : triple (GF := GF) (pointsToCell x (.own 1) intTy bsx)
+      (storeExpr loc ann intTy x fiveVal mo)
+      (fun w => iprop(∃ fp, ⌜w = SpikeVal.annot [DA_pos [] fp] Vunit⌝ ∗
+        pointsToCell x (.own 1) intTy fiveBytes)) :=
+    wp_store loc ann intTy x fiveVal mo fiveMval bsx five_encodes five_storable
+  have h1 : triple (GF := GF)
+      iprop(pointsToCell x (.own 1) intTy bsx ∗
+        pointsToCell y (.own 1) intTy bsy)
+      (storeExpr loc ann intTy x fiveVal mo)
+      (fun _ => iprop(pointsToCell x (.own 1) intTy fiveBytes ∗
+        pointsToCell y (.own 1) intTy bsy)) := by
+    refine triple_conseq .rfl ?_
+      (triple_frame (R := pointsToCell y (.own 1) intTy bsy) hx)
+    intro v
+    iintro ⟨⟨%fp, %hw, Hx⟩, Hy⟩
+    iframe
+  -- leg 2: the store small axiom on y, FRAMED with x's updated cell
+  have hy : triple (GF := GF) (pointsToCell y (.own 1) intTy bsy)
+      (storeExpr loc' ann' intTy y sixVal mo')
+      (fun w => iprop(∃ fp, ⌜w = SpikeVal.annot [DA_pos [] fp] Vunit⌝ ∗
+        pointsToCell y (.own 1) intTy sixBytes)) :=
+    wp_store loc' ann' intTy y sixVal mo' sixMval bsy six_encodes six_storable
+  have h2 : triple (GF := GF)
+      iprop(pointsToCell x (.own 1) intTy fiveBytes ∗
+        pointsToCell y (.own 1) intTy bsy)
+      (storeExpr loc' ann' intTy y sixVal mo')
+      (fun _ => iprop(pointsToCell x (.own 1) intTy fiveBytes ∗
+        pointsToCell y (.own 1) intTy sixBytes)) := by
+    refine triple_conseq BI.sep_comm.1 ?_
+      (triple_frame (R := pointsToCell x (.own 1) intTy fiveBytes) hy)
+    intro v
+    iintro ⟨⟨%fp, %hw, Hy⟩, Hx⟩
+    iframe
+  -- glue: SEQ
+  exact triple_seq h1 h2
+
 end RefinedCerberus.Spike

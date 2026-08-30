@@ -639,4 +639,163 @@ theorem exhibitA_terminates (aids : Nat → Nat) :
     rw [engineSteps_done]
     rfl
 
+/-! ## EXHIBIT C ([USER 2026-08-30]): disjoint sequential stores,
+exported to the engine level
+
+`lets _ = store(x,5) in store(y,6)` on the two seeded cells. The
+interior derivation is `exhibitC_triple` (Rules.lean) — wp_store per
+leg FRAMED with the other cell, glued by triple_seq; the export
+below only repackages its footprint form through
+`semantic_triple_sound`. The postcondition carries NO value clause:
+`triple_seq`'s assertion-postcondition form (deliberately, the
+wildcard-binding fragment shape) discards the delivered value, and
+re-deriving it monolithically would defeat the exhibit's point —
+the update facts are the content. -/
+
+/-- Exhibit (c): `lets _ = store(x,5) in store(y,6)`, x/y the two
+    seeded disjoint cells. -/
+abbrev progC : CoreExpr :=
+  sseqExpr BTy_unit (storeExpr loc0 empty_annotation intTy xPtr fiveVal NA)
+    (storeExpr loc0 empty_annotation intTy yPtr sixVal NA)
+
+theorem fragC : FragP progC := FragP.sseq (.store loc0_lib) (.store loc0_lib)
+
+/-- The two cells after the two stores. -/
+abbrev cellX5 : SpikeCell := ⟨xAddr, intTy, fiveBytes⟩
+
+abbrev cellY6 : SpikeCell := ⟨yAddr, intTy, sixBytes⟩
+
+/-- Post-footprint of progC: BOTH cells updated, non-conflictingly. -/
+abbrev mC : CellMap :=
+  Iris.Std.PartialMap.insert (Iris.Std.PartialMap.insert ∅ 0 cellX5) 1 cellY6
+
+theorem mB_base_get1 :
+    Iris.Std.PartialMap.get?
+      (Iris.Std.PartialMap.insert (∅ : CellMap) 0 cellX) 1 = none := by
+  rw [Iris.Std.get?_insert_ne (by omega : (0 : Int) ≠ 1)]
+  exact Iris.Std.LawfulPartialMap.get?_empty (M := SpikeHeapF) 1
+
+theorem mC_base_get1 :
+    Iris.Std.PartialMap.get?
+      (Iris.Std.PartialMap.insert (∅ : CellMap) 0 cellX5) 1 = none := by
+  rw [Iris.Std.get?_insert_ne (by omega : (0 : Int) ≠ 1)]
+  exact Iris.Std.LawfulPartialMap.get?_empty (M := SpikeHeapF) 1
+
+/-- Unpack mB's big-sep into the two pointer-shaped cells. -/
+theorem bigSepB_pts [SpikeGS .hasLC GF] :
+    iprop(([∗map] i ↦ c ∈ mB, pointsTo i (.own 1) c)) ⊢
+      iprop(pointsToCell (GF := GF) xPtr (.own 1) intTy bytesX ∗
+        pointsToCell yPtr (.own 1) intTy bytesY) := by
+  refine .trans (BigSepM.bigSepM_insert (i := 1) (x := cellY) mB_base_get1).1 ?_
+  iintro ⟨Hy, Hbase⟩
+  icases (BigSepM.bigSepM_insert (i := 0) (x := cellX)
+    (Iris.Std.LawfulPartialMap.get?_empty (M := SpikeHeapF) 0)).1
+    $$ Hbase with ⟨Hx, -⟩
+  isplitl [Hx]
+  · iapply (pointsToCell_iff _ _ _ _).mpr
+    iexists 0, xAddr
+    isplit
+    · ipureintro
+      exact xPtr_eq
+    · iexact Hx
+  · iapply (pointsToCell_iff _ _ _ _).mpr
+    iexists 1, yAddr
+    isplit
+    · ipureintro
+      exact yPtr_eq
+    · iexact Hy
+
+/-- Repackage the two updated cells as mC's big-sep. -/
+theorem cells_to_mC [SpikeGS .hasLC GF] :
+    iprop(pointsToCell (GF := GF) xPtr (.own 1) intTy fiveBytes ∗
+      pointsToCell yPtr (.own 1) intTy sixBytes) ⊢
+      iprop([∗map] i ↦ c ∈ mC, pointsTo i (.own 1) c) := by
+  iintro ⟨Hx, Hy⟩
+  icases (pointsToCell_iff _ _ _ _).mp $$ Hx with ⟨%ix, %ax, %Hpx, Hx⟩
+  obtain ⟨rfl, rfl⟩ := cellPtr_inj (xPtr_eq.symm.trans Hpx)
+  icases (pointsToCell_iff _ _ _ _).mp $$ Hy with ⟨%iy, %ay, %Hpy, Hy⟩
+  obtain ⟨rfl, rfl⟩ := cellPtr_inj (yPtr_eq.symm.trans Hpy)
+  iapply (BigSepM.bigSepM_insert
+    (Φ := fun (i : Int) (c : SpikeCell) => pointsTo i (.own 1) c)
+    (i := 1) (x := cellY6) mC_base_get1).2
+  isplitl [Hy]
+  · iexact Hy
+  · iapply (BigSepM.bigSepM_insert
+      (Φ := fun (i : Int) (c : SpikeCell) => pointsTo i (.own 1) c)
+      (i := 0) (x := cellX5)
+      (Iris.Std.LawfulPartialMap.get?_empty (M := SpikeHeapF) 0)).2
+    isplitl [Hx]
+    · iexact Hx
+    · iapply (BigSepM.bigSepM_empty_intro
+        (P := (BIBase.emp : IProp GF))
+        (Φ := fun (i : Int) (c : SpikeCell) => pointsTo i (.own 1) c))
+      itrivial
+
+/-- The two-store footprint triple: the interior compositional
+    derivation `exhibitC_triple` repackaged at footprint granularity
+    — no re-derivation, only big-sep ↔ pointsToCell plumbing. -/
+theorem provenC {GF : BundledGFunctors} [SpikeGpreS GF] :
+    ProvenTriple GF progC mB (fun _ Q => Q = mC) := by
+  intro instGS
+  refine bigSepB_pts.trans ((exhibitC_triple xPtr yPtr loc0 loc0
+    empty_annotation empty_annotation NA NA BTy_unit bytesX bytesY).trans ?_)
+  apply wp_mono
+  intro v
+  iintro ⟨Hx, Hy⟩
+  iexists mC
+  isplit
+  · ipureintro
+    rfl
+  · iapply cells_to_mC
+    isplitl [Hx]
+    · iexact Hx
+    · iexact Hy
+
+/-- EXHIBIT (c) AS A SEMANTIC TRIPLE: over EVERY engine configuration
+    splitting as (x-cell ∗ y-cell) ⊎ R — the frame R ARBITRARY — the
+    drive of `lets _ = store(x,5) in store(y,6)` cannot kill or
+    derail, and any completed run updates BOTH cells (x to 5's bytes,
+    y to 6's bytes) with R verbatim: the two stores do not conflict. -/
+theorem exhibitC_semantic {GF : BundledGFunctors} [SpikeGpreS GF] :
+    SemTriple progC mB (fun _ Q => Q = mC) :=
+  semantic_triple_sound (GF := GF) fragC provenC
+
+/-- Exhibit (c) at the seeded engine instance (rest := ∅): after the
+    two stores, the engine's bytemap holds 5's image at x AND 6's
+    image at y — the non-conflicting update read back from the real
+    memory. -/
+theorem exhibitC_engine (n : Nat) (aids : Nat → Nat) (hn : n ≤ 999998) :
+    (∀ r, drive aids n (spikeThread progC) σ₀ ≠ .killed r) ∧
+    (drive aids n (spikeThread progC) σ₀ ≠ .stuck) ∧
+    (∀ (v : value) (σ' : Mem),
+      drive aids n (spikeThread progC) σ₀ = .done v σ' →
+        CerbMem.readBytesFrom σ' xAddr 4 = fiveBytes ∧
+        CerbMem.readBytesFrom σ' yAddr 4 = sixBytes) := by
+  have h := exhibitC_semantic (GF := SpikeGF) ∅
+    (Iris.Std.LawfulPartialMap.disjoint_empty_right mB) σ₀
+    (by rw [show Iris.Std.PartialMap.union mB ∅ = mB from
+        Iris.Std.LawfulPartialMap.union_empty_right]
+        exact coh_mB)
+    n aids
+    (by rw [show esize progC = 2 from rfl]; unfold lemDefaultFuel; omega)
+  refine ⟨h.1, h.2.1, fun v σ' hd => ?_⟩
+  obtain ⟨Q, hQ, _, hsat⟩ := h.2.2 v σ' hd
+  subst hQ
+  have hsat' : Sat σ' mC :=
+    Sat.mono hsat (by
+      rw [show Iris.Std.PartialMap.union mC ∅ = mC from
+        Iris.Std.LawfulPartialMap.union_empty_right])
+  have hgx : Iris.Std.PartialMap.get? mC 0 = some cellX5 := by
+    rw [show Iris.Std.PartialMap.get? mC 0 =
+        Iris.Std.PartialMap.get?
+          (Iris.Std.PartialMap.insert (∅ : CellMap) 0 cellX5) 0 from
+      Iris.Std.get?_insert_ne (by omega : (1 : Int) ≠ 0)]
+    exact Iris.Std.get?_insert_eq rfl
+  have hgy : Iris.Std.PartialMap.get? mC 1 = some cellY6 :=
+    Iris.Std.get?_insert_eq rfl
+  have hcx := (hsat'.cells 0 _ hgx).bytes
+  have hcy := (hsat'.cells 1 _ hgy).bytes
+  rw [show CerbMem.sizeofCtype intTy = 4 from rfl] at hcx hcy
+  exact ⟨hcx, hcy⟩
+
 end RefinedCerberus.Spike

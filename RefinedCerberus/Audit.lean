@@ -102,6 +102,32 @@ info: 'RefinedCerberus.Spike.semantic_frame' depends on axioms: [propext, Classi
 -/
 #guard_msgs in #print axioms RefinedCerberus.Spike.semantic_frame
 
+-- Spike exhibit C (2026-08-30, [USER] task): disjoint sequential
+-- stores — `lets _ = store(x,5) in store(y,6)` gives non-conflicting
+-- updates. exhibitC_triple is derived PURELY COMPOSITIONALLY (the
+-- store small axiom framed per leg + triple_seq; no
+-- Step/storeM/state_interp unfolding); exhibitC_semantic exports it
+-- over every splitting engine configuration (arbitrary rest verbatim);
+-- exhibitC_engine instantiates at the allocateObject-seeded two-cell
+-- state. Sweep count re-baselined 196 → 209 in this commit: the 13
+-- new exhibit-C theorems (values/encodings ×4, the triple, fragC,
+-- footprint plumbing ×4, provenC, the semantic export, the engine
+-- instance), each cone exactly the trio.
+/--
+info: 'RefinedCerberus.Spike.exhibitC_triple' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms RefinedCerberus.Spike.exhibitC_triple
+
+/--
+info: 'RefinedCerberus.Spike.exhibitC_semantic' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms RefinedCerberus.Spike.exhibitC_semantic
+
+/--
+info: 'RefinedCerberus.Spike.exhibitC_engine' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms RefinedCerberus.Spike.exhibitC_engine
+
 /-! ## The exhaustive sweep (LAST — nothing declared below) -/
 
 open Lean in
