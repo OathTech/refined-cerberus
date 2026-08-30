@@ -31,6 +31,7 @@ stays the last import of the lib root.
 import Lean
 import RefinedCerberus.Smoke
 import RefinedCerberus.SemanticsSmoke
+import RefinedCerberus.Spike.Rules
 
 namespace RefinedCerberus.Audit
 
@@ -47,6 +48,15 @@ def allowedAxioms : List Name :=
 -- lemma's cone is EMPTY — strictly stronger than the trio bound.
 /-- info: 'RefinedCerberus.smoke' does not depend on any axioms -/
 #guard_msgs in #print axioms RefinedCerberus.smoke
+
+-- Spike slice A (2026-08-30): the acceptance exhibit — {x ↦ - ∗ y ↦ a}
+-- store(x,7) {x ↦ 7 ∗ y ↦ a} via FRAME on the store small axiom —
+-- carries exactly the classical trio (through iris-lean). Proved over
+-- Step; engine certification of Step is slice B (artifact 4).
+/--
+info: 'RefinedCerberus.Spike.exhibit' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms RefinedCerberus.Spike.exhibit
 
 /-! ## The exhaustive sweep (LAST — nothing declared below) -/
 
