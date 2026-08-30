@@ -105,3 +105,28 @@ monolithic):
 Triples are defined over the Iris WP in the standard way; all of
 the above discharge through artifact 4's soundness into
 engine-behavior statements.
+
+## Full-build derisk register ([USER 2026-08-30]: "derisk aspects of
+the full RefinedC build")
+
+Spike decisions are made FULL-BUILD-FORWARD: where costs are close,
+choose the option the RefinedC port will actually stand on (the port
+map's consumed-interface strata are the reference). Target risks —
+the report closes each as RETIRED / OPEN / CHANGED-SHAPE:
+- R1 the coupling seam (which engine entry adequacy targets) — the
+  full build inherits this choice directly.
+- R2 points-to basis: must be growable to the donor's ty_deref/
+  ty_ref shape (l ◁ₗ ty ⟷ l ↦ v ∗ v ◁ᵥ ty) — weigh byte/MemValue
+  granularity against what loadM/storeM manipulate AND what the
+  typing stratum needs; a convenience ↦ that can't carry the type
+  system retires nothing.
+- R3 WP form: prefer iris-lean's WP with the mask/fupd structure
+  (the donor's typed_read_end E→∅ discipline needs it later) over a
+  bespoke minimal WP.
+- R4 UB channel: the WP must be UB-EXCLUDING (safety = loadM/storeM
+  failure impossible under the precondition), not success-partial —
+  UB-freedom is RefinedC's product.
+- R5 provenance honesty: x in x ↦ v is a real PointerValue with
+  provenance; the small axioms must not idealize it away.
+- R6 the bind/sequencing story: wp_seq through Iris bind over real
+  Esseq — tests the "bind layer dissolves" finding on live proofs.
