@@ -130,3 +130,21 @@ the report closes each as RETIRED / OPEN / CHANGED-SHAPE:
   provenance; the small axioms must not idealize it away.
 - R6 the bind/sequencing story: wp_seq through Iris bind over real
   Esseq — tests the "bind layer dissolves" finding on live proofs.
+
+## Stretch S1: the donor stratum in miniature ([USER]: "prototype
+aspects of that design 'in miniature'")
+
+Gated on the core package landing green (never at its expense): one
+miniature of the RefinedC type stratum over the spike substrate —
+- a baby type former `intT : Z → SpikeTy` with the donor's
+  factorization in miniature: `l ◁ₗ intT z  ⟷  l ↦ v ∗ v ◁ᵥ intT z`
+  (ty_deref/ty_ref shape, type.v:277-282 as the reference), where
+  `v ◁ᵥ intT z` says the real MemValue encodes z;
+- ONE typed rule in the donor's judgment shape (a miniature
+  typed_write or typed_read) proved from the small axioms +
+  factorization — demonstrating the typing stratum grows on this
+  substrate by construction;
+- the exhibit re-proved at the typed level.
+This prototypes, in miniature: the type-former interface, the
+value/location ownership split, and the typing-layer-on-WP
+architecture — the three load-bearing joints of the full build.
