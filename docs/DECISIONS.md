@@ -148,3 +148,28 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   core/semantics-first; finalize runs a second evaluator
   (Driver.hack) → result postconditions need a characterization
   lemma family.
+- **2026-08-30 [AGENT, prompted by USER: "Do we actually need to
+  sequentialize?"] Sequentialisation is NOT needed — fragment 1 =
+  non-sequentialised Core, exactly as the validated engine runs it.**
+  Supersedes the earlier item-17 call (sequentialised referent).
+  Evidence (`docs/2026-08-30_eunseq-census.md`): 98 Eunseq nodes /
+  201 arms across 23 files — 92% of arms read-only+pure; a store
+  NEVER occurs as an arm (assignment stores are sequenced after the
+  unseq join); everything reduces to 4 templates + one rmw variant;
+  Eunseq never spans statements; the save/run skeleton is invariant
+  under the pass (token-level proof the pass touches only unseq
+  nodes). The Eunseq proof rule is SHARED READS / DISJOINT WRITES
+  (fractional-permission separation — classical lineage; full
+  pairwise disjointness is unsatisfiable on ordinary C since
+  read-read overlap is ubiquitous), whose side condition literally
+  mirrors the engine's own join-time race criterion (`overlapping`,
+  CerbMem.lean:1186 = impl_mem.ml:527-532 — the rule's premise IS
+  the engine's check). Calls are a second ATOMIC rule shape: the
+  engine's Eccall step makes callee bodies atomic w.r.t. sibling
+  arms (core_reduction.lem:1347-1368), so no interleaving reasoning.
+  Consequences: the cross-repo Core_sequentialise wiring + lane
+  drops from the queue entirely; the attachment layer owes the
+  one-time unseq-rule meta-theorem; the port becomes strictly more
+  honest than RefinedC and CN on unsequenced-race UB (both miss the
+  class). [USER] veto point: this flip is evidence-based but stands
+  as an [AGENT] call until seen.
