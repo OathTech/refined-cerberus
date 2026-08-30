@@ -2,13 +2,13 @@
 RefinedCerberus.Spike.Step — spike artifact 1: the fragment's
 inductive small-step over the REAL generated Core types.
 
-STATUS / HONESTY (slice A): this relation is hand-written,
-grammar-keyed, and has ZERO independent authority. Every rule carries
-a mirror-cite into the engine (cerberus-lean pin 8fb380c9c,
-lean_frontend/generated/). The soundness theorem certifying Step
-against the engine's `step_ctx`/driver composite is artifact 4
-(slice B) — until it lands, the rules below are claims with cites,
-not theorems.
+STATUS: this relation is hand-written, grammar-keyed, and has ZERO
+independent authority. Every rule carries a mirror-cite into the
+engine (cerberus-lean pin 8fb380c9c, lean_frontend/generated/). The
+certification against the engine's `step_ctx`/driver composite is
+Soundness.lean (slice B: `engine_complete` + the context-undisturbed
+per-rule lemmas); the engine-facing meaning of everything proved over
+Step lands through Adequacy.lean's semantic triples.
 
 Scope (the spike fragment, docs/2026-08-30_spike-minilog-plan.md):
 pure values, Load0/Store0 actions (positive polarity, wildcard-bound

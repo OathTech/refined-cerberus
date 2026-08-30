@@ -23,10 +23,13 @@ STATE INTERPRETATION (memory only — no driver state; recon §5.1):
 real `CerbMem.MemState`. `Coh` is the coupling invariant: every ghost
 cell is backed by a live, writable, in-bounds, non-atomic allocation
 whose bytemap slice IS the cell's byte list; cells are pairwise
-disjoint; and the union/function-pointer side tables are pinned empty
-(they are fragment-invariant: the fragment's pointers are
-`PVconcrete none`, so no union-member updates, and `StorableAt`
-guarantees funptrmap-neutral serialization).
+disjoint. The union-member/function-pointer side tables are SYMBOLIC
+(read-only context, arbitrary and returned verbatim): each cell
+carries an INERTNESS premise (`CellCoh.dec_indep`) saying its decode
+ignores both tables — exactly what loadM's reconstruction reads them
+for — and `StorableAt` carries the serialization-side analogues.
+For scalar cells all of these are `rfl`. ([USER 2026-08-30]: the
+de-pin; the full-build shape is ghost ownership of the tables.)
 -/
 import Iris
 import RefinedCerberus.Spike.Step
@@ -54,8 +57,9 @@ def cellPtr (id : Int) (a : Int) : CerbMem.PointerValue :=
   .PV (.Prov_some id) (.PVconcrete none a)
 
 /-- Engine decode of a cell: `reconstructValue` (CerbMem.lean:774) at
-    the Coh-pinned side tables (lastUsedUnionMembers = [],
-    funptrmap = []). This is the engine's own decoder, not a new one. -/
+    EMPTY side tables — the canonical decode; `CellCoh.dec_indep`
+    says the cell decodes the same at ANY tables. The engine's own
+    decoder, not a new one. -/
 def decodeCell (c : SpikeCell) : CerbMem.MemValue :=
   CerbMem.reconstructValue [] [] c.addr c.ty c.bytes
 
@@ -99,6 +103,17 @@ structure StorableAt (ty : ctype) (mv : CerbMem.MemValue) : Prop where
   compat : CerbMem.ctypeMemCompatible ty (CerbMem.typeofMval mv) = true
   fpm : ∀ fpm, (CerbMem.memValueToBytes fpm mv).1 = fpm
   len : ∀ fpm, ((CerbMem.memValueToBytes fpm mv).2).length = CerbMem.sizeofCtype ty
+  /-- serialization is table-independent (storeM serializes at the
+      state's CURRENT funptrmap, CerbMem.lean:1632/639; scalar
+      values produce the same bytes at any table). -/
+  bytes_fpm : ∀ fpm, (CerbMem.memValueToBytes fpm mv).2 =
+    (CerbMem.memValueToBytes [] mv).2
+  /-- the stored image decodes table-independently (feeds the written
+      cell's `CellCoh.dec_indep`). -/
+  stored_dec : ∀ (lum : List (Int × identifier)) (fpm : CerbMem.Funptrmap)
+    (addr : Int),
+    CerbMem.reconstructValue lum fpm addr ty (CerbMem.memValueToBytes [] mv).2 =
+      CerbMem.reconstructValue [] [] addr ty (CerbMem.memValueToBytes [] mv).2
 
 /-! ## Pure bytemap lemmas (writeBytesTo/readBytesFrom, CerbMem.lean:1420-1431) -/
 
@@ -192,6 +207,18 @@ structure CellCoh (σ : Mem) (id : Int) (c : SpikeCell) : Prop where
   nonAtomic : atomicTy c.ty = false
   len : c.bytes.length = CerbMem.sizeofCtype c.ty
   bytes : CerbMem.readBytesFrom σ c.addr (CerbMem.sizeofCtype c.ty) = c.bytes
+  /-- INERTNESS ([USER 2026-08-30], the de-pin): the cell's decode is
+      independent of the union-member and function-pointer side
+      tables — exactly what loadM's value reconstruction reads them
+      for (reconstructValue, CerbMem.lean:652: the unionmap enters
+      only union arms, the funptrmap only pointer-byte arms). Under
+      this premise the tables are READ-ONLY context (arbitrary,
+      returned verbatim); for scalar cells the premise is `fun _ _ =>
+      rfl`. The full-build shape is ghost ownership of the tables
+      (funptrmap ↔ the donor's fntbl_entry analog); this premise is
+      its degenerate case. -/
+  dec_indep : ∀ (lum : List (Int × identifier)) (fpm : CerbMem.Funptrmap),
+    CerbMem.reconstructValue lum fpm c.addr c.ty c.bytes = decodeCell c
 
 def cellsDisjoint (c1 c2 : SpikeCell) : Prop :=
   c1.addr + (CerbMem.sizeofCtype c1.ty : Int) ≤ c2.addr ∨
@@ -201,8 +228,6 @@ open Iris.Std.PartialMap in
 /-- The coupling invariant between the real MemState and the ghost
     cell map. -/
 structure Coh (σ : Mem) (m : SpikeHeapF SpikeCell) : Prop where
-  lum : σ.lastUsedUnionMembers = []
-  fpm : σ.funptrmap = []
   cells : ∀ id c, get? m id = some c → CellCoh σ id c
   disj : ∀ id1 id2 c1 c2, id1 ≠ id2 → get? m id1 = some c1 →
     get? m id2 = some c2 → cellsDisjoint c1 c2
@@ -230,8 +255,7 @@ theorem isAtomicMemberAccess_false (al : CerbMem.Allocation) (ty : ctype)
     a named hypothesis. -/
 theorem storeM_success (σ : Mem) (id : Int) (c : SpikeCell)
     (mv : CerbMem.MemValue) (loc : CerbLocation.Loc)
-    (hcoh : CellCoh σ id c) (hfpm : σ.funptrmap = [])
-    (hst : StorableAt c.ty mv) :
+    (hcoh : CellCoh σ id c) (hst : StorableAt c.ty mv) :
     applyMemM (CerbMem.storeM loc c.ty false (cellPtr id c.addr) mv) σ =
       some (.FP .W c.addr (CerbMem.sizeofCtype c.ty),
         CerbMem.writeBytesTo σ c.addr (CerbMem.memValueToBytes [] mv).2) := by
@@ -239,25 +263,27 @@ theorem storeM_success (σ : Mem) (id : Int) (c : SpikeCell)
   have hbounds : CerbMem.isInBounds al c.addr (CerbMem.sizeofCtype c.ty) = true := by
     simp [CerbMem.isInBounds, hbase, hsize]
   have hatomic := isAtomicMemberAccess_false al c.ty c.addr hty hcoh.nonAtomic
-  have hself : ({ σ with funptrmap := ([] : CerbMem.Funptrmap) } : Mem) = σ := by
-    rw [← hfpm]
-  rcases hmvb : CerbMem.memValueToBytes [] mv with ⟨fpm', bs'⟩
-  have hfpm' : fpm' = [] := by
-    have := hst.fpm []
+  rcases hmvb : CerbMem.memValueToBytes σ.funptrmap mv with ⟨fpm', bs'⟩
+  have hfpm' : fpm' = σ.funptrmap := by
+    have := hst.fpm σ.funptrmap
     rw [hmvb] at this
     exact this
-  subst hfpm'
+  have hbs' : bs' = (CerbMem.memValueToBytes [] mv).2 := by
+    have := hst.bytes_fpm σ.funptrmap
+    rw [hmvb] at this
+    exact this
+  subst hfpm' hbs'
+  have hself : ({ σ with funptrmap := σ.funptrmap } : Mem) = σ := rfl
   unfold CerbMem.storeM applyMemM
   simp only [hst.compat, Bool.not_true, Bool.false_eq_true, if_false, cellPtr,
-    hal, hbounds, hro, hatomic, hfpm, hmvb, hself]
+    hal, hbounds, hro, hatomic, hmvb, hself]
 
 /-- Successful load: with a Coh-backed cell that is not a _Bool trap,
     `loadM` (CerbMem.lean:1586) takes the active path, returns the
     cell's decode, and leaves the state unchanged. -/
 theorem loadM_success (σ : Mem) (id : Int) (c : SpikeCell)
     (loc : CerbLocation.Loc)
-    (hcoh : CellCoh σ id c) (hlum : σ.lastUsedUnionMembers = [])
-    (hfpm : σ.funptrmap = []) (htrap : cellLoadTrap c = false) :
+    (hcoh : CellCoh σ id c) (htrap : cellLoadTrap c = false) :
     applyMemM (CerbMem.loadM loc c.ty (cellPtr id c.addr)) σ =
       some ((.FP .R c.addr (CerbMem.sizeofCtype c.ty), decodeCell c), σ) := by
   obtain ⟨al, hal, hbase, hsize, hty, hro⟩ := hcoh.alloc
@@ -267,7 +293,8 @@ theorem loadM_success (σ : Mem) (id : Int) (c : SpikeCell)
   have hdec : CerbMem.reconstructValue σ.lastUsedUnionMembers σ.funptrmap c.addr
       c.ty (CerbMem.readBytesFrom σ c.addr (CerbMem.sizeofCtype c.ty)) =
       decodeCell c := by
-    rw [hlum, hfpm, hcoh.bytes]; rfl
+    rw [hcoh.bytes]
+    exact hcoh.dec_indep _ _
   unfold CerbMem.loadM applyMemM
   simp only [cellPtr, hcoh.dead, Bool.false_eq_true, if_false, hal, hbounds,
     Bool.not_true, hatomic, hdec]
@@ -277,7 +304,7 @@ theorem loadM_success (σ : Mem) (id : Int) (c : SpikeCell)
   -- scrutinees until both reduce.
   unfold cellLoadTrap boolTy at htrap
   generalize decodeCell c = mval at htrap ⊢
-  clear hdec hatomic hbounds hro hty hsize hbase hal al hcoh hlum hfpm
+  clear hdec hatomic hbounds hro hty hsize hbase hal al hcoh
   rcases c with ⟨ca, ⟨q, t⟩, cb⟩ <;> cases t <;> try simp_all
   rename_i bt
   cases bt <;> try simp_all
@@ -319,22 +346,24 @@ theorem Coh.store (σ : Mem) (m : SpikeHeapF SpikeCell) (i : Int)
       exact .inl ⟨rfl, (Option.some.inj h).symm⟩
     · rw [Iris.Std.get?_insert_ne (fun h' => hid h'.symm)] at h
       exact .inr ⟨hid, h⟩
-  refine ⟨?_, ?_, ?_, ?_⟩
-  · simpa using hcoh.lum
-  · simpa using hcoh.fpm
+  refine ⟨?_, ?_⟩
   · intro j c' h
     rcases hcell' j c' h with ⟨rfl, rfl⟩ | ⟨hne, hold⟩
     · have hc := hcoh.cells _ c hget
-      refine ⟨by simpa using hc.dead, ?_, hc.nonAtomic, hlen, ?_⟩
+      refine ⟨by simpa using hc.dead, ?_, hc.nonAtomic, hlen, ?_, ?_⟩
       · obtain ⟨al, hal, h1, h2, h3, h4⟩ := hc.alloc
         exact ⟨al, by simpa using hal, h1, h2, h3, h4⟩
       · show CerbMem.readBytesFrom (CerbMem.writeBytesTo σ c.addr bs) c.addr
           (CerbMem.sizeofCtype c.ty) = bs
         rw [← hlen]
         exact readBytesFrom_writeBytesTo_self σ c.addr bs
+      · intro lum fpm
+        show CerbMem.reconstructValue lum fpm c.addr c.ty bs = _
+        rw [← hbs]
+        exact hst.stored_dec lum fpm c.addr
     · have hc := hcoh.cells j c' hold
       have hdisj := hcoh.disj _ _ c' c hne hold hget
-      refine ⟨by simpa using hc.dead, ?_, hc.nonAtomic, hc.len, ?_⟩
+      refine ⟨by simpa using hc.dead, ?_, hc.nonAtomic, hc.len, ?_, hc.dec_indep⟩
       · obtain ⟨al, hal, h1, h2, h3, h4⟩ := hc.alloc
         exact ⟨al, by simpa using hal, h1, h2, h3, h4⟩
       · show CerbMem.readBytesFrom (CerbMem.writeBytesTo σ c.addr bs) c'.addr

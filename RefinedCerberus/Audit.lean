@@ -32,6 +32,7 @@ import Lean
 import RefinedCerberus.Smoke
 import RefinedCerberus.SemanticsSmoke
 import RefinedCerberus.Spike.Rules
+import RefinedCerberus.Spike.Exhibit
 
 namespace RefinedCerberus.Audit
 
@@ -57,6 +58,49 @@ def allowedAxioms : List Name :=
 info: 'RefinedCerberus.Spike.exhibit' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in #print axioms RefinedCerberus.Spike.exhibit
+
+-- Spike slice B (2026-08-30): the engine-facing spine, exact trio each.
+-- engine_complete = artifact 4 (Step certified against step_ctx +
+-- the Driver.lean:273 discharge, per-construct); spike_engine_adequacy
+-- = the engine-only adequacy statement; the exhibits are the
+-- operator's package re-concluded at the engine level, incl. the
+-- recon probe as a theorem (exhibitA_terminates).
+/--
+info: 'RefinedCerberus.Spike.engine_complete' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms RefinedCerberus.Spike.engine_complete
+
+/--
+info: 'RefinedCerberus.Spike.spike_engine_adequacy' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms RefinedCerberus.Spike.spike_engine_adequacy
+
+/--
+info: 'RefinedCerberus.Spike.exhibitA_engine' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms RefinedCerberus.Spike.exhibitA_engine
+
+/--
+info: 'RefinedCerberus.Spike.exhibitB_engine' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms RefinedCerberus.Spike.exhibitB_engine
+
+/--
+info: 'RefinedCerberus.Spike.exhibitA_terminates' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms RefinedCerberus.Spike.exhibitA_terminates
+
+-- The exported semantic face ([USER 2026-08-30] final form): the
+-- configuration-level triple soundness + the semantic frame rule.
+/--
+info: 'RefinedCerberus.Spike.semantic_triple_sound' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms RefinedCerberus.Spike.semantic_triple_sound
+
+/--
+info: 'RefinedCerberus.Spike.semantic_frame' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms RefinedCerberus.Spike.semantic_frame
 
 /-! ## The exhaustive sweep (LAST — nothing declared below) -/
 

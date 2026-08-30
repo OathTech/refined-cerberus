@@ -21,15 +21,13 @@ The acceptance package (docs/2026-08-30_spike-minilog-plan.md):
   end of this file (a failing example cannot be committed compiling;
   the stuck goal is recorded verbatim there and in the slice notes).
 
-SOUNDNESS STATUS (honest gap, slice A): every theorem here is proved
-against `Step` (Step.lean) — the hand-written mirror of the engine.
-Artifact 4 (slice B) certifies Step against the engine's
-step_ctx/driver composite; until then these are theorems about the
-mirror, with per-rule engine cites, not yet engine-behavior
-statements. A second honest gap: the `SpikeGS hlc GF` ghost-state
-assumption is not yet discharged by a concrete functor list (the
-HeapLangS construction, PrimitiveLaws.lean:94-126, is the template);
-slice B's adequacy statement forces that construction.
+SOUNDNESS STATUS: every theorem here is proved against `Step`
+(Step.lean), the hand-written mirror. Slice B closed both slice-A
+gaps: Step is certified against the engine's step_ctx/driver
+composite (Soundness.lean), and the bundled `SpikeGS` ghost state is
+constructed inside the adequacy proof (Adequacy.lean,
+spike_step_adequacy), so triples proved here acquire engine-level
+meaning through SemTriple / semantic_triple_sound.
 -/
 import RefinedCerberus.Spike.Lang
 
@@ -125,7 +123,7 @@ theorem wp_store [SpikeGS hlc GF] {s : Stuckness} {E : CoPset}
   · ihave >%_ := genHeap_valid $$ [$Hh $Hpt]
     itrivial
   have hcell : CellCoh σ₁ i ⟨addr, ty, bs⟩ := Hcoh.cells i _ Hget
-  have hrun := storeM_success σ₁ i ⟨addr, ty, bs⟩ mv loc hcell Hcoh.fpm hst
+  have hrun := storeM_success σ₁ i ⟨addr, ty, bs⟩ mv loc hcell hst
   imodintro
   isplitr
   · ipureintro
@@ -199,7 +197,7 @@ theorem wp_load [SpikeGS hlc GF] {s : Stuckness} {E : CoPset}
   · ihave >%_ := genHeap_valid $$ [$Hh $Hpt]
     itrivial
   have hcell : CellCoh σ₁ i ⟨addr, ty, bs⟩ := Hcoh.cells i _ Hget
-  have hrun := loadM_success σ₁ i ⟨addr, ty, bs⟩ loc hcell Hcoh.lum Hcoh.fpm htrap
+  have hrun := loadM_success σ₁ i ⟨addr, ty, bs⟩ loc hcell htrap
   imodintro
   isplitr
   · ipureintro
@@ -612,7 +610,7 @@ theorem seven_encodes :
       some sevenMval := rfl
 
 theorem seven_storable : StorableAt intTy sevenMval :=
-  ⟨rfl, fun _ => rfl, fun _ => rfl⟩
+  ⟨rfl, fun _ => rfl, fun _ => rfl, fun _ => rfl, fun _ _ _ => rfl⟩
 
 /-- THE EXHIBIT ([USER 2026-08-30], the go order):
 

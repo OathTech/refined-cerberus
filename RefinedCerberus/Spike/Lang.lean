@@ -15,8 +15,9 @@ template, Iris/HeapLang/Instances.lean + PrimitiveLaws.lean:59-90).
   `Context.primStep_fill` fails there. The Eannot layer is handled by
   a dedicated commuting lemma in Rules.lean (wp_annot), not by bind.
 
-SOUNDNESS STATUS: sound against Step only; Step's certification
-against the engine is slice B (artifact 4).
+SOUNDNESS STATUS: the WP is over Step; Step's certification against
+the engine is Soundness.lean, and the engine-facing meaning lands
+through Adequacy.lean (SemTriple / semantic_triple_sound).
 -/
 import RefinedCerberus.Spike.Heap
 

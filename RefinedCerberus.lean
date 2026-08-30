@@ -4,4 +4,7 @@ import RefinedCerberus.Spike.Step
 import RefinedCerberus.Spike.Heap
 import RefinedCerberus.Spike.Lang
 import RefinedCerberus.Spike.Rules
+import RefinedCerberus.Spike.Soundness
+import RefinedCerberus.Spike.Adequacy
+import RefinedCerberus.Spike.Exhibit
 import RefinedCerberus.Audit
