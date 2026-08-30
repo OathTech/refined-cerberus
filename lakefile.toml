@@ -34,3 +34,12 @@ subDir = "Iris"
 
 [[lean_lib]]
 name = "RefinedCerberus"
+
+# The SEMANTICS dependency ([USER 2026-08-29]: pin the post-merge
+# mainline; landed 2026-08-30). Path form into the pinned+primed
+# workspace clone (.cerberus-ws — see scripts/setup-cerberus-dep.sh;
+# a plain git require cannot work: generated/ is gitignored upstream).
+# The pin itself lives in scripts/semantics-pin.env, drift-checked.
+[[require]]
+name = "CerberusLean"
+path = ".cerberus-ws/lean_frontend"

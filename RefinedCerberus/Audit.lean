@@ -30,6 +30,7 @@ stays the last import of the lib root.
 -/
 import Lean
 import RefinedCerberus.Smoke
+import RefinedCerberus.SemanticsSmoke
 
 namespace RefinedCerberus.Audit
 
