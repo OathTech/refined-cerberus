@@ -19,10 +19,26 @@ grow only for load-bearing trust properties):
    `#guard_msgs in #print axioms` — growth is a build failure until
    deliberately re-baselined in the same commit with the reason.
 
-THE DECLARED BOUNDARY: the classical trio only. There are no
-project axioms; adding one requires a boundary-list entry here with
-provenance (permanent-immovable or temporal-with-mover), per the
-no-internal-trust-gaps discipline.
+THE DECLARED BOUNDARY: the classical trio, plus — for EXACTLY the
+two production-entry modules (Spike.ProdEntry / Spike.ProdExhibit) —
+the one declared boundary axiom `runEffectful` (LemLib.lean:54).
+Boundary entry provenance (Extension D, 2026-08-30):
+- TEMPORAL, with a named mover: `runEffectful` is the semantics
+  repo's one residual axiom (cerberus-lean lean_frontend/TODO.md —
+  "the residual is runEffectful (LemLib, temporal — its deletion is
+  ...)"; DESIGN.md §the axiom story). Its removal is owned by the
+  cerberus-lean/lem-lean register, not here; when it lands, the
+  boundary list here shrinks back to the trio with no statement
+  change on our side.
+- WHY it enters: the production-entry theorems quantify over the
+  SHIPPED initial state, `initial_driver_state` (Driver.lean:435),
+  whose `initial_core_run_state` (Core_run_aux.lean:395) draws
+  sym_supply through `runEffectful (CerberusFresh.freshIntIO ())`.
+  The axiom enters through the STATEMENT (the constant's definition
+  cone), not through any proof step; the theorems hold for every
+  value of the seam (the fragment never reads sym_supply — the D14
+  partition). Every other module — including the whole
+  DriverCollapse layer — remains trio-exact, pinned below.
 
 The sweep is LAST in the file by design: a constant declared after
 it would dodge it, so nothing is declared below it, and this module
@@ -33,6 +49,7 @@ import RefinedCerberus.Smoke
 import RefinedCerberus.SemanticsSmoke
 import RefinedCerberus.Spike.Rules
 import RefinedCerberus.Spike.Exhibit
+import RefinedCerberus.Spike.ProdExhibit
 
 namespace RefinedCerberus.Audit
 
@@ -42,6 +59,17 @@ open Lean
     axioms exist; see header before adding anything). -/
 def allowedAxioms : List Name :=
   [``propext, ``Classical.choice, ``Quot.sound]
+
+/-- The production-entry boundary: trio + the declared temporal
+    boundary axiom (provenance + mover in the header). -/
+def boundaryAxioms : List Name :=
+  allowedAxioms ++ [``runEffectful]
+
+/-- EXACTLY the modules whose theorems quantify over the shipped
+    `initial_driver_state` and may therefore carry `runEffectful`
+    (in their statements). Everything else is held to the trio. -/
+def boundaryModules : List Name :=
+  [`RefinedCerberus.Spike.ProdEntry, `RefinedCerberus.Spike.ProdExhibit]
 
 /-! ## Curated pins -/
 
@@ -128,6 +156,43 @@ info: 'RefinedCerberus.Spike.exhibitC_engine' depends on axioms: [propext, Class
 -/
 #guard_msgs in #print axioms RefinedCerberus.Spike.exhibitC_engine
 
+-- Extension D (2026-08-30): the production-entry theorems. The
+-- COLLAPSE layer (DriverCollapse — the scheduler/ND/readout
+-- equations against the driver's own round functions) is TRIO-EXACT;
+-- the ENTRY theorems (ProdEntry/ProdExhibit — statements quantify
+-- over the shipped `initial_driver_state`) carry exactly
+-- trio + runEffectful, the declared temporal boundary (header:
+-- provenance + mover — the semantics repo's register owns it).
+/--
+info: 'RefinedCerberus.Spike.prod_loop_done' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms RefinedCerberus.Spike.prod_loop_done
+
+/--
+info: 'RefinedCerberus.Spike.driver2_done' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms RefinedCerberus.Spike.driver2_done
+
+/--
+info: 'RefinedCerberus.Spike.finalize_done' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms RefinedCerberus.Spike.finalize_done
+
+/--
+info: 'RefinedCerberus.Spike.prod_run_eq' depends on axioms: [propext, runEffectful, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms RefinedCerberus.Spike.prod_run_eq
+
+/--
+info: 'RefinedCerberus.Spike.sem_triple_prod' depends on axioms: [propext, runEffectful, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms RefinedCerberus.Spike.sem_triple_prod
+
+/--
+info: 'RefinedCerberus.Spike.exhibitA_prod' depends on axioms: [propext, runEffectful, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms RefinedCerberus.Spike.exhibitA_prod
+
 /-! ## The exhaustive sweep (LAST — nothing declared below) -/
 
 open Lean in
@@ -135,27 +200,32 @@ open Lean in
   let env ← getEnv
   let mods := env.header.moduleNames
   let isOurs : Array Bool := mods.map (fun m => m.getRoot == `RefinedCerberus)
+  let isBoundary : Array Bool := mods.map (fun m => boundaryModules.contains m)
   let names : Array Name := env.constants.fold
     (fun acc n _ => acc.push n) #[]
   let mut swept := 0
+  let mut boundarySwept := 0
   for n in names do
-    let ours := match env.getModuleIdxFor? n with
-      | some idx => isOurs[idx.toNat]!
-      | none => true  -- the file being elaborated
+    let (ours, boundary) := match env.getModuleIdxFor? n with
+      | some idx => (isOurs[idx.toNat]!, isBoundary[idx.toNat]!)
+      | none => (true, false)  -- the file being elaborated: trio-only
     unless ours do continue
     unless env.find? n matches some (.thmInfo _) do continue
     if n.isInternalDetail then continue
+    let allowed := if boundary then boundaryAxioms else allowedAxioms
     let axs ← collectAxioms n
     for a in axs do
-      unless allowedAxioms.contains a do
+      unless allowed.contains a do
         throwError "RefinedCerberus axiom sweep FAILED: theorem {n} \
           carries axiom {a}, outside the declared boundary \
-          {allowedAxioms}. Either the proof is wrong (sorry / a \
+          {allowed}. Either the proof is wrong (sorry / a \
           non-kernel method) or a boundary decision is being made \
           implicitly — boundary changes happen in Audit.lean, same \
           commit, with provenance."
     swept := swept + 1
-  logInfo s!"RefinedCerberus axiom sweep: {swept} theorems, all cones \
-    within the classical trio"
+    if boundary then boundarySwept := boundarySwept + 1
+  logInfo s!"RefinedCerberus axiom sweep: {swept} theorems within the \
+    declared boundary ({boundarySwept} in the production-entry \
+    boundary modules, trio + runEffectful; all others trio-exact)"
 
 end RefinedCerberus.Audit

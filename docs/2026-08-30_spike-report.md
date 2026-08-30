@@ -6,7 +6,11 @@
 below is committed and gated on this branch (`spike-minilog`,
 semantics pin 8fb380c9c): 196 theorems in the sweep, all axiom cones
 exactly the classical trio, no sorries, no non-kernel methods, no
-fuel/recursion-limit bumps.
+fuel/recursion-limit bumps. (Since amended: exhibit C brought the
+sweep to 209; Extension D — the production-driver coupling, §Extension
+D below — brings it to 287, of which 34 sit in the two declared
+production-entry boundary modules whose cones are trio +
+`runEffectful`; everything else remains trio-exact.)
 
 ## The headline theorem ([USER 2026-08-30], the required shape)
 
@@ -229,3 +233,193 @@ ty_deref/ty_ref factorization would sit.
   layer should target; its footprint/inertness premises are the
   degenerate forms of ghost state the full build will own
   (side tables, allocation metadata).
+
+## Extension D: the production-driver coupling ([USER 2026-08-30], "extend this to cover the real engine, not our hand-rolled driver")
+
+The drive-vs-production delta is retired: the semantic triples are
+re-exported against the SHIPPED pipeline — `CerbND.runND` of
+`Driver.drive` from `initial_driver_state` (Driver.lean:435, the
+production constructor; the exact composite Main.lean:857-885 runs),
+through the `finalize`/`Driver.hack` readout. New modules:
+`Spike/DriverCollapse.lean` (D1-D3), `Spike/ProdEntry.lean` (D4 cold
+start + the theorem), `Spike/ProdExhibit.lean` (the demonstration);
+`create` joined the fragment (Step.lean rule + full certification in
+Soundness.lean).
+
+### The production-entry theorem (verbatim, `Spike/ProdEntry.lean`)
+
+```lean
+theorem sem_triple_prod
+    (e : CoreExpr) (hfrag : FragP e)
+    -- the compute part and its exported triple
+    (ec : CoreExpr) (P : CellMap) (post : value → CellMap → Prop)
+    (hsem : SemTriple ec P post)
+    -- the frame quantifier, as in SemTriple
+    (R : CellMap) (hdisj : P ##ₘ R)
+    -- the program's prefix drives the production cold-start memory to
+    -- a configuration satisfying P ⊎ R in j steps (engine vocabulary)
+    (σc : Mem) (j : Nat)
+    (hpre : ∀ (aids : Nat → Nat) (n : Nat),
+      drive aids (j + n) (spikeThread e) prodMem₀ =
+        drive (fun i => aids (i + j)) n (spikeThread ec) σc)
+    (hsat : Sat σc (Iris.Std.PartialMap.union P R))
+    -- termination of the compute part within the production budget
+    (v : value) (σfin : Mem) (k : Nat)
+    (hterm : ∀ aids : Nat → Nat,
+      drive aids k (spikeThread ec) σc = .done v σfin)
+    (hfuel : esize e + (j + k) + 2 ≤ lemDefaultFuel)
+    (hfuelc : esize ec + k ≤ lemDefaultFuel)
+    (fs : CerbFS.FsState) (args : List String) :
+    ∃ (dres : driver_result) (dst' : driver_state),
+      CerbND.runND (_root_.drive fmapEmpty false (prodFile e) args)
+          (initial_driver_state (prodFile e) fs) =
+        [(nd_status.Active dres, ([] : List String), dst')] ∧
+      dres.dres_core_value = v ∧
+      dst'.layout_state = σfin ∧
+      ∃ Q : CellMap, post v Q ∧ Q ##ₘ R ∧
+        Sat σfin (Iris.Std.PartialMap.union Q R)
+```
+
+`prodFile e` is the synthetic one-procedure file (main := a
+parameterless Proc with body `e`); `prodMem₀` is the production
+cold-start memory (initialMemState + the driver's own errno
+allocate-and-zero, derived through engine functions only). Nothing
+hand-built enters the quantifiers: the initial state is literally
+`initial_driver_state (prodFile e) fs`. The conclusion is an
+EQUATION: the production run IS the singleton Active execution —
+killed/stuck productions are excluded by the equation itself, and
+completed runs' value and final memory satisfy the postcondition
+with the frame `R` verbatim, exactly SemTriple's splitting
+quantifier. The engine-only supporting form (`prod_run_eq`) pins
+additionally `dres_blocked = false`, `dres_stdout = dres_stderr = ""`.
+
+### The demonstration (`Spike/ProdExhibit.lean`)
+
+Exhibit A re-exported at this level on a fully SELF-CONTAINED
+program (D4's cold start — the program creates its own cell with the
+engine's `create` at the address the production allocator
+deterministically mints; errno is production allocation id 0, the
+program's cell id 1):
+
+```lean
+theorem exhibitA_prod (fs : CerbFS.FsState) (args : List String) :
+    ∃ (dres : driver_result) (dst' : driver_state),
+      CerbND.runND (_root_.drive fmapEmpty false (prodFile progAProd) args)
+          (initial_driver_state (prodFile progAProd) fs) =
+        [(nd_status.Active dres, ([] : List String), dst')] ∧
+      dres.dres_core_value = sevenVal ∧
+      CerbMem.readBytesFrom dst'.layout_state pxAddr 4 =
+        (CerbMem.memValueToBytes [] sevenMval).2
+```
+
+where `progAProd = lets _ = create(4, int) in (lets _ = store(x,7)
+in load(x))` at x = the production cell. The compute part goes
+through the UNCHANGED slice-B logic (wp_store/wp_sseq/wp_load →
+semantic_triple_sound); the create prefix and termination are
+concrete engine facts on the cold-start states.
+
+### The obligations, discharged
+
+- **D1 scheduler collapse** (`DriverCollapse.lean`): one iteration
+  of the production per-thread loop `drive_nonmemory_steps_aux2`
+  (Driver.lean:346-351) = the spike drive-loop body, proved by
+  unfolding the driver's own round functions (`loop_step_tau`/
+  `loop_step_action`/`loop_step_done`; the action path goes
+  advance_step → liftCore_run → perform_action_request2 (the
+  fresh_action_id' draw, Driver.lean:283) →
+  action_request_sequential2 (Driver.lean:273) — the exact composite
+  `dischargeStep` mirrors). Iterated: `prod_loop_done` — production
+  driving = the spike drive, for fragment configurations. The outer
+  `driver2` round (`driver2_done`) routes PROGRAM-DONE through
+  `process_core_step2`/`prepare_exit`; the opaque execution-mode
+  read (`CerbGlobal.current_execution_mode`, an `opaque` constant)
+  is handled by CASES — both scheduler branches reduce to the same
+  singleton pick on a one-thread fragment state.
+- **D2 ND collapse**: the fragment path of the whole driver
+  computation is a one-layer NDactive tree (`runOne` layer:
+  bind/liftND/liftCore_run composition lemmas — each bind spends one
+  layer of its own fresh fuel budget, never accumulating; `pick` on
+  a singleton is `NDactive`, no ND node);
+  `runND_active` (an EMPTY axiom cone) lifts it to the runner:
+  exactly one execution.
+- **D3 readout**: `hack_value` (`step_eval_pexpr`'s PEval arm is the
+  identity, `valueFromPexpr` reads it back — one fuel layer) +
+  `finalize_done` (the PROGRAM-DONE parked state reads out to the
+  delivered value, io streams folded from the untouched initial io).
+  The annot value form never reaches `hack`: the REMOVE-ANNOT tau
+  precedes PROGRAM-DONE (the D20 value protocol, composed inside
+  `prod_loop_done`).
+- **D4 cold start**: `create` joined the fragment mirroring the
+  store pattern (Step rule + createRedex/Redex/Decomp +
+  `step_ctx_create` context-undisturbed + `dischargeStep` Create arm
+  + engine_complete case); the production setup prefix
+  (spawn/main-lookup/errno) is collapsed by `drive_after_setup` with
+  the errno allocation done by the real
+  `allocateObject`/`storeM` on the cold state.
+
+### The cone answer (D5): the known unknown, resolved
+
+`runEffectful` DOES enter — exactly where anticipated, and ONLY
+there. Which definition drags it in: `initial_driver_state`
+(Driver.lean:435) → `initial_core_run_state`
+(Core_run_aux.lean:395), whose `sym_supply` is
+`runEffectful (fun () => CerberusFresh.freshIntIO ())` —
+`runEffectful` is LemLib's one residual axiom (lem-lean
+lean-lib/LemLib.lean:54; the semantics repo's TODO/DESIGN register
+owns its removal). It enters through the theorem STATEMENTS (the
+constant's definition cone), not through any proof step, and the
+theorems hold for every value of the seam (the fragment never reads
+sym_supply — the D14 partition's row). Cones, pinned in Audit.lean:
+
+- the ENTIRE collapse layer (`DriverCollapse.lean`: prod_loop_done,
+  driver2_done, finalize_done, the loop/discharge lemmas):
+  EXACT TRIO (`runND_active`: empty cone);
+- the entry theorems (`prod_run_eq`, `sem_triple_prod`,
+  `exhibitA_prod`): exactly
+  `[propext, runEffectful, Classical.choice, Quot.sound]`.
+
+Audit.lean declares the boundary per its header discipline: a
+module-scoped boundary (ONLY `Spike.ProdEntry`/`Spike.ProdExhibit`
+may carry `runEffectful`; every other module is held to the trio by
+the sweep), with provenance TEMPORAL and the mover named (the
+semantics repo's register owns `runEffectful`; when its deletion
+lands there, the boundary here shrinks back to the trio with no
+statement change on our side). The modified sweep is plant-tested in
+both directions (a runEffectful statement outside the boundary
+modules fails; a sorry inside them fails).
+
+### Design finding: no unconditional `wp_create`
+
+An unconditional `wp_create` small axiom is UNPROVABLE in the
+slice-B logic: `allocateObject` can kill ("out of memory",
+CerbMem.lean:1479) from configurations the footprint does not
+constrain, so the WP's NotStuck obligation cannot be established
+from cell ownership alone. A sound `wp_create` needs an
+allocator-cursor resource in the state interpretation (the
+registered full-build shape; `genHeap_alloc` is then its ghost
+step). Extension D therefore adds `create` at the
+Step/certification level only, and cold-start programs run their
+create prefix on the production-pinned initial memory, where
+allocation success is a theorem. Recorded in
+`ProdEntry.lean`'s header and slice-B notes D26.
+
+### What remains (out of Extension D's scope, named)
+
+- **Fuel parametricity.** The production loop's fuel-exhaustion leaf
+  is the opaque `fuelExhausted` (fail-closed, D19): at insufficient
+  fuel nothing about the production value is provable, so
+  `sem_triple_prod` carries a termination-within-budget hypothesis
+  (`hterm` — for the exhibits a 6-step simulation; the budget is
+  10^6). Removing it needs either graceful exhaustion in the driver
+  or fuel-parametric drive statements.
+- **Ewseq** (and Eif): still outside the fragment; per-construct
+  certification cost is linear and mechanical, but each new
+  construct now also adds one loop-iteration case to
+  `prod_loop_done`.
+- **Untracked-preservation export**: the production equation pins
+  layout_state and the driver_result; the remaining driver_state
+  components (trace contents, dr_step_counter, core_run_state0) are
+  existentially absorbed — exporting their exact values (the trace
+  as a checkable execution record) is unclaimed.
+- **The allocator-cursor resource** (above): the ghost-side create
+  story for arbitrary configurations.

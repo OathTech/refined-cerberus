@@ -204,3 +204,109 @@ cones within the classical trio; curated pins on `Spike.exhibit`,
 `exhibitB_engine`, `exhibitA_terminates`, `semantic_triple_sound`,
 `semantic_frame` (exact trio each). No sorry, no non-kernel methods,
 no new axioms, no maxRecDepth/heartbeat bumps.
+
+## Extension D notes (D25+; production-driver coupling worker)
+
+### D25. The collapse architecture: runOne layer + per-round equations + one simulation
+The production coupling is proved at the ONE-LAYER level, not the
+runner level: `runOne` (DriverCollapse.lean) applies an ndM tree to a
+state and exposes the raw `nd_action × state`; composition lemmas
+(`runOne_bind_active`, `runOne_liftMem_active`,
+`runOne_liftCore_run_*`) collapse the driver's bind/lift plumbing one
+layer at a time — each `nd_bind` spends one layer of its own FRESH
+`nd_bind_lemFuel` budget (Nondeterminism.lean:188), so bind fuel
+never accumulates across a run; the only per-step fuel is
+`drive_nonmemory_steps_aux2`'s own loop budget (hence the `n + 2 ≤
+lemDefaultFuel` side condition: n drive steps + the done-recording
+and drain iterations). `runND` enters exactly once, at the very end
+(`runND_active`, empty axiom cone). The unfolding recipe that works
+against the generated fuelled definitions:
+`rw [lemDefaultFuel_succ]; unfold f_lemFuel; dsimp only; rw [h]` —
+the same staging discipline as D12/D22, now for fuel matchers.
+
+### D26. wp_create is unprovable without an allocator-cursor resource (design finding)
+`allocateObject` kills ("out of memory", CerbMem.lean:1479) when the
+allocation cursor is exhausted — a condition the cell footprint says
+nothing about, so the WP's NotStuck obligation for `create` cannot be
+discharged from ownership. Consequence: `create` joins the fragment
+at the Step/certification level only (rule + createRedex +
+step_ctx_create + dischargeStep Create arm + engine_complete case);
+cold-start programs discharge their create prefixes CONCRETELY on
+the production-pinned initial memory, where success is a theorem.
+The full-build shape is an allocator-cursor ghost resource in the
+state interpretation (then `genHeap_alloc` is the ghost step of a
+sound wp_create). Note the mirror details: create's continuation is
+a BARE value (`mk_value_e (Vobject (OVpointer ptr))`, no Eannot
+residue — step_action's Create arm, Core_reduction.lean:424), and
+allocateObject DISCARDS both tid and the requested address
+(CerbMem.lean:1470-1474) — the Step rule pins them to 0/none and the
+certification bridges by `allocateObject_arg_irrel` (D28).
+
+### D27. The scheduler's opaque mode read is handled by cases, and both branches converge
+`driver2`'s random-vs-exhaustive branch reads
+`CerbGlobal.current_execution_mode ()` — an `opaque` constant (not
+an axiom; kernel-consistent, value unknowable). The round equation
+(`driver2_done`) is proved by `cases` on the mode test: on a
+SINGLETON non-blocked step list both branches reduce to the same
+pick-the-one-step path (`pick` on a singleton is `NDactive`,
+Nondeterminism.lean:276 — no ND node, so branch-freeness survives
+the scheduler). Unit-valued debug plumbing (`print_debug_pure` & co)
+disappears definitionally by Unit eta.
+
+### D28. Concrete-state defeq is the cost center; symbolic bridges keep it off the path
+Two measured hazards, both avoided structurally rather than by limit
+bumps: (i) letting the elaborator discover that discarded arguments
+don't matter (`get_with_address []` vs `none` in the create payload)
+forces whnf of `allocateObject` AT THE CONCRETE STATE — a heartbeat
+blowout; the fix is the symbolic-argument equation
+`allocateObject_arg_irrel` proved once at symbolic arguments
+(Soundness.lean). (ii) `simp` on byte-level facts at a LITERAL
+address evaluates the TreeMap bytemap (kernel deep recursion); the
+fix is stating the length fact at a universal address
+(`errno_bytes_len (a : Int)`), exactly the exhibit's `bytes_len`
+shape. Corollary of D22, recorded because both failures were
+observed live in this slice.
+
+### D29. The production simulation consumes the drive hypothesis, not adequacy
+`prod_loop_done` takes `∀ aids, drive … = .done v σfin` and mirrors
+it step-for-step through the production loop; the killed/refused
+engine arms are REFUTED by the hypothesis (a killed drive cannot be
+`.done`), so no NotStuck input is needed and the whole collapse
+layer stays engine-vocabulary (and trio-exact). The ∀-quantification
+over action-id supplies is what lets the induction realign with the
+production supply (which starts at the opaque
+`initial_core_run_state` seed): the drive successor is
+aid-independent on the fragment (slice-A D2 at work), so each step
+instantiates the hypothesis at a cons of the production draw.
+Adequacy (the SemTriple hypothesis) enters only once, at the very
+end of `sem_triple_prod`, to convert the delivered value/state into
+the postcondition — the same division of labor as
+`spike_engine_adequacy` vs `exhibitA_terminates`.
+
+### D30. The boundary event (D5) landed as declared, module-scoped
+`runEffectful` (LemLib.lean:54, the semantics repo's one residual
+axiom) enters the cones of exactly the theorems whose STATEMENTS
+mention `initial_driver_state` (its `initial_core_run_state` draws
+sym_supply through the effectful seam). Audit.lean now carries a
+module-scoped boundary: `Spike.ProdEntry`/`Spike.ProdExhibit` are
+allowed trio + runEffectful; every other module (including all of
+DriverCollapse) is held to the trio by the sweep. Boundary entry is
+TEMPORAL with the mover named (the semantics repo's register owns
+runEffectful's deletion). The modified sweep was plant-tested in
+both directions: a runEffectful-carrying statement outside the
+boundary modules fails the build; a `sorry` inside them fails the
+build.
+
+## Extension D gate status
+
+`./scripts/test_unit.sh`: ALL GATES GREEN (grep ban + build; capped
+falls back uncapped-loud in-sandbox per the recorded ruling).
+In-build audit: sweep re-baselined 209 → 287 in this commit
+(Extension D: the create certification, the DriverCollapse layer,
+the ProdEntry cold start + theorems, the ProdExhibit demonstration);
+34 theorems in the two production-entry boundary modules carry
+exactly trio + runEffectful (statement-level, see D30), all others
+trio-exact. New curated pins: prod_loop_done, driver2_done,
+finalize_done (exact trio), prod_run_eq, sem_triple_prod,
+exhibitA_prod (exact trio + runEffectful). No sorry, no non-kernel
+methods, no maxRecDepth/heartbeat bumps.

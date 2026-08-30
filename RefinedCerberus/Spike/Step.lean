@@ -226,6 +226,31 @@ inductive Step : CoreExpr × Mem → CoreExpr × Mem → Prop where
            (Expr [] (Eannot [DA_pos [] fp]
               (Expr [] (Epure (Pexpr [] () (PEval
                 (valueFromMemValue mval).2))))), σ')
+  /-- Positive strong create (Extension D: cold-start programs create
+      their own cells). Mirrors: step_action Create arm
+      (Core_reduction.lean:424 — canonical operands
+      `(Vobject (OVinteger align), Vctype ty)` always classify, so no
+      ILLTYPED arm exists for this shape; request `CreateRequest2 pref
+      align ty (get_with_address e_annots) none` with continuation
+      `mk_value_e (Vobject (OVpointer ptrval))` — a BARE value, no
+      Eannot residue), driver discharge `liftMem (CerbMem.allocateObject
+      tid pref align ty req_addr_opt init_opt)` (Driver.lean:273).
+      allocateObject DISCARDS both the thread id and the requested
+      address (CerbMem.lean:1470-1474, `_ : Nat` / `_ : Option Int`),
+      so the rule pins them to `0`/`none`; the certification bridges to
+      the engine's `tid1`/`get_with_address []` by `rfl` (discarded
+      arguments are definitionally interchangeable). Failure (the
+      "out of memory" `Other` kill, CerbMem.lean:1479) is absence of a
+      step, exactly as for store/load. -/
+  | create {a : List annot} {loc : CerbLocation.Loc} {ann : core_run_annotation}
+      {align : CerbMem.IntegerValue} {ty : ctype} {pref : prefix0}
+      {pv : CerbMem.PointerValue} {σ σ' : Mem}
+      (hmem : applyMemM (CerbMem.allocateObject 0 pref align ty none none) σ =
+        some (pv, σ')) :
+      Step (Expr a (Eaction (Paction polarity.Pos (Action loc ann
+              (Create (Pexpr [] () (PEval (Vobject (OVinteger align))))
+                      (Pexpr [] () (PEval (Vctype ty))) pref)))), σ)
+           (Expr [] (Epure (Pexpr [] () (PEval (Vobject (OVpointer pv))))), σ')
   /-- LETS-PURE at a wildcard pattern:
       `lets _ = v in E2 --> E2` (one_step0 Esseq bare-value arm,
       Core_reduction.lean:353 "reduction: LETS-PURE"; the env update
@@ -331,6 +356,20 @@ theorem Step.load_inv {a : List annot} {loc : CerbLocation.Loc}
                 (valueFromMemValue mval).2))))), σ') := by
   cases h with
   | load hmem => exact ⟨_, _, _, hmem, rfl⟩
+
+/-- Inversion at a create redex. -/
+theorem Step.create_inv {a : List annot} {loc : CerbLocation.Loc}
+    {ann : core_run_annotation} {align : CerbMem.IntegerValue} {ty : ctype}
+    {pref : prefix0} {σ : Mem} {out : CoreExpr × Mem}
+    (h : Step (Expr a (Eaction (Paction polarity.Pos (Action loc ann
+            (Create (Pexpr [] () (PEval (Vobject (OVinteger align))))
+                    (Pexpr [] () (PEval (Vctype ty))) pref)))), σ) out) :
+    ∃ pv σ',
+      applyMemM (CerbMem.allocateObject 0 pref align ty none none) σ =
+        some (pv, σ') ∧
+      out = (Expr [] (Epure (Pexpr [] () (PEval (Vobject (OVpointer pv))))), σ') := by
+  cases h with
+  | create hmem => exact ⟨_, _, hmem, rfl⟩
 
 /-- Inversion at an Esseq node: either a frame step of e1, or one of
     the two betas (which require e1 to be a canonical value form). -/

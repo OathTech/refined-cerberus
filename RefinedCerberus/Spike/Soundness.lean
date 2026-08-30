@@ -159,6 +159,19 @@ def dischargeStep (aid : Nat) (rs : core_run_state) (σ : Mem) :
            | (NDactive p, σ') => .next (k aid p.1 p.2) σ'
            | (NDkilled r, _) => .killed r
            | _ => .offFragment)
+      | CreateRequest2 pref align ty reqAddr initOpt k =>
+        -- Extension D: the driver's CreateRequest discharge
+        -- (Driver.lean:273, `liftMem (CerbMem.allocateObject tid1 pref
+        -- align_ival lvalue_ty req_addr_opt init_opt)`). allocateObject
+        -- discards its tid argument (CerbMem.lean:1470, `_ : Nat`), so
+        -- the projection passes 0; the payload's reqAddr/initOpt are
+        -- threaded verbatim.
+        (match CerbMem.allocateObject 0 pref align ty reqAddr initOpt with
+         | ND f =>
+           match f σ with
+           | (NDactive pv, σ') => .next (k aid pv) σ'
+           | (NDkilled r, _) => .killed r
+           | _ => .offFragment)
       | _ => .offFragment
     | _ => .offFragment
   | _ => .offFragment
@@ -201,6 +214,12 @@ inductive FragP : CoreExpr → Prop where
       FragP (Expr [] (Eaction (Paction polarity.Pos (Action loc ann
         (Load0 (Pexpr [] () (PEval (Vctype ty)))
                (Pexpr [] () (PEval (Vobject (OVpointer pv)))) mo)))))
+  | create {loc : CerbLocation.Loc} {ann : core_run_annotation}
+      {align : CerbMem.IntegerValue} {ty : ctype} {pref : prefix0}
+      (hlib : CerbLocation.isLibraryLocation loc = false) :
+      FragP (Expr [] (Eaction (Paction polarity.Pos (Action loc ann
+        (Create (Pexpr [] () (PEval (Vobject (OVinteger align))))
+                (Pexpr [] () (PEval (Vctype ty))) pref)))))
   | sseq {pa : List annot} {bty : core_base_type} {e1 e2 : CoreExpr} :
       FragP e1 → FragP e2 →
       FragP (Expr [] (Esseq (Pattern pa (CaseBase (none, bty))) e1 e2))
@@ -232,6 +251,12 @@ def loadRedex (loc : CerbLocation.Loc) (ann : core_run_annotation) (ty : ctype)
   Expr [] (Eaction (Paction polarity.Pos (Action loc ann
     (Load0 (Pexpr [] () (PEval (Vctype ty)))
            (Pexpr [] () (PEval (Vobject (OVpointer pv)))) mo))))
+
+def createRedex (loc : CerbLocation.Loc) (ann : core_run_annotation)
+    (align : CerbMem.IntegerValue) (ty : ctype) (pref : prefix0) : CoreExpr :=
+  Expr [] (Eaction (Paction polarity.Pos (Action loc ann
+    (Create (Pexpr [] () (PEval (Vobject (OVinteger align))))
+            (Pexpr [] () (PEval (Vctype ty))) pref))))
 
 /-- `is_irreducible` (Core_reduction.lean:293) holds on both value
     forms. -/
@@ -267,6 +292,10 @@ inductive Redex : CoreExpr → Prop where
       {pv : CerbMem.PointerValue} {mo : memory_order}
       (hlib : CerbLocation.isLibraryLocation loc = false) :
       Redex (loadRedex loc ann ty pv mo)
+  | create {loc : CerbLocation.Loc} {ann : core_run_annotation}
+      {align : CerbMem.IntegerValue} {ty : ctype} {pref : prefix0}
+      (hlib : CerbLocation.isLibraryLocation loc = false) :
+      Redex (createRedex loc ann align ty pref)
   | beta_pure {pa : List annot} {bty : core_base_type} {v : value} {e2 : CoreExpr} :
       Redex (Expr [] (Esseq (Pattern pa (CaseBase (none, bty))) (ofVal (.pure v)) e2))
   | beta_annot {pa : List annot} {bty : core_base_type}
@@ -309,11 +338,29 @@ theorem Decomp.not_irreducible {e : CoreExpr} {ctx : context} {r : CoreExpr}
     cases hr with
     | store hlib => rfl
     | load hlib => rfl
+    | create hlib => rfl
     | beta_pure => rfl
     | beta_annot => rfl
     | merge hirr => exact hirr
   | sseq _ _ => rfl
   | annot _ hirr _ _ _ => exact hirr
+
+/-- Fragment evaluation contexts (CTX/Csseq/Cannot chains) carry no
+    unsequenced call: `is_unseq_with_ccall` (Core_reduction.lean:364-369)
+    is false on every Decomp-produced context. (Extension D: the
+    production driver's `can_advance` reads exactly this flag on
+    action-request steps, Driver.lean:310.) -/
+theorem Decomp.unseq_ccall_false {e : CoreExpr} {ctx : context} {r : CoreExpr}
+    (h : Decomp e ctx r) : is_unseq_with_ccall ctx = false := by
+  have aux : ∀ {e' : CoreExpr} {ctx' : context} {r' : CoreExpr},
+      Decomp e' ctx' r' → ∀ b : Bool, is_unseq_with_ccall_aux b ctx' = b := by
+    intro e' ctx' r' h'
+    induction h' with
+    | root _ => intro b; rfl
+    | sseq _ ih => intro b; simpa [is_unseq_with_ccall_aux] using ih b
+    | annot _ _ _ _ ih => intro b; simpa [is_unseq_with_ccall_aux] using ih b
+  unfold is_unseq_with_ccall
+  exact aux h false
 
 /-- Rebuild: `apply_ctx` (Core_reduction.lean:388) undoes the
     decomposition. -/
@@ -432,6 +479,7 @@ theorem Decomp.get_ctx_at {e : CoreExpr} {ctx : context} {r : CoreExpr}
     cases hr with
     | store hlib => exact get_ctx_action m
     | load hlib => exact get_ctx_action m
+    | create hlib => exact get_ctx_action m
     | beta_pure => exact get_ctx_sseq_val m
     | beta_annot => exact get_ctx_sseq_val m
     | merge hirr => exact get_ctx_merge m
@@ -638,6 +686,44 @@ theorem step_ctx_load {e : CoreExpr} {ctx : context}
      rw [hlib]
      rfl)
 
+/-- Create, context undisturbed (Extension D): one CreateRequest2 with
+    the canonical operands (which always classify — no ILLTYPED arm
+    exists for this shape); the continuation rebuilds the BARE pointer
+    value in context (mk_value_e, no Eannot residue — step_action
+    Create arm, Core_reduction.lean:424), thread context verbatim.
+    tagDefs is unread; `hlib` keeps current_loc unread. The request
+    carries `get_with_address []` (the fragment's `[]` node annots) as
+    the requested address — an opaque `partial def` value that
+    `allocateObject` discards (CerbMem.lean:1473). -/
+theorem step_ctx_create {e : CoreExpr} {ctx : context}
+    {loc : CerbLocation.Loc} {ann : core_run_annotation}
+    {align : CerbMem.IntegerValue} {ty : ctype} {pref : prefix0}
+    (hd : Decomp e ctx (createRedex loc ann align ty pref))
+    (hsz : esize e ≤ lemDefaultFuel)
+    (hlib : CerbLocation.isLibraryLocation loc = false)
+    (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
+    (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
+    (tid : Nat) (parent : Option Nat)
+    (th : thread_state) (harena : th.arena = e) :
+    step_ctx tds σ file ext tid (parent, th) =
+      [Step_action_request2 "CreateRequest" loc tid (is_unseq_with_ccall ctx)
+        (stExceptUndef_return (CreateRequest2 pref align ty
+          (get_with_address []) none
+          (fun (_ : Nat) (pv : CerbMem.PointerValue) =>
+            { th with arena := apply_ctx ctx (Expr [] (Epure (Pexpr [] ()
+                (PEval (Vobject (OVpointer pv)))))) })))] := by
+  have hget : get_ctx th.arena = [(ctx, createRedex loc ann align ty pref)] := by
+    rw [harena]; exact hd.get_ctx_default hsz
+  unfold step_ctx
+  dsimp only
+  rw [hget]
+  simp only [List.map_cons, List.map_nil]
+  unfold createRedex
+  cases ctx <;>
+    (dsimp only [step_action, act_valueFromPexpr, valueFromPexpr]
+     rw [hlib]
+     rfl)
+
 /-- LETS-PURE, context undisturbed: env is READ-ONLY-UNDER-WF — the
     engine's update_env fails loudly on an empty stack (`henv`
     nonemptiness), and the wildcard update returns it verbatim
@@ -800,6 +886,22 @@ theorem engineSteps_load {e : CoreExpr} {ctx : context}
                 (valueFromMemValue mval).2))))))))))] :=
   step_ctx_load hd hsz hlib fmapEmpty σ spikeFile fmapEmpty 0 none _ rfl
 
+theorem engineSteps_create {e : CoreExpr} {ctx : context}
+    {loc : CerbLocation.Loc} {ann : core_run_annotation}
+    {align : CerbMem.IntegerValue} {ty : ctype} {pref : prefix0}
+    (hd : Decomp e ctx (createRedex loc ann align ty pref))
+    (hsz : esize e ≤ lemDefaultFuel)
+    (hlib : CerbLocation.isLibraryLocation loc = false)
+    (σ : Mem) :
+    engineSteps e σ =
+      [Step_action_request2 "CreateRequest" loc 0 (is_unseq_with_ccall ctx)
+        (stExceptUndef_return (CreateRequest2 pref align ty
+          (get_with_address []) none
+          (fun (_ : Nat) (pv : CerbMem.PointerValue) =>
+            spikeThread (apply_ctx ctx
+              (Expr [] (Epure (Pexpr [] () (PEval (Vobject (OVpointer pv)))))))))) ] :=
+  step_ctx_create hd hsz hlib fmapEmpty σ spikeFile fmapEmpty 0 none _ rfl
+
 theorem engineSteps_beta_pure {e : CoreExpr} {ctx : context}
     {pa : List _root_.annot} {bty : core_base_type} {v : value} {e2 : CoreExpr}
     (hd : Decomp e ctx
@@ -929,6 +1031,66 @@ theorem dischargeStep_load_refusal {aid : Nat} {rs : core_run_state}
   rw [hf]
   cases act <;> simp only [] at h ⊢ <;> first | exact True.intro | cases h
 
+/-- allocateObject discards its thread-id and requested-address
+    arguments (CerbMem.lean:1470-1474, `_`-binders): any two choices
+    are definitionally the same operation. (The cheap SYMBOLIC bridge:
+    at a concrete memory state, letting the elaborator discover this
+    by whnf would evaluate the whole allocation — this equation keeps
+    that off every proof path.) -/
+theorem allocateObject_arg_irrel (tid tid' : Nat) (pref : prefix0)
+    (align : CerbMem.IntegerValue) (ty : ctype) (r r' : Option Int)
+    (init : Option CerbMem.MemValue) :
+    CerbMem.allocateObject tid pref align ty r init =
+      CerbMem.allocateObject tid' pref align ty r' init := rfl
+
+theorem dischargeStep_create_active {aid : Nat} {rs : core_run_state}
+    {σ σ' : Mem} {str : String}
+    {loc : CerbLocation.Loc} {tid : thread_id} {uw : Bool}
+    {pref : prefix0} {align : CerbMem.IntegerValue} {ty : ctype}
+    {reqAddr : Option Int} {k : Nat → CerbMem.PointerValue → thread_state}
+    {pv : CerbMem.PointerValue}
+    (h : applyMemM (CerbMem.allocateObject 0 pref align ty reqAddr none) σ =
+      some (pv, σ')) :
+    dischargeStep aid rs σ (Step_action_request2 str loc tid uw
+      (stExceptUndef_return (CreateRequest2 pref align ty reqAddr none k))) =
+      .next (k aid pv) σ' := by
+  rcases hm : CerbMem.allocateObject 0 pref align ty reqAddr none with ⟨f⟩
+  rcases hf : f σ with ⟨act, st⟩
+  unfold applyMemM at h
+  rw [hm] at h
+  simp only [hf] at h
+  unfold dischargeStep
+  dsimp only [stExceptUndef_return, stExpect_return, return1, except_return]
+  rw [hm]
+  dsimp only
+  rw [hf]
+  cases act <;> simp only [] at h ⊢
+  case NDactive x =>
+    obtain ⟨rfl, rfl⟩ : x = pv ∧ st = σ' := by
+      cases h; exact ⟨rfl, rfl⟩
+    rfl
+  all_goals cases h
+
+theorem dischargeStep_create_refusal {aid : Nat} {rs : core_run_state}
+    {σ : Mem} {str : String}
+    {loc : CerbLocation.Loc} {tid : thread_id} {uw : Bool}
+    {pref : prefix0} {align : CerbMem.IntegerValue} {ty : ctype}
+    {reqAddr : Option Int} {k : Nat → CerbMem.PointerValue → thread_state}
+    (h : applyMemM (CerbMem.allocateObject 0 pref align ty reqAddr none) σ = none) :
+    (dischargeStep aid rs σ (Step_action_request2 str loc tid uw
+      (stExceptUndef_return (CreateRequest2 pref align ty reqAddr none k)))).isRefusal := by
+  rcases hm : CerbMem.allocateObject 0 pref align ty reqAddr none with ⟨f⟩
+  rcases hf : f σ with ⟨act, st⟩
+  unfold applyMemM at h
+  rw [hm] at h
+  simp only [hf] at h
+  unfold dischargeStep
+  dsimp only [stExceptUndef_return, stExpect_return, return1, except_return]
+  rw [hm]
+  dsimp only
+  rw [hf]
+  cases act <;> simp only [] at h ⊢ <;> first | exact True.intro | cases h
+
 /-! ## More esize equations -/
 
 @[simp] theorem esize_pure {a : List annot} {pe : pexpr} :
@@ -950,6 +1112,7 @@ theorem Step.esize_succ {c c' : CoreExpr × Mem} (h : Step c c') :
   induction h with
   | store hmv hmem => simp
   | load hmem => simp
+  | create hmem => simp
   | sseq_pure => simp; omega
   | sseq_annot => simp; omega
   | sseq_ctx hs ih => simp at ih ⊢; omega
@@ -971,6 +1134,11 @@ theorem FragP.step {e : CoreExpr} {σ : Mem} {e' : CoreExpr} {σ' : Mem}
     injection hout with h1 h2
     subst h1
     exact .annot (.val_pure _)
+  | create hlib =>
+    obtain ⟨pv, σ'', hmem, hout⟩ := hs.create_inv
+    injection hout with h1 h2
+    subst h1
+    exact .val_pure _
   | sseq hf1 hf2 ih1 ih2 =>
     rcases hs.sseq_inv with ⟨e1', σ'', hstep, hout⟩ | ⟨_, _, v, _, _, hout⟩ |
         ⟨_, _, ds', v, _, _, hout⟩
@@ -1022,6 +1190,7 @@ theorem FragP.decomp {e : CoreExpr} (hf : FragP e) (hnv : toVal e = none) :
     cases hnv
   | store hlib => exact ⟨_, _, Decomp.root (.store hlib)⟩
   | load hlib => exact ⟨_, _, Decomp.root (.load hlib)⟩
+  | create hlib => exact ⟨_, _, Decomp.root (.create hlib)⟩
   | @sseq pa bty e1 e2 hf1 hf2 ih1 ih2 =>
     cases hv1 : toVal e1 with
     | some w =>
@@ -1040,6 +1209,7 @@ theorem FragP.decomp {e : CoreExpr} (hf : FragP e) (hnv : toVal e = none) :
       | val_pure v => simp [annotRooted] at hr
       | store hlib => simp [annotRooted] at hr
       | load hlib => simp [annotRooted] at hr
+      | create hlib => simp [annotRooted] at hr
       | sseq hf1 hf2 => simp [annotRooted] at hr
       | @annot ds2 c hfc =>
         -- irreducibility of the double-annot node: by the head shape
@@ -1048,6 +1218,7 @@ theorem FragP.decomp {e : CoreExpr} (hf : FragP e) (hnv : toVal e = none) :
         | val_pure v => exact ⟨_, _, Decomp.root (.merge rfl)⟩
         | store hlib => exact ⟨_, _, Decomp.root (.merge rfl)⟩
         | load hlib => exact ⟨_, _, Decomp.root (.merge rfl)⟩
+        | create hlib => exact ⟨_, _, Decomp.root (.merge rfl)⟩
         | sseq hf1 hf2 => exact ⟨_, _, Decomp.root (.merge rfl)⟩
         | annot hfc' => exact ⟨_, _, Decomp.root (.merge rfl)⟩
     · have hr' : annotRooted b = false := by simpa using hr
@@ -1072,6 +1243,7 @@ theorem FragP.decomp {e : CoreExpr} (hf : FragP e) (hnv : toVal e = none) :
           cases hvb
         | store hlib => exact ⟨_, _, Decomp.annot hr' rfl (fun n => rfl) hd⟩
         | load hlib => exact ⟨_, _, Decomp.annot hr' rfl (fun n => rfl) hd⟩
+        | create hlib => exact ⟨_, _, Decomp.annot hr' rfl (fun n => rfl) hd⟩
         | sseq hf1 hf2 => exact ⟨_, _, Decomp.annot hr' rfl (fun n => rfl) hd⟩
         | annot hfc => simp [annotRooted] at hr'
 
@@ -1188,6 +1360,34 @@ theorem engine_complete (aid : Nat) (σ : Mem) {e : CoreExpr}
                   (Expr [] (Epure (Pexpr [] () (PEval
                     (valueFromMemValue mval).2))))))))))), ?_,
           EngineMatch.refused (dischargeStep_load_refusal happ) hns hv⟩
+        unfold engineOutcomes
+        rw [heq]
+        rfl
+    | @create loc ann align ty pref hlib =>
+      have heq := engineSteps_create hd hsz hlib σ
+      cases happ : applyMemM (CerbMem.allocateObject 0 pref align ty none none) σ with
+      | some p =>
+        rcases p with ⟨pv, σ'⟩
+        refine ⟨_, ?_, EngineMatch.step (hd.rebuild (Step.create happ))⟩
+        unfold engineOutcomes
+        rw [heq]
+        simp only [List.map_cons, List.map_nil]
+        rw [dischargeStep_create_active (reqAddr := get_with_address []) happ]
+      | none =>
+        have hns : ∀ out, ¬ Step (e, σ) out := by
+          intro out hstep
+          obtain ⟨r', σ', hr, _⟩ := hd.step_factor hstep
+          obtain ⟨pv', σ'', happ', _⟩ := hr.create_inv
+          rw [happ] at happ'
+          cases happ'
+        refine ⟨dischargeStep aid spikeRunState σ (Step_action_request2 "CreateRequest" loc 0
+            (is_unseq_with_ccall ctx) (stExceptUndef_return (CreateRequest2 pref align ty
+              (get_with_address []) none
+              (fun (_ : Nat) (pv : CerbMem.PointerValue) =>
+                spikeThread (apply_ctx ctx (Expr [] (Epure
+                  (Pexpr [] () (PEval (Vobject (OVpointer pv))))))))))), ?_,
+          EngineMatch.refused (dischargeStep_create_refusal (reqAddr := get_with_address []) happ)
+            hns hv⟩
         unfold engineOutcomes
         rw [heq]
         rfl

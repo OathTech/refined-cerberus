@@ -7,4 +7,7 @@ import RefinedCerberus.Spike.Rules
 import RefinedCerberus.Spike.Soundness
 import RefinedCerberus.Spike.Adequacy
 import RefinedCerberus.Spike.Exhibit
+import RefinedCerberus.Spike.DriverCollapse
+import RefinedCerberus.Spike.ProdEntry
+import RefinedCerberus.Spike.ProdExhibit
 import RefinedCerberus.Audit
