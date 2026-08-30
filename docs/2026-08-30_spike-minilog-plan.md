@@ -85,3 +85,23 @@ Work on this branch (`spike-minilog`) in its worktree; iterate with
 per-file probes; substantive commits on green steps; gates before
 any claim. Semantics pin: 8fb380c9c (bumped here from a8f86112d —
 records-only upstream delta, re-verified stamp-identical at setup).
+
+## Acceptance: the classic package ([USER 2026-08-30], the go order)
+
+The spike passes when the following are theorems, and the exhibit
+proofs are COMPOSITIONAL (small axiom + structural rule, never
+monolithic):
+- SMALL AXIOMS:  {x ↦ -} store(x,v) {x ↦ v}   and
+  {x ↦ v} load(x) {r. ⌜r = v⌝ ∗ x ↦ v}
+- FRAME:  {P} e {Q}  ⊢  {P ∗ R} e {Q ∗ R}
+- SEQ/BIND:  {P} e1 {Q} and {Q} e2 {R}  give  {P} e1;e2 {R}
+  (value-binding form as the fragment needs)
+- CONSEQUENCE (from BI entailment), and wp_wand.
+- THE EXHIBIT (the operator's form, derived by FRAME on the store
+  small axiom):  {x ↦ - ∗ y ↦ a} store(x,7) {x ↦ 7 ∗ y ↦ a}
+- one anti-frame sanity check: the derivation FAILS (stuck goal)
+  without the y-cell in the precondition when the postcondition
+  claims it — locality is real, not decorative.
+Triples are defined over the Iris WP in the standard way; all of
+the above discharge through artifact 4's soundness into
+engine-behavior statements.
