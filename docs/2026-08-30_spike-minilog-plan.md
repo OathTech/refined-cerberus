@@ -148,3 +148,19 @@ miniature of the RefinedC type stratum over the spike substrate —
 This prototypes, in miniature: the type-former interface, the
 value/location ownership split, and the typing-layer-on-WP
 architecture — the three load-bearing joints of the full build.
+
+## Extension D: the real engine entry ([USER 2026-08-30]: "extend
+this to cover the real engine, not our hand-rolled driver")
+
+Retire the drive-vs-production delta: re-export the semantic triples
+against the SHIPPED pipeline — `runND` over the production driver
+from `initial_driver_state`, through the `finalize`/`Driver.hack`
+readout. Obligations: D1 scheduler collapse (single-thread round =
+our loop body, by unfolding Driver.lean's round); D2 runND
+branch-free collapse (branch-freeness already proved per-construct);
+D3 hack-on-value readout lemmas; D4 `create` joins the fragment
+(self-contained programs) + the cold-start theorem from
+`initial_driver_state file fs`. Known unknown, resolved either way
+honestly: whether the production path's cone touches `runEffectful`
+— trio-clean if avoidable, else the one declared boundary appears in
+the final cones with its mover, pinned exactly.
