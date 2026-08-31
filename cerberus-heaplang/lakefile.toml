@@ -1,0 +1,45 @@
+name = "cerberus-heaplang"
+defaultTargets = ["CerberusHeapLang"]
+moreLeanArgs = ["-DautoImplicit=false"]
+
+# cerberus-heaplang — the standalone DEMO development ([USER
+# 2026-08-31]: the spike restructured as a separate Lean package,
+# the HeapLang-analog for the Cerberus Core engine, alongside the
+# future RefinedC port which lives in the repo's root package).
+#
+# Dependency wiring mirrors cerberus-lean lean_frontend/lakefile.toml
+# (the proven offline recipe): plain git requires, resolved to local
+# checkouts/mirrors by GIT_CONFIG_GLOBAL=<container>/deps/gitconfig.
+# batteries and Qq are pinned to the exact revs iris-lean's 4.32.2
+# build vendored (deps/iris-lean/Iris/lake-manifest.json), shadowing
+# its scoped requires so resolution never touches the Reservoir API.
+
+[[require]]
+name = "batteries"
+git = "https://github.com/leanprover-community/batteries"
+rev = "023ce7d62a0531e22a5331e20b587817a80d49ff"
+
+[[require]]
+name = "Qq"
+git = "https://github.com/leanprover-community/quote4"
+rev = "38d591e778f100aec9762bb582f9c7f55f50e9dc"
+
+# iris-lean: the intermediate program logic (BI proof mode,
+# ProgramLogic WP/adequacy, GenHeap). Pinned to the local checkout's
+# HEAD (deps/iris-lean @ 34390a0).
+[[require]]
+name = "iris"
+git = "https://github.com/leanprover-community/iris-lean"
+rev = "34390a0133986385c62bf59a6eb01938945b48ec"
+subDir = "Iris"
+
+# The SEMANTICS dependency: the SAME pinned+primed workspace clone
+# the root package uses (.cerberus-ws at the repo root — see
+# scripts/setup-cerberus-dep.sh; the pin lives in
+# scripts/semantics-pin.env, drift-checked).
+[[require]]
+name = "CerberusLean"
+path = "../.cerberus-ws/lean_frontend"
+
+[[lean_lib]]
+name = "CerberusHeapLang"

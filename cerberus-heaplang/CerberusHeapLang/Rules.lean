@@ -1,5 +1,5 @@
 /-
-RefinedCerberus.Spike.Rules — spike artifact 3: the logic.
+CerberusHeapLang.Rules — spike artifact 3: the logic.
 
 The acceptance package (docs/2026-08-30_spike-minilog-plan.md):
 - SMALL AXIOMS `wp_store` / `wp_load` — UB-EXCLUDING (R4): the
@@ -29,11 +29,11 @@ constructed inside the adequacy proof (Adequacy.lean,
 spike_step_adequacy), so triples proved here acquire engine-level
 meaning through SemTriple / semantic_triple_sound.
 -/
-import RefinedCerberus.Spike.Lang
+import CerberusHeapLang.Lang
 
 set_option autoImplicit false
 
-namespace RefinedCerberus.Spike
+namespace CerberusHeapLang
 
 open Iris Iris.ProgramLogic Iris.ProgramLogic.Language.Notation
 
@@ -797,4 +797,4 @@ theorem exhibitC_triple [SpikeGS hlc GF] (x y : CerbMem.PointerValue)
   -- glue: SEQ
   exact triple_seq h1 h2
 
-end RefinedCerberus.Spike
+end CerberusHeapLang

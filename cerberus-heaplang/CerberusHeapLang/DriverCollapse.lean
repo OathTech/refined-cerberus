@@ -1,5 +1,5 @@
 /-
-RefinedCerberus.Spike.DriverCollapse — Extension D obligations D1-D3:
+CerberusHeapLang.DriverCollapse — Extension D obligations D1-D3:
 the PRODUCTION driver pipeline collapsed onto the spike's drive loop,
 for fragment configurations.
 
@@ -70,13 +70,13 @@ theorem carries a termination-within-budget hypothesis (fuel
 parametricity is out of scope for Extension D — recorded in the
 report).
 -/
-import RefinedCerberus.Spike.Adequacy
+import CerberusHeapLang.Adequacy
 import Driver
 import CerbND
 
 set_option autoImplicit false
 
-namespace RefinedCerberus.Spike
+namespace CerberusHeapLang
 
 open Lem_Basic_classes Lem_Maybe Lem_List
 
@@ -977,4 +977,4 @@ theorem driver2_done (fl : Nat)
       dsimp only
       exact process_done tds _ v dstF thF hthF
 
-end RefinedCerberus.Spike
+end CerberusHeapLang

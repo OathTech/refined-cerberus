@@ -1,5 +1,5 @@
 /-
-RefinedCerberus.Spike.Soundness — spike artifact 4: THE BOUNDARY
+CerberusHeapLang.Soundness — spike artifact 4: THE BOUNDARY
 MODULE. The only spike module that references the engine's step
 machinery (`step_ctx`, Core_reduction.lean:484); everything here
 certifies the hand-written `Step` (Step.lean) against the engine at
@@ -62,12 +62,12 @@ lemDefaultFuel` side condition; `esize` grows by at most 1 per step
 `esize e₀ + steps ≤ lemDefaultFuel`. This is an honest engine
 artifact, not slack: past the budget the engine really does bail.
 -/
-import RefinedCerberus.Spike.Step
+import CerberusHeapLang.Step
 import Core_reduction
 
 set_option autoImplicit false
 
-namespace RefinedCerberus.Spike
+namespace CerberusHeapLang
 
 /-! ## The frozen minimal context (recon §3.2, measured by probe)
 
@@ -1410,4 +1410,4 @@ theorem engine_complete (aid : Nat) (σ : Mem) {e : CoreExpr}
       rw [heq]
       rfl
 
-end RefinedCerberus.Spike
+end CerberusHeapLang

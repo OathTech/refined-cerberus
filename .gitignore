@@ -1,4 +1,5 @@
 /.lake
+/cerberus-heaplang/.lake
 /worktrees
 /.opamroot
 /.refinedc-ws

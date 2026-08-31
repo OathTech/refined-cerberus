@@ -1,5 +1,5 @@
 /-
-RefinedCerberus.Spike.Step — spike artifact 1: the fragment's
+CerberusHeapLang.Step — spike artifact 1: the fragment's
 inductive small-step over the REAL generated Core types.
 
 STATUS: this relation is hand-written, grammar-keyed, and has ZERO
@@ -39,7 +39,7 @@ import CerbMem
 
 set_option autoImplicit false
 
-namespace RefinedCerberus.Spike
+namespace CerberusHeapLang
 
 /-- The fragment's program type: the engine's run-time instantiation
     `expr core_run_annotation = generic_expr core_run_annotation Unit sym`
@@ -401,4 +401,4 @@ theorem Step.annot_inv {a : List annot} {ds : List dyn_annotation}
   | annot_ctx hg hs => exact .inl ⟨hg, _, _, hs, rfl⟩
   | annot_merge => exact .inr ⟨_, _, _, rfl, rfl⟩
 
-end RefinedCerberus.Spike
+end CerberusHeapLang

@@ -173,3 +173,10 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   honest than RefinedC and CN on unsequenced-race UB (both miss the
   class). [USER] veto point: this flip is evidence-based but stands
   as an [AGENT] call until seen.
+- **2026-08-31 [USER] The spike becomes cerberus-heaplang**:
+  restructured as a standalone demo Lean development alongside the
+  future RefinedC port ('Cerberus-heaplang'); the RefinedCerberus
+  root package is reserved for the port; the runEffectful boundary
+  lives only in the demo's audit, with upstream retirement planned.
+  Mechanics + re-run plant-test transcripts:
+  `cerberus-heaplang/docs/2026-08-31_restructure-notes.md`.

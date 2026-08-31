@@ -1,5 +1,5 @@
 /-
-RefinedCerberus.Spike.ProdEntry — Extension D obligation D4: the
+CerberusHeapLang.ProdEntry — Extension D obligation D4: the
 COLD START and the production-entry theorem.
 
 The pipeline under judgment is the SHIPPED one (Main.lean:857-885):
@@ -52,11 +52,11 @@ PRODUCTION-PINNED initial memory, where allocation success is a
 theorem (the `hpre` hypothesis below, discharged concretely by the
 exhibits).
 -/
-import RefinedCerberus.Spike.DriverCollapse
+import CerberusHeapLang.DriverCollapse
 
 set_option autoImplicit false
 
-namespace RefinedCerberus.Spike
+namespace CerberusHeapLang
 
 open Lem_Basic_classes Lem_Maybe Lem_List
 open scoped Iris.Std.PartialMap
@@ -340,4 +340,4 @@ theorem sem_triple_prod
   have h := hsem R hdisj σc hsat k (fun _ => 0) hfuelc
   exact h.2.2 v σfin (hterm _)
 
-end RefinedCerberus.Spike
+end CerberusHeapLang

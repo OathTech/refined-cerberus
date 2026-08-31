@@ -1,5 +1,5 @@
 /-
-RefinedCerberus.Spike.Heap — spike artifact 2: the points-to over the
+CerberusHeapLang.Heap — spike artifact 2: the points-to over the
 engine's memory state, on iris-lean's GenHeap.
 
 GRANULARITY DECISION (recon §5.2, recorded reasoning): the ghost
@@ -32,11 +32,11 @@ For scalar cells all of these are `rfl`. ([USER 2026-08-30]: the
 de-pin; the full-build shape is ghost ownership of the tables.)
 -/
 import Iris
-import RefinedCerberus.Spike.Step
+import CerberusHeapLang.Step
 
 set_option autoImplicit false
 
-namespace RefinedCerberus.Spike
+namespace CerberusHeapLang
 
 open Iris
 
@@ -425,4 +425,4 @@ def pointsToCell [SpikeGS hlc GF] (pv : CerbMem.PointerValue) (dq : DFrac)
 notation:50 pv " ↦c{" dq "} " ty " ; " bs:50 => pointsToCell pv dq ty bs
 notation:50 pv " ↦c " ty " ; " bs:50 => pointsToCell pv (DFrac.own 1) ty bs
 
-end RefinedCerberus.Spike
+end CerberusHeapLang

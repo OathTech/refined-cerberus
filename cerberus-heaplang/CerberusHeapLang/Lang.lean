@@ -1,5 +1,5 @@
 /-
-RefinedCerberus.Spike.Lang — the iris-lean `Language` instance over
+CerberusHeapLang.Lang — the iris-lean `Language` instance over
 the fragment's Step (recon §5.3: the Language-instance route, R3 —
 inherits the full mask/fupd WP; HeapLang's instantiation is the
 template, Iris/HeapLang/Instances.lean + PrimitiveLaws.lean:59-90).
@@ -19,11 +19,11 @@ SOUNDNESS STATUS: the WP is over Step; Step's certification against
 the engine is Soundness.lean, and the engine-facing meaning lands
 through Adequacy.lean (SemTriple / semantic_triple_sound).
 -/
-import RefinedCerberus.Spike.Heap
+import CerberusHeapLang.Heap
 
 set_option autoImplicit false
 
-namespace RefinedCerberus.Spike
+namespace CerberusHeapLang
 
 open Iris Iris.ProgramLogic
 
@@ -178,4 +178,4 @@ instance instSpikeGpreS_SpikeGF : SpikeGpreS SpikeGF where
       exists 5
     · exists 6
 
-end RefinedCerberus.Spike
+end CerberusHeapLang

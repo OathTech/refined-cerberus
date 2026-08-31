@@ -45,6 +45,7 @@ cerberus-lean park branch `arc/segment-ladder`,
 | Path | What |
 |------|------|
 | `RefinedCerberus/` | the Lean package (Audit.lean = in-build axiom gate, last import of the lib root) |
+| `cerberus-heaplang/` | standalone DEMO development ([USER 2026-08-31]): the spike as a separate nested Lake package — its own README/docs/audit; the root package stays the port's home |
 | `docs/` | dated records + `DECISIONS.md` (rulings register) |
 | `scripts/` | `capped` (cgroup-capped builds), `test_unit.sh` (gates), `new-worktree.sh`, `setup-refinedc.sh`/`env-refinedc.sh`/`refinedc-pins.env` (donor toolchain) |
 | `worktrees/` | build-primed parallel checkouts (gitignored) |

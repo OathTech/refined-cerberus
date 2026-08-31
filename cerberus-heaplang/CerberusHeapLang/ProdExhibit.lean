@@ -1,5 +1,5 @@
 /-
-RefinedCerberus.Spike.ProdExhibit — Extension D: exhibit A re-exported
+CerberusHeapLang.ProdExhibit — Extension D: exhibit A re-exported
 at the PRODUCTION ENTRY (the D4 demonstration).
 
 The program is fully self-contained — it creates its own cell with the
@@ -21,12 +21,12 @@ semantic triple (the slice-B logic: wp_store/wp_sseq/wp_load through
 the production cold-start memory, and termination by the 6-step
 simulation (the exhibit-A pattern at the production cell).
 -/
-import RefinedCerberus.Spike.ProdEntry
-import RefinedCerberus.Spike.Exhibit
+import CerberusHeapLang.ProdEntry
+import CerberusHeapLang.Exhibit
 
 set_option autoImplicit false
 
-namespace RefinedCerberus.Spike
+namespace CerberusHeapLang
 
 open Iris Iris.BI Iris.ProgramLogic Iris.ProgramLogic.Language.Notation
 open Lem_Basic_classes Lem_Maybe Lem_List
@@ -397,4 +397,4 @@ theorem exhibitA_prod (fs : CerbFS.FsState) (args : List String) :
   rw [hlay]
   exact hcx
 
-end RefinedCerberus.Spike
+end CerberusHeapLang

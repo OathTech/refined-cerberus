@@ -1,5 +1,5 @@
 /-
-RefinedCerberus.Spike.Exhibit — spike artifact 5: the end-to-end
+CerberusHeapLang.Exhibit — spike artifact 5: the end-to-end
 exhibits, re-concluded AT THE ENGINE LEVEL via adequacy.
 
 (a) store-then-load: on a concrete state seeded through the engine's
@@ -21,11 +21,11 @@ The seeded state: two int-cells allocated from the empty MemState by
 — per the plan's seeding decision. All concrete facts (pointers,
 addresses, Coh) are closed computations.
 -/
-import RefinedCerberus.Spike.Adequacy
+import CerberusHeapLang.Adequacy
 
 set_option autoImplicit false
 
-namespace RefinedCerberus.Spike
+namespace CerberusHeapLang
 
 open Iris Iris.BI Iris.ProgramLogic Iris.ProgramLogic.Language.Notation
 open scoped Iris.Std.PartialMap
@@ -798,4 +798,4 @@ theorem exhibitC_engine (n : Nat) (aids : Nat → Nat) (hn : n ≤ 999998) :
   rw [show CerbMem.sizeofCtype intTy = 4 from rfl] at hcx hcy
   exact ⟨hcx, hcy⟩
 
-end RefinedCerberus.Spike
+end CerberusHeapLang

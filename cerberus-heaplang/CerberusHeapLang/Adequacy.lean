@@ -1,5 +1,5 @@
 /-
-RefinedCerberus.Spike.Adequacy — spike artifact 4b: adequacy.
+CerberusHeapLang.Adequacy — spike artifact 4b: adequacy.
 
 Three layers:
 1. `drive` — the ENGINE'S EXECUTION at the frozen minimal context:
@@ -38,12 +38,12 @@ drive length so get_ctx's opaque fuel-exhaustion leaf stays
 unreachable (Soundness.lean header). Termination is NOT claimed
 (partial correctness): `.more` carries no obligation.
 -/
-import RefinedCerberus.Spike.Rules
-import RefinedCerberus.Spike.Soundness
+import CerberusHeapLang.Rules
+import CerberusHeapLang.Soundness
 
 set_option autoImplicit false
 
-namespace RefinedCerberus.Spike
+namespace CerberusHeapLang
 
 open Iris Iris.BI Iris.ProgramLogic Iris.ProgramLogic.Language.Notation FromMathlib
 open Iris.Std.PartialMap in
@@ -488,4 +488,4 @@ theorem semantic_frame {GF : BundledGFunctors} [SpikeGpreS GF]
     · iexact HF
 
 end
-end RefinedCerberus.Spike
+end CerberusHeapLang
