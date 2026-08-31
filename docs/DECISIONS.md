@@ -180,3 +180,16 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   lives only in the demo's audit, with upstream retirement planned.
   Mechanics + re-run plant-test transcripts:
   `cerberus-heaplang/docs/2026-08-31_restructure-notes.md`.
+- **2026-08-31 [USER] The heaplang end state + two-phase arc**:
+  end state = "a tiny separation logic (really just
+  reynolds/ohearn) over a synthetic fragment of core. So not at all
+  RefinedC, but it'll derisk a lot of the fundamental machinery."
+  Base logic = partial correctness (donor parity); termination
+  measures = optional variant layer producing step bounds that
+  upgrade to the unconditional production equation. Phase 1
+  restratifies coverage-preserving (frozen-corpus regression gate;
+  S0 jump-kernel probe first); phase 2 extends (loops/branches/
+  invariants; fib + list-reverse acceptance). [USER]: run on the
+  branch without check-in until P2 works or a blocker needs
+  discussion. Plan:
+  cerberus-heaplang/docs/2026-08-31_two-phase-arc-plan.md.
