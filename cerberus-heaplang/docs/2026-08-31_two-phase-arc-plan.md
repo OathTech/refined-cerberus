@@ -46,3 +46,19 @@ ACCEPTANCE: fib and list-reverse verified end-to-end on authored
 Core through the loop rule and the production entry; the README
 scope section updated to match, still claiming nothing beyond the
 theorems.
+
+## Amendment ([USER 2026-08-31], pre-phase-2): acceptance exhibits
+
+Phase 2 ACCEPTANCE = fib + an ARRAY-WALK exhibit (array-sum first;
+in-place increment if cheap): loops, invariants, variants for the
+bounds, pointer arithmetic, big-sep pre-states (∗_{i<n} base+i ↦
+vs[i] — no recursion; the bigSepA_ptx plumbing already exists).
+LIST-REVERSE demotes to a REGISTERED STRETCH with three named
+prerequisites, each priced small, none gating the phase: a null
+encoding in the byte model + the null-test memop; a struct-free
+node encoding (two adjacent cells); the recursive representation
+predicate (plain structural recursion on the mathematical list —
+no step-indexing, per the readiness check). Rationale: pre-states
+for unbounded linked data are the subtle part; the array walk
+isolates loop machinery from the linked-data layer, so a phase-2
+failure is attributable.
