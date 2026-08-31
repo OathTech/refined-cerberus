@@ -203,3 +203,12 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   big-sep phrasing; first-class element ownership remains the
   registered sub-allocation-view growth step (structs/arrays as
   type formers in the port).
+- **2026-08-31 [USER] Demo-first ruling**: "we're going to get
+  cerberus-heaplang right, we're not kicking off refinedC until
+  this is perfect." The foundational audit (F-01..F-10,
+  orchestrator-verified) is adopted in full: its phase structure
+  and 8-test acceptance suite become the foundations arc
+  (cerberus-heaplang/docs/2026-08-31_foundations-arc-plan.md); the
+  RefinedC port is gated on the arc's fresh re-audit returning no
+  High findings. Supersedes the orchestrator's proposal to fold
+  F-03/F-04 remediation into the port kickoff.
