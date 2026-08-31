@@ -213,6 +213,8 @@ def engineOutcomes (aid : Nat) (e : CoreExpr) (ρ : EnvStack) (σ : Mem) :
 def esize : CoreExpr → Nat
   | Expr _ (Esseq _ e1 e2) => 1 + max (esize e1) (esize e2)
   | Expr _ (Eannot _ b) => 1 + esize b
+  | Expr _ (Eif _ e2 e3) => 1 + max (esize e2) (esize e3)
+  | Expr _ (Esave _ _ body) => 1 + esize body
   | _ => 1
 
 /-! ## The fragment cone
@@ -2008,7 +2010,9 @@ theorem DecompJ.step_factor {Q : LabelMap} {e : CoreExpr} {ctx : context}
     {r : CoreExpr} {ρ : EnvStack} {σ : Mem}
     {out : CoreExpr × EnvStack × Mem}
     (h : DecompJ e ctx r) (hs : Step Q (e, ρ, σ) out) :
-    (∃ r' ρ' σ', Step Q (r, ρ, σ) (r', ρ', σ') ∧
+    (∃ r' ρ' σ', (∀ (ra : core_run_annotation) (l : sym)
+        (pes : List (generic_pexpr Unit sym)), r ≠ runRedex ra l pes) ∧
+      Step Q (r, ρ, σ) (r', ρ', σ') ∧
       out = (apply_ctx ctx r', ρ', σ')) ∨
     (∃ (ra : core_run_annotation) (l : sym)
       (pes : List (generic_pexpr Unit sym)),
@@ -2019,17 +2023,18 @@ theorem DecompJ.step_factor {Q : LabelMap} {e : CoreExpr} {ctx : context}
         (pes : List (generic_pexpr Unit sym)), r = runRedex ra l pes
     · obtain ⟨ra, l, pes, rfl⟩ := hrun
       exact .inr ⟨ra, l, pes, rfl, hs⟩
-    · exact .inl ⟨out.1, out.2.1, out.2.2, hs, rfl⟩
+    · exact .inl ⟨out.1, out.2.1, out.2.2,
+        fun ra l pes hr => hrun ⟨ra, l, pes, hr⟩, hs, rfl⟩
   | @sseq pa bty e1 e2 ctx' r' hd ih =>
     rcases hs.sseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
         ⟨_, _, v, _, _, _, he1, _, _⟩ | ⟨_, _, ds, v, _, _, _, he1, _, _⟩ |
         ⟨l, pes, params, cont, vs, ev0, evs, hj, hρ, hl, hvs, hout⟩
-    · rcases ih hstep with ⟨r2, ρr, σr, hr2, heq⟩ | ⟨ra, l, pes, rfl, hr2⟩
+    · rcases ih hstep with ⟨r2, ρr, σr, hnr2, hr2, heq⟩ | ⟨ra, l, pes, rfl, hr2⟩
       · obtain ⟨he, hρ2, hσ2⟩ : e1' = apply_ctx _ r2 ∧ ρ'' = ρr ∧
             σ'' = σr := by
           simpa [Prod.mk.injEq] using heq
         subst he hρ2 hσ2
-        exact .inl ⟨r2, _, _, hr2, by rw [hout]; rfl⟩
+        exact .inl ⟨r2, _, _, hnr2, hr2, by rw [hout]; rfl⟩
       · rw [hd.jumpRedex?_eq] at hnj
         rw [show jumpRedex? (runRedex ra l pes) = some (l, pes) from rfl]
           at hnj
@@ -2050,12 +2055,12 @@ theorem DecompJ.step_factor {Q : LabelMap} {e : CoreExpr} {ctx : context}
     rcases hs.annot_inv with ⟨_, hnj, b', ρ'', σ'', hstep, hout⟩ |
         ⟨a2, ds2, c, hb, _⟩ |
         ⟨l, pes, params, cont, vs, ev0, evs, hg, hj, hρ, hl, hvs, hout⟩
-    · rcases ih hstep with ⟨r2, ρr, σr, hr2, heq⟩ | ⟨ra, l, pes, rfl, hr2⟩
+    · rcases ih hstep with ⟨r2, ρr, σr, hnr2, hr2, heq⟩ | ⟨ra, l, pes, rfl, hr2⟩
       · obtain ⟨he, hρ2, hσ2⟩ : b' = apply_ctx _ r2 ∧ ρ'' = ρr ∧
             σ'' = σr := by
           simpa [Prod.mk.injEq] using heq
         subst he hρ2 hσ2
-        exact .inl ⟨r2, _, _, hr2, by rw [hout]; rfl⟩
+        exact .inl ⟨r2, _, _, hnr2, hr2, by rw [hout]; rfl⟩
       · rw [hd.jumpRedex?_eq] at hnj
         rw [show jumpRedex? (runRedex ra l pes) = some (l, pes) from rfl]
           at hnj
@@ -2420,5 +2425,565 @@ theorem stepDischarge_run {e : CoreExpr} {ctx : context}
          hvs hdep]
      dsimp only []
      rw [stExceptUndef_return_apply])
+
+/-! ### The extended fragment cone and the step-match completeness
+
+`FragJ` is the S3 syntactic cone: the phase-1 shapes plus Esave,
+Eif (with the guard's fuel-honesty side condition), and Erun (with
+the arguments'). Ecase stays OUT (its cone needs the
+substitution-closure lemmas — the registered S4 item); registered
+continuations enter through the SIDE hypothesis `hQf` (the label
+map's own cone membership), which breaks the circularity a
+Q-indexed cone would have.
+
+The completeness shape CHANGES from phase 1 (recorded finding): the
+old `engine_complete` classified every engine behavior including
+refusals-at-stuck; the J-lane instead certifies MATCH-GIVEN-STEP
+(`engine_step_matchJ`): wherever the MIRROR steps, the engine's
+behavior is the singleton discharged match. That suffices for the
+WP-driven adequacy lane (NotStuck supplies a mirror step at every
+reachable configuration) and dissolves the WF-threading problem:
+the panic-exclusion facts live as RULE PREMISES, extracted by the
+inversions from the given step — the WP is the well-formedness
+oracle. -/
+
+inductive FragJ : CoreExpr → Prop where
+  | val_pure (v : value) : FragJ (Expr [] (Epure (Pexpr [] () (PEval v))))
+  | store {loc : CerbLocation.Loc} {ann : core_run_annotation} {lk : Bool}
+      {ty : ctype} {pv : CerbMem.PointerValue} {cv : value} {mo : memory_order}
+      (hlib : CerbLocation.isLibraryLocation loc = false) :
+      FragJ (storeRedex loc ann lk ty pv cv mo)
+  | load {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
+      {pv : CerbMem.PointerValue} {mo : memory_order}
+      (hlib : CerbLocation.isLibraryLocation loc = false) :
+      FragJ (loadRedex loc ann ty pv mo)
+  | create {loc : CerbLocation.Loc} {ann : core_run_annotation}
+      {align : CerbMem.IntegerValue} {ty : ctype} {pref : prefix0}
+      (hlib : CerbLocation.isLibraryLocation loc = false) :
+      FragJ (createRedex loc ann align ty pref)
+  | sseq {pa : List annot} {bty : core_base_type} {e1 e2 : CoreExpr} :
+      FragJ e1 → FragJ e2 →
+      FragJ (Expr [] (Esseq (Pattern pa (CaseBase (none, bty))) e1 e2))
+  | annot {ds : List dyn_annotation} {b : CoreExpr} :
+      FragJ b → FragJ (Expr [] (Eannot ds b))
+  | save {sb : sym × core_base_type}
+      {ps : List (sym × ((core_base_type ×
+        Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym))}
+      {body : CoreExpr} :
+      FragJ body → FragJ (saveRedex sb ps body)
+  | if_ {g : generic_pexpr Unit sym} {e2 e3 : CoreExpr}
+      (hdg : peDepth g ≤ lemDefaultFuel) :
+      FragJ e2 → FragJ e3 → FragJ (ifRedex g e2 e3)
+  | run {ra : core_run_annotation} {l : sym}
+      {pes : List (generic_pexpr Unit sym)}
+      (hdep : ∀ pe ∈ pes, peDepth pe ≤ lemDefaultFuel) :
+      FragJ (runRedex ra l pes)
+
+/-- The phase-1 cone embeds. -/
+theorem FragP.toJ {e : CoreExpr} (hf : FragP e) : FragJ e := by
+  induction hf with
+  | val_pure v => exact .val_pure v
+  | store hlib => exact .store hlib
+  | load hlib => exact .load hlib
+  | create hlib => exact .create hlib
+  | sseq hf1 hf2 ih1 ih2 => exact .sseq ih1 ih2
+  | annot hfb ihb => exact .annot ihb
+
+theorem fragJ_ofVal (w : SpikeVal) : FragJ (ofVal w) := by
+  cases w with
+  | pure v => exact .val_pure v
+  | annot ds v => exact .annot (.val_pure v)
+
+/-- Every non-value FragJ configuration decomposes (extended
+    roots). -/
+theorem FragJ.decompJ {e : CoreExpr} (hf : FragJ e) (hnv : toVal e = none) :
+    ∃ ctx r, DecompJ e ctx r ∧ FragJ r := by
+  induction hf with
+  | val_pure v =>
+    rw [show toVal (Expr ([] : List _root_.annot) (Epure (Pexpr [] () (PEval v)))) =
+      some (.pure v) from rfl] at hnv
+    cases hnv
+  | store hlib => exact ⟨_, _, DecompJ.root (.base (.store hlib)), .store hlib⟩
+  | load hlib => exact ⟨_, _, DecompJ.root (.base (.load hlib)), .load hlib⟩
+  | create hlib => exact ⟨_, _, DecompJ.root (.base (.create hlib)), .create hlib⟩
+  | @sseq pa bty e1 e2 hf1 hf2 ih1 ih2 =>
+    cases hv1 : toVal e1 with
+    | some w =>
+      have he1 := ofVal_of_toVal hv1
+      subst he1
+      cases w with
+      | pure v => exact ⟨_, _, DecompJ.root (.base .beta_pure),
+          .sseq (fragJ_ofVal (.pure v)) hf2⟩
+      | annot ds v => exact ⟨_, _, DecompJ.root (.base .beta_annot),
+          .sseq (fragJ_ofVal (.annot ds v)) hf2⟩
+    | none =>
+      obtain ⟨ctx, r, hd, hfr⟩ := ih1 hv1
+      exact ⟨_, _, DecompJ.sseq hd, hfr⟩
+  | @annot ds b hfb ihb =>
+    by_cases hr : annotRooted b = true
+    · cases hfb with
+      | val_pure v => simp [annotRooted] at hr
+      | store hlib => simp [annotRooted, storeRedex] at hr
+      | load hlib => simp [annotRooted, loadRedex] at hr
+      | create hlib => simp [annotRooted, createRedex] at hr
+      | sseq hf1 hf2 => simp [annotRooted] at hr
+      | save hb => simp [annotRooted, saveRedex] at hr
+      | if_ hdg hf2 hf3 => simp [annotRooted, ifRedex] at hr
+      | run hdep => simp [annotRooted, runRedex] at hr
+      | @annot ds2 c hfc =>
+        have hwit : FragJ (Expr ([] : List _root_.annot)
+            (Eannot ds (Expr [] (Eannot ds2 c)))) := .annot (.annot hfc)
+        cases hfc with
+        | val_pure v => exact ⟨_, _, DecompJ.root (.base (.merge rfl)), hwit⟩
+        | store hlib => exact ⟨_, _, DecompJ.root (.base (.merge rfl)), hwit⟩
+        | load hlib => exact ⟨_, _, DecompJ.root (.base (.merge rfl)), hwit⟩
+        | create hlib => exact ⟨_, _, DecompJ.root (.base (.merge rfl)), hwit⟩
+        | sseq hf1 hf2 => exact ⟨_, _, DecompJ.root (.base (.merge rfl)), hwit⟩
+        | annot hfc' => exact ⟨_, _, DecompJ.root (.base (.merge rfl)), hwit⟩
+        | save hb => exact ⟨_, _, DecompJ.root (.base (.merge rfl)), hwit⟩
+        | if_ hdg hf2 hf3 => exact ⟨_, _, DecompJ.root (.base (.merge rfl)), hwit⟩
+        | run hdep => exact ⟨_, _, DecompJ.root (.base (.merge rfl)), hwit⟩
+    · have hr' : annotRooted b = false := by simpa using hr
+      cases hvb : toVal b with
+      | some w =>
+        have hb := ofVal_of_toVal hvb
+        subst hb
+        cases w with
+        | pure v =>
+          rw [show toVal (Expr ([] : List _root_.annot)
+            (Eannot ds (ofVal (.pure v)))) = some (.annot ds v) from rfl] at hnv
+          cases hnv
+        | annot ds2 v => simp [annotRooted, ofVal] at hr'
+      | none =>
+        obtain ⟨ctx, r, hd, hfr⟩ := ihb hvb
+        cases hfb with
+        | val_pure v =>
+          rw [show toVal (Expr ([] : List _root_.annot)
+            (Epure (Pexpr [] () (PEval v)))) = some (.pure v) from rfl] at hvb
+          cases hvb
+        | store hlib => exact ⟨_, _, DecompJ.annot hr' rfl (fun n => rfl) hd, hfr⟩
+        | load hlib => exact ⟨_, _, DecompJ.annot hr' rfl (fun n => rfl) hd, hfr⟩
+        | create hlib => exact ⟨_, _, DecompJ.annot hr' rfl (fun n => rfl) hd, hfr⟩
+        | sseq hf1 hf2 => exact ⟨_, _, DecompJ.annot hr' rfl (fun n => rfl) hd, hfr⟩
+        | save hb => exact ⟨_, _, DecompJ.annot hr' rfl (fun n => rfl) hd, hfr⟩
+        | if_ hdg hf2 hf3 => exact ⟨_, _, DecompJ.annot hr' rfl (fun n => rfl) hd, hfr⟩
+        | run hdep => exact ⟨_, _, DecompJ.annot hr' rfl (fun n => rfl) hd, hfr⟩
+        | annot hfc => simp [annotRooted] at hr'
+  | save hb ih => exact ⟨_, _, DecompJ.root (.save _ _ _), .save hb⟩
+  | if_ hdg hf2 hf3 ih2 ih3 =>
+    exact ⟨_, _, DecompJ.root (.if_ _ _ _), .if_ hdg hf2 hf3⟩
+  | run hdep => exact ⟨_, _, DecompJ.root (.run _ _ _), .run hdep⟩
+
+/-- An extended decomposition holding a PHASE-1 redex is a phase-1
+    decomposition (lets the old strong step_ctx lemmas apply
+    unchanged in the J-lane). -/
+theorem DecompJ.toDecomp {e : CoreExpr} {ctx : context} {r : CoreExpr}
+    (h : DecompJ e ctx r) (hr : Redex r) : Decomp e ctx r := by
+  induction h with
+  | root _ => exact .root hr
+  | sseq _ ih => exact .sseq (ih hr)
+  | annot hroot hirr hmap _ ih => exact .annot hroot hirr hmap (ih hr)
+
+/-- The value protocol at the jump profile (PROGRAM-DONE /
+    REMOVE-ANNOT — the strong forms quantify the thread, so the
+    proc-carrying corollaries are instances). -/
+theorem engineOutcomesP_done (p : sym) (aid : Nat) (rs : core_run_state)
+    (v : value) (ρ : EnvStack) (σ : Mem) :
+    engineOutcomesP p aid rs (ofVal (.pure v)) ρ σ = [.done v] := by
+  unfold engineOutcomesP engineStepsP
+  rw [step_ctx_done v fmapEmpty σ spikeFile fmapEmpty 0 _ rfl rfl]
+  rfl
+
+theorem engineOutcomesP_remove_annot (p : sym) (aid : Nat)
+    (rs : core_run_state) (ds : List dyn_annotation) (v : value)
+    (ρ : EnvStack) (σ : Mem) :
+    engineOutcomesP p aid rs (ofVal (.annot ds v)) ρ σ =
+      [.next (procThread p (ofVal (.pure v)) ρ) σ] := by
+  unfold engineOutcomesP engineStepsP
+  rw [step_ctx_remove_annot ds v fmapEmpty σ spikeFile fmapEmpty 0 none _ rfl]
+  rfl
+
+/-- The extended cone is closed under Step, GIVEN the label map's
+    own cone membership (`hQf` — the registered continuations are
+    fragment terms; the side hypothesis breaks the circularity a
+    Q-indexed cone would have). -/
+theorem FragJ.step {Q : LabelMap}
+    (hQf : ∀ l params cont, lookupLabel Q l = some (params, cont) → FragJ cont)
+    {e : CoreExpr} {ρ : EnvStack} {σ : Mem}
+    {e' : CoreExpr} {ρ' : EnvStack} {σ' : Mem}
+    (hf : FragJ e) (hs : Step Q (e, ρ, σ) (e', ρ', σ')) : FragJ e' := by
+  induction hf generalizing e' ρ' σ' with
+  | val_pure v => exact (Step.val_elim (w := .pure v) hs).elim
+  | store hlib =>
+    obtain ⟨mv, fp, σ'', hmv, hmem, hout⟩ := hs.store_inv
+    obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ'' := by
+      simpa [Prod.mk.injEq] using hout
+    subst h1
+    exact .annot (.val_pure Vunit)
+  | load hlib =>
+    obtain ⟨fp, mval, σ'', hmem, hout⟩ := hs.load_inv
+    obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ'' := by
+      simpa [Prod.mk.injEq] using hout
+    subst h1
+    exact .annot (.val_pure _)
+  | create hlib =>
+    obtain ⟨pv, σ'', hmem, hout⟩ := hs.create_inv
+    obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ'' := by
+      simpa [Prod.mk.injEq] using hout
+    subst h1
+    exact .val_pure _
+  | sseq hf1 hf2 ih1 ih2 =>
+    rcases hs.sseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
+        ⟨_, _, v, _, _, _, _, _, hout⟩ | ⟨_, _, ds', v, _, _, _, _, _, hout⟩ |
+        ⟨l, pes, params, cont, vs, _, _, hj, _, hl, _, hout⟩
+    · obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ'' ∧ σ' = σ'' := by
+        simpa [Prod.mk.injEq] using hout
+      subst h1
+      exact .sseq (ih1 hstep) hf2
+    · obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ := by
+        simpa [Prod.mk.injEq] using hout
+      subst h1
+      exact hf2
+    · obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ := by
+        simpa [Prod.mk.injEq] using hout
+      subst h1
+      exact .annot hf2
+    · obtain ⟨h1, -, -⟩ : e' = cont ∧ ρ' = _ ∧ σ' = σ := by
+        simpa [Prod.mk.injEq] using hout
+      rw [h1]
+      exact hQf l params cont hl
+  | annot hfb ihb =>
+    rcases hs.annot_inv with ⟨hg, hnj, b', ρ'', σ'', hstep, hout⟩ |
+        ⟨a2, ds2, c, hb, hout⟩ |
+        ⟨l, pes, params, cont, vs, _, _, hg, hj, _, hl, _, hout⟩
+    · obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ'' ∧ σ' = σ'' := by
+        simpa [Prod.mk.injEq] using hout
+      subst h1
+      exact .annot (ihb hstep)
+    · subst hb
+      obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ := by
+        simpa [Prod.mk.injEq] using hout
+      subst h1
+      cases hfb with
+      | annot hfc => exact .annot hfc
+    · obtain ⟨h1, -, -⟩ : e' = cont ∧ ρ' = _ ∧ σ' = σ := by
+        simpa [Prod.mk.injEq] using hout
+      rw [h1]
+      exact hQf l params cont hl
+  | save hb ih =>
+    obtain ⟨cvals, ev0', evs', hρeq, hvals, hout⟩ := hs.save_inv
+    obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = _ ∧ σ' = σ := by
+      simpa [Prod.mk.injEq] using hout
+    subst h1
+    exact hb
+  | if_ hdg hf2 hf3 ih2 ih3 =>
+    rcases hs.if_inv with ⟨-, hout⟩ | ⟨-, hout⟩ <;>
+      (obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ := by
+        simpa [Prod.mk.injEq] using hout)
+    · subst h1; exact hf2
+    · subst h1; exact hf3
+  | run hdep =>
+    obtain ⟨params, cont, vs, ev0', evs', hρeq, hl, hvs, hout⟩ :=
+      hs.jump_inv (by rfl)
+    obtain ⟨h1, -, -⟩ : e' = cont ∧ ρ' = _ ∧ σ' = σ := by
+      simpa [Prod.mk.injEq] using hout
+    rw [h1]
+    exact hQf _ params cont hl
+
+/-- Step growth on the extended cone: additive except at a jump,
+    which RESETS to a registered continuation (the R3 reset — the
+    J-lane accounting's second budget). -/
+theorem FragJ.esize_step_bound {Q : LabelMap} {e : CoreExpr} {ρ : EnvStack}
+    {σ : Mem} {e' : CoreExpr} {ρ' : EnvStack} {σ' : Mem}
+    (hf : FragJ e) (hs : Step Q (e, ρ, σ) (e', ρ', σ')) :
+    esize e' ≤ esize e + 1 ∨
+    ∃ l pes params cont, jumpRedex? e = some (l, pes) ∧
+      lookupLabel Q l = some (params, cont) ∧ e' = cont := by
+  induction hf generalizing e' ρ' σ' with
+  | val_pure v => exact (Step.val_elim (w := .pure v) hs).elim
+  | store hlib =>
+    obtain ⟨mv, fp, σ'', hmv, hmem, hout⟩ := hs.store_inv
+    obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ'' := by
+      simpa [Prod.mk.injEq] using hout
+    subst h1
+    left; simp [esize, storeRedex]
+  | load hlib =>
+    obtain ⟨fp, mval, σ'', hmem, hout⟩ := hs.load_inv
+    obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ'' := by
+      simpa [Prod.mk.injEq] using hout
+    subst h1
+    left; simp [esize, loadRedex]
+  | create hlib =>
+    obtain ⟨pv, σ'', hmem, hout⟩ := hs.create_inv
+    obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ'' := by
+      simpa [Prod.mk.injEq] using hout
+    subst h1
+    left; simp [esize, createRedex]
+  | sseq hf1 hf2 ih1 ih2 =>
+    rcases hs.sseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
+        ⟨_, _, v, _, _, _, _, _, hout⟩ | ⟨_, _, ds', v, _, _, _, _, _, hout⟩ |
+        ⟨l, pes, params, cont, vs, _, _, hj, _, hl, _, hout⟩
+    · obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ'' ∧ σ' = σ'' := by
+        simpa [Prod.mk.injEq] using hout
+      subst h1
+      rcases ih1 hstep with hle | ⟨l, pes, params, cont, hj1, hl, rfl⟩
+      · left
+        simp only [esize_sseq] at *
+        omega
+      · -- a jump of e1 under the frame is excluded by the congruence
+        -- guard
+        rw [hnj] at hj1
+        cases hj1
+    · obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ := by
+        simpa [Prod.mk.injEq] using hout
+      subst h1
+      left
+      simp only [esize_sseq]
+      omega
+    · obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ := by
+        simpa [Prod.mk.injEq] using hout
+      subst h1
+      left
+      simp only [esize_sseq, esize_annot]
+      omega
+    · obtain ⟨h1, -, -⟩ : e' = cont ∧ ρ' = _ ∧ σ' = σ := by
+        simpa [Prod.mk.injEq] using hout
+      exact .inr ⟨l, pes, params, cont, by rw [jumpRedex?_sseq, hj], hl, h1⟩
+  | annot hfb ihb =>
+    rcases hs.annot_inv with ⟨hg, hnj, b', ρ'', σ'', hstep, hout⟩ |
+        ⟨a2, ds2, c, hb, hout⟩ |
+        ⟨l, pes, params, cont, vs, _, _, hg, hj, _, hl, _, hout⟩
+    · obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ'' ∧ σ' = σ'' := by
+        simpa [Prod.mk.injEq] using hout
+      subst h1
+      rcases ihb hstep with hle | ⟨l, pes, params, cont, hj1, hl, rfl⟩
+      · left
+        simp only [esize_annot] at *
+        omega
+      · rw [hnj] at hj1
+        cases hj1
+    · subst hb
+      obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ := by
+        simpa [Prod.mk.injEq] using hout
+      subst h1
+      left
+      simp only [esize_annot]
+      omega
+    · obtain ⟨h1, -, -⟩ : e' = cont ∧ ρ' = _ ∧ σ' = σ := by
+        simpa [Prod.mk.injEq] using hout
+      exact .inr ⟨l, pes, params, cont,
+        by rw [jumpRedex?_annot_of_not_root _ _ hg, hj], hl, h1⟩
+  | save hb ih =>
+    obtain ⟨cvals, ev0', evs', hρeq, hvals, hout⟩ := hs.save_inv
+    obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = _ ∧ σ' = σ := by
+      simpa [Prod.mk.injEq] using hout
+    subst h1
+    left
+    simp only [show ∀ sb ps b, esize (saveRedex sb ps b) = 1 + esize b
+      from fun _ _ _ => rfl]
+    omega
+  | if_ hdg hf2 hf3 ih2 ih3 =>
+    rcases hs.if_inv with ⟨-, hout⟩ | ⟨-, hout⟩ <;>
+      (obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ := by
+        simpa [Prod.mk.injEq] using hout)
+    · subst h1
+      left
+      simp only [show ∀ g e2 e3, esize (ifRedex g e2 e3) =
+        1 + max (esize e2) (esize e3) from fun _ _ _ => rfl]
+      omega
+    · subst h1
+      left
+      simp only [show ∀ g e2 e3, esize (ifRedex g e2 e3) =
+        1 + max (esize e2) (esize e3) from fun _ _ _ => rfl]
+      omega
+  | run hdep =>
+    obtain ⟨params, cont, vs, ev0', evs', hρeq, hl, hvs, hout⟩ :=
+      hs.jump_inv (by rfl)
+    obtain ⟨h1, -, -⟩ : e' = cont ∧ ρ' = _ ∧ σ' = σ := by
+      simpa [Prod.mk.injEq] using hout
+    exact .inr ⟨_, _, params, cont, rfl, hl, h1⟩
+
+/-- THE STEP-MATCH COMPLETENESS AT THE JUMP PROFILE: wherever the
+    MIRROR steps at a FragJ configuration (labels tied by
+    `LabeledAt`), the engine's discharged behavior list is EXACTLY
+    the matching singleton. The WP's NotStuck supplies the step at
+    every reachable configuration, so this is the certification the
+    J-lane drive classification consumes; the rule premises
+    extracted by the inversions are precisely the panic-exclusion
+    facts (guard boolean, label registered, proc set, env
+    nonempty) — the WP is the well-formedness oracle. -/
+theorem engine_step_matchJ {Q : LabelMap} {p : sym} (aid : Nat)
+    {rs : core_run_state} (hQ : LabeledAt rs p Q)
+    {e e' : CoreExpr} {ev0 : Fmap sym value} {evs : List (Fmap sym value)}
+    {ρ' : EnvStack} {σ σ' : Mem}
+    (hf : FragJ e) (hsz : esize e ≤ lemDefaultFuel)
+    (hs : Step Q (e, ev0 :: evs, σ) (e', ρ', σ')) :
+    engineOutcomesP p aid rs e (ev0 :: evs) σ =
+      [.next (procThread p e' ρ') σ'] := by
+  have hnv : toVal e = none := hs.toVal_none
+  obtain ⟨ctx, r, hd, hfr⟩ := hf.decompJ hnv
+  rcases hd.step_factor hs with ⟨r', ρr, σr, hnr, hr, heq⟩ | ⟨ra, l, pes, rfl, hr⟩
+  · obtain ⟨he', hρ', hσ'⟩ : e' = apply_ctx ctx r' ∧ ρ' = ρr ∧ σ' = σr := by
+      simpa [Prod.mk.injEq] using heq
+    subst he' hρ' hσ'
+    have hrj := hd.redexJ
+    cases hrj with
+    | base hb =>
+      have hdOld : Decomp e ctx r := hd.toDecomp hb
+      cases hb with
+      | @store loc ann lk ty pv cv mo hlib =>
+        obtain ⟨mv, fp, σ'', hmv, hmem, hout⟩ := hr.store_inv
+        obtain ⟨h1, h2, h3⟩ : r' = Expr [] (Eannot [DA_pos [] fp]
+            (Expr [] (Epure (Pexpr [] () (PEval Vunit))))) ∧
+            ρ' = ev0 :: evs ∧ σ' = σ'' := by
+          simpa [Prod.mk.injEq] using hout
+        subst h1 h2 h3
+        unfold engineOutcomesP engineStepsP
+        rw [step_ctx_store hdOld hsz hlib fmapEmpty hmv σ spikeFile fmapEmpty
+          0 none _ rfl]
+        simp only [List.map_cons, List.map_nil]
+        rw [dischargeStep_store_active hmem]
+        rfl
+      | @load loc ann ty pv mo hlib =>
+        obtain ⟨fp, mval, σ'', hmem, hout⟩ := hr.load_inv
+        obtain ⟨h1, h2, h3⟩ : r' = Expr [] (Eannot [DA_pos [] fp]
+            (Expr [] (Epure (Pexpr [] () (PEval
+              (valueFromMemValue mval).2))))) ∧
+            ρ' = ev0 :: evs ∧ σ' = σ'' := by
+          simpa [Prod.mk.injEq] using hout
+        subst h1 h2 h3
+        unfold engineOutcomesP engineStepsP
+        rw [step_ctx_load hdOld hsz hlib fmapEmpty σ spikeFile fmapEmpty
+          0 none _ rfl]
+        simp only [List.map_cons, List.map_nil]
+        rw [dischargeStep_load_active hmem]
+        rfl
+      | @create loc ann align ty pref hlib =>
+        obtain ⟨pv, σ'', hmem, hout⟩ := hr.create_inv
+        obtain ⟨h1, h2, h3⟩ : r' = Expr [] (Epure (Pexpr [] ()
+            (PEval (Vobject (OVpointer pv))))) ∧
+            ρ' = ev0 :: evs ∧ σ' = σ'' := by
+          simpa [Prod.mk.injEq] using hout
+        subst h1 h2 h3
+        unfold engineOutcomesP engineStepsP
+        rw [step_ctx_create hdOld hsz hlib fmapEmpty σ spikeFile fmapEmpty
+          0 none _ rfl]
+        simp only [List.map_cons, List.map_nil]
+        rw [dischargeStep_create_active (reqAddr := get_with_address []) hmem]
+        rfl
+      | @beta_pure pa bty v e2 =>
+        rcases hr.sseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
+            ⟨_, _, v', _, _, _, he1, _, hout⟩ |
+            ⟨_, _, ds', v', _, _, _, he1, _, hout⟩ |
+            ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩
+        · exact absurd hstep (fun h => Step.val_elim h)
+        · obtain rfl : v' = v := by
+            have : ofVal (.pure v') = ofVal (.pure v) := he1.symm
+            simpa [ofVal] using this
+          obtain ⟨h1, h2, h3⟩ : r' = e2 ∧ ρ' = ev0 :: evs ∧ σ' = σ := by
+            simpa [Prod.mk.injEq] using hout
+          subst h2
+          obtain rfl : σ = σ' := h3.symm
+          obtain rfl : e2 = r' := h1.symm
+          unfold engineOutcomesP engineStepsP
+          rw [step_ctx_beta_pure hdOld hsz fmapEmpty σ spikeFile fmapEmpty
+            0 none _ rfl rfl]
+          rfl
+        · exact absurd he1 (by simp [ofVal])
+        · rw [jumpRedex?_ofVal] at hj; cases hj
+      | @beta_annot pa bty ds v e2 =>
+        rcases hr.sseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
+            ⟨_, _, v', _, _, _, he1, _, hout⟩ |
+            ⟨_, _, ds', v', _, _, _, he1, _, hout⟩ |
+            ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩
+        · exact absurd hstep (fun h => Step.val_elim h)
+        · exact absurd he1 (by simp [ofVal])
+        · obtain ⟨hds, hv⟩ : ds = ds' ∧ v = v' := by simpa [ofVal] using he1
+          subst hds hv
+          obtain ⟨h1, h2, h3⟩ : r' = Expr [] (Eannot ds e2) ∧
+              ρ' = ev0 :: evs ∧ σ' = σ := by
+            simpa [Prod.mk.injEq] using hout
+          subst h1 h2
+          obtain rfl : σ = σ' := h3.symm
+          unfold engineOutcomesP engineStepsP
+          rw [step_ctx_beta_annot hdOld hsz fmapEmpty σ spikeFile fmapEmpty
+            0 none _ rfl rfl]
+          rfl
+        · rw [jumpRedex?_ofVal] at hj; cases hj
+      | @merge ds1 ds2 b hirr =>
+        rcases hr.annot_inv with ⟨hg, hnj, b', ρ'', σ'', hstep, hout⟩ |
+            ⟨a2, ds2', c, hbeq, hout⟩ |
+            ⟨l, pes, params, cont, vs, _, _, hg, hj, _, _, _, _⟩
+        · rw [show annotRooted (Expr ([] : List annot) (Eannot ds2 b)) = true
+            from rfl] at hg
+          cases hg
+        · injection hbeq with hb1 hb2
+          injection hb2 with hb3 hb4
+          subst hb1 hb3 hb4
+          obtain ⟨h1, h2, h3⟩ : r' = Expr ([] ++ []) (Eannot (ds1 ++ ds2) b) ∧
+              ρ' = ev0 :: evs ∧ σ' = σ := by
+            simpa [Prod.mk.injEq] using hout
+          subst h1 h2
+          obtain rfl : σ = σ' := h3.symm
+          unfold engineOutcomesP engineStepsP
+          rw [step_ctx_merge hdOld hirr hsz fmapEmpty σ spikeFile fmapEmpty
+            0 none _ rfl]
+          rfl
+        · rw [show annotRooted (Expr ([] : List annot) (Eannot ds2 b)) = true
+            from rfl] at hg
+          cases hg
+    | save sb ps body =>
+      obtain ⟨cvals, ev0', evs', hρeq, hvals, hout⟩ := hr.save_inv
+      obtain ⟨h1, h2, h3⟩ : r' = body ∧
+          ρ' = bindSaveParams ps cvals (ev0 :: evs) ∧ σ' = σ := by
+        simpa [Prod.mk.injEq] using hout
+      subst h2
+      obtain rfl : σ = σ' := h3.symm
+      obtain rfl : body = r' := h1.symm
+      unfold engineOutcomesP engineStepsP
+      rw [step_ctx_save hd hsz hvals fmapEmpty σ spikeFile fmapEmpty
+        0 none _ rfl rfl]
+      rfl
+    | if_ g e2 e3 =>
+      have hdg : peDepth g ≤ lemDefaultFuel := by
+        cases hfr with
+        | if_ hdg _ _ => exact hdg
+      rcases hr.if_inv with ⟨hg, hout⟩ | ⟨hg, hout⟩
+      · obtain ⟨h1, h2, h3⟩ : r' = e2 ∧ ρ' = ev0 :: evs ∧ σ' = σ := by
+          simpa [Prod.mk.injEq] using hout
+        subst h2
+        obtain rfl : σ = σ' := h3.symm
+        obtain rfl : e2 = r' := h1.symm
+        exact stepDischarge_if_true hd hsz hdg fmapEmpty σ spikeFile
+          0 none _ rfl hg aid rs
+      · obtain ⟨h1, h2, h3⟩ : r' = e3 ∧ ρ' = ev0 :: evs ∧ σ' = σ := by
+          simpa [Prod.mk.injEq] using hout
+        subst h2
+        obtain rfl : σ = σ' := h3.symm
+        obtain rfl : e3 = r' := h1.symm
+        exact stepDischarge_if_false hd hsz hdg fmapEmpty σ spikeFile
+          0 none _ rfl hg aid rs
+    | case_ pe pats =>
+      -- Ecase is outside the J cone (the registered S4 item); no
+      -- FragJ constructor produces the case shape, so the redex's
+      -- cone membership refutes.
+      cases hfr
+    | run ra l pes =>
+      -- unreachable: the factor theorem's LEFT disjunct certifies
+      -- its redex is NOT a run redex
+      exact absurd rfl (hnr ra l pes)
+  · obtain ⟨params, cont, vs, ev0', evs', hρeq, hl, hvs, hout⟩ :=
+      hr.jump_inv (by rfl)
+    have hdep : ∀ pe' ∈ pes, peDepth pe' ≤ lemDefaultFuel := by
+      cases hfr with
+      | run hdep => exact hdep
+    obtain ⟨h1, h2, h3⟩ : e' = cont ∧
+        ρ' = bindArgs params vs (ev0 :: evs) ∧ σ' = σ := by
+      simpa [Prod.mk.injEq] using hout
+    subst h1 h2
+    obtain rfl : σ = σ' := h3.symm
+    unfold engineOutcomesP engineStepsP
+    exact stepDischarge_run hd hsz hl hdep fmapEmpty σ spikeFile 0 none p
+      _ rfl rfl hvs aid rs hQ
 
 end CerberusHeapLang

@@ -64,6 +64,7 @@ import CerberusHeapLang.Rules
 import CerberusHeapLang.Wps
 import CerberusHeapLang.Exhibit
 import CerberusHeapLang.ProdExhibit
+import CerberusHeapLang.LoopExhibit
 import CerberusHeapLang.StmtProbe
 
 namespace CerberusHeapLang.Audit
@@ -113,6 +114,42 @@ info: 'CerberusHeapLang.engine_complete' depends on axioms: [propext, Classical.
 info: 'CerberusHeapLang.spike_engine_adequacy' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in #print axioms CerberusHeapLang.spike_engine_adequacy
+
+-- Phase-2 S3 (2026-08-31): the jump layer's headline cones, exact
+-- trio each — the context-discard certification (stepDischarge_run),
+-- the factor theorem with the jump disjunct, the step-match
+-- completeness at the jump profile, the Löb-tied collapse with
+-- blockSpecs, and THE END-TO-END CERTIFIED LOOP (driveJ conclusion,
+-- engine vocabulary only).
+/--
+info: 'CerberusHeapLang.stepDischarge_run' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms CerberusHeapLang.stepDischarge_run
+
+/--
+info: 'CerberusHeapLang.DecompJ.step_factor' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms CerberusHeapLang.DecompJ.step_factor
+
+/--
+info: 'CerberusHeapLang.engine_step_matchJ' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms CerberusHeapLang.engine_step_matchJ
+
+/--
+info: 'CerberusHeapLang.wps_sound' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms CerberusHeapLang.wps_sound
+
+/--
+info: 'CerberusHeapLang.engine_adequacyJ' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms CerberusHeapLang.engine_adequacyJ
+
+/--
+info: 'CerberusHeapLang.counter_loop_certified' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms CerberusHeapLang.counter_loop_certified
 
 /--
 info: 'CerberusHeapLang.exhibitA_engine' depends on axioms: [propext, Classical.choice, Quot.sound]

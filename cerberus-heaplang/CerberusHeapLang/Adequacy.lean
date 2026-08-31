@@ -507,5 +507,174 @@ theorem semantic_frame {GF : BundledGFunctors} [SpikeGpreS GF]
     · iexact HQ
     · iexact HF
 
+/-! ## S3 — THE JUMP-PROFILE DRIVE AND ADEQUACY
+
+`driveJ` iterates the same {step_ctx → discharge} loop at a
+PARAMETERIZED run state (Erun reads `labeled` through it; the
+fragment's monads return it verbatim, so it stays constant across
+the drive — mirroring that the real driver never writes `labeled`
+on this path). Classification differs from the phase-1 lane in
+shape (recorded finding): completeness is MATCH-GIVEN-STEP
+(`engine_step_matchJ`) — the WP's NotStuck supplies the mirror step
+at every reachable configuration, whose rule premises carry every
+panic-exclusion fact; no refusal case ever arises. Fuel: the
+in-budget hypotheses (additive on the current segment + the static
+per-label bound for the R3 jump reset — the mission-sanctioned
+interim until the termination-accounting slot). -/
+
+/-- The engine's execution at the jump profile. -/
+def driveJ (rs : core_run_state) (aids : Nat → Nat) :
+    Nat → thread_state → Mem → DriveResult
+  | 0, th, σ => .more th σ
+  | n+1, th, σ =>
+    match (step_ctx fmapEmpty σ spikeFile fmapEmpty 0 (none, th)).map
+        (dischargeStep (aids 0) rs σ) with
+    | [.next th' σ'] => driveJ rs (fun i => aids (i+1)) n th' σ'
+    | [.done v] => .done v σ
+    | [.killed r] => .killed r
+    | _ => .stuck
+
+theorem driveJ_scrutinee (p : sym) (rs : core_run_state) (aid : Nat)
+    (e : CoreExpr) (ρ : EnvStack) (σ : Mem) :
+    (step_ctx fmapEmpty σ spikeFile fmapEmpty 0 (none, procThread p e ρ)).map
+        (dischargeStep aid rs σ) = engineOutcomesP p aid rs e ρ σ := rfl
+
+/-- Driving a bare value at the jump profile: PROGRAM-DONE. -/
+theorem driveJ_value_pure (p : sym) (rs : core_run_state)
+    (φp : CoreRVal → Mem → Prop) (aids : Nat → Nat)
+    (v : value) (ρ : EnvStack) (σ : Mem)
+    (h : ∃ w : CoreRVal, w.val = v ∧ φp w σ) :
+    ∀ n, DriveOk φp (driveJ rs aids n (procThread p (ofVal (.pure v)) ρ) σ)
+  | 0 => trivial
+  | n+1 => by
+    unfold driveJ
+    rw [driveJ_scrutinee, engineOutcomesP_done]
+    exact h
+
+/-- The J-lane drive classification: from Step-level NotStuck +
+    value readout over `Reach` (at the label-carrying tuple), every
+    driveJ outcome is DriveOk — via `engine_step_matchJ`, one
+    certification case per step. Hypotheses: the Q↔labeled tie, the
+    label map's cone membership + static size bound (the R3 reset
+    budget), and the in-budget segment bound. -/
+theorem drive_classifyJ {Q : LabelMap} {p : sym} {rs : core_run_state}
+    (hQ : LabeledAt rs p Q)
+    (hQf : ∀ l params cont, lookupLabel Q l = some (params, cont) →
+      FragJ cont)
+    (n₀ : Nat)
+    (hQsz : ∀ l params cont, lookupLabel Q l = some (params, cont) →
+      esize cont + n₀ ≤ lemDefaultFuel)
+    (e₀ : CoreExpr) (ρ₀ : EnvStack) (σ₀ : Mem)
+    (φp : CoreRVal → Mem → Prop)
+    (hNS : ∀ (r : CoreRt) (σ : Mem),
+      Reach ((⟨e₀, ρ₀, Q⟩ : CoreRt), σ₀) (r, σ) →
+      PrimStep.NotStuck (Val := CoreRVal) (r, σ))
+    (hRES : ∀ (w : CoreRVal) (σ : Mem),
+      Reach ((⟨e₀, ρ₀, Q⟩ : CoreRt), σ₀) (ofValRt w, σ) → φp w σ) :
+    ∀ (n : Nat), n ≤ n₀ →
+    ∀ (aids : Nat → Nat) (e : CoreExpr) (ev0 : Fmap sym value)
+      (evs : List (Fmap sym value)) (σ : Mem),
+      Reach ((⟨e₀, ρ₀, Q⟩ : CoreRt), σ₀) ((⟨e, ev0 :: evs, Q⟩ : CoreRt), σ) →
+      FragJ e → esize e + n ≤ lemDefaultFuel →
+      DriveOk φp (driveJ rs aids n (procThread p e (ev0 :: evs)) σ) := by
+  intro n
+  induction n with
+  | zero => intro _ aids e ev0 evs σ _ _ _; trivial
+  | succ n ih =>
+    intro hn₀ aids e ev0 evs σ hreach hf hfuel
+    cases hv : toVal e with
+    | some w =>
+      have he := ofVal_of_toVal hv
+      subst he
+      cases w with
+      | pure v =>
+        exact driveJ_value_pure p rs φp aids v (ev0 :: evs) σ
+          ⟨⟨.pure v, ev0 :: evs, Q⟩, rfl,
+            hRES ⟨.pure v, ev0 :: evs, Q⟩ σ hreach⟩ (n+1)
+      | annot ds v =>
+        unfold driveJ
+        rw [driveJ_scrutinee, engineOutcomesP_remove_annot]
+        exact driveJ_value_pure p rs φp _ v (ev0 :: evs) σ
+          ⟨⟨.annot ds v, ev0 :: evs, Q⟩, rfl,
+            hRES ⟨.annot ds v, ev0 :: evs, Q⟩ σ hreach⟩ n
+    | none =>
+      rcases hNS ⟨e, ev0 :: evs, Q⟩ σ hreach with hval | ⟨obs, r', σ', efs, hprim⟩
+      · rw [language_toVal_eq, toValRt_mk, hv] at hval
+        cases hval
+      · obtain ⟨hs, hlbl, -⟩ := hprim
+        obtain ⟨re', rρ', rQ'⟩ := r'
+        simp only at hs hlbl
+        obtain rfl : Q = rQ' := hlbl.symm
+        obtain ⟨ev0', rfl⟩ := Step.env_cons hs
+        unfold driveJ
+        rw [driveJ_scrutinee,
+          engine_step_matchJ (aids 0) hQ hf (by omega) hs]
+        refine ih (by omega) _ re' ev0' evs σ'
+          (hreach.tail ⟨hs, rfl⟩) (hf.step hQf hs) ?_
+        rcases hf.esize_step_bound hs with hle |
+            ⟨l, pes, params, cont, hj, hl, hec⟩
+        · omega
+        · rw [hec]
+          have := hQsz l params cont hl
+          omega
+
+/-- ADEQUACY AT THE JUMP PROFILE (engine-only conclusion): a proved
+    base-WP at the label-carrying tuple plus the seeded memory
+    implies driveJ from the proc-carrying thread never kills, never
+    derails, and any delivered value satisfies the postcondition
+    readout. The run state is a parameter carrying the label tie;
+    the label map's cone membership and static size bound are the
+    honest R3-interim hypotheses (arc plan: the in-budget form until
+    the termination-accounting slot). -/
+theorem engine_adequacyJ {GF : BundledGFunctors} [SpikeGpreS GF]
+    {Q : LabelMap} {p : sym} {rs : core_run_state}
+    (hQ : LabeledAt rs p Q)
+    (hQf : ∀ l params cont, lookupLabel Q l = some (params, cont) →
+      FragJ cont)
+    (e₀ : CoreExpr) (ev00 : Fmap sym value) (evs0 : List (Fmap sym value))
+    (σ₀ : Mem) (m₀ : SpikeHeapF SpikeCell)
+    (hfrag : FragJ e₀) (hcoh : Coh σ₀ m₀)
+    (ψ : value → Mem → Prop)
+    (hwp : ∀ [SpikeGS .hasLC GF],
+      iprop(([∗map] i ↦ c ∈ m₀, pointsTo i (.own 1) c)) ⊢
+        WP (⟨e₀, ev00 :: evs0, Q⟩ : CoreRt) @ Stuckness.NotStuck; ⊤
+          {{ w, iprop(∀ (σ' : Mem) (ns : Nat)
+          (κs : List Empty) (nt : Nat),
+          stateInterp σ' ns κs nt ={⊤, ∅}=∗ ⌜ψ w.val σ'⌝) }})
+    (n : Nat) (aids : Nat → Nat)
+    (hfuel : esize e₀ + n ≤ lemDefaultFuel)
+    (hQsz : ∀ l params cont, lookupLabel Q l = some (params, cont) →
+      esize cont + n ≤ lemDefaultFuel) :
+    (∀ r, driveJ rs aids n (procThread p e₀ (ev00 :: evs0)) σ₀ ≠ .killed r) ∧
+    (driveJ rs aids n (procThread p e₀ (ev00 :: evs0)) σ₀ ≠ .stuck) ∧
+    (∀ (v : value) (σ' : Mem),
+      driveJ rs aids n (procThread p e₀ (ev00 :: evs0)) σ₀ = .done v σ' →
+      ψ v σ') := by
+  have hadeq := fun (t2 : List CoreRt) (σ2 : Mem)
+      (h : ([(⟨e₀, ev00 :: evs0, Q⟩ : CoreRt)], σ₀) -·->ₜₚ* (t2, σ2)) =>
+    spike_step_adequacy ⟨e₀, ev00 :: evs0, Q⟩ σ₀ m₀ hcoh
+      (fun w σ' => ψ w.val σ') hwp h
+  have hNS : ∀ (r : CoreRt) (σ : Mem),
+      Reach ((⟨e₀, ev00 :: evs0, Q⟩ : CoreRt), σ₀) (r, σ) →
+      PrimStep.NotStuck (Val := CoreRVal) (r, σ) := by
+    intro r σ hr
+    exact (hadeq [r] σ (Reach.toPool hr)).1 r (by simp)
+  have hRES : ∀ (w : CoreRVal) (σ : Mem),
+      Reach ((⟨e₀, ev00 :: evs0, Q⟩ : CoreRt), σ₀) (ofValRt w, σ) →
+      ψ w.val σ := by
+    intro w σ hr
+    exact (hadeq [ofValRt w] σ (Reach.toPool hr)).2 w [] rfl
+  have hok : DriveOk (fun w σ' => ψ w.val σ')
+      (driveJ rs aids n (procThread p e₀ (ev00 :: evs0)) σ₀) :=
+    drive_classifyJ hQ hQf n hQsz e₀ (ev00 :: evs0) σ₀ _ hNS hRES
+      n (Nat.le_refl n) aids e₀ ev00 evs0 σ₀ .refl hfrag hfuel
+  refine ⟨fun r hdr => ?_, fun hds => ?_, fun v σ' hdv => ?_⟩
+  · rw [hdr] at hok; exact hok
+  · rw [hds] at hok; exact hok
+  · rw [hdv] at hok
+    obtain ⟨w, hwv, hφ⟩ := hok
+    rw [← hwv]
+    exact hφ
+
 end
 end CerberusHeapLang

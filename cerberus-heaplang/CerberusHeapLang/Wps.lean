@@ -74,10 +74,20 @@ open Iris Iris.ProgramLogic Iris.ProgramLogic.Language.Notation
 /-! ## The label context (header note; `LabelMap` itself moved to
 Step.lean at S3 — Step now consults it) -/
 
-/-- Per-label preconditions, indexed by the jump-argument values
-    (probe `Ls`, list-valued for Erun's argument list). -/
+/-- Per-label preconditions, indexed by the jump-argument values AND
+    the jump-time environment (probe `Ls`, list-valued for Erun's
+    argument list; S3 jump-clause payload decision: env-indexed —
+    classical de Bruin label assertions range over the whole state,
+    and the Core env's finite-map representation makes env-BLIND
+    specs unusable for data-dependent loops: the body's parameter
+    lookups after the jump's `update_env` fold sit on an arbitrary
+    quantified base frame, where the tree-map add/lookup laws would
+    demand comparator lawfulness the digest order does not ship;
+    pinning the env in `Ls` keeps every exhibit-side map operation
+    at concrete keys and concrete frames — recorded finding, slice
+    notes). -/
 abbrev LabelSpec (GF : BundledGFunctors) : Type :=
-  sym → List value → IProp GF
+  sym → List value → EnvStack → IProp GF
 
 /-! ## Per-constructor value-test facts (match-reduction discipline) -/
 
@@ -114,7 +124,7 @@ def wps.pre [SpikeGS hlc GF] (Q : LabelMap) (Ls : LabelSpec GF)
       iprop(|={⊤}=> ∃ (params : List (sym × core_base_type)) (cont : CoreExpr)
         (vs : List value) (ev0 : Fmap sym value) (evs : List (Fmap sym value)),
         ⌜ρ = ev0 :: evs⌝ ∗ ⌜lookupLabel Q lp.1 = some (params, cont)⌝ ∗
-        ⌜evalPexprs ρ lp.2 = some vs⌝ ∗ Ls lp.1 vs)
+        ⌜evalPexprs ρ lp.2 = some vs⌝ ∗ Ls lp.1 vs ρ)
     | none =>
       iprop(∀ (σ₁ : Mem) (ns : Nat) (obs obs' : List Empty) (nt : Nat),
         stateInterp σ₁ ns (obs ++ obs') nt ={⊤,∅}=∗
@@ -204,7 +214,8 @@ theorem wps_run {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
     {vs : List value} (ev0 : Fmap sym value) (evs : List (Fmap sym value))
     (hl : lookupLabel Q l = some (params, cont))
     (hvs : evalPexprs (ev0 :: evs) pes = some vs) :
-    Ls l vs ⊢ wps Q Ls Ψ (Expr a (Erun ra l pes)) (ev0 :: evs) := by
+    Ls l vs (ev0 :: evs) ⊢
+      wps Q Ls Ψ (Expr a (Erun ra l pes)) (ev0 :: evs) := by
   rw [wps_unfold.to_eq]
   simp only [wps.pre, show toVal (Expr a (Erun ra l pes)) = none from rfl,
     jumpRedex?_run]
@@ -684,6 +695,158 @@ theorem wps_seq {Ψ : SpikeVal → EnvStack → IProp GF}
       · rw [he1, toVal_ofVal] at htv; cases htv
       · rw [hjr] at hj; cases hj
 
+/-! ## The branch/entry rules (S3 — the engine's measured
+granularity: Eif's big-step guard via the pure-evaluator premise,
+Esave's valueFromPexprs fast-path, Ecase's value-scrutinee
+selection; each one deterministic engine step, certified per-rule in
+Soundness.lean) -/
+
+/-- Eif, true branch (donor `wps_if`, lifting.v:1256, at the
+    engine's big-step-guard granularity; the pure evaluator premise
+    is certified against `full_eval_pexpr` by the bridge). -/
+theorem wps_if_true {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
+    (g : generic_pexpr Unit sym) (e2 e3 : CoreExpr) (ρ : EnvStack)
+    (hg : evalPexpr ρ g = some Vtrue) :
+    wps Q Ls Ψ e2 ρ ⊢ wps Q Ls Ψ (Expr a (Eif g e2 e3)) ρ := by
+  rw [(wps_unfold (e := Expr a (Eif g e2 e3))).to_eq]
+  simp only [wps.pre, show toVal (Expr a (Eif g e2 e3)) = none from rfl,
+    show jumpRedex? (Expr a (Eif g e2 e3)) = none from rfl]
+  iintro H %σ₁ %ns %obs %obs' %nt Hσ
+  iapply fupd_mask_intro Std.LawfulSet.empty_subset
+  iintro Hclose
+  isplitr
+  · ipureintro
+    exact ⟨[], ⟨_, _, _⟩, _, [], ⟨Step.if_true hg, rfl, rfl⟩⟩
+  inext
+  iintro %r %σ₂ %eₜ %Hstep Hcred
+  obtain ⟨hs, hlbl, rfl⟩ := Hstep
+  rcases hs.if_inv with ⟨-, hout⟩ | ⟨hg', -⟩
+  · obtain ⟨re, rρ, rQ⟩ := r
+    simp only at hlbl
+    obtain rfl : Q = rQ := hlbl.symm
+    obtain ⟨hre, hrρ, hσ⟩ : re = e2 ∧ rρ = ρ ∧ σ₂ = σ₁ := by
+      simpa [Prod.mk.injEq] using hout
+    obtain rfl : e2 = re := hre.symm
+    subst hrρ
+    obtain rfl : σ₁ = σ₂ := hσ.symm
+    imod Hclose with -
+    imodintro
+    isplitl [Hσ]
+    · iexact Hσ
+    · iexact H
+  · rw [hg] at hg'; cases hg'
+
+/-- Eif, false branch. -/
+theorem wps_if_false {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
+    (g : generic_pexpr Unit sym) (e2 e3 : CoreExpr) (ρ : EnvStack)
+    (hg : evalPexpr ρ g = some Vfalse) :
+    wps Q Ls Ψ e3 ρ ⊢ wps Q Ls Ψ (Expr a (Eif g e2 e3)) ρ := by
+  rw [(wps_unfold (e := Expr a (Eif g e2 e3))).to_eq]
+  simp only [wps.pre, show toVal (Expr a (Eif g e2 e3)) = none from rfl,
+    show jumpRedex? (Expr a (Eif g e2 e3)) = none from rfl]
+  iintro H %σ₁ %ns %obs %obs' %nt Hσ
+  iapply fupd_mask_intro Std.LawfulSet.empty_subset
+  iintro Hclose
+  isplitr
+  · ipureintro
+    exact ⟨[], ⟨_, _, _⟩, _, [], ⟨Step.if_false hg, rfl, rfl⟩⟩
+  inext
+  iintro %r %σ₂ %eₜ %Hstep Hcred
+  obtain ⟨hs, hlbl, rfl⟩ := Hstep
+  rcases hs.if_inv with ⟨hg', -⟩ | ⟨-, hout⟩
+  · rw [hg] at hg'; cases hg'
+  · obtain ⟨re, rρ, rQ⟩ := r
+    simp only at hlbl
+    obtain rfl : Q = rQ := hlbl.symm
+    obtain ⟨hre, hrρ, hσ⟩ : re = e3 ∧ rρ = ρ ∧ σ₂ = σ₁ := by
+      simpa [Prod.mk.injEq] using hout
+    obtain rfl : e3 = re := hre.symm
+    subst hrρ
+    obtain rfl : σ₁ = σ₂ := hσ.symm
+    imod Hclose with -
+    imodintro
+    isplitl [Hσ]
+    · iexact Hσ
+    · iexact H
+
+/-- Esave ENTRY (one_step0's valueFromPexprs fast-path TAU): verify
+    the save body at the parameter-bound env. -/
+theorem wps_save {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
+    (sb : sym × core_base_type)
+    (ps : List (sym × ((core_base_type ×
+      Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym)))
+    (body : CoreExpr) {cvals : List value}
+    (ev0 : Fmap sym value) (evs : List (Fmap sym value))
+    (hvals : valueFromPexprs (saveParamPexprs ps) = some cvals) :
+    wps Q Ls Ψ body (bindSaveParams ps cvals (ev0 :: evs)) ⊢
+      wps Q Ls Ψ (Expr a (Esave sb ps body)) (ev0 :: evs) := by
+  rw [(wps_unfold (e := Expr a (Esave sb ps body))).to_eq]
+  simp only [wps.pre, show toVal (Expr a (Esave sb ps body)) = none from rfl,
+    show jumpRedex? (Expr a (Esave sb ps body)) = none from rfl]
+  iintro H %σ₁ %ns %obs %obs' %nt Hσ
+  iapply fupd_mask_intro Std.LawfulSet.empty_subset
+  iintro Hclose
+  isplitr
+  · ipureintro
+    exact ⟨[], ⟨_, _, _⟩, _, [], ⟨Step.save hvals, rfl, rfl⟩⟩
+  inext
+  iintro %r %σ₂ %eₜ %Hstep Hcred
+  obtain ⟨hs, hlbl, rfl⟩ := Hstep
+  obtain ⟨cvals', ev0', evs', hρeq, hvals', hout⟩ := hs.save_inv
+  obtain rfl : cvals = cvals' := Option.some.inj (hvals.symm.trans hvals')
+  obtain ⟨re, rρ, rQ⟩ := r
+  simp only at hlbl
+  obtain rfl : Q = rQ := hlbl.symm
+  obtain ⟨hre, hrρ, hσ⟩ : re = body ∧
+      rρ = bindSaveParams ps cvals (ev0 :: evs) ∧ σ₂ = σ₁ := by
+    simpa [Prod.mk.injEq] using hout
+  obtain rfl : body = re := hre.symm
+  subst hrρ
+  obtain rfl : σ₁ = σ₂ := hσ.symm
+  imod Hclose with -
+  imodintro
+  isplitl [Hσ]
+  · iexact Hσ
+  · iexact H
+
+/-- Ecase at a VALUE scrutinee (the engine's substitution TAU; the
+    no-match ILLTYPED refusal is excluded by the selection
+    premise). -/
+theorem wps_case_value {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
+    (pe : generic_pexpr Unit sym) (pats : List (pattern × CoreExpr))
+    {cval : value} {e' : CoreExpr} (ρ : EnvStack)
+    (hv : valueFromPexpr pe = some cval)
+    (hsel : select_case subst_sym_expr cval pats = some e') :
+    wps Q Ls Ψ e' ρ ⊢ wps Q Ls Ψ (Expr a (Ecase pe pats)) ρ := by
+  rw [(wps_unfold (e := Expr a (Ecase pe pats))).to_eq]
+  simp only [wps.pre, show toVal (Expr a (Ecase pe pats)) = none from rfl,
+    show jumpRedex? (Expr a (Ecase pe pats)) = none from rfl]
+  iintro H %σ₁ %ns %obs %obs' %nt Hσ
+  iapply fupd_mask_intro Std.LawfulSet.empty_subset
+  iintro Hclose
+  isplitr
+  · ipureintro
+    exact ⟨[], ⟨e', ρ, Q⟩, σ₁, [], ⟨Step.case_value hv hsel, rfl, rfl⟩⟩
+  inext
+  iintro %r %σ₂ %eₜ %Hstep Hcred
+  obtain ⟨hs, hlbl, rfl⟩ := Hstep
+  obtain ⟨cval', e'', hv', hsel', hout⟩ := hs.case_inv
+  obtain rfl : cval = cval' := Option.some.inj (hv.symm.trans hv')
+  obtain rfl : e' = e'' := Option.some.inj (hsel.symm.trans hsel')
+  obtain ⟨re, rρ, rQ⟩ := r
+  simp only at hlbl
+  obtain rfl : Q = rQ := hlbl.symm
+  obtain ⟨hre, hrρ, hσ⟩ : re = e' ∧ rρ = ρ ∧ σ₂ = σ₁ := by
+    simpa [Prod.mk.injEq] using hout
+  obtain rfl : e' = re := hre.symm
+  subst hrρ
+  obtain rfl : σ₁ = σ₂ := hσ.symm
+  imod Hclose with -
+  imodintro
+  isplitl [Hσ]
+  · iexact Hσ
+  · iexact H
+
 /-! ## The small axioms at the statement layer (house engine seams
 `storeM_success`/`loadM_success` reused verbatim — probe §6 S2) -/
 
@@ -868,7 +1031,7 @@ abbrev blockSpecs (Q : LabelMap) (Ls : LabelSpec GF)
   iprop(□ ∀ (l : sym) (params : List (sym × core_base_type))
     (cont : CoreExpr) (vs : List value) (ev0 : Fmap sym value)
     (evs : List (Fmap sym value)),
-    ⌜lookupLabel Q l = some (params, cont)⌝ -∗ Ls l vs -∗
+    ⌜lookupLabel Q l = some (params, cont)⌝ -∗ Ls l vs (ev0 :: evs) -∗
       wps Q Ls Ψ cont (bindArgs params vs (ev0 :: evs)))
 
 /-- THE PER-LABEL INVARIANT RULE (partial correctness, the default
@@ -881,7 +1044,7 @@ abbrev blockSpecs (Q : LabelMap) (Ls : LabelSpec GF)
 theorem blockSpecs_intro {Ψ : SpikeVal → EnvStack → IProp GF}
     (h : ∀ l params cont vs ev0 evs,
       lookupLabel Q l = some (params, cont) →
-      Ls l vs ⊢ wps (GF := GF) Q Ls Ψ cont
+      Ls l vs (ev0 :: evs) ⊢ wps (GF := GF) Q Ls Ψ cont
         (bindArgs params vs (ev0 :: evs))) :
     ⊢ blockSpecs Q Ls Ψ := by
   unfold blockSpecs
@@ -905,16 +1068,16 @@ theorem blockSpecs_intro_variant {Ψ : SpikeVal → EnvStack → IProp GF}
       lookupLabel Q l = some (params, cont) →
       (∀ l' params' cont' vs' ev0' evs',
         lookupLabel Q l' = some (params', cont') → μ l' vs' < μ l vs →
-        Ls l' vs' ⊢ wps (GF := GF) Q Ls Ψ cont'
+        Ls l' vs' (ev0' :: evs') ⊢ wps (GF := GF) Q Ls Ψ cont'
           (bindArgs params' vs' (ev0' :: evs'))) →
-      Ls l vs ⊢ wps (GF := GF) Q Ls Ψ cont
+      Ls l vs (ev0 :: evs) ⊢ wps (GF := GF) Q Ls Ψ cont
         (bindArgs params vs (ev0 :: evs))) :
     ⊢ blockSpecs Q Ls Ψ := by
   refine blockSpecs_intro fun l params cont vs ev0 evs hQ => ?_
   -- strong induction on the measure, purely at the meta level
   suffices hind : ∀ (n : Nat) l params cont vs ev0 evs,
       lookupLabel Q l = some (params, cont) → μ l vs < n →
-      Ls l vs ⊢ wps (GF := GF) Q Ls Ψ cont
+      Ls l vs (ev0 :: evs) ⊢ wps (GF := GF) Q Ls Ψ cont
         (bindArgs params vs (ev0 :: evs)) by
     exact hind (μ l vs + 1) l params cont vs ev0 evs hQ (Nat.lt_succ_self _)
   intro n

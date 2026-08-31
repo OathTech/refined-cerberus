@@ -9,5 +9,6 @@ import CerberusHeapLang.Exhibit
 import CerberusHeapLang.DriverCollapse
 import CerberusHeapLang.ProdEntry
 import CerberusHeapLang.ProdExhibit
+import CerberusHeapLang.LoopExhibit
 import CerberusHeapLang.StmtProbe
 import CerberusHeapLang.Audit
