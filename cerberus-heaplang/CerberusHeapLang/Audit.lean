@@ -1,17 +1,14 @@
 /-
-CerberusHeapLang.Audit — the in-build axiom-cone gate for the demo
-development (moved here from RefinedCerberus/Audit.lean at the
-2026-08-31 restructure; the ROOT package's audit carries no
-boundary — the boundary lives ONLY here, with the demo it serves).
+CerberusHeapLang.Audit — the in-build axiom-cone gate for this
+package (the repository ROOT package's audit carries no boundary —
+the boundary lives ONLY here, with the demo it serves).
 
-Pattern: the predecessor repo's in-build audit (cerberus-lean park
-branch, relsem/RelSem/Audit.lean), itself from golean's
-proofs/Audit.lean. This file is a member of the CerberusHeapLang lib
-and is its LAST import, so `lake build` elaborates it and an edit
-that weakens the epistemic position fails the build.
+This file is a member of the CerberusHeapLang lib and is its LAST
+import, so `lake build` elaborates it and an edit that weakens the
+epistemic position fails the build.
 
-Checks (minimal set, per the blessed rules §5 —
-grow only for load-bearing trust properties):
+Checks (minimal set by rule — gates grow only for load-bearing
+trust properties):
 
 1. EXHAUSTIVE SWEEP: every theorem in a module whose name root is
    `CerberusHeapLang` (module-of-origin, not namespace — a namespace
@@ -58,6 +55,13 @@ re-baseline to trio), no restatement.
 The sweep is LAST in the file by design: a constant declared after
 it would dodge it, so nothing is declared below it, and this module
 stays the last import of the lib root.
+
+Adjacent instrument (NOT a gate): scripts/statement_census.lean
+reports the statement-surface constant partition of the pinned
+theorems (engine / spec-idiom / Iris / core — docs/WALKTHROUGH.md
+§5). Freezing its expected partitions as an in-build check 4 (with
+the plant tests the other checks get) is registered as a future
+gate; today it is run manually.
 -/
 import Lean
 import CerberusHeapLang.Rules

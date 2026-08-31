@@ -1,20 +1,21 @@
 /-
-CerberusHeapLang.Adequacy — spike artifact 4b: adequacy.
+CerberusHeapLang.Adequacy — adequacy: where proofs in the derived
+logic become facts about the engine's execution.
 
 Three layers:
 1. `drive` — the ENGINE'S EXECUTION at the frozen minimal context:
-   the recon §3.3 discharge loop {step_ctx → Driver.lean:273
-   discharge} as a definition over engine objects (thread_state,
-   MemState, core_step2), with an explicit per-step action-id supply
-   and explicit fuel. Engine vocabulary only.
+   the discharge loop {step_ctx → Driver.lean:273 discharge} as a
+   definition over engine objects (thread_state, MemState,
+   core_step2), with an explicit per-step action-id supply and
+   explicit fuel. Engine vocabulary only.
 2. `spike_step_adequacy` — the Iris adequacy instance: the bundled
    ghost state `SpikeGS` is CONSTRUCTED here (genHeap_init over the
-   initial cell map — closing slice A's D11 honest gap), and iris-
-   lean's `wp_strong_adequacy_gen` yields NotStuck + postcondition
-   readout for every Step-reachable configuration. HeapLang's
-   heap_adequacy (Iris/HeapLang/PrimitiveLaws.lean:131) is the
-   template; the strong variant is needed because the fragment's
-   postconditions read out the FINAL MEMORY STATE (through the state
+   initial cell map), and iris-lean's `wp_strong_adequacy_gen`
+   yields NotStuck + postcondition readout for every Step-reachable
+   configuration. HeapLang's heap_adequacy
+   (Iris/HeapLang/PrimitiveLaws.lean:131) is the template; the
+   strong variant is needed because the fragment's postconditions
+   read out the FINAL MEMORY STATE (through the state
    interpretation), not just the value.
 3. `spike_engine_adequacy` — THE ENGINE-ONLY STATEMENT: a proved WP
    plus a seeded MemState satisfying the precondition footprint
@@ -30,8 +31,9 @@ Certification direction used (Soundness.lean header): engine-
 completeness. Each drive step is `engine_complete`'s unique engine
 behavior; Step-matched behaviors stay in the WP-covered cone,
 refusals contradict NotStuck, and the value protocol composes the
-D1 REMOVE-ANNOT tau with PROGRAM-DONE (annotations erased by
-`SpikeVal.val` in the readout).
+REMOVE-ANNOT tau with PROGRAM-DONE (annotations erased by
+`SpikeVal.val` in the readout — the value-classification divergence
+registered in Step.lean's `SpikeVal` docstring).
 
 FUEL HONESTY (inherited): `esize e₀ + n ≤ lemDefaultFuel` bounds the
 drive length so get_ctx's opaque fuel-exhaustion leaf stays
@@ -59,7 +61,8 @@ inductive DriveResult : Type where
   /-- PROGRAM-DONE: the engine delivered a value -/
   | done (v : value) (σ : Mem)
   /-- the engine killed: `Undef0` (UB), `Error0`, or `Other`
-      (recon §2.6 — the full loadM/storeM failure vocabulary) -/
+      (the full loadM/storeM failure vocabulary —
+      docs/2026-08-30_spike-recon.md §2.6) -/
   | killed (r : kill_reason mem_error)
   /-- refusal (Step_error2 / ILLTYPED) or any off-protocol engine
       behavior -/
@@ -116,8 +119,8 @@ theorem Reach.toPool {c c' : CoreRt × Mem} (h : Reach c c') :
 /-! ## Step-level adequacy: constructing SpikeGS and applying iris -/
 
 /-- Iris adequacy over Step, with final-state readout: constructs
-    the bundled ghost state (SpikeGS — the slice-A D11 gap closes
-    here) from the initial cell map and applies
+    the bundled ghost state (SpikeGS — nothing is assumed
+    pre-allocated) from the initial cell map and applies
     `wp_strong_adequacy_gen`. The postcondition is a readout wand:
     it consumes the final state interpretation, so cell ownership at
     the end pins facts about the FINAL MemState. -/
@@ -507,20 +510,20 @@ theorem semantic_frame {GF : BundledGFunctors} [SpikeGpreS GF]
     · iexact HQ
     · iexact HF
 
-/-! ## S3 — THE JUMP-PROFILE DRIVE AND ADEQUACY
+/-! ## THE JUMP-PROFILE DRIVE AND ADEQUACY (the loop exhibits' lane)
 
 `driveJ` iterates the same {step_ctx → discharge} loop at a
 PARAMETERIZED run state (Erun reads `labeled` through it; the
 fragment's monads return it verbatim, so it stays constant across
 the drive — mirroring that the real driver never writes `labeled`
-on this path). Classification differs from the phase-1 lane in
-shape (recorded finding): completeness is MATCH-GIVEN-STEP
+on this path). Classification differs from the straight-line lane
+in shape (recorded finding): completeness is MATCH-GIVEN-STEP
 (`engine_step_matchJ`) — the WP's NotStuck supplies the mirror step
 at every reachable configuration, whose rule premises carry every
 panic-exclusion fact; no refusal case ever arises. Fuel: the
 in-budget hypotheses (additive on the current segment + the static
-per-label bound for the R3 jump reset — the mission-sanctioned
-interim until the termination-accounting slot). -/
+per-label bound for the jump's fuel reset; `fib_certified_total`
+shows the variant route past them). -/
 
 /-- The engine's execution at the jump profile. -/
 def driveJ (rs : core_run_state) (aids : Nat → Nat) :

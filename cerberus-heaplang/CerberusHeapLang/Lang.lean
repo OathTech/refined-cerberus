@@ -1,29 +1,26 @@
 /-
-CerberusHeapLang.Lang — the iris-lean `Language` instance over
-the fragment's Step (recon §5.3: the Language-instance route, R3 —
-inherits the full mask/fupd WP; HeapLang's instantiation is the
-template, Iris/HeapLang/Instances.lean + PrimitiveLaws.lean:59-90).
+CerberusHeapLang.Lang — the iris-lean `Language` instance over the
+fragment's Step. This is how the package inherits iris-lean's full
+mask/fupd WP without touching iris-lean itself; HeapLang's
+instantiation is the template (Iris/HeapLang/Instances.lean +
+PrimitiveLaws.lean:59-90).
 
-PHASE-1 S1 + PHASE-2 S3: the language expression is the runtime
-TUPLE `CoreRt` (Core expression + live env stack + the static
-per-procedure label map) and values are `CoreRVal` — the probe's
-FULL componentwise `TRt`/`TRVal` pattern (StmtProbe/Toy.lean:
-445-460, label map included). `toVal`/`ofVal` act componentwise;
+The language expression is the runtime TUPLE `CoreRt` (Core
+expression + live env stack + the static per-procedure label map)
+and values are `CoreRVal`; `toVal`/`ofVal` act componentwise and
 the partial-bijection laws lift pointwise. `primStep` runs `Step`
 at the tuple's own label map and PINS the successor's map to it
-(`q.1.lbl = p.1.lbl` — the probe's `q.1.fn = p.1.fn`): the engine
-never writes `labeled` on the sequential path.
+(`q.1.lbl = p.1.lbl`): the engine never writes `labeled` on the
+sequential path.
 
 - Observations: `Empty` (the fragment forks no threads and emits no
   observations; every `List Empty` is `[]`).
-- S3 RETIREMENT (pre-declared — phase-1 notes §2 item 1, and this
-  header's own phase-1 note): the `Language.Context` instance for
-  the Esseq frame (`instContextSseq`) is RETIRED. It was TRUE for
-  the phase-1 jump-free relation; the S3 global jump rule FALSIFIES
-  it (readiness R1 — a jump of e1 and of `Esseq pat e1 e2` step to
+- NO `Language.Context` instance for the Esseq frame: such an
+  instance is TRUE for a jump-free relation but the global jump
+  rule FALSIFIES it (a jump of e1 and of `Esseq pat e1 e2` step to
   the SAME configuration, so `Context.primStep_fill` fails). The
   sequencing routes in force (Wps.lean `wps_seq`; Rules.lean
-  `wp_sseq`'s factor proof) never used it.
+  `wp_sseq`'s factor proof) do not use one.
 
 SOUNDNESS STATUS: the WP is over Step; Step's certification against
 the engine is Soundness.lean, and the engine-facing meaning lands
@@ -80,15 +77,15 @@ instance : Language CoreRt Mem Empty CoreRVal where
 theorem language_toVal_eq (r : CoreRt) :
     ToVal.toVal (Val := CoreRVal) r = toValRt r := rfl
 
-/-! RETIRED (S3, pre-declared): `instContextSseq`, the
-`Language.Context` instance for the Esseq frame. The S3 global jump
-rule falsifies `Context.primStep_fill` — the engine's `Erun`
-discards the frame (step_ctx's Erun arm, Core_reduction.lean:484),
-so a jump of `e1` and of `Esseq pat e1 e2` step to the SAME
-configuration, and a step of the framed term is not always a framed
-step. Statement-level fact recording the falsification direction:
-`Step.sseq_inv`'s jump disjunct (Step.lean). Nothing in the
-sequencing routes used the instance (header note). -/
+/-! Deliberately ABSENT: a `Language.Context` instance for the
+Esseq frame. The global jump rule falsifies `Context.primStep_fill`
+— the engine's `Erun` discards the frame (step_ctx's Erun arm,
+Core_reduction.lean:484), so a jump of `e1` and of
+`Esseq pat e1 e2` step to the SAME configuration, and a step of the
+framed term is not always a framed step. Statement-level fact
+recording the falsification direction: `Step.sseq_inv`'s jump
+disjunct (Step.lean). Nothing in the sequencing routes uses such an
+instance (header note). -/
 
 /-! ## Determinism / reducibility facts for the pure steps
 

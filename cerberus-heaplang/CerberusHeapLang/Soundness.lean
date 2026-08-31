@@ -1,9 +1,9 @@
 /-
-CerberusHeapLang.Soundness — spike artifact 4: THE BOUNDARY
-MODULE. The only spike module that references the engine's step
-machinery (`step_ctx`, Core_reduction.lean:484); everything here
-certifies the hand-written `Step` (Step.lean) against the engine at
-the frozen minimal context (recon §3.2).
+CerberusHeapLang.Soundness — THE BOUNDARY MODULE: the only module
+that references the engine's step machinery (`step_ctx`,
+Core_reduction.lean:484); everything here certifies the
+hand-written `Step` (Step.lean) against the engine at the frozen
+minimal context.
 
 WHAT IS PROVED (the certification direction, and why it suffices):
 
@@ -49,7 +49,8 @@ following projections, each cited:
   - the aid drawn by perform_action_request2 (Driver.lean:284) is an
     arbitrary parameter here: the fragment's positive non-excluded
     continuations build `DA_pos [] fp` and ignore it (step_action,
-    Core_reduction.lean:424; slice-A note D2) — the per-rule lemmas
+    Core_reduction.lean:424; recorded finding D2,
+    docs/2026-08-30_spike-sliceA-notes.md) — the per-rule lemmas
     hold for every aid.
 
 FUEL HONESTY: the engine's get_ctx is fuel-bounded
@@ -69,7 +70,8 @@ set_option autoImplicit false
 
 namespace CerberusHeapLang
 
-/-! ## The frozen minimal context (recon §3.2, measured by probe)
+/-! ## The frozen minimal context (measured by probe —
+docs/2026-08-30_spike-recon.md §3.2)
 
 tagDefs/extern empty (no structs, no linked externs in the
 fragment), default file (only proc/impl lookups read it — the

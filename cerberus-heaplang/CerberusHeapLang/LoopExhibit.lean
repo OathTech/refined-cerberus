@@ -1,9 +1,8 @@
 /-
-CerberusHeapLang.LoopExhibit — phase-2 S3, THE FIRST EXHIBIT: a
-counter loop through the REAL engine end-to-end (two-phase arc plan
-§Phase 2; the S3 mission's exhibit item — the fib skeleton's
-machinery, minus Ecase/loads-into-env, which are S4's with the
-substitution-closure and binding-beta items).
+CerberusHeapLang.LoopExhibit — THE FIRST LOOP EXHIBIT: a counter
+loop through the REAL engine end-to-end. The simplest program with
+a back edge, and the template every later loop exhibit follows
+(fib, array-sum, list-reverse).
 
 THE PROGRAM (authored Core, all metadata quantified):
 
@@ -26,18 +25,18 @@ THE PROGRAM (authored Core, all metadata quantified):
   proc-carrying thread never kills, never derails, and a delivered
   value is `Vunit` with the cell's final bytes pinned by the
   data-dependent post (`n = 0` → untouched; `0 < n` → the stored
-  image). Partial correctness; the in-budget fuel hypotheses are the
-  arc plan's sanctioned interim until the termination-accounting
-  slot.
+  image). Partial correctness with in-budget fuel hypotheses (the
+  variant route past them is demonstrated by `fib_certified_total`,
+  FibExhibit.lean).
 
-THE ENV-FRAME SEAM (recorded finding, slice notes): the engine env
-frames are LemLib `Fmap`s (TreeMap-backed); add/lookup at a CONCRETE
-key on CONCRETELY-STRUCTURED frames reduces definitionally, and the
+THE ENV-FRAME SEAM (recorded finding): the engine env frames are
+LemLib `Fmap`s (TreeMap-backed); add/lookup at a CONCRETE key on
+CONCRETELY-STRUCTURED frames reduces definitionally, and this
 exhibit's per-label invariant PINS the frame structure (`IsXFrame` —
 the env-indexed `LabelSpec`'s purpose). Generic map lawfulness
-(lookup-after-add on arbitrary frames) is deliberately NOT assumed —
-it would require comparator lawfulness for the digest order; the
-named S4+ seam if binding-heavy programs need it.
+(lookup-after-add on arbitrary frames) is deliberately NOT assumed
+here; EnvLaws.lean proves it, and the later exhibits (fib onward)
+use it instead of frame-shape pins.
 -/
 import CerberusHeapLang.Adequacy
 import CerberusHeapLang.Wps

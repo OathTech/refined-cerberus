@@ -1,7 +1,7 @@
 /-
-CerberusHeapLang.ListRevExhibit — the list-reverse arc, phase A:
-THE CANONICAL EXHIBIT (arc plan
-docs/2026-08-31_listrev-shopwindow-arc-plan.md).
+CerberusHeapLang.ListRevExhibit — THE CANONICAL EXHIBIT: in-place
+linked-list reversal, the flagship demonstration of the
+Reynolds/O'Hearn tradition on the real engine.
 
 THE PROGRAM (authored Core, in-place reversal — the classic
 three-pointer loop):
@@ -14,7 +14,8 @@ three-pointer loop):
         lets _ = store(node*, array_shift(cur, long, 1), prev) in
         run loop(cur, n)
 
-THE NODE ([USER] one-allocation-array ruling, extended to nodes):
+THE NODE (the [USER 2026-08-31] one-allocation ruling — see
+ArrayExhibit.lean's provenance forcing fact — extended to nodes):
 ONE allocation per node, TWO long-width fields inside it — the value
 at offset 0, the next pointer at offset 8 (= the engine's own
 `targetPtrSize`, CerbMem.lean:253; LP64 `sizeof(long) = 8`). The
@@ -53,9 +54,9 @@ the interior load axiom, `wps_seq` + `wps_store_eval` + the interior
 STORE axiom, `wps_run`); no monolithic unfolding. Certified through
 the engine lane (`driveJ`, like fib): `list_reverse_certified` (the
 general seeded-chain statement) + `list_reverse_demo` (the concrete
-3-node instance). REGISTERED RESIDUAL (best-effort per the arc plan,
-non-gating): the TOTAL export at the variant's step bound is NOT
-delivered — unlike fib's state-free drive lane, each iteration's
+3-node instance). REGISTERED RESIDUAL: the TOTAL export at the
+variant's step bound is NOT delivered — unlike fib's state-free
+drive lane, each iteration's
 steps depend on `applyMemM` success at the current memory, so the
 unconditional bound needs a pure drive-invariant lane threading
 ChainAt-style heap facts through the 11-steps-per-iteration chain

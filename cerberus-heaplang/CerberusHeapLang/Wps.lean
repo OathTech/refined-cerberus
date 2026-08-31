@@ -1,38 +1,32 @@
 /-
-CerberusHeapLang.Wps — phase-1 S2: the STATEMENT-STRATIFIED WP over
-the real Core fragment (the probe's architecture, StmtProbe/Wps.lean,
-migrated off the toy — two-phase arc plan
-docs/2026-08-31_two-phase-arc-plan.md; prescription: probe report
-docs/2026-08-31_s0-probe-report.md §6).
+CerberusHeapLang.Wps — the STATEMENT-STRATIFIED WP: the judgment
+the loop exhibits are proved in.
 
 THE SHAPE: the classical LABEL-CONTEXT statement logic (de Bruin
-1981-style label-assumption judgments), realized as a guarded
-fixpoint over the fragment's Step via iris-lean's PUBLIC Banach
-machinery (`fixpoint`/`OFE.Contractive` — the same machinery `wp`
-itself is built from; iris-lean untouched; adjudicated in-bounds,
-docs/2026-08-31_s0-adjudication.md). `wps Q Ls Ψ e ρ` is indexed by
+1981-style label-assumption judgments, the shape RefinedC's
+statement judgment also takes), realized as a guarded fixpoint over
+the fragment's Step via iris-lean's PUBLIC Banach machinery
+(`fixpoint`/`OFE.Contractive` — the same machinery `wp` itself is
+built from; iris-lean untouched). `wps Q Ls Ψ e ρ` is indexed by
 
 - `Q : LabelMap` — the STATIC label map (per-procedure registered
   continuations; the engine's `labeled_continuations`,
-  Core_run_aux.lean:186-187 — Caesium `f_code`'s analog). S3 ties it
-  to `core_run_state.labeled` at the current procedure by a pure
-  equation (the donor's `⌜Q = rf.f_code⌝`, lifting.v:1002 —
-  legitimate because nothing writes `labeled` on the positive
-  sequential path).
+  Core_run_aux.lean:186-187 — the analog of Caesium's `f_code`).
+  The certification ties it to `core_run_state.labeled` at the
+  current procedure by a pure equation (RefinedC's
+  `⌜Q = rf.f_code⌝`, lifting.v:1002 — legitimate because nothing
+  writes `labeled` on the positive sequential path).
 - `Ls : LabelSpec GF` — the per-label preconditions, indexed by the
-  jump-argument values (the probe's `Ls : Nat → Int → IProp`,
-  list-valued for Erun's argument list).
+  jump-argument values (list-valued for Erun's argument list) and
+  the jump-time environment.
 
-PHASE-2 S3 — THE JUMP CLAUSE IS PRESENT (phase 1's pre-declared
-"honest absence" closes here): `wps.pre` has THREE clauses
-(value / jump redex / step). The jump clause fires at the Core
-`jumpRedex?` (Step.lean — the syntactic image of step_ctx's Erun
-context-discard over the Esseq/Eannot frames) and its payload is
-the DECIDED Q↔labeled design: `Q` is the CURRENT PROCEDURE's label
-map carried in the runtime tuple (`CoreRt.lbl` — Caesium
-`to_rtstmt rf`'s `f_code`, the probe's `TRt.fn`); the engine's
-two-level `core_run_state.labeled` read through `current_proc_opt`
-and the extern indirection is tied to it by the pure equation
+THE JUMP CLAUSE: `wps.pre` has THREE clauses (value / jump redex /
+step). The jump clause fires at the Core `jumpRedex?` (Step.lean —
+the syntactic image of step_ctx's Erun context-discard over the
+Esseq/Eannot frames); `Q` is the CURRENT PROCEDURE's label map
+carried in the runtime tuple (`CoreRt.lbl`); the engine's two-level
+`core_run_state.labeled` read through `current_proc_opt` and the
+extern indirection is tied to it by the pure equation
 `fmapLookupBy ord p rs.labeled = some Q` in Soundness.lean's
 jump-profile certification. The clause demands: the label resolves
 in `Q` (`lookupLabel`), the arguments evaluate under the CURRENT
@@ -40,28 +34,34 @@ env by the PURE evaluator (`evalPexprs` — certified against the
 engine's `full_eval_pexpr'`), the env stack is cons-shaped (the
 `update_env` panic exclusion), and the per-label precondition
 `Ls l vs` holds — then TRACKING STOPS (the label-context logic's
-discipline; the Φ-clash of the probe report §1 never forms).
-`wps_sound` gains the `blockSpecs` premise as pre-declared, and its
-jump case is where the clause is CERTIFIED against the step
-relation (`Step.jump_inv` / `Step.run_of_jumpRedex` — the probe's
-`step_jump_inv`/`step_of_jumpRedex` pair on Core).
+discipline: a jump's postcondition is the label's business, so the
+postcondition clash that would sink a bind-style rule never forms).
+`wps_sound` (the collapse into the base WP, and the package's one
+Löb induction) carries the `blockSpecs` premise — every registered
+label's body re-establishes its precondition — and its jump case is
+where the clause is CERTIFIED against the step relation
+(`Step.jump_inv` / `Step.run_of_jumpRedex`).
 
-WHAT MIGRATES HERE (probe §4 coverage preservation, now on the REAL
-fragment): the small axioms (`wps_store`/`wps_load` — the house
-`storeM_success`/`loadM_success` engine seams reused verbatim inside
-the step clause), the jump-aware-SHAPED sequencing rule `wps_seq`
-(its jump case arrives with S3; the phase-1 proof is the
-value/annot-beta/step three-way), the annotation-commuting layer
-(`wps_annot_reindex`/`wps_annot` — the R-i cost re-paid once at this
-stratum), structural rules (`wps_wand`/`wps_frame`), the collapse
-`wps_sound` into the base Iris WP (the sole adequacy interface), and
-the two corpus exhibit shapes over an ARBITRARY label context.
+THE CONTENTS: the small axioms at this stratum (`wps_store`/
+`wps_load` — the `storeM_success`/`loadM_success` engine seams
+reused verbatim inside the step clause), the jump-aware sequencing
+rules (`wps_seq`, `wps_seq_spec`, `wps_seq_sym`), the
+annotation-commuting layer (`wps_annot_reindex`/`wps_annot`),
+structural rules (`wps_wand`/`wps_frame`), the branch/entry rules,
+the per-label invariant rule `blockSpecs_intro` and the
+invariant+variant rule `blockSpecs_intro_variant` (no Löb in
+either — the one Löb is inside `wps_sound`), and the collapse
+`wps_sound` into the base Iris WP (the sole adequacy interface).
 
-NO `wps_create`: no create small axiom exists at ANY layer
-(registered design finding D26, ProdEntry.lean header — a sound one
-needs the allocator-cursor resource in the state interpretation,
-phase 2's item). Cold-start creates ride the production entry
+NO `wps_create`: no create small axiom exists at ANY layer (a sound
+one needs the allocator-cursor resource in the state
+interpretation — registered growth step, ProdEntry.lean header).
+Cold-start creates ride the production entry
 (prod_run_eq / sem_triple_prod) unchanged.
+
+Design records: docs/2026-08-31_s0-probe-report.md (the
+architecture probe), docs/2026-08-31_s0-adjudication.md (the
+machinery-use adjudication), the dated slice notes.
 -/
 import CerberusHeapLang.Rules
 
@@ -71,8 +71,8 @@ namespace CerberusHeapLang
 
 open Iris Iris.ProgramLogic Iris.ProgramLogic.Language.Notation
 
-/-! ## The label context (header note; `LabelMap` itself moved to
-Step.lean at S3 — Step now consults it) -/
+/-! ## The label context (header note; `LabelMap` itself lives in
+Step.lean — Step consults it) -/
 
 /-- Per-label preconditions, indexed by the jump-argument values AND
     the jump-time environment (probe `Ls`, list-valued for Erun's

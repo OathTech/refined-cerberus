@@ -1,6 +1,7 @@
 /-
-CerberusHeapLang.ProdEntry — Extension D obligation D4: the
-COLD START and the production-entry theorem.
+CerberusHeapLang.ProdEntry — the COLD START and the
+production-entry theorem: triples restated against the shipped
+pipeline, from the shipped initial state.
 
 The pipeline under judgment is the SHIPPED one (Main.lean:857-885):
 
@@ -16,7 +17,8 @@ whose `sym_supply` is drawn through the EFFECTFUL seam
 `runEffectful (CerberusFresh.freshIntIO ())` — the declared temporal
 boundary axiom (see Audit.lean); every theorem below therefore carries
 `LemLib.runEffectful` in its cone, and holds REGARDLESS of the drawn
-value (the fragment never reads sym_supply — D14's partition).
+value (the fragment never reads sym_supply — the D14 read-set
+partition).
 
 The setup prefix `Driver.drive` runs before `driver2`
 (Driver.lean:500-513): spawn thread 0 (`driver_globals` /
@@ -30,19 +32,28 @@ etc.) pin that prefix; `prodMem₀` is the memory state at fragment
 start — derived through engine functions only.
 
 THE THEOREM (`sem_triple_prod`): the exported semantic-triple face
-(Adequacy.lean, D16/D17) restated against this pipeline. Scope
-honesty: single-threaded, fragment-only, partial correctness — plus a
+(Adequacy.lean) restated against this pipeline. Scope honesty:
+single-threaded, fragment-only, partial correctness — plus a
 termination-within-budget hypothesis, because the production loop's
 fuel-exhaustion leaf is the opaque `fuelExhausted` (fail-closed, D19):
 at insufficient fuel NOTHING about the production value is provable,
 so the run must provably complete for the equation to exist. Fuel
-parametricity is explicitly out of Extension D's scope (the report's
-"what remains").
+parametricity is a registered residual (README "Registered
+divergences").
+
+THE REGISTRATION TIE for loops: `fib_labeledAt_production` /
+`loop_labeledAt_production` derive `LabeledAt` at the PRODUCTION
+initial run state from the shipped
+`collect_labeled_continuations_NEW` — the loop exhibits' label maps
+are exactly what the production entry computes, nothing hand-built —
+and `counter_loop_certified_production` re-exports the counter loop
+at that derived tie. (The full production `runND` equation for a
+loop RUN remains a registered residual.)
 
 Note on `create` and the WP layer (design finding, recorded): the
-fragment gained `create` at the Step/certification level ONLY. An
-unconditional `wp_create` small axiom is UNPROVABLE in the slice-B
-logic: allocateObject can kill ("out of memory", CerbMem.lean:1479)
+fragment has `create` at the Step/certification level ONLY. An
+unconditional `wp_create` small axiom is UNPROVABLE in this logic:
+allocateObject can kill ("out of memory", CerbMem.lean:1479)
 from configurations the footprint does not constrain, so NotStuck
 cannot be established from cell ownership — a sound `wp_create` needs
 an allocator-cursor resource in the state interpretation (the
@@ -51,6 +62,9 @@ Cold-start programs instead run their create prefix on the
 PRODUCTION-PINNED initial memory, where allocation success is a
 theorem (the `hpre` hypothesis below, discharged concretely by the
 exhibits).
+
+Dnn labels are the recorded design findings of
+docs/2026-08-30_spike-sliceB-notes.md.
 -/
 import CerberusHeapLang.DriverCollapse
 import CerberusHeapLang.FibExhibit

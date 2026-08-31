@@ -1,54 +1,42 @@
 /-
-CerberusHeapLang.Rules — spike artifact 3: the logic.
+CerberusHeapLang.Rules — the base logic: the store/load small
+axioms, sequencing, frame, consequence, and the first derived
+exhibit.
 
-The acceptance package (docs/2026-08-30_spike-minilog-plan.md):
-- SMALL AXIOMS `wp_store` / `wp_load` — UB-EXCLUDING (R4): the
-  preconditions rule out every NDkilled arm of storeM/loadM (recon
-  §2.6): the points-to supplies pointer-shape, liveness, bounds,
-  writability, non-atomicity; `StorableAt` supplies the type-compat
-  fact (the non-UB `Other` arm!); `cellLoadTrap = false` excludes the
-  _Bool trap-representation arm.
-- SEQ/BIND: `wp_sseq` — since phase-1 S1/S2 (the restratification)
-  proved DIRECTLY by Löb induction over the factor structure of the
-  Esseq frame (`Step.sseq_inv`), NOT through the
-  `Language.Context`/wp_bind route: the direct proof (i) transports
-  the phase-1 env invariance into the beta case (the betas fire only
-  at cons-shaped env stacks — a fact the pointwise `wp_mono` step of
-  the bind route cannot see), and (ii) is the base-WP face of the
-  jump-aware sequencing argument (probe report §3), so the S3 jump
-  disjunct lands here as one more case instead of a rework. The
-  `instContextSseq` instance remains (true and certified for the
-  jump-free relation — Lang.lean header) but is no longer
-  load-bearing. The annotation-commuting lemmas
-  `wp_annot_reindex`/`wp_annot` (the R-i residue's cost, paid once)
-  survive as before; `triple_seq` glues at the triple level.
+The contents:
+- SMALL AXIOMS `wp_store` / `wp_load` — UB-EXCLUDING: the
+  preconditions rule out every NDkilled (undefined-behavior/error)
+  arm of the engine's storeM/loadM: the points-to supplies
+  pointer-shape, liveness, bounds, writability, non-atomicity;
+  `StorableAt` supplies the type-compat fact (the non-UB `Other`
+  arm!); `cellLoadTrap = false` excludes the _Bool
+  trap-representation arm.
+- SEQ/BIND: `wp_sseq` — proved DIRECTLY by Löb induction over the
+  factor structure of the Esseq frame (`Step.sseq_inv`), NOT
+  through a `Language.Context`/wp_bind route: the direct proof
+  (i) uses the fact that the betas fire only at cons-shaped env
+  stacks (invisible to the pointwise `wp_mono` step of the bind
+  route), and (ii) accommodates the jump disjunct as one more case
+  (a Context instance for Esseq is falsified by jumps — Lang.lean).
+  The annotation-commuting lemmas `wp_annot_reindex`/`wp_annot`
+  handle the run-time annotation residue; `triple_seq` glues at the
+  triple level.
 - FRAME from Iris (`wp_frame_l/r`), stated at triple level.
 - CONSEQUENCE + `wp_wand` (from Iris, stated at triple level).
-- THE EXHIBIT: {x ↦ - ∗ y ↦ a} store(x,7) {x ↦ 7 ∗ y ↦ a}, derived by
-  FRAME on the store small axiom.
+- THE EXHIBIT: {x ↦ - ∗ y ↦ a} store(x,7) {x ↦ 7 ∗ y ↦ a}, derived
+  by FRAME on the store small axiom.
 - The anti-frame sanity check: a comment-fenced negative test at the
   end of this file (a failing example cannot be committed compiling;
-  the stuck goal is recorded verbatim there and in the slice notes).
+  the stuck goal is recorded verbatim there).
 
-PHASE-1 S1 (env live): the WP is over the runtime tuple `CoreRt`;
+ENV DISCIPLINE: the WP is over the runtime tuple `CoreRt`;
 postconditions speak `CoreRVal` (value + final env). The action
 small axioms return the env VERBATIM in their postconditions (the
 request path never touches it); the triple layer is stated at the
 frozen entry env `spikeEnv` (what the production driver parks for a
-parameterless `main` — ProdEntry.prodThread); env-general triples
-arrive with binding patterns (phase 2).
+parameterless `main` — ProdEntry.prodThread).
 
-SOUNDNESS STATUS: every theorem here is proved against `Step`
-(Step.lean), the hand-written mirror. Slice B closed both slice-A
-gaps: Step is certified against the engine's step_ctx/driver
-composite (Soundness.lean), and the bundled `SpikeGS` ghost state is
-constructed inside the adequacy proof (Adequacy.lean,
-spike_step_adequacy), so triples proved here acquire engine-level
-meaning through SemTriple / semantic_triple_sound.
-
-PHASE-2 S3 (the jump layer — Step.lean header notes 3-5). The tuple
-gains the label-map component; this module's statements split into
-two classes, each itemized in the slice notes:
+LABEL DISCIPLINE (the tuple carries the per-procedure label map):
 - LABEL-GENERAL (quantified `Q`): the small axioms `wp_store`/
   `wp_load` — local action steps never consult the label context;
   the jump disjuncts of their inversions are refuted by node shape.
@@ -60,12 +48,23 @@ two classes, each itemized in the slice notes:
   posts — the lockstep argument breaks exactly at the jump); their
   label-general forms live at the wps stratum (Wps.lean), where the
   jump CLAUSE is post-independent and the transfer is formula
-  identity. `wp_sseq` at a populated map has the probe report §1
-  Φ-clash and is likewise a wps-stratum statement (`wps_seq`).
-- RETIRED (pre-declared): `wp_env_invariant` — false once Esave/Erun
-  rebind the env. Survivor: `wp_env_invariant_frag` (FragP-scoped);
-  `triple_seq` gains the `FragP e1` hypothesis it needs to invoke it
-  (forced finding, recorded in the slice notes).
+  identity. `wp_sseq` at a populated map has the analogous
+  postcondition clash and is likewise a wps-stratum statement
+  (`wps_seq`).
+- There is deliberately NO env-invariance lemma at WP level — false
+  once Esave/Erun rebind the env; the FragP-scoped
+  `wp_env_invariant_frag` survives for the straight-line fragment,
+  and `triple_seq` carries the `FragP e1` hypothesis it needs.
+
+SOUNDNESS STATUS: every theorem here is proved against `Step`
+(Step.lean), the hand-written mirror; Step is certified against the
+engine's step_ctx/driver composite (Soundness.lean), and the
+bundled `SpikeGS` ghost state is constructed inside the adequacy
+proof (Adequacy.lean), so triples proved here acquire engine-level
+meaning through SemTriple / semantic_triple_sound.
+
+Design records: docs/2026-08-30_spike-minilog-plan.md and the dated
+slice notes in docs/.
 -/
 import CerberusHeapLang.Lang
 

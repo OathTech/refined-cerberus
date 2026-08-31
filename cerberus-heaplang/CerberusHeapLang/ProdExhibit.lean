@@ -1,6 +1,7 @@
 /-
-CerberusHeapLang.ProdExhibit — Extension D: exhibit A re-exported
-at the PRODUCTION ENTRY (the D4 demonstration).
+CerberusHeapLang.ProdExhibit — exhibit A re-exported at the
+PRODUCTION ENTRY: the unconditional demonstration that the whole
+export chain reaches the shipped pipeline.
 
 The program is fully self-contained — it creates its own cell with the
 engine's `create`, then runs the exhibit-A body at the pointer the
@@ -16,7 +17,7 @@ one-procedure file wrapping this program, from
 `initial_driver_state`, is EXACTLY ONE Active execution; its
 driver_result value is `Specified(7)` and the final memory holds 7's
 byte image at x — via `sem_triple_prod` with the compute part's
-semantic triple (the slice-B logic: wp_store/wp_sseq/wp_load through
+semantic triple (the base logic: wp_store/wp_sseq/wp_load through
 `semantic_triple_sound`), the create prefix discharged concretely on
 the production cold-start memory, and termination by the 6-step
 simulation (the exhibit-A pattern at the production cell).

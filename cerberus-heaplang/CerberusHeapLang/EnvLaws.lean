@@ -1,12 +1,14 @@
 /-
-CerberusHeapLang.EnvLaws — S4: the env-map seam, closed.
+CerberusHeapLang.EnvLaws — lawfulness of the engine's environment
+maps: the lookup-after-add law the loop exhibits' invariants stand
+on.
 
-S3 named this seam (slice notes §6/§7): the engine env frames are
-LemLib `Fmap`s (Std.TreeMap-backed since lem arc-6), and
-lookup-after-add on an ARBITRARY frame needs comparator lawfulness
-for the symbol order, which was not shipped — S3's exhibits pinned
-frame SHAPES instead (`IsXFrame`), which does not scale past one
-binding per frame. This module closes the seam:
+The seam this closes: the engine's env frames are LemLib `Fmap`s
+(Std.TreeMap-backed), and lookup-after-add on an ARBITRARY frame
+needs comparator lawfulness for the symbol order, which the engine
+does not ship as an instance. (Without it, exhibits must pin
+concrete frame SHAPES, which does not scale past one binding per
+frame.) The contents:
 
 1. `Std.TransCmp symOrd` — LAWFULNESS OF THE SYMBOL ORDER. The
    engine's env-map comparator (`mapKeyCompare` at `sym` =
@@ -29,8 +31,8 @@ binding per frame. This module closes the seam:
    invariants: an invariant now carries `SymFrame f` plus the
    lookups it needs.
 4. The binding-pattern computations (`update_env_aux_sym`,
-   `update_env_aux_spec`) and the singleton-map facts, MOVED here
-   from LoopExhibit (S3) — they are shared by every exhibit.
+   `update_env_aux_spec`) and the singleton-map facts — shared by
+   every exhibit.
 -/
 import CerberusHeapLang.Step
 
@@ -41,7 +43,7 @@ namespace CerberusHeapLang
 open Lem_Basic_classes Lem_Map
 
 /-! ## Singleton-map facts (concrete-structure reductions — no
-comparator lawfulness; moved from LoopExhibit) -/
+comparator lawfulness needed) -/
 
 /-- `get?` after insert-into-empty, characterized for ANY key: the
     tree is one node, so lookup is a single comparison. -/

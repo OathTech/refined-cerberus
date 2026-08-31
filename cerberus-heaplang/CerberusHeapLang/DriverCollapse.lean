@@ -1,9 +1,11 @@
 /-
-CerberusHeapLang.DriverCollapse — Extension D obligations D1-D3:
-the PRODUCTION driver pipeline collapsed onto the spike's drive loop,
-for fragment configurations.
+CerberusHeapLang.DriverCollapse — the PRODUCTION driver pipeline
+(scheduler, nondeterminism monad, result readout) collapsed onto
+this package's drive loop, for fragment configurations: the bridge
+that lets drive-lane theorems become statements about the shipped
+`runND (Driver.drive …)` composite (ProdEntry.lean).
 
-- D1 SCHEDULER COLLAPSE: the production driver's round structure is
+- SCHEDULER COLLAPSE: the production driver's round structure is
   `driver2` (Driver.lean:381-386) → `new_drive_core_threads`
   (Driver.lean:355) → `drive_nonmemory_steps_aux2` (Driver.lean:346-351),
   the fuelled per-thread loop {step_ctx → find_can_advance →
@@ -28,11 +30,12 @@ for fragment configurations.
   spike drive, for fragment configurations (single-threaded,
   parent-less, stack-empty — the D14 partition's read set).
 
-- D2 ND COLLAPSE: on the fragment the whole driver computation is a
+- ND COLLAPSE: on the fragment the whole driver computation is a
   branch-free ndM tree — every node the fragment path crosses is a
   single-layer `NDactive`/`NDkilled` state transformer (nd_return/
-  nd_get/nd_update/nd_read: Nondeterminism.lean:184-215; the memM ops:
-  recon §2.3; `pick` on a SINGLETON list: Nondeterminism.lean:276,
+  nd_get/nd_update/nd_read: Nondeterminism.lean:184-215; the memM
+  ops: docs/2026-08-30_spike-recon.md §2.3; `pick` on a SINGLETON
+  list: Nondeterminism.lean:276,
   `NDactive`, no NDnd node), and `nd_bind`/`liftND` compose such
   layers into one layer (`runOne_bind_active`/`runOne_liftMem_active`
   below — each bind spends one layer of its own fresh
@@ -42,7 +45,7 @@ for fragment configurations.
   engine_complete's singleton step list; these lemmas lift it through
   the ndM structure.
 
-- D3 READOUT: `finalize` (Driver.lean:423) on the PROGRAM-DONE state:
+- READOUT: `finalize` (Driver.lean:423) on the PROGRAM-DONE state:
   `prepare_exit` (Driver.lean:372) parks the delivered value as
   `mk_value_e v` in the single surviving thread; `to_pure`
   (Core_aux.lean:570) strips the Epure node; `Driver.hack`
@@ -67,8 +70,12 @@ get_ctx budgets are the inherited `esize` side conditions
 value is the opaque `fuelExhausted` leaf — nothing is provable there,
 fail-closed by construction (D19); this is why the production-entry
 theorem carries a termination-within-budget hypothesis (fuel
-parametricity is out of scope for Extension D — recorded in the
-report).
+parametricity is a registered residual — README "Registered
+divergences").
+
+Dnn labels here and below are the recorded design findings of
+docs/2026-08-30_spike-sliceB-notes.md (e.g. D14 context-undisturbed
+/ read-set partition, D19 fuel honesty, D20 the value protocol).
 -/
 import CerberusHeapLang.Adequacy
 import Driver
@@ -80,7 +87,8 @@ namespace CerberusHeapLang
 
 open Lem_Basic_classes Lem_Maybe Lem_List
 
-/-! ## The runOne layer (D2): one-layer application of an ndM tree -/
+/-! ## The runOne layer (the ND collapse): one-layer application of
+an ndM tree -/
 
 /-- One-layer application of an ndM computation — the driver-level
     analog of `applyMemM` (Step.lean), kept at the raw

@@ -1,25 +1,28 @@
 /-
-CerberusHeapLang.Exhibit — spike artifact 5: the end-to-end
-exhibits, re-concluded AT THE ENGINE LEVEL via adequacy.
+CerberusHeapLang.Exhibit — the straight-line end-to-end exhibits,
+concluded AT THE ENGINE LEVEL via adequacy.
 
 (a) store-then-load: on a concrete state seeded through the engine's
     own allocateObject, the engine's drive of
     `lets _ = store(x,7) in load(x)` delivers the stored integer —
-    the recon §3.3 probe, now a THEOREM whose value fact flows from
-    the proved WP through spike_engine_adequacy (the drive's
-    termination step-count is by execution; the VALUE and SAFETY
-    facts are by adequacy, not by evaluation).
-(b) the operator's frame exhibit, discharged end-to-end:
+    a THEOREM whose value fact flows from the proved WP through
+    spike_engine_adequacy (the drive's termination step-count is by
+    execution; the VALUE and SAFETY facts are by adequacy, not by
+    evaluation).
+(b) the frame exhibit, discharged end-to-end:
     {x ↦ - ∗ y ↦ a} store(x,7) {x ↦ 7 ∗ y ↦ a} (Rules.exhibit, built
     by FRAME on the store small axiom) lands as an engine fact: the
     drive of store(x,7) cannot kill, and afterwards the real
     MemState holds 7's bytes at x and y's bytes UNCHANGED — the
     frame's locality read back from the engine's bytemap.
+(c) disjoint sequential stores: `lets _ = store(x,5) in store(y,6)`
+    updates BOTH cells non-conflictingly — wp_store per leg, each
+    framed with the other cell, glued by triple_seq.
 
 The seeded state: two int-cells allocated from the empty MemState by
-`CerbMem.allocateObject` (the engine's allocator, CerbMem.lean:1469)
-— per the plan's seeding decision. All concrete facts (pointers,
-addresses, Coh) are closed computations.
+`CerbMem.allocateObject` (the engine's allocator, CerbMem.lean:1469).
+All concrete facts (pointers, addresses, Coh) are closed
+computations.
 -/
 import CerberusHeapLang.Adequacy
 
@@ -59,7 +62,9 @@ def yPtr : CerbMem.PointerValue :=
   | some ((_, y), _) => y
   | none => .PV .Prov_none (.PVnull intTy)
 
-/-- x's address: top-of-memory minus one aligned int (recon §2.5). -/
+/-- x's address: top-of-memory minus one aligned int (the engine
+    allocates downward from its address ceiling —
+    docs/2026-08-30_spike-recon.md §2.5). -/
 def xAddr : Int := 281474976710648
 
 def yAddr : Int := 281474976710644

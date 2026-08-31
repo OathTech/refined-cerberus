@@ -1,7 +1,7 @@
 /-
-CerberusHeapLang.FibExhibit — phase-2 S4, ACCEPTANCE EXHIBIT 1: FIB
-end-to-end (two-phase arc plan §Phase 2 + the [USER] acceptance
-amendment — "fib + an array-walk exhibit").
+CerberusHeapLang.FibExhibit — FIB end-to-end: the data-dependent
+loop invariant, and the one exhibit with a TOTAL, unconditional
+export.
 
 THE PROGRAM (authored Core, iterative two-accumulator form; run
 annotation quantified):
@@ -9,13 +9,13 @@ annotation quantified):
     save loop: (i : integer := 0, a : integer := 0, b : integer := 1) in
       if (i < n) then run loop(i + 1, b, a + b) else pure(a)
 
-- Esave binds THREE parameters (the S3 exhibit's machinery at width
-  3 — the env-map seam pays: no frame-shape pins, the invariant
-  carries `SymFrame` + the lookup law).
+- Esave binds THREE parameters (the counter-loop machinery at width
+  3 — the env-map laws pay: no frame-shape pins, the invariant
+  carries `SymFrame` + the lookup law, EnvLaws.lean).
 - The guard `i < n` and the back-edge arguments `i+1`, `b`, `a+b`
   evaluate through the certified pure evaluator; the back edge is
   the context-discarding Erun.
-- The exit `pure(a)` DELIVERS THE ACCUMULATOR through the S4 PURE
+- The exit `pure(a)` DELIVERS THE ACCUMULATOR through the pure-exit
   rule (`wps_pure` / `Step.pure_eval` — one big-step engine
   evaluation of the exit expression).
 - VERIFIED via the per-label invariant rule (`blockSpecs_intro`)
@@ -25,6 +25,10 @@ annotation quantified):
   driveJ from the proc-carrying thread never kills, never derails,
   and any delivered value IS `fib n` — at ANY initial memory (the
   program touches no state; the seeded footprint is empty).
+- ADDITIONALLY TOTAL: `fib_certified_total` is an unconditional
+  equation — at the loop variant's step bound `2·n + 4`, driveJ
+  DELIVERS `fib n`, with no fuel or partiality hypotheses (its lane
+  is state-free: every drive step fires from pure evaluator facts).
 -/
 import CerberusHeapLang.LoopExhibit
 

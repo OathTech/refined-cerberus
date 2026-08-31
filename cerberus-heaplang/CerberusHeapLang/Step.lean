@@ -1,84 +1,82 @@
 /-
-CerberusHeapLang.Step — spike artifact 1: the fragment's
-inductive small-step over the REAL generated Core types.
+CerberusHeapLang.Step — the fragment's inductive small-step
+relation, MIRRORING the engine over the engine's own generated Core
+types.
 
 STATUS: this relation is hand-written, grammar-keyed, and has ZERO
 independent authority. Every rule carries a mirror-cite into the
-engine (cerberus-lean pin 8fb380c9c, lean_frontend/generated/). The
-certification against the engine's `step_ctx`/driver composite is
-Soundness.lean (slice B: `engine_complete` + the context-undisturbed
-per-rule lemmas); the engine-facing meaning of everything proved over
-Step lands through Adequacy.lean's semantic triples.
+engine (the cerberus-lean checkout pinned in
+../scripts/semantics-pin.env; file:line references are into its
+lean_frontend/generated/). The certification against the engine's
+`step_ctx`/driver composite is Soundness.lean (`engine_complete` +
+the context-undisturbed per-rule lemmas); the engine-facing meaning
+of everything proved over Step lands through Adequacy.lean's
+semantic triples. A wrong rule here can therefore only make
+theorems unprovable, never make an exported engine statement false.
 
-Scope (the spike fragment, docs/2026-08-30_spike-minilog-plan.md):
-pure values, Load0/Store0 actions (positive polarity, wildcard-bound
-strong sequencing), Esseq, and the run-time Eannot residue those
-produce. Ewseq is NOT included (it was not free: three more rules and
-every inversion lemma doubles — recorded in the slice notes). All
-rules use the CANONICAL node shapes (empty `List annot` lists, `()`
-at bty) that `mk_value_e`/`mk_value_pe` (Core_aux.lean:302,645) and
-the fragment's authored programs produce; the engine's redex
-patterns accept arbitrary annotation lists in some positions
-(e.g. one_step0's LETS-PURE, Core_reduction.lean:353) — Step takes
-the canonical instances, so it is exact on the fragment cone and a
-sub-relation elsewhere (recorded divergence, slice notes §D3).
+SCOPE (the certified fragment): pure values, Load0/Store0/Create0
+actions, the PtrEq memop, strong sequencing `Esseq` (wildcard,
+`Specified`-binder and plain-symbol-binder patterns),
+`Esave`/`Eif`/value-scrutinee `Ecase`, the context-discarding
+`Erun`, pure/operand evaluation, and the run-time `Eannot` residue
+those produce. `Ewseq` is NOT included (three more rules and every
+inversion lemma doubles — deliberately deferred, register in
+README "Registered divergences"). All rules use the CANONICAL node
+shapes (empty `List annot` lists, `()` at bty) that
+`mk_value_e`/`mk_value_pe` (Core_aux.lean:302,645) and the
+fragment's authored programs produce; the engine's redex patterns
+accept arbitrary annotation lists in some positions (e.g.
+one_step0's LETS-PURE, Core_reduction.lean:353) — Step takes the
+canonical instances, so it is exact on the fragment cone and a
+sub-relation elsewhere (recorded divergence D3,
+docs/2026-08-30_spike-sliceA-notes.md).
 
-The minimal surrounding context frozen out of the judgment (recon
-§3.2): tagDefs = fmapEmpty, extern = fmapEmpty, default file, tid 0.
-The aid counter (driver_state.core_run_state0.aid_supply) never
-enters the fragment's terms: positive non-excluded actions annotate
-with `DA_pos [] fp` (step_action, Core_reduction.lean:424
-Store0/Load0 arms — aid1 is unused in the continuation's dyn_annots),
-so Step needs no aid index.
+The minimal surrounding context frozen out of the judgment:
+tagDefs = fmapEmpty, extern = fmapEmpty, default file, tid 0. The
+aid counter (driver_state.core_run_state0.aid_supply) never enters
+the fragment's terms: positive non-excluded actions annotate with
+`DA_pos [] fp` (step_action, Core_reduction.lean:424 Store0/Load0
+arms — aid1 is unused in the continuation's dyn_annots), so Step
+needs no aid index.
 
-PHASE-1 RESTRATIFICATION (S1, two-phase arc plan
-docs/2026-08-31_two-phase-arc-plan.md; probe prescription
-docs/2026-08-31_s0-probe-report.md §6):
+DESIGN NOTES (each mirrors a specific engine behavior):
 
 1. THE ENVIRONMENT IS LIVE STATE. The engine's thread environment
    (`thread_state.env : List (Fmap sym value)`, Core_run_aux.lean:291)
-   joins the configuration: `Step : CoreExpr × EnvStack × Mem → …`,
-   the probe's componentwise `TRt`/`TRVal` pattern (StmtProbe/Toy.lean)
-   minus the label-map component (S3's; the S3 landing is the
-   frozen-context restatement against `core_run_state.labeled`).
-   Every phase-1 rule RETURNS the env verbatim (`Step.env_invariant`):
-   the fragment's patterns are wildcards, whose `update_env` is the
-   identity on a NONEMPTY env stack (Core_aux.lean:861-868, first
-   arm) and a failwithI PANIC on an empty one — mirrored fail-closed
-   as ABSENCE of a step: the beta rules fire only at cons-shaped
-   envs (the readiness review's panic-channel discipline: panics are
-   excluded by WF shape, never absorbed). The congruence rules are
-   stated env-GENERAL (a descent step's env update is thread-global)
-   so the S3 jump rule extends without restating them.
+   is part of the configuration: `Step : CoreExpr × EnvStack × Mem
+   → …`. Wildcard-pattern betas return the env verbatim: the
+   engine's `update_env` is the identity on a NONEMPTY env stack
+   (Core_aux.lean:861-868, first arm) and a failwithI PANIC on an
+   empty one — mirrored fail-closed as ABSENCE of a step: the beta
+   rules fire only at cons-shaped envs (the panic-channel
+   discipline: panics are excluded by WF shape, never absorbed).
+   The congruence rules are stated env-GENERAL (a descent step's
+   env update is thread-global) so the jump rule composes without
+   restating them.
 
 2. ACTION_EVAL PHRASING. The action rules are stated over
    EVALUATED-OPERAND PREMISES, not syntactic `PEval` patterns:
-   `valueFromPexpr peᵢ = some vᵢ` (Core_aux.lean:472) — the engine's
-   own request-path dispatch: step_action (Core_reduction.lean:424)
-   issues the one-step ACTION_REQUEST exactly when
-   `act_valueFromPexpr` succeeds on every operand, and
+   `valueFromPexpr peᵢ = some vᵢ` (Core_aux.lean:472) — the
+   engine's own request-path dispatch: step_action
+   (Core_reduction.lean:424) issues the one-step ACTION_REQUEST
+   exactly when `act_valueFromPexpr` succeeds on every operand, and
    `act_valueFromPexpr` (Core_reduction.lean:393) equals
    `valueFromPexpr` everywhere except the `PEconstrained` PANIC
    channel, which the `valueFromPexpr` premise excludes fail-closed
    (`valueFromPexpr (PEconstrained …) = none`, so the premise is
    unsatisfiable — no step where the engine panics). Non-value
    operands (e.g. `store(x, a+b)`) take the engine's separate
-   ACTION_EVAL step first; that step rule is phase 2's — these rule
-   STATEMENTS already cover the post-eval shapes, so its arrival is
-   additive. The canonical `PEval` instances discharge the premises
-   by `rfl` (`valueFromPexpr_val`), so the certified fragment cone
-   (Soundness.lean FragP — still canonical) is unchanged.
+   ACTION_EVAL step first (`Step.load_eval`/`store_eval`/
+   `memop_eval`); the canonical `PEval` instances discharge the
+   premises by `rfl` (`valueFromPexpr_val`).
 
-PHASE-2 S3 (jumps and branches — two-phase arc plan §Phase 2; probe
-report §6 S3 prescription):
-
-3. THE LABEL CONTEXT JOINS THE RUNTIME TUPLE. `CoreRt`/`CoreRVal`
-   gain `lbl : LabelMap` — the CURRENT PROCEDURE's static label map
-   (the engine's `labeled_continuations`, Core_run_aux.lean:187;
-   Caesium `f_code` carried by `to_rtstmt rf`, lifting.v:1002; the
-   probe's `TRt.fn`). `Step` takes it as a leading parameter `Q`;
-   steps preserve it by construction of `primStep` (Lang.lean) —
-   the engine never writes `labeled` on the sequential path. The
+3. THE LABEL CONTEXT IS PART OF THE RUNTIME TUPLE. `CoreRt`/
+   `CoreRVal` carry `lbl : LabelMap` — the CURRENT PROCEDURE's
+   static label map (the engine's `labeled_continuations`,
+   Core_run_aux.lean:187; the analog of Caesium's `f_code`,
+   RefinedC lifting.v:1002). `Step` takes it as a leading parameter
+   `Q`; steps preserve it by construction of `primStep` (Lang.lean)
+   — the engine never writes `labeled` on the sequential path. The
    certification ties `Q` to `core_run_state.labeled` at the
    current procedure by the pure equation
    `fmapLookupBy ord p rs.labeled = some Q` with
@@ -89,35 +87,39 @@ report §6 S3 prescription):
 
 4. THE GLOBAL JUMP RULE. `Erun` DISCARDS its evaluation context
    (step_ctx's Erun arm returns `{th_st with env := env', arena :=
-   cont_expr}` — no `apply_ctx ctx`; readiness §2.1 items 1-3). The
-   mirror: `jumpRedex?` is the structural redex search through the
-   Esseq/Eannot spine (the SYNTACTIC image of the context-discard —
-   probe Toy.lean `jumpRedex?`), and `Step.run` fires at ANY
-   configuration whose spine hole is a registered `Erun`, replacing
-   the whole expression. The congruence rules `sseq_ctx`/`annot_ctx`
-   are GUARDED by `jumpRedex? _ = none` so that a jump of a subterm
-   is never framed (the engine's `K[run l pes] --> cont`, never
-   `K[cont]`); this retires `Step.env_invariant` and the
-   `Language.Context` instance for Esseq (both pre-declared —
-   phase-1 notes §2 item 6, Lang.lean header).
+   cont_expr}` — no `apply_ctx ctx`). The mirror: `jumpRedex?` is
+   the structural redex search through the Esseq/Eannot spine (the
+   SYNTACTIC image of the context-discard), and `Step.run` fires at
+   ANY configuration whose spine hole is a registered `Erun`,
+   replacing the whole expression. The congruence rules
+   `sseq_ctx`/`annot_ctx` are GUARDED by `jumpRedex? _ = none` so
+   that a jump of a subterm is never framed (the engine's
+   `K[run l pes] --> cont`, never `K[cont]`). Consequence: no
+   `Language.Context` instance for the Esseq frame is possible once
+   jumps exist (a jump of e1 and of `Esseq pat e1 e2` step to the
+   SAME configuration) — sequencing is proved directly instead
+   (Rules.lean `wp_sseq`, Wps.lean `wps_seq`).
 
 5. Esave / Eif / Ecase are LOCAL rules in the engine's measured
-   granularity (readiness §2.1 items 4-6): Esave entry is a pure
-   TAU at value-shaped parameter pexprs (one_step0's Esave
-   valueFromPexprs fast-path, Core_reduction.lean:353), binding the
-   parameters into the env; Eif takes ONE engine step with a
-   BIG-STEP guard (TAU_WITH_RUNSTATE over `full_eval_pexpr` — the
-   mirror premise is the PURE evaluator `evalPexpr`, certified
-   against the engine's evaluator in Soundness.lean; the
-   non-boolean-guard failwithI PANIC channel is excluded because
-   the rule fires only at `Vtrue`/`Vfalse` results); Ecase with a
-   value scrutinee is a TAU into the substituted branch
-   (`select_case`, Core_aux.lean:637; the no-match ILLTYPED channel
-   is a refusal — absence of a premise; the PEconstrained-scrutinee
-   PANIC is excluded by the `valueFromPexpr` premise). The Ecase
-   EVAL arm (small-step scrutinee via `eval_pexpr1`) is measured
-   but NOT mirrored this slice — recorded S4 item together with the
-   substitution-closure lemmas its cone needs.
+   granularity: Esave entry is a pure TAU at value-shaped parameter
+   pexprs (one_step0's Esave valueFromPexprs fast-path,
+   Core_reduction.lean:353), binding the parameters into the env;
+   Eif takes ONE engine step with a BIG-STEP guard
+   (TAU_WITH_RUNSTATE over `full_eval_pexpr` — the mirror premise
+   is the PURE evaluator `evalPexpr`, certified against the
+   engine's evaluator in Soundness.lean; the non-boolean-guard
+   failwithI PANIC channel is excluded because the rule fires only
+   at `Vtrue`/`Vfalse` results); Ecase with a value scrutinee is a
+   TAU into the substituted branch (`select_case`,
+   Core_aux.lean:637; the no-match ILLTYPED channel is a refusal —
+   absence of a premise; the PEconstrained-scrutinee PANIC is
+   excluded by the `valueFromPexpr` premise). The Ecase EVAL arm
+   (small-step scrutinee via `eval_pexpr1`) is NOT mirrored —
+   registered extension (README "Registered divergences").
+
+Design records (chronology, findings, alternatives priced):
+docs/2026-08-30_spike-minilog-plan.md, docs/2026-08-30_spike-recon.md,
+docs/2026-08-31_s0-probe-report.md, the dated slice notes.
 -/
 import Core_aux
 import Core_run_aux

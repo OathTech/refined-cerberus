@@ -1,7 +1,6 @@
 /-
-CerberusHeapLang.ArrayExhibit — phase-2 S4, ACCEPTANCE EXHIBIT 2:
-ARRAY-SUM end-to-end (two-phase arc plan §Phase 2 + the [USER]
-acceptance amendment).
+CerberusHeapLang.ArrayExhibit — the ARRAY-SUM walk end-to-end:
+real pointer arithmetic through the engine's memory model.
 
 THE PROGRAM (authored Core; metadata quantified):
 
@@ -14,11 +13,11 @@ THE PROGRAM (authored Core; metadata quantified):
 - REAL POINTER ARITHMETIC: the loop-carried pointer advances by
   `array_shift` through the certified evaluator's PEarray_shift arm
   (the engine's own `arrayShiftPtrval`).
-- The load's pointer operand is a SYMBOL: the S4 ACTION_EVAL rule
+- The load's pointer operand is a SYMBOL: the ACTION_EVAL rule
   evaluates it (one engine step) into the canonical load redex; the
   INTERIOR-LOAD small axiom (`wps_load_interior`) then reads the
   element slice of the array cell.
-- The loaded `Specified` value is unwrapped by the S4
+- The loaded `Specified` value is unwrapped by the
   Specified-binder sequencing rule (`wps_seq_spec` — Core's own
   binding-pattern mechanism), so `acc + x` is plain integer
   arithmetic.
@@ -27,8 +26,9 @@ THE PROGRAM (authored Core; metadata quantified):
   cell's ownership; the conclusion is `⌜result = vs.sum⌝` WITH THE
   ARRAY PRESERVED (the final memory still carries the seeded bytes).
 
-RECORDED DIVERGENCE from the amendment's `∗_{i<n} base+i·|int| ↦
-vs[i]` PRE-STATE PHRASING ([AGENT], forcing fact about Cerberus):
+RECORDED DIVERGENCE from the textbook `∗_{i<n} base+i·|int| ↦
+vs[i]` PRE-STATE PHRASING ([AGENT], forcing fact about Cerberus;
+[USER 2026-08-31] one-allocation ruling ratified it):
 in this ghost model a cell IS an allocation (`CellCoh` ties the
 ghost key to the allocation id), and the concrete memory model's
 loads resolve the pointer's PROVENANCE allocation and bounds-check

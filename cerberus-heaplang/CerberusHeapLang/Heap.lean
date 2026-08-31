@@ -1,24 +1,24 @@
 /-
-CerberusHeapLang.Heap — spike artifact 2: the points-to over the
-engine's memory state, on iris-lean's GenHeap.
+CerberusHeapLang.Heap — the points-to over the engine's memory
+state, on iris-lean's GenHeap.
 
-GRANULARITY DECISION (recon §5.2, recorded reasoning): the ghost
-carrier is ALLOCATION-ROOTED — one ghost cell per allocation id,
-holding (base address, C type, byte list). Why:
+GRANULARITY DECISION: the ghost carrier is ALLOCATION-ROOTED — one
+ghost cell per allocation id, holding (base address, C type, byte
+list). Why:
 - loadM/storeM success is decided by the ALLOCATION table (liveness,
   bounds, writability, atomicity — CerbMem.lean:1586-1696), so a
   byte-only points-to cannot entail access success (the allocation
   facts would need a second ghost heap anyway);
 - the value payload is the BYTE list (mirror-true to `bytemap`),
-  which is exactly the donor's Caesium `l ↦ v : list mbyte` shape;
+  which is exactly RefinedC/Caesium's `l ↦ v : list mbyte` shape;
   value-level claims are stated OVER the bytes by encoding
-  predicates (recon §2.8) — the ty_deref/ty_ref factorization (R2)
-  grows on this without change;
+  predicates — the ty_deref/ty_ref factorization grows on this
+  without change;
 - per-byte splitting of one allocation (struct fields) is the
   registered growth step: split into a per-byte heap + a
   per-allocation metadata heap. CHANGED-SHAPE, not blocking.
 
-STATE INTERPRETATION (memory only — no driver state; recon §5.1):
+STATE INTERPRETATION (memory only — no driver state):
 `stateInterp σ _ _ _ := ∃ m, ⌜Coh σ m⌝ ∗ genHeapInterp m` over the
 real `CerbMem.MemState`. `Coh` is the coupling invariant: every ghost
 cell is backed by a live, writable, in-bounds, non-atomic allocation
@@ -28,8 +28,10 @@ disjoint. The union-member/function-pointer side tables are SYMBOLIC
 carries an INERTNESS premise (`CellCoh.dec_indep`) saying its decode
 ignores both tables — exactly what loadM's reconstruction reads them
 for — and `StorableAt` carries the serialization-side analogues.
-For scalar cells all of these are `rfl`. ([USER 2026-08-30]: the
-de-pin; the full-build shape is ghost ownership of the tables.)
+For scalar cells all of these are `rfl`. (The full-build shape is
+ghost ownership of the tables.)
+
+Design records: docs/2026-08-30_spike-recon.md §5.
 -/
 import Iris
 import CerberusHeapLang.Step

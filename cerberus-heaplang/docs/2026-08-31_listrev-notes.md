@@ -200,3 +200,98 @@ verbatim expectation):
 'CerberusHeapLang.list_reverse_certified' depends on axioms: [propext, Classical.choice, Quot.sound]
 'CerberusHeapLang.list_reverse_demo' depends on axioms: [propext, Classical.choice, Quot.sound]
 ```
+
+---
+
+# Phase B — the shop window (pedagogy pass; this worker's record)
+
+Docs/headers/instrument only — ZERO proof-content changes, ZERO
+renames. Mechanical verification of that claim: the signature
+snapshot regenerated after all edits is BYTE-IDENTICAL to the
+committed phase-A post snapshot
+(`docs/2026-08-31_listrev-signatures-post.txt`; diff -q clean,
+2026-08-31). Sweep tallies unchanged: 755 theorems / 1499 constants
+/ 434 jobs.
+
+## What was produced / moved
+
+1. **`docs/WALKTHROUGH.md`** (new): the naive-PL-reader tour —
+   §1 what Cerberus/Core/the engine are (no project history
+   assumed); §2 the list-reverse program construct by construct
+   (pretty form + the real `lrBody` term); §3 what a triple means
+   (wp_store walked; `SemTriple`'s quantifier structure: any
+   configuration satisfying P, arbitrary rest returned verbatim,
+   engine execution; the headline statement skeleton); §4 the trust
+   story in three tiers (kernel-checked cones / explicit hypotheses
+   / the specification idiom) incl. the mirror-is-interior
+   invariant (a bad mirror can only make theorems unprovable, never
+   false) and the driveJ-vs-production-lane asymmetry; §5 READING
+   THE THEOREMS ([USER 2026-08-31] addendum, mid-phase): verbatim
+   statements + identifier-by-identifier bin tables
+   (ENGINE / SPEC IDIOM / HYPOTHESES) + idiom definitions inline
+   for `fib_certified_total`, `list_reverse_certified`,
+   `exhibitA_prod`, + the statement-surface census output pasted
+   verbatim; §6 check-it-yourself (commands RUN, output pasted);
+   §7 module reading order.
+2. **README recast**: Reynolds/O'Hearn claim made explicit and
+   backed immediately by the exhibit table (small axioms → frame →
+   disjoint stores → counter loop → fib incl. total → array →
+   LIST-REVERSE → production rows), each row
+   claim/hypotheses/lane/cone; drive-vs-production lane defined at
+   first use; walkthrough linked at top; all honesty artifacts kept
+   (trust story, scope of claims verbatim in substance, divergence
+   register with references normalized to dated doc PATHS, verify-me
+   block re-run); chronicle-flavored text (phase/arc/slice labels)
+   removed from the front doc.
+3. **`scripts/statement_census.lean`** (new, [USER 2026-08-31]
+   addendum deliverable): read-only #eval instrument; for each of
+   the 10 pinned exported theorems, collects the constants of the
+   STATEMENT (type only, proofs not inspected) and bins by module
+   root (CerberusHeapLang = idiom / Iris / Init‑Lean‑Std‑Batteries‑Qq
+   = core / everything else = the CerberusLean dependency = engine).
+   NOT wired as an audit check (frozen expected partitions + plant
+   tests judged non-trivial mid-phase; registered as future gate in
+   the script header and Audit.lean header). Run twice (before and
+   after the header pass) — outputs identical.
+4. **Module headers** rewritten to orient a stranger (all 18
+   modules): "spike artifact N" / phase‑S1‑S4 / "Extension D
+   obligation" openers replaced by content descriptions; bare
+   references ("recon §", "slice notes", "probe report", "the
+   report") normalized to dated doc paths; Dnn finding labels KEPT
+   in DriverCollapse/ProdEntry with a one-line legend pointing at
+   `docs/2026-08-30_spike-sliceB-notes.md`; the stale hardcoded
+   engine pin in Step.lean's header (8fb380c9c) replaced by a
+   pointer to `../scripts/semantics-pin.env` (the pin's single
+   source of truth); Lang.lean's "RETIRED instance" note recast as
+   "deliberately ABSENT" (the instance does not exist in code);
+   Exhibit header now lists exhibit (c). No declaration renamed, no
+   file renamed.
+
+## Findings (census, honest observations — reported not papered)
+
+- The Iris-exported theorems carry the universally quantified
+  ghost-functor binder (`Iris.BundledGFunctors` + `SpikeGpreS`) in
+  their statement surface; satisfiability witness `SpikeGF`. The
+  engine-only exports (`fib_certified_total`, `exhibitA_prod`)
+  surface ZERO Iris constants.
+- `counter_loop_certified_production`'s statement surfaces
+  iris-lean's finite-map library (`Iris.Std.PartialMap.singleton`,
+  `Std.ExtTreeMap.instPartialMapCompare`) — footprint-map DATA
+  vocabulary, not program-logic machinery; listed in WALKTHROUGH
+  §5.4. No other machinery constant surfaces in any pinned
+  statement.
+
+## Commands run (verbatim outputs pasted where quoted)
+
+- `./scripts/test_unit.sh` — baseline before edits AND after all
+  edits: `ALL GATES GREEN` both times (post-edit tail quoted in
+  README; the audit info-line position moved 362→366 with the
+  header edit, quoted tails updated to the observed output).
+- `lake env lean scripts/signature_snapshot.lean` → diff vs
+  committed post snapshot: identical (above).
+- `lake env lean scripts/statement_census.lean` — output pasted
+  into WALKTHROUGH §5 verbatim.
+- The verify-me `#print axioms` block — re-run this checkout;
+  output identical to the quoted README block.
+
+Rename table: EMPTY (no renames).
