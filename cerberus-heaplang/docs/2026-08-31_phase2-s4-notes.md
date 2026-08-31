@@ -51,8 +51,10 @@ packages with in-build audits).
    product is; a general theorem needs a step-counting refinement of
    the wps layer (registered forward item).
 4. **PRODUCTION TIE** (ProdEntry.lean, boundary): `collect_saves`
-   and `collect_labeled_continuations_NEW` COMPUTE the exhibits'
-   label maps on the synthetic one-proc file (`collect_saves_fib`
+   and `collect_labeled_continuations_NEW` COMPUTE the fib and
+   counter-loop label maps (no array registration tie exists —
+   plural corrected per arc-close audit MINOR 4) on the synthetic
+   one-proc file (`collect_saves_fib`
    / `collect_saves_loop`, both `rfl`), so `LabeledAt` at the
    SHIPPED `initial_core_run_state` is DERIVED
    (`fib_labeledAt_production`, `loop_labeledAt_production`) — the
@@ -163,8 +165,12 @@ parser counts every dumped entry kind incl. ctor/rec):
 
 Boundary: module set unchanged (`ProdEntry`/`ProdExhibit`);
 boundary theorem count 34 → 40 (+6: the S4 registration-tie
-theorems, each carrying exactly trio + `runEffectful` through the
-`initial_core_run_state` STATEMENTS). Sweep: 542 → 643
+theorems. CORRECTED TALLY [orchestrator, arc-close audit MINOR 3]:
+3 of the 6 carry trio + `runEffectful` through the
+`initial_core_run_state` STATEMENTS; the other 3
+(`collect_saves_fib`/`collect_saves_loop`/`collect_new_fib`) are
+trio-only — the original "each carrying" claim erred conservatively
+but was a wrong derived tally). Sweep: 542 → 643
 boundary-swept theorems; banned-axiom sweep 1319 constants clean;
 all pre-existing pins byte-identical; +6 S4 pins (`fib_certified`,
 `array_sum_certified`, `fib_certified_total`,

@@ -5,10 +5,12 @@ HeapLang-analog of the cerberus-lean semantics. A small Iris program
 logic (points-to, the store/load small axioms, frame, sequencing,
 consequence) is built over a tight fragment of the Core AST and then
 **certified against the production cerberus-lean pipeline from cold
-start**: the exported theorems quantify over the shipped
+start**: the STRAIGHT-LINE exports quantify over the shipped
 `initial_driver_state` and conclude equations about the very
 `CerbND.runND (Driver.drive …)` composite that the cerberus-lean
-executable runs. The exported theorems carry a definite qualifier
+executable runs; the LOOP exports certify against the engine's own
+stepper lane, with the full-pipeline loop equation a registered
+residual (see "Scope of the claims"). The exported theorems carry a definite qualifier
 set, stated in full under "Scope of the claims" below; the analogy
 to Iris HeapLang is in the ROLE (the demonstration language the
 logic is exercised on), not the extent — unlike HeapLang this
@@ -68,7 +70,11 @@ is tied to `core_run_state.labeled`: the engine never kills, never
 derails, and a delivered value satisfies the data-dependent
 postcondition (`fib n` from the Lean-side `fibSpec`; `vs.sum` with
 the array preserved). These are PARTIAL-correctness statements with
-in-budget fuel hypotheses — except `fib_certified_total`, which is
+in-budget fuel hypotheses — and, for `array_sum_certified`, stated
+pre-state hypotheses: the coherence-seeded one-allocation array
+(`hcoh`), per-element decode premises (`hdec`, rfl-dischargeable at
+concrete engine-serialized bytes), and size/location side conditions
+(`hsz`/`hlib`) — except `fib_certified_total`, which is
 TOTAL AND UNCONDITIONAL: at the loop variant's step bound `2·n + 4`,
 `driveJ` DELIVERS `fib n`, with no fuel hypotheses at all. Scope
 honesty for all of them: the drive lane is the sequential driver's
