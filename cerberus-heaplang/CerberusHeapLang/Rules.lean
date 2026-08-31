@@ -724,7 +724,9 @@ theorem wp_sseq [SpikeGS hlc GF] {s : Stuckness} {E : CoPset}
       dsimp only [Nat.repeat]
       rcases hstepW.sseq_inv with ⟨e1', ρ', σ'', hnj, hs, hout⟩ |
           ⟨_, _, v, _, _, _, he1, _, _⟩ | ⟨_, _, _, v, _, _, _, he1, _, _⟩ |
-          ⟨l, pes, params, cont, vs, _, _, _, _, hl, _, _⟩
+          ⟨l, pes, params, cont, vs, _, _, _, _, hl, _, _⟩ |
+          ⟨_, _, _, _, _, _, _, hpat, _, _, _⟩ |
+          ⟨_, _, _, _, _, _, _, _, hpat, _, _, _⟩
       · -- S3: env invariance is gone; the step keeps the stack
         -- CONS-SHAPED (`Step.env_cons`) and the Löb IH re-enters at
         -- the new head frame.
@@ -752,6 +754,8 @@ theorem wp_sseq [SpikeGS hlc GF] {s : Stuckness} {E : CoPset}
       · rw [he1, toVal_ofVal] at hv; cases hv
       · rw [he1, toVal_ofVal] at hv; cases hv
       · rw [lookupLabel_empty] at hl; cases hl
+      · exact (specPat_ne_base hpat).elim
+      · exact (specPat_ne_base hpat).elim
 
 /-! ## Triples
 
@@ -828,16 +832,20 @@ theorem EnvStable.step_env {Q : LabelMap} {e : CoreExpr} {ρ : EnvStack}
   | pure a pe =>
     cases hs with
     | run hj hl hvs => simp at hj
+    | pure_eval hnv hv => exact ⟨.pure _ _, rfl⟩
   | action a p =>
     cases hs with
     | store h1 h2 h3 hmv hmem => exact ⟨.annot (.pure _ _), rfl⟩
     | load h1 h2 hmem => exact ⟨.annot (.pure _ _), rfl⟩
     | create h1 h2 hmem => exact ⟨.pure _ _, rfl⟩
     | run hj hl hvs => simp at hj
+    | load_eval hnv2 hv2 => exact ⟨.action _ _, rfl⟩
   | sseq hf1 hf2 ih1 ih2 =>
     rcases hs.sseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
         ⟨_, _, v, _, _, _, _, _, hout⟩ | ⟨_, _, ds', v, _, _, _, _, _, hout⟩ |
-        ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩
+        ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩ |
+        ⟨_, _, _, _, _, _, _, hpat, _, _, _⟩ |
+        ⟨_, _, _, _, _, _, _, _, hpat, _, _, _⟩
     · obtain ⟨h1, h2, -⟩ : e' = _ ∧ ρ' = ρ'' ∧ σ' = σ'' := by
         simpa [Prod.mk.injEq] using hout
       subst h1 h2
@@ -853,6 +861,8 @@ theorem EnvStable.step_env {Q : LabelMap} {e : CoreExpr} {ρ : EnvStack}
       exact ⟨.annot hf2, h2⟩
     · rw [hf1.jumpRedex?_none] at hj
       cases hj
+    · exact (specPat_ne_base hpat).elim
+    · exact (specPat_ne_base hpat).elim
   | annot hfb ihb =>
     rcases hs.annot_inv with ⟨hg, hnj, b', ρ'', σ'', hstep, hout⟩ |
         ⟨a2, ds2, c, hb, hout⟩ |

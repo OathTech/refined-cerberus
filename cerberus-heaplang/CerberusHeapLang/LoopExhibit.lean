@@ -41,6 +41,7 @@ named S4+ seam if binding-heavy programs need it.
 -/
 import CerberusHeapLang.Adequacy
 import CerberusHeapLang.Wps
+import CerberusHeapLang.EnvLaws
 
 set_option autoImplicit false
 
@@ -48,36 +49,6 @@ namespace CerberusHeapLang
 
 open Iris Iris.BI Iris.ProgramLogic Iris.ProgramLogic.Language.Notation
 open Lem_Basic_classes Lem_Map
-
-/-! ## Generic singleton-map facts (concrete-structure reductions;
-no comparator lawfulness) -/
-
-/-- `get?` after insert-into-empty, characterized for ANY key: the
-    tree is one node, so lookup is a single comparison. -/
-theorem treeMap_get?_insert_empty {α β : Type} (cmp : α → α → Ordering)
-    (k : α) (v : β) (l : α) :
-    (((Std.TreeMap.empty (cmp := cmp)).insert k v).get? l) =
-      (if cmp l k = .eq then some v else none) := by
-  cases hc : cmp l k <;>
-    simp [Std.TreeMap.get?, Std.TreeMap.insert, Std.TreeMap.empty,
-      Std.DTreeMap.Internal.Impl.insert,
-      Std.DTreeMap.Const.get?, Std.DTreeMap.insert, Std.DTreeMap.empty,
-      Std.DTreeMap.Internal.Impl.Const.get?,
-      Std.DTreeMap.Internal.Impl.empty,
-      EmptyCollection.emptyCollection, Std.TreeMap.instEmptyCollection,
-      Std.DTreeMap.instEmptyCollection, hc]
-
-/-- Lookup in a one-entry `Fmap` built by `fmapAddBy` on empty. -/
-theorem fmapLookupBy_addBy_empty {β : Type}
-    (cmpL cmpL' : sym → sym → LemOrdering) (k : sym) (v : β) (l : sym) :
-    fmapLookupBy cmpL' l (fmapAddBy cmpL k v fmapEmpty) =
-      (if lemCmpToOrd cmpL l k = .eq then some v else none) := by
-  unfold fmapAddBy fmapEmpty fmapLookupBy
-  dsimp only
-  rw [treeMap_get?_insert_empty]
-  by_cases hc : lemCmpToOrd cmpL l k = .eq
-  · rw [if_pos hc, if_pos hc]
-  · rw [if_neg hc, if_neg hc]
 
 /-! ## The program -/
 
@@ -115,10 +86,6 @@ def loopProg (loc : CerbLocation.Loc) (ann ra : core_run_annotation)
     [(xSym, ((xbty, (none : Option (ctype × pass_by_value_or_pointer))),
       Pexpr [] () (PEval (ivVal n))))]
     (loopBody loc ann ra mo bty c))
-
-/-- The engine's lookup-comparator spelling (`lookupLabel`'s). -/
-def symCmpL : sym → sym → LemOrdering :=
-  fun s1 s2 => Lem_Basic_classes.ordCompare s1 s2
 
 /-- The label map: `loop` registered with the sseq-extended body
     (which at this top-level program IS the save body — the
@@ -175,29 +142,6 @@ theorem loopRS_labeledAt :
   rw [if_pos (by decide +kernel)]
 
 /-! ## The env frames (the concrete-structure invariant) -/
-
-/-- The env-update comparator (update_env's `mapKeyCompare`
-    instance). -/
-def symCmpK : sym → sym → LemOrdering := @mapKeyCompare sym _
-
-/-- The head-frame add in the ENGINE's exact elaboration
-    (update_env_aux's comparator AND its MapKeyType-derived BEq —
-    the derived structural `BEq sym` is a DIFFERENT instance and
-    must not leak in). -/
-abbrev envAdd (x : sym) (v : value) (m : Fmap sym value) : Fmap sym value :=
-  @fmapAddBy sym value instBEqOfMapKeyType symCmpK x v m
-
-/-- `update_env_aux` at the sym-binder pattern is the head-frame
-    add (Core_aux.lean:861 arm 2; the fuelled matcher needs the
-    value's constructor exposed). -/
-theorem update_env_aux_sym (x : sym) (b : core_base_type) (v : value)
-    (m : Fmap sym value) :
-    update_env_aux (a := sym) (mk_sym_pat x b) v m = envAdd x v m := by
-  show update_env_aux_lemFuel lemDefaultFuel _ _ _ = _
-  rw [show lemDefaultFuel = 999999 + 1 from rfl]
-  unfold update_env_aux_lemFuel
-  dsimp only [mk_sym_pat, mk_sym_pat_]
-  rfl
 
 /-- The exhibit's head-frame shape: a one-node tree at `xSym`
     holding `v` (sequence/counter bookkeeping quantified). Every

@@ -575,11 +575,11 @@ theorem exhibitA_terminates (aids : Nat → Nat) :
     rw [drive_scrutinee]
     unfold engineOutcomes
     have hE := engineSteps_store
-      (Decomp.sseq (pa := []) (bty := BTy_unit)
+      (Decomp.toJ (Decomp.sseq (pa := []) (bty := BTy_unit)
         (e2 := loadExpr loc0 empty_annotation intTy xPtr NA)
         (Decomp.root (Redex.store (loc := loc0) (ann := empty_annotation)
           (lk := false) (ty := intTy) (pv := xPtr) (cv := sevenVal)
-          (mo := NA) loc0_lib)))
+          (mo := NA) loc0_lib))))
       (by decide) loc0_lib seven_encodes spikeEnv σ₀
     rw [show engineSteps progA spikeEnv σ₀ = _ from hE]
     simp only [List.map_cons, List.map_nil]
@@ -593,7 +593,7 @@ theorem exhibitA_terminates (aids : Nat → Nat) :
     have hE := engineSteps_beta_annot (pa := []) (bty := BTy_unit)
       (ds := [DA_pos [] fpS]) (v := Vunit)
       (e2 := loadExpr loc0 empty_annotation intTy xPtr NA)
-      (Decomp.root Redex.beta_annot) (by decide) fmapEmpty [] σ₁
+      (Decomp.toJ (Decomp.root Redex.beta_annot)) (by decide) fmapEmpty [] σ₁
     rw [show engineSteps eA1 spikeEnv σ₁ = _ from hE]
     rfl
   -- step 3: the load request, discharged against loadM
@@ -602,9 +602,9 @@ theorem exhibitA_terminates (aids : Nat → Nat) :
     rw [drive_scrutinee]
     unfold engineOutcomes
     have hE := engineSteps_load
-      (Decomp.annot (ds := [DA_pos [] fpS]) rfl rfl (fun n => rfl)
+      (Decomp.toJ (Decomp.annot (ds := [DA_pos [] fpS]) rfl rfl (fun n => rfl)
         (Decomp.root (Redex.load (loc := loc0) (ann := empty_annotation)
-          (ty := intTy) (pv := xPtr) (mo := NA) loc0_lib)))
+          (ty := intTy) (pv := xPtr) (mo := NA) loc0_lib))))
       (by decide) loc0_lib spikeEnv σ₁
     rw [show engineSteps eA2 spikeEnv σ₁ = _ from hE]
     simp only [List.map_cons, List.map_nil]
@@ -619,8 +619,8 @@ theorem exhibitA_terminates (aids : Nat → Nat) :
     unfold engineOutcomes
     have hE := engineSteps_merge (ds1 := [DA_pos [] fpS])
       (ds2 := [DA_pos [] fpL])
-      (Decomp.root (Redex.merge
-        (b := Expr [] (Epure (Pexpr [] () (PEval sevenVal)))) rfl))
+      (Decomp.toJ (Decomp.root (Redex.merge
+        (b := Expr [] (Epure (Pexpr [] () (PEval sevenVal)))) rfl)))
       rfl (by decide) spikeEnv σ₁
     rw [show engineSteps eA3 spikeEnv σ₁ = _ from hE]
     rfl

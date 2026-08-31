@@ -751,11 +751,11 @@ theorem prod_loop_done (th₀ : thread_state)
               rw [drive_step_next (by
                 rw [drive_scrutinee]
                 unfold engineOutcomes
-                rw [engineSteps_store hd hsz hlib hmv]
+                rw [engineSteps_store hd.toJ hsz hlib hmv]
                 simp only [List.map_cons, List.map_nil]
                 rw [dischargeStep_store_active happ])] at h
               exact h
-            have hsteps := step_ctx_store hd hsz hlib fmapEmpty hmv
+            have hsteps := step_ctx_store hd.toJ hsz hlib fmapEmpty hmv
               dst.layout_state dst.core_file dst.core_extern 0 none
               { th₀ with arena := e } rfl
             rw [hccall] at hsteps
@@ -792,11 +792,11 @@ theorem prod_loop_done (th₀ : thread_state)
             rw [drive_step_next (by
               rw [drive_scrutinee]
               unfold engineOutcomes
-              rw [engineSteps_load hd hsz hlib]
+              rw [engineSteps_load hd.toJ hsz hlib]
               simp only [List.map_cons, List.map_nil]
               rw [dischargeStep_load_active happ])] at h
             exact h
-          have hsteps := step_ctx_load hd hsz hlib fmapEmpty
+          have hsteps := step_ctx_load hd.toJ hsz hlib fmapEmpty
             dst.layout_state dst.core_file dst.core_extern 0 none
             { th₀ with arena := e } rfl
           rw [hccall] at hsteps
@@ -832,12 +832,12 @@ theorem prod_loop_done (th₀ : thread_state)
             rw [drive_step_next (by
               rw [drive_scrutinee]
               unfold engineOutcomes
-              rw [engineSteps_create hd hsz hlib]
+              rw [engineSteps_create hd.toJ hsz hlib]
               simp only [List.map_cons, List.map_nil]
               rw [dischargeStep_create_active (reqAddr := get_with_address [])
                 happ])] at h
             exact h
-          have hsteps := step_ctx_create hd hsz hlib fmapEmpty
+          have hsteps := step_ctx_create hd.toJ hsz hlib fmapEmpty
             dst.layout_state dst.core_file dst.core_extern 0 none
             { th₀ with arena := e } rfl
           rw [hccall] at hsteps
@@ -859,11 +859,11 @@ theorem prod_loop_done (th₀ : thread_state)
           rw [drive_step_next (by
             rw [drive_scrutinee]
             unfold engineOutcomes
-            rw [engineSteps_beta_pure hd hsz fmapEmpty []]
+            rw [engineSteps_beta_pure hd.toJ hsz fmapEmpty []]
             rfl)] at h
           exact h
         rw [loop_step_tau f fmapEmpty acc hth
-          (step_ctx_beta_pure hd hsz fmapEmpty dst.layout_state dst.core_file
+          (step_ctx_beta_pure hd.toJ hsz fmapEmpty dst.layout_state dst.core_file
             dst.core_extern 0 none { th₀ with arena := e } rfl henv)]
         refine step_case _ dst.layout_state _ hstep ?_ rfl rfl rfl rfl rfl rfl
           rfl rfl hdrive'
@@ -882,11 +882,11 @@ theorem prod_loop_done (th₀ : thread_state)
           rw [drive_step_next (by
             rw [drive_scrutinee]
             unfold engineOutcomes
-            rw [engineSteps_beta_annot hd hsz fmapEmpty []]
+            rw [engineSteps_beta_annot hd.toJ hsz fmapEmpty []]
             rfl)] at h
           exact h
         rw [loop_step_tau f fmapEmpty acc hth
-          (step_ctx_beta_annot hd hsz fmapEmpty dst.layout_state dst.core_file
+          (step_ctx_beta_annot hd.toJ hsz fmapEmpty dst.layout_state dst.core_file
             dst.core_extern 0 none { th₀ with arena := e } rfl henv)]
         refine step_case _ dst.layout_state _ hstep ?_ rfl rfl rfl rfl rfl rfl
           rfl rfl hdrive'
@@ -905,11 +905,11 @@ theorem prod_loop_done (th₀ : thread_state)
           rw [drive_step_next (by
             rw [drive_scrutinee]
             unfold engineOutcomes
-            rw [engineSteps_merge hd hirr hsz]
+            rw [engineSteps_merge hd.toJ hirr hsz]
             rfl)] at h
           exact h
         rw [loop_step_tau f fmapEmpty acc hth
-          (step_ctx_merge hd hirr hsz fmapEmpty dst.layout_state dst.core_file
+          (step_ctx_merge hd.toJ hirr hsz fmapEmpty dst.layout_state dst.core_file
             dst.core_extern 0 none { th₀ with arena := e } rfl)]
         refine step_case _ dst.layout_state _ hstep ?_ rfl rfl rfl rfl rfl rfl
           rfl rfl hdrive'

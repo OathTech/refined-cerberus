@@ -441,6 +441,19 @@ def evalBinop : binop → value → value → Option value
       (CerbMem.leIval i2 i1).map boolValue
   | _, _, _ => none
 
+/-- Array-shift on evaluated operands — mirror of step_eval_pexpr's
+    `PEarray_shift` value dispatch (Core_eval.lean:145): a pointer
+    and an integer produce `arrayShiftPtrval` (the ENGINE'S OWN
+    function, so the mirror is exact by construction — including on
+    degenerate pointers, where both compute the same value); any
+    other operand shapes are fail-closed `none` (the engine's arm
+    there is the Illformed_program channel — no mirror step). S4:
+    the pointer-arithmetic extension the array exhibit needs. -/
+def evalArrayShift (ty : ctype) : value → value → Option value
+  | Vobject (OVpointer pv), Vobject (OVinteger iv) =>
+      some (Vobject (OVpointer (CerbMem.arrayShiftPtrval pv ty iv)))
+  | _, _ => none
+
 /-- The pure evaluator (fragment operands; partial, fail-closed). -/
 def evalPexpr (ρ : EnvStack) : generic_pexpr Unit sym → Option value
   | Pexpr _ _ (PEval v) => some v
@@ -449,6 +462,10 @@ def evalPexpr (ρ : EnvStack) : generic_pexpr Unit sym → Option value
       let v1 ← evalPexpr ρ pe1
       let v2 ← evalPexpr ρ pe2
       evalBinop op v1 v2
+  | Pexpr _ _ (PEarray_shift pe1 ty pe2) => do
+      let v1 ← evalPexpr ρ pe1
+      let v2 ← evalPexpr ρ pe2
+      evalArrayShift ty v1 v2
   | _ => none
 
 @[simp] theorem evalPexpr_val (ρ : EnvStack) (a : List annot) (v : value) :
@@ -463,6 +480,13 @@ theorem evalPexpr_op (ρ : EnvStack) (a : List annot) (op : binop)
       let v1 ← evalPexpr ρ pe1
       let v2 ← evalPexpr ρ pe2
       evalBinop op v1 v2) := rfl
+
+theorem evalPexpr_array_shift (ρ : EnvStack) (a : List annot) (ty : ctype)
+    (pe1 pe2 : generic_pexpr Unit sym) :
+    evalPexpr ρ (Pexpr a () (PEarray_shift pe1 ty pe2)) = (do
+      let v1 ← evalPexpr ρ pe1
+      let v2 ← evalPexpr ρ pe2
+      evalArrayShift ty v1 v2) := rfl
 
 /-- All-or-nothing list evaluation (the engine's per-argument
     `full_eval_pexpr'` fold in step_ctx's Erun arm evaluates each
@@ -485,6 +509,20 @@ theorem evalPexprs_cons (ρ : EnvStack) (pe : generic_pexpr Unit sym)
       let v ← evalPexpr ρ pe
       let vs ← evalPexprs ρ pes
       pure (v :: vs)) := rfl
+
+/-! ## The Specified-binder pattern (S4)
+
+`lets Specified(x : bty) = e1 in e2` — the load-result unwrapping
+idiom: `update_env_aux`'s `CaseCtor Cspecified [pat']` arm
+(Core_aux.lean:861) matches a `Vloaded (LVspecified oval)` and binds
+the payload as a plain OBJECT value (`Vobject oval`), so the bound
+symbol is directly usable in integer arithmetic. This is the shape
+S4's binding-sseq betas fire at (the S3 notes' registered item —
+the fragment's loads deliver `Vloaded` values, and Core's binding
+patterns are the engine's own unwrapping mechanism; no new
+evaluation machinery). -/
+def specPat (pa pb : List annot) (x : sym) (bty : core_base_type) : pattern :=
+  Pattern pa (CaseCtor Cspecified [Pattern pb (CaseBase (some x, bty))])
 
 /-! ## The env-binding folds (Erun / Esave successors) -/
 
@@ -694,6 +732,77 @@ inductive Step (Q : LabelMap) :
       Step Q (Expr a (Esseq (Pattern pa (CaseBase (none, bty)))
               (ofVal (.annot ds v)) e2), ev0 :: evs, σ)
            (Expr [] (Eannot ds e2), ev0 :: evs, σ)
+  /-- LETS-PURE at the SPECIFIED-BINDER pattern (S4 binding beta):
+      `lets Specified(x) = Specified(ov) in E2 --> E2` with `x` bound
+      to the payload OBJECT value (one_step0 Esseq bare-value arm,
+      Core_reduction.lean:353 "reduction: LETS-PURE" — the env update
+      is `update_env (specPat …)`, whose `CaseCtor Cspecified` arm
+      recurses into the sym binder with `Vobject oval`,
+      Core_aux.lean:861). A non-`LVspecified` bound value would take
+      update_env_aux's failwithI mismatch arm — mirrored fail-closed
+      as ABSENCE of a step (the WF-shape discipline, header note 1). -/
+  | sseq_spec_pure {a pa pb : List annot} {x : sym} {bty : core_base_type}
+      {ov : object_value} {e2 : CoreExpr}
+      {ev0 : Fmap sym value} {evs : List (Fmap sym value)} {σ : Mem} :
+      Step Q (Expr a (Esseq (specPat pa pb x bty)
+              (ofVal (.pure (Vloaded (LVspecified ov)))) e2), ev0 :: evs, σ)
+           (e2, update_env (specPat pa pb x bty) (Vloaded (LVspecified ov))
+              (ev0 :: evs), σ)
+  /-- LETS-ANNOT at the Specified-binder pattern:
+      `lets Specified(x) = {A}Specified(ov) in E2 --> {A} E2`, same
+      binding discipline (one_step0 Esseq Eannot arm, "reduction:
+      LETS-ANNOT" — the engine binds the BARE value; the annotations
+      flow to the continuation wrapper). -/
+  | sseq_spec_annot {a pa pb : List annot} {x : sym} {bty : core_base_type}
+      {ds : List dyn_annotation} {ov : object_value} {e2 : CoreExpr}
+      {ev0 : Fmap sym value} {evs : List (Fmap sym value)} {σ : Mem} :
+      Step Q (Expr a (Esseq (specPat pa pb x bty)
+              (ofVal (.annot ds (Vloaded (LVspecified ov)))) e2), ev0 :: evs, σ)
+           (Expr [] (Eannot ds e2),
+            update_env (specPat pa pb x bty) (Vloaded (LVspecified ov))
+              (ev0 :: evs), σ)
+  /-- PURE at a non-value pexpr (S4): ONE engine step BIG-STEP
+      evaluating the pure expression (one_step0's Epure arm,
+      Core_reduction.lean:353 "reduction: PURE" — `EVAL "Epure"`
+      over `full_eval_pexpr1 pe`, wrapped by step_ctx's EVAL arm
+      into a Step_with_runstate2 whose successor arena carries
+      `Expr annots1 (Epure (mk_value_pe cval))`). The mirror premise
+      is the certified pure evaluator; the PURE-UNDEF channel is
+      excluded because the evaluator RETURNS a value. Env, state,
+      and node annotations verbatim. -/
+  | pure_eval {a : List annot} {pe : generic_pexpr Unit sym} {v : value}
+      {ρ : EnvStack} {σ : Mem}
+      (hnv : valueFromPexpr pe = none)
+      (hv : evalPexpr ρ pe = some v) :
+      Step Q (Expr a (Epure pe), ρ, σ)
+           (Expr a (Epure (Pexpr [] () (PEval v))), ρ, σ)
+  /-- ACTION_EVAL for a positive strong load with an unevaluated
+      pointer operand (S4): ONE engine step BIG-STEP evaluating the
+      operands (step_action's Load0 `_, _` arm, Core_reduction.lean:
+      424 — `ACTION_EVAL "eval operands of Load"` over the two
+      `full_eval_pexpr1` calls, wrapped by process_action's
+      ACTION_EVAL arm into Step_with_runstate2; successor
+      `Expr e_annots (wrap_act (Load0 (mk_value_pe cval1)
+      (mk_value_pe cval2) mo))`). The type operand is pinned at its
+      canonical evaluated shape (its re-evaluation is the identity);
+      the pointer operand evaluates through the certified pure
+      evaluator to a POINTER value — the successor is exactly the
+      canonical load redex, so the certified load axiom takes over.
+      The PEconstrained PANIC pre-arm of `act_valueFromPexpr` is
+      excluded by the evaluator premise's grammar (PePure has no
+      PEconstrained). -/
+  | load_eval {a : List annot} {loc : CerbLocation.Loc}
+      {ann : core_run_annotation} {ty : ctype}
+      {pe2 : generic_pexpr Unit sym} {pv : CerbMem.PointerValue}
+      {mo : memory_order} {ρ : EnvStack} {σ : Mem}
+      (hnv2 : valueFromPexpr pe2 = none)
+      (hv2 : evalPexpr ρ pe2 = some (Vobject (OVpointer pv))) :
+      Step Q (Expr a (Eaction (Paction polarity.Pos (Action loc ann
+              (Load0 (Pexpr [] () (PEval (Vctype ty))) pe2 mo)))), ρ, σ)
+           (Expr a (Eaction (Paction polarity.Pos (Action loc ann
+              (Load0 (Pexpr [] () (PEval (Vctype ty)))
+                     (Pexpr [] () (PEval (Vobject (OVpointer pv)))) mo)))),
+            ρ, σ)
   /-- Reduction under the strong-sequencing frame. Mirrors get_ctx's
       Esseq arm (descend into e1 when it is not irreducible —
       Core_reduction.lean:375) + apply_ctx's Csseq rebuild
@@ -872,6 +981,16 @@ theorem Step.env_cons' {Q : LabelMap} {c c' : CoreExpr × EnvStack × Mem}
   | create h1 h2 hmem => exact fun ev0 evs hin => ⟨ev0, hin⟩
   | sseq_pure => exact fun ev0 evs hin => ⟨ev0, hin⟩
   | sseq_annot => exact fun ev0 evs hin => ⟨ev0, hin⟩
+  | sseq_spec_pure =>
+    intro ev0 evs hin
+    obtain ⟨rfl, rfl⟩ := List.cons.inj hin
+    exact ⟨_, update_env_cons ..⟩
+  | sseq_spec_annot =>
+    intro ev0 evs hin
+    obtain ⟨rfl, rfl⟩ := List.cons.inj hin
+    exact ⟨_, update_env_cons ..⟩
+  | pure_eval hnv hv => exact fun ev0 evs hin => ⟨ev0, hin⟩
+  | load_eval hnv2 hv2 => exact fun ev0 evs hin => ⟨ev0, hin⟩
   | sseq_ctx hnj hs ih => exact ih
   | annot_ctx hnj hg hs ih => exact ih
   | annot_merge => exact fun ev0 evs hin => ⟨ev0, hin⟩
@@ -904,11 +1023,13 @@ theorem Step.val_elim {Q : LabelMap} {w : SpikeVal} {ρ : EnvStack} {σ : Mem}
   | pure v =>
     cases h with
     | run hj hl hvs => simp [ofVal] at hj
+    | pure_eval hnv hv => rw [valueFromPexpr_val] at hnv; cases hnv
   | annot ds v =>
     cases h with
     | annot_ctx hnj hg hs =>
       cases hs with
       | run hj hl hvs => simp at hj
+      | pure_eval hnv hv => rw [valueFromPexpr_val] at hnv; cases hnv
     | run hj hl hvs => simp [ofVal, jumpRedex?, annotRooted] at hj
 
 theorem Step.toVal_none {Q : LabelMap} {e : CoreExpr} {ρ : EnvStack} {σ : Mem}
@@ -960,6 +1081,7 @@ theorem Step.load_inv {Q : LabelMap} {a : List annot} {loc : CerbLocation.Loc}
                 (valueFromMemValue mval).2))))), ρ, σ') := by
   cases h with
   | run hj hl hvs => simp at hj
+  | load_eval hnv2 hv2 => rw [valueFromPexpr_val] at hnv2; cases hnv2
   | load h1 h2 hmem =>
     rw [valueFromPexpr_val] at h1 h2
     injection h1 with h1; injection h1 with h1
@@ -1015,6 +1137,10 @@ theorem Step.jump_inv {Q : LabelMap} {e : CoreExpr} {ρ : EnvStack} {σ : Mem}
   | create h1 h2 hmem => simp at hj
   | sseq_pure => rw [jumpRedex?_sseq, jumpRedex?_ofVal] at hj; cases hj
   | sseq_annot => rw [jumpRedex?_sseq, jumpRedex?_ofVal] at hj; cases hj
+  | sseq_spec_pure => rw [jumpRedex?_sseq, jumpRedex?_ofVal] at hj; cases hj
+  | sseq_spec_annot => rw [jumpRedex?_sseq, jumpRedex?_ofVal] at hj; cases hj
+  | pure_eval hnv hv => simp at hj
+  | load_eval hnv2 hv2 => simp at hj
   | sseq_ctx hnj hs => rw [jumpRedex?_sseq, hnj] at hj; cases hj
   | annot_ctx hnj hg hs => rw [jumpRedex?_annot_of_not_root _ _ hg, hnj] at hj; cases hj
   | annot_merge =>
@@ -1056,14 +1182,28 @@ theorem Step.sseq_inv {Q : LabelMap} {a : List annot} {pat : pattern}
     (∃ l pes params cont vs ev0 evs, jumpRedex? e1 = some (l, pes) ∧
         ρ = ev0 :: evs ∧ lookupLabel Q l = some (params, cont) ∧
         evalPexprs ρ pes = some vs ∧
-        out = (cont, bindArgs params vs ρ, σ)) := by
+        out = (cont, bindArgs params vs ρ, σ)) ∨
+    (∃ pa' pb' x bty' ov ev0 evs, pat = specPat pa' pb' x bty' ∧
+        e1 = ofVal (.pure (Vloaded (LVspecified ov))) ∧ ρ = ev0 :: evs ∧
+        out = (e2, update_env (specPat pa' pb' x bty')
+          (Vloaded (LVspecified ov)) ρ, σ)) ∨
+    (∃ pa' pb' x bty' ds ov ev0 evs, pat = specPat pa' pb' x bty' ∧
+        e1 = ofVal (.annot ds (Vloaded (LVspecified ov))) ∧ ρ = ev0 :: evs ∧
+        out = (Expr [] (Eannot ds e2), update_env (specPat pa' pb' x bty')
+          (Vloaded (LVspecified ov)) ρ, σ)) := by
   cases h with
   | sseq_ctx hnj hs => exact .inl ⟨_, _, _, hnj, hs, rfl⟩
   | sseq_pure => exact .inr (.inl ⟨_, _, _, _, _, rfl, rfl, rfl, rfl⟩)
   | sseq_annot => exact .inr (.inr (.inl ⟨_, _, _, _, _, _, rfl, rfl, rfl, rfl⟩))
   | run hj hl hvs =>
     rw [jumpRedex?_sseq] at hj
-    exact .inr (.inr (.inr ⟨_, _, _, _, _, _, _, hj, rfl, hl, hvs, rfl⟩))
+    exact .inr (.inr (.inr (.inl ⟨_, _, _, _, _, _, _, hj, rfl, hl, hvs, rfl⟩)))
+  | sseq_spec_pure =>
+    exact .inr (.inr (.inr (.inr (.inl
+      ⟨_, _, _, _, _, _, _, rfl, rfl, rfl, rfl⟩))))
+  | sseq_spec_annot =>
+    exact .inr (.inr (.inr (.inr (.inr
+      ⟨_, _, _, _, _, _, _, _, rfl, rfl, rfl, rfl⟩))))
 
 /-- Inversion at an Eannot node (S3 form): Cannot-descent of a
     non-jump-redex body, the ANNOTS merge, or the global jump
@@ -1132,6 +1272,75 @@ theorem Step.case_inv {Q : LabelMap} {a : List annot}
   cases h with
   | case_value hv hsel => exact ⟨_, _, hv, hsel, rfl⟩
   | run hj hl hvs => simp [jumpRedex?] at hj
+
+/-- Inversion at an Epure node (S4): the big-step PURE evaluation. -/
+theorem Step.pure_inv {Q : LabelMap} {a : List annot}
+    {pe : generic_pexpr Unit sym} {ρ : EnvStack} {σ : Mem}
+    {out : CoreExpr × EnvStack × Mem}
+    (h : Step Q (Expr a (Epure pe), ρ, σ) out) :
+    ∃ v, valueFromPexpr pe = none ∧ evalPexpr ρ pe = some v ∧
+      out = (Expr a (Epure (Pexpr [] () (PEval v))), ρ, σ) := by
+  cases h with
+  | pure_eval hnv hv => exact ⟨_, hnv, hv, rfl⟩
+  | run hj hl hvs => simp at hj
+
+/-- Inversion at a positive load whose pointer operand is NOT a
+    value (S4): the ACTION_EVAL step. The operand's non-value shape
+    is a side hypothesis (it discharges by `rfl`/`simp` at authored
+    shapes) so the canonical load rule's arms refute. -/
+theorem Step.load_op_inv {Q : LabelMap} {a : List annot}
+    {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
+    {pe2 : generic_pexpr Unit sym} {mo : memory_order}
+    {ρ : EnvStack} {σ : Mem} {out : CoreExpr × EnvStack × Mem}
+    (hnv2 : valueFromPexpr pe2 = none)
+    (h : Step Q (Expr a (Eaction (Paction polarity.Pos (Action loc ann
+            (Load0 (Pexpr [] () (PEval (Vctype ty))) pe2 mo)))), ρ, σ) out) :
+    ∃ pv, evalPexpr ρ pe2 = some (Vobject (OVpointer pv)) ∧
+      out = (Expr a (Eaction (Paction polarity.Pos (Action loc ann
+        (Load0 (Pexpr [] () (PEval (Vctype ty)))
+               (Pexpr [] () (PEval (Vobject (OVpointer pv)))) mo)))), ρ, σ) := by
+  cases h with
+  | run hj hl hvs => simp at hj
+  | load h1 h2 hmem => rw [hnv2] at h2; cases h2
+  | load_eval hnv2' hv2 => exact ⟨_, hv2, rfl⟩
+
+/-- Constructor-clash refutation: the Specified-binder pattern is
+    never the wildcard base pattern (the wildcard-context proofs'
+    dispatch fact). -/
+theorem specPat_ne_base {pa' : List annot} {bty' : core_base_type}
+    {pa pb : List annot} {x : sym} {bty : core_base_type}
+    (h : Pattern pa' (CaseBase (none, bty')) = specPat pa pb x bty) : False := by
+  simp [specPat] at h
+
+theorem specPat_inj {pa pb pa' pb' : List annot} {x x' : sym}
+    {bty bty' : core_base_type}
+    (h : specPat pa pb x bty = specPat pa' pb' x' bty') :
+    pa = pa' ∧ pb = pb' ∧ x = x' ∧ bty = bty' := by
+  simpa [specPat] using h
+
+/-- A non-value pure expression is not a mirror value (feeds the
+    S4 PURE rule's wps face). -/
+theorem toVal_pure_none {a : List annot} {pe : generic_pexpr Unit sym}
+    (hnv : valueFromPexpr pe = none) : toVal (Expr a (Epure pe)) = none := by
+  rcases pe with ⟨b, u, pe_⟩
+  cases u
+  cases pe_ <;>
+    first
+    | rfl
+    | (rw [valueFromPexpr_val] at hnv; cases hnv)
+
+/-- Canonical spelling of the S4 PURE redex (non-value pure
+    expression at the root). -/
+def pureRedex (pe : generic_pexpr Unit sym) : CoreExpr :=
+  Expr [] (Epure pe)
+
+/-- Canonical spelling of the S4 load ACTION_EVAL redex: positive
+    strong load, canonical evaluated type operand, UNevaluated
+    pointer operand. -/
+def loadOpRedex (loc : CerbLocation.Loc) (ann : core_run_annotation)
+    (ty : ctype) (pe2 : generic_pexpr Unit sym) (mo : memory_order) : CoreExpr :=
+  Expr [] (Eaction (Paction polarity.Pos (Action loc ann
+    (Load0 (Pexpr [] () (PEval (Vctype ty))) pe2 mo))))
 
 /-! ## The frozen entry label map + the phase-1 fragment cone
 
@@ -1259,7 +1468,9 @@ theorem FragP.step_env {Q : LabelMap} {e : CoreExpr} {ρ : EnvStack} {σ : Mem}
   | sseq hf1 hf2 ih1 ih2 =>
     rcases hs.sseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
         ⟨_, _, v, _, _, _, _, _, hout⟩ | ⟨_, _, ds', v, _, _, _, _, _, hout⟩ |
-        ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩
+        ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩ |
+        ⟨_, _, _, _, _, _, _, hpat, _, _, _⟩ |
+        ⟨_, _, _, _, _, _, _, _, hpat, _, _, _⟩
     · obtain ⟨h1, h2, -⟩ : e' = _ ∧ ρ' = ρ'' ∧ σ' = σ'' := by
         simpa [Prod.mk.injEq] using hout
       subst h1 h2
@@ -1275,6 +1486,8 @@ theorem FragP.step_env {Q : LabelMap} {e : CoreExpr} {ρ : EnvStack} {σ : Mem}
       exact ⟨.annot hf2, h2⟩
     · rw [hf1.jumpRedex?_none] at hj
       cases hj
+    · exact (specPat_ne_base hpat).elim
+    · exact (specPat_ne_base hpat).elim
   | annot hfb ihb =>
     rcases hs.annot_inv with ⟨hg, hnj, b', ρ'', σ'', hstep, hout⟩ |
         ⟨a2, ds2, c, hb, hout⟩ |

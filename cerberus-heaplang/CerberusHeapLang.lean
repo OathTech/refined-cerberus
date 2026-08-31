@@ -1,4 +1,5 @@
 import CerberusHeapLang.Step
+import CerberusHeapLang.EnvLaws
 import CerberusHeapLang.Heap
 import CerberusHeapLang.Lang
 import CerberusHeapLang.Rules

@@ -235,10 +235,10 @@ theorem prodA_pre (aids : Nat → Nat) (n : Nat) :
     rw [drive_scrutinee]
     unfold engineOutcomes
     have hE := engineSteps_create
-      (Decomp.sseq (pa := []) (bty := BTy_unit) (e2 := progAProdC)
+      (Decomp.toJ (Decomp.sseq (pa := []) (bty := BTy_unit) (e2 := progAProdC)
         (Decomp.root (Redex.create (ann := empty_annotation)
           (align := CerbMem.integerIval 4) (ty := intTy)
-          (pref := PrefOther "spike-x") loc0_lib)))
+          (pref := PrefOther "spike-x") loc0_lib))))
       (by decide) loc0_lib spikeEnv prodMem₀
     rw [show engineSteps progAProd spikeEnv prodMem₀ = _ from hE]
     simp only [List.map_cons, List.map_nil]
@@ -249,7 +249,7 @@ theorem prodA_pre (aids : Nat → Nat) (n : Nat) :
     unfold engineOutcomes
     have hE := engineSteps_beta_pure (pa := []) (bty := BTy_unit)
       (v := Vobject (OVpointer pxPtr)) (e2 := progAProdC)
-      (Decomp.root Redex.beta_pure) (by decide) fmapEmpty [] σcP
+      (Decomp.toJ (Decomp.root Redex.beta_pure)) (by decide) fmapEmpty [] σcP
     rw [show engineSteps (Expr [] (Esseq (Pattern [] (CaseBase (none, BTy_unit)))
       (ofVal (.pure (Vobject (OVpointer pxPtr)))) progAProdC)) spikeEnv σcP =
         _ from hE]
@@ -302,11 +302,11 @@ theorem prodA_terminates (aids : Nat → Nat) :
     rw [drive_scrutinee]
     unfold engineOutcomes
     have hE := engineSteps_store
-      (Decomp.sseq (pa := []) (bty := BTy_unit)
+      (Decomp.toJ (Decomp.sseq (pa := []) (bty := BTy_unit)
         (e2 := loadExpr loc0 empty_annotation intTy pxPtr NA)
         (Decomp.root (Redex.store (loc := loc0) (ann := empty_annotation)
           (lk := false) (ty := intTy) (pv := pxPtr) (cv := sevenVal)
-          (mo := NA) loc0_lib)))
+          (mo := NA) loc0_lib))))
       (by decide) loc0_lib seven_encodes spikeEnv σcP
     rw [show engineSteps progAProdC spikeEnv σcP = _ from hE]
     simp only [List.map_cons, List.map_nil]
@@ -319,7 +319,7 @@ theorem prodA_terminates (aids : Nat → Nat) :
     have hE := engineSteps_beta_annot (pa := []) (bty := BTy_unit)
       (ds := [DA_pos [] fpSP]) (v := Vunit)
       (e2 := loadExpr loc0 empty_annotation intTy pxPtr NA)
-      (Decomp.root Redex.beta_annot) (by decide) fmapEmpty [] σ1P
+      (Decomp.toJ (Decomp.root Redex.beta_annot)) (by decide) fmapEmpty [] σ1P
     rw [show engineSteps eP1 spikeEnv σ1P = _ from hE]
     rfl
   rw [drive_next (th' := spikeThread eP3) (σ' := σ1P) ?s3]
@@ -327,9 +327,9 @@ theorem prodA_terminates (aids : Nat → Nat) :
     rw [drive_scrutinee]
     unfold engineOutcomes
     have hE := engineSteps_load
-      (Decomp.annot (ds := [DA_pos [] fpSP]) rfl rfl (fun n => rfl)
+      (Decomp.toJ (Decomp.annot (ds := [DA_pos [] fpSP]) rfl rfl (fun n => rfl)
         (Decomp.root (Redex.load (loc := loc0) (ann := empty_annotation)
-          (ty := intTy) (pv := pxPtr) (mo := NA) loc0_lib)))
+          (ty := intTy) (pv := pxPtr) (mo := NA) loc0_lib))))
       (by decide) loc0_lib spikeEnv σ1P
     rw [show engineSteps eP2 spikeEnv σ1P = _ from hE]
     simp only [List.map_cons, List.map_nil]
@@ -343,8 +343,8 @@ theorem prodA_terminates (aids : Nat → Nat) :
     unfold engineOutcomes
     have hE := engineSteps_merge (ds1 := [DA_pos [] fpSP])
       (ds2 := [DA_pos [] fpLP])
-      (Decomp.root (Redex.merge
-        (b := Expr [] (Epure (Pexpr [] () (PEval sevenVal)))) rfl))
+      (Decomp.toJ (Decomp.root (Redex.merge
+        (b := Expr [] (Epure (Pexpr [] () (PEval sevenVal)))) rfl)))
       rfl (by decide) spikeEnv σ1P
     rw [show engineSteps eP3 spikeEnv σ1P = _ from hE]
     rfl

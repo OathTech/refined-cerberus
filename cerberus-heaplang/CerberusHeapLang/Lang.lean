@@ -111,7 +111,9 @@ theorem sseq_pure_det {Q : LabelMap} {a pa : List annot}
   obtain ⟨hstep, hlbl, hefs⟩ := h
   rcases hstep.sseq_inv with ⟨e1', ρ'', σ'', hnj, hs, hout⟩ |
       ⟨_, _, w, _, _, hp, he, _, hout⟩ | ⟨_, _, ds, w, _, _, hp, he, _, hout⟩ |
-      ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩
+      ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩ |
+      ⟨_, _, _, _, _, _, _, hpat, _, _, _⟩ |
+      ⟨_, _, _, _, _, _, _, _, hpat, _, _, _⟩
   · exact absurd hs (fun hs => Step.val_elim hs)
   · obtain ⟨h1, h2, h3⟩ : r'.e = e2 ∧ r'.ρ = ev0 :: evs ∧ σ' = σ := by
       simpa [Prod.mk.injEq] using hout
@@ -122,6 +124,8 @@ theorem sseq_pure_det {Q : LabelMap} {a pa : List annot}
   · -- a bare value form cannot be the annot value form
     exact absurd he (by simp [ofVal])
   · rw [jumpRedex?_ofVal] at hj; cases hj
+  · exact (specPat_ne_base hpat).elim
+  · exact (specPat_ne_base hpat).elim
 
 /-- The Esseq wildcard beta on an annot value is a pure deterministic
     step (LETS-ANNOT). -/
@@ -138,7 +142,9 @@ theorem sseq_annot_det {Q : LabelMap} {a pa : List annot}
   obtain ⟨hstep, hlbl, hefs⟩ := h
   rcases hstep.sseq_inv with ⟨e1', ρ'', σ'', hnj, hs, hout⟩ |
       ⟨_, _, w, _, _, hp, he, _, hout⟩ | ⟨_, _, ds', w, _, _, hp, he, _, hout⟩ |
-      ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩
+      ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩ |
+      ⟨_, _, _, _, _, _, _, hpat, _, _, _⟩ |
+      ⟨_, _, _, _, _, _, _, _, hpat, _, _, _⟩
   · exact absurd hs (fun hs => Step.val_elim hs)
   · exact absurd he (by simp [ofVal])
   · obtain ⟨hds, -⟩ : ds = ds' ∧ v = w := by simpa [ofVal] using he
@@ -151,6 +157,8 @@ theorem sseq_annot_det {Q : LabelMap} {a pa : List annot}
     simp only at h1 h2 hlbl
     rw [h1, h2, hlbl]
   · rw [jumpRedex?_ofVal] at hj; cases hj
+  · exact (specPat_ne_base hpat).elim
+  · exact (specPat_ne_base hpat).elim
 
 /-- The ANNOTS merge is a pure deterministic step (any env — the
     merge never reads it). -/
