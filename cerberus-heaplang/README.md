@@ -8,7 +8,14 @@ consequence) is built over a tight fragment of the Core AST and then
 start**: the exported theorems quantify over the shipped
 `initial_driver_state` and conclude equations about the very
 `CerbND.runND (Driver.drive …)` composite that the cerberus-lean
-executable runs.
+executable runs. The exported theorems carry a definite qualifier
+set, stated in full under "Scope of the claims" below; the analogy
+to Iris HeapLang is in the ROLE (the demonstration language the
+logic is exercised on), not the extent — unlike HeapLang this
+package has no concurrency, no prophecy variables, no allocation
+rule in the logic yet (the allocator-cursor resource is the
+registered growth step), and a small lemma suite rather than
+HeapLang's full library.
 
 **What this is NOT**: the RefinedC port. That development — the
 Lean-native RefinedC-architecture verifier — lives alongside, in
@@ -37,6 +44,54 @@ Non-kernel proof methods (`native_decide`, `bv_decide`, `ofReduce*`)
 are banned by a grep gate and would in any case enter a cone and
 fail the audit — a build that weakens any of this fails.
 
+## Scope of the claims
+
+The flagship demonstration is unconditional: `exhibitA_prod`
+(ProdExhibit.lean) quantifies over nothing but the file-system state
+`fs` and the argument list `args` — every other hypothesis is
+discharged concretely — and concludes that the production run of its
+create/store/load program IS the singleton Active execution
+delivering 7 with the exact final bytes.
+
+The GENERAL production-entry theorems are conditioned, and the
+conditions are part of the claim. `sem_triple_prod` and
+`prod_run_eq` (ProdEntry.lean) conclude their `runND` equation only
+under: `hterm`, a proved in-budget-termination hypothesis for the
+compute part (∀ aids, the drive completes to `.done v σfin` in k
+steps); `hpre`, a proved setup-prefix alignment equation (the
+program's prefix drives the production cold-start memory to the
+footprint-satisfying configuration); and the fuel side conditions
+`hfuel`/`hfuelc` (`esize … ≤ lemDefaultFuel = 10^6`, the engine's
+own budget). `SemTriple` itself (Adequacy.lean) is PARTIAL
+correctness — fuel exhaustion (`.more`) is unconstrained — under the
+same fuel cap, and its conclusion constrains only the P ⊎ R split it
+quantifies (untracked cells outside it are not claimed preserved by
+the general statements; the production equation does pin the full
+final `layout_state`). Everything is single-threaded, over the
+four-construct fragment only (`store`/`load`/`create` + strong
+sequencing `Esseq`, plus the run-time annotation residue), and the
+logic has no `wp_create` small axiom (registered:
+ProdEntry.lean:42-53 — a sound one needs the allocator-cursor
+resource, the registered growth step). Each qualifier is registered
+at source (module headers; `docs/2026-08-30_spike-report.md`); this
+section is the summary the claims above are read under.
+
+## Registered divergences and seams
+
+Acceptable qualifiers are clear, known divergences with retirement
+or growth paths. The register (each entry's home is authoritative):
+
+| Divergence / seam | Discharge / path | Registered at |
+|---|---|---|
+| `runEffectful` in the production-entry statement cones | Temporal boundary; upstream retirement planned — vanishes at a pin bump, no restatement | `Audit.lean` header |
+| tagDefs argument: the theorems pin `drive`'s tagDefs to `fmapEmpty`; the shipped `Main.lean:871` passes `CerbTags.tagDefs ()` after `setTagDefsIO` | Semantically forced equal for the synthetic file: `(prodFile e).tagDefs = fmapEmpty` by `rfl`; the effectful set-then-read global is inert here (scalar layout paths provably never read it; struct/union paths would) | This table + the spike report register (2026-08-31 merge audit) |
+| Memory orders accepted arbitrarily: `Step.store`/`wp_store` hold at ANY `memory_order` | Mirror-true: the sequential driver drops `mo` (`action_request_sequential2`, Driver.lean:273 — `mo1` unused); NA-only side conditions would be a divergence FROM the engine | This table + the spike report register (2026-08-31 merge audit) |
+| Whole-allocation byte-list cells (no per-byte split) | Registered growth step for structs | `Heap.lean` header; report R2 |
+| `Ewseq`/`Eif` outside the fragment | Mechanical per-construct extension, path named | `Step.lean` header; report "Honestly open" |
+| Fuel side condition (no fuel parametricity) | Fuel-irrelevance theorem for `get_ctx` or graceful driver exhaustion would remove it | report "What remains"; `ProdEntry.lean` header |
+| No `wp_create` in the logic | Allocator-cursor resource in the state interpretation (registered growth step) | `ProdEntry.lean:42-53`; report D26 |
+| D1 REMOVE-ANNOT value protocol; D3 canonical-annotation subrelation | Deliberate, engine-faithful readout composition | `Step.lean` header; slice notes |
+
 ## How to build
 
 From the repository root (offline; deps resolve through the
@@ -48,13 +103,20 @@ cd cerberus-heaplang
 ../scripts/capped ~/.elan/bin/lake build
 ```
 
-A green build IS the verification run: it elaborates every proof
-through the Lean kernel and then `Audit.lean`, which sweeps the
-transitive axiom cone of every theorem in the package and pins the
-headline theorems' exact cones. Expected tail:
+A green build is the verification run for exactly what the sweeps
+check: it elaborates every proof through the Lean kernel and then
+`Audit.lean`, which (1) bounds the transitive axiom cone of every
+theorem in the package by the declared boundary, (2) pins the
+headline theorems' exact cones, and (3) checks every constant of
+every kind — defs included — for the banned axioms
+(`sorryAx`/`ofReduceBool`/`ofReduceNat`). It certifies nothing
+beyond that: in particular it does not discharge the scope
+qualifiers above — they are part of the theorem statements. Expected
+tail:
 
 ```
-info: CerberusHeapLang/Audit.lean:201:0: CerberusHeapLang axiom sweep: 285 theorems within the declared boundary (34 in the production-entry boundary modules, trio + runEffectful; all others trio-exact)
+info: CerberusHeapLang/Audit.lean:208:0: CerberusHeapLang axiom sweep: 285 theorems within the declared boundary (34 in the production-entry boundary modules, trio + runEffectful; all others trio-exact)
+info: CerberusHeapLang/Audit.lean:208:0: CerberusHeapLang banned-axiom sweep: 589 constants of every kind checked; sorryAx/ofReduceBool/ofReduceNat absent from all cones
 Build completed successfully (424 jobs).
 ```
 
@@ -102,9 +164,9 @@ a failure.
 | `Adequacy.lean` | The exported semantic face over engine configurations: triples with an arbitrary framed rest, driven by the engine's step function | `semantic_triple_sound`, `semantic_frame`, `spike_engine_adequacy` |
 | `Exhibit.lean` | End-to-end exhibits at the engine level: store-then-load returns 7; the frame exhibit; termination of the probe as a theorem | `exhibitA_engine`, `exhibitB_engine`, `exhibitC_engine`, `exhibitA_terminates` |
 | `DriverCollapse.lean` | The production scheduler/ND/readout collapsed onto the demo's drive loop — proved from the driver's OWN round functions; entirely trio-exact | `prod_loop_done`, `driver2_done`, `finalize_done` |
-| `ProdEntry.lean` | Cold start from the SHIPPED `initial_driver_state` (errno allocated by the real allocator) + the production-entry theorem: the production run IS the singleton Active execution satisfying the postcondition | `sem_triple_prod`, `prod_run_eq` |
+| `ProdEntry.lean` | Cold start from the SHIPPED `initial_driver_state` (errno allocated by the real allocator) + the production-entry theorem: under the scope hypotheses above (termination-in-budget, setup alignment, fuel), the production run IS the singleton Active execution satisfying the postcondition | `sem_triple_prod`, `prod_run_eq` |
 | `ProdExhibit.lean` | The demonstration: a self-contained program (create/store/load) run through the production pipeline delivers 7 with the exact final bytes | `exhibitA_prod` |
-| `Audit.lean` | The in-build axiom gate: curated exact-cone pins + the exhaustive sweep with the module-scoped `runEffectful` boundary (plant-tested both directions — see `docs/2026-08-31_restructure-notes.md`) | the sweep |
+| `Audit.lean` | The in-build axiom gate: curated exact-cone pins + the exhaustive theorem sweep with the module-scoped `runEffectful` boundary + the banned-axiom sweep over every constant kind (all plant-tested both directions — see `docs/2026-08-31_restructure-notes.md`) | the sweeps |
 
 History and design findings: the spike records in `docs/`
 (`2026-08-30_spike-report.md` is the closing report; plan, recon and

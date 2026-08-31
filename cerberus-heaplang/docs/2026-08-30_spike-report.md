@@ -203,6 +203,37 @@ per-action aid tick mirrored as a quantified parameter.
   it. Named residual cost: the annotation layer (D8), now with its
   engine-side counterpart certified (LETS-ANNOT/ANNOTS/REMOVE-ANNOT).
 
+### Registered seams (added 2026-08-31, merge-audit findings 2 and 6)
+
+[AGENT 2026-08-31] Two divergences the merge audit
+(`../../docs/2026-08-31_heaplang-merge-audit.md`) found off the
+register, now registered (also in the README's divergence table):
+
+- **The tagDefs-argument / CerbTags effectful-global seam.** The
+  production-entry theorems' subject is
+  `CerbND.runND (_root_.drive fmapEmpty false (prodFile e) args) …`
+  (ProdEntry.lean:272-273); the shipped invocation (Main.lean:871)
+  passes `CerbTags.tagDefs ()` after
+  `CerbTags.setTagDefsIO runFile.tagDefs` (Main.lean:855). The
+  identification is semantically forced for the synthetic file —
+  `(prodFile e).tagDefs = fmapEmpty` holds by `rfl` (probed at the
+  audit) — but it factors through an extra-logical set-then-read of
+  an effectful global; CerbMem layout functions read that global for
+  struct/union types, and the scalar paths of this fragment provably
+  do not (the `rfl`-proved allocation/store equations demonstrate
+  it). Known seam, inert for tagless synthetic files; a
+  struct-carrying growth step must revisit it. The "exact composite
+  Main.lean:857-885 runs" phrasing in Extension D above is read
+  modulo this seam.
+- **Memory orders are accepted arbitrarily, and this is
+  mirror-true.** `Step.store`/`wp_store` hold at ANY `memory_order`
+  because the sequential driver's discharge drops `mo`
+  (`action_request_sequential2`, Driver.lean:273: `StoreRequest2 mo1
+  … => liftMem (CerbMem.storeM …)` — `mo1` unused). Faithful to the
+  pinned engine (a NA-only side condition would diverge FROM it);
+  registered so a reader expecting NA-only conditions finds it
+  named.
+
 ## Stretch S1: skipped
 
 Not attempted, per the gate ("only if 1-4 land green with headroom"):

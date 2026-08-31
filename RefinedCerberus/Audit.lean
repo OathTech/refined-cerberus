@@ -22,6 +22,13 @@ grow only for load-bearing trust properties):
 2. CURATED PINS: exact axiom sets of load-bearing theorems via
    `#guard_msgs in #print axioms` — growth is a build failure until
    deliberately re-baselined in the same commit with the reason.
+3. BANNED-AXIOM SWEEP OVER EVERY CONSTANT KIND (added at the
+   2026-08-31 merge audit, finding 3): trio-bounding stays
+   theorems-only (check 1), but `sorryAx`/`ofReduceBool`/
+   `ofReduceNat` anywhere in the cone of ANY of our constants —
+   defs included, referenced by a theorem or not — fails the build.
+   Closes the def-level-sorry hole (a hole in a bare definitional
+   artifact used to ride a green build).
 
 THE DECLARED BOUNDARY: the classical trio only. There are no
 project axioms; adding one requires a boundary-list entry here with
@@ -90,5 +97,29 @@ open Lean in
     swept := swept + 1
   logInfo s!"RefinedCerberus axiom sweep: {swept} theorems, all cones \
     within the classical trio"
+  -- Pass 2 (header check 3): the banned-axiom check for EVERY
+  -- constant kind of our modules — not just theorems. A `sorry` (or
+  -- ofReduce*) in a bare def referenced by no theorem escaped pass 1
+  -- (2026-08-31 merge-audit finding 3); it fails the build here.
+  let banned : List Name := [``sorryAx, ``ofReduceBool, ``ofReduceNat]
+  let mut checked := 0
+  for n in names do
+    let ours := match env.getModuleIdxFor? n with
+      | some idx => isOurs[idx.toNat]!
+      | none => true  -- the file being elaborated
+    unless ours do continue
+    if n.isInternalDetail then continue
+    let axs ← collectAxioms n
+    for a in axs do
+      if banned.contains a then
+        throwError "RefinedCerberus banned-axiom sweep FAILED: constant {n} \
+          carries banned axiom {a}. sorryAx / ofReduceBool / \
+          ofReduceNat are never in any boundary, for ANY constant \
+          kind — a def-level hole is still a hole; remove it (there \
+          is no register route for these)."
+    checked := checked + 1
+  logInfo s!"RefinedCerberus banned-axiom sweep: {checked} constants of \
+    every kind checked; sorryAx/ofReduceBool/ofReduceNat absent from \
+    all cones"
 
 end RefinedCerberus.Audit
