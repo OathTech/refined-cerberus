@@ -115,6 +115,36 @@ structure StorableAt (ty : ctype) (mv : CerbMem.MemValue) : Prop where
     CerbMem.reconstructValue lum fpm addr ty (CerbMem.memValueToBytes [] mv).2 =
       CerbMem.reconstructValue [] [] addr ty (CerbMem.memValueToBytes [] mv).2
 
+/-! ## The null-test memM facts (list-reverse phase A)
+
+The honest null encoding: the engine's null pointer is
+`nullPtrval ty = PV Prov_none (PVnull ty)` (CerbMem.lean:843), and
+the engine's own pointer-equality memop `eqPtrval`
+(CerbMem.lean:1731, mirroring impl_mem.ml:1830-1881 arm-for-arm)
+answers the null test PURELY on the fragment's operand shapes:
+- null vs null → `memReturn true` (impl_mem.ml:1832-1833);
+- an allocation-backed concrete pointer (`cellPtr` — what
+  `allocateObject` returns and what a load of stored pointer bytes
+  reconstructs) vs null, either order → `memReturn false`
+  (impl_mem.ml:1834-1836).
+All three are single-layer active memM computations returning the
+state verbatim — `applyMemM` shape by `rfl`. The remaining arms
+(function pointers; the differing-provenance concrete/concrete
+`msum` ND fork) are NOT single-layer and stay fail-closed outside
+the mirror (Step.lean, `Step.memop_ptreq`). -/
+
+theorem eqPtrval_null_null (t1 t2 : ctype) (σ : Mem) :
+    applyMemM (CerbMem.eqPtrval default (CerbMem.nullPtrval t1)
+      (CerbMem.nullPtrval t2)) σ = some (true, σ) := rfl
+
+theorem eqPtrval_cell_null (id a : Int) (t : ctype) (σ : Mem) :
+    applyMemM (CerbMem.eqPtrval default (cellPtr id a)
+      (CerbMem.nullPtrval t)) σ = some (false, σ) := rfl
+
+theorem eqPtrval_null_cell (t : ctype) (id a : Int) (σ : Mem) :
+    applyMemM (CerbMem.eqPtrval default (CerbMem.nullPtrval t)
+      (cellPtr id a)) σ = some (false, σ) := rfl
+
 /-! ## Pure bytemap lemmas (writeBytesTo/readBytesFrom, CerbMem.lean:1420-1431) -/
 
 section Bytemap

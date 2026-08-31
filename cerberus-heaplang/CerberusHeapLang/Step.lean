@@ -395,6 +395,10 @@ theorem jumpRedex?_annot (a : List annot) (ds : List dyn_annotation)
     (p : generic_paction core_run_annotation Unit sym) :
     jumpRedex? (Expr a (Eaction p)) = none := rfl
 
+@[simp] theorem jumpRedex?_memop (a : List annot) (mop : memop)
+    (pes : List (generic_pexpr Unit sym)) :
+    jumpRedex? (Expr a (Ememop mop pes)) = none := rfl
+
 @[simp] theorem jumpRedex?_ofVal (w : SpikeVal) :
     jumpRedex? (ofVal w) = none := by
   cases w <;> rfl
@@ -509,6 +513,16 @@ theorem evalPexprs_cons (ρ : EnvStack) (pe : generic_pexpr Unit sym)
       let v ← evalPexpr ρ pe
       let vs ← evalPexprs ρ pes
       pure (v :: vs)) := rfl
+
+/-! ## The plain-symbol binder pattern (list-reverse arc, phase A)
+
+`lets x = e1 in e2` at a bare symbol pattern — the engine's own
+value-binding idiom for NON-loaded results (the memop protocol's
+delivered booleans are bare `Vtrue`/`Vfalse`, so the Specified
+unwrap does not apply): `update_env_aux`'s `CaseBase (some sym1, _)`
+arm (Core_aux.lean:861) binds the value verbatim. -/
+def symPat (pa : List annot) (x : sym) (bty : core_base_type) : pattern :=
+  Pattern pa (CaseBase (some x, bty))
 
 /-! ## The Specified-binder pattern (S4)
 
@@ -912,6 +926,107 @@ inductive Step (Q : LabelMap) :
       (hv : valueFromPexpr pe = some cval)
       (hsel : select_case subst_sym_expr cval pats = some e') :
       Step Q (Expr a (Ecase pe pats), ρ, σ) (e', ρ, σ)
+  /-- LETS-PURE at the plain-symbol binder (list-reverse phase A):
+      `lets x = v in E2 --> E2` with `x` bound to `v` verbatim
+      (one_step0 Esseq bare-value arm, Core_reduction.lean:353
+      "reduction: LETS-PURE"; the env update is `update_env
+      (symPat …)`, whose `CaseBase (some sym1, _)` arm adds the
+      binding, Core_aux.lean:861). RECORDED DIVERGENCE (deliberate,
+      fail-closed sub-relation): the `{A}v` LETS-ANNOT variant at
+      this pattern is NOT mirrored — the only producer of
+      sym-binder-bound values in the fragment is the memop protocol,
+      which delivers BARE values (step_ctx's MEMOP continuation,
+      Core_reduction.lean:484 — `mk_pure_e`, no Eannot residue); the
+      annot variant is a mechanical extension when needed. -/
+  | sseq_sym_pure {a pa : List annot} {x : sym} {bty : core_base_type}
+      {v : value} {e2 : CoreExpr}
+      {ev0 : Fmap sym value} {evs : List (Fmap sym value)} {σ : Mem} :
+      Step Q (Expr a (Esseq (symPat pa x bty) (ofVal (.pure v)) e2), ev0 :: evs, σ)
+           (e2, update_env (symPat pa x bty) v (ev0 :: evs), σ)
+  /-- THE POINTER-EQUALITY MEMOP at evaluated operands (list-reverse
+      phase A — the honest null test): ONE engine step. Mirrors:
+      one_step0's Ememop arm at value operands (`valueFromPexprs pes
+      = some cvals` → `MEMOP PtrEq cvals`, Core_reduction.lean:353
+      "reduction: MEMOP"), step_ctx's MEMOP dispatch
+      (Core_reduction.lean:484 — `Step_memop_request2
+      th_st.current_loc PtrEq cvals tid (is_unseq_with_ccall ctx)
+      (fun cval => wrap_expr (mk_pure_e (mk_value_pe cval)))`), the
+      sequential driver's memop discharge (driver21's
+      Step_memop_request2 arm, Driver.lean:377 →
+      `perform_memop_request2`, Driver.lean:288, PtrEq arm:
+      `liftMem (CerbMem.eqPtrval loc ptr_val1 ptr_val2)` then
+      `mk_th_st (if is_eq then Vtrue else Vfalse)`). The successor
+      is a BARE pure value (no Eannot residue, unlike load/store —
+      the memop protocol carries no dyn annotation). `loc`: the
+      engine passes `th_st.current_loc`; `eqPtrval` DISCARDS its loc
+      argument (CerbMem.lean:1731, `_ : CerbLocation.Loc`), so the
+      rule pins `default` (the frozen profiles' current_loc) — any
+      two locs are definitionally the same operation
+      (`eqPtrval` never reads it; certified via the rfl bridge in
+      Soundness.lean). Failure (the killed channel) and the
+      differing-provenance ND fork (`msum`, CerbMem.lean:1753 — a
+      real NDnd, not single-layer) are ABSENCE of a step: `applyMemM`
+      answers `none` there, fail-closed. -/
+  | memop_ptreq {a : List annot} {pe1 pe2 : generic_pexpr Unit sym}
+      {pv1 pv2 : CerbMem.PointerValue} {b : Bool}
+      {ρ : EnvStack} {σ σ' : Mem}
+      (h1 : valueFromPexpr pe1 = some (Vobject (OVpointer pv1)))
+      (h2 : valueFromPexpr pe2 = some (Vobject (OVpointer pv2)))
+      (hmem : applyMemM (CerbMem.eqPtrval default pv1 pv2) σ = some (b, σ')) :
+      Step Q (Expr a (Ememop PtrEq [pe1, pe2]), ρ, σ)
+           (Expr [] (Epure (Pexpr [] () (PEval (boolValue b)))), ρ, σ')
+  /-- MEMOP-OPERAND EVALUATION (list-reverse phase A): ONE engine
+      step BIG-STEP evaluating both operands of a two-operand memop
+      (one_step0's Ememop arm at a non-value operand list,
+      Core_reduction.lean:353 — `EVAL "Ememop"` over
+      `stExceptUndef_mapM eval_pexpr1 pes`; step_ctx's eval_pexpr1
+      is one full iteration of the evaluator tower — `eval_pexpr20`
+      then the Sum readout, Core_reduction.lean:484/84 — which on
+      the certified operand grammar delivers the fully evaluated
+      `mk_value_pe` form in ONE application, exactly like the
+      already-certified `full_eval_pexpr`). Node annotations are
+      PRESERVED (`Expr annots1 (Ememop memop1 pes')`). The mirror
+      premises are the certified pure evaluator; memop-generic
+      exactly as the engine's arm. -/
+  | memop_eval {a : List annot} {mop : memop}
+      {pe1 pe2 : generic_pexpr Unit sym} {v1 v2 : value}
+      {ρ : EnvStack} {σ : Mem}
+      (hnv : valueFromPexprs [pe1, pe2] = none)
+      (hv1 : evalPexpr ρ pe1 = some v1)
+      (hv2 : evalPexpr ρ pe2 = some v2) :
+      Step Q (Expr a (Ememop mop [pe1, pe2]), ρ, σ)
+           (Expr a (Ememop mop
+             [Pexpr [] () (PEval v1), Pexpr [] () (PEval v2)]), ρ, σ)
+  /-- ACTION_EVAL for a positive strong store with unevaluated
+      pointer AND value operands (list-reverse phase A — the
+      loop-carried interior store): ONE engine step BIG-STEP
+      evaluating the operands (step_action's Store0 `_, _, _` arm,
+      Core_reduction.lean:424 — `ACTION_EVAL "eval operands of
+      Store"` over the three `full_eval_pexpr1` calls, wrapped by
+      process_action's ACTION_EVAL arm; successor `Expr e_annots
+      (wrap_act (Store0 is_locking (mk_value_pe cval1) (mk_value_pe
+      cval2) (mk_value_pe cval3) mo1))`). The type operand is pinned
+      at its canonical evaluated shape (its re-evaluation is the
+      identity); pointer and value operands evaluate through the
+      certified pure evaluator — the pointer to a POINTER value, so
+      the successor is exactly the canonical store redex. The
+      `Store0 … PEconstrained` failwithI pre-arm
+      (Core_reduction.lean:424) is excluded by the evaluator premise
+      (`evalPexpr (PEconstrained …) = none`). -/
+  | store_eval {a : List annot} {loc : CerbLocation.Loc}
+      {ann : core_run_annotation} {lk : Bool} {ty : ctype}
+      {pe2 pe3 : generic_pexpr Unit sym} {pv : CerbMem.PointerValue}
+      {cv : value} {mo : memory_order} {ρ : EnvStack} {σ : Mem}
+      (hnv2 : valueFromPexpr pe2 = none)
+      (hnv3 : valueFromPexpr pe3 = none)
+      (hv2 : evalPexpr ρ pe2 = some (Vobject (OVpointer pv)))
+      (hv3 : evalPexpr ρ pe3 = some cv) :
+      Step Q (Expr a (Eaction (Paction polarity.Pos (Action loc ann
+              (Store0 lk (Pexpr [] () (PEval (Vctype ty))) pe2 pe3 mo)))), ρ, σ)
+           (Expr a (Eaction (Paction polarity.Pos (Action loc ann
+              (Store0 lk (Pexpr [] () (PEval (Vctype ty)))
+                      (Pexpr [] () (PEval (Vobject (OVpointer pv))))
+                      (Pexpr [] () (PEval cv)) mo)))), ρ, σ)
 
 /-! ## Basic metatheory of Step (inversions the logic needs) -/
 
@@ -1005,6 +1120,13 @@ theorem Step.env_cons' {Q : LabelMap} {c c' : CoreExpr × EnvStack × Mem}
   | if_true hg => exact fun ev0 evs hin => ⟨ev0, hin⟩
   | if_false hg => exact fun ev0 evs hin => ⟨ev0, hin⟩
   | case_value hv hsel => exact fun ev0 evs hin => ⟨ev0, hin⟩
+  | sseq_sym_pure =>
+    intro ev0 evs hin
+    obtain ⟨rfl, rfl⟩ := List.cons.inj hin
+    exact ⟨_, update_env_cons ..⟩
+  | memop_ptreq h1 h2 hmem => exact fun ev0 evs hin => ⟨ev0, hin⟩
+  | memop_eval hnv hv1 hv2 => exact fun ev0 evs hin => ⟨ev0, hin⟩
+  | store_eval hnv2 hnv3 hv2 hv3 => exact fun ev0 evs hin => ⟨ev0, hin⟩
 
 theorem Step.env_cons {Q : LabelMap} {e : CoreExpr} {ev0 : Fmap sym value}
     {evs : List (Fmap sym value)} {σ : Mem}
@@ -1057,6 +1179,7 @@ theorem Step.store_inv {Q : LabelMap} {a : List annot} {loc : CerbLocation.Loc}
               (Expr [] (Epure (Pexpr [] () (PEval Vunit))))), ρ, σ') := by
   cases h with
   | run hj hl hvs => simp at hj
+  | store_eval hnv2 hnv3 hv2 hv3 => rw [valueFromPexpr_val] at hnv2; cases hnv2
   | store h1 h2 h3 hmv hmem =>
     rw [valueFromPexpr_val] at h1 h2 h3
     injection h1 with h1; injection h1 with h1
@@ -1149,6 +1272,10 @@ theorem Step.jump_inv {Q : LabelMap} {e : CoreExpr} {ρ : EnvStack} {σ : Mem}
   | if_true hg => simp [jumpRedex?] at hj
   | if_false hg => simp [jumpRedex?] at hj
   | case_value hv hsel => simp [jumpRedex?] at hj
+  | sseq_sym_pure => rw [jumpRedex?_sseq, jumpRedex?_ofVal] at hj; cases hj
+  | memop_ptreq h1 h2 hmem => simp at hj
+  | memop_eval hnv hv1 hv2 => simp at hj
+  | store_eval hnv2 hnv3 hv2 hv3 => simp at hj
 
 /-- Reducibility at a registered jump redex (the probe's
     `step_of_jumpRedex`). -/
@@ -1190,7 +1317,10 @@ theorem Step.sseq_inv {Q : LabelMap} {a : List annot} {pat : pattern}
     (∃ pa' pb' x bty' ds ov ev0 evs, pat = specPat pa' pb' x bty' ∧
         e1 = ofVal (.annot ds (Vloaded (LVspecified ov))) ∧ ρ = ev0 :: evs ∧
         out = (Expr [] (Eannot ds e2), update_env (specPat pa' pb' x bty')
-          (Vloaded (LVspecified ov)) ρ, σ)) := by
+          (Vloaded (LVspecified ov)) ρ, σ)) ∨
+    (∃ pa' x bty' v ev0 evs, pat = symPat pa' x bty' ∧
+        e1 = ofVal (.pure v) ∧ ρ = ev0 :: evs ∧
+        out = (e2, update_env (symPat pa' x bty') v ρ, σ)) := by
   cases h with
   | sseq_ctx hnj hs => exact .inl ⟨_, _, _, hnj, hs, rfl⟩
   | sseq_pure => exact .inr (.inl ⟨_, _, _, _, _, rfl, rfl, rfl, rfl⟩)
@@ -1202,8 +1332,11 @@ theorem Step.sseq_inv {Q : LabelMap} {a : List annot} {pat : pattern}
     exact .inr (.inr (.inr (.inr (.inl
       ⟨_, _, _, _, _, _, _, rfl, rfl, rfl, rfl⟩))))
   | sseq_spec_annot =>
-    exact .inr (.inr (.inr (.inr (.inr
-      ⟨_, _, _, _, _, _, _, _, rfl, rfl, rfl, rfl⟩))))
+    exact .inr (.inr (.inr (.inr (.inr (.inl
+      ⟨_, _, _, _, _, _, _, _, rfl, rfl, rfl, rfl⟩)))))
+  | sseq_sym_pure =>
+    exact .inr (.inr (.inr (.inr (.inr (.inr
+      ⟨_, _, _, _, _, _, rfl, rfl, rfl, rfl⟩)))))
 
 /-- Inversion at an Eannot node (S3 form): Cannot-descent of a
     non-jump-redex body, the ANNOTS merge, or the global jump
@@ -1304,6 +1437,79 @@ theorem Step.load_op_inv {Q : LabelMap} {a : List annot}
   | load h1 h2 hmem => rw [hnv2] at h2; cases h2
   | load_eval hnv2' hv2 => exact ⟨_, hv2, rfl⟩
 
+/-- The engine's all-or-nothing operand test on a two-element list,
+    characterized (valueFromPexprs, Core_aux.lean:476 — a foldr of
+    the per-operand `valueFromPexpr` test). -/
+theorem valueFromPexprs_pair (pe1 pe2 : generic_pexpr Unit sym) :
+    valueFromPexprs [pe1, pe2] =
+      (match valueFromPexpr pe1, valueFromPexpr pe2 with
+       | some v1, some v2 => some [v1, v2]
+       | _, _ => none) := by
+  unfold valueFromPexprs
+  simp only [List.foldr_cons, List.foldr_nil]
+  cases valueFromPexpr pe1 <;> cases valueFromPexpr pe2 <;> rfl
+
+/-- Inversion at the pointer-equality memop with VALUE operands: the
+    step is unique and fully determined by the memM computation. -/
+theorem Step.memop_ptreq_inv {Q : LabelMap} {a : List annot}
+    {pe1 pe2 : generic_pexpr Unit sym} {pv1 pv2 : CerbMem.PointerValue}
+    {ρ : EnvStack} {σ : Mem} {out : CoreExpr × EnvStack × Mem}
+    (h1 : valueFromPexpr pe1 = some (Vobject (OVpointer pv1)))
+    (h2 : valueFromPexpr pe2 = some (Vobject (OVpointer pv2)))
+    (h : Step Q (Expr a (Ememop PtrEq [pe1, pe2]), ρ, σ) out) :
+    ∃ b σ', applyMemM (CerbMem.eqPtrval default pv1 pv2) σ = some (b, σ') ∧
+      out = (Expr [] (Epure (Pexpr [] () (PEval (boolValue b)))), ρ, σ') := by
+  cases h with
+  | run hj hl hvs => simp at hj
+  | memop_ptreq h1' h2' hmem =>
+    rw [h1] at h1'
+    rw [h2] at h2'
+    obtain rfl : pv1 = _ := by simpa using h1'
+    obtain rfl : pv2 = _ := by simpa using h2'
+    exact ⟨_, _, hmem, rfl⟩
+  | memop_eval hnv hv1 hv2 =>
+    rw [valueFromPexprs_pair, h1, h2] at hnv
+    cases hnv
+
+/-- Inversion at a two-operand memop with a NON-value operand list:
+    the operand-evaluation step. -/
+theorem Step.memop_op_inv {Q : LabelMap} {a : List annot} {mop : memop}
+    {pe1 pe2 : generic_pexpr Unit sym}
+    {ρ : EnvStack} {σ : Mem} {out : CoreExpr × EnvStack × Mem}
+    (hnv : valueFromPexprs [pe1, pe2] = none)
+    (h : Step Q (Expr a (Ememop mop [pe1, pe2]), ρ, σ) out) :
+    ∃ v1 v2, evalPexpr ρ pe1 = some v1 ∧ evalPexpr ρ pe2 = some v2 ∧
+      out = (Expr a (Ememop mop
+        [Pexpr [] () (PEval v1), Pexpr [] () (PEval v2)]), ρ, σ) := by
+  cases h with
+  | run hj hl hvs => simp at hj
+  | memop_ptreq h1 h2 hmem =>
+    rw [valueFromPexprs_pair, h1, h2] at hnv
+    cases hnv
+  | memop_eval hnv' hv1 hv2 => exact ⟨_, _, hv1, hv2, rfl⟩
+
+/-- Inversion at a store whose pointer operand is NOT a value: the
+    ACTION_EVAL step (and its value operand is not a value either —
+    the rule's shape). -/
+theorem Step.store_op_inv {Q : LabelMap} {a : List annot}
+    {loc : CerbLocation.Loc} {ann : core_run_annotation} {lk : Bool}
+    {ty : ctype} {pe2 pe3 : generic_pexpr Unit sym} {mo : memory_order}
+    {ρ : EnvStack} {σ : Mem} {out : CoreExpr × EnvStack × Mem}
+    (hnv2 : valueFromPexpr pe2 = none)
+    (h : Step Q (Expr a (Eaction (Paction polarity.Pos (Action loc ann
+        (Store0 lk (Pexpr [] () (PEval (Vctype ty))) pe2 pe3 mo)))), ρ, σ)
+      out) :
+    ∃ pv cv, evalPexpr ρ pe2 = some (Vobject (OVpointer pv)) ∧
+      evalPexpr ρ pe3 = some cv ∧ valueFromPexpr pe3 = none ∧
+      out = (Expr a (Eaction (Paction polarity.Pos (Action loc ann
+        (Store0 lk (Pexpr [] () (PEval (Vctype ty)))
+                (Pexpr [] () (PEval (Vobject (OVpointer pv))))
+                (Pexpr [] () (PEval cv)) mo)))), ρ, σ) := by
+  cases h with
+  | run hj hl hvs => simp at hj
+  | store h1 h2 h3 hmv hmem => rw [hnv2] at h2; cases h2
+  | store_eval hnv2' hnv3 hv2 hv3 => exact ⟨_, _, hv2, hv3, hnv3, rfl⟩
+
 /-- Constructor-clash refutation: the Specified-binder pattern is
     never the wildcard base pattern (the wildcard-context proofs'
     dispatch fact). -/
@@ -1317,6 +1523,25 @@ theorem specPat_inj {pa pb pa' pb' : List annot} {x x' : sym}
     (h : specPat pa pb x bty = specPat pa' pb' x' bty') :
     pa = pa' ∧ pb = pb' ∧ x = x' ∧ bty = bty' := by
   simpa [specPat] using h
+
+/-- The plain-symbol pattern is never the wildcard base pattern
+    (`some x ≠ none`). -/
+theorem symPat_ne_base {pa' : List annot} {bty' : core_base_type}
+    {pa : List annot} {x : sym} {bty : core_base_type}
+    (h : Pattern pa' (CaseBase (none, bty')) = symPat pa x bty) : False := by
+  simp [symPat] at h
+
+/-- ... nor the Specified-binder pattern (CaseCtor vs CaseBase). -/
+theorem symPat_ne_spec {pa pb : List annot} {x : sym} {bty : core_base_type}
+    {pa' : List annot} {x' : sym} {bty' : core_base_type}
+    (h : specPat pa pb x bty = symPat pa' x' bty') : False := by
+  simp [specPat, symPat] at h
+
+theorem symPat_inj {pa pa' : List annot} {x x' : sym}
+    {bty bty' : core_base_type}
+    (h : symPat pa x bty = symPat pa' x' bty') :
+    pa = pa' ∧ x = x' ∧ bty = bty' := by
+  simpa [symPat] using h
 
 /-- A non-value pure expression is not a mirror value (feeds the
     S4 PURE rule's wps face). -/
@@ -1341,6 +1566,25 @@ def loadOpRedex (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (ty : ctype) (pe2 : generic_pexpr Unit sym) (mo : memory_order) : CoreExpr :=
   Expr [] (Eaction (Paction polarity.Pos (Action loc ann
     (Load0 (Pexpr [] () (PEval (Vctype ty))) pe2 mo))))
+
+/-- Canonical spelling of a memop redex (list-reverse phase A):
+    `[]` node annotations, operands per instance. -/
+def memopRedex (mop : memop) (pes : List (generic_pexpr Unit sym)) : CoreExpr :=
+  Expr [] (Ememop mop pes)
+
+/-- The pointer-equality memop at canonical VALUE operands (the
+    post-ACTION_EVAL shape the memop axiom fires at). -/
+def memopPtrEqVals (v1 v2 : value) : CoreExpr :=
+  memopRedex PtrEq [Pexpr [] () (PEval v1), Pexpr [] () (PEval v2)]
+
+/-- Canonical spelling of the store ACTION_EVAL redex: positive
+    strong non-locking store, canonical evaluated type operand,
+    UNevaluated pointer/value operands. -/
+def storeOpRedex (loc : CerbLocation.Loc) (ann : core_run_annotation)
+    (ty : ctype) (pe2 pe3 : generic_pexpr Unit sym) (mo : memory_order) :
+    CoreExpr :=
+  Expr [] (Eaction (Paction polarity.Pos (Action loc ann
+    (Store0 false (Pexpr [] () (PEval (Vctype ty))) pe2 pe3 mo))))
 
 /-! ## The frozen entry label map + the phase-1 fragment cone
 
@@ -1470,7 +1714,8 @@ theorem FragP.step_env {Q : LabelMap} {e : CoreExpr} {ρ : EnvStack} {σ : Mem}
         ⟨_, _, v, _, _, _, _, _, hout⟩ | ⟨_, _, ds', v, _, _, _, _, _, hout⟩ |
         ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩ |
         ⟨_, _, _, _, _, _, _, hpat, _, _, _⟩ |
-        ⟨_, _, _, _, _, _, _, _, hpat, _, _, _⟩
+        ⟨_, _, _, _, _, _, _, _, hpat, _, _, _⟩ |
+        ⟨_, _, _, _, _, _, hpat, _, _, _⟩
     · obtain ⟨h1, h2, -⟩ : e' = _ ∧ ρ' = ρ'' ∧ σ' = σ'' := by
         simpa [Prod.mk.injEq] using hout
       subst h1 h2
@@ -1488,6 +1733,7 @@ theorem FragP.step_env {Q : LabelMap} {e : CoreExpr} {ρ : EnvStack} {σ : Mem}
       cases hj
     · exact (specPat_ne_base hpat).elim
     · exact (specPat_ne_base hpat).elim
+    · exact (symPat_ne_base hpat).elim
   | annot hfb ihb =>
     rcases hs.annot_inv with ⟨hg, hnj, b', ρ'', σ'', hstep, hout⟩ |
         ⟨a2, ds2, c, hb, hout⟩ |

@@ -98,6 +98,10 @@ abbrev LabelSpec (GF : BundledGFunctors) : Type :=
     (p : generic_paction core_run_annotation Unit sym) :
     toVal (Expr a (Eaction p)) = none := rfl
 
+@[simp] theorem toVal_memop_node (a : List annot) (mop : memop)
+    (pes : List (generic_pexpr Unit sym)) :
+    toVal (Expr a (Ememop mop pes)) = none := rfl
+
 variable {hlc : HasLC} {GF : BundledGFunctors}
 
 /-! ## The statement WP -/
@@ -596,7 +600,8 @@ theorem wps_seq {Ψ : SpikeVal → EnvStack → IProp GF}
         ⟨_, _, v, _, _, _, he1, _, hout⟩ | ⟨_, _, ds, v, _, _, _, he1, _, hout⟩ |
         ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩ |
         ⟨_, _, _, _, _, _, _, hpat, _, _, _⟩ |
-        ⟨_, _, _, _, _, _, _, _, hpat, _, _, _⟩
+        ⟨_, _, _, _, _, _, _, _, hpat, _, _, _⟩ |
+        ⟨_, _, _, _, _, _, hpat, _, _, _⟩
     · exact absurd hs' (fun h => Step.val_elim h)
     · -- LETS-PURE: successor (e2, ρ, σ)
       obtain rfl : w = .pure v := by
@@ -643,6 +648,7 @@ theorem wps_seq {Ψ : SpikeVal → EnvStack → IProp GF}
     · rw [jumpRedex?_ofVal] at hj; cases hj
     · exact (specPat_ne_base hpat).elim
     · exact (specPat_ne_base hpat).elim
+    · exact (symPat_ne_base hpat).elim
   | none =>
     cases hjr : jumpRedex? e1 with
     | some lp =>
@@ -683,7 +689,8 @@ theorem wps_seq {Ψ : SpikeVal → EnvStack → IProp GF}
           ⟨_, _, v, _, _, _, he1, _, _⟩ | ⟨_, _, ds, v, _, _, _, he1, _, _⟩ |
           ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩ |
           ⟨_, _, _, _, _, _, _, hpat, _, _, _⟩ |
-          ⟨_, _, _, _, _, _, _, _, hpat, _, _, _⟩
+          ⟨_, _, _, _, _, _, _, _, hpat, _, _, _⟩ |
+          ⟨_, _, _, _, _, _, hpat, _, _, _⟩
       · obtain ⟨ev0', rfl⟩ := Step.env_cons hs'
         obtain ⟨re, rρ, rQ⟩ := r
         simp only at hlbl
@@ -702,6 +709,7 @@ theorem wps_seq {Ψ : SpikeVal → EnvStack → IProp GF}
       · rw [hjr] at hj; cases hj
       · exact (specPat_ne_base hpat).elim
       · exact (specPat_ne_base hpat).elim
+      · exact (symPat_ne_base hpat).elim
 
 /-! ## The branch/entry rules (S3 — the engine's measured
 granularity: Eif's big-step guard via the pure-evaluator premise,
@@ -988,7 +996,8 @@ theorem wps_seq_spec {Ψ : SpikeVal → EnvStack → IProp GF}
           ⟨_, _, _, v', _, _, hpat, he1, _, hout⟩ |
           ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩ |
           ⟨pa', pb', x', bty', ov', _, _, hpat, he1, _, hout⟩ |
-          ⟨pa', pb', x', bty', ds', ov', _, _, hpat, he1, _, hout⟩
+          ⟨pa', pb', x', bty', ds', ov', _, _, hpat, he1, _, hout⟩ |
+          ⟨_, _, _, _, _, _, hpat, _, _, _⟩
       · exact absurd hs' (fun h => Step.val_elim h)
       · exact (specPat_ne_base hpat.symm).elim
       · exact (specPat_ne_base hpat.symm).elim
@@ -1014,6 +1023,7 @@ theorem wps_seq_spec {Ψ : SpikeVal → EnvStack → IProp GF}
               (Vloaded (LVspecified ov))) u) ρ'') = Ψ from rfl]
           iexact Hinner
       · exact absurd he1 (by simp [ofVal])
+      · exact (symPat_ne_spec hpat).elim
     | annot ds v =>
       obtain rfl : v = Vloaded (LVspecified ov) := hval
       isplitr
@@ -1027,7 +1037,8 @@ theorem wps_seq_spec {Ψ : SpikeVal → EnvStack → IProp GF}
           ⟨_, _, _, v', _, _, hpat, he1, _, hout⟩ |
           ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩ |
           ⟨pa', pb', x', bty', ov', _, _, hpat, he1, _, hout⟩ |
-          ⟨pa', pb', x', bty', ds', ov', _, _, hpat, he1, _, hout⟩
+          ⟨pa', pb', x', bty', ds', ov', _, _, hpat, he1, _, hout⟩ |
+          ⟨_, _, _, _, _, _, hpat, _, _, _⟩
       · exact absurd hs' (fun h => Step.val_elim h)
       · exact (specPat_ne_base hpat.symm).elim
       · exact (specPat_ne_base hpat.symm).elim
@@ -1054,6 +1065,7 @@ theorem wps_seq_spec {Ψ : SpikeVal → EnvStack → IProp GF}
               (Vloaded (LVspecified ov))) u) ρ'') =
             (fun u ρ'' => Ψ (SpikeVal.merge ds u) ρ'') from rfl]
           iapply wps_annot ds e2 _ $$ Hinner
+      · exact (symPat_ne_spec hpat).elim
   | none =>
     cases hjr : jumpRedex? e1 with
     | some lp =>
@@ -1083,7 +1095,8 @@ theorem wps_seq_spec {Ψ : SpikeVal → EnvStack → IProp GF}
           ⟨_, _, v, _, _, _, he1, _, _⟩ | ⟨_, _, ds, v, _, _, _, he1, _, _⟩ |
           ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩ |
           ⟨_, _, _, _, _, _, _, _, he1, _, _⟩ |
-          ⟨_, _, _, _, _, _, _, _, _, he1, _, _⟩
+          ⟨_, _, _, _, _, _, _, _, _, he1, _, _⟩ |
+          ⟨_, _, _, _, _, _, _, he1, _, _⟩
       · obtain ⟨ev0', rfl⟩ := Step.env_cons hs'
         obtain ⟨re, rρ, rQ⟩ := r
         simp only at hlbl
@@ -1102,6 +1115,276 @@ theorem wps_seq_spec {Ψ : SpikeVal → EnvStack → IProp GF}
       · rw [hjr] at hj; cases hj
       · rw [he1, toVal_ofVal] at htv; cases htv
       · rw [he1, toVal_ofVal] at htv; cases htv
+      · rw [he1, toVal_ofVal] at htv; cases htv
+
+/-! ## The plain-symbol-binder sequencing rule (list-reverse phase A)
+
+`lets x = e1 in e2` at a bare symbol pattern — the memop result's
+binding idiom (Step.lean `symPat`). The premise's value channel
+carries the PURE-value shape fact (the mirror's sym-binder beta is
+deliberately restricted to bare values — Step.lean, the recorded
+fail-closed divergence), and the continuation is verified at the
+value-bound environment. -/
+
+theorem wps_seq_sym {Ψ : SpikeVal → EnvStack → IProp GF}
+    (a pa : List annot) (x : sym) (bty : core_base_type)
+    (e1 e2 : CoreExpr)
+    (ev0 : Fmap sym value) (evs : List (Fmap sym value)) :
+    wps Q Ls (fun w ρ' => iprop(∃ (v : value),
+        ⌜w = SpikeVal.pure v⌝ ∗
+        wps Q Ls Ψ e2 (update_env (symPat pa x bty) v ρ')))
+      e1 (ev0 :: evs) ⊢
+      wps Q Ls Ψ (Expr a (Esseq (symPat pa x bty) e1 e2))
+        (ev0 :: evs) := by
+  iloeb as IH generalizing %e1 %ev0 %evs
+  cases htv : toVal e1 with
+  | some w =>
+    have he := ofVal_of_toVal htv
+    subst he
+    rw [wps_unfold.to_eq,
+      (wps_unfold (e := Expr a (Esseq (symPat pa x bty)
+        (ofVal w) e2))).to_eq]
+    simp only [wps.pre, toVal_ofVal, toVal_sseq_node, jumpRedex?_sseq,
+      jumpRedex?_ofVal]
+    iintro H %σ₁ %ns %obs %obs' %nt Hσ
+    imod H with ⟨%v, %hval, Hinner⟩
+    subst hval
+    iapply fupd_mask_intro Std.LawfulSet.empty_subset
+    iintro Hclose
+    isplitr
+    · ipureintro
+      exact ⟨[], ⟨_, _, _⟩, _, [], ⟨Step.sseq_sym_pure, rfl, rfl⟩⟩
+    inext
+    iintro %r %σ₂ %eₜ %Hstep Hcred
+    obtain ⟨hs, hlbl, rfl⟩ := Hstep
+    rcases hs.sseq_inv with ⟨e1', ρ'', σ'', hnj, hs', hout⟩ |
+        ⟨_, _, v', _, _, hpat, he1, _, hout⟩ |
+        ⟨_, _, _, v', _, _, hpat, he1, _, hout⟩ |
+        ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩ |
+        ⟨pa', pb', x', bty', ov', _, _, hpat, he1, _, hout⟩ |
+        ⟨pa', pb', x', bty', ds', ov', _, _, hpat, he1, _, hout⟩ |
+        ⟨pa', x', bty', v', _, _, hpat, he1, _, hout⟩
+    · exact absurd hs' (fun h => Step.val_elim h)
+    · exact (symPat_ne_base hpat.symm).elim
+    · exact (symPat_ne_base hpat.symm).elim
+    · rw [jumpRedex?_ofVal] at hj; cases hj
+    · exact (symPat_ne_spec hpat.symm).elim
+    · exact (symPat_ne_spec hpat.symm).elim
+    · obtain ⟨rfl, rfl, rfl⟩ := symPat_inj hpat
+      obtain rfl : v = v' := by simpa [ofVal] using he1
+      obtain ⟨re, rρ, rQ⟩ := r
+      simp only at hlbl
+      obtain rfl : Q = rQ := hlbl.symm
+      obtain ⟨hre, hrρ, hσ⟩ : re = e2 ∧
+          rρ = update_env (symPat pa x bty) v (ev0 :: evs) ∧ σ₂ = σ₁ := by
+        simpa [Prod.mk.injEq] using hout
+      subst hrρ
+      obtain rfl : e2 = re := hre.symm
+      obtain rfl : σ₁ = σ₂ := hσ.symm
+      imod Hclose with -
+      imodintro
+      isplitl [Hσ]
+      · iexact Hσ
+      · iexact Hinner
+  | none =>
+    cases hjr : jumpRedex? e1 with
+    | some lp =>
+      rw [wps_unfold.to_eq,
+        (wps_unfold (e := Expr a (Esseq (symPat pa x bty) e1 e2))).to_eq]
+      simp only [wps.pre, htv, toVal_sseq_node, jumpRedex?_sseq, hjr]
+      iintro H
+      iexact H
+    | none =>
+      rw [wps_unfold.to_eq,
+        (wps_unfold (e := Expr a (Esseq (symPat pa x bty) e1 e2))).to_eq]
+      simp only [wps.pre, htv, toVal_sseq_node, jumpRedex?_sseq, hjr]
+      iintro H %σ₁ %ns %obs %obs' %nt Hσ
+      imod H $$ %σ₁ %ns %obs %obs' %nt Hσ with ⟨%hred, H⟩
+      imodintro
+      isplit
+      · ipureintro
+        obtain ⟨obs0, r', σ', eₜ', hps⟩ := hred
+        obtain ⟨hs', hlbl', hnil'⟩ := hps
+        exact ⟨obs0, ⟨Expr a (Esseq (symPat pa x bty)
+            r'.e e2), r'.ρ, Q⟩, σ', [],
+          ⟨Step.sseq_ctx hjr hs', rfl, rfl⟩⟩
+      inext
+      iintro %r %σ₂ %eₜ %Hstep Hcred
+      obtain ⟨hs, hlbl, rfl⟩ := Hstep
+      rcases hs.sseq_inv with ⟨e1', ρ'', σ'', hnj, hs', hout⟩ |
+          ⟨_, _, v, _, _, _, he1, _, _⟩ | ⟨_, _, ds, v, _, _, _, he1, _, _⟩ |
+          ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩ |
+          ⟨_, _, _, _, _, _, _, _, he1, _, _⟩ |
+          ⟨_, _, _, _, _, _, _, _, _, he1, _, _⟩ |
+          ⟨_, _, _, _, _, _, _, he1, _, _⟩
+      · obtain ⟨ev0', rfl⟩ := Step.env_cons hs'
+        obtain ⟨re, rρ, rQ⟩ := r
+        simp only at hlbl
+        obtain rfl : Q = rQ := hlbl.symm
+        obtain ⟨hre, hrρ, hσ⟩ : re = Expr a (Esseq (symPat pa x bty)
+            e1' e2) ∧ rρ = ev0' :: evs ∧
+            σ₂ = σ'' := by
+          simpa [Prod.mk.injEq] using hout
+        subst hre hrρ hσ
+        imod H $$ %(⟨e1', ev0' :: evs, Q⟩ : CoreRt) %σ₂ %([] : List CoreRt)
+          %⟨hs', rfl, rfl⟩ Hcred with ⟨$, H⟩
+        imodintro
+        iapply IH $$ %e1' %ev0' %evs H
+      · rw [he1, toVal_ofVal] at htv; cases htv
+      · rw [he1, toVal_ofVal] at htv; cases htv
+      · rw [hjr] at hj; cases hj
+      · rw [he1, toVal_ofVal] at htv; cases htv
+      · rw [he1, toVal_ofVal] at htv; cases htv
+      · rw [he1, toVal_ofVal] at htv; cases htv
+
+/-! ## The pointer-test memop rules (list-reverse phase A)
+
+The null test as the ENGINE's own pointer memop, at the wps stratum:
+`wps_memop_ptreq` consumes the pure single-layer `eqPtrval` verdict
+(Heap.lean's `eqPtrval_null_null` / `eqPtrval_cell_null` /
+`eqPtrval_null_cell` discharge `hres` at the fragment's shapes);
+`wps_memop_eval` is the one-step operand evaluation into the
+canonical value-operand redex (the memop analog of
+`wps_load_eval`). -/
+
+/-- The pointer-equality memop at VALUE operands: one deterministic
+    engine step delivering the boolean verdict as a BARE pure value
+    (no Eannot residue — the memop protocol's continuation,
+    Core_reduction.lean:484). State untouched (`hres` pins the
+    single-layer state-verbatim verdict — exactly the null-test
+    arms). -/
+theorem wps_memop_ptreq {Ψ : SpikeVal → EnvStack → IProp GF}
+    (pv1 pv2 : CerbMem.PointerValue) {b : Bool} (ρ : EnvStack)
+    (hres : ∀ σ : Mem, applyMemM (CerbMem.eqPtrval default pv1 pv2) σ =
+      some (b, σ)) :
+    Ψ (.pure (boolValue b)) ρ ⊢
+      wps Q Ls Ψ (memopPtrEqVals (Vobject (OVpointer pv1))
+        (Vobject (OVpointer pv2))) ρ := by
+  rw [(wps_unfold (e := memopPtrEqVals (Vobject (OVpointer pv1))
+    (Vobject (OVpointer pv2)))).to_eq]
+  simp only [wps.pre, memopPtrEqVals, memopRedex, toVal_memop_node,
+    jumpRedex?_memop]
+  iintro H %σ₁ %ns %obs %obs' %nt Hσ
+  iapply fupd_mask_intro Std.LawfulSet.empty_subset
+  iintro Hclose
+  isplitr
+  · ipureintro
+    exact ⟨[], ⟨_, _, _⟩, _, [],
+      ⟨Step.memop_ptreq rfl rfl (hres σ₁), rfl, rfl⟩⟩
+  inext
+  iintro %r %σ₂ %eₜ %Hstep Hcred
+  obtain ⟨hs, hlbl, rfl⟩ := Hstep
+  obtain ⟨b', σ'', hmem, hout⟩ := hs.memop_ptreq_inv rfl rfl
+  rw [hres σ₁] at hmem
+  obtain ⟨rfl, rfl⟩ : b = b' ∧ σ₁ = σ'' := by
+    have h := Option.some.inj hmem
+    exact ⟨congrArg Prod.fst h, congrArg Prod.snd h⟩
+  obtain ⟨re, rρ, rQ⟩ := r
+  simp only at hlbl
+  obtain rfl : Q = rQ := hlbl.symm
+  obtain ⟨hre, hrρ, hσ⟩ : re = Expr [] (Epure (Pexpr [] ()
+      (PEval (boolValue b)))) ∧ rρ = ρ ∧ σ₂ = σ₁ := by
+    simpa [Prod.mk.injEq] using hout
+  subst hre
+  obtain rfl : ρ = rρ := hrρ.symm
+  obtain rfl : σ₁ = σ₂ := hσ.symm
+  imod Hclose with -
+  imodintro
+  isplitl [Hσ]
+  · iexact Hσ
+  · rw [show Expr ([] : List annot) (Epure (Pexpr [] ()
+        (PEval (boolValue b)))) = ofVal (.pure (boolValue b)) from rfl]
+    iapply wps_ofVal (.pure (boolValue b)) ρ
+    iexact H
+
+/-- Memop-operand evaluation: ONE deterministic engine step
+    big-step-evaluating both operands through the certified
+    evaluator into the canonical value-operand memop redex
+    (`Step.memop_eval`). -/
+theorem wps_memop_eval {Ψ : SpikeVal → EnvStack → IProp GF}
+    (mop : memop) (pe1 pe2 : generic_pexpr Unit sym)
+    {v1 v2 : value} (ρ : EnvStack)
+    (hnv : valueFromPexprs [pe1, pe2] = none)
+    (hv1 : evalPexpr ρ pe1 = some v1)
+    (hv2 : evalPexpr ρ pe2 = some v2) :
+    wps Q Ls Ψ (memopRedex mop
+      [Pexpr [] () (PEval v1), Pexpr [] () (PEval v2)]) ρ ⊢
+      wps Q Ls Ψ (memopRedex mop [pe1, pe2]) ρ := by
+  rw [(wps_unfold (e := memopRedex mop [pe1, pe2])).to_eq]
+  simp only [wps.pre, memopRedex, toVal_memop_node, jumpRedex?_memop]
+  iintro H %σ₁ %ns %obs %obs' %nt Hσ
+  iapply fupd_mask_intro Std.LawfulSet.empty_subset
+  iintro Hclose
+  isplitr
+  · ipureintro
+    exact ⟨[], ⟨_, _, _⟩, _, [], ⟨Step.memop_eval hnv hv1 hv2, rfl, rfl⟩⟩
+  inext
+  iintro %r %σ₂ %eₜ %Hstep Hcred
+  obtain ⟨hs, hlbl, rfl⟩ := Hstep
+  obtain ⟨v1', v2', hv1', hv2', hout⟩ := hs.memop_op_inv hnv
+  obtain rfl : v1 = v1' := Option.some.inj (hv1.symm.trans hv1')
+  obtain rfl : v2 = v2' := Option.some.inj (hv2.symm.trans hv2')
+  obtain ⟨re, rρ, rQ⟩ := r
+  simp only at hlbl
+  obtain rfl : Q = rQ := hlbl.symm
+  obtain ⟨hre, hrρ, hσ⟩ : re = Expr [] (Ememop mop
+      [Pexpr [] () (PEval v1), Pexpr [] () (PEval v2)]) ∧
+      rρ = ρ ∧ σ₂ = σ₁ := by
+    simpa [Prod.mk.injEq] using hout
+  subst hre
+  obtain rfl : ρ = rρ := hrρ.symm
+  obtain rfl : σ₁ = σ₂ := hσ.symm
+  imod Hclose with -
+  imodintro
+  isplitl [Hσ]
+  · iexact Hσ
+  · iexact H
+
+/-- ACTION_EVAL for a store with unevaluated pointer/value operands
+    (the store analog of `wps_load_eval` — the loop-carried interior
+    store's entry step): ONE deterministic engine step evaluating
+    the operands into the canonical store redex, over which the
+    certified store axiom then applies (`Step.store_eval`). -/
+theorem wps_store_eval {Ψ : SpikeVal → EnvStack → IProp GF}
+    (loc : CerbLocation.Loc) (ann : core_run_annotation) (ty : ctype)
+    (pe2 pe3 : generic_pexpr Unit sym) (mo : memory_order) (ρ : EnvStack)
+    {pv : CerbMem.PointerValue} {cv : value}
+    (hnv2 : valueFromPexpr pe2 = none)
+    (hnv3 : valueFromPexpr pe3 = none)
+    (hv2 : evalPexpr ρ pe2 = some (Vobject (OVpointer pv)))
+    (hv3 : evalPexpr ρ pe3 = some cv) :
+    wps Q Ls Ψ (storeExpr loc ann ty pv cv mo) ρ ⊢
+      wps Q Ls Ψ (storeOpRedex loc ann ty pe2 pe3 mo) ρ := by
+  rw [(wps_unfold (e := storeOpRedex loc ann ty pe2 pe3 mo)).to_eq]
+  simp only [wps.pre, storeOpRedex, toVal_action_node, jumpRedex?_action]
+  iintro H %σ₁ %ns %obs %obs' %nt Hσ
+  iapply fupd_mask_intro Std.LawfulSet.empty_subset
+  iintro Hclose
+  isplitr
+  · ipureintro
+    exact ⟨[], ⟨_, _, _⟩, _, [],
+      ⟨Step.store_eval hnv2 hnv3 hv2 hv3, rfl, rfl⟩⟩
+  inext
+  iintro %r %σ₂ %eₜ %Hstep Hcred
+  obtain ⟨hs, hlbl, rfl⟩ := Hstep
+  obtain ⟨pv', cv', hv2', hv3', -, hout⟩ := hs.store_op_inv hnv2
+  obtain rfl : pv = pv' := by
+    simpa using Option.some.inj (hv2.symm.trans hv2')
+  obtain rfl : cv = cv' := Option.some.inj (hv3.symm.trans hv3')
+  obtain ⟨re, rρ, rQ⟩ := r
+  simp only at hlbl
+  obtain rfl : Q = rQ := hlbl.symm
+  obtain ⟨hre, hrρ, hσ⟩ : re = storeExpr loc ann ty pv cv mo ∧
+      rρ = ρ ∧ σ₂ = σ₁ := by
+    simpa [Prod.mk.injEq, storeExpr] using hout
+  subst hre
+  obtain rfl : ρ = rρ := hrρ.symm
+  obtain rfl : σ₁ = σ₂ := hσ.symm
+  imod Hclose with -
+  imodintro
+  isplitl [Hσ]
+  · iexact Hσ
+  · iexact H
 
 /-! ## The small axioms at the statement layer (house engine seams
 `storeM_success`/`loadM_success` reused verbatim — probe §6 S2) -/
