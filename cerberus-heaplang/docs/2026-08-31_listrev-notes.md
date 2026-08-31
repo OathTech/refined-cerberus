@@ -483,3 +483,19 @@ subsection was confirmed by grep against the vendored source:
 validation-summary numbers were read from
 `../.cerberus-ws/lean_frontend/VALIDATION.md` at the pinned
 workspace (its §2 lane table and §5 scope statement).
+
+### The phase-B prediction list, verbatim ([orchestrator] record —
+transmitted from the phase-B worker's report, closing the gap the
+phase-C fix worker correctly flagged)
+
+Phase B predicted five naive-reader stumbling points: (1)
+Fmap/LemLib vocabulary undefined at first use in statements; (2)
+the `hlib` (isLibraryLocation) hypothesis explained too thinly; (3)
+the driveJ run-state parameter (lrRS/LabeledAt tie) as the most
+jargon-dense spot; (4) section variables absent from quoted theorem
+text; (5) the two D-numbering families colliding across dated
+notes. Actual reader MAJORs — the axiom never exhibited; the
+differential-validation dangler — were BOTH unpredicted; the
+predicted items landed as minor friction or did not bind. The
+fresh-persona instrument catches what author-side prediction
+cannot.
