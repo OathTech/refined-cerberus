@@ -65,6 +65,7 @@ import CerberusHeapLang.Wps
 import CerberusHeapLang.Exhibit
 import CerberusHeapLang.ProdExhibit
 import CerberusHeapLang.LoopExhibit
+import CerberusHeapLang.FibExhibit
 import CerberusHeapLang.StmtProbe
 
 namespace CerberusHeapLang.Audit
@@ -285,6 +286,17 @@ info: 'CerberusHeapLang.wps_sound' depends on axioms: [propext, Classical.choice
 info: 'CerberusHeapLang.wps_store' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in #print axioms CerberusHeapLang.wps_store
+
+-- Phase-2 S4 (2026-08-31): ACCEPTANCE EXHIBIT 1 — fib end-to-end
+-- (the iterative two-accumulator loop through blockSpecs_intro with
+-- the data-dependent invariant a = fib i ∧ b = fib (i+1), the S4
+-- PURE exit, the env-map seam's SymFrame invariant; driveJ
+-- conclusion, engine vocabulary only; delivered value = the
+-- Lean-side fibSpec). Cone exactly the trio.
+/--
+info: 'CerberusHeapLang.fib_certified' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms CerberusHeapLang.fib_certified
 
 /-! ## The exhaustive sweep (LAST — nothing declared below) -/
 
