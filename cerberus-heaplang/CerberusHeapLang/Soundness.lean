@@ -182,6 +182,23 @@ def dischargeStep (aid : Nat) (rs : core_run_state) (σ : Mem) :
            | _ => .offFragment)
       | _ => .offFragment
     | _ => .offFragment
+  | Step_with_runstate2 _ m =>
+    -- S3: the sequential driver's `liftCore_run` protocol
+    -- (Driver.lean:245/336) projected: run the monad on the
+    -- quantified run state; `Defined` continues, `Undef`/`Error`
+    -- kill; a monad-level `Exception` is the driver's
+    -- `Other (DErr_core_run …)` kill — off the fragment protocol
+    -- here (the fragment's with-runstate monads never raise, proved
+    -- ∀ rs in the per-rule discharge lemmas). The projection drops
+    -- the returned run state; the fragment's monads return it
+    -- verbatim (Erun's `labeled` read is `state_except_read` —
+    -- READ-ONLY; guard/argument evaluation is `runEU`-lifted — the
+    -- D14 partition rows, recorded in the slice notes).
+    match m rs with
+    | Result (Defined th', _) => .next th' σ
+    | Result (Undef l ubs, _) => .killed (Undef0 l ubs)
+    | Result (Error l s, _) => .killed (Error0 l s)
+    | Exception _ => .offFragment
   | _ => .offFragment
 
 /-- The engine's discharged behavior list at a configuration. -/
@@ -1459,5 +1476,949 @@ theorem engine_complete (aid : Nat) (σ : Mem) (ev0 : Fmap sym value)
       unfold engineOutcomes
       rw [heq]
       rfl
+
+/-! ## S3 — THE JUMP-PROFILE CERTIFICATION
+
+Everything below certifies the S3 mirror rules (Step.lean header
+notes 3-5) against the engine: the pure-evaluator bridge into
+`full_eval_pexpr` (the state-threaded evaluator all guard/argument
+premises are certified against), the extended redex/decomposition
+layer (`RedexJ`/`DecompJ` — the factor theorem WITH the jump
+disjunct), the proc-carrying frozen profile (`procThread` — the
+`current_proc_opt`/`labeled` reads Erun makes), the
+`Step_with_runstate2` discharge arm (the sequential driver's
+`liftCore_run` protocol, Driver.lean:245/336, projected), and the
+per-construct engine equations. -/
+
+/-! ### The pure-evaluator bridge
+
+`PePure` is the operand sub-grammar the mirror evaluator covers
+(value leaves, symbols, integer/boolean binops). `evalPexpr` success
+implies membership (`evalPexpr_shape`), and on the sub-grammar the
+engine's evaluation tower — `pull_constrained` (identity modulo
+annotation renormalization), `step_eval_pexpr` (one full-depth
+evaluation), `eval_pexpr_aux2` (one iteration), `full_eval_pexpr`
+(one iteration, `runEU`-lifted, STATE-VERBATIM) — computes exactly
+the mirror's answer. Fuel honesty: `peDepth` bounds every fuelled
+layer; the side condition `peDepth pe ≤ lemDefaultFuel` is carried
+explicitly (the engine's own budget; exhaustion is the opaque
+`fuelExhausted` leaf). -/
+
+/-- The covered operand sub-grammar. -/
+inductive PePure : generic_pexpr Unit sym → Prop where
+  | val (a : List annot) (v : value) : PePure (Pexpr a () (PEval v))
+  | sym (a : List annot) (x : sym) : PePure (Pexpr a () (PEsym x))
+  | op (a : List annot) (op : binop) {pe1 pe2 : generic_pexpr Unit sym} :
+      PePure pe1 → PePure pe2 → PePure (Pexpr a () (PEop op pe1 pe2))
+
+/-- Depth measure (bounds the per-level fuel draw of
+    `step_eval_pexpr`/`pull_constrained`). -/
+def peDepth : generic_pexpr Unit sym → Nat
+  | Pexpr _ _ (PEop _ pe1 pe2) => 1 + max (peDepth pe1) (peDepth pe2)
+  | _ => 1
+
+@[simp] theorem peDepth_op (a : List annot) (op : binop)
+    (pe1 pe2 : generic_pexpr Unit sym) :
+    peDepth (Pexpr a () (PEop op pe1 pe2)) =
+      1 + max (peDepth pe1) (peDepth pe2) := rfl
+
+theorem peDepth_pos (pe : generic_pexpr Unit sym) : 1 ≤ peDepth pe := by
+  rcases pe with ⟨a, u, pe_⟩
+  cases pe_ <;> simp [peDepth] <;> omega
+
+/-- Off-grammar shapes evaluate to nothing (fail-closed). -/
+theorem evalPexpr_none_of_shape {ρ : EnvStack} {pe : generic_pexpr Unit sym}
+    (hne1 : ∀ (a : List annot) (u : Unit) (v : value),
+      pe = Pexpr a u (PEval v) → False)
+    (hne2 : ∀ (a : List annot) (u : Unit) (x : sym),
+      pe = Pexpr a u (PEsym x) → False)
+    (hne3 : ∀ (a : List annot) (u : Unit) (op : binop)
+      (pe1 pe2 : generic_pexpr Unit sym),
+      pe = Pexpr a u (PEop op pe1 pe2) → False) :
+    evalPexpr ρ pe = none := by
+  unfold evalPexpr
+  split
+  · exact absurd rfl (hne1 _ _ _)
+  · exact absurd rfl (hne2 _ _ _)
+  · exact absurd rfl (hne3 _ _ _ _ _)
+  · rfl
+
+/-- Mirror success implies the covered shape. -/
+theorem evalPexpr_shape {ρ : EnvStack} {pe : generic_pexpr Unit sym} {v : value}
+    (h : evalPexpr ρ pe = some v) : PePure pe := by
+  revert h
+  revert v
+  induction pe using evalPexpr.induct with
+  | case1 a u v' => intro v h; exact .val a v'
+  | case2 a u x => intro v h; exact .sym a x
+  | case3 a u op pe1 pe2 ih1 ih2 =>
+    intro v h
+    rw [evalPexpr_op] at h
+    cases h1 : evalPexpr ρ pe1 with
+    | none => rw [h1] at h; cases h
+    | some v1 =>
+      cases h2 : evalPexpr ρ pe2 with
+      | none => rw [h1, h2] at h; cases h
+      | some v2 => exact .op a op (ih1 h1) (ih2 h2)
+  | case4 pe hne1 hne2 hne3 =>
+    intro v h
+    rw [evalPexpr_none_of_shape hne1 hne2 hne3] at h
+    cases h
+
+/-- LEVEL 1 of the bridge: `step_eval_pexpr` (Core_eval.lean:142)
+    computes the mirror's answer in ONE call — it recurses full-depth
+    through `PEop` operands itself. Quantified over the level counter
+    `n` (the engine ticks it per operand level), tagDefs, locations,
+    the memory state, and the file (all UNREAD on the covered
+    grammar); the extern map is pinned to the frozen `fmapEmpty`
+    (`PEsym`'s indirection is then the identity fallback). -/
+theorem step_eval_bridge {ρ : EnvStack} {pe : generic_pexpr Unit sym}
+    {v : value} (hp : PePure pe) (hv : evalPexpr ρ pe = some v) :
+    ∀ (fuel : Nat), peDepth pe ≤ fuel →
+    ∀ (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (n : Nat)
+      (loc : CerbLocation.Loc) (cloc : Option CerbLocation.Loc)
+      (mem : Option CerbMem.MemState)
+      (file : generic_file Unit core_run_annotation),
+    step_eval_pexpr_lemFuel fuel tds n loc cloc fmapEmpty ρ mem file false pe =
+      exception_undef_return (Pexpr [] () (PEval v)) := by
+  induction hp generalizing v with
+  | val a v' =>
+    intro fuel hfuel tds n loc cloc mem file
+    obtain ⟨f, rfl⟩ : ∃ f, fuel = f + 1 :=
+      ⟨fuel - 1, by have := peDepth_pos (Pexpr a () (PEval v')); omega⟩
+    obtain rfl : v' = v := by simpa using hv
+    rfl
+  | sym a x =>
+    intro fuel hfuel tds n loc cloc mem file
+    obtain ⟨f, rfl⟩ : ∃ f, fuel = f + 1 :=
+      ⟨fuel - 1, by have := peDepth_pos (Pexpr a () (PEsym x)); omega⟩
+    have hx : lookup_env x ρ = some v := by simpa using hv
+    show exception_undef_fmap (Pexpr [] ()) _ = _
+    dsimp only
+    rw [show (fmapLookupBy (fun (s1 : sym) (s2 : sym) =>
+        Lem_Basic_classes.ordCompare s1 s2) x
+        (fmapEmpty (α := sym) (β := sym))) = none from rfl]
+    dsimp only
+    rw [hx]
+    rfl
+  | @op a op pe1 pe2 hp1 hp2 ih1 ih2 =>
+    intro fuel hfuel tds n loc cloc mem file
+    obtain ⟨f, rfl⟩ : ∃ f, fuel = f + 1 := ⟨fuel - 1, by simp at hfuel; omega⟩
+    rw [evalPexpr_op] at hv
+    obtain ⟨v1, h1, v2, h2, hb⟩ : ∃ v1, evalPexpr ρ pe1 = some v1 ∧
+        ∃ v2, evalPexpr ρ pe2 = some v2 ∧ evalBinop op v1 v2 = some v := by
+      cases h1 : evalPexpr ρ pe1 with
+      | none => rw [h1] at hv; cases hv
+      | some v1 =>
+        cases h2 : evalPexpr ρ pe2 with
+        | none => rw [h1, h2] at hv; cases hv
+        | some v2 =>
+          rw [h1, h2] at hv
+          exact ⟨v1, rfl, v2, rfl, hv⟩
+    have hd1 : peDepth pe1 ≤ f := by simp at hfuel; omega
+    have hd2 : peDepth pe2 ≤ f := by simp at hfuel; omega
+    show exception_undef_fmap (Pexpr [] ()) _ = _
+    dsimp only [step_eval_peop]
+    rw [ih1 h1 f hd1 tds (n+1) loc cloc mem file,
+      ih2 h2 f hd2 tds (n+1) loc cloc mem file]
+    dsimp only [exception_undef_bind, exception_undef_return,
+      exception_undef_fmap, valueFromPexpr]
+    -- the binop dispatch: split the MIRROR's equation into its
+    -- compiled arms; in each arm operands and operator are concrete
+    -- and the ENGINE's dispatch computes
+    unfold evalBinop at hb
+    split at hb <;>
+      first
+      | (cases hb; rfl)
+      | (rename_i hlt
+         first
+         | (cases hcmp : CerbMem.eqIval _ _ <;> rw [hcmp] at hb <;>
+             simp only [Option.map_some, Option.map_none] at hb <;>
+             first
+             | cases hb
+             | (obtain rfl := hb.symm; rfl))
+         | (cases hcmp : CerbMem.ltIval _ _ <;> rw [hcmp] at hb <;>
+             simp only [Option.map_some, Option.map_none] at hb <;>
+             first
+             | cases hb
+             | (obtain rfl := hb.symm; rfl))
+         | (cases hcmp : CerbMem.leIval _ _ <;> rw [hcmp] at hb <;>
+             simp only [Option.map_some, Option.map_none] at hb <;>
+             first
+             | cases hb
+             | (obtain rfl := hb.symm; rfl)))
+      | cases hb
+
+/-- The constrained-pull's image on the covered grammar: annotation
+    renormalization only (`pull_constrained` rebuilds every node
+    with `[]` annots; no `PEconstrained` exists to pull). -/
+def peStrip : generic_pexpr Unit sym → generic_pexpr Unit sym
+  | Pexpr _ _ (PEop op pe1 pe2) => Pexpr [] () (PEop op (peStrip pe1) (peStrip pe2))
+  | Pexpr _ _ pex => Pexpr [] () pex
+
+theorem PePure.strip {pe : generic_pexpr Unit _root_.sym} (hp : PePure pe) :
+    PePure (peStrip pe) := by
+  induction hp with
+  | val a v => exact .val [] v
+  | sym a x => exact .sym [] x
+  | op a op hp1 hp2 ih1 ih2 => exact .op [] op ih1 ih2
+
+theorem evalPexpr_peStrip {ρ : EnvStack} {pe : generic_pexpr Unit sym}
+    (hp : PePure pe) : evalPexpr ρ (peStrip pe) = evalPexpr ρ pe := by
+  induction hp with
+  | val a v => rfl
+  | sym a x => rfl
+  | op a op hp1 hp2 ih1 ih2 =>
+    show evalPexpr ρ (Pexpr [] () (PEop op _ _)) = _
+    rw [evalPexpr_op, evalPexpr_op, ih1, ih2]
+
+theorem peDepth_peStrip {pe : generic_pexpr Unit sym} (hp : PePure pe) :
+    peDepth (peStrip pe) = peDepth pe := by
+  induction hp with
+  | val a v => rfl
+  | sym a x => rfl
+  | op a op hp1 hp2 ih1 ih2 =>
+    show peDepth (Pexpr [] () (PEop op _ _)) = _
+    rw [peDepth_op, peDepth_op, ih1, ih2]
+
+/-- LEVEL 2: `pull_constrained` (Core_eval.lean:126) is annotation
+    renormalization on the covered grammar. -/
+theorem pull_bridge {pe : generic_pexpr Unit sym} (hp : PePure pe) :
+    ∀ (fuel : Nat), peDepth pe ≤ fuel → ∀ (n : Nat),
+    pull_constrained_lemFuel fuel n pe = peStrip pe := by
+  induction hp with
+  | val a v =>
+    intro fuel hfuel n
+    obtain ⟨f, rfl⟩ : ∃ f, fuel = f + 1 :=
+      ⟨fuel - 1, by have := peDepth_pos (Pexpr a () (PEval v)); omega⟩
+    rfl
+  | sym a x =>
+    intro fuel hfuel n
+    obtain ⟨f, rfl⟩ : ∃ f, fuel = f + 1 :=
+      ⟨fuel - 1, by have := peDepth_pos (Pexpr a () (PEsym x)); omega⟩
+    rfl
+  | @op a op pe1 pe2 hp1 hp2 ih1 ih2 =>
+    intro fuel hfuel n
+    obtain ⟨f, rfl⟩ : ∃ f, fuel = f + 1 := ⟨fuel - 1, by simp at hfuel; omega⟩
+    have hd1 : peDepth pe1 ≤ f := by simp at hfuel; omega
+    have hd2 : peDepth pe2 ≤ f := by simp at hfuel; omega
+    show Pexpr [] () _ = _
+    dsimp only
+    rw [ih1 f hd1 (n+1), ih2 f hd2 (n+1)]
+    cases hp1 <;> cases hp2 <;> rfl
+
+/-- LEVEL 3a: `eval_pexpr_aux2` (Core_eval.lean:152) computes the
+    mirror's answer in ONE iteration on the covered grammar (pull,
+    then one full-depth `step_eval`, then the value test succeeds).
+    The engine's own budget: `peDepth pe ≤ lemDefaultFuel` (the
+    interior `pull_constrained`/`step_eval_pexpr` run at the default
+    budget; the iteration fuel needs only one unfold). -/
+theorem aux2_bridge {ρ : EnvStack} {pe : generic_pexpr Unit sym} {v : value}
+    (hp : PePure pe) (hv : evalPexpr ρ pe = some v)
+    (hd : peDepth pe ≤ lemDefaultFuel) :
+    ∀ (fuel : Nat)
+      (tds : Fmap sym (CerbLocation.Loc × tag_definition))
+      (loc : CerbLocation.Loc) (cloc : Option CerbLocation.Loc)
+      (mem : Option CerbMem.MemState)
+      (file : generic_file Unit core_run_annotation),
+    eval_pexpr_aux2_lemFuel (fuel + 1) tds loc cloc fmapEmpty ρ mem file pe =
+      exception_undef_return (Sum.inr v) := by
+  intro fuel tds loc cloc mem file
+  have hpull : pull_constrained 0 pe = peStrip pe :=
+    pull_bridge hp lemDefaultFuel hd 0
+  have hstep := step_eval_bridge hp.strip
+    (by rw [evalPexpr_peStrip hp]; exact hv) lemDefaultFuel
+    (by rw [peDepth_peStrip hp]; exact hd) tds 0 loc cloc mem file
+  unfold eval_pexpr_aux2_lemFuel
+  dsimp only [CerbDebug.print_debug_pure]
+  rw [hpull]
+  cases hp with
+  | val a v' =>
+    rw [show peStrip (Pexpr a () (PEval v')) = Pexpr [] () (PEval v') from rfl]
+    rw [show peStrip (Pexpr a () (PEval v')) = Pexpr [] () (PEval v')
+      from rfl] at hstep
+    dsimp only
+    rw [show step_eval_pexpr = step_eval_pexpr_lemFuel lemDefaultFuel from rfl,
+      hstep]
+    dsimp only [exception_undef_bind, exception_undef_return, valueFromPexpr]
+    obtain rfl : v' = v := by simpa using hv
+    rfl
+  | sym a x =>
+    rw [show peStrip (Pexpr a () (PEsym x)) = Pexpr [] () (PEsym x) from rfl]
+    rw [show peStrip (Pexpr a () (PEsym x)) = Pexpr [] () (PEsym x)
+      from rfl] at hstep
+    dsimp only
+    rw [show step_eval_pexpr = step_eval_pexpr_lemFuel lemDefaultFuel from rfl,
+      hstep]
+    rfl
+  | @op a op pe1 pe2 hp1 hp2 =>
+    rw [show peStrip (Pexpr a () (PEop op pe1 pe2)) =
+      Pexpr [] () (PEop op (peStrip pe1) (peStrip pe2)) from rfl]
+    rw [show peStrip (Pexpr a () (PEop op pe1 pe2)) =
+      Pexpr [] () (PEop op (peStrip pe1) (peStrip pe2)) from rfl] at hstep
+    dsimp only
+    rw [show step_eval_pexpr = step_eval_pexpr_lemFuel lemDefaultFuel from rfl,
+      hstep]
+    rfl
+
+/-- LEVEL 3b: `full_eval_pexpr` — the state-threaded evaluator the
+    Erun/Eif certification runs against — computes the mirror's
+    answer in one iteration, STATE-VERBATIM (`runEU`'s shape: the
+    whole tower is a pure `exceptM` computation lifted pointwise).
+    Extern pinned at the frozen `fmapEmpty`; tagDefs/memory/file
+    quantified (unread). -/
+theorem full_eval_bridge {b : Type} {th : thread_state}
+    {pe : generic_pexpr Unit sym} {v : value}
+    (hv : evalPexpr th.env pe = some v)
+    (hd : peDepth pe ≤ lemDefaultFuel)
+    (tds : Fmap sym (CerbLocation.Loc × tag_definition))
+    (σ : CerbMem.MemState) (file : generic_file Unit core_run_annotation) :
+    full_eval_pexpr (b := b) tds th fmapEmpty σ file pe =
+      stExceptUndef_return v := by
+  have hp := evalPexpr_shape hv
+  rw [show (full_eval_pexpr (b := b) tds th fmapEmpty σ file pe) =
+    full_eval_pexpr_lemFuel (b := b) (999999 + 1) tds th fmapEmpty σ file pe
+    from rfl]
+  show stExceptUndef_bind _ _ = _
+  funext st
+  show (match E.eval_pexpr20 tds th fmapEmpty σ file pe st with
+    | _ => _ : exceptM _ _) = _
+  rw [show E.eval_pexpr20 (a := b) tds th fmapEmpty σ file pe =
+    runEU ((eval_pexpr_aux2 tds) th.current_loc
+      (match th.exec_loc with
+        | ELoc_globals => none
+        | ELoc_normal [] => none
+        | ELoc_normal ((_, loc1) :: _) => some loc1)
+      fmapEmpty th.env (some σ) file pe) from rfl]
+  rw [show (eval_pexpr_aux2 (tds)) = eval_pexpr_aux2_lemFuel (999999 + 1) tds
+    from rfl]
+  rw [aux2_bridge hp hv hd 999999 tds th.current_loc _ (some σ) file]
+  rfl
+
+/-! ### The extended redex/decomposition layer (S3)
+
+`RedexJ`/`DecompJ` extend the phase-1 `Redex`/`Decomp` with the four
+new root shapes (Esave / Eif / Ecase / Erun — all singleton `get_ctx`
+roots, readiness §3 ND-collapse row). The phase-1 `Decomp` and its
+lemmas stay VERBATIM (their jump disjuncts are vacuous —
+`Decomp.jumpRedex?_none`); the jump-carrying factor theorem is
+`DecompJ.step_factor` — the readiness's "factor theorem gains one
+disjunct", with the disjunct saying the successor is the redex's OWN
+successor, NOT rebuilt: the engine's context-discard as a theorem. -/
+
+/-- Canonical new-root spellings. -/
+def saveRedex (sb : sym × core_base_type)
+    (ps : List (sym × ((core_base_type ×
+      Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym)))
+    (body : CoreExpr) : CoreExpr :=
+  Expr [] (Esave sb ps body)
+
+def ifRedex (g : generic_pexpr Unit sym) (e2 e3 : CoreExpr) : CoreExpr :=
+  Expr [] (Eif g e2 e3)
+
+def caseRedex (pe : generic_pexpr Unit sym)
+    (pats : List (pattern × CoreExpr)) : CoreExpr :=
+  Expr [] (Ecase pe pats)
+
+def runRedex (ra : core_run_annotation) (l : sym)
+    (pes : List (generic_pexpr Unit sym)) : CoreExpr :=
+  Expr [] (Erun ra l pes)
+
+inductive RedexJ : CoreExpr → Prop where
+  | base {r : CoreExpr} : Redex r → RedexJ r
+  | save (sb : sym × core_base_type)
+      (ps : List (sym × ((core_base_type ×
+        Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym)))
+      (body : CoreExpr) : RedexJ (saveRedex sb ps body)
+  | if_ (g : generic_pexpr Unit sym) (e2 e3 : CoreExpr) :
+      RedexJ (ifRedex g e2 e3)
+  | case_ (pe : generic_pexpr Unit sym) (pats : List (pattern × CoreExpr)) :
+      RedexJ (caseRedex pe pats)
+  | run (ra : core_run_annotation) (l : sym)
+      (pes : List (generic_pexpr Unit sym)) : RedexJ (runRedex ra l pes)
+
+/-- The extended decomposition: the same three layers as `Decomp`
+    (get_ctx's arm order), over the extended root set. -/
+inductive DecompJ : CoreExpr → context → CoreExpr → Prop where
+  | root {r : CoreExpr} : RedexJ r → DecompJ r CTX r
+  | sseq {pa : List annot} {bty : core_base_type} {e1 e2 : CoreExpr}
+      {ctx : context} {r : CoreExpr} :
+      DecompJ e1 ctx r →
+      DecompJ (Expr [] (Esseq (Pattern pa (CaseBase (none, bty))) e1 e2))
+             (Csseq [] (Pattern pa (CaseBase (none, bty))) ctx e2) r
+  | annot {ds : List dyn_annotation} {b : CoreExpr} {ctx : context}
+      {r : CoreExpr}
+      (hroot : annotRooted b = false)
+      (hirr : is_irreducible (Expr [] (Eannot ds b)) = false)
+      (hmap : ∀ n : Nat,
+        get_ctx_lemFuel (n+1) (Expr [] (Eannot ds b)) =
+          List.map (fun p => (Cannot [] ds p.1, p.2)) (get_ctx_lemFuel n b)) :
+      DecompJ b ctx r → DecompJ (Expr [] (Eannot ds b)) (Cannot [] ds ctx) r
+
+/-- The phase-1 decompositions embed. -/
+theorem Decomp.toJ {e : CoreExpr} {ctx : context} {r : CoreExpr}
+    (h : Decomp e ctx r) : DecompJ e ctx r := by
+  induction h with
+  | root hr => exact .root (.base hr)
+  | sseq _ ih => exact .sseq ih
+  | annot hroot hirr hmap _ ih => exact .annot hroot hirr hmap ih
+
+theorem RedexJ.not_irreducible {r : CoreExpr} (h : RedexJ r) :
+    is_irreducible r = false := by
+  cases h with
+  | base hr =>
+    cases hr with
+    | store hlib => rfl
+    | load hlib => rfl
+    | create hlib => rfl
+    | beta_pure => rfl
+    | beta_annot => rfl
+    | merge hirr => exact hirr
+  | save sb ps body => rfl
+  | if_ g e2 e3 => rfl
+  | case_ pe pats => rfl
+  | run ra l pes => rfl
+
+theorem DecompJ.not_irreducible {e : CoreExpr} {ctx : context} {r : CoreExpr}
+    (h : DecompJ e ctx r) : is_irreducible e = false := by
+  induction h with
+  | root hr => exact hr.not_irreducible
+  | sseq _ _ => rfl
+  | annot _ hirr _ _ _ => exact hirr
+
+theorem DecompJ.unseq_ccall_false {e : CoreExpr} {ctx : context} {r : CoreExpr}
+    (h : DecompJ e ctx r) : is_unseq_with_ccall ctx = false := by
+  have aux : ∀ {e' : CoreExpr} {ctx' : context} {r' : CoreExpr},
+      DecompJ e' ctx' r' → ∀ b : Bool, is_unseq_with_ccall_aux b ctx' = b := by
+    intro e' ctx' r' h'
+    induction h' with
+    | root _ => intro b; rfl
+    | sseq _ ih => intro b; simpa [is_unseq_with_ccall_aux] using ih b
+    | annot _ _ _ _ ih => intro b; simpa [is_unseq_with_ccall_aux] using ih b
+  unfold is_unseq_with_ccall
+  exact aux h false
+
+theorem DecompJ.apply_eq {e : CoreExpr} {ctx : context} {r : CoreExpr}
+    (h : DecompJ e ctx r) : apply_ctx ctx r = e := by
+  induction h with
+  | root _ => rfl
+  | sseq _ ih => simpa [apply_ctx] using ih
+  | annot _ _ _ _ ih => simpa [apply_ctx] using ih
+
+/-- get_ctx roots at the new redexes (Core_reduction.lean:375 — Eif/
+    Ecase/Esave/Erun all return `[(CTX, expr1)]`). -/
+theorem get_ctx_save {sb : sym × core_base_type}
+    {ps : List (sym × ((core_base_type ×
+      Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym))}
+    {body : CoreExpr} (n : Nat) :
+    get_ctx_lemFuel (n+1) (saveRedex sb ps body) =
+      [(CTX, saveRedex sb ps body)] := rfl
+
+theorem get_ctx_if {g : generic_pexpr Unit sym} {e2 e3 : CoreExpr} (n : Nat) :
+    get_ctx_lemFuel (n+1) (ifRedex g e2 e3) = [(CTX, ifRedex g e2 e3)] := rfl
+
+theorem get_ctx_case {pe : generic_pexpr Unit sym}
+    {pats : List (pattern × CoreExpr)} (n : Nat) :
+    get_ctx_lemFuel (n+1) (caseRedex pe pats) = [(CTX, caseRedex pe pats)] := rfl
+
+theorem get_ctx_run {ra : core_run_annotation} {l : sym}
+    {pes : List (generic_pexpr Unit sym)} (n : Nat) :
+    get_ctx_lemFuel (n+1) (runRedex ra l pes) = [(CTX, runRedex ra l pes)] := rfl
+
+/-- The engine's singleton decomposition, extended roots. -/
+theorem DecompJ.get_ctx_at {e : CoreExpr} {ctx : context} {r : CoreExpr}
+    (h : DecompJ e ctx r) :
+    ∀ n : Nat, esize e ≤ n → get_ctx_lemFuel n e = [(ctx, r)] := by
+  induction h with
+  | @root r0 hr =>
+    intro n hn
+    obtain ⟨m, rfl⟩ : ∃ m, n = m + 1 :=
+      ⟨n - 1, by have := esize_pos r0; omega⟩
+    cases hr with
+    | base hb =>
+      cases hb with
+      | store hlib => exact get_ctx_action m
+      | load hlib => exact get_ctx_action m
+      | create hlib => exact get_ctx_action m
+      | beta_pure => exact get_ctx_sseq_val m
+      | beta_annot => exact get_ctx_sseq_val m
+      | merge hirr => exact get_ctx_merge m
+    | save sb ps body => exact get_ctx_save m
+    | if_ g e2 e3 => exact get_ctx_if m
+    | case_ pe pats => exact get_ctx_case m
+    | run ra l pes => exact get_ctx_run m
+  | sseq hd ih =>
+    intro n hn
+    rw [esize_sseq] at hn
+    obtain ⟨m, rfl⟩ : ∃ m, n = m + 1 := ⟨n - 1, by omega⟩
+    rw [get_ctx_sseq hd.not_irreducible m, ih m (by omega)]
+    rfl
+  | annot hroot hirr hmap hd ih =>
+    intro n hn
+    rw [esize_annot] at hn
+    obtain ⟨m, rfl⟩ : ∃ m, n = m + 1 := ⟨n - 1, by omega⟩
+    rw [hmap m, ih m (by omega)]
+    rfl
+
+theorem DecompJ.get_ctx_default {e : CoreExpr} {ctx : context} {r : CoreExpr}
+    (h : DecompJ e ctx r) (hsz : esize e ≤ lemDefaultFuel) :
+    get_ctx e = [(ctx, r)] :=
+  h.get_ctx_at lemDefaultFuel hsz
+
+/-- `jumpRedex?` along an extended decomposition: `some` exactly at
+    a run redex. -/
+theorem DecompJ.jumpRedex?_eq {e : CoreExpr} {ctx : context} {r : CoreExpr}
+    (h : DecompJ e ctx r) : jumpRedex? e = jumpRedex? r := by
+  induction h with
+  | root _ => rfl
+  | sseq _ ih => rw [jumpRedex?_sseq]; exact ih
+  | annot hroot _ _ _ ih =>
+    rw [jumpRedex?_annot_of_not_root _ _ hroot]; exact ih
+
+theorem DecompJ.redexJ {e : CoreExpr} {ctx : context} {r : CoreExpr}
+    (h : DecompJ e ctx r) : RedexJ r := by
+  induction h with
+  | root hr => exact hr
+  | sseq _ ih => exact ih
+  | annot _ _ _ _ ih => exact ih
+
+/-- A redex with a positive jump-redex answer IS the run redex. -/
+theorem RedexJ.jumpRedex?_some_inv {r : CoreExpr} {l : sym}
+    {pes : List (generic_pexpr Unit sym)} (h : RedexJ r)
+    (hj : jumpRedex? r = some (l, pes)) :
+    ∃ ra : core_run_annotation, r = runRedex ra l pes := by
+  cases h with
+  | base hb => rw [hb.jumpRedex?_none] at hj; cases hj
+  | save sb ps body => cases hj
+  | if_ g e2 e3 => cases hj
+  | case_ pe pats => cases hj
+  | run ra l' pes' =>
+    obtain ⟨rfl, rfl⟩ : l' = l ∧ pes' = pes := by
+      have := Option.some.inj hj
+      exact ⟨congrArg Prod.fst this, congrArg Prod.snd this⟩
+    exact ⟨ra, rfl⟩
+
+/-- THE FACTOR THEOREM WITH THE JUMP DISJUNCT (readiness R1: "the
+    factor theorem gains one disjunct"): a step of a decomposed term
+    is EITHER a step of its redex REBUILT in context (the phase-1
+    shape), OR the redex is a registered jump and the step is the
+    redex's OWN step — the context is DISCARDED, and the successor
+    does not mention it. -/
+theorem DecompJ.step_factor {Q : LabelMap} {e : CoreExpr} {ctx : context}
+    {r : CoreExpr} {ρ : EnvStack} {σ : Mem}
+    {out : CoreExpr × EnvStack × Mem}
+    (h : DecompJ e ctx r) (hs : Step Q (e, ρ, σ) out) :
+    (∃ r' ρ' σ', Step Q (r, ρ, σ) (r', ρ', σ') ∧
+      out = (apply_ctx ctx r', ρ', σ')) ∨
+    (∃ (ra : core_run_annotation) (l : sym)
+      (pes : List (generic_pexpr Unit sym)),
+      r = runRedex ra l pes ∧ Step Q (r, ρ, σ) out) := by
+  induction h generalizing out with
+  | @root r hr =>
+    by_cases hrun : ∃ (ra : core_run_annotation) (l : sym)
+        (pes : List (generic_pexpr Unit sym)), r = runRedex ra l pes
+    · obtain ⟨ra, l, pes, rfl⟩ := hrun
+      exact .inr ⟨ra, l, pes, rfl, hs⟩
+    · exact .inl ⟨out.1, out.2.1, out.2.2, hs, rfl⟩
+  | @sseq pa bty e1 e2 ctx' r' hd ih =>
+    rcases hs.sseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
+        ⟨_, _, v, _, _, _, he1, _, _⟩ | ⟨_, _, ds, v, _, _, _, he1, _, _⟩ |
+        ⟨l, pes, params, cont, vs, ev0, evs, hj, hρ, hl, hvs, hout⟩
+    · rcases ih hstep with ⟨r2, ρr, σr, hr2, heq⟩ | ⟨ra, l, pes, rfl, hr2⟩
+      · obtain ⟨he, hρ2, hσ2⟩ : e1' = apply_ctx _ r2 ∧ ρ'' = ρr ∧
+            σ'' = σr := by
+          simpa [Prod.mk.injEq] using heq
+        subst he hρ2 hσ2
+        exact .inl ⟨r2, _, _, hr2, by rw [hout]; rfl⟩
+      · rw [hd.jumpRedex?_eq] at hnj
+        rw [show jumpRedex? (runRedex ra l pes) = some (l, pes) from rfl]
+          at hnj
+        cases hnj
+    · rw [he1] at hd
+      exact absurd hd.not_irreducible (by simp [is_irreducible_ofVal])
+    · rw [he1] at hd
+      exact absurd hd.not_irreducible (by simp [is_irreducible_ofVal])
+    · -- the node's step IS the jump: the decomposed redex must be
+      -- the run redex, and its own step has the SAME successor
+      have hje : jumpRedex? r' = some (l, pes) := by
+        rw [← hd.jumpRedex?_eq]; exact hj
+      obtain ⟨ra, rfl⟩ := hd.redexJ.jumpRedex?_some_inv hje
+      subst hρ
+      rw [hout]
+      exact .inr ⟨ra, l, pes, rfl, Step.run (by rfl) hl hvs⟩
+  | @annot ds b ctx' r' hroot hirr hmap hd ih =>
+    rcases hs.annot_inv with ⟨_, hnj, b', ρ'', σ'', hstep, hout⟩ |
+        ⟨a2, ds2, c, hb, _⟩ |
+        ⟨l, pes, params, cont, vs, ev0, evs, hg, hj, hρ, hl, hvs, hout⟩
+    · rcases ih hstep with ⟨r2, ρr, σr, hr2, heq⟩ | ⟨ra, l, pes, rfl, hr2⟩
+      · obtain ⟨he, hρ2, hσ2⟩ : b' = apply_ctx _ r2 ∧ ρ'' = ρr ∧
+            σ'' = σr := by
+          simpa [Prod.mk.injEq] using heq
+        subst he hρ2 hσ2
+        exact .inl ⟨r2, _, _, hr2, by rw [hout]; rfl⟩
+      · rw [hd.jumpRedex?_eq] at hnj
+        rw [show jumpRedex? (runRedex ra l pes) = some (l, pes) from rfl]
+          at hnj
+        cases hnj
+    · rw [hb] at hroot
+      simp [annotRooted] at hroot
+    · have hje : jumpRedex? r' = some (l, pes) := by
+        rw [← hd.jumpRedex?_eq]; exact hj
+      obtain ⟨ra, rfl⟩ := hd.redexJ.jumpRedex?_some_inv hje
+      subst hρ
+      rw [hout]
+      exact .inr ⟨ra, l, pes, rfl, Step.run (by rfl) hl hvs⟩
+
+/-! ### The jump-profile frozen context and the per-construct engine
+equations (context undisturbed — the [USER 2026-08-30] theorem
+shape, extended to the S3 constructs)
+
+`procThread` is the proc-CARRYING thread profile: identical to
+`envThread` except `current_proc_opt := some p` — the read step_ctx's
+Erun arm makes before building its monad (the no-current-proc
+failwithI PANIC channel is excluded by the profile). The Q↔labeled
+tie is the pure equation `fmapLookupBy ord p rs.labeled = some Q` on
+the QUANTIFIED run state (the donor's `⌜Q = rf.f_code⌝` analog); the
+frozen `extern = fmapEmpty` makes the proc redirect the identity
+fallback. -/
+
+/-- The proc-carrying thread profile (S3's frozen-context
+    restatement — readiness §2.1 item 3). -/
+def procThread (p : sym) (e : CoreExpr) (ρ : EnvStack) : thread_state :=
+  { arena := e, stack0 := Stack_empty, errno := default, env := ρ,
+    current_proc_opt := some p, exec_loc := default, current_loc := default }
+
+@[simp] theorem procThread_arena (p : sym) (e : CoreExpr) (ρ : EnvStack) :
+    (procThread p e ρ).arena = e := rfl
+
+@[simp] theorem procThread_env (p : sym) (e : CoreExpr) (ρ : EnvStack) :
+    (procThread p e ρ).env = ρ := rfl
+
+/-- One engine step at the jump profile. -/
+def engineStepsP (p : sym) (e : CoreExpr) (ρ : EnvStack) (σ : Mem) :
+    List core_step2 :=
+  step_ctx fmapEmpty σ spikeFile fmapEmpty 0 (none, procThread p e ρ)
+
+/-- ... discharged (the run state is now a PARAMETER — Erun reads
+    `labeled` through it). -/
+def engineOutcomesP (p : sym) (aid : Nat) (rs : core_run_state)
+    (e : CoreExpr) (ρ : EnvStack) (σ : Mem) : List EngineOutcome :=
+  (engineStepsP p e ρ σ).map (dischargeStep aid rs σ)
+
+/-- The Q↔labeled tie (the donor's `⌜Q = rf.f_code⌝`,
+    lifting.v:1002): the run state's two-level `labeled` map has
+    fiber `Q` at the current procedure. Pure, stated in the engine's
+    own lookup spelling. -/
+def LabeledAt (rs : core_run_state) (p : sym) (Q : LabelMap) : Prop :=
+  fmapLookupBy (fun (s1 : sym) (s2 : sym) =>
+    Lem_Basic_classes.ordCompare s1 s2) p rs.labeled = some Q
+
+/-- Esave ENTRY, context undisturbed (one_step0's Esave
+    valueFromPexprs fast-path TAU, Core_reduction.lean:353): env is
+    READ-AND-REBOUND (the parameter fold — the D14 partition's env
+    row moves to TOUCHED for this rule; nonemptiness is the
+    update_env panic exclusion), everything else verbatim. -/
+theorem step_ctx_save {e : CoreExpr} {ctx : context}
+    {sb : sym × core_base_type}
+    {ps : List (sym × ((core_base_type ×
+      Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym))}
+    {body : CoreExpr} {cvals : List value}
+    (hd : DecompJ e ctx (saveRedex sb ps body))
+    (hsz : esize e ≤ lemDefaultFuel)
+    (hvals : valueFromPexprs (saveParamPexprs ps) = some cvals)
+    (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
+    (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
+    (tid : Nat) (parent : Option Nat) (th : thread_state)
+    (harena : th.arena = e)
+    {ev0 : Fmap sym value} {evs : List (Fmap sym value)}
+    (henv : th.env = ev0 :: evs) :
+    step_ctx tds σ file ext tid (parent, th) =
+      [Step_tau2 "Esave" TSK_Misc
+        { th with env := bindSaveParams ps cvals (ev0 :: evs),
+                  arena := apply_ctx ctx body }] := by
+  have hget : get_ctx th.arena = [(ctx, saveRedex sb ps body)] := by
+    rw [harena]; exact hd.get_ctx_default hsz
+  have hvals' : valueFromPexprs
+      (List.map (fun p => match p with | (_, (_, z)) => z) ps) = some cvals := by
+    rw [show (List.map (fun (p : sym × ((core_base_type ×
+        Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym))
+        => match p with | (_, (_, z)) => z) ps) = saveParamPexprs ps from rfl]
+    exact hvals
+  unfold step_ctx
+  dsimp only
+  rw [hget]
+  simp only [List.map_cons, List.map_nil]
+  unfold saveRedex
+  cases ctx <;>
+    (dsimp only [one_step0]
+     rw [show is_irreducible (Expr [] (Esave sb ps body)) = false from rfl]
+     dsimp only [get_loc]
+     rw [hvals']
+     dsimp only
+     rw [henv]
+     rfl)
+
+/-- Ecase at a VALUE scrutinee, context undisturbed (one_step0's
+    Ecase value arm — TAU into the substituted branch; the
+    PEconstrained PANIC pre-arm is bypassed by the canonical value
+    scrutinee's shape, the no-match ILLTYPED channel by the
+    selection premise). Env verbatim, no premise. -/
+theorem step_ctx_case_value {e : CoreExpr} {ctx : context}
+    {a : List annot} {cval : value} {pats : List (pattern × CoreExpr)}
+    {e' : CoreExpr}
+    (hd : DecompJ e ctx (caseRedex (Pexpr a () (PEval cval)) pats))
+    (hsz : esize e ≤ lemDefaultFuel)
+    (hsel : select_case subst_sym_expr cval pats = some e')
+    (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
+    (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
+    (tid : Nat) (parent : Option Nat) (th : thread_state)
+    (harena : th.arena = e) :
+    step_ctx tds σ file ext tid (parent, th) =
+      [Step_tau2 "Ecase" TSK_Misc
+        { th with arena := apply_ctx ctx e' }] := by
+  have hget : get_ctx th.arena =
+      [(ctx, caseRedex (Pexpr a () (PEval cval)) pats)] := by
+    rw [harena]; exact hd.get_ctx_default hsz
+  unfold step_ctx
+  dsimp only
+  rw [hget]
+  simp only [List.map_cons, List.map_nil]
+  unfold caseRedex
+  cases ctx <;>
+    (dsimp only [one_step0]
+     rw [show is_irreducible (Expr ([] : List annot)
+       (Ecase (Pexpr a () (PEval cval)) pats)) = false from rfl]
+     dsimp only [get_loc, valueFromPexpr]
+     rw [hsel]
+     rfl)
+
+/-- Eif (TRUE), context undisturbed, DISCHARGED (one_step0's Eif
+    TAU_WITH_RUNSTATE + the liftCore_run protocol arm): ONE engine
+    step big-step-evaluating the guard through `full_eval_pexpr`
+    (certified by the bridge — the non-boolean failwithI PANIC
+    channel is excluded because the evaluator RETURNS `Vtrue`), run
+    state returned VERBATIM (∀ rs — the guard evaluation is
+    `runEU`-lifted), env verbatim, memory verbatim. Extern pinned at
+    the frozen `fmapEmpty` (the bridge's PEsym indirection). -/
+theorem stepDischarge_if_true {e : CoreExpr} {ctx : context}
+    {g : generic_pexpr Unit sym} {e2 e3 : CoreExpr}
+    (hd : DecompJ e ctx (ifRedex g e2 e3))
+    (hsz : esize e ≤ lemDefaultFuel)
+    (hdg : peDepth g ≤ lemDefaultFuel)
+    (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
+    (file : generic_file Unit core_run_annotation)
+    (tid : Nat) (parent : Option Nat) (th : thread_state)
+    (harena : th.arena = e)
+    (hg : evalPexpr th.env g = some Vtrue)
+    (aid : Nat) (rs : core_run_state) :
+    (step_ctx tds σ file fmapEmpty tid (parent, th)).map
+        (dischargeStep aid rs σ) =
+      [.next { th with arena := apply_ctx ctx e2 } σ] := by
+  have hget : get_ctx th.arena = [(ctx, ifRedex g e2 e3)] := by
+    rw [harena]; exact hd.get_ctx_default hsz
+  unfold step_ctx
+  dsimp only
+  rw [hget]
+  simp only [List.map_cons, List.map_nil]
+  unfold ifRedex
+  cases ctx <;>
+    (dsimp only [one_step0]
+     rw [show is_irreducible (Expr ([] : List annot) (Eif g e2 e3)) = false
+       from rfl]
+     dsimp only [get_loc, dischargeStep]
+     rw [full_eval_bridge hg hdg tds σ file]
+     dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+       return1, except_return]
+     rfl)
+
+/-- Eif (FALSE) — symmetric. -/
+theorem stepDischarge_if_false {e : CoreExpr} {ctx : context}
+    {g : generic_pexpr Unit sym} {e2 e3 : CoreExpr}
+    (hd : DecompJ e ctx (ifRedex g e2 e3))
+    (hsz : esize e ≤ lemDefaultFuel)
+    (hdg : peDepth g ≤ lemDefaultFuel)
+    (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
+    (file : generic_file Unit core_run_annotation)
+    (tid : Nat) (parent : Option Nat) (th : thread_state)
+    (harena : th.arena = e)
+    (hg : evalPexpr th.env g = some Vfalse)
+    (aid : Nat) (rs : core_run_state) :
+    (step_ctx tds σ file fmapEmpty tid (parent, th)).map
+        (dischargeStep aid rs σ) =
+      [.next { th with arena := apply_ctx ctx e3 } σ] := by
+  have hget : get_ctx th.arena = [(ctx, ifRedex g e2 e3)] := by
+    rw [harena]; exact hd.get_ctx_default hsz
+  unfold step_ctx
+  dsimp only
+  rw [hget]
+  simp only [List.map_cons, List.map_nil]
+  unfold ifRedex
+  cases ctx <;>
+    (dsimp only [one_step0]
+     rw [show is_irreducible (Expr ([] : List annot) (Eif g e2 e3)) = false
+       from rfl]
+     dsimp only [get_loc, dischargeStep]
+     rw [full_eval_bridge hg hdg tds σ file]
+     dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+       return1, except_return]
+     rfl)
+
+/-- Top-level application equations for the state-except monad (the
+    binder-safe computation chain: `rw` never descends under the
+    binding-fold lambda, so the engine's own spellings survive
+    verbatim until each redex surfaces at the top level). -/
+theorem stExceptUndef_bind_apply {a b c d e : Type}
+    (m : e → exceptM ((t0 d × a)) c) (f : d → a → exceptM ((t0 b × a)) c)
+    (st : e) :
+    stExceptUndef_bind m f st =
+      match m st with
+      | Result (Defined z, st') => f z st'
+      | Result (Undef loc1 ubs, st') => stExpect_return (undef loc1 ubs) st'
+      | Result (Error loc1 str, st') => stExpect_return (error0 loc1 str) st'
+      | Exception err => fail0 err := by
+  unfold stExceptUndef_bind
+  rcases m st with ⟨⟨z | ⟨loc1, ubs⟩ | ⟨loc1, str⟩, st'⟩⟩ | err <;> rfl
+
+theorem stExceptUndef_return_apply {a b c : Type} (z : a) (st : b) :
+    stExceptUndef_return (c := c) z st = Result (Defined z, st) := rfl
+
+theorem runSE_read_apply {a b msg : Type} (f : a → b) (st : a) :
+    runSE (msg := msg) (state_except_read f) st =
+      Result (Defined (f st), st) := rfl
+
+theorem bind0_some {a b : Type} (x : a) (f : a → Option b) :
+    Lem_Maybe.bind0 (some x) f = f x := rfl
+
+theorem stExceptUndef_foldM_cons {a b c e : Type}
+    (f : a → e → c → exceptM ((t0 a × c)) b) (acc : a) (x : e) (xs : List e) :
+    stExceptUndef_foldM f acc (x :: xs) =
+      stExceptUndef_bind (f acc x) (fun z => stExceptUndef_foldM f z xs) := rfl
+
+/-- The Erun argument fold (step_ctx's `stExceptUndef_foldM` over
+    `zip sym_bTys pes`) computes the mirror's `bindArgs`,
+    STATE-VERBATIM: each argument evaluates against the FIXED
+    `th.env` (the engine's `full_eval_pexpr'` closure) while the
+    binding accumulator threads. The fold body is ABSTRACT with a
+    pointwise characterization `hf` (spelling-independent: the
+    engine's match-lambda and its normalized forms all satisfy it by
+    `rfl`). -/
+theorem foldM_args_bridge {th : thread_state}
+    {tds : Fmap sym (CerbLocation.Loc × tag_definition)} {σ : Mem}
+    {file : generic_file Unit core_run_annotation}
+    (f : EnvStack → (sym × core_base_type) × generic_pexpr Unit sym →
+      core_run_state → exceptM ((t0 EnvStack × core_run_state)) core_run_cause)
+    (hf : ∀ (acc : EnvStack) (s : sym) (bTy : core_base_type)
+      (pe : generic_pexpr Unit sym) (rs' : core_run_state),
+      f acc ((s, bTy), pe) rs' =
+        stExceptUndef_bind (full_eval_pexpr tds th fmapEmpty σ file pe)
+          (fun cval =>
+            stExceptUndef_return (update_env (mk_sym_pat s bTy) cval acc)) rs') :
+    ∀ (params : List (sym × core_base_type))
+      (pes : List (generic_pexpr Unit sym)) (vs : List value)
+      (acc : EnvStack) (rs : core_run_state),
+      evalPexprs th.env pes = some vs →
+      (∀ pe ∈ pes, peDepth pe ≤ lemDefaultFuel) →
+      stExceptUndef_foldM f acc (List.zip params pes) rs =
+        Result (Defined (bindArgs params vs acc), rs) := by
+  intro params
+  induction params with
+  | nil =>
+    intro pes vs acc rs hvs hdep
+    rfl
+  | cons p params ih =>
+    intro pes vs acc rs hvs hdep
+    cases pes with
+    | nil =>
+      obtain rfl : vs = [] := by
+        have : some ([] : List value) = some vs := by simpa using hvs
+        exact (Option.some.inj this).symm
+      rw [List.zip_nil_right]
+      rfl
+    | cons pe pes =>
+      rw [evalPexprs_cons] at hvs
+      obtain ⟨v, hv, vs', hvs', rfl⟩ : ∃ v, evalPexpr th.env pe = some v ∧
+          ∃ vs', evalPexprs th.env pes = some vs' ∧ vs = v :: vs' := by
+        cases h1 : evalPexpr th.env pe with
+        | none => rw [h1] at hvs; cases hvs
+        | some v =>
+          cases h2 : evalPexprs th.env pes with
+          | none => rw [h1, h2] at hvs; cases hvs
+          | some vs' =>
+            rw [h1, h2] at hvs
+            cases hvs
+            exact ⟨v, rfl, vs', rfl, rfl⟩
+      obtain ⟨p1, p2⟩ := p
+      rw [List.zip_cons_cons, stExceptUndef_foldM_cons,
+        stExceptUndef_bind_apply, hf acc p1 p2 pe rs,
+        stExceptUndef_bind_apply,
+        full_eval_bridge hv (hdep pe (by simp)) tds σ file,
+        stExceptUndef_return_apply]
+      dsimp only []
+      rw [stExceptUndef_return_apply]
+      dsimp only []
+      rw [ih pes vs' (update_env (mk_sym_pat p1 p2) v acc) rs hvs'
+        (fun pe' hpe' => hdep pe' (by simp [hpe']))]
+      rfl
+
+/-- THE JUMP, context DISCARDED, DISCHARGED — the headline S3
+    certification (step_ctx's Erun arm, Core_reduction.lean:484 +
+    the liftCore_run discharge): at a proc-carrying thread whose
+    arena decomposes to a registered `run l pes`, the engine takes
+    EXACTLY ONE step, whose successor REPLACES THE WHOLE ARENA by
+    the registered continuation with the parameters rebound — the
+    evaluation context `ctx` appears NOWHERE in the successor. The
+    run state is read (the `labeled` fiber at the current procedure,
+    through the frozen extern's identity fallback — the pure
+    Q↔labeled tie `LabeledAt`) and returned VERBATIM
+    (`state_except_read` + `runEU`-lifted argument evaluation); the
+    unresolvable-label and no-current-proc failwithI PANIC channels
+    are excluded by `hl`/`hproc`. -/
+theorem stepDischarge_run {e : CoreExpr} {ctx : context}
+    {ra : core_run_annotation} {l : sym}
+    {pes : List (generic_pexpr Unit sym)}
+    (hd : DecompJ e ctx (runRedex ra l pes))
+    (hsz : esize e ≤ lemDefaultFuel)
+    {Q : LabelMap} {params : List (sym × core_base_type)} {cont : CoreExpr}
+    {vs : List value}
+    (hl : lookupLabel Q l = some (params, cont))
+    (hdep : ∀ pe ∈ pes, peDepth pe ≤ lemDefaultFuel)
+    (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
+    (file : generic_file Unit core_run_annotation)
+    (tid : Nat) (parent : Option Nat) (p : sym) (th : thread_state)
+    (harena : th.arena = e)
+    (hproc : th.current_proc_opt = some p)
+    (hvs : evalPexprs th.env pes = some vs)
+    (aid : Nat) (rs : core_run_state) (hQ : LabeledAt rs p Q) :
+    (step_ctx tds σ file fmapEmpty tid (parent, th)).map
+        (dischargeStep aid rs σ) =
+      [.next { th with env := bindArgs params vs th.env, arena := cont } σ] := by
+  have hget : get_ctx th.arena = [(ctx, runRedex ra l pes)] := by
+    rw [harena]; exact hd.get_ctx_default hsz
+  have hQ' : (fmapLookupBy (fun (sym1 : sym) (sym2 : sym) =>
+      Lem_Basic_classes.ordCompare sym1 sym2) p rs.labeled) = some Q := hQ
+  have hl' : (fmapLookupBy (fun (sym1 : sym) (sym2 : sym) =>
+      Lem_Basic_classes.ordCompare sym1 sym2) l Q) = some (params, cont) := hl
+  unfold step_ctx
+  dsimp only
+  rw [hget]
+  simp only [List.map_cons, List.map_nil]
+  unfold runRedex
+  cases ctx <;>
+    (dsimp only [get_loc]
+     rw [hproc]
+     dsimp only [dischargeStep]
+     rw [stExceptUndef_bind_apply, runSE_read_apply]
+     dsimp only []
+     rw [show (fmapLookupBy (fun (sym1 : sym) (sym2 : sym) =>
+         Lem_Basic_classes.ordCompare sym1 sym2) p
+         (fmapEmpty (α := sym) (β := sym))) = none from rfl]
+     dsimp only []
+     rw [hQ', bind0_some, hl']
+     dsimp only []
+     rw [stExceptUndef_bind_apply,
+       foldM_args_bridge _ (fun _ _ _ _ _ => rfl) params pes vs th.env rs
+         hvs hdep]
+     dsimp only []
+     rw [stExceptUndef_return_apply])
 
 end CerberusHeapLang
