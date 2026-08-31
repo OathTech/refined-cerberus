@@ -81,21 +81,27 @@ def drive (aids : Nat → Nat) : Nat → thread_state → Mem → DriveResult
     | [.killed r] => .killed r
     | _ => .stuck
 
-/-- The drive's one-step scrutinee at a spikeThread arena IS
+/-- The drive's one-step scrutinee at an envThread arena IS
     `engineOutcomes` (definitional). -/
+theorem drive_scrutinee_env (aid : Nat) (e : CoreExpr) (ρ : EnvStack) (σ : Mem) :
+    (step_ctx fmapEmpty σ spikeFile fmapEmpty 0 (none, envThread e ρ)).map
+        (dischargeStep aid spikeRunState σ) = engineOutcomes aid e ρ σ := rfl
+
+/-- ... at the exported entry env. -/
 theorem drive_scrutinee (aid : Nat) (e : CoreExpr) (σ : Mem) :
     (step_ctx fmapEmpty σ spikeFile fmapEmpty 0 (none, spikeThread e)).map
-        (dischargeStep aid spikeRunState σ) = engineOutcomes aid e σ := rfl
+        (dischargeStep aid spikeRunState σ) = engineOutcomes aid e spikeEnv σ := rfl
 
 /-! ## Step chains and iris thread-pool reachability -/
 
-/-- Reachability along the fragment's Step (single thread). -/
-def Reach : CoreExpr × Mem → CoreExpr × Mem → Prop :=
-  Relation.ReflTransGen (fun a b => Step a b)
+/-- Reachability along the fragment's Step (single thread; env-
+    carrying configurations, S1). -/
+def Reach : CoreRt × Mem → CoreRt × Mem → Prop :=
+  Relation.ReflTransGen (fun a b => Step (a.1.e, a.1.ρ, a.2) (b.1.e, b.1.ρ, b.2))
 
 /-- Transport into the iris thread-pool reduction (the pool stays a
     singleton: the fragment forks nothing). -/
-theorem Reach.toPool {c c' : CoreExpr × Mem} (h : Reach c c') :
+theorem Reach.toPool {c c' : CoreRt × Mem} (h : Reach c c') :
     ([c.1], c.2) -·->ₜₚ* ([c'.1], c'.2) := by
   induction h with
   | refl => exact .refl
@@ -103,7 +109,7 @@ theorem Reach.toPool {c c' : CoreExpr × Mem} (h : Reach c c') :
     exact ih.tail ⟨([] : List Empty),
       Language.Step.of_primStep (⟨hstep, rfl⟩ :
         PrimStep.primStep (b.1, b.2) ([] : List Empty)
-          (b'.1, b'.2, ([] : List CoreExpr)))
+          (b'.1, b'.2, ([] : List CoreRt)))
         (t₁ := []) (t₂ := [])⟩
 
 /-! ## Step-level adequacy: constructing SpikeGS and applying iris -/
@@ -115,17 +121,17 @@ theorem Reach.toPool {c c' : CoreExpr × Mem} (h : Reach c c') :
     it consumes the final state interpretation, so cell ownership at
     the end pins facts about the FINAL MemState. -/
 theorem spike_step_adequacy {GF : BundledGFunctors} [SpikeGpreS GF]
-    (e : CoreExpr) (σ : Mem) (m₀ : SpikeHeapF SpikeCell) (hcoh : Coh σ m₀)
-    (φp : SpikeVal → Mem → Prop)
+    (e : CoreRt) (σ : Mem) (m₀ : SpikeHeapF SpikeCell) (hcoh : Coh σ m₀)
+    (φp : CoreRVal → Mem → Prop)
     (hwp : ∀ [SpikeGS .hasLC GF],
       iprop(([∗map] i ↦ c ∈ m₀, pointsTo i (.own 1) c)) ⊢
         WP e @ Stuckness.NotStuck; ⊤ {{ v, iprop(∀ (σ' : Mem) (ns : Nat)
           (κs : List Empty) (nt : Nat),
           stateInterp σ' ns κs nt ={⊤, ∅}=∗ ⌜φp v σ'⌝) }})
-    {t2 : List CoreExpr} {σ2 : Mem}
+    {t2 : List CoreRt} {σ2 : Mem}
     (hreach : ([e], σ) -·->ₜₚ* (t2, σ2)) :
-    (∀ e2 ∈ t2, PrimStep.NotStuck (Val := SpikeVal) (e2, σ2)) ∧
-    (∀ (w : SpikeVal) (t2' : List CoreExpr), t2 = ofVal w :: t2' → φp w σ2) := by
+    (∀ e2 ∈ t2, PrimStep.NotStuck (Val := CoreRVal) (e2, σ2)) ∧
+    (∀ (w : CoreRVal) (t2' : List CoreRt), t2 = ofValRt w :: t2' → φp w σ2) := by
   obtain ⟨n, κs, hsteps⟩ := (Language.erasedStep_nSteps _ _).mp hreach
   apply wp_strong_adequacy_gen (GF := GF) (hlc := .hasLC) Stuckness.NotStuck [e] σ n κs t2 σ2 _
     (fun _ => 0) ?_ hsteps
@@ -135,7 +141,7 @@ theorem spike_step_adequacy {GF : BundledGFunctors} [SpikeGpreS GF]
   imodintro
   iexists fun (σ' : Mem) (_ : Nat) (_ : List Empty) (_ : Nat) =>
     iprop(∃ m, ⌜Coh σ' m⌝ ∗ genHeapInterp m)
-  iexists [fun (v : SpikeVal) => iprop(∀ (σ' : Mem) (ns : Nat)
+  iexists [fun (v : CoreRVal) => iprop(∀ (σ' : Mem) (ns : Nat)
     (κs' : List Empty) (nt : Nat), stateInterp σ' ns κs' nt ={⊤, ∅}=∗ ⌜φp v σ'⌝)]
   iexists fun _ => iprop(True)
   iexists fun _ _ _ _ => fupd_intro
@@ -151,7 +157,7 @@ theorem spike_step_adequacy {GF : BundledGFunctors} [SpikeGpreS GF]
     ihave HW := hwp $$ Hpts
     iexact HW
   iintro %es' %t2' %heqt %hlen %hnsp Hst Hposts Hforks
-  have hns : ∀ e2 ∈ t2, PrimStep.NotStuck (Val := SpikeVal) (e2, σ2) :=
+  have hns : ∀ e2 ∈ t2, PrimStep.NotStuck (Val := CoreRVal) (e2, σ2) :=
     fun e2 he2 => hnsp e2 rfl he2
   obtain ⟨e1', rfl⟩ : ∃ x, es' = [x] := by
     cases es' with
@@ -161,7 +167,7 @@ theorem spike_step_adequacy {GF : BundledGFunctors} [SpikeGpreS GF]
       | nil => exact ⟨a, rfl⟩
       | cons b l' => simp at hlen
   icases BigSepL2.bigSepL2_cons_inv_right $$ Hposts with ⟨%eh, %Φt, %HeqΦ, Hpost, Hrest⟩
-  cases hv : ToVal.toVal (Val := SpikeVal) eh with
+  cases hv : ToVal.toVal (Val := CoreRVal) eh with
   | none =>
     iapply fupd_mask_intro_discard Std.LawfulSet.empty_subset
     ipureintro
@@ -170,7 +176,7 @@ theorem spike_step_adequacy {GF : BundledGFunctors} [SpikeGpreS GF]
     injection HeqΦ with h1 h2
     subst h1
     injection heq2 with h3 h4
-    rw [h3, language_toVal_eq, toVal_ofVal] at hv
+    rw [h3, language_toVal_eq, toValRt_ofValRt] at hv
     cases hv
   | some w =>
     dsimp only [Option.elim_some]
@@ -181,7 +187,7 @@ theorem spike_step_adequacy {GF : BundledGFunctors} [SpikeGpreS GF]
     injection HeqΦ with h1 h2
     subst h1
     injection heq2 with h3 h4
-    rw [h3, language_toVal_eq, toVal_ofVal] at hv
+    rw [h3, language_toVal_eq, toValRt_ofValRt] at hv
     injection hv with h5
     subst h5
     exact hφw
@@ -193,57 +199,64 @@ theorem spike_step_adequacy {GF : BundledGFunctors} [SpikeGpreS GF]
     postcondition (with the D1 annotation erasure: the delivered
     engine value is `w.val` for the WP-level value `w`), and the
     killed/stuck channels are unreachable. -/
-def DriveOk (φp : SpikeVal → Mem → Prop) : DriveResult → Prop
+def DriveOk (φp : CoreRVal → Mem → Prop) : DriveResult → Prop
   | .more _ _ => True
-  | .done v σ' => ∃ w : SpikeVal, w.val = v ∧ φp w σ'
+  | .done v σ' => ∃ w : CoreRVal, w.val = v ∧ φp w σ'
   | .killed _ => False
   | .stuck => False
 
 /-- Driving a bare value: one PROGRAM-DONE step. -/
-theorem drive_value_pure (φp : SpikeVal → Mem → Prop) (aids : Nat → Nat)
-    (v : value) (σ : Mem) (h : ∃ w : SpikeVal, w.val = v ∧ φp w σ) :
-    ∀ n, DriveOk φp (drive aids n (spikeThread (ofVal (.pure v))) σ)
+theorem drive_value_pure (φp : CoreRVal → Mem → Prop) (aids : Nat → Nat)
+    (v : value) (ρ : EnvStack) (σ : Mem)
+    (h : ∃ w : CoreRVal, w.val = v ∧ φp w σ) :
+    ∀ n, DriveOk φp (drive aids n (envThread (ofVal (.pure v)) ρ) σ)
   | 0 => trivial
   | n+1 => by
     unfold drive
-    rw [drive_scrutinee,
-      show engineOutcomes (aids 0) (ofVal (.pure v)) σ = [.done v] by
+    rw [drive_scrutinee_env,
+      show engineOutcomes (aids 0) (ofVal (.pure v)) ρ σ = [.done v] by
         unfold engineOutcomes; rw [engineSteps_done]; rfl]
     exact h
 
 /-- The classification: from Step-level NotStuck + value readout
     (both over Reach), every drive outcome is DriveOk — via
     `engine_complete`, one certification case per step. -/
-theorem drive_classify (e₀ : CoreExpr) (σ₀ : Mem) (φp : SpikeVal → Mem → Prop)
-    (hNS : ∀ e σ, Reach (e₀, σ₀) (e, σ) →
-      PrimStep.NotStuck (Val := SpikeVal) (e, σ))
-    (hRES : ∀ (w : SpikeVal) (σ : Mem), Reach (e₀, σ₀) (ofVal w, σ) → φp w σ)
+theorem drive_classify (e₀ : CoreExpr) (ρ₀ : EnvStack) (σ₀ : Mem)
+    (φp : CoreRVal → Mem → Prop)
+    (hNS : ∀ (r : CoreRt) (σ : Mem), Reach ((⟨e₀, ρ₀⟩ : CoreRt), σ₀) (r, σ) →
+      PrimStep.NotStuck (Val := CoreRVal) (r, σ))
+    (hRES : ∀ (w : CoreRVal) (σ : Mem),
+      Reach ((⟨e₀, ρ₀⟩ : CoreRt), σ₀) (ofValRt w, σ) → φp w σ)
     (n : Nat) :
-    ∀ (aids : Nat → Nat) (e : CoreExpr) (σ : Mem),
-      Reach (e₀, σ₀) (e, σ) → FragP e → esize e + n ≤ lemDefaultFuel →
-      DriveOk φp (drive aids n (spikeThread e) σ) := by
+    ∀ (aids : Nat → Nat) (e : CoreExpr) (ev0 : Fmap sym value)
+      (evs : List (Fmap sym value)) (σ : Mem),
+      Reach ((⟨e₀, ρ₀⟩ : CoreRt), σ₀) ((⟨e, ev0 :: evs⟩ : CoreRt), σ) →
+      FragP e → esize e + n ≤ lemDefaultFuel →
+      DriveOk φp (drive aids n (envThread e (ev0 :: evs)) σ) := by
   induction n with
-  | zero => intro aids e σ _ _ _; trivial
+  | zero => intro aids e ev0 evs σ _ _ _; trivial
   | succ n ih =>
-    intro aids e σ hreach hf hfuel
+    intro aids e ev0 evs σ hreach hf hfuel
     obtain ⟨o, houts, hmatch⟩ :=
-      engine_complete (aids 0) σ hf (by omega)
+      engine_complete (aids 0) σ ev0 evs hf (by omega)
     unfold drive
-    rw [drive_scrutinee, houts]
+    rw [drive_scrutinee_env, houts]
     cases hmatch with
-    | @step e' σ' hs =>
-      exact ih _ _ _ (hreach.tail hs) (hf.step hs)
+    | @step e' ρ' σ' hs =>
+      obtain rfl : ρ' = ev0 :: evs := hs.env_invariant
+      exact ih _ _ _ _ _ (hreach.tail hs) (hf.step hs)
         (by have := hs.esize_succ; simp at this; omega)
     | @removeAnnot ds v hann =>
       subst hann
-      exact drive_value_pure φp _ v σ
-        ⟨.annot ds v, rfl, hRES (.annot ds v) σ hreach⟩ n
+      exact drive_value_pure φp _ v (ev0 :: evs) σ
+        ⟨⟨.annot ds v, ev0 :: evs⟩, rfl,
+          hRES ⟨.annot ds v, ev0 :: evs⟩ σ hreach⟩ n
     | @done v hpure =>
       subst hpure
-      exact ⟨.pure v, rfl, hRES (.pure v) σ hreach⟩
+      exact ⟨⟨.pure v, ev0 :: evs⟩, rfl, hRES ⟨.pure v, ev0 :: evs⟩ σ hreach⟩
     | refused href hnostep hnv =>
-      rcases hNS e σ hreach with hval | ⟨obs, e', σ', efs, hprim⟩
-      · rw [language_toVal_eq, hnv] at hval
+      rcases hNS ⟨e, ev0 :: evs⟩ σ hreach with hval | ⟨obs, e', σ', efs, hprim⟩
+      · rw [language_toVal_eq, toValRt_mk, hnv] at hval
         cases hval
       · exact absurd hprim.1 (hnostep _)
 
@@ -272,7 +285,8 @@ theorem spike_engine_adequacy {GF : BundledGFunctors} [SpikeGpreS GF]
     (ψ : value → Mem → Prop)
     (hwp : ∀ [SpikeGS .hasLC GF],
       iprop(([∗map] i ↦ c ∈ m₀, pointsTo i (.own 1) c)) ⊢
-        WP e₀ @ Stuckness.NotStuck; ⊤ {{ w, iprop(∀ (σ' : Mem) (ns : Nat)
+        WP (⟨e₀, spikeEnv⟩ : CoreRt) @ Stuckness.NotStuck; ⊤
+          {{ w, iprop(∀ (σ' : Mem) (ns : Nat)
           (κs : List Empty) (nt : Nat),
           stateInterp σ' ns κs nt ={⊤, ∅}=∗ ⌜ψ w.val σ'⌝) }})
     (n : Nat) (aids : Nat → Nat)
@@ -281,19 +295,23 @@ theorem spike_engine_adequacy {GF : BundledGFunctors} [SpikeGpreS GF]
     (drive aids n (spikeThread e₀) σ₀ ≠ .stuck) ∧
     (∀ (v : value) (σ' : Mem),
       drive aids n (spikeThread e₀) σ₀ = .done v σ' → ψ v σ') := by
-  have hadeq := fun (t2 : List CoreExpr) (σ2 : Mem)
-      (h : ([e₀], σ₀) -·->ₜₚ* (t2, σ2)) =>
-    spike_step_adequacy e₀ σ₀ m₀ hcoh (fun w σ' => ψ w.val σ') hwp h
-  have hNS : ∀ e σ, Reach (e₀, σ₀) (e, σ) →
-      PrimStep.NotStuck (Val := SpikeVal) (e, σ) := by
-    intro e σ hr
-    exact (hadeq [e] σ (Reach.toPool hr)).1 e (by simp)
-  have hRES : ∀ (w : SpikeVal) (σ : Mem), Reach (e₀, σ₀) (ofVal w, σ) →
+  have hadeq := fun (t2 : List CoreRt) (σ2 : Mem)
+      (h : ([(⟨e₀, spikeEnv⟩ : CoreRt)], σ₀) -·->ₜₚ* (t2, σ2)) =>
+    spike_step_adequacy ⟨e₀, spikeEnv⟩ σ₀ m₀ hcoh (fun w σ' => ψ w.val σ') hwp h
+  have hNS : ∀ (r : CoreRt) (σ : Mem),
+      Reach ((⟨e₀, spikeEnv⟩ : CoreRt), σ₀) (r, σ) →
+      PrimStep.NotStuck (Val := CoreRVal) (r, σ) := by
+    intro r σ hr
+    exact (hadeq [r] σ (Reach.toPool hr)).1 r (by simp)
+  have hRES : ∀ (w : CoreRVal) (σ : Mem),
+      Reach ((⟨e₀, spikeEnv⟩ : CoreRt), σ₀) (ofValRt w, σ) →
       ψ w.val σ := by
     intro w σ hr
-    exact (hadeq [ofVal w] σ (Reach.toPool hr)).2 w [] rfl
-  have hok := drive_classify e₀ σ₀ (fun w σ' => ψ w.val σ') hNS hRES n aids e₀ σ₀
-    .refl hfrag hfuel
+    exact (hadeq [ofValRt w] σ (Reach.toPool hr)).2 w [] rfl
+  have hok0 := drive_classify e₀ spikeEnv σ₀ (fun w σ' => ψ w.val σ') hNS hRES
+    n aids e₀ fmapEmpty [] σ₀ .refl hfrag hfuel
+  have hok : DriveOk (fun w σ' => ψ w.val σ')
+      (drive aids n (spikeThread e₀) σ₀) := hok0
   refine ⟨fun r hdr => ?_, fun hds => ?_, fun v σ' hdv => ?_⟩
   · rw [hdr] at hok; exact hok
   · rw [hds] at hok; exact hok
@@ -362,8 +380,8 @@ abbrev ProvenTriple (GF : BundledGFunctors) [SpikeGpreS GF] (e : CoreExpr)
     (P : CellMap) (post : value → CellMap → Prop) : Prop :=
   ∀ [SpikeGS .hasLC GF],
     iprop(([∗map] i ↦ c ∈ P, pointsTo i (.own 1) c)) ⊢
-      WP e @ Stuckness.NotStuck; ⊤ {{ w,
-        iprop(∃ Q : CellMap, ⌜post (SpikeVal.val w) Q⌝ ∗
+      WP (⟨e, spikeEnv⟩ : CoreRt) @ Stuckness.NotStuck; ⊤ {{ w,
+        iprop(∃ Q : CellMap, ⌜post (CoreRVal.val w) Q⌝ ∗
           ([∗map] i ↦ c ∈ Q, pointsTo i (.own 1) c)) }}
 
 /-! interior extraction lemmas -/
@@ -452,7 +470,7 @@ theorem semantic_triple_sound {GF : BundledGFunctors} [SpikeGpreS GF]
   ihave HW := hwp $$ HP
   iapply spike_wp_wand $$ HW
   iintro %w Hpost
-  iapply cells_readout post R (SpikeVal.val w)
+  iapply cells_readout post R (CoreRVal.val w)
   isplitl [Hpost]
   · iexact Hpost
   · iexact HR

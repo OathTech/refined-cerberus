@@ -313,7 +313,7 @@ theorem provenB {GF : BundledGFunctors} [SpikeGpreS GF] :
   refine bigSepA_ptx.trans ?_
   iintro Hx
   ihave HW := wp_store (s := Stuckness.NotStuck) (E := ⊤) loc0 empty_annotation
-    intTy xPtr sevenVal NA sevenMval bytesX seven_encodes seven_storable $$ Hx
+    intTy xPtr sevenVal NA sevenMval bytesX spikeEnv seven_encodes seven_storable $$ Hx
   iapply spike_wp_wand $$ HW
   iintro %v ⟨%fp, %hv, Hx⟩
   iexists mA7
@@ -329,16 +329,16 @@ theorem provenB {GF : BundledGFunctors} [SpikeGpreS GF] :
 theorem provenA {GF : BundledGFunctors} [SpikeGpreS GF] :
     ProvenTriple GF progA mA (fun v Q => v = sevenVal ∧ Q = mA7) := by
   intro instGS
-  refine bigSepA_ptx.trans (.trans ?_ (wp_sseq [] [] BTy_unit _ _))
+  refine bigSepA_ptx.trans (.trans ?_ (wp_sseq [] [] BTy_unit _ _ fmapEmpty []))
   iintro Hx
   ihave HW := wp_store (s := Stuckness.NotStuck) (E := ⊤) loc0 empty_annotation
-    intTy xPtr sevenVal NA sevenMval bytesX seven_encodes seven_storable $$ Hx
+    intTy xPtr sevenVal NA sevenMval bytesX spikeEnv seven_encodes seven_storable $$ Hx
   iapply spike_wp_wand $$ HW
   iintro %v ⟨%fp, %hv, Hx⟩
   subst hv
   iapply BI.later_intro
   ihave HW2 := wp_load (s := Stuckness.NotStuck) (E := ⊤) loc0 empty_annotation
-    intTy xPtr NA (.own 1) (CerbMem.memValueToBytes [] sevenMval).2
+    intTy xPtr NA (.own 1) (CerbMem.memValueToBytes [] sevenMval).2 spikeEnv
     htrap_seven $$ Hx
   iapply spike_wp_wand $$ HW2
   iintro %w ⟨%fp2, %hw, Hx⟩
@@ -347,7 +347,7 @@ theorem provenA {GF : BundledGFunctors} [SpikeGpreS GF] :
   · ipureintro
     subst hw
     refine ⟨?_, rfl⟩
-    simp only [mergeInto, SpikeVal.val_merge]
+    simp only [mergeInto, CoreRVal.val, CoreRVal.merge_mk, SpikeVal.val_merge]
     exact loaded_seven
   · ihave HC := ptx_to_cells $$ Hx
     iexact HC
@@ -580,8 +580,8 @@ theorem exhibitA_terminates (aids : Nat → Nat) :
         (Decomp.root (Redex.store (loc := loc0) (ann := empty_annotation)
           (lk := false) (ty := intTy) (pv := xPtr) (cv := sevenVal)
           (mo := NA) loc0_lib)))
-      (by decide) loc0_lib seven_encodes σ₀
-    rw [show engineSteps progA σ₀ = _ from hE]
+      (by decide) loc0_lib seven_encodes spikeEnv σ₀
+    rw [show engineSteps progA spikeEnv σ₀ = _ from hE]
     simp only [List.map_cons, List.map_nil]
     rw [dischargeStep_store_active store_applies]
     rfl
@@ -593,8 +593,8 @@ theorem exhibitA_terminates (aids : Nat → Nat) :
     have hE := engineSteps_beta_annot (pa := []) (bty := BTy_unit)
       (ds := [DA_pos [] fpS]) (v := Vunit)
       (e2 := loadExpr loc0 empty_annotation intTy xPtr NA)
-      (Decomp.root Redex.beta_annot) (by decide) σ₁
-    rw [show engineSteps eA1 σ₁ = _ from hE]
+      (Decomp.root Redex.beta_annot) (by decide) fmapEmpty [] σ₁
+    rw [show engineSteps eA1 spikeEnv σ₁ = _ from hE]
     rfl
   -- step 3: the load request, discharged against loadM
   rw [drive_next (th' := spikeThread eA3) (σ' := σ₁) ?s3]
@@ -605,8 +605,8 @@ theorem exhibitA_terminates (aids : Nat → Nat) :
       (Decomp.annot (ds := [DA_pos [] fpS]) rfl rfl (fun n => rfl)
         (Decomp.root (Redex.load (loc := loc0) (ann := empty_annotation)
           (ty := intTy) (pv := xPtr) (mo := NA) loc0_lib)))
-      (by decide) loc0_lib σ₁
-    rw [show engineSteps eA2 σ₁ = _ from hE]
+      (by decide) loc0_lib spikeEnv σ₁
+    rw [show engineSteps eA2 spikeEnv σ₁ = _ from hE]
     simp only [List.map_cons, List.map_nil]
     rw [dischargeStep_load_active load_applies]
     rfl
@@ -621,8 +621,8 @@ theorem exhibitA_terminates (aids : Nat → Nat) :
       (ds2 := [DA_pos [] fpL])
       (Decomp.root (Redex.merge
         (b := Expr [] (Epure (Pexpr [] () (PEval sevenVal)))) rfl))
-      rfl (by decide) σ₁
-    rw [show engineSteps eA3 σ₁ = _ from hE]
+      rfl (by decide) spikeEnv σ₁
+    rw [show engineSteps eA3 spikeEnv σ₁ = _ from hE]
     rfl
   -- step 5: REMOVE-ANNOT
   rw [drive_next (th' := spikeThread (ofVal (.pure sevenVal))) (σ' := σ₁) ?s5]

@@ -194,17 +194,17 @@ theorem ptx_to_cells_P [SpikeGS .hasLC GF] :
 theorem provenAProd {GF : BundledGFunctors} [SpikeGpreS GF] :
     ProvenTriple GF progAProdC mAP (fun v Q => v = sevenVal ∧ Q = mAP7) := by
   intro instGS
-  refine bigSep_ptx_P.trans (.trans ?_ (wp_sseq [] [] BTy_unit _ _))
+  refine bigSep_ptx_P.trans (.trans ?_ (wp_sseq [] [] BTy_unit _ _ fmapEmpty []))
   iintro Hx
   ihave HW := wp_store (s := Stuckness.NotStuck) (E := ⊤) loc0 empty_annotation
-    intTy pxPtr sevenVal NA sevenMval cellXP.bytes seven_encodes
+    intTy pxPtr sevenVal NA sevenMval cellXP.bytes spikeEnv seven_encodes
     seven_storable $$ Hx
   iapply spike_wp_wand $$ HW
   iintro %v ⟨%fp, %hv, Hx⟩
   subst hv
   iapply BI.later_intro
   ihave HW2 := wp_load (s := Stuckness.NotStuck) (E := ⊤) loc0 empty_annotation
-    intTy pxPtr NA (.own 1) (CerbMem.memValueToBytes [] sevenMval).2
+    intTy pxPtr NA (.own 1) (CerbMem.memValueToBytes [] sevenMval).2 spikeEnv
     (htrap_seven_at (addrOf pxPtr)) $$ Hx
   iapply spike_wp_wand $$ HW2
   iintro %w ⟨%fp2, %hw, Hx⟩
@@ -213,7 +213,7 @@ theorem provenAProd {GF : BundledGFunctors} [SpikeGpreS GF] :
   · ipureintro
     subst hw
     refine ⟨?_, rfl⟩
-    simp only [mergeInto, SpikeVal.val_merge]
+    simp only [mergeInto, CoreRVal.val, CoreRVal.merge_mk, SpikeVal.val_merge]
     exact loaded_seven_at 1 pxAddr
   · ihave HC := ptx_to_cells_P $$ Hx
     iexact HC
@@ -239,8 +239,8 @@ theorem prodA_pre (aids : Nat → Nat) (n : Nat) :
         (Decomp.root (Redex.create (ann := empty_annotation)
           (align := CerbMem.integerIval 4) (ty := intTy)
           (pref := PrefOther "spike-x") loc0_lib)))
-      (by decide) loc0_lib prodMem₀
-    rw [show engineSteps progAProd prodMem₀ = _ from hE]
+      (by decide) loc0_lib spikeEnv prodMem₀
+    rw [show engineSteps progAProd spikeEnv prodMem₀ = _ from hE]
     simp only [List.map_cons, List.map_nil]
     rw [dischargeStep_create_active create_applies_req]
     rfl)]
@@ -249,9 +249,10 @@ theorem prodA_pre (aids : Nat → Nat) (n : Nat) :
     unfold engineOutcomes
     have hE := engineSteps_beta_pure (pa := []) (bty := BTy_unit)
       (v := Vobject (OVpointer pxPtr)) (e2 := progAProdC)
-      (Decomp.root Redex.beta_pure) (by decide) σcP
+      (Decomp.root Redex.beta_pure) (by decide) fmapEmpty [] σcP
     rw [show engineSteps (Expr [] (Esseq (Pattern [] (CaseBase (none, BTy_unit)))
-      (ofVal (.pure (Vobject (OVpointer pxPtr)))) progAProdC)) σcP = _ from hE]
+      (ofVal (.pure (Vobject (OVpointer pxPtr)))) progAProdC)) spikeEnv σcP =
+        _ from hE]
     rfl)]
 
 /-! ## Termination of the compute part (the exhibit-A 6-step
@@ -306,8 +307,8 @@ theorem prodA_terminates (aids : Nat → Nat) :
         (Decomp.root (Redex.store (loc := loc0) (ann := empty_annotation)
           (lk := false) (ty := intTy) (pv := pxPtr) (cv := sevenVal)
           (mo := NA) loc0_lib)))
-      (by decide) loc0_lib seven_encodes σcP
-    rw [show engineSteps progAProdC σcP = _ from hE]
+      (by decide) loc0_lib seven_encodes spikeEnv σcP
+    rw [show engineSteps progAProdC spikeEnv σcP = _ from hE]
     simp only [List.map_cons, List.map_nil]
     rw [dischargeStep_store_active store_applies_P]
     rfl
@@ -318,8 +319,8 @@ theorem prodA_terminates (aids : Nat → Nat) :
     have hE := engineSteps_beta_annot (pa := []) (bty := BTy_unit)
       (ds := [DA_pos [] fpSP]) (v := Vunit)
       (e2 := loadExpr loc0 empty_annotation intTy pxPtr NA)
-      (Decomp.root Redex.beta_annot) (by decide) σ1P
-    rw [show engineSteps eP1 σ1P = _ from hE]
+      (Decomp.root Redex.beta_annot) (by decide) fmapEmpty [] σ1P
+    rw [show engineSteps eP1 spikeEnv σ1P = _ from hE]
     rfl
   rw [drive_next (th' := spikeThread eP3) (σ' := σ1P) ?s3]
   case s3 =>
@@ -329,8 +330,8 @@ theorem prodA_terminates (aids : Nat → Nat) :
       (Decomp.annot (ds := [DA_pos [] fpSP]) rfl rfl (fun n => rfl)
         (Decomp.root (Redex.load (loc := loc0) (ann := empty_annotation)
           (ty := intTy) (pv := pxPtr) (mo := NA) loc0_lib)))
-      (by decide) loc0_lib σ1P
-    rw [show engineSteps eP2 σ1P = _ from hE]
+      (by decide) loc0_lib spikeEnv σ1P
+    rw [show engineSteps eP2 spikeEnv σ1P = _ from hE]
     simp only [List.map_cons, List.map_nil]
     rw [dischargeStep_load_active load_applies_P]
     rfl
@@ -344,8 +345,8 @@ theorem prodA_terminates (aids : Nat → Nat) :
       (ds2 := [DA_pos [] fpLP])
       (Decomp.root (Redex.merge
         (b := Expr [] (Epure (Pexpr [] () (PEval sevenVal)))) rfl))
-      rfl (by decide) σ1P
-    rw [show engineSteps eP3 σ1P = _ from hE]
+      rfl (by decide) spikeEnv σ1P
+    rw [show engineSteps eP3 spikeEnv σ1P = _ from hE]
     rfl
   rw [drive_next (th' := spikeThread (ofVal (.pure sevenVal))) (σ' := σ1P) ?s5]
   case s5 =>

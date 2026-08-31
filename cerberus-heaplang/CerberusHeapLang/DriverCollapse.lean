@@ -646,7 +646,7 @@ theorem prod_loop_done (th₀ : thread_state)
       obtain ⟨f, rfl⟩ : ∃ f, fl = f + 1 := ⟨fl - 1, by omega⟩
       -- one shared continuation for every Step-matched successor
       have step_case : ∀ (eNext : CoreExpr) (σ' : Mem) (dst' : driver_state),
-          Step (e, dst.layout_state) (eNext, σ') →
+          Step (e, spikeEnv, dst.layout_state) (eNext, spikeEnv, σ') →
           dst'.core_state0.thread_states =
             [(0, (none, { th₀ with arena := eNext }))] →
           dst'.layout_state = σ' →
@@ -689,9 +689,10 @@ theorem prod_loop_done (th₀ : thread_state)
       -- engine_complete's refusal protocol — the engine's one behavior
       -- at a stuck fragment configuration is a refusal, and a refusal
       -- never yields `.done`).
-      have refute : (∀ out, ¬ Step (e, dst.layout_state) out) → False := by
+      have refute : (∀ out, ¬ Step (e, spikeEnv, dst.layout_state) out) → False := by
         intro hstuck
-        obtain ⟨o, houts, hmatch⟩ := engine_complete 0 dst.layout_state hf hsz
+        obtain ⟨o, houts, hmatch⟩ :=
+          engine_complete 0 dst.layout_state fmapEmpty [] hf hsz
         cases hmatch with
         | step hs => exact hstuck _ hs
         | removeAnnot h => rw [h, toVal_ofVal] at hv; cases hv
@@ -718,7 +719,7 @@ theorem prod_loop_done (th₀ : thread_state)
         cases hmv : memValueFromValue fmapEmpty (Ctype [] (unatomic_ ty)) cv with
         | none =>
           exact (refute (fun out hstep => by
-            obtain ⟨r', σr, hr, _⟩ := hd.step_factor hstep
+            obtain ⟨r', ρr, σr, hr, _⟩ := hd.step_factor hstep
             obtain ⟨mv', _, _, hmv', _, _⟩ := hr.store_inv
             rw [hmv] at hmv'
             cases hmv')).elim
@@ -727,7 +728,7 @@ theorem prod_loop_done (th₀ : thread_state)
               dst.layout_state with
           | none =>
             exact (refute (fun out hstep => by
-              obtain ⟨r', σr, hr, _⟩ := hd.step_factor hstep
+              obtain ⟨r', ρr, σr, hr, _⟩ := hd.step_factor hstep
               obtain ⟨mv', fp', σ'', hmv', happ', _⟩ := hr.store_inv
               rw [hmv] at hmv'
               obtain rfl : mv = mv' := Option.some.inj hmv'
@@ -735,10 +736,11 @@ theorem prod_loop_done (th₀ : thread_state)
               cases happ')).elim
           | some p =>
             rcases p with ⟨fp, σ'⟩
-            have hstep : Step (e, dst.layout_state)
+            have hstep : Step (e, spikeEnv, dst.layout_state)
                 (apply_ctx ctx (Expr [] (Eannot [DA_pos [] fp]
-                  (Expr [] (Epure (Pexpr [] () (PEval Vunit)))))), σ') :=
-              hd.rebuild (Step.store hmv happ)
+                  (Expr [] (Epure (Pexpr [] () (PEval Vunit)))))),
+                 spikeEnv, σ') :=
+              hd.rebuild (Step.store_canonical hmv happ)
             have hdrive' : ∀ aids : Nat → Nat,
                 drive aids n (spikeThread (apply_ctx ctx
                   (Expr [] (Eannot [DA_pos [] fp]
@@ -768,17 +770,17 @@ theorem prod_loop_done (th₀ : thread_state)
         cases happ : applyMemM (CerbMem.loadM loc ty pv) dst.layout_state with
         | none =>
           exact (refute (fun out hstep => by
-            obtain ⟨r', σr, hr, _⟩ := hd.step_factor hstep
+            obtain ⟨r', ρr, σr, hr, _⟩ := hd.step_factor hstep
             obtain ⟨fp', mval', σ'', happ', _⟩ := hr.load_inv
             rw [happ] at happ'
             cases happ')).elim
         | some p =>
           rcases p with ⟨⟨fp, mval⟩, σ'⟩
-          have hstep : Step (e, dst.layout_state)
+          have hstep : Step (e, spikeEnv, dst.layout_state)
               (apply_ctx ctx (Expr [] (Eannot [DA_pos [] fp]
                 (Expr [] (Epure (Pexpr [] () (PEval
-                  (valueFromMemValue mval).2)))))), σ') :=
-            hd.rebuild (Step.load happ)
+                  (valueFromMemValue mval).2)))))), spikeEnv, σ') :=
+            hd.rebuild (Step.load_canonical happ)
           have hdrive' : ∀ aids : Nat → Nat,
               drive aids n (spikeThread (apply_ctx ctx
                 (Expr [] (Eannot [DA_pos [] fp]
@@ -810,16 +812,16 @@ theorem prod_loop_done (th₀ : thread_state)
             dst.layout_state with
         | none =>
           exact (refute (fun out hstep => by
-            obtain ⟨r', σr, hr, _⟩ := hd.step_factor hstep
+            obtain ⟨r', ρr, σr, hr, _⟩ := hd.step_factor hstep
             obtain ⟨pv', σ'', happ', _⟩ := hr.create_inv
             rw [happ] at happ'
             cases happ')).elim
         | some p =>
           rcases p with ⟨pv, σ'⟩
-          have hstep : Step (e, dst.layout_state)
+          have hstep : Step (e, spikeEnv, dst.layout_state)
               (apply_ctx ctx (Expr [] (Epure (Pexpr [] () (PEval
-                (Vobject (OVpointer pv)))))), σ') :=
-            hd.rebuild (Step.create happ)
+                (Vobject (OVpointer pv)))))), spikeEnv, σ') :=
+            hd.rebuild (Step.create_canonical happ)
           have hdrive' : ∀ aids : Nat → Nat,
               drive aids n (spikeThread (apply_ctx ctx
                 (Expr [] (Epure (Pexpr [] () (PEval
@@ -847,8 +849,8 @@ theorem prod_loop_done (th₀ : thread_state)
           show (update_thread_state 0 _ dst.core_state0).thread_states = _
           rw [update_thread_state_single _ _ _ hth]
       | @beta_pure pa bty v' e2 =>
-        have hstep : Step (e, dst.layout_state) (apply_ctx ctx e2,
-            dst.layout_state) := hd.rebuild Step.sseq_pure
+        have hstep : Step (e, spikeEnv, dst.layout_state) (apply_ctx ctx e2,
+            spikeEnv, dst.layout_state) := hd.rebuild Step.sseq_pure
         have hdrive' : ∀ aids : Nat → Nat,
             drive aids n (spikeThread (apply_ctx ctx e2)) dst.layout_state =
               .done v σfin := by
@@ -857,7 +859,7 @@ theorem prod_loop_done (th₀ : thread_state)
           rw [drive_step_next (by
             rw [drive_scrutinee]
             unfold engineOutcomes
-            rw [engineSteps_beta_pure hd hsz]
+            rw [engineSteps_beta_pure hd hsz fmapEmpty []]
             rfl)] at h
           exact h
         rw [loop_step_tau f fmapEmpty acc hth
@@ -868,8 +870,9 @@ theorem prod_loop_done (th₀ : thread_state)
         show (update_thread_state 0 _ dst.core_state0).thread_states = _
         rw [update_thread_state_single _ _ _ hth]
       | @beta_annot pa bty ds v' e2 =>
-        have hstep : Step (e, dst.layout_state)
-            (apply_ctx ctx (Expr [] (Eannot ds e2)), dst.layout_state) :=
+        have hstep : Step (e, spikeEnv, dst.layout_state)
+            (apply_ctx ctx (Expr [] (Eannot ds e2)), spikeEnv,
+              dst.layout_state) :=
           hd.rebuild Step.sseq_annot
         have hdrive' : ∀ aids : Nat → Nat,
             drive aids n (spikeThread (apply_ctx ctx (Expr [] (Eannot ds e2))))
@@ -879,7 +882,7 @@ theorem prod_loop_done (th₀ : thread_state)
           rw [drive_step_next (by
             rw [drive_scrutinee]
             unfold engineOutcomes
-            rw [engineSteps_beta_annot hd hsz]
+            rw [engineSteps_beta_annot hd hsz fmapEmpty []]
             rfl)] at h
           exact h
         rw [loop_step_tau f fmapEmpty acc hth
@@ -890,9 +893,9 @@ theorem prod_loop_done (th₀ : thread_state)
         show (update_thread_state 0 _ dst.core_state0).thread_states = _
         rw [update_thread_state_single _ _ _ hth]
       | @merge ds1 ds2 b hirr =>
-        have hstep : Step (e, dst.layout_state)
+        have hstep : Step (e, spikeEnv, dst.layout_state)
             (apply_ctx ctx (Expr [] (Eannot (ds1 ++ ds2) b)),
-              dst.layout_state) := hd.rebuild Step.annot_merge
+              spikeEnv, dst.layout_state) := hd.rebuild Step.annot_merge
         have hdrive' : ∀ aids : Nat → Nat,
             drive aids n
               (spikeThread (apply_ctx ctx (Expr [] (Eannot (ds1 ++ ds2) b))))
