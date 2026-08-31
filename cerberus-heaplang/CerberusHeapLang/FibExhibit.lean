@@ -294,6 +294,11 @@ section FibIris
 variable {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
 variable (ra : core_run_annotation) (n : Int)
   (ibty abty bbty : core_base_type)
+-- S1b: the wps judgment is indexed by the MACHINE CONTEXT; the
+-- exhibit works at the jump-profile instance `procCtx p rs` with the
+-- label map tied by the honest `LabeledAt` link (`procCtx_labels`).
+variable (p : sym) (rs : core_run_state)
+  (hQ : LabeledAt rs p (fibQ ra n ibty abty bbty))
 
 /-- The postcondition: the delivered value IS `fib n`. -/
 abbrev fibPost : SpikeVal → EnvStack → IProp GF := fun w _ =>
@@ -307,11 +312,13 @@ abbrev fibLs : LabelSpec GF := fun _ vs ρ =>
     ⌜vs = [ivVal i, ivVal (fibSpec i.toNat), ivVal (fibSpec (i.toNat + 1))] ∧
       0 ≤ i ∧ i ≤ n ∧ ρ = f :: rest ∧ SymFrame f⌝) : IProp GF)
 
+include hQ
+
 /-- The loop body verifies at any invariant frame. -/
 theorem fib_body_wps (i : Int) (f : Fmap sym value)
     (rest : List (Fmap sym value)) (hf : SymFrame f)
     (h0 : 0 ≤ i) (hin : i ≤ n) :
-    ⊢ wps (GF := GF) (fibQ ra n ibty abty bbty) (fibLs n) (fibPost n)
+    ⊢ wps (GF := GF) (procCtx p rs) (fibLs n) (fibPost n)
         (fibBody ra n)
         (fibFrame (ivVal i) (ivVal (fibSpec i.toNat))
           (ivVal (fibSpec (i.toNat + 1))) f :: rest) := by
@@ -323,7 +330,8 @@ theorem fib_body_wps (i : Int) (f : Fmap sym value)
     iapply wps_if_true [] (fibGuard n) _ _ _
       (by rw [fib_guard_eval hf i _ _ rest n, decide_eq_true hlt]; rfl)
     iapply wps_run [] ra fibLoopSym [fibIncPe, fibBPe, fibABPe] _ _
-      (fibQ_lookup ra n ibty abty bbty)
+      (by rw [procCtx_labels hQ]
+          exact fibQ_lookup ra n ibty abty bbty)
       (fib_args_eval hf i _ _ rest)
     iexists (i + 1), (fibFrame (ivVal i) (ivVal (fibSpec i.toNat))
       (ivVal (fibSpec (i.toNat + 1))) f), rest
@@ -343,9 +351,10 @@ theorem fib_body_wps (i : Int) (f : Fmap sym value)
 
 /-- THE BLOCK SPECIFICATION (per-label invariant rule, no Löb). -/
 theorem fib_blockSpecs :
-    ⊢ blockSpecs (GF := GF) (fibQ ra n ibty abty bbty) (fibLs n)
+    ⊢ blockSpecs (GF := GF) (procCtx p rs) (fibLs n)
       (fibPost n) := by
   refine blockSpecs_intro fun l params cont vs ev0 evs hl => ?_
+  rw [procCtx_labels hQ] at hl
   obtain ⟨rfl, rfl⟩ := fibQ_inv ra n ibty abty bbty hl
   iintro ⟨%i, %f, %rest, %hpure⟩
   obtain ⟨rfl, h0, hin, hρ, hf⟩ := hpure
@@ -355,11 +364,11 @@ theorem fib_blockSpecs :
     simp at h1 h2
     exact ⟨h1.symm, h2.symm⟩
   rw [bindArgs_fib]
-  exact fib_body_wps ra n ibty abty bbty i f rest hf h0 hin
+  exact fib_body_wps ra n ibty abty bbty p rs hQ i f rest hf h0 hin
 
 /-- The whole program's statement WP from the entry env. -/
 theorem fib_wps (hn : 0 ≤ n) (sbty : core_base_type) :
-    ⊢ wps (GF := GF) (fibQ ra n ibty abty bbty) (fibLs n) (fibPost n)
+    ⊢ wps (GF := GF) (procCtx p rs) (fibLs n) (fibPost n)
         (fibProg ra n sbty ibty abty bbty) [fmapEmpty] := by
   rw [show fibProg ra n sbty ibty abty bbty =
     Expr [] (Esave (fibLoopSym, sbty) (fibParams ibty abty bbty)
@@ -367,7 +376,7 @@ theorem fib_wps (hn : 0 ≤ n) (sbty : core_base_type) :
   iapply wps_save [] (fibLoopSym, sbty) _ _ fmapEmpty []
     (cvals := [ivVal 0, ivVal 0, ivVal 1]) rfl
   rw [bindSave_fib]
-  have h := fib_body_wps (GF := GF) ra n ibty abty bbty 0 fmapEmpty []
+  have h := fib_body_wps (GF := GF) ra n ibty abty bbty p rs hQ 0 fmapEmpty []
     symFrame_empty (by omega) hn
   rw [show ((0 : Int)).toNat = 0 from rfl] at h
   exact h
@@ -375,13 +384,13 @@ theorem fib_wps (hn : 0 ≤ n) (sbty : core_base_type) :
 /-- The base-WP face with the engine readout. -/
 theorem fib_wp_readout (hn : 0 ≤ n) (sbty : core_base_type) :
     ⊢ WP (⟨fibProg ra n sbty ibty abty bbty, [fmapEmpty],
-          fibQ ra n ibty abty bbty⟩ : CoreRt) @ Stuckness.NotStuck; ⊤
+          procCtx p rs⟩ : CoreRt) @ Stuckness.NotStuck; ⊤
         {{ w, iprop(∀ (σ' : Mem) (ns : Nat) (κs : List Empty) (nt : Nat),
           (stateInterp σ' ns κs nt : IProp GF) ={⊤, ∅}=∗
             ⌜CoreRVal.val w = ivVal (fibSpec n.toNat)⌝) }} := by
-  refine (fib_wps ra n ibty abty bbty hn sbty).trans ?_
+  refine (fib_wps ra n ibty abty bbty p rs hQ hn sbty).trans ?_
   refine (BI.emp_sep.2.trans (BI.sep_mono
-    ((fib_blockSpecs ra n ibty abty bbty).trans
+    ((fib_blockSpecs ra n ibty abty bbty p rs hQ).trans
       (wps_sound (fibProg ra n sbty ibty abty bbty) [fmapEmpty]))
     .rfl)).trans ?_
   refine BI.wand_elim_left.trans ?_
@@ -391,8 +400,9 @@ theorem fib_wp_readout (hn : 0 ≤ n) (sbty : core_base_type) :
   ipureintro
   exact hval
 
+omit hQ in
 /-- The label bodies are in the certified cone. -/
-theorem fibBody_fragJ : FragJ (fibBody ra n) := by
+theorem fibBody_fragJ : Frag (fibBody ra n) := by
   refine .if_ (by
     rw [show peDepth (fibGuard n) = 2 from rfl,
       show lemDefaultFuel = 999999 + 1 from rfl]
@@ -406,6 +416,7 @@ theorem fibBody_fragJ : FragJ (fibBody ra n) := by
       | (rw [show peDepth fibBPe = 1 from rfl]; omega)
       | (rw [show peDepth fibABPe = 2 from rfl]; omega))
 
+omit p rs hQ in
 /-- The empty seeded footprint is coherent with ANY memory. -/
 theorem coh_empty (σ : Mem) :
     Coh σ ((∅ : SpikeHeapF SpikeCell)) := by
@@ -465,7 +476,8 @@ theorem fib_certified {GF : BundledGFunctors} [SpikeGpreS GF]
       omega)
   intro inst
   exact (BigSepM.bigSepM_empty).1.trans
-    (fib_wp_readout ra n ibty abty bbty hn sbty)
+    (fib_wp_readout ra n ibty abty bbty fibProcSym rs
+      (fibRS_labeledAt ra n ibty abty bbty) hn sbty)
 
 /-! ## THE OPERATIONAL ENGINE THEOREM (S4 item 3; reclassified per
 the 2026-08-31 foundational audit, F-02): an engine-level
@@ -528,8 +540,8 @@ theorem fib_loop_drive (n : Int) (i : Int) (h0 : 0 ≤ i) (hin : i ≤ n)
         (by rw [fib_guard_eval hf i _ _ rest n,
           decide_eq_false (by omega)]; rfl))]
     rw [driveJ_step hQ _ _
-      (by exact FragJ.pure_sym :
-        FragJ (Expr ([] : List _root_.annot) (Epure fibExitPe)))
+      (by exact Frag.pure_sym :
+        Frag (Expr ([] : List _root_.annot) (Epure fibExitPe)))
       (by rw [show esize (Expr ([] : List _root_.annot) (Epure fibExitPe)) = 1
           from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega)
       (Step.pure_eval rfl (fib_exit_eval hf i _ _ rest))]
@@ -550,7 +562,7 @@ theorem fib_loop_drive (n : Int) (i : Int) (h0 : 0 ≤ i) (hin : i ≤ n)
           decide_eq_true hlt]; rfl))]
     rw [driveJ_step hQ _ _
       (by
-        refine FragJ.run ?_
+        refine Frag.run ?_
         intro pe hpe
         simp only [List.mem_cons, List.not_mem_nil, or_false] at hpe
         rcases hpe with rfl | rfl | rfl <;>
@@ -559,12 +571,14 @@ theorem fib_loop_drive (n : Int) (i : Int) (h0 : 0 ≤ i) (hin : i ≤ n)
             | (rw [show peDepth fibIncPe = 2 from rfl]; omega)
             | (rw [show peDepth fibBPe = 1 from rfl]; omega)
             | (rw [show peDepth fibABPe = 2 from rfl]; omega)) :
-        FragJ (Expr ([] : List _root_.annot)
+        Frag (Expr ([] : List _root_.annot)
           (Erun ra fibLoopSym [fibIncPe, fibBPe, fibABPe])))
       (by rw [show esize (Expr ([] : List _root_.annot)
           (Erun ra fibLoopSym [fibIncPe, fibBPe, fibABPe])) = 1 from rfl,
           show lemDefaultFuel = 999999 + 1 from rfl]; omega)
-      (Step.run (by rfl) (fibQ_lookup ra n ibty abty bbty)
+      (Step.run (by rfl)
+        (by rw [procCtx_labels hQ]
+            exact fibQ_lookup ra n ibty abty bbty)
         (fib_args_eval hf i _ _ rest))]
     rw [bindArgs_fib]
     have harg : ivVal ((i : Int) + 1) = ivVal (i + 1) := rfl
@@ -597,8 +611,8 @@ theorem fib_certified_total (sbty : core_base_type) (n : Int)
     Expr [] (Esave (fibLoopSym, sbty) (fibParams ibty abty bbty)
       (fibBody ra n)) from rfl]
   rw [driveJ_step hQ _ _
-    (by exact FragJ.save (fibBody_fragJ ra n) :
-      FragJ (Expr ([] : List _root_.annot)
+    (by exact Frag.save (fibBody_fragJ ra n) :
+      Frag (Expr ([] : List _root_.annot)
         (Esave (fibLoopSym, sbty) (fibParams ibty abty bbty)
           (fibBody ra n))))
     (by rw [show esize (Expr ([] : List _root_.annot)

@@ -68,21 +68,64 @@ inductive DriveResult : Type where
       behavior -/
   | stuck
 
-/-- THE ENGINE'S EXECUTION at the frozen context: iterate
-    {`step_ctx` → `dischargeStep`} (the sequential driver's loop
+/-- One drive scrutinee at a machine context (the {step_ctx →
+    discharge} composite the loop iterates). -/
+def stepOutcomes (M : MachineCtx) (aid : Nat) (th : thread_state)
+    (σ : Mem) : List EngineOutcome :=
+  (step_ctx M.tagDefs σ M.file M.extern M.tid (M.parent, th)).map
+    (dischargeStep aid M.runState σ)
+
+theorem stepOutcomes_thread (M : MachineCtx) (aid : Nat) (e : CoreExpr)
+    (ρ : EnvStack) (σ : Mem) :
+    stepOutcomes M aid (M.thread e ρ) σ = outcomesU M aid e ρ σ := rfl
+
+/-- THE ENGINE'S EXECUTION AT A MACHINE CONTEXT (S1b — the ONE
+    drive): iterate {`step_ctx` → `dischargeStep`} with every
+    immutable drawn from the context (the sequential driver's loop
     projected to (thread_state, MemState) — Soundness.lean header
     for the cited projections). `aids` supplies the driver's
     per-step action-id draws (Driver.lean:284); the fragment ignores
     them (D2), and the theorems hold for every supply. -/
-def drive (aids : Nat → Nat) : Nat → thread_state → Mem → DriveResult
+def driveU (M : MachineCtx) (aids : Nat → Nat) :
+    Nat → thread_state → Mem → DriveResult
   | 0, th, σ => .more th σ
   | n+1, th, σ =>
-    match (step_ctx fmapEmpty σ spikeFile fmapEmpty 0 (none, th)).map
-        (dischargeStep (aids 0) spikeRunState σ) with
-    | [.next th' σ'] => drive (fun i => aids (i+1)) n th' σ'
+    match stepOutcomes M (aids 0) th σ with
+    | [.next th' σ'] => driveU M (fun i => aids (i+1)) n th' σ'
     | [.done v] => .done v σ
     | [.killed r] => .killed r
     | _ => .stuck
+
+/-- The succ-step equation of the unified drive (rfl, named for
+    rewriting). -/
+theorem driveU_succ (M : MachineCtx) (aids : Nat → Nat) (n : Nat)
+    (th : thread_state) (σ : Mem) :
+    driveU M aids (n+1) th σ =
+      (match stepOutcomes M (aids 0) th σ with
+        | [.next th' σ'] => driveU M (fun i => aids (i+1)) n th' σ'
+        | [.done v] => DriveResult.done v σ
+        | [.killed r] => DriveResult.killed r
+        | _ => DriveResult.stuck) := rfl
+
+/-- THE ENGINE'S EXECUTION at the frozen straight-line context — the
+    `spikeCtx` INSTANCE of the one drive (S1b: the drive/driveJ split
+    disappears; the exported statements keep their vocabulary through
+    these definitional instances). The body is definitionally the old
+    frozen-profile loop. -/
+def drive (aids : Nat → Nat) : Nat → thread_state → Mem → DriveResult :=
+  driveU spikeCtx aids
+
+/-- The succ-step equation at the straight-line instance, in the old
+    frozen spelling (rfl — rewriting aid for the simulation lemmas). -/
+theorem drive_succ_eq (aids : Nat → Nat) (n : Nat) (th : thread_state)
+    (σ : Mem) :
+    drive aids (n+1) th σ =
+      (match (step_ctx fmapEmpty σ spikeFile fmapEmpty 0 (none, th)).map
+          (dischargeStep (aids 0) spikeRunState σ) with
+        | [.next th' σ'] => drive (fun i => aids (i+1)) n th' σ'
+        | [.done v] => DriveResult.done v σ
+        | [.killed r] => DriveResult.killed r
+        | _ => DriveResult.stuck) := rfl
 
 /-- The drive's one-step scrutinee at an envThread arena IS
     `engineOutcomes` (definitional). -/
@@ -101,7 +144,7 @@ theorem drive_scrutinee (aid : Nat) (e : CoreExpr) (σ : Mem) :
     carrying configurations, S1). -/
 def Reach : CoreRt × Mem → CoreRt × Mem → Prop :=
   Relation.ReflTransGen (fun a b =>
-    Step a.1.lbl (a.1.e, a.1.ρ, a.2) (b.1.e, b.1.ρ, b.2) ∧ b.1.lbl = a.1.lbl)
+    Step a.1.M (a.1.e, a.1.ρ, a.2) (b.1.e, b.1.ρ, b.2) ∧ b.1.M = a.1.M)
 
 /-- Transport into the iris thread-pool reduction (the pool stays a
     singleton: the fragment forks nothing). -/
@@ -209,61 +252,147 @@ def DriveOk (φp : CoreRVal → Mem → Prop) : DriveResult → Prop
   | .killed _ => False
   | .stuck => False
 
-/-- Driving a bare value: one PROGRAM-DONE step. -/
-theorem drive_value_pure (φp : CoreRVal → Mem → Prop) (aids : Nat → Nat)
+/-- Driving a bare value at any SeqWF context: PROGRAM-DONE. -/
+theorem driveU_value_pure {M : MachineCtx} (hwf : M.SeqWF)
+    (φp : CoreRVal → Mem → Prop) (aids : Nat → Nat)
     (v : value) (ρ : EnvStack) (σ : Mem)
     (h : ∃ w : CoreRVal, w.val = v ∧ φp w σ) :
-    ∀ n, DriveOk φp (drive aids n (envThread (ofVal (.pure v)) ρ) σ)
+    ∀ n, DriveOk φp (driveU M aids n (M.thread (ofVal (.pure v)) ρ) σ)
   | 0 => trivial
   | n+1 => by
-    unfold drive
-    rw [drive_scrutinee_env,
-      show engineOutcomes (aids 0) (ofVal (.pure v)) ρ σ = [.done v] by
-        unfold engineOutcomes; rw [engineSteps_done]; rfl]
+    rw [driveU_succ, stepOutcomes_thread, outcomesU_done hwf]
     exact h
 
-/-- The classification: from Step-level NotStuck + value readout
-    (both over Reach), every drive outcome is DriveOk — via
-    `engine_complete`, one certification case per step. -/
-theorem drive_classify (e₀ : CoreExpr) (ρ₀ : EnvStack) (σ₀ : Mem)
+/-- THE UNIFIED CLASSIFICATION (S1b — the one drive classification,
+    at any machine context; the straight-line and jump lanes are its
+    instances): from StepU-level NotStuck + value readout over
+    `Reach`, every driveU outcome is DriveOk — via
+    `engine_step_matchU`, one certification case per step. The old
+    J-lane's `LabeledAt` tie hypothesis is GONE (context-derived);
+    the label cone/budget hypotheses remain (registered continuations
+    are the jump targets). Registered extern restriction `hext`
+    (S1b′'s named mover, design record §5.2). -/
+theorem drive_classifyU {M : MachineCtx} (hwf : M.SeqWF)
+    (hext : M.extern = fmapEmpty)
+    (hQf : ∀ l params cont, lookupLabel M.labels l = some (params, cont) →
+      Frag cont)
+    (n₀ : Nat)
+    (hQsz : ∀ l params cont, lookupLabel M.labels l = some (params, cont) →
+      esize cont + n₀ ≤ lemDefaultFuel)
+    (e₀ : CoreExpr) (ρ₀ : EnvStack) (σ₀ : Mem)
     (φp : CoreRVal → Mem → Prop)
-    (hNS : ∀ (r : CoreRt) (σ : Mem), Reach ((⟨e₀, ρ₀, spikeLbl⟩ : CoreRt), σ₀) (r, σ) →
+    (hNS : ∀ (r : CoreRt) (σ : Mem),
+      Reach ((⟨e₀, ρ₀, M⟩ : CoreRt), σ₀) (r, σ) →
       PrimStep.NotStuck (Val := CoreRVal) (r, σ))
     (hRES : ∀ (w : CoreRVal) (σ : Mem),
-      Reach ((⟨e₀, ρ₀, spikeLbl⟩ : CoreRt), σ₀) (ofValRt w, σ) → φp w σ)
-    (n : Nat) :
+      Reach ((⟨e₀, ρ₀, M⟩ : CoreRt), σ₀) (ofValRt w, σ) → φp w σ) :
+    ∀ (n : Nat), n ≤ n₀ →
     ∀ (aids : Nat → Nat) (e : CoreExpr) (ev0 : Fmap sym value)
       (evs : List (Fmap sym value)) (σ : Mem),
-      Reach ((⟨e₀, ρ₀, spikeLbl⟩ : CoreRt), σ₀) ((⟨e, ev0 :: evs, spikeLbl⟩ : CoreRt), σ) →
-      FragP e → esize e + n ≤ lemDefaultFuel →
-      DriveOk φp (drive aids n (envThread e (ev0 :: evs)) σ) := by
+      Reach ((⟨e₀, ρ₀, M⟩ : CoreRt), σ₀) ((⟨e, ev0 :: evs, M⟩ : CoreRt), σ) →
+      Frag e → esize e + n ≤ lemDefaultFuel →
+      DriveOk φp (driveU M aids n (M.thread e (ev0 :: evs)) σ) := by
+  intro n
   induction n with
-  | zero => intro aids e ev0 evs σ _ _ _; trivial
+  | zero => intro _ aids e ev0 evs σ _ _ _; trivial
   | succ n ih =>
-    intro aids e ev0 evs σ hreach hf hfuel
-    obtain ⟨o, houts, hmatch⟩ :=
-      engine_complete (aids 0) σ ev0 evs hf (by omega)
-    unfold drive
-    rw [drive_scrutinee_env, houts]
-    cases hmatch with
-    | @step e' ρ' σ' hs =>
-      obtain rfl : ρ' = ev0 :: evs := Step.env_invariant_frag hf hs
-      exact ih _ _ _ _ _ (hreach.tail ⟨hs, rfl⟩) (hf.step hs)
-        (by have := Step.esize_succ hf hs; omega)
-    | @removeAnnot ds v hann =>
-      subst hann
-      exact drive_value_pure φp _ v (ev0 :: evs) σ
-        ⟨⟨.annot ds v, ev0 :: evs, spikeLbl⟩, rfl,
-          hRES ⟨.annot ds v, ev0 :: evs, spikeLbl⟩ σ hreach⟩ n
-    | @done v hpure =>
-      subst hpure
-      exact ⟨⟨.pure v, ev0 :: evs, spikeLbl⟩, rfl,
-        hRES ⟨.pure v, ev0 :: evs, spikeLbl⟩ σ hreach⟩
-    | refused href hnostep hnv =>
-      rcases hNS ⟨e, ev0 :: evs, spikeLbl⟩ σ hreach with hval | ⟨obs, e', σ', efs, hprim⟩
-      · rw [language_toVal_eq, toValRt_mk, hnv] at hval
+    intro hn₀ aids e ev0 evs σ hreach hf hfuel
+    cases hv : toVal e with
+    | some w =>
+      have he := ofVal_of_toVal hv
+      subst he
+      cases w with
+      | pure v =>
+        exact driveU_value_pure hwf φp aids v (ev0 :: evs) σ
+          ⟨⟨.pure v, ev0 :: evs, M⟩, rfl,
+            hRES ⟨.pure v, ev0 :: evs, M⟩ σ hreach⟩ (n+1)
+      | annot ds v =>
+        rw [driveU_succ, stepOutcomes_thread, outcomesU_remove_annot]
+        exact driveU_value_pure hwf φp _ v (ev0 :: evs) σ
+          ⟨⟨.annot ds v, ev0 :: evs, M⟩, rfl,
+            hRES ⟨.annot ds v, ev0 :: evs, M⟩ σ hreach⟩ n
+    | none =>
+      rcases hNS ⟨e, ev0 :: evs, M⟩ σ hreach with hval | ⟨obs, r', σ', efs, hprim⟩
+      · rw [language_toVal_eq, toValRt_mk, hv] at hval
         cases hval
-      · exact absurd hprim.1 (hnostep _)
+      · obtain ⟨hs, hM, -⟩ := hprim
+        obtain ⟨re', rρ', rM'⟩ := r'
+        simp only at hs hM
+        obtain rfl : M = rM' := hM.symm
+        obtain ⟨ev0', rfl⟩ := Step.env_cons hs
+        rw [driveU_succ, stepOutcomes_thread,
+          engine_step_matchU hext (aids 0) hf (by omega) hs]
+        refine ih (by omega) _ re' ev0' evs σ'
+          (hreach.tail ⟨hs, rfl⟩) (hf.step hQf hs) ?_
+        rcases hf.esize_step_bound hs with hle | ⟨l, pes, params, cont, -, hl, hec⟩
+        · omega
+        · rw [hec]
+          have := hQsz l params cont hl
+          omega
+
+/-- ADEQUACY AT A MACHINE CONTEXT (engine-only conclusion, the one
+    adequacy of which the straight-line and jump exports are
+    instances): a proved WP at the unified tuple plus the seeded
+    memory implies driveU from the context's thread never kills,
+    never derails, and any delivered value satisfies the readout.
+    Explicit WF hypotheses (statement-change class (D)): `SeqWF` and
+    the registered extern restriction. -/
+theorem engine_adequacyU {GF : BundledGFunctors} [SpikeGpreS GF]
+    {M : MachineCtx} (hwf : M.SeqWF) (hext : M.extern = fmapEmpty)
+    (hQf : ∀ l params cont, lookupLabel M.labels l = some (params, cont) →
+      Frag cont)
+    (e₀ : CoreExpr) (ev00 : Fmap sym value) (evs0 : List (Fmap sym value))
+    (σ₀ : Mem) (m₀ : SpikeHeapF SpikeCell)
+    (hfrag : Frag e₀) (hcoh : Coh σ₀ m₀)
+    (ψ : value → Mem → Prop)
+    (hwp : ∀ [SpikeGS .hasLC GF],
+      iprop(([∗map] i ↦ c ∈ m₀, pointsTo i (.own 1) c)) ⊢
+        WP (⟨e₀, ev00 :: evs0, M⟩ : CoreRt) @ Stuckness.NotStuck; ⊤
+          {{ w, iprop(∀ (σ' : Mem) (ns : Nat)
+          (κs : List Empty) (nt : Nat),
+          stateInterp σ' ns κs nt ={⊤, ∅}=∗ ⌜ψ w.val σ'⌝) }})
+    (n : Nat) (aids : Nat → Nat)
+    (hfuel : esize e₀ + n ≤ lemDefaultFuel)
+    (hQsz : ∀ l params cont, lookupLabel M.labels l = some (params, cont) →
+      esize cont + n ≤ lemDefaultFuel) :
+    (∀ r, driveU M aids n (M.thread e₀ (ev00 :: evs0)) σ₀ ≠ .killed r) ∧
+    (driveU M aids n (M.thread e₀ (ev00 :: evs0)) σ₀ ≠ .stuck) ∧
+    (∀ (v : value) (σ' : Mem),
+      driveU M aids n (M.thread e₀ (ev00 :: evs0)) σ₀ = .done v σ' →
+      ψ v σ') := by
+  have hadeq := fun (t2 : List CoreRt) (σ2 : Mem)
+      (h : ([(⟨e₀, ev00 :: evs0, M⟩ : CoreRt)], σ₀) -·->ₜₚ* (t2, σ2)) =>
+    spike_step_adequacy ⟨e₀, ev00 :: evs0, M⟩ σ₀ m₀ hcoh
+      (fun w σ' => ψ w.val σ') hwp h
+  have hNS : ∀ (r : CoreRt) (σ : Mem),
+      Reach ((⟨e₀, ev00 :: evs0, M⟩ : CoreRt), σ₀) (r, σ) →
+      PrimStep.NotStuck (Val := CoreRVal) (r, σ) := by
+    intro r σ hr
+    exact (hadeq [r] σ (Reach.toPool hr)).1 r (by simp)
+  have hRES : ∀ (w : CoreRVal) (σ : Mem),
+      Reach ((⟨e₀, ev00 :: evs0, M⟩ : CoreRt), σ₀) (ofValRt w, σ) →
+      ψ w.val σ := by
+    intro w σ hr
+    exact (hadeq [ofValRt w] σ (Reach.toPool hr)).2 w [] rfl
+  have hok : DriveOk (fun w σ' => ψ w.val σ')
+      (driveU M aids n (M.thread e₀ (ev00 :: evs0)) σ₀) :=
+    drive_classifyU hwf hext hQf n hQsz e₀ (ev00 :: evs0) σ₀ _ hNS hRES
+      n (Nat.le_refl n) aids e₀ ev00 evs0 σ₀ .refl hfrag hfuel
+  refine ⟨fun r hdr => ?_, fun hds => ?_, fun v σ' hdv => ?_⟩
+  · rw [hdr] at hok; exact hok
+  · rw [hds] at hok; exact hok
+  · rw [hdv] at hok
+    obtain ⟨w, hwv, hφ⟩ := hok
+    rw [← hwv]
+    exact hφ
+
+/-- The spike context has no registered labels (its run state's
+    `labeled` is empty), so the label-cone hypotheses are vacuous. -/
+theorem spikeCtx_labels_none (l : sym)
+    {pc : List (sym × core_base_type) × CoreExpr}
+    (h : lookupLabel spikeCtx.labels l = some pc) : False := by
+  rw [spikeCtx_labels, lookupLabel_empty] at h
+  cases h
 
 /-! ## THE ADEQUACY STATEMENT (engine-only conclusion) -/
 
@@ -286,11 +415,11 @@ theorem drive_classify (e₀ : CoreExpr) (ρ₀ : EnvStack) (σ₀ : Mem)
     HONESTY). -/
 theorem spike_engine_adequacy {GF : BundledGFunctors} [SpikeGpreS GF]
     (e₀ : CoreExpr) (σ₀ : Mem) (m₀ : SpikeHeapF SpikeCell)
-    (hfrag : FragP e₀) (hcoh : Coh σ₀ m₀)
+    (hfrag : Frag e₀) (hcoh : Coh σ₀ m₀)
     (ψ : value → Mem → Prop)
     (hwp : ∀ [SpikeGS .hasLC GF],
       iprop(([∗map] i ↦ c ∈ m₀, pointsTo i (.own 1) c)) ⊢
-        WP (⟨e₀, spikeEnv, spikeLbl⟩ : CoreRt) @ Stuckness.NotStuck; ⊤
+        WP (⟨e₀, spikeEnv, spikeCtx⟩ : CoreRt) @ Stuckness.NotStuck; ⊤
           {{ w, iprop(∀ (σ' : Mem) (ns : Nat)
           (κs : List Empty) (nt : Nat),
           stateInterp σ' ns κs nt ={⊤, ∅}=∗ ⌜ψ w.val σ'⌝) }})
@@ -299,31 +428,11 @@ theorem spike_engine_adequacy {GF : BundledGFunctors} [SpikeGpreS GF]
     (∀ r, drive aids n (spikeThread e₀) σ₀ ≠ .killed r) ∧
     (drive aids n (spikeThread e₀) σ₀ ≠ .stuck) ∧
     (∀ (v : value) (σ' : Mem),
-      drive aids n (spikeThread e₀) σ₀ = .done v σ' → ψ v σ') := by
-  have hadeq := fun (t2 : List CoreRt) (σ2 : Mem)
-      (h : ([(⟨e₀, spikeEnv, spikeLbl⟩ : CoreRt)], σ₀) -·->ₜₚ* (t2, σ2)) =>
-    spike_step_adequacy ⟨e₀, spikeEnv, spikeLbl⟩ σ₀ m₀ hcoh (fun w σ' => ψ w.val σ') hwp h
-  have hNS : ∀ (r : CoreRt) (σ : Mem),
-      Reach ((⟨e₀, spikeEnv, spikeLbl⟩ : CoreRt), σ₀) (r, σ) →
-      PrimStep.NotStuck (Val := CoreRVal) (r, σ) := by
-    intro r σ hr
-    exact (hadeq [r] σ (Reach.toPool hr)).1 r (by simp)
-  have hRES : ∀ (w : CoreRVal) (σ : Mem),
-      Reach ((⟨e₀, spikeEnv, spikeLbl⟩ : CoreRt), σ₀) (ofValRt w, σ) →
-      ψ w.val σ := by
-    intro w σ hr
-    exact (hadeq [ofValRt w] σ (Reach.toPool hr)).2 w [] rfl
-  have hok0 := drive_classify e₀ spikeEnv σ₀ (fun w σ' => ψ w.val σ') hNS hRES
-    n aids e₀ fmapEmpty [] σ₀ .refl hfrag hfuel
-  have hok : DriveOk (fun w σ' => ψ w.val σ')
-      (drive aids n (spikeThread e₀) σ₀) := hok0
-  refine ⟨fun r hdr => ?_, fun hds => ?_, fun v σ' hdv => ?_⟩
-  · rw [hdr] at hok; exact hok
-  · rw [hds] at hok; exact hok
-  · rw [hdv] at hok
-    obtain ⟨w, hwv, hφ⟩ := hok
-    rw [← hwv]
-    exact hφ
+      drive aids n (spikeThread e₀) σ₀ = .done v σ' → ψ v σ') :=
+  engine_adequacyU (GF := GF) (M := spikeCtx) spikeCtx_wf rfl
+    (fun l params cont hl => (spikeCtx_labels_none l hl).elim)
+    e₀ fmapEmpty [] σ₀ m₀ hfrag hcoh ψ hwp n aids hfuel
+    (fun l params cont hl => (spikeCtx_labels_none l hl).elim)
 
 /-! ## THE EXPORTED FACE: semantic triples over engine configurations
 ([USER 2026-08-30], the final-form instruction)
@@ -385,7 +494,7 @@ abbrev ProvenTriple (GF : BundledGFunctors) [SpikeGpreS GF] (e : CoreExpr)
     (P : CellMap) (post : value → CellMap → Prop) : Prop :=
   ∀ [SpikeGS .hasLC GF],
     iprop(([∗map] i ↦ c ∈ P, pointsTo i (.own 1) c)) ⊢
-      WP (⟨e, spikeEnv, spikeLbl⟩ : CoreRt) @ Stuckness.NotStuck; ⊤ {{ w,
+      WP (⟨e, spikeEnv, spikeCtx⟩ : CoreRt) @ Stuckness.NotStuck; ⊤ {{ w,
         iprop(∃ Q : CellMap, ⌜post (CoreRVal.val w) Q⌝ ∗
           ([∗map] i ↦ c ∈ Q, pointsTo i (.own 1) c)) }}
 
@@ -462,7 +571,7 @@ theorem cells_readout {GF : BundledGFunctors} [SpikeGS .hasLC GF]
     semantic level — a proved footprint triple holds of the ENGINE
     over every splitting configuration. -/
 theorem semantic_triple_sound {GF : BundledGFunctors} [SpikeGpreS GF]
-    {e : CoreExpr} (hfrag : FragP e) {P : CellMap}
+    {e : CoreExpr} (hfrag : Frag e) {P : CellMap}
     {post : value → CellMap → Prop}
     (hwp : ProvenTriple GF e P post) :
     SemTriple e P post := by
@@ -486,7 +595,7 @@ theorem semantic_triple_sound {GF : BundledGFunctors} [SpikeGpreS GF]
     SemTriple frame-closed over the UNNAMED rest; this theorem
     additionally moves a NAMED frame F across the triple.) -/
 theorem semantic_frame {GF : BundledGFunctors} [SpikeGpreS GF]
-    {e : CoreExpr} (hfrag : FragP e) {P : CellMap} (F : CellMap)
+    {e : CoreExpr} (hfrag : Frag e) {P : CellMap} (F : CellMap)
     {post : value → CellMap → Prop} (hPF : P ##ₘ F)
     (hwp : ProvenTriple GF e P post) :
     SemTriple e (Iris.Std.PartialMap.union P F)
@@ -512,140 +621,107 @@ theorem semantic_frame {GF : BundledGFunctors} [SpikeGpreS GF]
 
 /-! ## THE JUMP-PROFILE DRIVE AND ADEQUACY (the loop exhibits' lane)
 
-`driveJ` iterates the same {step_ctx → discharge} loop at a
-PARAMETERIZED run state (Erun reads `labeled` through it; the
-fragment's monads return it verbatim, so it stays constant across
-the drive — mirroring that the real driver never writes `labeled`
-on this path). Classification differs from the straight-line lane
-in shape (recorded finding): completeness is MATCH-GIVEN-STEP
-(`engine_step_matchJ`) — the WP's NotStuck supplies the mirror step
-at every reachable configuration, whose rule premises carry every
-panic-exclusion fact; no refusal case ever arises. Fuel: the
-in-budget hypotheses (additive on the current segment + the static
-per-label bound for the jump's fuel reset; `fib_certified_total`
-shows the variant route past them). -/
+S1b: `driveJ` is the `rsCtx` INSTANCE of the one drive (the drive
+loop itself reads no current-proc — only the discharge's run state
+differs from the straight-line profile), definitionally the old
+frozen-profile loop; the J-lane theorems are `procCtx` instances of
+the unified classification/adequacy, with the old `LabeledAt` tie
+hypothesis kept in the STATEMENTS as the honest link between the
+quantified run state and the label map the label-cone hypotheses
+speak about (interior theorems derive `(procCtx p rs).labels = Q`
+from it — `procCtx_labels`). -/
 
-/-- The engine's execution at the jump profile. -/
+/-- The engine's execution at the jump profile — the run-state
+    instance of the one drive (definitionally the old body). -/
 def driveJ (rs : core_run_state) (aids : Nat → Nat) :
-    Nat → thread_state → Mem → DriveResult
-  | 0, th, σ => .more th σ
-  | n+1, th, σ =>
-    match (step_ctx fmapEmpty σ spikeFile fmapEmpty 0 (none, th)).map
-        (dischargeStep (aids 0) rs σ) with
-    | [.next th' σ'] => driveJ rs (fun i => aids (i+1)) n th' σ'
-    | [.done v] => .done v σ
-    | [.killed r] => .killed r
-    | _ => .stuck
+    Nat → thread_state → Mem → DriveResult :=
+  driveU (rsCtx rs) aids
 
 theorem driveJ_scrutinee (p : sym) (rs : core_run_state) (aid : Nat)
     (e : CoreExpr) (ρ : EnvStack) (σ : Mem) :
     (step_ctx fmapEmpty σ spikeFile fmapEmpty 0 (none, procThread p e ρ)).map
         (dischargeStep aid rs σ) = engineOutcomesP p aid rs e ρ σ := rfl
 
+/-- The succ-step equation at the run-state instance, old spelling
+    (rfl). -/
+theorem driveJ_succ_eq (rs : core_run_state) (aids : Nat → Nat) (n : Nat)
+    (th : thread_state) (σ : Mem) :
+    driveJ rs aids (n+1) th σ =
+      (match (step_ctx fmapEmpty σ spikeFile fmapEmpty 0 (none, th)).map
+          (dischargeStep (aids 0) rs σ) with
+        | [.next th' σ'] => driveJ rs (fun i => aids (i+1)) n th' σ'
+        | [.done v] => DriveResult.done v σ
+        | [.killed r] => DriveResult.killed r
+        | _ => DriveResult.stuck) := rfl
+
+/-- The one drive at the proc-carrying context IS the run-state
+    instance (the drive loop reads no proc; pointwise the two
+    contexts' read fields coincide definitionally). -/
+theorem driveU_procCtx (p : sym) (rs : core_run_state) :
+    ∀ (n : Nat) (aids : Nat → Nat) (th : thread_state) (σ : Mem),
+      driveU (procCtx p rs) aids n th σ = driveJ rs aids n th σ
+  | 0, aids, th, σ => rfl
+  | n+1, aids, th, σ => by
+    rw [driveU_succ]
+    show (match stepOutcomes (rsCtx rs) (aids 0) th σ with
+      | [.next th' σ'] => driveU (procCtx p rs) (fun i => aids (i+1)) n th' σ'
+      | [.done v] => DriveResult.done v σ
+      | [.killed r] => DriveResult.killed r
+      | _ => DriveResult.stuck) = driveJ rs aids (n+1) th σ
+    rw [show driveJ rs aids (n+1) th σ =
+      (match stepOutcomes (rsCtx rs) (aids 0) th σ with
+        | [.next th' σ'] => driveJ rs (fun i => aids (i+1)) n th' σ'
+        | [.done v] => DriveResult.done v σ
+        | [.killed r] => DriveResult.killed r
+        | _ => DriveResult.stuck) from rfl]
+    cases houts : stepOutcomes (rsCtx rs) (aids 0) th σ with
+    | nil => rfl
+    | cons o rest =>
+      cases rest with
+      | cons o2 rest2 => cases o <;> rfl
+      | nil =>
+        cases o with
+        | next th' σ' => exact driveU_procCtx p rs n (fun i => aids (i+1)) th' σ'
+        | done v => rfl
+        | killed r => rfl
+        | error s => rfl
+        | offFragment => rfl
+
 /-- Driving a bare value at the jump profile: PROGRAM-DONE. -/
 theorem driveJ_value_pure (p : sym) (rs : core_run_state)
     (φp : CoreRVal → Mem → Prop) (aids : Nat → Nat)
     (v : value) (ρ : EnvStack) (σ : Mem)
     (h : ∃ w : CoreRVal, w.val = v ∧ φp w σ) :
-    ∀ n, DriveOk φp (driveJ rs aids n (procThread p (ofVal (.pure v)) ρ) σ)
-  | 0 => trivial
-  | n+1 => by
-    unfold driveJ
-    rw [driveJ_scrutinee, engineOutcomesP_done]
-    exact h
+    ∀ n, DriveOk φp (driveJ rs aids n (procThread p (ofVal (.pure v)) ρ) σ) :=
+  fun n => driveU_procCtx p rs n aids _ σ ▸
+    driveU_value_pure (M := procCtx p rs) (procCtx_wf p rs) φp aids v ρ σ h n
 
-/-- The J-lane drive classification: from Step-level NotStuck +
-    value readout over `Reach` (at the label-carrying tuple), every
-    driveJ outcome is DriveOk — via `engine_step_matchJ`, one
-    certification case per step. Hypotheses: the Q↔labeled tie, the
-    label map's cone membership + static size bound (the R3 reset
-    budget), and the in-budget segment bound. -/
-theorem drive_classifyJ {Q : LabelMap} {p : sym} {rs : core_run_state}
-    (hQ : LabeledAt rs p Q)
-    (hQf : ∀ l params cont, lookupLabel Q l = some (params, cont) →
-      FragJ cont)
-    (n₀ : Nat)
-    (hQsz : ∀ l params cont, lookupLabel Q l = some (params, cont) →
-      esize cont + n₀ ≤ lemDefaultFuel)
-    (e₀ : CoreExpr) (ρ₀ : EnvStack) (σ₀ : Mem)
-    (φp : CoreRVal → Mem → Prop)
-    (hNS : ∀ (r : CoreRt) (σ : Mem),
-      Reach ((⟨e₀, ρ₀, Q⟩ : CoreRt), σ₀) (r, σ) →
-      PrimStep.NotStuck (Val := CoreRVal) (r, σ))
-    (hRES : ∀ (w : CoreRVal) (σ : Mem),
-      Reach ((⟨e₀, ρ₀, Q⟩ : CoreRt), σ₀) (ofValRt w, σ) → φp w σ) :
-    ∀ (n : Nat), n ≤ n₀ →
-    ∀ (aids : Nat → Nat) (e : CoreExpr) (ev0 : Fmap sym value)
-      (evs : List (Fmap sym value)) (σ : Mem),
-      Reach ((⟨e₀, ρ₀, Q⟩ : CoreRt), σ₀) ((⟨e, ev0 :: evs, Q⟩ : CoreRt), σ) →
-      FragJ e → esize e + n ≤ lemDefaultFuel →
-      DriveOk φp (driveJ rs aids n (procThread p e (ev0 :: evs)) σ) := by
-  intro n
-  induction n with
-  | zero => intro _ aids e ev0 evs σ _ _ _; trivial
-  | succ n ih =>
-    intro hn₀ aids e ev0 evs σ hreach hf hfuel
-    cases hv : toVal e with
-    | some w =>
-      have he := ofVal_of_toVal hv
-      subst he
-      cases w with
-      | pure v =>
-        exact driveJ_value_pure p rs φp aids v (ev0 :: evs) σ
-          ⟨⟨.pure v, ev0 :: evs, Q⟩, rfl,
-            hRES ⟨.pure v, ev0 :: evs, Q⟩ σ hreach⟩ (n+1)
-      | annot ds v =>
-        unfold driveJ
-        rw [driveJ_scrutinee, engineOutcomesP_remove_annot]
-        exact driveJ_value_pure p rs φp _ v (ev0 :: evs) σ
-          ⟨⟨.annot ds v, ev0 :: evs, Q⟩, rfl,
-            hRES ⟨.annot ds v, ev0 :: evs, Q⟩ σ hreach⟩ n
-    | none =>
-      rcases hNS ⟨e, ev0 :: evs, Q⟩ σ hreach with hval | ⟨obs, r', σ', efs, hprim⟩
-      · rw [language_toVal_eq, toValRt_mk, hv] at hval
-        cases hval
-      · obtain ⟨hs, hlbl, -⟩ := hprim
-        obtain ⟨re', rρ', rQ'⟩ := r'
-        simp only at hs hlbl
-        obtain rfl : Q = rQ' := hlbl.symm
-        obtain ⟨ev0', rfl⟩ := Step.env_cons hs
-        unfold driveJ
-        rw [driveJ_scrutinee,
-          engine_step_matchJ (aids 0) hQ hf (by omega) hs]
-        refine ih (by omega) _ re' ev0' evs σ'
-          (hreach.tail ⟨hs, rfl⟩) (hf.step hQf hs) ?_
-        rcases hf.esize_step_bound hs with hle |
-            ⟨l, pes, params, cont, hj, hl, hec⟩
-        · omega
-        · rw [hec]
-          have := hQsz l params cont hl
-          omega
+/-! ## The termination-accounting primitives at the driveJ lane
+(one certified drive step per mirror step, and the value delivery;
+the fib exhibit's UNCONDITIONAL total theorem chains them by
+induction on the variant). S1b statement change (class (A)): the
+mirror step's index is the `procCtx p rs` instance (the old
+separate `Q` index is the context's DERIVED label map — interior
+lookups rewrite by `procCtx_labels hQ`). -/
 
-/-! ## S4 — the termination-accounting primitives at the driveJ
-lane (the step-bound product's building blocks: one certified drive
-step per mirror step, and the value delivery; the fib exhibit's
-UNCONDITIONAL total theorem chains them by induction on the
-variant). -/
-
-/-- ONE certified drive step: wherever the mirror steps at a FragJ
-    configuration (labels tied), driveJ takes exactly that step. -/
+/-- ONE certified drive step: wherever the mirror steps at a cone
+    configuration at the proc-carrying context (tie `hQ` links the
+    quantified run state to the label map the caller reasons with),
+    driveJ takes exactly that step. -/
 theorem driveJ_step {Q : LabelMap} {p : sym} {rs : core_run_state}
     (hQ : LabeledAt rs p Q) (aids : Nat → Nat) (n : Nat)
     {e e' : CoreExpr} {ev0 : Fmap sym value} {evs : List (Fmap sym value)}
     {ρ' : EnvStack} {σ σ' : Mem}
-    (hf : FragJ e) (hsz : esize e ≤ lemDefaultFuel)
-    (hs : Step Q (e, ev0 :: evs, σ) (e', ρ', σ')) :
+    (hf : Frag e) (hsz : esize e ≤ lemDefaultFuel)
+    (hs : Step (procCtx p rs) (e, ev0 :: evs, σ) (e', ρ', σ')) :
     driveJ rs aids (n + 1) (procThread p e (ev0 :: evs)) σ =
       driveJ rs (fun i => aids (i + 1)) n (procThread p e' ρ') σ' := by
-  rw [show driveJ rs aids (n + 1) (procThread p e (ev0 :: evs)) σ =
-    (match (step_ctx fmapEmpty σ spikeFile fmapEmpty 0
-        (none, procThread p e (ev0 :: evs))).map
-        (dischargeStep (aids 0) rs σ) with
-      | [.next th' σ'] => driveJ rs (fun i => aids (i + 1)) n th' σ'
-      | [.done v] => .done v σ
-      | [.killed r] => .killed r
-      | _ => .stuck) from rfl]
-  rw [driveJ_scrutinee, engine_step_matchJ (aids 0) hQ hf hsz hs]
+  rw [← driveU_procCtx p rs (n+1) aids _ σ, ← driveU_procCtx p rs n _ _ σ']
+  rw [show (procThread p e (ev0 :: evs)) =
+    (procCtx p rs).thread e (ev0 :: evs) from rfl,
+    show (procThread p e' ρ') = (procCtx p rs).thread e' ρ' from rfl]
+  rw [driveU_succ, stepOutcomes_thread,
+    engine_step_matchU rfl (aids 0) hf hsz hs]
 
 /-- Value delivery: driveJ at a bare value is PROGRAM-DONE, state
     verbatim. -/
@@ -653,36 +729,31 @@ theorem driveJ_done (p : sym) (rs : core_run_state) (aids : Nat → Nat)
     (n : Nat) (v : value) (ρ : EnvStack) (σ : Mem) :
     driveJ rs aids (n + 1) (procThread p (ofVal (.pure v)) ρ) σ =
       .done v σ := by
-  rw [show driveJ rs aids (n + 1) (procThread p (ofVal (.pure v)) ρ) σ =
-    (match (step_ctx fmapEmpty σ spikeFile fmapEmpty 0
-        (none, procThread p (ofVal (.pure v)) ρ)).map
-        (dischargeStep (aids 0) rs σ) with
-      | [.next th' σ'] => driveJ rs (fun i => aids (i + 1)) n th' σ'
-      | [.done v] => .done v σ
-      | [.killed r] => .killed r
-      | _ => .stuck) from rfl]
-  rw [driveJ_scrutinee, engineOutcomesP_done]
+  rw [← driveU_procCtx p rs (n+1) aids _ σ,
+    show (procThread p (ofVal (.pure v)) ρ) =
+      (procCtx p rs).thread (ofVal (.pure v)) ρ from rfl,
+    driveU_succ, stepOutcomes_thread, outcomesU_done (procCtx_wf p rs)]
 
-/-- ADEQUACY AT THE JUMP PROFILE (engine-only conclusion): a proved
-    base-WP at the label-carrying tuple plus the seeded memory
-    implies driveJ from the proc-carrying thread never kills, never
-    derails, and any delivered value satisfies the postcondition
-    readout. The run state is a parameter carrying the label tie;
-    the label map's cone membership and static size bound are the
-    honest R3-interim hypotheses (arc plan: the in-budget form until
-    the termination-accounting slot). -/
+/-- ADEQUACY AT THE JUMP PROFILE (engine-only conclusion) — the
+    `procCtx` instance of `engine_adequacyU`: a proved base-WP at
+    the context-carrying tuple plus the seeded memory implies driveJ
+    from the proc-carrying thread never kills, never derails, and
+    any delivered value satisfies the postcondition readout. The run
+    state is a parameter carrying the label tie; the label map's
+    cone membership and static size bound are the honest R3-interim
+    hypotheses. -/
 theorem engine_adequacyJ {GF : BundledGFunctors} [SpikeGpreS GF]
     {Q : LabelMap} {p : sym} {rs : core_run_state}
     (hQ : LabeledAt rs p Q)
     (hQf : ∀ l params cont, lookupLabel Q l = some (params, cont) →
-      FragJ cont)
+      Frag cont)
     (e₀ : CoreExpr) (ev00 : Fmap sym value) (evs0 : List (Fmap sym value))
     (σ₀ : Mem) (m₀ : SpikeHeapF SpikeCell)
-    (hfrag : FragJ e₀) (hcoh : Coh σ₀ m₀)
+    (hfrag : Frag e₀) (hcoh : Coh σ₀ m₀)
     (ψ : value → Mem → Prop)
     (hwp : ∀ [SpikeGS .hasLC GF],
       iprop(([∗map] i ↦ c ∈ m₀, pointsTo i (.own 1) c)) ⊢
-        WP (⟨e₀, ev00 :: evs0, Q⟩ : CoreRt) @ Stuckness.NotStuck; ⊤
+        WP (⟨e₀, ev00 :: evs0, procCtx p rs⟩ : CoreRt) @ Stuckness.NotStuck; ⊤
           {{ w, iprop(∀ (σ' : Mem) (ns : Nat)
           (κs : List Empty) (nt : Nat),
           stateInterp σ' ns κs nt ={⊤, ∅}=∗ ⌜ψ w.val σ'⌝) }})
@@ -695,31 +766,16 @@ theorem engine_adequacyJ {GF : BundledGFunctors} [SpikeGpreS GF]
     (∀ (v : value) (σ' : Mem),
       driveJ rs aids n (procThread p e₀ (ev00 :: evs0)) σ₀ = .done v σ' →
       ψ v σ') := by
-  have hadeq := fun (t2 : List CoreRt) (σ2 : Mem)
-      (h : ([(⟨e₀, ev00 :: evs0, Q⟩ : CoreRt)], σ₀) -·->ₜₚ* (t2, σ2)) =>
-    spike_step_adequacy ⟨e₀, ev00 :: evs0, Q⟩ σ₀ m₀ hcoh
-      (fun w σ' => ψ w.val σ') hwp h
-  have hNS : ∀ (r : CoreRt) (σ : Mem),
-      Reach ((⟨e₀, ev00 :: evs0, Q⟩ : CoreRt), σ₀) (r, σ) →
-      PrimStep.NotStuck (Val := CoreRVal) (r, σ) := by
-    intro r σ hr
-    exact (hadeq [r] σ (Reach.toPool hr)).1 r (by simp)
-  have hRES : ∀ (w : CoreRVal) (σ : Mem),
-      Reach ((⟨e₀, ev00 :: evs0, Q⟩ : CoreRt), σ₀) (ofValRt w, σ) →
-      ψ w.val σ := by
-    intro w σ hr
-    exact (hadeq [ofValRt w] σ (Reach.toPool hr)).2 w [] rfl
-  have hok : DriveOk (fun w σ' => ψ w.val σ')
-      (driveJ rs aids n (procThread p e₀ (ev00 :: evs0)) σ₀) :=
-    drive_classifyJ hQ hQf n hQsz e₀ (ev00 :: evs0) σ₀ _ hNS hRES
-      n (Nat.le_refl n) aids e₀ ev00 evs0 σ₀ .refl hfrag hfuel
-  refine ⟨fun r hdr => ?_, fun hds => ?_, fun v σ' hdv => ?_⟩
-  · rw [hdr] at hok; exact hok
-  · rw [hds] at hok; exact hok
-  · rw [hdv] at hok
-    obtain ⟨w, hwv, hφ⟩ := hok
-    rw [← hwv]
-    exact hφ
+  have hlbl : (procCtx p rs).labels = Q := procCtx_labels hQ
+  have h := engine_adequacyU (GF := GF) (M := procCtx p rs)
+    (procCtx_wf p rs) rfl
+    (fun l params cont hl => hQf l params cont (by rwa [hlbl] at hl))
+    e₀ ev00 evs0 σ₀ m₀ hfrag hcoh ψ hwp n aids hfuel
+    (fun l params cont hl => hQsz l params cont (by rwa [hlbl] at hl))
+  rw [show (procCtx p rs).thread e₀ (ev00 :: evs0) =
+    procThread p e₀ (ev00 :: evs0) from rfl,
+    driveU_procCtx p rs n aids _ σ₀] at h
+  exact h
 
 end
 end CerberusHeapLang

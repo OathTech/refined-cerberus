@@ -19,11 +19,9 @@ CHECKED vs DECLARED (Phase-0 honesty about the instrument itself):
   the stated kind (theorem / constructor) — a deleted or renamed
   rule, cone case, match lemma, or consumer makes this script THROW
   and the gate go red. Additionally the FULL CONSTRUCTOR LISTS of
-  `Step` and `FragJ` are asserted equal to the expected lists below:
+  `Step` and `Frag` are asserted equal to the expected lists below:
   ANY cone/mirror constructor added or removed fails the run until
-  the manifest is regenerated and re-reviewed (this is what makes
-  the Ecase RED row checked rather than narrated: FragJ provably has
-  no case constructor as long as this run is green).
+  the manifest is regenerated and re-reviewed.
 - DECLARED (documented, not yet mechanical): the ATTRIBUTIONS — that
   a listed consumer's program actually executes the construct, and
   the lane assignments. Phase 1 replaces these with a table
@@ -102,7 +100,7 @@ def rows : List Row := [
   { token := "value", construct := "value delivery (Epure at PEval; Eannot values)",
     mirror := .declared "terminal — the toVal/ofVal value protocol (values do not step)",
     logic := .thms [`CerberusHeapLang.wp_ofVal, `CerberusHeapLang.wps_ofVal],
-    cone := .ctors [`CerberusHeapLang.FragJ.val_pure],
+    cone := .ctors [`CerberusHeapLang.Frag.val_pure],
     engineMatch := .thms [`CerberusHeapLang.step_ctx_done,
       `CerberusHeapLang.step_ctx_remove_annot],
     partialLane := .thms [`CerberusHeapLang.engine_complete,
@@ -113,7 +111,7 @@ def rows : List Row := [
   { token := "store", construct := "Eaction Store0 (value operands)",
     mirror := .ctors [`CerberusHeapLang.Step.store],
     logic := .thms [`CerberusHeapLang.wp_store, `CerberusHeapLang.wps_store],
-    cone := .ctors [`CerberusHeapLang.FragJ.store],
+    cone := .ctors [`CerberusHeapLang.Frag.store],
     engineMatch := .thms [`CerberusHeapLang.step_ctx_store],
     partialLane := .thms [`CerberusHeapLang.engine_complete,
       `CerberusHeapLang.engine_adequacyJ],
@@ -125,7 +123,7 @@ def rows : List Row := [
   { token := "load", construct := "Eaction Load0 (value operand)",
     mirror := .ctors [`CerberusHeapLang.Step.load],
     logic := .thms [`CerberusHeapLang.wp_load, `CerberusHeapLang.wps_load],
-    cone := .ctors [`CerberusHeapLang.FragJ.load],
+    cone := .ctors [`CerberusHeapLang.Frag.load],
     engineMatch := .thms [`CerberusHeapLang.step_ctx_load],
     partialLane := .thms [`CerberusHeapLang.engine_complete,
       `CerberusHeapLang.engine_adequacyJ],
@@ -136,7 +134,7 @@ def rows : List Row := [
   { token := "create", construct := "Eaction Create0",
     mirror := .ctors [`CerberusHeapLang.Step.create],
     logic := .red "no wp_create/wps_create small axiom (registered D26: needs the allocator-cursor resource; Phase 2); see Notes 4",
-    cone := .ctors [`CerberusHeapLang.FragJ.create],
+    cone := .ctors [`CerberusHeapLang.Frag.create],
     engineMatch := .thms [`CerberusHeapLang.step_ctx_create],
     partialLane := .thms [`CerberusHeapLang.engine_complete,
       `CerberusHeapLang.engine_adequacyJ],
@@ -148,7 +146,7 @@ def rows : List Row := [
     mirror := .ctors [`CerberusHeapLang.Step.sseq_pure,
       `CerberusHeapLang.Step.sseq_annot, `CerberusHeapLang.Step.sseq_ctx],
     logic := .thms [`CerberusHeapLang.wp_sseq, `CerberusHeapLang.wps_seq],
-    cone := .ctors [`CerberusHeapLang.FragJ.sseq],
+    cone := .ctors [`CerberusHeapLang.Frag.sseq],
     engineMatch := .thms [`CerberusHeapLang.step_ctx_beta_pure,
       `CerberusHeapLang.step_ctx_beta_annot],
     partialLane := .thms [`CerberusHeapLang.engine_complete,
@@ -161,7 +159,7 @@ def rows : List Row := [
     mirror := .ctors [`CerberusHeapLang.Step.sseq_spec_pure,
       `CerberusHeapLang.Step.sseq_spec_annot],
     logic := .thms [`CerberusHeapLang.wps_seq_spec],
-    cone := .ctors [`CerberusHeapLang.FragJ.sseq_spec],
+    cone := .ctors [`CerberusHeapLang.Frag.sseq_spec],
     engineMatch := .thms [`CerberusHeapLang.step_ctx_beta_spec_pure,
       `CerberusHeapLang.step_ctx_beta_spec_annot],
     partialLane := .thms [`CerberusHeapLang.engine_adequacyJ],
@@ -172,7 +170,7 @@ def rows : List Row := [
   { token := "sseq-sym", construct := "Esseq, plain-symbol-binder pattern (bare values)",
     mirror := .ctors [`CerberusHeapLang.Step.sseq_sym_pure],
     logic := .thms [`CerberusHeapLang.wps_seq_sym],
-    cone := .ctors [`CerberusHeapLang.FragJ.sseq_sym],
+    cone := .ctors [`CerberusHeapLang.Frag.sseq_sym],
     engineMatch := .thms [`CerberusHeapLang.step_ctx_beta_sym_pure],
     partialLane := .thms [`CerberusHeapLang.engine_adequacyJ],
     totalLane := noTotal,
@@ -182,7 +180,7 @@ def rows : List Row := [
     mirror := .ctors [`CerberusHeapLang.Step.annot_ctx,
       `CerberusHeapLang.Step.annot_merge],
     logic := .thms [`CerberusHeapLang.wp_annot, `CerberusHeapLang.wps_annot],
-    cone := .ctors [`CerberusHeapLang.FragJ.annot],
+    cone := .ctors [`CerberusHeapLang.Frag.annot],
     engineMatch := .thms [`CerberusHeapLang.step_ctx_merge],
     partialLane := .thms [`CerberusHeapLang.engine_complete,
       `CerberusHeapLang.engine_adequacyJ],
@@ -192,7 +190,7 @@ def rows : List Row := [
   { token := "save", construct := "Esave (block entry, value-shaped params)",
     mirror := .ctors [`CerberusHeapLang.Step.save],
     logic := .thms [`CerberusHeapLang.wps_save],
-    cone := .ctors [`CerberusHeapLang.FragJ.save],
+    cone := .ctors [`CerberusHeapLang.Frag.save],
     engineMatch := .thms [`CerberusHeapLang.step_ctx_save],
     partialLane := .thms [`CerberusHeapLang.engine_adequacyJ],
     totalLane := noTotal,
@@ -204,7 +202,7 @@ def rows : List Row := [
       `CerberusHeapLang.Step.if_false],
     logic := .thms [`CerberusHeapLang.wps_if_true,
       `CerberusHeapLang.wps_if_false],
-    cone := .ctors [`CerberusHeapLang.FragJ.if_],
+    cone := .ctors [`CerberusHeapLang.Frag.if_],
     engineMatch := .thms [`CerberusHeapLang.stepDischarge_if_true,
       `CerberusHeapLang.stepDischarge_if_false],
     partialLane := .thms [`CerberusHeapLang.engine_adequacyJ],
@@ -215,7 +213,7 @@ def rows : List Row := [
   { token := "run", construct := "Erun (context-discarding jump)",
     mirror := .ctors [`CerberusHeapLang.Step.run],
     logic := .thms [`CerberusHeapLang.wps_run],
-    cone := .ctors [`CerberusHeapLang.FragJ.run],
+    cone := .ctors [`CerberusHeapLang.Frag.run],
     engineMatch := .thms [`CerberusHeapLang.stepDischarge_run],
     partialLane := .thms [`CerberusHeapLang.engine_adequacyJ],
     totalLane := noTotal,
@@ -224,20 +222,23 @@ def rows : List Row := [
       `CerberusHeapLang.fib_certified] },
   { token := "case-value", construct := "Ecase, VALUE scrutinee",
     mirror := .ctors [`CerberusHeapLang.Step.case_value],
-    logic := .thms [`CerberusHeapLang.wps_case_value]
-      (note := "NO package consumer"),
-    cone := .red "no FragJ constructor (checked: the asserted FragJ constructor list below has no case entry) — not adequacy-exportable until Phase 1 (audit F-01)",
-    engineMatch := .thms [`CerberusHeapLang.step_ctx_case_value]
-      (note := "per-step equation only"),
-    partialLane := .red "engine_step_matchJ eliminates its case_ branch (outside the J cone, Soundness.lean); no adequacy theorem can consume the rule",
+    logic := .thms [`CerberusHeapLang.wps_case_value],
+    cone := .ctors [`CerberusHeapLang.Frag.case_value]
+      (note := "S1b: joined — branch-closure + branch-size premises explicit"),
+    engineMatch := .thms [`CerberusHeapLang.step_ctx_case_value,
+      `CerberusHeapLang.step_ctx_case_illtyped,
+      `CerberusHeapLang.engine_complete_caseU]
+      (note := "TWO-SIDED at any MachineCtx"),
+    partialLane := .thms [`CerberusHeapLang.engine_adequacyJ,
+      `CerberusHeapLang.engine_adequacyU],
     totalLane := noTotal,
     prodLane := .red "outside every lane",
-    consumer := .red "none in the package" },
+    consumer := .red "no package consumer yet — the adequacy-level case regression lands in the S1b drift/regression commit" },
   { token := "pure-sym", construct := "Epure exit at PEsym shape",
     mirror := .ctors [`CerberusHeapLang.Step.pure_eval]
       (note := "certified at PEsym shape — Soundness stepDischarge_pure_sym"),
     logic := .thms [`CerberusHeapLang.wps_pure],
-    cone := .ctors [`CerberusHeapLang.FragJ.pure_sym],
+    cone := .ctors [`CerberusHeapLang.Frag.pure_sym],
     engineMatch := .thms [`CerberusHeapLang.stepDischarge_pure_sym],
     partialLane := .thms [`CerberusHeapLang.engine_adequacyJ],
     totalLane := noTotal,
@@ -246,7 +247,7 @@ def rows : List Row := [
   { token := "memop-ptreq", construct := "Ememop PtrEq (value operands)",
     mirror := .ctors [`CerberusHeapLang.Step.memop_ptreq],
     logic := .thms [`CerberusHeapLang.wps_memop_ptreq],
-    cone := .ctors [`CerberusHeapLang.FragJ.memop_vals],
+    cone := .ctors [`CerberusHeapLang.Frag.memop_vals],
     engineMatch := .thms [`CerberusHeapLang.step_ctx_memop],
     partialLane := .thms [`CerberusHeapLang.engine_adequacyJ],
     totalLane := noTotal,
@@ -255,7 +256,7 @@ def rows : List Row := [
   { token := "memop-op", construct := "Ememop PtrEq, operand-evaluation step",
     mirror := .ctors [`CerberusHeapLang.Step.memop_eval],
     logic := .thms [`CerberusHeapLang.wps_memop_eval],
-    cone := .ctors [`CerberusHeapLang.FragJ.memop_op],
+    cone := .ctors [`CerberusHeapLang.Frag.memop_op],
     engineMatch := .thms [`CerberusHeapLang.stepDischarge_memop_eval],
     partialLane := .thms [`CerberusHeapLang.engine_adequacyJ],
     totalLane := noTotal,
@@ -264,7 +265,7 @@ def rows : List Row := [
   { token := "load-op", construct := "Load0 operand-evaluation step (ACTION_EVAL)",
     mirror := .ctors [`CerberusHeapLang.Step.load_eval],
     logic := .thms [`CerberusHeapLang.wps_load_eval],
-    cone := .ctors [`CerberusHeapLang.FragJ.load_op],
+    cone := .ctors [`CerberusHeapLang.Frag.load_op],
     engineMatch := .thms [`CerberusHeapLang.stepDischarge_load_eval],
     partialLane := .thms [`CerberusHeapLang.engine_adequacyJ],
     totalLane := noTotal,
@@ -273,7 +274,7 @@ def rows : List Row := [
   { token := "store-op", construct := "Store0 operand-evaluation step (ACTION_EVAL)",
     mirror := .ctors [`CerberusHeapLang.Step.store_eval],
     logic := .thms [`CerberusHeapLang.wps_store_eval],
-    cone := .ctors [`CerberusHeapLang.FragJ.store_op],
+    cone := .ctors [`CerberusHeapLang.Frag.store_op],
     engineMatch := .thms [`CerberusHeapLang.stepDischarge_store_eval],
     partialLane := .thms [`CerberusHeapLang.engine_adequacyJ],
     totalLane := noTotal,
@@ -283,7 +284,7 @@ def rows : List Row := [
     construct := "pure operands: PEval / PEsym / integer PEop / PEarray_shift",
     mirror := .declared "premises of the if/run/pure/ACTION_EVAL rules via the certified pure evaluator (Soundness evaluator bridge); no per-construct Step rule",
     logic := .declared "enters as rule premises (guard/argument/operand evaluation)",
-    cone := .declared "via the peDepth side conditions carried by FragJ.if_/run/load_op/memop_op/store_op",
+    cone := .declared "via the peDepth side conditions carried by Frag.if_/run/load_op/memop_op/store_op",
     engineMatch := .declared "the evaluator bridge lemmas, Soundness.lean (eval1/mapM tower)",
     partialLane := .thms [`CerberusHeapLang.engine_adequacyJ],
     totalLane := noTotal,
@@ -307,17 +308,20 @@ def expectedStepCtors : List Name :=
    `CerberusHeapLang.Step.sseq_sym_pure, `CerberusHeapLang.Step.store,
    `CerberusHeapLang.Step.store_eval]
 
-/-- The asserted cone constructor list (sorted). NB: no case entry —
-this is the checked form of the Ecase RED row (audit F-01). -/
-def expectedFragJCtors : List Name :=
-  [`CerberusHeapLang.FragJ.annot, `CerberusHeapLang.FragJ.create,
-   `CerberusHeapLang.FragJ.if_, `CerberusHeapLang.FragJ.load,
-   `CerberusHeapLang.FragJ.load_op, `CerberusHeapLang.FragJ.memop_op,
-   `CerberusHeapLang.FragJ.memop_vals, `CerberusHeapLang.FragJ.pure_sym,
-   `CerberusHeapLang.FragJ.run, `CerberusHeapLang.FragJ.save,
-   `CerberusHeapLang.FragJ.sseq, `CerberusHeapLang.FragJ.sseq_spec,
-   `CerberusHeapLang.FragJ.sseq_sym, `CerberusHeapLang.FragJ.store,
-   `CerberusHeapLang.FragJ.store_op, `CerberusHeapLang.FragJ.val_pure]
+/-- The asserted cone constructor list (sorted). S1b: ONE unified
+cone (`Frag` — the migrated `FragJ`), with value-scrutinee `Ecase`
+JOINED (`Frag.case_value` — the F-01 export). Still hand-asserted
+this slice; S1c derives the rows from the cone. -/
+def expectedFragCtors : List Name :=
+  [`CerberusHeapLang.Frag.annot, `CerberusHeapLang.Frag.case_value,
+   `CerberusHeapLang.Frag.create,
+   `CerberusHeapLang.Frag.if_, `CerberusHeapLang.Frag.load,
+   `CerberusHeapLang.Frag.load_op, `CerberusHeapLang.Frag.memop_op,
+   `CerberusHeapLang.Frag.memop_vals, `CerberusHeapLang.Frag.pure_sym,
+   `CerberusHeapLang.Frag.run, `CerberusHeapLang.Frag.save,
+   `CerberusHeapLang.Frag.sseq, `CerberusHeapLang.Frag.sseq_spec,
+   `CerberusHeapLang.Frag.sseq_sym, `CerberusHeapLang.Frag.store,
+   `CerberusHeapLang.Frag.store_op, `CerberusHeapLang.Frag.val_pure]
 
 def checkNames (env : Environment) (kind : String) (names : List Name) :
     Except String Unit := do
@@ -365,7 +369,7 @@ def checkCtorList (env : Environment) (ind : Name) (expected : List Name) :
   (match checkCtorList env `CerberusHeapLang.Step expectedStepCtors with
    | .ok () => pure ()
    | .error e => throwError e)
-  (match checkCtorList env `CerberusHeapLang.FragJ expectedFragJCtors with
+  (match checkCtorList env `CerberusHeapLang.Frag expectedFragCtors with
    | .ok () => pure ()
    | .error e => throwError e)
   let render (c : Cell) : MetaM String :=
@@ -391,12 +395,12 @@ def checkCtorList (env : Environment) (ind : Name) (expected : List Name) :
   IO.println "Column semantics — which columns are CHECKED vs DECLARED is part of"
   IO.println "the instrument's honesty and is stated in the script header: `OK`"
   IO.println "cells are name-and-kind checked in the built environment (and the"
-  IO.println "full `Step`/`FragJ` constructor lists are asserted verbatim, so a"
+  IO.println "full `Step`/`Frag` constructor lists are asserted verbatim, so a"
   IO.println "deleted cone case fails the gate); lane ATTRIBUTIONS and"
   IO.println "consumer-exercises-construct claims are DECLARED pending the Phase-1"
   IO.println "fully mechanical (cone-derived) upgrade."
   IO.println ""
-  IO.println "| Construct | Level | Mirror (Step) | Logic (wp/wps) | Cone (FragJ) | Engine match | Partial adequacy | Total lane | Production lane | Example consumer |"
+  IO.println "| Construct | Level | Mirror (Step) | Logic (wp/wps) | Cone (Frag) | Engine match | Partial adequacy | Total lane | Production lane | Example consumer |"
   IO.println "|---|---|---|---|---|---|---|---|---|---|"
   for r in rows do
     let cells ← [r.mirror, r.logic, r.cone, r.engineMatch, r.partialLane,
@@ -405,14 +409,14 @@ def checkCtorList (env : Environment) (ind : Name) (expected : List Name) :
   IO.println ""
   IO.println "## Notes (the registered honesty items behind the RED cells)"
   IO.println ""
-  IO.println "1. **`Ecase` (value scrutinee) is LOCAL RULE ONLY — RED at the"
-  IO.println "   adequacy column** (audit F-01): mirror rule, wps rule and"
-  IO.println "   per-step engine equation exist, but there is no `FragJ`"
-  IO.println "   membership, `engine_step_matchJ` eliminates the case shape, and"
-  IO.println "   `wps_case_value` has no package consumer. Not"
-  IO.println "   adequacy-exportable until Phase 1 exports it (cone constructor +"
-  IO.println "   substitution closure + decompJ/match extension + an adequacy"
-  IO.println "   regression theorem whose program executes the rule)."
+  IO.println "1. **`Ecase` (value scrutinee) joined the unified cone in S1b**"
+  IO.println "   (audit F-01 remediation): mirror rule + wps rule + cone"
+  IO.println "   membership (`Frag.case_value`, branch-closure and branch-size"
+  IO.println "   premises explicit over the extended `esize`) + TWO-SIDED engine"
+  IO.println "   pair (`step_ctx_case_value`/`step_ctx_case_illtyped`/"
+  IO.println "   `engine_complete_caseU`) + generic adequacy coverage. The row"
+  IO.println "   stays short of FULL until an in-package consumer (adequacy-level"
+  IO.println "   case regression) lands — the S1b drift/regression commit."
   IO.println "2. **The total lane is empty for every construct** (audit F-02):"
   IO.println "   the logic has no total WP / total statement judgment;"
   IO.println "   `blockSpecs_intro_variant` has no theorem-level termination"

@@ -140,15 +140,15 @@ theorem pointsToCell_iff [SpikeGS hlc GF] (pv : CerbMem.PointerValue)
     the terms at all (DA_pos carries only the exclusion list and the
     footprint). Env: arbitrary and returned VERBATIM (the request
     path never reads it). -/
-theorem wp_store [SpikeGS hlc GF] {s : Stuckness} {E : CoPset} {Q : LabelMap}
+theorem wp_store [SpikeGS hlc GF] {s : Stuckness} {E : CoPset} {M : MachineCtx}
     (loc : CerbLocation.Loc) (ann : core_run_annotation) (ty : ctype)
     (pv : CerbMem.PointerValue) (cv : value) (mo : memory_order)
     (mv : CerbMem.MemValue) (bs : List CerbMem.AbsByte) (ρ : EnvStack)
-    (hmv : memValueFromValue fmapEmpty (Ctype [] (unatomic_ ty)) cv = some mv)
+    (hmv : memValueFromValue M.tagDefs (Ctype [] (unatomic_ ty)) cv = some mv)
     (hst : StorableAt ty mv) :
     pointsToCell (GF := GF) pv (.own 1) ty bs ⊢
-      WP (⟨storeExpr loc ann ty pv cv mo, ρ, Q⟩ : CoreRt) @ s; E
-        {{ w, ∃ fp, ⌜w = (⟨SpikeVal.annot [DA_pos [] fp] Vunit, ρ, Q⟩ : CoreRVal)⌝ ∗
+      WP (⟨storeExpr loc ann ty pv cv mo, ρ, M⟩ : CoreRt) @ s; E
+        {{ w, ∃ fp, ⌜w = (⟨SpikeVal.annot [DA_pos [] fp] Vunit, ρ, M⟩ : CoreRVal)⌝ ∗
             pointsToCell pv (.own 1) ty (CerbMem.memValueToBytes [] mv).2 }} := by
   iintro Hpt
   iapply wp_lift_atomic_step rfl
@@ -177,9 +177,9 @@ theorem wp_store [SpikeGS hlc GF] {s : Stuckness} {E : CoPset} {Q : LabelMap}
       σ'' = CerbMem.writeBytesTo σ₁ addr (CerbMem.memValueToBytes [] mv).2 := by
     have h := Option.some.inj hmem'.symm
     exact ⟨congrArg Prod.fst h, congrArg Prod.snd h⟩
-  obtain ⟨e₂e, e₂ρ, e₂Q⟩ := e₂
+  obtain ⟨e₂e, e₂ρ, e₂M⟩ := e₂
   simp only at hlbl
-  obtain rfl : Q = e₂Q := hlbl.symm
+  obtain rfl : M = e₂M := hlbl.symm
   obtain ⟨he, hρ, hσ⟩ : e₂e = Expr [] (Eannot
         [DA_pos [] (CerbMem.Footprint.FP .W addr (CerbMem.sizeofCtype ty))]
         (Expr [] (Epure (Pexpr [] () (PEval Vunit))))) ∧ e₂ρ = ρ ∧
@@ -202,7 +202,7 @@ theorem wp_store [SpikeGS hlc GF] {s : Stuckness} {E : CoPset} {Q : LabelMap}
   isplitl [Hpt]
   · iexists (⟨SpikeVal.annot
       [DA_pos [] (CerbMem.Footprint.FP .W addr (CerbMem.sizeofCtype ty))] Vunit,
-      ρ, Q⟩ : CoreRVal)
+      ρ, M⟩ : CoreRVal)
     isplit
     · ipureintro; rfl
     iexists (CerbMem.Footprint.FP .W addr (CerbMem.sizeofCtype ty))
@@ -225,15 +225,15 @@ theorem wp_store [SpikeGS hlc GF] {s : Stuckness} {E : CoPset} {Q : LabelMap}
     Coh-pinned side tables). The `htrap` premise excludes the _Bool
     trap-representation kill arm (CerbMem.lean:1598-1604) — the one
     loadM failure the points-to alone cannot rule out (R4). -/
-theorem wp_load [SpikeGS hlc GF] {s : Stuckness} {E : CoPset} {Q : LabelMap}
+theorem wp_load [SpikeGS hlc GF] {s : Stuckness} {E : CoPset} {M : MachineCtx}
     (loc : CerbLocation.Loc) (ann : core_run_annotation) (ty : ctype)
     (pv : CerbMem.PointerValue) (mo : memory_order) (dq : DFrac)
     (bs : List CerbMem.AbsByte) (ρ : EnvStack)
     (htrap : cellLoadTrap ⟨addrOf pv, ty, bs⟩ = false) :
     pointsToCell (GF := GF) pv dq ty bs ⊢
-      WP (⟨loadExpr loc ann ty pv mo, ρ, Q⟩ : CoreRt) @ s; E
+      WP (⟨loadExpr loc ann ty pv mo, ρ, M⟩ : CoreRt) @ s; E
         {{ w, ∃ fp, ⌜w = (⟨SpikeVal.annot [DA_pos [] fp] (loadedVal pv ty bs),
-            ρ, Q⟩ : CoreRVal)⌝ ∗
+            ρ, M⟩ : CoreRVal)⌝ ∗
             pointsToCell pv dq ty bs }} := by
   iintro Hpt
   iapply wp_lift_atomic_step rfl
@@ -263,9 +263,9 @@ theorem wp_load [SpikeGS hlc GF] {s : Stuckness} {E : CoPset} {Q : LabelMap}
     have h := Option.some.inj hmem'.symm
     exact ⟨⟨congrArg (fun p => p.1.1) h, congrArg (fun p => p.1.2) h⟩,
       (congrArg Prod.snd h).symm⟩
-  obtain ⟨e₂e, e₂ρ, e₂Q⟩ := e₂
+  obtain ⟨e₂e, e₂ρ, e₂M⟩ := e₂
   simp only at hlbl
-  obtain rfl : Q = e₂Q := hlbl.symm
+  obtain rfl : M = e₂M := hlbl.symm
   obtain ⟨he, hρ, hσ⟩ : e₂e = Expr [] (Eannot
         [DA_pos [] (CerbMem.Footprint.FP .R addr (CerbMem.sizeofCtype ty))]
         (Expr [] (Epure (Pexpr [] () (PEval
@@ -286,7 +286,7 @@ theorem wp_load [SpikeGS hlc GF] {s : Stuckness} {E : CoPset} {Q : LabelMap}
   isplitl [Hpt]
   · iexists (⟨SpikeVal.annot
       [DA_pos [] (CerbMem.Footprint.FP .R addr (CerbMem.sizeofCtype ty))]
-      (loadedVal (cellPtr i addr) ty bs), ρ, Q⟩ : CoreRVal)
+      (loadedVal (cellPtr i addr) ty bs), ρ, M⟩ : CoreRVal)
     isplit
     · ipureintro; rfl
     iexists (CerbMem.Footprint.FP .R addr (CerbMem.sizeofCtype ty))
@@ -354,13 +354,13 @@ theorem toVal_annot_none {a : List annot} {ds : List dyn_annotation}
 
 /-- Tuple-level value dichotomy corollaries (per-constructor simp
     discipline — the probe's match-reduction rule). -/
-theorem toValRt_of_toVal {e : CoreExpr} {ρ : EnvStack} {Q : LabelMap}
+theorem toValRt_of_toVal {e : CoreExpr} {ρ : EnvStack} {M : MachineCtx}
     {w : SpikeVal} (h : toVal e = some w) :
-    toValRt ⟨e, ρ, Q⟩ = some ⟨w, ρ, Q⟩ := by
+    toValRt ⟨e, ρ, M⟩ = some ⟨w, ρ, M⟩ := by
   rw [toValRt_mk, h]; rfl
 
-theorem toValRt_of_toVal_none {e : CoreExpr} {ρ : EnvStack} {Q : LabelMap}
-    (h : toVal e = none) : toValRt ⟨e, ρ, Q⟩ = none := by
+theorem toValRt_of_toVal_none {e : CoreExpr} {ρ : EnvStack} {M : MachineCtx}
+    (h : toVal e = none) : toValRt ⟨e, ρ, M⟩ = none := by
   rw [toValRt_mk, h]; rfl
 
 /-- Annotation reindexing (the lockstep argument): the two wraps make
@@ -371,8 +371,8 @@ theorem wp_annot_reindex [SpikeGS hlc GF] {s : Stuckness} {E : CoPset}
     (a : List annot) (dsA dsB : List dyn_annotation) (c : CoreExpr)
     (ρ : EnvStack) {Φ₁ Φ₂ : CoreRVal → IProp GF}
     (hΦ : ∀ v, Φ₁ (CoreRVal.merge dsA v) = Φ₂ (CoreRVal.merge dsB v)) :
-    WP (⟨Expr a (Eannot dsA c), ρ, spikeLbl⟩ : CoreRt) @ s; E {{ Φ₁ }} ⊢
-      WP (⟨Expr a (Eannot dsB c), ρ, spikeLbl⟩ : CoreRt) @ s; E {{ Φ₂ }} := by
+    WP (⟨Expr a (Eannot dsA c), ρ, spikeCtx⟩ : CoreRt) @ s; E {{ Φ₁ }} ⊢
+      WP (⟨Expr a (Eannot dsB c), ρ, spikeCtx⟩ : CoreRt) @ s; E {{ Φ₂ }} := by
   iloeb as IH generalizing %a %dsA %dsB %c %ρ %hΦ
   rcases toVal_annot_cases a c dsA with ⟨rfl, v, rfl, hA⟩ | hA
   · -- value on both sides
@@ -384,9 +384,9 @@ theorem wp_annot_reindex [SpikeGS hlc GF] {s : Stuckness} {E : CoPset}
     iintro H
     imod H with H
     imodintro
-    have h' : Φ₁ (⟨SpikeVal.annot dsA v, ρ, spikeLbl⟩ : CoreRVal) =
-        Φ₂ (⟨SpikeVal.annot dsB v, ρ, spikeLbl⟩ : CoreRVal) :=
-      hΦ ⟨.pure v, ρ, spikeLbl⟩
+    have h' : Φ₁ (⟨SpikeVal.annot dsA v, ρ, spikeCtx⟩ : CoreRVal) =
+        Φ₂ (⟨SpikeVal.annot dsB v, ρ, spikeCtx⟩ : CoreRVal) :=
+      hΦ ⟨.pure v, ρ, spikeCtx⟩
     rw [← h']
     iexact H
   · -- non-value on both sides
@@ -411,25 +411,25 @@ theorem wp_annot_reindex [SpikeGS hlc GF] {s : Stuckness} {E : CoPset}
         rcases hstep.1.annot_inv with ⟨hg, hnj, c', ρ', σ'', hs, _⟩ |
             ⟨a2, ds2, c'', rfl, _⟩ |
             ⟨l, pes, params, cont, vs, _, _, _, _, _, hl, _, _⟩
-        · exact ⟨[], ⟨Expr a (Eannot dsB c'), ρ', spikeLbl⟩, _, [],
+        · exact ⟨[], ⟨Expr a (Eannot dsB c'), ρ', spikeCtx⟩, _, [],
             ⟨Step.annot_ctx hnj hg hs, rfl, rfl⟩⟩
-        · exact ⟨[], ⟨Expr (a ++ a2) (Eannot (dsB ++ ds2) c''), ρ, spikeLbl⟩,
+        · exact ⟨[], ⟨Expr (a ++ a2) (Eannot (dsB ++ ds2) c''), ρ, spikeCtx⟩,
             _, [], ⟨Step.annot_merge, rfl, rfl⟩⟩
-        · rw [lookupLabel_empty] at hl; cases hl
+        · rw [spikeCtx_labels, lookupLabel_empty] at hl; cases hl
     · iintro %e₂ %σ₂ %eₜ %HstepB Hcred
       obtain ⟨hstepB, hlbl, rfl⟩ := HstepB
       dsimp only [Nat.repeat]
       rcases hstepB.annot_inv with ⟨hg, hnj, c', ρ', σ'', hs, hout⟩ |
           ⟨a2, ds2, c'', rfl, hout⟩ |
           ⟨l, pes, params, cont, vs, _, _, _, _, _, hl, _, _⟩
-      · obtain ⟨e₂e, e₂ρ, e₂Q⟩ := e₂
+      · obtain ⟨e₂e, e₂ρ, e₂M⟩ := e₂
         simp only at hlbl
         subst hlbl
         obtain ⟨he, hρ, hσ⟩ : e₂e = Expr a (Eannot dsB c') ∧ e₂ρ = ρ' ∧
             σ₂ = σ'' := by
           simpa [Prod.mk.injEq] using hout
         subst he hρ hσ
-        imod H $$ %(⟨Expr a (Eannot dsA c'), e₂ρ, spikeLbl⟩ : CoreRt) %_ %([])
+        imod H $$ %(⟨Expr a (Eannot dsA c'), e₂ρ, spikeCtx⟩ : CoreRt) %_ %([])
           %⟨Step.annot_ctx hnj hg hs, rfl, rfl⟩ Hcred with H
         iintro !> !>
         imod H
@@ -441,7 +441,7 @@ theorem wp_annot_reindex [SpikeGS hlc GF] {s : Stuckness} {E : CoPset}
         isplitl [Hwp]
         · iapply IH $$ %a %dsA %dsB %c' %e₂ρ %hΦ Hwp
         · iexact Hefs
-      · obtain ⟨e₂e, e₂ρ, e₂Q⟩ := e₂
+      · obtain ⟨e₂e, e₂ρ, e₂M⟩ := e₂
         simp only at hlbl
         subst hlbl
         obtain ⟨he, hρ, hσ⟩ : e₂e = Expr (a ++ a2) (Eannot (dsB ++ ds2) c'') ∧
@@ -451,7 +451,7 @@ theorem wp_annot_reindex [SpikeGS hlc GF] {s : Stuckness} {E : CoPset}
         obtain rfl : ρ = e₂ρ := hρ.symm
         obtain rfl : σ₁ = σ₂ := hσ.symm
         imod H $$ %(⟨Expr (a ++ a2) (Eannot (dsA ++ ds2) c''), ρ,
-            spikeLbl⟩ : CoreRt) %_
+            spikeCtx⟩ : CoreRt) %_
           %([]) %⟨Step.annot_merge, rfl, rfl⟩ Hcred with H
         iintro !> !>
         imod H
@@ -466,7 +466,7 @@ theorem wp_annot_reindex [SpikeGS hlc GF] {s : Stuckness} {E : CoPset}
               rw [← CoreRVal.merge_merge, ← CoreRVal.merge_merge]
               exact hΦ (CoreRVal.merge ds2 v)) Hwp
         · iexact Hefs
-      · rw [lookupLabel_empty] at hl; cases hl
+      · rw [spikeCtx_labels, lookupLabel_empty] at hl; cases hl
 
 /-- WP commutes with the run-time dyn-annotation wrapper: to verify
     `{A}e`, verify `e` with the postcondition translated along
@@ -477,8 +477,8 @@ theorem wp_annot_reindex [SpikeGS hlc GF] {s : Stuckness} {E : CoPset}
 theorem wp_annot [SpikeGS hlc GF] {s : Stuckness} {E : CoPset}
     (ds : List dyn_annotation) (e : CoreExpr) (ρ : EnvStack)
     {Φ : CoreRVal → IProp GF} :
-    WP (⟨e, ρ, spikeLbl⟩ : CoreRt) @ s; E {{ v, Φ (CoreRVal.merge ds v) }} ⊢
-      WP (⟨Expr ([] : List annot) (Eannot ds e), ρ, spikeLbl⟩ : CoreRt) @ s; E
+    WP (⟨e, ρ, spikeCtx⟩ : CoreRt) @ s; E {{ v, Φ (CoreRVal.merge ds v) }} ⊢
+      WP (⟨Expr ([] : List annot) (Eannot ds e), ρ, spikeCtx⟩ : CoreRt) @ s; E
         {{ Φ }} := by
   iloeb as IH generalizing %ds %e %ρ
   cases hv : toVal e with
@@ -496,16 +496,16 @@ theorem wp_annot [SpikeGS hlc GF] {s : Stuckness} {E : CoPset}
       iintro H
       imod H with H
       imodintro
-      rw [show (⟨SpikeVal.annot ds v, ρ, spikeLbl⟩ : CoreRVal) =
-        CoreRVal.merge ds ⟨SpikeVal.pure v, ρ, spikeLbl⟩ from rfl]
+      rw [show (⟨SpikeVal.annot ds v, ρ, spikeCtx⟩ : CoreRVal) =
+        CoreRVal.merge ds ⟨SpikeVal.pure v, ρ, spikeCtx⟩ from rfl]
       iexact H
     | annot ds2 v =>
       -- double annot: one deterministic tau (ANNOTS merge) to a value
-      rw [show (⟨ofVal (SpikeVal.annot ds2 v), ρ, spikeLbl⟩ : CoreRt) =
-        ofValRt ⟨SpikeVal.annot ds2 v, ρ, spikeLbl⟩ from rfl]
+      rw [show (⟨ofVal (SpikeVal.annot ds2 v), ρ, spikeCtx⟩ : CoreRt) =
+        ofValRt ⟨SpikeVal.annot ds2 v, ρ, spikeCtx⟩ from rfl]
       iintro H
       iapply wp_lift_pure_det_step_no_fork E
-        (e₂ := (⟨ofVal (SpikeVal.annot (ds ++ ds2) v), ρ, spikeLbl⟩ : CoreRt))
+        (e₂ := (⟨ofVal (SpikeVal.annot (ds ++ ds2) v), ρ, spikeCtx⟩ : CoreRt))
         ?safe ?det
       case safe =>
         intro σ
@@ -520,11 +520,11 @@ theorem wp_annot [SpikeGS hlc GF] {s : Stuckness} {E : CoPset}
       iapply step_fupd_intro Std.LawfulSet.subset_refl
       inext
       iintro -
-      rw [show (⟨ofVal (SpikeVal.annot (ds ++ ds2) v), ρ, spikeLbl⟩ : CoreRt) =
-        ofValRt ⟨SpikeVal.annot (ds ++ ds2) v, ρ, spikeLbl⟩ from rfl]
+      rw [show (⟨ofVal (SpikeVal.annot (ds ++ ds2) v), ρ, spikeCtx⟩ : CoreRt) =
+        ofValRt ⟨SpikeVal.annot (ds ++ ds2) v, ρ, spikeCtx⟩ from rfl]
       iapply wp_ofVal
-      rw [show (⟨SpikeVal.annot (ds ++ ds2) v, ρ, spikeLbl⟩ : CoreRVal) =
-        CoreRVal.merge ds ⟨SpikeVal.annot ds2 v, ρ, spikeLbl⟩ from rfl]
+      rw [show (⟨SpikeVal.annot (ds ++ ds2) v, ρ, spikeCtx⟩ : CoreRVal) =
+        CoreRVal.merge ds ⟨SpikeVal.annot ds2 v, ρ, spikeCtx⟩ from rfl]
       iexact H
   | none =>
     by_cases hr : annotRooted e = true
@@ -537,7 +537,7 @@ theorem wp_annot [SpikeGS hlc GF] {s : Stuckness} {E : CoPset}
         · cases hr
       iintro H
       iapply wp_lift_pure_det_step_no_fork E
-        (e₂ := (⟨Expr ([] ++ a2) (Eannot (ds ++ ds2) c), ρ, spikeLbl⟩ : CoreRt))
+        (e₂ := (⟨Expr ([] ++ a2) (Eannot (ds ++ ds2) c), ρ, spikeCtx⟩ : CoreRt))
         ?safe2 ?det2
       case safe2 =>
         intro σ
@@ -570,9 +570,9 @@ theorem wp_annot [SpikeGS hlc GF] {s : Stuckness} {E : CoPset}
         | MaybeStuck => trivial
         | NotStuck =>
           obtain ⟨obs0, e', σ', eₜ, hstep⟩ := hred
-          exact ⟨[], ⟨Expr ([] : List annot) (Eannot ds e'.e), e'.ρ, spikeLbl⟩,
+          exact ⟨[], ⟨Expr ([] : List annot) (Eannot ds e'.e), e'.ρ, spikeCtx⟩,
             _, [],
-            ⟨Step.annot_ctx (Step.jumpRedex?_none_of_spikeLbl hstep.1) hr'
+            ⟨Step.annot_ctx (Step.jumpRedex?_none_of_spikeCtx hstep.1) hr'
               hstep.1, rfl, rfl⟩⟩
       · iintro %e₂ %σ₂ %eₜ %HstepW Hcred
         obtain ⟨hstepW, hlbl, rfl⟩ := HstepW
@@ -580,14 +580,14 @@ theorem wp_annot [SpikeGS hlc GF] {s : Stuckness} {E : CoPset}
         rcases hstepW.annot_inv with ⟨hg, hnj, e'', ρ', σ'', hs, hout⟩ |
             ⟨a2, ds2, c, heq, hout⟩ |
             ⟨l, pes, params, cont, vs, _, _, _, _, _, hl, _, _⟩
-        · obtain ⟨e₂e, e₂ρ, e₂Q⟩ := e₂
+        · obtain ⟨e₂e, e₂ρ, e₂M⟩ := e₂
           simp only at hlbl
           subst hlbl
           obtain ⟨he, hρ, hσ⟩ : e₂e = Expr ([] : List annot) (Eannot ds e'') ∧
               e₂ρ = ρ' ∧ σ₂ = σ'' := by
             simpa [Prod.mk.injEq] using hout
           subst he hρ hσ
-          imod H $$ %(⟨e'', e₂ρ, spikeLbl⟩ : CoreRt) %_ %([])
+          imod H $$ %(⟨e'', e₂ρ, spikeCtx⟩ : CoreRt) %_ %([])
             %⟨hs, rfl, rfl⟩ Hcred with H
           iintro !> !>
           imod H
@@ -603,7 +603,7 @@ theorem wp_annot [SpikeGS hlc GF] {s : Stuckness} {E : CoPset}
             intro heq
             rw [heq] at hr'
             simp [annotRooted] at hr')
-        · rw [lookupLabel_empty] at hl; cases hl
+        · rw [spikeCtx_labels, lookupLabel_empty] at hl; cases hl
 
 /-! ## Sequencing (the jump-ready factor route — header note) -/
 
@@ -632,11 +632,11 @@ theorem wp_sseq [SpikeGS hlc GF] {s : Stuckness} {E : CoPset}
     (a pa : List annot) (bty : core_base_type) (e1 e2 : CoreExpr)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value))
     {Φ : CoreRVal → IProp GF} :
-    WP (⟨e1, ev0 :: evs, spikeLbl⟩ : CoreRt) @ s; E
-      {{ v, ▷ WP (⟨e2, v.ρ, spikeLbl⟩ : CoreRt) @ s; E
+    WP (⟨e1, ev0 :: evs, spikeCtx⟩ : CoreRt) @ s; E
+      {{ v, ▷ WP (⟨e2, v.ρ, spikeCtx⟩ : CoreRt) @ s; E
         {{ w, Φ (mergeInto v w) }} }} ⊢
       WP (⟨Expr a (Esseq (Pattern pa (CaseBase (none, bty))) e1 e2),
-          ev0 :: evs, spikeLbl⟩ : CoreRt) @ s; E {{ Φ }} := by
+          ev0 :: evs, spikeCtx⟩ : CoreRt) @ s; E {{ Φ }} := by
   iloeb as IH generalizing %e1 %ev0 %evs
   cases hv : toVal e1 with
   | some w =>
@@ -645,11 +645,11 @@ theorem wp_sseq [SpikeGS hlc GF] {s : Stuckness} {E : CoPset}
     cases w with
     | pure v =>
       -- one deterministic beta step (LETS-PURE) into e2
-      rw [show (⟨ofVal (SpikeVal.pure v), ev0 :: evs, spikeLbl⟩ : CoreRt) =
-        ofValRt ⟨SpikeVal.pure v, ev0 :: evs, spikeLbl⟩ from rfl]
+      rw [show (⟨ofVal (SpikeVal.pure v), ev0 :: evs, spikeCtx⟩ : CoreRt) =
+        ofValRt ⟨SpikeVal.pure v, ev0 :: evs, spikeCtx⟩ from rfl]
       iintro H
       iapply wp_lift_pure_det_step_no_fork E
-        (e₂ := (⟨e2, ev0 :: evs, spikeLbl⟩ : CoreRt)) ?safeP ?detP
+        (e₂ := (⟨e2, ev0 :: evs, spikeCtx⟩ : CoreRt)) ?safeP ?detP
       case safeP =>
         intro σ
         cases s
@@ -664,18 +664,18 @@ theorem wp_sseq [SpikeGS hlc GF] {s : Stuckness} {E : CoPset}
       inext
       iintro -
       iapply (wp_mono (fun w => .rfl) :
-        WP (⟨e2, ev0 :: evs, spikeLbl⟩ : CoreRt) @ s; E
-          {{ w, Φ (mergeInto ⟨SpikeVal.pure v, ev0 :: evs, spikeLbl⟩ w) }} ⊢
-          WP (⟨e2, ev0 :: evs, spikeLbl⟩ : CoreRt) @ s; E {{ Φ }}) $$ H
+        WP (⟨e2, ev0 :: evs, spikeCtx⟩ : CoreRt) @ s; E
+          {{ w, Φ (mergeInto ⟨SpikeVal.pure v, ev0 :: evs, spikeCtx⟩ w) }} ⊢
+          WP (⟨e2, ev0 :: evs, spikeCtx⟩ : CoreRt) @ s; E {{ Φ }}) $$ H
     | annot ds v =>
       -- one deterministic beta step (LETS-ANNOT) into {ds}e2, then
       -- the annotation-commuting rule
-      rw [show (⟨ofVal (SpikeVal.annot ds v), ev0 :: evs, spikeLbl⟩ : CoreRt) =
-        ofValRt ⟨SpikeVal.annot ds v, ev0 :: evs, spikeLbl⟩ from rfl]
+      rw [show (⟨ofVal (SpikeVal.annot ds v), ev0 :: evs, spikeCtx⟩ : CoreRt) =
+        ofValRt ⟨SpikeVal.annot ds v, ev0 :: evs, spikeCtx⟩ from rfl]
       iintro H
       iapply wp_lift_pure_det_step_no_fork E
         (e₂ := (⟨Expr ([] : List annot) (Eannot ds e2), ev0 :: evs,
-          spikeLbl⟩ : CoreRt))
+          spikeCtx⟩ : CoreRt))
         ?safeA ?detA
       case safeA =>
         intro σ
@@ -691,9 +691,9 @@ theorem wp_sseq [SpikeGS hlc GF] {s : Stuckness} {E : CoPset}
       inext
       iintro -
       ihave H := (wp_mono (fun w => .rfl) :
-        WP (⟨e2, ev0 :: evs, spikeLbl⟩ : CoreRt) @ s; E
-          {{ w, Φ (mergeInto ⟨SpikeVal.annot ds v, ev0 :: evs, spikeLbl⟩ w) }} ⊢
-          WP (⟨e2, ev0 :: evs, spikeLbl⟩ : CoreRt) @ s; E
+        WP (⟨e2, ev0 :: evs, spikeCtx⟩ : CoreRt) @ s; E
+          {{ w, Φ (mergeInto ⟨SpikeVal.annot ds v, ev0 :: evs, spikeCtx⟩ w) }} ⊢
+          WP (⟨e2, ev0 :: evs, spikeCtx⟩ : CoreRt) @ s; E
             {{ w, Φ (CoreRVal.merge ds w) }}) $$ H
       iapply wp_annot ds e2 (ev0 :: evs) $$ H
   | none =>
@@ -715,8 +715,8 @@ theorem wp_sseq [SpikeGS hlc GF] {s : Stuckness} {E : CoPset}
       | NotStuck =>
         obtain ⟨obs0, e', σ', eₜ, hstep⟩ := hred
         exact ⟨[], ⟨Expr a (Esseq (Pattern pa (CaseBase (none, bty)))
-            e'.e e2), e'.ρ, spikeLbl⟩, _, [],
-          ⟨Step.sseq_ctx (Step.jumpRedex?_none_of_spikeLbl hstep.1)
+            e'.e e2), e'.ρ, spikeCtx⟩, _, [],
+          ⟨Step.sseq_ctx (Step.jumpRedex?_none_of_spikeCtx hstep.1)
             hstep.1, rfl, rfl⟩⟩
     · iintro %e₂ %σ₂ %eₜ %HstepW Hcred
       obtain ⟨hstepW, hlbl, rfl⟩ := HstepW
@@ -731,7 +731,7 @@ theorem wp_sseq [SpikeGS hlc GF] {s : Stuckness} {E : CoPset}
         -- CONS-SHAPED (`Step.env_cons`) and the Löb IH re-enters at
         -- the new head frame.
         obtain ⟨ev0', rfl⟩ := Step.env_cons hs
-        obtain ⟨e₂e, e₂ρ, e₂Q⟩ := e₂
+        obtain ⟨e₂e, e₂ρ, e₂M⟩ := e₂
         simp only at hlbl
         subst hlbl
         obtain ⟨he, hρ, hσ⟩ : e₂e = Expr a (Esseq (Pattern pa
@@ -739,7 +739,7 @@ theorem wp_sseq [SpikeGS hlc GF] {s : Stuckness} {E : CoPset}
             σ₂ = σ'' := by
           simpa [Prod.mk.injEq] using hout
         subst he hρ hσ
-        imod H $$ %(⟨e1', ev0' :: evs, spikeLbl⟩ : CoreRt) %_ %([])
+        imod H $$ %(⟨e1', ev0' :: evs, spikeCtx⟩ : CoreRt) %_ %([])
           %⟨hs, rfl, rfl⟩ Hcred with H
         iintro !> !>
         imod H
@@ -753,7 +753,7 @@ theorem wp_sseq [SpikeGS hlc GF] {s : Stuckness} {E : CoPset}
         · iexact Hefs
       · rw [he1, toVal_ofVal] at hv; cases hv
       · rw [he1, toVal_ofVal] at hv; cases hv
-      · rw [lookupLabel_empty] at hl; cases hl
+      · rw [spikeCtx_labels, lookupLabel_empty] at hl; cases hl
       · exact (specPat_ne_base hpat).elim
       · exact (specPat_ne_base hpat).elim
       · exact (symPat_ne_base hpat).elim
@@ -768,7 +768,7 @@ phase 2). -/
 
 def triple [SpikeGS hlc GF] (P : IProp GF) (e : CoreExpr)
     (Ψ : CoreRVal → IProp GF) : Prop :=
-  P ⊢ WP (⟨e, spikeEnv, spikeLbl⟩ : CoreRt) @ Stuckness.NotStuck; ⊤ {{ Ψ }}
+  P ⊢ WP (⟨e, spikeEnv, spikeCtx⟩ : CoreRt) @ Stuckness.NotStuck; ⊤ {{ Ψ }}
 
 /-- FRAME (the acceptance item, stated at triple level; the WP-level
     rule is Iris's `wp_frame_r`/`wp_frame_l`). -/
@@ -825,9 +825,9 @@ theorem EnvStable.jumpRedex?_none {e : CoreExpr} (hf : EnvStable e) :
     · exact ihb
 
 /-- Closure + env invariance on the env-write-free cone. -/
-theorem EnvStable.step_env {Q : LabelMap} {e : CoreExpr} {ρ : EnvStack}
+theorem EnvStable.step_env {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
     {σ : Mem} {e' : CoreExpr} {ρ' : EnvStack} {σ' : Mem}
-    (hf : EnvStable e) (hs : Step Q (e, ρ, σ) (e', ρ', σ')) :
+    (hf : EnvStable e) (hs : Step M (e, ρ, σ) (e', ρ', σ')) :
     EnvStable e' ∧ ρ' = ρ := by
   induction hf generalizing e' ρ' σ' with
   | pure a pe =>
@@ -898,8 +898,8 @@ theorem EnvStable.step_env {Q : LabelMap} {e : CoreExpr} {ρ : EnvStack}
 theorem wp_env_invariant_stable [SpikeGS hlc GF] {s : Stuckness} {E : CoPset}
     (e : CoreExpr) (ρ : EnvStack) (hf : EnvStable e)
     {Φ : CoreRVal → IProp GF} :
-    WP (⟨e, ρ, spikeLbl⟩ : CoreRt) @ s; E {{ Φ }} ⊢
-      WP (⟨e, ρ, spikeLbl⟩ : CoreRt) @ s; E {{ v, ⌜v.ρ = ρ⌝ ∗ Φ v }} := by
+    WP (⟨e, ρ, spikeCtx⟩ : CoreRt) @ s; E {{ Φ }} ⊢
+      WP (⟨e, ρ, spikeCtx⟩ : CoreRt) @ s; E {{ v, ⌜v.ρ = ρ⌝ ∗ Φ v }} := by
   iloeb as IH generalizing %e %ρ %hf
   cases hv : toVal e with
   | some w =>
@@ -920,13 +920,13 @@ theorem wp_env_invariant_stable [SpikeGS hlc GF] {s : Stuckness} {E : CoPset}
     iintro %e₂ %σ₂ %eₜ %Hstep Hcred
     obtain ⟨hs, hlbl, rfl⟩ := Hstep
     dsimp only [Nat.repeat]
-    obtain ⟨e₂e, e₂ρ, e₂Q⟩ := e₂
+    obtain ⟨e₂e, e₂ρ, e₂M⟩ := e₂
     simp only at hlbl
     subst hlbl
     obtain ⟨hf', hρ⟩ := EnvStable.step_env hf hs
     have hρ' : ρ = e₂ρ := hρ.symm
     subst hρ'
-    imod H $$ %(⟨e₂e, ρ, spikeLbl⟩ : CoreRt) %σ₂ %([] : List CoreRt)
+    imod H $$ %(⟨e₂e, ρ, spikeCtx⟩ : CoreRt) %σ₂ %([] : List CoreRt)
       %⟨hs, rfl, rfl⟩ Hcred with H
     iintro !> !>
     imod H
@@ -1044,7 +1044,7 @@ theorem exhibit [SpikeGS hlc GF] (x y : CerbMem.PointerValue)
   have hax : triple (GF := GF) (pointsToCell x (.own 1) intTy bs)
       (storeExpr loc ann intTy x sevenVal mo)
       (fun w => iprop(∃ fp,
-        ⌜w = (⟨SpikeVal.annot [DA_pos [] fp] Vunit, spikeEnv, spikeLbl⟩ : CoreRVal)⌝ ∗
+        ⌜w = (⟨SpikeVal.annot [DA_pos [] fp] Vunit, spikeEnv, spikeCtx⟩ : CoreRVal)⌝ ∗
         pointsToCell x (.own 1) intTy sevenBytes)) :=
     wp_store loc ann intTy x sevenVal mo sevenMval bs spikeEnv seven_encodes
       seven_storable
@@ -1078,7 +1078,7 @@ example {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
   have hax : triple (GF := GF) (pointsToCell x (.own 1) intTy bs)
       (storeExpr loc ann intTy x sevenVal mo)
       (fun w => iprop(∃ fp,
-        ⌜w = (⟨SpikeVal.annot [DA_pos [] fp] Vunit, spikeEnv, spikeLbl⟩ : CoreRVal)⌝ ∗
+        ⌜w = (⟨SpikeVal.annot [DA_pos [] fp] Vunit, spikeEnv, spikeCtx⟩ : CoreRVal)⌝ ∗
         pointsToCell x (.own 1) intTy sevenBytes)) :=
     wp_store loc ann intTy x sevenVal mo sevenMval bs spikeEnv seven_encodes
       seven_storable
@@ -1167,7 +1167,7 @@ theorem exhibitC_triple [SpikeGS hlc GF] (x y : CerbMem.PointerValue)
   have hx : triple (GF := GF) (pointsToCell x (.own 1) intTy bsx)
       (storeExpr loc ann intTy x fiveVal mo)
       (fun w => iprop(∃ fp,
-        ⌜w = (⟨SpikeVal.annot [DA_pos [] fp] Vunit, spikeEnv, spikeLbl⟩ : CoreRVal)⌝ ∗
+        ⌜w = (⟨SpikeVal.annot [DA_pos [] fp] Vunit, spikeEnv, spikeCtx⟩ : CoreRVal)⌝ ∗
         pointsToCell x (.own 1) intTy fiveBytes)) :=
     wp_store loc ann intTy x fiveVal mo fiveMval bsx spikeEnv five_encodes
       five_storable
@@ -1186,7 +1186,7 @@ theorem exhibitC_triple [SpikeGS hlc GF] (x y : CerbMem.PointerValue)
   have hy : triple (GF := GF) (pointsToCell y (.own 1) intTy bsy)
       (storeExpr loc' ann' intTy y sixVal mo')
       (fun w => iprop(∃ fp,
-        ⌜w = (⟨SpikeVal.annot [DA_pos [] fp] Vunit, spikeEnv, spikeLbl⟩ : CoreRVal)⌝ ∗
+        ⌜w = (⟨SpikeVal.annot [DA_pos [] fp] Vunit, spikeEnv, spikeCtx⟩ : CoreRVal)⌝ ∗
         pointsToCell y (.own 1) intTy sixBytes)) :=
     wp_store loc' ann' intTy y sixVal mo' sixMval bsy spikeEnv six_encodes
       six_storable

@@ -420,6 +420,8 @@ abbrev arrLs : LabelSpec GF := fun _ args ρ =>
       i ≤ vs.length ∧ ρ = f :: rest ∧ SymFrame f⌝ ∗
     pointsTo id (.own 1) (SpikeCell.mk a aty bs)) : IProp GF)
 
+variable (p : sym) (rs : core_run_state)
+  (hQ : LabeledAt rs p (arrQ loc ann ra mo ibty accbty pbty xbty vs.length))
 variable (hsz : vs.length * 4 ≤ CerbMem.sizeofCtype aty)
   (ety : integerType)
   (hdec : ∀ (i : Nat) (hi : i < vs.length),
@@ -428,14 +430,14 @@ variable (hsz : vs.length * 4 ≤ CerbMem.sizeofCtype aty)
         ((bs.drop (4 * i)).take (CerbMem.sizeofCtype intTy)) =
       CerbMem.MemValue.MVinteger ety (CerbMem.integerIval vs[i]))
 
-include hsz hdec
+include hQ hsz hdec
 
 /-- The loop body verifies at any invariant frame. -/
 theorem arr_body_wps (i : Nat) (f : Fmap sym value)
     (rest : List (Fmap sym value)) (hf : SymFrame f)
     (hin : i ≤ vs.length) :
     iprop(pointsTo (GF := GF) id (.own 1) (SpikeCell.mk a aty bs)) ⊢
-      wps (arrQ loc ann ra mo ibty accbty pbty xbty vs.length)
+      wps (procCtx p rs)
         (arrLs vs id a aty bs)
         (arrPost vs id a aty bs)
         (arrBody loc ann ra mo xbty vs.length)
@@ -478,7 +480,8 @@ theorem arr_body_wps (i : Nat) (f : Fmap sym value)
         (Vobject (OVpointer (cellPtr id (a + ((4 * i : Nat) : Int))))) f
       from rfl]
     iapply wps_run [] ra arrLoopSym [arrIncPe, arrAccXPe, arrShiftPe] _ _
-      (arrQ_lookup loc ann ra mo ibty accbty pbty xbty vs.length)
+      (by rw [procCtx_labels hQ]
+          exact arrQ_lookup loc ann ra mo ibty accbty pbty xbty vs.length)
       (arr_args_eval hf i _ rest vs[i] id (a + ((4 * i : Nat) : Int)))
     iexists (i + 1),
       (arrFrameX (ivVal vs[i]) (ivVal i) (ivVal ((vs.take i).sum))
@@ -508,9 +511,10 @@ theorem arr_body_wps (i : Nat) (f : Fmap sym value)
 /-- THE BLOCK SPECIFICATION. -/
 theorem arr_blockSpecs :
     ⊢ blockSpecs (GF := GF)
-      (arrQ loc ann ra mo ibty accbty pbty xbty vs.length)
+      (procCtx p rs)
       (arrLs vs id a aty bs) (arrPost vs id a aty bs) := by
   refine blockSpecs_intro fun l params cont args ev0 evs hl => ?_
+  rw [procCtx_labels hQ] at hl
   obtain ⟨rfl, rfl⟩ := arrQ_inv loc ann ra mo ibty accbty pbty xbty
     vs.length hl
   iintro ⟨%i, %f, %rest, %hpure, Hpt⟩
@@ -522,12 +526,12 @@ theorem arr_blockSpecs :
     exact ⟨h1.symm, h2.symm⟩
   rw [bindArgs_arr]
   iapply arr_body_wps loc ann ra mo ibty accbty pbty xbty vs id a aty bs
-    hsz ety hdec i f rest hf hin $$ Hpt
+    p rs hQ hsz ety hdec i f rest hf hin $$ Hpt
 
 /-- The whole program's statement WP from the entry env. -/
 theorem arr_wps (sbty : core_base_type) :
     iprop(pointsTo (GF := GF) id (.own 1) (SpikeCell.mk a aty bs)) ⊢
-      wps (arrQ loc ann ra mo ibty accbty pbty xbty vs.length)
+      wps (procCtx p rs)
         (arrLs vs id a aty bs) (arrPost vs id a aty bs)
         (arrProg loc ann ra mo sbty ibty accbty pbty xbty
           (cellPtr id a) vs.length) [fmapEmpty] := by
@@ -541,7 +545,7 @@ theorem arr_wps (sbty : core_base_type) :
     (cvals := [ivVal 0, ivVal 0, Vobject (OVpointer (cellPtr id a))]) rfl
   rw [bindSave_arr]
   have h := arr_body_wps (GF := GF) loc ann ra mo ibty accbty pbty xbty
-    vs id a aty bs hsz ety hdec 0 fmapEmpty [] symFrame_empty
+    vs id a aty bs p rs hQ hsz ety hdec 0 fmapEmpty [] symFrame_empty
     (by omega)
   rw [show a + ((4 * 0 : Nat) : Int) = a by omega] at h
   rw [show ivVal ((0 : Nat) : Int) = ivVal 0 from rfl] at h
@@ -554,17 +558,17 @@ theorem arr_wp_readout (sbty : core_base_type) :
     iprop(pointsTo (GF := GF) id (.own 1) (SpikeCell.mk a aty bs)) ⊢
       WP (⟨arrProg loc ann ra mo sbty ibty accbty pbty xbty
             (cellPtr id a) vs.length, [fmapEmpty],
-          arrQ loc ann ra mo ibty accbty pbty xbty vs.length⟩ : CoreRt)
+          procCtx p rs⟩ : CoreRt)
         @ Stuckness.NotStuck; ⊤
         {{ w, iprop(∀ (σ' : Mem) (ns : Nat) (κs : List Empty) (nt : Nat),
           (stateInterp σ' ns κs nt : IProp GF) ={⊤, ∅}=∗
             ⌜CoreRVal.val w = ivVal vs.sum ∧
               CellCoh σ' id ⟨a, aty, bs⟩⌝) }} := by
   refine (arr_wps loc ann ra mo ibty accbty pbty xbty vs id a aty bs
-    hsz ety hdec sbty).trans ?_
+    p rs hQ hsz ety hdec sbty).trans ?_
   refine (BI.emp_sep.2.trans (BI.sep_mono
     ((arr_blockSpecs loc ann ra mo ibty accbty pbty xbty vs id a aty bs
-      hsz ety hdec).trans
+      p rs hQ hsz ety hdec).trans
       (wps_sound (arrProg loc ann ra mo sbty ibty accbty pbty xbty
         (cellPtr id a) vs.length) [fmapEmpty]))
     .rfl)).trans ?_
@@ -580,10 +584,10 @@ theorem arr_wp_readout (sbty : core_base_type) :
   ipureintro
   exact ⟨hval, Hcoh.cells id _ Hget⟩
 
-omit hsz hdec in
+omit hQ hsz hdec in
 /-- The label bodies are in the certified cone. -/
 theorem arrBody_fragJ (hlib : CerbLocation.isLibraryLocation loc = false)
-    (n : Int) : FragJ (arrBody loc ann ra mo xbty n) := by
+    (n : Int) : Frag (arrBody loc ann ra mo xbty n) := by
   refine .if_ (by
       rw [show peDepth (arrGuard n) = 2 from rfl,
         show lemDefaultFuel = 999999 + 1 from rfl]
@@ -669,7 +673,9 @@ theorem array_sum_certified {GF : BundledGFunctors} [SpikeGpreS GF]
       omega)
   intro inst
   refine .trans ?_ (arr_wp_readout loc ann ra mo ibty accbty pbty xbty
-    vs id a aty bs hsz ety hdec sbty)
+    vs id a aty bs arrProcSym rs
+    (arrRS_labeledAt loc ann ra mo ibty accbty pbty xbty vs.length)
+    hsz ety hdec sbty)
   exact (BigSepM.bigSepM_singleton).1
 
 end ArrDrive

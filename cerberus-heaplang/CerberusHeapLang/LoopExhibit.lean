@@ -246,6 +246,11 @@ variable {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
 variable (loc : CerbLocation.Loc) (ann ra : core_run_annotation)
   (mo : memory_order) (bty xbty : core_base_type)
   (c : CerbMem.PointerValue) (n : Int) (bs0 : List CerbMem.AbsByte)
+-- S1b: the wps judgment is indexed by the MACHINE CONTEXT; the
+-- exhibit works at the jump-profile instance `procCtx p rs` with the
+-- label map tied by the honest `LabeledAt` link (`procCtx_labels`).
+variable (p : sym) (rs : core_run_state)
+  (hQ : LabeledAt rs p (loopQ loc ann ra mo bty xbty c))
 
 /-- The postcondition: unit value; the cell untouched iff the loop
     never ran (data-dependent). -/
@@ -265,6 +270,8 @@ abbrev loopLs : LabelSpec GF := fun _ vs ρ =>
     ((⌜i = n⌝ ∗ pointsToCell c (.own 1) intTy bs0) ∨
      (⌜i < n⌝ ∗ pointsToCell c (.own 1) intTy sevenBytes))) : IProp GF)
 
+include hQ
+
 /-- The loop body verifies at any pinned counter frame (the shared
     lemma behind both the block spec and the entry). -/
 theorem loop_body_wps (i : Int) (f : Fmap sym value)
@@ -272,7 +279,7 @@ theorem loop_body_wps (i : Int) (f : Fmap sym value)
     (h0 : 0 ≤ i) (hin : i ≤ n) :
     iprop(((⌜i = n⌝ ∗ pointsToCell (GF := GF) c (.own 1) intTy bs0) ∨
       (⌜i < n⌝ ∗ pointsToCell c (.own 1) intTy sevenBytes))) ⊢
-      wps (loopQ loc ann ra mo bty xbty c) (loopLs c n bs0)
+      wps (procCtx p rs) (loopLs c n bs0)
         (loopPost c n bs0) (loopBody loc ann ra mo bty c)
         (envAdd xSym (ivVal i) f :: rest) := by
   have hf' : IsXFrame (envAdd xSym (ivVal i) f) (ivVal i) := hxr (ivVal i)
@@ -300,7 +307,9 @@ theorem loop_body_wps (i : Int) (f : Fmap sym value)
        · iexact Hc
        iintro %fp Hc
        iapply wps_run [] ra loopSym [decPe] _ _
-         (loopQ_lookup loc ann ra mo bty xbty c) (dec_eval hf' rest)
+         (by rw [procCtx_labels hQ]
+             exact loopQ_lookup loc ann ra mo bty xbty c)
+         (dec_eval hf' rest)
        iexists (i - 1), (envAdd xSym (ivVal i) f), rest
        isplit
        · ipureintro
@@ -335,9 +344,10 @@ theorem loop_body_wps (i : Int) (f : Fmap sym value)
     Löb — the back edge discharged against the invariant at `i-1`
     through the jump clause). -/
 theorem loop_blockSpecs :
-    ⊢ blockSpecs (GF := GF) (loopQ loc ann ra mo bty xbty c)
+    ⊢ blockSpecs (GF := GF) (procCtx p rs)
       (loopLs c n bs0) (loopPost c n bs0) := by
   refine blockSpecs_intro fun l params cont vs ev0 evs hl => ?_
+  rw [procCtx_labels hQ] at hl
   obtain ⟨rfl, rfl⟩ := loopQ_inv loc ann ra mo bty xbty c hl
   iintro ⟨%i, %f, %rest, %hpure, Hcell⟩
   obtain ⟨rfl, h0, hin, hρ, hxr⟩ := hpure
@@ -347,13 +357,13 @@ theorem loop_blockSpecs :
     simp at h1 h2
     exact ⟨h1.symm, h2.symm⟩
   rw [bindArgs_x]
-  iapply loop_body_wps loc ann ra mo bty xbty c n bs0 i f rest hxr h0 hin
-    $$ Hcell
+  iapply loop_body_wps loc ann ra mo bty xbty c n bs0 p rs hQ i f rest hxr
+    h0 hin $$ Hcell
 
 /-- The whole program's statement WP from the entry env. -/
 theorem loop_wps (hn : 0 ≤ n) (sbty : core_base_type) :
     pointsToCell (GF := GF) c (.own 1) intTy bs0 ⊢
-      wps (loopQ loc ann ra mo bty xbty c) (loopLs c n bs0)
+      wps (procCtx p rs) (loopLs c n bs0)
         (loopPost c n bs0)
         (loopProg loc ann ra mo bty xbty sbty c n) [fmapEmpty] := by
   iintro Hc
@@ -365,13 +375,14 @@ theorem loop_wps (hn : 0 ≤ n) (sbty : core_base_type) :
   iapply wps_save [] (loopSym, sbty) _ _ fmapEmpty []
     (cvals := [ivVal n]) rfl
   rw [bindSave_x]
-  iapply loop_body_wps loc ann ra mo bty xbty c n bs0 n fmapEmpty []
+  iapply loop_body_wps loc ann ra mo bty xbty c n bs0 p rs hQ n fmapEmpty []
     xready_empty hn (by omega)
   ileft
   isplit
   · ipureintro; rfl
   · iexact Hc
 
+omit hQ in
 /-- Single-cell readout (the `cells_readout` shape at one cell):
     ownership at the end pins the final MemState's cell. -/
 theorem cell_readout (pv : CerbMem.PointerValue) (ty : ctype)
@@ -392,6 +403,7 @@ theorem cell_readout (pv : CerbMem.PointerValue) (ty : ctype)
   ipureintro
   exact ⟨i, a, Hpv, Hcoh.cells i _ Hget⟩
 
+omit hQ in
 /-- The per-value readout of the loop postcondition. -/
 theorem loop_readout_val (w : CoreRVal) :
     loopPost (GF := GF) c n bs0 w.w w.ρ ⊢
@@ -425,15 +437,15 @@ theorem loop_readout_val (w : CoreRVal) :
 theorem loop_wp_readout (hn : 0 ≤ n) (sbty : core_base_type) :
     pointsToCell (GF := GF) c (.own 1) intTy bs0 ⊢
       WP (⟨loopProg loc ann ra mo bty xbty sbty c n, [fmapEmpty],
-          loopQ loc ann ra mo bty xbty c⟩ : CoreRt) @ Stuckness.NotStuck; ⊤
+          procCtx p rs⟩ : CoreRt) @ Stuckness.NotStuck; ⊤
         {{ w, iprop(∀ (σ' : Mem) (ns : Nat) (κs : List Empty) (nt : Nat),
           stateInterp σ' ns κs nt ={⊤, ∅}=∗
             ⌜w.val = Vunit ∧ ∃ bs',
               ((n = 0 ∧ bs' = bs0) ∨ (0 < n ∧ bs' = sevenBytes)) ∧
               ∃ i a, c = cellPtr i a ∧ CellCoh σ' i ⟨a, intTy, bs'⟩⌝) }} := by
-  refine ((loop_wps loc ann ra mo bty xbty c n bs0 hn sbty).trans ?_)
+  refine ((loop_wps loc ann ra mo bty xbty c n bs0 p rs hQ hn sbty).trans ?_)
   refine (BI.emp_sep.2.trans (BI.sep_mono
-    ((loop_blockSpecs loc ann ra mo bty xbty c n bs0).trans
+    ((loop_blockSpecs loc ann ra mo bty xbty c n bs0 p rs hQ).trans
       (wps_sound (loopProg loc ann ra mo bty xbty sbty c n) [fmapEmpty]))
     .rfl)).trans ?_
   refine BI.wand_elim_left.trans ?_
@@ -452,7 +464,7 @@ variable (loc : CerbLocation.Loc) (ann ra : core_run_annotation)
 
 /-- The body is in the certified extended cone. -/
 theorem loopBody_fragJ (hlib : CerbLocation.isLibraryLocation loc = false) :
-    FragJ (loopBody loc ann ra mo bty c) := by
+    Frag (loopBody loc ann ra mo bty c) := by
   refine .if_ (by decide +kernel) (.sseq (.store hlib) (.run ?_))
     (.val_pure Vunit)
   intro pe hpe
@@ -512,7 +524,8 @@ theorem counter_loop_certified {GF : BundledGFunctors} [SpikeGpreS GF]
       omega)
   intro inst
   refine .trans ?_ (loop_wp_readout loc ann ra mo bty xbty (cellPtr idx addr)
-    n bs0 hn sbty)
+    n bs0 loopProcSym rs
+    (loopRS_labeledAt loc ann ra mo bty xbty (cellPtr idx addr)) hn sbty)
   refine (BigSepM.bigSepM_singleton).1.trans ?_
   iintro Hpt
   iapply (pointsToCell_iff _ _ _ _).mpr

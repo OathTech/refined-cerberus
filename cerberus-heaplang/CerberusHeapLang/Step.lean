@@ -293,25 +293,134 @@ def lookupLabel (Q : LabelMap) (l : sym) :
   fmapLookupBy (fun (s1 : sym) (s2 : sym) =>
     Lem_Basic_classes.ordCompare s1 s2) l Q
 
-/-! ## The runtime tuple (S1: env is live state; S3: + the label map —
-the probe's full `TRt`/`TRVal` pattern, StmtProbe/Toy.lean:113-124) -/
+/-! ## The machine context (S1b — the unified configuration;
+design record docs/2026-08-31_phase1-design-record.md §1)
+
+`MachineCtx` names EVERY immutable component of an engine
+configuration: the parameters of `step_ctx` (tagDefs, file, extern,
+tid, parent), the non-(arena/env) fields of the thread state, and
+the run state the discharge protocol threads (read-only under the
+fragment — Erun reads `labeled` through it; per-step aid draws
+remain per-step parameters, as in the driver). The live state stays
+the `(CoreExpr × EnvStack × Mem)` triple. The old frozen profiles
+(`spikeCtx`/`procCtx` below) are INSTANCES — one point of the
+context space — not parts of the judgment. -/
+
+/-- The engine's extern indirection with identity fallback — the
+    `let sym1 := match fmapLookupBy … core_extern1 with …`
+    computation of the evaluator's PEsym arm (Core_eval.lean:142)
+    and of step_ctx's Erun arm (Core_reduction.lean:484). -/
+def resolveExtern (ext : Fmap sym sym) (x : sym) : sym :=
+  match fmapLookupBy (fun (s1 : sym) (s2 : sym) =>
+      Lem_Basic_classes.ordCompare s1 s2) x ext with
+  | some y => y
+  | none => x
+
+theorem resolveExtern_empty (x : sym) : resolveExtern fmapEmpty x = x := rfl
+
+/-- Every immutable component of an engine configuration (per-field
+    engine slots and fragment reads: the design record §1 table). -/
+structure MachineCtx where
+  tagDefs : Fmap sym (CerbLocation.Loc × tag_definition)
+  file : generic_file Unit core_run_annotation
+  extern : Fmap sym sym
+  tid : Nat
+  parent : Option Nat
+  stack : stack core_run_annotation
+  errno : CerbMem.PointerValue
+  proc : Option sym
+  execLoc : exec_location
+  currentLoc : CerbLocation.Loc
+  runState : core_run_state
+
+namespace MachineCtx
+
+/-- The thread state a context builds around live (expression, env).
+    Explicit literal so record updates of it reduce definitionally
+    (the `envThread` precedent). -/
+def thread (M : MachineCtx) (e : CoreExpr) (ρ : EnvStack) : thread_state :=
+  { arena := e, stack0 := M.stack, errno := M.errno, env := ρ,
+    current_proc_opt := M.proc, exec_loc := M.execLoc,
+    current_loc := M.currentLoc }
+
+@[simp] theorem thread_arena (M : MachineCtx) (e : CoreExpr) (ρ : EnvStack) :
+    (M.thread e ρ).arena = e := rfl
+
+@[simp] theorem thread_env (M : MachineCtx) (e : CoreExpr) (ρ : EnvStack) :
+    (M.thread e ρ).env = ρ := rfl
+
+/-- The sequential single-procedure well-formedness the VALUE
+    protocol reads (PROGRAM-DONE selection in step_ctx's value arm):
+    empty call stack, startup thread. Permanent for the supported
+    fragment (procedure return is outside it). -/
+structure SeqWF (M : MachineCtx) : Prop where
+  stack : M.stack = Stack_empty
+  parent : M.parent = none
+
+/-- The extern indirection at the context's own extern map —
+    verbatim the `proc_sym` computation of step_ctx's Erun arm
+    (Core_reduction.lean:484). -/
+def resolveProc (M : MachineCtx) (p : sym) : sym :=
+  resolveExtern M.extern p
+
+theorem resolveProc_of_extern_empty {M : MachineCtx}
+    (hext : M.extern = fmapEmpty) (p : sym) : M.resolveProc p = p := by
+  unfold resolveProc
+  rw [hext]
+  rfl
+
+/-- The current procedure's registered label fiber, read from the
+    context exactly as step_ctx's Erun arm reads it (two-level
+    `labeled` lookup at the extern-resolved current proc). Lookup
+    failure and the no-current-proc case collapse to the EMPTY map:
+    the jump rule cannot fire there — the engine's failwithI panic
+    channels are mirrored fail-closed as absence of a step. The old
+    `Q : LabelMap` index and its `LabeledAt` tie hypothesis are
+    subsumed: the label map is DERIVED, not carried. -/
+def labels (M : MachineCtx) : LabelMap :=
+  match M.proc with
+  | none => fmapEmpty
+  | some p =>
+    match fmapLookupBy (fun (s1 : sym) (s2 : sym) =>
+        Lem_Basic_classes.ordCompare s1 s2)
+        (M.resolveProc p) M.runState.labeled with
+    | some Q => Q
+    | none => fmapEmpty
+
+/-- The label fiber at a known current procedure (the outer match
+    reduced). -/
+theorem labels_eq_of_proc {M : MachineCtx} {p : sym} (hp : M.proc = some p) :
+    M.labels =
+      (match fmapLookupBy (fun (s1 : sym) (s2 : sym) =>
+          Lem_Basic_classes.ordCompare s1 s2)
+          (M.resolveProc p) M.runState.labeled with
+        | some Q => Q
+        | none => fmapEmpty) := by
+  unfold labels
+  rw [hp]
+
+end MachineCtx
+
+/-! ## The runtime tuple (S1: env is live state; S1b: + the machine
+context — the unified configuration; the S3 label-map slot was the
+`labels` projection of it) -/
 
 /-- The runtime expression tuple: Core expression + live environment
-    stack (thread_state's `arena` and `env` components) + the static
-    per-procedure label map (read-only context carried in the tuple —
-    Caesium's `to_rtstmt rf`; the rest of the thread state stays
-    frozen context — Soundness.lean). -/
+    stack (thread_state's `arena` and `env` components) + the machine
+    context (every immutable the fragment reads, carried read-only in
+    the tuple; steps preserve it by construction of `primStep` —
+    the engine writes no context component on the sequential path). -/
 structure CoreRt where
   e : CoreExpr
   ρ : EnvStack
-  lbl : LabelMap
+  M : MachineCtx
 
-/-- Values carry the final env and the (unchanged) label map
-    (exported posts may project both away — probe `TRVal`). -/
+/-- Values carry the final env and the (unchanged) machine context
+    (exported posts may project both away). -/
 structure CoreRVal where
   w : SpikeVal
   ρ : EnvStack
-  lbl : LabelMap
+  M : MachineCtx
 
 /-- The delivered engine value of a runtime value (annotations and
     env erased — the D1 readout). -/
@@ -321,11 +430,11 @@ def CoreRVal.val (v : CoreRVal) : value := v.w.val
     (the env and label map ride — annotation reduction never touches
     them). -/
 def CoreRVal.merge (ds : List dyn_annotation) (v : CoreRVal) : CoreRVal :=
-  ⟨SpikeVal.merge ds v.w, v.ρ, v.lbl⟩
+  ⟨SpikeVal.merge ds v.w, v.ρ, v.M⟩
 
 @[simp] theorem CoreRVal.merge_mk (ds : List dyn_annotation) (w : SpikeVal)
-    (ρ : EnvStack) (Q : LabelMap) :
-    CoreRVal.merge ds ⟨w, ρ, Q⟩ = ⟨SpikeVal.merge ds w, ρ, Q⟩ := rfl
+    (ρ : EnvStack) (M : MachineCtx) :
+    CoreRVal.merge ds ⟨w, ρ, M⟩ = ⟨SpikeVal.merge ds w, ρ, M⟩ := rfl
 
 @[simp] theorem CoreRVal.merge_merge (ds ds' : List dyn_annotation)
     (v : CoreRVal) :
@@ -342,19 +451,19 @@ def CoreRVal.merge (ds : List dyn_annotation) (v : CoreRVal) : CoreRVal :=
 
 /-- Componentwise value test (Language-side `toVal`). -/
 def toValRt (r : CoreRt) : Option CoreRVal :=
-  (toVal r.e).map fun w => ⟨w, r.ρ, r.lbl⟩
+  (toVal r.e).map fun w => ⟨w, r.ρ, r.M⟩
 
 /-- Componentwise value injection (Language-side `ofVal`). -/
-def ofValRt (v : CoreRVal) : CoreRt := ⟨ofVal v.w, v.ρ, v.lbl⟩
+def ofValRt (v : CoreRVal) : CoreRt := ⟨ofVal v.w, v.ρ, v.M⟩
 
-@[simp] theorem toValRt_mk (e : CoreExpr) (ρ : EnvStack) (Q : LabelMap) :
-    toValRt ⟨e, ρ, Q⟩ = (toVal e).map fun w => ⟨w, ρ, Q⟩ := rfl
+@[simp] theorem toValRt_mk (e : CoreExpr) (ρ : EnvStack) (M : MachineCtx) :
+    toValRt ⟨e, ρ, M⟩ = (toVal e).map fun w => ⟨w, ρ, M⟩ := rfl
 
-@[simp] theorem ofValRt_mk (w : SpikeVal) (ρ : EnvStack) (Q : LabelMap) :
-    ofValRt ⟨w, ρ, Q⟩ = ⟨ofVal w, ρ, Q⟩ := rfl
+@[simp] theorem ofValRt_mk (w : SpikeVal) (ρ : EnvStack) (M : MachineCtx) :
+    ofValRt ⟨w, ρ, M⟩ = ⟨ofVal w, ρ, M⟩ := rfl
 
 @[simp] theorem toValRt_ofValRt (v : CoreRVal) : toValRt (ofValRt v) = some v := by
-  obtain ⟨w, ρ, Q⟩ := v
+  obtain ⟨w, ρ, M⟩ := v
   rw [ofValRt_mk, toValRt_mk, toVal_ofVal]
   rfl
 
@@ -664,7 +773,7 @@ def applyMemM {α : Type} (m : CerbMem.memM α) (st : Mem) : Option (α × Mem) 
     NDactive result or the state — so the rules pass the action's own
     loc; fragment locations are not library locations (slice notes
     §D5). -/
-inductive Step (Q : LabelMap) :
+inductive Step (M : MachineCtx) :
     CoreExpr × EnvStack × Mem → CoreExpr × EnvStack × Mem → Prop where
   /-- Positive strong store, evaluated operands (ACTION_EVAL
       phrasing — header note 2). Mirrors: step_action Store0 arm
@@ -685,9 +794,9 @@ inductive Step (Q : LabelMap) :
       (h1 : valueFromPexpr pe1 = some (Vctype ty))
       (h2 : valueFromPexpr pe2 = some (Vobject (OVpointer pv)))
       (h3 : valueFromPexpr pe3 = some cv)
-      (hmv : memValueFromValue fmapEmpty (Ctype [] (unatomic_ ty)) cv = some mv)
+      (hmv : memValueFromValue M.tagDefs (Ctype [] (unatomic_ ty)) cv = some mv)
       (hmem : applyMemM (CerbMem.storeM loc ty lk pv mv) σ = some (fp, σ')) :
-      Step Q (Expr a (Eaction (Paction polarity.Pos (Action loc ann
+      Step M (Expr a (Eaction (Paction polarity.Pos (Action loc ann
               (Store0 lk pe1 pe2 pe3 mo)))), ρ, σ)
            (Expr [] (Eannot [DA_pos [] fp]
               (Expr [] (Epure (Pexpr [] () (PEval Vunit))))), ρ, σ')
@@ -706,7 +815,7 @@ inductive Step (Q : LabelMap) :
       (h1 : valueFromPexpr pe1 = some (Vctype ty))
       (h2 : valueFromPexpr pe2 = some (Vobject (OVpointer pv)))
       (hmem : applyMemM (CerbMem.loadM loc ty pv) σ = some ((fp, mval), σ')) :
-      Step Q (Expr a (Eaction (Paction polarity.Pos (Action loc ann
+      Step M (Expr a (Eaction (Paction polarity.Pos (Action loc ann
               (Load0 pe1 pe2 mo)))), ρ, σ)
            (Expr [] (Eannot [DA_pos [] fp]
               (Expr [] (Epure (Pexpr [] () (PEval
@@ -735,7 +844,7 @@ inductive Step (Q : LabelMap) :
       (h2 : valueFromPexpr pe2 = some (Vctype ty))
       (hmem : applyMemM (CerbMem.allocateObject 0 pref align ty none none) σ =
         some (pv, σ')) :
-      Step Q (Expr a (Eaction (Paction polarity.Pos (Action loc ann
+      Step M (Expr a (Eaction (Paction polarity.Pos (Action loc ann
               (Create pe1 pe2 pref)))), ρ, σ)
            (Expr [] (Epure (Pexpr [] () (PEval (Vobject (OVpointer pv))))), ρ, σ')
   /-- LETS-PURE at a wildcard pattern:
@@ -748,7 +857,7 @@ inductive Step (Q : LabelMap) :
   | sseq_pure {a pa : List annot} {bty : core_base_type} {v : value}
       {e2 : CoreExpr} {ev0 : Fmap sym value} {evs : List (Fmap sym value)}
       {σ : Mem} :
-      Step Q (Expr a (Esseq (Pattern pa (CaseBase (none, bty)))
+      Step M (Expr a (Esseq (Pattern pa (CaseBase (none, bty)))
               (ofVal (.pure v)) e2), ev0 :: evs, σ)
            (e2, ev0 :: evs, σ)
   /-- LETS-ANNOT at a wildcard pattern:
@@ -760,7 +869,7 @@ inductive Step (Q : LabelMap) :
   | sseq_annot {a pa : List annot} {bty : core_base_type}
       {ds : List dyn_annotation} {v : value} {e2 : CoreExpr}
       {ev0 : Fmap sym value} {evs : List (Fmap sym value)} {σ : Mem} :
-      Step Q (Expr a (Esseq (Pattern pa (CaseBase (none, bty)))
+      Step M (Expr a (Esseq (Pattern pa (CaseBase (none, bty)))
               (ofVal (.annot ds v)) e2), ev0 :: evs, σ)
            (Expr [] (Eannot ds e2), ev0 :: evs, σ)
   /-- LETS-PURE at the SPECIFIED-BINDER pattern (S4 binding beta):
@@ -775,7 +884,7 @@ inductive Step (Q : LabelMap) :
   | sseq_spec_pure {a pa pb : List annot} {x : sym} {bty : core_base_type}
       {ov : object_value} {e2 : CoreExpr}
       {ev0 : Fmap sym value} {evs : List (Fmap sym value)} {σ : Mem} :
-      Step Q (Expr a (Esseq (specPat pa pb x bty)
+      Step M (Expr a (Esseq (specPat pa pb x bty)
               (ofVal (.pure (Vloaded (LVspecified ov)))) e2), ev0 :: evs, σ)
            (e2, update_env (specPat pa pb x bty) (Vloaded (LVspecified ov))
               (ev0 :: evs), σ)
@@ -787,7 +896,7 @@ inductive Step (Q : LabelMap) :
   | sseq_spec_annot {a pa pb : List annot} {x : sym} {bty : core_base_type}
       {ds : List dyn_annotation} {ov : object_value} {e2 : CoreExpr}
       {ev0 : Fmap sym value} {evs : List (Fmap sym value)} {σ : Mem} :
-      Step Q (Expr a (Esseq (specPat pa pb x bty)
+      Step M (Expr a (Esseq (specPat pa pb x bty)
               (ofVal (.annot ds (Vloaded (LVspecified ov)))) e2), ev0 :: evs, σ)
            (Expr [] (Eannot ds e2),
             update_env (specPat pa pb x bty) (Vloaded (LVspecified ov))
@@ -805,7 +914,7 @@ inductive Step (Q : LabelMap) :
       {ρ : EnvStack} {σ : Mem}
       (hnv : valueFromPexpr pe = none)
       (hv : evalPexpr ρ pe = some v) :
-      Step Q (Expr a (Epure pe), ρ, σ)
+      Step M (Expr a (Epure pe), ρ, σ)
            (Expr a (Epure (Pexpr [] () (PEval v))), ρ, σ)
   /-- ACTION_EVAL for a positive strong load with an unevaluated
       pointer operand (S4): ONE engine step BIG-STEP evaluating the
@@ -828,7 +937,7 @@ inductive Step (Q : LabelMap) :
       {mo : memory_order} {ρ : EnvStack} {σ : Mem}
       (hnv2 : valueFromPexpr pe2 = none)
       (hv2 : evalPexpr ρ pe2 = some (Vobject (OVpointer pv))) :
-      Step Q (Expr a (Eaction (Paction polarity.Pos (Action loc ann
+      Step M (Expr a (Eaction (Paction polarity.Pos (Action loc ann
               (Load0 (Pexpr [] () (PEval (Vctype ty))) pe2 mo)))), ρ, σ)
            (Expr a (Eaction (Paction polarity.Pos (Action loc ann
               (Load0 (Pexpr [] () (PEval (Vctype ty)))
@@ -849,8 +958,8 @@ inductive Step (Q : LabelMap) :
   | sseq_ctx {a : List annot} {pat : pattern} {e1 e1' e2 : CoreExpr}
       {ρ ρ' : EnvStack} {σ σ' : Mem}
       (hnj : jumpRedex? e1 = none) :
-      Step Q (e1, ρ, σ) (e1', ρ', σ') →
-      Step Q (Expr a (Esseq pat e1 e2), ρ, σ) (Expr a (Esseq pat e1' e2), ρ', σ')
+      Step M (e1, ρ, σ) (e1', ρ', σ') →
+      Step M (Expr a (Esseq pat e1 e2), ρ, σ) (Expr a (Esseq pat e1' e2), ρ', σ')
   /-- Reduction under a dyn-annotation frame. Mirrors get_ctx's plain
       `Eannot xs e` arm (Cannot-descent — taken only when e is NOT
       itself Eannot-rooted, because the double-annot arm precedes it;
@@ -862,8 +971,8 @@ inductive Step (Q : LabelMap) :
       {ρ ρ' : EnvStack} {σ σ' : Mem}
       (hnj : jumpRedex? b = none) :
       annotRooted b = false →
-      Step Q (b, ρ, σ) (b', ρ', σ') →
-      Step Q (Expr a (Eannot ds b), ρ, σ) (Expr a (Eannot ds b'), ρ', σ')
+      Step M (b, ρ, σ) (b', ρ', σ') →
+      Step M (Expr a (Eannot ds b), ρ, σ) (Expr a (Eannot ds b'), ρ', σ')
   /-- ANNOTS merge: `{A_1} {A_2} E --> {A_1 ++ A_2} E` (one_step0
       Eannot arm, Core_reduction.lean:353 "reduction: ANNOTS";
       combine_dyn_annotations = (++), :305-306; get_ctx routes every
@@ -872,7 +981,7 @@ inductive Step (Q : LabelMap) :
       the body, exactly as the engine; env untouched. -/
   | annot_merge {a1 a2 : List annot} {ds1 ds2 : List dyn_annotation}
       {b : CoreExpr} {ρ : EnvStack} {σ : Mem} :
-      Step Q (Expr a1 (Eannot ds1 (Expr a2 (Eannot ds2 b))), ρ, σ)
+      Step M (Expr a1 (Eannot ds1 (Expr a2 (Eannot ds2 b))), ρ, σ)
            (Expr (a1 ++ a2) (Eannot (ds1 ++ ds2) b), ρ, σ)
   /-- THE GLOBAL JUMP (S3, header note 4). Mirrors step_ctx's Erun
       arm (Core_reduction.lean:484): the spine hole holds
@@ -894,9 +1003,9 @@ inductive Step (Q : LabelMap) :
       {vs : List value} {ev0 : Fmap sym value} {evs : List (Fmap sym value)}
       {σ : Mem}
       (hj : jumpRedex? e = some (l, pes))
-      (hl : lookupLabel Q l = some (params, cont))
+      (hl : lookupLabel M.labels l = some (params, cont))
       (hvs : evalPexprs (ev0 :: evs) pes = some vs) :
-      Step Q (e, ev0 :: evs, σ)
+      Step M (e, ev0 :: evs, σ)
            (cont, bindArgs params vs (ev0 :: evs), σ)
   /-- Esave ENTRY at value-shaped parameter pexprs: one_step0's Esave
       TAU fast-path (Core_reduction.lean:353, "reduction: SAVE (tau
@@ -912,7 +1021,7 @@ inductive Step (Q : LabelMap) :
       {body : CoreExpr} {cvals : List value}
       {ev0 : Fmap sym value} {evs : List (Fmap sym value)} {σ : Mem}
       (hvals : valueFromPexprs (saveParamPexprs ps) = some cvals) :
-      Step Q (Expr a (Esave sb ps body), ev0 :: evs, σ)
+      Step M (Expr a (Esave sb ps body), ev0 :: evs, σ)
            (body, bindSaveParams ps cvals (ev0 :: evs), σ)
   /-- Eif, true branch: ONE engine step with a BIG-STEP guard
       (one_step0's Eif TAU_WITH_RUNSTATE, Core_reduction.lean:353 —
@@ -923,12 +1032,12 @@ inductive Step (Q : LabelMap) :
   | if_true {a : List annot} {g : generic_pexpr Unit sym} {e2 e3 : CoreExpr}
       {ρ : EnvStack} {σ : Mem}
       (hg : evalPexpr ρ g = some Vtrue) :
-      Step Q (Expr a (Eif g e2 e3), ρ, σ) (e2, ρ, σ)
+      Step M (Expr a (Eif g e2 e3), ρ, σ) (e2, ρ, σ)
   /-- Eif, false branch. -/
   | if_false {a : List annot} {g : generic_pexpr Unit sym} {e2 e3 : CoreExpr}
       {ρ : EnvStack} {σ : Mem}
       (hg : evalPexpr ρ g = some Vfalse) :
-      Step Q (Expr a (Eif g e2 e3), ρ, σ) (e3, ρ, σ)
+      Step M (Expr a (Eif g e2 e3), ρ, σ) (e3, ρ, σ)
   /-- Ecase at a VALUE scrutinee: TAU into the substituted branch
       (one_step0's Ecase value arm, Core_reduction.lean:353 —
       `select_case subst_sym_expr cval pat_es`; no-match ILLTYPED is
@@ -942,7 +1051,7 @@ inductive Step (Q : LabelMap) :
       {ρ : EnvStack} {σ : Mem}
       (hv : valueFromPexpr pe = some cval)
       (hsel : select_case subst_sym_expr cval pats = some e') :
-      Step Q (Expr a (Ecase pe pats), ρ, σ) (e', ρ, σ)
+      Step M (Expr a (Ecase pe pats), ρ, σ) (e', ρ, σ)
   /-- LETS-PURE at the plain-symbol binder (list-reverse phase A):
       `lets x = v in E2 --> E2` with `x` bound to `v` verbatim
       (one_step0 Esseq bare-value arm, Core_reduction.lean:353
@@ -958,7 +1067,7 @@ inductive Step (Q : LabelMap) :
   | sseq_sym_pure {a pa : List annot} {x : sym} {bty : core_base_type}
       {v : value} {e2 : CoreExpr}
       {ev0 : Fmap sym value} {evs : List (Fmap sym value)} {σ : Mem} :
-      Step Q (Expr a (Esseq (symPat pa x bty) (ofVal (.pure v)) e2), ev0 :: evs, σ)
+      Step M (Expr a (Esseq (symPat pa x bty) (ofVal (.pure v)) e2), ev0 :: evs, σ)
            (e2, update_env (symPat pa x bty) v (ev0 :: evs), σ)
   /-- THE POINTER-EQUALITY MEMOP at evaluated operands (list-reverse
       phase A — the honest null test): ONE engine step. Mirrors:
@@ -990,7 +1099,7 @@ inductive Step (Q : LabelMap) :
       (h1 : valueFromPexpr pe1 = some (Vobject (OVpointer pv1)))
       (h2 : valueFromPexpr pe2 = some (Vobject (OVpointer pv2)))
       (hmem : applyMemM (CerbMem.eqPtrval default pv1 pv2) σ = some (b, σ')) :
-      Step Q (Expr a (Ememop PtrEq [pe1, pe2]), ρ, σ)
+      Step M (Expr a (Ememop PtrEq [pe1, pe2]), ρ, σ)
            (Expr [] (Epure (Pexpr [] () (PEval (boolValue b)))), ρ, σ')
   /-- MEMOP-OPERAND EVALUATION (list-reverse phase A): ONE engine
       step BIG-STEP evaluating both operands of a two-operand memop
@@ -1011,7 +1120,7 @@ inductive Step (Q : LabelMap) :
       (hnv : valueFromPexprs [pe1, pe2] = none)
       (hv1 : evalPexpr ρ pe1 = some v1)
       (hv2 : evalPexpr ρ pe2 = some v2) :
-      Step Q (Expr a (Ememop mop [pe1, pe2]), ρ, σ)
+      Step M (Expr a (Ememop mop [pe1, pe2]), ρ, σ)
            (Expr a (Ememop mop
              [Pexpr [] () (PEval v1), Pexpr [] () (PEval v2)]), ρ, σ)
   /-- ACTION_EVAL for a positive strong store with unevaluated
@@ -1038,7 +1147,7 @@ inductive Step (Q : LabelMap) :
       (hnv3 : valueFromPexpr pe3 = none)
       (hv2 : evalPexpr ρ pe2 = some (Vobject (OVpointer pv)))
       (hv3 : evalPexpr ρ pe3 = some cv) :
-      Step Q (Expr a (Eaction (Paction polarity.Pos (Action loc ann
+      Step M (Expr a (Eaction (Paction polarity.Pos (Action loc ann
               (Store0 lk (Pexpr [] () (PEval (Vctype ty))) pe2 pe3 mo)))), ρ, σ)
            (Expr a (Eaction (Paction polarity.Pos (Action loc ann
               (Store0 lk (Pexpr [] () (PEval (Vctype ty)))
@@ -1054,15 +1163,15 @@ The evaluated-operand premises discharge by `rfl` at the canonical
 so the certification layer and the small-axiom proofs apply them
 directly. -/
 
-theorem Step.store_canonical {Q : LabelMap} {a : List annot}
+theorem Step.store_canonical {M : MachineCtx} {a : List annot}
     {loc : CerbLocation.Loc}
     {ann : core_run_annotation} {lk : Bool} {ty : ctype}
     {pv : CerbMem.PointerValue} {cv : value} {mo : memory_order}
     {mv : CerbMem.MemValue} {fp : CerbMem.Footprint}
     {ρ : EnvStack} {σ σ' : Mem}
-    (hmv : memValueFromValue fmapEmpty (Ctype [] (unatomic_ ty)) cv = some mv)
+    (hmv : memValueFromValue M.tagDefs (Ctype [] (unatomic_ ty)) cv = some mv)
     (hmem : applyMemM (CerbMem.storeM loc ty lk pv mv) σ = some (fp, σ')) :
-    Step Q (Expr a (Eaction (Paction polarity.Pos (Action loc ann
+    Step M (Expr a (Eaction (Paction polarity.Pos (Action loc ann
             (Store0 lk (Pexpr [] () (PEval (Vctype ty)))
                        (Pexpr [] () (PEval (Vobject (OVpointer pv))))
                        (Pexpr [] () (PEval cv)) mo)))), ρ, σ)
@@ -1070,13 +1179,13 @@ theorem Step.store_canonical {Q : LabelMap} {a : List annot}
             (Expr [] (Epure (Pexpr [] () (PEval Vunit))))), ρ, σ') :=
   Step.store rfl rfl rfl hmv hmem
 
-theorem Step.load_canonical {Q : LabelMap} {a : List annot}
+theorem Step.load_canonical {M : MachineCtx} {a : List annot}
     {loc : CerbLocation.Loc}
     {ann : core_run_annotation} {ty : ctype} {pv : CerbMem.PointerValue}
     {mo : memory_order} {mval : CerbMem.MemValue} {fp : CerbMem.Footprint}
     {ρ : EnvStack} {σ σ' : Mem}
     (hmem : applyMemM (CerbMem.loadM loc ty pv) σ = some ((fp, mval), σ')) :
-    Step Q (Expr a (Eaction (Paction polarity.Pos (Action loc ann
+    Step M (Expr a (Eaction (Paction polarity.Pos (Action loc ann
             (Load0 (Pexpr [] () (PEval (Vctype ty)))
                    (Pexpr [] () (PEval (Vobject (OVpointer pv)))) mo)))), ρ, σ)
          (Expr [] (Eannot [DA_pos [] fp]
@@ -1084,13 +1193,13 @@ theorem Step.load_canonical {Q : LabelMap} {a : List annot}
               (valueFromMemValue mval).2))))), ρ, σ') :=
   Step.load rfl rfl hmem
 
-theorem Step.create_canonical {Q : LabelMap} {a : List annot}
+theorem Step.create_canonical {M : MachineCtx} {a : List annot}
     {loc : CerbLocation.Loc}
     {ann : core_run_annotation} {align : CerbMem.IntegerValue} {ty : ctype}
     {pref : prefix0} {pv : CerbMem.PointerValue} {ρ : EnvStack} {σ σ' : Mem}
     (hmem : applyMemM (CerbMem.allocateObject 0 pref align ty none none) σ =
       some (pv, σ')) :
-    Step Q (Expr a (Eaction (Paction polarity.Pos (Action loc ann
+    Step M (Expr a (Eaction (Paction polarity.Pos (Action loc ann
             (Create (Pexpr [] () (PEval (Vobject (OVinteger align))))
                     (Pexpr [] () (PEval (Vctype ty))) pref)))), ρ, σ)
          (Expr [] (Epure (Pexpr [] () (PEval (Vobject (OVpointer pv))))), ρ, σ') :=
@@ -1104,8 +1213,8 @@ theorem Step.create_canonical {Q : LabelMap} {a : List annot}
     the FragP-scoped invariance in Soundness.lean
     (`Step.env_invariant_frag` — the old cone has no env-writing
     shapes). -/
-theorem Step.env_cons' {Q : LabelMap} {c c' : CoreExpr × EnvStack × Mem}
-    (h : Step Q c c') :
+theorem Step.env_cons' {M : MachineCtx} {c c' : CoreExpr × EnvStack × Mem}
+    (h : Step M c c') :
     ∀ ev0 evs, c.2.1 = ev0 :: evs → ∃ ev0', c'.2.1 = ev0' :: evs := by
   induction h with
   | store h1 h2 h3 hmv hmem => exact fun ev0 evs hin => ⟨ev0, hin⟩
@@ -1145,19 +1254,19 @@ theorem Step.env_cons' {Q : LabelMap} {c c' : CoreExpr × EnvStack × Mem}
   | memop_eval hnv hv1 hv2 => exact fun ev0 evs hin => ⟨ev0, hin⟩
   | store_eval hnv2 hnv3 hv2 hv3 => exact fun ev0 evs hin => ⟨ev0, hin⟩
 
-theorem Step.env_cons {Q : LabelMap} {e : CoreExpr} {ev0 : Fmap sym value}
+theorem Step.env_cons {M : MachineCtx} {e : CoreExpr} {ev0 : Fmap sym value}
     {evs : List (Fmap sym value)} {σ : Mem}
     {e' : CoreExpr} {ρ' : EnvStack} {σ' : Mem}
-    (h : Step Q (e, ev0 :: evs, σ) (e', ρ', σ')) :
+    (h : Step M (e, ev0 :: evs, σ) (e', ρ', σ')) :
     ∃ ev0', ρ' = ev0' :: evs :=
   h.env_cons' ev0 evs rfl
 
 /-- Values do not step (the Language interface's `val_stuck`).
     Engine analogue: is_irreducible short-circuits both get_ctx and
     one_step0 (Core_reduction.lean:293,353,375). -/
-theorem Step.val_elim {Q : LabelMap} {w : SpikeVal} {ρ : EnvStack} {σ : Mem}
+theorem Step.val_elim {M : MachineCtx} {w : SpikeVal} {ρ : EnvStack} {σ : Mem}
     {out : CoreExpr × EnvStack × Mem}
-    (h : Step Q (ofVal w, ρ, σ) out) : False := by
+    (h : Step M (ofVal w, ρ, σ) out) : False := by
   cases w with
   | pure v =>
     cases h with
@@ -1171,9 +1280,9 @@ theorem Step.val_elim {Q : LabelMap} {w : SpikeVal} {ρ : EnvStack} {σ : Mem}
       | pure_eval hnv hv => rw [valueFromPexpr_val] at hnv; cases hnv
     | run hj hl hvs => simp [ofVal, jumpRedex?, annotRooted] at hj
 
-theorem Step.toVal_none {Q : LabelMap} {e : CoreExpr} {ρ : EnvStack} {σ : Mem}
+theorem Step.toVal_none {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack} {σ : Mem}
     {out : CoreExpr × EnvStack × Mem}
-    (h : Step Q (e, ρ, σ) out) : toVal e = none := by
+    (h : Step M (e, ρ, σ) out) : toVal e = none := by
   cases hv : toVal e with
   | none => rfl
   | some w => exact absurd (ofVal_of_toVal hv ▸ h) (fun h => h.val_elim)
@@ -1181,16 +1290,16 @@ theorem Step.toVal_none {Q : LabelMap} {e : CoreExpr} {ρ : EnvStack} {σ : Mem}
 /-- Inversion at a store redex (canonical operand instance — the
     certified cone's shape): the step is unique and fully determined
     by the memM computation; the env is returned verbatim. -/
-theorem Step.store_inv {Q : LabelMap} {a : List annot} {loc : CerbLocation.Loc}
+theorem Step.store_inv {M : MachineCtx} {a : List annot} {loc : CerbLocation.Loc}
     {ann : core_run_annotation} {lk : Bool} {ty : ctype}
     {pv : CerbMem.PointerValue} {cv : value} {mo : memory_order}
     {ρ : EnvStack} {σ : Mem} {out : CoreExpr × EnvStack × Mem}
-    (h : Step Q (Expr a (Eaction (Paction polarity.Pos (Action loc ann
+    (h : Step M (Expr a (Eaction (Paction polarity.Pos (Action loc ann
             (Store0 lk (Pexpr [] () (PEval (Vctype ty)))
                        (Pexpr [] () (PEval (Vobject (OVpointer pv))))
                        (Pexpr [] () (PEval cv)) mo)))), ρ, σ) out) :
     ∃ mv fp σ',
-      memValueFromValue fmapEmpty (Ctype [] (unatomic_ ty)) cv = some mv ∧
+      memValueFromValue M.tagDefs (Ctype [] (unatomic_ ty)) cv = some mv ∧
       applyMemM (CerbMem.storeM loc ty lk pv mv) σ = some (fp, σ') ∧
       out = (Expr [] (Eannot [DA_pos [] fp]
               (Expr [] (Epure (Pexpr [] () (PEval Vunit))))), ρ, σ') := by
@@ -1206,11 +1315,11 @@ theorem Step.store_inv {Q : LabelMap} {a : List annot} {loc : CerbLocation.Loc}
     exact ⟨_, _, _, hmv, hmem, rfl⟩
 
 /-- Inversion at a load redex (canonical operand instance). -/
-theorem Step.load_inv {Q : LabelMap} {a : List annot} {loc : CerbLocation.Loc}
+theorem Step.load_inv {M : MachineCtx} {a : List annot} {loc : CerbLocation.Loc}
     {ann : core_run_annotation} {ty : ctype} {pv : CerbMem.PointerValue}
     {mo : memory_order} {ρ : EnvStack} {σ : Mem}
     {out : CoreExpr × EnvStack × Mem}
-    (h : Step Q (Expr a (Eaction (Paction polarity.Pos (Action loc ann
+    (h : Step M (Expr a (Eaction (Paction polarity.Pos (Action loc ann
             (Load0 (Pexpr [] () (PEval (Vctype ty)))
                    (Pexpr [] () (PEval (Vobject (OVpointer pv)))) mo)))), ρ, σ)
           out) :
@@ -1230,11 +1339,11 @@ theorem Step.load_inv {Q : LabelMap} {a : List annot} {loc : CerbLocation.Loc}
     exact ⟨_, _, _, hmem, rfl⟩
 
 /-- Inversion at a create redex (canonical operand instance). -/
-theorem Step.create_inv {Q : LabelMap} {a : List annot} {loc : CerbLocation.Loc}
+theorem Step.create_inv {M : MachineCtx} {a : List annot} {loc : CerbLocation.Loc}
     {ann : core_run_annotation} {align : CerbMem.IntegerValue} {ty : ctype}
     {pref : prefix0} {ρ : EnvStack} {σ : Mem}
     {out : CoreExpr × EnvStack × Mem}
-    (h : Step Q (Expr a (Eaction (Paction polarity.Pos (Action loc ann
+    (h : Step M (Expr a (Eaction (Paction polarity.Pos (Action loc ann
             (Create (Pexpr [] () (PEval (Vobject (OVinteger align))))
                     (Pexpr [] () (PEval (Vctype ty))) pref)))), ρ, σ) out) :
     ∃ pv σ',
@@ -1256,13 +1365,13 @@ cash-in of context-independence: at a jump redex EVERY step is THE
 jump and its successor does not depend on the decomposition; the
 congruence guards make this a one-level `cases`). -/
 
-theorem Step.jump_inv {Q : LabelMap} {e : CoreExpr} {ρ : EnvStack} {σ : Mem}
+theorem Step.jump_inv {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack} {σ : Mem}
     {out : CoreExpr × EnvStack × Mem} {l : sym}
     {pes : List (generic_pexpr Unit sym)}
     (hj : jumpRedex? e = some (l, pes))
-    (h : Step Q (e, ρ, σ) out) :
+    (h : Step M (e, ρ, σ) out) :
     ∃ params cont vs ev0 evs, ρ = ev0 :: evs ∧
-      lookupLabel Q l = some (params, cont) ∧
+      lookupLabel M.labels l = some (params, cont) ∧
       evalPexprs ρ pes = some vs ∧
       out = (cont, bindArgs params vs ρ, σ) := by
   cases h with
@@ -1296,14 +1405,14 @@ theorem Step.jump_inv {Q : LabelMap} {e : CoreExpr} {ρ : EnvStack} {σ : Mem}
 
 /-- Reducibility at a registered jump redex (the probe's
     `step_of_jumpRedex`). -/
-theorem Step.run_of_jumpRedex {Q : LabelMap} {e : CoreExpr} {l : sym}
+theorem Step.run_of_jumpRedex {M : MachineCtx} {e : CoreExpr} {l : sym}
     {pes : List (generic_pexpr Unit sym)}
     {params : List (sym × core_base_type)} {cont : CoreExpr} {vs : List value}
     {ev0 : Fmap sym value} {evs : List (Fmap sym value)} {σ : Mem}
     (hj : jumpRedex? e = some (l, pes))
-    (hl : lookupLabel Q l = some (params, cont))
+    (hl : lookupLabel M.labels l = some (params, cont))
     (hvs : evalPexprs (ev0 :: evs) pes = some vs) :
-    Step Q (e, ev0 :: evs, σ) (cont, bindArgs params vs (ev0 :: evs), σ) :=
+    Step M (e, ev0 :: evs, σ) (cont, bindArgs params vs (ev0 :: evs), σ) :=
   Step.run hj hl hvs
 
 /-- Inversion at an Esseq node (S3 form): a frame step of a
@@ -1312,11 +1421,11 @@ theorem Step.run_of_jumpRedex {Q : LabelMap} {e : CoreExpr} {l : sym}
     The frame case's `jumpRedex? e1 = none` is the S3 congruence
     guard surfacing; the jump disjunct is the readiness's "factor
     theorem gains one disjunct" at the Esseq node. -/
-theorem Step.sseq_inv {Q : LabelMap} {a : List annot} {pat : pattern}
+theorem Step.sseq_inv {M : MachineCtx} {a : List annot} {pat : pattern}
     {e1 e2 : CoreExpr}
     {ρ : EnvStack} {σ : Mem} {out : CoreExpr × EnvStack × Mem}
-    (h : Step Q (Expr a (Esseq pat e1 e2), ρ, σ) out) :
-    (∃ e1' ρ' σ', jumpRedex? e1 = none ∧ Step Q (e1, ρ, σ) (e1', ρ', σ') ∧
+    (h : Step M (Expr a (Esseq pat e1 e2), ρ, σ) out) :
+    (∃ e1' ρ' σ', jumpRedex? e1 = none ∧ Step M (e1, ρ, σ) (e1', ρ', σ') ∧
         out = (Expr a (Esseq pat e1' e2), ρ', σ')) ∨
     (∃ pa bty v ev0 evs, pat = Pattern pa (CaseBase (none, bty)) ∧
         e1 = ofVal (.pure v) ∧ ρ = ev0 :: evs ∧ out = (e2, ρ, σ)) ∨
@@ -1324,7 +1433,7 @@ theorem Step.sseq_inv {Q : LabelMap} {a : List annot} {pat : pattern}
         e1 = ofVal (.annot ds v) ∧ ρ = ev0 :: evs ∧
         out = (Expr [] (Eannot ds e2), ρ, σ)) ∨
     (∃ l pes params cont vs ev0 evs, jumpRedex? e1 = some (l, pes) ∧
-        ρ = ev0 :: evs ∧ lookupLabel Q l = some (params, cont) ∧
+        ρ = ev0 :: evs ∧ lookupLabel M.labels l = some (params, cont) ∧
         evalPexprs ρ pes = some vs ∧
         out = (cont, bindArgs params vs ρ, σ)) ∨
     (∃ pa' pb' x bty' ov ev0 evs, pat = specPat pa' pb' x bty' ∧
@@ -1358,19 +1467,19 @@ theorem Step.sseq_inv {Q : LabelMap} {a : List annot} {pat : pattern}
 /-- Inversion at an Eannot node (S3 form): Cannot-descent of a
     non-jump-redex body, the ANNOTS merge, or the global jump
     through the Cannot frame. -/
-theorem Step.annot_inv {Q : LabelMap} {a : List annot}
+theorem Step.annot_inv {M : MachineCtx} {a : List annot}
     {ds : List dyn_annotation}
     {b : CoreExpr} {ρ : EnvStack} {σ : Mem}
     {out : CoreExpr × EnvStack × Mem}
-    (h : Step Q (Expr a (Eannot ds b), ρ, σ) out) :
+    (h : Step M (Expr a (Eannot ds b), ρ, σ) out) :
     (annotRooted b = false ∧ jumpRedex? b = none ∧
-        ∃ b' ρ' σ', Step Q (b, ρ, σ) (b', ρ', σ') ∧
+        ∃ b' ρ' σ', Step M (b, ρ, σ) (b', ρ', σ') ∧
         out = (Expr a (Eannot ds b'), ρ', σ')) ∨
     (∃ a2 ds2 c, b = Expr a2 (Eannot ds2 c) ∧
         out = (Expr (a ++ a2) (Eannot (ds ++ ds2) c), ρ, σ)) ∨
     (∃ l pes params cont vs ev0 evs, annotRooted b = false ∧
         jumpRedex? b = some (l, pes) ∧
-        ρ = ev0 :: evs ∧ lookupLabel Q l = some (params, cont) ∧
+        ρ = ev0 :: evs ∧ lookupLabel M.labels l = some (params, cont) ∧
         evalPexprs ρ pes = some vs ∧
         out = (cont, bindArgs params vs ρ, σ)) := by
   cases h with
@@ -1384,13 +1493,13 @@ theorem Step.annot_inv {Q : LabelMap} {a : List annot}
       exact .inr (.inr ⟨_, _, _, _, _, _, _, hr', hj, rfl, hl, hvs, rfl⟩)
 
 /-- Inversion at an Esave node: the entry TAU (value-shaped params). -/
-theorem Step.save_inv {Q : LabelMap} {a : List annot}
+theorem Step.save_inv {M : MachineCtx} {a : List annot}
     {sb : sym × core_base_type}
     {ps : List (sym × ((core_base_type ×
       Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym))}
     {body : CoreExpr} {ρ : EnvStack} {σ : Mem}
     {out : CoreExpr × EnvStack × Mem}
-    (h : Step Q (Expr a (Esave sb ps body), ρ, σ) out) :
+    (h : Step M (Expr a (Esave sb ps body), ρ, σ) out) :
     ∃ cvals ev0 evs, ρ = ev0 :: evs ∧
       valueFromPexprs (saveParamPexprs ps) = some cvals ∧
       out = (body, bindSaveParams ps cvals ρ, σ) := by
@@ -1400,10 +1509,10 @@ theorem Step.save_inv {Q : LabelMap} {a : List annot}
 
 /-- Inversion at an Eif node: the guard evaluates to a boolean and
     the step selects the branch. -/
-theorem Step.if_inv {Q : LabelMap} {a : List annot}
+theorem Step.if_inv {M : MachineCtx} {a : List annot}
     {g : generic_pexpr Unit sym} {e2 e3 : CoreExpr}
     {ρ : EnvStack} {σ : Mem} {out : CoreExpr × EnvStack × Mem}
-    (h : Step Q (Expr a (Eif g e2 e3), ρ, σ) out) :
+    (h : Step M (Expr a (Eif g e2 e3), ρ, σ) out) :
     (evalPexpr ρ g = some Vtrue ∧ out = (e2, ρ, σ)) ∨
     (evalPexpr ρ g = some Vfalse ∧ out = (e3, ρ, σ)) := by
   cases h with
@@ -1412,10 +1521,10 @@ theorem Step.if_inv {Q : LabelMap} {a : List annot}
   | run hj hl hvs => simp [jumpRedex?] at hj
 
 /-- Inversion at an Ecase node: the value-scrutinee selection TAU. -/
-theorem Step.case_inv {Q : LabelMap} {a : List annot}
+theorem Step.case_inv {M : MachineCtx} {a : List annot}
     {pe : generic_pexpr Unit sym} {pats : List (pattern × CoreExpr)}
     {ρ : EnvStack} {σ : Mem} {out : CoreExpr × EnvStack × Mem}
-    (h : Step Q (Expr a (Ecase pe pats), ρ, σ) out) :
+    (h : Step M (Expr a (Ecase pe pats), ρ, σ) out) :
     ∃ cval e', valueFromPexpr pe = some cval ∧
       select_case subst_sym_expr cval pats = some e' ∧
       out = (e', ρ, σ) := by
@@ -1424,10 +1533,10 @@ theorem Step.case_inv {Q : LabelMap} {a : List annot}
   | run hj hl hvs => simp [jumpRedex?] at hj
 
 /-- Inversion at an Epure node (S4): the big-step PURE evaluation. -/
-theorem Step.pure_inv {Q : LabelMap} {a : List annot}
+theorem Step.pure_inv {M : MachineCtx} {a : List annot}
     {pe : generic_pexpr Unit sym} {ρ : EnvStack} {σ : Mem}
     {out : CoreExpr × EnvStack × Mem}
-    (h : Step Q (Expr a (Epure pe), ρ, σ) out) :
+    (h : Step M (Expr a (Epure pe), ρ, σ) out) :
     ∃ v, valueFromPexpr pe = none ∧ evalPexpr ρ pe = some v ∧
       out = (Expr a (Epure (Pexpr [] () (PEval v))), ρ, σ) := by
   cases h with
@@ -1438,12 +1547,12 @@ theorem Step.pure_inv {Q : LabelMap} {a : List annot}
     value (S4): the ACTION_EVAL step. The operand's non-value shape
     is a side hypothesis (it discharges by `rfl`/`simp` at authored
     shapes) so the canonical load rule's arms refute. -/
-theorem Step.load_op_inv {Q : LabelMap} {a : List annot}
+theorem Step.load_op_inv {M : MachineCtx} {a : List annot}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
     {pe2 : generic_pexpr Unit sym} {mo : memory_order}
     {ρ : EnvStack} {σ : Mem} {out : CoreExpr × EnvStack × Mem}
     (hnv2 : valueFromPexpr pe2 = none)
-    (h : Step Q (Expr a (Eaction (Paction polarity.Pos (Action loc ann
+    (h : Step M (Expr a (Eaction (Paction polarity.Pos (Action loc ann
             (Load0 (Pexpr [] () (PEval (Vctype ty))) pe2 mo)))), ρ, σ) out) :
     ∃ pv, evalPexpr ρ pe2 = some (Vobject (OVpointer pv)) ∧
       out = (Expr a (Eaction (Paction polarity.Pos (Action loc ann
@@ -1468,12 +1577,12 @@ theorem valueFromPexprs_pair (pe1 pe2 : generic_pexpr Unit sym) :
 
 /-- Inversion at the pointer-equality memop with VALUE operands: the
     step is unique and fully determined by the memM computation. -/
-theorem Step.memop_ptreq_inv {Q : LabelMap} {a : List annot}
+theorem Step.memop_ptreq_inv {M : MachineCtx} {a : List annot}
     {pe1 pe2 : generic_pexpr Unit sym} {pv1 pv2 : CerbMem.PointerValue}
     {ρ : EnvStack} {σ : Mem} {out : CoreExpr × EnvStack × Mem}
     (h1 : valueFromPexpr pe1 = some (Vobject (OVpointer pv1)))
     (h2 : valueFromPexpr pe2 = some (Vobject (OVpointer pv2)))
-    (h : Step Q (Expr a (Ememop PtrEq [pe1, pe2]), ρ, σ) out) :
+    (h : Step M (Expr a (Ememop PtrEq [pe1, pe2]), ρ, σ) out) :
     ∃ b σ', applyMemM (CerbMem.eqPtrval default pv1 pv2) σ = some (b, σ') ∧
       out = (Expr [] (Epure (Pexpr [] () (PEval (boolValue b)))), ρ, σ') := by
   cases h with
@@ -1490,11 +1599,11 @@ theorem Step.memop_ptreq_inv {Q : LabelMap} {a : List annot}
 
 /-- Inversion at a two-operand memop with a NON-value operand list:
     the operand-evaluation step. -/
-theorem Step.memop_op_inv {Q : LabelMap} {a : List annot} {mop : memop}
+theorem Step.memop_op_inv {M : MachineCtx} {a : List annot} {mop : memop}
     {pe1 pe2 : generic_pexpr Unit sym}
     {ρ : EnvStack} {σ : Mem} {out : CoreExpr × EnvStack × Mem}
     (hnv : valueFromPexprs [pe1, pe2] = none)
-    (h : Step Q (Expr a (Ememop mop [pe1, pe2]), ρ, σ) out) :
+    (h : Step M (Expr a (Ememop mop [pe1, pe2]), ρ, σ) out) :
     ∃ v1 v2, evalPexpr ρ pe1 = some v1 ∧ evalPexpr ρ pe2 = some v2 ∧
       out = (Expr a (Ememop mop
         [Pexpr [] () (PEval v1), Pexpr [] () (PEval v2)]), ρ, σ) := by
@@ -1508,12 +1617,12 @@ theorem Step.memop_op_inv {Q : LabelMap} {a : List annot} {mop : memop}
 /-- Inversion at a store whose pointer operand is NOT a value: the
     ACTION_EVAL step (and its value operand is not a value either —
     the rule's shape). -/
-theorem Step.store_op_inv {Q : LabelMap} {a : List annot}
+theorem Step.store_op_inv {M : MachineCtx} {a : List annot}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {lk : Bool}
     {ty : ctype} {pe2 pe3 : generic_pexpr Unit sym} {mo : memory_order}
     {ρ : EnvStack} {σ : Mem} {out : CoreExpr × EnvStack × Mem}
     (hnv2 : valueFromPexpr pe2 = none)
-    (h : Step Q (Expr a (Eaction (Paction polarity.Pos (Action loc ann
+    (h : Step M (Expr a (Eaction (Paction polarity.Pos (Action loc ann
         (Store0 lk (Pexpr [] () (PEval (Vctype ty))) pe2 pe3 mo)))), ρ, σ)
       out) :
     ∃ pv cv, evalPexpr ρ pe2 = some (Vobject (OVpointer pv)) ∧
@@ -1603,184 +1712,127 @@ def storeOpRedex (loc : CerbLocation.Loc) (ann : core_run_annotation)
   Expr [] (Eaction (Paction polarity.Pos (Action loc ann
     (Store0 false (Pexpr [] () (PEval (Vctype ty))) pe2 pe3 mo))))
 
-/-! ## The frozen entry label map + the phase-1 fragment cone
+/-! ## The frozen profiles as context instances
 
-`spikeLbl` is the S3 analog of `spikeEnv`: the frozen EMPTY label
-map the jump-free exports pin their tuples at (the production
-driver's `labeled` fiber at `current_proc_opt = none` — no procedure,
-no registered labels). At `spikeLbl` the jump rule can never fire
-(`lookupLabel_empty`), so the phase-1 corpus's statements survive
-pinned, with their proofs refuting the jump disjuncts.
+`spikeLbl` survives as the frozen EMPTY label map VALUE (the
+`spikeEnv` precedent) — the label fiber of the straight-line launch
+profile. The frozen profiles themselves are now `MachineCtx`
+INSTANCES: `spikeCtx` (the straight-line/production launch context)
+and `procCtx p rs` (the jump profile: proc-carrying thread over a
+parameterized run state). No frozen constant remains inside any
+judgment; exported statements pin the launch profile through these
+instances only.
 
-`FragP` (the phase-1 syntactic fragment cone) MOVES here from
-Soundness.lean unchanged in statement: S3's retirement of the
-unconditional env invariance (pre-declared) leaves its survivors
-(`Step.env_invariant_frag`, Rules.lean `wp_env_invariant_frag`)
-FragP-scoped, and Rules.lean does not import the boundary module. -/
+S1b RETIREMENT NOTE (design record §8.3, prune-don't-merge): the
+phase-1 parallel cone `FragP` (and its `Decomp`-side machinery in
+Soundness.lean) is DELETED — the ONE capability cone is `Frag`
+(Soundness.lean; the migrated `FragJ` with value-scrutinee `Ecase`
+joined). The straight-line TWO-SIDEDNESS sub-grammar that
+`engine_complete` needs survives as `StraightFrag` (Soundness.lean),
+which is NOT a capability cone (membership embeds via
+`StraightFrag.toFrag`). -/
 
 abbrev spikeLbl : LabelMap := fmapEmpty
 
 @[simp] theorem lookupLabel_empty (l : sym) :
     lookupLabel spikeLbl l = none := rfl
 
-/-- At the empty label map nothing ever jumps: any step's subject has
-    no REGISTERED jump redex — and since registration is what the
-    jump rule needs, a step's subject with a syntactic jump redex is
-    impossible. -/
-theorem Step.jumpRedex?_none_of_spikeLbl {e : CoreExpr} {ρ : EnvStack}
+/-- The default (empty) Core file. Only proc/impl/funinfo lookups
+    read it; the fragment performs none. -/
+def spikeFile : generic_file Unit core_run_annotation := default
+
+/-- The frozen core_run_state (Core_run_aux.lean:353-358). The
+    fragment's request monads thread it; only the aid would reach a
+    continuation, and the fragment's continuations ignore it (D2). -/
+def spikeRunState : core_run_state :=
+  { tid_supply := 1, aid_supply := 0, excluded_supply := 0, sym_supply := 0,
+    labeled := fmapEmpty }
+
+/-- The straight-line frozen profile as a context instance
+    (tagDefs/extern empty, default file, tid 0, no parent, empty
+    stack, no current procedure, frozen run state). -/
+def spikeCtx : MachineCtx :=
+  { tagDefs := fmapEmpty, file := spikeFile, extern := fmapEmpty,
+    tid := 0, parent := none, stack := Stack_empty, errno := default,
+    proc := none, execLoc := default, currentLoc := default,
+    runState := spikeRunState }
+
+/-- The jump profile (proc-carrying thread, parameterized run state)
+    as a context instance. -/
+def procCtx (p : sym) (rs : core_run_state) : MachineCtx :=
+  { spikeCtx with proc := some p, runState := rs }
+
+/-- A run-state-only variant of the spike context (the old `driveJ`
+    profile: the drive loop itself reads no proc — only the
+    discharge's run state differs). -/
+def rsCtx (rs : core_run_state) : MachineCtx :=
+  { spikeCtx with runState := rs }
+
+/-- Field-projection equations for the frozen instances (rewriting
+    aids: statements at the instances reduce to the old frozen
+    constants). -/
+@[simp] theorem spikeCtx_tagDefs : spikeCtx.tagDefs = fmapEmpty := rfl
+@[simp] theorem spikeCtx_extern : spikeCtx.extern = fmapEmpty := rfl
+@[simp] theorem spikeCtx_runState : spikeCtx.runState = spikeRunState := rfl
+@[simp] theorem procCtx_tagDefs (p : sym) (rs : core_run_state) :
+    (procCtx p rs).tagDefs = fmapEmpty := rfl
+@[simp] theorem procCtx_extern (p : sym) (rs : core_run_state) :
+    (procCtx p rs).extern = fmapEmpty := rfl
+@[simp] theorem procCtx_runState (p : sym) (rs : core_run_state) :
+    (procCtx p rs).runState = rs := rfl
+@[simp] theorem rsCtx_extern (rs : core_run_state) :
+    (rsCtx rs).extern = fmapEmpty := rfl
+@[simp] theorem rsCtx_runState (rs : core_run_state) :
+    (rsCtx rs).runState = rs := rfl
+
+@[simp] theorem spikeCtx_labels : spikeCtx.labels = spikeLbl := rfl
+
+@[simp] theorem rsCtx_labels (rs : core_run_state) :
+    (rsCtx rs).labels = spikeLbl := rfl
+
+theorem spikeCtx_wf : spikeCtx.SeqWF := ⟨rfl, rfl⟩
+
+theorem procCtx_wf (p : sym) (rs : core_run_state) :
+    (procCtx p rs).SeqWF := ⟨rfl, rfl⟩
+
+theorem rsCtx_wf (rs : core_run_state) : (rsCtx rs).SeqWF := ⟨rfl, rfl⟩
+
+/-- The jump profile's DERIVED label map at a successful two-level
+    `labeled` read (the old `LabeledAt` tie, consumed): the fiber at
+    the current procedure IS the context's label map. Stated in the
+    engine's own lookup spelling (extern empty in the profile, so the
+    proc redirect is the identity fallback). -/
+theorem procCtx_labels {p : sym} {rs : core_run_state} {Q : LabelMap}
+    (hQ : fmapLookupBy (fun (s1 : sym) (s2 : sym) =>
+      Lem_Basic_classes.ordCompare s1 s2) p rs.labeled = some Q) :
+    (procCtx p rs).labels = Q := by
+  rw [MachineCtx.labels_eq_of_proc (M := procCtx p rs) rfl,
+    MachineCtx.resolveProc_of_extern_empty rfl]
+  show (match fmapLookupBy (fun (s1 : sym) (s2 : sym) =>
+      Lem_Basic_classes.ordCompare s1 s2) p rs.labeled with
+    | some Q => Q
+    | none => fmapEmpty) = Q
+  rw [hQ]
+
+/-- At an empty derived label map nothing ever jumps: any step's
+    subject has no REGISTERED jump redex (registration is what the
+    jump rule needs). -/
+theorem Step.jumpRedex?_none_of_empty {M : MachineCtx}
+    (hlbl : M.labels = spikeLbl) {e : CoreExpr} {ρ : EnvStack}
     {σ : Mem} {out : CoreExpr × EnvStack × Mem}
-    (h : Step spikeLbl (e, ρ, σ) out) : jumpRedex? e = none := by
+    (h : Step M (e, ρ, σ) out) : jumpRedex? e = none := by
   cases hj : jumpRedex? e with
   | none => rfl
   | some lp =>
     obtain ⟨l, pes⟩ := lp
     obtain ⟨params, cont, vs, ev0, evs, -, hl, -, -⟩ := h.jump_inv hj
-    rw [lookupLabel_empty] at hl
+    rw [hlbl, lookupLabel_empty] at hl
     cases hl
 
-/-- The syntactic fragment (canonical shapes, closed under Step —
-    `FragP.step`): pure values, positive non-library store/load with
-    canonical value operands, wildcard strong sequencing, and the
-    run-time Eannot residue. Node annotation lists are pinned `[]`
-    (what authored programs and every engine successor produce);
-    `isLibraryLocation loc = false` freezes step_ctx's
-    library-location current_loc substitution out of the fragment
-    (slice-A D5). S3: FragP stays the PHASE-1 cone (no
-    Eif/Ecase/Esave/Erun) — the extended cone is Soundness.lean's
-    `FragJ`. -/
-inductive FragP : CoreExpr → Prop where
-  | val_pure (v : value) : FragP (Expr [] (Epure (Pexpr [] () (PEval v))))
-  | store {loc : CerbLocation.Loc} {ann : core_run_annotation} {lk : Bool}
-      {ty : ctype} {pv : CerbMem.PointerValue} {cv : value} {mo : memory_order}
-      (hlib : CerbLocation.isLibraryLocation loc = false) :
-      FragP (Expr [] (Eaction (Paction polarity.Pos (Action loc ann
-        (Store0 lk (Pexpr [] () (PEval (Vctype ty)))
-                   (Pexpr [] () (PEval (Vobject (OVpointer pv))))
-                   (Pexpr [] () (PEval cv)) mo)))))
-  | load {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
-      {pv : CerbMem.PointerValue} {mo : memory_order}
-      (hlib : CerbLocation.isLibraryLocation loc = false) :
-      FragP (Expr [] (Eaction (Paction polarity.Pos (Action loc ann
-        (Load0 (Pexpr [] () (PEval (Vctype ty)))
-               (Pexpr [] () (PEval (Vobject (OVpointer pv)))) mo)))))
-  | create {loc : CerbLocation.Loc} {ann : core_run_annotation}
-      {align : CerbMem.IntegerValue} {ty : ctype} {pref : prefix0}
-      (hlib : CerbLocation.isLibraryLocation loc = false) :
-      FragP (Expr [] (Eaction (Paction polarity.Pos (Action loc ann
-        (Create (Pexpr [] () (PEval (Vobject (OVinteger align))))
-                (Pexpr [] () (PEval (Vctype ty))) pref)))))
-  | sseq {pa : List annot} {bty : core_base_type} {e1 e2 : CoreExpr} :
-      FragP e1 → FragP e2 →
-      FragP (Expr [] (Esseq (Pattern pa (CaseBase (none, bty))) e1 e2))
-  | annot {ds : List dyn_annotation} {b : CoreExpr} :
-      FragP b → FragP (Expr [] (Eannot ds b))
-
-/-- Both value forms are fragment terms (`ofVal (.annot ds v)` is
-    `annot` over `val_pure`). -/
-theorem fragP_ofVal (w : SpikeVal) : FragP (ofVal w) := by
-  cases w with
-  | pure v => exact .val_pure v
-  | annot ds v => exact .annot (.val_pure v)
-
-/-- The phase-1 cone has no jump redex (no `Erun` shape exists in
-    it). -/
-theorem FragP.jumpRedex?_none {e : CoreExpr} (hf : FragP e) :
-    jumpRedex? e = none := by
-  induction hf with
-  | val_pure v => rfl
-  | store hlib => rfl
-  | load hlib => rfl
-  | create hlib => rfl
-  | sseq hf1 hf2 ih1 ih2 => rw [jumpRedex?_sseq]; exact ih1
-  | annot hfb ihb =>
-    rw [jumpRedex?_annot]
-    split
-    · rfl
-    · exact ihb
-
-/-- Closure + FragP-scoped env invariance in one pass: on the
-    phase-1 cone no rule writes the environment (the S3 survivor of
-    the retired `Step.env_invariant` — pre-declared, phase-1 notes
-    §2 item 6). -/
-theorem FragP.step_env {Q : LabelMap} {e : CoreExpr} {ρ : EnvStack} {σ : Mem}
-    {e' : CoreExpr} {ρ' : EnvStack} {σ' : Mem}
-    (hf : FragP e) (hs : Step Q (e, ρ, σ) (e', ρ', σ')) :
-    FragP e' ∧ ρ' = ρ := by
-  induction hf generalizing e' ρ' σ' with
-  | val_pure v => exact (Step.val_elim (w := .pure v) hs).elim
-  | store hlib =>
-    obtain ⟨mv, fp, σ'', hmv, hmem, hout⟩ := hs.store_inv
-    obtain ⟨h1, h2, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ'' := by
-      simpa [Prod.mk.injEq] using hout
-    subst h1
-    exact ⟨.annot (.val_pure Vunit), h2⟩
-  | load hlib =>
-    obtain ⟨fp, mval, σ'', hmem, hout⟩ := hs.load_inv
-    obtain ⟨h1, h2, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ'' := by
-      simpa [Prod.mk.injEq] using hout
-    subst h1
-    exact ⟨.annot (.val_pure _), h2⟩
-  | create hlib =>
-    obtain ⟨pv, σ'', hmem, hout⟩ := hs.create_inv
-    obtain ⟨h1, h2, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ'' := by
-      simpa [Prod.mk.injEq] using hout
-    subst h1
-    exact ⟨.val_pure _, h2⟩
-  | sseq hf1 hf2 ih1 ih2 =>
-    rcases hs.sseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
-        ⟨_, _, v, _, _, _, _, _, hout⟩ | ⟨_, _, ds', v, _, _, _, _, _, hout⟩ |
-        ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩ |
-        ⟨_, _, _, _, _, _, _, hpat, _, _, _⟩ |
-        ⟨_, _, _, _, _, _, _, _, hpat, _, _, _⟩ |
-        ⟨_, _, _, _, _, _, hpat, _, _, _⟩
-    · obtain ⟨h1, h2, -⟩ : e' = _ ∧ ρ' = ρ'' ∧ σ' = σ'' := by
-        simpa [Prod.mk.injEq] using hout
-      subst h1 h2
-      obtain ⟨hf1', hρ⟩ := ih1 hstep
-      exact ⟨.sseq hf1' hf2, hρ⟩
-    · obtain ⟨h1, h2, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ := by
-        simpa [Prod.mk.injEq] using hout
-      subst h1
-      exact ⟨hf2, h2⟩
-    · obtain ⟨h1, h2, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ := by
-        simpa [Prod.mk.injEq] using hout
-      subst h1
-      exact ⟨.annot hf2, h2⟩
-    · rw [hf1.jumpRedex?_none] at hj
-      cases hj
-    · exact (specPat_ne_base hpat).elim
-    · exact (specPat_ne_base hpat).elim
-    · exact (symPat_ne_base hpat).elim
-  | annot hfb ihb =>
-    rcases hs.annot_inv with ⟨hg, hnj, b', ρ'', σ'', hstep, hout⟩ |
-        ⟨a2, ds2, c, hb, hout⟩ |
-        ⟨l, pes, params, cont, vs, _, _, hg, hj, _, _, _, _⟩
-    · obtain ⟨h1, h2, -⟩ : e' = _ ∧ ρ' = ρ'' ∧ σ' = σ'' := by
-        simpa [Prod.mk.injEq] using hout
-      subst h1 h2
-      obtain ⟨hfb', hρ⟩ := ihb hstep
-      exact ⟨.annot hfb', hρ⟩
-    · subst hb
-      obtain ⟨h1, h2, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ := by
-        simpa [Prod.mk.injEq] using hout
-      subst h1
-      cases hfb with
-      | annot hfc => exact ⟨.annot hfc, h2⟩
-    · rw [hfb.jumpRedex?_none] at hj
-      cases hj
-
-/-- The fragment is closed under Step (statement of the phase-1
-    lemma, now over the S3 relation at any label map). -/
-theorem FragP.step {Q : LabelMap} {e : CoreExpr} {ρ : EnvStack} {σ : Mem}
-    {e' : CoreExpr} {ρ' : EnvStack} {σ' : Mem}
-    (hf : FragP e) (hs : Step Q (e, ρ, σ) (e', ρ', σ')) : FragP e' :=
-  (hf.step_env hs).1
-
-/-- FragP-scoped env invariance (the retired `Step.env_invariant`'s
-    survivor). -/
-theorem Step.env_invariant_frag {Q : LabelMap} {e : CoreExpr} {ρ : EnvStack}
-    {σ : Mem} {e' : CoreExpr} {ρ' : EnvStack} {σ' : Mem}
-    (hf : FragP e) (h : Step Q (e, ρ, σ) (e', ρ', σ')) : ρ' = ρ :=
-  (hf.step_env h).2
+/-- ... the `spikeCtx` instance (the straight-line lane's guard fact). -/
+theorem Step.jumpRedex?_none_of_spikeCtx {e : CoreExpr} {ρ : EnvStack}
+    {σ : Mem} {out : CoreExpr × EnvStack × Mem}
+    (h : Step spikeCtx (e, ρ, σ) out) : jumpRedex? e = none :=
+  h.jumpRedex?_none_of_empty rfl
 
 end CerberusHeapLang

@@ -6,11 +6,11 @@ instantiation is the template (Iris/HeapLang/Instances.lean +
 PrimitiveLaws.lean:59-90).
 
 The language expression is the runtime TUPLE `CoreRt` (Core
-expression + live env stack + the static per-procedure label map)
+expression + live env stack + the machine context — S1b unified)
 and values are `CoreRVal`; `toVal`/`ofVal` act componentwise and
 the partial-bijection laws lift pointwise. `primStep` runs `Step`
 at the tuple's own label map and PINS the successor's map to it
-(`q.1.lbl = p.1.lbl`): the engine never writes `labeled` on the
+(`q.1.M = p.1.M`): the engine never writes `labeled` on the
 sequential path.
 
 - Observations: `Empty` (the fragment forks no threads and emits no
@@ -42,34 +42,34 @@ theorem List.empty_eq_nil (l : List Empty) : l = [] := by
 
 instance : Language CoreRt Mem Empty CoreRVal where
   primStep := fun p _obs q =>
-    Step p.1.lbl (p.1.e, p.1.ρ, p.2) (q.1.e, q.1.ρ, q.2.1) ∧
-      q.1.lbl = p.1.lbl ∧ q.2.2 = []
+    Step p.1.M (p.1.e, p.1.ρ, p.2) (q.1.e, q.1.ρ, q.2.1) ∧
+      q.1.M = p.1.M ∧ q.2.2 = []
   toVal := toValRt
   ofVal := ofValRt
   coe_of_toVal_eq_some {r v} h := by
-    obtain ⟨e, ρ, Q⟩ := r
+    obtain ⟨e, ρ, M⟩ := r
     rw [toValRt_mk] at h
     cases he : toVal e with
     | none => rw [he] at h; cases h
     | some w =>
       rw [he] at h
       cases h
-      show ofValRt ⟨w, ρ, Q⟩ = ⟨e, ρ, Q⟩
+      show ofValRt ⟨w, ρ, M⟩ = ⟨e, ρ, M⟩
       rw [ofValRt_mk, ofVal_of_toVal he]
   toVal_coe v := by
-    obtain ⟨w, ρ, Q⟩ := v
+    obtain ⟨w, ρ, M⟩ := v
     rw [ofValRt_mk, toValRt_mk, toVal_ofVal]
     rfl
   val_stuck {r σ obs r' σ' eₜ} h := by
-    obtain ⟨e, ρ, Q⟩ := r
-    show toValRt ⟨e, ρ, Q⟩ = none
+    obtain ⟨e, ρ, M⟩ := r
+    show toValRt ⟨e, ρ, M⟩ = none
     rw [toValRt_mk, Step.toVal_none h.1]
     rfl
 
 @[simp] theorem primStep_eq (r : CoreRt) (σ : Mem) (obs : List Empty)
     (r' : CoreRt) (σ' : Mem) (efs : List CoreRt) :
     (PrimStep.primStep (r, σ) obs (r', σ', efs) : Prop) ↔
-      (Step r.lbl (r.e, r.ρ, σ) (r'.e, r'.ρ, σ') ∧ r'.lbl = r.lbl ∧ efs = []) :=
+      (Step r.M (r.e, r.ρ, σ) (r'.e, r'.ρ, σ') ∧ r'.M = r.M ∧ efs = []) :=
   Iff.rfl
 
 /-- Values-side sanity: `toVal` on the Language instance is the
@@ -97,14 +97,14 @@ mirrored as absence of a step). -/
 
 /-- The Esseq wildcard beta on a bare value is a pure deterministic
     step (LETS-PURE). -/
-theorem sseq_pure_det {Q : LabelMap} {a pa : List annot}
+theorem sseq_pure_det {M : MachineCtx} {a pa : List annot}
     {bty : core_base_type} {v : value}
     {e2 : CoreExpr} {ev0 : Fmap sym value} {evs : List (Fmap sym value)}
     {σ : Mem} {obs : List Empty} {r' : CoreRt} {σ' : Mem} {eₜ : List CoreRt}
     (h : PrimStep.primStep
       ((⟨Expr a (Esseq (Pattern pa (CaseBase (none, bty))) (ofVal (.pure v)) e2),
-        ev0 :: evs, Q⟩ : CoreRt), σ) obs (r', σ', eₜ)) :
-    obs = [] ∧ σ' = σ ∧ r' = (⟨e2, ev0 :: evs, Q⟩ : CoreRt) ∧ eₜ = [] := by
+        ev0 :: evs, M⟩ : CoreRt), σ) obs (r', σ', eₜ)) :
+    obs = [] ∧ σ' = σ ∧ r' = (⟨e2, ev0 :: evs, M⟩ : CoreRt) ∧ eₜ = [] := by
   obtain ⟨hstep, hlbl, hefs⟩ := h
   rcases hstep.sseq_inv with ⟨e1', ρ'', σ'', hnj, hs, hout⟩ |
       ⟨_, _, w, _, _, hp, he, _, hout⟩ | ⟨_, _, ds, w, _, _, hp, he, _, hout⟩ |
@@ -128,16 +128,16 @@ theorem sseq_pure_det {Q : LabelMap} {a pa : List annot}
 
 /-- The Esseq wildcard beta on an annot value is a pure deterministic
     step (LETS-ANNOT). -/
-theorem sseq_annot_det {Q : LabelMap} {a pa : List annot}
+theorem sseq_annot_det {M : MachineCtx} {a pa : List annot}
     {bty : core_base_type}
     {ds : List dyn_annotation} {v : value} {e2 : CoreExpr}
     {ev0 : Fmap sym value} {evs : List (Fmap sym value)} {σ : Mem}
     {obs : List Empty} {r' : CoreRt} {σ' : Mem} {eₜ : List CoreRt}
     (h : PrimStep.primStep
       ((⟨Expr a (Esseq (Pattern pa (CaseBase (none, bty))) (ofVal (.annot ds v)) e2),
-        ev0 :: evs, Q⟩ : CoreRt), σ) obs (r', σ', eₜ)) :
+        ev0 :: evs, M⟩ : CoreRt), σ) obs (r', σ', eₜ)) :
     obs = [] ∧ σ' = σ ∧
-      r' = (⟨Expr [] (Eannot ds e2), ev0 :: evs, Q⟩ : CoreRt) ∧ eₜ = [] := by
+      r' = (⟨Expr [] (Eannot ds e2), ev0 :: evs, M⟩ : CoreRt) ∧ eₜ = [] := by
   obtain ⟨hstep, hlbl, hefs⟩ := h
   rcases hstep.sseq_inv with ⟨e1', ρ'', σ'', hnj, hs, hout⟩ |
       ⟨_, _, w, _, _, hp, he, _, hout⟩ | ⟨_, _, ds', w, _, _, hp, he, _, hout⟩ |
@@ -163,15 +163,15 @@ theorem sseq_annot_det {Q : LabelMap} {a pa : List annot}
 
 /-- The ANNOTS merge is a pure deterministic step (any env — the
     merge never reads it). -/
-theorem annot_merge_det {Q : LabelMap} {a1 a2 : List annot}
+theorem annot_merge_det {M : MachineCtx} {a1 a2 : List annot}
     {ds1 ds2 : List dyn_annotation}
     {b : CoreExpr} {ρ : EnvStack} {σ : Mem} {obs : List Empty}
     {r' : CoreRt} {σ' : Mem} {eₜ : List CoreRt}
     (h : PrimStep.primStep
-      ((⟨Expr a1 (Eannot ds1 (Expr a2 (Eannot ds2 b))), ρ, Q⟩ : CoreRt), σ)
+      ((⟨Expr a1 (Eannot ds1 (Expr a2 (Eannot ds2 b))), ρ, M⟩ : CoreRt), σ)
       obs (r', σ', eₜ)) :
     obs = [] ∧ σ' = σ ∧
-      r' = (⟨Expr (a1 ++ a2) (Eannot (ds1 ++ ds2) b), ρ, Q⟩ : CoreRt) ∧
+      r' = (⟨Expr (a1 ++ a2) (Eannot (ds1 ++ ds2) b), ρ, M⟩ : CoreRt) ∧
       eₜ = [] := by
   obtain ⟨hstep, hlbl, hefs⟩ := h
   rcases hstep.annot_inv with ⟨hg, hnj, b', ρ'', σ'', hs, hout⟩ |

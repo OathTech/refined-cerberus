@@ -277,7 +277,7 @@ theorem drive_after_setup (e : CoreExpr) (fs : CerbFS.FsState)
     production supply starts at an effectful seed). Killed and stuck
     productions are excluded by the equation itself: the run IS the
     singleton Active execution. -/
-theorem prod_run_eq (e : CoreExpr) (hfrag : FragP e)
+theorem prod_run_eq (e : CoreExpr) (hfrag : StraightFrag e)
     (v : value) (σfin : Mem) (k : Nat)
     (hterm : ∀ aids : Nat → Nat,
       drive aids k (spikeThread e) prodMem₀ = .done v σfin)
@@ -316,7 +316,7 @@ result value is the delivered value, and the final memory satisfies
 the postcondition footprint with the frame R verbatim — the same
 splitting quantifier as SemTriple. -/
 theorem sem_triple_prod
-    (e : CoreExpr) (hfrag : FragP e)
+    (e : CoreExpr) (hfrag : StraightFrag e)
     -- the compute part and its exported triple
     (ec : CoreExpr) (P : CellMap) (post : value → CellMap → Prop)
     (hsem : SemTriple ec P post)
@@ -486,7 +486,9 @@ theorem counter_loop_certified_production {GF : Iris.BundledGFunctors}
       omega)
   intro inst
   refine .trans ?_ (loop_wp_readout loc ann ra mo bty xbty (cellPtr idx addr)
-    n bs0 hn sbty)
+    n bs0 mainSym rs
+    (loop_labeledAt_production loc ann ra mo bty xbty sbty
+      (cellPtr idx addr) n) hn sbty)
   refine (BigSepM.bigSepM_singleton).1.trans ?_
   iintro Hpt
   iapply (pointsToCell_iff _ _ _ _).mpr

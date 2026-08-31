@@ -89,7 +89,6 @@ import CerberusHeapLang.FibExhibit
 import CerberusHeapLang.ArrayExhibit
 import CerberusHeapLang.ListRevExhibit
 import CerberusHeapLang.StmtProbe
-import CerberusHeapLang.Phase1Probe
 
 namespace CerberusHeapLang.Audit
 
@@ -139,10 +138,12 @@ info: 'CerberusHeapLang.spike_engine_adequacy' depends on axioms: [propext, Clas
 -/
 #guard_msgs in #print axioms CerberusHeapLang.spike_engine_adequacy
 
--- Phase-2 S3 (2026-08-31): the jump layer's headline cones, exact
+-- Phase-2 S3 (2026-08-31; S1b: re-homed at the unified relation —
+-- the factor theorem and step-match now speak the one Decomp/Frag
+-- cone at any MachineCtx): the jump layer's headline cones, exact
 -- trio each — the context-discard certification (stepDischarge_run),
 -- the factor theorem with the jump disjunct, the step-match
--- completeness at the jump profile, the Löb-tied collapse with
+-- completeness over the full cone, the Löb-tied collapse with
 -- blockSpecs, and THE END-TO-END CERTIFIED LOOP (driveJ conclusion,
 -- engine vocabulary only).
 /--
@@ -151,14 +152,17 @@ info: 'CerberusHeapLang.stepDischarge_run' depends on axioms: [propext, Classica
 #guard_msgs in #print axioms CerberusHeapLang.stepDischarge_run
 
 /--
-info: 'CerberusHeapLang.DecompJ.step_factor' depends on axioms: [propext, Classical.choice, Quot.sound]
+info: 'CerberusHeapLang.Decomp.step_factor' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
-#guard_msgs in #print axioms CerberusHeapLang.DecompJ.step_factor
+#guard_msgs in #print axioms CerberusHeapLang.Decomp.step_factor
 
+-- S1b re-baseline (same commit, cone unification): the step-match
+-- completeness is the UNIFIED `engine_step_matchU` (full cone, any
+-- MachineCtx) — the J-profile theorem is subsumed (design record §8).
 /--
-info: 'CerberusHeapLang.engine_step_matchJ' depends on axioms: [propext, Classical.choice, Quot.sound]
+info: 'CerberusHeapLang.engine_step_matchU' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
-#guard_msgs in #print axioms CerberusHeapLang.engine_step_matchJ
+#guard_msgs in #print axioms CerberusHeapLang.engine_step_matchU
 
 /--
 info: 'CerberusHeapLang.wps_sound' depends on axioms: [propext, Classical.choice, Quot.sound]

@@ -228,9 +228,9 @@ abbrev progA : CoreExpr :=
 /-- Exhibit (b): the operator's frame program, `store(x,7)`. -/
 abbrev progB : CoreExpr := storeExpr loc0 empty_annotation intTy xPtr sevenVal NA
 
-theorem fragA : FragP progA := FragP.sseq (.store loc0_lib) (.load loc0_lib)
+theorem fragA : Frag progA := Frag.sseq (.store loc0_lib) (.load loc0_lib)
 
-theorem fragB : FragP progB := FragP.store loc0_lib
+theorem fragB : Frag progB := Frag.store loc0_lib
 
 /-- The engine's decode of 7's byte image is 7 again (recon §2.8:
     exact round-trip for `integerIval`-written values). -/
@@ -515,18 +515,14 @@ theorem drive_next {aids : Nat → Nat} {n : Nat} {th th' : thread_state}
     (h : (step_ctx fmapEmpty σ spikeFile fmapEmpty 0 (none, th)).map
       (dischargeStep (aids 0) spikeRunState σ) = [.next th' σ']) :
     drive aids (n+1) th σ = drive (fun i => aids (i+1)) n th' σ' := by
-  rw [drive.eq_def]
-  dsimp only
-  rw [h]
+  rw [drive_succ_eq, h]
 
 theorem drive_done {aids : Nat → Nat} {n : Nat} {th : thread_state} {σ : Mem}
     {v : value}
     (h : (step_ctx fmapEmpty σ spikeFile fmapEmpty 0 (none, th)).map
       (dischargeStep (aids 0) spikeRunState σ) = [.done v]) :
     drive aids (n+1) th σ = .done v σ := by
-  rw [drive.eq_def]
-  dsimp only
-  rw [h]
+  rw [drive_succ_eq, h]
 
 /-- The store's footprint / the load's footprint. -/
 def fpS : CerbMem.Footprint := .FP .W xAddr 4
@@ -578,9 +574,9 @@ theorem exhibitA_terminates (aids : Nat → Nat) :
   rw [drive_next (th' := spikeThread eA1) (σ' := σ₁) ?s1]
   case s1 =>
     rw [drive_scrutinee]
-    unfold engineOutcomes
+    rw [engineOutcomes_eq]
     have hE := engineSteps_store
-      (Decomp.toJ (Decomp.sseq (pa := []) (bty := BTy_unit)
+      ((Decomp.sseq (pa := []) (bty := BTy_unit)
         (e2 := loadExpr loc0 empty_annotation intTy xPtr NA)
         (Decomp.root (Redex.store (loc := loc0) (ann := empty_annotation)
           (lk := false) (ty := intTy) (pv := xPtr) (cv := sevenVal)
@@ -594,20 +590,20 @@ theorem exhibitA_terminates (aids : Nat → Nat) :
   rw [drive_next (th' := spikeThread eA2) (σ' := σ₁) ?s2]
   case s2 =>
     rw [drive_scrutinee]
-    unfold engineOutcomes
+    rw [engineOutcomes_eq]
     have hE := engineSteps_beta_annot (pa := []) (bty := BTy_unit)
       (ds := [DA_pos [] fpS]) (v := Vunit)
       (e2 := loadExpr loc0 empty_annotation intTy xPtr NA)
-      (Decomp.toJ (Decomp.root Redex.beta_annot)) (by decide) fmapEmpty [] σ₁
+      (Decomp.root Redex.beta_annot) (by decide) fmapEmpty [] σ₁
     rw [show engineSteps eA1 spikeEnv σ₁ = _ from hE]
     rfl
   -- step 3: the load request, discharged against loadM
   rw [drive_next (th' := spikeThread eA3) (σ' := σ₁) ?s3]
   case s3 =>
     rw [drive_scrutinee]
-    unfold engineOutcomes
+    rw [engineOutcomes_eq]
     have hE := engineSteps_load
-      (Decomp.toJ (Decomp.annot (ds := [DA_pos [] fpS]) rfl rfl (fun n => rfl)
+      ((Decomp.annot (ds := [DA_pos [] fpS]) rfl rfl (fun n => rfl)
         (Decomp.root (Redex.load (loc := loc0) (ann := empty_annotation)
           (ty := intTy) (pv := xPtr) (mo := NA) loc0_lib))))
       (by decide) loc0_lib spikeEnv σ₁
@@ -621,10 +617,10 @@ theorem exhibitA_terminates (aids : Nat → Nat) :
     (σ' := σ₁) ?s4]
   case s4 =>
     rw [drive_scrutinee]
-    unfold engineOutcomes
+    rw [engineOutcomes_eq]
     have hE := engineSteps_merge (ds1 := [DA_pos [] fpS])
       (ds2 := [DA_pos [] fpL])
-      (Decomp.toJ (Decomp.root (Redex.merge
+      ((Decomp.root (Redex.merge
         (b := Expr [] (Epure (Pexpr [] () (PEval sevenVal)))) rfl)))
       rfl (by decide) spikeEnv σ₁
     rw [show engineSteps eA3 spikeEnv σ₁ = _ from hE]
@@ -633,14 +629,14 @@ theorem exhibitA_terminates (aids : Nat → Nat) :
   rw [drive_next (th' := spikeThread (ofVal (.pure sevenVal))) (σ' := σ₁) ?s5]
   case s5 =>
     rw [drive_scrutinee]
-    unfold engineOutcomes
+    rw [engineOutcomes_eq]
     rw [engineSteps_remove_annot]
     rfl
   -- step 6: PROGRAM-DONE
   rw [drive_done ?s6]
   case s6 =>
     rw [drive_scrutinee]
-    unfold engineOutcomes
+    rw [engineOutcomes_eq]
     rw [engineSteps_done]
     rfl
 
@@ -663,7 +659,7 @@ abbrev progC : CoreExpr :=
   sseqExpr BTy_unit (storeExpr loc0 empty_annotation intTy xPtr fiveVal NA)
     (storeExpr loc0 empty_annotation intTy yPtr sixVal NA)
 
-theorem fragC : FragP progC := FragP.sseq (.store loc0_lib) (.store loc0_lib)
+theorem fragC : Frag progC := Frag.sseq (.store loc0_lib) (.store loc0_lib)
 
 /-- The two cells after the two stores. -/
 abbrev cellX5 : SpikeCell := ⟨xAddr, intTy, fiveBytes⟩

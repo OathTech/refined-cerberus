@@ -590,7 +590,7 @@ type, plus the INTERIOR STORE the reversal needs) -/
 section NodeAxioms
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
-variable {Q : LabelMap} {Ls : LabelSpec GF}
+variable {M : MachineCtx} {Ls : LabelSpec GF}
 
 /-- INTERIOR `node*` LOAD small axiom: loading the next field of an
     owned node cell delivers the DECODE OF THE FIELD SLICE; the cell
@@ -609,7 +609,7 @@ theorem wps_load_interior_node {Ψ : SpikeVal → EnvStack → IProp GF}
     iprop(pointsTo (GF := GF) id dq (SpikeCell.mk a nodeTy bs) ∗
       (∀ fp, pointsTo id dq (SpikeCell.mk a nodeTy bs) -∗
         Ψ (SpikeVal.annot [DA_pos [] fp] ((valueFromMemValue mv).2)) ρ)) ⊢
-      wps Q Ls Ψ (loadExpr loc ann nodePtrTy (cellPtr id (a + (off : Int))) mo)
+      wps M Ls Ψ (loadExpr loc ann nodePtrTy (cellPtr id (a + (off : Int))) mo)
         ρ := by
   rw [(wps_unfold
     (e := loadExpr loc ann nodePtrTy (cellPtr id (a + (off : Int))) mo)).to_eq]
@@ -649,9 +649,9 @@ theorem wps_load_interior_node {Ψ : SpikeVal → EnvStack → IProp GF}
     exact ⟨⟨congrArg (fun p => p.1.1) h,
       (congrArg (fun p => p.1.2) h).symm⟩,
       (congrArg Prod.snd h).symm⟩
-  obtain ⟨re, rρ, rQ⟩ := r
+  obtain ⟨re, rρ, rM⟩ := r
   simp only at hlbl
-  obtain rfl : Q = rQ := hlbl.symm
+  obtain rfl : M = rM := hlbl.symm
   obtain ⟨hre, hrρ, hσ⟩ : re = Expr [] (Eannot
         [DA_pos [] (CerbMem.Footprint.FP .R (a + (off : Int))
           (CerbMem.sizeofCtype nodePtrTy))]
@@ -692,7 +692,7 @@ theorem wps_store_interior_node {Ψ : SpikeVal → EnvStack → IProp GF}
     (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (id a : Int) (off : Nat) (cv : value) (mo : memory_order)
     (bs : List CerbMem.AbsByte) (ρ : EnvStack) {mv : CerbMem.MemValue}
-    (hmv : memValueFromValue fmapEmpty (Ctype [] (unatomic_ nodePtrTy)) cv =
+    (hmv : memValueFromValue M.tagDefs (Ctype [] (unatomic_ nodePtrTy)) cv =
       some mv)
     (hbound : off + 8 ≤ CerbMem.sizeofCtype nodeTy)
     (hlen : (CerbMem.memValueToBytes [] mv).2.length = 8)
@@ -705,7 +705,7 @@ theorem wps_store_interior_node {Ψ : SpikeVal → EnvStack → IProp GF}
       (∀ fp, pointsTo id (.own 1) (SpikeCell.mk a nodeTy
           (spliceBytes off (CerbMem.memValueToBytes [] mv).2 bs)) -∗
         Ψ (SpikeVal.annot [DA_pos [] fp] Vunit) ρ)) ⊢
-      wps Q Ls Ψ (storeExpr loc ann nodePtrTy (cellPtr id (a + (off : Int)))
+      wps M Ls Ψ (storeExpr loc ann nodePtrTy (cellPtr id (a + (off : Int)))
         cv mo) ρ := by
   rw [(wps_unfold (e := storeExpr loc ann nodePtrTy
     (cellPtr id (a + (off : Int))) cv mo)).to_eq]
@@ -747,9 +747,9 @@ theorem wps_store_interior_node {Ψ : SpikeVal → EnvStack → IProp GF}
         (CerbMem.memValueToBytes [] mv).2 := by
     have h := Option.some.inj hmem'.symm
     exact ⟨congrArg Prod.fst h, congrArg Prod.snd h⟩
-  obtain ⟨re, rρ, rQ⟩ := r
+  obtain ⟨re, rρ, rM⟩ := r
   simp only at hlbl
-  obtain rfl : Q = rQ := hlbl.symm
+  obtain rfl : M = rM := hlbl.symm
   obtain ⟨hre, hrρ, hσ⟩ : re = Expr [] (Eannot
         [DA_pos [] (CerbMem.Footprint.FP .W (a + (off : Int))
           (CerbMem.sizeofCtype nodePtrTy))]
@@ -1342,6 +1342,11 @@ variable {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
 variable (loc : CerbLocation.Loc) (ann ra : core_run_annotation)
   (mo : memory_order) (pbty cbty bbty nbty ubty : core_base_type)
   (xs : List Int)
+-- S1b: the wps judgment is indexed by the MACHINE CONTEXT; the
+-- exhibit works at the jump-profile instance `procCtx p rs` with the
+-- label map tied by the honest `LabeledAt` link (`procCtx_labels`).
+variable (p : sym) (rs : core_run_state)
+  (hQ : LabeledAt rs p (lrQ loc ann ra mo pbty cbty bbty nbty ubty))
 
 /-- The postcondition: the delivered value is a pointer satisfying
     `isList · xs.reverse`. -/
@@ -1358,6 +1363,8 @@ abbrev lrLs : LabelSpec GF := fun _ args ρ =>
       ρ = f :: renv ∧ SymFrame f⌝ ∗
     isList pPrev revd ∗ isList pCur rest')
 
+include hQ
+
 /-- The loop body verifies at any invariant frame — the TEXTBOOK
     derivation: each construct by its small axiom or rule, glued by
     the sequencing rules; the frame is carried by ∗ alone. -/
@@ -1366,7 +1373,7 @@ theorem lr_body_wps (revd rest' : List Int)
     (renv : List (Fmap sym value)) (hf : SymFrame f)
     (hxs : xs = revd.reverse ++ rest') :
     iprop(isList (GF := GF) pPrev revd ∗ isList pCur rest') ⊢
-      wps (lrQ loc ann ra mo pbty cbty bbty nbty ubty) (lrLs xs)
+      wps (procCtx p rs) (lrLs xs)
         (lrPost xs) (lrBody loc ann ra mo bbty nbty ubty)
         (lrFrame (ptrVal pPrev) (ptrVal pCur) f :: renv) := by
   rw [show lrBody loc ann ra mo bbty nbty ubty =
@@ -1483,7 +1490,8 @@ theorem lr_body_wps (revd rest' : List Int)
     iintro %fp2 Hpt
     iapply wps_run [] ra lrLoopSym
       [Pexpr [] () (PEsym lrCurSym), Pexpr [] () (PEsym lrNSym)] _ _
-      (lrQ_lookup loc ann ra mo pbty cbty bbty nbty ubty)
+      (by rw [procCtx_labels hQ]
+          exact lrQ_lookup loc ann ra mo pbty cbty bbty nbty ubty)
       (lr_args_eval hf renv _ _ _ _)
     iexists (v :: revd), vs, (cellPtr id aN), q,
       (lrFrameN (ptrVal q) (boolValue false) (ptrVal pPrev)
@@ -1513,9 +1521,10 @@ theorem lr_body_wps (revd rest' : List Int)
 
 /-- THE BLOCK SPECIFICATION (per-label invariant rule — no Löb). -/
 theorem lr_blockSpecs :
-    ⊢ blockSpecs (GF := GF) (lrQ loc ann ra mo pbty cbty bbty nbty ubty)
+    ⊢ blockSpecs (GF := GF) (procCtx p rs)
       (lrLs xs) (lrPost xs) := by
   refine blockSpecs_intro fun l params cont args env0 envs hl => ?_
+  rw [procCtx_labels hQ] at hl
   obtain ⟨rfl, rfl⟩ := lrQ_inv loc ann ra mo pbty cbty bbty nbty ubty hl
   iintro ⟨%revd, %rest', %pPrev, %pCur, %f, %renv, %hpure, HP, HC⟩
   obtain ⟨rfl, hxs, hρ, hf⟩ := hpure
@@ -1525,8 +1534,8 @@ theorem lr_blockSpecs :
     simp at h1 h2
     exact ⟨h1.symm, h2.symm⟩
   rw [bindArgs_lr]
-  iapply lr_body_wps loc ann ra mo pbty cbty bbty nbty ubty xs revd rest'
-    pPrev pCur f renv hf hxs
+  iapply lr_body_wps loc ann ra mo pbty cbty bbty nbty ubty xs p rs hQ
+    revd rest' pPrev pCur f renv hf hxs
   isplitl [HP]
   · iexact HP
   · iexact HC
@@ -1536,7 +1545,7 @@ theorem lr_blockSpecs :
     (`isList head xs`). -/
 theorem lr_wps (sbty : core_base_type) (head : CerbMem.PointerValue) :
     isList (GF := GF) head xs ⊢
-      wps (lrQ loc ann ra mo pbty cbty bbty nbty ubty) (lrLs xs) (lrPost xs)
+      wps (procCtx p rs) (lrLs xs) (lrPost xs)
         (lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head)
         [fmapEmpty] := by
   rw [show lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head =
@@ -1548,7 +1557,7 @@ theorem lr_wps (sbty : core_base_type) (head : CerbMem.PointerValue) :
   rw [bindSave_lr]
   rw [show lrFrame nullVal (ptrVal head) fmapEmpty =
     lrFrame (ptrVal nullNode) (ptrVal head) fmapEmpty from rfl]
-  iapply lr_body_wps loc ann ra mo pbty cbty bbty nbty ubty xs [] xs
+  iapply lr_body_wps loc ann ra mo pbty cbty bbty nbty ubty xs p rs hQ [] xs
     nullNode head fmapEmpty [] symFrame_empty (by simp)
   isplitr [HL]
   · exact isList_nil_intro
@@ -1559,15 +1568,16 @@ theorem lr_wps (sbty : core_base_type) (head : CerbMem.PointerValue) :
 theorem lr_wp_readout (sbty : core_base_type) (head : CerbMem.PointerValue) :
     isList (GF := GF) head xs ⊢
       WP (⟨lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head,
-            [fmapEmpty], lrQ loc ann ra mo pbty cbty bbty nbty ubty⟩ : CoreRt)
+            [fmapEmpty], procCtx p rs⟩ : CoreRt)
         @ Stuckness.NotStuck; ⊤
         {{ w, iprop(∀ (σ' : Mem) (ns : Nat) (κs : List Empty) (nt : Nat),
           (stateInterp σ' ns κs nt : IProp GF) ={⊤, ∅}=∗
             ⌜∃ p' : CerbMem.PointerValue, CoreRVal.val w = ptrVal p' ∧
               ChainAt σ' p' xs.reverse⌝) }} := by
-  refine (lr_wps loc ann ra mo pbty cbty bbty nbty ubty xs sbty head).trans ?_
+  refine (lr_wps loc ann ra mo pbty cbty bbty nbty ubty xs p rs hQ sbty
+    head).trans ?_
   refine (BI.emp_sep.2.trans (BI.sep_mono
-    ((lr_blockSpecs loc ann ra mo pbty cbty bbty nbty ubty xs).trans
+    ((lr_blockSpecs loc ann ra mo pbty cbty bbty nbty ubty xs p rs hQ).trans
       (wps_sound (lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head)
         [fmapEmpty]))
     .rfl)).trans ?_
@@ -1597,7 +1607,7 @@ variable (loc : CerbLocation.Loc) (ann ra : core_run_annotation)
 
 /-- The label body is in the certified cone. -/
 theorem lrBody_fragJ (hlib : CerbLocation.isLibraryLocation loc = false) :
-    FragJ (lrBody loc ann ra mo bbty nbty ubty) := by
+    Frag (lrBody loc ann ra mo bbty nbty ubty) := by
   refine .sseq_sym
     (.memop_op rfl (.sym _ _) (.val _ _)
       (by rw [show peDepth (Pexpr ([] : List annot) () (PEsym lrCurSym)) = 1
@@ -1724,7 +1734,8 @@ theorem list_reverse_certified {GF : BundledGFunctors} [SpikeGpreS GF]
       omega)
   intro inst
   exact (seedChain_isList xs m₀ head hseed).trans
-    (lr_wp_readout loc ann ra mo pbty cbty bbty nbty ubty xs sbty head)
+    (lr_wp_readout loc ann ra mo pbty cbty bbty nbty ubty xs lrProcSym rs
+      (lrRS_labeledAt loc ann ra mo pbty cbty bbty nbty ubty) sbty head)
 
 /-! ## THE CONCRETE DEMONSTRATION: a seeded 3-node list [1, 2, 3]
 (engine-serialized byte images; every decode fact discharges by
