@@ -54,9 +54,23 @@ if [[ ! -f "$prime_done" ]]; then
   [[ $check_only == 1 ]] && { say "B MISSING: not primed"; exit 1; }
   src_at="$(git -C "$SRC" rev-parse HEAD)"
   if [[ "$src_at" != "$CERBERUS_LEAN_COMMIT" ]]; then
-    say "B FAIL-CLOSED: primary checkout is at $src_at, pin is $CERBERUS_LEAN_COMMIT."
-    say "  Priming from a mismatched tree is the stale-semantics hazard; re-pin or wait."
-    exit 1
+    # CONTENT-BASED guard (2026-08-31): the mainline often moves with
+    # docs/records-only commits; demanding commit equality made every
+    # such move a false drift stop. Priming from a moved source is
+    # SAFE iff the pin..source diff is EMPTY on every path that feeds
+    # the primed build state: the .lem sources (they determine
+    # generated/), the generated tree itself, native/, and the lem
+    # runtime seams. Any real change on those paths still fail-closes.
+    CONTENT_PATHS=(frontend lean_frontend/generated lean_frontend/native \
+      lean_frontend/lakefile.toml lean_frontend/Makefile Makefile)
+    if git -C "$SRC" diff --quiet "$CERBERUS_LEAN_COMMIT" "$src_at" -- "${CONTENT_PATHS[@]}"; then
+      say "B: source at $src_at ≠ pin, but content-identical on all primed paths (verified) — priming allowed"
+    else
+      say "B FAIL-CLOSED: primary checkout ($src_at) differs from pin ($CERBERUS_LEAN_COMMIT) on primed content:"
+      git -C "$SRC" diff --stat "$CERBERUS_LEAN_COMMIT" "$src_at" -- "${CONTENT_PATHS[@]}" | tail -5 >&2
+      say "  Re-pin deliberately or wait; priming mismatched semantics is the stale-tree hazard."
+      exit 1
+    fi
   fi
   for p in lean_frontend/generated lean_frontend/native lean_frontend/.lake; do
     [[ -e "$SRC/$p" ]] || { say "B FAIL: $SRC/$p missing — primary checkout not built?"; exit 1; }
