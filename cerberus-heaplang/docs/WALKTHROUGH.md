@@ -28,7 +28,10 @@ test programs and their behaviors compared, so the Lean semantics is
 tied to an independently maintained oracle rather than being a
 formalization that answers only to itself. (The pinned engine
 version is in `../scripts/semantics-pin.env`; validation is that
-project's, not this package's.)
+project's, not this package's — what it covers, with the
+in-package path to its record, is summarized in the README's
+["What you are asked to take on
+faith"](../README.md#what-you-are-asked-to-take-on-faith).)
 
 **This package** builds a small Iris separation logic — points-to,
 store/load small axioms, frame, sequencing, loop rules — over a
@@ -293,7 +296,11 @@ fragment never reads the affected field). Non-kernel proof methods
 gate and would fail the in-build cone check anyway. At this tier
 you trust: the Lean kernel, and the engine's definitions being the
 semantics you care about (which is what the differential validation
-against the OCaml oracle is for).
+against the OCaml oracle is for). Both take-on-faith items — the
+axiom's statement, printed verbatim, and what that differential
+validation actually covers, with the in-package path to its
+record — are laid out in the README's ["What you are asked to take
+on faith"](../README.md#what-you-are-asked-to-take-on-faith).
 
 **Tier 2 — explicit hypotheses, visible in the statements.** Fuel
 bounds, seeded-footprint hypotheses (`SeedChain`, `Coh`),
@@ -407,7 +414,11 @@ metadata, like `sbty`.) Reading table:
 | `ivVal` | SPEC IDIOM | injection of a mathematical integer into a Core value, 1 line, below |
 | `Mem` | SPEC IDIOM | abbreviation for the engine's `CerbMem.MemState` (1 line) |
 | `hn : 0 ≤ n` | HYPOTHESIS | fib of a non-negative count |
-| — | HYPOTHESES | *nothing else*: no fuel bound, no seeded state (`σ₀` and `aids` are universally quantified) |
+| — | HYPOTHESES | *nothing else*: no fuel bound, no seeded state (`σ₀` and `aids` are universally quantified; `aids : Nat → Nat` is the action-id supply — the ∀-quantified oracle for the driver's fresh action-id draws, irrelevant on this deterministic fragment) |
+
+One fact the statement implies but the table does not shout: the
+conclusion delivers `.done … σ₀` — the *initial* memory, returned
+unchanged. The fib program provably touches no memory.
 
 The idiom, in full — this is the entire non-engine vocabulary of
 the theorem:
@@ -536,7 +547,8 @@ Reading table (identifiers already read in §5.1 not repeated):
 | `GF : BundledGFunctors`, `[SpikeGpreS GF]` | HYPOTHESIS (machinery-shaped — see below) | the Iris ghost-functor binder |
 | `hseed`, `hcoh` | HYPOTHESES | the seeded input chain, carried by the initial memory |
 | `hlib` | HYPOTHESIS | the program's source location is not library-internal (a WF fact about metadata) |
-| `hfuel`, `hfuel2` | HYPOTHESES | in-budget fuel (the engine's own 10^6 budget) |
+| `nsteps`, `aids` | quantified data | any step budget; any action-id supply (`aids` — the driver's fresh action-id oracle, ∀-quantified; irrelevant on this deterministic fragment) |
+| `hfuel`, `hfuel2` | HYPOTHESES | in-budget fuel (the engine's own 10^6 budget): one nested budget fact per drive entry point — the whole program (`esize` 6) and the loop body the jump re-enters (`esize` 5; one construct less, hence the +1 slack). `hfuel2` is a trivial consequence of `hfuel`, carried separately as interim scaffolding of the in-budget form (the registered total-export lane retires the fuel hypotheses altogether) |
 
 The readout and seeding predicates, in full — pure `Prop`s over
 engine objects, no Iris:
@@ -786,6 +798,28 @@ info: CerberusHeapLang/Audit.lean:366:0: CerberusHeapLang axiom sweep: 755 theor
 info: CerberusHeapLang/Audit.lean:366:0: CerberusHeapLang banned-axiom sweep: 1499 constants of every kind checked; sorryAx/ofReduceBool/ofReduceNat absent from all cones
 Build completed successfully (434 jobs).
 ```
+
+What to expect around that tail, so nothing surprises you:
+
+- In sandboxed environments without a systemd user bus,
+  `../scripts/capped` prints
+  `capped: WARNING — systemd user bus unavailable (sandbox); running UNCAPPED`
+  (plus an `interim per [USER 2026-08-29]` governance line) and
+  proceeds. The cap is a resource-limit wrapper (a memory blast
+  radius for builds); running without it changes nothing about
+  what the build verifies.
+- The tail is preceded by `unusedVariables` linter warnings from
+  the semantics dependency's `generated/*` files — linter noise
+  from generated code, not failures. A failure is a red `error:`
+  line, a missing audit tail, or a nonzero exit.
+- Timing: with the package already built, `lake build` replays
+  from cache in about a second. A from-scratch elaboration of this
+  package's 434 jobs is a long build — expect minutes to tens of
+  minutes depending on the machine (no pinned cold timing is
+  recorded). The setup script itself is offline (it clones and
+  primes the workspace from the local repository, prebuilt
+  semantics artifacts included) and is an idempotent, sub-second
+  no-op when the workspace is already primed.
 
 Then ask the kernel directly about three headline theorems:
 

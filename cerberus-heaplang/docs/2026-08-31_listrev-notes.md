@@ -295,3 +295,191 @@ committed phase-A post snapshot
   output identical to the quoted README block.
 
 Rename table: EMPTY (no renames).
+
+---
+
+# Phase C — the naive-reader review, the prediction-diff, the fixes (this worker's record)
+
+The [USER]-mandated fresh-eyes instrument (arc plan phase C) ran:
+an auditor roleplaying a PL-literate separation logician with zero
+Cerberus/lem/project knowledge, reading only what the front docs
+point to and running every documented command. Full review:
+`docs/2026-08-31_naive-reader-review.md` (repository root),
+committed with this slice.
+
+## The verdict, quoted verbatim (review §5)
+
+> **Would I believe the Reynolds/O'Hearn-over-real-C claim after
+> this session? Yes, with one precisely locatable reservation —
+> and the docs themselves taught me where to put it.**
+
+and its closing assessment:
+
+> Nothing I checked — ten axiom cones, three census partitions,
+> five line citations, one engine-source divergence claim, two
+> full statement reads — came back other than exactly as
+> documented, and that track record is itself evidence. This is
+> the rare artifact whose documentation *under*-promises relative
+> to what spot-checking finds.
+
+Tally (review §2, verbatim): "2 READER-MAJOR, 8 READER-MINOR,
+6 NOTE."
+
+## Prediction-diff (the instrument's value demonstrated)
+
+The phase-B close carried a prediction of five reader stumbles
+([AGENT orchestrator] record, transmitted in the phase-C work
+order; the five-item list itself was not committed — a process gap
+noted here, not repaired retroactively). Per that record: **both
+READER-MAJORs were unpredicted** —
+
+1. MAJOR-1: the one axiom (`runEffectful`) discussed at length in
+   three documents but its *statement* printed in none; the
+   register chain terminates at a file:line inside a vendored
+   `.lake` dependency.
+2. MAJOR-2: the "differentially validated" claim asserted with no
+   reachable record — the only pointer a jargon-laden pin file
+   that names a commit, not what the validation covers.
+
+The committed phase-B record's own known-frictions list (Dnn
+labels deliberately kept with a legend; the ghost-functor-binder
+and PartialMap statement surfacings, pre-disclosed in WALKTHROUGH
+§5.4) landed exactly as predicted-grade friction or better: MINOR
+finding 7, and positive NOTEs 13 and the §5.4 disclosures. The
+asymmetry is the instrument's demonstrated value: everything the
+author-side eye saw coming came back as friction, while the two
+items it missed are precisely what a stranger ranked as blocking.
+The author-side eye, primed by the register chains
+(README → `Audit.lean` header → LemLib.lean:54;
+README → `semantics-pin.env`), could not see that the chains'
+endpoints are unreadable from outside the project.
+
+## Fix list (this commit), by review finding number
+
+- **Findings 1 + 2 (both MAJORs) — the single best change**: a
+  self-contained "What you are asked to take on faith" subsection
+  in the README's trust story: (a) `runEffectful` printed VERBATIM
+  (confirmed against the vendored source,
+  `.lake/packages/LemLib/lean-lib/LemLib.lean:54`) with its
+  two-sentence story (effect-erasure seam; statements-only entry
+  via the initial state's symbol-supply seam, which the certified
+  fragment provably never reads; declared temporal, upstream
+  retirement in flight, vanishes at a pin bump); (b) what the
+  differential validation actually covers, summarized from the
+  engine's own record with its real numbers (106/106 minimal,
+  213/213 CN, 16/16 libxml2-URI byte-identical, 1,669 csmith at a
+  classified baseline, ~2,000 harness-family executions,
+  2,186-file CI sweep with zero mismatches among 1,316 comparable;
+  sampling-not-proof and oracle-on-the-boundary stated), with the
+  IN-PACKAGE path `../.cerberus-ws/lean_frontend/VALIDATION.md`
+  named as the record. Walkthrough §1 and §4 link the subsection;
+  the divergence-register runEffectful row and the README intro
+  now point at it.
+- **Findings 3 + 9 (MINOR)**: column legend line at the exhibit
+  table head — Lane (drive/driveJ/production), trio, in-budget
+  fuel, interior — each term one clause, full treatments still
+  where they were.
+- **Finding 4 (MINOR)**: `aids` documented front-facing — one
+  sentence in the README's lanes paragraph (the action-id supply,
+  the ∀-quantified oracle for the driver's fresh action-id draws,
+  irrelevant on this deterministic fragment) + reading-table
+  coverage in WALKTHROUGH §5.1 and a new `nsteps`/`aids` row in
+  §5.2.
+- **Finding 5 (MINOR)**: the `hfuel`/`hfuel2` pair explained in
+  the §5.2 reading table: nested budget facts, one per drive entry
+  point — whole program `esize` 6, jump-re-entered loop body
+  `esize` 5, hence the +1 slack; `hfuel2` a trivial consequence of
+  `hfuel`, interim scaffolding retired by the registered
+  total-export lane.
+- **Finding 6 (MINOR) + NOTE 15**: WALKTHROUGH §6 gains
+  build-experience notes — the expected
+  `capped: WARNING — … running UNCAPPED` sandbox warning and why
+  it has no bearing on the verification claim, the expected
+  `unusedVariables` linter noise from `generated/*`, the
+  warm-vs-cold duration expectation (sub-second replay vs minutes
+  to tens of minutes from scratch; honestly labeled: no pinned
+  cold timing recorded), and the setup script's offline/idempotent
+  behavior. A compact pointer line added to the README's build
+  section.
+- **NOTE 16**: the σ₀-returned-unchanged one-liner added to §5.1
+  (the fib program provably touches no memory).
+
+Skipped, with reasons (the reviewer praised the concision; bloat
+was the named risk):
+
+- **Finding 7 (MINOR, internal shorthand D26/R2/D14)**: the Dnn
+  labels were KEPT deliberately in phase B with a legend; the
+  reviewer confirms every row's content survives without them.
+  Rewriting the register would churn a record whose entries' homes
+  are authoritative.
+- **Finding 8 (MINOR, house-flavored phrases)**: each is decodable
+  from context per the review itself; a phrase-by-phrase rewrite
+  pass risks the bloat and would touch claim-bearing sentences for
+  style only.
+- **Finding 10 (MINOR, out-of-package sends)**: the two sends that
+  carry trust weight (axiom declaration, validation record) are
+  exactly the MAJOR fixes above; the remaining sends land on the
+  object of study (the engine's generated source) or the build
+  scripts, and are irreducible for a package that certifies an
+  external engine.
+- **NOTE 14 (authorship), NOTEs 11/12/13 (positives)**: no action
+  needed.
+
+## Verification (this checkout, after all edits)
+
+Docs-only slice — zero proof content touched; the only non-doc
+file in the commit is the review record itself. Gates re-run:
+`./scripts/test_unit.sh` ALL GATES GREEN (output quoted in the
+commit message context below). The README verify-me `#print
+axioms` block and the WALKTHROUGH §6 three-theorem block re-run
+this checkout: outputs identical to the quoted blocks (re-pasted
+in this record's phase-C run log below).
+
+### Phase-C run log (verbatim, 2026-08-31, this checkout)
+
+`./scripts/test_unit.sh` tail:
+
+```
+ℹ [432/434] Replayed CerberusHeapLang.Audit
+info: CerberusHeapLang/Audit.lean:366:0: CerberusHeapLang axiom sweep: 755 theorems within the declared boundary (40 in the production-entry boundary modules, trio + runEffectful; all others trio-exact)
+info: CerberusHeapLang/Audit.lean:366:0: CerberusHeapLang banned-axiom sweep: 1499 constants of every kind checked; sorryAx/ofReduceBool/ofReduceNat absent from all cones
+Build completed successfully (434 jobs).
+ok: cerberus-heaplang build green (axiom sweep + pins passed in-build)
+ALL GATES GREEN
+```
+
+The README verify-me heredoc, re-run:
+
+```
+'CerberusHeapLang.semantic_triple_sound' depends on axioms: [propext, Classical.choice, Quot.sound]
+'CerberusHeapLang.engine_complete' depends on axioms: [propext, Classical.choice, Quot.sound]
+'CerberusHeapLang.counter_loop_certified' depends on axioms: [propext, Classical.choice, Quot.sound]
+'CerberusHeapLang.fib_certified' depends on axioms: [propext, Classical.choice, Quot.sound]
+'CerberusHeapLang.fib_certified_total' depends on axioms: [propext, Classical.choice, Quot.sound]
+'CerberusHeapLang.array_sum_certified' depends on axioms: [propext, Classical.choice, Quot.sound]
+'CerberusHeapLang.list_reverse_certified' depends on axioms: [propext, Classical.choice, Quot.sound]
+'CerberusHeapLang.list_reverse_demo' depends on axioms: [propext, Classical.choice, Quot.sound]
+'CerberusHeapLang.exhibitA_prod' depends on axioms: [propext, runEffectful, Classical.choice, Quot.sound]
+'CerberusHeapLang.counter_loop_certified_production' depends on axioms: [propext,
+ runEffectful,
+ Classical.choice,
+ Quot.sound]
+```
+
+The WALKTHROUGH §6 three-theorem block, re-run:
+
+```
+'CerberusHeapLang.list_reverse_certified' depends on axioms: [propext, Classical.choice, Quot.sound]
+'CerberusHeapLang.fib_certified_total' depends on axioms: [propext, Classical.choice, Quot.sound]
+'CerberusHeapLang.exhibitA_prod' depends on axioms: [propext, runEffectful, Classical.choice, Quot.sound]
+```
+
+Both match the documents' quoted blocks character-for-character
+(the two production-entry cones carrying `runEffectful`, everything
+else trio-exact). The axiom's verbatim statement in the new README
+subsection was confirmed by grep against the vendored source:
+`.lake/packages/LemLib/lean-lib/LemLib.lean:54` reads exactly
+`axiom runEffectful {α : Type} : (Unit → BaseIO α) → α`. The
+validation-summary numbers were read from
+`../.cerberus-ws/lean_frontend/VALIDATION.md` at the pinned
+workspace (its §2 lane table and §5 scope statement).

@@ -10,7 +10,9 @@ pointer derives from, policing arithmetic and comparisons as the C
 standard does). The engine here is the Lean 4 port of that
 semantics, differentially validated against the original OCaml
 implementation and pinned by commit in
-`../scripts/semantics-pin.env`. This package builds a small Iris
+`../scripts/semantics-pin.env` (what that validation covers, and
+the in-package path to its record: "What you are asked to take on
+faith", below). This package builds a small Iris
 program logic — points-to, store/load small axioms, frame,
 sequencing, consequence, loop rules — over a fragment of Core, and
 certifies every rule against that engine, so that the exported
@@ -44,7 +46,16 @@ tradition — small axioms, the frame rule, representation predicates
 by structural recursion, loop invariants of the textbook shape —
 whose theorems are about the execution of a real C semantics'
 engine, ending at the tradition's canonical exhibit, in-place
-linked-list reversal. The exhibits, in pedagogical order:
+linked-list reversal. The exhibits, in pedagogical order (column
+legend, for first read — each term gets its full treatment below:
+**Lane** = which execution function the theorem is stated against,
+`drive`/`driveJ` being the engine's driver loop projected into the
+package and `production` the shipped pipeline itself, defined in
+the paragraph after the table; **trio** = the classical axioms
+`propext`, `Classical.choice`, `Quot.sound`; **in-budget fuel** =
+a hypothesis that the step count fits the engine's own interpreter
+budget, `lemDefaultFuel = 10^6`; **interior** = appears in proofs
+only, never in exported conclusions — the trust story below):
 
 | Theorem (file) | Claim | Hypotheses | Lane | Axiom cone |
 |---|---|---|---|---|
@@ -71,7 +82,11 @@ pipeline itself — `CerbND.runND (Driver.drive …)` from
 runs — with no package-defined execution function in the statement
 at all. Straight-line programs are exported all the way to the
 production lane; loop programs currently stop at the drive lane
-plus a proved registration tie (see "Scope of the claims").
+plus a proved registration tie (see "Scope of the claims"). Every
+drive-lane statement also quantifies over `aids : Nat → Nat`, the
+action-id supply: the oracle for the driver's fresh action-id
+draws, ∀-quantified so the theorems hold for every supply — on
+this deterministic fragment the choice is irrelevant.
 
 The proof of the flagship is textbook-compositional and that is the
 point of the exhibit: representation predicate `isList` by plain
@@ -113,6 +128,55 @@ pinned by executable concrete instances (the demos), and laid out
 for reading, identifier by identifier and with a mechanical
 statement-surface census, in the
 [walkthrough](docs/WALKTHROUGH.md) §5 (the trust tiers are its §4).
+
+### What you are asked to take on faith
+
+Self-contained, because these are the only two places where the
+trust story bottoms out outside this package.
+
+**1. The one axiom, verbatim.** The full statement of
+`runEffectful`, from the vendored lem runtime the engine builds on
+(`.lake/packages/LemLib/lean-lib/LemLib.lean:54` in this package's
+checkout):
+
+```lean
+axiom runEffectful {α : Type} : (Unit → BaseIO α) → α
+```
+
+It is the semantics port's effect-erasure seam: generated code
+uses it to read ambient state that the original OCaml reads
+effectfully. It enters this package through the STATEMENTS of the
+two production-entry modules only — the shipped
+`initial_driver_state` draws its symbol supply through
+`runEffectful (CerberusFresh.freshIntIO ())`, and the certified
+fragment provably never reads that field, so the theorems hold for
+every value the seam could produce. It is declared TEMPORAL:
+upstream retirement is designed and in flight on the semantics/lem
+side, after which this boundary vanishes here at a pin bump with
+no restatement (the `Audit.lean` header carries the full
+provenance).
+
+**2. What "differentially validated" covers.** The Lean port and
+the OCaml Cerberus — both generated from the same Lem model — are
+run on the same programs and their full verdict lines compared
+(defined values, exact undefined-behaviour codes, errors) against
+pinned fail-closed baselines, with an un-forked upstream checkout
+as a third comparison point; among the recorded lanes: the
+106-program upstream minimal suite (106/106), a 213-test CN corpus
+(213/213 exact match), a 16-URI multi-TU libxml2 corpus (16/16
+byte-identical against the oracle), 1,669 csmith programs at a
+classified pinned baseline, ~2,000 recorded harness-family
+differential executions, and a 2,186-file upstream CI sweep with
+zero mismatches among its 1,316 comparable files. This samples
+behaviour — it is not an equivalence proof — and the OCaml oracle
+itself remains on the trust boundary. The record is in this
+package's reach: the pinned semantics workspace
+(`../scripts/setup-cerberus-dep.sh`) carries it at
+`../.cerberus-ws/lean_frontend/VALIDATION.md`, and that file, not
+the pin file, is the authority on what is compared, how often, and
+what it does and does not establish. It is the engine's own trust
+story, imported: this package's theorems discharge INTO that
+engine and neither add to nor draw on its evidence.
 
 ## Scope of the claims
 
@@ -200,7 +264,7 @@ or growth paths. The register (each entry's home is authoritative):
 
 | Divergence / seam | Discharge / path | Registered at |
 |---|---|---|
-| `runEffectful` in the production-entry statement cones | Temporal boundary; upstream retirement planned — vanishes at a pin bump, no restatement | `Audit.lean` header |
+| `runEffectful` in the production-entry statement cones | Temporal boundary (statement printed verbatim in "What you are asked to take on faith", above); upstream retirement planned — vanishes at a pin bump, no restatement | `Audit.lean` header |
 | tagDefs argument: the theorems pin `drive`'s tagDefs to `fmapEmpty`; the shipped `Main.lean:871` passes `CerbTags.tagDefs ()` after `setTagDefsIO` | Semantically forced equal for the synthetic file: `(prodFile e).tagDefs = fmapEmpty` by `rfl`; the effectful set-then-read global is inert here (scalar layout paths provably never read it; struct/union paths would) | This table + `docs/2026-08-30_spike-report.md` register |
 | Memory orders accepted arbitrarily: `Step.store`/`wp_store` hold at ANY `memory_order` | Mirror-true: the sequential driver drops `mo` (`action_request_sequential2`, Driver.lean:273 — `mo1` unused); NA-only side conditions would be a divergence FROM the engine | This table + `docs/2026-08-30_spike-report.md` register |
 | Whole-allocation byte-list cells (no per-byte split) | Registered growth step for structs | `Heap.lean` header; `docs/2026-08-30_spike-report.md` R2 |
@@ -242,6 +306,12 @@ info: CerberusHeapLang/Audit.lean:366:0: CerberusHeapLang axiom sweep: 755 theor
 info: CerberusHeapLang/Audit.lean:366:0: CerberusHeapLang banned-axiom sweep: 1499 constants of every kind checked; sorryAx/ofReduceBool/ofReduceNat absent from all cones
 Build completed successfully (434 jobs).
 ```
+
+(In sandboxed environments `../scripts/capped` may warn
+`running UNCAPPED` — the cap is a resource-limit wrapper with no
+bearing on the verification claim; linter warnings from the
+dependency's `generated/*` files ahead of the tail are expected.
+The walkthrough §6 gives the full build-experience notes.)
 
 Or run both packages plus the grep gate: `scripts/test_unit.sh` from
 the repository root.
