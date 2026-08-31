@@ -172,8 +172,14 @@ replaced by the engine's own serialization of `v`
 The rest of the logic is the familiar kit: `wp_load`, sequencing,
 the frame rule, consequence (`Rules.lean`); and for programs with
 loops a *statement-level* WP `wps` with a label context — per-label
-preconditions, a loop-invariant rule `blockSpecs_intro` and an
-invariant-plus-variant rule for total loops (`Wps.lean`). That
+preconditions and a loop-invariant rule `blockSpecs_intro`
+(`Wps.lean`). Partial correctness only: the logic has no
+total-correctness rule — a variant-shaped lemma
+(`blockSpecs_intro_variant`) exists but offers its smaller-measure
+hypotheses optionally, carries no theorem-level termination
+consequence, and has no consumer; the logical total lane is the
+foundations arc's Phase 3
+(the [capability manifest](CAPABILITY_MANIFEST.md), Notes 2). That
 label-context judgment is the classical treatment of `goto`-like
 jumps (de Bruin-style label assumptions) built as a guarded
 fixpoint with the same machinery Iris builds `wp` from.
@@ -218,10 +224,14 @@ There is no Iris in this statement. Unpack the quantifiers:
   step budget `n` (`.more`) carries no obligation, and the
   `lemDefaultFuel` side condition is the engine's own internal fuel
   budget (10^6) — an honest artifact of the interpreter, not proof
-  slack. One exhibit is total and unconditional
-  (`fib_certified_total`, walked verbatim in §5.1 — the engine
-  *equals* `.done (fib n)` at the loop variant's step bound, no
-  fuel hypotheses at all).
+  slack. One exhibit additionally has an unconditional engine
+  equation (`fib_certified_total`, walked verbatim in §5.1 — the
+  engine *equals* `.done (fib n)` at a concrete step bound, no fuel
+  hypotheses at all) — but note its provenance: it is an
+  OPERATIONAL ENGINE THEOREM, proved by direct induction on the
+  drive, not through the logic; the logic itself is
+  partial-correctness only (no total WP yet — the manifest's total
+  lane, Notes 2).
 
 The bridge theorem is `semantic_triple_sound` (`Adequacy.lean:464`):
 a triple proved in the derived logic (`ProvenTriple` — the only
@@ -283,11 +293,16 @@ they mean? Three tiers, from nothing-new to read-this-part.
 
 **Tier 1 — kernel-checked theorems about the engine's definitions.**
 Every theorem is checked by the Lean kernel, and every theorem's
-*transitive axiom cone* is asserted in-build (`Audit.lean`, the
-last import of the library): everything reduces to the classical
-trio (`propext`, `Classical.choice`, `Quot.sound`), except the two
+*transitive axiom cone* is BOUNDED in-build, with the headline
+theorems' cones EXACTLY PINNED (`Audit.lean`, the last import of
+the library; the exhaustive sweep is an upper-bound containment
+check, the curated pins are equality checks — "exhaustively
+bounded, headline cones exactly pinned" is the precise claim):
+every cone is within the classical trio
+(`propext`, `Classical.choice`, `Quot.sound`), except the two
 production-entry modules whose *statements* mention the shipped
-initial driver state and therefore carry the semantics port's one
+initial driver state and are therefore additionally allowed the
+semantics port's one
 residual axiom `runEffectful` — a declared temporal boundary (an
 effectful initialization seam scheduled for removal upstream; the
 theorems hold for every value it could produce, since the program
@@ -348,6 +363,17 @@ true and uninteresting. Three guards:
    false engine-level statement provable.** The same holds for the
    logic's rules and for iris-lean itself: a bug there deprives us
    of proofs, not of truth of what was proved about the engine.
+   Two caveats keep this invariant honest (2026-08-31 audit, F-09).
+   First, it is relative to tier 3: if a *statement-level*
+   definition (`drive`, `dischargeStep`, a readout predicate) were
+   wrong, a theorem could be true and irrelevant — that is exactly
+   why tier 3 exists and is kept small. Second, the invariant is
+   fail-open for COVERAGE: a missing mirror or cone case makes
+   rules silently dead rather than false (the realized instance is
+   value-scrutinee `Ecase`, which has local rules but no adequacy
+   path) — which is why per-construct coverage is gated by the
+   generated [capability manifest](CAPABILITY_MANIFEST.md) instead
+   of trusted to prose.
 
 One honest asymmetry to keep in view: the *straight-line* exhibits
 are exported all the way to the production pipeline (the `runND`
@@ -387,9 +413,16 @@ Its output for the three theorems below is pasted verbatim at the
 end of each subsection; §5.4 states the invariant the full run
 witnesses and the two honest observations it surfaces.
 
-### 5.1 `fib_certified_total` — total, unconditional, engine-only
+### 5.1 `fib_certified_total` — an unconditional engine equation
 
-The statement, verbatim (`FibExhibit.lean:570`):
+Classification first (2026-08-31 audit, F-02): this is an
+OPERATIONAL ENGINE THEOREM — its proof is a direct induction on the
+drive (explicit `Step` constructors fed to `driveJ_step`), not a
+product of the separation logic; it uses neither `fib_wps` nor any
+total WP (the logic has no total-correctness lane yet — Phase 3).
+It earns its place here as the strongest *statement*: an
+unconditional equation on the engine's run, with the smallest
+statement surface. The statement, verbatim (`FibExhibit.lean:570`):
 
 ```lean
 theorem fib_certified_total (sbty : core_base_type) (n : Int)
@@ -461,6 +494,10 @@ statement**: `Step`, `wps`, `WP`, Iris, ghost state — the entire
 proof machinery. Because none of it occurs in the statement, a bug
 in any of it could only have made this theorem unprovable; it
 cannot have made this equation about the engine's execution false.
+(The remaining trust is tier 3, per §4's caveat: `driveJ` and the
+program/spec definitions that DO occur in the statement — a wrong
+definition there would make the equation true but about the wrong
+thing, which is what the printed idiom above is for.)
 
 Census output, verbatim (2026-08-31, this checkout):
 
@@ -794,8 +831,8 @@ boundary and checks every constant of every kind for
 `sorryAx`/`ofReduceBool`/`ofReduceNat`. Expected tail:
 
 ```
-info: CerberusHeapLang/Audit.lean:366:0: CerberusHeapLang axiom sweep: 755 theorems within the declared boundary (40 in the production-entry boundary modules, trio + runEffectful; all others trio-exact)
-info: CerberusHeapLang/Audit.lean:366:0: CerberusHeapLang banned-axiom sweep: 1499 constants of every kind checked; sorryAx/ofReduceBool/ofReduceNat absent from all cones
+info: CerberusHeapLang/Audit.lean:384:0: CerberusHeapLang axiom sweep: 755 theorems BOUNDED by the declared upper bounds (40 in the production-entry boundary modules, bounded by trio + runEffectful; all others bounded by the trio; exact cones pinned only for the curated headline list above)
+info: CerberusHeapLang/Audit.lean:384:0: CerberusHeapLang banned-axiom sweep: 1499 constants of every kind checked; sorryAx/ofReduceBool/ofReduceNat absent from all cones
 Build completed successfully (434 jobs).
 ```
 
@@ -871,7 +908,8 @@ line each:
 5. `EnvLaws.lean` — lawfulness of the engine's environment maps
    (lookup-after-add over reachable frames).
 6. `Wps.lean` — the label-context statement WP: jump-aware
-   sequencing, loop-invariant and invariant+variant rules.
+   sequencing, the loop-invariant rule (partial correctness only —
+   §3.1's note on the unconsumed variant lemma).
 7. `Soundness.lean` — the boundary module: per-construct
    certification of Step against the engine's `step_ctx` and driver
    discharge.

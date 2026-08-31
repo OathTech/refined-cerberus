@@ -12,14 +12,29 @@ lean_frontend/generated/). The certification against the engine's
 the context-undisturbed per-rule lemmas); the engine-facing meaning
 of everything proved over Step lands through Adequacy.lean's
 semantic triples. A wrong rule here can therefore only make
-theorems unprovable, never make an exported engine statement false.
+theorems unprovable, never make an exported engine statement false
+— WITH the idiom-faithfulness caveat (2026-08-31 foundational
+audit, F-09): that guarantee covers exactly the layers interior to
+proofs (Step, the logic, iris-lean). It does NOT extend to the
+statement-level specification idiom (drive/driveJ, dischargeStep,
+the readout predicates) — a wrong definition THERE yields a true
+but irrelevant theorem — and it is fail-open for COVERAGE: a
+missing rule or cone case silently narrows what is provable
+without falsifying anything (the realized instance: value-scrutinee
+Ecase, below). The per-construct coverage authority is
+docs/CAPABILITY_MANIFEST.md.
 
-SCOPE (the certified fragment): pure values, Load0/Store0/Create0
+SCOPE (the mirrored fragment): pure values, Load0/Store0/Create0
 actions, the PtrEq memop, strong sequencing `Esseq` (wildcard,
 `Specified`-binder and plain-symbol-binder patterns),
 `Esave`/`Eif`/value-scrutinee `Ecase`, the context-discarding
 `Erun`, pure/operand evaluation, and the run-time `Eannot` residue
-those produce. `Ewseq` is NOT included (three more rules and every
+those produce. NB value-scrutinee `Ecase` is LOCAL RULE ONLY: it
+has a mirror rule, a wps rule and a per-step engine equation
+(`step_ctx_case_value`), but NO `FragJ` membership and NO adequacy
+consumer — it is not adequacy-exportable (RED row in
+docs/CAPABILITY_MANIFEST.md until Phase 1 exports it; 2026-08-31
+foundational audit F-01). `Ewseq` is NOT included (three more rules and every
 inversion lemma doubles — deliberately deferred, register in
 README "Registered divergences"). All rules use the CANONICAL node
 shapes (empty `List annot` lists, `()` at bty) that

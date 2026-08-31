@@ -15,6 +15,12 @@ trust properties):
    filter lets top-level declarations dodge) must have its
    TRANSITIVE axiom cone inside the declared boundary. `sorryAx`,
    `ofReduceBool`, `ofReduceNat` are never in the boundary.
+   NB (2026-08-31 audit, F-07): this sweep is an UPPER-BOUND check
+   (containment in the allowed list), not an equality check — a
+   boundary-module theorem is allowed `runEffectful` whether or not
+   its own cone uses it. EXACT cones are established only by the
+   curated pins (check 2). Public wording everywhere:
+   "exhaustively bounded; headline cones exactly pinned".
 2. CURATED PINS: exact axiom sets of load-bearing theorems via
    `#guard_msgs in #print axioms` — growth is a build failure until
    deliberately re-baselined in the same commit with the reason.
@@ -45,7 +51,8 @@ Boundary entry provenance (Extension D, 2026-08-30):
   cone), not through any proof step; the theorems hold for every
   value of the seam (the fragment never reads sym_supply — the D14
   partition). Every other module — including the whole
-  DriverCollapse layer — remains trio-exact, pinned below.
+  DriverCollapse layer — is BOUNDED by the trio (sweep, check 1);
+  the headline theorems' cones are exactly pinned below (check 2).
 
 [USER 2026-08-31]: upstream retirement of runEffectful is planned on
 the cerberus-lean/lem side — this boundary is expected to vanish at
@@ -56,12 +63,21 @@ The sweep is LAST in the file by design: a constant declared after
 it would dodge it, so nothing is declared below it, and this module
 stays the last import of the lib root.
 
-Adjacent instrument (NOT a gate): scripts/statement_census.lean
-reports the statement-surface constant partition of the pinned
-theorems (engine / spec-idiom / Iris / core — docs/WALKTHROUGH.md
-§5). Freezing its expected partitions as an in-build check 4 (with
-the plant tests the other checks get) is registered as a future
-gate; today it is run manually.
+Adjacent instruments:
+- scripts/statement_census.lean (NOT a gate): reports the
+  statement-surface constant partition of the pinned theorems
+  (engine / spec-idiom / Iris / core — docs/WALKTHROUGH.md §5).
+  Freezing its expected partitions as an in-build check 4 (with the
+  plant tests the other checks get) is registered as a future gate;
+  today it is run manually.
+- scripts/capability_manifest.lean (A GATE, via
+  scripts/test_unit.sh gate 4, Phase 0 of the foundations arc):
+  generates docs/CAPABILITY_MANIFEST.md, the authoritative
+  per-construct scope statement; the gate re-runs it and fails on
+  drift against the committed output, and ties the README's
+  certified-scope enumeration to the manifest's adequacy-exportable
+  set (grep-level for Phase 0; the Phase-1 upgrade is a fully
+  mechanical cone-derived table).
 -/
 import Lean
 import CerberusHeapLang.Rules
@@ -316,10 +332,12 @@ info: 'CerberusHeapLang.array_sum_certified' depends on axioms: [propext, Classi
 -/
 #guard_msgs in #print axioms CerberusHeapLang.array_sum_certified
 
--- Phase-2 S4 (2026-08-31): the termination-accounting export — fib
--- TOTAL AND UNCONDITIONAL at the drive lane (the loop variant's
--- step bound 2n+4 discharges every fuel hypothesis; driveJ DELIVERS
--- fib n); and the PRODUCTION REGISTRATION TIE (LabeledAt derived
+-- Phase-2 S4 (2026-08-31): the OPERATIONAL ENGINE THEOREM for fib
+-- (reclassified per the 2026-08-31 audit, F-02): unconditional at
+-- the drive lane — the concrete step bound 2n+4 discharges every
+-- fuel hypothesis; driveJ DELIVERS fib n. Proved by direct
+-- operational induction, NOT by the logic (no total WP exists yet —
+-- Phase 3); and the PRODUCTION REGISTRATION TIE (LabeledAt derived
 -- from collect_labeled_continuations_NEW at the shipped initial run
 -- state — the boundary statement carries the declared temporal
 -- seam) with the counter loop re-exported at the derived tie.
@@ -391,9 +409,11 @@ open Lean in
           commit, with provenance."
     swept := swept + 1
     if boundary then boundarySwept := boundarySwept + 1
-  logInfo s!"CerberusHeapLang axiom sweep: {swept} theorems within the \
-    declared boundary ({boundarySwept} in the production-entry \
-    boundary modules, trio + runEffectful; all others trio-exact)"
+  logInfo s!"CerberusHeapLang axiom sweep: {swept} theorems BOUNDED by the \
+    declared upper bounds ({boundarySwept} in the production-entry \
+    boundary modules, bounded by trio + runEffectful; all others \
+    bounded by the trio; exact cones pinned only for the curated \
+    headline list above)"
   -- Pass 2 (header check 3): the banned-axiom check for EVERY
   -- constant kind of our modules — not just theorems. A `sorry` (or
   -- ofReduce*) in a bare def referenced by no theorem escaped pass 1

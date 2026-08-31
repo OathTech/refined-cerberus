@@ -25,10 +25,18 @@ annotation quantified):
   driveJ from the proc-carrying thread never kills, never derails,
   and any delivered value IS `fib n` — at ANY initial memory (the
   program touches no state; the seeded footprint is empty).
-- ADDITIONALLY TOTAL: `fib_certified_total` is an unconditional
-  equation — at the loop variant's step bound `2·n + 4`, driveJ
-  DELIVERS `fib n`, with no fuel or partiality hypotheses (its lane
-  is state-free: every drive step fires from pure evaluator facts).
+- ADDITIONALLY, AS A SEPARATE OPERATIONAL ENGINE THEOREM (2026-08-31
+  foundational audit, F-02 reclassification): `fib_certified_total`
+  is an unconditional equation — at the concrete step bound
+  `2·n + 4`, driveJ DELIVERS `fib n`, with no fuel or partiality
+  hypotheses (its lane is state-free: every drive step fires from
+  pure evaluator facts). It is NOT a product of the separation
+  logic: its proof is a direct induction on the drive, supplying
+  `Step` constructors to `driveJ_step` — it uses neither `fib_wps`
+  nor `blockSpecs_intro_variant` nor any total WP. It demonstrates
+  engine-level termination accounting for this exhibit, not
+  total-correctness capability of the logic (that is Phase 3;
+  docs/CAPABILITY_MANIFEST.md, total lane).
 -/
 import CerberusHeapLang.LoopExhibit
 
@@ -459,18 +467,25 @@ theorem fib_certified {GF : BundledGFunctors} [SpikeGpreS GF]
   exact (BigSepM.bigSepM_empty).1.trans
     (fib_wp_readout ra n ibty abty bbty hn sbty)
 
-/-! ## THE TERMINATION-ACCOUNTING EXPORT (S4 item 3): the variant's
-step-bound product at the driveJ lane. The loop's variant `n − i`
-prices each iteration at exactly TWO engine steps (the big-step
-guard; the context-discarding jump); entry costs one (the save
-TAU), the exit three (guard; the PURE evaluation; PROGRAM-DONE).
-The bound `2·n + 4` discharges the in-budget hypotheses OUTRIGHT:
-the theorem below is UNCONDITIONAL — no fuel hypotheses, no
-partiality: driveJ at the concrete budget DELIVERS `fib n`, at any
-initial memory and any action-id supply. (The general
-variant-rule-to-bound theorem remains open — recorded in the slice
-notes; this is the exhibit-level product, its induction measure IS
-the variant.) -/
+/-! ## THE OPERATIONAL ENGINE THEOREM (S4 item 3; reclassified per
+the 2026-08-31 foundational audit, F-02): an engine-level
+step-bound equation at the driveJ lane, proved by DIRECT OPERATIONAL
+INDUCTION on the numeric distance `n − i` — the proof below rewrites
+with `driveJ_step`, `Step.if_true`, `Step.run`, `Step.if_false` and
+`driveJ_done` explicitly. It is NOT a product of the separation
+logic: it does not use `fib_wps`, `fib_blockSpecs`,
+`blockSpecs_intro_variant`, or any total WP (the logic-side total
+lane does not exist yet — Phase 3). Accounting: each iteration
+costs exactly TWO engine steps (the big-step guard; the
+context-discarding jump); entry costs one (the save TAU), the exit
+three (guard; the PURE evaluation; PROGRAM-DONE). The bound
+`2·n + 4` discharges the in-budget hypotheses OUTRIGHT: the theorem
+below is UNCONDITIONAL — no fuel hypotheses, no partiality: driveJ
+at the concrete budget DELIVERS `fib n`, at any initial memory and
+any action-id supply. The general variant-rule-to-bound theorem
+remains open (slice notes); consequence of this proof shape: the
+exact two-step body granularity is baked in — any change in
+evaluation granularity replays this induction. -/
 
 section FibTotal
 
@@ -562,11 +577,14 @@ theorem fib_loop_drive (n : Int) (i : Int) (h0 : 0 ≤ i) (hin : i ≤ n)
       show i.toNat + 1 + 1 = i.toNat + 2 from rfl, fibSpec_add_two] at hstep
     exact hstep
 
-/-- FIB, TOTAL AND UNCONDITIONAL AT THE DRIVE LANE: at the concrete
-    step budget `2·n + 4` the engine DELIVERS `fib n` — no fuel
-    hypotheses, no partiality, any initial memory, any action-id
-    supply. This is the termination-accounting product for the fib
-    exhibit: the budget is the loop variant's step bound. -/
+/-- FIB, an UNCONDITIONAL OPERATIONAL ENGINE THEOREM at the drive
+    lane: at the concrete step budget `2·n + 4` the engine DELIVERS
+    `fib n` — no fuel hypotheses, no partiality, any initial memory,
+    any action-id supply. Reclassified (2026-08-31 audit, F-02):
+    proved by direct operational induction (`fib_loop_drive`), not
+    by the logic — this is an engine regression/termination-
+    accounting theorem, not evidence of total correctness in the
+    separation logic (Phase 3 owns that). -/
 theorem fib_certified_total (sbty : core_base_type) (n : Int)
     (hn : 0 ≤ n) (σ₀ : Mem) (aids : Nat → Nat) :
     driveJ (fibRS ra n ibty abty bbty) aids (2 * n.toNat + 4)

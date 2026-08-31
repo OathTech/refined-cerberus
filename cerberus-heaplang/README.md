@@ -46,7 +46,17 @@ tradition — small axioms, the frame rule, representation predicates
 by structural recursion, loop invariants of the textbook shape —
 whose theorems are about the execution of a real C semantics'
 engine, ending at the tradition's canonical exhibit, in-place
-linked-list reversal. The exhibits, in pedagogical order (column
+linked-list reversal.
+
+**The authoritative scope statement is the generated
+[capability manifest](docs/CAPABILITY_MANIFEST.md)** — one row per
+supported Core construct (mirror rule / logic rule / fragment cone
+/ engine match / adequacy, total, and production lanes / example
+consumer), regenerated and drift-checked by `scripts/test_unit.sh`
+gate 4. Every scope claim in this README is read under it: a
+construct is claimed at exactly its manifest level, no more.
+
+The exhibits, in pedagogical order (column
 legend, for first read — each term gets its full treatment below:
 **Lane** = which execution function the theorem is stated against,
 `drive`/`driveJ` being the engine's driver loop projected into the
@@ -64,11 +74,11 @@ only, never in exported conclusions — the trust story below):
 | `exhibitB_semantic` / `exhibitB_engine` (Exhibit.lean) | THE FRAME: `⦃x ↦ - ∗ y ↦ a⦄ store(x,7) ⦃x ↦ 7 ∗ y ↦ a⦄` over engine configurations — y and all unnamed rest verbatim | in-budget fuel; seeded cells | drive | trio |
 | `exhibitC_semantic` / `exhibitC_engine` (Exhibit.lean) | Sequenced stores to disjoint cells both land, non-conflictingly — locality read back from the engine's bytemap | in-budget fuel; seeded cells | drive | trio |
 | `counter_loop_certified` (LoopExhibit.lean) | THE FIRST LOOP: save entry, real `x > 0` guard, store under the loop, context-discarding back edge — never kills, final bytes pinned by a data-dependent post | in-budget fuel; seeded cell | driveJ | trio |
-| `fib_certified`, `fib_certified_total` (FibExhibit.lean) | Iterative fib with invariant `a = fib i ∧ b = fib (i+1)` delivers `fib n`; the TOTAL form is an unconditional equation — at step bound `2·n + 4`, `driveJ … = .done (fib n)`, no fuel hypotheses at all | partial form: in-budget fuel; total form: NONE | driveJ | trio |
+| `fib_certified`, `fib_certified_total` (FibExhibit.lean) | Iterative fib with invariant `a = fib i ∧ b = fib (i+1)` delivers `fib n`; `fib_certified_total` is a separate OPERATIONAL ENGINE THEOREM — an unconditional equation, at step bound `2·n + 4`, `driveJ … = .done (fib n)`, no fuel hypotheses at all — proved by direct induction on the drive, NOT by the logic (no total WP exists yet; manifest Notes 2) | partial form: in-budget fuel; engine theorem: NONE | driveJ | trio |
 | `array_sum_certified` (ArrayExhibit.lean) | The array walk: real pointer arithmetic, interior loads of a seeded one-allocation array — delivers `vs.sum` with the array preserved | in-budget fuel; seeded array (coherence, per-element decode, size/location) | driveJ | trio |
 | `list_reverse_certified`, `list_reverse_demo` (ListRevExhibit.lean) | THE CANONICAL EXHIBIT: in-place reversal of a linked list of two-field nodes — any delivered value is a pointer whose final-heap chain is `xs.reverse`; the demo instantiates a 3-node `[1,2,3]` chain, every decode fact `rfl` | in-budget fuel; seeded chain (`SeedChain`, `Coh`) | driveJ | trio |
 | `exhibitA_prod` (ProdExhibit.lean) | The production run of a self-contained create/store/load program IS the singleton Active execution delivering 7 with the exact final bytes | file-system state and argv only — everything else discharged | production | trio + `runEffectful` |
-| `counter_loop_certified_production` (ProdEntry.lean) | The counter loop re-exported with the label plumbing DERIVED from the shipped label-collection — nothing hand-built | as `counter_loop_certified` | driveJ @ production run state | trio + `runEffectful` |
+| `counter_loop_certified_production` (ProdEntry.lean) | THE REGISTRATION THEOREM (that is what it is, despite the declaration's name — naming debt, manifest Notes 3): the counter loop re-exported with the label plumbing DERIVED from the shipped label-collection — nothing hand-built; NOT a production `runND` equation | as `counter_loop_certified` | driveJ @ production run state | trio + `runEffectful` |
 
 Two lanes appear above, and the difference is part of every claim.
 The **drive lanes** (`drive`, and `driveJ` for programs with jumps)
@@ -102,13 +112,18 @@ semantics (the Lean port of Cerberus Core, pinned by commit in
 `../scripts/semantics-pin.env` and differentially validated
 upstream against the OCaml oracle); everything in this package is
 derived and proved down into that engine. Every theorem is
-kernel-checked with its exact axiom cone asserted in-build
+kernel-checked with its transitive axiom cone BOUNDED in-build, and
+the headline theorems' cones EXACTLY PINNED
 (`CerberusHeapLang/Audit.lean`, the last import of the library
-root): all cones are exactly the classical trio (`propext`,
-`Classical.choice`, `Quot.sound`), except in the two
-production-entry modules (`ProdEntry`, `ProdExhibit`) whose
-statements mention the shipped initial driver state and therefore
-additionally carry the semantics repo's one residual axiom
+root — the exhaustive sweep is an upper-bound check, the curated
+pins are equality checks; "exhaustively bounded, headline cones
+exactly pinned" is the precise claim): every cone is within the
+classical trio (`propext`, `Classical.choice`, `Quot.sound`),
+except in the two production-entry modules (`ProdEntry`,
+`ProdExhibit`) whose
+statements mention the shipped initial driver state and are
+therefore additionally allowed the semantics repo's one residual
+axiom
 `runEffectful` — a declared TEMPORAL boundary (an effectful
 initialization seam), entering through the statements only, whose
 upstream retirement is planned (after which this boundary vanishes
@@ -121,7 +136,16 @@ The package's own step relation (`Step`) and the Iris layer are
 INTERIOR: they appear in proofs, never in exported conclusions, and
 are certified per-rule against the engine (`Soundness.lean`). A
 wrong mirror can therefore only make theorems unprovable, never
-false. What remains statement-level trust — the specification
+false — with the caveat that keeps the slogan honest (2026-08-31
+audit, F-09): the guarantee holds only relative to a FAITHFUL
+specification idiom. A wrong statement-level definition
+(`drive`/`driveJ`, `dischargeStep`, a readout predicate) yields a
+true-but-irrelevant theorem rather than a false one, and a missing
+mirror/cone case silently narrows coverage without falsifying
+anything — which is why the specification idiom is read (below)
+and coverage is gated by the
+[capability manifest](docs/CAPABILITY_MANIFEST.md) rather than
+trusted to prose. What remains statement-level trust — the specification
 idiom: the drive-loop projections and the footprint/readout
 predicates the exported statements are phrased in — is kept small,
 pinned by executable concrete instances (the demos), and laid out
@@ -204,9 +228,14 @@ value is a POINTER whose FINAL-heap chain is `xs.reverse`
 (`ChainAt` — per-node `CellCoh` + field decode facts about the
 final `MemState`; the concrete `list_reverse_demo` instantiates a
 3-node [1,2,3] chain with every decode fact discharged by `rfl`) —
-except `fib_certified_total`, which is TOTAL AND UNCONDITIONAL: at
-the loop variant's step bound `2·n + 4`, `driveJ` DELIVERS `fib n`,
-with no fuel hypotheses at all. Scope honesty for all of them: the
+except `fib_certified_total`, which is UNCONDITIONAL — at the
+concrete step bound `2·n + 4`, `driveJ` DELIVERS `fib n`, with no
+fuel hypotheses at all — and which is an OPERATIONAL ENGINE
+THEOREM, not a logic result (2026-08-31 audit, F-02): it is proved
+by direct induction on the drive (explicit `Step`/`driveJ_step`
+rewrites), consuming neither `fib_wps` nor the variant loop rule
+nor any total WP; the logic itself has no total-correctness lane
+yet (Phase 3; manifest Notes 2). Scope honesty for all of them: the
 drive lane is the sequential driver's loop projected to
 (thread_state, MemState) with the run state a constant parameter
 (certified faithful for this fragment — the real driver
@@ -244,18 +273,29 @@ the same fuel cap, and its conclusion constrains only the P ⊎ R
 split it quantifies (untracked cells outside it are not claimed
 preserved by the general statements; the production equation does
 pin the full final `layout_state`). Everything is single-threaded,
-over the certified fragment only (`store`/`load`/`create`, strong
+over the certified fragment only — authoritatively, the
+adequacy-exportable rows of the
+[capability manifest](docs/CAPABILITY_MANIFEST.md); in prose:
+`store`/`load`/`create`, strong
 sequencing `Esseq` at wildcard, `Specified`-binder and
-plain-symbol-binder patterns, `Esave`/`Eif`/`Erun`, value-scrutinee
-`Ecase`, `PEsym`-shaped pure exits, the `Load0` AND `Store0`
+plain-symbol-binder patterns, `Esave`/`Eif`/`Erun`,
+`PEsym`-shaped pure exits, the `Load0` AND `Store0`
 operand-evaluation steps, the `PtrEq` memop with its
 operand-evaluation step, `PEval`/`PEsym`/integer-`PEop`/
-`PEarray_shift` operands, plus the run-time annotation residue),
-and the logic has no `wp_create` small axiom (registered:
+`PEarray_shift` operands, plus the run-time annotation residue.
+<!-- MANIFEST-SCOPE-BEGIN
+tokens: value store load create sseq-wild sseq-spec sseq-sym annot save if run pure-sym memop-ptreq memop-op load-op store-op pure-operands
+MANIFEST-SCOPE-END -->
+NOT in the certified fragment despite having a mirror rule and a
+wps rule: value-scrutinee `Ecase` — LOCAL RULE ONLY, not
+adequacy-exportable (no `FragJ` membership, no adequacy consumer;
+RED in the manifest until Phase 1 exports it — 2026-08-31 audit,
+F-01). And the logic has no `wp_create` small axiom (registered:
 ProdEntry.lean header — a sound one needs the allocator-cursor
 resource, the registered growth step). Each qualifier is registered
 at source (module headers; `docs/2026-08-30_spike-report.md`); this
-section is the summary the claims above are read under.
+section, under the manifest, is the summary the claims above are
+read under.
 
 ## Registered divergences and seams
 
@@ -269,6 +309,8 @@ or growth paths. The register (each entry's home is authoritative):
 | Memory orders accepted arbitrarily: `Step.store`/`wp_store` hold at ANY `memory_order` | Mirror-true: the sequential driver drops `mo` (`action_request_sequential2`, Driver.lean:273 — `mo1` unused); NA-only side conditions would be a divergence FROM the engine | This table + `docs/2026-08-30_spike-report.md` register |
 | Whole-allocation byte-list cells (no per-byte split) | Registered growth step for structs | `Heap.lean` header; `docs/2026-08-30_spike-report.md` R2 |
 | `Ewseq` still outside the fragment; `Ecase`'s EVAL arm (non-value scrutinees) unmirrored | Mechanical per-construct extension, path named | `Step.lean` header; `docs/2026-08-30_spike-report.md` "Honestly open" |
+| Value-scrutinee `Ecase` is LOCAL RULE ONLY: mirror rule + wps rule + per-step engine equation, but no `FragJ` membership, no adequacy consumer — not adequacy-exportable (2026-08-31 audit F-01) | Phase 1 exports it (cone constructor + substitution closure + decompJ/match extension + adequacy regression theorem) | `Step.lean` header; manifest row (RED) |
+| `counter_loop_certified_production` is the REGISTRATION theorem, not a production `runND` equation — the declaration name overstates its lane (2026-08-31 audit F-05) | Naming debt registered; docs call it the registration theorem; rename lands with Phase 5's real production theorem (a rename now is statement-surface churn) | Manifest Notes 3; `ProdEntry.lean` |
 | PURE exits certified at `PEsym` shape only (general `PePure` exits are a bounded matcher extension) | Extend `stepDischarge_pure_sym` per-constructor when needed | `Soundness.lean`; `docs/2026-08-31_phase2-s4-notes.md` |
 | The array exhibit's pre-state is ONE allocation (not a ∗-of-per-element-cells): the engine's loads bounds-check against the pointer's PROVENANCE allocation and `arrayShiftPtrval` preserves provenance, so distinct-allocation "arrays" are not walkable in the engine — C's object model | Forcing fact about Cerberus, recorded; per-element structure lives in the index-partitioned invariant + decode premises | `ArrayExhibit.lean` header; `docs/2026-08-31_phase2-s4-notes.md` |
 | The pointer-test memop coverage is `PtrEq` only; the family (PtrNe/Lt/…) and eqPtrval's differing-provenance ND fork are fail-closed ABSENCES of a mirror step (the fork is a real `msum`, CerbMem.lean:1753 — enumerated by the exhaustive runners, not single-layer) | Mechanical per-memop extension (dischargeStep arm + Step rule + wps axiom) | `Soundness.lean` dischargeStep memop arm; `docs/2026-08-31_listrev-notes.md` |
@@ -302,8 +344,8 @@ qualifiers above — they are part of the theorem statements. Expected
 tail:
 
 ```
-info: CerberusHeapLang/Audit.lean:366:0: CerberusHeapLang axiom sweep: 755 theorems within the declared boundary (40 in the production-entry boundary modules, trio + runEffectful; all others trio-exact)
-info: CerberusHeapLang/Audit.lean:366:0: CerberusHeapLang banned-axiom sweep: 1499 constants of every kind checked; sorryAx/ofReduceBool/ofReduceNat absent from all cones
+info: CerberusHeapLang/Audit.lean:384:0: CerberusHeapLang axiom sweep: 755 theorems BOUNDED by the declared upper bounds (40 in the production-entry boundary modules, bounded by trio + runEffectful; all others bounded by the trio; exact cones pinned only for the curated headline list above)
+info: CerberusHeapLang/Audit.lean:384:0: CerberusHeapLang banned-axiom sweep: 1499 constants of every kind checked; sorryAx/ofReduceBool/ofReduceNat absent from all cones
 Build completed successfully (434 jobs).
 ```
 
@@ -365,7 +407,13 @@ the statement-surface census (`scripts/statement_census.lean`, a
 read-only reporting instrument) bins every constant in each pinned
 theorem's statement into engine / spec-idiom / Iris / Lean-core;
 the [walkthrough](docs/WALKTHROUGH.md) §5 pastes its output and
-reads the three headline statements identifier by identifier.
+reads the three headline statements identifier by identifier. For
+per-construct coverage, regenerate the
+[capability manifest](docs/CAPABILITY_MANIFEST.md)
+(`scripts/capability_manifest.lean`) and diff it against the
+committed copy — `scripts/test_unit.sh` gate 4 does exactly that,
+and additionally fails if this README's certified-scope token list
+strays outside the manifest's adequacy-exportable set.
 
 ## The modules
 
@@ -374,21 +422,21 @@ In teaching order (= import order; one line each — the
 
 | Module | Contents | Headline |
 |--------|----------|----------|
-| `Step.lean` | The fragment's mirror small-step over the ENGINE's generated AST/state types (values, `store`/`load`/`create`, the `PtrEq` memop, strong sequencing at wildcard, `Specified`-binder and plain-symbol-binder patterns, `Esave`/`Eif`/`Ecase`, the global context-discarding `Erun`, pure/operand evaluation, the annotation residue; the runtime tuple carries the live env stack and the per-procedure label map) — hand-written, zero authority until certified | `Step` |
+| `Step.lean` | The fragment's mirror small-step over the ENGINE's generated AST/state types (values, `store`/`load`/`create`, the `PtrEq` memop, strong sequencing at wildcard, `Specified`-binder and plain-symbol-binder patterns, `Esave`/`Eif`, value-scrutinee `Ecase` (local rule only — manifest), the global context-discarding `Erun`, pure/operand evaluation, the annotation residue; the runtime tuple carries the live env stack and the per-procedure label map) — hand-written, zero authority until certified | `Step` |
 | `Heap.lean` | Points-to over the engine's memory state via iris-lean GenHeap (allocation-rooted byte-list cells); the memM-level store/load facts | `pointsToCell` (`↦c`), `storeM_success`, `loadM_success` |
-| `Lang.lean` | The iris-lean `Language` instance over Step (evaluation contexts, wp_bind for real `Esseq`) | `instance : Language CoreExpr Mem Empty SpikeVal` |
+| `Lang.lean` | The iris-lean `Language` instance over Step (primStep over the runtime tuple, componentwise value protocol, pure-determinism facts for the beta/merge taus, the `SpikeGF` ghost-functor witness). Deliberately NO `Language.Context`/wp_bind instance: the global jump rule falsifies the frame law (`Erun` discards its context), so sequencing is proved directly (`wp_sseq`, `wps_seq`) — the module header records the falsification | `instance : Language CoreRt Mem Empty CoreRVal` |
 | `EnvLaws.lean` | The env-map seam, closed: lawfulness of the engine's symbol order (`Std.TransCmp` via the String×Nat lexicographic characterization) and the lookup-after-add law over reachable frames — loop invariants carry `SymFrame` instead of frame-shape pins | `envAdd_lookup` |
 | `Rules.lean` | The base logic: small axioms, sequencing, frame, consequence, wand — plus the compositional two-store triple and the interior-load memM fact | `wp_store`, `wp_load`, `wp_sseq`, `triple_frame`, `triple_seq`, `loadM_interior_int` |
-| `Wps.lean` | The statement-stratified WP (the classical label-context judgment as a package-local guarded fixpoint): value/jump/step clauses, the jump-aware sequencing rules, the branch/entry rules, the small axioms at the stratum, the per-label invariant and invariant+variant loop rules, and the Löb-tied collapse into the base WP | `wps`, `wps_seq`, `wps_seq_spec`, `blockSpecs_intro(_variant)`, `wps_sound` |
+| `Wps.lean` | The statement-stratified WP (the classical label-context judgment as a package-local guarded fixpoint): value/jump/step clauses, the jump-aware sequencing rules, the branch/entry rules, the small axioms at the stratum, the per-label invariant loop rule (and `blockSpecs_intro_variant`, which offers smaller-measure hypotheses but carries NO termination consequence and has no consumer yet — the total lane is Phase 3, manifest Notes 2), and the Löb-tied collapse into the base WP | `wps`, `wps_seq`, `wps_seq_spec`, `blockSpecs_intro`, `wps_sound` |
 | `Soundness.lean` | Per-construct certification of Step against the engine's own `step_ctx` + request discharge (context-undisturbed shape; refusals classified; the jump layer: the evaluator bridge, the factor theorem with the jump disjunct, the context-discard certification, the step-match completeness at the jump profile) | `engine_complete`, `stepDischarge_run`, `DecompJ.step_factor`, `engine_step_matchJ` |
 | `Adequacy.lean` | The exported semantic face over engine configurations: triples with an arbitrary framed rest, driven by the engine's step function; the jump-profile drive lane (`driveJ`) with its adequacy and per-step drive equations | `semantic_triple_sound`, `semantic_frame`, `spike_engine_adequacy`, `engine_adequacyJ`, `driveJ_step` |
 | `Exhibit.lean` | End-to-end exhibits at the engine level: store-then-load returns 7; the frame exhibit; disjoint sequential stores; termination of the probe program as a theorem | `exhibitA_engine`, `exhibitB_engine`, `exhibitC_engine`, `exhibitA_terminates` |
 | `LoopExhibit.lean` | THE FIRST LOOP: the counter loop — save entry, real `x > 0` guard, a store under the loop, the context-discarding back edge — certified end-to-end through `driveJ` with a data-dependent post | `counter_loop_certified` |
-| `FibExhibit.lean` | Iterative two-accumulator fib with the data-dependent invariant `a = fib i ∧ b = fib (i+1)`; partial via `engine_adequacyJ`, and TOTAL AND UNCONDITIONAL at the variant's step bound | `fib_certified`, `fib_certified_total` |
+| `FibExhibit.lean` | Iterative two-accumulator fib with the data-dependent invariant `a = fib i ∧ b = fib (i+1)`; partial via `engine_adequacyJ`; plus the separate OPERATIONAL ENGINE THEOREM `fib_certified_total` — an unconditional driveJ equation at step bound `2·n+4`, proved by direct operational induction, not by the logic (manifest Notes 2) | `fib_certified`, `fib_certified_total` |
 | `ArrayExhibit.lean` | The array-sum walk — real pointer arithmetic, operand-evaluated loads, interior reads of the seeded array allocation, the `Specified`-binder unwrap, the index-partitioned invariant; the array preserved in the conclusion | `array_sum_certified` |
 | `ListRevExhibit.lean` | THE CANONICAL EXHIBIT: in-place reversal of a linked list of one-allocation two-field nodes — the honest null encoding + the engine's own `PtrEq` memop as the null test (the null/pointer byte ROUND TRIPS proved against repr/abst), interior next-field loads AND stores by in-allocation arithmetic, `isList` by plain structural recursion, the textbook `blockSpecs_intro` proof with invariant `isList prev reversed ∗ isList cur rest`; conclusion: any delivered value is a pointer whose final-heap chain is `xs.reverse` | `list_reverse_certified`, `list_reverse_demo` |
-| `DriverCollapse.lean` | The production scheduler/ND/readout collapsed onto the demo's drive loop — proved from the driver's OWN round functions; entirely trio-exact | `prod_loop_done`, `driver2_done`, `finalize_done` |
-| `ProdEntry.lean` | Cold start from the SHIPPED `initial_driver_state` (errno allocated by the real allocator) + the production-entry theorem; the REGISTRATION TIE — `LabeledAt` derived from the shipped `collect_labeled_continuations_NEW` for the authored loop programs, and the counter loop re-exported at the derived tie | `sem_triple_prod`, `prod_run_eq`, `fib_labeledAt_production`, `counter_loop_certified_production` |
+| `DriverCollapse.lean` | The production scheduler/ND/readout collapsed onto the demo's drive loop — proved from the driver's OWN round functions; bounded by the trio, its three headline equations exact-pinned | `prod_loop_done`, `driver2_done`, `finalize_done` |
+| `ProdEntry.lean` | Cold start from the SHIPPED `initial_driver_state` (errno allocated by the real allocator) + the production-entry theorem; the REGISTRATION TIE — `LabeledAt` derived from the shipped `collect_labeled_continuations_NEW` for the authored loop programs, and the counter loop re-exported at the derived tie (the registration theorem — manifest Notes 3) | `sem_triple_prod`, `prod_run_eq`, `fib_labeledAt_production`, `counter_loop_certified_production` |
 | `ProdExhibit.lean` | The demonstration: a self-contained program (create/store/load) run through the production pipeline delivers 7 with the exact final bytes | `exhibitA_prod` |
 | `Audit.lean` | The in-build axiom gate: curated exact-cone pins + the exhaustive theorem sweep with the module-scoped `runEffectful` boundary + the banned-axiom sweep over every constant kind (all plant-tested both directions — record: `docs/2026-08-31_restructure-notes.md`) | the sweeps |
 

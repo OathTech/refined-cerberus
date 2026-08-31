@@ -4,8 +4,10 @@
 # of BOTH packages (root RefinedCerberus + the cerberus-heaplang
 # demo development, each of which elaborates its own Audit.lean —
 # the in-build axiom-cone sweep + curated pins) plus the
-# kernel-method grep ban. New gates only for load-bearing TRUST
-# properties.
+# kernel-method grep ban, plus (foundations arc Phase 0) the
+# capability-manifest coverage gate — a load-bearing TRUST property:
+# claims surfaces cannot outrun proved per-construct coverage. New
+# gates only for load-bearing TRUST properties.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -43,6 +45,73 @@ if (cd cerberus-heaplang && ../scripts/capped "$HOME/.elan/bin/lake" build); the
 else
   echo "FAIL: cerberus-heaplang build red" >&2
   fail=1
+fi
+
+echo "== gate 4: capability manifest (drift + README certified-scope tie) =="
+# Phase 0 of the foundations arc (2026-08-31 audit F-01/F-09): the
+# generated capability manifest is THE authoritative per-construct
+# scope statement. This gate (a) regenerates it and fails on any
+# drift against the committed copy (the generator itself fails
+# closed if a checked rule/cone/match/consumer name is missing or if
+# the Step/FragJ constructor lists changed — so a deleted cone case
+# is red here), and (b) ties the README's certified-scope token list
+# to the manifest's ADEQUACY-EXPORTABLE set: a construct claimed as
+# certified without a manifest row at that level is red. The tie is
+# grep-level for Phase 0; the registered Phase-1 upgrade generates
+# the table from the unified capability predicate itself.
+manifest=cerberus-heaplang/docs/CAPABILITY_MANIFEST.md
+if [[ ! -f "$manifest" ]]; then
+  echo "FAIL: committed capability manifest missing ($manifest)" >&2
+  fail=1
+else
+  tmpman="$(mktemp "${TMPDIR:-/tmp}/capability_manifest.XXXXXX")" || {
+    echo "FAIL: mktemp failed for manifest regeneration" >&2; exit 1; }
+  if (cd cerberus-heaplang && \
+      ../scripts/capped "$HOME/.elan/bin/lake" env lean \
+        scripts/capability_manifest.lean > "$tmpman"); then
+    if diff -u "$manifest" "$tmpman"; then
+      echo "ok: capability manifest regenerated, no drift"
+    else
+      echo "FAIL: capability manifest drift (diff above) — regenerate" \
+        "docs/CAPABILITY_MANIFEST.md deliberately, same commit" >&2
+      fail=1
+    fi
+  else
+    echo "FAIL: capability manifest generator red (a checked name or" \
+      "the Step/FragJ constructor list changed); generator output:" >&2
+    cat "$tmpman" >&2
+    fail=1
+  fi
+  rm -f "$tmpman"
+  # README tie: every token the README claims as certified scope must
+  # be in the manifest's ADEQUACY-EXPORTABLE set. Fail-closed: missing
+  # markers or missing machine line are failures, not skips.
+  readme_tokens="$(sed -n '/MANIFEST-SCOPE-BEGIN/,/MANIFEST-SCOPE-END/p' \
+    cerberus-heaplang/README.md | sed -n 's/^tokens: //p')"
+  allowed="$(sed -n 's/^ADEQUACY-EXPORTABLE: //p' "$manifest")"
+  if [[ -z "$readme_tokens" ]]; then
+    echo "FAIL: README MANIFEST-SCOPE token block missing/empty" >&2
+    fail=1
+  elif [[ -z "$allowed" ]]; then
+    echo "FAIL: manifest ADEQUACY-EXPORTABLE line missing/empty" >&2
+    fail=1
+  else
+    tie_ok=1
+    for t in $readme_tokens; do
+      hit=0
+      for a in $allowed; do
+        [[ "$t" == "$a" ]] && hit=1
+      done
+      if [[ $hit -eq 0 ]]; then
+        echo "FAIL: README claims certified scope token '$t' but the" \
+          "manifest does not list it as adequacy-exportable" >&2
+        tie_ok=0
+        fail=1
+      fi
+    done
+    [[ $tie_ok -eq 1 ]] && echo "ok: README certified-scope tokens all" \
+      "within the manifest's adequacy-exportable set"
+  fi
 fi
 
 if [[ $fail -ne 0 ]]; then
