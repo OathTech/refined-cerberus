@@ -53,6 +53,7 @@ theorem (the `hpre` hypothesis below, discharged concretely by the
 exhibits).
 -/
 import CerberusHeapLang.DriverCollapse
+import CerberusHeapLang.FibExhibit
 
 set_option autoImplicit false
 
@@ -339,5 +340,145 @@ theorem sem_triple_prod
   refine ⟨dres, dst', heq, hval, hlay, ?_⟩
   have h := hsem R hdisj σc hsat k (fun _ => 0) hfuelc
   exact h.2.2 v σfin (hterm _)
+
+/-! ## S4 — THE PRODUCTION REGISTRATION TIE (the LabeledAt
+derivation): for the authored loop programs, the label map the
+exhibits' run states carry is EXACTLY what the SHIPPED registration
+computes — `collect_labeled_continuations_NEW` over the synthetic
+one-procedure file (Core_aux.lean:853, via `collect_saves`), the
+map `initial_core_run_state` installs as `labeled`
+(Core_run_aux.lean:395). `LabeledAt` at the PRODUCTION initial run
+state is therefore DERIVED, not hypothesized (the S3 exhibit's
+recorded gap). These statements quantify over the shipped initial
+state, whose `sym_supply` draws the declared temporal boundary seam
+— hence this boundary module. HONEST RESIDUAL (recorded, slice
+notes): the full production-face `.done` equation for a LOOP run
+(the driver2 collapse at a proc-carrying thread with a populated
+label map) is not established this slice — the DriverCollapse
+scheduler equations are pinned at the phase-1 profile; the drive
+lane's `fib_certified_total` carries the step-bound product that
+would discharge its in-budget hypothesis. -/
+
+open Iris Iris.BI Iris.ProgramLogic
+
+/-- The registration computes the fib exhibit's label map. -/
+theorem collect_saves_fib (ra : core_run_annotation) (n : Int)
+    (sbty ibty abty bbty : core_base_type) :
+    collect_saves (fibProg ra n sbty ibty abty bbty) =
+      fibQ ra n ibty abty bbty := rfl
+
+/-- ... lifted through the file-level registration. -/
+theorem collect_new_fib (ra : core_run_annotation) (n : Int)
+    (sbty ibty abty bbty : core_base_type) :
+    collect_labeled_continuations_NEW
+        (prodFile (fibProg ra n sbty ibty abty bbty)) =
+      fmapAddBy (fun (s1 s2 : sym) => ordCompare s1 s2) mainSym
+        (fibQ ra n ibty abty bbty) fmapEmpty := rfl
+
+/-- THE TIE: at the PRODUCTION initial run state of the synthetic
+    fib file, the current procedure's `labeled` fiber IS the
+    exhibit's label map — `LabeledAt` derived from the shipped
+    registration. -/
+theorem fib_labeledAt_production (ra : core_run_annotation) (n : Int)
+    (sbty ibty abty bbty : core_base_type) :
+    LabeledAt (initial_core_run_state (collect_labeled_continuations_NEW
+        (prodFile (fibProg ra n sbty ibty abty bbty))))
+      mainSym (fibQ ra n ibty abty bbty) := by
+  unfold LabeledAt
+  rw [show (initial_core_run_state (collect_labeled_continuations_NEW
+      (prodFile (fibProg ra n sbty ibty abty bbty)))).labeled =
+    collect_labeled_continuations_NEW
+      (prodFile (fibProg ra n sbty ibty abty bbty)) from rfl]
+  rw [collect_new_fib]
+  rw [fmapLookupBy_addBy_empty]
+  rw [if_pos (by decide +kernel)]
+
+/-- The same tie for the S3 counter loop. -/
+theorem collect_saves_loop (loc : CerbLocation.Loc)
+    (ann ra : core_run_annotation) (mo : memory_order)
+    (bty xbty sbty : core_base_type) (c : CerbMem.PointerValue) (n : Int) :
+    collect_saves (loopProg loc ann ra mo bty xbty sbty c n) =
+      loopQ loc ann ra mo bty xbty c := rfl
+
+theorem loop_labeledAt_production (loc : CerbLocation.Loc)
+    (ann ra : core_run_annotation) (mo : memory_order)
+    (bty xbty sbty : core_base_type) (c : CerbMem.PointerValue) (n : Int) :
+    LabeledAt (initial_core_run_state (collect_labeled_continuations_NEW
+        (prodFile (loopProg loc ann ra mo bty xbty sbty c n))))
+      mainSym (loopQ loc ann ra mo bty xbty c) := by
+  unfold LabeledAt
+  rw [show (initial_core_run_state (collect_labeled_continuations_NEW
+      (prodFile (loopProg loc ann ra mo bty xbty sbty c n)))).labeled =
+    collect_labeled_continuations_NEW
+      (prodFile (loopProg loc ann ra mo bty xbty sbty c n)) from rfl]
+  rw [show collect_labeled_continuations_NEW
+      (prodFile (loopProg loc ann ra mo bty xbty sbty c n)) =
+    fmapAddBy (fun (s1 s2 : sym) => ordCompare s1 s2) mainSym
+      (loopQ loc ann ra mo bty xbty c) fmapEmpty from rfl]
+  rw [fmapLookupBy_addBy_empty]
+  rw [if_pos (by decide +kernel)]
+
+/-- THE PRODUCTION-ENTRY LOOP EXPORT at the derived tie: the
+    counter-loop certification restated with the run state built by
+    the SHIPPED registration ONLY (`initial_core_run_state ∘
+    collect_labeled_continuations_NEW` — nothing hand-built in the
+    label plumbing; the drive is the certified jump-profile lane).
+    The in-budget hypotheses are the sanctioned interim form. -/
+theorem counter_loop_certified_production {GF : Iris.BundledGFunctors}
+    [SpikeGpreS GF]
+    (loc : CerbLocation.Loc) (ann ra : core_run_annotation)
+    (mo : memory_order) (bty xbty sbty : core_base_type)
+    (idx addr : Int) (bs0 : List CerbMem.AbsByte)
+    (n : Int) (hn : 0 ≤ n)
+    (hlib : CerbLocation.isLibraryLocation loc = false)
+    (σ₀ : Mem)
+    (hcoh : Coh σ₀ ((Iris.Std.PartialMap.singleton idx
+      (SpikeCell.mk addr intTy bs0)) : SpikeHeapF SpikeCell))
+    (nsteps : Nat) (aids : Nat → Nat)
+    (hfuel : 4 + nsteps ≤ lemDefaultFuel)
+    (hfuel2 : 3 + nsteps ≤ lemDefaultFuel) :
+    let prog := loopProg loc ann ra mo bty xbty sbty (cellPtr idx addr) n
+    let rs := initial_core_run_state (collect_labeled_continuations_NEW
+      (prodFile prog))
+    (∀ r, driveJ rs aids nsteps
+      (procThread mainSym prog [fmapEmpty]) σ₀ ≠ .killed r) ∧
+    (driveJ rs aids nsteps
+      (procThread mainSym prog [fmapEmpty]) σ₀ ≠ .stuck) ∧
+    (∀ (v : value) (σ' : Mem),
+      driveJ rs aids nsteps
+        (procThread mainSym prog [fmapEmpty]) σ₀ = .done v σ' →
+      v = Vunit ∧ ∃ bs',
+        ((n = 0 ∧ bs' = bs0) ∨ (0 < n ∧ bs' = sevenBytes)) ∧
+        ∃ i a, cellPtr idx addr = cellPtr i a ∧
+          CellCoh σ' i ⟨a, intTy, bs'⟩) := by
+  intro prog rs
+  refine engine_adequacyJ (GF := GF)
+    (loop_labeledAt_production loc ann ra mo bty xbty sbty
+      (cellPtr idx addr) n)
+    (fun l params cont hl => by
+      obtain ⟨-, rfl⟩ := loopQ_inv loc ann ra mo bty xbty _ hl
+      exact loopBody_fragJ loc ann ra mo bty _ hlib)
+    prog fmapEmpty [] σ₀ _
+    (.save (loopBody_fragJ loc ann ra mo bty _ hlib)) hcoh
+    (fun v σ' => v = Vunit ∧ ∃ bs',
+      ((n = 0 ∧ bs' = bs0) ∨ (0 < n ∧ bs' = sevenBytes)) ∧
+      ∃ i a, cellPtr idx addr = cellPtr i a ∧ CellCoh σ' i ⟨a, intTy, bs'⟩)
+    ?_ nsteps aids
+    (by rw [show esize prog = 4 from rfl]; omega)
+    (fun l params cont hl => by
+      obtain ⟨-, rfl⟩ := loopQ_inv loc ann ra mo bty xbty _ hl
+      rw [show esize (loopBody loc ann ra mo bty (cellPtr idx addr)) = 3
+        from rfl]
+      omega)
+  intro inst
+  refine .trans ?_ (loop_wp_readout loc ann ra mo bty xbty (cellPtr idx addr)
+    n bs0 hn sbty)
+  refine (BigSepM.bigSepM_singleton).1.trans ?_
+  iintro Hpt
+  iapply (pointsToCell_iff _ _ _ _).mpr
+  iexists idx, addr
+  isplit
+  · ipureintro; rfl
+  · iexact Hpt
 
 end CerberusHeapLang

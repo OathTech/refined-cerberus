@@ -454,3 +454,58 @@ allocation success is a theorem. Recorded in
   as a checkable execution record) is unclaimed.
 - **The allocator-cursor resource** (above): the ghost-side create
   story for arbitrary configurations.
+
+## Phase 2 (2026-08-31): the while language — loops certified end-to-end
+
+Appended at S4 close (the two-phase arc,
+`2026-08-31_two-phase-arc-plan.md` + the [USER] acceptance
+amendment; slice records `2026-08-31_phase1-notes.md`,
+`…_phase2-s3-notes.md`, `…_phase2-s4-notes.md` are authoritative for
+the per-slice detail).
+
+The spike's fragment grew into a while language and the logic into
+a loop logic, coverage-preserving at every step (frozen-corpus
+statement diffs at each gate):
+
+- **Phase 1** restratified: the env joined the runtime tuple as
+  live state; rules moved to evaluated-operand (ACTION_EVAL)
+  phrasing; the corpus migrated onto a statement-stratified WP
+  (the classical label-context judgment, a package-local guarded
+  fixpoint via iris-lean's public Banach machinery).
+- **S3** landed the jump layer: the per-procedure label map in the
+  runtime tuple tied to `core_run_state.labeled` by a pure equation
+  (`LabeledAt` — the donor's `⌜Q = f_code⌝` in run-state form); the
+  global context-discarding `Erun` rule with the factor theorem's
+  jump disjunct; `Esave`/`Eif`/value-`Ecase` at the engine's
+  measured granularity; the certified pure-evaluator bridge; the
+  per-label invariant rule (no Löb) and the invariant+variant rule;
+  the jump-profile drive lane (`driveJ`, `engine_step_matchJ`,
+  `engine_adequacyJ`); THE COUNTER LOOP end-to-end.
+- **S4** closed the acceptance: the PURE-exit and load-ACTION_EVAL
+  steps, `Specified`-binder lets (Core's own unwrapping), certified
+  `PEarray_shift` pointer arithmetic, the interior-load axiom, and
+  THE ENV-MAP SEAM CLOSED (`Std.TransCmp` for the engine's symbol
+  order via its String×Nat lexicographic characterization — loop
+  invariants now carry `SymFrame` + a lookup law instead of
+  frame-shape pins). The acceptance exhibits: **fib**
+  (`fib_certified`, data-dependent invariant, result = the Lean-side
+  `fibSpec`) and **array-sum** (`array_sum_certified`, real pointer
+  walk + interior loads + index-partitioned invariant, result =
+  `vs.sum` with the array preserved). Termination accounting:
+  **`fib_certified_total`** — at the loop variant's step bound
+  `2·n + 4`, `driveJ` DELIVERS `fib n`, unconditionally (no fuel
+  hypotheses). Production tie: `LabeledAt` DERIVED from the shipped
+  `collect_labeled_continuations_NEW` at the production initial run
+  state (`fib_labeledAt_production`, `loop_labeledAt_production`),
+  with the counter loop re-exported at the derived tie
+  (`counter_loop_certified_production`).
+
+Phase-2 register additions (the README's divergence table is the
+current summary): the array pre-state is ONE allocation (the
+engine's provenance-checked loads make ∗-of-cells arrays unwalkable
+— C's object model, a forcing fact about Cerberus); PURE exits
+certified at `PEsym` shape; `Ewseq` and `Ecase`'s EVAL arm still
+out; LIST-REVERSE a registered stretch (not started); the
+production-face `.done` equation for a LOOP run is the named
+residual (the drive-lane step bound is its in-budget discharge,
+waiting on run-state-general DriverCollapse equations).

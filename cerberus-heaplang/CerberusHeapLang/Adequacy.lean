@@ -618,6 +618,48 @@ theorem drive_classifyJ {Q : LabelMap} {p : sym} {rs : core_run_state}
           have := hQsz l params cont hl
           omega
 
+/-! ## S4 — the termination-accounting primitives at the driveJ
+lane (the step-bound product's building blocks: one certified drive
+step per mirror step, and the value delivery; the fib exhibit's
+UNCONDITIONAL total theorem chains them by induction on the
+variant). -/
+
+/-- ONE certified drive step: wherever the mirror steps at a FragJ
+    configuration (labels tied), driveJ takes exactly that step. -/
+theorem driveJ_step {Q : LabelMap} {p : sym} {rs : core_run_state}
+    (hQ : LabeledAt rs p Q) (aids : Nat → Nat) (n : Nat)
+    {e e' : CoreExpr} {ev0 : Fmap sym value} {evs : List (Fmap sym value)}
+    {ρ' : EnvStack} {σ σ' : Mem}
+    (hf : FragJ e) (hsz : esize e ≤ lemDefaultFuel)
+    (hs : Step Q (e, ev0 :: evs, σ) (e', ρ', σ')) :
+    driveJ rs aids (n + 1) (procThread p e (ev0 :: evs)) σ =
+      driveJ rs (fun i => aids (i + 1)) n (procThread p e' ρ') σ' := by
+  rw [show driveJ rs aids (n + 1) (procThread p e (ev0 :: evs)) σ =
+    (match (step_ctx fmapEmpty σ spikeFile fmapEmpty 0
+        (none, procThread p e (ev0 :: evs))).map
+        (dischargeStep (aids 0) rs σ) with
+      | [.next th' σ'] => driveJ rs (fun i => aids (i + 1)) n th' σ'
+      | [.done v] => .done v σ
+      | [.killed r] => .killed r
+      | _ => .stuck) from rfl]
+  rw [driveJ_scrutinee, engine_step_matchJ (aids 0) hQ hf hsz hs]
+
+/-- Value delivery: driveJ at a bare value is PROGRAM-DONE, state
+    verbatim. -/
+theorem driveJ_done (p : sym) (rs : core_run_state) (aids : Nat → Nat)
+    (n : Nat) (v : value) (ρ : EnvStack) (σ : Mem) :
+    driveJ rs aids (n + 1) (procThread p (ofVal (.pure v)) ρ) σ =
+      .done v σ := by
+  rw [show driveJ rs aids (n + 1) (procThread p (ofVal (.pure v)) ρ) σ =
+    (match (step_ctx fmapEmpty σ spikeFile fmapEmpty 0
+        (none, procThread p (ofVal (.pure v)) ρ)).map
+        (dischargeStep (aids 0) rs σ) with
+      | [.next th' σ'] => driveJ rs (fun i => aids (i + 1)) n th' σ'
+      | [.done v] => .done v σ
+      | [.killed r] => .killed r
+      | _ => .stuck) from rfl]
+  rw [driveJ_scrutinee, engineOutcomesP_done]
+
 /-- ADEQUACY AT THE JUMP PROFILE (engine-only conclusion): a proved
     base-WP at the label-carrying tuple plus the seeded memory
     implies driveJ from the proc-carrying thread never kills, never

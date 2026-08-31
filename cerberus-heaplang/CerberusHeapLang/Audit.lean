@@ -311,6 +311,31 @@ info: 'CerberusHeapLang.array_sum_certified' depends on axioms: [propext, Classi
 -/
 #guard_msgs in #print axioms CerberusHeapLang.array_sum_certified
 
+-- Phase-2 S4 (2026-08-31): the termination-accounting export — fib
+-- TOTAL AND UNCONDITIONAL at the drive lane (the loop variant's
+-- step bound 2n+4 discharges every fuel hypothesis; driveJ DELIVERS
+-- fib n); and the PRODUCTION REGISTRATION TIE (LabeledAt derived
+-- from collect_labeled_continuations_NEW at the shipped initial run
+-- state — the boundary statement carries the declared temporal
+-- seam) with the counter loop re-exported at the derived tie.
+/--
+info: 'CerberusHeapLang.fib_certified_total' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms CerberusHeapLang.fib_certified_total
+
+/--
+info: 'CerberusHeapLang.fib_labeledAt_production' depends on axioms: [propext, runEffectful, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms CerberusHeapLang.fib_labeledAt_production
+
+/--
+info: 'CerberusHeapLang.counter_loop_certified_production' depends on axioms: [propext,
+ runEffectful,
+ Classical.choice,
+ Quot.sound]
+-/
+#guard_msgs in #print axioms CerberusHeapLang.counter_loop_certified_production
+
 /-! ## The exhaustive sweep (LAST — nothing declared below) -/
 
 open Lean in
