@@ -212,3 +212,10 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   RefinedC port is gated on the arc's fresh re-audit returning no
   High findings. Supersedes the orchestrator's proposal to fold
   F-03/F-04 remediation into the port kickoff.
+- **2026-08-31 [USER] Foundations arc run authorization**: "launch
+  it on a branch. You can run long-cycle on this, get it done and
+  then we'll check in" — phases proceed sequentially on the branch
+  without per-phase pauses; the check-in is at arc end (acceptance
+  suite + fresh re-audit). The Phase-1 design-decision record is
+  still written operator-visible in the arc docs but does not
+  block.
