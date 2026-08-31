@@ -67,6 +67,7 @@ import CerberusHeapLang.ProdExhibit
 import CerberusHeapLang.LoopExhibit
 import CerberusHeapLang.FibExhibit
 import CerberusHeapLang.ArrayExhibit
+import CerberusHeapLang.ListRevExhibit
 import CerberusHeapLang.StmtProbe
 
 namespace CerberusHeapLang.Audit
@@ -335,6 +336,25 @@ info: 'CerberusHeapLang.counter_loop_certified_production' depends on axioms: [p
  Quot.sound]
 -/
 #guard_msgs in #print axioms CerberusHeapLang.counter_loop_certified_production
+
+-- List-reverse arc phase A (2026-08-31): THE CANONICAL EXHIBIT —
+-- in-place list reversal over one-allocation two-field nodes, the
+-- honest null encoding + the engine's own PtrEq memop as the null
+-- test, interior next-field loads AND stores by in-allocation
+-- arithmetic, `isList` by structural recursion, the textbook
+-- blockSpecs_intro proof, certified through the engine lane
+-- (driveJ); conclusion: never killed/stuck, any delivered value is
+-- a pointer whose FINAL-heap chain is xs.reverse. Plus the concrete
+-- seeded 3-node demonstration. Cones exactly the trio.
+/--
+info: 'CerberusHeapLang.list_reverse_certified' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms CerberusHeapLang.list_reverse_certified
+
+/--
+info: 'CerberusHeapLang.list_reverse_demo' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms CerberusHeapLang.list_reverse_demo
 
 /-! ## The exhaustive sweep (LAST — nothing declared below) -/
 
