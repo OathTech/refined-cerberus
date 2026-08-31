@@ -261,3 +261,114 @@ production equation is still open (Phase 5); the interior-rule
 modularity defect (F-04) and list-theorem strength (F-06) are
 untouched (Phases 2/4). This slice makes the repository say so, in
 one authoritative place, with a gate.
+
+## Phase 1 — S1a, the architecture probe (this slice)
+
+Worker slice, [AGENT] execution of the S1a probe brief (arc plan
+Phase 1; kill criteria pre-registered there). Deliverables: the
+DESIGN RECORD `docs/2026-08-31_phase1-design-record.md` (the
+[USER] Phase-1 checkpoint document — unified MachineCtx
+configuration, alternatives rejected, per-construct two-sidedness,
+findings, migration prescription) and the probe implementation
+`CerberusHeapLang/Phase1Probe/{Machine,Match,Lang,Adequacy}.lean`
+(+ umbrella), PROBE-ONLY: lives alongside the existing cones,
+consumed by nothing exported; S1b replaces the old cones with this
+shape and retires the probe modules.
+
+### What the probe proved (summary; the design record is the account)
+
+- `MachineCtx` (11 explicit fields = every immutable of the engine
+  configuration) × unchanged live state; frozen profiles =
+  instances (`spikeCtx`/`procCtx`, rfl ties); label map DERIVED
+  from the context — the `LabeledAt` tie hypothesis disappears.
+- `StepU M` re-indexes store/run/case; ONE cone `FragU` (case
+  JOINS it — F-01) with one closure theorem; the existing `DecompJ`
+  is already the single decomposition (S1b deletes the P-variants).
+- Characterization: store TWO-SIDED at any context
+  (`engine_step_matchU` + `engine_complete_storeU`); case
+  TWO-SIDED (new `step_ctx_case_illtyped` + `engine_complete_caseU`
+  — the RED row's engine pair now exists); run ONE-SIDED
+  (match-given-step, the direction adequacy consumes;
+  audit-sanctioned, documented in the probe manifest row).
+- Language instance over `CoreRtU = (e, ρ, M)`; `primStep` = the
+  unified relation; Heap/ghost layer shared unchanged; `wp_storeU`
+  re-proves the store small axiom near-verbatim.
+- Adequacy chain re-derived at any context (`spike_step_adequacyU`
+  → `drive_classifyU` → `engine_adequacyU`); ONE drive `driveU M`
+  with `drive`/`driveJ` as proved instances (`driveU_spike`,
+  `driveU_procJ`).
+- THE ORACLE (K1): `exhibitB_semantic_unified` re-proves the
+  exported `exhibitB_semantic` statement VERBATIM through the
+  unified route — zero statement diff.
+- ECASE regression: `case_regression_engine` (any SeqWF context) /
+  `case_regression_drive` (over the OLD `drive`) — an engine-facing
+  theorem whose program executes the value-scrutinee case rule.
+- K4: `scripts/phase1_probe_manifest.lean` enumerates the manifest
+  rows FROM `FragU`'s constructor list (no hand row list); plant
+  run recorded below.
+
+### Kill assessment
+
+K1/K2/K3/K4 all NOT TRIGGERED — details + evidence: design record
+§7. Registered probe restrictions (explicit hypotheses, named
+movers, design record §5): `M.extern = fmapEmpty` on the run
+characterization (S1b threads extern through the evaluator bridge);
+`SeqWF` (permanent — the value protocol reads stack/parent); the
+`esize`-has-no-Ecase-arm finding (S1b measure extension, flagged as
+statement-change class (E) for operator sanction).
+
+### Audit-sweep coverage + docs tallies
+
+`Audit.lean` gained `import CerberusHeapLang.Phase1Probe` — without
+it the probe's constants would have escaped the in-build sweep (no
+internal trust gaps). New sweep tallies, quoted verbatim from this
+checkout's green build (README "How to build" + walkthrough §6
+expected-tail blocks updated to exactly this):
+
+```
+info: CerberusHeapLang/Audit.lean:385:0: CerberusHeapLang axiom sweep: 827 theorems BOUNDED by the declared upper bounds (40 in the production-entry boundary modules, bounded by trio + runEffectful; all others bounded by the trio; exact cones pinned only for the curated headline list above)
+info: CerberusHeapLang/Audit.lean:385:0: CerberusHeapLang banned-axiom sweep: 1670 constants of every kind checked; sorryAx/ofReduceBool/ofReduceNat absent from all cones
+Build completed successfully (439 jobs).
+```
+
+All probe theorems are trio-bounded (none in a boundary module).
+
+### K4 plant run (this checkout, reverted)
+
+The `FragU.case_value → row` mapping deleted from
+`scripts/phase1_probe_manifest.lean`; run:
+
+```
+scripts/phase1_probe_manifest.lean:82:0: error: probe manifest FAIL: cone constructor CerberusHeapLang.FragU.case_value has NO manifest row mapping — the cone was extended without the manifest (fail-closed by design; add the row).
+```
+
+Reverted; green run enumerates 5 cone constructors and emits the
+table (reproduced in full by running the script).
+
+### Signature discipline (probe additions only)
+
+Pre-snapshot regenerated before probe work and diffed against the
+committed baseline:
+
+```
+$ diff -q docs/2026-08-31_listrev-signatures-post.txt \
+    /tmp/claude-1000/phase1-probe-signatures-pre.txt && echo "PRE == COMMITTED BASELINE"
+PRE == COMMITTED BASELINE
+```
+
+Post-snapshot diff vs pre: 0 lines removed or changed, 1496 lines
+added (163 declarations, all `Phase1Probe`/`*U`/`MachineCtx` —
+derived tally from the diff; the post snapshot is committed as
+`docs/2026-08-31_phase1-probe-signatures-post.txt`). The existing
+corpus's statement surface is untouched; the one re-proved export
+(`exhibitB_semantic_unified`) is a NEW name with the OLD statement
+body, per the probe charter (the migration, not the probe, replaces
+the old proofs).
+
+### What S1a does NOT claim
+
+The migration is unpaid: the exported corpus still runs on the old
+cones; only exhibit (b)'s semantic statement has a unified-route
+proof; Ecase's manifest row stays LOCAL RULE ONLY until S1b lands
+the full row (wps consumer + binder patterns + esize extension).
+The S1b/S1c prescription and slice estimate: design record §8.

@@ -831,9 +831,9 @@ boundary and checks every constant of every kind for
 `sorryAx`/`ofReduceBool`/`ofReduceNat`. Expected tail:
 
 ```
-info: CerberusHeapLang/Audit.lean:384:0: CerberusHeapLang axiom sweep: 755 theorems BOUNDED by the declared upper bounds (40 in the production-entry boundary modules, bounded by trio + runEffectful; all others bounded by the trio; exact cones pinned only for the curated headline list above)
-info: CerberusHeapLang/Audit.lean:384:0: CerberusHeapLang banned-axiom sweep: 1499 constants of every kind checked; sorryAx/ofReduceBool/ofReduceNat absent from all cones
-Build completed successfully (434 jobs).
+info: CerberusHeapLang/Audit.lean:385:0: CerberusHeapLang axiom sweep: 827 theorems BOUNDED by the declared upper bounds (40 in the production-entry boundary modules, bounded by trio + runEffectful; all others bounded by the trio; exact cones pinned only for the curated headline list above)
+info: CerberusHeapLang/Audit.lean:385:0: CerberusHeapLang banned-axiom sweep: 1670 constants of every kind checked; sorryAx/ofReduceBool/ofReduceNat absent from all cones
+Build completed successfully (439 jobs).
 ```
 
 What to expect around that tail, so nothing surprises you:
@@ -851,7 +851,7 @@ What to expect around that tail, so nothing surprises you:
   line, a missing audit tail, or a nonzero exit.
 - Timing: with the package already built, `lake build` replays
   from cache in about a second. A from-scratch elaboration of this
-  package's 434 jobs is a long build — expect minutes to tens of
+  package's 439 jobs is a long build — expect minutes to tens of
   minutes depending on the machine (no pinned cold timing is
   recorded). The setup script itself is offline (it clones and
   primes the workspace from the local repository, prebuilt
