@@ -303,10 +303,9 @@ theorem storeM_success (σ : Mem) (id : Int) (c : SpikeCell)
     rw [hmvb] at this
     exact this
   subst hfpm' hbs'
-  have hself : ({ σ with funptrmap := σ.funptrmap } : Mem) = σ := rfl
   unfold CerbMem.storeM applyMemM
   simp only [hst.compat, Bool.not_true, Bool.false_eq_true, if_false, cellPtr,
-    hal, hbounds, hro, hatomic, hmvb, hself]
+    hal, hbounds, hro, hatomic, hmvb]
 
 /-- Successful load: with a Coh-backed cell that is not a _Bool trap,
     `loadM` (CerbMem.lean:1586) takes the active path, returns the

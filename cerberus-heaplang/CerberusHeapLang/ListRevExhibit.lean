@@ -51,8 +51,16 @@ by its small axiom or rule (`wps_seq_sym` + `wps_memop_eval` +
 `wps_memop_ptreq`, `wps_if_*`, `wps_seq_spec` + `wps_load_eval` +
 the interior load axiom, `wps_seq` + `wps_store_eval` + the interior
 STORE axiom, `wps_run`); no monolithic unfolding. Certified through
-the engine lane (`driveJ`, like fib), then the TOTAL export at the
-variant's step bound (11·|xs| + 6).
+the engine lane (`driveJ`, like fib): `list_reverse_certified` (the
+general seeded-chain statement) + `list_reverse_demo` (the concrete
+3-node instance). REGISTERED RESIDUAL (best-effort per the arc plan,
+non-gating): the TOTAL export at the variant's step bound is NOT
+delivered — unlike fib's state-free drive lane, each iteration's
+steps depend on `applyMemM` success at the current memory, so the
+unconditional bound needs a pure drive-invariant lane threading
+ChainAt-style heap facts through the 11-steps-per-iteration chain
+(the named mover; the bound would be 11·|xs| + 6). Record:
+docs/2026-08-31_listrev-notes.md §Findings.
 -/
 import CerberusHeapLang.ArrayExhibit
 
@@ -250,7 +258,7 @@ theorem storeM_interior_nodePtr (σ : Mem) (id : Int) (c : SpikeCell)
   have hself : ({ σ with funptrmap := σ.funptrmap } : Mem) = σ := rfl
   unfold CerbMem.storeM applyMemM
   simp only [hcompat, Bool.not_true, Bool.false_eq_true, if_false, cellPtr,
-    hal, hbounds, hro, hatomic, hmvb, hself]
+    hal, hbounds, hro, hatomic, hmvb]
   rfl
 
 /-- Pointwise characterization of the splice. -/
@@ -452,7 +460,7 @@ theorem bytesToInt_ptrImg_cell (id a : Int) (h0 : 0 ≤ a) (h1 : a < 2 ^ 64) :
   congr 1
   obtain ⟨A, rfl⟩ : ∃ A : Nat, a = (A : Int) := ⟨a.toNat, by omega⟩
   simp only [Int.shiftLeft_eq]
-  simp only [Nat.reduceMul, Nat.reducePow, Int.reducePow]
+  simp only [Nat.reduceMul, Int.reducePow]
   have h64 : A < 72057594037927936 * 256 := by
     have h2 : (2 : Nat) ^ 64 = 72057594037927936 * 256 := rfl
     omega

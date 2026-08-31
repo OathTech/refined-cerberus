@@ -28,7 +28,12 @@ WP (the classical label-context judgment), per-label invariant and
 invariant+variant loop rules, and LOOP EXHIBITS certified through
 the real engine end-to-end (the counter loop, iterative fib, and an
 array-sum walk; fib additionally TOTAL and unconditional at the
-drive lane).
+drive lane). The list-reverse arc (phase A) adds THE CANONICAL
+HEAP-LOGIC EXHIBIT: in-place linked-list reversal over
+one-allocation two-field nodes, with the engine's own null encoding
+and `PtrEq` memop as the null test, a structurally recursive
+`isList` representation predicate, and a textbook-compositional
+proof — the Reynolds/O'Hearn shape on the real engine.
 
 **What this is NOT**: the RefinedC port. That development — the
 Lean-native RefinedC-architecture verifier — lives alongside, in
@@ -59,9 +64,10 @@ fail the audit — a build that weakens any of this fails.
 
 ## Scope of the claims
 
-THE LOOP CLAIMS (phase 2). `counter_loop_certified`
-(LoopExhibit.lean), `fib_certified` (FibExhibit.lean) and
-`array_sum_certified` (ArrayExhibit.lean) certify authored Core
+THE LOOP CLAIMS (phase 2 + the list-reverse arc).
+`counter_loop_certified` (LoopExhibit.lean), `fib_certified`
+(FibExhibit.lean), `array_sum_certified` (ArrayExhibit.lean) and
+`list_reverse_certified` (ListRevExhibit.lean) certify authored Core
 LOOPS — save entry, big-step guards, context-discarding back edges,
 and (array-sum) interior loads with real pointer arithmetic —
 against the engine's own `{step_ctx → sequential discharge}` loop
@@ -74,8 +80,15 @@ in-budget fuel hypotheses — and, for `array_sum_certified`, stated
 pre-state hypotheses: the coherence-seeded one-allocation array
 (`hcoh`), per-element decode premises (`hdec`, rfl-dischargeable at
 concrete engine-serialized bytes), and size/location side conditions
-(`hsz`/`hlib`) — except `fib_certified_total`, which is
-TOTAL AND UNCONDITIONAL: at the loop variant's step bound `2·n + 4`,
+(`hsz`/`hlib`); `list_reverse_certified` is stated over a SEEDED
+INPUT CHAIN (`SeedChain` — one disjoint one-allocation node cell per
+element, engine-serialized field images, per-node machine-address WF
+`0 < a < 2^64`) and concludes that any delivered value is a POINTER
+whose FINAL-heap chain is `xs.reverse` (`ChainAt` — per-node
+`CellCoh` + field decode facts about the final `MemState`; the
+concrete `list_reverse_demo` instantiates a 3-node [1,2,3] chain
+with every decode fact discharged by `rfl`) — except
+`fib_certified_total`, which is TOTAL AND UNCONDITIONAL: at the loop variant's step bound `2·n + 4`,
 `driveJ` DELIVERS `fib n`, with no fuel hypotheses at all. Scope
 honesty for all of them: the drive lane is the sequential driver's
 loop projected to (thread_state, MemState) with the run state a
@@ -114,9 +127,11 @@ quantifies (untracked cells outside it are not claimed preserved by
 the general statements; the production equation does pin the full
 final `layout_state`). Everything is single-threaded, over the
 certified fragment only (`store`/`load`/`create`, strong sequencing
-`Esseq` at wildcard and `Specified`-binder patterns, `Esave`/`Eif`/
-`Erun`, value-scrutinee `Ecase`, `PEsym`-shaped pure exits, the
-`Load0` operand-evaluation step, `PEval`/`PEsym`/integer-`PEop`/
+`Esseq` at wildcard, `Specified`-binder and plain-symbol-binder
+patterns, `Esave`/`Eif`/`Erun`, value-scrutinee `Ecase`,
+`PEsym`-shaped pure exits, the `Load0` AND `Store0`
+operand-evaluation steps, the `PtrEq` memop with its
+operand-evaluation step, `PEval`/`PEsym`/integer-`PEop`/
 `PEarray_shift` operands, plus the run-time annotation residue), and the
 logic has no `wp_create` small axiom (registered:
 ProdEntry.lean:42-53 — a sound one needs the allocator-cursor
@@ -138,7 +153,9 @@ or growth paths. The register (each entry's home is authoritative):
 | `Ewseq` still outside the fragment; `Ecase`'s EVAL arm (non-value scrutinees) unmirrored | Mechanical per-construct extension, path named | `Step.lean` header; report "Honestly open" |
 | PURE exits certified at `PEsym` shape only (general `PePure` exits are a bounded matcher extension) | Extend `stepDischarge_pure_sym` per-constructor when needed | `Soundness.lean` (S4); S4 slice notes |
 | The array exhibit's pre-state is ONE allocation (not the amendment's ∗-of-cells): the engine's loads bounds-check against the pointer's PROVENANCE allocation and `arrayShiftPtrval` preserves provenance, so distinct-allocation "arrays" are not walkable in the engine — C's object model | Forcing fact about Cerberus, recorded; per-element structure lives in the index-partitioned invariant + decode premises | `ArrayExhibit.lean` header; S4 slice notes |
-| LIST-REVERSE: registered STRETCH, not started (null encoding + node encoding + recursive representation predicate, each priced small) | Named prerequisites in the acceptance amendment | arc plan amendment; S4 slice notes |
+| The pointer-test memop coverage is `PtrEq` only; the family (PtrNe/Lt/…) and eqPtrval's differing-provenance ND fork are fail-closed ABSENCES of a mirror step (the fork is a real `msum`, CerbMem.lean:1753 — enumerated by the exhaustive runners, not single-layer) | Mechanical per-memop extension (dischargeStep arm + Step rule + wps axiom) | `Soundness.lean` dischargeStep memop arm; listrev notes |
+| The plain-symbol binder beta is mirrored at BARE values only (`Step.sseq_sym_pure`; no LETS-ANNOT variant) | The fragment's only sym-binder producer is the memop protocol, which delivers bare values (step_ctx's MEMOP continuation — `mk_pure_e`, no Eannot residue); the annot variant is a mechanical extension | `Step.lean` (the rule's docstring); listrev notes |
+| List-reverse TOTAL export (variant → unconditional driveJ bound, the fib pattern) not delivered: the drive induction must thread a pure heap invariant through the per-iteration memory operations (fib's lane is state-free) | The pure drive-invariant lane is the named mover; the per-iteration step count is fixed (11), so the bound would be 11·n + 6 | listrev notes §Findings |
 | Production-face loop export (`runND` equation for a loop run) | The DriverCollapse scheduler equations are phase-1-profile-pinned; the drive-lane step bound (`fib_certified_total`) is the in-budget discharge waiting for it | `ProdEntry.lean` (S4 section); S4 slice notes |
 | Fuel side condition (no fuel parametricity) | Fuel-irrelevance theorem for `get_ctx` or graceful driver exhaustion would remove it | report "What remains"; `ProdEntry.lean` header |
 | No `wp_create` in the logic | Allocator-cursor resource in the state interpretation (registered growth step) | `ProdEntry.lean:42-53`; report D26 |
@@ -167,9 +184,9 @@ qualifiers above — they are part of the theorem statements. Expected
 tail:
 
 ```
-info: CerberusHeapLang/Audit.lean:342:0: CerberusHeapLang axiom sweep: 643 theorems within the declared boundary (40 in the production-entry boundary modules, trio + runEffectful; all others trio-exact)
-info: CerberusHeapLang/Audit.lean:342:0: CerberusHeapLang banned-axiom sweep: 1319 constants of every kind checked; sorryAx/ofReduceBool/ofReduceNat absent from all cones
-Build completed successfully (433 jobs).
+info: CerberusHeapLang/Audit.lean:362:0: CerberusHeapLang axiom sweep: 755 theorems within the declared boundary (40 in the production-entry boundary modules, trio + runEffectful; all others trio-exact)
+info: CerberusHeapLang/Audit.lean:362:0: CerberusHeapLang banned-axiom sweep: 1499 constants of every kind checked; sorryAx/ofReduceBool/ofReduceNat absent from all cones
+Build completed successfully (434 jobs).
 ```
 
 Or run both packages plus the grep gate: `scripts/test_unit.sh` from
@@ -188,6 +205,8 @@ import CerberusHeapLang
 #print axioms CerberusHeapLang.fib_certified
 #print axioms CerberusHeapLang.fib_certified_total
 #print axioms CerberusHeapLang.array_sum_certified
+#print axioms CerberusHeapLang.list_reverse_certified
+#print axioms CerberusHeapLang.list_reverse_demo
 #print axioms CerberusHeapLang.exhibitA_prod
 #print axioms CerberusHeapLang.counter_loop_certified_production
 EOF
@@ -202,6 +221,8 @@ Observed output (2026-08-31, this checkout):
 'CerberusHeapLang.fib_certified' depends on axioms: [propext, Classical.choice, Quot.sound]
 'CerberusHeapLang.fib_certified_total' depends on axioms: [propext, Classical.choice, Quot.sound]
 'CerberusHeapLang.array_sum_certified' depends on axioms: [propext, Classical.choice, Quot.sound]
+'CerberusHeapLang.list_reverse_certified' depends on axioms: [propext, Classical.choice, Quot.sound]
+'CerberusHeapLang.list_reverse_demo' depends on axioms: [propext, Classical.choice, Quot.sound]
 'CerberusHeapLang.exhibitA_prod' depends on axioms: [propext, runEffectful, Classical.choice, Quot.sound]
 'CerberusHeapLang.counter_loop_certified_production' depends on axioms: [propext,
  runEffectful,
@@ -219,7 +240,7 @@ production-entry statements, which additionally carry
 
 | Module | Contents | Headline |
 |--------|----------|----------|
-| `Step.lean` | The fragment's mirror small-step over the ENGINE's generated AST/state types (values, `store`/`load`/`create`, strong sequencing at wildcard and `Specified`-binder patterns, `Esave`/`Eif`/`Ecase`, the global context-discarding `Erun`, pure/operand evaluation, the annotation residue; the runtime tuple carries the live env stack and the per-procedure label map) — hand-written, zero authority until certified | `Step` |
+| `Step.lean` | The fragment's mirror small-step over the ENGINE's generated AST/state types (values, `store`/`load`/`create`, the `PtrEq` memop, strong sequencing at wildcard, `Specified`-binder and plain-symbol-binder patterns, `Esave`/`Eif`/`Ecase`, the global context-discarding `Erun`, pure/operand evaluation, the annotation residue; the runtime tuple carries the live env stack and the per-procedure label map) — hand-written, zero authority until certified | `Step` |
 | `Heap.lean` | Points-to over the engine's memory state via iris-lean GenHeap (allocation-rooted byte-list cells); the memM-level store/load facts | `pointsToCell` (`↦c`), `storeM_success`, `loadM_success` |
 | `Lang.lean` | The iris-lean `Language` instance over Step (evaluation contexts, wp_bind for real `Esseq`) | `instance : Language CoreExpr Mem Empty SpikeVal` |
 | `EnvLaws.lean` | The env-map seam, closed (S4): lawfulness of the engine's symbol order (`Std.TransCmp` via the String×Nat lexicographic characterization) and the lookup-after-add law over reachable frames — loop invariants carry `SymFrame` instead of frame-shape pins | `envAdd_lookup` |
@@ -231,6 +252,7 @@ production-entry statements, which additionally carry
 | `LoopExhibit.lean` | THE FIRST LOOP (S3): the counter loop — save entry, real `x > 0` guard, a store under the loop, the context-discarding back edge — certified end-to-end through `driveJ` with a data-dependent post | `counter_loop_certified` |
 | `FibExhibit.lean` | ACCEPTANCE EXHIBIT 1 (S4): iterative two-accumulator fib with the data-dependent invariant `a = fib i ∧ b = fib (i+1)`; partial via `engine_adequacyJ`, and TOTAL AND UNCONDITIONAL at the variant's step bound | `fib_certified`, `fib_certified_total` |
 | `ArrayExhibit.lean` | ACCEPTANCE EXHIBIT 2 (S4): the array-sum walk — real pointer arithmetic, operand-evaluated loads, interior reads of the seeded array allocation, the `Specified`-binder unwrap, the index-partitioned invariant; the array preserved in the conclusion | `array_sum_certified` |
+| `ListRevExhibit.lean` | THE CANONICAL EXHIBIT (list-reverse arc, phase A): in-place reversal of a linked list of one-allocation two-field nodes — the honest null encoding + the engine's own `PtrEq` memop as the null test (the null/pointer byte ROUND TRIPS proved against repr/abst), interior next-field loads AND stores by in-allocation arithmetic, `isList` by plain structural recursion, the textbook `blockSpecs_intro` proof with invariant `isList prev reversed ∗ isList cur rest`; conclusion: any delivered value is a pointer whose final-heap chain is `xs.reverse` | `list_reverse_certified`, `list_reverse_demo` |
 | `DriverCollapse.lean` | The production scheduler/ND/readout collapsed onto the demo's drive loop — proved from the driver's OWN round functions; entirely trio-exact | `prod_loop_done`, `driver2_done`, `finalize_done` |
 | `ProdEntry.lean` | Cold start from the SHIPPED `initial_driver_state` (errno allocated by the real allocator) + the production-entry theorem; S4: the REGISTRATION TIE — `LabeledAt` derived from the shipped `collect_labeled_continuations_NEW` for the authored loop programs, and the counter loop re-exported at the derived tie | `sem_triple_prod`, `prod_run_eq`, `fib_labeledAt_production`, `counter_loop_certified_production` |
 | `ProdExhibit.lean` | The demonstration: a self-contained program (create/store/load) run through the production pipeline delivers 7 with the exact final bytes | `exhibitA_prod` |
