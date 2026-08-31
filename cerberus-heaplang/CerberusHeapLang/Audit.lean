@@ -63,6 +63,7 @@ import Lean
 import CerberusHeapLang.Rules
 import CerberusHeapLang.Exhibit
 import CerberusHeapLang.ProdExhibit
+import CerberusHeapLang.StmtProbe
 
 namespace CerberusHeapLang.Audit
 
@@ -201,6 +202,28 @@ info: 'CerberusHeapLang.sem_triple_prod' depends on axioms: [propext, runEffectf
 info: 'CerberusHeapLang.exhibitA_prod' depends on axioms: [propext, runEffectful, Classical.choice, Quot.sound]
 -/
 #guard_msgs in #print axioms CerberusHeapLang.exhibitA_prod
+
+-- S0 jump-kernel probe (2026-08-31, arc plan §Phase 1): the
+-- statement-stratified WP over the TOY (StmtProbe — no engine
+-- imports, no boundary). Pinned: the jump-aware sequencing lemma
+-- (the readiness R1 obligation), the Löb-tied elimination into the
+-- base WP (the donor wps_block_rec analog), and the toy-loop
+-- demonstration (back-edge + per-label invariant + live env).
+-- Each cone exactly the trio.
+/--
+info: 'CerberusHeapLang.StmtProbe.wps_seq' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms CerberusHeapLang.StmtProbe.wps_seq
+
+/--
+info: 'CerberusHeapLang.StmtProbe.wps_sound' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms CerberusHeapLang.StmtProbe.wps_sound
+
+/--
+info: 'CerberusHeapLang.StmtProbe.demo_loop' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms CerberusHeapLang.StmtProbe.demo_loop
 
 /-! ## The exhaustive sweep (LAST — nothing declared below) -/
 
