@@ -964,6 +964,44 @@ theorem triple_seq [SpikeGS hlc GF] {P Q R : IProp GF}
 /-- signed int (the recon's probe type). -/
 def intTy : ctype := Ctype [] (.Basic (.Integer (.Signed .Int_)))
 
+/-- Successful INTERIOR int load (S4, the array exhibit): with a
+    Coh-backed cell whose type is big enough, `loadM` at `int` and an
+    interior offset takes the active path, reads the byte SLICE, and
+    returns the state unchanged. The trap arm is unreachable at the
+    non-Bool int type. -/
+theorem loadM_interior_int (σ : Mem) (id : Int) (c : SpikeCell)
+    (off : Nat) (loc : CerbLocation.Loc)
+    (hcoh : CellCoh σ id c)
+    (hbound : off + CerbMem.sizeofCtype intTy ≤ CerbMem.sizeofCtype c.ty) :
+    applyMemM (CerbMem.loadM loc intTy (cellPtr id (c.addr + (off : Int)))) σ =
+      some ((.FP .R (c.addr + (off : Int)) (CerbMem.sizeofCtype intTy),
+        CerbMem.reconstructValue σ.lastUsedUnionMembers σ.funptrmap
+          (c.addr + (off : Int)) intTy
+          ((c.bytes.drop off).take (CerbMem.sizeofCtype intTy))), σ) := by
+  obtain ⟨al, hal, hbase, hsize, hty, hro⟩ := hcoh.alloc
+  have hbounds : CerbMem.isInBounds al (c.addr + (off : Int))
+      (CerbMem.sizeofCtype intTy) = true := by
+    simp only [CerbMem.isInBounds, hbase, hsize]
+    simp
+    omega
+  have hatomic : CerbMem.isAtomicMemberAccess al intTy
+      (c.addr + (off : Int)) = false := by
+    unfold CerbMem.isAtomicMemberAccess
+    rw [hty]
+    have := hcoh.nonAtomic
+    rcases c with ⟨ca, ⟨q, t⟩, cb⟩
+    cases t <;> simp_all [atomicTy]
+  have hread : CerbMem.readBytesFrom σ (c.addr + (off : Int))
+      (CerbMem.sizeofCtype intTy) = (c.bytes.drop off).take
+        (CerbMem.sizeofCtype intTy) :=
+    readBytesFrom_sub σ c.addr (CerbMem.sizeofCtype c.ty) c.bytes
+      hcoh.bytes off (CerbMem.sizeofCtype intTy) hbound
+  unfold CerbMem.loadM applyMemM
+  simp only [cellPtr, hcoh.dead, Bool.false_eq_true, if_false, hal, hbounds,
+    Bool.not_true, hatomic, hread]
+  rfl
+
+
 /-- The Core value `Specified(7) : loaded integer`. -/
 def sevenVal : value :=
   Vloaded (LVspecified (OVinteger (CerbMem.integerIval 7)))

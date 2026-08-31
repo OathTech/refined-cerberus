@@ -1264,6 +1264,94 @@ theorem wps_load {Ψ : SpikeVal → EnvStack → IProp GF}
     · ipureintro; rfl
     · iexact Hpt
 
+/-- INTERIOR int load small axiom (S4, the array exhibit): loading
+    at `int` from an interior offset of an owned cell whose type is
+    big enough delivers the DECODE OF THE BYTE SLICE; the cell rides
+    through untouched. The decode-independence premise (`hdec`) is
+    the interior analog of `CellCoh.dec_indep` — the exhibit
+    discharges it per element from its seeded byte images. Stated
+    over the raw ghost `pointsTo` (the cell's id and base address
+    explicit — the interior pointer is `cellPtr id (a + off)`). -/
+theorem wps_load_interior {Ψ : SpikeVal → EnvStack → IProp GF}
+    (loc : CerbLocation.Loc) (ann : core_run_annotation)
+    (aty : ctype) (id a : Int) (off : Nat) (mo : memory_order)
+    (dq : DFrac) (bs : List CerbMem.AbsByte) (ρ : EnvStack)
+    {mv : CerbMem.MemValue}
+    (hbound : off + CerbMem.sizeofCtype intTy ≤ CerbMem.sizeofCtype aty)
+    (hdec : ∀ lum fpm, CerbMem.reconstructValue lum fpm (a + (off : Int))
+      intTy ((bs.drop off).take (CerbMem.sizeofCtype intTy)) = mv) :
+    iprop(pointsTo (GF := GF) id dq (SpikeCell.mk a aty bs) ∗
+      (∀ fp, pointsTo id dq (SpikeCell.mk a aty bs) -∗
+        Ψ (SpikeVal.annot [DA_pos [] fp] ((valueFromMemValue mv).2)) ρ)) ⊢
+      wps Q Ls Ψ (loadExpr loc ann intTy (cellPtr id (a + (off : Int))) mo)
+        ρ := by
+  rw [(wps_unfold
+    (e := loadExpr loc ann intTy (cellPtr id (a + (off : Int))) mo)).to_eq]
+  simp only [wps.pre,
+    show toVal (loadExpr loc ann intTy (cellPtr id (a + (off : Int))) mo) =
+      none from rfl,
+    show jumpRedex? (loadExpr loc ann intTy
+      (cellPtr id (a + (off : Int))) mo) = none from rfl]
+  iintro ⟨Hpt, HΨ⟩ %σ₁ %ns %obs %obs' %nt Hσ
+  icases (stateInterp_iff σ₁ ns (obs ++ obs') nt).mp $$ Hσ with ⟨%m, %Hcoh, Hh⟩
+  ihave %Hget : ⌜Iris.Std.PartialMap.get? m id = some (SpikeCell.mk a aty bs)⌝
+      $$ [Hh Hpt]
+  · ihave >%_ := genHeap_valid $$ [$Hh $Hpt]
+    itrivial
+  have hcell : CellCoh σ₁ id ⟨a, aty, bs⟩ := Hcoh.cells id _ Hget
+  have hrun := loadM_interior_int σ₁ id ⟨a, aty, bs⟩ off loc hcell hbound
+  rw [hdec σ₁.lastUsedUnionMembers σ₁.funptrmap] at hrun
+  iapply fupd_mask_intro Std.LawfulSet.empty_subset
+  iintro Hclose
+  isplitr
+  · ipureintro
+    exact ⟨[], ⟨_, _, _⟩, _, [], ⟨Step.load_canonical hrun, rfl, rfl⟩⟩
+  inext
+  iintro %r %σ₂ %eₜ %Hstep Hcred
+  obtain ⟨hstep, hlbl, rfl⟩ := Hstep
+  obtain ⟨fp', mval', σ'', hmem', hout⟩ := hstep.load_inv
+  rw [hrun] at hmem'
+  obtain ⟨⟨rfl, rfl⟩, rfl⟩ :
+      (fp' = CerbMem.Footprint.FP .R (a + (off : Int))
+        (CerbMem.sizeofCtype intTy) ∧ mv = mval') ∧ σ₁ = σ'' := by
+    have h := Option.some.inj hmem'.symm
+    exact ⟨⟨congrArg (fun p => p.1.1) h,
+      (congrArg (fun p => p.1.2) h).symm⟩,
+      (congrArg Prod.snd h).symm⟩
+  obtain ⟨re, rρ, rQ⟩ := r
+  simp only at hlbl
+  obtain rfl : Q = rQ := hlbl.symm
+  obtain ⟨hre, hrρ, hσ⟩ : re = Expr [] (Eannot
+        [DA_pos [] (CerbMem.Footprint.FP .R (a + (off : Int))
+          (CerbMem.sizeofCtype intTy))]
+        (Expr [] (Epure (Pexpr [] () (PEval (valueFromMemValue mv).2))))) ∧
+      rρ = ρ ∧ σ₂ = σ₁ := by
+    simpa [Prod.mk.injEq] using hout
+  subst hre
+  obtain rfl : ρ = rρ := hrρ.symm
+  obtain rfl : σ₁ = σ₂ := hσ.symm
+  imod Hclose with -
+  imodintro
+  isplitl [Hh]
+  · iapply (stateInterp_iff _ _ _ _).mpr
+    iexists m
+    isplitr [Hh]
+    · ipureintro
+      exact Hcoh
+    · iexact Hh
+  · rw [show Expr ([] : List annot) (Eannot
+        [DA_pos [] (CerbMem.Footprint.FP .R (a + (off : Int))
+          (CerbMem.sizeofCtype intTy))]
+        (Expr [] (Epure (Pexpr [] () (PEval (valueFromMemValue mv).2))))) =
+      ofVal (.annot [DA_pos [] (CerbMem.Footprint.FP .R (a + (off : Int))
+        (CerbMem.sizeofCtype intTy))] ((valueFromMemValue mv).2))
+      from rfl]
+    iapply (wps_ofVal
+      (.annot [DA_pos [] (CerbMem.Footprint.FP .R (a + (off : Int))
+        (CerbMem.sizeofCtype intTy))] ((valueFromMemValue mv).2)) ρ)
+    iapply HΨ
+    iexact Hpt
+
 /-! ## Block specifications, THE COLLAPSE, and the loop rules
 
 The collapse into the base Iris WP (the sole adequacy interface).

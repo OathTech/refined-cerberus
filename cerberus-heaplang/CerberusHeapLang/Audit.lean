@@ -66,6 +66,7 @@ import CerberusHeapLang.Exhibit
 import CerberusHeapLang.ProdExhibit
 import CerberusHeapLang.LoopExhibit
 import CerberusHeapLang.FibExhibit
+import CerberusHeapLang.ArrayExhibit
 import CerberusHeapLang.StmtProbe
 
 namespace CerberusHeapLang.Audit
@@ -297,6 +298,18 @@ info: 'CerberusHeapLang.wps_store' depends on axioms: [propext, Classical.choice
 info: 'CerberusHeapLang.fib_certified' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in #print axioms CerberusHeapLang.fib_certified
+
+-- Phase-2 S4 (2026-08-31): ACCEPTANCE EXHIBIT 2 — array-sum
+-- end-to-end (real pointer arithmetic via the certified
+-- PEarray_shift arm, the ACTION_EVAL load at a symbol operand, the
+-- interior-load axiom over the seeded array allocation, the
+-- Specified-binder unwrap, the index-partitioned invariant;
+-- conclusion: value = vs.sum AND the array preserved). Cone exactly
+-- the trio.
+/--
+info: 'CerberusHeapLang.array_sum_certified' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms CerberusHeapLang.array_sum_certified
 
 /-! ## The exhaustive sweep (LAST — nothing declared below) -/
 

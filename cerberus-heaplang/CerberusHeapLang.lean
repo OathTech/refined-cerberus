@@ -12,5 +12,6 @@ import CerberusHeapLang.ProdEntry
 import CerberusHeapLang.ProdExhibit
 import CerberusHeapLang.LoopExhibit
 import CerberusHeapLang.FibExhibit
+import CerberusHeapLang.ArrayExhibit
 import CerberusHeapLang.StmtProbe
 import CerberusHeapLang.Audit

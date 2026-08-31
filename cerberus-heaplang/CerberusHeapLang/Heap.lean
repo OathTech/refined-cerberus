@@ -319,6 +319,25 @@ theorem loadM_success (σ : Mem) (id : Int) (c : SpikeCell)
     rw [htrap h1] at h2
     cases h2)]
 
+/-- Interior slice of a whole-cell read (S4, the array exhibit):
+    the byte image of a sub-range is the corresponding list slice. -/
+theorem readBytesFrom_sub (σ : Mem) (a : Int) (m : Nat)
+    (bs : List CerbMem.AbsByte)
+    (hread : CerbMem.readBytesFrom σ a m = bs) (off k : Nat)
+    (hok : off + k ≤ m) :
+    CerbMem.readBytesFrom σ (a + (off : Int)) k = (bs.drop off).take k := by
+  rw [← hread]
+  unfold CerbMem.readBytesFrom
+  apply List.ext_getElem
+  · simp
+    omega
+  · intro j h1 h2
+    have hj : j < k := by simpa using h1
+    simp only [List.getElem_take, List.getElem_drop, List.getElem_map,
+      List.getElem_range]
+    rw [show a + ((off : Int)) + (j : Int) = a + (((off + j : Nat)) : Int)
+      by omega]
+
 /-- Coh survives a Coh-backed store: the touched cell re-reads to the
     written image (exact footprint), the untouched cells are outside
     the written range (pairwise disjointness), the allocation table
