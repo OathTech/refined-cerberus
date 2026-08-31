@@ -2,6 +2,7 @@ import CerberusHeapLang.Step
 import CerberusHeapLang.Heap
 import CerberusHeapLang.Lang
 import CerberusHeapLang.Rules
+import CerberusHeapLang.Wps
 import CerberusHeapLang.Soundness
 import CerberusHeapLang.Adequacy
 import CerberusHeapLang.Exhibit

@@ -141,6 +141,14 @@ def merge (ds : List dyn_annotation) : SpikeVal → SpikeVal
     (merge ds v).val = v.val := by
   cases v <;> simp [merge, val]
 
+/-- How a bound value's annotations flow into a continuation's value
+    (`lets _ = v in e2` leaves e2's value alone; `lets _ = {A}v in e2`
+    prefixes A — LETS-ANNOT + the eventual ANNOTS merge). Value-level
+    form; the runtime-tuple form is `CerberusHeapLang.mergeInto`. -/
+def mergeInto : SpikeVal → SpikeVal → SpikeVal
+  | .pure _, w => w
+  | .annot ds _, w => merge ds w
+
 end SpikeVal
 
 /-- Canonical expression of a value (the shape `mk_value_e` produces,

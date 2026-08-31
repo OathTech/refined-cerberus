@@ -61,6 +61,7 @@ stays the last import of the lib root.
 -/
 import Lean
 import CerberusHeapLang.Rules
+import CerberusHeapLang.Wps
 import CerberusHeapLang.Exhibit
 import CerberusHeapLang.ProdExhibit
 import CerberusHeapLang.StmtProbe
@@ -224,6 +225,29 @@ info: 'CerberusHeapLang.StmtProbe.wps_sound' depends on axioms: [propext, Classi
 info: 'CerberusHeapLang.StmtProbe.demo_loop' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in #print axioms CerberusHeapLang.StmtProbe.demo_loop
+
+-- Phase-1 S2 (2026-08-31, two-phase arc plan): the statement-
+-- stratified WP over the REAL fragment (Wps.lean) — the label-context
+-- judgment as a package-local guarded fixpoint (public iris-lean
+-- Banach API; jump clause deliberately absent, S3's — module header).
+-- Pinned: the sequencing rule (the jump-aware statement shape over
+-- Core), the collapse into the base WP (the sole adequacy interface),
+-- and the store small axiom at the stratum. Each cone exactly the
+-- trio.
+/--
+info: 'CerberusHeapLang.wps_seq' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms CerberusHeapLang.wps_seq
+
+/--
+info: 'CerberusHeapLang.wps_sound' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms CerberusHeapLang.wps_sound
+
+/--
+info: 'CerberusHeapLang.wps_store' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms CerberusHeapLang.wps_store
 
 /-! ## The exhaustive sweep (LAST — nothing declared below) -/
 
