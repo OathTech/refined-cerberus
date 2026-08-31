@@ -193,3 +193,13 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   branch without check-in until P2 works or a blocker needs
   discussion. Plan:
   cerberus-heaplang/docs/2026-08-31_two-phase-arc-plan.md.
+- **2026-08-31 [USER] Array pre-state ruling**: the one-allocation
+  array (single cell, per-element structure in invariants/decode
+  premises) is RATIFIED — "this is I think the only way this example
+  can work in C!" Forcing fact: Cerberus provenance (arithmetic-
+  derived pointers must stay in-allocation; loaded pointers carry
+  their own rights); donor-aligned (Caesium's array is one block
+  with element views). Supersedes the amendment's literal per-cell
+  big-sep phrasing; first-class element ownership remains the
+  registered sub-allocation-view growth step (structs/arrays as
+  type formers in the port).
