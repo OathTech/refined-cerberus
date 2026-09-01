@@ -99,13 +99,13 @@ theorem alloc_two_creates_wps {M : MachineCtx} {Ls : LabelSpec GF}
     (fun a => intTy_decIndep a _)
   isplitl [Hcap]
   · iexact Hcap
-  iintro %p₁ ⟨Hpt₁, Hcap⟩
+  iintro %p₁ ⟨Hpt₁, Hcap, -⟩
   iapply wps_create loc0 empty_annotation .Prov_none ⟨al₂, intTy⟩
     [] pref₂ (ev0 :: evs) intTy_nonatomic
     (fun a => intTy_decIndep a _)
   isplitl [Hcap]
   · iexact Hcap
-  iintro %p₂ ⟨Hpt₂, Hcap⟩
+  iintro %p₂ ⟨Hpt₂, Hcap, -⟩
   iexists p₁, p₂
   isplitl [Hpt₁]
   · iexact Hpt₁
@@ -130,7 +130,7 @@ theorem alloc_create_wpt {M : MachineCtx} {Ls : LabelSpecT GF}
     (Nat.le_refl 2) intTy_nonatomic (fun a => intTy_decIndep a _)
   isplitl [Hcap]
   · iexact Hcap
-  iintro %p ⟨Hpt, Hcap⟩
+  iintro %p ⟨Hpt, Hcap, -⟩
   iexists p
   isplitl [Hpt]
   · iexact Hpt
@@ -191,7 +191,7 @@ theorem alloc_create_launch_smoke (pref : prefix0) (aids : Nat → Nat) :
             (fun a => intTy_decIndep a _)
           isplitl [Hcap]
           · iexact Hcap
-          iintro %p ⟨-, -⟩
+          iintro %p ⟨-, -, -⟩
           iintro %σ' %ns %κs %nt Hσ
           iapply fupd_mask_intro_discard Std.LawfulSet.empty_subset
           ipureintro

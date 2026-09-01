@@ -1964,8 +1964,10 @@ theorem wpt_create_cursor_internal {Ψ : SpikeVal → EnvStack → IProp GF}
     the section header — one create step + one pure-value delivery
     against `driveU`). Statement is cursor-free (the P1 grep test);
     capacity for `req :: rest` buys the create, the continuation
-    binds the fresh pointer with full whole-cell ownership and
-    `allocCap rest`. -/
+    binds the fresh pointer with full whole-cell ownership,
+    `allocCap rest`, and (alloc arc P2, mirroring `wps_create`) the
+    fresh pointer's pure machine-address bounds
+    `0 < addrOf p < 2^64`. -/
 theorem wpt_create {Ψ : SpikeVal → EnvStack → IProp GF}
     (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (aprov : CerbMem.Provenance) (req : AllocReq) (rest : List AllocReq)
@@ -1977,12 +1979,14 @@ theorem wpt_create {Ψ : SpikeVal → EnvStack → IProp GF}
       (∀ p : CerbMem.PointerValue,
         (pointsToCell p (.own 1) req.ty
             (List.replicate (CerbMem.sizeofCtype req.ty) undefByte) ∗
-          allocCap rest) -∗
+          allocCap rest ∗
+          ⌜0 < addrOf p ∧ addrOf p < 2 ^ 64⌝) -∗
         Ψ (SpikeVal.pure (Vobject (OVpointer p))) ρ)) ⊢
       wpt M Ls k Ψ (createExpr loc ann (.IV aprov req.align) req.ty pref) ρ := by
   unfold allocCap
   iintro ⟨⟨%c, Hc, %hfit⟩, HΨ⟩
-  obtain ⟨c', hadv, hrest⟩ := (PlanFits_cons_iff c req rest).mp hfit
+  obtain ⟨hplan, hla⟩ := hfit
+  obtain ⟨c', hadv, hrest⟩ := (PlanFits_cons_iff c req rest).mp hplan
   obtain ⟨hsz, hnz, rfl⟩ := advanceCursor_some_inv hadv
   iapply wpt_create_cursor_internal loc ann aprov req.align req.ty pref
     c.lastAddr c.nextId ρ hk hsz hatom hnz (hinert _)
@@ -1992,12 +1996,17 @@ theorem wpt_create {Ψ : SpikeVal → EnvStack → IProp GF}
   iapply HΨ
   isplitl [Hpt]
   · iexact Hpt
+  isplitl [Hc]
   · iexists ⟨freshBase c.lastAddr req.align (CerbMem.sizeofCtype req.ty),
       c.nextId + 1⟩
     isplitl [Hc]
     · iexact Hc
     · ipureintro
-      exact hrest
+      exact ⟨hrest, Int.le_of_lt (freshBase_lt_two64 c.lastAddr req.align
+        req.ty hsz hnz hla)⟩
+  · ipureintro
+    exact ⟨freshBase_pos c.lastAddr req.align req.ty hnz,
+      freshBase_lt_two64 c.lastAddr req.align req.ty hsz hnz hla⟩
 
 end CreateRuleT
 

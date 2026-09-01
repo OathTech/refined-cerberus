@@ -334,6 +334,16 @@ theorem update_env_spec (pa pb : List annot) (x : sym)
       envAdd x (Vobject ov) ev0 :: evs := by
   rw [update_env_cons, update_env_aux_spec]
 
+/-- The whole-stack form at the plain sym-binder pattern (alloc arc
+    P2 — the binding step of `lets x = create(...) in ...`). -/
+theorem update_env_sym (x : sym) (bty : core_base_type) (v : value)
+    (ev0 : Fmap sym value) (evs : List (Fmap sym value)) :
+    update_env (symPat [] x bty) v (ev0 :: evs) =
+      envAdd x v ev0 :: evs := by
+  rw [update_env_cons]
+  show update_env_aux (mk_sym_pat x bty) v ev0 :: evs = _
+  rw [update_env_aux_sym]
+
 /-! ## Head-frame lookups through `lookup_env` -/
 
 /-- A hit in the head frame decides the stack lookup. -/

@@ -943,6 +943,18 @@ theorem freshBase_pos (la : Int) (alignN : Int) (ty : ctype)
     Int.natCast_nonneg _
   omega
 
+/-- The downward allocator never mints above its cursor: a machine
+    bound on the cursor is a machine bound on every fresh base (the
+    address-WF fact the public create rules export — alloc arc P2,
+    the charter's "bounds knowledge" allowance). -/
+theorem freshBase_lt_two64 (la : Int) (alignN : Int) (ty : ctype)
+    (hsz : 0 < sizeofCtype ty)
+    (hnz : freshBase la alignN (sizeofCtype ty) ≠ 0)
+    (hla : la ≤ 2 ^ 64) :
+    freshBase la alignN (sizeofCtype ty) < 2 ^ 64 := by
+  have h := freshBase_add_le la alignN ty hsz hnz
+  omega
+
 /-- allocateObject SUCCESS, symbolic state: at a nonzero fresh base
     the allocator takes the active path, mints exactly
     `cellPtr σ.nextAllocId base`, bumps the cursor, registers the
@@ -1637,15 +1649,21 @@ grep test, recorded in the slice notes). -/
 
 section AllocCap
 
-/-- The abstract finite allocation capacity for a request plan. -/
+/-- The abstract finite allocation capacity for a request plan. The
+    machine bound on the hidden cursor (alloc arc P2) is what lets
+    the public create rules export address-WF bounds for the fresh
+    pointer (`freshBase_lt_two64`) without naming the cursor. -/
 def allocCap [SpikeGS hlc GF] (reqs : List AllocReq) : IProp GF :=
-  iprop(∃ c : AllocCursor, cursorOwn c ∗ ⌜PlanFits c reqs⌝)
+  iprop(∃ c : AllocCursor, cursorOwn c ∗
+    ⌜PlanFits c reqs ∧ c.lastAddr ≤ 2 ^ 64⌝)
 
 /-- Introduction (implementation/launch side): cursor ownership plus
-    a fitting plan. Clients receive `allocCap` from the
-    allocation-aware launchers; they never build it. -/
+    a fitting plan at a machine-bounded cursor. Clients receive
+    `allocCap` from the allocation-aware launchers; they never build
+    it. -/
 theorem allocCap_intro [SpikeGS hlc GF] (c : AllocCursor)
-    (reqs : List AllocReq) (hfit : PlanFits c reqs) :
+    (reqs : List AllocReq) (hfit : PlanFits c reqs)
+    (hla : c.lastAddr ≤ 2 ^ 64) :
     cursorOwn (GF := GF) c ⊢ allocCap reqs := by
   unfold allocCap
   iintro Hc
@@ -1653,7 +1671,7 @@ theorem allocCap_intro [SpikeGS hlc GF] (c : AllocCursor)
   isplitl [Hc]
   · iexact Hc
   · ipureintro
-    exact hfit
+    exact ⟨hfit, hla⟩
 
 /-- Weakening: capacity for a longer plan serves any PREFIX (a
     client may stop allocating early; it may never reorder or skip
@@ -1666,7 +1684,7 @@ theorem allocCap_weaken [SpikeGS hlc GF] (reqs rest : List AllocReq) :
   isplitl [Hc]
   · iexact Hc
   · ipureintro
-    exact hfit.prefix
+    exact ⟨hfit.1.prefix, hfit.2⟩
 
 end AllocCap
 

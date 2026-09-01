@@ -417,6 +417,11 @@ structure LaunchCoh (σ : Mem) (m : SpikeHeapF SpikeCell)
     σ.deadAllocations.contains id = false
   addr_lo : ∀ i c, get? m i = some c → σ.lastAddress ≤ c.addr
   plan : PlanFits ⟨σ.lastAddress, σ.nextAllocId⟩ reqs
+  /-- The launch cursor respects the machine address bound (real
+      Cerberus starts the downward cursor at 0xFFFFFFFFFFFF < 2^64;
+      alloc arc P2 — rides inside `allocCap` so the public create
+      rules can export the fresh pointer's address-WF bounds). -/
+  la_wf : σ.lastAddress ≤ 2 ^ 64
 
 open Iris.Std.PartialMap in
 /-- Launch coherence at the EMPTY footprint: allocator health + the
@@ -426,11 +431,12 @@ theorem LaunchCoh.empty (σ : Mem) (reqs : List AllocReq)
       σ.allocations.get? id = none)
     (hdead : ∀ id : Int, σ.nextAllocId ≤ id →
       σ.deadAllocations.contains id = false)
-    (hplan : PlanFits ⟨σ.lastAddress, σ.nextAllocId⟩ reqs) :
+    (hplan : PlanFits ⟨σ.lastAddress, σ.nextAllocId⟩ reqs)
+    (hla : σ.lastAddress ≤ 2 ^ 64) :
     LaunchCoh σ (∅ : SpikeHeapF SpikeCell) reqs := by
   have hnone : ∀ i : Int, get? (∅ : SpikeHeapF SpikeCell) i = none :=
     fun i => Iris.Std.LawfulPartialMap.get?_empty i
-  refine ⟨⟨?_, ?_⟩, ?_, halloc, hdead, ?_, hplan⟩
+  refine ⟨⟨?_, ?_⟩, ?_, halloc, hdead, ?_, hplan, hla⟩
   · intro i c hg
     rw [hnone i] at hg
     cases hg
@@ -542,7 +548,8 @@ theorem launchResources {GF : BundledGFunctors} [SpikeGS .hasLC GF]
     · iexact Hki
   isplitl [Hcells]
   · iexact Hcells
-  · iapply allocCap_intro ⟨σ.lastAddress, σ.nextAllocId⟩ reqs h.plan $$ Hc
+  · iapply allocCap_intro ⟨σ.lastAddress, σ.nextAllocId⟩ reqs h.plan
+      h.la_wf $$ Hc
 
 /-! ## Step-level adequacy: constructing SpikeGS and applying iris -/
 
@@ -919,6 +926,90 @@ theorem spike_engine_adequacy {GF : BundledGFunctors} [SpikeGpreS GF]
     (fun l params cont hl => (spikeCtx_labels_none l hl).elim)
     e₀ fmapEmpty [] σ₀ m₀ hfrag hcoh ψ hwp n aids hfuel
     (fun l params cont hl => (spikeCtx_labels_none l hl).elim)
+
+/-- ALLOCATION-AWARE engine adequacy at any machine context (alloc
+    arc P2 — the partial lane's engine face for allocating clients):
+    as `engine_adequacyU`, but launched through `launchResources` —
+    the client's WP proof receives the footprint cells AND
+    `allocCap reqs` (via `spike_step_adequacy_alloc`). -/
+theorem engine_adequacyU_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
+    {M : MachineCtx} (hwf : M.SeqWF)
+    (hQf : ∀ l params cont, lookupLabel M.labels l = some (params, cont) →
+      Frag cont)
+    (e₀ : CoreExpr) (ev00 : Fmap sym value) (evs0 : List (Fmap sym value))
+    (σ₀ : Mem) (m₀ : SpikeHeapF SpikeCell) (reqs : List AllocReq)
+    (hfrag : Frag e₀) (hl : LaunchCoh σ₀ m₀ reqs)
+    (ψ : value → Mem → Prop)
+    (hwp : ∀ [SpikeGS .hasLC GF],
+      iprop(([∗map] i ↦ c ∈ m₀,
+          cellOwn (hlc := .hasLC) (GF := GF) i (.own 1) c) ∗
+        allocCap reqs) ⊢
+        WP (⟨e₀, ev00 :: evs0, M⟩ : CoreRt) @ Stuckness.NotStuck; ⊤
+          {{ w, iprop(∀ (σ' : Mem) (ns : Nat)
+          (κs : List Empty) (nt : Nat),
+          stateInterp σ' ns κs nt ={⊤, ∅}=∗ ⌜ψ w.val σ'⌝) }})
+    (n : Nat) (aids : Nat → Nat)
+    (hfuel : esize e₀ + n ≤ lemDefaultFuel)
+    (hQsz : ∀ l params cont, lookupLabel M.labels l = some (params, cont) →
+      esize cont + n ≤ lemDefaultFuel) :
+    (∀ r, driveU M aids n (M.thread e₀ (ev00 :: evs0)) σ₀ ≠ .killed r) ∧
+    (driveU M aids n (M.thread e₀ (ev00 :: evs0)) σ₀ ≠ .stuck) ∧
+    (∀ (v : value) (σ' : Mem),
+      driveU M aids n (M.thread e₀ (ev00 :: evs0)) σ₀ = .done v σ' →
+      ψ v σ') := by
+  have hadeq := fun (t2 : List CoreRt) (σ2 : Mem)
+      (h : ([(⟨e₀, ev00 :: evs0, M⟩ : CoreRt)], σ₀) -·->ₜₚ* (t2, σ2)) =>
+    spike_step_adequacy_alloc ⟨e₀, ev00 :: evs0, M⟩ σ₀ m₀ reqs hl
+      (fun w σ' => ψ w.val σ') hwp h
+  have hNS : ∀ (r : CoreRt) (σ : Mem),
+      Reach ((⟨e₀, ev00 :: evs0, M⟩ : CoreRt), σ₀) (r, σ) →
+      PrimStep.NotStuck (Val := CoreRVal) (r, σ) := by
+    intro r σ hr
+    exact (hadeq [r] σ (Reach.toPool hr)).1 r (by simp)
+  have hRES : ∀ (w : CoreRVal) (σ : Mem),
+      Reach ((⟨e₀, ev00 :: evs0, M⟩ : CoreRt), σ₀) (ofValRt w, σ) →
+      ψ w.val σ := by
+    intro w σ hr
+    exact (hadeq [ofValRt w] σ (Reach.toPool hr)).2 w [] rfl
+  have hok : DriveOk (fun w σ' => ψ w.val σ')
+      (driveU M aids n (M.thread e₀ (ev00 :: evs0)) σ₀) :=
+    drive_classifyU hwf hQf n hQsz e₀ (ev00 :: evs0) σ₀ _ hNS hRES
+      n (Nat.le_refl n) aids e₀ ev00 evs0 σ₀ .refl hfrag hfuel
+  refine ⟨fun r hdr => ?_, fun hds => ?_, fun v σ' hdv => ?_⟩
+  · rw [hdr] at hok; exact hok
+  · rw [hds] at hok; exact hok
+  · rw [hdv] at hok
+    obtain ⟨w, hwv, hφ⟩ := hok
+    rw [← hwv]
+    exact hφ
+
+/-- ALLOCATION-AWARE spike-face engine adequacy (alloc arc P2): the
+    `spike_engine_adequacy` face launched through `launchResources`
+    — the drive-lane engine conclusion for a whole program that
+    allocates its own cells from `allocCap`. -/
+theorem spike_engine_adequacy_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
+    (e₀ : CoreExpr) (σ₀ : Mem) (m₀ : SpikeHeapF SpikeCell)
+    (reqs : List AllocReq)
+    (hfrag : Frag e₀) (hl : LaunchCoh σ₀ m₀ reqs)
+    (ψ : value → Mem → Prop)
+    (hwp : ∀ [SpikeGS .hasLC GF],
+      iprop(([∗map] i ↦ c ∈ m₀,
+          cellOwn (hlc := .hasLC) (GF := GF) i (.own 1) c) ∗
+        allocCap reqs) ⊢
+        WP (⟨e₀, spikeEnv, spikeCtx⟩ : CoreRt) @ Stuckness.NotStuck; ⊤
+          {{ w, iprop(∀ (σ' : Mem) (ns : Nat)
+          (κs : List Empty) (nt : Nat),
+          stateInterp σ' ns κs nt ={⊤, ∅}=∗ ⌜ψ w.val σ'⌝) }})
+    (n : Nat) (aids : Nat → Nat)
+    (hfuel : esize e₀ + n ≤ lemDefaultFuel) :
+    (∀ r, drive aids n (spikeThread e₀) σ₀ ≠ .killed r) ∧
+    (drive aids n (spikeThread e₀) σ₀ ≠ .stuck) ∧
+    (∀ (v : value) (σ' : Mem),
+      drive aids n (spikeThread e₀) σ₀ = .done v σ' → ψ v σ') :=
+  engine_adequacyU_alloc (GF := GF) (M := spikeCtx) spikeCtx_wf
+    (fun l params cont hl' => (spikeCtx_labels_none l hl').elim)
+    e₀ fmapEmpty [] σ₀ m₀ reqs hfrag hl ψ hwp n aids hfuel
+    (fun l params cont hl' => (spikeCtx_labels_none l hl').elim)
 
 /-! ## THE EXPORTED FACE: semantic triples over engine configurations
 ([USER 2026-08-30], the final-form instruction)

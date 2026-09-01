@@ -2179,9 +2179,9 @@ Two strata (charter P1.4):
   `hnz` — allocation failure is excluded by ownership arithmetic,
   not assumed away. HEAP-IMPLEMENTATION USE ONLY: it names
   `lastAddress`/`nextAllocId`/`freshBase`/`cursorOwn` and may be
-  consumed only by this module's public rule, its total mirror
-  (Wpt.lean), and pre-P2 legacy clients queued for conversion
-  (StructExhibit — P2 item 1).
+  consumed only by this module's public rule and its total mirror
+  (Wpt.lean). (The last legacy client, StructExhibit's, converted to
+  the public rule at alloc arc P2 item 1.)
 - `wps_create` — THE PUBLIC RULE: precondition `allocCap
   (req :: rest)`, existential/continuation-bound pointer result
   with the fresh whole-cell points-to plus `allocCap rest`. NO
@@ -2385,8 +2385,13 @@ theorem wps_create_cursor_internal {Ψ : SpikeVal → EnvStack → IProp GF}
     integer-array types) — address-independent so the statement stays
     cursor-free. Positivity of `sizeof req.ty` and the no-OOM guard
     are NOT premises: they ride inside `allocCap` (the plan fits).
-    The statement contains no `AllocCursor`/`lastAddress`/
-    `nextAllocId`/`freshBase`/`cursorOwn` — the P1 grep test. -/
+    The continuation ALSO receives the fresh pointer's pure
+    machine-address bounds `0 < addrOf p < 2^64` (alloc arc P2 —
+    the charter P1.4 "bounds knowledge" allowance, needed by the
+    allocating whole-program clients, e.g. `isList`'s node-WF facts;
+    pure form pending the P4 metadata split). The statement contains
+    no `AllocCursor`/`lastAddress`/`nextAllocId`/`freshBase`/
+    `cursorOwn` — the P1 grep test. -/
 theorem wps_create {Ψ : SpikeVal → EnvStack → IProp GF}
     (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (aprov : CerbMem.Provenance) (req : AllocReq) (rest : List AllocReq)
@@ -2398,12 +2403,14 @@ theorem wps_create {Ψ : SpikeVal → EnvStack → IProp GF}
       (∀ p : CerbMem.PointerValue,
         (pointsToCell p (.own 1) req.ty
             (List.replicate (CerbMem.sizeofCtype req.ty) undefByte) ∗
-          allocCap rest) -∗
+          allocCap rest ∗
+          ⌜0 < addrOf p ∧ addrOf p < 2 ^ 64⌝) -∗
         Ψ (SpikeVal.pure (Vobject (OVpointer p))) ρ)) ⊢
       wps M Ls Ψ (createExpr loc ann (.IV aprov req.align) req.ty pref) ρ := by
   unfold allocCap
   iintro ⟨⟨%c, Hc, %hfit⟩, HΨ⟩
-  obtain ⟨c', hadv, hrest⟩ := (PlanFits_cons_iff c req rest).mp hfit
+  obtain ⟨hplan, hla⟩ := hfit
+  obtain ⟨c', hadv, hrest⟩ := (PlanFits_cons_iff c req rest).mp hplan
   obtain ⟨hsz, hnz, rfl⟩ := advanceCursor_some_inv hadv
   iapply wps_create_cursor_internal loc ann aprov req.align req.ty pref
     c.lastAddr c.nextId ρ hsz hatom hnz (hinert _)
@@ -2413,13 +2420,18 @@ theorem wps_create {Ψ : SpikeVal → EnvStack → IProp GF}
   iapply HΨ
   isplitl [Hpt]
   · iexact Hpt
+  isplitl [Hc]
   · -- rebuild the (unfolded) capacity from the advanced cursor
     iexists ⟨freshBase c.lastAddr req.align (CerbMem.sizeofCtype req.ty),
       c.nextId + 1⟩
     isplitl [Hc]
     · iexact Hc
     · ipureintro
-      exact hrest
+      exact ⟨hrest, Int.le_of_lt (freshBase_lt_two64 c.lastAddr req.align
+        req.ty hsz hnz hla)⟩
+  · ipureintro
+    exact ⟨freshBase_pos c.lastAddr req.align req.ty hnz,
+      freshBase_lt_two64 c.lastAddr req.align req.ty hsz hnz hla⟩
 
 end CreateRule
 

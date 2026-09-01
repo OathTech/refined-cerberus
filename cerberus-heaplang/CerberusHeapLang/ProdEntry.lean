@@ -221,6 +221,7 @@ theorem prodMem₀_launchCoh (reqs : List AllocReq)
     (hfit : PlanFits ⟨prodMem₀.lastAddress, prodMem₀.nextAllocId⟩ reqs) :
     LaunchCoh prodMem₀ (∅ : SpikeHeapF SpikeCell) reqs := by
   refine LaunchCoh.empty prodMem₀ reqs ?_ ?_ hfit
+    (by rw [prodMem₀_lastAddress]; decide)
   · intro id hle
     rw [prodMem₀_nextAllocId] at hle
     rw [prodMem₀_allocations]

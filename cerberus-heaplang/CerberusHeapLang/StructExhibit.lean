@@ -19,19 +19,21 @@ laws at this layout's offsets. Recreating the proof for another
 layout changes only the offsets, sizes, and decode facts (audit
 Phase-2 exit criterion).
 
-Also here: THE ALLOCATION CLIENT (`struct_create_store_wps`) —
-allocate a fresh struct and initialize its x field mid-derivation.
-SCOPE (2026-09-01 re-audit R-01; alloc arc P1 landed): this client
-still consumes the INTERNAL exact-cursor rule
-(`wps_create_cursor_internal`) with a `cursorOwn` premise, and ends
-at `wps` — it is not an adequacy consumer. The PUBLIC rules
-(`wps_create`/`wpt_create` over `allocCap`) and the allocation-aware
-launchers exist since P1 (see AllocExhibit for their consumers);
-converting THIS client to the public rule + an adequacy theorem is
-alloc arc P2 item 1.
+Also here: THE ALLOCATION CLIENT (`struct_create_store_wps` +
+`struct_create_store_adequacy`) — allocate a fresh struct and
+initialize its x field. CONVERTED at alloc arc P2 (charter items
+1-2): the client consumes the PUBLIC `wps_create` from the abstract
+capacity `allocCap [⟨align, structTy⟩]` (no cursor vocabulary; the
+program BINDS the fresh pointer with `lets p = create(...)` and
+stores through the bound symbol), and the adequacy theorem launches
+it against the real engine from the production cold-start memory
+through `spike_engine_adequacy_alloc`/`launchResources` — the
+partial-lane allocation consumer of the R-01 closure test.
 -/
 import CerberusHeapLang.Adequacy
 import CerberusHeapLang.Wps
+import CerberusHeapLang.EnvLaws
+import CerberusHeapLang.ProdEntry
 
 set_option autoImplicit false
 
@@ -295,99 +297,248 @@ theorem struct_update_certified {GF : BundledGFunctors} [SpikeGpreS GF]
       (by rw [sixBytes_len, hlen1]; decide)
   exact ⟨hx, hy⟩
 
-/-! ## THE ALLOCATION CLIENT (internal-rule legacy — see the module
-header)
+/-! ## THE ALLOCATION CLIENT (alloc arc P2, charter items 1-2)
 
-`create` used mid-derivation as an ordinary rule: the program
-allocates a fresh struct and initializes its x field. The fresh
-pointer is the CLOSED FORM of the allocator arithmetic
-(`cellPtr nid (freshBase la align 16)`) — this client still speaks
-the INTERNAL exact-cursor vocabulary (`wps_create_cursor_internal`,
-`cursorOwn`, `freshBase`) and ends at `wps`, so it is not an
-adequacy consumer. Its P2 conversion target: premise
-`allocCap [⟨align, structTy⟩]`, existential pointer, plus an
-adequacy theorem through the allocation-aware launchers. -/
+The self-contained allocate-then-initialize program, proved through
+the PUBLIC create rule from the abstract capacity `allocCap` alone —
+no cursor vocabulary anywhere (the fresh pointer is bound by the
+program's own `lets p = create(...)`, and the store goes through the
+bound symbol) — and exported to the engine through the
+allocation-aware launcher (`spike_engine_adequacy_alloc`): the
+partial-lane allocation consumer the re-audit's R-01 acceptance test
+names. NO operational proof terms in this section (no `Step.*`,
+`engineSteps_*`, `driveJ_step`, `driverDone_step`). -/
 
 section CreateConsumer
+
+/-- The bound fresh-pointer symbol / the bound stored-value symbol
+    (the store rule's operands must be non-values, so the constant
+    rides through a binding too). -/
+def structPSym : sym := Symbol "" 501 SD_None
+def structVSym : sym := Symbol "" 502 SD_None
+
+/-- `lets p = create(align, struct) in lets v = 5 in
+    store(int, p, v)` — the x field (offset 0) of the fresh struct,
+    initialized through the BOUND pointer. -/
+def progCreateInit (loc : CerbLocation.Loc) (ann : core_run_annotation)
+    (aprov : CerbMem.Provenance) (alignN : Int) (pref : prefix0)
+    (mo : memory_order) (pbty vbty : core_base_type) : CoreExpr :=
+  Expr [] (Esseq (symPat [] structPSym pbty)
+    (createExpr loc ann (.IV aprov alignN) structTy pref)
+    (Expr [] (Esseq (symPat [] structVSym vbty)
+      (ofVal (.pure fiveVal))
+      (storeOpRedex loc ann intTy (Pexpr [] () (PEsym structPSym))
+        (Pexpr [] () (PEsym structVSym)) mo))))
+
+/-- Cone membership. -/
+theorem progCreateInit_frag (loc : CerbLocation.Loc)
+    (ann : core_run_annotation) (aprov : CerbMem.Provenance)
+    (alignN : Int) (pref : prefix0) (mo : memory_order)
+    (pbty vbty : core_base_type)
+    (hlib : CerbLocation.isLibraryLocation loc = false) :
+    Frag (progCreateInit loc ann aprov alignN pref mo pbty vbty) :=
+  .sseq_sym (.create hlib)
+    (.sseq_sym (frag_ofVal (.pure fiveVal))
+      (.store_op hlib rfl rfl (.sym [] structPSym) (.sym [] structVSym)
+        (by rw [show peDepth (Pexpr ([] : List annot) ()
+            (PEsym structPSym)) = 1 from rfl,
+          show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+        (by rw [show peDepth (Pexpr ([] : List annot) ()
+            (PEsym structVSym)) = 1 from rfl,
+          show lemDefaultFuel = 999999 + 1 from rfl]; omega)))
+
+section CreateIris
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
 variable {M : MachineCtx} {Ls : LabelSpec GF}
 
-/-- `lets _ = create(align, struct) in store(int, &fresh.x, 5)`. -/
-def progCreateInit (loc : CerbLocation.Loc) (ann : core_run_annotation)
-    (aprov : CerbMem.Provenance) (alignN : Int) (pref : prefix0)
-    (mo : memory_order) (bty : core_base_type) (la nid : Int) : CoreExpr :=
-  sseqExpr bty
-    (createExpr loc ann (.IV aprov alignN) structTy pref)
-    (storeExpr loc ann intTy
-      (cellPtr nid (freshBase la alignN (CerbMem.sizeofCtype structTy) +
-        ((fieldX : Nat) : Int))) fiveVal mo)
+/-- The head frame after the two binds. -/
+abbrev structFrame (p : CerbMem.PointerValue) (f : Fmap sym value) :
+    Fmap sym value :=
+  envAdd structVSym fiveVal (envAdd structPSym (Vobject (OVpointer p)) f)
 
-/-- ALLOCATE-THEN-INITIALIZE: from cursor ownership alone, the fresh
-    struct materializes (unspecified bytes), its x field is
-    initialized through the generic subrange store, and the cursor
-    advances. Every create premise is pure allocator arithmetic on
-    owned state. -/
+theorem structFrame_lookup_p {f : Fmap sym value} (hf : SymFrame f)
+    (p : CerbMem.PointerValue) :
+    fmapLookupBy symCmpK structPSym (structFrame p f) =
+      some (Vobject (OVpointer p)) := by
+  unfold structFrame
+  rw [envAdd_lookup (hf.add _ _) symCmpK, if_neg (by decide +kernel),
+    envAdd_lookup hf symCmpK, if_pos (by decide +kernel)]
+
+theorem structFrame_lookup_v {f : Fmap sym value} (hf : SymFrame f)
+    (p : CerbMem.PointerValue) :
+    fmapLookupBy symCmpK structVSym (structFrame p f) = some fiveVal := by
+  unfold structFrame
+  rw [envAdd_lookup (hf.add _ _) symCmpK, if_pos (by decide +kernel)]
+
+/-- ALLOCATE-THEN-INITIALIZE, THE PUBLIC-RULE CLIENT (charter P2 item
+    1): from the abstract capacity `allocCap [⟨align, structTy⟩]`
+    ALONE, the whole program verifies — the create through the PUBLIC
+    `wps_create` (existential pointer, no cursor vocabulary), the
+    x-field store through the generic typed-subrange rule at the
+    program-bound pointer. The postcondition returns the initialized
+    fresh struct (existential pointer) and the spent capacity. -/
 theorem struct_create_store_wps
     (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (aprov : CerbMem.Provenance) (alignN : Int) (pref : prefix0)
-    (mo : memory_order) (bty : core_base_type) (la nid : Int)
+    (mo : memory_order) (pbty vbty : core_base_type)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value))
-    (hnz : freshBase la alignN (CerbMem.sizeofCtype structTy) ≠ 0) :
-    iprop(cursorOwn (GF := GF) ⟨la, nid⟩) ⊢
+    (hf : SymFrame ev0) (hex : M.extern = fmapEmpty) :
+    iprop(allocCap (GF := GF) [⟨alignN, structTy⟩]) ⊢
       wps M Ls
-        (fun _ _ => iprop(
-          cellOwn nid (.own 1) (SpikeCell.mk
-            (freshBase la alignN (CerbMem.sizeofCtype structTy)) structTy
+        (fun w _ => iprop(∃ p : CerbMem.PointerValue,
+          ⌜w.val = Vunit⌝ ∗
+          pointsToCell p (.own 1) structTy
             (spliceBytes fieldX fiveBytes
-              (List.replicate (CerbMem.sizeofCtype structTy) undefByte))) ∗
-          cursorOwn ⟨freshBase la alignN (CerbMem.sizeofCtype structTy),
-            nid + 1⟩))
-        (progCreateInit loc ann aprov alignN pref mo bty la nid)
+              (List.replicate (CerbMem.sizeofCtype structTy) undefByte)) ∗
+          allocCap []))
+        (progCreateInit loc ann aprov alignN pref mo pbty vbty)
         (ev0 :: evs) := by
-  iintro Hc
-  rw [show progCreateInit loc ann aprov alignN pref mo bty la nid =
-    Expr [] (Esseq (Pattern [] (CaseBase (none, bty)))
+  iintro Hcap
+  rw [show progCreateInit loc ann aprov alignN pref mo pbty vbty =
+    Expr [] (Esseq (symPat [] structPSym pbty)
       (createExpr loc ann (.IV aprov alignN) structTy pref)
-      (storeExpr loc ann intTy
-        (cellPtr nid (freshBase la alignN (CerbMem.sizeofCtype structTy) +
-          ((fieldX : Nat) : Int))) fiveVal mo)) from rfl]
-  iapply wps_seq
-  -- P2 CONVERSION PENDING (charter P2 item 1): this legacy client
-  -- still consumes the INTERNAL exact-cursor rule; its conversion to
-  -- the public `allocCap`-premised `wps_create` + an adequacy
-  -- theorem is the next phase's first step.
-  iapply wps_create_cursor_internal loc ann aprov alignN structTy pref
-    la nid (ev0 :: evs)
-    (by rw [structTy_size]; decide) structTy_nonatomic hnz
-    (structTy_decIndep _ _)
-  isplitl [Hc]
-  · iexact Hc
-  iintro ⟨Hpt, Hc⟩
+      (Expr [] (Esseq (symPat [] structVSym vbty)
+        (ofVal (.pure fiveVal))
+        (storeOpRedex loc ann intTy (Pexpr [] () (PEsym structPSym))
+          (Pexpr [] () (PEsym structVSym)) mo)))) from rfl]
+  iapply wps_seq_sym
+  iapply wps_create loc ann aprov ⟨alignN, structTy⟩ [] pref (ev0 :: evs)
+    structTy_nonatomic (fun a => structTy_decIndep a _)
+  isplitl [Hcap]
+  · iexact Hcap
+  iintro %p ⟨Hpt, Hcap, -⟩
+  iexists (Vobject (OVpointer p))
+  isplit
+  · ipureintro
+    rfl
+  rw [update_env_sym structPSym pbty]
+  iapply wps_seq_sym
+  iapply wps_ofVal (.pure fiveVal)
+  iexists fiveVal
+  isplit
+  · ipureintro
+    rfl
+  rw [update_env_sym structVSym vbty]
   icases (pointsToCell_cellOwn_iff _ _ _ _).mp $$ Hpt
-    with ⟨%id', %a', %hpv, Hcell⟩
-  obtain ⟨rfl, rfl⟩ : nid = id' ∧
-      freshBase la alignN (CerbMem.sizeofCtype structTy) = a' := by
-    unfold cellPtr at hpv
-    injection hpv with h1 h2
-    injection h1 with h1
-    injection h2 with _ h2
-    exact ⟨h1, h2⟩
-  iapply wps_store_cell_at loc ann nid
-    (freshBase la alignN (CerbMem.sizeofCtype structTy)) structTy fieldX
-    intTy fiveVal mo
-    (List.replicate (CerbMem.sizeofCtype structTy) undefByte) (ev0 :: evs)
-    five_encodes (by rw [structTy_size]; decide)
-    five_storable.compat five_storable.fpm five_storable.bytes_fpm
-    (five_storable.len []) (structTy_decIndep _ _)
+    with ⟨%id, %a, %hpv, Hcell⟩
+  iapply wps_store_eval loc ann intTy _ _ mo _ rfl rfl
+    (pv := p) (cv := fiveVal)
+    (by rw [hex, evalPexpr_sym_empty]
+        exact lookup_env_head (structFrame_lookup_p hf p) evs)
+    (by rw [hex, evalPexpr_sym_empty]
+        exact lookup_env_head (structFrame_lookup_v hf p) evs)
+  rw [hpv, show (cellPtr id a) = cellPtr id (a + ((fieldX : Nat) : Int))
+    from congrArg (cellPtr id) (by unfold fieldX; omega)]
+  iapply wps_struct_x_store loc ann mo id a
+    (List.replicate (CerbMem.sizeofCtype structTy) undefByte) _
   isplitl [Hcell]
   · iexact Hcell
   iintro %fp Hcell
-  rw [show (fiveBytes : List CerbMem.AbsByte) =
-    (CerbMem.memValueToBytes [] fiveMval).2 from rfl]
+  iexists p
+  isplit
+  · ipureintro
+    rfl
   isplitl [Hcell]
-  · iexact Hcell
-  · iexact Hc
+  · iapply (pointsToCell_cellOwn_iff _ _ _ _).mpr
+    iexists id, a
+    isplit
+    · ipureintro
+      exact hpv
+    · iexact Hcell
+  · iexact Hcap
+
+end CreateIris
+
+/-! ## THE ADEQUACY CONSUMER (charter P2 item 2 — the gap from a
+local entailment to an engine-facing theorem CLOSES): the program at
+the production cold-start memory, launched through the
+allocation-aware launcher. -/
+
+/-- The one-struct plan fits the production cold-start cursor
+    (closed allocator arithmetic — the boundary evaluation of the
+    concrete plan). -/
+theorem struct_plan_fits :
+    PlanFits ⟨prodMem₀.lastAddress, prodMem₀.nextAllocId⟩
+      [⟨8, structTy⟩] := by
+  rw [prodMem₀_lastAddress, prodMem₀_nextAllocId, PlanFits_cons_iff]
+  refine ⟨⟨freshBase errnoAddr 8 (CerbMem.sizeofCtype structTy), 1 + 1⟩,
+    ?_, PlanFits_nil _⟩
+  rw [advanceCursor_mk, structTy_size]
+  exact if_pos ⟨by decide, by decide⟩
+
+/-- ALLOCATE-THEN-INITIALIZE AT THE ENGINE (the R-01 partial-lane
+    closure consumer): driving the REAL engine on the self-contained
+    program from the production cold-start memory — launched through
+    `spike_engine_adequacy_alloc`/`launchResources` with the
+    one-request plan, verified ONLY through the public `wps_create` +
+    the generic store rule — never kills, never derails, and any
+    delivered value is unit with the final memory holding the
+    initialized fresh struct (existential allocation id/address: the
+    logic binds the pointer, the engine picks it). -/
+theorem struct_create_store_adequacy {GF : BundledGFunctors} [SpikeGpreS GF]
+    (loc : CerbLocation.Loc) (ann : core_run_annotation)
+    (pref : prefix0) (mo : memory_order) (pbty vbty : core_base_type)
+    (hlib : CerbLocation.isLibraryLocation loc = false)
+    (n : Nat) (aids : Nat → Nat) (hfuel : 3 + n ≤ lemDefaultFuel) :
+    (∀ r, drive aids n (spikeThread
+        (progCreateInit loc ann .Prov_none 8 pref mo pbty vbty)) prodMem₀ ≠
+      .killed r) ∧
+    (drive aids n (spikeThread
+        (progCreateInit loc ann .Prov_none 8 pref mo pbty vbty)) prodMem₀ ≠
+      .stuck) ∧
+    (∀ (v : value) (σ' : Mem),
+      drive aids n (spikeThread
+          (progCreateInit loc ann .Prov_none 8 pref mo pbty vbty)) prodMem₀ =
+        .done v σ' →
+      v = Vunit ∧ ∃ i a : Int, CellCoh σ' i ⟨a, structTy,
+        spliceBytes fieldX fiveBytes
+          (List.replicate (CerbMem.sizeofCtype structTy) undefByte)⟩) := by
+  refine spike_engine_adequacy_alloc (GF := GF)
+    (progCreateInit loc ann .Prov_none 8 pref mo pbty vbty)
+    prodMem₀ (∅ : SpikeHeapF SpikeCell) [⟨8, structTy⟩]
+    (progCreateInit_frag loc ann .Prov_none 8 pref mo pbty vbty hlib)
+    (prodMem₀_launchCoh [⟨8, structTy⟩] struct_plan_fits)
+    (fun v σ' => v = Vunit ∧ ∃ i a : Int, CellCoh σ' i ⟨a, structTy,
+      spliceBytes fieldX fiveBytes
+        (List.replicate (CerbMem.sizeofCtype structTy) undefByte)⟩)
+    ?_ n aids
+    (by rw [show esize (progCreateInit loc ann .Prov_none 8 pref mo
+        pbty vbty) = 3 from rfl]
+        exact hfuel)
+  intro inst
+  iintro ⟨-, Hcap⟩
+  ihave HW := struct_create_store_wps (M := spikeCtx)
+    (Ls := fun _ _ _ => iprop(False)) loc ann .Prov_none 8 pref mo
+    pbty vbty fmapEmpty [] symFrame_empty rfl $$ Hcap
+  ihave HWP : _ $$ [HW]
+  · refine BI.emp_sep.2.trans (.trans (BI.sep_mono
+      ((blockSpecs_intro fun l _ _ _ _ _ hl =>
+        (spikeCtx_labels_none l hl).elim).trans
+        (wps_sound (progCreateInit loc ann .Prov_none 8 pref mo pbty vbty)
+          spikeEnv))
+      .rfl) BI.wand_elim_left)
+  iapply wp_mono _ $$ HWP
+  iintro %w ⟨%p, %hval, Hpt, -⟩
+  icases (pointsToCell_cellOwn_iff _ _ _ _).mp $$ Hpt
+    with ⟨%id, %a, %hpv, Hcell⟩
+  iintro %σ2 %ns2 %κs2 %nt2 Hσ
+  icases (stateInterp_iff σ2 ns2 κs2 nt2).mp $$ Hσ
+    with ⟨%mm, %mb, %mk, %HG, Hmi, Hbi, Hki⟩
+  ihave %Hcc : ⌜CellCoh σ2 id ⟨a, structTy,
+      spliceBytes fieldX fiveBytes
+        (List.replicate (CerbMem.sizeofCtype structTy) undefByte)⟩ ∧
+      Iris.Std.PartialMap.get? mm id = some (metaOf
+        (⟨a, structTy, spliceBytes fieldX fiveBytes
+          (List.replicate (CerbMem.sizeofCtype structTy) undefByte)⟩ :
+          SpikeCell))⌝ $$ [Hmi Hbi Hcell]
+  · iapply cellOwn_cellCoh HG id (.own 1)
+      ⟨a, structTy, spliceBytes fieldX fiveBytes
+        (List.replicate (CerbMem.sizeofCtype structTy) undefByte)⟩
+      $$ [$Hmi $Hbi $Hcell]
+  iapply fupd_mask_intro_discard Std.LawfulSet.empty_subset
+  ipureintro
+  exact ⟨hval, id, a, Hcc.1⟩
 
 end CreateConsumer
 

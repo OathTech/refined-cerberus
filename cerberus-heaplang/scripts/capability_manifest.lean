@@ -226,8 +226,9 @@ def rowSpec : Name → Option RowSpec
       consumer := .thms [`CerberusHeapLang.alloc_create_launch_smoke,
         `CerberusHeapLang.alloc_two_creates_wps,
         `CerberusHeapLang.alloc_create_wpt,
-        `CerberusHeapLang.struct_create_store_wps]
-        (note := "alloc_create_launch_smoke is the P1 engine-facing chain-closer (driveU .done at fuel 2 via wpt_create + wpt_engine_boundU_alloc from prodMem₀); alloc_two_creates_wps / alloc_create_wpt are the wps/wpt-level local consumers of the PUBLIC rules; struct_create_store_wps still consumes the INTERNAL exact-cursor rule (P2 item 1 converts it); the HEADLINE allocating exhibits are not yet consumers (R-02, P2)") }
+        `CerberusHeapLang.struct_create_store_wps,
+        `CerberusHeapLang.struct_create_store_adequacy]
+        (note := "alloc_create_launch_smoke is the P1 engine-facing chain-closer (driveU .done at fuel 2 via wpt_create + wpt_engine_boundU_alloc from prodMem₀); alloc_two_creates_wps / alloc_create_wpt are the wps/wpt-level local consumers of the PUBLIC rules; struct_create_store_wps is a PUBLIC-rule whole-program client over allocCap (alloc arc P2 item 1 — the program binds the fresh pointer; no cursor vocabulary) with its engine-facing adequacy consumer struct_create_store_adequacy launched through spike_engine_adequacy_alloc (P2 item 2); the HEADLINE allocating exhibits are not yet consumers (R-02, P2 items 3-5)") }
   | `CerberusHeapLang.Frag.sseq => some
     { token := "sseq-wild", construct := "Esseq, wildcard pattern",
       mirror := .ctors [`CerberusHeapLang.Step.sseq_pure,
@@ -619,13 +620,19 @@ def Cell.render (env : Environment) : Cell → Except String String
   IO.println "   allocator-health facts non-vacuous). Chain-closing"
   IO.println "   consumer: `alloc_create_launch_smoke` (AllocExhibit — a"
   IO.println "   driveU `.done` equation at fuel exactly 2 from prodMem₀)."
-  IO.println "   RESIDUE (honest): `struct_create_store_wps` still consumes"
-  IO.println "   the internal rule, and the HEADLINE allocating production"
+  IO.println "   PARTIAL-LANE WHOLE-PROGRAM CONSUMER (alloc arc P2 items"
+  IO.println "   1-2): `struct_create_store_wps` is a PUBLIC-rule client"
+  IO.println "   over `allocCap` (the program binds the fresh pointer;"
+  IO.println "   no cursor vocabulary), exported to the engine by"
+  IO.println "   `struct_create_store_adequacy` through"
+  IO.println "   `spike_engine_adequacy_alloc` — deleting the public"
+  IO.println "   `wps_create` breaks it (the R-01 partial-lane closure"
+  IO.println "   consumer). The public rules also export the fresh"
+  IO.println "   pointer's pure address bounds (0 < addrOf p < 2^64),"
+  IO.println "   carried by `allocCap`'s machine-bounded hidden cursor."
+  IO.println "   RESIDUE (honest): the HEADLINE allocating production"
   IO.println "   exhibits remain MIXED logical/operational (R-02) — their"
-  IO.println "   whole-program rewrites are alloc-arc P2; R-01's closure"
-  IO.println "   test (deleting the public rule or the launch initialization"
-  IO.println "   breaks a HEADLINE self-contained allocation theorem) is"
-  IO.println "   therefore marked pending P2 in the closure table."
+  IO.println "   whole-program rewrites are alloc-arc P2 items 3-5."
   IO.println "5. **Interior (sub-allocation) access is GENERIC** (Phase 2,"
   IO.println "   F-04 retired): one typed-subrange load and one store rule"
   IO.println "   (`wps_load_at`/`wps_store_at` over views; whole-cell forms"

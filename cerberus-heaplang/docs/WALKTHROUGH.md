@@ -465,16 +465,22 @@ launch invariant; and the chain is closed at the engine by
 `alloc_create_launch_smoke` (AllocExhibit) — a bare create from the
 production cold-start memory delivering a pointer at `driveU` fuel
 exactly 2, proved only through the public total rule and the
-allocation-aware launcher. WHAT REMAINS OPEN (R-02, alloc arc P2):
-the self-contained allocating production theorems are still MIXED
-logical/operational proofs — their create prefixes
+allocation-aware launcher. THE PARTIAL-LANE WHOLE-PROGRAM
+CONSUMER (alloc arc P2 items 1-2): the struct allocation client
+`struct_create_store_wps` (StructExhibit) is a public-rule client
+over `allocCap` — the program binds its fresh pointer
+(`lets p = create(...)`) and stores through the bound symbol — and
+`struct_create_store_adequacy` launches it against the real engine
+from the production cold-start memory through
+`spike_engine_adequacy_alloc`. WHAT REMAINS OPEN (R-02, alloc arc
+P2 items 3-5): the self-contained allocating production theorems
+are still MIXED logical/operational proofs — their create prefixes
 (`counter_loop_certified_production`'s cold-start cell,
 `list_reverse_certified_production`'s two-create chain build, and
 `exhibitA_prod`'s create plus its termination trace) are handwritten
 certified operational rounds crossing `driverDone_step`, with the
-statement logic driving only the store/load/loop suffixes; and
-`struct_create_store_wps` still consumes the internal exact-cursor
-rule. Until the P2 rewrites land, those exports are evidence that
+statement logic driving only the store/load/loop suffixes. Until
+those rewrites land, the production exports are evidence that
 the shipped pipeline runs the programs as claimed — not that the
 separation logic verifies THEIR allocation. The finding-by-finding
 closure table is in `docs/2026-09-01_alloc-arc-plan.md`. The
