@@ -219,11 +219,13 @@ def rowSpec : Name → Option RowSpec
         `CerberusHeapLang.engine_adequacyJ],
       totalLane := totalVia [`CerberusHeapLang.wpt_create]
         [`CerberusHeapLang.alloc_create_launch_smoke,
-         `CerberusHeapLang.progAProd_wpt],
+         `CerberusHeapLang.progAProd_wpt,
+         `CerberusHeapLang.ctrProd_wpt,
+         `CerberusHeapLang.lrProd_wpt],
       prodLane := .thms [`CerberusHeapLang.exhibitA_prod,
         `CerberusHeapLang.counter_loop_certified_production,
         `CerberusHeapLang.list_reverse_certified_production]
-        (note := "exhibitA_prod is a WHOLE-PROGRAM create-rule consumer since alloc arc P2 step 3 (progAProd_wpt through the PUBLIC wpt_create + the generic wpt_driver_done_alloc collapse — zero operational proof terms); the two LOOP exports are STILL MIXED logical/operational (R-02, P2 steps 4-5): their create prefixes are handwritten certified operational rounds, NOT create-rule consumers"),
+        (note := "ALL THREE are WHOLE-PROGRAM create-rule consumers (alloc arc P2, the R-02 conversion): each program BINDS its engine-created pointer(s), the creates cross the PUBLIC wpt_create from abstract capacity plans (progAProd_wpt / ctrProd_wpt / lrProd_wpt), and the pipeline arrows are the generic wpt_driver_done_alloc → prod_run_eqJ — zero operational proof terms in any positive exhibit (grep transcript, docs/2026-09-01_p2-notes.md)"),
       consumer := .thms [`CerberusHeapLang.alloc_create_launch_smoke,
         `CerberusHeapLang.alloc_two_creates_wps,
         `CerberusHeapLang.alloc_create_wpt,
@@ -597,11 +599,13 @@ def Cell.render (env : Environment) : Cell → Except String String
   IO.println "   `exhibitA_prod` — since alloc arc P2 step 3 a WHOLE-PROGRAM"
   IO.println "   logic proof (progAProd_wpt through the PUBLIC wpt_create,"
   IO.println "   collapsed by the generic wpt_driver_done_alloc /"
-  IO.println "   prod_run_eqJ). SCOPE (2026-09-01 re-audit, R-02): the"
-  IO.println "   counter and reversal production proofs are MIXED"
-  IO.println "   logical/operational — their create/chain-build prefixes are"
-  IO.println "   handwritten certified operational rounds (driverDone_step"
-  IO.println "   chains), not create-rule consumers; the total judgment"
+  IO.println "   prod_run_eqJ). The counter and reversal production proofs"
+  IO.println "   are likewise WHOLE-PROGRAM logic proofs (P2 steps 4-5,"
+  IO.println "   R-02 closed): the programs BIND their engine-created"
+  IO.println "   pointers, ctrProd_wpt/lrProd_wpt carry create + stores +"
+  IO.println "   loop in one total judgment (the reversal consuming the"
+  IO.println "   GENERIC list logic verbatim at existential engine-picked"
+  IO.println "   ids, transported by wpt_mono_Ls); the total judgment"
   IO.println "   drives the loop suffixes only. fib (no heap) is the fully"
   IO.println "   logic-driven positive control."
   IO.println "4. **`create` has PUBLIC partial+total rules, LAUNCHABLE**"
@@ -638,9 +642,14 @@ def Cell.render (env : Environment) : Cell → Except String String
   IO.println "   `progAProd_wpt`/`exhibitA_prod` — the complete"
   IO.println "   create/store/load through the PUBLIC `wpt_create` and the"
   IO.println "   allocation-aware driver collapse `wpt_driver_done_alloc`."
-  IO.println "   RESIDUE (honest): the two allocating LOOP production"
-  IO.println "   exports remain MIXED logical/operational (R-02) — their"
-  IO.println "   whole-program rewrites are alloc-arc P2 steps 4-5."
+  IO.println "   LOOP-LANE WHOLE-PROGRAM CONSUMERS (P2 steps 4-5):"
+  IO.println "   `ctrProd_wpt`/`counter_loop_certified_production` (one-"
+  IO.println "   request plan) and `lrProd_wpt`/"
+  IO.println "   `list_reverse_certified_production` (two-request plan,"
+  IO.println "   the generic list logic consumed verbatim at existential"
+  IO.println "   engine-picked ids). R-01 and R-02 are CLOSED (closure"
+  IO.println "   table, docs/2026-09-01_alloc-arc-plan.md; plant"
+  IO.println "   transcripts in docs/2026-09-01_p2-notes.md)."
   IO.println "5. **Interior (sub-allocation) access is GENERIC** (Phase 2,"
   IO.println "   F-04 retired): one typed-subrange load and one store rule"
   IO.println "   (`wps_load_at`/`wps_store_at` over views; whole-cell forms"

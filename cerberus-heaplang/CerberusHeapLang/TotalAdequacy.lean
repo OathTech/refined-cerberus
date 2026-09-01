@@ -733,6 +733,16 @@ theorem readoutPost_annot_absorb {GF : BundledGFunctors} [SpikeGS .hasLC GF]
       readoutPost ψ (SpikeVal.mergeInto (.annot ds v) u) ρ' := by
   rw [congrFun (congrFun (readoutPost_mergeInto_annot ψ ds v) u) ρ']
 
+/-- Monotonicity of the readout in the pure postcondition. -/
+theorem readoutPost_mono {hlc : HasLC} {GF : BundledGFunctors}
+    [SpikeGS hlc GF] {ψ ψ' : value → Mem → Prop}
+    (h : ∀ v σ, ψ v σ → ψ' v σ) (w : SpikeVal) (ρ' : EnvStack) :
+    readoutPost (GF := GF) ψ w ρ' ⊢ readoutPost ψ' w ρ' := by
+  iintro H %σ' %ns %κs %nt Hσ
+  imod H $$ %σ' %ns %κs %nt Hσ with %hp
+  ipureintro
+  exact h _ _ hp
+
 
 /-- The simulation's pure conclusion: the drive at fuel k DELIVERS,
     the delivered value and final state satisfy the readout, and on

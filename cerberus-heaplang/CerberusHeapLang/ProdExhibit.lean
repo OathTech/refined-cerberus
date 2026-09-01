@@ -31,12 +31,11 @@ create prefix (`prodA_pre`) and six-round termination trace
 (`prodA_terminates`) are DELETED — no `Step.*`, `engineSteps_*`,
 `driveJ_step`, `driverDone_step` in any proof of this module.
 
-LEGACY COLD-START SCAFFOLDING (slice-3-pending): the concrete
-allocator facts `pxAddr`/`pxPtr`/`σcP`/`cellXP`/`mAP`/
-`bigSep_ptx_P`/`create_applies` below are NO LONGER used by this
-module's exhibit; they remain solely for ProdLoopExhibit's counter
-and reversal exports, whose own conversions are alloc arc P2 steps
-4-5 (the operational-prefix deletions land with them).
+The former concrete cold-start scaffolding (`pxAddr`/`pxPtr`/`σcP`/
+`cellXP`/`mAP`/`bigSep_ptx_P`/`create_applies`) is DELETED (alloc
+arc P2 step 6): its last consumers were the loop exports' handwritten
+operational prefixes, replaced by whole-program logic proofs in
+ProdLoopExhibit.
 -/
 import CerberusHeapLang.ProdEntry
 import CerberusHeapLang.Exhibit
@@ -50,97 +49,7 @@ open Iris Iris.BI Iris.ProgramLogic Iris.ProgramLogic.Language.Notation
 open Lem_Basic_classes Lem_Maybe Lem_List
 open scoped Iris.Std.PartialMap
 
-/-! ## LEGACY cold-start facts (slice-3-pending; see the header) -/
-
-/-- x's address: the cursor after the errno allocation
-    (0xFFFFFFFFFFF4). -/
-def pxAddr : Int := 281474976710644
-
-/-- x's pointer: allocation id 1 (errno is id 0). -/
-def pxPtr : CerbMem.PointerValue := cellPtr 1 pxAddr
-
-/-- The engine's own in-program allocation on the cold-start memory. -/
-def createSeeded : Option (CerbMem.PointerValue × Mem) :=
-  applyMemM (CerbMem.allocateObject 0 (PrefOther "spike-x")
-    (CerbMem.integerIval 4) intTy none none) prodMem₀
-
-/-- The state after the program's create. -/
-def σcP : Mem := match createSeeded with | some (_, σ) => σ | none => {}
-
-theorem createSeeded_eq : createSeeded = some (pxPtr, σcP) := rfl
-
-theorem create_applies :
-    applyMemM (CerbMem.allocateObject 0 (PrefOther "spike-x")
-      (CerbMem.integerIval 4) intTy none none) prodMem₀ =
-      some (pxPtr, σcP) := createSeeded_eq
-
-def pxAllocRec : CerbMem.Allocation :=
-  { base := pxAddr, size := 4, ty := some intTy,
-    isReadonly := CerbMem.readonlyStatusForAlloc (PrefOther "spike-x") none,
-    prefix_ := PrefOther "spike-x" }
-
-theorem σcP_allocations :
-    σcP.allocations =
-      ((({} : Mem).allocations.insert 0 errnoAllocRec).insert 1 pxAllocRec) := rfl
-
-theorem px_alloc_get : σcP.allocations.get? 1 = some pxAllocRec := by
-  rw [σcP_allocations]
-  simp
-
-theorem px_bytes_len (a : Int) :
-    (CerbMem.readBytesFrom σcP a 4).length = 4 := by
-  unfold CerbMem.readBytesFrom
-  simp
-
-/-- x's (uninitialized) cell in the post-create state. -/
-abbrev cellXP : SpikeCell := ⟨pxAddr, intTy, CerbMem.readBytesFrom σcP pxAddr 4⟩
-
-theorem cellCohXP : CellCoh σcP 1 cellXP :=
-  ⟨rfl, ⟨pxAllocRec, px_alloc_get, rfl, rfl, rfl, rfl⟩, rfl,
-   by rw [show CerbMem.sizeofCtype cellXP.ty = 4 from rfl]; exact px_bytes_len pxAddr,
-   by rw [show CerbMem.sizeofCtype cellXP.ty = 4 from rfl],
-   fun _ _ => rfl⟩
-
-/-- x's footprint (the legacy counter's precondition). -/
-abbrev mAP : CellMap := Iris.Std.PartialMap.insert ∅ 1 cellXP
-
-theorem coh_mAP : Coh σcP mAP := by
-  refine ⟨?_, ?_⟩
-  · intro id c h
-    by_cases h1 : id = 1
-    · subst h1
-      rw [mAP, Iris.Std.get?_insert_eq rfl] at h
-      cases h
-      exact cellCohXP
-    · rw [mAP, Iris.Std.get?_insert_ne (fun h' => h1 h'.symm),
-        Iris.Std.LawfulPartialMap.get?_empty] at h
-      cases h
-  · intro id1 id2 c1 c2 hne h1 h2
-    by_cases ha : id1 = 1
-    · subst ha
-      by_cases hb : id2 = 1
-      · exact absurd hb.symm hne
-      · rw [mAP, Iris.Std.get?_insert_ne (fun h' => hb h'.symm),
-          Iris.Std.LawfulPartialMap.get?_empty] at h2
-        cases h2
-    · rw [mAP, Iris.Std.get?_insert_ne (fun h' => ha h'.symm),
-        Iris.Std.LawfulPartialMap.get?_empty] at h1
-      cases h1
-
 variable {GF : BundledGFunctors}
-
-theorem bigSep_ptx_P [SpikeGS .hasLC GF] :
-    iprop(([∗map] i ↦ c ∈ mAP, cellOwn (hlc := .hasLC) (GF := GF) i (.own 1) c)) ⊢
-      pointsToCell (GF := GF) pxPtr (.own 1) intTy cellXP.bytes := by
-  refine .trans (BigSepM.bigSepM_insert (i := 1) (x := cellXP)
-    (Iris.Std.LawfulPartialMap.get?_empty (M := SpikeHeapF) 1)).1 ?_
-  iintro ⟨Hx, -⟩
-  iapply (pointsToCell_cellOwn_iff _ _ _ _).mpr
-  iexists 1, pxAddr
-  isplit
-  · ipureintro
-    rfl
-  · iexact Hx
 
 /-! ## The program (alloc arc P2 shape: the created pointer is
 BOUND; the stored constant rides a binder too — the mirrored

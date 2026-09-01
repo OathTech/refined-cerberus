@@ -481,16 +481,19 @@ allocation-aware driver collapse (`wpt_driver_done_alloc` →
 `prod_run_eqJ`) reaches the shipped pipeline; the old operational
 create prefix and six-round termination trace are DELETED (likewise
 Exhibit.lean's straight-line trace, retired for the generic total
-route `exhibitA_total`). WHAT REMAINS OPEN (R-02, alloc arc P2
-steps 4-5): the two allocating LOOP production theorems are still
-MIXED logical/operational proofs — their create/chain-build prefixes
-(`counter_loop_certified_production`'s cold-start cell,
-`list_reverse_certified_production`'s two-create chain build) are
-handwritten certified operational rounds crossing `driverDone_step`,
-with the statement logic driving only the loop suffixes. Until those
-rewrites land, those two exports are evidence that the shipped
-pipeline runs the programs as claimed — not that the separation
-logic verifies THEIR allocation. The finding-by-finding
+route `exhibitA_total`). THE LOOP-LANE
+WHOLE-PROGRAM CONSUMERS (P2 steps 4-5 — R-02 CLOSED): the counter
+and reversal production programs BIND their engine-created pointers,
+`ctrProd_wpt`/`lrProd_wpt` carry create + stores + loop in single
+total judgments (the reversal consuming the GENERIC list logic
+verbatim at existential engine-picked allocation ids, transported by
+`wpt_mono_Ls`; the create rule's exported address bounds feed
+`isList`'s node-WF facts), and the generic
+`wpt_driver_done_alloc` → `prod_run_eqJ` collapse supplies every
+pipeline arrow. The former handwritten `driverDone_step` prefixes
+are DELETED; no positive exhibit contains a direct operational-
+semantic proof chain (the grep transcript and the R-01/R-02
+closure-test plants are in `docs/2026-09-01_p2-notes.md`). The finding-by-finding
 closure table is in `docs/2026-09-01_alloc-arc-plan.md`. The
 README's divergence register keeps every remaining seam on one
 list, each with its discharge path.

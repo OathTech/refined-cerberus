@@ -38,7 +38,7 @@ owns no constructor and is mechanically barred from claiming any.
 | value delivery (Epure at PEval; Eannot values) | CERTIFIED (drive lane) | DECLARED — terminal — the toVal/ofVal value protocol (values do not step) | OK `wp_ofVal`, `wps_ofVal` | OK `Frag.val_pure` | OK `step_ctx_done`, `step_ctx_remove_annot` | OK `engine_complete`, `engine_adequacyJ` | OK `wpt_ofVal`, `fib_certified_total`, `list_reverse_certified_total` | OK `exhibitA_prod`, `fib_certified_production` | OK `exhibitA_engine` |
 | Eaction Store0 (value operands) | CERTIFIED (drive lane) | OK `Step.store` | OK `wp_store`, `wps_store` | OK `Frag.store` | OK `step_ctx_store`, `engine_complete_storeU` — TWO-SIDED at any MachineCtx | OK `engine_complete`, `engine_adequacyJ` | OK `wpt_store_at`, `wpt_store_cell_at`, `wpt_store_cell`, `list_reverse_certified_total` | OK `exhibitA_prod`, `counter_loop_certified_production`, `list_reverse_certified_production` | OK `exhibitB_engine`, `counter_loop_certified`, `list_reverse_certified` |
 | Eaction Load0 (value operand) | CERTIFIED (drive lane) | OK `Step.load` | OK `wp_load`, `wps_load` | OK `Frag.load` | OK `step_ctx_load` | OK `engine_complete`, `engine_adequacyJ` | OK `wpt_load_at`, `wpt_load_cell_at`, `list_reverse_certified_total` | OK `exhibitA_prod`, `list_reverse_certified_production` | OK `exhibitA_engine`, `array_sum_certified` |
-| Eaction Create0 | CERTIFIED (drive lane) | OK `Step.create` | OK `wps_create`, `wps_create_cursor_internal` — alloc arc P1: the PUBLIC wps_create takes the abstract capacity allocCap (req :: rest) and binds an existential pointer (statement cursor-free); the exact-cursor form is wps_create_cursor_internal (heap-implementation use only); OOM excluded by the plan-fit inside allocCap — see Notes 4 | OK `Frag.create` | OK `step_ctx_create` | OK `engine_complete`, `engine_adequacyJ` | OK `wpt_create`, `alloc_create_launch_smoke`, `progAProd_wpt` | OK `exhibitA_prod`, `counter_loop_certified_production`, `list_reverse_certified_production` — exhibitA_prod is a WHOLE-PROGRAM create-rule consumer since alloc arc P2 step 3 (progAProd_wpt through the PUBLIC wpt_create + the generic wpt_driver_done_alloc collapse — zero operational proof terms); the two LOOP exports are STILL MIXED logical/operational (R-02, P2 steps 4-5): their create prefixes are handwritten certified operational rounds, NOT create-rule consumers | OK `alloc_create_launch_smoke`, `alloc_two_creates_wps`, `alloc_create_wpt`, `struct_create_store_wps`, `struct_create_store_adequacy` — alloc_create_launch_smoke is the P1 engine-facing chain-closer (driveU .done at fuel 2 via wpt_create + wpt_engine_boundU_alloc from prodMem₀); alloc_two_creates_wps / alloc_create_wpt are the wps/wpt-level local consumers of the PUBLIC rules; struct_create_store_wps is a PUBLIC-rule whole-program client over allocCap (alloc arc P2 item 1 — the program binds the fresh pointer; no cursor vocabulary) with its engine-facing adequacy consumer struct_create_store_adequacy launched through spike_engine_adequacy_alloc (P2 item 2); the HEADLINE allocating exhibits are not yet consumers (R-02, P2 items 3-5) |
+| Eaction Create0 | CERTIFIED (drive lane) | OK `Step.create` | OK `wps_create`, `wps_create_cursor_internal` — alloc arc P1: the PUBLIC wps_create takes the abstract capacity allocCap (req :: rest) and binds an existential pointer (statement cursor-free); the exact-cursor form is wps_create_cursor_internal (heap-implementation use only); OOM excluded by the plan-fit inside allocCap — see Notes 4 | OK `Frag.create` | OK `step_ctx_create` | OK `engine_complete`, `engine_adequacyJ` | OK `wpt_create`, `alloc_create_launch_smoke`, `progAProd_wpt`, `ctrProd_wpt`, `lrProd_wpt` | OK `exhibitA_prod`, `counter_loop_certified_production`, `list_reverse_certified_production` — ALL THREE are WHOLE-PROGRAM create-rule consumers (alloc arc P2, the R-02 conversion): each program BINDS its engine-created pointer(s), the creates cross the PUBLIC wpt_create from abstract capacity plans (progAProd_wpt / ctrProd_wpt / lrProd_wpt), and the pipeline arrows are the generic wpt_driver_done_alloc → prod_run_eqJ — zero operational proof terms in any positive exhibit (grep transcript, docs/2026-09-01_p2-notes.md) | OK `alloc_create_launch_smoke`, `alloc_two_creates_wps`, `alloc_create_wpt`, `struct_create_store_wps`, `struct_create_store_adequacy` — alloc_create_launch_smoke is the P1 engine-facing chain-closer (driveU .done at fuel 2 via wpt_create + wpt_engine_boundU_alloc from prodMem₀); alloc_two_creates_wps / alloc_create_wpt are the wps/wpt-level local consumers of the PUBLIC rules; struct_create_store_wps is a PUBLIC-rule whole-program client over allocCap (alloc arc P2 item 1 — the program binds the fresh pointer; no cursor vocabulary) with its engine-facing adequacy consumer struct_create_store_adequacy launched through spike_engine_adequacy_alloc (P2 item 2); the HEADLINE allocating exhibits are not yet consumers (R-02, P2 items 3-5) |
 | Esseq, wildcard pattern | CERTIFIED (drive lane) | OK `Step.sseq_pure`, `Step.sseq_annot`, `Step.sseq_ctx` | OK `wp_sseq`, `wps_seq` | OK `Frag.sseq` | OK `step_ctx_beta_pure`, `step_ctx_beta_annot` | OK `engine_complete`, `engine_adequacyJ` | OK `wpt_seq`, `list_reverse_certified_total` | OK `exhibitA_prod`, `counter_loop_certified_production`, `list_reverse_certified_production` | OK `exhibitA_engine`, `exhibitC_engine` |
 | Eannot residue (descent + merge) | CERTIFIED (drive lane) | OK `Step.annot_ctx`, `Step.annot_merge` | OK `wp_annot`, `wps_annot` | OK `Frag.annot` | OK `step_ctx_merge` | OK `engine_complete`, `engine_adequacyJ` | OK `wpt_annot`, `list_reverse_certified_total` | OK `exhibitA_prod`, `counter_loop_certified_production`, `list_reverse_certified_production` | OK `exhibitA_engine` |
 | Esave (block entry, value-shaped params) | CERTIFIED (drive lane) | OK `Step.save` | OK `wps_save` | OK `Frag.save` | OK `step_ctx_save` | OK `engine_adequacyJ` | OK `wpt_save`, `fib_certified_total`, `list_reverse_certified_total` | OK `fib_certified_production`, `counter_loop_certified_production`, `list_reverse_certified_production` | OK `counter_loop_certified`, `fib_certified` |
@@ -113,11 +113,13 @@ owns no constructor and is mechanically barred from claiming any.
    `exhibitA_prod` — since alloc arc P2 step 3 a WHOLE-PROGRAM
    logic proof (progAProd_wpt through the PUBLIC wpt_create,
    collapsed by the generic wpt_driver_done_alloc /
-   prod_run_eqJ). SCOPE (2026-09-01 re-audit, R-02): the
-   counter and reversal production proofs are MIXED
-   logical/operational — their create/chain-build prefixes are
-   handwritten certified operational rounds (driverDone_step
-   chains), not create-rule consumers; the total judgment
+   prod_run_eqJ). The counter and reversal production proofs
+   are likewise WHOLE-PROGRAM logic proofs (P2 steps 4-5,
+   R-02 closed): the programs BIND their engine-created
+   pointers, ctrProd_wpt/lrProd_wpt carry create + stores +
+   loop in one total judgment (the reversal consuming the
+   GENERIC list logic verbatim at existential engine-picked
+   ids, transported by wpt_mono_Ls); the total judgment
    drives the loop suffixes only. fib (no heap) is the fully
    logic-driven positive control.
 4. **`create` has PUBLIC partial+total rules, LAUNCHABLE**
@@ -154,9 +156,14 @@ owns no constructor and is mechanically barred from claiming any.
    `progAProd_wpt`/`exhibitA_prod` — the complete
    create/store/load through the PUBLIC `wpt_create` and the
    allocation-aware driver collapse `wpt_driver_done_alloc`.
-   RESIDUE (honest): the two allocating LOOP production
-   exports remain MIXED logical/operational (R-02) — their
-   whole-program rewrites are alloc-arc P2 steps 4-5.
+   LOOP-LANE WHOLE-PROGRAM CONSUMERS (P2 steps 4-5):
+   `ctrProd_wpt`/`counter_loop_certified_production` (one-
+   request plan) and `lrProd_wpt`/
+   `list_reverse_certified_production` (two-request plan,
+   the generic list logic consumed verbatim at existential
+   engine-picked ids). R-01 and R-02 are CLOSED (closure
+   table, docs/2026-09-01_alloc-arc-plan.md; plant
+   transcripts in docs/2026-09-01_p2-notes.md).
 5. **Interior (sub-allocation) access is GENERIC** (Phase 2,
    F-04 retired): one typed-subrange load and one store rule
    (`wps_load_at`/`wps_store_at` over views; whole-cell forms

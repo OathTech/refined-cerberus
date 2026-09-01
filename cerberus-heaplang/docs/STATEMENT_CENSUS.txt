@@ -707,15 +707,13 @@
     tag_definition
     value
     value.Vunit
-  SPEC IDIOM (CerberusHeapLang) (9):
+  SPEC IDIOM (CerberusHeapLang) (7):
     CerberusHeapLang.CellCoh
-    CerberusHeapLang.SpikeCell.bytes
     CerberusHeapLang.SpikeCell.mk
-    CerberusHeapLang.cellXP
     CerberusHeapLang.counterProdProg
     CerberusHeapLang.intTy
+    CerberusHeapLang.intUndefBytes
     CerberusHeapLang.prodFile
-    CerberusHeapLang.pxAddr
     CerberusHeapLang.sevenBytes
   IRIS (0):
   LEAN CORE/STD (29):
@@ -776,16 +774,15 @@
     sym
     tag_definition
     value
-  SPEC IDIOM (CerberusHeapLang) (7):
+  SPEC IDIOM (CerberusHeapLang) (6):
     CerberusHeapLang.CellMap
     CerberusHeapLang.Sat
     CerberusHeapLang.SeedChain
-    CerberusHeapLang.lrProdNs
     CerberusHeapLang.lrProdProg
     CerberusHeapLang.prodFile
     CerberusHeapLang.ptrVal
   IRIS (0):
-  LEAN CORE/STD (13):
+  LEAN CORE/STD (14):
     And
     Bool
     Bool.false
@@ -795,8 +792,9 @@
     List
     List.cons
     List.nil
-    List.reverse
+    OfNat.ofNat
     Prod
     Prod.mk
     String
+    instOfNat
 census: done (statement surfaces only; proofs not inspected)

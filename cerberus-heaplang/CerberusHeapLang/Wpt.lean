@@ -313,6 +313,79 @@ theorem wpt_mono {Ψ₁ Ψ₂ : SpikeVal → EnvStack → IProp GF}
         imodintro
         iapply IH (r.e) (r.ρ) $$ H
 
+/-- Monotonicity in the LABEL CONTEXT (alloc arc P2): a judgment at
+    a pointwise-stronger label context transports to a weaker one —
+    the jump clause's payload maps through the entailment, the value
+    and step clauses are label-free. (The production reversal wraps
+    the generic list label spec in an existential over the
+    engine-picked allocation ids; this is the transport.) -/
+theorem wpt_mono_Ls {Ls₁ Ls₂ : LabelSpecT GF}
+    {Ψ : SpikeVal → EnvStack → IProp GF}
+    (h : ∀ l m vs ρ', Ls₁ l m vs ρ' ⊢ Ls₂ l m vs ρ')
+    (k : Nat) (e : CoreExpr) (ρ : EnvStack) :
+    wpt M Ls₁ k Ψ e ρ ⊢ wpt M Ls₂ k Ψ e ρ := by
+  induction k generalizing e ρ with
+  | zero =>
+    cases htv : toVal e with
+    | some w =>
+      rw [wpt_val_eq (Ls := Ls₁) 0 htv, wpt_val_eq (Ls := Ls₂) 0 htv]
+    | none =>
+      cases hjr : jumpRedex? e with
+      | some lp =>
+        obtain ⟨l, pes⟩ := lp
+        rw [wpt_jump_eq (Ls := Ls₁) 0 htv hjr,
+          wpt_jump_eq (Ls := Ls₂) 0 htv hjr]
+        iintro H
+        imod H with ⟨%params, %cont, %vs, %ev0, %evs, %m, %h1, %h2, %h3,
+          %h4, HLs⟩
+        imodintro
+        iexists params, cont, vs, ev0, evs, m
+        isplit
+        · ipureintro; exact h1
+        isplit
+        · ipureintro; exact h2
+        isplit
+        · ipureintro; exact h3
+        isplit
+        · ipureintro; exact h4
+        iapply h l m vs ρ $$ HLs
+      | none =>
+        rw [wpt_zero_step_eq (Ls := Ls₁) htv hjr,
+          wpt_zero_step_eq (Ls := Ls₂) htv hjr]
+  | succ m IH =>
+    cases htv : toVal e with
+    | some w =>
+      rw [wpt_val_eq (Ls := Ls₁) (m + 1) htv, wpt_val_eq (Ls := Ls₂) (m + 1) htv]
+    | none =>
+      cases hjr : jumpRedex? e with
+      | some lp =>
+        obtain ⟨l, pes⟩ := lp
+        rw [wpt_jump_eq (Ls := Ls₁) (m + 1) htv hjr,
+          wpt_jump_eq (Ls := Ls₂) (m + 1) htv hjr]
+        iintro H
+        imod H with ⟨%params, %cont, %vs, %ev0, %evs, %m', %h1, %h2, %h3,
+          %h4, HLs⟩
+        imodintro
+        iexists params, cont, vs, ev0, evs, m'
+        isplit
+        · ipureintro; exact h1
+        isplit
+        · ipureintro; exact h2
+        isplit
+        · ipureintro; exact h3
+        isplit
+        · ipureintro; exact h4
+        iapply h l m' vs ρ $$ HLs
+      | none =>
+        rw [wpt_step_eq (Ls := Ls₁) m htv hjr, wpt_step_eq (Ls := Ls₂) m htv hjr]
+        iintro H %σ₁ %ns %obs %nt Hσ
+        imod H $$ %σ₁ %ns %obs %nt Hσ with ⟨$, H⟩
+        imodintro
+        iintro %r %σ₂ %eₜ %Hstep
+        imod H $$ %r %σ₂ %eₜ %Hstep with ⟨$, H⟩
+        imodintro
+        iapply IH (r.e) (r.ρ) $$ H
+
 /-- Value rule (delivery cost within budget). -/
 theorem wpt_ofVal {Ψ : SpikeVal → EnvStack → IProp GF} (w : SpikeVal)
     (ρ : EnvStack) {k : Nat} (hk : deliveryCost w ≤ k) :
