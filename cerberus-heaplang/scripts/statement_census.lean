@@ -46,7 +46,11 @@ import CerberusHeapLang
 
 open Lean Meta
 
-/-- The pinned exported theorems (the README verify-me list). -/
+/-- The pinned exported theorems: the README verify-me list, plus
+(arc-close re-audit fix L2, 2026-09-01) the three Phase-5 production
+exports — the arc's headline new statements, now census-FROZEN, not
+just axiom-pinned, so gate 5's statement-vocabulary protection
+extends to them. -/
 def pinned : List Name := [
   `CerberusHeapLang.semantic_triple_sound,
   `CerberusHeapLang.engine_complete,
@@ -59,7 +63,12 @@ def pinned : List Name := [
   `CerberusHeapLang.tree_rotate_certified,
   `CerberusHeapLang.tree_rotate_certified_total,
   `CerberusHeapLang.exhibitA_prod,
-  `CerberusHeapLang.counter_loop_certified_registration]
+  `CerberusHeapLang.counter_loop_certified_registration,
+  -- Phase-5 production exports (appended at the end so the
+  -- committed census's existing blocks stay byte-identical):
+  `CerberusHeapLang.fib_certified_production,
+  `CerberusHeapLang.counter_loop_certified_production,
+  `CerberusHeapLang.list_reverse_certified_production]
 
 inductive Bin | engine | idiom | iris | core
 deriving BEq

@@ -248,8 +248,11 @@ info: CerberusHeapLang/Audit.lean:624:0: CerberusHeapLang banned-axiom sweep: 20
   slice).
 - **Exact pins for all public exports — COMPLETED THIS SLICE**: the
   curated pin list (Audit.lean `#guard_msgs in #print axioms`,
-  62 pins after this slice) now covers every theorem in the
-  README's exhibit table plus the manifest's consumer regressions.
+  62 pins after this slice) now covers every EXPORTED theorem in
+  the README's exhibit table plus the manifest's consumer
+  regressions; the table's one explicitly-interior row (`wp_store`/
+  `wp_load`) carries no curated pins and is sweep-BOUNDED only
+  (wording trued at arc close — re-audit finding L3).
   Added this slice (each pinned exactly the trio, verified by the
   green build): `exhibitA_semantic`, `exhibitB_semantic`,
   `engine_adequacyU`, `case_certified`, `wseq_certified`. Every

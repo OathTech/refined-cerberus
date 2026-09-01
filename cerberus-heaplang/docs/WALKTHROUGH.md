@@ -889,9 +889,12 @@ Census output, verbatim (2026-08-31, this checkout):
 
 ### 5.4 The invariant, and what the census surfaces
 
-The full census run covers all twelve pinned theorems (the README's
-verify-me list, including the Phase-4 tree-rotation exports). What
-it witnesses: **every exported statement is engine vocabulary plus
+The full census run covers all fifteen pinned theorems: the README's
+verify-me list (including the Phase-4 tree-rotation exports) plus —
+since the arc-close re-audit fix (L2, 2026-09-01) — the three
+Phase-5 production exports (`fib_certified_production`,
+`counter_loop_certified_production`,
+`list_reverse_certified_production`). What it witnesses: **every exported statement is engine vocabulary plus
 the enumerated spec idiom plus Lean core/std, nothing else** — with
 two honest observations, reported rather than papered over:
 
@@ -906,15 +909,25 @@ two honest observations, reported rather than papered over:
    (`semantic_triple_sound` — whose hypothesis `ProvenTriple` is
    itself an Iris-level judgment, so the binder is load-bearing
    there, permanently and by design).
-2. **Finite-map vocabulary.** Statements that phrase footprints as
-   concrete maps (the flagships' `SeedChain`/`SeedTree` seeds, the
-   frame footprints, `counter_loop_certified_production`) surface
-   iris-lean's finite-map *library* (`Iris.Std.PartialMap`
-   operations — `get?`, `union`, disjointness — and an `ExtTreeMap`
-   instance) in the IRIS bin. That is data-structure vocabulary
-   (the type of footprint maps), not program-logic machinery — but
-   it is iris-lean code in a statement surface, so it is listed,
-   not hidden.
+2. **Finite-map vocabulary.** Statements that phrase footprints
+   through finite-map *operations* (the flagships' framed
+   footprints and the loop exports' singleton cells —
+   `list_reverse_certified`, `list_reverse_demo`,
+   `tree_rotate_certified{,_total}`, `counter_loop_certified`,
+   `array_sum_certified`, `counter_loop_certified_registration`)
+   surface iris-lean's finite-map *library* (`Iris.Std.PartialMap`
+   operations — `singleton`, `get?`, `union`, disjointness — and an
+   `ExtTreeMap` instance) in the IRIS bin. That is data-structure
+   vocabulary (the type of footprint maps), not program-logic
+   machinery — but it is iris-lean code in a statement surface, so
+   it is listed, not hidden. The three Phase-5 production exports,
+   by contrast, have census-witnessed EMPTY IRIS bins: their
+   footprint vocabulary enters only through the named spec-idiom
+   predicates (`CellCoh`, `Sat`/`SeedChain` over `CellMap`), whose
+   definitions §3 and §5.2 read. (Arc-close correction: an earlier
+   revision of this item cited `counter_loop_certified_production`
+   as surfacing the finite-map library — the extended census showed
+   its IRIS bin is empty; re-audit finding L1.)
 
 The census GATES since the acceptance-suite slice (2026-09-01):
 its output is committed as `docs/STATEMENT_CENSUS.txt` and
@@ -941,8 +954,8 @@ boundary and checks every constant of every kind for
 `sorryAx`/`ofReduceBool`/`ofReduceNat`. Expected tail:
 
 ```
-info: CerberusHeapLang/Audit.lean:624:0: CerberusHeapLang axiom sweep: 1123 theorems BOUNDED by the declared upper bounds (71 in the production-entry boundary modules, of which 13 carry the boundary axiom — each STATEMENT-BORNE, origin-checked, so every boundary cone is exact-by-construction: trio + runEffectful iff the statement carries it; all other theorems bounded by the trio; headline cones additionally pinned above)
-info: CerberusHeapLang/Audit.lean:624:0: CerberusHeapLang banned-axiom sweep: 2075 constants of every kind checked; sorryAx/ofReduceBool/ofReduceNat absent from all cones
+info: CerberusHeapLang/Audit.lean:622:0: CerberusHeapLang axiom sweep: 1123 theorems BOUNDED by the declared upper bounds (71 in the production-entry boundary modules, of which 13 carry the boundary axiom — each STATEMENT-BORNE, origin-checked, so every boundary cone is exact-by-construction: trio + runEffectful iff the statement carries it; all other theorems bounded by the trio; headline cones additionally pinned above)
+info: CerberusHeapLang/Audit.lean:622:0: CerberusHeapLang banned-axiom sweep: 2075 constants of every kind checked; sorryAx/ofReduceBool/ofReduceNat absent from all cones
 Build completed successfully (443 jobs).
 ```
 

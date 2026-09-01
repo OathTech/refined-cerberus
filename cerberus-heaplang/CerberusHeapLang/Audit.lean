@@ -325,18 +325,16 @@ info: 'CerberusHeapLang.StmtProbe.demo_loop' depends on axioms: [propext, Classi
 -- judgment as a package-local guarded fixpoint (public iris-lean
 -- Banach API; jump clause deliberately absent, S3's — module header).
 -- Pinned: the sequencing rule (the jump-aware statement shape over
--- Core), the collapse into the base WP (the sole adequacy interface),
+-- Core), the collapse into the base WP (the sole adequacy interface
+-- — `wps_sound`, whose pin lives in the headline block above; this
+-- block's duplicate pin was removed at arc close, 2026-09-01
+-- re-audit observation: 63 blocks → 62, one per distinct theorem),
 -- and the store small axiom at the stratum. Each cone exactly the
 -- trio.
 /--
 info: 'CerberusHeapLang.wps_seq' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in #print axioms CerberusHeapLang.wps_seq
-
-/--
-info: 'CerberusHeapLang.wps_sound' depends on axioms: [propext, Classical.choice, Quot.sound]
--/
-#guard_msgs in #print axioms CerberusHeapLang.wps_sound
 
 /--
 info: 'CerberusHeapLang.wps_store' depends on axioms: [propext, Classical.choice, Quot.sound]

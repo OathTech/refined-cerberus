@@ -620,4 +620,185 @@
     instOfNat
     instOfNatNat
     instOrdInt
+== CerberusHeapLang.fib_certified_production ==
+  ENGINE (24):
+    CerbFS.FsState
+    CerbLocation.Loc
+    CerbMem.IntegerValue
+    CerbND.runND
+    core_base_type
+    core_run_annotation
+    drive
+    driver_error
+    driver_result
+    driver_result.dres_blocked
+    driver_result.dres_core_value
+    driver_result.dres_stderr
+    driver_result.dres_stdout
+    driver_state
+    fmapEmpty
+    initial_driver_state
+    lemDefaultFuel
+    mem_constraint
+    nd_status
+    nd_status.Active
+    step_kind
+    sym
+    tag_definition
+    value
+  SPEC IDIOM (CerberusHeapLang) (4):
+    CerberusHeapLang.fibProg
+    CerberusHeapLang.fibSpec
+    CerberusHeapLang.ivVal
+    CerberusHeapLang.prodFile
+  IRIS (0):
+  LEAN CORE/STD (26):
+    And
+    Bool
+    Bool.false
+    Eq
+    Exists
+    HAdd.hAdd
+    HMul.hMul
+    Int
+    Int.instLEInt
+    Int.toNat
+    LE.le
+    List
+    List.cons
+    List.nil
+    Nat
+    OfNat.ofNat
+    Prod
+    Prod.mk
+    String
+    instAddNat
+    instHAdd
+    instHMul
+    instLENat
+    instMulNat
+    instOfNat
+    instOfNatNat
+== CerberusHeapLang.counter_loop_certified_production ==
+  ENGINE (28):
+    CerbFS.FsState
+    CerbLocation.Loc
+    CerbMem.AbsByte
+    CerbMem.IntegerValue
+    CerbND.runND
+    core_base_type
+    core_run_annotation
+    drive
+    driver_error
+    driver_result
+    driver_result.dres_blocked
+    driver_result.dres_core_value
+    driver_result.dres_stderr
+    driver_result.dres_stdout
+    driver_state
+    driver_state.layout_state
+    fmapEmpty
+    initial_driver_state
+    lemDefaultFuel
+    mem_constraint
+    memory_order
+    nd_status
+    nd_status.Active
+    step_kind
+    sym
+    tag_definition
+    value
+    value.Vunit
+  SPEC IDIOM (CerberusHeapLang) (9):
+    CerberusHeapLang.CellCoh
+    CerberusHeapLang.SpikeCell.bytes
+    CerberusHeapLang.SpikeCell.mk
+    CerberusHeapLang.cellXP
+    CerberusHeapLang.counterProdProg
+    CerberusHeapLang.intTy
+    CerberusHeapLang.prodFile
+    CerberusHeapLang.pxAddr
+    CerberusHeapLang.sevenBytes
+  IRIS (0):
+  LEAN CORE/STD (29):
+    And
+    Bool
+    Bool.false
+    Eq
+    Exists
+    HAdd.hAdd
+    HMul.hMul
+    Int
+    Int.instLEInt
+    Int.instLTInt
+    Int.toNat
+    LE.le
+    LT.lt
+    List
+    List.cons
+    List.nil
+    Nat
+    OfNat.ofNat
+    Or
+    Prod
+    Prod.mk
+    String
+    instAddNat
+    instHAdd
+    instHMul
+    instLENat
+    instMulNat
+    instOfNat
+    instOfNatNat
+== CerberusHeapLang.list_reverse_certified_production ==
+  ENGINE (26):
+    CerbFS.FsState
+    CerbLocation.Loc
+    CerbMem.IntegerValue
+    CerbMem.PointerValue
+    CerbND.runND
+    core_base_type
+    core_run_annotation
+    drive
+    driver_error
+    driver_result
+    driver_result.dres_blocked
+    driver_result.dres_core_value
+    driver_result.dres_stderr
+    driver_result.dres_stdout
+    driver_state
+    driver_state.layout_state
+    fmapEmpty
+    initial_driver_state
+    mem_constraint
+    memory_order
+    nd_status
+    nd_status.Active
+    step_kind
+    sym
+    tag_definition
+    value
+  SPEC IDIOM (CerberusHeapLang) (7):
+    CerberusHeapLang.CellMap
+    CerberusHeapLang.Sat
+    CerberusHeapLang.SeedChain
+    CerberusHeapLang.lrProdNs
+    CerberusHeapLang.lrProdProg
+    CerberusHeapLang.prodFile
+    CerberusHeapLang.ptrVal
+  IRIS (0):
+  LEAN CORE/STD (13):
+    And
+    Bool
+    Bool.false
+    Eq
+    Exists
+    Int
+    List
+    List.cons
+    List.nil
+    List.reverse
+    Prod
+    Prod.mk
+    String
 census: done (statement surfaces only; proofs not inspected)

@@ -225,3 +225,33 @@ instruments: `CerberusHeapLang/Audit.lean` (sweep + origin
 discipline + 62 exact pins), `scripts/test_unit.sh` (five gates).
 The suite evidence: `docs/2026-09-01_acceptance-suite-record.md`.
 The per-phase records: the dated notes cited above, in order.
+
+## Arc close (2026-09-01)
+
+The fresh foundational re-audit landed:
+`docs/2026-09-01_foundational-re-audit.md` (repository-root `docs/`;
+new auditor, every claim re-derived on this tree @ `4dc79a3`, gates
+re-run independently, two mutation plants + one perturbation
+re-executed end-to-end). **Verdict: ZERO High findings — the arc's
+exit criterion is met.** Three Low findings (documentation /
+instrument precision, none touching a theorem, a cone, or a gate's
+soundness), all fixed in the arc-close commit ("foundations arc
+CLOSED: …" — the commit that also commits the re-audit record and
+this section): L2 — the statement census extended from the 12
+verify-me theorems to 15, adding the three Phase-5 production
+exports (`fib/counter_loop/list_reverse_certified_production`), so
+gate 5's freeze now covers the arc's headline statement surfaces;
+L1 — walkthrough §5.4 trued to the extended census (the extension
+showed the production exports' IRIS bins are census-witnessed
+EMPTY, so the old `counter_loop_certified_production` finite-map
+cite was removed as wrong, correction noted in place); L3 — the
+acceptance record's pin-coverage sentence trued (every EXPORTED
+exhibit-table theorem exactly-pinned; the interior
+`wp_store`/`wp_load` row sweep-BOUNDED only). Plus the re-audit's
+cosmetic observation: the duplicate `wps_sound` pin in Audit.lean
+deduped (63 → 62 `#guard_msgs` blocks, one per distinct theorem;
+the sweep's source position moved to `Audit.lean:622`, expected-tail
+quotes in README/walkthrough re-baselined to the re-run build's
+verbatim output). Gate suite after the fixes: `ALL GATES GREEN`
+(all five, manifest and census drift-free). **The foundations arc
+is CLOSED; the port is unblocked.**
