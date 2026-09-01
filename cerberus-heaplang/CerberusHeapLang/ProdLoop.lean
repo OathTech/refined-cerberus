@@ -161,6 +161,26 @@ theorem driverDone_step {M₀ : MachineCtx}
   rcases cs with ⟨ths, io⟩
   rfl
 
+/-! ## Readout plumbing for sequenced prefixes: the engine readout
+only reads the ERASED value, so an annotation-merge on the sequenced
+value is absorbed (the LETS-ANNOT residue of a prefix store never
+reaches ψ). -/
+
+theorem val_mergeInto_annot (ds : List dyn_annotation) (v : value)
+    (u : SpikeVal) :
+    (SpikeVal.mergeInto (.annot ds v) u).val = u.val := by
+  cases u <;> rfl
+
+theorem readoutPost_mergeInto_annot {GF : BundledGFunctors}
+    [SpikeGS .hasLC GF] (ψ : value → Mem → Prop)
+    (ds : List dyn_annotation) (v : value) :
+    (fun (u : SpikeVal) (ρ' : EnvStack) =>
+      readoutPost (GF := GF) ψ (SpikeVal.mergeInto (.annot ds v) u) ρ') =
+    (fun (u : SpikeVal) (ρ' : EnvStack) => readoutPost (GF := GF) ψ u ρ') := by
+  funext u ρ'
+  unfold readoutPost
+  rw [val_mergeInto_annot ds v u]
+
 /-! ## THE SIMULATION: the total judgment drives the production
 driver's loop (the `wpt_drive_aux` clone at the driver level). -/
 

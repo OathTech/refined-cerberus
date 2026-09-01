@@ -406,6 +406,32 @@ info: 'CerberusHeapLang.fib_certified_production' depends on axioms: [propext, r
 -/
 #guard_msgs in #print axioms CerberusHeapLang.fib_certified_production
 
+-- Phase 5 (2026-09-01, continued): the remaining loop production
+-- exports — the SELF-CONTAINED counter (engine-created cell) and the
+-- SELF-CONTAINED two-node list reversal (engine-built chain), each on
+-- the shipped pipeline from the cold start; and the new whole-cell
+-- total store rule (trio).
+/--
+info: 'CerberusHeapLang.wpt_store_cell' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms CerberusHeapLang.wpt_store_cell
+
+/--
+info: 'CerberusHeapLang.counter_loop_certified_production' depends on axioms: [propext,
+ runEffectful,
+ Classical.choice,
+ Quot.sound]
+-/
+#guard_msgs in #print axioms CerberusHeapLang.counter_loop_certified_production
+
+/--
+info: 'CerberusHeapLang.list_reverse_certified_production' depends on axioms: [propext,
+ runEffectful,
+ Classical.choice,
+ Quot.sound]
+-/
+#guard_msgs in #print axioms CerberusHeapLang.list_reverse_certified_production
+
 -- List-reverse arc phase A (2026-08-31): THE CANONICAL EXHIBIT —
 -- in-place list reversal over one-allocation two-field nodes, the
 -- honest null encoding + the engine's own PtrEq memop as the null

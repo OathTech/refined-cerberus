@@ -174,8 +174,11 @@ def rowSpec : Name → Option RowSpec
       partialLane := .thms [`CerberusHeapLang.engine_complete,
         `CerberusHeapLang.engine_adequacyJ],
       totalLane := totalVia [`CerberusHeapLang.wpt_store_at,
-        `CerberusHeapLang.wpt_store_cell_at] [`CerberusHeapLang.list_reverse_certified_total],
-      prodLane := .thms [`CerberusHeapLang.exhibitA_prod],
+        `CerberusHeapLang.wpt_store_cell_at, `CerberusHeapLang.wpt_store_cell]
+        [`CerberusHeapLang.list_reverse_certified_total],
+      prodLane := .thms [`CerberusHeapLang.exhibitA_prod,
+        `CerberusHeapLang.counter_loop_certified_production,
+        `CerberusHeapLang.list_reverse_certified_production],
       consumer := .thms [`CerberusHeapLang.exhibitB_engine,
         `CerberusHeapLang.counter_loop_certified,
         `CerberusHeapLang.list_reverse_certified] }
@@ -188,7 +191,8 @@ def rowSpec : Name → Option RowSpec
         `CerberusHeapLang.engine_adequacyJ],
       totalLane := totalVia [`CerberusHeapLang.wpt_load_at,
         `CerberusHeapLang.wpt_load_cell_at] [`CerberusHeapLang.list_reverse_certified_total],
-      prodLane := .thms [`CerberusHeapLang.exhibitA_prod],
+      prodLane := .thms [`CerberusHeapLang.exhibitA_prod,
+        `CerberusHeapLang.list_reverse_certified_production],
       consumer := .thms [`CerberusHeapLang.exhibitA_engine,
         `CerberusHeapLang.array_sum_certified] }
   | `CerberusHeapLang.Frag.create => some
@@ -199,8 +203,10 @@ def rowSpec : Name → Option RowSpec
       engineMatch := .thms [`CerberusHeapLang.step_ctx_create],
       partialLane := .thms [`CerberusHeapLang.engine_complete,
         `CerberusHeapLang.engine_adequacyJ],
-      totalLane := noTotal "no wpt_create — mechanical analog of wps_create, no consumer",
-      prodLane := .thms [`CerberusHeapLang.exhibitA_prod],
+      totalLane := noTotal "no wpt_create — mechanical analog of wps_create, no consumer (production creates cross the driver as certified rounds instead — driverDone_step)",
+      prodLane := .thms [`CerberusHeapLang.exhibitA_prod,
+        `CerberusHeapLang.counter_loop_certified_production,
+        `CerberusHeapLang.list_reverse_certified_production],
       consumer := .thms [`CerberusHeapLang.exhibitA_prod,
         `CerberusHeapLang.struct_create_store_wps]
         (note := "production exhibit + the allocate-then-initialize client") }
@@ -214,7 +220,9 @@ def rowSpec : Name → Option RowSpec
       partialLane := .thms [`CerberusHeapLang.engine_complete,
         `CerberusHeapLang.engine_adequacyJ],
       totalLane := totalVia [`CerberusHeapLang.wpt_seq] [`CerberusHeapLang.list_reverse_certified_total],
-      prodLane := .thms [`CerberusHeapLang.exhibitA_prod],
+      prodLane := .thms [`CerberusHeapLang.exhibitA_prod,
+        `CerberusHeapLang.counter_loop_certified_production,
+        `CerberusHeapLang.list_reverse_certified_production],
       consumer := .thms [`CerberusHeapLang.exhibitA_engine,
         `CerberusHeapLang.exhibitC_engine] }
   | `CerberusHeapLang.Frag.annot => some
@@ -226,7 +234,9 @@ def rowSpec : Name → Option RowSpec
       partialLane := .thms [`CerberusHeapLang.engine_complete,
         `CerberusHeapLang.engine_adequacyJ],
       totalLane := totalVia [`CerberusHeapLang.wpt_annot] [`CerberusHeapLang.list_reverse_certified_total],
-      prodLane := .thms [`CerberusHeapLang.exhibitA_prod],
+      prodLane := .thms [`CerberusHeapLang.exhibitA_prod,
+        `CerberusHeapLang.counter_loop_certified_production,
+        `CerberusHeapLang.list_reverse_certified_production],
       consumer := .thms [`CerberusHeapLang.exhibitA_engine] }
   | `CerberusHeapLang.Frag.save => some
     { token := "save", construct := "Esave (block entry, value-shaped params)",
@@ -236,7 +246,9 @@ def rowSpec : Name → Option RowSpec
       partialLane := .thms [`CerberusHeapLang.engine_adequacyJ],
       totalLane := totalVia [`CerberusHeapLang.wpt_save]
         [`CerberusHeapLang.fib_certified_total, `CerberusHeapLang.list_reverse_certified_total],
-      prodLane := .thms [`CerberusHeapLang.fib_certified_production],
+      prodLane := .thms [`CerberusHeapLang.fib_certified_production,
+        `CerberusHeapLang.counter_loop_certified_production,
+        `CerberusHeapLang.list_reverse_certified_production],
       consumer := .thms [`CerberusHeapLang.counter_loop_certified,
         `CerberusHeapLang.fib_certified] }
   | `CerberusHeapLang.Frag.if_ => some
@@ -250,7 +262,9 @@ def rowSpec : Name → Option RowSpec
       partialLane := .thms [`CerberusHeapLang.engine_adequacyJ],
       totalLane := totalVia [`CerberusHeapLang.wpt_if_true,
         `CerberusHeapLang.wpt_if_false] [`CerberusHeapLang.fib_certified_total, `CerberusHeapLang.list_reverse_certified_total],
-      prodLane := .thms [`CerberusHeapLang.fib_certified_production],
+      prodLane := .thms [`CerberusHeapLang.fib_certified_production,
+        `CerberusHeapLang.counter_loop_certified_production,
+        `CerberusHeapLang.list_reverse_certified_production],
       consumer := .thms [`CerberusHeapLang.counter_loop_certified,
         `CerberusHeapLang.fib_certified] }
   | `CerberusHeapLang.Frag.run => some
@@ -262,7 +276,9 @@ def rowSpec : Name → Option RowSpec
       partialLane := .thms [`CerberusHeapLang.engine_adequacyJ],
       totalLane := totalVia [`CerberusHeapLang.wpt_run]
         [`CerberusHeapLang.fib_certified_total, `CerberusHeapLang.list_reverse_certified_total],
-      prodLane := .thms [`CerberusHeapLang.fib_certified_production],
+      prodLane := .thms [`CerberusHeapLang.fib_certified_production,
+        `CerberusHeapLang.counter_loop_certified_production,
+        `CerberusHeapLang.list_reverse_certified_production],
       consumer := .thms [`CerberusHeapLang.counter_loop_certified,
         `CerberusHeapLang.fib_certified] }
   | `CerberusHeapLang.Frag.sseq_spec => some
@@ -274,7 +290,7 @@ def rowSpec : Name → Option RowSpec
         `CerberusHeapLang.step_ctx_beta_spec_annot],
       partialLane := .thms [`CerberusHeapLang.engine_adequacyJ],
       totalLane := totalVia [`CerberusHeapLang.wpt_seq_spec] [`CerberusHeapLang.list_reverse_certified_total],
-      prodLane := prodRegOnly,
+      prodLane := .thms [`CerberusHeapLang.list_reverse_certified_production],
       consumer := .thms [`CerberusHeapLang.array_sum_certified,
         `CerberusHeapLang.list_reverse_certified] }
   | `CerberusHeapLang.Frag.pure_sym => some
@@ -286,7 +302,9 @@ def rowSpec : Name → Option RowSpec
       partialLane := .thms [`CerberusHeapLang.engine_adequacyJ],
       totalLane := totalVia [`CerberusHeapLang.wpt_pure]
         [`CerberusHeapLang.fib_certified_total, `CerberusHeapLang.list_reverse_certified_total],
-      prodLane := .thms [`CerberusHeapLang.fib_certified_production],
+      prodLane := .thms [`CerberusHeapLang.fib_certified_production,
+        `CerberusHeapLang.counter_loop_certified_production,
+        `CerberusHeapLang.list_reverse_certified_production],
       consumer := .thms [`CerberusHeapLang.fib_certified] }
   | `CerberusHeapLang.Frag.load_op => some
     { token := "load-op", construct := "Load0 operand-evaluation step (ACTION_EVAL)",
@@ -295,7 +313,7 @@ def rowSpec : Name → Option RowSpec
       engineMatch := .thms [`CerberusHeapLang.stepDischarge_load_eval],
       partialLane := .thms [`CerberusHeapLang.engine_adequacyJ],
       totalLane := totalVia [`CerberusHeapLang.wpt_load_eval] [`CerberusHeapLang.list_reverse_certified_total],
-      prodLane := prodRegOnly,
+      prodLane := .thms [`CerberusHeapLang.list_reverse_certified_production],
       consumer := .thms [`CerberusHeapLang.array_sum_certified] }
   | `CerberusHeapLang.Frag.sseq_sym => some
     { token := "sseq-sym", construct := "Esseq, plain-symbol-binder pattern (bare values)",
@@ -304,7 +322,7 @@ def rowSpec : Name → Option RowSpec
       engineMatch := .thms [`CerberusHeapLang.step_ctx_beta_sym_pure],
       partialLane := .thms [`CerberusHeapLang.engine_adequacyJ],
       totalLane := totalVia [`CerberusHeapLang.wpt_seq_sym] [`CerberusHeapLang.list_reverse_certified_total],
-      prodLane := prodRegOnly,
+      prodLane := .thms [`CerberusHeapLang.list_reverse_certified_production],
       consumer := .thms [`CerberusHeapLang.list_reverse_certified] }
   | `CerberusHeapLang.Frag.memop_vals => some
     { token := "memop-ptreq", construct := "Ememop PtrEq (value operands)",
@@ -313,7 +331,7 @@ def rowSpec : Name → Option RowSpec
       engineMatch := .thms [`CerberusHeapLang.step_ctx_memop],
       partialLane := .thms [`CerberusHeapLang.engine_adequacyJ],
       totalLane := totalVia [`CerberusHeapLang.wpt_memop_ptreq] [`CerberusHeapLang.list_reverse_certified_total],
-      prodLane := prodRegOnly,
+      prodLane := .thms [`CerberusHeapLang.list_reverse_certified_production],
       consumer := .thms [`CerberusHeapLang.list_reverse_certified] }
   | `CerberusHeapLang.Frag.memop_op => some
     { token := "memop-op", construct := "Ememop PtrEq, operand-evaluation step",
@@ -322,7 +340,7 @@ def rowSpec : Name → Option RowSpec
       engineMatch := .thms [`CerberusHeapLang.stepDischarge_memop_eval],
       partialLane := .thms [`CerberusHeapLang.engine_adequacyJ],
       totalLane := totalVia [`CerberusHeapLang.wpt_memop_eval] [`CerberusHeapLang.list_reverse_certified_total],
-      prodLane := prodRegOnly,
+      prodLane := .thms [`CerberusHeapLang.list_reverse_certified_production],
       consumer := .thms [`CerberusHeapLang.list_reverse_certified] }
   | `CerberusHeapLang.Frag.store_op => some
     { token := "store-op", construct := "Store0 operand-evaluation step (ACTION_EVAL)",
@@ -331,7 +349,7 @@ def rowSpec : Name → Option RowSpec
       engineMatch := .thms [`CerberusHeapLang.stepDischarge_store_eval],
       partialLane := .thms [`CerberusHeapLang.engine_adequacyJ],
       totalLane := totalVia [`CerberusHeapLang.wpt_store_eval] [`CerberusHeapLang.list_reverse_certified_total],
-      prodLane := prodRegOnly,
+      prodLane := .thms [`CerberusHeapLang.list_reverse_certified_production],
       consumer := .thms [`CerberusHeapLang.list_reverse_certified] }
   | `CerberusHeapLang.Frag.case_value => some
     { token := "case-value", construct := "Ecase, VALUE scrutinee",
@@ -541,10 +559,14 @@ def Cell.render (env : Environment) : Cell → Except String String
   IO.println "   The former misnamed theorem is RENAMED"
   IO.println "   `counter_loop_certified_registration` (the naming debt paid):"
   IO.println "   it is the driveJ-lane REGISTRATION tie, kept as a lemma."
-  IO.println "   Rows still marked 'registration tie only' await their"
-  IO.println "   production consumer (counter loop / list reverse — this"
-  IO.println "   phase's remaining exports). Straight-line constructs reach"
-  IO.println "   the shipped pipeline via `exhibitA_prod`."
+  IO.println "   The counter loop (`counter_loop_certified_production` — a"
+  IO.println "   SELF-CONTAINED program: the cell engine-created on the cold"
+  IO.println "   start) and the flagship reversal's demo instance"
+  IO.println "   (`list_reverse_certified_production` — the two-node chain"
+  IO.println "   engine-built by creates + field stores, then reversed by the"
+  IO.println "   authored loop) conclude about the same shipped composite."
+  IO.println "   Straight-line constructs reach the shipped pipeline via"
+  IO.println "   `exhibitA_prod`."
   IO.println "4. **`create` HAS its logic rule** (Phase 2 — D26 RETIRED):"
   IO.println "   `wps_create` allocates through the allocator-cursor ghost"
   IO.println "   resource; the out-of-memory kill arm is excluded by the pure"
