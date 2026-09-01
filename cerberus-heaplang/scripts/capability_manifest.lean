@@ -105,8 +105,14 @@ def Row.level (r : Row) : String :=
   else if r.logic.isRed then "ADEQUACY-EXPORTABLE (no logic rule)"
   else "CERTIFIED (drive lane)"
 
-/-- The uniform total-lane cell (F-02; Phase 3 owns the lane). -/
-def noTotal : Cell := .red "no logical total lane (Phase 3); see Notes 2"
+/-- Total-lane cell: the wpt rule(s) + the total-equation
+    consumer(s) (Phase 3; see Notes 2). -/
+def totalVia (rules consumers : List Name) : Cell :=
+  .thms (rules ++ consumers)
+
+/-- Constructs with no total rule yet (see Notes 2). -/
+def noTotal (why : String) : Cell :=
+  .red s!"no total rule yet ({why}); see Notes 2"
 
 /-- The uniform loop-construct production cell (F-05). -/
 def prodRegOnly : Cell := .red "registration tie only; see Notes 3"
@@ -153,7 +159,8 @@ def rowSpec : Name → Option RowSpec
         `CerberusHeapLang.step_ctx_remove_annot],
       partialLane := .thms [`CerberusHeapLang.engine_complete,
         `CerberusHeapLang.engine_adequacyJ],
-      totalLane := noTotal,
+      totalLane := totalVia [`CerberusHeapLang.wpt_ofVal]
+        [`CerberusHeapLang.fib_certified_total, `CerberusHeapLang.list_reverse_certified_total],
       prodLane := .thms [`CerberusHeapLang.exhibitA_prod],
       consumer := .thms [`CerberusHeapLang.exhibitA_engine] }
   | `CerberusHeapLang.Frag.store => some
@@ -165,7 +172,8 @@ def rowSpec : Name → Option RowSpec
         (note := "TWO-SIDED at any MachineCtx"),
       partialLane := .thms [`CerberusHeapLang.engine_complete,
         `CerberusHeapLang.engine_adequacyJ],
-      totalLane := noTotal,
+      totalLane := totalVia [`CerberusHeapLang.wpt_store_at,
+        `CerberusHeapLang.wpt_store_cell_at] [`CerberusHeapLang.list_reverse_certified_total],
       prodLane := .thms [`CerberusHeapLang.exhibitA_prod],
       consumer := .thms [`CerberusHeapLang.exhibitB_engine,
         `CerberusHeapLang.counter_loop_certified,
@@ -177,7 +185,8 @@ def rowSpec : Name → Option RowSpec
       engineMatch := .thms [`CerberusHeapLang.step_ctx_load],
       partialLane := .thms [`CerberusHeapLang.engine_complete,
         `CerberusHeapLang.engine_adequacyJ],
-      totalLane := noTotal,
+      totalLane := totalVia [`CerberusHeapLang.wpt_load_at,
+        `CerberusHeapLang.wpt_load_cell_at] [`CerberusHeapLang.list_reverse_certified_total],
       prodLane := .thms [`CerberusHeapLang.exhibitA_prod],
       consumer := .thms [`CerberusHeapLang.exhibitA_engine,
         `CerberusHeapLang.array_sum_certified] }
@@ -189,7 +198,7 @@ def rowSpec : Name → Option RowSpec
       engineMatch := .thms [`CerberusHeapLang.step_ctx_create],
       partialLane := .thms [`CerberusHeapLang.engine_complete,
         `CerberusHeapLang.engine_adequacyJ],
-      totalLane := noTotal,
+      totalLane := noTotal "no wpt_create — mechanical analog of wps_create, no consumer",
       prodLane := .thms [`CerberusHeapLang.exhibitA_prod],
       consumer := .thms [`CerberusHeapLang.exhibitA_prod,
         `CerberusHeapLang.struct_create_store_wps]
@@ -203,7 +212,7 @@ def rowSpec : Name → Option RowSpec
         `CerberusHeapLang.step_ctx_beta_annot],
       partialLane := .thms [`CerberusHeapLang.engine_complete,
         `CerberusHeapLang.engine_adequacyJ],
-      totalLane := noTotal,
+      totalLane := totalVia [`CerberusHeapLang.wpt_seq] [`CerberusHeapLang.list_reverse_certified_total],
       prodLane := .thms [`CerberusHeapLang.exhibitA_prod],
       consumer := .thms [`CerberusHeapLang.exhibitA_engine,
         `CerberusHeapLang.exhibitC_engine] }
@@ -215,7 +224,7 @@ def rowSpec : Name → Option RowSpec
       engineMatch := .thms [`CerberusHeapLang.step_ctx_merge],
       partialLane := .thms [`CerberusHeapLang.engine_complete,
         `CerberusHeapLang.engine_adequacyJ],
-      totalLane := noTotal,
+      totalLane := totalVia [`CerberusHeapLang.wpt_annot] [`CerberusHeapLang.list_reverse_certified_total],
       prodLane := .thms [`CerberusHeapLang.exhibitA_prod],
       consumer := .thms [`CerberusHeapLang.exhibitA_engine] }
   | `CerberusHeapLang.Frag.save => some
@@ -224,7 +233,8 @@ def rowSpec : Name → Option RowSpec
       logic := .thms [`CerberusHeapLang.wps_save],
       engineMatch := .thms [`CerberusHeapLang.step_ctx_save],
       partialLane := .thms [`CerberusHeapLang.engine_adequacyJ],
-      totalLane := noTotal,
+      totalLane := totalVia [`CerberusHeapLang.wpt_save]
+        [`CerberusHeapLang.fib_certified_total, `CerberusHeapLang.list_reverse_certified_total],
       prodLane := prodRegOnly,
       consumer := .thms [`CerberusHeapLang.counter_loop_certified,
         `CerberusHeapLang.fib_certified] }
@@ -237,7 +247,8 @@ def rowSpec : Name → Option RowSpec
       engineMatch := .thms [`CerberusHeapLang.stepDischarge_if_true,
         `CerberusHeapLang.stepDischarge_if_false],
       partialLane := .thms [`CerberusHeapLang.engine_adequacyJ],
-      totalLane := noTotal,
+      totalLane := totalVia [`CerberusHeapLang.wpt_if_true,
+        `CerberusHeapLang.wpt_if_false] [`CerberusHeapLang.fib_certified_total, `CerberusHeapLang.list_reverse_certified_total],
       prodLane := prodRegOnly,
       consumer := .thms [`CerberusHeapLang.counter_loop_certified,
         `CerberusHeapLang.fib_certified] }
@@ -248,7 +259,8 @@ def rowSpec : Name → Option RowSpec
       engineMatch := .thms [`CerberusHeapLang.stepDischarge_run]
         (note := "ONE-SIDED — match-given-step, the direction adequacy consumes; jump refusal channels are failwithI panics = absence of a step; see Notes 7"),
       partialLane := .thms [`CerberusHeapLang.engine_adequacyJ],
-      totalLane := noTotal,
+      totalLane := totalVia [`CerberusHeapLang.wpt_run]
+        [`CerberusHeapLang.fib_certified_total, `CerberusHeapLang.list_reverse_certified_total],
       prodLane := prodRegOnly,
       consumer := .thms [`CerberusHeapLang.counter_loop_certified,
         `CerberusHeapLang.fib_certified] }
@@ -260,7 +272,7 @@ def rowSpec : Name → Option RowSpec
       engineMatch := .thms [`CerberusHeapLang.step_ctx_beta_spec_pure,
         `CerberusHeapLang.step_ctx_beta_spec_annot],
       partialLane := .thms [`CerberusHeapLang.engine_adequacyJ],
-      totalLane := noTotal,
+      totalLane := totalVia [`CerberusHeapLang.wpt_seq_spec] [`CerberusHeapLang.list_reverse_certified_total],
       prodLane := prodRegOnly,
       consumer := .thms [`CerberusHeapLang.array_sum_certified,
         `CerberusHeapLang.list_reverse_certified] }
@@ -271,7 +283,8 @@ def rowSpec : Name → Option RowSpec
       logic := .thms [`CerberusHeapLang.wps_pure],
       engineMatch := .thms [`CerberusHeapLang.stepDischarge_pure_sym],
       partialLane := .thms [`CerberusHeapLang.engine_adequacyJ],
-      totalLane := noTotal,
+      totalLane := totalVia [`CerberusHeapLang.wpt_pure]
+        [`CerberusHeapLang.fib_certified_total, `CerberusHeapLang.list_reverse_certified_total],
       prodLane := prodRegOnly,
       consumer := .thms [`CerberusHeapLang.fib_certified] }
   | `CerberusHeapLang.Frag.load_op => some
@@ -280,7 +293,7 @@ def rowSpec : Name → Option RowSpec
       logic := .thms [`CerberusHeapLang.wps_load_eval],
       engineMatch := .thms [`CerberusHeapLang.stepDischarge_load_eval],
       partialLane := .thms [`CerberusHeapLang.engine_adequacyJ],
-      totalLane := noTotal,
+      totalLane := totalVia [`CerberusHeapLang.wpt_load_eval] [`CerberusHeapLang.list_reverse_certified_total],
       prodLane := prodRegOnly,
       consumer := .thms [`CerberusHeapLang.array_sum_certified] }
   | `CerberusHeapLang.Frag.sseq_sym => some
@@ -289,7 +302,7 @@ def rowSpec : Name → Option RowSpec
       logic := .thms [`CerberusHeapLang.wps_seq_sym],
       engineMatch := .thms [`CerberusHeapLang.step_ctx_beta_sym_pure],
       partialLane := .thms [`CerberusHeapLang.engine_adequacyJ],
-      totalLane := noTotal,
+      totalLane := totalVia [`CerberusHeapLang.wpt_seq_sym] [`CerberusHeapLang.list_reverse_certified_total],
       prodLane := prodRegOnly,
       consumer := .thms [`CerberusHeapLang.list_reverse_certified] }
   | `CerberusHeapLang.Frag.memop_vals => some
@@ -298,7 +311,7 @@ def rowSpec : Name → Option RowSpec
       logic := .thms [`CerberusHeapLang.wps_memop_ptreq],
       engineMatch := .thms [`CerberusHeapLang.step_ctx_memop],
       partialLane := .thms [`CerberusHeapLang.engine_adequacyJ],
-      totalLane := noTotal,
+      totalLane := totalVia [`CerberusHeapLang.wpt_memop_ptreq] [`CerberusHeapLang.list_reverse_certified_total],
       prodLane := prodRegOnly,
       consumer := .thms [`CerberusHeapLang.list_reverse_certified] }
   | `CerberusHeapLang.Frag.memop_op => some
@@ -307,7 +320,7 @@ def rowSpec : Name → Option RowSpec
       logic := .thms [`CerberusHeapLang.wps_memop_eval],
       engineMatch := .thms [`CerberusHeapLang.stepDischarge_memop_eval],
       partialLane := .thms [`CerberusHeapLang.engine_adequacyJ],
-      totalLane := noTotal,
+      totalLane := totalVia [`CerberusHeapLang.wpt_memop_eval] [`CerberusHeapLang.list_reverse_certified_total],
       prodLane := prodRegOnly,
       consumer := .thms [`CerberusHeapLang.list_reverse_certified] }
   | `CerberusHeapLang.Frag.store_op => some
@@ -316,7 +329,7 @@ def rowSpec : Name → Option RowSpec
       logic := .thms [`CerberusHeapLang.wps_store_eval],
       engineMatch := .thms [`CerberusHeapLang.stepDischarge_store_eval],
       partialLane := .thms [`CerberusHeapLang.engine_adequacyJ],
-      totalLane := noTotal,
+      totalLane := totalVia [`CerberusHeapLang.wpt_store_eval] [`CerberusHeapLang.list_reverse_certified_total],
       prodLane := prodRegOnly,
       consumer := .thms [`CerberusHeapLang.list_reverse_certified] }
   | `CerberusHeapLang.Frag.case_value => some
@@ -330,7 +343,7 @@ def rowSpec : Name → Option RowSpec
         (note := "TWO-SIDED at any MachineCtx"),
       partialLane := .thms [`CerberusHeapLang.engine_adequacyJ,
         `CerberusHeapLang.engine_adequacyU],
-      totalLane := noTotal,
+      totalLane := noTotal "no wpt case rule — mechanical analog of wps_case_value, no consumer",
       prodLane := .red "outside every lane",
       consumer := .thms [`CerberusHeapLang.case_certified]
         (note := "the WP-lane adequacy regression — binder pattern, substitution TAU (CaseExhibit)") }
@@ -344,7 +357,7 @@ def rowSpec : Name → Option RowSpec
         `CerberusHeapLang.step_ctx_wseq_annot],
       partialLane := .thms [`CerberusHeapLang.engine_adequacyJ,
         `CerberusHeapLang.engine_adequacyU],
-      totalLane := noTotal,
+      totalLane := noTotal "no wpt wseq rule — mechanical analog of wps_wseq, no consumer",
       prodLane := .red "outside every lane",
       consumer := .thms [`CerberusHeapLang.wseq_certified]
         (note := "the drift-test WP-lane adequacy regression (WseqExhibit)") }
@@ -362,7 +375,8 @@ def supplementaryRows : List Row := [
     cone := .declared "via the peDepth side conditions carried by Frag.if_/run/load_op/memop_op/store_op",
     engineMatch := .declared "the evaluator bridge lemmas, Soundness.lean (eval1/mapM tower)",
     partialLane := .thms [`CerberusHeapLang.engine_adequacyJ],
-    totalLane := noTotal,
+    totalLane := totalVia [] [`CerberusHeapLang.fib_certified_total,
+      `CerberusHeapLang.list_reverse_certified_total],
     prodLane := prodRegOnly,
     consumer := .thms [`CerberusHeapLang.array_sum_certified,
       `CerberusHeapLang.fib_certified] }
@@ -493,14 +507,28 @@ def Cell.render (env : Environment) : Cell → Except String String
   IO.println "   BINDER-pattern case program — the substitution TAU genuinely"
   IO.println "   fires — through wps_case_value → wps_sound →"
   IO.println "   spike_engine_adequacy, engine-vocabulary conclusion)."
-  IO.println "2. **The total lane is empty for every construct** (audit F-02):"
-  IO.println "   the logic has no total WP / total statement judgment;"
-  IO.println "   `blockSpecs_intro_variant` has no theorem-level termination"
-  IO.println "   consequence and no consumer. `fib_certified_total` is an"
-  IO.println "   OPERATIONAL ENGINE THEOREM (direct induction on the drive,"
-  IO.println "   explicit `Step`/`driveJ_step` rewrites) — an engine"
-  IO.println "   regression/termination-accounting result, NOT a logic product."
-  IO.println "   Phase 3 owns the logical total lane."
+  IO.println "2. **The total lane is LIVE** (foundations Phase 3; audit F-02"
+  IO.println "   remediated): the total statement judgment `wpt` (Wpt.lean) has"
+  IO.println "   a MANDATORY back-edge variant decrease (the jump clause's"
+  IO.println "   `∃ m, 1 + m ≤ k` against variant-indexed label preconditions),"
+  IO.println "   collapses into the pinned Iris TotalWeakestPre (`wpt_sound`),"
+  IO.println "   and carries BOTH adequacy halves (TotalAdequacy.lean):"
+  IO.println "   termination over the unified relation"
+  IO.println "   (`wpt_strongly_normalizing` — `twp_total` consumed as-is) and"
+  IO.println "   the generic measure→drive-fuel simulation"
+  IO.println "   (`wpt_engine_boundU`/`wpt_engine_boundJ`). Consumers:"
+  IO.println "   `fib_certified_total` (unconditional driveJ equation at 2·n+4,"
+  IO.println "   statement unchanged, proof a corollary — zero Step"
+  IO.println "   constructors) + `fib_terminates`;"
+  IO.println "   `list_reverse_certified_total` (the derived bound 13·|xs|+7) +"
+  IO.println "   `list_reverse_terminates`. Negative test:"
+  IO.println "   `diverge_total_unprovable` (DivergeExhibit — the self-jump"
+  IO.println "   loop's total derivation is FALSE). RED total cells:"
+  IO.println "   create/Ecase/Ewseq have no wpt rule yet (mechanical analogs of"
+  IO.println "   their wps rules, no consumer — registered follow-ons)."
+  IO.println "   `blockSpecs_intro_variant` is RETIRED, replaced by"
+  IO.println "   `blockSpecsT` (Wpt.lean): the smaller-measure discipline is"
+  IO.println "   the judgment's jump clause, never an optional hypothesis."
   IO.println "3. **The production lane for loop constructs is RED** (audit F-05):"
   IO.println "   what exists is the REGISTRATION theorem —"
   IO.println "   `counter_loop_certified_production` concludes at `driveJ` at the"

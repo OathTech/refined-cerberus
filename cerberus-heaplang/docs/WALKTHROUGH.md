@@ -178,16 +178,20 @@ The rest of the logic is the familiar kit: `wp_load`, sequencing,
 the frame rule, consequence (`Rules.lean`); and for programs with
 loops a *statement-level* WP `wps` with a label context — per-label
 preconditions and a loop-invariant rule `blockSpecs_intro`
-(`Wps.lean`). Partial correctness only: the logic has no
-total-correctness rule — a variant-shaped lemma
-(`blockSpecs_intro_variant`) exists but offers its smaller-measure
-hypotheses optionally, carries no theorem-level termination
-consequence, and has no consumer; the logical total lane is the
-foundations arc's Phase 3
-(the [capability manifest](CAPABILITY_MANIFEST.md), Notes 2). That
-label-context judgment is the classical treatment of `goto`-like
-jumps (de Bruin-style label assumptions) built as a guarded
-fixpoint with the same machinery Iris builds `wp` from.
+(`Wps.lean`, partial correctness), PLUS its TOTAL counterpart `wpt`
+(`Wpt.lean`, foundations Phase 3): the same label-context shape with
+variant-indexed label preconditions and a MANDATORY back-edge
+decrease in the jump clause — the total rule `blockSpecsT` (which
+replaced the retired, consumerless `blockSpecs_intro_variant`)
+collapses into the pinned Iris TotalWeakestPre and yields both
+termination and unconditional drive-fuel bounds
+(the [capability manifest](CAPABILITY_MANIFEST.md), Notes 2). The
+partial judgment is the classical treatment of `goto`-like jumps
+(de Bruin-style label assumptions) built as a guarded fixpoint with
+the same machinery Iris builds `wp` from; the total judgment is
+built by structural recursion on its step budget — the
+least-fixpoint discipline of total WPs, with the budget as the
+well-founded measure.
 
 ### 3.2 The exported meaning: triples over the engine
 
@@ -225,18 +229,21 @@ There is no Iris in this statement. Unpack the quantifiers:
   engine never kills (no undefined behavior reached), never gets
   stuck off-protocol, and any value it delivers satisfies the
   postcondition, with the final memory carrying `Q ∪ R`.
-- **Partial correctness, honestly labelled.** Running out of the
-  step budget `n` (`.more`) carries no obligation, and the
-  `lemDefaultFuel` side condition is the engine's own internal fuel
-  budget (10^6) — an honest artifact of the interpreter, not proof
-  slack. One exhibit additionally has an unconditional engine
-  equation (`fib_certified_total`, walked verbatim in §5.1 — the
-  engine *equals* `.done (fib n)` at a concrete step bound, no fuel
-  hypotheses at all) — but note its provenance: it is an
-  OPERATIONAL ENGINE THEOREM, proved by direct induction on the
-  drive, not through the logic; the logic itself is
-  partial-correctness only (no total WP yet — the manifest's total
-  lane, Notes 2).
+- **Partial correctness where labelled, total where earned.**
+  Running out of the step budget `n` (`.more`) carries no
+  obligation in the partial exports, and the `lemDefaultFuel` side
+  condition is the engine's own internal fuel budget (10^6) — an
+  honest artifact of the interpreter, not proof slack. The TOTAL
+  exports (`fib_certified_total`, walked verbatim in §5.1;
+  `list_reverse_certified_total`) are unconditional engine
+  equations — the engine *equals* `.done …` at a concrete step
+  bound, no fuel hypotheses at all — and since foundations Phase 3
+  they are LOGIC RESULTS: corollaries of the total statement
+  judgment through the generic measure→drive-fuel simulation (the
+  manifest's total lane, Notes 2). History, one line: until Phase 3
+  the fib equation was proved by a direct operational induction on
+  the drive (the 2026-08-31 audit's F-02 finding); that proof is
+  retired.
 
 The bridge theorem is `semantic_triple_sound` (`Adequacy.lean:464`):
 a triple proved in the derived logic (`ProvenTriple` — the only
@@ -434,14 +441,20 @@ witnesses and the two honest observations it surfaces.
 
 ### 5.1 `fib_certified_total` — an unconditional engine equation
 
-Classification first (2026-08-31 audit, F-02): this is an
-OPERATIONAL ENGINE THEOREM — its proof is a direct induction on the
-drive (explicit `Step` constructors fed to `driveJ_step`), not a
-product of the separation logic; it uses neither `fib_wps` nor any
-total WP (the logic has no total-correctness lane yet — Phase 3).
-It earns its place here as the strongest *statement*: an
-unconditional equation on the engine's run, with the smallest
-statement surface. The statement, verbatim (`FibExhibit.lean:570`):
+Classification (foundations Phase 3; audit F-02 remediated): this
+is a TOTAL-CORRECTNESS RESULT OF THE LOGIC — a corollary of the
+total statement judgment (`fib_wpt`, with the variant `2·(n−i)+3`
+pinned by the invariant and the back edge discharging the mandatory
+decrease) through the generic measure→drive-fuel simulation
+(`wpt_engine_boundJ`); the final-state pin `σ₀` comes from the
+generic state-inert-cone conjunct. Zero example-level `Step`
+constructors or `driveJ_step` chains appear in its proof. History,
+one line: until Phase 3 this equation was proved by a direct
+operational induction on the drive (the audit's F-02 finding); that
+proof is retired. It earns its place here as the strongest
+*statement*: an unconditional equation on the engine's run, with
+the smallest statement surface. The statement, verbatim
+(`FibExhibit.lean`):
 
 ```lean
 theorem fib_certified_total (sbty : core_base_type) (n : Int)
@@ -604,7 +617,7 @@ Reading table (identifiers already read in §5.1 not repeated):
 | `hseed`, `hcoh` | HYPOTHESES | the seeded input chain, carried by the initial memory |
 | `hlib` | HYPOTHESIS | the program's source location is not library-internal (a WF fact about metadata) |
 | `nsteps`, `aids` | quantified data | any step budget; any action-id supply (`aids` — the driver's fresh action-id oracle, ∀-quantified; irrelevant on this deterministic fragment) |
-| `hfuel`, `hfuel2` | HYPOTHESES | in-budget fuel (the engine's own 10^6 budget): one nested budget fact per drive entry point — the whole program (`esize` 6) and the loop body the jump re-enters (`esize` 5; one construct less, hence the +1 slack). `hfuel2` is a trivial consequence of `hfuel`, carried separately as interim scaffolding of the in-budget form (the registered total-export lane retires the fuel hypotheses altogether) |
+| `hfuel`, `hfuel2` | HYPOTHESES | in-budget fuel (the engine's own 10^6 budget): one nested budget fact per drive entry point — the whole program (`esize` 6) and the loop body the jump re-enters (`esize` 5; one construct less, hence the +1 slack). `hfuel2` is a trivial consequence of `hfuel`, carried separately as interim scaffolding of the in-budget form (the TOTAL export `list_reverse_certified_total` — Phase 3 — has no fuel hypotheses at all) |
 
 The readout and seeding predicates, in full — pure `Prop`s over
 engine objects, no Iris:
@@ -927,8 +940,12 @@ line each:
 5. `EnvLaws.lean` — lawfulness of the engine's environment maps
    (lookup-after-add over reachable frames).
 6. `Wps.lean` — the label-context statement WP: jump-aware
-   sequencing, the loop-invariant rule (partial correctness only —
-   §3.1's note on the unconsumed variant lemma).
+   sequencing, the loop-invariant rule (partial correctness; the
+   total stratum is `Wpt.lean` — §3.1), and `Wpt.lean` +
+   `TotalAdequacy.lean` — the total judgment, its collapse into
+   Iris TotalWeakestPre, and the two adequacy halves (termination;
+   the generic drive-fuel simulation), with `DivergeExhibit.lean`
+   as the negative test.
 7. `Soundness.lean` — the boundary module: per-construct
    certification of Step against the engine's `step_ctx` and driver
    discharge.
