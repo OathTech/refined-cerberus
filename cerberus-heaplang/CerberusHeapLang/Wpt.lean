@@ -1715,6 +1715,70 @@ theorem wpt_store_cell_at {Ψ : SpikeVal → EnvStack → IProp GF}
     rw [spliceBytes_length _ _ _ (by omega)]
     exact hlen
 
+/-- WHOLE-CELL STORE at the total stratum (the `wps_store` analog —
+    Phase 5, the counter loop's total lane): the `off := 0` instance
+    of the generic subrange rule, with the splice collapsed to the
+    stored image (`|img| = |bs| = sizeof ty`) and the write-side
+    decode-independence supplied by `StorableAt.stored_dec`. -/
+theorem wpt_store_cell {Ψ : SpikeVal → EnvStack → IProp GF}
+    (loc : CerbLocation.Loc) (ann : core_run_annotation) (ty : ctype)
+    (pv : CerbMem.PointerValue) (cv : value) (mo : memory_order)
+    (mv : CerbMem.MemValue) (bs : List CerbMem.AbsByte) (ρ : EnvStack)
+    {k : Nat} (hk : 3 ≤ k)
+    (hmv : memValueFromValue M.tagDefs (Ctype [] (unatomic_ ty)) cv = some mv)
+    (hst : StorableAt ty mv) :
+    iprop(pointsToCell (GF := GF) pv (.own 1) ty bs ∗
+      (∀ fp, pointsToCell pv (.own 1) ty (CerbMem.memValueToBytes [] mv).2 -∗
+        Ψ (SpikeVal.annot [DA_pos [] fp] Vunit) ρ)) ⊢
+      wpt M Ls k Ψ (storeExpr loc ann ty pv cv mo) ρ := by
+  iintro ⟨Hpt, HΨ⟩
+  icases (pointsToCell_cellOwn_iff pv (.own 1) ty bs).mp $$ Hpt
+    with ⟨%i, %a, %hpv, Hcell⟩
+  subst hpv
+  icases (cellOwn_iff i (.own 1) ⟨a, ty, bs⟩).mp $$ Hcell
+    with ⟨Hm, Hb, %hpure⟩
+  obtain ⟨hlen, hdec⟩ := hpure
+  have hsplice : spliceBytes 0 (CerbMem.memValueToBytes [] mv).2 bs =
+      (CerbMem.memValueToBytes [] mv).2 := by
+    unfold spliceBytes
+    rw [List.take_zero, List.nil_append, Nat.zero_add,
+      List.drop_eq_nil_of_le (by rw [hst.len []]; exact Nat.le_of_eq hlen),
+      List.append_nil]
+  have hdec' : decIndep a ty
+      (spliceBytes 0 (CerbMem.memValueToBytes [] mv).2 bs) := by
+    rw [hsplice]
+    intro lum fpm
+    exact hst.stored_dec lum fpm a
+  have hpe : storeExpr loc ann ty (cellPtr i a) cv mo =
+      storeExpr loc ann ty (cellPtr i (a + ((0 : Nat) : Int))) cv mo := by
+    rw [show a + ((0 : Nat) : Int) = a by omega]
+  rw [hpe]
+  iapply wpt_store_cell_at loc ann i a ty 0 ty cv mo bs ρ hk hmv
+    (by omega) hst.compat hst.fpm hst.bytes_fpm (hst.len []) hdec'
+  isplitl [Hm Hb]
+  · iapply (cellOwn_iff i (.own 1) ⟨a, ty, bs⟩).mpr
+    isplitl [Hm]
+    · iexact Hm
+    isplitl [Hb]
+    · iexact Hb
+    · ipureintro
+      exact ⟨hlen, hdec⟩
+  iintro %fp Hcell'
+  ihave Hcell2 : cellOwn (hlc := hlc) (GF := GF) i (.own 1)
+      (SpikeCell.mk a ty (CerbMem.memValueToBytes [] mv).2) $$ [Hcell']
+  · rw [show (SpikeCell.mk a ty (CerbMem.memValueToBytes [] mv).2) =
+      SpikeCell.mk a ty (spliceBytes 0 (CerbMem.memValueToBytes [] mv).2 bs)
+      from by rw [hsplice]]
+    iexact Hcell'
+  iapply HΨ
+  iapply (pointsToCell_cellOwn_iff (cellPtr i a) (.own 1) ty
+    (CerbMem.memValueToBytes [] mv).2).mpr
+  iexists i, a
+  isplit
+  · ipureintro
+    rfl
+  · iexact Hcell2
+
 /-! ## Total block specifications and THE COLLAPSE into Iris TWP -/
 
 /-- TOTAL BLOCK SPECIFICATIONS: every registered label's body meets
