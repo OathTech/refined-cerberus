@@ -155,8 +155,10 @@ info: 'CerberusHeapLang.exhibit' depends on axioms: [propext, Classical.choice, 
 -- engine_complete = artifact 4 (Step certified against step_ctx +
 -- the Driver.lean:273 discharge, per-construct); spike_engine_adequacy
 -- = the engine-only adequacy statement; the exhibits are the
--- operator's package re-concluded at the engine level, incl. the
--- recon probe as a theorem (exhibitA_terminates).
+-- operator's package re-concluded at the engine level, incl.
+-- termination-with-delivery via the generic total route
+-- (exhibitA_total — alloc arc P2 retired the example-specific
+-- exhibitA_terminates trace).
 /--
 info: 'CerberusHeapLang.engine_complete' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
@@ -219,9 +221,9 @@ info: 'CerberusHeapLang.exhibitB_engine' depends on axioms: [propext, Classical.
 #guard_msgs in #print axioms CerberusHeapLang.exhibitB_engine
 
 /--
-info: 'CerberusHeapLang.exhibitA_terminates' depends on axioms: [propext, Classical.choice, Quot.sound]
+info: 'CerberusHeapLang.exhibitA_total' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
-#guard_msgs in #print axioms CerberusHeapLang.exhibitA_terminates
+#guard_msgs in #print axioms CerberusHeapLang.exhibitA_total
 
 -- The exported semantic face ([USER 2026-08-30] final form): the
 -- configuration-level triple soundness + the semantic frame rule.

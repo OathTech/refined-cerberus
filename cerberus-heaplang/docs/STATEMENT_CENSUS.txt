@@ -504,19 +504,18 @@
     instOfNatNat
     instOrdInt
 == CerberusHeapLang.exhibitA_prod ==
-  ENGINE (23):
+  ENGINE (22):
     CerbFS.FsState
     CerbLocation.Loc
-    CerbMem.AbsByte
-    CerbMem.Funptrmap
     CerbMem.IntegerValue
-    CerbMem.memValueToBytes
-    CerbMem.readBytesFrom
     CerbND.runND
     drive
     driver_error
     driver_result
+    driver_result.dres_blocked
     driver_result.dres_core_value
+    driver_result.dres_stderr
+    driver_result.dres_stdout
     driver_state
     driver_state.layout_state
     fmapEmpty
@@ -528,15 +527,18 @@
     sym
     tag_definition
     value
-  SPEC IDIOM (CerberusHeapLang) (5):
+  SPEC IDIOM (CerberusHeapLang) (7):
+    CerberusHeapLang.CellCoh
+    CerberusHeapLang.SpikeCell.mk
+    CerberusHeapLang.intTy
     CerberusHeapLang.prodFile
     CerberusHeapLang.progAProd
-    CerberusHeapLang.pxAddr
-    CerberusHeapLang.sevenMval
+    CerberusHeapLang.sevenBytes
     CerberusHeapLang.sevenVal
   IRIS (0):
-  LEAN CORE/STD (15):
+  LEAN CORE/STD (12):
     And
+    Bool
     Bool.false
     Eq
     Exists
@@ -544,13 +546,9 @@
     List
     List.cons
     List.nil
-    Nat
-    OfNat.ofNat
     Prod
     Prod.mk
-    Prod.snd
     String
-    instOfNatNat
 == CerberusHeapLang.counter_loop_certified_registration ==
   ENGINE (18):
     CerbLocation.Loc

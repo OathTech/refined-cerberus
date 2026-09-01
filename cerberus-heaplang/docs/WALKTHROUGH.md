@@ -472,17 +472,25 @@ over `allocCap` — the program binds its fresh pointer
 (`lets p = create(...)`) and stores through the bound symbol — and
 `struct_create_store_adequacy` launches it against the real engine
 from the production cold-start memory through
-`spike_engine_adequacy_alloc`. WHAT REMAINS OPEN (R-02, alloc arc
-P2 items 3-5): the self-contained allocating production theorems
-are still MIXED logical/operational proofs — their create prefixes
+`spike_engine_adequacy_alloc`. THE COMPLETE
+CREATE/STORE/LOAD PRODUCTION EXPORT (P2 step 3): `exhibitA_prod` is
+now a whole-program logic proof — the program binds its created
+pointer, `progAProd_wpt` carries create/store/load in one total
+judgment through the PUBLIC `wpt_create`, and the generic
+allocation-aware driver collapse (`wpt_driver_done_alloc` →
+`prod_run_eqJ`) reaches the shipped pipeline; the old operational
+create prefix and six-round termination trace are DELETED (likewise
+Exhibit.lean's straight-line trace, retired for the generic total
+route `exhibitA_total`). WHAT REMAINS OPEN (R-02, alloc arc P2
+steps 4-5): the two allocating LOOP production theorems are still
+MIXED logical/operational proofs — their create/chain-build prefixes
 (`counter_loop_certified_production`'s cold-start cell,
-`list_reverse_certified_production`'s two-create chain build, and
-`exhibitA_prod`'s create plus its termination trace) are handwritten
-certified operational rounds crossing `driverDone_step`, with the
-statement logic driving only the store/load/loop suffixes. Until
-those rewrites land, the production exports are evidence that
-the shipped pipeline runs the programs as claimed — not that the
-separation logic verifies THEIR allocation. The finding-by-finding
+`list_reverse_certified_production`'s two-create chain build) are
+handwritten certified operational rounds crossing `driverDone_step`,
+with the statement logic driving only the loop suffixes. Until those
+rewrites land, those two exports are evidence that the shipped
+pipeline runs the programs as claimed — not that the separation
+logic verifies THEIR allocation. The finding-by-finding
 closure table is in `docs/2026-09-01_alloc-arc-plan.md`. The
 README's divergence register keeps every remaining seam on one
 list, each with its discharge path.

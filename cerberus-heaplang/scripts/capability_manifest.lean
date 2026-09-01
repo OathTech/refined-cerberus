@@ -218,11 +218,12 @@ def rowSpec : Name → Option RowSpec
       partialLane := .thms [`CerberusHeapLang.engine_complete,
         `CerberusHeapLang.engine_adequacyJ],
       totalLane := totalVia [`CerberusHeapLang.wpt_create]
-        [`CerberusHeapLang.alloc_create_launch_smoke],
+        [`CerberusHeapLang.alloc_create_launch_smoke,
+         `CerberusHeapLang.progAProd_wpt],
       prodLane := .thms [`CerberusHeapLang.exhibitA_prod,
         `CerberusHeapLang.counter_loop_certified_production,
         `CerberusHeapLang.list_reverse_certified_production]
-        (note := "STILL MIXED logical/operational proofs (R-02, owner alloc-arc P2): the create prefixes are handwritten certified operational rounds, NOT create-rule consumers"),
+        (note := "exhibitA_prod is a WHOLE-PROGRAM create-rule consumer since alloc arc P2 step 3 (progAProd_wpt through the PUBLIC wpt_create + the generic wpt_driver_done_alloc collapse — zero operational proof terms); the two LOOP exports are STILL MIXED logical/operational (R-02, P2 steps 4-5): their create prefixes are handwritten certified operational rounds, NOT create-rule consumers"),
       consumer := .thms [`CerberusHeapLang.alloc_create_launch_smoke,
         `CerberusHeapLang.alloc_two_creates_wps,
         `CerberusHeapLang.alloc_create_wpt,
@@ -593,7 +594,10 @@ def Cell.render (env : Environment) : Cell → Except String String
   IO.println "   engine-built by creates + field stores, then reversed by the"
   IO.println "   authored loop) conclude about the same shipped composite."
   IO.println "   Straight-line constructs reach the shipped pipeline via"
-  IO.println "   `exhibitA_prod`. SCOPE (2026-09-01 re-audit, R-02): the"
+  IO.println "   `exhibitA_prod` — since alloc arc P2 step 3 a WHOLE-PROGRAM"
+  IO.println "   logic proof (progAProd_wpt through the PUBLIC wpt_create,"
+  IO.println "   collapsed by the generic wpt_driver_done_alloc /"
+  IO.println "   prod_run_eqJ). SCOPE (2026-09-01 re-audit, R-02): the"
   IO.println "   counter and reversal production proofs are MIXED"
   IO.println "   logical/operational — their create/chain-build prefixes are"
   IO.println "   handwritten certified operational rounds (driverDone_step"
@@ -630,9 +634,13 @@ def Cell.render (env : Environment) : Cell → Except String String
   IO.println "   consumer). The public rules also export the fresh"
   IO.println "   pointer's pure address bounds (0 < addrOf p < 2^64),"
   IO.println "   carried by `allocCap`'s machine-bounded hidden cursor."
-  IO.println "   RESIDUE (honest): the HEADLINE allocating production"
-  IO.println "   exhibits remain MIXED logical/operational (R-02) — their"
-  IO.println "   whole-program rewrites are alloc-arc P2 items 3-5."
+  IO.println "   TOTAL-LANE WHOLE-PROGRAM CONSUMER (P2 step 3):"
+  IO.println "   `progAProd_wpt`/`exhibitA_prod` — the complete"
+  IO.println "   create/store/load through the PUBLIC `wpt_create` and the"
+  IO.println "   allocation-aware driver collapse `wpt_driver_done_alloc`."
+  IO.println "   RESIDUE (honest): the two allocating LOOP production"
+  IO.println "   exports remain MIXED logical/operational (R-02) — their"
+  IO.println "   whole-program rewrites are alloc-arc P2 steps 4-5."
   IO.println "5. **Interior (sub-allocation) access is GENERIC** (Phase 2,"
   IO.println "   F-04 retired): one typed-subrange load and one store rule"
   IO.println "   (`wps_load_at`/`wps_store_at` over views; whole-cell forms"

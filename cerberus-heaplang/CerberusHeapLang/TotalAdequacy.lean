@@ -702,6 +702,38 @@ abbrev readoutPost {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
   iprop(∀ (σ' : Mem) (ns : Nat) (κs : List Empty) (nt : Nat),
     stateInterp σ' ns κs nt ={⊤,∅}=∗ ⌜ψ w.val σ'⌝)
 
+/-! ## Readout plumbing for sequenced prefixes: the engine readout
+only reads the ERASED value, so an annotation-merge on the sequenced
+value is absorbed (the LETS-ANNOT residue of a prefix store never
+reaches ψ). -/
+
+theorem val_mergeInto_annot (ds : List dyn_annotation) (v : value)
+    (u : SpikeVal) :
+    (SpikeVal.mergeInto (.annot ds v) u).val = u.val := by
+  cases u <;> rfl
+
+theorem readoutPost_mergeInto_annot {GF : BundledGFunctors}
+    [SpikeGS .hasLC GF] (ψ : value → Mem → Prop)
+    (ds : List dyn_annotation) (v : value) :
+    (fun (u : SpikeVal) (ρ' : EnvStack) =>
+      readoutPost (GF := GF) ψ (SpikeVal.mergeInto (.annot ds v) u) ρ') =
+    (fun (u : SpikeVal) (ρ' : EnvStack) => readoutPost (GF := GF) ψ u ρ') := by
+  funext u ρ'
+  unfold readoutPost
+  rw [val_mergeInto_annot ds v u]
+
+/-- The engine readout only reads the ERASED value, so a prefix
+    store's annotation-merge is absorbed (element-wise face of
+    `readoutPost_mergeInto_annot`, robust against the abbrev's
+    unfolding under unification). -/
+theorem readoutPost_annot_absorb {GF : BundledGFunctors} [SpikeGS .hasLC GF]
+    (ψ : value → Mem → Prop) (ds : List dyn_annotation) (v : value)
+    (u : SpikeVal) (ρ' : EnvStack) :
+    readoutPost (GF := GF) ψ u ρ' ⊢
+      readoutPost ψ (SpikeVal.mergeInto (.annot ds v) u) ρ' := by
+  rw [congrFun (congrFun (readoutPost_mergeInto_annot ψ ds v) u) ρ']
+
+
 /-- The simulation's pure conclusion: the drive at fuel k DELIVERS,
     the delivered value and final state satisfy the readout, and on
     the state-inert cone the final state is the initial one. -/

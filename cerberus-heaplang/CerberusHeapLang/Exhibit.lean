@@ -25,6 +25,8 @@ All concrete facts (pointers, addresses, Coh) are closed
 computations.
 -/
 import CerberusHeapLang.Adequacy
+import CerberusHeapLang.Wpt
+import CerberusHeapLang.TotalAdequacy
 
 set_option autoImplicit false
 
@@ -500,145 +502,116 @@ theorem exhibitB_engine (n : Nat) (aids : Nat → Nat) (hn : n ≤ 999999) :
   rw [show CerbMem.sizeofCtype intTy = 4 from rfl] at hcx hcy
   exact ⟨hv, hcx, hcy⟩
 
-/-! ## Termination of exhibit (a): the drive actually delivers
+/-! ## Termination of exhibit (a) — THE GENERIC TOTAL ROUTE (alloc
+arc P2, the re-audit's parenthetical on this module's trace): the
+former example-specific six-step engine simulation
+(`exhibitA_terminates` — `engineSteps_store`/beta/load/merge/remove/
+done chains) is RETIRED; termination is delivered by the total
+statement judgment (`progA_wpt`, budget 6 = store 3 + load 3)
+through the GENERIC measure→fuel simulation (`wpt_engine_boundU`) —
+an unconditional `driveU .done` equation, zero operational proof
+terms in this module. -/
 
-The recon probe as a theorem: six drive steps reach PROGRAM-DONE.
-(Adequacy gives safety and pins the value; this simulation, built
-from the same per-rule certification lemmas, adds termination.) -/
+/-- The seven image decodes back to `sevenMval` at ANY address (the
+    table- and address-independent int decode). -/
+theorem seven_reconstruct (lum : List (Int × identifier))
+    (fpm : CerbMem.Funptrmap) (ad : Int) :
+    CerbMem.reconstructValue lum fpm ad intTy
+      ((sevenBytes.drop 0).take (CerbMem.sizeofCtype intTy)) =
+      sevenMval := rfl
 
-/-- The state after the store. -/
-def σ₁ : Mem :=
-  CerbMem.writeBytesTo σ₀ xAddr (CerbMem.memValueToBytes [] sevenMval).2
+theorem seven_fromMemValue : (valueFromMemValue sevenMval).2 = sevenVal := rfl
 
-theorem drive_next {aids : Nat → Nat} {n : Nat} {th th' : thread_state}
-    {σ σ' : Mem}
-    (h : (step_ctx fmapEmpty σ spikeFile fmapEmpty 0 (none, th)).map
-      (dischargeStep (aids 0) spikeRunState σ) = [.next th' σ']) :
-    drive aids (n+1) th σ = drive (fun i => aids (i+1)) n th' σ' := by
-  rw [drive_succ_eq, h]
+theorem seven_loadTrap : loadTrapV intTy sevenMval = false := rfl
 
-theorem drive_done {aids : Nat → Nat} {n : Nat} {th : thread_state} {σ : Mem}
-    {v : value}
-    (h : (step_ctx fmapEmpty σ spikeFile fmapEmpty 0 (none, th)).map
-      (dischargeStep (aids 0) spikeRunState σ) = [.done v]) :
-    drive aids (n+1) th σ = .done v σ := by
-  rw [drive_succ_eq, h]
+/-- The engine-facing postcondition of the total route: `Specified 7`
+    delivered, the final memory holding 7's image at the seeded
+    cell. -/
+def ψX : value → Mem → Prop := fun v σ' =>
+  v = sevenVal ∧ CellCoh σ' 0 ⟨xAddr, intTy, sevenBytes⟩
 
-/-- The store's footprint / the load's footprint. -/
-def fpS : CerbMem.Footprint := .FP .W xAddr 4
-def fpL : CerbMem.Footprint := .FP .R xAddr 4
+/-- Exhibit (a) at the TOTAL judgment, budget 6 (store 3 + load 3),
+    from the seeded cell's ownership alone. -/
+theorem progA_wpt {GF : BundledGFunctors} [SpikeGS .hasLC GF]
+    {M : MachineCtx} {Ls : LabelSpecT GF}
+    (ev0 : Fmap sym value) (evs : List (Fmap sym value)) :
+    iprop(pointsToCell (GF := GF) xPtr (.own 1) intTy bytesX) ⊢
+      wpt M Ls 6 (readoutPost ψX) progA (ev0 :: evs) := by
+  iintro Hpt
+  rw [show (progA : CoreExpr) =
+    Expr [] (Esseq (Pattern [] (CaseBase (none, BTy_unit)))
+      (storeExpr loc0 empty_annotation intTy xPtr sevenVal NA)
+      (loadExpr loc0 empty_annotation intTy xPtr NA)) from rfl,
+    show (6 : Nat) = 3 + 3 from rfl]
+  iapply wpt_seq
+  iapply wpt_store_cell loc0 empty_annotation intTy xPtr sevenVal NA
+    sevenMval bytesX _ (Nat.le_refl 3) seven_encodes seven_storable
+  isplitl [Hpt]
+  · iexact Hpt
+  iintro %fp Hpt
+  iapply wpt_mono
+    (fun u ρ' => readoutPost_annot_absorb ψX [DA_pos [] fp] Vunit u ρ') _ _
+  icases (pointsToCell_cellOwn_iff _ _ _ _).mp $$ Hpt
+    with ⟨%id, %a, %hpv, Hcell⟩
+  obtain ⟨rfl, rfl⟩ := cellPtr_inj (xPtr_eq.symm.trans hpv)
+  rw [show (xPtr : CerbMem.PointerValue) =
+      cellPtr 0 (xAddr + ((0 : Nat) : Int)) from by
+    rw [xPtr_eq]
+    exact congrArg (cellPtr 0) (by omega)]
+  iapply wpt_load_cell_at loc0 empty_annotation 0 xAddr intTy 0 intTy NA
+    (.own 1) (CerbMem.memValueToBytes [] sevenMval).2 _
+    (mv := sevenMval) (Nat.le_refl 3) (by omega)
+    (fun lum fpm => seven_reconstruct lum fpm _) seven_loadTrap
+  isplitl [Hcell]
+  · iexact Hcell
+  iintro %fp2 Hcell
+  iintro %σ2 %ns %κs %nt Hσ
+  icases (stateInterp_iff σ2 ns κs nt).mp $$ Hσ
+    with ⟨%mm, %mb, %mk, %HG, Hmi, Hbi, Hki⟩
+  ihave %Hcc : ⌜CellCoh σ2 0 ⟨xAddr, intTy,
+      (CerbMem.memValueToBytes [] sevenMval).2⟩ ∧
+      Iris.Std.PartialMap.get? mm 0 = some (metaOf
+        (⟨xAddr, intTy, (CerbMem.memValueToBytes [] sevenMval).2⟩ :
+          SpikeCell))⌝ $$ [Hmi Hbi Hcell]
+  · iapply cellOwn_cellCoh HG 0 (.own 1)
+      ⟨xAddr, intTy, (CerbMem.memValueToBytes [] sevenMval).2⟩
+      $$ [$Hmi $Hbi $Hcell]
+  iapply fupd_mask_intro_discard Std.LawfulSet.empty_subset
+  ipureintro
+  exact ⟨seven_fromMemValue, Hcc.1⟩
 
-/-- store discharges actively on the seeded state (the memM building
-    block from slice A, instantiated). -/
-theorem store_applies :
-    applyMemM (CerbMem.storeM loc0 intTy false xPtr sevenMval) σ₀ =
-      some (fpS, σ₁) :=
-  storeM_success σ₀ 0 cellX sevenMval loc0 cellCohX seven_storable
-
-/-- Coh survives the store (slice A's Coh.store, instantiated). -/
-theorem coh_after_store :
-    Coh σ₁ (Iris.Std.PartialMap.insert mA 0
-      ⟨xAddr, intTy, (CerbMem.memValueToBytes [] sevenMval).2⟩) :=
-  Coh.store σ₀ mA 0 cellX sevenMval coh_mA (Iris.Std.get?_insert_eq rfl)
-    seven_storable
-
-theorem load_applies :
-    applyMemM (CerbMem.loadM loc0 intTy xPtr) σ₁ =
-      some ((fpL, decodeCell ⟨xAddr, intTy,
-        (CerbMem.memValueToBytes [] sevenMval).2⟩), σ₁) :=
-  loadM_success σ₁ 0 ⟨xAddr, intTy, (CerbMem.memValueToBytes [] sevenMval).2⟩
-    loc0 (coh_after_store.cells 0 _ (Iris.Std.get?_insert_eq rfl))
-    htrap_seven
-
-/-- The intermediate arenas. -/
-def eA1 : CoreExpr :=
-  Expr [] (Esseq (Pattern [] (CaseBase (none, BTy_unit)))
-    (Expr [] (Eannot [DA_pos [] fpS]
-      (Expr [] (Epure (Pexpr [] () (PEval Vunit))))))
-    (loadExpr loc0 empty_annotation intTy xPtr NA))
-
-def eA2 : CoreExpr :=
-  Expr [] (Eannot [DA_pos [] fpS] (loadExpr loc0 empty_annotation intTy xPtr NA))
-
-def eA3 : CoreExpr :=
-  Expr [] (Eannot [DA_pos [] fpS] (Expr [] (Eannot [DA_pos [] fpL]
-    (Expr [] (Epure (Pexpr [] () (PEval sevenVal)))))))
-
-/-- THE PROBE, AS A THEOREM: six engine steps from the seeded state
-    end in the engine delivering `Specified(7)` (with adequacy's
-    exhibitA_engine pinning that this is the only possible delivery
-    and that no drive of any length can kill). -/
-theorem exhibitA_terminates (aids : Nat → Nat) :
-    drive aids 6 (spikeThread progA) σ₀ = .done sevenVal σ₁ := by
-  -- step 1: the store request, discharged against storeM
-  rw [drive_next (th' := spikeThread eA1) (σ' := σ₁) ?s1]
-  case s1 =>
-    rw [drive_scrutinee]
-    rw [engineOutcomes_eq]
-    have hE := engineSteps_store
-      ((Decomp.sseq (pa := []) (bty := BTy_unit)
-        (e2 := loadExpr loc0 empty_annotation intTy xPtr NA)
-        (Decomp.root (Redex.store (loc := loc0) (ann := empty_annotation)
-          (lk := false) (ty := intTy) (pv := xPtr) (cv := sevenVal)
-          (mo := NA) loc0_lib))))
-      (by decide) loc0_lib seven_encodes spikeEnv σ₀
-    rw [show engineSteps progA spikeEnv σ₀ = _ from hE]
-    simp only [List.map_cons, List.map_nil]
-    rw [dischargeStep_store_active store_applies]
-    rfl
-  -- step 2: LETS-ANNOT
-  rw [drive_next (th' := spikeThread eA2) (σ' := σ₁) ?s2]
-  case s2 =>
-    rw [drive_scrutinee]
-    rw [engineOutcomes_eq]
-    have hE := engineSteps_beta_annot (pa := []) (bty := BTy_unit)
-      (ds := [DA_pos [] fpS]) (v := Vunit)
-      (e2 := loadExpr loc0 empty_annotation intTy xPtr NA)
-      (Decomp.root Redex.beta_annot) (by decide) fmapEmpty [] σ₁
-    rw [show engineSteps eA1 spikeEnv σ₁ = _ from hE]
-    rfl
-  -- step 3: the load request, discharged against loadM
-  rw [drive_next (th' := spikeThread eA3) (σ' := σ₁) ?s3]
-  case s3 =>
-    rw [drive_scrutinee]
-    rw [engineOutcomes_eq]
-    have hE := engineSteps_load
-      ((Decomp.annot (ds := [DA_pos [] fpS]) rfl rfl (fun n => rfl)
-        (Decomp.root (Redex.load (loc := loc0) (ann := empty_annotation)
-          (ty := intTy) (pv := xPtr) (mo := NA) loc0_lib))))
-      (by decide) loc0_lib spikeEnv σ₁
-    rw [show engineSteps eA2 spikeEnv σ₁ = _ from hE]
-    simp only [List.map_cons, List.map_nil]
-    rw [dischargeStep_load_active load_applies]
-    rfl
-  -- step 4: ANNOTS merge
-  rw [drive_next
-    (th' := spikeThread (ofVal (.annot [DA_pos [] fpS, DA_pos [] fpL] sevenVal)))
-    (σ' := σ₁) ?s4]
-  case s4 =>
-    rw [drive_scrutinee]
-    rw [engineOutcomes_eq]
-    have hE := engineSteps_merge (ds1 := [DA_pos [] fpS])
-      (ds2 := [DA_pos [] fpL])
-      ((Decomp.root (Redex.merge
-        (b := Expr [] (Epure (Pexpr [] () (PEval sevenVal)))) rfl)))
-      rfl (by decide) spikeEnv σ₁
-    rw [show engineSteps eA3 spikeEnv σ₁ = _ from hE]
-    rfl
-  -- step 5: REMOVE-ANNOT
-  rw [drive_next (th' := spikeThread (ofVal (.pure sevenVal))) (σ' := σ₁) ?s5]
-  case s5 =>
-    rw [drive_scrutinee]
-    rw [engineOutcomes_eq]
-    rw [engineSteps_remove_annot]
-    rfl
-  -- step 6: PROGRAM-DONE
-  rw [drive_done ?s6]
-  case s6 =>
-    rw [drive_scrutinee]
-    rw [engineOutcomes_eq]
-    rw [engineSteps_done]
-    rfl
+/-- TERMINATION-WITH-DELIVERY, THE GENERIC ROUTE (replaces the
+    retired `exhibitA_terminates` trace): the engine's own drive at
+    fuel 6 DELIVERS `Specified(7)` from the seeded state, with the
+    final memory holding 7's image at the cell — an unconditional
+    `.done` equation, a corollary of the total judgment through the
+    generic simulation. (Adequacy's `exhibitA_engine` pins that no
+    drive of any length can kill or derail.) -/
+theorem exhibitA_total (aids : Nat → Nat) :
+    ∃ (v : value) (σ' : Mem),
+      driveU spikeCtx aids 6 (spikeCtx.thread progA spikeEnv) σ₀ =
+        .done v σ' ∧
+      v = sevenVal ∧ CellCoh σ' 0 ⟨xAddr, intTy, sevenBytes⟩ := by
+  obtain ⟨v, σ', h1, h2, -⟩ :=
+    wpt_engine_boundU (GF := SpikeGF) (M := spikeCtx) spikeCtx_wf
+      (fun l params cont hl => (spikeCtx_labels_none l hl).elim)
+      (fun l params cont hl => (spikeCtx_labels_none l hl).elim)
+      (fun _ _ _ _ => iprop(False))
+      progA fmapEmpty [] σ₀ mA fragA
+      (by rw [show pot progA = 3 from rfl,
+          show lemDefaultFuel = 999999 + 1 from rfl]
+          omega)
+      coh_mA ψX 6
+      (by
+        intro inst
+        iintro Hcells
+        isplitr [Hcells]
+        · iapply blockSpecsT_intro fun l params cont _ _ _ _ hl =>
+            (spikeCtx_labels_none l hl).elim
+        · ihave Hpt := bigSepA_ptx $$ Hcells
+          iapply progA_wpt fmapEmpty [] $$ Hpt)
+      aids
+  exact ⟨v, σ', h1, h2⟩
 
 /-! ## EXHIBIT C ([USER 2026-08-30]): disjoint sequential stores,
 exported to the engine level

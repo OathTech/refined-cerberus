@@ -77,6 +77,7 @@ docs/2026-08-30_spike-sliceB-notes.md.
 -/
 import CerberusHeapLang.DriverCollapse
 import CerberusHeapLang.FibExhibit
+import CerberusHeapLang.ProdLoop
 
 set_option autoImplicit false
 
@@ -406,6 +407,50 @@ theorem sem_triple_prod
   refine ⟨dres, dst', heq, hval, hlay, ?_⟩
   have h := hsem R hdisj σc hsat k (fun _ => 0) hfuelc
   exact h.2.2 v σfin (hterm _)
+
+/-! ## THE PRODUCTION RUN EQUATION FOR REGISTERED-LOOP PROGRAMS
+(moved here from ProdLoopExhibit at alloc arc P2 — generic
+production machinery, not example content: the pipeline theorem
+composing `drive_after_setup` + a `DriverDoneAt` delivery fact +
+`driver2_done`/`finalize_done`) -/
+
+/-- The production pipeline on a synthetic one-procedure file whose
+    program's registered label map (the SHIPPED registration,
+    `collect_labeled_continuations_NEW`) ties at `mainSym`, given the
+    driver-delivery fact from the cold-start memory: `runND` of the
+    SHIPPED driver from the PRODUCTION initial state is EXACTLY ONE
+    Active execution, whose result value and final memory satisfy ψ.
+    Total-lane composition: `hdd` comes from `wpt_driver_done`, so no
+    termination hypothesis remains — only the in-budget bound on the
+    certified step count (fuel honesty, D19). -/
+theorem prod_run_eqJ (e : CoreExpr) {Q : LabelMap}
+    (hQe : LabeledAt (initial_core_run_state
+      (collect_labeled_continuations_NEW (prodFile e))) mainSym Q)
+    (ψ : value → Mem → Prop) (k : Nat)
+    (hdd : DriverDoneAt mainSym Q (prodThread e) e [fmapEmpty] prodMem₀ ψ k)
+    (hfl : k + 2 ≤ lemDefaultFuel)
+    (fs : CerbFS.FsState) (args : List String) :
+    ∃ (dres : driver_result) (dst' : driver_state),
+      CerbND.runND (_root_.drive fmapEmpty false (prodFile e) args)
+          (initial_driver_state (prodFile e) fs) =
+        [(nd_status.Active dres, ([] : List String), dst')] ∧
+      ψ dres.dres_core_value dst'.layout_state ∧
+      dres.dres_blocked = false ∧
+      dres.dres_stdout = "" ∧
+      dres.dres_stderr = "" := by
+  obtain ⟨v, σfin, ρfin, rs', tr, ctr, hψ, hloop⟩ :=
+    hdd (prodEntryState e fs) fmapEmpty lemDefaultFuel rfl rfl rfl hQe hfl
+  have hdrv2 := driver2_done 999999 fmapEmpty (prodEntryState e fs) _
+    (prodThread e)
+    { prodThread e with arena := ofVal (.pure v), env := ρfin }
+    v rfl hloop rfl
+  have hrun := drive_after_setup e fs args _ hdrv2
+  refine ⟨_, _, runND_active hrun, ?_, rfl, rfl, rfl⟩
+  rw [finalize_done fmapEmpty _ _
+    { { prodThread e with arena := ofVal (.pure v), env := ρfin } with
+        stack0 := Stack_empty, arena := mk_value_e v } v rfl rfl]
+  exact hψ
+
 
 /-! ## S4 — THE PRODUCTION REGISTRATION TIE (the LabeledAt
 derivation): for the authored loop programs, the label map the

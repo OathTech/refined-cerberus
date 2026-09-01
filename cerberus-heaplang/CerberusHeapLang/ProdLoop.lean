@@ -161,26 +161,6 @@ theorem driverDone_step {M₀ : MachineCtx}
   rcases cs with ⟨ths, io⟩
   rfl
 
-/-! ## Readout plumbing for sequenced prefixes: the engine readout
-only reads the ERASED value, so an annotation-merge on the sequenced
-value is absorbed (the LETS-ANNOT residue of a prefix store never
-reaches ψ). -/
-
-theorem val_mergeInto_annot (ds : List dyn_annotation) (v : value)
-    (u : SpikeVal) :
-    (SpikeVal.mergeInto (.annot ds v) u).val = u.val := by
-  cases u <;> rfl
-
-theorem readoutPost_mergeInto_annot {GF : BundledGFunctors}
-    [SpikeGS .hasLC GF] (ψ : value → Mem → Prop)
-    (ds : List dyn_annotation) (v : value) :
-    (fun (u : SpikeVal) (ρ' : EnvStack) =>
-      readoutPost (GF := GF) ψ (SpikeVal.mergeInto (.annot ds v) u) ρ') =
-    (fun (u : SpikeVal) (ρ' : EnvStack) => readoutPost (GF := GF) ψ u ρ') := by
-  funext u ρ'
-  unfold readoutPost
-  rw [val_mergeInto_annot ds v u]
-
 /-! ## THE SIMULATION: the total judgment drives the production
 driver's loop (the `wpt_drive_aux` clone at the driver level). -/
 
@@ -341,6 +321,59 @@ theorem wpt_driver_done {GF : BundledGFunctors} [SpikeGpreS GF]
     isplitl [Hbi]
     · iexact Hbi
     · iexact Hki
+  iapply wpt_driver_aux htd hex hlb hproc hstack hQf hQpot Ls ψ k e₀
+    ev00 evs0 σ₀ 0 0 hfrag hpot $$ [$Hσ $HB $Hwpt]
+
+/-- ALLOCATION-AWARE driver delivery (alloc arc P2 — the production
+    lane's missing launcher variant): as `wpt_driver_done`, but
+    launched through the one shared `launchResources` helper — the
+    client's total proof receives the footprint cells AND
+    `allocCap reqs`, so a whole program may allocate through the
+    PUBLIC `wpt_create` and still conclude the driver-delivery fact
+    `prod_run_eqJ` consumes. This is the arrow that replaces the
+    example-specific `driverDone_step` create prefixes (charter P2:
+    "no arrow may be supplied by an example-specific engine
+    trace"). -/
+theorem wpt_driver_done_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
+    {M₀ : MachineCtx}
+    (htd : M₀.tagDefs = fmapEmpty) (hex : M₀.extern = fmapEmpty)
+    {Q : LabelMap} (hlb : M₀.labels = Q)
+    {p : sym} {th₀ : thread_state}
+    (hproc : th₀.current_proc_opt = some p)
+    (hstack : th₀.stack0 = Stack_empty)
+    (hQf : ∀ l params cont, lookupLabel M₀.labels l = some (params, cont) →
+      Frag cont)
+    (hQpot : ∀ l params cont, lookupLabel M₀.labels l = some (params, cont) →
+      pot cont ≤ lemDefaultFuel)
+    (Ls : ∀ [SpikeGS .hasLC GF], LabelSpecT GF)
+    (e₀ : CoreExpr) (ev00 : Fmap sym value) (evs0 : List (Fmap sym value))
+    (σ₀ : Mem) (m₀ : SpikeHeapF SpikeCell) (reqs : List AllocReq)
+    (hfrag : Frag e₀) (hpot : pot e₀ ≤ lemDefaultFuel)
+    (hl : LaunchCoh σ₀ m₀ reqs)
+    (ψ : value → Mem → Prop) (k : Nat)
+    (hwp : ∀ [SpikeGS .hasLC GF],
+      iprop(([∗map] i ↦ c ∈ m₀, cellOwn (hlc := .hasLC) (GF := GF) i
+          (.own 1) c) ∗ allocCap reqs) ⊢
+        iprop(blockSpecsT M₀ Ls (readoutPost ψ) ∗
+          wpt M₀ Ls k (readoutPost ψ) e₀ (ev00 :: evs0))) :
+    DriverDoneAt p Q th₀ e₀ (ev00 :: evs0) σ₀ ψ k := by
+  refine pure_soundness (PROP := IProp GF) ?_
+  refine (fupd_finally_soundness .hasLC 0 ⊤ _ ?_)
+  iintro %Hinv Hcred
+  letI : InvGS_gen .hasLC GF := Hinv
+  icases Hcred with -
+  imod (genHeap_init (L := Int) (V := MetaCell) (H := SpikeHeapF)
+    (∅ : SpikeHeapF MetaCell)) with ⟨%Gm, Hmi, -, -⟩
+  imod (genHeap_init (L := Int) (V := CerbMem.AbsByte) (H := SpikeHeapF)
+    (∅ : SpikeHeapF CerbMem.AbsByte)) with ⟨%Gb, Hbi, -, -⟩
+  imod (genHeap_init (L := Int) (V := AllocCursor) (H := SpikeHeapF)
+    (∅ : SpikeHeapF AllocCursor)) with ⟨%Gk, Hki, -, -⟩
+  letI instGS : SpikeGS .hasLC GF :=
+    { byteGS := Gb, metaGS := Gm, cursorGS := Gk }
+  imod (launchResources σ₀ m₀ reqs hl) $$ [$Hmi $Hbi $Hki]
+    with ⟨Hσ, Hcells, Hcap⟩
+  ihave HW := hwp $$ [$Hcells $Hcap]
+  icases HW with ⟨HB, Hwpt⟩
   iapply wpt_driver_aux htd hex hlb hproc hstack hQf hQpot Ls ψ k e₀
     ev00 evs0 σ₀ 0 0 hfrag hpot $$ [$Hσ $HB $Hwpt]
 
