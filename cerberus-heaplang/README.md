@@ -25,10 +25,10 @@ the claims yourself in five minutes.
 
 The analogy to Iris HeapLang is in the ROLE (the demonstration
 language a logic is exercised on), not the extent: unlike HeapLang
-this package has no concurrency, no prophecy variables, no
-allocation rule in the logic yet (the allocator-cursor resource is
-the registered growth step), and a small lemma suite rather than
-HeapLang's full library. What it has instead is an object language
+this package has no concurrency, no prophecy variables, and a small
+lemma suite rather than HeapLang's full library (allocation IS in
+the logic: `wps_create` through the allocator-cursor resource —
+Phase 2). What it has instead is an object language
 that is the intermediate language of a real C semantics, executed
 by the real interpreter.
 
@@ -313,9 +313,7 @@ operand-evaluation step, `PEval`/`PEsym`/integer-`PEop`/
 <!-- MANIFEST-SCOPE-BEGIN
 tokens: value store load create sseq-wild sseq-spec sseq-sym wseq-wild annot save if run case-value pure-sym memop-ptreq memop-op load-op store-op pure-operands
 MANIFEST-SCOPE-END -->
-The logic has no `wp_create` small axiom (registered:
-ProdEntry.lean header — a sound one needs the allocator-cursor
-resource, the registered growth step). Each qualifier is registered
+Each qualifier is registered
 at source (module headers; `docs/2026-08-30_spike-report.md`); this
 section, under the manifest, is the summary the claims above are
 read under.
@@ -340,7 +338,6 @@ or growth paths. The register (each entry's home is authoritative):
 | List-reverse TOTAL export (variant → unconditional driveJ bound, the fib pattern) not delivered: the drive induction must thread a pure heap invariant through the per-iteration memory operations (fib's lane is state-free) | The pure drive-invariant lane is the named mover; the per-iteration step count is fixed (11), so the bound would be 11·n + 6 | `docs/2026-08-31_listrev-notes.md` §Findings |
 | Production-face loop export (`runND` equation for a loop run) | The DriverCollapse scheduler equations are pinned at the straight-line profile; the drive-lane step bound (`fib_certified_total`) is the in-budget discharge waiting for it | `ProdEntry.lean`; `docs/2026-08-31_phase2-s4-notes.md` |
 | Fuel side condition (no fuel parametricity) | Fuel-irrelevance theorem for `get_ctx` or graceful driver exhaustion would remove it | `docs/2026-08-30_spike-report.md` "What remains"; `ProdEntry.lean` header |
-| No `wp_create` in the logic | Allocator-cursor resource in the state interpretation (registered growth step) | `ProdEntry.lean` header; `docs/2026-08-30_spike-sliceB-notes.md` D26 |
 | REMOVE-ANNOT value protocol; canonical-annotation subrelation | Deliberate, engine-faithful readout composition | `Step.lean` header; `docs/2026-08-30_spike-sliceA-notes.md` D1/D3 |
 
 ## How to build
@@ -448,14 +445,15 @@ In teaching order (= import order; one line each — the
 | `Heap.lean` | Points-to over the engine's memory state via iris-lean GenHeap (allocation-rooted byte-list cells); the memM-level store/load facts | `pointsToCell` (`↦c`), `storeM_success`, `loadM_success` |
 | `Lang.lean` | The iris-lean `Language` instance over Step (primStep over the runtime tuple, componentwise value protocol, pure-determinism facts for the beta/merge taus, the `SpikeGF` ghost-functor witness). Deliberately NO `Language.Context`/wp_bind instance: the global jump rule falsifies the frame law (`Erun` discards its context), so sequencing is proved directly (`wp_sseq`, `wps_seq`) — the module header records the falsification | `instance : Language CoreRt Mem Empty CoreRVal` |
 | `EnvLaws.lean` | The env-map seam, closed: lawfulness of the engine's symbol order (`Std.TransCmp` via the String×Nat lexicographic characterization) and the lookup-after-add law over reachable frames — loop invariants carry `SymFrame` instead of frame-shape pins | `envAdd_lookup` |
-| `Rules.lean` | The base logic: small axioms, sequencing, frame, consequence, wand — plus the compositional two-store triple and the interior-load memM fact | `wp_store`, `wp_load`, `wp_sseq`, `triple_frame`, `triple_seq`, `loadM_interior_int` |
-| `Wps.lean` | The statement-stratified WP (the classical label-context judgment as a package-local guarded fixpoint): value/jump/step clauses, the jump-aware sequencing rules, the branch/entry rules, the small axioms at the stratum, the per-label invariant loop rule (and `blockSpecs_intro_variant`, which offers smaller-measure hypotheses but carries NO termination consequence and has no consumer yet — the total lane is Phase 3, manifest Notes 2), and the Löb-tied collapse into the base WP | `wps`, `wps_seq`, `wps_seq_spec`, `blockSpecs_intro`, `wps_sound` |
+| `Rules.lean` | The base logic: small axioms, sequencing, frame, consequence, wand — plus the compositional two-store triple | `wp_store`, `wp_load`, `wp_sseq`, `triple_frame`, `triple_seq` |
+| `Wps.lean` | The statement-stratified WP (the classical label-context judgment as a package-local guarded fixpoint): value/jump/step clauses, the jump-aware sequencing rules, the branch/entry rules, the small axioms at the stratum, THE GENERIC TYPED-SUBRANGE RULES (`wps_load_at`/`wps_store_at` over views + the derived whole-cell interior forms — Phase 2, F-04 retired), THE ALLOCATION RULE (`wps_create` through the allocator-cursor resource — Phase 2, D26 retired), the per-label invariant loop rule (and `blockSpecs_intro_variant`, which offers smaller-measure hypotheses but carries NO termination consequence and has no consumer yet — the total lane is Phase 3, manifest Notes 2), and the Löb-tied collapse into the base WP | `wps`, `wps_seq`, `wps_seq_spec`, `wps_load_at`, `wps_store_at`, `wps_create`, `blockSpecs_intro`, `wps_sound` |
 | `Soundness.lean` | Per-construct certification of Step against the engine's own `step_ctx` + request discharge (context-undisturbed shape; refusals classified; the jump layer: the evaluator bridge, the factor theorem with the jump disjunct, the context-discard certification, the step-match completeness at the jump profile) | `engine_complete`, `stepDischarge_run`, `DecompJ.step_factor`, `engine_step_matchJ` |
 | `Adequacy.lean` | The exported semantic face over engine configurations: triples with an arbitrary framed rest, driven by the engine's step function; the jump-profile drive lane (`driveJ`) with its adequacy and per-step drive equations | `semantic_triple_sound`, `semantic_frame`, `spike_engine_adequacy`, `engine_adequacyJ`, `driveJ_step` |
 | `Exhibit.lean` | End-to-end exhibits at the engine level: store-then-load returns 7; the frame exhibit; disjoint sequential stores; termination of the probe program as a theorem | `exhibitA_engine`, `exhibitB_engine`, `exhibitC_engine`, `exhibitA_terminates` |
 | `LoopExhibit.lean` | THE FIRST LOOP: the counter loop — save entry, real `x > 0` guard, a store under the loop, the context-discarding back edge — certified end-to-end through `driveJ` with a data-dependent post | `counter_loop_certified` |
 | `FibExhibit.lean` | Iterative two-accumulator fib with the data-dependent invariant `a = fib i ∧ b = fib (i+1)`; partial via `engine_adequacyJ`; plus the separate OPERATIONAL ENGINE THEOREM `fib_certified_total` — an unconditional driveJ equation at step bound `2·n+4`, proved by direct operational induction, not by the logic (manifest Notes 2) | `fib_certified`, `fib_certified_total` |
 | `ArrayExhibit.lean` | The array-sum walk — real pointer arithmetic, operand-evaluated loads, interior reads of the seeded array allocation, the `Specified`-binder unwrap, the index-partitioned invariant; the array preserved in the conclusion | `array_sum_certified` |
+| `StructExhibit.lean` | THE FRESH-CLIENT TEST (Phase 2 acceptance): a two-field struct update (layout `{int x @ 0; int y @ 8}` in one 16-byte allocation — a third distinct layout) verified end-to-end with ZERO core-logic edits — every rule a one-line client instance of the generic subrange rules; plus the allocation consumer (create a fresh struct through the cursor resource and initialize a field) | `struct_update_certified`, `struct_create_store_wps` |
 | `ListRevExhibit.lean` | THE CANONICAL EXHIBIT: in-place reversal of a linked list of one-allocation two-field nodes — the honest null encoding + the engine's own `PtrEq` memop as the null test (the null/pointer byte ROUND TRIPS proved against repr/abst), interior next-field loads AND stores by in-allocation arithmetic, `isList` by plain structural recursion, the textbook `blockSpecs_intro` proof with invariant `isList prev reversed ∗ isList cur rest`; conclusion: any delivered value is a pointer whose final-heap chain is `xs.reverse` | `list_reverse_certified`, `list_reverse_demo` |
 | `DriverCollapse.lean` | The production scheduler/ND/readout collapsed onto the demo's drive loop — proved from the driver's OWN round functions; bounded by the trio, its three headline equations exact-pinned | `prod_loop_done`, `driver2_done`, `finalize_done` |
 | `ProdEntry.lean` | Cold start from the SHIPPED `initial_driver_state` (errno allocated by the real allocator) + the production-entry theorem; the REGISTRATION TIE — `LabeledAt` derived from the shipped `collect_labeled_continuations_NEW` for the authored loop programs, and the counter loop re-exported at the derived tie (the registration theorem — manifest Notes 3) | `sem_triple_prod`, `prod_run_eq`, `fib_labeledAt_production`, `counter_loop_certified_production` |

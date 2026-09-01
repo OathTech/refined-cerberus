@@ -90,6 +90,7 @@ import CerberusHeapLang.ArrayExhibit
 import CerberusHeapLang.ListRevExhibit
 import CerberusHeapLang.CaseExhibit
 import CerberusHeapLang.WseqExhibit
+import CerberusHeapLang.StructExhibit
 import CerberusHeapLang.StmtProbe
 
 namespace CerberusHeapLang.Audit
@@ -384,6 +385,36 @@ info: 'CerberusHeapLang.list_reverse_certified' depends on axioms: [propext, Cla
 info: 'CerberusHeapLang.list_reverse_demo' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in #print axioms CerberusHeapLang.list_reverse_demo
+
+-- Foundations Phase 2 (2026-09-01): the generic memory layer's
+-- headline pins — the allocation rule (D26 retired: create through
+-- the allocator-cursor resource), the generic typed-subrange rules,
+-- and the FRESH-CLIENT acceptance theorem (two-field struct update,
+-- end-to-end, zero core-logic edits). Cones exactly the trio.
+/--
+info: 'CerberusHeapLang.wps_create' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms CerberusHeapLang.wps_create
+
+/--
+info: 'CerberusHeapLang.wps_load_at' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms CerberusHeapLang.wps_load_at
+
+/--
+info: 'CerberusHeapLang.wps_store_at' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms CerberusHeapLang.wps_store_at
+
+/--
+info: 'CerberusHeapLang.struct_update_certified' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms CerberusHeapLang.struct_update_certified
+
+/--
+info: 'CerberusHeapLang.struct_create_store_wps' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms CerberusHeapLang.struct_create_store_wps
 
 /-! ## The exhaustive sweep (LAST — nothing declared below) -/
 

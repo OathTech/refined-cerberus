@@ -33,7 +33,7 @@ owns no constructor and is mechanically barred from claiming any.
 | value delivery (Epure at PEval; Eannot values) | CERTIFIED (drive lane) | DECLARED — terminal — the toVal/ofVal value protocol (values do not step) | OK `wp_ofVal`, `wps_ofVal` | OK `Frag.val_pure` | OK `step_ctx_done`, `step_ctx_remove_annot` | OK `engine_complete`, `engine_adequacyJ` | RED — no logical total lane (Phase 3); see Notes 2 | OK `exhibitA_prod` | OK `exhibitA_engine` |
 | Eaction Store0 (value operands) | CERTIFIED (drive lane) | OK `Step.store` | OK `wp_store`, `wps_store` | OK `Frag.store` | OK `step_ctx_store`, `engine_complete_storeU` — TWO-SIDED at any MachineCtx | OK `engine_complete`, `engine_adequacyJ` | RED — no logical total lane (Phase 3); see Notes 2 | OK `exhibitA_prod` | OK `exhibitB_engine`, `counter_loop_certified`, `list_reverse_certified` |
 | Eaction Load0 (value operand) | CERTIFIED (drive lane) | OK `Step.load` | OK `wp_load`, `wps_load` | OK `Frag.load` | OK `step_ctx_load` | OK `engine_complete`, `engine_adequacyJ` | RED — no logical total lane (Phase 3); see Notes 2 | OK `exhibitA_prod` | OK `exhibitA_engine`, `array_sum_certified` |
-| Eaction Create0 | ADEQUACY-EXPORTABLE (no logic rule) | OK `Step.create` | RED — no wp_create/wps_create small axiom (registered D26: needs the allocator-cursor resource; Phase 2); see Notes 4 | OK `Frag.create` | OK `step_ctx_create` | OK `engine_complete`, `engine_adequacyJ` | RED — no logical total lane (Phase 3); see Notes 2 | OK `exhibitA_prod` | OK `exhibitA_prod` — production exhibit only — no drive-lane-only consumer |
+| Eaction Create0 | CERTIFIED (drive lane) | OK `Step.create` | OK `wps_create` — the allocator-cursor resource (Phase 2, D26 RETIRED): OOM excluded by the pure freshBase guard on owned cursor state | OK `Frag.create` | OK `step_ctx_create` | OK `engine_complete`, `engine_adequacyJ` | RED — no logical total lane (Phase 3); see Notes 2 | OK `exhibitA_prod` | OK `exhibitA_prod`, `struct_create_store_wps` — production exhibit + the allocate-then-initialize client |
 | Esseq, wildcard pattern | CERTIFIED (drive lane) | OK `Step.sseq_pure`, `Step.sseq_annot`, `Step.sseq_ctx` | OK `wp_sseq`, `wps_seq` | OK `Frag.sseq` | OK `step_ctx_beta_pure`, `step_ctx_beta_annot` | OK `engine_complete`, `engine_adequacyJ` | RED — no logical total lane (Phase 3); see Notes 2 | OK `exhibitA_prod` | OK `exhibitA_engine`, `exhibitC_engine` |
 | Eannot residue (descent + merge) | CERTIFIED (drive lane) | OK `Step.annot_ctx`, `Step.annot_merge` | OK `wp_annot`, `wps_annot` | OK `Frag.annot` | OK `step_ctx_merge` | OK `engine_complete`, `engine_adequacyJ` | RED — no logical total lane (Phase 3); see Notes 2 | OK `exhibitA_prod` | OK `exhibitA_engine` |
 | Esave (block entry, value-shaped params) | CERTIFIED (drive lane) | OK `Step.save` | OK `wps_save` | OK `Frag.save` | OK `step_ctx_save` | OK `engine_adequacyJ` | RED — no logical total lane (Phase 3); see Notes 2 | RED — registration tie only; see Notes 3 | OK `counter_loop_certified`, `fib_certified` |
@@ -81,14 +81,21 @@ owns no constructor and is mechanically barred from claiming any.
    `_registration` lands with Phase 5's real production theorem.
    Straight-line constructs reach the shipped pipeline via
    `exhibitA_prod`.
-4. **`create` has no logic rule** (registered D26): sound
-   `wp_create` needs the allocator-cursor resource (Phase 2). It is
-   adequacy-exportable (mirror + cone + match) and its only example
-   consumer is the production exhibit.
-5. **Interior (sub-allocation) load/store rules are not construct
-   rows**: `wps_load_interior` and the exhibit-local node rules are
-   layout-specific extensions of the rule layer (audit F-04);
-   Phase 2 replaces them with generic typed-subrange rules.
+4. **`create` HAS its logic rule** (Phase 2 — D26 RETIRED):
+   `wps_create` allocates through the allocator-cursor ghost
+   resource; the out-of-memory kill arm is excluded by the pure
+   `freshBase ... ≠ 0` guard computed on OWNED cursor state (the
+   OOM arm is handled by the resource's design, not assumed away).
+   Consumers: the cold-start production exhibit and the
+   allocate-then-initialize client (`struct_create_store_wps`).
+5. **Interior (sub-allocation) access is GENERIC** (Phase 2,
+   F-04 retired): one typed-subrange load and one store rule
+   (`wps_load_at`/`wps_store_at` over views; whole-cell forms
+   `wps_load_cell_at`/`wps_store_cell_at`), certified once
+   against loadM/storeM. The former int-specific and node-
+   specific interior rules are DELETED; array element, node
+   field, and struct field rules are client instances inside
+   their exhibit modules.
 6. **`Ewseq` wildcard is the S1b DRIFT TEST** (arc plan Phase 1
    item 7; design record §8 item 8): a NEW non-example construct
    passed through the GENERIC route — relation rules + cone/
@@ -120,6 +127,6 @@ owns no constructor and is mechanically barred from claiming any.
 
 ```
 ADEQUACY-EXPORTABLE: value store load create sseq-wild annot save if run sseq-spec pure-sym load-op sseq-sym memop-ptreq memop-op store-op case-value wseq-wild pure-operands
-FULL-ROW: value store load sseq-wild annot save if run sseq-spec pure-sym load-op sseq-sym memop-ptreq memop-op store-op case-value wseq-wild pure-operands
+FULL-ROW: value store load create sseq-wild annot save if run sseq-spec pure-sym load-op sseq-sym memop-ptreq memop-op store-op case-value wseq-wild pure-operands
 LOCAL-RULE-ONLY: 
 ```

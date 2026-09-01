@@ -16,5 +16,6 @@ import CerberusHeapLang.ArrayExhibit
 import CerberusHeapLang.ListRevExhibit
 import CerberusHeapLang.CaseExhibit
 import CerberusHeapLang.WseqExhibit
+import CerberusHeapLang.StructExhibit
 import CerberusHeapLang.StmtProbe
 import CerberusHeapLang.Audit

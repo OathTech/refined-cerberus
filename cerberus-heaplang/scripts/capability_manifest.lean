@@ -184,14 +184,16 @@ def rowSpec : Name → Option RowSpec
   | `CerberusHeapLang.Frag.create => some
     { token := "create", construct := "Eaction Create0",
       mirror := .ctors [`CerberusHeapLang.Step.create],
-      logic := .red "no wp_create/wps_create small axiom (registered D26: needs the allocator-cursor resource; Phase 2); see Notes 4",
+      logic := .thms [`CerberusHeapLang.wps_create]
+        (note := "the allocator-cursor resource (Phase 2, D26 RETIRED): OOM excluded by the pure freshBase guard on owned cursor state"),
       engineMatch := .thms [`CerberusHeapLang.step_ctx_create],
       partialLane := .thms [`CerberusHeapLang.engine_complete,
         `CerberusHeapLang.engine_adequacyJ],
       totalLane := noTotal,
       prodLane := .thms [`CerberusHeapLang.exhibitA_prod],
-      consumer := .thms [`CerberusHeapLang.exhibitA_prod]
-        (note := "production exhibit only — no drive-lane-only consumer") }
+      consumer := .thms [`CerberusHeapLang.exhibitA_prod,
+        `CerberusHeapLang.struct_create_store_wps]
+        (note := "production exhibit + the allocate-then-initialize client") }
   | `CerberusHeapLang.Frag.sseq => some
     { token := "sseq-wild", construct := "Esseq, wildcard pattern",
       mirror := .ctors [`CerberusHeapLang.Step.sseq_pure,
@@ -510,14 +512,21 @@ def Cell.render (env : Environment) : Cell → Except String String
   IO.println "   `_registration` lands with Phase 5's real production theorem."
   IO.println "   Straight-line constructs reach the shipped pipeline via"
   IO.println "   `exhibitA_prod`."
-  IO.println "4. **`create` has no logic rule** (registered D26): sound"
-  IO.println "   `wp_create` needs the allocator-cursor resource (Phase 2). It is"
-  IO.println "   adequacy-exportable (mirror + cone + match) and its only example"
-  IO.println "   consumer is the production exhibit."
-  IO.println "5. **Interior (sub-allocation) load/store rules are not construct"
-  IO.println "   rows**: `wps_load_interior` and the exhibit-local node rules are"
-  IO.println "   layout-specific extensions of the rule layer (audit F-04);"
-  IO.println "   Phase 2 replaces them with generic typed-subrange rules."
+  IO.println "4. **`create` HAS its logic rule** (Phase 2 — D26 RETIRED):"
+  IO.println "   `wps_create` allocates through the allocator-cursor ghost"
+  IO.println "   resource; the out-of-memory kill arm is excluded by the pure"
+  IO.println "   `freshBase ... ≠ 0` guard computed on OWNED cursor state (the"
+  IO.println "   OOM arm is handled by the resource's design, not assumed away)."
+  IO.println "   Consumers: the cold-start production exhibit and the"
+  IO.println "   allocate-then-initialize client (`struct_create_store_wps`)."
+  IO.println "5. **Interior (sub-allocation) access is GENERIC** (Phase 2,"
+  IO.println "   F-04 retired): one typed-subrange load and one store rule"
+  IO.println "   (`wps_load_at`/`wps_store_at` over views; whole-cell forms"
+  IO.println "   `wps_load_cell_at`/`wps_store_cell_at`), certified once"
+  IO.println "   against loadM/storeM. The former int-specific and node-"
+  IO.println "   specific interior rules are DELETED; array element, node"
+  IO.println "   field, and struct field rules are client instances inside"
+  IO.println "   their exhibit modules."
   IO.println "6. **`Ewseq` wildcard is the S1b DRIFT TEST** (arc plan Phase 1"
   IO.println "   item 7; design record §8 item 8): a NEW non-example construct"
   IO.println "   passed through the GENERIC route — relation rules + cone/"
