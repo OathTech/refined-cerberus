@@ -895,18 +895,17 @@ it witnesses: **every exported statement is engine vocabulary plus
 the enumerated spec idiom plus Lean core/std, nothing else** — with
 two honest observations, reported rather than papered over:
 
-1. **The ghost-functor binder is GONE from the flagships** (Phase
-   4, the audit's F-06 tail and this section's own pre-Phase-4
-   footnote): `list_reverse_certified` and kin, and the tree
-   exports, are stated at the concrete `SpikeGF` internally and
-   carry no `Iris.BundledGFunctors`/`SpikeGpreS` hypothesis. The
-   binder remains only on the GENERIC bridge theorems
+1. **The ghost-functor binder is GONE from every loop and flagship
+   export** (Phase 4 removed it from the flagships and tree
+   exports; Phase 5 from the remaining loop exports —
+   `counter_loop_certified`, `fib_certified`,
+   `array_sum_certified`, `counter_loop_certified_registration`):
+   all are stated at the concrete `SpikeGF` internally and carry no
+   `Iris.BundledGFunctors`/`SpikeGpreS` hypothesis. The binder
+   remains only on the GENERIC bridge theorem
    (`semantic_triple_sound` — whose hypothesis `ProvenTriple` is
    itself an Iris-level judgment, so the binder is load-bearing
-   there) and the pre-Phase-4 loop exports
-   (`counter_loop_certified`, `fib_certified`,
-   `array_sum_certified`) — a registered follow-on, not a
-   structural need.
+   there, permanently and by design).
 2. **Finite-map vocabulary.** Statements that phrase footprints as
    concrete maps (the flagships' `SeedChain`/`SeedTree` seeds, the
    frame footprints, `counter_loop_certified_production`) surface
@@ -917,10 +916,13 @@ two honest observations, reported rather than papered over:
    it is iris-lean code in a statement surface, so it is listed,
    not hidden.
 
-The census is a documented, read-only instrument (it reports; it
-gates nothing). Freezing its expected partitions as an in-build
-audit check — with the plant test the audit checks get — is
-registered as a future gate in the script header.
+The census GATES since the acceptance-suite slice (2026-09-01):
+its output is committed as `docs/STATEMENT_CENSUS.txt` and
+`scripts/test_unit.sh` gate 5 re-runs it on every gate pass,
+failing on any drift (fail-closed; plant-tested both directions —
+`docs/2026-09-01_acceptance-suite-record.md`). A statement-surface
+change to any pinned export therefore requires a deliberate
+same-commit re-baseline of the committed census.
 
 ## 6. Check it yourself in five minutes
 
@@ -939,9 +941,9 @@ boundary and checks every constant of every kind for
 `sorryAx`/`ofReduceBool`/`ofReduceNat`. Expected tail:
 
 ```
-info: CerberusHeapLang/Audit.lean:492:0: CerberusHeapLang axiom sweep: 1067 theorems BOUNDED by the declared upper bounds (40 in the production-entry boundary modules, bounded by trio + runEffectful; all others bounded by the trio; exact cones pinned only for the curated headline list above)
-info: CerberusHeapLang/Audit.lean:492:0: CerberusHeapLang banned-axiom sweep: 1995 constants of every kind checked; sorryAx/ofReduceBool/ofReduceNat absent from all cones
-Build completed successfully (441 jobs).
+info: CerberusHeapLang/Audit.lean:624:0: CerberusHeapLang axiom sweep: 1123 theorems BOUNDED by the declared upper bounds (71 in the production-entry boundary modules, of which 13 carry the boundary axiom — each STATEMENT-BORNE, origin-checked, so every boundary cone is exact-by-construction: trio + runEffectful iff the statement carries it; all other theorems bounded by the trio; headline cones additionally pinned above)
+info: CerberusHeapLang/Audit.lean:624:0: CerberusHeapLang banned-axiom sweep: 2075 constants of every kind checked; sorryAx/ofReduceBool/ofReduceNat absent from all cones
+Build completed successfully (443 jobs).
 ```
 
 What to expect around that tail, so nothing surprises you:
@@ -959,7 +961,7 @@ What to expect around that tail, so nothing surprises you:
   line, a missing audit tail, or a nonzero exit.
 - Timing: with the package already built, `lake build` replays
   from cache in about a second. A from-scratch elaboration of this
-  package's 441 jobs is a long build — expect minutes to tens of
+  package's 443 jobs is a long build — expect minutes to tens of
   minutes depending on the machine (no pinned cold timing is
   recorded). The setup script itself is offline (it clones and
   primes the workspace from the local repository, prebuilt

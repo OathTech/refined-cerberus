@@ -401,9 +401,9 @@ qualifiers above — they are part of the theorem statements. Expected
 tail:
 
 ```
-info: CerberusHeapLang/Audit.lean:492:0: CerberusHeapLang axiom sweep: 1067 theorems BOUNDED by the declared upper bounds (40 in the production-entry boundary modules, bounded by trio + runEffectful; all others bounded by the trio; exact cones pinned only for the curated headline list above)
-info: CerberusHeapLang/Audit.lean:492:0: CerberusHeapLang banned-axiom sweep: 1995 constants of every kind checked; sorryAx/ofReduceBool/ofReduceNat absent from all cones
-Build completed successfully (441 jobs).
+info: CerberusHeapLang/Audit.lean:624:0: CerberusHeapLang axiom sweep: 1123 theorems BOUNDED by the declared upper bounds (71 in the production-entry boundary modules, of which 13 carry the boundary axiom — each STATEMENT-BORNE, origin-checked, so every boundary cone is exact-by-construction: trio + runEffectful iff the statement carries it; all other theorems bounded by the trio; headline cones additionally pinned above)
+info: CerberusHeapLang/Audit.lean:624:0: CerberusHeapLang banned-axiom sweep: 2075 constants of every kind checked; sorryAx/ofReduceBool/ofReduceNat absent from all cones
+Build completed successfully (443 jobs).
 ```
 
 (In sandboxed environments `../scripts/capped` may warn
@@ -464,9 +464,12 @@ production-entry statements, which additionally carry
 `sorryAx` appearing anywhere is a failure.
 
 To separate the trust base from the proof machinery mechanically,
-the statement-surface census (`scripts/statement_census.lean`, a
-read-only reporting instrument) bins every constant in each pinned
-theorem's statement into engine / spec-idiom / Iris / Lean-core;
+the statement-surface census (`scripts/statement_census.lean`) bins
+every constant in each pinned theorem's statement into engine /
+spec-idiom / Iris / Lean-core; its output is committed
+(`docs/STATEMENT_CENSUS.txt`) and drift-checked by
+`scripts/test_unit.sh` gate 5, so a pinned export's statement
+surface cannot change without a deliberate same-commit re-baseline;
 the [walkthrough](docs/WALKTHROUGH.md) §5 pastes its output and
 reads the three headline statements identifier by identifier. For
 per-construct coverage, regenerate the
