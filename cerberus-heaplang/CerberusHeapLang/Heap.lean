@@ -1152,6 +1152,160 @@ structure AllocCursor where
   nextId : Int
   deriving Inhabited
 
+/-! ## The allocation plan (alloc arc P1.1 — the pure model of the
+abstract allocation-capacity policy)
+
+An `AllocReq` is the client-visible read-set of one `create`: the
+alignment operand and the C object type. `advanceCursor` is the PURE
+image of one successful `allocateObject` on the cursor fields — it
+reuses EXACTLY the guards of `allocateObject_success` (this file,
+§"The allocator engine seam": `0 < sizeofCtype ty` pins the engine's
+`max 1` padding away, and `freshBase … ≠ 0` is the out-of-memory
+kill arm, CerbMem.lean:1479) and EXACTLY its cursor update
+(`lastAddress := freshBase la align (sizeof ty)`,
+`nextAllocId := nid + 1` — CerbMem.lean:1475-1490). `PlanFits` runs
+a request list IN ORDER (alignment rounding is not commutative —
+`planFits_order_sensitive` below). The type-specific non-atomic and
+decode-inert premises stay on the logical create rules, not here
+(charter P1.1). -/
+
+/-- One allocation request: alignment operand + C object type. -/
+structure AllocReq where
+  align : Int
+  ty : ctype
+
+/-- One successful `allocateObject`, on the cursor fields alone.
+    Guard and update mirror `allocateObject_success` exactly (see
+    the section note above); `none` is the engine's out-of-memory
+    kill arm (or a zero-size type, which stays outside the logic). -/
+def advanceCursor (c : AllocCursor) (r : AllocReq) : Option AllocCursor :=
+  if 0 < CerbMem.sizeofCtype r.ty ∧
+      freshBase c.lastAddr r.align (CerbMem.sizeofCtype r.ty) ≠ 0 then
+    some ⟨freshBase c.lastAddr r.align (CerbMem.sizeofCtype r.ty),
+      c.nextId + 1⟩
+  else
+    none
+
+/-- A request list fits a cursor when every request advances it, in
+    order. -/
+def PlanFits (c : AllocCursor) : List AllocReq → Prop
+  | [] => True
+  | r :: rs =>
+    match advanceCursor c r with
+    | some c' => PlanFits c' rs
+    | none => False
+
+theorem advanceCursor_pos (c : AllocCursor) (r : AllocReq)
+    (hsz : 0 < CerbMem.sizeofCtype r.ty)
+    (hnz : freshBase c.lastAddr r.align (CerbMem.sizeofCtype r.ty) ≠ 0) :
+    advanceCursor c r =
+      some ⟨freshBase c.lastAddr r.align (CerbMem.sizeofCtype r.ty),
+        c.nextId + 1⟩ := by
+  unfold advanceCursor
+  rw [if_pos ⟨hsz, hnz⟩]
+
+/-- Inversion: a successful advance carries both engine guards and
+    pins the next cursor to the allocator arithmetic. (Deleting the
+    nonzero guard from `advanceCursor` breaks exactly this — and with
+    it the internal create rule's `allocateObject_success` discharge:
+    the P1.4 guard-deletion plant.) -/
+theorem advanceCursor_some_inv {c c' : AllocCursor} {r : AllocReq}
+    (h : advanceCursor c r = some c') :
+    0 < CerbMem.sizeofCtype r.ty ∧
+    freshBase c.lastAddr r.align (CerbMem.sizeofCtype r.ty) ≠ 0 ∧
+    c' = ⟨freshBase c.lastAddr r.align (CerbMem.sizeofCtype r.ty),
+      c.nextId + 1⟩ := by
+  unfold advanceCursor at h
+  split at h
+  · next hc => exact ⟨hc.1, hc.2, (Option.some.inj h).symm⟩
+  · cases h
+
+/-- Constructor-argument form (unfolds the projections; the concrete
+    unit tests rewrite with this). -/
+theorem advanceCursor_mk (la nid al : Int) (ty : ctype) :
+    advanceCursor ⟨la, nid⟩ ⟨al, ty⟩ =
+      if 0 < CerbMem.sizeofCtype ty ∧
+          freshBase la al (CerbMem.sizeofCtype ty) ≠ 0 then
+        some ⟨freshBase la al (CerbMem.sizeofCtype ty), nid + 1⟩
+      else none := rfl
+
+@[simp] theorem PlanFits_nil (c : AllocCursor) : PlanFits c [] := trivial
+
+theorem PlanFits_cons_iff (c : AllocCursor) (r : AllocReq)
+    (rs : List AllocReq) :
+    PlanFits c (r :: rs) ↔
+      ∃ c', advanceCursor c r = some c' ∧ PlanFits c' rs := by
+  constructor
+  · intro h
+    unfold PlanFits at h
+    split at h
+    · next c' hc' => exact ⟨c', hc', h⟩
+    · exact h.elim
+  · rintro ⟨c', hc', h⟩
+    unfold PlanFits
+    rw [hc']
+    exact h
+
+/-- Prefix weakening: a plan that fits still fits after dropping a
+    TAIL (stopping early is always allowed; dropping the HEAD is
+    not — see `planFits_order_sensitive`). -/
+theorem PlanFits.prefix {c : AllocCursor} {rs rs' : List AllocReq}
+    (h : PlanFits c (rs ++ rs')) : PlanFits c rs := by
+  induction rs generalizing c with
+  | nil => trivial
+  | cons r rs ih =>
+    rw [List.cons_append, PlanFits_cons_iff] at h
+    rw [PlanFits_cons_iff]
+    obtain ⟨c', hc', h⟩ := h
+    exact ⟨c', hc', ih h⟩
+
+/-! The P1.4 pure unit tests, generic over ANY 4-byte object type
+(no example constants in this module — the charter's merge-row-2
+constraint; the exhibits instantiate these at `intTy`). -/
+
+/-- PLAN-ORDER SENSITIVITY: at a 4-byte type, `[align 16, align 1]`
+    fits cursor 21 (16-aligned base 16, then base 12) but the SWAPPED
+    plan does not (align-1 base 17, then `alignDown 13 16 = 0` — the
+    out-of-memory arm). Request order is semantically binding. -/
+theorem planFits_order_sensitive (ty : ctype)
+    (h4 : CerbMem.sizeofCtype ty = 4) :
+    PlanFits ⟨21, 0⟩ [⟨16, ty⟩, ⟨1, ty⟩] ∧
+      ¬ PlanFits ⟨21, 0⟩ [⟨1, ty⟩, ⟨16, ty⟩] := by
+  constructor
+  · rw [PlanFits_cons_iff]
+    refine ⟨⟨freshBase 21 16 (CerbMem.sizeofCtype ty), 0 + 1⟩, ?_, ?_⟩
+    · rw [advanceCursor_mk, h4]
+      exact if_pos ⟨by decide, by decide⟩
+    · rw [PlanFits_cons_iff]
+      refine ⟨⟨freshBase (freshBase 21 16 (CerbMem.sizeofCtype ty)) 1
+        (CerbMem.sizeofCtype ty), 0 + 1 + 1⟩, ?_, PlanFits_nil _⟩
+      rw [advanceCursor_mk, h4]
+      exact if_pos ⟨by decide, by decide⟩
+  · intro h
+    rw [PlanFits_cons_iff] at h
+    obtain ⟨c', hc', h⟩ := h
+    rw [advanceCursor_mk, h4, if_pos ⟨by decide, by decide⟩] at hc'
+    obtain rfl := Option.some.inj hc'
+    rw [PlanFits_cons_iff] at h
+    obtain ⟨c'', hc'', -⟩ := h
+    rw [advanceCursor_mk, h4,
+      if_neg (fun hcon => hcon.2 (by decide))] at hc''
+    cases hc''
+
+/-- INSUFFICIENT PLAN: a 4-byte request cannot fit cursor 2 (the
+    fresh range would underflow to base 0 — the engine's kill arm).
+    An empty or too-small capacity proves no create (the create rules
+    consume `PlanFits` through `advanceCursor_some_inv`). -/
+theorem planFits_insufficient (ty : ctype)
+    (h4 : CerbMem.sizeofCtype ty = 4) :
+    ¬ PlanFits ⟨2, 0⟩ [⟨1, ty⟩] := by
+  intro h
+  rw [PlanFits_cons_iff] at h
+  obtain ⟨c', hc', -⟩ := h
+  rw [advanceCursor_mk, h4,
+    if_neg (fun hcon => hcon.2 (by decide))] at hc'
+  cases hc'
+
 /-- Ghost-state prerequisites: invariants + the three GenHeaps
     (bytes, allocation metadata, allocator cursor). -/
 class SpikeGpreS (GF : BundledGFunctors) extends InvGpreS GF where
@@ -1464,6 +1618,56 @@ theorem cellOwn_view (i : Int) (dq : DFrac) (c : SpikeCell) :
       exact ⟨hlen, hdec⟩
 
 end ViewLaws
+
+/-! ## The abstract allocation capacity (alloc arc P1.1)
+
+`allocCap reqs` certifies that the known finite request list `reqs`
+will not hit the allocator's out-of-memory kill arm — the charter's
+recommended abstract finite allocation-capacity resource, faithful
+to the deterministic downward cursor while hiding it.
+
+IMPLEMENTATION (this module and the create-rule internals only):
+existential ownership of the cursor fragment plus a pure `PlanFits`
+proof. CLIENT DISCIPLINE (the public abstraction): clients use ONLY
+the introduction/weakening lemmas below plus the public create
+rules; client-visible statements never name `AllocCursor`,
+`lastAddress`/`nextAllocId`, `freshBase` or `cursorOwn` (the P1
+grep test, recorded in the slice notes). -/
+
+section AllocCap
+
+/-- The abstract finite allocation capacity for a request plan. -/
+def allocCap [SpikeGS hlc GF] (reqs : List AllocReq) : IProp GF :=
+  iprop(∃ c : AllocCursor, cursorOwn c ∗ ⌜PlanFits c reqs⌝)
+
+/-- Introduction (implementation/launch side): cursor ownership plus
+    a fitting plan. Clients receive `allocCap` from the
+    allocation-aware launchers; they never build it. -/
+theorem allocCap_intro [SpikeGS hlc GF] (c : AllocCursor)
+    (reqs : List AllocReq) (hfit : PlanFits c reqs) :
+    cursorOwn (GF := GF) c ⊢ allocCap reqs := by
+  unfold allocCap
+  iintro Hc
+  iexists c
+  isplitl [Hc]
+  · iexact Hc
+  · ipureintro
+    exact hfit
+
+/-- Weakening: capacity for a longer plan serves any PREFIX (a
+    client may stop allocating early; it may never reorder or skip
+    a request — `planFits_order_sensitive`). -/
+theorem allocCap_weaken [SpikeGS hlc GF] (reqs rest : List AllocReq) :
+    allocCap (GF := GF) (reqs ++ rest) ⊢ allocCap reqs := by
+  unfold allocCap
+  iintro ⟨%c, Hc, %hfit⟩
+  iexists c
+  isplitl [Hc]
+  · iexact Hc
+  · ipureintro
+    exact hfit.prefix
+
+end AllocCap
 
 /-! ## Ghost extraction and update (the rule-facing interp lemmas) -/
 
