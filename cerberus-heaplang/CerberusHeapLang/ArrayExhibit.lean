@@ -598,16 +598,17 @@ theorem arr_wp_readout (sbty : core_base_type) :
     .rfl)).trans ?_
   refine BI.wand_elim_left.trans ?_
   refine wp_mono fun w => ?_
-  iintro ⟨%hval, Hpt⟩ %σ' %ns %κs %nt Hσ
-  icases (stateInterp_iff σ' ns κs nt).mp $$ Hσ
-    with ⟨%mm, %mb, %mk, %HG, Hmi, Hbi, Hki⟩
-  ihave %Hcc : ⌜CellCoh σ' id ⟨a, aty, bs⟩ ∧
-      Iris.Std.PartialMap.get? mm id =
-        some (metaOf (⟨a, aty, bs⟩ : SpikeCell))⌝ $$ [Hmi Hbi Hpt]
-  · iapply cellOwn_cellCoh HG id (.own 1) ⟨a, aty, bs⟩ $$ [$Hmi $Hbi $Hpt]
-  iapply fupd_mask_intro_discard Std.LawfulSet.empty_subset
-  ipureintro
-  exact ⟨hval, Hcc.1⟩
+  -- Phase-4 tidy: the state-interpretation open/close lives in the
+  -- core combinator (stateInterp_readout); this module supplies only
+  -- the coupling-conditional extraction (cellOwn_cellCoh).
+  exact stateInterp_readout (fun σ' mm mb mk HG => by
+    iintro ⟨⟨%hval, Hpt⟩, Hmi, Hbi⟩
+    ihave %Hcc : ⌜CellCoh σ' id ⟨a, aty, bs⟩ ∧
+        Iris.Std.PartialMap.get? mm id =
+          some (metaOf (⟨a, aty, bs⟩ : SpikeCell))⌝ $$ [Hmi Hbi Hpt]
+    · iapply cellOwn_cellCoh HG id (.own 1) ⟨a, aty, bs⟩ $$ [$Hmi $Hbi $Hpt]
+    ipureintro
+    exact ⟨hval, Hcc.1⟩)
 
 omit hQ hsz hdec in
 /-- The label bodies are in the certified cone. -/

@@ -117,6 +117,37 @@ theorem stateInterp_iff [SpikeGS hlc GF] (σ : Mem) (ns : Nat) (κs : List Empty
       iprop(∃ mm mb mk, ⌜CohG σ mm mb mk⌝ ∗
         metaInterp mm ∗ byteInterp mb ∗ cursorInterp mk) := .rfl
 
+/-- THE READOUT COMBINATOR (foundations Phase 4 — the phase-2
+    residual's registered tidy): the ONE open/close of the state
+    interpretation the exhibit readout lemmas consume. An exhibit
+    supplies its footprint assertion `Φ` and a coupling-conditional
+    extraction (typically one or more `cellOwn_cellCoh` /
+    `cellsOwn_extract` applications — READ-ONLY: the interp
+    components are consumed into a pure fact, never updated); the
+    combinator packages the `stateInterp_iff` destructuring and the
+    final mask discard once, here. Exhibit modules no longer touch
+    `stateInterp_iff` or the fupd plumbing directly. -/
+theorem stateInterp_readout [SpikeGS hlc GF] {Φ : IProp GF} {ψ : Mem → Prop}
+    (h : ∀ (σ : Mem) (mm : SpikeHeapF MetaCell)
+        (mb : SpikeHeapF CerbMem.AbsByte) (mk : SpikeHeapF AllocCursor),
+        CohG σ mm mb mk →
+        iprop(Φ ∗ metaInterp mm ∗ byteInterp mb) ⊢ (⌜ψ σ⌝ : IProp GF)) :
+    Φ ⊢ iprop(∀ (σ' : Mem) (ns : Nat) (κs : List Empty) (nt : Nat),
+      stateInterp σ' ns κs nt ={⊤, ∅}=∗ ⌜ψ σ'⌝) := by
+  iintro HΦ %σ' %ns %κs %nt Hσ
+  icases (stateInterp_iff σ' ns κs nt).mp $$ Hσ
+    with ⟨%mm, %mb, %mk, %HG, Hmi, Hbi, Hki⟩
+  ihave %hψ : ⌜ψ σ'⌝ $$ [HΦ Hmi Hbi]
+  · iapply h σ' mm mb mk HG
+    isplitl [HΦ]
+    · iexact HΦ
+    isplitl [Hmi]
+    · iexact Hmi
+    · iexact Hbi
+  iapply fupd_mask_intro_discard Std.LawfulSet.empty_subset
+  ipureintro
+  exact hψ
+
 theorem pointsToCell_iff [SpikeGS hlc GF] (pv : CerbMem.PointerValue)
     (dq : DFrac) (ty : ctype) (bs : List CerbMem.AbsByte) :
     pointsToCell (GF := GF) pv dq ty bs ⊣⊢

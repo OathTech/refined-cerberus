@@ -38,30 +38,50 @@ theorem here (`nodeNextDec_null_img`). The null TEST is the engine's
 own `PtrEq` memop (Step.lean `Step.memop_ptreq`; the eqPtrval null
 arms, Heap.lean).
 
-THE PREDICATE `isList p xs`: plain structural recursion on the
-mathematical list (no step-indexing); one ∗-composed ghost cell per
-node; the nil case ties to the null encoding; the cons case ∃-binds
-the next pointer with the node's cell ∗ the tail. Machine-address
-WF (`0 < a < 2^64`) is carried per node — real addresses (what
-`allocateObject` mints and what the 8-byte serialization round-trips).
+THE PREDICATE `isList p ns` (foundations Phase 4, audit F-06 — the
+IDENTITY-INDEXED form): plain structural recursion on the list of
+NODES `ns : List (Int × Int)` — each node is its ALLOCATION ID (the
+phase-2 metadata heap's authority: the exclusivity anchor
+`allocateObject` mints) paired with its value; one ∗-composed ghost
+cell per node; the nil case ties to the null encoding; the cons case
+∃-binds the next pointer with the node's cell ∗ the tail.
+Machine-address WF (`0 < a < 2^64`) is carried per node — real
+addresses (what `allocateObject` mints and what the 8-byte
+serialization round-trips).
 
 THE PROOF: textbook-compositional — `blockSpecs_intro` with the
-invariant `isList prev reversed ∗ isList cur rest` and
-`xs = reversed.reverse ++ rest`, each program construct discharged
-by its small axiom or rule (`wps_seq_sym` + `wps_memop_eval` +
-`wps_memop_ptreq`, `wps_if_*`, `wps_seq_spec` + `wps_load_eval` +
-the interior load axiom, `wps_seq` + `wps_store_eval` + the interior
-STORE axiom, `wps_run`); no monolithic unfolding. Certified through
-the engine lane (`driveJ`, like fib): `list_reverse_certified` (the
-general seeded-chain statement) + `list_reverse_demo` (the concrete
-3-node instance). REGISTERED RESIDUAL: the TOTAL export at the
-variant's step bound is NOT delivered — unlike fib's state-free
-drive lane, each iteration's
-steps depend on `applyMemM` success at the current memory, so the
-unconditional bound needs a pure drive-invariant lane threading
-ChainAt-style heap facts through the 11-steps-per-iteration chain
-(the named mover; the bound would be 11·|xs| + 6). Record:
-docs/2026-08-31_listrev-notes.md §Findings.
+invariant `isList prev reversed ∗ isList cur rest ∗ RF` (`RF` the
+arbitrary frame, threaded through the loop invariant — the only
+thing that crosses a back edge) and `ns = reversed.reverse ++ rest`,
+each program construct discharged by its small axiom or rule
+(`wps_seq_sym` + `wps_memop_eval` + `wps_memop_ptreq`, `wps_if_*`,
+`wps_seq_spec` + `wps_load_eval` + the node-field load client rule,
+`wps_seq` + `wps_store_eval` + the node-field STORE client rule,
+`wps_run`); no monolithic unfolding.
+
+THE FLAGSHIP (Phase 4 statement — audit F-06's exit criterion
+verbatim: "the public theorem literally states same-footprint,
+in-place reversal plus termination and frame preservation"):
+`list_reverse_certified` (partial, any budget) and
+`list_reverse_certified_total` (unconditional `.done` at the DERIVED
+bound `13·|ns| + 7`) + `list_reverse_terminates`. Both flagships are
+stated with the `SemTriple` rest-quantifier shape at the jump lane:
+an ARBITRARY disjoint frame footprint `R` rides next to the seeded
+chain `m₀` and is returned VERBATIM (`Sat σ' (Q ∪ R)`); the
+delivered pointer heads a chain `SeedChain Q p' ns.reverse` — the
+SAME allocation ids, in exactly reversed order, each node still
+carrying its own value (in-place in the literal sense: only the
+next fields moved); and the footprint equality
+`∀ k, (get? Q k).isSome ↔ (get? m₀ k).isSome` is a stated conjunct
+(no allocation, no leak — the node set is preserved; the id list
+`ns.reverse.map .1` is by construction a permutation — the reversal
+— of `ns.map .1`). Statements are SpikeGF-concrete: no ghost-functor
+binder (the census's one machinery-shaped hypothesis) remains on any
+flagship. The 2026-08-31 pre-Phase-4 forms (values-only `ChainAt`
+conclusion, no identity, no frame) are RETIRED — subsumed, see
+docs/2026-09-01_phase4-notes.md for the old→new itemization; the
+id-indexed `ChainAt` remains as demoted corollary vocabulary
+(`seedChain_chainAt`, consumed by the demo).
 -/
 import CerberusHeapLang.ArrayExhibit
 
@@ -340,9 +360,9 @@ theorem wps_store_node_field {Ψ : SpikeVal → EnvStack → IProp GF}
 
 end NodeClients
 
-/-! ## THE PREDICATE: `isList p xs` (structural recursion on the
-mathematical list; ∗-composed node cells; the nil case IS the null
-encoding) -/
+/-! ## THE PREDICATE: `isList p ns` (structural recursion on the
+IDENTITY-INDEXED node list — allocation id × value; ∗-composed node
+cells; the nil case IS the null encoding) -/
 
 /-- The value field's decode fact (offset 0, `signed long`). Pure,
     table- and address-independent (the integer arm reads neither). -/
@@ -376,27 +396,32 @@ section IsList
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
 
-/-- THE REPRESENTATION PREDICATE (plain structural recursion; the
-    nil case ties to the null encoding; the cons case ∃-binds the
-    next pointer with the node's cell ∗ the tail; machine-address WF
-    per node). -/
-def isList : CerbMem.PointerValue → List Int → IProp GF
+/-- THE REPRESENTATION PREDICATE, IDENTITY-INDEXED (Phase 4, audit
+    F-06): the node list carries each node's ALLOCATION ID (`.1` —
+    the metadata heap's authority) with its value (`.2`). Plain
+    structural recursion; the nil case ties to the null encoding;
+    the cons case ∃-binds the next pointer with the node's cell ∗
+    the tail; machine-address WF per node. The head pointer's
+    provenance id IS the head node's id — identity is pinned, not
+    existential. -/
+def isList : CerbMem.PointerValue → List (Int × Int) → IProp GF
   | p, [] => iprop(⌜p = nullNode⌝)
-  | p, v :: vs => iprop(∃ (id aN : Int) (q : CerbMem.PointerValue)
+  | p, nd :: ns => iprop(∃ (aN : Int) (q : CerbMem.PointerValue)
       (bs : List CerbMem.AbsByte),
-      ⌜p = cellPtr id aN ∧ 0 < aN ∧ aN < 2 ^ 64 ∧ bs.length = 16 ∧
-        nodeValDec bs v ∧ nodeNextDec bs q⌝ ∗
-      cellOwn id (.own 1) (SpikeCell.mk aN nodeTy bs) ∗ isList q vs)
+      ⌜p = cellPtr nd.1 aN ∧ 0 < aN ∧ aN < 2 ^ 64 ∧ bs.length = 16 ∧
+        nodeValDec bs nd.2 ∧ nodeNextDec bs q⌝ ∗
+      cellOwn nd.1 (.own 1) (SpikeCell.mk aN nodeTy bs) ∗ isList q ns)
 
 @[simp] theorem isList_nil (p : CerbMem.PointerValue) :
     isList (GF := GF) p [] = iprop(⌜p = nullNode⌝) := rfl
 
-theorem isList_cons (p : CerbMem.PointerValue) (v : Int) (vs : List Int) :
-    isList (GF := GF) p (v :: vs) = iprop(∃ (id aN : Int)
+theorem isList_cons (p : CerbMem.PointerValue) (nd : Int × Int)
+    (ns : List (Int × Int)) :
+    isList (GF := GF) p (nd :: ns) = iprop(∃ (aN : Int)
       (q : CerbMem.PointerValue) (bs : List CerbMem.AbsByte),
-      ⌜p = cellPtr id aN ∧ 0 < aN ∧ aN < 2 ^ 64 ∧ bs.length = 16 ∧
-        nodeValDec bs v ∧ nodeNextDec bs q⌝ ∗
-      cellOwn id (.own 1) (SpikeCell.mk aN nodeTy bs) ∗ isList q vs) := rfl
+      ⌜p = cellPtr nd.1 aN ∧ 0 < aN ∧ aN < 2 ^ 64 ∧ bs.length = 16 ∧
+        nodeValDec bs nd.2 ∧ nodeNextDec bs q⌝ ∗
+      cellOwn nd.1 (.own 1) (SpikeCell.mk aN nodeTy bs) ∗ isList q ns) := rfl
 
 /-- Nil introduction. -/
 theorem isList_nil_intro : ⊢ isList (GF := GF) nullNode [] := by
@@ -406,15 +431,15 @@ theorem isList_nil_intro : ⊢ isList (GF := GF) nullNode [] := by
 
 /-- Cons introduction (the node's cell ∗ the tail). -/
 theorem isList_cons_intro (id aN : Int) (q : CerbMem.PointerValue)
-    (bs : List CerbMem.AbsByte) (v : Int) (vs : List Int)
+    (bs : List CerbMem.AbsByte) (v : Int) (ns : List (Int × Int))
     (h0 : 0 < aN) (h1 : aN < 2 ^ 64) (hlen : bs.length = 16)
     (hval : nodeValDec bs v) (hnext : nodeNextDec bs q) :
     iprop(cellOwn (GF := GF) id (.own 1) (SpikeCell.mk aN nodeTy bs) ∗
-        isList q vs) ⊢
-      isList (cellPtr id aN) (v :: vs) := by
+        isList q ns) ⊢
+      isList (cellPtr id aN) ((id, v) :: ns) := by
   rw [isList_cons]
   iintro ⟨Hpt, HL⟩
-  iexists id, aN, q, bs
+  iexists aN, q, bs
   isplit
   · ipureintro
     exact ⟨rfl, h0, h1, hlen, hval, hnext⟩
@@ -789,55 +814,22 @@ theorem node_ptr_bytes_null (fpm : CerbMem.Funptrmap) :
       (CerbMem.memValueToBytes [] (CerbMem.pointerMval nodeTy nullNode)).2
       := rfl
 
-/-! ## The engine-level chain predicate (the conclusion's vocabulary:
-CellCoh facts about the FINAL MemState, no Iris) -/
+/-! ## The engine-level chain predicate (identity-indexed; DEMOTED
+COROLLARY VOCABULARY since Phase 4 — the flagship conclusions speak
+`SeedChain` + `Sat` directly; `ChainAt` remains as the per-node
+CellCoh readout, derivable by `seedChain_chainAt`, consumed by the
+demo) -/
 
-def ChainAt (σ : Mem) : CerbMem.PointerValue → List Int → Prop
+def ChainAt (σ : Mem) : CerbMem.PointerValue → List (Int × Int) → Prop
   | p, [] => p = nullNode
-  | p, v :: vs => ∃ (id aN : Int) (q : CerbMem.PointerValue)
-      (bs : List CerbMem.AbsByte), p = cellPtr id aN ∧ 0 < aN ∧ aN < 2 ^ 64 ∧
-      CellCoh σ id ⟨aN, nodeTy, bs⟩ ∧ bs.length = 16 ∧
-      nodeValDec bs v ∧ nodeNextDec bs q ∧ ChainAt σ q vs
-
-/-- The readout: an `isList` footprint against the final coupling
-    yields the pure engine-level chain (per-node `cellOwn_cellCoh`). -/
-theorem isList_readout {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
-    (σ : Mem) {mm : SpikeHeapF MetaCell} {mb : SpikeHeapF CerbMem.AbsByte}
-    {mk : SpikeHeapF AllocCursor} (hG : CohG σ mm mb mk) :
-    ∀ (ws : List Int) (p : CerbMem.PointerValue),
-    iprop(isList (GF := GF) p ws ∗ metaInterp mm ∗ byteInterp mb) ⊢
-      (⌜ChainAt σ p ws⌝ : IProp GF) := by
-  intro ws
-  induction ws with
-  | nil =>
-    intro p
-    rw [isList_nil]
-    iintro ⟨%h, -, -⟩
-    ipureintro
-    exact h
-  | cons v vs ih =>
-    intro p
-    rw [isList_cons]
-    iintro ⟨⟨%id, %aN, %q, %bs, %hfacts, Hpt, HT⟩, Hmi, Hbi⟩
-    obtain ⟨rfl, h0, h1, hlen, hval, hnext⟩ := hfacts
-    ihave %Hcc : ⌜CellCoh σ id ⟨aN, nodeTy, bs⟩ ∧
-        Iris.Std.PartialMap.get? mm id =
-          some (metaOf (⟨aN, nodeTy, bs⟩ : SpikeCell))⌝ $$ [Hmi Hbi Hpt]
-    · iapply cellOwn_cellCoh hG id (.own 1) ⟨aN, nodeTy, bs⟩
-        $$ [$Hmi $Hbi $Hpt]
-    ihave %htail := ih q $$ [HT Hmi Hbi]
-    · isplitl [HT]
-      · iexact HT
-      isplitl [Hmi]
-      · iexact Hmi
-      · iexact Hbi
-    ipureintro
-    exact ⟨id, aN, q, bs, rfl, h0, h1, Hcc.1, hlen, hval,
-      hnext, htail⟩
+  | p, nd :: ns => ∃ (aN : Int) (q : CerbMem.PointerValue)
+      (bs : List CerbMem.AbsByte), p = cellPtr nd.1 aN ∧ 0 < aN ∧ aN < 2 ^ 64 ∧
+      CellCoh σ nd.1 ⟨aN, nodeTy, bs⟩ ∧ bs.length = 16 ∧
+      nodeValDec bs nd.2 ∧ nodeNextDec bs q ∧ ChainAt σ q ns
 
 /-- The shape of a list head (extracted non-destructively). -/
 theorem isList_shape {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
-    (p : CerbMem.PointerValue) (ws : List Int) :
+    (p : CerbMem.PointerValue) (ws : List (Int × Int)) :
     isList (GF := GF) p ws ⊢
       iprop(⌜p = nullNode ∨ ∃ id aN : Int, p = cellPtr id aN ∧ 0 < aN ∧
         aN < 2 ^ 64⌝ ∗ isList p ws) := by
@@ -850,14 +842,14 @@ theorem isList_shape {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
       exact .inl h
     · ipureintro
       exact h
-  | cons v vs =>
+  | cons nd ns =>
     rw [isList_cons]
-    iintro ⟨%id, %aN, %q, %bs, %hfacts, Hpt, HT⟩
+    iintro ⟨%aN, %q, %bs, %hfacts, Hpt, HT⟩
     obtain ⟨hp, h0, h1, hlen, hval, hnext⟩ := hfacts
     isplit
     · ipureintro
-      exact .inr ⟨id, aN, hp, h0, h1⟩
-    iexists id, aN, q, bs
+      exact .inr ⟨nd.1, aN, hp, h0, h1⟩
+    iexists aN, q, bs
     isplit
     · ipureintro
       exact ⟨hp, h0, h1, hlen, hval, hnext⟩
@@ -895,7 +887,7 @@ section LrIris
 variable {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
 variable (loc : CerbLocation.Loc) (ann ra : core_run_annotation)
   (mo : memory_order) (pbty cbty bbty nbty ubty : core_base_type)
-  (xs : List Int)
+  (ns : List (Int × Int)) (RF : IProp GF)
 -- S1b: the wps judgment is indexed by the MACHINE CONTEXT; the
 -- exhibit works at the jump-profile instance `procCtx p rs` with the
 -- label map tied by the honest `LabeledAt` link (`procCtx_labels`).
@@ -903,43 +895,48 @@ variable (p : sym) (rs : core_run_state)
   (hQ : LabeledAt rs p (lrQ loc ann ra mo pbty cbty bbty nbty ubty))
 
 /-- The postcondition: the delivered value is a pointer satisfying
-    `isList · xs.reverse`. -/
+    `isList · ns.reverse` — the SAME nodes (ids and their own
+    values), relinked in exactly reversed order — WITH the arbitrary
+    frame `RF` returned verbatim (Phase 4, F-06). -/
 abbrev lrPost : SpikeVal → EnvStack → IProp GF := fun w _ =>
   iprop(∃ p' : CerbMem.PointerValue, ⌜w.val = ptrVal p'⌝ ∗
-    isList p' xs.reverse)
+    isList p' ns.reverse ∗ RF)
 
-/-- THE LOOP INVARIANT: `isList prev reversed ∗ isList cur rest`
-    with `xs = reversed.reverse ++ rest`, over any reachable frame. -/
+/-- THE LOOP INVARIANT: `isList prev reversed ∗ isList cur rest ∗ RF`
+    with `ns = reversed.reverse ++ rest`, over any reachable frame —
+    the frame proposition `RF` is threaded through the invariant (the
+    only thing that crosses a back edge), which is exactly how the
+    exported statements own frame preservation. -/
 abbrev lrLs : LabelSpec GF := fun _ args ρ =>
-  iprop(∃ (revd rest' : List Int) (pPrev pCur : CerbMem.PointerValue)
+  iprop(∃ (revd rest' : List (Int × Int)) (pPrev pCur : CerbMem.PointerValue)
       (f : Fmap sym value) (renv : List (Fmap sym value)),
-    ⌜args = [ptrVal pPrev, ptrVal pCur] ∧ xs = revd.reverse ++ rest' ∧
+    ⌜args = [ptrVal pPrev, ptrVal pCur] ∧ ns = revd.reverse ++ rest' ∧
       ρ = f :: renv ∧ SymFrame f⌝ ∗
-    isList pPrev revd ∗ isList pCur rest')
+    isList pPrev revd ∗ isList pCur rest' ∗ RF)
 
 include hQ
 
 /-- The loop body verifies at any invariant frame — the TEXTBOOK
     derivation: each construct by its small axiom or rule, glued by
     the sequencing rules; the frame is carried by ∗ alone. -/
-theorem lr_body_wps (revd rest' : List Int)
+theorem lr_body_wps (revd rest' : List (Int × Int))
     (pPrev pCur : CerbMem.PointerValue) (f : Fmap sym value)
     (renv : List (Fmap sym value)) (hf : SymFrame f)
-    (hxs : xs = revd.reverse ++ rest') :
-    iprop(isList (GF := GF) pPrev revd ∗ isList pCur rest') ⊢
-      wps (procCtx p rs) (lrLs xs)
-        (lrPost xs) (lrBody loc ann ra mo bbty nbty ubty)
+    (hxs : ns = revd.reverse ++ rest') :
+    iprop(isList (GF := GF) pPrev revd ∗ isList pCur rest' ∗ RF) ⊢
+      wps (procCtx p rs) (lrLs ns RF)
+        (lrPost ns RF) (lrBody loc ann ra mo bbty nbty ubty)
         (lrFrame (ptrVal pPrev) (ptrVal pCur) f :: renv) := by
   rw [show lrBody loc ann ra mo bbty nbty ubty =
     Expr [] (Esseq (symPat [] lrBSym bbty) lrMemopE
       (Expr [] (Eif (Pexpr [] () (PEsym lrBSym))
         (Expr [] (Epure lrExitPe))
         (lrElse loc ann ra mo nbty ubty)))) from rfl]
-  iintro ⟨HP, HC⟩
+  iintro ⟨HP, HC, HF⟩
   cases rest' with
   | nil =>
     -- cur == NULL: the test answers true, the exit delivers prev,
-    -- and xs.reverse = reversed.
+    -- and ns.reverse = reversed.
     rw [isList_nil]
     icases HC with %hnull
     subst hnull
@@ -966,13 +963,15 @@ theorem lr_body_wps (revd rest' : List Int)
     isplit
     · ipureintro
       rfl
-    rw [show xs.reverse = revd by rw [hxs]; simp]
-    iexact HP
-  | cons v vs =>
+    rw [show ns.reverse = revd by rw [hxs]; simp]
+    isplitl [HP]
+    · iexact HP
+    · iexact HF
+  | cons nd vs =>
     -- cur is a node: test false; load next; store prev into the
     -- next field; jump with (cur, n).
     rw [isList_cons]
-    icases HC with ⟨%id, %aN, %q, %bs, %hfacts, Hpt, HT⟩
+    icases HC with ⟨%aN, %q, %bs, %hfacts, Hpt, HT⟩
     obtain ⟨rfl, h0, h1, hlen, hval, hnext⟩ := hfacts
     -- prev's shape (for the store kit), non-destructively
     ihave HP2 := isList_shape pPrev revd $$ HP
@@ -984,12 +983,12 @@ theorem lr_body_wps (revd rest' : List Int)
       [Pexpr [] () (PEsym lrCurSym), Pexpr [] () (PEval nullVal)] from rfl]
     iapply wps_memop_eval PtrEq _ _ _
       lr_memop_operands_nonvalue (lr_cur_eval hf renv _ _) rfl
-    rw [show memopRedex PtrEq [Pexpr [] () (PEval (ptrVal (cellPtr id aN))),
+    rw [show memopRedex PtrEq [Pexpr [] () (PEval (ptrVal (cellPtr nd.1 aN))),
         Pexpr [] () (PEval nullVal)] =
-      memopPtrEqVals (Vobject (OVpointer (cellPtr id aN)))
+      memopPtrEqVals (Vobject (OVpointer (cellPtr nd.1 aN)))
         (Vobject (OVpointer nullNode)) from rfl]
-    iapply wps_memop_ptreq (cellPtr id aN) nullNode _
-      (fun σ => eqPtrval_cell_null id aN nodeTy σ)
+    iapply wps_memop_ptreq (cellPtr nd.1 aN) nullNode _
+      (fun σ => eqPtrval_cell_null nd.1 aN nodeTy σ)
     iexists (boolValue false)
     isplit
     · ipureintro
@@ -1009,10 +1008,10 @@ theorem lr_body_wps (revd rest' : List Int)
     rw [show lrLoadE loc ann mo =
       loadOpRedex loc ann nodePtrTy (lrShiftPe lrCurSym) mo from rfl]
     iapply wps_load_eval loc ann nodePtrTy (lrShiftPe lrCurSym) mo _
-      rfl (lr_shift_eval_B hf renv _ _ id aN)
-    rw [show cellPtr id (aN + 8) = cellPtr id (aN + ((8 : Nat) : Int))
+      rfl (lr_shift_eval_B hf renv _ _ nd.1 aN)
+    rw [show cellPtr nd.1 (aN + 8) = cellPtr nd.1 (aN + ((8 : Nat) : Int))
       from rfl]
-    iapply wps_load_node_field loc ann id aN 8 mo (.own 1) bs _
+    iapply wps_load_node_field loc ann nd.1 aN 8 mo (.own 1) bs _
       (by rw [nodeTy_size]; omega)
       (fun lum fpm => hnext lum fpm _)
     isplitl [Hpt]
@@ -1025,18 +1024,18 @@ theorem lr_body_wps (revd rest' : List Int)
       rw [valueFromMemValue_ptr]
     rw [update_env_spec]
     rw [show envAdd lrNSym (Vobject (OVpointer q))
-        (lrFrameB (boolValue false) (ptrVal pPrev) (ptrVal (cellPtr id aN)) f) =
+        (lrFrameB (boolValue false) (ptrVal pPrev) (ptrVal (cellPtr nd.1 aN)) f) =
       lrFrameN (ptrVal q) (boolValue false) (ptrVal pPrev)
-        (ptrVal (cellPtr id aN)) f from rfl]
+        (ptrVal (cellPtr nd.1 aN)) f from rfl]
     iapply wps_seq
     rw [show lrStoreE loc ann mo = storeOpRedex loc ann nodePtrTy
       (lrShiftPe lrCurSym) (Pexpr [] () (PEsym lrPrevSym)) mo from rfl]
     iapply wps_store_eval loc ann nodePtrTy _ _ mo _
-      rfl rfl (lr_shift_eval_N hf renv _ _ _ id aN)
+      rfl rfl (lr_shift_eval_N hf renv _ _ _ nd.1 aN)
       (lr_store_value_eval hf renv _ _ _ _)
-    rw [show cellPtr id (aN + 8) = cellPtr id (aN + ((8 : Nat) : Int))
+    rw [show cellPtr nd.1 (aN + 8) = cellPtr nd.1 (aN + ((8 : Nat) : Int))
       from rfl]
-    iapply wps_store_node_field loc ann id aN 8 (ptrVal pPrev) mo bs _
+    iapply wps_store_node_field loc ann nd.1 aN 8 (ptrVal pPrev) mo bs _
       (node_ptr_encodes pPrev) (by rw [nodeTy_size]; omega) klen
       (node_ptr_compat pPrev) kfpm kbytes
     isplitl [Hpt]
@@ -1047,9 +1046,9 @@ theorem lr_body_wps (revd rest' : List Int)
       (by rw [procCtx_labels hQ]
           exact lrQ_lookup loc ann ra mo pbty cbty bbty nbty ubty)
       (lr_args_eval hf renv _ _ _ _)
-    iexists (v :: revd), vs, (cellPtr id aN), q,
+    iexists (nd :: revd), vs, (cellPtr nd.1 aN), q,
       (lrFrameN (ptrVal q) (boolValue false) (ptrVal pPrev)
-        (ptrVal (cellPtr id aN)) f), renv
+        (ptrVal (cellPtr nd.1 aN)) f), renv
     isplit
     · ipureintro
       refine ⟨rfl, ?_, rfl, lrFrameN_symFrame hf _ _ _ _⟩
@@ -1057,8 +1056,9 @@ theorem lr_body_wps (revd rest' : List Int)
       simp
     isplitl [Hpt HP]
     · -- the RE-POINTED node: cur's cell now holds prev in its next
-      -- field; its value slice is untouched.
-      iapply isList_cons_intro id aN pPrev _ v revd h0 h1
+      -- field; its value slice is untouched — the SAME allocation
+      -- (id nd.1) joins the reversed prefix carrying its own value.
+      iapply isList_cons_intro nd.1 aN pPrev _ nd.2 revd h0 h1
         (by rw [spliceBytes_length _ _ _ (by rw [klen, hlen]; omega)]
             exact hlen)
         (by intro lum fpm ad
@@ -1071,16 +1071,18 @@ theorem lr_body_wps (revd rest' : List Int)
       isplitl [Hpt]
       · iexact Hpt
       · iexact HP
+    isplitl [HT]
     · iexact HT
+    · iexact HF
 
 /-- THE BLOCK SPECIFICATION (per-label invariant rule — no Löb). -/
 theorem lr_blockSpecs :
     ⊢ blockSpecs (GF := GF) (procCtx p rs)
-      (lrLs xs) (lrPost xs) := by
+      (lrLs ns RF) (lrPost ns RF) := by
   refine blockSpecs_intro fun l params cont args env0 envs hl => ?_
   rw [procCtx_labels hQ] at hl
   obtain ⟨rfl, rfl⟩ := lrQ_inv loc ann ra mo pbty cbty bbty nbty ubty hl
-  iintro ⟨%revd, %rest', %pPrev, %pCur, %f, %renv, %hpure, HP, HC⟩
+  iintro ⟨%revd, %rest', %pPrev, %pCur, %f, %renv, %hpure, HP, HC, HF⟩
   obtain ⟨rfl, hxs, hρ, hf⟩ := hpure
   obtain ⟨rfl, rfl⟩ : f = env0 ∧ renv = envs := by
     have h1 := congrArg (fun l => l.head?) hρ
@@ -1088,68 +1090,38 @@ theorem lr_blockSpecs :
     simp at h1 h2
     exact ⟨h1.symm, h2.symm⟩
   rw [bindArgs_lr]
-  iapply lr_body_wps loc ann ra mo pbty cbty bbty nbty ubty xs p rs hQ
+  iapply lr_body_wps loc ann ra mo pbty cbty bbty nbty ubty ns RF p rs hQ
     revd rest' pPrev pCur f renv hf hxs
   isplitl [HP]
   · iexact HP
+  isplitl [HC]
   · iexact HC
+  · iexact HF
 
 /-- The whole program's statement WP from the entry env: prev = NULL
     (`isList nullNode []` — the empty reversed part), cur = head
-    (`isList head xs`). -/
+    (`isList head ns`), the frame `RF` alongside. -/
 theorem lr_wps (sbty : core_base_type) (head : CerbMem.PointerValue) :
-    isList (GF := GF) head xs ⊢
-      wps (procCtx p rs) (lrLs xs) (lrPost xs)
+    iprop(isList (GF := GF) head ns ∗ RF) ⊢
+      wps (procCtx p rs) (lrLs ns RF) (lrPost ns RF)
         (lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head)
         [fmapEmpty] := by
   rw [show lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head =
     Expr [] (Esave (lrLoopSym, sbty) (lrParams pbty cbty head)
       (lrBody loc ann ra mo bbty nbty ubty)) from rfl]
-  iintro HL
+  iintro ⟨HL, HF⟩
   iapply wps_save [] (lrLoopSym, sbty) _ _ fmapEmpty []
     (cvals := [nullVal, ptrVal head]) rfl
   rw [bindSave_lr]
   rw [show lrFrame nullVal (ptrVal head) fmapEmpty =
     lrFrame (ptrVal nullNode) (ptrVal head) fmapEmpty from rfl]
-  iapply lr_body_wps loc ann ra mo pbty cbty bbty nbty ubty xs p rs hQ [] xs
+  iapply lr_body_wps loc ann ra mo pbty cbty bbty nbty ubty ns RF p rs hQ [] ns
     nullNode head fmapEmpty [] symFrame_empty (by simp)
-  isplitr [HL]
+  isplitr [HL HF]
   · exact isList_nil_intro
+  isplitl [HL]
   · iexact HL
-
-/-- The base-WP face with the engine readout: the delivered value is
-    a pointer whose final-heap chain is `xs.reverse`. -/
-theorem lr_wp_readout (sbty : core_base_type) (head : CerbMem.PointerValue) :
-    isList (GF := GF) head xs ⊢
-      WP (⟨lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head,
-            [fmapEmpty], procCtx p rs⟩ : CoreRt)
-        @ Stuckness.NotStuck; ⊤
-        {{ w, iprop(∀ (σ' : Mem) (ns : Nat) (κs : List Empty) (nt : Nat),
-          (stateInterp σ' ns κs nt : IProp GF) ={⊤, ∅}=∗
-            ⌜∃ p' : CerbMem.PointerValue, CoreRVal.val w = ptrVal p' ∧
-              ChainAt σ' p' xs.reverse⌝) }} := by
-  refine (lr_wps loc ann ra mo pbty cbty bbty nbty ubty xs p rs hQ sbty
-    head).trans ?_
-  refine (BI.emp_sep.2.trans (BI.sep_mono
-    ((lr_blockSpecs loc ann ra mo pbty cbty bbty nbty ubty xs p rs hQ).trans
-      (wps_sound (lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head)
-        [fmapEmpty]))
-    .rfl)).trans ?_
-  refine BI.wand_elim_left.trans ?_
-  refine wp_mono fun w => ?_
-  iintro ⟨%p', %hval, HL⟩ %σ' %ns %κs %nt Hσ
-  icases (stateInterp_iff σ' ns κs nt).mp $$ Hσ
-    with ⟨%mm, %mb, %mk, %HG, Hmi, Hbi, Hki⟩
-  ihave %hchain : ⌜ChainAt σ' p' xs.reverse⌝ $$ [HL Hmi Hbi]
-  · iapply isList_readout σ' HG xs.reverse p'
-    isplitl [HL]
-    · iexact HL
-    isplitl [Hmi]
-    · iexact Hmi
-    · iexact Hbi
-  iapply fupd_mask_intro_discard Std.LawfulSet.empty_subset
-  ipureintro
-  exact ⟨p', hval, hchain⟩
+  · iexact HF
 
 end LrIris
 
@@ -1200,27 +1172,106 @@ theorem lrBody_fragJ (hlib : CerbLocation.isLibraryLocation loc = false) :
                 | (rw [show peDepth (Pexpr ([] : List annot) ()
                     (PEsym lrNSym)) = 1 from rfl]; omega)))))))
 
-/-! ## Seeding: a pure chain description of the initial cell map -/
+/-! ## Seeding: a pure chain description of the initial cell map
+(IDENTITY-INDEXED since Phase 4: the map's keys ARE the chain's
+allocation-id list — `SeedChain.footprint`) -/
 
 /-- The seeded input chain, as a pure fact about the initial cell
-    map: one disjoint singleton per node, decode facts per field,
-    the last next-image null. -/
-def SeedChain : SpikeHeapF SpikeCell → CerbMem.PointerValue → List Int → Prop
+    map: one disjoint singleton per node AT THE NODE'S ALLOCATION ID,
+    decode facts per field, the last next-image null. -/
+def SeedChain : SpikeHeapF SpikeCell → CerbMem.PointerValue →
+    List (Int × Int) → Prop
   | m, p, [] => m = (∅ : SpikeHeapF SpikeCell) ∧ p = nullNode
-  | m, p, v :: vs => ∃ (id aN : Int) (q : CerbMem.PointerValue)
+  | m, p, nd :: ns => ∃ (aN : Int) (q : CerbMem.PointerValue)
       (bs : List CerbMem.AbsByte) (m' : SpikeHeapF SpikeCell),
-      p = cellPtr id aN ∧ 0 < aN ∧ aN < 2 ^ 64 ∧ bs.length = 16 ∧
-      nodeValDec bs v ∧ nodeNextDec bs q ∧
-      ((Iris.Std.PartialMap.singleton id (SpikeCell.mk aN nodeTy bs) :
+      p = cellPtr nd.1 aN ∧ 0 < aN ∧ aN < 2 ^ 64 ∧ bs.length = 16 ∧
+      nodeValDec bs nd.2 ∧ nodeNextDec bs q ∧
+      ((Iris.Std.PartialMap.singleton nd.1 (SpikeCell.mk aN nodeTy bs) :
         SpikeHeapF SpikeCell)) ##ₘ m' ∧
       m = Iris.Std.PartialMap.union
-        (Iris.Std.PartialMap.singleton id (SpikeCell.mk aN nodeTy bs)) m' ∧
-      SeedChain m' q vs
+        (Iris.Std.PartialMap.singleton nd.1 (SpikeCell.mk aN nodeTy bs)) m' ∧
+      SeedChain m' q ns
+
+/-- `get?` over the (term-level) union — the Iris lemma at the
+    union spelling `SeedChain` uses. -/
+theorem get?_union' (m₁ m₂ : SpikeHeapF SpikeCell) (k : Int) :
+    Iris.Std.PartialMap.get? (Iris.Std.PartialMap.union m₁ m₂) k =
+      (Iris.Std.PartialMap.get? m₁ k).orElse
+        (fun _ => Iris.Std.PartialMap.get? m₂ k) :=
+  Iris.Std.LawfulPartialMap.get?_union
+
+/-- Lookup in the right component of a disjoint union. -/
+theorem get?_union_right {s m' : SpikeHeapF SpikeCell} (hdisj : s ##ₘ m')
+    {i : Int} {c : SpikeCell} (hg : Iris.Std.PartialMap.get? m' i = some c) :
+    Iris.Std.PartialMap.get? (Iris.Std.PartialMap.union s m') i = some c := by
+  have hs : Iris.Std.PartialMap.get? s i = none := by
+    rcases (Iris.Std.PartialMap.disjoint_iff s m').mp hdisj i with h | h
+    · exact h
+    · rw [h] at hg
+      cases hg
+  rw [get?_union', hs]
+  exact hg
+
+/-- THE FOOTPRINT LAW (Phase 4, F-06 — "same footprint" is literal):
+    a seeded chain's cell map is defined at EXACTLY the chain's
+    allocation ids. -/
+theorem SeedChain.footprint :
+    ∀ (ns : List (Int × Int)) (m : SpikeHeapF SpikeCell)
+      (p : CerbMem.PointerValue), SeedChain m p ns →
+      ∀ k, (Iris.Std.PartialMap.get? m k).isSome ↔ k ∈ ns.map Prod.fst
+  | [], m, p, hseed, k => by
+    obtain ⟨rfl, -⟩ := hseed
+    rw [Iris.Std.LawfulPartialMap.get?_empty]
+    simp
+  | nd :: ns, m, p, hseed, k => by
+    obtain ⟨aN, q, bs, m', -, -, -, -, -, -, hdisj, rfl, hseed'⟩ := hseed
+    have ih := SeedChain.footprint ns m' q hseed' k
+    by_cases hk : nd.1 = k
+    · subst hk
+      rw [get?_union', Iris.Std.LawfulPartialMap.get?_singleton_eq rfl]
+      simp
+    · rw [get?_union', Iris.Std.LawfulPartialMap.get?_singleton_ne hk]
+      simp only [List.map_cons, List.mem_cons]
+      rw [show (Option.none.orElse fun _ =>
+        Iris.Std.PartialMap.get? m' k) = Iris.Std.PartialMap.get? m' k
+        from rfl]
+      constructor
+      · intro h
+        exact .inr (ih.mp h)
+      · rintro (rfl | h)
+        · exact absurd rfl hk
+        · exact ih.mpr h
+
+/-- The DEMOTED corollary bridge: a seeded chain carried by a
+    satisfying memory reads out as the per-node `CellCoh` chain
+    (`ChainAt`) — the pre-Phase-4 conclusion vocabulary, now a pure
+    consequence of the flagship's `SeedChain` + `Sat` conclusion. -/
+theorem seedChain_chainAt (σ : Mem) :
+    ∀ (ns : List (Int × Int)) (m : SpikeHeapF SpikeCell)
+      (p : CerbMem.PointerValue), SeedChain m p ns → Coh σ m →
+      ChainAt σ p ns
+  | [], m, p, hseed, _ => hseed.2
+  | nd :: ns, m, p, hseed, hcoh => by
+    obtain ⟨aN, q, bs, m', hp, h0, h1, hlen, hval, hnext, hdisj, rfl,
+      hseed'⟩ := hseed
+    have hget : Iris.Std.PartialMap.get?
+        (Iris.Std.PartialMap.union
+          (Iris.Std.PartialMap.singleton nd.1 (SpikeCell.mk aN nodeTy bs)) m')
+        nd.1 = some (SpikeCell.mk aN nodeTy bs) := by
+      rw [get?_union', Iris.Std.LawfulPartialMap.get?_singleton_eq rfl]
+      rfl
+    have hcoh' : Coh σ m' :=
+      ⟨fun i c hg => hcoh.cells i c (get?_union_right hdisj hg),
+       fun i j ci cj hne hgi hgj => hcoh.disj i j ci cj hne
+         (get?_union_right hdisj hgi) (get?_union_right hdisj hgj)⟩
+    exact ⟨aN, q, bs, hp, h0, h1, hcoh.cells nd.1 _ hget, hlen, hval, hnext,
+      seedChain_chainAt σ ns m' q hseed' hcoh'⟩
 
 /-- Seeding: the initial footprint's big-sep IS the list predicate. -/
 theorem seedChain_isList {hlc : HasLC} {GF : BundledGFunctors}
     [SpikeGS hlc GF] :
-    ∀ (ws : List Int) (m : SpikeHeapF SpikeCell) (p : CerbMem.PointerValue),
+    ∀ (ws : List (Int × Int)) (m : SpikeHeapF SpikeCell)
+      (p : CerbMem.PointerValue),
     SeedChain m p ws →
     iprop(([∗map] i ↦ c ∈ m, cellOwn (GF := GF) i (.own 1) c)) ⊢
       isList p ws := by
@@ -1233,32 +1284,162 @@ theorem seedChain_isList {hlc : HasLC} {GF : BundledGFunctors}
     iintro -
     ipureintro
     rfl
-  | cons v vs ih =>
+  | cons nd ns ih =>
     intro m p hseed
-    obtain ⟨id, aN, q, bs, m', hp, h0, h1, hlen, hval, hnext, hdisj, rfl,
+    obtain ⟨aN, q, bs, m', hp, h0, h1, hlen, hval, hnext, hdisj, rfl,
       hseed'⟩ := hseed
     subst hp
     iintro Hm
     icases (BigSepM.bigSepM_union hdisj).1 $$ Hm with ⟨H1, Hrest⟩
-    iapply isList_cons_intro id aN q bs v vs h0 h1 hlen hval hnext
+    iapply isList_cons_intro nd.1 aN q bs nd.2 ns h0 h1 hlen hval hnext
     isplitl [H1]
     · iapply (BigSepM.bigSepM_singleton).1 $$ H1
     · iapply ih m' q hseed' $$ Hrest
 
-/-- LIST-REVERSE, END TO END: driving the REAL engine ({step_ctx →
-    sequential discharge} at the proc-carrying thread, labels tied
-    through `core_run_state.labeled`) on the authored in-place
-    reversal, from any memory carrying a seeded input chain: the
-    engine never kills, never derails, and any delivered value is a
-    POINTER whose final-heap chain is `xs.reverse` — the reversed
-    list, in place (`ChainAt`: per-node CellCoh + field decode facts
-    about the FINAL MemState). Partial correctness; fuel hypotheses
-    are the engine's own budgets (interim in-budget form). -/
-theorem list_reverse_certified {GF : BundledGFunctors} [SpikeGpreS GF]
-    (sbty : core_base_type) (xs : List Int) (head : CerbMem.PointerValue)
-    (m₀ : SpikeHeapF SpikeCell) (hseed : SeedChain m₀ head xs)
+/-- The readout companion of `seedChain_isList` (Phase 4): an
+    `isList` footprint RE-MATERIALIZES as a cell map with a pure
+    `SeedChain` description — the disjointness of the collected
+    singletons is forced by ownership validity
+    (`bigSepM_own_disjoint`), so no allocation can have been
+    duplicated or invented. -/
+theorem isList_to_cells {GF : BundledGFunctors} [SpikeGS .hasLC GF] :
+    ∀ (ws : List (Int × Int)) (p : CerbMem.PointerValue),
+    isList (hlc := .hasLC) (GF := GF) p ws ⊢
+      iprop(∃ m : SpikeHeapF SpikeCell, ⌜SeedChain m p ws⌝ ∗
+        ([∗map] i ↦ c ∈ m, cellOwn (hlc := .hasLC) i (.own 1) c))
+  | [], p => by
+    rw [isList_nil]
+    iintro %h
+    iexists (∅ : SpikeHeapF SpikeCell)
+    isplit
+    · ipureintro
+      exact ⟨rfl, h⟩
+    · iapply BigSepM.bigSepM_empty
+      itrivial
+  | nd :: ns, p => by
+    rw [isList_cons]
+    iintro ⟨%aN, %q, %bs, %hfacts, Hpt, HT⟩
+    obtain ⟨rfl, h0, h1, hlen, hval, hnext⟩ := hfacts
+    ihave HTC := isList_to_cells ns q $$ HT
+    icases HTC with ⟨%m', %hseed', Hm'⟩
+    ihave H1 : iprop(([∗map] i ↦ c ∈ ((Iris.Std.PartialMap.singleton nd.1
+        (SpikeCell.mk aN nodeTy bs)) : SpikeHeapF SpikeCell),
+        cellOwn (hlc := .hasLC) (GF := GF) i (.own 1) c)) $$ [Hpt]
+    · iapply (BigSepM.bigSepM_singleton
+        (Φ := fun (i : Int) (c : SpikeCell) =>
+          cellOwn (hlc := .hasLC) (GF := GF) i (.own 1) c)
+        (i := nd.1) (x := SpikeCell.mk aN nodeTy bs)).2
+      iexact Hpt
+    ihave %hdisj : ⌜((Iris.Std.PartialMap.singleton nd.1
+        (SpikeCell.mk aN nodeTy bs)) : SpikeHeapF SpikeCell) ##ₘ m'⌝
+        $$ [H1 Hm']
+    · iapply bigSepM_own_disjoint _ m'
+      isplitl [H1]
+      · iexact H1
+      · iexact Hm'
+    iexists (Iris.Std.PartialMap.union
+      (Iris.Std.PartialMap.singleton nd.1 (SpikeCell.mk aN nodeTy bs)) m')
+    isplit
+    · ipureintro
+      exact ⟨aN, q, bs, m', rfl, h0, h1, hlen, hval, hnext, hdisj, rfl,
+        hseed'⟩
+    iapply (BigSepM.bigSepM_union hdisj).2
+    isplitl [H1]
+    · iexact H1
+    · iexact Hm'
+
+/-- The bigsep frame the launches thread through the loop invariant
+    (the `RF` instance every engine-facing export uses). -/
+abbrev lrCellFrame {GF : BundledGFunctors} [SpikeGS .hasLC GF]
+    (R : CellMap) : IProp GF :=
+  iprop(([∗map] i ↦ c ∈ R, cellOwn (hlc := .hasLC) i (.own 1) c))
+
+/-- THE READOUT (Phase 4 — through the core `cells_readout`, which
+    owns the one state-interpretation open): the loop postcondition
+    with a cell-map frame entails the engine-facing conclusion — a
+    delivered pointer, a final footprint `Q` seeded as the REVERSED
+    chain (same ids, own values), disjointness from and preservation
+    of the frame `R`. Both lanes (partial WP and total judgment)
+    consume this one lemma. -/
+theorem lrPost_readout {GF : BundledGFunctors} [SpikeGS .hasLC GF]
+    (ns : List (Int × Int)) (R : CellMap) :
+    ∀ (w : SpikeVal) (ρ' : EnvStack),
+    lrPost (hlc := .hasLC) (GF := GF) ns (lrCellFrame R) w ρ' ⊢
+      readoutPost (fun v σ' => ∃ Q : CellMap,
+        (∃ p' : CerbMem.PointerValue, v = ptrVal p' ∧
+          SeedChain Q p' ns.reverse) ∧ Q ##ₘ R ∧
+        Coh σ' (Iris.Std.PartialMap.union Q R)) w ρ' := by
+  intro w ρ'
+  iintro ⟨%p', %hval, HL, HF⟩
+  ihave HC := isList_to_cells ns.reverse p' $$ HL
+  icases HC with ⟨%Q, %hQ, HQ⟩
+  iapply cells_readout (fun v Q => ∃ p' : CerbMem.PointerValue,
+      v = ptrVal p' ∧ SeedChain Q p' ns.reverse) R w.val
+  isplitl [HQ]
+  · iexists Q
+    isplit
+    · ipureintro
+      exact ⟨p', hval, hQ⟩
+    · iexact HQ
+  · iexact HF
+
+/-- The base-WP face with the engine readout (the launch shape
+    `engine_adequacyJ` consumes). -/
+theorem lr_wp_readout {GF : BundledGFunctors} [SpikeGS .hasLC GF]
+    (ns : List (Int × Int)) (p : sym) (rs : core_run_state)
+    (hQ : LabeledAt rs p (lrQ loc ann ra mo pbty cbty bbty nbty ubty))
+    (sbty : core_base_type) (head : CerbMem.PointerValue) (R : CellMap) :
+    iprop(isList (hlc := .hasLC) (GF := GF) head ns ∗ lrCellFrame R) ⊢
+      WP (⟨lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head,
+            [fmapEmpty], procCtx p rs⟩ : CoreRt)
+        @ Stuckness.NotStuck; ⊤
+        {{ w, iprop(∀ (σ' : Mem) (ns' : Nat) (κs : List Empty) (nt : Nat),
+          (stateInterp σ' ns' κs nt : IProp GF) ={⊤, ∅}=∗
+            ⌜∃ Q : CellMap, (∃ p' : CerbMem.PointerValue,
+                CoreRVal.val w = ptrVal p' ∧ SeedChain Q p' ns.reverse) ∧
+              Q ##ₘ R ∧ Coh σ' (Iris.Std.PartialMap.union Q R)⌝) }} := by
+  refine (lr_wps loc ann ra mo pbty cbty bbty nbty ubty ns (lrCellFrame R)
+    p rs hQ sbty head).trans ?_
+  refine (BI.emp_sep.2.trans (BI.sep_mono
+    ((lr_blockSpecs loc ann ra mo pbty cbty bbty nbty ubty ns (lrCellFrame R)
+      p rs hQ).trans
+      (wps_sound (lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head)
+        [fmapEmpty]))
+    .rfl)).trans ?_
+  refine BI.wand_elim_left.trans ?_
+  refine wp_mono fun w => ?_
+  exact lrPost_readout ns R w.w w.ρ
+
+/-- LIST-REVERSE, END TO END — THE FLAGSHIP AT FULL STRENGTH
+    (foundations Phase 4; audit F-06's exit criterion): driving the
+    REAL engine ({step_ctx → sequential discharge} at the
+    proc-carrying thread, labels tied through
+    `core_run_state.labeled`) on the authored in-place reversal,
+    from ANY memory that satisfies the seeded input chain `m₀`
+    TOGETHER WITH an arbitrary disjoint frame footprint `R` (the
+    `SemTriple` rest-quantifier, at the jump lane):
+    - the engine never kills, never derails, and
+    - any delivered value is a POINTER `p'` heading a final
+      footprint `Q` with `SeedChain Q p' ns.reverse` — IN-PLACE,
+      SAME-FOOTPRINT REVERSAL in the literal sense: the final chain
+      visits EXACTLY the original allocation ids in reversed order
+      (`ns.reverse.map .1 = (ns.map .1).reverse` — a permutation of
+      the original node set by construction), each node still
+      carrying its own value; the stated footprint equality
+      `∀ k, (get? Q k).isSome ↔ (get? m₀ k).isSome` pins the node
+      SET on the actual maps (nothing allocated, nothing leaked);
+    - THE FRAME `R` IS RETURNED VERBATIM: `Sat σ' (Q ∪ R)` — every
+      allocation outside the chain is untouched.
+    Partial correctness (fuel hypotheses are the engine's own
+    budgets); the TOTAL form below has no fuel hypotheses at all.
+    SpikeGF-concrete: no ghost-functor binder in the statement. -/
+theorem list_reverse_certified
+    (sbty : core_base_type) (ns : List (Int × Int))
+    (head : CerbMem.PointerValue)
+    (m₀ : CellMap) (hseed : SeedChain m₀ head ns)
+    (R : CellMap) (hR : m₀ ##ₘ R)
     (hlib : CerbLocation.isLibraryLocation loc = false)
-    (σ₀ : Mem) (hcoh : Coh σ₀ m₀)
+    (σ₀ : Mem) (hcoh : Sat σ₀ (Iris.Std.PartialMap.union m₀ R))
     (nsteps : Nat) (aids : Nat → Nat)
     (hfuel : 6 + nsteps ≤ lemDefaultFuel)
     (hfuel2 : 5 + nsteps ≤ lemDefaultFuel) :
@@ -1271,28 +1452,43 @@ theorem list_reverse_certified {GF : BundledGFunctors} [SpikeGpreS GF]
     (∀ (v : value) (σ' : Mem),
       driveJ rs aids nsteps
         (procThread lrProcSym prog [fmapEmpty]) σ₀ = .done v σ' →
-      ∃ p' : CerbMem.PointerValue, v = ptrVal p' ∧
-        ChainAt σ' p' xs.reverse) := by
+      ∃ (p' : CerbMem.PointerValue) (Q : CellMap),
+        v = ptrVal p' ∧
+        SeedChain Q p' ns.reverse ∧
+        (∀ k, (Iris.Std.PartialMap.get? Q k).isSome ↔
+          (Iris.Std.PartialMap.get? m₀ k).isSome) ∧
+        Q ##ₘ R ∧
+        Sat σ' (Iris.Std.PartialMap.union Q R)) := by
   intro prog rs
-  refine engine_adequacyJ (GF := GF)
+  have h := engine_adequacyJ (GF := SpikeGF)
     (lrRS_labeledAt loc ann ra mo pbty cbty bbty nbty ubty)
     (fun l params cont hl => by
       obtain ⟨-, rfl⟩ := lrQ_inv loc ann ra mo pbty cbty bbty nbty ubty hl
       exact lrBody_fragJ loc ann ra mo bbty nbty ubty hlib)
-    prog fmapEmpty [] σ₀ m₀
+    prog fmapEmpty [] σ₀ (Iris.Std.PartialMap.union m₀ R)
     (.save (lrBody_fragJ loc ann ra mo bbty nbty ubty hlib)) hcoh
-    (fun v σ' => ∃ p' : CerbMem.PointerValue, v = ptrVal p' ∧
-      ChainAt σ' p' xs.reverse)
-    ?_ nsteps aids
+    (fun v σ' => ∃ Q : CellMap, (∃ p' : CerbMem.PointerValue,
+        v = ptrVal p' ∧ SeedChain Q p' ns.reverse) ∧ Q ##ₘ R ∧
+      Coh σ' (Iris.Std.PartialMap.union Q R))
+    (by
+      intro inst
+      refine ((BigSepM.bigSepM_union hR).1.trans
+        (BI.sep_mono (seedChain_isList ns m₀ head hseed) .rfl)).trans ?_
+      exact lr_wp_readout loc ann ra mo pbty cbty bbty nbty ubty ns
+        lrProcSym rs (lrRS_labeledAt loc ann ra mo pbty cbty bbty nbty ubty)
+        sbty head R)
+    nsteps aids
     (by rw [show esize prog = 6 from rfl]; omega)
     (fun l params cont hl => by
       obtain ⟨-, rfl⟩ := lrQ_inv loc ann ra mo pbty cbty bbty nbty ubty hl
       rw [show esize (lrBody loc ann ra mo bbty nbty ubty) = 5 from rfl]
       omega)
-  intro inst
-  exact (seedChain_isList xs m₀ head hseed).trans
-    (lr_wp_readout loc ann ra mo pbty cbty bbty nbty ubty xs lrProcSym rs
-      (lrRS_labeledAt loc ann ra mo pbty cbty bbty nbty ubty) sbty head)
+  refine ⟨h.1, h.2.1, fun v σ' hdone => ?_⟩
+  obtain ⟨Q, ⟨p', rfl, hQseed⟩, hdisj, hsat⟩ := h.2.2 v σ' hdone
+  refine ⟨p', Q, rfl, hQseed, fun k => ?_, hdisj, hsat⟩
+  rw [SeedChain.footprint ns.reverse Q p' hQseed k,
+    SeedChain.footprint ns m₀ head hseed k]
+  simp
 
 /-! ## THE CONCRETE DEMONSTRATION: a seeded 3-node list [1, 2, 3]
 (engine-serialized byte images; every decode fact discharges by
@@ -1318,17 +1514,12 @@ def demoM : SpikeHeapF SpikeCell :=
     (union (singleton 2 demoCell2)
       (union (singleton 3 demoCell3) (∅ : SpikeHeapF SpikeCell)))
 
-/-- `get?` over the (term-level) union — the Iris lemma at the
-    union spelling `SeedChain` uses. -/
-theorem get?_union' (m₁ m₂ : SpikeHeapF SpikeCell) (k : Int) :
-    Iris.Std.PartialMap.get? (Iris.Std.PartialMap.union m₁ m₂) k =
-      (Iris.Std.PartialMap.get? m₁ k).orElse
-        (fun _ => Iris.Std.PartialMap.get? m₂ k) :=
-  Iris.Std.LawfulPartialMap.get?_union
+/-- The demo's node list: (allocation id, value) per node. -/
+def demoNs : List (Int × Int) := [(1, 1), (2, 2), (3, 3)]
 
 open Iris.Std.PartialMap in
-theorem demo_seed : SeedChain demoM demoHead [1, 2, 3] := by
-  refine ⟨1, 4096, cellPtr 2 8192, demoBytes 1 (cellPtr 2 8192),
+theorem demo_seed : SeedChain demoM demoHead demoNs := by
+  refine ⟨4096, cellPtr 2 8192, demoBytes 1 (cellPtr 2 8192),
     union (singleton 2 demoCell2)
       (union (singleton 3 demoCell3) (∅ : SpikeHeapF SpikeCell)),
     rfl, by omega, by omega, rfl,
@@ -1347,7 +1538,7 @@ theorem demo_seed : SeedChain demoM demoHead [1, 2, 3] := by
       Iris.Std.LawfulPartialMap.get?_singleton_ne (by omega),
       Iris.Std.LawfulPartialMap.get?_empty] at h2
     cases h2
-  refine ⟨2, 8192, cellPtr 3 12288, demoBytes 2 (cellPtr 3 12288),
+  refine ⟨8192, cellPtr 3 12288, demoBytes 2 (cellPtr 3 12288),
     union (singleton 3 demoCell3) (∅ : SpikeHeapF SpikeCell),
     rfl, by omega, by omega, rfl,
     (fun lum fpm ad => rfl), (fun lum fpm ad => rfl), ?_, rfl, ?_⟩
@@ -1363,7 +1554,7 @@ theorem demo_seed : SeedChain demoM demoHead [1, 2, 3] := by
       Iris.Std.LawfulPartialMap.get?_singleton_ne (by omega),
       Iris.Std.LawfulPartialMap.get?_empty] at h2
     cases h2
-  refine ⟨3, 12288, nullNode, demoBytes 3 nullNode,
+  refine ⟨12288, nullNode, demoBytes 3 nullNode,
     (∅ : SpikeHeapF SpikeCell),
     rfl, by omega, by omega, rfl,
     (fun lum fpm ad => rfl), (fun lum fpm ad => rfl), ?_, rfl, ⟨rfl, rfl⟩⟩
@@ -1373,12 +1564,15 @@ theorem demo_seed : SeedChain demoM demoHead [1, 2, 3] := by
     cases h2
 
 /-- THE DEMONSTRATION INSTANCE: reversing the seeded 3-node list
-    [1, 2, 3] — any delivered value is a pointer whose final-heap
-    chain is [3, 2, 1]. -/
-theorem list_reverse_demo {GF : BundledGFunctors} [SpikeGpreS GF]
-    (sbty : core_base_type)
+    (ids 1, 2, 3 carrying values 1, 2, 3) next to an arbitrary
+    disjoint frame — the delivered pointer heads the SAME three
+    allocations relinked as [(3,3), (2,2), (1,1)], the frame is
+    returned verbatim, and the demoted `ChainAt` readout of the
+    final memory is included (via `seedChain_chainAt`). -/
+theorem list_reverse_demo (sbty : core_base_type)
+    (R : CellMap) (hR : demoM ##ₘ R)
     (hlib : CerbLocation.isLibraryLocation loc = false)
-    (σ₀ : Mem) (hcoh : Coh σ₀ demoM)
+    (σ₀ : Mem) (hcoh : Sat σ₀ (Iris.Std.PartialMap.union demoM R))
     (nsteps : Nat) (aids : Nat → Nat)
     (hfuel : 6 + nsteps ≤ lemDefaultFuel)
     (hfuel2 : 5 + nsteps ≤ lemDefaultFuel) :
@@ -1391,10 +1585,24 @@ theorem list_reverse_demo {GF : BundledGFunctors} [SpikeGpreS GF]
     (∀ (v : value) (σ' : Mem),
       driveJ rs aids nsteps
         (procThread lrProcSym prog [fmapEmpty]) σ₀ = .done v σ' →
-      ∃ p' : CerbMem.PointerValue, v = ptrVal p' ∧
-        ChainAt σ' p' [3, 2, 1]) :=
-  list_reverse_certified (GF := GF) loc ann ra mo pbty cbty bbty nbty ubty sbty
-    [1, 2, 3] demoHead demoM demo_seed hlib σ₀ hcoh nsteps aids hfuel hfuel2
+      ∃ (p' : CerbMem.PointerValue) (Q : CellMap),
+        v = ptrVal p' ∧
+        SeedChain Q p' [(3, 3), (2, 2), (1, 1)] ∧
+        (∀ k, (Iris.Std.PartialMap.get? Q k).isSome ↔
+          (Iris.Std.PartialMap.get? demoM k).isSome) ∧
+        Q ##ₘ R ∧
+        Sat σ' (Iris.Std.PartialMap.union Q R) ∧
+        ChainAt σ' p' [(3, 3), (2, 2), (1, 1)]) := by
+  intro prog rs
+  have h := list_reverse_certified loc ann ra mo pbty cbty bbty nbty ubty
+    sbty demoNs demoHead demoM demo_seed R hR hlib σ₀ hcoh nsteps aids
+    hfuel hfuel2
+  refine ⟨h.1, h.2.1, fun v σ' hdone => ?_⟩
+  obtain ⟨p', Q, hval, hQSeed, hfoot, hdisj, hsat⟩ := h.2.2 v σ' hdone
+  have hrev : demoNs.reverse = [(3, 3), (2, 2), (1, 1)] := rfl
+  rw [hrev] at hQSeed
+  exact ⟨p', Q, hval, hQSeed, hfoot, hdisj, hsat,
+    seedChain_chainAt σ' _ Q p' hQSeed (Sat.union_left hsat)⟩
 
 end LrDrive
 
@@ -1410,8 +1618,8 @@ load-eval 1 + node load 3; spec-beta + wrapper prepaid; store-eval 1
 + node store 3; wild-beta + wrapper prepaid; jump 1 — the two annot
 wrappers each reserve one unit for their eventual merge, of which
 the engine spends one, so the budget is one unit per iteration above
-the engine's true 12), program bound `13·|xs| + 7`. The 2026-08-31
-listrev notes had ESTIMATED ~11·|xs| + 6 before the wrapper-merge
+the engine's true 12), program bound `13·|ns| + 7`. The 2026-08-31
+listrev notes had ESTIMATED ~11·|ns| + 6 before the wrapper-merge
 step and the nested-wrapper merge were counted; the derived bound
 here is proved, unconditional, and delivered by the GENERIC
 simulation (`wpt_engine_boundJ`) — zero Step constructors, zero
@@ -1487,40 +1695,41 @@ section LrTotal
 variable {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
 variable (loc : CerbLocation.Loc) (ann ra : core_run_annotation)
   (mo : memory_order) (pbty cbty bbty nbty ubty : core_base_type)
-  (xs : List Int)
+  (ns : List (Int × Int)) (RF : IProp GF)
 variable (p : sym) (rs : core_run_state)
   (hQ : LabeledAt rs p (lrQ loc ann ra mo pbty cbty bbty nbty ubty))
 
-/-- The variant-indexed label context: the partial invariant plus
-    the variant pin `m = lrCost rest'.length` (the heap-resident
-    measure enters through the invariant — the length of the chain
-    the second argument heads). -/
+/-- The variant-indexed label context: the partial invariant (frame
+    `RF` threaded, as at the partial stratum) plus the variant pin
+    `m = lrCost rest'.length` (the heap-resident measure enters
+    through the invariant — the length of the chain the second
+    argument heads). -/
 abbrev lrLsT : LabelSpecT GF := fun _ m args ρ =>
-  iprop(∃ (revd rest' : List Int) (pPrev pCur : CerbMem.PointerValue)
+  iprop(∃ (revd rest' : List (Int × Int)) (pPrev pCur : CerbMem.PointerValue)
       (f : Fmap sym value) (renv : List (Fmap sym value)),
-    ⌜args = [ptrVal pPrev, ptrVal pCur] ∧ xs = revd.reverse ++ rest' ∧
+    ⌜args = [ptrVal pPrev, ptrVal pCur] ∧ ns = revd.reverse ++ rest' ∧
       m = lrCost rest'.length ∧ ρ = f :: renv ∧ SymFrame f⌝ ∗
-    isList pPrev revd ∗ isList pCur rest')
+    isList pPrev revd ∗ isList pCur rest' ∗ RF)
 
 include hQ
 
 /-- The loop body meets its variant budget at any invariant frame —
     the same textbook derivation as `lr_body_wps`, at the total
     stratum with the budget arithmetic. -/
-theorem lr_body_wpt (revd rest' : List Int)
+theorem lr_body_wpt (revd rest' : List (Int × Int))
     (pPrev pCur : CerbMem.PointerValue) (f : Fmap sym value)
     (renv : List (Fmap sym value)) (hf : SymFrame f)
-    (hxs : xs = revd.reverse ++ rest') :
-    iprop(isList (GF := GF) pPrev revd ∗ isList pCur rest') ⊢
-      wpt (procCtx p rs) (lrLsT xs) (lrCost rest'.length)
-        (lrPost xs) (lrBody loc ann ra mo bbty nbty ubty)
+    (hxs : ns = revd.reverse ++ rest') :
+    iprop(isList (GF := GF) pPrev revd ∗ isList pCur rest' ∗ RF) ⊢
+      wpt (procCtx p rs) (lrLsT ns RF) (lrCost rest'.length)
+        (lrPost ns RF) (lrBody loc ann ra mo bbty nbty ubty)
         (lrFrame (ptrVal pPrev) (ptrVal pCur) f :: renv) := by
   rw [show lrBody loc ann ra mo bbty nbty ubty =
     Expr [] (Esseq (symPat [] lrBSym bbty) lrMemopE
       (Expr [] (Eif (Pexpr [] () (PEsym lrBSym))
         (Expr [] (Epure lrExitPe))
         (lrElse loc ann ra mo nbty ubty)))) from rfl]
-  iintro ⟨HP, HC⟩
+  iintro ⟨HP, HC, HF⟩
   cases rest' with
   | nil =>
     -- cur == NULL: exit in 6 = 3 (null test) + 3 (guard + PURE +
@@ -1528,7 +1737,7 @@ theorem lr_body_wpt (revd rest' : List Int)
     rw [isList_nil]
     icases HC with %hnull
     subst hnull
-    rw [show lrCost ([] : List Int).length = 3 + 3 from rfl]
+    rw [show lrCost ([] : List (Int × Int)).length = 3 + 3 from rfl]
     iapply wpt_seq_sym
     rw [show lrMemopE = memopRedex PtrEq
       [Pexpr [] () (PEsym lrCurSym), Pexpr [] () (PEval nullVal)] from rfl,
@@ -1554,20 +1763,22 @@ theorem lr_body_wpt (revd rest' : List Int)
     isplit
     · ipureintro
       rfl
-    rw [show xs.reverse = revd by rw [hxs]; simp]
-    iexact HP
-  | cons v vs =>
+    rw [show ns.reverse = revd by rw [hxs]; simp]
+    isplitl [HP]
+    · iexact HP
+    · iexact HF
+  | cons nd vs =>
     -- cur is a node: 13 + lrCost |vs| = 3 (null test) + 1 (if) +
     -- 4 (load) + 4 (store) + 1 (jump) + the target's budget
     rw [isList_cons]
-    icases HC with ⟨%id, %aN, %q, %bs, %hfacts, Hpt, HT⟩
+    icases HC with ⟨%aN, %q, %bs, %hfacts, Hpt, HT⟩
     obtain ⟨rfl, h0, h1, hlen, hval, hnext⟩ := hfacts
     ihave HP2 := isList_shape pPrev revd $$ HP
     icases HP2 with ⟨%hshape, HP⟩
     have kit := node_store_kit pPrev hshape
     obtain ⟨klen, kfpm, kbytes, knext⟩ := kit
-    rw [show lrCost (v :: vs).length = 3 + (10 + lrCost vs.length) from by
-      rw [show (v :: vs).length = vs.length + 1 from rfl,
+    rw [show lrCost (nd :: vs).length = 3 + (10 + lrCost vs.length) from by
+      rw [show (nd :: vs).length = vs.length + 1 from rfl,
         show lrCost (vs.length + 1) = 13 + lrCost vs.length from rfl]
       omega]
     iapply wpt_seq_sym
@@ -1576,12 +1787,12 @@ theorem lr_body_wpt (revd rest' : List Int)
       show (3 : Nat) = 2 + 1 from rfl]
     iapply wpt_memop_eval PtrEq _ _ _
       lr_memop_operands_nonvalue (lr_cur_eval hf renv _ _) rfl
-    rw [show memopRedex PtrEq [Pexpr [] () (PEval (ptrVal (cellPtr id aN))),
+    rw [show memopRedex PtrEq [Pexpr [] () (PEval (ptrVal (cellPtr nd.1 aN))),
         Pexpr [] () (PEval nullVal)] =
-      memopPtrEqVals (Vobject (OVpointer (cellPtr id aN)))
+      memopPtrEqVals (Vobject (OVpointer (cellPtr nd.1 aN)))
         (Vobject (OVpointer nullNode)) from rfl]
-    iapply wpt_memop_ptreq (cellPtr id aN) nullNode _ (by omega)
-      (fun σ => eqPtrval_cell_null id aN nodeTy σ)
+    iapply wpt_memop_ptreq (cellPtr nd.1 aN) nullNode _ (by omega)
+      (fun σ => eqPtrval_cell_null nd.1 aN nodeTy σ)
     iexists (boolValue false)
     isplit
     · ipureintro
@@ -1604,10 +1815,10 @@ theorem lr_body_wpt (revd rest' : List Int)
       loadOpRedex loc ann nodePtrTy (lrShiftPe lrCurSym) mo from rfl,
       show (4 : Nat) = 3 + 1 from rfl]
     iapply wpt_load_eval loc ann nodePtrTy (lrShiftPe lrCurSym) mo _
-      rfl (lr_shift_eval_B hf renv _ _ id aN)
-    rw [show cellPtr id (aN + 8) = cellPtr id (aN + ((8 : Nat) : Int))
+      rfl (lr_shift_eval_B hf renv _ _ nd.1 aN)
+    rw [show cellPtr nd.1 (aN + 8) = cellPtr nd.1 (aN + ((8 : Nat) : Int))
       from rfl]
-    iapply wpt_load_node_field loc ann id aN 8 mo (.own 1) bs _
+    iapply wpt_load_node_field loc ann nd.1 aN 8 mo (.own 1) bs _
       (by omega)
       (by rw [nodeTy_size]; omega)
       (fun lum fpm => hnext lum fpm _)
@@ -1621,20 +1832,20 @@ theorem lr_body_wpt (revd rest' : List Int)
       rw [valueFromMemValue_ptr]
     rw [update_env_spec]
     rw [show envAdd lrNSym (Vobject (OVpointer q))
-        (lrFrameB (boolValue false) (ptrVal pPrev) (ptrVal (cellPtr id aN)) f) =
+        (lrFrameB (boolValue false) (ptrVal pPrev) (ptrVal (cellPtr nd.1 aN)) f) =
       lrFrameN (ptrVal q) (boolValue false) (ptrVal pPrev)
-        (ptrVal (cellPtr id aN)) f from rfl]
+        (ptrVal (cellPtr nd.1 aN)) f from rfl]
     rw [show 5 + lrCost vs.length = 4 + (1 + lrCost vs.length) by omega]
     iapply wpt_seq
     rw [show lrStoreE loc ann mo = storeOpRedex loc ann nodePtrTy
       (lrShiftPe lrCurSym) (Pexpr [] () (PEsym lrPrevSym)) mo from rfl,
       show (4 : Nat) = 3 + 1 from rfl]
     iapply wpt_store_eval loc ann nodePtrTy _ _ mo _
-      rfl rfl (lr_shift_eval_N hf renv _ _ _ id aN)
+      rfl rfl (lr_shift_eval_N hf renv _ _ _ nd.1 aN)
       (lr_store_value_eval hf renv _ _ _ _)
-    rw [show cellPtr id (aN + 8) = cellPtr id (aN + ((8 : Nat) : Int))
+    rw [show cellPtr nd.1 (aN + 8) = cellPtr nd.1 (aN + ((8 : Nat) : Int))
       from rfl]
-    iapply wpt_store_node_field loc ann id aN 8 (ptrVal pPrev) mo bs _
+    iapply wpt_store_node_field loc ann nd.1 aN 8 (ptrVal pPrev) mo bs _
       (by omega)
       (node_ptr_encodes pPrev) (by rw [nodeTy_size]; omega) klen
       (node_ptr_compat pPrev) kfpm kbytes
@@ -1648,16 +1859,16 @@ theorem lr_body_wpt (revd rest' : List Int)
           exact lrQ_lookup loc ann ra mo pbty cbty bbty nbty ubty)
       (lr_args_eval hf renv _ _ _ _)
       (by omega)
-    iexists (v :: revd), vs, (cellPtr id aN), q,
+    iexists (nd :: revd), vs, (cellPtr nd.1 aN), q,
       (lrFrameN (ptrVal q) (boolValue false) (ptrVal pPrev)
-        (ptrVal (cellPtr id aN)) f), renv
+        (ptrVal (cellPtr nd.1 aN)) f), renv
     isplit
     · ipureintro
       refine ⟨rfl, ?_, rfl, rfl, lrFrameN_symFrame hf _ _ _ _⟩
       rw [hxs]
       simp
     isplitl [Hpt HP]
-    · iapply isList_cons_intro id aN pPrev _ v revd h0 h1
+    · iapply isList_cons_intro nd.1 aN pPrev _ nd.2 revd h0 h1
         (by rw [spliceBytes_length _ _ _ (by rw [klen, hlen]; omega)]
             exact hlen)
         (by intro lum fpm ad
@@ -1670,16 +1881,18 @@ theorem lr_body_wpt (revd rest' : List Int)
       isplitl [Hpt]
       · iexact Hpt
       · iexact HP
+    isplitl [HT]
     · iexact HT
+    · iexact HF
 
 /-- THE TOTAL BLOCK SPECIFICATION for the reversal loop. -/
 theorem lr_blockSpecsT :
     ⊢ blockSpecsT (GF := GF) (procCtx p rs)
-      (lrLsT xs) (lrPost xs) := by
+      (lrLsT ns RF) (lrPost ns RF) := by
   refine blockSpecsT_intro fun l params cont args env0 envs m hl => ?_
   rw [procCtx_labels hQ] at hl
   obtain ⟨rfl, rfl⟩ := lrQ_inv loc ann ra mo pbty cbty bbty nbty ubty hl
-  iintro ⟨%revd, %rest', %pPrev, %pCur, %f, %renv, %hpure, HP, HC⟩
+  iintro ⟨%revd, %rest', %pPrev, %pCur, %f, %renv, %hpure, HP, HC, HF⟩
   obtain ⟨rfl, hxs, rfl, hρ, hf⟩ := hpure
   obtain ⟨rfl, rfl⟩ : f = env0 ∧ renv = envs := by
     have h1 := congrArg (fun l => l.head?) hρ
@@ -1687,58 +1900,42 @@ theorem lr_blockSpecsT :
     simp at h1 h2
     exact ⟨h1.symm, h2.symm⟩
   rw [bindArgs_lr]
-  iapply lr_body_wpt loc ann ra mo pbty cbty bbty nbty ubty xs p rs hQ
+  iapply lr_body_wpt loc ann ra mo pbty cbty bbty nbty ubty ns RF p rs hQ
     revd rest' pPrev pCur f renv hf hxs
   isplitl [HP]
   · iexact HP
+  isplitl [HC]
   · iexact HC
+  · iexact HF
 
-/-- The whole program's total judgment at budget `lrCost |xs| + 1`. -/
+/-- The whole program's total judgment at budget `lrCost |ns| + 1`. -/
 theorem lr_wpt (sbty : core_base_type) (head : CerbMem.PointerValue) :
-    isList (GF := GF) head xs ⊢
-      wpt (procCtx p rs) (lrLsT xs) (lrCost xs.length + 1) (lrPost xs)
+    iprop(isList (GF := GF) head ns ∗ RF) ⊢
+      wpt (procCtx p rs) (lrLsT ns RF) (lrCost ns.length + 1) (lrPost ns RF)
         (lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head)
         [fmapEmpty] := by
   rw [show lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head =
     Expr [] (Esave (lrLoopSym, sbty) (lrParams pbty cbty head)
       (lrBody loc ann ra mo bbty nbty ubty)) from rfl]
-  iintro HL
+  iintro ⟨HL, HF⟩
   iapply wpt_save [] (lrLoopSym, sbty) _ _ fmapEmpty []
     (cvals := [nullVal, ptrVal head]) rfl
   rw [bindSave_lr]
   rw [show lrFrame nullVal (ptrVal head) fmapEmpty =
     lrFrame (ptrVal nullNode) (ptrVal head) fmapEmpty from rfl]
-  iapply lr_body_wpt loc ann ra mo pbty cbty bbty nbty ubty xs p rs hQ [] xs
+  iapply lr_body_wpt loc ann ra mo pbty cbty bbty nbty ubty ns RF p rs hQ [] ns
     nullNode head fmapEmpty [] symFrame_empty (by simp)
-  isplitr [HL]
+  isplitr [HL HF]
   · exact isList_nil_intro
+  isplitl [HL]
   · iexact HL
-
-omit hQ in
-/-- The postcondition entails the engine readout (final-heap chain,
-    per-node CellCoh — the same extraction as the partial lane's). -/
-theorem lrPost_to_readout :
-    ∀ w ρ', lrPost (GF := GF) xs w ρ' ⊢
-      readoutPost (fun v σ' => ∃ p' : CerbMem.PointerValue,
-        v = ptrVal p' ∧ ChainAt σ' p' xs.reverse) w ρ' := by
-  intro w ρ'
-  iintro ⟨%p', %hval, HL⟩ %σ' %ns %κs %nt Hσ
-  icases (stateInterp_iff σ' ns κs nt).mp $$ Hσ
-    with ⟨%mm, %mb, %mk, %HG, Hmi, Hbi, Hki⟩
-  ihave %hchain : ⌜ChainAt σ' p' xs.reverse⌝ $$ [HL Hmi Hbi]
-  · iapply isList_readout σ' HG xs.reverse p'
-    isplitl [HL]
-    · iexact HL
-    isplitl [Hmi]
-    · iexact Hmi
-    · iexact Hbi
-  iapply fupd_mask_intro_discard Std.LawfulSet.empty_subset
-  ipureintro
-  exact ⟨p', hval, hchain⟩
+  · iexact HF
 
 end LrTotal
 
 section LrTotalExport
+
+open Iris.Std.PartialMap
 
 variable (loc : CerbLocation.Loc) (ann ra : core_run_annotation)
   (mo : memory_order) (pbty cbty bbty nbty ubty : core_base_type)
@@ -1748,32 +1945,44 @@ theorem lrProg_pot (sbty : core_base_type) (head : CerbMem.PointerValue) :
 
 theorem lrBody_pot : pot (lrBody loc ann ra mo bbty nbty ubty) = 6 := rfl
 
-/-- LIST-REVERSE, THE UNCONDITIONAL TOTAL ENGINE EQUATION (the
-    registered residual closes; the bound is DERIVED — 13 per
-    iteration + 6 exit + 1 entry, header note on the delta vs the
-    old 11-per-iteration estimate): from any memory carrying a
-    seeded input chain, the engine's driveJ at fuel `13·|xs| + 7`
-    DELIVERS a pointer whose final-heap chain is `xs.reverse` — no
-    fuel hypotheses, no partiality. A corollary of the total
-    judgment through the generic simulation: zero Step constructors,
-    zero driveJ_step chains. -/
+/-- LIST-REVERSE, THE UNCONDITIONAL TOTAL ENGINE EQUATION — THE
+    FLAGSHIP AT FULL STRENGTH (foundations Phase 4; audit F-06's
+    exit criterion: same-footprint, in-place reversal + TERMINATION
+    + frame preservation, in one statement, no fuel hypotheses):
+    from any memory satisfying the seeded chain `m₀` next to an
+    ARBITRARY disjoint frame footprint `R`, the engine's driveJ at
+    the DERIVED bound `13·|ns| + 7` (13 per iteration + 6 exit + 1
+    entry) DELIVERS a pointer `p'` heading a final footprint `Q`
+    with `SeedChain Q p' ns.reverse` — the SAME allocation ids in
+    exactly reversed order, each node carrying its own value — the
+    footprint equality `∀ k, (get? Q k).isSome ↔ (get? m₀ k).isSome`
+    stated on the maps, and the frame `R` returned VERBATIM
+    (`Sat σ' (Q ∪ R)`). A corollary of the total judgment through
+    the generic simulation: zero Step constructors, zero driveJ_step
+    chains. SpikeGF-concrete: no ghost-functor binder. -/
 theorem list_reverse_certified_total (sbty : core_base_type)
-    (xs : List Int) (head : CerbMem.PointerValue)
-    (m₀ : SpikeHeapF SpikeCell) (hseed : SeedChain m₀ head xs)
+    (ns : List (Int × Int)) (head : CerbMem.PointerValue)
+    (m₀ : CellMap) (hseed : SeedChain m₀ head ns)
+    (R : CellMap) (hR : m₀ ##ₘ R)
     (hlib : CerbLocation.isLibraryLocation loc = false)
-    (σ₀ : Mem) (hcoh : Coh σ₀ m₀) (aids : Nat → Nat) :
-    ∃ (p' : CerbMem.PointerValue) (σ' : Mem),
+    (σ₀ : Mem) (hcoh : Sat σ₀ (Iris.Std.PartialMap.union m₀ R))
+    (aids : Nat → Nat) :
+    ∃ (p' : CerbMem.PointerValue) (Q : CellMap) (σ' : Mem),
       driveJ (lrRS loc ann ra mo pbty cbty bbty nbty ubty) aids
-        (13 * xs.length + 7)
+        (13 * ns.length + 7)
         (procThread lrProcSym
           (lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head)
           [fmapEmpty]) σ₀ = .done (ptrVal p') σ' ∧
-      ChainAt σ' p' xs.reverse := by
+      SeedChain Q p' ns.reverse ∧
+      (∀ k, (Iris.Std.PartialMap.get? Q k).isSome ↔
+        (Iris.Std.PartialMap.get? m₀ k).isSome) ∧
+      Q ##ₘ R ∧
+      Sat σ' (Iris.Std.PartialMap.union Q R) := by
   have hQ := lrRS_labeledAt loc ann ra mo pbty cbty bbty nbty ubty
-  have hk : lrCost xs.length + 1 = 13 * xs.length + 7 := by
+  have hk : lrCost ns.length + 1 = 13 * ns.length + 7 := by
     rw [lrCost_eq]
   rw [← hk]
-  obtain ⟨v, σ', hdone, ⟨p', rfl, hchain⟩, -⟩ :=
+  obtain ⟨v, σ', hdone, ⟨Q, ⟨p', rfl, hQseed⟩, hdisj, hsat⟩, -⟩ :=
     wpt_engine_boundJ (GF := SpikeGF) hQ
       (fun l params cont hl => by
         obtain ⟨-, rfl⟩ := lrQ_inv loc ann ra mo pbty cbty bbty nbty ubty hl
@@ -1782,50 +1991,62 @@ theorem list_reverse_certified_total (sbty : core_base_type)
         obtain ⟨-, rfl⟩ := lrQ_inv loc ann ra mo pbty cbty bbty nbty ubty hl
         rw [lrBody_pot, show lemDefaultFuel = 999999 + 1 from rfl]
         omega)
-      (lrLsT xs)
+      (lrLsT ns (lrCellFrame R))
       (lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head)
-      fmapEmpty [] σ₀ m₀
+      fmapEmpty [] σ₀ (Iris.Std.PartialMap.union m₀ R)
       (.save (lrBody_fragJ loc ann ra mo bbty nbty ubty hlib))
       (by rw [lrProg_pot, show lemDefaultFuel = 999999 + 1 from rfl]; omega)
       hcoh
-      (fun v σ' => ∃ p' : CerbMem.PointerValue,
-        v = ptrVal p' ∧ ChainAt σ' p' xs.reverse)
-      (lrCost xs.length + 1)
+      (fun v σ' => ∃ Q : CellMap, (∃ p' : CerbMem.PointerValue,
+          v = ptrVal p' ∧ SeedChain Q p' ns.reverse) ∧ Q ##ₘ R ∧
+        Coh σ' (Iris.Std.PartialMap.union Q R))
+      (lrCost ns.length + 1)
       (by
         intro inst
+        refine ((BigSepM.bigSepM_union hR).1.trans
+          (BI.sep_mono (seedChain_isList ns m₀ head hseed) .rfl)).trans ?_
         refine .trans BI.emp_sep.2 (BI.sep_mono ?_ ?_)
-        · exact (lr_blockSpecsT loc ann ra mo pbty cbty bbty nbty ubty xs
+        · exact (lr_blockSpecsT loc ann ra mo pbty cbty bbty nbty ubty ns
+            (lrCellFrame R)
             lrProcSym (lrRS loc ann ra mo pbty cbty bbty nbty ubty) hQ).trans
-            (blockSpecsT_mono (lrPost_to_readout xs))
-        · exact (seedChain_isList xs m₀ head hseed).trans
-            ((lr_wpt loc ann ra mo pbty cbty bbty nbty ubty xs
+            (blockSpecsT_mono (lrPost_readout ns R))
+        · exact (lr_wpt loc ann ra mo pbty cbty bbty nbty ubty ns
+              (lrCellFrame R)
               lrProcSym (lrRS loc ann ra mo pbty cbty bbty nbty ubty) hQ
               sbty head).trans
-              (wpt_mono (lrPost_to_readout xs) _ _ _)))
+              (wpt_mono (lrPost_readout ns R) _ _ _))
       aids
-  exact ⟨p', σ', hdone, hchain⟩
+  refine ⟨p', Q, σ', hdone, hQseed, fun k => ?_, hdisj, hsat⟩
+  rw [SeedChain.footprint ns.reverse Q p' hQseed k,
+    SeedChain.footprint ns m₀ head hseed k]
+  simp
 
 /-- LIST-REVERSE TERMINATES — the logical half over the unified
-    relation (Iris TotalAdequacy consumed as-is). -/
+    relation (Iris TotalAdequacy consumed as-is), from the seeded
+    chain next to an arbitrary disjoint frame. -/
 theorem list_reverse_terminates (sbty : core_base_type)
-    (xs : List Int) (head : CerbMem.PointerValue)
-    (m₀ : SpikeHeapF SpikeCell) (hseed : SeedChain m₀ head xs)
-    (σ₀ : Mem) (hcoh : Coh σ₀ m₀) :
+    (ns : List (Int × Int)) (head : CerbMem.PointerValue)
+    (m₀ : CellMap) (hseed : SeedChain m₀ head ns)
+    (R : CellMap) (hR : m₀ ##ₘ R)
+    (σ₀ : Mem) (hcoh : Sat σ₀ (Iris.Std.PartialMap.union m₀ R)) :
     Relation.StronglyNormalizing Language.ErasedStep
       ([(⟨lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head,
           [fmapEmpty],
           procCtx lrProcSym (lrRS loc ann ra mo pbty cbty bbty nbty ubty)⟩ :
             CoreRt)], σ₀) := by
   have hQ := lrRS_labeledAt loc ann ra mo pbty cbty bbty nbty ubty
-  refine wpt_strongly_normalizing (GF := SpikeGF) (lrLsT xs) (lrPost xs)
-    _ _ σ₀ m₀ hcoh (lrCost xs.length + 1) ?_
+  refine wpt_strongly_normalizing (GF := SpikeGF)
+    (lrLsT ns (lrCellFrame R)) (lrPost ns (lrCellFrame R))
+    _ _ σ₀ (Iris.Std.PartialMap.union m₀ R) hcoh (lrCost ns.length + 1) ?_
   intro inst
+  refine ((BigSepM.bigSepM_union hR).1.trans
+    (BI.sep_mono (seedChain_isList ns m₀ head hseed) .rfl)).trans ?_
   refine .trans BI.emp_sep.2 (BI.sep_mono ?_ ?_)
-  · exact lr_blockSpecsT loc ann ra mo pbty cbty bbty nbty ubty xs
+  · exact lr_blockSpecsT loc ann ra mo pbty cbty bbty nbty ubty ns
+      (lrCellFrame R)
       lrProcSym (lrRS loc ann ra mo pbty cbty bbty nbty ubty) hQ
-  · exact (seedChain_isList xs m₀ head hseed).trans
-      (lr_wpt loc ann ra mo pbty cbty bbty nbty ubty xs
-        lrProcSym (lrRS loc ann ra mo pbty cbty bbty nbty ubty) hQ sbty head)
+  · exact lr_wpt loc ann ra mo pbty cbty bbty nbty ubty ns (lrCellFrame R)
+      lrProcSym (lrRS loc ann ra mo pbty cbty bbty nbty ubty) hQ sbty head
 
 end LrTotalExport
 

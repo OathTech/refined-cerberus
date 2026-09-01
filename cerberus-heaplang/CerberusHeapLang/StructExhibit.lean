@@ -192,20 +192,21 @@ theorem struct_wp_readout (loc : CerbLocation.Loc)
     .rfl)).trans ?_
   refine BI.wand_elim_left.trans ?_
   refine wp_mono fun w => ?_
-  iintro Hs %σ' %ns %κs %nt Hσ
-  icases (stateInterp_iff σ' ns κs nt).mp $$ Hσ
-    with ⟨%mm, %mb, %mk, %HG, Hmi, Hbi, Hki⟩
-  ihave %Hcc : ⌜CellCoh σ' id ⟨a, structTy,
-      spliceBytes fieldY sixBytes (spliceBytes fieldX fiveBytes bs)⟩ ∧
-      Iris.Std.PartialMap.get? mm id = some (metaOf
-        (⟨a, structTy, spliceBytes fieldY sixBytes
-          (spliceBytes fieldX fiveBytes bs)⟩ : SpikeCell))⌝ $$ [Hmi Hbi Hs]
-  · iapply cellOwn_cellCoh HG id (.own 1)
-      ⟨a, structTy, spliceBytes fieldY sixBytes
-        (spliceBytes fieldX fiveBytes bs)⟩ $$ [$Hmi $Hbi $Hs]
-  iapply fupd_mask_intro_discard Std.LawfulSet.empty_subset
-  ipureintro
-  exact Hcc.1
+  -- Phase-4 tidy: the state-interpretation open/close lives in the
+  -- core combinator; this module supplies only the coupling-
+  -- conditional extraction (cellOwn_cellCoh).
+  exact stateInterp_readout (fun σ' mm mb mk HG => by
+    iintro ⟨Hs, Hmi, Hbi⟩
+    ihave %Hcc : ⌜CellCoh σ' id ⟨a, structTy,
+        spliceBytes fieldY sixBytes (spliceBytes fieldX fiveBytes bs)⟩ ∧
+        Iris.Std.PartialMap.get? mm id = some (metaOf
+          (⟨a, structTy, spliceBytes fieldY sixBytes
+            (spliceBytes fieldX fiveBytes bs)⟩ : SpikeCell))⌝ $$ [Hmi Hbi Hs]
+    · iapply cellOwn_cellCoh HG id (.own 1)
+        ⟨a, structTy, spliceBytes fieldY sixBytes
+          (spliceBytes fieldX fiveBytes bs)⟩ $$ [$Hmi $Hbi $Hs]
+    ipureintro
+    exact Hcc.1)
 
 end StructReadout
 

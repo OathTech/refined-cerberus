@@ -710,6 +710,24 @@ theorem Sat.mono {σ : Mem} {m m' : CellMap} (h : Sat σ m) (hsub : m' ⊆ m) :
   ⟨fun i c hg => h.cells i c (hsub i c hg),
    fun i j c1 c2 hne h1 h2 => h.disj i j c1 c2 hne (hsub _ _ h1) (hsub _ _ h2)⟩
 
+/-- Satisfaction of a (left-biased) union restricts to its left
+    component: `get?` on the union answers the left map's entry
+    verbatim wherever the left map is defined. -/
+theorem Sat.union_left {σ : Mem} {Q R : CellMap}
+    (h : Sat σ (Iris.Std.PartialMap.union Q R)) : Sat σ Q := by
+  have hlift : ∀ i (c : SpikeCell), Iris.Std.PartialMap.get? Q i = some c →
+      Iris.Std.PartialMap.get? (Iris.Std.PartialMap.union Q R) i = some c := by
+    intro i c hg
+    have hu : Iris.Std.PartialMap.get? (Iris.Std.PartialMap.union Q R) i =
+        (Iris.Std.PartialMap.get? Q i).orElse
+          (fun _ => Iris.Std.PartialMap.get? R i) :=
+      Iris.Std.LawfulPartialMap.get?_union
+    rw [hu, hg]
+    rfl
+  exact ⟨fun i c hg => h.cells i c (hlift i c hg),
+    fun i j c1 c2 hne h1 h2 =>
+      h.disj i j c1 c2 hne (hlift _ _ h1) (hlift _ _ h2)⟩
+
 /-- THE SEMANTIC TRIPLE ⦃P⦄ e ⦃post⦄, engine vocabulary only: for
     every configuration that splits as P ⊎ R — footprint P satisfied,
     rest R ARBITRARY — the engine's drive never kills or derails,

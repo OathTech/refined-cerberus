@@ -391,17 +391,18 @@ theorem cell_readout (pv : CerbMem.PointerValue) (ty : ctype)
       iprop(∀ (σ' : Mem) (ns : Nat) (κs : List Empty) (nt : Nat),
         stateInterp σ' ns κs nt ={⊤, ∅}=∗
           ⌜∃ i a, pv = cellPtr i a ∧ CellCoh σ' i ⟨a, ty, bs⟩⌝) := by
-  iintro Hpt %σ' %ns %κs %nt Hσ
-  icases (stateInterp_iff σ' ns κs nt).mp $$ Hσ
-    with ⟨%mm, %mb, %mk, %HG, Hmi, Hbi, Hki⟩
-  icases (pointsToCell_cellOwn_iff pv (.own 1) ty bs).mp $$ Hpt with
-    ⟨%i, %a, %Hpv, Hcell⟩
-  ihave %Hcc : ⌜CellCoh σ' i ⟨a, ty, bs⟩ ∧ Iris.Std.PartialMap.get? mm i =
-      some (metaOf (⟨a, ty, bs⟩ : SpikeCell))⌝ $$ [Hmi Hbi Hcell]
-  · iapply cellOwn_cellCoh HG i (.own 1) ⟨a, ty, bs⟩ $$ [$Hmi $Hbi $Hcell]
-  iapply fupd_mask_intro_discard Std.LawfulSet.empty_subset
-  ipureintro
-  exact ⟨i, a, Hpv, Hcc.1⟩
+  -- Phase-4 tidy: the state-interpretation open/close lives in the
+  -- core combinator (stateInterp_readout); this module supplies only
+  -- the coupling-conditional extraction (cellOwn_cellCoh).
+  exact stateInterp_readout (fun σ' mm mb mk HG => by
+    iintro ⟨Hpt, Hmi, Hbi⟩
+    icases (pointsToCell_cellOwn_iff pv (.own 1) ty bs).mp $$ Hpt with
+      ⟨%i, %a, %Hpv, Hcell⟩
+    ihave %Hcc : ⌜CellCoh σ' i ⟨a, ty, bs⟩ ∧ Iris.Std.PartialMap.get? mm i =
+        some (metaOf (⟨a, ty, bs⟩ : SpikeCell))⌝ $$ [Hmi Hbi Hcell]
+    · iapply cellOwn_cellCoh HG i (.own 1) ⟨a, ty, bs⟩ $$ [$Hmi $Hbi $Hcell]
+    ipureintro
+    exact ⟨i, a, Hpv, Hcc.1⟩)
 
 omit hQ in
 /-- The per-value readout of the loop postcondition. -/
