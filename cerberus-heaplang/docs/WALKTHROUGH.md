@@ -997,7 +997,7 @@ definitions in full; the file map:
 - `SeedChain`, `ChainAt`, `lrProg`/`lrBody` — `ListRevExhibit.lean`
 - the production statements' vocabulary is the engine's own
   (`runND`, `Driver.drive`, `initial_driver_state`) —
-  `ProdEntry.lean`, `ProdExhibit.lean`
+  `ProdEntry.lean`, `ProdExhibit.lean`, `ProdLoopExhibit.lean`
 
 ## 7. Reading the development
 
@@ -1032,10 +1032,13 @@ line each:
 10. `LoopExhibit.lean` → `FibExhibit.lean` → `ArrayExhibit.lean` →
     `ListRevExhibit.lean` — the loop exhibits, in increasing order
     of heap content, ending at list reverse.
-11. `DriverCollapse.lean` → `ProdEntry.lean` → `ProdExhibit.lean` —
-    the production pipeline: scheduler/nondeterminism collapse, cold
-    start from the shipped initial state, exhibit A at the
-    production entry.
+11. `DriverCollapse.lean` → `ProdLoop.lean` → `ProdEntry.lean` →
+    `ProdExhibit.lean` → `ProdLoopExhibit.lean` — the production
+    pipeline: scheduler/nondeterminism collapse (Phase 5: the
+    proc-carrying, populated-label rounds and the per-redex driver
+    step-match), the total-driven driver simulation, cold start from
+    the shipped initial state, exhibit A and the three loop programs
+    at the production entry.
 12. `Audit.lean` — the in-build axiom gate.
 
 (`StmtProbe/` is a self-contained toy-language design probe for the

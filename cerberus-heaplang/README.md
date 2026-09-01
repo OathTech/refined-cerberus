@@ -99,9 +99,12 @@ driver. The **production lane** states theorems against the shipped
 pipeline itself — `CerbND.runND (Driver.drive …)` from
 `initial_driver_state`, the composite the cerberus-lean executable
 runs — with no package-defined execution function in the statement
-at all. Straight-line programs are exported all the way to the
-production lane; loop programs currently stop at the drive lane
-plus a proved registration tie (see "Scope of the claims"). Every
+at all. Straight-line programs AND loop programs are exported all
+the way to the production lane (Phase 5 — the proc-carrying,
+populated-label scheduler collapse: `fib_certified_production`,
+`counter_loop_certified_production`,
+`list_reverse_certified_production`); the drive-lane loop theorems
+remain as the engine-level lemmas beneath them. Every
 drive-lane statement also quantifies over `aids : Nat → Nat`, the
 action-id supply: the oracle for the driver's fresh action-id
 draws, ∀-quantified so the theorems hold for every supply — on
@@ -298,19 +301,19 @@ honesty for all of them: the
 drive lane is the sequential driver's loop projected to
 (thread_state, MemState) with the run state a constant parameter
 (certified faithful for this fragment — the real driver
-additionally ticks `aid_supply`, which the fragment ignores); the
-PRODUCTION-pipeline export of a loop run (the `runND` equation) is
-NOT yet established — the production tie delivered so far is the
-REGISTRATION equation (`fib_labeledAt_production` /
-`loop_labeledAt_production`, ProdEntry.lean): the exhibits' label
-maps are exactly what the shipped
+additionally ticks `aid_supply`, which the fragment ignores). The
+PRODUCTION-pipeline export of loop runs IS established (Phase 5):
+the `*_production` theorems (ProdLoopExhibit.lean) conclude about
+the shipped `runND ∘ Driver.drive ∘ initial_driver_state` composite
+through the proc-carrying scheduler collapse — one production
+driver round per certified mirror step, driven by the total
+statement judgment — with the label plumbing DERIVED from the
+shipped registration (`fib_labeledAt_production` /
+`loop_labeledAt_production` / the per-program `*_labeledAt` ties:
+the exhibits' label maps are exactly what
 `collect_labeled_continuations_NEW ∘ initial_core_run_state`
-computes, so `LabeledAt` at the production initial run state is
-derived, not hypothesized, and `counter_loop_certified_registration`
-re-exports the counter loop with NOTHING hand-built in the label
-plumbing; the production lane proper (`*_production`,
-ProdLoopExhibit.lean) concludes about the shipped `runND ∘ drive`
-composite through the Phase-5 scheduler collapse.
+computes); `counter_loop_certified_registration` (the renamed F-05
+naming debt) remains the driveJ-lane registration lemma.
 
 The flagship straight-line demonstration is unconditional:
 `exhibitA_prod` (ProdExhibit.lean) quantifies over nothing but the
