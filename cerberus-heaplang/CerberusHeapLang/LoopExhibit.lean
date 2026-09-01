@@ -484,7 +484,7 @@ theorem loopBody_fragJ (hlib : CerbLocation.isLibraryLocation loc = false) :
     loop's data: untouched for `n = 0`, the stored image for
     `0 < n`. Partial correctness; the two fuel hypotheses are the
     engine's own budgets (the R3-interim in-budget form). -/
-theorem counter_loop_certified {GF : BundledGFunctors} [SpikeGpreS GF]
+theorem counter_loop_certified
     (sbty : core_base_type) (idx addr : Int) (bs0 : List CerbMem.AbsByte)
     (n : Int) (hn : 0 ≤ n)
     (hlib : CerbLocation.isLibraryLocation loc = false)
@@ -508,7 +508,7 @@ theorem counter_loop_certified {GF : BundledGFunctors} [SpikeGpreS GF]
         ∃ i a, cellPtr idx addr = cellPtr i a ∧
           CellCoh σ' i ⟨a, intTy, bs'⟩) := by
   intro prog rs
-  refine engine_adequacyJ (GF := GF)
+  refine engine_adequacyJ (GF := SpikeGF)
     (loopRS_labeledAt loc ann ra mo bty xbty (cellPtr idx addr))
     (fun l params cont hl => by
       obtain ⟨-, rfl⟩ := loopQ_inv loc ann ra mo bty xbty _ hl

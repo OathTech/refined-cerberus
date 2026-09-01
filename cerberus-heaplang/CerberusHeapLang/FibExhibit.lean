@@ -448,7 +448,7 @@ variable (ra : core_run_annotation)
     `fibSpec`). Partial correctness; the fuel hypotheses are the
     engine's own budgets (interim in-budget form — the
     termination-accounting export is the S4 driveJ-total theorem). -/
-theorem fib_certified {GF : BundledGFunctors} [SpikeGpreS GF]
+theorem fib_certified
     (sbty : core_base_type) (n : Int) (hn : 0 ≤ n) (σ₀ : Mem)
     (nsteps : Nat) (aids : Nat → Nat)
     (hfuel : 3 + nsteps ≤ lemDefaultFuel)
@@ -464,7 +464,7 @@ theorem fib_certified {GF : BundledGFunctors} [SpikeGpreS GF]
         (procThread fibProcSym prog [fmapEmpty]) σ₀ = .done v σ' →
       v = ivVal (fibSpec n.toNat)) := by
   intro prog rs
-  refine engine_adequacyJ (GF := GF)
+  refine engine_adequacyJ (GF := SpikeGF)
     (fibRS_labeledAt ra n ibty abty bbty)
     (fun l params cont hl => by
       obtain ⟨-, rfl⟩ := fibQ_inv ra n ibty abty bbty hl

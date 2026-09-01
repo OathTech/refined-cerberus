@@ -15,12 +15,16 @@ trust properties):
    filter lets top-level declarations dodge) must have its
    TRANSITIVE axiom cone inside the declared boundary. `sorryAx`,
    `ofReduceBool`, `ofReduceNat` are never in the boundary.
-   NB (2026-08-31 audit, F-07): this sweep is an UPPER-BOUND check
-   (containment in the allowed list), not an equality check — a
-   boundary-module theorem is allowed `runEffectful` whether or not
-   its own cone uses it. EXACT cones are established only by the
-   curated pins (check 2). Public wording everywhere:
-   "exhaustively bounded; headline cones exactly pinned".
+   F-07 STRENGTHENING (Phase 5, closing the 2026-08-31 audit's
+   upper-bound gap): boundary-module theorems additionally pass the
+   ORIGIN DISCIPLINE — whenever `runEffectful` is in a theorem's
+   cone, it must be reachable through the STATEMENT's constants
+   (the shipped initial state); a proof-borne boundary axiom fails
+   the build. Non-boundary theorems are trio-bounded; boundary
+   theorems are therefore exact-by-construction (trio +
+   runEffectful iff statement-borne). Public wording:
+   "exhaustively bounded with statement-borne boundary origin;
+   headline cones additionally pinned".
 2. CURATED PINS: exact axiom sets of load-bearing theorems via
    `#guard_msgs in #print axioms` — growth is a build failure until
    deliberately re-baselined in the same commit with the reason.
@@ -59,6 +63,14 @@ Boundary entry provenance (Extension D, 2026-08-30):
 the cerberus-lean/lem side — this boundary is expected to vanish at
 a future pin bump; cleanup is mechanical (boundary deletion + pin
 re-baseline to trio), no restatement.
+STATUS (orchestrator-checked 2026-09-01, Phase 5 close): the
+upstream retirement has NOT landed (lem-lean mainline LemLib.lean:54
+still carries the axiom) — the Phase-5 boundary endgame therefore
+takes the arc plan's documented FALLBACK: the allowance narrowed to
+the minimal statement-carrying module set (the three Prod*Exhibit/
+Entry modules; the whole collapse machinery is trio-only) and every
+boundary cone exact via the origin discipline (check 1). The
+retirement remains the registered mover.
 
 The sweep is LAST in the file by design: a constant declared after
 it would dodge it, so nothing is declared below it, and this module
@@ -548,7 +560,32 @@ info: 'CerberusHeapLang.diverge_total_unprovable' depends on axioms: [propext, C
 -/
 #guard_msgs in #print axioms CerberusHeapLang.diverge_total_unprovable
 
-/-! ## The exhaustive sweep (LAST — nothing declared below) -/
+/-! ## The exhaustive sweep (LAST — nothing declared below except the
+sweep's own reachability helper, declared just above it) -/
+
+open Lean in
+/-- Memoized reachability of an axiom constant through
+    definitions/statements (types AND bodies) — the sweep's
+    origin-discipline instrument (F-07 strengthening). Cycle-guarded
+    (recursors/mutual blocks): a name is pre-marked `false` while its
+    dependencies are explored. -/
+partial def carriesAx (env : Environment) (ax : Name) (n : Name) :
+    StateM (Std.HashMap Name Bool) Bool := do
+  if n == ax then
+    return true
+  match (← get).get? n with
+  | some b => return b
+  | none =>
+    modify (·.insert n false)
+    let some ci := env.find? n | return false
+    let consts := ci.type.getUsedConstants ++
+      (match ci.value? with | some v => v.getUsedConstants | none => #[])
+    let mut r := false
+    for c in consts do
+      if ← carriesAx env ax c then
+        r := true
+    modify (·.insert n r)
+    return r
 
 open Lean in
 #eval show CoreM Unit from do
@@ -560,12 +597,14 @@ open Lean in
     (fun acc n _ => acc.push n) #[]
   let mut swept := 0
   let mut boundarySwept := 0
+  let mut boundaryStmtBorne := 0
+  let mut memo : Std.HashMap Name Bool := {}
   for n in names do
     let (ours, boundary) := match env.getModuleIdxFor? n with
       | some idx => (isOurs[idx.toNat]!, isBoundary[idx.toNat]!)
       | none => (true, false)  -- the file being elaborated: trio-only
     unless ours do continue
-    unless env.find? n matches some (.thmInfo _) do continue
+    let some (.thmInfo ti) := env.find? n | continue
     if n.isInternalDetail then continue
     let allowed := if boundary then boundaryAxioms else allowedAxioms
     let axs ← collectAxioms n
@@ -577,13 +616,37 @@ open Lean in
           non-kernel method) or a boundary decision is being made \
           implicitly — boundary changes happen in Audit.lean, same \
           commit, with provenance."
+    -- F-07 STRENGTHENING (Phase 5): ORIGIN DISCIPLINE. In a boundary
+    -- module, `runEffectful` may enter a theorem's cone ONLY through
+    -- its STATEMENT (the constants of its type — the shipped initial
+    -- state); a proof-borne boundary axiom is never acceptable and
+    -- fails the build. Together with the upper bound this makes every
+    -- boundary theorem's cone exact-by-construction: the trio, plus
+    -- runEffectful exactly when the statement carries it.
+    if boundary && axs.contains ``runEffectful then
+      let mut stmtCarries := false
+      for c in ti.type.getUsedConstants do
+        unless stmtCarries do
+          let (b, memo') := (carriesAx env ``runEffectful c).run memo
+          memo := memo'
+          if b then
+            stmtCarries := true
+      unless stmtCarries do
+        throwError "CerberusHeapLang axiom sweep FAILED (origin \
+          discipline, F-07): boundary theorem {n} carries runEffectful \
+          in its cone but NOT through its statement's constants — a \
+          proof-borne boundary axiom is never allowed; the boundary \
+          allowance covers statement-borne entries only."
+      boundaryStmtBorne := boundaryStmtBorne + 1
     swept := swept + 1
     if boundary then boundarySwept := boundarySwept + 1
   logInfo s!"CerberusHeapLang axiom sweep: {swept} theorems BOUNDED by the \
     declared upper bounds ({boundarySwept} in the production-entry \
-    boundary modules, bounded by trio + runEffectful; all others \
-    bounded by the trio; exact cones pinned only for the curated \
-    headline list above)"
+    boundary modules, of which {boundaryStmtBorne} carry the boundary \
+    axiom — each STATEMENT-BORNE, origin-checked, so every boundary \
+    cone is exact-by-construction: trio + runEffectful iff the \
+    statement carries it; all other theorems bounded by the trio; \
+    headline cones additionally pinned above)"
   -- Pass 2 (header check 3): the banned-axiom check for EVERY
   -- constant kind of our modules — not just theorems. A `sorry` (or
   -- ofReduce*) in a bare def referenced by no theorem escaped pass 1

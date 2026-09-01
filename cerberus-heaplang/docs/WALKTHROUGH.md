@@ -327,13 +327,16 @@ they mean? Three tiers, from nothing-new to read-this-part.
 
 **Tier 1 — kernel-checked theorems about the engine's definitions.**
 Every theorem is checked by the Lean kernel, and every theorem's
-*transitive axiom cone* is BOUNDED in-build, with the headline
-theorems' cones EXACTLY PINNED (`Audit.lean`, the last import of
-the library; the exhaustive sweep is an upper-bound containment
-check, the curated pins are equality checks — "exhaustively
-bounded, headline cones exactly pinned" is the precise claim):
-every cone is within the classical trio
-(`propext`, `Classical.choice`, `Quot.sound`), except the two
+*transitive axiom cone* is BOUNDED in-build, the boundary axiom's
+origin MECHANICALLY CHECKED, and the headline theorems' cones
+EXACTLY PINNED (`Audit.lean`, the last import of the library; the
+exhaustive sweep is an upper-bound containment check plus — in the
+boundary modules — the Phase-5 origin discipline, under which
+`runEffectful` in a cone must be reachable through the STATEMENT's
+constants, making every boundary cone exact-by-construction; the
+curated pins are additional equality checks): every cone is within
+the classical trio
+(`propext`, `Classical.choice`, `Quot.sound`), except the three
 production-entry modules whose *statements* mention the shipped
 initial driver state and are therefore additionally allowed the
 semantics port's one
@@ -423,17 +426,27 @@ true and uninteresting. Three guards:
    fail-open coverage channel closes by a failed check, not by
    vigilance.
 
-One honest asymmetry to keep in view: the *straight-line* exhibits
-are exported all the way to the production pipeline (the `runND`
-equation above), while the *loop* exhibits are exported to the
-drive lane — `driveJ`, the driver's loop projected to
-(thread state, memory state) at a label-carrying run state — plus a
-proved registration tie (`fib_labeledAt_production`: the label maps
-the loop theorems assume are exactly what the shipped
-label-collection computes at the production initial state). The
-full production-pipeline equation for a loop run is a registered
-residual, not a claim. The README's divergence register keeps this
-and every other seam on one list, each with its discharge path.
+The former loop/straight-line asymmetry is CLOSED (Phase 5): loop
+programs now reach the production pipeline too. Three theorems
+conclude directly about `CerbND.runND (Driver.drive …)
+(initial_driver_state …)` from the cold start —
+`fib_certified_production` (state-inert back-edge loop),
+`counter_loop_certified_production` (heap-effecting loop against a
+cell the program creates with the engine's real allocator), and
+`list_reverse_certified_production` (the flagship's demo instance:
+a two-node chain engine-built cold, then reversed in place by the
+authored loop). The route is the proc-carrying, populated-label
+scheduler collapse: one production driver round per certified
+mirror step over the full fragment cone (`loop_step_frag`,
+DriverCollapse), driven by the TOTAL statement judgment
+(`wpt_driver_done`, ProdLoop — the driver-level analog of the
+measure→drive-fuel simulation), with the label maps computed by
+the shipped registration (the `*_labeledAt_production` ties). The
+drive-lane theorems (`driveJ`) remain as lemmas — the loop
+exhibits' engine-level workhorses — and the registration tie keeps
+its own name (`counter_loop_certified_registration`, the renamed
+F-05 debt). The README's divergence register keeps every remaining
+seam on one list, each with its discharge path.
 
 ## 5. Reading the theorems: statement surfaces
 

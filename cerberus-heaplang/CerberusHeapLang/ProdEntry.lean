@@ -447,8 +447,7 @@ theorem loop_labeledAt_production (loc : CerbLocation.Loc)
     certified jump-profile lane). The in-budget hypotheses are the
     sanctioned interim form. The real production equations live in
     ProdLoopExhibit.lean. -/
-theorem counter_loop_certified_registration {GF : Iris.BundledGFunctors}
-    [SpikeGpreS GF]
+theorem counter_loop_certified_registration
     (loc : CerbLocation.Loc) (ann ra : core_run_annotation)
     (mo : memory_order) (bty xbty sbty : core_base_type)
     (idx addr : Int) (bs0 : List CerbMem.AbsByte)
@@ -475,7 +474,7 @@ theorem counter_loop_certified_registration {GF : Iris.BundledGFunctors}
         ∃ i a, cellPtr idx addr = cellPtr i a ∧
           CellCoh σ' i ⟨a, intTy, bs'⟩) := by
   intro prog rs
-  refine engine_adequacyJ (GF := GF)
+  refine engine_adequacyJ (GF := SpikeGF)
     (loop_labeledAt_production loc ann ra mo bty xbty sbty
       (cellPtr idx addr) n)
     (fun l params cont hl => by

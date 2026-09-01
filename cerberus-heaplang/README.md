@@ -125,15 +125,18 @@ semantics (the Lean port of Cerberus Core, pinned by commit in
 `../scripts/semantics-pin.env` and differentially validated
 upstream against the OCaml oracle); everything in this package is
 derived and proved down into that engine. Every theorem is
-kernel-checked with its transitive axiom cone BOUNDED in-build, and
-the headline theorems' cones EXACTLY PINNED
+kernel-checked with its transitive axiom cone BOUNDED in-build, the
+boundary axiom's origin MECHANICALLY CHECKED, and the headline
+theorems' cones EXACTLY PINNED
 (`CerberusHeapLang/Audit.lean`, the last import of the library
-root — the exhaustive sweep is an upper-bound check, the curated
-pins are equality checks; "exhaustively bounded, headline cones
-exactly pinned" is the precise claim): every cone is within the
-classical trio (`propext`, `Classical.choice`, `Quot.sound`),
-except in the two production-entry modules (`ProdEntry`,
-`ProdExhibit`) whose
+root — the exhaustive sweep is an upper-bound check PLUS, in the
+boundary modules, the Phase-5 ORIGIN DISCIPLINE: `runEffectful` in
+a theorem's cone must be reachable through the statement's
+constants, so every boundary cone is exact-by-construction; the
+curated pins are additional equality checks): every cone is within
+the classical trio (`propext`, `Classical.choice`, `Quot.sound`),
+except in the three production-entry modules (`ProdEntry`,
+`ProdExhibit`, `ProdLoopExhibit`) whose
 statements mention the shipped initial driver state and are
 therefore additionally allowed the semantics repo's one residual
 axiom
@@ -186,7 +189,9 @@ axiom runEffectful {α : Type} : (Unit → BaseIO α) → α
 It is the semantics port's effect-erasure seam: generated code
 uses it to read ambient state that the original OCaml reads
 effectfully. It enters this package through the STATEMENTS of the
-two production-entry modules only — the shipped
+three production-entry modules only (mechanically enforced: the
+in-build origin discipline fails the build on any proof-borne
+occurrence) — the shipped
 `initial_driver_state` draws its symbol supply through
 `runEffectful (CerberusFresh.freshIntIO ())`, and the certified
 fragment provably never reads that field, so the theorems hold for

@@ -652,7 +652,7 @@ variable (loc : CerbLocation.Loc) (ann ra : core_run_annotation)
     ARRAY PRESERVED in the final memory (`CellCoh` at the original
     bytes). Partial correctness; fuel hypotheses are the engine's
     own budgets (interim in-budget form). -/
-theorem array_sum_certified {GF : BundledGFunctors} [SpikeGpreS GF]
+theorem array_sum_certified
     (sbty : core_base_type) (vs : List Int) (id a : Int)
     (aty : ctype) (bs : List CerbMem.AbsByte)
     (hsz : vs.length * 4 ≤ CerbMem.sizeofCtype aty)
@@ -681,7 +681,7 @@ theorem array_sum_certified {GF : BundledGFunctors} [SpikeGpreS GF]
         (procThread arrProcSym prog [fmapEmpty]) σ₀ = .done v σ' →
       v = ivVal vs.sum ∧ CellCoh σ' id ⟨a, aty, bs⟩) := by
   intro prog rs
-  refine engine_adequacyJ (GF := GF)
+  refine engine_adequacyJ (GF := SpikeGF)
     (arrRS_labeledAt loc ann ra mo ibty accbty pbty xbty vs.length)
     (fun l params cont hl => by
       obtain ⟨-, rfl⟩ := arrQ_inv loc ann ra mo ibty accbty pbty xbty
