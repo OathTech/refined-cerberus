@@ -631,3 +631,122 @@ Claims surfaces trued with the instrument (same commit): README
 manifest paragraph + trust-story coverage caveat, walkthrough §4
 tier-3 coverage caveat — each now states the row set is
 cone-derived and a constructor without a row is a failed gate.
+
+### Direction documentation trued (found by the exit sweep)
+
+The exit sweep found arc-plan item 3's tail under-documented: the
+one-sided/two-sided DIRECTION was recorded in the design record and
+the Soundness comments but not per-construct on the manifest (the
+audit-sanctioned home for it). The THEOREMS all exist; only cell
+notes were missing — closed in-slice (claims-surface work, S1c's
+charter): the store row's engine-match cell now carries
+`engine_complete_storeU` with the TWO-SIDED note (case already
+carried its pair), the run row carries the ONE-SIDED
+match-given-step note, and manifest Notes 7 states the direction
+semantics of the whole column (`engine_step_matchU` =
+match-given-step over the full cone at any MachineCtx — the
+direction the WP-driven adequacy consumes; `engine_complete` = the
+straight-line classification completeness over `StraightFrag`; rows
+without a completeness entry are one-sided, deliberately). Manifest
+regenerated, same commit.
+
+### The RelSem two-presentations paragraph (arc plan Phase-1 item 6)
+
+Landed where the naive reader's trust path passes the pinned
+semantics workspace: README "What you are asked to take on faith"
+item 2 gains the "two presentations, one engine" paragraph (the
+workspace's `relsemcore` — `RelSem` machine `Step`, `runND_sound`,
+`HarnessAdequate` — is the SEMANTICS REPO'S validation instrument
+for its own runner, NOT part of this package's chain; no bridging
+theorem exists or is claimed; this package's chain is exactly the
+trust story's; a bridge is recorded OUT of scope for this phase),
+and walkthrough §4 tier 1 gains the compact parenthetical pointing
+at it. Names verified against the workspace this checkout:
+`relsemcore/RelSem/Machine.lean:131` (`Step`),
+`RelSem/RunND.lean:190` (`runND_sound`),
+`RelSem/Cerberus.lean:268` (`HarnessAdequate`).
+
+### PHASE-1 EXIT CRITERIA — the checklist against this tree
+
+Arc plan Phase-1 items 1-7, each verified at source this slice
+(file:line as of this checkout):
+
+1. **Design decision recorded, operator-visible** — MET:
+   `docs/2026-08-31_phase1-design-record.md` (S1a; now carrying the
+   CLOSED status update).
+2. **One capability predicate, one decomposition, closure
+   theorems; manifest generates FROM it** — MET: `Frag`
+   (Soundness.lean:3578; FragP/Redex/Decomp deleted and
+   FragJ/RedexJ/DecompJ renamed in at S1b 1/4), closure under steps
+   `Frag.step` (Soundness.lean:3918, label-cone side hypothesis
+   `hQf`), decomposition `Frag.decomp` (Soundness.lean:3698).
+   REGISTERED DEVIATION (S1b 3/n, recorded in the CaseExhibit
+   header and the S1b notes): the arc plan's generic
+   substitution-closure lemma is FALSE on this cone
+   (value-shape-sensitive premises) — branch closure is carried as
+   explicit per-branch premises on `Frag.case_value` (`hbr`/`hbsz`),
+   discharged by computation at consumers. Manifest generated FROM
+   the cone: this slice (above).
+3. **Engine characterization against the unified relation;
+   directions documented** — MET: `engine_step_matchU`
+   (Soundness.lean:4396 — full cone, any MachineCtx); two-sided
+   where obtained: `engine_complete` (Soundness.lean:2058, the
+   straight-line classification over `StraightFrag`),
+   `engine_complete_storeU` (:4809), `engine_complete_caseU`
+   (:4905); per-construct direction notes on the manifest (above).
+4. **Iris Language over the unified relation; primStep IS the
+   authoritative relation** — MET: `instance : Language CoreRt Mem
+   Empty CoreRVal` (Lang.lean:43) defines `primStep` AS `Step` at
+   the tuple's own MachineCtx (successor context pinned);
+   `primStep_eq` (Lang.lean:69) is the definitional tie
+   (`Iff.rfl`).
+5. **Ecase (value) joins the cone properly** — MET: `Step.case_value`
+   (Step.lean), `Frag.case_value` (branch-closure + branch-size
+   premises over the extended `esize`), `wps_case_value`
+   (Wps.lean:964), engine pair `step_ctx_case_value` /
+   `step_ctx_case_illtyped` / `engine_complete_caseU`, and the
+   adequacy-level regression `case_certified` (CaseExhibit.lean:136
+   — BINDER pattern; the substitution TAU genuinely fires; program
+   executes the rule).
+6. **RelSem documented honestly, bridge out of scope** — MET this
+   slice (above).
+7. **Oracle + drift test** — MET: the S1b oracle (headline exports
+   byte-identical baseline→post; the S1b notes section is the
+   record); drift construct Ewseq wildcard through the generic
+   route: `Step.wseq_pure`/`wseq_annot`/`wseq_ctx`, `Frag.wseq`,
+   `wps_wseq` (Wps.lean:721), `step_ctx_wseq_pure`/`_annot`,
+   consumer `wseq_certified` (WseqExhibit.lean:105); the manifest
+   generator failed closed until the row landed (verbatim transcript
+   in the S1b notes).
+
+The exit line, verbatim criteria:
+
+- **"One theorem ties primStep to the engine relation on the
+  fragment"** — `engine_step_matchU`: wherever the mirror steps at
+  a `Frag` configuration (any MachineCtx, in-budget esize), the
+  engine's discharged behavior list is exactly the matching
+  singleton; `primStep` is `Step` definitionally (`primStep_eq`,
+  `Iff.rfl`), so the theorem IS about primStep on the fragment.
+- **"Cones cannot diverge without a failed check"** — one cone
+  (`Frag`, the only capability predicate in the tree since S1b) and
+  the cone-derived gate (this slice): a cone constructor without a
+  manifest row, a mirror constructor without a row, a stale or
+  double claim, a missing checked rule/match/consumer name,
+  committed-manifest drift, and a README scope token outside the
+  exportable set EACH fail gate 4 — plant transcripts above.
+- **"Ecase + the new construct through the generic route"** — items
+  5 and 7's theorem chains, both ending at adequacy-level consumers
+  (`case_certified`, `wseq_certified`) in engine vocabulary.
+
+### Verify-me re-runs + statement surface (this checkout)
+
+No `CerberusHeapLang/*.lean` library source changed in S1c
+(instruments + docs only), so the committed S1b signature snapshot
+(`docs/2026-09-01_s1b-signatures-post.txt`) remains the current
+truth and the build tallies are unchanged (827 theorems / 1670
+constants — the expected-tail blocks stand). The README verify-me
+axiom block was re-run verbatim at this tree: output IDENTICAL to
+the committed observed block (trio everywhere; trio + `runEffectful`
+on the two production-entry statements). Gate record: full
+`./scripts/test_unit.sh` ALL GATES GREEN at each S1c commit
+(re-verified below by the committing worker).

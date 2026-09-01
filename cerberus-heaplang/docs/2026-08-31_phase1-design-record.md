@@ -8,6 +8,20 @@ nothing in the exported corpus); slice notes:
 `docs/2026-08-31_foundations-notes.md`. Audit basis: F-03 and F-01
 (2026-08-31 foundational audit), arc plan Phase 1.
 
+STATUS UPDATE [AGENT 2026-09-01]: **PHASE 1 CLOSED at S1c.** The §8
+prescription is executed in full — S1b (commits `7dcb497`,
+`d4f4084`, `e3cb802`, `4d3e99e`, `7ea6cf2`: the swap, extern
+threading, the Ecase consumer, the Ewseq drift test, the oracle) and
+S1c (the cone-derived manifest / gate-4 upgrade, the RelSem
+two-presentations paragraph, the exit-criteria sweep). The
+per-criterion checklist verified against the tree, with theorem
+names and plant transcripts: `docs/2026-08-31_foundations-notes.md`,
+S1c sections. The probe modules were retired in S1b (their content
+is the migrated code). The PHASE MERGE remains the [USER]
+checkpoint (arc plan: pause for merge word per phase) — CLOSED here
+means the work and its record are complete on this branch, not that
+the merge has been sanctioned.
+
 ## 1. The decision
 
 The authoritative relation remains the hand-written syntax-facing

@@ -160,7 +160,9 @@ def rowSpec : Name → Option RowSpec
     { token := "store", construct := "Eaction Store0 (value operands)",
       mirror := .ctors [`CerberusHeapLang.Step.store],
       logic := .thms [`CerberusHeapLang.wp_store, `CerberusHeapLang.wps_store],
-      engineMatch := .thms [`CerberusHeapLang.step_ctx_store],
+      engineMatch := .thms [`CerberusHeapLang.step_ctx_store,
+        `CerberusHeapLang.engine_complete_storeU]
+        (note := "TWO-SIDED at any MachineCtx"),
       partialLane := .thms [`CerberusHeapLang.engine_complete,
         `CerberusHeapLang.engine_adequacyJ],
       totalLane := noTotal,
@@ -241,7 +243,8 @@ def rowSpec : Name → Option RowSpec
     { token := "run", construct := "Erun (context-discarding jump)",
       mirror := .ctors [`CerberusHeapLang.Step.run],
       logic := .thms [`CerberusHeapLang.wps_run],
-      engineMatch := .thms [`CerberusHeapLang.stepDischarge_run],
+      engineMatch := .thms [`CerberusHeapLang.stepDischarge_run]
+        (note := "ONE-SIDED — match-given-step, the direction adequacy consumes; jump refusal channels are failwithI panics = absence of a step; see Notes 7"),
       partialLane := .thms [`CerberusHeapLang.engine_adequacyJ],
       totalLane := noTotal,
       prodLane := prodRegOnly,
@@ -524,6 +527,23 @@ def Cell.render (env : Environment) : Cell → Except String String
   IO.println "   FAILED CLOSED on the extended Step/Frag constructor lists until"
   IO.println "   this row landed. Ewseq at spec/sym binder patterns stays a"
   IO.println "   registered divergence (README)."
+  IO.println "7. **Direction semantics of the engine-match column** (arc plan"
+  IO.println "   Phase-1 item 3; audit-sanctioned one-sidedness): the certified"
+  IO.println "   direction for EVERY row is MATCH-GIVEN-STEP — one theorem over"
+  IO.println "   the whole cone at any MachineCtx, `engine_step_matchU`"
+  IO.println "   (Soundness.lean): wherever the mirror steps at a cone"
+  IO.println "   configuration, the engine's discharged behavior list is exactly"
+  IO.println "   the matching singleton. That is the direction the WP-driven"
+  IO.println "   adequacy consumes (`NotStuck` supplies the mirror step at every"
+  IO.println "   reachable configuration); the refusal channels the other"
+  IO.println "   direction would classify are failwithI panics, mirrored"
+  IO.println "   fail-closed as absence of a step. ADDITIONALLY two-sided:"
+  IO.println "   the straight-line profile as a whole (`engine_complete` — the"
+  IO.println "   per-configuration classification over `StraightFrag`, its"
+  IO.println "   domain being the straight-line completeness instance) and the"
+  IO.println "   per-construct completeness pairs `engine_complete_storeU` /"
+  IO.println "   `engine_complete_caseU` (store, case — noted on their rows)."
+  IO.println "   Rows without a completeness entry are ONE-SIDED, deliberately."
   IO.println ""
   IO.println "## Machine-readable scope lines (consumed by test_unit.sh gate 4)"
   IO.println ""

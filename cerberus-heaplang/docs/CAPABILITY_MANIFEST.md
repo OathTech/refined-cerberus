@@ -31,14 +31,14 @@ owns no constructor and is mechanically barred from claiming any.
 | Construct | Level | Mirror (Step) | Logic (wp/wps) | Cone (Frag) | Engine match | Partial adequacy | Total lane | Production lane | Example consumer |
 |---|---|---|---|---|---|---|---|---|---|
 | value delivery (Epure at PEval; Eannot values) | CERTIFIED (drive lane) | DECLARED — terminal — the toVal/ofVal value protocol (values do not step) | OK `wp_ofVal`, `wps_ofVal` | OK `Frag.val_pure` | OK `step_ctx_done`, `step_ctx_remove_annot` | OK `engine_complete`, `engine_adequacyJ` | RED — no logical total lane (Phase 3); see Notes 2 | OK `exhibitA_prod` | OK `exhibitA_engine` |
-| Eaction Store0 (value operands) | CERTIFIED (drive lane) | OK `Step.store` | OK `wp_store`, `wps_store` | OK `Frag.store` | OK `step_ctx_store` | OK `engine_complete`, `engine_adequacyJ` | RED — no logical total lane (Phase 3); see Notes 2 | OK `exhibitA_prod` | OK `exhibitB_engine`, `counter_loop_certified`, `list_reverse_certified` |
+| Eaction Store0 (value operands) | CERTIFIED (drive lane) | OK `Step.store` | OK `wp_store`, `wps_store` | OK `Frag.store` | OK `step_ctx_store`, `engine_complete_storeU` — TWO-SIDED at any MachineCtx | OK `engine_complete`, `engine_adequacyJ` | RED — no logical total lane (Phase 3); see Notes 2 | OK `exhibitA_prod` | OK `exhibitB_engine`, `counter_loop_certified`, `list_reverse_certified` |
 | Eaction Load0 (value operand) | CERTIFIED (drive lane) | OK `Step.load` | OK `wp_load`, `wps_load` | OK `Frag.load` | OK `step_ctx_load` | OK `engine_complete`, `engine_adequacyJ` | RED — no logical total lane (Phase 3); see Notes 2 | OK `exhibitA_prod` | OK `exhibitA_engine`, `array_sum_certified` |
 | Eaction Create0 | ADEQUACY-EXPORTABLE (no logic rule) | OK `Step.create` | RED — no wp_create/wps_create small axiom (registered D26: needs the allocator-cursor resource; Phase 2); see Notes 4 | OK `Frag.create` | OK `step_ctx_create` | OK `engine_complete`, `engine_adequacyJ` | RED — no logical total lane (Phase 3); see Notes 2 | OK `exhibitA_prod` | OK `exhibitA_prod` — production exhibit only — no drive-lane-only consumer |
 | Esseq, wildcard pattern | CERTIFIED (drive lane) | OK `Step.sseq_pure`, `Step.sseq_annot`, `Step.sseq_ctx` | OK `wp_sseq`, `wps_seq` | OK `Frag.sseq` | OK `step_ctx_beta_pure`, `step_ctx_beta_annot` | OK `engine_complete`, `engine_adequacyJ` | RED — no logical total lane (Phase 3); see Notes 2 | OK `exhibitA_prod` | OK `exhibitA_engine`, `exhibitC_engine` |
 | Eannot residue (descent + merge) | CERTIFIED (drive lane) | OK `Step.annot_ctx`, `Step.annot_merge` | OK `wp_annot`, `wps_annot` | OK `Frag.annot` | OK `step_ctx_merge` | OK `engine_complete`, `engine_adequacyJ` | RED — no logical total lane (Phase 3); see Notes 2 | OK `exhibitA_prod` | OK `exhibitA_engine` |
 | Esave (block entry, value-shaped params) | CERTIFIED (drive lane) | OK `Step.save` | OK `wps_save` | OK `Frag.save` | OK `step_ctx_save` | OK `engine_adequacyJ` | RED — no logical total lane (Phase 3); see Notes 2 | RED — registration tie only; see Notes 3 | OK `counter_loop_certified`, `fib_certified` |
 | Eif (big-step boolean guard) | CERTIFIED (drive lane) | OK `Step.if_true`, `Step.if_false` | OK `wps_if_true`, `wps_if_false` | OK `Frag.if_` | OK `stepDischarge_if_true`, `stepDischarge_if_false` | OK `engine_adequacyJ` | RED — no logical total lane (Phase 3); see Notes 2 | RED — registration tie only; see Notes 3 | OK `counter_loop_certified`, `fib_certified` |
-| Erun (context-discarding jump) | CERTIFIED (drive lane) | OK `Step.run` | OK `wps_run` | OK `Frag.run` | OK `stepDischarge_run` | OK `engine_adequacyJ` | RED — no logical total lane (Phase 3); see Notes 2 | RED — registration tie only; see Notes 3 | OK `counter_loop_certified`, `fib_certified` |
+| Erun (context-discarding jump) | CERTIFIED (drive lane) | OK `Step.run` | OK `wps_run` | OK `Frag.run` | OK `stepDischarge_run` — ONE-SIDED — match-given-step, the direction adequacy consumes; jump refusal channels are failwithI panics = absence of a step; see Notes 7 | OK `engine_adequacyJ` | RED — no logical total lane (Phase 3); see Notes 2 | RED — registration tie only; see Notes 3 | OK `counter_loop_certified`, `fib_certified` |
 | Esseq, Specified-binder pattern | CERTIFIED (drive lane) | OK `Step.sseq_spec_pure`, `Step.sseq_spec_annot` | OK `wps_seq_spec` | OK `Frag.sseq_spec` | OK `step_ctx_beta_spec_pure`, `step_ctx_beta_spec_annot` | OK `engine_adequacyJ` | RED — no logical total lane (Phase 3); see Notes 2 | RED — registration tie only; see Notes 3 | OK `array_sum_certified`, `list_reverse_certified` |
 | Epure exit at PEsym shape | CERTIFIED (drive lane) | OK `Step.pure_eval` — certified at PEsym shape — Soundness stepDischarge_pure_sym | OK `wps_pure` | OK `Frag.pure_sym` | OK `stepDischarge_pure_sym` | OK `engine_adequacyJ` | RED — no logical total lane (Phase 3); see Notes 2 | RED — registration tie only; see Notes 3 | OK `fib_certified` |
 | Load0 operand-evaluation step (ACTION_EVAL) | CERTIFIED (drive lane) | OK `Step.load_eval` | OK `wps_load_eval` | OK `Frag.load_op` | OK `stepDischarge_load_eval` | OK `engine_adequacyJ` | RED — no logical total lane (Phase 3); see Notes 2 | RED — registration tie only; see Notes 3 | OK `array_sum_certified` |
@@ -98,6 +98,23 @@ owns no constructor and is mechanically barred from claiming any.
    FAILED CLOSED on the extended Step/Frag constructor lists until
    this row landed. Ewseq at spec/sym binder patterns stays a
    registered divergence (README).
+7. **Direction semantics of the engine-match column** (arc plan
+   Phase-1 item 3; audit-sanctioned one-sidedness): the certified
+   direction for EVERY row is MATCH-GIVEN-STEP — one theorem over
+   the whole cone at any MachineCtx, `engine_step_matchU`
+   (Soundness.lean): wherever the mirror steps at a cone
+   configuration, the engine's discharged behavior list is exactly
+   the matching singleton. That is the direction the WP-driven
+   adequacy consumes (`NotStuck` supplies the mirror step at every
+   reachable configuration); the refusal channels the other
+   direction would classify are failwithI panics, mirrored
+   fail-closed as absence of a step. ADDITIONALLY two-sided:
+   the straight-line profile as a whole (`engine_complete` — the
+   per-configuration classification over `StraightFrag`, its
+   domain being the straight-line completeness instance) and the
+   per-construct completeness pairs `engine_complete_storeU` /
+   `engine_complete_caseU` (store, case — noted on their rows).
+   Rows without a completeness entry are ONE-SIDED, deliberately.
 
 ## Machine-readable scope lines (consumed by test_unit.sh gate 4)
 

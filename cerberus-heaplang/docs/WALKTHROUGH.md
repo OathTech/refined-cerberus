@@ -316,6 +316,14 @@ axiom's statement, printed verbatim, and what that differential
 validation actually covers, with the in-package path to its
 record — are laid out in the README's ["What you are asked to take
 on faith"](../README.md#what-you-are-asked-to-take-on-faith).
+(One disambiguation on that path: the pinned semantics workspace
+also carries the semantics repo's own derived relational spine —
+`relsemcore`: `Step`/`runND_sound`/`HarnessAdequate` — which is
+that repo's validation instrument for its runner, NOT part of this
+package's chain; no bridging theorem between the two presentations
+exists or is claimed, and this package's chain is exactly the tiers
+described here. The README section above carries the full
+paragraph.)
 
 **Tier 2 — explicit hypotheses, visible in the statements.** Fuel
 bounds, seeded-footprint hypotheses (`SeedChain`, `Coh`),

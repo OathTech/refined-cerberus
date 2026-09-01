@@ -210,6 +210,23 @@ what it does and does not establish. It is the engine's own trust
 story, imported: this package's theorems discharge INTO that
 engine and neither add to nor draw on its evidence.
 
+**A disambiguation on that path — two presentations, one engine.**
+The pinned semantics workspace also carries the semantics repo's
+OWN small derived relational spine (`relsemcore`: a `RelSem`
+machine `Step` relation, the `runND_sound` runner-soundness
+theorem, and the `HarnessAdequate` harness statement). That spine
+is the SEMANTICS REPO'S validation instrument for its own
+driver/harness — it is NOT part of this package's chain: this
+package neither imports nor builds on it, and NO bridging theorem
+between the two presentations exists or is claimed. This package's
+chain into the engine is exactly the one described in the trust
+story above — the interior mirror `Step`, certified per-rule
+against the engine's own `step_ctx`/discharge functions
+(`Soundness.lean`), landing through the adequacy theorems in the
+drive and production lanes. A bridge between the two presentations
+is recorded as OUT of scope for this phase (foundations arc plan,
+Phase 1 item 6).
+
 ## Scope of the claims
 
 THE LOOP CLAIMS. `counter_loop_certified` (LoopExhibit.lean),
