@@ -1,0 +1,623 @@
+== CerberusHeapLang.semantic_triple_sound ==
+  ENGINE (1):
+    value
+  SPEC IDIOM (CerberusHeapLang) (6):
+    CerberusHeapLang.CellMap
+    CerberusHeapLang.CoreExpr
+    CerberusHeapLang.Frag
+    CerberusHeapLang.ProvenTriple
+    CerberusHeapLang.SemTriple
+    CerberusHeapLang.SpikeGpreS
+  IRIS (1):
+    Iris.BundledGFunctors
+  LEAN CORE/STD (0):
+== CerberusHeapLang.engine_complete ==
+  ENGINE (4):
+    Fmap
+    lemDefaultFuel
+    sym
+    value
+  SPEC IDIOM (CerberusHeapLang) (7):
+    CerberusHeapLang.CoreExpr
+    CerberusHeapLang.EngineMatch
+    CerberusHeapLang.EngineOutcome
+    CerberusHeapLang.Mem
+    CerberusHeapLang.StraightFrag
+    CerberusHeapLang.engineOutcomes
+    CerberusHeapLang.esize
+  IRIS (0):
+  LEAN CORE/STD (9):
+    And
+    Eq
+    Exists
+    LE.le
+    List
+    List.cons
+    List.nil
+    Nat
+    instLENat
+== CerberusHeapLang.counter_loop_certified ==
+  ENGINE (16):
+    CerbLocation.Loc
+    CerbLocation.isLibraryLocation
+    CerbMem.AbsByte
+    CerbMem.PointerValue
+    Fmap
+    core_base_type
+    core_run_annotation
+    core_run_state
+    fmapEmpty
+    kill_reason
+    lemDefaultFuel
+    mem_error
+    memory_order
+    sym
+    value
+    value.Vunit
+  SPEC IDIOM (CerberusHeapLang) (19):
+    CerberusHeapLang.CellCoh
+    CerberusHeapLang.Coh
+    CerberusHeapLang.CoreExpr
+    CerberusHeapLang.DriveResult
+    CerberusHeapLang.DriveResult.done
+    CerberusHeapLang.DriveResult.killed
+    CerberusHeapLang.DriveResult.stuck
+    CerberusHeapLang.Mem
+    CerberusHeapLang.SpikeCell
+    CerberusHeapLang.SpikeCell.mk
+    CerberusHeapLang.SpikeHeapF
+    CerberusHeapLang.cellPtr
+    CerberusHeapLang.driveJ
+    CerberusHeapLang.intTy
+    CerberusHeapLang.loopProcSym
+    CerberusHeapLang.loopProg
+    CerberusHeapLang.loopRS
+    CerberusHeapLang.procThread
+    CerberusHeapLang.sevenBytes
+  IRIS (2):
+    Iris.Std.PartialMap.singleton
+    Std.ExtTreeMap.instPartialMapCompare
+  LEAN CORE/STD (25):
+    And
+    Bool
+    Bool.false
+    Eq
+    Exists
+    HAdd.hAdd
+    Int
+    Int.instLEInt
+    Int.instLTInt
+    Int.instTransOrd
+    LE.le
+    LT.lt
+    List
+    List.cons
+    List.nil
+    Nat
+    Ne
+    OfNat.ofNat
+    Or
+    instAddNat
+    instHAdd
+    instLENat
+    instOfNat
+    instOfNatNat
+    instOrdInt
+== CerberusHeapLang.fib_certified ==
+  ENGINE (10):
+    Fmap
+    core_base_type
+    core_run_annotation
+    core_run_state
+    fmapEmpty
+    kill_reason
+    lemDefaultFuel
+    mem_error
+    sym
+    value
+  SPEC IDIOM (CerberusHeapLang) (13):
+    CerberusHeapLang.CoreExpr
+    CerberusHeapLang.DriveResult
+    CerberusHeapLang.DriveResult.done
+    CerberusHeapLang.DriveResult.killed
+    CerberusHeapLang.DriveResult.stuck
+    CerberusHeapLang.Mem
+    CerberusHeapLang.driveJ
+    CerberusHeapLang.fibProcSym
+    CerberusHeapLang.fibProg
+    CerberusHeapLang.fibRS
+    CerberusHeapLang.fibSpec
+    CerberusHeapLang.ivVal
+    CerberusHeapLang.procThread
+  IRIS (0):
+  LEAN CORE/STD (17):
+    And
+    Eq
+    HAdd.hAdd
+    Int
+    Int.instLEInt
+    Int.toNat
+    LE.le
+    List.cons
+    List.nil
+    Nat
+    Ne
+    OfNat.ofNat
+    instAddNat
+    instHAdd
+    instLENat
+    instOfNat
+    instOfNatNat
+== CerberusHeapLang.fib_certified_total ==
+  ENGINE (6):
+    Fmap
+    core_base_type
+    core_run_annotation
+    fmapEmpty
+    sym
+    value
+  SPEC IDIOM (CerberusHeapLang) (10):
+    CerberusHeapLang.DriveResult
+    CerberusHeapLang.DriveResult.done
+    CerberusHeapLang.Mem
+    CerberusHeapLang.driveJ
+    CerberusHeapLang.fibProcSym
+    CerberusHeapLang.fibProg
+    CerberusHeapLang.fibRS
+    CerberusHeapLang.fibSpec
+    CerberusHeapLang.ivVal
+    CerberusHeapLang.procThread
+  IRIS (0):
+  LEAN CORE/STD (17):
+    Eq
+    HAdd.hAdd
+    HMul.hMul
+    Int
+    Int.instLEInt
+    Int.toNat
+    LE.le
+    List.cons
+    List.nil
+    Nat
+    OfNat.ofNat
+    instAddNat
+    instHAdd
+    instHMul
+    instMulNat
+    instOfNat
+    instOfNatNat
+== CerberusHeapLang.array_sum_certified ==
+  ENGINE (23):
+    CerbLocation.Loc
+    CerbLocation.isLibraryLocation
+    CerbMem.AbsByte
+    CerbMem.Funptrmap
+    CerbMem.MemValue
+    CerbMem.MemValue.MVinteger
+    CerbMem.integerIval
+    CerbMem.reconstructValue
+    CerbMem.sizeofCtype
+    Fmap
+    core_base_type
+    core_run_annotation
+    core_run_state
+    ctype
+    fmapEmpty
+    identifier
+    integerType
+    kill_reason
+    lemDefaultFuel
+    mem_error
+    memory_order
+    sym
+    value
+  SPEC IDIOM (CerberusHeapLang) (19):
+    CerberusHeapLang.CellCoh
+    CerberusHeapLang.Coh
+    CerberusHeapLang.CoreExpr
+    CerberusHeapLang.DriveResult
+    CerberusHeapLang.DriveResult.done
+    CerberusHeapLang.DriveResult.killed
+    CerberusHeapLang.DriveResult.stuck
+    CerberusHeapLang.Mem
+    CerberusHeapLang.SpikeCell
+    CerberusHeapLang.SpikeCell.mk
+    CerberusHeapLang.SpikeHeapF
+    CerberusHeapLang.arrProcSym
+    CerberusHeapLang.arrProg
+    CerberusHeapLang.arrRS
+    CerberusHeapLang.cellPtr
+    CerberusHeapLang.driveJ
+    CerberusHeapLang.intTy
+    CerberusHeapLang.ivVal
+    CerberusHeapLang.procThread
+  IRIS (2):
+    Iris.Std.PartialMap.singleton
+    Std.ExtTreeMap.instPartialMapCompare
+  LEAN CORE/STD (36):
+    And
+    Bool
+    Bool.false
+    Eq
+    GetElem.getElem
+    HAdd.hAdd
+    HMul.hMul
+    Int
+    Int.instAdd
+    Int.instTransOrd
+    LE.le
+    LT.lt
+    List
+    List.cons
+    List.drop
+    List.instGetElemNatLtLength
+    List.length
+    List.nil
+    List.sum
+    List.take
+    Nat
+    Nat.cast
+    Ne
+    OfNat.ofNat
+    Prod
+    Zero.ofOfNat0
+    instAddNat
+    instHAdd
+    instHMul
+    instLENat
+    instLTNat
+    instMulNat
+    instNatCastInt
+    instOfNat
+    instOfNatNat
+    instOrdInt
+== CerberusHeapLang.list_reverse_certified ==
+  ENGINE (14):
+    CerbLocation.Loc
+    CerbLocation.isLibraryLocation
+    CerbMem.PointerValue
+    Fmap
+    core_base_type
+    core_run_annotation
+    core_run_state
+    fmapEmpty
+    kill_reason
+    lemDefaultFuel
+    mem_error
+    memory_order
+    sym
+    value
+  SPEC IDIOM (CerberusHeapLang) (17):
+    CerberusHeapLang.CellMap
+    CerberusHeapLang.CoreExpr
+    CerberusHeapLang.DriveResult
+    CerberusHeapLang.DriveResult.done
+    CerberusHeapLang.DriveResult.killed
+    CerberusHeapLang.DriveResult.stuck
+    CerberusHeapLang.Mem
+    CerberusHeapLang.Sat
+    CerberusHeapLang.SeedChain
+    CerberusHeapLang.SpikeCell
+    CerberusHeapLang.SpikeHeapF
+    CerberusHeapLang.driveJ
+    CerberusHeapLang.lrProcSym
+    CerberusHeapLang.lrProg
+    CerberusHeapLang.lrRS
+    CerberusHeapLang.procThread
+    CerberusHeapLang.ptrVal
+  IRIS (4):
+    Iris.Std.PartialMap.disjoint
+    Iris.Std.PartialMap.get?
+    Iris.Std.PartialMap.union
+    Std.ExtTreeMap.instPartialMapCompare
+  LEAN CORE/STD (25):
+    And
+    Bool
+    Bool.false
+    Bool.true
+    Eq
+    Exists
+    HAdd.hAdd
+    Iff
+    Int
+    Int.instTransOrd
+    LE.le
+    List
+    List.cons
+    List.nil
+    List.reverse
+    Nat
+    Ne
+    OfNat.ofNat
+    Option.isSome
+    Prod
+    instAddNat
+    instHAdd
+    instLENat
+    instOfNatNat
+    instOrdInt
+== CerberusHeapLang.list_reverse_demo ==
+  ENGINE (14):
+    CerbLocation.Loc
+    CerbLocation.isLibraryLocation
+    CerbMem.PointerValue
+    Fmap
+    core_base_type
+    core_run_annotation
+    core_run_state
+    fmapEmpty
+    kill_reason
+    lemDefaultFuel
+    mem_error
+    memory_order
+    sym
+    value
+  SPEC IDIOM (CerberusHeapLang) (20):
+    CerberusHeapLang.CellMap
+    CerberusHeapLang.ChainAt
+    CerberusHeapLang.CoreExpr
+    CerberusHeapLang.DriveResult
+    CerberusHeapLang.DriveResult.done
+    CerberusHeapLang.DriveResult.killed
+    CerberusHeapLang.DriveResult.stuck
+    CerberusHeapLang.Mem
+    CerberusHeapLang.Sat
+    CerberusHeapLang.SeedChain
+    CerberusHeapLang.SpikeCell
+    CerberusHeapLang.SpikeHeapF
+    CerberusHeapLang.demoHead
+    CerberusHeapLang.demoM
+    CerberusHeapLang.driveJ
+    CerberusHeapLang.lrProcSym
+    CerberusHeapLang.lrProg
+    CerberusHeapLang.lrRS
+    CerberusHeapLang.procThread
+    CerberusHeapLang.ptrVal
+  IRIS (4):
+    Iris.Std.PartialMap.disjoint
+    Iris.Std.PartialMap.get?
+    Iris.Std.PartialMap.union
+    Std.ExtTreeMap.instPartialMapCompare
+  LEAN CORE/STD (25):
+    And
+    Bool
+    Bool.false
+    Bool.true
+    Eq
+    Exists
+    HAdd.hAdd
+    Iff
+    Int
+    Int.instTransOrd
+    LE.le
+    List.cons
+    List.nil
+    Nat
+    Ne
+    OfNat.ofNat
+    Option.isSome
+    Prod
+    Prod.mk
+    instAddNat
+    instHAdd
+    instLENat
+    instOfNat
+    instOfNatNat
+    instOrdInt
+== CerberusHeapLang.tree_rotate_certified ==
+  ENGINE (10):
+    CerbLocation.Loc
+    CerbLocation.isLibraryLocation
+    CerbMem.PointerValue
+    core_base_type
+    core_run_annotation
+    kill_reason
+    lemDefaultFuel
+    mem_error
+    memory_order
+    value
+  SPEC IDIOM (CerberusHeapLang) (17):
+    CerberusHeapLang.CellMap
+    CerberusHeapLang.CoreExpr
+    CerberusHeapLang.DriveResult
+    CerberusHeapLang.DriveResult.done
+    CerberusHeapLang.DriveResult.killed
+    CerberusHeapLang.DriveResult.stuck
+    CerberusHeapLang.Mem
+    CerberusHeapLang.NodeTree
+    CerberusHeapLang.NodeTree.node
+    CerberusHeapLang.Sat
+    CerberusHeapLang.SeedTree
+    CerberusHeapLang.SpikeCell
+    CerberusHeapLang.SpikeHeapF
+    CerberusHeapLang.drive
+    CerberusHeapLang.ptrVal
+    CerberusHeapLang.spikeThread
+    CerberusHeapLang.trProg
+  IRIS (4):
+    Iris.Std.PartialMap.disjoint
+    Iris.Std.PartialMap.get?
+    Iris.Std.PartialMap.union
+    Std.ExtTreeMap.instPartialMapCompare
+  LEAN CORE/STD (20):
+    And
+    Bool
+    Bool.false
+    Bool.true
+    Eq
+    Exists
+    HAdd.hAdd
+    Iff
+    Int
+    Int.instTransOrd
+    LE.le
+    Nat
+    Ne
+    OfNat.ofNat
+    Option.isSome
+    instAddNat
+    instHAdd
+    instLENat
+    instOfNatNat
+    instOrdInt
+== CerberusHeapLang.tree_rotate_certified_total ==
+  ENGINE (6):
+    CerbLocation.Loc
+    CerbLocation.isLibraryLocation
+    CerbMem.PointerValue
+    core_base_type
+    core_run_annotation
+    memory_order
+  SPEC IDIOM (CerberusHeapLang) (14):
+    CerberusHeapLang.CellMap
+    CerberusHeapLang.DriveResult
+    CerberusHeapLang.DriveResult.done
+    CerberusHeapLang.Mem
+    CerberusHeapLang.NodeTree
+    CerberusHeapLang.NodeTree.node
+    CerberusHeapLang.Sat
+    CerberusHeapLang.SeedTree
+    CerberusHeapLang.SpikeCell
+    CerberusHeapLang.SpikeHeapF
+    CerberusHeapLang.drive
+    CerberusHeapLang.ptrVal
+    CerberusHeapLang.spikeThread
+    CerberusHeapLang.trProg
+  IRIS (4):
+    Iris.Std.PartialMap.disjoint
+    Iris.Std.PartialMap.get?
+    Iris.Std.PartialMap.union
+    Std.ExtTreeMap.instPartialMapCompare
+  LEAN CORE/STD (14):
+    And
+    Bool
+    Bool.false
+    Bool.true
+    Eq
+    Exists
+    Iff
+    Int
+    Int.instTransOrd
+    Nat
+    OfNat.ofNat
+    Option.isSome
+    instOfNatNat
+    instOrdInt
+== CerberusHeapLang.exhibitA_prod ==
+  ENGINE (23):
+    CerbFS.FsState
+    CerbLocation.Loc
+    CerbMem.AbsByte
+    CerbMem.Funptrmap
+    CerbMem.IntegerValue
+    CerbMem.memValueToBytes
+    CerbMem.readBytesFrom
+    CerbND.runND
+    drive
+    driver_error
+    driver_result
+    driver_result.dres_core_value
+    driver_state
+    driver_state.layout_state
+    fmapEmpty
+    initial_driver_state
+    mem_constraint
+    nd_status
+    nd_status.Active
+    step_kind
+    sym
+    tag_definition
+    value
+  SPEC IDIOM (CerberusHeapLang) (5):
+    CerberusHeapLang.prodFile
+    CerberusHeapLang.progAProd
+    CerberusHeapLang.pxAddr
+    CerberusHeapLang.sevenMval
+    CerberusHeapLang.sevenVal
+  IRIS (0):
+  LEAN CORE/STD (15):
+    And
+    Bool.false
+    Eq
+    Exists
+    Int
+    List
+    List.cons
+    List.nil
+    Nat
+    OfNat.ofNat
+    Prod
+    Prod.mk
+    Prod.snd
+    String
+    instOfNatNat
+== CerberusHeapLang.counter_loop_certified_registration ==
+  ENGINE (18):
+    CerbLocation.Loc
+    CerbLocation.isLibraryLocation
+    CerbMem.AbsByte
+    CerbMem.PointerValue
+    Fmap
+    collect_labeled_continuations_NEW
+    core_base_type
+    core_run_annotation
+    core_run_state
+    fmapEmpty
+    initial_core_run_state
+    kill_reason
+    lemDefaultFuel
+    mem_error
+    memory_order
+    sym
+    value
+    value.Vunit
+  SPEC IDIOM (CerberusHeapLang) (19):
+    CerberusHeapLang.CellCoh
+    CerberusHeapLang.Coh
+    CerberusHeapLang.CoreExpr
+    CerberusHeapLang.DriveResult
+    CerberusHeapLang.DriveResult.done
+    CerberusHeapLang.DriveResult.killed
+    CerberusHeapLang.DriveResult.stuck
+    CerberusHeapLang.Mem
+    CerberusHeapLang.SpikeCell
+    CerberusHeapLang.SpikeCell.mk
+    CerberusHeapLang.SpikeHeapF
+    CerberusHeapLang.cellPtr
+    CerberusHeapLang.driveJ
+    CerberusHeapLang.intTy
+    CerberusHeapLang.loopProg
+    CerberusHeapLang.mainSym
+    CerberusHeapLang.procThread
+    CerberusHeapLang.prodFile
+    CerberusHeapLang.sevenBytes
+  IRIS (2):
+    Iris.Std.PartialMap.singleton
+    Std.ExtTreeMap.instPartialMapCompare
+  LEAN CORE/STD (25):
+    And
+    Bool
+    Bool.false
+    Eq
+    Exists
+    HAdd.hAdd
+    Int
+    Int.instLEInt
+    Int.instLTInt
+    Int.instTransOrd
+    LE.le
+    LT.lt
+    List
+    List.cons
+    List.nil
+    Nat
+    Ne
+    OfNat.ofNat
+    Or
+    instAddNat
+    instHAdd
+    instLENat
+    instOfNat
+    instOfNatNat
+    instOrdInt
+census: done (statement surfaces only; proofs not inspected)

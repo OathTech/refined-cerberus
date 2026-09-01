@@ -118,6 +118,44 @@ else
   fi
 fi
 
+echo "== gate 5: statement-surface census freeze (pinned-export statement surfaces) =="
+# Acceptance-suite slice (2026-09-01; the census's formerly
+# registered future gate — Audit.lean header "Adjacent instruments",
+# audit acceptance test 8's statement-surface arm): re-run the
+# statement census and fail on any drift against the committed
+# expected output. Load-bearing TRUST property: a statement-surface
+# change to a pinned public export (its readout/spec vocabulary)
+# cannot land silently — it forces a deliberate same-commit
+# re-baseline of docs/STATEMENT_CENSUS.txt. Fail-closed: a missing
+# committed file, a red generator run (e.g. a pinned theorem
+# missing/renamed), and drift are each failures, never skips.
+census=cerberus-heaplang/docs/STATEMENT_CENSUS.txt
+if [[ ! -f "$census" ]]; then
+  echo "FAIL: committed statement census missing ($census)" >&2
+  fail=1
+else
+  tmpcen="$(mktemp "${TMPDIR:-/tmp}/statement_census.XXXXXX")" || {
+    echo "FAIL: mktemp failed for census regeneration" >&2; exit 1; }
+  if (cd cerberus-heaplang && \
+      ../scripts/capped "$HOME/.elan/bin/lake" env lean \
+        scripts/statement_census.lean > "$tmpcen"); then
+    if diff -u "$census" "$tmpcen"; then
+      echo "ok: statement census regenerated, no drift"
+    else
+      echo "FAIL: statement census drift (diff above) — a pinned" \
+        "export's statement surface changed; re-baseline" \
+        "docs/STATEMENT_CENSUS.txt deliberately, same commit" >&2
+      fail=1
+    fi
+  else
+    echo "FAIL: statement census generator red (a pinned theorem" \
+      "missing or not a theorem); generator output:" >&2
+    cat "$tmpcen" >&2
+    fail=1
+  fi
+  rm -f "$tmpcen"
+fi
+
 if [[ $fail -ne 0 ]]; then
   echo "GATE FAILURE" >&2
   exit 1

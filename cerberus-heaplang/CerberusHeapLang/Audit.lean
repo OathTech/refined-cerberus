@@ -77,12 +77,16 @@ it would dodge it, so nothing is declared below it, and this module
 stays the last import of the lib root.
 
 Adjacent instruments:
-- scripts/statement_census.lean (NOT a gate): reports the
-  statement-surface constant partition of the pinned theorems
-  (engine / spec-idiom / Iris / core — docs/WALKTHROUGH.md §5).
-  Freezing its expected partitions as an in-build check 4 (with the
-  plant tests the other checks get) is registered as a future gate;
-  today it is run manually.
+- scripts/statement_census.lean (A GATE since the acceptance-suite
+  slice, 2026-09-01: scripts/test_unit.sh gate 5 — the formerly
+  registered census freeze-gate): reports the statement-surface
+  constant partition of the pinned theorems (engine / spec-idiom /
+  Iris / core — docs/WALKTHROUGH.md §5); the committed expected
+  output is docs/STATEMENT_CENSUS.txt, and the gate re-runs the
+  census and fails on drift (fail-closed: a pinned theorem missing
+  from the environment throws inside the script). A statement-
+  surface change to any pinned export therefore cannot land without
+  a deliberate same-commit re-baseline of the committed census.
 - scripts/capability_manifest.lean (A GATE, via
   scripts/test_unit.sh gate 4, Phase 0 of the foundations arc):
   generates docs/CAPABILITY_MANIFEST.md, the authoritative
@@ -559,6 +563,35 @@ info: 'CerberusHeapLang.tree_rotate_certified_total' depends on axioms: [propext
 info: 'CerberusHeapLang.diverge_total_unprovable' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in #print axioms CerberusHeapLang.diverge_total_unprovable
+
+-- Acceptance-suite close (2026-09-01, test 7 — exact pins for ALL
+-- public exports): the remaining README-table exports and the two
+-- manifest consumer regressions gain curated pins (they were
+-- already trio-BOUNDED by the sweep; these make them trio-EXACT).
+/--
+info: 'CerberusHeapLang.exhibitA_semantic' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms CerberusHeapLang.exhibitA_semantic
+
+/--
+info: 'CerberusHeapLang.exhibitB_semantic' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms CerberusHeapLang.exhibitB_semantic
+
+/--
+info: 'CerberusHeapLang.engine_adequacyU' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms CerberusHeapLang.engine_adequacyU
+
+/--
+info: 'CerberusHeapLang.case_certified' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms CerberusHeapLang.case_certified
+
+/--
+info: 'CerberusHeapLang.wseq_certified' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms CerberusHeapLang.wseq_certified
 
 /-! ## The exhaustive sweep (LAST — nothing declared below except the
 sweep's own reachability helper, declared just above it) -/

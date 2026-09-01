@@ -32,9 +32,15 @@ constant surfacing in an exported statement is a finding.
 Run (from cerberus-heaplang/; read-only, prints to stdout):
   ../scripts/capped ~/.elan/bin/lake env lean scripts/statement_census.lean
 
-Wiring this as an in-build audit check (frozen expected partitions +
-plant test) is a registered future gate; today it is a documented
-instrument, run manually and pasted into the walkthrough.
+THE CENSUS FREEZE-GATE (acceptance-suite slice, 2026-09-01 — the
+formerly registered future gate, implemented): the committed
+expected output is docs/STATEMENT_CENSUS.txt and
+scripts/test_unit.sh gate 5 re-runs this script and fails on any
+drift against it (and fail-closed on a missing/renamed pinned
+theorem — the lookup throws). A statement-surface change to a
+pinned export therefore requires a deliberate same-commit
+re-baseline of the committed census. Plant-tested both directions
+(record: docs/2026-09-01_acceptance-suite-record.md).
 -/
 import CerberusHeapLang
 
