@@ -374,7 +374,12 @@ true and uninteresting. Three guards:
    the S1b export discharged it, audit F-01) — which is why
    per-construct coverage is gated by the generated
    [capability manifest](CAPABILITY_MANIFEST.md) instead of trusted
-   to prose.
+   to prose, and why (since Phase-1 S1c) the manifest's row set is
+   itself DERIVED from the cone: the generator enumerates the
+   fragment and mirror constructors out of the built environment,
+   and a constructor without a manifest row fails gate 4 — the
+   fail-open coverage channel closes by a failed check, not by
+   vigilance.
 
 One honest asymmetry to keep in view: the *straight-line* exhibits
 are exported all the way to the production pipeline (the `runND`

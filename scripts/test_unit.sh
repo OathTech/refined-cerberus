@@ -48,17 +48,21 @@ else
 fi
 
 echo "== gate 4: capability manifest (drift + README certified-scope tie) =="
-# Phase 0 of the foundations arc (2026-08-31 audit F-01/F-09): the
-# generated capability manifest is THE authoritative per-construct
-# scope statement. This gate (a) regenerates it and fails on any
-# drift against the committed copy (the generator itself fails
-# closed if a checked rule/cone/match/consumer name is missing or if
-# the Step/FragJ constructor lists changed — so a deleted cone case
-# is red here), and (b) ties the README's certified-scope token list
+# Foundations arc (2026-08-31 audit F-01/F-09; Phase 0, upgraded to
+# the CONE-DERIVED form in Phase-1 S1c): the generated capability
+# manifest is THE authoritative per-construct scope statement, and
+# its row set is DERIVED from the unified cone — the generator
+# enumerates `Frag`'s constructors out of the built environment (a
+# cone constructor without a row mapping is a generator throw) and
+# derives `Step` mirror coverage the same way (every Step
+# constructor must be claimed by exactly one row). This gate (a)
+# regenerates the manifest and fails on any drift against the
+# committed copy (the generator itself fails closed on an unmapped
+# cone/mirror constructor or a missing checked rule/match/consumer
+# name — so a new or deleted constructor without a manifest row is
+# red here), and (b) ties the README's certified-scope token list
 # to the manifest's ADEQUACY-EXPORTABLE set: a construct claimed as
-# certified without a manifest row at that level is red. The tie is
-# grep-level for Phase 0; the registered Phase-1 upgrade generates
-# the table from the unified capability predicate itself.
+# certified without a manifest row at that level is red.
 manifest=cerberus-heaplang/docs/CAPABILITY_MANIFEST.md
 if [[ ! -f "$manifest" ]]; then
   echo "FAIL: committed capability manifest missing ($manifest)" >&2
@@ -77,8 +81,8 @@ else
       fail=1
     fi
   else
-    echo "FAIL: capability manifest generator red (a checked name or" \
-      "the Step/FragJ constructor list changed); generator output:" >&2
+    echo "FAIL: capability manifest generator red (an unmapped Step/Frag" \
+      "constructor or a missing checked name); generator output:" >&2
     cat "$tmpman" >&2
     fail=1
   fi

@@ -10,17 +10,23 @@ regenerate with:
 
 This file is THE authoritative per-construct scope statement for
 `cerberus-heaplang` (2026-08-31 foundations arc, Phase 0; audit
-findings F-01/F-09). Every claims surface defers to it: a construct
-may be claimed at exactly its row's level, no more. Enforcement:
-`scripts/test_unit.sh` gate 4 (drift + README scope tie).
+findings F-01/F-09; cone-derived since Phase-1 S1c). Every claims
+surface defers to it: a construct may be claimed at exactly its
+row's level, no more. Enforcement: `scripts/test_unit.sh` gate 4
+(drift + README scope tie).
 
-Column semantics — which columns are CHECKED vs DECLARED is part of
-the instrument's honesty and is stated in the script header: `OK`
-cells are name-and-kind checked in the built environment (and the
-full `Step`/`Frag` constructor lists are asserted verbatim, so a
-deleted cone case fails the gate); lane ATTRIBUTIONS and
-consumer-exercises-construct claims are DECLARED pending the Phase-1
-fully mechanical (cone-derived) upgrade.
+Row provenance — which parts are DERIVED vs CHECKED vs DECLARED is
+part of the instrument's honesty and is stated in the script
+header: the ROW SET is DERIVED — enumerated from the `Frag` cone's
+constructor list read out of the built environment (rows appear in
+cone declaration order; a cone constructor without a row mapping
+fails the run), and the `Step` mirror's coverage is DERIVED the
+same way (every Step constructor must be claimed by exactly one
+row's mirror cell); `OK` cells are name-and-kind CHECKED in the
+built environment; lane ATTRIBUTIONS and
+consumer-exercises-construct claims are DECLARED (documented
+instrument granularity). The supplementary evaluator row (last)
+owns no constructor and is mechanically barred from claiming any.
 
 | Construct | Level | Mirror (Step) | Logic (wp/wps) | Cone (Frag) | Engine match | Partial adequacy | Total lane | Production lane | Example consumer |
 |---|---|---|---|---|---|---|---|---|---|
@@ -29,19 +35,19 @@ fully mechanical (cone-derived) upgrade.
 | Eaction Load0 (value operand) | CERTIFIED (drive lane) | OK `Step.load` | OK `wp_load`, `wps_load` | OK `Frag.load` | OK `step_ctx_load` | OK `engine_complete`, `engine_adequacyJ` | RED — no logical total lane (Phase 3); see Notes 2 | OK `exhibitA_prod` | OK `exhibitA_engine`, `array_sum_certified` |
 | Eaction Create0 | ADEQUACY-EXPORTABLE (no logic rule) | OK `Step.create` | RED — no wp_create/wps_create small axiom (registered D26: needs the allocator-cursor resource; Phase 2); see Notes 4 | OK `Frag.create` | OK `step_ctx_create` | OK `engine_complete`, `engine_adequacyJ` | RED — no logical total lane (Phase 3); see Notes 2 | OK `exhibitA_prod` | OK `exhibitA_prod` — production exhibit only — no drive-lane-only consumer |
 | Esseq, wildcard pattern | CERTIFIED (drive lane) | OK `Step.sseq_pure`, `Step.sseq_annot`, `Step.sseq_ctx` | OK `wp_sseq`, `wps_seq` | OK `Frag.sseq` | OK `step_ctx_beta_pure`, `step_ctx_beta_annot` | OK `engine_complete`, `engine_adequacyJ` | RED — no logical total lane (Phase 3); see Notes 2 | OK `exhibitA_prod` | OK `exhibitA_engine`, `exhibitC_engine` |
-| Esseq, Specified-binder pattern | CERTIFIED (drive lane) | OK `Step.sseq_spec_pure`, `Step.sseq_spec_annot` | OK `wps_seq_spec` | OK `Frag.sseq_spec` | OK `step_ctx_beta_spec_pure`, `step_ctx_beta_spec_annot` | OK `engine_adequacyJ` | RED — no logical total lane (Phase 3); see Notes 2 | RED — registration tie only; see Notes 3 | OK `array_sum_certified`, `list_reverse_certified` |
-| Esseq, plain-symbol-binder pattern (bare values) | CERTIFIED (drive lane) | OK `Step.sseq_sym_pure` | OK `wps_seq_sym` | OK `Frag.sseq_sym` | OK `step_ctx_beta_sym_pure` | OK `engine_adequacyJ` | RED — no logical total lane (Phase 3); see Notes 2 | RED — registration tie only; see Notes 3 | OK `list_reverse_certified` |
-| Ewseq, wildcard pattern (weak sequencing) | CERTIFIED (drive lane) | OK `Step.wseq_pure`, `Step.wseq_annot`, `Step.wseq_ctx` — S1b DRIFT TEST — entered through the generic route; see Notes 6 | OK `wps_wseq` | OK `Frag.wseq` | OK `step_ctx_wseq_pure`, `step_ctx_wseq_annot` | OK `engine_adequacyJ`, `engine_adequacyU` | RED — no logical total lane (Phase 3); see Notes 2 | RED — outside every lane | OK `wseq_certified` — the drift-test WP-lane adequacy regression (WseqExhibit) |
 | Eannot residue (descent + merge) | CERTIFIED (drive lane) | OK `Step.annot_ctx`, `Step.annot_merge` | OK `wp_annot`, `wps_annot` | OK `Frag.annot` | OK `step_ctx_merge` | OK `engine_complete`, `engine_adequacyJ` | RED — no logical total lane (Phase 3); see Notes 2 | OK `exhibitA_prod` | OK `exhibitA_engine` |
 | Esave (block entry, value-shaped params) | CERTIFIED (drive lane) | OK `Step.save` | OK `wps_save` | OK `Frag.save` | OK `step_ctx_save` | OK `engine_adequacyJ` | RED — no logical total lane (Phase 3); see Notes 2 | RED — registration tie only; see Notes 3 | OK `counter_loop_certified`, `fib_certified` |
 | Eif (big-step boolean guard) | CERTIFIED (drive lane) | OK `Step.if_true`, `Step.if_false` | OK `wps_if_true`, `wps_if_false` | OK `Frag.if_` | OK `stepDischarge_if_true`, `stepDischarge_if_false` | OK `engine_adequacyJ` | RED — no logical total lane (Phase 3); see Notes 2 | RED — registration tie only; see Notes 3 | OK `counter_loop_certified`, `fib_certified` |
 | Erun (context-discarding jump) | CERTIFIED (drive lane) | OK `Step.run` | OK `wps_run` | OK `Frag.run` | OK `stepDischarge_run` | OK `engine_adequacyJ` | RED — no logical total lane (Phase 3); see Notes 2 | RED — registration tie only; see Notes 3 | OK `counter_loop_certified`, `fib_certified` |
-| Ecase, VALUE scrutinee | CERTIFIED (drive lane) | OK `Step.case_value` | OK `wps_case_value` | OK `Frag.case_value` — S1b: joined — branch-closure + branch-size premises explicit | OK `step_ctx_case_value`, `step_ctx_case_illtyped`, `engine_complete_caseU` — TWO-SIDED at any MachineCtx | OK `engine_adequacyJ`, `engine_adequacyU` | RED — no logical total lane (Phase 3); see Notes 2 | RED — outside every lane | OK `case_certified` — the WP-lane adequacy regression — binder pattern, substitution TAU (CaseExhibit) |
+| Esseq, Specified-binder pattern | CERTIFIED (drive lane) | OK `Step.sseq_spec_pure`, `Step.sseq_spec_annot` | OK `wps_seq_spec` | OK `Frag.sseq_spec` | OK `step_ctx_beta_spec_pure`, `step_ctx_beta_spec_annot` | OK `engine_adequacyJ` | RED — no logical total lane (Phase 3); see Notes 2 | RED — registration tie only; see Notes 3 | OK `array_sum_certified`, `list_reverse_certified` |
 | Epure exit at PEsym shape | CERTIFIED (drive lane) | OK `Step.pure_eval` — certified at PEsym shape — Soundness stepDischarge_pure_sym | OK `wps_pure` | OK `Frag.pure_sym` | OK `stepDischarge_pure_sym` | OK `engine_adequacyJ` | RED — no logical total lane (Phase 3); see Notes 2 | RED — registration tie only; see Notes 3 | OK `fib_certified` |
+| Load0 operand-evaluation step (ACTION_EVAL) | CERTIFIED (drive lane) | OK `Step.load_eval` | OK `wps_load_eval` | OK `Frag.load_op` | OK `stepDischarge_load_eval` | OK `engine_adequacyJ` | RED — no logical total lane (Phase 3); see Notes 2 | RED — registration tie only; see Notes 3 | OK `array_sum_certified` |
+| Esseq, plain-symbol-binder pattern (bare values) | CERTIFIED (drive lane) | OK `Step.sseq_sym_pure` | OK `wps_seq_sym` | OK `Frag.sseq_sym` | OK `step_ctx_beta_sym_pure` | OK `engine_adequacyJ` | RED — no logical total lane (Phase 3); see Notes 2 | RED — registration tie only; see Notes 3 | OK `list_reverse_certified` |
 | Ememop PtrEq (value operands) | CERTIFIED (drive lane) | OK `Step.memop_ptreq` | OK `wps_memop_ptreq` | OK `Frag.memop_vals` | OK `step_ctx_memop` | OK `engine_adequacyJ` | RED — no logical total lane (Phase 3); see Notes 2 | RED — registration tie only; see Notes 3 | OK `list_reverse_certified` |
 | Ememop PtrEq, operand-evaluation step | CERTIFIED (drive lane) | OK `Step.memop_eval` | OK `wps_memop_eval` | OK `Frag.memop_op` | OK `stepDischarge_memop_eval` | OK `engine_adequacyJ` | RED — no logical total lane (Phase 3); see Notes 2 | RED — registration tie only; see Notes 3 | OK `list_reverse_certified` |
-| Load0 operand-evaluation step (ACTION_EVAL) | CERTIFIED (drive lane) | OK `Step.load_eval` | OK `wps_load_eval` | OK `Frag.load_op` | OK `stepDischarge_load_eval` | OK `engine_adequacyJ` | RED — no logical total lane (Phase 3); see Notes 2 | RED — registration tie only; see Notes 3 | OK `array_sum_certified` |
 | Store0 operand-evaluation step (ACTION_EVAL) | CERTIFIED (drive lane) | OK `Step.store_eval` | OK `wps_store_eval` | OK `Frag.store_op` | OK `stepDischarge_store_eval` | OK `engine_adequacyJ` | RED — no logical total lane (Phase 3); see Notes 2 | RED — registration tie only; see Notes 3 | OK `list_reverse_certified` |
+| Ecase, VALUE scrutinee | CERTIFIED (drive lane) | OK `Step.case_value` | OK `wps_case_value` | OK `Frag.case_value` — S1b: joined — branch-closure + branch-size premises explicit | OK `step_ctx_case_value`, `step_ctx_case_illtyped`, `engine_complete_caseU` — TWO-SIDED at any MachineCtx | OK `engine_adequacyJ`, `engine_adequacyU` | RED — no logical total lane (Phase 3); see Notes 2 | RED — outside every lane | OK `case_certified` — the WP-lane adequacy regression — binder pattern, substitution TAU (CaseExhibit) |
+| Ewseq, wildcard pattern (weak sequencing) | CERTIFIED (drive lane) | OK `Step.wseq_pure`, `Step.wseq_annot`, `Step.wseq_ctx` — S1b DRIFT TEST — entered through the generic route; see Notes 6 | OK `wps_wseq` | OK `Frag.wseq` | OK `step_ctx_wseq_pure`, `step_ctx_wseq_annot` | OK `engine_adequacyJ`, `engine_adequacyU` | RED — no logical total lane (Phase 3); see Notes 2 | RED — outside every lane | OK `wseq_certified` — the drift-test WP-lane adequacy regression (WseqExhibit) |
 | pure operands: PEval / PEsym / integer PEop / PEarray_shift | CERTIFIED (drive lane) | DECLARED — premises of the if/run/pure/ACTION_EVAL rules via the certified pure evaluator (Soundness evaluator bridge); no per-construct Step rule | DECLARED — enters as rule premises (guard/argument/operand evaluation) | DECLARED — via the peDepth side conditions carried by Frag.if_/run/load_op/memop_op/store_op | DECLARED — the evaluator bridge lemmas, Soundness.lean (eval1/mapM tower) | OK `engine_adequacyJ` | RED — no logical total lane (Phase 3); see Notes 2 | RED — registration tie only; see Notes 3 | OK `array_sum_certified`, `fib_certified` |
 
 ## Notes (the registered honesty items behind the RED cells)
@@ -96,7 +102,7 @@ fully mechanical (cone-derived) upgrade.
 ## Machine-readable scope lines (consumed by test_unit.sh gate 4)
 
 ```
-ADEQUACY-EXPORTABLE: value store load create sseq-wild sseq-spec sseq-sym wseq-wild annot save if run case-value pure-sym memop-ptreq memop-op load-op store-op pure-operands
-FULL-ROW: value store load sseq-wild sseq-spec sseq-sym wseq-wild annot save if run case-value pure-sym memop-ptreq memop-op load-op store-op pure-operands
+ADEQUACY-EXPORTABLE: value store load create sseq-wild annot save if run sseq-spec pure-sym load-op sseq-sym memop-ptreq memop-op store-op case-value wseq-wild pure-operands
+FULL-ROW: value store load sseq-wild annot save if run sseq-spec pure-sym load-op sseq-sym memop-ptreq memop-op store-op case-value wseq-wild pure-operands
 LOCAL-RULE-ONLY: 
 ```

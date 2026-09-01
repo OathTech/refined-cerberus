@@ -518,3 +518,116 @@ arm remain registered divergences; the manifest's Step/Frag
 constructor lists are still hand-asserted mirrors of the
 inductives — S1c derives the rows from the cone (K4's demonstrated
 mechanism, design record §4).
+
+## Phase 1 — S1c, instruments + claims surfaces (this slice, 2026-09-01)
+
+[AGENT] execution of the design record §8 S1c prescription (the
+light closing slice): the cone-derived manifest (K4's demonstrated
+mechanism at full-cone scale), the RelSem two-presentations
+paragraph (arc plan Phase-1 item 6), and the Phase-1 exit-criteria
+sweep.
+
+### The cone-derived manifest (gate-4 upgrade)
+
+`scripts/capability_manifest.lean` rebuilt on the S1a probe's
+enumeration shape (`phase1_probe_manifest.lean`, retired with the
+probe — recovered from `d42a77a` as the donor pattern):
+
+- THE ROW SET IS DERIVED: rows are enumerated from `Frag`'s
+  constructor list read out of the built environment, through a
+  `Name → Option RowSpec` mapping. A cone constructor without a
+  mapping arm throws (fail-closed). The hand-asserted
+  `expectedFragCtors` list is DELETED — there is no list to drift.
+- STEP COVERAGE IS DERIVED: after row generation, every `Step`
+  constructor read out of the environment must be claimed by
+  EXACTLY ONE row's mirror cell; an unclaimed constructor, a claim
+  of a non-`Step` constructor, and a double claim each throw. The
+  hand-asserted `expectedStepCtors` list is DELETED.
+- The cone CELL is the enumeration key itself (`RowSpec` carries no
+  cone cell; the generator fills it) — a row cannot claim cone
+  membership the cone does not have.
+- The supplementary evaluator-tower row (`pure-operands` — premises,
+  not a capability; it owns no constructor) is mechanically barred
+  from claiming any constructor, so it can never absorb a cone or
+  mirror extension.
+- Kept from Phase 0: every `OK` cell name-and-kind checked. Still
+  DECLARED (documented instrument granularity, no registered mover):
+  lane attributions and consumer-exercises-construct claims.
+- Row order is now cone declaration order (the enumeration is the
+  row set) + the supplementary row last; the machine-readable token
+  SETS are unchanged (derived check this slice: old vs new
+  `ADEQUACY-EXPORTABLE` lines sorted and diffed — identical as
+  sets). `docs/CAPABILITY_MANIFEST.md` regenerated, same commit;
+  gate-4 comments in `scripts/test_unit.sh` trued to the derived
+  form.
+
+What the derivation surfaced: NOTHING LATENT — the enumeration
+reproduced the retired hand lists exactly (18 `Frag` rows, 24
+`Step` constructors, each claimed exactly once, every cone
+constructor mapped), so no row was silently weaker than the hand
+lists claimed. The derivation does CLOSE two failure modes the hand
+lists never checked: (a) a mirror cell claiming a constructor of a
+DIFFERENT inductive (previously only existence+kind was checked;
+now the constructor's parent inductive must be `Step`), and
+(b) two rows claiming the same `Step` constructor (previously the
+asserted list would still pass; now a double claim throws — one
+semantic coverage point per constructor, the audit F-03 acceptance
+wording). Neither fired on the current corpus.
+
+### Plant tests (all this checkout, all reverted)
+
+Plant method note ([AGENT], per the S1a probe's precedent): a
+hypothetical NEW `Step`/`Frag` constructor is simulated
+mechanically, not planted as proof content (a real constructor
+would force inversion-proof edits) — the failure state the gate
+must catch is "an environment constructor no manifest row covers",
+and deleting one row-side claim/mapping reproduces exactly that
+state through the identical code path (the derived-coverage loop).
+
+Plant A — new mirror constructor without a row (simulated:
+`Step.wseq_ctx` removed from the wseq row's mirror cell); generator
+run:
+
+```
+scripts/capability_manifest.lean:389:0: error: manifest FAIL: mirror constructor CerberusHeapLang.Step.wseq_ctx has NO manifest row — the Step relation was extended without the manifest (fail-closed by design; add it to a row's mirror cell, or give the new construct its own row).
+```
+
+(exit 1). Reverted.
+
+Plant B — new cone constructor without a mapping (the probe's exact
+plant: the `Frag.case_value → rowSpec` arm deleted); generator run:
+
+```
+scripts/capability_manifest.lean:374:0: error: manifest FAIL: cone constructor CerberusHeapLang.Frag.case_value has NO manifest row mapping — the cone was extended without the manifest (fail-closed by design; add the rowSpec arm).
+```
+
+(exit 1). Reverted.
+
+Plant C — manifest drift (existing plant re-run at the upgraded
+gate: `bogus-token` hand-added to the committed manifest's
+`ADEQUACY-EXPORTABLE` line); full `./scripts/test_unit.sh`:
+
+```
+FAIL: capability manifest drift (diff above) — regenerate docs/CAPABILITY_MANIFEST.md deliberately, same commit
+GATE FAILURE
+```
+
+(exit 1). Reverted.
+
+Green direction after all reverts — full run:
+
+```
+ok: no banned proof-method references
+ok: root build green (axiom sweep + pins passed in-build)
+ok: cerberus-heaplang build green (axiom sweep + pins passed in-build)
+ok: capability manifest regenerated, no drift
+ok: README certified-scope tokens all within the manifest's adequacy-exportable set
+ALL GATES GREEN
+```
+
+(exit 0).
+
+Claims surfaces trued with the instrument (same commit): README
+manifest paragraph + trust-story coverage caveat, walkthrough §4
+tier-3 coverage caveat — each now states the row set is
+cone-derived and a constructor without a row is a failed gate.

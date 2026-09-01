@@ -53,7 +53,12 @@ linked-list reversal.
 supported Core construct (mirror rule / logic rule / fragment cone
 / engine match / adequacy, total, and production lanes / example
 consumer), regenerated and drift-checked by `scripts/test_unit.sh`
-gate 4. Every scope claim in this README is read under it: a
+gate 4. Since Phase-1 S1c its row set is DERIVED from the unified
+fragment cone: the generator enumerates the cone's constructors out
+of the built environment and requires every mirror-relation
+constructor to be claimed by exactly one row, so the mirror, the
+cone, and this claims surface cannot diverge without a failed
+check. Every scope claim in this README is read under it: a
 construct is claimed at exactly its manifest level, no more.
 
 The exhibits, in pedagogical order (column
@@ -145,7 +150,10 @@ mirror/cone case silently narrows coverage without falsifying
 anything — which is why the specification idiom is read (below)
 and coverage is gated by the
 [capability manifest](docs/CAPABILITY_MANIFEST.md) rather than
-trusted to prose. What remains statement-level trust — the specification
+trusted to prose (and the manifest's row set is itself derived from
+the cone's constructors in the built environment — a mirror or cone
+case added or deleted without a manifest row fails gate 4, so the
+coverage channel closes by a failed check, not by vigilance). What remains statement-level trust — the specification
 idiom: the drive-loop projections and the footprint/readout
 predicates the exported statements are phrased in — is kept small,
 pinned by executable concrete instances (the demos), and laid out
