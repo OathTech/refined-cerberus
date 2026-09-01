@@ -36,13 +36,14 @@ over the real `CerbMem.MemState`. `CohG` couples: byte cells to the
 bytemap readout; metadata cells to live/writable/typed/non-atomic
 allocations, pairwise range-disjoint; a cursor cell (key 0) to
 lastAddress/nextAllocId, its PRESENCE carrying the allocator-health
-facts `wps_create` needs (fresh ids unallocated and not dead; all
+facts the create rules need (fresh ids unallocated and not dead; all
 ghost-tracked addresses at or above the downward-growing cursor) —
-cursor-free launches owe nothing new. NB (2026-09-01 re-audit,
-R-01): every current adequacy launcher launches the cursor heap
-EMPTY (key 0 absent — these facts vacuous at launch), so `cursorOwn`
-is never granted and `wps_create` is a LOCAL RULE ONLY; the
-cursor-granting launcher is alloc arc P1. The union-member/
+cursor-free launches owe nothing new. Alloc arc P1: the
+ALLOCATION-AWARE launchers mint cursor key 0 NONEMPTY
+(`launchResources`, Adequacy.lean — `LaunchCoh` discharges the
+health facts non-vacuously) and grant the abstract capacity
+`allocCap` (this file) to the public create rules; the cursor-free
+launchers remain for no-allocation programs. The union-member/
 function-pointer side tables are SYMBOLIC (read-only context):
 decode-inertness rides as a pure payload of `pointsToCell`
 (`decIndep`; per-view decode premises on the generic rules), and

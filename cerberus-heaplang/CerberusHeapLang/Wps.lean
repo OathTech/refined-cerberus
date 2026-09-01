@@ -53,18 +53,20 @@ the one Löb is inside `wps_sound`; the TOTAL rules live at the
 total stratum, Wpt.lean), and the collapse
 `wps_sound` into the base Iris WP (the sole adequacy interface).
 
-THE ALLOCATION RULE `wps_create` (this file, §CreateRule) is a
-LOCAL RULE ONLY — allocator resource not launchable: its
-precondition is the exclusive allocator-cursor resource
-`cursorOwn`, and NO adequacy launcher grants that resource (every
-launcher — `spike_step_adequacy`, `wpt_engine_boundU/J`,
-`wpt_strongly_normalizing` — initializes the cursor ghost heap
-EMPTY, and no `cursorHeap_alloc` exists), so no heap-allocating
-whole program is currently proved through this rule (2026-09-01
-skeptical re-audit, R-01; owner: alloc arc P1). Cold-start creates
-in the production exhibits cross the driver as handwritten
-certified operational rounds (ProdExhibit / ProdLoopExhibit — R-02),
-not through this rule.
+THE ALLOCATION RULES (this file, §CreateRule; alloc arc P1): the
+PUBLIC `wps_create` takes `allocCap (req :: rest)` (the abstract
+finite allocation capacity — Heap.lean) and binds an existential
+pointer; it is LAUNCHABLE through the allocation-aware launchers
+(`spike_step_adequacy_alloc`, `wpt_engine_boundU/J_alloc`,
+`wpt_strongly_normalizing_alloc` — via `launchResources`, which
+grants `allocCap` from real Cerberus memory under `LaunchCoh`). The
+exact-cursor form is `wps_create_cursor_internal`
+(heap-implementation use only). HONESTY LINE (R-02, owner alloc arc
+P2): the allocating production exhibits do NOT yet consume these
+rules — their cold-start creates still cross the driver as
+handwritten certified operational rounds (ProdExhibit /
+ProdLoopExhibit); the engine-facing allocation consumers are P2
+work (a launcher-level smoke exists in AllocExhibit.lean).
 
 Design records: docs/2026-08-31_s0-probe-report.md (the
 architecture probe), docs/2026-08-31_s0-adjudication.md (the
@@ -2163,29 +2165,38 @@ theorem wps_store_cell_at {Ψ : SpikeVal → EnvStack → IProp GF}
     rw [spliceBytes_length _ _ _ (by omega)]
     exact hlen
 
-/-! ## THE ALLOCATION RULE (Phase 2) — LOCAL RULE ONLY (R-01)
+/-! ## THE ALLOCATION RULES (Phase 2 internal rule; alloc arc P1.4
+public rule)
 
-`wps_create`: sound allocation THROUGH the allocator-cursor
-resource. The cursor cell carries exactly the two MemState fields
-`allocateObject` reads (lastAddress/nextAllocId), so the fresh base
-address is a CLOSED FORM of owned state and the out-of-memory kill
-arm (`alignedAddr == 0`, CerbMem.lean:1479) becomes the PURE premise
-`hnz` — allocation failure is excluded by ownership arithmetic, not
-assumed away. Donor shape: RefinedC's alloc_new_blocks/alloc_alive
-discipline (theories/caesium/ghost_state.v) — there the allocator is
-part of the state interpretation; here its authority is a one-cell
-ghost heap because the engine's allocator is a deterministic
-cursor.
+Two strata (charter P1.4):
 
-LAUNCHABILITY (2026-09-01 skeptical re-audit, R-01): this rule is
-LOCAL ONLY — no adequacy launcher grants `cursorOwn` (the cursor
-ghost heap is launched EMPTY everywhere), so the rule is unreachable
-from any exported engine-facing theorem; its one client
-(`struct_create_store_wps`, StructExhibit) is a wps-level entailment
-whose premise ASSUMES the resource. The launchable public
-abstraction (existential pointer, no client-visible cursor) is alloc
-arc P1; the exact-cursor form below is expected to become the
-INTERNAL rule then. -/
+- `wps_create_cursor_internal` — the exact-cursor rule: sound
+  allocation THROUGH the allocator-cursor resource. The cursor cell
+  carries exactly the two MemState fields `allocateObject` reads
+  (lastAddress/nextAllocId), so the fresh base address is a CLOSED
+  FORM of owned state and the out-of-memory kill arm
+  (`alignedAddr == 0`, CerbMem.lean:1479) becomes the PURE premise
+  `hnz` — allocation failure is excluded by ownership arithmetic,
+  not assumed away. HEAP-IMPLEMENTATION USE ONLY: it names
+  `lastAddress`/`nextAllocId`/`freshBase`/`cursorOwn` and may be
+  consumed only by this module's public rule, its total mirror
+  (Wpt.lean), and pre-P2 legacy clients queued for conversion
+  (StructExhibit — P2 item 1).
+- `wps_create` — THE PUBLIC RULE: precondition `allocCap
+  (req :: rest)`, existential/continuation-bound pointer result
+  with the fresh whole-cell points-to plus `allocCap rest`. NO
+  cursor vocabulary in the statement (the P1 grep test). Launchable:
+  the allocation-aware launchers (Adequacy/TotalAdequacy) grant
+  `allocCap` from real Cerberus memory via `launchResources`.
+
+Donor shape: RefinedC's alloc_new_blocks/alloc_alive discipline
+(theories/caesium/ghost_state.v) — there the allocator is part of
+the state interpretation and the client sees an existential fresh
+location (lifting.v:979-998); here the authority is a one-cell ghost
+heap because the engine's allocator is a deterministic cursor, and
+`allocCap` is the abstract finite-capacity face of that cursor
+(no-OOM policy: docs/2026-09-01_p1-notes.md, the P1.1 design
+record). -/
 
 section CreateRule
 open Iris.Std.PartialMap
@@ -2198,17 +2209,17 @@ def createExpr (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (Create (Pexpr [] () (PEval (Vobject (OVinteger align))))
             (Pexpr [] () (PEval (Vctype ty))) pref))))
 
-/-- CREATE small axiom: with the allocator cursor at `⟨la, nid⟩` and
-    a nonzero fresh base, `create` allocates exactly
+/-- CREATE small axiom, EXACT-CURSOR (INTERNAL — see the section
+    header): with the allocator cursor at `⟨la, nid⟩` and a nonzero
+    fresh base, `create` allocates exactly
     `cellPtr nid (freshBase la alignN (sizeof ty))`, delivers the
     whole-allocation points-to at unspecified bytes, and advances
     the cursor. UB/OOM-excluding: `hnz` is the out-of-memory guard,
     `hsz`/`hatom` pin a real non-atomic object type, `hinert` is the
     unspecified image's decode-inertness at the allocated type (rfl
-    for scalar and integer-array types). LOCAL RULE ONLY (R-01): no
-    adequacy launcher grants `cursorOwn`, so this rule is not
-    launchable — see the section header above. -/
-theorem wps_create {Ψ : SpikeVal → EnvStack → IProp GF}
+    for scalar and integer-array types). Clients use the PUBLIC
+    `wps_create` below. -/
+theorem wps_create_cursor_internal {Ψ : SpikeVal → EnvStack → IProp GF}
     (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (aprov : CerbMem.Provenance) (alignN : Int) (ty : ctype)
     (pref : prefix0) (la nid : Int) (ρ : EnvStack)
@@ -2363,6 +2374,52 @@ theorem wps_create {Ψ : SpikeVal → EnvStack → IProp GF}
         exact ⟨by simp, hinert⟩
     · iexact Hc
 
+/-- THE PUBLIC ALLOCATION RULE (alloc arc P1.4, the charter's exact
+    logical shape): capacity for `req :: rest` buys one `create` of
+    `req`; the returned pointer is CONTINUATION-BOUND (its allocation
+    id and address occur nowhere in the precondition), delivered with
+    full whole-cell ownership at unspecified bytes and the remaining
+    capacity `allocCap rest`. Side premises: `hatom` pins a
+    non-atomic object type; `hinert` is the unspecified image's
+    decode-inertness AT EVERY ADDRESS (rfl for scalar and
+    integer-array types) — address-independent so the statement stays
+    cursor-free. Positivity of `sizeof req.ty` and the no-OOM guard
+    are NOT premises: they ride inside `allocCap` (the plan fits).
+    The statement contains no `AllocCursor`/`lastAddress`/
+    `nextAllocId`/`freshBase`/`cursorOwn` — the P1 grep test. -/
+theorem wps_create {Ψ : SpikeVal → EnvStack → IProp GF}
+    (loc : CerbLocation.Loc) (ann : core_run_annotation)
+    (aprov : CerbMem.Provenance) (req : AllocReq) (rest : List AllocReq)
+    (pref : prefix0) (ρ : EnvStack)
+    (hatom : atomicTy req.ty = false)
+    (hinert : ∀ a : Int, decIndep a req.ty
+      (List.replicate (CerbMem.sizeofCtype req.ty) undefByte)) :
+    iprop(allocCap (GF := GF) (req :: rest) ∗
+      (∀ p : CerbMem.PointerValue,
+        (pointsToCell p (.own 1) req.ty
+            (List.replicate (CerbMem.sizeofCtype req.ty) undefByte) ∗
+          allocCap rest) -∗
+        Ψ (SpikeVal.pure (Vobject (OVpointer p))) ρ)) ⊢
+      wps M Ls Ψ (createExpr loc ann (.IV aprov req.align) req.ty pref) ρ := by
+  unfold allocCap
+  iintro ⟨⟨%c, Hc, %hfit⟩, HΨ⟩
+  obtain ⟨c', hadv, hrest⟩ := (PlanFits_cons_iff c req rest).mp hfit
+  obtain ⟨hsz, hnz, rfl⟩ := advanceCursor_some_inv hadv
+  iapply wps_create_cursor_internal loc ann aprov req.align req.ty pref
+    c.lastAddr c.nextId ρ hsz hatom hnz (hinert _)
+  isplitl [Hc]
+  · iexact Hc
+  iintro ⟨Hpt, Hc⟩
+  iapply HΨ
+  isplitl [Hpt]
+  · iexact Hpt
+  · -- rebuild the (unfolded) capacity from the advanced cursor
+    iexists ⟨freshBase c.lastAddr req.align (CerbMem.sizeofCtype req.ty),
+      c.nextId + 1⟩
+    isplitl [Hc]
+    · iexact Hc
+    · ipureintro
+      exact hrest
 
 end CreateRule
 

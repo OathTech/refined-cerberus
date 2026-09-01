@@ -211,19 +211,23 @@ def rowSpec : Name → Option RowSpec
   | `CerberusHeapLang.Frag.create => some
     { token := "create", construct := "Eaction Create0",
       mirror := .ctors [`CerberusHeapLang.Step.create],
-      logic := .thms [`CerberusHeapLang.wps_create]
-        (note := "LOCAL RULE ONLY — allocator resource not launchable: the rule's cursorOwn premise is granted by NO adequacy launcher (every launcher initializes the cursor ghost heap EMPTY; re-audit R-01, owner alloc-arc P1); OOM excluded by the pure freshBase guard on owned cursor state — see Notes 4"),
+      logic := .thms [`CerberusHeapLang.wps_create,
+        `CerberusHeapLang.wps_create_cursor_internal]
+        (note := "alloc arc P1: the PUBLIC wps_create takes the abstract capacity allocCap (req :: rest) and binds an existential pointer (statement cursor-free); the exact-cursor form is wps_create_cursor_internal (heap-implementation use only); OOM excluded by the plan-fit inside allocCap — see Notes 4"),
       engineMatch := .thms [`CerberusHeapLang.step_ctx_create],
       partialLane := .thms [`CerberusHeapLang.engine_complete,
         `CerberusHeapLang.engine_adequacyJ],
-      totalLane := noTotal "no wpt_create — blocked on the launchable allocator resource (R-01), owner alloc-arc P1; production creates cross the driver as handwritten certified rounds instead — driverDone_step",
+      totalLane := totalVia [`CerberusHeapLang.wpt_create]
+        [`CerberusHeapLang.alloc_create_launch_smoke],
       prodLane := .thms [`CerberusHeapLang.exhibitA_prod,
         `CerberusHeapLang.counter_loop_certified_production,
         `CerberusHeapLang.list_reverse_certified_production]
-        (note := "MIXED logical/operational proofs (R-02): the create prefixes are handwritten certified operational rounds, NOT create-rule consumers"),
-      consumer := .thms [`CerberusHeapLang.exhibitA_prod,
+        (note := "STILL MIXED logical/operational proofs (R-02, owner alloc-arc P2): the create prefixes are handwritten certified operational rounds, NOT create-rule consumers"),
+      consumer := .thms [`CerberusHeapLang.alloc_create_launch_smoke,
+        `CerberusHeapLang.alloc_two_creates_wps,
+        `CerberusHeapLang.alloc_create_wpt,
         `CerberusHeapLang.struct_create_store_wps]
-        (note := "exhibitA_prod is a MIXED logical/operational proof (create prefix + termination trace operational — R-02); struct_create_store_wps is a LOCAL wps-level entailment ASSUMING cursorOwn (R-01) — neither consumes the create rule from an adequacy launch") }
+        (note := "alloc_create_launch_smoke is the P1 engine-facing chain-closer (driveU .done at fuel 2 via wpt_create + wpt_engine_boundU_alloc from prodMem₀); alloc_two_creates_wps / alloc_create_wpt are the wps/wpt-level local consumers of the PUBLIC rules; struct_create_store_wps still consumes the INTERNAL exact-cursor rule (P2 item 1 converts it); the HEADLINE allocating exhibits are not yet consumers (R-02, P2)") }
   | `CerberusHeapLang.Frag.sseq => some
     { token := "sseq-wild", construct := "Esseq, wildcard pattern",
       mirror := .ctors [`CerberusHeapLang.Step.sseq_pure,
@@ -563,9 +567,10 @@ def Cell.render (env : Environment) : Cell → Except String String
   IO.println "   `diverge_total_unprovable` (DivergeExhibit — the self-jump"
   IO.println "   loop's total derivation is FALSE). RED total cells:"
   IO.println "   Ecase/Ewseq have no wpt rule yet (mechanical analogs of"
-  IO.println "   their wps rules, no consumer — registered follow-ons);"
-  IO.println "   create has no wpt rule AND its wps rule is local-only"
-  IO.println "   (R-01/Notes 4) — owner alloc-arc P1."
+  IO.println "   their wps rules, no consumer — registered follow-ons)."
+  IO.println "   create's total rule landed in alloc arc P1 (`wpt_create`,"
+  IO.println "   derived cost bound 2 = one create step + one pure-value"
+  IO.println "   delivery; consumer: the launcher smoke, Notes 4)."
   IO.println "   `blockSpecs_intro_variant` is RETIRED, replaced by"
   IO.println "   `blockSpecsT` (Wpt.lean): the smaller-measure discipline is"
   IO.println "   the judgment's jump clause, never an optional hypothesis."
@@ -594,22 +599,33 @@ def Cell.render (env : Environment) : Cell → Except String String
   IO.println "   chains), not create-rule consumers; the total judgment"
   IO.println "   drives the loop suffixes only. fib (no heap) is the fully"
   IO.println "   logic-driven positive control."
-  IO.println "4. **`create` has a LOCAL logic rule ONLY** (Phase 2 proved"
-  IO.println "   `wps_create`; the 2026-09-01 skeptical re-audit R-01"
-  IO.println "   DOWNGRADED the claim — the former \"D26 RETIRED\" wording"
-  IO.println "   overstated closure): the rule allocates through the"
-  IO.println "   allocator-cursor ghost resource, the out-of-memory kill arm"
-  IO.println "   excluded by the pure `freshBase ... ≠ 0` guard computed on"
-  IO.println "   OWNED cursor state — but the resource is NOT LAUNCHABLE:"
-  IO.println "   every adequacy launcher initializes the cursor ghost heap"
-  IO.println "   EMPTY and no cursor-allocation lemma exists, so no"
-  IO.println "   engine-facing theorem consumes the rule. Its one client,"
-  IO.println "   `struct_create_store_wps`, ASSUMES `cursorOwn` and ends at"
-  IO.println "   `wps` (not an adequacy consumer); the row's other named"
-  IO.println "   consumers are MIXED logical/operational production exhibits"
-  IO.println "   (R-02). Owner: alloc-arc P1 (launchable public rule +"
-  IO.println "   launcher + `wpt_create`) and P2 (whole-program logic"
-  IO.println "   consumers)."
+  IO.println "4. **`create` has PUBLIC partial+total rules, LAUNCHABLE**"
+  IO.println "   (alloc arc P1; the R-01 repair — rules + launch landed,"
+  IO.println "   closure test pending P2's whole-program consumers): the"
+  IO.println "   public `wps_create`/`wpt_create` take the abstract finite"
+  IO.println "   allocation capacity `allocCap (req :: rest)` (Heap.lean —"
+  IO.println "   internally the cursor fragment + a pure plan-fit; the OOM"
+  IO.println "   kill arm is excluded by the plan, never assumed away) and"
+  IO.println "   bind an EXISTENTIAL pointer; their statements contain no"
+  IO.println "   AllocCursor/lastAddress/nextAllocId/freshBase/cursorOwn"
+  IO.println "   (grep-checked, docs/2026-09-01_p1-notes.md). The exact-"
+  IO.println "   cursor rules are internal (`wps_create_cursor_internal`/"
+  IO.println "   `wpt_create_cursor_internal`, heap-implementation use only)."
+  IO.println "   LAUNCH: the allocation-aware launchers"
+  IO.println "   (`spike_step_adequacy_alloc`, `wpt_engine_boundU/J_alloc`,"
+  IO.println "   `wpt_strongly_normalizing_alloc`) grant `allocCap` from"
+  IO.println "   real Cerberus memory through the one `launchResources`"
+  IO.println "   helper under `LaunchCoh` (cursor key 0 NONEMPTY; CohG's"
+  IO.println "   allocator-health facts non-vacuous). Chain-closing"
+  IO.println "   consumer: `alloc_create_launch_smoke` (AllocExhibit — a"
+  IO.println "   driveU `.done` equation at fuel exactly 2 from prodMem₀)."
+  IO.println "   RESIDUE (honest): `struct_create_store_wps` still consumes"
+  IO.println "   the internal rule, and the HEADLINE allocating production"
+  IO.println "   exhibits remain MIXED logical/operational (R-02) — their"
+  IO.println "   whole-program rewrites are alloc-arc P2; R-01's closure"
+  IO.println "   test (deleting the public rule or the launch initialization"
+  IO.println "   breaks a HEADLINE self-contained allocation theorem) is"
+  IO.println "   therefore marked pending P2 in the closure table."
   IO.println "5. **Interior (sub-allocation) access is GENERIC** (Phase 2,"
   IO.println "   F-04 retired): one typed-subrange load and one store rule"
   IO.println "   (`wps_load_at`/`wps_store_at` over views; whole-cell forms"
@@ -657,8 +673,9 @@ def Cell.render (env : Environment) : Cell → Except String String
   IO.println "name-and-kind checked, NOT dependency-traced — R-04's staged"
   IO.println "dependency certification is alloc-arc P3). The per-lane lines"
   IO.println "list the rows whose respective cell is non-red. NB `create`"
-  IO.println "is on LOGIC-RULE-LANE with a LOCAL rule only (not launchable,"
-  IO.println "R-01) and is absent from TOTAL-LANE."
+  IO.println "joined TOTAL-LANE at alloc arc P1 (`wpt_create` + the launcher"
+  IO.println "smoke); its PRODUCTION-LANE membership is still the MIXED"
+  IO.println "exhibits (R-02, pending P2) — see Notes 4."
   IO.println ""
   let exportable := rows.filter (·.exportable) |>.map (·.token)
   let coreDriveRows := rows.filter (·.coreDriveRow) |>.map (·.token)

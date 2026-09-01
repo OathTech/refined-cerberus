@@ -20,15 +20,15 @@ layout changes only the offsets, sizes, and decode facts (audit
 Phase-2 exit criterion).
 
 Also here: THE ALLOCATION CLIENT (`struct_create_store_wps`) —
-`wps_create` consumed by an ordinary client: allocate a fresh
-struct through the allocator-cursor resource and initialize its x
-field (no cold-start hoisting, the allocation happens mid-derivation
-on ghost-owned cursor arithmetic). SCOPE (2026-09-01 re-audit,
-R-01): this is a LOCAL wps-level entailment whose premise ASSUMES
-`cursorOwn` — no adequacy launcher grants that resource, so this
-client does not reach an engine-facing (adequacy) theorem; the
-launchable public allocation rule and its adequacy consumer are
-alloc arc P1/P2.
+allocate a fresh struct and initialize its x field mid-derivation.
+SCOPE (2026-09-01 re-audit R-01; alloc arc P1 landed): this client
+still consumes the INTERNAL exact-cursor rule
+(`wps_create_cursor_internal`) with a `cursorOwn` premise, and ends
+at `wps` — it is not an adequacy consumer. The PUBLIC rules
+(`wps_create`/`wpt_create` over `allocCap`) and the allocation-aware
+launchers exist since P1 (see AllocExhibit for their consumers);
+converting THIS client to the public rule + an adequacy theorem is
+alloc arc P2 item 1.
 -/
 import CerberusHeapLang.Adequacy
 import CerberusHeapLang.Wps
@@ -295,17 +295,18 @@ theorem struct_update_certified {GF : BundledGFunctors} [SpikeGpreS GF]
       (by rw [sixBytes_len, hlen1]; decide)
   exact ⟨hx, hy⟩
 
-/-! ## THE ALLOCATION CLIENT (local — see the module header)
+/-! ## THE ALLOCATION CLIENT (internal-rule legacy — see the module
+header)
 
 `create` used mid-derivation as an ordinary rule: the program
 allocates a fresh struct and initializes its x field. The fresh
 pointer is the CLOSED FORM of the allocator arithmetic
-(`cellPtr nid (freshBase la align 16)`) — ownership of the
-allocator-cursor resource is exactly what makes the address
-well-defined, and the out-of-memory arm is excluded by the pure
-`hnz` guard on owned state (no cold-start hoisting). LOCAL ONLY
-(R-01): the `cursorOwn` premise is granted by no adequacy launcher,
-so this theorem ends at `wps` — it is not an adequacy consumer. -/
+(`cellPtr nid (freshBase la align 16)`) — this client still speaks
+the INTERNAL exact-cursor vocabulary (`wps_create_cursor_internal`,
+`cursorOwn`, `freshBase`) and ends at `wps`, so it is not an
+adequacy consumer. Its P2 conversion target: premise
+`allocCap [⟨align, structTy⟩]`, existential pointer, plus an
+adequacy theorem through the allocation-aware launchers. -/
 
 section CreateConsumer
 
@@ -352,7 +353,12 @@ theorem struct_create_store_wps
         (cellPtr nid (freshBase la alignN (CerbMem.sizeofCtype structTy) +
           ((fieldX : Nat) : Int))) fiveVal mo)) from rfl]
   iapply wps_seq
-  iapply wps_create loc ann aprov alignN structTy pref la nid (ev0 :: evs)
+  -- P2 CONVERSION PENDING (charter P2 item 1): this legacy client
+  -- still consumes the INTERNAL exact-cursor rule; its conversion to
+  -- the public `allocCap`-premised `wps_create` + an adequacy
+  -- theorem is the next phase's first step.
+  iapply wps_create_cursor_internal loc ann aprov alignN structTy pref
+    la nid (ev0 :: evs)
     (by rw [structTy_size]; decide) structTy_nonatomic hnz
     (structTy_decIndep _ _)
   isplitl [Hc]

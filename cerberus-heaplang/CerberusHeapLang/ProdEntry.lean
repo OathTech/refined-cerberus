@@ -58,18 +58,19 @@ an UNCONDITIONAL `wp_create` from cell ownership alone is
 unprovable — allocateObject can kill ("out of memory",
 CerbMem.lean:1479) from configurations no cell footprint
 constrains. Phase 2's allocator-cursor resource supplies the
-missing authority locally: `wps_create` (Wps.lean) allocates from
-cursor ownership, the OOM arm excluded by the pure `freshBase`
-guard on owned state. But that rule is LOCAL ONLY — no adequacy
-launcher grants `cursorOwn` (R-01; its one client,
-`struct_create_store_wps`, assumes the resource and ends at `wps`).
-THIS module's cold-start technique is therefore the route the
-allocating production exhibits ACTUALLY use: the create prefix runs
-on the PRODUCTION-PINNED initial memory as handwritten certified
-operational rounds, where allocation success is a theorem (the
-`hpre` hypothesis below, discharged concretely by the exhibits) —
-a MIXED logical/operational proof shape (R-02), scheduled for
-replacement by whole-program logic proofs in alloc arc P1/P2.
+missing authority; alloc arc P1 made it LAUNCHABLE and PUBLIC: the
+create rules take the abstract capacity `allocCap` (Heap.lean), the
+allocation-aware launchers grant it from real memory
+(`launchResources` under `LaunchCoh` — this module proves the
+concrete cold-start instance `prodMem₀_launchCoh` below), and the
+chain closes at the engine (`alloc_create_launch_smoke`,
+AllocExhibit). HOWEVER (R-02, owner alloc arc P2): the allocating
+production exhibits still use THIS module's cold-start technique —
+the create prefix runs on the PRODUCTION-PINNED initial memory as
+handwritten certified operational rounds, where allocation success
+is a theorem (the `hpre` hypothesis below, discharged concretely by
+the exhibits) — a MIXED logical/operational proof shape, scheduled
+for replacement by whole-program logic proofs in alloc arc P2.
 
 Dnn labels are the recorded design findings of
 docs/2026-08-30_spike-sliceB-notes.md.

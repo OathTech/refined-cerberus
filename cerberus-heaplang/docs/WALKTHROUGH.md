@@ -452,28 +452,34 @@ exhibits' engine-level workhorses — and the registration tie keeps
 its own name (`counter_loop_certified_registration`, the renamed
 F-05 debt).
 
-Two allocation caveats keep that closure honest (the 2026-09-01
-skeptical re-audit, R-01/R-02). First, the allocation logic rule
-`wps_create` is LOCAL ONLY: it requires an exclusive
-allocator-cursor resource (`cursorOwn`) that NO adequacy launcher
-grants — every launcher initializes the cursor ghost heap empty —
-so no heap-allocating whole program is proved *through the logic's
-create rule*, and no total-lane `wpt_create` exists at all. Second,
-and consequently, the self-contained allocating production theorems
-above are MIXED logical/operational proofs: their create prefixes
+One allocation caveat keeps that closure honest (the 2026-09-01
+skeptical re-audit, R-01/R-02; alloc arc P1 landed the logic-path
+repair). The allocation LOGIC PATH now exists end to end: public
+`wps_create`/`wpt_create` take the abstract finite capacity
+`allocCap (req :: rest)` and bind an existential fresh pointer
+(statements cursor-free); the allocation-aware launchers
+(`spike_step_adequacy_alloc`, `wpt_engine_boundU/J_alloc`,
+`wpt_strongly_normalizing_alloc`) grant `allocCap` from real
+Cerberus memory through `launchResources` under the `LaunchCoh`
+launch invariant; and the chain is closed at the engine by
+`alloc_create_launch_smoke` (AllocExhibit) — a bare create from the
+production cold-start memory delivering a pointer at `driveU` fuel
+exactly 2, proved only through the public total rule and the
+allocation-aware launcher. WHAT REMAINS OPEN (R-02, alloc arc P2):
+the self-contained allocating production theorems are still MIXED
+logical/operational proofs — their create prefixes
 (`counter_loop_certified_production`'s cold-start cell,
 `list_reverse_certified_production`'s two-create chain build, and
 `exhibitA_prod`'s create plus its termination trace) are handwritten
 certified operational rounds crossing `driverDone_step`, with the
-statement logic driving only the store/load/loop suffixes. They are
-therefore evidence that the shipped pipeline runs these programs as
-claimed — not that the separation logic verifies allocation. The
-repair (a launchable public allocation rule with an existential
-pointer, then whole-program logic proofs) is the allocation arc's
-P1/P2; the finding-by-finding closure table is in
-`docs/2026-09-01_alloc-arc-plan.md`. The README's divergence
-register keeps every remaining seam on one list, each with its
-discharge path.
+statement logic driving only the store/load/loop suffixes; and
+`struct_create_store_wps` still consumes the internal exact-cursor
+rule. Until the P2 rewrites land, those exports are evidence that
+the shipped pipeline runs the programs as claimed — not that the
+separation logic verifies THEIR allocation. The finding-by-finding
+closure table is in `docs/2026-09-01_alloc-arc-plan.md`. The
+README's divergence register keeps every remaining seam on one
+list, each with its discharge path.
 
 ## 5. Reading the theorems: statement surfaces
 

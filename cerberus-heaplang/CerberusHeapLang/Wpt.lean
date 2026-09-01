@@ -1779,6 +1779,228 @@ theorem wpt_store_cell {Ψ : SpikeVal → EnvStack → IProp GF}
     rfl
   · iexact Hcell2
 
+/-! ## The allocation rules at the total stratum (alloc arc P1.4)
+
+Total mirrors of Wps.lean §CreateRule: `wpt_create_cursor_internal`
+(exact-cursor, HEAP-IMPLEMENTATION USE ONLY) and the public
+`wpt_create` (`allocCap`-premised, cursor-free statement).
+
+THE COST BOUND, DERIVED AGAINST `driveU` (not copied from the
+charter): a bare create is one relational create step — the wpt step
+clause consumes 1 budget unit, which `wpt_drive_aux` maps to one
+engine round (`engine_step_matchU` at the create redex) — and its
+result is the BARE pure pointer value (`Step.create` — "a BARE
+value, no Eannot residue", Step.lean's create docstring), whose
+delivery costs `deliveryCost (.pure _) = 1` — one `driveU` round
+(`outcomesU_done`). Total: `2 ≤ k`, the charter's expected minimum,
+confirmed (contrast `wpt_store_at`'s `3 ≤ k`: a store's result is an
+ANNOT value, whose delivery pays the REMOVE-ANNOT tau first). -/
+
+section CreateRuleT
+open Iris.Std.PartialMap
+
+/-- CREATE small axiom, EXACT-CURSOR, total (INTERNAL — see the
+    section header): the total mirror of
+    `wps_create_cursor_internal` at budget `2 ≤ k` (1 create step +
+    1 pure-value delivery, derived above). -/
+theorem wpt_create_cursor_internal {Ψ : SpikeVal → EnvStack → IProp GF}
+    (loc : CerbLocation.Loc) (ann : core_run_annotation)
+    (aprov : CerbMem.Provenance) (alignN : Int) (ty : ctype)
+    (pref : prefix0) (la nid : Int) (ρ : EnvStack) {k : Nat} (hk : 2 ≤ k)
+    (hsz : 0 < CerbMem.sizeofCtype ty) (hatom : atomicTy ty = false)
+    (hnz : freshBase la alignN (CerbMem.sizeofCtype ty) ≠ 0)
+    (hinert : decIndep (freshBase la alignN (CerbMem.sizeofCtype ty)) ty
+      (List.replicate (CerbMem.sizeofCtype ty) undefByte)) :
+    iprop(cursorOwn (GF := GF) ⟨la, nid⟩ ∗
+      ((pointsToCell (cellPtr nid (freshBase la alignN (CerbMem.sizeofCtype ty)))
+          (.own 1) ty (List.replicate (CerbMem.sizeofCtype ty) undefByte) ∗
+        cursorOwn ⟨freshBase la alignN (CerbMem.sizeofCtype ty), nid + 1⟩) -∗
+        Ψ (SpikeVal.pure (Vobject (OVpointer
+          (cellPtr nid (freshBase la alignN (CerbMem.sizeofCtype ty)))))) ρ)) ⊢
+      wpt M Ls k Ψ (createExpr loc ann (.IV aprov alignN) ty pref) ρ := by
+  obtain ⟨k1, rfl⟩ : ∃ k1, k = k1 + 1 := ⟨k - 1, by omega⟩
+  rw [wpt_step_eq k1
+    (show toVal (createExpr loc ann (.IV aprov alignN) ty pref) = none
+      from rfl)
+    (show jumpRedex? (createExpr loc ann (.IV aprov alignN) ty pref) =
+      none from rfl)]
+  iintro ⟨Hc, HΨ⟩ %σ₁ %ns %obs %nt Hσ
+  icases (stateInterp_iff σ₁ ns obs nt).mp $$ Hσ
+    with ⟨%mm, %mb, %mk, %HG, Hmi, Hbi, Hki⟩
+  ihave %Hgetc : ⌜Iris.Std.PartialMap.get? mk 0 =
+      some (⟨la, nid⟩ : AllocCursor)⌝ $$ [Hki Hc]
+  · ihave >%h := cursorHeap_valid $$ [$Hki $Hc]
+    itrivial
+  obtain ⟨hla, hnid⟩ := HG.cursor _ Hgetc
+  simp only at hla hnid
+  subst hla
+  subst hnid
+  have hrun := allocateObject_success σ₁ pref aprov alignN ty hsz hnz
+  iapply fupd_mask_intro Std.LawfulSet.empty_subset
+  iintro Hclose
+  isplitr
+  · ipureintro
+    exact ⟨[], ⟨_, _, _⟩, _, [], ⟨Step.create_canonical hrun, rfl, rfl⟩⟩
+  iintro %r %σ₂ %eₜ %Hstep
+  obtain ⟨hstep, hlbl, rfl⟩ := Hstep
+  obtain ⟨pv', σ'', hmem', hout⟩ := hstep.create_inv
+  rw [hrun] at hmem'
+  obtain ⟨rfl, rfl⟩ : cellPtr σ₁.nextAllocId
+      (freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype ty)) = pv' ∧
+      CerbMem.writeBytesTo
+        { σ₁ with
+            nextAllocId := σ₁.nextAllocId + 1,
+            lastAddress := freshBase σ₁.lastAddress alignN
+              (CerbMem.sizeofCtype ty),
+            allocations := σ₁.allocations.insert σ₁.nextAllocId
+              { base := freshBase σ₁.lastAddress alignN
+                  (CerbMem.sizeofCtype ty),
+                size := (CerbMem.sizeofCtype ty : Int),
+                ty := some ty,
+                isReadonly := .IsWritable,
+                prefix_ := pref } }
+        (freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype ty))
+        (List.replicate (CerbMem.sizeofCtype ty) undefByte) = σ'' := by
+    have h := Option.some.inj hmem'
+    exact ⟨congrArg Prod.fst h, congrArg Prod.snd h⟩
+  obtain ⟨re, rρ, rM⟩ := r
+  simp only at hlbl
+  obtain rfl : M = rM := hlbl.symm
+  obtain ⟨hre, hrρ, hσ⟩ : re = Expr [] (Epure (Pexpr [] () (PEval
+        (Vobject (OVpointer (cellPtr σ₁.nextAllocId
+          (freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype ty)))))))) ∧
+      rρ = ρ ∧ σ₂ = _ := by
+    simpa [Prod.mk.injEq] using hout
+  subst hre hσ
+  obtain rfl : ρ = rρ := hrρ.symm
+  imod Hclose with -
+  -- ghost: advance the cursor, mint the metadata, mint the bytes
+  imod (cursorHeap_update
+    (AllocCursor.mk (freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype ty))
+      (σ₁.nextAllocId + 1))) $$ [$Hki $Hc] with ⟨Hki, Hc⟩
+  have hfreshm : Iris.Std.PartialMap.get? mm σ₁.nextAllocId = none := by
+    cases hg : Iris.Std.PartialMap.get? mm σ₁.nextAllocId with
+    | none => rfl
+    | some mc =>
+      have := HG.cur_meta_lt (by rw [Hgetc]; simp) _ _ hg
+      omega
+  imod (metaHeap_alloc
+    (MetaCell.mk (freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype ty)) ty)
+    hfreshm) $$ [$Hmi] with ⟨Hmi, Hmnew⟩
+  have hfreshb : (rangeMap
+      (freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype ty))
+      (List.replicate (CerbMem.sizeofCtype ty) undefByte)) ##ₘ mb := by
+    rw [Iris.Std.PartialMap.disjoint_iff]
+    intro key
+    cases hg : Iris.Std.PartialMap.get? mb key with
+    | none => exact .inr rfl
+    | some b =>
+      left
+      rw [rangeMap_get?]
+      rw [if_neg ?_]
+      have hkey := HG.cur_byte_lo (by rw [Hgetc]; simp) _ _ hg
+      have hbase_le : freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype ty) +
+          (CerbMem.sizeofCtype ty : Int) ≤ σ₁.lastAddress :=
+        freshBase_add_le σ₁.lastAddress alignN ty hsz hnz
+      intro hcon
+      obtain ⟨h1, h2⟩ := hcon
+      rw [List.length_replicate] at h2
+      exact absurd (Int.lt_of_lt_of_le h2 (Int.le_trans hbase_le hkey))
+        (Int.lt_irrefl key)
+  imod (byteHeap_alloc_big (rangeMap
+      (freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype ty))
+      (List.replicate (CerbMem.sizeofCtype ty) undefByte)) hfreshb)
+    $$ [$Hbi] with ⟨Hbi, Hbnew⟩
+  imodintro
+  isplitl [Hmi Hbi Hki]
+  · iapply (stateInterp_iff _ _ _ _).mpr
+    iexists (Iris.Std.PartialMap.insert mm σ₁.nextAllocId
+        ⟨freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype ty), ty⟩),
+      (Iris.Std.PartialMap.union (rangeMap
+        (freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype ty))
+        (List.replicate (CerbMem.sizeofCtype ty) undefByte)) mb),
+      (Iris.Std.PartialMap.insert mk 0
+        ⟨freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype ty),
+          σ₁.nextAllocId + 1⟩)
+    isplitr [Hmi Hbi Hki]
+    · ipureintro
+      exact HG.create pref alignN ty hsz hatom Hgetc hnz
+    isplitl [Hmi]
+    · iexact Hmi
+    isplitl [Hbi]
+    · iexact Hbi
+    · iexact Hki
+  · rw [show Expr ([] : List annot) (Epure (Pexpr [] () (PEval
+        (Vobject (OVpointer (cellPtr σ₁.nextAllocId
+          (freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype ty)))))))) =
+      ofVal (.pure (Vobject (OVpointer (cellPtr σ₁.nextAllocId
+        (freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype ty))))))
+      from rfl]
+    iapply (wpt_ofVal
+      (.pure (Vobject (OVpointer (cellPtr σ₁.nextAllocId
+        (freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype ty)))))) ρ
+      (by simp only [deliveryCost_pure]; omega))
+    ihave HB : bytesOwn (freshBase σ₁.lastAddress alignN
+        (CerbMem.sizeofCtype ty)) (.own 1)
+        (List.replicate (CerbMem.sizeofCtype ty) undefByte) $$ [Hbnew]
+    · iapply bigSepM_rangeMap $$ Hbnew
+    iapply HΨ
+    isplitl [Hmnew HB]
+    · iapply (pointsToCell_iff _ _ _ _).mpr
+      iexists σ₁.nextAllocId,
+        (freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype ty))
+      isplit
+      · ipureintro; rfl
+      isplitl [Hmnew]
+      · iexact Hmnew
+      isplitl [HB]
+      · iexact HB
+      · ipureintro
+        exact ⟨by simp, hinert⟩
+    · iexact Hc
+
+/-- THE PUBLIC TOTAL ALLOCATION RULE (alloc arc P1.4): the total
+    analogue of `wps_create` at the DERIVED cost bound `2 ≤ k` (see
+    the section header — one create step + one pure-value delivery
+    against `driveU`). Statement is cursor-free (the P1 grep test);
+    capacity for `req :: rest` buys the create, the continuation
+    binds the fresh pointer with full whole-cell ownership and
+    `allocCap rest`. -/
+theorem wpt_create {Ψ : SpikeVal → EnvStack → IProp GF}
+    (loc : CerbLocation.Loc) (ann : core_run_annotation)
+    (aprov : CerbMem.Provenance) (req : AllocReq) (rest : List AllocReq)
+    (pref : prefix0) (ρ : EnvStack) {k : Nat} (hk : 2 ≤ k)
+    (hatom : atomicTy req.ty = false)
+    (hinert : ∀ a : Int, decIndep a req.ty
+      (List.replicate (CerbMem.sizeofCtype req.ty) undefByte)) :
+    iprop(allocCap (GF := GF) (req :: rest) ∗
+      (∀ p : CerbMem.PointerValue,
+        (pointsToCell p (.own 1) req.ty
+            (List.replicate (CerbMem.sizeofCtype req.ty) undefByte) ∗
+          allocCap rest) -∗
+        Ψ (SpikeVal.pure (Vobject (OVpointer p))) ρ)) ⊢
+      wpt M Ls k Ψ (createExpr loc ann (.IV aprov req.align) req.ty pref) ρ := by
+  unfold allocCap
+  iintro ⟨⟨%c, Hc, %hfit⟩, HΨ⟩
+  obtain ⟨c', hadv, hrest⟩ := (PlanFits_cons_iff c req rest).mp hfit
+  obtain ⟨hsz, hnz, rfl⟩ := advanceCursor_some_inv hadv
+  iapply wpt_create_cursor_internal loc ann aprov req.align req.ty pref
+    c.lastAddr c.nextId ρ hk hsz hatom hnz (hinert _)
+  isplitl [Hc]
+  · iexact Hc
+  iintro ⟨Hpt, Hc⟩
+  iapply HΨ
+  isplitl [Hpt]
+  · iexact Hpt
+  · iexists ⟨freshBase c.lastAddr req.align (CerbMem.sizeofCtype req.ty),
+      c.nextId + 1⟩
+    isplitl [Hc]
+    · iexact Hc
+    · ipureintro
+      exact hrest
+
+end CreateRuleT
+
 /-! ## Total block specifications and THE COLLAPSE into Iris TWP -/
 
 /-- TOTAL BLOCK SPECIFICATIONS: every registered label's body meets

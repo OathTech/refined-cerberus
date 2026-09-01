@@ -38,7 +38,7 @@ owns no constructor and is mechanically barred from claiming any.
 | value delivery (Epure at PEval; Eannot values) | CERTIFIED (drive lane) | DECLARED — terminal — the toVal/ofVal value protocol (values do not step) | OK `wp_ofVal`, `wps_ofVal` | OK `Frag.val_pure` | OK `step_ctx_done`, `step_ctx_remove_annot` | OK `engine_complete`, `engine_adequacyJ` | OK `wpt_ofVal`, `fib_certified_total`, `list_reverse_certified_total` | OK `exhibitA_prod`, `fib_certified_production` | OK `exhibitA_engine` |
 | Eaction Store0 (value operands) | CERTIFIED (drive lane) | OK `Step.store` | OK `wp_store`, `wps_store` | OK `Frag.store` | OK `step_ctx_store`, `engine_complete_storeU` — TWO-SIDED at any MachineCtx | OK `engine_complete`, `engine_adequacyJ` | OK `wpt_store_at`, `wpt_store_cell_at`, `wpt_store_cell`, `list_reverse_certified_total` | OK `exhibitA_prod`, `counter_loop_certified_production`, `list_reverse_certified_production` | OK `exhibitB_engine`, `counter_loop_certified`, `list_reverse_certified` |
 | Eaction Load0 (value operand) | CERTIFIED (drive lane) | OK `Step.load` | OK `wp_load`, `wps_load` | OK `Frag.load` | OK `step_ctx_load` | OK `engine_complete`, `engine_adequacyJ` | OK `wpt_load_at`, `wpt_load_cell_at`, `list_reverse_certified_total` | OK `exhibitA_prod`, `list_reverse_certified_production` | OK `exhibitA_engine`, `array_sum_certified` |
-| Eaction Create0 | CERTIFIED (drive lane) | OK `Step.create` | OK `wps_create` — LOCAL RULE ONLY — allocator resource not launchable: the rule's cursorOwn premise is granted by NO adequacy launcher (every launcher initializes the cursor ghost heap EMPTY; re-audit R-01, owner alloc-arc P1); OOM excluded by the pure freshBase guard on owned cursor state — see Notes 4 | OK `Frag.create` | OK `step_ctx_create` | OK `engine_complete`, `engine_adequacyJ` | RED — no total rule yet (no wpt_create — blocked on the launchable allocator resource (R-01), owner alloc-arc P1; production creates cross the driver as handwritten certified rounds instead — driverDone_step); see Notes 2 | OK `exhibitA_prod`, `counter_loop_certified_production`, `list_reverse_certified_production` — MIXED logical/operational proofs (R-02): the create prefixes are handwritten certified operational rounds, NOT create-rule consumers | OK `exhibitA_prod`, `struct_create_store_wps` — exhibitA_prod is a MIXED logical/operational proof (create prefix + termination trace operational — R-02); struct_create_store_wps is a LOCAL wps-level entailment ASSUMING cursorOwn (R-01) — neither consumes the create rule from an adequacy launch |
+| Eaction Create0 | CERTIFIED (drive lane) | OK `Step.create` | OK `wps_create`, `wps_create_cursor_internal` — alloc arc P1: the PUBLIC wps_create takes the abstract capacity allocCap (req :: rest) and binds an existential pointer (statement cursor-free); the exact-cursor form is wps_create_cursor_internal (heap-implementation use only); OOM excluded by the plan-fit inside allocCap — see Notes 4 | OK `Frag.create` | OK `step_ctx_create` | OK `engine_complete`, `engine_adequacyJ` | OK `wpt_create`, `alloc_create_launch_smoke` | OK `exhibitA_prod`, `counter_loop_certified_production`, `list_reverse_certified_production` — STILL MIXED logical/operational proofs (R-02, owner alloc-arc P2): the create prefixes are handwritten certified operational rounds, NOT create-rule consumers | OK `alloc_create_launch_smoke`, `alloc_two_creates_wps`, `alloc_create_wpt`, `struct_create_store_wps` — alloc_create_launch_smoke is the P1 engine-facing chain-closer (driveU .done at fuel 2 via wpt_create + wpt_engine_boundU_alloc from prodMem₀); alloc_two_creates_wps / alloc_create_wpt are the wps/wpt-level local consumers of the PUBLIC rules; struct_create_store_wps still consumes the INTERNAL exact-cursor rule (P2 item 1 converts it); the HEADLINE allocating exhibits are not yet consumers (R-02, P2) |
 | Esseq, wildcard pattern | CERTIFIED (drive lane) | OK `Step.sseq_pure`, `Step.sseq_annot`, `Step.sseq_ctx` | OK `wp_sseq`, `wps_seq` | OK `Frag.sseq` | OK `step_ctx_beta_pure`, `step_ctx_beta_annot` | OK `engine_complete`, `engine_adequacyJ` | OK `wpt_seq`, `list_reverse_certified_total` | OK `exhibitA_prod`, `counter_loop_certified_production`, `list_reverse_certified_production` | OK `exhibitA_engine`, `exhibitC_engine` |
 | Eannot residue (descent + merge) | CERTIFIED (drive lane) | OK `Step.annot_ctx`, `Step.annot_merge` | OK `wp_annot`, `wps_annot` | OK `Frag.annot` | OK `step_ctx_merge` | OK `engine_complete`, `engine_adequacyJ` | OK `wpt_annot`, `list_reverse_certified_total` | OK `exhibitA_prod`, `counter_loop_certified_production`, `list_reverse_certified_production` | OK `exhibitA_engine` |
 | Esave (block entry, value-shaped params) | CERTIFIED (drive lane) | OK `Step.save` | OK `wps_save` | OK `Frag.save` | OK `step_ctx_save` | OK `engine_adequacyJ` | OK `wpt_save`, `fib_certified_total`, `list_reverse_certified_total` | OK `fib_certified_production`, `counter_loop_certified_production`, `list_reverse_certified_production` | OK `counter_loop_certified`, `fib_certified` |
@@ -85,9 +85,10 @@ owns no constructor and is mechanically barred from claiming any.
    `diverge_total_unprovable` (DivergeExhibit — the self-jump
    loop's total derivation is FALSE). RED total cells:
    Ecase/Ewseq have no wpt rule yet (mechanical analogs of
-   their wps rules, no consumer — registered follow-ons);
-   create has no wpt rule AND its wps rule is local-only
-   (R-01/Notes 4) — owner alloc-arc P1.
+   their wps rules, no consumer — registered follow-ons).
+   create's total rule landed in alloc arc P1 (`wpt_create`,
+   derived cost bound 2 = one create step + one pure-value
+   delivery; consumer: the launcher smoke, Notes 4).
    `blockSpecs_intro_variant` is RETIRED, replaced by
    `blockSpecsT` (Wpt.lean): the smaller-measure discipline is
    the judgment's jump clause, never an optional hypothesis.
@@ -116,22 +117,33 @@ owns no constructor and is mechanically barred from claiming any.
    chains), not create-rule consumers; the total judgment
    drives the loop suffixes only. fib (no heap) is the fully
    logic-driven positive control.
-4. **`create` has a LOCAL logic rule ONLY** (Phase 2 proved
-   `wps_create`; the 2026-09-01 skeptical re-audit R-01
-   DOWNGRADED the claim — the former "D26 RETIRED" wording
-   overstated closure): the rule allocates through the
-   allocator-cursor ghost resource, the out-of-memory kill arm
-   excluded by the pure `freshBase ... ≠ 0` guard computed on
-   OWNED cursor state — but the resource is NOT LAUNCHABLE:
-   every adequacy launcher initializes the cursor ghost heap
-   EMPTY and no cursor-allocation lemma exists, so no
-   engine-facing theorem consumes the rule. Its one client,
-   `struct_create_store_wps`, ASSUMES `cursorOwn` and ends at
-   `wps` (not an adequacy consumer); the row's other named
-   consumers are MIXED logical/operational production exhibits
-   (R-02). Owner: alloc-arc P1 (launchable public rule +
-   launcher + `wpt_create`) and P2 (whole-program logic
-   consumers).
+4. **`create` has PUBLIC partial+total rules, LAUNCHABLE**
+   (alloc arc P1; the R-01 repair — rules + launch landed,
+   closure test pending P2's whole-program consumers): the
+   public `wps_create`/`wpt_create` take the abstract finite
+   allocation capacity `allocCap (req :: rest)` (Heap.lean —
+   internally the cursor fragment + a pure plan-fit; the OOM
+   kill arm is excluded by the plan, never assumed away) and
+   bind an EXISTENTIAL pointer; their statements contain no
+   AllocCursor/lastAddress/nextAllocId/freshBase/cursorOwn
+   (grep-checked, docs/2026-09-01_p1-notes.md). The exact-
+   cursor rules are internal (`wps_create_cursor_internal`/
+   `wpt_create_cursor_internal`, heap-implementation use only).
+   LAUNCH: the allocation-aware launchers
+   (`spike_step_adequacy_alloc`, `wpt_engine_boundU/J_alloc`,
+   `wpt_strongly_normalizing_alloc`) grant `allocCap` from
+   real Cerberus memory through the one `launchResources`
+   helper under `LaunchCoh` (cursor key 0 NONEMPTY; CohG's
+   allocator-health facts non-vacuous). Chain-closing
+   consumer: `alloc_create_launch_smoke` (AllocExhibit — a
+   driveU `.done` equation at fuel exactly 2 from prodMem₀).
+   RESIDUE (honest): `struct_create_store_wps` still consumes
+   the internal rule, and the HEADLINE allocating production
+   exhibits remain MIXED logical/operational (R-02) — their
+   whole-program rewrites are alloc-arc P2; R-01's closure
+   test (deleting the public rule or the launch initialization
+   breaks a HEADLINE self-contained allocation theorem) is
+   therefore marked pending P2 in the closure table.
 5. **Interior (sub-allocation) access is GENERIC** (Phase 2,
    F-04 retired): one typed-subrange load and one store rule
    (`wps_load_at`/`wps_store_at` over views; whole-cell forms
@@ -179,14 +191,15 @@ proof-flow dependency (lane membership is cell non-redness,
 name-and-kind checked, NOT dependency-traced — R-04's staged
 dependency certification is alloc-arc P3). The per-lane lines
 list the rows whose respective cell is non-red. NB `create`
-is on LOGIC-RULE-LANE with a LOCAL rule only (not launchable,
-R-01) and is absent from TOTAL-LANE.
+joined TOTAL-LANE at alloc arc P1 (`wpt_create` + the launcher
+smoke); its PRODUCTION-LANE membership is still the MIXED
+exhibits (R-02, pending P2) — see Notes 4.
 
 ```
 ADEQUACY-EXPORTABLE: value store load create sseq-wild annot save if run sseq-spec pure-sym load-op sseq-sym memop-ptreq memop-op store-op case-value wseq-wild pure-operands
 CORE-DRIVE-ROW: value store load create sseq-wild annot save if run sseq-spec pure-sym load-op sseq-sym memop-ptreq memop-op store-op case-value wseq-wild pure-operands
 LOGIC-RULE-LANE: value store load create sseq-wild annot save if run sseq-spec pure-sym load-op sseq-sym memop-ptreq memop-op store-op case-value wseq-wild pure-operands
-TOTAL-LANE: value store load sseq-wild annot save if run sseq-spec pure-sym load-op sseq-sym memop-ptreq memop-op store-op pure-operands
+TOTAL-LANE: value store load create sseq-wild annot save if run sseq-spec pure-sym load-op sseq-sym memop-ptreq memop-op store-op pure-operands
 PRODUCTION-LANE: value store load create sseq-wild annot save if run sseq-spec pure-sym load-op sseq-sym memop-ptreq memop-op store-op pure-operands
 LOCAL-RULE-ONLY: 
 ```
