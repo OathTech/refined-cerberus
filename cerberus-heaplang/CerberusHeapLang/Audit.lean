@@ -91,6 +91,7 @@ import CerberusHeapLang.FibExhibit
 import CerberusHeapLang.DivergeExhibit
 import CerberusHeapLang.ArrayExhibit
 import CerberusHeapLang.ListRevExhibit
+import CerberusHeapLang.TreeRotExhibit
 import CerberusHeapLang.CaseExhibit
 import CerberusHeapLang.WseqExhibit
 import CerberusHeapLang.StructExhibit
@@ -462,6 +463,23 @@ info: 'CerberusHeapLang.list_reverse_certified_total' depends on axioms: [propex
 info: 'CerberusHeapLang.list_reverse_terminates' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in #print axioms CerberusHeapLang.list_reverse_terminates
+
+-- Foundations Phase 4 (2026-09-01): THE FLAGSHIPS AT FULL STRENGTH
+-- (audit F-06) — identity-indexed same-footprint in-place reversal
+-- with the frame quantifier (the restated list flagships above keep
+-- their names; their new statements ride the same pins) and THE
+-- SECOND CLIENT: binary-tree rotation through the generic layer,
+-- zero core edits, partial + unconditional-total. Cones exactly the
+-- trio.
+/--
+info: 'CerberusHeapLang.tree_rotate_certified' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms CerberusHeapLang.tree_rotate_certified
+
+/--
+info: 'CerberusHeapLang.tree_rotate_certified_total' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms CerberusHeapLang.tree_rotate_certified_total
 
 /--
 info: 'CerberusHeapLang.diverge_total_unprovable' depends on axioms: [propext, Classical.choice, Quot.sound]

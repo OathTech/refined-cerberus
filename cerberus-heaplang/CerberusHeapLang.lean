@@ -17,6 +17,7 @@ import CerberusHeapLang.FibExhibit
 import CerberusHeapLang.DivergeExhibit
 import CerberusHeapLang.ArrayExhibit
 import CerberusHeapLang.ListRevExhibit
+import CerberusHeapLang.TreeRotExhibit
 import CerberusHeapLang.CaseExhibit
 import CerberusHeapLang.WseqExhibit
 import CerberusHeapLang.StructExhibit
