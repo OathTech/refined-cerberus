@@ -219,3 +219,25 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   suite + fresh re-audit). The Phase-1 design-decision record is
   still written operator-visible in the arc docs but does not
   block.
+- **2026-08-31 [USER] The substitution ruling DOWNGRADED + the
+  rulings-skepticism discipline**: "I don't feel strongly about args
+  by substitution (that might have been inherited from the failed
+  reasoning project). I think you should be a bit skeptical /
+  careful about things I've 'ruled'." The 2026-08-29
+  calls-by-substitution ruling is downgraded to an OPEN QUESTION:
+  gathered evidence already contradicts it (the env is live state in
+  the language tuple; the engine's call protocol binds args via
+  bindArgs into the env, not substitution — the mirror follows the
+  engine). The logic-level shape (env-aware call rule with a
+  Cerberus forcing fact vs a substitution-facade with an env≈subst
+  correspondence) is settled empirically by the future calls-arc
+  probe with pre-registered criteria. Standing discipline: [USER]
+  tags fix PROVENANCE, not truth — values/goals rulings are fixed
+  points; technical rulings are revisitable claims, with
+  evidence-conflicts surfaced for re-adjudication and failed-era
+  "corroboration" screened as a contamination vector.
+- **2026-08-31 [USER] Direction: the calls arc** (post-foundations):
+  grow the miniature logic with function calls and specs, "derisk
+  all the crux points… creep up on refinedC step by step"; flagship
+  = recursive fib (partial, then total via the measure-across-calls
+  layer). Prerequisites are foundations Phases 1-3 outputs.
