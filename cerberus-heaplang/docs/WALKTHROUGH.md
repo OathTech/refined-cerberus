@@ -131,12 +131,17 @@ instantiation.
 
 ### 3.1 A small axiom
 
-The logic's assertions are Iris propositions over a ghost heap of
-**cells**: one cell per allocation, holding its base address, C
-type, and byte contents (`Heap.lean`). `pointsToCell p (ty, bs)` —
-written with the usual ↦ intuition — says: *I own the allocation
-`p` points to; it is live, in bounds, writable, non-atomic, and its
-bytes are exactly `bs`.* The store small axiom (`Rules.lean:143`):
+The logic's assertions are Iris propositions over a SPLIT ghost
+carrier (Phase 2, the Caesium-shaped heap/allocs factorization): a
+per-BYTE heap (address ↦ byte — the ghost fragment of the engine's
+own bytemap), a per-allocation METADATA heap (allocation id ↦
+base/type — the provenance/metadata authority), and a one-cell
+allocator-cursor heap (`Heap.lean`). Typed subrange VIEWS
+(`pointsToView`) own one field/element range of one allocation and
+split/join at real ∗; `pointsToCell p (ty, bs)` — written with the
+usual ↦ intuition — is the MAXIMAL view: *I own the whole
+allocation `p` points to; it is live, in bounds, writable,
+non-atomic, and its bytes are exactly `bs`.* The store small axiom (`Rules.lean:143`):
 
 ```lean
 theorem wp_store … 

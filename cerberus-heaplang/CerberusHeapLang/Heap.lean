@@ -2,36 +2,52 @@
 CerberusHeapLang.Heap — the points-to over the engine's memory
 state, on iris-lean's GenHeap.
 
-GRANULARITY DECISION: the ghost carrier is ALLOCATION-ROOTED — one
-ghost cell per allocation id, holding (base address, C type, byte
-list). Why:
-- loadM/storeM success is decided by the ALLOCATION table (liveness,
-  bounds, writability, atomicity — CerbMem.lean:1586-1696), so a
-  byte-only points-to cannot entail access success (the allocation
-  facts would need a second ghost heap anyway);
-- the value payload is the BYTE list (mirror-true to `bytemap`),
-  which is exactly RefinedC/Caesium's `l ↦ v : list mbyte` shape;
-  value-level claims are stated OVER the bytes by encoding
-  predicates — the ty_deref/ty_ref factorization grows on this
-  without change;
-- per-byte splitting of one allocation (struct fields) is the
-  registered growth step: split into a per-byte heap + a
-  per-allocation metadata heap. CHANGED-SHAPE, not blocking.
+GRANULARITY (Phase 2 — the ownership split, the registered growth
+step EXECUTED): the ghost carrier is the donor-shaped SPLIT (Caesium
+heap/allocs; RefinedC theories/caesium/ghost_state.v is the
+reference):
+- a per-BYTE heap (absolute address ↦ AbsByte — the ghost fragment
+  of the engine's own `bytemap`), so subrange ownership splits and
+  joins at REAL ∗ (`bytesOwn`, `pointsToView`);
+- a per-allocation METADATA heap (allocation id ↦ base/type — the
+  provenance/metadata authority: loadM/storeM success is decided by
+  the ALLOCATION table (liveness, bounds, writability, atomicity —
+  CerbMem.lean:1586-1696), so byte content alone can never entail
+  access success; the metadata cell carries exactly those facts and
+  is the per-allocation exclusivity anchor);
+- a one-cell ALLOCATOR-CURSOR heap (`AllocCursor` — the two MemState
+  fields `allocateObject` reads/writes), the D26 resource: without
+  it `create`'s reducibility is unprovable from footprints; with it
+  the out-of-memory arm is a pure guard on owned state.
+The whole-allocation `pointsToCell` is the MAXIMAL VIEW (offset 0,
+view type = allocation type) plus the image's decode-inertness fact;
+`SpikeCell`/`Coh`/`CellCoh` remain the PURE footprint vocabulary of
+the exported engine-facing statements (`Sat`/`SemTriple`).
+
+METADATA LIFETIME NOTE (named mover): kill/free is outside the
+fragment, so metadata never dies and views may share it fractionally
+without a liveness component. When kill joins the fragment, the
+metadata heap gains the donor's alloc_alive/freeable split
+(fractional liveness + the deallocation permission).
 
 STATE INTERPRETATION (memory only — no driver state):
-`stateInterp σ _ _ _ := ∃ m, ⌜Coh σ m⌝ ∗ genHeapInterp m` over the
-real `CerbMem.MemState`. `Coh` is the coupling invariant: every ghost
-cell is backed by a live, writable, in-bounds, non-atomic allocation
-whose bytemap slice IS the cell's byte list; cells are pairwise
-disjoint. The union-member/function-pointer side tables are SYMBOLIC
-(read-only context, arbitrary and returned verbatim): each cell
-carries an INERTNESS premise (`CellCoh.dec_indep`) saying its decode
-ignores both tables — exactly what loadM's reconstruction reads them
-for — and `StorableAt` carries the serialization-side analogues.
-For scalar cells all of these are `rfl`. (The full-build shape is
-ghost ownership of the tables.)
+`stateInterp σ _ _ _ := ∃ mm mb mk, ⌜CohG σ mm mb mk⌝ ∗ interps`
+over the real `CerbMem.MemState`. `CohG` couples: byte cells to the
+bytemap readout; metadata cells to live/writable/typed/non-atomic
+allocations, pairwise range-disjoint; a cursor cell (key 0) to
+lastAddress/nextAllocId, its PRESENCE carrying the allocator-health
+facts `wps_create` needs (fresh ids unallocated and not dead; all
+ghost-tracked addresses at or above the downward-growing cursor) —
+cursor-free launches owe nothing new. The union-member/
+function-pointer side tables are SYMBOLIC (read-only context):
+decode-inertness rides as a pure payload of `pointsToCell`
+(`decIndep`; per-view decode premises on the generic rules), and
+`StorableAt` carries the serialization-side analogues. For scalar
+and integer-array images all of these are `rfl`.
 
-Design records: docs/2026-08-30_spike-recon.md §5.
+Design records: docs/2026-08-30_spike-recon.md §5 (the original
+allocation-rooted decision), docs/2026-09-01_phase2-notes.md (the
+split).
 -/
 import Iris
 import CerberusHeapLang.Step

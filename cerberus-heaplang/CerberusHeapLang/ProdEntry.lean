@@ -50,16 +50,17 @@ and `counter_loop_certified_production` re-exports the counter loop
 at that derived tie. (The full production `runND` equation for a
 loop RUN remains a registered residual.)
 
-Note on `create` and the WP layer (design finding, recorded): the
-fragment has `create` at the Step/certification level ONLY. An
-unconditional `wp_create` small axiom is UNPROVABLE in this logic:
-allocateObject can kill ("out of memory", CerbMem.lean:1479)
-from configurations the footprint does not constrain, so NotStuck
-cannot be established from cell ownership — a sound `wp_create` needs
-an allocator-cursor resource in the state interpretation (the
-registered full-build shape; `genHeap_alloc` is then its ghost step).
-Cold-start programs instead run their create prefix on the
-PRODUCTION-PINNED initial memory, where allocation success is a
+Note on `create` and the WP layer (D26, RETIRED in Phase 2): an
+UNCONDITIONAL `wp_create` from cell ownership alone is unprovable —
+allocateObject can kill ("out of memory", CerbMem.lean:1479) from
+configurations no cell footprint constrains. Phase 2's
+allocator-cursor resource supplies the missing authority:
+`wps_create` (Wps.lean) allocates from cursor ownership, the OOM
+arm excluded by the pure `freshBase` guard on owned state
+(consumer: `struct_create_store_wps`). THIS module's cold-start
+technique predates it and remains valid as-is: the create prefix
+runs on the PRODUCTION-PINNED initial memory, where allocation
+success is a
 theorem (the `hpre` hypothesis below, discharged concretely by the
 exhibits).
 
