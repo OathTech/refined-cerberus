@@ -50,6 +50,8 @@ def pinned : List Name := [
   `CerberusHeapLang.array_sum_certified,
   `CerberusHeapLang.list_reverse_certified,
   `CerberusHeapLang.list_reverse_demo,
+  `CerberusHeapLang.tree_rotate_certified,
+  `CerberusHeapLang.tree_rotate_certified_total,
   `CerberusHeapLang.exhibitA_prod,
   `CerberusHeapLang.counter_loop_certified_production]
 

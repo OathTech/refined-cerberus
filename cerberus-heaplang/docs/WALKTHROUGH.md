@@ -46,9 +46,16 @@ semantics, executed by the real interpreter.
 
 The headline exhibit is the canonical one from the
 Reynolds/O'Hearn separation-logic tradition: **in-place linked-list
-reversal**, specified with a structurally recursive `isList`
-predicate and proved with a loop invariant of the textbook shape —
-then read back as a theorem about the engine's execution.
+reversal**, specified with a structurally recursive,
+identity-indexed `isList` predicate and proved with a loop
+invariant of the textbook shape — then read back as a theorem about
+the engine's execution stating the full classical claim:
+same footprint (the same allocations, nothing allocated or
+leaked), in-place relinking (each node keeps its own value),
+an arbitrary disjoint frame preserved verbatim, and termination
+(foundations Phase 4). A second, structurally different client —
+binary-tree rotation — replays the same shape with zero core
+edits.
 
 ## 2. What a program looks like
 
@@ -109,7 +116,7 @@ round trip is proved against the engine's own
 serializer/deserializer, not assumed.
 
 And this is a real Lean term, not pseudocode — the loop body
-(`ListRevExhibit.lean:930`):
+(`ListRevExhibit.lean:505`):
 
 ```lean
 def lrBody (loc : CerbLocation.Loc) (ann ra : core_run_annotation)
@@ -141,7 +148,7 @@ allocator-cursor heap (`Heap.lean`). Typed subrange VIEWS
 split/join at real ∗; `pointsToCell p (ty, bs)` — written with the
 usual ↦ intuition — is the MAXIMAL view: *I own the whole
 allocation `p` points to; it is live, in bounds, writable,
-non-atomic, and its bytes are exactly `bs`.* The store small axiom (`Rules.lean:143`):
+non-atomic, and its bytes are exactly `bs`.* The store small axiom (`Rules.lean:176`):
 
 ```lean
 theorem wp_store … 
@@ -245,7 +252,7 @@ There is no Iris in this statement. Unpack the quantifiers:
   the drive (the 2026-08-31 audit's F-02 finding); that proof is
   retired.
 
-The bridge theorem is `semantic_triple_sound` (`Adequacy.lean:464`):
+The bridge theorem is `semantic_triple_sound` (`Adequacy.lean:892`):
 a triple proved in the derived logic (`ProvenTriple` — the only
 place the WP appears in the exported layer) yields the `SemTriple`
 above. Its proof is the adequacy argument: Iris adequacy over the
@@ -259,44 +266,59 @@ can resolve its target), and `engine_adequacyJ` exports
 
 ### 3.3 The headline theorem, read line by line
 
-`list_reverse_certified` (`ListRevExhibit.lean:1690`), abridged to
-its quantifier skeleton:
+`list_reverse_certified` (`ListRevExhibit.lean`; Phase 4 — the full
+F-06 statement), abridged to its quantifier skeleton:
 
 ```lean
 theorem list_reverse_certified …
-    (xs : List Int) (head : CerbMem.PointerValue)
-    (m₀ : SpikeHeapF SpikeCell) (hseed : SeedChain m₀ head xs)
+    (ns : List (Int × Int)) (head : CerbMem.PointerValue)
+    (m₀ : CellMap) (hseed : SeedChain m₀ head ns)
+    (R : CellMap) (hR : m₀ ##ₘ R)
     …
-    (σ₀ : Mem) (hcoh : Coh σ₀ m₀)
+    (σ₀ : Mem) (hcoh : Sat σ₀ (m₀ ∪ R))
     (nsteps : Nat) (aids : Nat → Nat)
     (hfuel : 6 + nsteps ≤ lemDefaultFuel) … :
     (∀ r, driveJ rs aids nsteps (procThread lrProcSym prog [fmapEmpty]) σ₀ ≠ .killed r) ∧
     (driveJ … ≠ .stuck) ∧
     (∀ (v : value) (σ' : Mem), driveJ … = .done v σ' →
-      ∃ p' : CerbMem.PointerValue, v = ptrVal p' ∧ ChainAt σ' p' xs.reverse)
+      ∃ (p' : CerbMem.PointerValue) (Q : CellMap),
+        v = ptrVal p' ∧ SeedChain Q p' ns.reverse ∧
+        (∀ k, (get? Q k).isSome ↔ (get? m₀ k).isSome) ∧
+        Q ##ₘ R ∧ Sat σ' (Q ∪ R))
 ```
 
-- **Hypotheses**: `xs` is any mathematical list of integers; `m₀`
-  is a cell footprint forming a linked chain for `xs` from `head`
-  (`SeedChain`: one disjoint node allocation per element,
-  engine-serialized field bytes, well-formed machine addresses);
-  `σ₀` is any engine memory actually carrying that footprint
-  (`Coh`); plus the fuel bounds.
+- **Hypotheses**: `ns` is any list of nodes — each an ALLOCATION ID
+  paired with its value; `m₀` is a cell footprint forming a linked
+  chain for `ns` from `head` (`SeedChain`: one disjoint node
+  allocation AT EACH LISTED ID, engine-serialized field bytes,
+  well-formed machine addresses); `R` is an ARBITRARY cell
+  footprint disjoint from it; `σ₀` is any engine memory actually
+  carrying both (`Sat`); plus the fuel bounds.
 - **Conclusion**: driving the real engine on the reversal program
   never kills, never derails, and any delivered value is a
-  *pointer* whose chain in the *final* memory spells out
-  `xs.reverse` (`ChainAt` — a pure, Iris-free predicate: per-node
-  allocation coherence and field-decode facts about the final
-  `MemState`). In-place reversal, read off the engine's bytes.
+  *pointer* heading a final footprint `Q` that is the chain for
+  `ns.reverse` — the SAME allocation ids in exactly reversed order,
+  each node still carrying its own value (in-place, literally: only
+  the next fields moved); the footprint-equality conjunct pins the
+  node set on the actual maps (no allocation, no leak); and the
+  frame `R` comes back VERBATIM in `Sat σ' (Q ∪ R)`. Same
+  footprint + in-place + frame, read off the engine's bytes; the
+  TOTAL form adds termination (an unconditional `.done` equation at
+  the derived bound `13·|ns| + 7`).
 
 The proof is the point of the exhibit: loop invariant
-`isList prev reversed ∗ isList cur rest` with
-`xs = reversed.reverse ++ rest`, `isList` by plain structural
-recursion on the list (no step-indexing), each program construct
-discharged by its own rule — no monolithic unfolding anywhere. The
-concrete instance `list_reverse_demo` runs it on a seeded 3-node
-list `[1,2,3]`, every byte-level side condition discharged by `rfl`
-on engine-serialized images.
+`isList prev reversed ∗ isList cur rest ∗ RF` with
+`ns = reversed.reverse ++ rest` (the frame proposition threaded
+through the invariant — the only thing that crosses a back edge),
+`isList` by plain structural recursion on the node list (no
+step-indexing), each program construct discharged by its own rule —
+no monolithic unfolding anywhere. The concrete instance
+`list_reverse_demo` runs it on a seeded 3-node chain
+`[(1,1),(2,2),(3,3)]`, every byte-level side condition discharged
+by `rfl` on engine-serialized images. The SECOND CLIENT —
+binary-tree rotation, `TreeRotExhibit.lean` — replays the same
+statement shape on a branching structure with zero core-logic
+edits (the Phase-4 accident-detector).
 
 ## 4. The trust story
 
@@ -576,16 +598,21 @@ Census output, verbatim (2026-08-31, this checkout):
 
 ### 5.2 `list_reverse_certified` — the canonical exhibit
 
-The statement, verbatim (`ListRevExhibit.lean:1690`; `loc`, `ann`,
-`ra`, `mo` and the `*bty` base-type tags are section variables —
-quantified metadata):
+Classification (foundations Phase 4; audit F-06 remediated): the
+flagship states SAME-FOOTPRINT, IN-PLACE reversal WITH FRAME
+PRESERVATION — and it is SpikeGF-concrete: since Phase 4 no
+ghost-functor binder appears in the statement. The statement,
+verbatim (`ListRevExhibit.lean`; `loc`, `ann`, `ra`, `mo` and the
+`*bty` base-type tags are section variables — quantified metadata):
 
 ```lean
-theorem list_reverse_certified {GF : BundledGFunctors} [SpikeGpreS GF]
-    (sbty : core_base_type) (xs : List Int) (head : CerbMem.PointerValue)
-    (m₀ : SpikeHeapF SpikeCell) (hseed : SeedChain m₀ head xs)
+theorem list_reverse_certified
+    (sbty : core_base_type) (ns : List (Int × Int))
+    (head : CerbMem.PointerValue)
+    (m₀ : CellMap) (hseed : SeedChain m₀ head ns)
+    (R : CellMap) (hR : m₀ ##ₘ R)
     (hlib : CerbLocation.isLibraryLocation loc = false)
-    (σ₀ : Mem) (hcoh : Coh σ₀ m₀)
+    (σ₀ : Mem) (hcoh : Sat σ₀ (Iris.Std.PartialMap.union m₀ R))
     (nsteps : Nat) (aids : Nat → Nat)
     (hfuel : 6 + nsteps ≤ lemDefaultFuel)
     (hfuel2 : 5 + nsteps ≤ lemDefaultFuel) :
@@ -598,9 +625,30 @@ theorem list_reverse_certified {GF : BundledGFunctors} [SpikeGpreS GF]
     (∀ (v : value) (σ' : Mem),
       driveJ rs aids nsteps
         (procThread lrProcSym prog [fmapEmpty]) σ₀ = .done v σ' →
-      ∃ p' : CerbMem.PointerValue, v = ptrVal p' ∧
-        ChainAt σ' p' xs.reverse)
+      ∃ (p' : CerbMem.PointerValue) (Q : CellMap),
+        v = ptrVal p' ∧
+        SeedChain Q p' ns.reverse ∧
+        (∀ k, (Iris.Std.PartialMap.get? Q k).isSome ↔
+          (Iris.Std.PartialMap.get? m₀ k).isSome) ∧
+        Q ##ₘ R ∧
+        Sat σ' (Iris.Std.PartialMap.union Q R))
 ```
+
+Read as a specification: the node list `ns` pairs each node's
+ALLOCATION ID with its value; the input is a seeded chain footprint
+`m₀` for `ns` from `head` TOGETHER WITH an arbitrary disjoint
+footprint `R` (the same rest-quantifier `SemTriple` uses, here at
+the jump lane); the output pointer heads a final footprint `Q`
+seeded as `ns.reverse` — the SAME allocation ids in exactly
+reversed chain order (a permutation of the original node set by
+construction), each node still carrying its own value: in-place in
+the literal sense, only the next fields moved. The footprint
+equality conjunct pins the node SET on the actual maps — nothing
+allocated, nothing leaked — and `Sat σ' (Q ∪ R)` returns the frame
+VERBATIM. The TOTAL form (`list_reverse_certified_total`) has the
+same conclusion as an unconditional `.done` equation at fuel
+`13·|ns| + 7` with no fuel hypotheses; `list_reverse_terminates`
+adds strong normalization.
 
 Reading table (identifiers already read in §5.1 not repeated):
 
@@ -608,39 +656,34 @@ Reading table (identifiers already read in §5.1 not repeated):
 |---|---|---|
 | `CerbMem.PointerValue`, `CerbLocation.isLibraryLocation`, `lemDefaultFuel`, `memory_order`, `kill_reason`, `mem_error`, `core_run_state` | ENGINE | the memory model's pointer values, the engine's location test, its fuel budget, its error vocabulary |
 | `lrProg`, `lrRS`, `lrProcSym` | SPEC IDIOM | the authored reversal program (§2 shows it), its label-carrying run state, its procedure symbol |
-| `SeedChain` | SPEC IDIOM | the input footprint: a linked chain for `xs` from `head`, printed below |
-| `ChainAt` | SPEC IDIOM | the readout: a chain in the *final* memory, printed below |
-| `Coh` (via `Sat`), `CellCoh` | SPEC IDIOM | footprint satisfaction by the real memory state, printed below |
-| `SpikeHeapF`, `SpikeCell`, `cellPtr` | SPEC IDIOM | cell maps (finite maps of allocation-id → (address, type, bytes)) and the fragment pointer shape |
+| `SeedChain` | SPEC IDIOM | the chain footprint: one disjoint node cell per (id, value) pair, at that allocation id, printed below — used for BOTH the input (`m₀`, at `ns`) and the output (`Q`, at `ns.reverse`) |
+| `CellMap`, `SpikeCell`, `SpikeHeapF`, `cellPtr` | SPEC IDIOM | footprints: finite maps of allocation-id → (address, type, bytes), and the fragment pointer shape |
+| `Sat` (= `Coh`), `CellCoh` | SPEC IDIOM | footprint satisfaction by the real memory state, printed below |
 | `ptrVal` | SPEC IDIOM | injection of a pointer into a Core value (1 line) |
-| `GF : BundledGFunctors`, `[SpikeGpreS GF]` | HYPOTHESIS (machinery-shaped — see below) | the Iris ghost-functor binder |
-| `hseed`, `hcoh` | HYPOTHESES | the seeded input chain, carried by the initial memory |
+| `Iris.Std.PartialMap.get?`/`union`, `##ₘ` (disjointness) | IRIS (data-structure library) | iris-lean's finite-map operations — the vocabulary of footprint maps, NOT program-logic machinery (see §5.4) |
+| `hseed`, `hR`, `hcoh` | HYPOTHESES | the seeded input chain, an arbitrary disjoint frame footprint, both carried by the initial memory |
 | `hlib` | HYPOTHESIS | the program's source location is not library-internal (a WF fact about metadata) |
 | `nsteps`, `aids` | quantified data | any step budget; any action-id supply (`aids` — the driver's fresh action-id oracle, ∀-quantified; irrelevant on this deterministic fragment) |
-| `hfuel`, `hfuel2` | HYPOTHESES | in-budget fuel (the engine's own 10^6 budget): one nested budget fact per drive entry point — the whole program (`esize` 6) and the loop body the jump re-enters (`esize` 5; one construct less, hence the +1 slack). `hfuel2` is a trivial consequence of `hfuel`, carried separately as interim scaffolding of the in-budget form (the TOTAL export `list_reverse_certified_total` — Phase 3 — has no fuel hypotheses at all) |
+| `hfuel`, `hfuel2` | HYPOTHESES | in-budget fuel (the engine's own 10^6 budget): one nested budget fact per drive entry point — the whole program (`esize` 6) and the loop body the jump re-enters (`esize` 5; one construct less, hence the +1 slack). `hfuel2` is a trivial consequence of `hfuel`, carried separately as interim scaffolding of the in-budget form (the TOTAL export has no fuel hypotheses at all) |
 
-The readout and seeding predicates, in full — pure `Prop`s over
-engine objects, no Iris:
+The seeding predicate, in full — a pure `Prop` over engine objects,
+no Iris program logic (`nodeValDec`/`nodeNextDec` say the node's
+byte ranges decode — by the *engine's* decoder — to the value resp.
+the next pointer):
 
 ```lean
-def ChainAt (σ : Mem) : CerbMem.PointerValue → List Int → Prop
-  | p, [] => p = nullNode
-  | p, v :: vs => ∃ (id aN : Int) (q : CerbMem.PointerValue)
-      (bs : List CerbMem.AbsByte), p = cellPtr id aN ∧ 0 < aN ∧ aN < 2 ^ 64 ∧
-      CellCoh σ id ⟨aN, nodeTy, bs⟩ ∧ bs.length = 16 ∧
-      nodeValDec bs v ∧ nodeNextDec bs q ∧ ChainAt σ q vs
-
-def SeedChain : SpikeHeapF SpikeCell → CerbMem.PointerValue → List Int → Prop
+def SeedChain : SpikeHeapF SpikeCell → CerbMem.PointerValue →
+    List (Int × Int) → Prop
   | m, p, [] => m = (∅ : SpikeHeapF SpikeCell) ∧ p = nullNode
-  | m, p, v :: vs => ∃ (id aN : Int) (q : CerbMem.PointerValue)
+  | m, p, nd :: ns => ∃ (aN : Int) (q : CerbMem.PointerValue)
       (bs : List CerbMem.AbsByte) (m' : SpikeHeapF SpikeCell),
-      p = cellPtr id aN ∧ 0 < aN ∧ aN < 2 ^ 64 ∧ bs.length = 16 ∧
-      nodeValDec bs v ∧ nodeNextDec bs q ∧
-      ((Iris.Std.PartialMap.singleton id (SpikeCell.mk aN nodeTy bs) :
+      p = cellPtr nd.1 aN ∧ 0 < aN ∧ aN < 2 ^ 64 ∧ bs.length = 16 ∧
+      nodeValDec bs nd.2 ∧ nodeNextDec bs q ∧
+      ((Iris.Std.PartialMap.singleton nd.1 (SpikeCell.mk aN nodeTy bs) :
         SpikeHeapF SpikeCell)) ##ₘ m' ∧
       m = Iris.Std.PartialMap.union
-        (Iris.Std.PartialMap.singleton id (SpikeCell.mk aN nodeTy bs)) m' ∧
-      SeedChain m' q vs
+        (Iris.Std.PartialMap.singleton nd.1 (SpikeCell.mk aN nodeTy bs)) m' ∧
+      SeedChain m' q ns
 
 structure Coh (σ : Mem) (m : SpikeHeapF SpikeCell) : Prop where
   cells : ∀ id c, get? m id = some c → CellCoh σ id c
@@ -648,27 +691,30 @@ structure Coh (σ : Mem) (m : SpikeHeapF SpikeCell) : Prop where
     get? m id2 = some c2 → cellsDisjoint c1 c2
 ```
 
-(`nodeValDec`/`nodeNextDec` say the node's byte ranges decode — by
-the *engine's* decoder — to the value resp. the next pointer;
-`CellCoh` is the per-cell backing fact: live, in-bounds, writable,
-non-atomic allocation whose bytes are the cell's — `Heap.lean`.)
-The chain in the conclusion is about the final `MemState` via
-`CellCoh`, i.e. it is read off the engine's real bytemap.
+`SeedChain.footprint` is the one-lemma reading of "same footprint":
+a seeded chain's map is defined at EXACTLY the chain's id list, so
+the conjunct `∀ k, (get? Q k).isSome ↔ (get? m₀ k).isSome` is
+equivalent to `ns.reverse.map (·.1)` and `ns.map (·.1)` having the
+same members — the reversal permutation. The pre-Phase-4 values-only
+`ChainAt` conclusion is retired; the id-indexed `ChainAt` (per-node
+`CellCoh` facts about the final `MemState`) remains derivable —
+`seedChain_chainAt` — and the concrete `list_reverse_demo` includes
+it, instantiating a 3-node chain `[(1,1),(2,2),(3,3)]` with every
+byte-level side condition discharged by `rfl` on engine-serialized
+images (so the hypotheses are satisfiable — the general theorem is
+not vacuously true).
 
-**Absent from the statement**: `Step`, `wps`, `WP`, `isList`, the
-points-to, ghost state — the machinery again. One machinery-shaped
-*hypothesis* does appear: the universally quantified ghost-functor
-binder `{GF : BundledGFunctors} [SpikeGpreS GF]`. A universally
-quantified hypothesis can weaken a theorem (at worst to vacuity if
-uninstantiable) but never strengthen it; instantiability is
-concrete — `SpikeGF` (`Adequacy.lean`) satisfies it, and the demo
-corollary `list_reverse_demo` runs at it. So the reading is: for
-any way of setting up Iris ghost state (and there is one), the
-engine facts follow — and the engine facts themselves mention no
-ghost state.
+**Absent from the statement**: `Step`, `wps`, `wpt`, `WP`,
+`isList`, the points-to, ghost state, and — since Phase 4 — the
+ghost-functor binder `{GF : BundledGFunctors} [SpikeGpreS GF]` that
+the census used to flag as the one machinery-shaped hypothesis: the
+flagships are stated at the concrete `SpikeGF` internally and
+export no Iris program-logic vocabulary at all. What remains in the
+IRIS census bin is iris-lean's finite-map *library* (the footprint
+maps' `get?`/`union`/disjointness and the backing `ExtTreeMap`
+instance) — data-structure vocabulary, listed rather than hidden.
 
-Census output, verbatim (2026-08-31, this checkout) — note the IRIS
-bin is exactly the binder:
+Census output, verbatim (2026-09-01, this checkout):
 
 ```
 == CerberusHeapLang.list_reverse_certified ==
@@ -687,18 +733,17 @@ bin is exactly the binder:
     memory_order
     sym
     value
-  SPEC IDIOM (CerberusHeapLang) (18):
-    CerberusHeapLang.ChainAt
-    CerberusHeapLang.Coh
+  SPEC IDIOM (CerberusHeapLang) (17):
+    CerberusHeapLang.CellMap
     CerberusHeapLang.CoreExpr
     CerberusHeapLang.DriveResult
     CerberusHeapLang.DriveResult.done
     CerberusHeapLang.DriveResult.killed
     CerberusHeapLang.DriveResult.stuck
     CerberusHeapLang.Mem
+    CerberusHeapLang.Sat
     CerberusHeapLang.SeedChain
     CerberusHeapLang.SpikeCell
-    CerberusHeapLang.SpikeGpreS
     CerberusHeapLang.SpikeHeapF
     CerberusHeapLang.driveJ
     CerberusHeapLang.lrProcSym
@@ -706,16 +751,22 @@ bin is exactly the binder:
     CerberusHeapLang.lrRS
     CerberusHeapLang.procThread
     CerberusHeapLang.ptrVal
-  IRIS (1):
-    Iris.BundledGFunctors
-  LEAN CORE/STD (19):
+  IRIS (4):
+    Iris.Std.PartialMap.disjoint
+    Iris.Std.PartialMap.get?
+    Iris.Std.PartialMap.union
+    Std.ExtTreeMap.instPartialMapCompare
+  LEAN CORE/STD (25):
     And
     Bool
     Bool.false
+    Bool.true
     Eq
     Exists
     HAdd.hAdd
+    Iff
     Int
+    Int.instTransOrd
     LE.le
     List
     List.cons
@@ -724,11 +775,15 @@ bin is exactly the binder:
     Nat
     Ne
     OfNat.ofNat
+    Option.isSome
+    Prod
     instAddNat
     instHAdd
     instLENat
     instOfNatNat
+    instOrdInt
 ```
+
 
 ### 5.3 `exhibitA_prod` — the shipped pipeline, no drive loop at all
 
@@ -821,25 +876,33 @@ Census output, verbatim (2026-08-31, this checkout):
 
 ### 5.4 The invariant, and what the census surfaces
 
-The full census run covers all ten pinned theorems (the README's
-verify-me list). What it witnesses: **every exported statement is
-engine vocabulary plus the enumerated spec idiom plus Lean
-core/std, nothing else** — with two honest observations, reported
-rather than papered over:
+The full census run covers all twelve pinned theorems (the README's
+verify-me list, including the Phase-4 tree-rotation exports). What
+it witnesses: **every exported statement is engine vocabulary plus
+the enumerated spec idiom plus Lean core/std, nothing else** — with
+two honest observations, reported rather than papered over:
 
-1. **The ghost-functor binder.** The Iris-exported theorems
-   (`list_reverse_certified` and kin) carry
-   `Iris.BundledGFunctors` + `SpikeGpreS` as a universally
-   quantified hypothesis (read in §5.2). The engine-only exports
-   (`fib_certified_total`, `exhibitA_prod`) carry nothing from
-   Iris at all.
-2. **Finite-map vocabulary.** Statements that phrase seeded
-   footprints as concrete maps (`counter_loop_certified_production`)
-   surface iris-lean's finite-map *library* (`Iris.Std.PartialMap`
-   operations and an `ExtTreeMap` instance) in the IRIS bin. That
-   is data-structure vocabulary (the type of footprint maps), not
-   program-logic machinery — but it is iris-lean code in a
-   statement surface, so it is listed, not hidden.
+1. **The ghost-functor binder is GONE from the flagships** (Phase
+   4, the audit's F-06 tail and this section's own pre-Phase-4
+   footnote): `list_reverse_certified` and kin, and the tree
+   exports, are stated at the concrete `SpikeGF` internally and
+   carry no `Iris.BundledGFunctors`/`SpikeGpreS` hypothesis. The
+   binder remains only on the GENERIC bridge theorems
+   (`semantic_triple_sound` — whose hypothesis `ProvenTriple` is
+   itself an Iris-level judgment, so the binder is load-bearing
+   there) and the pre-Phase-4 loop exports
+   (`counter_loop_certified`, `fib_certified`,
+   `array_sum_certified`) — a registered follow-on, not a
+   structural need.
+2. **Finite-map vocabulary.** Statements that phrase footprints as
+   concrete maps (the flagships' `SeedChain`/`SeedTree` seeds, the
+   frame footprints, `counter_loop_certified_production`) surface
+   iris-lean's finite-map *library* (`Iris.Std.PartialMap`
+   operations — `get?`, `union`, disjointness — and an `ExtTreeMap`
+   instance) in the IRIS bin. That is data-structure vocabulary
+   (the type of footprint maps), not program-logic machinery — but
+   it is iris-lean code in a statement surface, so it is listed,
+   not hidden.
 
 The census is a documented, read-only instrument (it reports; it
 gates nothing). Freezing its expected partitions as an in-build
@@ -863,9 +926,9 @@ boundary and checks every constant of every kind for
 `sorryAx`/`ofReduceBool`/`ofReduceNat`. Expected tail:
 
 ```
-info: CerberusHeapLang/Audit.lean:385:0: CerberusHeapLang axiom sweep: 827 theorems BOUNDED by the declared upper bounds (40 in the production-entry boundary modules, bounded by trio + runEffectful; all others bounded by the trio; exact cones pinned only for the curated headline list above)
-info: CerberusHeapLang/Audit.lean:385:0: CerberusHeapLang banned-axiom sweep: 1670 constants of every kind checked; sorryAx/ofReduceBool/ofReduceNat absent from all cones
-Build completed successfully (439 jobs).
+info: CerberusHeapLang/Audit.lean:492:0: CerberusHeapLang axiom sweep: 1067 theorems BOUNDED by the declared upper bounds (40 in the production-entry boundary modules, bounded by trio + runEffectful; all others bounded by the trio; exact cones pinned only for the curated headline list above)
+info: CerberusHeapLang/Audit.lean:492:0: CerberusHeapLang banned-axiom sweep: 1995 constants of every kind checked; sorryAx/ofReduceBool/ofReduceNat absent from all cones
+Build completed successfully (441 jobs).
 ```
 
 What to expect around that tail, so nothing surprises you:
@@ -883,7 +946,7 @@ What to expect around that tail, so nothing surprises you:
   line, a missing audit tail, or a nonzero exit.
 - Timing: with the package already built, `lake build` replays
   from cache in about a second. A from-scratch elaboration of this
-  package's 439 jobs is a long build — expect minutes to tens of
+  package's 441 jobs is a long build — expect minutes to tens of
   minutes depending on the machine (no pinned cold timing is
   recorded). The setup script itself is offline (it clones and
   primes the workspace from the local repository, prebuilt

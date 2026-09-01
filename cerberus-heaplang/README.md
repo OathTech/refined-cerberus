@@ -81,7 +81,8 @@ only, never in exported conclusions — the trust story below):
 | `counter_loop_certified` (LoopExhibit.lean) | THE FIRST LOOP: save entry, real `x > 0` guard, store under the loop, context-discarding back edge — never kills, final bytes pinned by a data-dependent post | in-budget fuel; seeded cell | driveJ | trio |
 | `fib_certified`, `fib_certified_total`, `fib_terminates` (FibExhibit.lean) | Iterative fib with invariant `a = fib i ∧ b = fib (i+1)` delivers `fib n`; `fib_certified_total` is the unconditional TOTAL equation — at step bound `2·n + 4`, `driveJ … = .done (fib n) σ₀`, no fuel hypotheses at all — A COROLLARY OF THE TOTAL STATEMENT JUDGMENT through the generic measure→drive-fuel simulation (Phase 3; manifest Notes 2; the variant `2·(n−i)+3` is pinned by the invariant, the back edge discharges the mandatory decrease); `fib_terminates` is strong normalization over the unified relation via Iris TotalAdequacy | partial form: in-budget fuel; total forms: NONE | driveJ + total | trio |
 | `array_sum_certified` (ArrayExhibit.lean) | The array walk: real pointer arithmetic, interior loads of a seeded one-allocation array — delivers `vs.sum` with the array preserved | in-budget fuel; seeded array (coherence, per-element decode, size/location) | driveJ | trio |
-| `list_reverse_certified`, `list_reverse_demo`, `list_reverse_certified_total`, `list_reverse_terminates` (ListRevExhibit.lean) | THE CANONICAL EXHIBIT: in-place reversal of a linked list of two-field nodes — any delivered value is a pointer whose final-heap chain is `xs.reverse`; the demo instantiates a 3-node `[1,2,3]` chain, every decode fact `rfl`; the TOTAL form (Phase 3) is unconditional — `driveJ` at the DERIVED bound `13·|xs| + 7` delivers the reversed chain, no fuel hypotheses — plus termination over the unified relation | partial: in-budget fuel + seeded chain; total: seeded chain only | driveJ + total | trio |
+| `list_reverse_certified`, `list_reverse_demo`, `list_reverse_certified_total`, `list_reverse_terminates` (ListRevExhibit.lean) | THE CANONICAL EXHIBIT AT FULL STRENGTH (Phase 4, audit F-06): SAME-FOOTPRINT, IN-PLACE reversal with FRAME PRESERVATION and TERMINATION — the predicates are indexed by the ordered node list of (allocation id, value); from a seeded chain `m₀` next to an ARBITRARY disjoint frame footprint `R`, any delivered value is a pointer heading a final footprint `Q` with `SeedChain Q p' ns.reverse` (the SAME allocation ids in exactly reversed order — a permutation of the original node set — each node still carrying its own value), the literal footprint equality `∀ k, (get? Q k).isSome ↔ (get? m₀ k).isSome`, and `Sat σ' (Q ∪ R)` — the frame verbatim; the TOTAL form is the same conclusion as an unconditional `driveJ` equation at the DERIVED bound `13·|ns| + 7`, no fuel hypotheses; plus termination over the unified relation; the demo instantiates a 3-node chain, every decode fact `rfl`. No ghost-functor binder in any of the four statements (SpikeGF-concrete) | partial: in-budget fuel + seeded chain + disjoint frame; total: seeded chain + disjoint frame only | driveJ + total | trio |
+| `tree_rotate_certified`, `tree_rotate_certified_total` (TreeRotExhibit.lean) | THE SECOND CLIENT (Phase 4 — the accident-detector): in-place right ROTATION of a binary tree (one-allocation three-field nodes: value + two child pointers) through the SAME generic layer with ZERO core-logic edits — seeded tree + arbitrary disjoint frame in; rotated tree (`SeedTree Q py (node y vy a (node x vx b c))` — same allocations, the rotated id list a PERMUTATION of the original, footprint equality stated on the maps) + frame verbatim out; the total form is an unconditional `drive` equation at the constant straight-line budget 19 | partial: in-budget fuel + seeded tree + disjoint frame; total: seeded tree + disjoint frame only | drive + total | trio |
 | `exhibitA_prod` (ProdExhibit.lean) | The production run of a self-contained create/store/load program IS the singleton Active execution delivering 7 with the exact final bytes | file-system state and argv only — everything else discharged | production | trio + `runEffectful` |
 | `counter_loop_certified_production` (ProdEntry.lean) | THE REGISTRATION THEOREM (that is what it is, despite the declaration's name — naming debt, manifest Notes 3): the counter loop re-exported with the label plumbing DERIVED from the shipped label-collection — nothing hand-built; NOT a production `runND` equation | as `counter_loop_certified` | driveJ @ production run state | trio + `runEffectful` |
 
@@ -105,10 +106,14 @@ this deterministic fragment the choice is irrelevant.
 
 The proof of the flagship is textbook-compositional and that is the
 point of the exhibit: representation predicate `isList` by plain
-structural recursion (no step-indexing), loop invariant
-`isList prev reversed ∗ isList cur rest` with
-`xs = reversed.reverse ++ rest`, every construct discharged by its
-small axiom or rule, no monolithic unfolding anywhere.
+structural recursion (no step-indexing), IDENTITY-INDEXED since
+Phase 4 (each node is its allocation id paired with its value — the
+metadata heap's authority), loop invariant
+`isList prev reversed ∗ isList cur rest ∗ RF` with
+`ns = reversed.reverse ++ rest` (the arbitrary frame `RF` threaded
+through the invariant — the only thing that crosses a back edge),
+every construct discharged by its small axiom or rule, no
+monolithic unfolding anywhere.
 
 ## The trust story
 
@@ -245,20 +250,32 @@ fuel hypotheses — and, for `array_sum_certified`, stated pre-state
 hypotheses: the coherence-seeded one-allocation array (`hcoh`),
 per-element decode premises (`hdec`, rfl-dischargeable at concrete
 engine-serialized bytes), and size/location side conditions
-(`hsz`/`hlib`); `list_reverse_certified` is stated over a SEEDED
-INPUT CHAIN (`SeedChain` — one disjoint one-allocation node cell
-per element, engine-serialized field images, per-node
-machine-address WF `0 < a < 2^64`) and concludes that any delivered
-value is a POINTER whose FINAL-heap chain is `xs.reverse`
-(`ChainAt` — per-node `CellCoh` + field decode facts about the
-final `MemState`; the concrete `list_reverse_demo` instantiates a
-3-node [1,2,3] chain with every decode fact discharged by `rfl`) —
-except the TOTAL exports, which are UNCONDITIONAL:
+(`hsz`/`hlib`); `list_reverse_certified` (Phase 4 — the full
+F-06 statement) is stated over a SEEDED INPUT CHAIN
+(`SeedChain m₀ head ns` — the node list `ns` carries each node's
+ALLOCATION ID with its value; one disjoint one-allocation cell per
+node at that id, engine-serialized field images, per-node
+machine-address WF `0 < a < 2^64`) NEXT TO an arbitrary disjoint
+frame footprint `R` (the `SemTriple` rest-quantifier at the driveJ
+lane), and concludes that any delivered value is a POINTER heading
+a final footprint `Q` with `SeedChain Q p' ns.reverse` — the same
+allocations, in exactly reversed chain order, each node its own
+value — plus the literal footprint equality
+`∀ k, (get? Q k).isSome ↔ (get? m₀ k).isSome` and
+`Sat σ' (Q ∪ R)`: the frame returned VERBATIM (the id-indexed
+`ChainAt` readout is a demoted corollary via `seedChain_chainAt`;
+the concrete `list_reverse_demo` instantiates a 3-node chain with
+every decode fact discharged by `rfl` and includes it); the SECOND
+CLIENT `tree_rotate_certified` (TreeRotExhibit.lean) replays the
+same statement shape for a binary-tree rotation with zero core
+edits — except the TOTAL exports, which are UNCONDITIONAL:
 `fib_certified_total` (at the concrete step bound `2·n + 4`,
 `driveJ` DELIVERS `fib n` with the state verbatim, no fuel
-hypotheses at all) and `list_reverse_certified_total` (at the
-DERIVED bound `13·|xs| + 7`, `driveJ` delivers the reversed final
-chain). Since foundations Phase 3 these ARE logic results (audit
+hypotheses at all), `list_reverse_certified_total` (at the
+DERIVED bound `13·|ns| + 7`, `driveJ` delivers the reversed final
+chain, same footprint, frame verbatim) and
+`tree_rotate_certified_total` (constant budget 19). Since
+foundations Phase 3 these ARE logic results (audit
 F-02 remediated): corollaries of the total statement judgment
 (`wpt`, Wpt.lean — mandatory back-edge variant decrease, collapse
 into the pinned Iris TotalWeakestPre) through the generic
@@ -344,7 +361,7 @@ or growth paths. The register (each entry's home is authoritative):
 | The array exhibit's pre-state is ONE allocation (not a ∗-of-per-element-cells): the engine's loads bounds-check against the pointer's PROVENANCE allocation and `arrayShiftPtrval` preserves provenance, so distinct-allocation "arrays" are not walkable in the engine — C's object model | Forcing fact about Cerberus, recorded; per-element structure lives in the index-partitioned invariant + decode premises | `ArrayExhibit.lean` header; `docs/2026-08-31_phase2-s4-notes.md` |
 | The pointer-test memop coverage is `PtrEq` only; the family (PtrNe/Lt/…) and eqPtrval's differing-provenance ND fork are fail-closed ABSENCES of a mirror step (the fork is a real `msum`, CerbMem.lean:1753 — enumerated by the exhaustive runners, not single-layer) | Mechanical per-memop extension (dischargeStep arm + Step rule + wps axiom) | `Soundness.lean` dischargeStep memop arm; `docs/2026-08-31_listrev-notes.md` |
 | The plain-symbol binder beta is mirrored at BARE values only (`Step.sseq_sym_pure`; no LETS-ANNOT variant) | The fragment's only sym-binder producer is the memop protocol, which delivers bare values (step_ctx's MEMOP continuation — `mk_pure_e`, no Eannot residue); the annot variant is a mechanical extension | `Step.lean` (the rule's docstring); `docs/2026-08-31_listrev-notes.md` |
-| List-reverse TOTAL export: RETIRED (foundations Phase 3) — `list_reverse_certified_total` delivers the unconditional bound through the total judgment (the heap-resident variant rides the variant-indexed invariant); the DERIVED bound is `13·|xs| + 7` (the old 11-per-iteration note undercounted the wrapper-merge step; the true engine cost is 12 per iteration plus one unit of budget-reservation slack, documented at `lrCost`) | Closed by `docs/2026-09-01_phase3-notes.md` | `ListRevExhibit.lean` §total lane |
+| List-reverse TOTAL export: RETIRED (foundations Phase 3) — `list_reverse_certified_total` delivers the unconditional bound through the total judgment (the heap-resident variant rides the variant-indexed invariant); the DERIVED bound is `13·|ns| + 7` (the old 11-per-iteration note undercounted the wrapper-merge step; the true engine cost is 12 per iteration plus one unit of budget-reservation slack, documented at `lrCost`) | Closed by `docs/2026-09-01_phase3-notes.md` | `ListRevExhibit.lean` §total lane |
 | Production-face loop export (`runND` equation for a loop run) | The DriverCollapse scheduler equations are pinned at the straight-line profile; the drive-lane step bound (`fib_certified_total`) is the in-budget discharge waiting for it | `ProdEntry.lean`; `docs/2026-08-31_phase2-s4-notes.md` |
 | Fuel side condition (no fuel parametricity) | Fuel-irrelevance theorem for `get_ctx` or graceful driver exhaustion would remove it | `docs/2026-08-30_spike-report.md` "What remains"; `ProdEntry.lean` header |
 | REMOVE-ANNOT value protocol; canonical-annotation subrelation | Deliberate, engine-faithful readout composition | `Step.lean` header; `docs/2026-08-30_spike-sliceA-notes.md` D1/D3 |
@@ -372,9 +389,9 @@ qualifiers above — they are part of the theorem statements. Expected
 tail:
 
 ```
-info: CerberusHeapLang/Audit.lean:385:0: CerberusHeapLang axiom sweep: 827 theorems BOUNDED by the declared upper bounds (40 in the production-entry boundary modules, bounded by trio + runEffectful; all others bounded by the trio; exact cones pinned only for the curated headline list above)
-info: CerberusHeapLang/Audit.lean:385:0: CerberusHeapLang banned-axiom sweep: 1670 constants of every kind checked; sorryAx/ofReduceBool/ofReduceNat absent from all cones
-Build completed successfully (439 jobs).
+info: CerberusHeapLang/Audit.lean:492:0: CerberusHeapLang axiom sweep: 1067 theorems BOUNDED by the declared upper bounds (40 in the production-entry boundary modules, bounded by trio + runEffectful; all others bounded by the trio; exact cones pinned only for the curated headline list above)
+info: CerberusHeapLang/Audit.lean:492:0: CerberusHeapLang banned-axiom sweep: 1995 constants of every kind checked; sorryAx/ofReduceBool/ofReduceNat absent from all cones
+Build completed successfully (441 jobs).
 ```
 
 (In sandboxed environments `../scripts/capped` may warn
@@ -401,12 +418,14 @@ import CerberusHeapLang
 #print axioms CerberusHeapLang.array_sum_certified
 #print axioms CerberusHeapLang.list_reverse_certified
 #print axioms CerberusHeapLang.list_reverse_demo
+#print axioms CerberusHeapLang.tree_rotate_certified
+#print axioms CerberusHeapLang.tree_rotate_certified_total
 #print axioms CerberusHeapLang.exhibitA_prod
 #print axioms CerberusHeapLang.counter_loop_certified_production
 EOF
 ```
 
-Observed output (2026-08-31, this checkout):
+Observed output (2026-09-01, this checkout):
 
 ```
 'CerberusHeapLang.semantic_triple_sound' depends on axioms: [propext, Classical.choice, Quot.sound]
@@ -417,6 +436,8 @@ Observed output (2026-08-31, this checkout):
 'CerberusHeapLang.array_sum_certified' depends on axioms: [propext, Classical.choice, Quot.sound]
 'CerberusHeapLang.list_reverse_certified' depends on axioms: [propext, Classical.choice, Quot.sound]
 'CerberusHeapLang.list_reverse_demo' depends on axioms: [propext, Classical.choice, Quot.sound]
+'CerberusHeapLang.tree_rotate_certified' depends on axioms: [propext, Classical.choice, Quot.sound]
+'CerberusHeapLang.tree_rotate_certified_total' depends on axioms: [propext, Classical.choice, Quot.sound]
 'CerberusHeapLang.exhibitA_prod' depends on axioms: [propext, runEffectful, Classical.choice, Quot.sound]
 'CerberusHeapLang.counter_loop_certified_production' depends on axioms: [propext,
  runEffectful,
@@ -466,7 +487,8 @@ In teaching order (= import order; one line each — the
 | `DivergeExhibit.lean` | THE NEGATIVE TEST of the total lane: the self-jump loop steps to itself, is not strongly normalizing, and any total derivation for it is FALSE — the mandatory decrease is exactly what blocks it (the module header records the stuck obligation) | `diverge_total_unprovable` |
 | `ArrayExhibit.lean` | The array-sum walk — real pointer arithmetic, operand-evaluated loads, interior reads of the seeded array allocation, the `Specified`-binder unwrap, the index-partitioned invariant; the array preserved in the conclusion | `array_sum_certified` |
 | `StructExhibit.lean` | THE FRESH-CLIENT TEST (Phase 2 acceptance): a two-field struct update (layout `{int x @ 0; int y @ 8}` in one 16-byte allocation — a third distinct layout) verified end-to-end with ZERO core-logic edits — every rule a one-line client instance of the generic subrange rules; plus the allocation consumer (create a fresh struct through the cursor resource and initialize a field) | `struct_update_certified`, `struct_create_store_wps` |
-| `ListRevExhibit.lean` | THE CANONICAL EXHIBIT: in-place reversal of a linked list of one-allocation two-field nodes — the honest null encoding + the engine's own `PtrEq` memop as the null test (the null/pointer byte ROUND TRIPS proved against repr/abst), interior next-field loads AND stores by in-allocation arithmetic, `isList` by plain structural recursion, the textbook `blockSpecs_intro` proof with invariant `isList prev reversed ∗ isList cur rest`; conclusion: any delivered value is a pointer whose final-heap chain is `xs.reverse`; the TOTAL lane (Phase 3): the same textbook derivation at the total judgment (heap-resident variant through the variant-indexed invariant) yields the unconditional equation at the derived bound `13·|xs|+7` plus termination | `list_reverse_certified`, `list_reverse_demo`, `list_reverse_certified_total`, `list_reverse_terminates` |
+| `ListRevExhibit.lean` | THE CANONICAL EXHIBIT AT FULL STRENGTH (Phase 4): in-place reversal of a linked list of one-allocation two-field nodes — the honest null encoding + the engine's own `PtrEq` memop as the null test (the null/pointer byte ROUND TRIPS proved against repr/abst), interior next-field loads AND stores by in-allocation arithmetic, IDENTITY-INDEXED `isList` by plain structural recursion (allocation id × value per node), the textbook `blockSpecs_intro` proof with invariant `isList prev reversed ∗ isList cur rest ∗ RF`; conclusion: same-footprint in-place reversal (`SeedChain Q p' ns.reverse` + the literal footprint-equality conjunct) with an arbitrary disjoint frame returned verbatim; the TOTAL lane: the same textbook derivation at the total judgment yields the unconditional equation at the derived bound `13·|ns|+7` plus termination | `list_reverse_certified`, `list_reverse_demo`, `list_reverse_certified_total`, `list_reverse_terminates` |
+| `TreeRotExhibit.lean` | THE SECOND CLIENT (Phase 4 — the accident-detector): binary-tree right rotation over one-allocation three-field nodes (value + two child pointers; the splice-ABOVE slice law's first consumer), identity-indexed `isTree`/`SeedTree` with BRANCHING recursion, certified end-to-end with ZERO core-logic edits at the flagship statement shape (same allocations — the rotated id list a permutation of the original — footprint equality, frame verbatim), partial + unconditional total (constant budget 19) | `tree_rotate_certified`, `tree_rotate_certified_total` |
 | `DriverCollapse.lean` | The production scheduler/ND/readout collapsed onto the demo's drive loop — proved from the driver's OWN round functions; bounded by the trio, its three headline equations exact-pinned | `prod_loop_done`, `driver2_done`, `finalize_done` |
 | `ProdEntry.lean` | Cold start from the SHIPPED `initial_driver_state` (errno allocated by the real allocator) + the production-entry theorem; the REGISTRATION TIE — `LabeledAt` derived from the shipped `collect_labeled_continuations_NEW` for the authored loop programs, and the counter loop re-exported at the derived tie (the registration theorem — manifest Notes 3) | `sem_triple_prod`, `prod_run_eq`, `fib_labeledAt_production`, `counter_loop_certified_production` |
 | `ProdExhibit.lean` | The demonstration: a self-contained program (create/store/load) run through the production pipeline delivers 7 with the exact final bytes | `exhibitA_prod` |
