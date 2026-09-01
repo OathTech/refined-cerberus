@@ -466,10 +466,10 @@ info: 'CerberusHeapLang.list_reverse_demo' depends on axioms: [propext, Classica
 #guard_msgs in #print axioms CerberusHeapLang.list_reverse_demo
 
 -- Foundations Phase 2 (2026-09-01): the generic memory layer's
--- headline pins — the allocation rule (D26 retired: create through
--- the allocator-cursor resource), the generic typed-subrange rules,
--- and the FRESH-CLIENT acceptance theorem (two-field struct update,
--- end-to-end, zero core-logic edits). Cones exactly the trio.
+-- headline pins — the allocation rule wps_create (LOCAL RULE ONLY:
+-- its cursorOwn premise is granted by no adequacy launcher, re-audit
+-- R-01), the generic typed-subrange rules, and the FRESH-CLIENT
+-- acceptance theorem (struct update). Cones exactly the trio.
 /--
 info: 'CerberusHeapLang.wps_create' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/

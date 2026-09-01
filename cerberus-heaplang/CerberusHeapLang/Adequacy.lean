@@ -729,8 +729,11 @@ theorem Sat.union_left {σ : Mem} {Q R : CellMap}
       h.disj i j c1 c2 hne (hlift _ _ h1) (hlift _ _ h2)⟩
 
 /-- THE SEMANTIC TRIPLE ⦃P⦄ e ⦃post⦄, engine vocabulary only: for
-    every configuration that splits as P ⊎ R — footprint P satisfied,
-    rest R ARBITRARY — the engine's drive never kills or derails,
+    every memory that splits as P ⊎ R — footprint P satisfied,
+    rest R ARBITRARY — AT THE FIXED DEMO MACHINE PROFILE
+    (`spikeThread`/`spikeCtx`/`spikeEnv`; the thread/context are not
+    quantified — 2026-09-01 re-audit R-09, generalization owned by
+    alloc arc P4) — the engine's drive never kills or derails,
     and any delivered value v comes with a post-footprint Q with
     `post v Q`, THE SAME R returned verbatim (Sat σ' (Iris.Std.PartialMap.union Q R)).
     Partial correctness: fuel exhaustion (.more) is unconstrained;

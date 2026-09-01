@@ -19,12 +19,16 @@ laws at this layout's offsets. Recreating the proof for another
 layout changes only the offsets, sizes, and decode facts (audit
 Phase-2 exit criterion).
 
-Also here: THE ALLOCATION CONSUMER (`struct_create_store_wps`) —
+Also here: THE ALLOCATION CLIENT (`struct_create_store_wps`) —
 `wps_create` consumed by an ordinary client: allocate a fresh
 struct through the allocator-cursor resource and initialize its x
-field (the D26 dodge retired at the consumer level: no cold-start
-hoisting, the allocation happens mid-derivation on ghost-owned
-cursor arithmetic).
+field (no cold-start hoisting, the allocation happens mid-derivation
+on ghost-owned cursor arithmetic). SCOPE (2026-09-01 re-audit,
+R-01): this is a LOCAL wps-level entailment whose premise ASSUMES
+`cursorOwn` — no adequacy launcher grants that resource, so this
+client does not reach an engine-facing (adequacy) theorem; the
+launchable public allocation rule and its adequacy consumer are
+alloc arc P1/P2.
 -/
 import CerberusHeapLang.Adequacy
 import CerberusHeapLang.Wps
@@ -291,7 +295,7 @@ theorem struct_update_certified {GF : BundledGFunctors} [SpikeGpreS GF]
       (by rw [sixBytes_len, hlen1]; decide)
   exact ⟨hx, hy⟩
 
-/-! ## THE ALLOCATION CONSUMER (the D26 retirement, consumed)
+/-! ## THE ALLOCATION CLIENT (local — see the module header)
 
 `create` used mid-derivation as an ordinary rule: the program
 allocates a fresh struct and initializes its x field. The fresh
@@ -299,7 +303,9 @@ pointer is the CLOSED FORM of the allocator arithmetic
 (`cellPtr nid (freshBase la align 16)`) — ownership of the
 allocator-cursor resource is exactly what makes the address
 well-defined, and the out-of-memory arm is excluded by the pure
-`hnz` guard on owned state (no cold-start hoisting, no dodge). -/
+`hnz` guard on owned state (no cold-start hoisting). LOCAL ONLY
+(R-01): the `cursorOwn` premise is granted by no adequacy launcher,
+so this theorem ends at `wps` — it is not an adequacy consumer. -/
 
 section CreateConsumer
 

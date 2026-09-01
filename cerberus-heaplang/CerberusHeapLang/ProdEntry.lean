@@ -53,19 +53,23 @@ full production `runND` equations for loop RUNS are the
 `*_production` theorems of ProdLoopExhibit.lean, through the
 proc-carrying scheduler collapse of DriverCollapse/ProdLoop.)
 
-Note on `create` and the WP layer (D26, RETIRED in Phase 2): an
-UNCONDITIONAL `wp_create` from cell ownership alone is unprovable —
-allocateObject can kill ("out of memory", CerbMem.lean:1479) from
-configurations no cell footprint constrains. Phase 2's
-allocator-cursor resource supplies the missing authority:
-`wps_create` (Wps.lean) allocates from cursor ownership, the OOM
-arm excluded by the pure `freshBase` guard on owned state
-(consumer: `struct_create_store_wps`). THIS module's cold-start
-technique predates it and remains valid as-is: the create prefix
-runs on the PRODUCTION-PINNED initial memory, where allocation
-success is a
-theorem (the `hpre` hypothesis below, discharged concretely by the
-exhibits).
+Note on `create` and the WP layer (D26; 2026-09-01 re-audit R-01):
+an UNCONDITIONAL `wp_create` from cell ownership alone is
+unprovable — allocateObject can kill ("out of memory",
+CerbMem.lean:1479) from configurations no cell footprint
+constrains. Phase 2's allocator-cursor resource supplies the
+missing authority locally: `wps_create` (Wps.lean) allocates from
+cursor ownership, the OOM arm excluded by the pure `freshBase`
+guard on owned state. But that rule is LOCAL ONLY — no adequacy
+launcher grants `cursorOwn` (R-01; its one client,
+`struct_create_store_wps`, assumes the resource and ends at `wps`).
+THIS module's cold-start technique is therefore the route the
+allocating production exhibits ACTUALLY use: the create prefix runs
+on the PRODUCTION-PINNED initial memory as handwritten certified
+operational rounds, where allocation success is a theorem (the
+`hpre` hypothesis below, discharged concretely by the exhibits) —
+a MIXED logical/operational proof shape (R-02), scheduled for
+replacement by whole-program logic proofs in alloc arc P1/P2.
 
 Dnn labels are the recorded design findings of
 docs/2026-08-30_spike-sliceB-notes.md.

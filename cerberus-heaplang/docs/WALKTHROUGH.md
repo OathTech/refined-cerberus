@@ -221,14 +221,19 @@ def SemTriple (e : CoreExpr) (P : CellMap)
 
 There is no Iris in this statement. Unpack the quantifiers:
 
-- **Any configuration satisfying P, any frame, verbatim.** `P` is
+- **Any memory satisfying P, any frame, verbatim — at the fixed
+  demo machine profile.** `P` is
   the footprint (a map of cells); `R` is an *arbitrary* disjoint
   rest of the heap. `Sat σ (P ∪ R)` says the real engine memory
   state `σ` actually carries those cells (live, in-bounds, bytes
   matching). The conclusion returns *the same R* alongside the
   post-footprint `Q` — the frame comes back untouched. This
   quantifier structure *is* the frame property, stated
-  semantically.
+  semantically. One scope honesty note (2026-09-01 re-audit,
+  R-09): the memory and frame are fully quantified, but the thread
+  and machine context are not — `SemTriple` runs `spikeThread e` at
+  the fixed `spikeCtx`/`spikeEnv` demo profile (generalization over
+  a well-formed `MachineCtx` is alloc arc P4).
 - **Engine execution.** `drive` iterates the engine's own step
   function (`step_ctx`) and discharges each memory request exactly
   as the engine's sequential driver does — it is the driver's loop
@@ -445,8 +450,30 @@ the shipped registration (the `*_labeledAt_production` ties). The
 drive-lane theorems (`driveJ`) remain as lemmas — the loop
 exhibits' engine-level workhorses — and the registration tie keeps
 its own name (`counter_loop_certified_registration`, the renamed
-F-05 debt). The README's divergence register keeps every remaining
-seam on one list, each with its discharge path.
+F-05 debt).
+
+Two allocation caveats keep that closure honest (the 2026-09-01
+skeptical re-audit, R-01/R-02). First, the allocation logic rule
+`wps_create` is LOCAL ONLY: it requires an exclusive
+allocator-cursor resource (`cursorOwn`) that NO adequacy launcher
+grants — every launcher initializes the cursor ghost heap empty —
+so no heap-allocating whole program is proved *through the logic's
+create rule*, and no total-lane `wpt_create` exists at all. Second,
+and consequently, the self-contained allocating production theorems
+above are MIXED logical/operational proofs: their create prefixes
+(`counter_loop_certified_production`'s cold-start cell,
+`list_reverse_certified_production`'s two-create chain build, and
+`exhibitA_prod`'s create plus its termination trace) are handwritten
+certified operational rounds crossing `driverDone_step`, with the
+statement logic driving only the store/load/loop suffixes. They are
+therefore evidence that the shipped pipeline runs these programs as
+claimed — not that the separation logic verifies allocation. The
+repair (a launchable public allocation rule with an existential
+pointer, then whole-program logic proofs) is the allocation arc's
+P1/P2; the finding-by-finding closure table is in
+`docs/2026-09-01_alloc-arc-plan.md`. The README's divergence
+register keeps every remaining seam on one list, each with its
+discharge path.
 
 ## 5. Reading the theorems: statement surfaces
 

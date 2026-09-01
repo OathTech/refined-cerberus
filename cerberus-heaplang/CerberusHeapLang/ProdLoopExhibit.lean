@@ -27,6 +27,18 @@ driver reads is EXACTLY what the shipped registration computes
 (`collect_labeled_continuations_NEW` over the synthetic file — the
 ProdEntry registration ties), so nothing is hand-built in the label
 plumbing either.
+
+PROOF CLASSIFICATION (2026-09-01 re-audit, R-02): the two
+heap-allocating exports here are MIXED logical/operational proofs —
+`counter_loop_certified_production`'s cold-start create prefix and
+`list_reverse_certified_production`'s chain build (two creates +
+four field stores) are explicit certified operational rounds
+(`Step.sseq_ctx (Step.create …)`/`Step.sseq_pure` +
+`driverDone_step` chains), NOT consumers of the create logic rule
+(which is local-only, R-01); the total statement judgment drives the
+LOOP SUFFIXES only. `fib_certified_production` (no heap) is the
+fully logic-driven positive control. Whole-program logic proofs are
+alloc arc P2.
 -/
 import CerberusHeapLang.ProdEntry
 import CerberusHeapLang.ProdExhibit

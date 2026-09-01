@@ -1,5 +1,14 @@
 # Fresh foundational re-audit of `cerberus-heaplang` (arc exit gate)
 
+> [AGENT 2026-09-01, alloc-arc P0] **STRUCK as acceptance record per
+> the 2026-09-01 skeptical re-audit**
+> (`docs/2026-09-01_cerberus-heaplang-skeptical-re-audit.md`) —
+> this audit validated names, not proof flow (it did not trace the
+> create rule's cursor resource into adequacy); see the R-01..R-11
+> closure table in
+> `cerberus-heaplang/docs/2026-09-01_alloc-arc-plan.md`. The
+> historical text below is unmodified.
+
 Date: 2026-09-01
 Auditor: FRESH re-auditor (new agent; did not author any of the arc;
 terms of reference = the 2026-08-31 foundational audit's brief +

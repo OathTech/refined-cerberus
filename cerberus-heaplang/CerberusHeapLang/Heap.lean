@@ -38,7 +38,11 @@ allocations, pairwise range-disjoint; a cursor cell (key 0) to
 lastAddress/nextAllocId, its PRESENCE carrying the allocator-health
 facts `wps_create` needs (fresh ids unallocated and not dead; all
 ghost-tracked addresses at or above the downward-growing cursor) —
-cursor-free launches owe nothing new. The union-member/
+cursor-free launches owe nothing new. NB (2026-09-01 re-audit,
+R-01): every current adequacy launcher launches the cursor heap
+EMPTY (key 0 absent — these facts vacuous at launch), so `cursorOwn`
+is never granted and `wps_create` is a LOCAL RULE ONLY; the
+cursor-granting launcher is alloc arc P1. The union-member/
 function-pointer side tables are SYMBOLIC (read-only context):
 decode-inertness rides as a pure payload of `pointsToCell`
 (`decIndep`; per-view decode premises on the generic rules), and

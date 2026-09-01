@@ -21,6 +21,15 @@ semantic triple (the base logic: wp_store/wp_sseq/wp_load through
 `semantic_triple_sound`), the create prefix discharged concretely on
 the production cold-start memory, and termination by the 6-step
 simulation (the exhibit-A pattern at the production cell).
+
+PROOF CLASSIFICATION (2026-09-01 re-audit, R-02): `exhibitA_prod` is
+a MIXED logical/operational proof — the create prefix
+(`drive`/`engineSteps_create`/beta unfolding, `semAProd`'s setup) and
+the six-round termination trace (`prodA_terminates`) are handwritten
+operational reasoning; only the store/load compute suffix crosses
+the separation logic (`SemTriple` via `semantic_triple_sound`). It
+is NOT a `wps_create` consumer (the create rule is local-only,
+R-01). The whole-program logic proof is alloc arc P2.
 -/
 import CerberusHeapLang.ProdEntry
 import CerberusHeapLang.Exhibit

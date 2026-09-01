@@ -3554,26 +3554,28 @@ theorem step_ctx_beta_sym_pure {e : CoreExpr} {ctx : context}
      rw [henv]
      try rfl)
 
-/-! ### The extended fragment cone and the step-match completeness
+/-! ### The unified fragment cone and the step-match
 
-`Frag` is the S3 syntactic cone: the phase-1 shapes plus Esave,
-Eif (with the guard's fuel-honesty side condition), and Erun (with
-the arguments'). Ecase stays OUT (its cone needs the
-substitution-closure lemmas — the registered S4 item); registered
-continuations enter through the SIDE hypothesis `hQf` (the label
-map's own cone membership), which breaks the circularity a
-Q-indexed cone would have.
+`Frag` is the ONE capability cone (Phase-1 S1b unified form — the
+old S3 note that "Ecase stays OUT" is superseded): the straight-line
+shapes plus Esave, Eif (with the guard's fuel-honesty side
+condition), Erun (with the arguments'), value-scrutinee Ecase
+(`Frag.case_value` below, with explicit branch-closure/branch-size
+premises) and wildcard Ewseq. Registered continuations enter through
+the SIDE hypothesis `hQf` (the label map's own cone membership),
+which breaks the circularity a Q-indexed cone would have.
 
-The completeness shape CHANGES from phase 1 (recorded finding): the
+The completeness shape CHANGED from phase 1 (recorded finding): the
 old `engine_complete` classified every engine behavior including
-refusals-at-stuck; the J-lane instead certifies MATCH-GIVEN-STEP
-(`engine_step_matchJ`): wherever the MIRROR steps, the engine's
-behavior is the singleton discharged match. That suffices for the
-WP-driven adequacy lane (NotStuck supplies a mirror step at every
-reachable configuration) and dissolves the WF-threading problem:
-the panic-exclusion facts live as RULE PREMISES, extracted by the
-inversions from the given step — the WP is the well-formedness
-oracle. -/
+refusals-at-stuck; the unified lane instead certifies
+MATCH-GIVEN-STEP (`engine_step_matchU`, the S1b replacement of the
+retired J-lane `engine_step_matchJ`): wherever the MIRROR steps, the
+engine's behavior is the singleton discharged match. That suffices
+for the WP-driven adequacy lane (NotStuck supplies a mirror step at
+every reachable configuration) and dissolves the WF-threading
+problem: the panic-exclusion facts live as RULE PREMISES, extracted
+by the inversions from the given step — the WP is the
+well-formedness oracle. -/
 
 inductive Frag : CoreExpr → Prop where
   | val_pure (v : value) : Frag (Expr [] (Epure (Pexpr [] () (PEval v))))

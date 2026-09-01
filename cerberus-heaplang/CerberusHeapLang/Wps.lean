@@ -53,11 +53,18 @@ the one Löb is inside `wps_sound`; the TOTAL rules live at the
 total stratum, Wpt.lean), and the collapse
 `wps_sound` into the base Iris WP (the sole adequacy interface).
 
-NO `wps_create`: no create small axiom exists at ANY layer (a sound
-one needs the allocator-cursor resource in the state
-interpretation — registered growth step, ProdEntry.lean header).
-Cold-start creates ride the production entry
-(prod_run_eq / sem_triple_prod) unchanged.
+THE ALLOCATION RULE `wps_create` (this file, §CreateRule) is a
+LOCAL RULE ONLY — allocator resource not launchable: its
+precondition is the exclusive allocator-cursor resource
+`cursorOwn`, and NO adequacy launcher grants that resource (every
+launcher — `spike_step_adequacy`, `wpt_engine_boundU/J`,
+`wpt_strongly_normalizing` — initializes the cursor ghost heap
+EMPTY, and no `cursorHeap_alloc` exists), so no heap-allocating
+whole program is currently proved through this rule (2026-09-01
+skeptical re-audit, R-01; owner: alloc arc P1). Cold-start creates
+in the production exhibits cross the driver as handwritten
+certified operational rounds (ProdExhibit / ProdLoopExhibit — R-02),
+not through this rule.
 
 Design records: docs/2026-08-31_s0-probe-report.md (the
 architecture probe), docs/2026-08-31_s0-adjudication.md (the
@@ -2156,7 +2163,7 @@ theorem wps_store_cell_at {Ψ : SpikeVal → EnvStack → IProp GF}
     rw [spliceBytes_length _ _ _ (by omega)]
     exact hlen
 
-/-! ## THE ALLOCATION RULE (Phase 2 — the D26 retirement)
+/-! ## THE ALLOCATION RULE (Phase 2) — LOCAL RULE ONLY (R-01)
 
 `wps_create`: sound allocation THROUGH the allocator-cursor
 resource. The cursor cell carries exactly the two MemState fields
@@ -2168,7 +2175,17 @@ assumed away. Donor shape: RefinedC's alloc_new_blocks/alloc_alive
 discipline (theories/caesium/ghost_state.v) — there the allocator is
 part of the state interpretation; here its authority is a one-cell
 ghost heap because the engine's allocator is a deterministic
-cursor. -/
+cursor.
+
+LAUNCHABILITY (2026-09-01 skeptical re-audit, R-01): this rule is
+LOCAL ONLY — no adequacy launcher grants `cursorOwn` (the cursor
+ghost heap is launched EMPTY everywhere), so the rule is unreachable
+from any exported engine-facing theorem; its one client
+(`struct_create_store_wps`, StructExhibit) is a wps-level entailment
+whose premise ASSUMES the resource. The launchable public
+abstraction (existential pointer, no client-visible cursor) is alloc
+arc P1; the exact-cursor form below is expected to become the
+INTERNAL rule then. -/
 
 section CreateRule
 open Iris.Std.PartialMap
@@ -2188,7 +2205,9 @@ def createExpr (loc : CerbLocation.Loc) (ann : core_run_annotation)
     the cursor. UB/OOM-excluding: `hnz` is the out-of-memory guard,
     `hsz`/`hatom` pin a real non-atomic object type, `hinert` is the
     unspecified image's decode-inertness at the allocated type (rfl
-    for scalar and integer-array types). -/
+    for scalar and integer-array types). LOCAL RULE ONLY (R-01): no
+    adequacy launcher grants `cursorOwn`, so this rule is not
+    launchable — see the section header above. -/
 theorem wps_create {Ψ : SpikeVal → EnvStack → IProp GF}
     (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (aprov : CerbMem.Provenance) (alignN : Int) (ty : ctype)

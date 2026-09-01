@@ -36,8 +36,15 @@ DERIVED vs CHECKED vs DECLARED (the instrument's own honesty):
 - DECLARED (documented, not mechanical): the ATTRIBUTIONS — that a
   listed consumer's program actually executes the construct, and the
   lane assignments. This is documented instrument granularity:
-  name-and-kind plus derived coverage is the checked level; no
-  registered mover.
+  name-and-kind plus derived coverage is the checked level. An `OK`
+  cell means the NAMED DECLARATION EXISTS with the stated kind — NOT
+  that its proof depends on the row's logic rule (the 2026-09-01
+  skeptical re-audit's R-04: this gate validates declarations, not
+  proof flow; dependency-staged certification is alloc-arc P3, the
+  registered mover). Hence the machine-readable line rename
+  (2026-09-01 P0, the audit's option b): the former FULL-ROW output
+  is now CORE-DRIVE-ROW, with the logic / total / production lanes
+  reported separately.
 
 Row order is the cone's constructor declaration order (the
 enumeration is the row set), followed by the supplementary
@@ -87,17 +94,23 @@ structure Row where
   consumer : Cell
 
 /-- Row level for the claims surfaces. The CORE columns are mirror /
-cone / engine-match / partial-adequacy / consumer; the logic column
-is reported separately (create is adequacy-exportable with no logic
-rule); total and production lanes are honest extra lanes, RED for
-most rows. -/
+cone / engine-match / partial-adequacy / consumer; the logic, total
+and production lanes are reported separately in the machine-readable
+lines (2026-09-01 P0: the former FULL-ROW aggregate is renamed
+CORE-DRIVE-ROW — it certifies the drive-lane core plus a logic rule
+EXISTING, and says nothing about the total/production lanes or about
+proof-flow dependency; re-audit R-04). -/
 def Row.coreCells (r : Row) : List Cell :=
   [r.mirror, r.cone, r.engineMatch, r.partialLane, r.consumer]
 
 def Row.exportable (r : Row) : Bool :=
   !(r.coreCells.any Cell.isRed)
 
-def Row.fullRow (r : Row) : Bool :=
+/-- The former `fullRow` (renamed, 2026-09-01 P0 — re-audit R-04
+option b): core drive-lane cells green AND a logic rule exists.
+Deliberately NOT "full": the total and production lanes are excluded
+and reported on their own lines. -/
+def Row.coreDriveRow (r : Row) : Bool :=
   r.exportable && !(r.logic.isRed)
 
 def Row.level (r : Row) : String :=
@@ -199,17 +212,18 @@ def rowSpec : Name → Option RowSpec
     { token := "create", construct := "Eaction Create0",
       mirror := .ctors [`CerberusHeapLang.Step.create],
       logic := .thms [`CerberusHeapLang.wps_create]
-        (note := "the allocator-cursor resource (Phase 2, D26 RETIRED): OOM excluded by the pure freshBase guard on owned cursor state"),
+        (note := "LOCAL RULE ONLY — allocator resource not launchable: the rule's cursorOwn premise is granted by NO adequacy launcher (every launcher initializes the cursor ghost heap EMPTY; re-audit R-01, owner alloc-arc P1); OOM excluded by the pure freshBase guard on owned cursor state — see Notes 4"),
       engineMatch := .thms [`CerberusHeapLang.step_ctx_create],
       partialLane := .thms [`CerberusHeapLang.engine_complete,
         `CerberusHeapLang.engine_adequacyJ],
-      totalLane := noTotal "no wpt_create — mechanical analog of wps_create, no consumer (production creates cross the driver as certified rounds instead — driverDone_step)",
+      totalLane := noTotal "no wpt_create — blocked on the launchable allocator resource (R-01), owner alloc-arc P1; production creates cross the driver as handwritten certified rounds instead — driverDone_step",
       prodLane := .thms [`CerberusHeapLang.exhibitA_prod,
         `CerberusHeapLang.counter_loop_certified_production,
-        `CerberusHeapLang.list_reverse_certified_production],
+        `CerberusHeapLang.list_reverse_certified_production]
+        (note := "MIXED logical/operational proofs (R-02): the create prefixes are handwritten certified operational rounds, NOT create-rule consumers"),
       consumer := .thms [`CerberusHeapLang.exhibitA_prod,
         `CerberusHeapLang.struct_create_store_wps]
-        (note := "production exhibit + the allocate-then-initialize client") }
+        (note := "exhibitA_prod is a MIXED logical/operational proof (create prefix + termination trace operational — R-02); struct_create_store_wps is a LOCAL wps-level entailment ASSUMING cursorOwn (R-01) — neither consumes the create rule from an adequacy launch") }
   | `CerberusHeapLang.Frag.sseq => some
     { token := "sseq-wild", construct := "Esseq, wildcard pattern",
       mirror := .ctors [`CerberusHeapLang.Step.sseq_pure,
@@ -504,7 +518,12 @@ def Cell.render (env : Environment) : Cell → Except String String
   IO.println "row's mirror cell); `OK` cells are name-and-kind CHECKED in the"
   IO.println "built environment; lane ATTRIBUTIONS and"
   IO.println "consumer-exercises-construct claims are DECLARED (documented"
-  IO.println "instrument granularity). The supplementary evaluator row (last)"
+  IO.println "instrument granularity). An `OK` cell therefore means the NAMED"
+  IO.println "DECLARATION EXISTS with the stated kind — NOT that its proof"
+  IO.println "depends on the row's logic rule (2026-09-01 skeptical re-audit"
+  IO.println "R-04: this gate validates declarations, not proof flow;"
+  IO.println "dependency-staged certification is alloc-arc P3). The"
+  IO.println "supplementary evaluator row (last)"
   IO.println "owns no constructor and is mechanically barred from claiming any."
   IO.println ""
   IO.println "| Construct | Level | Mirror (Step) | Logic (wp/wps) | Cone (Frag) | Engine match | Partial adequacy | Total lane | Production lane | Example consumer |"
@@ -543,8 +562,10 @@ def Cell.render (env : Environment) : Cell → Except String String
   IO.println "   `list_reverse_terminates`. Negative test:"
   IO.println "   `diverge_total_unprovable` (DivergeExhibit — the self-jump"
   IO.println "   loop's total derivation is FALSE). RED total cells:"
-  IO.println "   create/Ecase/Ewseq have no wpt rule yet (mechanical analogs of"
-  IO.println "   their wps rules, no consumer — registered follow-ons)."
+  IO.println "   Ecase/Ewseq have no wpt rule yet (mechanical analogs of"
+  IO.println "   their wps rules, no consumer — registered follow-ons);"
+  IO.println "   create has no wpt rule AND its wps rule is local-only"
+  IO.println "   (R-01/Notes 4) — owner alloc-arc P1."
   IO.println "   `blockSpecs_intro_variant` is RETIRED, replaced by"
   IO.println "   `blockSpecsT` (Wpt.lean): the smaller-measure discipline is"
   IO.println "   the judgment's jump clause, never an optional hypothesis."
@@ -566,14 +587,29 @@ def Cell.render (env : Environment) : Cell → Except String String
   IO.println "   engine-built by creates + field stores, then reversed by the"
   IO.println "   authored loop) conclude about the same shipped composite."
   IO.println "   Straight-line constructs reach the shipped pipeline via"
-  IO.println "   `exhibitA_prod`."
-  IO.println "4. **`create` HAS its logic rule** (Phase 2 — D26 RETIRED):"
-  IO.println "   `wps_create` allocates through the allocator-cursor ghost"
-  IO.println "   resource; the out-of-memory kill arm is excluded by the pure"
-  IO.println "   `freshBase ... ≠ 0` guard computed on OWNED cursor state (the"
-  IO.println "   OOM arm is handled by the resource's design, not assumed away)."
-  IO.println "   Consumers: the cold-start production exhibit and the"
-  IO.println "   allocate-then-initialize client (`struct_create_store_wps`)."
+  IO.println "   `exhibitA_prod`. SCOPE (2026-09-01 re-audit, R-02): the"
+  IO.println "   counter and reversal production proofs are MIXED"
+  IO.println "   logical/operational — their create/chain-build prefixes are"
+  IO.println "   handwritten certified operational rounds (driverDone_step"
+  IO.println "   chains), not create-rule consumers; the total judgment"
+  IO.println "   drives the loop suffixes only. fib (no heap) is the fully"
+  IO.println "   logic-driven positive control."
+  IO.println "4. **`create` has a LOCAL logic rule ONLY** (Phase 2 proved"
+  IO.println "   `wps_create`; the 2026-09-01 skeptical re-audit R-01"
+  IO.println "   DOWNGRADED the claim — the former \"D26 RETIRED\" wording"
+  IO.println "   overstated closure): the rule allocates through the"
+  IO.println "   allocator-cursor ghost resource, the out-of-memory kill arm"
+  IO.println "   excluded by the pure `freshBase ... ≠ 0` guard computed on"
+  IO.println "   OWNED cursor state — but the resource is NOT LAUNCHABLE:"
+  IO.println "   every adequacy launcher initializes the cursor ghost heap"
+  IO.println "   EMPTY and no cursor-allocation lemma exists, so no"
+  IO.println "   engine-facing theorem consumes the rule. Its one client,"
+  IO.println "   `struct_create_store_wps`, ASSUMES `cursorOwn` and ends at"
+  IO.println "   `wps` (not an adequacy consumer); the row's other named"
+  IO.println "   consumers are MIXED logical/operational production exhibits"
+  IO.println "   (R-02). Owner: alloc-arc P1 (launchable public rule +"
+  IO.println "   launcher + `wpt_create`) and P2 (whole-program logic"
+  IO.println "   consumers)."
   IO.println "5. **Interior (sub-allocation) access is GENERIC** (Phase 2,"
   IO.println "   F-04 retired): one typed-subrange load and one store rule"
   IO.println "   (`wps_load_at`/`wps_store_at` over views; whole-cell forms"
@@ -611,11 +647,30 @@ def Cell.render (env : Environment) : Cell → Except String String
   IO.println ""
   IO.println "## Machine-readable scope lines (consumed by test_unit.sh gate 4)"
   IO.println ""
+  IO.println "Line semantics (2026-09-01 P0 — the skeptical re-audit's R-04,"
+  IO.println "option b: the former FULL-ROW aggregate is RENAMED, lanes"
+  IO.println "reported separately): CORE-DRIVE-ROW = the drive-lane core"
+  IO.println "cells (mirror/cone/engine-match/partial-adequacy/consumer)"
+  IO.println "green AND a logic rule EXISTS — it says nothing about the"
+  IO.println "total or production lanes, about launchability, or about"
+  IO.println "proof-flow dependency (lane membership is cell non-redness,"
+  IO.println "name-and-kind checked, NOT dependency-traced — R-04's staged"
+  IO.println "dependency certification is alloc-arc P3). The per-lane lines"
+  IO.println "list the rows whose respective cell is non-red. NB `create`"
+  IO.println "is on LOGIC-RULE-LANE with a LOCAL rule only (not launchable,"
+  IO.println "R-01) and is absent from TOTAL-LANE."
+  IO.println ""
   let exportable := rows.filter (·.exportable) |>.map (·.token)
-  let fullRows := rows.filter (·.fullRow) |>.map (·.token)
+  let coreDriveRows := rows.filter (·.coreDriveRow) |>.map (·.token)
+  let logicRows := rows.filter (fun r => !r.logic.isRed) |>.map (·.token)
+  let totalRows := rows.filter (fun r => !r.totalLane.isRed) |>.map (·.token)
+  let prodRows := rows.filter (fun r => !r.prodLane.isRed) |>.map (·.token)
   let localOnly := rows.filter (fun r => !r.exportable) |>.map (·.token)
   IO.println "```"
   IO.println s!"ADEQUACY-EXPORTABLE: {" ".intercalate exportable}"
-  IO.println s!"FULL-ROW: {" ".intercalate fullRows}"
+  IO.println s!"CORE-DRIVE-ROW: {" ".intercalate coreDriveRows}"
+  IO.println s!"LOGIC-RULE-LANE: {" ".intercalate logicRows}"
+  IO.println s!"TOTAL-LANE: {" ".intercalate totalRows}"
+  IO.println s!"PRODUCTION-LANE: {" ".intercalate prodRows}"
   IO.println s!"LOCAL-RULE-ONLY: {" ".intercalate localOnly}"
   IO.println "```"

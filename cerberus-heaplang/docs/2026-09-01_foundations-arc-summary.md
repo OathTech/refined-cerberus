@@ -255,3 +255,8 @@ quotes in README/walkthrough re-baselined to the re-run build's
 verbatim output). Gate suite after the fixes: `ALL GATES GREEN`
 (all five, manifest and census drift-free). **The foundations arc
 is CLOSED; the port is unblocked.**
+
+[AGENT 2026-09-01, alloc-arc P0]: the re-audit above is STRUCK as
+acceptance record per the 2026-09-01 skeptical re-audit (it
+validated names, not proof flow); see the R-01..R-11 closure table
+in `docs/2026-09-01_alloc-arc-plan.md`.
