@@ -35,7 +35,7 @@ fully mechanical (cone-derived) upgrade.
 | Esave (block entry, value-shaped params) | CERTIFIED (drive lane) | OK `Step.save` | OK `wps_save` | OK `Frag.save` | OK `step_ctx_save` | OK `engine_adequacyJ` | RED — no logical total lane (Phase 3); see Notes 2 | RED — registration tie only; see Notes 3 | OK `counter_loop_certified`, `fib_certified` |
 | Eif (big-step boolean guard) | CERTIFIED (drive lane) | OK `Step.if_true`, `Step.if_false` | OK `wps_if_true`, `wps_if_false` | OK `Frag.if_` | OK `stepDischarge_if_true`, `stepDischarge_if_false` | OK `engine_adequacyJ` | RED — no logical total lane (Phase 3); see Notes 2 | RED — registration tie only; see Notes 3 | OK `counter_loop_certified`, `fib_certified` |
 | Erun (context-discarding jump) | CERTIFIED (drive lane) | OK `Step.run` | OK `wps_run` | OK `Frag.run` | OK `stepDischarge_run` | OK `engine_adequacyJ` | RED — no logical total lane (Phase 3); see Notes 2 | RED — registration tie only; see Notes 3 | OK `counter_loop_certified`, `fib_certified` |
-| Ecase, VALUE scrutinee | LOCAL RULE ONLY (RED) | OK `Step.case_value` | OK `wps_case_value` | OK `Frag.case_value` — S1b: joined — branch-closure + branch-size premises explicit | OK `step_ctx_case_value`, `step_ctx_case_illtyped`, `engine_complete_caseU` — TWO-SIDED at any MachineCtx | OK `engine_adequacyJ`, `engine_adequacyU` | RED — no logical total lane (Phase 3); see Notes 2 | RED — outside every lane | RED — no package consumer yet — the adequacy-level case regression lands in the S1b drift/regression commit |
+| Ecase, VALUE scrutinee | CERTIFIED (drive lane) | OK `Step.case_value` | OK `wps_case_value` | OK `Frag.case_value` — S1b: joined — branch-closure + branch-size premises explicit | OK `step_ctx_case_value`, `step_ctx_case_illtyped`, `engine_complete_caseU` — TWO-SIDED at any MachineCtx | OK `engine_adequacyJ`, `engine_adequacyU` | RED — no logical total lane (Phase 3); see Notes 2 | RED — outside every lane | OK `case_certified` — the WP-lane adequacy regression — binder pattern, substitution TAU (CaseExhibit) |
 | Epure exit at PEsym shape | CERTIFIED (drive lane) | OK `Step.pure_eval` — certified at PEsym shape — Soundness stepDischarge_pure_sym | OK `wps_pure` | OK `Frag.pure_sym` | OK `stepDischarge_pure_sym` | OK `engine_adequacyJ` | RED — no logical total lane (Phase 3); see Notes 2 | RED — registration tie only; see Notes 3 | OK `fib_certified` |
 | Ememop PtrEq (value operands) | CERTIFIED (drive lane) | OK `Step.memop_ptreq` | OK `wps_memop_ptreq` | OK `Frag.memop_vals` | OK `step_ctx_memop` | OK `engine_adequacyJ` | RED — no logical total lane (Phase 3); see Notes 2 | RED — registration tie only; see Notes 3 | OK `list_reverse_certified` |
 | Ememop PtrEq, operand-evaluation step | CERTIFIED (drive lane) | OK `Step.memop_eval` | OK `wps_memop_eval` | OK `Frag.memop_op` | OK `stepDischarge_memop_eval` | OK `engine_adequacyJ` | RED — no logical total lane (Phase 3); see Notes 2 | RED — registration tie only; see Notes 3 | OK `list_reverse_certified` |
@@ -45,14 +45,16 @@ fully mechanical (cone-derived) upgrade.
 
 ## Notes (the registered honesty items behind the RED cells)
 
-1. **`Ecase` (value scrutinee) joined the unified cone in S1b**
+1. **`Ecase` (value scrutinee) exported in S1b**
    (audit F-01 remediation): mirror rule + wps rule + cone
    membership (`Frag.case_value`, branch-closure and branch-size
    premises explicit over the extended `esize`) + TWO-SIDED engine
    pair (`step_ctx_case_value`/`step_ctx_case_illtyped`/
-   `engine_complete_caseU`) + generic adequacy coverage. The row
-   stays short of FULL until an in-package consumer (adequacy-level
-   case regression) lands — the S1b drift/regression commit.
+   `engine_complete_caseU`) + generic adequacy coverage + the
+   WP-lane consumer regression `case_certified` (CaseExhibit: a
+   BINDER-pattern case program — the substitution TAU genuinely
+   fires — through wps_case_value → wps_sound →
+   spike_engine_adequacy, engine-vocabulary conclusion).
 2. **The total lane is empty for every construct** (audit F-02):
    the logic has no total WP / total statement judgment;
    `blockSpecs_intro_variant` has no theorem-level termination
@@ -84,7 +86,7 @@ fully mechanical (cone-derived) upgrade.
 ## Machine-readable scope lines (consumed by test_unit.sh gate 4)
 
 ```
-ADEQUACY-EXPORTABLE: value store load create sseq-wild sseq-spec sseq-sym annot save if run pure-sym memop-ptreq memop-op load-op store-op pure-operands
-FULL-ROW: value store load sseq-wild sseq-spec sseq-sym annot save if run pure-sym memop-ptreq memop-op load-op store-op pure-operands
-LOCAL-RULE-ONLY: case-value
+ADEQUACY-EXPORTABLE: value store load create sseq-wild sseq-spec sseq-sym annot save if run case-value pure-sym memop-ptreq memop-op load-op store-op pure-operands
+FULL-ROW: value store load sseq-wild sseq-spec sseq-sym annot save if run case-value pure-sym memop-ptreq memop-op load-op store-op pure-operands
+LOCAL-RULE-ONLY: 
 ```

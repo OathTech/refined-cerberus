@@ -88,6 +88,7 @@ import CerberusHeapLang.LoopExhibit
 import CerberusHeapLang.FibExhibit
 import CerberusHeapLang.ArrayExhibit
 import CerberusHeapLang.ListRevExhibit
+import CerberusHeapLang.CaseExhibit
 import CerberusHeapLang.StmtProbe
 
 namespace CerberusHeapLang.Audit

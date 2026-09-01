@@ -233,7 +233,8 @@ def rows : List Row := [
       `CerberusHeapLang.engine_adequacyU],
     totalLane := noTotal,
     prodLane := .red "outside every lane",
-    consumer := .red "no package consumer yet — the adequacy-level case regression lands in the S1b drift/regression commit" },
+    consumer := .thms [`CerberusHeapLang.case_certified]
+      (note := "the WP-lane adequacy regression — binder pattern, substitution TAU (CaseExhibit)") },
   { token := "pure-sym", construct := "Epure exit at PEsym shape",
     mirror := .ctors [`CerberusHeapLang.Step.pure_eval]
       (note := "certified at PEsym shape — Soundness stepDischarge_pure_sym"),
@@ -409,14 +410,16 @@ def checkCtorList (env : Environment) (ind : Name) (expected : List Name) :
   IO.println ""
   IO.println "## Notes (the registered honesty items behind the RED cells)"
   IO.println ""
-  IO.println "1. **`Ecase` (value scrutinee) joined the unified cone in S1b**"
+  IO.println "1. **`Ecase` (value scrutinee) exported in S1b**"
   IO.println "   (audit F-01 remediation): mirror rule + wps rule + cone"
   IO.println "   membership (`Frag.case_value`, branch-closure and branch-size"
   IO.println "   premises explicit over the extended `esize`) + TWO-SIDED engine"
   IO.println "   pair (`step_ctx_case_value`/`step_ctx_case_illtyped`/"
-  IO.println "   `engine_complete_caseU`) + generic adequacy coverage. The row"
-  IO.println "   stays short of FULL until an in-package consumer (adequacy-level"
-  IO.println "   case regression) lands — the S1b drift/regression commit."
+  IO.println "   `engine_complete_caseU`) + generic adequacy coverage + the"
+  IO.println "   WP-lane consumer regression `case_certified` (CaseExhibit: a"
+  IO.println "   BINDER-pattern case program — the substitution TAU genuinely"
+  IO.println "   fires — through wps_case_value → wps_sound →"
+  IO.println "   spike_engine_adequacy, engine-vocabulary conclusion)."
   IO.println "2. **The total lane is empty for every construct** (audit F-02):"
   IO.println "   the logic has no total WP / total statement judgment;"
   IO.println "   `blockSpecs_intro_variant` has no theorem-level termination"
