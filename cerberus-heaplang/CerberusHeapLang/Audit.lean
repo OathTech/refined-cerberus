@@ -33,7 +33,8 @@ trust properties):
    artifact used to ride a green build).
 
 THE DECLARED BOUNDARY: the classical trio, plus — for EXACTLY the
-two production-entry modules (ProdEntry / ProdExhibit) —
+production-entry modules (ProdEntry / ProdExhibit /
+ProdLoopExhibit, the statement-carrying set) —
 the one declared boundary axiom `runEffectful` (LemLib.lean:54).
 Boundary entry provenance (Extension D, 2026-08-30):
 - TEMPORAL, with a named mover: `runEffectful` is the semantics
@@ -86,6 +87,7 @@ import CerberusHeapLang.Wpt
 import CerberusHeapLang.TotalAdequacy
 import CerberusHeapLang.Exhibit
 import CerberusHeapLang.ProdExhibit
+import CerberusHeapLang.ProdLoopExhibit
 import CerberusHeapLang.LoopExhibit
 import CerberusHeapLang.FibExhibit
 import CerberusHeapLang.DivergeExhibit
@@ -114,9 +116,13 @@ def boundaryAxioms : List Name :=
 
 /-- EXACTLY the modules whose theorems quantify over the shipped
     `initial_driver_state` and may therefore carry `runEffectful`
-    (in their statements). Everything else is held to the trio. -/
+    (in their statements). Everything else is held to the trio.
+    Phase 5 adds ProdLoopExhibit (the production LOOP equations);
+    the whole collapse machinery (DriverCollapse, ProdLoop) stays
+    OUTSIDE the boundary. -/
 def boundaryModules : List Name :=
-  [`CerberusHeapLang.ProdEntry, `CerberusHeapLang.ProdExhibit]
+  [`CerberusHeapLang.ProdEntry, `CerberusHeapLang.ProdExhibit,
+   `CerberusHeapLang.ProdLoopExhibit]
 
 /-! ## Curated pins -/
 
@@ -363,12 +369,42 @@ info: 'CerberusHeapLang.fib_labeledAt_production' depends on axioms: [propext, r
 #guard_msgs in #print axioms CerberusHeapLang.fib_labeledAt_production
 
 /--
-info: 'CerberusHeapLang.counter_loop_certified_production' depends on axioms: [propext,
+info: 'CerberusHeapLang.counter_loop_certified_registration' depends on axioms: [propext,
  runEffectful,
  Classical.choice,
  Quot.sound]
 -/
-#guard_msgs in #print axioms CerberusHeapLang.counter_loop_certified_production
+#guard_msgs in #print axioms CerberusHeapLang.counter_loop_certified_registration
+
+-- Foundations Phase 5 (2026-09-01): THE LOOP PRODUCTION COLLAPSE
+-- (audit F-05 closed) — the proc-carrying, populated-label scheduler
+-- collapse. TRIO-EXACT: the driver step-match (one production round
+-- per mirror step, jump rounds included, over the full Frag cone)
+-- and the total-judgment driver simulation (the wpt_drive_aux analog
+-- at the driver's own loop). The boundary carries only the SHIPPED
+-- pipeline statements (ProdLoopExhibit): the generic runND equation
+-- for registered-loop programs and the fib production theorem, each
+-- exactly trio + runEffectful (statement-borne, as everywhere in the
+-- boundary).
+/--
+info: 'CerberusHeapLang.loop_step_frag' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms CerberusHeapLang.loop_step_frag
+
+/--
+info: 'CerberusHeapLang.wpt_driver_done' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms CerberusHeapLang.wpt_driver_done
+
+/--
+info: 'CerberusHeapLang.prod_run_eqJ' depends on axioms: [propext, runEffectful, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms CerberusHeapLang.prod_run_eqJ
+
+/--
+info: 'CerberusHeapLang.fib_certified_production' depends on axioms: [propext, runEffectful, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms CerberusHeapLang.fib_certified_production
 
 -- List-reverse arc phase A (2026-08-31): THE CANONICAL EXHIBIT —
 -- in-place list reversal over one-allocation two-field nodes, the

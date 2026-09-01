@@ -46,9 +46,12 @@ THE REGISTRATION TIE for loops: `fib_labeledAt_production` /
 initial run state from the shipped
 `collect_labeled_continuations_NEW` — the loop exhibits' label maps
 are exactly what the production entry computes, nothing hand-built —
-and `counter_loop_certified_production` re-exports the counter loop
-at that derived tie. (The full production `runND` equation for a
-loop RUN remains a registered residual.)
+and `counter_loop_certified_registration` re-exports the counter
+loop at that derived tie. (Phase 5 [audit F-05]: the theorem is
+named for what it is — the REGISTRATION tie at the driveJ lane; the
+full production `runND` equations for loop RUNS are the
+`*_production` theorems of ProdLoopExhibit.lean, through the
+proc-carrying scheduler collapse of DriverCollapse/ProdLoop.)
 
 Note on `create` and the WP layer (D26, RETIRED in Phase 2): an
 UNCONDITIONAL `wp_create` from cell ownership alone is unprovable —
@@ -433,13 +436,18 @@ theorem loop_labeledAt_production (loc : CerbLocation.Loc)
   rw [fmapLookupBy_addBy_empty]
   rw [if_pos (by decide +kernel)]
 
-/-- THE PRODUCTION-ENTRY LOOP EXPORT at the derived tie: the
-    counter-loop certification restated with the run state built by
-    the SHIPPED registration ONLY (`initial_core_run_state ∘
-    collect_labeled_continuations_NEW` — nothing hand-built in the
-    label plumbing; the drive is the certified jump-profile lane).
-    The in-budget hypotheses are the sanctioned interim form. -/
-theorem counter_loop_certified_production {GF : Iris.BundledGFunctors}
+/-- THE REGISTRATION-TIE LOOP EXPORT (renamed from
+    `counter_loop_certified_production` at Phase 5 — audit F-05:
+    "production" is reserved for statements whose execution function
+    is the shipped runner; this one's lane is driveJ at the
+    production run state): the counter-loop certification restated
+    with the run state built by the SHIPPED registration ONLY
+    (`initial_core_run_state ∘ collect_labeled_continuations_NEW` —
+    nothing hand-built in the label plumbing; the drive is the
+    certified jump-profile lane). The in-budget hypotheses are the
+    sanctioned interim form. The real production equations live in
+    ProdLoopExhibit.lean. -/
+theorem counter_loop_certified_registration {GF : Iris.BundledGFunctors}
     [SpikeGpreS GF]
     (loc : CerbLocation.Loc) (ann ra : core_run_annotation)
     (mo : memory_order) (bty xbty sbty : core_base_type)

@@ -10,8 +10,10 @@ import CerberusHeapLang.Adequacy
 import CerberusHeapLang.TotalAdequacy
 import CerberusHeapLang.Exhibit
 import CerberusHeapLang.DriverCollapse
+import CerberusHeapLang.ProdLoop
 import CerberusHeapLang.ProdEntry
 import CerberusHeapLang.ProdExhibit
+import CerberusHeapLang.ProdLoopExhibit
 import CerberusHeapLang.LoopExhibit
 import CerberusHeapLang.FibExhibit
 import CerberusHeapLang.DivergeExhibit

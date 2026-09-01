@@ -161,7 +161,8 @@ def rowSpec : Name → Option RowSpec
         `CerberusHeapLang.engine_adequacyJ],
       totalLane := totalVia [`CerberusHeapLang.wpt_ofVal]
         [`CerberusHeapLang.fib_certified_total, `CerberusHeapLang.list_reverse_certified_total],
-      prodLane := .thms [`CerberusHeapLang.exhibitA_prod],
+      prodLane := .thms [`CerberusHeapLang.exhibitA_prod,
+        `CerberusHeapLang.fib_certified_production],
       consumer := .thms [`CerberusHeapLang.exhibitA_engine] }
   | `CerberusHeapLang.Frag.store => some
     { token := "store", construct := "Eaction Store0 (value operands)",
@@ -235,7 +236,7 @@ def rowSpec : Name → Option RowSpec
       partialLane := .thms [`CerberusHeapLang.engine_adequacyJ],
       totalLane := totalVia [`CerberusHeapLang.wpt_save]
         [`CerberusHeapLang.fib_certified_total, `CerberusHeapLang.list_reverse_certified_total],
-      prodLane := prodRegOnly,
+      prodLane := .thms [`CerberusHeapLang.fib_certified_production],
       consumer := .thms [`CerberusHeapLang.counter_loop_certified,
         `CerberusHeapLang.fib_certified] }
   | `CerberusHeapLang.Frag.if_ => some
@@ -249,7 +250,7 @@ def rowSpec : Name → Option RowSpec
       partialLane := .thms [`CerberusHeapLang.engine_adequacyJ],
       totalLane := totalVia [`CerberusHeapLang.wpt_if_true,
         `CerberusHeapLang.wpt_if_false] [`CerberusHeapLang.fib_certified_total, `CerberusHeapLang.list_reverse_certified_total],
-      prodLane := prodRegOnly,
+      prodLane := .thms [`CerberusHeapLang.fib_certified_production],
       consumer := .thms [`CerberusHeapLang.counter_loop_certified,
         `CerberusHeapLang.fib_certified] }
   | `CerberusHeapLang.Frag.run => some
@@ -261,7 +262,7 @@ def rowSpec : Name → Option RowSpec
       partialLane := .thms [`CerberusHeapLang.engine_adequacyJ],
       totalLane := totalVia [`CerberusHeapLang.wpt_run]
         [`CerberusHeapLang.fib_certified_total, `CerberusHeapLang.list_reverse_certified_total],
-      prodLane := prodRegOnly,
+      prodLane := .thms [`CerberusHeapLang.fib_certified_production],
       consumer := .thms [`CerberusHeapLang.counter_loop_certified,
         `CerberusHeapLang.fib_certified] }
   | `CerberusHeapLang.Frag.sseq_spec => some
@@ -285,7 +286,7 @@ def rowSpec : Name → Option RowSpec
       partialLane := .thms [`CerberusHeapLang.engine_adequacyJ],
       totalLane := totalVia [`CerberusHeapLang.wpt_pure]
         [`CerberusHeapLang.fib_certified_total, `CerberusHeapLang.list_reverse_certified_total],
-      prodLane := prodRegOnly,
+      prodLane := .thms [`CerberusHeapLang.fib_certified_production],
       consumer := .thms [`CerberusHeapLang.fib_certified] }
   | `CerberusHeapLang.Frag.load_op => some
     { token := "load-op", construct := "Load0 operand-evaluation step (ACTION_EVAL)",
@@ -377,7 +378,7 @@ def supplementaryRows : List Row := [
     partialLane := .thms [`CerberusHeapLang.engine_adequacyJ],
     totalLane := totalVia [] [`CerberusHeapLang.fib_certified_total,
       `CerberusHeapLang.list_reverse_certified_total],
-    prodLane := prodRegOnly,
+    prodLane := .thms [`CerberusHeapLang.fib_certified_production],
     consumer := .thms [`CerberusHeapLang.array_sum_certified,
       `CerberusHeapLang.fib_certified] }
 ]
@@ -529,17 +530,21 @@ def Cell.render (env : Environment) : Cell → Except String String
   IO.println "   `blockSpecs_intro_variant` is RETIRED, replaced by"
   IO.println "   `blockSpecsT` (Wpt.lean): the smaller-measure discipline is"
   IO.println "   the judgment's jump clause, never an optional hypothesis."
-  IO.println "3. **The production lane for loop constructs is RED** (audit F-05):"
-  IO.println "   what exists is the REGISTRATION theorem —"
-  IO.println "   `counter_loop_certified_production` concludes at `driveJ` at the"
-  IO.println "   shipped initial run state with the label plumbing derived from"
-  IO.println "   the shipped registration; it is NOT a `runND` production"
-  IO.println "   equation. NAMING DEBT (registered): the declaration keeps its"
-  IO.println "   `_production` name this phase (a rename is statement-surface"
-  IO.println "   churn); docs call it the registration theorem; the rename to"
-  IO.println "   `_registration` lands with Phase 5's real production theorem."
-  IO.println "   Straight-line constructs reach the shipped pipeline via"
-  IO.println "   `exhibitA_prod`."
+  IO.println "3. **The production lane is LIVE for loop constructs** (Phase 5;"
+  IO.println "   audit F-05 closed): the proc-carrying, populated-label"
+  IO.println "   scheduler collapse (DriverCollapse `loop_step_frag` +"
+  IO.println "   ProdLoop `wpt_driver_done`) makes loop programs runnable on"
+  IO.println "   the SHIPPED pipeline — `fib_certified_production`"
+  IO.println "   (ProdLoopExhibit) concludes about"
+  IO.println "   `CerbND.runND (Driver.drive ...) (initial_driver_state ...)`"
+  IO.println "   from the cold start, no package drive/driveJ in the statement."
+  IO.println "   The former misnamed theorem is RENAMED"
+  IO.println "   `counter_loop_certified_registration` (the naming debt paid):"
+  IO.println "   it is the driveJ-lane REGISTRATION tie, kept as a lemma."
+  IO.println "   Rows still marked 'registration tie only' await their"
+  IO.println "   production consumer (counter loop / list reverse — this"
+  IO.println "   phase's remaining exports). Straight-line constructs reach"
+  IO.println "   the shipped pipeline via `exhibitA_prod`."
   IO.println "4. **`create` HAS its logic rule** (Phase 2 — D26 RETIRED):"
   IO.println "   `wps_create` allocates through the allocator-cursor ghost"
   IO.println "   resource; the out-of-memory kill arm is excluded by the pure"

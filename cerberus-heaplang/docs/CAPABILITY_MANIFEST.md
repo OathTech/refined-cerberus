@@ -30,17 +30,17 @@ owns no constructor and is mechanically barred from claiming any.
 
 | Construct | Level | Mirror (Step) | Logic (wp/wps) | Cone (Frag) | Engine match | Partial adequacy | Total lane | Production lane | Example consumer |
 |---|---|---|---|---|---|---|---|---|---|
-| value delivery (Epure at PEval; Eannot values) | CERTIFIED (drive lane) | DECLARED — terminal — the toVal/ofVal value protocol (values do not step) | OK `wp_ofVal`, `wps_ofVal` | OK `Frag.val_pure` | OK `step_ctx_done`, `step_ctx_remove_annot` | OK `engine_complete`, `engine_adequacyJ` | OK `wpt_ofVal`, `fib_certified_total`, `list_reverse_certified_total` | OK `exhibitA_prod` | OK `exhibitA_engine` |
+| value delivery (Epure at PEval; Eannot values) | CERTIFIED (drive lane) | DECLARED — terminal — the toVal/ofVal value protocol (values do not step) | OK `wp_ofVal`, `wps_ofVal` | OK `Frag.val_pure` | OK `step_ctx_done`, `step_ctx_remove_annot` | OK `engine_complete`, `engine_adequacyJ` | OK `wpt_ofVal`, `fib_certified_total`, `list_reverse_certified_total` | OK `exhibitA_prod`, `fib_certified_production` | OK `exhibitA_engine` |
 | Eaction Store0 (value operands) | CERTIFIED (drive lane) | OK `Step.store` | OK `wp_store`, `wps_store` | OK `Frag.store` | OK `step_ctx_store`, `engine_complete_storeU` — TWO-SIDED at any MachineCtx | OK `engine_complete`, `engine_adequacyJ` | OK `wpt_store_at`, `wpt_store_cell_at`, `list_reverse_certified_total` | OK `exhibitA_prod` | OK `exhibitB_engine`, `counter_loop_certified`, `list_reverse_certified` |
 | Eaction Load0 (value operand) | CERTIFIED (drive lane) | OK `Step.load` | OK `wp_load`, `wps_load` | OK `Frag.load` | OK `step_ctx_load` | OK `engine_complete`, `engine_adequacyJ` | OK `wpt_load_at`, `wpt_load_cell_at`, `list_reverse_certified_total` | OK `exhibitA_prod` | OK `exhibitA_engine`, `array_sum_certified` |
 | Eaction Create0 | CERTIFIED (drive lane) | OK `Step.create` | OK `wps_create` — the allocator-cursor resource (Phase 2, D26 RETIRED): OOM excluded by the pure freshBase guard on owned cursor state | OK `Frag.create` | OK `step_ctx_create` | OK `engine_complete`, `engine_adequacyJ` | RED — no total rule yet (no wpt_create — mechanical analog of wps_create, no consumer); see Notes 2 | OK `exhibitA_prod` | OK `exhibitA_prod`, `struct_create_store_wps` — production exhibit + the allocate-then-initialize client |
 | Esseq, wildcard pattern | CERTIFIED (drive lane) | OK `Step.sseq_pure`, `Step.sseq_annot`, `Step.sseq_ctx` | OK `wp_sseq`, `wps_seq` | OK `Frag.sseq` | OK `step_ctx_beta_pure`, `step_ctx_beta_annot` | OK `engine_complete`, `engine_adequacyJ` | OK `wpt_seq`, `list_reverse_certified_total` | OK `exhibitA_prod` | OK `exhibitA_engine`, `exhibitC_engine` |
 | Eannot residue (descent + merge) | CERTIFIED (drive lane) | OK `Step.annot_ctx`, `Step.annot_merge` | OK `wp_annot`, `wps_annot` | OK `Frag.annot` | OK `step_ctx_merge` | OK `engine_complete`, `engine_adequacyJ` | OK `wpt_annot`, `list_reverse_certified_total` | OK `exhibitA_prod` | OK `exhibitA_engine` |
-| Esave (block entry, value-shaped params) | CERTIFIED (drive lane) | OK `Step.save` | OK `wps_save` | OK `Frag.save` | OK `step_ctx_save` | OK `engine_adequacyJ` | OK `wpt_save`, `fib_certified_total`, `list_reverse_certified_total` | RED — registration tie only; see Notes 3 | OK `counter_loop_certified`, `fib_certified` |
-| Eif (big-step boolean guard) | CERTIFIED (drive lane) | OK `Step.if_true`, `Step.if_false` | OK `wps_if_true`, `wps_if_false` | OK `Frag.if_` | OK `stepDischarge_if_true`, `stepDischarge_if_false` | OK `engine_adequacyJ` | OK `wpt_if_true`, `wpt_if_false`, `fib_certified_total`, `list_reverse_certified_total` | RED — registration tie only; see Notes 3 | OK `counter_loop_certified`, `fib_certified` |
-| Erun (context-discarding jump) | CERTIFIED (drive lane) | OK `Step.run` | OK `wps_run` | OK `Frag.run` | OK `stepDischarge_run` — ONE-SIDED — match-given-step, the direction adequacy consumes; jump refusal channels are failwithI panics = absence of a step; see Notes 7 | OK `engine_adequacyJ` | OK `wpt_run`, `fib_certified_total`, `list_reverse_certified_total` | RED — registration tie only; see Notes 3 | OK `counter_loop_certified`, `fib_certified` |
+| Esave (block entry, value-shaped params) | CERTIFIED (drive lane) | OK `Step.save` | OK `wps_save` | OK `Frag.save` | OK `step_ctx_save` | OK `engine_adequacyJ` | OK `wpt_save`, `fib_certified_total`, `list_reverse_certified_total` | OK `fib_certified_production` | OK `counter_loop_certified`, `fib_certified` |
+| Eif (big-step boolean guard) | CERTIFIED (drive lane) | OK `Step.if_true`, `Step.if_false` | OK `wps_if_true`, `wps_if_false` | OK `Frag.if_` | OK `stepDischarge_if_true`, `stepDischarge_if_false` | OK `engine_adequacyJ` | OK `wpt_if_true`, `wpt_if_false`, `fib_certified_total`, `list_reverse_certified_total` | OK `fib_certified_production` | OK `counter_loop_certified`, `fib_certified` |
+| Erun (context-discarding jump) | CERTIFIED (drive lane) | OK `Step.run` | OK `wps_run` | OK `Frag.run` | OK `stepDischarge_run` — ONE-SIDED — match-given-step, the direction adequacy consumes; jump refusal channels are failwithI panics = absence of a step; see Notes 7 | OK `engine_adequacyJ` | OK `wpt_run`, `fib_certified_total`, `list_reverse_certified_total` | OK `fib_certified_production` | OK `counter_loop_certified`, `fib_certified` |
 | Esseq, Specified-binder pattern | CERTIFIED (drive lane) | OK `Step.sseq_spec_pure`, `Step.sseq_spec_annot` | OK `wps_seq_spec` | OK `Frag.sseq_spec` | OK `step_ctx_beta_spec_pure`, `step_ctx_beta_spec_annot` | OK `engine_adequacyJ` | OK `wpt_seq_spec`, `list_reverse_certified_total` | RED — registration tie only; see Notes 3 | OK `array_sum_certified`, `list_reverse_certified` |
-| Epure exit at PEsym shape | CERTIFIED (drive lane) | OK `Step.pure_eval` — certified at PEsym shape — Soundness stepDischarge_pure_sym | OK `wps_pure` | OK `Frag.pure_sym` | OK `stepDischarge_pure_sym` | OK `engine_adequacyJ` | OK `wpt_pure`, `fib_certified_total`, `list_reverse_certified_total` | RED — registration tie only; see Notes 3 | OK `fib_certified` |
+| Epure exit at PEsym shape | CERTIFIED (drive lane) | OK `Step.pure_eval` — certified at PEsym shape — Soundness stepDischarge_pure_sym | OK `wps_pure` | OK `Frag.pure_sym` | OK `stepDischarge_pure_sym` | OK `engine_adequacyJ` | OK `wpt_pure`, `fib_certified_total`, `list_reverse_certified_total` | OK `fib_certified_production` | OK `fib_certified` |
 | Load0 operand-evaluation step (ACTION_EVAL) | CERTIFIED (drive lane) | OK `Step.load_eval` | OK `wps_load_eval` | OK `Frag.load_op` | OK `stepDischarge_load_eval` | OK `engine_adequacyJ` | OK `wpt_load_eval`, `list_reverse_certified_total` | RED — registration tie only; see Notes 3 | OK `array_sum_certified` |
 | Esseq, plain-symbol-binder pattern (bare values) | CERTIFIED (drive lane) | OK `Step.sseq_sym_pure` | OK `wps_seq_sym` | OK `Frag.sseq_sym` | OK `step_ctx_beta_sym_pure` | OK `engine_adequacyJ` | OK `wpt_seq_sym`, `list_reverse_certified_total` | RED — registration tie only; see Notes 3 | OK `list_reverse_certified` |
 | Ememop PtrEq (value operands) | CERTIFIED (drive lane) | OK `Step.memop_ptreq` | OK `wps_memop_ptreq` | OK `Frag.memop_vals` | OK `step_ctx_memop` | OK `engine_adequacyJ` | OK `wpt_memop_ptreq`, `list_reverse_certified_total` | RED — registration tie only; see Notes 3 | OK `list_reverse_certified` |
@@ -48,7 +48,7 @@ owns no constructor and is mechanically barred from claiming any.
 | Store0 operand-evaluation step (ACTION_EVAL) | CERTIFIED (drive lane) | OK `Step.store_eval` | OK `wps_store_eval` | OK `Frag.store_op` | OK `stepDischarge_store_eval` | OK `engine_adequacyJ` | OK `wpt_store_eval`, `list_reverse_certified_total` | RED — registration tie only; see Notes 3 | OK `list_reverse_certified` |
 | Ecase, VALUE scrutinee | CERTIFIED (drive lane) | OK `Step.case_value` | OK `wps_case_value` | OK `Frag.case_value` — S1b: joined — branch-closure + branch-size premises explicit | OK `step_ctx_case_value`, `step_ctx_case_illtyped`, `engine_complete_caseU` — TWO-SIDED at any MachineCtx | OK `engine_adequacyJ`, `engine_adequacyU` | RED — no total rule yet (no wpt case rule — mechanical analog of wps_case_value, no consumer); see Notes 2 | RED — outside every lane | OK `case_certified` — the WP-lane adequacy regression — binder pattern, substitution TAU (CaseExhibit) |
 | Ewseq, wildcard pattern (weak sequencing) | CERTIFIED (drive lane) | OK `Step.wseq_pure`, `Step.wseq_annot`, `Step.wseq_ctx` — S1b DRIFT TEST — entered through the generic route; see Notes 6 | OK `wps_wseq` | OK `Frag.wseq` | OK `step_ctx_wseq_pure`, `step_ctx_wseq_annot` | OK `engine_adequacyJ`, `engine_adequacyU` | RED — no total rule yet (no wpt wseq rule — mechanical analog of wps_wseq, no consumer); see Notes 2 | RED — outside every lane | OK `wseq_certified` — the drift-test WP-lane adequacy regression (WseqExhibit) |
-| pure operands: PEval / PEsym / integer PEop / PEarray_shift | CERTIFIED (drive lane) | DECLARED — premises of the if/run/pure/ACTION_EVAL rules via the certified pure evaluator (Soundness evaluator bridge); no per-construct Step rule | DECLARED — enters as rule premises (guard/argument/operand evaluation) | DECLARED — via the peDepth side conditions carried by Frag.if_/run/load_op/memop_op/store_op | DECLARED — the evaluator bridge lemmas, Soundness.lean (eval1/mapM tower) | OK `engine_adequacyJ` | OK `fib_certified_total`, `list_reverse_certified_total` | RED — registration tie only; see Notes 3 | OK `array_sum_certified`, `fib_certified` |
+| pure operands: PEval / PEsym / integer PEop / PEarray_shift | CERTIFIED (drive lane) | DECLARED — premises of the if/run/pure/ACTION_EVAL rules via the certified pure evaluator (Soundness evaluator bridge); no per-construct Step rule | DECLARED — enters as rule premises (guard/argument/operand evaluation) | DECLARED — via the peDepth side conditions carried by Frag.if_/run/load_op/memop_op/store_op | DECLARED — the evaluator bridge lemmas, Soundness.lean (eval1/mapM tower) | OK `engine_adequacyJ` | OK `fib_certified_total`, `list_reverse_certified_total` | OK `fib_certified_production` | OK `array_sum_certified`, `fib_certified` |
 
 ## Notes (the registered honesty items behind the RED cells)
 
@@ -84,17 +84,21 @@ owns no constructor and is mechanically barred from claiming any.
    `blockSpecs_intro_variant` is RETIRED, replaced by
    `blockSpecsT` (Wpt.lean): the smaller-measure discipline is
    the judgment's jump clause, never an optional hypothesis.
-3. **The production lane for loop constructs is RED** (audit F-05):
-   what exists is the REGISTRATION theorem —
-   `counter_loop_certified_production` concludes at `driveJ` at the
-   shipped initial run state with the label plumbing derived from
-   the shipped registration; it is NOT a `runND` production
-   equation. NAMING DEBT (registered): the declaration keeps its
-   `_production` name this phase (a rename is statement-surface
-   churn); docs call it the registration theorem; the rename to
-   `_registration` lands with Phase 5's real production theorem.
-   Straight-line constructs reach the shipped pipeline via
-   `exhibitA_prod`.
+3. **The production lane is LIVE for loop constructs** (Phase 5;
+   audit F-05 closed): the proc-carrying, populated-label
+   scheduler collapse (DriverCollapse `loop_step_frag` +
+   ProdLoop `wpt_driver_done`) makes loop programs runnable on
+   the SHIPPED pipeline — `fib_certified_production`
+   (ProdLoopExhibit) concludes about
+   `CerbND.runND (Driver.drive ...) (initial_driver_state ...)`
+   from the cold start, no package drive/driveJ in the statement.
+   The former misnamed theorem is RENAMED
+   `counter_loop_certified_registration` (the naming debt paid):
+   it is the driveJ-lane REGISTRATION tie, kept as a lemma.
+   Rows still marked 'registration tie only' await their
+   production consumer (counter loop / list reverse — this
+   phase's remaining exports). Straight-line constructs reach
+   the shipped pipeline via `exhibitA_prod`.
 4. **`create` HAS its logic rule** (Phase 2 — D26 RETIRED):
    `wps_create` allocates through the allocator-cursor ghost
    resource; the out-of-memory kill arm is excluded by the pure

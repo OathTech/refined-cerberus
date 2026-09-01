@@ -53,7 +53,7 @@ def pinned : List Name := [
   `CerberusHeapLang.tree_rotate_certified,
   `CerberusHeapLang.tree_rotate_certified_total,
   `CerberusHeapLang.exhibitA_prod,
-  `CerberusHeapLang.counter_loop_certified_production]
+  `CerberusHeapLang.counter_loop_certified_registration]
 
 inductive Bin | engine | idiom | iris | core
 deriving BEq
