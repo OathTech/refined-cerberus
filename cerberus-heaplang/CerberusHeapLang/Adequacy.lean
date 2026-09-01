@@ -159,6 +159,234 @@ theorem Reach.toPool {c c' : CoreRt × Mem} (h : Reach c c') :
           (b'.1, b'.2, ([] : List CoreRt)))
         (t₁ := []) (t₂ := [])⟩
 
+/-! ## The ghost launch (Phase 2 carrier): the three heaps from a
+cell footprint. A footprint cell becomes one metadata entry plus its
+byte range; the cursor heap starts EMPTY (existing launches owe no
+allocator facts — the cursor-owning launch is a separate variant). -/
+
+open Iris.Std.PartialMap in
+/-- The meta/byte ghost images of a cell footprint (characterized —
+    the launch builds them by allocation). -/
+structure MetaByteOf (m : SpikeHeapF SpikeCell) (mm : SpikeHeapF MetaCell)
+    (mb : SpikeHeapF CerbMem.AbsByte) : Prop where
+  meta_sub : ∀ i mc, get? mm i = some mc →
+    ∃ c, get? m i = some c ∧ mc = metaOf c
+  meta_all : ∀ i c, get? m i = some c → get? mm i = some (metaOf c)
+  byte_cov : ∀ k b, get? mb k = some b → ∃ i c, get? m i = some c ∧
+    c.addr ≤ k ∧ k < c.addr + c.bytes.length ∧
+    b = (c.bytes[(k - c.addr).toNat]?).getD undefByte
+  byte_all : ∀ i c, get? m i = some c → ∀ (j : Nat), j < c.bytes.length →
+    get? mb (c.addr + (j : Int)) = c.bytes[j]?
+
+open Iris.Std.PartialMap in
+/-- A footprint's ghost images couple to any state the footprint
+    satisfies (cursor-free). -/
+theorem MetaByteOf.cohG {σ : Mem} {m : SpikeHeapF SpikeCell}
+    {mm : SpikeHeapF MetaCell} {mb : SpikeHeapF CerbMem.AbsByte}
+    (hcoh : Coh σ m) (h : MetaByteOf m mm mb) :
+    CohG σ mm mb (∅ : SpikeHeapF AllocCursor) := by
+  have hnone : ∀ k : Int, get? (∅ : SpikeHeapF AllocCursor) k = none :=
+    fun k => Iris.Std.LawfulPartialMap.get?_empty k
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  · intro id mc hget
+    obtain ⟨c, hc, rfl⟩ := h.meta_sub id mc hget
+    exact (hcoh.cells id c hc).toMetaCoh
+  · intro i j mci mcj hne hgi hgj
+    obtain ⟨ci, hci, rfl⟩ := h.meta_sub i mci hgi
+    obtain ⟨cj, hcj, rfl⟩ := h.meta_sub j mcj hgj
+    exact (cellsDisjoint_iff_metaDisjoint ci cj).mp
+      (hcoh.disj i j ci cj hne hci hcj)
+  · intro k b hget
+    obtain ⟨i, c, hc, hk1, hk2, rfl⟩ := h.byte_cov k b hget
+    have hcc := hcoh.cells i c hc
+    have hj : ((k - c.addr).toNat) < c.bytes.length := by omega
+    have := byteAt_of_readBytesFrom σ c.addr (CerbMem.sizeofCtype c.ty)
+      c.bytes hcc.bytes (k - c.addr).toNat (by rw [hcc.len] at hj; exact hj)
+    rw [show c.addr + (((k - c.addr).toNat : Nat) : Int) = k by omega] at this
+    exact this
+  · intro k c hget
+    rw [hnone k] at hget
+    cases hget
+  · intro c hget
+    rw [hnone 0] at hget
+    cases hget
+  · intro hne
+    exact absurd (hnone 0) hne
+  · intro hne
+    exact absurd (hnone 0) hne
+  · intro hne
+    exact absurd (hnone 0) hne
+  · intro hne
+    exact absurd (hnone 0) hne
+  · intro hne
+    exact absurd (hnone 0) hne
+
+open Iris.Std.PartialMap in
+/-- THE LAUNCH ALLOCATION: from empty meta/byte heaps, allocate every
+    footprint cell (metadata entry + byte range), delivering the
+    per-cell whole-allocation ownership. -/
+theorem spikeCells_alloc {GF : BundledGFunctors} [SpikeGS .hasLC GF]
+    (σ : Mem) (m : SpikeHeapF SpikeCell) (hcoh : Coh σ m) :
+    iprop(metaInterp (GF := GF) (∅ : SpikeHeapF MetaCell) ∗
+        byteInterp (∅ : SpikeHeapF CerbMem.AbsByte)) ⊢
+      |==> iprop(∃ mm mb, ⌜MetaByteOf m mm mb⌝ ∗
+        metaInterp mm ∗ byteInterp mb ∗
+        ([∗map] i ↦ c ∈ m, cellOwn (hlc := .hasLC) (GF := GF) i (.own 1) c)) := by
+  induction m using Iris.Std.LawfulFiniteMap.induction_on with
+  | hemp =>
+    iintro ⟨Hmi, Hbi⟩
+    imodintro
+    iexists (∅ : SpikeHeapF MetaCell), (∅ : SpikeHeapF CerbMem.AbsByte)
+    isplit
+    · ipureintro
+      refine ⟨?_, ?_, ?_, ?_⟩ <;> intro i
+      · intro mc h
+        rw [Iris.Std.LawfulPartialMap.get?_empty] at h
+        cases h
+      · intro c h
+        rw [Iris.Std.LawfulPartialMap.get?_empty] at h
+        cases h
+      · intro b h
+        rw [Iris.Std.LawfulPartialMap.get?_empty] at h
+        cases h
+      · intro c h
+        rw [Iris.Std.LawfulPartialMap.get?_empty] at h
+        cases h
+    isplitl [Hmi]
+    · iexact Hmi
+    isplitl [Hbi]
+    · iexact Hbi
+    · iapply BigSepM.bigSepM_empty
+      itrivial
+  | hins i c m'' Hl IH =>
+    have hsub : m'' ⊆ Iris.Std.PartialMap.insert m'' i c := by
+      intro k v hk
+      have hne : k ≠ i := fun h => by
+        subst h
+        rw [Hl] at hk
+        cases hk
+      rw [Iris.Std.get?_insert_ne (fun h => hne h.symm)]
+      exact hk
+    have hcoh'' : Coh σ m'' :=
+      ⟨fun i c hg => hcoh.cells i c (hsub i c hg),
+       fun i j c1 c2 hne h1 h2 =>
+         hcoh.disj i j c1 c2 hne (hsub _ _ h1) (hsub _ _ h2)⟩
+    have hci : get? (Iris.Std.PartialMap.insert m'' i c) i = some c :=
+      Iris.Std.get?_insert_eq rfl
+    have hcc := hcoh.cells i c hci
+    iintro ⟨Hmi, Hbi⟩
+    imod (IH hcoh'') $$ [$Hmi $Hbi] with ⟨%mm, %mb, %hmbo, Hmi, Hbi, Hcells⟩
+    -- metadata freshness
+    have hfreshm : get? mm i = none := by
+      cases hg : get? mm i with
+      | none => rfl
+      | some mc =>
+        obtain ⟨c', hc', -⟩ := hmbo.meta_sub i mc hg
+        rw [Hl] at hc'
+        cases hc'
+    imod (metaHeap_alloc (metaOf c) hfreshm) $$ [$Hmi] with ⟨Hmi, Hmnew⟩
+    -- byte-range freshness
+    have hfreshb : (rangeMap c.addr c.bytes) ##ₘ mb := by
+      rw [Iris.Std.PartialMap.disjoint_iff]
+      intro k
+      cases hg : get? mb k with
+      | none => exact .inr rfl
+      | some b =>
+        left
+        rw [rangeMap_get?]
+        rw [if_neg ?_]
+        obtain ⟨j, cj, hcj, hk1, hk2, -⟩ := hmbo.byte_cov k b hg
+        have hne : i ≠ j := fun h => by
+          subst h
+          rw [Hl] at hcj
+          cases hcj
+        have hdisj := hcoh.disj i j c cj hne hci (hsub j cj hcj)
+        have hlc := (hcoh.cells i c hci).len
+        have hlcj := (hcoh''.cells j cj hcj).len
+        simp only [cellsDisjoint] at hdisj
+        intro hcon
+        obtain ⟨h1, h2⟩ := hcon
+        omega
+    imod (byteHeap_alloc_big (rangeMap c.addr c.bytes) hfreshb)
+      $$ [$Hbi] with ⟨Hbi, Hbnew⟩
+    imodintro
+    iexists (Iris.Std.PartialMap.insert mm i (metaOf c)),
+      (Iris.Std.PartialMap.union (rangeMap c.addr c.bytes) mb)
+    isplit
+    · ipureintro
+      refine ⟨?_, ?_, ?_, ?_⟩
+      · intro j mc hg
+        by_cases hj : j = i
+        · subst hj
+          rw [Iris.Std.get?_insert_eq rfl] at hg
+          exact ⟨c, hci, (Option.some.inj hg).symm⟩
+        · rw [Iris.Std.get?_insert_ne (fun h => hj h.symm)] at hg
+          obtain ⟨c', hc', rfl⟩ := hmbo.meta_sub j mc hg
+          exact ⟨c', hsub j c' hc', rfl⟩
+      · intro j c' hg
+        by_cases hj : j = i
+        · subst hj
+          rw [Iris.Std.get?_insert_eq rfl] at hg ⊢
+          rw [(Option.some.inj hg)]
+        · rw [Iris.Std.get?_insert_ne (fun h => hj h.symm)] at hg
+          rw [Iris.Std.get?_insert_ne (fun h => hj h.symm)]
+          exact hmbo.meta_all j c' hg
+      · intro k b hg
+        rw [PMunion_get?, rangeMap_get?] at hg
+        by_cases hin : c.addr ≤ k ∧ k < c.addr + c.bytes.length
+        · rw [if_pos hin] at hg
+          simp only [Option.orElse] at hg
+          refine ⟨i, c, hci, hin.1, hin.2, ?_⟩
+          have hj : (k - c.addr).toNat < c.bytes.length := by omega
+          rw [List.getElem?_eq_getElem hj] at hg ⊢
+          simp only [Option.getD_some]
+          exact (Option.some.inj hg).symm
+        · rw [if_neg hin] at hg
+          simp only [Option.orElse] at hg
+          obtain ⟨j, cj, hcj, h1, h2, h3⟩ := hmbo.byte_cov k b hg
+          exact ⟨j, cj, hsub j cj hcj, h1, h2, h3⟩
+      · intro j c' hg jj hjj
+        by_cases hj : j = i
+        · subst hj
+          rw [Iris.Std.get?_insert_eq rfl] at hg
+          obtain rfl : c = c' := Option.some.inj hg
+          rw [PMunion_get?, rangeMap_get?]
+          rw [if_pos ⟨Int.le_add_of_nonneg_right (Int.natCast_nonneg _),
+            Int.add_lt_add_left (by exact_mod_cast hjj) c.addr⟩]
+          simp only [Option.orElse]
+          rw [show (c.addr + (jj : Int) - c.addr).toNat = jj by omega,
+            List.getElem?_eq_getElem hjj]
+        · rw [Iris.Std.get?_insert_ne (fun h => hj h.symm)] at hg
+          rw [PMunion_get?, rangeMap_get?]
+          rw [if_neg ?_]
+          · simp only [Option.orElse]
+            exact hmbo.byte_all j c' hg jj hjj
+          · have hne : i ≠ j := fun h => hj h.symm
+            have hdisj := hcoh.disj i j c c' hne hci (hsub j c' hg)
+            have hlc := (hcoh.cells i c hci).len
+            have hlcj := (hcoh''.cells j c' hg).len
+            simp only [cellsDisjoint] at hdisj
+            intro hcon
+            obtain ⟨h1, h2⟩ := hcon
+            omega
+    isplitl [Hmi]
+    · iexact Hmi
+    isplitl [Hbi]
+    · iexact Hbi
+    ihave HBnew : bytesOwn c.addr (.own 1) c.bytes $$ [Hbnew]
+    · iapply bigSepM_rangeMap $$ Hbnew
+    iapply (BigSepM.bigSepM_insert (Φ := fun i c =>
+      cellOwn (hlc := .hasLC) (GF := GF) i (.own 1) c) Hl).2
+    isplitl [Hmnew HBnew]
+    · iapply (cellOwn_iff i (.own 1) c).mpr
+      isplitl [Hmnew]
+      · iexact Hmnew
+      isplitl [HBnew]
+      · iexact HBnew
+      · ipureintro
+        exact ⟨hcc.len, hcc.dec_indep⟩
+    · iexact Hcells
+
 /-! ## Step-level adequacy: constructing SpikeGS and applying iris -/
 
 /-- Iris adequacy over Step, with final-state readout: constructs
@@ -171,7 +399,7 @@ theorem spike_step_adequacy {GF : BundledGFunctors} [SpikeGpreS GF]
     (e : CoreRt) (σ : Mem) (m₀ : SpikeHeapF SpikeCell) (hcoh : Coh σ m₀)
     (φp : CoreRVal → Mem → Prop)
     (hwp : ∀ [SpikeGS .hasLC GF],
-      iprop(([∗map] i ↦ c ∈ m₀, pointsTo i (.own 1) c)) ⊢
+      iprop(([∗map] i ↦ c ∈ m₀, cellOwn (hlc := .hasLC) (GF := GF) i (.own 1) c)) ⊢
         WP e @ Stuckness.NotStuck; ⊤ {{ v, iprop(∀ (σ' : Mem) (ns : Nat)
           (κs : List Empty) (nt : Nat),
           stateInterp σ' ns κs nt ={⊤, ∅}=∗ ⌜φp v σ'⌝) }})
@@ -183,25 +411,38 @@ theorem spike_step_adequacy {GF : BundledGFunctors} [SpikeGpreS GF]
   apply wp_strong_adequacy_gen (GF := GF) (hlc := .hasLC) Stuckness.NotStuck [e] σ n κs t2 σ2 _
     (fun _ => 0) ?_ hsteps
   intro instInv
-  imod (genHeap_init (H := SpikeHeapF) m₀) with ⟨%G, Hint, Hpts, Htok⟩
-  letI instGS : SpikeGS .hasLC GF := { heap := G }
+  imod (genHeap_init (L := Int) (V := MetaCell) (H := SpikeHeapF)
+    (∅ : SpikeHeapF MetaCell)) with ⟨%Gm, Hmi, -, -⟩
+  imod (genHeap_init (L := Int) (V := CerbMem.AbsByte) (H := SpikeHeapF)
+    (∅ : SpikeHeapF CerbMem.AbsByte)) with ⟨%Gb, Hbi, -, -⟩
+  imod (genHeap_init (L := Int) (V := AllocCursor) (H := SpikeHeapF)
+    (∅ : SpikeHeapF AllocCursor)) with ⟨%Gk, Hki, -, -⟩
+  letI instGS : SpikeGS .hasLC GF :=
+    { byteGS := Gb, metaGS := Gm, cursorGS := Gk }
+  imod (spikeCells_alloc σ m₀ hcoh) $$ [$Hmi $Hbi]
+    with ⟨%mm, %mb, %hmbo, Hmi, Hbi, Hcells⟩
   imodintro
   iexists fun (σ' : Mem) (_ : Nat) (_ : List Empty) (_ : Nat) =>
-    iprop(∃ m, ⌜Coh σ' m⌝ ∗ genHeapInterp m)
+    iprop(∃ mm mb mk, ⌜CohG σ' mm mb mk⌝ ∗
+      metaInterp mm ∗ byteInterp mb ∗ cursorInterp mk)
   iexists [fun (v : CoreRVal) => iprop(∀ (σ' : Mem) (ns : Nat)
     (κs' : List Empty) (nt : Nat), stateInterp σ' ns κs' nt ={⊤, ∅}=∗ ⌜φp v σ'⌝)]
   iexists fun _ => iprop(True)
   iexists fun _ _ _ _ => fupd_intro
   dsimp only
-  isplitl [Hint]
-  · iexists m₀
+  isplitl [Hmi Hbi Hki]
+  · iexists mm, mb, (∅ : SpikeHeapF AllocCursor)
     isplit
     · ipureintro
-      exact hcoh
-    · iexact Hint
-  isplitl [Hpts]
+      exact hmbo.cohG hcoh
+    isplitl [Hmi]
+    · iexact Hmi
+    isplitl [Hbi]
+    · iexact Hbi
+    · iexact Hki
+  isplitl [Hcells]
   · iapply BigSepL2.bigSepL2_singleton
-    ihave HW := hwp $$ Hpts
+    ihave HW := hwp $$ Hcells
     iexact HW
   iintro %es' %t2' %heqt %hlen %hnsp Hst Hposts Hforks
   have hns : ∀ e2 ∈ t2, PrimStep.NotStuck (Val := CoreRVal) (e2, σ2) :=
@@ -346,7 +587,7 @@ theorem engine_adequacyU {GF : BundledGFunctors} [SpikeGpreS GF]
     (hfrag : Frag e₀) (hcoh : Coh σ₀ m₀)
     (ψ : value → Mem → Prop)
     (hwp : ∀ [SpikeGS .hasLC GF],
-      iprop(([∗map] i ↦ c ∈ m₀, pointsTo i (.own 1) c)) ⊢
+      iprop(([∗map] i ↦ c ∈ m₀, cellOwn (hlc := .hasLC) (GF := GF) i (.own 1) c)) ⊢
         WP (⟨e₀, ev00 :: evs0, M⟩ : CoreRt) @ Stuckness.NotStuck; ⊤
           {{ w, iprop(∀ (σ' : Mem) (ns : Nat)
           (κs : List Empty) (nt : Nat),
@@ -418,7 +659,7 @@ theorem spike_engine_adequacy {GF : BundledGFunctors} [SpikeGpreS GF]
     (hfrag : Frag e₀) (hcoh : Coh σ₀ m₀)
     (ψ : value → Mem → Prop)
     (hwp : ∀ [SpikeGS .hasLC GF],
-      iprop(([∗map] i ↦ c ∈ m₀, pointsTo i (.own 1) c)) ⊢
+      iprop(([∗map] i ↦ c ∈ m₀, cellOwn (hlc := .hasLC) (GF := GF) i (.own 1) c)) ⊢
         WP (⟨e₀, spikeEnv, spikeCtx⟩ : CoreRt) @ Stuckness.NotStuck; ⊤
           {{ w, iprop(∀ (σ' : Mem) (ns : Nat)
           (κs : List Empty) (nt : Nat),
@@ -493,10 +734,10 @@ def SemTriple (e : CoreExpr) (P : CellMap)
 abbrev ProvenTriple (GF : BundledGFunctors) [SpikeGpreS GF] (e : CoreExpr)
     (P : CellMap) (post : value → CellMap → Prop) : Prop :=
   ∀ [SpikeGS .hasLC GF],
-    iprop(([∗map] i ↦ c ∈ P, pointsTo i (.own 1) c)) ⊢
+    iprop(([∗map] i ↦ c ∈ P, cellOwn (hlc := .hasLC) (GF := GF) i (.own 1) c)) ⊢
       WP (⟨e, spikeEnv, spikeCtx⟩ : CoreRt) @ Stuckness.NotStuck; ⊤ {{ w,
         iprop(∃ Q : CellMap, ⌜post (CoreRVal.val w) Q⌝ ∗
-          ([∗map] i ↦ c ∈ Q, pointsTo i (.own 1) c)) }}
+          ([∗map] i ↦ c ∈ Q, cellOwn (hlc := .hasLC) (GF := GF) i (.own 1) c)) }}
 
 /-! interior extraction lemmas -/
 
@@ -517,8 +758,8 @@ theorem genHeap_valid_big {GF : BundledGFunctors}
     (two full cells at one key are invalid). -/
 theorem bigSepM_own_disjoint {GF : BundledGFunctors} [SpikeGS .hasLC GF]
     (Q R : CellMap) :
-    iprop(([∗map] i ↦ c ∈ Q, pointsTo i (.own 1) c) ∗
-          ([∗map] i ↦ c ∈ R, pointsTo i (.own 1) c)) ⊢
+    iprop(([∗map] i ↦ c ∈ Q, cellOwn (hlc := .hasLC) (GF := GF) i (.own 1) c) ∗
+          ([∗map] i ↦ c ∈ R, cellOwn (hlc := .hasLC) (GF := GF) i (.own 1) c)) ⊢
       (⌜Q ##ₘ R⌝ : IProp GF) := by
   by_cases hd : Q ##ₘ R
   · iintro -
@@ -539,9 +780,68 @@ theorem bigSepM_own_disjoint {GF : BundledGFunctors} [SpikeGS .hasLC GF]
     iintro ⟨HQ, HR⟩
     ihave HkQ := BigSepM.bigSepM_lookup hcq $$ HQ
     ihave HkR := BigSepM.bigSepM_lookup hcr $$ HR
-    ihave %hne := pointsTo_ne $$ HkQ [HkR]
-    · iexact HkR
+    icases (cellOwn_iff k (.own 1) cq).mp $$ HkQ with ⟨HkQm, -, -⟩
+    icases (cellOwn_iff k (.own 1) cr).mp $$ HkR with ⟨HkRm, -, -⟩
+    ihave %hne := metaOwn_ne $$ HkQm [HkRm]
+    · iexact HkRm
     exact absurd rfl hne
+
+open Iris.Std.PartialMap in
+/-- Per-footprint extraction: whole-cell ownership of every cell of a
+    footprint, against the coupling, yields footprint satisfaction —
+    per-cell facts by `cellOwn_cellCoh`, pairwise disjointness through
+    the metadata authority's `metas_disj` invariant. -/
+theorem cellsOwn_facts {GF : BundledGFunctors} [SpikeGS .hasLC GF]
+    {σ : Mem} {mm : SpikeHeapF MetaCell} {mb : SpikeHeapF CerbMem.AbsByte}
+    {mk : SpikeHeapF AllocCursor} (hG : CohG σ mm mb mk)
+    (Q : SpikeHeapF SpikeCell) :
+    iprop(metaInterp (GF := GF) mm ∗ byteInterp mb ∗
+        ([∗map] i ↦ c ∈ Q, cellOwn (hlc := .hasLC) (GF := GF) i (.own 1) c)) ⊢
+      (⌜∀ i c, get? Q i = some c →
+        CellCoh σ i c ∧ get? mm i = some (metaOf c)⌝ : IProp GF) := by
+  induction Q using Iris.Std.LawfulFiniteMap.induction_on with
+  | hemp =>
+    iintro ⟨-, -, -⟩
+    ipureintro
+    intro i c h
+    rw [Iris.Std.LawfulPartialMap.get?_empty] at h
+    cases h
+  | hins i c Q'' Hl IH =>
+    iintro ⟨Hmi, Hbi, HQ⟩
+    icases (BigSepM.bigSepM_insert (Φ := fun i c =>
+      cellOwn (hlc := .hasLC) (GF := GF) i (.own 1) c) Hl).1 $$ HQ with ⟨Hc, Hrest⟩
+    ihave %hone : ⌜CellCoh σ i c ∧ get? mm i = some (metaOf c)⌝ $$ [Hmi Hbi Hc]
+    · iapply cellOwn_cellCoh hG i (.own 1) c $$ [$Hmi $Hbi $Hc]
+    ihave %hrest : ⌜∀ j c', get? Q'' j = some c' →
+        CellCoh σ j c' ∧ get? mm j = some (metaOf c')⌝ $$ [Hmi Hbi Hrest]
+    · iapply IH $$ [$Hmi $Hbi $Hrest]
+    ipureintro
+    intro j c' hg
+    by_cases hj : j = i
+    · subst hj
+      rw [Iris.Std.get?_insert_eq rfl] at hg
+      obtain rfl : c = c' := Option.some.inj hg
+      exact hone
+    · rw [Iris.Std.get?_insert_ne (fun h => hj h.symm)] at hg
+      exact hrest j c' hg
+
+open Iris.Std.PartialMap in
+theorem cellsOwn_extract {GF : BundledGFunctors} [SpikeGS .hasLC GF]
+    {σ : Mem} {mm : SpikeHeapF MetaCell} {mb : SpikeHeapF CerbMem.AbsByte}
+    {mk : SpikeHeapF AllocCursor} (hG : CohG σ mm mb mk)
+    (Q : SpikeHeapF SpikeCell) :
+    iprop(metaInterp (GF := GF) mm ∗ byteInterp mb ∗
+        ([∗map] i ↦ c ∈ Q, cellOwn (hlc := .hasLC) (GF := GF) i (.own 1) c)) ⊢
+      (⌜Coh σ Q⌝ : IProp GF) := by
+  iintro ⟨Hmi, Hbi, HQ⟩
+  ihave %hfacts : ⌜∀ i c, get? Q i = some c →
+      CellCoh σ i c ∧ get? mm i = some (metaOf c)⌝ $$ [Hmi Hbi HQ]
+  · iapply cellsOwn_facts hG Q $$ [$Hmi $Hbi $HQ]
+  ipureintro
+  refine ⟨fun i c hg => (hfacts i c hg).1, fun i j ci cj hne hgi hgj => ?_⟩
+  exact (cellsDisjoint_iff_metaDisjoint ci cj).mpr
+    (hG.metas_disj i j (metaOf ci) (metaOf cj) hne
+      (hfacts i ci hgi).2 (hfacts j cj hgj).2)
 
 /-- The cell-footprint readout: post-cells + frame-cells consume the
     final state interpretation into the pure semantic-triple
@@ -549,23 +849,24 @@ theorem bigSepM_own_disjoint {GF : BundledGFunctors} [SpikeGS .hasLC GF]
 theorem cells_readout {GF : BundledGFunctors} [SpikeGS .hasLC GF]
     (post : value → CellMap → Prop) (R : CellMap) (vv : value) :
     iprop((∃ Q : CellMap, ⌜post vv Q⌝ ∗
-        ([∗map] i ↦ c ∈ Q, pointsTo i (.own 1) c)) ∗
-        ([∗map] i ↦ c ∈ R, pointsTo i (.own 1) c)) ⊢
+        ([∗map] i ↦ c ∈ Q, cellOwn (hlc := .hasLC) (GF := GF) i (.own 1) c)) ∗
+        ([∗map] i ↦ c ∈ R, cellOwn (hlc := .hasLC) (GF := GF) i (.own 1) c)) ⊢
       iprop(∀ (σ' : Mem) (ns : Nat) (κs : List Empty) (nt : Nat),
         stateInterp σ' ns κs nt ={⊤, ∅}=∗
           ⌜∃ Q : CellMap, post vv Q ∧ Q ##ₘ R ∧ Coh σ' (Iris.Std.PartialMap.union Q R)⌝) := by
   iintro ⟨⟨%Q, %hpost, HQ⟩, HR⟩ %σ' %ns %κs %nt Hsi
-  icases (stateInterp_iff σ' ns κs nt).mp $$ Hsi with ⟨%m, %Hcoh, Hh⟩
+  icases (stateInterp_iff σ' ns κs nt).mp $$ Hsi
+    with ⟨%mm, %mb, %mk, %HG, Hmi, Hbi, Hki⟩
   ihave %hd : ⌜Q ##ₘ R⌝ $$ [HQ HR]
   · iapply bigSepM_own_disjoint Q R $$ [$HQ $HR]
-  ihave HQR : iprop([∗map] i ↦ c ∈ (Iris.Std.PartialMap.union Q R), pointsTo i (.own 1) c)
-      $$ [HQ HR]
+  ihave HQR : iprop([∗map] i ↦ c ∈ (Iris.Std.PartialMap.union Q R),
+      cellOwn (hlc := .hasLC) (GF := GF) i (.own 1) c) $$ [HQ HR]
   · iapply (BigSepM.bigSepM_union hd).2 $$ [$HQ $HR]
-  ihave %hsub : ⌜(Iris.Std.PartialMap.union Q R) ⊆ m⌝ $$ [Hh HQR]
-  · iapply genHeap_valid_big $$ [$Hh $HQR]
+  ihave %hsat : ⌜Coh σ' (Iris.Std.PartialMap.union Q R)⌝ $$ [Hmi Hbi HQR]
+  · iapply cellsOwn_extract HG (Iris.Std.PartialMap.union Q R) $$ [$Hmi $Hbi $HQR]
   iapply fupd_mask_intro_discard Std.LawfulSet.empty_subset
   ipureintro
-  exact ⟨Q, hpost, hd, Sat.mono Hcoh hsub⟩
+  exact ⟨Q, hpost, hd, hsat⟩
 
 /-- THE HEADLINE: soundness of the derived logic's triples at the
     semantic level — a proved footprint triple holds of the ENGINE
@@ -752,7 +1053,7 @@ theorem engine_adequacyJ {GF : BundledGFunctors} [SpikeGpreS GF]
     (hfrag : Frag e₀) (hcoh : Coh σ₀ m₀)
     (ψ : value → Mem → Prop)
     (hwp : ∀ [SpikeGS .hasLC GF],
-      iprop(([∗map] i ↦ c ∈ m₀, pointsTo i (.own 1) c)) ⊢
+      iprop(([∗map] i ↦ c ∈ m₀, cellOwn (hlc := .hasLC) (GF := GF) i (.own 1) c)) ⊢
         WP (⟨e₀, ev00 :: evs0, procCtx p rs⟩ : CoreRt) @ Stuckness.NotStuck; ⊤
           {{ w, iprop(∀ (σ' : Mem) (ns : Nat)
           (κs : List Empty) (nt : Nat),

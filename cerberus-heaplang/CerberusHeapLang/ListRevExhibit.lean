@@ -133,310 +133,21 @@ theorem ptrImg_cell (id a : Int) :
         (fun (v, i) =>
           { prov := .Prov_some id, copyOffset := some (i : Int), value := v }) := rfl
 
-theorem intToBytes_length (n : Int) (sz : Nat) :
-    (CerbMem.intToBytes n sz).length = sz := by
-  unfold CerbMem.intToBytes
-  simp
-
 theorem ptrImg_cell_length (id a : Int) : (ptrImg (cellPtr id a)).length = 8 := by
   rw [ptrImg_cell]
   simp [intToBytes_length]
 
 theorem ptrImg_null_length : (ptrImg nullNode).length = 8 := rfl
 
-/-- The derived BEq on provenances is reflexive (needed because the
-    pointer-load provenance policy compares bytes' provenances with
-    `==`). -/
-theorem provenance_beq_refl (p : CerbMem.Provenance) : (p == p) = true := by
-  cases p with
-  | Prov_none => rfl
-  | Prov_some id =>
-    show (match defaultCompare id id with
-          | LemOrdering.EQ => true | _ => false) = true
-    unfold defaultCompare
-    rw [Int.compare_eq_eq.mpr rfl]
-  | Prov_symbolic i =>
-    show (match defaultCompare i i with
-          | LemOrdering.EQ => true | _ => false) = true
-    unfold defaultCompare
-    rw [Int.compare_eq_eq.mpr rfl]
-  | Prov_device => rfl
-
-/-! ## Interior memM facts (the field-access seams)
-
-`loadM_interior_nodePtr` / `storeM_interior_nodePtr`: with a
-Coh-backed node cell, loadM/storeM at `node*` and the field offset
-take exactly the active path — the interior analogs of
-`loadM_success`/`storeM_success` (Heap.lean), at the pointer field
-type. Every guard crossed is one NDkilled arm, discharged by a named
-hypothesis. -/
-
-theorem loadM_interior_nodePtr (σ : Mem) (id : Int) (c : SpikeCell)
-    (off : Nat) (loc : CerbLocation.Loc)
-    (hcoh : CellCoh σ id c)
-    (hbound : off + 8 ≤ CerbMem.sizeofCtype c.ty) :
-    applyMemM (CerbMem.loadM loc nodePtrTy (cellPtr id (c.addr + (off : Int)))) σ =
-      some ((.FP .R (c.addr + (off : Int)) 8,
-        CerbMem.reconstructValue σ.lastUsedUnionMembers σ.funptrmap
-          (c.addr + (off : Int)) nodePtrTy
-          ((c.bytes.drop off).take 8)), σ) := by
-  obtain ⟨al, hal, hbase, hsize, hty, hro⟩ := hcoh.alloc
-  have hbounds : CerbMem.isInBounds al (c.addr + (off : Int))
-      (CerbMem.sizeofCtype nodePtrTy) = true := by
-    simp only [CerbMem.isInBounds, hbase, hsize, nodePtrTy_size]
-    simp
-    omega
-  have hatomic : CerbMem.isAtomicMemberAccess al nodePtrTy
-      (c.addr + (off : Int)) = false := by
-    unfold CerbMem.isAtomicMemberAccess
-    rw [hty]
-    have := hcoh.nonAtomic
-    rcases c with ⟨ca, ⟨q, t⟩, cb⟩
-    cases t <;> simp_all [atomicTy]
-  have hread : CerbMem.readBytesFrom σ (c.addr + (off : Int))
-      (CerbMem.sizeofCtype nodePtrTy) = (c.bytes.drop off).take
-        (CerbMem.sizeofCtype nodePtrTy) :=
-    readBytesFrom_sub σ c.addr (CerbMem.sizeofCtype c.ty) c.bytes
-      hcoh.bytes off (CerbMem.sizeofCtype nodePtrTy)
-      (by rw [nodePtrTy_size]; omega)
-  unfold CerbMem.loadM applyMemM
-  simp only [cellPtr, hcoh.dead, Bool.false_eq_true, if_false, hal, hbounds,
-    Bool.not_true, hatomic, hread]
-  rfl
-
-/-- The byte splice an interior store performs on the cell image. -/
-def spliceBytes (off : Nat) (img bs : List CerbMem.AbsByte) :
-    List CerbMem.AbsByte :=
-  bs.take off ++ img ++ bs.drop (off + img.length)
-
-theorem spliceBytes_length (off : Nat) (img bs : List CerbMem.AbsByte)
-    (h : off + img.length ≤ bs.length) :
-    (spliceBytes off img bs).length = bs.length := by
-  simp [spliceBytes]
-  omega
-
-/-- Successful INTERIOR store at `node*`: the active path, the state
-    change is the 8-byte write at the field address. Serialization
-    side conditions (`hcompat`/`hfpm`/`hbytes`) are the `StorableAt`
-    facts at the pointer type — rfl at the fragment's stored
-    shapes. -/
-theorem storeM_interior_nodePtr (σ : Mem) (id : Int) (c : SpikeCell)
-    (off : Nat) (loc : CerbLocation.Loc) (mv : CerbMem.MemValue)
-    (hcoh : CellCoh σ id c)
-    (hbound : off + 8 ≤ CerbMem.sizeofCtype c.ty)
-    (hcompat : CerbMem.ctypeMemCompatible nodePtrTy (CerbMem.typeofMval mv) = true)
-    (hfpm : ∀ fpm, (CerbMem.memValueToBytes fpm mv).1 = fpm)
-    (hbytes : ∀ fpm, (CerbMem.memValueToBytes fpm mv).2 =
-      (CerbMem.memValueToBytes [] mv).2) :
-    applyMemM (CerbMem.storeM loc nodePtrTy false
-        (cellPtr id (c.addr + (off : Int))) mv) σ =
-      some (.FP .W (c.addr + (off : Int)) 8,
-        CerbMem.writeBytesTo σ (c.addr + (off : Int))
-          (CerbMem.memValueToBytes [] mv).2) := by
-  obtain ⟨al, hal, hbase, hsize, hty, hro⟩ := hcoh.alloc
-  have hbounds : CerbMem.isInBounds al (c.addr + (off : Int))
-      (CerbMem.sizeofCtype nodePtrTy) = true := by
-    simp only [CerbMem.isInBounds, hbase, hsize, nodePtrTy_size]
-    simp
-    omega
-  have hatomic : CerbMem.isAtomicMemberAccess al nodePtrTy
-      (c.addr + (off : Int)) = false := by
-    unfold CerbMem.isAtomicMemberAccess
-    rw [hty]
-    have := hcoh.nonAtomic
-    rcases c with ⟨ca, ⟨q, t⟩, cb⟩
-    cases t <;> simp_all [atomicTy]
-  rcases hmvb : CerbMem.memValueToBytes σ.funptrmap mv with ⟨fpm', bs'⟩
-  have hfpm' : fpm' = σ.funptrmap := by
-    have := hfpm σ.funptrmap
-    rw [hmvb] at this
-    exact this
-  have hbs' : bs' = (CerbMem.memValueToBytes [] mv).2 := by
-    have := hbytes σ.funptrmap
-    rw [hmvb] at this
-    exact this
-  subst hfpm' hbs'
-  have hself : ({ σ with funptrmap := σ.funptrmap } : Mem) = σ := rfl
-  unfold CerbMem.storeM applyMemM
-  simp only [hcompat, Bool.not_true, Bool.false_eq_true, if_false, cellPtr,
-    hal, hbounds, hro, hatomic, hmvb]
-  rfl
-
-/-- Pointwise characterization of the splice. -/
-theorem spliceBytes_getElem? (off : Nat) (img bs : List CerbMem.AbsByte)
-    (hb : off + img.length ≤ bs.length) (k : Nat) :
-    (spliceBytes off img bs)[k]? =
-      if k < off then bs[k]?
-      else if k < off + img.length then img[k - off]?
-      else bs[k]? := by
-  have hto : (bs.take off).length = off := by simp; omega
-  have htoi : (bs.take off ++ img).length = off + img.length := by
-    simp; omega
-  unfold spliceBytes
-  by_cases h1 : k < off
-  · rw [if_pos h1,
-      List.getElem?_append_left (by rw [htoi]; omega),
-      List.getElem?_append_left (by rw [hto]; omega),
-      List.getElem?_take, if_pos h1]
-  · rw [if_neg h1]
-    by_cases h2 : k < off + img.length
-    · rw [if_pos h2,
-        List.getElem?_append_left (by rw [htoi]; omega),
-        List.getElem?_append_right (by rw [hto]; omega), hto]
-    · rw [if_neg h2,
-        List.getElem?_append_right (by rw [htoi]; omega), htoi,
-        List.getElem?_drop]
-      congr 1
-      omega
-
-/-- The interior write re-reads as the splice of the old image. -/
-theorem readBytesFrom_write_interior (σ : Mem) (a : Int) (off : Nat)
-    (img : List CerbMem.AbsByte) (n : Nat) (bs : List CerbMem.AbsByte)
-    (hread : CerbMem.readBytesFrom σ a n = bs)
-    (hb : off + img.length ≤ n) :
-    CerbMem.readBytesFrom (CerbMem.writeBytesTo σ (a + (off : Int)) img) a n =
-      spliceBytes off img bs := by
-  have hbs : bs.length = n := by
-    rw [← hread]; simp [CerbMem.readBytesFrom]
-  apply List.ext_getElem?
-  intro k
-  by_cases hk : k < n
-  · have hchar : ∀ (τ : Mem), (CerbMem.readBytesFrom τ a n)[k]? =
-        some (match τ.bytemap.get? (a + (k : Int)) with
-              | some b => b
-              | none => { prov := .Prov_none, copyOffset := none,
-                          value := none }) := by
-      intro τ
-      simp only [CerbMem.readBytesFrom, List.getElem?_map,
-        List.getElem?_range hk, Option.map_some]
-      rfl
-    have hbsk : bs[k]? = some (match σ.bytemap.get? (a + (k : Int)) with
-        | some b => b
-        | none => { prov := .Prov_none, copyOffset := none,
-                    value := none }) := by
-      rw [← hread]
-      exact hchar σ
-    rw [hchar, spliceBytes_getElem? off img bs (by omega) k,
-      writeBytesTo_bytemap_get?]
-    by_cases hin : off ≤ k ∧ k < off + img.length
-    · rw [if_pos (by omega), if_neg (by omega), if_pos (by omega)]
-      rw [show ((a + (k : Int)) - (a + (off : Int))).toNat = k - off by omega]
-      rw [List.getElem?_eq_getElem (by omega : k - off < img.length)]
-    · rw [if_neg (by omega)]
-      have hout : (if k < off then bs[k]? else
-          if k < off + img.length then img[k - off]? else bs[k]?) = bs[k]? := by
-        by_cases h1 : k < off
-        · rw [if_pos h1]
-        · rw [if_neg h1, if_neg (by omega)]
-      rw [hout, hbsk]
-  · have hL : (CerbMem.readBytesFrom
-        (CerbMem.writeBytesTo σ (a + (off : Int)) img) a n).length = n := by
-      simp [CerbMem.readBytesFrom]
-    have hR : (spliceBytes off img bs).length = n := by
-      rw [spliceBytes_length off img bs (by omega)]
-      exact hbs
-    rw [List.getElem?_eq_none (by omega), List.getElem?_eq_none (by omega)]
-
-/-- Coh survives an interior store into a Coh-backed cell: the
-    touched cell's image is spliced (the untouched prefix/suffix
-    re-read verbatim), the other cells are outside the written range
-    (pairwise disjointness ⊇ the sub-range), the allocation table and
-    side tables untouched. `hdec_indep` is the spliced image's
-    table-independence (the node type's decode never consults the
-    tables — `nodeTy_dec_indep` below). -/
-theorem Coh.store_interior (σ : Mem) (m : SpikeHeapF SpikeCell) (i : Int)
-    (c : SpikeCell) (off : Nat) (img : List CerbMem.AbsByte)
-    (hcoh : Coh σ m) (hget : Iris.Std.PartialMap.get? m i = some c)
-    (hbound : off + img.length ≤ CerbMem.sizeofCtype c.ty)
-    (hdec_indep : ∀ (lum : List (Int × identifier)) (fpm : CerbMem.Funptrmap),
-      CerbMem.reconstructValue lum fpm c.addr c.ty (spliceBytes off img c.bytes) =
-        decodeCell ⟨c.addr, c.ty, spliceBytes off img c.bytes⟩) :
-    Coh (CerbMem.writeBytesTo σ (c.addr + (off : Int)) img)
-      (Iris.Std.PartialMap.insert m i
-        ⟨c.addr, c.ty, spliceBytes off img c.bytes⟩) := by
-  have hlenb : c.bytes.length = CerbMem.sizeofCtype c.ty := (hcoh.cells i c hget).len
-  have hlen : (spliceBytes off img c.bytes).length = CerbMem.sizeofCtype c.ty := by
-    rw [spliceBytes_length off img c.bytes (by omega)]
-    exact hlenb
-  have hreread : CerbMem.readBytesFrom
-      (CerbMem.writeBytesTo σ (c.addr + (off : Int)) img) c.addr
-      (CerbMem.sizeofCtype c.ty) = spliceBytes off img c.bytes :=
-    readBytesFrom_write_interior σ c.addr off img (CerbMem.sizeofCtype c.ty)
-      c.bytes (hcoh.cells i c hget).bytes hbound
-  have hcell' : ∀ j c', Iris.Std.PartialMap.get?
-      (Iris.Std.PartialMap.insert m i
-        (⟨c.addr, c.ty, spliceBytes off img c.bytes⟩ : SpikeCell)) j =
-        some c' →
-      (j = i ∧ c' = ⟨c.addr, c.ty, spliceBytes off img c.bytes⟩) ∨
-      (j ≠ i ∧ Iris.Std.PartialMap.get? m j = some c') := by
-    intro j c' h
-    by_cases hid : j = i
-    · subst hid
-      rw [Iris.Std.get?_insert_eq rfl] at h
-      exact .inl ⟨rfl, (Option.some.inj h).symm⟩
-    · rw [Iris.Std.get?_insert_ne (fun h' => hid h'.symm)] at h
-      exact .inr ⟨hid, h⟩
-  refine ⟨?_, ?_⟩
-  · intro j c' h
-    rcases hcell' j c' h with ⟨rfl, rfl⟩ | ⟨hne, hold⟩
-    · have hc := hcoh.cells _ c hget
-      refine ⟨by simpa using hc.dead, ?_, hc.nonAtomic, hlen, hreread, hdec_indep⟩
-      obtain ⟨al, hal, h1, h2, h3, h4⟩ := hc.alloc
-      exact ⟨al, by simpa using hal, h1, h2, h3, h4⟩
-    · have hc := hcoh.cells j c' hold
-      have hdisj := hcoh.disj _ _ c' c hne hold hget
-      refine ⟨by simpa using hc.dead, ?_, hc.nonAtomic, hc.len, ?_, hc.dec_indep⟩
-      · obtain ⟨al, hal, h1, h2, h3, h4⟩ := hc.alloc
-        exact ⟨al, by simpa using hal, h1, h2, h3, h4⟩
-      · show CerbMem.readBytesFrom
-          (CerbMem.writeBytesTo σ (c.addr + (off : Int)) img) c'.addr
-          (CerbMem.sizeofCtype c'.ty) = c'.bytes
-        rw [readBytesFrom_writeBytesTo_disjoint _ _ _ _ _ ?_]
-        · exact hc.bytes
-        · simp only [cellsDisjoint] at hdisj
-          omega
-  · intro j1 j2 c1 c2 hne h1 h2
-    rcases hcell' j1 c1 h1 with ⟨rfl, rfl⟩ | ⟨hne1, hold1⟩ <;>
-      rcases hcell' j2 c2 h2 with ⟨rfl, rfl⟩ | ⟨hne2, hold2⟩
-    · exact absurd rfl hne
-    · have h := hcoh.disj _ _ c c2 (fun h => hne2 h.symm) hget hold2
-      simp only [cellsDisjoint] at h ⊢
-      omega
-    · have h := hcoh.disj _ _ c1 c hne1 hold1 hget
-      simp only [cellsDisjoint] at h ⊢
-      omega
-    · exact hcoh.disj j1 j2 c1 c2 hne hold1 hold2
+/-! ## Phase 2 (F-04): the per-layout interior memM seams and the
+byte-splice machinery formerly here are RETIRED/moved — the generic
+typed-subrange seams (`loadM_at`/`storeM_at`) and the splice algebra
+(`spliceBytes*`, `readBytesFrom_write_interior`, `Coh.store_interior`)
+live in Heap.lean; the node-field WPS rules below are CLIENT
+instances of the generic `wps_load_cell_at`/`wps_store_cell_at`. -/
 
 /-! ## Decode round trips (the engine's own abst,
 CerbMem.lean:677-708) -/
-
-/-- Serialization at a nonnegative value: the `if` in intToBytes
-    resolves. -/
-theorem intToBytes_nonneg (n : Int) (sz : Nat) (h0 : 0 ≤ n) :
-    CerbMem.intToBytes n sz = (List.range sz).map fun (i : Nat) =>
-      some ((n >>> (i * 8)).toNat % 256).toUInt8 := by
-  unfold CerbMem.intToBytes
-  have hneg : (if n < 0 then ((1 <<< (sz * 8) : Nat) : Int) + n else n) = n :=
-    if_neg (by omega)
-  simp only [hneg]
-
-/-- One `go` step of bytesToInt at a defined byte (the fold,
-    exposed). -/
-theorem bytesToInt_go_cons (p : CerbMem.Provenance) (c : Option Int)
-    (v : UInt8) (rest : List CerbMem.AbsByte) (i : Nat) (acc : Int) :
-    CerbMem.bytesToInt.go (⟨p, c, some v⟩ :: rest) i acc =
-      CerbMem.bytesToInt.go rest (i + 1) (acc + (v.toNat : Int) <<< (i * 8)) := rfl
-
-theorem bytesToInt_go_nil (i : Nat) (acc : Int) :
-    CerbMem.bytesToInt.go [] i acc = acc := rfl
-
-/-- bytesToInt at unsigned with all bytes defined IS the go fold. -/
-theorem bytesToInt_of_all_some (bs : List CerbMem.AbsByte)
-    (h : bs.any (·.value.isNone) = false) :
-    CerbMem.bytesToInt bs false = some (CerbMem.bytesToInt.go bs 0 0) := by
-  unfold CerbMem.bytesToInt
-  rw [h]
-  rfl
 
 /-- The serialized concrete-pointer image, spelled byte by byte. -/
 theorem ptrImg_cell_explicit (id a : Int) (h0 : 0 ≤ a) :
@@ -544,34 +255,20 @@ theorem reconstruct_ptrImg_cell (id a : Int) (h0 : 0 < a) (h1 : a < 2 ^ 64)
   · rename_i heq
     exact absurd heq (by simp)
 
-/-! ## Splice slices (what an interior next-store does to the two
-field slices) -/
+/-! ## Splice slices — LAYOUT INSTANCES of the generic splice algebra
+(Heap.lean `spliceBytes_slice_below`/`_self`) at the node layout. -/
 
 theorem spliceBytes_value_slice (img bs : List CerbMem.AbsByte)
     (himg : img.length = 8) (hbs : bs.length = 16) :
-    ((spliceBytes 8 img bs).drop 0).take 8 = (bs.drop 0).take 8 := by
-  apply List.ext_getElem?
-  intro k
-  simp only [List.getElem?_take, List.getElem?_drop]
-  by_cases hk : k < 8
-  · rw [if_pos hk, if_pos hk]
-    rw [spliceBytes_getElem? 8 img bs (by omega) (0 + k)]
-    rw [if_pos (by omega)]
-  · rw [if_neg hk, if_neg hk]
+    ((spliceBytes 8 img bs).drop 0).take 8 = (bs.drop 0).take 8 :=
+  spliceBytes_slice_below 8 img bs (by omega) 0 8 (by omega)
 
 theorem spliceBytes_next_slice (img bs : List CerbMem.AbsByte)
     (himg : img.length = 8) (hbs : bs.length = 16) :
     ((spliceBytes 8 img bs).drop 8).take 8 = img := by
-  apply List.ext_getElem?
-  intro k
-  simp only [List.getElem?_take, List.getElem?_drop]
-  by_cases hk : k < 8
-  · rw [if_pos hk]
-    rw [spliceBytes_getElem? 8 img bs (by omega) (8 + k)]
-    rw [if_neg (by omega), if_pos (by omega)]
-    congr 1
-    omega
-  · rw [if_neg hk, List.getElem?_eq_none (by omega)]
+  have h := spliceBytes_slice_self 8 img bs (by omega)
+  rw [himg] at h
+  exact h
 
 /-- The node type's decode is TABLE-INDEPENDENT for any bytes: the
     `long[2]` decode is an array of integer decodes, and the integer
@@ -583,22 +280,20 @@ theorem nodeTy_dec_indep (lum : List (Int × identifier))
     CerbMem.reconstructValue lum fpm addr nodeTy bs =
       CerbMem.reconstructValue [] [] addr nodeTy bs := rfl
 
-/-! ## The interior small axioms at the wps stratum (the node-field
-access rules — `wps_load_interior`'s pattern at the pointer field
-type, plus the INTERIOR STORE the reversal needs) -/
+/-! ## The node-field access rules — CLIENT INSTANCES of the generic
+typed-subrange rules (F-04: no WP/WPS lifting proof lives in this
+module; the layout enters only through `nodeTy`/`nodePtrTy` sizes,
+the field offset, and the decode facts). -/
 
-section NodeAxioms
+section NodeClients
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
 variable {M : MachineCtx} {Ls : LabelSpec GF}
 
-/-- INTERIOR `node*` LOAD small axiom: loading the next field of an
-    owned node cell delivers the DECODE OF THE FIELD SLICE; the cell
-    rides through untouched (the interior analog of
-    `wps_load_interior` at the pointer field type; `hdec` is the
-    field slice's table-independent decode — supplied by the round
-    trips above). -/
-theorem wps_load_interior_node {Ψ : SpikeVal → EnvStack → IProp GF}
+/-- NODE `node*`-FIELD LOAD — `wps_load_cell_at` at view type
+    `nodePtrTy` (the old example-local lifting rule, re-derived as a
+    one-line client). -/
+theorem wps_load_node_field {Ψ : SpikeVal → EnvStack → IProp GF}
     (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (id a : Int) (off : Nat) (mo : memory_order)
     (dq : DFrac) (bs : List CerbMem.AbsByte) (ρ : EnvStack)
@@ -606,89 +301,20 @@ theorem wps_load_interior_node {Ψ : SpikeVal → EnvStack → IProp GF}
     (hbound : off + 8 ≤ CerbMem.sizeofCtype nodeTy)
     (hdec : ∀ lum fpm, CerbMem.reconstructValue lum fpm (a + (off : Int))
       nodePtrTy ((bs.drop off).take 8) = mv) :
-    iprop(pointsTo (GF := GF) id dq (SpikeCell.mk a nodeTy bs) ∗
-      (∀ fp, pointsTo id dq (SpikeCell.mk a nodeTy bs) -∗
+    iprop(cellOwn (GF := GF) id dq (SpikeCell.mk a nodeTy bs) ∗
+      (∀ fp, cellOwn id dq (SpikeCell.mk a nodeTy bs) -∗
         Ψ (SpikeVal.annot [DA_pos [] fp] ((valueFromMemValue mv).2)) ρ)) ⊢
       wps M Ls Ψ (loadExpr loc ann nodePtrTy (cellPtr id (a + (off : Int))) mo)
-        ρ := by
-  rw [(wps_unfold
-    (e := loadExpr loc ann nodePtrTy (cellPtr id (a + (off : Int))) mo)).to_eq]
-  simp only [wps.pre,
-    show toVal (loadExpr loc ann nodePtrTy (cellPtr id (a + (off : Int))) mo) =
-      none from rfl,
-    show jumpRedex? (loadExpr loc ann nodePtrTy
-      (cellPtr id (a + (off : Int))) mo) = none from rfl]
-  iintro ⟨Hpt, HΨ⟩ %σ₁ %ns %obs %obs' %nt Hσ
-  icases (stateInterp_iff σ₁ ns (obs ++ obs') nt).mp $$ Hσ with ⟨%m, %Hcoh, Hh⟩
-  ihave %Hget : ⌜Iris.Std.PartialMap.get? m id = some (SpikeCell.mk a nodeTy bs)⌝
-      $$ [Hh Hpt]
-  · ihave >%_ := genHeap_valid $$ [$Hh $Hpt]
-    itrivial
-  have hcell : CellCoh σ₁ id ⟨a, nodeTy, bs⟩ := Hcoh.cells id _ Hget
-  have hrun := loadM_interior_nodePtr σ₁ id ⟨a, nodeTy, bs⟩ off loc hcell hbound
-  rw [hdec σ₁.lastUsedUnionMembers σ₁.funptrmap] at hrun
-  have hrun' : applyMemM (CerbMem.loadM loc nodePtrTy
-      (cellPtr id (a + (off : Int)))) σ₁ =
-      some ((.FP .R (a + (off : Int)) (CerbMem.sizeofCtype nodePtrTy), mv), σ₁) := by
-    rw [nodePtrTy_size]
-    exact hrun
-  iapply fupd_mask_intro Std.LawfulSet.empty_subset
-  iintro Hclose
-  isplitr
-  · ipureintro
-    exact ⟨[], ⟨_, _, _⟩, _, [], ⟨Step.load_canonical hrun', rfl, rfl⟩⟩
-  inext
-  iintro %r %σ₂ %eₜ %Hstep Hcred
-  obtain ⟨hstep, hlbl, rfl⟩ := Hstep
-  obtain ⟨fp', mval', σ'', hmem', hout⟩ := hstep.load_inv
-  rw [hrun'] at hmem'
-  obtain ⟨⟨rfl, rfl⟩, rfl⟩ :
-      (fp' = CerbMem.Footprint.FP .R (a + (off : Int))
-        (CerbMem.sizeofCtype nodePtrTy) ∧ mv = mval') ∧ σ₁ = σ'' := by
-    have h := Option.some.inj hmem'.symm
-    exact ⟨⟨congrArg (fun p => p.1.1) h,
-      (congrArg (fun p => p.1.2) h).symm⟩,
-      (congrArg Prod.snd h).symm⟩
-  obtain ⟨re, rρ, rM⟩ := r
-  simp only at hlbl
-  obtain rfl : M = rM := hlbl.symm
-  obtain ⟨hre, hrρ, hσ⟩ : re = Expr [] (Eannot
-        [DA_pos [] (CerbMem.Footprint.FP .R (a + (off : Int))
-          (CerbMem.sizeofCtype nodePtrTy))]
-        (Expr [] (Epure (Pexpr [] () (PEval (valueFromMemValue mv).2))))) ∧
-      rρ = ρ ∧ σ₂ = σ₁ := by
-    simpa [Prod.mk.injEq] using hout
-  subst hre
-  obtain rfl : ρ = rρ := hrρ.symm
-  obtain rfl : σ₁ = σ₂ := hσ.symm
-  imod Hclose with -
-  imodintro
-  isplitl [Hh]
-  · iapply (stateInterp_iff _ _ _ _).mpr
-    iexists m
-    isplitr [Hh]
-    · ipureintro
-      exact Hcoh
-    · iexact Hh
-  · rw [show Expr ([] : List annot) (Eannot
-        [DA_pos [] (CerbMem.Footprint.FP .R (a + (off : Int))
-          (CerbMem.sizeofCtype nodePtrTy))]
-        (Expr [] (Epure (Pexpr [] () (PEval (valueFromMemValue mv).2))))) =
-      ofVal (.annot [DA_pos [] (CerbMem.Footprint.FP .R (a + (off : Int))
-        (CerbMem.sizeofCtype nodePtrTy))] ((valueFromMemValue mv).2))
-      from rfl]
-    iapply (wps_ofVal
-      (.annot [DA_pos [] (CerbMem.Footprint.FP .R (a + (off : Int))
-        (CerbMem.sizeofCtype nodePtrTy))] ((valueFromMemValue mv).2)) ρ)
-    iapply HΨ
-    iexact Hpt
+        ρ :=
+  wps_load_cell_at loc ann id a nodeTy off nodePtrTy mo dq bs ρ
+    (by rw [nodePtrTy_size]; exact hbound)
+    (by rw [nodePtrTy_size]; exact hdec) rfl
 
-/-- INTERIOR `node*` STORE small axiom (the reversal's
-    `cur->next := prev`): storing into the next field of an owned
-    node cell SPLICES the field slice; full ownership, UB-excluding
-    (every guard is a named hypothesis — the interior bounds, the
-    type-compat fact, funptrmap-neutral serialization). -/
-theorem wps_store_interior_node {Ψ : SpikeVal → EnvStack → IProp GF}
+/-- NODE `node*`-FIELD STORE — `wps_store_cell_at` at view type
+    `nodePtrTy`; the spliced image's whole-cell inertness is
+    `nodeTy_dec_indep` (any bytes), so the client owes only the
+    serialization facts of the stored pointer. -/
+theorem wps_store_node_field {Ψ : SpikeVal → EnvStack → IProp GF}
     (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (id a : Int) (off : Nat) (cv : value) (mo : memory_order)
     (bs : List CerbMem.AbsByte) (ρ : EnvStack) {mv : CerbMem.MemValue}
@@ -701,94 +327,18 @@ theorem wps_store_interior_node {Ψ : SpikeVal → EnvStack → IProp GF}
     (hfpm : ∀ fpm, (CerbMem.memValueToBytes fpm mv).1 = fpm)
     (hbytes : ∀ fpm, (CerbMem.memValueToBytes fpm mv).2 =
       (CerbMem.memValueToBytes [] mv).2) :
-    iprop(pointsTo (GF := GF) id (.own 1) (SpikeCell.mk a nodeTy bs) ∗
-      (∀ fp, pointsTo id (.own 1) (SpikeCell.mk a nodeTy
+    iprop(cellOwn (GF := GF) id (.own 1) (SpikeCell.mk a nodeTy bs) ∗
+      (∀ fp, cellOwn id (.own 1) (SpikeCell.mk a nodeTy
           (spliceBytes off (CerbMem.memValueToBytes [] mv).2 bs)) -∗
         Ψ (SpikeVal.annot [DA_pos [] fp] Vunit) ρ)) ⊢
       wps M Ls Ψ (storeExpr loc ann nodePtrTy (cellPtr id (a + (off : Int)))
-        cv mo) ρ := by
-  rw [(wps_unfold (e := storeExpr loc ann nodePtrTy
-    (cellPtr id (a + (off : Int))) cv mo)).to_eq]
-  simp only [wps.pre,
-    show toVal (storeExpr loc ann nodePtrTy (cellPtr id (a + (off : Int)))
-      cv mo) = none from rfl,
-    show jumpRedex? (storeExpr loc ann nodePtrTy
-      (cellPtr id (a + (off : Int))) cv mo) = none from rfl]
-  iintro ⟨Hpt, HΨ⟩ %σ₁ %ns %obs %obs' %nt Hσ
-  icases (stateInterp_iff σ₁ ns (obs ++ obs') nt).mp $$ Hσ with ⟨%m, %Hcoh, Hh⟩
-  ihave %Hget : ⌜Iris.Std.PartialMap.get? m id = some (SpikeCell.mk a nodeTy bs)⌝
-      $$ [Hh Hpt]
-  · ihave >%_ := genHeap_valid $$ [$Hh $Hpt]
-    itrivial
-  have hcell : CellCoh σ₁ id ⟨a, nodeTy, bs⟩ := Hcoh.cells id _ Hget
-  have hrun := storeM_interior_nodePtr σ₁ id ⟨a, nodeTy, bs⟩ off loc mv hcell
-    hbound hcompat hfpm hbytes
-  have hrun' : applyMemM (CerbMem.storeM loc nodePtrTy false
-      (cellPtr id (a + (off : Int))) mv) σ₁ =
-      some (.FP .W (a + (off : Int)) (CerbMem.sizeofCtype nodePtrTy),
-        CerbMem.writeBytesTo σ₁ (a + (off : Int))
-          (CerbMem.memValueToBytes [] mv).2) := by
-    rw [nodePtrTy_size]
-    exact hrun
-  iapply fupd_mask_intro Std.LawfulSet.empty_subset
-  iintro Hclose
-  isplitr
-  · ipureintro
-    exact ⟨[], ⟨_, _, _⟩, _, [], ⟨Step.store_canonical hmv hrun', rfl, rfl⟩⟩
-  inext
-  iintro %r %σ₂ %eₜ %Hstep Hcred
-  obtain ⟨hstep, hlbl, rfl⟩ := Hstep
-  obtain ⟨mv', fp', σ'', hmv', hmem', hout⟩ := hstep.store_inv
-  obtain rfl : mv = mv' := Option.some.inj (hmv.symm.trans hmv')
-  rw [hrun'] at hmem'
-  obtain ⟨rfl, rfl⟩ : fp' = CerbMem.Footprint.FP .W (a + (off : Int))
-      (CerbMem.sizeofCtype nodePtrTy) ∧
-      σ'' = CerbMem.writeBytesTo σ₁ (a + (off : Int))
-        (CerbMem.memValueToBytes [] mv).2 := by
-    have h := Option.some.inj hmem'.symm
-    exact ⟨congrArg Prod.fst h, congrArg Prod.snd h⟩
-  obtain ⟨re, rρ, rM⟩ := r
-  simp only at hlbl
-  obtain rfl : M = rM := hlbl.symm
-  obtain ⟨hre, hrρ, hσ⟩ : re = Expr [] (Eannot
-        [DA_pos [] (CerbMem.Footprint.FP .W (a + (off : Int))
-          (CerbMem.sizeofCtype nodePtrTy))]
-        (Expr [] (Epure (Pexpr [] () (PEval Vunit))))) ∧ rρ = ρ ∧
-      σ₂ = CerbMem.writeBytesTo σ₁ (a + (off : Int))
-        (CerbMem.memValueToBytes [] mv).2 := by
-    simpa [Prod.mk.injEq] using hout
-  subst hre hσ
-  obtain rfl : ρ = rρ := hrρ.symm
-  imod Hclose with -
-  imod (genHeap_update
-      (v₂ := SpikeCell.mk a nodeTy
-        (spliceBytes off (CerbMem.memValueToBytes [] mv).2 bs)))
-    $$ [$Hh $Hpt] with ⟨Hh, Hpt⟩
-  imodintro
-  isplitl [Hh]
-  · iapply (stateInterp_iff _ _ _ _).mpr
-    iexists (Iris.Std.PartialMap.insert m id
-      (SpikeCell.mk a nodeTy
-        (spliceBytes off (CerbMem.memValueToBytes [] mv).2 bs)))
-    isplitr [Hh]
-    · ipureintro
-      exact Coh.store_interior σ₁ m id ⟨a, nodeTy, bs⟩ off
-        (CerbMem.memValueToBytes [] mv).2 Hcoh Hget (by rw [hlen]; exact hbound)
-        (fun lum fpm => nodeTy_dec_indep lum fpm a _)
-    · iexact Hh
-  · rw [show Expr ([] : List annot) (Eannot
-        [DA_pos [] (CerbMem.Footprint.FP .W (a + (off : Int))
-          (CerbMem.sizeofCtype nodePtrTy))]
-        (Expr [] (Epure (Pexpr [] () (PEval Vunit))))) =
-      ofVal (.annot [DA_pos [] (CerbMem.Footprint.FP .W (a + (off : Int))
-        (CerbMem.sizeofCtype nodePtrTy))] Vunit) from rfl]
-    iapply (wps_ofVal
-      (.annot [DA_pos [] (CerbMem.Footprint.FP .W (a + (off : Int))
-        (CerbMem.sizeofCtype nodePtrTy))] Vunit) ρ)
-    iapply HΨ
-    iexact Hpt
+        cv mo) ρ :=
+  wps_store_cell_at loc ann id a nodeTy off nodePtrTy cv mo bs ρ hmv
+    (by rw [nodePtrTy_size]; exact hbound) hcompat hfpm hbytes
+    (by rw [nodePtrTy_size]; exact hlen)
+    (fun lum fpm => nodeTy_dec_indep lum fpm a _)
 
-end NodeAxioms
+end NodeClients
 
 /-! ## THE PREDICATE: `isList p xs` (structural recursion on the
 mathematical list; ∗-composed node cells; the nil case IS the null
@@ -836,7 +386,7 @@ def isList : CerbMem.PointerValue → List Int → IProp GF
       (bs : List CerbMem.AbsByte),
       ⌜p = cellPtr id aN ∧ 0 < aN ∧ aN < 2 ^ 64 ∧ bs.length = 16 ∧
         nodeValDec bs v ∧ nodeNextDec bs q⌝ ∗
-      pointsTo id (.own 1) (SpikeCell.mk aN nodeTy bs) ∗ isList q vs)
+      cellOwn id (.own 1) (SpikeCell.mk aN nodeTy bs) ∗ isList q vs)
 
 @[simp] theorem isList_nil (p : CerbMem.PointerValue) :
     isList (GF := GF) p [] = iprop(⌜p = nullNode⌝) := rfl
@@ -846,7 +396,7 @@ theorem isList_cons (p : CerbMem.PointerValue) (v : Int) (vs : List Int) :
       (q : CerbMem.PointerValue) (bs : List CerbMem.AbsByte),
       ⌜p = cellPtr id aN ∧ 0 < aN ∧ aN < 2 ^ 64 ∧ bs.length = 16 ∧
         nodeValDec bs v ∧ nodeNextDec bs q⌝ ∗
-      pointsTo id (.own 1) (SpikeCell.mk aN nodeTy bs) ∗ isList q vs) := rfl
+      cellOwn id (.own 1) (SpikeCell.mk aN nodeTy bs) ∗ isList q vs) := rfl
 
 /-- Nil introduction. -/
 theorem isList_nil_intro : ⊢ isList (GF := GF) nullNode [] := by
@@ -859,7 +409,7 @@ theorem isList_cons_intro (id aN : Int) (q : CerbMem.PointerValue)
     (bs : List CerbMem.AbsByte) (v : Int) (vs : List Int)
     (h0 : 0 < aN) (h1 : aN < 2 ^ 64) (hlen : bs.length = 16)
     (hval : nodeValDec bs v) (hnext : nodeNextDec bs q) :
-    iprop(pointsTo (GF := GF) id (.own 1) (SpikeCell.mk aN nodeTy bs) ∗
+    iprop(cellOwn (GF := GF) id (.own 1) (SpikeCell.mk aN nodeTy bs) ∗
         isList q vs) ⊢
       isList (cellPtr id aN) (v :: vs) := by
   rw [isList_cons]
@@ -1249,36 +799,40 @@ def ChainAt (σ : Mem) : CerbMem.PointerValue → List Int → Prop
       CellCoh σ id ⟨aN, nodeTy, bs⟩ ∧ bs.length = 16 ∧
       nodeValDec bs v ∧ nodeNextDec bs q ∧ ChainAt σ q vs
 
-/-- The readout: an `isList` footprint against the final state
-    interpretation yields the pure engine-level chain. -/
+/-- The readout: an `isList` footprint against the final coupling
+    yields the pure engine-level chain (per-node `cellOwn_cellCoh`). -/
 theorem isList_readout {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
-    (σ : Mem) (m : SpikeHeapF SpikeCell) (hcoh : Coh σ m) :
+    (σ : Mem) {mm : SpikeHeapF MetaCell} {mb : SpikeHeapF CerbMem.AbsByte}
+    {mk : SpikeHeapF AllocCursor} (hG : CohG σ mm mb mk) :
     ∀ (ws : List Int) (p : CerbMem.PointerValue),
-    iprop(isList (GF := GF) p ws ∗ genHeapInterp m) ⊢
+    iprop(isList (GF := GF) p ws ∗ metaInterp mm ∗ byteInterp mb) ⊢
       (⌜ChainAt σ p ws⌝ : IProp GF) := by
   intro ws
   induction ws with
   | nil =>
     intro p
     rw [isList_nil]
-    iintro ⟨%h, -⟩
+    iintro ⟨%h, -, -⟩
     ipureintro
     exact h
   | cons v vs ih =>
     intro p
     rw [isList_cons]
-    iintro ⟨⟨%id, %aN, %q, %bs, %hfacts, Hpt, HT⟩, Hh⟩
+    iintro ⟨⟨%id, %aN, %q, %bs, %hfacts, Hpt, HT⟩, Hmi, Hbi⟩
     obtain ⟨rfl, h0, h1, hlen, hval, hnext⟩ := hfacts
-    ihave %Hget : ⌜Iris.Std.PartialMap.get? m id =
-        some (SpikeCell.mk aN nodeTy bs)⌝ $$ [Hh Hpt]
-    · ihave >%_ := genHeap_valid $$ [$Hh $Hpt]
-      itrivial
-    ihave %htail := ih q $$ [HT Hh]
+    ihave %Hcc : ⌜CellCoh σ id ⟨aN, nodeTy, bs⟩ ∧
+        Iris.Std.PartialMap.get? mm id =
+          some (metaOf (⟨aN, nodeTy, bs⟩ : SpikeCell))⌝ $$ [Hmi Hbi Hpt]
+    · iapply cellOwn_cellCoh hG id (.own 1) ⟨aN, nodeTy, bs⟩
+        $$ [$Hmi $Hbi $Hpt]
+    ihave %htail := ih q $$ [HT Hmi Hbi]
     · isplitl [HT]
       · iexact HT
-      · iexact Hh
+      isplitl [Hmi]
+      · iexact Hmi
+      · iexact Hbi
     ipureintro
-    exact ⟨id, aN, q, bs, rfl, h0, h1, hcoh.cells id _ Hget, hlen, hval,
+    exact ⟨id, aN, q, bs, rfl, h0, h1, Hcc.1, hlen, hval,
       hnext, htail⟩
 
 /-- The shape of a list head (extracted non-destructively). -/
@@ -1458,7 +1012,7 @@ theorem lr_body_wps (revd rest' : List Int)
       rfl (lr_shift_eval_B hf renv _ _ id aN)
     rw [show cellPtr id (aN + 8) = cellPtr id (aN + ((8 : Nat) : Int))
       from rfl]
-    iapply wps_load_interior_node loc ann id aN 8 mo (.own 1) bs _
+    iapply wps_load_node_field loc ann id aN 8 mo (.own 1) bs _
       (by rw [nodeTy_size]; omega)
       (fun lum fpm => hnext lum fpm _)
     isplitl [Hpt]
@@ -1482,7 +1036,7 @@ theorem lr_body_wps (revd rest' : List Int)
       (lr_store_value_eval hf renv _ _ _ _)
     rw [show cellPtr id (aN + 8) = cellPtr id (aN + ((8 : Nat) : Int))
       from rfl]
-    iapply wps_store_interior_node loc ann id aN 8 (ptrVal pPrev) mo bs _
+    iapply wps_store_node_field loc ann id aN 8 (ptrVal pPrev) mo bs _
       (node_ptr_encodes pPrev) (by rw [nodeTy_size]; omega) klen
       (node_ptr_compat pPrev) kfpm kbytes
     isplitl [Hpt]
@@ -1584,12 +1138,15 @@ theorem lr_wp_readout (sbty : core_base_type) (head : CerbMem.PointerValue) :
   refine BI.wand_elim_left.trans ?_
   refine wp_mono fun w => ?_
   iintro ⟨%p', %hval, HL⟩ %σ' %ns %κs %nt Hσ
-  icases (stateInterp_iff σ' ns κs nt).mp $$ Hσ with ⟨%m, %Hcoh, Hh⟩
-  ihave %hchain : ⌜ChainAt σ' p' xs.reverse⌝ $$ [HL Hh]
-  · iapply isList_readout σ' m Hcoh xs.reverse p'
+  icases (stateInterp_iff σ' ns κs nt).mp $$ Hσ
+    with ⟨%mm, %mb, %mk, %HG, Hmi, Hbi, Hki⟩
+  ihave %hchain : ⌜ChainAt σ' p' xs.reverse⌝ $$ [HL Hmi Hbi]
+  · iapply isList_readout σ' HG xs.reverse p'
     isplitl [HL]
     · iexact HL
-    · iexact Hh
+    isplitl [Hmi]
+    · iexact Hmi
+    · iexact Hbi
   iapply fupd_mask_intro_discard Std.LawfulSet.empty_subset
   ipureintro
   exact ⟨p', hval, hchain⟩
@@ -1665,7 +1222,7 @@ theorem seedChain_isList {hlc : HasLC} {GF : BundledGFunctors}
     [SpikeGS hlc GF] :
     ∀ (ws : List Int) (m : SpikeHeapF SpikeCell) (p : CerbMem.PointerValue),
     SeedChain m p ws →
-    iprop(([∗map] i ↦ c ∈ m, pointsTo (GF := GF) i (.own 1) c)) ⊢
+    iprop(([∗map] i ↦ c ∈ m, cellOwn (GF := GF) i (.own 1) c)) ⊢
       isList p ws := by
   intro ws
   induction ws with

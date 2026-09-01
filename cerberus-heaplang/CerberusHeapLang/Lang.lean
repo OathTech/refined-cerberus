@@ -218,11 +218,15 @@ def SpikeGF : BundledGFunctors
   | 1 => ⟨constOF CoPsetDisjL, by infer_instance⟩
   | 2 => ⟨constOF (DisjointLeibnizSet PosSet), by infer_instance⟩
   | 3 => ⟨_root_.Auth.AuthURF (constOF Credit), by infer_instance⟩
-  | 4 => ⟨constOF (HeapView Int (Agree (DiscreteO SpikeCell)) SpikeHeapF),
+  | 4 => ⟨constOF (HeapView Int (Agree (DiscreteO CerbMem.AbsByte)) SpikeHeapF),
           by infer_instance⟩
-  | 5 => ⟨constOF (HeapView Int (Agree (DiscreteO GName)) SpikeHeapF),
+  | 5 => ⟨constOF (HeapView Int (Agree (DiscreteO MetaCell)) SpikeHeapF),
           by infer_instance⟩
-  | 6 => ⟨constOF MetaUR, by infer_instance⟩
+  | 6 => ⟨constOF (HeapView Int (Agree (DiscreteO AllocCursor)) SpikeHeapF),
+          by infer_instance⟩
+  | 7 => ⟨constOF (HeapView Int (Agree (DiscreteO GName)) SpikeHeapF),
+          by infer_instance⟩
+  | 8 => ⟨constOF MetaUR, by infer_instance⟩
   | _ => ⟨constOF Unit, by infer_instance⟩
 
 instance instSpikeGpreS_SpikeGF : SpikeGpreS SpikeGF where
@@ -234,12 +238,26 @@ instance instSpikeGpreS_SpikeGF : SpikeGpreS SpikeGF where
   toLcGpreS := by
     constructor
     · exists 3
-  heap_pre := by
+  byte_pre := by
     constructor
     · constructor
       exists 4
     · constructor
+      exists 7
+    · exists 8
+  meta_pre := by
+    constructor
+    · constructor
       exists 5
-    · exists 6
+    · constructor
+      exists 7
+    · exists 8
+  cursor_pre := by
+    constructor
+    · constructor
+      exists 6
+    · constructor
+      exists 7
+    · exists 8
 
 end CerberusHeapLang

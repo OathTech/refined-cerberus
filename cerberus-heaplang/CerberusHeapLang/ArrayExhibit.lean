@@ -407,7 +407,7 @@ variable (loc : CerbLocation.Loc) (ann ra : core_run_annotation)
     array cell is preserved. -/
 abbrev arrPost : SpikeVal → EnvStack → IProp GF := fun w _ =>
   iprop(⌜w.val = ivVal vs.sum⌝ ∗
-    pointsTo id (.own 1) (SpikeCell.mk a aty bs))
+    cellOwn id (.own 1) (SpikeCell.mk a aty bs))
 
 /-- THE INDEX-PARTITIONED INVARIANT: at iteration `i` the
     accumulator is the sum of the first `i` elements and the pointer
@@ -418,7 +418,7 @@ abbrev arrLs : LabelSpec GF := fun _ args ρ =>
     ⌜args = [ivVal i, ivVal ((vs.take i).sum),
         Vobject (OVpointer (cellPtr id (a + ((4 * i : Nat) : Int))))] ∧
       i ≤ vs.length ∧ ρ = f :: rest ∧ SymFrame f⌝ ∗
-    pointsTo id (.own 1) (SpikeCell.mk a aty bs)) : IProp GF)
+    cellOwn id (.own 1) (SpikeCell.mk a aty bs)) : IProp GF)
 
 variable (p : sym) (rs : core_run_state)
   (hQ : LabeledAt rs p (arrQ loc ann ra mo ibty accbty pbty xbty vs.length))
@@ -432,11 +432,35 @@ variable (hsz : vs.length * 4 ≤ CerbMem.sizeofCtype aty)
 
 include hQ hsz hdec
 
+omit hQ hsz hdec in
+/-- ARRAY ELEMENT LOAD — the exhibit's layout instance of the GENERIC
+    typed-subrange rule (`wps_load_cell_at` at element type `intTy`,
+    offset `4 * i`): an ordinary CLIENT lemma, not a logic extension
+    (F-04). The trap premise is `rfl` (int is not _Bool); the decode
+    premise is the exhibit's per-element seeded-image fact. -/
+theorem wps_arr_elem_load {M' : MachineCtx} {Ls' : LabelSpec GF}
+    {Ψ : SpikeVal → EnvStack → IProp GF}
+    (loc' : CerbLocation.Loc) (ann' : core_run_annotation)
+    (aty' : ctype) (id' a' : Int) (i : Nat) (mo' : memory_order)
+    (dq : DFrac) (bs' : List CerbMem.AbsByte) (ρ : EnvStack)
+    {mv : CerbMem.MemValue}
+    (hbound : 4 * i + CerbMem.sizeofCtype intTy ≤ CerbMem.sizeofCtype aty')
+    (hdec : ∀ lum fpm, CerbMem.reconstructValue lum fpm (a' + ((4 * i : Nat) : Int))
+      intTy ((bs'.drop (4 * i)).take (CerbMem.sizeofCtype intTy)) = mv)
+    (htrap : loadTrapV intTy mv = false) :
+    iprop(cellOwn (GF := GF) id' dq (SpikeCell.mk a' aty' bs') ∗
+      (∀ fp, cellOwn id' dq (SpikeCell.mk a' aty' bs') -∗
+        Ψ (SpikeVal.annot [DA_pos [] fp] ((valueFromMemValue mv).2)) ρ)) ⊢
+      wps M' Ls' Ψ (loadExpr loc' ann' intTy
+        (cellPtr id' (a' + ((4 * i : Nat) : Int))) mo') ρ :=
+  wps_load_cell_at loc' ann' id' a' aty' (4 * i) intTy mo' dq bs' ρ
+    hbound hdec htrap
+
 /-- The loop body verifies at any invariant frame. -/
 theorem arr_body_wps (i : Nat) (f : Fmap sym value)
     (rest : List (Fmap sym value)) (hf : SymFrame f)
     (hin : i ≤ vs.length) :
-    iprop(pointsTo (GF := GF) id (.own 1) (SpikeCell.mk a aty bs)) ⊢
+    iprop(cellOwn (GF := GF) id (.own 1) (SpikeCell.mk a aty bs)) ⊢
       wps (procCtx p rs)
         (arrLs vs id a aty bs)
         (arrPost vs id a aty bs)
@@ -461,9 +485,9 @@ theorem arr_body_wps (i : Nat) (f : Fmap sym value)
       loadOpRedex loc ann intTy (Pexpr [] () (PEsym arrPSym)) mo from rfl]
     iapply wps_load_eval loc ann intTy (Pexpr [] () (PEsym arrPSym)) mo _
       rfl (arr_p_eval hf i _ _ rest)
-    iapply wps_load_interior loc ann aty id a (4 * i) mo (.own 1) bs _
+    iapply wps_arr_elem_load loc ann aty id a i mo (.own 1) bs _
       (by rw [intTy_size]; omega)
-      (hdec i hlt)
+      (hdec i hlt) rfl
     isplitl [Hpt]
     · iexact Hpt
     iintro %fp Hpt
@@ -530,7 +554,7 @@ theorem arr_blockSpecs :
 
 /-- The whole program's statement WP from the entry env. -/
 theorem arr_wps (sbty : core_base_type) :
-    iprop(pointsTo (GF := GF) id (.own 1) (SpikeCell.mk a aty bs)) ⊢
+    iprop(cellOwn (GF := GF) id (.own 1) (SpikeCell.mk a aty bs)) ⊢
       wps (procCtx p rs)
         (arrLs vs id a aty bs) (arrPost vs id a aty bs)
         (arrProg loc ann ra mo sbty ibty accbty pbty xbty
@@ -555,7 +579,7 @@ theorem arr_wps (sbty : core_base_type) :
 /-- The base-WP face with the engine readout (value + the preserved
     array cell in the final memory). -/
 theorem arr_wp_readout (sbty : core_base_type) :
-    iprop(pointsTo (GF := GF) id (.own 1) (SpikeCell.mk a aty bs)) ⊢
+    iprop(cellOwn (GF := GF) id (.own 1) (SpikeCell.mk a aty bs)) ⊢
       WP (⟨arrProg loc ann ra mo sbty ibty accbty pbty xbty
             (cellPtr id a) vs.length, [fmapEmpty],
           procCtx p rs⟩ : CoreRt)
@@ -575,14 +599,15 @@ theorem arr_wp_readout (sbty : core_base_type) :
   refine BI.wand_elim_left.trans ?_
   refine wp_mono fun w => ?_
   iintro ⟨%hval, Hpt⟩ %σ' %ns %κs %nt Hσ
-  icases (stateInterp_iff σ' ns κs nt).mp $$ Hσ with ⟨%m, %Hcoh, Hh⟩
-  ihave %Hget : ⌜Iris.Std.PartialMap.get? m id =
-      some (SpikeCell.mk a aty bs)⌝ $$ [Hh Hpt]
-  · ihave >%_ := genHeap_valid $$ [$Hh $Hpt]
-    itrivial
+  icases (stateInterp_iff σ' ns κs nt).mp $$ Hσ
+    with ⟨%mm, %mb, %mk, %HG, Hmi, Hbi, Hki⟩
+  ihave %Hcc : ⌜CellCoh σ' id ⟨a, aty, bs⟩ ∧
+      Iris.Std.PartialMap.get? mm id =
+        some (metaOf (⟨a, aty, bs⟩ : SpikeCell))⌝ $$ [Hmi Hbi Hpt]
+  · iapply cellOwn_cellCoh HG id (.own 1) ⟨a, aty, bs⟩ $$ [$Hmi $Hbi $Hpt]
   iapply fupd_mask_intro_discard Std.LawfulSet.empty_subset
   ipureintro
-  exact ⟨hval, Hcoh.cells id _ Hget⟩
+  exact ⟨hval, Hcc.1⟩
 
 omit hQ hsz hdec in
 /-- The label bodies are in the certified cone. -/

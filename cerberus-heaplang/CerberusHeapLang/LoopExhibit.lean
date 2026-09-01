@@ -392,16 +392,16 @@ theorem cell_readout (pv : CerbMem.PointerValue) (ty : ctype)
         stateInterp σ' ns κs nt ={⊤, ∅}=∗
           ⌜∃ i a, pv = cellPtr i a ∧ CellCoh σ' i ⟨a, ty, bs⟩⌝) := by
   iintro Hpt %σ' %ns %κs %nt Hσ
-  icases (stateInterp_iff σ' ns κs nt).mp $$ Hσ with ⟨%m, %Hcoh, Hh⟩
-  icases (pointsToCell_iff pv (.own 1) ty bs).mp $$ Hpt with
-    ⟨%i, %a, %Hpv, Hpt⟩
-  ihave %Hget : ⌜Iris.Std.PartialMap.get? m i = some (SpikeCell.mk a ty bs)⌝
-      $$ [Hh Hpt]
-  · ihave >%_ := genHeap_valid $$ [$Hh $Hpt]
-    itrivial
+  icases (stateInterp_iff σ' ns κs nt).mp $$ Hσ
+    with ⟨%mm, %mb, %mk, %HG, Hmi, Hbi, Hki⟩
+  icases (pointsToCell_cellOwn_iff pv (.own 1) ty bs).mp $$ Hpt with
+    ⟨%i, %a, %Hpv, Hcell⟩
+  ihave %Hcc : ⌜CellCoh σ' i ⟨a, ty, bs⟩ ∧ Iris.Std.PartialMap.get? mm i =
+      some (metaOf (⟨a, ty, bs⟩ : SpikeCell))⌝ $$ [Hmi Hbi Hcell]
+  · iapply cellOwn_cellCoh HG i (.own 1) ⟨a, ty, bs⟩ $$ [$Hmi $Hbi $Hcell]
   iapply fupd_mask_intro_discard Std.LawfulSet.empty_subset
   ipureintro
-  exact ⟨i, a, Hpv, Hcoh.cells i _ Hget⟩
+  exact ⟨i, a, Hpv, Hcc.1⟩
 
 omit hQ in
 /-- The per-value readout of the loop postcondition. -/
@@ -528,7 +528,7 @@ theorem counter_loop_certified {GF : BundledGFunctors} [SpikeGpreS GF]
     (loopRS_labeledAt loc ann ra mo bty xbty (cellPtr idx addr)) hn sbty)
   refine (BigSepM.bigSepM_singleton).1.trans ?_
   iintro Hpt
-  iapply (pointsToCell_iff _ _ _ _).mpr
+  iapply (pointsToCell_cellOwn_iff _ _ _ _).mpr
   iexists idx, addr
   isplit
   · ipureintro; rfl

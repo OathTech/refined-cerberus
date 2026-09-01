@@ -114,13 +114,15 @@ variable {hlc : HasLC} {GF : BundledGFunctors}
 theorem stateInterp_iff [SpikeGS hlc GF] (σ : Mem) (ns : Nat) (κs : List Empty)
     (nt : Nat) :
     stateInterp (GF := GF) σ ns κs nt ⊣⊢
-      iprop(∃ m, ⌜Coh σ m⌝ ∗ genHeapInterp m) := .rfl
+      iprop(∃ mm mb mk, ⌜CohG σ mm mb mk⌝ ∗
+        metaInterp mm ∗ byteInterp mb ∗ cursorInterp mk) := .rfl
 
 theorem pointsToCell_iff [SpikeGS hlc GF] (pv : CerbMem.PointerValue)
     (dq : DFrac) (ty : ctype) (bs : List CerbMem.AbsByte) :
     pointsToCell (GF := GF) pv dq ty bs ⊣⊢
       iprop(∃ (i : Int) (a : Int),
-        ⌜pv = cellPtr i a⌝ ∗ pointsTo i dq (SpikeCell.mk a ty bs)) := .rfl
+        ⌜pv = cellPtr i a⌝ ∗ metaOwn i dq ⟨a, ty⟩ ∗ bytesOwn a dq bs ∗
+        ⌜bs.length = CerbMem.sizeofCtype ty ∧ decIndep a ty bs⌝) := .rfl
 
 /-! ## The small axioms -/
 
@@ -153,15 +155,26 @@ theorem wp_store [SpikeGS hlc GF] {s : Stuckness} {E : CoPset} {M : MachineCtx}
   iintro Hpt
   iapply wp_lift_atomic_step rfl
   iintro %σ₁ %ns %obs %obs' %nt Hσ
-  icases (stateInterp_iff σ₁ ns (obs ++ obs') nt).mp $$ Hσ with ⟨%m, %Hcoh, Hh⟩
-  icases (pointsToCell_iff pv (.own 1) ty bs).mp $$ Hpt with ⟨%i, %addr, %Hpv, Hpt⟩
+  icases (stateInterp_iff σ₁ ns (obs ++ obs') nt).mp $$ Hσ
+    with ⟨%mm, %mb, %mk, %HG, Hmi, Hbi, Hki⟩
+  icases (pointsToCell_iff pv (.own 1) ty bs).mp $$ Hpt
+    with ⟨%i, %addr, %Hpv, Hm, Hb, %Hpure⟩
   subst Hpv
-  ihave %Hget : ⌜Iris.Std.PartialMap.get? m i = some (SpikeCell.mk addr ty bs)⌝
-      $$ [Hh Hpt]
-  · ihave >%_ := genHeap_valid $$ [$Hh $Hpt]
+  obtain ⟨hlen, hdec⟩ := Hpure
+  ihave %Hgetm : ⌜Iris.Std.PartialMap.get? mm i = some (⟨addr, ty⟩ : MetaCell)⌝
+      $$ [Hmi Hm]
+  · ihave >%h := metaHeap_valid $$ [$Hmi $Hm]
     itrivial
-  have hcell : CellCoh σ₁ i ⟨addr, ty, bs⟩ := Hcoh.cells i _ Hget
+  ihave %Hcover : ⌜∀ (j : Nat), j < bs.length →
+      Iris.Std.PartialMap.get? mb (addr + (j : Int)) = bs[j]?⌝ $$ [Hbi Hb]
+  · iapply bytesOwn_get mb addr (.own 1) bs $$ [$Hbi $Hb]
+  ihave %Hread : ⌜CerbMem.readBytesFrom σ₁ addr bs.length = bs⌝ $$ [Hbi Hb]
+  · iapply bytesOwn_read HG addr (.own 1) bs $$ [$Hbi $Hb]
+  have hcell : CellCoh σ₁ i ⟨addr, ty, bs⟩ :=
+    CellCoh.ofParts (HG.metas i _ Hgetm) hlen (hlen ▸ Hread) hdec
   have hrun := storeM_success σ₁ i ⟨addr, ty, bs⟩ mv loc hcell hst
+  have hlen' : (CerbMem.memValueToBytes [] mv).2.length = bs.length := by
+    rw [hst.len [], hlen]
   imodintro
   isplitr
   · ipureintro
@@ -187,19 +200,24 @@ theorem wp_store [SpikeGS hlc GF] {s : Stuckness} {E : CoPset} {M : MachineCtx}
     simpa [Prod.mk.injEq] using hout
   subst he hσ
   obtain rfl : ρ = e₂ρ := hρ.symm
-  imod (genHeap_update
-      (v₂ := SpikeCell.mk addr ty (CerbMem.memValueToBytes [] mv).2))
-    $$ [$Hh $Hpt] with ⟨Hh, Hpt⟩
+  imod (bytesOwn_update mb addr bs (CerbMem.memValueToBytes [] mv).2 hlen')
+    $$ [$Hbi $Hb] with ⟨Hbi, Hb⟩
   imodintro
-  isplitl [Hh]
+  isplitl [Hmi Hbi Hki]
   · iapply (stateInterp_iff _ _ _ _).mpr
-    iexists (Iris.Std.PartialMap.insert m i
-      (SpikeCell.mk addr ty (CerbMem.memValueToBytes [] mv).2))
-    isplitr [Hh]
+    iexists mm, (insertRange mb addr (CerbMem.memValueToBytes [] mv).2), mk
+    isplitr [Hmi Hbi Hki]
     · ipureintro
-      exact Coh.store σ₁ m i ⟨addr, ty, bs⟩ mv Hcoh Hget hst
-    · iexact Hh
-  isplitl [Hpt]
+      exact HG.storeRange addr (CerbMem.memValueToBytes [] mv).2
+        (fun j hj => ⟨bs[j]'(by omega), by
+          rw [Hcover j (by omega)]
+          exact List.getElem?_eq_getElem _⟩)
+    isplitl [Hmi]
+    · iexact Hmi
+    isplitl [Hbi]
+    · iexact Hbi
+    · iexact Hki
+  isplitl [Hm Hb]
   · iexists (⟨SpikeVal.annot
       [DA_pos [] (CerbMem.Footprint.FP .W addr (CerbMem.sizeofCtype ty))] Vunit,
       ρ, M⟩ : CoreRVal)
@@ -212,7 +230,14 @@ theorem wp_store [SpikeGS hlc GF] {s : Stuckness} {E : CoPset} {M : MachineCtx}
     iexists i, addr
     isplit
     · ipureintro; rfl
-    · iexact Hpt
+    isplitl [Hm]
+    · iexact Hm
+    isplitl [Hb]
+    · iexact Hb
+    · ipureintro
+      refine ⟨hst.len [], ?_⟩
+      intro lum fpm
+      exact hst.stored_dec lum fpm addr
   · simp only [Algebra.BigOpL.bigOpL_nil]
     itrivial
 
@@ -238,14 +263,20 @@ theorem wp_load [SpikeGS hlc GF] {s : Stuckness} {E : CoPset} {M : MachineCtx}
   iintro Hpt
   iapply wp_lift_atomic_step rfl
   iintro %σ₁ %ns %obs %obs' %nt Hσ
-  icases (stateInterp_iff σ₁ ns (obs ++ obs') nt).mp $$ Hσ with ⟨%m, %Hcoh, Hh⟩
-  icases (pointsToCell_iff pv dq ty bs).mp $$ Hpt with ⟨%i, %addr, %Hpv, Hpt⟩
+  icases (stateInterp_iff σ₁ ns (obs ++ obs') nt).mp $$ Hσ
+    with ⟨%mm, %mb, %mk, %HG, Hmi, Hbi, Hki⟩
+  icases (pointsToCell_iff pv dq ty bs).mp $$ Hpt
+    with ⟨%i, %addr, %Hpv, Hm, Hb, %Hpure⟩
   subst Hpv
-  ihave %Hget : ⌜Iris.Std.PartialMap.get? m i = some (SpikeCell.mk addr ty bs)⌝
-      $$ [Hh Hpt]
-  · ihave >%_ := genHeap_valid $$ [$Hh $Hpt]
+  obtain ⟨hlen, hdec⟩ := Hpure
+  ihave %Hgetm : ⌜Iris.Std.PartialMap.get? mm i = some (⟨addr, ty⟩ : MetaCell)⌝
+      $$ [Hmi Hm]
+  · ihave >%h := metaHeap_valid $$ [$Hmi $Hm]
     itrivial
-  have hcell : CellCoh σ₁ i ⟨addr, ty, bs⟩ := Hcoh.cells i _ Hget
+  ihave %Hread : ⌜CerbMem.readBytesFrom σ₁ addr bs.length = bs⌝ $$ [Hbi Hb]
+  · iapply bytesOwn_read HG addr dq bs $$ [$Hbi $Hb]
+  have hcell : CellCoh σ₁ i ⟨addr, ty, bs⟩ :=
+    CellCoh.ofParts (HG.metas i _ Hgetm) hlen (hlen ▸ Hread) hdec
   have hrun := loadM_success σ₁ i ⟨addr, ty, bs⟩ loc hcell htrap
   imodintro
   isplitr
@@ -276,14 +307,18 @@ theorem wp_load [SpikeGS hlc GF] {s : Stuckness} {E : CoPset} {M : MachineCtx}
   obtain rfl : ρ = e₂ρ := hρ.symm
   obtain rfl : σ₁ = σ₂ := hσ.symm
   imodintro
-  isplitl [Hh]
+  isplitl [Hmi Hbi Hki]
   · iapply (stateInterp_iff _ _ _ _).mpr
-    iexists m
-    isplitr [Hh]
+    iexists mm, mb, mk
+    isplitr [Hmi Hbi Hki]
     · ipureintro
-      exact Hcoh
-    · iexact Hh
-  isplitl [Hpt]
+      exact HG
+    isplitl [Hmi]
+    · iexact Hmi
+    isplitl [Hbi]
+    · iexact Hbi
+    · iexact Hki
+  isplitl [Hm Hb]
   · iexists (⟨SpikeVal.annot
       [DA_pos [] (CerbMem.Footprint.FP .R addr (CerbMem.sizeofCtype ty))]
       (loadedVal (cellPtr i addr) ty bs), ρ, M⟩ : CoreRVal)
@@ -296,7 +331,12 @@ theorem wp_load [SpikeGS hlc GF] {s : Stuckness} {E : CoPset} {M : MachineCtx}
     iexists i, addr
     isplit
     · ipureintro; rfl
-    · iexact Hpt
+    isplitl [Hm]
+    · iexact Hm
+    isplitl [Hb]
+    · iexact Hb
+    · ipureintro
+      exact ⟨hlen, hdec⟩
   · simp only [Algebra.BigOpL.bigOpL_nil]
     itrivial
 
@@ -968,43 +1008,9 @@ theorem triple_seq [SpikeGS hlc GF] {P Q R : IProp GF}
 /-- signed int (the recon's probe type). -/
 def intTy : ctype := Ctype [] (.Basic (.Integer (.Signed .Int_)))
 
-/-- Successful INTERIOR int load (S4, the array exhibit): with a
-    Coh-backed cell whose type is big enough, `loadM` at `int` and an
-    interior offset takes the active path, reads the byte SLICE, and
-    returns the state unchanged. The trap arm is unreachable at the
-    non-Bool int type. -/
-theorem loadM_interior_int (σ : Mem) (id : Int) (c : SpikeCell)
-    (off : Nat) (loc : CerbLocation.Loc)
-    (hcoh : CellCoh σ id c)
-    (hbound : off + CerbMem.sizeofCtype intTy ≤ CerbMem.sizeofCtype c.ty) :
-    applyMemM (CerbMem.loadM loc intTy (cellPtr id (c.addr + (off : Int)))) σ =
-      some ((.FP .R (c.addr + (off : Int)) (CerbMem.sizeofCtype intTy),
-        CerbMem.reconstructValue σ.lastUsedUnionMembers σ.funptrmap
-          (c.addr + (off : Int)) intTy
-          ((c.bytes.drop off).take (CerbMem.sizeofCtype intTy))), σ) := by
-  obtain ⟨al, hal, hbase, hsize, hty, hro⟩ := hcoh.alloc
-  have hbounds : CerbMem.isInBounds al (c.addr + (off : Int))
-      (CerbMem.sizeofCtype intTy) = true := by
-    simp only [CerbMem.isInBounds, hbase, hsize]
-    simp
-    omega
-  have hatomic : CerbMem.isAtomicMemberAccess al intTy
-      (c.addr + (off : Int)) = false := by
-    unfold CerbMem.isAtomicMemberAccess
-    rw [hty]
-    have := hcoh.nonAtomic
-    rcases c with ⟨ca, ⟨q, t⟩, cb⟩
-    cases t <;> simp_all [atomicTy]
-  have hread : CerbMem.readBytesFrom σ (c.addr + (off : Int))
-      (CerbMem.sizeofCtype intTy) = (c.bytes.drop off).take
-        (CerbMem.sizeofCtype intTy) :=
-    readBytesFrom_sub σ c.addr (CerbMem.sizeofCtype c.ty) c.bytes
-      hcoh.bytes off (CerbMem.sizeofCtype intTy) hbound
-  unfold CerbMem.loadM applyMemM
-  simp only [cellPtr, hcoh.dead, Bool.false_eq_true, if_false, hal, hbounds,
-    Bool.not_true, hatomic, hread]
-  rfl
-
+-- Phase 2 (F-04): the int-specific interior load engine seam
+-- (`loadM_interior_int`) is RETIRED — the generic typed-subrange seam
+-- `loadM_at` (Heap.lean) covers every accessed type and offset.
 
 /-- The Core value `Specified(7) : loaded integer`. -/
 def sevenVal : value :=

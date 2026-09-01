@@ -160,12 +160,12 @@ theorem htrap_seven_at (a : Int) :
 variable {GF : BundledGFunctors}
 
 theorem bigSep_ptx_P [SpikeGS .hasLC GF] :
-    iprop(([∗map] i ↦ c ∈ mAP, pointsTo i (.own 1) c)) ⊢
+    iprop(([∗map] i ↦ c ∈ mAP, cellOwn (hlc := .hasLC) (GF := GF) i (.own 1) c)) ⊢
       pointsToCell (GF := GF) pxPtr (.own 1) intTy cellXP.bytes := by
   refine .trans (BigSepM.bigSepM_insert (i := 1) (x := cellXP)
     (Iris.Std.LawfulPartialMap.get?_empty (M := SpikeHeapF) 1)).1 ?_
   iintro ⟨Hx, -⟩
-  iapply (pointsToCell_iff _ _ _ _).mpr
+  iapply (pointsToCell_cellOwn_iff _ _ _ _).mpr
   iexists 1, pxAddr
   isplit
   · ipureintro
@@ -175,19 +175,19 @@ theorem bigSep_ptx_P [SpikeGS .hasLC GF] :
 theorem ptx_to_cells_P [SpikeGS .hasLC GF] :
     iprop(pointsToCell (GF := GF) pxPtr (.own 1) intTy
       (CerbMem.memValueToBytes [] sevenMval).2) ⊢
-      iprop([∗map] i ↦ c ∈ mAP7, pointsTo i (.own 1) c) := by
+      iprop([∗map] i ↦ c ∈ mAP7, cellOwn (hlc := .hasLC) (GF := GF) i (.own 1) c) := by
   iintro Hx
-  icases (pointsToCell_iff _ _ _ _).mp $$ Hx with ⟨%ix, %ax, %Hpx, Hx⟩
+  icases (pointsToCell_cellOwn_iff _ _ _ _).mp $$ Hx with ⟨%ix, %ax, %Hpx, Hx⟩
   obtain ⟨rfl, rfl⟩ := cellPtr_inj Hpx.symm
   iapply (BigSepM.bigSepM_insert
-    (Φ := fun (i : Int) (c : SpikeCell) => pointsTo i (.own 1) c)
+    (Φ := fun (i : Int) (c : SpikeCell) => cellOwn (hlc := .hasLC) (GF := GF) i (.own 1) c)
     (i := 1) (x := cellXP7)
     (Iris.Std.LawfulPartialMap.get?_empty (M := SpikeHeapF) 1)).2
   isplitl [Hx]
   · iexact Hx
   · iapply (BigSepM.bigSepM_empty_intro
       (P := (BIBase.emp : IProp GF))
-      (Φ := fun (i : Int) (c : SpikeCell) => pointsTo i (.own 1) c))
+      (Φ := fun (i : Int) (c : SpikeCell) => cellOwn (hlc := .hasLC) (GF := GF) i (.own 1) c))
     itrivial
 
 /-- The compute part's footprint triple, proved in the derived logic

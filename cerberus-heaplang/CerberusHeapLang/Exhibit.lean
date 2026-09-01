@@ -254,12 +254,12 @@ theorem cellPtr_inj {i a j b : Int} (h : cellPtr i a = cellPtr j b) :
   exact ⟨h1, h2⟩
 
 theorem bigSepA_ptx [SpikeGS .hasLC GF] :
-    iprop(([∗map] i ↦ c ∈ mA, pointsTo i (.own 1) c)) ⊢
+    iprop(([∗map] i ↦ c ∈ mA, cellOwn (hlc := .hasLC) (GF := GF) i (.own 1) c)) ⊢
       pointsToCell (GF := GF) xPtr (.own 1) intTy bytesX := by
   refine .trans (BigSepM.bigSepM_insert (i := 0) (x := cellX)
     (Iris.Std.LawfulPartialMap.get?_empty (M := SpikeHeapF) 0)).1 ?_
   iintro ⟨Hx, -⟩
-  iapply (pointsToCell_iff _ _ _ _).mpr
+  iapply (pointsToCell_cellOwn_iff _ _ _ _).mpr
   iexists 0, xAddr
   isplit
   · ipureintro
@@ -295,19 +295,19 @@ theorem mA_disj_mF : mA ##ₘ mF := by
 theorem ptx_to_cells [SpikeGS .hasLC GF] :
     iprop(pointsToCell (GF := GF) xPtr (.own 1) intTy
       (CerbMem.memValueToBytes [] sevenMval).2) ⊢
-      iprop([∗map] i ↦ c ∈ mA7, pointsTo i (.own 1) c) := by
+      iprop([∗map] i ↦ c ∈ mA7, cellOwn (hlc := .hasLC) (GF := GF) i (.own 1) c) := by
   iintro Hx
-  icases (pointsToCell_iff _ _ _ _).mp $$ Hx with ⟨%ix, %ax, %Hpx, Hx⟩
+  icases (pointsToCell_cellOwn_iff _ _ _ _).mp $$ Hx with ⟨%ix, %ax, %Hpx, Hx⟩
   obtain ⟨rfl, rfl⟩ := cellPtr_inj (xPtr_eq.symm.trans Hpx)
   iapply (BigSepM.bigSepM_insert
-    (Φ := fun (i : Int) (c : SpikeCell) => pointsTo i (.own 1) c)
+    (Φ := fun (i : Int) (c : SpikeCell) => cellOwn (hlc := .hasLC) (GF := GF) i (.own 1) c)
     (i := 0) (x := cellX7)
     (Iris.Std.LawfulPartialMap.get?_empty (M := SpikeHeapF) 0)).2
   isplitl [Hx]
   · iexact Hx
   · iapply (BigSepM.bigSepM_empty_intro
       (P := (BIBase.emp : IProp GF))
-      (Φ := fun (i : Int) (c : SpikeCell) => pointsTo i (.own 1) c))
+      (Φ := fun (i : Int) (c : SpikeCell) => cellOwn (hlc := .hasLC) (GF := GF) i (.own 1) c))
     itrivial
 
 /-- The store's footprint triple, proved in the derived logic:
@@ -684,7 +684,7 @@ theorem mC_base_get1 :
 
 /-- Unpack mB's big-sep into the two pointer-shaped cells. -/
 theorem bigSepB_pts [SpikeGS .hasLC GF] :
-    iprop(([∗map] i ↦ c ∈ mB, pointsTo i (.own 1) c)) ⊢
+    iprop(([∗map] i ↦ c ∈ mB, cellOwn (hlc := .hasLC) (GF := GF) i (.own 1) c)) ⊢
       iprop(pointsToCell (GF := GF) xPtr (.own 1) intTy bytesX ∗
         pointsToCell yPtr (.own 1) intTy bytesY) := by
   refine .trans (BigSepM.bigSepM_insert (i := 1) (x := cellY) mB_base_get1).1 ?_
@@ -693,13 +693,13 @@ theorem bigSepB_pts [SpikeGS .hasLC GF] :
     (Iris.Std.LawfulPartialMap.get?_empty (M := SpikeHeapF) 0)).1
     $$ Hbase with ⟨Hx, -⟩
   isplitl [Hx]
-  · iapply (pointsToCell_iff _ _ _ _).mpr
+  · iapply (pointsToCell_cellOwn_iff _ _ _ _).mpr
     iexists 0, xAddr
     isplit
     · ipureintro
       exact xPtr_eq
     · iexact Hx
-  · iapply (pointsToCell_iff _ _ _ _).mpr
+  · iapply (pointsToCell_cellOwn_iff _ _ _ _).mpr
     iexists 1, yAddr
     isplit
     · ipureintro
@@ -710,26 +710,26 @@ theorem bigSepB_pts [SpikeGS .hasLC GF] :
 theorem cells_to_mC [SpikeGS .hasLC GF] :
     iprop(pointsToCell (GF := GF) xPtr (.own 1) intTy fiveBytes ∗
       pointsToCell yPtr (.own 1) intTy sixBytes) ⊢
-      iprop([∗map] i ↦ c ∈ mC, pointsTo i (.own 1) c) := by
+      iprop([∗map] i ↦ c ∈ mC, cellOwn (hlc := .hasLC) (GF := GF) i (.own 1) c) := by
   iintro ⟨Hx, Hy⟩
-  icases (pointsToCell_iff _ _ _ _).mp $$ Hx with ⟨%ix, %ax, %Hpx, Hx⟩
+  icases (pointsToCell_cellOwn_iff _ _ _ _).mp $$ Hx with ⟨%ix, %ax, %Hpx, Hx⟩
   obtain ⟨rfl, rfl⟩ := cellPtr_inj (xPtr_eq.symm.trans Hpx)
-  icases (pointsToCell_iff _ _ _ _).mp $$ Hy with ⟨%iy, %ay, %Hpy, Hy⟩
+  icases (pointsToCell_cellOwn_iff _ _ _ _).mp $$ Hy with ⟨%iy, %ay, %Hpy, Hy⟩
   obtain ⟨rfl, rfl⟩ := cellPtr_inj (yPtr_eq.symm.trans Hpy)
   iapply (BigSepM.bigSepM_insert
-    (Φ := fun (i : Int) (c : SpikeCell) => pointsTo i (.own 1) c)
+    (Φ := fun (i : Int) (c : SpikeCell) => cellOwn (hlc := .hasLC) (GF := GF) i (.own 1) c)
     (i := 1) (x := cellY6) mC_base_get1).2
   isplitl [Hy]
   · iexact Hy
   · iapply (BigSepM.bigSepM_insert
-      (Φ := fun (i : Int) (c : SpikeCell) => pointsTo i (.own 1) c)
+      (Φ := fun (i : Int) (c : SpikeCell) => cellOwn (hlc := .hasLC) (GF := GF) i (.own 1) c)
       (i := 0) (x := cellX5)
       (Iris.Std.LawfulPartialMap.get?_empty (M := SpikeHeapF) 0)).2
     isplitl [Hx]
     · iexact Hx
     · iapply (BigSepM.bigSepM_empty_intro
         (P := (BIBase.emp : IProp GF))
-        (Φ := fun (i : Int) (c : SpikeCell) => pointsTo i (.own 1) c))
+        (Φ := fun (i : Int) (c : SpikeCell) => cellOwn (hlc := .hasLC) (GF := GF) i (.own 1) c))
       itrivial
 
 /-- The two-store footprint triple: the interior compositional

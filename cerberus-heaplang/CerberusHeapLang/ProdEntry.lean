@@ -491,7 +491,7 @@ theorem counter_loop_certified_production {GF : Iris.BundledGFunctors}
       (cellPtr idx addr) n) hn sbty)
   refine (BigSepM.bigSepM_singleton).1.trans ?_
   iintro Hpt
-  iapply (pointsToCell_iff _ _ _ _).mpr
+  iapply (pointsToCell_cellOwn_iff _ _ _ _).mpr
   iexists idx, addr
   isplit
   · ipureintro; rfl
