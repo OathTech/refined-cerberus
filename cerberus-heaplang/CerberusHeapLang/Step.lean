@@ -29,14 +29,15 @@ actions, the PtrEq memop, strong sequencing `Esseq` (wildcard,
 `Specified`-binder and plain-symbol-binder patterns),
 `Esave`/`Eif`/value-scrutinee `Ecase`, the context-discarding
 `Erun`, pure/operand evaluation, and the run-time `Eannot` residue
-those produce. NB value-scrutinee `Ecase` is LOCAL RULE ONLY: it
-has a mirror rule, a wps rule and a per-step engine equation
-(`step_ctx_case_value`), but NO `FragJ` membership and NO adequacy
-consumer — it is not adequacy-exportable (RED row in
-docs/CAPABILITY_MANIFEST.md until Phase 1 exports it; 2026-08-31
-foundational audit F-01). `Ewseq` is NOT included (three more rules and every
-inversion lemma doubles — deliberately deferred, register in
-README "Registered divergences"). All rules use the CANONICAL node
+those produce. NB value-scrutinee `Ecase` was EXPORTED in S1b
+(audit F-01 discharged): `Frag.case_value` cone membership with
+explicit branch premises, the TWO-SIDED engine pair, and the
+`case_certified` consumer (CaseExhibit) — the full manifest row.
+`Ewseq` WILDCARD is included (S1b drift
+test, design record §8 item 8 — the three-rule clone of the Esseq
+wildcard lane: LETW-PURE/LETW-ANNOT/Cwseq-descent); Ewseq at
+spec/sym binder patterns remains OUT (README "Registered
+divergences"). All rules use the CANONICAL node
 shapes (empty `List annot` lists, `()` at bty) that
 `mk_value_e`/`mk_value_pe` (Core_aux.lean:302,645) and the
 fragment's authored programs produce; the engine's redex patterns
@@ -46,8 +47,10 @@ canonical instances, so it is exact on the fragment cone and a
 sub-relation elsewhere (recorded divergence D3,
 docs/2026-08-30_spike-sliceA-notes.md).
 
-The minimal surrounding context frozen out of the judgment:
-tagDefs = fmapEmpty, extern = fmapEmpty, default file, tid 0. The
+The surrounding engine configuration is the EXPLICIT `MachineCtx`
+index (S1b, the unified configuration — the old frozen profile,
+tagDefs/extern = fmapEmpty + default file + tid 0, survives as the
+`spikeCtx` INSTANCE with rfl field equations). The
 aid counter (driver_state.core_run_state0.aid_supply) never enters
 the fragment's terms: positive non-excluded actions annotate with
 `DA_pos [] fp` (step_action, Core_reduction.lean:424 Store0/Load0
@@ -488,6 +491,7 @@ never a descent. -/
 def jumpRedex? : CoreExpr → Option (sym × List (generic_pexpr Unit sym))
   | Expr _ (Erun _ l pes) => some (l, pes)
   | Expr _ (Esseq _ e1 _) => jumpRedex? e1
+  | Expr _ (Ewseq _ e1 _) => jumpRedex? e1
   | Expr _ (Eannot _ b) => if annotRooted b then none else jumpRedex? b
   | _ => none
 
@@ -498,6 +502,19 @@ def jumpRedex? : CoreExpr → Option (sym × List (generic_pexpr Unit sym))
 @[simp] theorem jumpRedex?_sseq (a : List annot) (pat : pattern)
     (e1 e2 : CoreExpr) :
     jumpRedex? (Expr a (Esseq pat e1 e2)) = jumpRedex? e1 := rfl
+
+/-- S1b DRIFT TEST (Ewseq wildcard, design record §8 item 8): the
+    Ewseq arm above extends the jump-redex search left through weak
+    sequencing, exactly as for Esseq — get_ctx descends Ewseq-left
+    into a Cwseq frame (Core_reduction.lean:375) and the engine's
+    Erun arm discards the WHOLE context, Cwseq frames included.
+    CONSERVATIVE on the pre-existing corpus: every pre-existing
+    head's equation (`jumpRedex?_run`/`_sseq`/`_annot`/`_pure`)
+    still holds by `rfl`; only Ewseq-containing terms (none before
+    this slice) gain a non-`none` answer. -/
+@[simp] theorem jumpRedex?_wseq (a : List annot) (pat : pattern)
+    (e1 e2 : CoreExpr) :
+    jumpRedex? (Expr a (Ewseq pat e1 e2)) = jumpRedex? e1 := rfl
 
 theorem jumpRedex?_annot (a : List annot) (ds : List dyn_annotation)
     (b : CoreExpr) :
@@ -891,6 +908,30 @@ inductive Step (M : MachineCtx) :
       Step M (Expr a (Esseq (Pattern pa (CaseBase (none, bty)))
               (ofVal (.annot ds v)) e2), ev0 :: evs, σ)
            (Expr [] (Eannot ds e2), ev0 :: evs, σ)
+  /-- LETW-PURE at a wildcard pattern (S1b DRIFT TEST — Ewseq joins
+      through the generic route, design record §8 item 8):
+      `letw _ = v in E2 --> E2` (one_step0 Ewseq bare-value arm,
+      Core_reduction.lean:353 "reduction: LETW-PURE"). Same env
+      discipline as LETS-PURE: `update_env` at a wildcard is the
+      identity on a NONEMPTY stack and a failwithI PANIC on an empty
+      one — the cons shape is load-bearing (header note 1). -/
+  | wseq_pure {a pa : List annot} {bty : core_base_type} {v : value}
+      {e2 : CoreExpr} {ev0 : Fmap sym value} {evs : List (Fmap sym value)}
+      {σ : Mem} :
+      Step M (Expr a (Ewseq (Pattern pa (CaseBase (none, bty)))
+              (ofVal (.pure v)) e2), ev0 :: evs, σ)
+           (e2, ev0 :: evs, σ)
+  /-- LETW-ANNOT at a wildcard pattern:
+      `letw _ = {A}v in E2 --> {A} E2` (one_step0 Ewseq Eannot arm,
+      Core_reduction.lean:353 "reduction: LETW-ANNOT" — the engine
+      writes the result node annots as `[]` verbatim). Same env
+      discipline as LETW-PURE. -/
+  | wseq_annot {a pa : List annot} {bty : core_base_type}
+      {ds : List dyn_annotation} {v : value} {e2 : CoreExpr}
+      {ev0 : Fmap sym value} {evs : List (Fmap sym value)} {σ : Mem} :
+      Step M (Expr a (Ewseq (Pattern pa (CaseBase (none, bty)))
+              (ofVal (.annot ds v)) e2), ev0 :: evs, σ)
+           (Expr [] (Eannot ds e2), ev0 :: evs, σ)
   /-- LETS-PURE at the SPECIFIED-BINDER pattern (S4 binding beta):
       `lets Specified(x) = Specified(ov) in E2 --> E2` with `x` bound
       to the payload OBJECT value (one_step0 Esseq bare-value arm,
@@ -979,6 +1020,16 @@ inductive Step (M : MachineCtx) :
       (hnj : jumpRedex? e1 = none) :
       Step M (e1, ρ, σ) (e1', ρ', σ') →
       Step M (Expr a (Esseq pat e1 e2), ρ, σ) (Expr a (Esseq pat e1' e2), ρ', σ')
+  /-- Reduction under the weak-sequencing frame (S1b DRIFT TEST).
+      Mirrors get_ctx's Ewseq arm (descend into e1 when it is not
+      irreducible — Core_reduction.lean:375) + apply_ctx's Cwseq
+      rebuild (Core_reduction.lean:389). Same S3 congruence guard
+      as `sseq_ctx`: a jump of e1 is never framed. -/
+  | wseq_ctx {a : List annot} {pat : pattern} {e1 e1' e2 : CoreExpr}
+      {ρ ρ' : EnvStack} {σ σ' : Mem}
+      (hnj : jumpRedex? e1 = none) :
+      Step M (e1, ρ, σ) (e1', ρ', σ') →
+      Step M (Expr a (Ewseq pat e1 e2), ρ, σ) (Expr a (Ewseq pat e1' e2), ρ', σ')
   /-- Reduction under a dyn-annotation frame. Mirrors get_ctx's plain
       `Eannot xs e` arm (Cannot-descent — taken only when e is NOT
       itself Eannot-rooted, because the double-annot arm precedes it;
@@ -1241,6 +1292,8 @@ theorem Step.env_cons' {M : MachineCtx} {c c' : CoreExpr × EnvStack × Mem}
   | create h1 h2 hmem => exact fun ev0 evs hin => ⟨ev0, hin⟩
   | sseq_pure => exact fun ev0 evs hin => ⟨ev0, hin⟩
   | sseq_annot => exact fun ev0 evs hin => ⟨ev0, hin⟩
+  | wseq_pure => exact fun ev0 evs hin => ⟨ev0, hin⟩
+  | wseq_annot => exact fun ev0 evs hin => ⟨ev0, hin⟩
   | sseq_spec_pure =>
     intro ev0 evs hin
     obtain ⟨rfl, rfl⟩ := List.cons.inj hin
@@ -1252,6 +1305,7 @@ theorem Step.env_cons' {M : MachineCtx} {c c' : CoreExpr × EnvStack × Mem}
   | pure_eval hnv hv => exact fun ev0 evs hin => ⟨ev0, hin⟩
   | load_eval hnv2 hv2 => exact fun ev0 evs hin => ⟨ev0, hin⟩
   | sseq_ctx hnj hs ih => exact ih
+  | wseq_ctx hnj hs ih => exact ih
   | annot_ctx hnj hg hs ih => exact ih
   | annot_merge => exact fun ev0 evs hin => ⟨ev0, hin⟩
   | run hj hl hvs =>
@@ -1405,11 +1459,14 @@ theorem Step.jump_inv {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack} {σ : Mem}
   | create h1 h2 hmem => simp at hj
   | sseq_pure => rw [jumpRedex?_sseq, jumpRedex?_ofVal] at hj; cases hj
   | sseq_annot => rw [jumpRedex?_sseq, jumpRedex?_ofVal] at hj; cases hj
+  | wseq_pure => rw [jumpRedex?_wseq, jumpRedex?_ofVal] at hj; cases hj
+  | wseq_annot => rw [jumpRedex?_wseq, jumpRedex?_ofVal] at hj; cases hj
   | sseq_spec_pure => rw [jumpRedex?_sseq, jumpRedex?_ofVal] at hj; cases hj
   | sseq_spec_annot => rw [jumpRedex?_sseq, jumpRedex?_ofVal] at hj; cases hj
   | pure_eval hnv hv => simp at hj
   | load_eval hnv2 hv2 => simp at hj
   | sseq_ctx hnj hs => rw [jumpRedex?_sseq, hnj] at hj; cases hj
+  | wseq_ctx hnj hs => rw [jumpRedex?_wseq, hnj] at hj; cases hj
   | annot_ctx hnj hg hs => rw [jumpRedex?_annot_of_not_root _ _ hg, hnj] at hj; cases hj
   | annot_merge =>
     rw [jumpRedex?_annot_of_root _ _ (by rfl)] at hj; cases hj
@@ -1482,6 +1539,35 @@ theorem Step.sseq_inv {M : MachineCtx} {a : List annot} {pat : pattern}
   | sseq_sym_pure =>
     exact .inr (.inr (.inr (.inr (.inr (.inr
       ⟨_, _, _, _, _, _, rfl, rfl, rfl, rfl⟩)))))
+
+/-- Inversion at an Ewseq node (S1b DRIFT TEST — the wildcard-only
+    `sseq_inv` shape): a frame step of a non-jump-redex e1, one of
+    the two wildcard betas, or THE GLOBAL JUMP (frame discarded).
+    Only the wildcard pattern has beta rules (the mirrored Ewseq
+    fragment — spec/sym binder patterns remain outside, README
+    registered divergences). -/
+theorem Step.wseq_inv {M : MachineCtx} {a : List annot} {pat : pattern}
+    {e1 e2 : CoreExpr}
+    {ρ : EnvStack} {σ : Mem} {out : CoreExpr × EnvStack × Mem}
+    (h : Step M (Expr a (Ewseq pat e1 e2), ρ, σ) out) :
+    (∃ e1' ρ' σ', jumpRedex? e1 = none ∧ Step M (e1, ρ, σ) (e1', ρ', σ') ∧
+        out = (Expr a (Ewseq pat e1' e2), ρ', σ')) ∨
+    (∃ pa bty v ev0 evs, pat = Pattern pa (CaseBase (none, bty)) ∧
+        e1 = ofVal (.pure v) ∧ ρ = ev0 :: evs ∧ out = (e2, ρ, σ)) ∨
+    (∃ pa bty ds v ev0 evs, pat = Pattern pa (CaseBase (none, bty)) ∧
+        e1 = ofVal (.annot ds v) ∧ ρ = ev0 :: evs ∧
+        out = (Expr [] (Eannot ds e2), ρ, σ)) ∨
+    (∃ l pes params cont vs ev0 evs, jumpRedex? e1 = some (l, pes) ∧
+        ρ = ev0 :: evs ∧ lookupLabel M.labels l = some (params, cont) ∧
+        evalPexprs M.extern ρ pes = some vs ∧
+        out = (cont, bindArgs params vs ρ, σ)) := by
+  cases h with
+  | wseq_ctx hnj hs => exact .inl ⟨_, _, _, hnj, hs, rfl⟩
+  | wseq_pure => exact .inr (.inl ⟨_, _, _, _, _, rfl, rfl, rfl, rfl⟩)
+  | wseq_annot => exact .inr (.inr (.inl ⟨_, _, _, _, _, _, rfl, rfl, rfl, rfl⟩))
+  | run hj hl hvs =>
+    rw [jumpRedex?_wseq] at hj
+    exact .inr (.inr (.inr ⟨_, _, _, _, _, _, _, hj, rfl, hl, hvs, rfl⟩))
 
 /-- Inversion at an Eannot node (S3 form): Cannot-descent of a
     non-jump-redex body, the ANNOTS merge, or the global jump

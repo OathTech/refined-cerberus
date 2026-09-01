@@ -94,6 +94,9 @@ abbrev LabelSpec (GF : BundledGFunctors) : Type :=
 @[simp] theorem toVal_sseq_node (a : List annot) (pat : pattern)
     (e1 e2 : CoreExpr) : toVal (Expr a (Esseq pat e1 e2)) = none := rfl
 
+@[simp] theorem toVal_wseq_node (a : List annot) (pat : pattern)
+    (e1 e2 : CoreExpr) : toVal (Expr a (Ewseq pat e1 e2)) = none := rfl
+
 @[simp] theorem toVal_action_node (a : List annot)
     (p : generic_paction core_run_annotation Unit sym) :
     toVal (Expr a (Eaction p)) = none := rfl
@@ -710,6 +713,136 @@ theorem wps_seq {Ψ : SpikeVal → EnvStack → IProp GF}
       · exact (specPat_ne_base hpat).elim
       · exact (specPat_ne_base hpat).elim
       · exact (symPat_ne_base hpat).elim
+
+/-- THE WEAK-SEQUENCING RULE at the wildcard pattern (S1b DRIFT TEST
+    — the `wps_seq` clone over the Ewseq lane; same jump-aware
+    four-way proof: value-beta / annot-beta / frame step / jump
+    transfer). -/
+theorem wps_wseq {Ψ : SpikeVal → EnvStack → IProp GF}
+    (a pa : List annot) (bty : core_base_type) (e1 e2 : CoreExpr)
+    (ev0 : Fmap sym value) (evs : List (Fmap sym value)) :
+    wps M Ls (fun w ρ' => wps M Ls
+        (fun u ρ'' => Ψ (SpikeVal.mergeInto w u) ρ'') e2 ρ') e1 (ev0 :: evs) ⊢
+      wps M Ls Ψ (Expr a (Ewseq (Pattern pa (CaseBase (none, bty))) e1 e2))
+        (ev0 :: evs) := by
+  iloeb as IH generalizing %e1 %ev0 %evs
+  cases htv : toVal e1 with
+  | some w =>
+    have he := ofVal_of_toVal htv
+    subst he
+    rw [wps_unfold.to_eq,
+      (wps_unfold (e := Expr a (Ewseq (Pattern pa (CaseBase (none, bty)))
+        (ofVal w) e2))).to_eq]
+    simp only [wps.pre, toVal_ofVal, toVal_wseq_node, jumpRedex?_wseq,
+      jumpRedex?_ofVal]
+    iintro H %σ₁ %ns %obs %obs' %nt Hσ
+    imod H with H
+    iapply fupd_mask_intro Std.LawfulSet.empty_subset
+    iintro Hclose
+    isplitr
+    · ipureintro
+      cases w with
+      | pure v => exact ⟨[], ⟨_, _, _⟩, _, [], ⟨Step.wseq_pure, rfl, rfl⟩⟩
+      | annot ds v => exact ⟨[], ⟨_, _, _⟩, _, [], ⟨Step.wseq_annot, rfl, rfl⟩⟩
+    inext
+    iintro %r %σ₂ %eₜ %Hstep Hcred
+    obtain ⟨hs, hlbl, rfl⟩ := Hstep
+    rcases hs.wseq_inv with ⟨e1', ρ'', σ'', hnj, hs', hout⟩ |
+        ⟨_, _, v, _, _, _, he1, _, hout⟩ | ⟨_, _, ds, v, _, _, _, he1, _, hout⟩ |
+        ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩
+    · exact absurd hs' (fun h => Step.val_elim h)
+    · -- LETW-PURE: successor (e2, ρ, σ)
+      obtain rfl : w = .pure v := by
+        cases w with
+        | pure v' => simpa [ofVal] using he1
+        | annot ds' v' => exact absurd he1 (by simp [ofVal])
+      obtain ⟨re, rρ, rM⟩ := r
+      simp only at hlbl
+      obtain rfl : M = rM := hlbl.symm
+      obtain ⟨hre, hrρ, hσ⟩ : re = e2 ∧ rρ = ev0 :: evs ∧ σ₂ = σ₁ := by
+        simpa [Prod.mk.injEq] using hout
+      subst hrρ
+      obtain rfl : e2 = re := hre.symm
+      obtain rfl : σ₁ = σ₂ := hσ.symm
+      imod Hclose with -
+      imodintro
+      isplitl [Hσ]
+      · iexact Hσ
+      · rw [show (fun u ρ'' => Ψ (SpikeVal.mergeInto (SpikeVal.pure v) u) ρ'')
+          = Ψ from rfl]
+        iexact H
+    · -- LETW-ANNOT: successor ({ds}e2, ρ, σ); exit through wps_annot
+      obtain rfl : w = .annot ds v := by
+        cases w with
+        | pure v' => exact absurd he1 (by simp [ofVal])
+        | annot ds' v' =>
+          obtain ⟨h1, h2⟩ : ds' = ds ∧ v' = v := by simpa [ofVal] using he1
+          rw [h1, h2]
+      obtain ⟨re, rρ, rM⟩ := r
+      simp only at hlbl
+      obtain rfl : M = rM := hlbl.symm
+      obtain ⟨hre, hrρ, hσ⟩ : re = Expr [] (Eannot ds e2) ∧
+          rρ = ev0 :: evs ∧ σ₂ = σ₁ := by
+        simpa [Prod.mk.injEq] using hout
+      subst hre hrρ
+      obtain rfl : σ₁ = σ₂ := hσ.symm
+      imod Hclose with -
+      imodintro
+      isplitl [Hσ]
+      · iexact Hσ
+      · rw [show (fun u ρ'' => Ψ (SpikeVal.mergeInto (SpikeVal.annot ds v) u) ρ'')
+          = fun u ρ'' => Ψ (SpikeVal.merge ds u) ρ'' from rfl]
+        iapply wps_annot ds e2 (ev0 :: evs) $$ H
+    · rw [jumpRedex?_ofVal] at hj; cases hj
+  | none =>
+    cases hjr : jumpRedex? e1 with
+    | some lp =>
+      -- the jump clauses are the same formula through the Cwseq
+      -- frame (`jumpRedex? (Ewseq …) = jumpRedex? e1`)
+      rw [wps_unfold.to_eq,
+        (wps_unfold (e := Expr a (Ewseq (Pattern pa (CaseBase (none, bty)))
+          e1 e2))).to_eq]
+      simp only [wps.pre, htv, toVal_wseq_node, jumpRedex?_wseq, hjr]
+      iintro H
+      iexact H
+    | none =>
+      -- e1 steps: inversion factor + congruence lift + Löb
+      rw [wps_unfold.to_eq,
+        (wps_unfold (e := Expr a (Ewseq (Pattern pa (CaseBase (none, bty)))
+          e1 e2))).to_eq]
+      simp only [wps.pre, htv, toVal_wseq_node, jumpRedex?_wseq, hjr]
+      iintro H %σ₁ %ns %obs %obs' %nt Hσ
+      imod H $$ %σ₁ %ns %obs %obs' %nt Hσ with ⟨%hred, H⟩
+      imodintro
+      isplit
+      · ipureintro
+        obtain ⟨obs0, r', σ', eₜ', hps⟩ := hred
+        obtain ⟨hs', hlbl', hnil'⟩ := hps
+        exact ⟨obs0, ⟨Expr a (Ewseq (Pattern pa (CaseBase (none, bty)))
+            r'.e e2), r'.ρ, M⟩, σ', [],
+          ⟨Step.wseq_ctx hjr hs', rfl, rfl⟩⟩
+      inext
+      iintro %r %σ₂ %eₜ %Hstep Hcred
+      obtain ⟨hs, hlbl, rfl⟩ := Hstep
+      rcases hs.wseq_inv with ⟨e1', ρ'', σ'', hnj, hs', hout⟩ |
+          ⟨_, _, v, _, _, _, he1, _, _⟩ | ⟨_, _, ds, v, _, _, _, he1, _, _⟩ |
+          ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩
+      · obtain ⟨ev0', rfl⟩ := Step.env_cons hs'
+        obtain ⟨re, rρ, rM⟩ := r
+        simp only at hlbl
+        obtain rfl : M = rM := hlbl.symm
+        obtain ⟨hre, hrρ, hσ⟩ : re = Expr a (Ewseq (Pattern pa
+            (CaseBase (none, bty))) e1' e2) ∧ rρ = ev0' :: evs ∧
+            σ₂ = σ'' := by
+          simpa [Prod.mk.injEq] using hout
+        subst hre hrρ hσ
+        imod H $$ %(⟨e1', ev0' :: evs, M⟩ : CoreRt) %σ₂ %([] : List CoreRt)
+          %⟨hs', rfl, rfl⟩ Hcred with ⟨$, H⟩
+        imodintro
+        iapply IH $$ %e1' %ev0' %evs H
+      · rw [he1, toVal_ofVal] at htv; cases htv
+      · rw [he1, toVal_ofVal] at htv; cases htv
+      · rw [hjr] at hj; cases hj
 
 /-! ## The branch/entry rules (S3 — the engine's measured
 granularity: Eif's big-step guard via the pure-evaluator premise,

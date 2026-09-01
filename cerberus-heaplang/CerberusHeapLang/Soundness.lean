@@ -266,9 +266,14 @@ theorem engineOutcomes_eq (aid : Nat) (e : CoreExpr) (ρ : EnvStack) (σ : Mem) 
     before; only Ecase-containing terms (none in the pre-S1b corpus)
     change value. -/
 mutual
-/-- The size measure (see the section comment above). -/
+/-- The size measure (see the section comment above; the `Ewseq` arm
+    is the S1b DRIFT-TEST extension — same conservativity discipline
+    as the Ecase arm: every pre-existing constructor's equation still
+    holds by `rfl`, only Ewseq-containing terms, none in the prior
+    corpus, change value). -/
 def esize : CoreExpr → Nat
   | Expr _ (Esseq _ e1 e2) => 1 + max (esize e1) (esize e2)
+  | Expr _ (Ewseq _ e1 e2) => 1 + max (esize e1) (esize e2)
   | Expr _ (Eannot _ b) => 1 + esize b
   | Expr _ (Eif _ e2 e3) => 1 + max (esize e2) (esize e3)
   | Expr _ (Esave _ _ body) => 1 + esize body
@@ -324,6 +329,10 @@ theorem is_irreducible_ofVal (w : SpikeVal) : is_irreducible (ofVal w) = true :=
     {e1 e2 : CoreExpr} :
     is_irreducible (Expr a (Esseq pat e1 e2)) = false := rfl
 
+@[simp] theorem is_irreducible_wseq {a : List annot} {pat : pattern}
+    {e1 e2 : CoreExpr} :
+    is_irreducible (Expr a (Ewseq pat e1 e2)) = false := rfl
+
 @[simp] theorem is_irreducible_action {a : List annot}
     {p : generic_paction core_run_annotation Unit sym} :
     is_irreducible (Expr a (Eaction p)) = false := rfl
@@ -349,6 +358,9 @@ is `Frag`). -/
 
 @[simp] theorem esize_sseq {a : List annot} {pat : pattern} {e1 e2 : CoreExpr} :
     esize (Expr a (Esseq pat e1 e2)) = 1 + max (esize e1) (esize e2) := rfl
+
+@[simp] theorem esize_wseq {a : List annot} {pat : pattern} {e1 e2 : CoreExpr} :
+    esize (Expr a (Ewseq pat e1 e2)) = 1 + max (esize e1) (esize e2) := rfl
 
 @[simp] theorem esize_annot {a : List annot} {ds : List dyn_annotation}
     {b : CoreExpr} : esize (Expr a (Eannot ds b)) = 1 + esize b := rfl
@@ -383,6 +395,22 @@ theorem get_ctx_sseq_val {a : List annot} {pat : pattern} {w : SpikeVal}
     {e2 : CoreExpr} (n : Nat) :
     get_ctx_lemFuel (n+1) (Expr a (Esseq pat (ofVal w) e2)) =
       [(CTX, Expr a (Esseq pat (ofVal w) e2))] := by
+  cases w <;> rfl
+
+theorem get_ctx_wseq {a : List annot} {pat : pattern} {e1 e2 : CoreExpr}
+    (h : is_irreducible e1 = false) (n : Nat) :
+    get_ctx_lemFuel (n+1) (Expr a (Ewseq pat e1 e2)) =
+      List.map (fun p => (Cwseq a pat p.1 e2, p.2)) (get_ctx_lemFuel n e1) := by
+  rw [show get_ctx_lemFuel (n+1) (Expr a (Ewseq pat e1 e2)) =
+      (if is_irreducible e1 = true then [(CTX, Expr a (Ewseq pat e1 e2))]
+       else List.map (fun p => (Cwseq a pat p.1 e2, p.2)) (get_ctx_lemFuel n e1))
+    from rfl, h]
+  rfl
+
+theorem get_ctx_wseq_val {a : List annot} {pat : pattern} {w : SpikeVal}
+    {e2 : CoreExpr} (n : Nat) :
+    get_ctx_lemFuel (n+1) (Expr a (Ewseq pat (ofVal w) e2)) =
+      [(CTX, Expr a (Ewseq pat (ofVal w) e2))] := by
   cases w <;> rfl
 
 theorem get_ctx_action {a : List annot}
@@ -526,6 +554,16 @@ inductive Redex : CoreExpr → Prop where
   | beta_sym {pa : List annot} {x : sym} {bty : core_base_type}
       {w : SpikeVal} {e2 : CoreExpr} :
       Redex (Expr [] (Esseq (symPat pa x bty) (ofVal w) e2))
+  /-- S1b DRIFT TEST: the two Ewseq wildcard betas (LETW-PURE /
+      LETW-ANNOT root shapes). -/
+  | wbeta_pure {pa : List annot} {bty : core_base_type} {v : value}
+      {e2 : CoreExpr} :
+      Redex (Expr [] (Ewseq (Pattern pa (CaseBase (none, bty)))
+        (ofVal (.pure v)) e2))
+  | wbeta_annot {pa : List annot} {bty : core_base_type}
+      {ds : List dyn_annotation} {v : value} {e2 : CoreExpr} :
+      Redex (Expr [] (Ewseq (Pattern pa (CaseBase (none, bty)))
+        (ofVal (.annot ds v)) e2))
 
 /-- The extended decomposition: the same three layers as `Decomp`
     (get_ctx's arm order), over the extended root set. -/
@@ -554,6 +592,14 @@ inductive Decomp : CoreExpr → context → CoreExpr → Prop where
         get_ctx_lemFuel (n+1) (Expr [] (Eannot ds b)) =
           List.map (fun p => (Cannot [] ds p.1, p.2)) (get_ctx_lemFuel n b)) :
       Decomp b ctx r → Decomp (Expr [] (Eannot ds b)) (Cannot [] ds ctx) r
+  /-- S1b DRIFT TEST: descent through the weak-sequencing frame
+      (get_ctx's Ewseq arm / Cwseq, Core_reduction.lean:375;
+      wildcard pattern only — the mirrored Ewseq fragment). -/
+  | wseq {pa : List annot} {bty : core_base_type} {e1 e2 : CoreExpr}
+      {ctx : context} {r : CoreExpr} :
+      Decomp e1 ctx r →
+      Decomp (Expr [] (Ewseq (Pattern pa (CaseBase (none, bty))) e1 e2))
+             (Cwseq [] (Pattern pa (CaseBase (none, bty))) ctx e2) r
 
 theorem Redex.not_irreducible {r : CoreExpr} (h : Redex r) :
     is_irreducible r = false := by
@@ -580,6 +626,8 @@ theorem Redex.not_irreducible {r : CoreExpr} (h : Redex r) :
   | memop mop pes => rfl
   | store_op loc ann ty mo hnv2 => rfl
   | beta_sym => rfl
+  | wbeta_pure => rfl
+  | wbeta_annot => rfl
 
 theorem Decomp.not_irreducible {e : CoreExpr} {ctx : context} {r : CoreExpr}
     (h : Decomp e ctx r) : is_irreducible e = false := by
@@ -589,6 +637,7 @@ theorem Decomp.not_irreducible {e : CoreExpr} {ctx : context} {r : CoreExpr}
   | sseq_spec _ _ => rfl
   | sseq_sym _ _ => rfl
   | annot _ hirr _ _ _ => exact hirr
+  | wseq _ _ => rfl
 
 theorem Decomp.unseq_ccall_false {e : CoreExpr} {ctx : context} {r : CoreExpr}
     (h : Decomp e ctx r) : is_unseq_with_ccall ctx = false := by
@@ -601,6 +650,7 @@ theorem Decomp.unseq_ccall_false {e : CoreExpr} {ctx : context} {r : CoreExpr}
     | sseq_spec _ ih => intro b; simpa [is_unseq_with_ccall_aux] using ih b
     | sseq_sym _ ih => intro b; simpa [is_unseq_with_ccall_aux] using ih b
     | annot _ _ _ _ ih => intro b; simpa [is_unseq_with_ccall_aux] using ih b
+    | wseq _ ih => intro b; simpa [is_unseq_with_ccall_aux] using ih b
   unfold is_unseq_with_ccall
   exact aux h false
 
@@ -612,6 +662,7 @@ theorem Decomp.apply_eq {e : CoreExpr} {ctx : context} {r : CoreExpr}
   | sseq_spec _ ih => simpa [apply_ctx] using ih
   | sseq_sym _ ih => simpa [apply_ctx] using ih
   | annot _ _ _ _ ih => simpa [apply_ctx] using ih
+  | wseq _ ih => simpa [apply_ctx] using ih
 
 /-- get_ctx roots at the new redexes (Core_reduction.lean:375 — Eif/
     Ecase/Esave/Erun all return `[(CTX, expr1)]`). -/
@@ -670,6 +721,8 @@ theorem Decomp.get_ctx_at {e : CoreExpr} {ctx : context} {r : CoreExpr}
     | memop mop pes => exact get_ctx_memop m
     | store_op loc ann ty mo hnv2 => exact get_ctx_action m
     | beta_sym => exact get_ctx_sseq_val m
+    | wbeta_pure => exact get_ctx_wseq_val m
+    | wbeta_annot => exact get_ctx_wseq_val m
   | sseq hd ih =>
     intro n hn
     rw [esize_sseq] at hn
@@ -694,6 +747,12 @@ theorem Decomp.get_ctx_at {e : CoreExpr} {ctx : context} {r : CoreExpr}
     obtain ⟨m, rfl⟩ : ∃ m, n = m + 1 := ⟨n - 1, by omega⟩
     rw [hmap m, ih m (by omega)]
     rfl
+  | wseq hd ih =>
+    intro n hn
+    rw [esize_wseq] at hn
+    obtain ⟨m, rfl⟩ : ∃ m, n = m + 1 := ⟨n - 1, by omega⟩
+    rw [get_ctx_wseq hd.not_irreducible m, ih m (by omega)]
+    rfl
 
 theorem Decomp.get_ctx_default {e : CoreExpr} {ctx : context} {r : CoreExpr}
     (h : Decomp e ctx r) (hsz : esize e ≤ lemDefaultFuel) :
@@ -711,6 +770,7 @@ theorem Decomp.jumpRedex?_eq {e : CoreExpr} {ctx : context} {r : CoreExpr}
   | sseq_sym _ ih => rw [jumpRedex?_sseq]; exact ih
   | annot hroot _ _ _ ih =>
     rw [jumpRedex?_annot_of_not_root _ _ hroot]; exact ih
+  | wseq _ ih => rw [jumpRedex?_wseq]; exact ih
 
 theorem Decomp.redex {e : CoreExpr} {ctx : context} {r : CoreExpr}
     (h : Decomp e ctx r) : Redex r := by
@@ -720,6 +780,7 @@ theorem Decomp.redex {e : CoreExpr} {ctx : context} {r : CoreExpr}
   | sseq_spec _ ih => exact ih
   | sseq_sym _ ih => exact ih
   | annot _ _ _ _ ih => exact ih
+  | wseq _ ih => exact ih
 
 /-- A redex with a positive jump-redex answer IS the run redex. -/
 theorem Redex.jumpRedex?_some_inv {r : CoreExpr} {l : sym}
@@ -742,6 +803,8 @@ theorem Redex.jumpRedex?_some_inv {r : CoreExpr} {l : sym}
   | memop mop pes => cases hj
   | store_op loc ann ty mo hnv2 => cases hj
   | beta_sym => rw [jumpRedex?_sseq, jumpRedex?_ofVal] at hj; cases hj
+  | wbeta_pure => rw [jumpRedex?_wseq, jumpRedex?_ofVal] at hj; cases hj
+  | wbeta_annot => rw [jumpRedex?_wseq, jumpRedex?_ofVal] at hj; cases hj
   | run ra l' pes' =>
     obtain ⟨rfl, rfl⟩ : l' = l ∧ pes' = pes := by
       have := Option.some.inj hj
@@ -872,6 +935,30 @@ theorem Decomp.step_factor {M : MachineCtx} {e : CoreExpr} {ctx : context}
       exact absurd hd.not_irreducible (by simp [is_irreducible_ofVal])
     · rw [he1] at hd
       exact absurd hd.not_irreducible (by simp [is_irreducible_ofVal])
+  | @wseq pa bty e1 e2 ctx' r' hd ih =>
+    rcases hs.wseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
+        ⟨_, _, v, _, _, _, he1, _, _⟩ | ⟨_, _, ds, v, _, _, _, he1, _, _⟩ |
+        ⟨l, pes, params, cont, vs, ev0, evs, hj, hρ, hl, hvs, hout⟩
+    · rcases ih hstep with ⟨r2, ρr, σr, hnr2, hr2, heq⟩ | ⟨ra, l, pes, rfl, hr2⟩
+      · obtain ⟨he, hρ2, hσ2⟩ : e1' = apply_ctx _ r2 ∧ ρ'' = ρr ∧
+            σ'' = σr := by
+          simpa [Prod.mk.injEq] using heq
+        subst he hρ2 hσ2
+        exact .inl ⟨r2, _, _, hnr2, hr2, by rw [hout]; rfl⟩
+      · rw [hd.jumpRedex?_eq] at hnj
+        rw [show jumpRedex? (runRedex ra l pes) = some (l, pes) from rfl]
+          at hnj
+        cases hnj
+    · rw [he1] at hd
+      exact absurd hd.not_irreducible (by simp [is_irreducible_ofVal])
+    · rw [he1] at hd
+      exact absurd hd.not_irreducible (by simp [is_irreducible_ofVal])
+    · have hje : jumpRedex? r' = some (l, pes) := by
+        rw [← hd.jumpRedex?_eq]; exact hj
+      obtain ⟨ra, rfl⟩ := hd.redex.jumpRedex?_some_inv hje
+      subst hρ
+      rw [hout]
+      exact .inr ⟨ra, l, pes, rfl, Step.run (by rfl) hl hvs⟩
   | @annot ds b ctx' r' hroot hirr hmap hd ih =>
     rcases hs.annot_inv with ⟨_, hnj, b', ρ'', σ'', hstep, hout⟩ |
         ⟨a2, ds2, c, hb, _⟩ |
@@ -914,6 +1001,7 @@ theorem Decomp.rebuild {M : MachineCtx} {e : CoreExpr} {ctx : context}
     exact Step.sseq_ctx (hd.jumpRedex?_eq.trans hnj) (ih hnj hs)
   | annot hroot _ _ hd ih =>
     exact Step.annot_ctx (hd.jumpRedex?_eq.trans hnj) hroot (ih hnj hs)
+  | wseq hd ih => exact Step.wseq_ctx (hd.jumpRedex?_eq.trans hnj) (ih hnj hs)
 
 /-- The factor theorem at a NON-run root (the old phase-1 shape,
     recovered: the jump disjunct refutes). -/
@@ -1171,6 +1259,81 @@ theorem step_ctx_beta_annot {e : CoreExpr} {ctx : context}
   simp only [List.map_cons, List.map_nil]
   cases ctx <;>
     (simp only [one_step0, ofVal, is_irreducible_sseq, Bool.false_eq_true,
+       if_false, valueFromPexpr]
+     simp only [get_loc]
+     dsimp only [update_env]
+     rw [henv]
+     dsimp only
+     try rw [show ∀ cval, update_env_aux (a := sym)
+         (Pattern pa (CaseBase (none, bty))) cval ev0 = ev0 from fun _ => rfl]
+     try rw [← henv]
+     try rfl)
+
+/-- LETW-PURE, context undisturbed (S1b DRIFT TEST — the
+    `step_ctx_beta_pure` clone at the Ewseq wildcard redex; one_step0
+    Ewseq bare-value arm, Core_reduction.lean:353 "reduction:
+    LETW-PURE", tau label "Ewseq"). Same env discipline. -/
+theorem step_ctx_wseq_pure {e : CoreExpr} {ctx : context}
+    {pa : List _root_.annot} {bty : core_base_type} {v : value} {e2 : CoreExpr}
+    (hd : Decomp e ctx
+      (Expr [] (Ewseq (Pattern pa (CaseBase (none, bty))) (ofVal (.pure v)) e2)))
+    (hsz : esize e ≤ lemDefaultFuel)
+    (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
+    (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
+    (tid : Nat) (parent : Option Nat) (th : thread_state)
+    (harena : th.arena = e)
+    {ev0 : Fmap sym value} {evs : List (Fmap sym value)}
+    (henv : th.env = ev0 :: evs) :
+    step_ctx tds σ file ext tid (parent, th) =
+      [Step_tau2 "Ewseq" TSK_Misc { th with arena := apply_ctx ctx e2 }] := by
+  have hget : get_ctx th.arena =
+      [(ctx, Expr [] (Ewseq (Pattern pa (CaseBase (none, bty)))
+        (ofVal (.pure v)) e2))] := by
+    rw [harena]; exact hd.get_ctx_default hsz
+  unfold step_ctx
+  dsimp only
+  rw [hget]
+  simp only [List.map_cons, List.map_nil]
+  cases ctx <;>
+    (simp only [one_step0, ofVal, is_irreducible_wseq, Bool.false_eq_true,
+       if_false, valueFromPexpr]
+     simp only [get_loc]
+     dsimp only [update_env]
+     rw [henv]
+     dsimp only
+     try rw [show ∀ cval, update_env_aux (a := sym)
+         (Pattern pa (CaseBase (none, bty))) cval ev0 = ev0 from fun _ => rfl]
+     try rw [← henv]
+     try rfl)
+
+/-- LETW-ANNOT, context undisturbed (S1b DRIFT TEST; tau label
+    "Ewseq Eannot"). -/
+theorem step_ctx_wseq_annot {e : CoreExpr} {ctx : context}
+    {pa : List _root_.annot} {bty : core_base_type}
+    {ds : List dyn_annotation} {v : value} {e2 : CoreExpr}
+    (hd : Decomp e ctx
+      (Expr [] (Ewseq (Pattern pa (CaseBase (none, bty)))
+        (ofVal (.annot ds v)) e2)))
+    (hsz : esize e ≤ lemDefaultFuel)
+    (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
+    (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
+    (tid : Nat) (parent : Option Nat) (th : thread_state)
+    (harena : th.arena = e)
+    {ev0 : Fmap sym value} {evs : List (Fmap sym value)}
+    (henv : th.env = ev0 :: evs) :
+    step_ctx tds σ file ext tid (parent, th) =
+      [Step_tau2 "Ewseq Eannot" TSK_Misc
+        { th with arena := apply_ctx ctx (Expr [] (Eannot ds e2)) }] := by
+  have hget : get_ctx th.arena =
+      [(ctx, Expr [] (Ewseq (Pattern pa (CaseBase (none, bty)))
+        (ofVal (.annot ds v)) e2))] := by
+    rw [harena]; exact hd.get_ctx_default hsz
+  unfold step_ctx
+  dsimp only
+  rw [hget]
+  simp only [List.map_cons, List.map_nil]
+  cases ctx <;>
+    (simp only [one_step0, ofVal, is_irreducible_wseq, Bool.false_eq_true,
        if_false, valueFromPexpr]
      simp only [get_loc]
      dsimp only [update_env]
@@ -3481,6 +3644,11 @@ inductive Frag : CoreExpr → Prop where
       (hbsz : ∀ e', select_case subst_sym_expr cval pats = some e' →
         esize e' ≤ esize (caseRedex (Pexpr b () (PEval cval)) pats)) :
       Frag (caseRedex (Pexpr b () (PEval cval)) pats)
+  /-- S1b DRIFT TEST: weak sequencing at the wildcard pattern joins
+      the cone through the generic route (the `sseq` clone). -/
+  | wseq {pa : List annot} {bty : core_base_type} {e1 e2 : CoreExpr} :
+      Frag e1 → Frag e2 →
+      Frag (Expr [] (Ewseq (Pattern pa (CaseBase (none, bty))) e1 e2))
 
 theorem frag_ofVal (w : SpikeVal) : Frag (ofVal w) := by
   cases w with
@@ -3550,6 +3718,19 @@ theorem Frag.decomp {e : CoreExpr} (hf : Frag e) (hnv : toVal e = none) :
     | none =>
       obtain ⟨ctx, r, hd, hfr⟩ := ih1 hv1
       exact ⟨_, _, Decomp.sseq hd, hfr⟩
+  | @wseq pa bty e1 e2 hf1 hf2 ih1 ih2 =>
+    cases hv1 : toVal e1 with
+    | some w =>
+      have he1 := ofVal_of_toVal hv1
+      subst he1
+      cases w with
+      | pure v => exact ⟨_, _, Decomp.root (.wbeta_pure),
+          .wseq (frag_ofVal (.pure v)) hf2⟩
+      | annot ds v => exact ⟨_, _, Decomp.root (.wbeta_annot),
+          .wseq (frag_ofVal (.annot ds v)) hf2⟩
+    | none =>
+      obtain ⟨ctx, r, hd, hfr⟩ := ih1 hv1
+      exact ⟨_, _, Decomp.wseq hd, hfr⟩
   | @annot ds b hfb ihb =>
     by_cases hr : annotRooted b = true
     · cases hfb with
@@ -3558,6 +3739,7 @@ theorem Frag.decomp {e : CoreExpr} (hf : Frag e) (hnv : toVal e = none) :
       | load hlib => simp [annotRooted, loadRedex] at hr
       | create hlib => simp [annotRooted, createRedex] at hr
       | sseq hf1 hf2 => simp [annotRooted] at hr
+      | wseq hf1 hf2 => simp [annotRooted] at hr
       | sseq_spec hf1 hf2 => simp [annotRooted] at hr
       | save hb => simp [annotRooted, saveRedex] at hr
       | if_ hdg hf2 hf3 => simp [annotRooted, ifRedex] at hr
@@ -3579,6 +3761,7 @@ theorem Frag.decomp {e : CoreExpr} (hf : Frag e) (hnv : toVal e = none) :
         | load hlib => exact ⟨_, _, Decomp.root (.merge rfl), hwit⟩
         | create hlib => exact ⟨_, _, Decomp.root (.merge rfl), hwit⟩
         | sseq hf1 hf2 => exact ⟨_, _, Decomp.root (.merge rfl), hwit⟩
+        | wseq hf1 hf2 => exact ⟨_, _, Decomp.root (.merge rfl), hwit⟩
         | sseq_spec hf1 hf2 =>
           exact ⟨_, _, Decomp.root (.merge rfl), hwit⟩
         | annot hfc' => exact ⟨_, _, Decomp.root (.merge rfl), hwit⟩
@@ -3621,6 +3804,8 @@ theorem Frag.decomp {e : CoreExpr} (hf : Frag e) (hnv : toVal e = none) :
         | load hlib => exact ⟨_, _, Decomp.annot hr' rfl (fun n => rfl) hd, hfr⟩
         | create hlib => exact ⟨_, _, Decomp.annot hr' rfl (fun n => rfl) hd, hfr⟩
         | sseq hf1 hf2 => exact ⟨_, _, Decomp.annot hr' rfl (fun n => rfl) hd, hfr⟩
+        | wseq hf1 hf2 =>
+          exact ⟨_, _, Decomp.annot hr' rfl (fun n => rfl) hd, hfr⟩
         | sseq_spec hf1 hf2 =>
           exact ⟨_, _, Decomp.annot hr' rfl (fun n => rfl) hd, hfr⟩
         | save hb => exact ⟨_, _, Decomp.annot hr' rfl (fun n => rfl) hd, hfr⟩
@@ -3782,6 +3967,26 @@ theorem Frag.step {M : MachineCtx}
     · exact (specPat_ne_base hpat).elim
     · exact (specPat_ne_base hpat).elim
     · exact (symPat_ne_base hpat).elim
+  | wseq hf1 hf2 ih1 ih2 =>
+    rcases hs.wseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
+        ⟨_, _, v, _, _, _, _, _, hout⟩ | ⟨_, _, ds', v, _, _, _, _, _, hout⟩ |
+        ⟨l, pes, params, cont, vs, _, _, hj, _, hl, _, hout⟩
+    · obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ'' ∧ σ' = σ'' := by
+        simpa [Prod.mk.injEq] using hout
+      subst h1
+      exact .wseq (ih1 hstep) hf2
+    · obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ := by
+        simpa [Prod.mk.injEq] using hout
+      subst h1
+      exact hf2
+    · obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ := by
+        simpa [Prod.mk.injEq] using hout
+      subst h1
+      exact .annot hf2
+    · obtain ⟨h1, -, -⟩ : e' = cont ∧ ρ' = _ ∧ σ' = σ := by
+        simpa [Prod.mk.injEq] using hout
+      rw [h1]
+      exact hQf l params cont hl
   | annot hfb ihb =>
     rcases hs.annot_inv with ⟨hg, hnj, b', ρ'', σ'', hstep, hout⟩ |
         ⟨a2, ds2, c, hb, hout⟩ |
@@ -3981,6 +4186,34 @@ theorem Frag.esize_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
       left
       simp only [esize_sseq]
       omega
+  | wseq hf1 hf2 ih1 ih2 =>
+    rcases hs.wseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
+        ⟨_, _, v, _, _, _, _, _, hout⟩ | ⟨_, _, ds', v, _, _, _, _, _, hout⟩ |
+        ⟨l, pes, params, cont, vs, _, _, hj, _, hl, _, hout⟩
+    · obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ'' ∧ σ' = σ'' := by
+        simpa [Prod.mk.injEq] using hout
+      subst h1
+      rcases ih1 hstep with hle | ⟨l, pes, params, cont, hj1, hl, rfl⟩
+      · left
+        simp only [esize_wseq] at *
+        omega
+      · rw [hnj] at hj1
+        cases hj1
+    · obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ := by
+        simpa [Prod.mk.injEq] using hout
+      subst h1
+      left
+      simp only [esize_wseq]
+      omega
+    · obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ := by
+        simpa [Prod.mk.injEq] using hout
+      subst h1
+      left
+      simp only [esize_wseq, esize_annot]
+      omega
+    · obtain ⟨h1, -, -⟩ : e' = cont ∧ ρ' = _ ∧ σ' = σ := by
+        simpa [Prod.mk.injEq] using hout
+      exact .inr ⟨l, pes, params, cont, by rw [jumpRedex?_wseq, hj], hl, h1⟩
   | annot hfb ihb =>
     rcases hs.annot_inv with ⟨hg, hnj, b', ρ'', σ'', hstep, hout⟩ |
         ⟨a2, ds2, c, hb, hout⟩ |
@@ -4262,6 +4495,43 @@ theorem engine_step_matchU {M : MachineCtx} (aid : Nat)
       · exact (specPat_ne_base hpat).elim
       · exact (specPat_ne_base hpat).elim
       · exact (symPat_ne_base hpat).elim
+    | @wbeta_pure pa bty v e2 =>
+      rcases hr.wseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
+          ⟨_, _, v', _, _, _, he1, _, hout⟩ |
+          ⟨_, _, ds', v', _, _, _, he1, _, hout⟩ |
+          ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩
+      · exact absurd hstep (fun h => Step.val_elim h)
+      · obtain rfl : v' = v := by
+          have : ofVal (.pure v') = ofVal (.pure v) := he1.symm
+          simpa [ofVal] using this
+        obtain ⟨h1, h2, h3⟩ : r' = e2 ∧ ρ' = ev0 :: evs ∧ σ' = σ := by
+          simpa [Prod.mk.injEq] using hout
+        subst h2
+        obtain rfl : σ = σ' := h3.symm
+        obtain rfl : e2 = r' := h1.symm
+        unfold outcomesU engineStepsU
+        rw [step_ctx_wseq_pure hdOld hsz M.tagDefs σ M.file M.extern M.tid M.parent _ rfl rfl]
+        rfl
+      · exact absurd he1 (by simp [ofVal])
+      · rw [jumpRedex?_ofVal] at hj; cases hj
+    | @wbeta_annot pa bty ds v e2 =>
+      rcases hr.wseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
+          ⟨_, _, v', _, _, _, he1, _, hout⟩ |
+          ⟨_, _, ds', v', _, _, _, he1, _, hout⟩ |
+          ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩
+      · exact absurd hstep (fun h => Step.val_elim h)
+      · exact absurd he1 (by simp [ofVal])
+      · obtain ⟨hds, hv⟩ : ds = ds' ∧ v = v' := by simpa [ofVal] using he1
+        subst hds hv
+        obtain ⟨h1, h2, h3⟩ : r' = Expr [] (Eannot ds e2) ∧
+            ρ' = ev0 :: evs ∧ σ' = σ := by
+          simpa [Prod.mk.injEq] using hout
+        subst h1 h2
+        obtain rfl : σ = σ' := h3.symm
+        unfold outcomesU engineStepsU
+        rw [step_ctx_wseq_annot hdOld hsz M.tagDefs σ M.file M.extern M.tid M.parent _ rfl rfl]
+        rfl
+      · rw [jumpRedex?_ofVal] at hj; cases hj
     | @merge ds1 ds2 b hirr =>
       rcases hr.annot_inv with ⟨hg, hnj, b', ρ'', σ'', hstep, hout⟩ |
           ⟨a2, ds2', c, hbeq, hout⟩ |

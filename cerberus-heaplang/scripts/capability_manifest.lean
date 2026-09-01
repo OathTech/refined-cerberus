@@ -176,6 +176,20 @@ def rows : List Row := [
     totalLane := noTotal,
     prodLane := prodRegOnly,
     consumer := .thms [`CerberusHeapLang.list_reverse_certified] },
+  { token := "wseq-wild", construct := "Ewseq, wildcard pattern (weak sequencing)",
+    mirror := .ctors [`CerberusHeapLang.Step.wseq_pure,
+      `CerberusHeapLang.Step.wseq_annot, `CerberusHeapLang.Step.wseq_ctx]
+      (note := "S1b DRIFT TEST — entered through the generic route; see Notes 6"),
+    logic := .thms [`CerberusHeapLang.wps_wseq],
+    cone := .ctors [`CerberusHeapLang.Frag.wseq],
+    engineMatch := .thms [`CerberusHeapLang.step_ctx_wseq_pure,
+      `CerberusHeapLang.step_ctx_wseq_annot],
+    partialLane := .thms [`CerberusHeapLang.engine_adequacyJ,
+      `CerberusHeapLang.engine_adequacyU],
+    totalLane := noTotal,
+    prodLane := .red "outside every lane",
+    consumer := .thms [`CerberusHeapLang.wseq_certified]
+      (note := "the drift-test WP-lane adequacy regression (WseqExhibit)") },
   { token := "annot", construct := "Eannot residue (descent + merge)",
     mirror := .ctors [`CerberusHeapLang.Step.annot_ctx,
       `CerberusHeapLang.Step.annot_merge],
@@ -307,7 +321,8 @@ def expectedStepCtors : List Name :=
    `CerberusHeapLang.Step.sseq_ctx, `CerberusHeapLang.Step.sseq_pure,
    `CerberusHeapLang.Step.sseq_spec_annot, `CerberusHeapLang.Step.sseq_spec_pure,
    `CerberusHeapLang.Step.sseq_sym_pure, `CerberusHeapLang.Step.store,
-   `CerberusHeapLang.Step.store_eval]
+   `CerberusHeapLang.Step.store_eval, `CerberusHeapLang.Step.wseq_annot,
+   `CerberusHeapLang.Step.wseq_ctx, `CerberusHeapLang.Step.wseq_pure]
 
 /-- The asserted cone constructor list (sorted). S1b: ONE unified
 cone (`Frag` — the migrated `FragJ`), with value-scrutinee `Ecase`
@@ -322,7 +337,8 @@ def expectedFragCtors : List Name :=
    `CerberusHeapLang.Frag.run, `CerberusHeapLang.Frag.save,
    `CerberusHeapLang.Frag.sseq, `CerberusHeapLang.Frag.sseq_spec,
    `CerberusHeapLang.Frag.sseq_sym, `CerberusHeapLang.Frag.store,
-   `CerberusHeapLang.Frag.store_op, `CerberusHeapLang.Frag.val_pure]
+   `CerberusHeapLang.Frag.store_op, `CerberusHeapLang.Frag.val_pure,
+   `CerberusHeapLang.Frag.wseq]
 
 def checkNames (env : Environment) (kind : String) (names : List Name) :
     Except String Unit := do
@@ -447,6 +463,15 @@ def checkCtorList (env : Environment) (ind : Name) (expected : List Name) :
   IO.println "   rows**: `wps_load_interior` and the exhibit-local node rules are"
   IO.println "   layout-specific extensions of the rule layer (audit F-04);"
   IO.println "   Phase 2 replaces them with generic typed-subrange rules."
+  IO.println "6. **`Ewseq` wildcard is the S1b DRIFT TEST** (arc plan Phase 1"
+  IO.println "   item 7; design record §8 item 8): a NEW non-example construct"
+  IO.println "   passed through the GENERIC route — relation rules + cone/"
+  IO.println "   decomposition arms + `engine_step_matchU` arms + `wps_wseq` +"
+  IO.println "   the consumer regression; the Rules/Wps/Adequacy strata and the"
+  IO.println "   Language instance needed ZERO changes, and this generator"
+  IO.println "   FAILED CLOSED on the extended Step/Frag constructor lists until"
+  IO.println "   this row landed. Ewseq at spec/sym binder patterns stays a"
+  IO.println "   registered divergence (README)."
   IO.println ""
   IO.println "## Machine-readable scope lines (consumed by test_unit.sh gate 4)"
   IO.println ""

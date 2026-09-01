@@ -278,19 +278,17 @@ adequacy-exportable rows of the
 [capability manifest](docs/CAPABILITY_MANIFEST.md); in prose:
 `store`/`load`/`create`, strong
 sequencing `Esseq` at wildcard, `Specified`-binder and
-plain-symbol-binder patterns, `Esave`/`Eif`/`Erun`,
+plain-symbol-binder patterns, weak sequencing `Ewseq` at wildcard
+(the S1b drift-test construct), `Esave`/`Eif`/`Erun`,
+value-scrutinee `Ecase` (S1b export — audit F-01 discharged),
 `PEsym`-shaped pure exits, the `Load0` AND `Store0`
 operand-evaluation steps, the `PtrEq` memop with its
 operand-evaluation step, `PEval`/`PEsym`/integer-`PEop`/
 `PEarray_shift` operands, plus the run-time annotation residue.
 <!-- MANIFEST-SCOPE-BEGIN
-tokens: value store load create sseq-wild sseq-spec sseq-sym annot save if run pure-sym memop-ptreq memop-op load-op store-op pure-operands
+tokens: value store load create sseq-wild sseq-spec sseq-sym wseq-wild annot save if run case-value pure-sym memop-ptreq memop-op load-op store-op pure-operands
 MANIFEST-SCOPE-END -->
-NOT in the certified fragment despite having a mirror rule and a
-wps rule: value-scrutinee `Ecase` — LOCAL RULE ONLY, not
-adequacy-exportable (no `FragJ` membership, no adequacy consumer;
-RED in the manifest until Phase 1 exports it — 2026-08-31 audit,
-F-01). And the logic has no `wp_create` small axiom (registered:
+The logic has no `wp_create` small axiom (registered:
 ProdEntry.lean header — a sound one needs the allocator-cursor
 resource, the registered growth step). Each qualifier is registered
 at source (module headers; `docs/2026-08-30_spike-report.md`); this
@@ -308,8 +306,7 @@ or growth paths. The register (each entry's home is authoritative):
 | tagDefs argument: the theorems pin `drive`'s tagDefs to `fmapEmpty`; the shipped `Main.lean:871` passes `CerbTags.tagDefs ()` after `setTagDefsIO` | Semantically forced equal for the synthetic file: `(prodFile e).tagDefs = fmapEmpty` by `rfl`; the effectful set-then-read global is inert here (scalar layout paths provably never read it; struct/union paths would) | This table + `docs/2026-08-30_spike-report.md` register |
 | Memory orders accepted arbitrarily: `Step.store`/`wp_store` hold at ANY `memory_order` | Mirror-true: the sequential driver drops `mo` (`action_request_sequential2`, Driver.lean:273 — `mo1` unused); NA-only side conditions would be a divergence FROM the engine | This table + `docs/2026-08-30_spike-report.md` register |
 | Whole-allocation byte-list cells (no per-byte split) | Registered growth step for structs | `Heap.lean` header; `docs/2026-08-30_spike-report.md` R2 |
-| `Ewseq` still outside the fragment; `Ecase`'s EVAL arm (non-value scrutinees) unmirrored | Mechanical per-construct extension, path named | `Step.lean` header; `docs/2026-08-30_spike-report.md` "Honestly open" |
-| Value-scrutinee `Ecase` is LOCAL RULE ONLY: mirror rule + wps rule + per-step engine equation, but no `FragJ` membership, no adequacy consumer — not adequacy-exportable (2026-08-31 audit F-01) | Phase 1 exports it (cone constructor + substitution closure + decompJ/match extension + adequacy regression theorem) | `Step.lean` header; manifest row (RED) |
+| `Ewseq` at spec/sym binder patterns outside the fragment (the WILDCARD lane exported in S1b as the drift test); `Ecase`'s EVAL arm (non-value scrutinees) unmirrored | Mechanical per-construct extension, path named | `Step.lean` header; `docs/2026-08-30_spike-report.md` "Honestly open" |
 | `counter_loop_certified_production` is the REGISTRATION theorem, not a production `runND` equation — the declaration name overstates its lane (2026-08-31 audit F-05) | Naming debt registered; docs call it the registration theorem; rename lands with Phase 5's real production theorem (a rename now is statement-surface churn) | Manifest Notes 3; `ProdEntry.lean` |
 | PURE exits certified at `PEsym` shape only (general `PePure` exits are a bounded matcher extension) | Extend `stepDischarge_pure_sym` per-constructor when needed | `Soundness.lean`; `docs/2026-08-31_phase2-s4-notes.md` |
 | The array exhibit's pre-state is ONE allocation (not a ∗-of-per-element-cells): the engine's loads bounds-check against the pointer's PROVENANCE allocation and `arrayShiftPtrval` preserves provenance, so distinct-allocation "arrays" are not walkable in the engine — C's object model | Forcing fact about Cerberus, recorded; per-element structure lives in the index-partitioned invariant + decode premises | `ArrayExhibit.lean` header; `docs/2026-08-31_phase2-s4-notes.md` |

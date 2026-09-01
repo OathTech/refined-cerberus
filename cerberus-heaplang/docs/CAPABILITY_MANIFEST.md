@@ -31,6 +31,7 @@ fully mechanical (cone-derived) upgrade.
 | Esseq, wildcard pattern | CERTIFIED (drive lane) | OK `Step.sseq_pure`, `Step.sseq_annot`, `Step.sseq_ctx` | OK `wp_sseq`, `wps_seq` | OK `Frag.sseq` | OK `step_ctx_beta_pure`, `step_ctx_beta_annot` | OK `engine_complete`, `engine_adequacyJ` | RED — no logical total lane (Phase 3); see Notes 2 | OK `exhibitA_prod` | OK `exhibitA_engine`, `exhibitC_engine` |
 | Esseq, Specified-binder pattern | CERTIFIED (drive lane) | OK `Step.sseq_spec_pure`, `Step.sseq_spec_annot` | OK `wps_seq_spec` | OK `Frag.sseq_spec` | OK `step_ctx_beta_spec_pure`, `step_ctx_beta_spec_annot` | OK `engine_adequacyJ` | RED — no logical total lane (Phase 3); see Notes 2 | RED — registration tie only; see Notes 3 | OK `array_sum_certified`, `list_reverse_certified` |
 | Esseq, plain-symbol-binder pattern (bare values) | CERTIFIED (drive lane) | OK `Step.sseq_sym_pure` | OK `wps_seq_sym` | OK `Frag.sseq_sym` | OK `step_ctx_beta_sym_pure` | OK `engine_adequacyJ` | RED — no logical total lane (Phase 3); see Notes 2 | RED — registration tie only; see Notes 3 | OK `list_reverse_certified` |
+| Ewseq, wildcard pattern (weak sequencing) | CERTIFIED (drive lane) | OK `Step.wseq_pure`, `Step.wseq_annot`, `Step.wseq_ctx` — S1b DRIFT TEST — entered through the generic route; see Notes 6 | OK `wps_wseq` | OK `Frag.wseq` | OK `step_ctx_wseq_pure`, `step_ctx_wseq_annot` | OK `engine_adequacyJ`, `engine_adequacyU` | RED — no logical total lane (Phase 3); see Notes 2 | RED — outside every lane | OK `wseq_certified` — the drift-test WP-lane adequacy regression (WseqExhibit) |
 | Eannot residue (descent + merge) | CERTIFIED (drive lane) | OK `Step.annot_ctx`, `Step.annot_merge` | OK `wp_annot`, `wps_annot` | OK `Frag.annot` | OK `step_ctx_merge` | OK `engine_complete`, `engine_adequacyJ` | RED — no logical total lane (Phase 3); see Notes 2 | OK `exhibitA_prod` | OK `exhibitA_engine` |
 | Esave (block entry, value-shaped params) | CERTIFIED (drive lane) | OK `Step.save` | OK `wps_save` | OK `Frag.save` | OK `step_ctx_save` | OK `engine_adequacyJ` | RED — no logical total lane (Phase 3); see Notes 2 | RED — registration tie only; see Notes 3 | OK `counter_loop_certified`, `fib_certified` |
 | Eif (big-step boolean guard) | CERTIFIED (drive lane) | OK `Step.if_true`, `Step.if_false` | OK `wps_if_true`, `wps_if_false` | OK `Frag.if_` | OK `stepDischarge_if_true`, `stepDischarge_if_false` | OK `engine_adequacyJ` | RED — no logical total lane (Phase 3); see Notes 2 | RED — registration tie only; see Notes 3 | OK `counter_loop_certified`, `fib_certified` |
@@ -82,11 +83,20 @@ fully mechanical (cone-derived) upgrade.
    rows**: `wps_load_interior` and the exhibit-local node rules are
    layout-specific extensions of the rule layer (audit F-04);
    Phase 2 replaces them with generic typed-subrange rules.
+6. **`Ewseq` wildcard is the S1b DRIFT TEST** (arc plan Phase 1
+   item 7; design record §8 item 8): a NEW non-example construct
+   passed through the GENERIC route — relation rules + cone/
+   decomposition arms + `engine_step_matchU` arms + `wps_wseq` +
+   the consumer regression; the Rules/Wps/Adequacy strata and the
+   Language instance needed ZERO changes, and this generator
+   FAILED CLOSED on the extended Step/Frag constructor lists until
+   this row landed. Ewseq at spec/sym binder patterns stays a
+   registered divergence (README).
 
 ## Machine-readable scope lines (consumed by test_unit.sh gate 4)
 
 ```
-ADEQUACY-EXPORTABLE: value store load create sseq-wild sseq-spec sseq-sym annot save if run case-value pure-sym memop-ptreq memop-op load-op store-op pure-operands
-FULL-ROW: value store load sseq-wild sseq-spec sseq-sym annot save if run case-value pure-sym memop-ptreq memop-op load-op store-op pure-operands
+ADEQUACY-EXPORTABLE: value store load create sseq-wild sseq-spec sseq-sym wseq-wild annot save if run case-value pure-sym memop-ptreq memop-op load-op store-op pure-operands
+FULL-ROW: value store load sseq-wild sseq-spec sseq-sym wseq-wild annot save if run case-value pure-sym memop-ptreq memop-op load-op store-op pure-operands
 LOCAL-RULE-ONLY: 
 ```
