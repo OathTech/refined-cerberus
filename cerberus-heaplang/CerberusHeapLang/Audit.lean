@@ -82,6 +82,8 @@ Adjacent instruments:
 import Lean
 import CerberusHeapLang.Rules
 import CerberusHeapLang.Wps
+import CerberusHeapLang.Wpt
+import CerberusHeapLang.TotalAdequacy
 import CerberusHeapLang.Exhibit
 import CerberusHeapLang.ProdExhibit
 import CerberusHeapLang.LoopExhibit
@@ -415,6 +417,29 @@ info: 'CerberusHeapLang.struct_update_certified' depends on axioms: [propext, Cl
 info: 'CerberusHeapLang.struct_create_store_wps' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in #print axioms CerberusHeapLang.struct_create_store_wps
+
+-- Foundations Phase 3 (2026-09-01): THE TOTAL LAYER (audit F-02
+-- remediation) — the total statement judgment's collapse into the
+-- pinned Iris TotalWeakestPre (wpt_sound: TWP gains its consumer),
+-- the generic measure→drive-fuel simulation at the jump profile
+-- (wpt_engine_boundJ: the cost half), and Iris TotalAdequacy
+-- consumed as-is over the unified relation
+-- (wpt_strongly_normalizing: the logical half). Cones exactly the
+-- trio.
+/--
+info: 'CerberusHeapLang.wpt_sound' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms CerberusHeapLang.wpt_sound
+
+/--
+info: 'CerberusHeapLang.wpt_engine_boundJ' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms CerberusHeapLang.wpt_engine_boundJ
+
+/--
+info: 'CerberusHeapLang.wpt_strongly_normalizing' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms CerberusHeapLang.wpt_strongly_normalizing
 
 /-! ## The exhaustive sweep (LAST — nothing declared below) -/
 

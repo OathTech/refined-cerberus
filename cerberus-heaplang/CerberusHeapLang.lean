@@ -4,8 +4,10 @@ import CerberusHeapLang.Heap
 import CerberusHeapLang.Lang
 import CerberusHeapLang.Rules
 import CerberusHeapLang.Wps
+import CerberusHeapLang.Wpt
 import CerberusHeapLang.Soundness
 import CerberusHeapLang.Adequacy
+import CerberusHeapLang.TotalAdequacy
 import CerberusHeapLang.Exhibit
 import CerberusHeapLang.DriverCollapse
 import CerberusHeapLang.ProdEntry

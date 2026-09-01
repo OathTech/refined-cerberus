@@ -48,9 +48,9 @@ reused verbatim inside the step clause), the jump-aware sequencing
 rules (`wps_seq`, `wps_seq_spec`, `wps_seq_sym`), the
 annotation-commuting layer (`wps_annot_reindex`/`wps_annot`),
 structural rules (`wps_wand`/`wps_frame`), the branch/entry rules,
-the per-label invariant rule `blockSpecs_intro` and the
-invariant+variant rule `blockSpecs_intro_variant` (no Löb in
-either — the one Löb is inside `wps_sound`), and the collapse
+the per-label invariant rule `blockSpecs_intro` (no Löb —
+the one Löb is inside `wps_sound`; the TOTAL rules live at the
+total stratum, Wpt.lean), and the collapse
 `wps_sound` into the base Iris WP (the sole adequacy interface).
 
 NO `wps_create`: no create small axiom exists at ANY layer (a sound
@@ -2391,42 +2391,15 @@ theorem blockSpecs_intro {Ψ : SpikeVal → EnvStack → IProp GF}
   iintro %l %params %cont %vs %ev0 %evs %hQ HLs
   iapply h l params cont vs ev0 evs hQ $$ HLs
 
-/-- THE INVARIANT+VARIANT RULE (the well-founded derivation
-    principle over the certified jump layer): prove each label body
-    assuming the block specifications only for STRICTLY SMALLER
-    measures — classical well-founded induction on a `Nat`-valued
-    variant of the jump arguments, no Löb, no step-indexing. The
-    measure's product (per-iteration step bounds → the unconditional
-    production `.done` equation) is the termination-accounting
-    item's slot (arc plan §Phase 2), not this rule's: here the
-    variant buys the DERIVATION PRINCIPLE (bodies may consult
-    smaller-measure specs as ordinary hypotheses). -/
-theorem blockSpecs_intro_variant {Ψ : SpikeVal → EnvStack → IProp GF}
-    (μ : sym → List value → Nat)
-    (h : ∀ l params cont vs ev0 evs,
-      lookupLabel M.labels l = some (params, cont) →
-      (∀ l' params' cont' vs' ev0' evs',
-        lookupLabel M.labels l' = some (params', cont') → μ l' vs' < μ l vs →
-        Ls l' vs' (ev0' :: evs') ⊢ wps (GF := GF) M Ls Ψ cont'
-          (bindArgs params' vs' (ev0' :: evs'))) →
-      Ls l vs (ev0 :: evs) ⊢ wps (GF := GF) M Ls Ψ cont
-        (bindArgs params vs (ev0 :: evs))) :
-    ⊢ blockSpecs M Ls Ψ := by
-  refine blockSpecs_intro fun l params cont vs ev0 evs hQ => ?_
-  -- strong induction on the measure, purely at the meta level
-  suffices hind : ∀ (n : Nat) l params cont vs ev0 evs,
-      lookupLabel M.labels l = some (params, cont) → μ l vs < n →
-      Ls l vs (ev0 :: evs) ⊢ wps (GF := GF) M Ls Ψ cont
-        (bindArgs params vs (ev0 :: evs)) by
-    exact hind (μ l vs + 1) l params cont vs ev0 evs hQ (Nat.lt_succ_self _)
-  intro n
-  induction n with
-  | zero => intro l params cont vs ev0 evs _ h0; cases h0
-  | succ n ih =>
-    intro l params cont vs ev0 evs hQ hlt
-    refine h l params cont vs ev0 evs hQ ?_
-    intro l' params' cont' vs' ev0' evs' hQ' hμ
-    exact ih l' params' cont' vs' ev0' evs' hQ' (by omega)
+/-! `blockSpecs_intro_variant` (the invariant+variant-shaped lemma
+that offered smaller-measure block specifications as OPTIONAL
+meta-level hypotheses) is RETIRED (foundations Phase 3, audit F-02:
+it had no consumer and no theorem-level termination consequence).
+THE REAL TOTAL RULE is `blockSpecsT`/`blockSpecsT_intro` (Wpt.lean):
+there the smaller-measure discipline is the total judgment's jump
+clause — mandatory, with the collapse into Iris TotalWeakestPre
+(`wpt_sound`) and the drive-fuel simulation (TotalAdequacy.lean) as
+its theorem-level consequences. -/
 
 /-- THE LÖB-TIED ELIMINATION (the donor `wps_block_rec` analog + the
     stmt-WP-to-WP collapse in one — probe `wps_sound`, now against
