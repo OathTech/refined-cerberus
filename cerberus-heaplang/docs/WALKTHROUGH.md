@@ -369,11 +369,12 @@ true and uninteresting. Three guards:
    wrong, a theorem could be true and irrelevant — that is exactly
    why tier 3 exists and is kept small. Second, the invariant is
    fail-open for COVERAGE: a missing mirror or cone case makes
-   rules silently dead rather than false (the realized instance is
-   value-scrutinee `Ecase`, which has local rules but no adequacy
-   path) — which is why per-construct coverage is gated by the
-   generated [capability manifest](CAPABILITY_MANIFEST.md) instead
-   of trusted to prose.
+   rules silently dead rather than false (the realized instance WAS
+   value-scrutinee `Ecase` — local rules, no adequacy path — until
+   the S1b export discharged it, audit F-01) — which is why
+   per-construct coverage is gated by the generated
+   [capability manifest](CAPABILITY_MANIFEST.md) instead of trusted
+   to prose.
 
 One honest asymmetry to keep in view: the *straight-line* exhibits
 are exported all the way to the production pipeline (the `runND`
