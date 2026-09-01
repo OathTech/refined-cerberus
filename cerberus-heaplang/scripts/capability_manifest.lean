@@ -231,7 +231,7 @@ def rowSpec : Name → Option RowSpec
         `CerberusHeapLang.alloc_create_wpt,
         `CerberusHeapLang.struct_create_store_wps,
         `CerberusHeapLang.struct_create_store_adequacy]
-        (note := "alloc_create_launch_smoke is the P1 engine-facing chain-closer (driveU .done at fuel 2 via wpt_create + wpt_engine_boundU_alloc from prodMem₀); alloc_two_creates_wps / alloc_create_wpt are the wps/wpt-level local consumers of the PUBLIC rules; struct_create_store_wps is a PUBLIC-rule whole-program client over allocCap (alloc arc P2 item 1 — the program binds the fresh pointer; no cursor vocabulary) with its engine-facing adequacy consumer struct_create_store_adequacy launched through spike_engine_adequacy_alloc (P2 item 2); the HEADLINE allocating exhibits are not yet consumers (R-02, P2 items 3-5)") }
+        (note := "alloc_create_launch_smoke is the P1 engine-facing chain-closer (driveU .done at fuel 2 via wpt_create + wpt_engine_boundU_alloc from prodMem₀); alloc_two_creates_wps / alloc_create_wpt are the wps/wpt-level local consumers of the PUBLIC rules; struct_create_store_wps is a PUBLIC-rule whole-program client over allocCap (alloc arc P2 item 1 — the program binds the fresh pointer; no cursor vocabulary) with its engine-facing adequacy consumer struct_create_store_adequacy launched through spike_engine_adequacy_alloc (P2 item 2); the allocating production exports are whole-program consumers since P2 steps 3-5 (see the production-lane cell)") }
   | `CerberusHeapLang.Frag.sseq => some
     { token := "sseq-wild", construct := "Esseq, wildcard pattern",
       mirror := .ctors [`CerberusHeapLang.Step.sseq_pure,
@@ -698,8 +698,9 @@ def Cell.render (env : Environment) : Cell → Except String String
   IO.println "dependency certification is alloc-arc P3). The per-lane lines"
   IO.println "list the rows whose respective cell is non-red. NB `create`"
   IO.println "joined TOTAL-LANE at alloc arc P1 (`wpt_create` + the launcher"
-  IO.println "smoke); its PRODUCTION-LANE membership is still the MIXED"
-  IO.println "exhibits (R-02, pending P2) — see Notes 4."
+  IO.println "smoke) and PRODUCTION-LANE at alloc arc P2 (all three"
+  IO.println "allocating production exports are whole-program create-rule"
+  IO.println "consumers; R-02 closed) — see Notes 4."
   IO.println ""
   let exportable := rows.filter (·.exportable) |>.map (·.token)
   let coreDriveRows := rows.filter (·.coreDriveRow) |>.map (·.token)

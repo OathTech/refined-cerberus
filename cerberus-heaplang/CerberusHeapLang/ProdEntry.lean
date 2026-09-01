@@ -64,13 +64,15 @@ allocation-aware launchers grant it from real memory
 (`launchResources` under `LaunchCoh` — this module proves the
 concrete cold-start instance `prodMem₀_launchCoh` below), and the
 chain closes at the engine (`alloc_create_launch_smoke`,
-AllocExhibit). HOWEVER (R-02, owner alloc arc P2): the allocating
-production exhibits still use THIS module's cold-start technique —
-the create prefix runs on the PRODUCTION-PINNED initial memory as
-handwritten certified operational rounds, where allocation success
-is a theorem (the `hpre` hypothesis below, discharged concretely by
-the exhibits) — a MIXED logical/operational proof shape, scheduled
-for replacement by whole-program logic proofs in alloc arc P2.
+AllocExhibit). CLOSED at alloc arc P2 (R-02): every allocating
+production exhibit is now a whole-program logic proof — the
+programs BIND their engine-created pointers, the creates cross the
+public rules, and this module's `prod_run_eqJ` (moved here from
+ProdLoopExhibit at P2: generic production machinery) composes the
+generic `wpt_driver_done_alloc` delivery fact with the setup
+collapse. The old cold-start operational-prefix technique survives
+only in `sem_triple_prod`'s `hpre` hypothesis (a generic partial
+face, currently without an allocating consumer).
 
 Dnn labels are the recorded design findings of
 docs/2026-08-30_spike-sliceB-notes.md.
