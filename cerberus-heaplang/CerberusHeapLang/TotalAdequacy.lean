@@ -722,14 +722,13 @@ theorem wpt_drive_aux {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
       Frag cont)
     (hQpot : ∀ l params cont, lookupLabel M.labels l = some (params, cont) →
       pot cont ≤ lemDefaultFuel)
-    (Ls : LabelSpec GF) (μ : sym → List value → Nat)
-    (ψ : value → Mem → Prop) :
+    (Ls : LabelSpecT GF) (ψ : value → Mem → Prop) :
     ∀ (k : Nat) (e : CoreExpr) (ev0 : Fmap sym value)
       (evs : List (Fmap sym value)) (σ : Mem) (ns nt : Nat) (aids : Nat → Nat),
       Frag e → pot e ≤ lemDefaultFuel →
       iprop(stateInterp (GF := GF) σ ns ([] : List Empty) nt ∗
-          blockSpecsT M Ls μ (readoutPost ψ) ∗
-          wpt M Ls μ k (readoutPost ψ) e (ev0 :: evs)) ⊢
+          blockSpecsT M Ls (readoutPost ψ) ∗
+          wpt M Ls k (readoutPost ψ) e (ev0 :: evs)) ⊢
         iprop(|={⊤|}=> ⌜DriveDoneAt M aids k e (ev0 :: evs) σ ψ⌝) := by
   intro k
   induction k using Nat.strongRecOn with
@@ -769,7 +768,8 @@ theorem wpt_drive_aux {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
       obtain ⟨l, pes⟩ := lp
       rw [wpt_jump_eq k htv hjr]
       iintro ⟨Hσ, #HB, HJ⟩
-      imod HJ with ⟨%params, %cont, %vs, %ev0', %evs', %hρ, %hl, %hvs, %hμ, HLs⟩
+      imod HJ with ⟨%params, %cont, %vs, %ev0', %evs', %m, %hρ, %hl, %hvs,
+        %hμ, HLs⟩
       obtain ⟨rfl, rfl⟩ : ev0 = ev0' ∧ evs = evs' := by
         injection hρ with h1 h2
         exact ⟨h1, h2⟩
@@ -778,10 +778,10 @@ theorem wpt_drive_aux {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
           (cont, bindArgs params vs (ev0 :: evs), σ) :=
         Step.run_of_jumpRedex hjr hl hvs
       obtain ⟨ev0'', hbind⟩ := Step.env_cons hs
-      ihave Hwpt := HB $$ %l %params %cont %vs %ev0 %evs %hl HLs
-      ihave Hwpt' : wpt M Ls μ k' (readoutPost ψ) cont
+      ihave Hwpt := HB $$ %l %params %cont %vs %ev0 %evs %m %hl HLs
+      ihave Hwpt' : wpt M Ls k' (readoutPost ψ) cont
           (bindArgs params vs (ev0 :: evs)) $$ [Hwpt]
-      · iapply wpt_mono_k (show μ l vs ≤ k' by omega) cont _ $$ Hwpt
+      · iapply wpt_mono_k (show m ≤ k' by omega) cont _ $$ Hwpt
       rw [hbind]
       have hstep_eq : driveU M aids (k' + 1) (M.thread e (ev0 :: evs)) σ =
           driveU M (fun i => aids (i + 1)) k'
@@ -868,8 +868,7 @@ theorem wpt_engine_boundU {GF : BundledGFunctors} [SpikeGpreS GF]
       Frag cont)
     (hQpot : ∀ l params cont, lookupLabel M.labels l = some (params, cont) →
       pot cont ≤ lemDefaultFuel)
-    (μ : sym → List value → Nat)
-    (Ls : ∀ [SpikeGS .hasLC GF], LabelSpec GF)
+    (Ls : ∀ [SpikeGS .hasLC GF], LabelSpecT GF)
     (e₀ : CoreExpr) (ev00 : Fmap sym value) (evs0 : List (Fmap sym value))
     (σ₀ : Mem) (m₀ : SpikeHeapF SpikeCell)
     (hfrag : Frag e₀) (hpot : pot e₀ ≤ lemDefaultFuel) (hcoh : Coh σ₀ m₀)
@@ -877,8 +876,8 @@ theorem wpt_engine_boundU {GF : BundledGFunctors} [SpikeGpreS GF]
     (hwp : ∀ [SpikeGS .hasLC GF],
       iprop(([∗map] i ↦ c ∈ m₀, cellOwn (hlc := .hasLC) (GF := GF) i
           (.own 1) c)) ⊢
-        iprop(blockSpecsT M Ls μ (readoutPost ψ) ∗
-          wpt M Ls μ k (readoutPost ψ) e₀ (ev00 :: evs0)))
+        iprop(blockSpecsT M Ls (readoutPost ψ) ∗
+          wpt M Ls k (readoutPost ψ) e₀ (ev00 :: evs0)))
     (aids : Nat → Nat) :
     ∃ v σ', driveU M aids k (M.thread e₀ (ev00 :: evs0)) σ₀ = .done v σ' ∧
       ψ v σ' ∧ (stateInert e₀ = true ∧ StateInertLabels M → σ' = σ₀) := by
@@ -910,7 +909,7 @@ theorem wpt_engine_boundU {GF : BundledGFunctors} [SpikeGpreS GF]
     isplitl [Hbi]
     · iexact Hbi
     · iexact Hki
-  iapply wpt_drive_aux hwf hQf hQpot Ls μ ψ k e₀ ev00 evs0 σ₀ 0 0 aids
+  iapply wpt_drive_aux hwf hQf hQpot Ls ψ k e₀ ev00 evs0 σ₀ 0 0 aids
     hfrag hpot $$ [$Hσ $HB $Hwpt]
 
 /-- THE TOTAL ENGINE BOUND AT THE JUMP PROFILE (the driveJ instance —
@@ -921,8 +920,7 @@ theorem wpt_engine_boundJ {GF : BundledGFunctors} [SpikeGpreS GF]
       Frag cont)
     (hQpot : ∀ l params cont, lookupLabel Q l = some (params, cont) →
       pot cont ≤ lemDefaultFuel)
-    (μ : sym → List value → Nat)
-    (Ls : ∀ [SpikeGS .hasLC GF], LabelSpec GF)
+    (Ls : ∀ [SpikeGS .hasLC GF], LabelSpecT GF)
     (e₀ : CoreExpr) (ev00 : Fmap sym value) (evs0 : List (Fmap sym value))
     (σ₀ : Mem) (m₀ : SpikeHeapF SpikeCell)
     (hfrag : Frag e₀) (hpot : pot e₀ ≤ lemDefaultFuel) (hcoh : Coh σ₀ m₀)
@@ -930,8 +928,8 @@ theorem wpt_engine_boundJ {GF : BundledGFunctors} [SpikeGpreS GF]
     (hwp : ∀ [SpikeGS .hasLC GF],
       iprop(([∗map] i ↦ c ∈ m₀, cellOwn (hlc := .hasLC) (GF := GF) i
           (.own 1) c)) ⊢
-        iprop(blockSpecsT (procCtx p rs) Ls μ (readoutPost ψ) ∗
-          wpt (procCtx p rs) Ls μ k (readoutPost ψ) e₀ (ev00 :: evs0)))
+        iprop(blockSpecsT (procCtx p rs) Ls (readoutPost ψ) ∗
+          wpt (procCtx p rs) Ls k (readoutPost ψ) e₀ (ev00 :: evs0)))
     (aids : Nat → Nat) :
     ∃ v σ', driveJ rs aids k (procThread p e₀ (ev00 :: evs0)) σ₀ = .done v σ' ∧
       ψ v σ' ∧ (stateInert e₀ = true ∧
@@ -941,7 +939,7 @@ theorem wpt_engine_boundJ {GF : BundledGFunctors} [SpikeGpreS GF]
   have h := wpt_engine_boundU (M := procCtx p rs) (procCtx_wf p rs)
     (fun l params cont hl => hQf l params cont (by rwa [hlbl] at hl))
     (fun l params cont hl => hQpot l params cont (by rwa [hlbl] at hl))
-    μ Ls e₀ ev00 evs0 σ₀ m₀ hfrag hpot hcoh ψ k hwp aids
+    Ls e₀ ev00 evs0 σ₀ m₀ hfrag hpot hcoh ψ k hwp aids
   rw [show (procCtx p rs).thread e₀ (ev00 :: evs0) =
     procThread p e₀ (ev00 :: evs0) from rfl,
     driveU_procCtx p rs k aids _ σ₀] at h
@@ -960,15 +958,15 @@ theorem wpt_engine_boundJ {GF : BundledGFunctors} [SpikeGpreS GF]
     vocabulary: termination as a fact about the one derived
     relation the Language instance runs on. -/
 theorem wpt_strongly_normalizing {GF : BundledGFunctors} [SpikeGpreS GF]
-    {M : MachineCtx} (μ : sym → List value → Nat)
-    (Ls : ∀ [SpikeGS .hasLC GF], LabelSpec GF)
+    {M : MachineCtx}
+    (Ls : ∀ [SpikeGS .hasLC GF], LabelSpecT GF)
     (Ψ : ∀ [SpikeGS .hasLC GF], SpikeVal → EnvStack → IProp GF)
     (e₀ : CoreExpr) (ρ₀ : EnvStack) (σ₀ : Mem) (m₀ : SpikeHeapF SpikeCell)
     (hcoh : Coh σ₀ m₀) (k : Nat)
     (hwp : ∀ [SpikeGS .hasLC GF],
       iprop(([∗map] i ↦ c ∈ m₀, cellOwn (hlc := .hasLC) (GF := GF) i
           (.own 1) c)) ⊢
-        iprop(blockSpecsT M Ls μ Ψ ∗ wpt M Ls μ k Ψ e₀ ρ₀)) :
+        iprop(blockSpecsT M Ls Ψ ∗ wpt M Ls k Ψ e₀ ρ₀)) :
     Relation.StronglyNormalizing Language.ErasedStep
       ([(⟨e₀, ρ₀, M⟩ : CoreRt)], σ₀) := by
   refine twp_total (hlc := .hasLC) (GF := GF) Stuckness.NotStuck _ σ₀

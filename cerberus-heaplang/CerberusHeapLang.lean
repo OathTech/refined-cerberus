@@ -14,6 +14,7 @@ import CerberusHeapLang.ProdEntry
 import CerberusHeapLang.ProdExhibit
 import CerberusHeapLang.LoopExhibit
 import CerberusHeapLang.FibExhibit
+import CerberusHeapLang.DivergeExhibit
 import CerberusHeapLang.ArrayExhibit
 import CerberusHeapLang.ListRevExhibit
 import CerberusHeapLang.CaseExhibit

@@ -4,7 +4,7 @@ CerberusHeapLang.Wpt — the TOTAL statement judgment (Phase 3 of the
 items 1-3).
 
 THE SHAPE: the total analog of `wps` (Wps.lean) — the same
-label-context statement logic, but TOTAL: `wpt M Ls μ k Ψ e ρ`
+label-context statement logic, but TOTAL: `wpt M Ls k Ψ e ρ`
 means "e delivers a value satisfying Ψ within k engine-drive steps
 (delivery protocol included), given that every registered label body
 meets its own budget". Realized WITHOUT any fixpoint: the judgment
@@ -17,17 +17,18 @@ Löb and no ▷ — exactly the least-fixpoint discipline of iris-lean's
 own `TotalWeakestPre` (the collapse target), realized through the
 budget's well-foundedness.
 
-THE MANDATORY DECREASE (the audit's exact F-02 criterion): the jump
-clause REQUIRES `1 + μ l vs ≤ k` — the target label's budget, plus
-the jump step itself, must fit in the remaining budget. Since a
-label body is verified (via `blockSpecsT`) at budget `μ l vs`, and
-budgets only shrink along steps, every back edge strictly decreases
-the well-founded `Nat` measure: at the jump point the remaining
-budget k satisfies k ≤ μ(source label, source args), so the premise
-forces μ l' vs' < μ l vs. The measure `μ : sym → List value → Nat`
-is a classical RANKING FUNCTION on (label, arguments), strengthened
-to a step budget so that the SAME derivation yields both halves the
-audit ordered separated:
+THE MANDATORY DECREASE (the audit's exact F-02 criterion): the
+label preconditions are INDEXED BY A VARIANT `m : Nat`
+(`LabelSpecT` — the classical Floyd variant as a specification
+parameter, so heap-resident measures like a chain length enter
+through the invariant); the jump clause REQUIRES `1 + m ≤ k` for
+the variant `m` at which the target's precondition is proved — the
+target label's budget, plus the jump step itself, must fit in the
+remaining budget. Since a label body is verified (via
+`blockSpecsT`) at budget `m`, and budgets only shrink along steps,
+every back edge strictly decreases the well-founded `Nat` measure.
+The variant is simultaneously a step budget, so the SAME derivation
+yields both halves the audit ordered separated:
 - the LOGICAL half: `wpt_sound` collapses the judgment into the
   pinned Iris `TotalWeakestPre` (`WP … [{ … }]`), whose adequacy
   (`twp_total`) is consumed as-is in TotalAdequacy.lean —
@@ -40,7 +41,8 @@ Removing the decrease premise makes the collapse and the simulation
 unprovable (their inductions are ON the budget), and makes a looping
 program derivable against `¬ StronglyNormalizing` — the negative
 exhibit (DivergeExhibit.lean) records the exact unsatisfiable
-obligation (`1 + μ loop [] ≤ k ≤ μ loop []`).
+obligation (`∃ m, 1 + m ≤ k` against a body that must be verified
+at every claimed variant, including 0).
 
 BUDGET ACCOUNTING (uniform): a rule's budget = its own engine steps
 plus the DELIVERY COST of its final value (1 for a bare pure value —
@@ -66,6 +68,15 @@ open Iris Iris.ProgramLogic Iris.ProgramLogic.Language.Notation
 
 variable {hlc : HasLC} {GF : BundledGFunctors}
 
+/-- Variant-indexed per-label preconditions (the total stratum's
+    label context): `Ls l m vs ρ` — the label `l`'s precondition at
+    VARIANT VALUE `m` (its body's step budget), jump-argument values
+    `vs`, jump-time env `ρ`. The variant is a logical index, so
+    heap-dependent measures (e.g. the length of the list a pointer
+    argument heads) are pinned by the invariant itself. -/
+abbrev LabelSpecT (GF : BundledGFunctors) : Type :=
+  sym → Nat → List value → EnvStack → IProp GF
+
 /-! ## The delivery cost of a value (the drive lane's value protocol:
 PROGRAM-DONE costs one drive step; an annot value pays the
 REMOVE-ANNOT tau first — Soundness.lean, the value protocol) -/
@@ -90,14 +101,15 @@ theorem deliveryCost_pos (w : SpikeVal) : 1 ≤ deliveryCost w := by
     strengthenings:
     - VALUE: the delivery cost must fit the remaining budget.
     - JUMP: the payload of `wps.pre`'s jump clause PLUS the mandatory
-      decrease `1 + μ lp.1 vs ≤ k` (never optional — audit F-02).
+      decrease `1 + m ≤ k` at the ∃-chosen variant `m` (never
+      optional — audit F-02).
     - STEP: the twp-shaped step obligation — NO later, NO credit
       (total WPs admit no Löb); the continuation `F` is the
       recursive occurrence at budget `k-1`, and at `k = 0` the
       clause is `⌜False⌝` (a non-value, non-jump term cannot deliver
       within zero steps). -/
-def wpt.pre [SpikeGS hlc GF] (M : MachineCtx) (Ls : LabelSpec GF)
-    (μ : sym → List value → Nat) (k : Nat)
+def wpt.pre [SpikeGS hlc GF] (M : MachineCtx) (Ls : LabelSpecT GF)
+    (k : Nat)
     (F : (SpikeVal → EnvStack → IProp GF) → CoreExpr → EnvStack → IProp GF)
     (Ψ : SpikeVal → EnvStack → IProp GF) (e : CoreExpr) (ρ : EnvStack) :
     IProp GF :=
@@ -107,10 +119,11 @@ def wpt.pre [SpikeGS hlc GF] (M : MachineCtx) (Ls : LabelSpec GF)
     match jumpRedex? e with
     | some lp =>
       iprop(|={⊤}=> ∃ (params : List (sym × core_base_type)) (cont : CoreExpr)
-        (vs : List value) (ev0 : Fmap sym value) (evs : List (Fmap sym value)),
+        (vs : List value) (ev0 : Fmap sym value) (evs : List (Fmap sym value))
+        (m : Nat),
         ⌜ρ = ev0 :: evs⌝ ∗ ⌜lookupLabel M.labels lp.1 = some (params, cont)⌝ ∗
         ⌜evalPexprs M.extern ρ lp.2 = some vs⌝ ∗
-        ⌜1 + μ lp.1 vs ≤ k⌝ ∗ Ls lp.1 vs ρ)
+        ⌜1 + m ≤ k⌝ ∗ Ls lp.1 m vs ρ)
     | none =>
       match k with
       | 0 => iprop(⌜False⌝)
@@ -126,51 +139,51 @@ def wpt.pre [SpikeGS hlc GF] (M : MachineCtx) (Ls : LabelSpec GF)
 /-- THE TOTAL STATEMENT JUDGMENT: structural recursion on the step
     budget (header note — no fixpoint machinery; the budget IS the
     well-founded measure). -/
-def wpt [SpikeGS hlc GF] (M : MachineCtx) (Ls : LabelSpec GF)
-    (μ : sym → List value → Nat) :
+def wpt [SpikeGS hlc GF] (M : MachineCtx) (Ls : LabelSpecT GF) :
     Nat → (SpikeVal → EnvStack → IProp GF) → CoreExpr → EnvStack → IProp GF
-  | 0 => wpt.pre M Ls μ 0 (fun _ _ _ => iprop(⌜False⌝))
-  | k + 1 => wpt.pre M Ls μ (k + 1) (wpt M Ls μ k)
+  | 0 => wpt.pre M Ls 0 (fun _ _ _ => iprop(⌜False⌝))
+  | k + 1 => wpt.pre M Ls (k + 1) (wpt M Ls k)
 
 variable [SpikeGS hlc GF]
-variable {M : MachineCtx} {Ls : LabelSpec GF} {μ : sym → List value → Nat}
+variable {M : MachineCtx} {Ls : LabelSpecT GF}
 
 /-! ## Per-clause unfolding equations -/
 
 theorem wpt_val_eq {Ψ : SpikeVal → EnvStack → IProp GF} (k : Nat)
     {e : CoreExpr} {w : SpikeVal} {ρ : EnvStack} (htv : toVal e = some w) :
-    wpt M Ls μ k Ψ e ρ = iprop(⌜deliveryCost w ≤ k⌝ ∗ |={⊤}=> Ψ w ρ) := by
+    wpt M Ls k Ψ e ρ = iprop(⌜deliveryCost w ≤ k⌝ ∗ |={⊤}=> Ψ w ρ) := by
   cases k <;> simp only [wpt, wpt.pre, htv]
 
 theorem wpt_jump_eq {Ψ : SpikeVal → EnvStack → IProp GF} (k : Nat)
     {e : CoreExpr} {l : sym} {pes : List (generic_pexpr Unit sym)}
     {ρ : EnvStack} (htv : toVal e = none)
     (hjr : jumpRedex? e = some (l, pes)) :
-    wpt M Ls μ k Ψ e ρ =
+    wpt M Ls k Ψ e ρ =
       iprop(|={⊤}=> ∃ (params : List (sym × core_base_type)) (cont : CoreExpr)
-        (vs : List value) (ev0 : Fmap sym value) (evs : List (Fmap sym value)),
+        (vs : List value) (ev0 : Fmap sym value) (evs : List (Fmap sym value))
+        (m : Nat),
         ⌜ρ = ev0 :: evs⌝ ∗ ⌜lookupLabel M.labels l = some (params, cont)⌝ ∗
         ⌜evalPexprs M.extern ρ pes = some vs⌝ ∗
-        ⌜1 + μ l vs ≤ k⌝ ∗ Ls l vs ρ) := by
+        ⌜1 + m ≤ k⌝ ∗ Ls l m vs ρ) := by
   cases k <;> simp only [wpt, wpt.pre, htv, hjr]
 
 theorem wpt_zero_step_eq {Ψ : SpikeVal → EnvStack → IProp GF}
     {e : CoreExpr} {ρ : EnvStack} (htv : toVal e = none)
     (hjr : jumpRedex? e = none) :
-    wpt M Ls μ 0 Ψ e ρ = iprop(⌜False⌝) := by
+    wpt M Ls 0 Ψ e ρ = iprop(⌜False⌝) := by
   simp only [wpt, wpt.pre, htv, hjr]
 
 theorem wpt_step_eq {Ψ : SpikeVal → EnvStack → IProp GF} (k : Nat)
     {e : CoreExpr} {ρ : EnvStack} (htv : toVal e = none)
     (hjr : jumpRedex? e = none) :
-    wpt M Ls μ (k + 1) Ψ e ρ =
+    wpt M Ls (k + 1) Ψ e ρ =
       iprop(∀ (σ₁ : Mem) (ns : Nat) (obs : List Empty) (nt : Nat),
         stateInterp σ₁ ns obs nt ={⊤,∅}=∗
         ⌜PrimStep.Reducible ((⟨e, ρ, M⟩ : CoreRt), σ₁)⌝ ∗
         ∀ (r : CoreRt) (σ₂ : Mem) (eₜ : List CoreRt),
           ⌜((⟨e, ρ, M⟩ : CoreRt), σ₁) -<([] : List Empty)>-> (r, σ₂, eₜ)⌝
             ={∅,⊤}=∗
-          stateInterp σ₂ (ns + 1) obs nt ∗ wpt M Ls μ k Ψ r.e r.ρ) := by
+          stateInterp σ₂ (ns + 1) obs nt ∗ wpt M Ls k Ψ r.e r.ρ) := by
   simp only [wpt, wpt.pre, htv, hjr]
 
 /-! ## Structural rules -/
@@ -178,7 +191,7 @@ theorem wpt_step_eq {Ψ : SpikeVal → EnvStack → IProp GF} (k : Nat)
 /-- Budget weakening: the judgment states an upper bound. -/
 theorem wpt_mono_k {Ψ : SpikeVal → EnvStack → IProp GF} {k k' : Nat}
     (hk : k ≤ k') (e : CoreExpr) (ρ : EnvStack) :
-    wpt M Ls μ k Ψ e ρ ⊢ wpt M Ls μ k' Ψ e ρ := by
+    wpt M Ls k Ψ e ρ ⊢ wpt M Ls k' Ψ e ρ := by
   induction k generalizing k' e ρ with
   | zero =>
     cases htv : toVal e with
@@ -194,9 +207,9 @@ theorem wpt_mono_k {Ψ : SpikeVal → EnvStack → IProp GF} {k k' : Nat}
         obtain ⟨l, pes⟩ := lp
         rw [wpt_jump_eq 0 htv hjr, wpt_jump_eq k' htv hjr]
         iintro H
-        imod H with ⟨%params, %cont, %vs, %ev0, %evs, %h1, %h2, %h3, %h4, HLs⟩
+        imod H with ⟨%params, %cont, %vs, %ev0, %evs, %m, %h1, %h2, %h3, %h4, HLs⟩
         imodintro
-        iexists params, cont, vs, ev0, evs
+        iexists params, cont, vs, ev0, evs, m
         isplit
         · ipureintro; exact h1
         isplit
@@ -224,9 +237,9 @@ theorem wpt_mono_k {Ψ : SpikeVal → EnvStack → IProp GF} {k k' : Nat}
         obtain ⟨l, pes⟩ := lp
         rw [wpt_jump_eq (m + 1) htv hjr, wpt_jump_eq k' htv hjr]
         iintro H
-        imod H with ⟨%params, %cont, %vs, %ev0, %evs, %h1, %h2, %h3, %h4, HLs⟩
+        imod H with ⟨%params, %cont, %vs, %ev0, %evs, %m, %h1, %h2, %h3, %h4, HLs⟩
         imodintro
-        iexists params, cont, vs, ev0, evs
+        iexists params, cont, vs, ev0, evs, m
         isplit
         · ipureintro; exact h1
         isplit
@@ -254,7 +267,7 @@ theorem wpt_mono_k {Ψ : SpikeVal → EnvStack → IProp GF} {k k' : Nat}
     meta-level entailment family). -/
 theorem wpt_mono {Ψ₁ Ψ₂ : SpikeVal → EnvStack → IProp GF}
     (h : ∀ w ρ', Ψ₁ w ρ' ⊢ Ψ₂ w ρ') (k : Nat) (e : CoreExpr) (ρ : EnvStack) :
-    wpt M Ls μ k Ψ₁ e ρ ⊢ wpt M Ls μ k Ψ₂ e ρ := by
+    wpt M Ls k Ψ₁ e ρ ⊢ wpt M Ls k Ψ₂ e ρ := by
   induction k generalizing e ρ with
   | zero =>
     cases htv : toVal e with
@@ -303,7 +316,7 @@ theorem wpt_mono {Ψ₁ Ψ₂ : SpikeVal → EnvStack → IProp GF}
 /-- Value rule (delivery cost within budget). -/
 theorem wpt_ofVal {Ψ : SpikeVal → EnvStack → IProp GF} (w : SpikeVal)
     (ρ : EnvStack) {k : Nat} (hk : deliveryCost w ≤ k) :
-    Ψ w ρ ⊢ wpt M Ls μ k Ψ (ofVal w) ρ := by
+    Ψ w ρ ⊢ wpt M Ls k Ψ (ofVal w) ρ := by
   rw [wpt_val_eq k (toVal_ofVal w)]
   iintro H
   isplit
@@ -321,17 +334,17 @@ theorem wpt_run {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
     (pes : List (generic_pexpr Unit sym))
     {params : List (sym × core_base_type)} {cont : CoreExpr}
     {vs : List value} (ev0 : Fmap sym value) (evs : List (Fmap sym value))
-    {k : Nat}
+    (m : Nat) {k : Nat}
     (hl : lookupLabel M.labels l = some (params, cont))
     (hvs : evalPexprs M.extern (ev0 :: evs) pes = some vs)
-    (hμ : 1 + μ l vs ≤ k) :
-    Ls l vs (ev0 :: evs) ⊢
-      wpt M Ls μ k Ψ (Expr a (Erun ra l pes)) (ev0 :: evs) := by
+    (hμ : 1 + m ≤ k) :
+    Ls l m vs (ev0 :: evs) ⊢
+      wpt M Ls k Ψ (Expr a (Erun ra l pes)) (ev0 :: evs) := by
   rw [wpt_jump_eq k (show toVal (Expr a (Erun ra l pes)) = none from rfl)
     (jumpRedex?_run a ra l pes)]
   iintro H
   imodintro
-  iexists params, cont, vs, ev0, evs
+  iexists params, cont, vs, ev0, evs, m
   isplit
   · ipureintro; rfl
   isplit
@@ -353,7 +366,7 @@ theorem wpt_det_step {Ψ : SpikeVal → EnvStack → IProp GF} {e : CoreExpr}
     (hstep : ∀ σ : Mem, Step M (e, ρ, σ) (e', ρ', σ))
     (hdet : ∀ (σ : Mem) (out : CoreExpr × EnvStack × Mem),
       Step M (e, ρ, σ) out → out = (e', ρ', σ)) :
-    wpt M Ls μ k Ψ e' ρ' ⊢ wpt M Ls μ (k + 1) Ψ e ρ := by
+    wpt M Ls k Ψ e' ρ' ⊢ wpt M Ls (k + 1) Ψ e ρ := by
   rw [wpt_step_eq k htv hjr]
   iintro H %σ₁ %ns %obs %nt Hσ
   iapply fupd_mask_intro Std.LawfulSet.empty_subset
@@ -382,7 +395,7 @@ theorem wpt_det_step {Ψ : SpikeVal → EnvStack → IProp GF} {e : CoreExpr}
 theorem wpt_if_true {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
     (g : generic_pexpr Unit sym) (e2 e3 : CoreExpr) (ρ : EnvStack) {k : Nat}
     (hg : evalPexpr M.extern ρ g = some Vtrue) :
-    wpt M Ls μ k Ψ e2 ρ ⊢ wpt M Ls μ (k + 1) Ψ (Expr a (Eif g e2 e3)) ρ :=
+    wpt M Ls k Ψ e2 ρ ⊢ wpt M Ls (k + 1) Ψ (Expr a (Eif g e2 e3)) ρ :=
   wpt_det_step rfl rfl (fun _ => Step.if_true hg)
     (fun σ out hs => by
       rcases hs.if_inv with ⟨-, hout⟩ | ⟨hg', -⟩
@@ -392,7 +405,7 @@ theorem wpt_if_true {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
 theorem wpt_if_false {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
     (g : generic_pexpr Unit sym) (e2 e3 : CoreExpr) (ρ : EnvStack) {k : Nat}
     (hg : evalPexpr M.extern ρ g = some Vfalse) :
-    wpt M Ls μ k Ψ e3 ρ ⊢ wpt M Ls μ (k + 1) Ψ (Expr a (Eif g e2 e3)) ρ :=
+    wpt M Ls k Ψ e3 ρ ⊢ wpt M Ls (k + 1) Ψ (Expr a (Eif g e2 e3)) ρ :=
   wpt_det_step rfl rfl (fun _ => Step.if_false hg)
     (fun σ out hs => by
       rcases hs.if_inv with ⟨hg', -⟩ | ⟨-, hout⟩
@@ -406,8 +419,8 @@ theorem wpt_save {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
     (body : CoreExpr) {cvals : List value}
     (ev0 : Fmap sym value) (evs : List (Fmap sym value)) {k : Nat}
     (hvals : valueFromPexprs (saveParamPexprs ps) = some cvals) :
-    wpt M Ls μ k Ψ body (bindSaveParams ps cvals (ev0 :: evs)) ⊢
-      wpt M Ls μ (k + 1) Ψ (Expr a (Esave sb ps body)) (ev0 :: evs) :=
+    wpt M Ls k Ψ body (bindSaveParams ps cvals (ev0 :: evs)) ⊢
+      wpt M Ls (k + 1) Ψ (Expr a (Esave sb ps body)) (ev0 :: evs) :=
   wpt_det_step rfl rfl (fun _ => Step.save hvals)
     (fun σ out hs => by
       obtain ⟨cvals', ev0', evs', hρeq, hvals', hout⟩ := hs.save_inv
@@ -420,9 +433,9 @@ theorem wpt_pure {Ψ : SpikeVal → EnvStack → IProp GF}
     (pe : generic_pexpr Unit sym) (ρ : EnvStack) {v : value} {k : Nat}
     (hk : 2 ≤ k)
     (hnv : valueFromPexpr pe = none) (hv : evalPexpr M.extern ρ pe = some v) :
-    Ψ (.pure v) ρ ⊢ wpt M Ls μ k Ψ (Expr ([] : List annot) (Epure pe)) ρ := by
+    Ψ (.pure v) ρ ⊢ wpt M Ls k Ψ (Expr ([] : List annot) (Epure pe)) ρ := by
   obtain ⟨k', rfl⟩ : ∃ k', k = k' + 1 := ⟨k - 1, by omega⟩
-  refine .trans (wpt_ofVal (M := M) (Ls := Ls) (μ := μ) (.pure v) ρ (by simp only [deliveryCost_pure]; exact Nat.le_of_succ_le_succ hk)) ?_
+  refine .trans (wpt_ofVal (M := M) (Ls := Ls) (.pure v) ρ (by simp only [deliveryCost_pure]; exact Nat.le_of_succ_le_succ hk)) ?_
   exact wpt_det_step (toVal_pure_none hnv) (jumpRedex?_pure _ _)
     (fun _ => Step.pure_eval hnv hv)
     (fun σ out hs => by
@@ -437,8 +450,8 @@ theorem wpt_load_eval {Ψ : SpikeVal → EnvStack → IProp GF}
     {pv : CerbMem.PointerValue} {k : Nat}
     (hnv2 : valueFromPexpr pe2 = none)
     (hv2 : evalPexpr M.extern ρ pe2 = some (Vobject (OVpointer pv))) :
-    wpt M Ls μ k Ψ (loadExpr loc ann ty pv mo) ρ ⊢
-      wpt M Ls μ (k + 1) Ψ (loadOpRedex loc ann ty pe2 mo) ρ :=
+    wpt M Ls k Ψ (loadExpr loc ann ty pv mo) ρ ⊢
+      wpt M Ls (k + 1) Ψ (loadOpRedex loc ann ty pe2 mo) ρ :=
   wpt_det_step rfl rfl (fun _ => Step.load_eval hnv2 hv2)
     (fun σ out hs => by
       obtain ⟨pv', hv2', hout⟩ := hs.load_op_inv hnv2
@@ -455,8 +468,8 @@ theorem wpt_store_eval {Ψ : SpikeVal → EnvStack → IProp GF}
     (hnv3 : valueFromPexpr pe3 = none)
     (hv2 : evalPexpr M.extern ρ pe2 = some (Vobject (OVpointer pv)))
     (hv3 : evalPexpr M.extern ρ pe3 = some cv) :
-    wpt M Ls μ k Ψ (storeExpr loc ann ty pv cv mo) ρ ⊢
-      wpt M Ls μ (k + 1) Ψ (storeOpRedex loc ann ty pe2 pe3 mo) ρ :=
+    wpt M Ls k Ψ (storeExpr loc ann ty pv cv mo) ρ ⊢
+      wpt M Ls (k + 1) Ψ (storeOpRedex loc ann ty pe2 pe3 mo) ρ :=
   wpt_det_step rfl rfl (fun _ => Step.store_eval hnv2 hnv3 hv2 hv3)
     (fun σ out hs => by
       obtain ⟨pv', cv', hv2', hv3', -, hout⟩ := hs.store_op_inv hnv2
@@ -472,9 +485,9 @@ theorem wpt_memop_eval {Ψ : SpikeVal → EnvStack → IProp GF}
     (hnv : valueFromPexprs [pe1, pe2] = none)
     (hv1 : evalPexpr M.extern ρ pe1 = some v1)
     (hv2 : evalPexpr M.extern ρ pe2 = some v2) :
-    wpt M Ls μ k Ψ (memopRedex mop
+    wpt M Ls k Ψ (memopRedex mop
       [Pexpr [] () (PEval v1), Pexpr [] () (PEval v2)]) ρ ⊢
-      wpt M Ls μ (k + 1) Ψ (memopRedex mop [pe1, pe2]) ρ :=
+      wpt M Ls (k + 1) Ψ (memopRedex mop [pe1, pe2]) ρ :=
   wpt_det_step rfl rfl (fun _ => Step.memop_eval hnv hv1 hv2)
     (fun σ out hs => by
       obtain ⟨v1', v2', hv1', hv2', hout⟩ := hs.memop_op_inv hnv
@@ -491,10 +504,10 @@ theorem wpt_memop_ptreq {Ψ : SpikeVal → EnvStack → IProp GF}
     (hres : ∀ σ : Mem, applyMemM (CerbMem.eqPtrval default pv1 pv2) σ =
       some (b, σ)) :
     Ψ (.pure (boolValue b)) ρ ⊢
-      wpt M Ls μ k Ψ (memopPtrEqVals (Vobject (OVpointer pv1))
+      wpt M Ls k Ψ (memopPtrEqVals (Vobject (OVpointer pv1))
         (Vobject (OVpointer pv2))) ρ := by
   obtain ⟨k', rfl⟩ : ∃ k', k = k' + 1 := ⟨k - 1, by omega⟩
-  refine .trans (wpt_ofVal (M := M) (Ls := Ls) (μ := μ) (.pure (boolValue b)) ρ
+  refine .trans (wpt_ofVal (M := M) (Ls := Ls) (.pure (boolValue b)) ρ
     (by simp only [deliveryCost_pure]; exact Nat.le_of_succ_le_succ hk)) ?_
   exact wpt_det_step rfl rfl
     (fun σ => Step.memop_ptreq rfl rfl (hres σ))
@@ -517,8 +530,8 @@ theorem wpt_annot_reindex (a : List annot) (dsA dsB : List dyn_annotation)
     (c : CoreExpr) (ρ : EnvStack) {k : Nat}
     {Ψ₁ Ψ₂ : SpikeVal → EnvStack → IProp GF}
     (hΦ : ∀ w ρ', Ψ₁ (SpikeVal.merge dsA w) ρ' = Ψ₂ (SpikeVal.merge dsB w) ρ') :
-    wpt M Ls μ k Ψ₁ (Expr a (Eannot dsA c)) ρ ⊢
-      wpt M Ls μ k Ψ₂ (Expr a (Eannot dsB c)) ρ := by
+    wpt M Ls k Ψ₁ (Expr a (Eannot dsA c)) ρ ⊢
+      wpt M Ls k Ψ₂ (Expr a (Eannot dsB c)) ρ := by
   induction k using Nat.strongRecOn generalizing a dsA dsB c ρ Ψ₁ Ψ₂ with
   | ind k IH =>
   rcases toVal_annot_cases a c dsA with ⟨rfl, v, rfl, hA⟩ | hA
@@ -614,8 +627,8 @@ theorem wpt_annot_reindex (a : List annot) (dsA dsB : List dyn_annotation)
     or a value-forming wrap costs none — the unit is slack there). -/
 theorem wpt_annot (ds : List dyn_annotation) (e : CoreExpr) (ρ : EnvStack)
     {k : Nat} {Ψ : SpikeVal → EnvStack → IProp GF} :
-    wpt M Ls μ k (fun w ρ' => Ψ (SpikeVal.merge ds w) ρ') e ρ ⊢
-      wpt M Ls μ (k + 1) Ψ (Expr ([] : List annot) (Eannot ds e)) ρ := by
+    wpt M Ls k (fun w ρ' => Ψ (SpikeVal.merge ds w) ρ') e ρ ⊢
+      wpt M Ls (k + 1) Ψ (Expr ([] : List annot) (Eannot ds e)) ρ := by
   induction k using Nat.strongRecOn generalizing ds e ρ with
   | ind k IH =>
   cases hv : toVal e with
@@ -751,9 +764,9 @@ theorem wpt_annot (ds : List dyn_annotation) (e : CoreExpr) (ρ : EnvStack)
           wpt_jump_eq (k + 1) hwrap
             ((jumpRedex?_annot_of_not_root ([] : List annot) ds hr').trans hjr)]
         iintro H
-        imod H with ⟨%params, %cont, %vs, %ev0, %evs, %h1, %h2, %h3, %h4, HLs⟩
+        imod H with ⟨%params, %cont, %vs, %ev0, %evs, %m, %h1, %h2, %h3, %h4, HLs⟩
         imodintro
-        iexists params, cont, vs, ev0, evs
+        iexists params, cont, vs, ev0, evs, m
         isplit
         · ipureintro; exact h1
         isplit
@@ -817,15 +830,15 @@ theorem wpt_jump_frame_sseq {Ψ₁ Ψ₂ : SpikeVal → EnvStack → IProp GF}
     (ρ : EnvStack) {l : sym} {pes : List (generic_pexpr Unit sym)}
     {k k' : Nat} (hkk : k ≤ k')
     (htv : toVal e1 = none) (hjr : jumpRedex? e1 = some (l, pes)) :
-    wpt M Ls μ k Ψ₁ e1 ρ ⊢
-      wpt M Ls μ k' Ψ₂ (Expr a (Esseq pat e1 e2)) ρ := by
+    wpt M Ls k Ψ₁ e1 ρ ⊢
+      wpt M Ls k' Ψ₂ (Expr a (Esseq pat e1 e2)) ρ := by
   rw [wpt_jump_eq (Ψ := Ψ₁) k htv hjr,
     wpt_jump_eq (Ψ := Ψ₂) k' (toVal_sseq_node a pat e1 e2)
       (by rw [jumpRedex?_sseq]; exact hjr)]
   iintro H
-  imod H with ⟨%params, %cont, %vs, %ev0, %evs, %h1, %h2, %h3, %h4, HLs⟩
+  imod H with ⟨%params, %cont, %vs, %ev0, %evs, %m, %h1, %h2, %h3, %h4, HLs⟩
   imodintro
-  iexists params, cont, vs, ev0, evs
+  iexists params, cont, vs, ev0, evs, m
   isplit
   · ipureintro; exact h1
   isplit
@@ -842,9 +855,9 @@ theorem wpt_jump_frame_sseq {Ψ₁ Ψ₂ : SpikeVal → EnvStack → IProp GF}
 theorem wpt_seq {Ψ : SpikeVal → EnvStack → IProp GF}
     (a pa : List annot) (bty : core_base_type) (e1 e2 : CoreExpr)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (k1 k2 : Nat) :
-    wpt M Ls μ k1 (fun w ρ' => wpt M Ls μ k2
+    wpt M Ls k1 (fun w ρ' => wpt M Ls k2
         (fun u ρ'' => Ψ (SpikeVal.mergeInto w u) ρ'') e2 ρ') e1 (ev0 :: evs) ⊢
-      wpt M Ls μ (k1 + k2) Ψ
+      wpt M Ls (k1 + k2) Ψ
         (Expr a (Esseq (Pattern pa (CaseBase (none, bty))) e1 e2))
         (ev0 :: evs) := by
   induction k1 using Nat.strongRecOn generalizing e1 ev0 evs with
@@ -992,12 +1005,12 @@ theorem wpt_seq_spec {Ψ : SpikeVal → EnvStack → IProp GF}
     (a pa pb : List annot) (x : sym) (bty : core_base_type)
     (e1 e2 : CoreExpr)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (k1 k2 : Nat) :
-    wpt M Ls μ k1 (fun w ρ' => iprop(∃ (ov : object_value),
+    wpt M Ls k1 (fun w ρ' => iprop(∃ (ov : object_value),
         ⌜w.val = Vloaded (LVspecified ov)⌝ ∗
-        wpt M Ls μ k2 (fun u ρ'' => Ψ (SpikeVal.mergeInto w u) ρ'') e2
+        wpt M Ls k2 (fun u ρ'' => Ψ (SpikeVal.mergeInto w u) ρ'') e2
           (update_env (specPat pa pb x bty) (Vloaded (LVspecified ov)) ρ')))
       e1 (ev0 :: evs) ⊢
-      wpt M Ls μ (k1 + k2) Ψ (Expr a (Esseq (specPat pa pb x bty) e1 e2))
+      wpt M Ls (k1 + k2) Ψ (Expr a (Esseq (specPat pa pb x bty) e1 e2))
         (ev0 :: evs) := by
   induction k1 using Nat.strongRecOn generalizing e1 ev0 evs with
   | ind k1 IH =>
@@ -1166,11 +1179,11 @@ theorem wpt_seq_sym {Ψ : SpikeVal → EnvStack → IProp GF}
     (a pa : List annot) (x : sym) (bty : core_base_type)
     (e1 e2 : CoreExpr)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (k1 k2 : Nat) :
-    wpt M Ls μ k1 (fun w ρ' => iprop(∃ (v : value),
+    wpt M Ls k1 (fun w ρ' => iprop(∃ (v : value),
         ⌜w = SpikeVal.pure v⌝ ∗
-        wpt M Ls μ k2 Ψ e2 (update_env (symPat pa x bty) v ρ')))
+        wpt M Ls k2 Ψ e2 (update_env (symPat pa x bty) v ρ')))
       e1 (ev0 :: evs) ⊢
-      wpt M Ls μ (k1 + k2) Ψ (Expr a (Esseq (symPat pa x bty) e1 e2))
+      wpt M Ls (k1 + k2) Ψ (Expr a (Esseq (symPat pa x bty) e1 e2))
         (ev0 :: evs) := by
   induction k1 using Nat.strongRecOn generalizing e1 ev0 evs with
   | ind k1 IH =>
@@ -1302,7 +1315,7 @@ theorem wpt_load_at {Ψ : SpikeVal → EnvStack → IProp GF}
     iprop(pointsToView (GF := GF) id a aty off dqm dqb vty bs ∗
       (∀ fp, pointsToView id a aty off dqm dqb vty bs -∗
         Ψ (SpikeVal.annot [DA_pos [] fp] ((valueFromMemValue mv).2)) ρ)) ⊢
-      wpt M Ls μ k Ψ (loadExpr loc ann vty (cellPtr id (a + (off : Int))) mo)
+      wpt M Ls k Ψ (loadExpr loc ann vty (cellPtr id (a + (off : Int))) mo)
         ρ := by
   obtain ⟨k1, rfl⟩ : ∃ k1, k = k1 + 1 := ⟨k - 1, by omega⟩
   rw [wpt_step_eq k1
@@ -1406,7 +1419,7 @@ theorem wpt_store_at {Ψ : SpikeVal → EnvStack → IProp GF}
       (∀ fp, pointsToView id a aty off dqm (.own 1) vty
           (CerbMem.memValueToBytes [] mv).2 -∗
         Ψ (SpikeVal.annot [DA_pos [] fp] Vunit) ρ)) ⊢
-      wpt M Ls μ k Ψ (storeExpr loc ann vty (cellPtr id (a + (off : Int))) cv mo)
+      wpt M Ls k Ψ (storeExpr loc ann vty (cellPtr id (a + (off : Int))) cv mo)
         ρ := by
   obtain ⟨k1, rfl⟩ : ∃ k1, k = k1 + 1 := ⟨k - 1, by omega⟩
   rw [wpt_step_eq k1
@@ -1514,7 +1527,7 @@ theorem wpt_load_cell_at {Ψ : SpikeVal → EnvStack → IProp GF}
     iprop(cellOwn (GF := GF) id dq (SpikeCell.mk a aty bs) ∗
       (∀ fp, cellOwn id dq (SpikeCell.mk a aty bs) -∗
         Ψ (SpikeVal.annot [DA_pos [] fp] ((valueFromMemValue mv).2)) ρ)) ⊢
-      wpt M Ls μ k Ψ (loadExpr loc ann vty (cellPtr id (a + (off : Int))) mo)
+      wpt M Ls k Ψ (loadExpr loc ann vty (cellPtr id (a + (off : Int))) mo)
         ρ := by
   iintro ⟨Hcell, HΨ⟩
   icases (cellOwn_iff id dq (SpikeCell.mk a aty bs)).mp $$ Hcell
@@ -1611,7 +1624,7 @@ theorem wpt_store_cell_at {Ψ : SpikeVal → EnvStack → IProp GF}
       (∀ fp, cellOwn id (.own 1) (SpikeCell.mk a aty
           (spliceBytes off (CerbMem.memValueToBytes [] mv).2 bs)) -∗
         Ψ (SpikeVal.annot [DA_pos [] fp] Vunit) ρ)) ⊢
-      wpt M Ls μ k Ψ (storeExpr loc ann vty (cellPtr id (a + (off : Int))) cv mo)
+      wpt M Ls k Ψ (storeExpr loc ann vty (cellPtr id (a + (off : Int))) cv mo)
         ρ := by
   iintro ⟨Hcell, HΨ⟩
   icases (cellOwn_iff id (.own 1) (SpikeCell.mk a aty bs)).mp $$ Hcell
@@ -1705,57 +1718,58 @@ theorem wpt_store_cell_at {Ψ : SpikeVal → EnvStack → IProp GF}
 /-! ## Total block specifications and THE COLLAPSE into Iris TWP -/
 
 /-- TOTAL BLOCK SPECIFICATIONS: every registered label's body meets
-    its OWN budget `μ l vs`. This is the real total rule that
-    replaces the retired `blockSpecs_intro_variant`: because the
-    body is verified at budget `μ l vs` and the jump clause demands
-    `1 + μ l' vs' ≤ (remaining budget) ≤ μ l vs`, every back edge
-    carries a strict decrease of the well-founded measure — the
-    obligation is structural, not an optional hypothesis. -/
-abbrev blockSpecsT (M : MachineCtx) (Ls : LabelSpec GF)
-    (μ : sym → List value → Nat)
+    its OWN variant value `m` (every m at which its precondition is
+    claimed). This is the real total rule that replaces the retired
+    `blockSpecs_intro_variant`: because the body is verified at
+    budget `m` and the jump clause demands `1 + m' ≤ (remaining
+    budget) ≤ m`, every back edge carries a strict decrease of the
+    well-founded measure — the obligation is structural, not an
+    optional hypothesis. -/
+abbrev blockSpecsT (M : MachineCtx) (Ls : LabelSpecT GF)
     (Ψ : SpikeVal → EnvStack → IProp GF) : IProp GF :=
   iprop(□ ∀ (l : sym) (params : List (sym × core_base_type))
     (cont : CoreExpr) (vs : List value) (ev0 : Fmap sym value)
-    (evs : List (Fmap sym value)),
-    ⌜lookupLabel M.labels l = some (params, cont)⌝ -∗ Ls l vs (ev0 :: evs) -∗
-      wpt M Ls μ (μ l vs) Ψ cont (bindArgs params vs (ev0 :: evs)))
+    (evs : List (Fmap sym value)) (m : Nat),
+    ⌜lookupLabel M.labels l = some (params, cont)⌝ -∗
+      Ls l m vs (ev0 :: evs) -∗
+      wpt M Ls m Ψ cont (bindArgs params vs (ev0 :: evs)))
 
 /-- Introduction from per-label entailments. -/
 theorem blockSpecsT_intro {Ψ : SpikeVal → EnvStack → IProp GF}
-    (h : ∀ l params cont vs ev0 evs,
+    (h : ∀ l params cont vs ev0 evs m,
       lookupLabel M.labels l = some (params, cont) →
-      Ls l vs (ev0 :: evs) ⊢ wpt (GF := GF) M Ls μ (μ l vs) Ψ cont
+      Ls l m vs (ev0 :: evs) ⊢ wpt (GF := GF) M Ls m Ψ cont
         (bindArgs params vs (ev0 :: evs))) :
-    ⊢ blockSpecsT M Ls μ Ψ := by
+    ⊢ blockSpecsT M Ls Ψ := by
   unfold blockSpecsT
   imodintro
-  iintro %l %params %cont %vs %ev0 %evs %hQ HLs
-  iapply h l params cont vs ev0 evs hQ $$ HLs
+  iintro %l %params %cont %vs %ev0 %evs %m %hQ HLs
+  iapply h l params cont vs ev0 evs m hQ $$ HLs
 
 /-- Monotonicity of the block specifications in the postcondition. -/
 theorem blockSpecsT_mono {Ψ₁ Ψ₂ : SpikeVal → EnvStack → IProp GF}
     (h : ∀ w ρ', Ψ₁ w ρ' ⊢ Ψ₂ w ρ') :
-    blockSpecsT (GF := GF) M Ls μ Ψ₁ ⊢ blockSpecsT M Ls μ Ψ₂ := by
+    blockSpecsT (GF := GF) M Ls Ψ₁ ⊢ blockSpecsT M Ls Ψ₂ := by
   iintro #HB
   imodintro
-  iintro %l %params %cont %vs %ev0 %evs %hQ HLs
-  iapply wpt_mono h (μ l vs) cont (bindArgs params vs (ev0 :: evs))
-  iapply HB $$ %l %params %cont %vs %ev0 %evs %hQ HLs
+  iintro %l %params %cont %vs %ev0 %evs %m %hQ HLs
+  iapply wpt_mono h m cont (bindArgs params vs (ev0 :: evs))
+  iapply HB $$ %l %params %cont %vs %ev0 %evs %m %hQ HLs
 
 /-- THE COLLAPSE INTO IRIS TOTAL WP (audit F-02, remediation item 1:
     the pinned `TotalWeakestPre` gains its consumer): under the total
     block specifications, the total statement judgment entails the
     Iris TWP with the value-channel postcondition. NO Löb: the
     induction is on the budget — steps decrease it by one, and a
-    back edge lands in the target body's budget `μ l vs`, strictly
+    back edge lands in the target body's variant budget, strictly
     below the jump point's remaining budget by the MANDATORY
     decrease premise. (Deleting that premise makes this induction
     unjustifiable — the structural form of the audit's negative
     criterion.) -/
 theorem wpt_sound {Ψ : SpikeVal → EnvStack → IProp GF} (k : Nat)
     (e : CoreExpr) (ρ : EnvStack) :
-    blockSpecsT M Ls μ Ψ ⊢
-      iprop(wpt M Ls μ k Ψ e ρ -∗
+    blockSpecsT M Ls Ψ ⊢
+      iprop(wpt M Ls k Ψ e ρ -∗
         WP (⟨e, ρ, M⟩ : CoreRt) @ Stuckness.NotStuck; ⊤ [{ w, Ψ w.w w.ρ }]) := by
   induction k using Nat.strongRecOn generalizing e ρ with
   | ind k IH =>
@@ -1782,7 +1796,7 @@ theorem wpt_sound {Ψ : SpikeVal → EnvStack → IProp GF} (k : Nat)
         (twp.unfold (e := (⟨e, ρ, M⟩ : CoreRt))).to_eq]
       simp only [twp.pre, htoval]
       iintro #HB H %σ₁ %ns %obs %nt Hσ
-      imod H with ⟨%params, %cont, %vs, %ev0, %evs, %hρ, %hl, %hvs, %hμ, HLs⟩
+      imod H with ⟨%params, %cont, %vs, %ev0, %evs, %m, %hρ, %hl, %hvs, %hμ, HLs⟩
       subst hρ
       iapply fupd_mask_intro Std.LawfulSet.empty_subset
       iintro Hclose
@@ -1819,8 +1833,8 @@ theorem wpt_sound {Ψ : SpikeVal → EnvStack → IProp GF} (k : Nat)
       · simp only [List.length_nil, Nat.add_zero]
         iexact Hσ
       isplitr []
-      · ihave Hwpt := HB $$ %l %params %cont %vs %ev0 %evs %hl HLs
-        iapply IH (μ l vs) (by omega) cont (bindArgs params vs (ev0 :: evs))
+      · ihave Hwpt := HB $$ %l %params %cont %vs %ev0 %evs %m %hl HLs
+        iapply IH m (by omega) cont (bindArgs params vs (ev0 :: evs))
           $$ HB Hwpt
       · simp only [Algebra.BigOpL.bigOpL_nil]
         itrivial

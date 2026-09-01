@@ -88,6 +88,7 @@ import CerberusHeapLang.Exhibit
 import CerberusHeapLang.ProdExhibit
 import CerberusHeapLang.LoopExhibit
 import CerberusHeapLang.FibExhibit
+import CerberusHeapLang.DivergeExhibit
 import CerberusHeapLang.ArrayExhibit
 import CerberusHeapLang.ListRevExhibit
 import CerberusHeapLang.CaseExhibit
@@ -342,13 +343,12 @@ info: 'CerberusHeapLang.array_sum_certified' depends on axioms: [propext, Classi
 -/
 #guard_msgs in #print axioms CerberusHeapLang.array_sum_certified
 
--- Phase-2 S4 (2026-08-31): the OPERATIONAL ENGINE THEOREM for fib
--- (reclassified per the 2026-08-31 audit, F-02): unconditional at
--- the drive lane — the concrete step bound 2n+4 discharges every
--- fuel hypothesis; driveJ DELIVERS fib n. Proved by direct
--- operational induction, NOT by the logic (no total WP exists yet —
--- Phase 3); and the PRODUCTION REGISTRATION TIE (LabeledAt derived
--- from collect_labeled_continuations_NEW at the shipped initial run
+-- fib's TOTAL equation (statement unchanged since Phase-2 S4;
+-- foundations Phase 3 re-derived its PROOF as a corollary of the
+-- total statement judgment through the generic measure→drive-fuel
+-- simulation — the operational induction is retired, audit F-02);
+-- and the PRODUCTION REGISTRATION TIE (LabeledAt derived from
+-- collect_labeled_continuations_NEW at the shipped initial run
 -- state — the boundary statement carries the declared temporal
 -- seam) with the counter loop re-exported at the derived tie.
 /--
@@ -440,6 +440,33 @@ info: 'CerberusHeapLang.wpt_engine_boundJ' depends on axioms: [propext, Classica
 info: 'CerberusHeapLang.wpt_strongly_normalizing' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in #print axioms CerberusHeapLang.wpt_strongly_normalizing
+
+-- Foundations Phase 3 (2026-09-01): THE TOTAL CLIENTS — fib's
+-- logical termination (Iris TotalAdequacy consumed as-is), the
+-- list-reverse TOTAL equation at the DERIVED bound 13·|xs|+7 (the
+-- registered residual closes) + its termination, and THE NEGATIVE
+-- TEST (the self-jump loop's total derivation is FALSE — the
+-- audit's "removing the decrease makes a looping example
+-- unprovable" criterion in semantic form). Cones exactly the trio.
+/--
+info: 'CerberusHeapLang.fib_terminates' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms CerberusHeapLang.fib_terminates
+
+/--
+info: 'CerberusHeapLang.list_reverse_certified_total' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms CerberusHeapLang.list_reverse_certified_total
+
+/--
+info: 'CerberusHeapLang.list_reverse_terminates' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms CerberusHeapLang.list_reverse_terminates
+
+/--
+info: 'CerberusHeapLang.diverge_total_unprovable' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms CerberusHeapLang.diverge_total_unprovable
 
 /-! ## The exhaustive sweep (LAST — nothing declared below) -/
 

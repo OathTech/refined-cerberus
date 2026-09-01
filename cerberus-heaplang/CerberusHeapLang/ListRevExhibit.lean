@@ -1398,5 +1398,436 @@ theorem list_reverse_demo {GF : BundledGFunctors} [SpikeGpreS GF]
 
 end LrDrive
 
+/-! ## THE TOTAL LANE (foundations Phase 3 — the registered residual
+CLOSES): total list reversal through the total statement judgment.
+The variant is the REMAINING CHAIN LENGTH — a heap-resident measure,
+pinned by the invariant through the variant-indexed label context
+(`lrLsT`: `m = lrCost rest'.length`); the back edge discharges the
+judgment's mandatory decrease by arithmetic on the derived
+per-iteration cost. THE DERIVED BOUND: `lrCost r = 13·r + 6` per
+label entry (memop-eval 1 + PtrEq 2 + sym-beta prepaid; if 1;
+load-eval 1 + node load 3; spec-beta + wrapper prepaid; store-eval 1
++ node store 3; wild-beta + wrapper prepaid; jump 1 — the two annot
+wrappers each reserve one unit for their eventual merge, of which
+the engine spends one, so the budget is one unit per iteration above
+the engine's true 12), program bound `13·|xs| + 7`. The 2026-08-31
+listrev notes had ESTIMATED ~11·|xs| + 6 before the wrapper-merge
+step and the nested-wrapper merge were counted; the derived bound
+here is proved, unconditional, and delivered by the GENERIC
+simulation (`wpt_engine_boundJ`) — zero Step constructors, zero
+driveJ_step chains, per the audit's acceptance criterion. -/
+
+/-- The derived per-label-entry step budget at remaining length r. -/
+def lrCost : Nat → Nat
+  | 0 => 6
+  | r + 1 => 13 + lrCost r
+
+theorem lrCost_eq (r : Nat) : lrCost r = 13 * r + 6 := by
+  induction r with
+  | zero => rfl
+  | succ r ih =>
+    rw [show lrCost (r + 1) = 13 + lrCost r from rfl, ih]
+    omega
+
+section NodeClientsT
+
+variable {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
+variable {M : MachineCtx} {Ls : LabelSpecT GF}
+
+/-- NODE `node*`-FIELD LOAD, total form — `wpt_load_cell_at` at view
+    type `nodePtrTy` (client instance, cost 3 ≤ k). -/
+theorem wpt_load_node_field {Ψ : SpikeVal → EnvStack → IProp GF}
+    (loc : CerbLocation.Loc) (ann : core_run_annotation)
+    (id a : Int) (off : Nat) (mo : memory_order)
+    (dq : DFrac) (bs : List CerbMem.AbsByte) (ρ : EnvStack)
+    {mv : CerbMem.MemValue} {k : Nat} (hk : 3 ≤ k)
+    (hbound : off + 8 ≤ CerbMem.sizeofCtype nodeTy)
+    (hdec : ∀ lum fpm, CerbMem.reconstructValue lum fpm (a + (off : Int))
+      nodePtrTy ((bs.drop off).take 8) = mv) :
+    iprop(cellOwn (GF := GF) id dq (SpikeCell.mk a nodeTy bs) ∗
+      (∀ fp, cellOwn id dq (SpikeCell.mk a nodeTy bs) -∗
+        Ψ (SpikeVal.annot [DA_pos [] fp] ((valueFromMemValue mv).2)) ρ)) ⊢
+      wpt M Ls k Ψ (loadExpr loc ann nodePtrTy (cellPtr id (a + (off : Int))) mo)
+        ρ :=
+  wpt_load_cell_at loc ann id a nodeTy off nodePtrTy mo dq bs ρ hk
+    (by rw [nodePtrTy_size]; exact hbound)
+    (by rw [nodePtrTy_size]; exact hdec) rfl
+
+/-- NODE `node*`-FIELD STORE, total form — `wpt_store_cell_at` at
+    view type `nodePtrTy` (client instance, cost 3 ≤ k). -/
+theorem wpt_store_node_field {Ψ : SpikeVal → EnvStack → IProp GF}
+    (loc : CerbLocation.Loc) (ann : core_run_annotation)
+    (id a : Int) (off : Nat) (cv : value) (mo : memory_order)
+    (bs : List CerbMem.AbsByte) (ρ : EnvStack) {mv : CerbMem.MemValue}
+    {k : Nat} (hk : 3 ≤ k)
+    (hmv : memValueFromValue M.tagDefs (Ctype [] (unatomic_ nodePtrTy)) cv =
+      some mv)
+    (hbound : off + 8 ≤ CerbMem.sizeofCtype nodeTy)
+    (hlen : (CerbMem.memValueToBytes [] mv).2.length = 8)
+    (hcompat : CerbMem.ctypeMemCompatible nodePtrTy (CerbMem.typeofMval mv) =
+      true)
+    (hfpm : ∀ fpm, (CerbMem.memValueToBytes fpm mv).1 = fpm)
+    (hbytes : ∀ fpm, (CerbMem.memValueToBytes fpm mv).2 =
+      (CerbMem.memValueToBytes [] mv).2) :
+    iprop(cellOwn (GF := GF) id (.own 1) (SpikeCell.mk a nodeTy bs) ∗
+      (∀ fp, cellOwn id (.own 1) (SpikeCell.mk a nodeTy
+          (spliceBytes off (CerbMem.memValueToBytes [] mv).2 bs)) -∗
+        Ψ (SpikeVal.annot [DA_pos [] fp] Vunit) ρ)) ⊢
+      wpt M Ls k Ψ (storeExpr loc ann nodePtrTy (cellPtr id (a + (off : Int)))
+        cv mo) ρ :=
+  wpt_store_cell_at loc ann id a nodeTy off nodePtrTy cv mo bs ρ hk hmv
+    (by rw [nodePtrTy_size]; exact hbound) hcompat hfpm hbytes
+    (by rw [nodePtrTy_size]; exact hlen)
+    (fun lum fpm => nodeTy_dec_indep lum fpm a _)
+
+end NodeClientsT
+
+section LrTotal
+
+variable {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
+variable (loc : CerbLocation.Loc) (ann ra : core_run_annotation)
+  (mo : memory_order) (pbty cbty bbty nbty ubty : core_base_type)
+  (xs : List Int)
+variable (p : sym) (rs : core_run_state)
+  (hQ : LabeledAt rs p (lrQ loc ann ra mo pbty cbty bbty nbty ubty))
+
+/-- The variant-indexed label context: the partial invariant plus
+    the variant pin `m = lrCost rest'.length` (the heap-resident
+    measure enters through the invariant — the length of the chain
+    the second argument heads). -/
+abbrev lrLsT : LabelSpecT GF := fun _ m args ρ =>
+  iprop(∃ (revd rest' : List Int) (pPrev pCur : CerbMem.PointerValue)
+      (f : Fmap sym value) (renv : List (Fmap sym value)),
+    ⌜args = [ptrVal pPrev, ptrVal pCur] ∧ xs = revd.reverse ++ rest' ∧
+      m = lrCost rest'.length ∧ ρ = f :: renv ∧ SymFrame f⌝ ∗
+    isList pPrev revd ∗ isList pCur rest')
+
+include hQ
+
+/-- The loop body meets its variant budget at any invariant frame —
+    the same textbook derivation as `lr_body_wps`, at the total
+    stratum with the budget arithmetic. -/
+theorem lr_body_wpt (revd rest' : List Int)
+    (pPrev pCur : CerbMem.PointerValue) (f : Fmap sym value)
+    (renv : List (Fmap sym value)) (hf : SymFrame f)
+    (hxs : xs = revd.reverse ++ rest') :
+    iprop(isList (GF := GF) pPrev revd ∗ isList pCur rest') ⊢
+      wpt (procCtx p rs) (lrLsT xs) (lrCost rest'.length)
+        (lrPost xs) (lrBody loc ann ra mo bbty nbty ubty)
+        (lrFrame (ptrVal pPrev) (ptrVal pCur) f :: renv) := by
+  rw [show lrBody loc ann ra mo bbty nbty ubty =
+    Expr [] (Esseq (symPat [] lrBSym bbty) lrMemopE
+      (Expr [] (Eif (Pexpr [] () (PEsym lrBSym))
+        (Expr [] (Epure lrExitPe))
+        (lrElse loc ann ra mo nbty ubty)))) from rfl]
+  iintro ⟨HP, HC⟩
+  cases rest' with
+  | nil =>
+    -- cur == NULL: exit in 6 = 3 (null test) + 3 (guard + PURE +
+    -- delivery)
+    rw [isList_nil]
+    icases HC with %hnull
+    subst hnull
+    rw [show lrCost ([] : List Int).length = 3 + 3 from rfl]
+    iapply wpt_seq_sym
+    rw [show lrMemopE = memopRedex PtrEq
+      [Pexpr [] () (PEsym lrCurSym), Pexpr [] () (PEval nullVal)] from rfl,
+      show (3 : Nat) = 2 + 1 from rfl]
+    iapply wpt_memop_eval PtrEq _ _ _
+      lr_memop_operands_nonvalue (lr_cur_eval hf renv _ _) rfl
+    rw [show memopRedex PtrEq [Pexpr [] () (PEval (ptrVal nullNode)),
+        Pexpr [] () (PEval nullVal)] =
+      memopPtrEqVals (Vobject (OVpointer nullNode))
+        (Vobject (OVpointer nullNode)) from rfl]
+    iapply wpt_memop_ptreq nullNode nullNode _ (by omega)
+      (fun σ => eqPtrval_null_null nodeTy nodeTy σ)
+    iexists (boolValue true)
+    isplit
+    · ipureintro
+      rfl
+    rw [bindSym_lr]
+    rw [show (2 + 1 : Nat) = 2 + 1 from rfl]
+    iapply wpt_if_true [] (Pexpr [] () (PEsym lrBSym)) _ _ _
+      (by rw [procCtx_extern, lr_guard_eval hf renv (boolValue true) _ _]; rfl)
+    iapply wpt_pure lrExitPe _ (by omega) rfl (lr_exit_eval hf renv _ _ _)
+    iexists pPrev
+    isplit
+    · ipureintro
+      rfl
+    rw [show xs.reverse = revd by rw [hxs]; simp]
+    iexact HP
+  | cons v vs =>
+    -- cur is a node: 13 + lrCost |vs| = 3 (null test) + 1 (if) +
+    -- 4 (load) + 4 (store) + 1 (jump) + the target's budget
+    rw [isList_cons]
+    icases HC with ⟨%id, %aN, %q, %bs, %hfacts, Hpt, HT⟩
+    obtain ⟨rfl, h0, h1, hlen, hval, hnext⟩ := hfacts
+    ihave HP2 := isList_shape pPrev revd $$ HP
+    icases HP2 with ⟨%hshape, HP⟩
+    have kit := node_store_kit pPrev hshape
+    obtain ⟨klen, kfpm, kbytes, knext⟩ := kit
+    rw [show lrCost (v :: vs).length = 3 + (10 + lrCost vs.length) from by
+      rw [show (v :: vs).length = vs.length + 1 from rfl,
+        show lrCost (vs.length + 1) = 13 + lrCost vs.length from rfl]
+      omega]
+    iapply wpt_seq_sym
+    rw [show lrMemopE = memopRedex PtrEq
+      [Pexpr [] () (PEsym lrCurSym), Pexpr [] () (PEval nullVal)] from rfl,
+      show (3 : Nat) = 2 + 1 from rfl]
+    iapply wpt_memop_eval PtrEq _ _ _
+      lr_memop_operands_nonvalue (lr_cur_eval hf renv _ _) rfl
+    rw [show memopRedex PtrEq [Pexpr [] () (PEval (ptrVal (cellPtr id aN))),
+        Pexpr [] () (PEval nullVal)] =
+      memopPtrEqVals (Vobject (OVpointer (cellPtr id aN)))
+        (Vobject (OVpointer nullNode)) from rfl]
+    iapply wpt_memop_ptreq (cellPtr id aN) nullNode _ (by omega)
+      (fun σ => eqPtrval_cell_null id aN nodeTy σ)
+    iexists (boolValue false)
+    isplit
+    · ipureintro
+      rfl
+    rw [bindSym_lr]
+    rw [show 10 + lrCost vs.length = (9 + lrCost vs.length) + 1 by omega]
+    iapply wpt_if_false [] (Pexpr [] () (PEsym lrBSym)) _ _ _
+      (by rw [procCtx_extern, lr_guard_eval hf renv (boolValue false) _ _]; rfl)
+    rw [show lrElse loc ann ra mo nbty ubty =
+      Expr [] (Esseq (specPat [] [] lrNSym nbty)
+        (lrLoadE loc ann mo)
+        (Expr [] (Esseq (Pattern [] (CaseBase (none, ubty)))
+          (lrStoreE loc ann mo)
+          (Expr [] (Erun ra lrLoopSym
+            [Pexpr [] () (PEsym lrCurSym), Pexpr [] () (PEsym lrNSym)])))))
+      from rfl,
+      show 9 + lrCost vs.length = 4 + (5 + lrCost vs.length) by omega]
+    iapply wpt_seq_spec
+    rw [show lrLoadE loc ann mo =
+      loadOpRedex loc ann nodePtrTy (lrShiftPe lrCurSym) mo from rfl,
+      show (4 : Nat) = 3 + 1 from rfl]
+    iapply wpt_load_eval loc ann nodePtrTy (lrShiftPe lrCurSym) mo _
+      rfl (lr_shift_eval_B hf renv _ _ id aN)
+    rw [show cellPtr id (aN + 8) = cellPtr id (aN + ((8 : Nat) : Int))
+      from rfl]
+    iapply wpt_load_node_field loc ann id aN 8 mo (.own 1) bs _
+      (by omega)
+      (by rw [nodeTy_size]; omega)
+      (fun lum fpm => hnext lum fpm _)
+    isplitl [Hpt]
+    · iexact Hpt
+    iintro %fp Hpt
+    iexists (OVpointer q)
+    isplit
+    · ipureintro
+      show (valueFromMemValue (.MVpointer nodeTy q)).2 = _
+      rw [valueFromMemValue_ptr]
+    rw [update_env_spec]
+    rw [show envAdd lrNSym (Vobject (OVpointer q))
+        (lrFrameB (boolValue false) (ptrVal pPrev) (ptrVal (cellPtr id aN)) f) =
+      lrFrameN (ptrVal q) (boolValue false) (ptrVal pPrev)
+        (ptrVal (cellPtr id aN)) f from rfl]
+    rw [show 5 + lrCost vs.length = 4 + (1 + lrCost vs.length) by omega]
+    iapply wpt_seq
+    rw [show lrStoreE loc ann mo = storeOpRedex loc ann nodePtrTy
+      (lrShiftPe lrCurSym) (Pexpr [] () (PEsym lrPrevSym)) mo from rfl,
+      show (4 : Nat) = 3 + 1 from rfl]
+    iapply wpt_store_eval loc ann nodePtrTy _ _ mo _
+      rfl rfl (lr_shift_eval_N hf renv _ _ _ id aN)
+      (lr_store_value_eval hf renv _ _ _ _)
+    rw [show cellPtr id (aN + 8) = cellPtr id (aN + ((8 : Nat) : Int))
+      from rfl]
+    iapply wpt_store_node_field loc ann id aN 8 (ptrVal pPrev) mo bs _
+      (by omega)
+      (node_ptr_encodes pPrev) (by rw [nodeTy_size]; omega) klen
+      (node_ptr_compat pPrev) kfpm kbytes
+    isplitl [Hpt]
+    · iexact Hpt
+    iintro %fp2 Hpt
+    iapply wpt_run [] ra lrLoopSym
+      [Pexpr [] () (PEsym lrCurSym), Pexpr [] () (PEsym lrNSym)] _ _
+      (lrCost vs.length)
+      (by rw [procCtx_labels hQ]
+          exact lrQ_lookup loc ann ra mo pbty cbty bbty nbty ubty)
+      (lr_args_eval hf renv _ _ _ _)
+      (by omega)
+    iexists (v :: revd), vs, (cellPtr id aN), q,
+      (lrFrameN (ptrVal q) (boolValue false) (ptrVal pPrev)
+        (ptrVal (cellPtr id aN)) f), renv
+    isplit
+    · ipureintro
+      refine ⟨rfl, ?_, rfl, rfl, lrFrameN_symFrame hf _ _ _ _⟩
+      rw [hxs]
+      simp
+    isplitl [Hpt HP]
+    · iapply isList_cons_intro id aN pPrev _ v revd h0 h1
+        (by rw [spliceBytes_length _ _ _ (by rw [klen, hlen]; omega)]
+            exact hlen)
+        (by intro lum fpm ad
+            rw [show ((spliceBytes 8 (CerbMem.memValueToBytes []
+                (CerbMem.pointerMval nodeTy pPrev)).2 bs).drop 0).take 8 =
+              (bs.drop 0).take 8 from
+              spliceBytes_value_slice _ bs klen hlen]
+            exact hval lum fpm ad)
+        (knext _ (spliceBytes_next_slice _ bs klen hlen))
+      isplitl [Hpt]
+      · iexact Hpt
+      · iexact HP
+    · iexact HT
+
+/-- THE TOTAL BLOCK SPECIFICATION for the reversal loop. -/
+theorem lr_blockSpecsT :
+    ⊢ blockSpecsT (GF := GF) (procCtx p rs)
+      (lrLsT xs) (lrPost xs) := by
+  refine blockSpecsT_intro fun l params cont args env0 envs m hl => ?_
+  rw [procCtx_labels hQ] at hl
+  obtain ⟨rfl, rfl⟩ := lrQ_inv loc ann ra mo pbty cbty bbty nbty ubty hl
+  iintro ⟨%revd, %rest', %pPrev, %pCur, %f, %renv, %hpure, HP, HC⟩
+  obtain ⟨rfl, hxs, rfl, hρ, hf⟩ := hpure
+  obtain ⟨rfl, rfl⟩ : f = env0 ∧ renv = envs := by
+    have h1 := congrArg (fun l => l.head?) hρ
+    have h2 := congrArg (fun l => l.tail) hρ
+    simp at h1 h2
+    exact ⟨h1.symm, h2.symm⟩
+  rw [bindArgs_lr]
+  iapply lr_body_wpt loc ann ra mo pbty cbty bbty nbty ubty xs p rs hQ
+    revd rest' pPrev pCur f renv hf hxs
+  isplitl [HP]
+  · iexact HP
+  · iexact HC
+
+/-- The whole program's total judgment at budget `lrCost |xs| + 1`. -/
+theorem lr_wpt (sbty : core_base_type) (head : CerbMem.PointerValue) :
+    isList (GF := GF) head xs ⊢
+      wpt (procCtx p rs) (lrLsT xs) (lrCost xs.length + 1) (lrPost xs)
+        (lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head)
+        [fmapEmpty] := by
+  rw [show lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head =
+    Expr [] (Esave (lrLoopSym, sbty) (lrParams pbty cbty head)
+      (lrBody loc ann ra mo bbty nbty ubty)) from rfl]
+  iintro HL
+  iapply wpt_save [] (lrLoopSym, sbty) _ _ fmapEmpty []
+    (cvals := [nullVal, ptrVal head]) rfl
+  rw [bindSave_lr]
+  rw [show lrFrame nullVal (ptrVal head) fmapEmpty =
+    lrFrame (ptrVal nullNode) (ptrVal head) fmapEmpty from rfl]
+  iapply lr_body_wpt loc ann ra mo pbty cbty bbty nbty ubty xs p rs hQ [] xs
+    nullNode head fmapEmpty [] symFrame_empty (by simp)
+  isplitr [HL]
+  · exact isList_nil_intro
+  · iexact HL
+
+omit hQ in
+/-- The postcondition entails the engine readout (final-heap chain,
+    per-node CellCoh — the same extraction as the partial lane's). -/
+theorem lrPost_to_readout :
+    ∀ w ρ', lrPost (GF := GF) xs w ρ' ⊢
+      readoutPost (fun v σ' => ∃ p' : CerbMem.PointerValue,
+        v = ptrVal p' ∧ ChainAt σ' p' xs.reverse) w ρ' := by
+  intro w ρ'
+  iintro ⟨%p', %hval, HL⟩ %σ' %ns %κs %nt Hσ
+  icases (stateInterp_iff σ' ns κs nt).mp $$ Hσ
+    with ⟨%mm, %mb, %mk, %HG, Hmi, Hbi, Hki⟩
+  ihave %hchain : ⌜ChainAt σ' p' xs.reverse⌝ $$ [HL Hmi Hbi]
+  · iapply isList_readout σ' HG xs.reverse p'
+    isplitl [HL]
+    · iexact HL
+    isplitl [Hmi]
+    · iexact Hmi
+    · iexact Hbi
+  iapply fupd_mask_intro_discard Std.LawfulSet.empty_subset
+  ipureintro
+  exact ⟨p', hval, hchain⟩
+
+end LrTotal
+
+section LrTotalExport
+
+variable (loc : CerbLocation.Loc) (ann ra : core_run_annotation)
+  (mo : memory_order) (pbty cbty bbty nbty ubty : core_base_type)
+
+theorem lrProg_pot (sbty : core_base_type) (head : CerbMem.PointerValue) :
+    pot (lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head) = 7 := rfl
+
+theorem lrBody_pot : pot (lrBody loc ann ra mo bbty nbty ubty) = 6 := rfl
+
+/-- LIST-REVERSE, THE UNCONDITIONAL TOTAL ENGINE EQUATION (the
+    registered residual closes; the bound is DERIVED — 13 per
+    iteration + 6 exit + 1 entry, header note on the delta vs the
+    old 11-per-iteration estimate): from any memory carrying a
+    seeded input chain, the engine's driveJ at fuel `13·|xs| + 7`
+    DELIVERS a pointer whose final-heap chain is `xs.reverse` — no
+    fuel hypotheses, no partiality. A corollary of the total
+    judgment through the generic simulation: zero Step constructors,
+    zero driveJ_step chains. -/
+theorem list_reverse_certified_total (sbty : core_base_type)
+    (xs : List Int) (head : CerbMem.PointerValue)
+    (m₀ : SpikeHeapF SpikeCell) (hseed : SeedChain m₀ head xs)
+    (hlib : CerbLocation.isLibraryLocation loc = false)
+    (σ₀ : Mem) (hcoh : Coh σ₀ m₀) (aids : Nat → Nat) :
+    ∃ (p' : CerbMem.PointerValue) (σ' : Mem),
+      driveJ (lrRS loc ann ra mo pbty cbty bbty nbty ubty) aids
+        (13 * xs.length + 7)
+        (procThread lrProcSym
+          (lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head)
+          [fmapEmpty]) σ₀ = .done (ptrVal p') σ' ∧
+      ChainAt σ' p' xs.reverse := by
+  have hQ := lrRS_labeledAt loc ann ra mo pbty cbty bbty nbty ubty
+  have hk : lrCost xs.length + 1 = 13 * xs.length + 7 := by
+    rw [lrCost_eq]
+  rw [← hk]
+  obtain ⟨v, σ', hdone, ⟨p', rfl, hchain⟩, -⟩ :=
+    wpt_engine_boundJ (GF := SpikeGF) hQ
+      (fun l params cont hl => by
+        obtain ⟨-, rfl⟩ := lrQ_inv loc ann ra mo pbty cbty bbty nbty ubty hl
+        exact lrBody_fragJ loc ann ra mo bbty nbty ubty hlib)
+      (fun l params cont hl => by
+        obtain ⟨-, rfl⟩ := lrQ_inv loc ann ra mo pbty cbty bbty nbty ubty hl
+        rw [lrBody_pot, show lemDefaultFuel = 999999 + 1 from rfl]
+        omega)
+      (lrLsT xs)
+      (lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head)
+      fmapEmpty [] σ₀ m₀
+      (.save (lrBody_fragJ loc ann ra mo bbty nbty ubty hlib))
+      (by rw [lrProg_pot, show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+      hcoh
+      (fun v σ' => ∃ p' : CerbMem.PointerValue,
+        v = ptrVal p' ∧ ChainAt σ' p' xs.reverse)
+      (lrCost xs.length + 1)
+      (by
+        intro inst
+        refine .trans BI.emp_sep.2 (BI.sep_mono ?_ ?_)
+        · exact (lr_blockSpecsT loc ann ra mo pbty cbty bbty nbty ubty xs
+            lrProcSym (lrRS loc ann ra mo pbty cbty bbty nbty ubty) hQ).trans
+            (blockSpecsT_mono (lrPost_to_readout xs))
+        · exact (seedChain_isList xs m₀ head hseed).trans
+            ((lr_wpt loc ann ra mo pbty cbty bbty nbty ubty xs
+              lrProcSym (lrRS loc ann ra mo pbty cbty bbty nbty ubty) hQ
+              sbty head).trans
+              (wpt_mono (lrPost_to_readout xs) _ _ _)))
+      aids
+  exact ⟨p', σ', hdone, hchain⟩
+
+/-- LIST-REVERSE TERMINATES — the logical half over the unified
+    relation (Iris TotalAdequacy consumed as-is). -/
+theorem list_reverse_terminates (sbty : core_base_type)
+    (xs : List Int) (head : CerbMem.PointerValue)
+    (m₀ : SpikeHeapF SpikeCell) (hseed : SeedChain m₀ head xs)
+    (σ₀ : Mem) (hcoh : Coh σ₀ m₀) :
+    Relation.StronglyNormalizing Language.ErasedStep
+      ([(⟨lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head,
+          [fmapEmpty],
+          procCtx lrProcSym (lrRS loc ann ra mo pbty cbty bbty nbty ubty)⟩ :
+            CoreRt)], σ₀) := by
+  have hQ := lrRS_labeledAt loc ann ra mo pbty cbty bbty nbty ubty
+  refine wpt_strongly_normalizing (GF := SpikeGF) (lrLsT xs) (lrPost xs)
+    _ _ σ₀ m₀ hcoh (lrCost xs.length + 1) ?_
+  intro inst
+  refine .trans BI.emp_sep.2 (BI.sep_mono ?_ ?_)
+  · exact lr_blockSpecsT loc ann ra mo pbty cbty bbty nbty ubty xs
+      lrProcSym (lrRS loc ann ra mo pbty cbty bbty nbty ubty) hQ
+  · exact (seedChain_isList xs m₀ head hseed).trans
+      (lr_wpt loc ann ra mo pbty cbty bbty nbty ubty xs
+        lrProcSym (lrRS loc ann ra mo pbty cbty bbty nbty ubty) hQ sbty head)
+
+end LrTotalExport
+
 
 end CerberusHeapLang
