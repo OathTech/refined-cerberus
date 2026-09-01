@@ -429,7 +429,14 @@ true and uninteresting. Three guards:
    fragment and mirror constructors out of the built environment,
    and a constructor without a manifest row fails gate 4 — the
    fail-open coverage channel closes by a failed check, not by
-   vigilance.
+   vigilance. Since alloc arc P3 the manifest's consumers are also
+   DEPENDENCY-CERTIFIED (each listed consumer's proof cone must
+   contain the row's public rule and its lane's adequacy launcher;
+   its statement must contain the construct's syntax; and the layer
+   cut bars every exhibit from reaching the relation or the engine
+   round except through the logic/adequacy layer) — a name whose
+   proof bypasses the logic is a red gate (re-audit R-04;
+   `2026-09-01_p3-notes.md`).
 
 The former loop/straight-line asymmetry is CLOSED (Phase 5): loop
 programs now reach the production pipeline too. Three theorems

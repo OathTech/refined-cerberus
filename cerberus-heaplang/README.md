@@ -55,16 +55,31 @@ linked-list reversal.
 
 **The authoritative scope statement is the generated
 [capability manifest](docs/CAPABILITY_MANIFEST.md)** — one row per
-supported Core construct (mirror rule / logic rule / fragment cone
-/ engine match / adequacy, total, and production lanes / example
-consumer), regenerated and drift-checked by `scripts/test_unit.sh`
-gate 4. Since Phase-1 S1c its row set is DERIVED from the unified
-fragment cone: the generator enumerates the cone's constructors out
-of the built environment and requires every mirror-relation
-constructor to be claimed by exactly one row, so the mirror, the
-cone, and this claims surface cannot diverge without a failed
-check. Every scope claim in this README is read under it: a
-construct is claimed at exactly its manifest level, no more.
+supported Core construct with STAGED fields (syntax witness / mirror
+rule / public logical rules / fragment cone / engine match / adequacy
+consumers / local consumers / total lane / production lane),
+regenerated and drift-checked by `scripts/test_unit.sh` gate 4.
+Since Phase-1 S1c its row set is DERIVED from the unified fragment
+cone: the generator enumerates the cone's constructors out of the
+built environment and requires every mirror-relation constructor to
+be claimed by exactly one row, so the mirror, the cone, and this
+claims surface cannot diverge without a failed check. Since alloc
+arc P3 every consumer it lists is DEPENDENCY-CERTIFIED: the
+generator computes each consumer's proof cone in the built
+environment and requires the row's public rule and the lane's
+adequacy launcher in it (for the allocating production exports also
+`wpt_create` and `launchResources`), requires the consumer's
+STATEMENT to contain the construct's syntax (through program-valued
+definitions only), and enforces the LAYER CUT over every declaration
+of the positive-exhibit modules — no dependency path from an exhibit
+reaches `Step.*`/the engine-round projections/`driveJ_step`/
+`driverDone_step` except through the logic/adequacy layer, and no
+exhibit body names one directly. A listed consumer whose proof
+bypasses its rule is a red gate, not a stale label (the 2026-09-01
+skeptical re-audit's R-04; plant transcripts:
+`docs/2026-09-01_p3-notes.md`). Every scope claim in this README is
+read under it: a construct is claimed at exactly its manifest level,
+no more.
 
 The exhibits, in pedagogical order (column
 legend, for first read — each term gets its full treatment below:
@@ -502,9 +517,11 @@ reads the three headline statements identifier by identifier. For
 per-construct coverage, regenerate the
 [capability manifest](docs/CAPABILITY_MANIFEST.md)
 (`scripts/capability_manifest.lean`) and diff it against the
-committed copy — `scripts/test_unit.sh` gate 4 does exactly that,
-and additionally fails if this README's certified-scope token list
-strays outside the manifest's adequacy-exportable set.
+committed copy — `scripts/test_unit.sh` gate 4 does exactly that
+(the generator itself throws on any dependency-certification or
+layer-cut failure), and additionally fails if this README's
+certified-scope token list strays outside the manifest's
+adequacy-exportable set.
 
 ## The modules
 

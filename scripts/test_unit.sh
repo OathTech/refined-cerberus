@@ -47,22 +47,35 @@ else
   fail=1
 fi
 
-echo "== gate 4: capability manifest (drift + README certified-scope tie) =="
+echo "== gate 4: capability manifest (dependency-certified; drift + README certified-scope tie) =="
 # Foundations arc (2026-08-31 audit F-01/F-09; Phase 0, upgraded to
-# the CONE-DERIVED form in Phase-1 S1c): the generated capability
-# manifest is THE authoritative per-construct scope statement, and
-# its row set is DERIVED from the unified cone — the generator
-# enumerates `Frag`'s constructors out of the built environment (a
-# cone constructor without a row mapping is a generator throw) and
-# derives `Step` mirror coverage the same way (every Step
-# constructor must be claimed by exactly one row). This gate (a)
+# the CONE-DERIVED form in Phase-1 S1c, to the DEPENDENCY-CERTIFIED
+# form in alloc arc P3 — the 2026-09-01 re-audit's R-04): the
+# generated capability manifest is THE authoritative per-construct
+# scope statement, and its row set is DERIVED from the unified cone
+# — the generator enumerates `Frag`'s constructors out of the built
+# environment (a cone constructor without a row mapping is a
+# generator throw) and derives `Step` mirror coverage the same way
+# (every Step constructor must be claimed by exactly one row). Since
+# P3 the generator additionally THROWS unless every listed consumer
+# is dependency-certified in the built environment — its proof cone
+# contains the row's public rule and its lane's approved adequacy
+# launcher (production consumers also the row's required
+# abstractions, e.g. wpt_create + launchResources for create), its
+# statement contains the construct's syntax through program-valued
+# definitions — and unless the LAYER CUT holds over every declaration
+# of the positive-exhibit modules (no path to Step.*/the engine-round
+# projections/driveJ_step/driverDone_step except through the
+# logic/adequacy layer; no direct reference). This gate (a)
 # regenerates the manifest and fails on any drift against the
 # committed copy (the generator itself fails closed on an unmapped
-# cone/mirror constructor or a missing checked rule/match/consumer
-# name — so a new or deleted constructor without a manifest row is
-# red here), and (b) ties the README's certified-scope token list
-# to the manifest's ADEQUACY-EXPORTABLE set: a construct claimed as
-# certified without a manifest row at that level is red.
+# cone/mirror constructor, a missing checked name, or any
+# dependency/layer-cut violation — so a consumer re-proved by a
+# direct engine trace under the same name is red here), and (b) ties
+# the README's certified-scope token list to the manifest's
+# ADEQUACY-EXPORTABLE set: a construct claimed as certified without a
+# manifest row at that level is red. Plant transcripts:
+# cerberus-heaplang/docs/2026-09-01_p3-notes.md.
 manifest=cerberus-heaplang/docs/CAPABILITY_MANIFEST.md
 if [[ ! -f "$manifest" ]]; then
   echo "FAIL: committed capability manifest missing ($manifest)" >&2
@@ -82,7 +95,8 @@ else
     fi
   else
     echo "FAIL: capability manifest generator red (an unmapped Step/Frag" \
-      "constructor or a missing checked name); generator output:" >&2
+      "constructor, a missing checked name, a dependency-certification" \
+      "failure, or a layer-cut violation); generator output:" >&2
     cat "$tmpman" >&2
     fail=1
   fi

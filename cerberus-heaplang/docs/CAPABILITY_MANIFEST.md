@@ -10,52 +10,64 @@ regenerate with:
 
 This file is THE authoritative per-construct scope statement for
 `cerberus-heaplang` (2026-08-31 foundations arc, Phase 0; audit
-findings F-01/F-09; cone-derived since Phase-1 S1c). Every claims
+findings F-01/F-09; cone-derived since Phase-1 S1c; DEPENDENCY-
+CERTIFIED since alloc arc P3 — re-audit R-04). Every claims
 surface defers to it: a construct may be claimed at exactly its
 row's level, no more. Enforcement: `scripts/test_unit.sh` gate 4
-(drift + README scope tie).
+(drift + README scope tie + every check below fail-closed).
 
-Row provenance — which parts are DERIVED vs CHECKED vs DECLARED is
-part of the instrument's honesty and is stated in the script
-header: the ROW SET is DERIVED — enumerated from the `Frag` cone's
-constructor list read out of the built environment (rows appear in
-cone declaration order; a cone constructor without a row mapping
-fails the run), and the `Step` mirror's coverage is DERIVED the
-same way (every Step constructor must be claimed by exactly one
-row's mirror cell); `OK` cells are name-and-kind CHECKED in the
-built environment; lane ATTRIBUTIONS and
-consumer-exercises-construct claims are DECLARED (documented
-instrument granularity). An `OK` cell therefore means the NAMED
-DECLARATION EXISTS with the stated kind — NOT that its proof
-depends on the row's logic rule (2026-09-01 skeptical re-audit
-R-04: this gate validates declarations, not proof flow;
-dependency-staged certification is alloc-arc P3). The
-supplementary evaluator row (last)
-owns no constructor and is mechanically barred from claiming any.
+Row provenance — DERIVED vs CHECKED vs DEPENDENCY-CERTIFIED vs
+DECLARED is stated in the script header. In brief: the ROW SET is
+DERIVED (enumerated from the `Frag` cone's constructor list in the
+built environment, in declaration order; a cone constructor without
+a row mapping fails the run) and the `Step` mirror coverage is
+DERIVED (every Step constructor claimed by exactly one row's mirror
+cell); `OK` cells are name-and-kind CHECKED; and EVERY CONSUMER
+LISTED IN A LANE IS DEPENDENCY-CERTIFIED — its statement's program
+text contains the row's syntax constructor (the execution witness,
+computed through program-valued definitions only), its proof cone
+contains a public rule of the row (partial rule for adequacy/local
+consumers, total rule for the total lane, either for production),
+and — for adequacy/total/production consumers — an approved
+launcher of that lane; production consumers additionally carry the
+row's required abstractions (create: `wpt_create` AND
+`launchResources`). A listed name failing any of these THROWS (the
+run is red, gate 4 is red) — an `OK` consumer therefore means its
+PROOF FLOWS THROUGH the row's public abstraction, not merely that a
+declaration of that name exists (the 2026-09-01 re-audit's R-04
+closed). Additionally the LAYER CUT holds over every constant of the
+positive-exhibit modules (608 declarations checked this run):
+no dependency path from an exhibit reaches an operational name
+(`Step.*`, the engine-round projections, the per-construct engine
+equations, `driveJ_step`/`driverDone_step`) except through the
+approved logic/adequacy layer, and no exhibit body names one
+directly. Lane prose and construct descriptions are DECLARED. The
+supplementary evaluator row (last) owns no constructor and is
+mechanically barred from claiming any.
 
-| Construct | Level | Mirror (Step) | Logic (wp/wps) | Cone (Frag) | Engine match | Partial adequacy | Total lane | Production lane | Example consumer |
-|---|---|---|---|---|---|---|---|---|---|
-| value delivery (Epure at PEval; Eannot values) | CERTIFIED (drive lane) | DECLARED — terminal — the toVal/ofVal value protocol (values do not step) | OK `wp_ofVal`, `wps_ofVal` | OK `Frag.val_pure` | OK `step_ctx_done`, `step_ctx_remove_annot` | OK `engine_complete`, `engine_adequacyJ` | OK `wpt_ofVal`, `fib_certified_total`, `list_reverse_certified_total` | OK `exhibitA_prod`, `fib_certified_production` | OK `exhibitA_engine` |
-| Eaction Store0 (value operands) | CERTIFIED (drive lane) | OK `Step.store` | OK `wp_store`, `wps_store` | OK `Frag.store` | OK `step_ctx_store`, `engine_complete_storeU` — TWO-SIDED at any MachineCtx | OK `engine_complete`, `engine_adequacyJ` | OK `wpt_store_at`, `wpt_store_cell_at`, `wpt_store_cell`, `list_reverse_certified_total` | OK `exhibitA_prod`, `counter_loop_certified_production`, `list_reverse_certified_production` | OK `exhibitB_engine`, `counter_loop_certified`, `list_reverse_certified` |
-| Eaction Load0 (value operand) | CERTIFIED (drive lane) | OK `Step.load` | OK `wp_load`, `wps_load` | OK `Frag.load` | OK `step_ctx_load` | OK `engine_complete`, `engine_adequacyJ` | OK `wpt_load_at`, `wpt_load_cell_at`, `list_reverse_certified_total` | OK `exhibitA_prod`, `list_reverse_certified_production` | OK `exhibitA_engine`, `array_sum_certified` |
-| Eaction Create0 | CERTIFIED (drive lane) | OK `Step.create` | OK `wps_create`, `wps_create_cursor_internal` — alloc arc P1: the PUBLIC wps_create takes the abstract capacity allocCap (req :: rest) and binds an existential pointer (statement cursor-free); the exact-cursor form is wps_create_cursor_internal (heap-implementation use only); OOM excluded by the plan-fit inside allocCap — see Notes 4 | OK `Frag.create` | OK `step_ctx_create` | OK `engine_complete`, `engine_adequacyJ` | OK `wpt_create`, `alloc_create_launch_smoke`, `progAProd_wpt`, `ctrProd_wpt`, `lrProd_wpt` | OK `exhibitA_prod`, `counter_loop_certified_production`, `list_reverse_certified_production` — ALL THREE are WHOLE-PROGRAM create-rule consumers (alloc arc P2, the R-02 conversion): each program BINDS its engine-created pointer(s), the creates cross the PUBLIC wpt_create from abstract capacity plans (progAProd_wpt / ctrProd_wpt / lrProd_wpt), and the pipeline arrows are the generic wpt_driver_done_alloc → prod_run_eqJ — zero operational proof terms in any positive exhibit (grep transcript, docs/2026-09-01_p2-notes.md) | OK `alloc_create_launch_smoke`, `alloc_two_creates_wps`, `alloc_create_wpt`, `struct_create_store_wps`, `struct_create_store_adequacy` — alloc_create_launch_smoke is the P1 engine-facing chain-closer (driveU .done at fuel 2 via wpt_create + wpt_engine_boundU_alloc from prodMem₀); alloc_two_creates_wps / alloc_create_wpt are the wps/wpt-level local consumers of the PUBLIC rules; struct_create_store_wps is a PUBLIC-rule whole-program client over allocCap (alloc arc P2 item 1 — the program binds the fresh pointer; no cursor vocabulary) with its engine-facing adequacy consumer struct_create_store_adequacy launched through spike_engine_adequacy_alloc (P2 item 2); the allocating production exports are whole-program consumers since P2 steps 3-5 (see the production-lane cell) |
-| Esseq, wildcard pattern | CERTIFIED (drive lane) | OK `Step.sseq_pure`, `Step.sseq_annot`, `Step.sseq_ctx` | OK `wp_sseq`, `wps_seq` | OK `Frag.sseq` | OK `step_ctx_beta_pure`, `step_ctx_beta_annot` | OK `engine_complete`, `engine_adequacyJ` | OK `wpt_seq`, `list_reverse_certified_total` | OK `exhibitA_prod`, `counter_loop_certified_production`, `list_reverse_certified_production` | OK `exhibitA_engine`, `exhibitC_engine` |
-| Eannot residue (descent + merge) | CERTIFIED (drive lane) | OK `Step.annot_ctx`, `Step.annot_merge` | OK `wp_annot`, `wps_annot` | OK `Frag.annot` | OK `step_ctx_merge` | OK `engine_complete`, `engine_adequacyJ` | OK `wpt_annot`, `list_reverse_certified_total` | OK `exhibitA_prod`, `counter_loop_certified_production`, `list_reverse_certified_production` | OK `exhibitA_engine` |
-| Esave (block entry, value-shaped params) | CERTIFIED (drive lane) | OK `Step.save` | OK `wps_save` | OK `Frag.save` | OK `step_ctx_save` | OK `engine_adequacyJ` | OK `wpt_save`, `fib_certified_total`, `list_reverse_certified_total` | OK `fib_certified_production`, `counter_loop_certified_production`, `list_reverse_certified_production` | OK `counter_loop_certified`, `fib_certified` |
-| Eif (big-step boolean guard) | CERTIFIED (drive lane) | OK `Step.if_true`, `Step.if_false` | OK `wps_if_true`, `wps_if_false` | OK `Frag.if_` | OK `stepDischarge_if_true`, `stepDischarge_if_false` | OK `engine_adequacyJ` | OK `wpt_if_true`, `wpt_if_false`, `fib_certified_total`, `list_reverse_certified_total` | OK `fib_certified_production`, `counter_loop_certified_production`, `list_reverse_certified_production` | OK `counter_loop_certified`, `fib_certified` |
-| Erun (context-discarding jump) | CERTIFIED (drive lane) | OK `Step.run` | OK `wps_run` | OK `Frag.run` | OK `stepDischarge_run` — ONE-SIDED — match-given-step, the direction adequacy consumes; jump refusal channels are failwithI panics = absence of a step; see Notes 7 | OK `engine_adequacyJ` | OK `wpt_run`, `fib_certified_total`, `list_reverse_certified_total` | OK `fib_certified_production`, `counter_loop_certified_production`, `list_reverse_certified_production` | OK `counter_loop_certified`, `fib_certified` |
-| Esseq, Specified-binder pattern | CERTIFIED (drive lane) | OK `Step.sseq_spec_pure`, `Step.sseq_spec_annot` | OK `wps_seq_spec` | OK `Frag.sseq_spec` | OK `step_ctx_beta_spec_pure`, `step_ctx_beta_spec_annot` | OK `engine_adequacyJ` | OK `wpt_seq_spec`, `list_reverse_certified_total` | OK `list_reverse_certified_production` | OK `array_sum_certified`, `list_reverse_certified` |
-| Epure exit at PEsym shape | CERTIFIED (drive lane) | OK `Step.pure_eval` — certified at PEsym shape — Soundness stepDischarge_pure_sym | OK `wps_pure` | OK `Frag.pure_sym` | OK `stepDischarge_pure_sym` | OK `engine_adequacyJ` | OK `wpt_pure`, `fib_certified_total`, `list_reverse_certified_total` | OK `fib_certified_production`, `counter_loop_certified_production`, `list_reverse_certified_production` | OK `fib_certified` |
-| Load0 operand-evaluation step (ACTION_EVAL) | CERTIFIED (drive lane) | OK `Step.load_eval` | OK `wps_load_eval` | OK `Frag.load_op` | OK `stepDischarge_load_eval` | OK `engine_adequacyJ` | OK `wpt_load_eval`, `list_reverse_certified_total` | OK `list_reverse_certified_production` | OK `array_sum_certified` |
-| Esseq, plain-symbol-binder pattern (bare values) | CERTIFIED (drive lane) | OK `Step.sseq_sym_pure` | OK `wps_seq_sym` | OK `Frag.sseq_sym` | OK `step_ctx_beta_sym_pure` | OK `engine_adequacyJ` | OK `wpt_seq_sym`, `list_reverse_certified_total` | OK `list_reverse_certified_production` | OK `list_reverse_certified` |
-| Ememop PtrEq (value operands) | CERTIFIED (drive lane) | OK `Step.memop_ptreq` | OK `wps_memop_ptreq` | OK `Frag.memop_vals` | OK `step_ctx_memop` | OK `engine_adequacyJ` | OK `wpt_memop_ptreq`, `list_reverse_certified_total` | OK `list_reverse_certified_production` | OK `list_reverse_certified` |
-| Ememop PtrEq, operand-evaluation step | CERTIFIED (drive lane) | OK `Step.memop_eval` | OK `wps_memop_eval` | OK `Frag.memop_op` | OK `stepDischarge_memop_eval` | OK `engine_adequacyJ` | OK `wpt_memop_eval`, `list_reverse_certified_total` | OK `list_reverse_certified_production` | OK `list_reverse_certified` |
-| Store0 operand-evaluation step (ACTION_EVAL) | CERTIFIED (drive lane) | OK `Step.store_eval` | OK `wps_store_eval` | OK `Frag.store_op` | OK `stepDischarge_store_eval` | OK `engine_adequacyJ` | OK `wpt_store_eval`, `list_reverse_certified_total` | OK `list_reverse_certified_production` | OK `list_reverse_certified` |
-| Ecase, VALUE scrutinee | CERTIFIED (drive lane) | OK `Step.case_value` | OK `wps_case_value` | OK `Frag.case_value` — S1b: joined — branch-closure + branch-size premises explicit | OK `step_ctx_case_value`, `step_ctx_case_illtyped`, `engine_complete_caseU` — TWO-SIDED at any MachineCtx | OK `engine_adequacyJ`, `engine_adequacyU` | RED — no total rule yet (no wpt case rule — mechanical analog of wps_case_value, no consumer); see Notes 2 | RED — outside every lane | OK `case_certified` — the WP-lane adequacy regression — binder pattern, substitution TAU (CaseExhibit) |
-| Ewseq, wildcard pattern (weak sequencing) | CERTIFIED (drive lane) | OK `Step.wseq_pure`, `Step.wseq_annot`, `Step.wseq_ctx` — S1b DRIFT TEST — entered through the generic route; see Notes 6 | OK `wps_wseq` | OK `Frag.wseq` | OK `step_ctx_wseq_pure`, `step_ctx_wseq_annot` | OK `engine_adequacyJ`, `engine_adequacyU` | RED — no total rule yet (no wpt wseq rule — mechanical analog of wps_wseq, no consumer); see Notes 2 | RED — outside every lane | OK `wseq_certified` — the drift-test WP-lane adequacy regression (WseqExhibit) |
-| pure operands: PEval / PEsym / integer PEop / PEarray_shift | CERTIFIED (drive lane) | DECLARED — premises of the if/run/pure/ACTION_EVAL rules via the certified pure evaluator (Soundness evaluator bridge); no per-construct Step rule | DECLARED — enters as rule premises (guard/argument/operand evaluation) | DECLARED — via the peDepth side conditions carried by Frag.if_/run/load_op/memop_op/store_op | DECLARED — the evaluator bridge lemmas, Soundness.lean (eval1/mapM tower) | OK `engine_adequacyJ` | OK `fib_certified_total`, `list_reverse_certified_total` | OK `fib_certified_production` | OK `array_sum_certified`, `fib_certified` |
+| Construct | Level | Syntax witness | Mirror (Step) | Logic (partial rules) | Cone (Frag) | Engine match | Partial adequacy | Adequacy consumers | Local consumers | Total lane | Production lane |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| value delivery (Epure at PEval; Eannot values) | CERTIFIED (drive lane) | OK `generic_pexpr_.PEval` | DECLARED — terminal — the toVal/ofVal value protocol (values do not step) | OK `wp_ofVal`, `wps_ofVal` | OK `Frag.val_pure` | OK `step_ctx_done`, `step_ctx_remove_annot` | OK `engine_complete`, `engine_adequacyJ` | CERTIFIED `exhibitA_engine` | — | CERTIFIED rules: `wpt_ofVal`; consumers: `exhibitA_total`, `fib_certified_total`, `list_reverse_certified_total` | CERTIFIED `exhibitA_prod`, `fib_certified_production` |
+| Eaction Store0 (value operands) | CERTIFIED (drive lane) | OK `generic_action_.Store0` | OK `Step.store` | OK `wp_store`, `wps_store`, `wps_store_at`, `wps_store_cell_at` — wps_store_at/wps_store_cell_at are the GENERIC typed-subrange forms (Notes 5) | OK `Frag.store` | OK `step_ctx_store`, `engine_complete_storeU` — TWO-SIDED at any MachineCtx | OK `engine_complete`, `engine_adequacyJ` | CERTIFIED `exhibitB_engine`, `counter_loop_certified`, `list_reverse_certified`, `struct_create_store_adequacy` | — | CERTIFIED rules: `wpt_store_at`, `wpt_store_cell_at`, `wpt_store_cell`; consumers: `exhibitA_total`, `list_reverse_certified_total` | CERTIFIED `exhibitA_prod`, `counter_loop_certified_production`, `list_reverse_certified_production` |
+| Eaction Load0 (value operand) | CERTIFIED (drive lane) | OK `generic_action_.Load0` | OK `Step.load` | OK `wp_load`, `wps_load`, `wps_load_at`, `wps_load_cell_at` — wps_load_at/wps_load_cell_at are the GENERIC typed-subrange forms (Notes 5) | OK `Frag.load` | OK `step_ctx_load` | OK `engine_complete`, `engine_adequacyJ` | CERTIFIED `exhibitA_engine`, `array_sum_certified` | — | CERTIFIED rules: `wpt_load_at`, `wpt_load_cell_at`; consumers: `exhibitA_total`, `list_reverse_certified_total` | CERTIFIED `exhibitA_prod`, `list_reverse_certified_production` |
+| Eaction Create0 | CERTIFIED (drive lane) | OK `generic_action_.Create` | OK `Step.create` | OK `wps_create`, `wps_create_cursor_internal` — alloc arc P1: the PUBLIC wps_create takes the abstract capacity allocCap (req :: rest) and binds an existential pointer (statement cursor-free); the exact-cursor form is wps_create_cursor_internal (heap-implementation use only); OOM excluded by the plan-fit inside allocCap — see Notes 4 | OK `Frag.create` | OK `step_ctx_create` | OK `engine_complete`, `engine_adequacyJ` | CERTIFIED `struct_create_store_adequacy` — the PUBLIC-rule whole-program client's engine export (alloc arc P2 item 2), launched through spike_engine_adequacy_alloc | CERTIFIED `alloc_two_creates_wps`, `alloc_create_wpt`, `struct_create_store_wps` — rule-level: the plan-order consumption test, the derived k=2 total budget, and the struct client's wps derivation (its engine export is the adequacy consumer) | CERTIFIED rules: `wpt_create`; derivations: `progAProd_wpt`, `ctrProd_wpt`, `lrProd_wpt`; consumers: `alloc_create_launch_smoke` — alloc_create_launch_smoke is the engine-facing chain-closer (driveU .done at fuel 2 via wpt_create + wpt_engine_boundU_alloc from prodMem₀); the three derivations are the P2 whole-program total judgments the production exports collapse | CERTIFIED `exhibitA_prod`, `counter_loop_certified_production`, `list_reverse_certified_production` (each cone required to contain `wpt_create`, `launchResources`) — ALL THREE are WHOLE-PROGRAM create-rule consumers (alloc arc P2, the R-02 conversion): each program BINDS its engine-created pointer(s), the creates cross the PUBLIC wpt_create from abstract capacity plans, and the pipeline arrows are the generic wpt_driver_done_alloc → prod_run_eqJ; since P3 the cone of each is REQUIRED to contain wpt_create AND launchResources (prodRequires) |
+| Esseq, wildcard pattern | CERTIFIED (drive lane) | OK `generic_expr_.Esseq` | OK `Step.sseq_pure`, `Step.sseq_annot`, `Step.sseq_ctx` | OK `wp_sseq`, `wps_seq` | OK `Frag.sseq` | OK `step_ctx_beta_pure`, `step_ctx_beta_annot` | OK `engine_complete`, `engine_adequacyJ` | CERTIFIED `exhibitA_engine`, `exhibitC_engine` | — | CERTIFIED rules: `wpt_seq`; consumers: `exhibitA_total`, `list_reverse_certified_total` | CERTIFIED `exhibitA_prod`, `counter_loop_certified_production`, `list_reverse_certified_production` |
+| Eannot residue (descent + merge) | CERTIFIED (drive lane) | OK `generic_expr_.Eannot`, `generic_action_.Store0`, `generic_action_.Load0` — a RUNTIME residue, not source syntax: the engine's DA_pos annotation arises from every executed Store0/Load0 (the evaluator-case witness the charter allows), or from a literal Eannot | OK `Step.annot_ctx`, `Step.annot_merge` | OK `wp_annot`, `wps_annot` | OK `Frag.annot` | OK `step_ctx_merge` | OK `engine_complete`, `engine_adequacyJ` | CERTIFIED `exhibitA_engine` | — | CERTIFIED rules: `wpt_annot`; consumers: `exhibitA_total`, `list_reverse_certified_total` | CERTIFIED `exhibitA_prod`, `counter_loop_certified_production`, `list_reverse_certified_production` |
+| Esave (block entry, value-shaped params) | CERTIFIED (drive lane) | OK `generic_expr_.Esave` | OK `Step.save` | OK `wps_save` | OK `Frag.save` | OK `step_ctx_save` | OK `engine_adequacyJ` | CERTIFIED `counter_loop_certified`, `fib_certified`, `list_reverse_certified` | — | CERTIFIED rules: `wpt_save`; consumers: `fib_certified_total`, `list_reverse_certified_total` | CERTIFIED `fib_certified_production` — fib ONLY (P3 dependency finding, recorded in the P3 notes): the counter and reversal production programs carry their `save` as a NEVER-ENTERED registration site (the untaken sseq arm — the loop is entered by `run` against the driver-collected label), so their cones contain no wpt_save; the P2 manifest listed them here and the dependency check REMOVED them |
+| Eif (big-step boolean guard) | CERTIFIED (drive lane) | OK `generic_expr_.Eif` | OK `Step.if_true`, `Step.if_false` | OK `wps_if_true`, `wps_if_false` | OK `Frag.if_` | OK `stepDischarge_if_true`, `stepDischarge_if_false` | OK `engine_adequacyJ` | CERTIFIED `counter_loop_certified`, `fib_certified` | — | CERTIFIED rules: `wpt_if_true`, `wpt_if_false`; consumers: `fib_certified_total`, `list_reverse_certified_total` | CERTIFIED `fib_certified_production`, `counter_loop_certified_production`, `list_reverse_certified_production` |
+| Erun (context-discarding jump) | CERTIFIED (drive lane) | OK `generic_expr_.Erun` | OK `Step.run` | OK `wps_run` | OK `Frag.run` | OK `stepDischarge_run` — ONE-SIDED — match-given-step, the direction adequacy consumes; jump refusal channels are failwithI panics = absence of a step; see Notes 7 | OK `engine_adequacyJ` | CERTIFIED `counter_loop_certified`, `fib_certified` | — | CERTIFIED rules: `wpt_run`; consumers: `fib_certified_total`, `list_reverse_certified_total` | CERTIFIED `fib_certified_production`, `counter_loop_certified_production`, `list_reverse_certified_production` |
+| Esseq, Specified-binder pattern | CERTIFIED (drive lane) | OK `ctor.Cspecified` — the Specified constructor pattern (Esseq is shared with the other binder rows; the pattern constructor is the distinguishing syntax) | OK `Step.sseq_spec_pure`, `Step.sseq_spec_annot` | OK `wps_seq_spec` | OK `Frag.sseq_spec` | OK `step_ctx_beta_spec_pure`, `step_ctx_beta_spec_annot` | OK `engine_adequacyJ` | CERTIFIED `array_sum_certified`, `list_reverse_certified` | — | CERTIFIED rules: `wpt_seq_spec`; consumers: `list_reverse_certified_total` | CERTIFIED `list_reverse_certified_production` |
+| Epure exit at PEsym shape | CERTIFIED (drive lane) | OK `generic_pexpr_.PEsym` | OK `Step.pure_eval` — certified at PEsym shape — Soundness stepDischarge_pure_sym | OK `wps_pure` | OK `Frag.pure_sym` | OK `stepDischarge_pure_sym` | OK `engine_adequacyJ` | CERTIFIED `fib_certified` | — | CERTIFIED rules: `wpt_pure`; consumers: `fib_certified_total`, `list_reverse_certified_total` | CERTIFIED `fib_certified_production`, `list_reverse_certified_production` — the counter production exits through a bare value, not a PEsym (P3 dependency finding: no wpt_pure in its cone; removed from this lane) |
+| Load0 operand-evaluation step (ACTION_EVAL) | CERTIFIED (drive lane) | OK `generic_action_.Load0` — the same Load0 syntax as the value-operand row; the operand-evaluation round is distinguished by its rule (wps_load_eval), which the dependency check requires | OK `Step.load_eval` | OK `wps_load_eval` | OK `Frag.load_op` | OK `stepDischarge_load_eval` | OK `engine_adequacyJ` | CERTIFIED `array_sum_certified` | — | CERTIFIED rules: `wpt_load_eval`; consumers: `list_reverse_certified_total` | CERTIFIED `list_reverse_certified_production` |
+| Esseq, plain-symbol-binder pattern (bare values) | CERTIFIED (drive lane) | OK `generic_expr_.Esseq` — Esseq shared with the wildcard row; the binder shape is distinguished by its rule (wps_seq_sym), which the dependency check requires | OK `Step.sseq_sym_pure` | OK `wps_seq_sym` | OK `Frag.sseq_sym` | OK `step_ctx_beta_sym_pure` | OK `engine_adequacyJ` | CERTIFIED `list_reverse_certified`, `struct_create_store_adequacy` | — | CERTIFIED rules: `wpt_seq_sym`; consumers: `list_reverse_certified_total` | CERTIFIED `exhibitA_prod`, `counter_loop_certified_production`, `list_reverse_certified_production` |
+| Ememop PtrEq (value operands) | CERTIFIED (drive lane) | OK `generic_memop.PtrEq` | OK `Step.memop_ptreq` | OK `wps_memop_ptreq` | OK `Frag.memop_vals` | OK `step_ctx_memop` | OK `engine_adequacyJ` | CERTIFIED `list_reverse_certified` | — | CERTIFIED rules: `wpt_memop_ptreq`; consumers: `list_reverse_certified_total` | CERTIFIED `list_reverse_certified_production` |
+| Ememop PtrEq, operand-evaluation step | CERTIFIED (drive lane) | OK `generic_expr_.Ememop` — the operand-evaluation rule wps_memop_eval is memop-GENERIC (any Ememop; PtrEq is the only memop with a value-operand rule, the previous row), so the witness is Ememop | OK `Step.memop_eval` | OK `wps_memop_eval` | OK `Frag.memop_op` | OK `stepDischarge_memop_eval` | OK `engine_adequacyJ` | CERTIFIED `list_reverse_certified` | — | CERTIFIED rules: `wpt_memop_eval`; consumers: `list_reverse_certified_total` | CERTIFIED `list_reverse_certified_production` |
+| Store0 operand-evaluation step (ACTION_EVAL) | CERTIFIED (drive lane) | OK `generic_action_.Store0` — the same Store0 syntax as the value-operand row; distinguished by its rule (wps_store_eval) | OK `Step.store_eval` | OK `wps_store_eval` | OK `Frag.store_op` | OK `stepDischarge_store_eval` | OK `engine_adequacyJ` | CERTIFIED `list_reverse_certified`, `struct_create_store_adequacy` | — | CERTIFIED rules: `wpt_store_eval`; consumers: `list_reverse_certified_total` | CERTIFIED `exhibitA_prod`, `counter_loop_certified_production`, `list_reverse_certified_production` |
+| Ecase, VALUE scrutinee | CERTIFIED (drive lane) | OK `generic_expr_.Ecase` | OK `Step.case_value` | OK `wps_case_value` | OK `Frag.case_value` — S1b: joined — branch-closure + branch-size premises explicit | OK `step_ctx_case_value`, `step_ctx_case_illtyped`, `engine_complete_caseU` — TWO-SIDED at any MachineCtx | OK `engine_adequacyJ`, `engine_adequacyU` | CERTIFIED `case_certified` — the WP-lane adequacy regression — binder pattern, substitution TAU (CaseExhibit) | — | RED — no total rule yet (no wpt case rule — mechanical analog of wps_case_value, no consumer); see Notes 2 | RED — outside every lane |
+| Ewseq, wildcard pattern (weak sequencing) | CERTIFIED (drive lane) | OK `generic_expr_.Ewseq` | OK `Step.wseq_pure`, `Step.wseq_annot`, `Step.wseq_ctx` — S1b DRIFT TEST — entered through the generic route; see Notes 6 | OK `wps_wseq` | OK `Frag.wseq` | OK `step_ctx_wseq_pure`, `step_ctx_wseq_annot` | OK `engine_adequacyJ`, `engine_adequacyU` | CERTIFIED `wseq_certified` — the drift-test WP-lane adequacy regression (WseqExhibit) | — | RED — no total rule yet (no wpt wseq rule — mechanical analog of wps_wseq, no consumer); see Notes 2 | RED — outside every lane |
+| pure operands: PEval / PEsym / integer PEop / PEarray_shift | CERTIFIED (drive lane) | DECLARED — premises, not a construct | DECLARED — premises of the if/run/pure/ACTION_EVAL rules via the certified pure evaluator (Soundness evaluator bridge); no per-construct Step rule | DECLARED — enters as rule premises (guard/argument/operand evaluation) | DECLARED — via the peDepth side conditions carried by Frag.if_/run/load_op/memop_op/store_op | DECLARED — the evaluator bridge lemmas, Soundness.lean (eval1/mapM tower) | OK `engine_adequacyJ` | CERTIFIED `array_sum_certified`, `fib_certified` | — | CERTIFIED rules: (premises); consumers: `fib_certified_total`, `list_reverse_certified_total` — no rule of its own — the tower is premises | CERTIFIED `fib_certified_production` |
 
-## Notes (the registered honesty items behind the RED cells)
+## Notes (the registered honesty items behind the RED cells and the instrument's limits)
 
 1. **`Ecase` (value scrutinee) exported in S1b**
    (audit F-01 remediation): mirror rule + wps rule + cone
@@ -81,7 +93,9 @@ owns no constructor and is mechanically barred from claiming any.
    statement unchanged, proof a corollary — zero Step
    constructors) + `fib_terminates`;
    `list_reverse_certified_total` (the derived bound 13·|xs|+7) +
-   `list_reverse_terminates`. Negative test:
+   `list_reverse_terminates`; `exhibitA_total` (the straight-line
+   create-free program at drive fuel 6 — alloc arc P2 retired its
+   engineSteps trace for the total route). Negative test:
    `diverge_total_unprovable` (DivergeExhibit — the self-jump
    loop's total derivation is FALSE). RED total cells:
    Ecase/Ewseq have no wpt rule yet (mechanical analogs of
@@ -121,49 +135,45 @@ owns no constructor and is mechanically barred from claiming any.
    GENERIC list logic verbatim at existential engine-picked
    ids, transported by wpt_mono_Ls); the total judgment
    drives the loop suffixes only. fib (no heap) is the fully
-   logic-driven positive control.
-4. **`create` has PUBLIC partial+total rules, LAUNCHABLE**
-   (alloc arc P1; the R-01 repair — rules + launch landed,
-   closure test pending P2's whole-program consumers): the
-   public `wps_create`/`wpt_create` take the abstract finite
-   allocation capacity `allocCap (req :: rest)` (Heap.lean —
-   internally the cursor fragment + a pure plan-fit; the OOM
-   kill arm is excluded by the plan, never assumed away) and
-   bind an EXISTENTIAL pointer; their statements contain no
+   logic-driven positive control. P3 DEPENDENCY FINDINGS (the
+   instrument's first catch on the live tree): the counter and
+   reversal productions are NOT `save`-rule consumers (their
+   `save` is the never-entered registration site) and the
+   counter is not a `pure-sym` consumer — the P2 manifest listed
+   them so; the dependency check removed the three attributions
+   (record: docs/2026-09-01_p3-notes.md).
+4. **`create` has PUBLIC partial+total rules, LAUNCHABLE, with
+   DEPENDENCY-CERTIFIED consumers** (alloc arc P1 rules+launch;
+   P2 whole-program consumers, R-01/R-02 closed; P3 the cone
+   checks): the public `wps_create`/`wpt_create` take the abstract
+   finite allocation capacity `allocCap (req :: rest)` (Heap.lean —
+   internally the cursor fragment + a pure plan-fit; the OOM kill
+   arm is excluded by the plan, never assumed away) and bind an
+   EXISTENTIAL pointer; their statements contain no
    AllocCursor/lastAddress/nextAllocId/freshBase/cursorOwn
-   (grep-checked, docs/2026-09-01_p1-notes.md). The exact-
-   cursor rules are internal (`wps_create_cursor_internal`/
+   (grep-checked, docs/2026-09-01_p1-notes.md). The exact-cursor
+   rules are internal (`wps_create_cursor_internal`/
    `wpt_create_cursor_internal`, heap-implementation use only).
    LAUNCH: the allocation-aware launchers
    (`spike_step_adequacy_alloc`, `wpt_engine_boundU/J_alloc`,
-   `wpt_strongly_normalizing_alloc`) grant `allocCap` from
-   real Cerberus memory through the one `launchResources`
-   helper under `LaunchCoh` (cursor key 0 NONEMPTY; CohG's
-   allocator-health facts non-vacuous). Chain-closing
-   consumer: `alloc_create_launch_smoke` (AllocExhibit — a
-   driveU `.done` equation at fuel exactly 2 from prodMem₀).
-   PARTIAL-LANE WHOLE-PROGRAM CONSUMER (alloc arc P2 items
-   1-2): `struct_create_store_wps` is a PUBLIC-rule client
-   over `allocCap` (the program binds the fresh pointer;
-   no cursor vocabulary), exported to the engine by
+   `wpt_strongly_normalizing_alloc`) grant `allocCap` from real
+   Cerberus memory through the one `launchResources` helper under
+   `LaunchCoh` (cursor key 0 NONEMPTY; CohG's allocator-health
+   facts non-vacuous). Chain-closing total consumer:
+   `alloc_create_launch_smoke` (a driveU `.done` equation at fuel
+   exactly 2 from prodMem₀). Adequacy (partial) consumer:
    `struct_create_store_adequacy` through
-   `spike_engine_adequacy_alloc` — deleting the public
-   `wps_create` breaks it (the R-01 partial-lane closure
-   consumer). The public rules also export the fresh
-   pointer's pure address bounds (0 < addrOf p < 2^64),
-   carried by `allocCap`'s machine-bounded hidden cursor.
-   TOTAL-LANE WHOLE-PROGRAM CONSUMER (P2 step 3):
-   `progAProd_wpt`/`exhibitA_prod` — the complete
-   create/store/load through the PUBLIC `wpt_create` and the
-   allocation-aware driver collapse `wpt_driver_done_alloc`.
-   LOOP-LANE WHOLE-PROGRAM CONSUMERS (P2 steps 4-5):
-   `ctrProd_wpt`/`counter_loop_certified_production` (one-
-   request plan) and `lrProd_wpt`/
-   `list_reverse_certified_production` (two-request plan,
-   the generic list logic consumed verbatim at existential
-   engine-picked ids). R-01 and R-02 are CLOSED (closure
-   table, docs/2026-09-01_alloc-arc-plan.md; plant
-   transcripts in docs/2026-09-01_p2-notes.md).
+   `spike_engine_adequacy_alloc`. Local consumers:
+   `alloc_two_creates_wps`, `alloc_create_wpt`,
+   `struct_create_store_wps`. Total derivations:
+   `progAProd_wpt`/`ctrProd_wpt`/`lrProd_wpt`; production
+   consumers: the three allocating exports, each cone REQUIRED to
+   contain `wpt_create` and `launchResources` (the charter's "not
+   merely Step.create"). The public rules also export the fresh
+   pointer's pure address bounds (0 < addrOf p < 2^64), carried by
+   `allocCap`'s machine-bounded hidden cursor. Plant transcripts:
+   docs/2026-09-01_p2-notes.md (R-01/R-02) and
+   docs/2026-09-01_p3-notes.md (R-04).
 5. **Interior (sub-allocation) access is GENERIC** (Phase 2,
    F-04 retired): one typed-subrange load and one store rule
    (`wps_load_at`/`wps_store_at` over views; whole-cell forms
@@ -171,7 +181,9 @@ owns no constructor and is mechanically barred from claiming any.
    against loadM/storeM. The former int-specific and node-
    specific interior rules are DELETED; array element, node
    field, and struct field rules are client instances inside
-   their exhibit modules.
+   their exhibit modules. The store/load rows list the generic
+   forms among their partial rules (a client consuming only the
+   subrange form is a rule consumer of the row).
 6. **`Ewseq` wildcard is the S1b DRIFT TEST** (arc plan Phase 1
    item 7; design record §8 item 8): a NEW non-example construct
    passed through the GENERIC route — relation rules + cone/
@@ -197,24 +209,38 @@ owns no constructor and is mechanically barred from claiming any.
    domain being the straight-line completeness instance) and the
    per-construct completeness pairs `engine_complete_storeU` /
    `engine_complete_caseU` (store, case — noted on their rows).
-   Rows without a completeness entry are ONE-SIDED, deliberately.
+   Rows without a completeness entry are ONE-SIDED, deliberately
+   (the two-sided relation closure is alloc arc P3.2, R-03).
+8. **What the dependency certification does NOT claim** (the
+   instrument's own limits, measured before installation —
+   docs/2026-09-01_p3-notes.md): (a) it does not tie a public rule
+   to its `Step` constructor by cone membership — in Lean 4 every
+   `cases` on `Step` names every constructor (`Step.casesOn`), so
+   that test is vacuous; the rule↔relation tie is the rule's
+   statement being ABOUT the construct (checked) plus the engine
+   certification of the relation itself (the mirror/engine-match
+   columns); (b) the execution witness is SYNTACTIC (the program
+   text contains the constructor) — that the construct is actually
+   EXECUTED is witnessed by the rule dependency (a rule for a
+   construct that never executes is not needed by the proof: the
+   never-entered `save` finding in Notes 3 is exactly this
+   discrimination working); (c) rows sharing syntax (Store0 for
+   store/store-op, Load0 for load/load-op, Esseq for the binder
+   rows) are told apart by their rules, not their syntax.
 
 ## Machine-readable scope lines (consumed by test_unit.sh gate 4)
 
-Line semantics (2026-09-01 P0 — the skeptical re-audit's R-04,
-option b: the former FULL-ROW aggregate is RENAMED, lanes
-reported separately): CORE-DRIVE-ROW = the drive-lane core
-cells (mirror/cone/engine-match/partial-adequacy/consumer)
-green AND a logic rule EXISTS — it says nothing about the
-total or production lanes, about launchability, or about
-proof-flow dependency (lane membership is cell non-redness,
-name-and-kind checked, NOT dependency-traced — R-04's staged
-dependency certification is alloc-arc P3). The per-lane lines
-list the rows whose respective cell is non-red. NB `create`
-joined TOTAL-LANE at alloc arc P1 (`wpt_create` + the launcher
-smoke) and PRODUCTION-LANE at alloc arc P2 (all three
-allocating production exports are whole-program create-rule
-consumers; R-02 closed) — see Notes 4.
+Line semantics (2026-09-01 P0 renamed the former FULL-ROW aggregate
+CORE-DRIVE-ROW and split the lanes; P3 made every lane member
+dependency-certified): CORE-DRIVE-ROW = the drive-lane core cells
+(mirror/cone/engine-match/partial-adequacy) green, at least one
+DEPENDENCY-CERTIFIED adequacy consumer, AND a partial logic rule
+that is ABOUT the construct. TOTAL-LANE / PRODUCTION-LANE list the
+rows whose lane is non-red — every consumer in a listed lane has
+passed the rule / launcher / witness cone checks (a failing one is
+a red run, not a listed row). LOGIC-RULE-LANE lists rows with a
+partial rule. `create` joined TOTAL-LANE at alloc arc P1 and
+PRODUCTION-LANE at P2; P3 certifies both by dependency — Notes 4.
 
 ```
 ADEQUACY-EXPORTABLE: value store load create sseq-wild annot save if run sseq-spec pure-sym load-op sseq-sym memop-ptreq memop-op store-op case-value wseq-wild pure-operands
@@ -223,4 +249,5 @@ LOGIC-RULE-LANE: value store load create sseq-wild annot save if run sseq-spec p
 TOTAL-LANE: value store load create sseq-wild annot save if run sseq-spec pure-sym load-op sseq-sym memop-ptreq memop-op store-op pure-operands
 PRODUCTION-LANE: value store load create sseq-wild annot save if run sseq-spec pure-sym load-op sseq-sym memop-ptreq memop-op store-op pure-operands
 LOCAL-RULE-ONLY: 
+DEPENDENCY-CERTIFIED: yes (staged rule/launcher/witness cone checks + layer cut over 608 positive-exhibit declarations)
 ```
