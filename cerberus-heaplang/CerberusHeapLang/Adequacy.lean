@@ -387,6 +387,163 @@ theorem spikeCells_alloc {GF : BundledGFunctors} [SpikeGS .hasLC GF]
         exact ⟨hcc.len, hcc.dec_indep⟩
     · iexact Hcells
 
+/-! ## Launch coherence and the allocation-aware launch (alloc arc
+P1.2/P1.3)
+
+`Coh` says the tracked cells exist and are disjoint. `LaunchCoh`
+extends it with exactly the allocator-health facts `CohG` states
+non-vacuously once cursor key 0 is PRESENT (charter P1.2's list):
+every tracked allocation id is below `σ.nextAllocId`; ids at or
+above `σ.nextAllocId` are absent from both the live and the dead
+allocation tables; every tracked allocation (hence every tracked
+byte) lies at or above the downward cursor `σ.lastAddress`; and the
+requested initial plan fits the actual
+`⟨σ.lastAddress, σ.nextAllocId⟩`. (Spelling note vs the charter's
+`LaunchCoh σ m`: the plan is an explicit third argument — the
+charter's fourth fact mentions the requested plan, which is not a
+function of σ and m.) -/
+
+open Iris.Std.PartialMap in
+/-- Launch coherence: footprint coherence + allocator health + the
+    plan fit. What an allocation-aware launcher demands of the
+    initial state. -/
+structure LaunchCoh (σ : Mem) (m : SpikeHeapF SpikeCell)
+    (reqs : List AllocReq) : Prop where
+  coh : Coh σ m
+  id_lt : ∀ i c, get? m i = some c → i < σ.nextAllocId
+  fresh_alloc : ∀ id : Int, σ.nextAllocId ≤ id →
+    σ.allocations.get? id = none
+  fresh_dead : ∀ id : Int, σ.nextAllocId ≤ id →
+    σ.deadAllocations.contains id = false
+  addr_lo : ∀ i c, get? m i = some c → σ.lastAddress ≤ c.addr
+  plan : PlanFits ⟨σ.lastAddress, σ.nextAllocId⟩ reqs
+
+open Iris.Std.PartialMap in
+/-- Launch coherence at the EMPTY footprint: allocator health + the
+    plan (cold-start programs allocate everything themselves). -/
+theorem LaunchCoh.empty (σ : Mem) (reqs : List AllocReq)
+    (halloc : ∀ id : Int, σ.nextAllocId ≤ id →
+      σ.allocations.get? id = none)
+    (hdead : ∀ id : Int, σ.nextAllocId ≤ id →
+      σ.deadAllocations.contains id = false)
+    (hplan : PlanFits ⟨σ.lastAddress, σ.nextAllocId⟩ reqs) :
+    LaunchCoh σ (∅ : SpikeHeapF SpikeCell) reqs := by
+  have hnone : ∀ i : Int, get? (∅ : SpikeHeapF SpikeCell) i = none :=
+    fun i => Iris.Std.LawfulPartialMap.get?_empty i
+  refine ⟨⟨?_, ?_⟩, ?_, halloc, hdead, ?_, hplan⟩
+  · intro i c hg
+    rw [hnone i] at hg
+    cases hg
+  · intro i j c1 c2 hne h1 h2
+    rw [hnone i] at h1
+    cases h1
+  · intro i c hg
+    rw [hnone i] at hg
+    cases hg
+  · intro i c hg
+    rw [hnone i] at hg
+    cases hg
+
+open Iris.Std.PartialMap in
+/-- The launched coupling: a launch-coherent footprint's ghost
+    images couple to σ WITH the cursor cell present at key 0 — the
+    `cur_*` facts of `CohG` are NON-VACUOUS here (contrast
+    `MetaByteOf.cohG` above, whose empty cursor map makes them
+    vacuous), discharged from `LaunchCoh`'s allocator health. -/
+theorem LaunchCoh.cohG {σ : Mem} {m : SpikeHeapF SpikeCell}
+    {reqs : List AllocReq}
+    {mm : SpikeHeapF MetaCell} {mb : SpikeHeapF CerbMem.AbsByte}
+    (h : LaunchCoh σ m reqs) (hmbo : MetaByteOf m mm mb) :
+    CohG σ mm mb
+      (Iris.Std.PartialMap.insert (∅ : SpikeHeapF AllocCursor) 0
+        ⟨σ.lastAddress, σ.nextAllocId⟩) := by
+  have base := hmbo.cohG h.coh
+  refine ⟨base.metas, base.metas_disj, base.bytes,
+    ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  · -- cursor_key
+    intro k c hget
+    by_cases hk : k = 0
+    · exact hk
+    · rw [Iris.Std.get?_insert_ne (fun hh => hk hh.symm),
+        Iris.Std.LawfulPartialMap.get?_empty] at hget
+      cases hget
+  · -- cursor: the launched cell pins the REAL allocator fields
+    intro c hget
+    rw [Iris.Std.get?_insert_eq rfl] at hget
+    obtain rfl := Option.some.inj hget
+    exact ⟨rfl, rfl⟩
+  · -- cur_dead
+    intro _ id hle
+    exact h.fresh_dead id hle
+  · -- cur_alloc
+    intro _ id hle
+    exact h.fresh_alloc id hle
+  · -- cur_meta_lt
+    intro _ id mc hget
+    obtain ⟨c, hc, rfl⟩ := hmbo.meta_sub id mc hget
+    exact h.id_lt id c hc
+  · -- cur_byte_lo: tracked bytes sit inside tracked cells, which sit
+    -- at or above the cursor
+    intro _ k b hget
+    obtain ⟨i, c, hc, hk1, -, -⟩ := hmbo.byte_cov k b hget
+    exact Int.le_trans (h.addr_lo i c hc) hk1
+  · -- cur_meta_lo
+    intro _ id mc hget
+    obtain ⟨c, hc, rfl⟩ := hmbo.meta_sub id mc hget
+    exact h.addr_lo id c hc
+
+/-- The launched cursor key is NONEMPTY (merge-row-3 must-prove,
+    stated once): key 0 of the launched cursor map holds the real
+    allocator fields, so every `get? mk 0 ≠ none` hypothesis of
+    `CohG`'s `cur_*` fields is satisfied at launch. -/
+theorem launchCursor_key_nonempty (σ : Mem) :
+    Iris.Std.PartialMap.get?
+      (Iris.Std.PartialMap.insert (∅ : SpikeHeapF AllocCursor) 0
+        ⟨σ.lastAddress, σ.nextAllocId⟩) 0 =
+      some ⟨σ.lastAddress, σ.nextAllocId⟩ :=
+  Iris.Std.get?_insert_eq rfl
+
+open Iris.Std.PartialMap in
+/-- THE SHARED ALLOCATION-AWARE LAUNCH (charter P1.3, the one
+    helper): from the three empty ghost heaps, allocate every
+    footprint cell AND the allocator cursor at key 0 — the
+    previously missing allocation step in the launch path (R-01).
+    Delivers the assembled state interpretation (cursor key
+    nonempty; `CohG` non-vacuous through `LaunchCoh.cohG`), the
+    per-cell ownership, and the abstract capacity `allocCap reqs`
+    wrapping the exclusive cursor fragment. -/
+theorem launchResources {GF : BundledGFunctors} [SpikeGS .hasLC GF]
+    (σ : Mem) (m : SpikeHeapF SpikeCell) (reqs : List AllocReq)
+    (h : LaunchCoh σ m reqs) :
+    iprop(metaInterp (GF := GF) (∅ : SpikeHeapF MetaCell) ∗
+        byteInterp (∅ : SpikeHeapF CerbMem.AbsByte) ∗
+        cursorInterp (∅ : SpikeHeapF AllocCursor)) ⊢
+      |==> iprop(stateInterp σ 0 ([] : List Empty) 0 ∗
+        ([∗map] i ↦ c ∈ m, cellOwn (hlc := .hasLC) i (.own 1) c) ∗
+        allocCap reqs) := by
+  iintro ⟨Hmi, Hbi, Hki⟩
+  imod (spikeCells_alloc σ m h.coh) $$ [$Hmi $Hbi]
+    with ⟨%mm, %mb, %hmbo, Hmi, Hbi, Hcells⟩
+  imod (cursorHeap_alloc (⟨σ.lastAddress, σ.nextAllocId⟩ : AllocCursor)
+    (Iris.Std.LawfulPartialMap.get?_empty 0)) $$ [$Hki] with ⟨Hki, Hc⟩
+  imodintro
+  isplitl [Hmi Hbi Hki]
+  · iapply (stateInterp_iff _ _ _ _).mpr
+    iexists mm, mb,
+      (Iris.Std.PartialMap.insert (∅ : SpikeHeapF AllocCursor) 0
+        ⟨σ.lastAddress, σ.nextAllocId⟩)
+    isplit
+    · ipureintro
+      exact h.cohG hmbo
+    isplitl [Hmi]
+    · iexact Hmi
+    isplitl [Hbi]
+    · iexact Hbi
+    · iexact Hki
+  isplitl [Hcells]
+  · iexact Hcells
+  · iapply allocCap_intro ⟨σ.lastAddress, σ.nextAllocId⟩ reqs h.plan $$ Hc
+
 /-! ## Step-level adequacy: constructing SpikeGS and applying iris -/
 
 /-- Iris adequacy over Step, with final-state readout: constructs
@@ -443,6 +600,94 @@ theorem spike_step_adequacy {GF : BundledGFunctors} [SpikeGpreS GF]
   isplitl [Hcells]
   · iapply BigSepL2.bigSepL2_singleton
     ihave HW := hwp $$ Hcells
+    iexact HW
+  iintro %es' %t2' %heqt %hlen %hnsp Hst Hposts Hforks
+  have hns : ∀ e2 ∈ t2, PrimStep.NotStuck (Val := CoreRVal) (e2, σ2) :=
+    fun e2 he2 => hnsp e2 rfl he2
+  obtain ⟨e1', rfl⟩ : ∃ x, es' = [x] := by
+    cases es' with
+    | nil => simp at hlen
+    | cons a l =>
+      cases l with
+      | nil => exact ⟨a, rfl⟩
+      | cons b l' => simp at hlen
+  icases BigSepL2.bigSepL2_cons_inv_right $$ Hposts with ⟨%eh, %Φt, %HeqΦ, Hpost, Hrest⟩
+  cases hv : ToVal.toVal (Val := CoreRVal) eh with
+  | none =>
+    iapply fupd_mask_intro_discard Std.LawfulSet.empty_subset
+    ipureintro
+    refine ⟨hns, fun w t2'' heq2 => ?_⟩
+    rw [heqt] at heq2
+    injection HeqΦ with h1 h2
+    subst h1
+    injection heq2 with h3 h4
+    rw [h3, language_toVal_eq, toValRt_ofValRt] at hv
+    cases hv
+  | some w =>
+    dsimp only [Option.elim_some]
+    imod Hpost $$ %σ2 %n %([] : List Empty) %(t2'.length) Hst with %hφw
+    ipureintro
+    refine ⟨hns, fun w' t2'' heq2 => ?_⟩
+    rw [heqt] at heq2
+    injection HeqΦ with h1 h2
+    subst h1
+    injection heq2 with h3 h4
+    rw [h3, language_toVal_eq, toValRt_ofValRt] at hv
+    injection hv with h5
+    subst h5
+    exact hφw
+
+/-- ALLOCATION-AWARE step adequacy (alloc arc P1.3): as
+    `spike_step_adequacy`, but launched through the one shared
+    `launchResources` helper — the client's proof receives the
+    footprint cells AND `allocCap reqs`, and the cursor ghost heap is
+    launched NONEMPTY at the real `⟨lastAddress, nextAllocId⟩`. The
+    cursor-free launcher above remains for no-allocation programs
+    (charter P1.3's incremental-migration allowance; retire it for
+    one complete launcher once every client is ported). -/
+theorem spike_step_adequacy_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
+    (e : CoreRt) (σ : Mem) (m₀ : SpikeHeapF SpikeCell)
+    (reqs : List AllocReq) (hl : LaunchCoh σ m₀ reqs)
+    (φp : CoreRVal → Mem → Prop)
+    (hwp : ∀ [SpikeGS .hasLC GF],
+      iprop(([∗map] i ↦ c ∈ m₀,
+          cellOwn (hlc := .hasLC) (GF := GF) i (.own 1) c) ∗
+        allocCap reqs) ⊢
+        WP e @ Stuckness.NotStuck; ⊤ {{ v, iprop(∀ (σ' : Mem) (ns : Nat)
+          (κs : List Empty) (nt : Nat),
+          stateInterp σ' ns κs nt ={⊤, ∅}=∗ ⌜φp v σ'⌝) }})
+    {t2 : List CoreRt} {σ2 : Mem}
+    (hreach : ([e], σ) -·->ₜₚ* (t2, σ2)) :
+    (∀ e2 ∈ t2, PrimStep.NotStuck (Val := CoreRVal) (e2, σ2)) ∧
+    (∀ (w : CoreRVal) (t2' : List CoreRt), t2 = ofValRt w :: t2' → φp w σ2) := by
+  obtain ⟨n, κs, hsteps⟩ := (Language.erasedStep_nSteps _ _).mp hreach
+  apply wp_strong_adequacy_gen (GF := GF) (hlc := .hasLC) Stuckness.NotStuck [e] σ n κs t2 σ2 _
+    (fun _ => 0) ?_ hsteps
+  intro instInv
+  imod (genHeap_init (L := Int) (V := MetaCell) (H := SpikeHeapF)
+    (∅ : SpikeHeapF MetaCell)) with ⟨%Gm, Hmi, -, -⟩
+  imod (genHeap_init (L := Int) (V := CerbMem.AbsByte) (H := SpikeHeapF)
+    (∅ : SpikeHeapF CerbMem.AbsByte)) with ⟨%Gb, Hbi, -, -⟩
+  imod (genHeap_init (L := Int) (V := AllocCursor) (H := SpikeHeapF)
+    (∅ : SpikeHeapF AllocCursor)) with ⟨%Gk, Hki, -, -⟩
+  letI instGS : SpikeGS .hasLC GF :=
+    { byteGS := Gb, metaGS := Gm, cursorGS := Gk }
+  imod (launchResources σ m₀ reqs hl) $$ [$Hmi $Hbi $Hki]
+    with ⟨Hσ, Hcells, Hcap⟩
+  imodintro
+  iexists fun (σ' : Mem) (_ : Nat) (_ : List Empty) (_ : Nat) =>
+    iprop(∃ mm mb mk, ⌜CohG σ' mm mb mk⌝ ∗
+      metaInterp mm ∗ byteInterp mb ∗ cursorInterp mk)
+  iexists [fun (v : CoreRVal) => iprop(∀ (σ' : Mem) (ns : Nat)
+    (κs' : List Empty) (nt : Nat), stateInterp σ' ns κs' nt ={⊤, ∅}=∗ ⌜φp v σ'⌝)]
+  iexists fun _ => iprop(True)
+  iexists fun _ _ _ _ => fupd_intro
+  dsimp only
+  isplitl [Hσ]
+  · iexact Hσ
+  isplitl [Hcells Hcap]
+  · iapply BigSepL2.bigSepL2_singleton
+    ihave HW := hwp $$ [$Hcells $Hcap]
     iexact HW
   iintro %es' %t2' %heqt %hlen %hnsp Hst Hposts Hforks
   have hns : ∀ e2 ∈ t2, PrimStep.NotStuck (Val := CoreRVal) (e2, σ2) :=

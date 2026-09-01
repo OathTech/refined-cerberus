@@ -1726,6 +1726,19 @@ theorem metaHeap_alloc {mm : SpikeHeapF MetaCell} {id : Int}
   exact BI.entails_wand ((genHeap_alloc (v := mc) hfresh).trans
     (bupd_mono (BI.sep_mono .rfl BI.sep_elim_left)))
 
+/-- Cursor-heap allocation (alloc arc P1.3 — the previously MISSING
+    launch step, R-01): mint the cursor cell at key 0 from an empty
+    (or 0-free) cursor heap, delivering the exclusive `cursorOwn`
+    fragment. Mirror of `metaHeap_alloc`. -/
+theorem cursorHeap_alloc {mk : SpikeHeapF AllocCursor} (c : AllocCursor)
+    (hfresh : Iris.Std.PartialMap.get? mk 0 = none) :
+    cursorInterp (GF := GF) mk ==∗
+      iprop(cursorInterp (Iris.Std.PartialMap.insert mk 0 c) ∗
+        cursorOwn c) := by
+  letI := SpikeGS.cursorGS (hlc := hlc) (GF := GF)
+  exact BI.entails_wand ((genHeap_alloc (v := c) hfresh).trans
+    (bupd_mono (BI.sep_mono .rfl BI.sep_elim_left)))
+
 theorem byteHeap_alloc_big {mb : SpikeHeapF CerbMem.AbsByte}
     (mbnew : SpikeHeapF CerbMem.AbsByte) (hdisj : mbnew ##ₘ mb) :
     byteInterp (GF := GF) mb ==∗
