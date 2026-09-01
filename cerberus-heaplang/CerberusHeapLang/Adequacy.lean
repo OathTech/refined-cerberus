@@ -270,10 +270,10 @@ theorem driveU_value_pure {M : MachineCtx} (hwf : M.SeqWF)
     `engine_step_matchU`, one certification case per step. The old
     J-lane's `LabeledAt` tie hypothesis is GONE (context-derived);
     the label cone/budget hypotheses remain (registered continuations
-    are the jump targets). Registered extern restriction `hext`
-    (S1b′'s named mover, design record §5.2). -/
+    are the jump targets). The S1a probe's extern restriction is
+    RETIRED (S1b′ — extern threaded through the evaluator bridge
+    tower, design record §5.2): the context is arbitrary. -/
 theorem drive_classifyU {M : MachineCtx} (hwf : M.SeqWF)
-    (hext : M.extern = fmapEmpty)
     (hQf : ∀ l params cont, lookupLabel M.labels l = some (params, cont) →
       Frag cont)
     (n₀ : Nat)
@@ -321,7 +321,7 @@ theorem drive_classifyU {M : MachineCtx} (hwf : M.SeqWF)
         obtain rfl : M = rM' := hM.symm
         obtain ⟨ev0', rfl⟩ := Step.env_cons hs
         rw [driveU_succ, stepOutcomes_thread,
-          engine_step_matchU hext (aids 0) hf (by omega) hs]
+          engine_step_matchU (aids 0) hf (by omega) hs]
         refine ih (by omega) _ re' ev0' evs σ'
           (hreach.tail ⟨hs, rfl⟩) (hf.step hQf hs) ?_
         rcases hf.esize_step_bound hs with hle | ⟨l, pes, params, cont, -, hl, hec⟩
@@ -335,10 +335,10 @@ theorem drive_classifyU {M : MachineCtx} (hwf : M.SeqWF)
     instances): a proved WP at the unified tuple plus the seeded
     memory implies driveU from the context's thread never kills,
     never derails, and any delivered value satisfies the readout.
-    Explicit WF hypotheses (statement-change class (D)): `SeqWF` and
-    the registered extern restriction. -/
+    Explicit WF hypothesis (statement-change class (D)): `SeqWF`.
+    The S1a probe's extern restriction is retired (S1b′). -/
 theorem engine_adequacyU {GF : BundledGFunctors} [SpikeGpreS GF]
-    {M : MachineCtx} (hwf : M.SeqWF) (hext : M.extern = fmapEmpty)
+    {M : MachineCtx} (hwf : M.SeqWF)
     (hQf : ∀ l params cont, lookupLabel M.labels l = some (params, cont) →
       Frag cont)
     (e₀ : CoreExpr) (ev00 : Fmap sym value) (evs0 : List (Fmap sym value))
@@ -376,7 +376,7 @@ theorem engine_adequacyU {GF : BundledGFunctors} [SpikeGpreS GF]
     exact (hadeq [ofValRt w] σ (Reach.toPool hr)).2 w [] rfl
   have hok : DriveOk (fun w σ' => ψ w.val σ')
       (driveU M aids n (M.thread e₀ (ev00 :: evs0)) σ₀) :=
-    drive_classifyU hwf hext hQf n hQsz e₀ (ev00 :: evs0) σ₀ _ hNS hRES
+    drive_classifyU hwf hQf n hQsz e₀ (ev00 :: evs0) σ₀ _ hNS hRES
       n (Nat.le_refl n) aids e₀ ev00 evs0 σ₀ .refl hfrag hfuel
   refine ⟨fun r hdr => ?_, fun hds => ?_, fun v σ' hdv => ?_⟩
   · rw [hdr] at hok; exact hok
@@ -429,7 +429,7 @@ theorem spike_engine_adequacy {GF : BundledGFunctors} [SpikeGpreS GF]
     (drive aids n (spikeThread e₀) σ₀ ≠ .stuck) ∧
     (∀ (v : value) (σ' : Mem),
       drive aids n (spikeThread e₀) σ₀ = .done v σ' → ψ v σ') :=
-  engine_adequacyU (GF := GF) (M := spikeCtx) spikeCtx_wf rfl
+  engine_adequacyU (GF := GF) (M := spikeCtx) spikeCtx_wf
     (fun l params cont hl => (spikeCtx_labels_none l hl).elim)
     e₀ fmapEmpty [] σ₀ m₀ hfrag hcoh ψ hwp n aids hfuel
     (fun l params cont hl => (spikeCtx_labels_none l hl).elim)
@@ -721,7 +721,7 @@ theorem driveJ_step {Q : LabelMap} {p : sym} {rs : core_run_state}
     (procCtx p rs).thread e (ev0 :: evs) from rfl,
     show (procThread p e' ρ') = (procCtx p rs).thread e' ρ' from rfl]
   rw [driveU_succ, stepOutcomes_thread,
-    engine_step_matchU rfl (aids 0) hf hsz hs]
+    engine_step_matchU (aids 0) hf hsz hs]
 
 /-- Value delivery: driveJ at a bare value is PROGRAM-DONE, state
     verbatim. -/
@@ -768,7 +768,7 @@ theorem engine_adequacyJ {GF : BundledGFunctors} [SpikeGpreS GF]
       ψ v σ') := by
   have hlbl : (procCtx p rs).labels = Q := procCtx_labels hQ
   have h := engine_adequacyU (GF := GF) (M := procCtx p rs)
-    (procCtx_wf p rs) rfl
+    (procCtx_wf p rs)
     (fun l params cont hl => hQf l params cont (by rwa [hlbl] at hl))
     e₀ ev00 evs0 σ₀ m₀ hfrag hcoh ψ hwp n aids hfuel
     (fun l params cont hl => hQsz l params cont (by rwa [hlbl] at hl))

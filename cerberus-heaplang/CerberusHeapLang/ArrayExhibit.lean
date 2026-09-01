@@ -316,66 +316,66 @@ variable {f : Fmap sym value} (hf : SymFrame f)
 include hf
 
 theorem arr_guard_eval (n : Int) :
-    evalPexpr (arrFrame (ivVal i) (ivVal acc) vp f :: rest)
+    evalPexpr fmapEmpty (arrFrame (ivVal i) (ivVal acc) vp f :: rest)
         (arrGuard n) = some (boolValue (decide ((i : Int) < n))) := by
   unfold arrGuard
   rw [evalPexpr_op]
-  rw [show evalPexpr (arrFrame (ivVal i) (ivVal acc) vp f :: rest)
+  rw [show evalPexpr fmapEmpty (arrFrame (ivVal i) (ivVal acc) vp f :: rest)
       (Pexpr [] () (PEsym arrISym)) = some (ivVal i) from by
-    rw [evalPexpr_sym]
+    rw [evalPexpr_sym_empty]
     exact lookup_env_head (arrFrame_lookup_i hf _ _ _) rest]
   show evalBinop binop.OpLt (ivVal i) (ivVal n) = _
   rfl
 
 theorem arr_p_eval :
-    evalPexpr (arrFrame (ivVal i) (ivVal acc) vp f :: rest)
+    evalPexpr fmapEmpty (arrFrame (ivVal i) (ivVal acc) vp f :: rest)
         (Pexpr [] () (PEsym arrPSym)) = some vp := by
-  rw [evalPexpr_sym]
+  rw [evalPexpr_sym_empty]
   exact lookup_env_head (arrFrame_lookup_p hf _ _ _) rest
 
 theorem arr_args_eval (x : Int) (id a : Int) :
-    evalPexprs (arrFrameX (ivVal x) (ivVal i) (ivVal acc)
+    evalPexprs fmapEmpty (arrFrameX (ivVal x) (ivVal i) (ivVal acc)
         (Vobject (OVpointer (cellPtr id a))) f :: rest)
         [arrIncPe, arrAccXPe, arrShiftPe] =
       some [ivVal ((i : Int) + 1), ivVal (acc + x),
         Vobject (OVpointer (cellPtr id (a + 4)))] := by
-  have hi : evalPexpr (arrFrameX (ivVal x) (ivVal i) (ivVal acc)
+  have hi : evalPexpr fmapEmpty (arrFrameX (ivVal x) (ivVal i) (ivVal acc)
       (Vobject (OVpointer (cellPtr id a))) f :: rest)
       (Pexpr [] () (PEsym arrISym)) = some (ivVal i) := by
-    rw [evalPexpr_sym]
+    rw [evalPexpr_sym_empty]
     exact lookup_env_head (arrFrameX_lookup_i hf _ _ _ _) rest
-  have hacc : evalPexpr (arrFrameX (ivVal x) (ivVal i) (ivVal acc)
+  have hacc : evalPexpr fmapEmpty (arrFrameX (ivVal x) (ivVal i) (ivVal acc)
       (Vobject (OVpointer (cellPtr id a))) f :: rest)
       (Pexpr [] () (PEsym arrAccSym)) = some (ivVal acc) := by
-    rw [evalPexpr_sym]
+    rw [evalPexpr_sym_empty]
     exact lookup_env_head (arrFrameX_lookup_acc hf _ _ _ _) rest
-  have hx : evalPexpr (arrFrameX (ivVal x) (ivVal i) (ivVal acc)
+  have hx : evalPexpr fmapEmpty (arrFrameX (ivVal x) (ivVal i) (ivVal acc)
       (Vobject (OVpointer (cellPtr id a))) f :: rest)
       (Pexpr [] () (PEsym arrXSym)) = some (ivVal x) := by
-    rw [evalPexpr_sym]
+    rw [evalPexpr_sym_empty]
     exact lookup_env_head (arrFrameX_lookup_x hf _ _ _ _) rest
-  have hp : evalPexpr (arrFrameX (ivVal x) (ivVal i) (ivVal acc)
+  have hp : evalPexpr fmapEmpty (arrFrameX (ivVal x) (ivVal i) (ivVal acc)
       (Vobject (OVpointer (cellPtr id a))) f :: rest)
       (Pexpr [] () (PEsym arrPSym)) =
       some (Vobject (OVpointer (cellPtr id a))) := by
-    rw [evalPexpr_sym]
+    rw [evalPexpr_sym_empty]
     exact lookup_env_head (arrFrameX_lookup_p hf _ _ _ _) rest
   rw [evalPexprs_cons]
-  rw [show evalPexpr (arrFrameX (ivVal x) (ivVal i) (ivVal acc)
+  rw [show evalPexpr fmapEmpty (arrFrameX (ivVal x) (ivVal i) (ivVal acc)
       (Vobject (OVpointer (cellPtr id a))) f :: rest) arrIncPe =
       some (ivVal ((i : Int) + 1)) from by
     unfold arrIncPe
     rw [evalPexpr_op, hi]
     rfl]
   rw [evalPexprs_cons]
-  rw [show evalPexpr (arrFrameX (ivVal x) (ivVal i) (ivVal acc)
+  rw [show evalPexpr fmapEmpty (arrFrameX (ivVal x) (ivVal i) (ivVal acc)
       (Vobject (OVpointer (cellPtr id a))) f :: rest) arrAccXPe =
       some (ivVal (acc + x)) from by
     unfold arrAccXPe
     rw [evalPexpr_op, hacc, hx]
     rfl]
   rw [evalPexprs_cons]
-  rw [show evalPexpr (arrFrameX (ivVal x) (ivVal i) (ivVal acc)
+  rw [show evalPexpr fmapEmpty (arrFrameX (ivVal x) (ivVal i) (ivVal acc)
       (Vobject (OVpointer (cellPtr id a))) f :: rest) arrShiftPe =
       some (Vobject (OVpointer (cellPtr id (a + 4)))) from by
     unfold arrShiftPe
@@ -386,10 +386,10 @@ theorem arr_args_eval (x : Int) (id a : Int) :
   rfl
 
 theorem arr_exit_eval :
-    evalPexpr (arrFrame (ivVal i) (ivVal acc) vp f :: rest)
+    evalPexpr fmapEmpty (arrFrame (ivVal i) (ivVal acc) vp f :: rest)
         arrExitPe = some (ivVal acc) := by
-  show evalPexpr _ (Pexpr [] () (PEsym arrAccSym)) = _
-  rw [evalPexpr_sym]
+  show evalPexpr fmapEmpty _ (Pexpr [] () (PEsym arrAccSym)) = _
+  rw [evalPexpr_sym_empty]
   exact lookup_env_head (arrFrame_lookup_acc hf _ _ _) rest
 
 end ArrEval
@@ -454,7 +454,7 @@ theorem arr_body_wps (i : Nat) (f : Fmap sym value)
   · -- load element i, unwrap, jump at i+1
     iintro Hpt
     iapply wps_if_true [] (arrGuard vs.length) _ _ _
-      (by rw [arr_guard_eval hf i _ _ rest vs.length,
+      (by rw [procCtx_extern, arr_guard_eval hf i _ _ rest vs.length,
         decide_eq_true (by exact_mod_cast hlt)]; rfl)
     iapply wps_seq_spec [] [] [] arrXSym xbty
     rw [show arrLoadE loc ann mo =
@@ -499,7 +499,7 @@ theorem arr_body_wps (i : Nat) (f : Fmap sym value)
     have hz : i = vs.length := by omega
     iintro Hpt
     iapply wps_if_false [] (arrGuard vs.length) _ _ _
-      (by rw [arr_guard_eval hf i _ _ rest vs.length,
+      (by rw [procCtx_extern, arr_guard_eval hf i _ _ rest vs.length,
         decide_eq_false (by exact_mod_cast hlt)]; rfl)
     iapply wps_pure arrExitPe _ rfl (arr_exit_eval hf i _ _ rest)
     isplit

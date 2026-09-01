@@ -234,44 +234,44 @@ variable {f : Fmap sym value} (hf : SymFrame f) (i a b : Int)
 include hf
 
 theorem fib_guard_eval (n : Int) :
-    evalPexpr (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
+    evalPexpr fmapEmpty (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
         (fibGuard n) = some (boolValue (decide (i < n))) := by
   unfold fibGuard
   rw [evalPexpr_op]
-  rw [show evalPexpr (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
+  rw [show evalPexpr fmapEmpty (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
       (Pexpr [] () (PEsym fibISym)) = some (ivVal i) from by
-    rw [evalPexpr_sym]
+    rw [evalPexpr_sym_empty]
     exact lookup_env_head (fibFrame_lookup_i hf _ _ _) rest]
   show evalBinop binop.OpLt (ivVal i) (ivVal n) = _
   rfl
 
 theorem fib_args_eval :
-    evalPexprs (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
+    evalPexprs fmapEmpty (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
         [fibIncPe, fibBPe, fibABPe] =
       some [ivVal (i + 1), ivVal b, ivVal (a + b)] := by
-  have hi : evalPexpr (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
+  have hi : evalPexpr fmapEmpty (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
       (Pexpr [] () (PEsym fibISym)) = some (ivVal i) := by
-    rw [evalPexpr_sym]
+    rw [evalPexpr_sym_empty]
     exact lookup_env_head (fibFrame_lookup_i hf _ _ _) rest
-  have ha : evalPexpr (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
+  have ha : evalPexpr fmapEmpty (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
       (Pexpr [] () (PEsym fibASym)) = some (ivVal a) := by
-    rw [evalPexpr_sym]
+    rw [evalPexpr_sym_empty]
     exact lookup_env_head (fibFrame_lookup_a hf _ _ _) rest
-  have hb : evalPexpr (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
+  have hb : evalPexpr fmapEmpty (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
       (Pexpr [] () (PEsym fibBSym)) = some (ivVal b) := by
-    rw [evalPexpr_sym]
+    rw [evalPexpr_sym_empty]
     exact lookup_env_head (fibFrame_lookup_b hf _ _ _) rest
   rw [evalPexprs_cons]
-  rw [show evalPexpr (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
+  rw [show evalPexpr fmapEmpty (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
       fibIncPe = some (ivVal (i + 1)) from by
     unfold fibIncPe
     rw [evalPexpr_op, hi]
     rfl]
   rw [evalPexprs_cons]
-  rw [show evalPexpr (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
+  rw [show evalPexpr fmapEmpty (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
       fibBPe = some (ivVal b) from hb]
   rw [evalPexprs_cons]
-  rw [show evalPexpr (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
+  rw [show evalPexpr fmapEmpty (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
       fibABPe = some (ivVal (a + b)) from by
     unfold fibABPe
     rw [evalPexpr_op, ha, hb]
@@ -279,10 +279,10 @@ theorem fib_args_eval :
   rfl
 
 theorem fib_exit_eval :
-    evalPexpr (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
+    evalPexpr fmapEmpty (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
         fibExitPe = some (ivVal a) := by
-  show evalPexpr _ (Pexpr [] () (PEsym fibASym)) = _
-  rw [evalPexpr_sym]
+  show evalPexpr fmapEmpty _ (Pexpr [] () (PEsym fibASym)) = _
+  rw [evalPexpr_sym_empty]
   exact lookup_env_head (fibFrame_lookup_a hf _ _ _) rest
 
 end FibEval
@@ -328,7 +328,7 @@ theorem fib_body_wps (i : Int) (f : Fmap sym value)
   by_cases hlt : i < n
   · -- back edge at (i+1, fib(i+1), fib(i) + fib(i+1))
     iapply wps_if_true [] (fibGuard n) _ _ _
-      (by rw [fib_guard_eval hf i _ _ rest n, decide_eq_true hlt]; rfl)
+      (by rw [procCtx_extern, fib_guard_eval hf i _ _ rest n, decide_eq_true hlt]; rfl)
     iapply wps_run [] ra fibLoopSym [fibIncPe, fibBPe, fibABPe] _ _
       (by rw [procCtx_labels hQ]
           exact fibQ_lookup ra n ibty abty bbty)
@@ -342,7 +342,7 @@ theorem fib_body_wps (i : Int) (f : Fmap sym value)
   · -- exit: i = n, deliver a = fib n
     have hz : i = n := by omega
     iapply wps_if_false [] (fibGuard n) _ _ _
-      (by rw [fib_guard_eval hf i _ _ rest n,
+      (by rw [procCtx_extern, fib_guard_eval hf i _ _ rest n,
         decide_eq_false hlt]; rfl)
     iapply wps_pure fibExitPe _ rfl (fib_exit_eval hf i _ _ rest)
     ipureintro
@@ -537,7 +537,7 @@ theorem fib_loop_drive (n : Int) (i : Int) (h0 : 0 ≤ i) (hin : i ≤ n)
       (Step.if_false (g := fibGuard n)
         (e2 := Expr [] (Erun ra fibLoopSym [fibIncPe, fibBPe, fibABPe]))
         (e3 := Expr [] (Epure fibExitPe))
-        (by rw [fib_guard_eval hf i _ _ rest n,
+        (by rw [procCtx_extern, fib_guard_eval hf i _ _ rest n,
           decide_eq_false (by omega)]; rfl))]
     rw [driveJ_step hQ _ _
       (by exact Frag.pure_sym :
@@ -558,7 +558,7 @@ theorem fib_loop_drive (n : Int) (i : Int) (h0 : 0 ≤ i) (hin : i ≤ n)
       (Step.if_true (g := fibGuard n)
         (e2 := Expr [] (Erun ra fibLoopSym [fibIncPe, fibBPe, fibABPe]))
         (e3 := Expr [] (Epure fibExitPe))
-        (by rw [fib_guard_eval hf i _ _ rest n,
+        (by rw [procCtx_extern, fib_guard_eval hf i _ _ rest n,
           decide_eq_true hlt]; rfl))]
     rw [driveJ_step hQ _ _
       (by

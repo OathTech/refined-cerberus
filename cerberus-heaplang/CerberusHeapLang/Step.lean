@@ -584,38 +584,55 @@ def evalArrayShift (ty : ctype) : value → value → Option value
       some (Vobject (OVpointer (CerbMem.arrayShiftPtrval pv ty iv)))
   | _, _ => none
 
-/-- The pure evaluator (fragment operands; partial, fail-closed). -/
-def evalPexpr (ρ : EnvStack) : generic_pexpr Unit sym → Option value
+/-- The pure evaluator (fragment operands; partial, fail-closed).
+    S1b′: EXTERN IS THREADED — the engine resolves EVERY `PEsym`
+    through the extern indirection with identity fallback
+    (Core_eval.lean:142, the `let sym1 := match fmapLookupBy … ` of
+    the PEsym arm); the S1a probe found the old extern-free evaluator
+    pinned the whole bridge tower at `extern = fmapEmpty` (design
+    record §5.2). The lookup-failure proc-pointer fallback channel
+    (`file1.funs`) is fail-closed absence, as before. -/
+def evalPexpr (ext : Fmap sym sym) (ρ : EnvStack) :
+    generic_pexpr Unit sym → Option value
   | Pexpr _ _ (PEval v) => some v
-  | Pexpr _ _ (PEsym x) => lookup_env x ρ
+  | Pexpr _ _ (PEsym x) => lookup_env (resolveExtern ext x) ρ
   | Pexpr _ _ (PEop op pe1 pe2) => do
-      let v1 ← evalPexpr ρ pe1
-      let v2 ← evalPexpr ρ pe2
+      let v1 ← evalPexpr ext ρ pe1
+      let v2 ← evalPexpr ext ρ pe2
       evalBinop op v1 v2
   | Pexpr _ _ (PEarray_shift pe1 ty pe2) => do
-      let v1 ← evalPexpr ρ pe1
-      let v2 ← evalPexpr ρ pe2
+      let v1 ← evalPexpr ext ρ pe1
+      let v2 ← evalPexpr ext ρ pe2
       evalArrayShift ty v1 v2
   | _ => none
 
-@[simp] theorem evalPexpr_val (ρ : EnvStack) (a : List annot) (v : value) :
-    evalPexpr ρ (Pexpr a () (PEval v)) = some v := rfl
+@[simp] theorem evalPexpr_val (ext : Fmap sym sym) (ρ : EnvStack)
+    (a : List annot) (v : value) :
+    evalPexpr ext ρ (Pexpr a () (PEval v)) = some v := rfl
 
-@[simp] theorem evalPexpr_sym (ρ : EnvStack) (a : List annot) (x : sym) :
-    evalPexpr ρ (Pexpr a () (PEsym x)) = lookup_env x ρ := rfl
+@[simp] theorem evalPexpr_sym (ext : Fmap sym sym) (ρ : EnvStack)
+    (a : List annot) (x : sym) :
+    evalPexpr ext ρ (Pexpr a () (PEsym x)) =
+      lookup_env (resolveExtern ext x) ρ := rfl
 
-theorem evalPexpr_op (ρ : EnvStack) (a : List annot) (op : binop)
-    (pe1 pe2 : generic_pexpr Unit sym) :
-    evalPexpr ρ (Pexpr a () (PEop op pe1 pe2)) = (do
-      let v1 ← evalPexpr ρ pe1
-      let v2 ← evalPexpr ρ pe2
+/-- ... at the empty extern the indirection is the identity (the
+    frozen profiles' instance; rfl). -/
+@[simp] theorem evalPexpr_sym_empty (ρ : EnvStack) (a : List annot) (x : sym) :
+    evalPexpr fmapEmpty ρ (Pexpr a () (PEsym x)) = lookup_env x ρ := rfl
+
+theorem evalPexpr_op (ext : Fmap sym sym) (ρ : EnvStack) (a : List annot)
+    (op : binop) (pe1 pe2 : generic_pexpr Unit sym) :
+    evalPexpr ext ρ (Pexpr a () (PEop op pe1 pe2)) = (do
+      let v1 ← evalPexpr ext ρ pe1
+      let v2 ← evalPexpr ext ρ pe2
       evalBinop op v1 v2) := rfl
 
-theorem evalPexpr_array_shift (ρ : EnvStack) (a : List annot) (ty : ctype)
+theorem evalPexpr_array_shift (ext : Fmap sym sym) (ρ : EnvStack)
+    (a : List annot) (ty : ctype)
     (pe1 pe2 : generic_pexpr Unit sym) :
-    evalPexpr ρ (Pexpr a () (PEarray_shift pe1 ty pe2)) = (do
-      let v1 ← evalPexpr ρ pe1
-      let v2 ← evalPexpr ρ pe2
+    evalPexpr ext ρ (Pexpr a () (PEarray_shift pe1 ty pe2)) = (do
+      let v1 ← evalPexpr ext ρ pe1
+      let v2 ← evalPexpr ext ρ pe2
       evalArrayShift ty v1 v2) := rfl
 
 /-- All-or-nothing list evaluation (the engine's per-argument
@@ -623,21 +640,23 @@ theorem evalPexpr_array_shift (ρ : EnvStack) (a : List annot) (ty : ctype)
     argument against the ORIGINAL env — `full_eval_pexpr'` is closed
     over `th_st` — while threading the binding accumulator;
     `evalPexprs` mirrors the evaluation half). -/
-def evalPexprs (ρ : EnvStack) : List (generic_pexpr Unit sym) →
-    Option (List value)
+def evalPexprs (ext : Fmap sym sym) (ρ : EnvStack) :
+    List (generic_pexpr Unit sym) → Option (List value)
   | [] => some []
   | pe :: pes => do
-      let v ← evalPexpr ρ pe
-      let vs ← evalPexprs ρ pes
+      let v ← evalPexpr ext ρ pe
+      let vs ← evalPexprs ext ρ pes
       pure (v :: vs)
 
-@[simp] theorem evalPexprs_nil (ρ : EnvStack) : evalPexprs ρ [] = some [] := rfl
+@[simp] theorem evalPexprs_nil (ext : Fmap sym sym) (ρ : EnvStack) :
+    evalPexprs ext ρ [] = some [] := rfl
 
-theorem evalPexprs_cons (ρ : EnvStack) (pe : generic_pexpr Unit sym)
+theorem evalPexprs_cons (ext : Fmap sym sym) (ρ : EnvStack)
+    (pe : generic_pexpr Unit sym)
     (pes : List (generic_pexpr Unit sym)) :
-    evalPexprs ρ (pe :: pes) = (do
-      let v ← evalPexpr ρ pe
-      let vs ← evalPexprs ρ pes
+    evalPexprs ext ρ (pe :: pes) = (do
+      let v ← evalPexpr ext ρ pe
+      let vs ← evalPexprs ext ρ pes
       pure (v :: vs)) := rfl
 
 /-! ## The plain-symbol binder pattern (list-reverse arc, phase A)
@@ -913,7 +932,7 @@ inductive Step (M : MachineCtx) :
   | pure_eval {a : List annot} {pe : generic_pexpr Unit sym} {v : value}
       {ρ : EnvStack} {σ : Mem}
       (hnv : valueFromPexpr pe = none)
-      (hv : evalPexpr ρ pe = some v) :
+      (hv : evalPexpr M.extern ρ pe = some v) :
       Step M (Expr a (Epure pe), ρ, σ)
            (Expr a (Epure (Pexpr [] () (PEval v))), ρ, σ)
   /-- ACTION_EVAL for a positive strong load with an unevaluated
@@ -936,7 +955,7 @@ inductive Step (M : MachineCtx) :
       {pe2 : generic_pexpr Unit sym} {pv : CerbMem.PointerValue}
       {mo : memory_order} {ρ : EnvStack} {σ : Mem}
       (hnv2 : valueFromPexpr pe2 = none)
-      (hv2 : evalPexpr ρ pe2 = some (Vobject (OVpointer pv))) :
+      (hv2 : evalPexpr M.extern ρ pe2 = some (Vobject (OVpointer pv))) :
       Step M (Expr a (Eaction (Paction polarity.Pos (Action loc ann
               (Load0 (Pexpr [] () (PEval (Vctype ty))) pe2 mo)))), ρ, σ)
            (Expr a (Eaction (Paction polarity.Pos (Action loc ann
@@ -1004,7 +1023,7 @@ inductive Step (M : MachineCtx) :
       {σ : Mem}
       (hj : jumpRedex? e = some (l, pes))
       (hl : lookupLabel M.labels l = some (params, cont))
-      (hvs : evalPexprs (ev0 :: evs) pes = some vs) :
+      (hvs : evalPexprs M.extern (ev0 :: evs) pes = some vs) :
       Step M (e, ev0 :: evs, σ)
            (cont, bindArgs params vs (ev0 :: evs), σ)
   /-- Esave ENTRY at value-shaped parameter pexprs: one_step0's Esave
@@ -1031,12 +1050,12 @@ inductive Step (M : MachineCtx) :
       state untouched. -/
   | if_true {a : List annot} {g : generic_pexpr Unit sym} {e2 e3 : CoreExpr}
       {ρ : EnvStack} {σ : Mem}
-      (hg : evalPexpr ρ g = some Vtrue) :
+      (hg : evalPexpr M.extern ρ g = some Vtrue) :
       Step M (Expr a (Eif g e2 e3), ρ, σ) (e2, ρ, σ)
   /-- Eif, false branch. -/
   | if_false {a : List annot} {g : generic_pexpr Unit sym} {e2 e3 : CoreExpr}
       {ρ : EnvStack} {σ : Mem}
-      (hg : evalPexpr ρ g = some Vfalse) :
+      (hg : evalPexpr M.extern ρ g = some Vfalse) :
       Step M (Expr a (Eif g e2 e3), ρ, σ) (e3, ρ, σ)
   /-- Ecase at a VALUE scrutinee: TAU into the substituted branch
       (one_step0's Ecase value arm, Core_reduction.lean:353 —
@@ -1118,8 +1137,8 @@ inductive Step (M : MachineCtx) :
       {pe1 pe2 : generic_pexpr Unit sym} {v1 v2 : value}
       {ρ : EnvStack} {σ : Mem}
       (hnv : valueFromPexprs [pe1, pe2] = none)
-      (hv1 : evalPexpr ρ pe1 = some v1)
-      (hv2 : evalPexpr ρ pe2 = some v2) :
+      (hv1 : evalPexpr M.extern ρ pe1 = some v1)
+      (hv2 : evalPexpr M.extern ρ pe2 = some v2) :
       Step M (Expr a (Ememop mop [pe1, pe2]), ρ, σ)
            (Expr a (Ememop mop
              [Pexpr [] () (PEval v1), Pexpr [] () (PEval v2)]), ρ, σ)
@@ -1145,8 +1164,8 @@ inductive Step (M : MachineCtx) :
       {cv : value} {mo : memory_order} {ρ : EnvStack} {σ : Mem}
       (hnv2 : valueFromPexpr pe2 = none)
       (hnv3 : valueFromPexpr pe3 = none)
-      (hv2 : evalPexpr ρ pe2 = some (Vobject (OVpointer pv)))
-      (hv3 : evalPexpr ρ pe3 = some cv) :
+      (hv2 : evalPexpr M.extern ρ pe2 = some (Vobject (OVpointer pv)))
+      (hv3 : evalPexpr M.extern ρ pe3 = some cv) :
       Step M (Expr a (Eaction (Paction polarity.Pos (Action loc ann
               (Store0 lk (Pexpr [] () (PEval (Vctype ty))) pe2 pe3 mo)))), ρ, σ)
            (Expr a (Eaction (Paction polarity.Pos (Action loc ann
@@ -1372,7 +1391,7 @@ theorem Step.jump_inv {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack} {σ : Mem}
     (h : Step M (e, ρ, σ) out) :
     ∃ params cont vs ev0 evs, ρ = ev0 :: evs ∧
       lookupLabel M.labels l = some (params, cont) ∧
-      evalPexprs ρ pes = some vs ∧
+      evalPexprs M.extern ρ pes = some vs ∧
       out = (cont, bindArgs params vs ρ, σ) := by
   cases h with
   | run hj' hl hvs =>
@@ -1411,7 +1430,7 @@ theorem Step.run_of_jumpRedex {M : MachineCtx} {e : CoreExpr} {l : sym}
     {ev0 : Fmap sym value} {evs : List (Fmap sym value)} {σ : Mem}
     (hj : jumpRedex? e = some (l, pes))
     (hl : lookupLabel M.labels l = some (params, cont))
-    (hvs : evalPexprs (ev0 :: evs) pes = some vs) :
+    (hvs : evalPexprs M.extern (ev0 :: evs) pes = some vs) :
     Step M (e, ev0 :: evs, σ) (cont, bindArgs params vs (ev0 :: evs), σ) :=
   Step.run hj hl hvs
 
@@ -1434,7 +1453,7 @@ theorem Step.sseq_inv {M : MachineCtx} {a : List annot} {pat : pattern}
         out = (Expr [] (Eannot ds e2), ρ, σ)) ∨
     (∃ l pes params cont vs ev0 evs, jumpRedex? e1 = some (l, pes) ∧
         ρ = ev0 :: evs ∧ lookupLabel M.labels l = some (params, cont) ∧
-        evalPexprs ρ pes = some vs ∧
+        evalPexprs M.extern ρ pes = some vs ∧
         out = (cont, bindArgs params vs ρ, σ)) ∨
     (∃ pa' pb' x bty' ov ev0 evs, pat = specPat pa' pb' x bty' ∧
         e1 = ofVal (.pure (Vloaded (LVspecified ov))) ∧ ρ = ev0 :: evs ∧
@@ -1480,7 +1499,7 @@ theorem Step.annot_inv {M : MachineCtx} {a : List annot}
     (∃ l pes params cont vs ev0 evs, annotRooted b = false ∧
         jumpRedex? b = some (l, pes) ∧
         ρ = ev0 :: evs ∧ lookupLabel M.labels l = some (params, cont) ∧
-        evalPexprs ρ pes = some vs ∧
+        evalPexprs M.extern ρ pes = some vs ∧
         out = (cont, bindArgs params vs ρ, σ)) := by
   cases h with
   | annot_ctx hnj hg hs => exact .inl ⟨hg, hnj, _, _, _, hs, rfl⟩
@@ -1513,8 +1532,8 @@ theorem Step.if_inv {M : MachineCtx} {a : List annot}
     {g : generic_pexpr Unit sym} {e2 e3 : CoreExpr}
     {ρ : EnvStack} {σ : Mem} {out : CoreExpr × EnvStack × Mem}
     (h : Step M (Expr a (Eif g e2 e3), ρ, σ) out) :
-    (evalPexpr ρ g = some Vtrue ∧ out = (e2, ρ, σ)) ∨
-    (evalPexpr ρ g = some Vfalse ∧ out = (e3, ρ, σ)) := by
+    (evalPexpr M.extern ρ g = some Vtrue ∧ out = (e2, ρ, σ)) ∨
+    (evalPexpr M.extern ρ g = some Vfalse ∧ out = (e3, ρ, σ)) := by
   cases h with
   | if_true hg => exact .inl ⟨hg, rfl⟩
   | if_false hg => exact .inr ⟨hg, rfl⟩
@@ -1537,7 +1556,7 @@ theorem Step.pure_inv {M : MachineCtx} {a : List annot}
     {pe : generic_pexpr Unit sym} {ρ : EnvStack} {σ : Mem}
     {out : CoreExpr × EnvStack × Mem}
     (h : Step M (Expr a (Epure pe), ρ, σ) out) :
-    ∃ v, valueFromPexpr pe = none ∧ evalPexpr ρ pe = some v ∧
+    ∃ v, valueFromPexpr pe = none ∧ evalPexpr M.extern ρ pe = some v ∧
       out = (Expr a (Epure (Pexpr [] () (PEval v))), ρ, σ) := by
   cases h with
   | pure_eval hnv hv => exact ⟨_, hnv, hv, rfl⟩
@@ -1554,7 +1573,7 @@ theorem Step.load_op_inv {M : MachineCtx} {a : List annot}
     (hnv2 : valueFromPexpr pe2 = none)
     (h : Step M (Expr a (Eaction (Paction polarity.Pos (Action loc ann
             (Load0 (Pexpr [] () (PEval (Vctype ty))) pe2 mo)))), ρ, σ) out) :
-    ∃ pv, evalPexpr ρ pe2 = some (Vobject (OVpointer pv)) ∧
+    ∃ pv, evalPexpr M.extern ρ pe2 = some (Vobject (OVpointer pv)) ∧
       out = (Expr a (Eaction (Paction polarity.Pos (Action loc ann
         (Load0 (Pexpr [] () (PEval (Vctype ty)))
                (Pexpr [] () (PEval (Vobject (OVpointer pv)))) mo)))), ρ, σ) := by
@@ -1604,7 +1623,7 @@ theorem Step.memop_op_inv {M : MachineCtx} {a : List annot} {mop : memop}
     {ρ : EnvStack} {σ : Mem} {out : CoreExpr × EnvStack × Mem}
     (hnv : valueFromPexprs [pe1, pe2] = none)
     (h : Step M (Expr a (Ememop mop [pe1, pe2]), ρ, σ) out) :
-    ∃ v1 v2, evalPexpr ρ pe1 = some v1 ∧ evalPexpr ρ pe2 = some v2 ∧
+    ∃ v1 v2, evalPexpr M.extern ρ pe1 = some v1 ∧ evalPexpr M.extern ρ pe2 = some v2 ∧
       out = (Expr a (Ememop mop
         [Pexpr [] () (PEval v1), Pexpr [] () (PEval v2)]), ρ, σ) := by
   cases h with
@@ -1625,8 +1644,8 @@ theorem Step.store_op_inv {M : MachineCtx} {a : List annot}
     (h : Step M (Expr a (Eaction (Paction polarity.Pos (Action loc ann
         (Store0 lk (Pexpr [] () (PEval (Vctype ty))) pe2 pe3 mo)))), ρ, σ)
       out) :
-    ∃ pv cv, evalPexpr ρ pe2 = some (Vobject (OVpointer pv)) ∧
-      evalPexpr ρ pe3 = some cv ∧ valueFromPexpr pe3 = none ∧
+    ∃ pv cv, evalPexpr M.extern ρ pe2 = some (Vobject (OVpointer pv)) ∧
+      evalPexpr M.extern ρ pe3 = some cv ∧ valueFromPexpr pe3 = none ∧
       out = (Expr a (Eaction (Paction polarity.Pos (Action loc ann
         (Store0 lk (Pexpr [] () (PEval (Vctype ty)))
                 (Pexpr [] () (PEval (Vobject (OVpointer pv))))

@@ -183,12 +183,12 @@ theorem lookup_env_xframe {f : Fmap sym value} {v : value}
 
 theorem guard_eval {f : Fmap sym value} {i : Int}
     (h : IsXFrame f (ivVal i)) (rest : List (Fmap sym value)) :
-    evalPexpr (f :: rest) guardPe = some (boolValue (decide (0 < i))) := by
+    evalPexpr fmapEmpty (f :: rest) guardPe = some (boolValue (decide (0 < i))) := by
   unfold guardPe
   rw [evalPexpr_op]
-  rw [show evalPexpr (f :: rest) (Pexpr [] () (PEsym xSym)) =
+  rw [show evalPexpr fmapEmpty (f :: rest) (Pexpr [] () (PEsym xSym)) =
     some (ivVal i) from by
-      rw [evalPexpr_sym]; exact lookup_env_xframe h rest]
+      rw [evalPexpr_sym_empty]; exact lookup_env_xframe h rest]
   show evalBinop binop.OpGt (ivVal i) (ivVal 0) = _
   unfold evalBinop ivVal
   show (CerbMem.ltIval (CerbMem.integerIval 0)
@@ -197,14 +197,14 @@ theorem guard_eval {f : Fmap sym value} {i : Int}
 
 theorem dec_eval {f : Fmap sym value} {i : Int}
     (h : IsXFrame f (ivVal i)) (rest : List (Fmap sym value)) :
-    evalPexprs (f :: rest) [decPe] = some [ivVal (i - 1)] := by
+    evalPexprs fmapEmpty (f :: rest) [decPe] = some [ivVal (i - 1)] := by
   rw [evalPexprs_cons]
-  rw [show evalPexpr (f :: rest) decPe = some (ivVal (i - 1)) from by
+  rw [show evalPexpr fmapEmpty (f :: rest) decPe = some (ivVal (i - 1)) from by
     unfold decPe
     rw [evalPexpr_op]
-    rw [show evalPexpr (f :: rest) (Pexpr [] () (PEsym xSym)) =
+    rw [show evalPexpr fmapEmpty (f :: rest) (Pexpr [] () (PEsym xSym)) =
       some (ivVal i) from by
-        rw [evalPexpr_sym]; exact lookup_env_xframe h rest]
+        rw [evalPexpr_sym_empty]; exact lookup_env_xframe h rest]
     rfl]
   rfl
 
@@ -292,7 +292,7 @@ theorem loop_body_wps (i : Int) (f : Fmap sym value)
   · -- guard TRUE: store then jump at i - 1
     iintro Hcell
     iapply wps_if_true [] guardPe _ _ _
-      (by rw [guard_eval hf' rest, decide_eq_true hpos]; rfl)
+      (by rw [procCtx_extern, guard_eval hf' rest, decide_eq_true hpos]; rfl)
     rw [show (sseqExpr bty (storeExpr loc ann intTy c sevenVal mo)
         (Expr [] (Erun ra loopSym [decPe]))) =
       Expr [] (Esseq (Pattern [] (CaseBase (none, bty)))
@@ -324,7 +324,7 @@ theorem loop_body_wps (i : Int) (f : Fmap sym value)
     subst hz
     iintro Hcell
     iapply wps_if_false [] guardPe _ _ _
-      (by rw [guard_eval hf' rest,
+      (by rw [procCtx_extern, guard_eval hf' rest,
         decide_eq_false hpos]; rfl)
     iapply wps_ofVal (.pure Vunit)
     unfold loopPost

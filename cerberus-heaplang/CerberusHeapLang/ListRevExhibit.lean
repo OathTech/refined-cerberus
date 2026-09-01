@@ -1133,70 +1133,70 @@ theorem lr_memop_operands_nonvalue :
 include hf
 
 theorem lr_cur_eval (vp vc : value) :
-    evalPexpr (lrFrame vp vc f :: rest)
+    evalPexpr fmapEmpty (lrFrame vp vc f :: rest)
       (Pexpr [] () (PEsym lrCurSym)) = some vc := by
-  rw [evalPexpr_sym]
+  rw [evalPexpr_sym_empty]
   exact lookup_env_head (lrFrame_lookup_cur hf _ _) rest
 
 theorem lr_guard_eval (vb vp vc : value) :
-    evalPexpr (lrFrameB vb vp vc f :: rest)
+    evalPexpr fmapEmpty (lrFrameB vb vp vc f :: rest)
       (Pexpr [] () (PEsym lrBSym)) = some vb := by
-  rw [evalPexpr_sym]
+  rw [evalPexpr_sym_empty]
   exact lookup_env_head (lrFrameB_lookup_b hf _ _ _) rest
 
 theorem lr_exit_eval (vb vp vc : value) :
-    evalPexpr (lrFrameB vb vp vc f :: rest) lrExitPe = some vp := by
-  show evalPexpr _ (Pexpr [] () (PEsym lrPrevSym)) = _
-  rw [evalPexpr_sym]
+    evalPexpr fmapEmpty (lrFrameB vb vp vc f :: rest) lrExitPe = some vp := by
+  show evalPexpr fmapEmpty _ (Pexpr [] () (PEsym lrPrevSym)) = _
+  rw [evalPexpr_sym_empty]
   exact lookup_env_head (lrFrameB_lookup_prev hf _ _ _) rest
 
 /-- The load's shifted pointer operand: `array_shift(cur, long, 1)`
     at a node pointer — the engine's own arithmetic, +8 within the
     allocation. -/
 theorem lr_shift_eval_B (vb vp : value) (id aN : Int) :
-    evalPexpr (lrFrameB vb vp (ptrVal (cellPtr id aN)) f :: rest)
+    evalPexpr fmapEmpty (lrFrameB vb vp (ptrVal (cellPtr id aN)) f :: rest)
       (lrShiftPe lrCurSym) = some (ptrVal (cellPtr id (aN + 8))) := by
   unfold lrShiftPe
   rw [evalPexpr_array_shift]
-  rw [show evalPexpr (lrFrameB vb vp (ptrVal (cellPtr id aN)) f :: rest)
+  rw [show evalPexpr fmapEmpty (lrFrameB vb vp (ptrVal (cellPtr id aN)) f :: rest)
       (Pexpr [] () (PEsym lrCurSym)) = some (ptrVal (cellPtr id aN)) from by
-    rw [evalPexpr_sym]
+    rw [evalPexpr_sym_empty]
     exact lookup_env_head (lrFrameB_lookup_cur hf _ _ _) rest]
   show evalArrayShift longTy (Vobject (OVpointer (cellPtr id aN))) (ivVal 1) = _
   exact evalArrayShift_long_one id aN
 
 /-- The store's shifted pointer operand, after n is bound. -/
 theorem lr_shift_eval_N (vn vb vp : value) (id aN : Int) :
-    evalPexpr (lrFrameN vn vb vp (ptrVal (cellPtr id aN)) f :: rest)
+    evalPexpr fmapEmpty (lrFrameN vn vb vp (ptrVal (cellPtr id aN)) f :: rest)
       (lrShiftPe lrCurSym) = some (ptrVal (cellPtr id (aN + 8))) := by
   unfold lrShiftPe
   rw [evalPexpr_array_shift]
-  rw [show evalPexpr (lrFrameN vn vb vp (ptrVal (cellPtr id aN)) f :: rest)
+  rw [show evalPexpr fmapEmpty (lrFrameN vn vb vp (ptrVal (cellPtr id aN)) f :: rest)
       (Pexpr [] () (PEsym lrCurSym)) = some (ptrVal (cellPtr id aN)) from by
-    rw [evalPexpr_sym]
+    rw [evalPexpr_sym_empty]
     exact lookup_env_head (lrFrameN_lookup_cur hf _ _ _ _) rest]
   show evalArrayShift longTy (Vobject (OVpointer (cellPtr id aN))) (ivVal 1) = _
   exact evalArrayShift_long_one id aN
 
 theorem lr_store_value_eval (vn vb vp vc : value) :
-    evalPexpr (lrFrameN vn vb vp vc f :: rest)
+    evalPexpr fmapEmpty (lrFrameN vn vb vp vc f :: rest)
       (Pexpr [] () (PEsym lrPrevSym)) = some vp := by
-  rw [evalPexpr_sym]
+  rw [evalPexpr_sym_empty]
   exact lookup_env_head (lrFrameN_lookup_prev hf _ _ _ _) rest
 
 theorem lr_args_eval (vn vb vp vc : value) :
-    evalPexprs (lrFrameN vn vb vp vc f :: rest)
+    evalPexprs fmapEmpty (lrFrameN vn vb vp vc f :: rest)
       [Pexpr [] () (PEsym lrCurSym), Pexpr [] () (PEsym lrNSym)] =
       some [vc, vn] := by
   rw [evalPexprs_cons]
-  rw [show evalPexpr (lrFrameN vn vb vp vc f :: rest)
+  rw [show evalPexpr fmapEmpty (lrFrameN vn vb vp vc f :: rest)
       (Pexpr ([] : List annot) () (PEsym lrCurSym)) = some vc from by
-    rw [evalPexpr_sym]
+    rw [evalPexpr_sym_empty]
     exact lookup_env_head (lrFrameN_lookup_cur hf _ _ _ _) rest]
   rw [evalPexprs_cons]
-  rw [show evalPexpr (lrFrameN vn vb vp vc f :: rest)
+  rw [show evalPexpr fmapEmpty (lrFrameN vn vb vp vc f :: rest)
       (Pexpr ([] : List annot) () (PEsym lrNSym)) = some vn from by
-    rw [evalPexpr_sym]
+    rw [evalPexpr_sym_empty]
     exact lookup_env_head (lrFrameN_lookup_n hf _ _ _ _) rest]
   rfl
 
@@ -1406,7 +1406,7 @@ theorem lr_body_wps (revd rest' : List Int)
       rfl
     rw [bindSym_lr]
     iapply wps_if_true [] (Pexpr [] () (PEsym lrBSym)) _ _ _
-      (by rw [lr_guard_eval hf renv (boolValue true) _ _]; rfl)
+      (by rw [procCtx_extern, lr_guard_eval hf renv (boolValue true) _ _]; rfl)
     iapply wps_pure lrExitPe _ rfl (lr_exit_eval hf renv _ _ _)
     iexists pPrev
     isplit
@@ -1442,7 +1442,7 @@ theorem lr_body_wps (revd rest' : List Int)
       rfl
     rw [bindSym_lr]
     iapply wps_if_false [] (Pexpr [] () (PEsym lrBSym)) _ _ _
-      (by rw [lr_guard_eval hf renv (boolValue false) _ _]; rfl)
+      (by rw [procCtx_extern, lr_guard_eval hf renv (boolValue false) _ _]; rfl)
     rw [show lrElse loc ann ra mo nbty ubty =
       Expr [] (Esseq (specPat [] [] lrNSym nbty)
         (lrLoadE loc ann mo)

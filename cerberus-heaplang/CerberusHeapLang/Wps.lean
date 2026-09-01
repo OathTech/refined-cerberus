@@ -128,7 +128,7 @@ def wps.pre [SpikeGS hlc GF] (M : MachineCtx) (Ls : LabelSpec GF)
       iprop(|={⊤}=> ∃ (params : List (sym × core_base_type)) (cont : CoreExpr)
         (vs : List value) (ev0 : Fmap sym value) (evs : List (Fmap sym value)),
         ⌜ρ = ev0 :: evs⌝ ∗ ⌜lookupLabel M.labels lp.1 = some (params, cont)⌝ ∗
-        ⌜evalPexprs ρ lp.2 = some vs⌝ ∗ Ls lp.1 vs ρ)
+        ⌜evalPexprs M.extern ρ lp.2 = some vs⌝ ∗ Ls lp.1 vs ρ)
     | none =>
       iprop(∀ (σ₁ : Mem) (ns : Nat) (obs obs' : List Empty) (nt : Nat),
         stateInterp σ₁ ns (obs ++ obs') nt ={⊤,∅}=∗
@@ -217,7 +217,7 @@ theorem wps_run {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
     {params : List (sym × core_base_type)} {cont : CoreExpr}
     {vs : List value} (ev0 : Fmap sym value) (evs : List (Fmap sym value))
     (hl : lookupLabel M.labels l = some (params, cont))
-    (hvs : evalPexprs (ev0 :: evs) pes = some vs) :
+    (hvs : evalPexprs M.extern (ev0 :: evs) pes = some vs) :
     Ls l vs (ev0 :: evs) ⊢
       wps M Ls Ψ (Expr a (Erun ra l pes)) (ev0 :: evs) := by
   rw [wps_unfold.to_eq]
@@ -722,7 +722,7 @@ Soundness.lean) -/
     is certified against `full_eval_pexpr` by the bridge). -/
 theorem wps_if_true {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
     (g : generic_pexpr Unit sym) (e2 e3 : CoreExpr) (ρ : EnvStack)
-    (hg : evalPexpr ρ g = some Vtrue) :
+    (hg : evalPexpr M.extern ρ g = some Vtrue) :
     wps M Ls Ψ e2 ρ ⊢ wps M Ls Ψ (Expr a (Eif g e2 e3)) ρ := by
   rw [(wps_unfold (e := Expr a (Eif g e2 e3))).to_eq]
   simp only [wps.pre, show toVal (Expr a (Eif g e2 e3)) = none from rfl,
@@ -755,7 +755,7 @@ theorem wps_if_true {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
 /-- Eif, false branch. -/
 theorem wps_if_false {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
     (g : generic_pexpr Unit sym) (e2 e3 : CoreExpr) (ρ : EnvStack)
-    (hg : evalPexpr ρ g = some Vfalse) :
+    (hg : evalPexpr M.extern ρ g = some Vfalse) :
     wps M Ls Ψ e3 ρ ⊢ wps M Ls Ψ (Expr a (Eif g e2 e3)) ρ := by
   rw [(wps_unfold (e := Expr a (Eif g e2 e3))).to_eq]
   simp only [wps.pre, show toVal (Expr a (Eif g e2 e3)) = none from rfl,
@@ -873,7 +873,7 @@ theorem wps_case_value {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot
     notes §D3). -/
 theorem wps_pure {Ψ : SpikeVal → EnvStack → IProp GF}
     (pe : generic_pexpr Unit sym) (ρ : EnvStack) {v : value}
-    (hnv : valueFromPexpr pe = none) (hv : evalPexpr ρ pe = some v) :
+    (hnv : valueFromPexpr pe = none) (hv : evalPexpr M.extern ρ pe = some v) :
     Ψ (.pure v) ρ ⊢ wps M Ls Ψ (Expr ([] : List annot) (Epure pe)) ρ := by
   rw [(wps_unfold (e := Expr ([] : List annot) (Epure pe))).to_eq]
   simp only [wps.pre, toVal_pure_none hnv, jumpRedex?_pure]
@@ -915,7 +915,7 @@ theorem wps_load_eval {Ψ : SpikeVal → EnvStack → IProp GF}
     (pe2 : generic_pexpr Unit sym) (mo : memory_order) (ρ : EnvStack)
     {pv : CerbMem.PointerValue}
     (hnv2 : valueFromPexpr pe2 = none)
-    (hv2 : evalPexpr ρ pe2 = some (Vobject (OVpointer pv))) :
+    (hv2 : evalPexpr M.extern ρ pe2 = some (Vobject (OVpointer pv))) :
     wps M Ls Ψ (loadExpr loc ann ty pv mo) ρ ⊢
       wps M Ls Ψ (loadOpRedex loc ann ty pe2 mo) ρ := by
   rw [(wps_unfold (e := loadOpRedex loc ann ty pe2 mo)).to_eq]
@@ -1305,8 +1305,8 @@ theorem wps_memop_eval {Ψ : SpikeVal → EnvStack → IProp GF}
     (mop : memop) (pe1 pe2 : generic_pexpr Unit sym)
     {v1 v2 : value} (ρ : EnvStack)
     (hnv : valueFromPexprs [pe1, pe2] = none)
-    (hv1 : evalPexpr ρ pe1 = some v1)
-    (hv2 : evalPexpr ρ pe2 = some v2) :
+    (hv1 : evalPexpr M.extern ρ pe1 = some v1)
+    (hv2 : evalPexpr M.extern ρ pe2 = some v2) :
     wps M Ls Ψ (memopRedex mop
       [Pexpr [] () (PEval v1), Pexpr [] () (PEval v2)]) ρ ⊢
       wps M Ls Ψ (memopRedex mop [pe1, pe2]) ρ := by
@@ -1351,8 +1351,8 @@ theorem wps_store_eval {Ψ : SpikeVal → EnvStack → IProp GF}
     {pv : CerbMem.PointerValue} {cv : value}
     (hnv2 : valueFromPexpr pe2 = none)
     (hnv3 : valueFromPexpr pe3 = none)
-    (hv2 : evalPexpr ρ pe2 = some (Vobject (OVpointer pv)))
-    (hv3 : evalPexpr ρ pe3 = some cv) :
+    (hv2 : evalPexpr M.extern ρ pe2 = some (Vobject (OVpointer pv)))
+    (hv3 : evalPexpr M.extern ρ pe3 = some cv) :
     wps M Ls Ψ (storeExpr loc ann ty pv cv mo) ρ ⊢
       wps M Ls Ψ (storeOpRedex loc ann ty pe2 pe3 mo) ρ := by
   rw [(wps_unfold (e := storeOpRedex loc ann ty pe2 pe3 mo)).to_eq]
