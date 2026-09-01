@@ -241,3 +241,17 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   all the crux points… creep up on refinedC step by step"; flagship
   = recursive fib (partial, then total via the measure-across-calls
   layer). Prerequisites are foundations Phases 1-3 outputs.
+- **2026-09-01 [USER] The independent skeptical re-audit adopted; the
+  allocation arc**: the operator's independent audit found two
+  Criticals the fresh re-audit and all five gates missed — R-01 the
+  stranded create rule (cursorOwn never launchable), R-02 allocating
+  production exhibits bypassing the logic with operational traces —
+  root-caused to R-04: every coverage instrument validated
+  DECLARATIONS AND NAMES, NOT PROOF FLOW. The 2026-09-01 foundational
+  re-audit is struck as the acceptance record. [USER] "Go ahead":
+  P0-P7 adopted verbatim as the allocation arc
+  (cerberus-heaplang/docs/2026-09-01_alloc-arc-plan.md wrapper),
+  long-cycle on branch heaplang-alloc-arc. Standing lesson entering
+  house practice: coverage/closure claims require DEPENDENCY-CONE
+  verification (launch → resource → rule → consumer), never
+  name-level checks; re-audits trace proof flow.
