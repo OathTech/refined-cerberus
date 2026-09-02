@@ -422,21 +422,17 @@ true and uninteresting. Three guards:
    rules silently dead rather than false (the realized instance WAS
    value-scrutinee `Ecase` — local rules, no adequacy path — until
    the S1b export discharged it, audit F-01) — which is why
-   per-construct coverage is gated by the generated
+   per-construct coverage is reported by the generated
    [capability manifest](CAPABILITY_MANIFEST.md) instead of trusted
-   to prose, and why (since Phase-1 S1c) the manifest's row set is
-   itself DERIVED from the cone: the generator enumerates the
-   fragment and mirror constructors out of the built environment,
-   and a constructor without a manifest row fails gate 4 — the
-   fail-open coverage channel closes by a failed check, not by
-   vigilance. Since alloc arc P3 the manifest's consumers are also
-   DEPENDENCY-CERTIFIED (each listed consumer's proof cone must
-   contain the row's public rule and its lane's adequacy launcher;
-   its statement must contain the construct's syntax; and the layer
-   cut bars every exhibit from reaching the relation or the engine
-   round except through the logic/adequacy layer) — a name whose
-   proof bypasses the logic is a red gate (re-audit R-04;
-   `2026-09-01_p3-notes.md`).
+   to prose: its row set is DERIVED from the fragment — the
+   generator enumerates `Frag`'s constructors out of the built
+   environment, and a constructor without a mapped rule that some
+   exhibit's proof actually depends on is a red row at the claim
+   gate (`scripts/test_unit.sh`) — so the fail-open coverage channel
+   closes by a visible report, not by vigilance. The manifest is a
+   SPEEDBUMP, not an adversarial gate ([USER 2026-09-02]; the P3
+   dependency-certification/layer-cut machinery was cut in P3.5,
+   `2026-09-02_p3.5-notes.md`).
 
 The former loop/straight-line asymmetry is CLOSED (Phase 5): loop
 programs now reach the production pipeline too. Three theorems
@@ -518,18 +514,16 @@ printed or one click away), and **HYPOTHESES** (what you are
 assuming when you believe the conclusion); and one sentence on what
 is provably *absent* from the statement.
 
-The partition is not hand-asserted: a census instrument
-(`scripts/statement_census.lean`) walks each pinned theorem's
-statement term, collects every constant in it (proofs are not
-inspected), and bins by module of origin. Regenerate it yourself:
-
-```bash
-../scripts/capped ~/.elan/bin/lake env lean scripts/statement_census.lean
-```
-
-Its output for the three theorems below is pasted verbatim at the
-end of each subsection; §5.4 states the invariant the full run
-witnesses and the two honest observations it surfaces.
+The partition below was produced mechanically at the acceptance-
+suite slice (2026-09-01) by a census instrument that walked each
+pinned theorem's statement term, collected every constant in it
+(proofs not inspected), and binned by module of origin; the
+instrument and its committed output were retired in P3.5 ([USER
+2026-09-02] — redundant with the committed signature snapshots under
+`docs/`, which record the same statement surfaces). Its output for
+the three theorems below is pasted verbatim at the end of each
+subsection as a reading aid; §5.4 states the invariant the full run
+witnessed and the two honest observations it surfaced.
 
 ### 5.1 `fib_certified_total` — an unconditional engine equation
 
@@ -986,13 +980,13 @@ two honest observations, reported rather than papered over:
    as surfacing the finite-map library — the extended census showed
    its IRIS bin is empty; re-audit finding L1.)
 
-The census GATES since the acceptance-suite slice (2026-09-01):
-its output is committed as `docs/STATEMENT_CENSUS.txt` and
-`scripts/test_unit.sh` gate 5 re-runs it on every gate pass,
-failing on any drift (fail-closed; plant-tested both directions —
-`docs/2026-09-01_acceptance-suite-record.md`). A statement-surface
-change to any pinned export therefore requires a deliberate
-same-commit re-baseline of the committed census.
+The census gated from the acceptance-suite slice (2026-09-01) until
+P3.5 (2026-09-02), when the instrument, its committed output and the
+gate were deleted as cruft ([USER 2026-09-02]: speedbumps, not
+adversarial gates; record: `2026-09-02_p3.5-notes.md`). Statement
+surfaces of the pinned exports remain recorded in the committed
+signature snapshots (`*-signatures-*.txt`, on-demand instrument
+`scripts/signature_snapshot.lean`).
 
 ## 6. Check it yourself in five minutes
 
@@ -1112,9 +1106,6 @@ line each:
     the shipped initial state, exhibit A and the three loop programs
     at the production entry.
 12. `Audit.lean` — the in-build axiom gate.
-
-(`StmtProbe/` is a self-contained toy-language design probe for the
-statement WP — no engine imports; kept as a record, skippable.)
 
 Design records, decision provenance, and the development history
 live in the dated files under [`docs/`](.); the README carries the

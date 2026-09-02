@@ -53,33 +53,21 @@ whose theorems are about the execution of a real C semantics'
 engine, ending at the tradition's canonical exhibit, in-place
 linked-list reversal.
 
-**The authoritative scope statement is the generated
+**The per-construct scope statement is the generated
 [capability manifest](docs/CAPABILITY_MANIFEST.md)** — one row per
-supported Core construct with STAGED fields (syntax witness / mirror
-rule / public logical rules / fragment cone / engine match / adequacy
-consumers / local consumers / total lane / production lane),
-regenerated and drift-checked by `scripts/test_unit.sh` gate 4.
-Since Phase-1 S1c its row set is DERIVED from the unified fragment
-cone: the generator enumerates the cone's constructors out of the
-built environment and requires every mirror-relation constructor to
-be claimed by exactly one row, so the mirror, the cone, and this
-claims surface cannot diverge without a failed check. Since alloc
-arc P3 every consumer it lists is DEPENDENCY-CERTIFIED: the
-generator computes each consumer's proof cone in the built
-environment and requires the row's public rule and the lane's
-adequacy launcher in it (for the allocating production exports also
-`wpt_create` and `launchResources`), requires the consumer's
-STATEMENT to contain the construct's syntax (through program-valued
-definitions only), and enforces the LAYER CUT over every declaration
-of the positive-exhibit modules — no dependency path from an exhibit
-reaches `Step.*`/the engine-round projections/`driveJ_step`/
-`driverDone_step` except through the logic/adequacy layer, and no
-exhibit body names one directly. A listed consumer whose proof
-bypasses its rule is a red gate, not a stale label (the 2026-09-01
-skeptical re-audit's R-04; plant transcripts:
-`docs/2026-09-01_p3-notes.md`). Every scope claim in this README is
+constructor of the fragment `Frag`, read out of the built
+environment (an unmapped constructor is a red run), naming the
+logical rule that covers the construct and the exhibit modules whose
+proofs actually depend on that rule (proof-term dependency cone); a
+rule consumed by no exhibit is a red row. It is a claim-point
+SPEEDBUMP ([USER 2026-09-02]: the trust base is the builds with
+their in-build axiom sweeps plus the banned-methods grep; everything
+else is a report that catches honest drift, not a gate designed to
+survive adversarial attack) — `scripts/test_unit.sh` regenerates it
+and reports drift or a red row. Every scope claim in this README is
 read under it: a construct is claimed at exactly its manifest level,
-no more.
+no more. (The dependency-certifying/layer-cut generator of alloc arc
+P3 was cut in P3.5: `docs/2026-09-02_p3.5-notes.md`.)
 
 The exhibits, in pedagogical order (column
 legend, for first read — each term gets its full treatment below:
@@ -182,17 +170,17 @@ specification idiom. A wrong statement-level definition
 true-but-irrelevant theorem rather than a false one, and a missing
 mirror/cone case silently narrows coverage without falsifying
 anything — which is why the specification idiom is read (below)
-and coverage is gated by the
+and coverage is reported by the
 [capability manifest](docs/CAPABILITY_MANIFEST.md) rather than
-trusted to prose (and the manifest's row set is itself derived from
-the cone's constructors in the built environment — a mirror or cone
-case added or deleted without a manifest row fails gate 4, so the
-coverage channel closes by a failed check, not by vigilance). What remains statement-level trust — the specification
+trusted to prose (its row set is derived from the fragment's
+constructors in the built environment — a fragment constructor
+without a mapped, exhibit-consumed rule is a red row at the claim
+gate, so the coverage channel closes by a visible report, not by
+vigilance). What remains statement-level trust — the specification
 idiom: the drive-loop projections and the footprint/readout
 predicates the exported statements are phrased in — is kept small,
 pinned by executable concrete instances (the demos), and laid out
-for reading, identifier by identifier and with a mechanical
-statement-surface census, in the
+for reading, identifier by identifier, in the
 [walkthrough](docs/WALKTHROUGH.md) §5 (the trust tiers are its §4).
 
 ### What you are asked to take on faith
@@ -412,9 +400,6 @@ value-scrutinee `Ecase` (S1b export — audit F-01 discharged),
 operand-evaluation steps, the `PtrEq` memop with its
 operand-evaluation step, `PEval`/`PEsym`/integer-`PEop`/
 `PEarray_shift` operands, plus the run-time annotation residue.
-<!-- MANIFEST-SCOPE-BEGIN
-tokens: value store load create sseq-wild sseq-spec sseq-sym wseq-wild annot save if run case-value pure-sym memop-ptreq memop-op load-op store-op pure-operands
-MANIFEST-SCOPE-END -->
 Each qualifier is registered
 at source (module headers; `docs/2026-08-30_spike-report.md`); this
 section, under the manifest, is the summary the claims above are
@@ -432,7 +417,7 @@ or growth paths. The register (each entry's home is authoritative):
 | Memory orders accepted arbitrarily: `Step.store`/`wp_store` hold at ANY `memory_order` | Mirror-true: the sequential driver drops `mo` (`action_request_sequential2`, Driver.lean:273 — `mo1` unused); NA-only side conditions would be a divergence FROM the engine | This table + `docs/2026-08-30_spike-report.md` register |
 | Allocation rules + launch REPAIRED (alloc arc P1), partial-lane whole-program consumer LANDED (P2 items 1-2): the public `wps_create`/`wpt_create` (existential pointer, `allocCap` capacity, cursor-free statements, pure address-bounds export) are launchable via the allocation-aware launchers (`launchResources` under `LaunchCoh`), with local consumers, the engine-facing smoke `alloc_create_launch_smoke` (AllocExhibit), and the struct client `struct_create_store_wps`/`struct_create_store_adequacy` (StructExhibit — public rule + engine-facing adequacy through `spike_engine_adequacy_alloc`); and — alloc arc P2 — the whole-program production consumers (`progAProd_wpt`/`ctrProd_wpt`/`lrProd_wpt` through `wpt_driver_done_alloc`); R-01's closure test PASSED (deleting the public rule breaks the struct/two-create consumers; deleting `wpt_create` breaks the create/store/load and both loop production chains; deleting `launchResources` breaks the launch family — plant transcripts in `docs/2026-09-01_p2-notes.md`) | — (CLOSED; the closure table records the transcripts: `docs/2026-09-01_alloc-arc-plan.md`) | `Wps.lean`/`Wpt.lean` §CreateRule headers; `docs/2026-09-01_p1-notes.md` + `docs/2026-09-01_p2-notes.md`; 2026-09-01 skeptical re-audit R-01 |
 | ~~R-02 (allocating exhibits bypass the separation logic)~~ CLOSED at alloc arc P2: all three allocating production exports are whole-program logic proofs (the programs bind their created pointers; creates cross the PUBLIC `wpt_create`; the generic `wpt_driver_done_alloc` → `prod_run_eqJ` collapse supplies every pipeline arrow); every handwritten `Step.*`/`engineSteps_*`/`driverDone_step` proof chain is DELETED from the positive exhibits (grep transcript + closure-test plants: `docs/2026-09-01_p2-notes.md`; closure table: `docs/2026-09-01_alloc-arc-plan.md`) | — (closed; the dependency-certified manifest upgrade is P3, R-04) | `ProdLoopExhibit.lean`/`ProdExhibit.lean` headers; 2026-09-01 skeptical re-audit R-02 |
-| ~~R-04 (the capability gate validated declarations, not use)~~ CLOSED at alloc arc P3.1: the manifest generator is DEPENDENCY-CERTIFIED — every listed consumer's proof cone must contain the row's public rule and its lane's launcher (create's production consumers also `wpt_create` + `launchResources`), its statement must contain the construct's syntax, and the LAYER CUT + direct-reference ban hold over every positive-exhibit declaration; the four charter plants (a create consumer re-proved by a direct `Step.create` trace under its own name; a local `wps` theorem listed as adequacy consumer; `wpt_create` removed from the row; a `Frag` constructor without a row) each turn gate 4 red — transcripts `docs/2026-09-01_p3-notes.md` | — (closed; closure table `docs/2026-09-01_alloc-arc-plan.md`) | `scripts/capability_manifest.lean` header; manifest Notes 8 |
+| ~~R-04 (the capability gate validated declarations, not use)~~ CLOSED at speedbump level by [USER 2026-09-02] ruling: the manifest is a claim-point report (rows derived from `Frag`; one rule per construct; the rule must lie in some exhibit's proof cone — the one check that caught real overclaims); the adversarial-grade dependency-certification and layer-cut checks of alloc arc P3 were cut in P3.5 (the P3 plant transcripts remain history: `docs/2026-09-01_p3-notes.md`) | — (closed; closure table `docs/2026-09-01_alloc-arc-plan.md`; P3.5 record `docs/2026-09-02_p3.5-notes.md`) | `scripts/capability_manifest.lean` header |
 | R-03 (the Cerberus relation a bespoke one-sided projection): the engine-round relation is NAMED (`CerberusRound`, Round.lean) and `cerberusRound_classify` is the exhaustive per-configuration classification over the whole `Frag` cone with the two-sided step arm (`step_iff_cerberusRound`); the manifest's engine-match column is derived from it; RESIDUAL: the refusal arm is classified two-sidedly for store/load/create/case only — the remaining rows' refusal channels are `failwithI` panics (opaque constants: a kernel classification is impossible, not merely unproved), save's EVAL round on non-value params, and the memop ND fork | Per-row refusal theorems where a non-panic channel exists (context rows: refusal propagation through `Decomp`; save: an EVAL-round arm); the panic channels stay one-sided by construction unless the semantics repo replaces `failwithI` with a value-level error | manifest Notes 7 + machine lines RELATION-REFUSAL-TWO-SIDED / -ONE-SIDED; `Round.lean` header; closure table |
 | `Ewseq` at spec/sym binder patterns outside the fragment (the WILDCARD lane exported in S1b as the drift test); `Ecase`'s EVAL arm (non-value scrutinees) unmirrored | Mechanical per-construct extension, path named | `Step.lean` header; `docs/2026-08-30_spike-report.md` "Honestly open" |
 | PURE exits certified at `PEsym` shape only (general `PePure` exits are a bounded matcher extension) | Extend `stepDischarge_pure_sym` per-constructor when needed | `Soundness.lean`; `docs/2026-08-31_phase2-s4-notes.md` |
@@ -528,23 +513,16 @@ production-entry statements, which additionally carry
 `runEffectful` (the one declared temporal boundary, above).
 `sorryAx` appearing anywhere is a failure.
 
-To separate the trust base from the proof machinery mechanically,
-the statement-surface census (`scripts/statement_census.lean`) bins
-every constant in each pinned theorem's statement into engine /
-spec-idiom / Iris / Lean-core; its output is committed
-(`docs/STATEMENT_CENSUS.txt`) and drift-checked by
-`scripts/test_unit.sh` gate 5, so a pinned export's statement
-surface cannot change without a deliberate same-commit re-baseline;
-the [walkthrough](docs/WALKTHROUGH.md) §5 pastes its output and
-reads the three headline statements identifier by identifier. For
-per-construct coverage, regenerate the
+The [walkthrough](docs/WALKTHROUGH.md) §5 reads the three headline
+statements identifier by identifier, binning every constant into
+engine / spec-idiom / Iris / Lean-core (the statement surfaces of
+the pinned exports are also recorded in the committed signature
+snapshots under `docs/`; `scripts/signature_snapshot.lean` is the
+on-demand instrument). For per-construct coverage, regenerate the
 [capability manifest](docs/CAPABILITY_MANIFEST.md)
 (`scripts/capability_manifest.lean`) and diff it against the
-committed copy — `scripts/test_unit.sh` gate 4 does exactly that
-(the generator itself throws on any dependency-certification or
-layer-cut failure), and additionally fails if this README's
-certified-scope token list strays outside the manifest's
-adequacy-exportable set.
+committed copy — `scripts/test_unit.sh` does exactly that as its
+speedbump.
 
 ## The modules
 
@@ -577,11 +555,7 @@ In teaching order (= import order; one line each — the
 | `ProdLoop.lean` | Phase 5: the total statement judgment drives the PRODUCTION DRIVER'S OWN LOOP — the driver-level analog of the measure→drive-fuel simulation (one production round per budget unit, jump rounds included), trio-only | `wpt_driver_done` |
 | `ProdLoopExhibit.lean` | THE PRODUCTION LOOP EQUATIONS — loop programs certified as `CerbND.runND (Driver.drive …) (initial_driver_state …)` equations from the cold start (no package drive/driveJ in any statement); the counter and reversal programs are SELF-CONTAINED WHOLE-PROGRAM LOGIC PROOFS (alloc arc P2: the programs bind their engine-created pointers; creates through the PUBLIC `wpt_create`; the reversal consumes the generic list logic verbatim at existential engine-picked ids) | `ctrProd_wpt`, `lrProd_wpt`, `fib_certified_production`, `counter_loop_certified_production`, `list_reverse_certified_production` |
 | `ProdExhibit.lean` | The demonstration: a self-contained program (create/store/load — the fresh pointer BOUND by the program) run through the production pipeline delivers 7 at the program's own cell — ONE whole-program total judgment through the PUBLIC create rule and the generic driver collapse (R-02 conversion, P2 step 3) | `progAProd_wpt`, `exhibitA_prod` |
-| `Audit.lean` | The in-build axiom gate: curated exact-cone pins + the exhaustive theorem sweep with the module-scoped `runEffectful` boundary + the banned-axiom sweep over every constant kind (all plant-tested both directions — record: `docs/2026-08-31_restructure-notes.md`) | the sweeps |
-
-(`StmtProbe/` is a self-contained toy-language design probe for the
-statement WP — no engine imports, no bearing on the claims; kept as
-a record.)
+| `Audit.lean` | The in-build axiom gate: exact axiom-set pins over the public exports (trio, or trio + `runEffectful` for the production-entry statements) + the exhaustive theorem sweep bounded per module + the banned-axiom sweep over every constant kind | the sweeps |
 
 History and design findings: the dated records in `docs/`
 (`2026-08-30_spike-report.md` is the founding report; plans,
