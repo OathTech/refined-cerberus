@@ -12,10 +12,14 @@ types and the functions `step_ctx`, `action_request_sequential2`,
 `loadM`/`storeM`/`allocateObject`, and the shipped driver composite
 `CerbND.runND (drive fmapEmpty false file args) (initial_driver_state
 sup file fs).1`. Nothing in this package has semantic authority of its
-own: every exported theorem is a statement about the engine's
-execution and memory states, and a disagreement between any
-definition here and the engine is a defect here. The engine is
-trusted as a policy decision — the Lean port is differentially
+own. Every exported execution theorem is either explicitly provisional
+over driveU or reaches the shipped engine; every public logical rule
+has a kernel-checked adequacy path through the package mirror to the
+engine. (The reusable rules and assertion laws are statements in Iris
+over the mirror `Step` and the ghost resources, §3, §6; what makes them
+statements about the engine is that adequacy path, not their own
+text.) A disagreement between any definition here and the engine is a
+defect here. The engine is trusted as a policy decision — the Lean port is differentially
 validated against the OCaml Cerberus, not proved equivalent to it
 (README, "What you are asked to take on faith").
 
@@ -106,14 +110,42 @@ are stated in Iris; `pointsToCell`, `cellOwn`, `allocCap`, the WP and
 BI connectives, and `CohG` (in the one hypothesis `hpost`) are
 definitions to read, not axioms to accept.
 
-THE ROOT-OF-TRUST LANE (total): `exhibitA_prod` (ProdExhibit.lean),
+THE ONE KNOWN ADMISSION IN THE PINNED SEMANTICS TREE. The pinned
+cerberus-lean tree declares no `axiom`, but it contains one generated
+admission: two `(sorry : String)` terms in the debug-log branch of
+`auxAddToRfLoad` in the generated concurrency model (`Cmm_op.lean`;
+Lean reports `declaration uses sorry` for it during the build). It is
+outside every current export cone: the package sweep (Audit.lean)
+establishes that `sorryAx` reaches no `CerberusHeapLang` constant.
+Concurrency is out of scope for this package (`drive fmapEmpty false
+…` in every production statement). The admission must be closed
+upstream or separately bounded before any concurrency or whole-engine
+claim is made on this semantics; it is reported to the cerberus-lean
+team in `../docs/2026-09-02_request-cerberus-lean-fuel-exhaustion-outcome.md`.
+
+THE ROOT-OF-TRUST LANE (total): the four closed shipped-driver
+statements — `exhibitA_prod` (ProdExhibit.lean),
 `fib_certified_production`, `counter_loop_certified_production`,
-`list_reverse_certified_production` (ProdLoopExhibit.lean), through
-`wpt_driver_done_alloc` (ProdLoop.lean) and `prod_run_eqJ`
-(ProdEntry.lean). Their execution function is the shipped composite
-of §1; no package definition appears in their statements except the
-authored programs and the pure readout predicates. The headline claim
-of this package rests on them.
+`list_reverse_certified_production` (ProdLoopExhibit.lean). Their
+execution function is the shipped composite of §1, applied to the
+authored program wrapped as a synthetic one-procedure file by
+`prodFile` (ProdEntry.lean); their conclusions are pure readout
+predicates on the delivered `driver_result`; they carry no termination
+hypothesis (where the certified step count depends on an input, the
+in-budget bound is an explicit hypothesis: `fib_certified_production`'s
+`hfuel : 2 * n.toNat + 6 ≤ lemDefaultFuel`,
+`counter_loop_certified_production`'s `hfuel : 6 * n.toNat + 8 ≤
+lemDefaultFuel`). "Closed shipped-driver statement" means exactly these
+four; the headline claim of this package rests on them. They are
+reached through `wpt_driver_done`/`wpt_driver_done_alloc`
+(ProdLoop.lean) and `prod_run_eqJ` (ProdEntry.lean), which is generic
+collapse machinery, not a closed statement: its premise `hdd` is the
+package-defined delivery fact `DriverDoneAt` (ProdLoop.lean) that the
+total judgment supplies, its premise `hQe` is the package-defined label
+tie `LabeledAt`, and it carries the in-budget bound `k + 2 ≤
+lemDefaultFuel` on the certified step count. The four statements
+discharge the delivery and label premises (and the bound, by
+computation, where the step count is fixed) and are what remains.
 
 THE PROVISIONAL LANE: `MemTripleU`, `MemTripleU_alloc`, `SemTripleU`,
 `project_triple`, `project_triple_pure`, `project_triple_alloc`,
@@ -136,17 +168,37 @@ which is what the total lane consumes.
 
 ## 7. Open items
 
-- Mirror completeness on the fragment (§2): for every `Frag`
-  constructor, mirror stuck ⇒ an engine refusal or kill fact.
-- The fuel-exhaustion request (§6): a transparent, distinguished
-  fuel-exhaustion outcome in the engine's driver monad.
+The first two are the explicit open ACCEPTANCE items (the 2026-09-02
+re-review's next action 1): each stays open until the named theorem
+exists, and the PROVISIONAL label is not removed before then.
+
+- Mirror completeness on the fragment (§2). Closes when, for every
+  `Frag` constructor, a theorem states: mirror stuck ⇒ an engine
+  refusal or kill fact (the shape of `cerberusRound_refused_store`/
+  `_load`/`_create`/`_case`, extended to every row).
+- The shipped-driver generic adequacy theorem (§6). Today
+  `MemTripleU`, the projection theorems and `wpt_engine_boundU` are
+  about `driveU`, and only the four closed production statements reach
+  `CerbND.runND (drive …) (initial_driver_state …).1`. Closes when a
+  generic theorem takes an arbitrary proved public triple to a
+  statement over that shipped composite — which needs the
+  fuel-exhaustion request below (a transparent, distinguished
+  fuel-exhaustion outcome in the engine's driver monad) to land, so
+  that a statement quantifying over all fuels can classify the
+  driver's outcomes. The PROVISIONAL lane is then restated with no
+  other change.
 - Footprint-relative freshness: `LaunchCoh` (Adequacy.lean)
   constrains tracked cells only (`id_lt`, `addr_lo`), so a `create`
   (`wps_create`/`wpt_create`) is fresh from the logical footprint, not
   from untracked allocations an arbitrary concrete state may carry
-  below the cursor; the production cold-start state is globally well
-  formed (`prodMem₀_launchCoh`, ProdEntry.lean). A global memory
-  well-formedness invariant is registered for the malloc/free
-  extension.
+  below the cursor. The production cold-start state `prodMem₀`
+  contains only the allocator-created errno allocation and no dead
+  allocations (`prodMem₀_allocations`, `prodMem₀_deadAllocations`,
+  ProdEntry.lean); `prodMem₀_launchCoh` proves `LaunchCoh` for the
+  empty footprint and any fitting plan, and no more. "Globally well
+  formed" is reserved for the future `MemWF` invariant (allocation-id
+  discipline, live/dead consistency, range disjointness of all live
+  allocations, cursor bounds) and its initialization proof, registered
+  for the malloc/free extension.
 - The deferred parametric semantics interfaces: the rules are proved
   directly against `Step` and the memory state (walkthrough §7).

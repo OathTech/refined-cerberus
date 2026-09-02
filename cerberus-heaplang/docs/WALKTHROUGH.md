@@ -177,8 +177,10 @@ theorem list_reverse_certified_production (sup : Nat) (ra : core_run_annotation)
 
 No section variables. `CerbND.runND (_root_.drive …) (initial_driver_state
 sup file fs).1` is exactly the composite the cerberus-lean executable
-runs — this is a ROOT-OF-TRUST export: the genuine driver, no
-package-defined loop in the statement. The theorem quantifies over nothing but the file-system state,
+runs — this is a ROOT-OF-TRUST export, one of the four closed
+shipped-driver statements: the genuine driver, no package-defined loop
+in the statement (the authored program enters wrapped by `prodFile`,
+the synthetic one-procedure file). The theorem quantifies over nothing but the file-system state,
 argv and the entry's symbol supply `sup` (the fragment never reads it):
 the run is the singleton `Active` execution — an equation, so a total
 statement — its delivered value heads a chain seeded as the reversed
@@ -265,10 +267,20 @@ a readout predicate you must read, §2). In the production statements —
 fmapEmpty false file args) (initial_driver_state sup file fs).1`, for
 total statements only.
 
-**The two lanes, labelled.** The production statements are THE
-ROOT-OF-TRUST exports: the genuine Cerberus driver, and nothing
-package-defined in the statement but the authored program and the pure
-readout predicates. Every statement over `driveU` — `MemTripleU`,
+**The two lanes, labelled.** Every exported execution theorem is
+either explicitly provisional over driveU or reaches the shipped
+engine; every public logical rule has a kernel-checked adequacy path
+through the package mirror to the engine. The four production
+statements (`exhibitA_prod`, `fib_certified_production`,
+`counter_loop_certified_production`,
+`list_reverse_certified_production`) are THE ROOT-OF-TRUST exports —
+the closed shipped-driver statements: the genuine Cerberus driver, and
+nothing package-defined in the statement but the authored program, its
+`prodFile` wrapper and the pure readout predicates. `prod_run_eqJ`,
+through which they are proved, is generic collapse machinery, not a
+closed statement: its delivery premise `DriverDoneAt` (ProdLoop.lean)
+and its label tie `LabeledAt` are package-defined, discharged by each
+of the four. Every statement over `driveU` — `MemTripleU`,
 `MemTripleU_alloc`, `SemTripleU`, `project_triple`,
 `project_triple_pure`, `project_triple_alloc`,
 `project_triple_pure_alloc`, `semantic_triple_soundU`,
@@ -789,14 +801,18 @@ LOGICAL FOOTPRINT — every owned cell is tracked and protected by
 from untracked allocations an arbitrary concrete state may hold below
 the cursor; `MemTripleU_alloc` quantifies over such states too, and
 says nothing about their untracked storage, as a separation logic may.
-The production cold-start state is globally well formed
-(`prodMem₀_launchCoh`, ProdEntry.lean: one `errno` allocation, made by
-the real allocator). A global memory well-formedness invariant —
+The production cold-start state `prodMem₀` contains only the
+allocator-created `errno` allocation and no dead allocations
+(`prodMem₀_allocations`, `prodMem₀_deadAllocations`, ProdEntry.lean);
+`prodMem₀_launchCoh` proves `LaunchCoh` for the empty footprint and any
+fitting plan, and no more — there is no global well-formedness theorem
+about it. A global memory well-formedness invariant (`MemWF`) —
 allocation-id discipline, live/dead consistency, range disjointness of
-ALL live allocations, cursor bounds — belongs to the launch premise and
-the state interpretation once `kill`/free enters the fragment; it is
-registered for the malloc/free arc (README, "Registered divergences and
-limitations").
+ALL live allocations, cursor bounds — with its initialization proof
+belongs to the launch premise and the state interpretation once
+`kill`/free enters the fragment; "globally well formed" is reserved for
+it, and it is registered for the malloc/free arc (README, "Registered
+divergences and limitations").
 
 **Why an ordered plan and not an additive budget.** The classical shape
 would be an additive resource with a split law, `budget (s + t) ⊣⊢
@@ -987,8 +1003,10 @@ a branch-free ND tree so `runND` yields the singleton execution
 (`driver2_done`, `runND_active`), and that `finalize` reads the
 delivered value back (`finalize_done`). `ProdLoop.lean`'s
 `wpt_driver_done(_alloc)` drives the driver's per-thread loop by the
-total judgment, one round per budget unit, concluding `DriverDoneAt`;
-`ProdEntry.lean`'s `prod_run_eqJ` starts from the shipped
+total judgment, one round per budget unit, concluding `DriverDoneAt`
+(a package-defined delivery fact); `ProdEntry.lean`'s `prod_run_eqJ` —
+generic collapse machinery with `DriverDoneAt` as its premise, not a
+closed statement — starts from the shipped
 `initial_driver_state` (memory `initialMemState`, `errno` allocated by
 the real allocator — `prodMem₀` is derived through engine functions
 only) and concludes `CerbND.runND (_root_.drive fmapEmpty false (prodFile
@@ -1021,8 +1039,18 @@ kind, internal details included, carries `sorryAx`, `ofReduceBool` or
 skipped internal-detail names, so a private `sorry` unused by any
 pinned export passed the build; a planted one is now red
 (`2026-09-02_audit-response-3-notes.md`). There is no declared boundary axiom:
-the semantics workspace and its lem runtime declare none. What the
-sweep does not certify: the scope qualifiers (parts of the statements),
+neither the semantics workspace nor its lem runtime contains an
+`axiom` declaration. The pinned semantics tree does contain one known
+generated admission: two `(sorry : String)` terms in the debug-log
+branch of `auxAddToRfLoad` in the generated concurrency model
+(`Cmm_op.lean`), which Lean reports as `declaration uses sorry` during
+the build. It is outside every current export cone — the banned-axiom
+sweep establishes that `sorryAx` reaches no `CerberusHeapLang`
+constant — and concurrency is out of scope here; it must be closed
+upstream or separately bounded before any concurrency or whole-engine
+claim is made on this semantics (reported to the cerberus-lean team,
+`../../docs/2026-09-02_request-cerberus-lean-fuel-exhaustion-outcome.md`).
+What the sweep does not certify: the scope qualifiers (parts of the statements),
 the readout predicates' faithfulness (§2 — read them), coverage (the
 capability manifest's job). The build command, its expected tail and
 the `#print axioms` recipe are in the README, "How to build and verify".

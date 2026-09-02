@@ -3,8 +3,10 @@
 A classical separation logic — Reynolds/O'Hearn: points-to and ∗,
 small axioms, the frame rule, sequencing, consequence, conditionals,
 loops with invariants — over the Cerberus Core semantics, built on
-iris-lean, whose exported theorems are statements about the execution
-and memory states of the cerberus-lean engine.
+iris-lean. Every exported execution theorem is either explicitly
+provisional over driveU or reaches the shipped engine; every public
+logical rule has a kernel-checked adequacy path through the package
+mirror to the engine.
 
 **Cerberus** is an executable semantics for C: it elaborates C into a
 typed functional intermediate language, **Core**, and runs Core on an
@@ -113,12 +115,19 @@ for P and Q "just memory + pure properties".
 **Where the headline claim rests.** On the total-lane production
 statements — `exhibitA_prod` (ProdExhibit.lean),
 `fib_certified_production`, `counter_loop_certified_production`,
-`list_reverse_certified_production` (ProdLoopExhibit.lean), through
-`prod_run_eqJ` (ProdEntry.lean). Their execution function is the
-shipped `CerbND.runND (drive fmapEmpty false file args)
-(initial_driver_state sup file fs).1`, the composite the cerberus-lean
-executable runs; no package-defined driver appears in their
-statements. These are THE root-of-trust exports of this package.
+`list_reverse_certified_production` (ProdLoopExhibit.lean). Their
+execution function is the shipped `CerbND.runND (drive fmapEmpty false
+file args) (initial_driver_state sup file fs).1`, the composite the
+cerberus-lean executable runs, applied to the authored program wrapped
+by `prodFile` (the synthetic one-procedure file); no package-defined
+driver appears in their statements, and they carry no termination
+hypothesis (only the explicit in-budget bounds `hfuel` where the step
+count depends on an input). These four are THE root-of-trust exports of this package —
+the closed shipped-driver statements. They are reached through
+`prod_run_eqJ` (ProdEntry.lean), which is generic collapse machinery
+rather than a closed statement: its delivery premise `DriverDoneAt`
+(ProdLoop.lean) and its label tie `LabeledAt` are package-defined, and
+the four statements discharge them.
 
 **PROVISIONAL.** Every export stated over `driveU` rather than the
 shipped driver — `MemTripleU`, `MemTripleU_alloc`, `SemTripleU`,
@@ -317,8 +326,9 @@ statement carries a fuel hypothesis.
   zero mismatches among its 1,316 comparable files. This samples
   behaviour; it is not an equivalence proof, and the OCaml oracle
   stays on the trust boundary. Neither the semantics workspace nor
-  its lem runtime (`LemLib`) declares an axiom. The engine does
-  declare kernel-opaque constants (`opaque`, mostly with
+  its lem runtime (`LemLib`) contains an `axiom` declaration; the
+  semantics tree does contain one generated `sorry` (next bullet). The
+  engine does declare kernel-opaque constants (`opaque`, mostly with
   `@[implemented_by]` bodies): they enter no axiom cone and cannot be
   unfolded, so a theorem can only hold for every value of them. The
   opaques reached by the export cones were measured
@@ -332,6 +342,17 @@ statement carries a fuel hypothesis.
   `Core.instBEqCore_base_type.beq`. The fuel and well-formedness
   premises below are how the statements stay away from
   `fuelExhaustedWith` and `failwithI`.
+- *The one known admission in the pinned semantics tree.* The pinned
+  cerberus-lean tree contains one generated admission: two `(sorry :
+  String)` terms in the debug-log branch of `auxAddToRfLoad` in the
+  generated concurrency model (`Cmm_op.lean`), which Lean reports as
+  `declaration uses sorry` during the build. It is outside every
+  current export cone: the package sweep (`Audit.lean`) establishes
+  that `sorryAx` reaches no `CerberusHeapLang` constant. Concurrency is
+  out of scope for this package. The admission must be closed upstream
+  or separately bounded before any concurrency or whole-engine claim
+  is made on this semantics; it is reported to the cerberus-lean team
+  (`../docs/2026-09-02_request-cerberus-lean-fuel-exhaustion-outcome.md`).
 - *Which Cerberus configuration.* Cerberus is switch-configured (PNVI
   variants, strict pointer arithmetic, …). The statements pin: the
   tag-definition environment is `fmapEmpty` and concurrency is off
@@ -364,7 +385,7 @@ theorems:
 | The tag-definition environment is an explicit parameter of the heap predicates (`pointsToCell tds …`, `M.tagDefs`); the demos state footprints at `fmapEmpty` | by design: a program-wide constant of the language instance | `Heap.lean` header |
 | Memory orders accepted arbitrarily (`Step.store`/`wp_store` at any `memory_order`) | mirror-true: the sequential driver drops `mo` (`action_request_sequential2`) | `Step.lean` |
 | The mirror's certification is ONE-DIRECTIONAL: `engine_step_matchU` gives mirror step ⇒ engine round; `step_iff_cerberusRound` is two-sided only GIVEN a mirror step; where the mirror is stuck no engine fact is proved (`cerberusRound_classify`'s `refused` arm) except at store/load/create/case (`cerberusRound_refused_*`) — the other rows' refusal channels are `failwithI` panics (opaque — a kernel classification is impossible), save's evaluation round, or the memop fork. The logic is SOUND but not proved COMPLETE for the fragment: a configuration the mirror refuses may be one the engine executes, and no export speaks about it | mirror completeness on the fragment — per-constructor "mirror stuck ⇒ engine refusal/kill" theorems; the registered open architecture item | `Round.lean` header; `ARCHITECTURE.md` §2 |
-| Freshness is footprint-relative: `LaunchCoh` constrains TRACKED cells only (`id_lt`, `addr_lo`), so a `create` (`wps_create`/`wpt_create`) is fresh from the logical footprint, not from untracked allocations an arbitrary concrete state may hold below the cursor (`allocateObject` scans no ranges); every owned cell is protected, and the production cold-start state is globally well formed (`prodMem₀_launchCoh`) | a global memory well-formedness invariant in the launch premise and the state interpretation, registered for the malloc/free arc | `Adequacy.lean` (`LaunchCoh` section), `Heap.lean` header; walkthrough §4 |
+| Freshness is footprint-relative: `LaunchCoh` constrains TRACKED cells only (`id_lt`, `addr_lo`), so a `create` (`wps_create`/`wpt_create`) is fresh from the logical footprint, not from untracked allocations an arbitrary concrete state may hold below the cursor (`allocateObject` scans no ranges); every owned cell is protected; the production cold-start state `prodMem₀` contains only the allocator-created errno allocation and no dead allocations (`prodMem₀_allocations`, `prodMem₀_deadAllocations`), and `prodMem₀_launchCoh` proves `LaunchCoh` for the empty footprint and any fitting plan — no global well-formedness theorem exists yet | a global memory well-formedness invariant (`MemWF`: id discipline, live/dead consistency, range disjointness of all live allocations, cursor bounds) with its initialization proof, in the launch premise and the state interpretation, registered for the malloc/free arc; "globally well formed" is reserved for it | `Adequacy.lean` (`LaunchCoh` section), `Heap.lean` header; walkthrough §4 |
 | Arrays are one allocation, not a ∗ of per-element cells: the engine bounds-checks against the pointer's provenance allocation and `arrayShiftPtrval` preserves provenance | forcing fact about Cerberus; per-element structure lives in the invariant + decode premises | `ArrayExhibit.lean` |
 | Allocation metadata at a fraction as the exclusivity anchor; a persistent stratum instead of a liveness token (no `kill`) | the dispose rule adds the donor's `alloc_alive`/freeable split and moves the anchor | `Heap.lean` header |
 | Allocation capacity is an ordered plan (`allocCap reqs`), not an additive resource: it cannot be split across ∗, only weakened to a prefix (`allocCap_weaken`) | an additive byte budget as a derived face (walkthrough §4) | `Heap.lean`; walkthrough §4 |
