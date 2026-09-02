@@ -500,3 +500,17 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   not the need; Lithium's engine is not ported, its judgment SHAPE
   (syntax-directed rules, unification instantiation, pure side
   conditions) is what survives.
+- **2026-09-02 [USER] THE GRUMPY-PROFESSOR STANDARD FOR THE DEMO** (verbatim):
+  "When you get done answering this review, run a 2nd review which is
+  briefed to the 'grumpy PL professor' standard. I.e a Fable-class
+  reviewer, reviewing the work in persona as a PL professor at a
+  world-class university. The professor knows everything there is to
+  know about Reynolds/O'Hearn, but the professor has a very low
+  tolerance for unclarity, or assumptions that aren't completely
+  justified, or anything that doesn't line up with the academic goals
+  of the demo logic. The professor gives you a grade and anything B or
+  below is a fail, go fix it". Sequence: the quality audit round
+  (dependency-tracing, AUDIT-BRIEF.md) → its fix slice → the professor
+  review (fresh Fable-class reviewer, in persona, letter grade) → fix
+  → re-mark by a NEW professor instance (never same-reviewer delta
+  convergence) until the grade is A-range.
