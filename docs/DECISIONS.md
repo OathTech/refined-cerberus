@@ -693,3 +693,48 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   reported upstream (appended to the fuel-exhaustion request): a
   `(sorry : String)` placeholder in the pinned generated `Cmm_op.lean`
   concurrency debug arm — outside every cone of ours by the sweep.
+- **2026-09-02 [USER] THE DEMO'S ACCEPTANCE GOALS** (verbatim): "we should log
+  as our goal for this demo these goals 'a generic logic with adequacy
+  over the shipped driver, a complete logic for the fragment, a globally
+  well-formed allocator model,' - covering all of Core isn't a goal for
+  the demo, but the rest are". Recorded as the three acceptance goals,
+  with the orchestrator's agreed precisions: (1) SHIPPED-DRIVER
+  ADEQUACY — no export labelled PROVISIONAL remains; every partial-
+  correctness statement quantifies over the shipped driver's fuel with
+  exhaustion a classified outcome; DEPENDS on the cerberus-lean fuel-
+  exhaustion request. (2) MIRROR COMPLETENESS FOR THE FRAGMENT — for
+  every fragment configuration, either the mirror steps and the engine
+  round matches it, or the engine round is classified (value, refusal/
+  kill/UB, or nondeterministic fork) as an engine fact; a STANDING
+  obligation each arc re-establishes for its constructors. (3) A GLOBAL
+  MEMORY WELL-FORMEDNESS INVARIANT (allocation-id discipline, live/dead
+  consistency, range disjointness of all live allocations, cursor
+  bounds) in the launch premise and state interpretation, proved for the
+  production initial state and preserved by every supported operation;
+  "fresh" then means fresh in the concrete allocation model. Not a goal:
+  full Core. Sequencing [AGENT]: completeness first (no dependency),
+  the invariant with the kill/free arc, shipped-driver adequacy when the
+  upstream outcome lands; calls after completeness.
+- **2026-09-02 [AGENT] AUDIT-RESPONSE-4 ADJUDICATIONS; A FAIL-OPEN IN THE
+  PRIMING GUARD FOUND AND CLOSED** (record:
+  `cerberus-heaplang/docs/2026-09-02_audit-response-4-notes.md`): the
+  re-review's N-1..N-4 fixed as specified (docs + two emitted-sentence
+  texts). N-3's diagnosis found the real cause of the count difference:
+  the PRIMARY checkout's `.cerberus-ws` (re-primed 2026-09-02T15:15 from
+  the cerberus-lean checkout at `4cb8c4ee9`) carries that commit's
+  hand-written `CerbMem.lean` (mem-scale C3 delta, +353/−15), not the
+  pin's, because `scripts/setup-cerberus-dep.sh`'s content guard did not
+  list the hand-written seams `lean_frontend/*.lean` (copied into
+  `generated/` at build time) — a FAIL-OPEN (a defect by house rule).
+  Closed in this slice: the seams and the copy manifest are on the guard's
+  path list, and a new section C verifies every primed seam copy
+  byte-identical to the PINNED clone's source in both prime and --check
+  modes (fallback to all `lean_frontend/*.lean` with a generated twin
+  when the pin predates the manifest, as ours does — 21 seams). Tested:
+  C ok on the correctly primed worktree workspace; the same check finds
+  `CerbMem.lean` MISMATCH on the primary's. The primary's workspace is
+  replaced by a copy of the verified pinned one. The third auditor's
+  re-review ran against the C3 memory model (green, 116 pins) — the
+  package holds against both texts, but that run was not a build against
+  the pin; recorded. A deliberate re-pin to a post-C3 head is a separate
+  forced-semantics-change slice, not taken now.

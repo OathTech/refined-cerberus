@@ -61,7 +61,15 @@ if [[ ! -f "$prime_done" ]]; then
     # the primed build state: the .lem sources (they determine
     # generated/), the generated tree itself, native/, and the lem
     # runtime seams. Any real change on those paths still fail-closes.
+    # 2026-09-02 fail-open FOUND AND CLOSED (re-review N-3 diagnosis): the
+    # hand-written seams lean_frontend/*.lean (copied into generated/ per
+    # handwritten_copy.manifest — CerbMem.lean among them) were NOT on
+    # this list, so a source whose CerbMem.lean differed from the pin's
+    # primed with a green guard. They are on it now; and section C below
+    # checks the primed copies against the PINNED clone's seam sources
+    # directly, independent of this guard.
     CONTENT_PATHS=(frontend lean_frontend/generated lean_frontend/native \
+      'lean_frontend/*.lean' lean_frontend/handwritten_copy.manifest \
       lean_frontend/lakefile.toml lean_frontend/Makefile Makefile)
     if git -C "$SRC" diff --quiet "$CERBERUS_LEAN_COMMIT" "$src_at" -- "${CONTENT_PATHS[@]}"; then
       say "B: source at $src_at ≠ pin, but content-identical on all primed paths (verified) — priming allowed"
@@ -106,5 +114,35 @@ if [[ ! -f "$prime_done" ]]; then
 else
   say "B ok: primed ($(cat "$prime_done"))"
 fi
+
+# --- C: hand-written seam identity (runs in BOTH modes; fail-closed) ---------
+# The clone at $WS IS the pin, so $WS/lean_frontend/<seam>.lean is the pin's
+# hand-written source; the primed generated/<seam>.lean must be byte-identical
+# to it. The pin's own manifest (handwritten_copy.manifest) is the list; a pin
+# without a manifest falls back to every lean_frontend/*.lean with a
+# generated twin. Any mismatch or missing copy is a stop — priming from a
+# source whose seams moved is exactly the stale-tree hazard.
+seam_list=()
+if [[ -f "$WS/lean_frontend/handwritten_copy.manifest" ]]; then
+  while IFS= read -r line; do
+    [[ -z "$line" || "$line" == \#* ]] && continue
+    seam_list+=("$line")
+  done < "$WS/lean_frontend/handwritten_copy.manifest"
+else
+  for f in "$WS"/lean_frontend/*.lean; do
+    [[ -f "$WS/lean_frontend/generated/$(basename "$f")" ]] && seam_list+=("$(basename "$f")")
+  done
+fi
+[[ ${#seam_list[@]} -gt 0 ]] || { say "C FAIL: no hand-written seams found to check (manifest empty?)"; exit 1; }
+seam_bad=0
+for f in "${seam_list[@]}"; do
+  if [[ ! -f "$WS/lean_frontend/generated/$f" ]]; then
+    say "C FAIL: primed generated/$f missing"; seam_bad=1
+  elif ! cmp -s "$WS/lean_frontend/$f" "$WS/lean_frontend/generated/$f"; then
+    say "C FAIL: primed generated/$f differs from the PIN's lean_frontend/$f (primed from a moved source?)"; seam_bad=1
+  fi
+done
+[[ $seam_bad -eq 0 ]] || { say "C FAIL-CLOSED: re-prime from a source whose seams equal the pin (rm -rf $WS; re-run)"; exit 1; }
+say "C ok: ${#seam_list[@]} hand-written seams byte-identical to the pin"
 
 say "DONE. Lake consumes $WS/lean_frontend as a path dependency."
