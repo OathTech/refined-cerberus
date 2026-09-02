@@ -541,3 +541,25 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   demoted to the two small axioms; Q10 one naming scheme; Q14/Q15
   statement cosmetics; the Notes (109 pins; trust-diagram arrow for the
   total drive equations; dead names). Then the grumpy-professor review.
+- **2026-09-02 [AGENT] QA-1 ADJUDICATIONS** (record:
+  `cerberus-heaplang/docs/2026-09-02_qa1-notes.md`): (1) `Frag.save`'s
+  new premise `∀ pe ∈ saveParamPexprs ps, peDepth pe ≤ lemDefaultFuel`
+  is ACCEPTED as a deliberate exception to the slice's
+  strict-generalization rule: it is the fuel-honesty condition every
+  other evaluating `Frag` constructor already carries (`Frag.if_`'s
+  `hdg`), it narrows `Frag` only on shapes that never had a rule or a
+  mirror step and cannot past fuel, and it is what certifying the
+  save-EVAL arm against the engine's fueled evaluator requires; the
+  audit's alternative (narrow to literal initializers) is the larger
+  narrowing. (2) `counter_loop_certified_production`'s fuel premise
+  `6·n+8` (was `7·n+7`): accepted — the natural program shape costs one
+  save-entry step and saves one per iteration; weaker for all n ≥ 1.
+  (3) Literal-initializer exhibits consuming `wpt_save_vals` (the
+  instance) while the production programs consume the general
+  `wpt_save`: accepted; both have consumers. Stopped items are
+  FINDINGS, not deferrals: Q6 (`decIndep` splice lemma false without a
+  layout side condition — `reconstructValue` consults the union and
+  funptr tables recursively), Q7/Q16 (whole-engine-AST fuel-indexed
+  induction — grind class), Q8 (annotation-generic pure/annot rules are
+  FALSE under the canonical-annotation protocol D3) — each is now
+  documented at the rule; Q3 partial for the same D3 reason.
