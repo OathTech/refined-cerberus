@@ -514,3 +514,30 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   review (fresh Fable-class reviewer, in persona, letter grade) → fix
   → re-mark by a NEW professor instance (never same-reviewer delta
   convergence) until the grade is A-range.
+- **2026-09-02 [AGENT] QUALITY-AUDIT RESPONSE PLAN** (audit record:
+  `cerberus-heaplang/docs/2026-09-02_quality-audit.md`; verdict: no
+  unsound/vacuous rule, no trust gap, 109/109 exports trio-exact and
+  traced to the engine functions; "the logic is not yet pristine").
+  Two slices, one-change-at-a-time: **QA-1 (spec generalizations
+  within the frozen fragment)** — H-1: mirror the engine's store/save
+  operand-evaluation arms at their true generality (`valueFromPexprs
+  [pe1,pe2,pe3] = none`; `Step.save_eval` + `wps_save`/`wpt_save` at
+  `evalPexprs … = some cvals`), then restate the two production programs
+  in their natural shape; M-3/Q9 the six missing stratum twins; Q3
+  drop derivable `hnv` premises; Q4 one conditional rule with the
+  verdict inside the logic (the two verdict rules become derived); Q5
+  `StorableAt` everywhere; Q6/Q7 premises replaced by lemmas if
+  provable; Q8 annotation-generic pure/annot rules; Q12 derived
+  annotation-insensitive small axioms; Q13 extern-resolution lookup
+  lemma; Q16. Every public statement change must be a strict
+  generalization or premise removal, listed in the spec-delta record.
+  **QA-2 (pruning + restatement)** — M-1/Q17 retire the dead island
+  (`StraightFrag`, `engine_complete`, `prod_loop_done`, `prod_run_eq`,
+  `sem_triple_prod`; plus `spike_engine_adequacy_alloc` and the other
+  consumerless API names the audit lists) — [AGENT] decision consistent
+  with the auditor's recommendation and prune-don't-merge, OPERATOR
+  VETO OPEN (asked 2026-09-02, unanswered); M-2/Q11 base stratum
+  generalized over `M`/`ρ` with the classical sequencing rule, or
+  demoted to the two small axioms; Q10 one naming scheme; Q14/Q15
+  statement cosmetics; the Notes (109 pins; trust-diagram arrow for the
+  total drive equations; dead names). Then the grumpy-professor review.
