@@ -768,3 +768,41 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   (fl+1) …) dst = runOne (… fl …) dst'`, killed/done terminals, ≥2
   outcomes for a fork), no fuel dependency, `dischargeStep` demoted to a
   proof device.
+- **2026-09-02 [AGENT] MIRROR COMPLETENESS LANDED — WITH FOUR REGISTERED GAPS;
+  DECISIONS PENDING** (record:
+  `cerberus-heaplang/docs/2026-09-02_mirror-completeness-notes.md`).
+  Commit 1: `CerberusRound` restated as ONE ITERATION OF THE SHIPPED
+  DRIVER'S THREAD LOOP (`step_ctx` → `can_advance` → `advance_step` at
+  every embedding driver state; no fuel dependency; at the context's
+  own tagDefs/extern/tid — no pin was deep); `engine_step_matchU`,
+  `step_iff_cerberusRound`, `cerberusRound_classify`, `cerberusRound_refused_*`
+  restated over it; `dischargeStep`/`outcomesU` are proof devices. The
+  one non-engine constant in the statement is `runOne`, the `ND`
+  constructor's eliminator (destructor plumbing, not driver content) —
+  accepted. Commit 2: `frag_round_complete` — at every non-value
+  fragment configuration the mirror steps, or the shipped round is a
+  classified refusal (`ShippedRefusal`: ILLTYPED / KILL with the
+  engine's `kill_reason` / FORK — `eqPtrval`'s differing-provenance
+  `msum` delivers exactly two executions / PANIC forms), or the
+  configuration is one of four REGISTERED GAPS (`OpenRound`, each an
+  engine fact): (a) the LETS-ANNOT beta at the symbol binder — engine
+  SUCCESS, no mirror rule (~1 day: an 8th `Step.sseq_inv` disjunct, 38
+  sites); (b) load/store ACTION_EVAL whose pointer operand evaluates to
+  a non-pointer — engine SUCCESS into the ill-typed action (~1 day);
+  (c) operand evaluation outside the mirror evaluator (`evalPexpr`
+  covers PEval/PEsym/eight integer binops/PEarray_shift; the engine's
+  `eval_pexpr_aux2` also succeeds on ctype/float equality, div/rem/exp,
+  and/or, floats, procedure-name symbols) — either a complete mirror
+  evaluator (LARGE: `M.file` in `evalPexpr`, ~340 call sites) or an
+  honest narrowing of `Frag`'s operand grammar to the covered set
+  (`PePure` for `if_`/`run`/`save`/`pure_sym` too); (d) a jump with no
+  current procedure — an engine `failwith` (opaque) inside the lookup
+  key; only the step's shape is statable. Orchestrator recommendation:
+  fix (a) and (b) at the engine's generality (they are exactly the
+  store/save class); NARROW for (c) — the classical-SL demo's operand
+  language is integers, symbols and pointer shifts, so declare the
+  fragment as what the mirror evaluator covers and state completeness
+  relative to that declared fragment (a complete evaluator belongs to
+  the compiled-Core derisking package); accept (d) as the engine's own
+  panic, classified by shape. Pins 116 → 139. Verified by the
+  orchestrator: FULL gate ALL GATES GREEN, GATE-EXIT=0.
