@@ -1013,9 +1013,14 @@ projections and the consequence lemmas) exists, is a theorem, and has
 transitive axiom set equal to `[propext, Classical.choice, Quot.sound]`
 — growth or shrinkage fails until the list is re-baselined in the same
 commit with the reason; (2) the exhaustive sweep — every theorem of
-every `CerberusHeapLang.*` module is bounded by those three axioms; (3)
-the banned-axiom sweep — no constant of any kind carries `sorryAx`,
-`ofReduceBool` or `ofReduceNat`. There is no declared boundary axiom:
+every `CerberusHeapLang.*` module, internal details (private names,
+proof and match auxiliaries, equation lemmas) included, is bounded by
+those three axioms; (3) the banned-axiom sweep — no constant of any
+kind, internal details included, carries `sorryAx`, `ofReduceBool` or
+`ofReduceNat`. The scope is exact: until 2026-09-02 both sweeps
+skipped internal-detail names, so a private `sorry` unused by any
+pinned export passed the build; a planted one is now red
+(`2026-09-02_audit-response-3-notes.md`). There is no declared boundary axiom:
 the semantics workspace and its lem runtime declare none. What the
 sweep does not certify: the scope qualifiers (parts of the statements),
 the readout predicates' faithfulness (§2 — read them), coverage (the

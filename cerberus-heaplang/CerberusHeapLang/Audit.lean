@@ -11,11 +11,25 @@ Three checks, in order:
    the classical trio. Growth OR shrinkage is a build failure until
    the list is re-baselined in the same commit with the reason.
 2. THE EXHAUSTIVE SWEEP: every theorem of every `CerberusHeapLang.*`
-   module (module-of-origin, so top-level names cannot dodge) is
-   BOUNDED by the trio — no module is allowed anything else.
-3. THE BANNED-AXIOM SWEEP over EVERY constant kind of our modules:
-   `sorryAx` / `ofReduceBool` / `ofReduceNat` anywhere in any cone
-   (defs included, referenced by a theorem or not) fails the build.
+   module (module-of-origin, so top-level names cannot dodge),
+   INTERNAL DETAILS INCLUDED (private names, proof and match
+   auxiliaries, equation lemmas — `Name.isInternalDetail` is NOT
+   consulted), is BOUNDED by the trio — no module is allowed anything
+   else.
+3. THE BANNED-AXIOM SWEEP over EVERY constant kind of our modules,
+   internal details included: `sorryAx` / `ofReduceBool` /
+   `ofReduceNat` anywhere in any cone (defs included, referenced by a
+   theorem or not) fails the build.
+
+THE SCOPE IS EXACT (2026-09-02 detailed audit, L-1): until
+2026-09-02 both sweeps skipped `n.isInternalDetail`, so a private
+`theorem … := by sorry` unused by any pinned export passed the build
+while the emitted text said "every theorem" — measured by a planted
+private sorry in a leaf module (green under the old sweeps, red under
+these; transcript in
+cerberus-heaplang/docs/2026-09-02_audit-response-3-notes.md). The
+skips are removed; the counts the build prints are the whole package.
+The run costs the same (1.8 s wall, before and after).
 
 THE TRUST BASE IS THE CLASSICAL TRIO, EXACTLY, OVER EVERY EXPORT.
 There is no declared boundary axiom. The former temporal boundary
@@ -62,6 +76,7 @@ import CerberusHeapLang.WseqExhibit
 import CerberusHeapLang.StructExhibit
 import CerberusHeapLang.AllocExhibit
 import CerberusHeapLang.Examples.ReadinessSmoke
+import CerberusHeapLang.Examples.MirrorCoverage
 import CerberusHeapLang.Round
 
 namespace CerberusHeapLang.Audit
@@ -213,7 +228,6 @@ def sortedNames (ns : Array Name) : Array String :=
       | none => true  -- the file being elaborated
     unless ours do continue
     let some (.thmInfo _) := env.find? n | continue
-    if n.isInternalDetail then continue
     for a in (← collectAxioms n) do
       unless allowedAxioms.contains a do
         throwError "CerberusHeapLang axiom sweep FAILED: theorem {n} carries axiom {a}, \
@@ -221,7 +235,7 @@ def sortedNames (ns : Array Name) : Array String :=
           non-kernel method) or a trust decision is being made implicitly — the trust base \
           is the trio, exactly; any change happens in Audit.lean, same commit, with provenance."
     swept := swept + 1
-  logInfo s!"CerberusHeapLang axiom sweep: {swept} theorems bounded by the trio"
+  logInfo s!"CerberusHeapLang axiom sweep: {swept} theorems (internal details included) bounded by the trio"
   -- 3. THE BANNED-AXIOM SWEEP over every constant kind.
   let banned : List Name := [``sorryAx, ``ofReduceBool, ``ofReduceNat]
   let mut checked := 0
@@ -230,14 +244,13 @@ def sortedNames (ns : Array Name) : Array String :=
       | some idx => isOurs[idx.toNat]!
       | none => true
     unless ours do continue
-    if n.isInternalDetail then continue
     for a in (← collectAxioms n) do
       if banned.contains a then
         throwError "CerberusHeapLang banned-axiom sweep FAILED: constant {n} carries banned \
           axiom {a}. sorryAx / ofReduceBool / ofReduceNat are never in any boundary, for ANY \
           constant kind — a def-level hole is still a hole; remove it."
     checked := checked + 1
-  logInfo s!"CerberusHeapLang banned-axiom sweep: {checked} constants of every kind checked; \
-    sorryAx/ofReduceBool/ofReduceNat absent from all cones"
+  logInfo s!"CerberusHeapLang banned-axiom sweep: {checked} constants of every kind (internal \
+    details included) checked; sorryAx/ofReduceBool/ofReduceNat absent from all cones"
 
 end CerberusHeapLang.Audit

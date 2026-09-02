@@ -37,6 +37,18 @@ forever). Deleting the `⌜1 + m ≤ k⌝` conjunct from `wpt.pre`'s jump
 clause would make the loop derivable at any budget — and make THIS
 THEOREM (and the budget inductions of `wpt_sound` /
 `wpt_drive_aux`) fail to elaborate: the structural tripwire.
+
+THE ONE DIRECT `Step` USE IN AN EXHIBIT, AND WHY (2026-09-02 detailed
+audit, L-2): `dg_self_step` is proved by `Step.run`. A client of the
+logic reasons through the public rules and never through `Step`
+(API.lean, "Below the line"); this module is the NEGATIVE test, not a
+client — it shows a derivation is impossible by exhibiting what the
+engine actually does, and the engine's behaviour at the self-jump is
+reached through the certified mirror step (`engine_step_matchU` on
+`dg_self_step` in `dg_driveU_more`). The narrow exception: a
+NEGATIVE test may name a mirror step to reach an engine fact; a
+POSITIVE exhibit may not. Mirror-level coverage witnesses live in
+`Examples/MirrorCoverage.lean`.
 -/
 import CerberusHeapLang.FibExhibit
 

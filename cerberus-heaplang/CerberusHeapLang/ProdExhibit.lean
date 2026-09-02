@@ -32,8 +32,16 @@ conversion): ONE whole-program LOGICAL total theorem
 at derived budget 10) + the GENERIC adequacy/driver collapse
 (`wpt_driver_done_alloc` → `prod_run_eqJ`). The former operational
 create prefix (`prodA_pre`) and six-round termination trace
-(`prodA_terminates`) are DELETED — no `Step.*`, no per-step drive
-equations, no `driverDone_step` in any proof of this module.
+(`prodA_terminates`) are DELETED, and the two mirror-level coverage
+witnesses for the mixed store shapes (`store_sym_lit_step`,
+`store_lit_sym_step`, proved by `Step.store_eval`) MOVED to
+`Examples/MirrorCoverage.lean` (2026-09-02 detailed audit, L-2;
+statements unchanged) — so no `Step.*`, no per-step drive equations,
+no `driverDone_step` in any proof of this module: it is a CLIENT,
+reasoning through the public rules only. `exhibitA_prod` is a
+ROOT-OF-TRUST export: its execution function is the shipped
+`runND ∘ drive ∘ initial_driver_state` (Adequacy.lean header,
+PROVISIONAL, for the contrast with the `driveU` lane).
 
 The former concrete cold-start scaffolding (`pxAddr`/`pxPtr`/`σcP`/
 `cellXP`/`mAP`/`bigSep_ptx_P`/`create_applies`) is DELETED (alloc
@@ -88,34 +96,15 @@ theorem progAProd_frag : Frag progAProd :=
             (PEsym pASym)) = 1 from rfl,
           show lemDefaultFuel = 999999 + 1 from rfl]; omega)))
 
-/-! ## The mixed operand shapes of `store` (QA-1/H-1)
+/-! ## The mixed operand shapes of `store` (QA-1/H-1) — at the rules
 
 The engine's ACTION_EVAL arm for `store` fires whenever the operand
 triple is NOT all values; before QA-1 the mirror and the rules covered
-only the two-non-value sub-case. The two mixed shapes, at the mirror
-and at the rules (instances of `Step.store_eval` / `wps_store_eval` /
-`wpt_store_eval`, the "not all values" premise by `rfl`): -/
-
-/-- `store(ty, x, v)` — SYMBOL pointer, LITERAL value — steps. -/
-theorem store_sym_lit_step {M : MachineCtx} {loc : CerbLocation.Loc}
-    {ann : core_run_annotation} {ty : ctype} {x : sym} {cv : value}
-    {mo : memory_order} {ρ : EnvStack} {σ : Mem} {pv : CerbMem.PointerValue}
-    (hx : evalPexpr M.tagDefs M.extern ρ (Pexpr [] () (PEsym x)) =
-      some (Vobject (OVpointer pv))) :
-    Step M (storeOpRedex loc ann ty (Pexpr [] () (PEsym x))
-        (Pexpr [] () (PEval cv)) mo, ρ, σ)
-      (storeExpr loc ann ty pv cv mo, ρ, σ) :=
-  Step.store_eval rfl hx rfl
-
-/-- `store(ty, p, y)` — LITERAL pointer, SYMBOL value — steps. -/
-theorem store_lit_sym_step {M : MachineCtx} {loc : CerbLocation.Loc}
-    {ann : core_run_annotation} {ty : ctype} {pv : CerbMem.PointerValue}
-    {y : sym} {mo : memory_order} {ρ : EnvStack} {σ : Mem} {cv : value}
-    (hy : evalPexpr M.tagDefs M.extern ρ (Pexpr [] () (PEsym y)) = some cv) :
-    Step M (storeOpRedex loc ann ty (Pexpr [] () (PEval (Vobject (OVpointer pv))))
-        (Pexpr [] () (PEsym y)) mo, ρ, σ)
-      (storeExpr loc ann ty pv cv mo, ρ, σ) :=
-  Step.store_eval rfl rfl hy
+only the two-non-value sub-case. The two mixed shapes at the rules
+(instances of `wps_store_eval` / `wpt_store_eval`, the "not all
+values" premise by `rfl`); the mirror-level witnesses at the same
+shapes (`store_sym_lit_step`, `store_lit_sym_step`) live in
+`Examples/MirrorCoverage.lean`, which is not a client: -/
 
 /-- The rule at the symbol-pointer/literal-value shape (both strata). -/
 theorem wps_store_sym_lit [SpikeGS .hasLC GF] {M : MachineCtx} {Ls : LabelSpec GF}

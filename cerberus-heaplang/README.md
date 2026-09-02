@@ -535,16 +535,21 @@ A green build is the verification run: it elaborates every proof
 through the Lean kernel and then `Audit.lean` (the last import of the
 library root), which (1) pins the exact axiom set of every public
 export to `propext`, `Classical.choice`, `Quot.sound`, (2) bounds every
-theorem of every module by those three, and (3) checks every constant
-of every kind for `sorryAx`/`ofReduceBool`/`ofReduceNat`. Expected
-tail (the build prints the current counts; "trio" in its output means
-the three classical axioms):
+theorem of every module by those three — internal details (private
+names, proof and match auxiliaries, equation lemmas) included — and
+(3) checks every constant of every kind, internal details included,
+for `sorryAx`/`ofReduceBool`/`ofReduceNat`. The scope is exact: until
+2026-09-02 both sweeps skipped internal-detail names, so a private
+`sorry` unused by any pinned export passed; a planted one is now red
+(`docs/2026-09-02_audit-response-3-notes.md`). Expected tail (the
+build prints the current counts; "trio" in its output means the three
+classical axioms):
 
 ```
-info: CerberusHeapLang/Audit.lean:191:0: CerberusHeapLang export pins: 116 trio-exact
-info: CerberusHeapLang/Audit.lean:191:0: CerberusHeapLang axiom sweep: 1158 theorems bounded by the trio
-info: CerberusHeapLang/Audit.lean:191:0: CerberusHeapLang banned-axiom sweep: 1950 constants of every kind checked; sorryAx/ofReduceBool/ofReduceNat absent from all cones
-Build completed successfully (445 jobs).
+info: CerberusHeapLang/Audit.lean:206:0: CerberusHeapLang export pins: 116 trio-exact
+info: CerberusHeapLang/Audit.lean:206:0: CerberusHeapLang axiom sweep: 2249 theorems (internal details included) bounded by the trio
+info: CerberusHeapLang/Audit.lean:206:0: CerberusHeapLang banned-axiom sweep: 3536 constants of every kind (internal details included) checked; sorryAx/ofReduceBool/ofReduceNat absent from all cones
+Build completed successfully (446 jobs).
 ```
 
 The trust base is this build with its in-build sweep, the root
@@ -593,12 +598,13 @@ In import order, one line each:
 | `TotalAdequacy.lean` | the budget-to-drive-length simulation on `pot` | `wpt_engine_boundU`, `wpt_engine_boundU_alloc` |
 | `API.lean` | the public surface as one import; the public/internal table | the header table |
 | `Examples/Layout.lean`, `Examples/ReadinessSmoke.lean` | example support (`intTy`, byte images); the two-field object predicate and its rules from the API alone | `twoField`, `twoField_create` |
+| `Examples/MirrorCoverage.lean` | mirror-level coverage witnesses proved directly against `Step` (the mixed `store` operand shapes) — a semantic regression module, NOT a client; the only other direct `Step` use outside the semantics layer is the negative test `DivergeExhibit.lean` (its header states the exception) | `store_sym_lit_step`, `store_lit_sym_step` |
 | `Exhibit.lean`, `LoopExhibit.lean`, `FibExhibit.lean`, `DivergeExhibit.lean`, `ArrayExhibit.lean`, `StructExhibit.lean`, `AllocExhibit.lean`, `ListRevExhibit.lean`, `TreeRotExhibit.lean`, `CaseExhibit.lean`, `WseqExhibit.lean` | the exhibits (table above) | — |
 | `DriverCollapse.lean` | the production scheduler/ND/readout collapsed onto the drive loop, proved from the driver's own round functions | `loop_step_frag`, `driver2_done`, `finalize_done` |
 | `ProdLoop.lean` | the total judgment drives the production driver's per-thread loop | `wpt_driver_done`, `wpt_driver_done_alloc` |
 | `ProdEntry.lean` | the cold start from the shipped `initial_driver_state`; the pipeline theorem; the registration ties | `prod_run_eqJ`, `fib_labeledAt_production` |
 | `ProdExhibit.lean`, `ProdLoopExhibit.lean` | the production statements (table above) | `exhibitA_prod`, `*_production` |
-| `Audit.lean` | the in-build axiom check: exact export pins, the exhaustive bound, the banned-axiom sweep | the sweeps |
+| `Audit.lean` | the in-build axiom check: exact export pins, the exhaustive bound, the banned-axiom sweep — internal details included, the whole package | the sweeps |
 
 ## Records
 
