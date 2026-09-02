@@ -29,7 +29,7 @@ consumed by no exhibit is a red row: the construct has a rule but no client.
 | `Frag.sseq_sym` | `wps_seq_sym` | ListRevExhibit, StructExhibit, TreeRotExhibit |
 | `Frag.memop_vals` | `wps_memop_ptreq` | ListRevExhibit |
 | `Frag.memop_op` | `wps_memop_eval` | ListRevExhibit |
-| `Frag.store_op` | `wps_store_eval` | ListRevExhibit, StructExhibit, TreeRotExhibit |
+| `Frag.store_op` | `wps_store_eval` | ListRevExhibit, ProdExhibit, StructExhibit, TreeRotExhibit |
 | `Frag.case_value` | `wps_case_value` | CaseExhibit |
 | `Frag.wseq` | `wps_wseq` | WseqExhibit |
 

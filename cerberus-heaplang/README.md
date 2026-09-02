@@ -485,9 +485,9 @@ those at the time of writing — P6.1, commit noted in
 and the pin count grows with every spec-addition slice):
 
 ```
-info: CerberusHeapLang/Audit.lean:170:0: CerberusHeapLang export pins: 109 trio-exact
-info: CerberusHeapLang/Audit.lean:170:0: CerberusHeapLang axiom sweep: 1186 theorems bounded by the trio
-info: CerberusHeapLang/Audit.lean:170:0: CerberusHeapLang banned-axiom sweep: 2033 constants of every kind checked; sorryAx/ofReduceBool/ofReduceNat absent from all cones
+info: CerberusHeapLang/Audit.lean:181:0: CerberusHeapLang export pins: 123 trio-exact
+info: CerberusHeapLang/Audit.lean:181:0: CerberusHeapLang axiom sweep: 1232 theorems bounded by the trio
+info: CerberusHeapLang/Audit.lean:181:0: CerberusHeapLang banned-axiom sweep: 2085 constants of every kind checked; sorryAx/ofReduceBool/ofReduceNat absent from all cones
 Build completed successfully (444 jobs).
 ```
 
