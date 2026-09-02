@@ -164,7 +164,7 @@ procedure symbol and a run state with registered labels), or the
 shipped pipeline. The last column lists EVERY hypothesis of the theorem
 by name, section variables included; it is read off the
 machine-printed statement of every constant in
-`docs/2026-09-02_pr1-C-signatures-post.txt` (`scripts/signature_snapshot.lean`),
+`docs/2026-09-02_pr3-C-signatures-post.txt` (`scripts/signature_snapshot.lean`),
 where section variables appear as leading binders. No statement
 carries a premise on the action locations: the engine attaches
 `requestLoc th loc` (the redex's own location, or the thread's
@@ -468,8 +468,8 @@ the three classical axioms):
 
 ```
 info: CerberusHeapLang/Audit.lean:191:0: CerberusHeapLang export pins: 116 trio-exact
-info: CerberusHeapLang/Audit.lean:191:0: CerberusHeapLang axiom sweep: 1160 theorems bounded by the trio
-info: CerberusHeapLang/Audit.lean:191:0: CerberusHeapLang banned-axiom sweep: 1951 constants of every kind checked; sorryAx/ofReduceBool/ofReduceNat absent from all cones
+info: CerberusHeapLang/Audit.lean:191:0: CerberusHeapLang axiom sweep: 1158 theorems bounded by the trio
+info: CerberusHeapLang/Audit.lean:191:0: CerberusHeapLang banned-axiom sweep: 1950 constants of every kind checked; sorryAx/ofReduceBool/ofReduceNat absent from all cones
 Build completed successfully (445 jobs).
 ```
 
@@ -531,11 +531,14 @@ In import order, one line each:
 History, provenance and process live in dated files, not here.
 Rulings: `../docs/DECISIONS.md` (append-only, `[USER]`/`[AGENT]`
 tagged). The audit and review record of the current tree, newest
-first: `docs/2026-09-02_pr2-notes.md` (this documentation response),
-`docs/2026-09-02_pr1-notes.md` (the code response: static fuel
-premises, the `project_triple_pure` headline, one triple/one drive,
-one proof per small axiom), `docs/2026-09-02_professor-review-1.md`
-(the review), `docs/2026-09-02_qa2-notes.md` and
+first: `docs/2026-09-02_pr3-notes.md` (the response to the second
+review: `peDepth`/`PePure` named, the location premise discharged,
+headers corrected), `docs/2026-09-02_professor-review-2.md` (the second
+review, A-), `docs/2026-09-02_pr2-notes.md` (the first review's
+documentation response), `docs/2026-09-02_pr1-notes.md` (its code
+response: static fuel premises, the `project_triple_pure` headline, one
+triple/one drive, one proof per small axiom),
+`docs/2026-09-02_professor-review-1.md` (the first review), `docs/2026-09-02_qa2-notes.md` and
 `docs/2026-09-02_qa1-notes.md` (the quality audit's fix records),
 `docs/2026-09-02_quality-audit.md` (the audit),
 `../docs/2026-09-01_cerberus-heaplang-skeptical-re-audit.md` (the

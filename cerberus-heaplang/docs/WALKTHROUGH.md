@@ -12,7 +12,7 @@ quoted declarations sit inside a Lean `section` whose `variable`s are
 part of the statement without appearing on the theorem line; a line
 "Section variables not shown" lists them by name. The machine-printed
 statement of every constant, section variables included, is
-[`2026-09-02_pr1-C-signatures-post.txt`](2026-09-02_pr1-C-signatures-post.txt).
+[`2026-09-02_pr3-C-signatures-post.txt`](2026-09-02_pr3-C-signatures-post.txt).
 
 **Cerberus** (Memarian, Sewell, et al.) is a semantics for C: it
 elaborates C into a small typed functional intermediate language,

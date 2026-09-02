@@ -227,8 +227,6 @@ theorem coh_mA : Coh fmapEmpty σ₀ mA := by
     computation the kernel has no business grinding through. -/
 def loc0 : CerbLocation.Loc := .unknown
 
-theorem loc0_lib : CerbLocation.isLibraryLocation loc0 = false := rfl
-
 /-- Exhibit (a): `lets _ = store(x,7) in load(x)`. -/
 abbrev progA : CoreExpr :=
   sseqExpr BTy_unit (storeExpr loc0 empty_annotation intTy xPtr sevenVal NA)

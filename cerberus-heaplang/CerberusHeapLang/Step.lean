@@ -2148,15 +2148,7 @@ def spikeRunState : core_run_state :=
 @[reducible] def procCtx (p : sym) (rs : core_run_state) : MachineCtx :=
   { spikeCtx with proc := some p, runState := rs }
 
-/-- A run-state-only variant of the spike context (the old `driveJ`
-    profile: the drive loop itself reads no proc — only the
-    discharge's run state differs; reducible — see `spikeCtx`). -/
-@[reducible] def rsCtx (rs : core_run_state) : MachineCtx :=
-  { spikeCtx with runState := rs }
-
-/-- Field-projection equations for the frozen instances (rewriting
-    aids: statements at the instances reduce to the old frozen
-    constants). -/
+/-- Field-projection equations for the two profile instances. -/
 @[simp] theorem spikeCtx_tagDefs : spikeCtx.tagDefs = fmapEmpty := rfl
 @[simp] theorem spikeCtx_extern : spikeCtx.extern = fmapEmpty := rfl
 @[simp] theorem spikeCtx_runState : spikeCtx.runState = spikeRunState := rfl
@@ -2166,22 +2158,13 @@ def spikeRunState : core_run_state :=
     (procCtx p rs).extern = fmapEmpty := rfl
 @[simp] theorem procCtx_runState (p : sym) (rs : core_run_state) :
     (procCtx p rs).runState = rs := rfl
-@[simp] theorem rsCtx_extern (rs : core_run_state) :
-    (rsCtx rs).extern = fmapEmpty := rfl
-@[simp] theorem rsCtx_runState (rs : core_run_state) :
-    (rsCtx rs).runState = rs := rfl
 
 @[simp] theorem spikeCtx_labels : spikeCtx.labels = spikeLbl := rfl
-
-@[simp] theorem rsCtx_labels (rs : core_run_state) :
-    (rsCtx rs).labels = spikeLbl := rfl
 
 theorem spikeCtx_wf : spikeCtx.SeqWF := ⟨rfl, rfl⟩
 
 theorem procCtx_wf (p : sym) (rs : core_run_state) :
     (procCtx p rs).SeqWF := ⟨rfl, rfl⟩
-
-theorem rsCtx_wf (rs : core_run_state) : (rsCtx rs).SeqWF := ⟨rfl, rfl⟩
 
 /-- The jump profile's DERIVED label map at a successful two-level
     `labeled` read (the old `LabeledAt` tie, consumed): the fiber at
