@@ -411,3 +411,50 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   no-consumer rule: `wpt_sound_frame`. Record:
   `cerberus-heaplang/docs/2026-09-02_p4-notes.md` (spec diff, inventory
   before/after, gate tail); signatures pre/post committed alongside.
+- **2026-09-02 [USER] FEATURE SET FROZEN UNTIL QUALITY IS STRONG; THEN THE
+  AUDIT ROUND; THEN CALLS + MALLOC/FREE** (verbatim): "the feature set
+  is frozen while we get this to a really strong state just in terms
+  of quality. But after that we're doing call/compositional reasoning
+  + malloc/free which will cover the entire Reynolds/O'Hearn logic I
+  think. Before then we're going to do another audit round so we might
+  find other areas for improvement first." Orchestrator's tracking
+  assessment (same day, on request): all four goal parts met at
+  fragment scope — a Reynolds/O'Hearn logic (minus dispose and
+  procedures), over real Core, genuinely on iris-lean, with every
+  export's axiom cone the classical trio and the closed-program
+  statements ending at the shipped `runND ∘ drive ∘ initial_driver_state`.
+- **2026-09-02 [USER] TWO TRUST CLAIMS — iris-lean is BELOW THE LINE for
+  the closed-program exports**: "I guess iris-lean is in the trust base
+  via the specification idiom? But we could prove adequacy for closed
+  programs without any specification without iris-lean (i.e the proof
+  machinery is not in the trust base)". Agreed and adopted as the
+  trust-story structure (P6 requirement): (1) the closed-program
+  exports have Iris-free statements — cerberus-lean's semantics as the
+  referents plus the pure readout predicates (`Sat`/`CellCoh`); iris-lean
+  appears only inside kernel-checked proof terms and contributes no
+  axiom, so it is checked, not trusted; (2) the reusable rules are
+  stated in Iris assertions, whose must-read set (the specification
+  idiom: `pointsToCell`, `CohG`, iris-lean's WP/BI) is the sense in
+  which iris-lean is "in the trust base" — definitions, not axioms.
+  [USER]: the exports are "just memory + pure properties".
+- **2026-09-02 [USER] NO BORING LOGIC; A PROJECTION THEOREM ONLY** — the
+  "boring semantic separation logic" factoring was discussed
+  (assertions as heap predicates, boring rules proved via Iris
+  mirrors) and REJECTED as a second logic: it does not help the
+  RefinedC implementation (RefinedC's types are Iris predicates; its
+  automation works on Iris goals) and would duplicate every assertion
+  and rule. [USER] (verbatim): "I would focus on the specifiation
+  layer, i.e don't prove the rules, but show that any iris-level
+  triple can be projected into a 'boring' triple over semantic states.
+  This gives us the ability to state properties via iris but doesn't
+  mirror the logic". Target statement shape ([USER], verbatim):
+  "s |= P && core_exec(prog, s) ~~> term ==> term = some(s') && s' |= Q
+  For some P / Q which are boring state descriptions" — "ie. just
+  memory + pure properties". Slice: the PROJECTION — one theorem (any
+  Iris triple with a concrete-map pre and an arbitrary Iris post
+  projects to a `SemTripleU`-shaped statement whose post is "every
+  pure consequence of the Iris post at the final state") plus
+  convenience pure-consequence lemmas for the points-to shapes; the
+  per-exhibit readout theorems become instances. Sequenced after P5,
+  before P6 (docs describe the final statement form). Not a new
+  assertion language; no rule restated.
