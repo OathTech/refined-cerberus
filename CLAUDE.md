@@ -58,7 +58,7 @@ cerberus-lean park branch `arc/segment-ladder`,
 
 ```bash
 scripts/capped ~/.elan/bin/lake build   # NEVER uncapped; elaborates the audit
-scripts/test_unit.sh                    # grep ban + capped build
+scripts/test_unit.sh                    # gates 1-3 (+ speedbump report); --fast = builds only
 ```
 
 Toolchain: Lean 4.32.2 (elan). Deps (batteries, Qq, iris) are
@@ -105,7 +105,9 @@ is added when its mainline pin lands (see DECISIONS).
   substitute for the conversation.
 - **Fresh-eyes full reviews** on core documents at major revisions
   (never same-reviewer deltas); hostile adversarial review before
-  ratification.
+  ratification. Every auditor is briefed with `docs/AUDIT-BRIEF.md`
+  (audits find substantive logical/coverage gaps in scope; hardening
+  recommendations are graded down).
 - Honest-gaps: unproved looks unproved; fail-closed, fail-noisy;
   stop-and-report over silent workaround.
 
@@ -125,8 +127,17 @@ is added when its mainline pin lands (see DECISIONS).
 - **Classical names only** for mechanisms; house jargon banned.
 - Profile before perf design; perf plans discussed then
   adversarially reviewed before execution.
-- **Gates minimal**: new gates only for load-bearing TRUST
-  properties; gates are plant-tested in both directions.
+- **Speedbumps, not adversarial gates** ([USER 2026-09-02], DECISIONS):
+  the trust base is the build + the in-build axiom sweep + the
+  banned-methods grep; nothing else is a fail-closed gate. Every
+  other check is a speedbump — a claim-point report that catches
+  honest drift, never designed to survive adversarial attack, never
+  a fast-tier blocker. New checks are welcome when high bang-for-
+  buck (cheap, catches a real class of mistake); no giant
+  enumerative tables unless a trust property is legitimately at
+  risk. Over-elaborate gating is cut, not classified. Two tiers:
+  `test_unit.sh --fast` (builds) for intermediate commits, the full
+  run at claim points (phase exits, merge asks).
 
 ## Machine etiquette
 
@@ -141,18 +152,16 @@ is added when its mainline pin lands (see DECISIONS).
   read-only. Everything needed is local: opam/Lake/elan caches,
   the repo-local toolchain, git redirects to read-only local repos.
   opam `install`-class operations and network fetches are
-  outside-sandbox operator actions. KNOWN GAP: `scripts/capped`
-  (systemd-run) needs systemd user-bus access the sandbox profile
-  does not grant ([USER 2026-08-29]: bus-grant experiments rolled
-  back as out of scope). [USER 2026-08-29] ruling: **run builds
-  UNCAPPED in-sandbox for now** ("until we figure out the nono
-  thing") — `capped` detects the missing bus, warns loudly, and
-  proceeds uncapped; interim mitigation is box discipline (serial
-  heavy lanes, prompt commits). Revisit when a nono capping route
-  exists.
+  outside-sandbox operator actions. `scripts/capped` is the
+  cerberus-lean mainline script (cgroup-direct, bus-free mode,
+  2026-09-01): it creates a sibling cgroup under app.slice and
+  enforces the cap without systemd-run, so builds ARE capped in the
+  sandbox. The 2026-08-29 interim "run uncapped in-sandbox" ruling
+  is RETIRED ([USER 2026-09-02]); an uncapped-warning from `capped`
+  again means a broken environment, stop and report.
 
 ## Current state
 
-See `docs/DECISIONS.md` tail + latest dated doc. Arc 0
-(scaffolding) complete except the semantics pin; arc 1 (the
-RefinedC port map) in flight.
+See `docs/DECISIONS.md` tail + the latest dated doc in
+`cerberus-heaplang/docs/` (the demo is the active work; the RefinedC
+port proper starts after it, per the demo-first ruling).

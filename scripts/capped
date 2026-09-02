@@ -47,6 +47,9 @@ fi
 run_reporting_kills() {
   local rc=0
   "$@" || rc=$?
+  # cgroup-direct mode registers a cleanup hook (migrate back + rmdir);
+  # it must run BEFORE exit and never alters rc.
+  if declare -F capped_cleanup >/dev/null 2>&1; then capped_cleanup; fi
   if [[ $rc -eq 137 || $rc -eq 143 ]]; then
     echo "==============================================================" >&2
     echo "capped: KILLED (exit $rc — cgroup/OOM or signal; NOT a pass)" >&2
@@ -59,24 +62,69 @@ if [[ "$MEM" == "none" ]]; then
   echo "capped: CERB_MEM_MAX=none — running UNCAPPED (explicit opt-out)" >&2
   run_reporting_kills "$@"
 fi
+# --- cgroup-direct mode (2026-09-01, bus-free) ------------------------------
+# `systemd-run --user --scope` needs the user manager's D-Bus AND private
+# socket, which the nono sandbox does not grant (profile history 1.9-1.11:
+# bus grants tried and rolled back 2026-08-29). The cap itself does not need
+# systemd at all: with cgroup v2 delegation (user@.service, Delegate=yes)
+# this process's parent slice (app.slice) is writable by us and already
+# enables the memory controller for children. So: create a sibling child
+# cgroup under that parent — the same shape systemd-run would create —
+# write memory.max/memory.swap.max, migrate THIS wrapper into it (children
+# inherit), run, migrate back, rmdir. Requires only a cgroupfs path grant
+# (nono profile 1.13.0). If any step is not permitted we fall through to
+# systemd-run; the wrapper is never silently uncapped by this path.
+# Sibling-not-child: cgroup v2's no-internal-processes rule forbids enabling
+# controllers under a cgroup that has processes (our own scope does).
+mem_to_bytes() {  # systemd suffix semantics: K/M/G/T are binary (1024^n)
+  local v="$1" n u
+  if [[ "$v" == "max" || "$v" == "infinity" ]]; then echo max; return 0; fi
+  n="${v%[KkMmGgTt]}"; u="${v#"$n"}"
+  [[ "$n" =~ ^[0-9]+$ ]] || return 1
+  case "$u" in
+    ''|B|b) echo "$n";;
+    K|k) echo $((n*1024));;
+    M|m) echo $((n*1024*1024));;
+    G|g) echo $((n*1024*1024*1024));;
+    T|t) echo $((n*1024*1024*1024*1024));;
+    *) return 1;;
+  esac
+}
+cgroup_direct_try() {
+  local mem_bytes self orig parent cg
+  mem_bytes="$(mem_to_bytes "$MEM")" || { echo "capped: ERROR — cannot parse CERB_MEM_MAX='$MEM' (want e.g. 32G, 512M, max)" >&2; exit 2; }
+  self="$(cut -d: -f3 /proc/self/cgroup 2>/dev/null)" || return 1
+  [[ -n "$self" && "$self" != "/" ]] || return 1
+  orig="/sys/fs/cgroup$self"; parent="$(dirname "$orig")"
+  [[ -d "$parent" && -f "$parent/cgroup.subtree_control" ]] || return 1
+  grep -qw memory "$parent/cgroup.subtree_control" 2>/dev/null || return 1
+  cg="$parent/capped-$$-$(date +%s%N)"
+  mkdir "$cg" 2>/dev/null || return 1
+  if ! { echo "$mem_bytes" > "$cg/memory.max" && echo 0 > "$cg/memory.swap.max" \
+         && echo $$ > "$cg/cgroup.procs"; } 2>/dev/null; then
+    echo $$ > "$orig/cgroup.procs" 2>/dev/null || true
+    rmdir "$cg" 2>/dev/null || true
+    return 1
+  fi
+  CAPPED_CG="$cg"; CAPPED_ORIG="$orig"
+  return 0
+}
+if cgroup_direct_try; then
+  capped_cleanup() {
+    echo $$ > "$CAPPED_ORIG/cgroup.procs" 2>/dev/null || true
+    rmdir "$CAPPED_CG" 2>/dev/null \
+      || echo "capped: WARNING — could not remove cgroup $CAPPED_CG (processes still inside?)" >&2
+  }
+  run_reporting_kills "$@"
+fi
 # Portability fallback (arc-7 S5c, audit-1 F4): on hosts without
 # systemd-run (containers, non-systemd distros) warn LOUDLY and
 # proceed uncapped rather than break every routed script. The warning
 # is the tripwire: an uncapped run on the dev box means a broken
-# environment, not a policy change.
+# environment, not a policy change. (cgroup-direct above is tried first.)
 if ! command -v systemd-run >/dev/null 2>&1; then
   echo "capped: WARNING — systemd-run NOT FOUND; running UNCAPPED" >&2
   echo "capped: WARNING — the D7 memory-cap rule is NOT enforced here" >&2
-  run_reporting_kills "$@"
-fi
-# Sandbox fallback [USER 2026-08-29]: the nono profile denies the systemd
-# user bus, so the cap cannot be applied in-sandbox. Ruling: "run with
-# uncapped builds until we figure out the nono thing" — probe the bus
-# once; if unavailable, warn LOUDLY and proceed uncapped. Interim
-# mitigation is box discipline (serial heavy lanes, prompt commits).
-if ! systemd-run --user --scope --quiet -p MemoryMax=1G true >/dev/null 2>&1; then
-  echo "capped: WARNING — systemd user bus unavailable (sandbox); running UNCAPPED" >&2
-  echo "capped: WARNING — interim per [USER 2026-08-29] until a nono capping route exists" >&2
   run_reporting_kills "$@"
 fi
 run_reporting_kills systemd-run --user --scope --quiet -p "MemoryMax=$MEM" -p "MemorySwapMax=0" "$@"
