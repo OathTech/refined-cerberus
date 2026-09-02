@@ -843,15 +843,11 @@ theorem struct_create_store_adequacy {GF : BundledGFunctors} [SpikeGpreS GF]
       .rfl) BI.wand_elim_left)
   iapply wp_mono _ $$ HWP
   iintro %w ⟨%p, %hval, Hpt, -⟩
-  -- alloc arc P4.1: the PUBLIC points-to readout (`pointsToCell_readout`,
-  -- Adequacy.lean) — no state-interpretation opening in this module.
-  ihave Hro := pointsToCell_readout fmapEmpty p (.own 1) structTy _ $$ Hpt
-  iintro %σ2 %ns2 %κs2 %nt2 Hσ
-  imod Hro $$ %σ2 %ns2 %κs2 %nt2 Hσ with %hcc
-  imodintro
-  ipureintro
-  obtain ⟨id, a, -, hcc⟩ := hcc
-  exact ⟨hval, id, a, hcc⟩
+  -- the projection's Iris half (`stateInterp_readout`) over the points-to
+  -- consequence (Adequacy.lean) — no state-interpretation opening here.
+  iapply stateInterp_readout (fun _ _ _ _ hG =>
+    (pointsToCell_consequence hG fmapEmpty p (.own 1) structTy _).trans
+      (BI.pure_mono fun ⟨id, a, _, hcc⟩ => ⟨hval, id, a, hcc⟩)) $$ Hpt
 
 end CreateConsumer
 

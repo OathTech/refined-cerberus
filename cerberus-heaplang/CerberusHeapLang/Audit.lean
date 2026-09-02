@@ -146,7 +146,15 @@ def trioExports : List Name := [
   ``CerberusHeapLang.ReadinessSmoke.twoField_load_y,
   ``CerberusHeapLang.ReadinessSmoke.twoField_store_x,
   ``CerberusHeapLang.ReadinessSmoke.twoField_store_y,
-  ``CerberusHeapLang.ReadinessSmoke.twoField_create]
+  ``CerberusHeapLang.ReadinessSmoke.twoField_create,
+  -- the PROJECTION ([USER 2026-09-02], DECISIONS "no boring logic; a
+  -- projection theorem only"): any Iris triple projects to the boring
+  -- memory-post triple; the pure-consequence lemmas discharge its post
+  ``CerberusHeapLang.project_triple, ``CerberusHeapLang.SemTripleU_iff_Mem,
+  ``CerberusHeapLang.pure_consequence, ``CerberusHeapLang.sep_consequence,
+  ``CerberusHeapLang.or_consequence, ``CerberusHeapLang.exists_consequence,
+  ``CerberusHeapLang.cellOwn_consequence, ``CerberusHeapLang.pointsToCell_consequence,
+  ``CerberusHeapLang.cellsOwn_consequence, ``CerberusHeapLang.cells_consequence]
 
 def sortedNames (ns : Array Name) : Array String :=
   (ns.map (·.toString)).qsort (· < ·)

@@ -398,11 +398,7 @@ theorem fib_wp_readout (hn : 0 ≤ n) (sbty : core_base_type) :
       (wps_sound (fibProg ra n sbty ibty abty bbty) [fmapEmpty]))
     .rfl)).trans ?_
   refine BI.wand_elim_left.trans ?_
-  refine wp_mono fun w => ?_
-  iintro %hval %σ' %ns %κs %nt Hσ
-  iapply fupd_mask_intro_discard Std.LawfulSet.empty_subset
-  ipureintro
-  exact hval
+  exact wp_mono fun w => stateInterp_readout fun _ _ _ _ _ => pure_consequence _
 
 omit hQ in
 /-- The label bodies are in the certified cone. -/
@@ -592,12 +588,8 @@ omit hQ in
 /-- The postcondition entails the engine readout. -/
 theorem fibPost_to_readout :
     ∀ w ρ', fibPost (GF := GF) n w ρ' ⊢
-      readoutPost (fun v _ => v = ivVal (fibSpec n.toNat)) w ρ' := by
-  intro w ρ'
-  iintro %hval %σ' %ns %κs %nt Hσ
-  iapply fupd_mask_intro_discard Std.LawfulSet.empty_subset
-  ipureintro
-  exact hval
+      readoutPost (fun v _ => v = ivVal (fibSpec n.toNat)) w ρ' :=
+  fun _ _ => stateInterp_readout fun _ _ _ _ _ => pure_consequence _
 
 end FibTotal
 

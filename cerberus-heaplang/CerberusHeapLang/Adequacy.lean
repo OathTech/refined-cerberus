@@ -27,6 +27,38 @@ Three layers:
    WP / Iris vocabulary appears only in the hypotheses (that is the
    point: the derived logic's guarantees land as engine facts).
 
+4. `project_triple` — THE PROJECTION ([USER 2026-09-02], DECISIONS
+   "no boring logic; a projection theorem only"): ANY Iris triple
+   with a concrete-map precondition and an ARBITRARY Iris
+   postcondition `Q` projects to a boring triple over engine states
+   (`MemTripleU`: memory splits as P ⊎ R, the engine's drive never
+   kills or derails, and every delivered `(v, σ')` satisfies a
+   postcondition stated over the FINAL MEMORY) whose postcondition is
+   "every pure consequence of `Q ∗ frame` at σ'". Properties are
+   STATED in Iris; no rule is restated and no second assertion
+   language exists. The pure-consequence lemmas (`*_consequence`)
+   discharge the projected post for the points-to shapes; the
+   exhibits' readouts are their instances through
+   `stateInterp_readout` (Rules.lean), the projection's Iris half.
+   `semantic_triple_soundU` is `project_triple` at the cells-shaped
+   post (`SemTripleU_iff_Mem`).
+
+TWO TRUST CLAIMS ([USER 2026-09-02], DECISIONS): (1) the CLOSED-
+PROGRAM exports have Iris-free statements — cerberus-lean's semantics
+(`step_ctx`/discharge, the shipped driver) as the referents plus the
+pure readout predicates (`Sat`/`CellCoh`, `readBytesFrom`); iris-lean
+appears only INSIDE kernel-checked proof terms and contributes no
+axiom (Audit.lean pins every export's cone to the classical trio),
+so it is CHECKED, not trusted. (2) the REUSABLE rules and
+`project_triple`'s hypotheses are stated in Iris assertions, whose
+must-read set — the specification idiom: `pointsToCell`/`cellOwn`,
+`CohG`, iris-lean's WP and BI connectives — is the one sense in which
+iris-lean is "in the trust base": definitions to read, not axioms to
+accept. The projection makes claim (1) uniform: any property STATED
+in Iris lands as an engine fact whose statement is Iris-free except
+for the opaque pure-consequence obligation the consequence lemmas
+discharge.
+
 Certification direction used (Soundness.lean header): engine-
 completeness. Each drive step is `engine_complete`'s unique engine
 behavior; Step-matched behaviors stay in the WP-covered cone,
@@ -1127,6 +1159,118 @@ abbrev ProvenTriple (GF : BundledGFunctors) [SpikeGpreS GF] (e : CoreExpr)
         iprop(∃ Q : CellMap, ⌜post (CoreRVal.val w) Q⌝ ∗
           ([∗map] i ↦ c ∈ Q, cellOwn spikeCtx.tagDefs (hlc := .hasLC) (GF := GF) i (.own 1) c)) }}
 
+/-! ## THE PROJECTION THEOREM ([USER 2026-09-02], DECISIONS: "don't
+prove the rules, but show that any iris-level triple can be projected
+into a 'boring' triple over semantic states. This gives us the ability
+to state properties via iris but doesn't mirror the logic")
+
+Target shape ([USER], verbatim): `s |= P && core_exec(prog, s) ~~> term
+==> term = some(s') && s' |= Q`, P/Q "just memory + pure properties".
+Here: `Sat σ (P ∪ R)` is `s |= P` (with the frame R built in, as
+`SemTripleU` does); `driveU M aids n (M.thread e ρ) σ` is
+`core_exec(prog, s)`; `.done v σ'` is `term = some(s')` (the two
+other arms are the never-kills / never-derails conjuncts); `post R v
+σ'` is `s' |= Q`. The projection's `post` is "every pure consequence
+of the Iris postcondition (with the frame's cells) at σ'": a pure
+`ψ` holds of `(v, σ')` whenever, against EVERY coupling witness for
+σ', the Iris post `Q w` (for every `w` erasing to `v`) together with
+the frame and the interpretation's components entails `⌜ψ⌝`. That
+obligation is discharged by the pure-consequence lemmas below
+(`cellOwn_consequence`, `pointsToCell_consequence`,
+`cells_consequence`, and the `∗`/`∨`/`∃`/pure combinators) — it is
+never opened by a client.
+
+Two trust claims (header): the conclusion is Iris-free except for
+that obligation, in which `Q`, `CohG`, `metaInterp`/`byteInterp` and
+`⊢` appear as the specification idiom (definitions to read); the
+proof is `engine_adequacyU` + `stateInterp_readout` (the ONE
+open/close of the state interpretation) + `spike_wp_wand`. The fuel
+and label hypotheses of `engine_adequacyU` appear unchanged inside
+`MemTripleU` — they are the registered seam (FUEL HONESTY). -/
+
+/-- THE BORING TRIPLE WITH A MEMORY POSTCONDITION, at any machine
+    context and entry environment: `SemTripleU` with the
+    postcondition stated over the FINAL MEMORY (and given the rest
+    footprint `R`, so the frame is part of the definition, not a
+    separate rule): for every memory that splits as P ⊎ R — footprint
+    P satisfied, rest R ARBITRARY — the engine's drive never kills or
+    derails, and any delivered `(v, σ')` satisfies `post R v σ'`.
+    `SemTripleU` is its instance at the cells-shaped post
+    (`SemTripleU_iff_Mem`, definitional). Partial correctness; the
+    fuel premises are the engine's own get_ctx budgets. -/
+def MemTripleU (M : MachineCtx) (ρ : EnvStack) (e : CoreExpr) (P : CellMap)
+    (post : CellMap → value → Mem → Prop) : Prop :=
+  ∀ (R : CellMap), P ##ₘ R →
+  ∀ (σ : Mem), Sat M.tagDefs σ (Iris.Std.PartialMap.union P R) →
+  ∀ (n : Nat) (aids : Nat → Nat), esize e + n ≤ lemDefaultFuel →
+    (∀ l params cont, lookupLabel M.labels l = some (params, cont) →
+      esize cont + n ≤ lemDefaultFuel) →
+    (∀ r, driveU M aids n (M.thread e ρ) σ ≠ .killed r) ∧
+    (driveU M aids n (M.thread e ρ) σ ≠ .stuck) ∧
+    (∀ (v : value) (σ' : Mem), driveU M aids n (M.thread e ρ) σ = .done v σ' →
+      post R v σ')
+
+/-- `SemTripleU` IS the memory-post triple at the cells-shaped
+    postcondition (definitionally: the two unfold to the same
+    proposition). -/
+theorem SemTripleU_iff_Mem (M : MachineCtx) (ρ : EnvStack) (e : CoreExpr) (P : CellMap)
+    (post : value → CellMap → Prop) :
+    SemTripleU M ρ e P post ↔
+      MemTripleU M ρ e P (fun R v σ' => ∃ Q : CellMap, post v Q ∧ Q ##ₘ R ∧
+        Sat M.tagDefs σ' (Iris.Std.PartialMap.union Q R)) :=
+  Iff.rfl
+
+/-- Interior: an assertion entails the pure fact "every ψ it
+    pure-entails holds" (the pure-implication law, classical). -/
+theorem consequences_intro {GF : BundledGFunctors} {Φ : IProp GF} {H : Prop → Prop}
+    (h : ∀ ψ : Prop, H ψ → Φ ⊢ (⌜ψ⌝ : IProp GF)) :
+    Φ ⊢ (⌜∀ ψ : Prop, H ψ → ψ⌝ : IProp GF) := by
+  refine .trans ?_ BI.pure_forall.2
+  refine BI.forall_intro fun ψ => ?_
+  by_cases hH : H ψ
+  · exact (h ψ hH).trans (BI.pure_mono fun hψ _ => hψ)
+  · exact BI.pure_intro fun h' => absurd h' hH
+
+/-- THE PROJECTION: any Iris triple with a concrete-map precondition
+    and an ARBITRARY Iris postcondition `Q` (over the logic's values,
+    at any bundled ghost state) projects to the boring triple whose
+    postcondition is every pure consequence of `Q w ∗ frame-cells`
+    at the final memory, for every `w` erasing to the delivered
+    value. `engine_adequacyU` + `stateInterp_readout` +
+    `spike_wp_wand`; the well-formedness, fragment, fuel and label
+    hypotheses are `engine_adequacyU`'s, unchanged. -/
+theorem project_triple {GF : BundledGFunctors} [SpikeGpreS GF]
+    {M : MachineCtx} (hwf : M.SeqWF)
+    (hQf : ∀ l params cont, lookupLabel M.labels l = some (params, cont) →
+      Frag cont)
+    {e : CoreExpr} (hfrag : Frag e) (ev0 : Fmap sym value) (evs : List (Fmap sym value))
+    (P : CellMap) (Q : ∀ [SpikeGS .hasLC GF], CoreRVal → IProp GF)
+    (hwp : ∀ [SpikeGS .hasLC GF],
+      iprop(([∗map] i ↦ c ∈ P, cellOwn M.tagDefs (hlc := .hasLC) (GF := GF) i (.own 1) c)) ⊢
+        WP (⟨e, ev0 :: evs, M⟩ : CoreRt) @ Stuckness.NotStuck; ⊤ {{ w, Q w }}) :
+    MemTripleU M (ev0 :: evs) e P (fun R v σ' => ∀ ψ : Prop,
+      (∀ [SpikeGS .hasLC GF] (w : CoreRVal), w.val = v →
+        ∀ (mm : SpikeHeapF MetaCell) (mb : SpikeHeapF CerbMem.AbsByte)
+          (mk : SpikeHeapF AllocCursor), CohG σ' mm mb mk →
+        iprop(Q w ∗ ([∗map] i ↦ c ∈ R, cellOwn M.tagDefs (hlc := .hasLC) (GF := GF) i (.own 1) c) ∗
+          metaInterp mm ∗ byteInterp mb) ⊢ (⌜ψ⌝ : IProp GF)) → ψ) := by
+  intro R hdisj σ hsat n aids hfuel hQsz
+  refine engine_adequacyU (GF := GF) hwf hQf e ev0 evs σ (Iris.Std.PartialMap.union P R)
+    hfrag hsat _ ?_ n aids hfuel hQsz
+  intro instGS
+  refine .trans (BigSepM.bigSepM_union hdisj).1 ?_
+  iintro ⟨HP, HR⟩
+  ihave HW := hwp $$ HP
+  iapply spike_wp_wand $$ HW
+  iintro %w HQ
+  ihave HΦ : iprop(Q w ∗ ([∗map] i ↦ c ∈ R,
+      cellOwn M.tagDefs (hlc := .hasLC) (GF := GF) i (.own 1) c)) $$ [HQ HR]
+  · isplitl [HQ]
+    · iexact HQ
+    · iexact HR
+  iapply stateInterp_readout (fun σ' mm mb mk hG => consequences_intro fun ψ hH =>
+    BI.sep_assoc.1.trans (hH w rfl mm mb mk hG)) $$ HΦ
+
 /-! interior extraction lemmas -/
 
 /-- genHeap_valid, big-footprint form (mirrors gen_heap's
@@ -1231,6 +1375,111 @@ theorem cellsOwn_extract (tds : CerbTags.TagDefsMap) {GF : BundledGFunctors} [Sp
     (hG.metas_disj i j (metaOf tds ci) (metaOf tds cj) hne
       (hfacts i ci hgi).2 (hfacts j cj hgj).2)
 
+/-! ## The pure-consequence lemmas (the projection's obligations, discharged)
+
+Shape: `Φ ∗ metaInterp mm ∗ byteInterp mb ⊢ ⌜<memory fact about σ>⌝`
+under `CohG σ mm mb mk` — exactly the hypothesis `stateInterp_readout`
+consumes and the obligation `project_triple`'s post states. One lemma
+per assertion shape the exhibits' postconditions use (whole cell,
+points-to, a cell footprint with a frame) and the `∗`/`∨`/`∃`/pure
+combinators; the readouts below and the exhibits' readouts are
+`stateInterp_readout` applied to compositions of these. -/
+
+section Consequences
+
+variable {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
+variable {mm : SpikeHeapF MetaCell} {mb : SpikeHeapF CerbMem.AbsByte}
+
+/-- A pure conjunct is its own consequence. -/
+theorem pure_consequence (φ : Prop) :
+    iprop(⌜φ⌝ ∗ metaInterp (GF := GF) mm ∗ byteInterp mb) ⊢ (⌜φ⌝ : IProp GF) :=
+  BI.sep_elim_left
+
+/-- `∗`: pure conclusions are duplicable, so each conjunct reads out
+    against the whole interpretation. -/
+theorem sep_consequence {Φ₁ Φ₂ : IProp GF} {ψ₁ ψ₂ : Prop}
+    (h₁ : iprop(Φ₁ ∗ metaInterp mm ∗ byteInterp mb) ⊢ (⌜ψ₁⌝ : IProp GF))
+    (h₂ : iprop(Φ₂ ∗ metaInterp mm ∗ byteInterp mb) ⊢ (⌜ψ₂⌝ : IProp GF)) :
+    iprop((Φ₁ ∗ Φ₂) ∗ metaInterp mm ∗ byteInterp mb) ⊢ (⌜ψ₁ ∧ ψ₂⌝ : IProp GF) := by
+  refine .trans (BI.and_intro ?_ ?_) BI.pure_and.1
+  · exact (BI.sep_mono_left BI.sep_elim_left).trans h₁
+  · exact (BI.sep_mono_left BI.sep_elim_right).trans h₂
+
+/-- `∨`. -/
+theorem or_consequence {Φ₁ Φ₂ : IProp GF} {ψ₁ ψ₂ : Prop}
+    (h₁ : iprop(Φ₁ ∗ metaInterp mm ∗ byteInterp mb) ⊢ (⌜ψ₁⌝ : IProp GF))
+    (h₂ : iprop(Φ₂ ∗ metaInterp mm ∗ byteInterp mb) ⊢ (⌜ψ₂⌝ : IProp GF)) :
+    iprop((Φ₁ ∨ Φ₂) ∗ metaInterp mm ∗ byteInterp mb) ⊢ (⌜ψ₁ ∨ ψ₂⌝ : IProp GF) :=
+  BI.sep_or_right.1.trans ((BI.or_mono h₁ h₂).trans BI.pure_or.1)
+
+/-- `∃`. -/
+theorem exists_consequence {α : Type _} {Φ : α → IProp GF} {ψ : α → Prop}
+    (h : ∀ a, iprop(Φ a ∗ metaInterp mm ∗ byteInterp mb) ⊢ (⌜ψ a⌝ : IProp GF)) :
+    iprop((∃ a, Φ a) ∗ metaInterp mm ∗ byteInterp mb) ⊢ (⌜∃ a, ψ a⌝ : IProp GF) :=
+  BI.sep_exists_right.1.trans ((BI.exists_mono h).trans BI.pure_exists.1)
+
+variable {σ : Mem} {mk : SpikeHeapF AllocCursor} (hG : CohG σ mm mb mk)
+include hG
+
+/-- Whole-cell ownership at ANY fraction: the cell's engine-facing
+    backing facts hold of σ (`cellOwn_cellCoh`, Heap.lean). -/
+theorem cellOwn_consequence (tds : CerbTags.TagDefsMap) (i : Int) (dq : DFrac) (c : SpikeCell) :
+    iprop(cellOwn tds (GF := GF) i dq c ∗ metaInterp mm ∗ byteInterp mb) ⊢
+      (⌜CellCoh tds σ i c⌝ : IProp GF) :=
+  (BI.sep_comm.1.trans BI.sep_assoc.1).trans
+    ((cellOwn_cellCoh tds hG i dq c).trans (BI.pure_mono And.left))
+
+/-- Points-to: the pointer is the cell's `cellPtr`, and the cell's
+    backing facts hold of σ. -/
+theorem pointsToCell_consequence (tds : CerbTags.TagDefsMap) (pv : CerbMem.PointerValue)
+    (dq : DFrac) (ty : ctype) (bs : List CerbMem.AbsByte) :
+    iprop(pointsToCell tds (GF := GF) pv dq ty bs ∗ metaInterp mm ∗ byteInterp mb) ⊢
+      (⌜∃ i a, pv = cellPtr i a ∧ CellCoh tds σ i ⟨a, ty, bs⟩⌝ : IProp GF) := by
+  refine (BI.sep_mono_left (pointsToCell_cellOwn_iff tds pv dq ty bs).1).trans ?_
+  exact exists_consequence fun i => exists_consequence fun a =>
+    sep_consequence (pure_consequence _) (cellOwn_consequence hG tds i dq _)
+
+end Consequences
+
+section ConsequencesCells
+
+variable {GF : BundledGFunctors} [SpikeGS .hasLC GF]
+variable {σ : Mem} {mm : SpikeHeapF MetaCell} {mb : SpikeHeapF CerbMem.AbsByte}
+  {mk : SpikeHeapF AllocCursor} (hG : CohG σ mm mb mk)
+include hG
+
+/-- A footprint of whole cells: satisfaction (`cellsOwn_extract`
+    reordered to the consequence shape). -/
+theorem cellsOwn_consequence (tds : CerbTags.TagDefsMap) (Q : CellMap) :
+    iprop(([∗map] i ↦ c ∈ Q, cellOwn tds (hlc := .hasLC) (GF := GF) i (.own 1) c) ∗
+        metaInterp mm ∗ byteInterp mb) ⊢ (⌜Coh tds σ Q⌝ : IProp GF) :=
+  (BI.sep_comm.1.trans BI.sep_assoc.1).trans (cellsOwn_extract tds hG Q)
+
+/-- The cells-shaped postcondition WITH a frame: the post-footprint is
+    disjoint from the frame and their union is satisfied (the
+    `SemTripleU` conclusion; the cross-disjointness comes from the
+    metadata authority through `bigSepM_own_disjoint`). -/
+theorem cells_consequence (tds : CerbTags.TagDefsMap)
+    (post : value → CellMap → Prop) (R : CellMap) (vv : value) :
+    iprop(((∃ Q : CellMap, ⌜post vv Q⌝ ∗
+        ([∗map] i ↦ c ∈ Q, cellOwn tds (hlc := .hasLC) (GF := GF) i (.own 1) c)) ∗
+        ([∗map] i ↦ c ∈ R, cellOwn tds (hlc := .hasLC) (GF := GF) i (.own 1) c)) ∗
+        metaInterp mm ∗ byteInterp mb) ⊢
+      (⌜∃ Q : CellMap, post vv Q ∧ Q ##ₘ R ∧
+        Coh tds σ (Iris.Std.PartialMap.union Q R)⌝ : IProp GF) := by
+  iintro ⟨⟨⟨%Q, %hpost, HQ⟩, HR⟩, Hmi, Hbi⟩
+  ihave %hd : ⌜Q ##ₘ R⌝ $$ [HQ HR]
+  · iapply bigSepM_own_disjoint tds Q R $$ [$HQ $HR]
+  ihave HQR : iprop([∗map] i ↦ c ∈ (Iris.Std.PartialMap.union Q R),
+      cellOwn tds (hlc := .hasLC) (GF := GF) i (.own 1) c) $$ [HQ HR]
+  · iapply (BigSepM.bigSepM_union hd).2 $$ [$HQ $HR]
+  ihave %hsat : ⌜Coh tds σ (Iris.Std.PartialMap.union Q R)⌝ $$ [Hmi Hbi HQR]
+  · iapply cellsOwn_consequence hG tds (Iris.Std.PartialMap.union Q R) $$ [$HQR $Hmi $Hbi]
+  ipureintro
+  exact ⟨Q, hpost, hd, hsat⟩
+
+end ConsequencesCells
+
 /-- THE SINGLE-CELL READOUT (alloc arc P4.1 — the public face of the
     coupling for whole-cell clients; the exhibits consume this instead
     of opening the state interpretation): whole-cell ownership at ANY
@@ -1241,13 +1490,7 @@ theorem cellOwn_readout (tds : CerbTags.TagDefsMap) {hlc : HasLC} {GF : BundledG
     cellOwn tds (GF := GF) i dq c ⊢
       iprop(∀ (σ' : Mem) (ns : Nat) (κs : List Empty) (nt : Nat),
         stateInterp σ' ns κs nt ={⊤, ∅}=∗ ⌜CellCoh tds σ' i c⌝) :=
-  stateInterp_readout (fun σ' mm mb mk HG => by
-    iintro ⟨Hc, Hmi, Hbi⟩
-    ihave %Hcc : ⌜CellCoh tds σ' i c ∧
-        Iris.Std.PartialMap.get? mm i = some (metaOf tds c)⌝ $$ [Hmi Hbi Hc]
-    · iapply cellOwn_cellCoh tds HG i dq c $$ [$Hmi $Hbi $Hc]
-    ipureintro
-    exact Hcc.1)
+  stateInterp_readout fun _ _ _ _ hG => cellOwn_consequence hG tds i dq c
 
 /-- The points-to form of the single-cell readout: the pointer's
     provenance id and address are the cell's. -/
@@ -1257,15 +1500,8 @@ theorem pointsToCell_readout (tds : CerbTags.TagDefsMap) {hlc : HasLC} {GF : Bun
     pointsToCell tds (GF := GF) pv dq ty bs ⊢
       iprop(∀ (σ' : Mem) (ns : Nat) (κs : List Empty) (nt : Nat),
         stateInterp σ' ns κs nt ={⊤, ∅}=∗
-          ⌜∃ i a, pv = cellPtr i a ∧ CellCoh tds σ' i ⟨a, ty, bs⟩⌝) := by
-  iintro Hpt
-  icases (pointsToCell_cellOwn_iff tds pv dq ty bs).mp $$ Hpt with ⟨%i, %a, %hpv, Hc⟩
-  ihave Hro := cellOwn_readout tds i dq ⟨a, ty, bs⟩ $$ Hc
-  iintro %σ' %ns %κs %nt Hσ
-  imod Hro $$ %σ' %ns %κs %nt Hσ with %hcc
-  imodintro
-  ipureintro
-  exact ⟨i, a, hpv, hcc⟩
+          ⌜∃ i a, pv = cellPtr i a ∧ CellCoh tds σ' i ⟨a, ty, bs⟩⌝) :=
+  stateInterp_readout fun _ _ _ _ hG => pointsToCell_consequence hG tds pv dq ty bs
 
 /-- The cell-footprint readout: post-cells + frame-cells consume the
     final state interpretation into the pure semantic-triple
@@ -1277,27 +1513,16 @@ theorem cells_readout (tds : CerbTags.TagDefsMap) {GF : BundledGFunctors} [Spike
         ([∗map] i ↦ c ∈ R, cellOwn tds (hlc := .hasLC) (GF := GF) i (.own 1) c)) ⊢
       iprop(∀ (σ' : Mem) (ns : Nat) (κs : List Empty) (nt : Nat),
         stateInterp σ' ns κs nt ={⊤, ∅}=∗
-          ⌜∃ Q : CellMap, post vv Q ∧ Q ##ₘ R ∧ Coh tds σ' (Iris.Std.PartialMap.union Q R)⌝) := by
-  iintro ⟨⟨%Q, %hpost, HQ⟩, HR⟩ %σ' %ns %κs %nt Hsi
-  icases (stateInterp_iff σ' ns κs nt).mp $$ Hsi
-    with ⟨%mm, %mb, %mk, %HG, Hmi, Hbi, Hki⟩
-  ihave %hd : ⌜Q ##ₘ R⌝ $$ [HQ HR]
-  · iapply bigSepM_own_disjoint tds Q R $$ [$HQ $HR]
-  ihave HQR : iprop([∗map] i ↦ c ∈ (Iris.Std.PartialMap.union Q R),
-      cellOwn tds (hlc := .hasLC) (GF := GF) i (.own 1) c) $$ [HQ HR]
-  · iapply (BigSepM.bigSepM_union hd).2 $$ [$HQ $HR]
-  ihave %hsat : ⌜Coh tds σ' (Iris.Std.PartialMap.union Q R)⌝ $$ [Hmi Hbi HQR]
-  · iapply cellsOwn_extract tds HG (Iris.Std.PartialMap.union Q R) $$ [$Hmi $Hbi $HQR]
-  iapply fupd_mask_intro_discard Std.LawfulSet.empty_subset
-  ipureintro
-  exact ⟨Q, hpost, hd, hsat⟩
+          ⌜∃ Q : CellMap, post vv Q ∧ Q ##ₘ R ∧ Coh tds σ' (Iris.Std.PartialMap.union Q R)⌝) :=
+  stateInterp_readout fun _ _ _ _ hG => cells_consequence hG tds post R vv
 
 /-- THE HEADLINE AT ANY MACHINE CONTEXT (alloc arc P4.3): soundness of
     the derived logic's triples at the semantic level — a proved
     footprint triple at a well-formed context, with every registered
     label body in the fragment, holds of the ENGINE over every
     splitting configuration, from any cons-shaped entry environment.
-    (`engine_adequacyU` + the cell-footprint readout.) -/
+    (`project_triple` at the cells-shaped post — `SemTripleU_iff_Mem` —
+    with the obligation discharged by `cells_consequence`.) -/
 theorem semantic_triple_soundU {GF : BundledGFunctors} [SpikeGpreS GF]
     {M : MachineCtx} (hwf : M.SeqWF)
     (hQf : ∀ l params cont, lookupLabel M.labels l = some (params, cont) →
@@ -1306,21 +1531,18 @@ theorem semantic_triple_soundU {GF : BundledGFunctors} [SpikeGpreS GF]
     {P : CellMap} {post : value → CellMap → Prop}
     (hwp : ProvenTripleU GF M (ev0 :: evs) e P post) :
     SemTripleU M (ev0 :: evs) e P post := by
+  -- the projection at the cells-shaped post, its obligation discharged
+  -- by `cells_consequence`
+  rw [SemTripleU_iff_Mem]
   intro R hdisj σ hsat n aids hfuel hQsz
-  refine engine_adequacyU (GF := GF) hwf hQf e ev0 evs σ (Iris.Std.PartialMap.union P R)
-    hfrag hsat
-    (fun v σ' => ∃ Q : CellMap, post v Q ∧ Q ##ₘ R ∧
-      Coh M.tagDefs σ' (Iris.Std.PartialMap.union Q R)) ?_ n aids hfuel hQsz
-  intro instGS
-  refine .trans (BigSepM.bigSepM_union hdisj).1 ?_
-  iintro ⟨HP, HR⟩
-  ihave HW := hwp $$ HP
-  iapply spike_wp_wand $$ HW
-  iintro %w Hpost
-  iapply cells_readout M.tagDefs post R (CoreRVal.val w)
-  isplitl [Hpost]
-  · iexact Hpost
-  · iexact HR
+  have h := project_triple (GF := GF) hwf hQf hfrag ev0 evs P
+    (fun w => iprop(∃ Q : CellMap, ⌜post (CoreRVal.val w) Q⌝ ∗
+      ([∗map] i ↦ c ∈ Q, cellOwn M.tagDefs (hlc := .hasLC) (GF := GF) i (.own 1) c)))
+    hwp R hdisj σ hsat n aids hfuel hQsz
+  refine ⟨h.1, h.2.1, fun v σ' hd => h.2.2 v σ' hd _ ?_⟩
+  intro _ w hw mm mb mk hG
+  subst hw
+  exact BI.sep_assoc.2.trans (cells_consequence hG M.tagDefs post R w.val)
 
 /-- THE FRAME RULE at the semantic level, at any machine context: a
     proved footprint triple substitutes into any larger context —

@@ -595,17 +595,12 @@ theorem arr_wp_readout (sbty : core_base_type) :
         (cellPtr id a) vs.length) [fmapEmpty]))
     .rfl)).trans ?_
   refine BI.wand_elim_left.trans ?_
-  refine wp_mono fun w => ?_
-  -- alloc arc P4.1: the readout is the PUBLIC single-cell readout
-  -- (`cellOwn_readout`, Adequacy.lean) — no state-interpretation
+  -- the projection's Iris half (`stateInterp_readout`) over the
+  -- pure-consequence lemmas (Adequacy.lean) — no state-interpretation
   -- opening in this module.
-  iintro ⟨%hval, Hpt⟩
-  ihave Hro := cellOwn_readout (procCtx p rs).tagDefs id (.own 1) ⟨a, aty, bs⟩ $$ Hpt
-  iintro %σ' %ns %κs %nt Hσ
-  imod Hro $$ %σ' %ns %κs %nt Hσ with %hcc
-  imodintro
-  ipureintro
-  exact ⟨hval, hcc⟩
+  exact wp_mono fun w => stateInterp_readout fun _ _ _ _ hG =>
+    sep_consequence (pure_consequence _)
+      (cellOwn_consequence hG (procCtx p rs).tagDefs id (.own 1) ⟨a, aty, bs⟩)
 
 omit hQ hsz hdec in
 /-- The label bodies are in the certified cone. -/

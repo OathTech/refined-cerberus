@@ -84,11 +84,7 @@ theorem wseq_wp_readout (v1 v2 : value) :
     ((wseq_blockSpecs v2).trans (wps_sound (wseqProg v1 v2) spikeEnv))
     .rfl)).trans ?_
   refine BI.wand_elim_left.trans ?_
-  refine wp_mono fun w => ?_
-  iintro %hval %σ' %ns %κs %nt Hσ
-  iapply fupd_mask_intro_discard Std.LawfulSet.empty_subset
-  ipureintro
-  exact hval
+  exact wp_mono fun w => stateInterp_readout fun _ _ _ _ _ => pure_consequence _
 
 end WseqIris
 

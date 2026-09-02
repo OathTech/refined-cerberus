@@ -371,26 +371,19 @@ theorem loop_readout_val (w : CoreRVal) :
         stateInterp σ' ns κs nt ={⊤, ∅}=∗
           ⌜w.val = Vunit ∧ ∃ bs',
             ((n = 0 ∧ bs' = bs0) ∨ (0 < n ∧ bs' = (sevenBytes fmapEmpty))) ∧
-            ∃ i a, c = cellPtr i a ∧ CellCoh fmapEmpty σ' i ⟨a, intTy, bs'⟩⌝) := by
-  rw [show (loopPost (GF := GF) c n bs0 w.w w.ρ) =
-    (iprop(⌜SpikeVal.val w.w = Vunit⌝ ∗
-      ((⌜n = 0⌝ ∗ pointsToCell fmapEmpty c (.own 1) intTy bs0) ∨
-       (⌜0 < n⌝ ∗ pointsToCell fmapEmpty c (.own 1) intTy (sevenBytes fmapEmpty)))) : IProp GF)
-    from rfl]
-  iintro ⟨%hval, Hd⟩
-  icases Hd with (⟨%hn0, Hcell⟩ | ⟨%hpos, Hcell⟩)
-  · ihave Hro := pointsToCell_readout fmapEmpty c (.own 1) intTy bs0 $$ Hcell
-    iintro %σ' %ns %κs %nt Hσ
-    imod Hro $$ %σ' %ns %κs %nt Hσ with %hfact
-    imodintro
-    ipureintro
-    exact ⟨hval, bs0, .inl ⟨hn0, rfl⟩, hfact⟩
-  · ihave Hro := pointsToCell_readout fmapEmpty c (.own 1) intTy (sevenBytes fmapEmpty) $$ Hcell
-    iintro %σ' %ns %κs %nt Hσ
-    imod Hro $$ %σ' %ns %κs %nt Hσ with %hfact
-    imodintro
-    ipureintro
-    exact ⟨hval, (sevenBytes fmapEmpty), .inr ⟨hpos, rfl⟩, hfact⟩
+            ∃ i a, c = cellPtr i a ∧ CellCoh fmapEmpty σ' i ⟨a, intTy, bs'⟩⌝) :=
+  -- the projection's Iris half over the pure-consequence lemmas
+  -- (Adequacy.lean): pure ∗ (pure ∗ ↦ ∨ pure ∗ ↦), then the pure reshaping
+  stateInterp_readout fun _ _ _ _ hG =>
+    (sep_consequence (pure_consequence _) (or_consequence
+      (sep_consequence (pure_consequence _)
+        (pointsToCell_consequence hG fmapEmpty c (.own 1) intTy bs0))
+      (sep_consequence (pure_consequence _)
+        (pointsToCell_consequence hG fmapEmpty c (.own 1) intTy
+          (sevenBytes fmapEmpty))))).trans
+    (BI.pure_mono fun ⟨hval, h⟩ => ⟨hval, h.elim
+      (fun ⟨hn0, hc⟩ => ⟨bs0, .inl ⟨hn0, rfl⟩, hc⟩)
+      (fun ⟨hpos, hc⟩ => ⟨sevenBytes fmapEmpty, .inr ⟨hpos, rfl⟩, hc⟩)⟩)
 
 /-- The base-WP face with the engine readout (what `engine_adequacyJ`
     consumes), from any reachable entry frame over any tail. -/
