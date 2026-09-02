@@ -406,7 +406,7 @@ tuple (Rules.lean), the partial label-context judgment `wps`
 
 | Family | Rules |
 |---|---|
-| Small axioms | `wp_store`, `wp_load` (base WP: cell ownership entails the WP, every UB arm of `storeM`/`loadM` excluded by the precondition); `wps_store`, `wps_load`, the typed-subrange forms `wps_load_at`/`wps_store_at`/`wps_load_cell_at`/`wps_store_cell_at`; `wpt_load_at`, `wpt_store_at`, `wpt_load_cell_at`, `wpt_store_cell_at`, `wpt_store_cell` |
+| Small axioms | `wp_store`, `wp_load` (base WP: cell ownership entails the WP, every UB arm of `storeM`/`loadM` excluded by the precondition); `wps_store`, `wps_load`, the typed-subrange forms `wps_load_at`/`wps_store_at`/`wps_load_cell_at`/`wps_store_cell_at`; `wpt_load_at`, `wpt_store_at`, `wpt_load_cell_at`, `wpt_store_cell_at`, `wpt_store` |
 | Allocation | `wps_create`, `wpt_create` (cost bound `2 ≤ k`): `allocCap (req :: rest)` buys one `create`; the continuation binds an EXISTENTIAL pointer with full ownership at the unspecified image, `allocCap rest`, and the pure bounds `0 < addrOf p < 2^64`; cursor-free statements |
 | Frame | `triple_frame` (base); `wps_frame`, `wps_frame_labels` with `frameLs R Ls = fun l vs ρ => Ls l vs ρ ∗ R`, `blockSpecs_frame`, the whole-loop `wps_sound_frame`; `wpt_frame`, `wpt_frame_labels` (`frameLsT`), `blockSpecsT_frame` — the frame crosses every back edge through the framed label context |
 | Consequence | `triple_conseq`; `wps_wand`, `wps_fupd` (postcondition-modality absorption); `wpt_mono`, `wpt_mono_k` (budgets are upper bounds), `wpt_mono_Ls` |

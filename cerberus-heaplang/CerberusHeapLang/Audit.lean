@@ -93,7 +93,7 @@ def trioExports : List Name := [
   ``CerberusHeapLang.wps_create, ``CerberusHeapLang.wps_load_at, ``CerberusHeapLang.wps_store_at,
   -- the total layer
   ``CerberusHeapLang.wpt_sound, ``CerberusHeapLang.wpt_engine_boundJ,
-  ``CerberusHeapLang.wpt_strongly_normalizing, ``CerberusHeapLang.wpt_store_cell,
+  ``CerberusHeapLang.wpt_strongly_normalizing, ``CerberusHeapLang.wpt_store,
   -- the collapse layer (trio-exact: no shipped-state statement)
   ``CerberusHeapLang.prod_loop_done, ``CerberusHeapLang.driver2_done,
   ``CerberusHeapLang.finalize_done, ``CerberusHeapLang.loop_step_frag,
@@ -162,7 +162,13 @@ def trioExports : List Name := [
   -- `MemTripleU_alloc` (launch premise `LaunchCoh`); `MemTripleU`
   -- implies it at every plan
   ``CerberusHeapLang.project_triple_alloc,
-  ``CerberusHeapLang.MemTripleU_alloc_of_MemTripleU]
+  ``CerberusHeapLang.MemTripleU_alloc_of_MemTripleU,
+  -- QA-1 (2026-09-02 quality audit, H-1/M-3): the generalized block-entry
+  -- rules (save at evaluated initializers) and the six stratum twins
+  ``CerberusHeapLang.wps_save, ``CerberusHeapLang.wpt_save,
+  ``CerberusHeapLang.wpt_load, ``CerberusHeapLang.wpt_case_value,
+  ``CerberusHeapLang.wpt_wseq, ``CerberusHeapLang.wpt_fupd,
+  ``CerberusHeapLang.wps_mono_Ls, ``CerberusHeapLang.blockSpecs_mono]
 
 def sortedNames (ns : Array Name) : Array String :=
   (ns.map (·.toString)).qsort (· < ·)

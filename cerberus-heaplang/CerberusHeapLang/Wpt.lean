@@ -386,6 +386,61 @@ theorem wpt_mono_Ls {Ls₁ Ls₂ : LabelSpecT GF}
         imodintro
         iapply IH (r.e) (r.ρ) $$ H
 
+/-- POSTCONDITION-MODALITY ABSORPTION at the total stratum (the
+    `wps_fupd` twin, QA-1/M-3): the update is paid at the value exit
+    (the value clause is fupd-headed), passes a jump untouched (the
+    jump clause is Ψ-independent), rides through steps by budget
+    induction. -/
+theorem wpt_fupd {Ψ : SpikeVal → EnvStack → IProp GF} (k : Nat) (e : CoreExpr)
+    (ρ : EnvStack) :
+    wpt M Ls k (fun w ρ' => iprop(|={⊤}=> Ψ w ρ')) e ρ ⊢ wpt M Ls k Ψ e ρ := by
+  induction k generalizing e ρ with
+  | zero =>
+    cases htv : toVal e with
+    | some w =>
+      rw [wpt_val_eq (Ψ := fun w ρ' => iprop(|={⊤}=> Ψ w ρ')) 0 htv,
+        wpt_val_eq (Ψ := Ψ) 0 htv]
+      iintro ⟨%hc, H⟩
+      isplit
+      · ipureintro; exact hc
+      imod H with H
+      iexact H
+    | none =>
+      cases hjr : jumpRedex? e with
+      | some lp =>
+        obtain ⟨l, pes⟩ := lp
+        rw [wpt_jump_eq (Ψ := fun w ρ' => iprop(|={⊤}=> Ψ w ρ')) 0 htv hjr,
+          wpt_jump_eq (Ψ := Ψ) 0 htv hjr]
+      | none =>
+        rw [wpt_zero_step_eq (Ψ := fun w ρ' => iprop(|={⊤}=> Ψ w ρ')) htv hjr,
+          wpt_zero_step_eq (Ψ := Ψ) htv hjr]
+  | succ m IH =>
+    cases htv : toVal e with
+    | some w =>
+      rw [wpt_val_eq (Ψ := fun w ρ' => iprop(|={⊤}=> Ψ w ρ')) (m + 1) htv,
+        wpt_val_eq (Ψ := Ψ) (m + 1) htv]
+      iintro ⟨%hc, H⟩
+      isplit
+      · ipureintro; exact hc
+      imod H with H
+      iexact H
+    | none =>
+      cases hjr : jumpRedex? e with
+      | some lp =>
+        obtain ⟨l, pes⟩ := lp
+        rw [wpt_jump_eq (Ψ := fun w ρ' => iprop(|={⊤}=> Ψ w ρ')) (m + 1) htv hjr,
+          wpt_jump_eq (Ψ := Ψ) (m + 1) htv hjr]
+      | none =>
+        rw [wpt_step_eq (Ψ := fun w ρ' => iprop(|={⊤}=> Ψ w ρ')) m htv hjr,
+          wpt_step_eq (Ψ := Ψ) m htv hjr]
+        iintro H %σ₁ %ns %obs %nt Hσ
+        imod H $$ %σ₁ %ns %obs %nt Hσ with ⟨$, H⟩
+        imodintro
+        iintro %r %σ₂ %eₜ %Hstep
+        imod H $$ %r %σ₂ %eₜ %Hstep with ⟨$, H⟩
+        imodintro
+        iapply IH (r.e) (r.ρ) $$ H
+
 /-! ## Statement-level framing at the total stratum (alloc arc P4.2,
 R-05): the frame rides through the value exit and every back edge by
 framing the variant-indexed label context pointwise (Wps.lean,
@@ -595,6 +650,22 @@ theorem wpt_if_false {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
       rcases hs.if_inv with ⟨hg', -⟩ | ⟨-, hout⟩
       · rw [hg] at hg'; cases hg'
       · exact hout)
+
+/-- Ecase at a VALUE scrutinee, total (the `wps_case_value` twin,
+    QA-1/M-3): the substitution TAU is deterministic and
+    state-preserving — an instance of `wpt_det_step`. -/
+theorem wpt_case_value {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
+    (pe : generic_pexpr Unit sym) (pats : List (pattern × CoreExpr))
+    {cval : value} {e' : CoreExpr} (ρ : EnvStack) {k : Nat}
+    (hv : valueFromPexpr pe = some cval)
+    (hsel : select_case subst_sym_expr cval pats = some e') :
+    wpt M Ls k Ψ e' ρ ⊢ wpt M Ls (k + 1) Ψ (Expr a (Ecase pe pats)) ρ :=
+  wpt_det_step rfl rfl (fun _ => Step.case_value hv hsel)
+    (fun σ out hs => by
+      obtain ⟨cval', e'', hv', hsel', hout⟩ := hs.case_inv
+      obtain rfl : cval = cval' := Option.some.inj (hv.symm.trans hv')
+      obtain rfl : e' = e'' := Option.some.inj (hsel.symm.trans hsel')
+      exact hout)
 
 /-- Esave ENTRY at VALUE initializers (the TAU arm; one tau) — the
     literal instance of `wpt_save`. -/
@@ -1253,6 +1324,170 @@ theorem wpt_seq {Ψ : SpikeVal → EnvStack → IProp GF}
         · exact (specPat_ne_base hpat).elim
         · exact (specPat_ne_base hpat).elim
         · exact (symPat_ne_base hpat).elim
+
+/-- The jump-clause transfer through an Ewseq frame (the `wpt_jump_frame_sseq`
+    twin). -/
+theorem wpt_jump_frame_wseq {Ψ₁ Ψ₂ : SpikeVal → EnvStack → IProp GF}
+    (a : List annot) (pat : pattern) {e1 : CoreExpr} (e2 : CoreExpr)
+    (ρ : EnvStack) {l : sym} {pes : List (generic_pexpr Unit sym)}
+    {k k' : Nat} (hkk : k ≤ k')
+    (htv : toVal e1 = none) (hjr : jumpRedex? e1 = some (l, pes)) :
+    wpt M Ls k Ψ₁ e1 ρ ⊢
+      wpt M Ls k' Ψ₂ (Expr a (Ewseq pat e1 e2)) ρ := by
+  rw [wpt_jump_eq (Ψ := Ψ₁) k htv hjr,
+    wpt_jump_eq (Ψ := Ψ₂) k' (toVal_wseq_node a pat e1 e2)
+      (by rw [jumpRedex?_wseq]; exact hjr)]
+  iintro H
+  imod H with ⟨%params, %cont, %vs, %ev0, %evs, %m, %h1, %h2, %h3, %h4, HLs⟩
+  imodintro
+  iexists params, cont, vs, ev0, evs, m
+  isplit
+  · ipureintro; exact h1
+  isplit
+  · ipureintro; exact h2
+  isplit
+  · ipureintro; exact h3
+  isplit
+  · ipureintro; exact Nat.le_trans h4 hkk
+  iexact HLs
+
+/-- THE TOTAL WEAK-SEQUENCING RULE at the wildcard pattern (the
+    `wps_wseq` twin, QA-1/M-3 — the `wpt_seq` clone through the Cwseq
+    frame; budgets add). -/
+theorem wpt_wseq {Ψ : SpikeVal → EnvStack → IProp GF}
+    (a pa : List annot) (bty : core_base_type) (e1 e2 : CoreExpr)
+    (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (k1 k2 : Nat) :
+    wpt M Ls k1 (fun w ρ' => wpt M Ls k2
+        (fun u ρ'' => Ψ (SpikeVal.mergeInto w u) ρ'') e2 ρ') e1 (ev0 :: evs) ⊢
+      wpt M Ls (k1 + k2) Ψ
+        (Expr a (Ewseq (Pattern pa (CaseBase (none, bty))) e1 e2))
+        (ev0 :: evs) := by
+  induction k1 using Nat.strongRecOn generalizing e1 ev0 evs with
+  | ind k1 IH =>
+  cases htv : toVal e1 with
+  | some w =>
+    have he := ofVal_of_toVal htv
+    subst he
+    rw [wpt_val_eq k1 (toVal_ofVal w)]
+    cases k1 with
+    | zero =>
+      iintro ⟨%hc, -⟩
+      exact absurd hc (by cases w <;> simp [deliveryCost])
+    | succ m =>
+      rw [show m + 1 + k2 = (m + k2) + 1 by omega,
+        wpt_step_eq (m + k2)
+          (toVal_wseq_node a (Pattern pa (CaseBase (none, bty))) (ofVal w) e2)
+          (by rw [jumpRedex?_wseq, jumpRedex?_ofVal])]
+      iintro ⟨%hc, H⟩ %σ₁ %ns %obs %nt Hσ
+      imod H with H
+      iapply fupd_mask_intro Std.LawfulSet.empty_subset
+      iintro Hclose
+      isplitr
+      · ipureintro
+        cases w with
+        | pure v => exact ⟨[], ⟨_, _, _⟩, _, [], ⟨Step.wseq_pure, rfl, rfl⟩⟩
+        | annot ds v => exact ⟨[], ⟨_, _, _⟩, _, [], ⟨Step.wseq_annot, rfl, rfl⟩⟩
+      iintro %r %σ₂ %eₜ %Hstep
+      obtain ⟨hs, hlbl, rfl⟩ := Hstep
+      rcases hs.wseq_inv with ⟨e1', ρ'', σ'', hnj, hs', hout⟩ |
+          ⟨_, _, v, _, _, _, he1, _, hout⟩ | ⟨_, _, ds, v, _, _, _, he1, _, hout⟩ |
+          ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩
+      · exact absurd hs' (fun h => Step.val_elim h)
+      · -- LETS-PURE: successor (e2, ρ, σ)
+        obtain rfl : w = .pure v := by
+          cases w with
+          | pure v' => simpa [ofVal] using he1
+          | annot ds' v' => exact absurd he1 (by simp [ofVal])
+        obtain ⟨re, rρ, rM⟩ := r
+        simp only at hlbl
+        obtain rfl : M = rM := hlbl.symm
+        obtain ⟨hre, hrρ, hσ⟩ : re = e2 ∧ rρ = ev0 :: evs ∧ σ₂ = σ₁ := by
+          simpa [Prod.mk.injEq] using hout
+        subst hrρ
+        obtain rfl : e2 = re := hre.symm
+        obtain rfl : σ₁ = σ₂ := hσ.symm
+        imod Hclose with -
+        imodintro
+        isplitl [Hσ]
+        · iexact Hσ
+        · rw [show (fun u ρ'' => Ψ (SpikeVal.mergeInto (SpikeVal.pure v) u) ρ'')
+            = Ψ from rfl]
+          iapply wpt_mono_k (Nat.le_add_left k2 m) e2 (ev0 :: evs) $$ H
+      · -- LETS-ANNOT: successor ({ds}e2, ρ, σ); exit through wpt_annot
+        obtain rfl : w = .annot ds v := by
+          cases w with
+          | pure v' => exact absurd he1 (by simp [ofVal])
+          | annot ds' v' =>
+            obtain ⟨h1, h2⟩ : ds' = ds ∧ v' = v := by simpa [ofVal] using he1
+            rw [h1, h2]
+        have hm : 1 ≤ m := by
+          have : (2 : Nat) ≤ m + 1 := by simpa [deliveryCost] using hc
+          omega
+        obtain ⟨re, rρ, rM⟩ := r
+        simp only at hlbl
+        obtain rfl : M = rM := hlbl.symm
+        obtain ⟨hre, hrρ, hσ⟩ : re = Expr [] (Eannot ds e2) ∧
+            rρ = ev0 :: evs ∧ σ₂ = σ₁ := by
+          simpa [Prod.mk.injEq] using hout
+        subst hre hrρ
+        obtain rfl : σ₁ = σ₂ := hσ.symm
+        imod Hclose with -
+        imodintro
+        isplitl [Hσ]
+        · iexact Hσ
+        · rw [show (fun u ρ'' => Ψ (SpikeVal.mergeInto (SpikeVal.annot ds v) u) ρ'')
+            = fun u ρ'' => Ψ (SpikeVal.merge ds u) ρ'' from rfl]
+          iapply wpt_mono_k (show k2 + 1 ≤ m + k2 by omega) _ _
+          iapply wpt_annot ds e2 (ev0 :: evs) $$ H
+      · rw [jumpRedex?_ofVal] at hj; cases hj
+  | none =>
+    cases hjr : jumpRedex? e1 with
+    | some lp =>
+      obtain ⟨l, pes⟩ := lp
+      exact wpt_jump_frame_wseq a _ e2 _ (Nat.le_add_right k1 k2) htv hjr
+    | none =>
+      cases k1 with
+      | zero =>
+        rw [wpt_zero_step_eq htv hjr]
+        iintro %h
+        exact h.elim
+      | succ m =>
+        rw [wpt_step_eq m htv hjr,
+          show m + 1 + k2 = (m + k2) + 1 by omega,
+          wpt_step_eq (m + k2)
+            (toVal_wseq_node a (Pattern pa (CaseBase (none, bty))) e1 e2)
+            (by rw [jumpRedex?_wseq, hjr])]
+        iintro H %σ₁ %ns %obs %nt Hσ
+        imod H $$ %σ₁ %ns %obs %nt Hσ with ⟨%hred, H⟩
+        imodintro
+        isplit
+        · ipureintro
+          obtain ⟨obs0, r', σ', eₜ', hps⟩ := hred
+          obtain ⟨hs', hlbl', hnil'⟩ := hps
+          exact ⟨[], ⟨Expr a (Ewseq (Pattern pa (CaseBase (none, bty)))
+              r'.e e2), r'.ρ, M⟩, σ', [],
+            ⟨Step.wseq_ctx hjr hs', rfl, rfl⟩⟩
+        iintro %r %σ₂ %eₜ %Hstep
+        obtain ⟨hs, hlbl, rfl⟩ := Hstep
+        rcases hs.wseq_inv with ⟨e1', ρ'', σ'', hnj, hs', hout⟩ |
+            ⟨_, _, v, _, _, _, he1, _, _⟩ | ⟨_, _, ds, v, _, _, _, he1, _, _⟩ |
+            ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩
+        · obtain ⟨ev0', rfl⟩ := Step.env_cons hs'
+          obtain ⟨re, rρ, rM⟩ := r
+          simp only at hlbl
+          obtain rfl : M = rM := hlbl.symm
+          obtain ⟨hre, hrρ, hσ⟩ : re = Expr a (Ewseq (Pattern pa
+              (CaseBase (none, bty))) e1' e2) ∧ rρ = ev0' :: evs ∧
+              σ₂ = σ'' := by
+            simpa [Prod.mk.injEq] using hout
+          subst hre hrρ hσ
+          imod H $$ %(⟨e1', ev0' :: evs, M⟩ : CoreRt) %σ₂ %([] : List CoreRt)
+            %⟨hs', rfl, rfl⟩ with ⟨$, H⟩
+          imodintro
+          iapply IH m (Nat.lt_succ_self m) e1' ev0' evs $$ H
+        · rw [he1, toVal_ofVal] at htv; cases htv
+        · rw [he1, toVal_ofVal] at htv; cases htv
+        · rw [hjr] at hj; cases hj
 
 /-- THE TOTAL Specified-binder sequencing rule (total analog of
     `wps_seq_spec`). -/
@@ -1970,12 +2205,13 @@ theorem wpt_store_cell_at {Ψ : SpikeVal → EnvStack → IProp GF}
     rw [spliceBytes_length _ _ _ (by omega)]
     exact hlen
 
-/-- WHOLE-CELL STORE at the total stratum (the `wps_store` analog —
-    Phase 5, the counter loop's total lane): the `off := 0` instance
-    of the generic subrange rule, with the splice collapsed to the
-    stored image (`|img| = |bs| = sizeof ty`) and the write-side
+/-- WHOLE-CELL STORE at the total stratum (the `wps_store` twin —
+    Phase 5, the counter loop's total lane; named `wpt_store`
+    before QA-1/Q10): the `off := 0` instance of the generic subrange
+    rule, with the splice collapsed to the stored image
+    (`|img| = |bs| = sizeof ty`) and the write-side
     decode-independence supplied by `StorableAt.stored_dec`. -/
-theorem wpt_store_cell {Ψ : SpikeVal → EnvStack → IProp GF}
+theorem wpt_store {Ψ : SpikeVal → EnvStack → IProp GF}
     (loc : CerbLocation.Loc) (ann : core_run_annotation) (ty : ctype)
     (pv : CerbMem.PointerValue) (cv : value) (mo : memory_order)
     (mv : CerbMem.MemValue) (bs : List CerbMem.AbsByte) (ρ : EnvStack)
@@ -2033,6 +2269,56 @@ theorem wpt_store_cell {Ψ : SpikeVal → EnvStack → IProp GF}
   · ipureintro
     rfl
   · iexact Hcell2
+
+/-- WHOLE-CELL LOAD at the total stratum (the `wps_load` twin,
+    QA-1/M-3): the `off := 0` instance of `wpt_load_cell_at`, the decode
+    supplied by the cell's own decode inertness; `htrap` excludes the
+    `_Bool` trap-representation kill exactly as `wps_load`'s. -/
+theorem wpt_load {Ψ : SpikeVal → EnvStack → IProp GF}
+    (loc : CerbLocation.Loc) (ann : core_run_annotation) (ty : ctype)
+    (pv : CerbMem.PointerValue) (mo : memory_order) (dq : DFrac)
+    (bs : List CerbMem.AbsByte) (ρ : EnvStack) {k : Nat} (hk : 3 ≤ k)
+    (htrap : cellLoadTrap M.tagDefs ⟨addrOf pv, ty, bs⟩ = false) :
+    iprop(pointsToCell M.tagDefs (GF := GF) pv dq ty bs ∗
+      (∀ fp, pointsToCell M.tagDefs pv dq ty bs -∗
+        Ψ (SpikeVal.annot [DA_pos [] fp] (loadedVal M.tagDefs pv ty bs)) ρ)) ⊢
+      wpt M Ls k Ψ (loadExpr loc ann ty pv mo) ρ := by
+  iintro ⟨Hpt, HΨ⟩
+  icases (pointsToCell_cellOwn_iff M.tagDefs pv dq ty bs).mp $$ Hpt
+    with ⟨%i, %a, %hpv, Hcell⟩
+  subst hpv
+  icases (cellOwn_iff M.tagDefs i dq ⟨a, ty, bs⟩).mp $$ Hcell
+    with ⟨Hm, Hb, %hpure⟩
+  obtain ⟨hlen, hdec⟩ := hpure
+  have hpe : loadExpr loc ann ty (cellPtr i a) mo =
+      loadExpr loc ann ty (cellPtr i (a + ((0 : Nat) : Int))) mo := by
+    rw [show a + ((0 : Nat) : Int) = a by omega]
+  rw [hpe]
+  iapply wpt_load_cell_at loc ann i a ty 0 ty mo dq bs ρ
+    (mv := decodeCell M.tagDefs ⟨a, ty, bs⟩) hk (by omega)
+    (fun lum fpm => by
+      rw [show a + ((0 : Nat) : Int) = a by omega, List.drop_zero,
+        List.take_of_length_le (Nat.le_of_eq hlen)]
+      exact hdec lum fpm)
+    htrap
+  isplitl [Hm Hb]
+  · iapply (cellOwn_iff M.tagDefs i dq ⟨a, ty, bs⟩).mpr
+    isplitl [Hm]
+    · iexact Hm
+    isplitl [Hb]
+    · iexact Hb
+    · ipureintro
+      exact ⟨hlen, hdec⟩
+  iintro %fp Hcell'
+  rw [show (valueFromMemValue (decodeCell M.tagDefs ⟨a, ty, bs⟩)).2 =
+    loadedVal M.tagDefs (cellPtr i a) ty bs from rfl]
+  iapply HΨ
+  iapply (pointsToCell_cellOwn_iff M.tagDefs (cellPtr i a) dq ty bs).mpr
+  iexists i, a
+  isplit
+  · ipureintro
+    rfl
+  · iexact Hcell'
 
 /-! ## The allocation rules at the total stratum (alloc arc P1.4)
 

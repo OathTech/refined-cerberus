@@ -535,7 +535,7 @@ theorem progA_wpt {GF : BundledGFunctors} [SpikeGS .hasLC GF]
       (loadExpr loc0 empty_annotation intTy xPtr NA)) from rfl,
     show (6 : Nat) = 3 + 3 from rfl]
   iapply wpt_seq
-  iapply wpt_store_cell loc0 empty_annotation intTy xPtr sevenVal NA
+  iapply wpt_store loc0 empty_annotation intTy xPtr sevenVal NA
     sevenMval bytesX _ (Nat.le_refl 3) seven_encodes (seven_storable _)
   isplitl [Hpt]
   · iexact Hpt

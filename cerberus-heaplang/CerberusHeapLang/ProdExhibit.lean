@@ -208,7 +208,7 @@ theorem progAProd_wpt [SpikeGS .hasLC GF]
     (by rw [hex, evalPexpr_sym_empty]
         exact lookup_env_head (prodAFrame_lookup_p hf p) evs)
     rfl
-  iapply wpt_store_cell loc0 empty_annotation intTy p sevenVal NA sevenMval
+  iapply wpt_store loc0 empty_annotation intTy p sevenVal NA sevenMval
     (intUndefBytes M.tagDefs) _ (Nat.le_refl 3) seven_encodes (seven_storable _)
   isplitl [Hpt]
   · iexact Hpt

@@ -424,7 +424,7 @@ theorem ctr_body_wpt (i : Int) (pptr : CerbMem.PointerValue)
       (by rw [procCtx_extern]
           exact ctr_store_ptr_eval hf rest (ivVal i) (ptrVal pptr))
       rfl
-    iapply wpt_store_cell loc0 empty_annotation intTy pptr sevenVal mo
+    iapply wpt_store loc0 empty_annotation intTy pptr sevenVal mo
       sevenMval bs _ (Nat.le_refl 3) seven_encodes (seven_storable _)
     isplitl [Hpt]
     · iexact Hpt

@@ -322,6 +322,48 @@ theorem wps_fupd {Ψ : SpikeVal → EnvStack → IProp GF} (e : CoreExpr)
       imodintro
       iapply IH $$ %(r.e) %(r.ρ) H
 
+/-- MONOTONICITY IN THE LABEL CONTEXT (the `wpt_mono_Ls` twin, QA-1/M-3):
+    a label context pointwise entailed by another verifies more — the
+    value clause is `Ls`-independent, the jump clause consults `Ls` once,
+    steps ride by Löb. -/
+theorem wps_mono_Ls {Ls₁ Ls₂ : LabelSpec GF} {Ψ : SpikeVal → EnvStack → IProp GF}
+    (h : ∀ l vs ρ', Ls₁ l vs ρ' ⊢ Ls₂ l vs ρ') (e : CoreExpr) (ρ : EnvStack) :
+    wps M Ls₁ Ψ e ρ ⊢ wps M Ls₂ Ψ e ρ := by
+  iloeb as IH generalizing %e %ρ
+  cases htv : toVal e with
+  | some w =>
+    rw [(wps_unfold (Ls := Ls₁)).to_eq, (wps_unfold (Ls := Ls₂)).to_eq]
+    simp only [wps.pre, htv]
+    iintro H
+    iexact H
+  | none =>
+    cases hjr : jumpRedex? e with
+    | some lp =>
+      rw [(wps_unfold (Ls := Ls₁)).to_eq, (wps_unfold (Ls := Ls₂)).to_eq]
+      simp only [wps.pre, htv, hjr]
+      iintro H
+      imod H with ⟨%params, %cont, %vs, %ev0, %evs, %h1, %h2, %h3, HLs⟩
+      imodintro
+      iexists params, cont, vs, ev0, evs
+      isplit
+      · ipureintro; exact h1
+      isplit
+      · ipureintro; exact h2
+      isplit
+      · ipureintro; exact h3
+      iapply h lp.1 vs ρ $$ HLs
+    | none =>
+      rw [(wps_unfold (Ls := Ls₁)).to_eq, (wps_unfold (Ls := Ls₂)).to_eq]
+      simp only [wps.pre, htv, hjr]
+      iintro H %σ₁ %ns %obs %obs' %nt Hσ
+      imod H $$ %σ₁ %ns %obs %obs' %nt Hσ with ⟨$, H⟩
+      imodintro
+      inext
+      iintro %r %σ₂ %eₜ %Hstep Hcred
+      imod H $$ %r %σ₂ %eₜ %Hstep Hcred with ⟨$, H⟩
+      imodintro
+      iapply IH $$ %(r.e) %(r.ρ) H
+
 /-- FRAME over the statement WP (derived from `wps_wand`; S3 note:
     the frame rides to the value exit; at a jump it is released —
     the label invariant is the only thing that crosses a back
@@ -2669,6 +2711,19 @@ theorem blockSpecs_frame {Ψ : SpikeVal → EnvStack → IProp GF} (R : IProp GF
   iintro %l %params %cont %vs %ev0 %evs %hQ ⟨HLs, HR⟩
   ihave HW := HB $$ %l %params %cont %vs %ev0 %evs %hQ HLs
   iapply wps_frame_labels R cont (bindArgs params vs (ev0 :: evs)) $$ HW HR
+
+/-- Monotonicity of the block specifications in the postcondition (the
+    `blockSpecsT_mono` twin, QA-1/M-3; through `wps_wand`). -/
+theorem blockSpecs_mono {Ψ₁ Ψ₂ : SpikeVal → EnvStack → IProp GF}
+    (h : ∀ w ρ', Ψ₁ w ρ' ⊢ Ψ₂ w ρ') :
+    blockSpecs (GF := GF) M Ls Ψ₁ ⊢ blockSpecs M Ls Ψ₂ := by
+  iintro #HB
+  imodintro
+  iintro %l %params %cont %vs %ev0 %evs %hQ HLs
+  ihave HW := HB $$ %l %params %cont %vs %ev0 %evs %hQ HLs
+  iapply wps_wand cont (bindArgs params vs (ev0 :: evs)) $$ HW
+  iintro %w %ρ' H
+  iapply h w ρ' $$ H
 
 /-! `blockSpecs_intro_variant` (the invariant+variant-shaped lemma
 that offered smaller-measure block specifications as OPTIONAL

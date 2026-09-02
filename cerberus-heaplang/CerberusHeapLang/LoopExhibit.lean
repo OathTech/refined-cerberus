@@ -609,7 +609,7 @@ theorem loop_body_wpt (i : Int) (f : Fmap sym value)
         3 + ((5 * (i - 1).toNat + 2) + 1) by omega]
     iapply wpt_seq
     icases Hcell with (⟨%hieq, Hc⟩ | ⟨%hlt, Hc⟩) <;>
-      (iapply wpt_store_cell loc ann intTy c sevenVal mo sevenMval _ _
+      (iapply wpt_store loc ann intTy c sevenVal mo sevenMval _ _
         (by omega) seven_encodes (seven_storable _)
        isplitl [Hc]
        · iexact Hc
