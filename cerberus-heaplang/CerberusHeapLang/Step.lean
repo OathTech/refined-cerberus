@@ -16,7 +16,7 @@ theorems unprovable, never make an exported engine statement false
 — WITH the idiom-faithfulness caveat (2026-08-31 foundational
 audit, F-09): that guarantee covers exactly the layers interior to
 proofs (Step, the logic, iris-lean). It does NOT extend to the
-statement-level specification idiom (drive/driveJ, dischargeStep,
+statement-level specification idiom (`driveU`, `dischargeStep`,
 the readout predicates) — a wrong definition THERE yields a true
 but irrelevant theorem — and it is fail-open for COVERAGE: a
 missing rule or cone case silently narrows what is provable

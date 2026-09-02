@@ -57,7 +57,8 @@ initial run state from the shipped
 are exactly what the production entry computes, nothing hand-built —
 and `counter_loop_certified_registration` re-exports the counter
 loop at that derived tie. (Phase 5 [audit F-05]: the theorem is
-named for what it is — the REGISTRATION tie at the driveJ lane; the
+named for what it is — the REGISTRATION tie, stated over `driveU`
+at `procCtx mainSym rs` with the production run state `rs`; the
 full production `runND` equations for loop RUNS are the
 `*_production` theorems of ProdLoopExhibit.lean, through the
 proc-carrying scheduler collapse of DriverCollapse/ProdLoop.)
@@ -453,8 +454,8 @@ theorem loop_labeledAt_production (sup : Nat) (loc : CerbLocation.Loc)
 /-- THE REGISTRATION-TIE LOOP EXPORT (renamed from
     `counter_loop_certified_production` at Phase 5 — audit F-05:
     "production" is reserved for statements whose execution function
-    is the shipped runner; this one's lane is driveJ at the
-    production run state): the counter-loop certification restated
+    is the shipped runner; this one's execution function is `driveU`
+    at `procCtx mainSym rs` with the production run state `rs`): the counter-loop certification restated
     with the run state built by the SHIPPED registration ONLY
     (`initial_core_run_state ∘ collect_labeled_continuations_NEW` —
     nothing hand-built in the label plumbing; the drive is `driveU`

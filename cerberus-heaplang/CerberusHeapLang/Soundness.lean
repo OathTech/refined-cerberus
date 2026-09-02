@@ -3018,7 +3018,26 @@ for the WP-driven adequacy lane (NotStuck supplies a mirror step at
 every reachable configuration) and dissolves the WF-threading
 problem: the panic-exclusion facts live as RULE PREMISES, extracted
 by the inversions from the given step — the WP is the
-well-formedness oracle. -/
+well-formedness oracle.
+
+THE FRAGMENT IS ANNOTATION-FREE (2026-09-02 professor review 1,
+required fix 3): every constructor below, and every redex spelling it
+ranges over (`storeRedex`/`loadRedex`/`createRedex` above,
+`loadOpRedex`/`storeOpRedex`/`memopRedex`/`pureRedex` in Step.lean,
+`saveRedex`/`ifRedex`/`runRedex`/`caseRedex` above, and the
+`Esseq`/`Ewseq`/`Eannot` constructors), is stated at the empty static
+annotation list `Expr []` — so every node of a fragment program is
+annotation-free. The forcing fact: in the general arm of the engine's
+`step_ctx` (Core_reduction.lean, the `Expr e_annots expr_` match),
+`get_loc e_annots` reads a source location from the redex node's
+annotations and, unless it is a library location, rewrites the
+thread's `current_loc`; this package keeps `currentLoc` in the
+immutable `MachineCtx`, and `engine_step_matchU` equates the engine's
+successor thread with `M.thread e' ρ'`, whose `current_loc` is
+`M.currentLoc`. A located node would falsify that equation. Located
+Core — in particular every Core program the C elaborator produces — is
+therefore outside `Frag`. The mover: make `current_loc` live state,
+part of the runtime tuple as `env` is. -/
 
 inductive Frag : CoreExpr → Prop where
   | val_pure (v : value) : Frag (Expr [] (Epure (Pexpr [] () (PEval v))))
