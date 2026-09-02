@@ -458,3 +458,45 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   per-exhibit readout theorems become instances. Sequenced after P5,
   before P6 (docs describe the final statement form). Not a new
   assertion language; no rule restated.
+- **2026-09-02 [USER] THE DEMO IS CLASSICAL SEPARATION LOGIC OVER CORE, NOTHING
+  MORE; DERISKING HAPPENS ON A COPY IN A SIBLING SUBFOLDER; THE DEMO IS
+  THE SEED OF THE NEXT LOGIC** (verbatim): "I think there's value in
+  getting our demo polished up and not overloading it. So we might want
+  to get to a really nice Reynolds/O'Hearn logic. And then maybe do a
+  derisking slice on a copy of the tree, something like that which
+  covers these extensions. So the things that are in our demo logic are
+  just the things you'd need for classical separation logic, over
+  cerberus core. But then we basically plunder this as the center of
+  the next logic"; "I'm thinking these will literally be different
+  subfolders of the project"; "It also means we can do nice things like
+  build some more classical separation logic examples in the demo
+  folder while we're noodling with the derisk slice." Disposition:
+  (1) `cerberus-heaplang/` = the demo, scope EXACTLY classical SL over
+  Core — points-to + ∗, small axioms for load/store/allocate/dispose,
+  frame, consequence, sequencing, conditionals, loops, procedures with
+  specs incl. recursion (dispose and procedures land in the post-audit
+  kill + calls arcs); projected to boring memory+pure statements; its
+  ongoing track after that is more classical examples (API-only
+  modules: swap, in-place append, list length/membership, dispose-a-
+  list, recursive tree traversal). (2) A sibling nested Lake package
+  (name TBD, e.g. `cerberus-heaplang-ext/`), created by COPYING the
+  demo's sources at a recorded seed commit (copy, not a dependency —
+  free to change internals; fixes do not propagate and need not),
+  sharing `.cerberus-ws` + the pin and covered by the gate runner with
+  its own in-build audit, hosts the derisking slices (ranked by the
+  orchestrator, [AGENT]: compiled-Core exhibit; value-indexed cells +
+  named struct fields; a straight-line symbolic-execution tactic;
+  the Eunseq rule; the pointer-operation family with the provenance
+  fork). (3) The root `RefinedCerberus/` package is fed by both: the
+  demo as the stable design/trust reference, the extension package as
+  measured answers to the RefinedC gaps (list of the gaps in the
+  2026-09-02 conversation: value layer over bytes; the type layer;
+  the typing-judgment architecture; Eunseq as a semantic gap; UB
+  fidelity to PNVI; compiled-program structure — globals/init/libc;
+  struct/union/padding; the meta engine + solvers; the end-to-end
+  spec attachment). [USER] on automation: heavy agent labor changes
+  the KIND of automation needed (a mechanical symbolic executor for
+  straight-line stretches, agents for specs/invariants/hard steps),
+  not the need; Lithium's engine is not ported, its judgment SHAPE
+  (syntax-directed rules, unification instantiation, pure side
+  conditions) is what survives.
