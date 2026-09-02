@@ -1064,17 +1064,37 @@ theorem Sat.union_left {tds : CerbTags.TagDefsMap} {σ : Mem} {Q R : CellMap}
     fun i j c1 c2 hne h1 h2 =>
       h.disj i j c1 c2 hne (hlift _ _ h1) (hlift _ _ h2)⟩
 
-/-- THE SEMANTIC TRIPLE ⦃P⦄ e ⦃post⦄, engine vocabulary only: for
-    every memory that splits as P ⊎ R — footprint P satisfied,
-    rest R ARBITRARY — AT THE FIXED DEMO MACHINE PROFILE
-    (`spikeThread`/`spikeCtx`/`spikeEnv`; the thread/context are not
-    quantified — 2026-09-01 re-audit R-09, generalization owned by
-    alloc arc P4) — the engine's drive never kills or derails,
-    and any delivered value v comes with a post-footprint Q with
-    `post v Q`, THE SAME R returned verbatim (Sat σ' (Iris.Std.PartialMap.union Q R)).
-    Partial correctness: fuel exhaustion (.more) is unconstrained;
-    the fuel bound is the engine's own get_ctx budget (Soundness.lean,
-    FUEL HONESTY). -/
+/-- THE SEMANTIC TRIPLE ⦃P⦄ e ⦃post⦄ AT ANY MACHINE CONTEXT AND ENTRY
+    ENVIRONMENT (alloc arc P4.3, R-09), engine vocabulary only: for
+    every memory that splits as P ⊎ R — footprint P satisfied, rest R
+    ARBITRARY — the engine's unified drive from `M`'s thread around
+    `(e, ρ)` never kills or derails, and any delivered value `v` comes
+    with a post-footprint `Q` with `post v Q`, THE SAME `R` returned
+    verbatim (`Sat σ' (Q ∪ R)`). Partial correctness: fuel exhaustion
+    (`.more`) is unconstrained; the fuel bounds are the engine's own
+    get_ctx budgets for the program and for every registered label
+    body (Soundness.lean, FUEL HONESTY). `SemTriple` below is its
+    instance at the fixed demo profile (`SemTriple_iff_U`). -/
+def SemTripleU (M : MachineCtx) (ρ : EnvStack) (e : CoreExpr) (P : CellMap)
+    (post : value → CellMap → Prop) : Prop :=
+  ∀ (R : CellMap), P ##ₘ R →
+  ∀ (σ : Mem), Sat M.tagDefs σ (Iris.Std.PartialMap.union P R) →
+  ∀ (n : Nat) (aids : Nat → Nat), esize e + n ≤ lemDefaultFuel →
+    (∀ l params cont, lookupLabel M.labels l = some (params, cont) →
+      esize cont + n ≤ lemDefaultFuel) →
+    (∀ r, driveU M aids n (M.thread e ρ) σ ≠ .killed r) ∧
+    (driveU M aids n (M.thread e ρ) σ ≠ .stuck) ∧
+    (∀ (v : value) (σ' : Mem), driveU M aids n (M.thread e ρ) σ = .done v σ' →
+      ∃ Q : CellMap, post v Q ∧ Q ##ₘ R ∧
+        Sat M.tagDefs σ' (Iris.Std.PartialMap.union Q R))
+
+/-- THE SEMANTIC TRIPLE ⦃P⦄ e ⦃post⦄ AT THE FIXED DEMO MACHINE PROFILE
+    (`spikeThread`/`spikeCtx`/`spikeEnv`): every memory that splits as
+    P ⊎ R, the rest R arbitrary and returned verbatim — the
+    `spikeCtx`/`spikeEnv` instance of `SemTripleU` (`SemTriple_iff_U`;
+    the label-fuel premise is vacuous at the label-free straight-line
+    profile). Kept in its historical spelling: the exhibits and the
+    documentation quote it. -/
 def SemTriple (e : CoreExpr) (P : CellMap)
     (post : value → CellMap → Prop) : Prop :=
   ∀ (R : CellMap), P ##ₘ R →
@@ -1085,9 +1105,20 @@ def SemTriple (e : CoreExpr) (P : CellMap)
     (∀ (v : value) (σ' : Mem), drive aids n (spikeThread e) σ = .done v σ' →
       ∃ Q : CellMap, post v Q ∧ Q ##ₘ R ∧ Sat spikeCtx.tagDefs σ' (Iris.Std.PartialMap.union Q R))
 
+/-- INTERIOR, at any machine context and entry environment: the derived
+    logic (Iris WP over Step) proves the footprint triple. -/
+abbrev ProvenTripleU (GF : BundledGFunctors) [SpikeGpreS GF] (M : MachineCtx)
+    (ρ : EnvStack) (e : CoreExpr) (P : CellMap) (post : value → CellMap → Prop) : Prop :=
+  ∀ [SpikeGS .hasLC GF],
+    iprop(([∗map] i ↦ c ∈ P, cellOwn M.tagDefs (hlc := .hasLC) (GF := GF) i (.own 1) c)) ⊢
+      WP (⟨e, ρ, M⟩ : CoreRt) @ Stuckness.NotStuck; ⊤ {{ w,
+        iprop(∃ Q : CellMap, ⌜post (CoreRVal.val w) Q⌝ ∗
+          ([∗map] i ↦ c ∈ Q, cellOwn M.tagDefs (hlc := .hasLC) (GF := GF) i (.own 1) c)) }}
+
 /-- INTERIOR: the derived logic (the slice-A separation logic — Iris
-    WP over Step) proves the footprint triple. This definition is
-    the only place the WP appears in the exported layer. -/
+    WP over Step) proves the footprint triple, at the fixed demo
+    profile. This definition is the only place the WP appears in the
+    exported layer. -/
 abbrev ProvenTriple (GF : BundledGFunctors) [SpikeGpreS GF] (e : CoreExpr)
     (P : CellMap) (post : value → CellMap → Prop) : Prop :=
   ∀ [SpikeGS .hasLC GF],
@@ -1261,40 +1292,51 @@ theorem cells_readout (tds : CerbTags.TagDefsMap) {GF : BundledGFunctors} [Spike
   ipureintro
   exact ⟨Q, hpost, hd, hsat⟩
 
-/-- THE HEADLINE: soundness of the derived logic's triples at the
-    semantic level — a proved footprint triple holds of the ENGINE
-    over every splitting configuration. -/
-theorem semantic_triple_sound {GF : BundledGFunctors} [SpikeGpreS GF]
-    {e : CoreExpr} (hfrag : Frag e) {P : CellMap}
-    {post : value → CellMap → Prop}
-    (hwp : ProvenTriple GF e P post) :
-    SemTriple e P post := by
-  intro R hdisj σ hsat n aids hfuel
-  refine spike_engine_adequacy (GF := GF) e σ (Iris.Std.PartialMap.union P R) hfrag hsat
-    (fun v σ' => ∃ Q : CellMap, post v Q ∧ Q ##ₘ R ∧ Coh spikeCtx.tagDefs σ' (Iris.Std.PartialMap.union Q R)) ?_ n aids hfuel
+/-- THE HEADLINE AT ANY MACHINE CONTEXT (alloc arc P4.3): soundness of
+    the derived logic's triples at the semantic level — a proved
+    footprint triple at a well-formed context, with every registered
+    label body in the fragment, holds of the ENGINE over every
+    splitting configuration, from any cons-shaped entry environment.
+    (`engine_adequacyU` + the cell-footprint readout.) -/
+theorem semantic_triple_soundU {GF : BundledGFunctors} [SpikeGpreS GF]
+    {M : MachineCtx} (hwf : M.SeqWF)
+    (hQf : ∀ l params cont, lookupLabel M.labels l = some (params, cont) →
+      Frag cont)
+    {e : CoreExpr} (hfrag : Frag e) (ev0 : Fmap sym value) (evs : List (Fmap sym value))
+    {P : CellMap} {post : value → CellMap → Prop}
+    (hwp : ProvenTripleU GF M (ev0 :: evs) e P post) :
+    SemTripleU M (ev0 :: evs) e P post := by
+  intro R hdisj σ hsat n aids hfuel hQsz
+  refine engine_adequacyU (GF := GF) hwf hQf e ev0 evs σ (Iris.Std.PartialMap.union P R)
+    hfrag hsat
+    (fun v σ' => ∃ Q : CellMap, post v Q ∧ Q ##ₘ R ∧
+      Coh M.tagDefs σ' (Iris.Std.PartialMap.union Q R)) ?_ n aids hfuel hQsz
   intro instGS
   refine .trans (BigSepM.bigSepM_union hdisj).1 ?_
   iintro ⟨HP, HR⟩
   ihave HW := hwp $$ HP
   iapply spike_wp_wand $$ HW
   iintro %w Hpost
-  iapply cells_readout spikeCtx.tagDefs post R (CoreRVal.val w)
+  iapply cells_readout M.tagDefs post R (CoreRVal.val w)
   isplitl [Hpost]
   · iexact Hpost
   · iexact HR
 
-/-- THE FRAME RULE at the semantic level: a proved footprint triple
-    substitutes into any larger context — ⦃P ∗ F⦄ e ⦃post ∗ F⦄, the
-    frame F verbatim. (The rest-quantifier already makes each
-    SemTriple frame-closed over the UNNAMED rest; this theorem
-    additionally moves a NAMED frame F across the triple.) -/
-theorem semantic_frame {GF : BundledGFunctors} [SpikeGpreS GF]
-    {e : CoreExpr} (hfrag : Frag e) {P : CellMap} (F : CellMap)
+/-- THE FRAME RULE at the semantic level, at any machine context: a
+    proved footprint triple substitutes into any larger context —
+    ⦃P ∗ F⦄ e ⦃post ∗ F⦄, the frame F verbatim. -/
+theorem semantic_frameU {GF : BundledGFunctors} [SpikeGpreS GF]
+    {M : MachineCtx} (hwf : M.SeqWF)
+    (hQf : ∀ l params cont, lookupLabel M.labels l = some (params, cont) →
+      Frag cont)
+    {e : CoreExpr} (hfrag : Frag e) (ev0 : Fmap sym value) (evs : List (Fmap sym value))
+    {P : CellMap} (F : CellMap)
     {post : value → CellMap → Prop} (hPF : P ##ₘ F)
-    (hwp : ProvenTriple GF e P post) :
-    SemTriple e (Iris.Std.PartialMap.union P F)
-      (fun v Q => ∃ Q₀ : CellMap, post v Q₀ ∧ Q₀ ##ₘ F ∧ Q = Iris.Std.PartialMap.union Q₀ F) := by
-  refine semantic_triple_sound (GF := GF) hfrag ?_
+    (hwp : ProvenTripleU GF M (ev0 :: evs) e P post) :
+    SemTripleU M (ev0 :: evs) e (Iris.Std.PartialMap.union P F)
+      (fun v Q => ∃ Q₀ : CellMap, post v Q₀ ∧ Q₀ ##ₘ F ∧
+        Q = Iris.Std.PartialMap.union Q₀ F) := by
+  refine semantic_triple_soundU (GF := GF) hwf hQf hfrag ev0 evs ?_
   intro instGS
   refine .trans (BigSepM.bigSepM_union hPF).1 ?_
   iintro ⟨HP, HF⟩
@@ -1303,7 +1345,7 @@ theorem semantic_frame {GF : BundledGFunctors} [SpikeGpreS GF]
   iintro %w HQex
   icases HQex with ⟨%Q₀, %hp, HQ⟩
   ihave %hd : ⌜Q₀ ##ₘ F⌝ $$ [HQ HF]
-  · iapply bigSepM_own_disjoint spikeCtx.tagDefs Q₀ F $$ [$HQ $HF]
+  · iapply bigSepM_own_disjoint M.tagDefs Q₀ F $$ [$HQ $HF]
   iexists (Iris.Std.PartialMap.union Q₀ F)
   isplit
   · ipureintro
@@ -1312,6 +1354,45 @@ theorem semantic_frame {GF : BundledGFunctors} [SpikeGpreS GF]
     isplitl [HQ]
     · iexact HQ
     · iexact HF
+
+/-- The fixed-profile semantic triple IS the `spikeCtx`/`spikeEnv`
+    instance of the general one: `drive` is `driveU spikeCtx`,
+    `spikeThread e` is `spikeCtx.thread e spikeEnv`, and the label-fuel
+    premise is vacuous (the profile registers no labels). -/
+theorem SemTriple_iff_U (e : CoreExpr) (P : CellMap) (post : value → CellMap → Prop) :
+    SemTriple e P post ↔ SemTripleU spikeCtx spikeEnv e P post :=
+  ⟨fun h R hd σ hs n aids hf _ => h R hd σ hs n aids hf,
+   fun h R hd σ hs n aids hf => h R hd σ hs n aids hf
+     (fun l _ _ hl => (spikeCtx_labels_none l hl).elim)⟩
+
+/-- THE HEADLINE: soundness of the derived logic's triples at the
+    semantic level — a proved footprint triple holds of the ENGINE
+    over every splitting configuration (the fixed-profile instance of
+    `semantic_triple_soundU`). -/
+theorem semantic_triple_sound {GF : BundledGFunctors} [SpikeGpreS GF]
+    {e : CoreExpr} (hfrag : Frag e) {P : CellMap}
+    {post : value → CellMap → Prop}
+    (hwp : ProvenTriple GF e P post) :
+    SemTriple e P post :=
+  (SemTriple_iff_U e P post).2
+    (semantic_triple_soundU (GF := GF) spikeCtx_wf
+      (fun l _ _ hl => (spikeCtx_labels_none l hl).elim) hfrag fmapEmpty [] hwp)
+
+/-- THE FRAME RULE at the semantic level: a proved footprint triple
+    substitutes into any larger context — ⦃P ∗ F⦄ e ⦃post ∗ F⦄, the
+    frame F verbatim. (The rest-quantifier already makes each
+    SemTriple frame-closed over the UNNAMED rest; this theorem
+    additionally moves a NAMED frame F across the triple.) The
+    fixed-profile instance of `semantic_frameU`. -/
+theorem semantic_frame {GF : BundledGFunctors} [SpikeGpreS GF]
+    {e : CoreExpr} (hfrag : Frag e) {P : CellMap} (F : CellMap)
+    {post : value → CellMap → Prop} (hPF : P ##ₘ F)
+    (hwp : ProvenTriple GF e P post) :
+    SemTriple e (Iris.Std.PartialMap.union P F)
+      (fun v Q => ∃ Q₀ : CellMap, post v Q₀ ∧ Q₀ ##ₘ F ∧ Q = Iris.Std.PartialMap.union Q₀ F) :=
+  (SemTriple_iff_U e _ _).2
+    (semantic_frameU (GF := GF) spikeCtx_wf
+      (fun l _ _ hl => (spikeCtx_labels_none l hl).elim) hfrag fmapEmpty [] F hPF hwp)
 
 /-! ## THE JUMP-PROFILE DRIVE AND ADEQUACY (the loop exhibits' lane)
 

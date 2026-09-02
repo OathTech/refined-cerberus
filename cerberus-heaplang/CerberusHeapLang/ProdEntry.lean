@@ -610,7 +610,7 @@ theorem counter_loop_certified_registration (sup : Nat)
   refine .trans ?_ (loop_wp_readout loc ann ra mo bty xbty (cellPtr idx addr)
     n bs0 mainSym rs
     (loop_labeledAt_production sup loc ann ra mo bty xbty sbty
-      (cellPtr idx addr) n) hn sbty)
+      (cellPtr idx addr) n) hn sbty fmapEmpty symFrame_empty [])
   refine (BigSepM.bigSepM_singleton).1.trans ?_
   iintro Hpt
   iapply (pointsToCell_cellOwn_iff fmapEmpty _ _ _ _).mpr

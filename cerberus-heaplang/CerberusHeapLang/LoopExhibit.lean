@@ -29,14 +29,16 @@ THE PROGRAM (authored Core, all metadata quantified):
   variant route past them is demonstrated by `fib_certified_total`,
   FibExhibit.lean).
 
-THE ENV-FRAME SEAM (recorded finding): the engine env frames are
-LemLib `Fmap`s (TreeMap-backed); add/lookup at a CONCRETE key on
-CONCRETELY-STRUCTURED frames reduces definitionally, and this
-exhibit's per-label invariant PINS the frame structure (`IsXFrame` —
-the env-indexed `LabelSpec`'s purpose). Generic map lawfulness
-(lookup-after-add on arbitrary frames) is deliberately NOT assumed
-here; EnvLaws.lean proves it, and the later exhibits (fib onward)
-use it instead of frame-shape pins.
+THE ENV-FRAME SEAM (alloc arc P4.3, R-08 — the representation
+accident REMOVED): the per-label invariant carries the reachable-frame
+predicate `SymFrame` (EnvLaws.lean) and every lookup goes through THE
+LOOKUP LAW `envAdd_lookup`, exactly as the later exhibits do. The
+former exact-shape pin `IsXFrame` (a one-node `Fmap` tree at `xSym`)
+is gone; the entry environment is ANY reachable frame over any tail,
+and the irrelevant-binding tests (`loop_wps_irrelevant_binding`,
+`counter_loop_certified_irrelevant_binding`) run the loop from a frame
+carrying an unrelated binding — a configuration no exact-shape pin
+could have matched, so the proof cannot regress to map equality.
 -/
 import CerberusHeapLang.Adequacy
 import CerberusHeapLang.Wps
@@ -56,6 +58,8 @@ open Lem_Basic_classes Lem_Map
 def loopSym : sym := Symbol "" 101 SD_None
 def xSym : sym := Symbol "" 102 SD_None
 def loopProcSym : sym := Symbol "" 103 SD_None
+/-- An unrelated symbol for the irrelevant-binding tests (R-08). -/
+def ySym : sym := Symbol "" 104 SD_None
 
 /-- Core mathematical-integer value. -/
 def ivVal (i : Int) : value := Vobject (OVinteger (CerbMem.integerIval i))
@@ -142,71 +146,45 @@ theorem loopRS_labeledAt :
   rw [fmapLookupBy_addBy_empty]
   rw [if_pos (by decide +kernel)]
 
-/-! ## The env frames (the concrete-structure invariant) -/
+/-! ## The env frames: any reachable frame, through THE LOOKUP LAW -/
 
-/-- The exhibit's head-frame shape: a one-node tree at `xSym`
-    holding `v` (sequence/counter bookkeeping quantified). Every
-    reachable frame of the loop has this shape — the env-indexed
-    label invariant pins it, which is what makes all evaluator
-    lookups definitional. -/
-def IsXFrame (m : Fmap sym value) (v : value) : Prop :=
-  ∃ (sq ctr : Nat) (bySeq : Std.TreeMap Nat (sym × value)),
-    m = Fmap.mk (lemCmpToOrd symCmpK)
-      ((Std.TreeMap.empty (cmp := lemCmpToOrd symCmpK)).insert xSym
-        [(sq, xSym, v)])
-      bySeq ctr
+/-- The counter's binding is found in the head frame, whatever else
+    the frame holds (`envAdd_lookup`, the lookup-after-add law over
+    reachable frames). -/
+theorem lookup_env_x {f : Fmap sym value} (hf : SymFrame f) (v : value)
+    (rest : List (Fmap sym value)) :
+    lookup_env (a := value) xSym (envAdd xSym v f :: rest) = some v :=
+  lookup_env_head (by rw [envAdd_lookup hf symCmpK, if_pos (by decide +kernel)]) rest
 
-theorem isXFrame_add_empty (v : value) :
-    IsXFrame (envAdd xSym v fmapEmpty) v :=
-  ⟨0, 1, _, rfl⟩
+/-! ## Evaluation facts at any reachable frame -/
 
-theorem isXFrame_lookup {m : Fmap sym value} {v : value}
-    (h : IsXFrame m v) : fmapLookupBy symCmpK xSym m = some v := by
-  obtain ⟨sq, ctr, bySeq, rfl⟩ := h
-  unfold fmapLookupBy
-  dsimp only
-  rw [treeMap_get?_insert_empty]
-  rw [if_pos (by decide +kernel : lemCmpToOrd symCmpK xSym xSym = .eq)]
-
-theorem isXFrame_add {m : Fmap sym value} {w : value}
-    (h : IsXFrame m w) (v : value) :
-    IsXFrame (envAdd xSym v m) v := by
-  obtain ⟨sq, ctr, bySeq, rfl⟩ := h
-  exact ⟨ctr, ctr + 1, _, rfl⟩
-
-/-! ## Evaluation facts at pinned frames -/
-
-theorem lookup_env_xframe {f : Fmap sym value} {v : value}
-    (h : IsXFrame f v) (rest : List (Fmap sym value)) :
-    lookup_env (a := value) xSym (f :: rest) = some v := by
-  unfold lookup_env
-  rw [show (fmapLookupBy (@mapKeyCompare sym _) xSym f) =
-    fmapLookupBy symCmpK xSym f from rfl, isXFrame_lookup h]
-
-theorem guard_eval {f : Fmap sym value} {i : Int}
-    (h : IsXFrame f (ivVal i)) (rest : List (Fmap sym value)) :
-    evalPexpr fmapEmpty fmapEmpty (f :: rest) guardPe = some (boolValue (decide (0 < i))) := by
+theorem guard_eval {f : Fmap sym value} (hf : SymFrame f) (i : Int)
+    (rest : List (Fmap sym value)) :
+    evalPexpr fmapEmpty fmapEmpty (envAdd xSym (ivVal i) f :: rest) guardPe =
+      some (boolValue (decide (0 < i))) := by
   unfold guardPe
   rw [evalPexpr_op]
-  rw [show evalPexpr fmapEmpty fmapEmpty (f :: rest) (Pexpr [] () (PEsym xSym)) =
-    some (ivVal i) from by
-      rw [evalPexpr_sym_empty]; exact lookup_env_xframe h rest]
+  rw [show evalPexpr fmapEmpty fmapEmpty (envAdd xSym (ivVal i) f :: rest)
+      (Pexpr [] () (PEsym xSym)) = some (ivVal i) from by
+      rw [evalPexpr_sym_empty]; exact lookup_env_x hf (ivVal i) rest]
   show evalBinop binop.OpGt (ivVal i) (ivVal 0) = _
   unfold evalBinop ivVal
   show (CerbMem.ltIval (CerbMem.integerIval 0)
     (CerbMem.integerIval i)).map boolValue = _
   rfl
 
-theorem dec_eval {f : Fmap sym value} {i : Int}
-    (h : IsXFrame f (ivVal i)) (rest : List (Fmap sym value)) :
-    evalPexprs fmapEmpty fmapEmpty (f :: rest) [decPe] = some [ivVal (i - 1)] := by
+theorem dec_eval {f : Fmap sym value} (hf : SymFrame f) (i : Int)
+    (rest : List (Fmap sym value)) :
+    evalPexprs fmapEmpty fmapEmpty (envAdd xSym (ivVal i) f :: rest) [decPe] =
+      some [ivVal (i - 1)] := by
   rw [evalPexprs_cons]
-  rw [show evalPexpr fmapEmpty fmapEmpty (f :: rest) decPe = some (ivVal (i - 1)) from by
+  rw [show evalPexpr fmapEmpty fmapEmpty (envAdd xSym (ivVal i) f :: rest) decPe =
+      some (ivVal (i - 1)) from by
     unfold decPe
     rw [evalPexpr_op]
-    rw [show evalPexpr fmapEmpty fmapEmpty (f :: rest) (Pexpr [] () (PEsym xSym)) =
-      some (ivVal i) from by
-        rw [evalPexpr_sym_empty]; exact lookup_env_xframe h rest]
+    rw [show evalPexpr fmapEmpty fmapEmpty (envAdd xSym (ivVal i) f :: rest)
+        (Pexpr [] () (PEsym xSym)) = some (ivVal i) from by
+        rw [evalPexpr_sym_empty]; exact lookup_env_x hf (ivVal i) rest]
     rfl]
   rfl
 
@@ -229,17 +207,6 @@ theorem bindSave_x (xbty : core_base_type) (n : Int)
   show update_env (mk_sym_pat xSym xbty) (ivVal n) (f :: rest) = _
   rw [update_env_cons, update_env_aux_sym]
 
-/-- Frames on which one more counter-bind lands in the pinned shape
-    (every reachable base frame of the loop). -/
-def XReady (f : Fmap sym value) : Prop :=
-  ∀ v', IsXFrame (envAdd xSym v' f) v'
-
-theorem xready_empty : XReady fmapEmpty := fun v' => isXFrame_add_empty v'
-
-theorem xready_step {f : Fmap sym value} {v : value}
-    (h : XReady f) : XReady (envAdd xSym v f) :=
-  fun v' => isXFrame_add (h v) v'
-
 /-! ## The Iris layer: invariant, body, block specs, entry, WP -/
 
 section LoopIris
@@ -261,30 +228,28 @@ abbrev loopPost : SpikeVal → EnvStack → IProp GF := fun w _ =>
     ((⌜n = 0⌝ ∗ pointsToCell fmapEmpty c (.own 1) intTy bs0) ∨
      (⌜0 < n⌝ ∗ pointsToCell fmapEmpty c (.own 1) intTy (sevenBytes fmapEmpty))))
 
-/-- THE PER-LABEL INVARIANT (env-indexed — it pins the reachable
-    frame shape, which is what makes the evaluator facts
-    definitional): the argument is the counter `i ∈ [0, n]`; the
-    env is a pinned frame over any tail; the cell is the entry bytes
-    before the first iteration and the stored image after. -/
+/-- THE PER-LABEL INVARIANT: the argument is the counter `i ∈ [0, n]`;
+    the env is ANY reachable frame (`SymFrame`) over any tail; the
+    cell is the entry bytes before the first iteration and the stored
+    image after. -/
 abbrev loopLs : LabelSpec GF := fun _ vs ρ =>
   (iprop(∃ (i : Int) (f : Fmap sym value) (rest : List (Fmap sym value)),
-    ⌜vs = [ivVal i] ∧ 0 ≤ i ∧ i ≤ n ∧ ρ = f :: rest ∧ XReady f⌝ ∗
+    ⌜vs = [ivVal i] ∧ 0 ≤ i ∧ i ≤ n ∧ ρ = f :: rest ∧ SymFrame f⌝ ∗
     ((⌜i = n⌝ ∗ pointsToCell fmapEmpty c (.own 1) intTy bs0) ∨
      (⌜i < n⌝ ∗ pointsToCell fmapEmpty c (.own 1) intTy (sevenBytes fmapEmpty)))) : IProp GF)
 
 include hQ
 
-/-- The loop body verifies at any pinned counter frame (the shared
+/-- The loop body verifies at any reachable counter frame (the shared
     lemma behind both the block spec and the entry). -/
 theorem loop_body_wps (i : Int) (f : Fmap sym value)
-    (rest : List (Fmap sym value)) (hxr : XReady f)
+    (rest : List (Fmap sym value)) (hf : SymFrame f)
     (h0 : 0 ≤ i) (hin : i ≤ n) :
     iprop(((⌜i = n⌝ ∗ pointsToCell (procCtx p rs).tagDefs (GF := GF) c (.own 1) intTy bs0) ∨
       (⌜i < n⌝ ∗ pointsToCell (procCtx p rs).tagDefs c (.own 1) intTy (sevenBytes (procCtx p rs).tagDefs)))) ⊢
       wps (procCtx p rs) (loopLs c n bs0)
         (loopPost c n bs0) (loopBody loc ann ra mo bty c)
         (envAdd xSym (ivVal i) f :: rest) := by
-  have hf' : IsXFrame (envAdd xSym (ivVal i) f) (ivVal i) := hxr (ivVal i)
   rw [show (loopBody loc ann ra mo bty c) =
     Expr [] (Eif guardPe
       (sseqExpr bty (storeExpr loc ann intTy c sevenVal mo)
@@ -294,7 +259,7 @@ theorem loop_body_wps (i : Int) (f : Fmap sym value)
   · -- guard TRUE: store then jump at i - 1
     iintro Hcell
     iapply wps_if_true [] guardPe _ _ _
-      (by rw [procCtx_extern, guard_eval hf' rest, decide_eq_true hpos]; rfl)
+      (by rw [procCtx_extern, guard_eval hf i rest, decide_eq_true hpos]; rfl)
     rw [show (sseqExpr bty (storeExpr loc ann intTy c sevenVal mo)
         (Expr [] (Erun ra loopSym [decPe]))) =
       Expr [] (Esseq (Pattern [] (CaseBase (none, bty)))
@@ -311,11 +276,11 @@ theorem loop_body_wps (i : Int) (f : Fmap sym value)
        iapply wps_run [] ra loopSym [decPe] _ _
          (by rw [procCtx_labels hQ]
              exact loopQ_lookup loc ann ra mo bty xbty c)
-         (dec_eval hf' rest)
+         (dec_eval hf i rest)
        iexists (i - 1), (envAdd xSym (ivVal i) f), rest
        isplit
        · ipureintro
-         exact ⟨rfl, by omega, by omega, rfl, xready_step hxr⟩
+         exact ⟨rfl, by omega, by omega, rfl, hf.add _ _⟩
        iright
        isplit
        · ipureintro; omega
@@ -326,7 +291,7 @@ theorem loop_body_wps (i : Int) (f : Fmap sym value)
     subst hz
     iintro Hcell
     iapply wps_if_false [] guardPe _ _ _
-      (by rw [procCtx_extern, guard_eval hf' rest,
+      (by rw [procCtx_extern, guard_eval hf 0 rest,
         decide_eq_false hpos]; rfl)
     iapply wps_ofVal (.pure Vunit)
     unfold loopPost
@@ -352,37 +317,54 @@ theorem loop_blockSpecs :
   rw [procCtx_labels hQ] at hl
   obtain ⟨rfl, rfl⟩ := loopQ_inv loc ann ra mo bty xbty c hl
   iintro ⟨%i, %f, %rest, %hpure, Hcell⟩
-  obtain ⟨rfl, h0, hin, hρ, hxr⟩ := hpure
+  obtain ⟨rfl, h0, hin, hρ, hf⟩ := hpure
   obtain ⟨rfl, rfl⟩ : f = ev0 ∧ rest = evs := by
     have h1 := congrArg (fun l => l.head?) hρ
     have h2 := congrArg (fun l => l.tail) hρ
     simp at h1 h2
     exact ⟨h1.symm, h2.symm⟩
   rw [bindArgs_x]
-  iapply loop_body_wps loc ann ra mo bty xbty c n bs0 p rs hQ i f rest hxr
+  iapply loop_body_wps loc ann ra mo bty xbty c n bs0 p rs hQ i f rest hf
     h0 hin $$ Hcell
 
-/-- The whole program's statement WP from the entry env. -/
-theorem loop_wps (hn : 0 ≤ n) (sbty : core_base_type) :
+/-- The whole program's statement WP from ANY reachable entry frame
+    `f` over any tail (alloc arc P4.3: the entry environment is no
+    longer the fixed `[fmapEmpty]`). -/
+theorem loop_wps (hn : 0 ≤ n) (sbty : core_base_type)
+    (f : Fmap sym value) (hf : SymFrame f) (rest : List (Fmap sym value)) :
     pointsToCell (procCtx p rs).tagDefs (GF := GF) c (.own 1) intTy bs0 ⊢
       wps (procCtx p rs) (loopLs c n bs0)
         (loopPost c n bs0)
-        (loopProg loc ann ra mo bty xbty sbty c n) [fmapEmpty] := by
+        (loopProg loc ann ra mo bty xbty sbty c n) (f :: rest) := by
   iintro Hc
   rw [show (loopProg loc ann ra mo bty xbty sbty c n) =
     Expr [] (Esave (loopSym, sbty)
       [(xSym, ((xbty, (none : Option (ctype × pass_by_value_or_pointer))),
         Pexpr [] () (PEval (ivVal n))))]
       (loopBody loc ann ra mo bty c)) from rfl]
-  iapply wps_save [] (loopSym, sbty) _ _ fmapEmpty []
+  iapply wps_save [] (loopSym, sbty) _ _ f rest
     (cvals := [ivVal n]) rfl
   rw [bindSave_x]
-  iapply loop_body_wps loc ann ra mo bty xbty c n bs0 p rs hQ n fmapEmpty []
-    xready_empty hn (by omega)
+  iapply loop_body_wps loc ann ra mo bty xbty c n bs0 p rs hQ n f rest
+    hf hn (by omega)
   ileft
   isplit
   · ipureintro; rfl
   · iexact Hc
+
+/-- THE IRRELEVANT-BINDING TEST (R-08): the loop verifies from an
+    entry frame carrying an unrelated binding `y ↦ junk`. No
+    exact-shape pin of the frame could match this configuration; the
+    proof goes through the lookup law alone. -/
+theorem loop_wps_irrelevant_binding (hn : 0 ≤ n) (sbty : core_base_type)
+    (junk : value) :
+    pointsToCell (procCtx p rs).tagDefs (GF := GF) c (.own 1) intTy bs0 ⊢
+      wps (procCtx p rs) (loopLs c n bs0)
+        (loopPost c n bs0)
+        (loopProg loc ann ra mo bty xbty sbty c n)
+        [envAdd ySym junk fmapEmpty] :=
+  loop_wps loc ann ra mo bty xbty c n bs0 p rs hQ hn sbty
+    (envAdd ySym junk fmapEmpty) (symFrame_empty.add _ _) []
 
 omit hQ in
 /-- The per-value readout of the loop postcondition. -/
@@ -414,20 +396,21 @@ theorem loop_readout_val (w : CoreRVal) :
     exact ⟨hval, (sevenBytes fmapEmpty), .inr ⟨hpos, rfl⟩, hfact⟩
 
 /-- The base-WP face with the engine readout (what `engine_adequacyJ`
-    consumes). -/
-theorem loop_wp_readout (hn : 0 ≤ n) (sbty : core_base_type) :
+    consumes), from any reachable entry frame over any tail. -/
+theorem loop_wp_readout (hn : 0 ≤ n) (sbty : core_base_type)
+    (f : Fmap sym value) (hf : SymFrame f) (rest : List (Fmap sym value)) :
     pointsToCell (procCtx p rs).tagDefs (GF := GF) c (.own 1) intTy bs0 ⊢
-      WP (⟨loopProg loc ann ra mo bty xbty sbty c n, [fmapEmpty],
+      WP (⟨loopProg loc ann ra mo bty xbty sbty c n, f :: rest,
           procCtx p rs⟩ : CoreRt) @ Stuckness.NotStuck; ⊤
         {{ w, iprop(∀ (σ' : Mem) (ns : Nat) (κs : List Empty) (nt : Nat),
           stateInterp σ' ns κs nt ={⊤, ∅}=∗
             ⌜w.val = Vunit ∧ ∃ bs',
               ((n = 0 ∧ bs' = bs0) ∨ (0 < n ∧ bs' = (sevenBytes (procCtx p rs).tagDefs))) ∧
               ∃ i a, c = cellPtr i a ∧ CellCoh (procCtx p rs).tagDefs σ' i ⟨a, intTy, bs'⟩⌝) }} := by
-  refine ((loop_wps loc ann ra mo bty xbty c n bs0 p rs hQ hn sbty).trans ?_)
+  refine ((loop_wps loc ann ra mo bty xbty c n bs0 p rs hQ hn sbty f hf rest).trans ?_)
   refine (BI.emp_sep.2.trans (BI.sep_mono
     ((loop_blockSpecs loc ann ra mo bty xbty c n bs0 p rs hQ).trans
-      (wps_sound (loopProg loc ann ra mo bty xbty sbty c n) [fmapEmpty]))
+      (wps_sound (loopProg loc ann ra mo bty xbty sbty c n) (f :: rest)))
     .rfl)).trans ?_
   refine BI.wand_elim_left.trans ?_
   exact wp_mono fun w => loop_readout_val c n bs0 w
@@ -506,7 +489,68 @@ theorem counter_loop_certified
   intro inst
   refine .trans ?_ (loop_wp_readout loc ann ra mo bty xbty (cellPtr idx addr)
     n bs0 loopProcSym rs
-    (loopRS_labeledAt loc ann ra mo bty xbty (cellPtr idx addr)) hn sbty)
+    (loopRS_labeledAt loc ann ra mo bty xbty (cellPtr idx addr)) hn sbty
+    fmapEmpty symFrame_empty [])
+  refine (BigSepM.bigSepM_singleton).1.trans ?_
+  iintro Hpt
+  iapply (pointsToCell_cellOwn_iff fmapEmpty _ _ _ _).mpr
+  iexists idx, addr
+  isplit
+  · ipureintro; rfl
+  · iexact Hpt
+
+/-- THE IRRELEVANT-BINDING TEST AT THE ENGINE (R-08): the same
+    conclusion when the proc-carrying thread is launched with an entry
+    frame carrying an unrelated binding `y ↦ junk` — the engine's own
+    `update_env`/`lookup_env` on a frame that no exact-shape pin could
+    describe. -/
+theorem counter_loop_certified_irrelevant_binding
+    (sbty : core_base_type) (idx addr : Int) (bs0 : List CerbMem.AbsByte)
+    (n : Int) (hn : 0 ≤ n) (junk : value)
+    (hlib : CerbLocation.isLibraryLocation loc = false)
+    (σ₀ : Mem)
+    (hcoh : Coh fmapEmpty σ₀ ((Iris.Std.PartialMap.singleton idx
+      (SpikeCell.mk addr intTy bs0)) : SpikeHeapF SpikeCell))
+    (nsteps : Nat) (aids : Nat → Nat)
+    (hfuel : 4 + nsteps ≤ lemDefaultFuel)
+    (hfuel2 : 3 + nsteps ≤ lemDefaultFuel) :
+    let prog := loopProg loc ann ra mo bty xbty sbty (cellPtr idx addr) n
+    let rs := loopRS loc ann ra mo bty xbty (cellPtr idx addr)
+    let ρ₀ : EnvStack := [envAdd ySym junk fmapEmpty]
+    (∀ r, driveJ rs aids nsteps
+      (procThread loopProcSym prog ρ₀) σ₀ ≠ .killed r) ∧
+    (driveJ rs aids nsteps
+      (procThread loopProcSym prog ρ₀) σ₀ ≠ .stuck) ∧
+    (∀ (v : value) (σ' : Mem),
+      driveJ rs aids nsteps
+        (procThread loopProcSym prog ρ₀) σ₀ = .done v σ' →
+      v = Vunit ∧ ∃ bs',
+        ((n = 0 ∧ bs' = bs0) ∨ (0 < n ∧ bs' = (sevenBytes fmapEmpty))) ∧
+        ∃ i a, cellPtr idx addr = cellPtr i a ∧
+          CellCoh fmapEmpty σ' i ⟨a, intTy, bs'⟩) := by
+  intro prog rs ρ₀
+  refine engine_adequacyJ (GF := SpikeGF)
+    (loopRS_labeledAt loc ann ra mo bty xbty (cellPtr idx addr))
+    (fun l params cont hl => by
+      obtain ⟨-, rfl⟩ := loopQ_inv loc ann ra mo bty xbty _ hl
+      exact loopBody_fragJ loc ann ra mo bty _ hlib)
+    prog (envAdd ySym junk fmapEmpty) [] σ₀ _
+    (.save (loopBody_fragJ loc ann ra mo bty _ hlib)) hcoh
+    (fun v σ' => v = Vunit ∧ ∃ bs',
+      ((n = 0 ∧ bs' = bs0) ∨ (0 < n ∧ bs' = (sevenBytes fmapEmpty))) ∧
+      ∃ i a, cellPtr idx addr = cellPtr i a ∧ CellCoh fmapEmpty σ' i ⟨a, intTy, bs'⟩)
+    ?_ nsteps aids
+    (by rw [show esize prog = 4 from rfl]; omega)
+    (fun l params cont hl => by
+      obtain ⟨-, rfl⟩ := loopQ_inv loc ann ra mo bty xbty _ hl
+      rw [show esize (loopBody loc ann ra mo bty (cellPtr idx addr)) = 3
+        from rfl]
+      omega)
+  intro inst
+  refine .trans ?_ (loop_wp_readout loc ann ra mo bty xbty (cellPtr idx addr)
+    n bs0 loopProcSym rs
+    (loopRS_labeledAt loc ann ra mo bty xbty (cellPtr idx addr)) hn sbty
+    (envAdd ySym junk fmapEmpty) (symFrame_empty.add _ _) [])
   refine (BigSepM.bigSepM_singleton).1.trans ?_
   iintro Hpt
   iapply (pointsToCell_cellOwn_iff fmapEmpty _ _ _ _).mpr
@@ -538,16 +582,16 @@ variable (p : sym) (rs : core_run_state)
 abbrev loopLsT : LabelSpecT GF := fun _ m vs ρ =>
   (iprop(∃ (i : Int) (f : Fmap sym value) (rest : List (Fmap sym value)),
     ⌜vs = [ivVal i] ∧ 0 ≤ i ∧ i ≤ n ∧ m = 5 * i.toNat + 2 ∧
-      ρ = f :: rest ∧ XReady f⌝ ∗
+      ρ = f :: rest ∧ SymFrame f⌝ ∗
     ((⌜i = n⌝ ∗ pointsToCell fmapEmpty c (.own 1) intTy bs0) ∨
      (⌜i < n⌝ ∗ pointsToCell fmapEmpty c (.own 1) intTy (sevenBytes fmapEmpty)))) : IProp GF)
 
 include hQ
 
-/-- The loop body meets its variant budget at any pinned counter
+/-- The loop body meets its variant budget at any reachable counter
     frame. -/
 theorem loop_body_wpt (i : Int) (f : Fmap sym value)
-    (rest : List (Fmap sym value)) (hxr : XReady f)
+    (rest : List (Fmap sym value)) (hf : SymFrame f)
     (h0 : 0 ≤ i) (hin : i ≤ n) :
     iprop(((⌜i = n⌝ ∗ pointsToCell (procCtx p rs).tagDefs (GF := GF) c (.own 1) intTy bs0) ∨
       (⌜i < n⌝ ∗ pointsToCell (procCtx p rs).tagDefs c (.own 1) intTy (sevenBytes (procCtx p rs).tagDefs)))) ⊢
@@ -555,7 +599,6 @@ theorem loop_body_wpt (i : Int) (f : Fmap sym value)
         (5 * i.toNat + 2)
         (loopPost c n bs0) (loopBody loc ann ra mo bty c)
         (envAdd xSym (ivVal i) f :: rest) := by
-  have hf' : IsXFrame (envAdd xSym (ivVal i) f) (ivVal i) := hxr (ivVal i)
   rw [show (loopBody loc ann ra mo bty c) =
     Expr [] (Eif guardPe
       (sseqExpr bty (storeExpr loc ann intTy c sevenVal mo)
@@ -566,7 +609,7 @@ theorem loop_body_wpt (i : Int) (f : Fmap sym value)
     rw [show 5 * i.toNat + 2 = (5 * (i - 1).toNat + 6) + 1 by omega]
     iintro Hcell
     iapply wpt_if_true [] guardPe _ _ _
-      (by rw [procCtx_extern, guard_eval hf' rest, decide_eq_true hpos]; rfl)
+      (by rw [procCtx_extern, guard_eval hf i rest, decide_eq_true hpos]; rfl)
     rw [show (sseqExpr bty (storeExpr loc ann intTy c sevenVal mo)
         (Expr [] (Erun ra loopSym [decPe]))) =
       Expr [] (Esseq (Pattern [] (CaseBase (none, bty)))
@@ -584,12 +627,12 @@ theorem loop_body_wpt (i : Int) (f : Fmap sym value)
        iapply wpt_run [] ra loopSym [decPe] _ _ (5 * (i - 1).toNat + 2)
          (by rw [procCtx_labels hQ]
              exact loopQ_lookup loc ann ra mo bty xbty c)
-         (dec_eval hf' rest)
+         (dec_eval hf i rest)
          (by omega)
        iexists (i - 1), (envAdd xSym (ivVal i) f), rest
        isplit
        · ipureintro
-         exact ⟨rfl, by omega, by omega, rfl, rfl, xready_step hxr⟩
+         exact ⟨rfl, by omega, by omega, rfl, rfl, hf.add _ _⟩
        iright
        isplit
        · ipureintro; omega
@@ -601,7 +644,7 @@ theorem loop_body_wpt (i : Int) (f : Fmap sym value)
     iintro Hcell
     rw [show 5 * (0 : Int).toNat + 2 = 1 + 1 by omega]
     iapply wpt_if_false [] guardPe _ _ _
-      (by rw [procCtx_extern, guard_eval hf' rest,
+      (by rw [procCtx_extern, guard_eval hf 0 rest,
         decide_eq_false hpos]; rfl)
     iapply wpt_ofVal (.pure Vunit) _ (Nat.le_refl 1)
     unfold loopPost
@@ -625,22 +668,24 @@ theorem loop_blockSpecsT :
   rw [procCtx_labels hQ] at hl
   obtain ⟨rfl, rfl⟩ := loopQ_inv loc ann ra mo bty xbty c hl
   iintro ⟨%i, %f, %rest, %hpure, Hcell⟩
-  obtain ⟨rfl, h0, hin, rfl, hρ, hxr⟩ := hpure
+  obtain ⟨rfl, h0, hin, rfl, hρ, hf⟩ := hpure
   obtain ⟨rfl, rfl⟩ : f = ev0 ∧ rest = evs := by
     have h1 := congrArg (fun l => l.head?) hρ
     have h2 := congrArg (fun l => l.tail) hρ
     simp at h1 h2
     exact ⟨h1.symm, h2.symm⟩
   rw [bindArgs_x]
-  iapply loop_body_wpt loc ann ra mo bty xbty c n bs0 p rs hQ i f rest hxr
+  iapply loop_body_wpt loc ann ra mo bty xbty c n bs0 p rs hQ i f rest hf
     h0 hin $$ Hcell
 
-/-- The whole program's total judgment at budget `5·n + 3`. -/
-theorem loop_wpt (hn : 0 ≤ n) (sbty : core_base_type) :
+/-- The whole program's total judgment at budget `5·n + 3`, from ANY
+    reachable entry frame over any tail. -/
+theorem loop_wpt (hn : 0 ≤ n) (sbty : core_base_type)
+    (f : Fmap sym value) (hf : SymFrame f) (rest : List (Fmap sym value)) :
     pointsToCell (procCtx p rs).tagDefs (GF := GF) c (.own 1) intTy bs0 ⊢
       wpt (procCtx p rs) (loopLsT c n bs0)
         (5 * n.toNat + 3) (loopPost c n bs0)
-        (loopProg loc ann ra mo bty xbty sbty c n) [fmapEmpty] := by
+        (loopProg loc ann ra mo bty xbty sbty c n) (f :: rest) := by
   iintro Hc
   rw [show (loopProg loc ann ra mo bty xbty sbty c n) =
     Expr [] (Esave (loopSym, sbty)
@@ -648,15 +693,26 @@ theorem loop_wpt (hn : 0 ≤ n) (sbty : core_base_type) :
         Pexpr [] () (PEval (ivVal n))))]
       (loopBody loc ann ra mo bty c)) from rfl,
     show 5 * n.toNat + 3 = (5 * n.toNat + 2) + 1 by omega]
-  iapply wpt_save [] (loopSym, sbty) _ _ fmapEmpty []
+  iapply wpt_save [] (loopSym, sbty) _ _ f rest
     (cvals := [ivVal n]) rfl
   rw [bindSave_x]
-  iapply loop_body_wpt loc ann ra mo bty xbty c n bs0 p rs hQ n fmapEmpty []
-    xready_empty hn (by omega)
+  iapply loop_body_wpt loc ann ra mo bty xbty c n bs0 p rs hQ n f rest
+    hf hn (by omega)
   ileft
   isplit
   · ipureintro; rfl
   · iexact Hc
+
+/-- The irrelevant-binding test at the total stratum. -/
+theorem loop_wpt_irrelevant_binding (hn : 0 ≤ n) (sbty : core_base_type)
+    (junk : value) :
+    pointsToCell (procCtx p rs).tagDefs (GF := GF) c (.own 1) intTy bs0 ⊢
+      wpt (procCtx p rs) (loopLsT c n bs0)
+        (5 * n.toNat + 3) (loopPost c n bs0)
+        (loopProg loc ann ra mo bty xbty sbty c n)
+        [envAdd ySym junk fmapEmpty] :=
+  loop_wpt loc ann ra mo bty xbty c n bs0 p rs hQ hn sbty
+    (envAdd ySym junk fmapEmpty) (symFrame_empty.add _ _) []
 
 omit hQ in
 /-- The postcondition entails the engine readout (the launch-facing

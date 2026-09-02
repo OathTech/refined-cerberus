@@ -130,7 +130,13 @@ def trioExports : List Name := [
   ``CerberusHeapLang.wps_sound_frame, ``CerberusHeapLang.wpt_frame_labels,
   ``CerberusHeapLang.blockSpecsT_frame, ``CerberusHeapLang.wpt_frame,
   ``CerberusHeapLang.lr_wps_frame, ``CerberusHeapLang.lr_wpt_frame,
-  ``CerberusHeapLang.tree_rotate_wps_frame, ``CerberusHeapLang.tree_rotate_wpt_frame]
+  ``CerberusHeapLang.tree_rotate_wps_frame, ``CerberusHeapLang.tree_rotate_wpt_frame,
+  -- alloc arc P4.3: the semantic triple at any machine context (R-09) and
+  -- the counter loop's irrelevant-binding tests (R-08)
+  ``CerberusHeapLang.semantic_triple_soundU, ``CerberusHeapLang.semantic_frameU,
+  ``CerberusHeapLang.SemTriple_iff_U,
+  ``CerberusHeapLang.loop_wps_irrelevant_binding,
+  ``CerberusHeapLang.counter_loop_certified_irrelevant_binding]
 
 def sortedNames (ns : Array Name) : Array String :=
   (ns.map (·.toString)).qsort (· < ·)
