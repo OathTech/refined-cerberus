@@ -957,3 +957,27 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   not the artifacts; the codec laws (GAP 1/2) land in the grown copy
   and enter the demo only if its own examples want them. The Lane C
   note's S0 is corrected accordingly (design-refinedc, bff3208).
+- **2026-09-02 [USER] RefinedC's DESIGN IS A TIEBREAKER, NOT A CONSTRAINT**
+  (verbatim): "we shouldn't feel totally bound by RefinedC's design, but
+  if there's a set of choices and we can match RefinedC, that probably
+  pays down some risk later". Standing rule: match RefinedC when the
+  choice is otherwise free; name the Cerberus forcing fact when we don't.
+- **2026-09-02 [USER] THE KILL/FREE ARC INCLUDES DYNAMIC ALLOCATION** —
+  "for real Reynolds/O'Hearn I think we need both" (create/static-kill
+  is C's automatic storage; the classical cons/dispose is dynamic).
+  Design notes: `cerberus-heaplang/docs/2026-09-02_kill-free-design-spike.md`
+  (0296986) and `…_calls-design-spike.md` (06d8946). Decisions taken
+  ([AGENT] recommendations, operator "Great!"): the invariant slice
+  first; the professor's read-only flag separate; the arc is ONE arc
+  sliced K0 global memory well-formedness invariant INCLUDING the
+  dynamic-address component → K1 alive flag + optional metadata type
+  (regions are untyped) → K2 static kill (mirror, certification,
+  completeness, rules) → K3 `alloc` + dynamic kill (same four) → K4
+  the two exhibits (dispose-a-list over created nodes; a malloc'd list
+  with free). RefinedC matches: `alive` on the metadata cell
+  (`al_alive`), kill as the same ghost update, persistent metadata as
+  the immortal `alloc_global`; Cerberus-forced departures: the global
+  invariant (Caesium needs none), static vs dynamic kill, untyped
+  regions. Calls arc second (configuration growth first — the note's
+  C1). Both dispatch only after mirror completeness merges (shared
+  files; the per-constructor completeness obligation).
