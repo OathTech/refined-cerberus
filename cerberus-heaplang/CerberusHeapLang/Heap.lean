@@ -48,11 +48,35 @@ state their footprints at the program's environment (`fmapEmpty` for
 every demo — the profile contexts `spikeCtx`/`procCtx` are reducible
 so `M.tagDefs` unfolds to it under the proof mode's matching).
 
-METADATA LIFETIME NOTE (named mover): kill/free is outside the
-fragment, so metadata never dies and views may share it fractionally
-without a liveness component. When kill joins the fragment, the
-metadata heap gains the donor's alloc_alive/freeable split
-(fractional liveness + the deallocation permission).
+THE THREE ALLOCATION FACTS (alloc arc P4.1, after RefinedC's
+ghost_state.v split heap_mapsto / loc_in_bounds / alloc_alive):
+1. LINEAR/FRACTIONAL BYTES — the per-byte heap: `bytesOwn`, split
+   at any list decomposition (`bytesOwn_append`) and at any fraction
+   sum (`bytesOwn_fractional`), agreeing on contents
+   (`bytesOwn_agree`).
+2. PERSISTENT ALLOCATION KNOWLEDGE — id, base, allocation type and
+   size, and in-bounds facts, all read off the IMMUTABLE metadata
+   cell: `allocMeta`/`locInBounds` (the metadata cell at the
+   discarded fraction — persistent by `pointsTo`'s `.discard` law;
+   `Persistent` instances are the persistence law). Any view's
+   metadata fraction can be traded for it (`pointsToView_persist`),
+   and a persistent-metadata view yields its bounds knowledge
+   without giving anything up (`pointsToView_locInBounds`). The
+   bundles (`pointsToView`, `cellOwn`, `pointsToCell`) keep the
+   metadata at a FRACTION `dqm` because full metadata ownership is
+   the per-allocation EXCLUSIVITY anchor the semantic-triple frame
+   needs (`metaOwn_ne` → `bigSepM_own_disjoint`, Adequacy.lean) — a
+   deliberate divergence from the donor, where the anchor is the
+   killable `alloc_alive`.
+3. NO LIVENESS/FREEABILITY TOKEN. kill/free is outside the fragment:
+   METADATA IS IMMUTABLE — no rule updates a metadata cell
+   (`metaHeap_alloc` mints; nothing writes) — so knowledge about an
+   allocation, once obtained, holds forever, and there is no
+   decorative token to guard a deallocation that cannot happen.
+   Named mover: when kill joins the fragment, the metadata heap
+   gains the donor's alloc_alive/freeable split (fractional
+   liveness + the deallocation permission) and the exclusivity
+   anchor moves there.
 
 STATE INTERPRETATION (memory only — no driver state):
 `stateInterp σ _ _ _ := ∃ mm mb mk, ⌜CohG σ mm mb mk⌝ ∗ interps`
@@ -1666,6 +1690,352 @@ theorem cellOwn_view (tds : CerbTags.TagDefsMap) (i : Int) (dq : DFrac) (c : Spi
       exact ⟨hlen, hdec⟩
 
 end ViewLaws
+
+/-! ## The three allocation facts (alloc arc P4.1): fractional
+ranges and cells, agreement, the persistent metadata stratum, and
+the provenance-preserving pointer shift (header, THE THREE
+ALLOCATION FACTS). -/
+
+section AllocFacts
+
+variable [SpikeGS hlc GF]
+
+open Iris.BI
+
+/-- The fragment pointer shape is injective in both components. -/
+theorem cellPtr_inj {i₁ a₁ i₂ a₂ : Int} (h : cellPtr i₁ a₁ = cellPtr i₂ a₂) :
+    i₁ = i₂ ∧ a₁ = a₂ := by
+  unfold cellPtr at h
+  cases h
+  exact ⟨rfl, rfl⟩
+
+/-- PROVENANCE-PRESERVING POINTER SHIFT: the engine's own pointer
+    arithmetic (`CerbMem.arrayShiftPtrval`, the `PVconcrete` arm) on a
+    fragment pointer keeps the allocation id and advances the address
+    by `k · sizeof ty` — for every non-void element type (void is the
+    GNU byte-granular exception in the engine's arm). Bounds are NOT
+    checked by the shift (the concrete memory model's arithmetic is
+    unchecked); they are enforced at the ACCESS, by the in-bounds
+    conjunct every view carries — so a shifted pointer is usable
+    exactly when the sub-range it names is in bounds. The exhibits'
+    per-type shift facts are instances. -/
+theorem cellPtr_arrayShift (tds : CerbTags.TagDefsMap) (id a : Int) (ty : ctype)
+    (k : Int) (hty : ∀ q, ty ≠ Ctype q .Void0) :
+    CerbMem.arrayShiftPtrval tds (cellPtr id a) ty (CerbMem.integerIval k) =
+      cellPtr id (a + k * ((CerbMem.sizeofCtype tds ty : Nat) : Int)) := by
+  obtain ⟨q, t⟩ := ty
+  cases t <;> first | exact absurd rfl (hty q) | rfl
+
+/-- One byte at one address: two fractions agree on the byte. -/
+theorem byteOwn_agree (k : Int) (dq₁ dq₂ : DFrac) (b₁ b₂ : CerbMem.AbsByte) :
+    iprop(byteOwn (GF := GF) k dq₁ b₁ ∗ byteOwn k dq₂ b₂) ⊢
+      (⌜b₁ = b₂⌝ : IProp GF) := by
+  letI := SpikeGS.byteGS (hlc := hlc) (GF := GF)
+  exact pointsTo_agree
+
+/-- RANGE FRACTIONAL (Boyland fractional permissions, per byte): a
+    byte range at fraction `q₁ + q₂` is the range at `q₁` next to the
+    range at `q₂` — both directions. -/
+theorem bytesOwn_fractional (a : Int) (q₁ q₂ : Qp) (bs : List CerbMem.AbsByte) :
+    bytesOwn (GF := GF) a (.own (q₁ + q₂)) bs ⊣⊢
+      iprop(bytesOwn a (.own q₁) bs ∗ bytesOwn a (.own q₂) bs) := by
+  induction bs generalizing a with
+  | nil =>
+    simp only [bytesOwn_nil]
+    exact BI.emp_sep.symm
+  | cons b bs ih =>
+    simp only [bytesOwn_cons]
+    have hb : byteOwn (GF := GF) a (.own (q₁ + q₂)) b ⊣⊢
+        iprop(byteOwn a (.own q₁) b ∗ byteOwn a (.own q₂) b) := by
+      letI := SpikeGS.byteGS (hlc := hlc) (GF := GF)
+      exact Fractional.fractional
+        (Φ := fun q => pointsTo (G := SpikeGS.byteGS) a (.own q) b) q₁ q₂
+    exact (BI.sep_congr hb (ih (a + 1))).trans BI.sep_sep_sep_comm
+
+/-- RANGE AGREEMENT: two ranges at one address of one length agree
+    bytewise. -/
+theorem bytesOwn_agree (a : Int) (dq₁ dq₂ : DFrac) (bs₁ bs₂ : List CerbMem.AbsByte)
+    (hlen : bs₁.length = bs₂.length) :
+    iprop(bytesOwn (GF := GF) a dq₁ bs₁ ∗ bytesOwn a dq₂ bs₂) ⊢
+      (⌜bs₁ = bs₂⌝ : IProp GF) := by
+  induction bs₁ generalizing a bs₂ with
+  | nil =>
+    obtain rfl : bs₂ = [] := List.length_eq_zero_iff.mp hlen.symm
+    iintro ⟨-, -⟩
+    ipureintro
+    rfl
+  | cons b₁ bs₁ ih =>
+    cases bs₂ with
+    | nil => simp at hlen
+    | cons b₂ bs₂ =>
+      simp only [bytesOwn_cons]
+      iintro ⟨⟨H₁, Hs₁⟩, H₂, Hs₂⟩
+      ihave %hb : ⌜b₁ = b₂⌝ $$ [H₁ H₂]
+      · iapply byteOwn_agree a dq₁ dq₂ b₁ b₂ $$ [$H₁ $H₂]
+      ihave %hs : ⌜bs₁ = bs₂⌝ $$ [Hs₁ Hs₂]
+      · iapply ih (a + 1) bs₂ (by simpa using hlen) $$ [$Hs₁ $Hs₂]
+      ipureintro
+      rw [hb, hs]
+
+/-- VIEW FRACTIONAL: a typed view at fraction `q₁ + q₂` (metadata and
+    bytes alike) is the two views at `q₁` and `q₂` — the classical
+    fractional-permission law at the typed-view stratum (read-sharing
+    of one range). -/
+theorem pointsToView_fractional (tds : CerbTags.TagDefsMap) (id a : Int) (aty : ctype)
+    (off : Nat) (q₁ q₂ : Qp) (vty : ctype) (bs : List CerbMem.AbsByte) :
+    pointsToView tds (GF := GF) id a aty off (.own (q₁ + q₂)) (.own (q₁ + q₂)) vty bs ⊣⊢
+      iprop(pointsToView tds id a aty off (.own q₁) (.own q₁) vty bs ∗
+        pointsToView tds id a aty off (.own q₂) (.own q₂) vty bs) := by
+  unfold pointsToView
+  constructor
+  · iintro ⟨Hm, %hp, Hb⟩
+    icases (metaOwn_fractional id ⟨a, aty, CerbMem.sizeofCtype tds aty⟩ q₁ q₂).1 $$ Hm
+      with ⟨Hm₁, Hm₂⟩
+    icases (bytesOwn_fractional (a + (off : Int)) q₁ q₂ bs).1 $$ Hb with ⟨Hb₁, Hb₂⟩
+    isplitl [Hm₁ Hb₁]
+    · isplitl [Hm₁]
+      · iexact Hm₁
+      isplit
+      · ipureintro
+        exact hp
+      · iexact Hb₁
+    · isplitl [Hm₂]
+      · iexact Hm₂
+      isplit
+      · ipureintro
+        exact hp
+      · iexact Hb₂
+  · iintro ⟨⟨Hm₁, %hp, Hb₁⟩, Hm₂, -, Hb₂⟩
+    isplitl [Hm₁ Hm₂]
+    · iapply (metaOwn_fractional id ⟨a, aty, CerbMem.sizeofCtype tds aty⟩ q₁ q₂).2
+      isplitl [Hm₁]
+      · iexact Hm₁
+      · iexact Hm₂
+    isplit
+    · ipureintro
+      exact hp
+    · iapply (bytesOwn_fractional (a + (off : Int)) q₁ q₂ bs).2
+      isplitl [Hb₁]
+      · iexact Hb₁
+      · iexact Hb₂
+
+/-- METADATA/BOUNDS AGREEMENT: two views of one allocation agree on
+    its base address and allocation type (hence on its size and on
+    every in-bounds fact). -/
+theorem pointsToView_agree (tds : CerbTags.TagDefsMap) (id a a' : Int) (aty aty' : ctype)
+    (off off' : Nat) (dqm dqb dqm' dqb' : DFrac) (vty vty' : ctype)
+    (bs bs' : List CerbMem.AbsByte) :
+    iprop(pointsToView tds (GF := GF) id a aty off dqm dqb vty bs ∗
+      pointsToView tds id a' aty' off' dqm' dqb' vty' bs') ⊢
+      (⌜a = a' ∧ aty = aty'⌝ : IProp GF) := by
+  unfold pointsToView
+  iintro ⟨⟨Hm, -, -⟩, Hm', -, -⟩
+  ihave %h : ⌜(⟨a, aty, CerbMem.sizeofCtype tds aty⟩ : MetaCell) =
+      ⟨a', aty', CerbMem.sizeofCtype tds aty'⟩⌝ $$ [Hm Hm']
+  · iapply metaOwn_agree id dqm dqm' _ _ $$ [$Hm $Hm']
+  ipureintro
+  simp only [MetaCell.mk.injEq] at h
+  exact ⟨h.1, h.2.1⟩
+
+/-- CELL FRACTIONAL: whole-cell ownership splits at any fraction sum. -/
+theorem cellOwn_fractional (tds : CerbTags.TagDefsMap) (i : Int) (q₁ q₂ : Qp)
+    (c : SpikeCell) :
+    cellOwn tds (GF := GF) i (.own (q₁ + q₂)) c ⊣⊢
+      iprop(cellOwn tds i (.own q₁) c ∗ cellOwn tds i (.own q₂) c) := by
+  unfold cellOwn
+  constructor
+  · iintro ⟨Hm, Hb, %hp⟩
+    icases (metaOwn_fractional i (metaOf tds c) q₁ q₂).1 $$ Hm with ⟨Hm₁, Hm₂⟩
+    icases (bytesOwn_fractional c.addr q₁ q₂ c.bytes).1 $$ Hb with ⟨Hb₁, Hb₂⟩
+    isplitl [Hm₁ Hb₁]
+    · isplitl [Hm₁]
+      · iexact Hm₁
+      isplitl [Hb₁]
+      · iexact Hb₁
+      · ipureintro
+        exact hp
+    · isplitl [Hm₂]
+      · iexact Hm₂
+      isplitl [Hb₂]
+      · iexact Hb₂
+      · ipureintro
+        exact hp
+  · iintro ⟨⟨Hm₁, Hb₁, %hp⟩, Hm₂, Hb₂, -⟩
+    isplitl [Hm₁ Hm₂]
+    · iapply (metaOwn_fractional i (metaOf tds c) q₁ q₂).2
+      isplitl [Hm₁]
+      · iexact Hm₁
+      · iexact Hm₂
+    isplitl [Hb₁ Hb₂]
+    · iapply (bytesOwn_fractional c.addr q₁ q₂ c.bytes).2
+      isplitl [Hb₁]
+      · iexact Hb₁
+      · iexact Hb₂
+    · ipureintro
+      exact hp
+
+/-- POINTS-TO FRACTIONAL (the textbook law): `pv ↦c{q₁+q₂} ty ; bs ⊣⊢
+    pv ↦c{q₁} ty ; bs ∗ pv ↦c{q₂} ty ; bs`. -/
+theorem pointsToCell_fractional (tds : CerbTags.TagDefsMap) (pv : CerbMem.PointerValue)
+    (q₁ q₂ : Qp) (ty : ctype) (bs : List CerbMem.AbsByte) :
+    pointsToCell tds (GF := GF) pv (.own (q₁ + q₂)) ty bs ⊣⊢
+      iprop(pointsToCell tds pv (.own q₁) ty bs ∗ pointsToCell tds pv (.own q₂) ty bs) := by
+  unfold pointsToCell
+  constructor
+  · iintro ⟨%id, %a, %hpv, Hc⟩
+    icases (cellOwn_fractional tds id q₁ q₂ ⟨a, ty, bs⟩).1 $$ Hc with ⟨Hc₁, Hc₂⟩
+    isplitl [Hc₁]
+    · iexists id, a
+      isplit
+      · ipureintro
+        exact hpv
+      · iexact Hc₁
+    · iexists id, a
+      isplit
+      · ipureintro
+        exact hpv
+      · iexact Hc₂
+  · iintro ⟨⟨%id₁, %a₁, %h₁, Hc₁⟩, %id₂, %a₂, %h₂, Hc₂⟩
+    obtain ⟨rfl, rfl⟩ := cellPtr_inj (h₁.symm.trans h₂)
+    iexists id₁, a₁
+    isplit
+    · ipureintro
+      exact h₁
+    · iapply (cellOwn_fractional tds id₁ q₁ q₂ ⟨a₁, ty, bs⟩).2
+      isplitl [Hc₁]
+      · iexact Hc₁
+      · iexact Hc₂
+
+/-- POINTS-TO AGREEMENT: two points-to of one pointer, at any
+    fractions, agree on the type and the contents (metadata agreement
+    through the views; contents through the byte ranges). -/
+theorem pointsToCell_agree (tds : CerbTags.TagDefsMap) (pv : CerbMem.PointerValue)
+    (dq₁ dq₂ : DFrac) (ty₁ ty₂ : ctype) (bs₁ bs₂ : List CerbMem.AbsByte) :
+    iprop(pointsToCell tds (GF := GF) pv dq₁ ty₁ bs₁ ∗ pointsToCell tds pv dq₂ ty₂ bs₂) ⊢
+      (⌜ty₁ = ty₂ ∧ bs₁ = bs₂⌝ : IProp GF) := by
+  unfold pointsToCell
+  iintro ⟨⟨%id₁, %a₁, %h₁, Hc₁⟩, %id₂, %a₂, %h₂, Hc₂⟩
+  obtain ⟨rfl, rfl⟩ := cellPtr_inj (h₁.symm.trans h₂)
+  icases (cellOwn_view tds id₁ dq₁ ⟨a₁, ty₁, bs₁⟩).1 $$ Hc₁ with ⟨Hv₁, -⟩
+  icases (cellOwn_view tds id₁ dq₂ ⟨a₁, ty₂, bs₂⟩).1 $$ Hc₂ with ⟨Hv₂, -⟩
+  ihave %hty : ⌜a₁ = a₁ ∧ ty₁ = ty₂⌝ $$ [Hv₁ Hv₂]
+  · iapply pointsToView_agree tds id₁ a₁ a₁ ty₁ ty₂ 0 0 dq₁ dq₁ dq₂ dq₂ ty₁ ty₂ bs₁ bs₂
+      $$ [$Hv₁ $Hv₂]
+  obtain ⟨-, rfl⟩ := hty
+  icases (pointsToView_iff tds id₁ a₁ ty₁ 0 dq₁ dq₁ ty₁ bs₁).1 $$ Hv₁ with ⟨-, %hp₁, Hb₁⟩
+  icases (pointsToView_iff tds id₁ a₁ ty₁ 0 dq₂ dq₂ ty₁ bs₂).1 $$ Hv₂ with ⟨-, %hp₂, Hb₂⟩
+  ihave %hbs : ⌜bs₁ = bs₂⌝ $$ [Hb₁ Hb₂]
+  · iapply bytesOwn_agree (a₁ + ((0 : Nat) : Int)) dq₁ dq₂ bs₁ bs₂ (by rw [hp₁.2, hp₂.2])
+      $$ [$Hb₁ $Hb₂]
+  ipureintro
+  exact ⟨rfl, hbs⟩
+
+/-- POINTS-TO COMBINE (agreement + join in one, the shape a shared
+    reader recombines with): two fractions of one pointer agree and
+    add up. -/
+theorem pointsToCell_combine (tds : CerbTags.TagDefsMap) (pv : CerbMem.PointerValue)
+    (q₁ q₂ : Qp) (ty₁ ty₂ : ctype) (bs₁ bs₂ : List CerbMem.AbsByte) :
+    iprop(pointsToCell tds (GF := GF) pv (.own q₁) ty₁ bs₁ ∗
+      pointsToCell tds pv (.own q₂) ty₂ bs₂) ⊢
+      iprop(⌜ty₁ = ty₂ ∧ bs₁ = bs₂⌝ ∗ pointsToCell tds pv (.own (q₁ + q₂)) ty₁ bs₁) := by
+  iintro ⟨H₁, H₂⟩
+  ihave %h : ⌜ty₁ = ty₂ ∧ bs₁ = bs₂⌝ $$ [H₁ H₂]
+  · iapply pointsToCell_agree tds pv (.own q₁) (.own q₂) ty₁ ty₂ bs₁ bs₂ $$ [$H₁ $H₂]
+  obtain ⟨rfl, rfl⟩ := h
+  isplit
+  · ipureintro
+    exact ⟨rfl, rfl⟩
+  · iapply (pointsToCell_fractional tds pv q₁ q₂ ty₁ bs₁).2
+    isplitl [H₁]
+    · iexact H₁
+    · iexact H₂
+
+/-! ### The persistent stratum -/
+
+/-- PERSISTENT ALLOCATION KNOWLEDGE: the allocation's id, base
+    address, allocation type and size — the metadata cell at the
+    DISCARDED fraction (the donor's `loc_in_bounds`/`alloc_meta`
+    analogue). Persistent: metadata is immutable in this fragment, so
+    the knowledge holds forever once obtained. -/
+def allocMeta (tds : CerbTags.TagDefsMap) (id a : Int) (aty : ctype) : IProp GF :=
+  metaOwn id .discard ⟨a, aty, CerbMem.sizeofCtype tds aty⟩
+
+/-- THE PERSISTENCE LAW. -/
+instance allocMeta_persistent (tds : CerbTags.TagDefsMap) (id a : Int) (aty : ctype) :
+    Persistent (allocMeta (GF := GF) tds id a aty) := by
+  letI := SpikeGS.metaGS (hlc := hlc) (GF := GF)
+  unfold allocMeta metaOwn
+  infer_instance
+
+theorem allocMeta_dup (tds : CerbTags.TagDefsMap) (id a : Int) (aty : ctype) :
+    allocMeta (GF := GF) tds id a aty ⊣⊢
+      iprop(allocMeta tds id a aty ∗ allocMeta tds id a aty) :=
+  persistent_sep_dup
+
+/-- Persistent knowledge agrees (one allocation, one base, one type). -/
+theorem allocMeta_agree (tds : CerbTags.TagDefsMap) (id a a' : Int) (aty aty' : ctype) :
+    iprop(allocMeta (GF := GF) tds id a aty ∗ allocMeta tds id a' aty') ⊢
+      (⌜a = a' ∧ aty = aty'⌝ : IProp GF) := by
+  unfold allocMeta
+  iintro ⟨H, H'⟩
+  ihave %h : ⌜(⟨a, aty, CerbMem.sizeofCtype tds aty⟩ : MetaCell) =
+      ⟨a', aty', CerbMem.sizeofCtype tds aty'⟩⌝ $$ [H H']
+  · iapply metaOwn_agree id .discard .discard _ _ $$ [$H $H']
+  ipureintro
+  simp only [MetaCell.mk.injEq] at h
+  exact ⟨h.1, h.2.1⟩
+
+/-- PERSISTENT IN-BOUNDS KNOWLEDGE: `n` bytes at offset `off` of the
+    allocation are inside it (the donor's `loc_in_bounds l n`). -/
+def locInBounds (tds : CerbTags.TagDefsMap) (id a : Int) (aty : ctype) (off n : Nat) :
+    IProp GF :=
+  iprop(allocMeta tds id a aty ∗ ⌜off + n ≤ CerbMem.sizeofCtype tds aty⌝)
+
+instance locInBounds_persistent (tds : CerbTags.TagDefsMap) (id a : Int) (aty : ctype)
+    (off n : Nat) : Persistent (locInBounds (GF := GF) tds id a aty off n) := by
+  unfold locInBounds
+  infer_instance
+
+/-- Metadata knowledge at any fraction can be made persistent — the
+    fraction is given up for good (`pointsTo_persist`). -/
+theorem metaOwn_persist (id : Int) (dq : DFrac) (mc : MetaCell) :
+    metaOwn (GF := GF) id dq mc ⊢ iprop(|==> metaOwn id .discard mc) := by
+  letI := SpikeGS.metaGS (hlc := hlc) (GF := GF)
+  exact BI.wand_entails pointsTo_persist
+
+/-- A view trades its metadata fraction for PERSISTENT metadata
+    knowledge; its bytes are untouched. -/
+theorem pointsToView_persist (tds : CerbTags.TagDefsMap) (id a : Int) (aty : ctype)
+    (off : Nat) (dqm dqb : DFrac) (vty : ctype) (bs : List CerbMem.AbsByte) :
+    pointsToView tds (GF := GF) id a aty off dqm dqb vty bs ⊢
+      iprop(|==> pointsToView tds id a aty off .discard dqb vty bs) := by
+  unfold pointsToView
+  iintro ⟨Hm, %hp, Hb⟩
+  imod (metaOwn_persist id dqm _) $$ Hm with Hm
+  imodintro
+  isplitl [Hm]
+  · iexact Hm
+  isplit
+  · ipureintro
+    exact hp
+  · iexact Hb
+
+/-- A persistent-metadata view yields its in-bounds knowledge and
+    keeps itself (the persistence law at work). -/
+theorem pointsToView_locInBounds (tds : CerbTags.TagDefsMap) (id a : Int) (aty : ctype)
+    (off : Nat) (dqb : DFrac) (vty : ctype) (bs : List CerbMem.AbsByte) :
+    pointsToView tds (GF := GF) id a aty off .discard dqb vty bs ⊢
+      iprop(locInBounds tds id a aty off (CerbMem.sizeofCtype tds vty) ∗
+        pointsToView tds id a aty off .discard dqb vty bs) := by
+  refine persistent_entails_right ?_
+  unfold pointsToView locInBounds allocMeta
+  iintro ⟨Hm, %hp, -⟩
+  isplitl [Hm]
+  · iexact Hm
+  · ipureintro
+    exact hp.1
+
+end AllocFacts
 
 /-! ## The abstract allocation capacity (alloc arc P1.1)
 

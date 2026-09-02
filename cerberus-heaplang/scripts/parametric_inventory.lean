@@ -27,6 +27,11 @@ Run (from cerberus-heaplang/, box free, capped):
 -/
 import CerberusHeapLang.TotalAdequacy
 import CerberusHeapLang.Round
+import CerberusHeapLang.ArrayExhibit
+import CerberusHeapLang.StructExhibit
+import CerberusHeapLang.ListRevExhibit
+import CerberusHeapLang.TreeRotExhibit
+import CerberusHeapLang.LoopExhibit
 
 open Lean
 
@@ -70,12 +75,23 @@ def isEnv (env : Environment) (n : Name) : Bool :=
                      "lookup_env", "bindArgs", "bindSaveParams", "envAdd", "SymFrame",
                      "symOrd", "symKey"])
           (modOf env n == `CerberusHeapLang.EnvLaws)
+/-- The ghost maps, the coupling invariant, the interpretations and the
+    component-level (`byteOwn`/`bytesOwn`/`metaOwn`) unfoldings. NOT
+    counted: `pointsToCell_cellOwn_iff` (a law between two PUBLIC
+    bundles — `pointsToCell` is the ∃-packaged `cellOwn`; alloc arc P4
+    refinement) and the pure allocation-PLAN model (`isPlan` below). -/
 def isGhost (n : Name) : Bool :=
-  hasSub n ["CohG", "AllocCursor", "advanceCursor", "PlanFits", "cursorOwn", "cursorInterp",
-            "cursorHeap", "byteInterp", "metaInterp", "byteHeap", "metaHeap", "freshBase",
+  Bool.and (n != `CerberusHeapLang.pointsToCell_cellOwn_iff)
+    (hasSub n ["CohG", "cursorOwn", "cursorInterp",
+            "cursorHeap", "byteInterp", "metaInterp", "byteHeap", "metaHeap",
             "stateInterp_eq", "stateInterp_iff", "pointsToCell_iff",
-            "cellOwn_iff", "pointsToView_iff", "pointsToCell_cellOwn_iff", "bytesOwn",
-            "byteOwn", "metaOwn", "MetaByteOf", "LaunchCoh", "genHeapInterp", "GenHeap"]
+            "cellOwn_iff", "pointsToView_iff", "bytesOwn",
+            "byteOwn", "metaOwn", "MetaByteOf", "LaunchCoh", "genHeapInterp", "GenHeap"])
+/-- The pure allocation-plan model (alloc arc P1.1: the cursor arithmetic
+    `PlanFits`/`advanceCursor`/`freshBase` a launch's plan-fit fact is
+    computed with) — separated from the ghost maps at P4. -/
+def isPlan (n : Name) : Bool :=
+  hasSub n ["AllocCursor", "advanceCursor", "PlanFits", "freshBase"]
 def judgNs : List Name := [`CerberusHeapLang.wps.pre, `CerberusHeapLang.wpt.pre]
 def isJudg (n : Name) : Bool := judgNs.any fun j => Bool.or (n == j) (j.isPrefixOf n)
 def layoutSubs : List String :=
@@ -132,6 +148,7 @@ structure Row where
   envT : Nat := 0
   ghostD : Nat := 0
   ghostT : Nat := 0
+  planD : Nat := 0
   judgD : Nat := 0
   engD : Array Name := #[]
   engTyD : Nat := 0
@@ -161,10 +178,15 @@ def analyze (env : Environment) (n : Name) : DepM Row := do
     stepLemD := count direct (isStepLem env)
     envD := count direct (isEnv env), envT := count trans (isEnv env)
     ghostD := count direct isGhost, ghostT := count trans isGhost
+    planD := count direct isPlan
     judgD := count direct isJudg
     engD := engD, engTyD := engTyD, engT := count trans (isEngineDef env)
     layoutD := layoutD, layoutT := layoutT }
 
+def clientModules : List Name :=
+  [`CerberusHeapLang.ArrayExhibit, `CerberusHeapLang.StructExhibit,
+   `CerberusHeapLang.ListRevExhibit, `CerberusHeapLang.TreeRotExhibit,
+   `CerberusHeapLang.LoopExhibit]
 def ruleModules : List Name :=
   [`CerberusHeapLang.Rules, `CerberusHeapLang.Wps, `CerberusHeapLang.Wpt]
 def rulePrefixes : List String := ["wp_", "wps_", "wpt_", "triple", "blockSpecs", "spike_wp_wand"]
@@ -255,3 +277,27 @@ open ParametricInventory in
     defs := defs.push s!"- `{short n}` ({short (modOf env n)}): {", ".intercalate hits}"
   for d in defs.qsort (· < ·) do IO.println d
   IO.println s!"\nTOTAL layout-dependent definitions: {defs.size}"
+  -- CLIENT MODULES (alloc arc P4 definition of done: the array, struct,
+  -- list and tree clients import only the public raw-logic API — none
+  -- unfolds the ghost maps / CohG / the cursor (Ghost), the engine
+  -- transition (StepDef / StepLem), or the judgment (Judg)). Per module:
+  -- theorem count and the DIRECT offenders by category.
+  IO.println "\n## Client modules: direct references per theorem (alloc arc P4 DoD; measured)\n"
+  for m in clientModules do
+    let mut thms : Array Name := #[]
+    for (n, ci) in env.constants.toList do
+      unless modOf env n == m do continue
+      unless ci matches .thmInfo _ do continue
+      if n.isInternalDetail then continue
+      thms := thms.push n
+    let sortedThms := thms.qsort (·.toString < ·.toString)
+    let (rows, _) := (sortedThms.mapM (analyze env)).run {}
+    let off (f : Row → Bool) : List String :=
+      (rows.filter f).toList.map (fun r => s!"`{r.name}`")
+    let ghost := off (·.ghostD > 0)
+    let sdef := off (·.stepDefD > 0)
+    let slem := off (·.stepLemD > 0)
+    let judg := off (·.judgD > 0)
+    let plan := off (·.planD > 0)
+    let fmtL (l : List String) := if l.isEmpty then "0" else s!"{l.length}: " ++ ", ".intercalate l
+    IO.println s!"- {short m}: {rows.size} theorems; Ghost-direct {fmtL ghost}; StepDef-direct {fmtL sdef}; StepLem-direct {fmtL slem}; Judg-direct {fmtL judg}; Plan-direct {fmtL plan}"

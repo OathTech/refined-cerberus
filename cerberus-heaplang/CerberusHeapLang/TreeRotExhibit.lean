@@ -89,13 +89,9 @@ theorem treeTy_dec_indep {tds : CerbTags.TagDefsMap} (lum : List (Int × identif
 theorem arrayShift_cellPtr_long_two {tds : CerbTags.TagDefsMap} (id p : Int) :
     CerbMem.arrayShiftPtrval tds (cellPtr id p) longTy (CerbMem.integerIval 2) =
       cellPtr id (p + 16) := by
-  show CerbMem.PointerValue.PV (.Prov_some id)
-    (.PVconcrete none (p + 2 * Int.ofNat (CerbMem.sizeofCtype tds longTy))) =
-    CerbMem.PointerValue.PV (.Prov_some id) (.PVconcrete none (p + 16))
-  rw [show p + 2 * Int.ofNat (CerbMem.sizeofCtype tds longTy) = p + 16 by
-    rw [longTy_size]
-    rw [show Int.ofNat 8 = (8 : Int) from rfl]
-    omega]
+  rw [cellPtr_arrayShift tds id p longTy 2 (fun _ h => by unfold longTy at h; cases h),
+    longTy_size]
+  exact congrArg (cellPtr id) (by omega)
 
 theorem evalArrayShift_long_two (id a : Int) :
     evalArrayShift fmapEmpty longTy (Vobject (OVpointer (cellPtr id a))) (ivVal 2) =

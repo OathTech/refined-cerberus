@@ -119,13 +119,9 @@ theorem nodePtrTy_size {tds : CerbTags.TagDefsMap} : CerbMem.sizeofCtype tds nod
 theorem arrayShift_cellPtr_long {tds : CerbTags.TagDefsMap} (id p : Int) :
     CerbMem.arrayShiftPtrval tds (cellPtr id p) longTy (CerbMem.integerIval 1) =
       cellPtr id (p + 8) := by
-  show CerbMem.PointerValue.PV (.Prov_some id)
-    (.PVconcrete none (p + 1 * Int.ofNat (CerbMem.sizeofCtype tds longTy))) =
-    CerbMem.PointerValue.PV (.Prov_some id) (.PVconcrete none (p + 8))
-  rw [show p + 1 * Int.ofNat (CerbMem.sizeofCtype tds longTy) = p + 8 by
-    rw [longTy_size]
-    rw [show Int.ofNat 8 = (8 : Int) from rfl]
-    omega]
+  rw [cellPtr_arrayShift tds id p longTy 1 (fun _ h => by unfold longTy at h; cases h),
+    longTy_size]
+  exact congrArg (cellPtr id) (by omega)
 
 theorem evalArrayShift_long_one (id a : Int) :
     evalArrayShift fmapEmpty longTy (Vobject (OVpointer (cellPtr id a))) (ivVal 1) =

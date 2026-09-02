@@ -114,7 +114,16 @@ def trioExports : List Name := [
   ``CerberusHeapLang.counter_loop_certified_registration, ``CerberusHeapLang.prod_run_eqJ,
   ``CerberusHeapLang.fib_certified_production,
   ``CerberusHeapLang.counter_loop_certified_production,
-  ``CerberusHeapLang.list_reverse_certified_production]
+  ``CerberusHeapLang.list_reverse_certified_production,
+  -- alloc arc P4.1: the raw separation-logic API closure — the three
+  -- allocation facts' laws and their clients (R-06)
+  ``CerberusHeapLang.pointsToCell_fractional, ``CerberusHeapLang.pointsToCell_combine,
+  ``CerberusHeapLang.pointsToView_fractional, ``CerberusHeapLang.pointsToView_agree,
+  ``CerberusHeapLang.pointsToView_persist, ``CerberusHeapLang.pointsToView_locInBounds,
+  ``CerberusHeapLang.cellPtr_arrayShift, ``CerberusHeapLang.wps_fupd,
+  ``CerberusHeapLang.cellOwn_readout, ``CerberusHeapLang.pointsToCell_readout,
+  ``CerberusHeapLang.struct_wps_views, ``CerberusHeapLang.struct_x_read_shared_wps,
+  ``CerberusHeapLang.cell_read_shared_wps, ``CerberusHeapLang.struct_x_read_persist_wps]
 
 def sortedNames (ns : Array Name) : Array String :=
   (ns.map (·.toString)).qsort (· < ·)

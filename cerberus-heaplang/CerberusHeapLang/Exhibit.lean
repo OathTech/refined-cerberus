@@ -247,14 +247,6 @@ theorem htrap_seven {tds : CerbTags.TagDefsMap} :
 
 variable {GF : BundledGFunctors}
 
-theorem cellPtr_inj {i a j b : Int} (h : cellPtr i a = cellPtr j b) :
-    i = j ∧ a = b := by
-  unfold cellPtr at h
-  injection h with h1 h2
-  injection h1 with h1
-  injection h2 with _ h2
-  exact ⟨h1, h2⟩
-
 theorem bigSepA_ptx [SpikeGS .hasLC GF] :
     iprop(([∗map] i ↦ c ∈ mA, cellOwn fmapEmpty (hlc := .hasLC) (GF := GF) i (.own 1) c)) ⊢
       pointsToCell fmapEmpty (GF := GF) xPtr (.own 1) intTy bytesX := by

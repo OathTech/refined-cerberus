@@ -282,6 +282,43 @@ theorem wps_wand {Ψ₁ Ψ₂ : SpikeVal → EnvStack → IProp GF} (e : CoreExp
       imodintro
       iapply IH $$ %(r.e) %(r.ρ) H HΨ
 
+/-- POSTCONDITION-MODALITY ABSORPTION (iris `wp_fupd`): a statement WP
+    whose postcondition sits under a fancy update is a statement WP —
+    the update is paid at the value exit (the value clause is
+    fupd-headed), passes through a jump untouched (the jump clause
+    is Ψ-independent), and rides through steps by Löb. This is what
+    lets a client perform a GHOST update (e.g. `pointsToView_persist`)
+    after an access, inside the statement logic. -/
+theorem wps_fupd {Ψ : SpikeVal → EnvStack → IProp GF} (e : CoreExpr)
+    (ρ : EnvStack) :
+    wps M Ls (fun w ρ' => iprop(|={⊤}=> Ψ w ρ')) e ρ ⊢ wps M Ls Ψ e ρ := by
+  iloeb as IH generalizing %e %ρ
+  cases htv : toVal e with
+  | some w =>
+    rw [wps_unfold.to_eq, wps_unfold.to_eq]
+    simp only [wps.pre, htv]
+    iintro H
+    imod H with H
+    iexact H
+  | none =>
+    cases hjr : jumpRedex? e with
+    | some lp =>
+      rw [wps_unfold.to_eq, wps_unfold.to_eq]
+      simp only [wps.pre, htv, hjr]
+      iintro H
+      iexact H
+    | none =>
+      rw [wps_unfold.to_eq, wps_unfold.to_eq]
+      simp only [wps.pre, htv, hjr]
+      iintro H %σ₁ %ns %obs %obs' %nt Hσ
+      imod H $$ %σ₁ %ns %obs %obs' %nt Hσ with ⟨$, H⟩
+      imodintro
+      inext
+      iintro %r %σ₂ %eₜ %Hstep Hcred
+      imod H $$ %r %σ₂ %eₜ %Hstep Hcred with ⟨$, H⟩
+      imodintro
+      iapply IH $$ %(r.e) %(r.ρ) H
+
 /-- FRAME over the statement WP (derived from `wps_wand`; S3 note:
     the frame rides to the value exit; at a jump it is released —
     the label invariant is the only thing that crosses a back

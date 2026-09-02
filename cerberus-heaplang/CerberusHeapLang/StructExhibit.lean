@@ -198,21 +198,11 @@ theorem struct_wp_readout (loc : CerbLocation.Loc)
     .rfl)).trans ?_
   refine BI.wand_elim_left.trans ?_
   refine wp_mono fun w => ?_
-  -- Phase-4 tidy: the state-interpretation open/close lives in the
-  -- core combinator; this module supplies only the coupling-
-  -- conditional extraction (cellOwn_cellCoh).
-  exact stateInterp_readout (fun σ' mm mb mk HG => by
-    iintro ⟨Hs, Hmi, Hbi⟩
-    ihave %Hcc : ⌜CellCoh spikeCtx.tagDefs σ' id ⟨a, structTy,
-        spliceBytes fieldY (sixBytes spikeCtx.tagDefs) (spliceBytes fieldX (fiveBytes spikeCtx.tagDefs) bs)⟩ ∧
-        Iris.Std.PartialMap.get? mm id = some (metaOf spikeCtx.tagDefs
-          (⟨a, structTy, spliceBytes fieldY (sixBytes spikeCtx.tagDefs)
-            (spliceBytes fieldX (fiveBytes spikeCtx.tagDefs) bs)⟩ : SpikeCell))⌝ $$ [Hmi Hbi Hs]
-    · iapply cellOwn_cellCoh spikeCtx.tagDefs HG id (.own 1)
-        ⟨a, structTy, spliceBytes fieldY (sixBytes spikeCtx.tagDefs)
-          (spliceBytes fieldX (fiveBytes spikeCtx.tagDefs) bs)⟩ $$ [$Hmi $Hbi $Hs]
-    ipureintro
-    exact Hcc.1)
+  -- alloc arc P4.1: the PUBLIC single-cell readout (`cellOwn_readout`,
+  -- Adequacy.lean) — no state-interpretation opening in this module.
+  exact cellOwn_readout spikeCtx.tagDefs id (.own 1)
+    ⟨a, structTy, spliceBytes fieldY (sixBytes spikeCtx.tagDefs)
+      (spliceBytes fieldX (fiveBytes spikeCtx.tagDefs) bs)⟩
 
 end StructReadout
 
@@ -296,6 +286,340 @@ theorem struct_update_certified {GF : BundledGFunctors} [SpikeGpreS GF]
       (spliceBytes fieldX (fiveBytes fmapEmpty) bs)
       (by rw [sixBytes_len, hlen1]; decide)
   exact ⟨hx, hy⟩
+
+/-! ## THE VIEW AND FRACTION CLIENTS (alloc arc P4.1 — the R-06 closure)
+
+Every advertised law of the view algebra with a compiling consumer:
+- `struct_wps_views`: the SAME two-field update, proved through
+  DISJOINT TYPED FIELD VIEWS — the whole-struct view is split into
+  the x field, the padding, the y field and the tail
+  (`pointsToView_split`, three times: `int[4] = int ⊕ int[3]`,
+  `int[3] = int ⊕ int[2]`, `int[2] = int ⊕ int`), each field is
+  updated THROUGH ITS OWN VIEW by the generic full-ownership store
+  (`wps_store_at`), and the four views are REJOINED into the
+  whole-struct view (`pointsToView_join`, three times). Metadata
+  fractions halve at each split and add back at each join; no
+  splice algebra appears (the byte image is literally the
+  concatenation of the field images). `struct_wps_views_cell` is
+  the same statement at the whole-cell bundle (`cellOwn_view`).
+- `struct_x_read_frac_wps`: a READ at ANY fraction `q` of the x
+  field's view (a proper fraction when `q < 1`): the load delivers
+  the decode and returns the view at the same fraction
+  (`wps_load_at` at fractions).
+- `struct_x_read_shared_wps`: THE SHARED READER — the full view is
+  split into two halves (`pointsToView_fractional`), one half is
+  lent to the read, the halves are rejoined: the whole comes back.
+- `cell_read_shared_wps`: TWO READERS, ONE POINTER, at the
+  points-to bundle — each holds a half of the pointer with ITS OWN
+  account of the contents; the load goes through the first; the
+  halves recombine into full ownership, AGREEMENT
+  (`pointsToCell_combine`) forcing the accounts to coincide.
+- `struct_x_read_persist_wps`: READ, THEN KEEP THE BOUNDS FOREVER —
+  after the read the client trades its metadata fraction for
+  PERSISTENT allocation knowledge (`pointsToView_persist`, a ghost
+  update inside the statement logic through `wps_fupd`) and hands
+  out the in-bounds fact `locInBounds` alongside the view
+  (`pointsToView_locInBounds` — the persistence law at work). -/
+
+section StructViews
+
+variable {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
+variable {M : MachineCtx} {Ls : LabelSpec GF}
+
+/-- The intermediate view types of the split: the struct minus its
+    first field (`int[3]`, 12 bytes) and the last two fields
+    (`int[2]`, 8 bytes). -/
+def int3Ty : ctype := Ctype [] (.Array0 intTy (some 3))
+def int2Ty : ctype := Ctype [] (.Array0 intTy (some 2))
+
+theorem int3Ty_size {tds : CerbTags.TagDefsMap} : CerbMem.sizeofCtype tds int3Ty = 12 := rfl
+theorem int2Ty_size {tds : CerbTags.TagDefsMap} : CerbMem.sizeofCtype tds int2Ty = 8 := rfl
+theorem intTy_size' {tds : CerbTags.TagDefsMap} : CerbMem.sizeofCtype tds intTy = 4 := rfl
+
+/-- The five image decodes back to `fiveMval` at any address and any
+    side tables (the table- and address-independent int decode). -/
+theorem five_reconstruct {tds : CerbTags.TagDefsMap} (lum : List (Int × identifier))
+    (fpm : CerbMem.Funptrmap) (ad : Int) :
+    CerbMem.reconstructValue tds lum fpm ad intTy (fiveBytes tds) = fiveMval := rfl
+
+theorem five_fromMemValue : (valueFromMemValue fiveMval).2 = fiveVal := rfl
+
+theorem five_loadTrap : loadTrapV intTy fiveMval = false := rfl
+
+/-- THE VIEW CLIENT: split → update through the field views → join. -/
+theorem struct_wps_views (loc : CerbLocation.Loc) (ann : core_run_annotation)
+    (mo mo' : memory_order) (bty : core_base_type) (id a : Int)
+    (b0 b1 b2 b3 : List CerbMem.AbsByte)
+    (h0 : b0.length = 4) (h1 : b1.length = 4) (h2 : b2.length = 4)
+    (ev0 : Fmap sym value) (evs : List (Fmap sym value)) :
+    pointsToView M.tagDefs (GF := GF) id a structTy 0 (.own 1) (.own 1) structTy
+        (b0 ++ (b1 ++ (b2 ++ b3))) ⊢
+      wps M Ls
+        (fun _ _ => pointsToView M.tagDefs id a structTy 0 (.own 1) (.own 1) structTy
+          (fiveBytes M.tagDefs ++ (b1 ++ (sixBytes M.tagDefs ++ b3))))
+        (progS loc ann mo mo' bty id a) (ev0 :: evs) := by
+  -- THE SPLITS (Lean-level instances of `pointsToView_split`; the
+  -- fraction arithmetic is `Qp.half_add_half`).
+  have s1 : pointsToView M.tagDefs (GF := GF) id a structTy 0 (.own 1) (.own 1) structTy
+        (b0 ++ (b1 ++ (b2 ++ b3))) ⊢
+      iprop(pointsToView M.tagDefs id a structTy 0 (.own (Qp.half 1)) (.own 1) intTy b0 ∗
+        pointsToView M.tagDefs id a structTy 4 (.own (Qp.half 1)) (.own 1) int3Ty
+          (b1 ++ (b2 ++ b3))) := by
+    have := pointsToView_split M.tagDefs (GF := GF) id a structTy 0 (Qp.half 1) (Qp.half 1)
+      (.own 1) structTy intTy int3Ty b0 (b1 ++ (b2 ++ b3))
+      (by rw [structTy_size, intTy_size', int3Ty_size]) h0
+    rw [Qp.half_add_half, show 0 + CerbMem.sizeofCtype M.tagDefs intTy = 4 from rfl] at this
+    exact this
+  have s2 : pointsToView M.tagDefs (GF := GF) id a structTy 4 (.own (Qp.half 1)) (.own 1) int3Ty
+        (b1 ++ (b2 ++ b3)) ⊢
+      iprop(pointsToView M.tagDefs id a structTy 4 (.own (Qp.half (Qp.half 1))) (.own 1)
+          intTy b1 ∗
+        pointsToView M.tagDefs id a structTy 8 (.own (Qp.half (Qp.half 1))) (.own 1) int2Ty
+          (b2 ++ b3)) := by
+    have := pointsToView_split M.tagDefs (GF := GF) id a structTy 4 (Qp.half (Qp.half 1))
+      (Qp.half (Qp.half 1)) (.own 1) int3Ty intTy int2Ty b1 (b2 ++ b3)
+      (by rw [int3Ty_size, intTy_size', int2Ty_size]) h1
+    rw [Qp.half_add_half, show 4 + CerbMem.sizeofCtype M.tagDefs intTy = 8 from rfl] at this
+    exact this
+  have s3 : pointsToView M.tagDefs (GF := GF) id a structTy 8 (.own (Qp.half (Qp.half 1)))
+        (.own 1) int2Ty (b2 ++ b3) ⊢
+      iprop(pointsToView M.tagDefs id a structTy 8 (.own (Qp.half (Qp.half (Qp.half 1))))
+          (.own 1) intTy b2 ∗
+        pointsToView M.tagDefs id a structTy 12 (.own (Qp.half (Qp.half (Qp.half 1))))
+          (.own 1) intTy b3) := by
+    have := pointsToView_split M.tagDefs (GF := GF) id a structTy 8
+      (Qp.half (Qp.half (Qp.half 1))) (Qp.half (Qp.half (Qp.half 1))) (.own 1) int2Ty intTy
+      intTy b2 b3 (by rw [int2Ty_size, intTy_size']) h2
+    rw [Qp.half_add_half, show 8 + CerbMem.sizeofCtype M.tagDefs intTy = 12 from rfl] at this
+    exact this
+  -- THE JOINS (instances of `pointsToView_join`, fractions adding back).
+  have j3 : iprop(pointsToView M.tagDefs (GF := GF) id a structTy 8
+          (.own (Qp.half (Qp.half (Qp.half 1)))) (.own 1) intTy
+          (CerbMem.memValueToBytes M.tagDefs [] sixMval).2 ∗
+        pointsToView M.tagDefs id a structTy 12 (.own (Qp.half (Qp.half (Qp.half 1))))
+          (.own 1) intTy b3) ⊢
+      pointsToView M.tagDefs id a structTy 8 (.own (Qp.half (Qp.half 1))) (.own 1) int2Ty
+        ((CerbMem.memValueToBytes M.tagDefs [] sixMval).2 ++ b3) := by
+    have := pointsToView_join M.tagDefs (GF := GF) id a structTy 8
+      (Qp.half (Qp.half (Qp.half 1))) (Qp.half (Qp.half (Qp.half 1))) (.own 1) int2Ty intTy
+      intTy (CerbMem.memValueToBytes M.tagDefs [] sixMval).2 b3 (by rw [int2Ty_size, intTy_size'])
+      (by rw [int2Ty_size, structTy_size]; decide)
+    rw [Qp.half_add_half, show 8 + CerbMem.sizeofCtype M.tagDefs intTy = 12 from rfl] at this
+    exact this
+  have j2 : iprop(pointsToView M.tagDefs (GF := GF) id a structTy 4
+          (.own (Qp.half (Qp.half 1))) (.own 1) intTy b1 ∗
+        pointsToView M.tagDefs id a structTy 8 (.own (Qp.half (Qp.half 1))) (.own 1) int2Ty
+          ((CerbMem.memValueToBytes M.tagDefs [] sixMval).2 ++ b3)) ⊢
+      pointsToView M.tagDefs id a structTy 4 (.own (Qp.half 1)) (.own 1) int3Ty
+        (b1 ++ ((CerbMem.memValueToBytes M.tagDefs [] sixMval).2 ++ b3)) := by
+    have := pointsToView_join M.tagDefs (GF := GF) id a structTy 4 (Qp.half (Qp.half 1))
+      (Qp.half (Qp.half 1)) (.own 1) int3Ty intTy int2Ty b1
+      ((CerbMem.memValueToBytes M.tagDefs [] sixMval).2 ++ b3)
+      (by rw [int3Ty_size, intTy_size', int2Ty_size])
+      (by rw [int3Ty_size, structTy_size]; decide)
+    rw [Qp.half_add_half, show 4 + CerbMem.sizeofCtype M.tagDefs intTy = 8 from rfl] at this
+    exact this
+  have j1 : iprop(pointsToView M.tagDefs (GF := GF) id a structTy 0 (.own (Qp.half 1)) (.own 1)
+          intTy (CerbMem.memValueToBytes M.tagDefs [] fiveMval).2 ∗
+        pointsToView M.tagDefs id a structTy 4 (.own (Qp.half 1)) (.own 1) int3Ty
+          (b1 ++ ((CerbMem.memValueToBytes M.tagDefs [] sixMval).2 ++ b3))) ⊢
+      pointsToView M.tagDefs id a structTy 0 (.own 1) (.own 1) structTy
+        ((CerbMem.memValueToBytes M.tagDefs [] fiveMval).2 ++
+          (b1 ++ ((CerbMem.memValueToBytes M.tagDefs [] sixMval).2 ++ b3))) := by
+    have := pointsToView_join M.tagDefs (GF := GF) id a structTy 0 (Qp.half 1) (Qp.half 1)
+      (.own 1) structTy intTy int3Ty (CerbMem.memValueToBytes M.tagDefs [] fiveMval).2
+      (b1 ++ ((CerbMem.memValueToBytes M.tagDefs [] sixMval).2 ++ b3))
+      (by rw [structTy_size, intTy_size', int3Ty_size]) (by rw [structTy_size]; decide)
+    rw [Qp.half_add_half, show 0 + CerbMem.sizeofCtype M.tagDefs intTy = 4 from rfl] at this
+    exact this
+  -- THE PROGRAM, through the field views.
+  iintro Hs
+  icases s1 $$ Hs with ⟨Hx, Hr⟩
+  icases s2 $$ Hr with ⟨Hp, Hr2⟩
+  icases s3 $$ Hr2 with ⟨Hy, Ht⟩
+  -- the field offsets are the literal view offsets (`fieldX = 0`,
+  -- `fieldY = 8`, by `rfl`); the images are the serializations.
+  rw [show progS loc ann mo mo' bty id a =
+    Expr [] (Esseq (Pattern [] (CaseBase (none, bty)))
+      (storeExpr loc ann intTy (cellPtr id (a + ((0 : Nat) : Int)))
+        fiveVal mo)
+      (storeExpr loc ann intTy (cellPtr id (a + ((8 : Nat) : Int)))
+        sixVal mo')) from rfl]
+  iapply wps_seq
+  iapply wps_store_at loc ann id a structTy 0 intTy fiveVal mo (.own (Qp.half 1)) b0
+    (ev0 :: evs) five_encodes (five_storable M.tagDefs).compat (five_storable M.tagDefs).fpm
+    (five_storable M.tagDefs).bytes_fpm ((five_storable M.tagDefs).len [])
+  isplitl [Hx]
+  · iexact Hx
+  iintro %fp Hx
+  iapply wps_store_at loc ann id a structTy 8 intTy sixVal mo'
+    (.own (Qp.half (Qp.half (Qp.half 1)))) b2 (ev0 :: evs) six_encodes
+    (six_storable M.tagDefs).compat (six_storable M.tagDefs).fpm
+    (six_storable M.tagDefs).bytes_fpm ((six_storable M.tagDefs).len [])
+  isplitl [Hy]
+  · iexact Hy
+  iintro %fp' Hy
+  unfold fiveBytes sixBytes
+  iapply j1
+  isplitl [Hx]
+  · iexact Hx
+  iapply j2
+  isplitl [Hp]
+  · iexact Hp
+  iapply j3
+  isplitl [Hy]
+  · iexact Hy
+  · iexact Ht
+
+/-- The view client at the whole-cell bundle: `cellOwn_view` in and
+    out (the image's decode inertness is the layout's `rfl` fact). -/
+theorem struct_wps_views_cell (loc : CerbLocation.Loc) (ann : core_run_annotation)
+    (mo mo' : memory_order) (bty : core_base_type) (id a : Int)
+    (b0 b1 b2 b3 : List CerbMem.AbsByte)
+    (h0 : b0.length = 4) (h1 : b1.length = 4) (h2 : b2.length = 4)
+    (ev0 : Fmap sym value) (evs : List (Fmap sym value)) :
+    cellOwn M.tagDefs (GF := GF) id (.own 1)
+        (SpikeCell.mk a structTy (b0 ++ (b1 ++ (b2 ++ b3)))) ⊢
+      wps M Ls
+        (fun _ _ => cellOwn M.tagDefs id (.own 1) (SpikeCell.mk a structTy
+          (fiveBytes M.tagDefs ++ (b1 ++ (sixBytes M.tagDefs ++ b3)))))
+        (progS loc ann mo mo' bty id a) (ev0 :: evs) := by
+  iintro Hc
+  icases (cellOwn_view M.tagDefs id (.own 1) _).1 $$ Hc with ⟨Hv, -⟩
+  ihave HW := struct_wps_views loc ann mo mo' bty id a b0 b1 b2 b3 h0 h1 h2 ev0 evs $$ Hv
+  iapply wps_wand _ _ $$ HW
+  iintro %w %ρ' Hv'
+  iapply (cellOwn_view M.tagDefs id (.own 1) _).2
+  isplitl [Hv']
+  · iexact Hv'
+  · ipureintro
+    exact structTy_decIndep a _
+
+/-- FRACTIONAL READ: the x field (holding 5) read through its view at
+    ANY fraction `q` — the load delivers 5 and the view comes back at
+    the same fraction. -/
+theorem struct_x_read_frac_wps (loc : CerbLocation.Loc) (ann : core_run_annotation)
+    (mo : memory_order) (id a : Int) (q : Qp) (ρ : EnvStack) :
+    pointsToView M.tagDefs (GF := GF) id a structTy fieldX (.own q) (.own q) intTy
+        (fiveBytes M.tagDefs) ⊢
+      wps M Ls
+        (fun w _ => iprop(⌜∃ fp, w = SpikeVal.annot [DA_pos [] fp] fiveVal⌝ ∗
+          pointsToView M.tagDefs id a structTy fieldX (.own q) (.own q) intTy
+            (fiveBytes M.tagDefs)))
+        (loadExpr loc ann intTy (cellPtr id (a + ((fieldX : Nat) : Int))) mo) ρ := by
+  iintro Hv
+  iapply wps_load_at loc ann id a structTy fieldX intTy mo (.own q) (.own q)
+    (fiveBytes M.tagDefs) ρ (fun lum fpm => five_reconstruct lum fpm _) five_loadTrap
+  isplitl [Hv]
+  · iexact Hv
+  iintro %fp Hv
+  isplit
+  · ipureintro
+    exact ⟨fp, rfl⟩
+  · iexact Hv
+
+/-- THE SHARED READER: the full x-field view splits into two halves,
+    one half is lent to the read, and the halves rejoin. -/
+theorem struct_x_read_shared_wps (loc : CerbLocation.Loc) (ann : core_run_annotation)
+    (mo : memory_order) (id a : Int) (ρ : EnvStack) :
+    pointsToView M.tagDefs (GF := GF) id a structTy fieldX (.own 1) (.own 1) intTy
+        (fiveBytes M.tagDefs) ⊢
+      wps M Ls
+        (fun w _ => iprop(⌜∃ fp, w = SpikeVal.annot [DA_pos [] fp] fiveVal⌝ ∗
+          pointsToView M.tagDefs id a structTy fieldX (.own 1) (.own 1) intTy
+            (fiveBytes M.tagDefs)))
+        (loadExpr loc ann intTy (cellPtr id (a + ((fieldX : Nat) : Int))) mo) ρ := by
+  have hsplit : pointsToView M.tagDefs (GF := GF) id a structTy fieldX (.own 1) (.own 1) intTy
+        (fiveBytes M.tagDefs) ⊣⊢
+      iprop(pointsToView M.tagDefs id a structTy fieldX (.own (Qp.half 1)) (.own (Qp.half 1))
+          intTy (fiveBytes M.tagDefs) ∗
+        pointsToView M.tagDefs id a structTy fieldX (.own (Qp.half 1)) (.own (Qp.half 1))
+          intTy (fiveBytes M.tagDefs)) := by
+    have := pointsToView_fractional M.tagDefs (GF := GF) id a structTy fieldX (Qp.half 1)
+      (Qp.half 1) intTy (fiveBytes M.tagDefs)
+    rw [Qp.half_add_half] at this
+    exact this
+  refine hsplit.1.trans ?_
+  refine (BI.sep_mono (struct_x_read_frac_wps (Ls := Ls) loc ann mo id a (Qp.half 1) ρ)
+    .rfl).trans ?_
+  refine (wps_frame _ _).trans ?_
+  iintro H
+  iapply (wps_wand _ _) $$ H
+  iintro %w %ρ' ⟨⟨%hw, Hv₁⟩, Hv₂⟩
+  isplit
+  · ipureintro
+    exact hw
+  · iapply hsplit.2
+    isplitl [Hv₁]
+    · iexact Hv₁
+    · iexact Hv₂
+
+/-- TWO READERS, ONE POINTER: each holds half of `pv` with its own
+    account of the contents (`bs`, `bs'`); the load goes through the
+    first; recombining forces the accounts to agree and returns full
+    ownership. -/
+theorem cell_read_shared_wps (loc : CerbLocation.Loc) (ann : core_run_annotation)
+    (pv : CerbMem.PointerValue) (mo : memory_order)
+    (bs bs' : List CerbMem.AbsByte) (ρ : EnvStack)
+    (htrap : cellLoadTrap M.tagDefs ⟨addrOf pv, intTy, bs⟩ = false) :
+    iprop(pointsToCell M.tagDefs (GF := GF) pv (.own (Qp.half 1)) intTy bs ∗
+      pointsToCell M.tagDefs pv (.own (Qp.half 1)) intTy bs') ⊢
+      wps M Ls
+        (fun w _ => iprop(⌜∃ fp, w = SpikeVal.annot [DA_pos [] fp]
+            (loadedVal M.tagDefs pv intTy bs)⌝ ∗
+          pointsToCell M.tagDefs pv (.own 1) intTy bs))
+        (loadExpr loc ann intTy pv mo) ρ := by
+  have hc : iprop(pointsToCell M.tagDefs (GF := GF) pv (.own (Qp.half 1)) intTy bs ∗
+        pointsToCell M.tagDefs pv (.own (Qp.half 1)) intTy bs') ⊢
+      pointsToCell M.tagDefs pv (.own 1) intTy bs := by
+    refine (pointsToCell_combine M.tagDefs pv (Qp.half 1) (Qp.half 1) intTy intTy bs bs').trans
+      ?_
+    rw [Qp.half_add_half]
+    exact BI.sep_elim_right
+  iintro ⟨H₁, H₂⟩
+  iapply wps_load loc ann intTy pv mo (.own (Qp.half 1)) bs ρ htrap
+  isplitl [H₁]
+  · iexact H₁
+  iintro %fp H₁
+  isplit
+  · ipureintro
+    exact ⟨fp, rfl⟩
+  · iapply hc
+    isplitl [H₁]
+    · iexact H₁
+    · iexact H₂
+
+/-- READ, THEN KEEP THE BOUNDS FOREVER: after the read the metadata
+    fraction is traded for persistent allocation knowledge, and the
+    in-bounds fact is handed out next to the (persistent-metadata)
+    view. -/
+theorem struct_x_read_persist_wps (loc : CerbLocation.Loc) (ann : core_run_annotation)
+    (mo : memory_order) (id a : Int) (q : Qp) (dqb : DFrac) (ρ : EnvStack) :
+    pointsToView M.tagDefs (GF := GF) id a structTy fieldX (.own q) dqb intTy
+        (fiveBytes M.tagDefs) ⊢
+      wps M Ls
+        (fun w _ => iprop(⌜∃ fp, w = SpikeVal.annot [DA_pos [] fp] fiveVal⌝ ∗
+          locInBounds M.tagDefs id a structTy fieldX (CerbMem.sizeofCtype M.tagDefs intTy) ∗
+          pointsToView M.tagDefs id a structTy fieldX .discard dqb intTy
+            (fiveBytes M.tagDefs)))
+        (loadExpr loc ann intTy (cellPtr id (a + ((fieldX : Nat) : Int))) mo) ρ := by
+  iintro Hv
+  iapply wps_fupd
+  iapply wps_load_at loc ann id a structTy fieldX intTy mo (.own q) dqb
+    (fiveBytes M.tagDefs) ρ (fun lum fpm => five_reconstruct lum fpm _) five_loadTrap
+  isplitl [Hv]
+  · iexact Hv
+  iintro %fp Hv
+  imod (pointsToView_persist M.tagDefs id a structTy fieldX (.own q) dqb intTy
+    (fiveBytes M.tagDefs)) $$ Hv with Hv
+  imodintro
+  isplit
+  · ipureintro
+    exact ⟨fp, rfl⟩
+  · iapply pointsToView_locInBounds M.tagDefs id a structTy fieldX dqb intTy
+      (fiveBytes M.tagDefs) $$ Hv
+
+end StructViews
 
 /-! ## THE ALLOCATION CLIENT (alloc arc P2, charter items 1-2)
 
@@ -520,25 +844,15 @@ theorem struct_create_store_adequacy {GF : BundledGFunctors} [SpikeGpreS GF]
       .rfl) BI.wand_elim_left)
   iapply wp_mono _ $$ HWP
   iintro %w ⟨%p, %hval, Hpt, -⟩
-  icases (pointsToCell_cellOwn_iff fmapEmpty _ _ _ _).mp $$ Hpt
-    with ⟨%id, %a, %hpv, Hcell⟩
+  -- alloc arc P4.1: the PUBLIC points-to readout (`pointsToCell_readout`,
+  -- Adequacy.lean) — no state-interpretation opening in this module.
+  ihave Hro := pointsToCell_readout fmapEmpty p (.own 1) structTy _ $$ Hpt
   iintro %σ2 %ns2 %κs2 %nt2 Hσ
-  icases (stateInterp_iff σ2 ns2 κs2 nt2).mp $$ Hσ
-    with ⟨%mm, %mb, %mk, %HG, Hmi, Hbi, Hki⟩
-  ihave %Hcc : ⌜CellCoh fmapEmpty σ2 id ⟨a, structTy,
-      spliceBytes fieldX (fiveBytes fmapEmpty)
-        (List.replicate (CerbMem.sizeofCtype fmapEmpty structTy) undefByte)⟩ ∧
-      Iris.Std.PartialMap.get? mm id = some (metaOf fmapEmpty
-        (⟨a, structTy, spliceBytes fieldX (fiveBytes fmapEmpty)
-          (List.replicate (CerbMem.sizeofCtype fmapEmpty structTy) undefByte)⟩ :
-          SpikeCell))⌝ $$ [Hmi Hbi Hcell]
-  · iapply cellOwn_cellCoh fmapEmpty HG id (.own 1)
-      ⟨a, structTy, spliceBytes fieldX (fiveBytes fmapEmpty)
-        (List.replicate (CerbMem.sizeofCtype fmapEmpty structTy) undefByte)⟩
-      $$ [$Hmi $Hbi $Hcell]
-  iapply fupd_mask_intro_discard Std.LawfulSet.empty_subset
+  imod Hro $$ %σ2 %ns2 %κs2 %nt2 Hσ with %hcc
+  imodintro
   ipureintro
-  exact ⟨hval, id, a, Hcc.1⟩
+  obtain ⟨id, a, -, hcc⟩ := hcc
+  exact ⟨hval, id, a, hcc⟩
 
 end CreateConsumer
 

@@ -385,28 +385,6 @@ theorem loop_wps (hn : 0 ≤ n) (sbty : core_base_type) :
   · iexact Hc
 
 omit hQ in
-/-- Single-cell readout (the `cells_readout` shape at one cell):
-    ownership at the end pins the final MemState's cell. -/
-theorem cell_readout (pv : CerbMem.PointerValue) (ty : ctype)
-    (bs : List CerbMem.AbsByte) :
-    pointsToCell fmapEmpty (GF := GF) pv (.own 1) ty bs ⊢
-      iprop(∀ (σ' : Mem) (ns : Nat) (κs : List Empty) (nt : Nat),
-        stateInterp σ' ns κs nt ={⊤, ∅}=∗
-          ⌜∃ i a, pv = cellPtr i a ∧ CellCoh fmapEmpty σ' i ⟨a, ty, bs⟩⌝) := by
-  -- Phase-4 tidy: the state-interpretation open/close lives in the
-  -- core combinator (stateInterp_readout); this module supplies only
-  -- the coupling-conditional extraction (cellOwn_cellCoh).
-  exact stateInterp_readout (fun σ' mm mb mk HG => by
-    iintro ⟨Hpt, Hmi, Hbi⟩
-    icases (pointsToCell_cellOwn_iff fmapEmpty pv (.own 1) ty bs).mp $$ Hpt with
-      ⟨%i, %a, %Hpv, Hcell⟩
-    ihave %Hcc : ⌜CellCoh fmapEmpty σ' i ⟨a, ty, bs⟩ ∧ Iris.Std.PartialMap.get? mm i =
-        some (metaOf fmapEmpty (⟨a, ty, bs⟩ : SpikeCell))⌝ $$ [Hmi Hbi Hcell]
-    · iapply cellOwn_cellCoh fmapEmpty HG i (.own 1) ⟨a, ty, bs⟩ $$ [$Hmi $Hbi $Hcell]
-    ipureintro
-    exact ⟨i, a, Hpv, Hcc.1⟩)
-
-omit hQ in
 /-- The per-value readout of the loop postcondition. -/
 theorem loop_readout_val (w : CoreRVal) :
     loopPost (GF := GF) c n bs0 w.w w.ρ ⊢
@@ -422,13 +400,13 @@ theorem loop_readout_val (w : CoreRVal) :
     from rfl]
   iintro ⟨%hval, Hd⟩
   icases Hd with (⟨%hn0, Hcell⟩ | ⟨%hpos, Hcell⟩)
-  · ihave Hro := cell_readout c intTy bs0 $$ Hcell
+  · ihave Hro := pointsToCell_readout fmapEmpty c (.own 1) intTy bs0 $$ Hcell
     iintro %σ' %ns %κs %nt Hσ
     imod Hro $$ %σ' %ns %κs %nt Hσ with %hfact
     imodintro
     ipureintro
     exact ⟨hval, bs0, .inl ⟨hn0, rfl⟩, hfact⟩
-  · ihave Hro := cell_readout c intTy (sevenBytes fmapEmpty) $$ Hcell
+  · ihave Hro := pointsToCell_readout fmapEmpty c (.own 1) intTy (sevenBytes fmapEmpty) $$ Hcell
     iintro %σ' %ns %κs %nt Hσ
     imod Hro $$ %σ' %ns %κs %nt Hσ with %hfact
     imodintro

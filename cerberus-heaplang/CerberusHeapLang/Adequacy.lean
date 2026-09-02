@@ -1200,6 +1200,42 @@ theorem cellsOwn_extract (tds : CerbTags.TagDefsMap) {GF : BundledGFunctors} [Sp
     (hG.metas_disj i j (metaOf tds ci) (metaOf tds cj) hne
       (hfacts i ci hgi).2 (hfacts j cj hgj).2)
 
+/-- THE SINGLE-CELL READOUT (alloc arc P4.1 — the public face of the
+    coupling for whole-cell clients; the exhibits consume this instead
+    of opening the state interpretation): whole-cell ownership at ANY
+    fraction reads the cell's engine-facing backing facts off the
+    final state. -/
+theorem cellOwn_readout (tds : CerbTags.TagDefsMap) {hlc : HasLC} {GF : BundledGFunctors}
+    [SpikeGS hlc GF] (i : Int) (dq : DFrac) (c : SpikeCell) :
+    cellOwn tds (GF := GF) i dq c ⊢
+      iprop(∀ (σ' : Mem) (ns : Nat) (κs : List Empty) (nt : Nat),
+        stateInterp σ' ns κs nt ={⊤, ∅}=∗ ⌜CellCoh tds σ' i c⌝) :=
+  stateInterp_readout (fun σ' mm mb mk HG => by
+    iintro ⟨Hc, Hmi, Hbi⟩
+    ihave %Hcc : ⌜CellCoh tds σ' i c ∧
+        Iris.Std.PartialMap.get? mm i = some (metaOf tds c)⌝ $$ [Hmi Hbi Hc]
+    · iapply cellOwn_cellCoh tds HG i dq c $$ [$Hmi $Hbi $Hc]
+    ipureintro
+    exact Hcc.1)
+
+/-- The points-to form of the single-cell readout: the pointer's
+    provenance id and address are the cell's. -/
+theorem pointsToCell_readout (tds : CerbTags.TagDefsMap) {hlc : HasLC} {GF : BundledGFunctors}
+    [SpikeGS hlc GF] (pv : CerbMem.PointerValue) (dq : DFrac) (ty : ctype)
+    (bs : List CerbMem.AbsByte) :
+    pointsToCell tds (GF := GF) pv dq ty bs ⊢
+      iprop(∀ (σ' : Mem) (ns : Nat) (κs : List Empty) (nt : Nat),
+        stateInterp σ' ns κs nt ={⊤, ∅}=∗
+          ⌜∃ i a, pv = cellPtr i a ∧ CellCoh tds σ' i ⟨a, ty, bs⟩⌝) := by
+  iintro Hpt
+  icases (pointsToCell_cellOwn_iff tds pv dq ty bs).mp $$ Hpt with ⟨%i, %a, %hpv, Hc⟩
+  ihave Hro := cellOwn_readout tds i dq ⟨a, ty, bs⟩ $$ Hc
+  iintro %σ' %ns %κs %nt Hσ
+  imod Hro $$ %σ' %ns %κs %nt Hσ with %hcc
+  imodintro
+  ipureintro
+  exact ⟨i, a, hpv, hcc⟩
+
 /-- The cell-footprint readout: post-cells + frame-cells consume the
     final state interpretation into the pure semantic-triple
     conclusion. -/

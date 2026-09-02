@@ -62,13 +62,9 @@ theorem intTy_size {tds : CerbTags.TagDefsMap} : CerbMem.sizeofCtype tds intTy =
 theorem arrayShift_cellPtr {tds : CerbTags.TagDefsMap} (id p : Int) :
     CerbMem.arrayShiftPtrval tds (cellPtr id p) intTy (CerbMem.integerIval 1) =
       cellPtr id (p + 4) := by
-  show CerbMem.PointerValue.PV (.Prov_some id)
-    (.PVconcrete none (p + 1 * Int.ofNat (CerbMem.sizeofCtype tds intTy))) =
-    CerbMem.PointerValue.PV (.Prov_some id) (.PVconcrete none (p + 4))
-  rw [show p + 1 * Int.ofNat (CerbMem.sizeofCtype tds intTy) = p + 4 by
-    rw [intTy_size]
-    rw [show Int.ofNat 4 = (4 : Int) from rfl]
-    omega]
+  rw [cellPtr_arrayShift tds id p intTy 1 (fun _ h => by unfold intTy at h; cases h),
+    intTy_size]
+  exact congrArg (cellPtr id) (by omega)
 
 /-- The mirror evaluator's shift at the concrete shapes. -/
 theorem evalArrayShift_ptr_one (id a : Int) :
@@ -598,17 +594,16 @@ theorem arr_wp_readout (sbty : core_base_type) :
     .rfl)).trans ?_
   refine BI.wand_elim_left.trans ?_
   refine wp_mono fun w => ?_
-  -- Phase-4 tidy: the state-interpretation open/close lives in the
-  -- core combinator (stateInterp_readout); this module supplies only
-  -- the coupling-conditional extraction (cellOwn_cellCoh).
-  exact stateInterp_readout (fun σ' mm mb mk HG => by
-    iintro ⟨⟨%hval, Hpt⟩, Hmi, Hbi⟩
-    ihave %Hcc : ⌜CellCoh (procCtx p rs).tagDefs σ' id ⟨a, aty, bs⟩ ∧
-        Iris.Std.PartialMap.get? mm id =
-          some (metaOf (procCtx p rs).tagDefs (⟨a, aty, bs⟩ : SpikeCell))⌝ $$ [Hmi Hbi Hpt]
-    · iapply cellOwn_cellCoh (procCtx p rs).tagDefs HG id (.own 1) ⟨a, aty, bs⟩ $$ [$Hmi $Hbi $Hpt]
-    ipureintro
-    exact ⟨hval, Hcc.1⟩)
+  -- alloc arc P4.1: the readout is the PUBLIC single-cell readout
+  -- (`cellOwn_readout`, Adequacy.lean) — no state-interpretation
+  -- opening in this module.
+  iintro ⟨%hval, Hpt⟩
+  ihave Hro := cellOwn_readout (procCtx p rs).tagDefs id (.own 1) ⟨a, aty, bs⟩ $$ Hpt
+  iintro %σ' %ns %κs %nt Hσ
+  imod Hro $$ %σ' %ns %κs %nt Hσ with %hcc
+  imodintro
+  ipureintro
+  exact ⟨hval, hcc⟩
 
 omit hQ hsz hdec in
 /-- The label bodies are in the certified cone. -/
