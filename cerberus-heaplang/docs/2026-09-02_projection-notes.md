@@ -193,7 +193,7 @@ composes with `engine_adequacyU`. The closed-program exports
 
 ## 5. Signature snapshot (frozen-corpus check)
 
-`docs/2026-09-02_projection-signatures-pre.txt` (at `3ff811e`; byte-
+`docs/2026-09-02_p5-signatures-post.txt (byte-identical to the former 2026-09-02_projection-signatures-pre.txt, deduplicated 2026-09-02)` (at `3ff811e`; byte-
 identical to `2026-09-02_p5-signatures-post.txt`) vs `…-post.txt` (at
 `6a7c041`). `diff pre post`: `<` lines (removed/changed): 0.
 Added declaration headers, verbatim:

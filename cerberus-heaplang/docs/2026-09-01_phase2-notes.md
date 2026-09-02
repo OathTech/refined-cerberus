@@ -177,7 +177,7 @@ cold-start hoisting).
 
 ## 5. The oracle (frozen-corpus regression)
 
-Snapshots: `docs/2026-09-01_phase2-signatures-pre.txt` (14499 lines,
+Snapshots: `docs/2026-09-01_s1b-signatures-post.txt (byte-identical to the former 2026-09-01_phase2-signatures-pre.txt, deduplicated 2026-09-02)` (14499 lines,
 at S1c close) / `docs/2026-09-01_phase2-signatures-post.txt` (16051
 lines). Derived tally (labeled as derived; the snapshots are the
 record): 8 deleted, 32 changed, 172 added declarations.

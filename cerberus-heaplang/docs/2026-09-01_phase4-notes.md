@@ -165,7 +165,7 @@ F-06 tail; the census footnote)
 
 ## 5. The oracle (frozen-corpus regression)
 
-Snapshots: `docs/2026-09-01_phase4-signatures-pre.txt` (= the
+Snapshots: `docs/2026-09-01_phase3-signatures-post.txt (byte-identical to the former 2026-09-01_phase4-signatures-pre.txt, deduplicated 2026-09-02)` (= the
 phase-3 post, 16998 lines) /
 `docs/2026-09-01_phase4-signatures-post.txt` (17860 lines). Derived
 tally (labeled as derived; the snapshots are the record, compared

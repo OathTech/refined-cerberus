@@ -175,7 +175,7 @@ list)
 
 ## 5. The oracle (frozen-corpus regression)
 
-Snapshots: `docs/2026-09-01_phase5-signatures-pre.txt` (= the
+Snapshots: `docs/2026-09-01_phase4-signatures-post.txt (byte-identical to the former 2026-09-01_phase5-signatures-pre.txt, deduplicated 2026-09-02)` (= the
 phase-4 post, 17860 lines, byte-identical — verified at slice start)
 / `docs/2026-09-01_phase5-signatures-post.txt` (18701 lines).
 Derived tally (labeled as derived; the snapshots are the record,
