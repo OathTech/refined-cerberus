@@ -580,3 +580,25 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   (4) four exhibits the README listed as pinned but never were are now
   pinned (the sentence was made true rather than weakened). Result:
   2,085 → 1,949 declarations; 120 trio-exact export pins.
+- **2026-09-02 [AGENT] PROFESSOR REVIEW 1 (B+) — RESPONSE ADJUDICATIONS**
+  (records: `cerberus-heaplang/docs/2026-09-02_professor-review-1.md`,
+  `…_pr1-notes.md`, `…_pr2-notes.md`): the grade clears the operator's
+  fail line (B or below) by one notch, but the two items the professor
+  names as separating it from A- are defects in the STATEMENTS of the
+  main results (run-length-coupled fuel premise; a headline projection
+  whose conclusion is not boring) — treated as required, all eight
+  required fixes executed, re-mark by a NEW professor instance follows.
+  PR-1 adjudications: (1) fix 8's lifting shape differs from the
+  review's (`WP ⊢ wps` is unprovable: iris-lean's `wp.pre` places `▷`
+  after the step's `|={∅}=>`, `wps.pre` before the `∀`) — the
+  mask-generic `AtomicStep` specification + three lifting lemmas
+  achieve one proof per small axiom; accepted. (2) The three
+  mirror-only termination exports are DELETED, not relabelled; the
+  negative test is re-proved at the engine. (3) The triple/drive
+  collapse to the `U` forms and `driveU` is accepted (prune, traces
+  recorded); `rsCtx` (Step.lean, frozen) is now consumerless — a later
+  slice. (4) `hlib` discharge STOPPED as a finding: the premise is
+  dischargeable on the success path but `Round.lean`'s refused
+  classifications carry the location in the killed payload; removing
+  it means editing the frozen certification — deferred with the
+  reason. (5) `hbsz` stays (QA-1's whole-AST-induction stop stands).
