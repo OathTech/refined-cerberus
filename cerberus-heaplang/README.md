@@ -261,9 +261,24 @@ against the engine's own `step_ctx`/discharge functions
 (`Soundness.lean`), landing through the adequacy theorems in the
 drive and production lanes. A bridge between the two presentations
 is recorded as OUT of scope for this phase (foundations arc plan,
-Phase 1 item 6; the relation-closure question — two-sided coverage
-of the package's own projection — is re-audit R-03, owner alloc arc
-P3: the closure table, `docs/2026-09-01_alloc-arc-plan.md`).
+Phase 1 item 6). The relation-closure question (re-audit R-03) is
+answered at alloc arc P3.2 (`Round.lean`): the engine-facing
+one-round relation is NAMED — `CerberusRound M aid`, the graph of
+the discharged `step_ctx` round, chosen as the reference relation
+because one round is exactly the unit the shipped driver iterates —
+and `cerberusRound_classify` classifies EVERY well-sized `Frag`
+configuration into value-done / value-annot / two-sided step
+(`Step M c c' ↔ CerberusRound M aid c c'` wherever the mirror steps)
+/ mirror-stuck; the capability manifest derives its engine-match
+column from that theorem. The honest residual: at mirror-STUCK
+configurations the engine's behavior is classified only for the
+store/load/create/case redexes (`cerberusRound_refused_*`); the
+other rows' refusal channels are `failwithI` panics (opaque — not
+classifiable in the kernel) or the memop ND fork, listed per row in
+the manifest (Notes 7) and in the closure table
+(`docs/2026-09-01_alloc-arc-plan.md`). No bridge to `RelSemCore` is
+claimed; a future type layer claiming it must prove the bridge
+first.
 
 ## Scope of the claims
 
@@ -365,7 +380,13 @@ heap rules, and the generic allocation-aware driver collapse
 pipeline — no handwritten operational rounds remain in the module.
 
 The GENERAL production-entry theorems are conditioned, and the
-conditions are part of the claim. `sem_triple_prod` and
+conditions are part of the claim (and — alloc arc P3 honesty note —
+those conditions are OPERATIONAL drive equations: `sem_triple_prod`
+is the last generic face of the cold-start prefix technique P2
+retired from the exhibits, has no consumer since P2, and is a
+retirement candidate for the P5 scaffolding pass; the allocating
+exports reach the pipeline through `wpt_driver_done_alloc` →
+`prod_run_eqJ` instead). `sem_triple_prod` and
 `prod_run_eq` (ProdEntry.lean) conclude their `runND` equation only
 under: `hterm`, a proved in-budget-termination hypothesis for the
 compute part (∀ aids, the drive completes to `.done v σfin` in k
@@ -411,6 +432,8 @@ or growth paths. The register (each entry's home is authoritative):
 | Memory orders accepted arbitrarily: `Step.store`/`wp_store` hold at ANY `memory_order` | Mirror-true: the sequential driver drops `mo` (`action_request_sequential2`, Driver.lean:273 — `mo1` unused); NA-only side conditions would be a divergence FROM the engine | This table + `docs/2026-08-30_spike-report.md` register |
 | Allocation rules + launch REPAIRED (alloc arc P1), partial-lane whole-program consumer LANDED (P2 items 1-2): the public `wps_create`/`wpt_create` (existential pointer, `allocCap` capacity, cursor-free statements, pure address-bounds export) are launchable via the allocation-aware launchers (`launchResources` under `LaunchCoh`), with local consumers, the engine-facing smoke `alloc_create_launch_smoke` (AllocExhibit), and the struct client `struct_create_store_wps`/`struct_create_store_adequacy` (StructExhibit — public rule + engine-facing adequacy through `spike_engine_adequacy_alloc`); and — alloc arc P2 — the whole-program production consumers (`progAProd_wpt`/`ctrProd_wpt`/`lrProd_wpt` through `wpt_driver_done_alloc`); R-01's closure test PASSED (deleting the public rule breaks the struct/two-create consumers; deleting `wpt_create` breaks the create/store/load and both loop production chains; deleting `launchResources` breaks the launch family — plant transcripts in `docs/2026-09-01_p2-notes.md`) | — (CLOSED; the closure table records the transcripts: `docs/2026-09-01_alloc-arc-plan.md`) | `Wps.lean`/`Wpt.lean` §CreateRule headers; `docs/2026-09-01_p1-notes.md` + `docs/2026-09-01_p2-notes.md`; 2026-09-01 skeptical re-audit R-01 |
 | ~~R-02 (allocating exhibits bypass the separation logic)~~ CLOSED at alloc arc P2: all three allocating production exports are whole-program logic proofs (the programs bind their created pointers; creates cross the PUBLIC `wpt_create`; the generic `wpt_driver_done_alloc` → `prod_run_eqJ` collapse supplies every pipeline arrow); every handwritten `Step.*`/`engineSteps_*`/`driverDone_step` proof chain is DELETED from the positive exhibits (grep transcript + closure-test plants: `docs/2026-09-01_p2-notes.md`; closure table: `docs/2026-09-01_alloc-arc-plan.md`) | — (closed; the dependency-certified manifest upgrade is P3, R-04) | `ProdLoopExhibit.lean`/`ProdExhibit.lean` headers; 2026-09-01 skeptical re-audit R-02 |
+| ~~R-04 (the capability gate validated declarations, not use)~~ CLOSED at alloc arc P3.1: the manifest generator is DEPENDENCY-CERTIFIED — every listed consumer's proof cone must contain the row's public rule and its lane's launcher (create's production consumers also `wpt_create` + `launchResources`), its statement must contain the construct's syntax, and the LAYER CUT + direct-reference ban hold over every positive-exhibit declaration; the four charter plants (a create consumer re-proved by a direct `Step.create` trace under its own name; a local `wps` theorem listed as adequacy consumer; `wpt_create` removed from the row; a `Frag` constructor without a row) each turn gate 4 red — transcripts `docs/2026-09-01_p3-notes.md` | — (closed; closure table `docs/2026-09-01_alloc-arc-plan.md`) | `scripts/capability_manifest.lean` header; manifest Notes 8 |
+| R-03 (the Cerberus relation a bespoke one-sided projection): the engine-round relation is NAMED (`CerberusRound`, Round.lean) and `cerberusRound_classify` is the exhaustive per-configuration classification over the whole `Frag` cone with the two-sided step arm (`step_iff_cerberusRound`); the manifest's engine-match column is derived from it; RESIDUAL: the refusal arm is classified two-sidedly for store/load/create/case only — the remaining rows' refusal channels are `failwithI` panics (opaque constants: a kernel classification is impossible, not merely unproved), save's EVAL round on non-value params, and the memop ND fork | Per-row refusal theorems where a non-panic channel exists (context rows: refusal propagation through `Decomp`; save: an EVAL-round arm); the panic channels stay one-sided by construction unless the semantics repo replaces `failwithI` with a value-level error | manifest Notes 7 + machine lines RELATION-REFUSAL-TWO-SIDED / -ONE-SIDED; `Round.lean` header; closure table |
 | `Ewseq` at spec/sym binder patterns outside the fragment (the WILDCARD lane exported in S1b as the drift test); `Ecase`'s EVAL arm (non-value scrutinees) unmirrored | Mechanical per-construct extension, path named | `Step.lean` header; `docs/2026-08-30_spike-report.md` "Honestly open" |
 | PURE exits certified at `PEsym` shape only (general `PePure` exits are a bounded matcher extension) | Extend `stepDischarge_pure_sym` per-constructor when needed | `Soundness.lean`; `docs/2026-08-31_phase2-s4-notes.md` |
 | The array exhibit's pre-state is ONE allocation (not a ∗-of-per-element-cells): the engine's loads bounds-check against the pointer's PROVENANCE allocation and `arrayShiftPtrval` preserves provenance, so distinct-allocation "arrays" are not walkable in the engine — C's object model | Forcing fact about Cerberus, recorded; per-element structure lives in the index-partitioned invariant + decode premises | `ArrayExhibit.lean` header; `docs/2026-08-31_phase2-s4-notes.md` |

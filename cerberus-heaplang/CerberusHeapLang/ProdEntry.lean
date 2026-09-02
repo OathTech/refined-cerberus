@@ -369,7 +369,23 @@ production cold-start memory and establishes the compute part's
 footprint), the production run is the singleton Active execution, its
 result value is the delivered value, and the final memory satisfies
 the postcondition footprint with the frame R verbatim — the same
-splitting quantifier as SemTriple. -/
+splitting quantifier as SemTriple.
+
+HONESTY NOTE [AGENT 2026-09-01, alloc arc P3 closure]: the `hpre`
+hypothesis (the prefix-alignment DRIVE EQUATION) and `hterm` (the
+compute part's in-budget drive equation) are OPERATIONAL
+hypotheses — this theorem is the last surviving generic face of the
+cold-start operational-prefix technique that alloc arc P2 retired
+from every positive exhibit (the allocating production exports now
+go through the PUBLIC `wpt_create` and the generic
+`wpt_driver_done_alloc` → `prod_run_eqJ` route, which needs no such
+hypothesis). Since P2 it has NO consumer in the package (only its
+Audit pin and the README's conditioned-theorem paragraph mention
+it). It is kept as the conditioned generic partial face it always
+was, with the conditions stated as part of the claim, and is a
+RETIREMENT CANDIDATE for the P5 scaffolding pass (re-audit R-07):
+retiring it deletes an exported face, so that decision is left
+operator-visible rather than taken here. -/
 theorem sem_triple_prod
     (e : CoreExpr) (hfrag : StraightFrag e)
     -- the compute part and its exported triple

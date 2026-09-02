@@ -113,6 +113,7 @@ import CerberusHeapLang.TreeRotExhibit
 import CerberusHeapLang.CaseExhibit
 import CerberusHeapLang.WseqExhibit
 import CerberusHeapLang.StructExhibit
+import CerberusHeapLang.Round
 import CerberusHeapLang.StmtProbe
 
 namespace CerberusHeapLang.Audit
@@ -592,6 +593,35 @@ info: 'CerberusHeapLang.case_certified' depends on axioms: [propext, Classical.c
 info: 'CerberusHeapLang.wseq_certified' depends on axioms: [propext, Classical.choice, Quot.sound]
 -/
 #guard_msgs in #print axioms CerberusHeapLang.wseq_certified
+
+-- Alloc arc P3.2 (2026-09-01): THE ENGINE-FACING ONE-ROUND RELATION
+-- NAMED (re-audit R-03) — `CerberusRound` (the graph of the discharged
+-- step_ctx round) with the exhaustive per-configuration
+-- classification over the whole `Frag` cone (`cerberusRound_classify`:
+-- value-done / value-annot / two-sided step / mirror-stuck), the
+-- two-sided arm as an iff wherever the mirror steps
+-- (`step_iff_cerberusRound`), and the load/create completeness pairs
+-- joining store/case (`engine_complete_loadU`/`_createU`). Cones
+-- exactly the trio.
+/--
+info: 'CerberusHeapLang.cerberusRound_classify' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms CerberusHeapLang.cerberusRound_classify
+
+/--
+info: 'CerberusHeapLang.step_iff_cerberusRound' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms CerberusHeapLang.step_iff_cerberusRound
+
+/--
+info: 'CerberusHeapLang.engine_complete_loadU' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms CerberusHeapLang.engine_complete_loadU
+
+/--
+info: 'CerberusHeapLang.engine_complete_createU' depends on axioms: [propext, Classical.choice, Quot.sound]
+-/
+#guard_msgs in #print axioms CerberusHeapLang.engine_complete_createU
 
 /-! ## The exhaustive sweep (LAST — nothing declared below except the
 sweep's own reachability helper, declared just above it) -/

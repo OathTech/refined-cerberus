@@ -28,7 +28,11 @@ instrument's own honesty):
   a cone constructor without a `rowSpec` mapping makes this script
   THROW. Symmetrically the `Step` mirror's coverage: every `Step`
   constructor read from the environment must be claimed by EXACTLY
-  ONE row's mirror cell (audit F-03 acceptance property).
+  ONE row's mirror cell (audit F-03 acceptance property). P3.2: the
+  ENGINE-MATCH column is derived from the relation-coverage theorem
+  `cerberusRound_classify` (Round.lean) — its statement must be
+  indexed by `Frag` and conclude `RoundClass` (arms checked), and
+  every row's engine equations must lie in its proof cone.
 - CHECKED (Phase 0): every named declaration in a cell is looked up
   in the environment and must exist with the stated kind.
 - DEPENDENCY-CERTIFIED (P3.1, the R-04 repair — the checks are
@@ -190,7 +194,8 @@ def importClosure (env : Environment) (m : Name) : Except String (Std.HashSet Na
     the semantics never reference this package — the import graph is
     acyclic); pruning at leaf modules is sound for the target modules
     by the import-closure assertion above. -/
-partial def cone (env : Environment) (start : Name) : DepM (Std.HashSet Name) := do
+partial def cone (env : Environment) (start : Name) (pruneLeaves : Bool := true) :
+    DepM (Std.HashSet Name) := do
   let mut seen : Std.HashSet Name := {}
   let mut stack : Array Name := ← allDeps env start
   while h : stack.size > 0 do
@@ -199,7 +204,7 @@ partial def cone (env : Environment) (start : Name) : DepM (Std.HashSet Name) :=
     if seen.contains c then continue
     if !isOurs env c then continue
     seen := seen.insert c
-    if leafModules.contains (modOf env c) then continue
+    if pruneLeaves && leafModules.contains (modOf env c) then continue
     for d in ← allDeps env c do
       if !seen.contains d then stack := stack.push d
   return seen
@@ -338,10 +343,12 @@ def isOperational (n : Name) : Bool :=
    s.startsWith "dischargeStep_", s.startsWith "Decomp.", s.startsWith "Redex.",
    s.startsWith "cerberusRound_", s.startsWith "CerberusRound."].any id
 
-/-- The direct-reference ban set (charter §P3.1 wording). -/
+/-- The direct-reference ban set (charter §P3.1 wording: `Step.*` —
+    the whole relation namespace, constructors and lemmas alike —
+    `engineSteps_*`, `driveJ_step`, `driverDone_step`). -/
 def isDirectBanned (stepCtors : List Name) (n : Name) : Bool :=
   let s := shortName n
-  [stepCtors.contains n, s.startsWith "engineSteps_",
+  [stepCtors.contains n, s.startsWith "Step.", s.startsWith "engineSteps_",
    n == `CerberusHeapLang.driveJ_step, n == `CerberusHeapLang.driverDone_step].any id
 
 /-! ## Cells and rows -/
@@ -400,7 +407,22 @@ structure RowSpec where
   /-- The public PARTIAL logical rules (wp_/wps_ family). -/
   logic : Cell
   coneNote : String := ""
-  engineMatch : Cell
+  /-- The per-construct ENGINE EQUATIONS the row's mirror rules are
+      certified by (step_ctx_*/stepDischarge_*): each must lie in the
+      cone of the headline classification `cerberusRound_classify`
+      (P3.2 — the manifest's relation coverage is DERIVED from that
+      theorem, not declared). -/
+  engineEqs : List Name
+  engineNote : String := ""
+  /-- The row's REFUSAL classification theorem (two-sided at the
+      refusal arm: mirror stuck ⇒ the engine's round is a singleton
+      refusal), or `none` with the reason the row is one-sided there
+      (the R-03 residual, per row). -/
+  twoSided : Option Name := none
+  oneSidedWhy : String := ""
+  /-- The refusal arm is NOT APPLICABLE (the value row: values are
+      never mirror-stuck — both engine rounds are exact value arms). -/
+  refusalNA : Bool := false
   /-- The generic partial-lane adequacy theorems the row rides. -/
   partialLane : Cell
   /-- Engine-facing PARTIAL consumers (rule + partial launcher). -/
@@ -426,7 +448,13 @@ structure Row where
   mirror : Cell
   logic : Cell
   cone : Cell
-  engineMatch : Cell
+  engineEqs : List Name
+  engineNote : String
+  twoSided : Option Name
+  oneSidedWhy : String
+  refusalNA : Bool
+  /-- Supplementary rows: a DECLARED engine-match text instead. -/
+  engineDeclared : String := ""
   partialLane : Cell
   adequacyConsumers : List Name
   adequacyNote : String
@@ -446,7 +474,10 @@ def RowSpec.toRow (spec : RowSpec) (coneCtor : Name) : Row :=
     synCtors := spec.synCtors, syntaxNote := spec.syntaxNote,
     mirror := spec.mirror, logic := spec.logic,
     cone := .ctors [coneCtor] (note := spec.coneNote),
-    engineMatch := spec.engineMatch, partialLane := spec.partialLane,
+    engineEqs := spec.engineEqs, engineNote := spec.engineNote,
+    twoSided := spec.twoSided, oneSidedWhy := spec.oneSidedWhy,
+    refusalNA := spec.refusalNA,
+    partialLane := spec.partialLane,
     adequacyConsumers := spec.adequacyConsumers, adequacyNote := spec.adequacyNote,
     localConsumers := spec.localConsumers, localNote := spec.localNote,
     total := spec.total, totalRed := spec.totalRed,
@@ -460,7 +491,7 @@ lanes are reported separately in the machine-readable lines
 CORE-DRIVE-ROW; since P3 every listed lane member is dependency-
 certified or the run throws). -/
 def Row.coreCells (r : Row) : List Cell :=
-  [r.mirror, r.cone, r.engineMatch, r.partialLane]
+  [r.mirror, r.cone, r.partialLane]
 
 def Row.exportable (r : Row) : Bool :=
   !(r.coreCells.any Cell.isRed) && !r.adequacyConsumers.isEmpty
@@ -514,8 +545,9 @@ def rowSpec : Name → Option RowSpec
       synCtors := [PEval],
       mirror := .declared "terminal — the toVal/ofVal value protocol (values do not step)",
       logic := .thms [`CerberusHeapLang.wp_ofVal, `CerberusHeapLang.wps_ofVal],
-      engineMatch := .thms [`CerberusHeapLang.step_ctx_done,
-        `CerberusHeapLang.step_ctx_remove_annot],
+      engineEqs := [`CerberusHeapLang.step_ctx_done, `CerberusHeapLang.step_ctx_remove_annot],
+      oneSidedWhy := "the value protocol: no mirror step exists at a value by design; both engine rounds (PROGRAM-DONE / REMOVE-ANNOT) are EXACT arms of the classification (value_done / value_annot) — nothing is one-sided here",
+      refusalNA := true,
       partialLane := .thms [`CerberusHeapLang.engine_complete,
         `CerberusHeapLang.engine_adequacyJ],
       adequacyConsumers := [`CerberusHeapLang.exhibitA_engine],
@@ -531,9 +563,9 @@ def rowSpec : Name → Option RowSpec
       logic := .thms [`CerberusHeapLang.wp_store, `CerberusHeapLang.wps_store,
         `CerberusHeapLang.wps_store_at, `CerberusHeapLang.wps_store_cell_at]
         (note := "wps_store_at/wps_store_cell_at are the GENERIC typed-subrange forms (Notes 5)"),
-      engineMatch := .thms [`CerberusHeapLang.step_ctx_store,
-        `CerberusHeapLang.engine_complete_storeU]
-        (note := "TWO-SIDED at any MachineCtx"),
+      engineEqs := [`CerberusHeapLang.step_ctx_store],
+      engineNote := "TWO-SIDED at any MachineCtx",
+      twoSided := some `CerberusHeapLang.cerberusRound_refused_store,
       partialLane := .thms [`CerberusHeapLang.engine_complete,
         `CerberusHeapLang.engine_adequacyJ],
       adequacyConsumers := [`CerberusHeapLang.exhibitB_engine,
@@ -552,7 +584,8 @@ def rowSpec : Name → Option RowSpec
       logic := .thms [`CerberusHeapLang.wp_load, `CerberusHeapLang.wps_load,
         `CerberusHeapLang.wps_load_at, `CerberusHeapLang.wps_load_cell_at]
         (note := "wps_load_at/wps_load_cell_at are the GENERIC typed-subrange forms (Notes 5)"),
-      engineMatch := .thms [`CerberusHeapLang.step_ctx_load],
+      engineEqs := [`CerberusHeapLang.step_ctx_load],
+      twoSided := some `CerberusHeapLang.cerberusRound_refused_load,
       partialLane := .thms [`CerberusHeapLang.engine_complete,
         `CerberusHeapLang.engine_adequacyJ],
       adequacyConsumers := [`CerberusHeapLang.exhibitA_engine,
@@ -569,7 +602,8 @@ def rowSpec : Name → Option RowSpec
       logic := .thms [`CerberusHeapLang.wps_create,
         `CerberusHeapLang.wps_create_cursor_internal]
         (note := "alloc arc P1: the PUBLIC wps_create takes the abstract capacity allocCap (req :: rest) and binds an existential pointer (statement cursor-free); the exact-cursor form is wps_create_cursor_internal (heap-implementation use only); OOM excluded by the plan-fit inside allocCap — see Notes 4"),
-      engineMatch := .thms [`CerberusHeapLang.step_ctx_create],
+      engineEqs := [`CerberusHeapLang.step_ctx_create],
+      twoSided := some `CerberusHeapLang.cerberusRound_refused_create,
       partialLane := .thms [`CerberusHeapLang.engine_complete,
         `CerberusHeapLang.engine_adequacyJ],
       adequacyConsumers := [`CerberusHeapLang.struct_create_store_adequacy],
@@ -592,8 +626,8 @@ def rowSpec : Name → Option RowSpec
       mirror := .ctors [`CerberusHeapLang.Step.sseq_pure,
         `CerberusHeapLang.Step.sseq_annot, `CerberusHeapLang.Step.sseq_ctx],
       logic := .thms [`CerberusHeapLang.wp_sseq, `CerberusHeapLang.wps_seq],
-      engineMatch := .thms [`CerberusHeapLang.step_ctx_beta_pure,
-        `CerberusHeapLang.step_ctx_beta_annot],
+      engineEqs := [`CerberusHeapLang.step_ctx_beta_pure, `CerberusHeapLang.step_ctx_beta_annot],
+      oneSidedWhy := "context row: the refusal at a nested redex propagates from the redex; the beta at a value never refuses (cons env) — the redex rows carry the two-sidedness; no context-level refusal theorem yet",
       partialLane := .thms [`CerberusHeapLang.engine_complete,
         `CerberusHeapLang.engine_adequacyJ],
       adequacyConsumers := [`CerberusHeapLang.exhibitA_engine,
@@ -610,7 +644,8 @@ def rowSpec : Name → Option RowSpec
       mirror := .ctors [`CerberusHeapLang.Step.annot_ctx,
         `CerberusHeapLang.Step.annot_merge],
       logic := .thms [`CerberusHeapLang.wp_annot, `CerberusHeapLang.wps_annot],
-      engineMatch := .thms [`CerberusHeapLang.step_ctx_merge],
+      engineEqs := [`CerberusHeapLang.step_ctx_merge],
+      oneSidedWhy := "context row (descent) / pure merge: as sseq-wild",
       partialLane := .thms [`CerberusHeapLang.engine_complete,
         `CerberusHeapLang.engine_adequacyJ],
       adequacyConsumers := [`CerberusHeapLang.exhibitA_engine],
@@ -624,7 +659,8 @@ def rowSpec : Name → Option RowSpec
       synCtors := [Esave],
       mirror := .ctors [`CerberusHeapLang.Step.save],
       logic := .thms [`CerberusHeapLang.wps_save],
-      engineMatch := .thms [`CerberusHeapLang.step_ctx_save],
+      engineEqs := [`CerberusHeapLang.step_ctx_save],
+      oneSidedWhy := "the refusal channel is an ENGINE EVAL round on non-value params (the mirror requires value-shaped params) — a genuine one-sided gap, not a panic",
       partialLane := .thms [`CerberusHeapLang.engine_adequacyJ],
       adequacyConsumers := [`CerberusHeapLang.counter_loop_certified,
         `CerberusHeapLang.fib_certified, `CerberusHeapLang.list_reverse_certified],
@@ -641,8 +677,8 @@ def rowSpec : Name → Option RowSpec
         `CerberusHeapLang.Step.if_false],
       logic := .thms [`CerberusHeapLang.wps_if_true,
         `CerberusHeapLang.wps_if_false],
-      engineMatch := .thms [`CerberusHeapLang.stepDischarge_if_true,
-        `CerberusHeapLang.stepDischarge_if_false],
+      engineEqs := [`CerberusHeapLang.stepDischarge_if_true, `CerberusHeapLang.stepDischarge_if_false],
+      oneSidedWhy := "non-boolean guard: failwithI PANIC (opaque — no kernel classification possible); guard evaluation errors: kill",
       partialLane := .thms [`CerberusHeapLang.engine_adequacyJ],
       adequacyConsumers := [`CerberusHeapLang.counter_loop_certified,
         `CerberusHeapLang.fib_certified],
@@ -656,8 +692,9 @@ def rowSpec : Name → Option RowSpec
       synCtors := [Erun],
       mirror := .ctors [`CerberusHeapLang.Step.run],
       logic := .thms [`CerberusHeapLang.wps_run],
-      engineMatch := .thms [`CerberusHeapLang.stepDischarge_run]
-        (note := "ONE-SIDED — match-given-step, the direction adequacy consumes; jump refusal channels are failwithI panics = absence of a step; see Notes 7"),
+      engineEqs := [`CerberusHeapLang.stepDischarge_run],
+      engineNote := "ONE-SIDED — match-given-step, the direction adequacy consumes; jump refusal channels are failwithI panics = absence of a step; see Notes 7",
+      oneSidedWhy := "jump refusal channels (unbound label, arity) are failwithI panics (opaque); argument evaluation errors: kill",
       partialLane := .thms [`CerberusHeapLang.engine_adequacyJ],
       adequacyConsumers := [`CerberusHeapLang.counter_loop_certified,
         `CerberusHeapLang.fib_certified],
@@ -673,8 +710,8 @@ def rowSpec : Name → Option RowSpec
       mirror := .ctors [`CerberusHeapLang.Step.sseq_spec_pure,
         `CerberusHeapLang.Step.sseq_spec_annot],
       logic := .thms [`CerberusHeapLang.wps_seq_spec],
-      engineMatch := .thms [`CerberusHeapLang.step_ctx_beta_spec_pure,
-        `CerberusHeapLang.step_ctx_beta_spec_annot],
+      engineEqs := [`CerberusHeapLang.step_ctx_beta_spec_pure, `CerberusHeapLang.step_ctx_beta_spec_annot],
+      oneSidedWhy := "non-Specified bound value: update_env's failwithI mismatch arm (opaque panic)",
       partialLane := .thms [`CerberusHeapLang.engine_adequacyJ],
       adequacyConsumers := [`CerberusHeapLang.array_sum_certified,
         `CerberusHeapLang.list_reverse_certified],
@@ -689,7 +726,8 @@ def rowSpec : Name → Option RowSpec
       mirror := .ctors [`CerberusHeapLang.Step.pure_eval]
         (note := "certified at PEsym shape — Soundness stepDischarge_pure_sym"),
       logic := .thms [`CerberusHeapLang.wps_pure],
-      engineMatch := .thms [`CerberusHeapLang.stepDischarge_pure_sym],
+      engineEqs := [`CerberusHeapLang.stepDischarge_pure_sym],
+      oneSidedWhy := "unbound symbol: the pure evaluator's error channel (kill) — no refusal theorem yet",
       partialLane := .thms [`CerberusHeapLang.engine_adequacyJ],
       adequacyConsumers := [`CerberusHeapLang.fib_certified],
       total := some
@@ -704,7 +742,8 @@ def rowSpec : Name → Option RowSpec
       syntaxNote := "the same Load0 syntax as the value-operand row; the operand-evaluation round is distinguished by its rule (wps_load_eval), which the dependency check requires",
       mirror := .ctors [`CerberusHeapLang.Step.load_eval],
       logic := .thms [`CerberusHeapLang.wps_load_eval],
-      engineMatch := .thms [`CerberusHeapLang.stepDischarge_load_eval],
+      engineEqs := [`CerberusHeapLang.stepDischarge_load_eval],
+      oneSidedWhy := "operand evaluation errors: kill; PEconstrained: panic — no refusal theorem yet",
       partialLane := .thms [`CerberusHeapLang.engine_adequacyJ],
       adequacyConsumers := [`CerberusHeapLang.array_sum_certified],
       total := some
@@ -718,7 +757,8 @@ def rowSpec : Name → Option RowSpec
       syntaxNote := "Esseq shared with the wildcard row; the binder shape is distinguished by its rule (wps_seq_sym), which the dependency check requires",
       mirror := .ctors [`CerberusHeapLang.Step.sseq_sym_pure],
       logic := .thms [`CerberusHeapLang.wps_seq_sym],
-      engineMatch := .thms [`CerberusHeapLang.step_ctx_beta_sym_pure],
+      engineEqs := [`CerberusHeapLang.step_ctx_beta_sym_pure],
+      oneSidedWhy := "as sseq-spec (binder beta)",
       partialLane := .thms [`CerberusHeapLang.engine_adequacyJ],
       adequacyConsumers := [`CerberusHeapLang.list_reverse_certified,
         `CerberusHeapLang.struct_create_store_adequacy],
@@ -732,7 +772,8 @@ def rowSpec : Name → Option RowSpec
       synCtors := [PtrEq],
       mirror := .ctors [`CerberusHeapLang.Step.memop_ptreq],
       logic := .thms [`CerberusHeapLang.wps_memop_ptreq],
-      engineMatch := .thms [`CerberusHeapLang.step_ctx_memop],
+      engineEqs := [`CerberusHeapLang.step_ctx_memop],
+      oneSidedWhy := "non-pointer operands and eqPtrval's differing-provenance ND fork land in offFragment (the fork is a real msum) — no refusal theorem yet",
       partialLane := .thms [`CerberusHeapLang.engine_adequacyJ],
       adequacyConsumers := [`CerberusHeapLang.list_reverse_certified],
       total := some
@@ -746,7 +787,8 @@ def rowSpec : Name → Option RowSpec
       syntaxNote := "the operand-evaluation rule wps_memop_eval is memop-GENERIC (any Ememop; PtrEq is the only memop with a value-operand rule, the previous row), so the witness is Ememop",
       mirror := .ctors [`CerberusHeapLang.Step.memop_eval],
       logic := .thms [`CerberusHeapLang.wps_memop_eval],
-      engineMatch := .thms [`CerberusHeapLang.stepDischarge_memop_eval],
+      engineEqs := [`CerberusHeapLang.stepDischarge_memop_eval],
+      oneSidedWhy := "as load-op",
       partialLane := .thms [`CerberusHeapLang.engine_adequacyJ],
       adequacyConsumers := [`CerberusHeapLang.list_reverse_certified],
       total := some
@@ -760,7 +802,8 @@ def rowSpec : Name → Option RowSpec
       syntaxNote := "the same Store0 syntax as the value-operand row; distinguished by its rule (wps_store_eval)",
       mirror := .ctors [`CerberusHeapLang.Step.store_eval],
       logic := .thms [`CerberusHeapLang.wps_store_eval],
-      engineMatch := .thms [`CerberusHeapLang.stepDischarge_store_eval],
+      engineEqs := [`CerberusHeapLang.stepDischarge_store_eval],
+      oneSidedWhy := "as load-op",
       partialLane := .thms [`CerberusHeapLang.engine_adequacyJ],
       adequacyConsumers := [`CerberusHeapLang.list_reverse_certified,
         `CerberusHeapLang.struct_create_store_adequacy],
@@ -775,10 +818,9 @@ def rowSpec : Name → Option RowSpec
       mirror := .ctors [`CerberusHeapLang.Step.case_value],
       logic := .thms [`CerberusHeapLang.wps_case_value],
       coneNote := "S1b: joined — branch-closure + branch-size premises explicit",
-      engineMatch := .thms [`CerberusHeapLang.step_ctx_case_value,
-        `CerberusHeapLang.step_ctx_case_illtyped,
-        `CerberusHeapLang.engine_complete_caseU]
-        (note := "TWO-SIDED at any MachineCtx"),
+      engineEqs := [`CerberusHeapLang.step_ctx_case_value],
+      engineNote := "TWO-SIDED at any MachineCtx (the ILLTYPED no-match equation step_ctx_case_illtyped is the refusal theorem's engine equation — it feeds engine_complete_caseU, not the step arm, which is why it is not listed as a step equation: the relation-coverage check rejected it there)",
+      twoSided := some `CerberusHeapLang.cerberusRound_refused_case,
       partialLane := .thms [`CerberusHeapLang.engine_adequacyJ,
         `CerberusHeapLang.engine_adequacyU],
       adequacyConsumers := [`CerberusHeapLang.case_certified],
@@ -793,8 +835,8 @@ def rowSpec : Name → Option RowSpec
         `CerberusHeapLang.Step.wseq_annot, `CerberusHeapLang.Step.wseq_ctx]
         (note := "S1b DRIFT TEST — entered through the generic route; see Notes 6"),
       logic := .thms [`CerberusHeapLang.wps_wseq],
-      engineMatch := .thms [`CerberusHeapLang.step_ctx_wseq_pure,
-        `CerberusHeapLang.step_ctx_wseq_annot],
+      engineEqs := [`CerberusHeapLang.step_ctx_wseq_pure, `CerberusHeapLang.step_ctx_wseq_annot],
+      oneSidedWhy := "as sseq-wild",
       partialLane := .thms [`CerberusHeapLang.engine_adequacyJ,
         `CerberusHeapLang.engine_adequacyU],
       adequacyConsumers := [`CerberusHeapLang.wseq_certified],
@@ -817,7 +859,8 @@ def supplementaryRows : List Row := [
     mirror := .declared "premises of the if/run/pure/ACTION_EVAL rules via the certified pure evaluator (Soundness evaluator bridge); no per-construct Step rule",
     logic := .declared "enters as rule premises (guard/argument/operand evaluation)",
     cone := .declared "via the peDepth side conditions carried by Frag.if_/run/load_op/memop_op/store_op",
-    engineMatch := .declared "the evaluator bridge lemmas, Soundness.lean (eval1/mapM tower)",
+    engineEqs := [], engineNote := "", twoSided := none, oneSidedWhy := "", refusalNA := true,
+    engineDeclared := "the evaluator bridge lemmas, Soundness.lean (eval1/mapM tower)",
     partialLane := .thms [`CerberusHeapLang.engine_adequacyJ],
     adequacyConsumers := [`CerberusHeapLang.array_sum_certified,
       `CerberusHeapLang.fib_certified],
@@ -879,10 +922,38 @@ def checkNamesC (env : Environment) (kind : String) (names : List Name) : Check 
 /-- THE STAGED DEPENDENCY CHECKS for one row. Every failure is
     recorded with the row, the stage, the consumer and the missing
     abstraction named; the run then throws with all of them. -/
-def checkRow (env : Environment) (r : Row) : Check Unit := do
+def checkRow (env : Environment) (clsCone : Std.HashSet Name) (r : Row) : Check Unit := do
   if r.supplementary then return ()
   -- syntax constructors exist and are constructors
   checkNamesC env "ctor" r.synCtors
+  -- P3.2 RELATION COVERAGE, DERIVED: the row's engine equations must
+  -- lie in the cone of the headline classification theorem — the
+  -- manifest's relation column rests on `cerberusRound_classify`, not
+  -- on a declared list; and the row's refusal theorem (if any) must be
+  -- a refusal classification ABOUT this construct.
+  checkNamesC env "theorem" r.engineEqs
+  for eq in r.engineEqs do
+    unless clsCone.contains eq do
+      fail s!"manifest FAIL (row '{r.token}', RELATION COVERAGE): engine equation \
+        {shortName eq} is NOT in the proof cone of cerberusRound_classify — the \
+        headline coverage theorem does not rest on it (a stale or decorative \
+        engine-match claim)."
+  match r.twoSided with
+  | some t =>
+    checkNamesC env "theorem" [t]
+    let syn ← stmtSyntax env t
+    if (hits syn r.synCtors).isEmpty then
+      fail s!"manifest FAIL (row '{r.token}', RELATION TWO-SIDED): {shortName t} is \
+        not about this construct (its statement reaches none of {r.synCtors.map shortName})."
+    let tdeps ← typeDeps env t
+    unless tdeps.contains `CerberusHeapLang.EngineOutcome.isRefusal &&
+        tdeps.contains `CerberusHeapLang.outcomesU do
+      fail s!"manifest FAIL (row '{r.token}', RELATION TWO-SIDED): {shortName t} does \
+        not state a refusal classification (no EngineOutcome.isRefusal / outcomesU in its statement)."
+  | none =>
+    if r.oneSidedWhy == "" then
+      fail s!"manifest FAIL (row '{r.token}'): no refusal theorem and no recorded reason \
+        (the R-03 residual must be stated per row)."
   let partialRules := r.logic.thmNames
   let totalRules := match r.total with | some t => t.rules | none => []
   let witness (who : String) (n : Name) : Check Unit := do
@@ -962,11 +1033,12 @@ def checkRow (env : Environment) (r : Row) : Check Unit := do
 
 /-- THE LAYER CUT + DIRECT-REFERENCE BAN over every constant of the
     positive-exhibit modules. Returns the count checked. -/
-def checkLayerCut (env : Environment) (stepCtors : List Name) : DepM (Except String Nat) := do
+def checkLayerCut (env : Environment) (stepCtors : List Name) : DepM (Nat × Array String) := do
   let names : Array Name := env.constants.fold (fun acc n _ => acc.push n) #[]
   let isCut (n : Name) : Bool :=
     !isOperational n && (cutNames.contains n || cutModules.contains (modOf env n))
   let mut checked := 0
+  let mut failures : Array String := #[]
   for n in names do
     if n.isInternalDetail then continue
     unless positiveExhibitModules.contains (modOf env n) do continue
@@ -974,7 +1046,7 @@ def checkLayerCut (env : Environment) (stepCtors : List Name) : DepM (Except Str
     -- direct-reference ban
     for c in body do
       if isDirectBanned stepCtors c then
-        return .error s!"manifest FAIL (DIRECT-REFERENCE BAN): positive-exhibit declaration \
+        failures := failures.push s!"manifest FAIL (DIRECT-REFERENCE BAN): positive-exhibit declaration \
           {shortName n} ({modOf env n}) names the operational constant \
           {shortName c} directly in its body."
     -- layer cut: DFS from the body, stop at approved crossings, fail at
@@ -982,6 +1054,7 @@ def checkLayerCut (env : Environment) (stepCtors : List Name) : DepM (Except Str
     let mut parent : Std.HashMap Name Name := {}
     let mut seen : Std.HashSet Name := {}
     let mut stack : Array (Name × Name) := body.map (fun c => (c, n))
+    let mut reported := false
     while h : stack.size > 0 do
       let (c, p) := stack[stack.size - 1]
       stack := stack.pop
@@ -998,15 +1071,18 @@ def checkLayerCut (env : Environment) (stepCtors : List Name) : DepM (Except Str
           match parent.get? cur with
           | some q => path := shortName q :: path; cur := q
           | none => fuel := 0
-        return .error s!"manifest FAIL (LAYER CUT): positive-exhibit declaration \
-          {shortName n} ({modOf env n}) reaches the operational name \
-          {shortName c} WITHOUT crossing the approved logic/adequacy layer; \
-          path: {" → ".intercalate path}"
+        unless reported do
+          failures := failures.push s!"manifest FAIL (LAYER CUT): positive-exhibit declaration \
+            {shortName n} ({modOf env n}) reaches the operational name \
+            {shortName c} WITHOUT crossing the approved logic/adequacy layer; \
+            path: {" → ".intercalate path}"
+          reported := true
+        continue
       if isCut c then continue
       for d in ← allDeps env c do
         if !seen.contains d then stack := stack.push (d, c)
     checked := checked + 1
-  return .ok checked
+  return (checked, failures)
 
 def liftE {α : Type} (e : Except String α) : MetaM α :=
   match e with
@@ -1090,14 +1166,49 @@ open CapabilityManifest in
       if closure.contains t then
         throwError "manifest FAIL: leaf module {m} (pruned by the cone traversal) \
           imports target module {t} — the pruning would be UNSOUND; fix leafModules."
-  -- THE STAGED DEPENDENCY CHECKS, per row — every failure reported.
-  let (failures, cache) := ((do for r in rows do checkRow env r : Check Unit).run #[] |>.run {}) |>.map (·.2) id
-  let failures := failures
+  -- P3.2: THE HEADLINE RELATION-COVERAGE THEOREM exists, is a theorem,
+  -- and is indexed by the cone (`Frag`) with the classification type
+  -- (`RoundClass`) — the relation column below is derived from it.
+  let clsName := `CerberusHeapLang.cerberusRound_classify
+  let some (.thmInfo clsInfo) := env.find? clsName
+    | throwError "manifest FAIL: the relation-coverage theorem {clsName} is missing or not a theorem"
+  let clsTypeConsts := clsInfo.type.getUsedConstants
+  unless clsTypeConsts.contains `CerberusHeapLang.Frag do
+    throwError "manifest FAIL: {clsName} is not indexed by the cone `Frag` — its statement \
+      does not quantify over Frag; the relation coverage cannot be derived from it."
+  unless clsTypeConsts.contains `CerberusHeapLang.RoundClass do
+    throwError "manifest FAIL: {clsName} does not conclude the RoundClass classification."
+  let some (.inductInfo rcInfo) := env.find? `CerberusHeapLang.RoundClass
+    | throwError "manifest FAIL: inductive CerberusHeapLang.RoundClass not found"
+  let expectedArms := [`CerberusHeapLang.RoundClass.value_done, `CerberusHeapLang.RoundClass.value_annot,
+    `CerberusHeapLang.RoundClass.step, `CerberusHeapLang.RoundClass.refused]
+  unless rcInfo.ctors == expectedArms do
+    throwError "manifest FAIL: RoundClass arms changed ({rcInfo.ctors}); the manifest's \
+      relation-coverage semantics (value_done / value_annot / step / refused) must be re-read."
+  -- THE LAYER CUT over the positive-exhibit modules (the R-02 bypass
+  -- class), then THE STAGED DEPENDENCY CHECKS per row (the R-04 class,
+  -- plus the P3.2 relation-coverage derivation) — every failure of
+  -- both is reported, then the run throws. The classification cone is
+  -- computed UNPRUNED (its engine equations live in Soundness).
+  let ((cutChecked, cutFailures), cache) := (checkLayerCut env stepInfo.ctors).run {}
+  let (clsCone, cache) := (cone env clsName (pruneLeaves := false)).run cache
+  let (rowFailures, _) := ((do for r in rows do checkRow env clsCone r : Check Unit).run #[] |>.run cache) |>.map (·.2) id
+  let failures := cutFailures ++ rowFailures
   unless failures.isEmpty do
-    throwError "{failures.size} dependency-certification failure(s):\n{"\n".intercalate failures.toList}"
+    throwError "{failures.size} HARD-check failure(s) (layer cut / dependency certification):\n{"\n".intercalate failures.toList}"
   -- THE LAYER CUT over the positive-exhibit modules.
-  let (cutRes, _) := (checkLayerCut env stepInfo.ctors).run cache
-  let cutChecked ← liftE cutRes
+  -- CHECK-ONLY MODE (scripts/test_unit.sh --fast): every HARD check
+  -- above has run (throws are fail-closed); the rendering — whose
+  -- diff against the committed copy is the SPEEDBUMP drift mechanic —
+  -- is skipped. Selected by the environment variable so the script
+  -- stays a plain `lake env lean` target.
+  if (← IO.getEnv "CAPABILITY_MANIFEST_CHECK_ONLY").isSome then
+    IO.println s!"CAPABILITY MANIFEST HARD CHECKS OK: {rows.length} rows \
+      (cone-derived, mirror coverage exact), staged dependency \
+      certification passed for every listed consumer, layer cut + \
+      direct-reference ban hold over {cutChecked} positive-exhibit \
+      declarations; rendering skipped (check-only)."
+    return
   let render (c : Cell) : MetaM String := liftE (c.render env)
   let names (ns : List Name) : String := renderNames ns
   IO.println "# The capability manifest"
@@ -1143,14 +1254,28 @@ open CapabilityManifest in
   IO.println "(`Step.*`, the engine-round projections, the per-construct engine"
   IO.println "equations, `driveJ_step`/`driverDone_step`) except through the"
   IO.println "approved logic/adequacy layer, and no exhibit body names one"
-  IO.println "directly. Lane prose and construct descriptions are DECLARED. The"
-  IO.println "supplementary evaluator row (last) owns no constructor and is"
-  IO.println "mechanically barred from claiming any."
+  IO.println "directly. The ENGINE-MATCH column is DERIVED (alloc arc P3.2, R-03):"
+  IO.println "every row's engine equations are checked to lie in the proof cone of"
+  IO.println "the headline relation-coverage theorem `cerberusRound_classify`"
+  IO.println "(Round.lean — exhaustive over `Frag`), and a row is TWO-SIDED at"
+  IO.println "the refusal arm only if it names a refusal-classification theorem"
+  IO.println "about its construct (Notes 7). Lane prose and construct"
+  IO.println "descriptions are DECLARED. The supplementary evaluator row (last)"
+  IO.println "owns no constructor and is mechanically barred from claiming any."
   IO.println ""
-  IO.println "| Construct | Level | Syntax witness | Mirror (Step) | Logic (partial rules) | Cone (Frag) | Engine match | Partial adequacy | Adequacy consumers | Local consumers | Total lane | Production lane |"
+  IO.println "| Construct | Level | Syntax witness | Mirror (Step) | Logic (partial rules) | Cone (Frag) | Engine match (relation coverage) | Partial adequacy | Adequacy consumers | Local consumers | Total lane | Production lane |"
   IO.println "|---|---|---|---|---|---|---|---|---|---|---|---|"
   for r in rows do
-    let cells ← [r.mirror, r.logic, r.cone, r.engineMatch, r.partialLane].mapM render
+    let cells ← [r.mirror, r.logic, r.cone].mapM render
+    let engine := if r.supplementary then s!"DECLARED — {r.engineDeclared}" else
+      let eqs := s!"DERIVED {names r.engineEqs} (in the cone of `cerberusRound_classify`)"
+      let two := match r.twoSided with
+        | some t => s!"; TWO-SIDED at the refusal arm: `{shortName t}`"
+        | none => if r.refusalNA then s!"; refusal arm N/A — {r.oneSidedWhy}"
+          else s!"; ONE-SIDED at the refusal arm — {r.oneSidedWhy}"
+      s!"{eqs}{if r.engineNote == "" then "" else s!" — {r.engineNote}"}{two}"
+    let partialC ← render r.partialLane
+    let cells := cells ++ [engine, partialC]
     let syn := if r.synCtors.isEmpty then s!"DECLARED — {r.syntaxNote}"
       else s!"OK {names r.synCtors}{if r.syntaxNote == "" then "" else s!" — {r.syntaxNote}"}"
     let adeq := s!"CERTIFIED {names r.adequacyConsumers}{if r.adequacyNote == "" then "" else s!" — {r.adequacyNote}"}"
@@ -1295,24 +1420,38 @@ open CapabilityManifest in
   IO.println "   FAILED CLOSED on the extended Step/Frag constructor lists until"
   IO.println "   this row landed. Ewseq at spec/sym binder patterns stays a"
   IO.println "   registered divergence (README)."
-  IO.println "7. **Direction semantics of the engine-match column** (arc plan"
-  IO.println "   Phase-1 item 3; audit-sanctioned one-sidedness): the certified"
-  IO.println "   direction for EVERY row is MATCH-GIVEN-STEP — one theorem over"
-  IO.println "   the whole cone at any MachineCtx, `engine_step_matchU`"
-  IO.println "   (Soundness.lean): wherever the mirror steps at a cone"
-  IO.println "   configuration, the engine's discharged behavior list is exactly"
-  IO.println "   the matching singleton. That is the direction the WP-driven"
-  IO.println "   adequacy consumes (`NotStuck` supplies the mirror step at every"
-  IO.println "   reachable configuration); the refusal channels the other"
-  IO.println "   direction would classify are failwithI panics, mirrored"
-  IO.println "   fail-closed as absence of a step. ADDITIONALLY two-sided:"
-  IO.println "   the straight-line profile as a whole (`engine_complete` — the"
-  IO.println "   per-configuration classification over `StraightFrag`, its"
-  IO.println "   domain being the straight-line completeness instance) and the"
-  IO.println "   per-construct completeness pairs `engine_complete_storeU` /"
-  IO.println "   `engine_complete_caseU` (store, case — noted on their rows)."
-  IO.println "   Rows without a completeness entry are ONE-SIDED, deliberately"
-  IO.println "   (the two-sided relation closure is alloc arc P3.2, R-03)."
+  IO.println "7. **The engine-match column is DERIVED from the relation-coverage"
+  IO.println "   theorem** (alloc arc P3.2; re-audit R-03 — Round.lean): the"
+  IO.println "   engine-facing one-round relation is NAMED, `CerberusRound M aid`"
+  IO.println "   = the graph of the discharged `step_ctx` round (the singleton"
+  IO.println "   successful-next of `outcomesU`), independent of every example"
+  IO.println "   and of the mirror; and `cerberusRound_classify` classifies EVERY"
+  IO.println "   well-sized `Frag` configuration (SeqWF context, cons env) into"
+  IO.println "   exactly one of value_done (PROGRAM-DONE, exact) / value_annot"
+  IO.println "   (REMOVE-ANNOT, exact — the engine's successful-next at an"
+  IO.println "   annotated value, which the mirror's value protocol does NOT"
+  IO.println "   step: the reason a global iff is the wrong shape) / step (the"
+  IO.println "   mirror steps, and then `Step M c c' ↔ CerberusRound M aid c c'`"
+  IO.println "   for EVERY c' — `step_iff_cerberusRound`, two-sided; mirror"
+  IO.println "   determinism falls out) / refused (mirror stuck at a non-value —"
+  IO.println "   ¬NotStuck, the set adequacy excludes). Each row's engine"
+  IO.println "   equations are CHECKED to lie in that theorem's proof cone (a"
+  IO.println "   stale or decorative engine-match claim throws), so the column"
+  IO.println "   is derived, not declared. THE RESIDUAL, per row: the `refused`"
+  IO.println "   arm says nothing about the ENGINE at a mirror-stuck"
+  IO.println "   configuration. Rows marked TWO-SIDED carry a refusal"
+  IO.println "   classification theorem (`cerberusRound_refused_store/_load/"
+  IO.println "   _create/_case`: mirror stuck ⇒ the engine's round is a"
+  IO.println "   singleton refusal — memory kill or ILLTYPED); rows marked"
+  IO.println "   ONE-SIDED state why (mostly `failwithI` PANIC channels — an"
+  IO.println "   OPAQUE constant with no equations, so a kernel classification"
+  IO.println "   of the panic as \"not a successful-next\" is impossible, not"
+  IO.println "   merely unproved; plus the memop ND fork and save's EVAL round"
+  IO.println "   on non-value params). The machine lines RELATION-REFUSAL-"
+  IO.println "   TWO-SIDED / -ONE-SIDED list the split. RelSemCore disclaimer:"
+  IO.println "   `CerberusRound` is NOT bridged to the semantics repo's own"
+  IO.println "   RelSem spine (README, two presentations one engine); a future"
+  IO.println "   type layer claiming RelSemCore must prove that bridge first."
   IO.println "8. **What the dependency certification does NOT claim** (the"
   IO.println "   instrument's own limits, measured before installation —"
   IO.println "   docs/2026-09-01_p3-notes.md): (a) it does not tie a public rule"
@@ -1358,4 +1497,11 @@ open CapabilityManifest in
   IO.println s!"PRODUCTION-LANE: {" ".intercalate prodRows}"
   IO.println s!"LOCAL-RULE-ONLY: {" ".intercalate localOnly}"
   IO.println s!"DEPENDENCY-CERTIFIED: yes (staged rule/launcher/witness cone checks + layer cut over {cutChecked} positive-exhibit declarations)"
+  let twoSidedRows := rows.filter (fun r => r.twoSided.isSome) |>.map (·.token)
+  let oneSidedRows := rows.filter (fun r => !r.supplementary && r.twoSided.isNone && !r.refusalNA) |>.map (·.token)
+  let naRows := rows.filter (fun r => !r.supplementary && r.refusalNA) |>.map (·.token)
+  IO.println s!"RELATION-COVERAGE: derived from cerberusRound_classify over Frag ({coneRows.size} rows; arms value_done value_annot step refused; the step arm two-sided by step_iff_cerberusRound)"
+  IO.println s!"RELATION-REFUSAL-TWO-SIDED: {" ".intercalate twoSidedRows}"
+  IO.println s!"RELATION-REFUSAL-ONE-SIDED: {" ".intercalate oneSidedRows}"
+  IO.println s!"RELATION-REFUSAL-NA: {" ".intercalate naRows} (values are never mirror-stuck; both value rounds exact)"
   IO.println "```"
