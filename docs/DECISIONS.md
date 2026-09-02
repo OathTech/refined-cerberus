@@ -339,3 +339,43 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   trio, exactly. The production-entry statements quantify over the
   supply-threaded entry's supply ([USER 2026-09-02], resume note
   Slice 1). Record: `cerberus-heaplang/docs/2026-09-02_repin-notes.md`.
+- **2026-09-02 [USER] ONE CHANGE AT A TIME; REYNOLDS/O'HEARN IS THE STABLE
+  SPEC** (verbatim): "during our design exploration we should try to
+  'change one thing at once' - the nice thing about aiming for
+  Reynolds/O'Hearn is it's a very stable and clean design target. We
+  can then build to this spec with different internals and get the
+  design right. Whereas if we're working on RefinedC the design is more
+  complex and we need to do more adaptations". Applied: every slice is
+  exactly one of — forced semantics change (pin moves), spec addition
+  (new rules/statements), internals refactor (public statements frozen,
+  verified by identical pre/post `scripts/signature_snapshot.lean`
+  output), or RefinedC-shaped adaptation (last). Never two in one slice.
+- **2026-09-02 [AGENT] PARAMETRIC-SEMANTICS SPIKE DISPATCHED** on the
+  operator's question ("make the logic parametric in its underlying
+  semantics ... a kind of parametricity property (analogous to
+  'theorems for free')"; [USER]: "this would be a parallel spike"):
+  read-only, branch `parametric-spike`, deliverable
+  `cerberus-heaplang/docs/2026-09-02_parametric-semantics-spike.md`
+  (measured inventory: 44 of 76 rule proofs unfold `Step` by
+  definition; 17 touch ghost/cursor internals; 14 clean; the donor
+  proves memory rules by inversion, Iris-style parametricity is
+  control-only in RefinedC; memory interface = 7 laws all already
+  lemmas; control mixin not an `EctxLanguage` instance because `Erun`
+  discards its context).
+- **2026-09-02 [USER] PARAMETRIC INTERFACES NOT ADOPTED — EXPERIMENT,
+  DEFERRED POSSIBLY PERMANENTLY** (verbatim): "I'm uncertain whether to
+  adopt this. I feel like abstractions should do some work for us.
+  There's nothing especially wrong about proving the proof rules
+  correct wrt the semantics directly, it just means that the proof
+  discipline is a bit harder to enforce. How much does this actually
+  buy us?" — orchestrator assessment: modest (same proofs relocated
+  behind a one-instance class; zero proof economy; the enforcement gap
+  is catchable by a report line); [USER]: "this should land on main
+  with a clear note at the top level that it's an experiment and that
+  we've deferred it, possibly forever." Disposition: the note carries
+  the DEFERRED banner; the rules stay proved directly against `Step`
+  and the memory state, as the donor does; `scripts/parametric_inventory.lean`
+  is kept as an on-demand instrument (its representation-reference
+  counts are the candidate speedbump line). Re-open triggers: a second
+  memory-model instance, or a type layer needing an abstract memory
+  contract. Pointer: cerberus-heaplang README "Deferred design experiments".

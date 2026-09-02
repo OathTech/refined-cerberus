@@ -411,6 +411,19 @@ or growth paths. The register (each entry's home is authoritative):
 | Fuel side condition (no fuel parametricity) | Fuel-irrelevance theorem for `get_ctx` or graceful driver exhaustion would remove it | `docs/2026-08-30_spike-report.md` "What remains"; `ProdEntry.lean` header |
 | REMOVE-ANNOT value protocol; canonical-annotation subrelation | Deliberate, engine-faithful readout composition | `Step.lean` header; `docs/2026-08-30_spike-sliceA-notes.md` D1/D3 |
 
+### Deferred design experiments
+
+- **Parametric semantics interfaces** — `docs/2026-09-02_parametric-semantics-spike.md`.
+  EXPERIMENT, DEFERRED possibly permanently ([USER 2026-09-02], DECISIONS.md):
+  a measured inventory of what each rule proof depends on in `Step`/the
+  memory state, and a draft memory/environment/control interface. Not
+  adopted: with one instance the interface relocates the same proofs
+  behind a class, and RefinedC itself proves memory rules by inversion.
+  The rules here are proved directly against `Step` and `CerbMem.MemState`.
+  Re-open only for a second memory-model instance or a type layer that
+  needs an abstract memory contract. The inventory script
+  `scripts/parametric_inventory.lean` remains an on-demand instrument.
+
 ## How to build
 
 From the repository root (offline; deps resolve through the
