@@ -60,6 +60,7 @@ import CerberusHeapLang.CaseExhibit
 import CerberusHeapLang.WseqExhibit
 import CerberusHeapLang.StructExhibit
 import CerberusHeapLang.AllocExhibit
+import CerberusHeapLang.Examples.ReadinessSmoke
 import CerberusHeapLang.Round
 
 namespace CerberusHeapLang.Audit
@@ -136,7 +137,16 @@ def trioExports : List Name := [
   ``CerberusHeapLang.semantic_triple_soundU, ``CerberusHeapLang.semantic_frameU,
   ``CerberusHeapLang.SemTriple_iff_U,
   ``CerberusHeapLang.loop_wps_irrelevant_binding,
-  ``CerberusHeapLang.counter_loop_certified_irrelevant_binding]
+  ``CerberusHeapLang.counter_loop_certified_irrelevant_binding,
+  -- alloc arc P5: the readiness smoke test (R-07 / charter item 5) — a
+  -- two-field object predicate and its load/store/allocate rules derived
+  -- from the public API alone (Examples/ReadinessSmoke.lean)
+  ``CerberusHeapLang.ReadinessSmoke.twoField_of_cell,
+  ``CerberusHeapLang.ReadinessSmoke.twoField_load_x,
+  ``CerberusHeapLang.ReadinessSmoke.twoField_load_y,
+  ``CerberusHeapLang.ReadinessSmoke.twoField_store_x,
+  ``CerberusHeapLang.ReadinessSmoke.twoField_store_y,
+  ``CerberusHeapLang.ReadinessSmoke.twoField_create]
 
 def sortedNames (ns : Array Name) : Array String :=
   (ns.map (·.toString)).qsort (· < ·)

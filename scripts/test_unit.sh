@@ -7,7 +7,7 @@
 # sweep). Everything after that is a SPEEDBUMP ([USER 2026-09-02]): a
 # claim-point report that catches honest drift; it is not designed to
 # survive adversarial attack.
-#   default : gates 1-3 + the capability-manifest speedbump (the claim gate)
+#   default : gates 1-3 + the speedbumps (capability manifest, import direction) — the claim gate
 #   --fast  : gates 1-3 only (intermediate commits; say fast-gate in the message)
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -65,6 +65,16 @@ if [[ $fast -eq 0 ]]; then
     cat "$tmp" >&2; fail=1
   fi
   rm -f "$tmp"
+
+  echo "== speedbump: import direction (semantics → heap → rules → adequacy → clients) =="
+  # No core module may import an exhibit, example-support or production module (a missing core file is red too).
+  core=(Step Lang Heap EnvLaws Rules Wps Wpt Soundness Round Adequacy TotalAdequacy DriverCollapse API)
+  files=(); for m in "${core[@]}"; do files+=("cerberus-heaplang/CerberusHeapLang/$m.lean"); done
+  if ! ls "${files[@]}" > /dev/null || grep -nE '^import CerberusHeapLang\.([A-Za-z]*Exhibit|Examples\.|Prod)' "${files[@]}"; then
+    echo "FAIL (speedbump): a core module is missing or imports an exhibit/example/production module (above)" >&2; fail=1
+  else
+    echo "ok: import direction — no core module imports an exhibit/example/production module"
+  fi
 fi
 
 if [[ $fail -ne 0 ]]; then

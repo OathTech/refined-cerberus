@@ -32,6 +32,7 @@ import CerberusHeapLang.StructExhibit
 import CerberusHeapLang.ListRevExhibit
 import CerberusHeapLang.TreeRotExhibit
 import CerberusHeapLang.LoopExhibit
+import CerberusHeapLang.Examples.ReadinessSmoke
 
 open Lean
 
@@ -186,7 +187,7 @@ def analyze (env : Environment) (n : Name) : DepM Row := do
 def clientModules : List Name :=
   [`CerberusHeapLang.ArrayExhibit, `CerberusHeapLang.StructExhibit,
    `CerberusHeapLang.ListRevExhibit, `CerberusHeapLang.TreeRotExhibit,
-   `CerberusHeapLang.LoopExhibit]
+   `CerberusHeapLang.LoopExhibit, `CerberusHeapLang.Examples.ReadinessSmoke]
 def ruleModules : List Name :=
   [`CerberusHeapLang.Rules, `CerberusHeapLang.Wps, `CerberusHeapLang.Wpt]
 def rulePrefixes : List String := ["wp_", "wps_", "wpt_", "triple", "blockSpecs", "spike_wp_wand"]
