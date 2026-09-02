@@ -563,3 +563,20 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   induction — grind class), Q8 (annotation-generic pure/annot rules are
   FALSE under the canonical-annotation protocol D3) — each is now
   documented at the rule; Q3 partial for the same D3 reason.
+- **2026-09-02 [AGENT] QA-2 ADJUDICATIONS** (record:
+  `cerberus-heaplang/docs/2026-09-02_qa2-notes.md`): (1) the dead
+  straight-line production island and the consumerless API names are
+  RETIRED (deleted) — the [AGENT] decision the plan announced,
+  operator veto still open; (2) M-2 resolved by DEMOTION, not
+  generalization: a classical raw-WP sequencing rule over an arbitrary
+  machine context is FALSE at a populated label map (a jump discards
+  the sequencing context — Rules.lean header), so sequencing belongs
+  to the label-context judgments `wps`/`wpt`; the base stratum is the
+  two raw-WP small axioms `wp_store`/`wp_load` only, and the spike
+  exhibits are re-derived through `wps`; (3) the worker's retirements
+  beyond the audit's named list (LoopExhibit's consumerless `LoopTotal`
+  section; the frozen jump-profile spellings in Soundness/Adequacy)
+  are ACCEPTED — zero-consumer traces recorded, prune-don't-merge;
+  (4) four exhibits the README listed as pinned but never were are now
+  pinned (the sentence was made true rather than weakened). Result:
+  2,085 → 1,949 declarations; 120 trio-exact export pins.
