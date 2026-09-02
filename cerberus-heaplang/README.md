@@ -36,6 +36,28 @@ theorem; the generated [capability manifest](docs/CAPABILITY_MANIFEST.md)
 lists one row per `Frag` constructor with the rule covering it and the
 exhibit modules whose proofs consume that rule (18 rows).
 
+**Pure operands carry their own static fuel bound.** The engine's
+pure-expression evaluator is fuelled at the same budget as its redex
+search (`step_eval_pexpr`/`pull_constrained` draw from
+`lemDefaultFuel`), so every `Frag` constructor that evaluates a pure
+operand — `if_` (the guard), `run` (the jump arguments), `save` (the
+initializers), `load_op`/`memop_op`/`store_op` (the operands the engine
+evaluates before dispatching the action) — carries the static premise
+`peDepth pe ≤ lemDefaultFuel` per operand, where `peDepth`
+(Soundness.lean) is the operand's syntactic depth (1 at a value or a
+symbol, `1 + max` at `PEop`/`PEarray_shift`); the three
+operand-evaluation constructors also restrict their operands to the
+sub-grammar `PePure` the mirror evaluator covers (values, symbols,
+`PEop` binops, `PEarray_shift`), while for `if_`/`run`/`save` the grammar
+is enforced by the rule's `evalPexpr … = some …` premise
+(`evalPexpr_shape`: success implies membership). Verbatim, the premises
+of `Frag.store_op`: `(hp2 : PePure pe2) (hp3 : PePure pe3) (hd2 : peDepth
+pe2 ≤ lemDefaultFuel) (hd3 : peDepth pe3 ≤ lemDefaultFuel)`. Like the
+`pot` bounds below, this bound is `rfl` for every authored program
+(`peDepth_sym_le`, `peDepth_val_le`) and never mentions the run length;
+unlike them it lives inside `Frag`, so it appears on no exhibit as a
+separate hypothesis.
+
 **Every node of a fragment program carries the empty static annotation
 list.** Each `Frag` constructor, and each redex spelling it ranges over
 (`storeRedex`, `loadRedex`, `createRedex`, `loadOpRedex`,
@@ -145,9 +167,19 @@ machine-printed statement of every constant in
 `docs/2026-09-02_pr1-C-signatures-post.txt` (`scripts/signature_snapshot.lean`),
 where section variables appear as leading binders. `hlib` is
 `CerbLocation.isLibraryLocation loc = false` on the action location (a
-constructor argument of `Frag.store/load/create`); `hcoh` is the
-seeded-footprint premise (`Coh`/`Sat`). No drive statement carries a
-fuel hypothesis.
+constructor argument of `Frag.store/load/create/load_op/store_op`) —
+the one client hypothesis known to be dischargeable: the engine uses the
+action's location only in the kill payload and in the `current_loc`
+rewrite the annotation-free fragment already excludes, so the premise
+could be dropped from `Frag` at the price of restating the
+`step_ctx_store/load/create` bridge equations with the engine's own
+`loc'` conditional (the register row below). `hcoh` is the
+seeded-footprint premise (`Coh`/`Sat`). `∀ x, resolveExtern M.extern x
+= x` (on `struct_create_store_wps`) says the program's symbols are not
+extern-redirected: the engine resolves every `PEsym` through the file's
+extern map with identity fallback (`resolveExtern`, Step.lean), so at
+`fmapEmpty` the premise is `rfl` (`resolveExtern_id_of_empty`). No drive
+statement carries a fuel hypothesis.
 
 | Theorem (file) | Says | Execution | Hypotheses, exhaustively |
 |---|---|---|---|
@@ -272,7 +304,7 @@ theorems:
 | Allocation metadata at a fraction as the exclusivity anchor; a persistent stratum instead of a liveness token (no `kill`) | the dispose rule adds the donor's `alloc_alive`/freeable split and moves the anchor | `Heap.lean` header |
 | Allocation capacity is an ordered plan (`allocCap reqs`), not an additive resource: it cannot be split across ∗, only weakened to a prefix (`allocCap_weaken`) | an additive byte budget as a derived face (walkthrough §4) | `Heap.lean`; walkthrough §4 |
 | Read-only allocations cannot be described: `CellCoh.alloc`/`MetaCoh.alloc` fix `isReadonly = .IsWritable` and `MetaCell` records no read-only flag, so a fractional `pointsToCell` still asserts a writable allocation | a read-only flag in `MetaCell`, with writability demanded by the store rule only | `Heap.lean` |
-| The `Frag.case_value` premise `hbsz` (the selected branch's `esize` is bounded by the case node's) is carried, not proved: `esize` ignores pure expressions and `subst_sym_expr` substitutes into them, so it is provable in principle, by an induction over the generated Core AST's mutual recursion | that induction | `CaseExhibit.lean` header |
+| The `Frag.case_value` premise `hbsz` (the selected branch's `esize` is bounded by the case node's) is carried, not proved. The equation whose proof would discharge it is `esize (subst_sym_expr x v e) = esize e` (with its mutual twin for `esizeAlts`): `esize` inspects only expression constructors and `subst_sym_expr` substitutes only into pure expressions. The obstacle: the engine's `subst_sym_expr` is `subst_sym_expr_lemFuel lemDefaultFuel`, a fuel-indexed recursion over the whole generated Core AST, so the proof is a fuel-indexed induction over that mutual recursion (`generic_expr`/`generic_pexpr`/patterns) — measured, not attempted. `rfl` for authored programs | that induction | `Soundness.lean` (`Frag.case_value`), `CaseExhibit.lean` header |
 | The canonical-annotation value protocol: the pure and annotation rules are stated at `Expr []` because that is where the mirror's values live; the annotation-generic forms are false | by design | `Step.lean` header |
 
 **Two presentations, one engine.** The pinned semantics workspace also
@@ -358,36 +390,35 @@ partial-correctness statement about the shipped pipeline.
 
 ## The logic
 
-One line per rule family (names are the theorems; the walkthrough §3
-quotes the small axioms, frame, create, one loop rule and the total
-judgment verbatim). Two label-context judgments over iris-lean's WP —
-the partial judgment `wps` (Wps.lean) and the total judgment `wpt`
-(Wpt.lean) — and beneath them the small axioms, each proved once as an
-atomic step specification `AtomicStep` (Rules.lean) and lifted to
-every judgment by `wp_of_atomic`, `wps_of_atomic`, `wpt_of_atomic`.
-Frame and consequence at the raw WP are iris-lean's own
-`wp_frame_r`/`wp_mono`; there is no raw-WP sequencing rule — at a
-populated label map it is false (a jump discards the sequencing
-context), which is why the label-context judgments exist.
+Two label-context judgments over iris-lean's WP — the partial judgment
+`wps` (Wps.lean) and the total judgment `wpt` (Wpt.lean) — and beneath
+them the small axioms, each proved once as an atomic step specification
+`AtomicStep` (Rules.lean) and lifted to every judgment by
+`wp_of_atomic`, `wps_of_atomic`, `wpt_of_atomic`. Frame and consequence
+at the raw WP are iris-lean's own `wp_frame_r`/`wp_mono`; there is no
+raw-WP sequencing rule — at a populated label map it is false (a jump
+discards the sequencing context), which is why the label-context
+judgments exist. The rule set, one line per family with every theorem
+named, is the public/internal table in `API.lean`'s header, maintained
+once; the walkthrough §3 quotes the small axioms, frame, create, one
+loop rule and the total judgment verbatim. The families: the five
+atomic specifications and their raw-WP and judgment faces (with the
+`_plain` forms for annotation-insensitive posts); allocation
+(`wps_create`/`wpt_create` from `allocCap`); frame across back edges
+(`wps_frame_labels`/`wpt_frame_labels` through the framed label
+context); consequence (budgets are upper bounds, `wpt_mono_k`);
+sequencing at the three binder shapes and `Ewseq`; conditionals with
+the guard's verdict as a pure premise (`wps_if`) and value-scrutinee
+case; loops (`wps_save`/`wps_run`/`blockSpecs_intro`, the total twins
+with the mandatory decrease `1 + m ≤ k`); the total judgment's collapse
+`wpt_sound` and its negative test `diverge_total_unprovable`; operand
+evaluation, the `PtrEq` memop and the value protocol; the assertion
+laws; and the environment laws (`SymFrame`, `envAdd_lookup`).
 
-| Family | Rules |
-|---|---|
-| Small axioms | `store_atomic`, `load_atomic`, `storeAt_atomic`, `loadAt_atomic`, `create_atomic` (the five engine unfoldings); at the raw WP `wp_store`, `wp_load`; at the judgments `wps_store`, `wps_load`, the typed-subrange forms `wps_load_at`/`wps_store_at`/`wps_load_cell_at`/`wps_store_cell_at`, and the `wpt_` twins. Storability vocabulary: `StorableAt` (whole-cell rules) and its four-field face `StorableView` (typed-subrange rules). Plain-value forms for annotation-insensitive postconditions — `{p ↦ -} store(p, v) {p ↦ v}` with no footprint quantifier: `wps_store_plain`, `wps_load_plain`, `wpt_store_plain`, `wpt_load_plain` |
-| Allocation | `wps_create`, `wpt_create` (cost bound `2 ≤ k`): `allocCap (req :: rest)` buys one `create`; the continuation binds an existential pointer with full ownership at the unspecified image, `allocCap rest`, and the pure bounds `0 < addrOf p < 2^64` |
-| Frame | iris-lean's `wp_frame_r` at the raw WP; `wps_frame`, `wps_frame_labels` with `frameLs R Ls = fun l vs ρ => Ls l vs ρ ∗ R`, `blockSpecs_frame`, the whole-loop `wps_sound_frame`; `wpt_frame`, `wpt_frame_labels` (`frameLsT`), `blockSpecsT_frame` — the frame crosses every back edge through the framed label context |
-| Consequence | iris-lean's `wp_mono`/`wp_wand` at the raw WP; `wps_wand`, `wps_fupd`, `wps_mono_Ls`, `blockSpecs_mono`; `wpt_mono`, `wpt_mono_k` (budgets are upper bounds), `wpt_mono_Ls`, `wpt_fupd`, `blockSpecsT_mono` |
-| Sequencing | `wps_seq` (wildcard), `wps_seq_spec` (`Specified` binder), `wps_seq_sym` (symbol binder), `wps_wseq`; `wpt_seq`, `wpt_seq_spec`, `wpt_seq_sym`, `wpt_wseq` (budgets add) |
-| Conditionals, case | `wps_if` (one rule, the guard's verdict as a pure premise: `⌜evalPexpr … ρ g = some (boolValue b)⌝ ∗ wps … (bif b then e2 else e3) ⊢ wps … (Eif g e2 e3)`; `wps_if_true`/`wps_if_false` derived), `wps_case_value`; `wpt_if` (`wpt_if_true`/`wpt_if_false` derived), `wpt_case_value` |
-| Loops (label context) | `wps_save` (block entry at evaluated initializers; `wps_save_vals` the literal instance, `wps_save_eval` the engine's evaluation step), `wps_run` (the jump: the label's precondition `Ls l vs ρ` suffices), `blockSpecs_intro` (every registered body re-establishes its precondition; the one Löb induction is in `wps_sound`); total: `wpt_save` (entry cost `saveEntryCost ps`: 1 at literal initializers, 2 otherwise; `wpt_save_vals`, `wpt_save_eval`), `wpt_run` with the mandatory decrease `1 + m ≤ k` at the variant `m`, `blockSpecsT_intro` |
-| The total judgment | `wpt M Ls k Ψ e ρ` by structural recursion on the step budget `k`; `wpt_sound` collapses it into iris-lean's `TotalWeakestPre`; `diverge_total_unprovable` is the negative test |
-| Operands, memop, values | `wps_load_eval`, `wps_store_eval` (premise `valueFromPexprs [pe2, pe3] = none` — the engine's dispatch), `wps_memop_eval`, `wps_memop_ptreq`; `wps_ofVal`, `wps_pure`, `wps_annot`, `wps_annot_reindex`; the `wpt_` counterparts |
-| Assertion laws | `pointsToCell_fractional`/`_agree`/`_combine`; `pointsToView_split`/`_join`/`_fractional`/`_agree`/`_persist`/`_locInBounds`; `allocMeta_persistent`, `allocMeta_agree`, `locInBounds_persistent`; `cellPtr_arrayShift` (provenance-preserving shift); `allocCap_weaken` |
-| Environment | `SymFrame`, `envAdd_lookup` (EnvLaws.lean): lookup-after-add on any reachable frame, so invariants never pin a frame shape |
-
-Every rule above is consumed by an exhibit (the capability manifest
-reports the fragment rows), except three kept as laws of the logic:
-`allocMeta_agree`, `allocCap_weaken`, and the raw-WP `wp_load` (the
-exhibits consume `wps_load`; its sibling `wp_store` is consumed by
+Every rule in that table is consumed by an exhibit (the capability
+manifest reports the fragment rows), except three kept as laws of the
+logic: `allocMeta_agree`, `allocCap_weaken`, and the raw-WP `wp_load`
+(the exhibits consume `wps_load`; its sibling `wp_store` is consumed by
 `provenB`, Exhibit.lean). Representation predicates are ordinary
 structural recursion — `isList` (ListRevExhibit.lean) is
 identity-indexed (each node = allocation id × value) and unframed; the

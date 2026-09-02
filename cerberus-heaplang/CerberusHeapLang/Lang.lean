@@ -6,12 +6,12 @@ instantiation is the template (Iris/HeapLang/Instances.lean +
 PrimitiveLaws.lean:59-90).
 
 The language expression is the runtime TUPLE `CoreRt` (Core
-expression + live env stack + the machine context — S1b unified)
-and values are `CoreRVal`; `toVal`/`ofVal` act componentwise and
-the partial-bijection laws lift pointwise. `primStep` runs `Step`
-at the tuple's own label map and PINS the successor's map to it
+expression + live env stack + the machine context `M`) and values are
+`CoreRVal`; `toVal`/`ofVal` act componentwise and the
+partial-bijection laws lift pointwise. `primStep` runs `Step` at the
+tuple's own machine context and PINS the successor's context to it
 (`q.1.M = p.1.M`): the engine never writes `labeled` on the
-sequential path.
+sequential path, and nothing else in `M` is written by the fragment.
 
 - Observations: `Empty` (the fragment forks no threads and emits no
   observations; every `List Empty` is `[]`).
@@ -22,10 +22,13 @@ sequential path.
   sequencing rules in force (Wps.lean `wps_seq`, Wpt.lean `wpt_seq`
   — direct Löb/budget inductions over the factor structure of the
   Esseq frame) do not use one.
+- The concrete ghost functor list `SpikeGF` (what the closed-program
+  exports instantiate) and its `SpikeGpreS` instance; the
+  `SpikeGS`/`SpikeGpreS` classes themselves are Heap.lean's.
 
 SOUNDNESS STATUS: the WP is over Step; Step's certification against
 the engine is Soundness.lean, and the engine-facing meaning lands
-through Adequacy.lean (MemTripleU / project_triple_pure).
+through Adequacy.lean (`MemTripleU` / `project_triple_pure`).
 -/
 import CerberusHeapLang.Heap
 

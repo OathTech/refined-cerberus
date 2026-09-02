@@ -3,7 +3,7 @@ CerberusHeapLang.EnvLaws — lawfulness of the engine's environment
 maps: the lookup-after-add law the loop exhibits' invariants stand
 on.
 
-The seam this closes: the engine's env frames are LemLib `Fmap`s
+The gap this closes: the engine's env frames are LemLib `Fmap`s
 (Std.TreeMap-backed), and lookup-after-add on an ARBITRARY frame
 needs comparator lawfulness for the symbol order, which the engine
 does not ship as an instance. (Without it, exhibits must pin
@@ -28,8 +28,8 @@ frame.) The contents:
 3. `envAdd_lookup` — THE LAW: lookup after add on any `SymFrame` is
    a one-comparison case split (`Std.TreeMap.getElem?_insert` under
    the TransCmp instance). Frame-shape pins disappear from loop
-   invariants: an invariant now carries `SymFrame f` plus the
-   lookups it needs.
+   invariants: an invariant carries `SymFrame f` plus the lookups it
+   needs.
 4. The binding-pattern computations (`update_env_aux_sym`,
    `update_env_aux_spec`) and the singleton-map facts — shared by
    every exhibit.

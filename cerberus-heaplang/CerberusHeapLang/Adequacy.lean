@@ -7,88 +7,83 @@ Four layers:
    discharge loop {step_ctx → Driver.lean:273 discharge} as a
    definition over engine objects (thread_state, MemState,
    core_step2), with an explicit per-step action-id supply and
-   explicit fuel. Engine vocabulary only. (The one drive: the former
-   fixed-profile spellings `drive`/`driveJ` were retired at the
-   2026-09-02 professor review, recommendation "collapse the triple
-   and drive vocabulary" — they were definitional instances.)
+   explicit drive length. Engine vocabulary only, plus this package's
+   projection `dischargeStep` (Soundness.lean) — the readout predicate
+   the walkthrough prints. It is the one drive; `spikeCtx`/`procCtx`
+   are contexts it runs at, not separate drives.
 2. `spike_step_adequacy` — the Iris adequacy instance: the bundled
-   ghost state `SpikeGS` is CONSTRUCTED here (genHeap_init over the
-   initial cell map), and iris-lean's `wp_strong_adequacy_gen`
-   yields NotStuck + postcondition readout for every Step-reachable
-   configuration. HeapLang's heap_adequacy
-   (Iris/HeapLang/PrimitiveLaws.lean:131) is the template; the
-   strong variant is needed because the fragment's postconditions
-   read out the FINAL MEMORY STATE (through the state
-   interpretation), not just the value.
-3. `engine_adequacyU` — THE ENGINE-ONLY STATEMENT: a proved WP
-   plus a seeded MemState satisfying the precondition footprint
-   implies the engine's drive never kills (no UB, no error kill, no
-   ILLTYPED refusal, no off-protocol step) and any final value+state
-   it delivers satisfies the postcondition readout. The CONCLUSION
-   quantifies over engine objects only (the program term, the
-   MemState, drive fuel, the action-id supply, DriveResult); Step /
-   WP / Iris vocabulary appears only in the hypotheses (that is the
-   point: the derived logic's guarantees land as engine facts).
+   ghost state `SpikeGS` is CONSTRUCTED here (`genHeap_init` over the
+   initial cell map, `spikeCells_alloc`), and iris-lean's
+   `wp_strong_adequacy_gen` yields NotStuck + postcondition readout
+   for every Step-reachable configuration. HeapLang's heap_adequacy
+   (Iris/HeapLang/PrimitiveLaws.lean:131) is the template; the strong
+   variant is needed because the fragment's postconditions read out
+   the FINAL MEMORY STATE (through the state interpretation), not
+   just the value. `spike_step_adequacy_alloc` is the allocation-aware
+   twin: `launchResources` under `LaunchCoh` also mints the allocator
+   cursor and grants `allocCap`.
+3. `engine_adequacyU` (+ `_alloc`) — THE ENGINE-ONLY STATEMENT: a
+   proved WP plus a seeded MemState satisfying the precondition
+   footprint implies the engine's drive never kills (no UB, no error
+   kill, no ILLTYPED refusal, no off-protocol step) and any final
+   value+state it delivers satisfies the postcondition readout. The
+   CONCLUSION quantifies over engine objects only (the program term,
+   the MemState, drive length, the action-id supply, DriveResult);
+   Step / WP / Iris vocabulary appears only in the hypotheses.
+4. `project_triple_pure` — THE HEADLINE PROJECTION: ANY Iris triple
+   with a concrete-map precondition and an ARBITRARY Iris
+   postcondition `Q` whose (framed) post pure-entails `ψ R w.val σ'`
+   under the coupling projects to the BORING triple `MemTripleU M ρ e
+   P ψ` — memory splits as P ⊎ R, the engine's drive never kills or
+   derails at any length, and every delivered `(v, σ')` satisfies the
+   PURE `ψ R v σ'` — with no Iris vocabulary in the conclusion. The
+   pure-consequence lemmas (`*_consequence`) discharge its one
+   Iris-shaped hypothesis for the points-to shapes. Properties are
+   STATED in Iris; no rule is restated and no second assertion
+   language exists. Beneath it, `project_triple` is the strongest-post
+   form (post = "every pure consequence of `Q ∗ frame` at σ'"), from
+   which the pure one is derived; `semantic_triple_soundU` is
+   `project_triple` at the cells-shaped post (`SemTripleU_iff_Mem`).
+   The precondition is footprint cells ONLY; the ALLOCATING twins
+   `project_triple_pure_alloc` / `project_triple_alloc` take footprint
+   cells ∗ `allocCap reqs` and conclude `MemTripleU_alloc` (the same
+   triple launched under `LaunchCoh` with the plan;
+   `MemTripleU_alloc_of_MemTripleU` records the direction that holds
+   between the two); `struct_create_store_adequacy` is an instance.
 
-4. `project_triple_pure` — THE HEADLINE PROJECTION ([USER
-   2026-09-02], DECISIONS "no boring logic; a projection theorem
-   only"; professor review 1, required fix 2): ANY Iris triple with a
-   concrete-map precondition and an ARBITRARY Iris postcondition `Q`
-   whose (framed) post pure-entails `ψ R w.val σ'` under the coupling
-   projects to the BORING triple `MemTripleU M ρ e P ψ` — memory
-   splits as P ⊎ R, the engine's drive never kills or derails, and
-   every delivered `(v, σ')` satisfies the PURE `ψ R v σ'` — with no
-   Iris vocabulary in the conclusion at all. The pure-consequence
-   lemmas (`*_consequence`) discharge its one Iris-shaped hypothesis
-   for the points-to shapes. Properties are STATED in Iris; no rule
-   is restated and no second assertion language exists. Beneath it,
-   `project_triple` is the strongest-post form (post = "every pure
-   consequence of `Q ∗ frame` at σ'"), from which the pure one is
-   derived; `semantic_triple_soundU` is `project_triple` at the
-   cells-shaped post (`SemTripleU_iff_Mem`). The precondition is
-   footprint cells ONLY; the ALLOCATING twins `project_triple_pure_alloc`
-   / `project_triple_alloc` (P6.1) take footprint cells ∗
-   `allocCap reqs` and conclude `MemTripleU_alloc` (the same triple
-   launched under `LaunchCoh` with the plan);
-   `struct_create_store_adequacy` is an instance of the pure one.
-
-TWO TRUST CLAIMS ([USER 2026-09-02], DECISIONS): (1) the CLOSED-
-PROGRAM exports have Iris-free statements — cerberus-lean's semantics
-(`step_ctx`/discharge, the shipped driver) as the referents plus the
-pure readout predicates (`Sat`/`CellCoh`, `readBytesFrom`); iris-lean
-appears only INSIDE kernel-checked proof terms and contributes no
-axiom (Audit.lean pins every export's cone to the classical trio),
-so it is CHECKED, not trusted. (2) the REUSABLE rules and
-`project_triple`'s hypotheses are stated in Iris assertions, whose
-must-read set — the specification idiom: `pointsToCell`/`cellOwn`,
-`CohG`, iris-lean's WP and BI connectives — is the one sense in which
-iris-lean is "in the trust base": definitions to read, not axioms to
-accept. The projection makes claim (1) uniform: any property STATED
-in Iris lands as an engine fact whose statement is Iris-free except
-for the opaque pure-consequence obligation the consequence lemmas
-discharge.
+TWO TRUST CLAIMS (the README's "The trust story"): (1) the
+CLOSED-PROGRAM exports have Iris-free statements — cerberus-lean's
+semantics (`step_ctx`/discharge, or the shipped driver) as the
+referents plus the pure readout predicates (`Sat`/`CellCoh`,
+`readBytesFrom`); iris-lean appears only INSIDE kernel-checked proof
+terms and contributes no axiom (Audit.lean pins every export's cone to
+the classical trio), so it is CHECKED, not trusted. (2) the REUSABLE
+rules and `project_triple`'s hypotheses are stated in Iris assertions,
+whose must-read set — `pointsToCell`/`cellOwn`, `CohG`, iris-lean's WP
+and BI connectives — is the one sense in which iris-lean is "in the
+trust base": definitions to read, not axioms to accept. The projection
+makes claim (1) uniform: any property STATED in Iris lands as an
+engine fact whose statement is Iris-free except for the
+pure-consequence obligation the consequence lemmas discharge.
 
 Certification direction used (Soundness.lean header): match-given-
 step. Each drive step is `engine_step_matchU`'s unique engine
-behavior; Step-matched behaviors stay in the WP-covered cone,
-refusals contradict NotStuck, and the value protocol composes the
-REMOVE-ANNOT tau with PROGRAM-DONE (annotations erased by
-`SpikeVal.val` in the readout — the value-classification divergence
-registered in Step.lean's `SpikeVal` docstring).
+behaviour (`drive_classifyU`); Step-matched behaviours stay in the
+WP-covered cone, refusals contradict NotStuck, and the value protocol
+composes the REMOVE-ANNOT tau with PROGRAM-DONE (annotations erased by
+`SpikeVal.val` in the readout).
 
-FUEL HONESTY, STATIC FORM (professor review 1, required fix 1): the
-engine's get_ctx budget enters every drive statement as the two
-STATIC premises `pot e₀ ≤ lemDefaultFuel` and, per registered label
-body, `pot cont ≤ lemDefaultFuel` (Potential.lean: `pot` never
-increases along a fragment step and resets to the registered body at
-a jump, and it bounds `esize`), so the drive length `n` is quantified
-UNBOUNDED — a partial-correctness statement says something about
-every run, however long. (The former `esize e₀ + n ≤ lemDefaultFuel`
-coupled the premise to the run length and was strictly weaker.) The
-boring triples `MemTripleU`/`MemTripleU_alloc`/`SemTripleU` carry NO
-fuel premise: the static bounds are hypotheses of the projection
-theorems, `rfl`/`decide`-closed for authored programs. Termination is
-NOT claimed (partial correctness): `.more` carries no obligation.
+FUEL HONESTY, STATIC FORM: the engine's get_ctx budget enters every
+drive statement as the two STATIC premises `pot e₀ ≤ lemDefaultFuel`
+and, per registered label body, `pot cont ≤ lemDefaultFuel`
+(Potential.lean: `pot` never increases along a fragment step and
+resets to the registered body at a jump, and it bounds `esize`), so
+the drive length `n` is quantified UNBOUNDED — a partial-correctness
+statement says something about every run, however long. The boring
+triples `MemTripleU`/`MemTripleU_alloc`/`SemTripleU` carry NO fuel
+premise: the static bounds are hypotheses of the projection theorems,
+`rfl`-closed for authored programs. Termination is NOT claimed
+(partial correctness): `.more` carries no obligation.
 -/
 import CerberusHeapLang.Rules
 import CerberusHeapLang.Soundness

@@ -1,44 +1,38 @@
 /-
-CerberusHeapLang.Round — THE ENGINE-FACING ONE-ROUND RELATION, NAMED
-(alloc arc P3.2; the 2026-09-01 skeptical re-audit's R-03).
+CerberusHeapLang.Round — THE ENGINE-FACING ONE-ROUND RELATION, NAMED.
 
-THE CHOICE [AGENT 2026-09-01, P3.2 — the charter's preferred option]:
-`CerberusRound M aid` is THE GRAPH OF THE DISCHARGED `step_ctx`
-ENGINE ROUND at a machine context — configuration `c` relates to `c'`
-exactly when the engine's discharged behavior list at `c`
+`CerberusRound M aid` is THE GRAPH OF THE DISCHARGED `step_ctx` ENGINE
+ROUND at a machine context — configuration `c` relates to `c'`
+exactly when the engine's discharged behaviour list at `c`
 (`outcomesU`: one `step_ctx` call, Core_reduction.lean:484, every
 core_step2 discharged by the sequential driver's protocol,
 Driver.lean:273, projected — Soundness.lean header) is the singleton
-successful-next to `c'`. It is defined independently of every
-example and of the mirror `Step`.
+successful-next to `c'`. It is defined independently of every example
+and of the mirror `Step`.
 
-WHY THIS GRANULARITY (the charter's question, answered): one
-`step_ctx` round is exactly the unit the shipped driver iterates
-(`driveU`'s scrutinee is one `stepOutcomes` = one round;
-DriverCollapse's `loop_step_frag` matches one production scheduler
-round to it), so the relation whose graph this is IS the semantics
-the package's adequacy theorems quantify over — no coarser
+WHY THIS GRANULARITY: one `step_ctx` round is exactly the unit the
+shipped driver iterates (`driveU`'s scrutinee is one `stepOutcomes` =
+one round; DriverCollapse's `loop_step_frag` matches one production
+scheduler round to it), so the relation whose graph this is IS the
+semantics the package's adequacy theorems quantify over — no coarser
 (a multi-round relation would hide the per-round refusal channels
 adequacy must see) and no finer (sub-round structure is the engine's
 internal control flow, not a Core-level transition).
 
-THE RelSemCore DISCLAIMER (consistent with the README's "two
-presentations, one engine" paragraph): `CerberusRound` is NOT bridged
-to the semantics repo's own `RelSem.Machine.Step`/`runND_sound`/
-`HarnessAdequate` spine, and no such bridge is claimed here. Both
-are presentations of the one engine; this package's reference
-relation is the engine round above. If a future RefinedC-style
-semantic-type layer claims `RelSemCore` as ITS reference semantics,
-that bridge must be proved BEFORE the type layer is built (charter
-P3.2: "do not let the type layer make this choice implicitly").
+THE RelSemCore DISCLAIMER (the README's "two presentations, one
+engine"): `CerberusRound` is NOT bridged to the semantics repo's own
+`RelSem.Machine.Step`/`runND_sound`/`HarnessAdequate` spine, and no
+such bridge is claimed here. Both are presentations of the one
+engine; this package's reference relation is the engine round above.
+A future layer that claims `RelSemCore` as ITS reference semantics
+must prove that bridge first.
 
-WHAT IS PROVED HERE (the R-03 form the charter accepts — an
-exhaustive sum classification, because a global iff is falsified by
-the value protocol: at an ANNOTATED VALUE the engine performs a
-REMOVE-ANNOT round (a successful-next) while the mirror treats the
-configuration as a value and does not step, and by the refusal
-channels): for every well-sized `Frag` configuration at a
-sequentially well-formed context with a cons-shaped environment
+WHAT IS PROVED HERE — an exhaustive sum classification, because a
+global iff is falsified by the value protocol (at an ANNOTATED VALUE
+the engine performs a REMOVE-ANNOT round, a successful-next, while
+the mirror treats the configuration as a value and does not step) and
+by the refusal channels: for every well-sized `Frag` configuration at
+a sequentially well-formed context with a cons-shaped environment
 stack, `cerberusRound_classify` yields EXACTLY ONE of
 
 - `value_done`   — a bare value; the engine's round is PROGRAM-DONE
@@ -59,7 +53,7 @@ The classification is exhaustive over `Frag` by construction (its
 hypothesis is `Frag e`; the row set of the capability manifest IS
 `Frag`'s constructor list) and its `step` arm carries the engine
 content (through `engine_step_matchU`). THE RESIDUAL, stated
-honestly: the `refused` arm says nothing about the ENGINE's behavior
+honestly: the `refused` arm says nothing about the ENGINE's behaviour
 at a mirror-stuck configuration — the engine may kill, report
 ILLTYPED, produce an off-fragment form, or PANIC (`failwithI`, an
 OPAQUE constant: no equation about its value is provable, so a
@@ -67,12 +61,13 @@ kernel-level classification of a panic channel as "not a
 successful-next" is IMPOSSIBLE, not merely unproved). Per-row
 refusal classification exists where the engine's refusal channel is
 a memory kill or an ILLTYPED report: `cerberusRound_refused_store`,
-`_load`, `_create`, `_case` below (store/case from the existing
-`engine_complete_storeU`/`_caseU`; load/create new here). The rows
-whose refusal channels include a `failwithI` panic (if/run/save/
-pure/the operand-evaluation rows/the binder betas) or the memop ND
-fork (memop-ptreq) remain ONE-SIDED at the refusal arm — the precise
-R-03 residual, recorded in the closure table.
+`_load`, `_create`, `_case` below (from the completeness pairs
+`engine_complete_storeU`/`_caseU` in Soundness.lean and
+`engine_complete_loadU`/`_createU` here). The rows whose refusal
+channels include a `failwithI` panic (if/run/save/pure/the
+operand-evaluation rows/the binder betas) or the memop
+nondeterministic fork (memop-ptreq) remain ONE-SIDED at the refusal
+arm — the residual the README's register records.
 
 WHAT ADEQUACY NEEDS is the `step` and value arms only: the WP's
 `NotStuck` supplies a mirror step (or a value) at every reachable
@@ -154,8 +149,8 @@ inductive RoundClass (M : MachineCtx) (aid : Nat) (c : Config) : Prop where
       (∀ c', ¬ Step M c c') →
       RoundClass M aid c
 
-/-- THE CLASSIFICATION THEOREM (R-03, charter P3.2 — the exhaustive sum
-    form): every well-sized `Frag` configuration at a sequentially
+/-- THE CLASSIFICATION THEOREM (the exhaustive sum form): every
+    well-sized `Frag` configuration at a sequentially
     well-formed context with a cons-shaped env stack falls into
     exactly one `RoundClass` arm; the `step` arm is two-sided. -/
 theorem cerberusRound_classify {M : MachineCtx} (hwf : M.SeqWF) (aid : Nat)

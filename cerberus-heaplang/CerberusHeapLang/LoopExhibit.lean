@@ -25,20 +25,19 @@ THE PROGRAM (authored Core, all metadata quantified):
   proc-carrying thread never kills, never derails, and a delivered
   value is `Vunit` with the cell's final bytes pinned by the
   data-dependent post (`n = 0` → untouched; `0 < n` → the stored
-  image). Partial correctness with in-budget fuel hypotheses (the
-  variant route past them is demonstrated by `fib_certified_total`,
-  FibExhibit.lean).
+  image). Partial correctness at EVERY drive length: the statement
+  carries no fuel hypothesis (the static `pot` bounds are discharged
+  inside the proof); the total form of the same shape is
+  `fib_certified_total`, FibExhibit.lean.
 
-THE ENV-FRAME SEAM (alloc arc P4.3, R-08 — the representation
-accident REMOVED): the per-label invariant carries the reachable-frame
+THE ENVIRONMENT: the per-label invariant carries the reachable-frame
 predicate `SymFrame` (EnvLaws.lean) and every lookup goes through THE
-LOOKUP LAW `envAdd_lookup`, exactly as the later exhibits do. The
-former exact-shape pin `IsXFrame` (a one-node `Fmap` tree at `xSym`)
-is gone; the entry environment is ANY reachable frame over any tail,
-and the irrelevant-binding tests (`loop_wps_irrelevant_binding`,
+LOOKUP LAW `envAdd_lookup`, exactly as the later exhibits do — no
+frame-shape pin. The entry environment is ANY reachable frame over any
+tail, and the irrelevant-binding tests (`loop_wps_irrelevant_binding`,
 `counter_loop_certified_irrelevant_binding`) run the loop from a frame
 carrying an unrelated binding — a configuration no exact-shape pin
-could have matched, so the proof cannot regress to map equality.
+could match, so the proof cannot regress to map equality.
 -/
 import CerberusHeapLang.API
 import CerberusHeapLang.Examples.Layout

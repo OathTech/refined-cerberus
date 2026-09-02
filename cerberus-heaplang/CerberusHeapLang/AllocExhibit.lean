@@ -1,36 +1,36 @@
 /-
 CerberusHeapLang.AllocExhibit — the PUBLIC allocation rules' local
-consumers and the allocation-aware launcher smoke (alloc arc P1.4).
+consumers, and the smallest allocating program driven to the engine
+from the production cold-start memory.
 
-SCOPE: this module is the P1 evidence that the public allocation
-chain CLOSES — public rule → collapse → allocation-aware launcher →
-engine conclusion — on a MINIMAL program. It is NOT the P2
-whole-program conversion: the headline allocating exhibits
-(ProdExhibit/ProdLoopExhibit) still cross the driver operationally
-(R-02) and their rewrite through `wps_create`/`wpt_create` is the
-next phase. Contents:
+Contents:
 
-- `alloc_two_creates_wps` — partial-lane local consumer: TWO creates
-  consume a two-element plan IN ORDER (the charter P1.4 local test);
-  the head request is consumed first and `allocCap` shrinks
-  head-first at each step.
-- `alloc_create_wpt` — total-lane local consumer at the DERIVED
-  minimal budget `k = 2` (Wpt.lean §CreateRuleT derives the bound
-  against `driveU`; this consumer pins it: the rule applies at
-  exactly 2).
-- `alloc_create_launch_smoke` — THE CHAIN-CLOSING SMOKE: from the
-  production cold-start memory `prodMem₀` (empty footprint, one
-  errno allocation, plan `[⟨4, int⟩]`), a single `create` driven
-  through `wpt_engine_boundU_alloc` DELIVERS at drive fuel exactly 2
-  — an unconditional engine `.done` equation whose proof consumes
-  `wpt_create` and `launchResources` (deleting either breaks it).
-  The delivered value is a pointer. Engine vocabulary only in the
-  statement (GF discharged at the satisfiability witness `SpikeGF`).
+- `alloc_two_creates_wps` — partial-judgment local consumer: TWO
+  creates consume a two-element plan IN ORDER; the head request is
+  consumed first and `allocCap` shrinks head-first at each step.
+- `alloc_create_wpt` — total-judgment local consumer at the minimal
+  budget `k = 2` (the rule `wpt_create`'s cost bound `2 ≤ k`, applied
+  at exactly 2).
+- `alloc_create_launch_smoke` — from the production cold-start memory
+  `prodMem₀` (empty footprint, one errno allocation, plan `[⟨4, int⟩]`),
+  a single `create` driven through `wpt_engine_boundU_alloc` DELIVERS
+  at drive length exactly 2 — an unconditional engine `.done` equation
+  whose proof consumes `wpt_create` and `launchResources` (deleting
+  either breaks it). The delivered value is a pointer. Engine
+  vocabulary only in the statement (GF discharged at the
+  satisfiability witness `SpikeGF`).
 
-Every create premise here is a closed layout fact of `intTy`
-(4-byte scalar int; decode-inertness is `rfl` at every address).
-NO operational proof terms: no `Step.*`, no per-step drive
-equations, no `driverDone_step` in any proof body of this module.
+The whole-program allocating exports — `struct_create_store_adequacy`
+(StructExhibit.lean) at the drive, `exhibitA_prod`,
+`counter_loop_certified_production` and
+`list_reverse_certified_production` (ProdExhibit.lean,
+ProdLoopExhibit.lean) on the shipped pipeline — go through the same
+public rules (`wps_create`/`wpt_create`) and launchers.
+
+Every create premise here is a closed layout fact of `intTy` (4-byte
+scalar int; decode-inertness is `rfl` at every address). NO
+operational proof terms: no `Step.*`, no per-step drive equations in
+any proof body of this module.
 -/
 import CerberusHeapLang.API
 import CerberusHeapLang.Examples.Layout
@@ -66,8 +66,8 @@ section AllocIris
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
 
-/-- TWO CREATES CONSUME A TWO-ELEMENT PLAN IN ORDER (charter P1.4
-    local test, partial lane): from capacity for
+/-- TWO CREATES CONSUME A TWO-ELEMENT PLAN IN ORDER (partial
+    judgment): from capacity for
     `[⟨al₁,int⟩, ⟨al₂,int⟩]` alone, the sequenced pair of creates
     delivers TWO separately-owned fresh cells and the SPENT capacity
     `allocCap []`. The first create consumes the head request
@@ -114,10 +114,9 @@ theorem alloc_two_creates_wps {M : MachineCtx} {Ls : LabelSpec GF}
   · iexact Hpt₂
   · iexact Hcap
 
-/-- Total-lane local consumer at the DERIVED minimal budget: one
-    create from a one-request plan, at `k = 2` exactly (1 relational
-    create step + 1 pure-value delivery — the bound Wpt.lean derives
-    against `driveU`). -/
+/-- Total-judgment local consumer at the minimal budget: one create
+    from a one-request plan, at `k = 2` exactly (1 create step + 1
+    pure-value delivery — `wpt_create`'s cost bound). -/
 theorem alloc_create_wpt {M : MachineCtx} {Ls : LabelSpecT GF}
     (al : Int) (pref : prefix0) (ρ : EnvStack) :
     iprop(allocCap M.tagDefs (GF := GF) [⟨al, intTy⟩]) ⊢
@@ -152,12 +151,11 @@ theorem prod_one_int_plan_fits :
   rw [advanceCursor_mk, intTy_size]
   exact if_pos ⟨by decide, by decide⟩
 
-/-- THE CHAIN-CLOSING SMOKE (P1 exit evidence; the R-01 closure test
-    proper waits for P2's whole-program consumers): a bare `create`
+/-- THE SMALLEST ALLOCATING PROGRAM AT THE ENGINE: a bare `create`
     at the production cold-start memory, proved ONLY through the
     public `wpt_create` and launched ONLY through
     `wpt_engine_boundU_alloc`/`launchResources`, DELIVERS at drive
-    fuel exactly 2 — the engine's own `driveU` returns `.done` with
+    length exactly 2 — the engine's own `driveU` returns `.done` with
     a pointer value. Engine vocabulary only. -/
 theorem alloc_create_launch_smoke (pref : prefix0) (aids : Nat → Nat) :
     ∃ v σ', driveU spikeCtx aids 2

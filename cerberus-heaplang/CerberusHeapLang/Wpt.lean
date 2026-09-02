@@ -1,62 +1,62 @@
 /-
-CerberusHeapLang.Wpt — the TOTAL statement judgment (Phase 3 of the
-2026-08-31 foundations arc; audit F-02 remediation, preferred order
-items 1-3).
+CerberusHeapLang.Wpt — the total label-context judgment `wpt`.
 
-THE SHAPE: the total analog of `wps` (Wps.lean) — the same
-label-context statement logic, but TOTAL: `wpt M Ls k Ψ e ρ`
-means "e delivers a value satisfying Ψ within k engine-drive steps
+THE SHAPE: the total analogue of `wps` (Wps.lean) — the same
+label-context statement logic, but TOTAL: `wpt M Ls k Ψ e ρ` means
+"e delivers a value satisfying Ψ within k engine-drive steps
 (delivery protocol included), given that every registered label body
-meets its own budget". Realized WITHOUT any fixpoint: the judgment
-is defined by STRUCTURAL RECURSION on the step budget `k` — the
-recursive occurrence in the step clause is at `k-1`, and the jump
-clause does not recurse at all (the body's obligation lives in
-`blockSpecsT` at the target's own budget). Compare `wps`: a guarded
-(Banach) fixpoint whose back edges are paid by Löb; here there is no
-Löb and no ▷ — exactly the least-fixpoint discipline of iris-lean's
-own `TotalWeakestPre` (the collapse target), realized through the
-budget's well-foundedness.
+meets its own budget" (`blockSpecsT`). It is defined WITHOUT a
+fixpoint, by structural recursion on the step budget `k` (`wpt.pre`:
+value / jump redex / step clauses; the recursive occurrence in the
+step clause is at `k - 1`, and the jump clause does not recurse — the
+body's obligation lives in `blockSpecsT` at the target's own budget).
+No Löb and no ▷: the least-fixpoint discipline of iris-lean's own
+`TotalWeakestPre`, realized through the budget's well-foundedness.
 
-THE MANDATORY DECREASE (the audit's exact F-02 criterion): the
-label preconditions are INDEXED BY A VARIANT `m : Nat`
-(`LabelSpecT` — the classical Floyd variant as a specification
-parameter, so heap-resident measures like a chain length enter
-through the invariant); the jump clause REQUIRES `1 + m ≤ k` for
-the variant `m` at which the target's precondition is proved — the
-target label's budget, plus the jump step itself, must fit in the
-remaining budget. Since a label body is verified (via
-`blockSpecsT`) at budget `m`, and budgets only shrink along steps,
-every back edge strictly decreases the well-founded `Nat` measure.
-The variant is simultaneously a step budget, so the SAME derivation
-yields both halves the audit ordered separated:
-- the LOGICAL half: `wpt_sound` collapses the judgment into the
-  pinned Iris `TotalWeakestPre` (`WP … [{ … }]`), whose adequacy
-  (`twp_total`) is consumed as-is in TotalAdequacy.lean —
-  termination (strong normalization) over the unified relation;
-- the COST half: `wpt_drive_aux` (TotalAdequacy.lean) is the generic
-  measure→driveU-fuel simulation — a proved `wpt … k` plus the
-  seeded footprint yields the unconditional `driveU … k = .done`
-  equation.
-Removing the decrease premise makes the collapse and the simulation
-unprovable (their inductions are ON the budget), and makes a looping
-program derivable against `¬ StronglyNormalizing` — the negative
-exhibit (DivergeExhibit.lean) records the exact unsatisfiable
-obligation (`∃ m, 1 + m ≤ k` against a body that must be verified
-at every claimed variant, including 0).
+THE MANDATORY DECREASE: label preconditions are INDEXED BY A VARIANT
+`m : Nat` (`LabelSpecT` — the classical Floyd variant as a
+specification parameter, so heap-resident measures such as a chain
+length enter through the invariant), and the jump clause REQUIRES
+`1 + m ≤ k`: the target label's budget plus the jump step itself must
+fit in the remaining budget. Since a body is verified (`blockSpecsT`)
+at budget `m` and budgets only shrink along steps, every back edge
+strictly decreases a well-founded `Nat` measure. The variant is
+simultaneously a step budget, so one derivation yields two results:
+- `wpt_sound` collapses the judgment into iris-lean's
+  `TotalWeakestPre` (`WP … [{ … }]`), by strong induction on the
+  budget — a metatheorem (the judgment is a sound total WP) that no
+  export consumes;
+- `wpt_drive_aux` (TotalAdequacy.lean) is the simulation into the
+  engine: a proved `wpt … k` plus the seeded footprint yields the
+  unconditional `driveU … k = .done` equation, `engine_step_matchU`
+  discharging one engine step per budget unit. Every total export
+  goes this way; no Iris adequacy result is in any total export's cone.
+Deleting the decrease premise makes both inductions fail to elaborate
+(they are ON the budget) and would make the self-jump loop derivable;
+`diverge_total_unprovable` (DivergeExhibit.lean) records, at the
+engine, that a total derivation for that loop is `False`.
 
 BUDGET ACCOUNTING (uniform): a rule's budget = its own engine steps
-plus the DELIVERY COST of its final value (1 for a bare pure value —
-PROGRAM-DONE; 2 for an annot value — the REMOVE-ANNOT tau then
-PROGRAM-DONE). Sequencing composes budgets additively (`k1 + k2`):
-the bound value's delivery cost prepays the beta step (pure) or the
-beta plus the wrapper's eventual merge (annot). Budgets are upper
-bounds (`wpt_mono_k`); rules take slack premises (`c ≤ k`) at
-value-delivering leaves and `+1` at deterministic taus.
+plus the DELIVERY COST of its final value (`deliveryCost`, Rules.lean:
+1 for a bare pure value — PROGRAM-DONE; 2 for an annotated value —
+the REMOVE-ANNOT tau then PROGRAM-DONE). Sequencing composes budgets
+additively (`k1 + k2`): the bound value's delivery cost prepays the
+beta step (pure) or the beta plus the wrapper's eventual merge
+(annot). Block entry costs `saveEntryCost ps` (1 at literal
+initializers, 2 otherwise). Budgets are upper bounds (`wpt_mono_k`);
+rules take slack premises (`c ≤ k`) at value-delivering leaves and
+`+1` at deterministic taus.
 
-`blockSpecs_intro_variant` (the audit's F-02 zero-consumer variant
-rule) is RETIRED in this slice: `blockSpecsT`/`blockSpecsT_intro`
-are the real total rule — the smaller-measure discipline is not an
-optional hypothesis but the judgment's jump clause.
+THE CONTENTS mirror Wps.lean rule for rule: the memory rules through
+`wpt_of_atomic` (`wpt_store`, `wpt_load`, the `_at`/`_cell_at`/`_plain`
+forms, `wpt_create` at cost `2 ≤ k`); sequencing (`wpt_seq`,
+`wpt_seq_spec`, `wpt_seq_sym`, `wpt_wseq`); `wpt_if`, `wpt_case_value`;
+`wpt_save`/`wpt_run` (the latter with the decrease premise `1 + m ≤
+k`); operand evaluation and the memop; the pure exit and the
+annotation layer; consequence (`wpt_mono`, `wpt_mono_k`, `wpt_mono_Ls`,
+`wpt_fupd`); framing (`wpt_frame`, `wpt_frame_labels`/`frameLsT`);
+`blockSpecsT_intro` with `blockSpecsT_frame`/`blockSpecsT_mono`; and
+the collapse `wpt_sound`.
 -/
 import CerberusHeapLang.Wps
 

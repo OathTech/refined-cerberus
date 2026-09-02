@@ -1,9 +1,8 @@
 /-
 CerberusHeapLang.Soundness — THE BOUNDARY MODULE: the only module
 that references the engine's step machinery (`step_ctx`,
-Core_reduction.lean:484); everything here certifies the
-hand-written `Step` (Step.lean) against the engine at the frozen
-minimal context.
+Core_reduction.lean:484); everything here certifies the hand-written
+`Step` (Step.lean) against the engine, at any machine context.
 
 WHAT IS PROVED (the certification direction, and why it suffices):
 
@@ -25,7 +24,7 @@ classified where the engine's refusal channel is a value (Round.lean,
 Why this direction suffices for adequacy (Adequacy.lean): the WP's
 NotStuck obligation (proved against Step) guarantees every reachable
 fragment configuration is a Step-value or Step-reducible; at such a
-configuration the engine's one behavior IS the matched step (or the
+configuration the engine's one behaviour IS the matched step (or the
 value protocol), so the engine can never kill and its final value is
 the one the WP's postcondition speaks about. The soundness direction
 (every Step is engine-realizable) is NOT needed for that statement
@@ -33,11 +32,11 @@ and is not claimed; the active-path equalities in the per-rule lemmas
 are exact (iff-grade on the fragment: `step_iff_cerberusRound`), so
 nothing here relies on Step over-approximating.
 
-THE DISCHARGE MIRROR (dischargeStep): Step_action_request2's request
-monad is run on the frozen core_run_state and the request discharged
-against the REAL CerbMem.loadM/storeM exactly as the sequential
-driver does (action_request_sequential2, Driver.lean:273), with the
-following projections, each cited:
+THE DISCHARGE MIRROR (`dischargeStep`): `Step_action_request2`'s
+request monad is run on the context's core_run_state and the request
+discharged against the REAL CerbMem.loadM/storeM/allocateObject
+exactly as the sequential driver does (action_request_sequential2,
+Driver.lean:273), with the following projections, each cited:
   - `prefixOfPointer` is dropped: it is `memReturn none`
     (CerbMem.lean:2064) — state-invariant and never-killing, its
     result only enters the driver's trace;
@@ -47,26 +46,30 @@ following projections, each cited:
   - the aid drawn by perform_action_request2 (Driver.lean:284) is an
     arbitrary parameter here: the fragment's positive non-excluded
     continuations build `DA_pos [] fp` and ignore it (step_action,
-    Core_reduction.lean:424; recorded finding D2,
-    docs/2026-08-30_spike-sliceA-notes.md) — the per-rule lemmas
-    hold for every aid.
+    Core_reduction.lean:424) — the per-rule lemmas hold for every aid.
+`Step_with_runstate2` (the guard/argument evaluation and `Erun`
+rounds) and `Step_memop_request2` (`PtrEq`) are discharged the same
+way; the arms are documented at the definition.
 
-FUEL HONESTY: the engine's get_ctx is fuel-bounded
-(get_ctx_lemFuel, Core_reduction.lean:373, budget lemDefaultFuel =
-10^6) and its exhaustion leaf is opaque (LemLib fuelExhausted —
-deliberately not provably equal to anything). Every statement about
-a symbolic configuration therefore carries an `esize e ≤
-lemDefaultFuel` side condition. `esize` grows by at most 1 per
-straight-line step and is reset by a jump to the registered body's
-own size (`Frag.esize_step_bound`); the drive statements do NOT carry
-that run-length-coupled form — Potential.lean's step-monotone
-potential `pot` (`esize e ≤ pot e`; `pot` never increases along a
-step except for the jump reset) turns it into the two STATIC premises
-`pot e₀ ≤ lemDefaultFuel` and `pot cont ≤ lemDefaultFuel` per
-registered label body that Adequacy.lean and TotalAdequacy.lean
-carry, with the drive length unbounded (2026-09-02 professor review,
-required fix 1). This is an honest engine artifact, not slack: past
-the budget the engine really does bail.
+FUEL HONESTY: the engine's get_ctx is fuel-bounded (get_ctx_lemFuel,
+Core_reduction.lean:373, budget lemDefaultFuel = 10^6) and its
+exhaustion leaf is opaque (LemLib fuelExhausted — deliberately not
+provably equal to anything). Every statement about a symbolic
+configuration therefore carries an `esize e ≤ lemDefaultFuel` side
+condition. `esize` grows by at most 1 per straight-line step and is
+reset by a jump to the registered body's own size
+(`Frag.esize_step_bound`); the drive statements do NOT carry that
+run-length-coupled form — Potential.lean's step-monotone potential
+`pot` (`esize e ≤ pot e`; `pot` never increases along a step except
+for the jump reset) turns it into the two STATIC premises `pot e₀ ≤
+lemDefaultFuel` and `pot cont ≤ lemDefaultFuel` per registered label
+body that Adequacy.lean and TotalAdequacy.lean carry, with the drive
+length unbounded. The pure-expression evaluator is fuelled at the
+same budget; its bound is the second static premise family, `peDepth
+pe ≤ lemDefaultFuel` on the operands of `Frag.if_`/`run`/`save`/
+`load_op`/`memop_op`/`store_op` (the pure-evaluator bridge section
+below). Both are honest engine artifacts, not slack: past the budget
+the engine really does bail.
 -/
 import CerberusHeapLang.Step
 import Core_reduction
@@ -2996,32 +2999,37 @@ theorem step_ctx_beta_sym_pure {e : CoreExpr} {ctx : context}
      rw [henv]
      try rfl)
 
-/-! ### The unified fragment cone and the step-match
+/-! ### The fragment `Frag` and the step-match
 
-`Frag` is the ONE capability cone (Phase-1 S1b unified form — the
-old S3 note that "Ecase stays OUT" is superseded): the straight-line
-shapes plus Esave, Eif (with the guard's fuel-honesty side
-condition), Erun (with the arguments'), value-scrutinee Ecase
-(`Frag.case_value` below, with explicit branch-closure/branch-size
-premises) and wildcard Ewseq. Registered continuations enter through
-the SIDE hypothesis `hQf` (the label map's own cone membership),
-which breaks the circularity a Q-indexed cone would have.
+`Frag` is the per-construct authority of every adequacy theorem: the
+straight-line shapes plus Esave, Eif (with the guard's static
+evaluator-fuel bound), Erun (with the arguments'), value-scrutinee
+Ecase (`Frag.case_value` below, with explicit branch-closure and
+branch-size premises) and wildcard Ewseq. Registered continuations
+enter through the SIDE hypothesis `hQf` (the label map's own
+membership), which breaks the circularity a label-indexed fragment
+would have.
 
-The completeness shape CHANGED from phase 1 (recorded finding): the
-phase-1 completeness theorem classified every engine behavior
-including refusals-at-stuck (retired at QA-2 with the straight-line
-island); the unified lane instead certifies
-MATCH-GIVEN-STEP (`engine_step_matchU`, the S1b replacement of the
-retired J-lane `engine_step_matchJ`): wherever the MIRROR steps, the
-engine's behavior is the singleton discharged match. That suffices
-for the WP-driven adequacy lane (NotStuck supplies a mirror step at
-every reachable configuration) and dissolves the WF-threading
-problem: the panic-exclusion facts live as RULE PREMISES, extracted
-by the inversions from the given step — the WP is the
-well-formedness oracle.
+The certification shape is MATCH-GIVEN-STEP (`engine_step_matchU`):
+wherever the MIRROR steps, the engine's behaviour is the singleton
+discharged match. That suffices for the WP-driven adequacy (NotStuck
+supplies a mirror step at every reachable configuration) and avoids
+threading well-formedness through the engine: the panic-exclusion
+facts live as RULE PREMISES, extracted by the inversions from the
+given step — the WP is the well-formedness oracle.
 
-THE FRAGMENT IS ANNOTATION-FREE (2026-09-02 professor review 1,
-required fix 3): every constructor below, and every redex spelling it
+THE SECOND FUEL BOUND. The engine's pure-expression evaluator is
+fuelled at `lemDefaultFuel` too (the pure-evaluator bridge above), so
+every constructor that evaluates a pure operand carries `peDepth pe ≤
+lemDefaultFuel` per operand (`if_`, `run`, `save`, `load_op`,
+`memop_op`, `store_op`), and the three operand-evaluation constructors
+restrict their operands to the covered sub-grammar `PePure`; for
+`if_`/`run`/`save` the grammar follows from the rule's `evalPexpr`
+success premise (`evalPexpr_shape`). Both are `rfl` for authored
+programs (`peDepth_sym_le`, `peDepth_val_le`).
+
+THE FRAGMENT IS ANNOTATION-FREE: every constructor below, and every
+redex spelling it
 ranges over (`storeRedex`/`loadRedex`/`createRedex` above,
 `loadOpRedex`/`storeOpRedex`/`memopRedex`/`pureRedex` in Step.lean,
 `saveRedex`/`ifRedex`/`runRedex`/`caseRedex` above, and the
@@ -3058,11 +3066,11 @@ inductive Frag : CoreExpr → Prop where
       Frag (Expr [] (Esseq (Pattern pa (CaseBase (none, bty))) e1 e2))
   | annot {ds : List dyn_annotation} {b : CoreExpr} :
       Frag b → Frag (Expr [] (Eannot ds b))
-  /-- Esave at ANY initializers within the evaluator's fuel (QA-1/H-1:
-      the engine's TAU arm at value initializers, its EVAL arm
-      otherwise — `Step.save`/`Step.save_eval`). `hd` is the same
-      fuel-honesty side condition `if_`/`run` carry for their pure
-      operands; literal initializers satisfy it trivially
+  /-- Esave at ANY initializers within the evaluator's fuel (the
+      engine's TAU arm at value initializers, its EVAL arm otherwise —
+      `Step.save`/`Step.save_eval`). `hd` is the same static
+      evaluator-fuel bound `if_`/`run` carry for their pure operands;
+      literal initializers satisfy it trivially
       (`saveParams_depth_of_vals`). -/
   | save {sb : sym × core_base_type}
       {ps : List (sym × ((core_base_type ×
@@ -3109,14 +3117,25 @@ inductive Frag : CoreExpr → Prop where
       (hd2 : peDepth pe2 ≤ lemDefaultFuel)
       (hd3 : peDepth pe3 ≤ lemDefaultFuel) :
       Frag (storeOpRedex loc ann ty pe2 pe3 mo)
+  /-- Value-scrutinee Ecase, with the selected branch's fragment
+      membership (`hbr`) and size bound (`hbsz`) as explicit premises.
+      `hbsz` is carried, not proved: the equation that would discharge
+      it is `esize (subst_sym_expr x v e) = esize e` (with its mutual
+      twin for `esizeAlts`) — true because `esize` inspects only
+      expression constructors and `subst_sym_expr` substitutes only
+      into pure expressions — but the engine's `subst_sym_expr` is
+      `subst_sym_expr_lemFuel lemDefaultFuel`, a fuel-indexed recursion
+      over the whole generated Core AST, so the proof is a fuel-indexed
+      induction over that mutual recursion; registered (README,
+      "Registered divergences and limitations"). For authored programs
+      both premises are `rfl` (CaseExhibit.lean, `caseProg_select`). -/
   | case_value {b : List annot} {cval : value}
       {pats : List (pattern × CoreExpr)}
       (hbr : ∀ e', select_case subst_sym_expr cval pats = some e' → Frag e')
       (hbsz : ∀ e', select_case subst_sym_expr cval pats = some e' →
         esize e' ≤ esize (caseRedex (Pexpr b () (PEval cval)) pats)) :
       Frag (caseRedex (Pexpr b () (PEval cval)) pats)
-  /-- S1b DRIFT TEST: weak sequencing at the wildcard pattern joins
-      the cone through the generic route (the `sseq` clone). -/
+  /-- Weak sequencing at the wildcard pattern (the `sseq` clone). -/
   | wseq {pa : List annot} {bty : core_base_type} {e1 e2 : CoreExpr} :
       Frag e1 → Frag e2 →
       Frag (Expr [] (Ewseq (Pattern pa (CaseBase (none, bty))) e1 e2))

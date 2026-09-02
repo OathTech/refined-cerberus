@@ -1,56 +1,53 @@
 /-
-CerberusHeapLang.Rules — the base stratum: the store/load small
-axioms at iris-lean's raw WP, and the readout combinator.
+CerberusHeapLang.Rules — the base stratum: the atomic step
+specifications, the store/load small axioms at iris-lean's raw WP,
+and the readout combinator.
 
 The contents:
 - THE ATOMIC STEP SPECIFICATIONS (`AtomicStep`; `store_atomic`,
   `load_atomic`, `loadAt_atomic`, `storeAt_atomic`, `create_atomic`)
   — every memory small axiom proved ONCE, against `Step`, in the
-  mask-generic one-step-to-value shape all three strata lift
-  (`wp_of_atomic` here; `wps_of_atomic`, `wpt_of_atomic` in the
-  statement modules) — 2026-09-02 professor review 1, required fix 8.
-- SMALL AXIOMS `wp_store` / `wp_load` (corollaries) — UB-EXCLUDING: the
-  preconditions rule out every NDkilled (undefined-behavior/error)
-  arm of the engine's storeM/loadM: the points-to supplies
-  pointer-shape, liveness, bounds, writability, non-atomicity;
-  `StorableAt` supplies the type-compat fact (the non-UB `Other`
-  arm!); `cellLoadTrap = false` excludes the _Bool
+  mask-generic one-step-to-value shape all three judgments lift
+  (`wp_of_atomic` here; `wps_of_atomic`, `wpt_of_atomic` in Wps.lean
+  and Wpt.lean). Each runs the real engine function inside the proof
+  (`storeM_success`, `loadM_success`, `storeM_at`, `loadM_at`,
+  `allocateObject_success`, Heap.lean).
+- THE SMALL AXIOMS `wp_store` / `wp_load` (corollaries) — UB-EXCLUDING:
+  the preconditions rule out every NDkilled (undefined-behaviour or
+  error) arm of the engine's storeM/loadM: the points-to supplies
+  pointer shape, liveness, bounds, writability, non-atomicity;
+  `StorableAt` supplies the type-compatibility fact (the non-UB
+  `MerrOther` arm); `cellLoadTrap = false` excludes the `_Bool`
   trap-representation arm. Both are generic in the machine context
   `M` and the environment stack `ρ`: a local action step never
   consults the label context (the jump disjuncts of the inversions
   are refuted by node shape) and returns the env VERBATIM.
-- THE READOUT COMBINATOR `stateInterp_readout` — the ONE open/close
-  of the state interpretation the projection (Adequacy.lean) uses to
-  turn an Iris postcondition into a pure fact about the final memory.
-- `spike_wp_wand`: iris-lean's `wp_wand` at this language.
-- The value dichotomy of an annot-wrapped term (`toVal_annot_cases`,
-  `toVal_annot_none`), consumed by the statement strata's annotation
-  rules (Wps.lean, Wpt.lean).
+- THE READOUT COMBINATOR `stateInterp_readout` — the ONE open/close of
+  the state interpretation the projection (Adequacy.lean) uses to turn
+  an Iris postcondition into a pure fact about the final memory.
+- `deliveryCost` (the value protocol's step cost: 1 for a bare value,
+  2 for an annotated one), `spike_wp_wand` (iris-lean's `wp_wand` at
+  this language), and the value dichotomy of an annotation-wrapped
+  term (`toVal_annot_cases`, `toVal_annot_none`), consumed by the
+  judgments' annotation rules.
 
-WHAT IS DELIBERATELY NOT HERE. Frame and consequence at the raw WP
-are iris-lean's own `wp_frame_r` / `wp_mono`. There is NO raw-WP
+WHAT IS DELIBERATELY NOT HERE. Frame and consequence at the raw WP are
+iris-lean's own `wp_frame_r` / `wp_mono`. There is NO raw-WP
 sequencing rule and NO raw-WP annotation-commuting rule: at a
 populated label map both are FALSE for the base WP — a jump discards
 the `Esseq`/`Eannot` context, so the premise's continuation and the
 conclusion's land on the same registered body owing DIFFERENT
-postconditions. Sequencing, annotation commutation, frame across
-back edges and consequence are therefore stated at the label-context
+postconditions. Sequencing, annotation commutation, frame across back
+edges and consequence are therefore stated at the label-context
 judgments `wps` (Wps.lean) and `wpt` (Wpt.lean), whose jump clause is
-post-independent; that is why those judgments exist. The spike-era
-raw-WP lane pinned to the empty label map (`triple`, `triple_seq`
-with its `EnvStable` side condition, `wp_sseq`, `wp_annot`) was
-retired at QA-2 (docs/2026-09-02_qa2-notes.md); its exhibits live at
-the statement stratum (Examples/Layout.lean).
+post-independent; that is why those judgments exist.
 
 SOUNDNESS STATUS: every theorem here is proved against `Step`
-(Step.lean), the hand-written mirror; Step is certified against the
-engine's step_ctx/driver composite (Soundness.lean), and the
-bundled `SpikeGS` ghost state is constructed inside the adequacy
-proof (Adequacy.lean), so what is proved here acquires engine-level
-meaning through the projection / semantic triples.
-
-Design records: docs/2026-08-30_spike-minilog-plan.md and the dated
-slice notes in docs/.
+(Step.lean), the hand-written mirror; `Step` is certified against the
+engine's step_ctx/driver composite (Soundness.lean), and the bundled
+`SpikeGS` ghost state is constructed inside the adequacy proof
+(Adequacy.lean), so what is proved here acquires engine-level meaning
+through the projection theorems.
 -/
 import CerberusHeapLang.Lang
 

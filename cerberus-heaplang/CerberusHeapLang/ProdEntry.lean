@@ -1,7 +1,7 @@
 /-
-CerberusHeapLang.ProdEntry — the COLD START and the
-production-entry theorem: triples restated against the shipped
-pipeline, from the shipped initial state.
+CerberusHeapLang.ProdEntry — the COLD START and the production-entry
+theorem: statements against the shipped pipeline, from the shipped
+initial state.
 
 The pipeline under judgment is the SHIPPED one (Main.lean:857-885):
 
@@ -13,15 +13,13 @@ constructor — nothing hand-built enters the quantifiers: memory starts
 at `CerbMem.initialMemState` (= the empty MemState), the thread pool
 empty (`initial_core_state`, Core_run_aux.lean:393), and the run state
 at `initial_core_run_state` (Core_run_aux.lean:406), which seeds
-`sym_supply` from the SUPPLY-THREADED entry's `sup` argument (the
-cerberus-lean effect-retirement arc, C1: `initial_driver_state :
+`sym_supply` from the entry's `sup` argument (`initial_driver_state :
 Nat → file → fs_state → driver_state × Nat`, the `.1` projection
 being the state and `.2` the advanced supply). Every theorem below
 quantifies over the supply `sup` — the shipped `Main` seeds one
 concrete stream, the theorems hold for every value, because the
-fragment never reads `sym_supply` (the D14 read-set partition). The
-former `runEffectful` boundary axiom is GONE from the cone: every
-theorem here is trio-exact (Audit.lean).
+fragment never reads `sym_supply`. Every theorem here has axiom set
+exactly the classical trio (Audit.lean).
 
 The setup prefix `Driver.drive` runs before `driver2`
 (Driver.lean:500-513): spawn thread 0 (`driver_globals` /
@@ -31,59 +29,46 @@ file), look up `main` in `funs`, skip argc/argv materialization
 (main has no parameters), allocate-and-zero `errno` with the REAL
 `allocateObject`/`storeM` on the cold memory, and park main's body as
 thread 0's arena. The concrete cold-start facts (`errno_alloc_eq`
-etc.) pin that prefix; `prodMem₀` is the memory state at fragment
-start — derived through engine functions only.
+etc.) pin that prefix (`drive_after_setup`); `prodMem₀` is the memory
+state at fragment start — derived through engine functions only — and
+`prodMem₀_launchCoh` is the launch premise `LaunchCoh` at it, for any
+plan that fits its cursor.
 
 THE THEOREM (`prod_run_eqJ`): the production pipeline on a synthetic
-one-procedure file is EXACTLY ONE Active execution whose value and
-final memory satisfy the postcondition, given the driver-delivery
-fact `DriverDoneAt` that the total judgment supplies
+one-procedure file (`prodFile e`) is EXACTLY ONE Active execution
+whose value and final memory satisfy the postcondition, given the
+driver-delivery fact `DriverDoneAt` that the total judgment supplies
 (`wpt_driver_done_alloc`, ProdLoop.lean) and the registration tie
-`LabeledAt`. Scope honesty: single-threaded, fragment-only, total
-correctness at a certified step count — plus the in-budget bound
-`k + 2 ≤ lemDefaultFuel`, because the production loop's
-fuel-exhaustion leaf is the opaque `fuelExhausted` (fail-closed, D19):
-at insufficient fuel NOTHING about the production value is provable.
-Fuel parametricity is a registered residual (README "Registered
-divergences"). The older straight-line face (`prod_run_eq`/
-`sem_triple_prod`, whose premises were operational drive equations)
-was retired at QA-2 as a second collapse of the same pipeline with
-no consumer (docs/2026-09-02_qa2-notes.md).
+`LabeledAt`. Scope: single-threaded, fragment-only, total correctness
+at a certified step count — plus the in-budget bound `k + 2 ≤
+lemDefaultFuel`, because the production loop's fuel-exhaustion leaf is
+the opaque `fuelExhausted`: at insufficient fuel NOTHING about the
+production value is provable (README, "Registered divergences and
+limitations"). The consumers are `exhibitA_prod` (ProdExhibit.lean)
+and the three `*_production` loop theorems (ProdLoopExhibit.lean).
 
 THE REGISTRATION TIE for loops: `fib_labeledAt_production` /
 `loop_labeledAt_production` derive `LabeledAt` at the PRODUCTION
-initial run state from the shipped
-`collect_labeled_continuations_NEW` — the loop exhibits' label maps
-are exactly what the production entry computes, nothing hand-built —
-and `counter_loop_certified_registration` re-exports the counter
-loop at that derived tie. (Phase 5 [audit F-05]: the theorem is
-named for what it is — the REGISTRATION tie, stated over `driveU`
-at `procCtx mainSym rs` with the production run state `rs`; the
-full production `runND` equations for loop RUNS are the
-`*_production` theorems of ProdLoopExhibit.lean, through the
-proc-carrying scheduler collapse of DriverCollapse/ProdLoop.)
+initial run state from the shipped `collect_labeled_continuations_NEW`
+— the loop exhibits' label maps are exactly what the production entry
+computes, nothing hand-built — and `counter_loop_certified_registration`
+re-exports the counter loop at that derived tie, stated over `driveU`
+at `procCtx mainSym rs` with the production run state `rs`. The
+production `runND` equations for the loop RUNS themselves are the
+`*_production` theorems of ProdLoopExhibit.lean, through
+`wpt_driver_done_alloc` → `prod_run_eqJ`.
 
-Note on `create` and the WP layer (D26; 2026-09-01 re-audit R-01):
-an UNCONDITIONAL `wp_create` from cell ownership alone is
-unprovable — allocateObject can kill ("out of memory",
-CerbMem.lean:1479) from configurations no cell footprint
-constrains. Phase 2's allocator-cursor resource supplies the
-missing authority; alloc arc P1 made it LAUNCHABLE and PUBLIC: the
+On `create`: an UNCONDITIONAL `wp_create` from cell ownership alone is
+unprovable — `allocateObject` can kill ("out of memory",
+CerbMem.lean:1479) from configurations no cell footprint constrains.
+The allocator-cursor resource supplies the missing authority: the
 create rules take the abstract capacity `allocCap` (Heap.lean), the
 allocation-aware launchers grant it from real memory
-(`launchResources` under `LaunchCoh` — this module proves the
-concrete cold-start instance `prodMem₀_launchCoh` below), and the
-chain closes at the engine (`alloc_create_launch_smoke`,
-AllocExhibit). CLOSED at alloc arc P2 (R-02): every allocating
-production exhibit is now a whole-program logic proof — the
-programs BIND their engine-created pointers, the creates cross the
-public rules, and this module's `prod_run_eqJ` (moved here from
-ProdLoopExhibit at P2: generic production machinery) composes the
-generic `wpt_driver_done_alloc` delivery fact with the setup
-collapse.
-
-Dnn labels are the recorded design findings of
-docs/2026-08-30_spike-sliceB-notes.md.
+(`launchResources` under `LaunchCoh` — this module proves the concrete
+cold-start instance `prodMem₀_launchCoh`), and every allocating
+production exhibit is a whole-program logic proof whose creates cross
+the public `wpt_create` (`exhibitA_prod`, `counter_loop_certified_production`,
+`list_reverse_certified_production`).
 -/
 import CerberusHeapLang.DriverCollapse
 import CerberusHeapLang.Examples.Layout
@@ -210,10 +195,10 @@ theorem errno_store_eq :
       some (.FP .W errnoAddr (CerbMem.sizeofCtype fmapEmpty signed_int), prodMem₀) :=
   storeM_success fmapEmpty σE1 0 errnoCell zeroMval _ errnoCellCoh zero_storable
 
-/-! ## Launch coherence at the production cold start (alloc arc
-P1.2 — the CONCRETE instance; the generic theorem is
-`LaunchCoh.cohG` in Adequacy.lean, which encodes neither the errno
-address nor any demo's future allocations) -/
+/-! ## Launch coherence at the production cold start (the CONCRETE
+instance; the generic theorem is `LaunchCoh.cohG` in Adequacy.lean,
+which encodes neither the errno address nor any demo's future
+allocations) -/
 
 theorem prodMem₀_nextAllocId : prodMem₀.nextAllocId = 1 := rfl
 
@@ -331,10 +316,9 @@ theorem drive_after_setup (sup : Nat) (e : CoreExpr) (fs : CerbFS.FsState)
     rfl
 
 /-! ## THE PRODUCTION RUN EQUATION FOR REGISTERED-LOOP PROGRAMS
-(moved here from ProdLoopExhibit at alloc arc P2 — generic
-production machinery, not example content: the pipeline theorem
-composing `drive_after_setup` + a `DriverDoneAt` delivery fact +
-`driver2_done`/`finalize_done`) -/
+(generic production machinery, not example content: the pipeline
+theorem composing `drive_after_setup` + a `DriverDoneAt` delivery fact
++ `driver2_done`/`finalize_done`) -/
 
 /-- The production pipeline on a synthetic one-procedure file whose
     program's registered label map (the SHIPPED registration,
@@ -374,23 +358,21 @@ theorem prod_run_eqJ (sup : Nat) (e : CoreExpr) {Q : LabelMap}
   exact hψ
 
 
-/-! ## S4 — THE PRODUCTION REGISTRATION TIE (the LabeledAt
-derivation): for the authored loop programs, the label map the
-exhibits' run states carry is EXACTLY what the SHIPPED registration
-computes — `collect_labeled_continuations_NEW` over the synthetic
-one-procedure file (Core_aux.lean:853, via `collect_saves`), the
-map `initial_core_run_state` installs as `labeled`
-(Core_run_aux.lean:406). `LabeledAt` at the PRODUCTION initial run
-state is therefore DERIVED, not hypothesized (the S3 exhibit's
-recorded gap). These statements quantify over the shipped initial
-state at every supply `sup` (the `labeled` fiber is supply-independent,
-by `rfl`). HONEST RESIDUAL (recorded, slice
-notes): the full production-face `.done` equation for a LOOP run
-(the driver2 collapse at a proc-carrying thread with a populated
-label map) is not established this slice — the DriverCollapse
-scheduler equations are pinned at the phase-1 profile; the drive
-lane's `fib_certified_total` carries the step-bound product that
-would discharge its in-budget hypothesis. -/
+/-! ## THE PRODUCTION REGISTRATION TIE (the LabeledAt derivation):
+for the authored loop programs, the label map the exhibits' run
+states carry is EXACTLY what the SHIPPED registration computes —
+`collect_labeled_continuations_NEW` over the synthetic one-procedure
+file (Core_aux.lean:853, via `collect_saves`), the map
+`initial_core_run_state` installs as `labeled` (Core_run_aux.lean:406).
+`LabeledAt` at the PRODUCTION initial run state is therefore DERIVED,
+not hypothesized. These statements quantify over the shipped initial
+state at every supply `sup` (the `labeled` fiber is
+supply-independent, by `rfl`). The production `.done` equations for
+the loop RUNS — `fib_certified_production`,
+`counter_loop_certified_production`,
+`list_reverse_certified_production` (ProdLoopExhibit.lean) — are
+proved through `prod_run_eqJ` above with these ties as their
+`LabeledAt` premise. -/
 
 open Iris Iris.BI Iris.ProgramLogic
 

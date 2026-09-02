@@ -1,30 +1,35 @@
 /-
-CerberusHeapLang.CaseExhibit — the Ecase (VALUE scrutinee) consumer
-regression (foundations arc Phase 1 / S1b; audit F-01's acceptance
-shape: "an adequacy-level regression theorem whose program executes
-the rule").
+CerberusHeapLang.CaseExhibit — the `Ecase` (VALUE scrutinee) consumer:
+an adequacy-level theorem whose program executes the rule.
 
 The program: `case v of x => pure(x) end` — a value scrutinee with a
 BINDER pattern, so the engine's substitution TAU genuinely fires
-(`select_case` binds `x := v` through `subst_sym_expr`; the S1a
-probe's interim regression used the wildcard pattern, which binds
-nothing). The theorem chain is the WP LANE end to end:
-`wps_case_value` (the logic rule) → `wps_sound` (the Löb-tied
-collapse, block specifications vacuous at the spike profile) →
-`engine_adequacyU` — concluding, engine vocabulary only: the
-drive of the case program never kills, never derails, and any
-delivered value IS the scrutinee.
+(`select_case` binds `x := v` through `subst_sym_expr`). The theorem
+chain: `wps_case_value` (the logic rule) → `wps_sound` (the Löb-tied
+collapse, block specifications vacuous at `spikeCtx`) →
+`engine_adequacyU` — concluding, in engine vocabulary only: the drive
+of the case program never kills, never derails, and any delivered
+value IS the scrutinee (`case_certified`).
 
-NOTE (substitution closure, design record §5.1): the cone carries
-branch closure as EXPLICIT per-branch premises (`Frag.case_value`'s
-`hbr`/`hbsz`), not via a generic `Frag e → Frag (subst_sym_expr x v
-e)` closure lemma — that statement is FALSE on this cone: several
-cone premises are value-shape-sensitive (`valueFromPexpr pe = none`
-on the ACTION_EVAL/operand-eval shapes), and substitution can turn a
-not-yet-value operand (`PEsym x`) into a value (`PEval v`) whose
-redex spelling leaves the constructor's range. Here the premises
-are discharged by computing the substituted branch (`caseProg_select`
-is `rfl`).
+ON THE BRANCH PREMISES. `Frag.case_value` carries branch closure as
+EXPLICIT per-branch premises (`hbr`: the selected branch is in `Frag`;
+`hbsz`: its `esize` is bounded by the case node's), not via a generic
+`Frag e → Frag (subst_sym_expr x v e)` closure lemma — that statement
+is FALSE on this fragment: several constructor premises are
+value-shape-sensitive (`valueFromPexpr pe = none` on the
+operand-evaluation shapes), and substitution can turn a not-yet-value
+operand (`PEsym x`) into a value (`PEval v`) whose redex spelling
+leaves the constructor's range. `hbsz` is carried rather than proved:
+the equation that would discharge it is `esize (subst_sym_expr x v e)
+= esize e` (with its mutual twin for `esizeAlts`) — true because
+`esize` inspects only expression constructors and `subst_sym_expr`
+substitutes only into pure expressions — and the obstacle is that the
+engine's `subst_sym_expr` is `subst_sym_expr_lemFuel lemDefaultFuel`,
+a fuel-indexed recursion over the whole generated Core AST, so the
+proof is a fuel-indexed induction over that mutual recursion (README,
+"Registered divergences and limitations"). Here both premises are
+discharged by computing the substituted branch (`caseProg_select` is
+`rfl`).
 -/
 import CerberusHeapLang.API
 

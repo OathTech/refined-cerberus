@@ -1,18 +1,17 @@
 /-
 CerberusHeapLang.Potential — the step-monotone size potential `pot`
-on fragment terms: the STATIC fuel bound both adequacy lanes carry.
+on fragment terms: the STATIC fuel bound both adequacy theorems carry.
 
 The engine's `get_ctx` is fuel-bounded (budget `lemDefaultFuel`,
 Soundness.lean header "FUEL HONESTY") and its exhaustion leaf is
 opaque, so every engine-step certification (`engine_step_matchU`)
 carries `esize e ≤ lemDefaultFuel` for the CURRENT term. The generic
 growth bound `Frag.esize_step_bound` (≤ +1 per step) would couple a
-drive statement's fuel premise to the run length — the shape the
-partial lane carried until the 2026-09-02 professor review (required
-fix 1). This module installs the classical remedy: a potential/
-ranking function on terms — value leaves 1, redex leaves 2 (a leaf's
-rewrite into its annotated value is prepaid), compounds structural,
-case nodes priced at twice their branch size — such that
+drive statement's fuel premise to the run length. This module installs
+the classical remedy: a potential/ranking function on terms — value
+leaves 1, redex leaves 2 (a leaf's rewrite into its annotated value is
+prepaid), compounds structural, case nodes priced at twice their
+branch size — such that
 
   * `Frag.esize_le_pot`   : `esize e ≤ pot e`, and
   * `Frag.pot_step_bound` : along a fragment step `pot` never
@@ -23,10 +22,9 @@ So the two STATIC premises `pot e₀ ≤ lemDefaultFuel` and
 `pot cont ≤ lemDefaultFuel` (per registered label body) bound `esize`
 at every reachable term, independent of the run length. Both the
 partial drive classification (Adequacy.lean, `drive_classifyU`) and
-the total measure→fuel simulation (TotalAdequacy.lean,
-`wpt_drive_aux`) consume exactly these. (Moved here from
-TotalAdequacy.lean so the partial lane can import it without a cycle;
-statements unchanged.)
+the total budget simulation (TotalAdequacy.lean, `wpt_drive_aux`)
+consume exactly these; `Frag.pot_le_two` (`pot e ≤ 2 * esize e`) is
+how the exhibits discharge them from a closed `esize`.
 -/
 import CerberusHeapLang.Soundness
 

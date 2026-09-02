@@ -1,42 +1,37 @@
 /-
-CerberusHeapLang.TotalAdequacy — total correctness at the engine: THE
-GENERIC MEASURE→DRIVE-FUEL SIMULATION.
+CerberusHeapLang.TotalAdequacy — total correctness at the engine: the
+budget-to-drive-length simulation.
 
 `wpt_drive_aux` / `wpt_engine_boundU` (+ `_alloc`): the total
-judgment's budget is realized as concrete `driveU` fuel. From
-`wpt … k … e ρ` plus the seeded footprint, the engine's drive AT
-FUEL k DELIVERS: `driveU M aids k (M.thread e ρ) σ = .done v σ'` with
-the postcondition readout — the unconditional total equations the
-exhibits export (fib at 2·n+4; list-reverse at its derived bound),
-with ZERO example-level Step constructors: the simulation is proved
-once, here, by induction on the budget with `engine_step_matchU`
-discharging one engine step per budget unit.
+judgment's budget is realized as a concrete `driveU` length. From
+`wpt … k … e ρ` (with `blockSpecsT` for the registered bodies) plus
+the seeded footprint, the engine's drive AT LENGTH k DELIVERS:
+`driveU M aids k (M.thread e ρ) σ = .done v σ'` with the postcondition
+readout — the unconditional total equations the exhibits export (fib
+at `2·n + 4`, list reversal at `13·|ns| + 7`, the tree rotation at
+19), with ZERO example-level Step constructors: the simulation is
+proved once, here, by strong induction on the budget with
+`engine_step_matchU` discharging one engine step per budget unit. No
+Iris adequacy result is in the cone: `wpt_sound` (Wpt.lean) is a
+metatheorem consumed by no export.
 
 FUEL HONESTY WITHOUT ACCUMULATION: the per-step `engine_step_matchU`
 obligation is `esize e ≤ lemDefaultFuel` for the CURRENT term only;
 the static potential `pot` (Potential.lean — `Frag.pot_step_bound`,
 `Frag.esize_le_pot`) turns it into the two run-length-independent
 hypotheses `pot e₀ ≤ lemDefaultFuel` and `pot cont ≤ lemDefaultFuel`
-per registered body. Since the 2026-09-02 professor review (required
-fix 1) the partial lane (Adequacy.lean) carries exactly the same two.
+per registered body — the same two the partial statements carry
+(Adequacy.lean).
 
 THE STATE-INERT CONE: programs built without memory actions
-(`stateInert` — no Eaction/Ememop/Ecase) preserve the memory state
-step by step (`Frag.stateInert_step`), so their total equations pin
-the final state to the initial one — fib's exported equation keeps
-its verbatim `.done (fib n) σ₀` shape through the generic theorem.
+(`stateInert` — no Eaction/Ememop/Ecase; `StateInertLabels` for the
+registered bodies) preserve the memory state step by step
+(`Frag.stateInert_step`), so their total equations pin the final
+state to the initial one — fib's exported equation keeps its verbatim
+`.done (fib n) σ₀` shape through the generic theorem.
 
-RETIRED HERE (professor review 1, required fix 5 and the vocabulary
-collapse): `wpt_strongly_normalizing` — strong normalization of the
-iris-lean thread-pool relation over the MIRROR `Step`, a fact that
-cannot be transported to the engine (`Step ⊆ engine round` is only
-available under `Frag` + fuel) and was listed as a closed-program
-export; its one consumer, the negative test
-`diverge_total_unprovable`, is now proved at the engine (the
-self-jump loop rests in `.more` at every fuel, contradicting the
-`.done` equation `wpt_engine_boundU` would give). `wpt_engine_boundJ`
-— the `procCtx` instance, definitional; clients call
-`wpt_engine_boundU` at `procCtx p rs` directly.
+`DriverDoneAt` and `readoutPost` are the delivery vocabulary the
+production collapse (ProdLoop.lean) restates this simulation in.
 -/
 import CerberusHeapLang.Wpt
 import CerberusHeapLang.Adequacy

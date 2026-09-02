@@ -1,6 +1,6 @@
 /-
-CerberusHeapLang.ArrayExhibit — the ARRAY-SUM walk end-to-end:
-real pointer arithmetic through the engine's memory model.
+CerberusHeapLang.ArrayExhibit — the ARRAY-SUM walk end-to-end: real
+pointer arithmetic through the engine's memory model.
 
 THE PROGRAM (authored Core; metadata quantified):
 
@@ -13,35 +13,33 @@ THE PROGRAM (authored Core; metadata quantified):
 - REAL POINTER ARITHMETIC: the loop-carried pointer advances by
   `array_shift` through the certified evaluator's PEarray_shift arm
   (the engine's own `arrayShiftPtrval`).
-- The load's pointer operand is a SYMBOL: the ACTION_EVAL rule
-  evaluates it (one engine step) into the canonical load redex; the
-  INTERIOR-LOAD small axiom (`wps_load_interior`) then reads the
-  element slice of the array cell.
-- The loaded `Specified` value is unwrapped by the
-  Specified-binder sequencing rule (`wps_seq_spec` — Core's own
-  binding-pattern mechanism), so `acc + x` is plain integer
-  arithmetic.
+- The load's pointer operand is a SYMBOL: the operand-evaluation rule
+  (`wps_load_eval`) takes the engine's ACTION_EVAL step into the
+  canonical load redex; the typed sub-range rule `wps_load_cell_at`
+  then reads the element slice of the array cell.
+- The loaded `Specified` value is unwrapped by the Specified-binder
+  sequencing rule (`wps_seq_spec` — Core's own binding-pattern
+  mechanism), so `acc + x` is plain integer arithmetic.
 - THE INVARIANT is index-partitioned over the VALUE list:
   `acc = (vs.take i).sum ∧ p = base + i·|int|`, carrying the array
   cell's ownership; the conclusion is `⌜result = vs.sum⌝` WITH THE
   ARRAY PRESERVED (the final memory still carries the seeded bytes).
 
-RECORDED DIVERGENCE from the textbook `∗_{i<n} base+i·|int| ↦
-vs[i]` PRE-STATE PHRASING ([AGENT], forcing fact about Cerberus;
-[USER 2026-08-31] one-allocation ruling ratified it):
-in this ghost model a cell IS an allocation (`CellCoh` ties the
-ghost key to the allocation id), and the concrete memory model's
-loads resolve the pointer's PROVENANCE allocation and bounds-check
-against it (loadM, generated/CerbMem.lean:1586-1631), while
-`arrayShiftPtrval` PRESERVES provenance (CerbMem.lean:1127-1142) —
-so a pointer walked by real arithmetic can never legally cross into
-a sibling allocation: an n-allocation "array" is not walkable, in
-the ENGINE, by construction (exactly C's object model). The array
-is therefore ONE allocation — one ghost cell holding the
-concatenated element images — and the per-element structure lives
-in the index-partitioned invariant and the per-element decode
-premises. The heap-side footprint is still delivered through the
-big-sep machinery ([∗map] over the seeded cell map).
+REGISTERED DIVERGENCE from the textbook `∗_{i<n} base+i·|int| ↦ vs[i]`
+pre-state phrasing — a forcing fact about Cerberus: in this ghost
+model a cell IS an allocation (`CellCoh` ties the ghost key to the
+allocation id), and the concrete memory model's loads resolve the
+pointer's PROVENANCE allocation and bounds-check against it (loadM,
+generated/CerbMem.lean:1586-1631), while `arrayShiftPtrval` PRESERVES
+provenance (CerbMem.lean:1127-1142) — so a pointer walked by real
+arithmetic can never legally cross into a sibling allocation: an
+n-allocation "array" is not walkable, in the ENGINE, by construction
+(exactly C's object model). The array is therefore ONE allocation —
+one ghost cell holding the concatenated element images — and the
+per-element structure lives in the index-partitioned invariant and
+the per-element decode premises (`hdec`). The heap-side footprint is
+still delivered through the big-sep machinery ([∗map] over the seeded
+cell map).
 -/
 import CerberusHeapLang.API
 import CerberusHeapLang.Examples.Layout

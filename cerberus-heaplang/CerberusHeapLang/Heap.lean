@@ -1,106 +1,103 @@
 /-
-CerberusHeapLang.Heap — the points-to over the engine's memory
-state, on iris-lean's GenHeap.
+CerberusHeapLang.Heap — the points-to over the engine's memory state,
+on iris-lean's GenHeap.
 
-GRANULARITY (Phase 2 — the ownership split, the registered growth
-step EXECUTED): the ghost carrier is the donor-shaped SPLIT (Caesium
-heap/allocs; RefinedC theories/caesium/ghost_state.v is the
-reference):
-- a per-BYTE heap (absolute address ↦ AbsByte — the ghost fragment
-  of the engine's own `bytemap`), so subrange ownership splits and
-  joins at REAL ∗ (`bytesOwn`, `pointsToView`);
-- a per-allocation METADATA heap (allocation id ↦ base/type — the
-  provenance/metadata authority: loadM/storeM success is decided by
-  the ALLOCATION table (liveness, bounds, writability, atomicity —
+THE GHOST CARRIER is the donor-shaped split (Caesium heap/allocs;
+RefinedC theories/caesium/ghost_state.v is the reference): three
+GenHeaps coupled to the real `CerbMem.MemState` by `CohG`.
+- A per-BYTE heap (absolute address ↦ `AbsByte`, the ghost fragment
+  of the engine's own bytemap), so sub-range ownership splits and
+  joins at real ∗ (`bytesOwn`, `pointsToView`).
+- A per-allocation METADATA heap (allocation id ↦ base/type/size) —
+  the provenance authority: `loadM`/`storeM` success is decided by the
+  allocation table (liveness, bounds, writability, atomicity —
   CerbMem.lean:1586-1696), so byte content alone can never entail
   access success; the metadata cell carries exactly those facts and
-  is the per-allocation exclusivity anchor);
-- a one-cell ALLOCATOR-CURSOR heap (`AllocCursor` — the two MemState
-  fields `allocateObject` reads/writes), the D26 resource: without
-  it `create`'s reducibility is unprovable from footprints; with it
-  the out-of-memory arm is a pure guard on owned state.
+  is the per-allocation exclusivity anchor (`metaOwn`).
+- A one-cell ALLOCATOR-CURSOR heap (`AllocCursor`: `lastAddress` and
+  `nextAllocId`, the two `MemState` fields `allocateObject` reads and
+  writes; `cursorOwn`). Without it `create`'s reducibility is
+  unprovable from footprints; with it the out-of-memory arm is a pure
+  guard on owned state.
 The whole-allocation `pointsToCell` is the MAXIMAL VIEW (offset 0,
 view type = allocation type) plus the image's decode-inertness fact;
-`SpikeCell`/`Coh`/`CellCoh` remain the PURE footprint vocabulary of
-the exported engine-facing statements (`Sat`/`MemTripleU`).
+`SpikeCell`/`Coh`/`CellCoh` are the PURE footprint vocabulary of the
+exported engine-facing statements (`Sat`/`MemTripleU`).
 
-THE TAG-DEFINITION ENVIRONMENT (2026-09-02, the retirement re-pin;
-[AGENT] decision, DECISIONS.md): the engine's memory functions take
-the tag-definition environment as an explicit leading `TagDefs`
-argument (cerberus-lean C1 reader_consumer threading — `sizeofCtype`,
-`memValueToBytes`, `reconstructValue`, `loadM`, `storeM`,
-`allocateObject`, …; the engine passes its reader binder
-`_lemReader_tagDefs`, Driver.lean:273). The environment is a
-program-wide constant of the language instance (Caesium's global
-environment in RefinedC), so every predicate here whose footprint
-depends on type LAYOUT is indexed by it explicitly — `(tds :
-CerbTags.TagDefsMap)` on `StorableAt`, `CellCoh`, `Coh`, `decIndep`,
-`pointsToView`, `cellOwn`, `pointsToCell`, `advanceCursor`,
-`PlanFits`, `allocCap` and the engine-seam lemmas — and the rules
-generic in a `MachineCtx` supply `M.tagDefs` (the mirror's
-`Step.store/load/create` use `M.tagDefs` exactly as the engine uses
-its reader). The STATE INTERPRETATION computes NO layout: the ghost
-metadata cell records the allocation's `size` as ghost data (the
-engine's own `Allocation.size`, registered by `allocateObject`), so
-`CohG` needs no environment and the Iris instance stays a plain
+THE TAG-DEFINITION ENVIRONMENT. The engine's memory functions take the
+tag-definition environment as an explicit leading argument
+(`sizeofCtype`, `memValueToBytes`, `reconstructValue`, `loadM`,
+`storeM`, `allocateObject`, …; the engine passes its reader binder
+`_lemReader_tagDefs`, Driver.lean:273). It is a program-wide constant
+of the language instance (Caesium's global environment in RefinedC),
+so every predicate here whose footprint depends on type LAYOUT is
+indexed by it explicitly — `(tds : CerbTags.TagDefsMap)` on
+`StorableAt`, `CellCoh`, `Coh`, `decIndep`, `pointsToView`, `cellOwn`,
+`pointsToCell`, `advanceCursor`, `PlanFits`, `allocCap` and the memory
+lemmas — and the rules generic in a `MachineCtx` supply `M.tagDefs`
+(the mirror's `Step.store/load/create` use `M.tagDefs` exactly as the
+engine uses its reader). The STATE INTERPRETATION computes no layout:
+the ghost metadata cell records the allocation's `size` as ghost data
+(the engine's own `Allocation.size`, registered by `allocateObject`),
+so `CohG` needs no environment and the Iris instance stays a plain
 instance; the assertions pin `size = sizeofCtype tds ty`. Clients
 state their footprints at the program's environment (`fmapEmpty` for
-every demo — the profile contexts `spikeCtx`/`procCtx` are reducible
-so `M.tagDefs` unfolds to it under the proof mode's matching).
+every demo — `spikeCtx`/`procCtx` are reducible, so `M.tagDefs`
+unfolds to it under the proof mode's matching).
 
-THE THREE ALLOCATION FACTS (alloc arc P4.1, after RefinedC's
-ghost_state.v split heap_mapsto / loc_in_bounds / alloc_alive):
-1. LINEAR/FRACTIONAL BYTES — the per-byte heap: `bytesOwn`, split
-   at any list decomposition (`bytesOwn_append`) and at any fraction
-   sum (`bytesOwn_fractional`), agreeing on contents
-   (`bytesOwn_agree`).
-2. PERSISTENT ALLOCATION KNOWLEDGE — id, base, allocation type and
-   size, and in-bounds facts, all read off the IMMUTABLE metadata
-   cell: `allocMeta`/`locInBounds` (the metadata cell at the
-   discarded fraction — persistent by `pointsTo`'s `.discard` law;
-   `Persistent` instances are the persistence law). Any view's
-   metadata fraction can be traded for it (`pointsToView_persist`),
-   and a persistent-metadata view yields its bounds knowledge
-   without giving anything up (`pointsToView_locInBounds`). The
-   bundles (`pointsToView`, `cellOwn`, `pointsToCell`) keep the
-   metadata at a FRACTION `dqm` because full metadata ownership is
-   the per-allocation EXCLUSIVITY anchor the semantic-triple frame
-   needs (`metaOwn_ne` → `bigSepM_own_disjoint`, Adequacy.lean) — a
-   deliberate divergence from the donor, where the anchor is the
-   killable `alloc_alive`.
+THE THREE ALLOCATION FACTS (after RefinedC's ghost_state.v split
+heap_mapsto / loc_in_bounds / alloc_alive):
+1. LINEAR/FRACTIONAL BYTES — the per-byte heap: `bytesOwn`, split at
+   any list decomposition (`bytesOwn_append`) and at any fraction sum
+   (`bytesOwn_fractional`), agreeing on contents (`bytesOwn_agree`).
+2. PERSISTENT ALLOCATION KNOWLEDGE — id, base, allocation type, size
+   and in-bounds facts, all read off the IMMUTABLE metadata cell:
+   `allocMeta`/`locInBounds` (the metadata cell at the discarded
+   fraction; the `Persistent` instances are the persistence law). Any
+   view's metadata fraction can be traded for it
+   (`pointsToView_persist`), and a persistent-metadata view yields its
+   bounds knowledge without giving anything up
+   (`pointsToView_locInBounds`). The bundles (`pointsToView`,
+   `cellOwn`, `pointsToCell`) keep the metadata at a FRACTION `dqm`
+   because full metadata ownership is the per-allocation EXCLUSIVITY
+   anchor the frame theorem needs (`metaOwn_ne` →
+   `bigSepM_own_disjoint`, Adequacy.lean) — a deliberate divergence
+   from the donor, where the anchor is the killable `alloc_alive`.
 3. NO LIVENESS/FREEABILITY TOKEN. kill/free is outside the fragment:
    METADATA IS IMMUTABLE — no rule updates a metadata cell
    (`metaHeap_alloc` mints; nothing writes) — so knowledge about an
-   allocation, once obtained, holds forever, and there is no
-   decorative token to guard a deallocation that cannot happen.
-   Named mover: when kill joins the fragment, the metadata heap
-   gains the donor's alloc_alive/freeable split (fractional
-   liveness + the deallocation permission) and the exclusivity
-   anchor moves there.
+   allocation, once obtained, holds forever, and there is no token to
+   guard a deallocation that cannot happen. Named mover: when kill
+   joins the fragment, the metadata heap gains the donor's
+   alloc_alive/freeable split and the exclusivity anchor moves there.
 
 STATE INTERPRETATION (memory only — no driver state):
-`stateInterp σ _ _ _ := ∃ mm mb mk, ⌜CohG σ mm mb mk⌝ ∗ interps`
-over the real `CerbMem.MemState`. `CohG` couples: byte cells to the
-bytemap readout; metadata cells to live/writable/typed/non-atomic
-allocations, pairwise range-disjoint; a cursor cell (key 0) to
-lastAddress/nextAllocId, its PRESENCE carrying the allocator-health
+`stateInterp σ _ _ _ := ∃ mm mb mk, ⌜CohG σ mm mb mk⌝ ∗ interps` over
+the real `CerbMem.MemState`. `CohG` couples: byte cells to the bytemap
+readout; metadata cells to live/writable/typed/non-atomic allocations,
+pairwise range-disjoint; the cursor cell (key 0) to
+`lastAddress`/`nextAllocId`, its PRESENCE carrying the allocator-health
 facts the create rules need (fresh ids unallocated and not dead; all
 ghost-tracked addresses at or above the downward-growing cursor) —
-cursor-free launches owe nothing new. Alloc arc P1: the
-ALLOCATION-AWARE launchers mint cursor key 0 NONEMPTY
-(`launchResources`, Adequacy.lean — `LaunchCoh` discharges the
-health facts non-vacuously) and grant the abstract capacity
-`allocCap` (this file) to the public create rules; the cursor-free
-launchers remain for no-allocation programs. The union-member/
-function-pointer side tables are SYMBOLIC (read-only context):
-decode-inertness rides as a pure payload of `pointsToCell`
+cursor-free launches owe nothing new. The allocation-aware launchers
+(`launchResources`, Adequacy.lean, under `LaunchCoh`) mint the cursor
+cell and grant the abstract capacity `allocCap` (this file) to the
+public create rules; the cursor-free launchers remain for programs
+that do not allocate. `allocCap reqs` is an ORDERED REQUEST PLAN over
+the exclusive cursor (`PlanFits`, whose guard is exactly
+`allocateObject_success`'s premise pair), weakened only to a prefix
+(`allocCap_weaken`) and never split across ∗ — the register row and
+walkthrough §4 state the cost and the additive alternative. The
+union-member/function-pointer side tables are SYMBOLIC (read-only
+context): decode-inertness rides as a pure payload of `pointsToCell`
 (`decIndep`; per-view decode premises on the generic rules), and
-`StorableAt` carries the serialization-side analogues. For scalar
-and integer-array images all of these are `rfl`.
+`StorableAt` carries the serialization-side analogues. For scalar and
+integer-array images all of these are `rfl`.
 
-Design records: docs/2026-08-30_spike-recon.md §5 (the original
-allocation-rooted decision), docs/2026-09-01_phase2-notes.md (the
-split).
+Also here: the engine-memory success lemmas the rule proofs run —
+`storeM_success`, `loadM_success`, `storeM_at`, `loadM_at`,
+`allocateObject_success` — and the byte-map algebra
+(`writeBytesTo_*`, `readBytesFrom_*`, `spliceBytes_*`).
 -/
 import Iris
 import CerberusHeapLang.Step

@@ -1,17 +1,19 @@
 /-
 CerberusHeapLang.DriverCollapse — the PRODUCTION driver pipeline
-(scheduler, nondeterminism monad, result readout) collapsed onto
-this package's drive loop, for fragment configurations: the bridge
-that lets drive-lane theorems become statements about the shipped
-`runND (Driver.drive …)` composite (ProdEntry.lean).
+(scheduler, nondeterminism monad, result readout) collapsed onto this
+package's drive round, for fragment configurations: the bridge that
+lets statements at the total judgment become statements about the
+shipped `runND (Driver.drive …)` composite (ProdLoop.lean,
+ProdEntry.lean). Every theorem here is proved by unfolding the
+driver's OWN round functions.
 
 - SCHEDULER COLLAPSE: the production driver's round structure is
   `driver2` (Driver.lean:381-386) → `new_drive_core_threads`
   (Driver.lean:355) → `drive_nonmemory_steps_aux2` (Driver.lean:346-351),
   the fuelled per-thread loop {step_ctx → find_can_advance →
   advance_step}. For a single-threaded state whose thread holds a
-  fragment configuration, ONE iteration of that loop is exactly the
-  spike drive-loop body: the step_ctx singleton (the per-rule
+  fragment configuration, ONE iteration of that loop is exactly one
+  `driveU` round: the step_ctx singleton (the per-rule
   context-undisturbed lemmas, Soundness.lean) is advanced in place —
   taus via `advance_step`'s Step_tau2 arm (Driver.lean:336, ticking
   dr_step_counter), actions via `advance_step` → `liftCore_run` (the
@@ -23,28 +25,27 @@ that lets drive-lane theorems become statements about the shipped
   (Soundness.lean header). PROGRAM-DONE steps are not advanceable
   (`can_advance`, Driver.lean:310), so the loop returns the singleton
   step map and `driver2` routes it through `process_core_step2`'s
-  Step_done2 arm (Driver.lean:377, `prepare_exit`).
-  The iteration lemmas (`loop_step_tau`/`loop_step_action`/
-  `loop_step_done`, and the with-runstate/memop rounds below) prove
-  this by unfolding the driver's own round functions; `loop_step_frag`
-  is the ONE production round at any fragment configuration
-  (single-threaded, parent-less, stack-empty — the D14 partition's
-  read set), and `wpt_driver_aux` (ProdLoop.lean) iterates it.
+  Step_done2 arm (Driver.lean:377, `prepare_exit`). The iteration
+  lemmas (`loop_step_tau`/`loop_step_action`/`loop_step_done`, and the
+  with-runstate/memop rounds) prove this by unfolding the driver's own
+  round functions; `loop_step_frag` is the ONE production round at any
+  fragment configuration where the mirror `Step` steps
+  (single-threaded, parent-less, stack-empty — the fields the fragment
+  reads), and `wpt_driver_aux` (ProdLoop.lean) iterates it.
 
 - ND COLLAPSE: on the fragment the whole driver computation is a
   branch-free ndM tree — every node the fragment path crosses is a
   single-layer `NDactive`/`NDkilled` state transformer (nd_return/
-  nd_get/nd_update/nd_read: Nondeterminism.lean:184-215; the memM
-  ops: docs/2026-08-30_spike-recon.md §2.3; `pick` on a SINGLETON
-  list: Nondeterminism.lean:276,
-  `NDactive`, no NDnd node), and `nd_bind`/`liftND` compose such
-  layers into one layer (`runOne_bind_active`/`runOne_liftMem_active`
-  below — each bind spends one layer of its own fresh
-  `nd_bind_lemFuel` budget, never accumulating). `runND`
-  (CerbND.lean:89-138) on a one-layer active tree is the singleton
-  execution (`runND_active`). Branch-freeness per construct is
-  `engine_step_matchU`'s singleton step list; these lemmas lift it
-  through the ndM structure.
+  nd_get/nd_update/nd_read: Nondeterminism.lean:184-215; the memM ops
+  `loadM`/`storeM`/`allocateObject`/`eqPtrval` on their active arms;
+  `pick` on a SINGLETON list: Nondeterminism.lean:276, `NDactive`, no
+  NDnd node), and `nd_bind`/`liftND` compose such layers into one
+  layer (`runOne_bind_active`/`runOne_liftMem_active` — each bind
+  spends one layer of its own fresh `nd_bind_lemFuel` budget, never
+  accumulating). `runND` (CerbND.lean:89-138) on a one-layer active
+  tree is the singleton execution (`runND_active`). Branch-freeness
+  per construct is `engine_step_matchU`'s singleton step list; these
+  lemmas lift it through the ndM structure.
 
 - READOUT: `finalize` (Driver.lean:423) on the PROGRAM-DONE state:
   `prepare_exit` (Driver.lean:372) parks the delivered value as
@@ -53,12 +54,16 @@ that lets drive-lane theorems become statements about the shipped
   (Driver.lean:390-395) steps `step_eval_pexpr` (Core_eval.lean:142),
   whose PEval arm returns the pexpr unchanged, and `valueFromPexpr`
   (Core_aux.lean:472) reads the value back — `hack_value`/
-  `finalize_done` below. The value delivered by Step_done2 is always
-  the BARE value form (the REMOVE-ANNOT tau precedes PROGRAM-DONE —
-  Adequacy.lean D20), so the annot value form never reaches `hack`;
-  composition with the REMOVE-ANNOT readout happens inside
-  `wpt_driver_aux`'s value protocol (ProdLoop.lean), exactly as in
-  `driveU`.
+  `finalize_done`. The value delivered by Step_done2 is always the
+  BARE value form (the REMOVE-ANNOT tau precedes PROGRAM-DONE), so
+  the annotated form never reaches `hack`; composition with the
+  REMOVE-ANNOT readout happens inside `wpt_driver_aux`'s value
+  protocol (ProdLoop.lean), exactly as in `driveU`.
+
+- `driver2_done`: the whole `driver2` computation from a PROGRAM-DONE
+  thread is the singleton `Active` execution, for both values of the
+  opaque `current_execution_mode` test (`cases` on it) — the one
+  configuration read on a proved path.
 
 FUEL: the driver functions run at their production budgets
 (lemDefaultFuel = 10^6). `nd_bind`/`liftND` budgets are spent per
@@ -69,15 +74,10 @@ steps + the done-recording and drain iterations); `driver2`'s budget
 is spent once per non-advanceable step (exactly one: Step_done2);
 get_ctx budgets are the inherited `esize` side conditions
 (Soundness.lean FUEL HONESTY). At insufficient fuel the production
-value is the opaque `fuelExhausted` leaf — nothing is provable there,
-fail-closed by construction (D19); this is why the production-entry
-theorem carries a termination-within-budget hypothesis (fuel
-parametricity is a registered residual — README "Registered
-divergences").
-
-Dnn labels here and below are the recorded design findings of
-docs/2026-08-30_spike-sliceB-notes.md (e.g. D14 context-undisturbed
-/ read-set partition, D19 fuel honesty, D20 the value protocol).
+value is the opaque `fuelExhausted` leaf — nothing is provable there;
+this is why the production-entry theorems carry a
+termination-within-budget hypothesis (README, "Registered divergences
+and limitations").
 -/
 import CerberusHeapLang.Adequacy
 import Driver

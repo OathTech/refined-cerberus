@@ -1,31 +1,30 @@
 /-
-CerberusHeapLang.ProdLoop — THE LOOP PRODUCTION COLLAPSE, part 2:
-the total statement judgment drives THE PRODUCTION DRIVER'S OWN
-LOOP (Phase 5; audit F-05's remediation — "prove the proc-carrying,
-populated-label scheduler collapse before restoring the name").
+CerberusHeapLang.ProdLoop — the total judgment drives THE PRODUCTION
+DRIVER'S OWN per-thread loop.
 
-`wpt_driver_aux` is the driver-level analog of the generic
-measure→drive-fuel simulation `wpt_drive_aux` (TotalAdequacy.lean):
-strong induction on the total judgment's budget, ONE production
-round (`loop_step_frag`, DriverCollapse.lean) per budget unit, the
-delivery protocol prepaid by the value clause. Where the drive-lane
-simulation concluded a `driveU .done` equation, this one concludes
-`DriverDoneAt`: the driver's per-thread loop
-(`drive_nonmemory_steps_aux2`) from ANY driver state holding the
-thread — quantified over the accumulator, the loop fuel and the whole
-driver-state context, with the run-state tie `LabeledAt` as the only
-run-state condition — returns the PROGRAM-DONE singleton step map
-with the postcondition's value, and the final driver state is pinned
-field by field.
+`wpt_driver_aux` is the driver-level analogue of the engine simulation
+`wpt_drive_aux` (TotalAdequacy.lean): strong induction on the total
+judgment's budget, ONE production round (`loop_step_frag`,
+DriverCollapse.lean) per budget unit, the delivery protocol prepaid by
+the value clause. Where the drive simulation concludes a `driveU
+.done` equation, this one concludes `DriverDoneAt`: the driver's
+per-thread loop (`drive_nonmemory_steps_aux2`) from ANY driver state
+holding the thread — quantified over the accumulator, the loop fuel
+and the whole driver-state context, with the run-state tie `LabeledAt`
+as the only run-state condition — returns the PROGRAM-DONE singleton
+step map with the postcondition's value, and the final driver state is
+pinned field by field. `wpt_driver_done` and `wpt_driver_done_alloc`
+(the allocation-aware form, from `LaunchCoh`) are the faces ProdEntry's
+`prod_run_eqJ` consumes.
 
-This module is TRIO-ONLY (no `initial_driver_state` in any
-statement): the boundary modules consume `wpt_driver_done` to state
-the shipped-pipeline equations.
+No statement here mentions `initial_driver_state`: the cold start is
+ProdEntry.lean's business.
 
 Fuel: the loop budget `fl` needs `k + 2` rounds (k certified steps +
-the done-recording and drain iterations); the judgment's own
-`esize`/`pot` side conditions bound
-get_ctx's budget exactly as in the drive lane.
+the done-recording and drain iterations), hence the production
+statements' `k + 2 ≤ lemDefaultFuel`; the judgment's own `esize`/`pot`
+side conditions bound get_ctx's budget exactly as in the drive
+statements.
 -/
 import CerberusHeapLang.DriverCollapse
 import CerberusHeapLang.TotalAdequacy

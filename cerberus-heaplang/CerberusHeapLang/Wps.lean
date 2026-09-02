@@ -1,79 +1,61 @@
 /-
-CerberusHeapLang.Wps — the STATEMENT-STRATIFIED WP: the judgment
-the loop exhibits are proved in.
+CerberusHeapLang.Wps — the partial label-context judgment `wps`: the
+judgment the loop exhibits are proved in.
 
-THE SHAPE: the classical LABEL-CONTEXT statement logic (de Bruin
-1981-style label-assumption judgments, the shape RefinedC's
-statement judgment also takes), realized as a guarded fixpoint over
-the fragment's Step via iris-lean's PUBLIC Banach machinery
+THE SHAPE: the classical label-context statement logic (de Bruin
+1981-style label-assumption judgments, the shape RefinedC's statement
+judgment also takes), realized as a guarded fixpoint over the
+fragment's `Step` via iris-lean's public Banach machinery
 (`fixpoint`/`OFE.Contractive` — the same machinery `wp` itself is
-built from; iris-lean untouched). `wps M Ls Ψ e ρ` is indexed by
+built from; iris-lean untouched). `wps M Ls Ψ e ρ` is indexed by the
+machine context `M` (whose derived `M.labels` is the current
+procedure's static label map — Step.lean header note 3), the label
+specification `Ls : LabelSpec GF` (`sym → List value → EnvStack →
+IProp GF`: a precondition per registered label over the jump-argument
+values and the jump-time environment), the postcondition `Ψ` over the
+delivered value and the final environment, the expression, and the
+live environment stack.
 
-- `Q : LabelMap` — the STATIC label map (per-procedure registered
-  continuations; the engine's `labeled_continuations`,
-  Core_run_aux.lean:186-187 — the analog of Caesium's `f_code`).
-  The certification ties it to `core_run_state.labeled` at the
-  current procedure by a pure equation (RefinedC's
-  `⌜Q = rf.f_code⌝`, lifting.v:1002 — legitimate because nothing
-  writes `labeled` on the positive sequential path).
-- `Ls : LabelSpec GF` — the per-label preconditions, indexed by the
-  jump-argument values (list-valued for Erun's argument list) and
-  the jump-time environment.
+THE JUMP CLAUSE: `wps.pre` has three clauses (value / jump redex /
+step). The jump clause fires at `jumpRedex? e` (Step.lean — the
+syntactic image of `step_ctx`'s `Erun` context-discard through the
+`Esseq`/`Eannot` spine) and demands: the label resolves in `M.labels`
+(`lookupLabel`), the arguments evaluate under the CURRENT environment
+by the pure evaluator (`evalPexprs`, certified against the engine's
+`full_eval_pexpr` in Soundness.lean), the environment stack is
+cons-shaped (the `update_env` panic exclusion), and the label's
+precondition `Ls l vs ρ` holds — then TRACKING STOPS: a jump's
+postcondition is the label's business, so the postcondition clash
+that would sink a bind-style rule never forms. The collapse
+`wps_sound` into iris-lean's WP carries the `blockSpecs` premise
+(every registered body re-establishes its label's precondition) and
+is the package's one Löb induction; its jump case is where the clause
+meets the step relation (`Step.jump_inv`/`Step.run_of_jumpRedex`).
 
-THE JUMP CLAUSE: `wps.pre` has THREE clauses (value / jump redex /
-step). The jump clause fires at the Core `jumpRedex?` (Step.lean —
-the syntactic image of step_ctx's Erun context-discard over the
-Esseq/Eannot frames); `Q` is the CURRENT PROCEDURE's label map
-carried in the runtime tuple (`CoreRt.lbl`); the engine's two-level
-`core_run_state.labeled` read through `current_proc_opt` and the
-extern indirection is tied to it by the pure equation
-`fmapLookupBy ord p rs.labeled = some Q` in Soundness.lean's
-jump-profile certification. The clause demands: the label resolves
-in `Q` (`lookupLabel`), the arguments evaluate under the CURRENT
-env by the PURE evaluator (`evalPexprs` — certified against the
-engine's `full_eval_pexpr'`), the env stack is cons-shaped (the
-`update_env` panic exclusion), and the per-label precondition
-`Ls l vs` holds — then TRACKING STOPS (the label-context logic's
-discipline: a jump's postcondition is the label's business, so the
-postcondition clash that would sink a bind-style rule never forms).
-`wps_sound` (the collapse into the base WP, and the package's one
-Löb induction) carries the `blockSpecs` premise — every registered
-label's body re-establishes its precondition — and its jump case is
-where the clause is CERTIFIED against the step relation
-(`Step.jump_inv` / `Step.run_of_jumpRedex`).
-
-THE CONTENTS: the small axioms at this stratum (`wps_store`/
-`wps_load` — the `storeM_success`/`loadM_success` engine seams
-reused verbatim inside the step clause), the jump-aware sequencing
-rules (`wps_seq`, `wps_seq_spec`, `wps_seq_sym`), the
-annotation-commuting layer (`wps_annot_reindex`/`wps_annot`),
-structural rules (`wps_wand`/`wps_frame`), the branch/entry rules,
-the per-label invariant rule `blockSpecs_intro` (no Löb —
-the one Löb is inside `wps_sound`; the TOTAL rules live at the
-total stratum, Wpt.lean), and the collapse
-`wps_sound` into the base Iris WP (the sole adequacy interface).
-
-THE ALLOCATION RULES (this file, §CreateRule; alloc arc P1): the
-PUBLIC `wps_create` takes `allocCap (req :: rest)` (the abstract
-finite allocation capacity — Heap.lean) and binds an existential
-pointer; it is LAUNCHABLE through the allocation-aware launchers
-(`spike_step_adequacy_alloc`, `engine_adequacyU_alloc`,
-`project_triple_alloc`, `wpt_engine_boundU_alloc` — via `launchResources`, which
-grants `allocCap` from real Cerberus memory under `LaunchCoh`). The
-exact-cursor form is `wps_create_cursor_internal`
-(heap-implementation use only). CONSUMERS: every allocating exhibit
-goes through these rules — `struct_create_store_wps` (StructExhibit,
-partial lane, launched to the engine by
-`struct_create_store_adequacy`), `alloc_two_creates_wps`/
-`alloc_create_wpt`/`alloc_create_launch_smoke` (AllocExhibit), and the
-three production exports `progAProd_wpt`/`ctrProd_wpt`/`lrProd_wpt`
-(ProdExhibit/ProdLoopExhibit, through the total rule `wpt_create` and
-the generic `wpt_driver_done_alloc` → `prod_run_eqJ` collapse); no
-positive exhibit contains a handwritten operational create round.
-
-Design records: docs/2026-08-31_s0-probe-report.md (the
-architecture probe), docs/2026-08-31_s0-adjudication.md (the
-machinery-use adjudication), the dated slice notes.
+THE CONTENTS: the memory rules as corollaries of the atomic step
+specifications (`wps_of_atomic`; `wps_store`/`wps_load`, the typed
+sub-range forms `wps_load_at`/`wps_store_at`/`wps_load_cell_at`/
+`wps_store_cell_at`, the plain-value forms `wps_store_plain`/
+`wps_load_plain`); the allocation rule `wps_create` from the abstract
+capacity `allocCap (req :: rest)` (Heap.lean; the exact-cursor form
+`wps_create_cursor_internal` is heap-implementation vocabulary); the
+sequencing rules at the three binder shapes and `Ewseq` (`wps_seq`,
+`wps_seq_spec`, `wps_seq_sym`, `wps_wseq`); the conditional with the
+guard's verdict as a pure premise (`wps_if`; `wps_if_true`/`_false`
+derived); value-scrutinee case (`wps_case_value`); block entry and the
+jump (`wps_save` at evaluated initializers, `wps_run`); operand
+evaluation and the `PtrEq` memop (`wps_load_eval`, `wps_store_eval`,
+`wps_memop_eval`, `wps_memop_ptreq`); the pure exit and the
+annotation layer (`wps_pure`, `wps_ofVal`, `wps_annot`,
+`wps_annot_reindex`); consequence (`wps_wand`, `wps_fupd`,
+`wps_mono_Ls`); framing at the statement level (`wps_frame`, and
+`wps_frame_labels` through the framed label context `frameLs`, which
+carries a frame across every back edge); the per-label invariant rule
+`blockSpecs_intro` (no Löb) with `blockSpecs_frame`/`blockSpecs_mono`;
+and the collapses `wps_sound`/`wps_sound_frame` into the raw WP — the
+adequacy interface (Adequacy.lean). There is deliberately no raw-WP
+sequencing rule and no `Language.Context` instance: both are false
+once labels are populated (Rules.lean and Lang.lean headers).
 -/
 import CerberusHeapLang.Rules
 

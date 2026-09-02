@@ -90,7 +90,8 @@ the fragment `Frag`; the static fuel bounds `pot e ≤ lemDefaultFuel` and
 `pot cont ≤ lemDefaultFuel` per registered body (`pot` is a
 step-monotone size potential on terms, Potential.lean; `lemDefaultFuel =
 10^6` is the engine's evaluator budget; both are `rfl` for authored
-programs — §5 says why they exist); an Iris triple `hwp` — footprint
+programs — §5 says why they exist, and names the second, operand-level
+fuel bound `peDepth` that lives inside `Frag` itself); an Iris triple `hwp` — footprint
 ownership entails the WP of the program with any Iris post `Q`; and
 `hpost` — the framed Iris post pure-entails `ψ R w.val σ'` under any
 coupling witness `CohG σ' …` for the final memory. Conclusion:
@@ -435,7 +436,13 @@ a (Eif g e2 e3)) ρ` — the classical two-premise rule is a case split on
 `b` outside the logic. What the logic knows about frames is `SymFrame`
 (EnvLaws.lean: a frame reachable by the engine's `update_env` chains)
 and the lookup law `envAdd_lookup`, so an invariant states "the frame
-binds `x` to `v`" without pinning the frame's shape.
+binds `x` to `v`" without pinning the frame's shape. One more
+environment-side premise appears on a client (`struct_create_store_wps`):
+`∀ x, resolveExtern M.extern x = x`. The engine resolves every `PEsym`
+through the file's extern map with identity fallback (`resolveExtern`,
+Step.lean, the evaluator's `PEsym` arm and `step_ctx`'s `Erun` arm), so
+the premise says the program's symbols are not extern-redirected; at
+`fmapEmpty` it is `rfl` (`resolveExtern_id_of_empty`).
 
 ### 3.2 Frame, consequence, allocation
 
@@ -525,10 +532,16 @@ law is false for Core, and sequencing is proved directly (`wps_seq`,
 `wps_seq_spec`, `wps_seq_sym`). One fragment premise deserves naming:
 `Frag.case_value` (rule `wps_case_value`) carries `hbsz`, that the branch
 `select_case` picks has `esize` bounded by the case node's. It is
-carried rather than proved — `esize` ignores pure expressions and
-`subst_sym_expr` substitutes into them, so it is provable in principle
-by an induction over the generated Core AST's mutual recursion; for
-authored programs it is `rfl`.
+carried rather than proved. The equation whose proof would discharge it
+is `esize (subst_sym_expr x v e) = esize e` (with its mutual twin for
+`esizeAlts`), true because `esize` inspects only expression constructors
+and `subst_sym_expr` substitutes only into pure expressions; the
+obstacle is that the engine's `subst_sym_expr` is `subst_sym_expr_lemFuel
+lemDefaultFuel`, a fuel-indexed recursion over the whole generated Core
+AST (`generic_expr`/`generic_pexpr`/patterns), so the proof is a
+fuel-indexed induction over that mutual recursion — measured and not
+attempted; the gap is registered (README, "Registered divergences and
+limitations"). For authored programs `hbsz` is `rfl`.
 
 **The total judgment** is defined by structural recursion on a step
 budget, no fixpoint, no ▷:
@@ -588,7 +601,10 @@ theorem wpt_sound {Ψ : SpikeVal → EnvStack → IProp GF} (k : Nat)
 ```
 
 into iris-lean's `TotalWeakestPre` (`[{ … }]`), by strong induction on
-the budget. Deleting the decrease premise would let a diverging program
+the budget — a metatheorem about the judgment (it is a sound total WP)
+that no export consumes: every total export goes through the engine
+simulation `wpt_drive_aux` (§5) directly, and no Iris adequacy result
+lies in any total export's cone. Deleting the decrease premise would let a diverging program
 be derived: `diverge_total_unprovable` (DivergeExhibit.lean) records
 that a total derivation for the self-jump loop is `False`, proved at the
 engine — the loop's `driveU` rests in `.more` at every drive length
@@ -815,6 +831,44 @@ increases along a step except at a jump, where it resets to the
 registered body's own potential (`Frag.pot_step_bound`). Hence the two
 static premises `pot e ≤ lemDefaultFuel` and `pot cont ≤ lemDefaultFuel`
 per registered body, and no bound on the drive length.
+
+**The second fuel bound: pure operands.** The engine's pure-expression
+evaluator is fuelled at the same budget (`step_eval_pexpr`,
+`pull_constrained`), so the fragment carries a second static premise
+family inside `Frag` itself: every constructor that evaluates a pure
+operand — `Frag.if_` (the guard), `Frag.run` (the jump arguments),
+`Frag.save` (the initializers), `Frag.load_op`/`Frag.memop_op`/
+`Frag.store_op` (the operands the engine evaluates before dispatching
+the action) — carries `peDepth pe ≤ lemDefaultFuel` per operand, where
+`peDepth` (Soundness.lean) is the operand's syntactic depth: 1 at a value
+or a symbol, `1 + max` of the children at `PEop`/`PEarray_shift`. The
+three operand-evaluation constructors also require their operands to lie
+in the sub-grammar `PePure` the mirror evaluator covers (values,
+symbols, `PEop` binops, `PEarray_shift`); for `if_`/`run`/`save` the
+grammar is enforced by the rule's `evalPexpr … = some …` premise instead
+(`evalPexpr_shape`: success implies membership). Verbatim, `Frag.if_`
+and the premises of `Frag.store_op`:
+
+```lean
+  | if_ {g : generic_pexpr Unit sym} {e2 e3 : CoreExpr}
+      (hdg : peDepth g ≤ lemDefaultFuel) :
+      Frag e2 → Frag e3 → Frag (ifRedex g e2 e3)
+```
+
+```lean
+      (hnv : valueFromPexprs [pe2, pe3] = none)
+      (hp2 : PePure pe2) (hp3 : PePure pe3)
+      (hd2 : peDepth pe2 ≤ lemDefaultFuel)
+      (hd3 : peDepth pe3 ≤ lemDefaultFuel) :
+      Frag (storeOpRedex loc ann ty pe2 pe3 mo)
+```
+
+Like `pot`, the bound is static — `rfl` for every authored program
+(`peDepth_sym_le`, `peDepth_val_le`) — and never mentions the run length;
+unlike `pot`, it lives inside `Frag`, so it appears on no exhibit as a
+separate hypothesis. The two budgets are the engine's own: `get_ctx`
+for the redex search (bounded by `pot`), `step_eval_pexpr` for the pure
+operands (bounded by `peDepth`).
 
 **Adequacy.** The Iris half (`spike_step_adequacy`) is
 `wp_strong_adequacy_gen` with the ghost state constructed by
