@@ -61,12 +61,15 @@ pointer; it is LAUNCHABLE through the allocation-aware launchers
 `wpt_strongly_normalizing_alloc` — via `launchResources`, which
 grants `allocCap` from real Cerberus memory under `LaunchCoh`). The
 exact-cursor form is `wps_create_cursor_internal`
-(heap-implementation use only). HONESTY LINE (R-02, owner alloc arc
-P2): the allocating production exhibits do NOT yet consume these
-rules — their cold-start creates still cross the driver as
-handwritten certified operational rounds (ProdExhibit /
-ProdLoopExhibit); the engine-facing allocation consumers are P2
-work (a launcher-level smoke exists in AllocExhibit.lean).
+(heap-implementation use only). CONSUMERS: every allocating exhibit
+goes through these rules — `struct_create_store_wps` (StructExhibit,
+partial lane, launched to the engine by
+`struct_create_store_adequacy`), `alloc_two_creates_wps`/
+`alloc_create_wpt`/`alloc_create_launch_smoke` (AllocExhibit), and the
+three production exports `progAProd_wpt`/`ctrProd_wpt`/`lrProd_wpt`
+(ProdExhibit/ProdLoopExhibit, through the total rule `wpt_create` and
+the generic `wpt_driver_done_alloc` → `prod_run_eqJ` collapse); no
+positive exhibit contains a handwritten operational create round.
 
 Design records: docs/2026-08-31_s0-probe-report.md (the
 architecture probe), docs/2026-08-31_s0-adjudication.md (the
@@ -2493,7 +2496,8 @@ theorem wps_create_cursor_internal {Ψ : SpikeVal → EnvStack → IProp GF}
     machine-address bounds `0 < addrOf p < 2^64` (alloc arc P2 —
     the charter P1.4 "bounds knowledge" allowance, needed by the
     allocating whole-program clients, e.g. `isList`'s node-WF facts;
-    pure form pending the P4 metadata split). The statement contains
+    kept in pure form — the persistent-metadata form of bounds
+    knowledge is `pointsToView_locInBounds`, Heap.lean). The statement contains
     no `AllocCursor`/`lastAddress`/`nextAllocId`/`freshBase`/
     `cursorOwn` — the P1 grep test. -/
 theorem wps_create {Ψ : SpikeVal → EnvStack → IProp GF}

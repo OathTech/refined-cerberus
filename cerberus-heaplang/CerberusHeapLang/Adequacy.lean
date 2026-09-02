@@ -2,7 +2,7 @@
 CerberusHeapLang.Adequacy — adequacy: where proofs in the derived
 logic become facts about the engine's execution.
 
-Three layers:
+Four layers:
 1. `drive` — the ENGINE'S EXECUTION at the frozen minimal context:
    the discharge loop {step_ctx → Driver.lean:273 discharge} as a
    definition over engine objects (thread_state, MemState,

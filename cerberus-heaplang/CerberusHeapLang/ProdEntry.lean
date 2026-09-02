@@ -386,10 +386,10 @@ go through the PUBLIC `wpt_create` and the generic
 hypothesis). Since P2 it has NO consumer in the package (only its
 Audit pin and the README's conditioned-theorem paragraph mention
 it). It is kept as the conditioned generic partial face it always
-was, with the conditions stated as part of the claim, and is a
-RETIREMENT CANDIDATE for the P5 scaffolding pass (re-audit R-07):
-retiring it deletes an exported face, so that decision is left
-operator-visible rather than taken here. -/
+was, with the conditions stated as part of the claim. The P5
+scaffolding pass (R-07) did NOT retire it: retiring it deletes an
+exported face, and that decision remains OPEN and operator-visible
+(README "Registered divergences and seams"). -/
 theorem sem_triple_prod (sup : Nat)
     (e : CoreExpr) (hfrag : StraightFrag e)
     -- the compute part and its exported triple

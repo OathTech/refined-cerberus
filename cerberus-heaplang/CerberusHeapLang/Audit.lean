@@ -35,9 +35,10 @@ former boundary exports sit in `trioExports` like everything else.
 
 P3.5 ([USER 2026-09-02], docs/2026-09-02_p3.5-notes.md): the 65
 `#guard_msgs in #print axioms` blocks + prose collapsed to the export
-list below (62 names, same exact assertion each); the F-07
-statement-borne origin discipline was cut; the StmtProbe pins went
-with the deleted probe.
+list below (62 names at P3.5, the same exact assertion each; the list
+grows with every spec-addition slice — the build prints the current
+count); the F-07 statement-borne origin discipline was cut; the
+StmtProbe pins went with the deleted probe.
 
 Nothing is declared after the sweep (a later constant would dodge
 it), and this module stays the lib root's last import.
@@ -72,7 +73,8 @@ def allowedAxioms : List Name :=
   [``propext, ``Classical.choice, ``Quot.sound]
 
 /-- THE PUBLIC EXPORTS pinned EXACTLY to the trio (in landing order;
-    the README table and WALKTHROUGH §7 name these). -/
+    the README's exhibits table and trust diagram, and WALKTHROUGH §6,
+    name these). -/
 def trioExports : List Name := [
   -- spike: the base logic exhibit, the engine-facing spine
   ``CerberusHeapLang.exhibit, ``CerberusHeapLang.engine_complete,
