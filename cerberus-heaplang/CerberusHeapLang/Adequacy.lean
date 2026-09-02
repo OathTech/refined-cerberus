@@ -3,14 +3,15 @@ CerberusHeapLang.Adequacy — adequacy: where proofs in the derived
 logic become facts about the engine's execution.
 
 Four layers:
-1. `driveU` — THE ENGINE'S EXECUTION at a machine context: the
+1. `driveU` — THIS PACKAGE'S LOOP around the engine's `step_ctx`: the
    discharge loop {step_ctx → Driver.lean:273 discharge} as a
    definition over engine objects (thread_state, MemState,
    core_step2), with an explicit per-step action-id supply and
    explicit drive length. Engine vocabulary only, plus this package's
    projection `dischargeStep` (Soundness.lean) — the readout predicate
    the walkthrough prints. It is the one drive; `spikeCtx`/`procCtx`
-   are contexts it runs at, not separate drives.
+   are contexts it runs at, not separate drives. It is NOT the shipped
+   driver: see PROVISIONAL below.
 2. `spike_step_adequacy` — the Iris adequacy instance: the bundled
    ghost state `SpikeGS` is CONSTRUCTED here (`genHeap_init` over the
    initial cell map, `spikeCells_alloc`), and iris-lean's
@@ -50,6 +51,27 @@ Four layers:
    triple launched under `LaunchCoh` with the plan;
    `MemTripleU_alloc_of_MemTripleU` records the direction that holds
    between the two); `struct_create_store_adequacy` is an instance.
+
+PROVISIONAL ([USER 2026-09-02], DECISIONS.md: the driver in every
+export is the genuine Cerberus one; semantics-side limitations are
+requested upstream, never worked around). Every export of this module
+that is stated over `driveU` — `MemTripleU`, `MemTripleU_alloc`,
+`SemTripleU`, `project_triple`, `project_triple_pure`,
+`project_triple_alloc`, `project_triple_pure_alloc`,
+`semantic_triple_soundU`, `semantic_frameU`, `engine_adequacyU`,
+`engine_adequacyU_alloc` — carries the label PROVISIONAL, in exactly
+this sense: a sound fact about `driveU`, this package's loop around
+the engine's `step_ctx`; not yet the root-of-trust statement, which is
+over the shipped driver and awaits the cerberus-lean fuel-exhaustion
+outcome (docs/2026-09-02_request-cerberus-lean-fuel-exhaustion-outcome.md,
+repository root); restated with no other change when it lands. The
+obstacle: the shipped driver's out-of-fuel arm is LemLib's
+kernel-opaque `fuelExhaustedWith`, so no statement quantifying over
+all fuels can classify its outcomes. The root-of-trust exports are the
+total-lane production statements over the shipped
+`runND ∘ drive ∘ initial_driver_state` (`exhibitA_prod`,
+`*_certified_production`, `prod_run_eqJ`). The PROVISIONAL statements
+are kept: they are sound and they are the shape that will be restated.
 
 TWO TRUST CLAIMS (the README's "The trust story"): (1) the
 CLOSED-PROGRAM exports have Iris-free statements — cerberus-lean's
@@ -137,13 +159,14 @@ theorem stepOutcomes_thread (M : MachineCtx) (aid : Nat) (e : CoreExpr)
     (ρ : EnvStack) (σ : Mem) :
     stepOutcomes M aid (M.thread e ρ) σ = outcomesU M aid e ρ σ := rfl
 
-/-- THE ENGINE'S EXECUTION AT A MACHINE CONTEXT (S1b — the ONE
-    drive): iterate {`step_ctx` → `dischargeStep`} with every
-    immutable drawn from the context (the sequential driver's loop
-    projected to (thread_state, MemState) — Soundness.lean header
-    for the cited projections). `aids` supplies the driver's
-    per-step action-id draws (Driver.lean:284); the fragment ignores
-    them (D2), and the theorems hold for every supply. -/
+/-- THIS PACKAGE'S DRIVE LOOP AT A MACHINE CONTEXT (the ONE drive):
+    iterate {`step_ctx` → `dischargeStep`} with every immutable drawn
+    from the context (the sequential driver's loop projected to
+    (thread_state, MemState) — Soundness.lean header for the cited
+    projections). `aids` supplies the driver's per-step action-id
+    draws (Driver.lean:284); the fragment ignores them, and the
+    theorems hold for every supply. NOT the shipped driver: every
+    statement over `driveU` is PROVISIONAL (module header). -/
 def driveU (M : MachineCtx) (aids : Nat → Nat) :
     Nat → thread_state → Mem → DriveResult
   | 0, th, σ => .more th σ
@@ -428,7 +451,23 @@ requested initial plan fits the actual
 `⟨σ.lastAddress, σ.nextAllocId⟩`. (Spelling note vs the charter's
 `LaunchCoh σ m`: the plan is an explicit third argument — the
 charter's fourth fact mentions the requested plan, which is not a
-function of σ and m.) -/
+function of σ and m.)
+
+FRESHNESS IS FOOTPRINT-RELATIVE (2026-09-02 audit, M-1). `LaunchCoh`
+constrains the TRACKED cells only (`id_lt`, `addr_lo` range over
+`get? m i = some c`); it says nothing about allocations the footprint
+does not track, and the engine's `allocateObject` computes the fresh
+address from the cursor without scanning existing allocation ranges.
+So a `create` is fresh from the LOGICAL FOOTPRINT — every owned cell
+is tracked and protected by `addr_lo`, which is exactly what
+`create_atomic`'s soundness needs — and NOT from untracked allocations
+an arbitrary concrete state may hold below the cursor;
+`MemTripleU_alloc` quantifies over such states and says nothing about
+their untracked storage. The production cold-start state is globally
+well formed (`prodMem₀_launchCoh`, ProdEntry.lean). A global memory
+well-formedness invariant (allocation-id discipline, live/dead
+consistency, range disjointness of ALL live allocations, cursor
+bounds) is registered for the malloc/free arc. -/
 
 open Iris.Std.PartialMap in
 /-- Launch coherence: footprint coherence + allocator health + the
@@ -854,7 +893,8 @@ theorem drive_classifyU {M : MachineCtx} (hwf : M.SeqWF)
     delivered value satisfies the readout — for EVERY drive length
     `n` and action-id supply. The fuel premises are the static
     `pot` bounds (program and every registered label body; required
-    fix 1). Explicit WF hypothesis: `SeqWF`. -/
+    fix 1). Explicit WF hypothesis: `SeqWF`. PROVISIONAL: stated over
+    `driveU` (module header). -/
 theorem engine_adequacyU {GF : BundledGFunctors} [SpikeGpreS GF]
     {M : MachineCtx} (hwf : M.SeqWF)
     (hQf : ∀ l params cont, lookupLabel M.labels l = some (params, cont) →
@@ -926,7 +966,8 @@ theorem spikeCtx_labels_pot (l : sym) (params : List (sym × core_base_type))
     arc P2 — the partial lane's engine face for allocating clients):
     as `engine_adequacyU`, but launched through `launchResources` —
     the client's WP proof receives the footprint cells AND
-    `allocCap reqs` (via `spike_step_adequacy_alloc`). -/
+    `allocCap reqs` (via `spike_step_adequacy_alloc`). PROVISIONAL:
+    stated over `driveU` (module header). -/
 theorem engine_adequacyU_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
     {M : MachineCtx} (hwf : M.SeqWF)
     (hQf : ∀ l params cont, lookupLabel M.labels l = some (params, cont) →
@@ -1041,7 +1082,8 @@ theorem Sat.union_left {tds : CerbTags.TagDefsMap} {σ : Mem} {Q R : CellMap}
     (`.more`) is unconstrained, and the drive length `n` is UNBOUNDED
     — the triple carries no fuel premise (the engine's static get_ctx
     budget, `pot`, is a hypothesis of the projection theorems that
-    produce triples; header, FUEL HONESTY). -/
+    produce triples; header, FUEL HONESTY). PROVISIONAL: stated over
+    `driveU` (module header). -/
 def SemTripleU (M : MachineCtx) (ρ : EnvStack) (e : CoreExpr) (P : CellMap)
     (post : value → CellMap → Prop) : Prop :=
   ∀ (R : CellMap), P ##ₘ R →
@@ -1107,7 +1149,8 @@ static form). -/
     (`SemTripleU_iff_Mem`, definitional). Partial correctness; the
     drive length `n` is UNBOUNDED and the triple carries no fuel
     premise (the static `pot` bounds are the projection theorems'
-    hypotheses). -/
+    hypotheses). PROVISIONAL: stated over `driveU`, this package's
+    loop around `step_ctx`, not the shipped driver (module header). -/
 def MemTripleU (M : MachineCtx) (ρ : EnvStack) (e : CoreExpr) (P : CellMap)
     (post : CellMap → value → Mem → Prop) : Prop :=
   ∀ (R : CellMap), P ##ₘ R →
@@ -1147,7 +1190,8 @@ theorem consequences_intro {GF : BundledGFunctors} {Φ : IProp GF} {H : Prop →
     to the delivered value. `engine_adequacyU` + `stateInterp_readout`
     + `spike_wp_wand`; the well-formedness, fragment and static fuel
     hypotheses are `engine_adequacyU`'s, unchanged. The headline
-    `project_triple_pure` below is derived from this. -/
+    `project_triple_pure` below is derived from this. PROVISIONAL:
+    the conclusion is over `driveU` (module header). -/
 theorem project_triple {GF : BundledGFunctors} [SpikeGpreS GF]
     {M : MachineCtx} (hwf : M.SeqWF)
     (hQf : ∀ l params cont, lookupLabel M.labels l = some (params, cont) →
@@ -1195,7 +1239,8 @@ theorem project_triple {GF : BundledGFunctors} [SpikeGpreS GF]
     derails, and every delivered `(v, σ')` satisfies `ψ R v σ'`. The
     one Iris-shaped hypothesis `hpost` is discharged for the points-to
     shapes by the `*_consequence` lemmas below. Derived from the
-    strongest-post form `project_triple`. -/
+    strongest-post form `project_triple`. PROVISIONAL: the conclusion
+    `MemTripleU` is over `driveU` (module header). -/
 theorem project_triple_pure {GF : BundledGFunctors} [SpikeGpreS GF]
     {M : MachineCtx} (hwf : M.SeqWF)
     (hQf : ∀ l params cont, lookupLabel M.labels l = some (params, cont) →
@@ -1254,7 +1299,9 @@ stronger launch premise. -/
     allocator healthy with the plan `reqs` fitting the engine's own
     cursor). Frame built in (`R` arbitrary, returned to the post);
     partial correctness; the drive length is unbounded and no fuel
-    premise is carried, as in `MemTripleU`. -/
+    premise is carried, as in `MemTripleU`. PROVISIONAL: stated over
+    `driveU` (module header). Freshness under `LaunchCoh` is
+    footprint-relative (the `LaunchCoh` section header). -/
 def MemTripleU_alloc (M : MachineCtx) (ρ : EnvStack) (e : CoreExpr) (P : CellMap)
     (reqs : List AllocReq) (post : CellMap → value → Mem → Prop) : Prop :=
   ∀ (R : CellMap), P ##ₘ R →
@@ -1286,7 +1333,8 @@ theorem MemTripleU_alloc_of_MemTripleU {M : MachineCtx} {ρ : EnvStack} {e : Cor
     `stateInterp_readout` + `spike_wp_wand`; the well-formedness,
     fragment and static fuel hypotheses are `engine_adequacyU_alloc`'s,
     unchanged. Strongest-post form; `project_triple_pure_alloc` below
-    is the boring headline derived from it. -/
+    is the boring headline derived from it. PROVISIONAL: the
+    conclusion is over `driveU` (module header). -/
 theorem project_triple_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
     {M : MachineCtx} (hwf : M.SeqWF)
     (hQf : ∀ l params cont, lookupLabel M.labels l = some (params, cont) →
@@ -1329,7 +1377,8 @@ theorem project_triple_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
     triple whose precondition is footprint cells ∗ `allocCap reqs` and
     whose framed post pure-entails `ψ R w.val σ'` projects to
     `MemTripleU_alloc M ρ e P reqs ψ` — engine vocabulary only in the
-    conclusion. Derived from `project_triple_alloc`. -/
+    conclusion. Derived from `project_triple_alloc`. PROVISIONAL: the
+    conclusion is over `driveU` (module header). -/
 theorem project_triple_pure_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
     {M : MachineCtx} (hwf : M.SeqWF)
     (hQf : ∀ l params cont, lookupLabel M.labels l = some (params, cont) →
@@ -1598,7 +1647,8 @@ theorem cells_readout (tds : CerbTags.TagDefsMap) {GF : BundledGFunctors} [Spike
     label body in the fragment, holds of the ENGINE over every
     splitting configuration, from any cons-shaped entry environment.
     (`project_triple` at the cells-shaped post — `SemTripleU_iff_Mem` —
-    with the obligation discharged by `cells_consequence`.) -/
+    with the obligation discharged by `cells_consequence`.)
+    PROVISIONAL: the conclusion is over `driveU` (module header). -/
 theorem semantic_triple_soundU {GF : BundledGFunctors} [SpikeGpreS GF]
     {M : MachineCtx} (hwf : M.SeqWF)
     (hQf : ∀ l params cont, lookupLabel M.labels l = some (params, cont) →
@@ -1625,7 +1675,8 @@ theorem semantic_triple_soundU {GF : BundledGFunctors} [SpikeGpreS GF]
 
 /-- THE FRAME RULE at the semantic level, at any machine context: a
     proved footprint triple substitutes into any larger context —
-    ⦃P ∗ F⦄ e ⦃post ∗ F⦄, the frame F verbatim. -/
+    ⦃P ∗ F⦄ e ⦃post ∗ F⦄, the frame F verbatim. PROVISIONAL: the
+    conclusion is over `driveU` (module header). -/
 theorem semantic_frameU {GF : BundledGFunctors} [SpikeGpreS GF]
     {M : MachineCtx} (hwf : M.SeqWF)
     (hQf : ∀ l params cont, lookupLabel M.labels l = some (params, cont) →

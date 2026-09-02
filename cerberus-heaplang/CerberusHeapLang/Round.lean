@@ -19,13 +19,29 @@ semantics the package's adequacy theorems quantify over — no coarser
 adequacy must see) and no finer (sub-round structure is the engine's
 internal control flow, not a Core-level transition).
 
-THE RelSemCore DISCLAIMER (the README's "two presentations, one
-engine"): `CerberusRound` is NOT bridged to the semantics repo's own
-`RelSem.Machine.Step`/`runND_sound`/`HarnessAdequate` spine, and no
-such bridge is claimed here. Both are presentations of the one
-engine; this package's reference relation is the engine round above.
-A future layer that claims `RelSemCore` as ITS reference semantics
-must prove that bridge first.
+THE ONLY REFERENCE. The mirror's only reference is this engine
+round: no other relational semantics is referenced or bridged, and
+none is needed for the root of trust, which is the engine
+(`step_ctx` and the shipped driver).
+
+WHAT THE CERTIFICATION IS, PRECISELY (2026-09-02 audit, H-1). It is
+ONE-DIRECTIONAL: `engine_step_matchU` (Soundness.lean) gives mirror
+step ⇒ engine round. `step_iff_cerberusRound` below is two-sided only
+under the hypothesis that a mirror step exists — it is not a
+completeness result for the mirror. Where the mirror is stuck NO
+engine fact is proved (`cerberusRound_classify`'s `refused` arm says
+only that the mirror is stuck), except at the four redexes with a
+non-panic refusal channel (`cerberusRound_refused_*`). Hence the
+logic built on `Step` is SOUND — every proved-safe execution is an
+engine execution — but not proved COMPLETE for the fragment: a
+configuration the mirror refuses may be one the engine executes, and
+no export speaks about it. What is established, in the auditor's
+words: "a sound Iris program logic for the package's restricted
+relational mirror, with a verified forward connection to successful
+Cerberus engine rounds on proved-safe executions". MIRROR
+COMPLETENESS ON THE FRAGMENT — per constructor, mirror stuck ⇒ an
+engine refusal or kill fact — is the registered open architecture
+item (DECISIONS.md, 2026-09-02 detailed-audit disposition).
 
 WHAT IS PROVED HERE — an exhaustive sum classification, because a
 global iff is falsified by the value protocol (at an ANNOTATED VALUE
@@ -43,9 +59,9 @@ stack, `cerberusRound_classify` yields EXACTLY ONE of
                    the mirror's value protocol (`toVal`);
 - `step`         — the mirror steps, and then for EVERY c':
                    `Step M c c' ↔ CerberusRound M aid c c'`
-                   (the two-sided arm: the engine's round is exactly
-                   the mirror's step, and conversely; mirror
-                   determinism falls out);
+                   (two-sided GIVEN the mirror step: the engine's
+                   round is exactly the mirror's step, and
+                   conversely; mirror determinism falls out);
 - `refused`      — the mirror is STUCK at a non-value configuration
                    (¬ NotStuck: no mirror step, no value).
 
@@ -104,8 +120,10 @@ theorem Step.toCerberusRound {M : MachineCtx} (aid : Nat) {e : CoreExpr}
   obtain ⟨e', ρ', σ'⟩ := c'
   exact engine_step_matchU aid hf hsz hs
 
-/-- THE TWO-SIDED ARM: wherever the mirror steps at all, `Step` and
-    `CerberusRound` coincide (both directions), for every successor. -/
+/-- THE TWO-SIDED ARM, GIVEN A MIRROR STEP: wherever the mirror steps
+    at all, `Step` and `CerberusRound` coincide (both directions), for
+    every successor. The hypothesis `hstep` is load-bearing: this is
+    not a completeness theorem for the mirror (module header). -/
 theorem step_iff_cerberusRound {M : MachineCtx} (aid : Nat) {e : CoreExpr}
     {ev0 : Fmap sym value} {evs : List (Fmap sym value)} {σ : Mem}
     (hf : Frag e) (hsz : esize e ≤ lemDefaultFuel)
@@ -152,7 +170,9 @@ inductive RoundClass (M : MachineCtx) (aid : Nat) (c : Config) : Prop where
 /-- THE CLASSIFICATION THEOREM (the exhaustive sum form): every
     well-sized `Frag` configuration at a sequentially
     well-formed context with a cons-shaped env stack falls into
-    exactly one `RoundClass` arm; the `step` arm is two-sided. -/
+    exactly one `RoundClass` arm; the `step` arm is two-sided given
+    its mirror step; the `refused` arm proves NO engine fact (module
+    header: sound, not proved complete). -/
 theorem cerberusRound_classify {M : MachineCtx} (hwf : M.SeqWF) (aid : Nat)
     {e : CoreExpr} {ev0 : Fmap sym value} {evs : List (Fmap sym value)} {σ : Mem}
     (hf : Frag e) (hsz : esize e ≤ lemDefaultFuel) :

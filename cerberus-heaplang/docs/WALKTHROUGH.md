@@ -25,7 +25,11 @@ implementation and differentially validated against it (README, "What
 you are asked to take on faith"). This package puts a classical
 separation logic over a fragment of Core, on iris-lean, and proves that
 what the logic says is what the engine does — where "the engine" is,
-precisely, the execution function named in each statement (§1.3).
+precisely, the execution function named in each statement (§1.3), and
+where statements over the package's drive loop `driveU` carry the
+label PROVISIONAL (§1.3) while the production statements over the
+shipped driver are the root-of-trust exports. The normative
+architecture statement is [`../ARCHITECTURE.md`](../ARCHITECTURE.md).
 
 ## 1. The claim, and one exhibit
 
@@ -59,8 +63,19 @@ stuck off-protocol, and whenever it delivers `.done v σ'`, `post R v
 correctness. The drive length `n` is unbounded; the triple carries no
 fuel premise.
 
+**PROVISIONAL.** `MemTripleU` is stated over `driveU`, not over the
+shipped driver, and so is every theorem below whose execution function
+is `driveU` (§1.3 lists them). Each is PROVISIONAL in exactly this
+sense: a sound fact about `driveU`, this package's loop around the
+engine's `step_ctx`; not yet the root-of-trust statement, which is over
+the shipped driver and awaits the cerberus-lean fuel-exhaustion outcome
+([`../../docs/2026-09-02_request-cerberus-lean-fuel-exhaustion-outcome.md`](../../docs/2026-09-02_request-cerberus-lean-fuel-exhaustion-outcome.md));
+restated with no other change when it lands. The root-of-trust exports
+are the total-lane production statements (§1.2).
+
 There is no Iris in `MemTripleU`. The theorem that produces one from an
-Iris triple is the headline:
+Iris triple is the headline of the partial lane (PROVISIONAL, as its
+conclusion is):
 
 ```lean
 theorem project_triple_pure {GF : BundledGFunctors} [SpikeGpreS GF]
@@ -162,7 +177,8 @@ theorem list_reverse_certified_production (sup : Nat) (ra : core_run_annotation)
 
 No section variables. `CerbND.runND (_root_.drive …) (initial_driver_state
 sup file fs).1` is exactly the composite the cerberus-lean executable
-runs. The theorem quantifies over nothing but the file-system state,
+runs — this is a ROOT-OF-TRUST export: the genuine driver, no
+package-defined loop in the statement. The theorem quantifies over nothing but the file-system state,
 argv and the entry's symbol supply `sup` (the fragment never reads it):
 the run is the singleton `Active` execution — an equation, so a total
 statement — its delivered value heads a chain seeded as the reversed
@@ -171,7 +187,8 @@ engine picks them), and the final production memory satisfies that
 footprint. No `driveU`, no `Step`, no Iris in the statement. The general
 drive statement beneath it — any chain, any frame, any memory with `Sat
 fmapEmpty σ₀ (m₀ ∪ R)`, every drive length — is `list_reverse_certified`
-(README, "The exhibits").
+(README, "The exhibits"); being over `driveU`, it is PROVISIONAL
+(§1.1).
 
 **The Iris triple** it comes from. The representation predicate is plain
 structural recursion, identity-indexed, no step-indexing:
@@ -248,6 +265,25 @@ a readout predicate you must read, §2). In the production statements —
 fmapEmpty false file args) (initial_driver_state sup file fs).1`, for
 total statements only.
 
+**The two lanes, labelled.** The production statements are THE
+ROOT-OF-TRUST exports: the genuine Cerberus driver, and nothing
+package-defined in the statement but the authored program and the pure
+readout predicates. Every statement over `driveU` — `MemTripleU`,
+`MemTripleU_alloc`, `SemTripleU`, `project_triple`,
+`project_triple_pure`, `project_triple_alloc`,
+`project_triple_pure_alloc`, `semantic_triple_soundU`,
+`semantic_frameU`, `engine_adequacyU`, `engine_adequacyU_alloc`,
+`wpt_engine_boundU`, `wpt_engine_boundU_alloc`, and every exhibit the
+README's table lists at `driveU` — is PROVISIONAL: a sound fact about
+`driveU`, this package's loop around the engine's `step_ctx`; not yet
+the root-of-trust statement, which is over the shipped driver and
+awaits the cerberus-lean fuel-exhaustion outcome
+(`../../docs/2026-09-02_request-cerberus-lean-fuel-exhaustion-outcome.md`);
+restated with no other change when it lands. The request asks the
+cerberus-lean team for a transparent, distinguished fuel-exhaustion
+outcome in the driver monad; no package-side driver is written to work
+around the opaque one.
+
 ## 2. The readout predicates
 
 The trust claims, the differential-validation record, the Cerberus
@@ -294,7 +330,9 @@ def driveU (M : MachineCtx) (aids : Nat → Nat) :
     | _ => .stuck
 ```
 
-(The `killed` constructor's docstring, elided, enumerates the engine's
+(`driveU` is the referent of the PROVISIONAL lane only, §1.3; the
+root-of-trust exports do not mention it. The `killed` constructor's
+docstring, elided, enumerates the engine's
 three kill reasons — undefined behaviour, the non-UB memory errors such
 as an ill-typed store, and the Core-run layer's `Error`; "never kills"
 excludes all three.) `dischargeStep` (Soundness.lean) is the sequential
@@ -736,6 +774,30 @@ from the allocation-aware launchers (`launchResources`, `LaunchCoh`) and
 may stop early (`allocCap_weaken`), never reorder or skip
 (`planFits_order_sensitive`: alignment rounding does not commute).
 
+**Freshness is footprint-relative.** The allocation-aware launch
+premise `LaunchCoh tds σ m reqs` (Adequacy.lean) constrains the TRACKED
+cells only: `id_lt` (every tracked allocation id is below the engine's
+`nextAllocId`), `fresh_alloc`/`fresh_dead` (ids from `nextAllocId` up
+are absent from the live and dead tables), `addr_lo` (every tracked
+cell sits at or above the downward cursor `lastAddress`), `plan` (the
+plan fits the cursor). Neither `Coh` nor `LaunchCoh` says anything
+about allocations the footprint does not track, and the engine's
+`allocateObject` computes the fresh address from the cursor without
+scanning existing allocation ranges. So a `create` is fresh from the
+LOGICAL FOOTPRINT — every owned cell is tracked and protected by
+`addr_lo`, which is what the create rules' soundness needs — and not
+from untracked allocations an arbitrary concrete state may hold below
+the cursor; `MemTripleU_alloc` quantifies over such states too, and
+says nothing about their untracked storage, as a separation logic may.
+The production cold-start state is globally well formed
+(`prodMem₀_launchCoh`, ProdEntry.lean: one `errno` allocation, made by
+the real allocator). A global memory well-formedness invariant —
+allocation-id discipline, live/dead consistency, range disjointness of
+ALL live allocations, cursor bounds — belongs to the launch premise and
+the state interpretation once `kill`/free enters the fragment; it is
+registered for the malloc/free arc (README, "Registered divergences and
+limitations").
+
 **Why an ordered plan and not an additive budget.** The classical shape
 would be an additive resource with a split law, `budget (s + t) ⊣⊢
 budget s ∗ budget t`, letting two components each own part of the
@@ -814,12 +876,31 @@ not step — why a global iff is the wrong shape), `step` (the mirror
 steps, and for every `c''`, `Step M c c'' ↔ CerberusRound M aid c c''`),
 or `refused` (the mirror is stuck at a non-value). Adequacy needs only
 the value and `step` arms: the WP's `NotStuck` supplies a mirror step at
-every reachable configuration, and there the engine agrees exactly. At
-mirror-stuck configurations the engine's refusal is classified for
-store/load/create/case (`cerberusRound_refused_*`); the other rows'
-refusal channels are `failwithI` panics (opaque — a kernel
-classification is impossible), save's evaluation round, or the memop
-fork.
+every reachable configuration, and there the engine agrees exactly.
+
+**What the certification is, precisely.** `engine_step_matchU` is
+ONE-DIRECTIONAL: mirror step ⇒ engine round. `step_iff_cerberusRound`
+is two-sided only under the hypothesis `∃ c', Step M c c'` — it is not
+a completeness result for the mirror. Where the mirror is stuck no
+engine fact is proved: `cerberusRound_classify`'s `refused` arm says
+`toVal c.1 = none` and `∀ c', ¬ Step M c c'`, nothing about
+`outcomesU`, except at the store/load/create/case redexes, where
+`cerberusRound_refused_store`/`_load`/`_create`/`_case` show the engine's
+round is a singleton refusal; the other rows' refusal channels are
+`failwithI` panics (opaque — a kernel classification is impossible),
+save's evaluation round, or the memop fork. Hence the logic is SOUND
+(every proved-safe execution is an engine execution) but not proved
+COMPLETE for the fragment (a configuration the mirror refuses may be
+one the engine executes; no export speaks about it). What is
+established, in the words of the 2026-09-02 audit: "a sound Iris
+program logic for the package's restricted relational mirror, with a
+verified forward connection to successful Cerberus engine rounds on
+proved-safe executions". Mirror completeness on the fragment —
+per-constructor "mirror stuck ⇒ engine refusal/kill" theorems — is the
+registered open architecture item. The mirror's only reference is the
+engine round `CerberusRound`; no other relational semantics is
+referenced or bridged, and none is needed for the root of trust, which
+is the engine.
 
 **Why the fuel premises exist.** The engine's redex search `get_ctx` is
 fuel-bounded at `lemDefaultFuel` with an opaque exhaustion leaf, so
@@ -892,7 +973,9 @@ v σ', driveU M aids k (M.thread e₀ (ev00 :: evs0)) σ₀ = .done v σ' ∧ ψ
 σ' ∧ (stateInert e₀ = true ∧ StateInertLabels M → σ' = σ₀)` — the
 judgment's budget is drive length, proved once by induction on the
 budget with `engine_step_matchU` discharging one engine step per unit
-(`wpt_drive_aux`).
+(`wpt_drive_aux`). Both faces, `engine_adequacyU` and
+`wpt_engine_boundU` (and their `_alloc` twins), are over `driveU` and
+therefore PROVISIONAL (§1.3).
 
 **The production entry.** `DriverCollapse.lean` proves, from the
 driver's own round functions (`driver2`, `new_drive_core_threads`,
@@ -917,7 +1000,8 @@ shipped registration (`collect_labeled_continuations_NEW`;
 lemDefaultFuel`, the production loop's own budget for `k` rounds plus
 the done-recording and drain iterations — below it the production value
 is the opaque `fuelExhausted` leaf (§1.3). The theorems hold for every
-supply `sup` because the fragment never reads it.
+supply `sup` because the fragment never reads it. These production
+statements are the root-of-trust exports (§1.3).
 
 ## 6. Reading the audit
 
@@ -970,8 +1054,17 @@ the `#print axioms` recipe are in the README, "How to build and verify".
   lemDefaultFuel`.
 - **A C frontend.** Programs enter as authored Core in a synthetic
   one-procedure file.
-- **A bridge to the semantics repo's `relsemcore` spine.** Not imported,
-  not claimed; this package's reference relation is `CerberusRound`.
+- **Mirror completeness on the fragment.** The certification is
+  one-directional (§5); at a mirror-stuck configuration no engine fact
+  is proved beyond the four refusal rows. The registered open
+  architecture item.
+- **Partial correctness over the shipped driver.** The partial lane is
+  stated over `driveU` and labelled PROVISIONAL (§1.3) until the
+  cerberus-lean fuel-exhaustion request lands; no package-side driver
+  works around the opaque fuel arm.
+- **A global memory well-formedness invariant.** Freshness is
+  footprint-relative (§4); the invariant is registered for the
+  malloc/free arc.
 - **Parametric semantics interfaces.** Not adopted: the rules are proved
   directly against `Step` and the memory state, as RefinedC proves its
   memory rules by inversion.

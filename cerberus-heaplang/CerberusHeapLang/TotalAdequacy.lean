@@ -32,6 +32,21 @@ state to the initial one — fib's exported equation keeps its verbatim
 
 `DriverDoneAt` and `readoutPost` are the delivery vocabulary the
 production collapse (ProdLoop.lean) restates this simulation in.
+
+PROVISIONAL ([USER 2026-09-02], DECISIONS.md; Adequacy.lean header).
+`wpt_engine_boundU` and `wpt_engine_boundU_alloc` are stated over
+`driveU`, and so are the total exhibit equations derived from them
+(`*_total`, `alloc_create_launch_smoke`). Each is PROVISIONAL, in
+exactly this sense: a sound fact about `driveU`, this package's loop
+around the engine's `step_ctx`; not yet the root-of-trust statement,
+which is over the shipped driver and awaits the cerberus-lean
+fuel-exhaustion outcome
+(docs/2026-09-02_request-cerberus-lean-fuel-exhaustion-outcome.md,
+repository root); restated with no other change when it lands. The
+root-of-trust exports are the production statements that consume
+this simulation through `wpt_driver_done_alloc` → `prod_run_eqJ`
+(`exhibitA_prod`, `*_certified_production`): those are over the
+shipped `runND ∘ drive ∘ initial_driver_state`.
 -/
 import CerberusHeapLang.Wpt
 import CerberusHeapLang.Adequacy
@@ -486,7 +501,8 @@ list (the total analog of `engine_adequacyU`) -/
     engine face): a proved total judgment at budget k plus the
     seeded footprint implies the drive AT FUEL k delivers a value
     satisfying ψ — an unconditional `.done` equation, no partiality;
-    state pinned on the state-inert cone. -/
+    state pinned on the state-inert cone. PROVISIONAL: stated over
+    `driveU` (module header). -/
 theorem wpt_engine_boundU {GF : BundledGFunctors} [SpikeGpreS GF]
     {M : MachineCtx} (hwf : M.SeqWF)
     (hQf : ∀ l params cont, lookupLabel M.labels l = some (params, cont) →
@@ -543,7 +559,8 @@ theorem wpt_engine_boundU {GF : BundledGFunctors} [SpikeGpreS GF]
     footprint cells AND `allocCap reqs`; the cursor ghost heap is
     launched NONEMPTY at the real `⟨lastAddress, nextAllocId⟩`. The
     cursor-free launcher above remains for no-allocation programs
-    (charter P1.3's incremental-migration allowance). -/
+    (charter P1.3's incremental-migration allowance). PROVISIONAL:
+    stated over `driveU` (module header). -/
 theorem wpt_engine_boundU_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
     {M : MachineCtx} (hwf : M.SeqWF)
     (hQf : ∀ l params cont, lookupLabel M.labels l = some (params, cont) →

@@ -83,7 +83,16 @@ cursor-free launches owe nothing new. The allocation-aware launchers
 (`launchResources`, Adequacy.lean, under `LaunchCoh`) mint the cursor
 cell and grant the abstract capacity `allocCap` (this file) to the
 public create rules; the cursor-free launchers remain for programs
-that do not allocate. `allocCap reqs` is an ORDERED REQUEST PLAN over
+that do not allocate. FRESHNESS IS FOOTPRINT-RELATIVE: `CohG`'s
+`cur_meta_lo`/`cur_byte_lo` and `LaunchCoh`'s `addr_lo` range over
+the GHOST-TRACKED cells only, and `allocateObject` computes the fresh
+address from the cursor without scanning existing allocation ranges,
+so a `create` is fresh from the logical footprint — every owned cell
+is protected — and not from untracked allocations an arbitrary
+concrete state may hold below the cursor (the production cold-start
+state is globally well formed, `prodMem₀_launchCoh`). A global memory
+well-formedness invariant is registered for the malloc/free arc
+(Adequacy.lean, the `LaunchCoh` section header). `allocCap reqs` is an ORDERED REQUEST PLAN over
 the exclusive cursor (`PlanFits`, whose guard is exactly
 `allocateObject_success`'s premise pair), weakened only to a prefix
 (`allocCap_weaken`) and never split across ∗ — the register row and
