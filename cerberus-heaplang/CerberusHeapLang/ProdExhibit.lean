@@ -84,7 +84,7 @@ def progAProd : CoreExpr :=
 
 /-- Cone membership. -/
 theorem progAProd_frag : Frag progAProd :=
-  .sseq_sym (.create)
+  .sseq_sym .create (.create)
     (.sseq
       (.store_op rfl (.sym [] pASym) (.val [] sevenVal)
         (by rw [show peDepth (Pexpr ([] : List annot) ()

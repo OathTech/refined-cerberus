@@ -524,7 +524,7 @@ theorem trProg_frag (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (mo : memory_order) (xbty ybty bbty ubty : core_base_type)
     (px : CerbMem.PointerValue) :
     Frag (trProg loc ann mo xbty ybty bbty ubty px) := by
-  refine .sseq_sym (.val_pure _)
+  refine .sseq_sym (.val_pure _) (.val_pure _)
     (.sseq_spec
       (.load_op rfl
         (.arrayShift [] longTy (.sym _ _) (.val _ _))

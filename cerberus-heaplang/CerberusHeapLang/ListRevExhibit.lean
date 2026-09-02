@@ -1156,12 +1156,14 @@ variable (loc : CerbLocation.Loc) (ann ra : core_run_annotation)
 /-- The label body is in the certified cone. -/
 theorem lrBody_fragJ :
     Frag (lrBody loc ann ra mo bbty nbty ubty) := by
-  refine .sseq_sym
-    (.memop_op rfl (.sym _ _) (.val _ _)
+  have hb : BareHead (memopRedex PtrEq
+      [Pexpr [] () (PEsym lrCurSym), Pexpr [] () (PEval nullVal)]) :=
+    .memop_op rfl (.sym _ _) (.val _ _)
       (by rw [show peDepth (Pexpr ([] : List annot) () (PEsym lrCurSym)) = 1
           from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega)
       (by rw [show peDepth (Pexpr ([] : List annot) () (PEval nullVal)) = 1
-          from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega))
+          from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+  refine .sseq_sym hb hb.frag
     (.if_ (by
         rw [show peDepth (Pexpr ([] : List annot) () (PEsym lrBSym)) = 1
           from rfl, show lemDefaultFuel = 999999 + 1 from rfl]

@@ -1853,52 +1853,22 @@ theorem complete_beta_spec {M : MachineCtx} {e : CoreExpr} {ctx : context}
       show update_env (specPat pa pb x bty) v (ev0 :: evs) = _
       rw [update_env_cons, hmsg]
 
-/-- LETS at the plain-symbol binder: a bare value is the mirror step;
-    an annotated value is the REGISTERED GAP `unmirrored_success` — the
-    engine's LETS-ANNOT tau binds the value and wraps the continuation
-    (Step.lean's recorded divergence: no `sseq_sym_annot` rule). -/
+/-- LETS at the plain-symbol binder: the fragment admits only
+    `BareHead` heads there (`Frag.sseq_sym`), so the value reaching the
+    binder is BARE and the beta always steps. The engine's LETS-ANNOT
+    beta at this binder (`step_ctx_beta_sym_annot`) is unreachable in
+    `Frag` (`BareHead.not_annot`) — the fragment-closure disposition of
+    the former gap (a). -/
 theorem complete_beta_sym {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {pa : List _root_.annot} {x : sym} {bty : core_base_type}
-    {w : SpikeVal} {e2 : CoreExpr}
-    (hd : Decomp e ctx (Expr [] (Esseq (symPat pa x bty) (ofVal w) e2)))
-    (hsz : esize e ≤ lemDefaultFuel)
+    {v : value} {e2 : CoreExpr}
+    (hd : Decomp e ctx (Expr [] (Esseq (symPat pa x bty) (ofVal (.pure v)) e2)))
     (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (σ : Mem) :
     RoundComplete M (e, ev0 :: evs, σ) := by
   have hnr : ∀ (ra : core_run_annotation) (l : sym) (pes : List (generic_pexpr Unit sym)),
-      Expr [] (Esseq (symPat pa x bty) (ofVal w) e2) ≠ runRedex ra l pes := by
+      Expr [] (Esseq (symPat pa x bty) (ofVal (.pure v)) e2) ≠ runRedex ra l pes := by
     intro ra l pes h; cases h
-  cases w with
-  | pure v => exact .inl ⟨_, hd.lift_step hnr Step.sseq_sym_pure⟩
-  | annot ds v =>
-    refine .inr (.inr (.unmirrored_success
-      (apply_ctx ctx (Expr [] (Eannot ds e2)),
-        update_env (symPat pa x bty) v (ev0 :: evs), σ) ?_ ?_))
-    · -- the mirror is stuck: no rule fires at `{A}v` bound by a symbol pattern
-      intro c'' hs
-      rcases hd.step_factor hs with ⟨r', ρr, σr, -, hr, -⟩ | ⟨ra, l, pes, heq, -⟩
-      · rcases hr.sseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
-            ⟨_, _, v', _, _, hpat, he1, _, hout⟩ |
-            ⟨_, _, ds', v', _, _, hpat, he1, _, hout⟩ |
-            ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩ |
-            ⟨pa', pb', x', bty', ov', _, _, hpat, he1, _, hout⟩ |
-            ⟨pa', pb', x', bty', ds', ov', _, _, hpat, he1, _, hout⟩ |
-            ⟨pa', x', bty', v', _, _, hpat, he1, _, hout⟩
-        · exact absurd hstep (fun h => Step.val_elim h)
-        · exact (symPat_ne_base hpat.symm).elim
-        · exact (symPat_ne_base hpat.symm).elim
-        · rw [jumpRedex?_ofVal] at hj; cases hj
-        · exact (symPat_ne_spec hpat.symm).elim
-        · exact (symPat_ne_spec hpat.symm).elim
-        · exact absurd he1 (by simp [ofVal])
-      · exact absurd heq (hnr ra l pes)
-    · intro dst hemb
-      obtain ⟨-, hlay, -, -, -⟩ := hemb
-      simp only at hlay
-      subst hlay
-      refine ⟨_, step_ctx_beta_sym_annot hd hsz M.tagDefs dst.layout_state
-          dst.core_file dst.core_extern M.tid M.parent _ rfl rfl,
-        rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, ?_⟩
-      exact advance_tau M.tagDefs M.tid _ _ dst
+  exact .inl ⟨_, hd.lift_step hnr Step.sseq_sym_pure⟩
 
 /-! ### The operand-evaluation rows: shape lemmas (the engine's step is
 the with-runstate evaluation step whatever the operand evaluates to)
@@ -3036,7 +3006,12 @@ theorem frag_round_complete {M : MachineCtx}
         cases hnvR
       | store_op hnv' hp2 hp3 hpd2 hpd3 => exact ⟨hp2, hp3, hpd2, hpd3⟩
     exact complete_store_op hd hsz hnvR hp2 hp3 hpd2 hpd3 _ _
-  | beta_sym => exact complete_beta_sym hd hsz _ _ _
+  | @beta_sym pa x bty w e2 =>
+    cases hfr with
+    | sseq_sym hb _ _ =>
+      cases w with
+      | pure v => exact complete_beta_sym hd _ _ _
+      | annot ds v => exact hb.not_annot.elim
   | wbeta_pure => exact complete_wbeta_pure hd _ _ _
   | wbeta_annot => exact complete_wbeta_annot hd _ _ _
 

@@ -120,7 +120,7 @@ theorem Frag.esize_le_pot {e : CoreExpr} (hf : Frag e) : esize e ≤ pot e := by
   | sseq_spec hf1 hf2 ih1 ih2 => simp only [esize_sseq, pot_sseq]; omega
   | pure_sym => simp [esize, pot, pureRedex]
   | load_op hnv2 hp2 hd2 => simp [esize, pot, loadOpRedex]
-  | sseq_sym hf1 hf2 ih1 ih2 => simp only [esize_sseq, pot_sseq]; omega
+  | sseq_sym hb hf1 hf2 ih1 ih2 => simp only [esize_sseq, pot_sseq]; omega
   | memop_vals v1 v2 => simp [esize, pot, memopPtrEqVals, memopRedex]
   | memop_op hnv hp1 hp2 hd1 hd2 => simp [esize, pot, memopRedex]
   | store_op hnv hp2 hp3 hd2 hd3 => simp [esize, pot, storeOpRedex]
@@ -158,7 +158,7 @@ theorem Frag.pot_le_two {e : CoreExpr} (hf : Frag e) : pot e ≤ 2 * esize e := 
   | sseq_spec hf1 hf2 ih1 ih2 => simp only [esize_sseq, pot_sseq]; omega
   | pure_sym => simp [esize, pot, pureRedex]
   | load_op hnv2 hp2 hd2 => simp [esize, pot, loadOpRedex]
-  | sseq_sym hf1 hf2 ih1 ih2 => simp only [esize_sseq, pot_sseq]; omega
+  | sseq_sym hb hf1 hf2 ih1 ih2 => simp only [esize_sseq, pot_sseq]; omega
   | memop_vals v1 v2 => simp [esize, pot, memopPtrEqVals, memopRedex]
   | memop_op hnv hp1 hp2 hd1 hd2 => simp [esize, pot, memopRedex]
   | store_op hnv hp2 hp3 hd2 hd3 => simp [esize, pot, storeOpRedex]
@@ -382,7 +382,7 @@ theorem Frag.pot_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
     subst h1
     left
     simp [pot, loadOpRedex]
-  | sseq_sym hf1 hf2 ih1 ih2 =>
+  | sseq_sym hb hf1 hf2 ih1 ih2 =>
     rcases hs.sseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
         ⟨_, _, v, _, _, hpat, _, _, hout⟩ |
         ⟨_, _, ds', v, _, _, hpat, _, _, hout⟩ |

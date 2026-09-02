@@ -570,7 +570,7 @@ theorem ctrParams_depth (xbty cbty : core_base_type) (n : Int) :
 theorem counterProdProg_frag (ra : core_run_annotation) (mo : memory_order)
     (bty xbty cbty sbty : core_base_type) (n : Int) :
     Frag (counterProdProg ra mo bty xbty cbty sbty n) :=
-  .sseq_sym (.create)
+  .sseq_sym .create (.create)
     (.save (ctrParams_depth xbty cbty n) (ctrBody_frag ra mo bty))
 
 theorem ctrBody_pot (ra : core_run_annotation) (mo : memory_order)
@@ -1247,8 +1247,8 @@ end LrProdIris
 theorem lrProdPrefix_frag (ra : core_run_annotation) (mo : memory_order)
     (bty : core_base_type) {k : CoreExpr} (hk : Frag k) :
     Frag (lrProdPrefix ra mo bty k) :=
-  .sseq_sym (.create)
-    (.sseq_sym (.create)
+  .sseq_sym .create (.create)
+    (.sseq_sym .create (.create)
       (.sseq
         (.store_op rfl (.sym [] lrN1Sym) (.val [] (longVal 1))
           (by rw [show peDepth (Pexpr ([] : List annot) ()

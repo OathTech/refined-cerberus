@@ -253,7 +253,7 @@ theorem Frag.stateInert_step {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
     subst h1
     exact ⟨h3, .inl rfl⟩
   | load_op hnv2 hp2 hd2 => simp [stateInert, loadOpRedex] at hin
-  | sseq_sym hf1 hf2 ih1 ih2 =>
+  | sseq_sym hb hf1 hf2 ih1 ih2 =>
     obtain ⟨hin1, hin2⟩ : stateInert _ = true ∧ stateInert _ = true := by
       simpa [stateInert, Bool.and_eq_true] using hin
     rcases hs.sseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |

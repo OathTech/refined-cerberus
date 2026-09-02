@@ -3007,6 +3007,94 @@ theorem step_ctx_beta_sym_pure {e : CoreExpr} {ctx : context}
      rw [henv]
      try rfl)
 
+/-! ### The plain-symbol binder's head grammar (fragment closure, 2026-09-02)
+
+`BareHead e1` is the set of head shapes admitted under the plain-symbol
+binder `lets x = e1 in e2` (`Frag.sseq_sym`): the shapes whose every
+mirror successor is again a `BareHead` and whose terminal value is a
+BARE value — never `{A}v`. The engine binds a plain symbol at an
+annotated value too (one_step0's Esseq Eannot arm, "reduction:
+LETS-ANNOT", `step_ctx_beta_sym_annot` in Round.lean), and the mirror
+has no rule for that beta (`Step.sseq_sym_pure` only — the recorded
+divergence in Step.lean). Rather than add the rule, the fragment is
+declared as exactly what the mirror covers ([USER 2026-09-02], "fail-
+closed if we've achieved complete coverage" — DECISIONS.md, fragment-
+closure ruling): the binder's head is restricted to the producers of
+bare values the fragment's programs actually bind — a literal value
+(`val_pure`), `create` (its continuation is `mk_value_e`, a bare
+pointer value — step_action's Create arm), and the pointer-equality
+memop at values or at operands to evaluate (the memop protocol's
+`mk_pure_e (mk_value_pe cval)`, a bare boolean). Closure under the
+mirror step is `BareHead.step`; the annotated value is not a
+`BareHead` (`BareHead.not_annot`), so the LETS-ANNOT beta at the
+symbol binder is unreachable in `Frag`. -/
+inductive BareHead : CoreExpr → Prop where
+  | val_pure (v : value) : BareHead (Expr [] (Epure (Pexpr [] () (PEval v))))
+  | create {loc : CerbLocation.Loc} {ann : core_run_annotation}
+      {align : CerbMem.IntegerValue} {ty : ctype} {pref : prefix0} :
+      BareHead (createRedex loc ann align ty pref)
+  | memop_vals (v1 v2 : value) : BareHead (memopPtrEqVals v1 v2)
+  | memop_op {pe1 pe2 : generic_pexpr Unit sym}
+      (hnv : valueFromPexprs [pe1, pe2] = none)
+      (hp1 : PePure pe1) (hp2 : PePure pe2)
+      (hd1 : peDepth pe1 ≤ lemDefaultFuel)
+      (hd2 : peDepth pe2 ≤ lemDefaultFuel) :
+      BareHead (memopRedex PtrEq [pe1, pe2])
+
+/-- An annotated value is never a `BareHead` (the LETS-ANNOT beta at
+    the symbol binder is unreachable in the fragment). -/
+theorem BareHead.not_annot {ds : List dyn_annotation} {v : value}
+    (h : BareHead (ofVal (.annot ds v))) : False := by
+  generalize he : ofVal (.annot ds v) = e at h
+  cases h with
+  | val_pure v' => cases he
+  | create => simp [createRedex, ofVal] at he
+  | memop_vals v1 v2 => simp [memopPtrEqVals, memopRedex, ofVal] at he
+  | memop_op hnv hp1 hp2 hd1 hd2 => simp [memopRedex, ofVal] at he
+
+/-- A non-value `BareHead` is itself a root redex. -/
+theorem BareHead.redex {e : CoreExpr} (h : BareHead e) (hnv : toVal e = none) :
+    Redex e := by
+  cases h with
+  | val_pure v =>
+    rw [show toVal (Expr ([] : List _root_.annot) (Epure (Pexpr [] () (PEval v)))) =
+      some (.pure v) from rfl] at hnv
+    cases hnv
+  | create => exact .create
+  | memop_vals v1 v2 => exact .memop _ _
+  | memop_op hnv hp1 hp2 hd1 hd2 => exact .memop _ _
+
+/-- Closure under the mirror step: a `BareHead` steps only to a
+    `BareHead` (create → its bare pointer value; memop-operand
+    evaluation → the memop at values; the memop at values → its bare
+    boolean). -/
+theorem BareHead.step {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack} {σ : Mem}
+    {e' : CoreExpr} {ρ' : EnvStack} {σ' : Mem}
+    (h : BareHead e) (hs : Step M (e, ρ, σ) (e', ρ', σ')) : BareHead e' := by
+  cases h with
+  | val_pure v => exact (Step.val_elim (w := .pure v) hs).elim
+  | create =>
+    obtain ⟨pv, σ'', hmem, hout⟩ := hs.create_inv
+    obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ'' := by
+      simpa [Prod.mk.injEq] using hout
+    subst h1
+    exact .val_pure _
+  | memop_vals v1 v2 =>
+    rw [show memopPtrEqVals v1 v2 = Expr [] (Ememop PtrEq
+      [Pexpr [] () (PEval v1), Pexpr [] () (PEval v2)]) from rfl] at hs
+    cases hs with
+    | run hj hl hvs => simp at hj
+    | memop_ptreq h1 h2 hmem => exact .val_pure _
+    | memop_eval hnv hv1 hv2 =>
+      rw [valueFromPexprs_pair, valueFromPexpr_val, valueFromPexpr_val] at hnv
+      cases hnv
+  | memop_op hnv hp1 hp2 hd1 hd2 =>
+    obtain ⟨v1, v2, hv1, hv2, hout⟩ := hs.memop_op_inv hnv
+    obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ := by
+      simpa [Prod.mk.injEq] using hout
+    subst h1
+    exact .memop_vals v1 v2
+
 /-! ### The fragment `Frag` and the step-match
 
 `Frag` is the per-construct authority of every adequacy theorem: the
@@ -3101,8 +3189,13 @@ inductive Frag : CoreExpr → Prop where
       (hnv2 : valueFromPexpr pe2 = none) (hp2 : PePure pe2)
       (hd2 : peDepth pe2 ≤ lemDefaultFuel) :
       Frag (loadOpRedex loc ann ty pe2 mo)
+  /-- Strong sequencing at the plain-symbol binder, the head restricted
+      to the bare-value producers `BareHead` (fragment closure,
+      2026-09-02: the LETS-ANNOT beta at this binder has no mirror rule
+      and is unreachable from these heads — `BareHead.step`,
+      `BareHead.not_annot`). -/
   | sseq_sym {pa : List annot} {x : sym} {bty : core_base_type}
-      {e1 e2 : CoreExpr} :
+      {e1 e2 : CoreExpr} (hb : BareHead e1) :
       Frag e1 → Frag e2 →
       Frag (Expr [] (Esseq (symPat pa x bty) e1 e2))
   | memop_vals (v1 v2 : value) :
@@ -3147,6 +3240,14 @@ theorem frag_ofVal (w : SpikeVal) : Frag (ofVal w) := by
   cases w with
   | pure v => exact .val_pure v
   | annot ds v => exact .annot (.val_pure v)
+
+/-- Every `BareHead` is in the fragment. -/
+theorem BareHead.frag {e : CoreExpr} (h : BareHead e) : Frag e := by
+  cases h with
+  | val_pure v => exact .val_pure v
+  | create => exact .create
+  | memop_vals v1 v2 => exact .memop_vals v1 v2
+  | memop_op hnv hp1 hp2 hd1 hd2 => exact .memop_op hnv hp1 hp2 hd1 hd2
 
 /-! matcher facts for the pure-redex shapes (the fuelled matchers
 examine the pexpr's head constructor; a non-value premise dismisses
@@ -3239,7 +3340,7 @@ theorem Frag.decomp {e : CoreExpr} (hf : Frag e) (hnv : toVal e = none) :
       | run hdep => simp [annotRooted, runRedex] at hr
       | pure_sym => simp [annotRooted, pureRedex] at hr
       | load_op hnv2 hp2 hd2 => simp [annotRooted, loadOpRedex] at hr
-      | sseq_sym hf1 hf2 => simp [annotRooted] at hr
+      | sseq_sym hb hf1 hf2 => simp [annotRooted] at hr
       | memop_vals v1 v2 => simp [annotRooted, memopPtrEqVals, memopRedex] at hr
       | memop_op hnv hp1 hp2 hpd1 hpd2 => simp [annotRooted, memopRedex] at hr
       | store_op hnv hp2 hp3 hpd2 hpd3 =>
@@ -3265,7 +3366,7 @@ theorem Frag.decomp {e : CoreExpr} (hf : Frag e) (hnv : toVal e = none) :
           exact ⟨_, _, Decomp.root (.merge rfl), hwit⟩
         | load_op hnv2 hp2 hd2 =>
           exact ⟨_, _, Decomp.root (.merge rfl), hwit⟩
-        | sseq_sym hf1 hf2 =>
+        | sseq_sym hb hf1 hf2 =>
           exact ⟨_, _, Decomp.root (.merge rfl), hwit⟩
         | memop_vals v1 v2 =>
           exact ⟨_, _, Decomp.root (.merge rfl), hwit⟩
@@ -3309,7 +3410,7 @@ theorem Frag.decomp {e : CoreExpr} (hf : Frag e) (hnv : toVal e = none) :
           exact ⟨_, _, Decomp.annot hr' rfl (fun n => rfl) hd, hfr⟩
         | load_op hnv2 hp2 hd2 =>
           exact ⟨_, _, Decomp.annot hr' rfl (fun n => rfl) hd, hfr⟩
-        | sseq_sym hf1 hf2 =>
+        | sseq_sym hb hf1 hf2 =>
           exact ⟨_, _, Decomp.annot hr' rfl (fun n => rfl) hd, hfr⟩
         | memop_vals v1 v2 =>
           exact ⟨_, _, Decomp.annot hr' rfl (fun n => rfl) hd, hfr⟩
@@ -3337,12 +3438,15 @@ theorem Frag.decomp {e : CoreExpr} (hf : Frag e) (hnv : toVal e = none) :
   | load_op hnv2 hp2 hd2 =>
     exact ⟨_, _, Decomp.root (.load_op _ _ _ _ hnv2),
       .load_op hnv2 hp2 hd2⟩
-  | @sseq_sym pa x bty e1 e2 hf1 hf2 ih1 ih2 =>
+  | @sseq_sym pa x bty e1 e2 hb hf1 hf2 ih1 ih2 =>
     cases hv1 : toVal e1 with
     | some w =>
       have he1 := ofVal_of_toVal hv1
       subst he1
-      exact ⟨_, _, Decomp.root .beta_sym, .sseq_sym (frag_ofVal w) hf2⟩
+      cases w with
+      | pure v =>
+        exact ⟨_, _, Decomp.root .beta_sym, .sseq_sym hb (frag_ofVal (.pure v)) hf2⟩
+      | annot ds v => exact hb.not_annot.elim
     | none =>
       obtain ⟨ctx, r, hd, hfr⟩ := ih1 hv1
       exact ⟨_, _, Decomp.sseq_sym hd, hfr⟩
@@ -3535,7 +3639,7 @@ theorem Frag.step {M : MachineCtx}
       subst h1
       exact .annot hf2
     · exact (symPat_ne_spec hpat).elim
-  | sseq_sym hf1 hf2 ih1 ih2 =>
+  | sseq_sym hb hf1 hf2 ih1 ih2 =>
     rcases hs.sseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
         ⟨_, _, v, _, _, hpat, _, _, hout⟩ |
         ⟨_, _, ds', v, _, _, hpat, _, _, hout⟩ |
@@ -3546,7 +3650,7 @@ theorem Frag.step {M : MachineCtx}
     · obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ'' ∧ σ' = σ'' := by
         simpa [Prod.mk.injEq] using hout
       subst h1
-      exact .sseq_sym (ih1 hstep) hf2
+      exact .sseq_sym (hb.step hstep) (ih1 hstep) hf2
     · exact (symPat_ne_base hpat.symm).elim
     · exact (symPat_ne_base hpat.symm).elim
     · obtain ⟨h1, -, -⟩ : e' = cont ∧ ρ' = _ ∧ σ' = σ := by
@@ -3809,7 +3913,7 @@ theorem Frag.esize_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
     subst h1
     left
     simp [esize, loadOpRedex]
-  | sseq_sym hf1 hf2 ih1 ih2 =>
+  | sseq_sym hb hf1 hf2 ih1 ih2 =>
     rcases hs.sseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
         ⟨_, _, v, _, _, hpat, _, _, hout⟩ |
         ⟨_, _, ds', v, _, _, hpat, _, _, hout⟩ |

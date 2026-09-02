@@ -655,8 +655,8 @@ theorem progCreateInit_frag (loc : CerbLocation.Loc)
     (alignN : Int) (pref : prefix0) (mo : memory_order)
     (pbty vbty : core_base_type) :
     Frag (progCreateInit loc ann aprov alignN pref mo pbty vbty) :=
-  .sseq_sym (.create)
-    (.sseq_sym (frag_ofVal (.pure fiveVal))
+  .sseq_sym .create (.create)
+    (.sseq_sym (.val_pure fiveVal) (frag_ofVal (.pure fiveVal))
       (.store_op rfl (.sym [] structPSym) (.sym [] structVSym)
         (by rw [show peDepth (Pexpr ([] : List annot) ()
             (PEsym structPSym)) = 1 from rfl,
