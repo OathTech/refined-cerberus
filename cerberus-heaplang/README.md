@@ -611,8 +611,13 @@ In import order, one line each:
 History, provenance and process live in dated files, not here.
 Rulings: `../docs/DECISIONS.md` (append-only, `[USER]`/`[AGENT]`
 tagged). The audit and review record of the current tree, newest
-first: `../docs/2026-09-02_cerberus-heaplang-detailed-audit.md` (the
-current architecture, trust and documentation audit),
+first: `docs/2026-09-02_audit-response-3-notes.md` (the response to
+the detailed audit: PROVISIONAL labels, the qualified connection, the
+audit-script scope with its plant transcript, the moves,
+`ARCHITECTURE.md`), `../docs/2026-09-02_cerberus-heaplang-detailed-audit.md` (the
+current architecture, trust and documentation audit) with the
+[USER 2026-09-02] genuine-driver ruling and the upstream request
+`../docs/2026-09-02_request-cerberus-lean-fuel-exhaustion-outcome.md`,
 `docs/2026-09-02_pr3-notes.md` (the response to the second
 review: `peDepth`/`PePure` named, the location premise discharged,
 headers corrected), `docs/2026-09-02_professor-review-2.md` (the second
