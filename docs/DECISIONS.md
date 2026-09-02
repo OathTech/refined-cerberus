@@ -255,3 +255,48 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   house practice: coverage/closure claims require DEPENDENCY-CONE
   verification (launch → resource → rule → consumer), never
   name-level checks; re-audits trace proof flow.
+- **2026-09-02 [USER] SPEEDBUMPS, NOT ADVERSARIAL GATES** (verbatim):
+  "our aim here is to build a relatively small Reynolds/O'Hearn style
+  logic, so if we're building over-elaborate gating, that should be
+  cut fairly brutally. We *do not* want to build heavy gates that are
+  intended to survive adversarial attack, we want to build
+  speedbumps." Also [USER 2026-09-01]: gate cruft (over-strong gates
+  accumulating) is a project-slowing defect; ACL2Lean's two-tier
+  gating is the model. CONFLICT SURFACED AND RESOLVED: the adopted
+  skeptical re-audit's P3 prescription (dependency-certified
+  consumers, layer-cut check, plants retained as gates) is
+  adversarial-grade gating — the ruling supersedes it (the audit is
+  a claim; the aim is the operator's). Disposition: the trust base
+  stays (banned-methods grep + the builds with the in-build axiom
+  sweep = the proofs); P3's 1,507-line generator is CUT to a ~300-
+  line claim-point SPEEDBUMP REPORT (cone-derived rows + the one
+  discriminating rule-in-consumer-cone check that caught real
+  overclaims); the layer cut, production staging, execution witness,
+  accumulating machinery, plant-gates, and gate 5 (census freeze —
+  redundant with committed signature snapshots) are removed.
+  Executed as slice 0 of the restart, before the retirement re-pin.
+- **2026-09-02 [USER] P3.5 — CUT THE CRUFT; THE STANDING AUDITOR BRIEF**
+  (verbatim): "I think this is on me for not briefing the auditor
+  correctly. We want to build the core logic to be well-designed and
+  minimal, and we want to close ALL substantive logical and coverage
+  gaps wrt our scope. We do not want to make everything insanely
+  hardened against all possible attacks, that's out of scope and will
+  slow us down enormously. You can cut the built up cruft from this
+  and elsewhere, and log this decision so the next auditor sees the
+  brief. This can be P3.5 - delete the junk here and elsewhere in the
+  project. We want this to be a reasonable set of gates sized
+  proportionate to the demo-level work we're doing and consistent
+  with moving fast. The actual logic itself must be pristine, enough
+  to make Reynolds and O'Hearn weep with joy. The rest just needs to
+  be sufficient". Standing brief for every future auditor:
+  `docs/AUDIT-BRIEF.md`. P3.5 inventory + plan: the resume note
+  (`docs/2026-09-02_resume-note.md`), executed as the restart's first
+  slice, before the retirement re-pin.
+- **2026-09-02 [USER] REFINEMENT — new checks are allowed, bang-for-buck
+  is the test** (verbatim): "We don't want to quite go so far as to
+  say we should never add a new check. But a gate should be high bang
+  for buck. No giant enumerative tables unless we are actually
+  legitimately worried about trust". Applied to AUDIT-BRIEF.md and the
+  P3.5 plan: the manifest's hand-maintained multi-cell row table (~340
+  lines) is cut to one line per construct; new checks are welcome
+  when cheap and catching a real class of mistake.
