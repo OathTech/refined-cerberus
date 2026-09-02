@@ -30,14 +30,22 @@ fuelled and monadic. `Step M` (Step.lean) is the hand-written mirror —
 a relation on (Core expression, environment stack, memory) covering
 the fragment `Frag` (Soundness.lean) — and it is the `primStep` of the
 iris-lean `Language` instance (Lang.lean). The mirror has no
-authority; its certification is `engine_step_matchU` (Soundness.lean):
-on `Frag`, at a `SeqWF` context with `esize e ≤ lemDefaultFuel`, every
-mirror step is exactly the engine's singleton successful round,
-`outcomesU M aid e ρ σ = [.next (M.thread e' ρ') σ']` — the relation
-`CerberusRound M aid` (Round.lean), the graph of one discharged
-`step_ctx` round. That round is the mirror's only reference: no other
-relational semantics is referenced or bridged, and none is needed for
-the root of trust, which is the engine (§1).
+authority; its certification is `engine_step_matchU` (Round.lean): on
+`Frag`, at a `SeqWF` context with `esize e ≤ lemDefaultFuel`, every
+mirror step is exactly ONE ITERATION OF THE SHIPPED DRIVER'S THREAD LOOP
+— the relation `CerberusRound M` (Round.lean): at every driver state
+embedding the context and the configuration (`MachineCtx.Embeds`), the
+engine's step list is a singleton `s`, `s` is advanceable
+(`can_advance`), and the shipped `advance_step` on it is one active
+wakeup-free transition to the state embedding the mirror's successor.
+The round is stated at the loop body (no fuel dependency; its
+loop-level reading `CerberusRound.loop_step` holds at every fuel), in
+the driver's own vocabulary only: the hand-written discharge
+`dischargeStep`/`outcomesU` is a proof device of the `driveU` lane and
+appears in no export's statement (the trust rule of 2026-09-02). That
+round is the mirror's only reference: no other relational semantics is
+referenced or bridged, and none is needed for the root of trust, which
+is the engine (§1).
 
 The certification is ONE-DIRECTIONAL: mirror step ⇒ engine round.
 `step_iff_cerberusRound` is two-sided only under the hypothesis that a
@@ -45,7 +53,10 @@ mirror step exists. `cerberusRound_classify` sorts every `Frag`
 configuration into `value_done`/`value_annot`/`step`/`refused`, and its
 `refused` arm records only that the mirror is stuck: no engine fact is
 proved there, except at the store/load/create/case redexes
-(`cerberusRound_refused_store`/`_load`/`_create`/`_case`). So the logic
+(`cerberusRound_refused_store`/`_load`/`_create`/`_case`, stated in the
+shipped driver's refusal vocabulary `ShippedRefusal`: ILLTYPED
+`[Step_error2 msg]`, KILL `NDkilled r` from the shipped `advance_step`,
+FORK ≥ 2 `CerbND.runND` outcomes, PANIC the engine's own `failwithI`). So the logic
 is SOUND (§4) but not proved COMPLETE for the fragment — a
 configuration the mirror refuses may be one the engine executes; no
 export says anything about it. Mirror completeness on the fragment is

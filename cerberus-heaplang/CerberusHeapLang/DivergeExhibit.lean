@@ -125,7 +125,7 @@ theorem dg_driveU_more (ra : core_run_annotation) (σ₀ : Mem) :
   | 0, _ => rfl
   | k + 1, aids => by
     rw [driveU_succ, stepOutcomes_thread,
-      engine_step_matchU (aids 0) (dgBody_frag ra)
+      outcomesU_of_step (aids 0) (dgBody_frag ra)
         (by rw [show esize (dgBody ra) = 1 from rfl,
           show lemDefaultFuel = 999999 + 1 from rfl]; omega)
         (dg_self_step ra fmapEmpty [] σ₀)]

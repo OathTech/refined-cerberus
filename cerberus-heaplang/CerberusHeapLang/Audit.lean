@@ -131,9 +131,13 @@ def trioExports : List Name := [
   ``CerberusHeapLang.tree_rotate_certified, ``CerberusHeapLang.tree_rotate_certified_total,
   ``CerberusHeapLang.diverge_total_unprovable,
   ``CerberusHeapLang.case_certified, ``CerberusHeapLang.wseq_certified,
-  -- the engine-facing one-round relation (Round.lean)
+  -- the shipped engine round and its classification (Round.lean; the
+  -- 2026-09-02 mirror-completeness slice restated the round over the
+  -- shipped driver's loop body — `dischargeStep`/`outcomesU` are proof
+  -- devices, unpinned)
   ``CerberusHeapLang.cerberusRound_classify, ``CerberusHeapLang.step_iff_cerberusRound,
-  ``CerberusHeapLang.engine_complete_loadU, ``CerberusHeapLang.engine_complete_createU,
+  ``CerberusHeapLang.cerberusRound_refused_store, ``CerberusHeapLang.cerberusRound_refused_load,
+  ``CerberusHeapLang.cerberusRound_refused_create, ``CerberusHeapLang.cerberusRound_refused_case,
   -- the production-entry exports (formerly the runEffectful boundary;
   -- trio-exact since the 2026-09-02 retirement re-pin — header)
   ``CerberusHeapLang.exhibitA_prod, ``CerberusHeapLang.fib_labeledAt_production,

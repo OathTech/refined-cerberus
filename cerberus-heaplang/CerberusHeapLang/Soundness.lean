@@ -3874,10 +3874,15 @@ theorem Frag.esize_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
     have := hbsz e' hsel
     omega
 
-/-- THE UNIFIED STEP-MATCH (S1b — the old `engine_step_matchJ` over
-    the full cone at ANY machine context): wherever the mirror steps
-    at a cone configuration, the engine's discharged behavior list
-    is EXACTLY the matching singleton. GONE relative to the J form:
+/-- THE UNIFIED STEP-MATCH AT THE DISCHARGE DEVICE (S1b — the old
+    `engine_step_matchJ` over the full cone at ANY machine context;
+    2026-09-02 mirror-completeness slice: renamed from
+    `engine_step_matchU`, which is now the SHIPPED-driver statement in
+    Round.lean — this `outcomesU` form is a PROOF DEVICE consumed by
+    the `driveU` lane, Adequacy/TotalAdequacy, not an export): wherever
+    the mirror steps at a cone configuration, the engine's discharged
+    behavior list is EXACTLY the matching singleton. GONE relative to
+    the J form:
     the separate label-map index and the `LabeledAt` tie hypothesis
     (derived from the context by `labels_lookup_some`); the frozen
     profile (the context is ARBITRARY — S1b′ threaded extern through
@@ -3886,7 +3891,7 @@ theorem Frag.esize_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
     supplies the step at every reachable configuration; the rule
     premises extracted by the inversions are precisely the
     panic-exclusion facts — the WP is the well-formedness oracle. -/
-theorem engine_step_matchU {M : MachineCtx} (aid : Nat)
+theorem outcomesU_of_step {M : MachineCtx} (aid : Nat)
     {e e' : CoreExpr} {ev0 : Fmap sym value} {evs : List (Fmap sym value)}
     {ρ' : EnvStack} {σ σ' : Mem}
     (hf : Frag e) (hsz : esize e ≤ lemDefaultFuel)

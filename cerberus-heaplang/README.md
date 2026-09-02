@@ -291,10 +291,13 @@ statement carries a fuel hypothesis.
    the 2026-09-02 audit: "a sound Iris program logic for the package's
    restricted relational mirror, with a verified forward connection
    to successful Cerberus engine rounds on proved-safe executions" —
-   `engine_step_matchU` is one-directional (mirror step ⇒ engine
-   round), and where the mirror is stuck no engine fact is proved
-   (`cerberusRound_classify`'s `refused` arm), so the logic is SOUND
-   but not proved COMPLETE for the fragment (the register below). The
+   `engine_step_matchU` is one-directional (mirror step ⇒ shipped
+   round: one iteration of the shipped driver's thread loop,
+   `CerberusRound`, Round.lean — stated in the driver's own vocabulary,
+   `dischargeStep` being a proof device only), and where the mirror is
+   stuck no engine fact is proved (`cerberusRound_classify`'s `refused`
+   arm) beyond four redexes, so the logic is SOUND but not proved
+   COMPLETE for the fragment (the register below). The
    remaining vocabulary
    is the pure readout predicates (`Sat`/`CellCoh`, `SeedChain`,
    `SeedTree`, `readBytesFrom`) and the authored programs. iris-lean
@@ -384,7 +387,7 @@ theorems:
 | Well-formedness by shape: `MachineCtx.SeqWF` and cons-shaped environment stacks — the engine's panic channels excluded by shape, never absorbed. Action locations carry no premise: the certification equations state the request at the engine's own `requestLoc th loc`, and `storeM_loc_irrel`/`loadM_loc_irrel` (the memory operations use the location only in the kill payload) transport the mirror's premise to it | by design | `Step.lean`, `Soundness.lean` |
 | The tag-definition environment is an explicit parameter of the heap predicates (`pointsToCell tds …`, `M.tagDefs`); the demos state footprints at `fmapEmpty` | by design: a program-wide constant of the language instance | `Heap.lean` header |
 | Memory orders accepted arbitrarily (`Step.store`/`wp_store` at any `memory_order`) | mirror-true: the sequential driver drops `mo` (`action_request_sequential2`) | `Step.lean` |
-| The mirror's certification is ONE-DIRECTIONAL: `engine_step_matchU` gives mirror step ⇒ engine round; `step_iff_cerberusRound` is two-sided only GIVEN a mirror step; where the mirror is stuck no engine fact is proved (`cerberusRound_classify`'s `refused` arm) except at store/load/create/case (`cerberusRound_refused_*`) — the other rows' refusal channels are `failwithI` panics (opaque — a kernel classification is impossible), save's evaluation round, or the memop fork. The logic is SOUND but not proved COMPLETE for the fragment: a configuration the mirror refuses may be one the engine executes, and no export speaks about it | mirror completeness on the fragment — per-constructor "mirror stuck ⇒ engine refusal/kill" theorems; the registered open architecture item | `Round.lean` header; `ARCHITECTURE.md` §2 |
+| The mirror's certification is ONE-DIRECTIONAL: `engine_step_matchU` gives mirror step ⇒ shipped round (`CerberusRound`: one iteration of the shipped driver's thread loop — `step_ctx`, `can_advance`, `advance_step` — at every embedding driver state); `step_iff_cerberusRound` is two-sided only GIVEN a mirror step; where the mirror is stuck no engine fact is proved (`cerberusRound_classify`'s `refused` arm) except at store/load/create/case (`cerberusRound_refused_*`, in the shipped refusal vocabulary `ShippedRefusal`: ILLTYPED / KILL / FORK / PANIC) — the other rows' refusal channels are the engine's `failwithI` panics, the evaluator's failures, or the memop fork. The logic is SOUND but not proved COMPLETE for the fragment: a configuration the mirror refuses may be one the engine executes, and no export speaks about it | mirror completeness on the fragment — per-constructor "mirror stuck ⇒ engine refusal/kill/fork/panic" theorems; the registered open architecture item | `Round.lean` header; `ARCHITECTURE.md` §2 |
 | Freshness is footprint-relative: `LaunchCoh` constrains TRACKED cells only (`id_lt`, `addr_lo`), so a `create` (`wps_create`/`wpt_create`) is fresh from the logical footprint, not from untracked allocations an arbitrary concrete state may hold below the cursor (`allocateObject` scans no ranges); every owned cell is protected; the production cold-start state `prodMem₀` contains only the allocator-created errno allocation and no dead allocations (`prodMem₀_allocations`, `prodMem₀_deadAllocations`), and `prodMem₀_launchCoh` proves `LaunchCoh` for the empty footprint and any fitting plan — no global well-formedness theorem exists yet | a global memory well-formedness invariant (`MemWF`: id discipline, live/dead consistency, range disjointness of all live allocations, cursor bounds) with its initialization proof, in the launch premise and the state interpretation, registered for the malloc/free arc; "globally well formed" is reserved for it | `Adequacy.lean` (`LaunchCoh` section), `Heap.lean` header; walkthrough §4 |
 | Arrays are one allocation, not a ∗ of per-element cells: the engine bounds-checks against the pointer's provenance allocation and `arrayShiftPtrval` preserves provenance | forcing fact about Cerberus; per-element structure lives in the invariant + decode premises | `ArrayExhibit.lean` |
 | Allocation metadata at a fraction as the exclusivity anchor; a persistent stratum instead of a liveness token (no `kill`) | the dispose rule adds the donor's `alloc_alive`/freeable split and moves the anchor | `Heap.lean` header |
@@ -393,16 +396,18 @@ theorems:
 | The `Frag.case_value` premise `hbsz` (the selected branch's `esize` is bounded by the case node's) is carried, not proved. The equation whose proof would discharge it is `esize (subst_sym_expr x v e) = esize e` (with its mutual twin for `esizeAlts`): `esize` inspects only expression constructors and `subst_sym_expr` substitutes only into pure expressions. The obstacle: the engine's `subst_sym_expr` is `subst_sym_expr_lemFuel lemDefaultFuel`, a fuel-indexed recursion over the whole generated Core AST, so the proof is a fuel-indexed induction over that mutual recursion (`generic_expr`/`generic_pexpr`/patterns) — measured, not attempted. `rfl` for authored programs | that induction | `Soundness.lean` (`Frag.case_value`), `CaseExhibit.lean` header |
 | The canonical-annotation value protocol: the pure and annotation rules are stated at `Expr []` because that is where the mirror's values live; the annotation-generic forms are false | by design | `Step.lean` header |
 
-**One reference relation.** The mirror's only reference is the engine
-round `CerberusRound M aid` (Round.lean), the graph of one discharged
-`step_ctx` round — exactly the unit the shipped driver iterates. No
-other relational semantics is referenced or bridged, and none is
-needed for the root of trust, which is the engine.
+**One reference relation.** The mirror's only reference is the shipped
+round `CerberusRound M` (Round.lean): one iteration of the shipped
+driver's thread loop — the engine's step list, `can_advance`,
+`advance_step` — stated in the driver's own vocabulary at every
+embedding driver state, with no fuel dependency. No other relational
+semantics is referenced or bridged, and none is needed for the root of
+trust, which is the engine.
 
 ## The trust diagram
 
 Every theorem named on an arrow has axiom set exactly `propext`,
-`Classical.choice`, `Quot.sound` (`Audit.lean`: 116 export pins; every
+`Classical.choice`, `Quot.sound` (`Audit.lean`: 118 export pins; every
 theorem of every module bounded). "Frag" = the fragment `Frag` at a
 `SeqWF` context with a cons-shaped environment; "labels" = every
 registered label body in `Frag` with its own static bound
@@ -416,10 +421,11 @@ source becomes a fact at the target.
     runND, drive, initial_driver_state)             + differential validation
  ─────────────────────────────────────────────────────────── kernel-checked
         │
-        │  CerberusRound M aid  (Round.lean) — the reference relation: the graph
-        │    of one discharged step_ctx round; the mirror's ONLY reference
+        │  CerberusRound M  (Round.lean) — the reference relation: ONE ITERATION
+        │    of the shipped driver's thread loop (step_ctx → can_advance →
+        │    advance_step), in the driver's own vocabulary; the mirror's ONLY reference
         │  Step M  (Step.lean) — the hand-written mirror; interior, zero authority
-        │    certified ONE WAY: engine_step_matchU  Step ⇒ engine round  [Frag]
+        │    certified ONE WAY: engine_step_matchU  Step ⇒ shipped round  [Frag]
         │      (step_iff_cerberusRound: two-sided only GIVEN a mirror step;
         │       cerberusRound_classify: its refused arm proves no engine fact —
         │       sound, not proved complete, for the fragment)
@@ -573,7 +579,7 @@ lacks them, so they vary with the semantics workspace's build state at
 the same pin (measured 2249/3536 vs 2210/3474, `docs/2026-09-02_audit-response-4-notes.md`):
 
 ```
-info: CerberusHeapLang/Audit.lean:216:0: CerberusHeapLang export pins: 116 trio-exact
+info: CerberusHeapLang/Audit.lean:216:0: CerberusHeapLang export pins: 118 trio-exact
 info: CerberusHeapLang/Audit.lean:216:0: CerberusHeapLang axiom sweep: every theorem bounded by the trio (N swept, internal details included — count informational, environment-dependent)
 info: CerberusHeapLang/Audit.lean:216:0: CerberusHeapLang banned-axiom sweep: sorryAx/ofReduceBool/ofReduceNat absent from all cones (M constants of every kind swept, internal details included — count informational, environment-dependent)
 Build completed successfully (… jobs).
@@ -618,8 +624,8 @@ In import order, one line each:
 | `Rules.lean` | the atomic step specifications and their lifting to the raw WP; `wp_store`, `wp_load`; the readout combinator | `AtomicStep`, `store_atomic`, `wp_of_atomic`, `wp_store`, `stateInterp_readout` |
 | `Wps.lean` | the partial label-context judgment as a guarded fixpoint; its rule set; statement-level framing; the Löb collapse into the raw WP | `wps`, `wps_seq`, `wps_create`, `blockSpecs_intro`, `wps_frame_labels`, `wps_sound` |
 | `Wpt.lean` | the total judgment by recursion on the budget; variant-indexed label preconditions with the mandatory back-edge decrease; collapse into Iris `TotalWeakestPre` | `wpt`, `wpt_run`, `wpt_create`, `blockSpecsT_intro`, `wpt_frame_labels`, `wpt_sound` |
-| `Soundness.lean` | the boundary module: per-construct certification of `Step` against `step_ctx` + the driver's discharge (`dischargeStep`); the fragment `Frag`; the step match at any context | `Frag`, `engine_step_matchU` |
-| `Round.lean` | the engine-facing one-round relation and its exhaustive classification | `CerberusRound`, `cerberusRound_classify`, `step_iff_cerberusRound` |
+| `Soundness.lean` | the boundary module: the per-construct engine equations of `Step` against `step_ctx` (`step_ctx_*`), the fragment `Frag`, the decomposition `Decomp`; the discharge device `dischargeStep`/`outcomesU` and its step match (`outcomesU_of_step`, the `driveU` lane's device) | `Frag`, `Decomp.step_factor`, `step_ctx_store` |
+| `Round.lean` | the shipped engine round (one iteration of the driver's thread loop, in the driver's own vocabulary), the certification `engine_step_matchU`, the exhaustive classification, the shipped refusal vocabulary | `CerberusRound`, `engine_step_matchU`, `cerberusRound_classify`, `step_iff_cerberusRound`, `ShippedRefusal` |
 | `Potential.lean` | the step-monotone size potential `pot` — the static fuel bound | `pot`, `Frag.esize_le_pot`, `Frag.pot_step_bound` |
 | `Adequacy.lean` | the drive `driveU`; Iris adequacy with the ghost state constructed; the allocation-aware launch; the triples; the projections and the pure-consequence lemmas | `project_triple_pure`, `MemTripleU`, `project_triple_pure_alloc`, `MemTripleU_alloc`, `engine_adequacyU` |
 | `TotalAdequacy.lean` | the budget-to-drive-length simulation on `pot` | `wpt_engine_boundU`, `wpt_engine_boundU_alloc` |

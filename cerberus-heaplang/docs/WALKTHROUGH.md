@@ -859,62 +859,95 @@ instance : Language CoreRt Mem Empty CoreRVal where
 
 (the four laws elided): no observations, no forks, the machine context
 pinned across steps; deliberately no `Language.Context` instance (§3.3).
-`CerberusRound M aid c c'` (Round.lean) holds when the engine's
-discharged behaviour list at `c` — one `step_ctx` call, every step
-discharged by the sequential driver's protocol — is the singleton
-successful-next to `c'`:
+`CerberusRound M c c'` (Round.lean) is ONE ITERATION OF THE SHIPPED
+DRIVER'S THREAD LOOP, stated in the driver's own vocabulary: at every
+driver state that embeds the context and the configuration
+(`MachineCtx.Embeds` — the single thread `M.tid` holds `M.thread c.1
+c.2.1`, the memory is `c.2.2`, the file, extern map and run state are
+`M`'s), the engine's step list read by the loop body is a singleton `s`,
+`s` is advanceable, and the shipped `advance_step` on it is one active,
+wakeup-free transition to the state embedding `c'`:
 
 ```lean
-def CerberusRound (M : MachineCtx) (aid : Nat) (c c' : Config) : Prop :=
-  outcomesU M aid c.1 c.2.1 c.2.2 = [.next (M.thread c'.1 c'.2.1) c'.2.2]
+def CerberusRound (M : MachineCtx) (c c' : Config) : Prop :=
+  ∀ dst : driver_state, M.Embeds dst c →
+    ∃ s : core_step2,
+      step_ctx M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid
+        (M.parent, M.thread c.1 c.2.1) = [s] ∧
+      can_advance s = true ∧
+      ∃ (rs' : core_run_state) (tr : List trace_event) (ctr : Nat),
+        rs'.labeled = dst.core_run_state0.labeled ∧
+        runOne (advance_step M.tagDefs M.tid s) dst =
+          (NDactive NOWAKEUP,
+           { dst with
+              core_state0 := update_thread_state M.tid (M.thread c'.1 c'.2.1) dst.core_state0,
+              layout_state := c'.2.2,
+              core_run_state0 := rs', trace := tr, dr_step_counter := ctr })
 ```
+
+Every constant here is the engine's (`step_ctx`, `can_advance`,
+`advance_step`, `update_thread_state`, the `ndM` types) or
+context/embedding plumbing; `runOne` is the `ND` constructor's
+eliminator (`match m with | ND f => f s` — the operation `nd_bind`
+itself performs on its left argument), not a semantic definition. The
+round has no fuel dependency: it is stated at the loop BODY, and its
+loop-level reading `CerberusRound.loop_step` — `runOne
+(drive_nonmemory_steps_aux2_lemFuel (fl+1) …) dst = runOne
+(drive_nonmemory_steps_aux2_lemFuel fl …) dst'` — holds for every `fl`
+(the same shipped continuation on both sides; no fuel-zero arm is ever
+evaluated). The hand-written discharge `dischargeStep`/`outcomesU`
+(Soundness.lean) is a PROOF DEVICE of the `driveU` lane and appears in
+no export's statement (the trust rule of 2026-09-02).
 
 The certification theorem, on the fragment `Frag` at a cons-shaped
 environment and `esize e ≤ lemDefaultFuel`:
 
 ```lean
-theorem engine_step_matchU {M : MachineCtx} (aid : Nat)
+theorem engine_step_matchU {M : MachineCtx}
     {e e' : CoreExpr} {ev0 : Fmap sym value} {evs : List (Fmap sym value)}
     {ρ' : EnvStack} {σ σ' : Mem}
     (hf : Frag e) (hsz : esize e ≤ lemDefaultFuel)
     (hs : Step M (e, ev0 :: evs, σ) (e', ρ', σ')) :
-    outcomesU M aid e (ev0 :: evs) σ =
-      [.next (M.thread e' ρ') σ'] := by
+    CerberusRound M (e, ev0 :: evs, σ) (e', ρ', σ') := by
 ```
 
-Note the conclusion's `M.thread e' ρ'`: the engine's successor thread
+Note the successor thread `M.thread e' ρ'`: the engine's successor
 carries `M`'s immutable fields, `current_loc` included — which is why
 the fragment is annotation-free (§7). `cerberusRound_classify` (plus
 `hwf : M.SeqWF`) sorts every `Frag` configuration into `value_done` (a
-bare value; the round is PROGRAM-DONE), `value_annot` (an annotated
-value; the round is REMOVE-ANNOT, which the mirror's value protocol does
-not step — why a global iff is the wrong shape), `step` (the mirror
-steps, and for every `c''`, `Step M c c'' ↔ CerberusRound M aid c c''`),
-or `refused` (the mirror is stuck at a non-value). Adequacy needs only
-the value and `step` arms: the WP's `NotStuck` supplies a mirror step at
-every reachable configuration, and there the engine agrees exactly.
+bare value; the engine's step list is PROGRAM-DONE, `[Step_done2 v]`),
+`value_annot` (an annotated value; the round is the REMOVE-ANNOT tau to
+the bare value, which the mirror's value protocol does not step — why a
+global iff is the wrong shape), `step` (the mirror steps, and for every
+`c''`, `Step M c c'' ↔ CerberusRound M c c''`), or `refused` (the mirror
+is stuck at a non-value). Adequacy needs only the value and `step`
+arms: the WP's `NotStuck` supplies a mirror step at every reachable
+configuration, and there the shipped driver agrees exactly.
 
 **What the certification is, precisely.** `engine_step_matchU` is
-ONE-DIRECTIONAL: mirror step ⇒ engine round. `step_iff_cerberusRound`
+ONE-DIRECTIONAL: mirror step ⇒ shipped round. `step_iff_cerberusRound`
 is two-sided only under the hypothesis `∃ c', Step M c c'` — it is not
-a completeness result for the mirror. Where the mirror is stuck no
-engine fact is proved: `cerberusRound_classify`'s `refused` arm says
-`toVal c.1 = none` and `∀ c', ¬ Step M c c'`, nothing about
-`outcomesU`, except at the store/load/create/case redexes, where
-`cerberusRound_refused_store`/`_load`/`_create`/`_case` show the engine's
-round is a singleton refusal; the other rows' refusal channels are
-`failwithI` panics (opaque — a kernel classification is impossible),
-save's evaluation round, or the memop fork. Hence the logic is SOUND
-(every proved-safe execution is an engine execution) but not proved
-COMPLETE for the fragment (a configuration the mirror refuses may be
-one the engine executes; no export speaks about it). What is
-established, in the words of the 2026-09-02 audit: "a sound Iris
-program logic for the package's restricted relational mirror, with a
-verified forward connection to successful Cerberus engine rounds on
-proved-safe executions". Mirror completeness on the fragment —
-per-constructor "mirror stuck ⇒ engine refusal/kill" theorems — is the
+a completeness result for the mirror. Where the mirror is stuck, the
+engine fact is proved so far at four redexes only, in the shipped
+driver's own refusal vocabulary (`ShippedRefusal`, Round.lean): ILLTYPED
+(`[Step_error2 msg]`), KILL (the shipped `advance_step` returns `NDkilled
+r` for an engine `kill_reason`), FORK (the shipped runner `CerbND.runND`
+returns at least two outcomes), PANIC (the round's monad is the engine's
+own `failwithI msg`). `cerberusRound_refused_store` (ILLTYPED or
+`storeM`'s kill), `_load` (`loadM`'s kill), `_create` (the out-of-memory
+kill), `_case` (the ILLTYPED no-match report) are the four instances;
+`cerberusRound_classify`'s `refused` arm itself says only `toVal c.1 =
+none` and `∀ c', ¬ Step M c c'`. Hence the logic is SOUND (every
+proved-safe execution is an engine execution) but not yet proved
+COMPLETE for the fragment (a configuration the mirror refuses may be one
+the engine executes; no export speaks about it). What is established,
+in the words of the 2026-09-02 audit: "a sound Iris program logic for
+the package's restricted relational mirror, with a verified forward
+connection to successful Cerberus engine rounds on proved-safe
+executions". Mirror completeness on the fragment — per-constructor
+"mirror stuck ⇒ engine refusal/kill/fork/panic" theorems — is the
 registered open architecture item. The mirror's only reference is the
-engine round `CerberusRound`; no other relational semantics is
+shipped round `CerberusRound`; no other relational semantics is
 referenced or bridged, and none is needed for the root of trust, which
 is the engine.
 
@@ -1025,7 +1058,7 @@ statements are the root-of-trust exports (§1.3).
 
 `CerberusHeapLang/Audit.lean` is the last import of the library root, so
 `lake build` elaborates it and a failure is a red build. It asserts, in
-order: (1) exact pins — every name in `trioExports` (116 theorems: the
+order: (1) exact pins — every name in `trioExports` (118 theorems: the
 rules, the adequacy and collapse theorems, every exhibit, the
 projections and the consequence lemmas) exists, is a theorem, and has
 transitive axiom set equal to `[propext, Classical.choice, Quot.sound]`

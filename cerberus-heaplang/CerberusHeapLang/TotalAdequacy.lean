@@ -427,7 +427,7 @@ theorem wpt_drive_aux {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
           driveU M (fun i => aids (i + 1)) k'
             (M.thread cont (ev0'' :: evs)) σ := by
         rw [driveU_succ, stepOutcomes_thread,
-          engine_step_matchU (aids 0) hfrag
+          outcomesU_of_step (aids 0) hfrag
             (Nat.le_trans hfrag.esize_le_pot hpot) hs, hbind]
       have hf : DriveDoneAt M (fun i => aids (i + 1)) k' cont
             (ev0'' :: evs) σ ψ →
@@ -475,7 +475,7 @@ theorem wpt_drive_aux {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
             driveU M (fun i => aids (i + 1)) k'
               (M.thread re (ev0' :: evs)) σ' := by
           rw [driveU_succ, stepOutcomes_thread,
-            engine_step_matchU (aids 0) hfrag
+            outcomesU_of_step (aids 0) hfrag
               (Nat.le_trans hfrag.esize_le_pot hpot) hs]
         have hf : DriveDoneAt M (fun i => aids (i + 1)) k' re
               (ev0' :: evs) σ' ψ →

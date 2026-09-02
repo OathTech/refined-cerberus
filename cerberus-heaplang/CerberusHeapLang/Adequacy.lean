@@ -878,7 +878,7 @@ theorem drive_classifyU {M : MachineCtx} (hwf : M.SeqWF)
         obtain rfl : M = rM' := hM.symm
         obtain ⟨ev0', rfl⟩ := Step.env_cons hs
         rw [driveU_succ, stepOutcomes_thread,
-          engine_step_matchU (aids 0) hf (Nat.le_trans hf.esize_le_pot hpot) hs]
+          outcomesU_of_step (aids 0) hf (Nat.le_trans hf.esize_le_pot hpot) hs]
         refine ih _ re' ev0' evs σ'
           (hreach.tail ⟨hs, rfl⟩) (hf.step hQf hs) ?_
         rcases hf.pot_step_bound hs with hle | ⟨l, pes, params, cont, -, hl, hec⟩
