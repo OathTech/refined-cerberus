@@ -80,7 +80,7 @@ theorem progAProd_frag : Frag progAProd :=
   .sseq_sym (.create loc0_lib)
     (.sseq_sym (frag_ofVal (.pure sevenVal))
       (.sseq
-        (.store_op loc0_lib rfl rfl (.sym [] pASym) (.sym [] vASym)
+        (.store_op loc0_lib rfl (.sym [] pASym) (.sym [] vASym)
           (by rw [show peDepth (Pexpr ([] : List annot) ()
               (PEsym pASym)) = 1 from rfl,
             show lemDefaultFuel = 999999 + 1 from rfl]; omega)
@@ -171,7 +171,7 @@ theorem progAProd_wpt [SpikeGS .hasLC GF]
   rw [update_env_sym vASym BTy_unit, show (8 : Nat) = 4 + 4 from rfl]
   iapply wpt_seq
   rw [show (4 : Nat) = 3 + 1 from rfl]
-  iapply wpt_store_eval loc0 empty_annotation intTy _ _ NA _ rfl rfl
+  iapply wpt_store_eval loc0 empty_annotation intTy _ _ NA _ rfl
     (pv := p) (cv := sevenVal)
     (by rw [hex, evalPexpr_sym_empty]
         exact lookup_env_head (prodAFrame_lookup_p hf p) evs)

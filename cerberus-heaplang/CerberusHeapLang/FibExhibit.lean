@@ -466,7 +466,7 @@ theorem fib_certified
       obtain ⟨-, rfl⟩ := fibQ_inv ra n ibty abty bbty hl
       exact fibBody_fragJ ra n)
     prog fmapEmpty [] σ₀ (∅ : SpikeHeapF SpikeCell)
-    (.save (fibBody_fragJ ra n)) (coh_empty σ₀)
+    (.save (saveParams_depth_of_vals rfl) (fibBody_fragJ ra n)) (coh_empty σ₀)
     (fun v _ => v = ivVal (fibSpec n.toNat))
     ?_ nsteps aids
     (by rw [show esize prog = 3 from rfl]; omega)
@@ -575,7 +575,7 @@ theorem fib_wpt (hn : 0 ≤ n) (sbty : core_base_type) :
     Expr [] (Esave (fibLoopSym, sbty) (fibParams ibty abty bbty)
       (fibBody ra n)) from rfl,
     show 2 * n.toNat + 4 = (2 * n.toNat + 3) + 1 by omega]
-  iapply wpt_save [] (fibLoopSym, sbty) _ _ fmapEmpty []
+  iapply wpt_save_vals [] (fibLoopSym, sbty) _ _ fmapEmpty []
     (cvals := [ivVal 0, ivVal 0, ivVal 1]) rfl
   rw [bindSave_fib]
   have h := fib_body_wpt (GF := GF) ra n ibty abty bbty p rs hQ 0 fmapEmpty []
@@ -639,7 +639,7 @@ theorem fib_certified_total (sbty : core_base_type) (n : Int)
       (fibLsT n)
       (fibProg ra n sbty ibty abty bbty) fmapEmpty [] σ₀
       (∅ : SpikeHeapF SpikeCell)
-      (.save (fibBody_fragJ ra n))
+      (.save (saveParams_depth_of_vals rfl) (fibBody_fragJ ra n))
       (by rw [fibProg_pot, show lemDefaultFuel = 999999 + 1 from rfl]; omega)
       (coh_empty σ₀)
       (fun v _ => v = ivVal (fibSpec n.toNat)) (2 * n.toNat + 4)

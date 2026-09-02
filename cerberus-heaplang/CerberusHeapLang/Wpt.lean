@@ -596,7 +596,9 @@ theorem wpt_if_false {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
       · rw [hg] at hg'; cases hg'
       · exact hout)
 
-theorem wpt_save {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
+/-- Esave ENTRY at VALUE initializers (the TAU arm; one tau) — the
+    literal instance of `wpt_save`. -/
+theorem wpt_save_vals {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
     (sb : sym × core_base_type)
     (ps : List (sym × ((core_base_type ×
       Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym)))
@@ -607,9 +609,79 @@ theorem wpt_save {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
       wpt M Ls (k + 1) Ψ (Expr a (Esave sb ps body)) (ev0 :: evs) :=
   wpt_det_step rfl rfl (fun _ => Step.save hvals)
     (fun σ out hs => by
-      obtain ⟨cvals', ev0', evs', hρeq, hvals', hout⟩ := hs.save_inv
+      obtain ⟨ev0', evs', hρeq, hout⟩ := hs.save_vals_inv hvals
+      exact hout)
+
+/-- Esave PARAMETER EVALUATION (the EVAL arm, `Step.save_eval`; one
+    tau): initializers not all values evaluate and the node is
+    re-formed with literal initializers. -/
+theorem wpt_save_eval {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
+    (sb : sym × core_base_type)
+    (ps : List (sym × ((core_base_type ×
+      Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym)))
+    (body : CoreExpr) {cvals : List value} (ρ : EnvStack) {k : Nat}
+    (hnv : valueFromPexprs (saveParamPexprs ps) = none)
+    (hvals : evalPexprs M.tagDefs M.extern ρ (saveParamPexprs ps) = some cvals) :
+    wpt M Ls k Ψ (Expr a (Esave sb (saveParamsWithValues ps cvals) body)) ρ ⊢
+      wpt M Ls (k + 1) Ψ (Expr a (Esave sb ps body)) ρ :=
+  wpt_det_step rfl rfl (fun _ => Step.save_eval hnv hvals)
+    (fun σ out hs => by
+      obtain ⟨cvals', hvals', hout⟩ := hs.save_op_inv hnv
       obtain rfl : cvals = cvals' := Option.some.inj (hvals.symm.trans hvals')
       exact hout)
+
+/-- The engine's entry cost of an Esave node: one tau at value
+    initializers (the TAU arm), two otherwise (EVAL then TAU) — the
+    engine's own dispatch (`valueFromPexprs`) decides, so at literal
+    initializers it is `1` by `rfl`. -/
+def saveEntryCost
+    (ps : List (sym × ((core_base_type ×
+      Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym))) : Nat :=
+  match valueFromPexprs (saveParamPexprs ps) with
+  | some _ => 1
+  | none => 2
+
+theorem saveEntryCost_of_vals
+    {ps : List (sym × ((core_base_type ×
+      Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym))}
+    {cvals : List value} (h : valueFromPexprs (saveParamPexprs ps) = some cvals) :
+    saveEntryCost ps = 1 := by
+  unfold saveEntryCost; rw [h]
+
+theorem saveEntryCost_of_eval
+    {ps : List (sym × ((core_base_type ×
+      Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym))}
+    (h : valueFromPexprs (saveParamPexprs ps) = none) :
+    saveEntryCost ps = 2 := by
+  unfold saveEntryCost; rw [h]
+
+/-- ESAVE ENTRY at the total stratum (QA-1/H-1 generality): the
+    initializers evaluate at the entry env to `cvals`, the body is
+    verified at the parameter-bound env at budget `k`, and the node
+    costs its engine entry cost on top (`saveEntryCost ps`: `1` at
+    literal initializers — the pre-QA-1 statement `wpt_save_vals` is
+    the instance — `2` at live-variable initializers). -/
+theorem wpt_save {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
+    (sb : sym × core_base_type)
+    (ps : List (sym × ((core_base_type ×
+      Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym)))
+    (body : CoreExpr) {cvals : List value}
+    (ev0 : Fmap sym value) (evs : List (Fmap sym value)) {k : Nat}
+    (hvals : evalPexprs M.tagDefs M.extern (ev0 :: evs) (saveParamPexprs ps) = some cvals) :
+    wpt M Ls k Ψ body (bindSaveParams ps cvals (ev0 :: evs)) ⊢
+      wpt M Ls (k + saveEntryCost ps) Ψ (Expr a (Esave sb ps body)) (ev0 :: evs) := by
+  cases hv : valueFromPexprs (saveParamPexprs ps) with
+  | some cvals' =>
+    obtain rfl : cvals = cvals' := Option.some.inj
+      (hvals.symm.trans (evalPexprs_of_valueFromPexprs M.tagDefs M.extern _ hv))
+    rw [saveEntryCost_of_vals hv]
+    exact wpt_save_vals a sb ps body ev0 evs hv
+  | none =>
+    rw [saveEntryCost_of_eval hv, show k + 2 = (k + 1) + 1 from rfl]
+    refine .trans ?_ (wpt_save_eval a sb ps body (ev0 :: evs) hv hvals)
+    rw [← bindSaveParams_withValues ps cvals]
+    exact wpt_save_vals a sb _ body ev0 evs (valueFromPexprs_withValues ps cvals
+      ((List.length_map ..).symm.trans (evalPexprs_length _ _ _ hvals)))
 
 /-- PURE at a non-value pexpr: one big-step evaluation tau, then the
     bare value's delivery (total cost 2 ≤ k). -/
@@ -648,15 +720,14 @@ theorem wpt_store_eval {Ψ : SpikeVal → EnvStack → IProp GF}
     (loc : CerbLocation.Loc) (ann : core_run_annotation) (ty : ctype)
     (pe2 pe3 : generic_pexpr Unit sym) (mo : memory_order) (ρ : EnvStack)
     {pv : CerbMem.PointerValue} {cv : value} {k : Nat}
-    (hnv2 : valueFromPexpr pe2 = none)
-    (hnv3 : valueFromPexpr pe3 = none)
+    (hnv : valueFromPexprs [pe2, pe3] = none)
     (hv2 : evalPexpr M.tagDefs M.extern ρ pe2 = some (Vobject (OVpointer pv)))
     (hv3 : evalPexpr M.tagDefs M.extern ρ pe3 = some cv) :
     wpt M Ls k Ψ (storeExpr loc ann ty pv cv mo) ρ ⊢
       wpt M Ls (k + 1) Ψ (storeOpRedex loc ann ty pe2 pe3 mo) ρ :=
-  wpt_det_step rfl rfl (fun _ => Step.store_eval hnv2 hnv3 hv2 hv3)
+  wpt_det_step rfl rfl (fun _ => Step.store_eval hnv hv2 hv3)
     (fun σ out hs => by
-      obtain ⟨pv', cv', hv2', hv3', -, hout⟩ := hs.store_op_inv hnv2
+      obtain ⟨pv', cv', hv2', hv3', hout⟩ := hs.store_op_inv hnv
       obtain rfl : pv = pv' := by
         simpa using Option.some.inj (hv2.symm.trans hv2')
       obtain rfl : cv = cv' := Option.some.inj (hv3.symm.trans hv3')

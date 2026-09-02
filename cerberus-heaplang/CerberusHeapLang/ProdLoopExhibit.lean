@@ -106,7 +106,7 @@ theorem fib_certified_production (sup : Nat) (ra : core_run_annotation) (n : Int
       (fibLsT n)
       (fibProg ra n sbty ibty abty bbty) fmapEmpty []
       prodMem₀ (∅ : SpikeHeapF SpikeCell)
-      (.save (fibBody_fragJ ra n))
+      (.save (saveParams_depth_of_vals rfl) (fibBody_fragJ ra n))
       (by rw [fibProg_pot, show lemDefaultFuel = 999999 + 1 from rfl]; omega)
       (coh_empty prodMem₀)
       (fun v _ => v = ivVal (fibSpec n.toNat)) (2 * n.toNat + 4)
@@ -443,7 +443,7 @@ theorem ctr_body_wpt (i : Int) (pptr : CerbMem.PointerValue)
     rw [show (4 + (1 + ctrCost (i - 1).toNat) : Nat) =
       (3 + 1) + (1 + ctrCost (i - 1).toNat) from rfl]
     iapply wpt_seq
-    iapply wpt_store_eval loc0 empty_annotation intTy _ _ mo _ rfl rfl
+    iapply wpt_store_eval loc0 empty_annotation intTy _ _ mo _ rfl
       (pv := pptr) (cv := sevenVal)
       (by rw [procCtx_extern]
           exact (ctr_store_operands_eval hf rest sevenVal (ivVal i)
@@ -579,7 +579,7 @@ theorem ctrBody_frag (ra : core_run_annotation) (mo : memory_order)
       show lemDefaultFuel = 999999 + 1 from rfl]; omega)
     (.sseq_sym (frag_ofVal (.pure sevenVal))
       (.sseq
-        (.store_op loc0_lib rfl rfl (.sym [] ctrCSym) (.sym [] ctrSSym)
+        (.store_op loc0_lib rfl (.sym [] ctrCSym) (.sym [] ctrSSym)
           (by rw [show peDepth (Pexpr ([] : List annot) ()
               (PEsym ctrCSym)) = 1 from rfl,
             show lemDefaultFuel = 999999 + 1 from rfl]; omega)
@@ -612,7 +612,7 @@ theorem counterProdProg_frag (ra : core_run_annotation) (mo : memory_order)
                 (PEval (ivVal n))) = 1 from rfl]; omega)
             | (rw [show peDepth (Pexpr ([] : List annot) ()
                 (PEsym ctrPSym)) = 1 from rfl]; omega)))))
-    (.save (ctrBody_frag ra mo bty))
+    (.save (saveParams_depth_of_vals rfl) (ctrBody_frag ra mo bty))
 
 theorem ctrBody_pot (ra : core_run_annotation) (mo : memory_order)
     (bty : core_base_type) : pot (ctrBody ra mo bty) = 5 := rfl
@@ -1198,7 +1198,7 @@ theorem lrProd_wpt (bty sbty : core_base_type)
   -- store 1: node 1's value field (offset 0, through the bound
   -- pointer)
   iapply wpt_seq
-  iapply wpt_store_eval loc0 empty_annotation longTy _ _ mo _ rfl rfl
+  iapply wpt_store_eval loc0 empty_annotation longTy _ _ mo _ rfl
     (pv := cellPtr i₁ a₁) (cv := longVal 1)
     (by rw [procCtx_extern, evalPexpr_sym_empty]
         exact lookup_env_head (lrPFrame_lookup_n1 hf _ _) evs)
@@ -1220,7 +1220,7 @@ theorem lrProd_wpt (bty sbty : core_base_type)
   iintro %fp1 Hcell₁
   -- store 2: node 1's next field (offset 8) := node 2
   iapply wpt_seq
-  iapply wpt_store_eval loc0 empty_annotation nodePtrTy _ _ mo _ rfl rfl
+  iapply wpt_store_eval loc0 empty_annotation nodePtrTy _ _ mo _ rfl
     (pv := cellPtr i₁ (a₁ + 8)) (cv := ptrVal (cellPtr i₂ a₂))
     (by rw [procCtx_extern]
         exact lrPFrame_shift_n1 hf (ptrVal (cellPtr i₂ a₂)) evs i₁ a₁)
@@ -1240,7 +1240,7 @@ theorem lrProd_wpt (bty sbty : core_base_type)
   iintro %fp2 Hcell₁
   -- store 3: node 2's value field
   iapply wpt_seq
-  iapply wpt_store_eval loc0 empty_annotation longTy _ _ mo _ rfl rfl
+  iapply wpt_store_eval loc0 empty_annotation longTy _ _ mo _ rfl
     (pv := cellPtr i₂ a₂) (cv := longVal 2)
     (by rw [procCtx_extern, evalPexpr_sym_empty]
         exact lookup_env_head (lrPFrame_lookup_n2 hf _ _) evs)
@@ -1262,7 +1262,7 @@ theorem lrProd_wpt (bty sbty : core_base_type)
   iintro %fp3 Hcell₂
   -- store 4: node 2's next field := NULL
   iapply wpt_seq
-  iapply wpt_store_eval loc0 empty_annotation nodePtrTy _ _ mo _ rfl rfl
+  iapply wpt_store_eval loc0 empty_annotation nodePtrTy _ _ mo _ rfl
     (pv := cellPtr i₂ (a₂ + 8)) (cv := nullVal)
     (by rw [procCtx_extern]
         exact lrPFrame_shift_n2 hf (ptrVal (cellPtr i₁ a₁)) evs i₂ a₂)
@@ -1334,7 +1334,7 @@ theorem lrProdPrefix_frag (ra : core_run_annotation) (mo : memory_order)
         (.sseq_sym (frag_ofVal (.pure (longVal 2)))
           (.sseq_sym (frag_ofVal (.pure nullVal))
             (.sseq
-              (.store_op loc0_lib rfl rfl (.sym [] lrN1Sym)
+              (.store_op loc0_lib rfl (.sym [] lrN1Sym)
                 (.sym [] lrW1Sym)
                 (by rw [show peDepth (Pexpr ([] : List annot) ()
                     (PEsym lrN1Sym)) = 1 from rfl,
@@ -1343,7 +1343,7 @@ theorem lrProdPrefix_frag (ra : core_run_annotation) (mo : memory_order)
                     (PEsym lrW1Sym)) = 1 from rfl,
                   show lemDefaultFuel = 999999 + 1 from rfl]; omega))
               (.sseq
-                (.store_op loc0_lib rfl rfl
+                (.store_op loc0_lib rfl
                   (.arrayShift [] longTy (.sym [] lrN1Sym) (.val [] (ivVal 1)))
                   (.sym [] lrN2Sym)
                   (by rw [show peDepth (lrShiftPe lrN1Sym) = 2 from rfl,
@@ -1352,7 +1352,7 @@ theorem lrProdPrefix_frag (ra : core_run_annotation) (mo : memory_order)
                       (PEsym lrN2Sym)) = 1 from rfl,
                     show lemDefaultFuel = 999999 + 1 from rfl]; omega))
                 (.sseq
-                  (.store_op loc0_lib rfl rfl (.sym [] lrN2Sym)
+                  (.store_op loc0_lib rfl (.sym [] lrN2Sym)
                     (.sym [] lrW2Sym)
                     (by rw [show peDepth (Pexpr ([] : List annot) ()
                         (PEsym lrN2Sym)) = 1 from rfl,
@@ -1361,7 +1361,7 @@ theorem lrProdPrefix_frag (ra : core_run_annotation) (mo : memory_order)
                         (PEsym lrW2Sym)) = 1 from rfl,
                       show lemDefaultFuel = 999999 + 1 from rfl]; omega))
                   (.sseq
-                    (.store_op loc0_lib rfl rfl
+                    (.store_op loc0_lib rfl
                       (.arrayShift [] longTy (.sym [] lrN2Sym)
                         (.val [] (ivVal 1)))
                       (.sym [] lrNZSym)
@@ -1387,7 +1387,7 @@ theorem lrProdProg_frag (ra : core_run_annotation) (mo : memory_order)
     (hlib : CerbLocation.isLibraryLocation loc0 = false) :
     Frag (lrProdProg ra mo bty sbty pbty cbty bbty nbty ubty) :=
   .sseq (lrProdPrefix_frag ra mo bty)
-    (.save (lrBody_fragJ loc0 empty_annotation ra mo bbty nbty ubty hlib))
+    (.save (saveParams_depth_of_vals rfl) (lrBody_fragJ loc0 empty_annotation ra mo bbty nbty ubty hlib))
 
 theorem lrProdPrefix_pot (ra : core_run_annotation) (mo : memory_order)
     (bty : core_base_type) : pot (lrProdPrefix ra mo bty) = 11 := by

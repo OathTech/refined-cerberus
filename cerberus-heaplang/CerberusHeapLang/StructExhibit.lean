@@ -662,7 +662,7 @@ theorem progCreateInit_frag (loc : CerbLocation.Loc)
     Frag (progCreateInit loc ann aprov alignN pref mo pbty vbty) :=
   .sseq_sym (.create hlib)
     (.sseq_sym (frag_ofVal (.pure fiveVal))
-      (.store_op hlib rfl rfl (.sym [] structPSym) (.sym [] structVSym)
+      (.store_op hlib rfl (.sym [] structPSym) (.sym [] structVSym)
         (by rw [show peDepth (Pexpr ([] : List annot) ()
             (PEsym structPSym)) = 1 from rfl,
           show lemDefaultFuel = 999999 + 1 from rfl]; omega)
@@ -745,7 +745,7 @@ theorem struct_create_store_wps
   rw [update_env_sym structVSym vbty]
   icases (pointsToCell_cellOwn_iff M.tagDefs _ _ _ _).mp $$ Hpt
     with ⟨%id, %a, %hpv, Hcell⟩
-  iapply wps_store_eval loc ann intTy _ _ mo _ rfl rfl
+  iapply wps_store_eval loc ann intTy _ _ mo _ rfl
     (pv := p) (cv := fiveVal)
     (by rw [hex, evalPexpr_sym_empty]
         exact lookup_env_head (structFrame_lookup_p hf p) evs)

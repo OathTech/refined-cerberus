@@ -537,7 +537,7 @@ theorem trProg_frag (loc : CerbLocation.Loc) (ann : core_run_annotation)
           (by rw [show peDepth (trShift2 trYSym) = 2 from rfl,
             show lemDefaultFuel = 999999 + 1 from rfl]; omega))
         (.sseq
-          (.store_op hlib rfl rfl
+          (.store_op hlib rfl
             (.arrayShift [] longTy (.sym _ _) (.val _ _)) (.sym _ _)
             (by rw [show peDepth (trShift1 trXSym) = 2 from rfl,
               show lemDefaultFuel = 999999 + 1 from rfl]; omega)
@@ -545,7 +545,7 @@ theorem trProg_frag (loc : CerbLocation.Loc) (ann : core_run_annotation)
                 (PEsym trBSym)) = 1 from rfl,
               show lemDefaultFuel = 999999 + 1 from rfl]; omega))
           (.sseq
-            (.store_op hlib rfl rfl
+            (.store_op hlib rfl
               (.arrayShift [] longTy (.sym _ _) (.val _ _)) (.sym _ _)
               (by rw [show peDepth (trShift2 trYSym) = 2 from rfl,
                 show lemDefaultFuel = 999999 + 1 from rfl]; omega)
@@ -960,7 +960,7 @@ theorem tree_rotate_wps
   -- x->left := b
   iapply wps_seq
   iapply wps_store_eval loc ann treePtrTy _ _ mo _
-    rfl rfl (tr_shift1_eval_F3 _ _ idx aX)
+    rfl (tr_shift1_eval_F3 _ _ idx aX)
     (tr_b_eval_F3 _ _ _)
   rw [show cellPtr idx (aX + 8) = cellPtr idx (aX + ((8 : Nat) : Int))
     from rfl]
@@ -973,7 +973,7 @@ theorem tree_rotate_wps
   -- y->right := x
   iapply wps_seq
   iapply wps_store_eval loc ann treePtrTy _ _ mo _
-    rfl rfl (tr_shift2_eval_F3 _ _ idy aY)
+    rfl (tr_shift2_eval_F3 _ _ idy aY)
     (tr_x_eval_F3 _ _ _)
   rw [show cellPtr idy (aY + 16) = cellPtr idy (aY + ((16 : Nat) : Int))
     from rfl]
@@ -1324,7 +1324,7 @@ theorem tree_rotate_wpt
   iapply wpt_seq
   rw [show (4 : Nat) = 3 + 1 from rfl]
   iapply wpt_store_eval loc ann treePtrTy _ _ mo _
-    rfl rfl (tr_shift1_eval_F3 _ _ idx aX)
+    rfl (tr_shift1_eval_F3 _ _ idx aX)
     (tr_b_eval_F3 _ _ _)
   rw [show cellPtr idx (aX + 8) = cellPtr idx (aX + ((8 : Nat) : Int))
     from rfl]
@@ -1339,7 +1339,7 @@ theorem tree_rotate_wpt
   iapply wpt_seq
   rw [show (4 : Nat) = 3 + 1 from rfl]
   iapply wpt_store_eval loc ann treePtrTy _ _ mo _
-    rfl rfl (tr_shift2_eval_F3 _ _ idy aY)
+    rfl (tr_shift2_eval_F3 _ _ idy aY)
     (tr_x_eval_F3 _ _ _)
   rw [show cellPtr idy (aY + 16) = cellPtr idy (aY + ((16 : Nat) : Int))
     from rfl]

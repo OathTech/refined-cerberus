@@ -1032,9 +1032,10 @@ theorem wps_if_false {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
     · iexact Hσ
     · iexact H
 
-/-- Esave ENTRY (one_step0's valueFromPexprs fast-path TAU): verify
-    the save body at the parameter-bound env. -/
-theorem wps_save {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
+/-- Esave ENTRY at VALUE initializers (one_step0's Esave TAU arm):
+    verify the save body at the parameter-bound env. The literal
+    instance of `wps_save`; one engine step. -/
+theorem wps_save_vals {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
     (sb : sym × core_base_type)
     (ps : List (sym × ((core_base_type ×
       Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym)))
@@ -1055,8 +1056,7 @@ theorem wps_save {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
   inext
   iintro %r %σ₂ %eₜ %Hstep Hcred
   obtain ⟨hs, hlbl, rfl⟩ := Hstep
-  obtain ⟨cvals', ev0', evs', hρeq, hvals', hout⟩ := hs.save_inv
-  obtain rfl : cvals = cvals' := Option.some.inj (hvals.symm.trans hvals')
+  obtain ⟨ev0', evs', hρeq, hout⟩ := hs.save_vals_inv hvals
   obtain ⟨re, rρ, rM⟩ := r
   simp only at hlbl
   obtain rfl : M = rM := hlbl.symm
@@ -1071,6 +1071,77 @@ theorem wps_save {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
   isplitl [Hσ]
   · iexact Hσ
   · iexact H
+
+/-- Esave PARAMETER EVALUATION (QA-1/H-1; one_step0's Esave EVAL arm,
+    `Step.save_eval`): when the initializers are not all values, ONE
+    deterministic engine step evaluates them through the certified
+    evaluator and re-forms the node with literal initializers, over
+    which `wps_save_vals` then applies. -/
+theorem wps_save_eval {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
+    (sb : sym × core_base_type)
+    (ps : List (sym × ((core_base_type ×
+      Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym)))
+    (body : CoreExpr) {cvals : List value} (ρ : EnvStack)
+    (hnv : valueFromPexprs (saveParamPexprs ps) = none)
+    (hvals : evalPexprs M.tagDefs M.extern ρ (saveParamPexprs ps) = some cvals) :
+    wps M Ls Ψ (Expr a (Esave sb (saveParamsWithValues ps cvals) body)) ρ ⊢
+      wps M Ls Ψ (Expr a (Esave sb ps body)) ρ := by
+  rw [(wps_unfold (e := Expr a (Esave sb ps body))).to_eq]
+  simp only [wps.pre, show toVal (Expr a (Esave sb ps body)) = none from rfl,
+    show jumpRedex? (Expr a (Esave sb ps body)) = none from rfl]
+  iintro H %σ₁ %ns %obs %obs' %nt Hσ
+  iapply fupd_mask_intro Std.LawfulSet.empty_subset
+  iintro Hclose
+  isplitr
+  · ipureintro
+    exact ⟨[], ⟨_, _, _⟩, _, [], ⟨Step.save_eval hnv hvals, rfl, rfl⟩⟩
+  inext
+  iintro %r %σ₂ %eₜ %Hstep Hcred
+  obtain ⟨hs, hlbl, rfl⟩ := Hstep
+  obtain ⟨cvals', hvals', hout⟩ := hs.save_op_inv hnv
+  obtain rfl : cvals = cvals' := Option.some.inj (hvals.symm.trans hvals')
+  obtain ⟨re, rρ, rM⟩ := r
+  simp only at hlbl
+  obtain rfl : M = rM := hlbl.symm
+  obtain ⟨hre, hrρ, hσ⟩ : re = Expr a (Esave sb (saveParamsWithValues ps cvals) body) ∧
+      rρ = ρ ∧ σ₂ = σ₁ := by
+    simpa [Prod.mk.injEq] using hout
+  subst hre
+  obtain rfl : ρ = rρ := hrρ.symm
+  obtain rfl : σ₁ = σ₂ := hσ.symm
+  imod Hclose with -
+  imodintro
+  isplitl [Hσ]
+  · iexact Hσ
+  · iexact H
+
+/-- ESAVE ENTRY (the block-entry rule; QA-1/H-1 generality): the
+    initializers evaluate — by the certified pure evaluator, at the
+    entry env — to `cvals`, and the body is verified at the
+    parameter-bound env. Covers both engine arms: literal initializers
+    (the TAU arm, `wps_save_vals` — the pre-QA-1 statement, now the
+    instance at `valueFromPexprs … = some cvals`) and live-variable
+    initializers (`save loop(x := n, c := p)` — the EVAL arm then the
+    TAU arm, `wps_save_eval` then `wps_save_vals`). -/
+theorem wps_save {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
+    (sb : sym × core_base_type)
+    (ps : List (sym × ((core_base_type ×
+      Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym)))
+    (body : CoreExpr) {cvals : List value}
+    (ev0 : Fmap sym value) (evs : List (Fmap sym value))
+    (hvals : evalPexprs M.tagDefs M.extern (ev0 :: evs) (saveParamPexprs ps) = some cvals) :
+    wps M Ls Ψ body (bindSaveParams ps cvals (ev0 :: evs)) ⊢
+      wps M Ls Ψ (Expr a (Esave sb ps body)) (ev0 :: evs) := by
+  cases hv : valueFromPexprs (saveParamPexprs ps) with
+  | some cvals' =>
+    obtain rfl : cvals = cvals' := Option.some.inj
+      (hvals.symm.trans (evalPexprs_of_valueFromPexprs M.tagDefs M.extern _ hv))
+    exact wps_save_vals a sb ps body ev0 evs hv
+  | none =>
+    refine .trans ?_ (wps_save_eval a sb ps body (ev0 :: evs) hv hvals)
+    rw [← bindSaveParams_withValues ps cvals]
+    exact wps_save_vals a sb _ body ev0 evs (valueFromPexprs_withValues ps cvals
+      ((List.length_map ..).symm.trans (evalPexprs_length _ _ _ hvals)))
 
 /-- Ecase at a VALUE scrutinee (the engine's substitution TAU; the
     no-match ILLTYPED refusal is excluded by the selection
@@ -1596,8 +1667,7 @@ theorem wps_store_eval {Ψ : SpikeVal → EnvStack → IProp GF}
     (loc : CerbLocation.Loc) (ann : core_run_annotation) (ty : ctype)
     (pe2 pe3 : generic_pexpr Unit sym) (mo : memory_order) (ρ : EnvStack)
     {pv : CerbMem.PointerValue} {cv : value}
-    (hnv2 : valueFromPexpr pe2 = none)
-    (hnv3 : valueFromPexpr pe3 = none)
+    (hnv : valueFromPexprs [pe2, pe3] = none)
     (hv2 : evalPexpr M.tagDefs M.extern ρ pe2 = some (Vobject (OVpointer pv)))
     (hv3 : evalPexpr M.tagDefs M.extern ρ pe3 = some cv) :
     wps M Ls Ψ (storeExpr loc ann ty pv cv mo) ρ ⊢
@@ -1610,11 +1680,11 @@ theorem wps_store_eval {Ψ : SpikeVal → EnvStack → IProp GF}
   isplitr
   · ipureintro
     exact ⟨[], ⟨_, _, _⟩, _, [],
-      ⟨Step.store_eval hnv2 hnv3 hv2 hv3, rfl, rfl⟩⟩
+      ⟨Step.store_eval hnv hv2 hv3, rfl, rfl⟩⟩
   inext
   iintro %r %σ₂ %eₜ %Hstep Hcred
   obtain ⟨hs, hlbl, rfl⟩ := Hstep
-  obtain ⟨pv', cv', hv2', hv3', -, hout⟩ := hs.store_op_inv hnv2
+  obtain ⟨pv', cv', hv2', hv3', hout⟩ := hs.store_op_inv hnv
   obtain rfl : pv = pv' := by
     simpa using Option.some.inj (hv2.symm.trans hv2')
   obtain rfl : cv = cv' := Option.some.inj (hv3.symm.trans hv3')

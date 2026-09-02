@@ -1029,7 +1029,7 @@ theorem lr_body_wps (revd rest' : List (Int × Int))
     rw [show lrStoreE loc ann mo = storeOpRedex loc ann nodePtrTy
       (lrShiftPe lrCurSym) (Pexpr [] () (PEsym lrPrevSym)) mo from rfl]
     iapply wps_store_eval loc ann nodePtrTy _ _ mo _
-      rfl rfl (lr_shift_eval_N hf renv _ _ _ nd.1 aN)
+      rfl (lr_shift_eval_N hf renv _ _ _ nd.1 aN)
       (lr_store_value_eval hf renv _ _ _ _)
     rw [show cellPtr nd.1 (aN + 8) = cellPtr nd.1 (aN + ((8 : Nat) : Int))
       from rfl]
@@ -1173,7 +1173,7 @@ theorem lrBody_fragJ (hlib : CerbLocation.isLibraryLocation loc = false) :
           (by rw [show peDepth (lrShiftPe lrCurSym) = 2 from rfl,
             show lemDefaultFuel = 999999 + 1 from rfl]; omega))
         (.sseq
-          (.store_op hlib rfl rfl
+          (.store_op hlib rfl
             (.arrayShift [] longTy (.sym _ _) (.val _ _)) (.sym _ _)
             (by rw [show peDepth (lrShiftPe lrCurSym) = 2 from rfl,
               show lemDefaultFuel = 999999 + 1 from rfl]; omega)
@@ -1485,7 +1485,7 @@ theorem list_reverse_certified
       obtain ⟨-, rfl⟩ := lrQ_inv loc ann ra mo pbty cbty bbty nbty ubty hl
       exact lrBody_fragJ loc ann ra mo bbty nbty ubty hlib)
     prog fmapEmpty [] σ₀ (Iris.Std.PartialMap.union m₀ R)
-    (.save (lrBody_fragJ loc ann ra mo bbty nbty ubty hlib)) hcoh
+    (.save (saveParams_depth_of_vals rfl) (lrBody_fragJ loc ann ra mo bbty nbty ubty hlib)) hcoh
     (fun v σ' => ∃ Q : CellMap, (∃ p' : CerbMem.PointerValue,
         v = ptrVal p' ∧ SeedChain Q p' ns.reverse) ∧ Q ##ₘ R ∧
       Coh fmapEmpty σ' (Iris.Std.PartialMap.union Q R))
@@ -1858,7 +1858,7 @@ theorem lr_body_wpt (revd rest' : List (Int × Int))
       (lrShiftPe lrCurSym) (Pexpr [] () (PEsym lrPrevSym)) mo from rfl,
       show (4 : Nat) = 3 + 1 from rfl]
     iapply wpt_store_eval loc ann nodePtrTy _ _ mo _
-      rfl rfl (lr_shift_eval_N hf renv _ _ _ nd.1 aN)
+      rfl (lr_shift_eval_N hf renv _ _ _ nd.1 aN)
       (lr_store_value_eval hf renv _ _ _ _)
     rw [show cellPtr nd.1 (aN + 8) = cellPtr nd.1 (aN + ((8 : Nat) : Int))
       from rfl]
@@ -1946,7 +1946,7 @@ theorem lr_wpt (sbty : core_base_type) (head : CerbMem.PointerValue) :
     Expr [] (Esave (lrLoopSym, sbty) (lrParams pbty cbty head)
       (lrBody loc ann ra mo bbty nbty ubty)) from rfl]
   iintro HL
-  iapply wpt_save [] (lrLoopSym, sbty) _ _ fmapEmpty []
+  iapply wpt_save_vals [] (lrLoopSym, sbty) _ _ fmapEmpty []
     (cvals := [nullVal, ptrVal head]) rfl
   rw [bindSave_lr]
   rw [show lrFrame nullVal (ptrVal head) fmapEmpty =
@@ -2042,7 +2042,7 @@ theorem list_reverse_certified_total (sbty : core_base_type)
       (frameLsT (lrCellFrame R) (lrLsT ns))
       (lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head)
       fmapEmpty [] σ₀ (Iris.Std.PartialMap.union m₀ R)
-      (.save (lrBody_fragJ loc ann ra mo bbty nbty ubty hlib))
+      (.save (saveParams_depth_of_vals rfl) (lrBody_fragJ loc ann ra mo bbty nbty ubty hlib))
       (by rw [lrProg_pot, show lemDefaultFuel = 999999 + 1 from rfl]; omega)
       hcoh
       (fun v σ' => ∃ Q : CellMap, (∃ p' : CerbMem.PointerValue,

@@ -913,7 +913,7 @@ theorem EnvStable.step_env {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
     | create h1 h2 hmem => exact ⟨.pure _ _, rfl⟩
     | run hj hl hvs => simp at hj
     | load_eval hnv2 hv2 => exact ⟨.action _ _, rfl⟩
-    | store_eval hnv2 hnv3 hv2 hv3 => exact ⟨.action _ _, rfl⟩
+    | store_eval hnv hv2 hv3 => exact ⟨.action _ _, rfl⟩
   | sseq hf1 hf2 ih1 ih2 =>
     rcases hs.sseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
         ⟨_, _, v, _, _, _, _, _, hout⟩ | ⟨_, _, ds', v, _, _, _, _, _, hout⟩ |

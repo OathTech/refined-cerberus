@@ -465,7 +465,7 @@ theorem counter_loop_certified
       obtain ⟨-, rfl⟩ := loopQ_inv loc ann ra mo bty xbty _ hl
       exact loopBody_fragJ loc ann ra mo bty _ hlib)
     prog fmapEmpty [] σ₀ _
-    (.save (loopBody_fragJ loc ann ra mo bty _ hlib)) hcoh
+    (.save (saveParams_depth_of_vals rfl) (loopBody_fragJ loc ann ra mo bty _ hlib)) hcoh
     (fun v σ' => v = Vunit ∧ ∃ bs',
       ((n = 0 ∧ bs' = bs0) ∨ (0 < n ∧ bs' = (sevenBytes fmapEmpty))) ∧
       ∃ i a, cellPtr idx addr = cellPtr i a ∧ CellCoh fmapEmpty σ' i ⟨a, intTy, bs'⟩)
@@ -525,7 +525,7 @@ theorem counter_loop_certified_irrelevant_binding
       obtain ⟨-, rfl⟩ := loopQ_inv loc ann ra mo bty xbty _ hl
       exact loopBody_fragJ loc ann ra mo bty _ hlib)
     prog (envAdd ySym junk fmapEmpty) [] σ₀ _
-    (.save (loopBody_fragJ loc ann ra mo bty _ hlib)) hcoh
+    (.save (saveParams_depth_of_vals rfl) (loopBody_fragJ loc ann ra mo bty _ hlib)) hcoh
     (fun v σ' => v = Vunit ∧ ∃ bs',
       ((n = 0 ∧ bs' = bs0) ∨ (0 < n ∧ bs' = (sevenBytes fmapEmpty))) ∧
       ∃ i a, cellPtr idx addr = cellPtr i a ∧ CellCoh fmapEmpty σ' i ⟨a, intTy, bs'⟩)
@@ -683,7 +683,7 @@ theorem loop_wpt (hn : 0 ≤ n) (sbty : core_base_type)
         Pexpr [] () (PEval (ivVal n))))]
       (loopBody loc ann ra mo bty c)) from rfl,
     show 5 * n.toNat + 3 = (5 * n.toNat + 2) + 1 by omega]
-  iapply wpt_save [] (loopSym, sbty) _ _ f rest
+  iapply wpt_save_vals [] (loopSym, sbty) _ _ f rest
     (cvals := [ivVal n]) rfl
   rw [bindSave_x]
   iapply loop_body_wpt loc ann ra mo bty xbty c n bs0 p rs hQ n f rest

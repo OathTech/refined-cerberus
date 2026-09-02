@@ -680,7 +680,7 @@ theorem array_sum_certified
         vs.length hl
       exact arrBody_fragJ loc ann ra mo xbty hlib vs.length)
     prog fmapEmpty [] σ₀ _
-    (.save (arrBody_fragJ loc ann ra mo xbty hlib vs.length)) hcoh
+    (.save (saveParams_depth_of_vals rfl) (arrBody_fragJ loc ann ra mo xbty hlib vs.length)) hcoh
     (fun v σ' => v = ivVal vs.sum ∧ CellCoh fmapEmpty σ' id ⟨a, aty, bs⟩)
     ?_ nsteps aids
     (by rw [show esize prog = 4 from rfl]; omega)

@@ -596,7 +596,7 @@ theorem counter_loop_certified_registration (sup : Nat)
       obtain ⟨-, rfl⟩ := loopQ_inv loc ann ra mo bty xbty _ hl
       exact loopBody_fragJ loc ann ra mo bty _ hlib)
     prog fmapEmpty [] σ₀ _
-    (.save (loopBody_fragJ loc ann ra mo bty _ hlib)) hcoh
+    (.save (saveParams_depth_of_vals rfl) (loopBody_fragJ loc ann ra mo bty _ hlib)) hcoh
     (fun v σ' => v = Vunit ∧ ∃ bs',
       ((n = 0 ∧ bs' = bs0) ∨ (0 < n ∧ bs' = (sevenBytes fmapEmpty))) ∧
       ∃ i a, cellPtr idx addr = cellPtr i a ∧ CellCoh fmapEmpty σ' i ⟨a, intTy, bs'⟩)

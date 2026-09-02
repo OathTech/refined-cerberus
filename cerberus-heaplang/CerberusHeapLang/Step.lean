@@ -740,6 +740,155 @@ def saveParamPexprs
     List (generic_pexpr Unit sym) :=
   ps.map fun p => p.2.2
 
+/-- The engine's RE-FORMED Esave parameter list after the SAVE EVAL
+    arm (one_step0's `sym_bTy_pes'`, Core_reduction.lean:353: the
+    `stExceptUndef_mapM` over `sym_bTy_pes` keeps each `(sym1, (bTy,
+    _))` and replaces the initializer by the evaluated `mk_value_pe
+    cval` — the successor node is `Expr annots1 (Esave sym_bTy
+    sym_bTy_pes' e)`). Stated over the evaluated value list `cvals`
+    (`evalPexprs` of the initializers; same length as `ps`, so the
+    zip truncates nothing). -/
+def saveParamsWithValues
+    (ps : List (sym × ((core_base_type ×
+      Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym)))
+    (cvals : List value) :
+    List (sym × ((core_base_type ×
+      Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym)) :=
+  (List.zip ps cvals).map fun p => (p.1.1, (p.1.2.1, Pexpr [] () (PEval p.2)))
+
+@[simp] theorem saveParamsWithValues_nil (cvals : List value) :
+    saveParamsWithValues [] cvals = [] := by
+  cases cvals <;> rfl
+
+@[simp] theorem saveParamsWithValues_cons
+    (p : sym × ((core_base_type ×
+      Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym))
+    (ps : List (sym × ((core_base_type ×
+      Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym)))
+    (v : value) (cvals : List value) :
+    saveParamsWithValues (p :: ps) (v :: cvals) =
+      (p.1, (p.2.1, Pexpr [] () (PEval v))) :: saveParamsWithValues ps cvals := rfl
+
+/-- The engine's all-or-nothing operand test, one cons at a time
+    (valueFromPexprs, Core_aux.lean:476 — a foldr of the per-operand
+    `valueFromPexpr` test). -/
+theorem valueFromPexprs_cons (pe : generic_pexpr Unit sym)
+    (pes : List (generic_pexpr Unit sym)) :
+    valueFromPexprs (pe :: pes) =
+      (match valueFromPexpr pe, valueFromPexprs pes with
+       | some v, some vs => some (v :: vs)
+       | _, _ => none) := by
+  unfold valueFromPexprs
+  simp only [List.foldr_cons]
+  rfl
+
+@[simp] theorem valueFromPexprs_nil : valueFromPexprs [] = some [] := rfl
+
+/-- The engine's all-or-nothing operand test on a two-element list,
+    characterized (valueFromPexprs, Core_aux.lean:476 — a foldr of
+    the per-operand `valueFromPexpr` test). -/
+theorem valueFromPexprs_pair (pe1 pe2 : generic_pexpr Unit sym) :
+    valueFromPexprs [pe1, pe2] =
+      (match valueFromPexpr pe1, valueFromPexpr pe2 with
+       | some v1, some v2 => some [v1, v2]
+       | _, _ => none) := by
+  unfold valueFromPexprs
+  simp only [List.foldr_cons, List.foldr_nil]
+  cases valueFromPexpr pe1 <;> cases valueFromPexpr pe2 <;> rfl
+
+/-- Canonical value pexprs are recognized wholesale. -/
+theorem valueFromPexprs_map_val (vs : List value) :
+    valueFromPexprs (vs.map fun v => Pexpr [] () (PEval v)) = some vs := by
+  induction vs with
+  | nil => rfl
+  | cons v vs ih => rw [List.map_cons, valueFromPexprs_cons, valueFromPexpr_val, ih]
+
+/-- The re-formed list's initializers are exactly the canonical value
+    pexprs of `cvals` (lengths agreeing). -/
+theorem saveParamPexprs_withValues
+    (ps : List (sym × ((core_base_type ×
+      Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym)))
+    (cvals : List value) (hlen : ps.length = cvals.length) :
+    saveParamPexprs (saveParamsWithValues ps cvals) =
+      cvals.map fun v => Pexpr [] () (PEval v) := by
+  induction ps generalizing cvals with
+  | nil => cases cvals with
+    | nil => rfl
+    | cons _ _ => cases hlen
+  | cons p ps ih => cases cvals with
+    | nil => cases hlen
+    | cons v cvals =>
+      rw [saveParamsWithValues_cons, List.map_cons]
+      show (p.1, (p.2.1, Pexpr [] () (PEval v))).2.2 ::
+        saveParamPexprs (saveParamsWithValues ps cvals) = _
+      rw [ih cvals (Nat.succ.inj hlen)]
+
+/-- ... so the re-formed list passes the engine's value test with the
+    same values: the successor of the EVAL arm is exactly the TAU
+    arm's redex. -/
+theorem valueFromPexprs_withValues
+    (ps : List (sym × ((core_base_type ×
+      Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym)))
+    (cvals : List value) (hlen : ps.length = cvals.length) :
+    valueFromPexprs (saveParamPexprs (saveParamsWithValues ps cvals)) = some cvals := by
+  rw [saveParamPexprs_withValues ps cvals hlen, valueFromPexprs_map_val]
+
+/-- The pure evaluator is the identity on the engine's value test
+    (`evalPexpr` returns a `PEval v` operand's value verbatim). -/
+theorem evalPexpr_of_valueFromPexpr (tds : CerbTags.TagDefsMap) (ext : Fmap sym sym)
+    (ρ : EnvStack) {pe : generic_pexpr Unit sym} {v : value}
+    (h : valueFromPexpr pe = some v) : evalPexpr tds ext ρ pe = some v := by
+  rcases pe with ⟨a, u, pe_⟩
+  cases u
+  cases pe_ <;> simp only [valueFromPexpr] at h
+  all_goals first
+    | (obtain rfl := Option.some.inj h; exact evalPexpr_val tds ext ρ _ _)
+    | (cases h)
+
+/-- All-or-nothing evaluation agrees with the engine's value test on
+    literal operand lists (`evalPexpr` is the identity on `PEval v`). -/
+theorem evalPexprs_of_valueFromPexprs (tds : CerbTags.TagDefsMap) (ext : Fmap sym sym)
+    (ρ : EnvStack) {pes : List (generic_pexpr Unit sym)} {vs : List value}
+    (h : valueFromPexprs pes = some vs) : evalPexprs tds ext ρ pes = some vs := by
+  induction pes generalizing vs with
+  | nil => rw [valueFromPexprs_nil] at h; exact h
+  | cons pe pes ih =>
+    rw [valueFromPexprs_cons] at h
+    revert h
+    cases hpe : valueFromPexpr pe with
+    | none => intro h; cases h
+    | some v =>
+      cases hpes : valueFromPexprs pes with
+      | none => intro h; cases h
+      | some vs' =>
+        intro h
+        obtain rfl : v :: vs' = vs := Option.some.inj h
+        rw [evalPexprs_cons, evalPexpr_of_valueFromPexpr tds ext ρ hpe, ih hpes]
+        rfl
+
+theorem evalPexprs_length (tds : CerbTags.TagDefsMap) (ext : Fmap sym sym)
+    (ρ : EnvStack) {pes : List (generic_pexpr Unit sym)} {vs : List value}
+    (h : evalPexprs tds ext ρ pes = some vs) : pes.length = vs.length := by
+  induction pes generalizing vs with
+  | nil => rw [evalPexprs_nil] at h; cases h; rfl
+  | cons pe pes ih =>
+    rw [evalPexprs_cons] at h
+    revert h
+    cases evalPexpr tds ext ρ pe with
+    | none => intro h; cases h
+    | some v =>
+      cases hpes : evalPexprs tds ext ρ pes with
+      | none => intro h; cases h
+      | some vs' =>
+        intro h
+        obtain rfl : v :: vs' = vs := Option.some.inj h
+        simp only [List.length_cons, ih hpes]
+
+/-- The literal-initializer test yields a list of the same length. -/
+theorem valueFromPexprs_length {pes : List (generic_pexpr Unit sym)} {vs : List value}
+    (h : valueFromPexprs pes = some vs) : pes.length = vs.length :=
+  evalPexprs_length fmapEmpty fmapEmpty [] (evalPexprs_of_valueFromPexprs _ _ _ h)
+
 /-- `update_env` keeps a cons-shaped stack cons-shaped
     (Core_aux.lean:868 — head-frame update). -/
 theorem update_env_cons (pat : pattern) (v : value) (ev0 : Fmap sym value)
@@ -775,6 +924,25 @@ theorem bindSaveParams_cons (ps : List (sym × ((core_base_type ×
       × value)
     (fun p => mk_sym_pat p.1.1 p.1.2.1.1) (fun p => p.2)
     (List.zip ps cvals) ev0 evs
+
+/-- The entry binding reads only the symbols and base types, so the
+    EVAL arm's re-formed list binds exactly as the original. -/
+theorem bindSaveParams_withValues
+    (ps : List (sym × ((core_base_type ×
+      Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym)))
+    (cvals : List value) (ρ : EnvStack) :
+    bindSaveParams (saveParamsWithValues ps cvals) cvals ρ =
+      bindSaveParams ps cvals ρ := by
+  unfold bindSaveParams
+  induction ps generalizing cvals ρ with
+  | nil => cases cvals <;> rfl
+  | cons p ps ih =>
+    cases cvals with
+    | nil => rfl
+    | cons v cvals =>
+      rw [saveParamsWithValues_cons, List.zip_cons_cons, List.zip_cons_cons,
+        List.foldl_cons, List.foldl_cons]
+      exact ih cvals _
 
 /-- One-layer application of a memM state transformer. Sound for the
     fragment's ops because allocateObject/loadM/storeM/killM are all
@@ -1085,13 +1253,11 @@ inductive Step (M : MachineCtx) :
       Step M (e, ev0 :: evs, σ)
            (cont, bindArgs params vs (ev0 :: evs), σ)
   /-- Esave ENTRY at value-shaped parameter pexprs: one_step0's Esave
-      TAU fast-path (Core_reduction.lean:353, "reduction: SAVE (tau
-      part)") — the parameters bind into the env, the arena becomes
-      the save body. Context-preserving (an ordinary redex under the
-      spine). Non-value parameter pexprs take the engine's EVAL arm
-      (small-step `eval_pexpr1` mapM) — not mirrored this slice
-      (absence of a step; authored fragment saves carry value
-      initializers). -/
+      TAU arm (Core_reduction.lean:353, `match valueFromPexprs (…
+      sym_bTy_pes) with | some cvals => /- reduction: SAVE (tau part)
+      -/ TAU "Esave" (foldl update_env …) e`) — the parameters bind
+      into the env, the arena becomes the save body. Context-preserving
+      (an ordinary redex under the spine). -/
   | save {a : List annot} {sb : sym × core_base_type}
       {ps : List (sym × ((core_base_type ×
         Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym))}
@@ -1100,6 +1266,29 @@ inductive Step (M : MachineCtx) :
       (hvals : valueFromPexprs (saveParamPexprs ps) = some cvals) :
       Step M (Expr a (Esave sb ps body), ev0 :: evs, σ)
            (body, bindSaveParams ps cvals (ev0 :: evs), σ)
+  /-- Esave PARAMETER EVALUATION (QA-1/H-1): one_step0's Esave EVAL
+      arm (Core_reduction.lean:353, `| none => /- reduction: SAVE
+      (eval part) + SAVE-UNDEF -/ EVAL "Esave" (stExceptUndef_bind
+      (stExceptUndef_mapM (fun (sym1, (bTy, pe)) => … eval_pexpr1 pe
+      … (sym1, (bTy, pe'))) sym_bTy_pes) (fun sym_bTy_pes' =>
+      stExceptUndef_return (Expr annots1 (Esave sym_bTy sym_bTy_pes'
+      e))))`): when the initializers are NOT all values, ONE engine
+      step evaluates every initializer (one full evaluator iteration
+      each — `eval_pexpr1`, which on the certified operand grammar
+      delivers the `mk_value_pe` form, exactly as `memop_eval`) and
+      RE-FORMS the Esave node with the evaluated initializers, node
+      annotations preserved; the TAU arm then fires on the successor.
+      The mirror premise is the certified pure evaluator over the
+      whole list (`evalPexprs`); the SAVE-UNDEF channel is excluded
+      because the evaluator RETURNS values. Env and state verbatim. -/
+  | save_eval {a : List annot} {sb : sym × core_base_type}
+      {ps : List (sym × ((core_base_type ×
+        Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym))}
+      {body : CoreExpr} {cvals : List value} {ρ : EnvStack} {σ : Mem}
+      (hnv : valueFromPexprs (saveParamPexprs ps) = none)
+      (hvals : evalPexprs M.tagDefs M.extern ρ (saveParamPexprs ps) = some cvals) :
+      Step M (Expr a (Esave sb ps body), ρ, σ)
+           (Expr a (Esave sb (saveParamsWithValues ps cvals) body), ρ, σ)
   /-- Eif, true branch: ONE engine step with a BIG-STEP guard
       (one_step0's Eif TAU_WITH_RUNSTATE, Core_reduction.lean:353 —
       `full_eval_pexpr1 pe1` then dispatch on Vtrue/Vfalse; any other
@@ -1200,28 +1389,34 @@ inductive Step (M : MachineCtx) :
       Step M (Expr a (Ememop mop [pe1, pe2]), ρ, σ)
            (Expr a (Ememop mop
              [Pexpr [] () (PEval v1), Pexpr [] () (PEval v2)]), ρ, σ)
-  /-- ACTION_EVAL for a positive strong store with unevaluated
-      pointer AND value operands (list-reverse phase A — the
-      loop-carried interior store): ONE engine step BIG-STEP
-      evaluating the operands (step_action's Store0 `_, _, _` arm,
-      Core_reduction.lean:424 — `ACTION_EVAL "eval operands of
-      Store"` over the three `full_eval_pexpr1` calls, wrapped by
-      process_action's ACTION_EVAL arm; successor `Expr e_annots
-      (wrap_act (Store0 is_locking (mk_value_pe cval1) (mk_value_pe
-      cval2) (mk_value_pe cval3) mo1))`). The type operand is pinned
-      at its canonical evaluated shape (its re-evaluation is the
-      identity); pointer and value operands evaluate through the
-      certified pure evaluator — the pointer to a POINTER value, so
-      the successor is exactly the canonical store redex. The
-      `Store0 … PEconstrained` failwithI pre-arm
-      (Core_reduction.lean:424) is excluded by the evaluator premise
-      (`evalPexpr (PEconstrained …) = none`). -/
+  /-- ACTION_EVAL for a positive strong store whose operands are NOT
+      ALL values (list-reverse phase A; generalized to the engine's
+      own dispatch at QA-1/H-1): ONE engine step BIG-STEP evaluating
+      the operands (step_action's Store0 arm, Core_reduction.lean:424
+      — `match act_valueFromPexpr pe1, act_valueFromPexpr pe2,
+      act_valueFromPexpr pe3 with | some (Vctype ty1), some (Vobject
+      (OVpointer ptrval)), some cval => ACTION_REQUEST … | some _,
+      some _, some _ => ACTION_ILLTYPED "Store" | _, _, _ =>
+      ACTION_EVAL "eval operands of Store"` over the three
+      `full_eval_pexpr1` calls, wrapped by process_action's
+      ACTION_EVAL arm; successor `Expr e_annots (wrap_act (Store0
+      is_locking (mk_value_pe cval1) (mk_value_pe cval2) (mk_value_pe
+      cval3) mo1))`). The arm fires exactly when the operand triple is
+      not all values; the type operand is pinned at its canonical
+      evaluated shape (its re-evaluation is the identity), so the
+      engine's three-operand test is `hnv` on the pointer/value pair
+      — the mixed shapes (`store(int, p, 7)`: symbol pointer, literal
+      value; literal pointer, symbol value) are included. Pointer and
+      value operands evaluate through the certified pure evaluator —
+      the pointer to a POINTER value, so the successor is exactly the
+      canonical store redex. The `Store0 … PEconstrained` failwithI
+      pre-arm (Core_reduction.lean:424) is excluded by the evaluator
+      premise (`evalPexpr (PEconstrained …) = none`). -/
   | store_eval {a : List annot} {loc : CerbLocation.Loc}
       {ann : core_run_annotation} {lk : Bool} {ty : ctype}
       {pe2 pe3 : generic_pexpr Unit sym} {pv : CerbMem.PointerValue}
       {cv : value} {mo : memory_order} {ρ : EnvStack} {σ : Mem}
-      (hnv2 : valueFromPexpr pe2 = none)
-      (hnv3 : valueFromPexpr pe3 = none)
+      (hnv : valueFromPexprs [pe2, pe3] = none)
       (hv2 : evalPexpr M.tagDefs M.extern ρ pe2 = some (Vobject (OVpointer pv)))
       (hv3 : evalPexpr M.tagDefs M.extern ρ pe3 = some cv) :
       Step M (Expr a (Eaction (Paction polarity.Pos (Action loc ann
@@ -1323,6 +1518,7 @@ theorem Step.env_cons' {M : MachineCtx} {c c' : CoreExpr × EnvStack × Mem}
     intro ev0 evs hin
     obtain ⟨rfl, rfl⟩ := List.cons.inj hin
     exact bindSaveParams_cons _ _ _ _
+  | save_eval hnv hvals => exact fun ev0 evs hin => ⟨ev0, hin⟩
   | if_true hg => exact fun ev0 evs hin => ⟨ev0, hin⟩
   | if_false hg => exact fun ev0 evs hin => ⟨ev0, hin⟩
   | case_value hv hsel => exact fun ev0 evs hin => ⟨ev0, hin⟩
@@ -1332,7 +1528,7 @@ theorem Step.env_cons' {M : MachineCtx} {c c' : CoreExpr × EnvStack × Mem}
     exact ⟨_, update_env_cons ..⟩
   | memop_ptreq h1 h2 hmem => exact fun ev0 evs hin => ⟨ev0, hin⟩
   | memop_eval hnv hv1 hv2 => exact fun ev0 evs hin => ⟨ev0, hin⟩
-  | store_eval hnv2 hnv3 hv2 hv3 => exact fun ev0 evs hin => ⟨ev0, hin⟩
+  | store_eval hnv hv2 hv3 => exact fun ev0 evs hin => ⟨ev0, hin⟩
 
 theorem Step.env_cons {M : MachineCtx} {e : CoreExpr} {ev0 : Fmap sym value}
     {evs : List (Fmap sym value)} {σ : Mem}
@@ -1385,7 +1581,9 @@ theorem Step.store_inv {M : MachineCtx} {a : List annot} {loc : CerbLocation.Loc
               (Expr [] (Epure (Pexpr [] () (PEval Vunit))))), ρ, σ') := by
   cases h with
   | run hj hl hvs => simp at hj
-  | store_eval hnv2 hnv3 hv2 hv3 => rw [valueFromPexpr_val] at hnv2; cases hnv2
+  | store_eval hnv hv2 hv3 =>
+    rw [valueFromPexprs_pair, valueFromPexpr_val, valueFromPexpr_val] at hnv
+    cases hnv
   | store h1 h2 h3 hmv hmem =>
     rw [valueFromPexpr_val] at h1 h2 h3
     injection h1 with h1; injection h1 with h1
@@ -1478,13 +1676,14 @@ theorem Step.jump_inv {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack} {σ : Mem}
   | annot_merge =>
     rw [jumpRedex?_annot_of_root _ _ (by rfl)] at hj; cases hj
   | save hvals => simp [jumpRedex?] at hj
+  | save_eval hnv hvals => simp [jumpRedex?] at hj
   | if_true hg => simp [jumpRedex?] at hj
   | if_false hg => simp [jumpRedex?] at hj
   | case_value hv hsel => simp [jumpRedex?] at hj
   | sseq_sym_pure => rw [jumpRedex?_sseq, jumpRedex?_ofVal] at hj; cases hj
   | memop_ptreq h1 h2 hmem => simp at hj
   | memop_eval hnv hv1 hv2 => simp at hj
-  | store_eval hnv2 hnv3 hv2 hv3 => simp at hj
+  | store_eval hnv hv2 hv3 => simp at hj
 
 /-- Reducibility at a registered jump redex (the probe's
     `step_of_jumpRedex`). -/
@@ -1604,7 +1803,9 @@ theorem Step.annot_inv {M : MachineCtx} {a : List annot}
       rw [jumpRedex?_annot_of_not_root _ _ hr'] at hj
       exact .inr (.inr ⟨_, _, _, _, _, _, _, hr', hj, rfl, hl, hvs, rfl⟩)
 
-/-- Inversion at an Esave node: the entry TAU (value-shaped params). -/
+/-- Inversion at an Esave node: either the entry TAU (value-shaped
+    initializers) or the parameter-EVAL step (initializers not all
+    values, re-formed with their values) — the engine's two arms. -/
 theorem Step.save_inv {M : MachineCtx} {a : List annot}
     {sb : sym × core_base_type}
     {ps : List (sym × ((core_base_type ×
@@ -1612,12 +1813,49 @@ theorem Step.save_inv {M : MachineCtx} {a : List annot}
     {body : CoreExpr} {ρ : EnvStack} {σ : Mem}
     {out : CoreExpr × EnvStack × Mem}
     (h : Step M (Expr a (Esave sb ps body), ρ, σ) out) :
-    ∃ cvals ev0 evs, ρ = ev0 :: evs ∧
+    (∃ cvals ev0 evs, ρ = ev0 :: evs ∧
       valueFromPexprs (saveParamPexprs ps) = some cvals ∧
-      out = (body, bindSaveParams ps cvals ρ, σ) := by
+      out = (body, bindSaveParams ps cvals ρ, σ)) ∨
+    (∃ cvals, valueFromPexprs (saveParamPexprs ps) = none ∧
+      evalPexprs M.tagDefs M.extern ρ (saveParamPexprs ps) = some cvals ∧
+      out = (Expr a (Esave sb (saveParamsWithValues ps cvals) body), ρ, σ)) := by
   cases h with
-  | save hvals => exact ⟨_, _, _, rfl, hvals, rfl⟩
+  | save hvals => exact .inl ⟨_, _, _, rfl, hvals, rfl⟩
+  | save_eval hnv hvals => exact .inr ⟨_, hnv, hvals, rfl⟩
   | run hj hl hvs => simp [jumpRedex?] at hj
+
+/-- Inversion at an Esave node with VALUE initializers: the entry TAU
+    only (the pre-QA-1 shape, retained as the literal instance). -/
+theorem Step.save_vals_inv {M : MachineCtx} {a : List annot}
+    {sb : sym × core_base_type}
+    {ps : List (sym × ((core_base_type ×
+      Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym))}
+    {body : CoreExpr} {ρ : EnvStack} {σ : Mem} {cvals : List value}
+    {out : CoreExpr × EnvStack × Mem}
+    (hvals : valueFromPexprs (saveParamPexprs ps) = some cvals)
+    (h : Step M (Expr a (Esave sb ps body), ρ, σ) out) :
+    ∃ ev0 evs, ρ = ev0 :: evs ∧ out = (body, bindSaveParams ps cvals ρ, σ) := by
+  rcases h.save_inv with ⟨cvals', ev0, evs, hρ, hvals', hout⟩ |
+      ⟨_, hnv, _, _⟩
+  · obtain rfl : cvals = cvals' := Option.some.inj (hvals.symm.trans hvals')
+    exact ⟨ev0, evs, hρ, hout⟩
+  · rw [hvals] at hnv; cases hnv
+
+/-- Inversion at an Esave node whose initializers are NOT all values:
+    the parameter-EVAL step only. -/
+theorem Step.save_op_inv {M : MachineCtx} {a : List annot}
+    {sb : sym × core_base_type}
+    {ps : List (sym × ((core_base_type ×
+      Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym))}
+    {body : CoreExpr} {ρ : EnvStack} {σ : Mem}
+    {out : CoreExpr × EnvStack × Mem}
+    (hnv : valueFromPexprs (saveParamPexprs ps) = none)
+    (h : Step M (Expr a (Esave sb ps body), ρ, σ) out) :
+    ∃ cvals, evalPexprs M.tagDefs M.extern ρ (saveParamPexprs ps) = some cvals ∧
+      out = (Expr a (Esave sb (saveParamsWithValues ps cvals) body), ρ, σ) := by
+  rcases h.save_inv with ⟨_, _, _, _, hvals, _⟩ | ⟨cvals, _, hvals, hout⟩
+  · rw [hnv] at hvals; cases hvals
+  · exact ⟨cvals, hvals, hout⟩
 
 /-- Inversion at an Eif node: the guard evaluates to a boolean and
     the step selects the branch. -/
@@ -1675,18 +1913,6 @@ theorem Step.load_op_inv {M : MachineCtx} {a : List annot}
   | load h1 h2 hmem => rw [hnv2] at h2; cases h2
   | load_eval hnv2' hv2 => exact ⟨_, hv2, rfl⟩
 
-/-- The engine's all-or-nothing operand test on a two-element list,
-    characterized (valueFromPexprs, Core_aux.lean:476 — a foldr of
-    the per-operand `valueFromPexpr` test). -/
-theorem valueFromPexprs_pair (pe1 pe2 : generic_pexpr Unit sym) :
-    valueFromPexprs [pe1, pe2] =
-      (match valueFromPexpr pe1, valueFromPexpr pe2 with
-       | some v1, some v2 => some [v1, v2]
-       | _, _ => none) := by
-  unfold valueFromPexprs
-  simp only [List.foldr_cons, List.foldr_nil]
-  cases valueFromPexpr pe1 <;> cases valueFromPexpr pe2 <;> rfl
-
 /-- Inversion at the pointer-equality memop with VALUE operands: the
     step is unique and fully determined by the memM computation. -/
 theorem Step.memop_ptreq_inv {M : MachineCtx} {a : List annot}
@@ -1726,27 +1952,26 @@ theorem Step.memop_op_inv {M : MachineCtx} {a : List annot} {mop : memop}
     cases hnv
   | memop_eval hnv' hv1 hv2 => exact ⟨_, _, hv1, hv2, rfl⟩
 
-/-- Inversion at a store whose pointer operand is NOT a value: the
-    ACTION_EVAL step (and its value operand is not a value either —
-    the rule's shape). -/
+/-- Inversion at a store whose operands are NOT all values: the
+    ACTION_EVAL step. -/
 theorem Step.store_op_inv {M : MachineCtx} {a : List annot}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {lk : Bool}
     {ty : ctype} {pe2 pe3 : generic_pexpr Unit sym} {mo : memory_order}
     {ρ : EnvStack} {σ : Mem} {out : CoreExpr × EnvStack × Mem}
-    (hnv2 : valueFromPexpr pe2 = none)
+    (hnv : valueFromPexprs [pe2, pe3] = none)
     (h : Step M (Expr a (Eaction (Paction polarity.Pos (Action loc ann
         (Store0 lk (Pexpr [] () (PEval (Vctype ty))) pe2 pe3 mo)))), ρ, σ)
       out) :
     ∃ pv cv, evalPexpr M.tagDefs M.extern ρ pe2 = some (Vobject (OVpointer pv)) ∧
-      evalPexpr M.tagDefs M.extern ρ pe3 = some cv ∧ valueFromPexpr pe3 = none ∧
+      evalPexpr M.tagDefs M.extern ρ pe3 = some cv ∧
       out = (Expr a (Eaction (Paction polarity.Pos (Action loc ann
         (Store0 lk (Pexpr [] () (PEval (Vctype ty)))
                 (Pexpr [] () (PEval (Vobject (OVpointer pv))))
                 (Pexpr [] () (PEval cv)) mo)))), ρ, σ) := by
   cases h with
   | run hj hl hvs => simp at hj
-  | store h1 h2 h3 hmv hmem => rw [hnv2] at h2; cases h2
-  | store_eval hnv2' hnv3 hv2 hv3 => exact ⟨_, _, hv2, hv3, hnv3, rfl⟩
+  | store h1 h2 h3 hmv hmem => rw [valueFromPexprs_pair, h2, h3] at hnv; cases hnv
+  | store_eval hnv' hv2 hv3 => exact ⟨_, _, hv2, hv3, rfl⟩
 
 /-- Constructor-clash refutation: the Specified-binder pattern is
     never the wildcard base pattern (the wildcard-context proofs'
