@@ -1,5 +1,11 @@
 # A walkthrough: this is the theorem, this is how to read it
 
+> **Status note (2026-09-02, PR-1; docs/2026-09-02_pr1-notes.md).** The
+> theorems changed under this document (static `pot` fuel premises, the
+> `project_triple_pure` headline, the one-drive/one-triple collapse, the
+> atomic step specifications); the prose was patched only where a name
+> would dangle. The full re-presentation is PR-2.
+
 For a reader who knows separation logic and roughly what Iris is, and
 has never heard of Cerberus. Seven sections: the claim and one exhibit
 read end to end (§1); the trust tiers (§2); the logic, rules quoted
@@ -41,9 +47,7 @@ def MemTripleU (M : MachineCtx) (ρ : EnvStack) (e : CoreExpr) (P : CellMap)
     (post : CellMap → value → Mem → Prop) : Prop :=
   ∀ (R : CellMap), P ##ₘ R →
   ∀ (σ : Mem), Sat M.tagDefs σ (Iris.Std.PartialMap.union P R) →
-  ∀ (n : Nat) (aids : Nat → Nat), esize e + n ≤ lemDefaultFuel →
-    (∀ l params cont, lookupLabel M.labels l = some (params, cont) →
-      esize cont + n ≤ lemDefaultFuel) →
+  ∀ (n : Nat) (aids : Nat → Nat),
     (∀ r, driveU M aids n (M.thread e ρ) σ ≠ .killed r) ∧
     (driveU M aids n (M.thread e ρ) σ ≠ .stuck) ∧
     (∀ (v : value) (σ' : Mem), driveU M aids n (M.thread e ρ) σ = .done v σ' →
@@ -118,9 +122,7 @@ def MemTripleU_alloc (M : MachineCtx) (ρ : EnvStack) (e : CoreExpr) (P : CellMa
     (reqs : List AllocReq) (post : CellMap → value → Mem → Prop) : Prop :=
   ∀ (R : CellMap), P ##ₘ R →
   ∀ (σ : Mem), LaunchCoh M.tagDefs σ (Iris.Std.PartialMap.union P R) reqs →
-  ∀ (n : Nat) (aids : Nat → Nat), esize e + n ≤ lemDefaultFuel →
-    (∀ l params cont, lookupLabel M.labels l = some (params, cont) →
-      esize cont + n ≤ lemDefaultFuel) →
+  ∀ (n : Nat) (aids : Nat → Nat),
     (∀ r, driveU M aids n (M.thread e ρ) σ ≠ .killed r) ∧
     (driveU M aids n (M.thread e ρ) σ ≠ .stuck) ∧
     (∀ (v : value) (σ' : Mem), driveU M aids n (M.thread e ρ) σ = .done v σ' →
@@ -188,7 +190,7 @@ engine never kills, never derails, and any delivered `(v, σ')` has
 in `σ'`. Its statement is the `MemTripleU_alloc` body unfolded at that
 profile — as the loop exhibits (`list_reverse_certified`, …) state
 the `MemTripleU` body unfolded at theirs; only `exhibitA/B/C_semantic`
-are stated as `SemTriple` values.
+are stated as `SemTripleU` values (at `spikeCtx`/`spikeEnv`).
 
 ### 1.2 The exhibit: in-place list reversal
 
@@ -280,13 +282,13 @@ lemDefaultFuel`, `5 + nsteps ≤ lemDefaultFuel` (program and label body);
 and, as section variables not on the theorem line
 (ListRevExhibit.lean:1153-1154), the metadata `loc ann ra mo` and the
 base-type tags `pbty cbty bbty nbty ubty`, all universally quantified.
-Its conclusion: `driveJ rs aids
+Its conclusion: `driveU (procCtx lrProcSym rs) aids
 nsteps (procThread lrProcSym prog [fmapEmpty]) σ₀` is never `.killed r`,
 never `.stuck`, and whenever it is `.done v σ'` there are `p'` and `Q`
 with `v = ptrVal p'`, `SeedChain Q p' ns.reverse`, `∀ k, (get? Q
 k).isSome ↔ (get? m₀ k).isSome`, `Q ##ₘ R` and `Sat fmapEmpty σ' (Q ∪
-R)`. That is: driving the engine (`driveJ` = `driveU` at the
-proc-carrying context with the label map) never kills or derails, and
+R)`. That is: driving the engine (`driveU` at the proc-carrying
+context with the label map) never kills or derails, and
 any delivered value is a pointer heading a footprint seeded as
 `ns.reverse` — the SAME allocation ids in reversed order, each node still
 carrying its own value (in-place, literally: only the next fields
@@ -294,9 +296,9 @@ moved); the footprint-equality conjunct pins the node set on the actual
 maps (nothing allocated, nothing leaked); and the frame comes back
 VERBATIM. `list_reverse_certified_total` has the same conclusion as an
 unconditional `.done` equation at fuel `13 * ns.length + 7`, no fuel
-hypotheses (it keeps `hlib` and the same section variables);
-`list_reverse_terminates` is strong normalization of the Iris relation
-(no `hlib`, no fuel); `list_reverse_demo` instantiates a 3-node chain
+hypotheses (it keeps `hlib` and the same section variables); the
+partial form has no fuel hypothesis either (2026-09-02, required fix 1);
+`list_reverse_demo` instantiates a 3-node chain
 with every DECODE side condition (`nodeValDec`/`nodeNextDec` of the
 seeded bytes) by `rfl` — it still carries `hlib`, the fuel pair and
 the arbitrary frame `R`.
@@ -358,7 +360,7 @@ load, `wps_seq` + `wps_store_eval` + `wps_store_cell_at`
 precondition), `blockSpecs_intro` to assemble the registered body's
 specification; the frame is then `wps_frame_labels` applied once. The
 path to the engine: `wps_sound_frame` collapses to the base WP,
-`engine_adequacyJ` lands the drive-lane statement; for the production
+`engine_adequacyU` (at `procCtx`) lands the drive-lane statement; for the production
 theorem, `lrProd_wpt` proves the whole build-and-reverse program at the
 TOTAL judgment (`wpt_create` twice from a two-request `allocCap` plan,
 the generic subrange stores through the bound pointers, then the loop
@@ -407,7 +409,8 @@ trio-exact):
    adequacy in the cone — the drive equations are proved by budget
    induction against the engine (`wpt_drive_aux`: `engine_step_matchU`
    discharges one engine step per budget unit, §5); iris-lean's
-   `twp_total` feeds only `wpt_strongly_normalizing`.
+   `twp_total` is not consumed (the mirror-only
+   `wpt_strongly_normalizing` was retired, 2026-09-02).
 7. `engine_adequacyU` (and `engine_adequacyU_alloc`, launched through
    `launchResources`) → `driveU` never kills/derails, readout at
    `.done`; `project_triple` → `MemTripleU`; `project_triple_alloc` →
@@ -520,9 +523,10 @@ def driveU (M : MachineCtx) (aids : Nat → Nat) :
     | _ => .stuck
 ```
 
-`drive` is `driveU spikeCtx` (the straight-line profile) and `driveJ rs`
-is `driveU (rsCtx rs)` (the proc-carrying profile at run state `rs`);
-`procThread p e ρ` is the thread literal with current procedure `p`.
+The straight-line exhibits run `driveU spikeCtx`, the loop exhibits
+`driveU (procCtx p rs)` (the former spellings `drive`/`driveJ` were
+retired, 2026-09-02); `procThread p e ρ` is the thread literal with
+current procedure `p`.
 
 `step_ctx` is the engine's step function; `dischargeStep`
 (Soundness.lean) is the sequential driver's request discharge
@@ -825,7 +829,7 @@ What a client must supply beyond the rules, with `LoopExhibit.lean`
    face `hQ` is DISCHARGED, not assumed: `loopRS_labeledAt : LabeledAt
    (loopRS …) loopProcSym (loopQ …)` (:138) is a lookup computation
    (`fmapLookupBy_addBy_empty`, `if_pos (by decide +kernel)`), and
-   `engine_adequacyJ` takes it as its first argument (:462-463). For the
+   `engine_adequacyU` consumes it through `procCtx_labels`. For the
    production lane the tie is derived from the SHIPPED registration
    instead (`loop_labeledAt_production`, ProdEntry.lean:536 — the label
    map `collect_labeled_continuations_NEW` computes from the synthetic
@@ -854,8 +858,8 @@ What a client must supply beyond the rules, with `LoopExhibit.lean`
    — `fun _ _ => rfl` in substance. `wps_load_at`'s `htrap : loadTrapV
    vty mv = false` excludes the `_Bool` trap representation, `rfl` for
    any non-`_Bool` value.
-5. **The engine face.** `engine_adequacyJ hQ hQf e ev0 evs σ₀ m₀ hfrag
-   hcoh ψ hwp n aids hfuel hQsz` (Adequacy.lean) lands `driveJ rs … ≠
+5. **The engine face.** `engine_adequacyU hwf hQf hQpot e ev0 evs σ₀ m₀
+   hfrag hpot hcoh ψ hwp n aids` (Adequacy.lean) lands `driveU (procCtx p rs) … ≠
    .killed / ≠ .stuck / .done ⇒ ψ` — `counter_loop_certified`
    (LoopExhibit.lean:438) is exactly this application, with `hQf`/`hQsz`
    (each registered body in `Frag`, within fuel) discharged from the
@@ -1074,8 +1078,8 @@ minted from `Coh` (`spikeCells_alloc`; for allocating programs
 registered label bodies are in `Frag`, for `Frag e₀`, `Coh M.tagDefs σ₀
 m₀`, and an Iris proof `hwp` that the footprint cells entail the WP of
 `⟨e₀, ev00 :: evs0, M⟩` with the readout post `∀ σ' ns κs nt, stateInterp
-σ' ns κs nt ={⊤, ∅}=∗ ⌜ψ w.val σ'⌝`, under the fuel bounds `esize e₀ + n ≤
-lemDefaultFuel` (and per label body): `driveU M aids n (M.thread e₀ (ev00
+σ' ns κs nt ={⊤, ∅}=∗ ⌜ψ w.val σ'⌝`, under the STATIC fuel bounds `pot e₀ ≤
+lemDefaultFuel` (and per label body), for EVERY `n`: `driveU M aids n (M.thread e₀ (ev00
 :: evs0)) σ₀` is never `.killed r`, never `.stuck`, and `.done v σ'`
 implies `ψ v σ'`. Its proof: every drive step is `engine_step_matchU`'s unique engine
 behaviour; Step-matched behaviours stay inside the WP-covered cone,
@@ -1096,9 +1100,10 @@ the budget with `engine_step_matchU` discharging one engine step per
 unit (`wpt_drive_aux`). The fuel side conditions are on the
 step-monotone size potential `pot` (not on the run length), so the
 exported equations are unconditional in the loop count; the
-state-inert conjunct pins fib's final memory to the initial one. The
-other half, `wpt_strongly_normalizing`, is iris-lean's `twp_total`
-consumed as-is — strong normalization of the thread-pool relation.
+state-inert conjunct pins fib's final memory to the initial one. (The
+former `wpt_strongly_normalizing` — iris-lean's `twp_total` consumed
+as-is, strong normalization of the MIRROR relation — was retired at the
+2026-09-02 professor review: not an engine fact.)
 `_alloc` variants launch through `launchResources`.
 
 **The production entry.** `DriverCollapse.lean` proves, from the
