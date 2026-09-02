@@ -602,3 +602,21 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   classifications carry the location in the killed payload; removing
   it means editing the frozen certification — deferred with the
   reason. (5) `hbsz` stays (QA-1's whole-AST-induction stop stands).
+- **2026-09-02 [AGENT] PROFESSOR REVIEW 2 (A-) — RESPONSE; ARC AT CLOSING
+  STATE** (records: `cerberus-heaplang/docs/2026-09-02_professor-review-2.md`,
+  `…_pr3-notes.md`). Of the four required fixes: (1) `peDepth`/`PePure`
+  documented; (2) six tree-refuting module headers corrected and every
+  header the WALKTHROUGH cites purged of process vocabulary; (3) `hlib`
+  DISCHARGED by the professor's route (`requestLoc` names the engine's
+  location conditional; `storeM_loc_irrel`/`loadM_loc_irrel`; 46
+  statements lose the premise, 9 strictly generalized, certification
+  theorems unchanged); (4) `hbsz` stated as the exact registered gap
+  `esize (subst_sym_expr x v e) = esize e` (obstacle: the fuel-indexed
+  `subst_sym_expr_lemFuel`), the alternative the professor named as
+  acceptable. `rsCtx` retired. Remaining for a full A: the recommended
+  additive capacity face over `allocCap` (an authoritative-sum ghost
+  algebra + inequality coupling) — design work; and the `hbsz`
+  induction (grind class). Orchestrator recommendation to the operator:
+  close the arc at A-, merge, and carry both as the first items of the
+  demo's post-freeze quality track (the malloc/free arc reshapes
+  allocation anyway). Operator decision pending.
