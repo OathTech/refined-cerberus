@@ -119,6 +119,14 @@ is added when its mainline pin lands (see DECISIONS).
 - **Exact axiom-cone assertions** in-build (Audit.lean): classical
   trio + declared boundary list only; boundary entries carry
   provenance (permanent-immovable or temporal-with-mover).
+- **The referent of every export is the genuine semantics** ([USER
+  2026-09-02]): no hand-written definition (driver loop, discharge,
+  scheduler) may appear in the statement of an exported theorem;
+  proof devices (the mirror, the collapse) live in proofs only. A
+  semantics-side limitation that blocks such a statement is REQUESTED
+  from the cerberus-lean team (a dated request note in `docs/`), never
+  worked around; until it lands the affected exports are labelled
+  PROVISIONAL on every surface.
 - **Capped builds always**; heavy lanes serial on this shared box;
   commit promptly (kill-loss containment).
 - **No grind campaigns**: a ~1hr pass is a stop-and-report event;

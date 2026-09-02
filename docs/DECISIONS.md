@@ -620,3 +620,53 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   close the arc at A-, merge, and carry both as the first items of the
   demo's post-freeze quality track (the malloc/free arc reshapes
   allocation anyway). Operator decision pending.
+- **2026-09-02 [USER] THE DRIVER IN EVERY EXPORT IS THE GENUINE CERBERUS ONE;
+  SEMANTICS-SIDE LIMITATIONS ARE REQUESTED UPSTREAM, NEVER WORKED AROUND**
+  (verbatim): "There should not be any reason for the driver to not be
+  the actual, genuine, legitimate, original Cerberus one. We should not
+  be writing our own trusted driver code. This is very clearly not
+  achieving the end to end root of trust behavior that we're aiming for
+  here." and "If we have limitations on the Cerberus side, we can in
+  fact make requests to the Cerberus team to improve the quality of
+  Cerberus Lean. This is the more appropriate way to deal with
+  limitations like this, not to invent some fake driver which doesn't
+  give us the complete root of trust that we're looking for." Also the
+  operator's restatement of the trust architecture (same day): the
+  Cerberus operational semantics is the true Cerberus and the root of
+  trust; relational artifacts in the repo (RelSem etc.) are subsidiary
+  bridging artifacts; Iris needs a non-fuel semantics, hence a mirror,
+  with every claim about a Core program deriving from an operational
+  behaviour of the Cerberus semantics. FINDING (surfaced by the
+  2026-09-02 detailed audit and the second professor): the
+  partial-correctness exports (`MemTripleU`, `project_triple*`, the
+  `*_certified` partial statements) are stated over `driveU`, a
+  package-defined loop around the engine's `step_ctx`, because the
+  shipped driver's fuel-exhaustion arm is the runtime's OPAQUE sentinel
+  and cannot be classified in any ∀-fuel statement. Disposition: (1)
+  the request `docs/2026-09-02_request-cerberus-lean-fuel-exhaustion-outcome.md`
+  (a distinguished, transparent fuel-exhaustion kill in the ND monad)
+  goes to the cerberus-lean team via the operator; (2) NO workaround
+  driver is built (the orchestrator's proposed existential-over-the-
+  opaque-tail statement is WITHDRAWN); (3) until the request lands, the
+  driveU-based exports are labelled PROVISIONAL on every surface —
+  sound facts about `driveU`, not the root-of-trust statement; the
+  total-lane production statements, which are over the shipped
+  pipeline, are the root-of-trust exports; (4) the trust rule "no
+  hand-written definition in any export's referent" enters CLAUDE.md.
+- **2026-09-02 [AGENT] DETAILED AUDIT (third independent auditor,
+  `docs/2026-09-02_cerberus-heaplang-detailed-audit.md`) — DISPOSITION**:
+  H-1 (no bridge to `RelSem`; two-sidedness assumes a mirror step):
+  the RelSem-bridge requirement is REJECTED on the trust ruling (RelSem
+  is a subsidiary artifact; the engine is the root); the auditor's
+  qualified statement of what is proved is adopted verbatim in the
+  docs; MIRROR COMPLETENESS ON THE FRAGMENT (mirror stuck ⇒ an engine
+  refusal/kill fact, per constructor) is registered as the open
+  architecture item for the post-freeze quality track. M-1 (allocation
+  health footprint-relative): documented as footprint-relative
+  freshness now; a global memory well-formedness invariant belongs to
+  the malloc/free arc. M-2 (API classification), L-1 (audit skips
+  internal-detail constants while claiming "every"), L-2 (Step-proved
+  coverage witnesses inside a positive exhibit module), L-3 (short
+  normative architecture statement): all accepted, executed in the
+  audit-response-3 slice. The auditor's uncommitted README edit on
+  main's working tree was moved to this branch and main restored.
