@@ -400,16 +400,20 @@ trio-exact):
 5. `wps`/`wpt` (Wps.lean, Wpt.lean) and their rule sets; `wps_sound`
    (Löb) and `wpt_sound` (budget induction) collapse them into the base
    WP and Iris `TotalWeakestPre`.
-6. `spike_step_adequacy` = iris-lean's `wp_strong_adequacy_gen` with the
-   ghost state CONSTRUCTED (`genHeap_init`), `launchResources` under
-   `LaunchCoh` minting the allocator cursor and granting `allocCap`;
-   `wpt_strongly_normalizing` = `twp_total`.
+6. Partial lane: `spike_step_adequacy` = iris-lean's
+   `wp_strong_adequacy_gen` with the ghost state CONSTRUCTED
+   (`genHeap_init`), `launchResources` under `LaunchCoh` minting the
+   allocator cursor and granting `allocCap`. Total lane: NO Iris
+   adequacy in the cone — the drive equations are proved by budget
+   induction against the engine (`wpt_drive_aux`: `engine_step_matchU`
+   discharges one engine step per budget unit, §5); iris-lean's
+   `twp_total` feeds only `wpt_strongly_normalizing`.
 7. `engine_adequacyU` (and `engine_adequacyU_alloc`, launched through
    `launchResources`) → `driveU` never kills/derails, readout at
    `.done`; `project_triple` → `MemTripleU`; `project_triple_alloc` →
-   `MemTripleU_alloc`; `wpt_engine_boundU/J(_alloc)` → `driveU … k =
-   .done v σ'` unconditionally.
-8. `loop_step_frag`, `prod_loop_done`, `driver2_done`, `finalize_done`
+   `MemTripleU_alloc`; `wpt_engine_boundU/J`, `wpt_engine_boundU_alloc`
+   → `driveU … k = .done v σ'` unconditionally.
+8. `loop_step_frag`, `driver2_done`, `finalize_done`
    (DriverCollapse.lean), `wpt_driver_done(_alloc)` (ProdLoop.lean),
    `prod_run_eqJ` (ProdEntry.lean): the shipped scheduler, ND monad and
    readout collapsed onto the drive, proved from the driver's own round
@@ -435,7 +439,7 @@ enum typing, CerberusImpl.lean:67/237). A kernel-opaque constant enters
 no axiom cone and cannot be unfolded by any proof, so a theorem whose
 cone contains one holds for EVERY value of it. What the statements pin
 and the tree shows (measured — the README's trust story lists every
-opaque constant reached by the 109 export cones): the tag-definition
+opaque constant reached by the 120 export cones, at the time of writing): the tag-definition
 environment is `fmapEmpty` and concurrency is OFF (`_root_.drive
 fmapEmpty false …` in every production statement — `drive tagDefs
 with_concurrency file args`, Driver.lean:518; `spikeCtx`/`procCtx`/
@@ -575,10 +579,15 @@ maps, not program-logic machinery).
 
 ## 3. The logic
 
-Three strata. The base WP is iris-lean's `WP` over the runtime tuple
-`⟨e, ρ, M⟩ : CoreRt` (expression, live environment stack, machine
-context). Above it, two label-context judgments for programs with
-`save`/`run`: `wps` (partial) and `wpt` (total).
+Two label-context judgments over iris-lean's `WP` — the partial `wps`
+and the total `wpt` — for programs with `save`/`run`, and beneath them
+the base stratum: the two small axioms `wp_store`/`wp_load` stated at
+the raw `WP` over the runtime tuple `⟨e, ρ, M⟩ : CoreRt` (expression,
+live environment stack, machine context), generic in `M` and `ρ`. The
+statement strata restate the small axioms with the label context and
+prove them the same way; frame, consequence and sequencing are stated
+there (§3.2), because at the raw WP sequencing is false once labels
+are populated — a jump discards the sequencing context.
 
 ### 3.1 The small axioms
 
@@ -622,18 +631,10 @@ engine seams (`storeM_success`, `loadM_success`).
 
 ### 3.2 Frame and consequence
 
-At the base WP the frame is iris-lean's `wp_frame_r`, stated at triple
-level (`triple P e Ψ := P ⊢ WP ⟨e, spikeEnv, spikeCtx⟩ @ NotStuck; ⊤ {{ Ψ }}`):
-
-```lean
-theorem triple_frame [SpikeGS hlc GF] {P R : IProp GF} {e : CoreExpr}
-    {Ψ : CoreRVal → IProp GF} (h : triple P e Ψ) :
-    triple iprop(P ∗ R) e (fun v => iprop(Ψ v ∗ R)) :=
-```
-
-with `triple_conseq` (BI entailment on both sides) and `triple_seq`.
-At the statement stratum the frame must also cross back edges, which is
-what framing the LABEL CONTEXT achieves:
+At the raw WP the frame is iris-lean's own `wp_frame_r` and
+consequence its `wp_mono`/`wp_wand`; the logic states them where the
+programs live, at the statement strata. There the frame must also
+cross back edges, which is what framing the LABEL CONTEXT achieves:
 
 ```lean
 abbrev frameLs (R : IProp GF) (Ls : LabelSpec GF) : LabelSpec GF :=
@@ -1107,7 +1108,7 @@ driver's OWN round functions (`driver2`, `new_drive_core_threads`,
 single-threaded fragment configuration one production round is exactly
 one drive round (`loop_step_frag`), that the whole driver computation is
 a branch-free ND tree so `runND` yields the singleton execution
-(`prod_loop_done`, `driver2_done`), and that `finalize` reads the
+(`driver2_done`, `runND_active`), and that `finalize` reads the
 delivered value back (`finalize_done`). `ProdLoop.lean`'s
 `wpt_driver_done(_alloc)` drives the driver's per-thread loop by the
 total judgment, one round per budget unit, concluding `DriverDoneAt`.
@@ -1161,7 +1162,7 @@ statement: everything of ours except the program, the wrapper file
 
 `CerberusHeapLang/Audit.lean` is the last import of the library root,
 so `lake build` elaborates it and a failure is a red build. It asserts,
-in order: (1) EXACT PINS — every name in `trioExports` (123 theorems
+in order: (1) EXACT PINS — every name in `trioExports` (120 theorems
 at the time of writing: the rules, the adequacy and collapse theorems,
 every exhibit, the two projections and the consequence lemmas)
 exists, is a theorem, and has
@@ -1195,13 +1196,13 @@ cd cerberus-heaplang
 Expected tail (linter warnings from the dependency's `generated/*`
 precede it; `capped` prints nothing on success — an `UNCAPPED` warning
 means a broken environment, stop). The three counts are those at the
-time of writing (P6.1); the build prints the current values, and the
-pin count grows with every spec-addition slice:
+time of writing (QA-2); the build prints the current values, and the
+pin count moves with every slice that adds or retires an export:
 
 ```
-info: CerberusHeapLang/Audit.lean:181:0: CerberusHeapLang export pins: 123 trio-exact
-info: CerberusHeapLang/Audit.lean:181:0: CerberusHeapLang axiom sweep: 1232 theorems bounded by the trio
-info: CerberusHeapLang/Audit.lean:181:0: CerberusHeapLang banned-axiom sweep: 2085 constants of every kind checked; sorryAx/ofReduceBool/ofReduceNat absent from all cones
+info: CerberusHeapLang/Audit.lean:188:0: CerberusHeapLang export pins: 120 trio-exact
+info: CerberusHeapLang/Audit.lean:188:0: CerberusHeapLang axiom sweep: 1155 theorems bounded by the trio
+info: CerberusHeapLang/Audit.lean:188:0: CerberusHeapLang banned-axiom sweep: 1949 constants of every kind checked; sorryAx/ofReduceBool/ofReduceNat absent from all cones
 Build completed successfully (444 jobs).
 ```
 
@@ -1225,10 +1226,14 @@ minutes to tens of minutes; a replay from cache about a second.
 - **The memop family beyond `PtrEq`**, and `PtrEq`'s
   differing-provenance nondeterministic fork (a real `msum` in the
   engine): fail-closed absences of a mirror step.
-- **`Ecase` on a non-value scrutinee, `Ewseq` at binder patterns, pure
-  exits beyond `PEsym`**: mechanical per-construct extensions, each
+- **`Ecase`'s EVAL arm (a non-value scrutinee), `Ewseq` at binder
+  patterns, pure exits beyond `PEsym`, the symbol-binder beta at
+  annotated values**: mechanical per-construct extensions, each
   needing a `dischargeStep` arm, a `Step` rule and a rule at each
-  stratum.
+  stratum. Not on this list, because it is not a gap: the pure and
+  annotation rules are stated at the empty annotation list `Expr []`
+  — the mirror's values live there (the canonical-annotation protocol
+  D3), and the annotation-generic forms are FALSE (QA-1).
 - **Fuel parametricity.** The engine's `get_ctx` fuel is real (the
   interpreter bails past `10^6`), so partial statements carry the
   budget hypotheses and total statements are stated at a derived bound.

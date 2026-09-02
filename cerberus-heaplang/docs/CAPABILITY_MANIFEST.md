@@ -14,12 +14,12 @@ consumed by no exhibit is a red row: the construct has a rule but no client.
 
 | Fragment constructor | Rule | Consumed by (exhibit modules) |
 |---|---|---|
-| `Frag.val_pure` | `wps_ofVal` | AllocExhibit, ArrayExhibit, CaseExhibit, FibExhibit, ListRevExhibit, LoopExhibit, StructExhibit, TreeRotExhibit, WseqExhibit |
-| `Frag.store` | `wps_store` | LoopExhibit |
+| `Frag.val_pure` | `wps_ofVal` | AllocExhibit, ArrayExhibit, CaseExhibit, Exhibit, FibExhibit, ListRevExhibit, LoopExhibit, StructExhibit, TreeRotExhibit, WseqExhibit |
+| `Frag.store` | `wps_store` | Exhibit, LoopExhibit |
 | `Frag.load` | `wps_load_at` | ArrayExhibit, ListRevExhibit, StructExhibit, TreeRotExhibit |
 | `Frag.create` | `wps_create` | AllocExhibit, StructExhibit |
-| `Frag.sseq` | `wps_seq` | AllocExhibit, ListRevExhibit, LoopExhibit, StructExhibit, TreeRotExhibit |
-| `Frag.annot` | `wps_annot` | AllocExhibit, ArrayExhibit, ListRevExhibit, LoopExhibit, StructExhibit, TreeRotExhibit, WseqExhibit |
+| `Frag.sseq` | `wps_seq` | AllocExhibit, Exhibit, ListRevExhibit, LoopExhibit, StructExhibit, TreeRotExhibit |
+| `Frag.annot` | `wps_annot` | AllocExhibit, ArrayExhibit, Exhibit, ListRevExhibit, LoopExhibit, StructExhibit, TreeRotExhibit, WseqExhibit |
 | `Frag.save` | `wps_save` | ArrayExhibit, FibExhibit, ListRevExhibit, LoopExhibit |
 | `Frag.if_` | `wps_if_true` | ArrayExhibit, FibExhibit, ListRevExhibit, LoopExhibit |
 | `Frag.run` | `wps_run` | ArrayExhibit, FibExhibit, ListRevExhibit, LoopExhibit |
