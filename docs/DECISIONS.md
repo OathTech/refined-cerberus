@@ -738,3 +738,33 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   package holds against both texts, but that run was not a build against
   the pin; recorded. A deliberate re-pin to a post-C3 head is a separate
   forced-semantics-change slice, not taken now.
+- **2026-09-02 [USER] MIRROR COMPLETENESS — GO** (verbatim): "Can we work
+  on this before the cerberus-lean team resolve the fuel issue? And are
+  there any considerations about how we do this that impact our future
+  RefinedC buildout? If both are clear, you can go ahead and begin
+  executing on this while we wait for the cerberus-lean team". Operator's
+  understanding, confirmed with the precision recorded here: on the
+  fragment the mirror is EXACTLY the engine restricted to its successful
+  deterministic rounds — mirror steps iff the engine has a successful
+  deterministic round, with the same successor; the engine's failure
+  outcomes (UB, kills, the nondeterministic fork) are stuck in the mirror
+  and CLASSIFIED in the engine, not modelled as transitions. [AGENT]
+  answers: (1) independent of the fuel fix — completeness is about
+  single rounds (`step_ctx` + the shipped request handling + the memory
+  functions), not the loop; (2) RefinedC-shaping constraints — one
+  coverage lemma per fragment constructor (linear growth; a missing arm
+  fails a proof, not an audit); classify refusals in the engine's own
+  kill vocabulary (`Undef0` codes, `Error0`), which is what a "no UB"
+  claim needs; do not bake determinism in — the fork is a class the
+  mirror may later cover with a nondeterministic step (Iris WP handles
+  demonic choice); freeze respected — no new constructs, coverage bugs
+  found on the way are quality fixes. FINDING folded into the slice:
+  the round relation `CerberusRound` and the certification/classification
+  exports (`engine_step_matchU`, `step_iff_cerberusRound`,
+  `cerberusRound_classify`) are stated over `outcomesU`, i.e. over the
+  hand-written `dischargeStep` — the new trust rule applies; the slice
+  restates the round over the SHIPPED driver's one-iteration unfolding
+  (the `loop_step_frag` shape: `runOne (drive_nonmemory_steps_aux2_lemFuel
+  (fl+1) …) dst = runOne (… fl …) dst'`, killed/done terminals, ≥2
+  outcomes for a fork), no fuel dependency, `dischargeStep` demoted to a
+  proof device.
