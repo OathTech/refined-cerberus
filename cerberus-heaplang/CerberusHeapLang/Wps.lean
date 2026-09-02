@@ -444,10 +444,16 @@ theorem wps_frame_labels {Ψ : SpikeVal → EnvStack → IProp GF} (R : IProp GF
       imodintro
       iapply IH $$ %(r.e) %(r.ρ) H HR
 
-/-! ## The annotation layer at this stratum (the R-i cost, re-paid
-once — the run-time Eannot residue commutes with `wps` exactly as
-with the base WP; proofs mirror Rules.lean's `wp_annot_reindex` /
-`wp_annot` over `wps.pre`) -/
+/-! ## The annotation layer (the R-i cost): the run-time Eannot
+residue commutes with `wps`. Two steps: `wps_annot_reindex` — two
+wraps of the SAME body differing only in the dyn-annotation payload
+step in lockstep forever (annotations never influence fragment
+stepping — they are race bookkeeping), so their judgments are
+interderivable whenever the postconditions agree modulo `merge`
+(Löb induction over `wps.pre`); `wps_annot` — the commuting rule
+itself, whose annot-rooted-body case takes the ANNOTS merge step and
+exits through the reindexing lemma. The value-side input is
+`toVal_annot_cases`/`toVal_annot_none` (Rules.lean). -/
 
 /-- Annotation reindexing (the lockstep argument) over `wps`. -/
 theorem wps_annot_reindex (a : List annot) (dsA dsB : List dyn_annotation)
@@ -542,9 +548,9 @@ theorem wps_annot_reindex (a : List annot) (dsA dsB : List dyn_annotation)
               exact hΦ (SpikeVal.merge ds2 w) ρ') H
         · rw [jumpRedex?_annot_of_not_root _ _ hg, hj] at hjr; cases hjr
 
-/-- `wps` commutes with the run-time dyn-annotation wrapper (mirror
-    of `wp_annot`; the merge case exits through the reindexing
-    lemma). -/
+/-- `wps` commutes with the run-time dyn-annotation wrapper: to
+    verify `{A}e`, verify `e` with the postcondition translated along
+    `merge` (the merge case exits through the reindexing lemma). -/
 theorem wps_annot (ds : List dyn_annotation) (e : CoreExpr) (ρ : EnvStack)
     {Ψ : SpikeVal → EnvStack → IProp GF} :
     wps M Ls (fun w ρ' => Ψ (SpikeVal.merge ds w) ρ') e ρ ⊢

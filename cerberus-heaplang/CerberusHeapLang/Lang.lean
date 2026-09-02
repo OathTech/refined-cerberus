@@ -19,8 +19,9 @@ sequential path.
   instance is TRUE for a jump-free relation but the global jump
   rule FALSIFIES it (a jump of e1 and of `Esseq pat e1 e2` step to
   the SAME configuration, so `Context.primStep_fill` fails). The
-  sequencing routes in force (Wps.lean `wps_seq`; Rules.lean
-  `wp_sseq`'s factor proof) do not use one.
+  sequencing rules in force (Wps.lean `wps_seq`, Wpt.lean `wpt_seq`
+  — direct Löb/budget inductions over the factor structure of the
+  Esseq frame) do not use one.
 
 SOUNDNESS STATUS: the WP is over Step; Step's certification against
 the engine is Soundness.lean, and the engine-facing meaning lands
@@ -86,108 +87,6 @@ framed term is not always a framed step. Statement-level fact
 recording the falsification direction: `Step.sseq_inv`'s jump
 disjunct (Step.lean). Nothing in the sequencing routes uses such an
 instance (header note). -/
-
-/-! ## Determinism / reducibility facts for the pure steps
-
-These feed `wp_lift_pure_det_step_no_fork` (Lifting.lean:171) — the
-beta and merge steps are deterministic, state-independent taus. The
-beta facts are stated at cons-shaped env stacks: the betas fire only
-there (Step.lean header note 1 — the empty-env panic channel is
-mirrored as absence of a step). -/
-
-/-- The Esseq wildcard beta on a bare value is a pure deterministic
-    step (LETS-PURE). -/
-theorem sseq_pure_det {M : MachineCtx} {a pa : List annot}
-    {bty : core_base_type} {v : value}
-    {e2 : CoreExpr} {ev0 : Fmap sym value} {evs : List (Fmap sym value)}
-    {σ : Mem} {obs : List Empty} {r' : CoreRt} {σ' : Mem} {eₜ : List CoreRt}
-    (h : PrimStep.primStep
-      ((⟨Expr a (Esseq (Pattern pa (CaseBase (none, bty))) (ofVal (.pure v)) e2),
-        ev0 :: evs, M⟩ : CoreRt), σ) obs (r', σ', eₜ)) :
-    obs = [] ∧ σ' = σ ∧ r' = (⟨e2, ev0 :: evs, M⟩ : CoreRt) ∧ eₜ = [] := by
-  obtain ⟨hstep, hlbl, hefs⟩ := h
-  rcases hstep.sseq_inv with ⟨e1', ρ'', σ'', hnj, hs, hout⟩ |
-      ⟨_, _, w, _, _, hp, he, _, hout⟩ | ⟨_, _, ds, w, _, _, hp, he, _, hout⟩ |
-      ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩ |
-      ⟨_, _, _, _, _, _, _, hpat, _, _, _⟩ |
-      ⟨_, _, _, _, _, _, _, _, hpat, _, _, _⟩ |
-      ⟨_, _, _, _, _, _, hpat, _, _, _⟩
-  · exact absurd hs (fun hs => Step.val_elim hs)
-  · obtain ⟨h1, h2, h3⟩ : r'.e = e2 ∧ r'.ρ = ev0 :: evs ∧ σ' = σ := by
-      simpa [Prod.mk.injEq] using hout
-    refine ⟨List.empty_eq_nil obs, h3, ?_, hefs⟩
-    obtain ⟨re, rρ, rQ⟩ := r'
-    simp only at h1 h2 hlbl
-    rw [h1, h2, hlbl]
-  · -- a bare value form cannot be the annot value form
-    exact absurd he (by simp [ofVal])
-  · rw [jumpRedex?_ofVal] at hj; cases hj
-  · exact (specPat_ne_base hpat).elim
-  · exact (specPat_ne_base hpat).elim
-  · exact (symPat_ne_base hpat).elim
-
-/-- The Esseq wildcard beta on an annot value is a pure deterministic
-    step (LETS-ANNOT). -/
-theorem sseq_annot_det {M : MachineCtx} {a pa : List annot}
-    {bty : core_base_type}
-    {ds : List dyn_annotation} {v : value} {e2 : CoreExpr}
-    {ev0 : Fmap sym value} {evs : List (Fmap sym value)} {σ : Mem}
-    {obs : List Empty} {r' : CoreRt} {σ' : Mem} {eₜ : List CoreRt}
-    (h : PrimStep.primStep
-      ((⟨Expr a (Esseq (Pattern pa (CaseBase (none, bty))) (ofVal (.annot ds v)) e2),
-        ev0 :: evs, M⟩ : CoreRt), σ) obs (r', σ', eₜ)) :
-    obs = [] ∧ σ' = σ ∧
-      r' = (⟨Expr [] (Eannot ds e2), ev0 :: evs, M⟩ : CoreRt) ∧ eₜ = [] := by
-  obtain ⟨hstep, hlbl, hefs⟩ := h
-  rcases hstep.sseq_inv with ⟨e1', ρ'', σ'', hnj, hs, hout⟩ |
-      ⟨_, _, w, _, _, hp, he, _, hout⟩ | ⟨_, _, ds', w, _, _, hp, he, _, hout⟩ |
-      ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩ |
-      ⟨_, _, _, _, _, _, _, hpat, _, _, _⟩ |
-      ⟨_, _, _, _, _, _, _, _, hpat, _, _, _⟩ |
-      ⟨_, _, _, _, _, _, hpat, _, _, _⟩
-  · exact absurd hs (fun hs => Step.val_elim hs)
-  · exact absurd he (by simp [ofVal])
-  · obtain ⟨hds, -⟩ : ds = ds' ∧ v = w := by simpa [ofVal] using he
-    subst hds
-    obtain ⟨h1, h2, h3⟩ : r'.e = Expr [] (Eannot ds e2) ∧
-        r'.ρ = ev0 :: evs ∧ σ' = σ := by
-      simpa [Prod.mk.injEq] using hout
-    refine ⟨List.empty_eq_nil obs, h3, ?_, hefs⟩
-    obtain ⟨re, rρ, rQ⟩ := r'
-    simp only at h1 h2 hlbl
-    rw [h1, h2, hlbl]
-  · rw [jumpRedex?_ofVal] at hj; cases hj
-  · exact (specPat_ne_base hpat).elim
-  · exact (specPat_ne_base hpat).elim
-  · exact (symPat_ne_base hpat).elim
-
-/-- The ANNOTS merge is a pure deterministic step (any env — the
-    merge never reads it). -/
-theorem annot_merge_det {M : MachineCtx} {a1 a2 : List annot}
-    {ds1 ds2 : List dyn_annotation}
-    {b : CoreExpr} {ρ : EnvStack} {σ : Mem} {obs : List Empty}
-    {r' : CoreRt} {σ' : Mem} {eₜ : List CoreRt}
-    (h : PrimStep.primStep
-      ((⟨Expr a1 (Eannot ds1 (Expr a2 (Eannot ds2 b))), ρ, M⟩ : CoreRt), σ)
-      obs (r', σ', eₜ)) :
-    obs = [] ∧ σ' = σ ∧
-      r' = (⟨Expr (a1 ++ a2) (Eannot (ds1 ++ ds2) b), ρ, M⟩ : CoreRt) ∧
-      eₜ = [] := by
-  obtain ⟨hstep, hlbl, hefs⟩ := h
-  rcases hstep.annot_inv with ⟨hg, hnj, b', ρ'', σ'', hs, hout⟩ |
-      ⟨a2', ds2', c, hb, hout⟩ |
-      ⟨l, pes, params, cont, vs, _, _, hg, hj, _, _, _, _⟩
-  · simp [annotRooted] at hg
-  · obtain ⟨rfl, rfl, rfl⟩ : a2 = a2' ∧ ds2 = ds2' ∧ b = c := by
-      simpa using hb
-    obtain ⟨h1, h2, h3⟩ : r'.e = Expr (a1 ++ a2) (Eannot (ds1 ++ ds2) b) ∧
-        r'.ρ = ρ ∧ σ' = σ := by
-      simpa [Prod.mk.injEq] using hout
-    refine ⟨List.empty_eq_nil obs, h3, ?_, hefs⟩
-    obtain ⟨re, rρ, rQ⟩ := r'
-    simp only at h1 h2 hlbl
-    rw [h1, h2, hlbl]
-  · simp [annotRooted] at hg
 
 /-! ## The Iris ghost-state instance -/
 

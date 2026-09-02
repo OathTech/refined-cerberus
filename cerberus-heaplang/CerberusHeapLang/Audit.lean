@@ -76,12 +76,14 @@ def allowedAxioms : List Name :=
     the README's exhibits table and trust diagram, and WALKTHROUGH §6,
     name these). -/
 def trioExports : List Name := [
-  -- spike: the base logic exhibit, the engine-facing spine
-  ``CerberusHeapLang.exhibit, ``CerberusHeapLang.spike_engine_adequacy,
+  -- the two exhibit shapes at the statement stratum (QA-2: the raw-WP
+  -- twins `exhibit`/`exhibitC_triple` retired), the engine-facing spine
+  ``CerberusHeapLang.wps_exhibit_store_frame, ``CerberusHeapLang.wps_exhibit_seq_stores,
+  ``CerberusHeapLang.spike_engine_adequacy,
   ``CerberusHeapLang.semantic_triple_sound, ``CerberusHeapLang.semantic_frame,
   ``CerberusHeapLang.exhibitA_engine, ``CerberusHeapLang.exhibitB_engine,
   ``CerberusHeapLang.exhibitA_semantic, ``CerberusHeapLang.exhibitB_semantic,
-  ``CerberusHeapLang.exhibitC_triple, ``CerberusHeapLang.exhibitC_semantic,
+  ``CerberusHeapLang.exhibitC_semantic,
   ``CerberusHeapLang.exhibitC_engine, ``CerberusHeapLang.exhibitA_total,
   -- the jump layer + the unified relation
   ``CerberusHeapLang.stepDischarge_run, ``CerberusHeapLang.Decomp.step_factor,

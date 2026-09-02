@@ -10,14 +10,22 @@ concluded AT THE ENGINE LEVEL via adequacy.
     execution; the VALUE and SAFETY facts are by adequacy, not by
     evaluation).
 (b) the frame exhibit, discharged end-to-end:
-    {x ↦ - ∗ y ↦ a} store(x,7) {x ↦ 7 ∗ y ↦ a} (`exhibit`, Examples/Layout.lean, built
-    by FRAME on the store small axiom) lands as an engine fact: the
-    drive of store(x,7) cannot kill, and afterwards the real
-    MemState holds 7's bytes at x and y's bytes UNCHANGED — the
-    frame's locality read back from the engine's bytemap.
+    {x ↦ - ∗ y ↦ a} store(x,7) {x ↦ 7 ∗ y ↦ a} (`wps_exhibit_store_frame`,
+    Examples/Layout.lean, built by FRAME on the store small axiom)
+    lands as an engine fact: the drive of store(x,7) cannot kill, and
+    afterwards the real MemState holds 7's bytes at x and y's bytes
+    UNCHANGED — the frame's locality read back from the engine's
+    bytemap.
 (c) disjoint sequential stores: `lets _ = store(x,5) in store(y,6)`
-    updates BOTH cells non-conflictingly — wp_store per leg, each
-    framed with the other cell, glued by triple_seq.
+    updates BOTH cells non-conflictingly — the store small axiom per
+    leg, glued by the sequencing rule (`wps_exhibit_seq_stores`).
+
+The interior derivations: (b)'s `provenB` is the raw-WP small axiom
+`wp_store` directly; (a)'s `provenA` and (c)'s `provenC` are
+statement-stratum derivations (`wps_seq`/`wps_store`/`wps_load`,
+resp. `wps_exhibit_seq_stores`) collapsed into the base WP by
+`wps_sound` at the vacuous label context — the one route every other
+exhibit takes.
 
 The seeded state: two int-cells allocated from the empty MemState by
 `CerbMem.allocateObject` (the engine's allocator, CerbMem.lean:1469).
@@ -322,31 +330,45 @@ theorem provenB {GF : BundledGFunctors} [SpikeGpreS GF] :
   · ihave HC := ptx_to_cells $$ Hx
     iexact HC
 
+/-- Vacuous block specifications at the straight-line profile (no
+    label is registered), at any postcondition. -/
+theorem spike_blockSpecs [SpikeGS .hasLC GF] (Ψ : SpikeVal → EnvStack → IProp GF) :
+    ⊢ blockSpecs (GF := GF) spikeCtx (fun _ _ _ => iprop(False)) Ψ :=
+  blockSpecs_intro fun l _ _ _ _ _ hl => (spikeCtx_labels_none l hl).elim
+
 /-- The store-then-load footprint triple:
-    ⦃x ↦ bytesX⦄ lets _ = store(x,7) in load(x) ⦃Specified 7; x ↦ seven-bytes⦄. -/
+    ⦃x ↦ bytesX⦄ lets _ = store(x,7) in load(x) ⦃Specified 7; x ↦ seven-bytes⦄
+    — `wps_seq` over `wps_store` then `wps_load`, collapsed into the
+    base WP by `wps_sound`. -/
 theorem provenA {GF : BundledGFunctors} [SpikeGpreS GF] :
     ProvenTriple GF progA mA (fun v Q => v = sevenVal ∧ Q = mA7) := by
   intro instGS
-  refine bigSepA_ptx.trans (.trans ?_ (wp_sseq [] [] BTy_unit _ _ fmapEmpty []))
+  refine bigSepA_ptx.trans ?_
+  refine .trans ?_ ((BI.emp_sep.2.trans (BI.sep_mono
+    ((spike_blockSpecs (fun w _ => iprop(∃ Q : CellMap, ⌜w.val = sevenVal ∧ Q = mA7⌝ ∗
+        ([∗map] i ↦ c ∈ Q, cellOwn spikeCtx.tagDefs (hlc := .hasLC) (GF := GF) i (.own 1) c)))).trans
+      (wps_sound progA spikeEnv)) .rfl)).trans
+    BI.wand_elim_left)
+  rw [show (progA : CoreExpr) =
+    Expr [] (Esseq (Pattern [] (CaseBase (none, BTy_unit)))
+      (storeExpr loc0 empty_annotation intTy xPtr sevenVal NA)
+      (loadExpr loc0 empty_annotation intTy xPtr NA)) from rfl]
   iintro Hx
-  ihave HW := wp_store (s := Stuckness.NotStuck) (E := ⊤) (M := spikeCtx) loc0 empty_annotation
-    intTy xPtr sevenVal NA sevenMval bytesX spikeEnv seven_encodes (seven_storable _) $$ Hx
-  iapply spike_wp_wand $$ HW
-  iintro %v ⟨%fp, %hv, Hx⟩
-  subst hv
-  iapply BI.later_intro
-  ihave HW2 := wp_load (s := Stuckness.NotStuck) (E := ⊤) loc0 empty_annotation
-    intTy xPtr NA (.own 1) (CerbMem.memValueToBytes fmapEmpty [] sevenMval).2 spikeEnv
-    htrap_seven $$ Hx
-  iapply spike_wp_wand $$ HW2
-  iintro %w ⟨%fp2, %hw, Hx⟩
+  iapply wps_seq
+  iapply wps_store loc0 empty_annotation intTy xPtr sevenVal NA sevenMval bytesX
+    spikeEnv seven_encodes (seven_storable _)
+  isplitl [Hx]
+  · iexact Hx
+  iintro %fp Hx
+  iapply wps_load loc0 empty_annotation intTy xPtr NA (.own 1)
+    (CerbMem.memValueToBytes fmapEmpty [] sevenMval).2 spikeEnv htrap_seven
+  isplitl [Hx]
+  · iexact Hx
+  iintro %fp2 Hx
   iexists mA7
   isplit
   · ipureintro
-    subst hw
-    refine ⟨?_, rfl⟩
-    simp only [mergeInto, CoreRVal.val, CoreRVal.merge_mk, SpikeVal.val_merge]
-    exact loaded_seven
+    exact ⟨loaded_seven, rfl⟩
   · ihave HC := ptx_to_cells $$ Hx
     iexact HC
 
@@ -608,14 +630,13 @@ theorem exhibitA_total (aids : Nat → Nat) :
 exported to the engine level
 
 `lets _ = store(x,5) in store(y,6)` on the two seeded cells. The
-interior derivation is `exhibitC_triple` (Examples/Layout.lean) — wp_store per
-leg FRAMED with the other cell, glued by triple_seq; the export
-below only repackages its footprint form through
-`semantic_triple_sound`. The postcondition carries NO value clause:
-`triple_seq`'s assertion-postcondition form (deliberately, the
-wildcard-binding fragment shape) discards the delivered value, and
-re-deriving it monolithically would defeat the exhibit's point —
-the update facts are the content. -/
+interior derivation is `wps_exhibit_seq_stores` (Examples/Layout.lean)
+— the store small axiom per leg, glued by the sequencing rule; the
+export below collapses it into the base WP (`wps_sound`) and
+repackages its footprint form through `semantic_triple_sound`. The
+postcondition carries NO value clause: the exhibit's assertion-only
+postcondition (deliberately, the wildcard-binding fragment shape)
+discards the delivered value — the update facts are the content. -/
 
 /-- Exhibit (c): `lets _ = store(x,5) in store(y,6)`, x/y the two
     seeded disjoint cells. -/
@@ -697,13 +718,18 @@ theorem cells_to_mC [SpikeGS .hasLC GF] :
       itrivial
 
 /-- The two-store footprint triple: the interior compositional
-    derivation `exhibitC_triple` repackaged at footprint granularity
-    — no re-derivation, only big-sep ↔ pointsToCell fmapEmpty plumbing. -/
+    derivation `wps_exhibit_seq_stores` collapsed into the base WP and
+    repackaged at footprint granularity — no re-derivation, only
+    big-sep ↔ pointsToCell fmapEmpty plumbing. -/
 theorem provenC {GF : BundledGFunctors} [SpikeGpreS GF] :
     ProvenTriple GF progC mB (fun _ Q => Q = mC) := by
   intro instGS
-  refine bigSepB_pts.trans ((exhibitC_triple xPtr yPtr loc0 loc0
-    empty_annotation empty_annotation NA NA BTy_unit bytesX bytesY).trans ?_)
+  refine bigSepB_pts.trans ((wps_exhibit_seq_stores (M := spikeCtx)
+    (Ls := fun _ _ _ => iprop(False)) xPtr yPtr loc0 loc0
+    empty_annotation empty_annotation NA NA BTy_unit bytesX bytesY fmapEmpty []).trans ?_)
+  refine ((BI.emp_sep.2.trans (BI.sep_mono
+    ((spike_blockSpecs _).trans (wps_sound progC spikeEnv)) .rfl)).trans
+    BI.wand_elim_left).trans ?_
   apply wp_mono
   intro v
   iintro ⟨Hx, Hy⟩

@@ -116,7 +116,7 @@ DESIGN NOTES (each mirrors a specific engine behavior):
    `Language.Context` instance for the Esseq frame is possible once
    jumps exist (a jump of e1 and of `Esseq pat e1 e2` step to the
    SAME configuration) — sequencing is proved directly instead
-   (Rules.lean `wp_sseq`, Wps.lean `wps_seq`).
+   (Wps.lean `wps_seq`, Wpt.lean `wpt_seq`).
 
 5. Esave / Eif / Ecase are LOCAL rules in the engine's measured
    granularity: Esave entry is a pure TAU at value-shaped parameter
@@ -446,11 +446,6 @@ def CoreRVal.merge (ds : List dyn_annotation) (v : CoreRVal) : CoreRVal :=
 @[simp] theorem CoreRVal.merge_mk (ds : List dyn_annotation) (w : SpikeVal)
     (ρ : EnvStack) (M : MachineCtx) :
     CoreRVal.merge ds ⟨w, ρ, M⟩ = ⟨SpikeVal.merge ds w, ρ, M⟩ := rfl
-
-@[simp] theorem CoreRVal.merge_merge (ds ds' : List dyn_annotation)
-    (v : CoreRVal) :
-    CoreRVal.merge ds (CoreRVal.merge ds' v) = CoreRVal.merge (ds ++ ds') v := by
-  cases v; simp [CoreRVal.merge]
 
 @[simp] theorem CoreRVal.val_merge (ds : List dyn_annotation) (v : CoreRVal) :
     (CoreRVal.merge ds v).val = v.val := by
@@ -2167,26 +2162,5 @@ theorem procCtx_labels {p : sym} {rs : core_run_state} {Q : LabelMap}
     | some Q => Q
     | none => fmapEmpty) = Q
   rw [hQ]
-
-/-- At an empty derived label map nothing ever jumps: any step's
-    subject has no REGISTERED jump redex (registration is what the
-    jump rule needs). -/
-theorem Step.jumpRedex?_none_of_empty {M : MachineCtx}
-    (hlbl : M.labels = spikeLbl) {e : CoreExpr} {ρ : EnvStack}
-    {σ : Mem} {out : CoreExpr × EnvStack × Mem}
-    (h : Step M (e, ρ, σ) out) : jumpRedex? e = none := by
-  cases hj : jumpRedex? e with
-  | none => rfl
-  | some lp =>
-    obtain ⟨l, pes⟩ := lp
-    obtain ⟨params, cont, vs, ev0, evs, -, hl, -, -⟩ := h.jump_inv hj
-    rw [hlbl, lookupLabel_empty] at hl
-    cases hl
-
-/-- ... the `spikeCtx` instance (the straight-line lane's guard fact). -/
-theorem Step.jumpRedex?_none_of_spikeCtx {e : CoreExpr} {ρ : EnvStack}
-    {σ : Mem} {out : CoreExpr × EnvStack × Mem}
-    (h : Step spikeCtx (e, ρ, σ) out) : jumpRedex? e = none :=
-  h.jumpRedex?_none_of_empty rfl
 
 end CerberusHeapLang
