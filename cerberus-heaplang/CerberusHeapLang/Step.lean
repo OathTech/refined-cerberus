@@ -592,13 +592,18 @@ def evalBinop : binop → value → value → Option value
     `PEarray_shift` value dispatch (Core_eval.lean:145): a pointer
     and an integer produce `arrayShiftPtrval` (the ENGINE'S OWN
     function, so the mirror is exact by construction — including on
-    degenerate pointers, where both compute the same value); any
+    degenerate pointers, where both compute the same value), applied
+    at the TAG ENVIRONMENT `tds` exactly as the engine applies it at
+    its reader `(CerbMem.arrayShiftPtrval _lemReader_tagDefs)`
+    (Core_eval.lean:145; the C1 reader_consumer threading, cerberus-lean
+    docs/2026-08-31_C1-change-manifest.md §4); any
     other operand shapes are fail-closed `none` (the engine's arm
     there is the Illformed_program channel — no mirror step). S4:
     the pointer-arithmetic extension the array exhibit needs. -/
-def evalArrayShift (ty : ctype) : value → value → Option value
+def evalArrayShift (tds : CerbTags.TagDefsMap) (ty : ctype) :
+    value → value → Option value
   | Vobject (OVpointer pv), Vobject (OVinteger iv) =>
-      some (Vobject (OVpointer (CerbMem.arrayShiftPtrval pv ty iv)))
+      some (Vobject (OVpointer (CerbMem.arrayShiftPtrval tds pv ty iv)))
   | _, _ => none
 
 /-- The pure evaluator (fragment operands; partial, fail-closed).
@@ -609,71 +614,72 @@ def evalArrayShift (ty : ctype) : value → value → Option value
     pinned the whole bridge tower at `extern = fmapEmpty` (design
     record §5.2). The lookup-failure proc-pointer fallback channel
     (`file1.funs`) is fail-closed absence, as before. -/
-def evalPexpr (ext : Fmap sym sym) (ρ : EnvStack) :
+def evalPexpr (tds : CerbTags.TagDefsMap) (ext : Fmap sym sym) (ρ : EnvStack) :
     generic_pexpr Unit sym → Option value
   | Pexpr _ _ (PEval v) => some v
   | Pexpr _ _ (PEsym x) => lookup_env (resolveExtern ext x) ρ
   | Pexpr _ _ (PEop op pe1 pe2) => do
-      let v1 ← evalPexpr ext ρ pe1
-      let v2 ← evalPexpr ext ρ pe2
+      let v1 ← evalPexpr tds ext ρ pe1
+      let v2 ← evalPexpr tds ext ρ pe2
       evalBinop op v1 v2
   | Pexpr _ _ (PEarray_shift pe1 ty pe2) => do
-      let v1 ← evalPexpr ext ρ pe1
-      let v2 ← evalPexpr ext ρ pe2
-      evalArrayShift ty v1 v2
+      let v1 ← evalPexpr tds ext ρ pe1
+      let v2 ← evalPexpr tds ext ρ pe2
+      evalArrayShift tds ty v1 v2
   | _ => none
 
-@[simp] theorem evalPexpr_val (ext : Fmap sym sym) (ρ : EnvStack)
+@[simp] theorem evalPexpr_val (tds : CerbTags.TagDefsMap) (ext : Fmap sym sym) (ρ : EnvStack)
     (a : List annot) (v : value) :
-    evalPexpr ext ρ (Pexpr a () (PEval v)) = some v := rfl
+    evalPexpr tds ext ρ (Pexpr a () (PEval v)) = some v := rfl
 
-@[simp] theorem evalPexpr_sym (ext : Fmap sym sym) (ρ : EnvStack)
+@[simp] theorem evalPexpr_sym (tds : CerbTags.TagDefsMap) (ext : Fmap sym sym) (ρ : EnvStack)
     (a : List annot) (x : sym) :
-    evalPexpr ext ρ (Pexpr a () (PEsym x)) =
+    evalPexpr tds ext ρ (Pexpr a () (PEsym x)) =
       lookup_env (resolveExtern ext x) ρ := rfl
 
 /-- ... at the empty extern the indirection is the identity (the
     frozen profiles' instance; rfl). -/
-@[simp] theorem evalPexpr_sym_empty (ρ : EnvStack) (a : List annot) (x : sym) :
-    evalPexpr fmapEmpty ρ (Pexpr a () (PEsym x)) = lookup_env x ρ := rfl
+@[simp] theorem evalPexpr_sym_empty (tds : CerbTags.TagDefsMap) (ρ : EnvStack)
+    (a : List annot) (x : sym) :
+    evalPexpr tds fmapEmpty ρ (Pexpr a () (PEsym x)) = lookup_env x ρ := rfl
 
-theorem evalPexpr_op (ext : Fmap sym sym) (ρ : EnvStack) (a : List annot)
+theorem evalPexpr_op (tds : CerbTags.TagDefsMap) (ext : Fmap sym sym) (ρ : EnvStack) (a : List annot)
     (op : binop) (pe1 pe2 : generic_pexpr Unit sym) :
-    evalPexpr ext ρ (Pexpr a () (PEop op pe1 pe2)) = (do
-      let v1 ← evalPexpr ext ρ pe1
-      let v2 ← evalPexpr ext ρ pe2
+    evalPexpr tds ext ρ (Pexpr a () (PEop op pe1 pe2)) = (do
+      let v1 ← evalPexpr tds ext ρ pe1
+      let v2 ← evalPexpr tds ext ρ pe2
       evalBinop op v1 v2) := rfl
 
-theorem evalPexpr_array_shift (ext : Fmap sym sym) (ρ : EnvStack)
+theorem evalPexpr_array_shift (tds : CerbTags.TagDefsMap) (ext : Fmap sym sym) (ρ : EnvStack)
     (a : List annot) (ty : ctype)
     (pe1 pe2 : generic_pexpr Unit sym) :
-    evalPexpr ext ρ (Pexpr a () (PEarray_shift pe1 ty pe2)) = (do
-      let v1 ← evalPexpr ext ρ pe1
-      let v2 ← evalPexpr ext ρ pe2
-      evalArrayShift ty v1 v2) := rfl
+    evalPexpr tds ext ρ (Pexpr a () (PEarray_shift pe1 ty pe2)) = (do
+      let v1 ← evalPexpr tds ext ρ pe1
+      let v2 ← evalPexpr tds ext ρ pe2
+      evalArrayShift tds ty v1 v2) := rfl
 
 /-- All-or-nothing list evaluation (the engine's per-argument
     `full_eval_pexpr'` fold in step_ctx's Erun arm evaluates each
     argument against the ORIGINAL env — `full_eval_pexpr'` is closed
     over `th_st` — while threading the binding accumulator;
     `evalPexprs` mirrors the evaluation half). -/
-def evalPexprs (ext : Fmap sym sym) (ρ : EnvStack) :
+def evalPexprs (tds : CerbTags.TagDefsMap) (ext : Fmap sym sym) (ρ : EnvStack) :
     List (generic_pexpr Unit sym) → Option (List value)
   | [] => some []
   | pe :: pes => do
-      let v ← evalPexpr ext ρ pe
-      let vs ← evalPexprs ext ρ pes
+      let v ← evalPexpr tds ext ρ pe
+      let vs ← evalPexprs tds ext ρ pes
       pure (v :: vs)
 
-@[simp] theorem evalPexprs_nil (ext : Fmap sym sym) (ρ : EnvStack) :
-    evalPexprs ext ρ [] = some [] := rfl
+@[simp] theorem evalPexprs_nil (tds : CerbTags.TagDefsMap) (ext : Fmap sym sym) (ρ : EnvStack) :
+    evalPexprs tds ext ρ [] = some [] := rfl
 
-theorem evalPexprs_cons (ext : Fmap sym sym) (ρ : EnvStack)
+theorem evalPexprs_cons (tds : CerbTags.TagDefsMap) (ext : Fmap sym sym) (ρ : EnvStack)
     (pe : generic_pexpr Unit sym)
     (pes : List (generic_pexpr Unit sym)) :
-    evalPexprs ext ρ (pe :: pes) = (do
-      let v ← evalPexpr ext ρ pe
-      let vs ← evalPexprs ext ρ pes
+    evalPexprs tds ext ρ (pe :: pes) = (do
+      let v ← evalPexpr tds ext ρ pe
+      let vs ← evalPexprs tds ext ρ pes
       pure (v :: vs)) := rfl
 
 /-! ## The plain-symbol binder pattern (list-reverse arc, phase A)
@@ -816,10 +822,10 @@ inductive Step (M : MachineCtx) :
       (Core_reduction.lean:424 — operand readout via
       act_valueFromPexpr, memValueFromValue at
       `Ctype [] (unatomic_ ty)`, request `StoreRequest2`), driver
-      discharge `liftMem (CerbMem.storeM loc ty lk pv mv)`
+      discharge `liftMem (CerbMem.storeM M.tagDefs loc ty lk pv mv)`
       (Driver.lean:273), continuation
       `Expr [] (Eannot [DA_pos [] fp] (mk_value_e Vunit))` (is_excluded
-      = none on the fragment's positive path). storeM: CerbMem.lean:1632.
+      = none on the fragment's positive path). storeM: CerbMem.lean:1667.
       The env is unread and returned verbatim (the request path never
       touches thread env). -/
   | store {a : List annot} {loc : CerbLocation.Loc} {ann : core_run_annotation}
@@ -831,7 +837,7 @@ inductive Step (M : MachineCtx) :
       (h2 : valueFromPexpr pe2 = some (Vobject (OVpointer pv)))
       (h3 : valueFromPexpr pe3 = some cv)
       (hmv : memValueFromValue M.tagDefs (Ctype [] (unatomic_ ty)) cv = some mv)
-      (hmem : applyMemM (CerbMem.storeM loc ty lk pv mv) σ = some (fp, σ')) :
+      (hmem : applyMemM (CerbMem.storeM M.tagDefs loc ty lk pv mv) σ = some (fp, σ')) :
       Step M (Expr a (Eaction (Paction polarity.Pos (Action loc ann
               (Store0 lk pe1 pe2 pe3 mo)))), ρ, σ)
            (Expr [] (Eannot [DA_pos [] fp]
@@ -840,7 +846,7 @@ inductive Step (M : MachineCtx) :
       Load0 arm (Core_reduction.lean:424 — request `LoadRequest2`,
       continuation `Expr [] (Eannot [DA_pos [] fp] (mk_value_e
       (valueFromMemValue mval).2))`), driver discharge
-      `liftMem (CerbMem.loadM loc ty pv)` (Driver.lean:273).
+      `liftMem (CerbMem.loadM M.tagDefs loc ty pv)` (Driver.lean:273).
       loadM: CerbMem.lean:1586 (returns the state unchanged on the
       active path — σ' = σ is derivable, kept in applyMemM shape). -/
   | load {a : List annot} {loc : CerbLocation.Loc} {ann : core_run_annotation}
@@ -850,7 +856,7 @@ inductive Step (M : MachineCtx) :
       {ρ : EnvStack} {σ σ' : Mem}
       (h1 : valueFromPexpr pe1 = some (Vctype ty))
       (h2 : valueFromPexpr pe2 = some (Vobject (OVpointer pv)))
-      (hmem : applyMemM (CerbMem.loadM loc ty pv) σ = some ((fp, mval), σ')) :
+      (hmem : applyMemM (CerbMem.loadM M.tagDefs loc ty pv) σ = some ((fp, mval), σ')) :
       Step M (Expr a (Eaction (Paction polarity.Pos (Action loc ann
               (Load0 pe1 pe2 mo)))), ρ, σ)
            (Expr [] (Eannot [DA_pos [] fp]
@@ -863,7 +869,8 @@ inductive Step (M : MachineCtx) :
       arm for these shapes; request `CreateRequest2 pref align ty
       (get_with_address e_annots) none` with continuation
       `mk_value_e (Vobject (OVpointer ptrval))` — a BARE value, no
-      Eannot residue), driver discharge `liftMem (CerbMem.allocateObject
+      Eannot residue), driver discharge `liftMem ((CerbMem.allocateObject
+      _lemReader_tagDefs)
       tid pref align ty req_addr_opt init_opt)` (Driver.lean:273).
       allocateObject DISCARDS both the thread id and the requested
       address (CerbMem.lean:1470-1474, `_ : Nat` / `_ : Option Int`),
@@ -878,7 +885,7 @@ inductive Step (M : MachineCtx) :
       {pv : CerbMem.PointerValue} {ρ : EnvStack} {σ σ' : Mem}
       (h1 : valueFromPexpr pe1 = some (Vobject (OVinteger align)))
       (h2 : valueFromPexpr pe2 = some (Vctype ty))
-      (hmem : applyMemM (CerbMem.allocateObject 0 pref align ty none none) σ =
+      (hmem : applyMemM (CerbMem.allocateObject M.tagDefs 0 pref align ty none none) σ =
         some (pv, σ')) :
       Step M (Expr a (Eaction (Paction polarity.Pos (Action loc ann
               (Create pe1 pe2 pref)))), ρ, σ)
@@ -973,7 +980,7 @@ inductive Step (M : MachineCtx) :
   | pure_eval {a : List annot} {pe : generic_pexpr Unit sym} {v : value}
       {ρ : EnvStack} {σ : Mem}
       (hnv : valueFromPexpr pe = none)
-      (hv : evalPexpr M.extern ρ pe = some v) :
+      (hv : evalPexpr M.tagDefs M.extern ρ pe = some v) :
       Step M (Expr a (Epure pe), ρ, σ)
            (Expr a (Epure (Pexpr [] () (PEval v))), ρ, σ)
   /-- ACTION_EVAL for a positive strong load with an unevaluated
@@ -996,7 +1003,7 @@ inductive Step (M : MachineCtx) :
       {pe2 : generic_pexpr Unit sym} {pv : CerbMem.PointerValue}
       {mo : memory_order} {ρ : EnvStack} {σ : Mem}
       (hnv2 : valueFromPexpr pe2 = none)
-      (hv2 : evalPexpr M.extern ρ pe2 = some (Vobject (OVpointer pv))) :
+      (hv2 : evalPexpr M.tagDefs M.extern ρ pe2 = some (Vobject (OVpointer pv))) :
       Step M (Expr a (Eaction (Paction polarity.Pos (Action loc ann
               (Load0 (Pexpr [] () (PEval (Vctype ty))) pe2 mo)))), ρ, σ)
            (Expr a (Eaction (Paction polarity.Pos (Action loc ann
@@ -1074,7 +1081,7 @@ inductive Step (M : MachineCtx) :
       {σ : Mem}
       (hj : jumpRedex? e = some (l, pes))
       (hl : lookupLabel M.labels l = some (params, cont))
-      (hvs : evalPexprs M.extern (ev0 :: evs) pes = some vs) :
+      (hvs : evalPexprs M.tagDefs M.extern (ev0 :: evs) pes = some vs) :
       Step M (e, ev0 :: evs, σ)
            (cont, bindArgs params vs (ev0 :: evs), σ)
   /-- Esave ENTRY at value-shaped parameter pexprs: one_step0's Esave
@@ -1101,12 +1108,12 @@ inductive Step (M : MachineCtx) :
       state untouched. -/
   | if_true {a : List annot} {g : generic_pexpr Unit sym} {e2 e3 : CoreExpr}
       {ρ : EnvStack} {σ : Mem}
-      (hg : evalPexpr M.extern ρ g = some Vtrue) :
+      (hg : evalPexpr M.tagDefs M.extern ρ g = some Vtrue) :
       Step M (Expr a (Eif g e2 e3), ρ, σ) (e2, ρ, σ)
   /-- Eif, false branch. -/
   | if_false {a : List annot} {g : generic_pexpr Unit sym} {e2 e3 : CoreExpr}
       {ρ : EnvStack} {σ : Mem}
-      (hg : evalPexpr M.extern ρ g = some Vfalse) :
+      (hg : evalPexpr M.tagDefs M.extern ρ g = some Vfalse) :
       Step M (Expr a (Eif g e2 e3), ρ, σ) (e3, ρ, σ)
   /-- Ecase at a VALUE scrutinee: TAU into the substituted branch
       (one_step0's Ecase value arm, Core_reduction.lean:353 —
@@ -1188,8 +1195,8 @@ inductive Step (M : MachineCtx) :
       {pe1 pe2 : generic_pexpr Unit sym} {v1 v2 : value}
       {ρ : EnvStack} {σ : Mem}
       (hnv : valueFromPexprs [pe1, pe2] = none)
-      (hv1 : evalPexpr M.extern ρ pe1 = some v1)
-      (hv2 : evalPexpr M.extern ρ pe2 = some v2) :
+      (hv1 : evalPexpr M.tagDefs M.extern ρ pe1 = some v1)
+      (hv2 : evalPexpr M.tagDefs M.extern ρ pe2 = some v2) :
       Step M (Expr a (Ememop mop [pe1, pe2]), ρ, σ)
            (Expr a (Ememop mop
              [Pexpr [] () (PEval v1), Pexpr [] () (PEval v2)]), ρ, σ)
@@ -1215,8 +1222,8 @@ inductive Step (M : MachineCtx) :
       {cv : value} {mo : memory_order} {ρ : EnvStack} {σ : Mem}
       (hnv2 : valueFromPexpr pe2 = none)
       (hnv3 : valueFromPexpr pe3 = none)
-      (hv2 : evalPexpr M.extern ρ pe2 = some (Vobject (OVpointer pv)))
-      (hv3 : evalPexpr M.extern ρ pe3 = some cv) :
+      (hv2 : evalPexpr M.tagDefs M.extern ρ pe2 = some (Vobject (OVpointer pv)))
+      (hv3 : evalPexpr M.tagDefs M.extern ρ pe3 = some cv) :
       Step M (Expr a (Eaction (Paction polarity.Pos (Action loc ann
               (Store0 lk (Pexpr [] () (PEval (Vctype ty))) pe2 pe3 mo)))), ρ, σ)
            (Expr a (Eaction (Paction polarity.Pos (Action loc ann
@@ -1240,7 +1247,7 @@ theorem Step.store_canonical {M : MachineCtx} {a : List annot}
     {mv : CerbMem.MemValue} {fp : CerbMem.Footprint}
     {ρ : EnvStack} {σ σ' : Mem}
     (hmv : memValueFromValue M.tagDefs (Ctype [] (unatomic_ ty)) cv = some mv)
-    (hmem : applyMemM (CerbMem.storeM loc ty lk pv mv) σ = some (fp, σ')) :
+    (hmem : applyMemM (CerbMem.storeM M.tagDefs loc ty lk pv mv) σ = some (fp, σ')) :
     Step M (Expr a (Eaction (Paction polarity.Pos (Action loc ann
             (Store0 lk (Pexpr [] () (PEval (Vctype ty)))
                        (Pexpr [] () (PEval (Vobject (OVpointer pv))))
@@ -1254,7 +1261,7 @@ theorem Step.load_canonical {M : MachineCtx} {a : List annot}
     {ann : core_run_annotation} {ty : ctype} {pv : CerbMem.PointerValue}
     {mo : memory_order} {mval : CerbMem.MemValue} {fp : CerbMem.Footprint}
     {ρ : EnvStack} {σ σ' : Mem}
-    (hmem : applyMemM (CerbMem.loadM loc ty pv) σ = some ((fp, mval), σ')) :
+    (hmem : applyMemM (CerbMem.loadM M.tagDefs loc ty pv) σ = some ((fp, mval), σ')) :
     Step M (Expr a (Eaction (Paction polarity.Pos (Action loc ann
             (Load0 (Pexpr [] () (PEval (Vctype ty)))
                    (Pexpr [] () (PEval (Vobject (OVpointer pv)))) mo)))), ρ, σ)
@@ -1267,7 +1274,7 @@ theorem Step.create_canonical {M : MachineCtx} {a : List annot}
     {loc : CerbLocation.Loc}
     {ann : core_run_annotation} {align : CerbMem.IntegerValue} {ty : ctype}
     {pref : prefix0} {pv : CerbMem.PointerValue} {ρ : EnvStack} {σ σ' : Mem}
-    (hmem : applyMemM (CerbMem.allocateObject 0 pref align ty none none) σ =
+    (hmem : applyMemM (CerbMem.allocateObject M.tagDefs 0 pref align ty none none) σ =
       some (pv, σ')) :
     Step M (Expr a (Eaction (Paction polarity.Pos (Action loc ann
             (Create (Pexpr [] () (PEval (Vobject (OVinteger align))))
@@ -1373,7 +1380,7 @@ theorem Step.store_inv {M : MachineCtx} {a : List annot} {loc : CerbLocation.Loc
                        (Pexpr [] () (PEval cv)) mo)))), ρ, σ) out) :
     ∃ mv fp σ',
       memValueFromValue M.tagDefs (Ctype [] (unatomic_ ty)) cv = some mv ∧
-      applyMemM (CerbMem.storeM loc ty lk pv mv) σ = some (fp, σ') ∧
+      applyMemM (CerbMem.storeM M.tagDefs loc ty lk pv mv) σ = some (fp, σ') ∧
       out = (Expr [] (Eannot [DA_pos [] fp]
               (Expr [] (Epure (Pexpr [] () (PEval Vunit))))), ρ, σ') := by
   cases h with
@@ -1397,7 +1404,7 @@ theorem Step.load_inv {M : MachineCtx} {a : List annot} {loc : CerbLocation.Loc}
                    (Pexpr [] () (PEval (Vobject (OVpointer pv)))) mo)))), ρ, σ)
           out) :
     ∃ fp mval σ',
-      applyMemM (CerbMem.loadM loc ty pv) σ = some ((fp, mval), σ') ∧
+      applyMemM (CerbMem.loadM M.tagDefs loc ty pv) σ = some ((fp, mval), σ') ∧
       out = (Expr [] (Eannot [DA_pos [] fp]
               (Expr [] (Epure (Pexpr [] () (PEval
                 (valueFromMemValue mval).2))))), ρ, σ') := by
@@ -1420,7 +1427,7 @@ theorem Step.create_inv {M : MachineCtx} {a : List annot} {loc : CerbLocation.Lo
             (Create (Pexpr [] () (PEval (Vobject (OVinteger align))))
                     (Pexpr [] () (PEval (Vctype ty))) pref)))), ρ, σ) out) :
     ∃ pv σ',
-      applyMemM (CerbMem.allocateObject 0 pref align ty none none) σ =
+      applyMemM (CerbMem.allocateObject M.tagDefs 0 pref align ty none none) σ =
         some (pv, σ') ∧
       out = (Expr [] (Epure (Pexpr [] () (PEval (Vobject (OVpointer pv))))), ρ, σ') := by
   cases h with
@@ -1445,7 +1452,7 @@ theorem Step.jump_inv {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack} {σ : Mem}
     (h : Step M (e, ρ, σ) out) :
     ∃ params cont vs ev0 evs, ρ = ev0 :: evs ∧
       lookupLabel M.labels l = some (params, cont) ∧
-      evalPexprs M.extern ρ pes = some vs ∧
+      evalPexprs M.tagDefs M.extern ρ pes = some vs ∧
       out = (cont, bindArgs params vs ρ, σ) := by
   cases h with
   | run hj' hl hvs =>
@@ -1487,7 +1494,7 @@ theorem Step.run_of_jumpRedex {M : MachineCtx} {e : CoreExpr} {l : sym}
     {ev0 : Fmap sym value} {evs : List (Fmap sym value)} {σ : Mem}
     (hj : jumpRedex? e = some (l, pes))
     (hl : lookupLabel M.labels l = some (params, cont))
-    (hvs : evalPexprs M.extern (ev0 :: evs) pes = some vs) :
+    (hvs : evalPexprs M.tagDefs M.extern (ev0 :: evs) pes = some vs) :
     Step M (e, ev0 :: evs, σ) (cont, bindArgs params vs (ev0 :: evs), σ) :=
   Step.run hj hl hvs
 
@@ -1510,7 +1517,7 @@ theorem Step.sseq_inv {M : MachineCtx} {a : List annot} {pat : pattern}
         out = (Expr [] (Eannot ds e2), ρ, σ)) ∨
     (∃ l pes params cont vs ev0 evs, jumpRedex? e1 = some (l, pes) ∧
         ρ = ev0 :: evs ∧ lookupLabel M.labels l = some (params, cont) ∧
-        evalPexprs M.extern ρ pes = some vs ∧
+        evalPexprs M.tagDefs M.extern ρ pes = some vs ∧
         out = (cont, bindArgs params vs ρ, σ)) ∨
     (∃ pa' pb' x bty' ov ev0 evs, pat = specPat pa' pb' x bty' ∧
         e1 = ofVal (.pure (Vloaded (LVspecified ov))) ∧ ρ = ev0 :: evs ∧
@@ -1559,7 +1566,7 @@ theorem Step.wseq_inv {M : MachineCtx} {a : List annot} {pat : pattern}
         out = (Expr [] (Eannot ds e2), ρ, σ)) ∨
     (∃ l pes params cont vs ev0 evs, jumpRedex? e1 = some (l, pes) ∧
         ρ = ev0 :: evs ∧ lookupLabel M.labels l = some (params, cont) ∧
-        evalPexprs M.extern ρ pes = some vs ∧
+        evalPexprs M.tagDefs M.extern ρ pes = some vs ∧
         out = (cont, bindArgs params vs ρ, σ)) := by
   cases h with
   | wseq_ctx hnj hs => exact .inl ⟨_, _, _, hnj, hs, rfl⟩
@@ -1585,7 +1592,7 @@ theorem Step.annot_inv {M : MachineCtx} {a : List annot}
     (∃ l pes params cont vs ev0 evs, annotRooted b = false ∧
         jumpRedex? b = some (l, pes) ∧
         ρ = ev0 :: evs ∧ lookupLabel M.labels l = some (params, cont) ∧
-        evalPexprs M.extern ρ pes = some vs ∧
+        evalPexprs M.tagDefs M.extern ρ pes = some vs ∧
         out = (cont, bindArgs params vs ρ, σ)) := by
   cases h with
   | annot_ctx hnj hg hs => exact .inl ⟨hg, hnj, _, _, _, hs, rfl⟩
@@ -1618,8 +1625,8 @@ theorem Step.if_inv {M : MachineCtx} {a : List annot}
     {g : generic_pexpr Unit sym} {e2 e3 : CoreExpr}
     {ρ : EnvStack} {σ : Mem} {out : CoreExpr × EnvStack × Mem}
     (h : Step M (Expr a (Eif g e2 e3), ρ, σ) out) :
-    (evalPexpr M.extern ρ g = some Vtrue ∧ out = (e2, ρ, σ)) ∨
-    (evalPexpr M.extern ρ g = some Vfalse ∧ out = (e3, ρ, σ)) := by
+    (evalPexpr M.tagDefs M.extern ρ g = some Vtrue ∧ out = (e2, ρ, σ)) ∨
+    (evalPexpr M.tagDefs M.extern ρ g = some Vfalse ∧ out = (e3, ρ, σ)) := by
   cases h with
   | if_true hg => exact .inl ⟨hg, rfl⟩
   | if_false hg => exact .inr ⟨hg, rfl⟩
@@ -1642,7 +1649,7 @@ theorem Step.pure_inv {M : MachineCtx} {a : List annot}
     {pe : generic_pexpr Unit sym} {ρ : EnvStack} {σ : Mem}
     {out : CoreExpr × EnvStack × Mem}
     (h : Step M (Expr a (Epure pe), ρ, σ) out) :
-    ∃ v, valueFromPexpr pe = none ∧ evalPexpr M.extern ρ pe = some v ∧
+    ∃ v, valueFromPexpr pe = none ∧ evalPexpr M.tagDefs M.extern ρ pe = some v ∧
       out = (Expr a (Epure (Pexpr [] () (PEval v))), ρ, σ) := by
   cases h with
   | pure_eval hnv hv => exact ⟨_, hnv, hv, rfl⟩
@@ -1659,7 +1666,7 @@ theorem Step.load_op_inv {M : MachineCtx} {a : List annot}
     (hnv2 : valueFromPexpr pe2 = none)
     (h : Step M (Expr a (Eaction (Paction polarity.Pos (Action loc ann
             (Load0 (Pexpr [] () (PEval (Vctype ty))) pe2 mo)))), ρ, σ) out) :
-    ∃ pv, evalPexpr M.extern ρ pe2 = some (Vobject (OVpointer pv)) ∧
+    ∃ pv, evalPexpr M.tagDefs M.extern ρ pe2 = some (Vobject (OVpointer pv)) ∧
       out = (Expr a (Eaction (Paction polarity.Pos (Action loc ann
         (Load0 (Pexpr [] () (PEval (Vctype ty)))
                (Pexpr [] () (PEval (Vobject (OVpointer pv)))) mo)))), ρ, σ) := by
@@ -1709,7 +1716,7 @@ theorem Step.memop_op_inv {M : MachineCtx} {a : List annot} {mop : memop}
     {ρ : EnvStack} {σ : Mem} {out : CoreExpr × EnvStack × Mem}
     (hnv : valueFromPexprs [pe1, pe2] = none)
     (h : Step M (Expr a (Ememop mop [pe1, pe2]), ρ, σ) out) :
-    ∃ v1 v2, evalPexpr M.extern ρ pe1 = some v1 ∧ evalPexpr M.extern ρ pe2 = some v2 ∧
+    ∃ v1 v2, evalPexpr M.tagDefs M.extern ρ pe1 = some v1 ∧ evalPexpr M.tagDefs M.extern ρ pe2 = some v2 ∧
       out = (Expr a (Ememop mop
         [Pexpr [] () (PEval v1), Pexpr [] () (PEval v2)]), ρ, σ) := by
   cases h with
@@ -1730,8 +1737,8 @@ theorem Step.store_op_inv {M : MachineCtx} {a : List annot}
     (h : Step M (Expr a (Eaction (Paction polarity.Pos (Action loc ann
         (Store0 lk (Pexpr [] () (PEval (Vctype ty))) pe2 pe3 mo)))), ρ, σ)
       out) :
-    ∃ pv cv, evalPexpr M.extern ρ pe2 = some (Vobject (OVpointer pv)) ∧
-      evalPexpr M.extern ρ pe3 = some cv ∧ valueFromPexpr pe3 = none ∧
+    ∃ pv cv, evalPexpr M.tagDefs M.extern ρ pe2 = some (Vobject (OVpointer pv)) ∧
+      evalPexpr M.tagDefs M.extern ρ pe3 = some cv ∧ valueFromPexpr pe3 = none ∧
       out = (Expr a (Eaction (Paction polarity.Pos (Action loc ann
         (Store0 lk (Pexpr [] () (PEval (Vctype ty)))
                 (Pexpr [] () (PEval (Vobject (OVpointer pv))))
@@ -1855,22 +1862,30 @@ def spikeRunState : core_run_state :=
 
 /-- The straight-line frozen profile as a context instance
     (tagDefs/extern empty, default file, tid 0, no parent, empty
-    stack, no current procedure, frozen run state). -/
-def spikeCtx : MachineCtx :=
+    stack, no current procedure, frozen run state).
+
+    REDUCIBLE (tag-environment threading, 2026-09-02): the logic's
+    rules are stated at `M.tagDefs`; the clients state their
+    footprints at the program's environment `fmapEmpty`. Making the
+    concrete profiles reducible lets `(procCtx p rs).tagDefs` and
+    `spikeCtx.tagDefs` unfold to `fmapEmpty` under the proof mode's
+    reducible-transparency matching, so no client proof has to
+    rewrite the environment by hand. -/
+@[reducible] def spikeCtx : MachineCtx :=
   { tagDefs := fmapEmpty, file := spikeFile, extern := fmapEmpty,
     tid := 0, parent := none, stack := Stack_empty, errno := default,
     proc := none, execLoc := default, currentLoc := default,
     runState := spikeRunState }
 
 /-- The jump profile (proc-carrying thread, parameterized run state)
-    as a context instance. -/
-def procCtx (p : sym) (rs : core_run_state) : MachineCtx :=
+    as a context instance (reducible — see `spikeCtx`). -/
+@[reducible] def procCtx (p : sym) (rs : core_run_state) : MachineCtx :=
   { spikeCtx with proc := some p, runState := rs }
 
 /-- A run-state-only variant of the spike context (the old `driveJ`
     profile: the drive loop itself reads no proc — only the
-    discharge's run state differs). -/
-def rsCtx (rs : core_run_state) : MachineCtx :=
+    discharge's run state differs; reducible — see `spikeCtx`). -/
+@[reducible] def rsCtx (rs : core_run_state) : MachineCtx :=
   { spikeCtx with runState := rs }
 
 /-- Field-projection equations for the frozen instances (rewriting

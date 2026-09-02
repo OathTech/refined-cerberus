@@ -6,36 +6,38 @@ build + this sweep + the banned-methods grep; everything else is a
 speedbump).
 
 Three checks, in order:
-1. EXACT PINS over the public exports (`trioExports`,
-   `boundaryExports`): each export must exist, be a theorem, and its
-   transitive axiom set must EQUAL the expected set — the classical
-   trio, or trio + `runEffectful` for the production-entry
-   statements. Growth OR shrinkage is a build failure until the list
-   is re-baselined in the same commit with the reason.
+1. EXACT PINS over the public exports (`trioExports`): each export
+   must exist, be a theorem, and its transitive axiom set must EQUAL
+   the classical trio. Growth OR shrinkage is a build failure until
+   the list is re-baselined in the same commit with the reason.
 2. THE EXHAUSTIVE SWEEP: every theorem of every `CerberusHeapLang.*`
    module (module-of-origin, so top-level names cannot dodge) is
-   BOUNDED by the trio, except theorems of the three production-entry
-   modules (`boundaryModules`), bounded by trio + `runEffectful`.
+   BOUNDED by the trio — no module is allowed anything else.
 3. THE BANNED-AXIOM SWEEP over EVERY constant kind of our modules:
    `sorryAx` / `ofReduceBool` / `ofReduceNat` anywhere in any cone
    (defs included, referenced by a theorem or not) fails the build.
 
-THE DECLARED BOUNDARY: `runEffectful` (LemLib.lean:54), the semantics
-repo's one residual axiom — TEMPORAL, mover: the cerberus-lean /
-lem-lean register (its mainline retirement is the next slice's
-re-pin; then the boundary here shrinks to the trio). It enters the
-production-entry theorems through their STATEMENTS: they quantify
-over the shipped `initial_driver_state` (Driver.lean:435), whose
-`initial_core_run_state` (Core_run_aux.lean:395) draws sym_supply
-through `runEffectful (CerberusFresh.freshIntIO ())`; the theorems
-hold for every value of the seam (the fragment never reads it).
+THE TRUST BASE IS THE CLASSICAL TRIO, EXACTLY, OVER EVERY EXPORT.
+There is no declared boundary axiom. The former temporal boundary
+(`runEffectful`, the lem runtime's effect-erasure axiom, which entered
+the production-entry theorems through their statements — the shipped
+`initial_driver_state` drew `sym_supply` through it) was RETIRED on
+the semantics side by the cerberus-lean effect-retirement arc and left
+this repo at the 2026-09-02 re-pin to cerberus-lean
+`ddcfc919972a31bc43a0454e6b2e76a19e6c4594` (LemLib `045dcb0`, zero
+axioms; record: cerberus-heaplang/docs/2026-09-02_repin-notes.md).
+The production entry is now the pure, supply-threaded
+`initial_driver_state (sup : Nat) file fs : driver_state × Nat`
+(Driver.lean:446; `initial_core_run_state`, Core_run_aux.lean:406,
+seeds `sym_supply` from `sup`), and the production-entry theorems
+quantify over the supply — the fragment never reads it. The nine
+former boundary exports sit in `trioExports` like everything else.
 
 P3.5 ([USER 2026-09-02], docs/2026-09-02_p3.5-notes.md): the 65
-`#guard_msgs in #print axioms` blocks + prose collapsed to the two
-export lists below (62 names, same exact assertion each); the F-07
-statement-borne origin discipline was cut (separable from the
-boundary allowance; vestigial once the re-pin lands); the StmtProbe
-pins went with the deleted probe.
+`#guard_msgs in #print axioms` blocks + prose collapsed to the export
+list below (62 names, same exact assertion each); the F-07
+statement-borne origin discipline was cut; the StmtProbe pins went
+with the deleted probe.
 
 Nothing is declared after the sweep (a later constant would dodge
 it), and this module stays the lib root's last import.
@@ -67,16 +69,6 @@ open Lean
 /-- The classical trio — the only axioms allowed anywhere. -/
 def allowedAxioms : List Name :=
   [``propext, ``Classical.choice, ``Quot.sound]
-
-/-- Trio + the declared temporal boundary axiom (header). -/
-def boundaryAxioms : List Name :=
-  allowedAxioms ++ [``runEffectful]
-
-/-- EXACTLY the modules whose theorems quantify over the shipped
-    `initial_driver_state`; everything else is held to the trio. -/
-def boundaryModules : List Name :=
-  [`CerberusHeapLang.ProdEntry, `CerberusHeapLang.ProdExhibit,
-   `CerberusHeapLang.ProdLoopExhibit]
 
 /-- THE PUBLIC EXPORTS pinned EXACTLY to the trio (in landing order;
     the README table and WALKTHROUGH §7 name these). -/
@@ -114,11 +106,9 @@ def trioExports : List Name := [
   ``CerberusHeapLang.case_certified, ``CerberusHeapLang.wseq_certified,
   -- the engine-facing one-round relation (Round.lean)
   ``CerberusHeapLang.cerberusRound_classify, ``CerberusHeapLang.step_iff_cerberusRound,
-  ``CerberusHeapLang.engine_complete_loadU, ``CerberusHeapLang.engine_complete_createU]
-
-/-- THE PRODUCTION-ENTRY EXPORTS pinned EXACTLY to trio + `runEffectful`
-    (statement-borne, header). -/
-def boundaryExports : List Name := [
+  ``CerberusHeapLang.engine_complete_loadU, ``CerberusHeapLang.engine_complete_createU,
+  -- the production-entry exports (formerly the runEffectful boundary;
+  -- trio-exact since the 2026-09-02 retirement re-pin — header)
   ``CerberusHeapLang.prod_run_eq, ``CerberusHeapLang.sem_triple_prod,
   ``CerberusHeapLang.exhibitA_prod, ``CerberusHeapLang.fib_labeledAt_production,
   ``CerberusHeapLang.counter_loop_certified_registration, ``CerberusHeapLang.prod_run_eqJ,
@@ -142,34 +132,27 @@ def sortedNames (ns : Array Name) : Array String :=
       throwError "CerberusHeapLang export pin FAILED: {n} depends on axioms {axs}, \
         expected EXACTLY {exp}"
   for n in trioExports do pin allowedAxioms n
-  for n in boundaryExports do pin boundaryAxioms n
-  logInfo s!"CerberusHeapLang export pins: {trioExports.length} trio-exact + \
-    {boundaryExports.length} trio+runEffectful-exact"
-  -- 2. THE EXHAUSTIVE SWEEP (theorems, bounded per module).
+  logInfo s!"CerberusHeapLang export pins: {trioExports.length} trio-exact"
+  -- 2. THE EXHAUSTIVE SWEEP (theorems, bounded by the trio, every module).
   let mods := env.header.moduleNames
   let isOurs : Array Bool := mods.map (fun m => m.getRoot == `CerberusHeapLang)
-  let isBoundary : Array Bool := mods.map (fun m => boundaryModules.contains m)
   let names : Array Name := env.constants.fold (fun acc n _ => acc.push n) #[]
   let mut swept := 0
-  let mut boundarySwept := 0
   for n in names do
-    let (ours, boundary) := match env.getModuleIdxFor? n with
-      | some idx => (isOurs[idx.toNat]!, isBoundary[idx.toNat]!)
-      | none => (true, false)  -- the file being elaborated: trio-only
+    let ours := match env.getModuleIdxFor? n with
+      | some idx => isOurs[idx.toNat]!
+      | none => true  -- the file being elaborated
     unless ours do continue
     let some (.thmInfo _) := env.find? n | continue
     if n.isInternalDetail then continue
-    let allowed := if boundary then boundaryAxioms else allowedAxioms
     for a in (← collectAxioms n) do
-      unless allowed.contains a do
+      unless allowedAxioms.contains a do
         throwError "CerberusHeapLang axiom sweep FAILED: theorem {n} carries axiom {a}, \
-          outside the declared boundary {allowed}. Either the proof is wrong (sorry / a \
-          non-kernel method) or a boundary decision is being made implicitly — boundary \
-          changes happen in Audit.lean, same commit, with provenance."
+          outside the classical trio {allowedAxioms}. Either the proof is wrong (sorry / a \
+          non-kernel method) or a trust decision is being made implicitly — the trust base \
+          is the trio, exactly; any change happens in Audit.lean, same commit, with provenance."
     swept := swept + 1
-    if boundary then boundarySwept := boundarySwept + 1
-  logInfo s!"CerberusHeapLang axiom sweep: {swept} theorems bounded by the trio \
-    ({boundarySwept} in the production-entry modules by trio + runEffectful)"
+  logInfo s!"CerberusHeapLang axiom sweep: {swept} theorems bounded by the trio"
   -- 3. THE BANNED-AXIOM SWEEP over every constant kind.
   let banned : List Name := [``sorryAx, ``ofReduceBool, ``ofReduceNat]
   let mut checked := 0

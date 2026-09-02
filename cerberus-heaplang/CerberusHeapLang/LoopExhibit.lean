@@ -185,10 +185,10 @@ theorem lookup_env_xframe {f : Fmap sym value} {v : value}
 
 theorem guard_eval {f : Fmap sym value} {i : Int}
     (h : IsXFrame f (ivVal i)) (rest : List (Fmap sym value)) :
-    evalPexpr fmapEmpty (f :: rest) guardPe = some (boolValue (decide (0 < i))) := by
+    evalPexpr fmapEmpty fmapEmpty (f :: rest) guardPe = some (boolValue (decide (0 < i))) := by
   unfold guardPe
   rw [evalPexpr_op]
-  rw [show evalPexpr fmapEmpty (f :: rest) (Pexpr [] () (PEsym xSym)) =
+  rw [show evalPexpr fmapEmpty fmapEmpty (f :: rest) (Pexpr [] () (PEsym xSym)) =
     some (ivVal i) from by
       rw [evalPexpr_sym_empty]; exact lookup_env_xframe h rest]
   show evalBinop binop.OpGt (ivVal i) (ivVal 0) = _
@@ -199,12 +199,12 @@ theorem guard_eval {f : Fmap sym value} {i : Int}
 
 theorem dec_eval {f : Fmap sym value} {i : Int}
     (h : IsXFrame f (ivVal i)) (rest : List (Fmap sym value)) :
-    evalPexprs fmapEmpty (f :: rest) [decPe] = some [ivVal (i - 1)] := by
+    evalPexprs fmapEmpty fmapEmpty (f :: rest) [decPe] = some [ivVal (i - 1)] := by
   rw [evalPexprs_cons]
-  rw [show evalPexpr fmapEmpty (f :: rest) decPe = some (ivVal (i - 1)) from by
+  rw [show evalPexpr fmapEmpty fmapEmpty (f :: rest) decPe = some (ivVal (i - 1)) from by
     unfold decPe
     rw [evalPexpr_op]
-    rw [show evalPexpr fmapEmpty (f :: rest) (Pexpr [] () (PEsym xSym)) =
+    rw [show evalPexpr fmapEmpty fmapEmpty (f :: rest) (Pexpr [] () (PEsym xSym)) =
       some (ivVal i) from by
         rw [evalPexpr_sym_empty]; exact lookup_env_xframe h rest]
     rfl]
@@ -258,8 +258,8 @@ variable (p : sym) (rs : core_run_state)
     never ran (data-dependent). -/
 abbrev loopPost : SpikeVal → EnvStack → IProp GF := fun w _ =>
   iprop(⌜w.val = Vunit⌝ ∗
-    ((⌜n = 0⌝ ∗ pointsToCell c (.own 1) intTy bs0) ∨
-     (⌜0 < n⌝ ∗ pointsToCell c (.own 1) intTy sevenBytes)))
+    ((⌜n = 0⌝ ∗ pointsToCell fmapEmpty c (.own 1) intTy bs0) ∨
+     (⌜0 < n⌝ ∗ pointsToCell fmapEmpty c (.own 1) intTy (sevenBytes fmapEmpty))))
 
 /-- THE PER-LABEL INVARIANT (env-indexed — it pins the reachable
     frame shape, which is what makes the evaluator facts
@@ -269,8 +269,8 @@ abbrev loopPost : SpikeVal → EnvStack → IProp GF := fun w _ =>
 abbrev loopLs : LabelSpec GF := fun _ vs ρ =>
   (iprop(∃ (i : Int) (f : Fmap sym value) (rest : List (Fmap sym value)),
     ⌜vs = [ivVal i] ∧ 0 ≤ i ∧ i ≤ n ∧ ρ = f :: rest ∧ XReady f⌝ ∗
-    ((⌜i = n⌝ ∗ pointsToCell c (.own 1) intTy bs0) ∨
-     (⌜i < n⌝ ∗ pointsToCell c (.own 1) intTy sevenBytes))) : IProp GF)
+    ((⌜i = n⌝ ∗ pointsToCell fmapEmpty c (.own 1) intTy bs0) ∨
+     (⌜i < n⌝ ∗ pointsToCell fmapEmpty c (.own 1) intTy (sevenBytes fmapEmpty)))) : IProp GF)
 
 include hQ
 
@@ -279,8 +279,8 @@ include hQ
 theorem loop_body_wps (i : Int) (f : Fmap sym value)
     (rest : List (Fmap sym value)) (hxr : XReady f)
     (h0 : 0 ≤ i) (hin : i ≤ n) :
-    iprop(((⌜i = n⌝ ∗ pointsToCell (GF := GF) c (.own 1) intTy bs0) ∨
-      (⌜i < n⌝ ∗ pointsToCell c (.own 1) intTy sevenBytes))) ⊢
+    iprop(((⌜i = n⌝ ∗ pointsToCell (procCtx p rs).tagDefs (GF := GF) c (.own 1) intTy bs0) ∨
+      (⌜i < n⌝ ∗ pointsToCell (procCtx p rs).tagDefs c (.own 1) intTy (sevenBytes (procCtx p rs).tagDefs)))) ⊢
       wps (procCtx p rs) (loopLs c n bs0)
         (loopPost c n bs0) (loopBody loc ann ra mo bty c)
         (envAdd xSym (ivVal i) f :: rest) := by
@@ -304,7 +304,7 @@ theorem loop_body_wps (i : Int) (f : Fmap sym value)
     -- the cell is owned either way; store the image
     icases Hcell with (⟨%hieq, Hc⟩ | ⟨%hlt, Hc⟩) <;>
       (iapply wps_store loc ann intTy c sevenVal mo sevenMval _ _
-        seven_encodes seven_storable
+        seven_encodes (seven_storable _)
        isplitl [Hc]
        · iexact Hc
        iintro %fp Hc
@@ -319,7 +319,7 @@ theorem loop_body_wps (i : Int) (f : Fmap sym value)
        iright
        isplit
        · ipureintro; omega
-       rw [show sevenBytes = (CerbMem.memValueToBytes [] sevenMval).2 from rfl]
+       rw [show (sevenBytes (procCtx p rs).tagDefs) = (CerbMem.memValueToBytes (procCtx p rs).tagDefs [] sevenMval).2 from rfl]
        iexact Hc)
   · -- guard FALSE: exit with the final cell state
     have hz : i = 0 := by omega
@@ -364,7 +364,7 @@ theorem loop_blockSpecs :
 
 /-- The whole program's statement WP from the entry env. -/
 theorem loop_wps (hn : 0 ≤ n) (sbty : core_base_type) :
-    pointsToCell (GF := GF) c (.own 1) intTy bs0 ⊢
+    pointsToCell (procCtx p rs).tagDefs (GF := GF) c (.own 1) intTy bs0 ⊢
       wps (procCtx p rs) (loopLs c n bs0)
         (loopPost c n bs0)
         (loopProg loc ann ra mo bty xbty sbty c n) [fmapEmpty] := by
@@ -389,20 +389,20 @@ omit hQ in
     ownership at the end pins the final MemState's cell. -/
 theorem cell_readout (pv : CerbMem.PointerValue) (ty : ctype)
     (bs : List CerbMem.AbsByte) :
-    pointsToCell (GF := GF) pv (.own 1) ty bs ⊢
+    pointsToCell fmapEmpty (GF := GF) pv (.own 1) ty bs ⊢
       iprop(∀ (σ' : Mem) (ns : Nat) (κs : List Empty) (nt : Nat),
         stateInterp σ' ns κs nt ={⊤, ∅}=∗
-          ⌜∃ i a, pv = cellPtr i a ∧ CellCoh σ' i ⟨a, ty, bs⟩⌝) := by
+          ⌜∃ i a, pv = cellPtr i a ∧ CellCoh fmapEmpty σ' i ⟨a, ty, bs⟩⌝) := by
   -- Phase-4 tidy: the state-interpretation open/close lives in the
   -- core combinator (stateInterp_readout); this module supplies only
   -- the coupling-conditional extraction (cellOwn_cellCoh).
   exact stateInterp_readout (fun σ' mm mb mk HG => by
     iintro ⟨Hpt, Hmi, Hbi⟩
-    icases (pointsToCell_cellOwn_iff pv (.own 1) ty bs).mp $$ Hpt with
+    icases (pointsToCell_cellOwn_iff fmapEmpty pv (.own 1) ty bs).mp $$ Hpt with
       ⟨%i, %a, %Hpv, Hcell⟩
-    ihave %Hcc : ⌜CellCoh σ' i ⟨a, ty, bs⟩ ∧ Iris.Std.PartialMap.get? mm i =
-        some (metaOf (⟨a, ty, bs⟩ : SpikeCell))⌝ $$ [Hmi Hbi Hcell]
-    · iapply cellOwn_cellCoh HG i (.own 1) ⟨a, ty, bs⟩ $$ [$Hmi $Hbi $Hcell]
+    ihave %Hcc : ⌜CellCoh fmapEmpty σ' i ⟨a, ty, bs⟩ ∧ Iris.Std.PartialMap.get? mm i =
+        some (metaOf fmapEmpty (⟨a, ty, bs⟩ : SpikeCell))⌝ $$ [Hmi Hbi Hcell]
+    · iapply cellOwn_cellCoh fmapEmpty HG i (.own 1) ⟨a, ty, bs⟩ $$ [$Hmi $Hbi $Hcell]
     ipureintro
     exact ⟨i, a, Hpv, Hcc.1⟩)
 
@@ -413,12 +413,12 @@ theorem loop_readout_val (w : CoreRVal) :
       iprop(∀ (σ' : Mem) (ns : Nat) (κs : List Empty) (nt : Nat),
         stateInterp σ' ns κs nt ={⊤, ∅}=∗
           ⌜w.val = Vunit ∧ ∃ bs',
-            ((n = 0 ∧ bs' = bs0) ∨ (0 < n ∧ bs' = sevenBytes)) ∧
-            ∃ i a, c = cellPtr i a ∧ CellCoh σ' i ⟨a, intTy, bs'⟩⌝) := by
+            ((n = 0 ∧ bs' = bs0) ∨ (0 < n ∧ bs' = (sevenBytes fmapEmpty))) ∧
+            ∃ i a, c = cellPtr i a ∧ CellCoh fmapEmpty σ' i ⟨a, intTy, bs'⟩⌝) := by
   rw [show (loopPost (GF := GF) c n bs0 w.w w.ρ) =
     (iprop(⌜SpikeVal.val w.w = Vunit⌝ ∗
-      ((⌜n = 0⌝ ∗ pointsToCell c (.own 1) intTy bs0) ∨
-       (⌜0 < n⌝ ∗ pointsToCell c (.own 1) intTy sevenBytes))) : IProp GF)
+      ((⌜n = 0⌝ ∗ pointsToCell fmapEmpty c (.own 1) intTy bs0) ∨
+       (⌜0 < n⌝ ∗ pointsToCell fmapEmpty c (.own 1) intTy (sevenBytes fmapEmpty)))) : IProp GF)
     from rfl]
   iintro ⟨%hval, Hd⟩
   icases Hd with (⟨%hn0, Hcell⟩ | ⟨%hpos, Hcell⟩)
@@ -428,24 +428,24 @@ theorem loop_readout_val (w : CoreRVal) :
     imodintro
     ipureintro
     exact ⟨hval, bs0, .inl ⟨hn0, rfl⟩, hfact⟩
-  · ihave Hro := cell_readout c intTy sevenBytes $$ Hcell
+  · ihave Hro := cell_readout c intTy (sevenBytes fmapEmpty) $$ Hcell
     iintro %σ' %ns %κs %nt Hσ
     imod Hro $$ %σ' %ns %κs %nt Hσ with %hfact
     imodintro
     ipureintro
-    exact ⟨hval, sevenBytes, .inr ⟨hpos, rfl⟩, hfact⟩
+    exact ⟨hval, (sevenBytes fmapEmpty), .inr ⟨hpos, rfl⟩, hfact⟩
 
 /-- The base-WP face with the engine readout (what `engine_adequacyJ`
     consumes). -/
 theorem loop_wp_readout (hn : 0 ≤ n) (sbty : core_base_type) :
-    pointsToCell (GF := GF) c (.own 1) intTy bs0 ⊢
+    pointsToCell (procCtx p rs).tagDefs (GF := GF) c (.own 1) intTy bs0 ⊢
       WP (⟨loopProg loc ann ra mo bty xbty sbty c n, [fmapEmpty],
           procCtx p rs⟩ : CoreRt) @ Stuckness.NotStuck; ⊤
         {{ w, iprop(∀ (σ' : Mem) (ns : Nat) (κs : List Empty) (nt : Nat),
           stateInterp σ' ns κs nt ={⊤, ∅}=∗
             ⌜w.val = Vunit ∧ ∃ bs',
-              ((n = 0 ∧ bs' = bs0) ∨ (0 < n ∧ bs' = sevenBytes)) ∧
-              ∃ i a, c = cellPtr i a ∧ CellCoh σ' i ⟨a, intTy, bs'⟩⌝) }} := by
+              ((n = 0 ∧ bs' = bs0) ∨ (0 < n ∧ bs' = (sevenBytes (procCtx p rs).tagDefs))) ∧
+              ∃ i a, c = cellPtr i a ∧ CellCoh (procCtx p rs).tagDefs σ' i ⟨a, intTy, bs'⟩⌝) }} := by
   refine ((loop_wps loc ann ra mo bty xbty c n bs0 p rs hQ hn sbty).trans ?_)
   refine (BI.emp_sep.2.trans (BI.sep_mono
     ((loop_blockSpecs loc ann ra mo bty xbty c n bs0 p rs hQ).trans
@@ -489,7 +489,7 @@ theorem counter_loop_certified
     (n : Int) (hn : 0 ≤ n)
     (hlib : CerbLocation.isLibraryLocation loc = false)
     (σ₀ : Mem)
-    (hcoh : Coh σ₀ ((Iris.Std.PartialMap.singleton idx
+    (hcoh : Coh fmapEmpty σ₀ ((Iris.Std.PartialMap.singleton idx
       (SpikeCell.mk addr intTy bs0)) : SpikeHeapF SpikeCell))
     (nsteps : Nat) (aids : Nat → Nat)
     (hfuel : 4 + nsteps ≤ lemDefaultFuel)
@@ -504,9 +504,9 @@ theorem counter_loop_certified
       driveJ rs aids nsteps
         (procThread loopProcSym prog [fmapEmpty]) σ₀ = .done v σ' →
       v = Vunit ∧ ∃ bs',
-        ((n = 0 ∧ bs' = bs0) ∨ (0 < n ∧ bs' = sevenBytes)) ∧
+        ((n = 0 ∧ bs' = bs0) ∨ (0 < n ∧ bs' = (sevenBytes fmapEmpty))) ∧
         ∃ i a, cellPtr idx addr = cellPtr i a ∧
-          CellCoh σ' i ⟨a, intTy, bs'⟩) := by
+          CellCoh fmapEmpty σ' i ⟨a, intTy, bs'⟩) := by
   intro prog rs
   refine engine_adequacyJ (GF := SpikeGF)
     (loopRS_labeledAt loc ann ra mo bty xbty (cellPtr idx addr))
@@ -516,8 +516,8 @@ theorem counter_loop_certified
     prog fmapEmpty [] σ₀ _
     (.save (loopBody_fragJ loc ann ra mo bty _ hlib)) hcoh
     (fun v σ' => v = Vunit ∧ ∃ bs',
-      ((n = 0 ∧ bs' = bs0) ∨ (0 < n ∧ bs' = sevenBytes)) ∧
-      ∃ i a, cellPtr idx addr = cellPtr i a ∧ CellCoh σ' i ⟨a, intTy, bs'⟩)
+      ((n = 0 ∧ bs' = bs0) ∨ (0 < n ∧ bs' = (sevenBytes fmapEmpty))) ∧
+      ∃ i a, cellPtr idx addr = cellPtr i a ∧ CellCoh fmapEmpty σ' i ⟨a, intTy, bs'⟩)
     ?_ nsteps aids
     (by rw [show esize prog = 4 from rfl]; omega)
     (fun l params cont hl => by
@@ -531,7 +531,7 @@ theorem counter_loop_certified
     (loopRS_labeledAt loc ann ra mo bty xbty (cellPtr idx addr)) hn sbty)
   refine (BigSepM.bigSepM_singleton).1.trans ?_
   iintro Hpt
-  iapply (pointsToCell_cellOwn_iff _ _ _ _).mpr
+  iapply (pointsToCell_cellOwn_iff fmapEmpty _ _ _ _).mpr
   iexists idx, addr
   isplit
   · ipureintro; rfl
@@ -561,8 +561,8 @@ abbrev loopLsT : LabelSpecT GF := fun _ m vs ρ =>
   (iprop(∃ (i : Int) (f : Fmap sym value) (rest : List (Fmap sym value)),
     ⌜vs = [ivVal i] ∧ 0 ≤ i ∧ i ≤ n ∧ m = 5 * i.toNat + 2 ∧
       ρ = f :: rest ∧ XReady f⌝ ∗
-    ((⌜i = n⌝ ∗ pointsToCell c (.own 1) intTy bs0) ∨
-     (⌜i < n⌝ ∗ pointsToCell c (.own 1) intTy sevenBytes))) : IProp GF)
+    ((⌜i = n⌝ ∗ pointsToCell fmapEmpty c (.own 1) intTy bs0) ∨
+     (⌜i < n⌝ ∗ pointsToCell fmapEmpty c (.own 1) intTy (sevenBytes fmapEmpty)))) : IProp GF)
 
 include hQ
 
@@ -571,8 +571,8 @@ include hQ
 theorem loop_body_wpt (i : Int) (f : Fmap sym value)
     (rest : List (Fmap sym value)) (hxr : XReady f)
     (h0 : 0 ≤ i) (hin : i ≤ n) :
-    iprop(((⌜i = n⌝ ∗ pointsToCell (GF := GF) c (.own 1) intTy bs0) ∨
-      (⌜i < n⌝ ∗ pointsToCell c (.own 1) intTy sevenBytes))) ⊢
+    iprop(((⌜i = n⌝ ∗ pointsToCell (procCtx p rs).tagDefs (GF := GF) c (.own 1) intTy bs0) ∨
+      (⌜i < n⌝ ∗ pointsToCell (procCtx p rs).tagDefs c (.own 1) intTy (sevenBytes (procCtx p rs).tagDefs)))) ⊢
       wpt (procCtx p rs) (loopLsT c n bs0)
         (5 * i.toNat + 2)
         (loopPost c n bs0) (loopBody loc ann ra mo bty c)
@@ -599,7 +599,7 @@ theorem loop_body_wpt (i : Int) (f : Fmap sym value)
     iapply wpt_seq
     icases Hcell with (⟨%hieq, Hc⟩ | ⟨%hlt, Hc⟩) <;>
       (iapply wpt_store_cell loc ann intTy c sevenVal mo sevenMval _ _
-        (by omega) seven_encodes seven_storable
+        (by omega) seven_encodes (seven_storable _)
        isplitl [Hc]
        · iexact Hc
        iintro %fp Hc
@@ -615,7 +615,7 @@ theorem loop_body_wpt (i : Int) (f : Fmap sym value)
        iright
        isplit
        · ipureintro; omega
-       rw [show sevenBytes = (CerbMem.memValueToBytes [] sevenMval).2 from rfl]
+       rw [show (sevenBytes (procCtx p rs).tagDefs) = (CerbMem.memValueToBytes (procCtx p rs).tagDefs [] sevenMval).2 from rfl]
        iexact Hc)
   · -- guard FALSE: exit with the final cell state (guard + delivery)
     have hz : i = 0 := by omega
@@ -659,7 +659,7 @@ theorem loop_blockSpecsT :
 
 /-- The whole program's total judgment at budget `5·n + 3`. -/
 theorem loop_wpt (hn : 0 ≤ n) (sbty : core_base_type) :
-    pointsToCell (GF := GF) c (.own 1) intTy bs0 ⊢
+    pointsToCell (procCtx p rs).tagDefs (GF := GF) c (.own 1) intTy bs0 ⊢
       wpt (procCtx p rs) (loopLsT c n bs0)
         (5 * n.toNat + 3) (loopPost c n bs0)
         (loopProg loc ann ra mo bty xbty sbty c n) [fmapEmpty] := by
@@ -686,8 +686,8 @@ omit hQ in
 theorem loopPost_to_readout :
     ∀ (w : SpikeVal) (ρ' : EnvStack), loopPost (GF := GF) c n bs0 w ρ' ⊢
       readoutPost (fun v σ' => v = Vunit ∧ ∃ bs',
-        ((n = 0 ∧ bs' = bs0) ∨ (0 < n ∧ bs' = sevenBytes)) ∧
-        ∃ i a, c = cellPtr i a ∧ CellCoh σ' i ⟨a, intTy, bs'⟩) w ρ' :=
+        ((n = 0 ∧ bs' = bs0) ∨ (0 < n ∧ bs' = (sevenBytes fmapEmpty))) ∧
+        ∃ i a, c = cellPtr i a ∧ CellCoh fmapEmpty σ' i ⟨a, intTy, bs'⟩) w ρ' :=
   fun w ρ' => loop_readout_val c n bs0 (⟨w, ρ', spikeCtx⟩ : CoreRVal)
 
 end LoopTotal

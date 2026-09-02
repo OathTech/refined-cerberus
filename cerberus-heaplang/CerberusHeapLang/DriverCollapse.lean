@@ -331,7 +331,7 @@ theorem loop_step_action {dst dst' : driver_state} {th : thread_state}
     (hsteps : step_ctx tds dst.layout_state dst.core_file dst.core_extern 0
       (none, th) = [Step_action_request2 s loc 0 false
         (stExceptUndef_return req)])
-    (hars : runOne (action_request_sequential2 loc 0
+    (hars : runOne (action_request_sequential2 tds loc 0
         dst.core_run_state0.aid_supply req)
         { dst with core_run_state0 :=
             { dst.core_run_state0 with aid_supply :=
@@ -383,13 +383,13 @@ equations are deliberately unproved-as-unneeded. -/
     `memReturn none` (CerbMem.lean:2064 — trace-only), the trace gets
     its ME_store event, the thread its continuation. No
     dr_step_counter tick on the action path (Driver.lean:273). -/
-theorem ars_store_active {loc : CerbLocation.Loc} {mo : memory_order}
+theorem ars_store_active {tds : Fmap sym (CerbLocation.Loc × tag_definition)} {loc : CerbLocation.Loc} {mo : memory_order}
     {ty : ctype} {lk : Bool} {pv : CerbMem.PointerValue} {mv : CerbMem.MemValue}
     {k : Nat → CerbMem.Footprint → thread_state} {tid aid : Nat}
     {dst : driver_state} {fp : CerbMem.Footprint} {σ' : Mem}
-    (happ : applyMemM (CerbMem.storeM loc ty lk pv mv) dst.layout_state =
+    (happ : applyMemM (CerbMem.storeM tds loc ty lk pv mv) dst.layout_state =
       some (fp, σ')) :
-    runOne (action_request_sequential2 loc tid aid
+    runOne (action_request_sequential2 tds loc tid aid
         (StoreRequest2 mo ty lk pv mv k)) dst =
       (NDactive (), { dst with
         layout_state := σ',
@@ -405,14 +405,14 @@ theorem ars_store_active {loc : CerbLocation.Loc} {mo : memory_order}
   rfl
 
 /-- LoadRequest2 discharge, active. -/
-theorem ars_load_active {loc : CerbLocation.Loc} {mo : memory_order}
+theorem ars_load_active {tds : Fmap sym (CerbLocation.Loc × tag_definition)} {loc : CerbLocation.Loc} {mo : memory_order}
     {ty : ctype} {pv : CerbMem.PointerValue}
     {k : Nat → CerbMem.Footprint → CerbMem.MemValue → thread_state}
     {tid aid : Nat} {dst : driver_state} {fp : CerbMem.Footprint}
     {mval : CerbMem.MemValue} {σ' : Mem}
-    (happ : applyMemM (CerbMem.loadM loc ty pv) dst.layout_state =
+    (happ : applyMemM (CerbMem.loadM tds loc ty pv) dst.layout_state =
       some ((fp, mval), σ')) :
-    runOne (action_request_sequential2 loc tid aid
+    runOne (action_request_sequential2 tds loc tid aid
         (LoadRequest2 mo ty pv k)) dst =
       (NDactive (), { dst with
         layout_state := σ',
@@ -432,14 +432,14 @@ theorem ars_load_active {loc : CerbLocation.Loc} {mo : memory_order}
 /-- CreateRequest2 discharge, active. allocateObject discards the
     thread id (CerbMem.lean:1470), so the hypothesis is stated at 0
     and bridges to the driver's `tid1` definitionally. -/
-theorem ars_create_active {loc : CerbLocation.Loc} {pref : prefix0}
+theorem ars_create_active {tds : Fmap sym (CerbLocation.Loc × tag_definition)} {loc : CerbLocation.Loc} {pref : prefix0}
     {align : CerbMem.IntegerValue} {ty : ctype} {reqAddr : Option Int}
     {initOpt : Option CerbMem.MemValue}
     {k : Nat → CerbMem.PointerValue → thread_state}
     {tid aid : Nat} {dst : driver_state} {pv : CerbMem.PointerValue} {σ' : Mem}
-    (happ : applyMemM (CerbMem.allocateObject 0 pref align ty reqAddr initOpt)
+    (happ : applyMemM (CerbMem.allocateObject tds 0 pref align ty reqAddr initOpt)
         dst.layout_state = some (pv, σ')) :
-    runOne (action_request_sequential2 loc tid aid
+    runOne (action_request_sequential2 tds loc tid aid
         (CreateRequest2 pref align ty reqAddr initOpt k)) dst =
       (NDactive (), { dst with
         layout_state := σ',
@@ -517,35 +517,35 @@ theorem process_done (tds : Fmap sym (CerbLocation.Loc × tag_definition))
 theorem drive_step_next {aids : Nat → Nat} {n : Nat} {th th' : thread_state}
     {σ σ' : Mem}
     (h : (step_ctx fmapEmpty σ spikeFile fmapEmpty 0 (none, th)).map
-      (dischargeStep (aids 0) spikeRunState σ) = [.next th' σ']) :
+      (dischargeStep spikeCtx.tagDefs (aids 0) spikeRunState σ) = [.next th' σ']) :
     drive aids (n+1) th σ = drive (fun i => aids (i+1)) n th' σ' := by
   rw [drive_succ_eq, h]
 
 theorem drive_step_done {aids : Nat → Nat} {n : Nat} {th : thread_state}
     {σ : Mem} {v : value}
     (h : (step_ctx fmapEmpty σ spikeFile fmapEmpty 0 (none, th)).map
-      (dischargeStep (aids 0) spikeRunState σ) = [.done v]) :
+      (dischargeStep spikeCtx.tagDefs (aids 0) spikeRunState σ) = [.done v]) :
     drive aids (n+1) th σ = .done v σ := by
   rw [drive_succ_eq, h]
 
 theorem drive_step_killed {aids : Nat → Nat} {n : Nat} {th : thread_state}
     {σ : Mem} {r : kill_reason mem_error}
     (h : (step_ctx fmapEmpty σ spikeFile fmapEmpty 0 (none, th)).map
-      (dischargeStep (aids 0) spikeRunState σ) = [.killed r]) :
+      (dischargeStep spikeCtx.tagDefs (aids 0) spikeRunState σ) = [.killed r]) :
     drive aids (n+1) th σ = .killed r := by
   rw [drive_succ_eq, h]
 
 theorem drive_step_error {aids : Nat → Nat} {n : Nat} {th : thread_state}
     {σ : Mem} {s : String}
     (h : (step_ctx fmapEmpty σ spikeFile fmapEmpty 0 (none, th)).map
-      (dischargeStep (aids 0) spikeRunState σ) = [.error s]) :
+      (dischargeStep spikeCtx.tagDefs (aids 0) spikeRunState σ) = [.error s]) :
     drive aids (n+1) th σ = .stuck := by
   rw [drive_succ_eq, h]
 
 theorem drive_step_off {aids : Nat → Nat} {n : Nat} {th : thread_state}
     {σ : Mem}
     (h : (step_ctx fmapEmpty σ spikeFile fmapEmpty 0 (none, th)).map
-      (dischargeStep (aids 0) spikeRunState σ) = [.offFragment]) :
+      (dischargeStep spikeCtx.tagDefs (aids 0) spikeRunState σ) = [.offFragment]) :
     drive aids (n+1) th σ = .stuck := by
   rw [drive_succ_eq, h]
 
@@ -558,8 +558,8 @@ one read; nonempty env — the beta rules' one read), an arbitrary
 file/extern in the driver state (unread on the fragment), tid 0, no
 parent, tagDefs fmapEmpty. The drive hypothesis is ∀-quantified over
 the action-id supply because the production supply starts at the
-opaque `initial_core_run_state` seed (Core_run_aux.lean:395,
-runEffectful) — the fragment ignores aids (D2/slice A), so the
+`initial_core_run_state` seed (Core_run_aux.lean:406, seeded from the
+entry's threaded supply) — the fragment ignores aids (D2/slice A), so the
 ∀-form is what the exhibits prove anyway. -/
 theorem prod_loop_done (th₀ : thread_state)
     (hstack : th₀.stack0 = Stack_empty)
@@ -725,7 +725,7 @@ theorem prod_loop_done (th₀ : thread_state)
             rw [hmv] at hmv'
             cases hmv')).elim
         | some mv =>
-          cases happ : applyMemM (CerbMem.storeM loc ty lk pv mv)
+          cases happ : applyMemM (CerbMem.storeM spikeCtx.tagDefs loc ty lk pv mv)
               dst.layout_state with
           | none =>
             exact (refute (fun out hstep => by
@@ -769,7 +769,7 @@ theorem prod_loop_done (th₀ : thread_state)
             show (update_thread_state 0 _ dst.core_state0).thread_states = _
             rw [update_thread_state_single _ _ _ hth]
       | @load loc ann ty pv mo hlib =>
-        cases happ : applyMemM (CerbMem.loadM loc ty pv) dst.layout_state with
+        cases happ : applyMemM (CerbMem.loadM spikeCtx.tagDefs loc ty pv) dst.layout_state with
         | none =>
           exact (refute (fun out hstep => by
             obtain ⟨r', ρr, σr, hr, _⟩ := hd.step_factor' hnr hstep
@@ -810,7 +810,7 @@ theorem prod_loop_done (th₀ : thread_state)
           show (update_thread_state 0 _ dst.core_state0).thread_states = _
           rw [update_thread_state_single _ _ _ hth]
       | @create loc ann align ty pref hlib =>
-        cases happ : applyMemM (CerbMem.allocateObject 0 pref align ty none none)
+        cases happ : applyMemM (CerbMem.allocateObject spikeCtx.tagDefs 0 pref align ty none none)
             dst.layout_state with
         | none =>
           exact (refute (fun out hstep => by
@@ -1190,7 +1190,7 @@ theorem step_ctx_if_true_ws {e : CoreExpr} {ctx : context}
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = e)
-    (hg : evalPexpr ext th.env g = some Vtrue) :
+    (hg : evalPexpr tds ext th.env g = some Vtrue) :
     ∃ (s : String) (m : core_runM thread_state),
       step_ctx tds σ file ext tid (parent, th) =
         [Step_with_runstate2 (RSK_tau s TSK_Misc) m] ∧
@@ -1209,7 +1209,7 @@ theorem step_ctx_if_true_ws {e : CoreExpr} {ctx : context}
        from rfl]
      dsimp only [get_loc]
      refine ⟨_, _, rfl, fun rs => ?_⟩
-     rw [full_eval_bridge hg hdg tds σ file]
+     rw [full_eval_bridge hg hdg σ file]
      dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
        return1, except_return])
 
@@ -1223,7 +1223,7 @@ theorem step_ctx_if_false_ws {e : CoreExpr} {ctx : context}
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = e)
-    (hg : evalPexpr ext th.env g = some Vfalse) :
+    (hg : evalPexpr tds ext th.env g = some Vfalse) :
     ∃ (s : String) (m : core_runM thread_state),
       step_ctx tds σ file ext tid (parent, th) =
         [Step_with_runstate2 (RSK_tau s TSK_Misc) m] ∧
@@ -1242,7 +1242,7 @@ theorem step_ctx_if_false_ws {e : CoreExpr} {ctx : context}
        from rfl]
      dsimp only [get_loc]
      refine ⟨_, _, rfl, fun rs => ?_⟩
-     rw [full_eval_bridge hg hdg tds σ file]
+     rw [full_eval_bridge hg hdg σ file]
      dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
        return1, except_return])
 
@@ -1255,7 +1255,7 @@ theorem step_ctx_pure_sym_ws {e : CoreExpr} {ctx : context}
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = e)
-    (hv : evalPexpr ext th.env (Pexpr pb () (PEsym x)) = some v) :
+    (hv : evalPexpr tds ext th.env (Pexpr pb () (PEsym x)) = some v) :
     ∃ (s : String) (m : core_runM thread_state),
       step_ctx tds σ file ext tid (parent, th) =
         [Step_with_runstate2 (RSK_eval s) m] ∧
@@ -1274,7 +1274,7 @@ theorem step_ctx_pure_sym_ws {e : CoreExpr} {ctx : context}
      simp only [Bool.false_eq_true, if_false]
      dsimp only [get_loc]
      refine ⟨_, _, rfl, fun rs => ?_⟩
-     rw [full_eval_bridge hv (peDepth_sym_le pb x) tds σ file]
+     rw [full_eval_bridge hv (peDepth_sym_le pb x) σ file]
      dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
        return1, except_return]
      rfl)
@@ -1297,7 +1297,7 @@ theorem step_ctx_run_ws {e : CoreExpr} {ctx : context}
     (tid : Nat) (parent : Option Nat) (p : sym) (th : thread_state)
     (harena : th.arena = e)
     (hproc : th.current_proc_opt = some p)
-    (hvs : evalPexprs ext th.env pes = some vs) :
+    (hvs : evalPexprs tds ext th.env pes = some vs) :
     ∃ (s : String) (m : core_runM thread_state),
       step_ctx tds σ file ext tid (parent, th) =
         [Step_with_runstate2 (RSK_eval s) m] ∧
@@ -1362,7 +1362,7 @@ theorem step_ctx_load_eval_ws {e : CoreExpr} {ctx : context}
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = e)
-    (hv2 : evalPexpr ext th.env pe2 = some (Vobject (OVpointer pv))) :
+    (hv2 : evalPexpr tds ext th.env pe2 = some (Vobject (OVpointer pv))) :
     ∃ (s : String) (m : core_runM thread_state),
       step_ctx tds σ file ext tid (parent, th) =
         [Step_with_runstate2 (RSK_eval s) m] ∧
@@ -1381,8 +1381,8 @@ theorem step_ctx_load_eval_ws {e : CoreExpr} {ctx : context}
      rw [act_valueFromPexpr_none hp2 hnv2]
      dsimp only [act_valueFromPexpr, valueFromPexpr]
      refine ⟨_, _, rfl, fun rs => ?_⟩
-     rw [full_eval_bridge (v := Vctype ty) rfl (peDepth_val_le _ _) tds σ file,
-       full_eval_bridge hv2 hd2 tds σ file]
+     rw [full_eval_bridge (v := Vctype ty) rfl (peDepth_val_le _ _) σ file,
+       full_eval_bridge hv2 hd2 σ file]
      dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
        return1, except_return]
      rfl)
@@ -1404,8 +1404,8 @@ theorem step_ctx_store_eval_ws {e : CoreExpr} {ctx : context}
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = e)
-    (hv2 : evalPexpr ext th.env pe2 = some (Vobject (OVpointer pv)))
-    (hv3 : evalPexpr ext th.env pe3 = some cv) :
+    (hv2 : evalPexpr tds ext th.env pe2 = some (Vobject (OVpointer pv)))
+    (hv3 : evalPexpr tds ext th.env pe3 = some cv) :
     ∃ (s : String) (m : core_runM thread_state),
       step_ctx tds σ file ext tid (parent, th) =
         [Step_with_runstate2 (RSK_eval s) m] ∧
@@ -1428,9 +1428,9 @@ theorem step_ctx_store_eval_ws {e : CoreExpr} {ctx : context}
        rw [act_valueFromPexpr_none hp2 hnv2]
        dsimp only [act_valueFromPexpr, valueFromPexpr]
        refine ⟨_, _, rfl, fun rs => ?_⟩
-       rw [full_eval_bridge (v := Vctype ty) rfl (peDepth_val_le _ _) tds σ file,
-         full_eval_bridge hv2 hd2 tds σ file,
-         full_eval_bridge hv3 hd3 tds σ file]
+       rw [full_eval_bridge (v := Vctype ty) rfl (peDepth_val_le _ _) σ file,
+         full_eval_bridge hv2 hd2 σ file,
+         full_eval_bridge hv3 hd3 σ file]
        dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
          return1, except_return]
        rfl)
@@ -1448,8 +1448,8 @@ theorem step_ctx_memop_eval_ws {e : CoreExpr} {ctx : context}
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = e)
-    (hv1 : evalPexpr ext th.env pe1 = some v1)
-    (hv2 : evalPexpr ext th.env pe2 = some v2) :
+    (hv1 : evalPexpr tds ext th.env pe1 = some v1)
+    (hv2 : evalPexpr tds ext th.env pe2 = some v2) :
     ∃ (s : String) (m : core_runM thread_state),
       step_ctx tds σ file ext tid (parent, th) =
         [Step_with_runstate2 (RSK_eval s) m] ∧
@@ -1527,7 +1527,7 @@ theorem loop_step_frag {M₀ : MachineCtx}
     cases hrj with
     | @store loc ann lk ty pv cv mo hlib =>
       obtain ⟨mv, fp, σ'', hmv, hmem, hout⟩ := hr.store_inv
-      rw [htd] at hmv
+      rw [htd] at hmv hmem
       obtain ⟨h1, h2, h3⟩ : r' = Expr [] (Eannot [DA_pos [] fp]
           (Expr [] (Epure (Pexpr [] () (PEval Vunit))))) ∧
           ρ' = ev0 :: evs ∧ σ' = σ'' := by
@@ -1546,6 +1546,7 @@ theorem loop_step_frag {M₀ : MachineCtx}
           (aid := dst.core_run_state0.aid_supply) hmem)
     | @load loc ann ty pv mo hlib =>
       obtain ⟨fp, mval, σ'', hmem, hout⟩ := hr.load_inv
+      rw [htd] at hmem
       obtain ⟨h1, h2, h3⟩ : r' = Expr [] (Eannot [DA_pos [] fp]
           (Expr [] (Epure (Pexpr [] () (PEval
             (valueFromMemValue mval).2))))) ∧
@@ -1565,6 +1566,7 @@ theorem loop_step_frag {M₀ : MachineCtx}
           (aid := dst.core_run_state0.aid_supply) hmem)
     | @create loc ann align ty pref hlib =>
       obtain ⟨pv, σ'', hmem, hout⟩ := hr.create_inv
+      rw [htd] at hmem
       obtain ⟨h1, h2, h3⟩ : r' = Expr [] (Epure (Pexpr [] ()
           (PEval (Vobject (OVpointer pv))))) ∧
           ρ' = ev0 :: evs ∧ σ' = σ'' := by
@@ -1714,7 +1716,7 @@ theorem loop_step_frag {M₀ : MachineCtx}
             σ' = dst.layout_state := by
           simpa [Prod.mk.injEq] using hout
         subst h1 h2 h3
-        rw [hex] at hg
+        rw [htd, hex] at hg
         obtain ⟨s, m, hsteps, hm⟩ := step_ctx_if_true_ws hd hsz hdg
           fmapEmpty dst.layout_state dst.core_file dst.core_extern 0 none
           { th₀ with arena := e, env := ev0 :: evs } rfl
@@ -1727,7 +1729,7 @@ theorem loop_step_frag {M₀ : MachineCtx}
             σ' = dst.layout_state := by
           simpa [Prod.mk.injEq] using hout
         subst h1 h2 h3
-        rw [hex] at hg
+        rw [htd, hex] at hg
         obtain ⟨s, m, hsteps, hm⟩ := step_ctx_if_false_ws hd hsz hdg
           fmapEmpty dst.layout_state dst.core_file dst.core_extern 0 none
           { th₀ with arena := e, env := ev0 :: evs } rfl
@@ -1762,7 +1764,7 @@ theorem loop_step_frag {M₀ : MachineCtx}
           ρ' = ev0 :: evs ∧ σ' = dst.layout_state := by
         simpa [Prod.mk.injEq] using hout
       subst h1 h2 h3
-      rw [hex] at hv
+      rw [htd, hex] at hv
       obtain ⟨s, m, hsteps, hm⟩ := step_ctx_pure_sym_ws hd hsz
         fmapEmpty dst.layout_state dst.core_file dst.core_extern 0 none
         { th₀ with arena := e, env := ev0 :: evs } rfl
@@ -1784,7 +1786,7 @@ theorem loop_step_frag {M₀ : MachineCtx}
           ρ' = ev0 :: evs ∧ σ' = dst.layout_state := by
         simpa [Prod.mk.injEq, loadRedex] using hout
       subst h1 h2 h3
-      rw [hex] at hv2
+      rw [htd, hex] at hv2
       obtain ⟨s, m, hsteps, hm⟩ := step_ctx_load_eval_ws hd hsz hnv2 hp2 hd2
         fmapEmpty dst.layout_state dst.core_file dst.core_extern 0 none
         { th₀ with arena := e, env := ev0 :: evs } rfl
@@ -1873,7 +1875,7 @@ theorem loop_step_frag {M₀ : MachineCtx}
             ρ' = ev0 :: evs ∧ σ' = dst.layout_state := by
           simpa [Prod.mk.injEq] using hout
         subst h1 h2 h3
-        rw [hex] at hv1' hv2'
+        rw [htd, hex] at hv1' hv2'
         obtain ⟨s, m, hsteps, hm⟩ := step_ctx_memop_eval_ws hd hsz hnvF
           hpd1 hpd2 fmapEmpty dst.layout_state dst.core_file
           dst.core_extern 0 none
@@ -1898,7 +1900,7 @@ theorem loop_step_frag {M₀ : MachineCtx}
           ρ' = ev0 :: evs ∧ σ' = dst.layout_state := by
         simpa [Prod.mk.injEq, storeRedex] using hout
       subst h1 h2 h3
-      rw [hex] at hv2 hv3
+      rw [htd, hex] at hv2 hv3
       obtain ⟨s, m, hsteps, hm⟩ := step_ctx_store_eval_ws hd hsz hnv2R hnv3
         hp2 hp3 hpd2 hpd3 fmapEmpty dst.layout_state dst.core_file
         dst.core_extern 0 none
@@ -1947,7 +1949,7 @@ theorem loop_step_frag {M₀ : MachineCtx}
       cases hfr with
       | run hdep => exact hdep
     rw [hlb] at hl
-    rw [hex] at hvs
+    rw [htd, hex] at hvs
     obtain ⟨h1, h2, h3⟩ : e' = cont ∧
         ρ' = bindArgs params vs (ev0 :: evs) ∧ σ' = dst.layout_state := by
       simpa [Prod.mk.injEq] using hout

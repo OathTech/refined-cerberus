@@ -39,10 +39,10 @@ open scoped Iris.Std.PartialMap
 
 /-- Two int objects, allocated by the engine from the empty state. -/
 def seeded : Option ((CerbMem.PointerValue × CerbMem.PointerValue) × Mem) :=
-  match applyMemM (CerbMem.allocateObject 0 (PrefOther "spike-x")
+  match applyMemM (CerbMem.allocateObject fmapEmpty 0 (PrefOther "spike-x")
       (CerbMem.integerIval 4) intTy none none) ({} : Mem) with
   | some (x, σ1) =>
-    match applyMemM (CerbMem.allocateObject 0 (PrefOther "spike-y")
+    match applyMemM (CerbMem.allocateObject fmapEmpty 0 (PrefOther "spike-y")
         (CerbMem.integerIval 4) intTy none none) σ1 with
     | some (y, σ2) => some ((x, y), σ2)
     | none => none
@@ -123,30 +123,30 @@ theorem bytes_len (a : Int) : (CerbMem.readBytesFrom σ₀ a 4).length = 4 := by
   unfold CerbMem.readBytesFrom
   simp
 
-/- The bytes/len clauses are staged through `sizeofCtype _ = 4` so
+/- The bytes/len clauses are staged through `sizeofCtype tds _ = 4` so
    the unifier never tries to force the (TreeMap-backed, not
    definitionally reducible) byte lists themselves. -/
 
-theorem cellCohX : CellCoh σ₀ 0 cellX :=
+theorem cellCohX : CellCoh fmapEmpty σ₀ 0 cellX :=
   ⟨rfl, ⟨allocX, alloc_get_x, rfl, rfl, rfl, rfl⟩, rfl,
-   by rw [show CerbMem.sizeofCtype cellX.ty = 4 from rfl]; exact bytes_len xAddr,
-   by rw [show CerbMem.sizeofCtype cellX.ty = 4 from rfl],
+   by rw [show CerbMem.sizeofCtype fmapEmpty cellX.ty = 4 from rfl]; exact bytes_len xAddr,
+   by rw [show CerbMem.sizeofCtype fmapEmpty cellX.ty = 4 from rfl],
    fun _ _ => rfl⟩
 
-theorem cellCohY : CellCoh σ₀ 1 cellY :=
+theorem cellCohY : CellCoh fmapEmpty σ₀ 1 cellY :=
   ⟨rfl, ⟨allocY, alloc_get_y, rfl, rfl, rfl, rfl⟩, rfl,
-   by rw [show CerbMem.sizeofCtype cellY.ty = 4 from rfl]; exact bytes_len yAddr,
-   by rw [show CerbMem.sizeofCtype cellY.ty = 4 from rfl],
+   by rw [show CerbMem.sizeofCtype fmapEmpty cellY.ty = 4 from rfl]; exact bytes_len yAddr,
+   by rw [show CerbMem.sizeofCtype fmapEmpty cellY.ty = 4 from rfl],
    fun _ _ => rfl⟩
 
-theorem cells_disjoint : cellsDisjoint cellY cellX := by
+theorem cells_disjoint : cellsDisjoint fmapEmpty cellY cellX := by
   left
-  show yAddr + (CerbMem.sizeofCtype intTy : Int) ≤ xAddr
-  rw [show (CerbMem.sizeofCtype intTy : Int) = 4 from rfl]
+  show yAddr + (CerbMem.sizeofCtype fmapEmpty intTy : Int) ≤ xAddr
+  rw [show (CerbMem.sizeofCtype fmapEmpty intTy : Int) = 4 from rfl]
   unfold yAddr xAddr
   omega
 
-theorem coh_mB : Coh σ₀ mB := by
+theorem coh_mB : Coh fmapEmpty σ₀ mB := by
   refine ⟨?_, ?_⟩
   · intro id c h
     by_cases h1 : id = 1
@@ -188,7 +188,7 @@ theorem coh_mB : Coh σ₀ mB := by
     · exact cells_disjoint
     · exact absurd rfl hne
 
-theorem coh_mA : Coh σ₀ mA := by
+theorem coh_mA : Coh fmapEmpty σ₀ mA := by
   refine ⟨?_, ?_⟩
   · intro id c h
     by_cases h0 : id = 0
@@ -236,12 +236,12 @@ theorem fragB : Frag progB := Frag.store loc0_lib
 
 /-- The engine's decode of 7's byte image is 7 again (recon §2.8:
     exact round-trip for `integerIval`-written values). -/
-theorem loaded_seven :
-    loadedVal xPtr intTy (CerbMem.memValueToBytes [] sevenMval).2 = sevenVal := rfl
+theorem loaded_seven {tds : CerbTags.TagDefsMap} :
+    loadedVal tds xPtr intTy (CerbMem.memValueToBytes tds [] sevenMval).2 = sevenVal := rfl
 
-theorem htrap_seven :
-    cellLoadTrap ⟨addrOf xPtr, intTy,
-      (CerbMem.memValueToBytes [] sevenMval).2⟩ = false := rfl
+theorem htrap_seven {tds : CerbTags.TagDefsMap} :
+    cellLoadTrap tds ⟨addrOf xPtr, intTy,
+      (CerbMem.memValueToBytes tds [] sevenMval).2⟩ = false := rfl
 
 /-! ## The precondition big-seps -/
 
@@ -256,12 +256,12 @@ theorem cellPtr_inj {i a j b : Int} (h : cellPtr i a = cellPtr j b) :
   exact ⟨h1, h2⟩
 
 theorem bigSepA_ptx [SpikeGS .hasLC GF] :
-    iprop(([∗map] i ↦ c ∈ mA, cellOwn (hlc := .hasLC) (GF := GF) i (.own 1) c)) ⊢
-      pointsToCell (GF := GF) xPtr (.own 1) intTy bytesX := by
+    iprop(([∗map] i ↦ c ∈ mA, cellOwn fmapEmpty (hlc := .hasLC) (GF := GF) i (.own 1) c)) ⊢
+      pointsToCell fmapEmpty (GF := GF) xPtr (.own 1) intTy bytesX := by
   refine .trans (BigSepM.bigSepM_insert (i := 0) (x := cellX)
     (Iris.Std.LawfulPartialMap.get?_empty (M := SpikeHeapF) 0)).1 ?_
   iintro ⟨Hx, -⟩
-  iapply (pointsToCell_cellOwn_iff _ _ _ _).mpr
+  iapply (pointsToCell_cellOwn_iff fmapEmpty _ _ _ _).mpr
   iexists 0, xAddr
   isplit
   · ipureintro
@@ -273,7 +273,7 @@ small axioms + SEQ from slice A, ending in the ProvenTriple shape) -/
 
 /-- x's cell after the store of 7. -/
 abbrev cellX7 : SpikeCell :=
-  ⟨xAddr, intTy, (CerbMem.memValueToBytes [] sevenMval).2⟩
+  ⟨xAddr, intTy, (CerbMem.memValueToBytes fmapEmpty [] sevenMval).2⟩
 
 /-- Post-footprint of the two programs: x's cell updated to 7. -/
 abbrev mA7 : CellMap := Iris.Std.PartialMap.insert ∅ 0 cellX7
@@ -295,21 +295,21 @@ theorem mA_disj_mF : mA ##ₘ mF := by
 
 /-- Repackage the single x-cell as its footprint big-sep. -/
 theorem ptx_to_cells [SpikeGS .hasLC GF] :
-    iprop(pointsToCell (GF := GF) xPtr (.own 1) intTy
-      (CerbMem.memValueToBytes [] sevenMval).2) ⊢
-      iprop([∗map] i ↦ c ∈ mA7, cellOwn (hlc := .hasLC) (GF := GF) i (.own 1) c) := by
+    iprop(pointsToCell fmapEmpty (GF := GF) xPtr (.own 1) intTy
+      (CerbMem.memValueToBytes fmapEmpty [] sevenMval).2) ⊢
+      iprop([∗map] i ↦ c ∈ mA7, cellOwn fmapEmpty (hlc := .hasLC) (GF := GF) i (.own 1) c) := by
   iintro Hx
-  icases (pointsToCell_cellOwn_iff _ _ _ _).mp $$ Hx with ⟨%ix, %ax, %Hpx, Hx⟩
+  icases (pointsToCell_cellOwn_iff fmapEmpty _ _ _ _).mp $$ Hx with ⟨%ix, %ax, %Hpx, Hx⟩
   obtain ⟨rfl, rfl⟩ := cellPtr_inj (xPtr_eq.symm.trans Hpx)
   iapply (BigSepM.bigSepM_insert
-    (Φ := fun (i : Int) (c : SpikeCell) => cellOwn (hlc := .hasLC) (GF := GF) i (.own 1) c)
+    (Φ := fun (i : Int) (c : SpikeCell) => cellOwn fmapEmpty (hlc := .hasLC) (GF := GF) i (.own 1) c)
     (i := 0) (x := cellX7)
     (Iris.Std.LawfulPartialMap.get?_empty (M := SpikeHeapF) 0)).2
   isplitl [Hx]
   · iexact Hx
   · iapply (BigSepM.bigSepM_empty_intro
       (P := (BIBase.emp : IProp GF))
-      (Φ := fun (i : Int) (c : SpikeCell) => cellOwn (hlc := .hasLC) (GF := GF) i (.own 1) c))
+      (Φ := fun (i : Int) (c : SpikeCell) => cellOwn fmapEmpty (hlc := .hasLC) (GF := GF) i (.own 1) c))
     itrivial
 
 /-- The store's footprint triple, proved in the derived logic:
@@ -319,8 +319,8 @@ theorem provenB {GF : BundledGFunctors} [SpikeGpreS GF] :
   intro instGS
   refine bigSepA_ptx.trans ?_
   iintro Hx
-  ihave HW := wp_store (s := Stuckness.NotStuck) (E := ⊤) loc0 empty_annotation
-    intTy xPtr sevenVal NA sevenMval bytesX spikeEnv seven_encodes seven_storable $$ Hx
+  ihave HW := wp_store (s := Stuckness.NotStuck) (E := ⊤) (M := spikeCtx) loc0 empty_annotation
+    intTy xPtr sevenVal NA sevenMval bytesX spikeEnv seven_encodes (seven_storable _) $$ Hx
   iapply spike_wp_wand $$ HW
   iintro %v ⟨%fp, %hv, Hx⟩
   iexists mA7
@@ -338,14 +338,14 @@ theorem provenA {GF : BundledGFunctors} [SpikeGpreS GF] :
   intro instGS
   refine bigSepA_ptx.trans (.trans ?_ (wp_sseq [] [] BTy_unit _ _ fmapEmpty []))
   iintro Hx
-  ihave HW := wp_store (s := Stuckness.NotStuck) (E := ⊤) loc0 empty_annotation
-    intTy xPtr sevenVal NA sevenMval bytesX spikeEnv seven_encodes seven_storable $$ Hx
+  ihave HW := wp_store (s := Stuckness.NotStuck) (E := ⊤) (M := spikeCtx) loc0 empty_annotation
+    intTy xPtr sevenVal NA sevenMval bytesX spikeEnv seven_encodes (seven_storable _) $$ Hx
   iapply spike_wp_wand $$ HW
   iintro %v ⟨%fp, %hv, Hx⟩
   subst hv
   iapply BI.later_intro
   ihave HW2 := wp_load (s := Stuckness.NotStuck) (E := ⊤) loc0 empty_annotation
-    intTy xPtr NA (.own 1) (CerbMem.memValueToBytes [] sevenMval).2 spikeEnv
+    intTy xPtr NA (.own 1) (CerbMem.memValueToBytes fmapEmpty [] sevenMval).2 spikeEnv
     htrap_seven $$ Hx
   iapply spike_wp_wand $$ HW2
   iintro %w ⟨%fp2, %hw, Hx⟩
@@ -408,9 +408,9 @@ theorem exhibitB_engine (n : Nat) (aids : Nat → Nat) (hn : n ≤ 999999) :
       drive aids n (spikeThread progB) σ₀ = .done v σ' →
         v = Vunit ∧
         CerbMem.readBytesFrom σ' xAddr 4 =
-          (CerbMem.memValueToBytes [] sevenMval).2 ∧
+          (CerbMem.memValueToBytes fmapEmpty [] sevenMval).2 ∧
         CerbMem.readBytesFrom σ' yAddr 4 = bytesY) := by
-  have hcohBu : Sat σ₀ (Iris.Std.PartialMap.union
+  have hcohBu : Sat fmapEmpty σ₀ (Iris.Std.PartialMap.union
       (Iris.Std.PartialMap.union mA mF) ∅) := by
     rw [show Iris.Std.PartialMap.union (Iris.Std.PartialMap.union mA mF) ∅ =
         Iris.Std.PartialMap.union mA mF from
@@ -474,7 +474,7 @@ theorem exhibitB_engine (n : Nat) (aids : Nat → Nat) (hn : n ≤ 999999) :
   refine ⟨h.1, h.2.1, fun v σ' hd => ?_⟩
   obtain ⟨Q, ⟨Q₀, ⟨hv, hQ0⟩, hdisj, hQ⟩, _, hsat⟩ := h.2.2 v σ' hd
   subst hQ0 hQ
-  have hsat' : Sat σ' (Iris.Std.PartialMap.union mA7 mF) :=
+  have hsat' : Sat fmapEmpty σ' (Iris.Std.PartialMap.union mA7 mF) :=
     Sat.mono hsat (by
       rw [show Iris.Std.PartialMap.union
           (Iris.Std.PartialMap.union mA7 mF) ∅ =
@@ -499,7 +499,7 @@ theorem exhibitB_engine (n : Nat) (aids : Nat → Nat) (hn : n ≤ 999999) :
     rw [mF, Iris.Std.get?_insert_eq rfl]
   have hcx := (hsat'.cells 0 _ hgx).bytes
   have hcy := (hsat'.cells 1 _ hgy).bytes
-  rw [show CerbMem.sizeofCtype intTy = 4 from rfl] at hcx hcy
+  rw [show CerbMem.sizeofCtype fmapEmpty intTy = 4 from rfl] at hcx hcy
   exact ⟨hv, hcx, hcy⟩
 
 /-! ## Termination of exhibit (a) — THE GENERIC TOTAL ROUTE (alloc
@@ -514,10 +514,10 @@ terms in this module. -/
 
 /-- The seven image decodes back to `sevenMval` at ANY address (the
     table- and address-independent int decode). -/
-theorem seven_reconstruct (lum : List (Int × identifier))
+theorem seven_reconstruct {tds : CerbTags.TagDefsMap} (lum : List (Int × identifier))
     (fpm : CerbMem.Funptrmap) (ad : Int) :
-    CerbMem.reconstructValue lum fpm ad intTy
-      ((sevenBytes.drop 0).take (CerbMem.sizeofCtype intTy)) =
+    CerbMem.reconstructValue tds lum fpm ad intTy
+      (((sevenBytes tds).drop 0).take (CerbMem.sizeofCtype tds intTy)) =
       sevenMval := rfl
 
 theorem seven_fromMemValue : (valueFromMemValue sevenMval).2 = sevenVal := rfl
@@ -527,16 +527,16 @@ theorem seven_loadTrap : loadTrapV intTy sevenMval = false := rfl
 /-- The engine-facing postcondition of the total route: `Specified 7`
     delivered, the final memory holding 7's image at the seeded
     cell. -/
-def ψX : value → Mem → Prop := fun v σ' =>
-  v = sevenVal ∧ CellCoh σ' 0 ⟨xAddr, intTy, sevenBytes⟩
+def ψX (tds : CerbTags.TagDefsMap) : value → Mem → Prop := fun v σ' =>
+  v = sevenVal ∧ CellCoh tds σ' 0 ⟨xAddr, intTy, sevenBytes tds⟩
 
 /-- Exhibit (a) at the TOTAL judgment, budget 6 (store 3 + load 3),
     from the seeded cell's ownership alone. -/
 theorem progA_wpt {GF : BundledGFunctors} [SpikeGS .hasLC GF]
     {M : MachineCtx} {Ls : LabelSpecT GF}
     (ev0 : Fmap sym value) (evs : List (Fmap sym value)) :
-    iprop(pointsToCell (GF := GF) xPtr (.own 1) intTy bytesX) ⊢
-      wpt M Ls 6 (readoutPost ψX) progA (ev0 :: evs) := by
+    iprop(pointsToCell M.tagDefs (GF := GF) xPtr (.own 1) intTy bytesX) ⊢
+      wpt M Ls 6 (readoutPost (ψX M.tagDefs)) progA (ev0 :: evs) := by
   iintro Hpt
   rw [show (progA : CoreExpr) =
     Expr [] (Esseq (Pattern [] (CaseBase (none, BTy_unit)))
@@ -545,13 +545,13 @@ theorem progA_wpt {GF : BundledGFunctors} [SpikeGS .hasLC GF]
     show (6 : Nat) = 3 + 3 from rfl]
   iapply wpt_seq
   iapply wpt_store_cell loc0 empty_annotation intTy xPtr sevenVal NA
-    sevenMval bytesX _ (Nat.le_refl 3) seven_encodes seven_storable
+    sevenMval bytesX _ (Nat.le_refl 3) seven_encodes (seven_storable _)
   isplitl [Hpt]
   · iexact Hpt
   iintro %fp Hpt
   iapply wpt_mono
-    (fun u ρ' => readoutPost_annot_absorb ψX [DA_pos [] fp] Vunit u ρ') _ _
-  icases (pointsToCell_cellOwn_iff _ _ _ _).mp $$ Hpt
+    (fun u ρ' => readoutPost_annot_absorb (ψX M.tagDefs) [DA_pos [] fp] Vunit u ρ') _ _
+  icases (pointsToCell_cellOwn_iff M.tagDefs _ _ _ _).mp $$ Hpt
     with ⟨%id, %a, %hpv, Hcell⟩
   obtain ⟨rfl, rfl⟩ := cellPtr_inj (xPtr_eq.symm.trans hpv)
   rw [show (xPtr : CerbMem.PointerValue) =
@@ -559,7 +559,7 @@ theorem progA_wpt {GF : BundledGFunctors} [SpikeGS .hasLC GF]
     rw [xPtr_eq]
     exact congrArg (cellPtr 0) (by omega)]
   iapply wpt_load_cell_at loc0 empty_annotation 0 xAddr intTy 0 intTy NA
-    (.own 1) (CerbMem.memValueToBytes [] sevenMval).2 _
+    (.own 1) (CerbMem.memValueToBytes M.tagDefs [] sevenMval).2 _
     (mv := sevenMval) (Nat.le_refl 3) (by omega)
     (fun lum fpm => seven_reconstruct lum fpm _) seven_loadTrap
   isplitl [Hcell]
@@ -568,13 +568,13 @@ theorem progA_wpt {GF : BundledGFunctors} [SpikeGS .hasLC GF]
   iintro %σ2 %ns %κs %nt Hσ
   icases (stateInterp_iff σ2 ns κs nt).mp $$ Hσ
     with ⟨%mm, %mb, %mk, %HG, Hmi, Hbi, Hki⟩
-  ihave %Hcc : ⌜CellCoh σ2 0 ⟨xAddr, intTy,
-      (CerbMem.memValueToBytes [] sevenMval).2⟩ ∧
-      Iris.Std.PartialMap.get? mm 0 = some (metaOf
-        (⟨xAddr, intTy, (CerbMem.memValueToBytes [] sevenMval).2⟩ :
+  ihave %Hcc : ⌜CellCoh M.tagDefs σ2 0 ⟨xAddr, intTy,
+      (CerbMem.memValueToBytes M.tagDefs [] sevenMval).2⟩ ∧
+      Iris.Std.PartialMap.get? mm 0 = some (metaOf M.tagDefs
+        (⟨xAddr, intTy, (CerbMem.memValueToBytes M.tagDefs [] sevenMval).2⟩ :
           SpikeCell))⌝ $$ [Hmi Hbi Hcell]
-  · iapply cellOwn_cellCoh HG 0 (.own 1)
-      ⟨xAddr, intTy, (CerbMem.memValueToBytes [] sevenMval).2⟩
+  · iapply cellOwn_cellCoh M.tagDefs HG 0 (.own 1)
+      ⟨xAddr, intTy, (CerbMem.memValueToBytes M.tagDefs [] sevenMval).2⟩
       $$ [$Hmi $Hbi $Hcell]
   iapply fupd_mask_intro_discard Std.LawfulSet.empty_subset
   ipureintro
@@ -591,7 +591,7 @@ theorem exhibitA_total (aids : Nat → Nat) :
     ∃ (v : value) (σ' : Mem),
       driveU spikeCtx aids 6 (spikeCtx.thread progA spikeEnv) σ₀ =
         .done v σ' ∧
-      v = sevenVal ∧ CellCoh σ' 0 ⟨xAddr, intTy, sevenBytes⟩ := by
+      v = sevenVal ∧ CellCoh spikeCtx.tagDefs σ' 0 ⟨xAddr, intTy, (sevenBytes spikeCtx.tagDefs)⟩ := by
   obtain ⟨v, σ', h1, h2, -⟩ :=
     wpt_engine_boundU (GF := SpikeGF) (M := spikeCtx) spikeCtx_wf
       (fun l params cont hl => (spikeCtx_labels_none l hl).elim)
@@ -601,7 +601,7 @@ theorem exhibitA_total (aids : Nat → Nat) :
       (by rw [show pot progA = 3 from rfl,
           show lemDefaultFuel = 999999 + 1 from rfl]
           omega)
-      coh_mA ψX 6
+      coh_mA (ψX fmapEmpty) 6
       (by
         intro inst
         iintro Hcells
@@ -609,7 +609,7 @@ theorem exhibitA_total (aids : Nat → Nat) :
         · iapply blockSpecsT_intro fun l params cont _ _ _ _ hl =>
             (spikeCtx_labels_none l hl).elim
         · ihave Hpt := bigSepA_ptx $$ Hcells
-          iapply progA_wpt fmapEmpty [] $$ Hpt)
+          iapply progA_wpt (M := spikeCtx) fmapEmpty [] $$ Hpt)
       aids
   exact ⟨v, σ', h1, h2⟩
 
@@ -635,9 +635,9 @@ abbrev progC : CoreExpr :=
 theorem fragC : Frag progC := Frag.sseq (.store loc0_lib) (.store loc0_lib)
 
 /-- The two cells after the two stores. -/
-abbrev cellX5 : SpikeCell := ⟨xAddr, intTy, fiveBytes⟩
+abbrev cellX5 : SpikeCell := ⟨xAddr, intTy, (fiveBytes fmapEmpty)⟩
 
-abbrev cellY6 : SpikeCell := ⟨yAddr, intTy, sixBytes⟩
+abbrev cellY6 : SpikeCell := ⟨yAddr, intTy, (sixBytes fmapEmpty)⟩
 
 /-- Post-footprint of progC: BOTH cells updated, non-conflictingly. -/
 abbrev mC : CellMap :=
@@ -657,22 +657,22 @@ theorem mC_base_get1 :
 
 /-- Unpack mB's big-sep into the two pointer-shaped cells. -/
 theorem bigSepB_pts [SpikeGS .hasLC GF] :
-    iprop(([∗map] i ↦ c ∈ mB, cellOwn (hlc := .hasLC) (GF := GF) i (.own 1) c)) ⊢
-      iprop(pointsToCell (GF := GF) xPtr (.own 1) intTy bytesX ∗
-        pointsToCell yPtr (.own 1) intTy bytesY) := by
+    iprop(([∗map] i ↦ c ∈ mB, cellOwn fmapEmpty (hlc := .hasLC) (GF := GF) i (.own 1) c)) ⊢
+      iprop(pointsToCell fmapEmpty (GF := GF) xPtr (.own 1) intTy bytesX ∗
+        pointsToCell fmapEmpty yPtr (.own 1) intTy bytesY) := by
   refine .trans (BigSepM.bigSepM_insert (i := 1) (x := cellY) mB_base_get1).1 ?_
   iintro ⟨Hy, Hbase⟩
   icases (BigSepM.bigSepM_insert (i := 0) (x := cellX)
     (Iris.Std.LawfulPartialMap.get?_empty (M := SpikeHeapF) 0)).1
     $$ Hbase with ⟨Hx, -⟩
   isplitl [Hx]
-  · iapply (pointsToCell_cellOwn_iff _ _ _ _).mpr
+  · iapply (pointsToCell_cellOwn_iff fmapEmpty _ _ _ _).mpr
     iexists 0, xAddr
     isplit
     · ipureintro
       exact xPtr_eq
     · iexact Hx
-  · iapply (pointsToCell_cellOwn_iff _ _ _ _).mpr
+  · iapply (pointsToCell_cellOwn_iff fmapEmpty _ _ _ _).mpr
     iexists 1, yAddr
     isplit
     · ipureintro
@@ -681,33 +681,33 @@ theorem bigSepB_pts [SpikeGS .hasLC GF] :
 
 /-- Repackage the two updated cells as mC's big-sep. -/
 theorem cells_to_mC [SpikeGS .hasLC GF] :
-    iprop(pointsToCell (GF := GF) xPtr (.own 1) intTy fiveBytes ∗
-      pointsToCell yPtr (.own 1) intTy sixBytes) ⊢
-      iprop([∗map] i ↦ c ∈ mC, cellOwn (hlc := .hasLC) (GF := GF) i (.own 1) c) := by
+    iprop(pointsToCell fmapEmpty (GF := GF) xPtr (.own 1) intTy (fiveBytes fmapEmpty) ∗
+      pointsToCell fmapEmpty yPtr (.own 1) intTy (sixBytes fmapEmpty)) ⊢
+      iprop([∗map] i ↦ c ∈ mC, cellOwn fmapEmpty (hlc := .hasLC) (GF := GF) i (.own 1) c) := by
   iintro ⟨Hx, Hy⟩
-  icases (pointsToCell_cellOwn_iff _ _ _ _).mp $$ Hx with ⟨%ix, %ax, %Hpx, Hx⟩
+  icases (pointsToCell_cellOwn_iff fmapEmpty _ _ _ _).mp $$ Hx with ⟨%ix, %ax, %Hpx, Hx⟩
   obtain ⟨rfl, rfl⟩ := cellPtr_inj (xPtr_eq.symm.trans Hpx)
-  icases (pointsToCell_cellOwn_iff _ _ _ _).mp $$ Hy with ⟨%iy, %ay, %Hpy, Hy⟩
+  icases (pointsToCell_cellOwn_iff fmapEmpty _ _ _ _).mp $$ Hy with ⟨%iy, %ay, %Hpy, Hy⟩
   obtain ⟨rfl, rfl⟩ := cellPtr_inj (yPtr_eq.symm.trans Hpy)
   iapply (BigSepM.bigSepM_insert
-    (Φ := fun (i : Int) (c : SpikeCell) => cellOwn (hlc := .hasLC) (GF := GF) i (.own 1) c)
+    (Φ := fun (i : Int) (c : SpikeCell) => cellOwn fmapEmpty (hlc := .hasLC) (GF := GF) i (.own 1) c)
     (i := 1) (x := cellY6) mC_base_get1).2
   isplitl [Hy]
   · iexact Hy
   · iapply (BigSepM.bigSepM_insert
-      (Φ := fun (i : Int) (c : SpikeCell) => cellOwn (hlc := .hasLC) (GF := GF) i (.own 1) c)
+      (Φ := fun (i : Int) (c : SpikeCell) => cellOwn fmapEmpty (hlc := .hasLC) (GF := GF) i (.own 1) c)
       (i := 0) (x := cellX5)
       (Iris.Std.LawfulPartialMap.get?_empty (M := SpikeHeapF) 0)).2
     isplitl [Hx]
     · iexact Hx
     · iapply (BigSepM.bigSepM_empty_intro
         (P := (BIBase.emp : IProp GF))
-        (Φ := fun (i : Int) (c : SpikeCell) => cellOwn (hlc := .hasLC) (GF := GF) i (.own 1) c))
+        (Φ := fun (i : Int) (c : SpikeCell) => cellOwn fmapEmpty (hlc := .hasLC) (GF := GF) i (.own 1) c))
       itrivial
 
 /-- The two-store footprint triple: the interior compositional
     derivation `exhibitC_triple` repackaged at footprint granularity
-    — no re-derivation, only big-sep ↔ pointsToCell plumbing. -/
+    — no re-derivation, only big-sep ↔ pointsToCell fmapEmpty plumbing. -/
 theorem provenC {GF : BundledGFunctors} [SpikeGpreS GF] :
     ProvenTriple GF progC mB (fun _ Q => Q = mC) := by
   intro instGS
@@ -743,8 +743,8 @@ theorem exhibitC_engine (n : Nat) (aids : Nat → Nat) (hn : n ≤ 999998) :
     (drive aids n (spikeThread progC) σ₀ ≠ .stuck) ∧
     (∀ (v : value) (σ' : Mem),
       drive aids n (spikeThread progC) σ₀ = .done v σ' →
-        CerbMem.readBytesFrom σ' xAddr 4 = fiveBytes ∧
-        CerbMem.readBytesFrom σ' yAddr 4 = sixBytes) := by
+        CerbMem.readBytesFrom σ' xAddr 4 = (fiveBytes fmapEmpty) ∧
+        CerbMem.readBytesFrom σ' yAddr 4 = (sixBytes fmapEmpty)) := by
   have h := exhibitC_semantic (GF := SpikeGF) ∅
     (Iris.Std.LawfulPartialMap.disjoint_empty_right mB) σ₀
     (by rw [show Iris.Std.PartialMap.union mB ∅ = mB from
@@ -755,7 +755,7 @@ theorem exhibitC_engine (n : Nat) (aids : Nat → Nat) (hn : n ≤ 999998) :
   refine ⟨h.1, h.2.1, fun v σ' hd => ?_⟩
   obtain ⟨Q, hQ, _, hsat⟩ := h.2.2 v σ' hd
   subst hQ
-  have hsat' : Sat σ' mC :=
+  have hsat' : Sat fmapEmpty σ' mC :=
     Sat.mono hsat (by
       rw [show Iris.Std.PartialMap.union mC ∅ = mC from
         Iris.Std.LawfulPartialMap.union_empty_right])
@@ -769,7 +769,7 @@ theorem exhibitC_engine (n : Nat) (aids : Nat → Nat) (hn : n ≤ 999998) :
     Iris.Std.get?_insert_eq rfl
   have hcx := (hsat'.cells 0 _ hgx).bytes
   have hcy := (hsat'.cells 1 _ hgy).bytes
-  rw [show CerbMem.sizeofCtype intTy = 4 from rfl] at hcx hcy
+  rw [show CerbMem.sizeofCtype fmapEmpty intTy = 4 from rfl] at hcx hcy
   exact ⟨hcx, hcy⟩
 
 end CerberusHeapLang

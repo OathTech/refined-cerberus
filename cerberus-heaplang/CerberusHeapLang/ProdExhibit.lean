@@ -120,8 +120,8 @@ and `prodA_terminates` (six-round termination trace). -/
 /-- The engine-facing postcondition: the delivered value is
     `Specified(7)` and the final memory holds 7's image at the
     program's own fresh cell (existential id/address). -/
-def ψA : value → Mem → Prop := fun v σ' =>
-  v = sevenVal ∧ ∃ i a : Int, CellCoh σ' i ⟨a, intTy, sevenBytes⟩
+def ψA (tds : CerbTags.TagDefsMap) : value → Mem → Prop := fun v σ' =>
+  v = sevenVal ∧ ∃ i a : Int, CellCoh tds σ' i ⟨a, intTy, sevenBytes tds⟩
 
 /-- THE WHOLE PROGRAM AT THE TOTAL JUDGMENT, budget 11 (derived:
     create 2 + constant bind 1 + store-operand eval 1 + store 3 +
@@ -134,8 +134,8 @@ theorem progAProd_wpt [SpikeGS .hasLC GF]
     (hex : M.extern = fmapEmpty)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value))
     (hf : SymFrame ev0) :
-    iprop(allocCap (GF := GF) [⟨4, intTy⟩]) ⊢
-      wpt M Ls 11 (readoutPost ψA) progAProd (ev0 :: evs) := by
+    iprop(allocCap M.tagDefs (GF := GF) [⟨4, intTy⟩]) ⊢
+      wpt M Ls 11 (readoutPost (ψA M.tagDefs)) progAProd (ev0 :: evs) := by
   iintro Hcap
   rw [show progAProd =
     Expr [] (Esseq (symPat [] pASym BTy_unit)
@@ -177,13 +177,13 @@ theorem progAProd_wpt [SpikeGS .hasLC GF]
     (by rw [hex, evalPexpr_sym_empty]
         exact lookup_env_head (prodAFrame_lookup_v hf p) evs)
   iapply wpt_store_cell loc0 empty_annotation intTy p sevenVal NA sevenMval
-    intUndefBytes _ (Nat.le_refl 3) seven_encodes seven_storable
+    (intUndefBytes M.tagDefs) _ (Nat.le_refl 3) seven_encodes (seven_storable _)
   isplitl [Hpt]
   · iexact Hpt
   iintro %fp Hpt
   iapply wpt_mono
-    (fun u ρ' => readoutPost_annot_absorb ψA [DA_pos [] fp] Vunit u ρ') _ _
-  icases (pointsToCell_cellOwn_iff _ _ _ _).mp $$ Hpt
+    (fun u ρ' => readoutPost_annot_absorb (ψA M.tagDefs) [DA_pos [] fp] Vunit u ρ') _ _
+  icases (pointsToCell_cellOwn_iff M.tagDefs _ _ _ _).mp $$ Hpt
     with ⟨%id, %a, %hpv, Hcell⟩
   iapply wpt_load_eval loc0 empty_annotation intTy _ NA _ rfl (pv := p)
     (by rw [hex, evalPexpr_sym_empty]
@@ -191,7 +191,7 @@ theorem progAProd_wpt [SpikeGS .hasLC GF]
   rw [hpv, show (cellPtr id a) = cellPtr id (a + ((0 : Nat) : Int))
     from congrArg (cellPtr id) (by omega)]
   iapply wpt_load_cell_at loc0 empty_annotation id a intTy 0 intTy NA
-    (.own 1) (CerbMem.memValueToBytes [] sevenMval).2 _
+    (.own 1) (CerbMem.memValueToBytes M.tagDefs [] sevenMval).2 _
     (mv := sevenMval) (Nat.le_refl 3) (by omega)
     (fun lum fpm => seven_reconstruct lum fpm _) seven_loadTrap
   isplitl [Hcell]
@@ -200,13 +200,13 @@ theorem progAProd_wpt [SpikeGS .hasLC GF]
   iintro %σ' %ns %κs %nt Hσ
   icases (stateInterp_iff σ' ns κs nt).mp $$ Hσ
     with ⟨%mm, %mb, %mk, %HG, Hmi, Hbi, Hki⟩
-  ihave %Hcc : ⌜CellCoh σ' id ⟨a, intTy,
-      (CerbMem.memValueToBytes [] sevenMval).2⟩ ∧
-      Iris.Std.PartialMap.get? mm id = some (metaOf
-        (⟨a, intTy, (CerbMem.memValueToBytes [] sevenMval).2⟩ :
+  ihave %Hcc : ⌜CellCoh M.tagDefs σ' id ⟨a, intTy,
+      (CerbMem.memValueToBytes M.tagDefs [] sevenMval).2⟩ ∧
+      Iris.Std.PartialMap.get? mm id = some (metaOf M.tagDefs
+        (⟨a, intTy, (CerbMem.memValueToBytes M.tagDefs [] sevenMval).2⟩ :
           SpikeCell))⌝ $$ [Hmi Hbi Hcell]
-  · iapply cellOwn_cellCoh HG id (.own 1)
-      ⟨a, intTy, (CerbMem.memValueToBytes [] sevenMval).2⟩
+  · iapply cellOwn_cellCoh M.tagDefs HG id (.own 1)
+      ⟨a, intTy, (CerbMem.memValueToBytes M.tagDefs [] sevenMval).2⟩
       $$ [$Hmi $Hbi $Hcell]
   iapply fupd_mask_intro_discard Std.LawfulSet.empty_subset
   ipureintro
@@ -218,13 +218,13 @@ arrows) -/
 
 /-- The label-free program registers the empty label map at
     `mainSym` (the shipped registration on the synthetic file). -/
-theorem progAProd_labeledAt :
-    LabeledAt (initial_core_run_state (collect_labeled_continuations_NEW
-        (prodFile progAProd)))
+theorem progAProd_labeledAt (sup : Nat) :
+    LabeledAt ((initial_core_run_state sup (collect_labeled_continuations_NEW
+        (prodFile progAProd))).1)
       mainSym fmapEmpty := by
   unfold LabeledAt
-  rw [show (initial_core_run_state (collect_labeled_continuations_NEW
-      (prodFile progAProd))).labeled =
+  rw [show ((initial_core_run_state sup (collect_labeled_continuations_NEW
+      (prodFile progAProd))).1).labeled =
     collect_labeled_continuations_NEW (prodFile progAProd) from rfl]
   rw [show collect_labeled_continuations_NEW (prodFile progAProd) =
     fmapAddBy (fun (s1 s2 : sym) => ordCompare s1 s2) mainSym
@@ -241,30 +241,30 @@ theorem progAProd_labeledAt :
     rules) → `wpt_driver_done_alloc` (allocation-aware launch from
     the cold-start memory with the one-request plan) →
     `prod_run_eqJ` (generic driver collapse). -/
-theorem exhibitA_prod (fs : CerbFS.FsState) (args : List String) :
+theorem exhibitA_prod (sup : Nat) (fs : CerbFS.FsState) (args : List String) :
     ∃ (dres : driver_result) (dst' : driver_state),
       CerbND.runND (_root_.drive fmapEmpty false (prodFile progAProd) args)
-          (initial_driver_state (prodFile progAProd) fs) =
+          ((initial_driver_state sup (prodFile progAProd) fs).1) =
         [(nd_status.Active dres, ([] : List String), dst')] ∧
       dres.dres_core_value = sevenVal ∧
-      (∃ i a : Int, CellCoh dst'.layout_state i ⟨a, intTy, sevenBytes⟩) ∧
+      (∃ i a : Int, CellCoh fmapEmpty dst'.layout_state i ⟨a, intTy, (sevenBytes fmapEmpty)⟩) ∧
       dres.dres_blocked = false ∧
       dres.dres_stdout = "" ∧
       dres.dres_stderr = "" := by
-  have hQe := progAProd_labeledAt
+  have hQe := progAProd_labeledAt sup
   have hnolabel : ∀ (l : sym) (params : List (sym × core_base_type))
       (cont : CoreExpr),
-      lookupLabel (procCtx mainSym (initial_core_run_state
-        (collect_labeled_continuations_NEW (prodFile progAProd)))).labels l =
+      lookupLabel (procCtx mainSym ((initial_core_run_state sup
+        (collect_labeled_continuations_NEW (prodFile progAProd))).1)).labels l =
         some (params, cont) → False := by
     intro l params cont hl
     rw [procCtx_labels hQe, lookupLabel_empty] at hl
     cases hl
   obtain ⟨dres, dst', heq, hψ, hbl, hout, herr⟩ :=
-    prod_run_eqJ progAProd hQe ψA 11
+    prod_run_eqJ sup progAProd hQe (ψA fmapEmpty) 11
       (wpt_driver_done_alloc (GF := SpikeGF)
-        (M₀ := procCtx mainSym (initial_core_run_state
-          (collect_labeled_continuations_NEW (prodFile progAProd))))
+        (M₀ := procCtx mainSym ((initial_core_run_state sup
+          (collect_labeled_continuations_NEW (prodFile progAProd))).1))
         rfl rfl (procCtx_labels hQe) rfl rfl
         (fun l params cont hl => (hnolabel l params cont hl).elim)
         (fun l params cont hl => (hnolabel l params cont hl).elim)
@@ -275,7 +275,7 @@ theorem exhibitA_prod (fs : CerbFS.FsState) (args : List String) :
             show lemDefaultFuel = 999999 + 1 from rfl]
             omega)
         (prodMem₀_launchCoh [⟨4, intTy⟩] prod_one_int_plan_fits)
-        ψA 11
+        (ψA fmapEmpty) 11
         (by
           intro inst
           iintro ⟨-, Hcap⟩

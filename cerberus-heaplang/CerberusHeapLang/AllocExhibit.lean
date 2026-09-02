@@ -44,7 +44,7 @@ open Iris Iris.BI Iris.ProgramLogic
 
 /-! ## intTy layout facts (closed, rfl) -/
 
-theorem intTy_size : CerbMem.sizeofCtype intTy = 4 := rfl
+theorem intTy_size {tds : CerbTags.TagDefsMap} : CerbMem.sizeofCtype tds intTy = 4 := rfl
 
 theorem intTy_nonatomic : atomicTy intTy = false := rfl
 
@@ -52,12 +52,12 @@ theorem intTy_nonatomic : atomicTy intTy = false := rfl
     function-pointer tables — at ANY address and image (the
     address-independent inertness shape the public create rules
     take). -/
-theorem intTy_decIndep (a : Int) (bs : List CerbMem.AbsByte) :
-    decIndep a intTy bs := fun _ _ => rfl
+theorem intTy_decIndep {tds : CerbTags.TagDefsMap} (a : Int) (bs : List CerbMem.AbsByte) :
+    decIndep tds a intTy bs := fun _ _ => rfl
 
 /-- The unspecified fresh image of one int cell. -/
-abbrev intUndefBytes : List CerbMem.AbsByte :=
-  List.replicate (CerbMem.sizeofCtype intTy) undefByte
+abbrev intUndefBytes (tds : CerbTags.TagDefsMap) : List CerbMem.AbsByte :=
+  List.replicate (CerbMem.sizeofCtype tds intTy) undefByte
 
 /-! ## Local consumers (partial and total lanes) -/
 
@@ -75,12 +75,12 @@ variable {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
 theorem alloc_two_creates_wps {M : MachineCtx} {Ls : LabelSpec GF}
     (al₁ al₂ : Int) (pref₁ pref₂ : prefix0) (bty : core_base_type)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value)) :
-    iprop(allocCap (GF := GF) [⟨al₁, intTy⟩, ⟨al₂, intTy⟩]) ⊢
+    iprop(allocCap M.tagDefs (GF := GF) [⟨al₁, intTy⟩, ⟨al₂, intTy⟩]) ⊢
       wps M Ls
         (fun _ _ => iprop(∃ p₁ p₂ : CerbMem.PointerValue,
-          pointsToCell p₁ (.own 1) intTy intUndefBytes ∗
-          pointsToCell p₂ (.own 1) intTy intUndefBytes ∗
-          allocCap []))
+          pointsToCell M.tagDefs p₁ (.own 1) intTy (intUndefBytes M.tagDefs) ∗
+          pointsToCell M.tagDefs p₂ (.own 1) intTy (intUndefBytes M.tagDefs) ∗
+          allocCap M.tagDefs []))
         (sseqExpr bty
           (createExpr loc0 empty_annotation (.IV .Prov_none al₁) intTy pref₁)
           (createExpr loc0 empty_annotation (.IV .Prov_none al₂) intTy pref₂))
@@ -119,10 +119,10 @@ theorem alloc_two_creates_wps {M : MachineCtx} {Ls : LabelSpec GF}
     against `driveU`). -/
 theorem alloc_create_wpt {M : MachineCtx} {Ls : LabelSpecT GF}
     (al : Int) (pref : prefix0) (ρ : EnvStack) :
-    iprop(allocCap (GF := GF) [⟨al, intTy⟩]) ⊢
+    iprop(allocCap M.tagDefs (GF := GF) [⟨al, intTy⟩]) ⊢
       wpt M Ls 2
         (fun _ _ => iprop(∃ p : CerbMem.PointerValue,
-          pointsToCell p (.own 1) intTy intUndefBytes ∗ allocCap []))
+          pointsToCell M.tagDefs p (.own 1) intTy (intUndefBytes M.tagDefs) ∗ allocCap M.tagDefs []))
         (createExpr loc0 empty_annotation (.IV .Prov_none al) intTy pref)
         ρ := by
   iintro Hcap
@@ -143,11 +143,11 @@ end AllocIris
 /-- The one-request plan fits the production cold-start cursor
     `⟨errnoAddr, 1⟩` (closed allocator arithmetic). -/
 theorem prod_one_int_plan_fits :
-    PlanFits ⟨prodMem₀.lastAddress, prodMem₀.nextAllocId⟩
+    PlanFits fmapEmpty ⟨prodMem₀.lastAddress, prodMem₀.nextAllocId⟩
       [⟨4, intTy⟩] := by
   rw [prodMem₀_lastAddress, prodMem₀_nextAllocId, PlanFits_cons_iff]
-  refine ⟨⟨freshBase errnoAddr 4 (CerbMem.sizeofCtype intTy), 1 + 1⟩,
-    ?_, PlanFits_nil _⟩
+  refine ⟨⟨freshBase errnoAddr 4 (CerbMem.sizeofCtype fmapEmpty intTy), 1 + 1⟩,
+    ?_, PlanFits_nil fmapEmpty _⟩
   rw [advanceCursor_mk, intTy_size]
   exact if_pos ⟨by decide, by decide⟩
 

@@ -238,11 +238,11 @@ variable {f : Fmap sym value} (hf : SymFrame f) (i a b : Int)
 include hf
 
 theorem fib_guard_eval (n : Int) :
-    evalPexpr fmapEmpty (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
+    evalPexpr fmapEmpty fmapEmpty (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
         (fibGuard n) = some (boolValue (decide (i < n))) := by
   unfold fibGuard
   rw [evalPexpr_op]
-  rw [show evalPexpr fmapEmpty (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
+  rw [show evalPexpr fmapEmpty fmapEmpty (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
       (Pexpr [] () (PEsym fibISym)) = some (ivVal i) from by
     rw [evalPexpr_sym_empty]
     exact lookup_env_head (fibFrame_lookup_i hf _ _ _) rest]
@@ -250,32 +250,32 @@ theorem fib_guard_eval (n : Int) :
   rfl
 
 theorem fib_args_eval :
-    evalPexprs fmapEmpty (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
+    evalPexprs fmapEmpty fmapEmpty (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
         [fibIncPe, fibBPe, fibABPe] =
       some [ivVal (i + 1), ivVal b, ivVal (a + b)] := by
-  have hi : evalPexpr fmapEmpty (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
+  have hi : evalPexpr fmapEmpty fmapEmpty (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
       (Pexpr [] () (PEsym fibISym)) = some (ivVal i) := by
     rw [evalPexpr_sym_empty]
     exact lookup_env_head (fibFrame_lookup_i hf _ _ _) rest
-  have ha : evalPexpr fmapEmpty (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
+  have ha : evalPexpr fmapEmpty fmapEmpty (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
       (Pexpr [] () (PEsym fibASym)) = some (ivVal a) := by
     rw [evalPexpr_sym_empty]
     exact lookup_env_head (fibFrame_lookup_a hf _ _ _) rest
-  have hb : evalPexpr fmapEmpty (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
+  have hb : evalPexpr fmapEmpty fmapEmpty (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
       (Pexpr [] () (PEsym fibBSym)) = some (ivVal b) := by
     rw [evalPexpr_sym_empty]
     exact lookup_env_head (fibFrame_lookup_b hf _ _ _) rest
   rw [evalPexprs_cons]
-  rw [show evalPexpr fmapEmpty (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
+  rw [show evalPexpr fmapEmpty fmapEmpty (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
       fibIncPe = some (ivVal (i + 1)) from by
     unfold fibIncPe
     rw [evalPexpr_op, hi]
     rfl]
   rw [evalPexprs_cons]
-  rw [show evalPexpr fmapEmpty (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
+  rw [show evalPexpr fmapEmpty fmapEmpty (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
       fibBPe = some (ivVal b) from hb]
   rw [evalPexprs_cons]
-  rw [show evalPexpr fmapEmpty (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
+  rw [show evalPexpr fmapEmpty fmapEmpty (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
       fibABPe = some (ivVal (a + b)) from by
     unfold fibABPe
     rw [evalPexpr_op, ha, hb]
@@ -283,9 +283,9 @@ theorem fib_args_eval :
   rfl
 
 theorem fib_exit_eval :
-    evalPexpr fmapEmpty (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
+    evalPexpr fmapEmpty fmapEmpty (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
         fibExitPe = some (ivVal a) := by
-  show evalPexpr fmapEmpty _ (Pexpr [] () (PEsym fibASym)) = _
+  show evalPexpr fmapEmpty fmapEmpty _ (Pexpr [] () (PEsym fibASym)) = _
   rw [evalPexpr_sym_empty]
   exact lookup_env_head (fibFrame_lookup_a hf _ _ _) rest
 
@@ -423,7 +423,7 @@ theorem fibBody_fragJ : Frag (fibBody ra n) := by
 omit p rs hQ in
 /-- The empty seeded footprint is coherent with ANY memory. -/
 theorem coh_empty (σ : Mem) :
-    Coh σ ((∅ : SpikeHeapF SpikeCell)) := by
+    Coh fmapEmpty σ ((∅ : SpikeHeapF SpikeCell)) := by
   refine ⟨fun i c hg => ?_, fun i j c1 c2 hne h1 h2 => ?_⟩
   · rw [Iris.Std.LawfulPartialMap.get?_empty] at hg
     cases hg

@@ -48,28 +48,28 @@ open Iris Iris.BI Iris.ProgramLogic
     padding). -/
 def structTy : ctype := Ctype [] (.Array0 intTy (some 4))
 
-theorem structTy_size : CerbMem.sizeofCtype structTy = 16 := rfl
+theorem structTy_size {tds : CerbTags.TagDefsMap} : CerbMem.sizeofCtype tds structTy = 16 := rfl
 
 theorem structTy_nonatomic : atomicTy structTy = false := rfl
 
 /-- The int-array decode never consults the union-member or
     function-pointer tables (the layout's inertness fact — the same
     shape as the list exhibit's `nodeTy_dec_indep`). -/
-theorem structTy_dec_indep (lum : List (Int × identifier))
+theorem structTy_dec_indep {tds : CerbTags.TagDefsMap} (lum : List (Int × identifier))
     (fpm : CerbMem.Funptrmap) (addr : Int) (bs : List CerbMem.AbsByte) :
-    CerbMem.reconstructValue lum fpm addr structTy bs =
-      CerbMem.reconstructValue [] [] addr structTy bs := rfl
+    CerbMem.reconstructValue tds lum fpm addr structTy bs =
+      CerbMem.reconstructValue tds [] [] addr structTy bs := rfl
 
-theorem structTy_decIndep (a : Int) (bs : List CerbMem.AbsByte) :
-    decIndep a structTy bs :=
+theorem structTy_decIndep {tds : CerbTags.TagDefsMap} (a : Int) (bs : List CerbMem.AbsByte) :
+    decIndep tds a structTy bs :=
   fun lum fpm => structTy_dec_indep lum fpm a bs
 
 /-- Field offsets. -/
 def fieldX : Nat := 0
 def fieldY : Nat := 8
 
-theorem fiveBytes_len : fiveBytes.length = 4 := rfl
-theorem sixBytes_len : sixBytes.length = 4 := rfl
+theorem fiveBytes_len {tds : CerbTags.TagDefsMap} : (fiveBytes tds).length = 4 := rfl
+theorem sixBytes_len {tds : CerbTags.TagDefsMap} : (sixBytes tds).length = 4 := rfl
 
 /-! ## The program: store both fields (interior typed stores) -/
 
@@ -105,32 +105,32 @@ theorem wps_struct_x_store {Ψ : SpikeVal → EnvStack → IProp GF}
     (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (mo : memory_order) (id a : Int) (bs : List CerbMem.AbsByte)
     (ρ : EnvStack) :
-    iprop(cellOwn (GF := GF) id (.own 1) (SpikeCell.mk a structTy bs) ∗
-      (∀ fp, cellOwn id (.own 1) (SpikeCell.mk a structTy
-          (spliceBytes fieldX fiveBytes bs)) -∗
+    iprop(cellOwn M.tagDefs (GF := GF) id (.own 1) (SpikeCell.mk a structTy bs) ∗
+      (∀ fp, cellOwn M.tagDefs id (.own 1) (SpikeCell.mk a structTy
+          (spliceBytes fieldX (fiveBytes M.tagDefs) bs)) -∗
         Ψ (SpikeVal.annot [DA_pos [] fp] Vunit) ρ)) ⊢
       wps M Ls Ψ (storeExpr loc ann intTy
         (cellPtr id (a + ((fieldX : Nat) : Int))) fiveVal mo) ρ :=
   wps_store_cell_at loc ann id a structTy fieldX intTy fiveVal mo bs ρ
-    five_encodes (by rw [structTy_size]; decide)
-    five_storable.compat five_storable.fpm five_storable.bytes_fpm
-    (five_storable.len []) (structTy_decIndep a _)
+    five_encodes (by rw [structTy_size, show CerbMem.sizeofCtype M.tagDefs intTy = 4 from rfl]; decide)
+    (five_storable M.tagDefs).compat (five_storable M.tagDefs).fpm (five_storable M.tagDefs).bytes_fpm
+    ((five_storable M.tagDefs).len []) (structTy_decIndep a _)
 
 /-- FIELD-Y STORE: the same generic rule at offset 8, stored value 6. -/
 theorem wps_struct_y_store {Ψ : SpikeVal → EnvStack → IProp GF}
     (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (mo : memory_order) (id a : Int) (bs : List CerbMem.AbsByte)
     (ρ : EnvStack) :
-    iprop(cellOwn (GF := GF) id (.own 1) (SpikeCell.mk a structTy bs) ∗
-      (∀ fp, cellOwn id (.own 1) (SpikeCell.mk a structTy
-          (spliceBytes fieldY sixBytes bs)) -∗
+    iprop(cellOwn M.tagDefs (GF := GF) id (.own 1) (SpikeCell.mk a structTy bs) ∗
+      (∀ fp, cellOwn M.tagDefs id (.own 1) (SpikeCell.mk a structTy
+          (spliceBytes fieldY (sixBytes M.tagDefs) bs)) -∗
         Ψ (SpikeVal.annot [DA_pos [] fp] Vunit) ρ)) ⊢
       wps M Ls Ψ (storeExpr loc ann intTy
         (cellPtr id (a + ((fieldY : Nat) : Int))) sixVal mo) ρ :=
   wps_store_cell_at loc ann id a structTy fieldY intTy sixVal mo bs ρ
-    six_encodes (by rw [structTy_size]; decide)
-    six_storable.compat six_storable.fpm six_storable.bytes_fpm
-    (six_storable.len []) (structTy_decIndep a _)
+    six_encodes (by rw [structTy_size, show CerbMem.sizeofCtype M.tagDefs intTy = 4 from rfl]; decide)
+    (six_storable M.tagDefs).compat (six_storable M.tagDefs).fpm (six_storable M.tagDefs).bytes_fpm
+    ((six_storable M.tagDefs).len []) (structTy_decIndep a _)
 
 /-- The whole program at the statement layer: both fields updated,
     the allocation's image doubly spliced. -/
@@ -138,10 +138,10 @@ theorem struct_wps (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (mo mo' : memory_order) (bty : core_base_type) (id a : Int)
     (bs : List CerbMem.AbsByte) (ev0 : Fmap sym value)
     (evs : List (Fmap sym value)) :
-    iprop(cellOwn (GF := GF) id (.own 1) (SpikeCell.mk a structTy bs)) ⊢
+    iprop(cellOwn M.tagDefs (GF := GF) id (.own 1) (SpikeCell.mk a structTy bs)) ⊢
       wps M Ls
-        (fun _ _ => iprop(cellOwn id (.own 1) (SpikeCell.mk a structTy
-          (spliceBytes fieldY sixBytes (spliceBytes fieldX fiveBytes bs)))))
+        (fun _ _ => iprop(cellOwn M.tagDefs id (.own 1) (SpikeCell.mk a structTy
+          (spliceBytes fieldY (sixBytes M.tagDefs) (spliceBytes fieldX (fiveBytes M.tagDefs) bs)))))
         (progS loc ann mo mo' bty id a) (ev0 :: evs) := by
   iintro Hs
   rw [show progS loc ann mo mo' bty id a =
@@ -156,7 +156,7 @@ theorem struct_wps (loc : CerbLocation.Loc) (ann : core_run_annotation)
   · iexact Hs
   iintro %fp Hs
   iapply wps_struct_y_store loc ann mo' id a
-    (spliceBytes fieldX fiveBytes bs) (ev0 :: evs)
+    (spliceBytes fieldX (fiveBytes M.tagDefs) bs) (ev0 :: evs)
   isplitl [Hs]
   · iexact Hs
   iintro %fp' Hs
@@ -166,8 +166,8 @@ theorem struct_wps (loc : CerbLocation.Loc) (ann : core_run_annotation)
     profile). -/
 theorem struct_blockSpecs (id a : Int) (bs : List CerbMem.AbsByte) :
     ⊢ blockSpecs (GF := GF) spikeCtx (fun _ _ _ => iprop(False))
-      (fun _ _ => iprop(cellOwn (hlc := hlc) id (.own 1) (SpikeCell.mk a structTy
-        (spliceBytes fieldY sixBytes (spliceBytes fieldX fiveBytes bs))))) :=
+      (fun _ _ => iprop(cellOwn spikeCtx.tagDefs (hlc := hlc) id (.own 1) (SpikeCell.mk a structTy
+        (spliceBytes fieldY (sixBytes spikeCtx.tagDefs) (spliceBytes fieldX (fiveBytes spikeCtx.tagDefs) bs))))) :=
   blockSpecs_intro fun l _ _ _ _ _ hl => (spikeCtx_labels_none l hl).elim
 
 end StructIris
@@ -181,15 +181,15 @@ variable {GF : BundledGFunctors} [SpikeGS .hasLC GF]
 theorem struct_wp_readout (loc : CerbLocation.Loc)
     (ann : core_run_annotation) (mo mo' : memory_order)
     (bty : core_base_type) (id a : Int) (bs : List CerbMem.AbsByte) :
-    iprop(cellOwn (hlc := .hasLC) (GF := GF) id (.own 1)
+    iprop(cellOwn spikeCtx.tagDefs (hlc := .hasLC) (GF := GF) id (.own 1)
         (SpikeCell.mk a structTy bs)) ⊢
       WP (⟨progS loc ann mo mo' bty id a, spikeEnv, spikeCtx⟩ : CoreRt)
         @ Stuckness.NotStuck; ⊤
         {{ w, iprop(∀ (σ' : Mem) (ns : Nat) (κs : List Empty) (nt : Nat),
           (stateInterp σ' ns κs nt : IProp GF) ={⊤, ∅}=∗
-            ⌜CellCoh σ' id ⟨a, structTy,
-              spliceBytes fieldY sixBytes
-                (spliceBytes fieldX fiveBytes bs)⟩⌝) }} := by
+            ⌜CellCoh spikeCtx.tagDefs σ' id ⟨a, structTy,
+              spliceBytes fieldY (sixBytes spikeCtx.tagDefs)
+                (spliceBytes fieldX (fiveBytes spikeCtx.tagDefs) bs)⟩⌝) }} := by
   refine (struct_wps (M := spikeCtx) (Ls := fun _ _ _ => iprop(False))
     loc ann mo mo' bty id a bs fmapEmpty []).trans ?_
   refine (BI.emp_sep.2.trans (BI.sep_mono
@@ -203,14 +203,14 @@ theorem struct_wp_readout (loc : CerbLocation.Loc)
   -- conditional extraction (cellOwn_cellCoh).
   exact stateInterp_readout (fun σ' mm mb mk HG => by
     iintro ⟨Hs, Hmi, Hbi⟩
-    ihave %Hcc : ⌜CellCoh σ' id ⟨a, structTy,
-        spliceBytes fieldY sixBytes (spliceBytes fieldX fiveBytes bs)⟩ ∧
-        Iris.Std.PartialMap.get? mm id = some (metaOf
-          (⟨a, structTy, spliceBytes fieldY sixBytes
-            (spliceBytes fieldX fiveBytes bs)⟩ : SpikeCell))⌝ $$ [Hmi Hbi Hs]
-    · iapply cellOwn_cellCoh HG id (.own 1)
-        ⟨a, structTy, spliceBytes fieldY sixBytes
-          (spliceBytes fieldX fiveBytes bs)⟩ $$ [$Hmi $Hbi $Hs]
+    ihave %Hcc : ⌜CellCoh spikeCtx.tagDefs σ' id ⟨a, structTy,
+        spliceBytes fieldY (sixBytes spikeCtx.tagDefs) (spliceBytes fieldX (fiveBytes spikeCtx.tagDefs) bs)⟩ ∧
+        Iris.Std.PartialMap.get? mm id = some (metaOf spikeCtx.tagDefs
+          (⟨a, structTy, spliceBytes fieldY (sixBytes spikeCtx.tagDefs)
+            (spliceBytes fieldX (fiveBytes spikeCtx.tagDefs) bs)⟩ : SpikeCell))⌝ $$ [Hmi Hbi Hs]
+    · iapply cellOwn_cellCoh spikeCtx.tagDefs HG id (.own 1)
+        ⟨a, structTy, spliceBytes fieldY (sixBytes spikeCtx.tagDefs)
+          (spliceBytes fieldX (fiveBytes spikeCtx.tagDefs) bs)⟩ $$ [$Hmi $Hbi $Hs]
     ipureintro
     exact Hcc.1)
 
@@ -233,7 +233,7 @@ theorem struct_update_certified {GF : BundledGFunctors} [SpikeGpreS GF]
     (id a : Int) (bs : List CerbMem.AbsByte)
     (hlib : CerbLocation.isLibraryLocation loc = false)
     (σ₀ : Mem)
-    (hcoh : Coh σ₀ ((Iris.Std.PartialMap.singleton id
+    (hcoh : Coh fmapEmpty σ₀ ((Iris.Std.PartialMap.singleton id
       (SpikeCell.mk a structTy bs)) : SpikeHeapF SpikeCell))
     (n : Nat) (aids : Nat → Nat)
     (hfuel : 2 + n ≤ lemDefaultFuel) :
@@ -244,8 +244,8 @@ theorem struct_update_certified {GF : BundledGFunctors} [SpikeGpreS GF]
     (∀ (v : value) (σ' : Mem),
       drive aids n (spikeThread (progS loc ann mo mo' bty id a)) σ₀ =
         .done v σ' →
-      CerbMem.readBytesFrom σ' (a + ((fieldX : Nat) : Int)) 4 = fiveBytes ∧
-      CerbMem.readBytesFrom σ' (a + ((fieldY : Nat) : Int)) 4 = sixBytes) := by
+      CerbMem.readBytesFrom σ' (a + ((fieldX : Nat) : Int)) 4 = (fiveBytes fmapEmpty) ∧
+      CerbMem.readBytesFrom σ' (a + ((fieldY : Nat) : Int)) 4 = (sixBytes fmapEmpty)) := by
   have hbs : bs.length = 16 := by
     have h := (hcoh.cells id _ (Iris.Std.LawfulPartialMap.get?_singleton_eq rfl)).len
     rw [structTy_size] at h
@@ -254,8 +254,8 @@ theorem struct_update_certified {GF : BundledGFunctors} [SpikeGpreS GF]
     (progS loc ann mo mo' bty id a) σ₀
     (Iris.Std.PartialMap.singleton id (SpikeCell.mk a structTy bs))
     (progS_frag loc ann mo mo' bty id a hlib) hcoh
-    (fun _ σ' => CellCoh σ' id ⟨a, structTy,
-      spliceBytes fieldY sixBytes (spliceBytes fieldX fiveBytes bs)⟩)
+    (fun _ σ' => CellCoh fmapEmpty σ' id ⟨a, structTy,
+      spliceBytes fieldY (sixBytes fmapEmpty) (spliceBytes fieldX (fiveBytes fmapEmpty) bs)⟩)
     (by
       intro inst
       refine (BigSepM.bigSepM_singleton).1.trans ?_
@@ -269,31 +269,31 @@ theorem struct_update_certified {GF : BundledGFunctors} [SpikeGpreS GF]
   refine ⟨hres.1, hres.2.1, fun v σ' hd => ?_⟩
   have hcc := hres.2.2 v σ' hd
   -- read the two field slices back out of the spliced image
-  have hlen1 : (spliceBytes fieldX fiveBytes bs).length = 16 := by
-    rw [spliceBytes_length fieldX fiveBytes bs (by rw [fiveBytes_len, hbs]; decide)]
+  have hlen1 : (spliceBytes fieldX (fiveBytes fmapEmpty) bs).length = 16 := by
+    rw [spliceBytes_length fieldX (fiveBytes fmapEmpty) bs (by rw [fiveBytes_len, hbs]; decide)]
     exact hbs
-  have hlen2 : (spliceBytes fieldY sixBytes
-      (spliceBytes fieldX fiveBytes bs)).length = 16 := by
-    rw [spliceBytes_length fieldY sixBytes _
+  have hlen2 : (spliceBytes fieldY (sixBytes fmapEmpty)
+      (spliceBytes fieldX (fiveBytes fmapEmpty) bs)).length = 16 := by
+    rw [spliceBytes_length fieldY (sixBytes fmapEmpty) _
       (by rw [sixBytes_len, hlen1]; decide)]
     exact hlen1
   have hread : CerbMem.readBytesFrom σ' a 16 =
-      spliceBytes fieldY sixBytes (spliceBytes fieldX fiveBytes bs) := by
+      spliceBytes fieldY (sixBytes fmapEmpty) (spliceBytes fieldX (fiveBytes fmapEmpty) bs) := by
     have h := hcc.bytes
     rw [structTy_size] at h
     exact h
   have hx : CerbMem.readBytesFrom σ' (a + ((fieldX : Nat) : Int)) 4 =
-      fiveBytes := by
+      (fiveBytes fmapEmpty) := by
     rw [readBytesFrom_sub σ' a 16 _ hread fieldX 4 (by decide)]
-    rw [spliceBytes_slice_below fieldY sixBytes _
+    rw [spliceBytes_slice_below fieldY (sixBytes fmapEmpty) _
       (by rw [sixBytes_len, hlen1]; decide) fieldX 4 (by decide)]
-    exact spliceBytes_slice_self fieldX fiveBytes bs
+    exact spliceBytes_slice_self fieldX (fiveBytes fmapEmpty) bs
       (by rw [fiveBytes_len, hbs]; decide)
   have hy : CerbMem.readBytesFrom σ' (a + ((fieldY : Nat) : Int)) 4 =
-      sixBytes := by
+      (sixBytes fmapEmpty) := by
     rw [readBytesFrom_sub σ' a 16 _ hread fieldY 4 (by decide)]
-    exact spliceBytes_slice_self fieldY sixBytes
-      (spliceBytes fieldX fiveBytes bs)
+    exact spliceBytes_slice_self fieldY (sixBytes fmapEmpty)
+      (spliceBytes fieldX (fiveBytes fmapEmpty) bs)
       (by rw [sixBytes_len, hlen1]; decide)
   exact ⟨hx, hy⟩
 
@@ -384,14 +384,14 @@ theorem struct_create_store_wps
     (mo : memory_order) (pbty vbty : core_base_type)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value))
     (hf : SymFrame ev0) (hex : M.extern = fmapEmpty) :
-    iprop(allocCap (GF := GF) [⟨alignN, structTy⟩]) ⊢
+    iprop(allocCap M.tagDefs (GF := GF) [⟨alignN, structTy⟩]) ⊢
       wps M Ls
         (fun w _ => iprop(∃ p : CerbMem.PointerValue,
           ⌜w.val = Vunit⌝ ∗
-          pointsToCell p (.own 1) structTy
-            (spliceBytes fieldX fiveBytes
-              (List.replicate (CerbMem.sizeofCtype structTy) undefByte)) ∗
-          allocCap []))
+          pointsToCell M.tagDefs p (.own 1) structTy
+            (spliceBytes fieldX (fiveBytes M.tagDefs)
+              (List.replicate (CerbMem.sizeofCtype M.tagDefs structTy) undefByte)) ∗
+          allocCap M.tagDefs []))
         (progCreateInit loc ann aprov alignN pref mo pbty vbty)
         (ev0 :: evs) := by
   iintro Hcap
@@ -420,7 +420,7 @@ theorem struct_create_store_wps
   · ipureintro
     rfl
   rw [update_env_sym structVSym vbty]
-  icases (pointsToCell_cellOwn_iff _ _ _ _).mp $$ Hpt
+  icases (pointsToCell_cellOwn_iff M.tagDefs _ _ _ _).mp $$ Hpt
     with ⟨%id, %a, %hpv, Hcell⟩
   iapply wps_store_eval loc ann intTy _ _ mo _ rfl rfl
     (pv := p) (cv := fiveVal)
@@ -431,7 +431,7 @@ theorem struct_create_store_wps
   rw [hpv, show (cellPtr id a) = cellPtr id (a + ((fieldX : Nat) : Int))
     from congrArg (cellPtr id) (by unfold fieldX; omega)]
   iapply wps_struct_x_store loc ann mo id a
-    (List.replicate (CerbMem.sizeofCtype structTy) undefByte) _
+    (List.replicate (CerbMem.sizeofCtype M.tagDefs structTy) undefByte) _
   isplitl [Hcell]
   · iexact Hcell
   iintro %fp Hcell
@@ -440,7 +440,7 @@ theorem struct_create_store_wps
   · ipureintro
     rfl
   isplitl [Hcell]
-  · iapply (pointsToCell_cellOwn_iff _ _ _ _).mpr
+  · iapply (pointsToCell_cellOwn_iff M.tagDefs _ _ _ _).mpr
     iexists id, a
     isplit
     · ipureintro
@@ -459,11 +459,11 @@ allocation-aware launcher. -/
     (closed allocator arithmetic — the boundary evaluation of the
     concrete plan). -/
 theorem struct_plan_fits :
-    PlanFits ⟨prodMem₀.lastAddress, prodMem₀.nextAllocId⟩
+    PlanFits fmapEmpty ⟨prodMem₀.lastAddress, prodMem₀.nextAllocId⟩
       [⟨8, structTy⟩] := by
   rw [prodMem₀_lastAddress, prodMem₀_nextAllocId, PlanFits_cons_iff]
-  refine ⟨⟨freshBase errnoAddr 8 (CerbMem.sizeofCtype structTy), 1 + 1⟩,
-    ?_, PlanFits_nil _⟩
+  refine ⟨⟨freshBase errnoAddr 8 (CerbMem.sizeofCtype fmapEmpty structTy), 1 + 1⟩,
+    ?_, PlanFits_nil fmapEmpty _⟩
   rw [advanceCursor_mk, structTy_size]
   exact if_pos ⟨by decide, by decide⟩
 
@@ -491,17 +491,17 @@ theorem struct_create_store_adequacy {GF : BundledGFunctors} [SpikeGpreS GF]
       drive aids n (spikeThread
           (progCreateInit loc ann .Prov_none 8 pref mo pbty vbty)) prodMem₀ =
         .done v σ' →
-      v = Vunit ∧ ∃ i a : Int, CellCoh σ' i ⟨a, structTy,
-        spliceBytes fieldX fiveBytes
-          (List.replicate (CerbMem.sizeofCtype structTy) undefByte)⟩) := by
+      v = Vunit ∧ ∃ i a : Int, CellCoh fmapEmpty σ' i ⟨a, structTy,
+        spliceBytes fieldX (fiveBytes fmapEmpty)
+          (List.replicate (CerbMem.sizeofCtype fmapEmpty structTy) undefByte)⟩) := by
   refine spike_engine_adequacy_alloc (GF := GF)
     (progCreateInit loc ann .Prov_none 8 pref mo pbty vbty)
     prodMem₀ (∅ : SpikeHeapF SpikeCell) [⟨8, structTy⟩]
     (progCreateInit_frag loc ann .Prov_none 8 pref mo pbty vbty hlib)
     (prodMem₀_launchCoh [⟨8, structTy⟩] struct_plan_fits)
-    (fun v σ' => v = Vunit ∧ ∃ i a : Int, CellCoh σ' i ⟨a, structTy,
-      spliceBytes fieldX fiveBytes
-        (List.replicate (CerbMem.sizeofCtype structTy) undefByte)⟩)
+    (fun v σ' => v = Vunit ∧ ∃ i a : Int, CellCoh fmapEmpty σ' i ⟨a, structTy,
+      spliceBytes fieldX (fiveBytes fmapEmpty)
+        (List.replicate (CerbMem.sizeofCtype fmapEmpty structTy) undefByte)⟩)
     ?_ n aids
     (by rw [show esize (progCreateInit loc ann .Prov_none 8 pref mo
         pbty vbty) = 3 from rfl]
@@ -520,21 +520,21 @@ theorem struct_create_store_adequacy {GF : BundledGFunctors} [SpikeGpreS GF]
       .rfl) BI.wand_elim_left)
   iapply wp_mono _ $$ HWP
   iintro %w ⟨%p, %hval, Hpt, -⟩
-  icases (pointsToCell_cellOwn_iff _ _ _ _).mp $$ Hpt
+  icases (pointsToCell_cellOwn_iff fmapEmpty _ _ _ _).mp $$ Hpt
     with ⟨%id, %a, %hpv, Hcell⟩
   iintro %σ2 %ns2 %κs2 %nt2 Hσ
   icases (stateInterp_iff σ2 ns2 κs2 nt2).mp $$ Hσ
     with ⟨%mm, %mb, %mk, %HG, Hmi, Hbi, Hki⟩
-  ihave %Hcc : ⌜CellCoh σ2 id ⟨a, structTy,
-      spliceBytes fieldX fiveBytes
-        (List.replicate (CerbMem.sizeofCtype structTy) undefByte)⟩ ∧
-      Iris.Std.PartialMap.get? mm id = some (metaOf
-        (⟨a, structTy, spliceBytes fieldX fiveBytes
-          (List.replicate (CerbMem.sizeofCtype structTy) undefByte)⟩ :
+  ihave %Hcc : ⌜CellCoh fmapEmpty σ2 id ⟨a, structTy,
+      spliceBytes fieldX (fiveBytes fmapEmpty)
+        (List.replicate (CerbMem.sizeofCtype fmapEmpty structTy) undefByte)⟩ ∧
+      Iris.Std.PartialMap.get? mm id = some (metaOf fmapEmpty
+        (⟨a, structTy, spliceBytes fieldX (fiveBytes fmapEmpty)
+          (List.replicate (CerbMem.sizeofCtype fmapEmpty structTy) undefByte)⟩ :
           SpikeCell))⌝ $$ [Hmi Hbi Hcell]
-  · iapply cellOwn_cellCoh HG id (.own 1)
-      ⟨a, structTy, spliceBytes fieldX fiveBytes
-        (List.replicate (CerbMem.sizeofCtype structTy) undefByte)⟩
+  · iapply cellOwn_cellCoh fmapEmpty HG id (.own 1)
+      ⟨a, structTy, spliceBytes fieldX (fiveBytes fmapEmpty)
+        (List.replicate (CerbMem.sizeofCtype fmapEmpty structTy) undefByte)⟩
       $$ [$Hmi $Hbi $Hcell]
   iapply fupd_mask_intro_discard Std.LawfulSet.empty_subset
   ipureintro

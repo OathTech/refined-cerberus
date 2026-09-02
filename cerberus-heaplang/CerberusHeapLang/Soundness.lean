@@ -77,8 +77,8 @@ tagDefs/extern empty (no structs, no linked externs in the
 fragment), default file (only proc/impl lookups read it — the
 fragment has none), tid 0, no parent thread, empty environment stack
 (wildcard patterns never look anything up), and a hand-built
-core_run_state (NEVER initial_core_run_state — that draws sym_supply
-through an effectful seam, Core_run_aux.lean:395). -/
+core_run_state (NEVER initial_core_run_state — that seeds sym_supply
+from the entry's supply argument, Core_run_aux.lean:406). -/
 
 /-- The frozen thread state around an arena AND a live env stack
     (S1): empty stack, no current procedure. An explicit literal so
@@ -150,8 +150,8 @@ def EngineOutcome.isRefusal : EngineOutcome → Prop
     `aid` mirrors the driver's fresh action-id draw (Driver.lean:284),
     the one run-state component the real driver ticks
     (fresh_action_id', aid_supply + 1). -/
-def dischargeStep (aid : Nat) (rs : core_run_state) (σ : Mem) :
-    core_step2 → EngineOutcome
+def dischargeStep (tds : CerbTags.TagDefsMap) (aid : Nat) (rs : core_run_state)
+    (σ : Mem) : core_step2 → EngineOutcome
   | Step_tau2 _ _ th' => .next th' σ
   | Step_done2 v => .done v
   | Step_error2 s => .error s
@@ -160,14 +160,14 @@ def dischargeStep (aid : Nat) (rs : core_run_state) (σ : Mem) :
     | Result (Defined req, _) =>
       match req with
       | StoreRequest2 _mo ty lk pv mv k =>
-        (match CerbMem.storeM loc ty lk pv mv with
+        (match CerbMem.storeM tds loc ty lk pv mv with
          | ND f =>
            match f σ with
            | (NDactive fp, σ') => .next (k aid fp) σ'
            | (NDkilled r, _) => .killed r
            | _ => .offFragment)
       | LoadRequest2 _mo ty pv k =>
-        (match CerbMem.loadM loc ty pv with
+        (match CerbMem.loadM tds loc ty pv with
          | ND f =>
            match f σ with
            | (NDactive p, σ') => .next (k aid p.1 p.2) σ'
@@ -180,7 +180,7 @@ def dischargeStep (aid : Nat) (rs : core_run_state) (σ : Mem) :
         -- discards its tid argument (CerbMem.lean:1470, `_ : Nat`), so
         -- the projection passes 0; the payload's reqAddr/initOpt are
         -- threaded verbatim.
-        (match CerbMem.allocateObject 0 pref align ty reqAddr initOpt with
+        (match CerbMem.allocateObject tds 0 pref align ty reqAddr initOpt with
          | ND f =>
            match f σ with
            | (NDactive pv, σ') => .next (k aid pv) σ'
@@ -234,7 +234,7 @@ def dischargeStep (aid : Nat) (rs : core_run_state) (σ : Mem) :
     (engine steps at `M`, discharged against `M`'s run state). -/
 def outcomesU (M : MachineCtx) (aid : Nat) (e : CoreExpr) (ρ : EnvStack)
     (σ : Mem) : List EngineOutcome :=
-  (engineStepsU M e ρ σ).map (dischargeStep aid M.runState σ)
+  (engineStepsU M e ρ σ).map (dischargeStep M.tagDefs aid M.runState σ)
 
 /-- The engine's discharged behavior list at the straight-line
     frozen entry — the `spikeCtx` instance, definitionally the old
@@ -246,7 +246,7 @@ def engineOutcomes (aid : Nat) (e : CoreExpr) (ρ : EnvStack) (σ : Mem) :
 /-- The old frozen-entry spelling, definitionally (rewriting aid). -/
 theorem engineOutcomes_eq (aid : Nat) (e : CoreExpr) (ρ : EnvStack) (σ : Mem) :
     engineOutcomes aid e ρ σ =
-      (engineSteps e ρ σ).map (dischargeStep aid spikeRunState σ) := rfl
+      (engineSteps e ρ σ).map (dischargeStep spikeCtx.tagDefs aid spikeRunState σ) := rfl
 
 /-! ## The size measure (fuel accounting; see FUEL HONESTY above) -/
 
@@ -1505,16 +1505,16 @@ memM application (`applyMemM`, Step.lean; sound for the fragment ops
 because storeM/loadM are single-layer state transformers, recon
 §2.3). These lemmas compute the discharge from the applyMemM verdict. -/
 
-theorem dischargeStep_store_active {aid : Nat} {rs : core_run_state}
+theorem dischargeStep_store_active {tds : CerbTags.TagDefsMap} {aid : Nat} {rs : core_run_state}
     {σ σ' : Mem} {str : String}
     {loc : CerbLocation.Loc} {tid : thread_id} {uw : Bool} {mo : memory_order}
     {ty : ctype} {lk : Bool} {pv : CerbMem.PointerValue} {mv : CerbMem.MemValue}
     {k : Nat → CerbMem.Footprint → thread_state} {fp : CerbMem.Footprint}
-    (h : applyMemM (CerbMem.storeM loc ty lk pv mv) σ = some (fp, σ')) :
-    dischargeStep aid rs σ (Step_action_request2 str loc tid uw
+    (h : applyMemM (CerbMem.storeM tds loc ty lk pv mv) σ = some (fp, σ')) :
+    dischargeStep tds aid rs σ (Step_action_request2 str loc tid uw
       (stExceptUndef_return (StoreRequest2 mo ty lk pv mv k))) =
       .next (k aid fp) σ' := by
-  rcases hm : CerbMem.storeM loc ty lk pv mv with ⟨f⟩
+  rcases hm : CerbMem.storeM tds loc ty lk pv mv with ⟨f⟩
   rcases hf : f σ with ⟨act, st⟩
   unfold applyMemM at h
   rw [hm] at h
@@ -1531,15 +1531,15 @@ theorem dischargeStep_store_active {aid : Nat} {rs : core_run_state}
     rfl
   all_goals cases h
 
-theorem dischargeStep_store_refusal {aid : Nat} {rs : core_run_state}
+theorem dischargeStep_store_refusal {tds : CerbTags.TagDefsMap} {aid : Nat} {rs : core_run_state}
     {σ : Mem} {str : String}
     {loc : CerbLocation.Loc} {tid : thread_id} {uw : Bool} {mo : memory_order}
     {ty : ctype} {lk : Bool} {pv : CerbMem.PointerValue} {mv : CerbMem.MemValue}
     {k : Nat → CerbMem.Footprint → thread_state}
-    (h : applyMemM (CerbMem.storeM loc ty lk pv mv) σ = none) :
-    (dischargeStep aid rs σ (Step_action_request2 str loc tid uw
+    (h : applyMemM (CerbMem.storeM tds loc ty lk pv mv) σ = none) :
+    (dischargeStep tds aid rs σ (Step_action_request2 str loc tid uw
       (stExceptUndef_return (StoreRequest2 mo ty lk pv mv k)))).isRefusal := by
-  rcases hm : CerbMem.storeM loc ty lk pv mv with ⟨f⟩
+  rcases hm : CerbMem.storeM tds loc ty lk pv mv with ⟨f⟩
   rcases hf : f σ with ⟨act, st⟩
   unfold applyMemM at h
   rw [hm] at h
@@ -1551,17 +1551,17 @@ theorem dischargeStep_store_refusal {aid : Nat} {rs : core_run_state}
   rw [hf]
   cases act <;> simp only [] at h ⊢ <;> first | exact True.intro | cases h
 
-theorem dischargeStep_load_active {aid : Nat} {rs : core_run_state}
+theorem dischargeStep_load_active {tds : CerbTags.TagDefsMap} {aid : Nat} {rs : core_run_state}
     {σ σ' : Mem} {str : String}
     {loc : CerbLocation.Loc} {tid : thread_id} {uw : Bool} {mo : memory_order}
     {ty : ctype} {pv : CerbMem.PointerValue}
     {k : Nat → CerbMem.Footprint → CerbMem.MemValue → thread_state}
     {fp : CerbMem.Footprint} {mval : CerbMem.MemValue}
-    (h : applyMemM (CerbMem.loadM loc ty pv) σ = some ((fp, mval), σ')) :
-    dischargeStep aid rs σ (Step_action_request2 str loc tid uw
+    (h : applyMemM (CerbMem.loadM tds loc ty pv) σ = some ((fp, mval), σ')) :
+    dischargeStep tds aid rs σ (Step_action_request2 str loc tid uw
       (stExceptUndef_return (LoadRequest2 mo ty pv k))) =
       .next (k aid fp mval) σ' := by
-  rcases hm : CerbMem.loadM loc ty pv with ⟨f⟩
+  rcases hm : CerbMem.loadM tds loc ty pv with ⟨f⟩
   rcases hf : f σ with ⟨act, st⟩
   unfold applyMemM at h
   rw [hm] at h
@@ -1578,15 +1578,15 @@ theorem dischargeStep_load_active {aid : Nat} {rs : core_run_state}
     rfl
   all_goals cases h
 
-theorem dischargeStep_load_refusal {aid : Nat} {rs : core_run_state}
+theorem dischargeStep_load_refusal {tds : CerbTags.TagDefsMap} {aid : Nat} {rs : core_run_state}
     {σ : Mem} {str : String}
     {loc : CerbLocation.Loc} {tid : thread_id} {uw : Bool} {mo : memory_order}
     {ty : ctype} {pv : CerbMem.PointerValue}
     {k : Nat → CerbMem.Footprint → CerbMem.MemValue → thread_state}
-    (h : applyMemM (CerbMem.loadM loc ty pv) σ = none) :
-    (dischargeStep aid rs σ (Step_action_request2 str loc tid uw
+    (h : applyMemM (CerbMem.loadM tds loc ty pv) σ = none) :
+    (dischargeStep tds aid rs σ (Step_action_request2 str loc tid uw
       (stExceptUndef_return (LoadRequest2 mo ty pv k)))).isRefusal := by
-  rcases hm : CerbMem.loadM loc ty pv with ⟨f⟩
+  rcases hm : CerbMem.loadM tds loc ty pv with ⟨f⟩
   rcases hf : f σ with ⟨act, st⟩
   unfold applyMemM at h
   rw [hm] at h
@@ -1604,24 +1604,24 @@ theorem dischargeStep_load_refusal {aid : Nat} {rs : core_run_state}
     at a concrete memory state, letting the elaborator discover this
     by whnf would evaluate the whole allocation — this equation keeps
     that off every proof path.) -/
-theorem allocateObject_arg_irrel (tid tid' : Nat) (pref : prefix0)
+theorem allocateObject_arg_irrel (tds : CerbTags.TagDefsMap) (tid tid' : Nat) (pref : prefix0)
     (align : CerbMem.IntegerValue) (ty : ctype) (r r' : Option Int)
     (init : Option CerbMem.MemValue) :
-    CerbMem.allocateObject tid pref align ty r init =
-      CerbMem.allocateObject tid' pref align ty r' init := rfl
+    CerbMem.allocateObject tds tid pref align ty r init =
+      CerbMem.allocateObject tds tid' pref align ty r' init := rfl
 
-theorem dischargeStep_create_active {aid : Nat} {rs : core_run_state}
+theorem dischargeStep_create_active {tds : CerbTags.TagDefsMap} {aid : Nat} {rs : core_run_state}
     {σ σ' : Mem} {str : String}
     {loc : CerbLocation.Loc} {tid : thread_id} {uw : Bool}
     {pref : prefix0} {align : CerbMem.IntegerValue} {ty : ctype}
     {reqAddr : Option Int} {k : Nat → CerbMem.PointerValue → thread_state}
     {pv : CerbMem.PointerValue}
-    (h : applyMemM (CerbMem.allocateObject 0 pref align ty reqAddr none) σ =
+    (h : applyMemM (CerbMem.allocateObject tds 0 pref align ty reqAddr none) σ =
       some (pv, σ')) :
-    dischargeStep aid rs σ (Step_action_request2 str loc tid uw
+    dischargeStep tds aid rs σ (Step_action_request2 str loc tid uw
       (stExceptUndef_return (CreateRequest2 pref align ty reqAddr none k))) =
       .next (k aid pv) σ' := by
-  rcases hm : CerbMem.allocateObject 0 pref align ty reqAddr none with ⟨f⟩
+  rcases hm : CerbMem.allocateObject tds 0 pref align ty reqAddr none with ⟨f⟩
   rcases hf : f σ with ⟨act, st⟩
   unfold applyMemM at h
   rw [hm] at h
@@ -1638,15 +1638,15 @@ theorem dischargeStep_create_active {aid : Nat} {rs : core_run_state}
     rfl
   all_goals cases h
 
-theorem dischargeStep_create_refusal {aid : Nat} {rs : core_run_state}
+theorem dischargeStep_create_refusal {tds : CerbTags.TagDefsMap} {aid : Nat} {rs : core_run_state}
     {σ : Mem} {str : String}
     {loc : CerbLocation.Loc} {tid : thread_id} {uw : Bool}
     {pref : prefix0} {align : CerbMem.IntegerValue} {ty : ctype}
     {reqAddr : Option Int} {k : Nat → CerbMem.PointerValue → thread_state}
-    (h : applyMemM (CerbMem.allocateObject 0 pref align ty reqAddr none) σ = none) :
-    (dischargeStep aid rs σ (Step_action_request2 str loc tid uw
+    (h : applyMemM (CerbMem.allocateObject tds 0 pref align ty reqAddr none) σ = none) :
+    (dischargeStep tds aid rs σ (Step_action_request2 str loc tid uw
       (stExceptUndef_return (CreateRequest2 pref align ty reqAddr none k)))).isRefusal := by
-  rcases hm : CerbMem.allocateObject 0 pref align ty reqAddr none with ⟨f⟩
+  rcases hm : CerbMem.allocateObject tds 0 pref align ty reqAddr none with ⟨f⟩
   rcases hf : f σ with ⟨act, st⟩
   unfold applyMemM at h
   rw [hm] at h
@@ -2103,7 +2103,7 @@ theorem engine_complete (aid : Nat) (σ : Mem) (ev0 : Fmap sym value)
         exact ⟨_, hlist, EngineMatch.refused True.intro hns hv⟩
       | some mv =>
         have heq := engineSteps_store hd hsz hlib hmv (ev0 :: evs) σ
-        cases happ : applyMemM (CerbMem.storeM loc ty lk pv mv) σ with
+        cases happ : applyMemM (CerbMem.storeM spikeCtx.tagDefs loc ty lk pv mv) σ with
         | some p =>
           rcases p with ⟨fp, σ'⟩
           refine ⟨_, ?_, EngineMatch.step (hd.rebuild hnj
@@ -2122,7 +2122,7 @@ theorem engine_complete (aid : Nat) (σ : Mem) (ev0 : Fmap sym value)
             obtain rfl : mv = mv' := Option.some.inj hmv'
             rw [happ] at happ'
             cases happ'
-          refine ⟨dischargeStep aid spikeRunState σ (Step_action_request2 "StoreRequest" loc 0
+          refine ⟨dischargeStep spikeCtx.tagDefs aid spikeRunState σ (Step_action_request2 "StoreRequest" loc 0
               (is_unseq_with_ccall ctx) (stExceptUndef_return
                 (StoreRequest2 mo ty lk pv mv
                   (fun (_ : Nat) (fp : CerbMem.Footprint) =>
@@ -2135,7 +2135,7 @@ theorem engine_complete (aid : Nat) (σ : Mem) (ev0 : Fmap sym value)
           rfl
     | @load loc ann ty pv mo hlib =>
       have heq := engineSteps_load hd hsz hlib (ev0 :: evs) σ
-      cases happ : applyMemM (CerbMem.loadM loc ty pv) σ with
+      cases happ : applyMemM (CerbMem.loadM spikeCtx.tagDefs loc ty pv) σ with
       | some p =>
         rcases p with ⟨⟨fp, mval⟩, σ'⟩
         refine ⟨_, ?_, EngineMatch.step (hd.rebuild hnj (Step.load_canonical happ))⟩
@@ -2150,7 +2150,7 @@ theorem engine_complete (aid : Nat) (σ : Mem) (ev0 : Fmap sym value)
           obtain ⟨fp', mval', σ'', happ', _⟩ := hr.load_inv
           rw [happ] at happ'
           cases happ'
-        refine ⟨dischargeStep aid spikeRunState σ (Step_action_request2 "LoadRequest" loc 0
+        refine ⟨dischargeStep spikeCtx.tagDefs aid spikeRunState σ (Step_action_request2 "LoadRequest" loc 0
             (is_unseq_with_ccall ctx) (stExceptUndef_return (LoadRequest2 mo ty pv
               (fun (_ : Nat) (fp : CerbMem.Footprint) (mval : CerbMem.MemValue) =>
                 envThread (apply_ctx ctx (Expr [] (Eannot [DA_pos [] fp]
@@ -2163,7 +2163,7 @@ theorem engine_complete (aid : Nat) (σ : Mem) (ev0 : Fmap sym value)
         rfl
     | @create loc ann align ty pref hlib =>
       have heq := engineSteps_create hd hsz hlib (ev0 :: evs) σ
-      cases happ : applyMemM (CerbMem.allocateObject 0 pref align ty none none) σ with
+      cases happ : applyMemM (CerbMem.allocateObject spikeCtx.tagDefs 0 pref align ty none none) σ with
       | some p =>
         rcases p with ⟨pv, σ'⟩
         refine ⟨_, ?_, EngineMatch.step (hd.rebuild hnj
@@ -2179,7 +2179,7 @@ theorem engine_complete (aid : Nat) (σ : Mem) (ev0 : Fmap sym value)
           obtain ⟨pv', σ'', happ', _⟩ := hr.create_inv
           rw [happ] at happ'
           cases happ'
-        refine ⟨dischargeStep aid spikeRunState σ (Step_action_request2 "CreateRequest" loc 0
+        refine ⟨dischargeStep spikeCtx.tagDefs aid spikeRunState σ (Step_action_request2 "CreateRequest" loc 0
             (is_unseq_with_ccall ctx) (stExceptUndef_return (CreateRequest2 pref align ty
               (get_with_address []) none
               (fun (_ : Nat) (pv : CerbMem.PointerValue) =>
@@ -2281,7 +2281,7 @@ theorem peDepth_val_le (a : List annot) (v : value) :
   omega
 
 /-- Off-grammar shapes evaluate to nothing (fail-closed). -/
-theorem evalPexpr_none_of_shape {ext : Fmap sym sym} {ρ : EnvStack}
+theorem evalPexpr_none_of_shape {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {ρ : EnvStack}
     {pe : generic_pexpr Unit sym}
     (hne1 : ∀ (a : List annot) (u : Unit) (v : value),
       pe = Pexpr a u (PEval v) → False)
@@ -2294,7 +2294,7 @@ theorem evalPexpr_none_of_shape {ext : Fmap sym sym} {ρ : EnvStack}
       (pe1 : generic_pexpr Unit sym) (ty : ctype)
       (pe2 : generic_pexpr Unit sym),
       pe = Pexpr a u (PEarray_shift pe1 ty pe2) → False) :
-    evalPexpr ext ρ pe = none := by
+    evalPexpr tds ext ρ pe = none := by
   unfold evalPexpr
   split
   · exact absurd rfl (hne1 _ _ _)
@@ -2304,9 +2304,9 @@ theorem evalPexpr_none_of_shape {ext : Fmap sym sym} {ρ : EnvStack}
   · rfl
 
 /-- Mirror success implies the covered shape. -/
-theorem evalPexpr_shape {ext : Fmap sym sym} {ρ : EnvStack}
+theorem evalPexpr_shape {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {ρ : EnvStack}
     {pe : generic_pexpr Unit sym} {v : value}
-    (h : evalPexpr ext ρ pe = some v) : PePure pe := by
+    (h : evalPexpr tds ext ρ pe = some v) : PePure pe := by
   revert h
   revert v
   induction pe using evalPexpr.induct with
@@ -2315,19 +2315,19 @@ theorem evalPexpr_shape {ext : Fmap sym sym} {ρ : EnvStack}
   | case3 a u op pe1 pe2 ih1 ih2 =>
     intro v h
     rw [evalPexpr_op] at h
-    cases h1 : evalPexpr ext ρ pe1 with
+    cases h1 : evalPexpr tds ext ρ pe1 with
     | none => rw [h1] at h; cases h
     | some v1 =>
-      cases h2 : evalPexpr ext ρ pe2 with
+      cases h2 : evalPexpr tds ext ρ pe2 with
       | none => rw [h1, h2] at h; cases h
       | some v2 => exact .op a op (ih1 h1) (ih2 h2)
   | case4 a u pe1 ty pe2 ih1 ih2 =>
     intro v h
     rw [evalPexpr_array_shift] at h
-    cases h1 : evalPexpr ext ρ pe1 with
+    cases h1 : evalPexpr tds ext ρ pe1 with
     | none => rw [h1] at h; cases h
     | some v1 =>
-      cases h2 : evalPexpr ext ρ pe2 with
+      cases h2 : evalPexpr tds ext ρ pe2 with
       | none => rw [h1, h2] at h; cases h
       | some v2 => exact .arrayShift a ty (ih1 h1) (ih2 h2)
   | case5 pe hne1 hne2 hne3 hne4 =>
@@ -2343,11 +2343,12 @@ theorem evalPexpr_shape {ext : Fmap sym sym} {ρ : EnvStack}
     grammar); the extern map is QUANTIFIED (S1b′) — the engine's
     `PEsym` indirection is the mirror's `resolveExtern`, matched
     case by case on the lookup. -/
-theorem step_eval_bridge {ext : Fmap sym sym} {ρ : EnvStack}
+theorem step_eval_bridge {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
+    {ext : Fmap sym sym} {ρ : EnvStack}
     {pe : generic_pexpr Unit sym}
-    {v : value} (hp : PePure pe) (hv : evalPexpr ext ρ pe = some v) :
+    {v : value} (hp : PePure pe) (hv : evalPexpr tds ext ρ pe = some v) :
     ∀ (fuel : Nat), peDepth pe ≤ fuel →
-    ∀ (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (n : Nat)
+    ∀ (n : Nat)
       (loc : CerbLocation.Loc) (cloc : Option CerbLocation.Loc)
       (mem : Option CerbMem.MemState)
       (file : generic_file Unit core_run_annotation),
@@ -2355,13 +2356,13 @@ theorem step_eval_bridge {ext : Fmap sym sym} {ρ : EnvStack}
       exception_undef_return (Pexpr [] () (PEval v)) := by
   induction hp generalizing v with
   | val a v' =>
-    intro fuel hfuel tds n loc cloc mem file
+    intro fuel hfuel n loc cloc mem file
     obtain ⟨f, rfl⟩ : ∃ f, fuel = f + 1 :=
       ⟨fuel - 1, by have := peDepth_pos (Pexpr a () (PEval v')); omega⟩
     obtain rfl : v' = v := by simpa using hv
     rfl
   | sym a x =>
-    intro fuel hfuel tds n loc cloc mem file
+    intro fuel hfuel n loc cloc mem file
     obtain ⟨f, rfl⟩ : ∃ f, fuel = f + 1 :=
       ⟨fuel - 1, by have := peDepth_pos (Pexpr a () (PEsym x)); omega⟩
     have hx : lookup_env (resolveExtern ext x) ρ = some v := by simpa using hv
@@ -2384,15 +2385,15 @@ theorem step_eval_bridge {ext : Fmap sym sym} {ρ : EnvStack}
       rw [hx]
       rfl
   | @op a op pe1 pe2 hp1 hp2 ih1 ih2 =>
-    intro fuel hfuel tds n loc cloc mem file
+    intro fuel hfuel n loc cloc mem file
     obtain ⟨f, rfl⟩ : ∃ f, fuel = f + 1 := ⟨fuel - 1, by simp at hfuel; omega⟩
     rw [evalPexpr_op] at hv
-    obtain ⟨v1, h1, v2, h2, hb⟩ : ∃ v1, evalPexpr ext ρ pe1 = some v1 ∧
-        ∃ v2, evalPexpr ext ρ pe2 = some v2 ∧ evalBinop op v1 v2 = some v := by
-      cases h1 : evalPexpr ext ρ pe1 with
+    obtain ⟨v1, h1, v2, h2, hb⟩ : ∃ v1, evalPexpr tds ext ρ pe1 = some v1 ∧
+        ∃ v2, evalPexpr tds ext ρ pe2 = some v2 ∧ evalBinop op v1 v2 = some v := by
+      cases h1 : evalPexpr tds ext ρ pe1 with
       | none => rw [h1] at hv; cases hv
       | some v1 =>
-        cases h2 : evalPexpr ext ρ pe2 with
+        cases h2 : evalPexpr tds ext ρ pe2 with
         | none => rw [h1, h2] at hv; cases hv
         | some v2 =>
           rw [h1, h2] at hv
@@ -2401,8 +2402,8 @@ theorem step_eval_bridge {ext : Fmap sym sym} {ρ : EnvStack}
     have hd2 : peDepth pe2 ≤ f := by simp at hfuel; omega
     show exception_undef_fmap (Pexpr [] ()) _ = _
     dsimp only [step_eval_peop]
-    rw [ih1 h1 f hd1 tds (n+1) loc cloc mem file,
-      ih2 h2 f hd2 tds (n+1) loc cloc mem file]
+    rw [ih1 h1 f hd1 (n+1) loc cloc mem file,
+      ih2 h2 f hd2 (n+1) loc cloc mem file]
     dsimp only [exception_undef_bind, exception_undef_return,
       exception_undef_fmap, valueFromPexpr]
     -- the binop dispatch: split the MIRROR's equation into its
@@ -2431,16 +2432,16 @@ theorem step_eval_bridge {ext : Fmap sym sym} {ρ : EnvStack}
              | (obtain rfl := hb.symm; rfl)))
       | cases hb
   | @arrayShift a ty pe1 pe2 hp1 hp2 ih1 ih2 =>
-    intro fuel hfuel tds n loc cloc mem file
+    intro fuel hfuel n loc cloc mem file
     obtain ⟨f, rfl⟩ : ∃ f, fuel = f + 1 := ⟨fuel - 1, by simp at hfuel; omega⟩
     rw [evalPexpr_array_shift] at hv
-    obtain ⟨v1, h1, v2, h2, hb⟩ : ∃ v1, evalPexpr ext ρ pe1 = some v1 ∧
-        ∃ v2, evalPexpr ext ρ pe2 = some v2 ∧
-          evalArrayShift ty v1 v2 = some v := by
-      cases h1 : evalPexpr ext ρ pe1 with
+    obtain ⟨v1, h1, v2, h2, hb⟩ : ∃ v1, evalPexpr tds ext ρ pe1 = some v1 ∧
+        ∃ v2, evalPexpr tds ext ρ pe2 = some v2 ∧
+          evalArrayShift tds ty v1 v2 = some v := by
+      cases h1 : evalPexpr tds ext ρ pe1 with
       | none => rw [h1] at hv; cases hv
       | some v1 =>
-        cases h2 : evalPexpr ext ρ pe2 with
+        cases h2 : evalPexpr tds ext ρ pe2 with
         | none => rw [h1, h2] at hv; cases hv
         | some v2 =>
           rw [h1, h2] at hv
@@ -2449,8 +2450,8 @@ theorem step_eval_bridge {ext : Fmap sym sym} {ρ : EnvStack}
     have hd2 : peDepth pe2 ≤ f := by simp at hfuel; omega
     show exception_undef_fmap (Pexpr [] ()) _ = _
     dsimp only
-    rw [ih1 h1 f hd1 tds (n+1) loc cloc mem file,
-      ih2 h2 f hd2 tds (n+1) loc cloc mem file]
+    rw [ih1 h1 f hd1 (n+1) loc cloc mem file,
+      ih2 h2 f hd2 (n+1) loc cloc mem file]
     dsimp only [exception_undef_bind, exception_undef_return,
       exception_undef_fmap, valueFromPexpr]
     unfold evalArrayShift at hb
@@ -2475,17 +2476,17 @@ theorem PePure.strip {pe : generic_pexpr Unit _root_.sym} (hp : PePure pe) :
   | op a op hp1 hp2 ih1 ih2 => exact .op [] op ih1 ih2
   | arrayShift a ty hp1 hp2 ih1 ih2 => exact .arrayShift [] ty ih1 ih2
 
-theorem evalPexpr_peStrip {ext : Fmap sym sym} {ρ : EnvStack}
+theorem evalPexpr_peStrip {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {ρ : EnvStack}
     {pe : generic_pexpr Unit sym}
-    (hp : PePure pe) : evalPexpr ext ρ (peStrip pe) = evalPexpr ext ρ pe := by
+    (hp : PePure pe) : evalPexpr tds ext ρ (peStrip pe) = evalPexpr tds ext ρ pe := by
   induction hp with
   | val a v => rfl
   | sym a x => rfl
   | op a op hp1 hp2 ih1 ih2 =>
-    show evalPexpr ext ρ (Pexpr [] () (PEop op _ _)) = _
+    show evalPexpr tds ext ρ (Pexpr [] () (PEop op _ _)) = _
     rw [evalPexpr_op, evalPexpr_op, ih1, ih2]
   | arrayShift a ty hp1 hp2 ih1 ih2 =>
-    show evalPexpr ext ρ (Pexpr [] () (PEarray_shift _ ty _)) = _
+    show evalPexpr tds ext ρ (Pexpr [] () (PEarray_shift _ ty _)) = _
     rw [evalPexpr_array_shift, evalPexpr_array_shift, ih1, ih2]
 
 theorem peDepth_peStrip {pe : generic_pexpr Unit sym} (hp : PePure pe) :
@@ -2541,23 +2542,23 @@ theorem pull_bridge {pe : generic_pexpr Unit sym} (hp : PePure pe) :
     The engine's own budget: `peDepth pe ≤ lemDefaultFuel` (the
     interior `pull_constrained`/`step_eval_pexpr` run at the default
     budget; the iteration fuel needs only one unfold). -/
-theorem aux2_bridge {ext : Fmap sym sym} {ρ : EnvStack}
+theorem aux2_bridge {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
+    {ext : Fmap sym sym} {ρ : EnvStack}
     {pe : generic_pexpr Unit sym} {v : value}
-    (hp : PePure pe) (hv : evalPexpr ext ρ pe = some v)
+    (hp : PePure pe) (hv : evalPexpr tds ext ρ pe = some v)
     (hd : peDepth pe ≤ lemDefaultFuel) :
     ∀ (fuel : Nat)
-      (tds : Fmap sym (CerbLocation.Loc × tag_definition))
       (loc : CerbLocation.Loc) (cloc : Option CerbLocation.Loc)
       (mem : Option CerbMem.MemState)
       (file : generic_file Unit core_run_annotation),
     eval_pexpr_aux2_lemFuel (fuel + 1) tds loc cloc ext ρ mem file pe =
       exception_undef_return (Sum.inr v) := by
-  intro fuel tds loc cloc mem file
+  intro fuel loc cloc mem file
   have hpull : pull_constrained 0 pe = peStrip pe :=
     pull_bridge hp lemDefaultFuel hd 0
   have hstep := step_eval_bridge hp.strip
     (by rw [evalPexpr_peStrip hp]; exact hv) lemDefaultFuel
-    (by rw [peDepth_peStrip hp]; exact hd) tds 0 loc cloc mem file
+    (by rw [peDepth_peStrip hp]; exact hd) 0 loc cloc mem file
   unfold eval_pexpr_aux2_lemFuel
   dsimp only [CerbDebug.print_debug_pure]
   rw [hpull]
@@ -2606,11 +2607,11 @@ theorem aux2_bridge {ext : Fmap sym sym} {ρ : EnvStack}
     whole tower is a pure `exceptM` computation lifted pointwise).
     Extern QUANTIFIED (S1b′); tagDefs/memory/file quantified
     (unread). -/
-theorem full_eval_bridge {b : Type} {ext : Fmap sym sym} {th : thread_state}
+theorem full_eval_bridge {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
+    {b : Type} {ext : Fmap sym sym} {th : thread_state}
     {pe : generic_pexpr Unit sym} {v : value}
-    (hv : evalPexpr ext th.env pe = some v)
+    (hv : evalPexpr tds ext th.env pe = some v)
     (hd : peDepth pe ≤ lemDefaultFuel)
-    (tds : Fmap sym (CerbLocation.Loc × tag_definition))
     (σ : CerbMem.MemState) (file : generic_file Unit core_run_annotation) :
     full_eval_pexpr (b := b) tds th ext σ file pe =
       stExceptUndef_return v := by
@@ -2631,7 +2632,7 @@ theorem full_eval_bridge {b : Type} {ext : Fmap sym sym} {th : thread_state}
       ext th.env (some σ) file pe) from rfl]
   rw [show (eval_pexpr_aux2 (tds)) = eval_pexpr_aux2_lemFuel (999999 + 1) tds
     from rfl]
-  rw [aux2_bridge hp hv hd 999999 tds th.current_loc _ (some σ) file]
+  rw [aux2_bridge hp hv hd 999999 th.current_loc _ (some σ) file]
   rfl
 
 /-! ### The jump-profile frozen context and the per-construct engine
@@ -2684,7 +2685,7 @@ def engineOutcomesP (p : sym) (aid : Nat) (rs : core_run_state)
 theorem engineOutcomesP_eq (p : sym) (aid : Nat) (rs : core_run_state)
     (e : CoreExpr) (ρ : EnvStack) (σ : Mem) :
     engineOutcomesP p aid rs e ρ σ =
-      (engineStepsP p e ρ σ).map (dischargeStep aid rs σ) := rfl
+      (engineStepsP p e ρ σ).map (dischargeStep (procCtx p rs).tagDefs aid rs σ) := rfl
 
 /-- The Q↔labeled tie (the donor's `⌜Q = rf.f_code⌝`,
     lifting.v:1002): the run state's two-level `labeled` map has
@@ -2819,10 +2820,10 @@ theorem stepDischarge_if_true {e : CoreExpr} {ctx : context}
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = e)
-    (hg : evalPexpr ext th.env g = some Vtrue)
+    (hg : evalPexpr tds ext th.env g = some Vtrue)
     (aid : Nat) (rs : core_run_state) :
     (step_ctx tds σ file ext tid (parent, th)).map
-        (dischargeStep aid rs σ) =
+        (dischargeStep tds aid rs σ) =
       [.next { th with arena := apply_ctx ctx e2 } σ] := by
   have hget : get_ctx th.arena = [(ctx, ifRedex g e2 e3)] := by
     rw [harena]; exact hd.get_ctx_default hsz
@@ -2836,7 +2837,7 @@ theorem stepDischarge_if_true {e : CoreExpr} {ctx : context}
      rw [show is_irreducible (Expr ([] : List annot) (Eif g e2 e3)) = false
        from rfl]
      dsimp only [get_loc, dischargeStep]
-     rw [full_eval_bridge hg hdg tds σ file]
+     rw [full_eval_bridge hg hdg σ file]
      dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
        return1, except_return]
      rfl)
@@ -2851,10 +2852,10 @@ theorem stepDischarge_if_false {e : CoreExpr} {ctx : context}
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = e)
-    (hg : evalPexpr ext th.env g = some Vfalse)
+    (hg : evalPexpr tds ext th.env g = some Vfalse)
     (aid : Nat) (rs : core_run_state) :
     (step_ctx tds σ file ext tid (parent, th)).map
-        (dischargeStep aid rs σ) =
+        (dischargeStep tds aid rs σ) =
       [.next { th with arena := apply_ctx ctx e3 } σ] := by
   have hget : get_ctx th.arena = [(ctx, ifRedex g e2 e3)] := by
     rw [harena]; exact hd.get_ctx_default hsz
@@ -2868,7 +2869,7 @@ theorem stepDischarge_if_false {e : CoreExpr} {ctx : context}
      rw [show is_irreducible (Expr ([] : List annot) (Eif g e2 e3)) = false
        from rfl]
      dsimp only [get_loc, dischargeStep]
-     rw [full_eval_bridge hg hdg tds σ file]
+     rw [full_eval_bridge hg hdg σ file]
      dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
        return1, except_return]
      rfl)
@@ -2890,10 +2891,10 @@ theorem stepDischarge_pure_sym {e : CoreExpr} {ctx : context}
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = e)
-    (hv : evalPexpr ext th.env (Pexpr pb () (PEsym x)) = some v)
+    (hv : evalPexpr tds ext th.env (Pexpr pb () (PEsym x)) = some v)
     (aid : Nat) (rs : core_run_state) :
     (step_ctx tds σ file ext tid (parent, th)).map
-        (dischargeStep aid rs σ) =
+        (dischargeStep tds aid rs σ) =
       [.next ({ th with arena := apply_ctx ctx (Expr [] (Epure (Pexpr [] () (PEval v)))) }) σ] := by
   have hget : get_ctx th.arena =
       [(ctx, pureRedex (Pexpr pb () (PEsym x)))] := by
@@ -2907,7 +2908,7 @@ theorem stepDischarge_pure_sym {e : CoreExpr} {ctx : context}
     (dsimp only [one_step0, is_irreducible, valueFromPexpr]
      simp only [Bool.false_eq_true, if_false]
      dsimp only [get_loc, dischargeStep]
-     rw [full_eval_bridge hv (peDepth_sym_le pb x) tds σ file]
+     rw [full_eval_bridge hv (peDepth_sym_le pb x) σ file]
      dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
        return1, except_return]
      rfl)
@@ -2945,10 +2946,10 @@ theorem stepDischarge_load_eval {e : CoreExpr} {ctx : context}
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = e)
-    (hv2 : evalPexpr ext th.env pe2 = some (Vobject (OVpointer pv)))
+    (hv2 : evalPexpr tds ext th.env pe2 = some (Vobject (OVpointer pv)))
     (aid : Nat) (rs : core_run_state) :
     (step_ctx tds σ file ext tid (parent, th)).map
-        (dischargeStep aid rs σ) =
+        (dischargeStep tds aid rs σ) =
       [.next { th with arena := apply_ctx ctx (loadRedex loc ann ty pv mo) }
         σ] := by
   have hget : get_ctx th.arena = [(ctx, loadOpRedex loc ann ty pe2 mo)] := by
@@ -2964,8 +2965,8 @@ theorem stepDischarge_load_eval {e : CoreExpr} {ctx : context}
      rw [act_valueFromPexpr_none hp2 hnv2]
      dsimp only [act_valueFromPexpr, valueFromPexpr]
      dsimp only [dischargeStep]
-     rw [full_eval_bridge (v := Vctype ty) rfl (peDepth_val_le _ _) tds σ file,
-       full_eval_bridge hv2 hd2 tds σ file]
+     rw [full_eval_bridge (v := Vctype ty) rfl (peDepth_val_le _ _) σ file,
+       full_eval_bridge hv2 hd2 σ file]
      dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
        return1, except_return]
      rfl)
@@ -3100,7 +3101,7 @@ theorem foldM_args_bridge {th : thread_state}
     ∀ (params : List (sym × core_base_type))
       (pes : List (generic_pexpr Unit sym)) (vs : List value)
       (acc : EnvStack) (rs : core_run_state),
-      evalPexprs ext th.env pes = some vs →
+      evalPexprs tds ext th.env pes = some vs →
       (∀ pe ∈ pes, peDepth pe ≤ lemDefaultFuel) →
       stExceptUndef_foldM f acc (List.zip params pes) rs =
         Result (Defined (bindArgs params vs acc), rs) := by
@@ -3120,12 +3121,12 @@ theorem foldM_args_bridge {th : thread_state}
       rfl
     | cons pe pes =>
       rw [evalPexprs_cons] at hvs
-      obtain ⟨v, hv, vs', hvs', rfl⟩ : ∃ v, evalPexpr ext th.env pe = some v ∧
-          ∃ vs', evalPexprs ext th.env pes = some vs' ∧ vs = v :: vs' := by
-        cases h1 : evalPexpr ext th.env pe with
+      obtain ⟨v, hv, vs', hvs', rfl⟩ : ∃ v, evalPexpr tds ext th.env pe = some v ∧
+          ∃ vs', evalPexprs tds ext th.env pes = some vs' ∧ vs = v :: vs' := by
+        cases h1 : evalPexpr tds ext th.env pe with
         | none => rw [h1] at hvs; cases hvs
         | some v =>
-          cases h2 : evalPexprs ext th.env pes with
+          cases h2 : evalPexprs tds ext th.env pes with
           | none => rw [h1, h2] at hvs; cases hvs
           | some vs' =>
             rw [h1, h2] at hvs
@@ -3135,7 +3136,7 @@ theorem foldM_args_bridge {th : thread_state}
       rw [List.zip_cons_cons, stExceptUndef_foldM_cons,
         stExceptUndef_bind_apply, hf acc p1 p2 pe rs,
         stExceptUndef_bind_apply,
-        full_eval_bridge hv (hdep pe (by simp)) tds σ file,
+        full_eval_bridge hv (hdep pe (by simp)) σ file,
         stExceptUndef_return_apply]
       dsimp only []
       rw [stExceptUndef_return_apply]
@@ -3171,11 +3172,11 @@ theorem stepDischarge_run {e : CoreExpr} {ctx : context}
     (tid : Nat) (parent : Option Nat) (p : sym) (th : thread_state)
     (harena : th.arena = e)
     (hproc : th.current_proc_opt = some p)
-    (hvs : evalPexprs ext th.env pes = some vs)
+    (hvs : evalPexprs tds ext th.env pes = some vs)
     (aid : Nat) (rs : core_run_state)
     (hQ : LabeledAt rs (resolveExtern ext p) Q) :
     (step_ctx tds σ file ext tid (parent, th)).map
-        (dischargeStep aid rs σ) =
+        (dischargeStep tds aid rs σ) =
       [.next { th with env := bindArgs params vs th.env, arena := cont } σ] := by
   have hget : get_ctx th.arena = [(ctx, runRedex ra l pes)] := by
     rw [harena]; exact hd.get_ctx_default hsz
@@ -3288,11 +3289,11 @@ theorem step_ctx_memop {e : CoreExpr} {ctx : context} {mop : memop}
     Driver.lean:288 — `liftMem (CerbMem.eqPtrval loc …)` then
     `mk_th_st (if is_eq then Vtrue else Vfalse)`); the request's loc
     bridges to the rule's `default` by `eqPtrval_loc_irrel`. -/
-theorem dischargeStep_memop_active {aid : Nat} {rs : core_run_state}
+theorem dischargeStep_memop_active {tds : CerbTags.TagDefsMap} {aid : Nat} {rs : core_run_state}
     {σ σ' : Mem} {loc : CerbLocation.Loc} {tid : thread_id} {uw : Bool}
     {pv1 pv2 : CerbMem.PointerValue} {k : value → thread_state} {b : Bool}
     (h : applyMemM (CerbMem.eqPtrval default pv1 pv2) σ = some (b, σ')) :
-    dischargeStep aid rs σ (Step_memop_request2 loc PtrEq
+    dischargeStep tds aid rs σ (Step_memop_request2 loc PtrEq
       [Vobject (OVpointer pv1), Vobject (OVpointer pv2)] tid uw k) =
       .next (k (boolValue b)) σ' := by
   rcases hm : CerbMem.eqPtrval default pv1 pv2 with ⟨f⟩
@@ -3318,10 +3319,10 @@ theorem dischargeStep_memop_active {aid : Nat} {rs : core_run_state}
     answer, STATE-VERBATIM, on the covered operand grammar — the
     one-step analog of `full_eval_bridge` (the tower iterates once;
     on the covered grammar one iteration completes). -/
-theorem eval1_bridge {ext : Fmap sym sym} {th : thread_state} {pe : generic_pexpr Unit sym}
-    {v : value} (hv : evalPexpr ext th.env pe = some v)
+theorem eval1_bridge {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
+    {ext : Fmap sym sym} {th : thread_state} {pe : generic_pexpr Unit sym}
+    {v : value} (hv : evalPexpr tds ext th.env pe = some v)
     (hdp : peDepth pe ≤ lemDefaultFuel)
-    (tds : Fmap sym (CerbLocation.Loc × tag_definition))
     (σ : CerbMem.MemState) (file : generic_file Unit core_run_annotation)
     (rs : core_run_state) :
     stExceptUndef_bind
@@ -3341,7 +3342,7 @@ theorem eval1_bridge {ext : Fmap sym sym} {th : thread_state} {pe : generic_pexp
       ext th.env (some σ) file pe) from rfl]
   rw [show (eval_pexpr_aux2 (tds)) = eval_pexpr_aux2_lemFuel (999999 + 1) tds
     from rfl]
-  rw [aux2_bridge hp hv hdp 999999 tds th.current_loc _ (some σ) file]
+  rw [aux2_bridge hp hv hdp 999999 th.current_loc _ (some σ) file]
   rfl
 
 /-- Top-level application equation for the plain state-except bind
@@ -3382,17 +3383,17 @@ theorem mapM_eval1_bridge {ext : Fmap sym sym} {th : thread_state}
           | Sum.inl pe' => stExceptUndef_return pe'
           | Sum.inr cval => stExceptUndef_return (mk_value_pe cval)) rs')
     {pe1 pe2 : generic_pexpr Unit sym} {v1 v2 : value}
-    (hv1 : evalPexpr ext th.env pe1 = some v1)
+    (hv1 : evalPexpr tds ext th.env pe1 = some v1)
     (hd1 : peDepth pe1 ≤ lemDefaultFuel)
-    (hv2 : evalPexpr ext th.env pe2 = some v2)
+    (hv2 : evalPexpr tds ext th.env pe2 = some v2)
     (hd2 : peDepth pe2 ≤ lemDefaultFuel)
     (rs : core_run_state) :
     stExceptUndef_mapM f [pe1, pe2] rs =
       Result (Defined [mk_value_pe v1, mk_value_pe v2], rs) := by
   have h1 : f pe1 rs = Result (Defined (mk_value_pe v1), rs) :=
-    (hf pe1 rs).trans (eval1_bridge hv1 hd1 tds σ file rs)
+    (hf pe1 rs).trans (eval1_bridge hv1 hd1 σ file rs)
   have h2 : f pe2 rs = Result (Defined (mk_value_pe v2), rs) :=
-    (hf pe2 rs).trans (eval1_bridge hv2 hd2 tds σ file rs)
+    (hf pe2 rs).trans (eval1_bridge hv2 hd2 σ file rs)
   have hb2 : stExpect_bind (f pe2) (fun y =>
       stExpect_bind (stExpect_return
         ([] : List (t0 (generic_pexpr Unit sym)))) (fun ys =>
@@ -3434,11 +3435,11 @@ theorem stepDischarge_memop_eval {e : CoreExpr} {ctx : context}
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = e)
-    (hv1 : evalPexpr ext th.env pe1 = some v1)
-    (hv2 : evalPexpr ext th.env pe2 = some v2)
+    (hv1 : evalPexpr tds ext th.env pe1 = some v1)
+    (hv2 : evalPexpr tds ext th.env pe2 = some v2)
     (aid : Nat) (rs : core_run_state) :
     (step_ctx tds σ file ext tid (parent, th)).map
-        (dischargeStep aid rs σ) =
+        (dischargeStep tds aid rs σ) =
       [.next { th with arena := apply_ctx ctx (Expr [] (Ememop mop
         [Pexpr [] () (PEval v1), Pexpr [] () (PEval v2)])) } σ] := by
   have hget : get_ctx th.arena = [(ctx, memopRedex mop [pe1, pe2])] := by
@@ -3488,11 +3489,11 @@ theorem stepDischarge_store_eval {e : CoreExpr} {ctx : context}
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = e)
-    (hv2 : evalPexpr ext th.env pe2 = some (Vobject (OVpointer pv)))
-    (hv3 : evalPexpr ext th.env pe3 = some cv)
+    (hv2 : evalPexpr tds ext th.env pe2 = some (Vobject (OVpointer pv)))
+    (hv3 : evalPexpr tds ext th.env pe3 = some cv)
     (aid : Nat) (rs : core_run_state) :
     (step_ctx tds σ file ext tid (parent, th)).map
-        (dischargeStep aid rs σ) =
+        (dischargeStep tds aid rs σ) =
       [.next { th with arena := apply_ctx ctx (storeRedex loc ann false ty
         pv cv mo) } σ] := by
   have hget : get_ctx th.arena = [(ctx, storeOpRedex loc ann ty pe2 pe3 mo)] := by
@@ -3510,9 +3511,9 @@ theorem stepDischarge_store_eval {e : CoreExpr} {ctx : context}
        rw [act_valueFromPexpr_none hp2 hnv2]
        dsimp only [act_valueFromPexpr, valueFromPexpr]
        dsimp only [dischargeStep]
-       rw [full_eval_bridge (v := Vctype ty) rfl (peDepth_val_le _ _) tds σ file,
-         full_eval_bridge hv2 hd2 tds σ file,
-         full_eval_bridge hv3 hd3 tds σ file]
+       rw [full_eval_bridge (v := Vctype ty) rfl (peDepth_val_le _ _) σ file,
+         full_eval_bridge hv2 hd2 σ file,
+         full_eval_bridge hv3 hd3 σ file]
        dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
          return1, except_return]
        rfl)
@@ -4836,7 +4837,7 @@ theorem engine_complete_storeU (M : MachineCtx) (aid : Nat)
       rw [hmv] at hmv'
       cases hmv'
   | some mv =>
-    cases hmem : applyMemM (CerbMem.storeM loc ty lk pv mv) σ with
+    cases hmem : applyMemM (CerbMem.storeM M.tagDefs loc ty lk pv mv) σ with
     | some fpσ =>
       obtain ⟨fp, σ'⟩ := fpσ
       refine ⟨_, ?_, .step (Step.store_canonical hmv hmem)⟩
@@ -4847,7 +4848,7 @@ theorem engine_complete_storeU (M : MachineCtx) (aid : Nat)
       rw [dischargeStep_store_active hmem]
       rfl
     | none =>
-      refine ⟨dischargeStep aid M.runState σ (Step_action_request2
+      refine ⟨dischargeStep M.tagDefs aid M.runState σ (Step_action_request2
           "StoreRequest" loc M.tid (is_unseq_with_ccall CTX)
           (stExceptUndef_return (StoreRequest2 mo ty lk pv mv (fun _ fp =>
             { M.thread (storeRedex loc ann lk ty pv cv mo) ρ with

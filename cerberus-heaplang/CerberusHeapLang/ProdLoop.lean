@@ -285,10 +285,10 @@ theorem wpt_driver_done {GF : BundledGFunctors} [SpikeGpreS GF]
     (Ls : ∀ [SpikeGS .hasLC GF], LabelSpecT GF)
     (e₀ : CoreExpr) (ev00 : Fmap sym value) (evs0 : List (Fmap sym value))
     (σ₀ : Mem) (m₀ : SpikeHeapF SpikeCell)
-    (hfrag : Frag e₀) (hpot : pot e₀ ≤ lemDefaultFuel) (hcoh : Coh σ₀ m₀)
+    (hfrag : Frag e₀) (hpot : pot e₀ ≤ lemDefaultFuel) (hcoh : Coh M₀.tagDefs σ₀ m₀)
     (ψ : value → Mem → Prop) (k : Nat)
     (hwp : ∀ [SpikeGS .hasLC GF],
-      iprop(([∗map] i ↦ c ∈ m₀, cellOwn (hlc := .hasLC) (GF := GF) i
+      iprop(([∗map] i ↦ c ∈ m₀, cellOwn M₀.tagDefs (hlc := .hasLC) (GF := GF) i
           (.own 1) c)) ⊢
         iprop(blockSpecsT M₀ Ls (readoutPost ψ) ∗
           wpt M₀ Ls k (readoutPost ψ) e₀ (ev00 :: evs0))) :
@@ -306,7 +306,7 @@ theorem wpt_driver_done {GF : BundledGFunctors} [SpikeGpreS GF]
     (∅ : SpikeHeapF AllocCursor)) with ⟨%Gk, Hki, -, -⟩
   letI instGS : SpikeGS .hasLC GF :=
     { byteGS := Gb, metaGS := Gm, cursorGS := Gk }
-  imod (spikeCells_alloc σ₀ m₀ hcoh) $$ [$Hmi $Hbi]
+  imod (spikeCells_alloc M₀.tagDefs σ₀ m₀ hcoh) $$ [$Hmi $Hbi]
     with ⟨%mm, %mb, %hmbo, Hmi, Hbi, Hcells⟩
   ihave HW := hwp $$ Hcells
   icases HW with ⟨HB, Hwpt⟩
@@ -349,11 +349,11 @@ theorem wpt_driver_done_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
     (e₀ : CoreExpr) (ev00 : Fmap sym value) (evs0 : List (Fmap sym value))
     (σ₀ : Mem) (m₀ : SpikeHeapF SpikeCell) (reqs : List AllocReq)
     (hfrag : Frag e₀) (hpot : pot e₀ ≤ lemDefaultFuel)
-    (hl : LaunchCoh σ₀ m₀ reqs)
+    (hl : LaunchCoh M₀.tagDefs σ₀ m₀ reqs)
     (ψ : value → Mem → Prop) (k : Nat)
     (hwp : ∀ [SpikeGS .hasLC GF],
-      iprop(([∗map] i ↦ c ∈ m₀, cellOwn (hlc := .hasLC) (GF := GF) i
-          (.own 1) c) ∗ allocCap reqs) ⊢
+      iprop(([∗map] i ↦ c ∈ m₀, cellOwn M₀.tagDefs (hlc := .hasLC) (GF := GF) i
+          (.own 1) c) ∗ allocCap M₀.tagDefs reqs) ⊢
         iprop(blockSpecsT M₀ Ls (readoutPost ψ) ∗
           wpt M₀ Ls k (readoutPost ψ) e₀ (ev00 :: evs0))) :
     DriverDoneAt p Q th₀ e₀ (ev00 :: evs0) σ₀ ψ k := by
@@ -370,7 +370,7 @@ theorem wpt_driver_done_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
     (∅ : SpikeHeapF AllocCursor)) with ⟨%Gk, Hki, -, -⟩
   letI instGS : SpikeGS .hasLC GF :=
     { byteGS := Gb, metaGS := Gm, cursorGS := Gk }
-  imod (launchResources σ₀ m₀ reqs hl) $$ [$Hmi $Hbi $Hki]
+  imod (launchResources M₀.tagDefs σ₀ m₀ reqs hl) $$ [$Hmi $Hbi $Hki]
     with ⟨Hσ, Hcells, Hcap⟩
   ihave HW := hwp $$ [$Hcells $Hcap]
   icases HW with ⟨HB, Hwpt⟩

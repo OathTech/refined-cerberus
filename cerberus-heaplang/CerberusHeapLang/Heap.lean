@@ -24,6 +24,30 @@ view type = allocation type) plus the image's decode-inertness fact;
 `SpikeCell`/`Coh`/`CellCoh` remain the PURE footprint vocabulary of
 the exported engine-facing statements (`Sat`/`SemTriple`).
 
+THE TAG-DEFINITION ENVIRONMENT (2026-09-02, the retirement re-pin;
+[AGENT] decision, DECISIONS.md): the engine's memory functions take
+the tag-definition environment as an explicit leading `TagDefs`
+argument (cerberus-lean C1 reader_consumer threading — `sizeofCtype`,
+`memValueToBytes`, `reconstructValue`, `loadM`, `storeM`,
+`allocateObject`, …; the engine passes its reader binder
+`_lemReader_tagDefs`, Driver.lean:273). The environment is a
+program-wide constant of the language instance (Caesium's global
+environment in RefinedC), so every predicate here whose footprint
+depends on type LAYOUT is indexed by it explicitly — `(tds :
+CerbTags.TagDefsMap)` on `StorableAt`, `CellCoh`, `Coh`, `decIndep`,
+`pointsToView`, `cellOwn`, `pointsToCell`, `advanceCursor`,
+`PlanFits`, `allocCap` and the engine-seam lemmas — and the rules
+generic in a `MachineCtx` supply `M.tagDefs` (the mirror's
+`Step.store/load/create` use `M.tagDefs` exactly as the engine uses
+its reader). The STATE INTERPRETATION computes NO layout: the ghost
+metadata cell records the allocation's `size` as ghost data (the
+engine's own `Allocation.size`, registered by `allocateObject`), so
+`CohG` needs no environment and the Iris instance stays a plain
+instance; the assertions pin `size = sizeofCtype tds ty`. Clients
+state their footprints at the program's environment (`fmapEmpty` for
+every demo — the profile contexts `spikeCtx`/`procCtx` are reducible
+so `M.tagDefs` unfolds to it under the proof mode's matching).
+
 METADATA LIFETIME NOTE (named mover): kill/free is outside the
 fragment, so metadata never dies and views may share it fractionally
 without a liveness component. When kill joins the fragment, the
@@ -83,8 +107,8 @@ def cellPtr (id : Int) (a : Int) : CerbMem.PointerValue :=
     EMPTY side tables — the canonical decode; `CellCoh.dec_indep`
     says the cell decodes the same at ANY tables. The engine's own
     decoder, not a new one. -/
-def decodeCell (c : SpikeCell) : CerbMem.MemValue :=
-  CerbMem.reconstructValue [] [] c.addr c.ty c.bytes
+def decodeCell (tds : CerbTags.TagDefsMap) (c : SpikeCell) : CerbMem.MemValue :=
+  CerbMem.reconstructValue tds [] [] c.addr c.ty c.bytes
 
 /-- Mirror of loadM's `isBool` (CerbMem.lean:1598). -/
 def boolTy : ctype → Bool
@@ -94,9 +118,9 @@ def boolTy : ctype → Bool
 /-- Mirror of loadM's `isTrap` guard (CerbMem.lean:1598-1604): the
     _Bool trap-representation UB arm. wp_load's precondition excludes
     it (R4: UB-excluding — this is one of the NDkilled arms). -/
-def cellLoadTrap (c : SpikeCell) : Bool :=
+def cellLoadTrap (tds : CerbTags.TagDefsMap) (c : SpikeCell) : Bool :=
   boolTy c.ty &&
-    (match decodeCell c with
+    (match decodeCell tds c with
      | .MVinteger _ (.IV _ n) => n != 0 && n != 1
      | .MVunspecified _ => true
      | _ => false)
@@ -122,21 +146,21 @@ def atomicTy : ctype → Bool
       exactly (needed to re-read the cell and to leave neighbours
       untouched). All three are closed computations on concrete
       integer values (rfl-provable). -/
-structure StorableAt (ty : ctype) (mv : CerbMem.MemValue) : Prop where
+structure StorableAt (tds : CerbTags.TagDefsMap) (ty : ctype) (mv : CerbMem.MemValue) : Prop where
   compat : CerbMem.ctypeMemCompatible ty (CerbMem.typeofMval mv) = true
-  fpm : ∀ fpm, (CerbMem.memValueToBytes fpm mv).1 = fpm
-  len : ∀ fpm, ((CerbMem.memValueToBytes fpm mv).2).length = CerbMem.sizeofCtype ty
+  fpm : ∀ fpm, (CerbMem.memValueToBytes tds fpm mv).1 = fpm
+  len : ∀ fpm, ((CerbMem.memValueToBytes tds fpm mv).2).length = CerbMem.sizeofCtype tds ty
   /-- serialization is table-independent (storeM serializes at the
       state's CURRENT funptrmap, CerbMem.lean:1632/639; scalar
       values produce the same bytes at any table). -/
-  bytes_fpm : ∀ fpm, (CerbMem.memValueToBytes fpm mv).2 =
-    (CerbMem.memValueToBytes [] mv).2
+  bytes_fpm : ∀ fpm, (CerbMem.memValueToBytes tds fpm mv).2 =
+    (CerbMem.memValueToBytes tds [] mv).2
   /-- the stored image decodes table-independently (feeds the written
       cell's `CellCoh.dec_indep`). -/
   stored_dec : ∀ (lum : List (Int × identifier)) (fpm : CerbMem.Funptrmap)
     (addr : Int),
-    CerbMem.reconstructValue lum fpm addr ty (CerbMem.memValueToBytes [] mv).2 =
-      CerbMem.reconstructValue [] [] addr ty (CerbMem.memValueToBytes [] mv).2
+    CerbMem.reconstructValue tds lum fpm addr ty (CerbMem.memValueToBytes tds [] mv).2 =
+      CerbMem.reconstructValue tds [] [] addr ty (CerbMem.memValueToBytes tds [] mv).2
 
 /-! ## The null-test memM facts (list-reverse phase A)
 
@@ -252,14 +276,14 @@ end Bytemap
 
 open Iris.Std.PartialMap in
 /-- Per-cell backing facts in the real memory state. -/
-structure CellCoh (σ : Mem) (id : Int) (c : SpikeCell) : Prop where
+structure CellCoh (tds : CerbTags.TagDefsMap) (σ : Mem) (id : Int) (c : SpikeCell) : Prop where
   dead : σ.deadAllocations.contains id = false
   alloc : ∃ al, σ.allocations.get? id = some al ∧ al.base = c.addr ∧
-    al.size = (CerbMem.sizeofCtype c.ty : Int) ∧ al.ty = some c.ty ∧
+    al.size = (CerbMem.sizeofCtype tds c.ty : Int) ∧ al.ty = some c.ty ∧
     al.isReadonly = .IsWritable
   nonAtomic : atomicTy c.ty = false
-  len : c.bytes.length = CerbMem.sizeofCtype c.ty
-  bytes : CerbMem.readBytesFrom σ c.addr (CerbMem.sizeofCtype c.ty) = c.bytes
+  len : c.bytes.length = CerbMem.sizeofCtype tds c.ty
+  bytes : CerbMem.readBytesFrom σ c.addr (CerbMem.sizeofCtype tds c.ty) = c.bytes
   /-- INERTNESS ([USER 2026-08-30], the de-pin): the cell's decode is
       independent of the union-member and function-pointer side
       tables — exactly what loadM's value reconstruction reads them
@@ -271,19 +295,19 @@ structure CellCoh (σ : Mem) (id : Int) (c : SpikeCell) : Prop where
       (funptrmap ↔ the donor's fntbl_entry analog); this premise is
       its degenerate case. -/
   dec_indep : ∀ (lum : List (Int × identifier)) (fpm : CerbMem.Funptrmap),
-    CerbMem.reconstructValue lum fpm c.addr c.ty c.bytes = decodeCell c
+    CerbMem.reconstructValue tds lum fpm c.addr c.ty c.bytes = decodeCell tds c
 
-def cellsDisjoint (c1 c2 : SpikeCell) : Prop :=
-  c1.addr + (CerbMem.sizeofCtype c1.ty : Int) ≤ c2.addr ∨
-  c2.addr + (CerbMem.sizeofCtype c2.ty : Int) ≤ c1.addr
+def cellsDisjoint (tds : CerbTags.TagDefsMap) (c1 c2 : SpikeCell) : Prop :=
+  c1.addr + (CerbMem.sizeofCtype tds c1.ty : Int) ≤ c2.addr ∨
+  c2.addr + (CerbMem.sizeofCtype tds c2.ty : Int) ≤ c1.addr
 
 open Iris.Std.PartialMap in
 /-- The coupling invariant between the real MemState and the ghost
     cell map. -/
-structure Coh (σ : Mem) (m : SpikeHeapF SpikeCell) : Prop where
-  cells : ∀ id c, get? m id = some c → CellCoh σ id c
+structure Coh (tds : CerbTags.TagDefsMap) (σ : Mem) (m : SpikeHeapF SpikeCell) : Prop where
+  cells : ∀ id c, get? m id = some c → CellCoh tds σ id c
   disj : ∀ id1 id2 c1 c2, id1 ≠ id2 → get? m id1 = some c1 →
-    get? m id2 = some c2 → cellsDisjoint c1 c2
+    get? m id2 = some c2 → cellsDisjoint tds c1 c2
 
 /-! ## The memM computations under the invariant
 
@@ -293,9 +317,9 @@ one-level applications of the real loadM/storeM (recon §5.4 seam (a)).
 
 /-- A non-atomic cell type makes the atomic-member arm
     (CerbMem.lean:1575-1585) unreachable. -/
-theorem isAtomicMemberAccess_false (al : CerbMem.Allocation) (ty : ctype)
+theorem isAtomicMemberAccess_false (tds : CerbTags.TagDefsMap) (al : CerbMem.Allocation) (ty : ctype)
     (addr : Int) (hty : al.ty = some ty) (hatom : atomicTy ty = false) :
-    CerbMem.isAtomicMemberAccess al ty addr = false := by
+    CerbMem.isAtomicMemberAccess tds al ty addr = false := by
   unfold CerbMem.isAtomicMemberAccess
   rw [hty]
   cases ty with
@@ -306,22 +330,22 @@ theorem isAtomicMemberAccess_false (al : CerbMem.Allocation) (ty : ctype)
     state change is the byte write. Every guard the proof crosses is
     one NDkilled arm of the R4 vocabulary (recon §2.6), discharged by
     a named hypothesis. -/
-theorem storeM_success (σ : Mem) (id : Int) (c : SpikeCell)
+theorem storeM_success (tds : CerbTags.TagDefsMap) (σ : Mem) (id : Int) (c : SpikeCell)
     (mv : CerbMem.MemValue) (loc : CerbLocation.Loc)
-    (hcoh : CellCoh σ id c) (hst : StorableAt c.ty mv) :
-    applyMemM (CerbMem.storeM loc c.ty false (cellPtr id c.addr) mv) σ =
-      some (.FP .W c.addr (CerbMem.sizeofCtype c.ty),
-        CerbMem.writeBytesTo σ c.addr (CerbMem.memValueToBytes [] mv).2) := by
+    (hcoh : CellCoh tds σ id c) (hst : StorableAt tds c.ty mv) :
+    applyMemM (CerbMem.storeM tds loc c.ty false (cellPtr id c.addr) mv) σ =
+      some (.FP .W c.addr (CerbMem.sizeofCtype tds c.ty),
+        CerbMem.writeBytesTo σ c.addr (CerbMem.memValueToBytes tds [] mv).2) := by
   obtain ⟨al, hal, hbase, hsize, hty, hro⟩ := hcoh.alloc
-  have hbounds : CerbMem.isInBounds al c.addr (CerbMem.sizeofCtype c.ty) = true := by
+  have hbounds : CerbMem.isInBounds al c.addr (CerbMem.sizeofCtype tds c.ty) = true := by
     simp [CerbMem.isInBounds, hbase, hsize]
-  have hatomic := isAtomicMemberAccess_false al c.ty c.addr hty hcoh.nonAtomic
-  rcases hmvb : CerbMem.memValueToBytes σ.funptrmap mv with ⟨fpm', bs'⟩
+  have hatomic := isAtomicMemberAccess_false tds al c.ty c.addr hty hcoh.nonAtomic
+  rcases hmvb : CerbMem.memValueToBytes tds σ.funptrmap mv with ⟨fpm', bs'⟩
   have hfpm' : fpm' = σ.funptrmap := by
     have := hst.fpm σ.funptrmap
     rw [hmvb] at this
     exact this
-  have hbs' : bs' = (CerbMem.memValueToBytes [] mv).2 := by
+  have hbs' : bs' = (CerbMem.memValueToBytes tds [] mv).2 := by
     have := hst.bytes_fpm σ.funptrmap
     rw [hmvb] at this
     exact this
@@ -333,18 +357,18 @@ theorem storeM_success (σ : Mem) (id : Int) (c : SpikeCell)
 /-- Successful load: with a Coh-backed cell that is not a _Bool trap,
     `loadM` (CerbMem.lean:1586) takes the active path, returns the
     cell's decode, and leaves the state unchanged. -/
-theorem loadM_success (σ : Mem) (id : Int) (c : SpikeCell)
+theorem loadM_success (tds : CerbTags.TagDefsMap) (σ : Mem) (id : Int) (c : SpikeCell)
     (loc : CerbLocation.Loc)
-    (hcoh : CellCoh σ id c) (htrap : cellLoadTrap c = false) :
-    applyMemM (CerbMem.loadM loc c.ty (cellPtr id c.addr)) σ =
-      some ((.FP .R c.addr (CerbMem.sizeofCtype c.ty), decodeCell c), σ) := by
+    (hcoh : CellCoh tds σ id c) (htrap : cellLoadTrap tds c = false) :
+    applyMemM (CerbMem.loadM tds loc c.ty (cellPtr id c.addr)) σ =
+      some ((.FP .R c.addr (CerbMem.sizeofCtype tds c.ty), decodeCell tds c), σ) := by
   obtain ⟨al, hal, hbase, hsize, hty, hro⟩ := hcoh.alloc
-  have hbounds : CerbMem.isInBounds al c.addr (CerbMem.sizeofCtype c.ty) = true := by
+  have hbounds : CerbMem.isInBounds al c.addr (CerbMem.sizeofCtype tds c.ty) = true := by
     simp [CerbMem.isInBounds, hbase, hsize]
-  have hatomic := isAtomicMemberAccess_false al c.ty c.addr hty hcoh.nonAtomic
-  have hdec : CerbMem.reconstructValue σ.lastUsedUnionMembers σ.funptrmap c.addr
-      c.ty (CerbMem.readBytesFrom σ c.addr (CerbMem.sizeofCtype c.ty)) =
-      decodeCell c := by
+  have hatomic := isAtomicMemberAccess_false tds al c.ty c.addr hty hcoh.nonAtomic
+  have hdec : CerbMem.reconstructValue tds σ.lastUsedUnionMembers σ.funptrmap c.addr
+      c.ty (CerbMem.readBytesFrom σ c.addr (CerbMem.sizeofCtype tds c.ty)) =
+      decodeCell tds c := by
     rw [hcoh.bytes]
     exact hcoh.dec_indep _ _
   unfold CerbMem.loadM applyMemM
@@ -355,7 +379,7 @@ theorem loadM_success (σ : Mem) (id : Int) (c : SpikeCell)
   -- scrutinees, so no defeq/simp bridge exists; case-explode the
   -- scrutinees until both reduce.
   unfold cellLoadTrap boolTy at htrap
-  generalize decodeCell c = mval at htrap ⊢
+  generalize decodeCell tds c = mval at htrap ⊢
   clear hdec hatomic hbounds hro hty hsize hbase hal al hcoh
   rcases c with ⟨ca, ⟨q, t⟩, cb⟩ <;> cases t <;> try simp_all
   rename_i bt
@@ -395,15 +419,15 @@ theorem readBytesFrom_sub (σ : Mem) (a : Int) (m : Nat)
     the written range (pairwise disjointness), the allocation table
     and the pinned side tables are untouched (isLocking = false,
     unionMem = none, funptrmap-neutral serialization). -/
-theorem Coh.store (σ : Mem) (m : SpikeHeapF SpikeCell) (i : Int)
+theorem Coh.store (tds : CerbTags.TagDefsMap) (σ : Mem) (m : SpikeHeapF SpikeCell) (i : Int)
     (c : SpikeCell) (mv : CerbMem.MemValue)
-    (hcoh : Coh σ m) (hget : Iris.Std.PartialMap.get? m i = some c)
-    (hst : StorableAt c.ty mv) :
-    Coh (CerbMem.writeBytesTo σ c.addr (CerbMem.memValueToBytes [] mv).2)
+    (hcoh : Coh tds σ m) (hget : Iris.Std.PartialMap.get? m i = some c)
+    (hst : StorableAt tds c.ty mv) :
+    Coh tds (CerbMem.writeBytesTo σ c.addr (CerbMem.memValueToBytes tds [] mv).2)
       (Iris.Std.PartialMap.insert m i
-        ⟨c.addr, c.ty, (CerbMem.memValueToBytes [] mv).2⟩) := by
-  generalize hbs : (CerbMem.memValueToBytes [] mv).2 = bs
-  have hlen : bs.length = CerbMem.sizeofCtype c.ty := by
+        ⟨c.addr, c.ty, (CerbMem.memValueToBytes tds [] mv).2⟩) := by
+  generalize hbs : (CerbMem.memValueToBytes tds [] mv).2 = bs
+  have hlen : bs.length = CerbMem.sizeofCtype tds c.ty := by
     rw [← hbs]; exact hst.len []
   have hcell' : ∀ j c', Iris.Std.PartialMap.get?
       (Iris.Std.PartialMap.insert m i (⟨c.addr, c.ty, bs⟩ : SpikeCell)) j =
@@ -425,11 +449,11 @@ theorem Coh.store (σ : Mem) (m : SpikeHeapF SpikeCell) (i : Int)
       · obtain ⟨al, hal, h1, h2, h3, h4⟩ := hc.alloc
         exact ⟨al, by simpa using hal, h1, h2, h3, h4⟩
       · show CerbMem.readBytesFrom (CerbMem.writeBytesTo σ c.addr bs) c.addr
-          (CerbMem.sizeofCtype c.ty) = bs
+          (CerbMem.sizeofCtype tds c.ty) = bs
         rw [← hlen]
         exact readBytesFrom_writeBytesTo_self σ c.addr bs
       · intro lum fpm
-        show CerbMem.reconstructValue lum fpm c.addr c.ty bs = _
+        show CerbMem.reconstructValue tds lum fpm c.addr c.ty bs = _
         rw [← hbs]
         exact hst.stored_dec lum fpm c.addr
     · have hc := hcoh.cells j c' hold
@@ -438,7 +462,7 @@ theorem Coh.store (σ : Mem) (m : SpikeHeapF SpikeCell) (i : Int)
       · obtain ⟨al, hal, h1, h2, h3, h4⟩ := hc.alloc
         exact ⟨al, by simpa using hal, h1, h2, h3, h4⟩
       · show CerbMem.readBytesFrom (CerbMem.writeBytesTo σ c.addr bs) c'.addr
-          (CerbMem.sizeofCtype c'.ty) = c'.bytes
+          (CerbMem.sizeofCtype tds c'.ty) = c'.bytes
         rw [readBytesFrom_writeBytesTo_disjoint _ _ _ _ _ ?_]
         · exact hc.bytes
         · simp only [cellsDisjoint] at hdisj
@@ -593,24 +617,24 @@ theorem spliceBytes_slice_above (off : Nat) (img bs : List AbsByte)
     spliced, other cells are outside the written sub-range, the
     allocation and side tables untouched. `hdec_indep` is the spliced
     image's table-independent decode. -/
-theorem Coh.store_interior (σ : Mem) (m : SpikeHeapF SpikeCell) (i : Int)
+theorem Coh.store_interior (tds : CerbTags.TagDefsMap) (σ : Mem) (m : SpikeHeapF SpikeCell) (i : Int)
     (c : SpikeCell) (off : Nat) (img : List AbsByte)
-    (hcoh : Coh σ m) (hget : Iris.Std.PartialMap.get? m i = some c)
-    (hbound : off + img.length ≤ sizeofCtype c.ty)
+    (hcoh : Coh tds σ m) (hget : Iris.Std.PartialMap.get? m i = some c)
+    (hbound : off + img.length ≤ sizeofCtype tds c.ty)
     (hdec_indep : ∀ (lum : List (Int × identifier)) (fpm : Funptrmap),
-      reconstructValue lum fpm c.addr c.ty (spliceBytes off img c.bytes) =
-        decodeCell ⟨c.addr, c.ty, spliceBytes off img c.bytes⟩) :
-    Coh (writeBytesTo σ (c.addr + (off : Int)) img)
+      reconstructValue tds lum fpm c.addr c.ty (spliceBytes off img c.bytes) =
+        decodeCell tds ⟨c.addr, c.ty, spliceBytes off img c.bytes⟩) :
+    Coh tds (writeBytesTo σ (c.addr + (off : Int)) img)
       (Iris.Std.PartialMap.insert m i
         ⟨c.addr, c.ty, spliceBytes off img c.bytes⟩) := by
-  have hlenb : c.bytes.length = sizeofCtype c.ty := (hcoh.cells i c hget).len
-  have hlen : (spliceBytes off img c.bytes).length = sizeofCtype c.ty := by
+  have hlenb : c.bytes.length = sizeofCtype tds c.ty := (hcoh.cells i c hget).len
+  have hlen : (spliceBytes off img c.bytes).length = sizeofCtype tds c.ty := by
     rw [spliceBytes_length off img c.bytes (by omega)]
     exact hlenb
   have hreread : readBytesFrom
       (writeBytesTo σ (c.addr + (off : Int)) img) c.addr
-      (sizeofCtype c.ty) = spliceBytes off img c.bytes :=
-    readBytesFrom_write_interior σ c.addr off img (sizeofCtype c.ty)
+      (sizeofCtype tds c.ty) = spliceBytes off img c.bytes :=
+    readBytesFrom_write_interior σ c.addr off img (sizeofCtype tds c.ty)
       c.bytes (hcoh.cells i c hget).bytes hbound
   have hcell' : ∀ j c', Iris.Std.PartialMap.get?
       (Iris.Std.PartialMap.insert m i
@@ -639,7 +663,7 @@ theorem Coh.store_interior (σ : Mem) (m : SpikeHeapF SpikeCell) (i : Int)
         exact ⟨al, by simpa using hal, h1, h2, h3, h4⟩
       · show readBytesFrom
           (writeBytesTo σ (c.addr + (off : Int)) img) c'.addr
-          (sizeofCtype c'.ty) = c'.bytes
+          (sizeofCtype tds c'.ty) = c'.bytes
         rw [readBytesFrom_writeBytesTo_disjoint _ _ _ _ _ ?_]
         · exact hc.bytes
         · simp only [cellsDisjoint] at hdisj
@@ -748,49 +772,56 @@ open CerbMem
 structure MetaCell where
   addr : Int
   ty : ctype
+  /-- the allocation's size in bytes — the engine's `Allocation.size`
+      (registered by `allocateObject`, CerbMem.lean:1504-1530), carried
+      as GHOST DATA so the coupling invariant computes no layout: the
+      tag-definition environment enters only through the assertions
+      (`metaOf`/`pointsToView`/`cellOwn` pin `size = sizeofCtype tds ty`). -/
+  size : Nat
 
-@[reducible] def metaOf (c : SpikeCell) : MetaCell := ⟨c.addr, c.ty⟩
+@[reducible] def metaOf (tds : CerbTags.TagDefsMap) (c : SpikeCell) : MetaCell :=
+  ⟨c.addr, c.ty, sizeofCtype tds c.ty⟩
 
 /-- Per-allocation metadata facts in the real state: exactly
     `CellCoh` minus the byte-contents facts. -/
 structure MetaCoh (σ : Mem) (id : Int) (mc : MetaCell) : Prop where
   dead : σ.deadAllocations.contains id = false
   alloc : ∃ al, σ.allocations.get? id = some al ∧ al.base = mc.addr ∧
-    al.size = (sizeofCtype mc.ty : Int) ∧ al.ty = some mc.ty ∧
+    al.size = (mc.size : Int) ∧ al.ty = some mc.ty ∧
     al.isReadonly = .IsWritable
   nonAtomic : atomicTy mc.ty = false
 
-theorem CellCoh.toMetaCoh {σ : Mem} {id : Int} {c : SpikeCell}
-    (h : CellCoh σ id c) : MetaCoh σ id (metaOf c) :=
+theorem CellCoh.toMetaCoh {σ : Mem} {id : Int} {c : SpikeCell} (tds : CerbTags.TagDefsMap)
+    (h : CellCoh tds σ id c) : MetaCoh σ id (metaOf tds c) :=
   ⟨h.dead, h.alloc, h.nonAtomic⟩
 
 /-- CellCoh assembled from its split parts: metadata authority +
     length + byte-range readout + decode inertness. -/
-theorem CellCoh.ofParts {σ : Mem} {id : Int} {c : SpikeCell}
-    (hm : MetaCoh σ id (metaOf c))
-    (hlen : c.bytes.length = sizeofCtype c.ty)
-    (hread : readBytesFrom σ c.addr (sizeofCtype c.ty) = c.bytes)
+theorem CellCoh.ofParts {σ : Mem} {id : Int} {c : SpikeCell} (tds : CerbTags.TagDefsMap)
+    (hm : MetaCoh σ id (metaOf tds c))
+    (hlen : c.bytes.length = sizeofCtype tds c.ty)
+    (hread : readBytesFrom σ c.addr (sizeofCtype tds c.ty) = c.bytes)
     (hdec : ∀ (lum : List (Int × identifier)) (fpm : Funptrmap),
-      reconstructValue lum fpm c.addr c.ty c.bytes = decodeCell c) :
-    CellCoh σ id c :=
+      reconstructValue tds lum fpm c.addr c.ty c.bytes = decodeCell tds c) :
+    CellCoh tds σ id c :=
   ⟨hm.dead, hm.alloc, hm.nonAtomic, hlen, hread, hdec⟩
 
 /-- Range-disjointness of allocation metadata (the same formula as
     `cellsDisjoint`). -/
 def metaDisjoint (m1 m2 : MetaCell) : Prop :=
-  m1.addr + (sizeofCtype m1.ty : Int) ≤ m2.addr ∨
-  m2.addr + (sizeofCtype m2.ty : Int) ≤ m1.addr
+  m1.addr + (m1.size : Int) ≤ m2.addr ∨
+  m2.addr + (m2.size : Int) ≤ m1.addr
 
-theorem cellsDisjoint_iff_metaDisjoint (c1 c2 : SpikeCell) :
-    cellsDisjoint c1 c2 ↔ metaDisjoint (metaOf c1) (metaOf c2) :=
+theorem cellsDisjoint_iff_metaDisjoint (tds : CerbTags.TagDefsMap) (c1 c2 : SpikeCell) :
+    cellsDisjoint tds c1 c2 ↔ metaDisjoint (metaOf tds c1) (metaOf tds c2) :=
   Iff.rfl
 
 /-- A non-atomic ALLOCATION type makes the atomic-member arm
     unreachable at ANY accessed lvalue type (the check reads only the
     allocation's type shape). -/
-theorem isAtomicMemberAccess_false' (al : Allocation) (aty lty : ctype)
+theorem isAtomicMemberAccess_false' (tds : CerbTags.TagDefsMap) (al : Allocation) (aty lty : ctype)
     (addr : Int) (hty : al.ty = some aty) (hatom : atomicTy aty = false) :
-    isAtomicMemberAccess al lty addr = false := by
+    isAtomicMemberAccess tds al lty addr = false := by
   unfold isAtomicMemberAccess
   rw [hty]
   cases aty with
@@ -806,8 +837,8 @@ def loadTrapV (ty : ctype) (mv : MemValue) : Bool :=
      | .MVunspecified _ => true
      | _ => false)
 
-theorem cellLoadTrap_eq (c : SpikeCell) :
-    cellLoadTrap c = loadTrapV c.ty (decodeCell c) := rfl
+theorem cellLoadTrap_eq (tds : CerbTags.TagDefsMap) (c : SpikeCell) :
+    cellLoadTrap tds c = loadTrapV c.ty (decodeCell tds c) := rfl
 
 /-- GENERIC IN-BOUNDS TYPED LOAD (memM stratum): with allocation
     metadata backing, an in-bounds offset, the range's byte image,
@@ -815,23 +846,23 @@ theorem cellLoadTrap_eq (c : SpikeCell) :
     active path, returns the decode of the range image, and leaves
     the state unchanged. Generalizes `loadM_success` (off 0, cell
     type) and the retired per-layout interior lemmas. -/
-theorem loadM_at (σ : Mem) (id a : Int) (aty : ctype) (off : Nat)
+theorem loadM_at (tds : CerbTags.TagDefsMap) (σ : Mem) (id a : Int) (aty : ctype) (off : Nat)
     (vty : ctype) (bs : List AbsByte) (mv : MemValue)
     (loc : CerbLocation.Loc)
-    (hmeta : MetaCoh σ id ⟨a, aty⟩)
-    (hbound : off + sizeofCtype vty ≤ sizeofCtype aty)
-    (hread : readBytesFrom σ (a + (off : Int)) (sizeofCtype vty) = bs)
-    (hdec : reconstructValue σ.lastUsedUnionMembers σ.funptrmap
+    (hmeta : MetaCoh σ id ⟨a, aty, sizeofCtype tds aty⟩)
+    (hbound : off + sizeofCtype tds vty ≤ sizeofCtype tds aty)
+    (hread : readBytesFrom σ (a + (off : Int)) (sizeofCtype tds vty) = bs)
+    (hdec : reconstructValue tds σ.lastUsedUnionMembers σ.funptrmap
       (a + (off : Int)) vty bs = mv)
     (htrap : loadTrapV vty mv = false) :
-    applyMemM (loadM loc vty (cellPtr id (a + (off : Int)))) σ =
-      some ((.FP .R (a + (off : Int)) (sizeofCtype vty), mv), σ) := by
+    applyMemM (loadM tds loc vty (cellPtr id (a + (off : Int)))) σ =
+      some ((.FP .R (a + (off : Int)) (sizeofCtype tds vty), mv), σ) := by
   obtain ⟨al, hal, hbase, hsize, hty, hro⟩ := hmeta.alloc
-  have hbounds : isInBounds al (a + (off : Int)) (sizeofCtype vty) = true := by
+  have hbounds : isInBounds al (a + (off : Int)) (sizeofCtype tds vty) = true := by
     simp only [isInBounds, hbase, hsize]
     simp
     omega
-  have hatomic := isAtomicMemberAccess_false' al aty vty (a + (off : Int))
+  have hatomic := isAtomicMemberAccess_false' tds al aty vty (a + (off : Int))
     hty hmeta.nonAtomic
   unfold loadM applyMemM
   simp only [cellPtr, hmeta.dead, Bool.false_eq_true, if_false, hal, hbounds,
@@ -861,30 +892,30 @@ theorem loadM_at (σ : Mem) (id a : Int) (aty : ctype) (off : Nat)
     address. Generalizes `storeM_success` and the retired per-layout
     interior lemmas; the serialization premises are the `StorableAt`
     facts at the accessed type. -/
-theorem storeM_at (σ : Mem) (id a : Int) (aty : ctype) (off : Nat)
+theorem storeM_at (tds : CerbTags.TagDefsMap) (σ : Mem) (id a : Int) (aty : ctype) (off : Nat)
     (vty : ctype) (mv : MemValue) (loc : CerbLocation.Loc)
-    (hmeta : MetaCoh σ id ⟨a, aty⟩)
-    (hbound : off + sizeofCtype vty ≤ sizeofCtype aty)
+    (hmeta : MetaCoh σ id ⟨a, aty, sizeofCtype tds aty⟩)
+    (hbound : off + sizeofCtype tds vty ≤ sizeofCtype tds aty)
     (hcompat : ctypeMemCompatible vty (typeofMval mv) = true)
-    (hfpm : ∀ fpm, (memValueToBytes fpm mv).1 = fpm)
-    (hbytes : ∀ fpm, (memValueToBytes fpm mv).2 =
-      (memValueToBytes [] mv).2) :
-    applyMemM (storeM loc vty false (cellPtr id (a + (off : Int))) mv) σ =
-      some (.FP .W (a + (off : Int)) (sizeofCtype vty),
-        writeBytesTo σ (a + (off : Int)) (memValueToBytes [] mv).2) := by
+    (hfpm : ∀ fpm, (memValueToBytes tds fpm mv).1 = fpm)
+    (hbytes : ∀ fpm, (memValueToBytes tds fpm mv).2 =
+      (memValueToBytes tds [] mv).2) :
+    applyMemM (storeM tds loc vty false (cellPtr id (a + (off : Int))) mv) σ =
+      some (.FP .W (a + (off : Int)) (sizeofCtype tds vty),
+        writeBytesTo σ (a + (off : Int)) (memValueToBytes tds [] mv).2) := by
   obtain ⟨al, hal, hbase, hsize, hty, hro⟩ := hmeta.alloc
-  have hbounds : isInBounds al (a + (off : Int)) (sizeofCtype vty) = true := by
+  have hbounds : isInBounds al (a + (off : Int)) (sizeofCtype tds vty) = true := by
     simp only [isInBounds, hbase, hsize]
     simp
     omega
-  have hatomic := isAtomicMemberAccess_false' al aty vty (a + (off : Int))
+  have hatomic := isAtomicMemberAccess_false' tds al aty vty (a + (off : Int))
     hty hmeta.nonAtomic
-  rcases hmvb : memValueToBytes σ.funptrmap mv with ⟨fpm', bs'⟩
+  rcases hmvb : memValueToBytes tds σ.funptrmap mv with ⟨fpm', bs'⟩
   have hfpm' : fpm' = σ.funptrmap := by
     have := hfpm σ.funptrmap
     rw [hmvb] at this
     exact this
-  have hbs' : bs' = (memValueToBytes [] mv).2 := by
+  have hbs' : bs' = (memValueToBytes tds [] mv).2 := by
     have := hbytes σ.funptrmap
     rw [hmvb] at this
     exact this
@@ -913,33 +944,33 @@ def freshBase (la : Int) (alignN : Int) (size : Nat) : Int :=
 
 /-- The fresh range ends at or below the old cursor (the downward
     allocator's arithmetic, exposed for the create rule's clients). -/
-theorem freshBase_add_le (la : Int) (alignN : Int) (ty : ctype)
-    (hsz : 0 < sizeofCtype ty)
-    (hnz : freshBase la alignN (sizeofCtype ty) ≠ 0) :
-    freshBase la alignN (sizeofCtype ty) + (sizeofCtype ty : Int) ≤ la := by
-  have htoNat_pos : 0 < (la - (sizeofCtype ty : Int)).toNat := by
-    rcases Nat.eq_zero_or_pos (la - (sizeofCtype ty : Int)).toNat
+theorem freshBase_add_le (tds : CerbTags.TagDefsMap) (la : Int) (alignN : Int) (ty : ctype)
+    (hsz : 0 < sizeofCtype tds ty)
+    (hnz : freshBase la alignN (sizeofCtype tds ty) ≠ 0) :
+    freshBase la alignN (sizeofCtype tds ty) + (sizeofCtype tds ty : Int) ≤ la := by
+  have htoNat_pos : 0 < (la - (sizeofCtype tds ty : Int)).toNat := by
+    rcases Nat.eq_zero_or_pos (la - (sizeofCtype tds ty : Int)).toNat
       with hz | hpos
     · exfalso
       apply hnz
-      show (alignDown (la - (sizeofCtype ty : Int)).toNat
+      show (alignDown (la - (sizeofCtype tds ty : Int)).toNat
         (alignN.toNat.max 1) : Int) = 0
       rw [hz]
       simp [alignDown]
     · exact hpos
-  have hle : alignDown (la - (sizeofCtype ty : Int)).toNat
-      (alignN.toNat.max 1) ≤ (la - (sizeofCtype ty : Int)).toNat := by
+  have hle : alignDown (la - (sizeofCtype tds ty : Int)).toNat
+      (alignN.toNat.max 1) ≤ (la - (sizeofCtype tds ty : Int)).toNat := by
     unfold alignDown
     exact Nat.div_mul_le_self _ _
-  show (alignDown (la - (sizeofCtype ty : Int)).toNat
-    (alignN.toNat.max 1) : Int) + (sizeofCtype ty : Int) ≤ la
+  show (alignDown (la - (sizeofCtype tds ty : Int)).toNat
+    (alignN.toNat.max 1) : Int) + (sizeofCtype tds ty : Int) ≤ la
   omega
 
 /-- The fresh base is positive at a nonzero guard. -/
-theorem freshBase_pos (la : Int) (alignN : Int) (ty : ctype)
-    (hnz : freshBase la alignN (sizeofCtype ty) ≠ 0) :
-    0 < freshBase la alignN (sizeofCtype ty) := by
-  have h0 : 0 ≤ freshBase la alignN (sizeofCtype ty) :=
+theorem freshBase_pos (tds : CerbTags.TagDefsMap) (la : Int) (alignN : Int) (ty : ctype)
+    (hnz : freshBase la alignN (sizeofCtype tds ty) ≠ 0) :
+    0 < freshBase la alignN (sizeofCtype tds ty) := by
+  have h0 : 0 ≤ freshBase la alignN (sizeofCtype tds ty) :=
     Int.natCast_nonneg _
   omega
 
@@ -947,12 +978,12 @@ theorem freshBase_pos (la : Int) (alignN : Int) (ty : ctype)
     bound on the cursor is a machine bound on every fresh base (the
     address-WF fact the public create rules export — alloc arc P2,
     the charter's "bounds knowledge" allowance). -/
-theorem freshBase_lt_two64 (la : Int) (alignN : Int) (ty : ctype)
-    (hsz : 0 < sizeofCtype ty)
-    (hnz : freshBase la alignN (sizeofCtype ty) ≠ 0)
+theorem freshBase_lt_two64 (tds : CerbTags.TagDefsMap) (la : Int) (alignN : Int) (ty : ctype)
+    (hsz : 0 < sizeofCtype tds ty)
+    (hnz : freshBase la alignN (sizeofCtype tds ty) ≠ 0)
     (hla : la ≤ 2 ^ 64) :
-    freshBase la alignN (sizeofCtype ty) < 2 ^ 64 := by
-  have h := freshBase_add_le la alignN ty hsz hnz
+    freshBase la alignN (sizeofCtype tds ty) < 2 ^ 64 := by
+  have h := freshBase_add_le tds la alignN ty hsz hnz
   omega
 
 /-- allocateObject SUCCESS, symbolic state: at a nonzero fresh base
@@ -961,27 +992,27 @@ theorem freshBase_lt_two64 (la : Int) (alignN : Int) (ty : ctype)
     allocation, and clears the range to unspecified bytes. The `0 <
     sizeof ty` premise pins the engine's `max 1` padding away (a real
     C object type; zero-size allocations stay outside the logic). -/
-theorem allocateObject_success (σ : Mem) (pref : prefix0)
+theorem allocateObject_success (tds : CerbTags.TagDefsMap) (σ : Mem) (pref : prefix0)
     (aprov : Provenance) (alignN : Int) (ty : ctype)
-    (hsz : 0 < sizeofCtype ty)
-    (hnz : freshBase σ.lastAddress alignN (sizeofCtype ty) ≠ 0) :
-    applyMemM (allocateObject 0 pref (.IV aprov alignN) ty none none) σ =
+    (hsz : 0 < sizeofCtype tds ty)
+    (hnz : freshBase σ.lastAddress alignN (sizeofCtype tds ty) ≠ 0) :
+    applyMemM (allocateObject tds 0 pref (.IV aprov alignN) ty none none) σ =
       some (cellPtr σ.nextAllocId
-          (freshBase σ.lastAddress alignN (sizeofCtype ty)),
+          (freshBase σ.lastAddress alignN (sizeofCtype tds ty)),
         writeBytesTo
           { σ with
               nextAllocId := σ.nextAllocId + 1,
-              lastAddress := freshBase σ.lastAddress alignN (sizeofCtype ty),
+              lastAddress := freshBase σ.lastAddress alignN (sizeofCtype tds ty),
               allocations := σ.allocations.insert σ.nextAllocId
-                { base := freshBase σ.lastAddress alignN (sizeofCtype ty),
-                  size := (sizeofCtype ty : Int),
+                { base := freshBase σ.lastAddress alignN (sizeofCtype tds ty),
+                  size := (sizeofCtype tds ty : Int),
                   ty := some ty,
                   isReadonly := .IsWritable,
                   prefix_ := pref } }
-          (freshBase σ.lastAddress alignN (sizeofCtype ty))
-          (List.replicate (sizeofCtype ty) undefByte)) := by
-  have hmax : (sizeofCtype ty).max 1 = sizeofCtype ty := Nat.max_eq_left hsz
-  have hbeq : ((freshBase σ.lastAddress alignN (sizeofCtype ty) == 0) = false) :=
+          (freshBase σ.lastAddress alignN (sizeofCtype tds ty))
+          (List.replicate (sizeofCtype tds ty) undefByte)) := by
+  have hmax : (sizeofCtype tds ty).max 1 = sizeofCtype tds ty := Nat.max_eq_left hsz
+  have hbeq : ((freshBase σ.lastAddress alignN (sizeofCtype tds ty) == 0) = false) :=
     int_beq_eq_false _ _ hnz
   unfold allocateObject applyMemM
   simp only [freshBase, hmax] at hbeq ⊢
@@ -1191,28 +1222,28 @@ structure AllocReq where
     Guard and update mirror `allocateObject_success` exactly (see
     the section note above); `none` is the engine's out-of-memory
     kill arm (or a zero-size type, which stays outside the logic). -/
-def advanceCursor (c : AllocCursor) (r : AllocReq) : Option AllocCursor :=
-  if 0 < CerbMem.sizeofCtype r.ty ∧
-      freshBase c.lastAddr r.align (CerbMem.sizeofCtype r.ty) ≠ 0 then
-    some ⟨freshBase c.lastAddr r.align (CerbMem.sizeofCtype r.ty),
+def advanceCursor (tds : CerbTags.TagDefsMap) (c : AllocCursor) (r : AllocReq) : Option AllocCursor :=
+  if 0 < CerbMem.sizeofCtype tds r.ty ∧
+      freshBase c.lastAddr r.align (CerbMem.sizeofCtype tds r.ty) ≠ 0 then
+    some ⟨freshBase c.lastAddr r.align (CerbMem.sizeofCtype tds r.ty),
       c.nextId + 1⟩
   else
     none
 
 /-- A request list fits a cursor when every request advances it, in
     order. -/
-def PlanFits (c : AllocCursor) : List AllocReq → Prop
+def PlanFits (tds : CerbTags.TagDefsMap) (c : AllocCursor) : List AllocReq → Prop
   | [] => True
   | r :: rs =>
-    match advanceCursor c r with
-    | some c' => PlanFits c' rs
+    match advanceCursor tds c r with
+    | some c' => PlanFits tds c' rs
     | none => False
 
-theorem advanceCursor_pos (c : AllocCursor) (r : AllocReq)
-    (hsz : 0 < CerbMem.sizeofCtype r.ty)
-    (hnz : freshBase c.lastAddr r.align (CerbMem.sizeofCtype r.ty) ≠ 0) :
-    advanceCursor c r =
-      some ⟨freshBase c.lastAddr r.align (CerbMem.sizeofCtype r.ty),
+theorem advanceCursor_pos (tds : CerbTags.TagDefsMap) (c : AllocCursor) (r : AllocReq)
+    (hsz : 0 < CerbMem.sizeofCtype tds r.ty)
+    (hnz : freshBase c.lastAddr r.align (CerbMem.sizeofCtype tds r.ty) ≠ 0) :
+    advanceCursor tds c r =
+      some ⟨freshBase c.lastAddr r.align (CerbMem.sizeofCtype tds r.ty),
         c.nextId + 1⟩ := by
   unfold advanceCursor
   rw [if_pos ⟨hsz, hnz⟩]
@@ -1222,11 +1253,11 @@ theorem advanceCursor_pos (c : AllocCursor) (r : AllocReq)
     nonzero guard from `advanceCursor` breaks exactly this — and with
     it the internal create rule's `allocateObject_success` discharge:
     the P1.4 guard-deletion plant.) -/
-theorem advanceCursor_some_inv {c c' : AllocCursor} {r : AllocReq}
-    (h : advanceCursor c r = some c') :
-    0 < CerbMem.sizeofCtype r.ty ∧
-    freshBase c.lastAddr r.align (CerbMem.sizeofCtype r.ty) ≠ 0 ∧
-    c' = ⟨freshBase c.lastAddr r.align (CerbMem.sizeofCtype r.ty),
+theorem advanceCursor_some_inv {c c' : AllocCursor} {r : AllocReq} (tds : CerbTags.TagDefsMap)
+    (h : advanceCursor tds c r = some c') :
+    0 < CerbMem.sizeofCtype tds r.ty ∧
+    freshBase c.lastAddr r.align (CerbMem.sizeofCtype tds r.ty) ≠ 0 ∧
+    c' = ⟨freshBase c.lastAddr r.align (CerbMem.sizeofCtype tds r.ty),
       c.nextId + 1⟩ := by
   unfold advanceCursor at h
   split at h
@@ -1235,19 +1266,20 @@ theorem advanceCursor_some_inv {c c' : AllocCursor} {r : AllocReq}
 
 /-- Constructor-argument form (unfolds the projections; the concrete
     unit tests rewrite with this). -/
-theorem advanceCursor_mk (la nid al : Int) (ty : ctype) :
-    advanceCursor ⟨la, nid⟩ ⟨al, ty⟩ =
-      if 0 < CerbMem.sizeofCtype ty ∧
-          freshBase la al (CerbMem.sizeofCtype ty) ≠ 0 then
-        some ⟨freshBase la al (CerbMem.sizeofCtype ty), nid + 1⟩
+theorem advanceCursor_mk (tds : CerbTags.TagDefsMap) (la nid al : Int) (ty : ctype) :
+    advanceCursor tds ⟨la, nid⟩ ⟨al, ty⟩ =
+      if 0 < CerbMem.sizeofCtype tds ty ∧
+          freshBase la al (CerbMem.sizeofCtype tds ty) ≠ 0 then
+        some ⟨freshBase la al (CerbMem.sizeofCtype tds ty), nid + 1⟩
       else none := rfl
 
-@[simp] theorem PlanFits_nil (c : AllocCursor) : PlanFits c [] := trivial
+@[simp] theorem PlanFits_nil (tds : CerbTags.TagDefsMap) (c : AllocCursor) :
+    PlanFits tds c [] := trivial
 
-theorem PlanFits_cons_iff (c : AllocCursor) (r : AllocReq)
+theorem PlanFits_cons_iff (tds : CerbTags.TagDefsMap) (c : AllocCursor) (r : AllocReq)
     (rs : List AllocReq) :
-    PlanFits c (r :: rs) ↔
-      ∃ c', advanceCursor c r = some c' ∧ PlanFits c' rs := by
+    PlanFits tds c (r :: rs) ↔
+      ∃ c', advanceCursor tds c r = some c' ∧ PlanFits tds c' rs := by
   constructor
   · intro h
     unfold PlanFits at h
@@ -1262,8 +1294,8 @@ theorem PlanFits_cons_iff (c : AllocCursor) (r : AllocReq)
 /-- Prefix weakening: a plan that fits still fits after dropping a
     TAIL (stopping early is always allowed; dropping the HEAD is
     not — see `planFits_order_sensitive`). -/
-theorem PlanFits.prefix {c : AllocCursor} {rs rs' : List AllocReq}
-    (h : PlanFits c (rs ++ rs')) : PlanFits c rs := by
+theorem PlanFits.prefix {c : AllocCursor} {rs rs' : List AllocReq} (tds : CerbTags.TagDefsMap)
+    (h : PlanFits tds c (rs ++ rs')) : PlanFits tds c rs := by
   induction rs generalizing c with
   | nil => trivial
   | cons r rs ih =>
@@ -1280,18 +1312,18 @@ constraint; the exhibits instantiate these at `intTy`). -/
     fits cursor 21 (16-aligned base 16, then base 12) but the SWAPPED
     plan does not (align-1 base 17, then `alignDown 13 16 = 0` — the
     out-of-memory arm). Request order is semantically binding. -/
-theorem planFits_order_sensitive (ty : ctype)
-    (h4 : CerbMem.sizeofCtype ty = 4) :
-    PlanFits ⟨21, 0⟩ [⟨16, ty⟩, ⟨1, ty⟩] ∧
-      ¬ PlanFits ⟨21, 0⟩ [⟨1, ty⟩, ⟨16, ty⟩] := by
+theorem planFits_order_sensitive (tds : CerbTags.TagDefsMap) (ty : ctype)
+    (h4 : CerbMem.sizeofCtype tds ty = 4) :
+    PlanFits tds ⟨21, 0⟩ [⟨16, ty⟩, ⟨1, ty⟩] ∧
+      ¬ PlanFits tds ⟨21, 0⟩ [⟨1, ty⟩, ⟨16, ty⟩] := by
   constructor
   · rw [PlanFits_cons_iff]
-    refine ⟨⟨freshBase 21 16 (CerbMem.sizeofCtype ty), 0 + 1⟩, ?_, ?_⟩
+    refine ⟨⟨freshBase 21 16 (CerbMem.sizeofCtype tds ty), 0 + 1⟩, ?_, ?_⟩
     · rw [advanceCursor_mk, h4]
       exact if_pos ⟨by decide, by decide⟩
     · rw [PlanFits_cons_iff]
-      refine ⟨⟨freshBase (freshBase 21 16 (CerbMem.sizeofCtype ty)) 1
-        (CerbMem.sizeofCtype ty), 0 + 1 + 1⟩, ?_, PlanFits_nil _⟩
+      refine ⟨⟨freshBase (freshBase 21 16 (CerbMem.sizeofCtype tds ty)) 1
+        (CerbMem.sizeofCtype tds ty), 0 + 1 + 1⟩, ?_, PlanFits_nil tds _⟩
       rw [advanceCursor_mk, h4]
       exact if_pos ⟨by decide, by decide⟩
   · intro h
@@ -1309,9 +1341,9 @@ theorem planFits_order_sensitive (ty : ctype)
     fresh range would underflow to base 0 — the engine's kill arm).
     An empty or too-small capacity proves no create (the create rules
     consume `PlanFits` through `advanceCursor_some_inv`). -/
-theorem planFits_insufficient (ty : ctype)
-    (h4 : CerbMem.sizeofCtype ty = 4) :
-    ¬ PlanFits ⟨2, 0⟩ [⟨1, ty⟩] := by
+theorem planFits_insufficient (tds : CerbTags.TagDefsMap) (ty : ctype)
+    (h4 : CerbMem.sizeofCtype tds ty = 4) :
+    ¬ PlanFits tds ⟨2, 0⟩ [⟨1, ty⟩] := by
   intro h
   rw [PlanFits_cons_iff] at h
   obtain ⟨c', hc', -⟩ := h
@@ -1420,63 +1452,65 @@ theorem stateInterp_eq [SpikeGS hlc GF] (σ : Mem) (ns : Nat)
 /-- Table-independent decode of a byte image at its type (the
     inertness fact `CellCoh.dec_indep` states through Coh; here it
     rides INSIDE the whole-cell assertion). -/
-def decIndep (a : Int) (ty : ctype) (bs : List CerbMem.AbsByte) : Prop :=
+def decIndep (tds : CerbTags.TagDefsMap) (a : Int) (ty : ctype) (bs : List CerbMem.AbsByte) : Prop :=
   ∀ (lum : List (Int × identifier)) (fpm : CerbMem.Funptrmap),
-    CerbMem.reconstructValue lum fpm a ty bs = decodeCell ⟨a, ty, bs⟩
+    CerbMem.reconstructValue tds lum fpm a ty bs = decodeCell tds ⟨a, ty, bs⟩
 
 /-- THE TYPED VIEW: ownership of one typed subrange of one
     allocation — metadata knowledge (id, base, allocation type) at
     fraction `dqm`, plus the range's bytes at fraction `dqb`, plus
     the in-bounds and footprint-length facts. -/
-def pointsToView [SpikeGS hlc GF] (id a : Int) (aty : ctype) (off : Nat)
+def pointsToView [SpikeGS hlc GF] (tds : CerbTags.TagDefsMap) (id a : Int) (aty : ctype) (off : Nat)
     (dqm dqb : DFrac) (vty : ctype) (bs : List CerbMem.AbsByte) : IProp GF :=
-  iprop(metaOwn id dqm ⟨a, aty⟩ ∗
-    ⌜off + CerbMem.sizeofCtype vty ≤ CerbMem.sizeofCtype aty ∧
-      bs.length = CerbMem.sizeofCtype vty⌝ ∗
+  iprop(metaOwn id dqm ⟨a, aty, CerbMem.sizeofCtype tds aty⟩ ∗
+    ⌜off + CerbMem.sizeofCtype tds vty ≤ CerbMem.sizeofCtype tds aty ∧
+      bs.length = CerbMem.sizeofCtype tds vty⌝ ∗
     bytesOwn (a + (off : Int)) dqb bs)
 
-theorem pointsToView_iff {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
+theorem pointsToView_iff {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF] (tds : CerbTags.TagDefsMap)
     (id a : Int) (aty : ctype) (off : Nat) (dqm dqb : DFrac) (vty : ctype)
     (bs : List CerbMem.AbsByte) :
-    pointsToView (GF := GF) id a aty off dqm dqb vty bs ⊣⊢
-      iprop(metaOwn id dqm ⟨a, aty⟩ ∗
-        ⌜off + CerbMem.sizeofCtype vty ≤ CerbMem.sizeofCtype aty ∧
-          bs.length = CerbMem.sizeofCtype vty⌝ ∗
+    pointsToView tds (GF := GF) id a aty off dqm dqb vty bs ⊣⊢
+      iprop(metaOwn id dqm ⟨a, aty, CerbMem.sizeofCtype tds aty⟩ ∗
+        ⌜off + CerbMem.sizeofCtype tds vty ≤ CerbMem.sizeofCtype tds aty ∧
+          bs.length = CerbMem.sizeofCtype tds vty⌝ ∗
         bytesOwn (a + (off : Int)) dqb bs) := .rfl
 
 /-- Whole-allocation ownership at a ghost id: THE MAXIMAL VIEW
     (offset 0, view type = allocation type, both fractions equal)
     plus the image's decode inertness. This is what the old
     allocation-rooted ghost cell becomes. -/
-def cellOwn [SpikeGS hlc GF] (i : Int) (dq : DFrac) (c : SpikeCell) : IProp GF :=
-  iprop(metaOwn i dq (metaOf c) ∗ bytesOwn c.addr dq c.bytes ∗
-    ⌜c.bytes.length = CerbMem.sizeofCtype c.ty ∧
-      decIndep c.addr c.ty c.bytes⌝)
+def cellOwn [SpikeGS hlc GF] (tds : CerbTags.TagDefsMap) (i : Int) (dq : DFrac) (c : SpikeCell) : IProp GF :=
+  iprop(metaOwn i dq (metaOf tds c) ∗ bytesOwn c.addr dq c.bytes ∗
+    ⌜c.bytes.length = CerbMem.sizeofCtype tds c.ty ∧
+      decIndep tds c.addr c.ty c.bytes⌝)
 
-theorem cellOwn_iff {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
+theorem cellOwn_iff {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF] (tds : CerbTags.TagDefsMap)
     (i : Int) (dq : DFrac) (c : SpikeCell) :
-    cellOwn (GF := GF) i dq c ⊣⊢
-      iprop(metaOwn i dq (metaOf c) ∗ bytesOwn c.addr dq c.bytes ∗
-        ⌜c.bytes.length = CerbMem.sizeofCtype c.ty ∧
-          decIndep c.addr c.ty c.bytes⌝) := .rfl
+    cellOwn tds (GF := GF) i dq c ⊣⊢
+      iprop(metaOwn i dq (metaOf tds c) ∗ bytesOwn c.addr dq c.bytes ∗
+        ⌜c.bytes.length = CerbMem.sizeofCtype tds c.ty ∧
+          decIndep tds c.addr c.ty c.bytes⌝) := .rfl
 
 /-- The fragment points-to: the pointer is a real `PointerValue`
     carrying its provenance id (R5 — never an address-only
     abstraction), and the whole allocation is owned at fraction dq. -/
-def pointsToCell [SpikeGS hlc GF] (pv : CerbMem.PointerValue) (dq : DFrac)
+def pointsToCell [SpikeGS hlc GF] (tds : CerbTags.TagDefsMap) (pv : CerbMem.PointerValue) (dq : DFrac)
     (ty : ctype) (bs : List CerbMem.AbsByte) : IProp GF :=
   iprop(∃ (id : Int) (a : Int),
-    ⌜pv = cellPtr id a⌝ ∗ cellOwn id dq (SpikeCell.mk a ty bs))
+    ⌜pv = cellPtr id a⌝ ∗ cellOwn tds id dq (SpikeCell.mk a ty bs))
 
 theorem pointsToCell_cellOwn_iff {hlc : HasLC} {GF : BundledGFunctors}
-    [SpikeGS hlc GF] (pv : CerbMem.PointerValue) (dq : DFrac) (ty : ctype)
+    [SpikeGS hlc GF] (tds : CerbTags.TagDefsMap) (pv : CerbMem.PointerValue) (dq : DFrac) (ty : ctype)
     (bs : List CerbMem.AbsByte) :
-    pointsToCell (GF := GF) pv dq ty bs ⊣⊢
+    pointsToCell tds (GF := GF) pv dq ty bs ⊣⊢
       iprop(∃ (id : Int) (a : Int),
-        ⌜pv = cellPtr id a⌝ ∗ cellOwn id dq (SpikeCell.mk a ty bs)) := .rfl
+        ⌜pv = cellPtr id a⌝ ∗ cellOwn tds id dq (SpikeCell.mk a ty bs)) := .rfl
 
-notation:50 pv " ↦c{" dq "} " ty " ; " bs:50 => pointsToCell pv dq ty bs
-notation:50 pv " ↦c " ty " ; " bs:50 => pointsToCell pv (DFrac.own 1) ty bs
+/-- Points-to notation; the tag-definition environment is written
+    explicitly (`pv ↦c[tds]{dq} ty ; bs`, `pv ↦c[tds] ty ; bs`). -/
+notation:50 pv " ↦c[" tds "]{" dq "} " ty " ; " bs:50 => pointsToCell tds pv dq ty bs
+notation:50 pv " ↦c[" tds "] " ty " ; " bs:50 => pointsToCell tds pv (DFrac.own 1) ty bs
 
 /-! ## Split/join laws (the view algebra)
 
@@ -1533,23 +1567,24 @@ theorem metaOwn_agree (id : Int) (dq₁ dq₂ : DFrac) (mc₁ mc₂ : MetaCell) 
 /-- SUBRANGE SPLIT: a typed view whose footprint decomposes as two
     type footprints splits into the two typed subviews (metadata
     fraction split, byte range split at the list decomposition). -/
-theorem pointsToView_split (id a : Int) (aty : ctype) (off : Nat)
+theorem pointsToView_split (tds : CerbTags.TagDefsMap) (id a : Int) (aty : ctype) (off : Nat)
     (q₁ q₂ : Qp) (dqb : DFrac) (vty vty₁ vty₂ : ctype)
     (bs₁ bs₂ : List CerbMem.AbsByte)
-    (hsz : CerbMem.sizeofCtype vty =
-      CerbMem.sizeofCtype vty₁ + CerbMem.sizeofCtype vty₂)
-    (hlen₁ : bs₁.length = CerbMem.sizeofCtype vty₁) :
-    pointsToView (GF := GF) id a aty off (.own (q₁ + q₂)) dqb vty (bs₁ ++ bs₂) ⊢
-      iprop(pointsToView id a aty off (.own q₁) dqb vty₁ bs₁ ∗
-        pointsToView id a aty (off + CerbMem.sizeofCtype vty₁) (.own q₂) dqb
+    (hsz : CerbMem.sizeofCtype tds vty =
+      CerbMem.sizeofCtype tds vty₁ + CerbMem.sizeofCtype tds vty₂)
+    (hlen₁ : bs₁.length = CerbMem.sizeofCtype tds vty₁) :
+    pointsToView tds (GF := GF) id a aty off (.own (q₁ + q₂)) dqb vty (bs₁ ++ bs₂) ⊢
+      iprop(pointsToView tds id a aty off (.own q₁) dqb vty₁ bs₁ ∗
+        pointsToView tds id a aty (off + CerbMem.sizeofCtype tds vty₁) (.own q₂) dqb
           vty₂ bs₂) := by
   unfold pointsToView
   iintro ⟨Hm, %hpure, Hb⟩
   obtain ⟨hbound, hlen⟩ := hpure
   have hlapp : (bs₁ ++ bs₂).length = bs₁.length + bs₂.length :=
     List.length_append
-  have hlen₂ : bs₂.length = CerbMem.sizeofCtype vty₂ := by omega
-  icases (metaOwn_fractional id ⟨a, aty⟩ q₁ q₂).1 $$ Hm with ⟨Hm₁, Hm₂⟩
+  have hlen₂ : bs₂.length = CerbMem.sizeofCtype tds vty₂ := by omega
+  icases (metaOwn_fractional id ⟨a, aty, CerbMem.sizeofCtype tds aty⟩ q₁ q₂).1 $$ Hm
+    with ⟨Hm₁, Hm₂⟩
   icases (bytesOwn_append (a + (off : Int)) dqb bs₁ bs₂).1 $$ Hb with ⟨Hb₁, Hb₂⟩
   isplitl [Hm₁ Hb₁]
   · isplitl [Hm₁]
@@ -1563,29 +1598,29 @@ theorem pointsToView_split (id a : Int) (aty : ctype) (off : Nat)
     isplit
     · ipureintro
       exact ⟨by omega, hlen₂⟩
-    · rw [show a + ((off + CerbMem.sizeofCtype vty₁ : Nat) : Int) =
+    · rw [show a + ((off + CerbMem.sizeofCtype tds vty₁ : Nat) : Int) =
         a + (off : Int) + ((bs₁.length : Nat) : Int) by omega]
       iexact Hb₂
 
 /-- SUBRANGE JOIN: the converse — two adjacent typed subviews of the
     same allocation join into the containing view (fractions add,
     byte ranges concatenate). -/
-theorem pointsToView_join (id a : Int) (aty : ctype) (off : Nat)
+theorem pointsToView_join (tds : CerbTags.TagDefsMap) (id a : Int) (aty : ctype) (off : Nat)
     (q₁ q₂ : Qp) (dqb : DFrac) (vty vty₁ vty₂ : ctype)
     (bs₁ bs₂ : List CerbMem.AbsByte)
-    (hsz : CerbMem.sizeofCtype vty =
-      CerbMem.sizeofCtype vty₁ + CerbMem.sizeofCtype vty₂)
-    (hbound : off + CerbMem.sizeofCtype vty ≤ CerbMem.sizeofCtype aty) :
-    iprop(pointsToView (GF := GF) id a aty off (.own q₁) dqb vty₁ bs₁ ∗
-      pointsToView id a aty (off + CerbMem.sizeofCtype vty₁) (.own q₂) dqb
+    (hsz : CerbMem.sizeofCtype tds vty =
+      CerbMem.sizeofCtype tds vty₁ + CerbMem.sizeofCtype tds vty₂)
+    (hbound : off + CerbMem.sizeofCtype tds vty ≤ CerbMem.sizeofCtype tds aty) :
+    iprop(pointsToView tds (GF := GF) id a aty off (.own q₁) dqb vty₁ bs₁ ∗
+      pointsToView tds id a aty (off + CerbMem.sizeofCtype tds vty₁) (.own q₂) dqb
         vty₂ bs₂) ⊢
-      pointsToView id a aty off (.own (q₁ + q₂)) dqb vty (bs₁ ++ bs₂) := by
+      pointsToView tds id a aty off (.own (q₁ + q₂)) dqb vty (bs₁ ++ bs₂) := by
   unfold pointsToView
   iintro ⟨⟨Hm₁, %hp₁, Hb₁⟩, Hm₂, %hp₂, Hb₂⟩
   obtain ⟨hbound₁, hlen₁⟩ := hp₁
   obtain ⟨hbound₂, hlen₂⟩ := hp₂
   isplitl [Hm₁ Hm₂]
-  · iapply (metaOwn_fractional id ⟨a, aty⟩ q₁ q₂).2
+  · iapply (metaOwn_fractional id ⟨a, aty, CerbMem.sizeofCtype tds aty⟩ q₁ q₂).2
     isplitl [Hm₁]
     · iexact Hm₁
     · iexact Hm₂
@@ -1599,15 +1634,15 @@ theorem pointsToView_join (id a : Int) (aty : ctype) (off : Nat)
     isplitl [Hb₁]
     · iexact Hb₁
     · rw [show a + (off : Int) + ((bs₁.length : Nat) : Int) =
-        a + ((off + CerbMem.sizeofCtype vty₁ : Nat) : Int) by omega]
+        a + ((off + CerbMem.sizeofCtype tds vty₁ : Nat) : Int) by omega]
       iexact Hb₂
 
 /-- The whole-cell ownership IS the maximal view (plus the image's
     decode-inertness fact) — both directions. -/
-theorem cellOwn_view (i : Int) (dq : DFrac) (c : SpikeCell) :
-    cellOwn (GF := GF) i dq c ⊣⊢
-      iprop(pointsToView i c.addr c.ty 0 dq dq c.ty c.bytes ∗
-        ⌜decIndep c.addr c.ty c.bytes⌝) := by
+theorem cellOwn_view (tds : CerbTags.TagDefsMap) (i : Int) (dq : DFrac) (c : SpikeCell) :
+    cellOwn tds (GF := GF) i dq c ⊣⊢
+      iprop(pointsToView tds i c.addr c.ty 0 dq dq c.ty c.bytes ∗
+        ⌜decIndep tds c.addr c.ty c.bytes⌝) := by
   unfold cellOwn pointsToView metaOf
   constructor
   · iintro ⟨Hm, Hb, %hpure⟩
@@ -1653,18 +1688,18 @@ section AllocCap
     machine bound on the hidden cursor (alloc arc P2) is what lets
     the public create rules export address-WF bounds for the fresh
     pointer (`freshBase_lt_two64`) without naming the cursor. -/
-def allocCap [SpikeGS hlc GF] (reqs : List AllocReq) : IProp GF :=
+def allocCap [SpikeGS hlc GF] (tds : CerbTags.TagDefsMap) (reqs : List AllocReq) : IProp GF :=
   iprop(∃ c : AllocCursor, cursorOwn c ∗
-    ⌜PlanFits c reqs ∧ c.lastAddr ≤ 2 ^ 64⌝)
+    ⌜PlanFits tds c reqs ∧ c.lastAddr ≤ 2 ^ 64⌝)
 
 /-- Introduction (implementation/launch side): cursor ownership plus
     a fitting plan at a machine-bounded cursor. Clients receive
     `allocCap` from the allocation-aware launchers; they never build
     it. -/
-theorem allocCap_intro [SpikeGS hlc GF] (c : AllocCursor)
-    (reqs : List AllocReq) (hfit : PlanFits c reqs)
+theorem allocCap_intro [SpikeGS hlc GF] (tds : CerbTags.TagDefsMap) (c : AllocCursor)
+    (reqs : List AllocReq) (hfit : PlanFits tds c reqs)
     (hla : c.lastAddr ≤ 2 ^ 64) :
-    cursorOwn (GF := GF) c ⊢ allocCap reqs := by
+    cursorOwn (GF := GF) c ⊢ allocCap tds reqs := by
   unfold allocCap
   iintro Hc
   iexists c
@@ -1676,8 +1711,8 @@ theorem allocCap_intro [SpikeGS hlc GF] (c : AllocCursor)
 /-- Weakening: capacity for a longer plan serves any PREFIX (a
     client may stop allocating early; it may never reorder or skip
     a request — `planFits_order_sensitive`). -/
-theorem allocCap_weaken [SpikeGS hlc GF] (reqs rest : List AllocReq) :
-    allocCap (GF := GF) (reqs ++ rest) ⊢ allocCap reqs := by
+theorem allocCap_weaken [SpikeGS hlc GF] (tds : CerbTags.TagDefsMap) (reqs rest : List AllocReq) :
+    allocCap tds (GF := GF) (reqs ++ rest) ⊢ allocCap tds reqs := by
   unfold allocCap
   iintro ⟨%c, Hc, %hfit⟩
   iexists c
@@ -1892,22 +1927,22 @@ theorem metaOwn_ne {i₁ i₂ : Int} {dq₂ : DFrac} {mc₁ mc₂ : MetaCell} :
     engine-facing backing facts (the readout workhorse — exhibits
     conclude `CellCoh` of the final state from surviving cells). -/
 theorem cellOwn_cellCoh {σ : Mem} {mm : SpikeHeapF MetaCell}
-    {mb : SpikeHeapF CerbMem.AbsByte} {mk : SpikeHeapF AllocCursor}
+    {mb : SpikeHeapF CerbMem.AbsByte} {mk : SpikeHeapF AllocCursor} (tds : CerbTags.TagDefsMap)
     (hG : CohG σ mm mb mk) (i : Int) (dq : DFrac) (c : SpikeCell) :
-    iprop(metaInterp (GF := GF) mm ∗ byteInterp mb ∗ cellOwn i dq c) ⊢
-      (⌜CellCoh σ i c ∧
-        Iris.Std.PartialMap.get? mm i = some (metaOf c)⌝ : IProp GF) := by
+    iprop(metaInterp (GF := GF) mm ∗ byteInterp mb ∗ cellOwn tds i dq c) ⊢
+      (⌜CellCoh tds σ i c ∧
+        Iris.Std.PartialMap.get? mm i = some (metaOf tds c)⌝ : IProp GF) := by
   iintro ⟨Hmi, Hbi, Hcell⟩
-  icases (cellOwn_iff i dq c).mp $$ Hcell with ⟨Hm, Hb, %Hpure⟩
+  icases (cellOwn_iff tds i dq c).mp $$ Hcell with ⟨Hm, Hb, %Hpure⟩
   obtain ⟨hlen, hdec⟩ := Hpure
-  ihave %Hgetm : ⌜Iris.Std.PartialMap.get? mm i = some (metaOf c)⌝ $$ [Hmi Hm]
+  ihave %Hgetm : ⌜Iris.Std.PartialMap.get? mm i = some (metaOf tds c)⌝ $$ [Hmi Hm]
   · ihave >%h := metaHeap_valid $$ [$Hmi $Hm]
     itrivial
   ihave %Hread : ⌜CerbMem.readBytesFrom σ c.addr c.bytes.length = c.bytes⌝
       $$ [Hbi Hb]
   · iapply bytesOwn_read hG c.addr dq c.bytes $$ [$Hbi $Hb]
   ipureintro
-  exact ⟨CellCoh.ofParts (hG.metas i _ Hgetm) hlen (hlen ▸ Hread) hdec, Hgetm⟩
+  exact ⟨CellCoh.ofParts tds (hG.metas i _ Hgetm) hlen (hlen ▸ Hread) hdec, Hgetm⟩
 
 end GhostOps
 
@@ -1975,37 +2010,38 @@ theorem CohG.storeRange {σ : Mem} {mm : SpikeHeapF MetaCell}
     fresh metadata and the fresh (unspecified) byte range join the
     ghost maps, everything old rides above the new cursor. -/
 theorem CohG.create {σ : Mem} {mm : SpikeHeapF MetaCell}
-    {mb : SpikeHeapF AbsByte} {mk : SpikeHeapF AllocCursor}
+    {mb : SpikeHeapF AbsByte} {mk : SpikeHeapF AllocCursor} (tds : CerbTags.TagDefsMap)
     (hG : CohG σ mm mb mk) (pref : prefix0) (alignN : Int) (ty : ctype)
-    (hsz : 0 < sizeofCtype ty) (hatom : atomicTy ty = false)
+    (hsz : 0 < sizeofCtype tds ty) (hatom : atomicTy ty = false)
     (hcur : get? mk 0 = some ⟨σ.lastAddress, σ.nextAllocId⟩)
-    (hnz : freshBase σ.lastAddress alignN (sizeofCtype ty) ≠ 0) :
+    (hnz : freshBase σ.lastAddress alignN (sizeofCtype tds ty) ≠ 0) :
     CohG
       (writeBytesTo
         { σ with
             nextAllocId := σ.nextAllocId + 1,
-            lastAddress := freshBase σ.lastAddress alignN (sizeofCtype ty),
+            lastAddress := freshBase σ.lastAddress alignN (sizeofCtype tds ty),
             allocations := σ.allocations.insert σ.nextAllocId
-              { base := freshBase σ.lastAddress alignN (sizeofCtype ty),
-                size := (sizeofCtype ty : Int),
+              { base := freshBase σ.lastAddress alignN (sizeofCtype tds ty),
+                size := (sizeofCtype tds ty : Int),
                 ty := some ty,
                 isReadonly := .IsWritable,
                 prefix_ := pref } }
-        (freshBase σ.lastAddress alignN (sizeofCtype ty))
-        (List.replicate (sizeofCtype ty) undefByte))
+        (freshBase σ.lastAddress alignN (sizeofCtype tds ty))
+        (List.replicate (sizeofCtype tds ty) undefByte))
       (Iris.Std.PartialMap.insert mm σ.nextAllocId
-        ⟨freshBase σ.lastAddress alignN (sizeofCtype ty), ty⟩)
+        ⟨freshBase σ.lastAddress alignN (sizeofCtype tds ty), ty,
+          sizeofCtype tds ty⟩)
       (Iris.Std.PartialMap.union
-        (rangeMap (freshBase σ.lastAddress alignN (sizeofCtype ty))
-          (List.replicate (sizeofCtype ty) undefByte)) mb)
+        (rangeMap (freshBase σ.lastAddress alignN (sizeofCtype tds ty))
+          (List.replicate (sizeofCtype tds ty) undefByte)) mb)
       (Iris.Std.PartialMap.insert mk 0
-        ⟨freshBase σ.lastAddress alignN (sizeofCtype ty),
+        ⟨freshBase σ.lastAddress alignN (sizeofCtype tds ty),
           σ.nextAllocId + 1⟩) := by
   have hcurne : get? mk 0 ≠ none := by
     rw [hcur]
     simp
   -- abbreviations (plain lets; the goal's occurrences are definitional)
-  generalize hbase_def : freshBase σ.lastAddress alignN (sizeofCtype ty) = base
+  generalize hbase_def : freshBase σ.lastAddress alignN (sizeofCtype tds ty) = base
     at hnz ⊢
   -- the fresh base sits strictly below the old cursor with the whole
   -- range: 0 < base, base + sizeof ty ≤ lastAddress
@@ -2013,53 +2049,53 @@ theorem CohG.create {σ : Mem} {mm : SpikeHeapF MetaCell}
     rw [← hbase_def]
     exact Int.natCast_nonneg _
   have hbase_pos : 0 < base := by omega
-  have htoNat_pos : 0 < (σ.lastAddress - (sizeofCtype ty : Int)).toNat := by
-    rcases Nat.eq_zero_or_pos (σ.lastAddress - (sizeofCtype ty : Int)).toNat
+  have htoNat_pos : 0 < (σ.lastAddress - (sizeofCtype tds ty : Int)).toNat := by
+    rcases Nat.eq_zero_or_pos (σ.lastAddress - (sizeofCtype tds ty : Int)).toNat
       with hz | hpos
     · exfalso
       apply hnz
       rw [← hbase_def]
-      show (alignDown (σ.lastAddress - (sizeofCtype ty : Int)).toNat
+      show (alignDown (σ.lastAddress - (sizeofCtype tds ty : Int)).toNat
         (alignN.toNat.max 1) : Int) = 0
       rw [hz]
       simp [alignDown]
     · exact hpos
-  have hbase_le : base + (sizeofCtype ty : Int) ≤ σ.lastAddress := by
-    have hle : alignDown (σ.lastAddress - (sizeofCtype ty : Int)).toNat
+  have hbase_le : base + (sizeofCtype tds ty : Int) ≤ σ.lastAddress := by
+    have hle : alignDown (σ.lastAddress - (sizeofCtype tds ty : Int)).toNat
         (alignN.toNat.max 1) ≤
-        (σ.lastAddress - (sizeofCtype ty : Int)).toNat := by
+        (σ.lastAddress - (sizeofCtype tds ty : Int)).toNat := by
       unfold alignDown
       exact Nat.div_mul_le_self _ _
     rw [← hbase_def]
-    show (alignDown (σ.lastAddress - (sizeofCtype ty : Int)).toNat
-      (alignN.toNat.max 1) : Int) + (sizeofCtype ty : Int) ≤ σ.lastAddress
+    show (alignDown (σ.lastAddress - (sizeofCtype tds ty : Int)).toNat
+      (alignN.toNat.max 1) : Int) + (sizeofCtype tds ty : Int) ≤ σ.lastAddress
     omega
-  have hreplen : (List.replicate (sizeofCtype ty) undefByte).length =
-    sizeofCtype ty := by simp
+  have hreplen : (List.replicate (sizeofCtype tds ty) undefByte).length =
+    sizeofCtype tds ty := by simp
   -- the fresh range is disjoint from every tracked byte (old bytes sit
   -- at or above the OLD cursor; the fresh range ends at or below it)
   have hbyte_hi : ∀ k b, get? mb k = some b →
-      base + (sizeofCtype ty : Int) ≤ k := by
+      base + (sizeofCtype tds ty : Int) ≤ k := by
     intro k b hget
     exact Int.le_trans hbase_le (hG.cur_byte_lo hcurne k b hget)
   have hmeta_hi : ∀ id mc, get? mm id = some mc →
-      base + (sizeofCtype ty : Int) ≤ mc.addr := by
+      base + (sizeofCtype tds ty : Int) ≤ mc.addr := by
     intro id mc hget
     exact Int.le_trans hbase_le (hG.cur_meta_lo hcurne id mc hget)
   have hmeta_lt : ∀ id mc, get? mm id = some mc → id < σ.nextAllocId :=
     hG.cur_meta_lt hcurne
   -- the fresh range map's readout
   have hrange_get : ∀ k,
-      get? (rangeMap base (List.replicate (sizeofCtype ty) undefByte)) k =
-      if base ≤ k ∧ k < base + (sizeofCtype ty : Int) then some undefByte
+      get? (rangeMap base (List.replicate (sizeofCtype tds ty) undefByte)) k =
+      if base ≤ k ∧ k < base + (sizeofCtype tds ty : Int) then some undefByte
       else none := by
     intro k
     rw [rangeMap_get?, hreplen]
-    by_cases h : base ≤ k ∧ k < base + (sizeofCtype ty : Int)
+    by_cases h : base ≤ k ∧ k < base + (sizeofCtype tds ty : Int)
     · rw [if_pos h, if_pos h,
         List.getElem?_eq_getElem
           (by rw [hreplen]; omega :
-            (k - base).toNat < (List.replicate (sizeofCtype ty) undefByte).length),
+            (k - base).toNat < (List.replicate (sizeofCtype tds ty) undefByte).length),
         List.getElem_replicate]
     · rw [if_neg h, if_neg h]
   -- state-side readouts of the post-allocation state
@@ -2068,53 +2104,53 @@ theorem CohG.create {σ : Mem} {mm : SpikeHeapF MetaCell}
           nextAllocId := σ.nextAllocId + 1,
           lastAddress := base,
           allocations := σ.allocations.insert σ.nextAllocId
-            { base := base, size := (sizeofCtype ty : Int), ty := some ty,
+            { base := base, size := (sizeofCtype tds ty : Int), ty := some ty,
               isReadonly := .IsWritable, prefix_ := pref } }
-      base (List.replicate (sizeofCtype ty) undefByte)).deadAllocations =
+      base (List.replicate (sizeofCtype tds ty) undefByte)).deadAllocations =
       σ.deadAllocations := rfl
   have hnext' : (writeBytesTo
       { σ with
           nextAllocId := σ.nextAllocId + 1,
           lastAddress := base,
           allocations := σ.allocations.insert σ.nextAllocId
-            { base := base, size := (sizeofCtype ty : Int), ty := some ty,
+            { base := base, size := (sizeofCtype tds ty : Int), ty := some ty,
               isReadonly := .IsWritable, prefix_ := pref } }
-      base (List.replicate (sizeofCtype ty) undefByte)).nextAllocId =
+      base (List.replicate (sizeofCtype tds ty) undefByte)).nextAllocId =
       σ.nextAllocId + 1 := rfl
   have hlast' : (writeBytesTo
       { σ with
           nextAllocId := σ.nextAllocId + 1,
           lastAddress := base,
           allocations := σ.allocations.insert σ.nextAllocId
-            { base := base, size := (sizeofCtype ty : Int), ty := some ty,
+            { base := base, size := (sizeofCtype tds ty : Int), ty := some ty,
               isReadonly := .IsWritable, prefix_ := pref } }
-      base (List.replicate (sizeofCtype ty) undefByte)).lastAddress =
+      base (List.replicate (sizeofCtype tds ty) undefByte)).lastAddress =
       base := rfl
   have halloc' : (writeBytesTo
       { σ with
           nextAllocId := σ.nextAllocId + 1,
           lastAddress := base,
           allocations := σ.allocations.insert σ.nextAllocId
-            { base := base, size := (sizeofCtype ty : Int), ty := some ty,
+            { base := base, size := (sizeofCtype tds ty : Int), ty := some ty,
               isReadonly := .IsWritable, prefix_ := pref } }
-      base (List.replicate (sizeofCtype ty) undefByte)).allocations =
+      base (List.replicate (sizeofCtype tds ty) undefByte)).allocations =
       σ.allocations.insert σ.nextAllocId
-        { base := base, size := (sizeofCtype ty : Int), ty := some ty,
+        { base := base, size := (sizeofCtype tds ty : Int), ty := some ty,
           isReadonly := .IsWritable, prefix_ := pref } := rfl
   have hbytemid : ∀ k, byteAt
       { σ with
           nextAllocId := σ.nextAllocId + 1,
           lastAddress := base,
           allocations := σ.allocations.insert σ.nextAllocId
-            { base := base, size := (sizeofCtype ty : Int), ty := some ty,
+            { base := base, size := (sizeofCtype tds ty : Int), ty := some ty,
               isReadonly := .IsWritable, prefix_ := pref } } k =
       byteAt σ k := fun _ => rfl
   have hallocs_get : ∀ (id : Int),
       (σ.allocations.insert σ.nextAllocId
-        ({ base := base, size := (sizeofCtype ty : Int), ty := some ty,
+        ({ base := base, size := (sizeofCtype tds ty : Int), ty := some ty,
            isReadonly := .IsWritable, prefix_ := pref } : Allocation)).get? id =
       if σ.nextAllocId = id then
-        some ({ base := base, size := (sizeofCtype ty : Int), ty := some ty,
+        some ({ base := base, size := (sizeofCtype tds ty : Int), ty := some ty,
                 isReadonly := .IsWritable, prefix_ := pref } : Allocation)
       else σ.allocations.get? id := by
     intro id
@@ -2125,11 +2161,11 @@ theorem CohG.create {σ : Mem} {mm : SpikeHeapF MetaCell}
     by_cases hid : id = σ.nextAllocId
     · subst hid
       rw [Iris.Std.get?_insert_eq rfl] at hget
-      obtain rfl : (⟨base, ty⟩ : MetaCell) = mc := Option.some.inj hget
+      obtain rfl : (⟨base, ty, sizeofCtype tds ty⟩ : MetaCell) = mc := Option.some.inj hget
       refine ⟨?_, ?_, hatom⟩
       · rw [hdead']
         exact hG.cur_dead hcurne _ (Int.le_refl _)
-      · refine ⟨Allocation.mk base (sizeofCtype ty : Int) (some ty)
+      · refine ⟨Allocation.mk base (sizeofCtype tds ty : Int) (some ty)
           .IsWritable .Unexposed pref, ?_, rfl, rfl, rfl, rfl⟩
         rw [halloc', hallocs_get, if_pos rfl]
     · rw [Iris.Std.get?_insert_ne (fun h => hid h.symm)] at hget
@@ -2146,30 +2182,30 @@ theorem CohG.create {σ : Mem} {mm : SpikeHeapF MetaCell}
     by_cases hi : i = σ.nextAllocId
     · subst hi
       rw [Iris.Std.get?_insert_eq rfl] at hgi
-      obtain rfl : (⟨base, ty⟩ : MetaCell) = mci := Option.some.inj hgi
+      obtain rfl : (⟨base, ty, sizeofCtype tds ty⟩ : MetaCell) = mci := Option.some.inj hgi
       rw [Iris.Std.get?_insert_ne hne] at hgj
       exact .inl (hmeta_hi j mcj hgj)
     · rw [Iris.Std.get?_insert_ne (fun h => hi h.symm)] at hgi
       by_cases hj : j = σ.nextAllocId
       · subst hj
         rw [Iris.Std.get?_insert_eq rfl] at hgj
-        obtain rfl : (⟨base, ty⟩ : MetaCell) = mcj := Option.some.inj hgj
+        obtain rfl : (⟨base, ty, sizeofCtype tds ty⟩ : MetaCell) = mcj := Option.some.inj hgj
         exact .inr (hmeta_hi i mci hgi)
       · rw [Iris.Std.get?_insert_ne (fun h => hj h.symm)] at hgj
         exact hG.metas_disj i j mci mcj hne hgi hgj
   · -- bytes
     intro k b hget
     rw [PMunion_get?, hrange_get] at hget
-    by_cases hin : base ≤ k ∧ k < base + (sizeofCtype ty : Int)
+    by_cases hin : base ≤ k ∧ k < base + (sizeofCtype tds ty : Int)
     · rw [if_pos hin] at hget
       simp only [Option.orElse] at hget
       obtain rfl : undefByte = b := Option.some.inj hget
-      rw [byteAt_writeBytesTo_in _ base (List.replicate (sizeofCtype ty) undefByte) k
+      rw [byteAt_writeBytesTo_in _ base (List.replicate (sizeofCtype tds ty) undefByte) k
         hin.1 (by rw [hreplen]; exact_mod_cast hin.2)]
       exact List.getElem_replicate _
     · rw [if_neg hin] at hget
       simp only [Option.orElse] at hget
-      rw [byteAt_writeBytesTo_out _ base (List.replicate (sizeofCtype ty) undefByte) k
+      rw [byteAt_writeBytesTo_out _ base (List.replicate (sizeofCtype tds ty) undefByte) k
         (by rw [hreplen]; exact_mod_cast hin), hbytemid]
       exact hG.bytes k b hget
   · -- cursor_key
@@ -2211,7 +2247,7 @@ theorem CohG.create {σ : Mem} {mm : SpikeHeapF MetaCell}
     intro _ k b hget
     rw [hlast']
     rw [PMunion_get?, hrange_get] at hget
-    by_cases hin : base ≤ k ∧ k < base + (sizeofCtype ty : Int)
+    by_cases hin : base ≤ k ∧ k < base + (sizeofCtype tds ty : Int)
     · exact hin.1
     · rw [if_neg hin] at hget
       simp only [Option.orElse] at hget
@@ -2223,7 +2259,7 @@ theorem CohG.create {σ : Mem} {mm : SpikeHeapF MetaCell}
     by_cases hid : id = σ.nextAllocId
     · subst hid
       rw [Iris.Std.get?_insert_eq rfl] at hget
-      obtain rfl : (⟨base, ty⟩ : MetaCell) = mc := Option.some.inj hget
+      obtain rfl : (⟨base, ty, sizeofCtype tds ty⟩ : MetaCell) = mc := Option.some.inj hget
       exact Int.le_refl _
     · rw [Iris.Std.get?_insert_ne (fun h => hid h.symm)] at hget
       exact Int.le_trans (Int.le_add_of_nonneg_right (Int.natCast_nonneg _))

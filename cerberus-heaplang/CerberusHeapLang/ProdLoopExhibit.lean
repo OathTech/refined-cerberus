@@ -4,19 +4,18 @@ CerberusHeapLang.ProdLoopExhibit — THE PRODUCTION LOOP THEOREMS
 about the SHIPPED pipeline
 
   CerbND.runND (Driver.drive tagDefs false file args)
-               (initial_driver_state file fs)
+               (initial_driver_state sup file fs).1
 
-from the COLD START — `initial_driver_state` (Driver.lean:435), the
-production state constructor, nothing hand-built in the quantifiers.
-The execution function in every public statement here is the shipped
-runner: no package `drive`/`driveJ` appears in any statement (the
-drive-lane theorems remain as lemmas in their exhibit modules).
+from the COLD START — `initial_driver_state` (Driver.lean:446), the
+production state constructor, nothing hand-built in the quantifiers;
+`sup` is the entry's symbol supply (the supply-threaded C1 shape),
+universally quantified — the fragment never reads it. The execution
+function in every public statement here is the shipped runner: no
+package `drive`/`driveJ` appears in any statement (the drive-lane
+theorems remain as lemmas in their exhibit modules).
 
-BOUNDARY MODULE: the statements quantify over the shipped initial
-state, whose `initial_core_run_state` draws sym_supply through the
-declared temporal boundary axiom `runEffectful` (see Audit.lean —
-provenance, mover, planned upstream retirement). Every theorem here
-carries exactly trio + runEffectful, pinned in Audit.lean.
+Every theorem here is trio-exact, pinned in Audit.lean (the former
+`runEffectful` boundary was retired at the 2026-09-02 re-pin).
 
 THE PIPELINE THEOREM (`prod_run_eqJ`, ProdEntry): `drive_after_setup`
 (the cold-start prefix: spawn, main lookup, errno block, park) + a
@@ -71,7 +70,7 @@ computation"). -/
     bound is the engine's own fuel budget, `lemDefaultFuel = 10^6`).
     No package drive/driveJ in the statement: the execution function
     is the shipped runner. -/
-theorem fib_certified_production (ra : core_run_annotation) (n : Int)
+theorem fib_certified_production (sup : Nat) (ra : core_run_annotation) (n : Int)
     (sbty ibty abty bbty : core_base_type) (hn : 0 ≤ n)
     (hfuel : 2 * n.toNat + 6 ≤ lemDefaultFuel)
     (fs : CerbFS.FsState) (args : List String) :
@@ -79,20 +78,20 @@ theorem fib_certified_production (ra : core_run_annotation) (n : Int)
       CerbND.runND
           (_root_.drive fmapEmpty false
             (prodFile (fibProg ra n sbty ibty abty bbty)) args)
-          (initial_driver_state
-            (prodFile (fibProg ra n sbty ibty abty bbty)) fs) =
+          ((initial_driver_state sup
+            (prodFile (fibProg ra n sbty ibty abty bbty)) fs).1) =
         [(nd_status.Active dres, ([] : List String), dst')] ∧
       dres.dres_core_value = ivVal (fibSpec n.toNat) ∧
       dres.dres_blocked = false ∧
       dres.dres_stdout = "" ∧
       dres.dres_stderr = "" := by
-  have hQprod := fib_labeledAt_production ra n sbty ibty abty bbty
-  have h := prod_run_eqJ (fibProg ra n sbty ibty abty bbty) hQprod
+  have hQprod := fib_labeledAt_production sup ra n sbty ibty abty bbty
+  have h := prod_run_eqJ sup (fibProg ra n sbty ibty abty bbty) hQprod
     (fun v _ => v = ivVal (fibSpec n.toNat)) (2 * n.toNat + 4)
     (wpt_driver_done (GF := SpikeGF)
-      (M₀ := procCtx mainSym (initial_core_run_state
+      (M₀ := procCtx mainSym ((initial_core_run_state sup
         (collect_labeled_continuations_NEW
-          (prodFile (fibProg ra n sbty ibty abty bbty)))))
+          (prodFile (fibProg ra n sbty ibty abty bbty)))).1))
       rfl rfl (procCtx_labels hQprod) rfl rfl
       (fun l params cont hl => by
         rw [procCtx_labels hQprod] at hl
@@ -287,11 +286,11 @@ variable {f : Fmap sym value} (hf : SymFrame f)
 include hf
 
 theorem ctr_guard_eval (i : Int) (vc : value) :
-    evalPexpr fmapEmpty (ctrFrame (ivVal i) vc f :: rest) ctrGuardPe =
+    evalPexpr fmapEmpty fmapEmpty (ctrFrame (ivVal i) vc f :: rest) ctrGuardPe =
       some (boolValue (decide (0 < i))) := by
   unfold ctrGuardPe
   rw [evalPexpr_op]
-  rw [show evalPexpr fmapEmpty (ctrFrame (ivVal i) vc f :: rest)
+  rw [show evalPexpr fmapEmpty fmapEmpty (ctrFrame (ivVal i) vc f :: rest)
       (Pexpr [] () (PEsym ctrXSym)) = some (ivVal i) from by
     rw [evalPexpr_sym_empty]
     exact lookup_env_head (ctrFrame_lookup_x hf _ _) rest]
@@ -302,9 +301,9 @@ theorem ctr_guard_eval (i : Int) (vc : value) :
   rfl
 
 theorem ctr_store_operands_eval (vs vx vc : value) :
-    evalPexpr fmapEmpty (ctrFrameS vs vx vc f :: rest)
+    evalPexpr fmapEmpty fmapEmpty (ctrFrameS vs vx vc f :: rest)
         (Pexpr [] () (PEsym ctrCSym)) = some vc ∧
-    evalPexpr fmapEmpty (ctrFrameS vs vx vc f :: rest)
+    evalPexpr fmapEmpty fmapEmpty (ctrFrameS vs vx vc f :: rest)
         (Pexpr [] () (PEsym ctrSSym)) = some vs := by
   constructor
   · rw [evalPexpr_sym_empty]
@@ -313,33 +312,33 @@ theorem ctr_store_operands_eval (vs vx vc : value) :
     exact lookup_env_head (ctrFrameS_lookup_s hf _ _ _) rest
 
 theorem ctr_backedge_args_eval (vs : value) (i : Int) (vc : value) :
-    evalPexprs fmapEmpty (ctrFrameS vs (ivVal i) vc f :: rest)
+    evalPexprs fmapEmpty fmapEmpty (ctrFrameS vs (ivVal i) vc f :: rest)
         [ctrDecPe, Pexpr [] () (PEsym ctrCSym)] =
       some [ivVal (i - 1), vc] := by
   rw [evalPexprs_cons]
-  rw [show evalPexpr fmapEmpty (ctrFrameS vs (ivVal i) vc f :: rest)
+  rw [show evalPexpr fmapEmpty fmapEmpty (ctrFrameS vs (ivVal i) vc f :: rest)
       ctrDecPe = some (ivVal (i - 1)) from by
     unfold ctrDecPe
     rw [evalPexpr_op]
-    rw [show evalPexpr fmapEmpty (ctrFrameS vs (ivVal i) vc f :: rest)
+    rw [show evalPexpr fmapEmpty fmapEmpty (ctrFrameS vs (ivVal i) vc f :: rest)
         (Pexpr [] () (PEsym ctrXSym)) = some (ivVal i) from by
       rw [evalPexpr_sym_empty]
       exact lookup_env_head (ctrFrameS_lookup_x hf _ _ _) rest]
     rfl]
   rw [evalPexprs_cons]
-  rw [show evalPexpr fmapEmpty (ctrFrameS vs (ivVal i) vc f :: rest)
+  rw [show evalPexpr fmapEmpty fmapEmpty (ctrFrameS vs (ivVal i) vc f :: rest)
       (Pexpr [] () (PEsym ctrCSym)) = some vc from by
     rw [evalPexpr_sym_empty]
     exact lookup_env_head (ctrFrameS_lookup_c hf _ _ _) rest]
   rfl
 
 theorem ctr_entry_args_eval (n : Int) (vp : value) :
-    evalPexprs fmapEmpty (envAdd ctrPSym vp f :: rest)
+    evalPexprs fmapEmpty fmapEmpty (envAdd ctrPSym vp f :: rest)
         [Pexpr [] () (PEval (ivVal n)), Pexpr [] () (PEsym ctrPSym)] =
       some [ivVal n, vp] := by
   rw [evalPexprs_cons, evalPexpr_val]
   rw [evalPexprs_cons]
-  rw [show evalPexpr fmapEmpty (envAdd ctrPSym vp f :: rest)
+  rw [show evalPexpr fmapEmpty fmapEmpty (envAdd ctrPSym vp f :: rest)
       (Pexpr [] () (PEsym ctrPSym)) = some vp from by
     rw [evalPexpr_sym_empty]
     refine lookup_env_head ?_ rest
@@ -371,8 +370,8 @@ theorem ctrCost_eq (i : Nat) : ctrCost i = 7 * i + 2 := by
     `n = 0`, the stored seven-image for `0 < n`. -/
 def ψC (n : Int) : value → Mem → Prop := fun v σ' =>
   v = Vunit ∧ ∃ (i a : Int) (bs : List CerbMem.AbsByte),
-    ((n = 0 ∧ bs = intUndefBytes) ∨ (0 < n ∧ bs = sevenBytes)) ∧
-    CellCoh σ' i ⟨a, intTy, bs⟩
+    ((n = 0 ∧ bs = (intUndefBytes fmapEmpty)) ∨ (0 < n ∧ bs = (sevenBytes fmapEmpty))) ∧
+    CellCoh fmapEmpty σ' i ⟨a, intTy, bs⟩
 
 section CtrIris
 
@@ -390,8 +389,8 @@ abbrev ctrLsT : LabelSpecT GF := fun _ m vs ρ =>
       (rest : List (Fmap sym value)),
     ⌜vs = [ivVal i, ptrVal pptr] ∧ 0 ≤ i ∧ i ≤ n ∧ m = ctrCost i.toNat ∧
       ρ = f :: rest ∧ SymFrame f ∧
-      ((i = n ∧ bs = intUndefBytes) ∨ (i < n ∧ bs = sevenBytes))⌝ ∗
-    pointsToCell pptr (.own 1) intTy bs)
+      ((i = n ∧ bs = (intUndefBytes fmapEmpty)) ∨ (i < n ∧ bs = (sevenBytes fmapEmpty)))⌝ ∗
+    pointsToCell fmapEmpty pptr (.own 1) intTy bs)
 
 variable (p : sym) (rs : core_run_state)
   (hQ : LabeledAt rs p (ctrQ ra mo bty xbty cbty))
@@ -403,8 +402,8 @@ theorem ctr_body_wpt (i : Int) (pptr : CerbMem.PointerValue)
     (bs : List CerbMem.AbsByte) (f : Fmap sym value)
     (rest : List (Fmap sym value)) (hf : SymFrame f)
     (h0 : 0 ≤ i) (hin : i ≤ n)
-    (hbs : (i = n ∧ bs = intUndefBytes) ∨ (i < n ∧ bs = sevenBytes)) :
-    iprop(pointsToCell (GF := GF) pptr (.own 1) intTy bs) ⊢
+    (hbs : (i = n ∧ bs = (intUndefBytes fmapEmpty)) ∨ (i < n ∧ bs = (sevenBytes (procCtx p rs).tagDefs))) :
+    iprop(pointsToCell (procCtx p rs).tagDefs (GF := GF) pptr (.own 1) intTy bs) ⊢
       wpt (procCtx p rs) (ctrLsT n) (ctrCost i.toNat)
         (readoutPost (ψC n)) (ctrBody ra mo bty)
         (ctrFrame (ivVal i) (ptrVal pptr) f :: rest) := by
@@ -452,7 +451,7 @@ theorem ctr_body_wpt (i : Int) (pptr : CerbMem.PointerValue)
           exact (ctr_store_operands_eval hf rest sevenVal (ivVal i)
             (ptrVal pptr)).2)
     iapply wpt_store_cell loc0 empty_annotation intTy pptr sevenVal mo
-      sevenMval bs _ (Nat.le_refl 3) seven_encodes seven_storable
+      sevenMval bs _ (Nat.le_refl 3) seven_encodes (seven_storable _)
     isplitl [Hpt]
     · iexact Hpt
     iintro %fp Hpt
@@ -463,7 +462,7 @@ theorem ctr_body_wpt (i : Int) (pptr : CerbMem.PointerValue)
       (by rw [procCtx_extern]
           exact ctr_backedge_args_eval hf rest sevenVal i (ptrVal pptr))
       (Nat.le_refl _)
-    iexists (i - 1), pptr, (CerbMem.memValueToBytes [] sevenMval).2,
+    iexists (i - 1), pptr, (CerbMem.memValueToBytes (procCtx p rs).tagDefs [] sevenMval).2,
       (ctrFrameS sevenVal (ivVal i) (ptrVal pptr) f), rest
     isplit
     · ipureintro
@@ -480,15 +479,15 @@ theorem ctr_body_wpt (i : Int) (pptr : CerbMem.PointerValue)
       (by rw [procCtx_extern, ctr_guard_eval hf rest 0 (ptrVal pptr),
         decide_eq_false hpos]; rfl)
     iapply wpt_ofVal (.pure Vunit) _ (by simp [deliveryCost])
-    icases (pointsToCell_cellOwn_iff _ _ _ _).mp $$ Hpt
+    icases (pointsToCell_cellOwn_iff (procCtx p rs).tagDefs _ _ _ _).mp $$ Hpt
       with ⟨%id, %a, %hpv, Hcell⟩
     iintro %σ' %ns %κs %nt Hσ
     icases (stateInterp_iff σ' ns κs nt).mp $$ Hσ
       with ⟨%mm, %mb, %mk, %HG, Hmi, Hbi, Hki⟩
-    ihave %Hcc : ⌜CellCoh σ' id ⟨a, intTy, bs⟩ ∧
-        Iris.Std.PartialMap.get? mm id = some (metaOf
+    ihave %Hcc : ⌜CellCoh (procCtx p rs).tagDefs σ' id ⟨a, intTy, bs⟩ ∧
+        Iris.Std.PartialMap.get? mm id = some (metaOf (procCtx p rs).tagDefs
           (⟨a, intTy, bs⟩ : SpikeCell))⌝ $$ [Hmi Hbi Hcell]
-    · iapply cellOwn_cellCoh HG id (.own 1) ⟨a, intTy, bs⟩
+    · iapply cellOwn_cellCoh (procCtx p rs).tagDefs HG id (.own 1) ⟨a, intTy, bs⟩
         $$ [$Hmi $Hbi $Hcell]
     iapply fupd_mask_intro_discard Std.LawfulSet.empty_subset
     ipureintro
@@ -522,7 +521,7 @@ theorem ctr_blockSpecsT :
 theorem ctrProd_wpt (sbty : core_base_type) (hn : 0 ≤ n)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value))
     (hf : SymFrame ev0) :
-    iprop(allocCap (GF := GF) [⟨4, intTy⟩]) ⊢
+    iprop(allocCap (procCtx p rs).tagDefs (GF := GF) [⟨4, intTy⟩]) ⊢
       wpt (procCtx p rs) (ctrLsT n) ((2 + (ctrCost n.toNat + 1)) + 0)
         (readoutPost (ψC n))
         (counterProdProg ra mo bty xbty cbty sbty n) (ev0 :: evs) := by
@@ -561,7 +560,7 @@ theorem ctrProd_wpt (sbty : core_base_type) (hn : 0 ≤ n)
     (by rw [procCtx_extern]
         exact ctr_entry_args_eval hf evs n (Vobject (OVpointer pptr)))
     (by omega)
-  iexists n, pptr, intUndefBytes,
+  iexists n, pptr, (intUndefBytes fmapEmpty),
     (envAdd ctrPSym (Vobject (OVpointer pptr)) ev0), evs
   isplit
   · ipureintro
@@ -630,14 +629,14 @@ theorem collect_new_ctrProd (ra : core_run_annotation) (mo : memory_order)
       fmapAddBy (fun (s1 s2 : sym) => ordCompare s1 s2) mainSym
         (ctrQ ra mo bty xbty cbty) fmapEmpty := rfl
 
-theorem ctrProd_labeledAt (ra : core_run_annotation) (mo : memory_order)
+theorem ctrProd_labeledAt (sup : Nat) (ra : core_run_annotation) (mo : memory_order)
     (bty xbty cbty sbty : core_base_type) (n : Int) :
-    LabeledAt (initial_core_run_state (collect_labeled_continuations_NEW
-        (prodFile (counterProdProg ra mo bty xbty cbty sbty n))))
+    LabeledAt ((initial_core_run_state sup (collect_labeled_continuations_NEW
+        (prodFile (counterProdProg ra mo bty xbty cbty sbty n)))).1)
       mainSym (ctrQ ra mo bty xbty cbty) := by
   unfold LabeledAt
-  rw [show (initial_core_run_state (collect_labeled_continuations_NEW
-      (prodFile (counterProdProg ra mo bty xbty cbty sbty n)))).labeled =
+  rw [show ((initial_core_run_state sup (collect_labeled_continuations_NEW
+      (prodFile (counterProdProg ra mo bty xbty cbty sbty n)))).1).labeled =
     collect_labeled_continuations_NEW
       (prodFile (counterProdProg ra mo bty xbty cbty sbty n)) from rfl]
   rw [collect_new_ctrProd]
@@ -657,7 +656,7 @@ theorem ctrProd_labeledAt (ra : core_run_annotation) (mo : memory_order)
     termination from the total judgment; the create crosses the
     PUBLIC `wpt_create`; the pipeline arrows are the generic
     `wpt_driver_done_alloc` → `prod_run_eqJ`. -/
-theorem counter_loop_certified_production (ra : core_run_annotation)
+theorem counter_loop_certified_production (sup : Nat) (ra : core_run_annotation)
     (mo : memory_order) (bty xbty cbty sbty : core_base_type)
     (n : Int) (hn : 0 ≤ n)
     (hfuel : 7 * n.toNat + 7 ≤ lemDefaultFuel)
@@ -666,34 +665,34 @@ theorem counter_loop_certified_production (ra : core_run_annotation)
       CerbND.runND
           (_root_.drive fmapEmpty false
             (prodFile (counterProdProg ra mo bty xbty cbty sbty n)) args)
-          (initial_driver_state
-            (prodFile (counterProdProg ra mo bty xbty cbty sbty n)) fs) =
+          ((initial_driver_state sup
+            (prodFile (counterProdProg ra mo bty xbty cbty sbty n)) fs).1) =
         [(nd_status.Active dres, ([] : List String), dst')] ∧
       dres.dres_core_value = Vunit ∧
       (∃ (i a : Int) (bs' : List CerbMem.AbsByte),
-        ((n = 0 ∧ bs' = intUndefBytes) ∨ (0 < n ∧ bs' = sevenBytes)) ∧
-        CellCoh dst'.layout_state i ⟨a, intTy, bs'⟩) ∧
+        ((n = 0 ∧ bs' = (intUndefBytes fmapEmpty)) ∨ (0 < n ∧ bs' = (sevenBytes fmapEmpty))) ∧
+        CellCoh fmapEmpty dst'.layout_state i ⟨a, intTy, bs'⟩) ∧
       dres.dres_blocked = false ∧
       dres.dres_stdout = "" ∧
       dres.dres_stderr = "" := by
-  have hQprod := ctrProd_labeledAt ra mo bty xbty cbty sbty n
+  have hQprod := ctrProd_labeledAt sup ra mo bty xbty cbty sbty n
   have hQf : ∀ (l : sym) (params : List (sym × core_base_type))
       (cont : CoreExpr),
-      lookupLabel (procCtx mainSym (initial_core_run_state
+      lookupLabel (procCtx mainSym ((initial_core_run_state sup
         (collect_labeled_continuations_NEW
-          (prodFile (counterProdProg ra mo bty xbty cbty sbty n))))).labels
+          (prodFile (counterProdProg ra mo bty xbty cbty sbty n)))).1)).labels
         l = some (params, cont) → Frag cont := by
     intro l params cont hl
     rw [procCtx_labels hQprod] at hl
     obtain ⟨-, rfl⟩ := ctrQ_inv ra mo bty xbty cbty hl
     exact ctrBody_frag ra mo bty
   obtain ⟨dres, dst', heq, hψ, hbl, hout, herr⟩ :=
-    prod_run_eqJ (counterProdProg ra mo bty xbty cbty sbty n) hQprod
+    prod_run_eqJ sup (counterProdProg ra mo bty xbty cbty sbty n) hQprod
       (ψC n) ((2 + (ctrCost n.toNat + 1)) + 0)
       (wpt_driver_done_alloc (GF := SpikeGF)
-        (M₀ := procCtx mainSym (initial_core_run_state
+        (M₀ := procCtx mainSym ((initial_core_run_state sup
           (collect_labeled_continuations_NEW
-            (prodFile (counterProdProg ra mo bty xbty cbty sbty n)))))
+            (prodFile (counterProdProg ra mo bty xbty cbty sbty n)))).1))
         rfl rfl (procCtx_labels hQprod) rfl rfl hQf
         (fun l params cont hl => by
           rw [procCtx_labels hQprod] at hl
@@ -758,13 +757,13 @@ def longMval (v : Int) : CerbMem.MemValue :=
 
 /-- The fresh node image. -/
 abbrev nodeUndefBytes : List CerbMem.AbsByte :=
-  List.replicate (CerbMem.sizeofCtype nodeTy) undefByte
+  List.replicate (CerbMem.sizeofCtype fmapEmpty nodeTy) undefByte
 
 theorem nodeTy_nonatomic : atomicTy nodeTy = false := rfl
 
 /-- The fresh node image's decode inertness at EVERY address (the
     public create rule's shape). -/
-theorem nodeTy_decIndep_undef (a : Int) : decIndep a nodeTy nodeUndefBytes :=
+theorem nodeTy_decIndep_undef (a : Int) : decIndep fmapEmpty a nodeTy nodeUndefBytes :=
   fun lum fpm => nodeTy_dec_indep lum fpm a _
 
 /-- The build prefix: two creates (pointers BOUND), three constant
@@ -881,42 +880,42 @@ theorem lrPFrame_lookup_nz :
 
 /-- The shifted next-field operands at the bound node pointers. -/
 theorem lrPFrame_shift_n1 (i a : Int) :
-    evalPexpr fmapEmpty
+    evalPexpr fmapEmpty fmapEmpty
         (lrPFrame (ptrVal (cellPtr i a)) v2 f :: rest)
         (lrShiftPe lrN1Sym) = some (ptrVal (cellPtr i (a + 8))) := by
   unfold lrShiftPe
   rw [evalPexpr_array_shift]
-  rw [show evalPexpr fmapEmpty (lrPFrame (ptrVal (cellPtr i a)) v2 f :: rest)
+  rw [show evalPexpr fmapEmpty fmapEmpty (lrPFrame (ptrVal (cellPtr i a)) v2 f :: rest)
       (Pexpr [] () (PEsym lrN1Sym)) = some (ptrVal (cellPtr i a)) from by
     rw [evalPexpr_sym_empty]
     exact lookup_env_head (lrPFrame_lookup_n1 hf _ _) rest]
-  show evalArrayShift longTy (Vobject (OVpointer (cellPtr i a))) (ivVal 1) = _
+  show evalArrayShift fmapEmpty longTy (Vobject (OVpointer (cellPtr i a))) (ivVal 1) = _
   exact evalArrayShift_long_one i a
 
 theorem lrPFrame_shift_n2 (i a : Int) :
-    evalPexpr fmapEmpty
+    evalPexpr fmapEmpty fmapEmpty
         (lrPFrame v1 (ptrVal (cellPtr i a)) f :: rest)
         (lrShiftPe lrN2Sym) = some (ptrVal (cellPtr i (a + 8))) := by
   unfold lrShiftPe
   rw [evalPexpr_array_shift]
-  rw [show evalPexpr fmapEmpty (lrPFrame v1 (ptrVal (cellPtr i a)) f :: rest)
+  rw [show evalPexpr fmapEmpty fmapEmpty (lrPFrame v1 (ptrVal (cellPtr i a)) f :: rest)
       (Pexpr [] () (PEsym lrN2Sym)) = some (ptrVal (cellPtr i a)) from by
     rw [evalPexpr_sym_empty]
     exact lookup_env_head (lrPFrame_lookup_n2 hf _ _) rest]
-  show evalArrayShift longTy (Vobject (OVpointer (cellPtr i a))) (ivVal 1) = _
+  show evalArrayShift fmapEmpty longTy (Vobject (OVpointer (cellPtr i a))) (ivVal 1) = _
   exact evalArrayShift_long_one i a
 
 theorem lrPFrame_entry_args :
-    evalPexprs fmapEmpty (lrPFrame v1 v2 f :: rest)
+    evalPexprs fmapEmpty fmapEmpty (lrPFrame v1 v2 f :: rest)
         [Pexpr [] () (PEsym lrNZSym), Pexpr [] () (PEsym lrN1Sym)] =
       some [nullVal, v1] := by
   rw [evalPexprs_cons]
-  rw [show evalPexpr fmapEmpty (lrPFrame v1 v2 f :: rest)
+  rw [show evalPexpr fmapEmpty fmapEmpty (lrPFrame v1 v2 f :: rest)
       (Pexpr [] () (PEsym lrNZSym)) = some nullVal from by
     rw [evalPexpr_sym_empty]
     exact lookup_env_head (lrPFrame_lookup_nz hf _ _) rest]
   rw [evalPexprs_cons]
-  rw [show evalPexpr fmapEmpty (lrPFrame v1 v2 f :: rest)
+  rw [show evalPexpr fmapEmpty fmapEmpty (lrPFrame v1 v2 f :: rest)
       (Pexpr [] () (PEsym lrN1Sym)) = some v1 from by
     rw [evalPexpr_sym_empty]
     exact lookup_env_head (lrPFrame_lookup_n1 hf _ _) rest]
@@ -929,26 +928,26 @@ over the fresh replicate image; addresses abstract) -/
 
 /-- Node 1's built image: value 1 then next := node 2. -/
 abbrev lrBuilt1 (i₂ a₂ : Int) : List CerbMem.AbsByte :=
-  spliceBytes 8 (CerbMem.memValueToBytes []
+  spliceBytes 8 (CerbMem.memValueToBytes fmapEmpty []
       (CerbMem.pointerMval nodeTy (cellPtr i₂ a₂))).2
-    (spliceBytes 0 (CerbMem.memValueToBytes [] (longMval 1)).2
+    (spliceBytes 0 (CerbMem.memValueToBytes fmapEmpty [] (longMval 1)).2
       nodeUndefBytes)
 
 /-- Node 2's built image: value 2 then next := NULL. -/
 abbrev lrBuilt2 : List CerbMem.AbsByte :=
-  spliceBytes 8 (CerbMem.memValueToBytes []
+  spliceBytes 8 (CerbMem.memValueToBytes fmapEmpty []
       (CerbMem.pointerMval nodeTy nullNode)).2
-    (spliceBytes 0 (CerbMem.memValueToBytes [] (longMval 2)).2
+    (spliceBytes 0 (CerbMem.memValueToBytes fmapEmpty [] (longMval 2)).2
       nodeUndefBytes)
 
 theorem lrBuilt1_inner_len :
-    (spliceBytes 0 (CerbMem.memValueToBytes [] (longMval 1)).2
+    (spliceBytes 0 (CerbMem.memValueToBytes fmapEmpty [] (longMval 1)).2
       nodeUndefBytes).length = 16 := by
   rw [spliceBytes_length _ _ _ (by decide)]
   decide
 
 theorem lrBuilt2_inner_len :
-    (spliceBytes 0 (CerbMem.memValueToBytes [] (longMval 2)).2
+    (spliceBytes 0 (CerbMem.memValueToBytes fmapEmpty [] (longMval 2)).2
       nodeUndefBytes).length = 16 := by
   rw [spliceBytes_length _ _ _ (by decide)]
   decide
@@ -965,20 +964,20 @@ theorem lrBuilt2_len : lrBuilt2.length = 16 := by
     omega)]
   exact lrBuilt2_inner_len
 
-theorem lrBuilt1_valDec (i₂ a₂ : Int) : nodeValDec (lrBuilt1 i₂ a₂) 1 := by
+theorem lrBuilt1_valDec (i₂ a₂ : Int) : nodeValDec fmapEmpty (lrBuilt1 i₂ a₂) 1 := by
   intro lum fpm ad
   rw [show ((lrBuilt1 i₂ a₂).drop 0).take 8 =
-      ((spliceBytes 0 (CerbMem.memValueToBytes [] (longMval 1)).2
+      ((spliceBytes 0 (CerbMem.memValueToBytes fmapEmpty [] (longMval 1)).2
         nodeUndefBytes).drop 0).take 8 from
     spliceBytes_value_slice _ _
       (by rw [node_ptr_img_cell]; exact ptrImg_cell_length i₂ a₂)
       lrBuilt1_inner_len]
   rfl
 
-theorem lrBuilt2_valDec : nodeValDec lrBuilt2 2 := by
+theorem lrBuilt2_valDec : nodeValDec fmapEmpty lrBuilt2 2 := by
   intro lum fpm ad
   rw [show (lrBuilt2.drop 0).take 8 =
-      ((spliceBytes 0 (CerbMem.memValueToBytes [] (longMval 2)).2
+      ((spliceBytes 0 (CerbMem.memValueToBytes fmapEmpty [] (longMval 2)).2
         nodeUndefBytes).drop 0).take 8 from
     spliceBytes_value_slice _ _
       (by rw [node_ptr_img_null]; exact ptrImg_null_length)
@@ -986,20 +985,20 @@ theorem lrBuilt2_valDec : nodeValDec lrBuilt2 2 := by
   rfl
 
 theorem lrBuilt1_nextDec (i₂ a₂ : Int) (h0 : 0 < a₂) (h1 : a₂ < 2 ^ 64) :
-    nodeNextDec (lrBuilt1 i₂ a₂) (cellPtr i₂ a₂) := by
+    nodeNextDec fmapEmpty (lrBuilt1 i₂ a₂) (cellPtr i₂ a₂) := by
   refine nodeNextDec_ptrImg_cell i₂ a₂ h0 h1 _ ?_
   rw [show ((lrBuilt1 i₂ a₂).drop 8).take 8 =
-      (CerbMem.memValueToBytes []
+      (CerbMem.memValueToBytes fmapEmpty []
         (CerbMem.pointerMval nodeTy (cellPtr i₂ a₂))).2 from
     spliceBytes_next_slice _ _
       (by rw [node_ptr_img_cell]; exact ptrImg_cell_length i₂ a₂)
       lrBuilt1_inner_len]
   exact node_ptr_img_cell i₂ a₂
 
-theorem lrBuilt2_nextDec : nodeNextDec lrBuilt2 nullNode := by
+theorem lrBuilt2_nextDec : nodeNextDec fmapEmpty lrBuilt2 nullNode := by
   refine nodeNextDec_ptrImg_null _ ?_
   rw [show (lrBuilt2.drop 8).take 8 =
-      (CerbMem.memValueToBytes []
+      (CerbMem.memValueToBytes fmapEmpty []
         (CerbMem.pointerMval nodeTy nullNode)).2 from
     spliceBytes_next_slice _ _
       (by rw [node_ptr_img_null]; exact ptrImg_null_length)
@@ -1017,7 +1016,7 @@ def ψL : value → Mem → Prop := fun v σ' =>
     (∃ p' : CerbMem.PointerValue, v = ptrVal p' ∧
       SeedChain Q p' ([((i₁ : Int), (1 : Int)), (i₂, 2)]).reverse) ∧
     Q ##ₘ (∅ : CellMap) ∧
-    Coh σ' (Iris.Std.PartialMap.union Q (∅ : CellMap))
+    Coh fmapEmpty σ' (Iris.Std.PartialMap.union Q (∅ : CellMap))
 
 section LrProdIris
 
@@ -1090,7 +1089,7 @@ theorem lrProd_blockSpecsT :
 theorem lrProd_wpt (bty sbty : core_base_type)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value))
     (hf : SymFrame ev0) :
-    iprop(allocCap (GF := GF) [⟨8, nodeTy⟩, ⟨8, nodeTy⟩]) ⊢
+    iprop(allocCap (procCtx p rs).tagDefs (GF := GF) [⟨8, nodeTy⟩, ⟨8, nodeTy⟩]) ⊢
       wpt (procCtx p rs) lrProdLsT
         ((2 + (2 + (1 + (1 + (1 + ((3 + 1) + ((3 + 1) + ((3 + 1) +
           ((3 + 1) + (lrCost 2 + 1)))))))))) + 0)
@@ -1186,9 +1185,9 @@ theorem lrProd_wpt (bty sbty : core_base_type)
       (envAdd lrW1Sym (longVal 1) (envAdd lrN2Sym (Vobject (OVpointer p₂))
         (envAdd lrN1Sym (Vobject (OVpointer p₁)) ev0)))) =
     lrPFrame (ptrVal p₁) (ptrVal p₂) ev0 from rfl]
-  icases (pointsToCell_cellOwn_iff _ _ _ _).mp $$ Hpt₁
+  icases (pointsToCell_cellOwn_iff (procCtx p rs).tagDefs _ _ _ _).mp $$ Hpt₁
     with ⟨%i₁, %a₁, %hpv₁, Hcell₁⟩
-  icases (pointsToCell_cellOwn_iff _ _ _ _).mp $$ Hpt₂
+  icases (pointsToCell_cellOwn_iff (procCtx p rs).tagDefs _ _ _ _).mp $$ Hpt₂
     with ⟨%i₂, %a₂, %hpv₂, Hcell₂⟩
   subst hpv₁
   subst hpv₂
@@ -1209,8 +1208,8 @@ theorem lrProd_wpt (bty sbty : core_base_type)
     rw [show a₁ + ((0 : Nat) : Int) = a₁ from by omega]]
   iapply wpt_store_cell_at (mv := longMval 1) loc0 empty_annotation i₁
     a₁ nodeTy 0 longTy (longVal 1) mo nodeUndefBytes _ (Nat.le_refl 3) rfl
-    (by rw [show CerbMem.sizeofCtype longTy = 8 from rfl,
-      show CerbMem.sizeofCtype nodeTy = 16 from rfl]; omega)
+    (by rw [show CerbMem.sizeofCtype (procCtx p rs).tagDefs longTy = 8 from rfl,
+      show CerbMem.sizeofCtype (procCtx p rs).tagDefs nodeTy = 16 from rfl]; omega)
     rfl (fun _ => rfl) (fun _ => rfl) rfl
     (fun lum fpm => nodeTy_dec_indep lum fpm a₁ _)
   isplitl [Hcell₁]
@@ -1229,7 +1228,7 @@ theorem lrProd_wpt (bty sbty : core_base_type)
   iapply wpt_store_node_field loc0 empty_annotation i₁ a₁ 8
     (ptrVal (cellPtr i₂ a₂)) mo _ _ (Nat.le_refl 3)
     (node_ptr_encodes (cellPtr i₂ a₂))
-    (by rw [show CerbMem.sizeofCtype nodeTy = 16 from rfl]; omega)
+    (by rw [show CerbMem.sizeofCtype (procCtx p rs).tagDefs nodeTy = 16 from rfl]; omega)
     (by rw [node_ptr_img_cell]; exact ptrImg_cell_length i₂ a₂)
     (node_ptr_compat (cellPtr i₂ a₂)) (node_ptr_fpm_cell i₂ a₂)
     (node_ptr_bytes_cell i₂ a₂)
@@ -1251,8 +1250,8 @@ theorem lrProd_wpt (bty sbty : core_base_type)
     rw [show a₂ + ((0 : Nat) : Int) = a₂ from by omega]]
   iapply wpt_store_cell_at (mv := longMval 2) loc0 empty_annotation i₂
     a₂ nodeTy 0 longTy (longVal 2) mo nodeUndefBytes _ (Nat.le_refl 3) rfl
-    (by rw [show CerbMem.sizeofCtype longTy = 8 from rfl,
-      show CerbMem.sizeofCtype nodeTy = 16 from rfl]; omega)
+    (by rw [show CerbMem.sizeofCtype (procCtx p rs).tagDefs longTy = 8 from rfl,
+      show CerbMem.sizeofCtype (procCtx p rs).tagDefs nodeTy = 16 from rfl]; omega)
     rfl (fun _ => rfl) (fun _ => rfl) rfl
     (fun lum fpm => nodeTy_dec_indep lum fpm a₂ _)
   isplitl [Hcell₂]
@@ -1271,7 +1270,7 @@ theorem lrProd_wpt (bty sbty : core_base_type)
   iapply wpt_store_node_field loc0 empty_annotation i₂ a₂ 8
     nullVal mo _ _ (Nat.le_refl 3)
     (node_ptr_encodes nullNode)
-    (by rw [show CerbMem.sizeofCtype nodeTy = 16 from rfl]; omega)
+    (by rw [show CerbMem.sizeofCtype (procCtx p rs).tagDefs nodeTy = 16 from rfl]; omega)
     (by rw [node_ptr_img_null]; exact ptrImg_null_length)
     (node_ptr_compat nullNode) (fun _ => rfl) (fun _ => rfl)
   isplitl [Hcell₂]
@@ -1315,7 +1314,7 @@ theorem lrProd_wpt (bty sbty : core_base_type)
     iapply (BigSepM.bigSepM_empty_intro
       (P := (BIBase.emp : IProp GF))
       (Φ := fun (i : Int) (c : SpikeCell) =>
-        cellOwn (hlc := .hasLC) (GF := GF) i (.own 1) c))
+        cellOwn (procCtx p rs).tagDefs (hlc := .hasLC) (GF := GF) i (.own 1) c))
     itrivial
 
 end LrProdIris
@@ -1523,14 +1522,14 @@ theorem collect_new_lrProd (ra : core_run_annotation) (mo : memory_order)
       col_lrProg]
     rfl]
 
-theorem lrProd_labeledAt (ra : core_run_annotation) (mo : memory_order)
+theorem lrProd_labeledAt (sup : Nat) (ra : core_run_annotation) (mo : memory_order)
     (bty sbty pbty cbty bbty nbty ubty : core_base_type) :
-    LabeledAt (initial_core_run_state (collect_labeled_continuations_NEW
-        (prodFile (lrProdProg ra mo bty sbty pbty cbty bbty nbty ubty))))
+    LabeledAt ((initial_core_run_state sup (collect_labeled_continuations_NEW
+        (prodFile (lrProdProg ra mo bty sbty pbty cbty bbty nbty ubty)))).1)
       mainSym (lrQ loc0 empty_annotation ra mo pbty cbty bbty nbty ubty) := by
   unfold LabeledAt
-  rw [show (initial_core_run_state (collect_labeled_continuations_NEW
-      (prodFile (lrProdProg ra mo bty sbty pbty cbty bbty nbty ubty)))).labeled =
+  rw [show ((initial_core_run_state sup (collect_labeled_continuations_NEW
+      (prodFile (lrProdProg ra mo bty sbty pbty cbty bbty nbty ubty)))).1).labeled =
     collect_labeled_continuations_NEW
       (prodFile (lrProdProg ra mo bty sbty pbty cbty bbty nbty ubty))
     from rfl]
@@ -1542,16 +1541,16 @@ theorem lrProd_labeledAt (ra : core_run_annotation) (mo : memory_order)
     allocator arithmetic — the boundary evaluation of the concrete
     plan; the exact cold-start pointers live HERE, not in the logic). -/
 theorem lr_two_node_plan_fits :
-    PlanFits ⟨prodMem₀.lastAddress, prodMem₀.nextAllocId⟩
+    PlanFits fmapEmpty ⟨prodMem₀.lastAddress, prodMem₀.nextAllocId⟩
       [⟨8, nodeTy⟩, ⟨8, nodeTy⟩] := by
   rw [prodMem₀_lastAddress, prodMem₀_nextAllocId, PlanFits_cons_iff]
-  refine ⟨⟨freshBase errnoAddr 8 (CerbMem.sizeofCtype nodeTy), 1 + 1⟩,
+  refine ⟨⟨freshBase errnoAddr 8 (CerbMem.sizeofCtype fmapEmpty nodeTy), 1 + 1⟩,
     ?_, ?_⟩
   · rw [advanceCursor_mk, nodeTy_size]
     exact if_pos ⟨by decide, by decide⟩
   · rw [PlanFits_cons_iff]
-    refine ⟨⟨freshBase (freshBase errnoAddr 8 (CerbMem.sizeofCtype nodeTy))
-      8 (CerbMem.sizeofCtype nodeTy), 1 + 1 + 1⟩, ?_, PlanFits_nil _⟩
+    refine ⟨⟨freshBase (freshBase errnoAddr 8 (CerbMem.sizeofCtype fmapEmpty nodeTy))
+      8 (CerbMem.sizeofCtype fmapEmpty nodeTy), 1 + 1 + 1⟩, ?_, PlanFits_nil fmapEmpty _⟩
     rw [advanceCursor_mk, nodeTy_size]
     exact if_pos ⟨by decide, by decide⟩
 
@@ -1569,7 +1568,7 @@ theorem lr_two_node_plan_fits :
     judgment; the creates cross the PUBLIC `wpt_create`; the generic
     list logic is consumed verbatim; the pipeline arrows are
     `wpt_driver_done_alloc` → `prod_run_eqJ`. -/
-theorem list_reverse_certified_production (ra : core_run_annotation)
+theorem list_reverse_certified_production (sup : Nat) (ra : core_run_annotation)
     (mo : memory_order) (bty sbty pbty cbty bbty nbty ubty : core_base_type)
     (fs : CerbFS.FsState) (args : List String) :
     ∃ (dres : driver_result) (dst' : driver_state),
@@ -1577,28 +1576,28 @@ theorem list_reverse_certified_production (ra : core_run_annotation)
           (_root_.drive fmapEmpty false
             (prodFile (lrProdProg ra mo bty sbty pbty cbty bbty nbty ubty))
             args)
-          (initial_driver_state
+          ((initial_driver_state sup
             (prodFile (lrProdProg ra mo bty sbty pbty cbty bbty nbty ubty))
-            fs) =
+            fs).1) =
         [(nd_status.Active dres, ([] : List String), dst')] ∧
       (∃ (i₁ i₂ : Int) (Q : CellMap) (p' : CerbMem.PointerValue),
         dres.dres_core_value = ptrVal p' ∧
         SeedChain Q p' [((i₂ : Int), (2 : Int)), (i₁, 1)] ∧
-        Sat dst'.layout_state Q) ∧
+        Sat fmapEmpty dst'.layout_state Q) ∧
       dres.dres_blocked = false ∧
       dres.dres_stdout = "" ∧
       dres.dres_stderr = "" := by
-  have hQprod := lrProd_labeledAt ra mo bty sbty pbty cbty bbty nbty ubty
+  have hQprod := lrProd_labeledAt sup ra mo bty sbty pbty cbty bbty nbty ubty
   obtain ⟨dres, dst', heq, hψ, hbl, hout, herr⟩ :=
-    prod_run_eqJ (lrProdProg ra mo bty sbty pbty cbty bbty nbty ubty)
+    prod_run_eqJ sup (lrProdProg ra mo bty sbty pbty cbty bbty nbty ubty)
       hQprod ψL
       ((2 + (2 + (1 + (1 + (1 + ((3 + 1) + ((3 + 1) + ((3 + 1) +
         ((3 + 1) + (lrCost 2 + 1)))))))))) + 0)
       (wpt_driver_done_alloc (GF := SpikeGF)
-        (M₀ := procCtx mainSym (initial_core_run_state
+        (M₀ := procCtx mainSym ((initial_core_run_state sup
           (collect_labeled_continuations_NEW
             (prodFile (lrProdProg ra mo bty sbty pbty cbty bbty nbty
-              ubty)))))
+              ubty)))).1))
         rfl rfl (procCtx_labels hQprod) rfl rfl
         (fun l params cont hl => by
           rw [procCtx_labels hQprod] at hl

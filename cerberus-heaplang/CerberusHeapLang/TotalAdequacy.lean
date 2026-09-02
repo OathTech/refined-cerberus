@@ -913,10 +913,10 @@ theorem wpt_engine_boundU {GF : BundledGFunctors} [SpikeGpreS GF]
     (Ls : ∀ [SpikeGS .hasLC GF], LabelSpecT GF)
     (e₀ : CoreExpr) (ev00 : Fmap sym value) (evs0 : List (Fmap sym value))
     (σ₀ : Mem) (m₀ : SpikeHeapF SpikeCell)
-    (hfrag : Frag e₀) (hpot : pot e₀ ≤ lemDefaultFuel) (hcoh : Coh σ₀ m₀)
+    (hfrag : Frag e₀) (hpot : pot e₀ ≤ lemDefaultFuel) (hcoh : Coh M.tagDefs σ₀ m₀)
     (ψ : value → Mem → Prop) (k : Nat)
     (hwp : ∀ [SpikeGS .hasLC GF],
-      iprop(([∗map] i ↦ c ∈ m₀, cellOwn (hlc := .hasLC) (GF := GF) i
+      iprop(([∗map] i ↦ c ∈ m₀, cellOwn M.tagDefs (hlc := .hasLC) (GF := GF) i
           (.own 1) c)) ⊢
         iprop(blockSpecsT M Ls (readoutPost ψ) ∗
           wpt M Ls k (readoutPost ψ) e₀ (ev00 :: evs0)))
@@ -936,7 +936,7 @@ theorem wpt_engine_boundU {GF : BundledGFunctors} [SpikeGpreS GF]
     (∅ : SpikeHeapF AllocCursor)) with ⟨%Gk, Hki, -, -⟩
   letI instGS : SpikeGS .hasLC GF :=
     { byteGS := Gb, metaGS := Gm, cursorGS := Gk }
-  imod (spikeCells_alloc σ₀ m₀ hcoh) $$ [$Hmi $Hbi]
+  imod (spikeCells_alloc M.tagDefs σ₀ m₀ hcoh) $$ [$Hmi $Hbi]
     with ⟨%mm, %mb, %hmbo, Hmi, Hbi, Hcells⟩
   ihave HW := hwp $$ Hcells
   icases HW with ⟨HB, Hwpt⟩
@@ -965,10 +965,10 @@ theorem wpt_engine_boundJ {GF : BundledGFunctors} [SpikeGpreS GF]
     (Ls : ∀ [SpikeGS .hasLC GF], LabelSpecT GF)
     (e₀ : CoreExpr) (ev00 : Fmap sym value) (evs0 : List (Fmap sym value))
     (σ₀ : Mem) (m₀ : SpikeHeapF SpikeCell)
-    (hfrag : Frag e₀) (hpot : pot e₀ ≤ lemDefaultFuel) (hcoh : Coh σ₀ m₀)
+    (hfrag : Frag e₀) (hpot : pot e₀ ≤ lemDefaultFuel) (hcoh : Coh (procCtx p rs).tagDefs σ₀ m₀)
     (ψ : value → Mem → Prop) (k : Nat)
     (hwp : ∀ [SpikeGS .hasLC GF],
-      iprop(([∗map] i ↦ c ∈ m₀, cellOwn (hlc := .hasLC) (GF := GF) i
+      iprop(([∗map] i ↦ c ∈ m₀, cellOwn (procCtx p rs).tagDefs (hlc := .hasLC) (GF := GF) i
           (.own 1) c)) ⊢
         iprop(blockSpecsT (procCtx p rs) Ls (readoutPost ψ) ∗
           wpt (procCtx p rs) Ls k (readoutPost ψ) e₀ (ev00 :: evs0)))
@@ -1007,11 +1007,11 @@ theorem wpt_engine_boundU_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
     (e₀ : CoreExpr) (ev00 : Fmap sym value) (evs0 : List (Fmap sym value))
     (σ₀ : Mem) (m₀ : SpikeHeapF SpikeCell) (reqs : List AllocReq)
     (hfrag : Frag e₀) (hpot : pot e₀ ≤ lemDefaultFuel)
-    (hl : LaunchCoh σ₀ m₀ reqs)
+    (hl : LaunchCoh M.tagDefs σ₀ m₀ reqs)
     (ψ : value → Mem → Prop) (k : Nat)
     (hwp : ∀ [SpikeGS .hasLC GF],
-      iprop(([∗map] i ↦ c ∈ m₀, cellOwn (hlc := .hasLC) (GF := GF) i
-          (.own 1) c) ∗ allocCap reqs) ⊢
+      iprop(([∗map] i ↦ c ∈ m₀, cellOwn M.tagDefs (hlc := .hasLC) (GF := GF) i
+          (.own 1) c) ∗ allocCap M.tagDefs reqs) ⊢
         iprop(blockSpecsT M Ls (readoutPost ψ) ∗
           wpt M Ls k (readoutPost ψ) e₀ (ev00 :: evs0)))
     (aids : Nat → Nat) :
@@ -1030,7 +1030,7 @@ theorem wpt_engine_boundU_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
     (∅ : SpikeHeapF AllocCursor)) with ⟨%Gk, Hki, -, -⟩
   letI instGS : SpikeGS .hasLC GF :=
     { byteGS := Gb, metaGS := Gm, cursorGS := Gk }
-  imod (launchResources σ₀ m₀ reqs hl) $$ [$Hmi $Hbi $Hki]
+  imod (launchResources M.tagDefs σ₀ m₀ reqs hl) $$ [$Hmi $Hbi $Hki]
     with ⟨Hσ, Hcells, Hcap⟩
   ihave HW := hwp $$ [$Hcells $Hcap]
   icases HW with ⟨HB, Hwpt⟩
@@ -1049,11 +1049,11 @@ theorem wpt_engine_boundJ_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
     (e₀ : CoreExpr) (ev00 : Fmap sym value) (evs0 : List (Fmap sym value))
     (σ₀ : Mem) (m₀ : SpikeHeapF SpikeCell) (reqs : List AllocReq)
     (hfrag : Frag e₀) (hpot : pot e₀ ≤ lemDefaultFuel)
-    (hl : LaunchCoh σ₀ m₀ reqs)
+    (hl : LaunchCoh (procCtx p rs).tagDefs σ₀ m₀ reqs)
     (ψ : value → Mem → Prop) (k : Nat)
     (hwp : ∀ [SpikeGS .hasLC GF],
-      iprop(([∗map] i ↦ c ∈ m₀, cellOwn (hlc := .hasLC) (GF := GF) i
-          (.own 1) c) ∗ allocCap reqs) ⊢
+      iprop(([∗map] i ↦ c ∈ m₀, cellOwn (procCtx p rs).tagDefs (hlc := .hasLC) (GF := GF) i
+          (.own 1) c) ∗ allocCap (procCtx p rs).tagDefs reqs) ⊢
         iprop(blockSpecsT (procCtx p rs) Ls (readoutPost ψ) ∗
           wpt (procCtx p rs) Ls k (readoutPost ψ) e₀ (ev00 :: evs0)))
     (aids : Nat → Nat) :
@@ -1088,9 +1088,9 @@ theorem wpt_strongly_normalizing {GF : BundledGFunctors} [SpikeGpreS GF]
     (Ls : ∀ [SpikeGS .hasLC GF], LabelSpecT GF)
     (Ψ : ∀ [SpikeGS .hasLC GF], SpikeVal → EnvStack → IProp GF)
     (e₀ : CoreExpr) (ρ₀ : EnvStack) (σ₀ : Mem) (m₀ : SpikeHeapF SpikeCell)
-    (hcoh : Coh σ₀ m₀) (k : Nat)
+    (hcoh : Coh M.tagDefs σ₀ m₀) (k : Nat)
     (hwp : ∀ [SpikeGS .hasLC GF],
-      iprop(([∗map] i ↦ c ∈ m₀, cellOwn (hlc := .hasLC) (GF := GF) i
+      iprop(([∗map] i ↦ c ∈ m₀, cellOwn M.tagDefs (hlc := .hasLC) (GF := GF) i
           (.own 1) c)) ⊢
         iprop(blockSpecsT M Ls Ψ ∗ wpt M Ls k Ψ e₀ ρ₀)) :
     Relation.StronglyNormalizing Language.ErasedStep
@@ -1106,7 +1106,7 @@ theorem wpt_strongly_normalizing {GF : BundledGFunctors} [SpikeGpreS GF]
     (∅ : SpikeHeapF AllocCursor)) with ⟨%Gk, Hki, -, -⟩
   letI instGS : SpikeGS .hasLC GF :=
     { byteGS := Gb, metaGS := Gm, cursorGS := Gk }
-  imod (spikeCells_alloc σ₀ m₀ hcoh) $$ [$Hmi $Hbi]
+  imod (spikeCells_alloc M.tagDefs σ₀ m₀ hcoh) $$ [$Hmi $Hbi]
     with ⟨%mm, %mb, %hmbo, Hmi, Hbi, Hcells⟩
   imodintro
   iexists fun (σ' : Mem) (_ : Nat) (_ : List Empty) (_ : Nat) =>
@@ -1142,10 +1142,10 @@ theorem wpt_strongly_normalizing_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
     (Ls : ∀ [SpikeGS .hasLC GF], LabelSpecT GF)
     (Ψ : ∀ [SpikeGS .hasLC GF], SpikeVal → EnvStack → IProp GF)
     (e₀ : CoreExpr) (ρ₀ : EnvStack) (σ₀ : Mem) (m₀ : SpikeHeapF SpikeCell)
-    (reqs : List AllocReq) (hl : LaunchCoh σ₀ m₀ reqs) (k : Nat)
+    (reqs : List AllocReq) (hl : LaunchCoh M.tagDefs σ₀ m₀ reqs) (k : Nat)
     (hwp : ∀ [SpikeGS .hasLC GF],
-      iprop(([∗map] i ↦ c ∈ m₀, cellOwn (hlc := .hasLC) (GF := GF) i
-          (.own 1) c) ∗ allocCap reqs) ⊢
+      iprop(([∗map] i ↦ c ∈ m₀, cellOwn M.tagDefs (hlc := .hasLC) (GF := GF) i
+          (.own 1) c) ∗ allocCap M.tagDefs reqs) ⊢
         iprop(blockSpecsT M Ls Ψ ∗ wpt M Ls k Ψ e₀ ρ₀)) :
     Relation.StronglyNormalizing Language.ErasedStep
       ([(⟨e₀, ρ₀, M⟩ : CoreRt)], σ₀) := by
@@ -1160,7 +1160,7 @@ theorem wpt_strongly_normalizing_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
     (∅ : SpikeHeapF AllocCursor)) with ⟨%Gk, Hki, -, -⟩
   letI instGS : SpikeGS .hasLC GF :=
     { byteGS := Gb, metaGS := Gm, cursorGS := Gk }
-  imod (launchResources σ₀ m₀ reqs hl) $$ [$Hmi $Hbi $Hki]
+  imod (launchResources M.tagDefs σ₀ m₀ reqs hl) $$ [$Hmi $Hbi $Hki]
     with ⟨Hσ, Hcells, Hcap⟩
   imodintro
   iexists fun (σ' : Mem) (_ : Nat) (_ : List Empty) (_ : Nat) =>

@@ -109,28 +109,28 @@ def nodePtrTy : ctype := Ctype [] (.Pointer no_qualifiers nodeTy)
     (CerbMem.lean:843). -/
 def nullNode : CerbMem.PointerValue := CerbMem.nullPtrval nodeTy
 
-theorem longTy_size : CerbMem.sizeofCtype longTy = 8 := rfl
-theorem nodeTy_size : CerbMem.sizeofCtype nodeTy = 16 := rfl
-theorem nodePtrTy_size : CerbMem.sizeofCtype nodePtrTy = 8 := rfl
+theorem longTy_size {tds : CerbTags.TagDefsMap} : CerbMem.sizeofCtype tds longTy = 8 := rfl
+theorem nodeTy_size {tds : CerbTags.TagDefsMap} : CerbMem.sizeofCtype tds nodeTy = 16 := rfl
+theorem nodePtrTy_size {tds : CerbTags.TagDefsMap} : CerbMem.sizeofCtype tds nodePtrTy = 8 := rfl
 
 /-- One long-element shift of a fragment pointer — the ENGINE's own
     arithmetic (`arrayShiftPtrval` at the concrete shape: provenance
     PRESERVED, address advanced by `sizeof(long) = 8`). -/
-theorem arrayShift_cellPtr_long (id p : Int) :
-    CerbMem.arrayShiftPtrval (cellPtr id p) longTy (CerbMem.integerIval 1) =
+theorem arrayShift_cellPtr_long {tds : CerbTags.TagDefsMap} (id p : Int) :
+    CerbMem.arrayShiftPtrval tds (cellPtr id p) longTy (CerbMem.integerIval 1) =
       cellPtr id (p + 8) := by
   show CerbMem.PointerValue.PV (.Prov_some id)
-    (.PVconcrete none (p + 1 * Int.ofNat (CerbMem.sizeofCtype longTy))) =
+    (.PVconcrete none (p + 1 * Int.ofNat (CerbMem.sizeofCtype tds longTy))) =
     CerbMem.PointerValue.PV (.Prov_some id) (.PVconcrete none (p + 8))
-  rw [show p + 1 * Int.ofNat (CerbMem.sizeofCtype longTy) = p + 8 by
+  rw [show p + 1 * Int.ofNat (CerbMem.sizeofCtype tds longTy) = p + 8 by
     rw [longTy_size]
     rw [show Int.ofNat 8 = (8 : Int) from rfl]
     omega]
 
 theorem evalArrayShift_long_one (id a : Int) :
-    evalArrayShift longTy (Vobject (OVpointer (cellPtr id a))) (ivVal 1) =
+    evalArrayShift fmapEmpty longTy (Vobject (OVpointer (cellPtr id a))) (ivVal 1) =
       some (Vobject (OVpointer (cellPtr id (a + 8)))) := by
-  show some (Vobject (OVpointer (CerbMem.arrayShiftPtrval (cellPtr id a)
+  show some (Vobject (OVpointer (CerbMem.arrayShiftPtrval fmapEmpty (cellPtr id a)
     longTy (CerbMem.integerIval 1)))) = _
   rw [arrayShift_cellPtr_long]
 
@@ -139,12 +139,12 @@ repr — CerbMem.lean:578-603) and their decode round trips -/
 
 /-- The serialized image of a stored value, at the empty funptrmap
     (the fragment's stores are funptrmap-neutral). -/
-def imgOf (mv : CerbMem.MemValue) : List CerbMem.AbsByte :=
-  (CerbMem.memValueToBytes [] mv).2
+def imgOf (tds : CerbTags.TagDefsMap) (mv : CerbMem.MemValue) : List CerbMem.AbsByte :=
+  (CerbMem.memValueToBytes tds [] mv).2
 
 /-- The stored NEXT images: a concrete node pointer / the null. -/
 def ptrImg (pv : CerbMem.PointerValue) : List CerbMem.AbsByte :=
-  imgOf (CerbMem.pointerMval nodeTy pv)
+  imgOf fmapEmpty (CerbMem.pointerMval nodeTy pv)
 
 theorem ptrImg_cell (id a : Int) :
     ptrImg (cellPtr id a) =
@@ -227,9 +227,9 @@ theorem valueFromMemValue_ptr (t : ctype) (pv : CerbMem.PointerValue) :
     Prov_none — repr, CerbMem.lean:581-585) reloads at `node*` as
     exactly the null pointer (abst's `some 0` arm,
     CerbMem.lean:688-692). Table- and address-independent. -/
-theorem reconstruct_ptrImg_null (lum : List (Int × identifier))
+theorem reconstruct_ptrImg_null {tds : CerbTags.TagDefsMap} (lum : List (Int × identifier))
     (fpm : CerbMem.Funptrmap) (addr : Int) :
-    CerbMem.reconstructValue lum fpm addr nodePtrTy (ptrImg nullNode) =
+    CerbMem.reconstructValue tds lum fpm addr nodePtrTy (ptrImg nullNode) =
       .MVpointer nodeTy nullNode := rfl
 
 /-- The first-component of the pointer-load provenance policy at the
@@ -248,9 +248,9 @@ theorem splitBytesProv_ptrImg_cell_fst (id a : Int) (h0 : 0 ≤ a) :
     policy: LOADED POINTERS CARRY THEIR OWN PROVENANCE). Machine-
     address WF (`0 < a < 2^64`) is the honest premise: these are the
     addresses `allocateObject` mints. -/
-theorem reconstruct_ptrImg_cell (id a : Int) (h0 : 0 < a) (h1 : a < 2 ^ 64)
+theorem reconstruct_ptrImg_cell {tds : CerbTags.TagDefsMap} (id a : Int) (h0 : 0 < a) (h1 : a < 2 ^ 64)
     (lum : List (Int × identifier)) (fpm : CerbMem.Funptrmap) (addr : Int) :
-    CerbMem.reconstructValue lum fpm addr nodePtrTy (ptrImg (cellPtr id a)) =
+    CerbMem.reconstructValue tds lum fpm addr nodePtrTy (ptrImg (cellPtr id a)) =
       .MVpointer nodeTy (cellPtr id a) := by
   have hb := bytesToInt_ptrImg_cell id a (by omega) h1
   have hsp := splitBytesProv_ptrImg_cell_fst id a (by omega)
@@ -295,10 +295,10 @@ theorem spliceBytes_next_slice (img bs : List CerbMem.AbsByte)
     arm never consults the union-member or function-pointer tables
     (reconstructValue, CerbMem.lean:652 — the tables enter only union
     and pointer-to-function arms). -/
-theorem nodeTy_dec_indep (lum : List (Int × identifier))
+theorem nodeTy_dec_indep {tds : CerbTags.TagDefsMap} (lum : List (Int × identifier))
     (fpm : CerbMem.Funptrmap) (addr : Int) (bs : List CerbMem.AbsByte) :
-    CerbMem.reconstructValue lum fpm addr nodeTy bs =
-      CerbMem.reconstructValue [] [] addr nodeTy bs := rfl
+    CerbMem.reconstructValue tds lum fpm addr nodeTy bs =
+      CerbMem.reconstructValue tds [] [] addr nodeTy bs := rfl
 
 /-! ## The node-field access rules — CLIENT INSTANCES of the generic
 typed-subrange rules (F-04: no WP/WPS lifting proof lives in this
@@ -318,11 +318,11 @@ theorem wps_load_node_field {Ψ : SpikeVal → EnvStack → IProp GF}
     (id a : Int) (off : Nat) (mo : memory_order)
     (dq : DFrac) (bs : List CerbMem.AbsByte) (ρ : EnvStack)
     {mv : CerbMem.MemValue}
-    (hbound : off + 8 ≤ CerbMem.sizeofCtype nodeTy)
-    (hdec : ∀ lum fpm, CerbMem.reconstructValue lum fpm (a + (off : Int))
+    (hbound : off + 8 ≤ CerbMem.sizeofCtype M.tagDefs nodeTy)
+    (hdec : ∀ lum fpm, CerbMem.reconstructValue M.tagDefs lum fpm (a + (off : Int))
       nodePtrTy ((bs.drop off).take 8) = mv) :
-    iprop(cellOwn (GF := GF) id dq (SpikeCell.mk a nodeTy bs) ∗
-      (∀ fp, cellOwn id dq (SpikeCell.mk a nodeTy bs) -∗
+    iprop(cellOwn M.tagDefs (GF := GF) id dq (SpikeCell.mk a nodeTy bs) ∗
+      (∀ fp, cellOwn M.tagDefs id dq (SpikeCell.mk a nodeTy bs) -∗
         Ψ (SpikeVal.annot [DA_pos [] fp] ((valueFromMemValue mv).2)) ρ)) ⊢
       wps M Ls Ψ (loadExpr loc ann nodePtrTy (cellPtr id (a + (off : Int))) mo)
         ρ :=
@@ -340,16 +340,16 @@ theorem wps_store_node_field {Ψ : SpikeVal → EnvStack → IProp GF}
     (bs : List CerbMem.AbsByte) (ρ : EnvStack) {mv : CerbMem.MemValue}
     (hmv : memValueFromValue M.tagDefs (Ctype [] (unatomic_ nodePtrTy)) cv =
       some mv)
-    (hbound : off + 8 ≤ CerbMem.sizeofCtype nodeTy)
-    (hlen : (CerbMem.memValueToBytes [] mv).2.length = 8)
+    (hbound : off + 8 ≤ CerbMem.sizeofCtype M.tagDefs nodeTy)
+    (hlen : (CerbMem.memValueToBytes M.tagDefs [] mv).2.length = 8)
     (hcompat : CerbMem.ctypeMemCompatible nodePtrTy (CerbMem.typeofMval mv) =
       true)
-    (hfpm : ∀ fpm, (CerbMem.memValueToBytes fpm mv).1 = fpm)
-    (hbytes : ∀ fpm, (CerbMem.memValueToBytes fpm mv).2 =
-      (CerbMem.memValueToBytes [] mv).2) :
-    iprop(cellOwn (GF := GF) id (.own 1) (SpikeCell.mk a nodeTy bs) ∗
-      (∀ fp, cellOwn id (.own 1) (SpikeCell.mk a nodeTy
-          (spliceBytes off (CerbMem.memValueToBytes [] mv).2 bs)) -∗
+    (hfpm : ∀ fpm, (CerbMem.memValueToBytes M.tagDefs fpm mv).1 = fpm)
+    (hbytes : ∀ fpm, (CerbMem.memValueToBytes M.tagDefs fpm mv).2 =
+      (CerbMem.memValueToBytes M.tagDefs [] mv).2) :
+    iprop(cellOwn M.tagDefs (GF := GF) id (.own 1) (SpikeCell.mk a nodeTy bs) ∗
+      (∀ fp, cellOwn M.tagDefs id (.own 1) (SpikeCell.mk a nodeTy
+          (spliceBytes off (CerbMem.memValueToBytes M.tagDefs [] mv).2 bs)) -∗
         Ψ (SpikeVal.annot [DA_pos [] fp] Vunit) ρ)) ⊢
       wps M Ls Ψ (storeExpr loc ann nodePtrTy (cellPtr id (a + (off : Int)))
         cv mo) ρ :=
@@ -366,28 +366,28 @@ cells; the nil case IS the null encoding) -/
 
 /-- The value field's decode fact (offset 0, `signed long`). Pure,
     table- and address-independent (the integer arm reads neither). -/
-def nodeValDec (bs : List CerbMem.AbsByte) (v : Int) : Prop :=
+def nodeValDec (tds : CerbTags.TagDefsMap) (bs : List CerbMem.AbsByte) (v : Int) : Prop :=
   ∀ (lum : List (Int × identifier)) (fpm : CerbMem.Funptrmap) (ad : Int),
-    CerbMem.reconstructValue lum fpm ad longTy ((bs.drop 0).take 8) =
+    CerbMem.reconstructValue tds lum fpm ad longTy ((bs.drop 0).take 8) =
       .MVinteger (.Signed .Long) (CerbMem.integerIval v)
 
 /-- The next field's decode fact (offset 8, `node*`). -/
-def nodeNextDec (bs : List CerbMem.AbsByte) (q : CerbMem.PointerValue) : Prop :=
+def nodeNextDec (tds : CerbTags.TagDefsMap) (bs : List CerbMem.AbsByte) (q : CerbMem.PointerValue) : Prop :=
   ∀ (lum : List (Int × identifier)) (fpm : CerbMem.Funptrmap) (ad : Int),
-    CerbMem.reconstructValue lum fpm ad nodePtrTy ((bs.drop 8).take 8) =
+    CerbMem.reconstructValue tds lum fpm ad nodePtrTy ((bs.drop 8).take 8) =
       .MVpointer nodeTy q
 
 /-- The stored images' next-field decode facts (the round trips). -/
 theorem nodeNextDec_ptrImg_cell (id a : Int) (h0 : 0 < a) (h1 : a < 2 ^ 64)
     (bs : List CerbMem.AbsByte) (himg : (bs.drop 8).take 8 = ptrImg (cellPtr id a)) :
-    nodeNextDec bs (cellPtr id a) := by
+    nodeNextDec fmapEmpty bs (cellPtr id a) := by
   intro lum fpm ad
   rw [himg]
   exact reconstruct_ptrImg_cell id a h0 h1 lum fpm ad
 
 theorem nodeNextDec_ptrImg_null (bs : List CerbMem.AbsByte)
     (himg : (bs.drop 8).take 8 = ptrImg nullNode) :
-    nodeNextDec bs nullNode := by
+    nodeNextDec fmapEmpty bs nullNode := by
   intro lum fpm ad
   rw [himg]
   exact reconstruct_ptrImg_null lum fpm ad
@@ -409,8 +409,8 @@ def isList : CerbMem.PointerValue → List (Int × Int) → IProp GF
   | p, nd :: ns => iprop(∃ (aN : Int) (q : CerbMem.PointerValue)
       (bs : List CerbMem.AbsByte),
       ⌜p = cellPtr nd.1 aN ∧ 0 < aN ∧ aN < 2 ^ 64 ∧ bs.length = 16 ∧
-        nodeValDec bs nd.2 ∧ nodeNextDec bs q⌝ ∗
-      cellOwn nd.1 (.own 1) (SpikeCell.mk aN nodeTy bs) ∗ isList q ns)
+        nodeValDec fmapEmpty bs nd.2 ∧ nodeNextDec fmapEmpty bs q⌝ ∗
+      cellOwn fmapEmpty nd.1 (.own 1) (SpikeCell.mk aN nodeTy bs) ∗ isList q ns)
 
 @[simp] theorem isList_nil (p : CerbMem.PointerValue) :
     isList (GF := GF) p [] = iprop(⌜p = nullNode⌝) := rfl
@@ -420,8 +420,8 @@ theorem isList_cons (p : CerbMem.PointerValue) (nd : Int × Int)
     isList (GF := GF) p (nd :: ns) = iprop(∃ (aN : Int)
       (q : CerbMem.PointerValue) (bs : List CerbMem.AbsByte),
       ⌜p = cellPtr nd.1 aN ∧ 0 < aN ∧ aN < 2 ^ 64 ∧ bs.length = 16 ∧
-        nodeValDec bs nd.2 ∧ nodeNextDec bs q⌝ ∗
-      cellOwn nd.1 (.own 1) (SpikeCell.mk aN nodeTy bs) ∗ isList q ns) := rfl
+        nodeValDec fmapEmpty bs nd.2 ∧ nodeNextDec fmapEmpty bs q⌝ ∗
+      cellOwn fmapEmpty nd.1 (.own 1) (SpikeCell.mk aN nodeTy bs) ∗ isList q ns) := rfl
 
 /-- Nil introduction. -/
 theorem isList_nil_intro : ⊢ isList (GF := GF) nullNode [] := by
@@ -433,8 +433,8 @@ theorem isList_nil_intro : ⊢ isList (GF := GF) nullNode [] := by
 theorem isList_cons_intro (id aN : Int) (q : CerbMem.PointerValue)
     (bs : List CerbMem.AbsByte) (v : Int) (ns : List (Int × Int))
     (h0 : 0 < aN) (h1 : aN < 2 ^ 64) (hlen : bs.length = 16)
-    (hval : nodeValDec bs v) (hnext : nodeNextDec bs q) :
-    iprop(cellOwn (GF := GF) id (.own 1) (SpikeCell.mk aN nodeTy bs) ∗
+    (hval : nodeValDec fmapEmpty bs v) (hnext : nodeNextDec fmapEmpty bs q) :
+    iprop(cellOwn fmapEmpty (GF := GF) id (.own 1) (SpikeCell.mk aN nodeTy bs) ∗
         isList q ns) ⊢
       isList (cellPtr id aN) ((id, v) :: ns) := by
   rw [isList_cons]
@@ -708,20 +708,20 @@ theorem lr_memop_operands_nonvalue :
 include hf
 
 theorem lr_cur_eval (vp vc : value) :
-    evalPexpr fmapEmpty (lrFrame vp vc f :: rest)
+    evalPexpr fmapEmpty fmapEmpty (lrFrame vp vc f :: rest)
       (Pexpr [] () (PEsym lrCurSym)) = some vc := by
   rw [evalPexpr_sym_empty]
   exact lookup_env_head (lrFrame_lookup_cur hf _ _) rest
 
 theorem lr_guard_eval (vb vp vc : value) :
-    evalPexpr fmapEmpty (lrFrameB vb vp vc f :: rest)
+    evalPexpr fmapEmpty fmapEmpty (lrFrameB vb vp vc f :: rest)
       (Pexpr [] () (PEsym lrBSym)) = some vb := by
   rw [evalPexpr_sym_empty]
   exact lookup_env_head (lrFrameB_lookup_b hf _ _ _) rest
 
 theorem lr_exit_eval (vb vp vc : value) :
-    evalPexpr fmapEmpty (lrFrameB vb vp vc f :: rest) lrExitPe = some vp := by
-  show evalPexpr fmapEmpty _ (Pexpr [] () (PEsym lrPrevSym)) = _
+    evalPexpr fmapEmpty fmapEmpty (lrFrameB vb vp vc f :: rest) lrExitPe = some vp := by
+  show evalPexpr fmapEmpty fmapEmpty _ (Pexpr [] () (PEsym lrPrevSym)) = _
   rw [evalPexpr_sym_empty]
   exact lookup_env_head (lrFrameB_lookup_prev hf _ _ _) rest
 
@@ -729,47 +729,47 @@ theorem lr_exit_eval (vb vp vc : value) :
     at a node pointer — the engine's own arithmetic, +8 within the
     allocation. -/
 theorem lr_shift_eval_B (vb vp : value) (id aN : Int) :
-    evalPexpr fmapEmpty (lrFrameB vb vp (ptrVal (cellPtr id aN)) f :: rest)
+    evalPexpr fmapEmpty fmapEmpty (lrFrameB vb vp (ptrVal (cellPtr id aN)) f :: rest)
       (lrShiftPe lrCurSym) = some (ptrVal (cellPtr id (aN + 8))) := by
   unfold lrShiftPe
   rw [evalPexpr_array_shift]
-  rw [show evalPexpr fmapEmpty (lrFrameB vb vp (ptrVal (cellPtr id aN)) f :: rest)
+  rw [show evalPexpr fmapEmpty fmapEmpty (lrFrameB vb vp (ptrVal (cellPtr id aN)) f :: rest)
       (Pexpr [] () (PEsym lrCurSym)) = some (ptrVal (cellPtr id aN)) from by
     rw [evalPexpr_sym_empty]
     exact lookup_env_head (lrFrameB_lookup_cur hf _ _ _) rest]
-  show evalArrayShift longTy (Vobject (OVpointer (cellPtr id aN))) (ivVal 1) = _
+  show evalArrayShift fmapEmpty longTy (Vobject (OVpointer (cellPtr id aN))) (ivVal 1) = _
   exact evalArrayShift_long_one id aN
 
 /-- The store's shifted pointer operand, after n is bound. -/
 theorem lr_shift_eval_N (vn vb vp : value) (id aN : Int) :
-    evalPexpr fmapEmpty (lrFrameN vn vb vp (ptrVal (cellPtr id aN)) f :: rest)
+    evalPexpr fmapEmpty fmapEmpty (lrFrameN vn vb vp (ptrVal (cellPtr id aN)) f :: rest)
       (lrShiftPe lrCurSym) = some (ptrVal (cellPtr id (aN + 8))) := by
   unfold lrShiftPe
   rw [evalPexpr_array_shift]
-  rw [show evalPexpr fmapEmpty (lrFrameN vn vb vp (ptrVal (cellPtr id aN)) f :: rest)
+  rw [show evalPexpr fmapEmpty fmapEmpty (lrFrameN vn vb vp (ptrVal (cellPtr id aN)) f :: rest)
       (Pexpr [] () (PEsym lrCurSym)) = some (ptrVal (cellPtr id aN)) from by
     rw [evalPexpr_sym_empty]
     exact lookup_env_head (lrFrameN_lookup_cur hf _ _ _ _) rest]
-  show evalArrayShift longTy (Vobject (OVpointer (cellPtr id aN))) (ivVal 1) = _
+  show evalArrayShift fmapEmpty longTy (Vobject (OVpointer (cellPtr id aN))) (ivVal 1) = _
   exact evalArrayShift_long_one id aN
 
 theorem lr_store_value_eval (vn vb vp vc : value) :
-    evalPexpr fmapEmpty (lrFrameN vn vb vp vc f :: rest)
+    evalPexpr fmapEmpty fmapEmpty (lrFrameN vn vb vp vc f :: rest)
       (Pexpr [] () (PEsym lrPrevSym)) = some vp := by
   rw [evalPexpr_sym_empty]
   exact lookup_env_head (lrFrameN_lookup_prev hf _ _ _ _) rest
 
 theorem lr_args_eval (vn vb vp vc : value) :
-    evalPexprs fmapEmpty (lrFrameN vn vb vp vc f :: rest)
+    evalPexprs fmapEmpty fmapEmpty (lrFrameN vn vb vp vc f :: rest)
       [Pexpr [] () (PEsym lrCurSym), Pexpr [] () (PEsym lrNSym)] =
       some [vc, vn] := by
   rw [evalPexprs_cons]
-  rw [show evalPexpr fmapEmpty (lrFrameN vn vb vp vc f :: rest)
+  rw [show evalPexpr fmapEmpty fmapEmpty (lrFrameN vn vb vp vc f :: rest)
       (Pexpr ([] : List annot) () (PEsym lrCurSym)) = some vc from by
     rw [evalPexpr_sym_empty]
     exact lookup_env_head (lrFrameN_lookup_cur hf _ _ _ _) rest]
   rw [evalPexprs_cons]
-  rw [show evalPexpr fmapEmpty (lrFrameN vn vb vp vc f :: rest)
+  rw [show evalPexpr fmapEmpty fmapEmpty (lrFrameN vn vb vp vc f :: rest)
       (Pexpr ([] : List annot) () (PEsym lrNSym)) = some vn from by
     rw [evalPexpr_sym_empty]
     exact lookup_env_head (lrFrameN_lookup_n hf _ _ _ _) rest]
@@ -787,31 +787,31 @@ theorem node_ptr_compat (pv : CerbMem.PointerValue) :
     CerbMem.ctypeMemCompatible nodePtrTy
       (CerbMem.typeofMval (CerbMem.pointerMval nodeTy pv)) = true := rfl
 
-theorem node_ptr_img_cell (id a : Int) :
-    (CerbMem.memValueToBytes [] (CerbMem.pointerMval nodeTy (cellPtr id a))).2 =
+theorem node_ptr_img_cell {tds : CerbTags.TagDefsMap} (id a : Int) :
+    (CerbMem.memValueToBytes tds [] (CerbMem.pointerMval nodeTy (cellPtr id a))).2 =
       ptrImg (cellPtr id a) := rfl
 
-theorem node_ptr_img_null :
-    (CerbMem.memValueToBytes [] (CerbMem.pointerMval nodeTy nullNode)).2 =
+theorem node_ptr_img_null {tds : CerbTags.TagDefsMap} :
+    (CerbMem.memValueToBytes tds [] (CerbMem.pointerMval nodeTy nullNode)).2 =
       ptrImg nullNode := rfl
 
-theorem node_ptr_fpm_cell (id a : Int) (fpm : CerbMem.Funptrmap) :
-    (CerbMem.memValueToBytes fpm
+theorem node_ptr_fpm_cell {tds : CerbTags.TagDefsMap} (id a : Int) (fpm : CerbMem.Funptrmap) :
+    (CerbMem.memValueToBytes tds fpm
       (CerbMem.pointerMval nodeTy (cellPtr id a))).1 = fpm := rfl
 
-theorem node_ptr_fpm_null (fpm : CerbMem.Funptrmap) :
-    (CerbMem.memValueToBytes fpm (CerbMem.pointerMval nodeTy nullNode)).1 =
+theorem node_ptr_fpm_null {tds : CerbTags.TagDefsMap} (fpm : CerbMem.Funptrmap) :
+    (CerbMem.memValueToBytes tds fpm (CerbMem.pointerMval nodeTy nullNode)).1 =
       fpm := rfl
 
-theorem node_ptr_bytes_cell (id a : Int) (fpm : CerbMem.Funptrmap) :
-    (CerbMem.memValueToBytes fpm
+theorem node_ptr_bytes_cell {tds : CerbTags.TagDefsMap} (id a : Int) (fpm : CerbMem.Funptrmap) :
+    (CerbMem.memValueToBytes tds fpm
         (CerbMem.pointerMval nodeTy (cellPtr id a))).2 =
-      (CerbMem.memValueToBytes [] (CerbMem.pointerMval nodeTy (cellPtr id a))).2
+      (CerbMem.memValueToBytes tds [] (CerbMem.pointerMval nodeTy (cellPtr id a))).2
       := rfl
 
-theorem node_ptr_bytes_null (fpm : CerbMem.Funptrmap) :
-    (CerbMem.memValueToBytes fpm (CerbMem.pointerMval nodeTy nullNode)).2 =
-      (CerbMem.memValueToBytes [] (CerbMem.pointerMval nodeTy nullNode)).2
+theorem node_ptr_bytes_null {tds : CerbTags.TagDefsMap} (fpm : CerbMem.Funptrmap) :
+    (CerbMem.memValueToBytes tds fpm (CerbMem.pointerMval nodeTy nullNode)).2 =
+      (CerbMem.memValueToBytes tds [] (CerbMem.pointerMval nodeTy nullNode)).2
       := rfl
 
 /-! ## The engine-level chain predicate (identity-indexed; DEMOTED
@@ -824,8 +824,8 @@ def ChainAt (σ : Mem) : CerbMem.PointerValue → List (Int × Int) → Prop
   | p, [] => p = nullNode
   | p, nd :: ns => ∃ (aN : Int) (q : CerbMem.PointerValue)
       (bs : List CerbMem.AbsByte), p = cellPtr nd.1 aN ∧ 0 < aN ∧ aN < 2 ^ 64 ∧
-      CellCoh σ nd.1 ⟨aN, nodeTy, bs⟩ ∧ bs.length = 16 ∧
-      nodeValDec bs nd.2 ∧ nodeNextDec bs q ∧ ChainAt σ q ns
+      CellCoh fmapEmpty σ nd.1 ⟨aN, nodeTy, bs⟩ ∧ bs.length = 16 ∧
+      nodeValDec fmapEmpty bs nd.2 ∧ nodeNextDec fmapEmpty bs q ∧ ChainAt σ q ns
 
 /-- The shape of a list head (extracted non-destructively). -/
 theorem isList_shape {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
@@ -859,19 +859,19 @@ theorem isList_shape {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
 
 /-- The store kit: everything the interior store axiom needs about
     the stored next value, at the two shapes a list head can have. -/
-theorem node_store_kit (pPrev : CerbMem.PointerValue)
+theorem node_store_kit {tds : CerbTags.TagDefsMap} (pPrev : CerbMem.PointerValue)
     (hshape : pPrev = nullNode ∨ ∃ id aN : Int, pPrev = cellPtr id aN ∧
       0 < aN ∧ aN < 2 ^ 64) :
-    (CerbMem.memValueToBytes [] (CerbMem.pointerMval nodeTy pPrev)).2.length
+    (CerbMem.memValueToBytes tds [] (CerbMem.pointerMval nodeTy pPrev)).2.length
         = 8 ∧
-    (∀ fpm, (CerbMem.memValueToBytes fpm
+    (∀ fpm, (CerbMem.memValueToBytes tds fpm
       (CerbMem.pointerMval nodeTy pPrev)).1 = fpm) ∧
-    (∀ fpm, (CerbMem.memValueToBytes fpm
+    (∀ fpm, (CerbMem.memValueToBytes tds fpm
         (CerbMem.pointerMval nodeTy pPrev)).2 =
-      (CerbMem.memValueToBytes [] (CerbMem.pointerMval nodeTy pPrev)).2) ∧
+      (CerbMem.memValueToBytes tds [] (CerbMem.pointerMval nodeTy pPrev)).2) ∧
     (∀ bs' : List CerbMem.AbsByte, (bs'.drop 8).take 8 =
-        (CerbMem.memValueToBytes [] (CerbMem.pointerMval nodeTy pPrev)).2 →
-      nodeNextDec bs' pPrev) := by
+        (CerbMem.memValueToBytes tds [] (CerbMem.pointerMval nodeTy pPrev)).2 →
+      nodeNextDec tds bs' pPrev) := by
   rcases hshape with rfl | ⟨id, aN, rfl, h0, h1⟩
   · exact ⟨rfl, fun _ => rfl, fun _ => rfl,
       fun bs' himg => nodeNextDec_ptrImg_null bs' himg⟩
@@ -976,7 +976,7 @@ theorem lr_body_wps (revd rest' : List (Int × Int))
     -- prev's shape (for the store kit), non-destructively
     ihave HP2 := isList_shape pPrev revd $$ HP
     icases HP2 with ⟨%hshape, HP⟩
-    have kit := node_store_kit pPrev hshape
+    have kit := node_store_kit (tds := fmapEmpty) pPrev hshape
     obtain ⟨klen, kfpm, kbytes, knext⟩ := kit
     iapply wps_seq_sym
     rw [show lrMemopE = memopRedex PtrEq
@@ -1011,7 +1011,7 @@ theorem lr_body_wps (revd rest' : List (Int × Int))
       rfl (lr_shift_eval_B hf renv _ _ nd.1 aN)
     rw [show cellPtr nd.1 (aN + 8) = cellPtr nd.1 (aN + ((8 : Nat) : Int))
       from rfl]
-    iapply wps_load_node_field loc ann nd.1 aN 8 mo (.own 1) bs _
+    iapply wps_load_node_field (M := procCtx p rs) loc ann nd.1 aN 8 mo (.own 1) bs _
       (by rw [nodeTy_size]; omega)
       (fun lum fpm => hnext lum fpm _)
     isplitl [Hpt]
@@ -1062,7 +1062,7 @@ theorem lr_body_wps (revd rest' : List (Int × Int))
         (by rw [spliceBytes_length _ _ _ (by rw [klen, hlen]; omega)]
             exact hlen)
         (by intro lum fpm ad
-            rw [show ((spliceBytes 8 (CerbMem.memValueToBytes []
+            rw [show ((spliceBytes 8 (CerbMem.memValueToBytes (procCtx p rs).tagDefs []
                 (CerbMem.pointerMval nodeTy pPrev)).2 bs).drop 0).take 8 =
               (bs.drop 0).take 8 from
               spliceBytes_value_slice _ bs klen hlen]
@@ -1185,7 +1185,7 @@ def SeedChain : SpikeHeapF SpikeCell → CerbMem.PointerValue →
   | m, p, nd :: ns => ∃ (aN : Int) (q : CerbMem.PointerValue)
       (bs : List CerbMem.AbsByte) (m' : SpikeHeapF SpikeCell),
       p = cellPtr nd.1 aN ∧ 0 < aN ∧ aN < 2 ^ 64 ∧ bs.length = 16 ∧
-      nodeValDec bs nd.2 ∧ nodeNextDec bs q ∧
+      nodeValDec fmapEmpty bs nd.2 ∧ nodeNextDec fmapEmpty bs q ∧
       ((Iris.Std.PartialMap.singleton nd.1 (SpikeCell.mk aN nodeTy bs) :
         SpikeHeapF SpikeCell)) ##ₘ m' ∧
       m = Iris.Std.PartialMap.union
@@ -1248,7 +1248,7 @@ theorem SeedChain.footprint :
     consequence of the flagship's `SeedChain` + `Sat` conclusion. -/
 theorem seedChain_chainAt (σ : Mem) :
     ∀ (ns : List (Int × Int)) (m : SpikeHeapF SpikeCell)
-      (p : CerbMem.PointerValue), SeedChain m p ns → Coh σ m →
+      (p : CerbMem.PointerValue), SeedChain m p ns → Coh fmapEmpty σ m →
       ChainAt σ p ns
   | [], m, p, hseed, _ => hseed.2
   | nd :: ns, m, p, hseed, hcoh => by
@@ -1260,7 +1260,7 @@ theorem seedChain_chainAt (σ : Mem) :
         nd.1 = some (SpikeCell.mk aN nodeTy bs) := by
       rw [get?_union', Iris.Std.LawfulPartialMap.get?_singleton_eq rfl]
       rfl
-    have hcoh' : Coh σ m' :=
+    have hcoh' : Coh fmapEmpty σ m' :=
       ⟨fun i c hg => hcoh.cells i c (get?_union_right hdisj hg),
        fun i j ci cj hne hgi hgj => hcoh.disj i j ci cj hne
          (get?_union_right hdisj hgi) (get?_union_right hdisj hgj)⟩
@@ -1273,7 +1273,7 @@ theorem seedChain_isList {hlc : HasLC} {GF : BundledGFunctors}
     ∀ (ws : List (Int × Int)) (m : SpikeHeapF SpikeCell)
       (p : CerbMem.PointerValue),
     SeedChain m p ws →
-    iprop(([∗map] i ↦ c ∈ m, cellOwn (GF := GF) i (.own 1) c)) ⊢
+    iprop(([∗map] i ↦ c ∈ m, cellOwn fmapEmpty (GF := GF) i (.own 1) c)) ⊢
       isList p ws := by
   intro ws
   induction ws with
@@ -1306,7 +1306,7 @@ theorem isList_to_cells {GF : BundledGFunctors} [SpikeGS .hasLC GF] :
     ∀ (ws : List (Int × Int)) (p : CerbMem.PointerValue),
     isList (hlc := .hasLC) (GF := GF) p ws ⊢
       iprop(∃ m : SpikeHeapF SpikeCell, ⌜SeedChain m p ws⌝ ∗
-        ([∗map] i ↦ c ∈ m, cellOwn (hlc := .hasLC) i (.own 1) c))
+        ([∗map] i ↦ c ∈ m, cellOwn fmapEmpty (hlc := .hasLC) i (.own 1) c))
   | [], p => by
     rw [isList_nil]
     iintro %h
@@ -1324,16 +1324,16 @@ theorem isList_to_cells {GF : BundledGFunctors} [SpikeGS .hasLC GF] :
     icases HTC with ⟨%m', %hseed', Hm'⟩
     ihave H1 : iprop(([∗map] i ↦ c ∈ ((Iris.Std.PartialMap.singleton nd.1
         (SpikeCell.mk aN nodeTy bs)) : SpikeHeapF SpikeCell),
-        cellOwn (hlc := .hasLC) (GF := GF) i (.own 1) c)) $$ [Hpt]
+        cellOwn fmapEmpty (hlc := .hasLC) (GF := GF) i (.own 1) c)) $$ [Hpt]
     · iapply (BigSepM.bigSepM_singleton
         (Φ := fun (i : Int) (c : SpikeCell) =>
-          cellOwn (hlc := .hasLC) (GF := GF) i (.own 1) c)
+          cellOwn fmapEmpty (hlc := .hasLC) (GF := GF) i (.own 1) c)
         (i := nd.1) (x := SpikeCell.mk aN nodeTy bs)).2
       iexact Hpt
     ihave %hdisj : ⌜((Iris.Std.PartialMap.singleton nd.1
         (SpikeCell.mk aN nodeTy bs)) : SpikeHeapF SpikeCell) ##ₘ m'⌝
         $$ [H1 Hm']
-    · iapply bigSepM_own_disjoint _ m'
+    · iapply bigSepM_own_disjoint fmapEmpty _ m'
       isplitl [H1]
       · iexact H1
       · iexact Hm'
@@ -1352,7 +1352,7 @@ theorem isList_to_cells {GF : BundledGFunctors} [SpikeGS .hasLC GF] :
     (the `RF` instance every engine-facing export uses). -/
 abbrev lrCellFrame {GF : BundledGFunctors} [SpikeGS .hasLC GF]
     (R : CellMap) : IProp GF :=
-  iprop(([∗map] i ↦ c ∈ R, cellOwn (hlc := .hasLC) i (.own 1) c))
+  iprop(([∗map] i ↦ c ∈ R, cellOwn fmapEmpty (hlc := .hasLC) i (.own 1) c))
 
 /-- THE READOUT (Phase 4 — through the core `cells_readout`, which
     owns the one state-interpretation open): the loop postcondition
@@ -1368,12 +1368,12 @@ theorem lrPost_readout {GF : BundledGFunctors} [SpikeGS .hasLC GF]
       readoutPost (fun v σ' => ∃ Q : CellMap,
         (∃ p' : CerbMem.PointerValue, v = ptrVal p' ∧
           SeedChain Q p' ns.reverse) ∧ Q ##ₘ R ∧
-        Coh σ' (Iris.Std.PartialMap.union Q R)) w ρ' := by
+        Coh fmapEmpty σ' (Iris.Std.PartialMap.union Q R)) w ρ' := by
   intro w ρ'
   iintro ⟨%p', %hval, HL, HF⟩
   ihave HC := isList_to_cells ns.reverse p' $$ HL
   icases HC with ⟨%Q, %hQ, HQ⟩
-  iapply cells_readout (fun v Q => ∃ p' : CerbMem.PointerValue,
+  iapply cells_readout fmapEmpty (fun v Q => ∃ p' : CerbMem.PointerValue,
       v = ptrVal p' ∧ SeedChain Q p' ns.reverse) R w.val
   isplitl [HQ]
   · iexists Q
@@ -1397,7 +1397,7 @@ theorem lr_wp_readout {GF : BundledGFunctors} [SpikeGS .hasLC GF]
           (stateInterp σ' ns' κs nt : IProp GF) ={⊤, ∅}=∗
             ⌜∃ Q : CellMap, (∃ p' : CerbMem.PointerValue,
                 CoreRVal.val w = ptrVal p' ∧ SeedChain Q p' ns.reverse) ∧
-              Q ##ₘ R ∧ Coh σ' (Iris.Std.PartialMap.union Q R)⌝) }} := by
+              Q ##ₘ R ∧ Coh (procCtx p rs).tagDefs σ' (Iris.Std.PartialMap.union Q R)⌝) }} := by
   refine (lr_wps loc ann ra mo pbty cbty bbty nbty ubty ns (lrCellFrame R)
     p rs hQ sbty head).trans ?_
   refine (BI.emp_sep.2.trans (BI.sep_mono
@@ -1439,7 +1439,7 @@ theorem list_reverse_certified
     (m₀ : CellMap) (hseed : SeedChain m₀ head ns)
     (R : CellMap) (hR : m₀ ##ₘ R)
     (hlib : CerbLocation.isLibraryLocation loc = false)
-    (σ₀ : Mem) (hcoh : Sat σ₀ (Iris.Std.PartialMap.union m₀ R))
+    (σ₀ : Mem) (hcoh : Sat fmapEmpty σ₀ (Iris.Std.PartialMap.union m₀ R))
     (nsteps : Nat) (aids : Nat → Nat)
     (hfuel : 6 + nsteps ≤ lemDefaultFuel)
     (hfuel2 : 5 + nsteps ≤ lemDefaultFuel) :
@@ -1458,7 +1458,7 @@ theorem list_reverse_certified
         (∀ k, (Iris.Std.PartialMap.get? Q k).isSome ↔
           (Iris.Std.PartialMap.get? m₀ k).isSome) ∧
         Q ##ₘ R ∧
-        Sat σ' (Iris.Std.PartialMap.union Q R)) := by
+        Sat fmapEmpty σ' (Iris.Std.PartialMap.union Q R)) := by
   intro prog rs
   have h := engine_adequacyJ (GF := SpikeGF)
     (lrRS_labeledAt loc ann ra mo pbty cbty bbty nbty ubty)
@@ -1469,7 +1469,7 @@ theorem list_reverse_certified
     (.save (lrBody_fragJ loc ann ra mo bbty nbty ubty hlib)) hcoh
     (fun v σ' => ∃ Q : CellMap, (∃ p' : CerbMem.PointerValue,
         v = ptrVal p' ∧ SeedChain Q p' ns.reverse) ∧ Q ##ₘ R ∧
-      Coh σ' (Iris.Std.PartialMap.union Q R))
+      Coh fmapEmpty σ' (Iris.Std.PartialMap.union Q R))
     (by
       intro inst
       refine ((BigSepM.bigSepM_union hR).1.trans
@@ -1496,7 +1496,7 @@ theorem list_reverse_certified
 
 /-- A stored long-value image (the engine's own serialization). -/
 def valImg (v : Int) : List CerbMem.AbsByte :=
-  imgOf (CerbMem.integerValueMval (.Signed .Long) (CerbMem.integerIval v))
+  imgOf fmapEmpty (CerbMem.integerValueMval (.Signed .Long) (CerbMem.integerIval v))
 
 /-- A node image: value long at offset 0, next pointer at offset 8. -/
 def demoBytes (v : Int) (next : CerbMem.PointerValue) : List CerbMem.AbsByte :=
@@ -1572,7 +1572,7 @@ theorem demo_seed : SeedChain demoM demoHead demoNs := by
 theorem list_reverse_demo (sbty : core_base_type)
     (R : CellMap) (hR : demoM ##ₘ R)
     (hlib : CerbLocation.isLibraryLocation loc = false)
-    (σ₀ : Mem) (hcoh : Sat σ₀ (Iris.Std.PartialMap.union demoM R))
+    (σ₀ : Mem) (hcoh : Sat fmapEmpty σ₀ (Iris.Std.PartialMap.union demoM R))
     (nsteps : Nat) (aids : Nat → Nat)
     (hfuel : 6 + nsteps ≤ lemDefaultFuel)
     (hfuel2 : 5 + nsteps ≤ lemDefaultFuel) :
@@ -1591,7 +1591,7 @@ theorem list_reverse_demo (sbty : core_base_type)
         (∀ k, (Iris.Std.PartialMap.get? Q k).isSome ↔
           (Iris.Std.PartialMap.get? demoM k).isSome) ∧
         Q ##ₘ R ∧
-        Sat σ' (Iris.Std.PartialMap.union Q R) ∧
+        Sat fmapEmpty σ' (Iris.Std.PartialMap.union Q R) ∧
         ChainAt σ' p' [(3, 3), (2, 2), (1, 1)]) := by
   intro prog rs
   have h := list_reverse_certified loc ann ra mo pbty cbty bbty nbty ubty
@@ -1649,11 +1649,11 @@ theorem wpt_load_node_field {Ψ : SpikeVal → EnvStack → IProp GF}
     (id a : Int) (off : Nat) (mo : memory_order)
     (dq : DFrac) (bs : List CerbMem.AbsByte) (ρ : EnvStack)
     {mv : CerbMem.MemValue} {k : Nat} (hk : 3 ≤ k)
-    (hbound : off + 8 ≤ CerbMem.sizeofCtype nodeTy)
-    (hdec : ∀ lum fpm, CerbMem.reconstructValue lum fpm (a + (off : Int))
+    (hbound : off + 8 ≤ CerbMem.sizeofCtype M.tagDefs nodeTy)
+    (hdec : ∀ lum fpm, CerbMem.reconstructValue M.tagDefs lum fpm (a + (off : Int))
       nodePtrTy ((bs.drop off).take 8) = mv) :
-    iprop(cellOwn (GF := GF) id dq (SpikeCell.mk a nodeTy bs) ∗
-      (∀ fp, cellOwn id dq (SpikeCell.mk a nodeTy bs) -∗
+    iprop(cellOwn M.tagDefs (GF := GF) id dq (SpikeCell.mk a nodeTy bs) ∗
+      (∀ fp, cellOwn M.tagDefs id dq (SpikeCell.mk a nodeTy bs) -∗
         Ψ (SpikeVal.annot [DA_pos [] fp] ((valueFromMemValue mv).2)) ρ)) ⊢
       wpt M Ls k Ψ (loadExpr loc ann nodePtrTy (cellPtr id (a + (off : Int))) mo)
         ρ :=
@@ -1670,16 +1670,16 @@ theorem wpt_store_node_field {Ψ : SpikeVal → EnvStack → IProp GF}
     {k : Nat} (hk : 3 ≤ k)
     (hmv : memValueFromValue M.tagDefs (Ctype [] (unatomic_ nodePtrTy)) cv =
       some mv)
-    (hbound : off + 8 ≤ CerbMem.sizeofCtype nodeTy)
-    (hlen : (CerbMem.memValueToBytes [] mv).2.length = 8)
+    (hbound : off + 8 ≤ CerbMem.sizeofCtype M.tagDefs nodeTy)
+    (hlen : (CerbMem.memValueToBytes M.tagDefs [] mv).2.length = 8)
     (hcompat : CerbMem.ctypeMemCompatible nodePtrTy (CerbMem.typeofMval mv) =
       true)
-    (hfpm : ∀ fpm, (CerbMem.memValueToBytes fpm mv).1 = fpm)
-    (hbytes : ∀ fpm, (CerbMem.memValueToBytes fpm mv).2 =
-      (CerbMem.memValueToBytes [] mv).2) :
-    iprop(cellOwn (GF := GF) id (.own 1) (SpikeCell.mk a nodeTy bs) ∗
-      (∀ fp, cellOwn id (.own 1) (SpikeCell.mk a nodeTy
-          (spliceBytes off (CerbMem.memValueToBytes [] mv).2 bs)) -∗
+    (hfpm : ∀ fpm, (CerbMem.memValueToBytes M.tagDefs fpm mv).1 = fpm)
+    (hbytes : ∀ fpm, (CerbMem.memValueToBytes M.tagDefs fpm mv).2 =
+      (CerbMem.memValueToBytes M.tagDefs [] mv).2) :
+    iprop(cellOwn M.tagDefs (GF := GF) id (.own 1) (SpikeCell.mk a nodeTy bs) ∗
+      (∀ fp, cellOwn M.tagDefs id (.own 1) (SpikeCell.mk a nodeTy
+          (spliceBytes off (CerbMem.memValueToBytes M.tagDefs [] mv).2 bs)) -∗
         Ψ (SpikeVal.annot [DA_pos [] fp] Vunit) ρ)) ⊢
       wpt M Ls k Ψ (storeExpr loc ann nodePtrTy (cellPtr id (a + (off : Int)))
         cv mo) ρ :=
@@ -1775,7 +1775,7 @@ theorem lr_body_wpt (revd rest' : List (Int × Int))
     obtain ⟨rfl, h0, h1, hlen, hval, hnext⟩ := hfacts
     ihave HP2 := isList_shape pPrev revd $$ HP
     icases HP2 with ⟨%hshape, HP⟩
-    have kit := node_store_kit pPrev hshape
+    have kit := node_store_kit (tds := fmapEmpty) pPrev hshape
     obtain ⟨klen, kfpm, kbytes, knext⟩ := kit
     rw [show lrCost (nd :: vs).length = 3 + (10 + lrCost vs.length) from by
       rw [show (nd :: vs).length = vs.length + 1 from rfl,
@@ -1818,7 +1818,7 @@ theorem lr_body_wpt (revd rest' : List (Int × Int))
       rfl (lr_shift_eval_B hf renv _ _ nd.1 aN)
     rw [show cellPtr nd.1 (aN + 8) = cellPtr nd.1 (aN + ((8 : Nat) : Int))
       from rfl]
-    iapply wpt_load_node_field loc ann nd.1 aN 8 mo (.own 1) bs _
+    iapply wpt_load_node_field (M := procCtx p rs) loc ann nd.1 aN 8 mo (.own 1) bs _
       (by omega)
       (by rw [nodeTy_size]; omega)
       (fun lum fpm => hnext lum fpm _)
@@ -1872,7 +1872,7 @@ theorem lr_body_wpt (revd rest' : List (Int × Int))
         (by rw [spliceBytes_length _ _ _ (by rw [klen, hlen]; omega)]
             exact hlen)
         (by intro lum fpm ad
-            rw [show ((spliceBytes 8 (CerbMem.memValueToBytes []
+            rw [show ((spliceBytes 8 (CerbMem.memValueToBytes (procCtx p rs).tagDefs []
                 (CerbMem.pointerMval nodeTy pPrev)).2 bs).drop 0).take 8 =
               (bs.drop 0).take 8 from
               spliceBytes_value_slice _ bs klen hlen]
@@ -1965,7 +1965,7 @@ theorem list_reverse_certified_total (sbty : core_base_type)
     (m₀ : CellMap) (hseed : SeedChain m₀ head ns)
     (R : CellMap) (hR : m₀ ##ₘ R)
     (hlib : CerbLocation.isLibraryLocation loc = false)
-    (σ₀ : Mem) (hcoh : Sat σ₀ (Iris.Std.PartialMap.union m₀ R))
+    (σ₀ : Mem) (hcoh : Sat fmapEmpty σ₀ (Iris.Std.PartialMap.union m₀ R))
     (aids : Nat → Nat) :
     ∃ (p' : CerbMem.PointerValue) (Q : CellMap) (σ' : Mem),
       driveJ (lrRS loc ann ra mo pbty cbty bbty nbty ubty) aids
@@ -1977,7 +1977,7 @@ theorem list_reverse_certified_total (sbty : core_base_type)
       (∀ k, (Iris.Std.PartialMap.get? Q k).isSome ↔
         (Iris.Std.PartialMap.get? m₀ k).isSome) ∧
       Q ##ₘ R ∧
-      Sat σ' (Iris.Std.PartialMap.union Q R) := by
+      Sat fmapEmpty σ' (Iris.Std.PartialMap.union Q R) := by
   have hQ := lrRS_labeledAt loc ann ra mo pbty cbty bbty nbty ubty
   have hk : lrCost ns.length + 1 = 13 * ns.length + 7 := by
     rw [lrCost_eq]
@@ -1999,7 +1999,7 @@ theorem list_reverse_certified_total (sbty : core_base_type)
       hcoh
       (fun v σ' => ∃ Q : CellMap, (∃ p' : CerbMem.PointerValue,
           v = ptrVal p' ∧ SeedChain Q p' ns.reverse) ∧ Q ##ₘ R ∧
-        Coh σ' (Iris.Std.PartialMap.union Q R))
+        Coh fmapEmpty σ' (Iris.Std.PartialMap.union Q R))
       (lrCost ns.length + 1)
       (by
         intro inst
@@ -2028,7 +2028,7 @@ theorem list_reverse_terminates (sbty : core_base_type)
     (ns : List (Int × Int)) (head : CerbMem.PointerValue)
     (m₀ : CellMap) (hseed : SeedChain m₀ head ns)
     (R : CellMap) (hR : m₀ ##ₘ R)
-    (σ₀ : Mem) (hcoh : Sat σ₀ (Iris.Std.PartialMap.union m₀ R)) :
+    (σ₀ : Mem) (hcoh : Sat (procCtx lrProcSym (lrRS loc ann ra mo pbty cbty bbty nbty ubty)).tagDefs σ₀ (Iris.Std.PartialMap.union m₀ R)) :
     Relation.StronglyNormalizing Language.ErasedStep
       ([(⟨lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head,
           [fmapEmpty],

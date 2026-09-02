@@ -216,7 +216,7 @@ theorem engine_complete_loadU (M : MachineCtx) (aid : Nat)
     rw [show esize (loadRedex loc ann ty pv mo) = 1 from rfl]
     unfold lemDefaultFuel
     omega
-  cases hmem : applyMemM (CerbMem.loadM loc ty pv) σ with
+  cases hmem : applyMemM (CerbMem.loadM M.tagDefs loc ty pv) σ with
   | some r =>
     obtain ⟨⟨fp, mval⟩, σ'⟩ := r
     refine ⟨_, ?_, .step (Step.load_canonical hmem)⟩
@@ -227,7 +227,7 @@ theorem engine_complete_loadU (M : MachineCtx) (aid : Nat)
     rw [dischargeStep_load_active hmem]
     rfl
   | none =>
-    refine ⟨dischargeStep aid M.runState σ (Step_action_request2
+    refine ⟨dischargeStep M.tagDefs aid M.runState σ (Step_action_request2
         "LoadRequest" loc M.tid (is_unseq_with_ccall CTX)
         (stExceptUndef_return (LoadRequest2 mo ty pv (fun _ fp mval =>
           { M.thread (loadRedex loc ann ty pv mo) ρ with
@@ -259,8 +259,8 @@ theorem engine_complete_createU (M : MachineCtx) (aid : Nat)
     rw [show esize (createRedex loc ann align ty pref) = 1 from rfl]
     unfold lemDefaultFuel
     omega
-  have hirr := allocateObject_arg_irrel 0 0 pref align ty (get_with_address []) none none
-  cases hmem : applyMemM (CerbMem.allocateObject 0 pref align ty none none) σ with
+  have hirr := allocateObject_arg_irrel M.tagDefs 0 0 pref align ty (get_with_address []) none none
+  cases hmem : applyMemM (CerbMem.allocateObject M.tagDefs 0 pref align ty none none) σ with
   | some r =>
     obtain ⟨pv, σ'⟩ := r
     refine ⟨_, ?_, .step (Step.create_canonical hmem)⟩
@@ -271,7 +271,7 @@ theorem engine_complete_createU (M : MachineCtx) (aid : Nat)
     rw [dischargeStep_create_active (hirr ▸ hmem)]
     rfl
   | none =>
-    refine ⟨dischargeStep aid M.runState σ (Step_action_request2
+    refine ⟨dischargeStep M.tagDefs aid M.runState σ (Step_action_request2
         "CreateRequest" loc M.tid (is_unseq_with_ccall CTX)
         (stExceptUndef_return (CreateRequest2 pref align ty
           (get_with_address []) none (fun _ pv =>

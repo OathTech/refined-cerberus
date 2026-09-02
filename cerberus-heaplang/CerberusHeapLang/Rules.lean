@@ -105,9 +105,9 @@ def addrOf : CerbMem.PointerValue → Int
 /-- The value a load of cell contents `(ty, bs)` through pointer `pv`
     returns: the engine's own decode (Heap.decodeCell) at the
     pointer's address. -/
-def loadedVal (pv : CerbMem.PointerValue) (ty : ctype)
+def loadedVal (tds : CerbTags.TagDefsMap) (pv : CerbMem.PointerValue) (ty : ctype)
     (bs : List CerbMem.AbsByte) : value :=
-  (valueFromMemValue (decodeCell ⟨addrOf pv, ty, bs⟩)).2
+  (valueFromMemValue (decodeCell tds ⟨addrOf pv, ty, bs⟩)).2
 
 variable {hlc : HasLC} {GF : BundledGFunctors}
 
@@ -148,12 +148,13 @@ theorem stateInterp_readout [SpikeGS hlc GF] {Φ : IProp GF} {ψ : Mem → Prop}
   ipureintro
   exact hψ
 
-theorem pointsToCell_iff [SpikeGS hlc GF] (pv : CerbMem.PointerValue)
-    (dq : DFrac) (ty : ctype) (bs : List CerbMem.AbsByte) :
-    pointsToCell (GF := GF) pv dq ty bs ⊣⊢
+theorem pointsToCell_iff [SpikeGS hlc GF] (tds : CerbTags.TagDefsMap)
+    (pv : CerbMem.PointerValue) (dq : DFrac) (ty : ctype) (bs : List CerbMem.AbsByte) :
+    pointsToCell (GF := GF) tds pv dq ty bs ⊣⊢
       iprop(∃ (i : Int) (a : Int),
-        ⌜pv = cellPtr i a⌝ ∗ metaOwn i dq ⟨a, ty⟩ ∗ bytesOwn a dq bs ∗
-        ⌜bs.length = CerbMem.sizeofCtype ty ∧ decIndep a ty bs⌝) := .rfl
+        ⌜pv = cellPtr i a⌝ ∗ metaOwn i dq ⟨a, ty, CerbMem.sizeofCtype tds ty⟩ ∗
+        bytesOwn a dq bs ∗
+        ⌜bs.length = CerbMem.sizeofCtype tds ty ∧ decIndep tds a ty bs⌝) := .rfl
 
 /-! ## The small axioms -/
 
@@ -178,21 +179,21 @@ theorem wp_store [SpikeGS hlc GF] {s : Stuckness} {E : CoPset} {M : MachineCtx}
     (pv : CerbMem.PointerValue) (cv : value) (mo : memory_order)
     (mv : CerbMem.MemValue) (bs : List CerbMem.AbsByte) (ρ : EnvStack)
     (hmv : memValueFromValue M.tagDefs (Ctype [] (unatomic_ ty)) cv = some mv)
-    (hst : StorableAt ty mv) :
-    pointsToCell (GF := GF) pv (.own 1) ty bs ⊢
+    (hst : StorableAt M.tagDefs ty mv) :
+    pointsToCell M.tagDefs (GF := GF) pv (.own 1) ty bs ⊢
       WP (⟨storeExpr loc ann ty pv cv mo, ρ, M⟩ : CoreRt) @ s; E
         {{ w, ∃ fp, ⌜w = (⟨SpikeVal.annot [DA_pos [] fp] Vunit, ρ, M⟩ : CoreRVal)⌝ ∗
-            pointsToCell pv (.own 1) ty (CerbMem.memValueToBytes [] mv).2 }} := by
+            pointsToCell M.tagDefs pv (.own 1) ty (CerbMem.memValueToBytes M.tagDefs [] mv).2 }} := by
   iintro Hpt
   iapply wp_lift_atomic_step rfl
   iintro %σ₁ %ns %obs %obs' %nt Hσ
   icases (stateInterp_iff σ₁ ns (obs ++ obs') nt).mp $$ Hσ
     with ⟨%mm, %mb, %mk, %HG, Hmi, Hbi, Hki⟩
-  icases (pointsToCell_iff pv (.own 1) ty bs).mp $$ Hpt
+  icases (pointsToCell_iff M.tagDefs pv (.own 1) ty bs).mp $$ Hpt
     with ⟨%i, %addr, %Hpv, Hm, Hb, %Hpure⟩
   subst Hpv
   obtain ⟨hlen, hdec⟩ := Hpure
-  ihave %Hgetm : ⌜Iris.Std.PartialMap.get? mm i = some (⟨addr, ty⟩ : MetaCell)⌝
+  ihave %Hgetm : ⌜Iris.Std.PartialMap.get? mm i = some (⟨addr, ty, CerbMem.sizeofCtype M.tagDefs ty⟩ : MetaCell)⌝
       $$ [Hmi Hm]
   · ihave >%h := metaHeap_valid $$ [$Hmi $Hm]
     itrivial
@@ -201,10 +202,10 @@ theorem wp_store [SpikeGS hlc GF] {s : Stuckness} {E : CoPset} {M : MachineCtx}
   · iapply bytesOwn_get mb addr (.own 1) bs $$ [$Hbi $Hb]
   ihave %Hread : ⌜CerbMem.readBytesFrom σ₁ addr bs.length = bs⌝ $$ [Hbi Hb]
   · iapply bytesOwn_read HG addr (.own 1) bs $$ [$Hbi $Hb]
-  have hcell : CellCoh σ₁ i ⟨addr, ty, bs⟩ :=
-    CellCoh.ofParts (HG.metas i _ Hgetm) hlen (hlen ▸ Hread) hdec
-  have hrun := storeM_success σ₁ i ⟨addr, ty, bs⟩ mv loc hcell hst
-  have hlen' : (CerbMem.memValueToBytes [] mv).2.length = bs.length := by
+  have hcell : CellCoh M.tagDefs σ₁ i ⟨addr, ty, bs⟩ :=
+    CellCoh.ofParts M.tagDefs (HG.metas i _ Hgetm) hlen (hlen ▸ Hread) hdec
+  have hrun := storeM_success M.tagDefs σ₁ i ⟨addr, ty, bs⟩ mv loc hcell hst
+  have hlen' : (CerbMem.memValueToBytes M.tagDefs [] mv).2.length = bs.length := by
     rw [hst.len [], hlen]
   imodintro
   isplitr
@@ -217,29 +218,29 @@ theorem wp_store [SpikeGS hlc GF] {s : Stuckness} {E : CoPset} {M : MachineCtx}
   obtain ⟨mv', fp', σ'', hmv', hmem', hout⟩ := hstep.store_inv
   obtain rfl : mv = mv' := Option.some.inj (hmv.symm.trans hmv')
   rw [hrun] at hmem'
-  obtain ⟨rfl, rfl⟩ : fp' = CerbMem.Footprint.FP .W addr (CerbMem.sizeofCtype ty) ∧
-      σ'' = CerbMem.writeBytesTo σ₁ addr (CerbMem.memValueToBytes [] mv).2 := by
+  obtain ⟨rfl, rfl⟩ : fp' = CerbMem.Footprint.FP .W addr (CerbMem.sizeofCtype M.tagDefs ty) ∧
+      σ'' = CerbMem.writeBytesTo σ₁ addr (CerbMem.memValueToBytes M.tagDefs [] mv).2 := by
     have h := Option.some.inj hmem'.symm
     exact ⟨congrArg Prod.fst h, congrArg Prod.snd h⟩
   obtain ⟨e₂e, e₂ρ, e₂M⟩ := e₂
   simp only at hlbl
   obtain rfl : M = e₂M := hlbl.symm
   obtain ⟨he, hρ, hσ⟩ : e₂e = Expr [] (Eannot
-        [DA_pos [] (CerbMem.Footprint.FP .W addr (CerbMem.sizeofCtype ty))]
+        [DA_pos [] (CerbMem.Footprint.FP .W addr (CerbMem.sizeofCtype M.tagDefs ty))]
         (Expr [] (Epure (Pexpr [] () (PEval Vunit))))) ∧ e₂ρ = ρ ∧
-      σ₂ = CerbMem.writeBytesTo σ₁ addr (CerbMem.memValueToBytes [] mv).2 := by
+      σ₂ = CerbMem.writeBytesTo σ₁ addr (CerbMem.memValueToBytes M.tagDefs [] mv).2 := by
     simpa [Prod.mk.injEq] using hout
   subst he hσ
   obtain rfl : ρ = e₂ρ := hρ.symm
-  imod (bytesOwn_update mb addr bs (CerbMem.memValueToBytes [] mv).2 hlen')
+  imod (bytesOwn_update mb addr bs (CerbMem.memValueToBytes M.tagDefs [] mv).2 hlen')
     $$ [$Hbi $Hb] with ⟨Hbi, Hb⟩
   imodintro
   isplitl [Hmi Hbi Hki]
   · iapply (stateInterp_iff _ _ _ _).mpr
-    iexists mm, (insertRange mb addr (CerbMem.memValueToBytes [] mv).2), mk
+    iexists mm, (insertRange mb addr (CerbMem.memValueToBytes M.tagDefs [] mv).2), mk
     isplitr [Hmi Hbi Hki]
     · ipureintro
-      exact HG.storeRange addr (CerbMem.memValueToBytes [] mv).2
+      exact HG.storeRange addr (CerbMem.memValueToBytes M.tagDefs [] mv).2
         (fun j hj => ⟨bs[j]'(by omega), by
           rw [Hcover j (by omega)]
           exact List.getElem?_eq_getElem _⟩)
@@ -250,14 +251,14 @@ theorem wp_store [SpikeGS hlc GF] {s : Stuckness} {E : CoPset} {M : MachineCtx}
     · iexact Hki
   isplitl [Hm Hb]
   · iexists (⟨SpikeVal.annot
-      [DA_pos [] (CerbMem.Footprint.FP .W addr (CerbMem.sizeofCtype ty))] Vunit,
+      [DA_pos [] (CerbMem.Footprint.FP .W addr (CerbMem.sizeofCtype M.tagDefs ty))] Vunit,
       ρ, M⟩ : CoreRVal)
     isplit
     · ipureintro; rfl
-    iexists (CerbMem.Footprint.FP .W addr (CerbMem.sizeofCtype ty))
+    iexists (CerbMem.Footprint.FP .W addr (CerbMem.sizeofCtype M.tagDefs ty))
     isplit
     · ipureintro; rfl
-    iapply (pointsToCell_iff _ _ _ _).mpr
+    iapply (pointsToCell_iff M.tagDefs _ _ _ _).mpr
     iexists i, addr
     isplit
     · ipureintro; rfl
@@ -285,30 +286,30 @@ theorem wp_load [SpikeGS hlc GF] {s : Stuckness} {E : CoPset} {M : MachineCtx}
     (loc : CerbLocation.Loc) (ann : core_run_annotation) (ty : ctype)
     (pv : CerbMem.PointerValue) (mo : memory_order) (dq : DFrac)
     (bs : List CerbMem.AbsByte) (ρ : EnvStack)
-    (htrap : cellLoadTrap ⟨addrOf pv, ty, bs⟩ = false) :
-    pointsToCell (GF := GF) pv dq ty bs ⊢
+    (htrap : cellLoadTrap M.tagDefs ⟨addrOf pv, ty, bs⟩ = false) :
+    pointsToCell M.tagDefs (GF := GF) pv dq ty bs ⊢
       WP (⟨loadExpr loc ann ty pv mo, ρ, M⟩ : CoreRt) @ s; E
-        {{ w, ∃ fp, ⌜w = (⟨SpikeVal.annot [DA_pos [] fp] (loadedVal pv ty bs),
+        {{ w, ∃ fp, ⌜w = (⟨SpikeVal.annot [DA_pos [] fp] (loadedVal M.tagDefs pv ty bs),
             ρ, M⟩ : CoreRVal)⌝ ∗
-            pointsToCell pv dq ty bs }} := by
+            pointsToCell M.tagDefs pv dq ty bs }} := by
   iintro Hpt
   iapply wp_lift_atomic_step rfl
   iintro %σ₁ %ns %obs %obs' %nt Hσ
   icases (stateInterp_iff σ₁ ns (obs ++ obs') nt).mp $$ Hσ
     with ⟨%mm, %mb, %mk, %HG, Hmi, Hbi, Hki⟩
-  icases (pointsToCell_iff pv dq ty bs).mp $$ Hpt
+  icases (pointsToCell_iff M.tagDefs pv dq ty bs).mp $$ Hpt
     with ⟨%i, %addr, %Hpv, Hm, Hb, %Hpure⟩
   subst Hpv
   obtain ⟨hlen, hdec⟩ := Hpure
-  ihave %Hgetm : ⌜Iris.Std.PartialMap.get? mm i = some (⟨addr, ty⟩ : MetaCell)⌝
+  ihave %Hgetm : ⌜Iris.Std.PartialMap.get? mm i = some (⟨addr, ty, CerbMem.sizeofCtype M.tagDefs ty⟩ : MetaCell)⌝
       $$ [Hmi Hm]
   · ihave >%h := metaHeap_valid $$ [$Hmi $Hm]
     itrivial
   ihave %Hread : ⌜CerbMem.readBytesFrom σ₁ addr bs.length = bs⌝ $$ [Hbi Hb]
   · iapply bytesOwn_read HG addr dq bs $$ [$Hbi $Hb]
-  have hcell : CellCoh σ₁ i ⟨addr, ty, bs⟩ :=
-    CellCoh.ofParts (HG.metas i _ Hgetm) hlen (hlen ▸ Hread) hdec
-  have hrun := loadM_success σ₁ i ⟨addr, ty, bs⟩ loc hcell htrap
+  have hcell : CellCoh M.tagDefs σ₁ i ⟨addr, ty, bs⟩ :=
+    CellCoh.ofParts M.tagDefs (HG.metas i _ Hgetm) hlen (hlen ▸ Hread) hdec
+  have hrun := loadM_success M.tagDefs σ₁ i ⟨addr, ty, bs⟩ loc hcell htrap
   imodintro
   isplitr
   · ipureintro
@@ -320,8 +321,8 @@ theorem wp_load [SpikeGS hlc GF] {s : Stuckness} {E : CoPset} {M : MachineCtx}
   obtain ⟨fp', mval', σ'', hmem', hout⟩ := hstep.load_inv
   rw [hrun] at hmem'
   obtain ⟨⟨rfl, rfl⟩, rfl⟩ :
-      (fp' = CerbMem.Footprint.FP .R addr (CerbMem.sizeofCtype ty) ∧
-        mval' = decodeCell ⟨addr, ty, bs⟩) ∧ σ₁ = σ'' := by
+      (fp' = CerbMem.Footprint.FP .R addr (CerbMem.sizeofCtype M.tagDefs ty) ∧
+        mval' = decodeCell M.tagDefs ⟨addr, ty, bs⟩) ∧ σ₁ = σ'' := by
     have h := Option.some.inj hmem'.symm
     exact ⟨⟨congrArg (fun p => p.1.1) h, congrArg (fun p => p.1.2) h⟩,
       (congrArg Prod.snd h).symm⟩
@@ -329,9 +330,9 @@ theorem wp_load [SpikeGS hlc GF] {s : Stuckness} {E : CoPset} {M : MachineCtx}
   simp only at hlbl
   obtain rfl : M = e₂M := hlbl.symm
   obtain ⟨he, hρ, hσ⟩ : e₂e = Expr [] (Eannot
-        [DA_pos [] (CerbMem.Footprint.FP .R addr (CerbMem.sizeofCtype ty))]
+        [DA_pos [] (CerbMem.Footprint.FP .R addr (CerbMem.sizeofCtype M.tagDefs ty))]
         (Expr [] (Epure (Pexpr [] () (PEval
-          (valueFromMemValue (decodeCell ⟨addr, ty, bs⟩)).2))))) ∧
+          (valueFromMemValue (decodeCell M.tagDefs ⟨addr, ty, bs⟩)).2))))) ∧
       e₂ρ = ρ ∧ σ₂ = σ₁ := by
     simpa [Prod.mk.injEq] using hout
   subst he
@@ -351,14 +352,14 @@ theorem wp_load [SpikeGS hlc GF] {s : Stuckness} {E : CoPset} {M : MachineCtx}
     · iexact Hki
   isplitl [Hm Hb]
   · iexists (⟨SpikeVal.annot
-      [DA_pos [] (CerbMem.Footprint.FP .R addr (CerbMem.sizeofCtype ty))]
-      (loadedVal (cellPtr i addr) ty bs), ρ, M⟩ : CoreRVal)
+      [DA_pos [] (CerbMem.Footprint.FP .R addr (CerbMem.sizeofCtype M.tagDefs ty))]
+      (loadedVal M.tagDefs (cellPtr i addr) ty bs), ρ, M⟩ : CoreRVal)
     isplit
     · ipureintro; rfl
-    iexists (CerbMem.Footprint.FP .R addr (CerbMem.sizeofCtype ty))
+    iexists (CerbMem.Footprint.FP .R addr (CerbMem.sizeofCtype M.tagDefs ty))
     isplit
     · ipureintro; rfl
-    iapply (pointsToCell_iff _ _ _ _).mpr
+    iapply (pointsToCell_iff M.tagDefs _ _ _ _).mpr
     iexists i, addr
     isplit
     · ipureintro; rfl
@@ -1052,14 +1053,14 @@ def sevenMval : CerbMem.MemValue :=
   CerbMem.integerValueMval (.Signed .Int_) (CerbMem.integerIval 7)
 
 /-- Its byte image (the engine's own serialization). -/
-def sevenBytes : List CerbMem.AbsByte :=
-  (CerbMem.memValueToBytes [] sevenMval).2
+def sevenBytes (tds : CerbTags.TagDefsMap) : List CerbMem.AbsByte :=
+  (CerbMem.memValueToBytes tds [] sevenMval).2
 
 theorem seven_encodes :
     memValueFromValue fmapEmpty (Ctype [] (unatomic_ intTy)) sevenVal =
       some sevenMval := rfl
 
-theorem seven_storable : StorableAt intTy sevenMval :=
+theorem seven_storable (tds : CerbTags.TagDefsMap) : StorableAt tds intTy sevenMval :=
   ⟨rfl, fun _ => rfl, fun _ => rfl, fun _ => rfl, fun _ _ _ => rfl⟩
 
 /-- THE EXHIBIT ([USER 2026-08-30], the go order):
@@ -1073,20 +1074,20 @@ theorem exhibit [SpikeGS hlc GF] (x y : CerbMem.PointerValue)
     (loc : CerbLocation.Loc) (ann : core_run_annotation) (mo : memory_order)
     (bs bs' : List CerbMem.AbsByte) (ty' : ctype) :
     triple (GF := GF)
-      iprop(pointsToCell x (.own 1) intTy bs ∗ pointsToCell y (.own 1) ty' bs')
+      iprop(pointsToCell spikeCtx.tagDefs x (.own 1) intTy bs ∗ pointsToCell spikeCtx.tagDefs y (.own 1) ty' bs')
       (storeExpr loc ann intTy x sevenVal mo)
-      (fun _ => iprop(pointsToCell x (.own 1) intTy sevenBytes ∗
-        pointsToCell y (.own 1) ty' bs')) := by
+      (fun _ => iprop(pointsToCell spikeCtx.tagDefs x (.own 1) intTy (sevenBytes spikeCtx.tagDefs) ∗
+        pointsToCell spikeCtx.tagDefs y (.own 1) ty' bs')) := by
   -- 1. the small axiom, instantiated at 7/int
-  have hax : triple (GF := GF) (pointsToCell x (.own 1) intTy bs)
+  have hax : triple (GF := GF) (pointsToCell spikeCtx.tagDefs x (.own 1) intTy bs)
       (storeExpr loc ann intTy x sevenVal mo)
       (fun w => iprop(∃ fp,
         ⌜w = (⟨SpikeVal.annot [DA_pos [] fp] Vunit, spikeEnv, spikeCtx⟩ : CoreRVal)⌝ ∗
-        pointsToCell x (.own 1) intTy sevenBytes)) :=
+        pointsToCell spikeCtx.tagDefs x (.own 1) intTy (sevenBytes spikeCtx.tagDefs))) :=
     wp_store loc ann intTy x sevenVal mo sevenMval bs spikeEnv seven_encodes
-      seven_storable
+      (seven_storable _)
   -- 2. FRAME with y's cell
-  have hfr := triple_frame (R := pointsToCell y (.own 1) ty' bs') hax
+  have hfr := triple_frame (R := pointsToCell spikeCtx.tagDefs y (.own 1) ty' bs') hax
   -- 3. CONSEQUENCE: drop the return-value information
   refine triple_conseq .rfl ?_ hfr
   intro v
@@ -1110,15 +1111,15 @@ example {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
     (bs bs' : List CerbMem.AbsByte) (ty' : ctype) :
     triple (GF := GF) (pointsToCell x (.own 1) intTy bs)
       (storeExpr loc ann intTy x sevenVal mo)
-      (fun _ => iprop(pointsToCell x (.own 1) intTy sevenBytes ∗
+      (fun _ => iprop(pointsToCell x (.own 1) intTy (sevenBytes spikeCtx.tagDefs) ∗
         pointsToCell y (.own 1) ty' bs')) := by
   have hax : triple (GF := GF) (pointsToCell x (.own 1) intTy bs)
       (storeExpr loc ann intTy x sevenVal mo)
       (fun w => iprop(∃ fp,
         ⌜w = (⟨SpikeVal.annot [DA_pos [] fp] Vunit, spikeEnv, spikeCtx⟩ : CoreRVal)⌝ ∗
-        pointsToCell x (.own 1) intTy sevenBytes)) :=
+        pointsToCell x (.own 1) intTy (sevenBytes spikeCtx.tagDefs))) :=
     wp_store loc ann intTy x sevenVal mo sevenMval bs spikeEnv seven_encodes
-      seven_storable
+      (seven_storable _)
   refine triple_conseq .rfl ?_ hax
   intro v
   iintro ⟨%fp, %hw, Hx⟩
@@ -1155,14 +1156,14 @@ def fiveVal : value :=
 def fiveMval : CerbMem.MemValue :=
   CerbMem.integerValueMval (.Signed .Int_) (CerbMem.integerIval 5)
 
-def fiveBytes : List CerbMem.AbsByte :=
-  (CerbMem.memValueToBytes [] fiveMval).2
+def fiveBytes (tds : CerbTags.TagDefsMap) : List CerbMem.AbsByte :=
+  (CerbMem.memValueToBytes tds [] fiveMval).2
 
 theorem five_encodes :
     memValueFromValue fmapEmpty (Ctype [] (unatomic_ intTy)) fiveVal =
       some fiveMval := rfl
 
-theorem five_storable : StorableAt intTy fiveMval :=
+theorem five_storable (tds : CerbTags.TagDefsMap) : StorableAt tds intTy fiveMval :=
   ⟨rfl, fun _ => rfl, fun _ => rfl, fun _ => rfl, fun _ _ _ => rfl⟩
 
 /-- The Core value `Specified(6)`, its memory value, its byte image. -/
@@ -1172,14 +1173,14 @@ def sixVal : value :=
 def sixMval : CerbMem.MemValue :=
   CerbMem.integerValueMval (.Signed .Int_) (CerbMem.integerIval 6)
 
-def sixBytes : List CerbMem.AbsByte :=
-  (CerbMem.memValueToBytes [] sixMval).2
+def sixBytes (tds : CerbTags.TagDefsMap) : List CerbMem.AbsByte :=
+  (CerbMem.memValueToBytes tds [] sixMval).2
 
 theorem six_encodes :
     memValueFromValue fmapEmpty (Ctype [] (unatomic_ intTy)) sixVal =
       some sixMval := rfl
 
-theorem six_storable : StorableAt intTy sixMval :=
+theorem six_storable (tds : CerbTags.TagDefsMap) : StorableAt tds intTy sixMval :=
   ⟨rfl, fun _ => rfl, fun _ => rfl, fun _ => rfl, fun _ _ _ => rfl⟩
 
 /-- EXHIBIT C at the Iris triple level. Derivation (the point):
@@ -1194,47 +1195,47 @@ theorem exhibitC_triple [SpikeGS hlc GF] (x y : CerbMem.PointerValue)
     (mo mo' : memory_order) (bty : core_base_type)
     (bsx bsy : List CerbMem.AbsByte) :
     triple (GF := GF)
-      iprop(pointsToCell x (.own 1) intTy bsx ∗
-        pointsToCell y (.own 1) intTy bsy)
+      iprop(pointsToCell spikeCtx.tagDefs x (.own 1) intTy bsx ∗
+        pointsToCell spikeCtx.tagDefs y (.own 1) intTy bsy)
       (sseqExpr bty (storeExpr loc ann intTy x fiveVal mo)
         (storeExpr loc' ann' intTy y sixVal mo'))
-      (fun _ => iprop(pointsToCell x (.own 1) intTy fiveBytes ∗
-        pointsToCell y (.own 1) intTy sixBytes)) := by
+      (fun _ => iprop(pointsToCell spikeCtx.tagDefs x (.own 1) intTy (fiveBytes spikeCtx.tagDefs) ∗
+        pointsToCell spikeCtx.tagDefs y (.own 1) intTy (sixBytes spikeCtx.tagDefs))) := by
   -- leg 1: the store small axiom on x, FRAMED with y's cell
-  have hx : triple (GF := GF) (pointsToCell x (.own 1) intTy bsx)
+  have hx : triple (GF := GF) (pointsToCell spikeCtx.tagDefs x (.own 1) intTy bsx)
       (storeExpr loc ann intTy x fiveVal mo)
       (fun w => iprop(∃ fp,
         ⌜w = (⟨SpikeVal.annot [DA_pos [] fp] Vunit, spikeEnv, spikeCtx⟩ : CoreRVal)⌝ ∗
-        pointsToCell x (.own 1) intTy fiveBytes)) :=
+        pointsToCell spikeCtx.tagDefs x (.own 1) intTy (fiveBytes spikeCtx.tagDefs))) :=
     wp_store loc ann intTy x fiveVal mo fiveMval bsx spikeEnv five_encodes
-      five_storable
+      (five_storable _)
   have h1 : triple (GF := GF)
-      iprop(pointsToCell x (.own 1) intTy bsx ∗
-        pointsToCell y (.own 1) intTy bsy)
+      iprop(pointsToCell spikeCtx.tagDefs x (.own 1) intTy bsx ∗
+        pointsToCell spikeCtx.tagDefs y (.own 1) intTy bsy)
       (storeExpr loc ann intTy x fiveVal mo)
-      (fun _ => iprop(pointsToCell x (.own 1) intTy fiveBytes ∗
-        pointsToCell y (.own 1) intTy bsy)) := by
+      (fun _ => iprop(pointsToCell spikeCtx.tagDefs x (.own 1) intTy (fiveBytes spikeCtx.tagDefs) ∗
+        pointsToCell spikeCtx.tagDefs y (.own 1) intTy bsy)) := by
     refine triple_conseq .rfl ?_
-      (triple_frame (R := pointsToCell y (.own 1) intTy bsy) hx)
+      (triple_frame (R := pointsToCell spikeCtx.tagDefs y (.own 1) intTy bsy) hx)
     intro v
     iintro ⟨⟨%fp, %hw, Hx⟩, Hy⟩
     iframe
   -- leg 2: the store small axiom on y, FRAMED with x's updated cell
-  have hy : triple (GF := GF) (pointsToCell y (.own 1) intTy bsy)
+  have hy : triple (GF := GF) (pointsToCell spikeCtx.tagDefs y (.own 1) intTy bsy)
       (storeExpr loc' ann' intTy y sixVal mo')
       (fun w => iprop(∃ fp,
         ⌜w = (⟨SpikeVal.annot [DA_pos [] fp] Vunit, spikeEnv, spikeCtx⟩ : CoreRVal)⌝ ∗
-        pointsToCell y (.own 1) intTy sixBytes)) :=
+        pointsToCell spikeCtx.tagDefs y (.own 1) intTy (sixBytes spikeCtx.tagDefs))) :=
     wp_store loc' ann' intTy y sixVal mo' sixMval bsy spikeEnv six_encodes
-      six_storable
+      (six_storable _)
   have h2 : triple (GF := GF)
-      iprop(pointsToCell x (.own 1) intTy fiveBytes ∗
-        pointsToCell y (.own 1) intTy bsy)
+      iprop(pointsToCell spikeCtx.tagDefs x (.own 1) intTy (fiveBytes spikeCtx.tagDefs) ∗
+        pointsToCell spikeCtx.tagDefs y (.own 1) intTy bsy)
       (storeExpr loc' ann' intTy y sixVal mo')
-      (fun _ => iprop(pointsToCell x (.own 1) intTy fiveBytes ∗
-        pointsToCell y (.own 1) intTy sixBytes)) := by
+      (fun _ => iprop(pointsToCell spikeCtx.tagDefs x (.own 1) intTy (fiveBytes spikeCtx.tagDefs) ∗
+        pointsToCell spikeCtx.tagDefs y (.own 1) intTy (sixBytes spikeCtx.tagDefs))) := by
     refine triple_conseq BI.sep_comm.1 ?_
-      (triple_frame (R := pointsToCell x (.own 1) intTy fiveBytes) hy)
+      (triple_frame (R := pointsToCell spikeCtx.tagDefs x (.own 1) intTy (fiveBytes spikeCtx.tagDefs)) hy)
     intro v
     iintro ⟨⟨%fp, %hw, Hy⟩, Hx⟩
     iframe

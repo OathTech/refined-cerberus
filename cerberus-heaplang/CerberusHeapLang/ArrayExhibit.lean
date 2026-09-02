@@ -54,27 +54,27 @@ open Lem_Basic_classes Lem_Map
 
 /-! ## Facts about the int layout and pointer arithmetic -/
 
-theorem intTy_size : CerbMem.sizeofCtype intTy = 4 := rfl
+theorem intTy_size {tds : CerbTags.TagDefsMap} : CerbMem.sizeofCtype tds intTy = 4 := rfl
 
 /-- One int-element shift of a fragment pointer — the ENGINE's own
     arithmetic (`arrayShiftPtrval` at concrete provenance/address
     shape: provenance PRESERVED, address advanced by |int|). -/
-theorem arrayShift_cellPtr (id p : Int) :
-    CerbMem.arrayShiftPtrval (cellPtr id p) intTy (CerbMem.integerIval 1) =
+theorem arrayShift_cellPtr {tds : CerbTags.TagDefsMap} (id p : Int) :
+    CerbMem.arrayShiftPtrval tds (cellPtr id p) intTy (CerbMem.integerIval 1) =
       cellPtr id (p + 4) := by
   show CerbMem.PointerValue.PV (.Prov_some id)
-    (.PVconcrete none (p + 1 * Int.ofNat (CerbMem.sizeofCtype intTy))) =
+    (.PVconcrete none (p + 1 * Int.ofNat (CerbMem.sizeofCtype tds intTy))) =
     CerbMem.PointerValue.PV (.Prov_some id) (.PVconcrete none (p + 4))
-  rw [show p + 1 * Int.ofNat (CerbMem.sizeofCtype intTy) = p + 4 by
+  rw [show p + 1 * Int.ofNat (CerbMem.sizeofCtype tds intTy) = p + 4 by
     rw [intTy_size]
     rw [show Int.ofNat 4 = (4 : Int) from rfl]
     omega]
 
 /-- The mirror evaluator's shift at the concrete shapes. -/
 theorem evalArrayShift_ptr_one (id a : Int) :
-    evalArrayShift intTy (Vobject (OVpointer (cellPtr id a))) (ivVal 1) =
+    evalArrayShift fmapEmpty intTy (Vobject (OVpointer (cellPtr id a))) (ivVal 1) =
       some (Vobject (OVpointer (cellPtr id (a + 4)))) := by
-  show some (Vobject (OVpointer (CerbMem.arrayShiftPtrval (cellPtr id a)
+  show some (Vobject (OVpointer (CerbMem.arrayShiftPtrval fmapEmpty (cellPtr id a)
     intTy (CerbMem.integerIval 1)))) = _
   rw [arrayShift_cellPtr]
 
@@ -316,11 +316,11 @@ variable {f : Fmap sym value} (hf : SymFrame f)
 include hf
 
 theorem arr_guard_eval (n : Int) :
-    evalPexpr fmapEmpty (arrFrame (ivVal i) (ivVal acc) vp f :: rest)
+    evalPexpr fmapEmpty fmapEmpty (arrFrame (ivVal i) (ivVal acc) vp f :: rest)
         (arrGuard n) = some (boolValue (decide ((i : Int) < n))) := by
   unfold arrGuard
   rw [evalPexpr_op]
-  rw [show evalPexpr fmapEmpty (arrFrame (ivVal i) (ivVal acc) vp f :: rest)
+  rw [show evalPexpr fmapEmpty fmapEmpty (arrFrame (ivVal i) (ivVal acc) vp f :: rest)
       (Pexpr [] () (PEsym arrISym)) = some (ivVal i) from by
     rw [evalPexpr_sym_empty]
     exact lookup_env_head (arrFrame_lookup_i hf _ _ _) rest]
@@ -328,67 +328,67 @@ theorem arr_guard_eval (n : Int) :
   rfl
 
 theorem arr_p_eval :
-    evalPexpr fmapEmpty (arrFrame (ivVal i) (ivVal acc) vp f :: rest)
+    evalPexpr fmapEmpty fmapEmpty (arrFrame (ivVal i) (ivVal acc) vp f :: rest)
         (Pexpr [] () (PEsym arrPSym)) = some vp := by
   rw [evalPexpr_sym_empty]
   exact lookup_env_head (arrFrame_lookup_p hf _ _ _) rest
 
 theorem arr_args_eval (x : Int) (id a : Int) :
-    evalPexprs fmapEmpty (arrFrameX (ivVal x) (ivVal i) (ivVal acc)
+    evalPexprs fmapEmpty fmapEmpty (arrFrameX (ivVal x) (ivVal i) (ivVal acc)
         (Vobject (OVpointer (cellPtr id a))) f :: rest)
         [arrIncPe, arrAccXPe, arrShiftPe] =
       some [ivVal ((i : Int) + 1), ivVal (acc + x),
         Vobject (OVpointer (cellPtr id (a + 4)))] := by
-  have hi : evalPexpr fmapEmpty (arrFrameX (ivVal x) (ivVal i) (ivVal acc)
+  have hi : evalPexpr fmapEmpty fmapEmpty (arrFrameX (ivVal x) (ivVal i) (ivVal acc)
       (Vobject (OVpointer (cellPtr id a))) f :: rest)
       (Pexpr [] () (PEsym arrISym)) = some (ivVal i) := by
     rw [evalPexpr_sym_empty]
     exact lookup_env_head (arrFrameX_lookup_i hf _ _ _ _) rest
-  have hacc : evalPexpr fmapEmpty (arrFrameX (ivVal x) (ivVal i) (ivVal acc)
+  have hacc : evalPexpr fmapEmpty fmapEmpty (arrFrameX (ivVal x) (ivVal i) (ivVal acc)
       (Vobject (OVpointer (cellPtr id a))) f :: rest)
       (Pexpr [] () (PEsym arrAccSym)) = some (ivVal acc) := by
     rw [evalPexpr_sym_empty]
     exact lookup_env_head (arrFrameX_lookup_acc hf _ _ _ _) rest
-  have hx : evalPexpr fmapEmpty (arrFrameX (ivVal x) (ivVal i) (ivVal acc)
+  have hx : evalPexpr fmapEmpty fmapEmpty (arrFrameX (ivVal x) (ivVal i) (ivVal acc)
       (Vobject (OVpointer (cellPtr id a))) f :: rest)
       (Pexpr [] () (PEsym arrXSym)) = some (ivVal x) := by
     rw [evalPexpr_sym_empty]
     exact lookup_env_head (arrFrameX_lookup_x hf _ _ _ _) rest
-  have hp : evalPexpr fmapEmpty (arrFrameX (ivVal x) (ivVal i) (ivVal acc)
+  have hp : evalPexpr fmapEmpty fmapEmpty (arrFrameX (ivVal x) (ivVal i) (ivVal acc)
       (Vobject (OVpointer (cellPtr id a))) f :: rest)
       (Pexpr [] () (PEsym arrPSym)) =
       some (Vobject (OVpointer (cellPtr id a))) := by
     rw [evalPexpr_sym_empty]
     exact lookup_env_head (arrFrameX_lookup_p hf _ _ _ _) rest
   rw [evalPexprs_cons]
-  rw [show evalPexpr fmapEmpty (arrFrameX (ivVal x) (ivVal i) (ivVal acc)
+  rw [show evalPexpr fmapEmpty fmapEmpty (arrFrameX (ivVal x) (ivVal i) (ivVal acc)
       (Vobject (OVpointer (cellPtr id a))) f :: rest) arrIncPe =
       some (ivVal ((i : Int) + 1)) from by
     unfold arrIncPe
     rw [evalPexpr_op, hi]
     rfl]
   rw [evalPexprs_cons]
-  rw [show evalPexpr fmapEmpty (arrFrameX (ivVal x) (ivVal i) (ivVal acc)
+  rw [show evalPexpr fmapEmpty fmapEmpty (arrFrameX (ivVal x) (ivVal i) (ivVal acc)
       (Vobject (OVpointer (cellPtr id a))) f :: rest) arrAccXPe =
       some (ivVal (acc + x)) from by
     unfold arrAccXPe
     rw [evalPexpr_op, hacc, hx]
     rfl]
   rw [evalPexprs_cons]
-  rw [show evalPexpr fmapEmpty (arrFrameX (ivVal x) (ivVal i) (ivVal acc)
+  rw [show evalPexpr fmapEmpty fmapEmpty (arrFrameX (ivVal x) (ivVal i) (ivVal acc)
       (Vobject (OVpointer (cellPtr id a))) f :: rest) arrShiftPe =
       some (Vobject (OVpointer (cellPtr id (a + 4)))) from by
     unfold arrShiftPe
     rw [evalPexpr_array_shift, hp]
-    show evalArrayShift intTy (Vobject (OVpointer (cellPtr id a)))
+    show evalArrayShift fmapEmpty intTy (Vobject (OVpointer (cellPtr id a)))
       (ivVal 1) = _
     exact evalArrayShift_ptr_one id a]
   rfl
 
 theorem arr_exit_eval :
-    evalPexpr fmapEmpty (arrFrame (ivVal i) (ivVal acc) vp f :: rest)
+    evalPexpr fmapEmpty fmapEmpty (arrFrame (ivVal i) (ivVal acc) vp f :: rest)
         arrExitPe = some (ivVal acc) := by
-  show evalPexpr fmapEmpty _ (Pexpr [] () (PEsym arrAccSym)) = _
+  show evalPexpr fmapEmpty fmapEmpty _ (Pexpr [] () (PEsym arrAccSym)) = _
   rw [evalPexpr_sym_empty]
   exact lookup_env_head (arrFrame_lookup_acc hf _ _ _) rest
 
@@ -407,7 +407,7 @@ variable (loc : CerbLocation.Loc) (ann ra : core_run_annotation)
     array cell is preserved. -/
 abbrev arrPost : SpikeVal → EnvStack → IProp GF := fun w _ =>
   iprop(⌜w.val = ivVal vs.sum⌝ ∗
-    cellOwn id (.own 1) (SpikeCell.mk a aty bs))
+    cellOwn fmapEmpty id (.own 1) (SpikeCell.mk a aty bs))
 
 /-- THE INDEX-PARTITIONED INVARIANT: at iteration `i` the
     accumulator is the sum of the first `i` elements and the pointer
@@ -418,16 +418,16 @@ abbrev arrLs : LabelSpec GF := fun _ args ρ =>
     ⌜args = [ivVal i, ivVal ((vs.take i).sum),
         Vobject (OVpointer (cellPtr id (a + ((4 * i : Nat) : Int))))] ∧
       i ≤ vs.length ∧ ρ = f :: rest ∧ SymFrame f⌝ ∗
-    cellOwn id (.own 1) (SpikeCell.mk a aty bs)) : IProp GF)
+    cellOwn fmapEmpty id (.own 1) (SpikeCell.mk a aty bs)) : IProp GF)
 
 variable (p : sym) (rs : core_run_state)
   (hQ : LabeledAt rs p (arrQ loc ann ra mo ibty accbty pbty xbty vs.length))
-variable (hsz : vs.length * 4 ≤ CerbMem.sizeofCtype aty)
+variable (hsz : vs.length * 4 ≤ CerbMem.sizeofCtype fmapEmpty aty)
   (ety : integerType)
   (hdec : ∀ (i : Nat) (hi : i < vs.length),
     ∀ (lum : List (Int × identifier)) (fpm : CerbMem.Funptrmap),
-    CerbMem.reconstructValue lum fpm (a + ((4 * i : Nat) : Int)) intTy
-        ((bs.drop (4 * i)).take (CerbMem.sizeofCtype intTy)) =
+    CerbMem.reconstructValue fmapEmpty lum fpm (a + ((4 * i : Nat) : Int)) intTy
+        ((bs.drop (4 * i)).take (CerbMem.sizeofCtype fmapEmpty intTy)) =
       CerbMem.MemValue.MVinteger ety (CerbMem.integerIval vs[i]))
 
 include hQ hsz hdec
@@ -444,12 +444,12 @@ theorem wps_arr_elem_load {M' : MachineCtx} {Ls' : LabelSpec GF}
     (aty' : ctype) (id' a' : Int) (i : Nat) (mo' : memory_order)
     (dq : DFrac) (bs' : List CerbMem.AbsByte) (ρ : EnvStack)
     {mv : CerbMem.MemValue}
-    (hbound : 4 * i + CerbMem.sizeofCtype intTy ≤ CerbMem.sizeofCtype aty')
-    (hdec : ∀ lum fpm, CerbMem.reconstructValue lum fpm (a' + ((4 * i : Nat) : Int))
-      intTy ((bs'.drop (4 * i)).take (CerbMem.sizeofCtype intTy)) = mv)
+    (hbound : 4 * i + CerbMem.sizeofCtype M'.tagDefs intTy ≤ CerbMem.sizeofCtype M'.tagDefs aty')
+    (hdec : ∀ lum fpm, CerbMem.reconstructValue M'.tagDefs lum fpm (a' + ((4 * i : Nat) : Int))
+      intTy ((bs'.drop (4 * i)).take (CerbMem.sizeofCtype M'.tagDefs intTy)) = mv)
     (htrap : loadTrapV intTy mv = false) :
-    iprop(cellOwn (GF := GF) id' dq (SpikeCell.mk a' aty' bs') ∗
-      (∀ fp, cellOwn id' dq (SpikeCell.mk a' aty' bs') -∗
+    iprop(cellOwn M'.tagDefs (GF := GF) id' dq (SpikeCell.mk a' aty' bs') ∗
+      (∀ fp, cellOwn M'.tagDefs id' dq (SpikeCell.mk a' aty' bs') -∗
         Ψ (SpikeVal.annot [DA_pos [] fp] ((valueFromMemValue mv).2)) ρ)) ⊢
       wps M' Ls' Ψ (loadExpr loc' ann' intTy
         (cellPtr id' (a' + ((4 * i : Nat) : Int))) mo') ρ :=
@@ -460,7 +460,7 @@ theorem wps_arr_elem_load {M' : MachineCtx} {Ls' : LabelSpec GF}
 theorem arr_body_wps (i : Nat) (f : Fmap sym value)
     (rest : List (Fmap sym value)) (hf : SymFrame f)
     (hin : i ≤ vs.length) :
-    iprop(cellOwn (GF := GF) id (.own 1) (SpikeCell.mk a aty bs)) ⊢
+    iprop(cellOwn (procCtx p rs).tagDefs (GF := GF) id (.own 1) (SpikeCell.mk a aty bs)) ⊢
       wps (procCtx p rs)
         (arrLs vs id a aty bs)
         (arrPost vs id a aty bs)
@@ -486,7 +486,7 @@ theorem arr_body_wps (i : Nat) (f : Fmap sym value)
     iapply wps_load_eval loc ann intTy (Pexpr [] () (PEsym arrPSym)) mo _
       rfl (arr_p_eval hf i _ _ rest)
     iapply wps_arr_elem_load loc ann aty id a i mo (.own 1) bs _
-      (by rw [intTy_size]; omega)
+      (by rw [intTy_size]; show 4 * i + 4 ≤ CerbMem.sizeofCtype fmapEmpty aty; omega)
       (hdec i hlt) rfl
     isplitl [Hpt]
     · iexact Hpt
@@ -554,7 +554,7 @@ theorem arr_blockSpecs :
 
 /-- The whole program's statement WP from the entry env. -/
 theorem arr_wps (sbty : core_base_type) :
-    iprop(cellOwn (GF := GF) id (.own 1) (SpikeCell.mk a aty bs)) ⊢
+    iprop(cellOwn (procCtx p rs).tagDefs (GF := GF) id (.own 1) (SpikeCell.mk a aty bs)) ⊢
       wps (procCtx p rs)
         (arrLs vs id a aty bs) (arrPost vs id a aty bs)
         (arrProg loc ann ra mo sbty ibty accbty pbty xbty
@@ -579,7 +579,7 @@ theorem arr_wps (sbty : core_base_type) :
 /-- The base-WP face with the engine readout (value + the preserved
     array cell in the final memory). -/
 theorem arr_wp_readout (sbty : core_base_type) :
-    iprop(cellOwn (GF := GF) id (.own 1) (SpikeCell.mk a aty bs)) ⊢
+    iprop(cellOwn (procCtx p rs).tagDefs (GF := GF) id (.own 1) (SpikeCell.mk a aty bs)) ⊢
       WP (⟨arrProg loc ann ra mo sbty ibty accbty pbty xbty
             (cellPtr id a) vs.length, [fmapEmpty],
           procCtx p rs⟩ : CoreRt)
@@ -587,7 +587,7 @@ theorem arr_wp_readout (sbty : core_base_type) :
         {{ w, iprop(∀ (σ' : Mem) (ns : Nat) (κs : List Empty) (nt : Nat),
           (stateInterp σ' ns κs nt : IProp GF) ={⊤, ∅}=∗
             ⌜CoreRVal.val w = ivVal vs.sum ∧
-              CellCoh σ' id ⟨a, aty, bs⟩⌝) }} := by
+              CellCoh (procCtx p rs).tagDefs σ' id ⟨a, aty, bs⟩⌝) }} := by
   refine (arr_wps loc ann ra mo ibty accbty pbty xbty vs id a aty bs
     p rs hQ hsz ety hdec sbty).trans ?_
   refine (BI.emp_sep.2.trans (BI.sep_mono
@@ -603,10 +603,10 @@ theorem arr_wp_readout (sbty : core_base_type) :
   -- the coupling-conditional extraction (cellOwn_cellCoh).
   exact stateInterp_readout (fun σ' mm mb mk HG => by
     iintro ⟨⟨%hval, Hpt⟩, Hmi, Hbi⟩
-    ihave %Hcc : ⌜CellCoh σ' id ⟨a, aty, bs⟩ ∧
+    ihave %Hcc : ⌜CellCoh (procCtx p rs).tagDefs σ' id ⟨a, aty, bs⟩ ∧
         Iris.Std.PartialMap.get? mm id =
-          some (metaOf (⟨a, aty, bs⟩ : SpikeCell))⌝ $$ [Hmi Hbi Hpt]
-    · iapply cellOwn_cellCoh HG id (.own 1) ⟨a, aty, bs⟩ $$ [$Hmi $Hbi $Hpt]
+          some (metaOf (procCtx p rs).tagDefs (⟨a, aty, bs⟩ : SpikeCell))⌝ $$ [Hmi Hbi Hpt]
+    · iapply cellOwn_cellCoh (procCtx p rs).tagDefs HG id (.own 1) ⟨a, aty, bs⟩ $$ [$Hmi $Hbi $Hpt]
     ipureintro
     exact ⟨hval, Hcc.1⟩)
 
@@ -655,16 +655,16 @@ variable (loc : CerbLocation.Loc) (ann ra : core_run_annotation)
 theorem array_sum_certified
     (sbty : core_base_type) (vs : List Int) (id a : Int)
     (aty : ctype) (bs : List CerbMem.AbsByte)
-    (hsz : vs.length * 4 ≤ CerbMem.sizeofCtype aty)
+    (hsz : vs.length * 4 ≤ CerbMem.sizeofCtype fmapEmpty aty)
     (ety : integerType)
     (hdec : ∀ (i : Nat) (hi : i < vs.length),
       ∀ (lum : List (Int × identifier)) (fpm : CerbMem.Funptrmap),
-      CerbMem.reconstructValue lum fpm (a + ((4 * i : Nat) : Int)) intTy
-          ((bs.drop (4 * i)).take (CerbMem.sizeofCtype intTy)) =
+      CerbMem.reconstructValue fmapEmpty lum fpm (a + ((4 * i : Nat) : Int)) intTy
+          ((bs.drop (4 * i)).take (CerbMem.sizeofCtype fmapEmpty intTy)) =
         CerbMem.MemValue.MVinteger ety (CerbMem.integerIval vs[i]))
     (hlib : CerbLocation.isLibraryLocation loc = false)
     (σ₀ : Mem)
-    (hcoh : Coh σ₀ ((Iris.Std.PartialMap.singleton id
+    (hcoh : Coh fmapEmpty σ₀ ((Iris.Std.PartialMap.singleton id
       (SpikeCell.mk a aty bs)) : SpikeHeapF SpikeCell))
     (nsteps : Nat) (aids : Nat → Nat)
     (hfuel : 4 + nsteps ≤ lemDefaultFuel)
@@ -679,7 +679,7 @@ theorem array_sum_certified
     (∀ (v : value) (σ' : Mem),
       driveJ rs aids nsteps
         (procThread arrProcSym prog [fmapEmpty]) σ₀ = .done v σ' →
-      v = ivVal vs.sum ∧ CellCoh σ' id ⟨a, aty, bs⟩) := by
+      v = ivVal vs.sum ∧ CellCoh fmapEmpty σ' id ⟨a, aty, bs⟩) := by
   intro prog rs
   refine engine_adequacyJ (GF := SpikeGF)
     (arrRS_labeledAt loc ann ra mo ibty accbty pbty xbty vs.length)
@@ -689,7 +689,7 @@ theorem array_sum_certified
       exact arrBody_fragJ loc ann ra mo xbty hlib vs.length)
     prog fmapEmpty [] σ₀ _
     (.save (arrBody_fragJ loc ann ra mo xbty hlib vs.length)) hcoh
-    (fun v σ' => v = ivVal vs.sum ∧ CellCoh σ' id ⟨a, aty, bs⟩)
+    (fun v σ' => v = ivVal vs.sum ∧ CellCoh fmapEmpty σ' id ⟨a, aty, bs⟩)
     ?_ nsteps aids
     (by rw [show esize prog = 4 from rfl]; omega)
     (fun l params cont hl => by

@@ -140,7 +140,7 @@ def wps.pre [SpikeGS hlc GF] (M : MachineCtx) (Ls : LabelSpec GF)
       iprop(|={⊤}=> ∃ (params : List (sym × core_base_type)) (cont : CoreExpr)
         (vs : List value) (ev0 : Fmap sym value) (evs : List (Fmap sym value)),
         ⌜ρ = ev0 :: evs⌝ ∗ ⌜lookupLabel M.labels lp.1 = some (params, cont)⌝ ∗
-        ⌜evalPexprs M.extern ρ lp.2 = some vs⌝ ∗ Ls lp.1 vs ρ)
+        ⌜evalPexprs M.tagDefs M.extern ρ lp.2 = some vs⌝ ∗ Ls lp.1 vs ρ)
     | none =>
       iprop(∀ (σ₁ : Mem) (ns : Nat) (obs obs' : List Empty) (nt : Nat),
         stateInterp σ₁ ns (obs ++ obs') nt ={⊤,∅}=∗
@@ -229,7 +229,7 @@ theorem wps_run {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
     {params : List (sym × core_base_type)} {cont : CoreExpr}
     {vs : List value} (ev0 : Fmap sym value) (evs : List (Fmap sym value))
     (hl : lookupLabel M.labels l = some (params, cont))
-    (hvs : evalPexprs M.extern (ev0 :: evs) pes = some vs) :
+    (hvs : evalPexprs M.tagDefs M.extern (ev0 :: evs) pes = some vs) :
     Ls l vs (ev0 :: evs) ⊢
       wps M Ls Ψ (Expr a (Erun ra l pes)) (ev0 :: evs) := by
   rw [wps_unfold.to_eq]
@@ -864,7 +864,7 @@ Soundness.lean) -/
     is certified against `full_eval_pexpr` by the bridge). -/
 theorem wps_if_true {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
     (g : generic_pexpr Unit sym) (e2 e3 : CoreExpr) (ρ : EnvStack)
-    (hg : evalPexpr M.extern ρ g = some Vtrue) :
+    (hg : evalPexpr M.tagDefs M.extern ρ g = some Vtrue) :
     wps M Ls Ψ e2 ρ ⊢ wps M Ls Ψ (Expr a (Eif g e2 e3)) ρ := by
   rw [(wps_unfold (e := Expr a (Eif g e2 e3))).to_eq]
   simp only [wps.pre, show toVal (Expr a (Eif g e2 e3)) = none from rfl,
@@ -897,7 +897,7 @@ theorem wps_if_true {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
 /-- Eif, false branch. -/
 theorem wps_if_false {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
     (g : generic_pexpr Unit sym) (e2 e3 : CoreExpr) (ρ : EnvStack)
-    (hg : evalPexpr M.extern ρ g = some Vfalse) :
+    (hg : evalPexpr M.tagDefs M.extern ρ g = some Vfalse) :
     wps M Ls Ψ e3 ρ ⊢ wps M Ls Ψ (Expr a (Eif g e2 e3)) ρ := by
   rw [(wps_unfold (e := Expr a (Eif g e2 e3))).to_eq]
   simp only [wps.pre, show toVal (Expr a (Eif g e2 e3)) = none from rfl,
@@ -1015,7 +1015,7 @@ theorem wps_case_value {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot
     notes §D3). -/
 theorem wps_pure {Ψ : SpikeVal → EnvStack → IProp GF}
     (pe : generic_pexpr Unit sym) (ρ : EnvStack) {v : value}
-    (hnv : valueFromPexpr pe = none) (hv : evalPexpr M.extern ρ pe = some v) :
+    (hnv : valueFromPexpr pe = none) (hv : evalPexpr M.tagDefs M.extern ρ pe = some v) :
     Ψ (.pure v) ρ ⊢ wps M Ls Ψ (Expr ([] : List annot) (Epure pe)) ρ := by
   rw [(wps_unfold (e := Expr ([] : List annot) (Epure pe))).to_eq]
   simp only [wps.pre, toVal_pure_none hnv, jumpRedex?_pure]
@@ -1057,7 +1057,7 @@ theorem wps_load_eval {Ψ : SpikeVal → EnvStack → IProp GF}
     (pe2 : generic_pexpr Unit sym) (mo : memory_order) (ρ : EnvStack)
     {pv : CerbMem.PointerValue}
     (hnv2 : valueFromPexpr pe2 = none)
-    (hv2 : evalPexpr M.extern ρ pe2 = some (Vobject (OVpointer pv))) :
+    (hv2 : evalPexpr M.tagDefs M.extern ρ pe2 = some (Vobject (OVpointer pv))) :
     wps M Ls Ψ (loadExpr loc ann ty pv mo) ρ ⊢
       wps M Ls Ψ (loadOpRedex loc ann ty pe2 mo) ρ := by
   rw [(wps_unfold (e := loadOpRedex loc ann ty pe2 mo)).to_eq]
@@ -1447,8 +1447,8 @@ theorem wps_memop_eval {Ψ : SpikeVal → EnvStack → IProp GF}
     (mop : memop) (pe1 pe2 : generic_pexpr Unit sym)
     {v1 v2 : value} (ρ : EnvStack)
     (hnv : valueFromPexprs [pe1, pe2] = none)
-    (hv1 : evalPexpr M.extern ρ pe1 = some v1)
-    (hv2 : evalPexpr M.extern ρ pe2 = some v2) :
+    (hv1 : evalPexpr M.tagDefs M.extern ρ pe1 = some v1)
+    (hv2 : evalPexpr M.tagDefs M.extern ρ pe2 = some v2) :
     wps M Ls Ψ (memopRedex mop
       [Pexpr [] () (PEval v1), Pexpr [] () (PEval v2)]) ρ ⊢
       wps M Ls Ψ (memopRedex mop [pe1, pe2]) ρ := by
@@ -1493,8 +1493,8 @@ theorem wps_store_eval {Ψ : SpikeVal → EnvStack → IProp GF}
     {pv : CerbMem.PointerValue} {cv : value}
     (hnv2 : valueFromPexpr pe2 = none)
     (hnv3 : valueFromPexpr pe3 = none)
-    (hv2 : evalPexpr M.extern ρ pe2 = some (Vobject (OVpointer pv)))
-    (hv3 : evalPexpr M.extern ρ pe3 = some cv) :
+    (hv2 : evalPexpr M.tagDefs M.extern ρ pe2 = some (Vobject (OVpointer pv)))
+    (hv3 : evalPexpr M.tagDefs M.extern ρ pe3 = some cv) :
     wps M Ls Ψ (storeExpr loc ann ty pv cv mo) ρ ⊢
       wps M Ls Ψ (storeOpRedex loc ann ty pe2 pe3 mo) ρ := by
   rw [(wps_unfold (e := storeOpRedex loc ann ty pe2 pe3 mo)).to_eq]
@@ -1540,9 +1540,9 @@ theorem wps_store {Ψ : SpikeVal → EnvStack → IProp GF}
     (pv : CerbMem.PointerValue) (cv : value) (mo : memory_order)
     (mv : CerbMem.MemValue) (bs : List CerbMem.AbsByte) (ρ : EnvStack)
     (hmv : memValueFromValue M.tagDefs (Ctype [] (unatomic_ ty)) cv = some mv)
-    (hst : StorableAt ty mv) :
-    iprop(pointsToCell (GF := GF) pv (.own 1) ty bs ∗
-      (∀ fp, pointsToCell pv (.own 1) ty (CerbMem.memValueToBytes [] mv).2 -∗
+    (hst : StorableAt M.tagDefs ty mv) :
+    iprop(pointsToCell M.tagDefs (GF := GF) pv (.own 1) ty bs ∗
+      (∀ fp, pointsToCell M.tagDefs pv (.own 1) ty (CerbMem.memValueToBytes M.tagDefs [] mv).2 -∗
         Ψ (SpikeVal.annot [DA_pos [] fp] Vunit) ρ)) ⊢
       wps M Ls Ψ (storeExpr loc ann ty pv cv mo) ρ := by
   rw [(wps_unfold (e := storeExpr loc ann ty pv cv mo)).to_eq]
@@ -1551,11 +1551,11 @@ theorem wps_store {Ψ : SpikeVal → EnvStack → IProp GF}
   iintro ⟨Hpt, HΨ⟩ %σ₁ %ns %obs %obs' %nt Hσ
   icases (stateInterp_iff σ₁ ns (obs ++ obs') nt).mp $$ Hσ
     with ⟨%mm, %mb, %mk, %HG, Hmi, Hbi, Hki⟩
-  icases (pointsToCell_iff pv (.own 1) ty bs).mp $$ Hpt
+  icases (pointsToCell_iff M.tagDefs pv (.own 1) ty bs).mp $$ Hpt
     with ⟨%i, %addr, %Hpv, Hm, Hb, %Hpure⟩
   subst Hpv
   obtain ⟨hlen, hdec⟩ := Hpure
-  ihave %Hgetm : ⌜Iris.Std.PartialMap.get? mm i = some (⟨addr, ty⟩ : MetaCell)⌝
+  ihave %Hgetm : ⌜Iris.Std.PartialMap.get? mm i = some (⟨addr, ty, CerbMem.sizeofCtype M.tagDefs ty⟩ : MetaCell)⌝
       $$ [Hmi Hm]
   · ihave >%h := metaHeap_valid $$ [$Hmi $Hm]
     itrivial
@@ -1564,10 +1564,10 @@ theorem wps_store {Ψ : SpikeVal → EnvStack → IProp GF}
   · iapply bytesOwn_get mb addr (.own 1) bs $$ [$Hbi $Hb]
   ihave %Hread : ⌜CerbMem.readBytesFrom σ₁ addr bs.length = bs⌝ $$ [Hbi Hb]
   · iapply bytesOwn_read HG addr (.own 1) bs $$ [$Hbi $Hb]
-  have hcell : CellCoh σ₁ i ⟨addr, ty, bs⟩ :=
-    CellCoh.ofParts (HG.metas i _ Hgetm) hlen (hlen ▸ Hread) hdec
-  have hrun := storeM_success σ₁ i ⟨addr, ty, bs⟩ mv loc hcell hst
-  have hlen' : (CerbMem.memValueToBytes [] mv).2.length = bs.length := by
+  have hcell : CellCoh M.tagDefs σ₁ i ⟨addr, ty, bs⟩ :=
+    CellCoh.ofParts M.tagDefs (HG.metas i _ Hgetm) hlen (hlen ▸ Hread) hdec
+  have hrun := storeM_success M.tagDefs σ₁ i ⟨addr, ty, bs⟩ mv loc hcell hst
+  have hlen' : (CerbMem.memValueToBytes M.tagDefs [] mv).2.length = bs.length := by
     rw [hst.len [], hlen]
   iapply fupd_mask_intro Std.LawfulSet.empty_subset
   iintro Hclose
@@ -1580,30 +1580,30 @@ theorem wps_store {Ψ : SpikeVal → EnvStack → IProp GF}
   obtain ⟨mv', fp', σ'', hmv', hmem', hout⟩ := hstep.store_inv
   obtain rfl : mv = mv' := Option.some.inj (hmv.symm.trans hmv')
   rw [hrun] at hmem'
-  obtain ⟨rfl, rfl⟩ : fp' = CerbMem.Footprint.FP .W addr (CerbMem.sizeofCtype ty) ∧
-      σ'' = CerbMem.writeBytesTo σ₁ addr (CerbMem.memValueToBytes [] mv).2 := by
+  obtain ⟨rfl, rfl⟩ : fp' = CerbMem.Footprint.FP .W addr (CerbMem.sizeofCtype M.tagDefs ty) ∧
+      σ'' = CerbMem.writeBytesTo σ₁ addr (CerbMem.memValueToBytes M.tagDefs [] mv).2 := by
     have h := Option.some.inj hmem'.symm
     exact ⟨congrArg Prod.fst h, congrArg Prod.snd h⟩
   obtain ⟨re, rρ, rM⟩ := r
   simp only at hlbl
   obtain rfl : M = rM := hlbl.symm
   obtain ⟨hre, hrρ, hσ⟩ : re = Expr [] (Eannot
-        [DA_pos [] (CerbMem.Footprint.FP .W addr (CerbMem.sizeofCtype ty))]
+        [DA_pos [] (CerbMem.Footprint.FP .W addr (CerbMem.sizeofCtype M.tagDefs ty))]
         (Expr [] (Epure (Pexpr [] () (PEval Vunit))))) ∧ rρ = ρ ∧
-      σ₂ = CerbMem.writeBytesTo σ₁ addr (CerbMem.memValueToBytes [] mv).2 := by
+      σ₂ = CerbMem.writeBytesTo σ₁ addr (CerbMem.memValueToBytes M.tagDefs [] mv).2 := by
     simpa [Prod.mk.injEq] using hout
   subst hre hσ
   obtain rfl : ρ = rρ := hrρ.symm
   imod Hclose with -
-  imod (bytesOwn_update mb addr bs (CerbMem.memValueToBytes [] mv).2 hlen')
+  imod (bytesOwn_update mb addr bs (CerbMem.memValueToBytes M.tagDefs [] mv).2 hlen')
     $$ [$Hbi $Hb] with ⟨Hbi, Hb⟩
   imodintro
   isplitl [Hmi Hbi Hki]
   · iapply (stateInterp_iff _ _ _ _).mpr
-    iexists mm, (insertRange mb addr (CerbMem.memValueToBytes [] mv).2), mk
+    iexists mm, (insertRange mb addr (CerbMem.memValueToBytes M.tagDefs [] mv).2), mk
     isplitr [Hmi Hbi Hki]
     · ipureintro
-      exact HG.storeRange addr (CerbMem.memValueToBytes [] mv).2
+      exact HG.storeRange addr (CerbMem.memValueToBytes M.tagDefs [] mv).2
         (fun j hj => ⟨bs[j]'(by omega), by
           rw [Hcover j (by omega)]
           exact List.getElem?_eq_getElem _⟩)
@@ -1613,15 +1613,15 @@ theorem wps_store {Ψ : SpikeVal → EnvStack → IProp GF}
     · iexact Hbi
     · iexact Hki
   · rw [show Expr ([] : List annot) (Eannot
-        [DA_pos [] (CerbMem.Footprint.FP .W addr (CerbMem.sizeofCtype ty))]
+        [DA_pos [] (CerbMem.Footprint.FP .W addr (CerbMem.sizeofCtype M.tagDefs ty))]
         (Expr [] (Epure (Pexpr [] () (PEval Vunit))))) =
       ofVal (.annot [DA_pos [] (CerbMem.Footprint.FP .W addr
-        (CerbMem.sizeofCtype ty))] Vunit) from rfl]
+        (CerbMem.sizeofCtype M.tagDefs ty))] Vunit) from rfl]
     iapply (wps_ofVal
       (.annot [DA_pos [] (CerbMem.Footprint.FP .W addr
-        (CerbMem.sizeofCtype ty))] Vunit) ρ)
+        (CerbMem.sizeofCtype M.tagDefs ty))] Vunit) ρ)
     iapply HΨ
-    iapply (pointsToCell_iff _ _ _ _).mpr
+    iapply (pointsToCell_iff M.tagDefs _ _ _ _).mpr
     iexists i, addr
     isplit
     · ipureintro; rfl
@@ -1640,10 +1640,10 @@ theorem wps_load {Ψ : SpikeVal → EnvStack → IProp GF}
     (loc : CerbLocation.Loc) (ann : core_run_annotation) (ty : ctype)
     (pv : CerbMem.PointerValue) (mo : memory_order) (dq : DFrac)
     (bs : List CerbMem.AbsByte) (ρ : EnvStack)
-    (htrap : cellLoadTrap ⟨addrOf pv, ty, bs⟩ = false) :
-    iprop(pointsToCell (GF := GF) pv dq ty bs ∗
-      (∀ fp, pointsToCell pv dq ty bs -∗
-        Ψ (SpikeVal.annot [DA_pos [] fp] (loadedVal pv ty bs)) ρ)) ⊢
+    (htrap : cellLoadTrap M.tagDefs ⟨addrOf pv, ty, bs⟩ = false) :
+    iprop(pointsToCell M.tagDefs (GF := GF) pv dq ty bs ∗
+      (∀ fp, pointsToCell M.tagDefs pv dq ty bs -∗
+        Ψ (SpikeVal.annot [DA_pos [] fp] (loadedVal M.tagDefs pv ty bs)) ρ)) ⊢
       wps M Ls Ψ (loadExpr loc ann ty pv mo) ρ := by
   rw [(wps_unfold (e := loadExpr loc ann ty pv mo)).to_eq]
   simp only [wps.pre, show toVal (loadExpr loc ann ty pv mo) = none from rfl,
@@ -1651,19 +1651,19 @@ theorem wps_load {Ψ : SpikeVal → EnvStack → IProp GF}
   iintro ⟨Hpt, HΨ⟩ %σ₁ %ns %obs %obs' %nt Hσ
   icases (stateInterp_iff σ₁ ns (obs ++ obs') nt).mp $$ Hσ
     with ⟨%mm, %mb, %mk, %HG, Hmi, Hbi, Hki⟩
-  icases (pointsToCell_iff pv dq ty bs).mp $$ Hpt
+  icases (pointsToCell_iff M.tagDefs pv dq ty bs).mp $$ Hpt
     with ⟨%i, %addr, %Hpv, Hm, Hb, %Hpure⟩
   subst Hpv
   obtain ⟨hlen, hdec⟩ := Hpure
-  ihave %Hgetm : ⌜Iris.Std.PartialMap.get? mm i = some (⟨addr, ty⟩ : MetaCell)⌝
+  ihave %Hgetm : ⌜Iris.Std.PartialMap.get? mm i = some (⟨addr, ty, CerbMem.sizeofCtype M.tagDefs ty⟩ : MetaCell)⌝
       $$ [Hmi Hm]
   · ihave >%h := metaHeap_valid $$ [$Hmi $Hm]
     itrivial
   ihave %Hread : ⌜CerbMem.readBytesFrom σ₁ addr bs.length = bs⌝ $$ [Hbi Hb]
   · iapply bytesOwn_read HG addr dq bs $$ [$Hbi $Hb]
-  have hcell : CellCoh σ₁ i ⟨addr, ty, bs⟩ :=
-    CellCoh.ofParts (HG.metas i _ Hgetm) hlen (hlen ▸ Hread) hdec
-  have hrun := loadM_success σ₁ i ⟨addr, ty, bs⟩ loc hcell htrap
+  have hcell : CellCoh M.tagDefs σ₁ i ⟨addr, ty, bs⟩ :=
+    CellCoh.ofParts M.tagDefs (HG.metas i _ Hgetm) hlen (hlen ▸ Hread) hdec
+  have hrun := loadM_success M.tagDefs σ₁ i ⟨addr, ty, bs⟩ loc hcell htrap
   iapply fupd_mask_intro Std.LawfulSet.empty_subset
   iintro Hclose
   isplitr
@@ -1675,8 +1675,8 @@ theorem wps_load {Ψ : SpikeVal → EnvStack → IProp GF}
   obtain ⟨fp', mval', σ'', hmem', hout⟩ := hstep.load_inv
   rw [hrun] at hmem'
   obtain ⟨⟨rfl, rfl⟩, rfl⟩ :
-      (fp' = CerbMem.Footprint.FP .R addr (CerbMem.sizeofCtype ty) ∧
-        mval' = decodeCell ⟨addr, ty, bs⟩) ∧ σ₁ = σ'' := by
+      (fp' = CerbMem.Footprint.FP .R addr (CerbMem.sizeofCtype M.tagDefs ty) ∧
+        mval' = decodeCell M.tagDefs ⟨addr, ty, bs⟩) ∧ σ₁ = σ'' := by
     have h := Option.some.inj hmem'.symm
     exact ⟨⟨congrArg (fun p => p.1.1) h, congrArg (fun p => p.1.2) h⟩,
       (congrArg Prod.snd h).symm⟩
@@ -1684,9 +1684,9 @@ theorem wps_load {Ψ : SpikeVal → EnvStack → IProp GF}
   simp only at hlbl
   obtain rfl : M = rM := hlbl.symm
   obtain ⟨hre, hrρ, hσ⟩ : re = Expr [] (Eannot
-        [DA_pos [] (CerbMem.Footprint.FP .R addr (CerbMem.sizeofCtype ty))]
+        [DA_pos [] (CerbMem.Footprint.FP .R addr (CerbMem.sizeofCtype M.tagDefs ty))]
         (Expr [] (Epure (Pexpr [] () (PEval
-          (valueFromMemValue (decodeCell ⟨addr, ty, bs⟩)).2))))) ∧
+          (valueFromMemValue (decodeCell M.tagDefs ⟨addr, ty, bs⟩)).2))))) ∧
       rρ = ρ ∧ σ₂ = σ₁ := by
     simpa [Prod.mk.injEq] using hout
   subst hre
@@ -1706,17 +1706,17 @@ theorem wps_load {Ψ : SpikeVal → EnvStack → IProp GF}
     · iexact Hbi
     · iexact Hki
   · rw [show Expr ([] : List annot) (Eannot
-        [DA_pos [] (CerbMem.Footprint.FP .R addr (CerbMem.sizeofCtype ty))]
+        [DA_pos [] (CerbMem.Footprint.FP .R addr (CerbMem.sizeofCtype M.tagDefs ty))]
         (Expr [] (Epure (Pexpr [] () (PEval
-          (valueFromMemValue (decodeCell ⟨addr, ty, bs⟩)).2))))) =
+          (valueFromMemValue (decodeCell M.tagDefs ⟨addr, ty, bs⟩)).2))))) =
       ofVal (.annot [DA_pos [] (CerbMem.Footprint.FP .R addr
-        (CerbMem.sizeofCtype ty))] (loadedVal (cellPtr i addr) ty bs))
+        (CerbMem.sizeofCtype M.tagDefs ty))] (loadedVal M.tagDefs (cellPtr i addr) ty bs))
       from rfl]
     iapply (wps_ofVal
       (.annot [DA_pos [] (CerbMem.Footprint.FP .R addr
-        (CerbMem.sizeofCtype ty))] (loadedVal (cellPtr i addr) ty bs)) ρ)
+        (CerbMem.sizeofCtype M.tagDefs ty))] (loadedVal M.tagDefs (cellPtr i addr) ty bs)) ρ)
     iapply HΨ
-    iapply (pointsToCell_iff _ _ _ _).mpr
+    iapply (pointsToCell_iff M.tagDefs _ _ _ _).mpr
     iexists i, addr
     isplit
     · ipureintro; rfl
@@ -1746,11 +1746,11 @@ theorem wps_load_at {Ψ : SpikeVal → EnvStack → IProp GF}
     (id a : Int) (aty : ctype) (off : Nat) (vty : ctype)
     (mo : memory_order) (dqm dqb : DFrac)
     (bs : List CerbMem.AbsByte) (ρ : EnvStack) {mv : CerbMem.MemValue}
-    (hdec : ∀ lum fpm, CerbMem.reconstructValue lum fpm (a + (off : Int))
+    (hdec : ∀ lum fpm, CerbMem.reconstructValue M.tagDefs lum fpm (a + (off : Int))
       vty bs = mv)
     (htrap : loadTrapV vty mv = false) :
-    iprop(pointsToView (GF := GF) id a aty off dqm dqb vty bs ∗
-      (∀ fp, pointsToView id a aty off dqm dqb vty bs -∗
+    iprop(pointsToView M.tagDefs (GF := GF) id a aty off dqm dqb vty bs ∗
+      (∀ fp, pointsToView M.tagDefs id a aty off dqm dqb vty bs -∗
         Ψ (SpikeVal.annot [DA_pos [] fp] ((valueFromMemValue mv).2)) ρ)) ⊢
       wps M Ls Ψ (loadExpr loc ann vty (cellPtr id (a + (off : Int))) mo)
         ρ := by
@@ -1764,17 +1764,17 @@ theorem wps_load_at {Ψ : SpikeVal → EnvStack → IProp GF}
   iintro ⟨Hv, HΨ⟩ %σ₁ %ns %obs %obs' %nt Hσ
   icases (stateInterp_iff σ₁ ns (obs ++ obs') nt).mp $$ Hσ
     with ⟨%mm, %mb, %mk, %HG, Hmi, Hbi, Hki⟩
-  icases (pointsToView_iff id a aty off dqm dqb vty bs).mp $$ Hv
+  icases (pointsToView_iff M.tagDefs id a aty off dqm dqb vty bs).mp $$ Hv
     with ⟨Hm, %Hpure, Hb⟩
   obtain ⟨hbound, hlenbs⟩ := Hpure
-  ihave %Hgetm : ⌜Iris.Std.PartialMap.get? mm id = some (⟨a, aty⟩ : MetaCell)⌝
+  ihave %Hgetm : ⌜Iris.Std.PartialMap.get? mm id = some (⟨a, aty, CerbMem.sizeofCtype M.tagDefs aty⟩ : MetaCell)⌝
       $$ [Hmi Hm]
   · ihave >%h := metaHeap_valid $$ [$Hmi $Hm]
     itrivial
   ihave %Hread : ⌜CerbMem.readBytesFrom σ₁ (a + (off : Int)) bs.length = bs⌝
       $$ [Hbi Hb]
   · iapply bytesOwn_read HG (a + (off : Int)) dqb bs $$ [$Hbi $Hb]
-  have hrun := loadM_at σ₁ id a aty off vty bs mv loc
+  have hrun := loadM_at M.tagDefs σ₁ id a aty off vty bs mv loc
     (HG.metas id _ Hgetm) hbound (hlenbs ▸ Hread)
     (hdec σ₁.lastUsedUnionMembers σ₁.funptrmap) htrap
   iapply fupd_mask_intro Std.LawfulSet.empty_subset
@@ -1789,7 +1789,7 @@ theorem wps_load_at {Ψ : SpikeVal → EnvStack → IProp GF}
   rw [hrun] at hmem'
   obtain ⟨⟨rfl, rfl⟩, rfl⟩ :
       (fp' = CerbMem.Footprint.FP .R (a + (off : Int))
-        (CerbMem.sizeofCtype vty) ∧ mv = mval') ∧ σ₁ = σ'' := by
+        (CerbMem.sizeofCtype M.tagDefs vty) ∧ mv = mval') ∧ σ₁ = σ'' := by
     have h := Option.some.inj hmem'.symm
     exact ⟨⟨congrArg (fun p => p.1.1) h,
       (congrArg (fun p => p.1.2) h).symm⟩,
@@ -1799,7 +1799,7 @@ theorem wps_load_at {Ψ : SpikeVal → EnvStack → IProp GF}
   obtain rfl : M = rM := hlbl.symm
   obtain ⟨hre, hrρ, hσ⟩ : re = Expr [] (Eannot
         [DA_pos [] (CerbMem.Footprint.FP .R (a + (off : Int))
-          (CerbMem.sizeofCtype vty))]
+          (CerbMem.sizeofCtype M.tagDefs vty))]
         (Expr [] (Epure (Pexpr [] () (PEval (valueFromMemValue mv).2))))) ∧
       rρ = ρ ∧ σ₂ = σ₁ := by
     simpa [Prod.mk.injEq] using hout
@@ -1821,16 +1821,16 @@ theorem wps_load_at {Ψ : SpikeVal → EnvStack → IProp GF}
     · iexact Hki
   · rw [show Expr ([] : List annot) (Eannot
         [DA_pos [] (CerbMem.Footprint.FP .R (a + (off : Int))
-          (CerbMem.sizeofCtype vty))]
+          (CerbMem.sizeofCtype M.tagDefs vty))]
         (Expr [] (Epure (Pexpr [] () (PEval (valueFromMemValue mv).2))))) =
       ofVal (.annot [DA_pos [] (CerbMem.Footprint.FP .R (a + (off : Int))
-        (CerbMem.sizeofCtype vty))] ((valueFromMemValue mv).2))
+        (CerbMem.sizeofCtype M.tagDefs vty))] ((valueFromMemValue mv).2))
       from rfl]
     iapply (wps_ofVal
       (.annot [DA_pos [] (CerbMem.Footprint.FP .R (a + (off : Int))
-        (CerbMem.sizeofCtype vty))] ((valueFromMemValue mv).2)) ρ)
+        (CerbMem.sizeofCtype M.tagDefs vty))] ((valueFromMemValue mv).2)) ρ)
     iapply HΨ
-    iapply (pointsToView_iff _ _ _ _ _ _ _ _).mpr
+    iapply (pointsToView_iff M.tagDefs _ _ _ _ _ _ _ _).mpr
     isplitl [Hm]
     · iexact Hm
     isplit
@@ -1851,14 +1851,14 @@ theorem wps_store_at {Ψ : SpikeVal → EnvStack → IProp GF}
     (bs : List CerbMem.AbsByte) (ρ : EnvStack) {mv : CerbMem.MemValue}
     (hmv : memValueFromValue M.tagDefs (Ctype [] (unatomic_ vty)) cv = some mv)
     (hcompat : CerbMem.ctypeMemCompatible vty (CerbMem.typeofMval mv) = true)
-    (hfpm : ∀ fpm, (CerbMem.memValueToBytes fpm mv).1 = fpm)
-    (hbytes : ∀ fpm, (CerbMem.memValueToBytes fpm mv).2 =
-      (CerbMem.memValueToBytes [] mv).2)
-    (hlen : (CerbMem.memValueToBytes [] mv).2.length =
-      CerbMem.sizeofCtype vty) :
-    iprop(pointsToView (GF := GF) id a aty off dqm (.own 1) vty bs ∗
-      (∀ fp, pointsToView id a aty off dqm (.own 1) vty
-          (CerbMem.memValueToBytes [] mv).2 -∗
+    (hfpm : ∀ fpm, (CerbMem.memValueToBytes M.tagDefs fpm mv).1 = fpm)
+    (hbytes : ∀ fpm, (CerbMem.memValueToBytes M.tagDefs fpm mv).2 =
+      (CerbMem.memValueToBytes M.tagDefs [] mv).2)
+    (hlen : (CerbMem.memValueToBytes M.tagDefs [] mv).2.length =
+      CerbMem.sizeofCtype M.tagDefs vty) :
+    iprop(pointsToView M.tagDefs (GF := GF) id a aty off dqm (.own 1) vty bs ∗
+      (∀ fp, pointsToView M.tagDefs id a aty off dqm (.own 1) vty
+          (CerbMem.memValueToBytes M.tagDefs [] mv).2 -∗
         Ψ (SpikeVal.annot [DA_pos [] fp] Vunit) ρ)) ⊢
       wps M Ls Ψ (storeExpr loc ann vty (cellPtr id (a + (off : Int))) cv mo)
         ρ := by
@@ -1872,10 +1872,10 @@ theorem wps_store_at {Ψ : SpikeVal → EnvStack → IProp GF}
   iintro ⟨Hv, HΨ⟩ %σ₁ %ns %obs %obs' %nt Hσ
   icases (stateInterp_iff σ₁ ns (obs ++ obs') nt).mp $$ Hσ
     with ⟨%mm, %mb, %mk, %HG, Hmi, Hbi, Hki⟩
-  icases (pointsToView_iff id a aty off dqm (.own 1) vty bs).mp $$ Hv
+  icases (pointsToView_iff M.tagDefs id a aty off dqm (.own 1) vty bs).mp $$ Hv
     with ⟨Hm, %Hpure, Hb⟩
   obtain ⟨hbound, hlenbs⟩ := Hpure
-  ihave %Hgetm : ⌜Iris.Std.PartialMap.get? mm id = some (⟨a, aty⟩ : MetaCell)⌝
+  ihave %Hgetm : ⌜Iris.Std.PartialMap.get? mm id = some (⟨a, aty, CerbMem.sizeofCtype M.tagDefs aty⟩ : MetaCell)⌝
       $$ [Hmi Hm]
   · ihave >%h := metaHeap_valid $$ [$Hmi $Hm]
     itrivial
@@ -1883,9 +1883,9 @@ theorem wps_store_at {Ψ : SpikeVal → EnvStack → IProp GF}
       Iris.Std.PartialMap.get? mb ((a + (off : Int)) + (j : Int)) = bs[j]?⌝
       $$ [Hbi Hb]
   · iapply bytesOwn_get mb (a + (off : Int)) (.own 1) bs $$ [$Hbi $Hb]
-  have hrun := storeM_at σ₁ id a aty off vty mv loc
+  have hrun := storeM_at M.tagDefs σ₁ id a aty off vty mv loc
     (HG.metas id _ Hgetm) hbound hcompat hfpm hbytes
-  have hlen' : (CerbMem.memValueToBytes [] mv).2.length = bs.length := by
+  have hlen' : (CerbMem.memValueToBytes M.tagDefs [] mv).2.length = bs.length := by
     rw [hlen, hlenbs]
   iapply fupd_mask_intro Std.LawfulSet.empty_subset
   iintro Hclose
@@ -1899,9 +1899,9 @@ theorem wps_store_at {Ψ : SpikeVal → EnvStack → IProp GF}
   obtain rfl : mv = mv' := Option.some.inj (hmv.symm.trans hmv')
   rw [hrun] at hmem'
   obtain ⟨rfl, rfl⟩ : fp' = CerbMem.Footprint.FP .W (a + (off : Int))
-      (CerbMem.sizeofCtype vty) ∧
+      (CerbMem.sizeofCtype M.tagDefs vty) ∧
       σ'' = CerbMem.writeBytesTo σ₁ (a + (off : Int))
-        (CerbMem.memValueToBytes [] mv).2 := by
+        (CerbMem.memValueToBytes M.tagDefs [] mv).2 := by
     have h := Option.some.inj hmem'.symm
     exact ⟨congrArg Prod.fst h, congrArg Prod.snd h⟩
   obtain ⟨re, rρ, rM⟩ := r
@@ -1909,24 +1909,24 @@ theorem wps_store_at {Ψ : SpikeVal → EnvStack → IProp GF}
   obtain rfl : M = rM := hlbl.symm
   obtain ⟨hre, hrρ, hσ⟩ : re = Expr [] (Eannot
         [DA_pos [] (CerbMem.Footprint.FP .W (a + (off : Int))
-          (CerbMem.sizeofCtype vty))]
+          (CerbMem.sizeofCtype M.tagDefs vty))]
         (Expr [] (Epure (Pexpr [] () (PEval Vunit))))) ∧ rρ = ρ ∧
       σ₂ = CerbMem.writeBytesTo σ₁ (a + (off : Int))
-        (CerbMem.memValueToBytes [] mv).2 := by
+        (CerbMem.memValueToBytes M.tagDefs [] mv).2 := by
     simpa [Prod.mk.injEq] using hout
   subst hre hσ
   obtain rfl : ρ = rρ := hrρ.symm
   imod Hclose with -
   imod (bytesOwn_update mb (a + (off : Int)) bs
-    (CerbMem.memValueToBytes [] mv).2 hlen') $$ [$Hbi $Hb] with ⟨Hbi, Hb⟩
+    (CerbMem.memValueToBytes M.tagDefs [] mv).2 hlen') $$ [$Hbi $Hb] with ⟨Hbi, Hb⟩
   imodintro
   isplitl [Hmi Hbi Hki]
   · iapply (stateInterp_iff _ _ _ _).mpr
     iexists mm, (insertRange mb (a + (off : Int))
-      (CerbMem.memValueToBytes [] mv).2), mk
+      (CerbMem.memValueToBytes M.tagDefs [] mv).2), mk
     isplitr [Hmi Hbi Hki]
     · ipureintro
-      exact HG.storeRange (a + (off : Int)) (CerbMem.memValueToBytes [] mv).2
+      exact HG.storeRange (a + (off : Int)) (CerbMem.memValueToBytes M.tagDefs [] mv).2
         (fun j hj => ⟨bs[j]'(by omega), by
           rw [Hcover j (by omega)]
           exact List.getElem?_eq_getElem _⟩)
@@ -1937,15 +1937,15 @@ theorem wps_store_at {Ψ : SpikeVal → EnvStack → IProp GF}
     · iexact Hki
   · rw [show Expr ([] : List annot) (Eannot
         [DA_pos [] (CerbMem.Footprint.FP .W (a + (off : Int))
-          (CerbMem.sizeofCtype vty))]
+          (CerbMem.sizeofCtype M.tagDefs vty))]
         (Expr [] (Epure (Pexpr [] () (PEval Vunit))))) =
       ofVal (.annot [DA_pos [] (CerbMem.Footprint.FP .W (a + (off : Int))
-        (CerbMem.sizeofCtype vty))] Vunit) from rfl]
+        (CerbMem.sizeofCtype M.tagDefs vty))] Vunit) from rfl]
     iapply (wps_ofVal
       (.annot [DA_pos [] (CerbMem.Footprint.FP .W (a + (off : Int))
-        (CerbMem.sizeofCtype vty))] Vunit) ρ)
+        (CerbMem.sizeofCtype M.tagDefs vty))] Vunit) ρ)
     iapply HΨ
-    iapply (pointsToView_iff _ _ _ _ _ _ _ _).mpr
+    iapply (pointsToView_iff M.tagDefs _ _ _ _ _ _ _ _).mpr
     isplitl [Hm]
     · iexact Hm
     isplit
@@ -1967,54 +1967,54 @@ theorem wps_load_cell_at {Ψ : SpikeVal → EnvStack → IProp GF}
     (id a : Int) (aty : ctype) (off : Nat) (vty : ctype)
     (mo : memory_order) (dq : DFrac)
     (bs : List CerbMem.AbsByte) (ρ : EnvStack) {mv : CerbMem.MemValue}
-    (hbound : off + CerbMem.sizeofCtype vty ≤ CerbMem.sizeofCtype aty)
-    (hdec : ∀ lum fpm, CerbMem.reconstructValue lum fpm (a + (off : Int))
-      vty ((bs.drop off).take (CerbMem.sizeofCtype vty)) = mv)
+    (hbound : off + CerbMem.sizeofCtype M.tagDefs vty ≤ CerbMem.sizeofCtype M.tagDefs aty)
+    (hdec : ∀ lum fpm, CerbMem.reconstructValue M.tagDefs lum fpm (a + (off : Int))
+      vty ((bs.drop off).take (CerbMem.sizeofCtype M.tagDefs vty)) = mv)
     (htrap : loadTrapV vty mv = false) :
-    iprop(cellOwn (GF := GF) id dq (SpikeCell.mk a aty bs) ∗
-      (∀ fp, cellOwn id dq (SpikeCell.mk a aty bs) -∗
+    iprop(cellOwn M.tagDefs (GF := GF) id dq (SpikeCell.mk a aty bs) ∗
+      (∀ fp, cellOwn M.tagDefs id dq (SpikeCell.mk a aty bs) -∗
         Ψ (SpikeVal.annot [DA_pos [] fp] ((valueFromMemValue mv).2)) ρ)) ⊢
       wps M Ls Ψ (loadExpr loc ann vty (cellPtr id (a + (off : Int))) mo)
         ρ := by
   iintro ⟨Hcell, HΨ⟩
-  icases (cellOwn_iff id dq (SpikeCell.mk a aty bs)).mp $$ Hcell
+  icases (cellOwn_iff M.tagDefs id dq (SpikeCell.mk a aty bs)).mp $$ Hcell
     with ⟨Hm, Hb, %Hpure⟩
   obtain ⟨hlen, hdec0⟩ := Hpure
-  have hblen : bs.length = CerbMem.sizeofCtype aty := hlen
+  have hblen : bs.length = CerbMem.sizeofCtype M.tagDefs aty := hlen
   have htk : (bs.take off).length = off := by
     simp [List.length_take]
     omega
-  have hmidlen : ((bs.drop off).take (CerbMem.sizeofCtype vty)).length =
-      CerbMem.sizeofCtype vty := by
+  have hmidlen : ((bs.drop off).take (CerbMem.sizeofCtype M.tagDefs vty)).length =
+      CerbMem.sizeofCtype M.tagDefs vty := by
     simp [List.length_take, List.length_drop]
     omega
   have hsplit : bs = bs.take off ++
-      ((bs.drop off).take (CerbMem.sizeofCtype vty) ++
-        (bs.drop off).drop (CerbMem.sizeofCtype vty)) := by
+      ((bs.drop off).take (CerbMem.sizeofCtype M.tagDefs vty) ++
+        (bs.drop off).drop (CerbMem.sizeofCtype M.tagDefs vty)) := by
     rw [List.take_append_drop, List.take_append_drop]
   ihave Hb2 : bytesOwn a dq (bs.take off ++
-      ((bs.drop off).take (CerbMem.sizeofCtype vty) ++
-        (bs.drop off).drop (CerbMem.sizeofCtype vty))) $$ [Hb]
+      ((bs.drop off).take (CerbMem.sizeofCtype M.tagDefs vty) ++
+        (bs.drop off).drop (CerbMem.sizeofCtype M.tagDefs vty))) $$ [Hb]
   · rw [← hsplit]
     iexact Hb
   icases (bytesOwn_append a dq _ _).1 $$ Hb2 with ⟨Hpre, Hrest⟩
   icases (bytesOwn_append _ dq _ _).1 $$ Hrest with ⟨Hmid0, Hsuf0⟩
   ihave Hmid : bytesOwn (a + (off : Int)) dq
-      ((bs.drop off).take (CerbMem.sizeofCtype vty)) $$ [Hmid0]
+      ((bs.drop off).take (CerbMem.sizeofCtype M.tagDefs vty)) $$ [Hmid0]
   · rw [show a + (off : Int) = a + ((bs.take off).length : Int) by rw [htk]]
     iexact Hmid0
   ihave Hsuf : bytesOwn (a + (off : Int) +
-      ((CerbMem.sizeofCtype vty : Nat) : Int)) dq
-      ((bs.drop off).drop (CerbMem.sizeofCtype vty)) $$ [Hsuf0]
-  · rw [show a + (off : Int) + ((CerbMem.sizeofCtype vty : Nat) : Int) =
+      ((CerbMem.sizeofCtype M.tagDefs vty : Nat) : Int)) dq
+      ((bs.drop off).drop (CerbMem.sizeofCtype M.tagDefs vty)) $$ [Hsuf0]
+  · rw [show a + (off : Int) + ((CerbMem.sizeofCtype M.tagDefs vty : Nat) : Int) =
       a + ((bs.take off).length : Int) +
-        (((bs.drop off).take (CerbMem.sizeofCtype vty)).length : Int) by
+        (((bs.drop off).take (CerbMem.sizeofCtype M.tagDefs vty)).length : Int) by
         rw [htk, hmidlen]]
     iexact Hsuf0
   iapply wps_load_at loc ann id a aty off vty mo dq dq
-    ((bs.drop off).take (CerbMem.sizeofCtype vty)) ρ hdec htrap
+    ((bs.drop off).take (CerbMem.sizeofCtype M.tagDefs vty)) ρ hdec htrap
   isplitl [Hm Hmid]
-  · iapply (pointsToView_iff _ _ _ _ _ _ _ _).mpr
+  · iapply (pointsToView_iff M.tagDefs _ _ _ _ _ _ _ _).mpr
     isplitl [Hm]
     · iexact Hm
     isplit
@@ -2022,15 +2022,15 @@ theorem wps_load_cell_at {Ψ : SpikeVal → EnvStack → IProp GF}
       exact ⟨hbound, hmidlen⟩
     · iexact Hmid
   iintro %fp Hview
-  icases (pointsToView_iff _ _ _ _ _ _ _ _).mp $$ Hview with ⟨Hm, -, Hmid⟩
+  icases (pointsToView_iff M.tagDefs _ _ _ _ _ _ _ _).mp $$ Hview with ⟨Hm, -, Hmid⟩
   iapply HΨ
-  iapply (cellOwn_iff id dq (SpikeCell.mk a aty bs)).mpr
+  iapply (cellOwn_iff M.tagDefs id dq (SpikeCell.mk a aty bs)).mpr
   isplitl [Hm]
   · iexact Hm
   isplitl [Hpre Hmid Hsuf]
   · have hEnt : bytesOwn (GF := GF) a dq (bs.take off ++
-        ((bs.drop off).take (CerbMem.sizeofCtype vty) ++
-          (bs.drop off).drop (CerbMem.sizeofCtype vty))) ⊢
+        ((bs.drop off).take (CerbMem.sizeofCtype M.tagDefs vty) ++
+          (bs.drop off).drop (CerbMem.sizeofCtype M.tagDefs vty))) ⊢
         bytesOwn a dq bs := by
       rw [← hsplit]
     iapply hEnt
@@ -2042,8 +2042,8 @@ theorem wps_load_cell_at {Ψ : SpikeVal → EnvStack → IProp GF}
     isplitl [Hmid]
     · iexact Hmid
     · rw [show a + (off : Int) +
-        ((((bs.drop off).take (CerbMem.sizeofCtype vty)).length : Nat) : Int) =
-        a + (off : Int) + ((CerbMem.sizeofCtype vty : Nat) : Int) by
+        ((((bs.drop off).take (CerbMem.sizeofCtype M.tagDefs vty)).length : Nat) : Int) =
+        a + (off : Int) + ((CerbMem.sizeofCtype M.tagDefs vty : Nat) : Int) by
           rw [hmidlen]]
       iexact Hsuf
   · ipureintro
@@ -2061,69 +2061,69 @@ theorem wps_store_cell_at {Ψ : SpikeVal → EnvStack → IProp GF}
     (cv : value) (mo : memory_order)
     (bs : List CerbMem.AbsByte) (ρ : EnvStack) {mv : CerbMem.MemValue}
     (hmv : memValueFromValue M.tagDefs (Ctype [] (unatomic_ vty)) cv = some mv)
-    (hbound : off + CerbMem.sizeofCtype vty ≤ CerbMem.sizeofCtype aty)
+    (hbound : off + CerbMem.sizeofCtype M.tagDefs vty ≤ CerbMem.sizeofCtype M.tagDefs aty)
     (hcompat : CerbMem.ctypeMemCompatible vty (CerbMem.typeofMval mv) = true)
-    (hfpm : ∀ fpm, (CerbMem.memValueToBytes fpm mv).1 = fpm)
-    (hbytes : ∀ fpm, (CerbMem.memValueToBytes fpm mv).2 =
-      (CerbMem.memValueToBytes [] mv).2)
-    (hlenimg : (CerbMem.memValueToBytes [] mv).2.length =
-      CerbMem.sizeofCtype vty)
-    (hdec' : decIndep a aty
-      (spliceBytes off (CerbMem.memValueToBytes [] mv).2 bs)) :
-    iprop(cellOwn (GF := GF) id (.own 1) (SpikeCell.mk a aty bs) ∗
-      (∀ fp, cellOwn id (.own 1) (SpikeCell.mk a aty
-          (spliceBytes off (CerbMem.memValueToBytes [] mv).2 bs)) -∗
+    (hfpm : ∀ fpm, (CerbMem.memValueToBytes M.tagDefs fpm mv).1 = fpm)
+    (hbytes : ∀ fpm, (CerbMem.memValueToBytes M.tagDefs fpm mv).2 =
+      (CerbMem.memValueToBytes M.tagDefs [] mv).2)
+    (hlenimg : (CerbMem.memValueToBytes M.tagDefs [] mv).2.length =
+      CerbMem.sizeofCtype M.tagDefs vty)
+    (hdec' : decIndep M.tagDefs a aty
+      (spliceBytes off (CerbMem.memValueToBytes M.tagDefs [] mv).2 bs)) :
+    iprop(cellOwn M.tagDefs (GF := GF) id (.own 1) (SpikeCell.mk a aty bs) ∗
+      (∀ fp, cellOwn M.tagDefs id (.own 1) (SpikeCell.mk a aty
+          (spliceBytes off (CerbMem.memValueToBytes M.tagDefs [] mv).2 bs)) -∗
         Ψ (SpikeVal.annot [DA_pos [] fp] Vunit) ρ)) ⊢
       wps M Ls Ψ (storeExpr loc ann vty (cellPtr id (a + (off : Int))) cv mo)
         ρ := by
   iintro ⟨Hcell, HΨ⟩
-  icases (cellOwn_iff id (.own 1) (SpikeCell.mk a aty bs)).mp $$ Hcell
+  icases (cellOwn_iff M.tagDefs id (.own 1) (SpikeCell.mk a aty bs)).mp $$ Hcell
     with ⟨Hm, Hb, %Hpure⟩
   obtain ⟨hlen, hdec0⟩ := Hpure
-  have hblen : bs.length = CerbMem.sizeofCtype aty := hlen
+  have hblen : bs.length = CerbMem.sizeofCtype M.tagDefs aty := hlen
   have htk : (bs.take off).length = off := by
     simp [List.length_take]
     omega
-  have hmidlen : ((bs.drop off).take (CerbMem.sizeofCtype vty)).length =
-      CerbMem.sizeofCtype vty := by
+  have hmidlen : ((bs.drop off).take (CerbMem.sizeofCtype M.tagDefs vty)).length =
+      CerbMem.sizeofCtype M.tagDefs vty := by
     simp [List.length_take, List.length_drop]
     omega
   have hsplit : bs = bs.take off ++
-      ((bs.drop off).take (CerbMem.sizeofCtype vty) ++
-        (bs.drop off).drop (CerbMem.sizeofCtype vty)) := by
+      ((bs.drop off).take (CerbMem.sizeofCtype M.tagDefs vty) ++
+        (bs.drop off).drop (CerbMem.sizeofCtype M.tagDefs vty)) := by
     rw [List.take_append_drop, List.take_append_drop]
-  have hsplice : spliceBytes off (CerbMem.memValueToBytes [] mv).2 bs =
-      bs.take off ++ ((CerbMem.memValueToBytes [] mv).2 ++
-        bs.drop (off + (CerbMem.memValueToBytes [] mv).2.length)) := by
+  have hsplice : spliceBytes off (CerbMem.memValueToBytes M.tagDefs [] mv).2 bs =
+      bs.take off ++ ((CerbMem.memValueToBytes M.tagDefs [] mv).2 ++
+        bs.drop (off + (CerbMem.memValueToBytes M.tagDefs [] mv).2.length)) := by
     unfold spliceBytes
     rw [List.append_assoc]
-  have hdroplen : (bs.drop off).drop (CerbMem.sizeofCtype vty) =
-      bs.drop (off + (CerbMem.memValueToBytes [] mv).2.length) := by
+  have hdroplen : (bs.drop off).drop (CerbMem.sizeofCtype M.tagDefs vty) =
+      bs.drop (off + (CerbMem.memValueToBytes M.tagDefs [] mv).2.length) := by
     rw [List.drop_drop, hlenimg]
   ihave Hb2 : bytesOwn a (.own 1) (bs.take off ++
-      ((bs.drop off).take (CerbMem.sizeofCtype vty) ++
-        (bs.drop off).drop (CerbMem.sizeofCtype vty))) $$ [Hb]
+      ((bs.drop off).take (CerbMem.sizeofCtype M.tagDefs vty) ++
+        (bs.drop off).drop (CerbMem.sizeofCtype M.tagDefs vty))) $$ [Hb]
   · rw [← hsplit]
     iexact Hb
   icases (bytesOwn_append a (.own 1) _ _).1 $$ Hb2 with ⟨Hpre, Hrest⟩
   icases (bytesOwn_append _ (.own 1) _ _).1 $$ Hrest with ⟨Hmid0, Hsuf0⟩
   ihave Hmid : bytesOwn (a + (off : Int)) (.own 1)
-      ((bs.drop off).take (CerbMem.sizeofCtype vty)) $$ [Hmid0]
+      ((bs.drop off).take (CerbMem.sizeofCtype M.tagDefs vty)) $$ [Hmid0]
   · rw [show a + (off : Int) = a + ((bs.take off).length : Int) by rw [htk]]
     iexact Hmid0
   ihave Hsuf : bytesOwn (a + (off : Int) +
-      ((CerbMem.sizeofCtype vty : Nat) : Int)) (.own 1)
-      ((bs.drop off).drop (CerbMem.sizeofCtype vty)) $$ [Hsuf0]
-  · rw [show a + (off : Int) + ((CerbMem.sizeofCtype vty : Nat) : Int) =
+      ((CerbMem.sizeofCtype M.tagDefs vty : Nat) : Int)) (.own 1)
+      ((bs.drop off).drop (CerbMem.sizeofCtype M.tagDefs vty)) $$ [Hsuf0]
+  · rw [show a + (off : Int) + ((CerbMem.sizeofCtype M.tagDefs vty : Nat) : Int) =
       a + ((bs.take off).length : Int) +
-        (((bs.drop off).take (CerbMem.sizeofCtype vty)).length : Int) by
+        (((bs.drop off).take (CerbMem.sizeofCtype M.tagDefs vty)).length : Int) by
         rw [htk, hmidlen]]
     iexact Hsuf0
   iapply wps_store_at loc ann id a aty off vty cv mo (.own 1)
-    ((bs.drop off).take (CerbMem.sizeofCtype vty)) ρ hmv hcompat hfpm
+    ((bs.drop off).take (CerbMem.sizeofCtype M.tagDefs vty)) ρ hmv hcompat hfpm
     hbytes hlenimg
   isplitl [Hm Hmid]
-  · iapply (pointsToView_iff _ _ _ _ _ _ _ _).mpr
+  · iapply (pointsToView_iff M.tagDefs _ _ _ _ _ _ _ _).mpr
     isplitl [Hm]
     · iexact Hm
     isplit
@@ -2131,18 +2131,18 @@ theorem wps_store_cell_at {Ψ : SpikeVal → EnvStack → IProp GF}
       exact ⟨hbound, hmidlen⟩
     · iexact Hmid
   iintro %fp Hview
-  icases (pointsToView_iff _ _ _ _ _ _ _ _).mp $$ Hview with ⟨Hm, -, Hmid⟩
+  icases (pointsToView_iff M.tagDefs _ _ _ _ _ _ _ _).mp $$ Hview with ⟨Hm, -, Hmid⟩
   iapply HΨ
-  iapply (cellOwn_iff id (.own 1) (SpikeCell.mk a aty
-    (spliceBytes off (CerbMem.memValueToBytes [] mv).2 bs))).mpr
+  iapply (cellOwn_iff M.tagDefs id (.own 1) (SpikeCell.mk a aty
+    (spliceBytes off (CerbMem.memValueToBytes M.tagDefs [] mv).2 bs))).mpr
   isplitl [Hm]
   · iexact Hm
   isplitl [Hpre Hmid Hsuf]
   · have hEnt : bytesOwn (GF := GF) a (.own 1) (bs.take off ++
-        ((CerbMem.memValueToBytes [] mv).2 ++
-          bs.drop (off + (CerbMem.memValueToBytes [] mv).2.length))) ⊢
+        ((CerbMem.memValueToBytes M.tagDefs [] mv).2 ++
+          bs.drop (off + (CerbMem.memValueToBytes M.tagDefs [] mv).2.length))) ⊢
         bytesOwn a (.own 1)
-          (spliceBytes off (CerbMem.memValueToBytes [] mv).2 bs) := by
+          (spliceBytes off (CerbMem.memValueToBytes M.tagDefs [] mv).2 bs) := by
       rw [hsplice]
     iapply hEnt
     iapply (bytesOwn_append a (.own 1) _ _).2
@@ -2153,15 +2153,15 @@ theorem wps_store_cell_at {Ψ : SpikeVal → EnvStack → IProp GF}
     isplitl [Hmid]
     · iexact Hmid
     · rw [show a + (off : Int) +
-        (((CerbMem.memValueToBytes [] mv).2.length : Nat) : Int) =
-        a + (off : Int) + ((CerbMem.sizeofCtype vty : Nat) : Int) by
+        (((CerbMem.memValueToBytes M.tagDefs [] mv).2.length : Nat) : Int) =
+        a + (off : Int) + ((CerbMem.sizeofCtype M.tagDefs vty : Nat) : Int) by
           rw [hlenimg]]
       rw [← hdroplen]
       iexact Hsuf
   · ipureintro
     refine ⟨?_, hdec'⟩
-    show (spliceBytes off (CerbMem.memValueToBytes [] mv).2 bs).length =
-      CerbMem.sizeofCtype aty
+    show (spliceBytes off (CerbMem.memValueToBytes M.tagDefs [] mv).2 bs).length =
+      CerbMem.sizeofCtype M.tagDefs aty
     rw [spliceBytes_length _ _ _ (by omega)]
     exact hlen
 
@@ -2223,16 +2223,16 @@ theorem wps_create_cursor_internal {Ψ : SpikeVal → EnvStack → IProp GF}
     (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (aprov : CerbMem.Provenance) (alignN : Int) (ty : ctype)
     (pref : prefix0) (la nid : Int) (ρ : EnvStack)
-    (hsz : 0 < CerbMem.sizeofCtype ty) (hatom : atomicTy ty = false)
-    (hnz : freshBase la alignN (CerbMem.sizeofCtype ty) ≠ 0)
-    (hinert : decIndep (freshBase la alignN (CerbMem.sizeofCtype ty)) ty
-      (List.replicate (CerbMem.sizeofCtype ty) undefByte)) :
+    (hsz : 0 < CerbMem.sizeofCtype M.tagDefs ty) (hatom : atomicTy ty = false)
+    (hnz : freshBase la alignN (CerbMem.sizeofCtype M.tagDefs ty) ≠ 0)
+    (hinert : decIndep M.tagDefs (freshBase la alignN (CerbMem.sizeofCtype M.tagDefs ty)) ty
+      (List.replicate (CerbMem.sizeofCtype M.tagDefs ty) undefByte)) :
     iprop(cursorOwn (GF := GF) ⟨la, nid⟩ ∗
-      ((pointsToCell (cellPtr nid (freshBase la alignN (CerbMem.sizeofCtype ty)))
-          (.own 1) ty (List.replicate (CerbMem.sizeofCtype ty) undefByte) ∗
-        cursorOwn ⟨freshBase la alignN (CerbMem.sizeofCtype ty), nid + 1⟩) -∗
+      ((pointsToCell M.tagDefs (cellPtr nid (freshBase la alignN (CerbMem.sizeofCtype M.tagDefs ty)))
+          (.own 1) ty (List.replicate (CerbMem.sizeofCtype M.tagDefs ty) undefByte) ∗
+        cursorOwn ⟨freshBase la alignN (CerbMem.sizeofCtype M.tagDefs ty), nid + 1⟩) -∗
         Ψ (SpikeVal.pure (Vobject (OVpointer
-          (cellPtr nid (freshBase la alignN (CerbMem.sizeofCtype ty)))))) ρ)) ⊢
+          (cellPtr nid (freshBase la alignN (CerbMem.sizeofCtype M.tagDefs ty)))))) ρ)) ⊢
       wps M Ls Ψ (createExpr loc ann (.IV aprov alignN) ty pref) ρ := by
   rw [(wps_unfold (e := createExpr loc ann (.IV aprov alignN) ty pref)).to_eq]
   simp only [wps.pre,
@@ -2250,7 +2250,7 @@ theorem wps_create_cursor_internal {Ψ : SpikeVal → EnvStack → IProp GF}
   simp only at hla hnid
   subst hla
   subst hnid
-  have hrun := allocateObject_success σ₁ pref aprov alignN ty hsz hnz
+  have hrun := allocateObject_success M.tagDefs σ₁ pref aprov alignN ty hsz hnz
   iapply fupd_mask_intro Std.LawfulSet.empty_subset
   iintro Hclose
   isplitr
@@ -2262,21 +2262,21 @@ theorem wps_create_cursor_internal {Ψ : SpikeVal → EnvStack → IProp GF}
   obtain ⟨pv', σ'', hmem', hout⟩ := hstep.create_inv
   rw [hrun] at hmem'
   obtain ⟨rfl, rfl⟩ : cellPtr σ₁.nextAllocId
-      (freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype ty)) = pv' ∧
+      (freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype M.tagDefs ty)) = pv' ∧
       CerbMem.writeBytesTo
         { σ₁ with
             nextAllocId := σ₁.nextAllocId + 1,
             lastAddress := freshBase σ₁.lastAddress alignN
-              (CerbMem.sizeofCtype ty),
+              (CerbMem.sizeofCtype M.tagDefs ty),
             allocations := σ₁.allocations.insert σ₁.nextAllocId
               { base := freshBase σ₁.lastAddress alignN
-                  (CerbMem.sizeofCtype ty),
-                size := (CerbMem.sizeofCtype ty : Int),
+                  (CerbMem.sizeofCtype M.tagDefs ty),
+                size := (CerbMem.sizeofCtype M.tagDefs ty : Int),
                 ty := some ty,
                 isReadonly := .IsWritable,
                 prefix_ := pref } }
-        (freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype ty))
-        (List.replicate (CerbMem.sizeofCtype ty) undefByte) = σ'' := by
+        (freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype M.tagDefs ty))
+        (List.replicate (CerbMem.sizeofCtype M.tagDefs ty) undefByte) = σ'' := by
     have h := Option.some.inj hmem'
     exact ⟨congrArg Prod.fst h, congrArg Prod.snd h⟩
   obtain ⟨re, rρ, rM⟩ := r
@@ -2284,7 +2284,7 @@ theorem wps_create_cursor_internal {Ψ : SpikeVal → EnvStack → IProp GF}
   obtain rfl : M = rM := hlbl.symm
   obtain ⟨hre, hrρ, hσ⟩ : re = Expr [] (Epure (Pexpr [] () (PEval
         (Vobject (OVpointer (cellPtr σ₁.nextAllocId
-          (freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype ty)))))))) ∧
+          (freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype M.tagDefs ty)))))))) ∧
       rρ = ρ ∧ σ₂ = _ := by
     simpa [Prod.mk.injEq] using hout
   subst hre hσ
@@ -2292,7 +2292,7 @@ theorem wps_create_cursor_internal {Ψ : SpikeVal → EnvStack → IProp GF}
   imod Hclose with -
   -- ghost: advance the cursor, mint the metadata, mint the bytes
   imod (cursorHeap_update
-    (AllocCursor.mk (freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype ty))
+    (AllocCursor.mk (freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype M.tagDefs ty))
       (σ₁.nextAllocId + 1))) $$ [$Hki $Hc] with ⟨Hki, Hc⟩
   have hfreshm : Iris.Std.PartialMap.get? mm σ₁.nextAllocId = none := by
     cases hg : Iris.Std.PartialMap.get? mm σ₁.nextAllocId with
@@ -2301,11 +2301,12 @@ theorem wps_create_cursor_internal {Ψ : SpikeVal → EnvStack → IProp GF}
       have := HG.cur_meta_lt (by rw [Hgetc]; simp) _ _ hg
       omega
   imod (metaHeap_alloc
-    (MetaCell.mk (freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype ty)) ty)
+    (MetaCell.mk (freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype M.tagDefs ty)) ty
+      (CerbMem.sizeofCtype M.tagDefs ty))
     hfreshm) $$ [$Hmi] with ⟨Hmi, Hmnew⟩
   have hfreshb : (rangeMap
-      (freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype ty))
-      (List.replicate (CerbMem.sizeofCtype ty) undefByte)) ##ₘ mb := by
+      (freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype M.tagDefs ty))
+      (List.replicate (CerbMem.sizeofCtype M.tagDefs ty) undefByte)) ##ₘ mb := by
     rw [Iris.Std.PartialMap.disjoint_iff]
     intro k
     cases hg : Iris.Std.PartialMap.get? mb k with
@@ -2315,32 +2316,33 @@ theorem wps_create_cursor_internal {Ψ : SpikeVal → EnvStack → IProp GF}
       rw [rangeMap_get?]
       rw [if_neg ?_]
       have hk := HG.cur_byte_lo (by rw [Hgetc]; simp) _ _ hg
-      have hbase_le : freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype ty) +
-          (CerbMem.sizeofCtype ty : Int) ≤ σ₁.lastAddress :=
-        freshBase_add_le σ₁.lastAddress alignN ty hsz hnz
+      have hbase_le : freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype M.tagDefs ty) +
+          (CerbMem.sizeofCtype M.tagDefs ty : Int) ≤ σ₁.lastAddress :=
+        freshBase_add_le M.tagDefs σ₁.lastAddress alignN ty hsz hnz
       intro hcon
       obtain ⟨h1, h2⟩ := hcon
       rw [List.length_replicate] at h2
       exact absurd (Int.lt_of_lt_of_le h2 (Int.le_trans hbase_le hk))
         (Int.lt_irrefl k)
   imod (byteHeap_alloc_big (rangeMap
-      (freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype ty))
-      (List.replicate (CerbMem.sizeofCtype ty) undefByte)) hfreshb)
+      (freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype M.tagDefs ty))
+      (List.replicate (CerbMem.sizeofCtype M.tagDefs ty) undefByte)) hfreshb)
     $$ [$Hbi] with ⟨Hbi, Hbnew⟩
   imodintro
   isplitl [Hmi Hbi Hki]
   · iapply (stateInterp_iff _ _ _ _).mpr
     iexists (Iris.Std.PartialMap.insert mm σ₁.nextAllocId
-        ⟨freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype ty), ty⟩),
+        ⟨freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype M.tagDefs ty), ty,
+          CerbMem.sizeofCtype M.tagDefs ty⟩),
       (Iris.Std.PartialMap.union (rangeMap
-        (freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype ty))
-        (List.replicate (CerbMem.sizeofCtype ty) undefByte)) mb),
+        (freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype M.tagDefs ty))
+        (List.replicate (CerbMem.sizeofCtype M.tagDefs ty) undefByte)) mb),
       (Iris.Std.PartialMap.insert mk 0
-        ⟨freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype ty),
+        ⟨freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype M.tagDefs ty),
           σ₁.nextAllocId + 1⟩)
     isplitr [Hmi Hbi Hki]
     · ipureintro
-      exact HG.create pref alignN ty hsz hatom Hgetc hnz
+      exact HG.create M.tagDefs pref alignN ty hsz hatom Hgetc hnz
     isplitl [Hmi]
     · iexact Hmi
     isplitl [Hbi]
@@ -2348,22 +2350,22 @@ theorem wps_create_cursor_internal {Ψ : SpikeVal → EnvStack → IProp GF}
     · iexact Hki
   · rw [show Expr ([] : List annot) (Epure (Pexpr [] () (PEval
         (Vobject (OVpointer (cellPtr σ₁.nextAllocId
-          (freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype ty)))))))) =
+          (freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype M.tagDefs ty)))))))) =
       ofVal (.pure (Vobject (OVpointer (cellPtr σ₁.nextAllocId
-        (freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype ty))))))
+        (freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype M.tagDefs ty))))))
       from rfl]
     iapply (wps_ofVal
       (.pure (Vobject (OVpointer (cellPtr σ₁.nextAllocId
-        (freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype ty)))))) ρ)
+        (freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype M.tagDefs ty)))))) ρ)
     ihave HB : bytesOwn (freshBase σ₁.lastAddress alignN
-        (CerbMem.sizeofCtype ty)) (.own 1)
-        (List.replicate (CerbMem.sizeofCtype ty) undefByte) $$ [Hbnew]
+        (CerbMem.sizeofCtype M.tagDefs ty)) (.own 1)
+        (List.replicate (CerbMem.sizeofCtype M.tagDefs ty) undefByte) $$ [Hbnew]
     · iapply bigSepM_rangeMap $$ Hbnew
     iapply HΨ
     isplitl [Hmnew HB]
-    · iapply (pointsToCell_iff _ _ _ _).mpr
+    · iapply (pointsToCell_iff M.tagDefs _ _ _ _).mpr
       iexists σ₁.nextAllocId,
-        (freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype ty))
+        (freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype M.tagDefs ty))
       isplit
       · ipureintro; rfl
       isplitl [Hmnew]
@@ -2397,21 +2399,21 @@ theorem wps_create {Ψ : SpikeVal → EnvStack → IProp GF}
     (aprov : CerbMem.Provenance) (req : AllocReq) (rest : List AllocReq)
     (pref : prefix0) (ρ : EnvStack)
     (hatom : atomicTy req.ty = false)
-    (hinert : ∀ a : Int, decIndep a req.ty
-      (List.replicate (CerbMem.sizeofCtype req.ty) undefByte)) :
-    iprop(allocCap (GF := GF) (req :: rest) ∗
+    (hinert : ∀ a : Int, decIndep M.tagDefs a req.ty
+      (List.replicate (CerbMem.sizeofCtype M.tagDefs req.ty) undefByte)) :
+    iprop(allocCap M.tagDefs (GF := GF) (req :: rest) ∗
       (∀ p : CerbMem.PointerValue,
-        (pointsToCell p (.own 1) req.ty
-            (List.replicate (CerbMem.sizeofCtype req.ty) undefByte) ∗
-          allocCap rest ∗
+        (pointsToCell M.tagDefs p (.own 1) req.ty
+            (List.replicate (CerbMem.sizeofCtype M.tagDefs req.ty) undefByte) ∗
+          allocCap M.tagDefs rest ∗
           ⌜0 < addrOf p ∧ addrOf p < 2 ^ 64⌝) -∗
         Ψ (SpikeVal.pure (Vobject (OVpointer p))) ρ)) ⊢
       wps M Ls Ψ (createExpr loc ann (.IV aprov req.align) req.ty pref) ρ := by
   unfold allocCap
   iintro ⟨⟨%c, Hc, %hfit⟩, HΨ⟩
   obtain ⟨hplan, hla⟩ := hfit
-  obtain ⟨c', hadv, hrest⟩ := (PlanFits_cons_iff c req rest).mp hplan
-  obtain ⟨hsz, hnz, rfl⟩ := advanceCursor_some_inv hadv
+  obtain ⟨c', hadv, hrest⟩ := (PlanFits_cons_iff M.tagDefs c req rest).mp hplan
+  obtain ⟨hsz, hnz, rfl⟩ := advanceCursor_some_inv M.tagDefs hadv
   iapply wps_create_cursor_internal loc ann aprov req.align req.ty pref
     c.lastAddr c.nextId ρ hsz hatom hnz (hinert _)
   isplitl [Hc]
@@ -2422,16 +2424,16 @@ theorem wps_create {Ψ : SpikeVal → EnvStack → IProp GF}
   · iexact Hpt
   isplitl [Hc]
   · -- rebuild the (unfolded) capacity from the advanced cursor
-    iexists ⟨freshBase c.lastAddr req.align (CerbMem.sizeofCtype req.ty),
+    iexists ⟨freshBase c.lastAddr req.align (CerbMem.sizeofCtype M.tagDefs req.ty),
       c.nextId + 1⟩
     isplitl [Hc]
     · iexact Hc
     · ipureintro
-      exact ⟨hrest, Int.le_of_lt (freshBase_lt_two64 c.lastAddr req.align
+      exact ⟨hrest, Int.le_of_lt (freshBase_lt_two64 M.tagDefs c.lastAddr req.align
         req.ty hsz hnz hla)⟩
   · ipureintro
-    exact ⟨freshBase_pos c.lastAddr req.align req.ty hnz,
-      freshBase_lt_two64 c.lastAddr req.align req.ty hsz hnz hla⟩
+    exact ⟨freshBase_pos M.tagDefs c.lastAddr req.align req.ty hnz,
+      freshBase_lt_two64 M.tagDefs c.lastAddr req.align req.ty hsz hnz hla⟩
 
 end CreateRule
 
@@ -2621,23 +2623,23 @@ axiom + FRAME + the sequencing rule; distinctness by ∗ alone. -/
 theorem wps_exhibit_store_frame (x y : CerbMem.PointerValue)
     (loc : CerbLocation.Loc) (ann : core_run_annotation) (mo : memory_order)
     (bs bs' : List CerbMem.AbsByte) (ty' : ctype) (ρ : EnvStack) :
-    iprop(pointsToCell (GF := GF) x (.own 1) intTy bs ∗
-        pointsToCell y (.own 1) ty' bs') ⊢
+    iprop(pointsToCell M.tagDefs (GF := GF) x (.own 1) intTy bs ∗
+        pointsToCell M.tagDefs y (.own 1) ty' bs') ⊢
       wps M Ls
-        (fun _ _ => iprop(pointsToCell x (.own 1) intTy sevenBytes ∗
-          pointsToCell y (.own 1) ty' bs'))
+        (fun _ _ => iprop(pointsToCell M.tagDefs x (.own 1) intTy (sevenBytes M.tagDefs) ∗
+          pointsToCell M.tagDefs y (.own 1) ty' bs'))
         (storeExpr loc ann intTy x sevenVal mo) ρ := by
   iintro ⟨Hx, Hy⟩
   iapply (wps_frame
-    (Ψ := fun _ _ => iprop(pointsToCell (GF := GF) x (.own 1) intTy sevenBytes))
-    (R := pointsToCell y (.own 1) ty' bs') _ _)
+    (Ψ := fun _ _ => iprop(pointsToCell M.tagDefs (GF := GF) x (.own 1) intTy (sevenBytes M.tagDefs)))
+    (R := pointsToCell M.tagDefs y (.own 1) ty' bs') _ _)
   isplitl [Hx]
   · iapply wps_store loc ann intTy x sevenVal mo sevenMval bs ρ seven_encodes
-      seven_storable
+      (seven_storable _)
     isplitl [Hx]
     · iexact Hx
     iintro %fp Hx
-    rw [show sevenBytes = (CerbMem.memValueToBytes [] sevenMval).2 from rfl]
+    rw [show (sevenBytes M.tagDefs) = (CerbMem.memValueToBytes M.tagDefs [] sevenMval).2 from rfl]
     iexact Hx
   · iexact Hy
 
@@ -2650,11 +2652,11 @@ theorem wps_exhibit_seq_stores (x y : CerbMem.PointerValue)
     (mo mo' : memory_order) (bty : core_base_type)
     (bsx bsy : List CerbMem.AbsByte)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value)) :
-    iprop(pointsToCell (GF := GF) x (.own 1) intTy bsx ∗
-        pointsToCell y (.own 1) intTy bsy) ⊢
+    iprop(pointsToCell M.tagDefs (GF := GF) x (.own 1) intTy bsx ∗
+        pointsToCell M.tagDefs y (.own 1) intTy bsy) ⊢
       wps M Ls
-        (fun _ _ => iprop(pointsToCell x (.own 1) intTy fiveBytes ∗
-          pointsToCell y (.own 1) intTy sixBytes))
+        (fun _ _ => iprop(pointsToCell M.tagDefs x (.own 1) intTy (fiveBytes M.tagDefs) ∗
+          pointsToCell M.tagDefs y (.own 1) intTy (sixBytes M.tagDefs)))
         (sseqExpr bty (storeExpr loc ann intTy x fiveVal mo)
           (storeExpr loc' ann' intTy y sixVal mo')) (ev0 :: evs) := by
   iintro ⟨Hx, Hy⟩
@@ -2665,17 +2667,17 @@ theorem wps_exhibit_seq_stores (x y : CerbMem.PointerValue)
       (storeExpr loc' ann' intTy y sixVal mo')) from rfl]
   iapply wps_seq
   iapply wps_store loc ann intTy x fiveVal mo fiveMval bsx (ev0 :: evs)
-    five_encodes five_storable
+    five_encodes (five_storable _)
   isplitl [Hx]
   · iexact Hx
   iintro %fp Hx
   iapply wps_store loc' ann' intTy y sixVal mo' sixMval bsy (ev0 :: evs)
-    six_encodes six_storable
+    six_encodes (six_storable _)
   isplitl [Hy]
   · iexact Hy
   iintro %fp' Hy
-  rw [show fiveBytes = (CerbMem.memValueToBytes [] fiveMval).2 from rfl,
-    show sixBytes = (CerbMem.memValueToBytes [] sixMval).2 from rfl]
+  rw [show (fiveBytes M.tagDefs) = (CerbMem.memValueToBytes M.tagDefs [] fiveMval).2 from rfl,
+    show (sixBytes M.tagDefs) = (CerbMem.memValueToBytes M.tagDefs [] sixMval).2 from rfl]
   isplitl [Hx]
   · iexact Hx
   · iexact Hy

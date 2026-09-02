@@ -72,35 +72,35 @@ def treePtrTy : ctype := Ctype [] (.Pointer no_qualifiers treeTy)
     CerbMem.lean:843). -/
 def nullTree : CerbMem.PointerValue := CerbMem.nullPtrval treeTy
 
-theorem treeTy_size : CerbMem.sizeofCtype treeTy = 24 := rfl
-theorem treePtrTy_size : CerbMem.sizeofCtype treePtrTy = 8 := rfl
+theorem treeTy_size {tds : CerbTags.TagDefsMap} : CerbMem.sizeofCtype tds treeTy = 24 := rfl
+theorem treePtrTy_size {tds : CerbTags.TagDefsMap} : CerbMem.sizeofCtype tds treePtrTy = 8 := rfl
 
 theorem treeTy_nonatomic : atomicTy treeTy = false := rfl
 
 /-- The `long[3]` decode is an array of integer decodes — table-
     independent (the same inertness argument as the list node's). -/
-theorem treeTy_dec_indep (lum : List (Int × identifier))
+theorem treeTy_dec_indep {tds : CerbTags.TagDefsMap} (lum : List (Int × identifier))
     (fpm : CerbMem.Funptrmap) (addr : Int) (bs : List CerbMem.AbsByte) :
-    CerbMem.reconstructValue lum fpm addr treeTy bs =
-      CerbMem.reconstructValue [] [] addr treeTy bs := rfl
+    CerbMem.reconstructValue tds lum fpm addr treeTy bs =
+      CerbMem.reconstructValue tds [] [] addr treeTy bs := rfl
 
 /-- Two long-element shifts of a fragment pointer (the engine's own
     arithmetic — the right-child field). -/
-theorem arrayShift_cellPtr_long_two (id p : Int) :
-    CerbMem.arrayShiftPtrval (cellPtr id p) longTy (CerbMem.integerIval 2) =
+theorem arrayShift_cellPtr_long_two {tds : CerbTags.TagDefsMap} (id p : Int) :
+    CerbMem.arrayShiftPtrval tds (cellPtr id p) longTy (CerbMem.integerIval 2) =
       cellPtr id (p + 16) := by
   show CerbMem.PointerValue.PV (.Prov_some id)
-    (.PVconcrete none (p + 2 * Int.ofNat (CerbMem.sizeofCtype longTy))) =
+    (.PVconcrete none (p + 2 * Int.ofNat (CerbMem.sizeofCtype tds longTy))) =
     CerbMem.PointerValue.PV (.Prov_some id) (.PVconcrete none (p + 16))
-  rw [show p + 2 * Int.ofNat (CerbMem.sizeofCtype longTy) = p + 16 by
+  rw [show p + 2 * Int.ofNat (CerbMem.sizeofCtype tds longTy) = p + 16 by
     rw [longTy_size]
     rw [show Int.ofNat 8 = (8 : Int) from rfl]
     omega]
 
 theorem evalArrayShift_long_two (id a : Int) :
-    evalArrayShift longTy (Vobject (OVpointer (cellPtr id a))) (ivVal 2) =
+    evalArrayShift fmapEmpty longTy (Vobject (OVpointer (cellPtr id a))) (ivVal 2) =
       some (Vobject (OVpointer (cellPtr id (a + 16)))) := by
-  show some (Vobject (OVpointer (CerbMem.arrayShiftPtrval (cellPtr id a)
+  show some (Vobject (OVpointer (CerbMem.arrayShiftPtrval fmapEmpty (cellPtr id a)
     longTy (CerbMem.integerIval 2)))) = _
   rw [arrayShift_cellPtr_long_two]
 
@@ -110,7 +110,7 @@ the list exhibit — pointer serialization is layout-independent) -/
 
 /-- The serialized image of a stored tree-node pointer. -/
 def trPtrImg (pv : CerbMem.PointerValue) : List CerbMem.AbsByte :=
-  imgOf (CerbMem.pointerMval treeTy pv)
+  imgOf fmapEmpty (CerbMem.pointerMval treeTy pv)
 
 theorem trPtrImg_cell (id a : Int) :
     trPtrImg (cellPtr id a) = ptrImg (cellPtr id a) := rfl
@@ -126,18 +126,18 @@ theorem trPtrImg_null_length : (trPtrImg nullTree).length = 8 := rfl
 
 /-- THE NULL ROUND TRIP at `tree*` (table- and address-independent —
     the list exhibit's `reconstruct_ptrImg_null` at this pointee). -/
-theorem reconstruct_trImg_null (lum : List (Int × identifier))
+theorem reconstruct_trImg_null {tds : CerbTags.TagDefsMap} (lum : List (Int × identifier))
     (fpm : CerbMem.Funptrmap) (addr : Int) :
-    CerbMem.reconstructValue lum fpm addr treePtrTy (trPtrImg nullTree) =
+    CerbMem.reconstructValue tds lum fpm addr treePtrTy (trPtrImg nullTree) =
       .MVpointer treeTy nullTree := rfl
 
 /-- THE CONCRETE-POINTER ROUND TRIP at `tree*` (transliteration of
     the list exhibit's `reconstruct_ptrImg_cell`; the byte-level
     facts `bytesToInt_ptrImg_cell` / `splitBytesProv_ptrImg_cell_fst`
     are reused as-is). -/
-theorem reconstruct_trImg_cell (id a : Int) (h0 : 0 < a) (h1 : a < 2 ^ 64)
+theorem reconstruct_trImg_cell {tds : CerbTags.TagDefsMap} (id a : Int) (h0 : 0 < a) (h1 : a < 2 ^ 64)
     (lum : List (Int × identifier)) (fpm : CerbMem.Funptrmap) (addr : Int) :
-    CerbMem.reconstructValue lum fpm addr treePtrTy (trPtrImg (cellPtr id a)) =
+    CerbMem.reconstructValue tds lum fpm addr treePtrTy (trPtrImg (cellPtr id a)) =
       .MVpointer treeTy (cellPtr id a) := by
   have hb := bytesToInt_ptrImg_cell id a (by omega) h1
   have hsp := splitBytesProv_ptrImg_cell_fst id a (by omega)
@@ -169,23 +169,23 @@ layout-independent; the child fields decode at `tree*`) -/
 
 /-- An 8-byte slice at offset `off` decodes — by the ENGINE's
     decoder — as the child pointer `q` at the tree-pointer type. -/
-def treePtrDec (bs : List CerbMem.AbsByte) (off : Nat)
+def treePtrDec (tds : CerbTags.TagDefsMap) (bs : List CerbMem.AbsByte) (off : Nat)
     (q : CerbMem.PointerValue) : Prop :=
   ∀ (lum : List (Int × identifier)) (fpm : CerbMem.Funptrmap) (ad : Int),
-    CerbMem.reconstructValue lum fpm ad treePtrTy ((bs.drop off).take 8) =
+    CerbMem.reconstructValue tds lum fpm ad treePtrTy ((bs.drop off).take 8) =
       .MVpointer treeTy q
 
 theorem treePtrDec_img_cell (id a : Int) (h0 : 0 < a) (h1 : a < 2 ^ 64)
     (bs : List CerbMem.AbsByte) (off : Nat)
     (himg : (bs.drop off).take 8 = trPtrImg (cellPtr id a)) :
-    treePtrDec bs off (cellPtr id a) := by
+    treePtrDec fmapEmpty bs off (cellPtr id a) := by
   intro lum fpm ad
   rw [himg]
   exact reconstruct_trImg_cell id a h0 h1 lum fpm ad
 
 theorem treePtrDec_img_null (bs : List CerbMem.AbsByte) (off : Nat)
     (himg : (bs.drop off).take 8 = trPtrImg nullTree) :
-    treePtrDec bs off nullTree := by
+    treePtrDec fmapEmpty bs off nullTree := by
   intro lum fpm ad
   rw [himg]
   exact reconstruct_trImg_null lum fpm ad
@@ -200,26 +200,26 @@ theorem tree_ptr_compat (pv : CerbMem.PointerValue) :
     CerbMem.ctypeMemCompatible treePtrTy
       (CerbMem.typeofMval (CerbMem.pointerMval treeTy pv)) = true := rfl
 
-theorem tree_ptr_img (pv : CerbMem.PointerValue) :
-    (CerbMem.memValueToBytes [] (CerbMem.pointerMval treeTy pv)).2 =
+theorem tree_ptr_img {tds : CerbTags.TagDefsMap} (pv : CerbMem.PointerValue) :
+    (CerbMem.memValueToBytes tds [] (CerbMem.pointerMval treeTy pv)).2 =
       trPtrImg pv := rfl
 
 /-- The store kit at the two shapes a tree root can have (the list
     exhibit's `node_store_kit`, at the tree layout, offset-generic:
     the decode-back component serves BOTH child fields). -/
-theorem tree_store_kit (pv : CerbMem.PointerValue)
+theorem tree_store_kit {tds : CerbTags.TagDefsMap} (pv : CerbMem.PointerValue)
     (hshape : pv = nullTree ∨ ∃ id aN : Int, pv = cellPtr id aN ∧
       0 < aN ∧ aN < 2 ^ 64) :
-    (CerbMem.memValueToBytes [] (CerbMem.pointerMval treeTy pv)).2.length
+    (CerbMem.memValueToBytes tds [] (CerbMem.pointerMval treeTy pv)).2.length
         = 8 ∧
-    (∀ fpm, (CerbMem.memValueToBytes fpm
+    (∀ fpm, (CerbMem.memValueToBytes tds fpm
       (CerbMem.pointerMval treeTy pv)).1 = fpm) ∧
-    (∀ fpm, (CerbMem.memValueToBytes fpm
+    (∀ fpm, (CerbMem.memValueToBytes tds fpm
         (CerbMem.pointerMval treeTy pv)).2 =
-      (CerbMem.memValueToBytes [] (CerbMem.pointerMval treeTy pv)).2) ∧
+      (CerbMem.memValueToBytes tds [] (CerbMem.pointerMval treeTy pv)).2) ∧
     (∀ (bs' : List CerbMem.AbsByte) (off : Nat), (bs'.drop off).take 8 =
-        (CerbMem.memValueToBytes [] (CerbMem.pointerMval treeTy pv)).2 →
-      treePtrDec bs' off pv) := by
+        (CerbMem.memValueToBytes tds [] (CerbMem.pointerMval treeTy pv)).2 →
+      treePtrDec tds bs' off pv) := by
   rcases hshape with rfl | ⟨id, aN, rfl, h0, h1⟩
   · exact ⟨rfl, fun _ => rfl, fun _ => rfl,
       fun bs' off himg => treePtrDec_img_null bs' off himg⟩
@@ -255,8 +255,8 @@ def isTree : CerbMem.PointerValue → NodeTree → IProp GF
   | p, .node id v l r => iprop(∃ (aN : Int)
       (ql qr : CerbMem.PointerValue) (bs : List CerbMem.AbsByte),
       ⌜p = cellPtr id aN ∧ 0 < aN ∧ aN < 2 ^ 64 ∧ bs.length = 24 ∧
-        nodeValDec bs v ∧ treePtrDec bs 8 ql ∧ treePtrDec bs 16 qr⌝ ∗
-      cellOwn id (.own 1) (SpikeCell.mk aN treeTy bs) ∗
+        nodeValDec fmapEmpty bs v ∧ treePtrDec fmapEmpty bs 8 ql ∧ treePtrDec fmapEmpty bs 16 qr⌝ ∗
+      cellOwn fmapEmpty id (.own 1) (SpikeCell.mk aN treeTy bs) ∗
       isTree ql l ∗ isTree qr r)
 
 @[simp] theorem isTree_leaf (p : CerbMem.PointerValue) :
@@ -267,8 +267,8 @@ theorem isTree_node (p : CerbMem.PointerValue) (id v : Int)
     isTree (GF := GF) p (.node id v l r) = iprop(∃ (aN : Int)
       (ql qr : CerbMem.PointerValue) (bs : List CerbMem.AbsByte),
       ⌜p = cellPtr id aN ∧ 0 < aN ∧ aN < 2 ^ 64 ∧ bs.length = 24 ∧
-        nodeValDec bs v ∧ treePtrDec bs 8 ql ∧ treePtrDec bs 16 qr⌝ ∗
-      cellOwn id (.own 1) (SpikeCell.mk aN treeTy bs) ∗
+        nodeValDec fmapEmpty bs v ∧ treePtrDec fmapEmpty bs 8 ql ∧ treePtrDec fmapEmpty bs 16 qr⌝ ∗
+      cellOwn fmapEmpty id (.own 1) (SpikeCell.mk aN treeTy bs) ∗
       isTree ql l ∗ isTree qr r) := rfl
 
 theorem isTree_leaf_intro : ⊢ isTree (GF := GF) nullTree .leaf := by
@@ -280,9 +280,9 @@ theorem isTree_leaf_intro : ⊢ isTree (GF := GF) nullTree .leaf := by
 theorem isTree_node_intro (id aN : Int) (ql qr : CerbMem.PointerValue)
     (bs : List CerbMem.AbsByte) (v : Int) (l r : NodeTree)
     (h0 : 0 < aN) (h1 : aN < 2 ^ 64) (hlen : bs.length = 24)
-    (hval : nodeValDec bs v) (hql : treePtrDec bs 8 ql)
-    (hqr : treePtrDec bs 16 qr) :
-    iprop(cellOwn (GF := GF) id (.own 1) (SpikeCell.mk aN treeTy bs) ∗
+    (hval : nodeValDec fmapEmpty bs v) (hql : treePtrDec fmapEmpty bs 8 ql)
+    (hqr : treePtrDec fmapEmpty bs 16 qr) :
+    iprop(cellOwn fmapEmpty (GF := GF) id (.own 1) (SpikeCell.mk aN treeTy bs) ∗
         isTree ql l ∗ isTree qr r) ⊢
       isTree (cellPtr id aN) (.node id v l r) := by
   rw [isTree_node]
@@ -341,7 +341,7 @@ def SeedTree : CellMap → CerbMem.PointerValue → NodeTree → Prop
   | m, p, .node id v l r => ∃ (aN : Int) (ql qr : CerbMem.PointerValue)
       (bs : List CerbMem.AbsByte) (ml mr : CellMap),
       p = cellPtr id aN ∧ 0 < aN ∧ aN < 2 ^ 64 ∧ bs.length = 24 ∧
-      nodeValDec bs v ∧ treePtrDec bs 8 ql ∧ treePtrDec bs 16 qr ∧
+      nodeValDec fmapEmpty bs v ∧ treePtrDec fmapEmpty bs 8 ql ∧ treePtrDec fmapEmpty bs 16 qr ∧
       ((singleton id (SpikeCell.mk aN treeTy bs) : CellMap)) ##ₘ
         (union ml mr) ∧
       ml ##ₘ mr ∧
@@ -397,7 +397,7 @@ open Iris.Std.PartialMap in
 theorem seedTree_isTree [SpikeGS hlc GF] :
     ∀ (t : NodeTree) (m : CellMap) (p : CerbMem.PointerValue),
     SeedTree m p t →
-    iprop(([∗map] i ↦ c ∈ m, cellOwn (GF := GF) i (.own 1) c)) ⊢
+    iprop(([∗map] i ↦ c ∈ m, cellOwn fmapEmpty (GF := GF) i (.own 1) c)) ⊢
       isTree p t
   | .leaf, m, p, hseed => by
     obtain ⟨rfl, rfl⟩ := hseed
@@ -427,7 +427,7 @@ theorem isTree_to_cells [SpikeGS .hasLC GF] :
     ∀ (t : NodeTree) (p : CerbMem.PointerValue),
     isTree (hlc := .hasLC) (GF := GF) p t ⊢
       iprop(∃ m : CellMap, ⌜SeedTree m p t⌝ ∗
-        ([∗map] i ↦ c ∈ m, cellOwn (hlc := .hasLC) i (.own 1) c))
+        ([∗map] i ↦ c ∈ m, cellOwn fmapEmpty (hlc := .hasLC) i (.own 1) c))
   | .leaf, p => by
     rw [isTree_leaf]
     iintro %h
@@ -446,27 +446,27 @@ theorem isTree_to_cells [SpikeGS .hasLC GF] :
     ihave HRC := isTree_to_cells r qr $$ HR
     icases HRC with ⟨%mr, %hmr, Hmr⟩
     ihave %hd2 : ⌜ml ##ₘ mr⌝ $$ [Hml Hmr]
-    · iapply bigSepM_own_disjoint ml mr
+    · iapply bigSepM_own_disjoint fmapEmpty ml mr
       isplitl [Hml]
       · iexact Hml
       · iexact Hmr
     ihave Hlr : iprop(([∗map] i ↦ c ∈ (union ml mr : CellMap),
-        cellOwn (hlc := .hasLC) (GF := GF) i (.own 1) c)) $$ [Hml Hmr]
+        cellOwn fmapEmpty (hlc := .hasLC) (GF := GF) i (.own 1) c)) $$ [Hml Hmr]
     · iapply (BigSepM.bigSepM_union hd2).2
       isplitl [Hml]
       · iexact Hml
       · iexact Hmr
     ihave H1 : iprop(([∗map] i ↦ c ∈ ((singleton id
         (SpikeCell.mk aN treeTy bs)) : CellMap),
-        cellOwn (hlc := .hasLC) (GF := GF) i (.own 1) c)) $$ [Hpt]
+        cellOwn fmapEmpty (hlc := .hasLC) (GF := GF) i (.own 1) c)) $$ [Hpt]
     · iapply (BigSepM.bigSepM_singleton
         (Φ := fun (i : Int) (c : SpikeCell) =>
-          cellOwn (hlc := .hasLC) (GF := GF) i (.own 1) c)
+          cellOwn fmapEmpty (hlc := .hasLC) (GF := GF) i (.own 1) c)
         (i := id) (x := SpikeCell.mk aN treeTy bs)).2
       iexact Hpt
     ihave %hd1 : ⌜((singleton id (SpikeCell.mk aN treeTy bs)) : CellMap) ##ₘ
         (union ml mr)⌝ $$ [H1 Hlr]
-    · iapply bigSepM_own_disjoint _ (union ml mr)
+    · iapply bigSepM_own_disjoint fmapEmpty _ (union ml mr)
       isplitl [H1]
       · iexact H1
       · iexact Hlr
@@ -636,67 +636,67 @@ theorem trBindB (bbty : core_base_type) (ov : object_value) (vy vx : value) :
 /-! ## Evaluation facts at the bound frames -/
 
 theorem tr_shift1_eval_F1 (id aX : Int) :
-    evalPexpr fmapEmpty (trF1 (ptrVal (cellPtr id aX)) :: [])
+    evalPexpr fmapEmpty fmapEmpty (trF1 (ptrVal (cellPtr id aX)) :: [])
       (trShift1 trXSym) = some (ptrVal (cellPtr id (aX + 8))) := by
   unfold trShift1
   rw [evalPexpr_array_shift]
-  rw [show evalPexpr fmapEmpty (trF1 (ptrVal (cellPtr id aX)) :: [])
+  rw [show evalPexpr fmapEmpty fmapEmpty (trF1 (ptrVal (cellPtr id aX)) :: [])
       (Pexpr [] () (PEsym trXSym)) = some (ptrVal (cellPtr id aX)) from by
     rw [evalPexpr_sym_empty]
     exact lookup_env_head (trF1_lookup_x _) []]
-  show evalArrayShift longTy (Vobject (OVpointer (cellPtr id aX))) (ivVal 1) = _
+  show evalArrayShift fmapEmpty longTy (Vobject (OVpointer (cellPtr id aX))) (ivVal 1) = _
   exact evalArrayShift_long_one id aX
 
 theorem tr_shift2_eval_F2 (id aY : Int) (vx : value) :
-    evalPexpr fmapEmpty (trF2 (ptrVal (cellPtr id aY)) vx :: [])
+    evalPexpr fmapEmpty fmapEmpty (trF2 (ptrVal (cellPtr id aY)) vx :: [])
       (trShift2 trYSym) = some (ptrVal (cellPtr id (aY + 16))) := by
   unfold trShift2
   rw [evalPexpr_array_shift]
-  rw [show evalPexpr fmapEmpty (trF2 (ptrVal (cellPtr id aY)) vx :: [])
+  rw [show evalPexpr fmapEmpty fmapEmpty (trF2 (ptrVal (cellPtr id aY)) vx :: [])
       (Pexpr [] () (PEsym trYSym)) = some (ptrVal (cellPtr id aY)) from by
     rw [evalPexpr_sym_empty]
     exact lookup_env_head (trF2_lookup_y _ _) []]
-  show evalArrayShift longTy (Vobject (OVpointer (cellPtr id aY))) (ivVal 2) = _
+  show evalArrayShift fmapEmpty longTy (Vobject (OVpointer (cellPtr id aY))) (ivVal 2) = _
   exact evalArrayShift_long_two id aY
 
 theorem tr_shift1_eval_F3 (vb vy : value) (id aX : Int) :
-    evalPexpr fmapEmpty (trF3 vb vy (ptrVal (cellPtr id aX)) :: [])
+    evalPexpr fmapEmpty fmapEmpty (trF3 vb vy (ptrVal (cellPtr id aX)) :: [])
       (trShift1 trXSym) = some (ptrVal (cellPtr id (aX + 8))) := by
   unfold trShift1
   rw [evalPexpr_array_shift]
-  rw [show evalPexpr fmapEmpty (trF3 vb vy (ptrVal (cellPtr id aX)) :: [])
+  rw [show evalPexpr fmapEmpty fmapEmpty (trF3 vb vy (ptrVal (cellPtr id aX)) :: [])
       (Pexpr [] () (PEsym trXSym)) = some (ptrVal (cellPtr id aX)) from by
     rw [evalPexpr_sym_empty]
     exact lookup_env_head (trF3_lookup_x _ _ _) []]
-  show evalArrayShift longTy (Vobject (OVpointer (cellPtr id aX))) (ivVal 1) = _
+  show evalArrayShift fmapEmpty longTy (Vobject (OVpointer (cellPtr id aX))) (ivVal 1) = _
   exact evalArrayShift_long_one id aX
 
 theorem tr_shift2_eval_F3 (vb vx : value) (id aY : Int) :
-    evalPexpr fmapEmpty (trF3 vb (ptrVal (cellPtr id aY)) vx :: [])
+    evalPexpr fmapEmpty fmapEmpty (trF3 vb (ptrVal (cellPtr id aY)) vx :: [])
       (trShift2 trYSym) = some (ptrVal (cellPtr id (aY + 16))) := by
   unfold trShift2
   rw [evalPexpr_array_shift]
-  rw [show evalPexpr fmapEmpty (trF3 vb (ptrVal (cellPtr id aY)) vx :: [])
+  rw [show evalPexpr fmapEmpty fmapEmpty (trF3 vb (ptrVal (cellPtr id aY)) vx :: [])
       (Pexpr [] () (PEsym trYSym)) = some (ptrVal (cellPtr id aY)) from by
     rw [evalPexpr_sym_empty]
     exact lookup_env_head (trF3_lookup_y _ _ _) []]
-  show evalArrayShift longTy (Vobject (OVpointer (cellPtr id aY))) (ivVal 2) = _
+  show evalArrayShift fmapEmpty longTy (Vobject (OVpointer (cellPtr id aY))) (ivVal 2) = _
   exact evalArrayShift_long_two id aY
 
 theorem tr_b_eval_F3 (vb vy vx : value) :
-    evalPexpr fmapEmpty (trF3 vb vy vx :: [])
+    evalPexpr fmapEmpty fmapEmpty (trF3 vb vy vx :: [])
       (Pexpr [] () (PEsym trBSym)) = some vb := by
   rw [evalPexpr_sym_empty]
   exact lookup_env_head (trF3_lookup_b _ _ _) []
 
 theorem tr_x_eval_F3 (vb vy vx : value) :
-    evalPexpr fmapEmpty (trF3 vb vy vx :: [])
+    evalPexpr fmapEmpty fmapEmpty (trF3 vb vy vx :: [])
       (Pexpr [] () (PEsym trXSym)) = some vx := by
   rw [evalPexpr_sym_empty]
   exact lookup_env_head (trF3_lookup_x _ _ _) []
 
 theorem tr_y_eval_F3 (vb vy vx : value) :
-    evalPexpr fmapEmpty (trF3 vb vy vx :: [])
+    evalPexpr fmapEmpty fmapEmpty (trF3 vb vy vx :: [])
       (Pexpr [] () (PEsym trYSym)) = some vy := by
   rw [evalPexpr_sym_empty]
   exact lookup_env_head (trF3_lookup_y _ _ _) []
@@ -717,11 +717,11 @@ theorem wps_load_tree_field {Ψ : SpikeVal → EnvStack → IProp GF}
     (id a : Int) (off : Nat) (mo : memory_order)
     (dq : DFrac) (bs : List CerbMem.AbsByte) (ρ : EnvStack)
     {mv : CerbMem.MemValue}
-    (hbound : off + 8 ≤ CerbMem.sizeofCtype treeTy)
-    (hdec : ∀ lum fpm, CerbMem.reconstructValue lum fpm (a + (off : Int))
+    (hbound : off + 8 ≤ CerbMem.sizeofCtype M.tagDefs treeTy)
+    (hdec : ∀ lum fpm, CerbMem.reconstructValue M.tagDefs lum fpm (a + (off : Int))
       treePtrTy ((bs.drop off).take 8) = mv) :
-    iprop(cellOwn (GF := GF) id dq (SpikeCell.mk a treeTy bs) ∗
-      (∀ fp, cellOwn id dq (SpikeCell.mk a treeTy bs) -∗
+    iprop(cellOwn M.tagDefs (GF := GF) id dq (SpikeCell.mk a treeTy bs) ∗
+      (∀ fp, cellOwn M.tagDefs id dq (SpikeCell.mk a treeTy bs) -∗
         Ψ (SpikeVal.annot [DA_pos [] fp] ((valueFromMemValue mv).2)) ρ)) ⊢
       wps M Ls Ψ (loadExpr loc ann treePtrTy (cellPtr id (a + (off : Int))) mo)
         ρ :=
@@ -737,16 +737,16 @@ theorem wps_store_tree_field {Ψ : SpikeVal → EnvStack → IProp GF}
     (bs : List CerbMem.AbsByte) (ρ : EnvStack) {mv : CerbMem.MemValue}
     (hmv : memValueFromValue M.tagDefs (Ctype [] (unatomic_ treePtrTy)) cv =
       some mv)
-    (hbound : off + 8 ≤ CerbMem.sizeofCtype treeTy)
-    (hlen : (CerbMem.memValueToBytes [] mv).2.length = 8)
+    (hbound : off + 8 ≤ CerbMem.sizeofCtype M.tagDefs treeTy)
+    (hlen : (CerbMem.memValueToBytes M.tagDefs [] mv).2.length = 8)
     (hcompat : CerbMem.ctypeMemCompatible treePtrTy (CerbMem.typeofMval mv) =
       true)
-    (hfpm : ∀ fpm, (CerbMem.memValueToBytes fpm mv).1 = fpm)
-    (hbytes : ∀ fpm, (CerbMem.memValueToBytes fpm mv).2 =
-      (CerbMem.memValueToBytes [] mv).2) :
-    iprop(cellOwn (GF := GF) id (.own 1) (SpikeCell.mk a treeTy bs) ∗
-      (∀ fp, cellOwn id (.own 1) (SpikeCell.mk a treeTy
-          (spliceBytes off (CerbMem.memValueToBytes [] mv).2 bs)) -∗
+    (hfpm : ∀ fpm, (CerbMem.memValueToBytes M.tagDefs fpm mv).1 = fpm)
+    (hbytes : ∀ fpm, (CerbMem.memValueToBytes M.tagDefs fpm mv).2 =
+      (CerbMem.memValueToBytes M.tagDefs [] mv).2) :
+    iprop(cellOwn M.tagDefs (GF := GF) id (.own 1) (SpikeCell.mk a treeTy bs) ∗
+      (∀ fp, cellOwn M.tagDefs id (.own 1) (SpikeCell.mk a treeTy
+          (spliceBytes off (CerbMem.memValueToBytes M.tagDefs [] mv).2 bs)) -∗
         Ψ (SpikeVal.annot [DA_pos [] fp] Vunit) ρ)) ⊢
       wps M Ls Ψ (storeExpr loc ann treePtrTy (cellPtr id (a + (off : Int)))
         cv mo) ρ :=
@@ -768,11 +768,11 @@ theorem wpt_load_tree_field {Ψ : SpikeVal → EnvStack → IProp GF}
     (id a : Int) (off : Nat) (mo : memory_order)
     (dq : DFrac) (bs : List CerbMem.AbsByte) (ρ : EnvStack)
     {mv : CerbMem.MemValue} {k : Nat} (hk : 3 ≤ k)
-    (hbound : off + 8 ≤ CerbMem.sizeofCtype treeTy)
-    (hdec : ∀ lum fpm, CerbMem.reconstructValue lum fpm (a + (off : Int))
+    (hbound : off + 8 ≤ CerbMem.sizeofCtype M.tagDefs treeTy)
+    (hdec : ∀ lum fpm, CerbMem.reconstructValue M.tagDefs lum fpm (a + (off : Int))
       treePtrTy ((bs.drop off).take 8) = mv) :
-    iprop(cellOwn (GF := GF) id dq (SpikeCell.mk a treeTy bs) ∗
-      (∀ fp, cellOwn id dq (SpikeCell.mk a treeTy bs) -∗
+    iprop(cellOwn M.tagDefs (GF := GF) id dq (SpikeCell.mk a treeTy bs) ∗
+      (∀ fp, cellOwn M.tagDefs id dq (SpikeCell.mk a treeTy bs) -∗
         Ψ (SpikeVal.annot [DA_pos [] fp] ((valueFromMemValue mv).2)) ρ)) ⊢
       wpt M Ls k Ψ (loadExpr loc ann treePtrTy (cellPtr id (a + (off : Int))) mo)
         ρ :=
@@ -788,16 +788,16 @@ theorem wpt_store_tree_field {Ψ : SpikeVal → EnvStack → IProp GF}
     {k : Nat} (hk : 3 ≤ k)
     (hmv : memValueFromValue M.tagDefs (Ctype [] (unatomic_ treePtrTy)) cv =
       some mv)
-    (hbound : off + 8 ≤ CerbMem.sizeofCtype treeTy)
-    (hlen : (CerbMem.memValueToBytes [] mv).2.length = 8)
+    (hbound : off + 8 ≤ CerbMem.sizeofCtype M.tagDefs treeTy)
+    (hlen : (CerbMem.memValueToBytes M.tagDefs [] mv).2.length = 8)
     (hcompat : CerbMem.ctypeMemCompatible treePtrTy (CerbMem.typeofMval mv) =
       true)
-    (hfpm : ∀ fpm, (CerbMem.memValueToBytes fpm mv).1 = fpm)
-    (hbytes : ∀ fpm, (CerbMem.memValueToBytes fpm mv).2 =
-      (CerbMem.memValueToBytes [] mv).2) :
-    iprop(cellOwn (GF := GF) id (.own 1) (SpikeCell.mk a treeTy bs) ∗
-      (∀ fp, cellOwn id (.own 1) (SpikeCell.mk a treeTy
-          (spliceBytes off (CerbMem.memValueToBytes [] mv).2 bs)) -∗
+    (hfpm : ∀ fpm, (CerbMem.memValueToBytes M.tagDefs fpm mv).1 = fpm)
+    (hbytes : ∀ fpm, (CerbMem.memValueToBytes M.tagDefs fpm mv).2 =
+      (CerbMem.memValueToBytes M.tagDefs [] mv).2) :
+    iprop(cellOwn M.tagDefs (GF := GF) id (.own 1) (SpikeCell.mk a treeTy bs) ∗
+      (∀ fp, cellOwn M.tagDefs id (.own 1) (SpikeCell.mk a treeTy
+          (spliceBytes off (CerbMem.memValueToBytes M.tagDefs [] mv).2 bs)) -∗
         Ψ (SpikeVal.annot [DA_pos [] fp] Vunit) ρ)) ⊢
       wpt M Ls k Ψ (storeExpr loc ann treePtrTy (cellPtr id (a + (off : Int)))
         cv mo) ρ :=
@@ -887,9 +887,9 @@ theorem tree_rotate_wps (RF : IProp GF)
   -- b's shape (for the first store's kit), non-destructively
   ihave Hb2 := isTree_shape qb tb $$ Hb
   icases Hb2 with ⟨%hshapeb, Hb⟩
-  have kitB := tree_store_kit qb hshapeb
+  have kitB := tree_store_kit (tds := fmapEmpty) qb hshapeb
   obtain ⟨kBlen, kBfpm, kBbytes, kBdec⟩ := kitB
-  have kitX := tree_store_kit (cellPtr idx aX)
+  have kitX := tree_store_kit (tds := fmapEmpty) (cellPtr idx aX)
     (.inr ⟨idx, aX, rfl, h0x, h1x⟩)
   obtain ⟨kXlen, kXfpm, kXbytes, kXdec⟩ := kitX
   rw [show trProg loc ann mo xbty ybty bbty ubty (cellPtr idx aX) =
@@ -924,7 +924,7 @@ theorem tree_rotate_wps (RF : IProp GF)
     rfl (tr_shift1_eval_F1 idx aX)
   rw [show cellPtr idx (aX + 8) = cellPtr idx (aX + ((8 : Nat) : Int))
     from rfl]
-  iapply wps_load_tree_field loc ann idx aX 8 mo (.own 1) bsx _
+  iapply wps_load_tree_field (M := spikeCtx) loc ann idx aX 8 mo (.own 1) bsx _
     (by rw [treeTy_size]; omega)
     (fun lum fpm => hLx lum fpm _)
   isplitl [HptX]
@@ -945,7 +945,7 @@ theorem tree_rotate_wps (RF : IProp GF)
     rfl (tr_shift2_eval_F2 idy aY _)
   rw [show cellPtr idy (aY + 16) = cellPtr idy (aY + ((16 : Nat) : Int))
     from rfl]
-  iapply wps_load_tree_field loc ann idy aY 16 mo (.own 1) bsy _
+  iapply wps_load_tree_field (M := spikeCtx) loc ann idy aY 16 mo (.own 1) bsy _
     (by rw [treeTy_size]; omega)
     (fun lum fpm => hRy lum fpm _)
   isplitl [HptY]
@@ -968,7 +968,7 @@ theorem tree_rotate_wps (RF : IProp GF)
     (tr_b_eval_F3 _ _ _)
   rw [show cellPtr idx (aX + 8) = cellPtr idx (aX + ((8 : Nat) : Int))
     from rfl]
-  iapply wps_store_tree_field loc ann idx aX 8 (ptrVal qb) mo bsx _
+  iapply wps_store_tree_field (M := spikeCtx) loc ann idx aX 8 (ptrVal qb) mo bsx _
     (tree_ptr_encodes qb) (by rw [treeTy_size]; omega) kBlen
     (tree_ptr_compat qb) kBfpm kBbytes
   isplitl [HptX]
@@ -981,7 +981,7 @@ theorem tree_rotate_wps (RF : IProp GF)
     (tr_x_eval_F3 _ _ _)
   rw [show cellPtr idy (aY + 16) = cellPtr idy (aY + ((16 : Nat) : Int))
     from rfl]
-  iapply wps_store_tree_field loc ann idy aY 16 (ptrVal (cellPtr idx aX))
+  iapply wps_store_tree_field (M := spikeCtx) loc ann idy aY 16 (ptrVal (cellPtr idx aX))
     mo bsy _
     (tree_ptr_encodes (cellPtr idx aX)) (by rw [treeTy_size]; omega) kXlen
     (tree_ptr_compat (cellPtr idx aX)) kXfpm kXbytes
@@ -997,19 +997,19 @@ theorem tree_rotate_wps (RF : IProp GF)
   isplitr [HF]
   · -- isTree (cellPtr idy aY) (node idy vy ta (node idx vx tb tc))
     iapply isTree_node_intro idy aY qa (cellPtr idx aX)
-      (spliceBytes 16 (CerbMem.memValueToBytes []
+      (spliceBytes 16 (CerbMem.memValueToBytes spikeCtx.tagDefs []
         (CerbMem.pointerMval treeTy (cellPtr idx aX))).2 bsy)
       vy ta (.node idx vx tb tc) h0y h1y
       (by rw [spliceBytes_length _ _ _ (by rw [kXlen, hleny]; omega)]
           exact hleny)
       (by intro lum fpm ad
-          rw [show ((spliceBytes 16 (CerbMem.memValueToBytes []
+          rw [show ((spliceBytes 16 (CerbMem.memValueToBytes spikeCtx.tagDefs []
               (CerbMem.pointerMval treeTy (cellPtr idx aX))).2 bsy).drop
                 0).take 8 =
             (bsy.drop 0).take 8 from trSplice16_val _ bsy kXlen hleny]
           exact hvaly lum fpm ad)
       (by intro lum fpm ad
-          rw [show ((spliceBytes 16 (CerbMem.memValueToBytes []
+          rw [show ((spliceBytes 16 (CerbMem.memValueToBytes spikeCtx.tagDefs []
               (CerbMem.pointerMval treeTy (cellPtr idx aX))).2 bsy).drop
                 8).take 8 =
             (bsy.drop 8).take 8 from trSplice16_left _ bsy kXlen hleny]
@@ -1021,19 +1021,19 @@ theorem tree_rotate_wps (RF : IProp GF)
     · iexact Ha
     · -- the rotated right subtree: x now holds b on its left
       iapply isTree_node_intro idx aX qb qR
-        (spliceBytes 8 (CerbMem.memValueToBytes []
+        (spliceBytes 8 (CerbMem.memValueToBytes spikeCtx.tagDefs []
           (CerbMem.pointerMval treeTy qb)).2 bsx)
         vx tb tc h0x h1x
         (by rw [spliceBytes_length _ _ _ (by rw [kBlen, hlenx]; omega)]
             exact hlenx)
         (by intro lum fpm ad
-            rw [show ((spliceBytes 8 (CerbMem.memValueToBytes []
+            rw [show ((spliceBytes 8 (CerbMem.memValueToBytes spikeCtx.tagDefs []
                 (CerbMem.pointerMval treeTy qb)).2 bsx).drop 0).take 8 =
               (bsx.drop 0).take 8 from trSplice8_val _ bsx kBlen hlenx]
             exact hvalx lum fpm ad)
         (kBdec _ 8 (trSplice8_self _ bsx kBlen hlenx))
         (by intro lum fpm ad
-            rw [show ((spliceBytes 8 (CerbMem.memValueToBytes []
+            rw [show ((spliceBytes 8 (CerbMem.memValueToBytes spikeCtx.tagDefs []
                 (CerbMem.pointerMval treeTy qb)).2 bsx).drop 16).take 8 =
               (bsx.drop 16).take 8 from trSplice8_right _ bsx kBlen hlenx]
             exact hRx lum fpm ad)
@@ -1069,12 +1069,12 @@ theorem trPost_readout [SpikeGS .hasLC GF] (t' : NodeTree) (R : CellMap) :
     trPost (hlc := .hasLC) (GF := GF) t' (lrCellFrame R) w ρ' ⊢
       readoutPost (fun v σ' => ∃ Q : CellMap,
         (∃ p' : CerbMem.PointerValue, v = ptrVal p' ∧ SeedTree Q p' t') ∧
-        Q ##ₘ R ∧ Coh σ' (union Q R)) w ρ' := by
+        Q ##ₘ R ∧ Coh fmapEmpty σ' (union Q R)) w ρ' := by
   intro w ρ'
   iintro ⟨%p', %hval, HT, HF⟩
   ihave HC := isTree_to_cells t' p' $$ HT
   icases HC with ⟨%Q, %hQ, HQ⟩
-  iapply cells_readout (fun v Q => ∃ p' : CerbMem.PointerValue,
+  iapply cells_readout fmapEmpty (fun v Q => ∃ p' : CerbMem.PointerValue,
       v = ptrVal p' ∧ SeedTree Q p' t') R w.val
   isplitl [HQ]
   · iexists Q
@@ -1099,7 +1099,7 @@ theorem tr_wp_readout [SpikeGS .hasLC GF]
             ⌜∃ Q : CellMap, (∃ p' : CerbMem.PointerValue,
                 CoreRVal.val w = ptrVal p' ∧
                 SeedTree Q p' (.node idy vy ta (.node idx vx tb tc))) ∧
-              Q ##ₘ R ∧ Coh σ' (union Q R)⌝) }} := by
+              Q ##ₘ R ∧ Coh spikeCtx.tagDefs σ' (union Q R)⌝) }} := by
   refine (tree_rotate_wps (Ls := fun _ _ _ => iprop(False)) loc ann mo
     xbty ybty bbty ubty (lrCellFrame R) idx idy vx vy ta tb tc px).trans ?_
   refine (BI.emp_sep.2.trans (BI.sep_mono
@@ -1163,7 +1163,7 @@ theorem tree_rotate_certified (sbty : core_base_type)
     (hseed : SeedTree m₀ px (.node idx vx (.node idy vy ta tb) tc))
     (R : CellMap) (hR : m₀ ##ₘ R)
     (hlib : CerbLocation.isLibraryLocation loc = false)
-    (σ₀ : Mem) (hcoh : Sat σ₀ (union m₀ R))
+    (σ₀ : Mem) (hcoh : Sat fmapEmpty σ₀ (union m₀ R))
     (n : Nat) (aids : Nat → Nat)
     (hfuel : 6 + n ≤ lemDefaultFuel) :
     let prog := trProg loc ann mo xbty ybty bbty ubty px
@@ -1176,7 +1176,7 @@ theorem tree_rotate_certified (sbty : core_base_type)
         SeedTree Q py (.node idy vy ta (.node idx vx tb tc)) ∧
         (∀ k, (get? Q k).isSome ↔ (get? m₀ k).isSome) ∧
         Q ##ₘ R ∧
-        Sat σ' (union Q R)) := by
+        Sat fmapEmpty σ' (union Q R)) := by
   intro prog
   have h := spike_engine_adequacy (GF := SpikeGF)
     prog σ₀ (union m₀ R)
@@ -1184,7 +1184,7 @@ theorem tree_rotate_certified (sbty : core_base_type)
     (fun v σ' => ∃ Q : CellMap, (∃ p' : CerbMem.PointerValue,
         v = ptrVal p' ∧
         SeedTree Q p' (.node idy vy ta (.node idx vx tb tc))) ∧
-      Q ##ₘ R ∧ Coh σ' (union Q R))
+      Q ##ₘ R ∧ Coh fmapEmpty σ' (union Q R))
     (by
       intro inst
       refine ((BigSepM.bigSepM_union hR).1.trans
@@ -1232,9 +1232,9 @@ theorem tree_rotate_wpt (RF : IProp GF)
   obtain ⟨rfl, h0y, h1y, hleny, hvaly, hLy, hRy⟩ := hfy
   ihave Hb2 := isTree_shape qb tb $$ Hb
   icases Hb2 with ⟨%hshapeb, Hb⟩
-  have kitB := tree_store_kit qb hshapeb
+  have kitB := tree_store_kit (tds := fmapEmpty) qb hshapeb
   obtain ⟨kBlen, kBfpm, kBbytes, kBdec⟩ := kitB
-  have kitX := tree_store_kit (cellPtr idx aX)
+  have kitX := tree_store_kit (tds := fmapEmpty) (cellPtr idx aX)
     (.inr ⟨idx, aX, rfl, h0x, h1x⟩)
   obtain ⟨kXlen, kXfpm, kXbytes, kXdec⟩ := kitX
   rw [show trProg loc ann mo xbty ybty bbty ubty (cellPtr idx aX) =
@@ -1272,7 +1272,7 @@ theorem tree_rotate_wpt (RF : IProp GF)
     rfl (tr_shift1_eval_F1 idx aX)
   rw [show cellPtr idx (aX + 8) = cellPtr idx (aX + ((8 : Nat) : Int))
     from rfl]
-  iapply wpt_load_tree_field loc ann idx aX 8 mo (.own 1) bsx _
+  iapply wpt_load_tree_field (M := spikeCtx) loc ann idx aX 8 mo (.own 1) bsx _
     (by omega) (by rw [treeTy_size]; omega)
     (fun lum fpm => hLx lum fpm _)
   isplitl [HptX]
@@ -1294,7 +1294,7 @@ theorem tree_rotate_wpt (RF : IProp GF)
     rfl (tr_shift2_eval_F2 idy aY _)
   rw [show cellPtr idy (aY + 16) = cellPtr idy (aY + ((16 : Nat) : Int))
     from rfl]
-  iapply wpt_load_tree_field loc ann idy aY 16 mo (.own 1) bsy _
+  iapply wpt_load_tree_field (M := spikeCtx) loc ann idy aY 16 mo (.own 1) bsy _
     (by omega) (by rw [treeTy_size]; omega)
     (fun lum fpm => hRy lum fpm _)
   isplitl [HptY]
@@ -1318,7 +1318,7 @@ theorem tree_rotate_wpt (RF : IProp GF)
     (tr_b_eval_F3 _ _ _)
   rw [show cellPtr idx (aX + 8) = cellPtr idx (aX + ((8 : Nat) : Int))
     from rfl]
-  iapply wpt_store_tree_field loc ann idx aX 8 (ptrVal qb) mo bsx _
+  iapply wpt_store_tree_field (M := spikeCtx) loc ann idx aX 8 (ptrVal qb) mo bsx _
     (by omega)
     (tree_ptr_encodes qb) (by rw [treeTy_size]; omega) kBlen
     (tree_ptr_compat qb) kBfpm kBbytes
@@ -1333,7 +1333,7 @@ theorem tree_rotate_wpt (RF : IProp GF)
     (tr_x_eval_F3 _ _ _)
   rw [show cellPtr idy (aY + 16) = cellPtr idy (aY + ((16 : Nat) : Int))
     from rfl]
-  iapply wpt_store_tree_field loc ann idy aY 16 (ptrVal (cellPtr idx aX))
+  iapply wpt_store_tree_field (M := spikeCtx) loc ann idy aY 16 (ptrVal (cellPtr idx aX))
     mo bsy _
     (by omega)
     (tree_ptr_encodes (cellPtr idx aX)) (by rw [treeTy_size]; omega) kXlen
@@ -1349,19 +1349,19 @@ theorem tree_rotate_wpt (RF : IProp GF)
     rfl
   isplitr [HF]
   · iapply isTree_node_intro idy aY qa (cellPtr idx aX)
-      (spliceBytes 16 (CerbMem.memValueToBytes []
+      (spliceBytes 16 (CerbMem.memValueToBytes spikeCtx.tagDefs []
         (CerbMem.pointerMval treeTy (cellPtr idx aX))).2 bsy)
       vy ta (.node idx vx tb tc) h0y h1y
       (by rw [spliceBytes_length _ _ _ (by rw [kXlen, hleny]; omega)]
           exact hleny)
       (by intro lum fpm ad
-          rw [show ((spliceBytes 16 (CerbMem.memValueToBytes []
+          rw [show ((spliceBytes 16 (CerbMem.memValueToBytes spikeCtx.tagDefs []
               (CerbMem.pointerMval treeTy (cellPtr idx aX))).2 bsy).drop
                 0).take 8 =
             (bsy.drop 0).take 8 from trSplice16_val _ bsy kXlen hleny]
           exact hvaly lum fpm ad)
       (by intro lum fpm ad
-          rw [show ((spliceBytes 16 (CerbMem.memValueToBytes []
+          rw [show ((spliceBytes 16 (CerbMem.memValueToBytes spikeCtx.tagDefs []
               (CerbMem.pointerMval treeTy (cellPtr idx aX))).2 bsy).drop
                 8).take 8 =
             (bsy.drop 8).take 8 from trSplice16_left _ bsy kXlen hleny]
@@ -1372,19 +1372,19 @@ theorem tree_rotate_wpt (RF : IProp GF)
     isplitl [Ha]
     · iexact Ha
     · iapply isTree_node_intro idx aX qb qR
-        (spliceBytes 8 (CerbMem.memValueToBytes []
+        (spliceBytes 8 (CerbMem.memValueToBytes spikeCtx.tagDefs []
           (CerbMem.pointerMval treeTy qb)).2 bsx)
         vx tb tc h0x h1x
         (by rw [spliceBytes_length _ _ _ (by rw [kBlen, hlenx]; omega)]
             exact hlenx)
         (by intro lum fpm ad
-            rw [show ((spliceBytes 8 (CerbMem.memValueToBytes []
+            rw [show ((spliceBytes 8 (CerbMem.memValueToBytes spikeCtx.tagDefs []
                 (CerbMem.pointerMval treeTy qb)).2 bsx).drop 0).take 8 =
               (bsx.drop 0).take 8 from trSplice8_val _ bsx kBlen hlenx]
             exact hvalx lum fpm ad)
         (kBdec _ 8 (trSplice8_self _ bsx kBlen hlenx))
         (by intro lum fpm ad
-            rw [show ((spliceBytes 8 (CerbMem.memValueToBytes []
+            rw [show ((spliceBytes 8 (CerbMem.memValueToBytes spikeCtx.tagDefs []
                 (CerbMem.pointerMval treeTy qb)).2 bsx).drop 16).take 8 =
               (bsx.drop 16).take 8 from trSplice8_right _ bsx kBlen hlenx]
             exact hRx lum fpm ad)
@@ -1421,7 +1421,7 @@ theorem tree_rotate_certified_total (idx idy vx vy : Int)
     (hseed : SeedTree m₀ px (.node idx vx (.node idy vy ta tb) tc))
     (R : CellMap) (hR : m₀ ##ₘ R)
     (hlib : CerbLocation.isLibraryLocation loc = false)
-    (σ₀ : Mem) (hcoh : Sat σ₀ (union m₀ R)) (aids : Nat → Nat) :
+    (σ₀ : Mem) (hcoh : Sat fmapEmpty σ₀ (union m₀ R)) (aids : Nat → Nat) :
     ∃ (py : CerbMem.PointerValue) (Q : CellMap) (σ' : Mem),
       drive aids 19
         (spikeThread (trProg loc ann mo xbty ybty bbty ubty px)) σ₀ =
@@ -1429,7 +1429,7 @@ theorem tree_rotate_certified_total (idx idy vx vy : Int)
       SeedTree Q py (.node idy vy ta (.node idx vx tb tc)) ∧
       (∀ k, (get? Q k).isSome ↔ (get? m₀ k).isSome) ∧
       Q ##ₘ R ∧
-      Sat σ' (union Q R) := by
+      Sat fmapEmpty σ' (union Q R) := by
   obtain ⟨v, σ', hdone, ⟨Q, ⟨py, rfl, hQseed⟩, hdisj, hsat⟩, -⟩ :=
     wpt_engine_boundU (GF := SpikeGF) (M := spikeCtx) spikeCtx_wf
       (fun l params cont hl => (spikeCtx_labels_none l hl).elim)
@@ -1443,7 +1443,7 @@ theorem tree_rotate_certified_total (idx idy vx vy : Int)
       (fun v σ' => ∃ Q : CellMap, (∃ p' : CerbMem.PointerValue,
           v = ptrVal p' ∧
           SeedTree Q p' (.node idy vy ta (.node idx vx tb tc))) ∧
-        Q ##ₘ R ∧ Coh σ' (union Q R))
+        Q ##ₘ R ∧ Coh fmapEmpty σ' (union Q R))
       19
       (by
         intro inst

@@ -6,19 +6,22 @@ pipeline, from the shipped initial state.
 The pipeline under judgment is the SHIPPED one (Main.lean:857-885):
 
   CerbND.runND (Driver.drive tagDefs false file args)
-               (initial_driver_state file fs)
+               (initial_driver_state sup file fs).1
 
-with `initial_driver_state` (Driver.lean:435) the PRODUCTION state
+with `initial_driver_state` (Driver.lean:446) the PRODUCTION state
 constructor — nothing hand-built enters the quantifiers: memory starts
-at `CerbMem.initialMemState` (= the empty MemState, CerbMem.lean:1193),
-the thread pool empty (`initial_core_state`, Core_run_aux.lean:392),
-and the run state at `initial_core_run_state` (Core_run_aux.lean:395)
-whose `sym_supply` is drawn through the EFFECTFUL seam
-`runEffectful (CerberusFresh.freshIntIO ())` — the declared temporal
-boundary axiom (see Audit.lean); every theorem below therefore carries
-`LemLib.runEffectful` in its cone, and holds REGARDLESS of the drawn
-value (the fragment never reads sym_supply — the D14 read-set
-partition).
+at `CerbMem.initialMemState` (= the empty MemState), the thread pool
+empty (`initial_core_state`, Core_run_aux.lean:393), and the run state
+at `initial_core_run_state` (Core_run_aux.lean:406), which seeds
+`sym_supply` from the SUPPLY-THREADED entry's `sup` argument (the
+cerberus-lean effect-retirement arc, C1: `initial_driver_state :
+Nat → file → fs_state → driver_state × Nat`, the `.1` projection
+being the state and `.2` the advanced supply). Every theorem below
+quantifies over the supply `sup` — the shipped `Main` seeds one
+concrete stream, the theorems hold for every value, because the
+fragment never reads `sym_supply` (the D14 read-set partition). The
+former `runEffectful` boundary axiom is GONE from the cone: every
+theorem here is trio-exact (Audit.lean).
 
 The setup prefix `Driver.drive` runs before `driver2`
 (Driver.lean:500-513): spawn thread 0 (`driver_globals` /
@@ -147,8 +150,8 @@ def errnoAllocRec : CerbMem.Allocation :=
 
 /-- The engine's own errno allocation on the cold state. -/
 def errnoSeeded : Option (CerbMem.PointerValue × Mem) :=
-  applyMemM (CerbMem.allocateObject 0 (PrefOther "errno")
-    (CerbMem.alignofIval signed_int) signed_int none none)
+  applyMemM (CerbMem.allocateObject fmapEmpty 0 (PrefOther "errno")
+    (CerbMem.alignofIval fmapEmpty signed_int) signed_int none none)
     CerbMem.initialMemState
 
 /-- The state after the errno allocation. -/
@@ -160,8 +163,8 @@ def σE1 : Mem :=
 theorem errnoSeeded_eq : errnoSeeded = some (errnoPtr, σE1) := rfl
 
 theorem errno_alloc_eq :
-    applyMemM (CerbMem.allocateObject 0 (PrefOther "errno")
-      (CerbMem.alignofIval signed_int) signed_int none none)
+    applyMemM (CerbMem.allocateObject fmapEmpty 0 (PrefOther "errno")
+      (CerbMem.alignofIval fmapEmpty signed_int) signed_int none none)
       CerbMem.initialMemState = some (errnoPtr, σE1) := errnoSeeded_eq
 
 theorem σE1_allocations :
@@ -181,25 +184,25 @@ theorem errno_bytes_len (a : Int) :
 abbrev errnoCell : SpikeCell :=
   ⟨errnoAddr, signed_int, CerbMem.readBytesFrom σE1 errnoAddr 4⟩
 
-theorem errnoCellCoh : CellCoh σE1 0 errnoCell :=
+theorem errnoCellCoh : CellCoh fmapEmpty σE1 0 errnoCell :=
   ⟨rfl, ⟨errnoAllocRec, errno_alloc_get, rfl, rfl, rfl, rfl⟩, rfl,
-   by rw [show CerbMem.sizeofCtype errnoCell.ty = 4 from rfl]; exact errno_bytes_len errnoAddr,
-   by rw [show CerbMem.sizeofCtype errnoCell.ty = 4 from rfl],
+   by rw [show CerbMem.sizeofCtype fmapEmpty errnoCell.ty = 4 from rfl]; exact errno_bytes_len errnoAddr,
+   by rw [show CerbMem.sizeofCtype fmapEmpty errnoCell.ty = 4 from rfl],
    fun _ _ => rfl⟩
 
-theorem zero_storable : StorableAt signed_int zeroMval :=
+theorem zero_storable {tds : CerbTags.TagDefsMap} : StorableAt tds signed_int zeroMval :=
   ⟨rfl, fun _ => rfl, fun _ => rfl, fun _ => rfl, fun _ _ _ => rfl⟩
 
 /-- The memory state at fragment start: errno allocated and zeroed by
     the engine's own operations — the production cold-start memory. -/
 def prodMem₀ : Mem :=
-  CerbMem.writeBytesTo σE1 errnoAddr (CerbMem.memValueToBytes [] zeroMval).2
+  CerbMem.writeBytesTo σE1 errnoAddr (CerbMem.memValueToBytes fmapEmpty [] zeroMval).2
 
 theorem errno_store_eq :
-    applyMemM (CerbMem.storeM (CerbLocation.other "errno init") signed_int
+    applyMemM (CerbMem.storeM fmapEmpty (CerbLocation.other "errno init") signed_int
       false errnoPtr zeroMval) σE1 =
-      some (.FP .W errnoAddr (CerbMem.sizeofCtype signed_int), prodMem₀) :=
-  storeM_success σE1 0 errnoCell zeroMval _ errnoCellCoh zero_storable
+      some (.FP .W errnoAddr (CerbMem.sizeofCtype fmapEmpty signed_int), prodMem₀) :=
+  storeM_success fmapEmpty σE1 0 errnoCell zeroMval _ errnoCellCoh zero_storable
 
 /-! ## Launch coherence at the production cold start (alloc arc
 P1.2 — the CONCRETE instance; the generic theorem is
@@ -221,9 +224,9 @@ theorem prodMem₀_deadAllocations : prodMem₀.deadAllocations = [] := rfl
     dead, so any plan fitting the actual cursor `⟨errnoAddr, 1⟩`
     launches the empty footprint allocation-aware. -/
 theorem prodMem₀_launchCoh (reqs : List AllocReq)
-    (hfit : PlanFits ⟨prodMem₀.lastAddress, prodMem₀.nextAllocId⟩ reqs) :
-    LaunchCoh prodMem₀ (∅ : SpikeHeapF SpikeCell) reqs := by
-  refine LaunchCoh.empty prodMem₀ reqs ?_ ?_ hfit
+    (hfit : PlanFits fmapEmpty ⟨prodMem₀.lastAddress, prodMem₀.nextAllocId⟩ reqs) :
+    LaunchCoh fmapEmpty prodMem₀ (∅ : SpikeHeapF SpikeCell) reqs := by
+  refine LaunchCoh.empty fmapEmpty prodMem₀ reqs ?_ ?_ hfit
     (by rw [prodMem₀_lastAddress]; decide)
   · intro id hle
     rw [prodMem₀_nextAllocId] at hle
@@ -263,19 +266,19 @@ def globalsThread : thread_state :=
 
 /-- The driver state after driver_globals on the synthetic file:
     thread 0 spawned (tid_supply ticked), nothing else moved. -/
-def prodPostGlobals (e : CoreExpr) (fs : CerbFS.FsState) : driver_state :=
-  { initial_driver_state (prodFile e) fs with
+def prodPostGlobals (sup : Nat) (e : CoreExpr) (fs : CerbFS.FsState) : driver_state :=
+  { (initial_driver_state sup (prodFile e) fs).1 with
       core_state0 := { thread_states := [(0, (none, globalsThread))],
                        io := initial_io_state },
       core_run_state0 :=
-        { initial_core_run_state
-            (collect_labeled_continuations_NEW (prodFile e)) with
+        { (initial_core_run_state sup
+            (collect_labeled_continuations_NEW (prodFile e))).1 with
           tid_supply := 1 } }
 
 /-- The driver state at driver2 entry: errno allocated and zeroed,
     main's body parked as thread 0's arena. -/
-def prodEntryState (e : CoreExpr) (fs : CerbFS.FsState) : driver_state :=
-  { prodPostGlobals e fs with
+def prodEntryState (sup : Nat) (e : CoreExpr) (fs : CerbFS.FsState) : driver_state :=
+  { prodPostGlobals sup e fs with
       core_state0 := { thread_states := [(0, (none, prodThread e))],
                        io := initial_io_state },
       layout_state := prodMem₀ }
@@ -284,19 +287,19 @@ def prodEntryState (e : CoreExpr) (fs : CerbFS.FsState) : driver_state :=
 initial state to the driver2 entry, computed through the engine's own
 setup functions (spawn_thread, the main lookup, the errno block). -/
 
-theorem drive_after_setup (e : CoreExpr) (fs : CerbFS.FsState)
+theorem drive_after_setup (sup : Nat) (e : CoreExpr) (fs : CerbFS.FsState)
     (args : List String) (dstD : driver_state)
     (hdrv2 : runOne (driver2_lemFuel lemDefaultFuel fmapEmpty false)
-        (prodEntryState e fs) = (NDactive (), dstD)) :
+        (prodEntryState sup e fs) = (NDactive (), dstD)) :
     runOne (_root_.drive fmapEmpty false (prodFile e) args)
-        (initial_driver_state (prodFile e) fs) =
+        ((initial_driver_state sup (prodFile e) fs).1) =
       (NDactive (finalize fmapEmpty "drive (without concur)" dstD), dstD) := by
   conv => lhs; unfold _root_.drive
   -- driver_globals: spawn thread 0, no globals
   refine (runOne_bind_active (z := (0 : Nat))
-    (s' := prodPostGlobals e fs) (by rfl)).trans ?_
+    (s' := prodPostGlobals sup e fs) (by rfl)).trans ?_
   -- main lookup on the synthetic file
-  refine (runOne_bind_active (z := prodPostGlobals e fs) (by rfl)).trans ?_
+  refine (runOne_bind_active (z := prodPostGlobals sup e fs) (by rfl)).trans ?_
   refine (runOne_bind_active (z := mainSym) (by rfl)).trans ?_
   refine (runOne_bind_active
     (z := (CerbLocation.unknown, ([] : List (sym × core_base_type)), e))
@@ -305,17 +308,17 @@ theorem drive_after_setup (e : CoreExpr) (fs : CerbFS.FsState)
   -- the errno allocation block (real allocateObject/storeM on the
   -- cold memory)
   refine (runOne_bind_active (z := errnoPtr)
-    (s' := { prodPostGlobals e fs with layout_state := prodMem₀ })
+    (s' := { prodPostGlobals sup e fs with layout_state := prodMem₀ })
     (runOne_liftMem_active ?_)).trans ?_
   · refine (runOne_bind_active (z := errnoPtr) (s' := σE1)
       (runOne_of_applyMemM errno_alloc_eq)).trans ?_
     refine (runOne_bind_active
-      (z := CerbMem.Footprint.FP .W errnoAddr (CerbMem.sizeofCtype signed_int))
+      (z := CerbMem.Footprint.FP .W errnoAddr (CerbMem.sizeofCtype fmapEmpty signed_int))
       (s' := prodMem₀) (runOne_of_applyMemM errno_store_eq)).trans ?_
     rfl
   -- park main's arena, run driver2, finalize
   refine (runOne_bind_active (z := ()) (s' := dstD) ?_).trans ?_
-  · refine (runOne_bind_active (z := ()) (s' := prodEntryState e fs)
+  · refine (runOne_bind_active (z := ()) (s' := prodEntryState sup e fs)
       (by rfl)).trans ?_
     exact hdrv2
   · refine (runOne_bind_active (z := dstD) (by rfl)).trans ?_
@@ -329,10 +332,10 @@ theorem drive_after_setup (e : CoreExpr) (fs : CerbFS.FsState)
     drive's delivered value and whose final memory is the drive's
     final memory. Hypotheses: the fragment drive from the cold-start
     memory completes within budget (∀ action-id supplies — the
-    production supply starts at an effectful seed). Killed and stuck
+    production aid supply starts at the entry's seed). Killed and stuck
     productions are excluded by the equation itself: the run IS the
     singleton Active execution. -/
-theorem prod_run_eq (e : CoreExpr) (hfrag : StraightFrag e)
+theorem prod_run_eq (sup : Nat) (e : CoreExpr) (hfrag : StraightFrag e)
     (v : value) (σfin : Mem) (k : Nat)
     (hterm : ∀ aids : Nat → Nat,
       drive aids k (spikeThread e) prodMem₀ = .done v σfin)
@@ -340,7 +343,7 @@ theorem prod_run_eq (e : CoreExpr) (hfrag : StraightFrag e)
     (fs : CerbFS.FsState) (args : List String) :
     ∃ (dres : driver_result) (dst' : driver_state),
       CerbND.runND (_root_.drive fmapEmpty false (prodFile e) args)
-          (initial_driver_state (prodFile e) fs) =
+          ((initial_driver_state sup (prodFile e) fs).1) =
         [(nd_status.Active dres, ([] : List String), dst')] ∧
       dres.dres_core_value = v ∧
       dres.dres_blocked = false ∧
@@ -349,11 +352,11 @@ theorem prod_run_eq (e : CoreExpr) (hfrag : StraightFrag e)
       dst'.layout_state = σfin := by
   obtain ⟨rs', tr, ctr, hloop⟩ := prod_loop_done (prodThread e) rfl
     (ev0 := fmapEmpty) (evs := []) rfl v σfin k lemDefaultFuel e
-    (prodEntryState e fs) fmapEmpty hfrag rfl (by omega) (by omega) hterm
-  have hdrv2 := driver2_done 999999 fmapEmpty (prodEntryState e fs) _
+    (prodEntryState sup e fs) fmapEmpty hfrag rfl (by omega) (by omega) hterm
+  have hdrv2 := driver2_done 999999 fmapEmpty (prodEntryState sup e fs) _
     (prodThread e) { prodThread e with arena := ofVal (.pure v) } v rfl
     hloop rfl
-  have hrun := drive_after_setup e fs args _ hdrv2
+  have hrun := drive_after_setup sup e fs args _ hdrv2
   exact ⟨_, _, runND_active hrun, by
       rw [finalize_done fmapEmpty _ _
         { { prodThread e with arena := ofVal (.pure v) } with
@@ -386,7 +389,7 @@ was, with the conditions stated as part of the claim, and is a
 RETIREMENT CANDIDATE for the P5 scaffolding pass (re-audit R-07):
 retiring it deletes an exported face, so that decision is left
 operator-visible rather than taken here. -/
-theorem sem_triple_prod
+theorem sem_triple_prod (sup : Nat)
     (e : CoreExpr) (hfrag : StraightFrag e)
     -- the compute part and its exported triple
     (ec : CoreExpr) (P : CellMap) (post : value → CellMap → Prop)
@@ -399,7 +402,7 @@ theorem sem_triple_prod
     (hpre : ∀ (aids : Nat → Nat) (n : Nat),
       drive aids (j + n) (spikeThread e) prodMem₀ =
         drive (fun i => aids (i + j)) n (spikeThread ec) σc)
-    (hsat : Sat σc (Iris.Std.PartialMap.union P R))
+    (hsat : Sat fmapEmpty σc (Iris.Std.PartialMap.union P R))
     -- termination of the compute part within the production budget
     (v : value) (σfin : Mem) (k : Nat)
     (hterm : ∀ aids : Nat → Nat,
@@ -409,19 +412,19 @@ theorem sem_triple_prod
     (fs : CerbFS.FsState) (args : List String) :
     ∃ (dres : driver_result) (dst' : driver_state),
       CerbND.runND (_root_.drive fmapEmpty false (prodFile e) args)
-          (initial_driver_state (prodFile e) fs) =
+          ((initial_driver_state sup (prodFile e) fs).1) =
         [(nd_status.Active dres, ([] : List String), dst')] ∧
       dres.dres_core_value = v ∧
       dst'.layout_state = σfin ∧
       ∃ Q : CellMap, post v Q ∧ Q ##ₘ R ∧
-        Sat σfin (Iris.Std.PartialMap.union Q R) := by
+        Sat fmapEmpty σfin (Iris.Std.PartialMap.union Q R) := by
   have htermFull : ∀ aids : Nat → Nat,
       drive aids (j + k) (spikeThread e) prodMem₀ = .done v σfin := by
     intro aids
     rw [hpre aids k]
     exact hterm _
   obtain ⟨dres, dst', heq, hval, _, _, _, hlay⟩ :=
-    prod_run_eq e hfrag v σfin (j + k) htermFull hfuel fs args
+    prod_run_eq sup e hfrag v σfin (j + k) htermFull hfuel fs args
   refine ⟨dres, dst', heq, hval, hlay, ?_⟩
   have h := hsem R hdisj σc hsat k (fun _ => 0) hfuelc
   exact h.2.2 v σfin (hterm _)
@@ -441,28 +444,28 @@ composing `drive_after_setup` + a `DriverDoneAt` delivery fact +
     Total-lane composition: `hdd` comes from `wpt_driver_done`, so no
     termination hypothesis remains — only the in-budget bound on the
     certified step count (fuel honesty, D19). -/
-theorem prod_run_eqJ (e : CoreExpr) {Q : LabelMap}
-    (hQe : LabeledAt (initial_core_run_state
-      (collect_labeled_continuations_NEW (prodFile e))) mainSym Q)
+theorem prod_run_eqJ (sup : Nat) (e : CoreExpr) {Q : LabelMap}
+    (hQe : LabeledAt ((initial_core_run_state sup
+      (collect_labeled_continuations_NEW (prodFile e))).1) mainSym Q)
     (ψ : value → Mem → Prop) (k : Nat)
     (hdd : DriverDoneAt mainSym Q (prodThread e) e [fmapEmpty] prodMem₀ ψ k)
     (hfl : k + 2 ≤ lemDefaultFuel)
     (fs : CerbFS.FsState) (args : List String) :
     ∃ (dres : driver_result) (dst' : driver_state),
       CerbND.runND (_root_.drive fmapEmpty false (prodFile e) args)
-          (initial_driver_state (prodFile e) fs) =
+          ((initial_driver_state sup (prodFile e) fs).1) =
         [(nd_status.Active dres, ([] : List String), dst')] ∧
       ψ dres.dres_core_value dst'.layout_state ∧
       dres.dres_blocked = false ∧
       dres.dres_stdout = "" ∧
       dres.dres_stderr = "" := by
   obtain ⟨v, σfin, ρfin, rs', tr, ctr, hψ, hloop⟩ :=
-    hdd (prodEntryState e fs) fmapEmpty lemDefaultFuel rfl rfl rfl hQe hfl
-  have hdrv2 := driver2_done 999999 fmapEmpty (prodEntryState e fs) _
+    hdd (prodEntryState sup e fs) fmapEmpty lemDefaultFuel rfl rfl rfl hQe hfl
+  have hdrv2 := driver2_done 999999 fmapEmpty (prodEntryState sup e fs) _
     (prodThread e)
     { prodThread e with arena := ofVal (.pure v), env := ρfin }
     v rfl hloop rfl
-  have hrun := drive_after_setup e fs args _ hdrv2
+  have hrun := drive_after_setup sup e fs args _ hdrv2
   refine ⟨_, _, runND_active hrun, ?_, rfl, rfl, rfl⟩
   rw [finalize_done fmapEmpty _ _
     { { prodThread e with arena := ofVal (.pure v), env := ρfin } with
@@ -476,11 +479,11 @@ exhibits' run states carry is EXACTLY what the SHIPPED registration
 computes — `collect_labeled_continuations_NEW` over the synthetic
 one-procedure file (Core_aux.lean:853, via `collect_saves`), the
 map `initial_core_run_state` installs as `labeled`
-(Core_run_aux.lean:395). `LabeledAt` at the PRODUCTION initial run
+(Core_run_aux.lean:406). `LabeledAt` at the PRODUCTION initial run
 state is therefore DERIVED, not hypothesized (the S3 exhibit's
 recorded gap). These statements quantify over the shipped initial
-state, whose `sym_supply` draws the declared temporal boundary seam
-— hence this boundary module. HONEST RESIDUAL (recorded, slice
+state at every supply `sup` (the `labeled` fiber is supply-independent,
+by `rfl`). HONEST RESIDUAL (recorded, slice
 notes): the full production-face `.done` equation for a LOOP run
 (the driver2 collapse at a proc-carrying thread with a populated
 label map) is not established this slice — the DriverCollapse
@@ -508,14 +511,14 @@ theorem collect_new_fib (ra : core_run_annotation) (n : Int)
     fib file, the current procedure's `labeled` fiber IS the
     exhibit's label map — `LabeledAt` derived from the shipped
     registration. -/
-theorem fib_labeledAt_production (ra : core_run_annotation) (n : Int)
+theorem fib_labeledAt_production (sup : Nat) (ra : core_run_annotation) (n : Int)
     (sbty ibty abty bbty : core_base_type) :
-    LabeledAt (initial_core_run_state (collect_labeled_continuations_NEW
-        (prodFile (fibProg ra n sbty ibty abty bbty))))
+    LabeledAt ((initial_core_run_state sup (collect_labeled_continuations_NEW
+        (prodFile (fibProg ra n sbty ibty abty bbty)))).1)
       mainSym (fibQ ra n ibty abty bbty) := by
   unfold LabeledAt
-  rw [show (initial_core_run_state (collect_labeled_continuations_NEW
-      (prodFile (fibProg ra n sbty ibty abty bbty)))).labeled =
+  rw [show ((initial_core_run_state sup (collect_labeled_continuations_NEW
+      (prodFile (fibProg ra n sbty ibty abty bbty)))).1).labeled =
     collect_labeled_continuations_NEW
       (prodFile (fibProg ra n sbty ibty abty bbty)) from rfl]
   rw [collect_new_fib]
@@ -529,15 +532,15 @@ theorem collect_saves_loop (loc : CerbLocation.Loc)
     collect_saves (loopProg loc ann ra mo bty xbty sbty c n) =
       loopQ loc ann ra mo bty xbty c := rfl
 
-theorem loop_labeledAt_production (loc : CerbLocation.Loc)
+theorem loop_labeledAt_production (sup : Nat) (loc : CerbLocation.Loc)
     (ann ra : core_run_annotation) (mo : memory_order)
     (bty xbty sbty : core_base_type) (c : CerbMem.PointerValue) (n : Int) :
-    LabeledAt (initial_core_run_state (collect_labeled_continuations_NEW
-        (prodFile (loopProg loc ann ra mo bty xbty sbty c n))))
+    LabeledAt ((initial_core_run_state sup (collect_labeled_continuations_NEW
+        (prodFile (loopProg loc ann ra mo bty xbty sbty c n)))).1)
       mainSym (loopQ loc ann ra mo bty xbty c) := by
   unfold LabeledAt
-  rw [show (initial_core_run_state (collect_labeled_continuations_NEW
-      (prodFile (loopProg loc ann ra mo bty xbty sbty c n)))).labeled =
+  rw [show ((initial_core_run_state sup (collect_labeled_continuations_NEW
+      (prodFile (loopProg loc ann ra mo bty xbty sbty c n)))).1).labeled =
     collect_labeled_continuations_NEW
       (prodFile (loopProg loc ann ra mo bty xbty sbty c n)) from rfl]
   rw [show collect_labeled_continuations_NEW
@@ -558,21 +561,21 @@ theorem loop_labeledAt_production (loc : CerbLocation.Loc)
     certified jump-profile lane). The in-budget hypotheses are the
     sanctioned interim form. The real production equations live in
     ProdLoopExhibit.lean. -/
-theorem counter_loop_certified_registration
+theorem counter_loop_certified_registration (sup : Nat)
     (loc : CerbLocation.Loc) (ann ra : core_run_annotation)
     (mo : memory_order) (bty xbty sbty : core_base_type)
     (idx addr : Int) (bs0 : List CerbMem.AbsByte)
     (n : Int) (hn : 0 ≤ n)
     (hlib : CerbLocation.isLibraryLocation loc = false)
     (σ₀ : Mem)
-    (hcoh : Coh σ₀ ((Iris.Std.PartialMap.singleton idx
+    (hcoh : Coh fmapEmpty σ₀ ((Iris.Std.PartialMap.singleton idx
       (SpikeCell.mk addr intTy bs0)) : SpikeHeapF SpikeCell))
     (nsteps : Nat) (aids : Nat → Nat)
     (hfuel : 4 + nsteps ≤ lemDefaultFuel)
     (hfuel2 : 3 + nsteps ≤ lemDefaultFuel) :
     let prog := loopProg loc ann ra mo bty xbty sbty (cellPtr idx addr) n
-    let rs := initial_core_run_state (collect_labeled_continuations_NEW
-      (prodFile prog))
+    let rs := (initial_core_run_state sup (collect_labeled_continuations_NEW
+      (prodFile prog))).1
     (∀ r, driveJ rs aids nsteps
       (procThread mainSym prog [fmapEmpty]) σ₀ ≠ .killed r) ∧
     (driveJ rs aids nsteps
@@ -581,12 +584,12 @@ theorem counter_loop_certified_registration
       driveJ rs aids nsteps
         (procThread mainSym prog [fmapEmpty]) σ₀ = .done v σ' →
       v = Vunit ∧ ∃ bs',
-        ((n = 0 ∧ bs' = bs0) ∨ (0 < n ∧ bs' = sevenBytes)) ∧
+        ((n = 0 ∧ bs' = bs0) ∨ (0 < n ∧ bs' = (sevenBytes fmapEmpty))) ∧
         ∃ i a, cellPtr idx addr = cellPtr i a ∧
-          CellCoh σ' i ⟨a, intTy, bs'⟩) := by
+          CellCoh fmapEmpty σ' i ⟨a, intTy, bs'⟩) := by
   intro prog rs
   refine engine_adequacyJ (GF := SpikeGF)
-    (loop_labeledAt_production loc ann ra mo bty xbty sbty
+    (loop_labeledAt_production sup loc ann ra mo bty xbty sbty
       (cellPtr idx addr) n)
     (fun l params cont hl => by
       obtain ⟨-, rfl⟩ := loopQ_inv loc ann ra mo bty xbty _ hl
@@ -594,8 +597,8 @@ theorem counter_loop_certified_registration
     prog fmapEmpty [] σ₀ _
     (.save (loopBody_fragJ loc ann ra mo bty _ hlib)) hcoh
     (fun v σ' => v = Vunit ∧ ∃ bs',
-      ((n = 0 ∧ bs' = bs0) ∨ (0 < n ∧ bs' = sevenBytes)) ∧
-      ∃ i a, cellPtr idx addr = cellPtr i a ∧ CellCoh σ' i ⟨a, intTy, bs'⟩)
+      ((n = 0 ∧ bs' = bs0) ∨ (0 < n ∧ bs' = (sevenBytes fmapEmpty))) ∧
+      ∃ i a, cellPtr idx addr = cellPtr i a ∧ CellCoh fmapEmpty σ' i ⟨a, intTy, bs'⟩)
     ?_ nsteps aids
     (by rw [show esize prog = 4 from rfl]; omega)
     (fun l params cont hl => by
@@ -606,11 +609,11 @@ theorem counter_loop_certified_registration
   intro inst
   refine .trans ?_ (loop_wp_readout loc ann ra mo bty xbty (cellPtr idx addr)
     n bs0 mainSym rs
-    (loop_labeledAt_production loc ann ra mo bty xbty sbty
+    (loop_labeledAt_production sup loc ann ra mo bty xbty sbty
       (cellPtr idx addr) n) hn sbty)
   refine (BigSepM.bigSepM_singleton).1.trans ?_
   iintro Hpt
-  iapply (pointsToCell_cellOwn_iff _ _ _ _).mpr
+  iapply (pointsToCell_cellOwn_iff fmapEmpty _ _ _ _).mpr
   iexists idx, addr
   isplit
   · ipureintro; rfl
