@@ -138,6 +138,20 @@ def trioExports : List Name := [
   ``CerberusHeapLang.cerberusRound_classify, ``CerberusHeapLang.step_iff_cerberusRound,
   ``CerberusHeapLang.cerberusRound_refused_store, ``CerberusHeapLang.cerberusRound_refused_load,
   ``CerberusHeapLang.cerberusRound_refused_create, ``CerberusHeapLang.cerberusRound_refused_case,
+  -- mirror completeness on the fragment (2026-09-02, commit 2 of the
+  -- slice): the assembled theorem and one classification lemma per
+  -- redex root of `Frag`
+  ``CerberusHeapLang.frag_round_complete,
+  ``CerberusHeapLang.complete_store, ``CerberusHeapLang.complete_load,
+  ``CerberusHeapLang.complete_create, ``CerberusHeapLang.complete_beta_pure,
+  ``CerberusHeapLang.complete_beta_annot, ``CerberusHeapLang.complete_wbeta_pure,
+  ``CerberusHeapLang.complete_wbeta_annot, ``CerberusHeapLang.complete_merge,
+  ``CerberusHeapLang.complete_case, ``CerberusHeapLang.complete_beta_spec,
+  ``CerberusHeapLang.complete_beta_sym, ``CerberusHeapLang.complete_if,
+  ``CerberusHeapLang.complete_run, ``CerberusHeapLang.complete_run_noproc,
+  ``CerberusHeapLang.complete_save, ``CerberusHeapLang.complete_pure_sym,
+  ``CerberusHeapLang.complete_load_op, ``CerberusHeapLang.complete_memop_op,
+  ``CerberusHeapLang.complete_store_op, ``CerberusHeapLang.complete_memop_vals,
   -- the production-entry exports (formerly the runEffectful boundary;
   -- trio-exact since the 2026-09-02 retirement re-pin — header)
   ``CerberusHeapLang.exhibitA_prod, ``CerberusHeapLang.fib_labeledAt_production,

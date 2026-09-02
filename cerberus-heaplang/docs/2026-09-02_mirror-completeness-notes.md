@@ -184,3 +184,241 @@ exit=0
 
 Build cost: the whole package rebuilt below Soundness in under five
 minutes (capped; no UNCAPPED warning).
+
+## Commit 2 — completeness, per constructor (spec addition)
+
+### The statement
+
+```lean
+abbrev RoundComplete (M : MachineCtx) (c : Config) : Prop :=
+  (∃ c', Step M c c') ∨ ShippedRefusal M c ∨ OpenRound M c
+
+theorem frag_round_complete {M : MachineCtx}
+    {e : CoreExpr} {ev0 : Fmap sym value} {evs : List (Fmap sym value)} {σ : Mem}
+    (hf : Frag e) (hsz : esize e ≤ lemDefaultFuel) (hnv : toVal e = none) :
+    RoundComplete M (e, ev0 :: evs, σ)
+```
+
+`RoundClass.refused` now carries `ShippedRefusal M c`; a fifth arm
+`RoundClass.open_` carries `OpenRound M c`; `cerberusRound_classify`
+(same hypotheses as before) is proved through `frag_round_complete`.
+The old `cerberusRound_classify` statement is derivable from the new
+one (map `refused`/`open_` to the old `refused`, dropping the engine
+fact) — a strict strengthening with no added premise.
+
+### Refusal vocabulary changes in this commit
+
+- `ShippedRefusal.panic` restated: `steps = [Step_with_runstate2 rsk m]`,
+  `m = stExceptUndef_bind step_m k`, and `step_m dst.core_run_state0 =
+  failwithI msg dst.core_run_state0` — the redex's own monad panics at
+  the head under step_ctx's TAU_WITH_RUNSTATE/EVAL wrapper `k`
+  (Core_reduction.lean:484); for `Erun`, whose monad has no wrapper,
+  `k` is the return by the right unit law
+  `stExceptUndef_bind_return_right`. Commit 1's head form `m rs =
+  failwithI msg rs` was FALSE for `Eif`: the wrapper's bind sits
+  between the panic and `m` ([AGENT] finding while proving
+  `step_ctx_if_panic`). The message and the `Inhabited` instance are
+  quantified inside the embedding (they are the engine's literals; the
+  proof extracts them from the shape lemma).
+- `ShippedRefusal.panic_env` added: a TAU whose successor thread's
+  environment head IS `failwithI msg` — the engine's `update_env_aux`
+  pattern-mismatch arm (Core_aux.lean:861) at the `Cspecified` binder
+  meeting a non-`Specified` value. In OCaml the strict `update_env`
+  raises during the round; Lean's opaque `failwithI` defers the abort to
+  the first read. [AGENT]: classified as PANIC (the OCaml referent
+  aborts), not as an unmirrored success.
+- `OpenRound` (new): the registered gaps, each an engine fact —
+  `unmirrored_success c'` (the mirror is stuck AND `CerberusRound M c
+  c'`), `eval_uncovered` (the step is an operand-evaluation
+  with-runstate step), `no_current_proc` (`M.proc = none` and the step
+  is the `Erun` with-runstate step).
+
+### The per-constructor table
+
+Mirror-step condition and the engine classification of the stuck case,
+per `Frag` constructor (the lemma is at the redex root reached by
+`Frag.decomp`; frames `sseq`/`wseq`/`annot` inherit the classification
+of their redex through `Decomp` — `Decomp.lift_step` lifts the redex's
+step, the `step_ctx_*` equations are stated at `Decomp`):
+
+| `Frag` constructor | lemma | the mirror steps iff | the mirror is stuck ⇒ (shipped fact) |
+|---|---|---|---|
+| `val_pure v` | `cerberusRound_classify` `value_done` | never (value protocol) | the step list is `[Step_done2 v]` (PROGRAM-DONE at `SeqWF`) |
+| `annot ds (val_pure v)` | `value_annot` | never (value protocol) | a shipped round (REMOVE-ANNOT tau) to the bare value |
+| `annot ds b`, `b` not a value | via `Decomp.annot` / `complete_merge` | `b` steps; the double-annot merge always steps | `b`'s classification |
+| `store` | `complete_store` | `memValueFromValue = some mv` ∧ `storeM` active | ILLTYPED `"…the value of a store(…) didn't match the lvalue type…"` (encoding), else KILL — `storeM`'s `failReason err (requestLoc th loc)`: `MerrAccess` UB kills as `Undef0 loc [ub]`, `MerrOther`/`MerrOutsideLifetime` as `Other (DErr_memory err)` |
+| `load` | `complete_load` | `loadM` active | KILL — `loadM`'s `failReason` (null/function/out-of-bounds/dead pointer UB as `Undef0`; trap representation, outside lifetime) |
+| `create` | `complete_create` | `allocateObject` active | KILL — `Other (DErr_memory (MerrOther "out of memory"))` |
+| `sseq` (wildcard), value head | `complete_beta_pure`/`_annot` | always (cons env) | — |
+| `wseq` (wildcard), value head | `complete_wbeta_pure`/`_annot` | always | — |
+| `sseq`/`wseq` frames, non-value head | `Decomp.sseq`/`wseq` | head steps (or the head's jump fires at the whole term) | head's classification |
+| `sseq_spec`, value head | `complete_beta_spec` | payload is `Vloaded (LVspecified _)` | PANIC-env — `update_env_aux`'s mismatch `failwithI "WIP: Core_aux.update_env_aux ==> ctor= specified, …"` |
+| `sseq_sym`, value head | `complete_beta_sym` | the head is a BARE value | GAP (a): `unmirrored_success` — the engine's LETS-ANNOT tau to `(Expr [] (Eannot ds e2), update_env (symPat …) v ρ, σ)` |
+| `save` | `complete_save` | initializers are values, or all evaluate (`evalPexprs`) | GAP (c): `eval_uncovered` |
+| `if_` | `complete_if` | guard evaluates to `Vtrue`/`Vfalse` | PANIC `"TODO(use the core_runM) ILLTYPED, the first operand of an Eif didn't evaluated to a boolean"` (other value); GAP (c) (uncovered guard) |
+| `run` | `complete_run` (`M.proc = some p`), `complete_run_noproc` | label registered ∧ arguments evaluate | PANIC `"Erun couldn't resolve label: `l' for procedure `p'"` (unregistered label — head form, unit law); GAP (c) (uncovered argument); GAP (d) (no current procedure) |
+| `pure_sym` | `complete_pure_sym` | the symbol is bound (`evalPexpr`) | GAP (c) — the engine: a procedure name evaluates to the null function pointer; otherwise `Exception (Unresolved_symbol …)` → the driver's `Other (DErr_core_run …)` kill (not characterized here) |
+| `load_op` | `complete_load_op` | the pointer operand evaluates to a pointer | GAP (b): `unmirrored_success` to the ill-typed load (non-pointer value); GAP (c) (uncovered operand) |
+| `memop_vals` | `complete_memop_vals` | both operands pointers ∧ `eqPtrval` deterministic (same provenance / null / function cases) | FORK — differing-provenance `msum`: `CerbND.runND` delivers exactly two executions (`memop_fork`); PANIC-memop `"INVALID memop request: …"` (non-pointer operands) |
+| `memop_op` | `complete_memop_op` | both operands evaluate | GAP (c) |
+| `store_op` | `complete_store_op` | pointer operand → pointer ∧ value operand evaluates | GAP (b) (non-pointer); GAP (c) (uncovered operand) |
+| `case_value` | `complete_case` | `select_case = some` | ILLTYPED `"Ecase, mismatched ==> …"` |
+
+### Coverage gaps found — STOP-AND-REPORT items ([AGENT])
+
+All four are stated as `OpenRound` arms (engine facts) rather than
+fixed in this slice; the charter's rule "fix at the engine's generality
+… if the fix is large, STOP AND REPORT with the shape" applies to
+(a)–(c); (d) is a context malformation, not a construct.
+
+(a) **LETS-ANNOT at the symbol binder** (`lets x = {A}v in e2`,
+`Frag.sseq_sym` with an annotated value head). Engine: the tau
+`Step_tau2 "Esseq Eannot" TSK_Misc {th with env := update_env (symPat
+pa x bty) v ρ, arena := apply_ctx ctx (Expr [] (Eannot ds e2))}`
+(`step_ctx_beta_sym_annot`, proved) — a shipped SUCCESS. Mirror: no
+rule (Step.lean's recorded divergence "the annot variant is a
+mechanical extension when needed"). Fix: add `Step.sseq_sym_annot`
+(clone of `sseq_spec_annot`), its engine equation (exists now), and an
+8th disjunct to `Step.sseq_inv` — whose consumers are 38 `rcases`
+sites across Soundness/Potential/Wps/Wpt/TotalAdequacy/DriverCollapse/
+Round (measured by grep), plus the exhaustive `cases` in
+`Step.env_cons'`/`jump_inv`. Mechanical, ~1 day of re-certification.
+
+(b) **ACTION_EVAL to a non-pointer value** (`Frag.load_op`/`store_op`
+whose pointer operand evaluates to a non-pointer). Engine: the
+evaluation round SUCCEEDS into `Load0 (Vctype ty) (PEval v)` /
+`Store0 … (PEval v) (PEval cv)` (`step_ctx_load_eval_ws'`/
+`store_eval_ws'`, proved at any value), whose next round is
+`ACTION_ILLTYPED "Load"/"Store"`. Mirror: `Step.load_eval`/`store_eval`
+require a pointer value (so the successor lands in `Frag.load`/`store`).
+Fix at the engine's generality: generalize the pointer slot of
+`Frag.load`/`Frag.store` (and `Redex.load`/`store`,
+`loadRedex`/`storeRedex`) to any value and `Step.load_eval`/`store_eval`
+to `some v`; then `Frag.load`/`store` at a non-pointer value classify
+as ILLTYPED (new `step_ctx_load_illtyped`, the store twin). Ripple:
+`Frag.decomp`, `Frag.step`, `Frag.esize_step_bound`, `pot_step_bound`,
+`outcomesU_of_step`, `engine_step_matchU`, `loop_step_frag`, the
+`load_op_inv`/`store_op_inv` consumers in Wps/Wpt determinism proofs.
+Not a new manifest row (the constructors keep their names). ~1 day.
+
+(c) **Operand evaluation outside the mirror evaluator** (`if_`, `run`,
+`save`, `pure_sym`, `load_op`, `memop_op`, `store_op` when `evalPexpr`
+returns `none`). The mirror's `evalPexpr` covers `PEval`, `PEsym`
+(environment lookup), `PEop` at the eight binops
+Add/Sub/Mul/Eq/Lt/Le/Gt/Ge on integers, `PEarray_shift`; `PePure`
+(the declared covered grammar, a premise of `load_op`/`memop_op`/
+`store_op` but NOT of `if_`/`run`/`save`) admits every binop. The
+engine's `eval_pexpr_aux2`/`step_eval_peop` (Core_eval.lean:135-152)
+on the uncovered cases: a symbol unbound in the environment but naming
+a `Proc` in `file.funs` evaluates to the null function pointer (a
+SUCCESS the mirror lacks); an unbound symbol otherwise is
+`Exception (Unresolved_symbol loc x)` → the driver's KILL `Other
+(DErr_core_run …)`; `OpEq` on ctypes/floats, `OpLt/Le/Gt/Ge` on floats,
+`OpDiv/OpRem_t/OpRem_f/OpExp` on integers, `OpAnd/OpOr` on booleans and
+floating arithmetic SUCCEED; ill-typed operands are `Illformed_program`
+exceptions → KILL; `Core_eval.eval_pexpr, PEop …` panics on the
+remaining operator/value combinations; the non-`PePure` language
+(`PEctor`, `PEcall`, `PEcase`, `PEundef`, …) has its own outcomes. Fix
+at the engine's generality: a mirror evaluator complete relative to
+`eval_pexpr_aux2` on the fragment's operand grammar (with `M.file` as a
+new `evalPexpr` argument for the procedure-name arm — a signature
+change at ~340 call sites), or a RECORDED narrowing of the fragment's
+operand grammar (`PePure` to the eight ops; `if_`/`run`/`save` to
+`PePure` operands) — a `Frag` change the charter reserves for the
+operator. Large; reported.
+
+(d) **A jump without a current procedure** (`M.proc = none`). Engine:
+`current_proc := failwithI "Core_reduction ==> Erun outside of a proc"`
+and the `labeled` lookup at that key — in OCaml a `failwith` during
+the round; in Lean the opaque key makes the monad's value
+uncharacterizable as an equation. Mirror: `M.labels = fmapEmpty`,
+fail-closed. Stated as `OpenRound.no_current_proc` with the step's
+shape. Every shipped thread inside a procedure body has a current
+procedure (`loop_step_frag`'s `hproc`, ProdEntry's production
+contexts).
+
+No coverage gap of the store/save kind was FIXED in this slice: the
+two candidates (a), (b) both touch the frozen certification broadly
+and are reported per the charter instead.
+
+### What was NOT attempted (measured, not guessed)
+
+- The `PEsym` failure bridge (an unbound symbol's `Unresolved_symbol`
+  kill through the evaluator tower) — the success bridge is ~400 lines
+  (Soundness.lean 1515-1927); the failure twin would be comparable and
+  is subsumed by gap (c)'s proper fix.
+
+### Pins (commit 2)
+
+`frag_round_complete` and the twenty per-redex lemmas (`complete_store`,
+`_load`, `_create`, `_beta_pure`, `_beta_annot`, `_wbeta_pure`,
+`_wbeta_annot`, `_merge`, `_case`, `_beta_spec`, `_beta_sym`, `_if`,
+`_run`, `_run_noproc`, `_save`, `_pure_sym`, `_load_op`, `_memop_op`,
+`_store_op`, `_memop_vals`) pinned trio-exact. 118 → 139 pins.
+`frag_round_complete` added to `scripts/parametric_inventory.lean`'s
+export seeds.
+
+### Snapshot (commit 2)
+
+`…-signatures-post1.txt` (19,289 lines) → `…-signatures-post2.txt`
+(20,059 lines). Diff (derived by name/statement comparison; counts
+derived):
+
+- REMOVED: 0.
+- CHANGED (8): `RoundClass.refused` (now carries `ShippedRefusal M c`)
+  and `RoundClass`'s recursors (a fifth arm `open_`);
+  `ShippedRefusal.panic` (the bind form, message and instance inside
+  the embedding) and `ShippedRefusal`'s recursors (the new
+  `panic_env` arm). No public theorem's statement changed:
+  `cerberusRound_classify`'s statement is unchanged (its conclusion's
+  type gained arms — the old classification is derivable by forgetting
+  the engine fact and merging `open_` into `refused`).
+- ADDED (59): the assembled theorem `frag_round_complete`, the
+  twenty `complete_*` lemmas, `OpenRound` (four arms + recursors),
+  `RoundClass.open_`, `RoundComplete`, `ShippedRefusal.panic_env`,
+  `Decomp.lift_step`, the engine equations at any value
+  (`step_ctx_beta_spec_pure'`/`_annot'`, `step_ctx_beta_sym_annot`,
+  `step_ctx_load_eval_ws'`, `step_ctx_store_eval_ws'`), the shape and
+  panic lemmas (`step_ctx_if_shape`/`_panic`, `step_ctx_run_shape`/
+  `_unresolved`, `step_ctx_save_eval_shape`, `step_ctx_pure_sym_shape`,
+  `step_ctx_load_eval_shape`, `step_ctx_store_eval_shape`,
+  `step_ctx_memop_eval_shape`), `update_env_aux_spec_mismatch`,
+  `stExceptUndef_bind_return_right`, and the fork machinery
+  (`eqPtrval_layer`, `runOne_bindF_active`, `runOne_bind_nd`,
+  `runOne_liftNDF_active`/`_nd`, `runNDFuel_active`/`_nd`,
+  `foldl_append_singletons_length`, `bind_branch_active`, `memop_fork`,
+  `perform_memop_ptreq_panic`).
+
+### Build cost (commit 2)
+
+Round.lean alone rebuilds in ~13 s (capped, 2.3k lines added over the
+slice); the heaviest single proofs are `step_ctx_store_eval_ws'`/
+`_shape` (the value split: 13 value shapes × 3 operand grammars × 6
+contexts) and `perform_memop_ptreq_panic` (169 constructor pairs), each
+a few seconds. No pass approached the tripwire; no heartbeat or
+recursion-depth option was touched.
+
+### FULL gate (commit 2, final tree) — verbatim tail
+
+Run on the final Lean tree (every `.lean` of this commit; only this
+tail paste and the commit follow it):
+
+```text
+The binding can be removed (if unused) or named `_` (if used implicitly).
+
+Note: This linter can be disabled with `set_option linter.unusedVariables false`
+ℹ [444/446] Replayed CerberusHeapLang.Audit
+info: CerberusHeapLang/Audit.lean:234:0: CerberusHeapLang export pins: 139 trio-exact
+info: CerberusHeapLang/Audit.lean:234:0: CerberusHeapLang axiom sweep: every theorem bounded by the trio (2434 swept, internal details included — count informational, environment-dependent)
+info: CerberusHeapLang/Audit.lean:234:0: CerberusHeapLang banned-axiom sweep: sorryAx/ofReduceBool/ofReduceNat absent from all cones (3802 constants of every kind swept, internal details included — count informational, environment-dependent)
+Build completed successfully (446 jobs).
+ok: cerberus-heaplang build green
+== speedbump: capability manifest (regenerate; red on a red row or drift) ==
+cerberus-lean-proj env: switch=/home/dev/projects/cerberus-lean-proj/cerberus-lean/_opam, git redirects active
+ok: capability manifest regenerated, no drift
+== speedbump: import direction (semantics → heap → rules → adequacy → clients) ==
+ok: import direction — no core module imports an exhibit/example/production module
+ALL GATES GREEN
+scripts/test_unit.sh  324.18s user 15.21s system 119% cpu 4:43.76 total
+exit=0
+```

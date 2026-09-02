@@ -926,27 +926,50 @@ configuration, and there the shipped driver agrees exactly.
 
 **What the certification is, precisely.** `engine_step_matchU` is
 ONE-DIRECTIONAL: mirror step ⇒ shipped round. `step_iff_cerberusRound`
-is two-sided only under the hypothesis `∃ c', Step M c c'` — it is not
-a completeness result for the mirror. Where the mirror is stuck, the
-engine fact is proved so far at four redexes only, in the shipped
-driver's own refusal vocabulary (`ShippedRefusal`, Round.lean): ILLTYPED
-(`[Step_error2 msg]`), KILL (the shipped `advance_step` returns `NDkilled
-r` for an engine `kill_reason`), FORK (the shipped runner `CerbND.runND`
-returns at least two outcomes), PANIC (the round's monad is the engine's
-own `failwithI msg`). `cerberusRound_refused_store` (ILLTYPED or
-`storeM`'s kill), `_load` (`loadM`'s kill), `_create` (the out-of-memory
-kill), `_case` (the ILLTYPED no-match report) are the four instances;
-`cerberusRound_classify`'s `refused` arm itself says only `toVal c.1 =
-none` and `∀ c', ¬ Step M c c'`. Hence the logic is SOUND (every
-proved-safe execution is an engine execution) but not yet proved
-COMPLETE for the fragment (a configuration the mirror refuses may be one
-the engine executes; no export speaks about it). What is established,
-in the words of the 2026-09-02 audit: "a sound Iris program logic for
-the package's restricted relational mirror, with a verified forward
-connection to successful Cerberus engine rounds on proved-safe
-executions". Mirror completeness on the fragment — per-constructor
-"mirror stuck ⇒ engine refusal/kill/fork/panic" theorems — is the
-registered open architecture item. The mirror's only reference is the
+is two-sided under the hypothesis `∃ c', Step M c c'`. The completeness
+direction is `frag_round_complete` (Round.lean): at every non-value
+`Frag` configuration, the mirror steps, or the shipped round is a
+classified refusal, or the configuration is one of four registered gaps:
+
+```lean
+theorem frag_round_complete {M : MachineCtx}
+    {e : CoreExpr} {ev0 : Fmap sym value} {evs : List (Fmap sym value)} {σ : Mem}
+    (hf : Frag e) (hsz : esize e ≤ lemDefaultFuel) (hnv : toVal e = none) :
+    (∃ c', Step M (e, ev0 :: evs, σ) c') ∨
+    ShippedRefusal M (e, ev0 :: evs, σ) ∨ OpenRound M (e, ev0 :: evs, σ)
+```
+
+The refusal vocabulary `ShippedRefusal` is the shipped driver's own:
+ILLTYPED (the step list is `[Step_error2 msg]`), KILL (the shipped
+`advance_step` returns `NDkilled r` for an engine `kill_reason` — the
+memory kills arrive through `liftMem`'s `DErr_memory`), FORK (the shipped
+runner `CerbND.runND` delivers at least two executions — `eqPtrval`'s
+differing-provenance `msum`), PANIC (the redex's monad, or the
+successor's environment head, IS the engine's own `failwithI msg` —
+LemLib's opaque rendering of OCaml `failwith`). One lemma per redex root
+carries the classification (`complete_store`: ILLTYPED or `storeM`'s
+kill; `complete_load`/`_create`: the memory kill; `complete_case`: the
+no-match report; `complete_if`: the non-boolean-guard panic;
+`complete_run`: the unregistered-label panic; `complete_beta_spec`: the
+binding panic at a non-`Specified` value; `complete_memop_vals`: the
+fork and the driver's INVALID-memop panic; the betas at the wildcard
+pattern and the merge always step). `OpenRound` names the four gaps as
+engine facts: `unmirrored_success` (the engine's round succeeds where
+the mirror has no rule — the LETS-ANNOT beta at the symbol binder, and a
+load/store ACTION_EVAL whose pointer operand evaluates to a non-pointer
+value), `eval_uncovered` (an operand-evaluation step on an operand the
+mirror evaluator does not cover — the engine's own evaluator decides),
+`no_current_proc` (a jump at a context without a current procedure).
+`cerberusRound_classify` sorts every `Frag` configuration into
+`value_done` / `value_annot` / `step` / `refused` (carrying its
+`ShippedRefusal`) / `open_` (carrying its `OpenRound`). Hence the logic
+is SOUND (every proved-safe execution is an engine execution) and
+COMPLETE for the fragment up to the four registered gaps (§7). What is
+established, in the words of the 2026-09-02 audit: "a sound Iris
+program logic for the package's restricted relational mirror, with a
+verified forward connection to successful Cerberus engine rounds on
+proved-safe executions" — now with the backward classification of every
+fragment refusal outside the gaps. The mirror's only reference is the
 shipped round `CerberusRound`; no other relational semantics is
 referenced or bridged, and none is needed for the root of trust, which
 is the engine.
@@ -1058,7 +1081,7 @@ statements are the root-of-trust exports (§1.3).
 
 `CerberusHeapLang/Audit.lean` is the last import of the library root, so
 `lake build` elaborates it and a failure is a red build. It asserts, in
-order: (1) exact pins — every name in `trioExports` (118 theorems: the
+order: (1) exact pins — every name in `trioExports` (139 theorems: the
 rules, the adequacy and collapse theorems, every exhibit, the
 projections and the consequence lemmas) exists, is a theorem, and has
 transitive axiom set equal to `[propext, Classical.choice, Quot.sound]`
@@ -1120,10 +1143,12 @@ the `#print axioms` recipe are in the README, "How to build and verify".
   lemDefaultFuel`.
 - **A C frontend.** Programs enter as authored Core in a synthetic
   one-procedure file.
-- **Mirror completeness on the fragment.** The certification is
-  one-directional (§5); at a mirror-stuck configuration no engine fact
-  is proved beyond the four refusal rows. The registered open
-  architecture item.
+- **The four registered gaps of mirror completeness** (`OpenRound`,
+  §5; `2026-09-02_mirror-completeness-notes.md`): the LETS-ANNOT beta at
+  the symbol binder; a load/store ACTION_EVAL to a non-pointer value;
+  operand evaluation outside the mirror evaluator `evalPexpr`; a jump
+  without a current procedure. Each is stated as an engine fact and
+  closes when its arm is removed.
 - **Partial correctness over the shipped driver.** The partial lane is
   stated over `driveU` and labelled PROVISIONAL (§1.3) until the
   cerberus-lean fuel-exhaustion request lands; no package-side driver

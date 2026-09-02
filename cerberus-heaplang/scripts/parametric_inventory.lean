@@ -197,6 +197,7 @@ def exportSeeds : List Name := [
   `CerberusHeapLang.Decomp.step_factor, `CerberusHeapLang.stepDischarge_run,
   `CerberusHeapLang.Frag.step, `CerberusHeapLang.Frag.decomp,
   `CerberusHeapLang.cerberusRound_classify, `CerberusHeapLang.step_iff_cerberusRound,
+  `CerberusHeapLang.frag_round_complete,
   `CerberusHeapLang.spike_step_adequacy, `CerberusHeapLang.spike_step_adequacy_alloc,
   `CerberusHeapLang.launchResources,
   `CerberusHeapLang.engine_adequacyU, `CerberusHeapLang.engine_adequacyU_alloc,

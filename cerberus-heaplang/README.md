@@ -294,10 +294,12 @@ statement carries a fuel hypothesis.
    `engine_step_matchU` is one-directional (mirror step ⇒ shipped
    round: one iteration of the shipped driver's thread loop,
    `CerberusRound`, Round.lean — stated in the driver's own vocabulary,
-   `dischargeStep` being a proof device only), and where the mirror is
-   stuck no engine fact is proved (`cerberusRound_classify`'s `refused`
-   arm) beyond four redexes, so the logic is SOUND but not proved
-   COMPLETE for the fragment (the register below). The
+   `dischargeStep` being a proof device only), and
+   `frag_round_complete` is the completeness direction: where the
+   mirror is stuck, the shipped round is a classified refusal
+   (`ShippedRefusal`: ILLTYPED / KILL / FORK / PANIC) or one of the
+   four registered gaps (`OpenRound`; the register below), so the logic
+   is SOUND and COMPLETE for the fragment up to those gaps. The
    remaining vocabulary
    is the pure readout predicates (`Sat`/`CellCoh`, `SeedChain`,
    `SeedTree`, `readBytesFrom`) and the authored programs. iris-lean
@@ -387,7 +389,7 @@ theorems:
 | Well-formedness by shape: `MachineCtx.SeqWF` and cons-shaped environment stacks — the engine's panic channels excluded by shape, never absorbed. Action locations carry no premise: the certification equations state the request at the engine's own `requestLoc th loc`, and `storeM_loc_irrel`/`loadM_loc_irrel` (the memory operations use the location only in the kill payload) transport the mirror's premise to it | by design | `Step.lean`, `Soundness.lean` |
 | The tag-definition environment is an explicit parameter of the heap predicates (`pointsToCell tds …`, `M.tagDefs`); the demos state footprints at `fmapEmpty` | by design: a program-wide constant of the language instance | `Heap.lean` header |
 | Memory orders accepted arbitrarily (`Step.store`/`wp_store` at any `memory_order`) | mirror-true: the sequential driver drops `mo` (`action_request_sequential2`) | `Step.lean` |
-| The mirror's certification is ONE-DIRECTIONAL: `engine_step_matchU` gives mirror step ⇒ shipped round (`CerberusRound`: one iteration of the shipped driver's thread loop — `step_ctx`, `can_advance`, `advance_step` — at every embedding driver state); `step_iff_cerberusRound` is two-sided only GIVEN a mirror step; where the mirror is stuck no engine fact is proved (`cerberusRound_classify`'s `refused` arm) except at store/load/create/case (`cerberusRound_refused_*`, in the shipped refusal vocabulary `ShippedRefusal`: ILLTYPED / KILL / FORK / PANIC) — the other rows' refusal channels are the engine's `failwithI` panics, the evaluator's failures, or the memop fork. The logic is SOUND but not proved COMPLETE for the fragment: a configuration the mirror refuses may be one the engine executes, and no export speaks about it | mirror completeness on the fragment — per-constructor "mirror stuck ⇒ engine refusal/kill/fork/panic" theorems; the registered open architecture item | `Round.lean` header; `ARCHITECTURE.md` §2 |
+| Mirror completeness holds UP TO FOUR REGISTERED GAPS (`OpenRound`, Round.lean; `frag_round_complete`): (a) the LETS-ANNOT beta at the symbol binder (`lets x = {A}v in e`) — the engine's tau succeeds, no `Step.sseq_sym_annot` rule; (b) a load/store ACTION_EVAL whose pointer operand evaluates to a non-pointer value — the engine's evaluation round succeeds into the ill-typed action it reports ILLTYPED on next; (c) operand evaluation outside the mirror evaluator `evalPexpr` (unbound symbols, binops outside the mirrored eight or at non-integer operands, the non-`PePure` pure language of `if_`/`run`/`save` initializers) — the engine's own evaluator decides; (d) a jump at a context without a current procedure. Everywhere else a mirror-stuck fragment configuration is an engine refusal in the engine's vocabulary (`ShippedRefusal`: ILLTYPED `[Step_error2 msg]`, KILL `NDkilled r` from the shipped `advance_step`, FORK ≥ 2 `CerbND.runND` executions, PANIC the engine's own `failwithI`) | (a) the mechanical rule + its `Step.sseq_inv` ripple; (b) generalize `Frag.load`/`Frag.store`'s pointer slot and `Step.load_eval`/`store_eval` to any value; (c) a mirror evaluator complete relative to `eval_pexpr_aux2` on the fragment's operand grammar, or a recorded grammar narrowing; (d) by design (every shipped thread in a procedure body has a current procedure) | `Round.lean` (`OpenRound`); `ARCHITECTURE.md` §2, §7; `docs/2026-09-02_mirror-completeness-notes.md` |
 | Freshness is footprint-relative: `LaunchCoh` constrains TRACKED cells only (`id_lt`, `addr_lo`), so a `create` (`wps_create`/`wpt_create`) is fresh from the logical footprint, not from untracked allocations an arbitrary concrete state may hold below the cursor (`allocateObject` scans no ranges); every owned cell is protected; the production cold-start state `prodMem₀` contains only the allocator-created errno allocation and no dead allocations (`prodMem₀_allocations`, `prodMem₀_deadAllocations`), and `prodMem₀_launchCoh` proves `LaunchCoh` for the empty footprint and any fitting plan — no global well-formedness theorem exists yet | a global memory well-formedness invariant (`MemWF`: id discipline, live/dead consistency, range disjointness of all live allocations, cursor bounds) with its initialization proof, in the launch premise and the state interpretation, registered for the malloc/free arc; "globally well formed" is reserved for it | `Adequacy.lean` (`LaunchCoh` section), `Heap.lean` header; walkthrough §4 |
 | Arrays are one allocation, not a ∗ of per-element cells: the engine bounds-checks against the pointer's provenance allocation and `arrayShiftPtrval` preserves provenance | forcing fact about Cerberus; per-element structure lives in the invariant + decode premises | `ArrayExhibit.lean` |
 | Allocation metadata at a fraction as the exclusivity anchor; a persistent stratum instead of a liveness token (no `kill`) | the dispose rule adds the donor's `alloc_alive`/freeable split and moves the anchor | `Heap.lean` header |
@@ -407,7 +409,7 @@ trust, which is the engine.
 ## The trust diagram
 
 Every theorem named on an arrow has axiom set exactly `propext`,
-`Classical.choice`, `Quot.sound` (`Audit.lean`: 118 export pins; every
+`Classical.choice`, `Quot.sound` (`Audit.lean`: 139 export pins; every
 theorem of every module bounded). "Frag" = the fragment `Frag` at a
 `SeqWF` context with a cons-shaped environment; "labels" = every
 registered label body in `Frag` with its own static bound
@@ -425,10 +427,11 @@ source becomes a fact at the target.
         │    of the shipped driver's thread loop (step_ctx → can_advance →
         │    advance_step), in the driver's own vocabulary; the mirror's ONLY reference
         │  Step M  (Step.lean) — the hand-written mirror; interior, zero authority
-        │    certified ONE WAY: engine_step_matchU  Step ⇒ shipped round  [Frag]
-        │      (step_iff_cerberusRound: two-sided only GIVEN a mirror step;
-        │       cerberusRound_classify: its refused arm proves no engine fact —
-        │       sound, not proved complete, for the fragment)
+        │    certified: engine_step_matchU  Step ⇒ shipped round  [Frag]
+        │      (step_iff_cerberusRound: two-sided GIVEN a mirror step);
+        │    COMPLETE up to four registered gaps: frag_round_complete
+        │      mirror stuck ⇒ ShippedRefusal (ILLTYPED/KILL/FORK/PANIC) ∨ OpenRound
+        │      (cerberusRound_classify: value_done/value_annot/step/refused/open_)
         ▼
    iris-lean Language instance over Step   (Lang.lean: instance Language CoreRt
      Mem Empty CoreRVal; NO Language.Context — Erun discards its context)
@@ -579,7 +582,7 @@ lacks them, so they vary with the semantics workspace's build state at
 the same pin (measured 2249/3536 vs 2210/3474, `docs/2026-09-02_audit-response-4-notes.md`):
 
 ```
-info: CerberusHeapLang/Audit.lean:216:0: CerberusHeapLang export pins: 118 trio-exact
+info: CerberusHeapLang/Audit.lean:216:0: CerberusHeapLang export pins: 139 trio-exact
 info: CerberusHeapLang/Audit.lean:216:0: CerberusHeapLang axiom sweep: every theorem bounded by the trio (N swept, internal details included — count informational, environment-dependent)
 info: CerberusHeapLang/Audit.lean:216:0: CerberusHeapLang banned-axiom sweep: sorryAx/ofReduceBool/ofReduceNat absent from all cones (M constants of every kind swept, internal details included — count informational, environment-dependent)
 Build completed successfully (… jobs).
@@ -625,7 +628,7 @@ In import order, one line each:
 | `Wps.lean` | the partial label-context judgment as a guarded fixpoint; its rule set; statement-level framing; the Löb collapse into the raw WP | `wps`, `wps_seq`, `wps_create`, `blockSpecs_intro`, `wps_frame_labels`, `wps_sound` |
 | `Wpt.lean` | the total judgment by recursion on the budget; variant-indexed label preconditions with the mandatory back-edge decrease; collapse into Iris `TotalWeakestPre` | `wpt`, `wpt_run`, `wpt_create`, `blockSpecsT_intro`, `wpt_frame_labels`, `wpt_sound` |
 | `Soundness.lean` | the boundary module: the per-construct engine equations of `Step` against `step_ctx` (`step_ctx_*`), the fragment `Frag`, the decomposition `Decomp`; the discharge device `dischargeStep`/`outcomesU` and its step match (`outcomesU_of_step`, the `driveU` lane's device) | `Frag`, `Decomp.step_factor`, `step_ctx_store` |
-| `Round.lean` | the shipped engine round (one iteration of the driver's thread loop, in the driver's own vocabulary), the certification `engine_step_matchU`, the exhaustive classification, the shipped refusal vocabulary | `CerberusRound`, `engine_step_matchU`, `cerberusRound_classify`, `step_iff_cerberusRound`, `ShippedRefusal` |
+| `Round.lean` | the shipped engine round (one iteration of the driver's thread loop, in the driver's own vocabulary), the certification `engine_step_matchU`, mirror completeness per redex root and its assembly, the exhaustive classification, the shipped refusal vocabulary and the registered gaps | `CerberusRound`, `engine_step_matchU`, `frag_round_complete`, `complete_*`, `cerberusRound_classify`, `ShippedRefusal`, `OpenRound` |
 | `Potential.lean` | the step-monotone size potential `pot` — the static fuel bound | `pot`, `Frag.esize_le_pot`, `Frag.pot_step_bound` |
 | `Adequacy.lean` | the drive `driveU`; Iris adequacy with the ghost state constructed; the allocation-aware launch; the triples; the projections and the pure-consequence lemmas | `project_triple_pure`, `MemTripleU`, `project_triple_pure_alloc`, `MemTripleU_alloc`, `engine_adequacyU` |
 | `TotalAdequacy.lean` | the budget-to-drive-length simulation on `pot` | `wpt_engine_boundU`, `wpt_engine_boundU_alloc` |
