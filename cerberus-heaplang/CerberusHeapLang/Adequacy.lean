@@ -41,7 +41,11 @@ Four layers:
    exhibits' readouts are their instances through
    `stateInterp_readout` (Rules.lean), the projection's Iris half.
    `semantic_triple_soundU` is `project_triple` at the cells-shaped
-   post (`SemTripleU_iff_Mem`).
+   post (`SemTripleU_iff_Mem`). Its precondition is footprint cells
+   ONLY; the ALLOCATING projection `project_triple_alloc` (P6.1) takes
+   footprint cells ∗ `allocCap reqs` and concludes `MemTripleU_alloc`
+   (the same triple launched under `LaunchCoh` with the plan) with
+   the same post; `struct_create_store_adequacy` is its consumer.
 
 TWO TRUST CLAIMS ([USER 2026-09-02], DECISIONS): (1) the CLOSED-
 PROGRAM exports have Iris-free statements — cerberus-lean's semantics
@@ -92,9 +96,21 @@ inductive DriveResult : Type where
   | more (th : thread_state) (σ : Mem)
   /-- PROGRAM-DONE: the engine delivered a value -/
   | done (v : value) (σ : Mem)
-  /-- the engine killed: `Undef0` (UB), `Error0`, or `Other`
-      (the full loadM/storeM failure vocabulary —
-      docs/2026-08-30_spike-recon.md §2.6) -/
+  /-- the engine killed. `kill_reason mem_error` (Nondeterminism.lean:54)
+      has three constructors. `Undef0 loc ubs` — undefined behaviour:
+      from the memory model, a `mem_error` mapped through
+      `undefinedFromMem_error` (Mem_common.lean:392) by `failReason`
+      (CerbMem.lean:1439) — null/no-provenance/out-of-bounds/dead/
+      outside-lifetime/atomic-member access, the `_Bool` trap
+      representation on load, a store to a read-only allocation
+      (`loadM` CerbMem.lean:1621-1664, `storeM` :1667-1730) — or from
+      the Core-run layer's own `Undef` result (`liftCore_run`,
+      Driver.lean:245-247). `Other err` — the non-UB memory errors: a
+      store with an ill-typed memory value (`MerrOther`, :1702) and
+      function-pointer access (`MerrAccess _ FunctionPtr`). `Error0 loc
+      msg` — the Core-run layer's `Error` result (`liftCore_run`, same
+      lines; never produced by `loadM`/`storeM`). "Never kills" below
+      excludes ALL THREE, not only UB. -/
   | killed (r : kill_reason mem_error)
   /-- refusal (Step_error2 / ILLTYPED) or any off-protocol engine
       behavior -/
@@ -1261,6 +1277,104 @@ theorem project_triple {GF : BundledGFunctors} [SpikeGpreS GF]
   refine .trans (BigSepM.bigSepM_union hdisj).1 ?_
   iintro ⟨HP, HR⟩
   ihave HW := hwp $$ HP
+  iapply spike_wp_wand $$ HW
+  iintro %w HQ
+  ihave HΦ : iprop(Q w ∗ ([∗map] i ↦ c ∈ R,
+      cellOwn M.tagDefs (hlc := .hasLC) (GF := GF) i (.own 1) c)) $$ [HQ HR]
+  · isplitl [HQ]
+    · iexact HQ
+    · iexact HR
+  iapply stateInterp_readout (fun σ' mm mb mk hG => consequences_intro fun ψ hH =>
+    BI.sep_assoc.1.trans (hH w rfl mm mb mk hG)) $$ HΦ
+
+/-! ## THE ALLOCATING PROJECTION (P6.1, review finding H-1)
+
+`project_triple`'s precondition is footprint ownership ALONE, so a
+client whose Iris precondition includes `allocCap` (every program
+that `create`s) cannot reach `MemTripleU` through it. The allocating
+projection below launches as `engine_adequacyU_alloc` does —
+`launchResources` under `LaunchCoh`, the client's WP proof receiving
+the footprint cells AND `allocCap reqs` — and concludes the boring
+triple `MemTripleU_alloc`, whose ONLY difference from `MemTripleU` is
+the launch precondition: `LaunchCoh M.tagDefs σ (P ∪ R) reqs` in
+place of `Sat M.tagDefs σ (P ∪ R)`. The two genuinely differ:
+`LaunchCoh` is `Sat` (its `coh` field) PLUS the allocator-health
+facts the create rule's soundness needs — every id at or above the
+engine's `nextAllocId` is unallocated and not dead, every footprint
+cell sits at or above the downward cursor `lastAddress`, the request
+plan fits the actual `⟨lastAddress, nextAllocId⟩`, and the cursor is
+below `2^64` — none of which follows from `Sat` (a memory can carry
+the footprint and still have its allocator cursor sitting on top of
+those cells). The frame stays built into the definition (`R`
+returned to the post), the post is the same "every pure consequence
+of the Iris post" as `project_triple`'s, and `MemTripleU` implies
+`MemTripleU_alloc` at every plan (`MemTripleU_alloc_of_MemTripleU`):
+the allocating triple is the weaker conclusion, paid for by the
+stronger launch premise. -/
+
+/-- THE BORING TRIPLE WITH A MEMORY POSTCONDITION, LAUNCHED WITH AN
+    ALLOCATION PLAN: `MemTripleU` with `Sat σ (P ∪ R)` replaced by
+    `LaunchCoh M.tagDefs σ (P ∪ R) reqs` (footprint satisfied AND the
+    allocator healthy with the plan `reqs` fitting the engine's own
+    cursor). Frame built in (`R` arbitrary, returned to the post);
+    partial correctness; the fuel premises are the engine's own
+    get_ctx budgets, as in `MemTripleU`. -/
+def MemTripleU_alloc (M : MachineCtx) (ρ : EnvStack) (e : CoreExpr) (P : CellMap)
+    (reqs : List AllocReq) (post : CellMap → value → Mem → Prop) : Prop :=
+  ∀ (R : CellMap), P ##ₘ R →
+  ∀ (σ : Mem), LaunchCoh M.tagDefs σ (Iris.Std.PartialMap.union P R) reqs →
+  ∀ (n : Nat) (aids : Nat → Nat), esize e + n ≤ lemDefaultFuel →
+    (∀ l params cont, lookupLabel M.labels l = some (params, cont) →
+      esize cont + n ≤ lemDefaultFuel) →
+    (∀ r, driveU M aids n (M.thread e ρ) σ ≠ .killed r) ∧
+    (driveU M aids n (M.thread e ρ) σ ≠ .stuck) ∧
+    (∀ (v : value) (σ' : Mem), driveU M aids n (M.thread e ρ) σ = .done v σ' →
+      post R v σ')
+
+/-- The non-allocating boring triple implies the allocating one at
+    every plan: `LaunchCoh` contains `Sat` (its `coh` field), so a
+    statement that needs no allocator health holds a fortiori under
+    it. The converse fails (the launch premise is genuinely
+    stronger). -/
+theorem MemTripleU_alloc_of_MemTripleU {M : MachineCtx} {ρ : EnvStack} {e : CoreExpr}
+    {P : CellMap} {post : CellMap → value → Mem → Prop}
+    (h : MemTripleU M ρ e P post) (reqs : List AllocReq) :
+    MemTripleU_alloc M ρ e P reqs post :=
+  fun R hdisj σ hl n aids hfuel hQsz => h R hdisj σ hl.coh n aids hfuel hQsz
+
+/-- THE ALLOCATING PROJECTION: any Iris triple whose precondition is
+    footprint ownership plus the allocation capacity `allocCap reqs`,
+    with an ARBITRARY Iris postcondition `Q`, projects to the boring
+    triple `MemTripleU_alloc` whose postcondition is every pure
+    consequence of `Q w ∗ frame-cells` at the final memory — the
+    same post as `project_triple`'s. Proof: `engine_adequacyU_alloc`
+    (the `launchResources` launch under `LaunchCoh`) +
+    `stateInterp_readout` + `spike_wp_wand`; the well-formedness,
+    fragment, fuel and label hypotheses are `engine_adequacyU_alloc`'s,
+    unchanged. -/
+theorem project_triple_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
+    {M : MachineCtx} (hwf : M.SeqWF)
+    (hQf : ∀ l params cont, lookupLabel M.labels l = some (params, cont) →
+      Frag cont)
+    {e : CoreExpr} (hfrag : Frag e) (ev0 : Fmap sym value) (evs : List (Fmap sym value))
+    (P : CellMap) (reqs : List AllocReq) (Q : ∀ [SpikeGS .hasLC GF], CoreRVal → IProp GF)
+    (hwp : ∀ [SpikeGS .hasLC GF],
+      iprop(([∗map] i ↦ c ∈ P, cellOwn M.tagDefs (hlc := .hasLC) (GF := GF) i (.own 1) c) ∗
+        allocCap M.tagDefs reqs) ⊢
+        WP (⟨e, ev0 :: evs, M⟩ : CoreRt) @ Stuckness.NotStuck; ⊤ {{ w, Q w }}) :
+    MemTripleU_alloc M (ev0 :: evs) e P reqs (fun R v σ' => ∀ ψ : Prop,
+      (∀ [SpikeGS .hasLC GF] (w : CoreRVal), w.val = v →
+        ∀ (mm : SpikeHeapF MetaCell) (mb : SpikeHeapF CerbMem.AbsByte)
+          (mk : SpikeHeapF AllocCursor), CohG σ' mm mb mk →
+        iprop(Q w ∗ ([∗map] i ↦ c ∈ R, cellOwn M.tagDefs (hlc := .hasLC) (GF := GF) i (.own 1) c) ∗
+          metaInterp mm ∗ byteInterp mb) ⊢ (⌜ψ⌝ : IProp GF)) → ψ) := by
+  intro R hdisj σ hl n aids hfuel hQsz
+  refine engine_adequacyU_alloc (GF := GF) hwf hQf e ev0 evs σ
+    (Iris.Std.PartialMap.union P R) reqs hfrag hl _ ?_ n aids hfuel hQsz
+  intro instGS
+  refine .trans (BI.sep_mono (BigSepM.bigSepM_union hdisj).1 .rfl) ?_
+  iintro ⟨⟨HP, HR⟩, HC⟩
+  ihave HW := hwp $$ [$HP $HC]
   iapply spike_wp_wand $$ HW
   iintro %w HQ
   ihave HΦ : iprop(Q w ∗ ([∗map] i ↦ c ∈ R,

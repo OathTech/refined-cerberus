@@ -156,7 +156,13 @@ def trioExports : List Name := [
   ``CerberusHeapLang.pure_consequence, ``CerberusHeapLang.sep_consequence,
   ``CerberusHeapLang.or_consequence, ``CerberusHeapLang.exists_consequence,
   ``CerberusHeapLang.cellOwn_consequence, ``CerberusHeapLang.pointsToCell_consequence,
-  ``CerberusHeapLang.cellsOwn_consequence, ``CerberusHeapLang.cells_consequence]
+  ``CerberusHeapLang.cellsOwn_consequence, ``CerberusHeapLang.cells_consequence,
+  -- P6.1 (fresh-eyes review H-1): the ALLOCATING projection — an Iris
+  -- triple whose pre is footprint cells ∗ `allocCap reqs` projects to
+  -- `MemTripleU_alloc` (launch premise `LaunchCoh`); `MemTripleU`
+  -- implies it at every plan
+  ``CerberusHeapLang.project_triple_alloc,
+  ``CerberusHeapLang.MemTripleU_alloc_of_MemTripleU]
 
 def sortedNames (ns : Array Name) : Array String :=
   (ns.map (·.toString)).qsort (· < ·)
