@@ -66,8 +66,8 @@ verbatim: "the public theorem literally states same-footprint,
 in-place reversal plus termination and frame preservation"):
 `list_reverse_certified` (partial, any budget) and
 `list_reverse_certified_total` (unconditional `.done` at the DERIVED
-bound `13·|ns| + 7`) + `list_reverse_terminates`. Both flagships are
-stated with the `SemTriple` rest-quantifier shape at the jump lane:
+bound `13·|ns| + 7`). Both flagships are stated with the `SemTripleU`
+rest-quantifier shape at the proc-carrying context:
 an ARBITRARY disjoint frame footprint `R` rides next to the seeded
 chain `m₀` and is returned VERBATIM (`Sat σ' (Q ∪ R)`); the
 delivered pointer heads a chain `SeedChain Q p' ns.reverse` — the
@@ -1403,7 +1403,7 @@ theorem lrPost_readout {GF : BundledGFunctors} [SpikeGS .hasLC GF]
   · iexact HF
 
 /-- The base-WP face with the engine readout (the launch shape
-    `engine_adequacyJ` consumes). -/
+    `engine_adequacyU` consumes). -/
 theorem lr_wp_readout {GF : BundledGFunctors} [SpikeGS .hasLC GF]
     (ns : List (Int × Int)) (p : sym) (rs : core_run_state)
     (hQ : LabeledAt rs p (lrQ loc ann ra mo pbty cbty bbty nbty ubty))
@@ -1436,7 +1436,7 @@ theorem lr_wp_readout {GF : BundledGFunctors} [SpikeGS .hasLC GF]
     `core_run_state.labeled`) on the authored in-place reversal,
     from ANY memory that satisfies the seeded input chain `m₀`
     TOGETHER WITH an arbitrary disjoint frame footprint `R` (the
-    `SemTriple` rest-quantifier, at the jump lane):
+    `SemTripleU` rest-quantifier, at the proc-carrying context):
     - the engine never kills, never derails, and
     - any delivered value is a POINTER `p'` heading a final
       footprint `Q` with `SeedChain Q p' ns.reverse` — IN-PLACE,
@@ -1449,8 +1449,8 @@ theorem lr_wp_readout {GF : BundledGFunctors} [SpikeGS .hasLC GF]
       SET on the actual maps (nothing allocated, nothing leaked);
     - THE FRAME `R` IS RETURNED VERBATIM: `Sat σ' (Q ∪ R)` — every
       allocation outside the chain is untouched.
-    Partial correctness (fuel hypotheses are the engine's own
-    budgets); the TOTAL form below has no fuel hypotheses at all.
+    Partial correctness at EVERY drive length; the TOTAL form below
+    delivers at the derived budget.
     SpikeGF-concrete: no ghost-functor binder in the statement. -/
 theorem list_reverse_certified
     (sbty : core_base_type) (ns : List (Int × Int))
@@ -1459,17 +1459,15 @@ theorem list_reverse_certified
     (R : CellMap) (hR : m₀ ##ₘ R)
     (hlib : CerbLocation.isLibraryLocation loc = false)
     (σ₀ : Mem) (hcoh : Sat fmapEmpty σ₀ (Iris.Std.PartialMap.union m₀ R))
-    (nsteps : Nat) (aids : Nat → Nat)
-    (hfuel : 6 + nsteps ≤ lemDefaultFuel)
-    (hfuel2 : 5 + nsteps ≤ lemDefaultFuel) :
+    (nsteps : Nat) (aids : Nat → Nat) :
     let prog := lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head
     let rs := lrRS loc ann ra mo pbty cbty bbty nbty ubty
-    (∀ r, driveJ rs aids nsteps
+    (∀ r, driveU (procCtx lrProcSym rs) aids nsteps
       (procThread lrProcSym prog [fmapEmpty]) σ₀ ≠ .killed r) ∧
-    (driveJ rs aids nsteps
+    (driveU (procCtx lrProcSym rs) aids nsteps
       (procThread lrProcSym prog [fmapEmpty]) σ₀ ≠ .stuck) ∧
     (∀ (v : value) (σ' : Mem),
-      driveJ rs aids nsteps
+      driveU (procCtx lrProcSym rs) aids nsteps
         (procThread lrProcSym prog [fmapEmpty]) σ₀ = .done v σ' →
       ∃ (p' : CerbMem.PointerValue) (Q : CellMap),
         v = ptrVal p' ∧
@@ -1479,13 +1477,26 @@ theorem list_reverse_certified
         Q ##ₘ R ∧
         Sat fmapEmpty σ' (Iris.Std.PartialMap.union Q R)) := by
   intro prog rs
-  have h := engine_adequacyJ (GF := SpikeGF)
-    (lrRS_labeledAt loc ann ra mo pbty cbty bbty nbty ubty)
+  have hlbl : (procCtx lrProcSym rs).labels = _ :=
+    procCtx_labels (lrRS_labeledAt loc ann ra mo pbty cbty bbty nbty ubty)
+  have h := engine_adequacyU (GF := SpikeGF)
+    (M := procCtx lrProcSym rs) (procCtx_wf _ _)
     (fun l params cont hl => by
+      rw [hlbl] at hl
       obtain ⟨-, rfl⟩ := lrQ_inv loc ann ra mo pbty cbty bbty nbty ubty hl
       exact lrBody_fragJ loc ann ra mo bbty nbty ubty hlib)
+    (fun l params cont hl => by
+      rw [hlbl] at hl
+      obtain ⟨-, rfl⟩ := lrQ_inv loc ann ra mo pbty cbty bbty nbty ubty hl
+      exact Nat.le_trans (lrBody_fragJ loc ann ra mo bbty nbty ubty hlib).pot_le_two
+        (by rw [show esize (lrBody loc ann ra mo bbty nbty ubty) = 5 from rfl,
+          show lemDefaultFuel = 999999 + 1 from rfl]; omega))
     prog fmapEmpty [] σ₀ (Iris.Std.PartialMap.union m₀ R)
-    (.save (saveParams_depth_of_vals rfl) (lrBody_fragJ loc ann ra mo bbty nbty ubty hlib)) hcoh
+    (.save (saveParams_depth_of_vals rfl) (lrBody_fragJ loc ann ra mo bbty nbty ubty hlib))
+    (Nat.le_trans (Frag.pot_le_two (e := prog) (.save (saveParams_depth_of_vals rfl)
+        (lrBody_fragJ loc ann ra mo bbty nbty ubty hlib)))
+      (by rw [show esize prog = 6 from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega))
+    hcoh
     (fun v σ' => ∃ Q : CellMap, (∃ p' : CerbMem.PointerValue,
         v = ptrVal p' ∧ SeedChain Q p' ns.reverse) ∧ Q ##ₘ R ∧
       Coh fmapEmpty σ' (Iris.Std.PartialMap.union Q R))
@@ -1497,11 +1508,6 @@ theorem list_reverse_certified
         lrProcSym rs (lrRS_labeledAt loc ann ra mo pbty cbty bbty nbty ubty)
         sbty head R)
     nsteps aids
-    (by rw [show esize prog = 6 from rfl]; omega)
-    (fun l params cont hl => by
-      obtain ⟨-, rfl⟩ := lrQ_inv loc ann ra mo pbty cbty bbty nbty ubty hl
-      rw [show esize (lrBody loc ann ra mo bbty nbty ubty) = 5 from rfl]
-      omega)
   refine ⟨h.1, h.2.1, fun v σ' hdone => ?_⟩
   obtain ⟨Q, ⟨p', rfl, hQseed⟩, hdisj, hsat⟩ := h.2.2 v σ' hdone
   refine ⟨p', Q, rfl, hQseed, fun k => ?_, hdisj, hsat⟩
@@ -1592,17 +1598,15 @@ theorem list_reverse_demo (sbty : core_base_type)
     (R : CellMap) (hR : demoM ##ₘ R)
     (hlib : CerbLocation.isLibraryLocation loc = false)
     (σ₀ : Mem) (hcoh : Sat fmapEmpty σ₀ (Iris.Std.PartialMap.union demoM R))
-    (nsteps : Nat) (aids : Nat → Nat)
-    (hfuel : 6 + nsteps ≤ lemDefaultFuel)
-    (hfuel2 : 5 + nsteps ≤ lemDefaultFuel) :
+    (nsteps : Nat) (aids : Nat → Nat) :
     let prog := lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty demoHead
     let rs := lrRS loc ann ra mo pbty cbty bbty nbty ubty
-    (∀ r, driveJ rs aids nsteps
+    (∀ r, driveU (procCtx lrProcSym rs) aids nsteps
       (procThread lrProcSym prog [fmapEmpty]) σ₀ ≠ .killed r) ∧
-    (driveJ rs aids nsteps
+    (driveU (procCtx lrProcSym rs) aids nsteps
       (procThread lrProcSym prog [fmapEmpty]) σ₀ ≠ .stuck) ∧
     (∀ (v : value) (σ' : Mem),
-      driveJ rs aids nsteps
+      driveU (procCtx lrProcSym rs) aids nsteps
         (procThread lrProcSym prog [fmapEmpty]) σ₀ = .done v σ' →
       ∃ (p' : CerbMem.PointerValue) (Q : CellMap),
         v = ptrVal p' ∧
@@ -1615,7 +1619,6 @@ theorem list_reverse_demo (sbty : core_base_type)
   intro prog rs
   have h := list_reverse_certified loc ann ra mo pbty cbty bbty nbty ubty
     sbty demoNs demoHead demoM demo_seed R hR hlib σ₀ hcoh nsteps aids
-    hfuel hfuel2
   refine ⟨h.1, h.2.1, fun v σ' hdone => ?_⟩
   obtain ⟨p', Q, hval, hQSeed, hfoot, hdisj, hsat⟩ := h.2.2 v σ' hdone
   have hrev : demoNs.reverse = [(3, 3), (2, 2), (1, 1)] := rfl
@@ -1641,7 +1644,7 @@ the engine's true 12), program bound `13·|ns| + 7`. The 2026-08-31
 listrev notes had ESTIMATED ~11·|ns| + 6 before the wrapper-merge
 step and the nested-wrapper merge were counted; the derived bound
 here is proved, unconditional, and delivered by the GENERIC
-simulation (`wpt_engine_boundJ`) — zero Step constructors, zero
+simulation (`wpt_engine_boundU`) — zero Step constructors, zero
 per-step drive equations, per the audit's acceptance criterion. -/
 
 /-- The derived per-label-entry step budget at remaining length r. -/
@@ -1998,7 +2001,7 @@ theorem lrBody_pot : pot (lrBody loc ann ra mo bbty nbty ubty) = 6 := rfl
     exit criterion: same-footprint, in-place reversal + TERMINATION
     + frame preservation, in one statement, no fuel hypotheses):
     from any memory satisfying the seeded chain `m₀` next to an
-    ARBITRARY disjoint frame footprint `R`, the engine's driveJ at
+    ARBITRARY disjoint frame footprint `R`, the engine's `driveU` at
     the DERIVED bound `13·|ns| + 7` (13 per iteration + 6 exit + 1
     entry) DELIVERS a pointer `p'` heading a final footprint `Q`
     with `SeedChain Q p' ns.reverse` — the SAME allocation ids in
@@ -2016,7 +2019,7 @@ theorem list_reverse_certified_total (sbty : core_base_type)
     (σ₀ : Mem) (hcoh : Sat fmapEmpty σ₀ (Iris.Std.PartialMap.union m₀ R))
     (aids : Nat → Nat) :
     ∃ (p' : CerbMem.PointerValue) (Q : CellMap) (σ' : Mem),
-      driveJ (lrRS loc ann ra mo pbty cbty bbty nbty ubty) aids
+      driveU (procCtx lrProcSym (lrRS loc ann ra mo pbty cbty bbty nbty ubty)) aids
         (13 * ns.length + 7)
         (procThread lrProcSym
           (lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head)
@@ -2030,12 +2033,17 @@ theorem list_reverse_certified_total (sbty : core_base_type)
   have hk : lrCost ns.length + 1 = 13 * ns.length + 7 := by
     rw [lrCost_eq]
   rw [← hk]
+  have hlbl := procCtx_labels hQ
   obtain ⟨v, σ', hdone, ⟨Q, ⟨p', rfl, hQseed⟩, hdisj, hsat⟩, -⟩ :=
-    wpt_engine_boundJ (GF := SpikeGF) hQ
+    wpt_engine_boundU (GF := SpikeGF)
+      (M := procCtx lrProcSym (lrRS loc ann ra mo pbty cbty bbty nbty ubty))
+      (procCtx_wf _ _)
       (fun l params cont hl => by
+        rw [hlbl] at hl
         obtain ⟨-, rfl⟩ := lrQ_inv loc ann ra mo pbty cbty bbty nbty ubty hl
         exact lrBody_fragJ loc ann ra mo bbty nbty ubty hlib)
       (fun l params cont hl => by
+        rw [hlbl] at hl
         obtain ⟨-, rfl⟩ := lrQ_inv loc ann ra mo pbty cbty bbty nbty ubty hl
         rw [lrBody_pot, show lemDefaultFuel = 999999 + 1 from rfl]
         omega)
@@ -2067,34 +2075,6 @@ theorem list_reverse_certified_total (sbty : core_base_type)
   rw [SeedChain.footprint ns.reverse Q p' hQseed k,
     SeedChain.footprint ns m₀ head hseed k]
   simp
-
-/-- LIST-REVERSE TERMINATES — the logical half over the unified
-    relation (Iris TotalAdequacy consumed as-is), from the seeded
-    chain next to an arbitrary disjoint frame. -/
-theorem list_reverse_terminates (sbty : core_base_type)
-    (ns : List (Int × Int)) (head : CerbMem.PointerValue)
-    (m₀ : CellMap) (hseed : SeedChain m₀ head ns)
-    (R : CellMap) (hR : m₀ ##ₘ R)
-    (σ₀ : Mem) (hcoh : Sat fmapEmpty σ₀ (Iris.Std.PartialMap.union m₀ R)) :
-    Relation.StronglyNormalizing Language.ErasedStep
-      ([(⟨lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head,
-          [fmapEmpty],
-          procCtx lrProcSym (lrRS loc ann ra mo pbty cbty bbty nbty ubty)⟩ :
-            CoreRt)], σ₀) := by
-  have hQ := lrRS_labeledAt loc ann ra mo pbty cbty bbty nbty ubty
-  refine wpt_strongly_normalizing (GF := SpikeGF)
-    (frameLsT (lrCellFrame R) (lrLsT ns))
-    (fun w ρ' => iprop(lrPost ns w ρ' ∗ lrCellFrame R))
-    _ _ σ₀ (Iris.Std.PartialMap.union m₀ R) hcoh (lrCost ns.length + 1) ?_
-  intro inst
-  refine ((BigSepM.bigSepM_union hR).1.trans
-    (BI.sep_mono (seedChain_isList ns m₀ head hseed) .rfl)).trans ?_
-  refine .trans BI.emp_sep.2 (BI.sep_mono ?_ ?_)
-  · exact lr_blockSpecsT_frame loc ann ra mo pbty cbty bbty nbty ubty ns
-      lrProcSym (lrRS loc ann ra mo pbty cbty bbty nbty ubty) hQ (lrCellFrame R)
-  · exact lr_wpt_frame loc ann ra mo pbty cbty bbty nbty ubty ns
-      lrProcSym (lrRS loc ann ra mo pbty cbty bbty nbty ubty) hQ (lrCellFrame R)
-      sbty head
 
 end LrTotalExport
 

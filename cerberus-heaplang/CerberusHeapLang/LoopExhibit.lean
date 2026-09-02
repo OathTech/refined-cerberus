@@ -20,8 +20,8 @@ THE PROGRAM (authored Core, all metadata quantified):
   procedure (`LabeledAt` — the donor's `⌜Q = f_code⌝`).
 - VERIFIED via the per-label invariant rule (`blockSpecs_intro` — no
   Löb) + `wps_sound` (the one Löb) and EXPORTED through the
-  jump-profile engine adequacy (`engine_adequacyJ`): the CONCLUSION
-  quantifies over engine objects only — driveJ from the
+  engine adequacy at the proc-carrying context (`engine_adequacyU`):
+  the CONCLUSION quantifies over engine objects only — `driveU` from the
   proc-carrying thread never kills, never derails, and a delivered
   value is `Vunit` with the cell's final bytes pinned by the
   data-dependent post (`n = 0` → untouched; `0 < n` → the stored
@@ -371,7 +371,7 @@ theorem loop_readout_val (w : CoreRVal) :
       (fun ⟨hn0, hc⟩ => ⟨bs0, .inl ⟨hn0, rfl⟩, hc⟩)
       (fun ⟨hpos, hc⟩ => ⟨sevenBytes fmapEmpty, .inr ⟨hpos, rfl⟩, hc⟩)⟩)
 
-/-- The base-WP face with the engine readout (what `engine_adequacyJ`
+/-- The base-WP face with the engine readout (what `engine_adequacyU`
     consumes), from any reachable entry frame over any tail. -/
 theorem loop_wp_readout (hn : 0 ≤ n) (sbty : core_base_type)
     (f : Fmap sym value) (hf : SymFrame f) (rest : List (Fmap sym value)) :
@@ -419,8 +419,8 @@ theorem loopBody_fragJ (hlib : CerbLocation.isLibraryLocation loc = false) :
     engine never kills (no UB), never derails, and any delivered
     value is `Vunit` with the cell's final bytes decided by the
     loop's data: untouched for `n = 0`, the stored image for
-    `0 < n`. Partial correctness; the two fuel hypotheses are the
-    engine's own budgets (the R3-interim in-budget form). -/
+    `0 < n`. Partial correctness at EVERY drive length (the engine's
+    static get_ctx budget is discharged inside the proof). -/
 theorem counter_loop_certified
     (sbty : core_base_type) (idx addr : Int) (bs0 : List CerbMem.AbsByte)
     (n : Int) (hn : 0 ≤ n)
@@ -428,29 +428,40 @@ theorem counter_loop_certified
     (σ₀ : Mem)
     (hcoh : Coh fmapEmpty σ₀ ((Iris.Std.PartialMap.singleton idx
       (SpikeCell.mk addr intTy bs0)) : SpikeHeapF SpikeCell))
-    (nsteps : Nat) (aids : Nat → Nat)
-    (hfuel : 4 + nsteps ≤ lemDefaultFuel)
-    (hfuel2 : 3 + nsteps ≤ lemDefaultFuel) :
+    (nsteps : Nat) (aids : Nat → Nat) :
     let prog := loopProg loc ann ra mo bty xbty sbty (cellPtr idx addr) n
     let rs := loopRS loc ann ra mo bty xbty (cellPtr idx addr)
-    (∀ r, driveJ rs aids nsteps
+    (∀ r, driveU (procCtx loopProcSym rs) aids nsteps
       (procThread loopProcSym prog [fmapEmpty]) σ₀ ≠ .killed r) ∧
-    (driveJ rs aids nsteps
+    (driveU (procCtx loopProcSym rs) aids nsteps
       (procThread loopProcSym prog [fmapEmpty]) σ₀ ≠ .stuck) ∧
     (∀ (v : value) (σ' : Mem),
-      driveJ rs aids nsteps
+      driveU (procCtx loopProcSym rs) aids nsteps
         (procThread loopProcSym prog [fmapEmpty]) σ₀ = .done v σ' →
       v = Vunit ∧ ∃ bs',
         ((n = 0 ∧ bs' = bs0) ∨ (0 < n ∧ bs' = (sevenBytes fmapEmpty))) ∧
         CellCoh fmapEmpty σ' idx ⟨addr, intTy, bs'⟩) := by
   intro prog rs
-  obtain ⟨h1, h2, h3⟩ := engine_adequacyJ (GF := SpikeGF)
-    (loopRS_labeledAt loc ann ra mo bty xbty (cellPtr idx addr))
+  have hlbl : (procCtx loopProcSym rs).labels = _ :=
+    procCtx_labels (loopRS_labeledAt loc ann ra mo bty xbty (cellPtr idx addr))
+  obtain ⟨h1, h2, h3⟩ := engine_adequacyU (GF := SpikeGF)
+    (M := procCtx loopProcSym rs) (procCtx_wf _ _)
     (fun l params cont hl => by
+      rw [hlbl] at hl
       obtain ⟨-, rfl⟩ := loopQ_inv loc ann ra mo bty xbty _ hl
       exact loopBody_fragJ loc ann ra mo bty _ hlib)
+    (fun l params cont hl => by
+      rw [hlbl] at hl
+      obtain ⟨-, rfl⟩ := loopQ_inv loc ann ra mo bty xbty _ hl
+      exact Nat.le_trans (loopBody_fragJ loc ann ra mo bty _ hlib).pot_le_two
+        (by rw [show esize (loopBody loc ann ra mo bty (cellPtr idx addr)) = 3 from rfl,
+          show lemDefaultFuel = 999999 + 1 from rfl]; omega))
     prog fmapEmpty [] σ₀ _
-    (.save (saveParams_depth_of_vals rfl) (loopBody_fragJ loc ann ra mo bty _ hlib)) hcoh
+    (.save (saveParams_depth_of_vals rfl) (loopBody_fragJ loc ann ra mo bty _ hlib))
+    (Nat.le_trans (Frag.pot_le_two (e := prog) (.save (saveParams_depth_of_vals rfl)
+        (loopBody_fragJ loc ann ra mo bty _ hlib)))
+      (by rw [show esize prog = 4 from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega))
+    hcoh
     (fun v σ' => v = Vunit ∧ ∃ bs',
       ((n = 0 ∧ bs' = bs0) ∨ (0 < n ∧ bs' = (sevenBytes fmapEmpty))) ∧
       ∃ i a, cellPtr idx addr = cellPtr i a ∧ CellCoh fmapEmpty σ' i ⟨a, intTy, bs'⟩)
@@ -468,12 +479,6 @@ theorem counter_loop_certified
       · ipureintro; rfl
       · iexact Hpt)
     nsteps aids
-    (by rw [show esize prog = 4 from rfl]; omega)
-    (fun l params cont hl => by
-      obtain ⟨-, rfl⟩ := loopQ_inv loc ann ra mo bty xbty _ hl
-      rw [show esize (loopBody loc ann ra mo bty (cellPtr idx addr)) = 3
-        from rfl]
-      omega)
   refine ⟨h1, h2, fun v σ' hd => ?_⟩
   obtain ⟨hv, bs', hbs, i, a, heq, hc⟩ := h3 v σ' hd
   obtain ⟨rfl, rfl⟩ := cellPtr_inj heq
@@ -491,30 +496,41 @@ theorem counter_loop_certified_irrelevant_binding
     (σ₀ : Mem)
     (hcoh : Coh fmapEmpty σ₀ ((Iris.Std.PartialMap.singleton idx
       (SpikeCell.mk addr intTy bs0)) : SpikeHeapF SpikeCell))
-    (nsteps : Nat) (aids : Nat → Nat)
-    (hfuel : 4 + nsteps ≤ lemDefaultFuel)
-    (hfuel2 : 3 + nsteps ≤ lemDefaultFuel) :
+    (nsteps : Nat) (aids : Nat → Nat) :
     let prog := loopProg loc ann ra mo bty xbty sbty (cellPtr idx addr) n
     let rs := loopRS loc ann ra mo bty xbty (cellPtr idx addr)
     let ρ₀ : EnvStack := [envAdd ySym junk fmapEmpty]
-    (∀ r, driveJ rs aids nsteps
+    (∀ r, driveU (procCtx loopProcSym rs) aids nsteps
       (procThread loopProcSym prog ρ₀) σ₀ ≠ .killed r) ∧
-    (driveJ rs aids nsteps
+    (driveU (procCtx loopProcSym rs) aids nsteps
       (procThread loopProcSym prog ρ₀) σ₀ ≠ .stuck) ∧
     (∀ (v : value) (σ' : Mem),
-      driveJ rs aids nsteps
+      driveU (procCtx loopProcSym rs) aids nsteps
         (procThread loopProcSym prog ρ₀) σ₀ = .done v σ' →
       v = Vunit ∧ ∃ bs',
         ((n = 0 ∧ bs' = bs0) ∨ (0 < n ∧ bs' = (sevenBytes fmapEmpty))) ∧
         CellCoh fmapEmpty σ' idx ⟨addr, intTy, bs'⟩) := by
   intro prog rs ρ₀
-  obtain ⟨h1, h2, h3⟩ := engine_adequacyJ (GF := SpikeGF)
-    (loopRS_labeledAt loc ann ra mo bty xbty (cellPtr idx addr))
+  have hlbl : (procCtx loopProcSym rs).labels = _ :=
+    procCtx_labels (loopRS_labeledAt loc ann ra mo bty xbty (cellPtr idx addr))
+  obtain ⟨h1, h2, h3⟩ := engine_adequacyU (GF := SpikeGF)
+    (M := procCtx loopProcSym rs) (procCtx_wf _ _)
     (fun l params cont hl => by
+      rw [hlbl] at hl
       obtain ⟨-, rfl⟩ := loopQ_inv loc ann ra mo bty xbty _ hl
       exact loopBody_fragJ loc ann ra mo bty _ hlib)
+    (fun l params cont hl => by
+      rw [hlbl] at hl
+      obtain ⟨-, rfl⟩ := loopQ_inv loc ann ra mo bty xbty _ hl
+      exact Nat.le_trans (loopBody_fragJ loc ann ra mo bty _ hlib).pot_le_two
+        (by rw [show esize (loopBody loc ann ra mo bty (cellPtr idx addr)) = 3 from rfl,
+          show lemDefaultFuel = 999999 + 1 from rfl]; omega))
     prog (envAdd ySym junk fmapEmpty) [] σ₀ _
-    (.save (saveParams_depth_of_vals rfl) (loopBody_fragJ loc ann ra mo bty _ hlib)) hcoh
+    (.save (saveParams_depth_of_vals rfl) (loopBody_fragJ loc ann ra mo bty _ hlib))
+    (Nat.le_trans (Frag.pot_le_two (e := prog) (.save (saveParams_depth_of_vals rfl)
+        (loopBody_fragJ loc ann ra mo bty _ hlib)))
+      (by rw [show esize prog = 4 from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega))
+    hcoh
     (fun v σ' => v = Vunit ∧ ∃ bs',
       ((n = 0 ∧ bs' = bs0) ∨ (0 < n ∧ bs' = (sevenBytes fmapEmpty))) ∧
       ∃ i a, cellPtr idx addr = cellPtr i a ∧ CellCoh fmapEmpty σ' i ⟨a, intTy, bs'⟩)
@@ -532,12 +548,6 @@ theorem counter_loop_certified_irrelevant_binding
       · ipureintro; rfl
       · iexact Hpt)
     nsteps aids
-    (by rw [show esize prog = 4 from rfl]; omega)
-    (fun l params cont hl => by
-      obtain ⟨-, rfl⟩ := loopQ_inv loc ann ra mo bty xbty _ hl
-      rw [show esize (loopBody loc ann ra mo bty (cellPtr idx addr)) = 3
-        from rfl]
-      omega)
   refine ⟨h1, h2, fun v σ' hd => ?_⟩
   obtain ⟨hv, bs', hbs, i, a, heq, hc⟩ := h3 v σ' hd
   obtain ⟨rfl, rfl⟩ := cellPtr_inj heq

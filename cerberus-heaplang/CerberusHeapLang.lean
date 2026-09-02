@@ -7,6 +7,7 @@ import CerberusHeapLang.Wps
 import CerberusHeapLang.Wpt
 import CerberusHeapLang.Soundness
 import CerberusHeapLang.Round
+import CerberusHeapLang.Potential
 import CerberusHeapLang.Adequacy
 import CerberusHeapLang.TotalAdequacy
 import CerberusHeapLang.API

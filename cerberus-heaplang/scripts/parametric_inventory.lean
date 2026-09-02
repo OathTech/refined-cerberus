@@ -198,12 +198,12 @@ def exportSeeds : List Name := [
   `CerberusHeapLang.Frag.step, `CerberusHeapLang.Frag.decomp,
   `CerberusHeapLang.cerberusRound_classify, `CerberusHeapLang.step_iff_cerberusRound,
   `CerberusHeapLang.spike_step_adequacy, `CerberusHeapLang.spike_step_adequacy_alloc,
-  `CerberusHeapLang.launchResources, `CerberusHeapLang.engine_adequacyU,
-  `CerberusHeapLang.engine_adequacyJ, `CerberusHeapLang.spike_engine_adequacy,
-  `CerberusHeapLang.semantic_triple_sound, `CerberusHeapLang.semantic_frame,
-  `CerberusHeapLang.wpt_engine_boundU,
-  `CerberusHeapLang.wpt_engine_boundJ, `CerberusHeapLang.wpt_engine_boundU_alloc,
-  `CerberusHeapLang.wpt_strongly_normalizing, `CerberusHeapLang.Frag.pot_step_bound]
+  `CerberusHeapLang.launchResources,
+  `CerberusHeapLang.engine_adequacyU, `CerberusHeapLang.engine_adequacyU_alloc,
+  `CerberusHeapLang.semantic_triple_soundU, `CerberusHeapLang.semantic_frameU,
+  `CerberusHeapLang.project_triple_pure, `CerberusHeapLang.project_triple_pure_alloc,
+  `CerberusHeapLang.wpt_engine_boundU, `CerberusHeapLang.wpt_engine_boundU_alloc,
+  `CerberusHeapLang.Frag.pot_step_bound]
 
 def fmt (r : Row) : String :=
   let eng := if r.engD.isEmpty then "-" else

@@ -25,7 +25,7 @@ sequential path.
 
 SOUNDNESS STATUS: the WP is over Step; Step's certification against
 the engine is Soundness.lean, and the engine-facing meaning lands
-through Adequacy.lean (SemTriple / semantic_triple_sound).
+through Adequacy.lean (MemTripleU / project_triple_pure).
 -/
 import CerberusHeapLang.Heap
 

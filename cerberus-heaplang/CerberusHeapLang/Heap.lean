@@ -22,7 +22,7 @@ reference):
 The whole-allocation `pointsToCell` is the MAXIMAL VIEW (offset 0,
 view type = allocation type) plus the image's decode-inertness fact;
 `SpikeCell`/`Coh`/`CellCoh` remain the PURE footprint vocabulary of
-the exported engine-facing statements (`Sat`/`SemTriple`).
+the exported engine-facing statements (`Sat`/`MemTripleU`).
 
 THE TAG-DEFINITION ENVIRONMENT (2026-09-02, the retirement re-pin;
 [AGENT] decision, DECISIONS.md): the engine's memory functions take

@@ -222,14 +222,13 @@ theorem struct_update_certified {GF : BundledGFunctors} [SpikeGpreS GF]
     (σ₀ : Mem)
     (hcoh : Coh fmapEmpty σ₀ ((Iris.Std.PartialMap.singleton id
       (SpikeCell.mk a structTy bs)) : SpikeHeapF SpikeCell))
-    (n : Nat) (aids : Nat → Nat)
-    (hfuel : 2 + n ≤ lemDefaultFuel) :
-    (∀ r, drive aids n (spikeThread (progS loc ann mo mo' bty id a)) σ₀ ≠
+    (n : Nat) (aids : Nat → Nat) :
+    (∀ r, driveU spikeCtx aids n (spikeThread (progS loc ann mo mo' bty id a)) σ₀ ≠
       .killed r) ∧
-    (drive aids n (spikeThread (progS loc ann mo mo' bty id a)) σ₀ ≠
+    (driveU spikeCtx aids n (spikeThread (progS loc ann mo mo' bty id a)) σ₀ ≠
       .stuck) ∧
     (∀ (v : value) (σ' : Mem),
-      drive aids n (spikeThread (progS loc ann mo mo' bty id a)) σ₀ =
+      driveU spikeCtx aids n (spikeThread (progS loc ann mo mo' bty id a)) σ₀ =
         .done v σ' →
       CerbMem.readBytesFrom σ' (a + ((fieldX : Nat) : Int)) 4 = (fiveBytes fmapEmpty) ∧
       CerbMem.readBytesFrom σ' (a + ((fieldY : Nat) : Int)) 4 = (sixBytes fmapEmpty)) := by
@@ -237,10 +236,15 @@ theorem struct_update_certified {GF : BundledGFunctors} [SpikeGpreS GF]
     have h := (hcoh.cells id _ (Iris.Std.LawfulPartialMap.get?_singleton_eq rfl)).len
     rw [structTy_size] at h
     exact h
-  have hres := spike_engine_adequacy (GF := GF)
-    (progS loc ann mo mo' bty id a) σ₀
+  have hres := engine_adequacyU (GF := GF) (M := spikeCtx) spikeCtx_wf
+    spikeCtx_labels_frag spikeCtx_labels_pot
+    (progS loc ann mo mo' bty id a) fmapEmpty [] σ₀
     (Iris.Std.PartialMap.singleton id (SpikeCell.mk a structTy bs))
-    (progS_frag loc ann mo mo' bty id a hlib) hcoh
+    (progS_frag loc ann mo mo' bty id a hlib)
+    (Nat.le_trans (progS_frag loc ann mo mo' bty id a hlib).pot_le_two
+      (by rw [show esize (progS loc ann mo mo' bty id a) = 2 from rfl,
+        show lemDefaultFuel = 999999 + 1 from rfl]; omega))
+    hcoh
     (fun _ σ' => CellCoh fmapEmpty σ' id ⟨a, structTy,
       spliceBytes fieldY (sixBytes fmapEmpty) (spliceBytes fieldX (fiveBytes fmapEmpty) bs)⟩)
     (by
@@ -251,8 +255,6 @@ theorem struct_update_certified {GF : BundledGFunctors} [SpikeGpreS GF]
       iintro H
       iexact H)
     n aids
-    (by rw [show esize (progS loc ann mo mo' bty id a) = 2 from rfl]
-        exact hfuel)
   refine ⟨hres.1, hres.2.1, fun v σ' hd => ?_⟩
   have hcc := hres.2.2 v σ' hd
   -- read the two field slices back out of the spliced image
@@ -786,43 +788,38 @@ theorem struct_plan_fits :
   rw [advanceCursor_mk, structTy_size]
   exact if_pos ⟨by decide, by decide⟩
 
-/-- ALLOCATE-THEN-INITIALIZE AT THE ENGINE (the R-01 partial-lane
+/-- ALLOCATE-THEN-INITIALIZE AS A BORING TRIPLE (the R-01 partial-lane
     closure consumer; since P6.1 THE CONSUMER OF THE ALLOCATING
-    PROJECTION `project_triple_alloc`): driving the REAL engine on the
-    self-contained program from the production cold-start memory —
-    launched through `project_triple_alloc`/`launchResources` with the
-    one-request plan (`prodMem₀_launchCoh` supplies `LaunchCoh` at the
-    empty footprint), verified ONLY through the public `wps_create` +
-    the generic store rule — never kills, never derails, and any
-    delivered value is unit with the final memory holding the
+    PROJECTION — since the 2026-09-02 professor review an INSTANCE of
+    its pure headline `project_triple_pure_alloc`): the self-contained
+    create-then-store program, at the straight-line profile, from the
+    EMPTY footprint with the one-request plan `[⟨8, structTy⟩]` —
+    `MemTripleU_alloc spikeCtx spikeEnv prog ∅ [⟨8, structTy⟩] ψ`:
+    for every memory launch-coherent with the plan (any frame `R`),
+    the engine's drive (any length) never kills, never derails, and
+    any delivered value is unit with the final memory holding the
     initialized fresh struct (existential allocation id/address: the
-    logic binds the pointer, the engine picks it). The statement is
-    the `MemTripleU_alloc` body at `spikeCtx`, footprint `∅`, frame
-    `∅`, unfolded; its post is discharged from the projected
-    pure-consequence obligation by the `*_consequence` lemmas. -/
+    logic binds the pointer, the engine picks it). Verified ONLY
+    through the public `wps_create` + the generic store rule; the
+    pure-consequence obligation is discharged by the `*_consequence`
+    lemmas. -/
 theorem struct_create_store_adequacy {GF : BundledGFunctors} [SpikeGpreS GF]
     (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (pref : prefix0) (mo : memory_order) (pbty vbty : core_base_type)
-    (hlib : CerbLocation.isLibraryLocation loc = false)
-    (n : Nat) (aids : Nat → Nat) (hfuel : 3 + n ≤ lemDefaultFuel) :
-    (∀ r, drive aids n (spikeThread
-        (progCreateInit loc ann .Prov_none 8 pref mo pbty vbty)) prodMem₀ ≠
-      .killed r) ∧
-    (drive aids n (spikeThread
-        (progCreateInit loc ann .Prov_none 8 pref mo pbty vbty)) prodMem₀ ≠
-      .stuck) ∧
-    (∀ (v : value) (σ' : Mem),
-      drive aids n (spikeThread
-          (progCreateInit loc ann .Prov_none 8 pref mo pbty vbty)) prodMem₀ =
-        .done v σ' →
-      v = Vunit ∧ ∃ i a : Int, CellCoh fmapEmpty σ' i ⟨a, structTy,
+    (hlib : CerbLocation.isLibraryLocation loc = false) :
+    MemTripleU_alloc spikeCtx spikeEnv
+      (progCreateInit loc ann .Prov_none 8 pref mo pbty vbty) ∅ [⟨8, structTy⟩]
+      (fun _ v σ' => v = Vunit ∧ ∃ i a : Int, CellCoh fmapEmpty σ' i ⟨a, structTy,
         spliceBytes fieldX (fiveBytes fmapEmpty)
           (List.replicate (CerbMem.sizeofCtype fmapEmpty structTy) undefByte)⟩) := by
   -- the allocating projection at the spike profile: footprint ∅, plan
   -- [⟨8, structTy⟩], the Iris post = `struct_create_store_wps`'s post
-  have h := project_triple_alloc (GF := GF) (M := spikeCtx) spikeCtx_wf
-    (fun l params cont hl => (spikeCtx_labels_none l hl).elim)
+  refine project_triple_pure_alloc (GF := GF) (M := spikeCtx) spikeCtx_wf
+    spikeCtx_labels_frag spikeCtx_labels_pot
     (progCreateInit_frag loc ann .Prov_none 8 pref mo pbty vbty hlib)
+    (Nat.le_trans (progCreateInit_frag loc ann .Prov_none 8 pref mo pbty vbty hlib).pot_le_two
+      (by rw [show esize (progCreateInit loc ann .Prov_none 8 pref mo pbty vbty) = 3
+          from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega))
     fmapEmpty [] (∅ : CellMap) [⟨8, structTy⟩]
     (fun w => iprop(∃ p : CerbMem.PointerValue,
       ⌜w.w.val = Vunit⌝ ∗
@@ -830,28 +827,7 @@ theorem struct_create_store_adequacy {GF : BundledGFunctors} [SpikeGpreS GF]
         (spliceBytes fieldX (fiveBytes fmapEmpty)
           (List.replicate (CerbMem.sizeofCtype fmapEmpty structTy) undefByte)) ∗
       allocCap fmapEmpty []))
-    ?_
-    (∅ : CellMap) (Iris.Std.LawfulPartialMap.disjoint_empty_right _) prodMem₀
-    (by rw [show Iris.Std.PartialMap.union (∅ : CellMap) (∅ : CellMap) = ∅ from
-          Iris.Std.LawfulPartialMap.union_empty_right]
-        exact prodMem₀_launchCoh [⟨8, structTy⟩] struct_plan_fits)
-    n aids
-    (by rw [show esize (progCreateInit loc ann .Prov_none 8 pref mo
-        pbty vbty) = 3 from rfl]
-        exact hfuel)
-    (fun l params cont hl => (spikeCtx_labels_none l hl).elim)
-  · refine ⟨h.1, h.2.1, fun v σ' hd => h.2.2 v σ' hd _ ?_⟩
-    -- the pure-consequence obligation: the frame is empty, the post's
-    -- points-to reads out through `pointsToCell_consequence`
-    intro _ w hw mm mb mk hG
-    subst hw
-    refine .trans (BI.sep_mono .rfl
-      (BI.sep_mono (BigSepM.bigSepM_empty).1 .rfl)) ?_
-    refine .trans (BI.sep_mono .rfl BI.emp_sep.1) ?_
-    refine (exists_consequence fun p => sep_consequence (pure_consequence _)
-      (sep_consequence (pointsToCell_consequence hG fmapEmpty p (.own 1) structTy _)
-        (BI.pure_intro True.intro))).trans ?_
-    exact BI.pure_mono fun ⟨_, hval, ⟨id, a, _, hcc⟩, _⟩ => ⟨hval, id, a, hcc⟩
+    _ ?_ ?_
   · -- the Iris triple: `struct_create_store_wps` collapsed by `wps_sound`
     intro inst
     iintro ⟨-, Hcap⟩
@@ -866,6 +842,43 @@ theorem struct_create_store_adequacy {GF : BundledGFunctors} [SpikeGpreS GF]
             spikeEnv))
         .rfl) BI.wand_elim_left)
     iexact HWP
+  · -- the pure-consequence obligation: the frame's cells are dropped,
+    -- the post's points-to reads out through `pointsToCell_consequence`
+    intro _ w R σ' mm mb mk hG
+    refine .trans (BI.sep_mono .rfl BI.sep_elim_right) ?_
+    refine (exists_consequence fun p => sep_consequence (pure_consequence _)
+      (sep_consequence (pointsToCell_consequence hG fmapEmpty p (.own 1) structTy _)
+        (BI.pure_intro True.intro))).trans ?_
+    exact BI.pure_mono fun ⟨_, hval, ⟨id, a, _, hcc⟩, _⟩ => ⟨hval, id, a, hcc⟩
+
+/-- The boring triple INSTANTIATED at the production cold-start memory
+    `prodMem₀` (frame ∅): the launch premise `LaunchCoh` is dischargeable
+    at a real engine memory — `prodMem₀_launchCoh` with the plan fitting
+    the actual cursor (`struct_plan_fits`). -/
+theorem struct_create_store_adequacy_prodMem₀ {GF : BundledGFunctors} [SpikeGpreS GF]
+    (loc : CerbLocation.Loc) (ann : core_run_annotation)
+    (pref : prefix0) (mo : memory_order) (pbty vbty : core_base_type)
+    (hlib : CerbLocation.isLibraryLocation loc = false)
+    (n : Nat) (aids : Nat → Nat) :
+    (∀ r, driveU spikeCtx aids n (spikeThread
+        (progCreateInit loc ann .Prov_none 8 pref mo pbty vbty)) prodMem₀ ≠
+      .killed r) ∧
+    (driveU spikeCtx aids n (spikeThread
+        (progCreateInit loc ann .Prov_none 8 pref mo pbty vbty)) prodMem₀ ≠
+      .stuck) ∧
+    (∀ (v : value) (σ' : Mem),
+      driveU spikeCtx aids n (spikeThread
+          (progCreateInit loc ann .Prov_none 8 pref mo pbty vbty)) prodMem₀ =
+        .done v σ' →
+      v = Vunit ∧ ∃ i a : Int, CellCoh fmapEmpty σ' i ⟨a, structTy,
+        spliceBytes fieldX (fiveBytes fmapEmpty)
+          (List.replicate (CerbMem.sizeofCtype fmapEmpty structTy) undefByte)⟩) :=
+  struct_create_store_adequacy (GF := GF) loc ann pref mo pbty vbty hlib
+    (∅ : CellMap) (Iris.Std.LawfulPartialMap.disjoint_empty_right _) prodMem₀
+    (by rw [show Iris.Std.PartialMap.union (∅ : CellMap) (∅ : CellMap) = ∅ from
+          Iris.Std.LawfulPartialMap.union_empty_right]
+        exact prodMem₀_launchCoh [⟨8, structTy⟩] struct_plan_fits)
+    n aids
 
 end CreateConsumer
 

@@ -56,12 +56,17 @@ FUEL HONESTY: the engine's get_ctx is fuel-bounded
 10^6) and its exhaustion leaf is opaque (LemLib fuelExhausted —
 deliberately not provably equal to anything). Every statement about
 a symbolic configuration therefore carries an `esize e ≤
-lemDefaultFuel` side condition; `esize` grows by at most 1 per
+lemDefaultFuel` side condition. `esize` grows by at most 1 per
 straight-line step and is reset by a jump to the registered body's
-own size (`Frag.esize_step_bound`), so Adequacy.lean's drive
-statements carry `esize e₀ + steps ≤ lemDefaultFuel` for the program
-and for every registered label body. This is an honest engine
-artifact, not slack: past the budget the engine really does bail.
+own size (`Frag.esize_step_bound`); the drive statements do NOT carry
+that run-length-coupled form — Potential.lean's step-monotone
+potential `pot` (`esize e ≤ pot e`; `pot` never increases along a
+step except for the jump reset) turns it into the two STATIC premises
+`pot e₀ ≤ lemDefaultFuel` and `pot cont ≤ lemDefaultFuel` per
+registered label body that Adequacy.lean and TotalAdequacy.lean
+carry, with the drive length unbounded (2026-09-02 professor review,
+required fix 1). This is an honest engine artifact, not slack: past
+the budget the engine really does bail.
 -/
 import CerberusHeapLang.Step
 import Core_reduction

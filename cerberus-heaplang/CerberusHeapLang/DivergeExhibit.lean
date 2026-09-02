@@ -10,15 +10,21 @@ THE PROGRAM: the self-jump loop
 
 whose registered body is its own back edge. Its configuration steps
 to ITSELF (`dg_self_step` — the context-discarding jump with no
-arguments and no state effect), so it is NOT strongly normalizing
-(`dg_not_normalizing`).
+arguments and no state effect), so THE ENGINE'S DRIVE of it rests in
+`.more` at EVERY fuel (`dg_driveU_more`: each round is the certified
+self-step, `engine_step_matchU`) — it never delivers.
 
-THE UNPROVABILITY, semantic form (`diverge_total_unprovable`): a
-total derivation for this loop — from ANY footprint's cell ownership
-(any `m₀` coherent with any memory), at ANY ghost functor list, ANY
-label context, ANY postcondition, ANY budget — is FALSE, not merely
-unprovable: it would yield strong normalization through the total
-adequacy (`wpt_strongly_normalizing`), contradicting the self-step.
+THE UNPROVABILITY, engine form (`diverge_total_unprovable`): a total
+derivation for this loop — from ANY footprint's cell ownership (any
+`m₀` coherent with any memory), at ANY ghost functor list, ANY label
+context, ANY postcondition, ANY budget `k` — is FALSE, not merely
+unprovable: through the total engine bound (`wpt_engine_boundU`) it
+would give `driveU … k … = .done v σ'`, contradicting `.more`. (Until
+the 2026-09-02 professor review this was argued through strong
+normalization of the mirror relation, `wpt_strongly_normalizing`; that
+theorem and the mirror-only `dg_not_normalizing` are retired — the
+negative test is now a fact about the engine's execution, like every
+other export.)
 
 WHERE A DIRECT ATTEMPT STICKS (the mandatory decrease doing its
 job): to install the loop via `blockSpecsT`, the body must be
@@ -78,37 +84,51 @@ theorem dg_self_step (ra : core_run_annotation) (ev0 : Fmap sym value)
     (by rw [procCtx_labels (dgRS_labeledAt ra)]; exact dgQ_lookup ra)
     rfl
 
-/-- A self-related element of any relation is not accessible. -/
-theorem not_acc_self {α : Type _} {r : α → α → Prop} {x : α}
-    (hr : r x x) : ¬ Acc r x := by
-  intro ha
-  have h : ∀ y, Acc r y → y = x → False := by
-    intro y ha
-    induction ha with
-    | intro z hz ih =>
-      rintro rfl
-      exact ih _ hr rfl
-  exact h x ha rfl
+/-- The registered body is in the fragment (a jump redex with no
+    arguments). -/
+theorem dgBody_frag (ra : core_run_annotation) : Frag (dgBody ra) :=
+  Frag.run (fun _ h => nomatch h)
 
-/-- The self-jump loop is NOT strongly normalizing over the unified
-    relation: it has an infinite (constant) reduction sequence. -/
-theorem dg_not_normalizing (ra : core_run_annotation) (σ₀ : Mem) :
-    ¬ Relation.StronglyNormalizing Language.ErasedStep
-      ([(⟨dgBody ra, [fmapEmpty], procCtx dgProcSym (dgRS ra)⟩ : CoreRt)],
-        σ₀) := by
-  have hstep : Language.ErasedStep
-      ([(⟨dgBody ra, [fmapEmpty], procCtx dgProcSym (dgRS ra)⟩ : CoreRt)], σ₀)
-      ([(⟨dgBody ra, [fmapEmpty], procCtx dgProcSym (dgRS ra)⟩ : CoreRt)],
-        σ₀) :=
-    ⟨[], Language.Step.of_primStep
-      (⟨dg_self_step ra fmapEmpty [] σ₀, rfl, rfl⟩ :
-        PrimStep.primStep
-          ((⟨dgBody ra, [fmapEmpty], procCtx dgProcSym (dgRS ra)⟩ : CoreRt), σ₀)
-          ([] : List Empty)
-          ((⟨dgBody ra, [fmapEmpty], procCtx dgProcSym (dgRS ra)⟩ : CoreRt), σ₀,
-            ([] : List CoreRt)))
-      (t₁ := []) (t₂ := [])⟩
-  exact not_acc_self hstep
+/-- The label map registers exactly the self-jump body. -/
+theorem dgQ_inv (ra : core_run_annotation) {l : sym}
+    {params : List (sym × core_base_type)} {cont : CoreExpr}
+    (h : lookupLabel (dgQ ra) l = some (params, cont)) :
+    params = [] ∧ cont = dgBody ra := by
+  unfold lookupLabel dgQ at h
+  rw [fmapLookupBy_addBy_empty] at h
+  split at h
+  · obtain ⟨h1, h2⟩ := Prod.mk.injEq .. ▸ Option.some.inj h
+    exact ⟨h1.symm ▸ rfl, h2.symm ▸ rfl⟩
+  · cases h
+
+/-- THE ENGINE NEVER DELIVERS: driving the self-jump loop for ANY
+    number of rounds rests in `.more` at the same configuration — each
+    round is the certified self-step (`engine_step_matchU` on
+    `dg_self_step`). -/
+theorem dg_driveU_more (ra : core_run_annotation) (σ₀ : Mem) :
+    ∀ (k : Nat) (aids : Nat → Nat),
+      driveU (procCtx dgProcSym (dgRS ra)) aids k
+        ((procCtx dgProcSym (dgRS ra)).thread (dgBody ra) [fmapEmpty]) σ₀ =
+      .more ((procCtx dgProcSym (dgRS ra)).thread (dgBody ra) [fmapEmpty]) σ₀
+  | 0, _ => rfl
+  | k + 1, aids => by
+    rw [driveU_succ, stepOutcomes_thread,
+      engine_step_matchU (aids 0) (dgBody_frag ra)
+        (by rw [show esize (dgBody ra) = 1 from rfl,
+          show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+        (dg_self_step ra fmapEmpty [] σ₀)]
+    exact dg_driveU_more ra σ₀ k _
+
+/-- Any postcondition weakens to the trivial engine readout. -/
+theorem dg_post_to_readout {GF : BundledGFunctors} [SpikeGS .hasLC GF]
+    (Ψ : SpikeVal → EnvStack → IProp GF) :
+    ∀ w ρ', Ψ w ρ' ⊢ readoutPost (fun _ _ => True) w ρ' := by
+  intro w ρ'
+  iintro -
+  iintro %σ' %ns %κs %nt -
+  iapply fupd_mask_intro_discard Std.LawfulSet.empty_subset
+  ipureintro
+  trivial
 
 /-- THE NEGATIVE THEOREM: a total derivation for the self-jump loop
     is FALSE — from the cell ownership of any footprint `m₀` coherent
@@ -116,7 +136,9 @@ theorem dg_not_normalizing (ra : core_run_annotation) (σ₀ : Mem) :
     postcondition, and budget (header note: the stuck obligation of a
     direct attempt is the jump clause's mandatory decrease
     `∃ m', 1 + m' ≤ m` against a body that must be verified at every
-    claimed variant, including m = 0). -/
+    claimed variant, including m = 0). Proved AT THE ENGINE: the total
+    bound would deliver `.done` at fuel `k`; the engine rests in
+    `.more`. -/
 theorem diverge_total_unprovable {GF : BundledGFunctors} [SpikeGpreS GF]
     (ra : core_run_annotation) (σ₀ : Mem) (m₀ : SpikeHeapF SpikeCell)
     (hcoh : Coh fmapEmpty σ₀ m₀)
@@ -127,9 +149,31 @@ theorem diverge_total_unprovable {GF : BundledGFunctors} [SpikeGpreS GF]
       iprop(([∗map] i ↦ c ∈ m₀, cellOwn fmapEmpty (hlc := .hasLC) (GF := GF) i (.own 1) c)) ⊢
         iprop(blockSpecsT (procCtx dgProcSym (dgRS ra)) Ls Ψ ∗
           wpt (procCtx dgProcSym (dgRS ra)) Ls k Ψ (dgBody ra) [fmapEmpty])) :
-    False :=
-  dg_not_normalizing ra σ₀
-    (wpt_strongly_normalizing (GF := GF) Ls Ψ (dgBody ra) [fmapEmpty]
-      σ₀ m₀ hcoh k hwp)
+    False := by
+  have hlbl := procCtx_labels (dgRS_labeledAt ra)
+  obtain ⟨v, σ', hdone, -, -⟩ :=
+    wpt_engine_boundU (GF := GF) (M := procCtx dgProcSym (dgRS ra)) (procCtx_wf _ _)
+      (fun l params cont hl => by
+        rw [hlbl] at hl
+        obtain ⟨-, rfl⟩ := dgQ_inv ra hl
+        exact dgBody_frag ra)
+      (fun l params cont hl => by
+        rw [hlbl] at hl
+        obtain ⟨-, rfl⟩ := dgQ_inv ra hl
+        rw [show pot (dgBody ra) = 2 from rfl,
+          show lemDefaultFuel = 999999 + 1 from rfl]
+        omega)
+      Ls (dgBody ra) fmapEmpty [] σ₀ m₀ (dgBody_frag ra)
+      (by rw [show pot (dgBody ra) = 2 from rfl,
+        show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+      hcoh (fun _ _ => True) k
+      (by
+        intro inst
+        refine hwp.trans (BI.sep_mono ?_ ?_)
+        · exact blockSpecsT_mono (dg_post_to_readout Ψ)
+        · exact wpt_mono (dg_post_to_readout Ψ) _ _ _)
+      (fun _ => 0)
+  rw [dg_driveU_more ra σ₀ k] at hdone
+  cases hdone
 
 end CerberusHeapLang

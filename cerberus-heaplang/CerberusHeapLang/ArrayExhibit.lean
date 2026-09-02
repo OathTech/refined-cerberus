@@ -642,8 +642,7 @@ variable (loc : CerbLocation.Loc) (ann ra : core_run_annotation)
     memory carrying the seeded array cell: the engine never kills,
     never derails, and any delivered value IS `vs.sum`, with the
     ARRAY PRESERVED in the final memory (`CellCoh` at the original
-    bytes). Partial correctness; fuel hypotheses are the engine's
-    own budgets (interim in-budget form). -/
+    bytes). Partial correctness at every drive length. -/
 theorem array_sum_certified
     (sbty : core_base_type) (vs : List Int) (id a : Int)
     (aty : ctype) (bs : List CerbMem.AbsByte)
@@ -658,37 +657,43 @@ theorem array_sum_certified
     (σ₀ : Mem)
     (hcoh : Coh fmapEmpty σ₀ ((Iris.Std.PartialMap.singleton id
       (SpikeCell.mk a aty bs)) : SpikeHeapF SpikeCell))
-    (nsteps : Nat) (aids : Nat → Nat)
-    (hfuel : 4 + nsteps ≤ lemDefaultFuel)
-    (hfuel2 : 3 + nsteps ≤ lemDefaultFuel) :
+    (nsteps : Nat) (aids : Nat → Nat) :
     let prog := arrProg loc ann ra mo sbty ibty accbty pbty xbty
       (cellPtr id a) vs.length
     let rs := arrRS loc ann ra mo ibty accbty pbty xbty vs.length
-    (∀ r, driveJ rs aids nsteps
+    (∀ r, driveU (procCtx arrProcSym rs) aids nsteps
       (procThread arrProcSym prog [fmapEmpty]) σ₀ ≠ .killed r) ∧
-    (driveJ rs aids nsteps
+    (driveU (procCtx arrProcSym rs) aids nsteps
       (procThread arrProcSym prog [fmapEmpty]) σ₀ ≠ .stuck) ∧
     (∀ (v : value) (σ' : Mem),
-      driveJ rs aids nsteps
+      driveU (procCtx arrProcSym rs) aids nsteps
         (procThread arrProcSym prog [fmapEmpty]) σ₀ = .done v σ' →
       v = ivVal vs.sum ∧ CellCoh fmapEmpty σ' id ⟨a, aty, bs⟩) := by
   intro prog rs
-  refine engine_adequacyJ (GF := SpikeGF)
-    (arrRS_labeledAt loc ann ra mo ibty accbty pbty xbty vs.length)
+  have hlbl : (procCtx arrProcSym rs).labels = _ :=
+    procCtx_labels (arrRS_labeledAt loc ann ra mo ibty accbty pbty xbty vs.length)
+  refine engine_adequacyU (GF := SpikeGF)
+    (M := procCtx arrProcSym rs) (procCtx_wf _ _)
     (fun l params cont hl => by
+      rw [hlbl] at hl
       obtain ⟨-, rfl⟩ := arrQ_inv loc ann ra mo ibty accbty pbty xbty
         vs.length hl
       exact arrBody_fragJ loc ann ra mo xbty hlib vs.length)
-    prog fmapEmpty [] σ₀ _
-    (.save (saveParams_depth_of_vals rfl) (arrBody_fragJ loc ann ra mo xbty hlib vs.length)) hcoh
-    (fun v σ' => v = ivVal vs.sum ∧ CellCoh fmapEmpty σ' id ⟨a, aty, bs⟩)
-    ?_ nsteps aids
-    (by rw [show esize prog = 4 from rfl]; omega)
     (fun l params cont hl => by
+      rw [hlbl] at hl
       obtain ⟨-, rfl⟩ := arrQ_inv loc ann ra mo ibty accbty pbty xbty
         vs.length hl
-      rw [show esize (arrBody loc ann ra mo xbty vs.length) = 3 from rfl]
-      omega)
+      exact Nat.le_trans (arrBody_fragJ loc ann ra mo xbty hlib vs.length).pot_le_two
+        (by rw [show esize (arrBody loc ann ra mo xbty vs.length) = 3 from rfl,
+          show lemDefaultFuel = 999999 + 1 from rfl]; omega))
+    prog fmapEmpty [] σ₀ _
+    (.save (saveParams_depth_of_vals rfl) (arrBody_fragJ loc ann ra mo xbty hlib vs.length))
+    (Nat.le_trans (Frag.pot_le_two (e := prog) (.save (saveParams_depth_of_vals rfl)
+        (arrBody_fragJ loc ann ra mo xbty hlib vs.length)))
+      (by rw [show esize prog = 4 from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega))
+    hcoh
+    (fun v σ' => v = ivVal vs.sum ∧ CellCoh fmapEmpty σ' id ⟨a, aty, bs⟩)
+    ?_ nsteps aids
   intro inst
   refine .trans ?_ (arr_wp_readout loc ann ra mo ibty accbty pbty xbty
     vs id a aty bs arrProcSym rs

@@ -9,7 +9,7 @@ node at the wildcard pattern whose first step is the engine's
 LETW-PURE TAU (one_step0 Ewseq bare-value arm, Core_reduction.lean:
 353) and whose delivered value is the CONTINUATION's value. The
 theorem chain is the WP LANE end to end: `wps_wseq` (the drift
-rule) → `wps_sound` → `spike_engine_adequacy` — concluding, engine
+rule) → `wps_sound` → `engine_adequacyU` — concluding, engine
 vocabulary only: the drive never kills, never derails, and any
 delivered value IS v2.
 
@@ -94,19 +94,23 @@ end WseqIris
     consumer cell): driving THE ENGINE on `letw _ = pure(v1) in
     pure(v2)`, from ANY memory state: never killed, never stuck, and
     any delivered value IS v2 — the value fact flows from the proved
-    WP through `spike_engine_adequacy`, not by evaluation. Step 1 of
+    WP through `engine_adequacyU`, not by evaluation. Step 1 of
     any such run is the engine's LETW-PURE TAU (`Step.wseq_pure` is
     the only rule that fires). -/
 theorem wseq_certified {GF : BundledGFunctors} [SpikeGpreS GF] (v1 v2 : value)
-    (σ₀ : Mem) (n : Nat) (aids : Nat → Nat)
-    (hfuel : 2 + n ≤ lemDefaultFuel) :
-    (∀ r, drive aids n (spikeThread (wseqProg v1 v2)) σ₀ ≠ .killed r) ∧
-    (drive aids n (spikeThread (wseqProg v1 v2)) σ₀ ≠ .stuck) ∧
+    (σ₀ : Mem) (n : Nat) (aids : Nat → Nat) :
+    (∀ r, driveU spikeCtx aids n (spikeThread (wseqProg v1 v2)) σ₀ ≠ .killed r) ∧
+    (driveU spikeCtx aids n (spikeThread (wseqProg v1 v2)) σ₀ ≠ .stuck) ∧
     (∀ (v' : value) (σ' : Mem),
-      drive aids n (spikeThread (wseqProg v1 v2)) σ₀ = .done v' σ' →
+      driveU spikeCtx aids n (spikeThread (wseqProg v1 v2)) σ₀ = .done v' σ' →
       v' = v2) := by
-  refine spike_engine_adequacy (GF := GF) (wseqProg v1 v2) σ₀ ∅
-    (wseqProg_frag v1 v2)
+  refine engine_adequacyU (GF := GF) (M := spikeCtx) spikeCtx_wf
+    (fun l params cont hl => (spikeCtx_labels_none l hl).elim)
+    (fun l params cont hl => (spikeCtx_labels_none l hl).elim)
+    (wseqProg v1 v2) fmapEmpty [] σ₀ ∅ (wseqProg_frag v1 v2)
+    (Nat.le_trans (wseqProg_frag v1 v2).pot_le_two
+      (by rw [show esize (wseqProg v1 v2) = 2 from rfl,
+        show lemDefaultFuel = 999999 + 1 from rfl]; omega))
     (Coh.mk
       (fun _ c hget => absurd (hget.symm.trans
         (Iris.Std.LawfulPartialMap.get?_empty (M := SpikeHeapF) _))
@@ -116,7 +120,6 @@ theorem wseq_certified {GF : BundledGFunctors} [SpikeGpreS GF] (v1 v2 : value)
         (Option.some_ne_none c1)))
     (fun v' _ => v' = v2)
     ?_ n aids
-    (by rw [show esize (wseqProg v1 v2) = 2 from rfl]; exact hfuel)
   intro inst
   exact (BigSepM.bigSepM_empty).1.trans (wseq_wp_readout v1 v2)
 

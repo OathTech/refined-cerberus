@@ -79,32 +79,30 @@ def trioExports : List Name := [
   -- the two exhibit shapes at the statement stratum (QA-2: the raw-WP
   -- twins `exhibit`/`exhibitC_triple` retired), the engine-facing spine
   ``CerberusHeapLang.wps_exhibit_store_frame, ``CerberusHeapLang.wps_exhibit_seq_stores,
-  ``CerberusHeapLang.spike_engine_adequacy,
-  ``CerberusHeapLang.semantic_triple_sound, ``CerberusHeapLang.semantic_frame,
   ``CerberusHeapLang.exhibitA_engine, ``CerberusHeapLang.exhibitB_engine,
   ``CerberusHeapLang.exhibitA_semantic, ``CerberusHeapLang.exhibitB_semantic,
   ``CerberusHeapLang.exhibitC_semantic,
   ``CerberusHeapLang.exhibitC_engine, ``CerberusHeapLang.exhibitA_total,
   -- the jump layer + the unified relation
   ``CerberusHeapLang.stepDischarge_run, ``CerberusHeapLang.Decomp.step_factor,
-  ``CerberusHeapLang.engine_step_matchU, ``CerberusHeapLang.engine_adequacyJ,
+  ``CerberusHeapLang.engine_step_matchU,
   ``CerberusHeapLang.engine_adequacyU, ``CerberusHeapLang.counter_loop_certified,
   -- the statement-stratified WP (partial) and its rules
   ``CerberusHeapLang.wps_sound, ``CerberusHeapLang.wps_seq, ``CerberusHeapLang.wps_store,
   ``CerberusHeapLang.wps_create, ``CerberusHeapLang.wps_load_at, ``CerberusHeapLang.wps_store_at,
   -- the total layer
-  ``CerberusHeapLang.wpt_sound, ``CerberusHeapLang.wpt_engine_boundJ,
-  ``CerberusHeapLang.wpt_strongly_normalizing, ``CerberusHeapLang.wpt_store,
+  ``CerberusHeapLang.wpt_sound, ``CerberusHeapLang.wpt_engine_boundU,
+  ``CerberusHeapLang.wpt_engine_boundU_alloc, ``CerberusHeapLang.wpt_store,
   -- the collapse layer (trio-exact: no shipped-state statement)
   ``CerberusHeapLang.driver2_done,
   ``CerberusHeapLang.finalize_done, ``CerberusHeapLang.loop_step_frag,
   ``CerberusHeapLang.wpt_driver_done,
   -- the exhibits
   ``CerberusHeapLang.fib_certified, ``CerberusHeapLang.fib_certified_total,
-  ``CerberusHeapLang.fib_terminates, ``CerberusHeapLang.array_sum_certified,
+  ``CerberusHeapLang.array_sum_certified,
   ``CerberusHeapLang.struct_update_certified, ``CerberusHeapLang.struct_create_store_wps,
   ``CerberusHeapLang.list_reverse_certified, ``CerberusHeapLang.list_reverse_demo,
-  ``CerberusHeapLang.list_reverse_certified_total, ``CerberusHeapLang.list_reverse_terminates,
+  ``CerberusHeapLang.list_reverse_certified_total,
   ``CerberusHeapLang.tree_rotate_certified, ``CerberusHeapLang.tree_rotate_certified_total,
   ``CerberusHeapLang.diverge_total_unprovable,
   ``CerberusHeapLang.case_certified, ``CerberusHeapLang.wseq_certified,
@@ -139,7 +137,6 @@ def trioExports : List Name := [
   -- alloc arc P4.3: the semantic triple at any machine context (R-09) and
   -- the counter loop's irrelevant-binding test at the engine (R-08)
   ``CerberusHeapLang.semantic_triple_soundU, ``CerberusHeapLang.semantic_frameU,
-  ``CerberusHeapLang.SemTriple_iff_U,
   ``CerberusHeapLang.counter_loop_certified_irrelevant_binding,
   -- alloc arc P5: the readiness smoke test (R-07 / charter item 5) — a
   -- two-field object predicate and its load/store/allocate rules derived
@@ -152,7 +149,12 @@ def trioExports : List Name := [
   ``CerberusHeapLang.ReadinessSmoke.twoField_create,
   -- the PROJECTION ([USER 2026-09-02], DECISIONS "no boring logic; a
   -- projection theorem only"): any Iris triple projects to the boring
-  -- memory-post triple; the pure-consequence lemmas discharge its post
+  -- memory-post triple; the pure-consequence lemmas discharge its post.
+  -- Professor review 1 (required fix 2): the HEADLINE is the pure form
+  -- `project_triple_pure` (+ `_alloc`) — a boring `MemTripleU` for a
+  -- pure ψ, no Iris in the conclusion; `project_triple` is the
+  -- strongest-post form beneath it
+  ``CerberusHeapLang.project_triple_pure, ``CerberusHeapLang.project_triple_pure_alloc,
   ``CerberusHeapLang.project_triple, ``CerberusHeapLang.SemTripleU_iff_Mem,
   ``CerberusHeapLang.pure_consequence, ``CerberusHeapLang.sep_consequence,
   ``CerberusHeapLang.or_consequence, ``CerberusHeapLang.exists_consequence,
@@ -179,6 +181,7 @@ def trioExports : List Name := [
   -- (the allocating projection's engine instance and the three local
   -- allocation consumers)
   ``CerberusHeapLang.struct_create_store_adequacy,
+  ``CerberusHeapLang.struct_create_store_adequacy_prodMem₀,
   ``CerberusHeapLang.alloc_two_creates_wps, ``CerberusHeapLang.alloc_create_wpt,
   ``CerberusHeapLang.alloc_create_launch_smoke]
 

@@ -457,9 +457,9 @@ theorem loop_labeledAt_production (sup : Nat) (loc : CerbLocation.Loc)
     production run state): the counter-loop certification restated
     with the run state built by the SHIPPED registration ONLY
     (`initial_core_run_state ∘ collect_labeled_continuations_NEW` —
-    nothing hand-built in the label plumbing; the drive is the
-    certified jump-profile lane). The in-budget hypotheses are the
-    sanctioned interim form. The real production equations live in
+    nothing hand-built in the label plumbing; the drive is `driveU`
+    at the proc-carrying context). Partial correctness at every
+    drive length. The real production equations live in
     ProdLoopExhibit.lean. -/
 theorem counter_loop_certified_registration (sup : Nat)
     (loc : CerbLocation.Loc) (ann ra : core_run_annotation)
@@ -470,31 +470,42 @@ theorem counter_loop_certified_registration (sup : Nat)
     (σ₀ : Mem)
     (hcoh : Coh fmapEmpty σ₀ ((Iris.Std.PartialMap.singleton idx
       (SpikeCell.mk addr intTy bs0)) : SpikeHeapF SpikeCell))
-    (nsteps : Nat) (aids : Nat → Nat)
-    (hfuel : 4 + nsteps ≤ lemDefaultFuel)
-    (hfuel2 : 3 + nsteps ≤ lemDefaultFuel) :
+    (nsteps : Nat) (aids : Nat → Nat) :
     let prog := loopProg loc ann ra mo bty xbty sbty (cellPtr idx addr) n
     let rs := (initial_core_run_state sup (collect_labeled_continuations_NEW
       (prodFile prog))).1
-    (∀ r, driveJ rs aids nsteps
+    (∀ r, driveU (procCtx mainSym rs) aids nsteps
       (procThread mainSym prog [fmapEmpty]) σ₀ ≠ .killed r) ∧
-    (driveJ rs aids nsteps
+    (driveU (procCtx mainSym rs) aids nsteps
       (procThread mainSym prog [fmapEmpty]) σ₀ ≠ .stuck) ∧
     (∀ (v : value) (σ' : Mem),
-      driveJ rs aids nsteps
+      driveU (procCtx mainSym rs) aids nsteps
         (procThread mainSym prog [fmapEmpty]) σ₀ = .done v σ' →
       v = Vunit ∧ ∃ bs',
         ((n = 0 ∧ bs' = bs0) ∨ (0 < n ∧ bs' = (sevenBytes fmapEmpty))) ∧
         CellCoh fmapEmpty σ' idx ⟨addr, intTy, bs'⟩) := by
   intro prog rs
-  obtain ⟨h1, h2, h3⟩ := engine_adequacyJ (GF := SpikeGF)
-    (loop_labeledAt_production sup loc ann ra mo bty xbty sbty
+  have hlbl : (procCtx mainSym rs).labels = _ :=
+    procCtx_labels (loop_labeledAt_production sup loc ann ra mo bty xbty sbty
       (cellPtr idx addr) n)
+  obtain ⟨h1, h2, h3⟩ := engine_adequacyU (GF := SpikeGF)
+    (M := procCtx mainSym rs) (procCtx_wf _ _)
     (fun l params cont hl => by
+      rw [hlbl] at hl
       obtain ⟨-, rfl⟩ := loopQ_inv loc ann ra mo bty xbty _ hl
       exact loopBody_fragJ loc ann ra mo bty _ hlib)
+    (fun l params cont hl => by
+      rw [hlbl] at hl
+      obtain ⟨-, rfl⟩ := loopQ_inv loc ann ra mo bty xbty _ hl
+      exact Nat.le_trans (loopBody_fragJ loc ann ra mo bty _ hlib).pot_le_two
+        (by rw [show esize (loopBody loc ann ra mo bty (cellPtr idx addr)) = 3 from rfl,
+          show lemDefaultFuel = 999999 + 1 from rfl]; omega))
     prog fmapEmpty [] σ₀ _
-    (.save (saveParams_depth_of_vals rfl) (loopBody_fragJ loc ann ra mo bty _ hlib)) hcoh
+    (.save (saveParams_depth_of_vals rfl) (loopBody_fragJ loc ann ra mo bty _ hlib))
+    (Nat.le_trans (Frag.pot_le_two (e := prog) (.save (saveParams_depth_of_vals rfl)
+        (loopBody_fragJ loc ann ra mo bty _ hlib)))
+      (by rw [show esize prog = 4 from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega))
+    hcoh
     (fun v σ' => v = Vunit ∧ ∃ bs',
       ((n = 0 ∧ bs' = bs0) ∨ (0 < n ∧ bs' = (sevenBytes fmapEmpty))) ∧
       ∃ i a, cellPtr idx addr = cellPtr i a ∧ CellCoh fmapEmpty σ' i ⟨a, intTy, bs'⟩)
@@ -512,12 +523,6 @@ theorem counter_loop_certified_registration (sup : Nat)
       · ipureintro; rfl
       · iexact Hpt)
     nsteps aids
-    (by rw [show esize prog = 4 from rfl]; omega)
-    (fun l params cont hl => by
-      obtain ⟨-, rfl⟩ := loopQ_inv loc ann ra mo bty xbty _ hl
-      rw [show esize (loopBody loc ann ra mo bty (cellPtr idx addr)) = 3
-        from rfl]
-      omega)
   refine ⟨h1, h2, fun v σ' hd => ?_⟩
   obtain ⟨hv, bs', hbs, i, a, heq, hc⟩ := h3 v σ' hd
   obtain ⟨rfl, rfl⟩ := cellPtr_inj heq

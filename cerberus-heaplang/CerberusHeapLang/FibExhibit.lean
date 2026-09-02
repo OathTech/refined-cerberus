@@ -21,25 +21,25 @@ annotation quantified):
 - VERIFIED via the per-label invariant rule (`blockSpecs_intro`)
   with THE DATA-DEPENDENT INVARIANT `a = fib i ∧ b = fib (i+1)`
   (`fibSpec` — the Lean-side specification function), collapsed by
-  `wps_sound`, EXPORTED through `engine_adequacyJ`: the engine's
-  driveJ from the proc-carrying thread never kills, never derails,
+  `wps_sound`, EXPORTED through `engine_adequacyU`: the engine's
+  `driveU` from the proc-carrying thread never kills, never derails,
   and any delivered value IS `fib n` — at ANY initial memory (the
   program touches no state; the seeded footprint is empty).
 - THE TOTAL LANE (foundations Phase 3, audit F-02 remediation):
   `fib_certified_total` is the same unconditional equation as before
-  — at the concrete step bound `2·n + 4`, driveJ DELIVERS `fib n`,
+  — at the concrete step bound `2·n + 4`, `driveU` DELIVERS `fib n`,
   no fuel or partiality hypotheses, final state pinned — but its
   proof is now A COROLLARY OF THE LOGIC: the total statement
   judgment (`fib_body_wpt`/`fib_blockSpecsT`/`fib_wpt`, with the
   variant-indexed invariant pinning the budget `2·(n−i)+3` per
   iteration) through the GENERIC measure→drive-fuel simulation
-  (`wpt_engine_boundJ`, TotalAdequacy.lean); the state pin comes
+  (`wpt_engine_boundU`, TotalAdequacy.lean); the state pin comes
   from the generic state-inert-cone conjunct. ZERO example-level
   `Step` constructors / per-step drive-equation chains remain (the former
   operational side proof `fib_loop_drive` is RETIRED — the audit's
-  acceptance criterion). `fib_terminates` is the logical half:
-  strong normalization over the unified relation via Iris
-  TotalAdequacy (`twp_total`), consumed as-is.
+  acceptance criterion). (The former `fib_terminates` — strong
+  normalization of the MIRROR relation, not an engine fact — was
+  retired at the 2026-09-02 professor review, required fix 5.)
 -/
 import CerberusHeapLang.API
 import CerberusHeapLang.LoopExhibit
@@ -441,39 +441,42 @@ variable (ra : core_run_annotation)
     through `core_run_state.labeled`) on the authored two-accumulator
     fib loop, from ANY initial memory: the engine never kills, never
     derails, and any delivered value IS `fib n` (the Lean-side
-    `fibSpec`). Partial correctness; the fuel hypotheses are the
-    engine's own budgets (interim in-budget form — the
-    termination-accounting export is the S4 driveJ-total theorem). -/
+    `fibSpec`). Partial correctness at EVERY drive length (the total
+    equation below is the termination-accounting export). -/
 theorem fib_certified
     (sbty : core_base_type) (n : Int) (hn : 0 ≤ n) (σ₀ : Mem)
-    (nsteps : Nat) (aids : Nat → Nat)
-    (hfuel : 3 + nsteps ≤ lemDefaultFuel)
-    (hfuel2 : 2 + nsteps ≤ lemDefaultFuel) :
+    (nsteps : Nat) (aids : Nat → Nat) :
     let prog := fibProg ra n sbty ibty abty bbty
     let rs := fibRS ra n ibty abty bbty
-    (∀ r, driveJ rs aids nsteps
+    (∀ r, driveU (procCtx fibProcSym rs) aids nsteps
       (procThread fibProcSym prog [fmapEmpty]) σ₀ ≠ .killed r) ∧
-    (driveJ rs aids nsteps
+    (driveU (procCtx fibProcSym rs) aids nsteps
       (procThread fibProcSym prog [fmapEmpty]) σ₀ ≠ .stuck) ∧
     (∀ (v : value) (σ' : Mem),
-      driveJ rs aids nsteps
+      driveU (procCtx fibProcSym rs) aids nsteps
         (procThread fibProcSym prog [fmapEmpty]) σ₀ = .done v σ' →
       v = ivVal (fibSpec n.toNat)) := by
   intro prog rs
-  refine engine_adequacyJ (GF := SpikeGF)
-    (fibRS_labeledAt ra n ibty abty bbty)
+  have hlbl : (procCtx fibProcSym rs).labels = _ :=
+    procCtx_labels (fibRS_labeledAt ra n ibty abty bbty)
+  refine engine_adequacyU (GF := SpikeGF)
+    (M := procCtx fibProcSym rs) (procCtx_wf _ _)
     (fun l params cont hl => by
+      rw [hlbl] at hl
       obtain ⟨-, rfl⟩ := fibQ_inv ra n ibty abty bbty hl
       exact fibBody_fragJ ra n)
+    (fun l params cont hl => by
+      rw [hlbl] at hl
+      obtain ⟨-, rfl⟩ := fibQ_inv ra n ibty abty bbty hl
+      exact Nat.le_trans (fibBody_fragJ ra n).pot_le_two
+        (by rw [show esize (fibBody ra n) = 2 from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega))
     prog fmapEmpty [] σ₀ (∅ : SpikeHeapF SpikeCell)
-    (.save (saveParams_depth_of_vals rfl) (fibBody_fragJ ra n)) (coh_empty σ₀)
+    (.save (saveParams_depth_of_vals rfl) (fibBody_fragJ ra n))
+    (Nat.le_trans (Frag.pot_le_two (e := prog) (.save (saveParams_depth_of_vals rfl) (fibBody_fragJ ra n)))
+      (by rw [show esize prog = 3 from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega))
+    (coh_empty σ₀)
     (fun v _ => v = ivVal (fibSpec n.toNat))
     ?_ nsteps aids
-    (by rw [show esize prog = 3 from rfl]; omega)
-    (fun l params cont hl => by
-      obtain ⟨-, rfl⟩ := fibQ_inv ra n ibty abty bbty hl
-      rw [show esize (fibBody ra n) = 2 from rfl]
-      omega)
   intro inst
   exact (BigSepM.bigSepM_empty).1.trans
     (fib_wp_readout ra n ibty abty bbty fibProcSym rs
@@ -616,23 +619,27 @@ theorem fibBody_pot (n : Int) : pot (fibBody ra n) = 3 := rfl
     returned verbatim — no fuel hypotheses, no partiality, any
     initial memory, any action-id supply. THE PROOF IS A COROLLARY
     of the total statement judgment through the generic
-    measure→drive-fuel simulation (`wpt_engine_boundJ`): no
+    measure→drive-fuel simulation (`wpt_engine_boundU`): no
     example-level `Step` constructors, no per-step drive-equation chains
     (audit F-02 acceptance; the former operational induction
     `fib_loop_drive` is retired). -/
 theorem fib_certified_total (sbty : core_base_type) (n : Int)
     (hn : 0 ≤ n) (σ₀ : Mem) (aids : Nat → Nat) :
-    driveJ (fibRS ra n ibty abty bbty) aids (2 * n.toNat + 4)
+    driveU (procCtx fibProcSym (fibRS ra n ibty abty bbty)) aids (2 * n.toNat + 4)
       (procThread fibProcSym (fibProg ra n sbty ibty abty bbty)
         [fmapEmpty]) σ₀ =
       .done (ivVal (fibSpec n.toNat)) σ₀ := by
   have hQ := fibRS_labeledAt ra n ibty abty bbty
+  have hlbl := procCtx_labels hQ
   obtain ⟨v, σ', hdone, hv, hinert⟩ :=
-    wpt_engine_boundJ (GF := SpikeGF) hQ
+    wpt_engine_boundU (GF := SpikeGF)
+      (M := procCtx fibProcSym (fibRS ra n ibty abty bbty)) (procCtx_wf _ _)
       (fun l params cont hl => by
+        rw [hlbl] at hl
         obtain ⟨-, rfl⟩ := fibQ_inv ra n ibty abty bbty hl
         exact fibBody_fragJ ra n)
       (fun l params cont hl => by
+        rw [hlbl] at hl
         obtain ⟨-, rfl⟩ := fibQ_inv ra n ibty abty bbty hl
         rw [fibBody_pot, show lemDefaultFuel = 999999 + 1 from rfl]
         omega)
@@ -657,29 +664,10 @@ theorem fib_certified_total (sbty : core_base_type) (n : Int)
   rw [hv] at hdone
   rw [hinert ⟨fibProg_stateInert ra ibty abty bbty sbty n,
     fun l params cont hl => by
+      rw [hlbl] at hl
       obtain ⟨-, rfl⟩ := fibQ_inv ra n ibty abty bbty hl
       exact fibBody_stateInert ra n⟩] at hdone
   exact hdone
-
-/-- FIB TERMINATES — the LOGICAL half: strong normalization of the
-    unified relation at the launched configuration, through the
-    pinned Iris TotalAdequacy (`twp_total`), consumed as-is. -/
-theorem fib_terminates (sbty : core_base_type) (n : Int) (hn : 0 ≤ n)
-    (σ₀ : Mem) :
-    Relation.StronglyNormalizing Language.ErasedStep
-      ([(⟨fibProg ra n sbty ibty abty bbty, [fmapEmpty],
-          procCtx fibProcSym (fibRS ra n ibty abty bbty)⟩ : CoreRt)], σ₀) := by
-  have hQ := fibRS_labeledAt ra n ibty abty bbty
-  refine wpt_strongly_normalizing (GF := SpikeGF) (fibLsT n)
-    (fibPost n) _ _ σ₀ (∅ : SpikeHeapF SpikeCell) (coh_empty σ₀)
-    (2 * n.toNat + 4) ?_
-  intro inst
-  refine .trans (BigSepM.bigSepM_empty).1 ?_
-  refine .trans BI.emp_sep.2 (BI.sep_mono ?_ ?_)
-  · exact fib_blockSpecsT ra n ibty abty bbty fibProcSym
-      (fibRS ra n ibty abty bbty) hQ
-  · exact fib_wpt ra n ibty abty bbty fibProcSym
-      (fibRS ra n ibty abty bbty) hQ hn sbty
 
 end FibTotalExport
 

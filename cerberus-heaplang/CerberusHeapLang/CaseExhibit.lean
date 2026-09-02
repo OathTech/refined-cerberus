@@ -11,7 +11,7 @@ probe's interim regression used the wildcard pattern, which binds
 nothing). The theorem chain is the WP LANE end to end:
 `wps_case_value` (the logic rule) → `wps_sound` (the Löb-tied
 collapse, block specifications vacuous at the spike profile) →
-`spike_engine_adequacy` — concluding, engine vocabulary only: the
+`engine_adequacyU` — concluding, engine vocabulary only: the
 drive of the case program never kills, never derails, and any
 delivered value IS the scrutinee.
 
@@ -125,18 +125,23 @@ end CaseIris
     `case v of x => pure(x) end`, from ANY memory state: never
     killed, never stuck, and any delivered value IS the scrutinee —
     the value fact flows from the proved WP through
-    `spike_engine_adequacy`, not by evaluation. Step 1 of any such
+    `engine_adequacyU`, not by evaluation. Step 1 of any such
     run is the engine's Ecase substitution TAU (`Step.case_value` is
     the only rule that fires). -/
 theorem case_certified {GF : BundledGFunctors} [SpikeGpreS GF] (v : value)
-    (σ₀ : Mem) (n : Nat) (aids : Nat → Nat)
-    (hfuel : 2 + n ≤ lemDefaultFuel) :
-    (∀ r, drive aids n (spikeThread (caseProg v)) σ₀ ≠ .killed r) ∧
-    (drive aids n (spikeThread (caseProg v)) σ₀ ≠ .stuck) ∧
+    (σ₀ : Mem) (n : Nat) (aids : Nat → Nat) :
+    (∀ r, driveU spikeCtx aids n (spikeThread (caseProg v)) σ₀ ≠ .killed r) ∧
+    (driveU spikeCtx aids n (spikeThread (caseProg v)) σ₀ ≠ .stuck) ∧
     (∀ (v' : value) (σ' : Mem),
-      drive aids n (spikeThread (caseProg v)) σ₀ = .done v' σ' →
+      driveU spikeCtx aids n (spikeThread (caseProg v)) σ₀ = .done v' σ' →
       v' = v) := by
-  refine spike_engine_adequacy (GF := GF) (caseProg v) σ₀ ∅ (caseProg_frag v)
+  refine engine_adequacyU (GF := GF) (M := spikeCtx) spikeCtx_wf
+    (fun l params cont hl => (spikeCtx_labels_none l hl).elim)
+    (fun l params cont hl => (spikeCtx_labels_none l hl).elim)
+    (caseProg v) fmapEmpty [] σ₀ ∅ (caseProg_frag v)
+    (Nat.le_trans (caseProg_frag v).pot_le_two
+      (by rw [show esize (caseProg v) = 2 from rfl,
+        show lemDefaultFuel = 999999 + 1 from rfl]; omega))
     (Coh.mk
       (fun _ c hget => absurd (hget.symm.trans
         (Iris.Std.LawfulPartialMap.get?_empty (M := SpikeHeapF) _))
@@ -146,7 +151,6 @@ theorem case_certified {GF : BundledGFunctors} [SpikeGpreS GF] (v : value)
         (Option.some_ne_none c1)))
     (fun v' _ => v' = v)
     ?_ n aids
-    (by rw [show esize (caseProg v) = 2 from rfl]; exact hfuel)
   intro inst
   exact (BigSepM.bigSepM_empty).1.trans (case_wp_readout v)
 

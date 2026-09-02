@@ -1078,7 +1078,7 @@ theorem trPost_readout [SpikeGS .hasLC GF] (t' : NodeTree) (R : CellMap) :
     · iexact HQ
   · iexact HF
 
-/-- The base-WP face (the launch shape `spike_engine_adequacy`
+/-- The base-WP face (the launch shape `engine_adequacyU`
     consumes) — through THE WHOLE-LOOP FRAME RULE `wps_sound_frame`
     (alloc arc P4.2): the unframed rotation proof plus the cell frame
     collapse to the base WP with the frame in the postcondition. -/
@@ -1158,13 +1158,12 @@ theorem tree_rotate_certified (sbty : core_base_type)
     (R : CellMap) (hR : m₀ ##ₘ R)
     (hlib : CerbLocation.isLibraryLocation loc = false)
     (σ₀ : Mem) (hcoh : Sat fmapEmpty σ₀ (union m₀ R))
-    (n : Nat) (aids : Nat → Nat)
-    (hfuel : 6 + n ≤ lemDefaultFuel) :
+    (n : Nat) (aids : Nat → Nat) :
     let prog := trProg loc ann mo xbty ybty bbty ubty px
-    (∀ r, drive aids n (spikeThread prog) σ₀ ≠ .killed r) ∧
-    (drive aids n (spikeThread prog) σ₀ ≠ .stuck) ∧
+    (∀ r, driveU spikeCtx aids n (spikeThread prog) σ₀ ≠ .killed r) ∧
+    (driveU spikeCtx aids n (spikeThread prog) σ₀ ≠ .stuck) ∧
     (∀ (v : value) (σ' : Mem),
-      drive aids n (spikeThread prog) σ₀ = .done v σ' →
+      driveU spikeCtx aids n (spikeThread prog) σ₀ = .done v σ' →
       ∃ (py : CerbMem.PointerValue) (Q : CellMap),
         v = ptrVal py ∧
         SeedTree Q py (.node idy vy ta (.node idx vx tb tc)) ∧
@@ -1172,9 +1171,12 @@ theorem tree_rotate_certified (sbty : core_base_type)
         Q ##ₘ R ∧
         Sat fmapEmpty σ' (union Q R)) := by
   intro prog
-  have h := spike_engine_adequacy (GF := SpikeGF)
-    prog σ₀ (union m₀ R)
-    (trProg_frag loc ann mo xbty ybty bbty ubty px hlib) hcoh
+  have h := engine_adequacyU (GF := SpikeGF) (M := spikeCtx) spikeCtx_wf
+    spikeCtx_labels_frag spikeCtx_labels_pot
+    prog fmapEmpty [] σ₀ (union m₀ R)
+    (trProg_frag loc ann mo xbty ybty bbty ubty px hlib)
+    (by rw [show pot prog = 7 from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+    hcoh
     (fun v σ' => ∃ Q : CellMap, (∃ p' : CerbMem.PointerValue,
         v = ptrVal p' ∧
         SeedTree Q p' (.node idy vy ta (.node idx vx tb tc))) ∧
@@ -1186,7 +1188,6 @@ theorem tree_rotate_certified (sbty : core_base_type)
       exact tr_wp_readout loc ann mo xbty ybty bbty ubty
         idx idy vx vy ta tb tc px R)
     n aids
-    (by rw [trProg_esize]; exact hfuel)
   refine ⟨h.1, h.2.1, fun v σ' hdone => ?_⟩
   obtain ⟨Q, ⟨py, rfl, hQseed⟩, hdisj, hsat⟩ := h.2.2 v σ' hdone
   refine ⟨py, Q, rfl, hQseed, fun k => ?_, hdisj, hsat⟩
@@ -1429,7 +1430,7 @@ theorem tree_rotate_certified_total (idx idy vx vy : Int)
     (hlib : CerbLocation.isLibraryLocation loc = false)
     (σ₀ : Mem) (hcoh : Sat fmapEmpty σ₀ (union m₀ R)) (aids : Nat → Nat) :
     ∃ (py : CerbMem.PointerValue) (Q : CellMap) (σ' : Mem),
-      drive aids 19
+      driveU spikeCtx aids 19
         (spikeThread (trProg loc ann mo xbty ybty bbty ubty px)) σ₀ =
           .done (ptrVal py) σ' ∧
       SeedTree Q py (.node idy vy ta (.node idx vx tb tc)) ∧
