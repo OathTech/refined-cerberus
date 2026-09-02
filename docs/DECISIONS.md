@@ -379,3 +379,35 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   counts are the candidate speedbump line). Re-open triggers: a second
   memory-model instance, or a type layer needing an abstract memory
   contract. Pointer: cerberus-heaplang README "Deferred design experiments".
+- **2026-09-02 [AGENT] ALLOC ARC P4 CLOSED — R-05, R-06, R-08, R-09 (the
+  raw separation-logic API closure)**, a SPEC-ADDITION slice under the
+  one-change-at-a-time ruling: (P4.1) THE THREE ALLOCATION FACTS —
+  linear/fractional bytes (`bytesOwn_fractional`/`_agree`), PERSISTENT
+  allocation knowledge (`allocMeta`/`locInBounds` = the metadata cell at
+  the discarded fraction; `Persistent` instances are the persistence law;
+  `pointsToView_persist`, `pointsToView_locInBounds`), and NO liveness
+  token (metadata immutability documented in Heap.lean's header; the
+  bundles keep the metadata at a fraction because full metadata is the
+  exclusivity anchor `bigSepM_own_disjoint` needs — a named divergence
+  from the donor's killable `alloc_alive`); the view/points-to laws
+  (`pointsToView_fractional`/`_agree`, `pointsToCell_fractional`/
+  `_agree`/`_combine`), the provenance-preserving shift
+  `cellPtr_arrayShift`, `wps_fupd`, the PUBLIC single-cell readouts
+  (`cellOwn_readout`/`pointsToCell_readout`); every advertised view law
+  has a StructExhibit client. (P4.2) statement-level framing at both
+  strata (`frameLs`/`frameLsT`, `wps_frame_labels`/`wpt_frame_labels`,
+  `blockSpecs(T)_frame`, `wps_sound_frame`, `wpt_frame`); `RF` removed
+  from the list/tree invariants, the framed theorems DERIVED. (P4.3)
+  LoopExhibit on `SymFrame` with irrelevant-binding tests (incl. the
+  engine-level `counter_loop_certified_irrelevant_binding`);
+  `SemTripleU` over any `MachineCtx` + entry environment with
+  `SemTriple` its proved instance (`SemTriple_iff_U`) — generalization
+  chosen over the rename because the statement is clean and the proofs
+  are the existing adequacy composed with the readout. Definition of
+  done measured by `scripts/parametric_inventory.lean` (client-module
+  section, new): Array/Struct/ListRev/TreeRot/Loop at ZERO direct
+  references to the ghost maps/CohG/cursor, the engine transition and
+  the judgment internals (before: 4 offenders). Not added, by the
+  no-consumer rule: `wpt_sound_frame`. Record:
+  `cerberus-heaplang/docs/2026-09-02_p4-notes.md` (spec diff, inventory
+  before/after, gate tail); signatures pre/post committed alongside.

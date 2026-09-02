@@ -16,7 +16,7 @@ consumed by no exhibit is a red row: the construct has a rule but no client.
 |---|---|---|
 | `Frag.val_pure` | `wps_ofVal` | AllocExhibit, ArrayExhibit, CaseExhibit, FibExhibit, ListRevExhibit, LoopExhibit, StructExhibit, TreeRotExhibit, WseqExhibit |
 | `Frag.store` | `wps_store` | LoopExhibit |
-| `Frag.load` | `wps_load_at` | ArrayExhibit, ListRevExhibit, TreeRotExhibit |
+| `Frag.load` | `wps_load_at` | ArrayExhibit, ListRevExhibit, StructExhibit, TreeRotExhibit |
 | `Frag.create` | `wps_create` | AllocExhibit, StructExhibit |
 | `Frag.sseq` | `wps_seq` | AllocExhibit, ListRevExhibit, LoopExhibit, StructExhibit, TreeRotExhibit |
 | `Frag.annot` | `wps_annot` | AllocExhibit, ArrayExhibit, ListRevExhibit, LoopExhibit, StructExhibit, TreeRotExhibit, WseqExhibit |

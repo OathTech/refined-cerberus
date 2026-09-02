@@ -143,12 +143,25 @@ carrier (Phase 2, the Caesium-shaped heap/allocs factorization): a
 per-BYTE heap (address ↦ byte — the ghost fragment of the engine's
 own bytemap), a per-allocation METADATA heap (allocation id ↦
 base/type — the provenance/metadata authority), and a one-cell
-allocator-cursor heap (`Heap.lean`). Typed subrange VIEWS
-(`pointsToView`) own one field/element range of one allocation and
-split/join at real ∗; `pointsToCell p (ty, bs)` — written with the
+allocator-cursor heap (`Heap.lean`). Three allocation facts are kept
+apart (alloc arc P4.1, after RefinedC's heap/bounds/liveness split):
+linear-or-fractional BYTES, PERSISTENT allocation knowledge
+(`allocMeta`/`locInBounds` — id, base, type, size, in-bounds facts,
+read off the immutable metadata; persistent because nothing in the
+fragment frees), and NO liveness token (there is no `kill`). Typed
+subrange VIEWS (`pointsToView`) own one field/element range of one
+allocation and split/join at real ∗ (`pointsToView_split`/`join`),
+split by fraction for read-sharing (`pointsToView_fractional`), and
+two views of one allocation agree on its base and type
+(`pointsToView_agree`); `pointsToCell p (ty, bs)` — written with the
 usual ↦ intuition — is the MAXIMAL view: *I own the whole
 allocation `p` points to; it is live, in bounds, writable,
-non-atomic, and its bytes are exactly `bs`.* The store small axiom (`Rules.lean:176`):
+non-atomic, and its bytes are exactly `bs`*, and it obeys the
+textbook fractional laws (`pointsToCell_fractional`,
+`pointsToCell_combine`). Every one of these laws has a client in
+`StructExhibit.lean` (split → store through field views → join; a
+read at a fraction; two readers recombined by agreement; read then
+persist the bounds). The store small axiom (`Rules.lean:176`):
 
 ```lean
 theorem wp_store … 
@@ -184,7 +197,12 @@ replaced by the engine's own serialization of `v`
 The rest of the logic is the familiar kit: `wp_load`, sequencing,
 the frame rule, consequence (`Rules.lean`); and for programs with
 loops a *statement-level* WP `wps` with a label context — per-label
-preconditions and a loop-invariant rule `blockSpecs_intro`
+preconditions, a loop-invariant rule `blockSpecs_intro`, and the
+statement-level FRAME RULE `wps_frame_labels` (the frame rides
+through the value exit AND across every back edge, by framing the
+label context pointwise: `frameLs R Ls = fun l vs ρ => Ls l vs ρ ∗ R`;
+`blockSpecs_frame` frames the block specifications and
+`wps_sound_frame` is the whole-loop form — alloc arc P4.2)
 (`Wps.lean`, partial correctness), PLUS its TOTAL counterpart `wpt`
 (`Wpt.lean`, foundations Phase 3): the same label-context shape with
 variant-indexed label preconditions and a MANDATORY back-edge
@@ -221,19 +239,23 @@ def SemTriple (e : CoreExpr) (P : CellMap)
 
 There is no Iris in this statement. Unpack the quantifiers:
 
-- **Any memory satisfying P, any frame, verbatim — at the fixed
-  demo machine profile.** `P` is
+- **Any memory satisfying P, any frame, verbatim.** `P` is
   the footprint (a map of cells); `R` is an *arbitrary* disjoint
   rest of the heap. `Sat σ (P ∪ R)` says the real engine memory
   state `σ` actually carries those cells (live, in-bounds, bytes
   matching). The conclusion returns *the same R* alongside the
   post-footprint `Q` — the frame comes back untouched. This
   quantifier structure *is* the frame property, stated
-  semantically. One scope honesty note (2026-09-01 re-audit,
-  R-09): the memory and frame are fully quantified, but the thread
-  and machine context are not — `SemTriple` runs `spikeThread e` at
-  the fixed `spikeCtx`/`spikeEnv` demo profile (generalization over
-  a well-formed `MachineCtx` is alloc arc P4).
+  semantically. Scope: this spelling runs `spikeThread e` at the
+  fixed `spikeCtx`/`spikeEnv` demo profile; it is the INSTANCE
+  (`SemTriple_iff_U`, alloc arc P4.3 — the 2026-09-01 re-audit's
+  R-09) of the general `SemTripleU M ρ e P post`, which quantifies
+  the machine context `M` and the entry environment `ρ` too
+  (`driveU M` from `M.thread e ρ`, satisfaction at `M.tagDefs`, and
+  the engine's fuel bound for every registered label body as a
+  premise); `semantic_triple_soundU`/`semantic_frameU` are the
+  general bridge and frame theorems, of which the two below are
+  the fixed-profile instances.
 - **Engine execution.** `drive` iterates the engine's own step
   function (`step_ctx`) and discharges each memory request exactly
   as the engine's sequential driver does — it is the driver's loop
@@ -257,10 +279,10 @@ There is no Iris in this statement. Unpack the quantifiers:
   the drive (the 2026-08-31 audit's F-02 finding); that proof is
   retired.
 
-The bridge theorem is `semantic_triple_sound` (`Adequacy.lean:892`):
+The bridge theorem is `semantic_triple_sound` (`Adequacy.lean`):
 a triple proved in the derived logic (`ProvenTriple` — the only
 place the WP appears in the exported layer) yields the `SemTriple`
-above. Its proof is the adequacy argument: Iris adequacy over the
+above (as the fixed-profile instance of `semantic_triple_soundU`). Its proof is the adequacy argument: Iris adequacy over the
 mirrored step relation, composed with a per-construct certification
 that the engine's step is matched by the mirror (§4).
 
@@ -312,9 +334,11 @@ theorem list_reverse_certified …
   the derived bound `13·|ns| + 7`).
 
 The proof is the point of the exhibit: loop invariant
-`isList prev reversed ∗ isList cur rest ∗ RF` with
-`ns = reversed.reverse ++ rest` (the frame proposition threaded
-through the invariant — the only thing that crosses a back edge),
+`isList prev reversed ∗ isList cur rest` with
+`ns = reversed.reverse ++ rest` — UNFRAMED; the arbitrary frame is
+added by the generic statement-level frame rule (`lr_wps_frame` =
+`wps_frame_labels` on the unframed proof, alloc arc P4.2), which
+carries it across every back edge through the framed label context —
 `isList` by plain structural recursion on the node list (no
 step-indexing), each program construct discharged by its own rule —
 no monolithic unfolding anywhere. The concrete instance
@@ -1085,7 +1109,9 @@ line each:
    certification of Step against the engine's `step_ctx` and driver
    discharge.
 8. `Adequacy.lean` — the exported face: `drive`/`driveJ`,
-   `SemTriple`, `semantic_triple_sound`, the frame theorem.
+   `SemTripleU`/`SemTriple`, `semantic_triple_soundU`/
+   `semantic_triple_sound`, the frame theorems, the public
+   single-cell readouts.
 9. `Exhibit.lean` — straight-line exhibits at the engine level
    (store/load, the frame exhibit, disjoint sequential stores).
 10. `LoopExhibit.lean` → `FibExhibit.lean` → `ArrayExhibit.lean` →
