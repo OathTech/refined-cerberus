@@ -562,15 +562,21 @@ names, proof and match auxiliaries, equation lemmas) included — and
 for `sorryAx`/`ofReduceBool`/`ofReduceNat`. The scope is exact: until
 2026-09-02 both sweeps skipped internal-detail names, so a private
 `sorry` unused by any pinned export passed; a planted one is now red
-(`docs/2026-09-02_audit-response-3-notes.md`). Expected tail (the
-build prints the current counts; "trio" in its output means the three
-classical axioms):
+(`docs/2026-09-02_audit-response-3-notes.md`). Expected tail — the
+three verdicts to check are the pin count, "every theorem bounded by
+the trio" and "absent from all cones" ("trio" means the three classical
+axioms); the two swept totals `N`/`M` are INFORMATIONAL and
+environment-dependent, not a baseline: they include auxiliary
+declarations (equation lemmas, match splitters) that a module realizes
+on demand for dependency definitions when the imported environment
+lacks them, so they vary with the semantics workspace's build state at
+the same pin (measured 2249/3536 vs 2210/3474, `docs/2026-09-02_audit-response-4-notes.md`):
 
 ```
-info: CerberusHeapLang/Audit.lean:206:0: CerberusHeapLang export pins: 116 trio-exact
-info: CerberusHeapLang/Audit.lean:206:0: CerberusHeapLang axiom sweep: 2249 theorems (internal details included) bounded by the trio
-info: CerberusHeapLang/Audit.lean:206:0: CerberusHeapLang banned-axiom sweep: 3536 constants of every kind (internal details included) checked; sorryAx/ofReduceBool/ofReduceNat absent from all cones
-Build completed successfully (446 jobs).
+info: CerberusHeapLang/Audit.lean:216:0: CerberusHeapLang export pins: 116 trio-exact
+info: CerberusHeapLang/Audit.lean:216:0: CerberusHeapLang axiom sweep: every theorem bounded by the trio (N swept, internal details included — count informational, environment-dependent)
+info: CerberusHeapLang/Audit.lean:216:0: CerberusHeapLang banned-axiom sweep: sorryAx/ofReduceBool/ofReduceNat absent from all cones (M constants of every kind swept, internal details included — count informational, environment-dependent)
+Build completed successfully (… jobs).
 ```
 
 The trust base is this build with its in-build sweep, the root
@@ -632,7 +638,13 @@ In import order, one line each:
 History, provenance and process live in dated files, not here.
 Rulings: `../docs/DECISIONS.md` (append-only, `[USER]`/`[AGENT]`
 tagged). The audit and review record of the current tree, newest
-first: `docs/2026-09-02_audit-response-3-notes.md` (the response to
+first: `docs/2026-09-02_audit-response-4-notes.md` (the response to
+the re-review's four Low findings: the exported-theorem sentence, the
+cold-start claim, the non-reproducible sweep totals diagnosed, the
+known generated `sorry` in the trust story),
+`../docs/2026-09-02_cerberus-heaplang-audit-response-re-review.md`
+(the re-review of the detailed-audit response),
+`docs/2026-09-02_audit-response-3-notes.md` (the response to
 the detailed audit: PROVISIONAL labels, the qualified connection, the
 audit-script scope with its plant transcript, the moves,
 `ARCHITECTURE.md`), `../docs/2026-09-02_cerberus-heaplang-detailed-audit.md` (the

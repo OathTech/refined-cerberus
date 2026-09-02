@@ -29,7 +29,17 @@ private sorry in a leaf module (green under the old sweeps, red under
 these; transcript in
 cerberus-heaplang/docs/2026-09-02_audit-response-3-notes.md). The
 skips are removed; the counts the build prints are the whole package.
-The run costs the same (1.8 s wall, before and after).
+The run costs the same (1.8 s wall, before and after). THE TWO TOTALS
+ARE INFORMATIONAL, NOT A BASELINE (2026-09-02 re-review, N-3): they
+include auxiliary declarations (equation lemmas, match splitters) that
+a module realizes on demand for DEPENDENCY definitions whenever the
+imported environment lacks them, so they vary with the semantics
+workspace's build state at the same pin — measured 2249/3536 against
+the pin's CerbMem.lean and 2210/3474 against a workspace re-primed
+from a later cerberus-lean commit, the 62-constant delta being
+`CerbMem.*` splitters/equation lemmas realized inside ListRevExhibit
+(cerberus-heaplang/docs/2026-09-02_audit-response-4-notes.md). The
+verdicts are the check; the numbers are a census of the run.
 
 THE TRUST BASE IS THE CLASSICAL TRIO, EXACTLY, OVER EVERY EXPORT.
 There is no declared boundary axiom. The former temporal boundary
@@ -235,7 +245,8 @@ def sortedNames (ns : Array Name) : Array String :=
           non-kernel method) or a trust decision is being made implicitly — the trust base \
           is the trio, exactly; any change happens in Audit.lean, same commit, with provenance."
     swept := swept + 1
-  logInfo s!"CerberusHeapLang axiom sweep: {swept} theorems (internal details included) bounded by the trio"
+  logInfo s!"CerberusHeapLang axiom sweep: every theorem bounded by the trio ({swept} swept, \
+    internal details included — count informational, environment-dependent)"
   -- 3. THE BANNED-AXIOM SWEEP over every constant kind.
   let banned : List Name := [``sorryAx, ``ofReduceBool, ``ofReduceNat]
   let mut checked := 0
@@ -250,7 +261,8 @@ def sortedNames (ns : Array Name) : Array String :=
           axiom {a}. sorryAx / ofReduceBool / ofReduceNat are never in any boundary, for ANY \
           constant kind — a def-level hole is still a hole; remove it."
     checked := checked + 1
-  logInfo s!"CerberusHeapLang banned-axiom sweep: {checked} constants of every kind (internal \
-    details included) checked; sorryAx/ofReduceBool/ofReduceNat absent from all cones"
+  logInfo s!"CerberusHeapLang banned-axiom sweep: sorryAx/ofReduceBool/ofReduceNat absent from all \
+    cones ({checked} constants of every kind swept, internal details included — count \
+    informational, environment-dependent)"
 
 end CerberusHeapLang.Audit
