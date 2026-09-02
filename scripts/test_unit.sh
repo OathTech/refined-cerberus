@@ -37,9 +37,14 @@
 # CAPABILITY_MANIFEST_CHECK_ONLY=1 makes the generator run every check
 # and skip the rendering (same import + traversal cost; the drift
 # diff is what is skipped). Measured cost (2026-09-01, P3): gate 4
-# ≈ 130 s wall-clock, of which ≈ 88 s is the environment import and
-# ≈ 40 s the memoized single-pass cone traversal (dependency table
-# filled lazily once, shared by every row check and the layer cut).
+# ≈ 130 s wall-clock on a quiet box (339-416 s under this shared
+# box's contention), of which ≈ 40 s is the memoized single-pass
+# cone traversal (dependency table filled lazily once, shared by
+# every row check and the layer cut) and the rest is Lean
+# elaborating/interpreting the generator SCRIPT itself (the import
+# of the built environment is ≈ 2 s — measured with an import-only
+# script); moving the generator into a compiled module would remove
+# the fixed cost — a registered follow-up, not done in P3.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
