@@ -92,3 +92,14 @@ side chooses the constructor. We are happy to review the design note.
 stated over the shipped driver only, with `driveU` deleted from every
 export. Until then our partial-correctness exports carry the label
 PROVISIONAL: sound facts about `driveU`, not yet the root-of-trust statement.
+
+## Also observed (separate, minor): a `sorry` in the generated concurrency model
+
+Generated `Cmm_op.lean:283-292` (pinned tree) contains `(sorry : String)`
+twice inside a debug-log string (`"CONCUR CHOSE ==> " …`) — the Lean
+emitter's placeholder for an unported string conversion. Our in-build sweep
+proves it is outside every cone of ours (no `sorryAx` reaches any
+cerberus-heaplang constant; the sweep now covers internal-detail constants
+too), so it does not touch our claims; but it is a `sorryAx` in the shipped
+semantics tree and should presumably be closed (or the debug arm made
+sorry-free) on the cerberus-lean side. Reported for completeness.

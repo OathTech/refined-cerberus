@@ -670,3 +670,26 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   normative architecture statement): all accepted, executed in the
   audit-response-3 slice. The auditor's uncommitted README edit on
   main's working tree was moved to this branch and main restored.
+- **2026-09-02 [USER] RelSem IS NOT MAINLINE MATERIAL** (verbatim): "the
+  RelSem work should not be on main, I'll get it killed". Consequence
+  here: every reference to `RelSem.Machine.Step`/`runND_sound`/
+  `HarnessAdequate`/`relsemcore` is removed from the package (docs,
+  Round.lean, ARCHITECTURE); the mirror's only reference is the engine
+  round `CerberusRound`; no other relational semantics is referenced or
+  bridged. Zero hits outside the dated records (measured).
+- **2026-09-02 [AGENT] AUDIT-RESPONSE-3 ADJUDICATIONS** (record:
+  `cerberus-heaplang/docs/2026-09-02_audit-response-3-notes.md`):
+  (1) L-1 turned out to be a REAL gap, not wording: a `private theorem
+  plant : True := by sorry` in a leaf module passed the OLD in-build
+  audit (exit 0, counts unchanged — measured) because both sweeps
+  skipped `isInternalDetail` constants; the sweeps now include them
+  (2249 theorems / 3536 constants, no measurable cost), the plant goes
+  red, and the plant is not retained. The 116 exact export pins were
+  never at risk (their cones are collected transitively), so no export
+  was affected. (2) PROVISIONAL labels on every `driveU`-based export
+  surface; the total-lane production statements named as the
+  root-of-trust exports. (3) `ARCHITECTURE.md` (152 lines) is the
+  normative statement; README/WALKTHROUGH point at it. (4) Observed and
+  reported upstream (appended to the fuel-exhaustion request): a
+  `(sorry : String)` placeholder in the pinned generated `Cmm_op.lean`
+  concurrency debug arm — outside every cone of ours by the sweep.
