@@ -171,7 +171,7 @@ theorem alloc_create_launch_smoke (pref : prefix0) (aids : Nat → Nat) :
       (fun _ _ _ _ => iprop(False))
       (createExpr loc0 empty_annotation (.IV .Prov_none 4) intTy pref)
       fmapEmpty [] prodMem₀ (∅ : SpikeHeapF SpikeCell) [⟨4, intTy⟩]
-      (Frag.create loc0_lib)
+      (Frag.create)
       (by rw [show pot (createExpr loc0 empty_annotation (.IV .Prov_none 4)
           intTy pref) = 2 from rfl,
           show lemDefaultFuel = 999999 + 1 from rfl]

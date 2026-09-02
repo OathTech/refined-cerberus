@@ -449,7 +449,6 @@ theorem counter_loop_certified_registration (sup : Nat)
     (mo : memory_order) (bty xbty sbty : core_base_type)
     (idx addr : Int) (bs0 : List CerbMem.AbsByte)
     (n : Int) (hn : 0 ≤ n)
-    (hlib : CerbLocation.isLibraryLocation loc = false)
     (σ₀ : Mem)
     (hcoh : Coh fmapEmpty σ₀ ((Iris.Std.PartialMap.singleton idx
       (SpikeCell.mk addr intTy bs0)) : SpikeHeapF SpikeCell))
@@ -476,17 +475,17 @@ theorem counter_loop_certified_registration (sup : Nat)
     (fun l params cont hl => by
       rw [hlbl] at hl
       obtain ⟨-, rfl⟩ := loopQ_inv loc ann ra mo bty xbty _ hl
-      exact loopBody_fragJ loc ann ra mo bty _ hlib)
+      exact loopBody_fragJ loc ann ra mo bty _)
     (fun l params cont hl => by
       rw [hlbl] at hl
       obtain ⟨-, rfl⟩ := loopQ_inv loc ann ra mo bty xbty _ hl
-      exact Nat.le_trans (loopBody_fragJ loc ann ra mo bty _ hlib).pot_le_two
+      exact Nat.le_trans (loopBody_fragJ loc ann ra mo bty _).pot_le_two
         (by rw [show esize (loopBody loc ann ra mo bty (cellPtr idx addr)) = 3 from rfl,
           show lemDefaultFuel = 999999 + 1 from rfl]; omega))
     prog fmapEmpty [] σ₀ _
-    (.save (saveParams_depth_of_vals rfl) (loopBody_fragJ loc ann ra mo bty _ hlib))
+    (.save (saveParams_depth_of_vals rfl) (loopBody_fragJ loc ann ra mo bty _))
     (Nat.le_trans (Frag.pot_le_two (e := prog) (.save (saveParams_depth_of_vals rfl)
-        (loopBody_fragJ loc ann ra mo bty _ hlib)))
+        (loopBody_fragJ loc ann ra mo bty _)))
       (by rw [show esize prog = 4 from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega))
     hcoh
     (fun v σ' => v = Vunit ∧ ∃ bs',

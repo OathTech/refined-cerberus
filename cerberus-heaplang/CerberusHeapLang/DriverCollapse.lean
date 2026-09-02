@@ -385,11 +385,11 @@ equations are deliberately unproved-as-unneeded. -/
     `memReturn none` (CerbMem.lean:2064 — trace-only), the trace gets
     its ME_store event, the thread its continuation. No
     dr_step_counter tick on the action path (Driver.lean:273). -/
-theorem ars_store_active {tds : Fmap sym (CerbLocation.Loc × tag_definition)} {loc : CerbLocation.Loc} {mo : memory_order}
+theorem ars_store_active {tds : Fmap sym (CerbLocation.Loc × tag_definition)} {loc loc₀ : CerbLocation.Loc} {mo : memory_order}
     {ty : ctype} {lk : Bool} {pv : CerbMem.PointerValue} {mv : CerbMem.MemValue}
     {k : Nat → CerbMem.Footprint → thread_state} {tid aid : Nat}
     {dst : driver_state} {fp : CerbMem.Footprint} {σ' : Mem}
-    (happ : applyMemM (CerbMem.storeM tds loc ty lk pv mv) dst.layout_state =
+    (happ : applyMemM (CerbMem.storeM tds loc₀ ty lk pv mv) dst.layout_state =
       some (fp, σ')) :
     runOne (action_request_sequential2 tds loc tid aid
         (StoreRequest2 mo ty lk pv mv k)) dst =
@@ -397,6 +397,7 @@ theorem ars_store_active {tds : Fmap sym (CerbLocation.Loc × tag_definition)} {
         layout_state := σ',
         trace := ME_store loc none ty lk pv mv :: dst.trace,
         core_state0 := update_thread_state tid (k aid fp) dst.core_state0 }) := by
+  replace happ := (storeM_loc_irrel loc₀ loc).trans happ
   unfold action_request_sequential2
   dsimp only
   refine (runOne_bind_active (z := fp) (s' := { dst with layout_state := σ' })
@@ -407,12 +408,12 @@ theorem ars_store_active {tds : Fmap sym (CerbLocation.Loc × tag_definition)} {
   rfl
 
 /-- LoadRequest2 discharge, active. -/
-theorem ars_load_active {tds : Fmap sym (CerbLocation.Loc × tag_definition)} {loc : CerbLocation.Loc} {mo : memory_order}
+theorem ars_load_active {tds : Fmap sym (CerbLocation.Loc × tag_definition)} {loc loc₀ : CerbLocation.Loc} {mo : memory_order}
     {ty : ctype} {pv : CerbMem.PointerValue}
     {k : Nat → CerbMem.Footprint → CerbMem.MemValue → thread_state}
     {tid aid : Nat} {dst : driver_state} {fp : CerbMem.Footprint}
     {mval : CerbMem.MemValue} {σ' : Mem}
-    (happ : applyMemM (CerbMem.loadM tds loc ty pv) dst.layout_state =
+    (happ : applyMemM (CerbMem.loadM tds loc₀ ty pv) dst.layout_state =
       some ((fp, mval), σ')) :
     runOne (action_request_sequential2 tds loc tid aid
         (LoadRequest2 mo ty pv k)) dst =
@@ -420,6 +421,7 @@ theorem ars_load_active {tds : Fmap sym (CerbLocation.Loc × tag_definition)} {l
         layout_state := σ',
         trace := ME_load loc none ty pv mval :: dst.trace,
         core_state0 := update_thread_state tid (k aid fp mval) dst.core_state0 }) := by
+  replace happ := (loadM_loc_irrel loc₀ loc).trans happ
   unfold action_request_sequential2
   dsimp only
   refine (runOne_bind_active (z := (fp, mval))
@@ -1178,7 +1180,7 @@ theorem loop_step_frag {M₀ : MachineCtx}
     have hccall := hd.unseq_ccall_false
     have hrj := hd.redex
     cases hrj with
-    | @store loc ann lk ty pv cv mo hlib =>
+    | @store loc ann lk ty pv cv mo =>
       obtain ⟨mv, fp, σ'', hmv, hmem, hout⟩ := hr.store_inv
       rw [htd] at hmv hmem
       obtain ⟨h1, h2, h3⟩ : r' = Expr [] (Eannot [DA_pos [] fp]
@@ -1186,18 +1188,19 @@ theorem loop_step_frag {M₀ : MachineCtx}
           ρ' = ev0 :: evs ∧ σ' = σ'' := by
         simpa [Prod.mk.injEq] using hout
       subst h1 h2 h3
-      have hsteps := step_ctx_store hd hsz hlib fmapEmpty hmv
+      have hsteps := step_ctx_store hd hsz fmapEmpty hmv
         dst.layout_state dst.core_file dst.core_extern 0 none
         { th₀ with arena := e, env := ev0 :: evs } rfl
       rw [hccall] at hsteps
       refine ⟨{ dst.core_run_state0 with aid_supply :=
           dst.core_run_state0.aid_supply + 1 },
-        ME_store loc none ty lk pv mv :: dst.trace, dst.dr_step_counter,
+        ME_store (requestLoc { th₀ with arena := e, env := ev0 :: evs } loc) none ty lk pv mv
+          :: dst.trace, dst.dr_step_counter,
         rfl, ?_⟩
       exact loop_step_action fl fmapEmpty acc hth hsteps
         (ars_store_active (tid := 0)
           (aid := dst.core_run_state0.aid_supply) hmem)
-    | @load loc ann ty pv mo hlib =>
+    | @load loc ann ty pv mo =>
       obtain ⟨fp, mval, σ'', hmem, hout⟩ := hr.load_inv
       rw [htd] at hmem
       obtain ⟨h1, h2, h3⟩ : r' = Expr [] (Eannot [DA_pos [] fp]
@@ -1206,18 +1209,19 @@ theorem loop_step_frag {M₀ : MachineCtx}
           ρ' = ev0 :: evs ∧ σ' = σ'' := by
         simpa [Prod.mk.injEq] using hout
       subst h1 h2 h3
-      have hsteps := step_ctx_load hd hsz hlib fmapEmpty
+      have hsteps := step_ctx_load hd hsz fmapEmpty
         dst.layout_state dst.core_file dst.core_extern 0 none
         { th₀ with arena := e, env := ev0 :: evs } rfl
       rw [hccall] at hsteps
       refine ⟨{ dst.core_run_state0 with aid_supply :=
           dst.core_run_state0.aid_supply + 1 },
-        ME_load loc none ty pv mval :: dst.trace, dst.dr_step_counter,
+        ME_load (requestLoc { th₀ with arena := e, env := ev0 :: evs } loc) none ty pv mval
+          :: dst.trace, dst.dr_step_counter,
         rfl, ?_⟩
       exact loop_step_action fl fmapEmpty acc hth hsteps
         (ars_load_active (tid := 0)
           (aid := dst.core_run_state0.aid_supply) hmem)
-    | @create loc ann align ty pref hlib =>
+    | @create loc ann align ty pref =>
       obtain ⟨pv, σ'', hmem, hout⟩ := hr.create_inv
       rw [htd] at hmem
       obtain ⟨h1, h2, h3⟩ : r' = Expr [] (Epure (Pexpr [] ()
@@ -1225,7 +1229,7 @@ theorem loop_step_frag {M₀ : MachineCtx}
           ρ' = ev0 :: evs ∧ σ' = σ'' := by
         simpa [Prod.mk.injEq] using hout
       subst h1 h2 h3
-      have hsteps := step_ctx_create hd hsz hlib fmapEmpty
+      have hsteps := step_ctx_create hd hsz fmapEmpty
         dst.layout_state dst.core_file dst.core_extern 0 none
         { th₀ with arena := e, env := ev0 :: evs } rfl
       rw [hccall] at hsteps
@@ -1446,11 +1450,11 @@ theorem loop_step_frag {M₀ : MachineCtx}
     | @load_op loc ann ty pe2 mo hnv2 =>
       obtain ⟨hp2, hd2⟩ : PePure pe2 ∧ peDepth pe2 ≤ lemDefaultFuel := by
         cases hfr with
-        | load hlib =>
+        | load =>
           rw [show valueFromPexpr (Pexpr [] () (PEval
             (Vobject (OVpointer _)))) = some _ from rfl] at hnv2
           cases hnv2
-        | load_op hlib hnv2' hp2 hd2 => exact ⟨hp2, hd2⟩
+        | load_op hnv2' hp2 hd2 => exact ⟨hp2, hd2⟩
       obtain ⟨pv, hv2, hout⟩ := hr.load_op_inv hnv2
       obtain ⟨h1, h2, h3⟩ : r' = loadRedex loc ann ty pv mo ∧
           ρ' = ev0 :: evs ∧ σ' = dst.layout_state := by
@@ -1560,10 +1564,10 @@ theorem loop_step_frag {M₀ : MachineCtx}
           PePure pe2 ∧ PePure pe3 ∧
           peDepth pe2 ≤ lemDefaultFuel ∧ peDepth pe3 ≤ lemDefaultFuel := by
         cases hfr with
-        | store hlib =>
+        | store =>
           rw [valueFromPexprs_pair, valueFromPexpr_val, valueFromPexpr_val] at hnvR
           cases hnvR
-        | store_op hlib hnv' hp2 hp3 hpd2 hpd3 =>
+        | store_op hnv' hp2 hp3 hpd2 hpd3 =>
           exact ⟨hp2, hp3, hpd2, hpd3⟩
       obtain ⟨pv, cv, hv2, hv3, hout⟩ := hr.store_op_inv hnvR
       obtain ⟨h1, h2, h3⟩ : r' = storeRedex loc ann false ty pv cv mo ∧

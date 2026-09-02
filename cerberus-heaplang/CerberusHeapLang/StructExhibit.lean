@@ -84,10 +84,9 @@ def progS (loc : CerbLocation.Loc) (ann : core_run_annotation)
 
 /-- Cone membership: two canonical stores under strong sequencing. -/
 theorem progS_frag (loc : CerbLocation.Loc) (ann : core_run_annotation)
-    (mo mo' : memory_order) (bty : core_base_type) (id a : Int)
-    (hlib : CerbLocation.isLibraryLocation loc = false) :
+    (mo mo' : memory_order) (bty : core_base_type) (id a : Int) :
     Frag (progS loc ann mo mo' bty id a) :=
-  Frag.sseq (.store hlib) (.store hlib)
+  Frag.sseq (.store) (.store)
 
 /-! ## The client field rules — one-line instances of the generic
 typed-subrange store -/
@@ -218,7 +217,6 @@ theorem struct_update_certified {GF : BundledGFunctors} [SpikeGpreS GF]
     (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (mo mo' : memory_order) (bty : core_base_type)
     (id a : Int) (bs : List CerbMem.AbsByte)
-    (hlib : CerbLocation.isLibraryLocation loc = false)
     (σ₀ : Mem)
     (hcoh : Coh fmapEmpty σ₀ ((Iris.Std.PartialMap.singleton id
       (SpikeCell.mk a structTy bs)) : SpikeHeapF SpikeCell))
@@ -240,8 +238,8 @@ theorem struct_update_certified {GF : BundledGFunctors} [SpikeGpreS GF]
     spikeCtx_labels_frag spikeCtx_labels_pot
     (progS loc ann mo mo' bty id a) fmapEmpty [] σ₀
     (Iris.Std.PartialMap.singleton id (SpikeCell.mk a structTy bs))
-    (progS_frag loc ann mo mo' bty id a hlib)
-    (Nat.le_trans (progS_frag loc ann mo mo' bty id a hlib).pot_le_two
+    (progS_frag loc ann mo mo' bty id a)
+    (Nat.le_trans (progS_frag loc ann mo mo' bty id a).pot_le_two
       (by rw [show esize (progS loc ann mo mo' bty id a) = 2 from rfl,
         show lemDefaultFuel = 999999 + 1 from rfl]; omega))
     hcoh
@@ -655,12 +653,11 @@ def progCreateInit (loc : CerbLocation.Loc) (ann : core_run_annotation)
 theorem progCreateInit_frag (loc : CerbLocation.Loc)
     (ann : core_run_annotation) (aprov : CerbMem.Provenance)
     (alignN : Int) (pref : prefix0) (mo : memory_order)
-    (pbty vbty : core_base_type)
-    (hlib : CerbLocation.isLibraryLocation loc = false) :
+    (pbty vbty : core_base_type) :
     Frag (progCreateInit loc ann aprov alignN pref mo pbty vbty) :=
-  .sseq_sym (.create hlib)
+  .sseq_sym (.create)
     (.sseq_sym (frag_ofVal (.pure fiveVal))
-      (.store_op hlib rfl (.sym [] structPSym) (.sym [] structVSym)
+      (.store_op rfl (.sym [] structPSym) (.sym [] structVSym)
         (by rw [show peDepth (Pexpr ([] : List annot) ()
             (PEsym structPSym)) = 1 from rfl,
           show lemDefaultFuel = 999999 + 1 from rfl]; omega)
@@ -805,8 +802,7 @@ theorem struct_plan_fits :
     lemmas. -/
 theorem struct_create_store_adequacy {GF : BundledGFunctors} [SpikeGpreS GF]
     (loc : CerbLocation.Loc) (ann : core_run_annotation)
-    (pref : prefix0) (mo : memory_order) (pbty vbty : core_base_type)
-    (hlib : CerbLocation.isLibraryLocation loc = false) :
+    (pref : prefix0) (mo : memory_order) (pbty vbty : core_base_type) :
     MemTripleU_alloc spikeCtx spikeEnv
       (progCreateInit loc ann .Prov_none 8 pref mo pbty vbty) ∅ [⟨8, structTy⟩]
       (fun _ v σ' => v = Vunit ∧ ∃ i a : Int, CellCoh fmapEmpty σ' i ⟨a, structTy,
@@ -816,8 +812,8 @@ theorem struct_create_store_adequacy {GF : BundledGFunctors} [SpikeGpreS GF]
   -- [⟨8, structTy⟩], the Iris post = `struct_create_store_wps`'s post
   refine project_triple_pure_alloc (GF := GF) (M := spikeCtx) spikeCtx_wf
     spikeCtx_labels_frag spikeCtx_labels_pot
-    (progCreateInit_frag loc ann .Prov_none 8 pref mo pbty vbty hlib)
-    (Nat.le_trans (progCreateInit_frag loc ann .Prov_none 8 pref mo pbty vbty hlib).pot_le_two
+    (progCreateInit_frag loc ann .Prov_none 8 pref mo pbty vbty)
+    (Nat.le_trans (progCreateInit_frag loc ann .Prov_none 8 pref mo pbty vbty).pot_le_two
       (by rw [show esize (progCreateInit loc ann .Prov_none 8 pref mo pbty vbty) = 3
           from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega))
     fmapEmpty [] (∅ : CellMap) [⟨8, structTy⟩]
@@ -858,7 +854,6 @@ theorem struct_create_store_adequacy {GF : BundledGFunctors} [SpikeGpreS GF]
 theorem struct_create_store_adequacy_prodMem₀ {GF : BundledGFunctors} [SpikeGpreS GF]
     (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (pref : prefix0) (mo : memory_order) (pbty vbty : core_base_type)
-    (hlib : CerbLocation.isLibraryLocation loc = false)
     (n : Nat) (aids : Nat → Nat) :
     (∀ r, driveU spikeCtx aids n (spikeThread
         (progCreateInit loc ann .Prov_none 8 pref mo pbty vbty)) prodMem₀ ≠
@@ -873,7 +868,7 @@ theorem struct_create_store_adequacy_prodMem₀ {GF : BundledGFunctors} [SpikeGp
       v = Vunit ∧ ∃ i a : Int, CellCoh fmapEmpty σ' i ⟨a, structTy,
         spliceBytes fieldX (fiveBytes fmapEmpty)
           (List.replicate (CerbMem.sizeofCtype fmapEmpty structTy) undefByte)⟩) :=
-  struct_create_store_adequacy (GF := GF) loc ann pref mo pbty vbty hlib
+  struct_create_store_adequacy (GF := GF) loc ann pref mo pbty vbty
     (∅ : CellMap) (Iris.Std.LawfulPartialMap.disjoint_empty_right _) prodMem₀
     (by rw [show Iris.Std.PartialMap.union (∅ : CellMap) (∅ : CellMap) = ∅ from
           Iris.Std.LawfulPartialMap.union_empty_right]

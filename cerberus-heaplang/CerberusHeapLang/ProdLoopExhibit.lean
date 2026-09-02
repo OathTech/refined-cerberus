@@ -540,7 +540,7 @@ theorem ctrBody_frag (ra : core_run_annotation) (mo : memory_order)
     (by rw [show peDepth ctrGuardPe = 2 from rfl,
       show lemDefaultFuel = 999999 + 1 from rfl]; omega)
     (.sseq
-      (.store_op loc0_lib rfl (.sym [] ctrCSym) (.val [] sevenVal)
+      (.store_op rfl (.sym [] ctrCSym) (.val [] sevenVal)
         (by rw [show peDepth (Pexpr ([] : List annot) ()
             (PEsym ctrCSym)) = 1 from rfl,
           show lemDefaultFuel = 999999 + 1 from rfl]; omega)
@@ -570,7 +570,7 @@ theorem ctrParams_depth (xbty cbty : core_base_type) (n : Int) :
 theorem counterProdProg_frag (ra : core_run_annotation) (mo : memory_order)
     (bty xbty cbty sbty : core_base_type) (n : Int) :
     Frag (counterProdProg ra mo bty xbty cbty sbty n) :=
-  .sseq_sym (.create loc0_lib)
+  .sseq_sym (.create)
     (.save (ctrParams_depth xbty cbty n) (ctrBody_frag ra mo bty))
 
 theorem ctrBody_pot (ra : core_run_annotation) (mo : memory_order)
@@ -1247,16 +1247,16 @@ end LrProdIris
 theorem lrProdPrefix_frag (ra : core_run_annotation) (mo : memory_order)
     (bty : core_base_type) {k : CoreExpr} (hk : Frag k) :
     Frag (lrProdPrefix ra mo bty k) :=
-  .sseq_sym (.create loc0_lib)
-    (.sseq_sym (.create loc0_lib)
+  .sseq_sym (.create)
+    (.sseq_sym (.create)
       (.sseq
-        (.store_op loc0_lib rfl (.sym [] lrN1Sym) (.val [] (longVal 1))
+        (.store_op rfl (.sym [] lrN1Sym) (.val [] (longVal 1))
           (by rw [show peDepth (Pexpr ([] : List annot) ()
               (PEsym lrN1Sym)) = 1 from rfl,
             show lemDefaultFuel = 999999 + 1 from rfl]; omega)
           (peDepth_val_le _ _))
         (.sseq
-          (.store_op loc0_lib rfl
+          (.store_op rfl
             (.arrayShift [] longTy (.sym [] lrN1Sym) (.val [] (ivVal 1)))
             (.sym [] lrN2Sym)
             (by rw [show peDepth (lrShiftPe lrN1Sym) = 2 from rfl,
@@ -1265,13 +1265,13 @@ theorem lrProdPrefix_frag (ra : core_run_annotation) (mo : memory_order)
                 (PEsym lrN2Sym)) = 1 from rfl,
               show lemDefaultFuel = 999999 + 1 from rfl]; omega))
           (.sseq
-            (.store_op loc0_lib rfl (.sym [] lrN2Sym) (.val [] (longVal 2))
+            (.store_op rfl (.sym [] lrN2Sym) (.val [] (longVal 2))
               (by rw [show peDepth (Pexpr ([] : List annot) ()
                   (PEsym lrN2Sym)) = 1 from rfl,
                 show lemDefaultFuel = 999999 + 1 from rfl]; omega)
               (peDepth_val_le _ _))
             (.sseq
-              (.store_op loc0_lib rfl
+              (.store_op rfl
                 (.arrayShift [] longTy (.sym [] lrN2Sym) (.val [] (ivVal 1)))
                 (.val [] nullVal)
                 (by rw [show peDepth (lrShiftPe lrN2Sym) = 2 from rfl,
@@ -1280,12 +1280,11 @@ theorem lrProdPrefix_frag (ra : core_run_annotation) (mo : memory_order)
               hk)))))
 
 theorem lrProdProg_frag (ra : core_run_annotation) (mo : memory_order)
-    (bty sbty pbty cbty bbty nbty ubty : core_base_type)
-    (hlib : CerbLocation.isLibraryLocation loc0 = false) :
+    (bty sbty pbty cbty bbty nbty ubty : core_base_type) :
     Frag (lrProdProg ra mo bty sbty pbty cbty bbty nbty ubty) :=
   lrProdPrefix_frag ra mo bty
     (.save (lrProdParams_depth pbty cbty)
-      (lrBody_fragJ loc0 empty_annotation ra mo bbty nbty ubty hlib))
+      (lrBody_fragJ loc0 empty_annotation ra mo bbty nbty ubty))
 
 theorem lrProdPrefix_pot (ra : core_run_annotation) (mo : memory_order)
     (bty : core_base_type) (k : CoreExpr) :
@@ -1473,8 +1472,7 @@ theorem list_reverse_certified_production (sup : Nat) (ra : core_run_annotation)
           rw [procCtx_labels hQprod] at hl
           obtain ⟨-, rfl⟩ := lrQ_inv loc0 empty_annotation ra mo pbty cbty
             bbty nbty ubty hl
-          exact lrBody_fragJ loc0 empty_annotation ra mo bbty nbty ubty
-            loc0_lib)
+          exact lrBody_fragJ loc0 empty_annotation ra mo bbty nbty ubty)
         (fun l params cont hl => by
           rw [procCtx_labels hQprod] at hl
           obtain ⟨-, rfl⟩ := lrQ_inv loc0 empty_annotation ra mo pbty cbty
@@ -1484,7 +1482,7 @@ theorem list_reverse_certified_production (sup : Nat) (ra : core_run_annotation)
         lrProdLsT
         (lrProdProg ra mo bty sbty pbty cbty bbty nbty ubty) fmapEmpty []
         prodMem₀ (∅ : SpikeHeapF SpikeCell) [⟨8, nodeTy⟩, ⟨8, nodeTy⟩]
-        (lrProdProg_frag ra mo bty sbty pbty cbty bbty nbty ubty loc0_lib)
+        (lrProdProg_frag ra mo bty sbty pbty cbty bbty nbty ubty)
         (by rw [lrProdProg_pot ra mo bty sbty pbty cbty bbty nbty ubty,
             show lemDefaultFuel = 999999 + 1 from rfl]
             omega)

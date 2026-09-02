@@ -602,13 +602,13 @@ theorem arr_wp_readout (sbty : core_base_type) :
 
 omit hQ hsz hdec in
 /-- The label bodies are in the certified cone. -/
-theorem arrBody_fragJ (hlib : CerbLocation.isLibraryLocation loc = false)
+theorem arrBody_fragJ
     (n : Int) : Frag (arrBody loc ann ra mo xbty n) := by
   refine .if_ (by
       rw [show peDepth (arrGuard n) = 2 from rfl,
         show lemDefaultFuel = 999999 + 1 from rfl]
       omega)
-    (.sseq_spec (.load_op hlib rfl (.sym _ _) (by
+    (.sseq_spec (.load_op rfl (.sym _ _) (by
         rw [show peDepth (Pexpr ([] : List annot) ()
           (PEsym arrPSym)) = 1 from rfl,
           show lemDefaultFuel = 999999 + 1 from rfl]
@@ -651,7 +651,6 @@ theorem array_sum_certified
       CerbMem.reconstructValue fmapEmpty lum fpm (a + ((4 * i : Nat) : Int)) intTy
           ((bs.drop (4 * i)).take (CerbMem.sizeofCtype fmapEmpty intTy)) =
         CerbMem.MemValue.MVinteger ety (CerbMem.integerIval vs[i]))
-    (hlib : CerbLocation.isLibraryLocation loc = false)
     (σ₀ : Mem)
     (hcoh : Coh fmapEmpty σ₀ ((Iris.Std.PartialMap.singleton id
       (SpikeCell.mk a aty bs)) : SpikeHeapF SpikeCell))
@@ -676,18 +675,18 @@ theorem array_sum_certified
       rw [hlbl] at hl
       obtain ⟨-, rfl⟩ := arrQ_inv loc ann ra mo ibty accbty pbty xbty
         vs.length hl
-      exact arrBody_fragJ loc ann ra mo xbty hlib vs.length)
+      exact arrBody_fragJ loc ann ra mo xbty vs.length)
     (fun l params cont hl => by
       rw [hlbl] at hl
       obtain ⟨-, rfl⟩ := arrQ_inv loc ann ra mo ibty accbty pbty xbty
         vs.length hl
-      exact Nat.le_trans (arrBody_fragJ loc ann ra mo xbty hlib vs.length).pot_le_two
+      exact Nat.le_trans (arrBody_fragJ loc ann ra mo xbty vs.length).pot_le_two
         (by rw [show esize (arrBody loc ann ra mo xbty vs.length) = 3 from rfl,
           show lemDefaultFuel = 999999 + 1 from rfl]; omega))
     prog fmapEmpty [] σ₀ _
-    (.save (saveParams_depth_of_vals rfl) (arrBody_fragJ loc ann ra mo xbty hlib vs.length))
+    (.save (saveParams_depth_of_vals rfl) (arrBody_fragJ loc ann ra mo xbty vs.length))
     (Nat.le_trans (Frag.pot_le_two (e := prog) (.save (saveParams_depth_of_vals rfl)
-        (arrBody_fragJ loc ann ra mo xbty hlib vs.length)))
+        (arrBody_fragJ loc ann ra mo xbty vs.length)))
       (by rw [show esize prog = 4 from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega))
     hcoh
     (fun v σ' => v = ivVal vs.sum ∧ CellCoh fmapEmpty σ' id ⟨a, aty, bs⟩)

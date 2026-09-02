@@ -99,9 +99,9 @@ def pot : CoreExpr → Nat
 theorem Frag.esize_le_pot {e : CoreExpr} (hf : Frag e) : esize e ≤ pot e := by
   induction hf with
   | val_pure v => simp [esize, pot]
-  | store hlib => simp [esize, pot, storeRedex]
-  | load hlib => simp [esize, pot, loadRedex]
-  | create hlib => simp [esize, pot, createRedex]
+  | store => simp [esize, pot, storeRedex]
+  | load => simp [esize, pot, loadRedex]
+  | create => simp [esize, pot, createRedex]
   | sseq hf1 hf2 ih1 ih2 => simp only [esize_sseq, pot_sseq]; omega
   | annot hfb ihb => simp only [esize_annot, pot_annot]; omega
   | save hd hb ih =>
@@ -119,11 +119,11 @@ theorem Frag.esize_le_pot {e : CoreExpr} (hf : Frag e) : esize e ≤ pot e := by
   | run hdep => simp [esize, pot, runRedex]
   | sseq_spec hf1 hf2 ih1 ih2 => simp only [esize_sseq, pot_sseq]; omega
   | pure_sym => simp [esize, pot, pureRedex]
-  | load_op hlib hnv2 hp2 hd2 => simp [esize, pot, loadOpRedex]
+  | load_op hnv2 hp2 hd2 => simp [esize, pot, loadOpRedex]
   | sseq_sym hf1 hf2 ih1 ih2 => simp only [esize_sseq, pot_sseq]; omega
   | memop_vals v1 v2 => simp [esize, pot, memopPtrEqVals, memopRedex]
   | memop_op hnv hp1 hp2 hd1 hd2 => simp [esize, pot, memopRedex]
-  | store_op hlib hnv hp2 hp3 hd2 hd3 => simp [esize, pot, storeOpRedex]
+  | store_op hnv hp2 hp3 hd2 hd3 => simp [esize, pot, storeOpRedex]
   | case_value hbr hbsz =>
     simp only [show ∀ pe pats, esize (caseRedex pe pats) = 1 + esizeAlts pats
         from fun _ _ => rfl,
@@ -137,9 +137,9 @@ theorem Frag.esize_le_pot {e : CoreExpr} (hf : Frag e) : esize e ≤ pot e := by
 theorem Frag.pot_le_two {e : CoreExpr} (hf : Frag e) : pot e ≤ 2 * esize e := by
   induction hf with
   | val_pure v => simp [esize, pot]
-  | store hlib => simp [esize, pot, storeRedex]
-  | load hlib => simp [esize, pot, loadRedex]
-  | create hlib => simp [esize, pot, createRedex]
+  | store => simp [esize, pot, storeRedex]
+  | load => simp [esize, pot, loadRedex]
+  | create => simp [esize, pot, createRedex]
   | sseq hf1 hf2 ih1 ih2 => simp only [esize_sseq, pot_sseq]; omega
   | annot hfb ihb => simp only [esize_annot, pot_annot]; omega
   | save hd hb ih =>
@@ -157,11 +157,11 @@ theorem Frag.pot_le_two {e : CoreExpr} (hf : Frag e) : pot e ≤ 2 * esize e := 
   | run hdep => simp [esize, pot, runRedex]
   | sseq_spec hf1 hf2 ih1 ih2 => simp only [esize_sseq, pot_sseq]; omega
   | pure_sym => simp [esize, pot, pureRedex]
-  | load_op hlib hnv2 hp2 hd2 => simp [esize, pot, loadOpRedex]
+  | load_op hnv2 hp2 hd2 => simp [esize, pot, loadOpRedex]
   | sseq_sym hf1 hf2 ih1 ih2 => simp only [esize_sseq, pot_sseq]; omega
   | memop_vals v1 v2 => simp [esize, pot, memopPtrEqVals, memopRedex]
   | memop_op hnv hp1 hp2 hd1 hd2 => simp [esize, pot, memopRedex]
-  | store_op hlib hnv hp2 hp3 hd2 hd3 => simp [esize, pot, storeOpRedex]
+  | store_op hnv hp2 hp3 hd2 hd3 => simp [esize, pot, storeOpRedex]
   | case_value hbr hbsz =>
     simp only [show ∀ pe pats, esize (caseRedex pe pats) = 1 + esizeAlts pats
         from fun _ _ => rfl,
@@ -183,19 +183,19 @@ theorem Frag.pot_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
       lookupLabel M.labels l = some (params, cont) ∧ e' = cont := by
   induction hf generalizing e' ρ' σ' with
   | val_pure v => exact (Step.val_elim (w := .pure v) hs).elim
-  | store hlib =>
+  | store =>
     obtain ⟨mv, fp, σ'', hmv, hmem, hout⟩ := hs.store_inv
     obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ'' := by
       simpa [Prod.mk.injEq] using hout
     subst h1
     left; simp [pot, storeRedex]
-  | load hlib =>
+  | load =>
     obtain ⟨fp, mval, σ'', hmem, hout⟩ := hs.load_inv
     obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ'' := by
       simpa [Prod.mk.injEq] using hout
     subst h1
     left; simp [pot, loadRedex]
-  | create hlib =>
+  | create =>
     obtain ⟨pv, σ'', hmem, hout⟩ := hs.create_inv
     obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ'' := by
       simpa [Prod.mk.injEq] using hout
@@ -375,7 +375,7 @@ theorem Frag.pot_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
     subst h1
     left
     simp [pot, pureRedex]
-  | load_op hlib hnv2 hp2 hd2 =>
+  | load_op hnv2 hp2 hd2 =>
     obtain ⟨pv, -, hout⟩ := hs.load_op_inv hnv2
     obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ := by
       simpa [Prod.mk.injEq] using hout
@@ -430,7 +430,7 @@ theorem Frag.pot_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
     subst h1
     left
     simp [pot, memopRedex]
-  | store_op hlib hnv hp2 hp3 hpd2 hpd3 =>
+  | store_op hnv hp2 hp3 hpd2 hpd3 =>
     obtain ⟨pv, cv, hv2', hv3', hout⟩ := hs.store_op_inv hnv
     obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ := by
       simpa [Prod.mk.injEq] using hout

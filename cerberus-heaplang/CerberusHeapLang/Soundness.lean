@@ -423,11 +423,13 @@ slice-B notes; the WF premises named below are exactly what the
 engine code inspects):
 - UNTOUCHED-UNREAD (quantified, verbatim, no premise): file,
   extern, thread_state's errno / current_proc_opt / exec_loc /
-  stack (except PROGRAM-DONE) / current_loc (the fragment's `[]`
-  node annotations keep get_loc = none, and `hlib` keeps the
-  library-location substitution off — step_ctx's loc' let), the
-  parent tid (except PROGRAM-DONE), and the memory σ for the pure
-  taus.
+  stack (except PROGRAM-DONE), the parent tid (except PROGRAM-DONE),
+  and the memory σ for the pure taus. current_loc is never WRITTEN
+  (the fragment's `[]` node annotations keep get_loc = none) and is
+  READ only into the action request's location (`requestLoc` — the
+  engine's loc' let), where it reaches the kill payload and the
+  driver's trace, never the active result or the memory
+  (`storeM_loc_irrel`/`loadM_loc_irrel`, Step.lean).
 - READ-ONLY-UNDER-WF (quantified, verbatim, premise named):
   tagDefs — read by the store rule only, at operand encoding
   (memValueFromValue, step_action Store0 arm,
@@ -482,16 +484,13 @@ def runRedex (ra : core_run_annotation) (l : sym)
 
 inductive Redex : CoreExpr → Prop where
   | store {loc : CerbLocation.Loc} {ann : core_run_annotation} {lk : Bool}
-      {ty : ctype} {pv : CerbMem.PointerValue} {cv : value} {mo : memory_order}
-      (hlib : CerbLocation.isLibraryLocation loc = false) :
+      {ty : ctype} {pv : CerbMem.PointerValue} {cv : value} {mo : memory_order} :
       Redex (storeRedex loc ann lk ty pv cv mo)
   | load {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
-      {pv : CerbMem.PointerValue} {mo : memory_order}
-      (hlib : CerbLocation.isLibraryLocation loc = false) :
+      {pv : CerbMem.PointerValue} {mo : memory_order} :
       Redex (loadRedex loc ann ty pv mo)
   | create {loc : CerbLocation.Loc} {ann : core_run_annotation}
-      {align : CerbMem.IntegerValue} {ty : ctype} {pref : prefix0}
-      (hlib : CerbLocation.isLibraryLocation loc = false) :
+      {align : CerbMem.IntegerValue} {ty : ctype} {pref : prefix0} :
       Redex (createRedex loc ann align ty pref)
   | beta_pure {pa : List annot} {bty : core_base_type} {v : value}
       {e2 : CoreExpr} :
@@ -583,9 +582,9 @@ inductive Decomp : CoreExpr → context → CoreExpr → Prop where
 theorem Redex.not_irreducible {r : CoreExpr} (h : Redex r) :
     is_irreducible r = false := by
   cases h with
-  | store hlib => rfl
-  | load hlib => rfl
-  | create hlib => rfl
+  | store => rfl
+  | load => rfl
+  | create => rfl
   | beta_pure => rfl
   | beta_annot => rfl
   | merge hirr => exact hirr
@@ -684,9 +683,9 @@ theorem Decomp.get_ctx_at {e : CoreExpr} {ctx : context} {r : CoreExpr}
     obtain ⟨m, rfl⟩ : ∃ m, n = m + 1 :=
       ⟨n - 1, by have := esize_pos r0; omega⟩
     cases hr with
-    | store hlib => exact get_ctx_action m
-    | load hlib => exact get_ctx_action m
-    | create hlib => exact get_ctx_action m
+    | store => exact get_ctx_action m
+    | load => exact get_ctx_action m
+    | create => exact get_ctx_action m
     | beta_pure => exact get_ctx_sseq_val m
     | beta_annot => exact get_ctx_sseq_val m
     | merge hirr => exact get_ctx_merge m
@@ -767,9 +766,9 @@ theorem Redex.jumpRedex?_some_inv {r : CoreExpr} {l : sym}
     (hj : jumpRedex? r = some (l, pes)) :
     ∃ ra : core_run_annotation, r = runRedex ra l pes := by
   cases h with
-  | store hlib => cases hj
-  | load hlib => cases hj
-  | create hlib => cases hj
+  | store => cases hj
+  | load => cases hj
+  | create => cases hj
   | beta_pure => rw [jumpRedex?_sseq, jumpRedex?_ofVal] at hj; cases hj
   | beta_annot => rw [jumpRedex?_sseq, jumpRedex?_ofVal] at hj; cases hj
   | merge hirr => rw [jumpRedex?_annot_of_root _ _ rfl] at hj; cases hj
@@ -1000,25 +999,35 @@ theorem step_ctx_remove_annot (ds : List dyn_annotation) (v : value)
   rw [hget]
   rfl
 
-/-- Store, active shape, context undisturbed: one StoreRequest2, the
-    continuation rebuilds `{DA_pos [] fp} unit` in context with the
-    whole thread context verbatim. tagDefs is READ (the operand
-    encoding premise `hmv` is stated at the quantified tagDefs);
-    `hlib` keeps current_loc unread. -/
+/-- The location the engine attaches to an action request: the redex's
+    own, unless it is a library location, in which case the thread's
+    `current_loc` (`step_ctx`'s process_action, Core_reduction.lean:484:
+    `let loc' := if isLibraryLocation loc1 then th_st.current_loc else
+    loc1`). It reaches only the kill payload and the driver's trace —
+    never the active result or the memory (`storeM_loc_irrel`,
+    `loadM_loc_irrel`, Step.lean). -/
+def requestLoc (th : thread_state) (loc : CerbLocation.Loc) : CerbLocation.Loc :=
+  if CerbLocation.isLibraryLocation loc then th.current_loc else loc
+
+/-- Store, active shape, context undisturbed: one StoreRequest2 at the
+    engine's `requestLoc th loc`, the continuation rebuilds
+    `{DA_pos [] fp} unit` in context with the whole thread context
+    verbatim. tagDefs is READ (the operand encoding premise `hmv` is
+    stated at the quantified tagDefs); `current_loc` is read into the
+    request location only. -/
 theorem step_ctx_store {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {lk : Bool}
     {ty : ctype} {pv : CerbMem.PointerValue} {cv : value} {mo : memory_order}
     {mv : CerbMem.MemValue}
     (hd : Decomp e ctx (storeRedex loc ann lk ty pv cv mo))
     (hsz : esize e ≤ lemDefaultFuel)
-    (hlib : CerbLocation.isLibraryLocation loc = false)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition))
     (hmv : memValueFromValue tds (Ctype [] (unatomic_ ty)) cv = some mv)
     (σ : Mem) (file : generic_file Unit core_run_annotation)
     (ext : Fmap sym sym) (tid : Nat) (parent : Option Nat)
     (th : thread_state) (harena : th.arena = e) :
     step_ctx tds σ file ext tid (parent, th) =
-      [Step_action_request2 "StoreRequest" loc tid (is_unseq_with_ccall ctx)
+      [Step_action_request2 "StoreRequest" (requestLoc th loc) tid (is_unseq_with_ccall ctx)
         (stExceptUndef_return (StoreRequest2 mo ty lk pv mv
           (fun (_ : Nat) (fp : CerbMem.Footprint) =>
             { th with arena := apply_ctx ctx (Expr [] (Eannot [DA_pos [] fp]
@@ -1034,8 +1043,7 @@ theorem step_ctx_store {e : CoreExpr} {ctx : context}
     (dsimp only [step_action, act_valueFromPexpr, valueFromPexpr]
      rw [hmv]
      dsimp only
-     rw [hlib]
-     rfl)
+     first | rfl | (unfold requestLoc; rfl))
 
 /-- Store, non-encoding shape, context undisturbed: ILLTYPED refusal
     (Step_error2). -/
@@ -1076,13 +1084,12 @@ theorem step_ctx_load {e : CoreExpr} {ctx : context}
     {pv : CerbMem.PointerValue} {mo : memory_order}
     (hd : Decomp e ctx (loadRedex loc ann ty pv mo))
     (hsz : esize e ≤ lemDefaultFuel)
-    (hlib : CerbLocation.isLibraryLocation loc = false)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat)
     (th : thread_state) (harena : th.arena = e) :
     step_ctx tds σ file ext tid (parent, th) =
-      [Step_action_request2 "LoadRequest" loc tid (is_unseq_with_ccall ctx)
+      [Step_action_request2 "LoadRequest" (requestLoc th loc) tid (is_unseq_with_ccall ctx)
         (stExceptUndef_return (LoadRequest2 mo ty pv
           (fun (_ : Nat) (fp : CerbMem.Footprint) (mval : CerbMem.MemValue) =>
             { th with arena := apply_ctx ctx (Expr [] (Eannot [DA_pos [] fp]
@@ -1097,16 +1104,15 @@ theorem step_ctx_load {e : CoreExpr} {ctx : context}
   unfold loadRedex
   cases ctx <;>
     (dsimp only [step_action, act_valueFromPexpr, valueFromPexpr]
-     rw [hlib]
-     rfl)
+     first | rfl | (unfold requestLoc; rfl))
 
 /-- Create, context undisturbed (Extension D): one CreateRequest2 with
     the canonical operands (which always classify — no ILLTYPED arm
     exists for this shape); the continuation rebuilds the BARE pointer
     value in context (mk_value_e, no Eannot residue — step_action
     Create arm, Core_reduction.lean:424), thread context verbatim.
-    tagDefs is unread; `hlib` keeps current_loc unread. The request
-    carries `get_with_address []` (the fragment's `[]` node annots) as
+    tagDefs is unread; `current_loc` is read into the request location
+    (`requestLoc th loc`) only. The request carries `get_with_address []` (the fragment's `[]` node annots) as
     the requested address — an opaque `partial def` value that
     `allocateObject` discards (CerbMem.lean:1473). -/
 theorem step_ctx_create {e : CoreExpr} {ctx : context}
@@ -1114,13 +1120,12 @@ theorem step_ctx_create {e : CoreExpr} {ctx : context}
     {align : CerbMem.IntegerValue} {ty : ctype} {pref : prefix0}
     (hd : Decomp e ctx (createRedex loc ann align ty pref))
     (hsz : esize e ≤ lemDefaultFuel)
-    (hlib : CerbLocation.isLibraryLocation loc = false)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat)
     (th : thread_state) (harena : th.arena = e) :
     step_ctx tds σ file ext tid (parent, th) =
-      [Step_action_request2 "CreateRequest" loc tid (is_unseq_with_ccall ctx)
+      [Step_action_request2 "CreateRequest" (requestLoc th loc) tid (is_unseq_with_ccall ctx)
         (stExceptUndef_return (CreateRequest2 pref align ty
           (get_with_address []) none
           (fun (_ : Nat) (pv : CerbMem.PointerValue) =>
@@ -1135,8 +1140,7 @@ theorem step_ctx_create {e : CoreExpr} {ctx : context}
   unfold createRedex
   cases ctx <;>
     (dsimp only [step_action, act_valueFromPexpr, valueFromPexpr]
-     rw [hlib]
-     rfl)
+     first | rfl | (unfold requestLoc; rfl))
 
 /-- LETS-PURE, context undisturbed: env is READ-ONLY-UNDER-WF — the
     engine's update_env fails loudly on an empty stack (`henv`
@@ -1322,13 +1326,14 @@ because storeM/loadM are single-layer state transformers, recon
 
 theorem dischargeStep_store_active {tds : CerbTags.TagDefsMap} {aid : Nat} {rs : core_run_state}
     {σ σ' : Mem} {str : String}
-    {loc : CerbLocation.Loc} {tid : thread_id} {uw : Bool} {mo : memory_order}
+    {loc loc₀ : CerbLocation.Loc} {tid : thread_id} {uw : Bool} {mo : memory_order}
     {ty : ctype} {lk : Bool} {pv : CerbMem.PointerValue} {mv : CerbMem.MemValue}
     {k : Nat → CerbMem.Footprint → thread_state} {fp : CerbMem.Footprint}
-    (h : applyMemM (CerbMem.storeM tds loc ty lk pv mv) σ = some (fp, σ')) :
+    (h : applyMemM (CerbMem.storeM tds loc₀ ty lk pv mv) σ = some (fp, σ')) :
     dischargeStep tds aid rs σ (Step_action_request2 str loc tid uw
       (stExceptUndef_return (StoreRequest2 mo ty lk pv mv k))) =
       .next (k aid fp) σ' := by
+  replace h := (storeM_loc_irrel loc₀ loc).trans h
   rcases hm : CerbMem.storeM tds loc ty lk pv mv with ⟨f⟩
   rcases hf : f σ with ⟨act, st⟩
   unfold applyMemM at h
@@ -1348,12 +1353,13 @@ theorem dischargeStep_store_active {tds : CerbTags.TagDefsMap} {aid : Nat} {rs :
 
 theorem dischargeStep_store_refusal {tds : CerbTags.TagDefsMap} {aid : Nat} {rs : core_run_state}
     {σ : Mem} {str : String}
-    {loc : CerbLocation.Loc} {tid : thread_id} {uw : Bool} {mo : memory_order}
+    {loc loc₀ : CerbLocation.Loc} {tid : thread_id} {uw : Bool} {mo : memory_order}
     {ty : ctype} {lk : Bool} {pv : CerbMem.PointerValue} {mv : CerbMem.MemValue}
     {k : Nat → CerbMem.Footprint → thread_state}
-    (h : applyMemM (CerbMem.storeM tds loc ty lk pv mv) σ = none) :
+    (h : applyMemM (CerbMem.storeM tds loc₀ ty lk pv mv) σ = none) :
     (dischargeStep tds aid rs σ (Step_action_request2 str loc tid uw
       (stExceptUndef_return (StoreRequest2 mo ty lk pv mv k)))).isRefusal := by
+  replace h := (storeM_loc_irrel loc₀ loc).trans h
   rcases hm : CerbMem.storeM tds loc ty lk pv mv with ⟨f⟩
   rcases hf : f σ with ⟨act, st⟩
   unfold applyMemM at h
@@ -1368,14 +1374,15 @@ theorem dischargeStep_store_refusal {tds : CerbTags.TagDefsMap} {aid : Nat} {rs 
 
 theorem dischargeStep_load_active {tds : CerbTags.TagDefsMap} {aid : Nat} {rs : core_run_state}
     {σ σ' : Mem} {str : String}
-    {loc : CerbLocation.Loc} {tid : thread_id} {uw : Bool} {mo : memory_order}
+    {loc loc₀ : CerbLocation.Loc} {tid : thread_id} {uw : Bool} {mo : memory_order}
     {ty : ctype} {pv : CerbMem.PointerValue}
     {k : Nat → CerbMem.Footprint → CerbMem.MemValue → thread_state}
     {fp : CerbMem.Footprint} {mval : CerbMem.MemValue}
-    (h : applyMemM (CerbMem.loadM tds loc ty pv) σ = some ((fp, mval), σ')) :
+    (h : applyMemM (CerbMem.loadM tds loc₀ ty pv) σ = some ((fp, mval), σ')) :
     dischargeStep tds aid rs σ (Step_action_request2 str loc tid uw
       (stExceptUndef_return (LoadRequest2 mo ty pv k))) =
       .next (k aid fp mval) σ' := by
+  replace h := (loadM_loc_irrel loc₀ loc).trans h
   rcases hm : CerbMem.loadM tds loc ty pv with ⟨f⟩
   rcases hf : f σ with ⟨act, st⟩
   unfold applyMemM at h
@@ -1395,12 +1402,13 @@ theorem dischargeStep_load_active {tds : CerbTags.TagDefsMap} {aid : Nat} {rs : 
 
 theorem dischargeStep_load_refusal {tds : CerbTags.TagDefsMap} {aid : Nat} {rs : core_run_state}
     {σ : Mem} {str : String}
-    {loc : CerbLocation.Loc} {tid : thread_id} {uw : Bool} {mo : memory_order}
+    {loc loc₀ : CerbLocation.Loc} {tid : thread_id} {uw : Bool} {mo : memory_order}
     {ty : ctype} {pv : CerbMem.PointerValue}
     {k : Nat → CerbMem.Footprint → CerbMem.MemValue → thread_state}
-    (h : applyMemM (CerbMem.loadM tds loc ty pv) σ = none) :
+    (h : applyMemM (CerbMem.loadM tds loc₀ ty pv) σ = none) :
     (dischargeStep tds aid rs σ (Step_action_request2 str loc tid uw
       (stExceptUndef_return (LoadRequest2 mo ty pv k)))).isRefusal := by
+  replace h := (loadM_loc_irrel loc₀ loc).trans h
   rcases hm : CerbMem.loadM tds loc ty pv with ⟨f⟩
   rcases hf : f σ with ⟨act, st⟩
   unfold applyMemM at h
@@ -3050,16 +3058,13 @@ part of the runtime tuple as `env` is. -/
 inductive Frag : CoreExpr → Prop where
   | val_pure (v : value) : Frag (Expr [] (Epure (Pexpr [] () (PEval v))))
   | store {loc : CerbLocation.Loc} {ann : core_run_annotation} {lk : Bool}
-      {ty : ctype} {pv : CerbMem.PointerValue} {cv : value} {mo : memory_order}
-      (hlib : CerbLocation.isLibraryLocation loc = false) :
+      {ty : ctype} {pv : CerbMem.PointerValue} {cv : value} {mo : memory_order} :
       Frag (storeRedex loc ann lk ty pv cv mo)
   | load {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
-      {pv : CerbMem.PointerValue} {mo : memory_order}
-      (hlib : CerbLocation.isLibraryLocation loc = false) :
+      {pv : CerbMem.PointerValue} {mo : memory_order} :
       Frag (loadRedex loc ann ty pv mo)
   | create {loc : CerbLocation.Loc} {ann : core_run_annotation}
-      {align : CerbMem.IntegerValue} {ty : ctype} {pref : prefix0}
-      (hlib : CerbLocation.isLibraryLocation loc = false) :
+      {align : CerbMem.IntegerValue} {ty : ctype} {pref : prefix0} :
       Frag (createRedex loc ann align ty pref)
   | sseq {pa : List annot} {bty : core_base_type} {e1 e2 : CoreExpr} :
       Frag e1 → Frag e2 →
@@ -3093,7 +3098,6 @@ inductive Frag : CoreExpr → Prop where
       Frag (pureRedex (Pexpr pb () (PEsym x)))
   | load_op {loc : CerbLocation.Loc} {ann : core_run_annotation}
       {ty : ctype} {pe2 : generic_pexpr Unit sym} {mo : memory_order}
-      (hlib : CerbLocation.isLibraryLocation loc = false)
       (hnv2 : valueFromPexpr pe2 = none) (hp2 : PePure pe2)
       (hd2 : peDepth pe2 ≤ lemDefaultFuel) :
       Frag (loadOpRedex loc ann ty pe2 mo)
@@ -3111,7 +3115,6 @@ inductive Frag : CoreExpr → Prop where
       Frag (memopRedex PtrEq [pe1, pe2])
   | store_op {loc : CerbLocation.Loc} {ann : core_run_annotation}
       {ty : ctype} {pe2 pe3 : generic_pexpr Unit sym} {mo : memory_order}
-      (hlib : CerbLocation.isLibraryLocation loc = false)
       (hnv : valueFromPexprs [pe2, pe3] = none)
       (hp2 : PePure pe2) (hp3 : PePure pe3)
       (hd2 : peDepth pe2 ≤ lemDefaultFuel)
@@ -3192,9 +3195,9 @@ theorem Frag.decomp {e : CoreExpr} (hf : Frag e) (hnv : toVal e = none) :
     rw [show toVal (Expr ([] : List _root_.annot) (Epure (Pexpr [] () (PEval v)))) =
       some (.pure v) from rfl] at hnv
     cases hnv
-  | store hlib => exact ⟨_, _, Decomp.root (.store hlib), .store hlib⟩
-  | load hlib => exact ⟨_, _, Decomp.root (.load hlib), .load hlib⟩
-  | create hlib => exact ⟨_, _, Decomp.root (.create hlib), .create hlib⟩
+  | store => exact ⟨_, _, Decomp.root (.store), .store⟩
+  | load => exact ⟨_, _, Decomp.root (.load), .load⟩
+  | create => exact ⟨_, _, Decomp.root (.create), .create⟩
   | @sseq pa bty e1 e2 hf1 hf2 ih1 ih2 =>
     cases hv1 : toVal e1 with
     | some w =>
@@ -3225,9 +3228,9 @@ theorem Frag.decomp {e : CoreExpr} (hf : Frag e) (hnv : toVal e = none) :
     by_cases hr : annotRooted b = true
     · cases hfb with
       | val_pure v => simp [annotRooted] at hr
-      | store hlib => simp [annotRooted, storeRedex] at hr
-      | load hlib => simp [annotRooted, loadRedex] at hr
-      | create hlib => simp [annotRooted, createRedex] at hr
+      | store => simp [annotRooted, storeRedex] at hr
+      | load => simp [annotRooted, loadRedex] at hr
+      | create => simp [annotRooted, createRedex] at hr
       | sseq hf1 hf2 => simp [annotRooted] at hr
       | wseq hf1 hf2 => simp [annotRooted] at hr
       | sseq_spec hf1 hf2 => simp [annotRooted] at hr
@@ -3235,11 +3238,11 @@ theorem Frag.decomp {e : CoreExpr} (hf : Frag e) (hnv : toVal e = none) :
       | if_ hdg hf2 hf3 => simp [annotRooted, ifRedex] at hr
       | run hdep => simp [annotRooted, runRedex] at hr
       | pure_sym => simp [annotRooted, pureRedex] at hr
-      | load_op hlib hnv2 hp2 hd2 => simp [annotRooted, loadOpRedex] at hr
+      | load_op hnv2 hp2 hd2 => simp [annotRooted, loadOpRedex] at hr
       | sseq_sym hf1 hf2 => simp [annotRooted] at hr
       | memop_vals v1 v2 => simp [annotRooted, memopPtrEqVals, memopRedex] at hr
       | memop_op hnv hp1 hp2 hpd1 hpd2 => simp [annotRooted, memopRedex] at hr
-      | store_op hlib hnv hp2 hp3 hpd2 hpd3 =>
+      | store_op hnv hp2 hp3 hpd2 hpd3 =>
         simp [annotRooted, storeOpRedex] at hr
       | case_value hbr hbsz => simp [annotRooted, caseRedex] at hr
       | @annot ds2 c hfc =>
@@ -3247,9 +3250,9 @@ theorem Frag.decomp {e : CoreExpr} (hf : Frag e) (hnv : toVal e = none) :
             (Eannot ds (Expr [] (Eannot ds2 c)))) := .annot (.annot hfc)
         cases hfc with
         | val_pure v => exact ⟨_, _, Decomp.root (.merge rfl), hwit⟩
-        | store hlib => exact ⟨_, _, Decomp.root (.merge rfl), hwit⟩
-        | load hlib => exact ⟨_, _, Decomp.root (.merge rfl), hwit⟩
-        | create hlib => exact ⟨_, _, Decomp.root (.merge rfl), hwit⟩
+        | store => exact ⟨_, _, Decomp.root (.merge rfl), hwit⟩
+        | load => exact ⟨_, _, Decomp.root (.merge rfl), hwit⟩
+        | create => exact ⟨_, _, Decomp.root (.merge rfl), hwit⟩
         | sseq hf1 hf2 => exact ⟨_, _, Decomp.root (.merge rfl), hwit⟩
         | wseq hf1 hf2 => exact ⟨_, _, Decomp.root (.merge rfl), hwit⟩
         | sseq_spec hf1 hf2 =>
@@ -3260,7 +3263,7 @@ theorem Frag.decomp {e : CoreExpr} (hf : Frag e) (hnv : toVal e = none) :
         | run hdep => exact ⟨_, _, Decomp.root (.merge rfl), hwit⟩
         | pure_sym =>
           exact ⟨_, _, Decomp.root (.merge rfl), hwit⟩
-        | load_op hlib hnv2 hp2 hd2 =>
+        | load_op hnv2 hp2 hd2 =>
           exact ⟨_, _, Decomp.root (.merge rfl), hwit⟩
         | sseq_sym hf1 hf2 =>
           exact ⟨_, _, Decomp.root (.merge rfl), hwit⟩
@@ -3268,7 +3271,7 @@ theorem Frag.decomp {e : CoreExpr} (hf : Frag e) (hnv : toVal e = none) :
           exact ⟨_, _, Decomp.root (.merge rfl), hwit⟩
         | memop_op hnv hp1 hp2 hpd1 hpd2 =>
           exact ⟨_, _, Decomp.root (.merge rfl), hwit⟩
-        | store_op hlib hnv hp2 hp3 hpd2 hpd3 =>
+        | store_op hnv hp2 hp3 hpd2 hpd3 =>
           exact ⟨_, _, Decomp.root (.merge rfl), hwit⟩
         | case_value hbr hbsz =>
           exact ⟨_, _, Decomp.root (.merge rfl), hwit⟩
@@ -3290,9 +3293,9 @@ theorem Frag.decomp {e : CoreExpr} (hf : Frag e) (hnv : toVal e = none) :
           rw [show toVal (Expr ([] : List _root_.annot)
             (Epure (Pexpr [] () (PEval v)))) = some (.pure v) from rfl] at hvb
           cases hvb
-        | store hlib => exact ⟨_, _, Decomp.annot hr' rfl (fun n => rfl) hd, hfr⟩
-        | load hlib => exact ⟨_, _, Decomp.annot hr' rfl (fun n => rfl) hd, hfr⟩
-        | create hlib => exact ⟨_, _, Decomp.annot hr' rfl (fun n => rfl) hd, hfr⟩
+        | store => exact ⟨_, _, Decomp.annot hr' rfl (fun n => rfl) hd, hfr⟩
+        | load => exact ⟨_, _, Decomp.annot hr' rfl (fun n => rfl) hd, hfr⟩
+        | create => exact ⟨_, _, Decomp.annot hr' rfl (fun n => rfl) hd, hfr⟩
         | sseq hf1 hf2 => exact ⟨_, _, Decomp.annot hr' rfl (fun n => rfl) hd, hfr⟩
         | wseq hf1 hf2 =>
           exact ⟨_, _, Decomp.annot hr' rfl (fun n => rfl) hd, hfr⟩
@@ -3304,7 +3307,7 @@ theorem Frag.decomp {e : CoreExpr} (hf : Frag e) (hnv : toVal e = none) :
         | annot hfc => simp [annotRooted] at hr'
         | pure_sym =>
           exact ⟨_, _, Decomp.annot hr' rfl (fun n => rfl) hd, hfr⟩
-        | load_op hlib hnv2 hp2 hd2 =>
+        | load_op hnv2 hp2 hd2 =>
           exact ⟨_, _, Decomp.annot hr' rfl (fun n => rfl) hd, hfr⟩
         | sseq_sym hf1 hf2 =>
           exact ⟨_, _, Decomp.annot hr' rfl (fun n => rfl) hd, hfr⟩
@@ -3312,7 +3315,7 @@ theorem Frag.decomp {e : CoreExpr} (hf : Frag e) (hnv : toVal e = none) :
           exact ⟨_, _, Decomp.annot hr' rfl (fun n => rfl) hd, hfr⟩
         | memop_op hnv hp1 hp2 hpd1 hpd2 =>
           exact ⟨_, _, Decomp.annot hr' rfl (fun n => rfl) hd, hfr⟩
-        | store_op hlib hnv hp2 hp3 hpd2 hpd3 =>
+        | store_op hnv hp2 hp3 hpd2 hpd3 =>
           exact ⟨_, _, Decomp.annot hr' rfl (fun n => rfl) hd, hfr⟩
         | case_value hbr hbsz =>
           exact ⟨_, _, Decomp.annot hr' rfl (fun n => rfl) hd, hfr⟩
@@ -3331,9 +3334,9 @@ theorem Frag.decomp {e : CoreExpr} (hf : Frag e) (hnv : toVal e = none) :
       exact ⟨_, _, Decomp.sseq_spec hd, hfr⟩
   | pure_sym =>
     exact ⟨_, _, Decomp.root (.pure_e rfl), .pure_sym⟩
-  | load_op hlib hnv2 hp2 hd2 =>
+  | load_op hnv2 hp2 hd2 =>
     exact ⟨_, _, Decomp.root (.load_op _ _ _ _ hnv2),
-      .load_op hlib hnv2 hp2 hd2⟩
+      .load_op hnv2 hp2 hd2⟩
   | @sseq_sym pa x bty e1 e2 hf1 hf2 ih1 ih2 =>
     cases hv1 : toVal e1 with
     | some w =>
@@ -3347,9 +3350,9 @@ theorem Frag.decomp {e : CoreExpr} (hf : Frag e) (hnv : toVal e = none) :
     exact ⟨_, _, Decomp.root (.memop _ _), .memop_vals v1 v2⟩
   | memop_op hnvF hp1 hp2 hpd1 hpd2 =>
     exact ⟨_, _, Decomp.root (.memop _ _), .memop_op hnvF hp1 hp2 hpd1 hpd2⟩
-  | store_op hlib hnvF hp2 hp3 hpd2 hpd3 =>
+  | store_op hnvF hp2 hp3 hpd2 hpd3 =>
     exact ⟨_, _, Decomp.root (.store_op _ _ _ _ hnvF),
-      .store_op hlib hnvF hp2 hp3 hpd2 hpd3⟩
+      .store_op hnvF hp2 hp3 hpd2 hpd3⟩
   | case_value hbr hbsz =>
     exact ⟨_, _, Decomp.root (.case_ _ _), .case_value hbr hbsz⟩
 
@@ -3398,19 +3401,19 @@ theorem Frag.step {M : MachineCtx}
     (hf : Frag e) (hs : Step M (e, ρ, σ) (e', ρ', σ')) : Frag e' := by
   induction hf generalizing e' ρ' σ' with
   | val_pure v => exact (Step.val_elim (w := .pure v) hs).elim
-  | store hlib =>
+  | store =>
     obtain ⟨mv, fp, σ'', hmv, hmem, hout⟩ := hs.store_inv
     obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ'' := by
       simpa [Prod.mk.injEq] using hout
     subst h1
     exact .annot (.val_pure Vunit)
-  | load hlib =>
+  | load =>
     obtain ⟨fp, mval, σ'', hmem, hout⟩ := hs.load_inv
     obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ'' := by
       simpa [Prod.mk.injEq] using hout
     subst h1
     exact .annot (.val_pure _)
-  | create hlib =>
+  | create =>
     obtain ⟨pv, σ'', hmem, hout⟩ := hs.create_inv
     obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ'' := by
       simpa [Prod.mk.injEq] using hout
@@ -3571,24 +3574,24 @@ theorem Frag.step {M : MachineCtx}
       simpa [Prod.mk.injEq] using hout
     subst h1
     exact .memop_vals v1 v2
-  | store_op hlib hnv hp2 hp3 hpd2 hpd3 =>
+  | store_op hnv hp2 hp3 hpd2 hpd3 =>
     obtain ⟨pv, cv, hv2', hv3', hout⟩ := hs.store_op_inv hnv
     obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ := by
       simpa [Prod.mk.injEq] using hout
     subst h1
-    exact .store hlib
+    exact .store
   | pure_sym =>
     obtain ⟨v, -, -, hout⟩ := hs.pure_inv
     obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ := by
       simpa [Prod.mk.injEq] using hout
     subst h1
     exact .val_pure v
-  | load_op hlib hnv2 hp2 hd2 =>
+  | load_op hnv2 hp2 hd2 =>
     obtain ⟨pv, -, hout⟩ := hs.load_op_inv hnv2
     obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ := by
       simpa [Prod.mk.injEq] using hout
     subst h1
-    exact .load hlib
+    exact .load
   | case_value hbr hbsz =>
     obtain ⟨cval', e'', hv, hsel, hout⟩ := hs.case_inv
     obtain rfl : _ = cval' := Option.some.inj (valueFromPexpr_val _ _ ▸ hv)
@@ -3608,19 +3611,19 @@ theorem Frag.esize_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
       lookupLabel M.labels l = some (params, cont) ∧ e' = cont := by
   induction hf generalizing e' ρ' σ' with
   | val_pure v => exact (Step.val_elim (w := .pure v) hs).elim
-  | store hlib =>
+  | store =>
     obtain ⟨mv, fp, σ'', hmv, hmem, hout⟩ := hs.store_inv
     obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ'' := by
       simpa [Prod.mk.injEq] using hout
     subst h1
     left; simp [esize, storeRedex]
-  | load hlib =>
+  | load =>
     obtain ⟨fp, mval, σ'', hmem, hout⟩ := hs.load_inv
     obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ'' := by
       simpa [Prod.mk.injEq] using hout
     subst h1
     left; simp [esize, loadRedex]
-  | create hlib =>
+  | create =>
     obtain ⟨pv, σ'', hmem, hout⟩ := hs.create_inv
     obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ'' := by
       simpa [Prod.mk.injEq] using hout
@@ -3799,7 +3802,7 @@ theorem Frag.esize_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
     subst h1
     left
     simp [esize, pureRedex]
-  | load_op hlib hnv2 hp2 hd2 =>
+  | load_op hnv2 hp2 hd2 =>
     obtain ⟨pv, -, hout⟩ := hs.load_op_inv hnv2
     obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ := by
       simpa [Prod.mk.injEq] using hout
@@ -3854,7 +3857,7 @@ theorem Frag.esize_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
     subst h1
     left
     simp [esize, memopRedex]
-  | store_op hlib hnv hp2 hp3 hpd2 hpd3 =>
+  | store_op hnv hp2 hp3 hpd2 hpd3 =>
     obtain ⟨pv, cv, hv2', hv3', hout⟩ := hs.store_op_inv hnv
     obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ := by
       simpa [Prod.mk.injEq] using hout
@@ -3899,7 +3902,7 @@ theorem engine_step_matchU {M : MachineCtx} (aid : Nat)
     have hdOld : Decomp e ctx r := hd
     have hrj := hd.redex
     cases hrj with
-    | @store loc ann lk ty pv cv mo hlib =>
+    | @store loc ann lk ty pv cv mo =>
       obtain ⟨mv, fp, σ'', hmv, hmem, hout⟩ := hr.store_inv
       obtain ⟨h1, h2, h3⟩ : r' = Expr [] (Eannot [DA_pos [] fp]
           (Expr [] (Epure (Pexpr [] () (PEval Vunit))))) ∧
@@ -3907,11 +3910,11 @@ theorem engine_step_matchU {M : MachineCtx} (aid : Nat)
         simpa [Prod.mk.injEq] using hout
       subst h1 h2 h3
       unfold outcomesU engineStepsU
-      rw [step_ctx_store hdOld hsz hlib M.tagDefs hmv σ M.file M.extern M.tid M.parent _ rfl]
+      rw [step_ctx_store hdOld hsz M.tagDefs hmv σ M.file M.extern M.tid M.parent _ rfl]
       simp only [List.map_cons, List.map_nil]
       rw [dischargeStep_store_active hmem]
       rfl
-    | @load loc ann ty pv mo hlib =>
+    | @load loc ann ty pv mo =>
       obtain ⟨fp, mval, σ'', hmem, hout⟩ := hr.load_inv
       obtain ⟨h1, h2, h3⟩ : r' = Expr [] (Eannot [DA_pos [] fp]
           (Expr [] (Epure (Pexpr [] () (PEval
@@ -3920,11 +3923,11 @@ theorem engine_step_matchU {M : MachineCtx} (aid : Nat)
         simpa [Prod.mk.injEq] using hout
       subst h1 h2 h3
       unfold outcomesU engineStepsU
-      rw [step_ctx_load hdOld hsz hlib M.tagDefs σ M.file M.extern M.tid M.parent _ rfl]
+      rw [step_ctx_load hdOld hsz M.tagDefs σ M.file M.extern M.tid M.parent _ rfl]
       simp only [List.map_cons, List.map_nil]
       rw [dischargeStep_load_active hmem]
       rfl
-    | @create loc ann align ty pref hlib =>
+    | @create loc ann align ty pref =>
       obtain ⟨pv, σ'', hmem, hout⟩ := hr.create_inv
       obtain ⟨h1, h2, h3⟩ : r' = Expr [] (Epure (Pexpr [] ()
           (PEval (Vobject (OVpointer pv))))) ∧
@@ -3932,7 +3935,7 @@ theorem engine_step_matchU {M : MachineCtx} (aid : Nat)
         simpa [Prod.mk.injEq] using hout
       subst h1 h2 h3
       unfold outcomesU engineStepsU
-      rw [step_ctx_create hdOld hsz hlib M.tagDefs σ M.file M.extern M.tid M.parent _ rfl]
+      rw [step_ctx_create hdOld hsz M.tagDefs σ M.file M.extern M.tid M.parent _ rfl]
       simp only [List.map_cons, List.map_nil]
       rw [dischargeStep_create_active (reqAddr := get_with_address []) hmem]
       rfl
@@ -4122,11 +4125,11 @@ theorem engine_step_matchU {M : MachineCtx} (aid : Nat)
     | @load_op loc ann ty pe2 mo hnv2 =>
       obtain ⟨hp2, hd2⟩ : PePure pe2 ∧ peDepth pe2 ≤ lemDefaultFuel := by
         cases hfr with
-        | load hlib =>
+        | load =>
           rw [show valueFromPexpr (Pexpr [] () (PEval
             (Vobject (OVpointer _)))) = some _ from rfl] at hnv2
           cases hnv2
-        | load_op hlib hnv2' hp2 hd2 => exact ⟨hp2, hd2⟩
+        | load_op hnv2' hp2 hd2 => exact ⟨hp2, hd2⟩
       obtain ⟨pv, hv2, hout⟩ := hr.load_op_inv hnv2
       obtain ⟨h1, h2, h3⟩ : r' = loadRedex loc ann ty pv mo ∧
           ρ' = ev0 :: evs ∧ σ' = σ := by
@@ -4219,10 +4222,10 @@ theorem engine_step_matchU {M : MachineCtx} (aid : Nat)
           PePure pe2 ∧ PePure pe3 ∧
           peDepth pe2 ≤ lemDefaultFuel ∧ peDepth pe3 ≤ lemDefaultFuel := by
         cases hfr with
-        | store hlib =>
+        | store =>
           rw [valueFromPexprs_pair, valueFromPexpr_val, valueFromPexpr_val] at hnvR
           cases hnvR
-        | store_op hlib hnv' hp2 hp3 hpd2 hpd3 =>
+        | store_op hnv' hp2 hp3 hpd2 hpd3 =>
           exact ⟨hp2, hp3, hpd2, hpd3⟩
       obtain ⟨pv, cv, hv2, hv3, hout⟩ := hr.store_op_inv hnvR
       obtain ⟨h1, h2, h3⟩ : r' = storeRedex loc ann false ty pv cv mo ∧
@@ -4311,7 +4314,6 @@ inductive EngineMatchU (M : MachineCtx) (e : CoreExpr) (ρ : EnvStack)
 theorem engine_complete_storeU (M : MachineCtx) (aid : Nat)
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {lk : Bool}
     {ty : ctype} {pv : CerbMem.PointerValue} {cv : value} {mo : memory_order}
-    (hlib : CerbLocation.isLibraryLocation loc = false)
     (ρ : EnvStack) (σ : Mem) :
     ∃ o, outcomesU M aid (storeRedex loc ann lk ty pv cv mo) ρ σ = [o] ∧
       EngineMatchU M (storeRedex loc ann lk ty pv cv mo) ρ σ o := by
@@ -4328,7 +4330,7 @@ theorem engine_complete_storeU (M : MachineCtx) (aid : Nat)
               (CerbPP.stringFromCore_value cv))))), ?_, ?_⟩
     · unfold outcomesU engineStepsU storeRedex
       rw [step_ctx_store_illtyped
-        (Decomp.root (Redex.store hlib)) hsz M.tagDefs hmv
+        (Decomp.root (Redex.store)) hsz M.tagDefs hmv
         σ M.file M.extern M.tid M.parent (M.thread _ ρ) rfl]
       rfl
     · refine .refused trivial (fun out hstep => ?_) rfl
@@ -4341,22 +4343,21 @@ theorem engine_complete_storeU (M : MachineCtx) (aid : Nat)
       obtain ⟨fp, σ'⟩ := fpσ
       refine ⟨_, ?_, .step (Step.store_canonical hmv hmem)⟩
       unfold outcomesU engineStepsU storeRedex
-      rw [step_ctx_store (Decomp.root (Redex.store hlib)) hsz
-        hlib M.tagDefs hmv σ M.file M.extern M.tid M.parent (M.thread _ ρ) rfl]
+      rw [step_ctx_store (Decomp.root (Redex.store)) hsz M.tagDefs hmv σ M.file M.extern M.tid M.parent (M.thread _ ρ) rfl]
       simp only [List.map_cons, List.map_nil]
       rw [dischargeStep_store_active hmem]
       rfl
     | none =>
       refine ⟨dischargeStep M.tagDefs aid M.runState σ (Step_action_request2
-          "StoreRequest" loc M.tid (is_unseq_with_ccall CTX)
+          "StoreRequest" (requestLoc (M.thread (storeRedex loc ann lk ty pv cv mo) ρ) loc) M.tid
+          (is_unseq_with_ccall CTX)
           (stExceptUndef_return (StoreRequest2 mo ty lk pv mv (fun _ fp =>
             { M.thread (storeRedex loc ann lk ty pv cv mo) ρ with
               arena := apply_ctx CTX (Expr [] (Eannot [DA_pos [] fp]
                 (Expr [] (Epure (Pexpr [] () (PEval Vunit)))))) })))),
         ?_, ?_⟩
       · unfold outcomesU engineStepsU storeRedex
-        rw [step_ctx_store (Decomp.root (Redex.store hlib)) hsz
-          hlib M.tagDefs hmv σ M.file M.extern M.tid M.parent
+        rw [step_ctx_store (Decomp.root (Redex.store)) hsz M.tagDefs hmv σ M.file M.extern M.tid M.parent
           (M.thread _ ρ) rfl]
         rfl
       · refine .refused (dischargeStep_store_refusal hmem)

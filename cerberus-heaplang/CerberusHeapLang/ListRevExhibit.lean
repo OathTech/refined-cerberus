@@ -1154,7 +1154,7 @@ variable (loc : CerbLocation.Loc) (ann ra : core_run_annotation)
   (mo : memory_order) (pbty cbty bbty nbty ubty : core_base_type)
 
 /-- The label body is in the certified cone. -/
-theorem lrBody_fragJ (hlib : CerbLocation.isLibraryLocation loc = false) :
+theorem lrBody_fragJ :
     Frag (lrBody loc ann ra mo bbty nbty ubty) := by
   refine .sseq_sym
     (.memop_op rfl (.sym _ _) (.val _ _)
@@ -1168,12 +1168,12 @@ theorem lrBody_fragJ (hlib : CerbLocation.isLibraryLocation loc = false) :
         omega)
       .pure_sym
       (.sseq_spec
-        (.load_op hlib rfl
+        (.load_op rfl
           (.arrayShift [] longTy (.sym _ _) (.val _ _))
           (by rw [show peDepth (lrShiftPe lrCurSym) = 2 from rfl,
             show lemDefaultFuel = 999999 + 1 from rfl]; omega))
         (.sseq
-          (.store_op hlib rfl
+          (.store_op rfl
             (.arrayShift [] longTy (.sym _ _) (.val _ _)) (.sym _ _)
             (by rw [show peDepth (lrShiftPe lrCurSym) = 2 from rfl,
               show lemDefaultFuel = 999999 + 1 from rfl]; omega)
@@ -1457,7 +1457,6 @@ theorem list_reverse_certified
     (head : CerbMem.PointerValue)
     (m₀ : CellMap) (hseed : SeedChain m₀ head ns)
     (R : CellMap) (hR : m₀ ##ₘ R)
-    (hlib : CerbLocation.isLibraryLocation loc = false)
     (σ₀ : Mem) (hcoh : Sat fmapEmpty σ₀ (Iris.Std.PartialMap.union m₀ R))
     (nsteps : Nat) (aids : Nat → Nat) :
     let prog := lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head
@@ -1484,17 +1483,17 @@ theorem list_reverse_certified
     (fun l params cont hl => by
       rw [hlbl] at hl
       obtain ⟨-, rfl⟩ := lrQ_inv loc ann ra mo pbty cbty bbty nbty ubty hl
-      exact lrBody_fragJ loc ann ra mo bbty nbty ubty hlib)
+      exact lrBody_fragJ loc ann ra mo bbty nbty ubty)
     (fun l params cont hl => by
       rw [hlbl] at hl
       obtain ⟨-, rfl⟩ := lrQ_inv loc ann ra mo pbty cbty bbty nbty ubty hl
-      exact Nat.le_trans (lrBody_fragJ loc ann ra mo bbty nbty ubty hlib).pot_le_two
+      exact Nat.le_trans (lrBody_fragJ loc ann ra mo bbty nbty ubty).pot_le_two
         (by rw [show esize (lrBody loc ann ra mo bbty nbty ubty) = 5 from rfl,
           show lemDefaultFuel = 999999 + 1 from rfl]; omega))
     prog fmapEmpty [] σ₀ (Iris.Std.PartialMap.union m₀ R)
-    (.save (saveParams_depth_of_vals rfl) (lrBody_fragJ loc ann ra mo bbty nbty ubty hlib))
+    (.save (saveParams_depth_of_vals rfl) (lrBody_fragJ loc ann ra mo bbty nbty ubty))
     (Nat.le_trans (Frag.pot_le_two (e := prog) (.save (saveParams_depth_of_vals rfl)
-        (lrBody_fragJ loc ann ra mo bbty nbty ubty hlib)))
+        (lrBody_fragJ loc ann ra mo bbty nbty ubty)))
       (by rw [show esize prog = 6 from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega))
     hcoh
     (fun v σ' => ∃ Q : CellMap, (∃ p' : CerbMem.PointerValue,
@@ -1596,7 +1595,6 @@ theorem demo_seed : SeedChain demoM demoHead demoNs := by
     final memory is included (via `seedChain_chainAt`). -/
 theorem list_reverse_demo (sbty : core_base_type)
     (R : CellMap) (hR : demoM ##ₘ R)
-    (hlib : CerbLocation.isLibraryLocation loc = false)
     (σ₀ : Mem) (hcoh : Sat fmapEmpty σ₀ (Iris.Std.PartialMap.union demoM R))
     (nsteps : Nat) (aids : Nat → Nat) :
     let prog := lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty demoHead
@@ -1618,7 +1616,7 @@ theorem list_reverse_demo (sbty : core_base_type)
         ChainAt σ' p' [(3, 3), (2, 2), (1, 1)]) := by
   intro prog rs
   have h := list_reverse_certified loc ann ra mo pbty cbty bbty nbty ubty
-    sbty demoNs demoHead demoM demo_seed R hR hlib σ₀ hcoh nsteps aids
+    sbty demoNs demoHead demoM demo_seed R hR σ₀ hcoh nsteps aids
   refine ⟨h.1, h.2.1, fun v σ' hdone => ?_⟩
   obtain ⟨p', Q, hval, hQSeed, hfoot, hdisj, hsat⟩ := h.2.2 v σ' hdone
   have hrev : demoNs.reverse = [(3, 3), (2, 2), (1, 1)] := rfl
@@ -2015,7 +2013,6 @@ theorem list_reverse_certified_total (sbty : core_base_type)
     (ns : List (Int × Int)) (head : CerbMem.PointerValue)
     (m₀ : CellMap) (hseed : SeedChain m₀ head ns)
     (R : CellMap) (hR : m₀ ##ₘ R)
-    (hlib : CerbLocation.isLibraryLocation loc = false)
     (σ₀ : Mem) (hcoh : Sat fmapEmpty σ₀ (Iris.Std.PartialMap.union m₀ R))
     (aids : Nat → Nat) :
     ∃ (p' : CerbMem.PointerValue) (Q : CellMap) (σ' : Mem),
@@ -2041,7 +2038,7 @@ theorem list_reverse_certified_total (sbty : core_base_type)
       (fun l params cont hl => by
         rw [hlbl] at hl
         obtain ⟨-, rfl⟩ := lrQ_inv loc ann ra mo pbty cbty bbty nbty ubty hl
-        exact lrBody_fragJ loc ann ra mo bbty nbty ubty hlib)
+        exact lrBody_fragJ loc ann ra mo bbty nbty ubty)
       (fun l params cont hl => by
         rw [hlbl] at hl
         obtain ⟨-, rfl⟩ := lrQ_inv loc ann ra mo pbty cbty bbty nbty ubty hl
@@ -2050,7 +2047,7 @@ theorem list_reverse_certified_total (sbty : core_base_type)
       (frameLsT (lrCellFrame R) (lrLsT ns))
       (lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head)
       fmapEmpty [] σ₀ (Iris.Std.PartialMap.union m₀ R)
-      (.save (saveParams_depth_of_vals rfl) (lrBody_fragJ loc ann ra mo bbty nbty ubty hlib))
+      (.save (saveParams_depth_of_vals rfl) (lrBody_fragJ loc ann ra mo bbty nbty ubty))
       (by rw [lrProg_pot, show lemDefaultFuel = 999999 + 1 from rfl]; omega)
       hcoh
       (fun v σ' => ∃ Q : CellMap, (∃ p' : CerbMem.PointerValue,

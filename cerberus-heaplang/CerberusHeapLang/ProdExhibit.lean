@@ -76,14 +76,14 @@ def progAProd : CoreExpr :=
 
 /-- Cone membership. -/
 theorem progAProd_frag : Frag progAProd :=
-  .sseq_sym (.create loc0_lib)
+  .sseq_sym (.create)
     (.sseq
-      (.store_op loc0_lib rfl (.sym [] pASym) (.val [] sevenVal)
+      (.store_op rfl (.sym [] pASym) (.val [] sevenVal)
         (by rw [show peDepth (Pexpr ([] : List annot) ()
             (PEsym pASym)) = 1 from rfl,
           show lemDefaultFuel = 999999 + 1 from rfl]; omega)
         (peDepth_val_le _ _))
-      (.load_op loc0_lib rfl (.sym [] pASym)
+      (.load_op rfl (.sym [] pASym)
         (by rw [show peDepth (Pexpr ([] : List annot) ()
             (PEsym pASym)) = 1 from rfl,
           show lemDefaultFuel = 999999 + 1 from rfl]; omega)))

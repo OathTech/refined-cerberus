@@ -237,9 +237,9 @@ abbrev progA : CoreExpr :=
 /-- Exhibit (b): the operator's frame program, `store(x,7)`. -/
 abbrev progB : CoreExpr := storeExpr loc0 empty_annotation intTy xPtr sevenVal NA
 
-theorem fragA : Frag progA := Frag.sseq (.store loc0_lib) (.load loc0_lib)
+theorem fragA : Frag progA := Frag.sseq (.store) (.load)
 
-theorem fragB : Frag progB := Frag.store loc0_lib
+theorem fragB : Frag progB := Frag.store
 
 /-- The engine's decode of 7's byte image is 7 again (recon §2.8:
     exact round-trip for `integerIval`-written values). -/
@@ -651,7 +651,7 @@ abbrev progC : CoreExpr :=
   sseqExpr BTy_unit (storeExpr loc0 empty_annotation intTy xPtr fiveVal NA)
     (storeExpr loc0 empty_annotation intTy yPtr sixVal NA)
 
-theorem fragC : Frag progC := Frag.sseq (.store loc0_lib) (.store loc0_lib)
+theorem fragC : Frag progC := Frag.sseq (.store) (.store)
 
 /-- The two cells after the two stores. -/
 abbrev cellX5 : SpikeCell := ⟨xAddr, intTy, (fiveBytes fmapEmpty)⟩

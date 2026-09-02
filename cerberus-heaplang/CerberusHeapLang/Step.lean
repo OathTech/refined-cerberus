@@ -955,6 +955,54 @@ def applyMemM {α : Type} (m : CerbMem.memM α) (st : Mem) : Option (α × Mem) 
     | (NDactive x, st') => some (x, st')
     | _ => none
 
+/-! ### The action location is irrelevant to the memory operation's outcome
+
+`storeM`/`loadM` take the action's source location, but use it only in
+the payload of a `fail_` (`NDkilled (failReason err loc)`,
+CerbMem.lean:1623/1669); the active arm and the state never depend on
+it. Under `applyMemM`, which projects the killed arm to `none`, the two
+operations are therefore location-independent as functions. The engine
+attaches `loc' := if isLibraryLocation loc then th.current_loc else loc`
+to every action request (`step_ctx`'s process_action,
+Core_reduction.lean:484) — these two lemmas are what lets the
+certification (Soundness.lean, DriverCollapse.lean) transport the
+mirror's premise, stated at the redex's own `loc`, to the engine's
+`loc'`. `allocateObject` takes no location. -/
+
+/-- The active-arm projection `applyMemM` performs on a one-layer
+    result (`ND f`, `f st`). -/
+def ndProj {α : Type} :
+    (nd_action α String mem_error (mem_constraint CerbMem.IntegerValue) CerbMem.MemState × Mem) →
+      Option (α × Mem)
+  | (NDactive x, st') => some (x, st')
+  | _ => none
+
+theorem applyMemM_ND {α : Type}
+    (f : Mem → nd_action α String mem_error (mem_constraint CerbMem.IntegerValue) CerbMem.MemState × Mem)
+    (σ : Mem) : applyMemM (ND f) σ = ndProj (f σ) := rfl
+
+/-- `storeM`'s outcome under `applyMemM` does not depend on the location. -/
+theorem storeM_loc_irrel {tds : CerbTags.TagDefsMap} (loc loc' : CerbLocation.Loc)
+    {ty : ctype} {lk : Bool} {pv : CerbMem.PointerValue} {mv : CerbMem.MemValue} {σ : Mem} :
+    applyMemM (CerbMem.storeM tds loc' ty lk pv mv) σ =
+      applyMemM (CerbMem.storeM tds loc ty lk pv mv) σ := by
+  unfold CerbMem.storeM
+  rw [applyMemM_ND, applyMemM_ND]
+  dsimp only
+  rcases pv with ⟨prov, base⟩
+  cases prov <;> cases base <;> dsimp only <;> repeat' (first | rfl | split)
+
+/-- `loadM`'s outcome under `applyMemM` does not depend on the location. -/
+theorem loadM_loc_irrel {tds : CerbTags.TagDefsMap} (loc loc' : CerbLocation.Loc)
+    {ty : ctype} {pv : CerbMem.PointerValue} {σ : Mem} :
+    applyMemM (CerbMem.loadM tds loc' ty pv) σ =
+      applyMemM (CerbMem.loadM tds loc ty pv) σ := by
+  unfold CerbMem.loadM
+  rw [applyMemM_ND, applyMemM_ND]
+  dsimp only
+  rcases pv with ⟨prov, base⟩
+  cases prov <;> cases base <;> dsimp only <;> repeat' (first | rfl | split)
+
 /-! ## The step relation -/
 
 /-- One engine step of the fragment, memory-composed: expression +
@@ -980,8 +1028,9 @@ def applyMemM {α : Type} (m : CerbMem.memM α) (st : Mem) : Option (α × Mem) 
     then current_loc else loc` to the memory op (step_ctx,
     process_action). loc only reaches error payloads — never the
     NDactive result or the state — so the rules pass the action's own
-    loc; fragment locations are not library locations (`hlib` on the
-    `Frag` constructors, Soundness.lean). -/
+    loc; the certification transports the premise to the engine's
+    `loc'` by `storeM_loc_irrel`/`loadM_loc_irrel` (above): the
+    success arm does not depend on the location. -/
 inductive Step (M : MachineCtx) :
     CoreExpr × EnvStack × Mem → CoreExpr × EnvStack × Mem → Prop where
   /-- Positive strong store, evaluated operands (ACTION_EVAL

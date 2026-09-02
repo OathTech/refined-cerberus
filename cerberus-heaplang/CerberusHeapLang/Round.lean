@@ -203,7 +203,6 @@ against the same discharge lemmas. -/
 theorem engine_complete_loadU (M : MachineCtx) (aid : Nat)
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
     {pv : CerbMem.PointerValue} {mo : memory_order}
-    (hlib : CerbLocation.isLibraryLocation loc = false)
     (ρ : EnvStack) (σ : Mem) :
     ∃ o, outcomesU M aid (loadRedex loc ann ty pv mo) ρ σ = [o] ∧
       EngineMatchU M (loadRedex loc ann ty pv mo) ρ σ o := by
@@ -216,14 +215,15 @@ theorem engine_complete_loadU (M : MachineCtx) (aid : Nat)
     obtain ⟨⟨fp, mval⟩, σ'⟩ := r
     refine ⟨_, ?_, .step (Step.load_canonical hmem)⟩
     unfold outcomesU engineStepsU loadRedex
-    rw [step_ctx_load (Decomp.root (Redex.load hlib)) hsz hlib M.tagDefs σ
+    rw [step_ctx_load (Decomp.root (Redex.load)) hsz M.tagDefs σ
       M.file M.extern M.tid M.parent (M.thread _ ρ) rfl]
     simp only [List.map_cons, List.map_nil]
     rw [dischargeStep_load_active hmem]
     rfl
   | none =>
     refine ⟨dischargeStep M.tagDefs aid M.runState σ (Step_action_request2
-        "LoadRequest" loc M.tid (is_unseq_with_ccall CTX)
+        "LoadRequest" (requestLoc (M.thread (loadRedex loc ann ty pv mo) ρ) loc) M.tid
+        (is_unseq_with_ccall CTX)
         (stExceptUndef_return (LoadRequest2 mo ty pv (fun _ fp mval =>
           { M.thread (loadRedex loc ann ty pv mo) ρ with
             arena := apply_ctx CTX (Expr [] (Eannot [DA_pos [] fp]
@@ -231,7 +231,7 @@ theorem engine_complete_loadU (M : MachineCtx) (aid : Nat)
                 (valueFromMemValue mval).2)))))) })))),
       ?_, ?_⟩
     · unfold outcomesU engineStepsU loadRedex
-      rw [step_ctx_load (Decomp.root (Redex.load hlib)) hsz hlib M.tagDefs σ
+      rw [step_ctx_load (Decomp.root (Redex.load)) hsz M.tagDefs σ
         M.file M.extern M.tid M.parent (M.thread _ ρ) rfl]
       rfl
     · refine .refused (dischargeStep_load_refusal hmem) (fun out hstep => ?_) rfl
@@ -246,7 +246,6 @@ theorem engine_complete_loadU (M : MachineCtx) (aid : Nat)
 theorem engine_complete_createU (M : MachineCtx) (aid : Nat)
     {loc : CerbLocation.Loc} {ann : core_run_annotation}
     {align : CerbMem.IntegerValue} {ty : ctype} {pref : prefix0}
-    (hlib : CerbLocation.isLibraryLocation loc = false)
     (ρ : EnvStack) (σ : Mem) :
     ∃ o, outcomesU M aid (createRedex loc ann align ty pref) ρ σ = [o] ∧
       EngineMatchU M (createRedex loc ann align ty pref) ρ σ o := by
@@ -260,14 +259,15 @@ theorem engine_complete_createU (M : MachineCtx) (aid : Nat)
     obtain ⟨pv, σ'⟩ := r
     refine ⟨_, ?_, .step (Step.create_canonical hmem)⟩
     unfold outcomesU engineStepsU createRedex
-    rw [step_ctx_create (Decomp.root (Redex.create hlib)) hsz hlib M.tagDefs σ
+    rw [step_ctx_create (Decomp.root (Redex.create)) hsz M.tagDefs σ
       M.file M.extern M.tid M.parent (M.thread _ ρ) rfl]
     simp only [List.map_cons, List.map_nil]
     rw [dischargeStep_create_active (hirr ▸ hmem)]
     rfl
   | none =>
     refine ⟨dischargeStep M.tagDefs aid M.runState σ (Step_action_request2
-        "CreateRequest" loc M.tid (is_unseq_with_ccall CTX)
+        "CreateRequest" (requestLoc (M.thread (createRedex loc ann align ty pref) ρ) loc) M.tid
+        (is_unseq_with_ccall CTX)
         (stExceptUndef_return (CreateRequest2 pref align ty
           (get_with_address []) none (fun _ pv =>
           { M.thread (createRedex loc ann align ty pref) ρ with
@@ -275,7 +275,7 @@ theorem engine_complete_createU (M : MachineCtx) (aid : Nat)
               (PEval (Vobject (OVpointer pv)))))) })))),
       ?_, ?_⟩
     · unfold outcomesU engineStepsU createRedex
-      rw [step_ctx_create (Decomp.root (Redex.create hlib)) hsz hlib M.tagDefs σ
+      rw [step_ctx_create (Decomp.root (Redex.create)) hsz M.tagDefs σ
         M.file M.extern M.tid M.parent (M.thread _ ρ) rfl]
       rfl
     · refine .refused (dischargeStep_create_refusal (hirr ▸ hmem)) (fun out hstep => ?_) rfl
@@ -300,22 +300,20 @@ theorem EngineMatchU.refusal_of_stuck {M : MachineCtx} {e : CoreExpr} {ρ : EnvS
 theorem cerberusRound_refused_store (M : MachineCtx) (aid : Nat)
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {lk : Bool}
     {ty : ctype} {pv : CerbMem.PointerValue} {cv : value} {mo : memory_order}
-    (hlib : CerbLocation.isLibraryLocation loc = false)
     (ρ : EnvStack) (σ : Mem)
     (hstuck : ∀ c', ¬ Step M (storeRedex loc ann lk ty pv cv mo, ρ, σ) c') :
     ∃ o, o.isRefusal ∧ outcomesU M aid (storeRedex loc ann lk ty pv cv mo) ρ σ = [o] := by
-  obtain ⟨o, ho, hm⟩ := engine_complete_storeU M aid hlib ρ σ
+  obtain ⟨o, ho, hm⟩ := engine_complete_storeU M aid ρ σ
   exact ⟨o, hm.refusal_of_stuck rfl hstuck, ho⟩
 
 /-- The refusal classification at a LOAD redex. -/
 theorem cerberusRound_refused_load (M : MachineCtx) (aid : Nat)
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
     {pv : CerbMem.PointerValue} {mo : memory_order}
-    (hlib : CerbLocation.isLibraryLocation loc = false)
     (ρ : EnvStack) (σ : Mem)
     (hstuck : ∀ c', ¬ Step M (loadRedex loc ann ty pv mo, ρ, σ) c') :
     ∃ o, o.isRefusal ∧ outcomesU M aid (loadRedex loc ann ty pv mo) ρ σ = [o] := by
-  obtain ⟨o, ho, hm⟩ := engine_complete_loadU M aid hlib ρ σ
+  obtain ⟨o, ho, hm⟩ := engine_complete_loadU M aid ρ σ
   exact ⟨o, hm.refusal_of_stuck rfl hstuck, ho⟩
 
 /-- The refusal classification at a CREATE redex (the out-of-memory
@@ -323,11 +321,10 @@ theorem cerberusRound_refused_load (M : MachineCtx) (aid : Nat)
 theorem cerberusRound_refused_create (M : MachineCtx) (aid : Nat)
     {loc : CerbLocation.Loc} {ann : core_run_annotation}
     {align : CerbMem.IntegerValue} {ty : ctype} {pref : prefix0}
-    (hlib : CerbLocation.isLibraryLocation loc = false)
     (ρ : EnvStack) (σ : Mem)
     (hstuck : ∀ c', ¬ Step M (createRedex loc ann align ty pref, ρ, σ) c') :
     ∃ o, o.isRefusal ∧ outcomesU M aid (createRedex loc ann align ty pref) ρ σ = [o] := by
-  obtain ⟨o, ho, hm⟩ := engine_complete_createU M aid hlib ρ σ
+  obtain ⟨o, ho, hm⟩ := engine_complete_createU M aid ρ σ
   exact ⟨o, hm.refusal_of_stuck rfl hstuck, ho⟩
 
 /-- The refusal classification at a value-scrutinee CASE redex (the

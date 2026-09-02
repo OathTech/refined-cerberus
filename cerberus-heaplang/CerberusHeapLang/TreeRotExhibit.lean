@@ -522,22 +522,21 @@ def trProg (loc : CerbLocation.Loc) (ann : core_run_annotation)
     unified cone. ZERO new constructors. -/
 theorem trProg_frag (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (mo : memory_order) (xbty ybty bbty ubty : core_base_type)
-    (px : CerbMem.PointerValue)
-    (hlib : CerbLocation.isLibraryLocation loc = false) :
+    (px : CerbMem.PointerValue) :
     Frag (trProg loc ann mo xbty ybty bbty ubty px) := by
   refine .sseq_sym (.val_pure _)
     (.sseq_spec
-      (.load_op hlib rfl
+      (.load_op rfl
         (.arrayShift [] longTy (.sym _ _) (.val _ _))
         (by rw [show peDepth (trShift1 trXSym) = 2 from rfl,
           show lemDefaultFuel = 999999 + 1 from rfl]; omega))
       (.sseq_spec
-        (.load_op hlib rfl
+        (.load_op rfl
           (.arrayShift [] longTy (.sym _ _) (.val _ _))
           (by rw [show peDepth (trShift2 trYSym) = 2 from rfl,
             show lemDefaultFuel = 999999 + 1 from rfl]; omega))
         (.sseq
-          (.store_op hlib rfl
+          (.store_op rfl
             (.arrayShift [] longTy (.sym _ _) (.val _ _)) (.sym _ _)
             (by rw [show peDepth (trShift1 trXSym) = 2 from rfl,
               show lemDefaultFuel = 999999 + 1 from rfl]; omega)
@@ -545,7 +544,7 @@ theorem trProg_frag (loc : CerbLocation.Loc) (ann : core_run_annotation)
                 (PEsym trBSym)) = 1 from rfl,
               show lemDefaultFuel = 999999 + 1 from rfl]; omega))
           (.sseq
-            (.store_op hlib rfl
+            (.store_op rfl
               (.arrayShift [] longTy (.sym _ _) (.val _ _)) (.sym _ _)
               (by rw [show peDepth (trShift2 trYSym) = 2 from rfl,
                 show lemDefaultFuel = 999999 + 1 from rfl]; omega)
@@ -1156,7 +1155,6 @@ theorem tree_rotate_certified (sbty : core_base_type)
     (m₀ : CellMap)
     (hseed : SeedTree m₀ px (.node idx vx (.node idy vy ta tb) tc))
     (R : CellMap) (hR : m₀ ##ₘ R)
-    (hlib : CerbLocation.isLibraryLocation loc = false)
     (σ₀ : Mem) (hcoh : Sat fmapEmpty σ₀ (union m₀ R))
     (n : Nat) (aids : Nat → Nat) :
     let prog := trProg loc ann mo xbty ybty bbty ubty px
@@ -1174,7 +1172,7 @@ theorem tree_rotate_certified (sbty : core_base_type)
   have h := engine_adequacyU (GF := SpikeGF) (M := spikeCtx) spikeCtx_wf
     spikeCtx_labels_frag spikeCtx_labels_pot
     prog fmapEmpty [] σ₀ (union m₀ R)
-    (trProg_frag loc ann mo xbty ybty bbty ubty px hlib)
+    (trProg_frag loc ann mo xbty ybty bbty ubty px)
     (by rw [show pot prog = 7 from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega)
     hcoh
     (fun v σ' => ∃ Q : CellMap, (∃ p' : CerbMem.PointerValue,
@@ -1427,7 +1425,6 @@ theorem tree_rotate_certified_total (idx idy vx vy : Int)
     (m₀ : CellMap)
     (hseed : SeedTree m₀ px (.node idx vx (.node idy vy ta tb) tc))
     (R : CellMap) (hR : m₀ ##ₘ R)
-    (hlib : CerbLocation.isLibraryLocation loc = false)
     (σ₀ : Mem) (hcoh : Sat fmapEmpty σ₀ (union m₀ R)) (aids : Nat → Nat) :
     ∃ (py : CerbMem.PointerValue) (Q : CellMap) (σ' : Mem),
       driveU spikeCtx aids 19
@@ -1444,7 +1441,7 @@ theorem tree_rotate_certified_total (idx idy vx vy : Int)
       (fun _ _ _ _ => iprop(False))
       (trProg loc ann mo xbty ybty bbty ubty px)
       fmapEmpty [] σ₀ (union m₀ R)
-      (trProg_frag loc ann mo xbty ybty bbty ubty px hlib)
+      (trProg_frag loc ann mo xbty ybty bbty ubty px)
       (trProg_pot loc ann mo xbty ybty bbty ubty px)
       hcoh
       (fun v σ' => ∃ Q : CellMap, (∃ p' : CerbMem.PointerValue,

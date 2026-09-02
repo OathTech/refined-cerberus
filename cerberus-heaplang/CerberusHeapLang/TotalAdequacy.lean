@@ -79,9 +79,9 @@ theorem Frag.stateInert_step {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
         lookupLabel M.labels l = some (params, cont) ∧ e' = cont) := by
   induction hf generalizing e' ρ' σ' with
   | val_pure v => exact (Step.val_elim (w := .pure v) hs).elim
-  | store hlib => simp [stateInert, storeRedex] at hin
-  | load hlib => simp [stateInert, loadRedex] at hin
-  | create hlib => simp [stateInert, createRedex] at hin
+  | store => simp [stateInert, storeRedex] at hin
+  | load => simp [stateInert, loadRedex] at hin
+  | create => simp [stateInert, createRedex] at hin
   | sseq hf1 hf2 ih1 ih2 =>
     obtain ⟨hin1, hin2⟩ : stateInert _ = true ∧ stateInert _ = true := by
       simpa [stateInert, Bool.and_eq_true] using hin
@@ -237,7 +237,7 @@ theorem Frag.stateInert_step {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
       simpa [Prod.mk.injEq] using hout
     subst h1
     exact ⟨h3, .inl rfl⟩
-  | load_op hlib hnv2 hp2 hd2 => simp [stateInert, loadOpRedex] at hin
+  | load_op hnv2 hp2 hd2 => simp [stateInert, loadOpRedex] at hin
   | sseq_sym hf1 hf2 ih1 ih2 =>
     obtain ⟨hin1, hin2⟩ : stateInert _ = true ∧ stateInert _ = true := by
       simpa [stateInert, Bool.and_eq_true] using hin
@@ -271,7 +271,7 @@ theorem Frag.stateInert_step {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
       exact ⟨h3, .inl hin2⟩
   | memop_vals v1 v2 => simp [stateInert, memopPtrEqVals, memopRedex] at hin
   | memop_op hnv hp1 hp2 hpd1 hpd2 => simp [stateInert, memopRedex] at hin
-  | store_op hlib hnv hp2 hp3 hpd2 hpd3 =>
+  | store_op hnv hp2 hp3 hpd2 hpd3 =>
     simp [stateInert, storeOpRedex] at hin
   | case_value hbr hbsz =>
     simp [stateInert, caseRedex] at hin
