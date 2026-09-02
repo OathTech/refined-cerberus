@@ -123,7 +123,14 @@ def trioExports : List Name := [
   ``CerberusHeapLang.cellPtr_arrayShift, ``CerberusHeapLang.wps_fupd,
   ``CerberusHeapLang.cellOwn_readout, ``CerberusHeapLang.pointsToCell_readout,
   ``CerberusHeapLang.struct_wps_views, ``CerberusHeapLang.struct_x_read_shared_wps,
-  ``CerberusHeapLang.cell_read_shared_wps, ``CerberusHeapLang.struct_x_read_persist_wps]
+  ``CerberusHeapLang.cell_read_shared_wps, ``CerberusHeapLang.struct_x_read_persist_wps,
+  -- alloc arc P4.2: statement-level framing at both strata (R-05) and
+  -- the list/tree arbitrary-frame theorems DERIVED from unframed bodies
+  ``CerberusHeapLang.wps_frame_labels, ``CerberusHeapLang.blockSpecs_frame,
+  ``CerberusHeapLang.wps_sound_frame, ``CerberusHeapLang.wpt_frame_labels,
+  ``CerberusHeapLang.blockSpecsT_frame, ``CerberusHeapLang.wpt_frame,
+  ``CerberusHeapLang.lr_wps_frame, ``CerberusHeapLang.lr_wpt_frame,
+  ``CerberusHeapLang.tree_rotate_wps_frame, ``CerberusHeapLang.tree_rotate_wpt_frame]
 
 def sortedNames (ns : Array Name) : Array String :=
   (ns.map (·.toString)).qsort (· < ·)

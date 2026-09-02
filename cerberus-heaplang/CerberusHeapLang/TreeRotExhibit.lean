@@ -853,27 +853,27 @@ variable (loc : CerbLocation.Loc) (ann : core_run_annotation)
   (mo : memory_order) (xbty ybty bbty ubty : core_base_type)
 
 /-- The rotation postcondition: the delivered value is the left
-    child's pointer, now heading the rotated tree, with the frame
-    returned. -/
-abbrev trPost (t' : NodeTree) (RF : IProp GF) :
+    child's pointer, now heading the rotated tree. UNFRAMED (alloc arc
+    P4.2): the frame is added by the generic frame rule
+    (`tree_rotate_wps_frame`). -/
+abbrev trPost (t' : NodeTree) :
     SpikeVal → EnvStack → IProp GF := fun w _ =>
   iprop(∃ p' : CerbMem.PointerValue, ⌜w.val = ptrVal p'⌝ ∗
-    isTree p' t' ∗ RF)
+    isTree p' t')
 
 /-- The rotation at the statement layer:
-    `{ isTree px (node x vx (node y vy a b) c) ∗ RF }
+    `{ isTree px (node x vx (node y vy a b) c) }
        rotate-right
-     { ret py. isTree py (node y vy a (node x vx b c)) ∗ RF }`. -/
-theorem tree_rotate_wps (RF : IProp GF)
+     { ret py. isTree py (node y vy a (node x vx b c)) }`. -/
+theorem tree_rotate_wps
     (idx idy vx vy : Int) (ta tb tc : NodeTree)
     (px : CerbMem.PointerValue) :
-    iprop(isTree (GF := GF) px
-        (.node idx vx (.node idy vy ta tb) tc) ∗ RF) ⊢
+    isTree (GF := GF) px (.node idx vx (.node idy vy ta tb) tc) ⊢
       wps spikeCtx Ls
-        (trPost (.node idy vy ta (.node idx vx tb tc)) RF)
+        (trPost (.node idy vy ta (.node idx vx tb tc)))
         (trProg loc ann mo xbty ybty bbty ubty px)
         [fmapEmpty] := by
-  iintro ⟨HX, HF⟩
+  iintro HX
   rw [isTree_node]
   icases HX with ⟨%aX, %qL, %qR, %bsx, %hfx, HptX, HY, Hc⟩
   obtain ⟨rfl, h0x, h1x, hlenx, hvalx, hLx, hRx⟩ := hfx
@@ -990,7 +990,6 @@ theorem tree_rotate_wps (RF : IProp GF)
   isplit
   · ipureintro
     rfl
-  isplitr [HF]
   · -- isTree (cellPtr idy aY) (node idy vy ta (node idx vx tb tc))
     iapply isTree_node_intro idy aY qa (cellPtr idx aX)
       (spliceBytes 16 (CerbMem.memValueToBytes spikeCtx.tagDefs []
@@ -1038,12 +1037,27 @@ theorem tree_rotate_wps (RF : IProp GF)
       isplitl [Hb]
       · iexact Hb
       · iexact Hc
-  · iexact HF
 
-/-- Vacuous block specifications (straight-line profile). -/
-theorem tr_blockSpecs (t' : NodeTree) (RF : IProp GF) :
-    ⊢ blockSpecs (GF := GF) spikeCtx (fun _ _ _ => iprop(False))
-      (trPost t' RF) :=
+/-- THE ARBITRARY-FRAME FORM, by the generic frame rule (alloc arc
+    P4.2): `{ isTree px … ∗ RF } rotate-right { ret py. isTree py … ∗
+    RF }` — straight-line, so the value-channel frame `wps_frame`
+    suffices (no label is ever jumped to). -/
+theorem tree_rotate_wps_frame (RF : IProp GF)
+    (idx idy vx vy : Int) (ta tb tc : NodeTree)
+    (px : CerbMem.PointerValue) :
+    iprop(isTree (GF := GF) px
+        (.node idx vx (.node idy vy ta tb) tc) ∗ RF) ⊢
+      wps spikeCtx Ls
+        (fun w ρ' => iprop(trPost (.node idy vy ta (.node idx vx tb tc)) w ρ' ∗ RF))
+        (trProg loc ann mo xbty ybty bbty ubty px)
+        [fmapEmpty] :=
+  (BI.sep_mono (tree_rotate_wps (Ls := Ls) loc ann mo xbty ybty bbty ubty
+    idx idy vx vy ta tb tc px) .rfl).trans (wps_frame _ _)
+
+/-- Vacuous block specifications (straight-line profile) — at ANY
+    postcondition. -/
+theorem tr_blockSpecs (Ψ : SpikeVal → EnvStack → IProp GF) :
+    ⊢ blockSpecs (GF := GF) spikeCtx (fun _ _ _ => iprop(False)) Ψ :=
   blockSpecs_intro fun l _ _ _ _ _ hl => (spikeCtx_labels_none l hl).elim
 
 end TrIris
@@ -1062,12 +1076,12 @@ variable (loc : CerbLocation.Loc) (ann : core_run_annotation)
     state-interpretation opening in this module). -/
 theorem trPost_readout [SpikeGS .hasLC GF] (t' : NodeTree) (R : CellMap) :
     ∀ (w : SpikeVal) (ρ' : EnvStack),
-    trPost (hlc := .hasLC) (GF := GF) t' (lrCellFrame R) w ρ' ⊢
+    iprop(trPost (hlc := .hasLC) (GF := GF) t' w ρ' ∗ lrCellFrame R) ⊢
       readoutPost (fun v σ' => ∃ Q : CellMap,
         (∃ p' : CerbMem.PointerValue, v = ptrVal p' ∧ SeedTree Q p' t') ∧
         Q ##ₘ R ∧ Coh fmapEmpty σ' (union Q R)) w ρ' := by
   intro w ρ'
-  iintro ⟨%p', %hval, HT, HF⟩
+  iintro ⟨⟨%p', %hval, HT⟩, HF⟩
   ihave HC := isTree_to_cells t' p' $$ HT
   icases HC with ⟨%Q, %hQ, HQ⟩
   iapply cells_readout fmapEmpty (fun v Q => ∃ p' : CerbMem.PointerValue,
@@ -1081,7 +1095,9 @@ theorem trPost_readout [SpikeGS .hasLC GF] (t' : NodeTree) (R : CellMap) :
   · iexact HF
 
 /-- The base-WP face (the launch shape `spike_engine_adequacy`
-    consumes). -/
+    consumes) — through THE WHOLE-LOOP FRAME RULE `wps_sound_frame`
+    (alloc arc P4.2): the unframed rotation proof plus the cell frame
+    collapse to the base WP with the frame in the postcondition. -/
 theorem tr_wp_readout [SpikeGS .hasLC GF]
     (idx idy vx vy : Int) (ta tb tc : NodeTree)
     (px : CerbMem.PointerValue) (R : CellMap) :
@@ -1096,13 +1112,11 @@ theorem tr_wp_readout [SpikeGS .hasLC GF]
                 CoreRVal.val w = ptrVal p' ∧
                 SeedTree Q p' (.node idy vy ta (.node idx vx tb tc))) ∧
               Q ##ₘ R ∧ Coh spikeCtx.tagDefs σ' (union Q R)⌝) }} := by
-  refine (tree_rotate_wps (Ls := fun _ _ _ => iprop(False)) loc ann mo
-    xbty ybty bbty ubty (lrCellFrame R) idx idy vx vy ta tb tc px).trans ?_
+  refine (BI.sep_mono (tree_rotate_wps (Ls := fun _ _ _ => iprop(False)) loc ann mo
+    xbty ybty bbty ubty idx idy vx vy ta tb tc px) .rfl).trans ?_
   refine (BI.emp_sep.2.trans (BI.sep_mono
-    ((tr_blockSpecs
-        (NodeTree.node idy vy ta (NodeTree.node idx vx tb tc))
-        (lrCellFrame R)).trans
-      (wps_sound (trProg loc ann mo xbty ybty bbty ubty px) spikeEnv))
+    ((tr_blockSpecs (trPost (NodeTree.node idy vy ta (NodeTree.node idx vx tb tc)))).trans
+      (wps_sound_frame (lrCellFrame R) (trProg loc ann mo xbty ybty bbty ubty px) spikeEnv))
     .rfl)).trans ?_
   refine BI.wand_elim_left.trans ?_
   refine wp_mono fun w => ?_
@@ -1209,17 +1223,17 @@ variable {Ls : LabelSpecT GF}
 variable (loc : CerbLocation.Loc) (ann : core_run_annotation)
   (mo : memory_order) (xbty ybty bbty ubty : core_base_type)
 
-/-- The rotation meets the constant budget 19. -/
-theorem tree_rotate_wpt (RF : IProp GF)
+/-- The rotation meets the constant budget 19 (UNFRAMED; the frame by
+    `tree_rotate_wpt_frame`). -/
+theorem tree_rotate_wpt
     (idx idy vx vy : Int) (ta tb tc : NodeTree)
     (px : CerbMem.PointerValue) :
-    iprop(isTree (GF := GF) px
-        (.node idx vx (.node idy vy ta tb) tc) ∗ RF) ⊢
+    isTree (GF := GF) px (.node idx vx (.node idy vy ta tb) tc) ⊢
       wpt spikeCtx Ls 19
-        (trPost (.node idy vy ta (.node idx vx tb tc)) RF)
+        (trPost (.node idy vy ta (.node idx vx tb tc)))
         (trProg loc ann mo xbty ybty bbty ubty px)
         [fmapEmpty] := by
-  iintro ⟨HX, HF⟩
+  iintro HX
   rw [isTree_node]
   icases HX with ⟨%aX, %qL, %qR, %bsx, %hfx, HptX, HY, Hc⟩
   obtain ⟨rfl, h0x, h1x, hlenx, hvalx, hLx, hRx⟩ := hfx
@@ -1343,7 +1357,6 @@ theorem tree_rotate_wpt (RF : IProp GF)
   isplit
   · ipureintro
     rfl
-  isplitr [HF]
   · iapply isTree_node_intro idy aY qa (cellPtr idx aX)
       (spliceBytes 16 (CerbMem.memValueToBytes spikeCtx.tagDefs []
         (CerbMem.pointerMval treeTy (cellPtr idx aX))).2 bsy)
@@ -1389,7 +1402,20 @@ theorem tree_rotate_wpt (RF : IProp GF)
       isplitl [Hb]
       · iexact Hb
       · iexact Hc
-  · iexact HF
+
+/-- The framed total judgment, by the generic `wpt_frame` (value
+    channel; straight-line). -/
+theorem tree_rotate_wpt_frame (RF : IProp GF)
+    (idx idy vx vy : Int) (ta tb tc : NodeTree)
+    (px : CerbMem.PointerValue) :
+    iprop(isTree (GF := GF) px
+        (.node idx vx (.node idy vy ta tb) tc) ∗ RF) ⊢
+      wpt spikeCtx Ls 19
+        (fun w ρ' => iprop(trPost (.node idy vy ta (.node idx vx tb tc)) w ρ' ∗ RF))
+        (trProg loc ann mo xbty ybty bbty ubty px)
+        [fmapEmpty] :=
+  (BI.sep_mono (tree_rotate_wpt (Ls := Ls) loc ann mo xbty ybty bbty ubty
+    idx idy vx vy ta tb tc px) .rfl).trans (wpt_frame RF _ _ _)
 
 end TrTotal
 
@@ -1448,7 +1474,7 @@ theorem tree_rotate_certified_total (idx idy vx vy : Int)
         refine .trans BI.emp_sep.2 (BI.sep_mono ?_ ?_)
         · exact (blockSpecsT_intro fun l _ _ _ _ _ _ hl =>
             (spikeCtx_labels_none l hl).elim)
-        · exact (tree_rotate_wpt (Ls := fun _ _ _ _ => iprop(False))
+        · exact (tree_rotate_wpt_frame (Ls := fun _ _ _ _ => iprop(False))
               loc ann mo xbty ybty bbty ubty (lrCellFrame R)
               idx idy vx vy ta tb tc px).trans
             (wpt_mono (trPost_readout

@@ -386,6 +386,117 @@ theorem wpt_mono_Ls {Ls₁ Ls₂ : LabelSpecT GF}
         imodintro
         iapply IH (r.e) (r.ρ) $$ H
 
+/-! ## Statement-level framing at the total stratum (alloc arc P4.2,
+R-05): the frame rides through the value exit and every back edge by
+framing the variant-indexed label context pointwise (Wps.lean,
+"Statement-level framing"). -/
+
+/-- Framing of a variant-indexed label context. -/
+abbrev frameLsT (R : IProp GF) (Ls : LabelSpecT GF) : LabelSpecT GF :=
+  fun l m vs ρ => iprop(Ls l m vs ρ ∗ R)
+
+/-- THE TOTAL STATEMENT FRAME RULE (labels included): induction on the
+    budget, clause by clause — the value clause keeps its cost bound,
+    the jump clause keeps its variant decrease. -/
+theorem wpt_frame_labels {Ψ : SpikeVal → EnvStack → IProp GF} (R : IProp GF)
+    (k : Nat) (e : CoreExpr) (ρ : EnvStack) :
+    wpt M Ls k Ψ e ρ ⊢
+      iprop(R -∗ wpt M (frameLsT R Ls) k (fun w ρ' => iprop(Ψ w ρ' ∗ R)) e ρ) := by
+  induction k generalizing e ρ with
+  | zero =>
+    cases htv : toVal e with
+    | some w =>
+      rw [wpt_val_eq (Ls := Ls) 0 htv, wpt_val_eq (Ls := frameLsT R Ls) 0 htv]
+      iintro ⟨%hc, H⟩ HR
+      isplit
+      · ipureintro; exact hc
+      imod H with H
+      imodintro
+      isplitl [H]
+      · iexact H
+      · iexact HR
+    | none =>
+      cases hjr : jumpRedex? e with
+      | some lp =>
+        obtain ⟨l, pes⟩ := lp
+        rw [wpt_jump_eq (Ls := Ls) 0 htv hjr,
+          wpt_jump_eq (Ls := frameLsT R Ls) 0 htv hjr]
+        iintro H HR
+        imod H with ⟨%params, %cont, %vs, %ev0, %evs, %m, %h1, %h2, %h3,
+          %h4, HLs⟩
+        imodintro
+        iexists params, cont, vs, ev0, evs, m
+        isplit
+        · ipureintro; exact h1
+        isplit
+        · ipureintro; exact h2
+        isplit
+        · ipureintro; exact h3
+        isplit
+        · ipureintro; exact h4
+        isplitl [HLs]
+        · iexact HLs
+        · iexact HR
+      | none =>
+        rw [wpt_zero_step_eq (Ls := Ls) htv hjr,
+          wpt_zero_step_eq (Ls := frameLsT R Ls) htv hjr]
+        iintro %h -
+        exact h.elim
+  | succ m IH =>
+    cases htv : toVal e with
+    | some w =>
+      rw [wpt_val_eq (Ls := Ls) (m + 1) htv, wpt_val_eq (Ls := frameLsT R Ls) (m + 1) htv]
+      iintro ⟨%hc, H⟩ HR
+      isplit
+      · ipureintro; exact hc
+      imod H with H
+      imodintro
+      isplitl [H]
+      · iexact H
+      · iexact HR
+    | none =>
+      cases hjr : jumpRedex? e with
+      | some lp =>
+        obtain ⟨l, pes⟩ := lp
+        rw [wpt_jump_eq (Ls := Ls) (m + 1) htv hjr,
+          wpt_jump_eq (Ls := frameLsT R Ls) (m + 1) htv hjr]
+        iintro H HR
+        imod H with ⟨%params, %cont, %vs, %ev0, %evs, %m', %h1, %h2, %h3,
+          %h4, HLs⟩
+        imodintro
+        iexists params, cont, vs, ev0, evs, m'
+        isplit
+        · ipureintro; exact h1
+        isplit
+        · ipureintro; exact h2
+        isplit
+        · ipureintro; exact h3
+        isplit
+        · ipureintro; exact h4
+        isplitl [HLs]
+        · iexact HLs
+        · iexact HR
+      | none =>
+        rw [wpt_step_eq (Ls := Ls) m htv hjr, wpt_step_eq (Ls := frameLsT R Ls) m htv hjr]
+        iintro H HR %σ₁ %ns %obs %nt Hσ
+        imod H $$ %σ₁ %ns %obs %nt Hσ with ⟨$, H⟩
+        imodintro
+        iintro %r %σ₂ %eₜ %Hstep
+        imod H $$ %r %σ₂ %eₜ %Hstep with ⟨$, H⟩
+        imodintro
+        iapply IH (r.e) (r.ρ) $$ H HR
+
+/-- The value-channel frame at a FIXED label context (derived: frame
+    the labels, then drop the frame from them — the total analogue of
+    `wps_frame`; what a straight-line client needs). -/
+theorem wpt_frame {Ψ : SpikeVal → EnvStack → IProp GF} (R : IProp GF)
+    (k : Nat) (e : CoreExpr) (ρ : EnvStack) :
+    iprop(wpt M Ls k Ψ e ρ ∗ R) ⊢
+      wpt M Ls k (fun w ρ' => iprop(Ψ w ρ' ∗ R)) e ρ := by
+  iintro ⟨H, HR⟩
+  iapply wpt_mono_Ls (Ls₁ := frameLsT R Ls) (fun l m vs ρ' => BI.sep_elim_left) k e ρ
+  iapply wpt_frame_labels R k e ρ $$ H HR
+
 /-- Value rule (delivery cost within budget). -/
 theorem wpt_ofVal {Ψ : SpikeVal → EnvStack → IProp GF} (w : SpikeVal)
     (ρ : EnvStack) {k : Nat} (hk : deliveryCost w ≤ k) :
@@ -2125,6 +2236,16 @@ theorem blockSpecsT_mono {Ψ₁ Ψ₂ : SpikeVal → EnvStack → IProp GF}
   iintro %l %params %cont %vs %ev0 %evs %m %hQ HLs
   iapply wpt_mono h m cont (bindArgs params vs (ev0 :: evs))
   iapply HB $$ %l %params %cont %vs %ev0 %evs %m %hQ HLs
+
+/-- FRAMING THE TOTAL BLOCK SPECIFICATIONS. -/
+theorem blockSpecsT_frame {Ψ : SpikeVal → EnvStack → IProp GF} (R : IProp GF) :
+    blockSpecsT (GF := GF) M Ls Ψ ⊢
+      blockSpecsT M (frameLsT R Ls) (fun w ρ' => iprop(Ψ w ρ' ∗ R)) := by
+  iintro #HB
+  imodintro
+  iintro %l %params %cont %vs %ev0 %evs %m %hQ ⟨HLs, HR⟩
+  ihave HW := HB $$ %l %params %cont %vs %ev0 %evs %m %hQ HLs
+  iapply wpt_frame_labels R m cont (bindArgs params vs (ev0 :: evs)) $$ HW HR
 
 /-- THE COLLAPSE INTO IRIS TOTAL WP (audit F-02, remediation item 1:
     the pinned `TotalWeakestPre` gains its consumer): under the total

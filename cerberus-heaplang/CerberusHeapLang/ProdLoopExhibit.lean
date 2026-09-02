@@ -1024,11 +1024,13 @@ variable {GF : BundledGFunctors} [SpikeGS .hasLC GF]
 
 /-- The production label spec: the GENERIC `lrLsT` at the two-node
     list `[(i₁,1),(i₂,2)]`, the ids existential (engine-picked, bound
-    by the whole-program derivation's create continuations). -/
+    by the whole-program derivation's create continuations), framed by
+    the (empty) cell frame through the generic `frameLsT` (alloc arc
+    P4.2 — the invariant itself is unframed). -/
 abbrev lrProdLsT : LabelSpecT GF := fun l m vs ρ =>
   iprop(∃ i₁ i₂ : Int,
-    lrLsT [((i₁ : Int), (1 : Int)), (i₂, 2)]
-      (lrCellFrame (∅ : CellMap)) l m vs ρ)
+    frameLsT (lrCellFrame (∅ : CellMap)) (lrLsT [((i₁ : Int), (1 : Int)), (i₂, 2)])
+      l m vs ρ)
 
 variable (ra : core_run_annotation) (mo : memory_order)
   (pbty cbty bbty nbty ubty : core_base_type)
@@ -1050,7 +1052,7 @@ theorem lrProd_blockSpecsT :
   obtain ⟨rfl, rfl⟩ := lrQ_inv loc0 empty_annotation ra mo pbty cbty bbty
     nbty ubty hl
   iintro ⟨%i₁, %i₂, HL⟩
-  icases HL with ⟨%revd, %rest', %pPrev, %pCur, %f, %renv, %hpure, HP, HC, HF⟩
+  icases HL with ⟨⟨%revd, %rest', %pPrev, %pCur, %f, %renv, %hpure, HP, HC⟩, HF⟩
   obtain ⟨rfl, hxs, rfl, hρ, hf⟩ := hpure
   obtain ⟨rfl, rfl⟩ : f = ev0 ∧ renv = evs := by
     have h1 := congrArg (fun l => l.head?) hρ
@@ -1064,20 +1066,20 @@ theorem lrProd_blockSpecsT :
       (readoutPost_mono (fun v σ' hv => ⟨i₁, i₂, hv⟩) w ρ'))
     _ _ _
   iapply wpt_mono_Ls
-    (Ls₁ := lrLsT [((i₁ : Int), (1 : Int)), (i₂, 2)]
-      (lrCellFrame (∅ : CellMap)))
+    (Ls₁ := frameLsT (lrCellFrame (∅ : CellMap))
+      (lrLsT [((i₁ : Int), (1 : Int)), (i₂, 2)]))
     (fun l' m' vs' ρ' => by
       iintro H
       iexists i₁, i₂
       iexact H)
     _ _ _
-  iapply lr_body_wpt loc0 empty_annotation ra mo pbty cbty bbty nbty ubty
-    [((i₁ : Int), (1 : Int)), (i₂, 2)] (lrCellFrame (∅ : CellMap)) p rs hQ
+  iapply lr_body_wpt_frame loc0 empty_annotation ra mo pbty cbty bbty nbty ubty
+    [((i₁ : Int), (1 : Int)), (i₂, 2)] p rs hQ (lrCellFrame (∅ : CellMap))
     revd rest' pPrev pCur f renv hf hxs
-  isplitl [HP]
-  · iexact HP
-  isplitl [HC]
-  · iexact HC
+  isplitl [HP HC]
+  · isplitl [HP]
+    · iexact HP
+    · iexact HC
   · iexact HF
 
 /-- THE WHOLE PROGRAM at the total judgment, from the abstract
@@ -1288,28 +1290,30 @@ theorem lrProd_wpt (bty sbty : core_base_type)
           (ptrVal (cellPtr i₂ a₂)) evs)
     (by omega)
   iexists i₁, i₂
-  iexists ([] : List (Int × Int)), [((i₁ : Int), (1 : Int)), (i₂, 2)],
-    nullNode, (cellPtr i₁ a₁),
-    (lrPFrame (ptrVal (cellPtr i₁ a₁)) (ptrVal (cellPtr i₂ a₂)) ev0), evs
-  isplit
-  · ipureintro
-    refine ⟨rfl, by simp, rfl, rfl, lrPFrame_symFrame hf _ _⟩
-  isplitr [Hcell₁ Hcell₂]
-  · -- isList NULL [] for prev
-    exact isList_nil_intro
+  -- the framed label context (alloc arc P4.2): the invariant, then
+  -- the (empty) frame
   isplitl [Hcell₁ Hcell₂]
-  · -- isList (node 1) [(i₁,1),(i₂,2)]: the built chain, with the
-    -- node-WF bounds from the PUBLIC create rule's export
-    iapply isList_cons_intro i₁ a₁ (cellPtr i₂ a₂) (lrBuilt1 i₂ a₂) 1
-      [(i₂, 2)] hb₁.1 hb₁.2 (lrBuilt1_len i₂ a₂) (lrBuilt1_valDec i₂ a₂)
-      (lrBuilt1_nextDec i₂ a₂ hb₂.1 hb₂.2)
-    isplitl [Hcell₁]
-    · iexact Hcell₁
-    iapply isList_cons_intro i₂ a₂ nullNode lrBuilt2 2 [] hb₂.1 hb₂.2
-      lrBuilt2_len lrBuilt2_valDec lrBuilt2_nextDec
-    isplitl [Hcell₂]
-    · iexact Hcell₂
-    · exact isList_nil_intro
+  · iexists ([] : List (Int × Int)), [((i₁ : Int), (1 : Int)), (i₂, 2)],
+      nullNode, (cellPtr i₁ a₁),
+      (lrPFrame (ptrVal (cellPtr i₁ a₁)) (ptrVal (cellPtr i₂ a₂)) ev0), evs
+    isplit
+    · ipureintro
+      refine ⟨rfl, by simp, rfl, rfl, lrPFrame_symFrame hf _ _⟩
+    isplitr [Hcell₁ Hcell₂]
+    · -- isList NULL [] for prev
+      exact isList_nil_intro
+    · -- isList (node 1) [(i₁,1),(i₂,2)]: the built chain, with the
+      -- node-WF bounds from the PUBLIC create rule's export
+      iapply isList_cons_intro i₁ a₁ (cellPtr i₂ a₂) (lrBuilt1 i₂ a₂) 1
+        [(i₂, 2)] hb₁.1 hb₁.2 (lrBuilt1_len i₂ a₂) (lrBuilt1_valDec i₂ a₂)
+        (lrBuilt1_nextDec i₂ a₂ hb₂.1 hb₂.2)
+      isplitl [Hcell₁]
+      · iexact Hcell₁
+      iapply isList_cons_intro i₂ a₂ nullNode lrBuilt2 2 [] hb₂.1 hb₂.2
+        lrBuilt2_len lrBuilt2_valDec lrBuilt2_nextDec
+      isplitl [Hcell₂]
+      · iexact Hcell₂
+      · exact isList_nil_intro
   · -- the empty frame
     iapply (BigSepM.bigSepM_empty_intro
       (P := (BIBase.emp : IProp GF))

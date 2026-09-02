@@ -334,6 +334,71 @@ theorem wps_frame {Ψ : SpikeVal → EnvStack → IProp GF} {R : IProp GF}
   · iexact HΨ
   · iexact HR
 
+/-! ## Statement-level framing (alloc arc P4.2 — the R-05 closure)
+
+The frame rule of the statement logic, in Reynolds/O'Hearn form: a
+frame `R` rides along the WHOLE statement — through the value exit
+AND across every back edge — by framing the label context pointwise.
+`wps_frame` above frames the value channel only (the frame is
+dropped at a jump); with `frameLs` the frame is carried by the label
+preconditions, so nothing is lost. Loop clients state their
+invariants UNFRAMED and obtain the arbitrary-frame theorems from
+these rules (ListRevExhibit, TreeRotExhibit). -/
+
+/-- Framing of a label context: every label precondition gains the
+    frame `R`. -/
+abbrev frameLs (R : IProp GF) (Ls : LabelSpec GF) : LabelSpec GF :=
+  fun l vs ρ => iprop(Ls l vs ρ ∗ R)
+
+/-- THE STATEMENT FRAME RULE (labels included): `wps M Ls Ψ e ρ ∗ R ⊢
+    wps M (frameLs R Ls) (Ψ ∗ R) e ρ`. Value exit: the frame joins the
+    postcondition; jump: the frame joins the label precondition (this
+    is exactly what `frameLs` is for); step: Löb. -/
+theorem wps_frame_labels {Ψ : SpikeVal → EnvStack → IProp GF} (R : IProp GF)
+    (e : CoreExpr) (ρ : EnvStack) :
+    wps M Ls Ψ e ρ ⊢
+      iprop(R -∗ wps M (frameLs R Ls) (fun w ρ' => iprop(Ψ w ρ' ∗ R)) e ρ) := by
+  iloeb as IH generalizing %e %ρ
+  cases htv : toVal e with
+  | some w =>
+    rw [wps_unfold.to_eq, wps_unfold.to_eq]
+    simp only [wps.pre, htv]
+    iintro H HR
+    imod H with H
+    imodintro
+    isplitl [H]
+    · iexact H
+    · iexact HR
+  | none =>
+    cases hjr : jumpRedex? e with
+    | some lp =>
+      rw [wps_unfold.to_eq, wps_unfold.to_eq]
+      simp only [wps.pre, htv, hjr]
+      iintro H HR
+      imod H with ⟨%params, %cont, %vs, %ev0, %evs, %h1, %h2, %h3, HLs⟩
+      imodintro
+      iexists params, cont, vs, ev0, evs
+      isplit
+      · ipureintro; exact h1
+      isplit
+      · ipureintro; exact h2
+      isplit
+      · ipureintro; exact h3
+      isplitl [HLs]
+      · iexact HLs
+      · iexact HR
+    | none =>
+      rw [wps_unfold.to_eq, wps_unfold.to_eq]
+      simp only [wps.pre, htv, hjr]
+      iintro H HR %σ₁ %ns %obs %obs' %nt Hσ
+      imod H $$ %σ₁ %ns %obs %obs' %nt Hσ with ⟨$, H⟩
+      imodintro
+      inext
+      iintro %r %σ₂ %eₜ %Hstep Hcred
+      imod H $$ %r %σ₂ %eₜ %Hstep Hcred with ⟨$, H⟩
+      imodintro
+      iapply IH $$ %(r.e) %(r.ρ) H HR
+
 /-! ## The annotation layer at this stratum (the R-i cost, re-paid
 once — the run-time Eannot residue commutes with `wps` exactly as
 with the base WP; proofs mirror Rules.lean's `wp_annot_reindex` /
@@ -2518,6 +2583,19 @@ theorem blockSpecs_intro {Ψ : SpikeVal → EnvStack → IProp GF}
   iintro %l %params %cont %vs %ev0 %evs %hQ HLs
   iapply h l params cont vs ev0 evs hQ $$ HLs
 
+/-- FRAMING THE BLOCK SPECIFICATIONS: block specifications at `Ls`
+    are block specifications at the framed context, with the frame
+    joining the postcondition — the per-label bodies are framed by
+    `wps_frame_labels`. -/
+theorem blockSpecs_frame {Ψ : SpikeVal → EnvStack → IProp GF} (R : IProp GF) :
+    blockSpecs (GF := GF) M Ls Ψ ⊢
+      blockSpecs M (frameLs R Ls) (fun w ρ' => iprop(Ψ w ρ' ∗ R)) := by
+  iintro #HB
+  imodintro
+  iintro %l %params %cont %vs %ev0 %evs %hQ ⟨HLs, HR⟩
+  ihave HW := HB $$ %l %params %cont %vs %ev0 %evs %hQ HLs
+  iapply wps_frame_labels R cont (bindArgs params vs (ev0 :: evs)) $$ HW HR
+
 /-! `blockSpecs_intro_variant` (the invariant+variant-shaped lemma
 that offered smaller-measure block specifications as OPTIONAL
 meta-level hypotheses) is RETIRED (foundations Phase 3, audit F-02:
@@ -2647,6 +2725,23 @@ theorem wps_sound {Ψ : SpikeVal → EnvStack → IProp GF} (e : CoreExpr)
       · subst hnil
         simp only [Algebra.BigOpL.bigOpL_nil]
         itrivial
+
+
+/-- THE WHOLE-LOOP FRAME RULE (derived): under block specifications
+    at `Ls`, a statement WP FRAMED by `R` collapses to the base WP with
+    `R` in the postcondition — `R` crosses every back edge (the labels
+    are framed by `blockSpecs_frame`, the judgment by
+    `wps_frame_labels`, and `wps_sound` runs at the framed context). -/
+theorem wps_sound_frame {Ψ : SpikeVal → EnvStack → IProp GF} (R : IProp GF)
+    (e : CoreExpr) (ρ : EnvStack) :
+    blockSpecs M Ls Ψ ⊢
+      iprop(wps M Ls Ψ e ρ ∗ R -∗
+        WP (⟨e, ρ, M⟩ : CoreRt) @ Stuckness.NotStuck; ⊤
+          {{ w, Ψ w.w w.ρ ∗ R }}) := by
+  iintro #HB ⟨H, HR⟩
+  ihave HW := wps_frame_labels R e ρ $$ H HR
+  ihave HB' := blockSpecs_frame R $$ HB
+  iapply wps_sound e ρ $$ HB' HW
 
 /-! ## Coverage preservation on the REAL fragment (probe §4, now over
 Core): the corpus's two exhibit shapes on the stratified layer, for
