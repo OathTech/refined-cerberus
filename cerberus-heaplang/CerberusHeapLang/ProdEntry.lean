@@ -485,10 +485,9 @@ theorem counter_loop_certified_registration (sup : Nat)
         (procThread mainSym prog [fmapEmpty]) σ₀ = .done v σ' →
       v = Vunit ∧ ∃ bs',
         ((n = 0 ∧ bs' = bs0) ∨ (0 < n ∧ bs' = (sevenBytes fmapEmpty))) ∧
-        ∃ i a, cellPtr idx addr = cellPtr i a ∧
-          CellCoh fmapEmpty σ' i ⟨a, intTy, bs'⟩) := by
+        CellCoh fmapEmpty σ' idx ⟨addr, intTy, bs'⟩) := by
   intro prog rs
-  refine engine_adequacyJ (GF := SpikeGF)
+  obtain ⟨h1, h2, h3⟩ := engine_adequacyJ (GF := SpikeGF)
     (loop_labeledAt_production sup loc ann ra mo bty xbty sbty
       (cellPtr idx addr) n)
     (fun l params cont hl => by
@@ -499,24 +498,29 @@ theorem counter_loop_certified_registration (sup : Nat)
     (fun v σ' => v = Vunit ∧ ∃ bs',
       ((n = 0 ∧ bs' = bs0) ∨ (0 < n ∧ bs' = (sevenBytes fmapEmpty))) ∧
       ∃ i a, cellPtr idx addr = cellPtr i a ∧ CellCoh fmapEmpty σ' i ⟨a, intTy, bs'⟩)
-    ?_ nsteps aids
+    (by
+      intro inst
+      refine .trans ?_ (loop_wp_readout loc ann ra mo bty xbty (cellPtr idx addr)
+        n bs0 mainSym rs
+        (loop_labeledAt_production sup loc ann ra mo bty xbty sbty
+          (cellPtr idx addr) n) hn sbty fmapEmpty symFrame_empty [])
+      refine (BigSepM.bigSepM_singleton).1.trans ?_
+      iintro Hpt
+      iapply (pointsToCell_cellOwn_iff fmapEmpty _ _ _ _).mpr
+      iexists idx, addr
+      isplit
+      · ipureintro; rfl
+      · iexact Hpt)
+    nsteps aids
     (by rw [show esize prog = 4 from rfl]; omega)
     (fun l params cont hl => by
       obtain ⟨-, rfl⟩ := loopQ_inv loc ann ra mo bty xbty _ hl
       rw [show esize (loopBody loc ann ra mo bty (cellPtr idx addr)) = 3
         from rfl]
       omega)
-  intro inst
-  refine .trans ?_ (loop_wp_readout loc ann ra mo bty xbty (cellPtr idx addr)
-    n bs0 mainSym rs
-    (loop_labeledAt_production sup loc ann ra mo bty xbty sbty
-      (cellPtr idx addr) n) hn sbty fmapEmpty symFrame_empty [])
-  refine (BigSepM.bigSepM_singleton).1.trans ?_
-  iintro Hpt
-  iapply (pointsToCell_cellOwn_iff fmapEmpty _ _ _ _).mpr
-  iexists idx, addr
-  isplit
-  · ipureintro; rfl
-  · iexact Hpt
+  refine ⟨h1, h2, fun v σ' hd => ?_⟩
+  obtain ⟨hv, bs', hbs, i, a, heq, hc⟩ := h3 v σ' hd
+  obtain ⟨rfl, rfl⟩ := cellPtr_inj heq
+  exact ⟨hv, bs', hbs, hc⟩
 
 end CerberusHeapLang

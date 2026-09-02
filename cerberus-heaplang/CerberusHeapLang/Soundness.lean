@@ -105,8 +105,7 @@ theorem spikeCtx_thread (e : CoreExpr) (ρ : EnvStack) :
 /-- THE ENGINE ENTRY AT A MACHINE CONTEXT (S1b, the unified
     configuration): one engine step at context `M` — `step_ctx`
     (Core_reduction.lean:484) with every immutable supplied by the
-    context (the generalization of the old frozen-profile entries
-    `engineSteps`/`engineStepsP`, which pinned them). -/
+    context. -/
 def engineStepsU (M : MachineCtx) (e : CoreExpr) (ρ : EnvStack) (σ : Mem) :
     List core_step2 :=
   step_ctx M.tagDefs σ M.file M.extern M.tid (M.parent, M.thread e ρ)
@@ -1939,28 +1938,6 @@ def procThread (p : sym) (e : CoreExpr) (ρ : EnvStack) : thread_state :=
 theorem procCtx_thread (p : sym) (rs : core_run_state) (e : CoreExpr)
     (ρ : EnvStack) : (procCtx p rs).thread e ρ = procThread p e ρ := rfl
 
-/-- One engine step at the jump profile — the `procCtx` instance of
-    the unified entry (the step list reads no run state, so any rs
-    gives the same list; definitionally the old frozen body). -/
-def engineStepsP (p : sym) (e : CoreExpr) (ρ : EnvStack) (σ : Mem) :
-    List core_step2 :=
-  engineStepsU (procCtx p spikeRunState) e ρ σ
-
-theorem engineStepsP_eq (p : sym) (e : CoreExpr) (ρ : EnvStack) (σ : Mem) :
-    engineStepsP p e ρ σ =
-      step_ctx fmapEmpty σ spikeFile fmapEmpty 0 (none, procThread p e ρ) := rfl
-
-/-- ... discharged (the run state is a parameter — Erun reads
-    `labeled` through it): the `procCtx p rs` instance. -/
-def engineOutcomesP (p : sym) (aid : Nat) (rs : core_run_state)
-    (e : CoreExpr) (ρ : EnvStack) (σ : Mem) : List EngineOutcome :=
-  outcomesU (procCtx p rs) aid e ρ σ
-
-theorem engineOutcomesP_eq (p : sym) (aid : Nat) (rs : core_run_state)
-    (e : CoreExpr) (ρ : EnvStack) (σ : Mem) :
-    engineOutcomesP p aid rs e ρ σ =
-      (engineStepsP p e ρ σ).map (dischargeStep (procCtx p rs).tagDefs aid rs σ) := rfl
-
 /-- The Q↔labeled tie (the donor's `⌜Q = rf.f_code⌝`,
     lifting.v:1002): the run state's two-level `labeled` map has
     fiber `Q` at the current procedure. Pure, stated in the engine's
@@ -3365,21 +3342,6 @@ theorem outcomesU_remove_annot (M : MachineCtx) (aid : Nat)
   rw [step_ctx_remove_annot ds v M.tagDefs σ M.file M.extern M.tid M.parent
       (M.thread (ofVal (.annot ds v)) ρ) rfl]
   rfl
-
-/-- The value protocol at the jump profile (PROGRAM-DONE /
-    REMOVE-ANNOT — the strong forms quantify the thread, so the
-    proc-carrying corollaries are instances). -/
-theorem engineOutcomesP_done (p : sym) (aid : Nat) (rs : core_run_state)
-    (v : value) (ρ : EnvStack) (σ : Mem) :
-    engineOutcomesP p aid rs (ofVal (.pure v)) ρ σ = [.done v] :=
-  outcomesU_done (procCtx_wf p rs) aid v ρ σ
-
-theorem engineOutcomesP_remove_annot (p : sym) (aid : Nat)
-    (rs : core_run_state) (ds : List dyn_annotation) (v : value)
-    (ρ : EnvStack) (σ : Mem) :
-    engineOutcomesP p aid rs (ofVal (.annot ds v)) ρ σ =
-      [.next (procThread p (ofVal (.pure v)) ρ) σ] :=
-  outcomesU_remove_annot (procCtx p rs) aid ds v ρ σ
 
 /-- The extended cone is closed under Step, GIVEN the label map's
     own cone membership (`hQf` — the registered continuations are

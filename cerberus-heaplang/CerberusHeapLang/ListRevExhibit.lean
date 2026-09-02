@@ -2075,7 +2075,7 @@ theorem list_reverse_terminates (sbty : core_base_type)
     (ns : List (Int × Int)) (head : CerbMem.PointerValue)
     (m₀ : CellMap) (hseed : SeedChain m₀ head ns)
     (R : CellMap) (hR : m₀ ##ₘ R)
-    (σ₀ : Mem) (hcoh : Sat (procCtx lrProcSym (lrRS loc ann ra mo pbty cbty bbty nbty ubty)).tagDefs σ₀ (Iris.Std.PartialMap.union m₀ R)) :
+    (σ₀ : Mem) (hcoh : Sat fmapEmpty σ₀ (Iris.Std.PartialMap.union m₀ R)) :
     Relation.StronglyNormalizing Language.ErasedStep
       ([(⟨lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head,
           [fmapEmpty],

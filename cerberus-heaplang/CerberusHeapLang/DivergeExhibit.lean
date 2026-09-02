@@ -14,10 +14,11 @@ arguments and no state effect), so it is NOT strongly normalizing
 (`dg_not_normalizing`).
 
 THE UNPROVABILITY, semantic form (`diverge_total_unprovable`): a
-total derivation for this loop — ANY label context, ANY
-postcondition, ANY budget — is FALSE, not merely unprovable: it
-would yield strong normalization through the total adequacy
-(`wpt_strongly_normalizing`), contradicting the self-step.
+total derivation for this loop — from ANY footprint's cell ownership
+(any `m₀` coherent with any memory), at ANY ghost functor list, ANY
+label context, ANY postcondition, ANY budget — is FALSE, not merely
+unprovable: it would yield strong normalization through the total
+adequacy (`wpt_strongly_normalizing`), contradicting the self-step.
 
 WHERE A DIRECT ATTEMPT STICKS (the mandatory decrease doing its
 job): to install the loop via `blockSpecsT`, the body must be
@@ -110,22 +111,25 @@ theorem dg_not_normalizing (ra : core_run_annotation) (σ₀ : Mem) :
   exact not_acc_self hstep
 
 /-- THE NEGATIVE THEOREM: a total derivation for the self-jump loop
-    is FALSE — at any label context, postcondition, and budget
-    (header note: the stuck obligation of a direct attempt is the
-    jump clause's mandatory decrease `∃ m', 1 + m' ≤ m` against a
-    body that must be verified at every claimed variant, including
-    m = 0). -/
-theorem diverge_total_unprovable (ra : core_run_annotation) (σ₀ : Mem)
-    (Ls : ∀ [SpikeGS .hasLC SpikeGF], LabelSpecT SpikeGF)
-    (Ψ : ∀ [SpikeGS .hasLC SpikeGF], SpikeVal → EnvStack → IProp SpikeGF)
+    is FALSE — from the cell ownership of any footprint `m₀` coherent
+    with any memory `σ₀`, at any ghost functor list, label context,
+    postcondition, and budget (header note: the stuck obligation of a
+    direct attempt is the jump clause's mandatory decrease
+    `∃ m', 1 + m' ≤ m` against a body that must be verified at every
+    claimed variant, including m = 0). -/
+theorem diverge_total_unprovable {GF : BundledGFunctors} [SpikeGpreS GF]
+    (ra : core_run_annotation) (σ₀ : Mem) (m₀ : SpikeHeapF SpikeCell)
+    (hcoh : Coh fmapEmpty σ₀ m₀)
+    (Ls : ∀ [SpikeGS .hasLC GF], LabelSpecT GF)
+    (Ψ : ∀ [SpikeGS .hasLC GF], SpikeVal → EnvStack → IProp GF)
     (k : Nat)
-    (hwp : ∀ [SpikeGS .hasLC SpikeGF],
-      ⊢ iprop(blockSpecsT (procCtx dgProcSym (dgRS ra)) Ls Ψ ∗
-        wpt (procCtx dgProcSym (dgRS ra)) Ls k Ψ (dgBody ra) [fmapEmpty])) :
+    (hwp : ∀ [SpikeGS .hasLC GF],
+      iprop(([∗map] i ↦ c ∈ m₀, cellOwn fmapEmpty (hlc := .hasLC) (GF := GF) i (.own 1) c)) ⊢
+        iprop(blockSpecsT (procCtx dgProcSym (dgRS ra)) Ls Ψ ∗
+          wpt (procCtx dgProcSym (dgRS ra)) Ls k Ψ (dgBody ra) [fmapEmpty])) :
     False :=
   dg_not_normalizing ra σ₀
-    (wpt_strongly_normalizing (GF := SpikeGF) Ls Ψ (dgBody ra) [fmapEmpty]
-      σ₀ (∅ : SpikeHeapF SpikeCell) (coh_empty σ₀) k
-      (fun {_} => (BigSepM.bigSepM_empty).1.trans hwp))
+    (wpt_strongly_normalizing (GF := GF) Ls Ψ (dgBody ra) [fmapEmpty]
+      σ₀ m₀ hcoh k hwp)
 
 end CerberusHeapLang

@@ -174,7 +174,13 @@ def trioExports : List Name := [
   -- and the plain-value forms of the whole-cell small axioms
   ``CerberusHeapLang.wps_if, ``CerberusHeapLang.wpt_if,
   ``CerberusHeapLang.wps_store_plain, ``CerberusHeapLang.wps_load_plain,
-  ``CerberusHeapLang.wpt_store_plain, ``CerberusHeapLang.wpt_load_plain]
+  ``CerberusHeapLang.wpt_store_plain, ``CerberusHeapLang.wpt_load_plain,
+  -- QA-2: the four exhibits the README's table lists that had no pin
+  -- (the allocating projection's engine instance and the three local
+  -- allocation consumers)
+  ``CerberusHeapLang.struct_create_store_adequacy,
+  ``CerberusHeapLang.alloc_two_creates_wps, ``CerberusHeapLang.alloc_create_wpt,
+  ``CerberusHeapLang.alloc_create_launch_smoke]
 
 def sortedNames (ns : Array Name) : Array String :=
   (ns.map (·.toString)).qsort (· < ·)

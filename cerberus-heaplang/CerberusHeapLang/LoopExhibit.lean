@@ -442,10 +442,9 @@ theorem counter_loop_certified
         (procThread loopProcSym prog [fmapEmpty]) σ₀ = .done v σ' →
       v = Vunit ∧ ∃ bs',
         ((n = 0 ∧ bs' = bs0) ∨ (0 < n ∧ bs' = (sevenBytes fmapEmpty))) ∧
-        ∃ i a, cellPtr idx addr = cellPtr i a ∧
-          CellCoh fmapEmpty σ' i ⟨a, intTy, bs'⟩) := by
+        CellCoh fmapEmpty σ' idx ⟨addr, intTy, bs'⟩) := by
   intro prog rs
-  refine engine_adequacyJ (GF := SpikeGF)
+  obtain ⟨h1, h2, h3⟩ := engine_adequacyJ (GF := SpikeGF)
     (loopRS_labeledAt loc ann ra mo bty xbty (cellPtr idx addr))
     (fun l params cont hl => by
       obtain ⟨-, rfl⟩ := loopQ_inv loc ann ra mo bty xbty _ hl
@@ -455,25 +454,30 @@ theorem counter_loop_certified
     (fun v σ' => v = Vunit ∧ ∃ bs',
       ((n = 0 ∧ bs' = bs0) ∨ (0 < n ∧ bs' = (sevenBytes fmapEmpty))) ∧
       ∃ i a, cellPtr idx addr = cellPtr i a ∧ CellCoh fmapEmpty σ' i ⟨a, intTy, bs'⟩)
-    ?_ nsteps aids
+    (by
+      intro inst
+      refine .trans ?_ (loop_wp_readout loc ann ra mo bty xbty (cellPtr idx addr)
+        n bs0 loopProcSym rs
+        (loopRS_labeledAt loc ann ra mo bty xbty (cellPtr idx addr)) hn sbty
+        fmapEmpty symFrame_empty [])
+      refine (BigSepM.bigSepM_singleton).1.trans ?_
+      iintro Hpt
+      iapply (pointsToCell_cellOwn_iff fmapEmpty _ _ _ _).mpr
+      iexists idx, addr
+      isplit
+      · ipureintro; rfl
+      · iexact Hpt)
+    nsteps aids
     (by rw [show esize prog = 4 from rfl]; omega)
     (fun l params cont hl => by
       obtain ⟨-, rfl⟩ := loopQ_inv loc ann ra mo bty xbty _ hl
       rw [show esize (loopBody loc ann ra mo bty (cellPtr idx addr)) = 3
         from rfl]
       omega)
-  intro inst
-  refine .trans ?_ (loop_wp_readout loc ann ra mo bty xbty (cellPtr idx addr)
-    n bs0 loopProcSym rs
-    (loopRS_labeledAt loc ann ra mo bty xbty (cellPtr idx addr)) hn sbty
-    fmapEmpty symFrame_empty [])
-  refine (BigSepM.bigSepM_singleton).1.trans ?_
-  iintro Hpt
-  iapply (pointsToCell_cellOwn_iff fmapEmpty _ _ _ _).mpr
-  iexists idx, addr
-  isplit
-  · ipureintro; rfl
-  · iexact Hpt
+  refine ⟨h1, h2, fun v σ' hd => ?_⟩
+  obtain ⟨hv, bs', hbs, i, a, heq, hc⟩ := h3 v σ' hd
+  obtain ⟨rfl, rfl⟩ := cellPtr_inj heq
+  exact ⟨hv, bs', hbs, hc⟩
 
 /-- THE IRRELEVANT-BINDING TEST AT THE ENGINE (R-08): the same
     conclusion when the proc-carrying thread is launched with an entry
@@ -502,10 +506,9 @@ theorem counter_loop_certified_irrelevant_binding
         (procThread loopProcSym prog ρ₀) σ₀ = .done v σ' →
       v = Vunit ∧ ∃ bs',
         ((n = 0 ∧ bs' = bs0) ∨ (0 < n ∧ bs' = (sevenBytes fmapEmpty))) ∧
-        ∃ i a, cellPtr idx addr = cellPtr i a ∧
-          CellCoh fmapEmpty σ' i ⟨a, intTy, bs'⟩) := by
+        CellCoh fmapEmpty σ' idx ⟨addr, intTy, bs'⟩) := by
   intro prog rs ρ₀
-  refine engine_adequacyJ (GF := SpikeGF)
+  obtain ⟨h1, h2, h3⟩ := engine_adequacyJ (GF := SpikeGF)
     (loopRS_labeledAt loc ann ra mo bty xbty (cellPtr idx addr))
     (fun l params cont hl => by
       obtain ⟨-, rfl⟩ := loopQ_inv loc ann ra mo bty xbty _ hl
@@ -515,180 +518,31 @@ theorem counter_loop_certified_irrelevant_binding
     (fun v σ' => v = Vunit ∧ ∃ bs',
       ((n = 0 ∧ bs' = bs0) ∨ (0 < n ∧ bs' = (sevenBytes fmapEmpty))) ∧
       ∃ i a, cellPtr idx addr = cellPtr i a ∧ CellCoh fmapEmpty σ' i ⟨a, intTy, bs'⟩)
-    ?_ nsteps aids
+    (by
+      intro inst
+      refine .trans ?_ (loop_wp_readout loc ann ra mo bty xbty (cellPtr idx addr)
+        n bs0 loopProcSym rs
+        (loopRS_labeledAt loc ann ra mo bty xbty (cellPtr idx addr)) hn sbty
+        (envAdd ySym junk fmapEmpty) (symFrame_empty.add _ _) [])
+      refine (BigSepM.bigSepM_singleton).1.trans ?_
+      iintro Hpt
+      iapply (pointsToCell_cellOwn_iff fmapEmpty _ _ _ _).mpr
+      iexists idx, addr
+      isplit
+      · ipureintro; rfl
+      · iexact Hpt)
+    nsteps aids
     (by rw [show esize prog = 4 from rfl]; omega)
     (fun l params cont hl => by
       obtain ⟨-, rfl⟩ := loopQ_inv loc ann ra mo bty xbty _ hl
       rw [show esize (loopBody loc ann ra mo bty (cellPtr idx addr)) = 3
         from rfl]
       omega)
-  intro inst
-  refine .trans ?_ (loop_wp_readout loc ann ra mo bty xbty (cellPtr idx addr)
-    n bs0 loopProcSym rs
-    (loopRS_labeledAt loc ann ra mo bty xbty (cellPtr idx addr)) hn sbty
-    (envAdd ySym junk fmapEmpty) (symFrame_empty.add _ _) [])
-  refine (BigSepM.bigSepM_singleton).1.trans ?_
-  iintro Hpt
-  iapply (pointsToCell_cellOwn_iff fmapEmpty _ _ _ _).mpr
-  iexists idx, addr
-  isplit
-  · ipureintro; rfl
-  · iexact Hpt
+  refine ⟨h1, h2, fun v σ' hd => ?_⟩
+  obtain ⟨hv, bs', hbs, i, a, heq, hc⟩ := h3 v σ' hd
+  obtain ⟨rfl, rfl⟩ := cellPtr_inj heq
+  exact ⟨hv, bs', hbs, hc⟩
 
 end LoopDrive
-
-/-! ## THE TOTAL LANE (foundations Phase 5 — the counter loop joins
-the total stratum so its PRODUCTION export can ride the total-driven
-driver simulation): the fib pattern with a heap effect — the loop
-body's variant budget is `5·i + 2` (per iteration: guard 1 + store 3
-+ jump 1; exit: guard 1 + delivery 1), the back edge discharges the
-judgment's MANDATORY decrease by arithmetic. -/
-
-section LoopTotal
-
-variable {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
-variable (loc : CerbLocation.Loc) (ann ra : core_run_annotation)
-  (mo : memory_order) (bty xbty : core_base_type)
-  (c : CerbMem.PointerValue) (n : Int) (bs0 : List CerbMem.AbsByte)
-variable (p : sym) (rs : core_run_state)
-  (hQ : LabeledAt rs p (loopQ loc ann ra mo bty xbty c))
-
-/-- The variant-indexed label context: the partial invariant plus the
-    variant pin (the loop body's budget at counter `i`). -/
-abbrev loopLsT : LabelSpecT GF := fun _ m vs ρ =>
-  (iprop(∃ (i : Int) (f : Fmap sym value) (rest : List (Fmap sym value)),
-    ⌜vs = [ivVal i] ∧ 0 ≤ i ∧ i ≤ n ∧ m = 5 * i.toNat + 2 ∧
-      ρ = f :: rest ∧ SymFrame f⌝ ∗
-    ((⌜i = n⌝ ∗ pointsToCell fmapEmpty c (.own 1) intTy bs0) ∨
-     (⌜i < n⌝ ∗ pointsToCell fmapEmpty c (.own 1) intTy (sevenBytes fmapEmpty)))) : IProp GF)
-
-include hQ
-
-/-- The loop body meets its variant budget at any reachable counter
-    frame. -/
-theorem loop_body_wpt (i : Int) (f : Fmap sym value)
-    (rest : List (Fmap sym value)) (hf : SymFrame f)
-    (h0 : 0 ≤ i) (hin : i ≤ n) :
-    iprop(((⌜i = n⌝ ∗ pointsToCell (procCtx p rs).tagDefs (GF := GF) c (.own 1) intTy bs0) ∨
-      (⌜i < n⌝ ∗ pointsToCell (procCtx p rs).tagDefs c (.own 1) intTy (sevenBytes (procCtx p rs).tagDefs)))) ⊢
-      wpt (procCtx p rs) (loopLsT c n bs0)
-        (5 * i.toNat + 2)
-        (loopPost c n bs0) (loopBody loc ann ra mo bty c)
-        (envAdd xSym (ivVal i) f :: rest) := by
-  rw [show (loopBody loc ann ra mo bty c) =
-    Expr [] (Eif guardPe
-      (sseqExpr bty (storeExpr loc ann intTy c sevenVal mo)
-        (Expr [] (Erun ra loopSym [decPe])))
-      (ofVal (.pure Vunit))) from rfl]
-  by_cases hpos : 0 < i
-  · -- guard TRUE: store (3) then jump (1 + the target's budget)
-    rw [show 5 * i.toNat + 2 = (5 * (i - 1).toNat + 6) + 1 by omega]
-    iintro Hcell
-    iapply wpt_if_true [] guardPe _ _ _
-      (by rw [procCtx_extern, guard_eval hf i rest, decide_eq_true hpos]; rfl)
-    rw [show (sseqExpr bty (storeExpr loc ann intTy c sevenVal mo)
-        (Expr [] (Erun ra loopSym [decPe]))) =
-      Expr [] (Esseq (Pattern [] (CaseBase (none, bty)))
-        (storeExpr loc ann intTy c sevenVal mo)
-        (Expr [] (Erun ra loopSym [decPe]))) from rfl,
-      show 5 * (i - 1).toNat + 6 =
-        3 + ((5 * (i - 1).toNat + 2) + 1) by omega]
-    iapply wpt_seq
-    icases Hcell with (⟨%hieq, Hc⟩ | ⟨%hlt, Hc⟩) <;>
-      (iapply wpt_store loc ann intTy c sevenVal mo sevenMval _ _
-        (by omega) seven_encodes (seven_storable _)
-       isplitl [Hc]
-       · iexact Hc
-       iintro %fp Hc
-       iapply wpt_run [] ra loopSym [decPe] _ _ (5 * (i - 1).toNat + 2)
-         (by rw [procCtx_labels hQ]
-             exact loopQ_lookup loc ann ra mo bty xbty c)
-         (dec_eval hf i rest)
-         (by omega)
-       iexists (i - 1), (envAdd xSym (ivVal i) f), rest
-       isplit
-       · ipureintro
-         exact ⟨rfl, by omega, by omega, rfl, rfl, hf.add _ _⟩
-       iright
-       isplit
-       · ipureintro; omega
-       rw [show (sevenBytes (procCtx p rs).tagDefs) = (CerbMem.memValueToBytes (procCtx p rs).tagDefs [] sevenMval).2 from rfl]
-       iexact Hc)
-  · -- guard FALSE: exit with the final cell state (guard + delivery)
-    have hz : i = 0 := by omega
-    subst hz
-    iintro Hcell
-    rw [show 5 * (0 : Int).toNat + 2 = 1 + 1 by omega]
-    iapply wpt_if_false [] guardPe _ _ _
-      (by rw [procCtx_extern, guard_eval hf 0 rest,
-        decide_eq_false hpos]; rfl)
-    iapply wpt_ofVal (.pure Vunit) _ (Nat.le_refl 1)
-    unfold loopPost
-    isplit
-    · ipureintro; rfl
-    icases Hcell with (⟨%hieq, Hc⟩ | ⟨%hlt, Hc⟩)
-    · ileft
-      isplit
-      · ipureintro; omega
-      · iexact Hc
-    · iright
-      isplit
-      · ipureintro; omega
-      · iexact Hc
-
-/-- THE TOTAL BLOCK SPECIFICATION for the counter loop. -/
-theorem loop_blockSpecsT :
-    ⊢ blockSpecsT (GF := GF) (procCtx p rs)
-      (loopLsT c n bs0) (loopPost c n bs0) := by
-  refine blockSpecsT_intro fun l params cont vs ev0 evs m hl => ?_
-  rw [procCtx_labels hQ] at hl
-  obtain ⟨rfl, rfl⟩ := loopQ_inv loc ann ra mo bty xbty c hl
-  iintro ⟨%i, %f, %rest, %hpure, Hcell⟩
-  obtain ⟨rfl, h0, hin, rfl, hρ, hf⟩ := hpure
-  obtain ⟨rfl, rfl⟩ : f = ev0 ∧ rest = evs := by
-    have h1 := congrArg (fun l => l.head?) hρ
-    have h2 := congrArg (fun l => l.tail) hρ
-    simp at h1 h2
-    exact ⟨h1.symm, h2.symm⟩
-  rw [bindArgs_x]
-  iapply loop_body_wpt loc ann ra mo bty xbty c n bs0 p rs hQ i f rest hf
-    h0 hin $$ Hcell
-
-/-- The whole program's total judgment at budget `5·n + 3`, from ANY
-    reachable entry frame over any tail. -/
-theorem loop_wpt (hn : 0 ≤ n) (sbty : core_base_type)
-    (f : Fmap sym value) (hf : SymFrame f) (rest : List (Fmap sym value)) :
-    pointsToCell (procCtx p rs).tagDefs (GF := GF) c (.own 1) intTy bs0 ⊢
-      wpt (procCtx p rs) (loopLsT c n bs0)
-        (5 * n.toNat + 3) (loopPost c n bs0)
-        (loopProg loc ann ra mo bty xbty sbty c n) (f :: rest) := by
-  iintro Hc
-  rw [show (loopProg loc ann ra mo bty xbty sbty c n) =
-    Expr [] (Esave (loopSym, sbty)
-      [(xSym, ((xbty, (none : Option (ctype × pass_by_value_or_pointer))),
-        Pexpr [] () (PEval (ivVal n))))]
-      (loopBody loc ann ra mo bty c)) from rfl,
-    show 5 * n.toNat + 3 = (5 * n.toNat + 2) + 1 by omega]
-  iapply wpt_save_vals [] (loopSym, sbty) _ _ f rest
-    (cvals := [ivVal n]) rfl
-  rw [bindSave_x]
-  iapply loop_body_wpt loc ann ra mo bty xbty c n bs0 p rs hQ n f rest
-    hf hn (by omega)
-  ileft
-  isplit
-  · ipureintro; rfl
-  · iexact Hc
-
-omit hQ in
-/-- The postcondition entails the engine readout (the launch-facing
-    face — the SpikeVal-indexed form of `loop_readout_val`). -/
-theorem loopPost_to_readout :
-    ∀ (w : SpikeVal) (ρ' : EnvStack), loopPost (GF := GF) c n bs0 w ρ' ⊢
-      readoutPost (fun v σ' => v = Vunit ∧ ∃ bs',
-        ((n = 0 ∧ bs' = bs0) ∨ (0 < n ∧ bs' = (sevenBytes fmapEmpty))) ∧
-        ∃ i a, c = cellPtr i a ∧ CellCoh fmapEmpty σ' i ⟨a, intTy, bs'⟩) w ρ' :=
-  fun w ρ' => loop_readout_val c n bs0 (⟨w, ρ', spikeCtx⟩ : CoreRVal)
-
-end LoopTotal
 
 end CerberusHeapLang
