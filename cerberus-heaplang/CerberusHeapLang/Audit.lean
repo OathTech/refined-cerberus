@@ -168,7 +168,12 @@ def trioExports : List Name := [
   ``CerberusHeapLang.wps_save, ``CerberusHeapLang.wpt_save,
   ``CerberusHeapLang.wpt_load, ``CerberusHeapLang.wpt_case_value,
   ``CerberusHeapLang.wpt_wseq, ``CerberusHeapLang.wpt_fupd,
-  ``CerberusHeapLang.wps_mono_Ls, ``CerberusHeapLang.blockSpecs_mono]
+  ``CerberusHeapLang.wps_mono_Ls, ``CerberusHeapLang.blockSpecs_mono,
+  -- QA-1 (M-4): the one conditional rule with the verdict inside the logic,
+  -- and the plain-value forms of the whole-cell small axioms
+  ``CerberusHeapLang.wps_if, ``CerberusHeapLang.wpt_if,
+  ``CerberusHeapLang.wps_store_plain, ``CerberusHeapLang.wps_load_plain,
+  ``CerberusHeapLang.wpt_store_plain, ``CerberusHeapLang.wpt_load_plain]
 
 def sortedNames (ns : Array Name) : Array String :=
   (ns.map (·.toString)).qsort (· < ·)

@@ -1006,73 +1006,70 @@ Esave's valueFromPexprs fast-path, Ecase's value-scrutinee
 selection; each one deterministic engine step, certified per-rule in
 Soundness.lean) -/
 
-/-- Eif, true branch (donor `wps_if`, lifting.v:1256, at the
-    engine's big-step-guard granularity; the pure evaluator premise
-    is certified against `full_eval_pexpr` by the bridge). -/
+/-- THE CONDITIONAL RULE (donor `wps_if`, lifting.v:1256, at the
+    engine's big-step-guard granularity; QA-1/Q4: the guard's verdict
+    is INSIDE THE LOGIC — a pure assertion `⌜evalPexpr … g = some
+    (boolValue b)⌝`, so a guard whose value is known only from Iris-level
+    facts needs no meta-level case split; the pure evaluator premise is
+    certified against `full_eval_pexpr` by the bridge). -/
+theorem wps_if {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
+    (g : generic_pexpr Unit sym) (e2 e3 : CoreExpr) (ρ : EnvStack) (b : Bool) :
+    iprop(⌜evalPexpr M.tagDefs M.extern ρ g = some (boolValue b)⌝ ∗
+      wps M Ls Ψ (bif b then e2 else e3) ρ) ⊢
+      wps M Ls Ψ (Expr a (Eif g e2 e3)) ρ := by
+  rw [(wps_unfold (e := Expr a (Eif g e2 e3))).to_eq]
+  simp only [wps.pre, show toVal (Expr a (Eif g e2 e3)) = none from rfl,
+    show jumpRedex? (Expr a (Eif g e2 e3)) = none from rfl]
+  iintro ⟨%hg, H⟩ %σ₁ %ns %obs %obs' %nt Hσ
+  iapply fupd_mask_intro Std.LawfulSet.empty_subset
+  iintro Hclose
+  isplitr
+  · ipureintro
+    cases b
+    · exact ⟨[], ⟨_, _, _⟩, _, [], ⟨Step.if_false hg, rfl, rfl⟩⟩
+    · exact ⟨[], ⟨_, _, _⟩, _, [], ⟨Step.if_true hg, rfl, rfl⟩⟩
+  inext
+  iintro %r %σ₂ %eₜ %Hstep Hcred
+  obtain ⟨hs, hlbl, rfl⟩ := Hstep
+  obtain ⟨re, rρ, rM⟩ := r
+  simp only at hlbl
+  obtain rfl : M = rM := hlbl.symm
+  have hout : re = (bif b then e2 else e3) ∧ rρ = ρ ∧ σ₂ = σ₁ := by
+    rcases hs.if_inv with ⟨hg', hout⟩ | ⟨hg', hout⟩ <;> cases b <;>
+      first
+        | (simpa [Prod.mk.injEq] using hout)
+        | (rw [hg] at hg'; simp [boolValue] at hg')
+  obtain ⟨rfl, rfl, rfl⟩ := hout
+  imod Hclose with -
+  imodintro
+  isplitl [Hσ]
+  · iexact Hσ
+  · iexact H
+
+/-- Eif, true branch — the `b := true` instance of `wps_if` with the
+    verdict at the meta level (retained as a derived corollary). -/
 theorem wps_if_true {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
     (g : generic_pexpr Unit sym) (e2 e3 : CoreExpr) (ρ : EnvStack)
     (hg : evalPexpr M.tagDefs M.extern ρ g = some Vtrue) :
     wps M Ls Ψ e2 ρ ⊢ wps M Ls Ψ (Expr a (Eif g e2 e3)) ρ := by
-  rw [(wps_unfold (e := Expr a (Eif g e2 e3))).to_eq]
-  simp only [wps.pre, show toVal (Expr a (Eif g e2 e3)) = none from rfl,
-    show jumpRedex? (Expr a (Eif g e2 e3)) = none from rfl]
-  iintro H %σ₁ %ns %obs %obs' %nt Hσ
-  iapply fupd_mask_intro Std.LawfulSet.empty_subset
-  iintro Hclose
-  isplitr
-  · ipureintro
-    exact ⟨[], ⟨_, _, _⟩, _, [], ⟨Step.if_true hg, rfl, rfl⟩⟩
-  inext
-  iintro %r %σ₂ %eₜ %Hstep Hcred
-  obtain ⟨hs, hlbl, rfl⟩ := Hstep
-  rcases hs.if_inv with ⟨-, hout⟩ | ⟨hg', -⟩
-  · obtain ⟨re, rρ, rM⟩ := r
-    simp only at hlbl
-    obtain rfl : M = rM := hlbl.symm
-    obtain ⟨hre, hrρ, hσ⟩ : re = e2 ∧ rρ = ρ ∧ σ₂ = σ₁ := by
-      simpa [Prod.mk.injEq] using hout
-    obtain rfl : e2 = re := hre.symm
-    subst hrρ
-    obtain rfl : σ₁ = σ₂ := hσ.symm
-    imod Hclose with -
-    imodintro
-    isplitl [Hσ]
-    · iexact Hσ
-    · iexact H
-  · rw [hg] at hg'; cases hg'
+  iintro H
+  iapply wps_if a g e2 e3 ρ true
+  isplit
+  · ipureintro; exact hg
+  · rw [show (bif true then e2 else e3) = e2 from rfl]
+    iexact H
 
-/-- Eif, false branch. -/
+/-- Eif, false branch — the `b := false` instance of `wps_if`. -/
 theorem wps_if_false {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
     (g : generic_pexpr Unit sym) (e2 e3 : CoreExpr) (ρ : EnvStack)
     (hg : evalPexpr M.tagDefs M.extern ρ g = some Vfalse) :
     wps M Ls Ψ e3 ρ ⊢ wps M Ls Ψ (Expr a (Eif g e2 e3)) ρ := by
-  rw [(wps_unfold (e := Expr a (Eif g e2 e3))).to_eq]
-  simp only [wps.pre, show toVal (Expr a (Eif g e2 e3)) = none from rfl,
-    show jumpRedex? (Expr a (Eif g e2 e3)) = none from rfl]
-  iintro H %σ₁ %ns %obs %obs' %nt Hσ
-  iapply fupd_mask_intro Std.LawfulSet.empty_subset
-  iintro Hclose
-  isplitr
-  · ipureintro
-    exact ⟨[], ⟨_, _, _⟩, _, [], ⟨Step.if_false hg, rfl, rfl⟩⟩
-  inext
-  iintro %r %σ₂ %eₜ %Hstep Hcred
-  obtain ⟨hs, hlbl, rfl⟩ := Hstep
-  rcases hs.if_inv with ⟨hg', -⟩ | ⟨-, hout⟩
-  · rw [hg] at hg'; cases hg'
-  · obtain ⟨re, rρ, rM⟩ := r
-    simp only at hlbl
-    obtain rfl : M = rM := hlbl.symm
-    obtain ⟨hre, hrρ, hσ⟩ : re = e3 ∧ rρ = ρ ∧ σ₂ = σ₁ := by
-      simpa [Prod.mk.injEq] using hout
-    obtain rfl : e3 = re := hre.symm
-    subst hrρ
-    obtain rfl : σ₁ = σ₂ := hσ.symm
-    imod Hclose with -
-    imodintro
-    isplitl [Hσ]
-    · iexact Hσ
-    · iexact H
+  iintro H
+  iapply wps_if a g e2 e3 ρ false
+  isplit
+  · ipureintro; exact hg
+  · rw [show (bif false then e2 else e3) = e3 from rfl]
+    iexact H
 
 /-- Esave ENTRY at VALUE initializers (one_step0's Esave TAU arm):
     verify the save body at the parameter-bound env. The literal
@@ -1944,6 +1941,52 @@ theorem wps_load {Ψ : SpikeVal → EnvStack → IProp GF}
     · ipureintro
       exact ⟨hlen, hdec⟩
 
+/-! ## The plain-value forms of the whole-cell small axioms (QA-1/Q12;
+the total twins and `AnnotInsensitive` are in Wpt.lean — this module
+does not import it, so the predicate is spelled out here) -/
+
+/-- `wps_store` for an annotation-insensitive postcondition
+    (`∀ ds v ρ', Ψ (.annot ds v) ρ' = Ψ (.pure v) ρ'`): the textbook
+    `{p ↦ -} store(p, v) {p ↦ v}` — no footprint quantifier. -/
+theorem wps_store_plain {Ψ : SpikeVal → EnvStack → IProp GF}
+    (hΨ : ∀ (ds : List dyn_annotation) (v : value) (ρ' : EnvStack),
+      Ψ (.annot ds v) ρ' = Ψ (.pure v) ρ')
+    (loc : CerbLocation.Loc) (ann : core_run_annotation) (ty : ctype)
+    (pv : CerbMem.PointerValue) (cv : value) (mo : memory_order)
+    (mv : CerbMem.MemValue) (bs : List CerbMem.AbsByte) (ρ : EnvStack)
+    (hmv : memValueFromValue M.tagDefs (Ctype [] (unatomic_ ty)) cv = some mv)
+    (hst : StorableAt M.tagDefs ty mv) :
+    iprop(pointsToCell M.tagDefs (GF := GF) pv (.own 1) ty bs ∗
+      (pointsToCell M.tagDefs pv (.own 1) ty (CerbMem.memValueToBytes M.tagDefs [] mv).2 -∗
+        Ψ (.pure Vunit) ρ)) ⊢
+      wps M Ls Ψ (storeExpr loc ann ty pv cv mo) ρ := by
+  iintro ⟨Hpt, HΨ⟩
+  iapply wps_store loc ann ty pv cv mo mv bs ρ hmv hst
+  isplitl [Hpt]
+  · iexact Hpt
+  iintro %fp Hpt'
+  rw [hΨ]
+  iapply HΨ $$ Hpt'
+
+/-- `wps_load` for an annotation-insensitive postcondition. -/
+theorem wps_load_plain {Ψ : SpikeVal → EnvStack → IProp GF}
+    (hΨ : ∀ (ds : List dyn_annotation) (v : value) (ρ' : EnvStack),
+      Ψ (.annot ds v) ρ' = Ψ (.pure v) ρ')
+    (loc : CerbLocation.Loc) (ann : core_run_annotation) (ty : ctype)
+    (pv : CerbMem.PointerValue) (mo : memory_order) (dq : DFrac)
+    (bs : List CerbMem.AbsByte) (ρ : EnvStack)
+    (htrap : cellLoadTrap M.tagDefs ⟨addrOf pv, ty, bs⟩ = false) :
+    iprop(pointsToCell M.tagDefs (GF := GF) pv dq ty bs ∗
+      (pointsToCell M.tagDefs pv dq ty bs -∗ Ψ (.pure (loadedVal M.tagDefs pv ty bs)) ρ)) ⊢
+      wps M Ls Ψ (loadExpr loc ann ty pv mo) ρ := by
+  iintro ⟨Hpt, HΨ⟩
+  iapply wps_load loc ann ty pv mo dq bs ρ htrap
+  isplitl [Hpt]
+  · iexact Hpt
+  iintro %fp Hpt'
+  rw [hΨ]
+  iapply HΨ $$ Hpt'
+
 /-! ## THE GENERIC TYPED-SUBRANGE RULES (Phase 2, F-04)
 
 One load rule and one store rule for ANY typed view of any
@@ -2067,12 +2110,7 @@ theorem wps_store_at {Ψ : SpikeVal → EnvStack → IProp GF}
     (cv : value) (mo : memory_order) (dqm : DFrac)
     (bs : List CerbMem.AbsByte) (ρ : EnvStack) {mv : CerbMem.MemValue}
     (hmv : memValueFromValue M.tagDefs (Ctype [] (unatomic_ vty)) cv = some mv)
-    (hcompat : CerbMem.ctypeMemCompatible vty (CerbMem.typeofMval mv) = true)
-    (hfpm : ∀ fpm, (CerbMem.memValueToBytes M.tagDefs fpm mv).1 = fpm)
-    (hbytes : ∀ fpm, (CerbMem.memValueToBytes M.tagDefs fpm mv).2 =
-      (CerbMem.memValueToBytes M.tagDefs [] mv).2)
-    (hlen : (CerbMem.memValueToBytes M.tagDefs [] mv).2.length =
-      CerbMem.sizeofCtype M.tagDefs vty) :
+    (hst : StorableView M.tagDefs vty mv) :
     iprop(pointsToView M.tagDefs (GF := GF) id a aty off dqm (.own 1) vty bs ∗
       (∀ fp, pointsToView M.tagDefs id a aty off dqm (.own 1) vty
           (CerbMem.memValueToBytes M.tagDefs [] mv).2 -∗
@@ -2101,9 +2139,9 @@ theorem wps_store_at {Ψ : SpikeVal → EnvStack → IProp GF}
       $$ [Hbi Hb]
   · iapply bytesOwn_get mb (a + (off : Int)) (.own 1) bs $$ [$Hbi $Hb]
   have hrun := storeM_at M.tagDefs σ₁ id a aty off vty mv loc
-    (HG.metas id _ Hgetm) hbound hcompat hfpm hbytes
+    (HG.metas id _ Hgetm) hbound hst.compat hst.fpm hst.bytes_fpm
   have hlen' : (CerbMem.memValueToBytes M.tagDefs [] mv).2.length = bs.length := by
-    rw [hlen, hlenbs]
+    rw [hst.len, hlenbs]
   iapply fupd_mask_intro Std.LawfulSet.empty_subset
   iintro Hclose
   isplitr
@@ -2167,7 +2205,7 @@ theorem wps_store_at {Ψ : SpikeVal → EnvStack → IProp GF}
     · iexact Hm
     isplit
     · ipureintro
-      exact ⟨hbound, hlen⟩
+      exact ⟨hbound, hst.len⟩
     · iexact Hb
 
 /-! ## Whole-cell interior access (derived clients of the generic
@@ -2279,12 +2317,7 @@ theorem wps_store_cell_at {Ψ : SpikeVal → EnvStack → IProp GF}
     (bs : List CerbMem.AbsByte) (ρ : EnvStack) {mv : CerbMem.MemValue}
     (hmv : memValueFromValue M.tagDefs (Ctype [] (unatomic_ vty)) cv = some mv)
     (hbound : off + CerbMem.sizeofCtype M.tagDefs vty ≤ CerbMem.sizeofCtype M.tagDefs aty)
-    (hcompat : CerbMem.ctypeMemCompatible vty (CerbMem.typeofMval mv) = true)
-    (hfpm : ∀ fpm, (CerbMem.memValueToBytes M.tagDefs fpm mv).1 = fpm)
-    (hbytes : ∀ fpm, (CerbMem.memValueToBytes M.tagDefs fpm mv).2 =
-      (CerbMem.memValueToBytes M.tagDefs [] mv).2)
-    (hlenimg : (CerbMem.memValueToBytes M.tagDefs [] mv).2.length =
-      CerbMem.sizeofCtype M.tagDefs vty)
+    (hst : StorableView M.tagDefs vty mv)
     (hdec' : decIndep M.tagDefs a aty
       (spliceBytes off (CerbMem.memValueToBytes M.tagDefs [] mv).2 bs)) :
     iprop(cellOwn M.tagDefs (GF := GF) id (.own 1) (SpikeCell.mk a aty bs) ∗
@@ -2297,6 +2330,8 @@ theorem wps_store_cell_at {Ψ : SpikeVal → EnvStack → IProp GF}
   icases (cellOwn_iff M.tagDefs id (.own 1) (SpikeCell.mk a aty bs)).mp $$ Hcell
     with ⟨Hm, Hb, %Hpure⟩
   obtain ⟨hlen, hdec0⟩ := Hpure
+  have hlenimg : (CerbMem.memValueToBytes M.tagDefs [] mv).2.length =
+      CerbMem.sizeofCtype M.tagDefs vty := hst.len
   have hblen : bs.length = CerbMem.sizeofCtype M.tagDefs aty := hlen
   have htk : (bs.take off).length = off := by
     simp [List.length_take]
@@ -2316,7 +2351,7 @@ theorem wps_store_cell_at {Ψ : SpikeVal → EnvStack → IProp GF}
     rw [List.append_assoc]
   have hdroplen : (bs.drop off).drop (CerbMem.sizeofCtype M.tagDefs vty) =
       bs.drop (off + (CerbMem.memValueToBytes M.tagDefs [] mv).2.length) := by
-    rw [List.drop_drop, hlenimg]
+    rw [List.drop_drop, hst.len]
   ihave Hb2 : bytesOwn a (.own 1) (bs.take off ++
       ((bs.drop off).take (CerbMem.sizeofCtype M.tagDefs vty) ++
         (bs.drop off).drop (CerbMem.sizeofCtype M.tagDefs vty))) $$ [Hb]
@@ -2337,8 +2372,7 @@ theorem wps_store_cell_at {Ψ : SpikeVal → EnvStack → IProp GF}
         rw [htk, hmidlen]]
     iexact Hsuf0
   iapply wps_store_at loc ann id a aty off vty cv mo (.own 1)
-    ((bs.drop off).take (CerbMem.sizeofCtype M.tagDefs vty)) ρ hmv hcompat hfpm
-    hbytes hlenimg
+    ((bs.drop off).take (CerbMem.sizeofCtype M.tagDefs vty)) ρ hmv hst
   isplitl [Hm Hmid]
   · iapply (pointsToView_iff M.tagDefs _ _ _ _ _ _ _ _).mpr
     isplitl [Hm]
@@ -2372,7 +2406,7 @@ theorem wps_store_cell_at {Ψ : SpikeVal → EnvStack → IProp GF}
     · rw [show a + (off : Int) +
         (((CerbMem.memValueToBytes M.tagDefs [] mv).2.length : Nat) : Int) =
         a + (off : Int) + ((CerbMem.sizeofCtype M.tagDefs vty : Nat) : Int) by
-          rw [hlenimg]]
+          rw [hst.len]]
       rw [← hdroplen]
       iexact Hsuf
   · ipureintro

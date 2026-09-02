@@ -1120,7 +1120,7 @@ theorem lrProd_wpt (bty sbty : core_base_type)
     a₁ nodeTy 0 longTy (longVal 1) mo nodeUndefBytes _ (Nat.le_refl 3) rfl
     (by rw [show CerbMem.sizeofCtype (procCtx p rs).tagDefs longTy = 8 from rfl,
       show CerbMem.sizeofCtype (procCtx p rs).tagDefs nodeTy = 16 from rfl]; omega)
-    rfl (fun _ => rfl) (fun _ => rfl) rfl
+    ⟨rfl, fun _ => rfl, fun _ => rfl, rfl⟩
     (fun lum fpm => nodeTy_dec_indep lum fpm a₁ _)
   isplitl [Hcell₁]
   · iexact Hcell₁
@@ -1161,7 +1161,7 @@ theorem lrProd_wpt (bty sbty : core_base_type)
     a₂ nodeTy 0 longTy (longVal 2) mo nodeUndefBytes _ (Nat.le_refl 3) rfl
     (by rw [show CerbMem.sizeofCtype (procCtx p rs).tagDefs longTy = 8 from rfl,
       show CerbMem.sizeofCtype (procCtx p rs).tagDefs nodeTy = 16 from rfl]; omega)
-    rfl (fun _ => rfl) (fun _ => rfl) rfl
+    ⟨rfl, fun _ => rfl, fun _ => rfl, rfl⟩
     (fun lum fpm => nodeTy_dec_indep lum fpm a₂ _)
   isplitl [Hcell₂]
   · iexact Hcell₂

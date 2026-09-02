@@ -112,8 +112,7 @@ theorem wps_struct_x_store {Ψ : SpikeVal → EnvStack → IProp GF}
         (cellPtr id (a + ((fieldX : Nat) : Int))) fiveVal mo) ρ :=
   wps_store_cell_at loc ann id a structTy fieldX intTy fiveVal mo bs ρ
     five_encodes (by rw [structTy_size, show CerbMem.sizeofCtype M.tagDefs intTy = 4 from rfl]; decide)
-    (five_storable M.tagDefs).compat (five_storable M.tagDefs).fpm (five_storable M.tagDefs).bytes_fpm
-    ((five_storable M.tagDefs).len []) (structTy_decIndep a _)
+    (five_storable M.tagDefs).toView (structTy_decIndep a _)
 
 /-- FIELD-Y STORE: the same generic rule at offset 8, stored value 6. -/
 theorem wps_struct_y_store {Ψ : SpikeVal → EnvStack → IProp GF}
@@ -128,8 +127,7 @@ theorem wps_struct_y_store {Ψ : SpikeVal → EnvStack → IProp GF}
         (cellPtr id (a + ((fieldY : Nat) : Int))) sixVal mo) ρ :=
   wps_store_cell_at loc ann id a structTy fieldY intTy sixVal mo bs ρ
     six_encodes (by rw [structTy_size, show CerbMem.sizeofCtype M.tagDefs intTy = 4 from rfl]; decide)
-    (six_storable M.tagDefs).compat (six_storable M.tagDefs).fpm (six_storable M.tagDefs).bytes_fpm
-    ((six_storable M.tagDefs).len []) (structTy_decIndep a _)
+    (six_storable M.tagDefs).toView (structTy_decIndep a _)
 
 /-- The whole program at the statement layer: both fields updated,
     the allocation's image doubly spliced. -/
@@ -446,15 +444,13 @@ theorem struct_wps_views (loc : CerbLocation.Loc) (ann : core_run_annotation)
         sixVal mo')) from rfl]
   iapply wps_seq
   iapply wps_store_at loc ann id a structTy 0 intTy fiveVal mo (.own (Qp.half 1)) b0
-    (ev0 :: evs) five_encodes (five_storable M.tagDefs).compat (five_storable M.tagDefs).fpm
-    (five_storable M.tagDefs).bytes_fpm ((five_storable M.tagDefs).len [])
+    (ev0 :: evs) five_encodes (five_storable M.tagDefs).toView
   isplitl [Hx]
   · iexact Hx
   iintro %fp Hx
   iapply wps_store_at loc ann id a structTy 8 intTy sixVal mo'
     (.own (Qp.half (Qp.half (Qp.half 1)))) b2 (ev0 :: evs) six_encodes
-    (six_storable M.tagDefs).compat (six_storable M.tagDefs).fpm
-    (six_storable M.tagDefs).bytes_fpm ((six_storable M.tagDefs).len [])
+    (six_storable M.tagDefs).toView
   isplitl [Hy]
   · iexact Hy
   iintro %fp' Hy
@@ -706,7 +702,7 @@ theorem struct_create_store_wps
     (aprov : CerbMem.Provenance) (alignN : Int) (pref : prefix0)
     (mo : memory_order) (pbty vbty : core_base_type)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value))
-    (hf : SymFrame ev0) (hex : M.extern = fmapEmpty) :
+    (hf : SymFrame ev0) (hex : ∀ x, resolveExtern M.extern x = x) :
     iprop(allocCap M.tagDefs (GF := GF) [⟨alignN, structTy⟩]) ⊢
       wps M Ls
         (fun w _ => iprop(∃ p : CerbMem.PointerValue,
@@ -747,9 +743,9 @@ theorem struct_create_store_wps
     with ⟨%id, %a, %hpv, Hcell⟩
   iapply wps_store_eval loc ann intTy _ _ mo _ rfl
     (pv := p) (cv := fiveVal)
-    (by rw [hex, evalPexpr_sym_empty]
+    (by rw [evalPexpr_sym_of_resolve _ _ _ (hex _)]
         exact lookup_env_head (structFrame_lookup_p hf p) evs)
-    (by rw [hex, evalPexpr_sym_empty]
+    (by rw [evalPexpr_sym_of_resolve _ _ _ (hex _)]
         exact lookup_env_head (structFrame_lookup_v hf p) evs)
   rw [hpv, show (cellPtr id a) = cellPtr id (a + ((fieldX : Nat) : Int))
     from congrArg (cellPtr id) (by unfold fieldX; omega)]
@@ -861,7 +857,7 @@ theorem struct_create_store_adequacy {GF : BundledGFunctors} [SpikeGpreS GF]
     iintro ⟨-, Hcap⟩
     ihave HW := struct_create_store_wps (M := spikeCtx)
       (Ls := fun _ _ _ => iprop(False)) loc ann .Prov_none 8 pref mo
-      pbty vbty fmapEmpty [] symFrame_empty rfl $$ Hcap
+      pbty vbty fmapEmpty [] symFrame_empty (resolveExtern_id_of_empty rfl) $$ Hcap
     ihave HWP : _ $$ [HW]
     · refine BI.emp_sep.2.trans (.trans (BI.sep_mono
         ((blockSpecs_intro fun l _ _ _ _ _ hl =>

@@ -186,6 +186,22 @@ structure StorableAt (tds : CerbTags.TagDefsMap) (ty : ctype) (mv : CerbMem.MemV
     CerbMem.reconstructValue tds lum fpm addr ty (CerbMem.memValueToBytes tds [] mv).2 =
       CerbMem.reconstructValue tds [] [] addr ty (CerbMem.memValueToBytes tds [] mv).2
 
+/-- The storability facts a TYPED-SUBRANGE store needs (QA-1/Q5 — the
+    one vocabulary of the `*_store_at`/`*_store_cell_at` rules): the
+    first four fields of `StorableAt`, without the write-side decode
+    inertness `stored_dec` (which only the whole-cell rules consume,
+    through `StorableAt`). `StorableAt.toView` is the forgetful map. -/
+structure StorableView (tds : CerbTags.TagDefsMap) (ty : ctype) (mv : CerbMem.MemValue) : Prop where
+  compat : CerbMem.ctypeMemCompatible ty (CerbMem.typeofMval mv) = true
+  fpm : ∀ fpm, (CerbMem.memValueToBytes tds fpm mv).1 = fpm
+  bytes_fpm : ∀ fpm, (CerbMem.memValueToBytes tds fpm mv).2 =
+    (CerbMem.memValueToBytes tds [] mv).2
+  len : ((CerbMem.memValueToBytes tds [] mv).2).length = CerbMem.sizeofCtype tds ty
+
+theorem StorableAt.toView {tds : CerbTags.TagDefsMap} {ty : ctype} {mv : CerbMem.MemValue}
+    (h : StorableAt tds ty mv) : StorableView tds ty mv :=
+  ⟨h.compat, h.fpm, h.bytes_fpm, h.len []⟩
+
 /-! ## The null-test memM facts (list-reverse phase A)
 
 The honest null encoding: the engine's null pointer is

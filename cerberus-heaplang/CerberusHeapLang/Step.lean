@@ -321,6 +321,14 @@ def resolveExtern (ext : Fmap sym sym) (x : sym) : sym :=
 
 theorem resolveExtern_empty (x : sym) : resolveExtern fmapEmpty x = x := rfl
 
+/-- A symbol the extern map does not redirect resolves to itself (the
+    QA-1/Q13 lookup vocabulary: a client states `∀ x, resolveExtern
+    M.extern x = x` — "no extern redirects" — instead of naming the
+    map's value). -/
+theorem resolveExtern_id_of_empty {ext : Fmap sym sym} (h : ext = fmapEmpty)
+    (x : sym) : resolveExtern ext x = x := by
+  rw [h]; rfl
+
 /-- Every immutable component of an engine configuration (per-field
     engine slots and fragment reads: the design record §1 table). -/
 structure MachineCtx where
@@ -642,6 +650,14 @@ def evalPexpr (tds : CerbTags.TagDefsMap) (ext : Fmap sym sym) (ρ : EnvStack) :
 @[simp] theorem evalPexpr_sym_empty (tds : CerbTags.TagDefsMap) (ρ : EnvStack)
     (a : List annot) (x : sym) :
     evalPexpr tds fmapEmpty ρ (Pexpr a () (PEsym x)) = lookup_env x ρ := rfl
+
+/-- ... and at ANY extern map that does not redirect `x` (QA-1/Q13: the
+    SymFrame-level lookup discharges `resolveExtern` without naming the
+    map). -/
+theorem evalPexpr_sym_of_resolve (tds : CerbTags.TagDefsMap) {ext : Fmap sym sym}
+    (ρ : EnvStack) (a : List annot) {x : sym} (hx : resolveExtern ext x = x) :
+    evalPexpr tds ext ρ (Pexpr a () (PEsym x)) = lookup_env x ρ := by
+  rw [evalPexpr_sym, hx]
 
 theorem evalPexpr_op (tds : CerbTags.TagDefsMap) (ext : Fmap sym sym) (ρ : EnvStack) (a : List annot)
     (op : binop) (pe1 pe2 : generic_pexpr Unit sym) :

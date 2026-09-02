@@ -1145,8 +1145,8 @@ shipped `Main` passes one concrete stream, the theorems hold for every
 export:
 
 `exhibitA_prod (sup : Nat) (fs : CerbFS.FsState) (args : List String)`
-(ProdExhibit.lean) concludes, for `progAProd` = `lets p = create(4, int) in lets v = 7 in lets _ =
-store(int, p, v) in load(int, p)`, that `CerbND.runND (_root_.drive
+(ProdExhibit.lean) concludes, for `progAProd` = `lets p = create(4, int) in lets _ =
+store(int, p, 7) in load(int, p)`, that `CerbND.runND (_root_.drive
 fmapEmpty false (prodFile progAProd) args) ((initial_driver_state sup
 (prodFile progAProd) fs).1) = [(nd_status.Active dres, [], dst')]` with
 `dres.dres_core_value = sevenVal` and `∃ i a, CellCoh fmapEmpty
@@ -1161,7 +1161,7 @@ statement: everything of ours except the program, the wrapper file
 
 `CerberusHeapLang/Audit.lean` is the last import of the library root,
 so `lake build` elaborates it and a failure is a red build. It asserts,
-in order: (1) EXACT PINS — every name in `trioExports` (109 theorems
+in order: (1) EXACT PINS — every name in `trioExports` (123 theorems
 at the time of writing: the rules, the adequacy and collapse theorems,
 every exhibit, the two projections and the consequence lemmas)
 exists, is a theorem, and has
@@ -1228,8 +1228,7 @@ minutes to tens of minutes; a replay from cache about a second.
 - **`Ecase` on a non-value scrutinee, `Ewseq` at binder patterns, pure
   exits beyond `PEsym`**: mechanical per-construct extensions, each
   needing a `dischargeStep` arm, a `Step` rule and a rule at each
-  stratum; value-scrutinee `Ecase` and wildcard `Ewseq` have
-  partial-stratum rules only.
+  stratum.
 - **Fuel parametricity.** The engine's `get_ctx` fuel is real (the
   interpreter bails past `10^6`), so partial statements carry the
   budget hypotheses and total statements are stated at a derived bound.

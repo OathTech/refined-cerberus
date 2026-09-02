@@ -352,8 +352,8 @@ theorem wps_store_node_field {Ψ : SpikeVal → EnvStack → IProp GF}
       wps M Ls Ψ (storeExpr loc ann nodePtrTy (cellPtr id (a + (off : Int)))
         cv mo) ρ :=
   wps_store_cell_at loc ann id a nodeTy off nodePtrTy cv mo bs ρ hmv
-    (by rw [nodePtrTy_size]; exact hbound) hcompat hfpm hbytes
-    (by rw [nodePtrTy_size]; exact hlen)
+    (by rw [nodePtrTy_size]; exact hbound)
+    ⟨hcompat, hfpm, hbytes, by rw [nodePtrTy_size]; exact hlen⟩
     (fun lum fpm => nodeTy_dec_indep lum fpm a _)
 
 end NodeClients
@@ -1703,8 +1703,8 @@ theorem wpt_store_node_field {Ψ : SpikeVal → EnvStack → IProp GF}
       wpt M Ls k Ψ (storeExpr loc ann nodePtrTy (cellPtr id (a + (off : Int)))
         cv mo) ρ :=
   wpt_store_cell_at loc ann id a nodeTy off nodePtrTy cv mo bs ρ hk hmv
-    (by rw [nodePtrTy_size]; exact hbound) hcompat hfpm hbytes
-    (by rw [nodePtrTy_size]; exact hlen)
+    (by rw [nodePtrTy_size]; exact hbound)
+    ⟨hcompat, hfpm, hbytes, by rw [nodePtrTy_size]; exact hlen⟩
     (fun lum fpm => nodeTy_dec_indep lum fpm a _)
 
 end NodeClientsT

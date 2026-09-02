@@ -631,25 +631,57 @@ theorem wpt_det_step {Ψ : SpikeVal → EnvStack → IProp GF} {e : CoreExpr}
 
 /-! ## Branch/entry rules (instances of the tau lifting) -/
 
+/-- THE CONDITIONAL RULE at the total stratum (QA-1/Q4: the verdict
+    inside the logic; one tau) — an instance of the deterministic-tau
+    lifting at each verdict. -/
+theorem wpt_if {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
+    (g : generic_pexpr Unit sym) (e2 e3 : CoreExpr) (ρ : EnvStack) (b : Bool)
+    {k : Nat} :
+    iprop(⌜evalPexpr M.tagDefs M.extern ρ g = some (boolValue b)⌝ ∗
+      wpt M Ls k Ψ (bif b then e2 else e3) ρ) ⊢
+      wpt M Ls (k + 1) Ψ (Expr a (Eif g e2 e3)) ρ := by
+  cases b
+  · rw [show (bif false then e2 else e3) = e3 from rfl]
+    iintro ⟨%hg, H⟩
+    iapply wpt_det_step rfl rfl (fun _ => Step.if_false hg)
+      (fun σ out hs => by
+        rcases hs.if_inv with ⟨hg', -⟩ | ⟨-, hout⟩
+        · rw [hg] at hg'; cases hg'
+        · exact hout)
+    iexact H
+  · rw [show (bif true then e2 else e3) = e2 from rfl]
+    iintro ⟨%hg, H⟩
+    iapply wpt_det_step rfl rfl (fun _ => Step.if_true hg)
+      (fun σ out hs => by
+        rcases hs.if_inv with ⟨-, hout⟩ | ⟨hg', -⟩
+        · exact hout
+        · rw [hg] at hg'; cases hg')
+    iexact H
+
+/-- Eif, true branch — the `b := true` instance of `wpt_if` (derived
+    corollary, verdict at the meta level). -/
 theorem wpt_if_true {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
     (g : generic_pexpr Unit sym) (e2 e3 : CoreExpr) (ρ : EnvStack) {k : Nat}
     (hg : evalPexpr M.tagDefs M.extern ρ g = some Vtrue) :
-    wpt M Ls k Ψ e2 ρ ⊢ wpt M Ls (k + 1) Ψ (Expr a (Eif g e2 e3)) ρ :=
-  wpt_det_step rfl rfl (fun _ => Step.if_true hg)
-    (fun σ out hs => by
-      rcases hs.if_inv with ⟨-, hout⟩ | ⟨hg', -⟩
-      · exact hout
-      · rw [hg] at hg'; cases hg')
+    wpt M Ls k Ψ e2 ρ ⊢ wpt M Ls (k + 1) Ψ (Expr a (Eif g e2 e3)) ρ := by
+  iintro H
+  iapply wpt_if a g e2 e3 ρ true
+  isplit
+  · ipureintro; exact hg
+  · rw [show (bif true then e2 else e3) = e2 from rfl]
+    iexact H
 
+/-- Eif, false branch — the `b := false` instance of `wpt_if`. -/
 theorem wpt_if_false {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
     (g : generic_pexpr Unit sym) (e2 e3 : CoreExpr) (ρ : EnvStack) {k : Nat}
     (hg : evalPexpr M.tagDefs M.extern ρ g = some Vfalse) :
-    wpt M Ls k Ψ e3 ρ ⊢ wpt M Ls (k + 1) Ψ (Expr a (Eif g e2 e3)) ρ :=
-  wpt_det_step rfl rfl (fun _ => Step.if_false hg)
-    (fun σ out hs => by
-      rcases hs.if_inv with ⟨hg', -⟩ | ⟨-, hout⟩
-      · rw [hg] at hg'; cases hg'
-      · exact hout)
+    wpt M Ls k Ψ e3 ρ ⊢ wpt M Ls (k + 1) Ψ (Expr a (Eif g e2 e3)) ρ := by
+  iintro H
+  iapply wpt_if a g e2 e3 ρ false
+  isplit
+  · ipureintro; exact hg
+  · rw [show (bif false then e2 else e3) = e3 from rfl]
+    iexact H
 
 /-- Ecase at a VALUE scrutinee, total (the `wps_case_value` twin,
     QA-1/M-3): the substitution TAU is deterministic and
@@ -1899,12 +1931,7 @@ theorem wpt_store_at {Ψ : SpikeVal → EnvStack → IProp GF}
     (bs : List CerbMem.AbsByte) (ρ : EnvStack) {mv : CerbMem.MemValue}
     {k : Nat} (hk : 3 ≤ k)
     (hmv : memValueFromValue M.tagDefs (Ctype [] (unatomic_ vty)) cv = some mv)
-    (hcompat : CerbMem.ctypeMemCompatible vty (CerbMem.typeofMval mv) = true)
-    (hfpm : ∀ fpm, (CerbMem.memValueToBytes M.tagDefs fpm mv).1 = fpm)
-    (hbytes : ∀ fpm, (CerbMem.memValueToBytes M.tagDefs fpm mv).2 =
-      (CerbMem.memValueToBytes M.tagDefs [] mv).2)
-    (hlen : (CerbMem.memValueToBytes M.tagDefs [] mv).2.length =
-      CerbMem.sizeofCtype M.tagDefs vty) :
+    (hst : StorableView M.tagDefs vty mv) :
     iprop(pointsToView M.tagDefs (GF := GF) id a aty off dqm (.own 1) vty bs ∗
       (∀ fp, pointsToView M.tagDefs id a aty off dqm (.own 1) vty
           (CerbMem.memValueToBytes M.tagDefs [] mv).2 -∗
@@ -1932,9 +1959,9 @@ theorem wpt_store_at {Ψ : SpikeVal → EnvStack → IProp GF}
       $$ [Hbi Hb]
   · iapply bytesOwn_get mb (a + (off : Int)) (.own 1) bs $$ [$Hbi $Hb]
   have hrun := storeM_at M.tagDefs σ₁ id a aty off vty mv loc
-    (HG.metas id _ Hgetm) hbound hcompat hfpm hbytes
+    (HG.metas id _ Hgetm) hbound hst.compat hst.fpm hst.bytes_fpm
   have hlen' : (CerbMem.memValueToBytes M.tagDefs [] mv).2.length = bs.length := by
-    rw [hlen, hlenbs]
+    rw [hst.len, hlenbs]
   iapply fupd_mask_intro Std.LawfulSet.empty_subset
   iintro Hclose
   isplitr
@@ -1998,7 +2025,7 @@ theorem wpt_store_at {Ψ : SpikeVal → EnvStack → IProp GF}
     · iexact Hm
     isplit
     · ipureintro
-      exact ⟨hbound, hlen⟩
+      exact ⟨hbound, hst.len⟩
     · iexact Hb
 
 /-- Interior typed load THROUGH whole-cell ownership (total form;
@@ -2102,12 +2129,7 @@ theorem wpt_store_cell_at {Ψ : SpikeVal → EnvStack → IProp GF}
     {k : Nat} (hk : 3 ≤ k)
     (hmv : memValueFromValue M.tagDefs (Ctype [] (unatomic_ vty)) cv = some mv)
     (hbound : off + CerbMem.sizeofCtype M.tagDefs vty ≤ CerbMem.sizeofCtype M.tagDefs aty)
-    (hcompat : CerbMem.ctypeMemCompatible vty (CerbMem.typeofMval mv) = true)
-    (hfpm : ∀ fpm, (CerbMem.memValueToBytes M.tagDefs fpm mv).1 = fpm)
-    (hbytes : ∀ fpm, (CerbMem.memValueToBytes M.tagDefs fpm mv).2 =
-      (CerbMem.memValueToBytes M.tagDefs [] mv).2)
-    (hlenimg : (CerbMem.memValueToBytes M.tagDefs [] mv).2.length =
-      CerbMem.sizeofCtype M.tagDefs vty)
+    (hst : StorableView M.tagDefs vty mv)
     (hdec' : decIndep M.tagDefs a aty
       (spliceBytes off (CerbMem.memValueToBytes M.tagDefs [] mv).2 bs)) :
     iprop(cellOwn M.tagDefs (GF := GF) id (.own 1) (SpikeCell.mk a aty bs) ∗
@@ -2120,6 +2142,8 @@ theorem wpt_store_cell_at {Ψ : SpikeVal → EnvStack → IProp GF}
   icases (cellOwn_iff M.tagDefs id (.own 1) (SpikeCell.mk a aty bs)).mp $$ Hcell
     with ⟨Hm, Hb, %Hpure⟩
   obtain ⟨hlen, hdec0⟩ := Hpure
+  have hlenimg : (CerbMem.memValueToBytes M.tagDefs [] mv).2.length =
+      CerbMem.sizeofCtype M.tagDefs vty := hst.len
   have hblen : bs.length = CerbMem.sizeofCtype M.tagDefs aty := hlen
   have htk : (bs.take off).length = off := by
     simp [List.length_take]
@@ -2139,7 +2163,7 @@ theorem wpt_store_cell_at {Ψ : SpikeVal → EnvStack → IProp GF}
     rw [List.append_assoc]
   have hdroplen : (bs.drop off).drop (CerbMem.sizeofCtype M.tagDefs vty) =
       bs.drop (off + (CerbMem.memValueToBytes M.tagDefs [] mv).2.length) := by
-    rw [List.drop_drop, hlenimg]
+    rw [List.drop_drop, hst.len]
   ihave Hb2 : bytesOwn a (.own 1) (bs.take off ++
       ((bs.drop off).take (CerbMem.sizeofCtype M.tagDefs vty) ++
         (bs.drop off).drop (CerbMem.sizeofCtype M.tagDefs vty))) $$ [Hb]
@@ -2160,8 +2184,7 @@ theorem wpt_store_cell_at {Ψ : SpikeVal → EnvStack → IProp GF}
         rw [htk, hmidlen]]
     iexact Hsuf0
   iapply wpt_store_at loc ann id a aty off vty cv mo (.own 1)
-    ((bs.drop off).take (CerbMem.sizeofCtype M.tagDefs vty)) ρ hk hmv hcompat hfpm
-    hbytes hlenimg
+    ((bs.drop off).take (CerbMem.sizeofCtype M.tagDefs vty)) ρ hk hmv hst
   isplitl [Hm Hmid]
   · iapply (pointsToView_iff M.tagDefs _ _ _ _ _ _ _ _).mpr
     isplitl [Hm]
@@ -2195,7 +2218,7 @@ theorem wpt_store_cell_at {Ψ : SpikeVal → EnvStack → IProp GF}
     · rw [show a + (off : Int) +
         (((CerbMem.memValueToBytes M.tagDefs [] mv).2.length : Nat) : Int) =
         a + (off : Int) + ((CerbMem.sizeofCtype M.tagDefs vty : Nat) : Int) by
-          rw [hlenimg]]
+          rw [hst.len]]
       rw [← hdroplen]
       iexact Hsuf
   · ipureintro
@@ -2245,7 +2268,7 @@ theorem wpt_store {Ψ : SpikeVal → EnvStack → IProp GF}
     rw [show a + ((0 : Nat) : Int) = a by omega]
   rw [hpe]
   iapply wpt_store_cell_at loc ann i a ty 0 ty cv mo bs ρ hk hmv
-    (by omega) hst.compat hst.fpm hst.bytes_fpm (hst.len []) hdec'
+    (by omega) hst.toView hdec'
   isplitl [Hm Hb]
   · iapply (cellOwn_iff M.tagDefs i (.own 1) ⟨a, ty, bs⟩).mpr
     isplitl [Hm]
@@ -2319,6 +2342,57 @@ theorem wpt_load {Ψ : SpikeVal → EnvStack → IProp GF}
   · ipureintro
     rfl
   · iexact Hcell'
+
+/-! ## The plain-value forms of the whole-cell small axioms (QA-1/Q12)
+
+The engine's action continuations carry the footprint residue
+`DA_pos [] fp` (the REMOVE-ANNOT value protocol); the primitive rules
+therefore quantify the footprint in every client proof. For
+postconditions that do not read annotations — `Ψ (.annot ds v) ρ = Ψ
+(.pure v) ρ`, which every exhibit's `Ψ` satisfies — the textbook forms
+follow: `{p ↦ -} store(p, v) {p ↦ v}` with no `∀ fp`. Derived, stated
+once each alongside the primitives. -/
+
+/-- The annotation-insensitive postconditions. -/
+def AnnotInsensitive {GF : BundledGFunctors} (Ψ : SpikeVal → EnvStack → IProp GF) : Prop :=
+  ∀ (ds : List dyn_annotation) (v : value) (ρ : EnvStack), Ψ (.annot ds v) ρ = Ψ (.pure v) ρ
+
+/-- `wpt_store` for an annotation-insensitive postcondition. -/
+theorem wpt_store_plain {Ψ : SpikeVal → EnvStack → IProp GF} (hΨ : AnnotInsensitive Ψ)
+    (loc : CerbLocation.Loc) (ann : core_run_annotation) (ty : ctype)
+    (pv : CerbMem.PointerValue) (cv : value) (mo : memory_order)
+    (mv : CerbMem.MemValue) (bs : List CerbMem.AbsByte) (ρ : EnvStack)
+    {k : Nat} (hk : 3 ≤ k)
+    (hmv : memValueFromValue M.tagDefs (Ctype [] (unatomic_ ty)) cv = some mv)
+    (hst : StorableAt M.tagDefs ty mv) :
+    iprop(pointsToCell M.tagDefs (GF := GF) pv (.own 1) ty bs ∗
+      (pointsToCell M.tagDefs pv (.own 1) ty (CerbMem.memValueToBytes M.tagDefs [] mv).2 -∗
+        Ψ (.pure Vunit) ρ)) ⊢
+      wpt M Ls k Ψ (storeExpr loc ann ty pv cv mo) ρ := by
+  iintro ⟨Hpt, HΨ⟩
+  iapply wpt_store loc ann ty pv cv mo mv bs ρ hk hmv hst
+  isplitl [Hpt]
+  · iexact Hpt
+  iintro %fp Hpt'
+  rw [hΨ]
+  iapply HΨ $$ Hpt'
+
+/-- `wpt_load` for an annotation-insensitive postcondition. -/
+theorem wpt_load_plain {Ψ : SpikeVal → EnvStack → IProp GF} (hΨ : AnnotInsensitive Ψ)
+    (loc : CerbLocation.Loc) (ann : core_run_annotation) (ty : ctype)
+    (pv : CerbMem.PointerValue) (mo : memory_order) (dq : DFrac)
+    (bs : List CerbMem.AbsByte) (ρ : EnvStack) {k : Nat} (hk : 3 ≤ k)
+    (htrap : cellLoadTrap M.tagDefs ⟨addrOf pv, ty, bs⟩ = false) :
+    iprop(pointsToCell M.tagDefs (GF := GF) pv dq ty bs ∗
+      (pointsToCell M.tagDefs pv dq ty bs -∗ Ψ (.pure (loadedVal M.tagDefs pv ty bs)) ρ)) ⊢
+      wpt M Ls k Ψ (loadExpr loc ann ty pv mo) ρ := by
+  iintro ⟨Hpt, HΨ⟩
+  iapply wpt_load loc ann ty pv mo dq bs ρ hk htrap
+  isplitl [Hpt]
+  · iexact Hpt
+  iintro %fp Hpt'
+  rw [hΨ]
+  iapply HΨ $$ Hpt'
 
 /-! ## The allocation rules at the total stratum (alloc arc P1.4)
 

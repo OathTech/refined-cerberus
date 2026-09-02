@@ -173,7 +173,7 @@ def ψA (tds : CerbTags.TagDefsMap) : value → Mem → Prop := fun v σ' =>
     rules at the PROGRAM-BOUND pointer. -/
 theorem progAProd_wpt [SpikeGS .hasLC GF]
     {M : MachineCtx} {Ls : LabelSpecT GF}
-    (hex : M.extern = fmapEmpty)
+    (hex : ∀ x, resolveExtern M.extern x = x)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value))
     (hf : SymFrame ev0) :
     iprop(allocCap M.tagDefs (GF := GF) [⟨4, intTy⟩]) ⊢
@@ -205,7 +205,7 @@ theorem progAProd_wpt [SpikeGS .hasLC GF]
   rw [show (4 : Nat) = 3 + 1 from rfl]
   iapply wpt_store_eval loc0 empty_annotation intTy _ _ NA _ rfl
     (pv := p) (cv := sevenVal)
-    (by rw [hex, evalPexpr_sym_empty]
+    (by rw [evalPexpr_sym_of_resolve _ _ _ (hex _)]
         exact lookup_env_head (prodAFrame_lookup_p hf p) evs)
     rfl
   iapply wpt_store loc0 empty_annotation intTy p sevenVal NA sevenMval
@@ -218,7 +218,7 @@ theorem progAProd_wpt [SpikeGS .hasLC GF]
   icases (pointsToCell_cellOwn_iff M.tagDefs _ _ _ _).mp $$ Hpt
     with ⟨%id, %a, %hpv, Hcell⟩
   iapply wpt_load_eval loc0 empty_annotation intTy _ NA _ rfl (pv := p)
-    (by rw [hex, evalPexpr_sym_empty]
+    (by rw [evalPexpr_sym_of_resolve _ _ _ (hex _)]
         exact lookup_env_head (prodAFrame_lookup_p hf p) evs)
   rw [hpv, show (cellPtr id a) = cellPtr id (a + ((0 : Nat) : Int))
     from congrArg (cellPtr id) (by omega)]
@@ -314,7 +314,7 @@ theorem exhibitA_prod (sup : Nat) (fs : CerbFS.FsState) (args : List String) :
           isplitr [Hcap]
           · iapply blockSpecsT_intro fun l params cont _ _ _ _ hl =>
               (hnolabel l params cont hl).elim
-          · iapply progAProd_wpt (procCtx_extern _ _) fmapEmpty []
+          · iapply progAProd_wpt (resolveExtern_id_of_empty (procCtx_extern _ _)) fmapEmpty []
               symFrame_empty $$ Hcap))
       (by rw [show lemDefaultFuel = 999999 + 1 from rfl]; omega)
       fs args

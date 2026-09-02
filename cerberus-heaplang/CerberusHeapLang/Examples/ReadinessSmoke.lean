@@ -219,7 +219,7 @@ theorem twoField_store_x {Ψ : SpikeVal → EnvStack → IProp GF}
   rw [hp, show storeExpr loc ann fieldTy (cellPtr id a) cv mo =
     storeExpr loc ann fieldTy (cellPtr id (a + ((0 : Nat) : Int))) cv mo by simp]
   iapply wps_store_at loc ann id a objTy 0 fieldTy cv mo (.own (Qp.half 1)) xb ρ
-    hmv hst.compat hst.fpm hst.bytes_fpm (hst.len [])
+    hmv hst.toView
   isplitl [Hx]
   · iexact Hx
   iintro %fp Hx
@@ -248,7 +248,7 @@ theorem twoField_store_y {Ψ : SpikeVal → EnvStack → IProp GF}
   icases (twoField_iff _ _ _ _).mp $$ H with ⟨%id, %a, %hp, Hx, Hy⟩
   rw [hp, fieldYPtr_cellPtr]
   iapply wps_store_at loc ann id a objTy 8 fieldTy cv mo (.own (Qp.half 1)) yb ρ
-    hmv hst.compat hst.fpm hst.bytes_fpm (hst.len [])
+    hmv hst.toView
   isplitl [Hy]
   · iexact Hy
   iintro %fp Hy

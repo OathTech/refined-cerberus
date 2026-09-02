@@ -747,8 +747,8 @@ theorem wps_store_tree_field {Ψ : SpikeVal → EnvStack → IProp GF}
       wps M Ls Ψ (storeExpr loc ann treePtrTy (cellPtr id (a + (off : Int)))
         cv mo) ρ :=
   wps_store_cell_at loc ann id a treeTy off treePtrTy cv mo bs ρ hmv
-    (by rw [treePtrTy_size]; exact hbound) hcompat hfpm hbytes
-    (by rw [treePtrTy_size]; exact hlen)
+    (by rw [treePtrTy_size]; exact hbound)
+    ⟨hcompat, hfpm, hbytes, by rw [treePtrTy_size]; exact hlen⟩
     (fun lum fpm => treeTy_dec_indep lum fpm a _)
 
 end TreeClients
@@ -798,8 +798,8 @@ theorem wpt_store_tree_field {Ψ : SpikeVal → EnvStack → IProp GF}
       wpt M Ls k Ψ (storeExpr loc ann treePtrTy (cellPtr id (a + (off : Int)))
         cv mo) ρ :=
   wpt_store_cell_at loc ann id a treeTy off treePtrTy cv mo bs ρ hk hmv
-    (by rw [treePtrTy_size]; exact hbound) hcompat hfpm hbytes
-    (by rw [treePtrTy_size]; exact hlen)
+    (by rw [treePtrTy_size]; exact hbound)
+    ⟨hcompat, hfpm, hbytes, by rw [treePtrTy_size]; exact hlen⟩
     (fun lum fpm => treeTy_dec_indep lum fpm a _)
 
 end TreeClientsT
