@@ -41,8 +41,8 @@ annotation quantified):
   strong normalization over the unified relation via Iris
   TotalAdequacy (`twp_total`), consumed as-is.
 -/
+import CerberusHeapLang.API
 import CerberusHeapLang.LoopExhibit
-import CerberusHeapLang.TotalAdequacy
 
 set_option autoImplicit false
 

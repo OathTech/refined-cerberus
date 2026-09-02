@@ -10,7 +10,7 @@ concluded AT THE ENGINE LEVEL via adequacy.
     execution; the VALUE and SAFETY facts are by adequacy, not by
     evaluation).
 (b) the frame exhibit, discharged end-to-end:
-    {x ↦ - ∗ y ↦ a} store(x,7) {x ↦ 7 ∗ y ↦ a} (Rules.exhibit, built
+    {x ↦ - ∗ y ↦ a} store(x,7) {x ↦ 7 ∗ y ↦ a} (`exhibit`, Examples/Layout.lean, built
     by FRAME on the store small axiom) lands as an engine fact: the
     drive of store(x,7) cannot kill, and afterwards the real
     MemState holds 7's bytes at x and y's bytes UNCHANGED — the
@@ -24,9 +24,8 @@ The seeded state: two int-cells allocated from the empty MemState by
 All concrete facts (pointers, addresses, Coh) are closed
 computations.
 -/
-import CerberusHeapLang.Adequacy
-import CerberusHeapLang.Wpt
-import CerberusHeapLang.TotalAdequacy
+import CerberusHeapLang.API
+import CerberusHeapLang.Examples.Layout
 
 set_option autoImplicit false
 
@@ -609,7 +608,7 @@ theorem exhibitA_total (aids : Nat → Nat) :
 exported to the engine level
 
 `lets _ = store(x,5) in store(y,6)` on the two seeded cells. The
-interior derivation is `exhibitC_triple` (Rules.lean) — wp_store per
+interior derivation is `exhibitC_triple` (Examples/Layout.lean) — wp_store per
 leg FRAMED with the other cell, glued by triple_seq; the export
 below only repackages its footprint form through
 `semantic_triple_sound`. The postcondition carries NO value clause:

@@ -26,8 +26,7 @@ redex spelling leaves the constructor's range. Here the premises
 are discharged by computing the substituted branch (`caseProg_select`
 is `rfl`).
 -/
-import CerberusHeapLang.Adequacy
-import CerberusHeapLang.Wps
+import CerberusHeapLang.API
 
 set_option autoImplicit false
 

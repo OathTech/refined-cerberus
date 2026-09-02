@@ -21,8 +21,7 @@ Language instance needed ZERO changes, and the capability-manifest
 generator FAILED CLOSED on the extended constructor lists until its
 row landed (the gate demonstration the arc plan prescribes).
 -/
-import CerberusHeapLang.Adequacy
-import CerberusHeapLang.Wps
+import CerberusHeapLang.API
 
 set_option autoImplicit false
 

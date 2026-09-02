@@ -43,6 +43,8 @@ in the index-partitioned invariant and the per-element decode
 premises. The heap-side footprint is still delivered through the
 big-sep machinery ([∗map] over the seeded cell map).
 -/
+import CerberusHeapLang.API
+import CerberusHeapLang.Examples.Layout
 import CerberusHeapLang.FibExhibit
 
 set_option autoImplicit false

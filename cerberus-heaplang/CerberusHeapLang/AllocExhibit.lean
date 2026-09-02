@@ -32,7 +32,8 @@ Every create premise here is a closed layout fact of `intTy`
 NO operational proof terms: no `Step.*`, `engineSteps_*`,
 `driveJ_step`, `driverDone_step` in any proof body of this module.
 -/
-import CerberusHeapLang.TotalAdequacy
+import CerberusHeapLang.API
+import CerberusHeapLang.Examples.Layout
 import CerberusHeapLang.ProdEntry
 import CerberusHeapLang.Exhibit
 

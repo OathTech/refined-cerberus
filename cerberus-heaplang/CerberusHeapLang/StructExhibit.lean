@@ -30,9 +30,8 @@ it against the real engine from the production cold-start memory
 through `spike_engine_adequacy_alloc`/`launchResources` — the
 partial-lane allocation consumer of the R-01 closure test.
 -/
-import CerberusHeapLang.Adequacy
-import CerberusHeapLang.Wps
-import CerberusHeapLang.EnvLaws
+import CerberusHeapLang.API
+import CerberusHeapLang.Examples.Layout
 import CerberusHeapLang.ProdEntry
 
 set_option autoImplicit false

@@ -37,6 +37,7 @@ arc P2 step 6): its last consumers were the loop exports' handwritten
 operational prefixes, replaced by whole-program logic proofs in
 ProdLoopExhibit.
 -/
+import CerberusHeapLang.Examples.Layout
 import CerberusHeapLang.ProdEntry
 import CerberusHeapLang.Exhibit
 import CerberusHeapLang.AllocExhibit

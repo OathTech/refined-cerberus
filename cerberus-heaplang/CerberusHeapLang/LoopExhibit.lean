@@ -40,11 +40,8 @@ and the irrelevant-binding tests (`loop_wps_irrelevant_binding`,
 carrying an unrelated binding — a configuration no exact-shape pin
 could have matched, so the proof cannot regress to map equality.
 -/
-import CerberusHeapLang.Adequacy
-import CerberusHeapLang.Wps
-import CerberusHeapLang.EnvLaws
-import CerberusHeapLang.Wpt
-import CerberusHeapLang.TotalAdequacy
+import CerberusHeapLang.API
+import CerberusHeapLang.Examples.Layout
 
 set_option autoImplicit false
 

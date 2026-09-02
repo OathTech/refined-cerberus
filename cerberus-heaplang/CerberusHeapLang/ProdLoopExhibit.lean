@@ -43,6 +43,7 @@ certified operational rounds (`Step.sseq_ctx (Step.create …)` +
 `engineSteps_*`/`driveJ_step`/`driverDone_step` mention left in this
 module is documentation of that deletion.
 -/
+import CerberusHeapLang.Examples.Layout
 import CerberusHeapLang.ProdEntry
 import CerberusHeapLang.ProdExhibit
 import CerberusHeapLang.ProdLoop

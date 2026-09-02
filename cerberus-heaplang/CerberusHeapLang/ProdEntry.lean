@@ -81,6 +81,7 @@ Dnn labels are the recorded design findings of
 docs/2026-08-30_spike-sliceB-notes.md.
 -/
 import CerberusHeapLang.DriverCollapse
+import CerberusHeapLang.Examples.Layout
 import CerberusHeapLang.FibExhibit
 import CerberusHeapLang.ProdLoop
 
