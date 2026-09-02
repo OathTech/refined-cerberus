@@ -242,21 +242,60 @@ inductive ShippedRefusal (M : MachineCtx) (c : Config) : Prop where
         perform_memop_request2 M.tagDefs loc mop cvals M.tid k =
           nd_bind (failwithI msg) g) →
       ShippedRefusal M c
+  /-- ILLTYPED AT DISTANCE ONE (fragment closure, gap (b)): the shipped
+      round SUCCEEDS — `CerberusRound M c c'` — into a configuration `c'`
+      at which the engine's NEXT step list is the ILLTYPED report
+      `[Step_error2 msg]`. The instance: a load/store ACTION_EVAL whose
+      pointer operand evaluates to a non-pointer value — the evaluation
+      round rebuilds the action with the value (step_action's `_, _`
+      ACTION_EVAL arm, Core_reduction.lean:424), and the rebuilt action's
+      operand test falls to `some _, some _ => ACTION_ILLTYPED "Load"`
+      (`"Store"`). An ill-typed program: classified, not narrowed. -/
+  | error_next (c' : Config) (msg : String) :
+      CerberusRound M c c' →
+      (∀ dst, M.Embeds dst c' →
+        step_ctx M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid
+          (M.parent, M.thread c'.1 c'.2.1) = [Step_error2 msg]) →
+      ShippedRefusal M c
+  /-- PANIC (jump without a current procedure; fragment closure, gap
+      (d)): at a context with `M.proc = none` the engine's Erun step
+      (step_ctx's Erun arm, Core_reduction.lean:484) reads
+      `current_proc := failwithI "Core_reduction ==> Erun outside of a
+      proc"` and consults the run state's label table AT THAT KEY — the
+      step's monad is exhibited: the state-read of `labeled` keyed by the
+      extern-resolved panic term, bound to the arm's continuation `k`.
+      In OCaml the strict `failwith` aborts the round; Lean's opaque
+      `failwithI` defers the same abort into the lookup key. The
+      mirror's label map at such a context is empty (`MachineCtx.labels`,
+      fail-closed). Every shipped thread inside a procedure body has a
+      current procedure. -/
+  | panic_noproc (msg : String) :
+      M.proc = none →
+      (∀ dst, M.Embeds dst c →
+        ∃ (s : String) (l : sym) (inst : Inhabited sym)
+          (k : Option (List (sym × core_base_type) × CoreExpr) → core_run_state →
+            exceptM (t0 thread_state × core_run_state) core_run_cause),
+        step_ctx M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid
+          (M.parent, M.thread c.1 c.2.1) =
+          [Step_with_runstate2 (RSK_eval s)
+            (stExceptUndef_bind
+              (runSE (state_except_read (fun rs : core_run_state =>
+                Lem_Maybe.bind0
+                  (fmapLookupBy (fun (s1 : sym) (s2 : sym) =>
+                      Lem_Basic_classes.ordCompare s1 s2)
+                    (resolveExtern dst.core_extern (@failwithI sym inst msg)) rs.labeled)
+                  (fmapLookupBy (fun (s1 : sym) (s2 : sym) =>
+                    Lem_Basic_classes.ordCompare s1 s2) l))))
+              k)]) →
+      ShippedRefusal M c
 
-/-- THE REGISTERED GAPS — configurations the mirror does not step at
-    and this slice does not classify as a refusal (each an [AGENT]
-    finding, recorded in the slice notes and reported). Every arm is
-    an engine fact; `unmirrored_success` additionally records that the
-    mirror IS stuck, so the arm names a genuine coverage gap. -/
+/-- THE RESIDUAL — the one configuration class the mirror does not
+    step at and this package does not classify as a refusal (fragment
+    closure, 2026-09-02; the former gaps (a), (b), (d) are closed —
+    `Frag.sseq_sym`'s `BareHead` premise, `ShippedRefusal.error_next`,
+    `ShippedRefusal.panic_noproc`). The arm is an engine fact plus the
+    record that the mirror IS stuck, so it names a genuine gap. -/
 inductive OpenRound (M : MachineCtx) (c : Config) : Prop where
-  /-- The engine's round is a SUCCESS (a shipped round to `c'`) at a
-      shape with no mirror rule: the LETS-ANNOT beta at the symbol
-      binder (`{A}v` bound by `lets x = …`, a recorded divergence of
-      Step.lean), and an ACTION_EVAL whose pointer operand evaluates to
-      a non-pointer value (the successor is the ill-typed action the
-      engine reports ILLTYPED on its next round). -/
-  | unmirrored_success (c' : Config) :
-      (∀ c'', ¬ Step M c c'') → CerberusRound M c c' → OpenRound M c
   /-- The engine's round is an operand-evaluation with-runstate step
       whose operand the mirror evaluator `evalPexpr` does not cover
       (a symbol unbound in the environment, a binop outside the
@@ -269,20 +308,6 @@ inductive OpenRound (M : MachineCtx) (c : Config) : Prop where
       (∀ dst, M.Embeds dst c → ∃ (rsk : runstate_step_kind) (m : core_runM thread_state),
         step_ctx M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid
           (M.parent, M.thread c.1 c.2.1) = [Step_with_runstate2 rsk m]) →
-      OpenRound M c
-  /-- A jump at a context WITHOUT a current procedure: the mirror's label
-      map is empty (fail-closed, `MachineCtx.labels`) and the engine's
-      `Erun` step consults the run state's label table at the key
-      `failwithI "Core_reduction ==> Erun outside of a proc"` (step_ctx,
-      Core_reduction.lean:484) — in OCaml the strict `failwith` aborts
-      the round; Lean's opaque `failwithI` defers it into the lookup key,
-      which is why only the step's shape is stated here. Every shipped
-      thread inside a procedure body has a current procedure. -/
-  | no_current_proc :
-      M.proc = none →
-      (∀ dst, M.Embeds dst c → ∃ (s : String) (m : core_runM thread_state),
-        step_ctx M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid
-          (M.parent, M.thread c.1 c.2.1) = [Step_with_runstate2 (RSK_eval s) m]) →
       OpenRound M c
 
 /-- The completeness disjunction at a configuration: the mirror steps,
@@ -1507,6 +1532,128 @@ theorem Decomp.lift_step {M : MachineCtx} {e : CoreExpr} {ctx : context} {r : Co
     exact Step.annot_ctx (hd.jumpRedex?_eq.trans hnj) hroot (ih hnr hs hnj)
   | wseq hd ih => exact Step.wseq_ctx (hd.jumpRedex?_eq.trans hnj) (ih hnr hs hnj)
 
+/-! `get_ctx`'s plain-`Eannot` arm (Core_reduction.lean:375) at a body
+whose head is a sequencing frame or an action: the outer irreducibility
+test and the double-annotation arm both decide by the head constructor. -/
+
+theorem get_ctx_annot_sseq {a a' : List _root_.annot} {ds : List dyn_annotation}
+    {pat : pattern} {e1 e2 : CoreExpr} (n : Nat) :
+    get_ctx_lemFuel (n+1) (Expr a (Eannot ds (Expr a' (Esseq pat e1 e2)))) =
+      List.map (fun q => (Cannot a ds q.1, q.2))
+        (get_ctx_lemFuel n (Expr a' (Esseq pat e1 e2))) := rfl
+
+theorem get_ctx_annot_wseq {a a' : List _root_.annot} {ds : List dyn_annotation}
+    {pat : pattern} {e1 e2 : CoreExpr} (n : Nat) :
+    get_ctx_lemFuel (n+1) (Expr a (Eannot ds (Expr a' (Ewseq pat e1 e2)))) =
+      List.map (fun q => (Cannot a ds q.1, q.2))
+        (get_ctx_lemFuel n (Expr a' (Ewseq pat e1 e2))) := rfl
+
+theorem get_ctx_annot_action {a a' : List _root_.annot} {ds : List dyn_annotation}
+    {p : generic_paction core_run_annotation Unit sym} (n : Nat) :
+    get_ctx_lemFuel (n+1) (Expr a (Eannot ds (Expr a' (Eaction p)))) =
+      List.map (fun q => (Cannot a ds q.1, q.2))
+        (get_ctx_lemFuel n (Expr a' (Eaction p))) := rfl
+
+/-- Rebuilding a decomposition's hole with an ACTION node keeps the
+    frames reducible (the head of every frame is `Esseq`/`Ewseq`/an
+    action; an annotation frame's body is never annotation-rooted —
+    `Decomp.annot`'s `hroot`). -/
+theorem Decomp.rebuild_not_irreducible {e : CoreExpr} {ctx : context} {r : CoreExpr}
+    (hd : Decomp e ctx r) (p : generic_paction core_run_annotation Unit sym) :
+    is_irreducible (apply_ctx ctx (Expr [] (Eaction p))) = false := by
+  induction hd with
+  | root _ => rfl
+  | sseq _ _ => rfl
+  | sseq_spec _ _ => rfl
+  | sseq_sym _ _ => rfl
+  | wseq _ _ => rfl
+  | annot hroot _ _ hd _ =>
+    cases hd with
+    | root _ => rfl
+    | sseq _ => rfl
+    | sseq_spec _ => rfl
+    | sseq_sym _ => rfl
+    | wseq _ => rfl
+    | annot _ _ _ _ => simp [annotRooted, apply_ctx] at hroot
+
+/-- Rebuilding a decomposition's hole with an ACTION node keeps the
+    decomposition: the engine's `get_ctx` at the rebuilt arena is the
+    singleton `[(ctx, action)]`, at the ORIGINAL arena's size bound
+    (every frame draws one fuel level, the root one). The successor of a
+    load/store ACTION_EVAL round is such a rebuilt arena
+    (`step_ctx_load_eval_ws'`/`store_eval_ws'`). -/
+theorem Decomp.get_ctx_rebuild_action {e : CoreExpr} {ctx : context} {r : CoreExpr}
+    (hd : Decomp e ctx r) (p : generic_paction core_run_annotation Unit sym) :
+    ∀ n : Nat, esize e ≤ n →
+      get_ctx_lemFuel n (apply_ctx ctx (Expr [] (Eaction p))) =
+        [(ctx, Expr [] (Eaction p))] := by
+  induction hd with
+  | @root r0 hr =>
+    intro n hn
+    obtain ⟨m, rfl⟩ : ∃ m, n = m + 1 :=
+      ⟨n - 1, by have := esize_pos r0; omega⟩
+    exact get_ctx_action m
+  | @sseq pa bty e1 e2 ctx' r' hd ih =>
+    intro n hn
+    rw [esize_sseq] at hn
+    obtain ⟨m, rfl⟩ : ∃ m, n = m + 1 := ⟨n - 1, by omega⟩
+    show get_ctx_lemFuel (m+1)
+      (Expr [] (Esseq (Pattern pa (CaseBase (none, bty)))
+        (apply_ctx ctx' (Expr [] (Eaction p))) e2)) = _
+    rw [get_ctx_sseq (hd.rebuild_not_irreducible p) m, ih m (by omega)]
+    rfl
+  | @sseq_spec pa pb x bty e1 e2 ctx' r' hd ih =>
+    intro n hn
+    rw [esize_sseq] at hn
+    obtain ⟨m, rfl⟩ : ∃ m, n = m + 1 := ⟨n - 1, by omega⟩
+    show get_ctx_lemFuel (m+1)
+      (Expr [] (Esseq (specPat pa pb x bty) (apply_ctx ctx' (Expr [] (Eaction p))) e2)) = _
+    rw [get_ctx_sseq (hd.rebuild_not_irreducible p) m, ih m (by omega)]
+    rfl
+  | @sseq_sym pa x bty e1 e2 ctx' r' hd ih =>
+    intro n hn
+    rw [esize_sseq] at hn
+    obtain ⟨m, rfl⟩ : ∃ m, n = m + 1 := ⟨n - 1, by omega⟩
+    show get_ctx_lemFuel (m+1)
+      (Expr [] (Esseq (symPat pa x bty) (apply_ctx ctx' (Expr [] (Eaction p))) e2)) = _
+    rw [get_ctx_sseq (hd.rebuild_not_irreducible p) m, ih m (by omega)]
+    rfl
+  | @wseq pa bty e1 e2 ctx' r' hd ih =>
+    intro n hn
+    rw [esize_wseq] at hn
+    obtain ⟨m, rfl⟩ : ∃ m, n = m + 1 := ⟨n - 1, by omega⟩
+    show get_ctx_lemFuel (m+1)
+      (Expr [] (Ewseq (Pattern pa (CaseBase (none, bty)))
+        (apply_ctx ctx' (Expr [] (Eaction p))) e2)) = _
+    rw [get_ctx_wseq (hd.rebuild_not_irreducible p) m, ih m (by omega)]
+    rfl
+  | @annot ds b ctx' r' hroot hirr hmap hd ih =>
+    intro n hn
+    rw [esize_annot] at hn
+    obtain ⟨m, rfl⟩ : ∃ m, n = m + 1 := ⟨n - 1, by omega⟩
+    have ih' := ih m (by omega)
+    show get_ctx_lemFuel (m+1)
+      (Expr [] (Eannot ds (apply_ctx ctx' (Expr [] (Eaction p))))) = _
+    -- the plain-`Eannot` arm of `get_ctx` (Core_reduction.lean:375): the
+    -- body's head is a frame or the action, never an annotation
+    cases hd with
+    | root _ =>
+      dsimp only [apply_ctx] at ih' ⊢
+      rw [get_ctx_annot_action m, ih']; rfl
+    | sseq _ =>
+      dsimp only [apply_ctx] at ih' ⊢
+      rw [get_ctx_annot_sseq m, ih']; rfl
+    | sseq_spec _ =>
+      dsimp only [apply_ctx] at ih' ⊢
+      rw [get_ctx_annot_sseq m, ih']; rfl
+    | sseq_sym _ =>
+      dsimp only [apply_ctx] at ih' ⊢
+      rw [get_ctx_annot_sseq m, ih']; rfl
+    | wseq _ =>
+      dsimp only [apply_ctx] at ih' ⊢
+      rw [get_ctx_annot_wseq m, ih']; rfl
+    | annot _ _ _ _ => simp [annotRooted, apply_ctx] at hroot
+
 /-- The right unit law of the engine's state-except monad. -/
 theorem stExceptUndef_bind_return_right {a b c : Type}
     (m : c → exceptM (t0 a × b) core_run_cause) :
@@ -2024,6 +2171,48 @@ theorem step_ctx_run_unresolved {e : CoreExpr} {ctx : context}
          dsimp only []
          rw [hnone]⟩)
 
+/-- Erun at a thread WITHOUT a current procedure: the step's monad is
+    the `labeled` read keyed by the engine's panic `failwithI
+    "Core_reduction ==> Erun outside of a proc"` (step_ctx's Erun arm,
+    Core_reduction.lean:484 — `current_proc := failwithI …`, then the
+    extern-resolved lookup at that key), bound to the arm's
+    continuation. -/
+theorem step_ctx_run_noproc {e : CoreExpr} {ctx : context}
+    {ra : core_run_annotation} {l : sym} {pes : List (generic_pexpr Unit sym)}
+    (hd : Decomp e ctx (runRedex ra l pes))
+    (hsz : esize e ≤ lemDefaultFuel)
+    (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
+    (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
+    (tid : Nat) (parent : Option Nat) (th : thread_state)
+    (harena : th.arena = e)
+    (hproc : th.current_proc_opt = none) :
+    ∃ (s : String) (inst : Inhabited sym)
+      (k : Option (List (sym × core_base_type) × CoreExpr) → core_run_state →
+        exceptM (t0 thread_state × core_run_state) core_run_cause),
+      step_ctx tds σ file ext tid (parent, th) =
+        [Step_with_runstate2 (RSK_eval s)
+          (stExceptUndef_bind
+            (runSE (state_except_read (fun rs : core_run_state =>
+              Lem_Maybe.bind0
+                (fmapLookupBy (fun (s1 : sym) (s2 : sym) =>
+                    Lem_Basic_classes.ordCompare s1 s2)
+                  (resolveExtern ext (@failwithI sym inst
+                    "Core_reduction ==> Erun outside of a proc")) rs.labeled)
+                (fmapLookupBy (fun (s1 : sym) (s2 : sym) =>
+                  Lem_Basic_classes.ordCompare s1 s2) l))))
+            k)] := by
+  have hget : get_ctx th.arena = [(ctx, runRedex ra l pes)] := by
+    rw [harena]; exact hd.get_ctx_default hsz
+  unfold step_ctx
+  dsimp only
+  rw [hget]
+  simp only [List.map_cons, List.map_nil]
+  unfold runRedex
+  cases ctx <;>
+    (dsimp only [get_loc]
+     rw [hproc]
+     exact ⟨_, _, _, rfl⟩)
+
 /-- Esave with non-value initializers: the engine's step is ONE
     `RSK_eval` with-runstate step (shape only). -/
 theorem step_ctx_save_eval_shape {e : CoreExpr} {ctx : context}
@@ -2334,6 +2523,76 @@ theorem step_ctx_memop_eval_shape {e : CoreExpr} {ctx : context}
      simp only [Bool.false_eq_true, if_false]
      exact ⟨_, _, rfl⟩)
 
+/-! ### ILLTYPED at the rebuilt action (the second round of gap (b)) -/
+
+/-- A positive load whose (evaluated) pointer operand is NOT a pointer
+    value, at any decomposition frame: the engine's step list is the
+    ILLTYPED report `[Step_error2 "Load"]` (step_action's Load0 arm,
+    `some _, some _ => ACTION_ILLTYPED "Load"`, Core_reduction.lean:424;
+    process_action's `ACTION_ILLTYPED str => Step_error2 str`). The
+    arena is the SUCCESSOR of a load ACTION_EVAL round
+    (`step_ctx_load_eval_ws'`), stated through the original
+    decomposition `hd` and its size bound. -/
+theorem step_ctx_load_illtyped' {e : CoreExpr} {ctx : context} {r : CoreExpr}
+    {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
+    {v : value} {mo : memory_order}
+    (hd : Decomp e ctx r) (hsz : esize e ≤ lemDefaultFuel)
+    (hv : ∀ pv, v ≠ Vobject (OVpointer pv))
+    (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
+    (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
+    (tid : Nat) (parent : Option Nat) (th : thread_state)
+    (harena : th.arena = apply_ctx ctx (Expr [] (Eaction (Paction polarity.Pos
+      (Action loc ann (Load0 (Pexpr [] () (PEval (Vctype ty)))
+        (Pexpr [] () (PEval v)) mo)))))) :
+    step_ctx tds σ file ext tid (parent, th) = [Step_error2 "Load"] := by
+  have hget : get_ctx th.arena = [(ctx, Expr [] (Eaction (Paction polarity.Pos
+      (Action loc ann (Load0 (Pexpr [] () (PEval (Vctype ty)))
+        (Pexpr [] () (PEval v)) mo)))))] := by
+    rw [harena]; exact hd.get_ctx_rebuild_action _ lemDefaultFuel hsz
+  unfold step_ctx
+  dsimp only
+  rw [hget]
+  simp only [List.map_cons, List.map_nil]
+  rcases v with ov | lv | _ | _ | _ | _ | ⟨_, _⟩ | _ <;> (try (cases ov)) <;>
+    cases ctx <;>
+      (dsimp only [get_loc]
+       dsimp only [step_action]
+       dsimp only [act_valueFromPexpr, valueFromPexpr])
+  all_goals first
+    | rfl
+    | exact absurd rfl (hv _)
+
+/-- The store twin: `[Step_error2 "Store"]` (step_action's Store0 arm,
+    `some _, some _, some _ => ACTION_ILLTYPED "Store"`). -/
+theorem step_ctx_store_illtyped' {e : CoreExpr} {ctx : context} {r : CoreExpr}
+    {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
+    {v cv : value} {mo : memory_order}
+    (hd : Decomp e ctx r) (hsz : esize e ≤ lemDefaultFuel)
+    (hv : ∀ pv, v ≠ Vobject (OVpointer pv))
+    (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
+    (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
+    (tid : Nat) (parent : Option Nat) (th : thread_state)
+    (harena : th.arena = apply_ctx ctx (Expr [] (Eaction (Paction polarity.Pos
+      (Action loc ann (Store0 false (Pexpr [] () (PEval (Vctype ty)))
+        (Pexpr [] () (PEval v)) (Pexpr [] () (PEval cv)) mo)))))) :
+    step_ctx tds σ file ext tid (parent, th) = [Step_error2 "Store"] := by
+  have hget : get_ctx th.arena = [(ctx, Expr [] (Eaction (Paction polarity.Pos
+      (Action loc ann (Store0 false (Pexpr [] () (PEval (Vctype ty)))
+        (Pexpr [] () (PEval v)) (Pexpr [] () (PEval cv)) mo)))))] := by
+    rw [harena]; exact hd.get_ctx_rebuild_action _ lemDefaultFuel hsz
+  unfold step_ctx
+  dsimp only
+  rw [hget]
+  simp only [List.map_cons, List.map_nil]
+  rcases v with ov | lv | _ | _ | _ | _ | ⟨_, _⟩ | _ <;> (try (cases ov)) <;>
+    cases ctx <;>
+      (dsimp only [get_loc]
+       dsimp only [step_action]
+       dsimp only [act_valueFromPexpr, valueFromPexpr])
+  all_goals first
+    | rfl
+    | exact absurd rfl (hv _)
+
 /-! ### The operand-evaluation rows, classified -/
 
 /-- Eif: a boolean guard is the mirror step; a non-boolean value is
@@ -2486,9 +2745,10 @@ theorem complete_pure_sym {M : MachineCtx} {e : CoreExpr} {ctx : context}
     exact ⟨_, _, hsteps⟩
 
 /-- Load ACTION_EVAL: a pointer-valued operand is the mirror step; a
-    non-pointer value is the registered gap `unmirrored_success` (the
-    engine's evaluation round succeeds into the ill-typed load it then
-    reports ILLTYPED on); an uncovered operand is `eval_uncovered`. -/
+    non-pointer value is ILLTYPED AT DISTANCE ONE (the engine's
+    evaluation round succeeds into the ill-typed load, whose next step
+    list is `[Step_error2 "Load"]` — `ShippedRefusal.error_next`); an
+    uncovered operand is `eval_uncovered`. -/
 theorem complete_load_op {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
     {pe2 : generic_pexpr Unit sym} {mo : memory_order}
@@ -2515,16 +2775,13 @@ theorem complete_load_op {M : MachineCtx} {e : CoreExpr} {ctx : context}
     by_cases hptr : ∃ pv, v = Vobject (OVpointer pv)
     · obtain ⟨pv, rfl⟩ := hptr
       exact .inl ⟨_, hd.lift_step hnr (Step.load_eval hnv2 hv2)⟩
-    · refine .inr (.inr (.unmirrored_success
+    · -- ILLTYPED AT DISTANCE ONE: the evaluation round succeeds into the
+      -- ill-typed load, whose next step list is `[Step_error2 "Load"]`
+      have hv' : ∀ pv, v ≠ Vobject (OVpointer pv) := fun pv h => hptr ⟨pv, h⟩
+      refine .inr (.inl (.error_next
         (apply_ctx ctx (Expr [] (Eaction (Paction polarity.Pos (Action loc ann
           (Load0 (Pexpr [] () (PEval (Vctype ty))) (Pexpr [] () (PEval v)) mo))))), ρ, σ)
-        ?_ ?_))
-      · intro c'' hs
-        rcases hd.step_factor hs with ⟨r', ρr, σr, -, hr, -⟩ | ⟨ra, l, pes, heq, -⟩
-        · obtain ⟨pv, hv2', -⟩ := hr.load_op_inv hnv2
-          rw [hv2] at hv2'
-          exact hptr ⟨pv, Option.some.inj hv2'⟩
-        · exact absurd heq (hnr ra l pes)
+        "Load" ?_ ?_))
       · intro dst hemb
         obtain ⟨-, hlay, -, hext, -⟩ := hemb
         simp only at hlay
@@ -2535,6 +2792,12 @@ theorem complete_load_op {M : MachineCtx} {e : CoreExpr} {ctx : context}
         refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace,
           dst.dr_step_counter + 1, rfl, ?_⟩
         exact advance_withrs_eval M.tagDefs M.tid s m (hm dst.core_run_state0)
+      · intro dst hemb
+        obtain ⟨-, hlay, -, -, -⟩ := hemb
+        simp only at hlay
+        subst hlay
+        exact step_ctx_load_illtyped' hd hsz hv' M.tagDefs dst.layout_state
+          dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ) rfl
 
 /-- Memop-operand EVAL (any memop): evaluable operands are the mirror
     step; an uncovered operand is the registered gap `eval_uncovered`. -/
@@ -2568,8 +2831,9 @@ theorem complete_memop_op {M : MachineCtx} {e : CoreExpr} {ctx : context}
 
 /-- Store ACTION_EVAL: a pointer-valued pointer operand with an
     evaluable value operand is the mirror step; a non-pointer pointer
-    operand is the registered gap `unmirrored_success`; an uncovered
-    operand is `eval_uncovered`. -/
+    operand is ILLTYPED AT DISTANCE ONE (`[Step_error2 "Store"]` on the
+    next round — `ShippedRefusal.error_next`); an uncovered operand is
+    `eval_uncovered`. -/
 theorem complete_store_op {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
     {pe2 pe3 : generic_pexpr Unit sym} {mo : memory_order}
@@ -2603,17 +2867,13 @@ theorem complete_store_op {M : MachineCtx} {e : CoreExpr} {ctx : context}
       by_cases hptr : ∃ pv, v = Vobject (OVpointer pv)
       · obtain ⟨pv, rfl⟩ := hptr
         exact .inl ⟨_, hd.lift_step hnr (Step.store_eval hnv hv2 hv3)⟩
-      · refine .inr (.inr (.unmirrored_success
+      · -- ILLTYPED AT DISTANCE ONE (the store twin)
+        have hv' : ∀ pv, v ≠ Vobject (OVpointer pv) := fun pv h => hptr ⟨pv, h⟩
+        refine .inr (.inl (.error_next
           (apply_ctx ctx (Expr [] (Eaction (Paction polarity.Pos (Action loc ann
             (Store0 false (Pexpr [] () (PEval (Vctype ty))) (Pexpr [] () (PEval v))
               (Pexpr [] () (PEval cv)) mo))))), ρ, σ)
-          ?_ ?_))
-        · intro c'' hs
-          rcases hd.step_factor hs with ⟨r', ρr, σr, -, hr, -⟩ | ⟨ra, l, pes, heq, -⟩
-          · obtain ⟨pv, cv', hv2', -, -⟩ := hr.store_op_inv hnv
-            rw [hv2] at hv2'
-            exact hptr ⟨pv, Option.some.inj hv2'⟩
-          · exact absurd heq (hnr ra l pes)
+          "Store" ?_ ?_))
         · intro dst hemb
           obtain ⟨-, hlay, -, hext, -⟩ := hemb
           simp only at hlay
@@ -2624,6 +2884,12 @@ theorem complete_store_op {M : MachineCtx} {e : CoreExpr} {ctx : context}
           refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace,
             dst.dr_step_counter + 1, rfl, ?_⟩
           exact advance_withrs_eval M.tagDefs M.tid s m (hm dst.core_run_state0)
+        · intro dst hemb
+          obtain ⟨-, hlay, -, -, -⟩ := hemb
+          simp only at hlay
+          subst hlay
+          exact step_ctx_store_illtyped' hd hsz hv' M.tagDefs dst.layout_state
+            dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ) rfl
 
 /-! ### The memop row: the pointer-equality fork and the driver's
 INVALID-memop panic -/
@@ -2925,21 +3191,23 @@ theorem complete_memop_vals {M : MachineCtx} {e : CoreExpr} {ctx : context}
     rw [hd.unseq_ccall_false] at hsteps
     exact ⟨_, _, _, _, _, g, hsteps, hpm⟩
 
-/-- Erun at a context WITHOUT a current procedure: the registered gap
-    `no_current_proc` (the mirror's label map is empty). -/
+/-- Erun at a context WITHOUT a current procedure: the engine's PANIC
+    in the label lookup's key (`ShippedRefusal.panic_noproc`; the
+    mirror's label map is empty, fail-closed). -/
 theorem complete_run_noproc {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {ra : core_run_annotation} {l : sym} {pes : List (generic_pexpr Unit sym)}
     (hd : Decomp e ctx (runRedex ra l pes))
     (hsz : esize e ≤ lemDefaultFuel)
     (hproc : M.proc = none) (ρ : EnvStack) (σ : Mem) :
     RoundComplete M (e, ρ, σ) := by
-  refine .inr (.inr (.no_current_proc hproc ?_))
+  refine .inr (.inl (.panic_noproc "Core_reduction ==> Erun outside of a proc" hproc ?_))
   intro dst hemb
   obtain ⟨-, hlay, -, -, -⟩ := hemb
   simp only at hlay
   subst hlay
-  exact step_ctx_run_shape hd hsz M.tagDefs dst.layout_state
-    dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ) rfl
+  obtain ⟨s, inst, k, hsteps⟩ := step_ctx_run_noproc hd hsz M.tagDefs dst.layout_state
+    dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ) rfl hproc
+  exact ⟨s, l, inst, k, hsteps⟩
 
 /-! ### THE ASSEMBLED COMPLETENESS THEOREM -/
 
