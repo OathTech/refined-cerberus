@@ -128,13 +128,19 @@ theorem fib_certified_production (sup : Nat) (ra : core_run_annotation) (n : Int
 loop from the cold start, WHOLE-PROGRAM LOGIC PROOF (alloc arc P2
 step 4; the R-02 conversion). The program is SELF-CONTAINED and
 BINDS its fresh cell (the P2 pointer-flow design record,
-docs/2026-09-01_p2-notes.md): `lets p = create(4, int)`, then a
-context-discarding `run` enters the registered loop carrying the
-counter AND the bound pointer as label arguments; each iteration
-stores 7 through the POINTER ARGUMENT. The `save` node sits in the
-untaken arm of the outer sseq — the REGISTRATION site the shipped
-`collect_labeled_continuations_NEW` reads; control never falls into
-it (the prefix always jumps). The create crosses the logic through
+docs/2026-09-01_p2-notes.md): `lets p = create(4, int)`, then the
+loop is ENTERED THROUGH ITS `save` with live-variable initializers,
+`save loop(x := n, c := p) in …` (QA-1/H-1: the engine's Esave EVAL
+arm evaluates `p` at entry — `wpt_save` at `evalPexprs … = some
+cvals`), carrying the counter AND the bound pointer as loop
+parameters; each iteration stores the constant 7 directly through the
+POINTER PARAMETER, `store(int, c, 7)` (the mixed operand shape). The
+`save` node is both the REGISTRATION site the shipped
+`collect_labeled_continuations_NEW` reads and the entry. The pre-QA-1
+form (a dummy-initialized `save` in an untaken sseq arm, entry by
+`run` from outside it, and a per-iteration `lets s = 7` bind because
+the mirrored store-EVAL arm required non-value operands) is recorded
+in docs/2026-09-02_qa1-notes.md. The create crosses the logic through
 the PUBLIC `wpt_create` from the one-request plan; the whole program
 is ONE total judgment collapsed by the generic
 `wpt_driver_done_alloc` → `prod_run_eqJ` — no `Step.*`,
@@ -145,7 +151,6 @@ def ctrLoopSym : sym := Symbol "" 521 SD_None
 def ctrXSym : sym := Symbol "" 522 SD_None
 def ctrCSym : sym := Symbol "" 523 SD_None
 def ctrPSym : sym := Symbol "" 524 SD_None
-def ctrSSym : sym := Symbol "" 525 SD_None
 
 /-- The guard `x > 0`. -/
 def ctrGuardPe : generic_pexpr Unit sym :=
@@ -157,36 +162,37 @@ def ctrDecPe : generic_pexpr Unit sym :=
   Pexpr [] () (PEop binop.OpSub (Pexpr [] () (PEsym ctrXSym))
     (Pexpr [] () (PEval (ivVal 1))))
 
-/-- The registered loop body: store 7 through the pointer ARGUMENT
-    (the stored constant bound per iteration — the mirrored
-    store-EVAL arm requires non-value operands), back edge re-passing
-    the pointer. -/
+/-- The registered loop body: `if x > 0 then (store(int, c, 7);
+    run loop(x - 1, c)) else unit` — the constant stored directly
+    through the pointer PARAMETER, the back edge re-passing it. -/
 def ctrBody (ra : core_run_annotation) (mo : memory_order)
     (bty : core_base_type) : CoreExpr :=
   Expr [] (Eif ctrGuardPe
-    (Expr [] (Esseq (symPat [] ctrSSym bty)
-      (ofVal (.pure sevenVal))
-      (Expr [] (Esseq (Pattern [] (CaseBase (none, bty)))
-        (storeOpRedex loc0 empty_annotation intTy
-          (Pexpr [] () (PEsym ctrCSym)) (Pexpr [] () (PEsym ctrSSym)) mo)
-        (Expr [] (Erun ra ctrLoopSym
-          [ctrDecPe, Pexpr [] () (PEsym ctrCSym)]))))))
+    (Expr [] (Esseq (Pattern [] (CaseBase (none, bty)))
+      (storeOpRedex loc0 empty_annotation intTy
+        (Pexpr [] () (PEsym ctrCSym)) (Pexpr [] () (PEval sevenVal)) mo)
+      (Expr [] (Erun ra ctrLoopSym
+        [ctrDecPe, Pexpr [] () (PEsym ctrCSym)]))))
     (ofVal (.pure Vunit)))
 
-/-- The whole self-contained program. -/
+/-- The loop's save parameters with their LIVE initializers:
+    `x := n` (the literal count), `c := p` (the program-bound pointer). -/
+def ctrParams (xbty cbty : core_base_type) (n : Int) :
+    List (sym × ((core_base_type ×
+      Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym)) :=
+  [(ctrXSym, ((xbty, (none : Option (ctype × pass_by_value_or_pointer))),
+    Pexpr [] () (PEval (ivVal n)))),
+   (ctrCSym, ((cbty, (none : Option (ctype × pass_by_value_or_pointer))),
+    Pexpr [] () (PEsym ctrPSym)))]
+
+/-- The whole self-contained program:
+    `lets p = create(4, int) in save loop(x := n, c := p) in body`. -/
 def counterProdProg (ra : core_run_annotation) (mo : memory_order)
     (bty xbty cbty sbty : core_base_type) (n : Int) : CoreExpr :=
-  Expr [] (Esseq (Pattern [] (CaseBase (none, bty)))
-    (Expr [] (Esseq (symPat [] ctrPSym bty)
-      (createExpr loc0 empty_annotation (.IV .Prov_none 4) intTy
-        (PrefOther "spike-x"))
-      (Expr [] (Erun ra ctrLoopSym
-        [Pexpr [] () (PEval (ivVal n)), Pexpr [] () (PEsym ctrPSym)]))))
-    (Expr [] (Esave (ctrLoopSym, sbty)
-      [(ctrXSym, ((xbty, (none : Option (ctype × pass_by_value_or_pointer))),
-        Pexpr [] () (PEval (ivVal 0)))),
-       (ctrCSym, ((cbty, (none : Option (ctype × pass_by_value_or_pointer))),
-        Pexpr [] () (PEval nullVal)))]
+  Expr [] (Esseq (symPat [] ctrPSym bty)
+    (createExpr loc0 empty_annotation (.IV .Prov_none 4) intTy
+      (PrefOther "spike-x"))
+    (Expr [] (Esave (ctrLoopSym, sbty) (ctrParams xbty cbty n)
       (ctrBody ra mo bty))))
 
 /-- The label map the shipped registration computes. -/
@@ -227,10 +233,6 @@ end CtrFacts
 def ctrFrame (vx vc : value) (f : Fmap sym value) : Fmap sym value :=
   envAdd ctrCSym vc (envAdd ctrXSym vx f)
 
-/-- ... after additionally binding the stored constant. -/
-def ctrFrameS (vs vx vc : value) (f : Fmap sym value) : Fmap sym value :=
-  envAdd ctrSSym vs (ctrFrame vx vc f)
-
 theorem ctrFrame_symFrame {f : Fmap sym value} (hf : SymFrame f)
     (vx vc : value) : SymFrame (ctrFrame vx vc f) :=
   (hf.add _ _).add _ _
@@ -248,30 +250,20 @@ theorem ctrFrame_lookup_c {f : Fmap sym value} (hf : SymFrame f)
   unfold ctrFrame
   rw [envAdd_lookup (hf.add _ _) symCmpK, if_pos (by decide +kernel)]
 
-theorem ctrFrameS_lookup_s {f : Fmap sym value} (hf : SymFrame f)
-    (vs vx vc : value) :
-    fmapLookupBy symCmpK ctrSSym (ctrFrameS vs vx vc f) = some vs := by
-  unfold ctrFrameS
-  rw [envAdd_lookup (ctrFrame_symFrame hf _ _) symCmpK,
-    if_pos (by decide +kernel)]
-
-theorem ctrFrameS_lookup_x {f : Fmap sym value} (hf : SymFrame f)
-    (vs vx vc : value) :
-    fmapLookupBy symCmpK ctrXSym (ctrFrameS vs vx vc f) = some vx := by
-  unfold ctrFrameS
-  rw [envAdd_lookup (ctrFrame_symFrame hf _ _) symCmpK,
-    if_neg (by decide +kernel), ctrFrame_lookup_x hf]
-
-theorem ctrFrameS_lookup_c {f : Fmap sym value} (hf : SymFrame f)
-    (vs vx vc : value) :
-    fmapLookupBy symCmpK ctrCSym (ctrFrameS vs vx vc f) = some vc := by
-  unfold ctrFrameS
-  rw [envAdd_lookup (ctrFrame_symFrame hf _ _) symCmpK,
-    if_neg (by decide +kernel), ctrFrame_lookup_c hf]
-
 theorem bindArgs_ctr (xbty cbty : core_base_type) (v1 v2 : value)
     (f : Fmap sym value) (rest : List (Fmap sym value)) :
     bindArgs [(ctrXSym, xbty), (ctrCSym, cbty)] [v1, v2] (f :: rest) =
+      ctrFrame v1 v2 f :: rest := by
+  show update_env (mk_sym_pat ctrCSym cbty) v2
+    (update_env (mk_sym_pat ctrXSym xbty) v1 (f :: rest)) = _
+  rw [update_env_cons, update_env_aux_sym, update_env_cons,
+    update_env_aux_sym]
+  rfl
+
+/-- The save entry binds the parameters exactly as the jump does. -/
+theorem bindSaveParams_ctr (xbty cbty : core_base_type) (n : Int)
+    (v1 v2 : value) (f : Fmap sym value) (rest : List (Fmap sym value)) :
+    bindSaveParams (ctrParams xbty cbty n) [v1, v2] (f :: rest) =
       ctrFrame v1 v2 f :: rest := by
   show update_env (mk_sym_pat ctrCSym cbty) v2
     (update_env (mk_sym_pat ctrXSym xbty) v1 (f :: rest)) = _
@@ -301,42 +293,41 @@ theorem ctr_guard_eval (i : Int) (vc : value) :
     (CerbMem.integerIval i)).map boolValue = _
   rfl
 
-theorem ctr_store_operands_eval (vs vx vc : value) :
-    evalPexpr fmapEmpty fmapEmpty (ctrFrameS vs vx vc f :: rest)
-        (Pexpr [] () (PEsym ctrCSym)) = some vc ∧
-    evalPexpr fmapEmpty fmapEmpty (ctrFrameS vs vx vc f :: rest)
-        (Pexpr [] () (PEsym ctrSSym)) = some vs := by
-  constructor
-  · rw [evalPexpr_sym_empty]
-    exact lookup_env_head (ctrFrameS_lookup_c hf _ _ _) rest
-  · rw [evalPexpr_sym_empty]
-    exact lookup_env_head (ctrFrameS_lookup_s hf _ _ _) rest
+theorem ctr_store_ptr_eval (vx vc : value) :
+    evalPexpr fmapEmpty fmapEmpty (ctrFrame vx vc f :: rest)
+        (Pexpr [] () (PEsym ctrCSym)) = some vc := by
+  rw [evalPexpr_sym_empty]
+  exact lookup_env_head (ctrFrame_lookup_c hf _ _) rest
 
-theorem ctr_backedge_args_eval (vs : value) (i : Int) (vc : value) :
-    evalPexprs fmapEmpty fmapEmpty (ctrFrameS vs (ivVal i) vc f :: rest)
+theorem ctr_backedge_args_eval (i : Int) (vc : value) :
+    evalPexprs fmapEmpty fmapEmpty (ctrFrame (ivVal i) vc f :: rest)
         [ctrDecPe, Pexpr [] () (PEsym ctrCSym)] =
       some [ivVal (i - 1), vc] := by
   rw [evalPexprs_cons]
-  rw [show evalPexpr fmapEmpty fmapEmpty (ctrFrameS vs (ivVal i) vc f :: rest)
+  rw [show evalPexpr fmapEmpty fmapEmpty (ctrFrame (ivVal i) vc f :: rest)
       ctrDecPe = some (ivVal (i - 1)) from by
     unfold ctrDecPe
     rw [evalPexpr_op]
-    rw [show evalPexpr fmapEmpty fmapEmpty (ctrFrameS vs (ivVal i) vc f :: rest)
+    rw [show evalPexpr fmapEmpty fmapEmpty (ctrFrame (ivVal i) vc f :: rest)
         (Pexpr [] () (PEsym ctrXSym)) = some (ivVal i) from by
       rw [evalPexpr_sym_empty]
-      exact lookup_env_head (ctrFrameS_lookup_x hf _ _ _) rest]
+      exact lookup_env_head (ctrFrame_lookup_x hf _ _) rest]
     rfl]
   rw [evalPexprs_cons]
-  rw [show evalPexpr fmapEmpty fmapEmpty (ctrFrameS vs (ivVal i) vc f :: rest)
+  rw [show evalPexpr fmapEmpty fmapEmpty (ctrFrame (ivVal i) vc f :: rest)
       (Pexpr [] () (PEsym ctrCSym)) = some vc from by
     rw [evalPexpr_sym_empty]
-    exact lookup_env_head (ctrFrameS_lookup_c hf _ _ _) rest]
+    exact lookup_env_head (ctrFrame_lookup_c hf _ _) rest]
   rfl
 
-theorem ctr_entry_args_eval (n : Int) (vp : value) :
+/-- The save's initializers evaluate at the entry env: the literal
+    count and the program-bound pointer. -/
+theorem ctr_save_params_eval (xbty cbty : core_base_type) (n : Int) (vp : value) :
     evalPexprs fmapEmpty fmapEmpty (envAdd ctrPSym vp f :: rest)
-        [Pexpr [] () (PEval (ivVal n)), Pexpr [] () (PEsym ctrPSym)] =
+        (saveParamPexprs (ctrParams xbty cbty n)) =
       some [ivVal n, vp] := by
+  show evalPexprs fmapEmpty fmapEmpty (envAdd ctrPSym vp f :: rest)
+    [Pexpr [] () (PEval (ivVal n)), Pexpr [] () (PEsym ctrPSym)] = _
   rw [evalPexprs_cons, evalPexpr_val]
   rw [evalPexprs_cons]
   rw [show evalPexpr fmapEmpty fmapEmpty (envAdd ctrPSym vp f :: rest)
@@ -352,17 +343,17 @@ end CtrEval
 block specification, whole-program judgment -/
 
 /-- The derived per-label-entry step budget at counter value i:
-    if 1 + constant bind 1 + store-operand eval 1 + store 3 + jump 1
-    per iteration; if 1 + unit delivery 1 at exit. -/
+    if 1 + store-operand eval 1 + store 3 + jump 1 per iteration;
+    if 1 + unit delivery 1 at exit. -/
 def ctrCost : Nat → Nat
   | 0 => 2
-  | i + 1 => 7 + ctrCost i
+  | i + 1 => 6 + ctrCost i
 
-theorem ctrCost_eq (i : Nat) : ctrCost i = 7 * i + 2 := by
+theorem ctrCost_eq (i : Nat) : ctrCost i = 6 * i + 2 := by
   induction i with
   | zero => rfl
   | succ i ih =>
-    rw [show ctrCost (i + 1) = 7 + ctrCost i from rfl, ih]
+    rw [show ctrCost (i + 1) = 6 + ctrCost i from rfl, ih]
     omega
 
 /-- The engine-facing postcondition: unit delivered, the final
@@ -410,47 +401,29 @@ theorem ctr_body_wpt (i : Int) (pptr : CerbMem.PointerValue)
         (ctrFrame (ivVal i) (ptrVal pptr) f :: rest) := by
   rw [show ctrBody ra mo bty =
     Expr [] (Eif ctrGuardPe
-      (Expr [] (Esseq (symPat [] ctrSSym bty)
-        (ofVal (.pure sevenVal))
-        (Expr [] (Esseq (Pattern [] (CaseBase (none, bty)))
-          (storeOpRedex loc0 empty_annotation intTy
-            (Pexpr [] () (PEsym ctrCSym)) (Pexpr [] () (PEsym ctrSSym)) mo)
-          (Expr [] (Erun ra ctrLoopSym
-            [ctrDecPe, Pexpr [] () (PEsym ctrCSym)]))))))
+      (Expr [] (Esseq (Pattern [] (CaseBase (none, bty)))
+        (storeOpRedex loc0 empty_annotation intTy
+          (Pexpr [] () (PEsym ctrCSym)) (Pexpr [] () (PEval sevenVal)) mo)
+        (Expr [] (Erun ra ctrLoopSym
+          [ctrDecPe, Pexpr [] () (PEsym ctrCSym)]))))
       (ofVal (.pure Vunit))) from rfl]
   iintro Hpt
   by_cases hpos : 0 < i
-  · -- guard TRUE: bind 7, store through the argument, jump smaller
+  · -- guard TRUE: store 7 through the parameter, jump smaller
     rw [show ctrCost i.toNat =
-        (1 + (4 + (1 + ctrCost (i - 1).toNat))) + 1 from by
+        ((3 + 1) + (1 + ctrCost (i - 1).toNat)) + 1 from by
       rw [show i.toNat = (i - 1).toNat + 1 from by omega]
-      show 7 + ctrCost (i - 1).toNat = _
+      show 6 + ctrCost (i - 1).toNat = _
       omega]
     iapply wpt_if_true [] ctrGuardPe _ _ _
       (by rw [procCtx_extern, ctr_guard_eval hf rest i (ptrVal pptr),
         decide_eq_true hpos]; rfl)
-    iapply wpt_seq_sym
-    iapply wpt_ofVal (.pure sevenVal) _ (by simp [deliveryCost])
-    iexists sevenVal
-    isplit
-    · ipureintro
-      rfl
-    rw [show update_env (symPat [] ctrSSym bty) sevenVal
-        (ctrFrame (ivVal i) (ptrVal pptr) f :: rest) =
-      ctrFrameS sevenVal (ivVal i) (ptrVal pptr) f :: rest from by
-      rw [update_env_sym]
-      rfl]
-    rw [show (4 + (1 + ctrCost (i - 1).toNat) : Nat) =
-      (3 + 1) + (1 + ctrCost (i - 1).toNat) from rfl]
     iapply wpt_seq
     iapply wpt_store_eval loc0 empty_annotation intTy _ _ mo _ rfl
       (pv := pptr) (cv := sevenVal)
       (by rw [procCtx_extern]
-          exact (ctr_store_operands_eval hf rest sevenVal (ivVal i)
-            (ptrVal pptr)).1)
-      (by rw [procCtx_extern]
-          exact (ctr_store_operands_eval hf rest sevenVal (ivVal i)
-            (ptrVal pptr)).2)
+          exact ctr_store_ptr_eval hf rest (ivVal i) (ptrVal pptr))
+      rfl
     iapply wpt_store_cell loc0 empty_annotation intTy pptr sevenVal mo
       sevenMval bs _ (Nat.le_refl 3) seven_encodes (seven_storable _)
     isplitl [Hpt]
@@ -461,14 +434,14 @@ theorem ctr_body_wpt (i : Int) (pptr : CerbMem.PointerValue)
       (by rw [procCtx_labels hQ]
           exact ctrQ_lookup ra mo bty xbty cbty)
       (by rw [procCtx_extern]
-          exact ctr_backedge_args_eval hf rest sevenVal i (ptrVal pptr))
+          exact ctr_backedge_args_eval hf rest i (ptrVal pptr))
       (Nat.le_refl _)
     iexists (i - 1), pptr, (CerbMem.memValueToBytes (procCtx p rs).tagDefs [] sevenMval).2,
-      (ctrFrameS sevenVal (ivVal i) (ptrVal pptr) f), rest
+      (ctrFrame (ivVal i) (ptrVal pptr) f), rest
     isplit
     · ipureintro
       refine ⟨rfl, by omega, by omega, rfl, rfl,
-        (ctrFrame_symFrame hf _ _).add _ _, ?_⟩
+        ctrFrame_symFrame hf _ _, ?_⟩
       right
       exact ⟨by omega, rfl⟩
     · iexact Hpt
@@ -517,30 +490,24 @@ theorem ctr_blockSpecsT :
 
 /-- THE WHOLE PROGRAM at the total judgment, from the abstract
     one-request capacity alone: create through the PUBLIC
-    `wpt_create`, entry by the registered jump carrying the BOUND
-    pointer. -/
+    `wpt_create`, entry through the loop's `save` with its live
+    initializers (`wpt_save` — EVAL then TAU, `saveEntryCost = 2`),
+    then the body at its variant budget. -/
 theorem ctrProd_wpt (sbty : core_base_type) (hn : 0 ≤ n)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value))
     (hf : SymFrame ev0) :
     iprop(allocCap (procCtx p rs).tagDefs (GF := GF) [⟨4, intTy⟩]) ⊢
-      wpt (procCtx p rs) (ctrLsT n) ((2 + (ctrCost n.toNat + 1)) + 0)
+      wpt (procCtx p rs) (ctrLsT n)
+        (2 + (ctrCost n.toNat + saveEntryCost (ctrParams xbty cbty n)))
         (readoutPost (ψC n))
         (counterProdProg ra mo bty xbty cbty sbty n) (ev0 :: evs) := by
   iintro Hcap
   rw [show counterProdProg ra mo bty xbty cbty sbty n =
-    Expr [] (Esseq (Pattern [] (CaseBase (none, bty)))
-      (Expr [] (Esseq (symPat [] ctrPSym bty)
-        (createExpr loc0 empty_annotation (.IV .Prov_none 4) intTy
-          (PrefOther "spike-x"))
-        (Expr [] (Erun ra ctrLoopSym
-          [Pexpr [] () (PEval (ivVal n)), Pexpr [] () (PEsym ctrPSym)]))))
-      (Expr [] (Esave (ctrLoopSym, sbty)
-        [(ctrXSym, ((xbty, (none : Option (ctype × pass_by_value_or_pointer))),
-          Pexpr [] () (PEval (ivVal 0)))),
-         (ctrCSym, ((cbty, (none : Option (ctype × pass_by_value_or_pointer))),
-          Pexpr [] () (PEval nullVal)))]
+    Expr [] (Esseq (symPat [] ctrPSym bty)
+      (createExpr loc0 empty_annotation (.IV .Prov_none 4) intTy
+        (PrefOther "spike-x"))
+      (Expr [] (Esave (ctrLoopSym, sbty) (ctrParams xbty cbty n)
         (ctrBody ra mo bty)))) from rfl]
-  iapply wpt_seq
   iapply wpt_seq_sym
   iapply wpt_create loc0 empty_annotation .Prov_none ⟨4, intTy⟩ []
     (PrefOther "spike-x") (ev0 :: evs) (Nat.le_refl 2) intTy_nonatomic
@@ -553,20 +520,15 @@ theorem ctrProd_wpt (sbty : core_base_type) (hn : 0 ≤ n)
   · ipureintro
     rfl
   rw [update_env_sym ctrPSym bty]
-  iapply wpt_run [] ra ctrLoopSym
-    [Pexpr [] () (PEval (ivVal n)), Pexpr [] () (PEsym ctrPSym)]
-    _ _ (ctrCost n.toNat)
-    (by rw [procCtx_labels hQ]
-        exact ctrQ_lookup ra mo bty xbty cbty)
+  iapply wpt_save [] (ctrLoopSym, sbty) (ctrParams xbty cbty n) _ _ evs
+    (cvals := [ivVal n, ptrVal pptr])
     (by rw [procCtx_extern]
-        exact ctr_entry_args_eval hf evs n (Vobject (OVpointer pptr)))
-    (by omega)
-  iexists n, pptr, (intUndefBytes fmapEmpty),
-    (envAdd ctrPSym (Vobject (OVpointer pptr)) ev0), evs
-  isplit
-  · ipureintro
-    exact ⟨rfl, hn, Int.le_refl n, rfl, rfl, hf.add _ _, .inl ⟨rfl, rfl⟩⟩
-  · iexact Hpt
+        exact ctr_save_params_eval hf evs xbty cbty n (ptrVal pptr))
+  rw [bindSaveParams_ctr]
+  iapply ctr_body_wpt ra mo bty xbty cbty n p rs hQ n pptr (intUndefBytes fmapEmpty)
+    (envAdd ctrPSym (Vobject (OVpointer pptr)) ev0) evs (hf.add _ _) hn
+    (Int.le_refl n) (.inl ⟨rfl, rfl⟩)
+  iexact Hpt
 
 end CtrIris
 
@@ -577,52 +539,49 @@ theorem ctrBody_frag (ra : core_run_annotation) (mo : memory_order)
   .if_
     (by rw [show peDepth ctrGuardPe = 2 from rfl,
       show lemDefaultFuel = 999999 + 1 from rfl]; omega)
-    (.sseq_sym (frag_ofVal (.pure sevenVal))
-      (.sseq
-        (.store_op loc0_lib rfl (.sym [] ctrCSym) (.sym [] ctrSSym)
-          (by rw [show peDepth (Pexpr ([] : List annot) ()
-              (PEsym ctrCSym)) = 1 from rfl,
-            show lemDefaultFuel = 999999 + 1 from rfl]; omega)
-          (by rw [show peDepth (Pexpr ([] : List annot) ()
-              (PEsym ctrSSym)) = 1 from rfl,
-            show lemDefaultFuel = 999999 + 1 from rfl]; omega))
-        (.run (by
-          intro pe hpe
-          simp only [List.mem_cons, List.not_mem_nil, or_false] at hpe
-          rcases hpe with rfl | rfl <;>
-            (rw [show lemDefaultFuel = 999999 + 1 from rfl]
-             first
-              | (rw [show peDepth ctrDecPe = 2 from rfl]; omega)
-              | (rw [show peDepth (Pexpr ([] : List annot) ()
-                  (PEsym ctrCSym)) = 1 from rfl]; omega))))))
-    (frag_ofVal (.pure Vunit))
-
-theorem counterProdProg_frag (ra : core_run_annotation) (mo : memory_order)
-    (bty xbty cbty sbty : core_base_type) (n : Int) :
-    Frag (counterProdProg ra mo bty xbty cbty sbty n) :=
-  .sseq
-    (.sseq_sym (.create loc0_lib)
+    (.sseq
+      (.store_op loc0_lib rfl (.sym [] ctrCSym) (.val [] sevenVal)
+        (by rw [show peDepth (Pexpr ([] : List annot) ()
+            (PEsym ctrCSym)) = 1 from rfl,
+          show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+        (peDepth_val_le _ _))
       (.run (by
         intro pe hpe
         simp only [List.mem_cons, List.not_mem_nil, or_false] at hpe
         rcases hpe with rfl | rfl <;>
           (rw [show lemDefaultFuel = 999999 + 1 from rfl]
            first
+            | (rw [show peDepth ctrDecPe = 2 from rfl]; omega)
             | (rw [show peDepth (Pexpr ([] : List annot) ()
-                (PEval (ivVal n))) = 1 from rfl]; omega)
-            | (rw [show peDepth (Pexpr ([] : List annot) ()
-                (PEsym ctrPSym)) = 1 from rfl]; omega)))))
-    (.save (saveParams_depth_of_vals rfl) (ctrBody_frag ra mo bty))
+                (PEsym ctrCSym)) = 1 from rfl]; omega)))))
+    (frag_ofVal (.pure Vunit))
+
+/-- The save's initializers are within the evaluator's fuel (a literal
+    and a symbol, depth 1 each). -/
+theorem ctrParams_depth (xbty cbty : core_base_type) (n : Int) :
+    ∀ pe ∈ saveParamPexprs (ctrParams xbty cbty n), peDepth pe ≤ lemDefaultFuel := by
+  intro pe hpe
+  simp only [ctrParams, saveParamPexprs, List.map_cons, List.map_nil,
+    List.mem_cons, List.not_mem_nil, or_false] at hpe
+  rcases hpe with rfl | rfl
+  · exact peDepth_val_le _ _
+  · exact peDepth_sym_le _ _
+
+theorem counterProdProg_frag (ra : core_run_annotation) (mo : memory_order)
+    (bty xbty cbty sbty : core_base_type) (n : Int) :
+    Frag (counterProdProg ra mo bty xbty cbty sbty n) :=
+  .sseq_sym (.create loc0_lib)
+    (.save (ctrParams_depth xbty cbty n) (ctrBody_frag ra mo bty))
 
 theorem ctrBody_pot (ra : core_run_annotation) (mo : memory_order)
-    (bty : core_base_type) : pot (ctrBody ra mo bty) = 5 := rfl
+    (bty : core_base_type) : pot (ctrBody ra mo bty) = 4 := rfl
 
 theorem counterProdProg_pot (ra : core_run_annotation) (mo : memory_order)
     (bty xbty cbty sbty : core_base_type) (n : Int) :
-    pot (counterProdProg ra mo bty xbty cbty sbty n) = 7 := rfl
+    pot (counterProdProg ra mo bty xbty cbty sbty n) = 6 := rfl
 
 /-- The shipped registration computes the counter's label map (the
-    save is the registration site; control never enters it). -/
+    save is the registration site and the entry). -/
 theorem collect_new_ctrProd (ra : core_run_annotation) (mo : memory_order)
     (bty xbty cbty sbty : core_base_type) (n : Int) :
     collect_labeled_continuations_NEW
@@ -660,7 +619,7 @@ theorem ctrProd_labeledAt (sup : Nat) (ra : core_run_annotation) (mo : memory_or
 theorem counter_loop_certified_production (sup : Nat) (ra : core_run_annotation)
     (mo : memory_order) (bty xbty cbty sbty : core_base_type)
     (n : Int) (hn : 0 ≤ n)
-    (hfuel : 7 * n.toNat + 7 ≤ lemDefaultFuel)
+    (hfuel : 6 * n.toNat + 8 ≤ lemDefaultFuel)
     (fs : CerbFS.FsState) (args : List String) :
     ∃ (dres : driver_result) (dst' : driver_state),
       CerbND.runND
@@ -689,7 +648,7 @@ theorem counter_loop_certified_production (sup : Nat) (ra : core_run_annotation)
     exact ctrBody_frag ra mo bty
   obtain ⟨dres, dst', heq, hψ, hbl, hout, herr⟩ :=
     prod_run_eqJ sup (counterProdProg ra mo bty xbty cbty sbty n) hQprod
-      (ψC n) ((2 + (ctrCost n.toNat + 1)) + 0)
+      (ψC n) (2 + (ctrCost n.toNat + saveEntryCost (ctrParams xbty cbty n)))
       (wpt_driver_done_alloc (GF := SpikeGF)
         (M₀ := procCtx mainSym ((initial_core_run_state sup
           (collect_labeled_continuations_NEW
@@ -709,7 +668,7 @@ theorem counter_loop_certified_production (sup : Nat) (ra : core_run_annotation)
             show lemDefaultFuel = 999999 + 1 from rfl]
             omega)
         (prodMem₀_launchCoh [⟨4, intTy⟩] prod_one_int_plan_fits)
-        (ψC n) ((2 + (ctrCost n.toNat + 1)) + 0)
+        (ψC n) (2 + (ctrCost n.toNat + saveEntryCost (ctrParams xbty cbty n)))
         (by
           intro inst
           iintro ⟨-, Hcap⟩
@@ -718,7 +677,7 @@ theorem counter_loop_certified_production (sup : Nat) (ra : core_run_annotation)
           · iapply ctrProd_wpt ra mo bty xbty cbty n mainSym _ hQprod sbty
               hn fmapEmpty [] symFrame_empty $$ Hcap))
       (by rw [show lemDefaultFuel = 999999 + 1 from rfl] at hfuel ⊢
-          rw [ctrCost_eq]
+          rw [ctrCost_eq, show saveEntryCost (ctrParams xbty cbty n) = 2 from rfl]
           omega)
       fs args
   exact ⟨dres, dst', heq, hψ.1, hψ.2, hbl, hout, herr⟩
@@ -730,8 +689,12 @@ engine's own operations, ALL THROUGH THE LOGIC: two creates through
 the PUBLIC `wpt_create` from a two-request plan (the fresh pointers
 BOUND by the program — the P2 pointer-flow design record), four
 field stores through the generic typed-subrange rules at the bound
-pointers, then the AUTHORED flagship loop entered by a
-context-discarding run. THE GENERIC LIST LOGIC IS UNTOUCHED (the
+pointers — the constants stored DIRECTLY (`store(long, n1, 1)`,
+`store(node*, array_shift(n2, long, 1), NULL)`: QA-1/H-1, the mixed
+operand shapes) — then the AUTHORED flagship loop ENTERED THROUGH ITS
+`save` with live initializers, `save loop(prev := NULL, cur := n1)`
+(`wpt_save` at `evalPexprs … = some cvals`). THE GENERIC LIST LOGIC IS
+UNTOUCHED (the
 charter's demand): `lrBody`/`lrQ`/`lrLsT`/`lr_body_wpt` are consumed
 verbatim at the node list `[(i₁,1),(i₂,2)]` for the ENGINE-PICKED
 allocation ids i₁ i₂ (existential — the production label spec wraps
@@ -739,15 +702,14 @@ the generic one in `∃ i₁ i₂`, transported by `wpt_mono_Ls`); the
 exact cold-start pointers live only in the plan's boundary
 evaluation (`lr_two_node_plan_fits`). The node-WF address bounds
 `isList` demands come from the PUBLIC create rule's bounds export.
-The `save` node in the untaken outer-sseq arm is the registration
-site. No `Step.*`, `engineSteps_*`, `driveJ_step`,
-`driverDone_step` anywhere. -/
+The `save` node is the registration site and the entry (the pre-QA-1
+form — three constant binds, the save dummy-initialized in an untaken
+outer-sseq arm, entry by `run` — is recorded in
+docs/2026-09-02_qa1-notes.md). No `Step.*`, `engineSteps_*`,
+`driveJ_step`, `driverDone_step` anywhere. -/
 
 def lrN1Sym : sym := Symbol "" 531 SD_None
 def lrN2Sym : sym := Symbol "" 532 SD_None
-def lrW1Sym : sym := Symbol "" 533 SD_None
-def lrW2Sym : sym := Symbol "" 534 SD_None
-def lrNZSym : sym := Symbol "" 535 SD_None
 
 /-- Core loaded-long values/mvals for the value fields. -/
 def longVal (v : Int) : value :=
@@ -767,60 +729,58 @@ theorem nodeTy_nonatomic : atomicTy nodeTy = false := rfl
 theorem nodeTy_decIndep_undef (a : Int) : decIndep fmapEmpty a nodeTy nodeUndefBytes :=
   fun lum fpm => nodeTy_dec_indep lum fpm a _
 
-/-- The build prefix: two creates (pointers BOUND), three constant
-    binds (the store-EVAL arm needs non-value operands), four field
-    stores through the bound pointers, then the jump into the
-    registered loop with (prev := NULL, cur := node 1). -/
+/-- The build prefix, continued by `k`: two creates (pointers BOUND),
+    four field stores through the bound pointers with the constants
+    stored directly (`store(long, n1, 1)`; `store(node*,
+    array_shift(n1, long, 1), n2)`; `store(long, n2, 2)`;
+    `store(node*, array_shift(n2, long, 1), NULL)`), then `k`. -/
 def lrProdPrefix (ra : core_run_annotation) (mo : memory_order)
-    (bty : core_base_type) : CoreExpr :=
+    (bty : core_base_type) (k : CoreExpr) : CoreExpr :=
   Expr [] (Esseq (symPat [] lrN1Sym bty)
     (createExpr loc0 empty_annotation (.IV .Prov_none 8) nodeTy
       (PrefOther "lr-n1"))
     (Expr [] (Esseq (symPat [] lrN2Sym bty)
       (createExpr loc0 empty_annotation (.IV .Prov_none 8) nodeTy
         (PrefOther "lr-n2"))
-      (Expr [] (Esseq (symPat [] lrW1Sym bty)
-        (ofVal (.pure (longVal 1)))
-        (Expr [] (Esseq (symPat [] lrW2Sym bty)
-          (ofVal (.pure (longVal 2)))
-          (Expr [] (Esseq (symPat [] lrNZSym bty)
-            (ofVal (.pure nullVal))
+      (Expr [] (Esseq (Pattern [] (CaseBase (none, bty)))
+        (storeOpRedex loc0 empty_annotation longTy
+          (Pexpr [] () (PEsym lrN1Sym)) (Pexpr [] () (PEval (longVal 1))) mo)
+        (Expr [] (Esseq (Pattern [] (CaseBase (none, bty)))
+          (storeOpRedex loc0 empty_annotation nodePtrTy
+            (lrShiftPe lrN1Sym) (Pexpr [] () (PEsym lrN2Sym)) mo)
+          (Expr [] (Esseq (Pattern [] (CaseBase (none, bty)))
+            (storeOpRedex loc0 empty_annotation longTy
+              (Pexpr [] () (PEsym lrN2Sym)) (Pexpr [] () (PEval (longVal 2))) mo)
             (Expr [] (Esseq (Pattern [] (CaseBase (none, bty)))
-              (storeOpRedex loc0 empty_annotation longTy
-                (Pexpr [] () (PEsym lrN1Sym)) (Pexpr [] () (PEsym lrW1Sym))
-                mo)
-              (Expr [] (Esseq (Pattern [] (CaseBase (none, bty)))
-                (storeOpRedex loc0 empty_annotation nodePtrTy
-                  (lrShiftPe lrN1Sym) (Pexpr [] () (PEsym lrN2Sym)) mo)
-                (Expr [] (Esseq (Pattern [] (CaseBase (none, bty)))
-                  (storeOpRedex loc0 empty_annotation longTy
-                    (Pexpr [] () (PEsym lrN2Sym))
-                    (Pexpr [] () (PEsym lrW2Sym)) mo)
-                  (Expr [] (Esseq (Pattern [] (CaseBase (none, bty)))
-                    (storeOpRedex loc0 empty_annotation nodePtrTy
-                      (lrShiftPe lrN2Sym) (Pexpr [] () (PEsym lrNZSym)) mo)
-                    (Expr [] (Erun ra lrLoopSym
-                      [Pexpr [] () (PEsym lrNZSym),
-                       Pexpr [] () (PEsym lrN1Sym)])))))))))))))))))))
+              (storeOpRedex loc0 empty_annotation nodePtrTy
+                (lrShiftPe lrN2Sym) (Pexpr [] () (PEval nullVal)) mo)
+              k)))))))))))
 
-/-- The self-contained production reversal program. -/
+/-- The loop's save parameters with their LIVE initializers:
+    `prev := NULL` (the literal), `cur := n1` (the program-bound head). -/
+def lrProdParams (pbty cbty : core_base_type) :
+    List (sym × ((core_base_type ×
+      Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym)) :=
+  [(lrPrevSym, ((pbty, none), Pexpr [] () (PEval nullVal))),
+   (lrCurSym, ((cbty, none), Pexpr [] () (PEsym lrN1Sym)))]
+
+/-- The self-contained production reversal program: the build prefix
+    continued by the loop's `save`, entered with the live initializers. -/
 def lrProdProg (ra : core_run_annotation) (mo : memory_order)
     (bty sbty pbty cbty bbty nbty ubty : core_base_type) : CoreExpr :=
-  Expr [] (Esseq (Pattern [] (CaseBase (none, bty)))
-    (lrProdPrefix ra mo bty)
-    (Expr [] (Esave (lrLoopSym, sbty) (lrParams pbty cbty nullNode)
-      (lrBody loc0 empty_annotation ra mo bbty nbty ubty))))
+  lrProdPrefix ra mo bty
+    (Expr [] (Esave (lrLoopSym, sbty) (lrProdParams pbty cbty)
+      (lrBody loc0 empty_annotation ra mo bbty nbty ubty)))
 
-/-! ### The prefix frame (five binds) and its evaluation facts -/
+/-! ### The prefix frame (two binds) and its evaluation facts -/
 
-/-- The head frame after the five prefix binds. -/
+/-- The head frame after the two prefix binds. -/
 def lrPFrame (v1 v2 : value) (f : Fmap sym value) : Fmap sym value :=
-  envAdd lrNZSym nullVal (envAdd lrW2Sym (longVal 2)
-    (envAdd lrW1Sym (longVal 1) (envAdd lrN2Sym v2 (envAdd lrN1Sym v1 f))))
+  envAdd lrN2Sym v2 (envAdd lrN1Sym v1 f)
 
 theorem lrPFrame_symFrame {f : Fmap sym value} (hf : SymFrame f)
     (v1 v2 : value) : SymFrame (lrPFrame v1 v2 f) :=
-  ((((hf.add _ _).add _ _).add _ _).add _ _).add _ _
+  (hf.add _ _).add _ _
 
 section LrPLookups
 
@@ -832,13 +792,7 @@ include hf
 theorem lrPFrame_lookup_n1 :
     fmapLookupBy symCmpK lrN1Sym (lrPFrame v1 v2 f) = some v1 := by
   unfold lrPFrame
-  rw [envAdd_lookup ((((hf.add _ _).add _ _).add _ _).add _ _) symCmpK,
-    if_neg (by decide +kernel),
-    envAdd_lookup (((hf.add _ _).add _ _).add _ _) symCmpK,
-    if_neg (by decide +kernel),
-    envAdd_lookup ((hf.add _ _).add _ _) symCmpK,
-    if_neg (by decide +kernel),
-    envAdd_lookup (hf.add _ _) symCmpK,
+  rw [envAdd_lookup (hf.add _ _) symCmpK,
     if_neg (by decide +kernel),
     envAdd_lookup hf symCmpK,
     if_pos (by decide +kernel)]
@@ -846,37 +800,7 @@ theorem lrPFrame_lookup_n1 :
 theorem lrPFrame_lookup_n2 :
     fmapLookupBy symCmpK lrN2Sym (lrPFrame v1 v2 f) = some v2 := by
   unfold lrPFrame
-  rw [envAdd_lookup ((((hf.add _ _).add _ _).add _ _).add _ _) symCmpK,
-    if_neg (by decide +kernel),
-    envAdd_lookup (((hf.add _ _).add _ _).add _ _) symCmpK,
-    if_neg (by decide +kernel),
-    envAdd_lookup ((hf.add _ _).add _ _) symCmpK,
-    if_neg (by decide +kernel),
-    envAdd_lookup (hf.add _ _) symCmpK,
-    if_pos (by decide +kernel)]
-
-theorem lrPFrame_lookup_w1 :
-    fmapLookupBy symCmpK lrW1Sym (lrPFrame v1 v2 f) = some (longVal 1) := by
-  unfold lrPFrame
-  rw [envAdd_lookup ((((hf.add _ _).add _ _).add _ _).add _ _) symCmpK,
-    if_neg (by decide +kernel),
-    envAdd_lookup (((hf.add _ _).add _ _).add _ _) symCmpK,
-    if_neg (by decide +kernel),
-    envAdd_lookup ((hf.add _ _).add _ _) symCmpK,
-    if_pos (by decide +kernel)]
-
-theorem lrPFrame_lookup_w2 :
-    fmapLookupBy symCmpK lrW2Sym (lrPFrame v1 v2 f) = some (longVal 2) := by
-  unfold lrPFrame
-  rw [envAdd_lookup ((((hf.add _ _).add _ _).add _ _).add _ _) symCmpK,
-    if_neg (by decide +kernel),
-    envAdd_lookup (((hf.add _ _).add _ _).add _ _) symCmpK,
-    if_pos (by decide +kernel)]
-
-theorem lrPFrame_lookup_nz :
-    fmapLookupBy symCmpK lrNZSym (lrPFrame v1 v2 f) = some nullVal := by
-  unfold lrPFrame
-  rw [envAdd_lookup ((((hf.add _ _).add _ _).add _ _).add _ _) symCmpK,
+  rw [envAdd_lookup (hf.add _ _) symCmpK,
     if_pos (by decide +kernel)]
 
 /-- The shifted next-field operands at the bound node pointers. -/
@@ -906,15 +830,15 @@ theorem lrPFrame_shift_n2 (i a : Int) :
   show evalArrayShift fmapEmpty longTy (Vobject (OVpointer (cellPtr i a))) (ivVal 1) = _
   exact evalArrayShift_long_one i a
 
-theorem lrPFrame_entry_args :
+/-- The save's initializers evaluate at the entry env: the NULL literal
+    and the program-bound head pointer. -/
+theorem lrPFrame_save_params (pbty cbty : core_base_type) :
     evalPexprs fmapEmpty fmapEmpty (lrPFrame v1 v2 f :: rest)
-        [Pexpr [] () (PEsym lrNZSym), Pexpr [] () (PEsym lrN1Sym)] =
-      some [nullVal, v1] := by
-  rw [evalPexprs_cons]
-  rw [show evalPexpr fmapEmpty fmapEmpty (lrPFrame v1 v2 f :: rest)
-      (Pexpr [] () (PEsym lrNZSym)) = some nullVal from by
-    rw [evalPexpr_sym_empty]
-    exact lookup_env_head (lrPFrame_lookup_nz hf _ _) rest]
+        (saveParamPexprs (lrProdParams pbty cbty)) =
+      some [ptrVal nullNode, v1] := by
+  show evalPexprs fmapEmpty fmapEmpty (lrPFrame v1 v2 f :: rest)
+    [Pexpr [] () (PEval nullVal), Pexpr [] () (PEsym lrN1Sym)] = _
+  rw [evalPexprs_cons, evalPexpr_val]
   rw [evalPexprs_cons]
   rw [show evalPexpr fmapEmpty fmapEmpty (lrPFrame v1 v2 f :: rest)
       (Pexpr [] () (PEsym lrN1Sym)) = some v1 from by
@@ -923,6 +847,28 @@ theorem lrPFrame_entry_args :
   rfl
 
 end LrPLookups
+
+/-- The save entry binds the parameters exactly as the jump does
+    (`bindArgs_lr`). -/
+theorem bindSaveParams_lrProd (pbty cbty : core_base_type)
+    (v1 v2 : value) (f : Fmap sym value) (rest : List (Fmap sym value)) :
+    bindSaveParams (lrProdParams pbty cbty) [v1, v2] (f :: rest) =
+      lrFrame v1 v2 f :: rest := by
+  show update_env (mk_sym_pat lrCurSym cbty) v2
+    (update_env (mk_sym_pat lrPrevSym pbty) v1 (f :: rest)) = _
+  rw [update_env_cons, update_env_aux_sym, update_env_cons,
+    update_env_aux_sym]
+  rfl
+
+/-- The save's initializers are within the evaluator's fuel. -/
+theorem lrProdParams_depth (pbty cbty : core_base_type) :
+    ∀ pe ∈ saveParamPexprs (lrProdParams pbty cbty), peDepth pe ≤ lemDefaultFuel := by
+  intro pe hpe
+  simp only [lrProdParams, saveParamPexprs, List.map_cons, List.map_nil,
+    List.mem_cons, List.not_mem_nil, or_false] at hpe
+  rcases hpe with rfl | rfl
+  · exact peDepth_val_le _ _
+  · exact peDepth_sym_le _ _
 
 /-! ### Byte-image facts for the built nodes (all concrete splices
 over the fresh replicate image; addresses abstract) -/
@@ -1094,49 +1040,33 @@ theorem lrProd_wpt (bty sbty : core_base_type)
     (hf : SymFrame ev0) :
     iprop(allocCap (procCtx p rs).tagDefs (GF := GF) [⟨8, nodeTy⟩, ⟨8, nodeTy⟩]) ⊢
       wpt (procCtx p rs) lrProdLsT
-        ((2 + (2 + (1 + (1 + (1 + ((3 + 1) + ((3 + 1) + ((3 + 1) +
-          ((3 + 1) + (lrCost 2 + 1)))))))))) + 0)
+        (2 + (2 + ((3 + 1) + ((3 + 1) + ((3 + 1) + ((3 + 1) +
+          (lrCost 2 + saveEntryCost (lrProdParams pbty cbty))))))))
         (readoutPost ψL)
         (lrProdProg ra mo bty sbty pbty cbty bbty nbty ubty)
         (ev0 :: evs) := by
   iintro Hcap
   rw [show lrProdProg ra mo bty sbty pbty cbty bbty nbty ubty =
-    Expr [] (Esseq (Pattern [] (CaseBase (none, bty)))
-      (lrProdPrefix ra mo bty)
-      (Expr [] (Esave (lrLoopSym, sbty) (lrParams pbty cbty nullNode)
-        (lrBody loc0 empty_annotation ra mo bbty nbty ubty)))) from rfl]
-  iapply wpt_seq
-  rw [show lrProdPrefix ra mo bty =
     Expr [] (Esseq (symPat [] lrN1Sym bty)
       (createExpr loc0 empty_annotation (.IV .Prov_none 8) nodeTy
         (PrefOther "lr-n1"))
       (Expr [] (Esseq (symPat [] lrN2Sym bty)
         (createExpr loc0 empty_annotation (.IV .Prov_none 8) nodeTy
           (PrefOther "lr-n2"))
-        (Expr [] (Esseq (symPat [] lrW1Sym bty)
-          (ofVal (.pure (longVal 1)))
-          (Expr [] (Esseq (symPat [] lrW2Sym bty)
-            (ofVal (.pure (longVal 2)))
-            (Expr [] (Esseq (symPat [] lrNZSym bty)
-              (ofVal (.pure nullVal))
+        (Expr [] (Esseq (Pattern [] (CaseBase (none, bty)))
+          (storeOpRedex loc0 empty_annotation longTy
+            (Pexpr [] () (PEsym lrN1Sym)) (Pexpr [] () (PEval (longVal 1))) mo)
+          (Expr [] (Esseq (Pattern [] (CaseBase (none, bty)))
+            (storeOpRedex loc0 empty_annotation nodePtrTy
+              (lrShiftPe lrN1Sym) (Pexpr [] () (PEsym lrN2Sym)) mo)
+            (Expr [] (Esseq (Pattern [] (CaseBase (none, bty)))
+              (storeOpRedex loc0 empty_annotation longTy
+                (Pexpr [] () (PEsym lrN2Sym)) (Pexpr [] () (PEval (longVal 2))) mo)
               (Expr [] (Esseq (Pattern [] (CaseBase (none, bty)))
-                (storeOpRedex loc0 empty_annotation longTy
-                  (Pexpr [] () (PEsym lrN1Sym))
-                  (Pexpr [] () (PEsym lrW1Sym)) mo)
-                (Expr [] (Esseq (Pattern [] (CaseBase (none, bty)))
-                  (storeOpRedex loc0 empty_annotation nodePtrTy
-                    (lrShiftPe lrN1Sym) (Pexpr [] () (PEsym lrN2Sym)) mo)
-                  (Expr [] (Esseq (Pattern [] (CaseBase (none, bty)))
-                    (storeOpRedex loc0 empty_annotation longTy
-                      (Pexpr [] () (PEsym lrN2Sym))
-                      (Pexpr [] () (PEsym lrW2Sym)) mo)
-                    (Expr [] (Esseq (Pattern [] (CaseBase (none, bty)))
-                      (storeOpRedex loc0 empty_annotation nodePtrTy
-                        (lrShiftPe lrN2Sym)
-                        (Pexpr [] () (PEsym lrNZSym)) mo)
-                      (Expr [] (Erun ra lrLoopSym
-                        [Pexpr [] () (PEsym lrNZSym),
-                         Pexpr [] () (PEsym lrN1Sym)])))))))))))))))))))
+                (storeOpRedex loc0 empty_annotation nodePtrTy
+                  (lrShiftPe lrN2Sym) (Pexpr [] () (PEval nullVal)) mo)
+                (Expr [] (Esave (lrLoopSym, sbty) (lrProdParams pbty cbty)
+                  (lrBody loc0 empty_annotation ra mo bbty nbty ubty))))))))))))))
     from rfl]
   iapply wpt_seq_sym
   iapply wpt_create loc0 empty_annotation .Prov_none ⟨8, nodeTy⟩
@@ -1162,31 +1092,9 @@ theorem lrProd_wpt (bty sbty : core_base_type)
   · ipureintro
     rfl
   rw [update_env_sym lrN2Sym bty]
-  iapply wpt_seq_sym
-  iapply wpt_ofVal (.pure (longVal 1)) _ (by simp [deliveryCost])
-  iexists (longVal 1)
-  isplit
-  · ipureintro
-    rfl
-  rw [update_env_sym lrW1Sym bty]
-  iapply wpt_seq_sym
-  iapply wpt_ofVal (.pure (longVal 2)) _ (by simp [deliveryCost])
-  iexists (longVal 2)
-  isplit
-  · ipureintro
-    rfl
-  rw [update_env_sym lrW2Sym bty]
-  iapply wpt_seq_sym
-  iapply wpt_ofVal (.pure nullVal) _ (by simp [deliveryCost])
-  iexists nullVal
-  isplit
-  · ipureintro
-    rfl
-  rw [update_env_sym lrNZSym bty]
-  -- the five binds assembled: the prefix frame
-  rw [show envAdd lrNZSym nullVal (envAdd lrW2Sym (longVal 2)
-      (envAdd lrW1Sym (longVal 1) (envAdd lrN2Sym (Vobject (OVpointer p₂))
-        (envAdd lrN1Sym (Vobject (OVpointer p₁)) ev0)))) =
+  -- the two binds assembled: the prefix frame
+  rw [show envAdd lrN2Sym (Vobject (OVpointer p₂))
+      (envAdd lrN1Sym (Vobject (OVpointer p₁)) ev0) =
     lrPFrame (ptrVal p₁) (ptrVal p₂) ev0 from rfl]
   icases (pointsToCell_cellOwn_iff (procCtx p rs).tagDefs _ _ _ _).mp $$ Hpt₁
     with ⟨%i₁, %a₁, %hpv₁, Hcell₁⟩
@@ -1202,8 +1110,7 @@ theorem lrProd_wpt (bty sbty : core_base_type)
     (pv := cellPtr i₁ a₁) (cv := longVal 1)
     (by rw [procCtx_extern, evalPexpr_sym_empty]
         exact lookup_env_head (lrPFrame_lookup_n1 hf _ _) evs)
-    (by rw [procCtx_extern, evalPexpr_sym_empty]
-        exact lookup_env_head (lrPFrame_lookup_w1 hf _ _) evs)
+    rfl
   rw [show (storeExpr loc0 empty_annotation longTy (cellPtr i₁ a₁)
       (longVal 1) mo : CoreExpr) =
     storeExpr loc0 empty_annotation longTy
@@ -1244,8 +1151,7 @@ theorem lrProd_wpt (bty sbty : core_base_type)
     (pv := cellPtr i₂ a₂) (cv := longVal 2)
     (by rw [procCtx_extern, evalPexpr_sym_empty]
         exact lookup_env_head (lrPFrame_lookup_n2 hf _ _) evs)
-    (by rw [procCtx_extern, evalPexpr_sym_empty]
-        exact lookup_env_head (lrPFrame_lookup_w2 hf _ _) evs)
+    rfl
   rw [show (storeExpr loc0 empty_annotation longTy (cellPtr i₂ a₂)
       (longVal 2) mo : CoreExpr) =
     storeExpr loc0 empty_annotation longTy
@@ -1266,8 +1172,7 @@ theorem lrProd_wpt (bty sbty : core_base_type)
     (pv := cellPtr i₂ (a₂ + 8)) (cv := nullVal)
     (by rw [procCtx_extern]
         exact lrPFrame_shift_n2 hf (ptrVal (cellPtr i₁ a₁)) evs i₂ a₂)
-    (by rw [procCtx_extern, evalPexpr_sym_empty]
-        exact lookup_env_head (lrPFrame_lookup_nz hf _ _) evs)
+    rfl
   rw [show (cellPtr i₂ (a₂ + 8)) = cellPtr i₂ (a₂ + ((8 : Nat) : Int))
     from rfl]
   iapply wpt_store_node_field loc0 empty_annotation i₂ a₂ 8
@@ -1279,28 +1184,41 @@ theorem lrProd_wpt (bty sbty : core_base_type)
   isplitl [Hcell₂]
   · iexact Hcell₂
   iintro %fp4 Hcell₂
-  -- the registered jump into the flagship loop with the built chain
-  iapply wpt_run [] ra lrLoopSym
-    [Pexpr [] () (PEsym lrNZSym), Pexpr [] () (PEsym lrN1Sym)] _ _
-    (lrCost 2)
-    (by rw [procCtx_labels hQ]
-        exact lrQ_lookup loc0 empty_annotation ra mo pbty cbty bbty nbty
-          ubty)
+  -- the loop's save, entered with the live initializers (prev := NULL,
+  -- cur := n1): EVAL then TAU, then the generic body theorem at the
+  -- built chain (the ids existential in the production label spec)
+  iapply wpt_save [] (lrLoopSym, sbty) (lrProdParams pbty cbty) _ _ evs
+    (cvals := [ptrVal nullNode, ptrVal (cellPtr i₁ a₁)])
     (by rw [procCtx_extern]
-        exact lrPFrame_entry_args hf (ptrVal (cellPtr i₁ a₁))
-          (ptrVal (cellPtr i₂ a₂)) evs)
-    (by omega)
-  iexists i₁, i₂
-  -- the framed label context (alloc arc P4.2): the invariant, then
-  -- the (empty) frame
+        exact lrPFrame_save_params hf (ptrVal (cellPtr i₁ a₁))
+          (ptrVal (cellPtr i₂ a₂)) evs pbty cbty)
+  rw [bindSaveParams_lrProd]
+  -- the readout, with the four stores' annotation residues absorbed
+  iapply wpt_mono
+    (fun w ρ' => ((lrPost_readout [((i₁ : Int), (1 : Int)), (i₂, 2)]
+        (∅ : CellMap) w ρ').trans
+      (readoutPost_mono (fun v σ' hv => ⟨i₁, i₂, hv⟩) w ρ')).trans
+      (((readoutPost_annot_absorb ψL [DA_pos [] fp4] Vunit w ρ').trans
+        (readoutPost_annot_absorb ψL [DA_pos [] fp3] Vunit _ ρ')).trans
+       ((readoutPost_annot_absorb ψL [DA_pos [] fp2] Vunit _ ρ').trans
+        (readoutPost_annot_absorb ψL [DA_pos [] fp1] Vunit _ ρ'))))
+    _ _ _
+  iapply wpt_mono_Ls
+    (Ls₁ := frameLsT (lrCellFrame (∅ : CellMap))
+      (lrLsT [((i₁ : Int), (1 : Int)), (i₂, 2)]))
+    (fun l' m' vs' ρ' => by
+      iintro H
+      iexists i₁, i₂
+      iexact H)
+    _ _ _
+  iapply lr_body_wpt_frame loc0 empty_annotation ra mo pbty cbty bbty nbty ubty
+    [((i₁ : Int), (1 : Int)), (i₂, 2)] p rs hQ (lrCellFrame (∅ : CellMap))
+    ([] : List (Int × Int)) [((i₁ : Int), (1 : Int)), (i₂, 2)] nullNode
+    (cellPtr i₁ a₁) (lrPFrame (ptrVal (cellPtr i₁ a₁)) (ptrVal (cellPtr i₂ a₂)) ev0)
+    evs (lrPFrame_symFrame hf _ _) rfl
+  -- the invariant at entry, then the (empty) cell frame
   isplitl [Hcell₁ Hcell₂]
-  · iexists ([] : List (Int × Int)), [((i₁ : Int), (1 : Int)), (i₂, 2)],
-      nullNode, (cellPtr i₁ a₁),
-      (lrPFrame (ptrVal (cellPtr i₁ a₁)) (ptrVal (cellPtr i₂ a₂)) ev0), evs
-    isplit
-    · ipureintro
-      refine ⟨rfl, by simp, rfl, rfl, lrPFrame_symFrame hf _ _⟩
-    isplitr [Hcell₁ Hcell₂]
+  · isplitr [Hcell₁ Hcell₂]
     · -- isList NULL [] for prev
       exact isList_nil_intro
     · -- isList (node 1) [(i₁,1),(i₂,2)]: the built chain, with the
@@ -1327,78 +1245,60 @@ end LrProdIris
 /-! ### Registration, cone membership, potentials, the plan -/
 
 theorem lrProdPrefix_frag (ra : core_run_annotation) (mo : memory_order)
-    (bty : core_base_type) : Frag (lrProdPrefix ra mo bty) :=
+    (bty : core_base_type) {k : CoreExpr} (hk : Frag k) :
+    Frag (lrProdPrefix ra mo bty k) :=
   .sseq_sym (.create loc0_lib)
     (.sseq_sym (.create loc0_lib)
-      (.sseq_sym (frag_ofVal (.pure (longVal 1)))
-        (.sseq_sym (frag_ofVal (.pure (longVal 2)))
-          (.sseq_sym (frag_ofVal (.pure nullVal))
+      (.sseq
+        (.store_op loc0_lib rfl (.sym [] lrN1Sym) (.val [] (longVal 1))
+          (by rw [show peDepth (Pexpr ([] : List annot) ()
+              (PEsym lrN1Sym)) = 1 from rfl,
+            show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+          (peDepth_val_le _ _))
+        (.sseq
+          (.store_op loc0_lib rfl
+            (.arrayShift [] longTy (.sym [] lrN1Sym) (.val [] (ivVal 1)))
+            (.sym [] lrN2Sym)
+            (by rw [show peDepth (lrShiftPe lrN1Sym) = 2 from rfl,
+              show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+            (by rw [show peDepth (Pexpr ([] : List annot) ()
+                (PEsym lrN2Sym)) = 1 from rfl,
+              show lemDefaultFuel = 999999 + 1 from rfl]; omega))
+          (.sseq
+            (.store_op loc0_lib rfl (.sym [] lrN2Sym) (.val [] (longVal 2))
+              (by rw [show peDepth (Pexpr ([] : List annot) ()
+                  (PEsym lrN2Sym)) = 1 from rfl,
+                show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+              (peDepth_val_le _ _))
             (.sseq
-              (.store_op loc0_lib rfl (.sym [] lrN1Sym)
-                (.sym [] lrW1Sym)
-                (by rw [show peDepth (Pexpr ([] : List annot) ()
-                    (PEsym lrN1Sym)) = 1 from rfl,
+              (.store_op loc0_lib rfl
+                (.arrayShift [] longTy (.sym [] lrN2Sym) (.val [] (ivVal 1)))
+                (.val [] nullVal)
+                (by rw [show peDepth (lrShiftPe lrN2Sym) = 2 from rfl,
                   show lemDefaultFuel = 999999 + 1 from rfl]; omega)
-                (by rw [show peDepth (Pexpr ([] : List annot) ()
-                    (PEsym lrW1Sym)) = 1 from rfl,
-                  show lemDefaultFuel = 999999 + 1 from rfl]; omega))
-              (.sseq
-                (.store_op loc0_lib rfl
-                  (.arrayShift [] longTy (.sym [] lrN1Sym) (.val [] (ivVal 1)))
-                  (.sym [] lrN2Sym)
-                  (by rw [show peDepth (lrShiftPe lrN1Sym) = 2 from rfl,
-                    show lemDefaultFuel = 999999 + 1 from rfl]; omega)
-                  (by rw [show peDepth (Pexpr ([] : List annot) ()
-                      (PEsym lrN2Sym)) = 1 from rfl,
-                    show lemDefaultFuel = 999999 + 1 from rfl]; omega))
-                (.sseq
-                  (.store_op loc0_lib rfl (.sym [] lrN2Sym)
-                    (.sym [] lrW2Sym)
-                    (by rw [show peDepth (Pexpr ([] : List annot) ()
-                        (PEsym lrN2Sym)) = 1 from rfl,
-                      show lemDefaultFuel = 999999 + 1 from rfl]; omega)
-                    (by rw [show peDepth (Pexpr ([] : List annot) ()
-                        (PEsym lrW2Sym)) = 1 from rfl,
-                      show lemDefaultFuel = 999999 + 1 from rfl]; omega))
-                  (.sseq
-                    (.store_op loc0_lib rfl
-                      (.arrayShift [] longTy (.sym [] lrN2Sym)
-                        (.val [] (ivVal 1)))
-                      (.sym [] lrNZSym)
-                      (by rw [show peDepth (lrShiftPe lrN2Sym) = 2 from rfl,
-                        show lemDefaultFuel = 999999 + 1 from rfl]; omega)
-                      (by rw [show peDepth (Pexpr ([] : List annot) ()
-                          (PEsym lrNZSym)) = 1 from rfl,
-                        show lemDefaultFuel = 999999 + 1 from rfl]; omega))
-                    (.run (by
-                      intro pe hpe
-                      simp only [List.mem_cons, List.not_mem_nil,
-                        or_false] at hpe
-                      rcases hpe with rfl | rfl <;>
-                        (rw [show lemDefaultFuel = 999999 + 1 from rfl]
-                         first
-                          | (rw [show peDepth (Pexpr ([] : List annot) ()
-                              (PEsym lrNZSym)) = 1 from rfl]; omega)
-                          | (rw [show peDepth (Pexpr ([] : List annot) ()
-                              (PEsym lrN1Sym)) = 1 from rfl]; omega))))))))))))
+                (peDepth_val_le _ _))
+              hk)))))
 
 theorem lrProdProg_frag (ra : core_run_annotation) (mo : memory_order)
     (bty sbty pbty cbty bbty nbty ubty : core_base_type)
     (hlib : CerbLocation.isLibraryLocation loc0 = false) :
     Frag (lrProdProg ra mo bty sbty pbty cbty bbty nbty ubty) :=
-  .sseq (lrProdPrefix_frag ra mo bty)
-    (.save (saveParams_depth_of_vals rfl) (lrBody_fragJ loc0 empty_annotation ra mo bbty nbty ubty hlib))
+  lrProdPrefix_frag ra mo bty
+    (.save (lrProdParams_depth pbty cbty)
+      (lrBody_fragJ loc0 empty_annotation ra mo bbty nbty ubty hlib))
 
 theorem lrProdPrefix_pot (ra : core_run_annotation) (mo : memory_order)
-    (bty : core_base_type) : pot (lrProdPrefix ra mo bty) = 11 := by
+    (bty : core_base_type) (k : CoreExpr) :
+    pot (lrProdPrefix ra mo bty k) = 1 + max 2 (1 + max 2 (1 + max 2 (1 + max 2
+      (1 + max 2 (1 + max 2 (pot k)))))) := by
   unfold lrProdPrefix createExpr storeOpRedex
-  simp
+  simp [pot]
 
 theorem lrProdProg_pot (ra : core_run_annotation) (mo : memory_order)
     (bty sbty pbty cbty bbty nbty ubty : core_base_type) :
-    pot (lrProdProg ra mo bty sbty pbty cbty bbty nbty ubty) = 12 := by
+    pot (lrProdProg ra mo bty sbty pbty cbty bbty nbty ubty) = 13 := by
   unfold lrProdProg
-  rw [pot_sseq, pot_save, lrProdPrefix_pot, lrBody_pot]
+  rw [lrProdPrefix_pot, pot_save, lrBody_pot]
   omega
 
 /-! The registration computation, COMPOSITIONALLY (a whole-program
@@ -1444,62 +1344,22 @@ theorem col_lrProg (m : Nat) (ann ra : core_run_annotation)
       { tmp_acc := lrQ loc0 ann ra mo pbty cbty bbty nbty ubty,
         closed_acc := fmapEmpty } := rfl
 
-/-- The store-suffix registers nothing (fuel-peeled; split from the
-    prefix so each closing `rfl` normalizes a small union tower). -/
-theorem col_lrStores (ra : core_run_annotation) (mo : memory_order)
-    (bty : core_base_type) :
-    collect_saves_aux_lemFuel 999994 empty_saves
-      (Expr [] (Esseq (Pattern [] (CaseBase (none, bty)))
-        (storeOpRedex loc0 empty_annotation longTy
-          (Pexpr [] () (PEsym lrN1Sym)) (Pexpr [] () (PEsym lrW1Sym)) mo)
-        (Expr [] (Esseq (Pattern [] (CaseBase (none, bty)))
-          (storeOpRedex loc0 empty_annotation nodePtrTy
-            (lrShiftPe lrN1Sym) (Pexpr [] () (PEsym lrN2Sym)) mo)
-          (Expr [] (Esseq (Pattern [] (CaseBase (none, bty)))
-            (storeOpRedex loc0 empty_annotation longTy
-              (Pexpr [] () (PEsym lrN2Sym))
-              (Pexpr [] () (PEsym lrW2Sym)) mo)
-            (Expr [] (Esseq (Pattern [] (CaseBase (none, bty)))
-              (storeOpRedex loc0 empty_annotation nodePtrTy
-                (lrShiftPe lrN2Sym)
-                (Pexpr [] () (PEsym lrNZSym)) mo)
-              (Expr [] (Erun ra lrLoopSym
-                [Pexpr [] () (PEsym lrNZSym),
-                 Pexpr [] () (PEsym lrN1Sym)])))))))) ) : CoreExpr) =
-      empty_saves := by
-  unfold storeOpRedex
-  rw [show (999994 : Nat) = 999993 + 1 from rfl, col_aux_sseq]
-  rw [show (999993 : Nat) = 999992 + 1 from rfl, col_aux_action,
-    col_aux_sseq]
-  rw [show (999992 : Nat) = 999991 + 1 from rfl, col_aux_action,
-    col_aux_sseq]
-  rw [show (999991 : Nat) = 999990 + 1 from rfl, col_aux_action,
-    col_aux_sseq]
-  rw [show (999990 : Nat) = 999989 + 1 from rfl, col_aux_action,
-    col_aux_run]
-  rfl
-
-/-- The whole prefix registers nothing. -/
-theorem col_lrProdPrefix (ra : core_run_annotation)
-    (mo : memory_order) (bty : core_base_type) :
-    collect_saves_aux_lemFuel 999999 empty_saves
-      (lrProdPrefix ra mo bty) = empty_saves := by
-  unfold lrProdPrefix createExpr
-  rw [show (999999 : Nat) = 999998 + 1 from rfl, col_aux_sseq]
-  rw [show (999998 : Nat) = 999997 + 1 from rfl, col_aux_action,
-    col_aux_sseq]
-  rw [show (999997 : Nat) = 999996 + 1 from rfl, col_aux_action,
-    col_aux_sseq]
-  rw [show (999996 : Nat) = 999995 + 1 from rfl, col_aux_ofVal_pure,
-    col_aux_sseq]
-  rw [show (999995 : Nat) = 999994 + 1 from rfl, col_aux_ofVal_pure,
-    col_aux_sseq]
-  rw [show (999994 : Nat) = 999993 + 1 from rfl, col_aux_ofVal_pure]
-  rw [show (999993 + 1 : Nat) = 999994 from rfl, col_lrStores]
-  rfl
+/-- The loop's save with the production initializers registers its
+    body (the initializers are not read by the registration), at
+    cushioned variable fuel — the `col_lrProg` twin. -/
+theorem col_lrProdSave (m : Nat) (ra : core_run_annotation)
+    (mo : memory_order) (sbty pbty cbty bbty nbty ubty : core_base_type) :
+    collect_saves_aux_lemFuel (m + 9) empty_saves
+      (Expr [] (Esave (lrLoopSym, sbty) (lrProdParams pbty cbty)
+        (lrBody loc0 empty_annotation ra mo bbty nbty ubty))) =
+      { tmp_acc := lrQ loc0 empty_annotation ra mo pbty cbty bbty nbty ubty,
+        closed_acc := fmapEmpty } := rfl
 
 /-- The shipped registration computes the flagship's label map (the
-    save is the registration site; control never enters it). -/
+    save is the registration site and the entry): the six prefix layers
+    peeled one arm at a time (each store registers nothing), the save's
+    own registration one bounded-fuel `rfl`, the union tower closed by
+    `rfl`. -/
 theorem collect_new_lrProd (ra : core_run_annotation) (mo : memory_order)
     (bty sbty pbty cbty bbty nbty ubty : core_base_type) :
     collect_labeled_continuations_NEW
@@ -1515,16 +1375,21 @@ theorem collect_new_lrProd (ra : core_run_annotation) (mo : memory_order)
   rw [show collect_saves (lrProdProg ra mo bty sbty pbty cbty bbty nbty
       ubty) = lrQ loc0 empty_annotation ra mo pbty cbty bbty nbty ubty
       from by
-    unfold collect_saves collect_saves_aux lrProdProg
-    rw [show lemDefaultFuel = 999999 + 1 from rfl]
-    rw [col_aux_sseq]
-    rw [col_lrProdPrefix]
-    rw [show (999999 : Nat) = 999990 + 9 from rfl,
-      show (Expr [] (Esave (lrLoopSym, sbty) (lrParams pbty cbty nullNode)
-        (lrBody loc0 empty_annotation ra mo bbty nbty ubty)) : CoreExpr) =
-      lrProg loc0 empty_annotation ra mo sbty pbty cbty bbty nbty ubty
-        nullNode from rfl,
-      col_lrProg]
+    unfold collect_saves collect_saves_aux lrProdProg lrProdPrefix createExpr
+      storeOpRedex
+    rw [show lemDefaultFuel = 999999 + 1 from rfl, col_aux_sseq]
+    rw [show (999999 : Nat) = 999998 + 1 from rfl, col_aux_action,
+      col_aux_sseq]
+    rw [show (999998 : Nat) = 999997 + 1 from rfl, col_aux_action,
+      col_aux_sseq]
+    rw [show (999997 : Nat) = 999996 + 1 from rfl, col_aux_action,
+      col_aux_sseq]
+    rw [show (999996 : Nat) = 999995 + 1 from rfl, col_aux_action,
+      col_aux_sseq]
+    rw [show (999995 : Nat) = 999994 + 1 from rfl, col_aux_action,
+      col_aux_sseq]
+    rw [show (999994 : Nat) = 999993 + 1 from rfl, col_aux_action]
+    rw [show (999993 : Nat) = 999984 + 9 from rfl, col_lrProdSave]
     rfl]
 
 theorem lrProd_labeledAt (sup : Nat) (ra : core_run_annotation) (mo : memory_order)
@@ -1596,8 +1461,8 @@ theorem list_reverse_certified_production (sup : Nat) (ra : core_run_annotation)
   obtain ⟨dres, dst', heq, hψ, hbl, hout, herr⟩ :=
     prod_run_eqJ sup (lrProdProg ra mo bty sbty pbty cbty bbty nbty ubty)
       hQprod ψL
-      ((2 + (2 + (1 + (1 + (1 + ((3 + 1) + ((3 + 1) + ((3 + 1) +
-        ((3 + 1) + (lrCost 2 + 1)))))))))) + 0)
+      (2 + (2 + ((3 + 1) + ((3 + 1) + ((3 + 1) + ((3 + 1) +
+        (lrCost 2 + saveEntryCost (lrProdParams pbty cbty))))))))
       (wpt_driver_done_alloc (GF := SpikeGF)
         (M₀ := procCtx mainSym ((initial_core_run_state sup
           (collect_labeled_continuations_NEW
@@ -1626,8 +1491,8 @@ theorem list_reverse_certified_production (sup : Nat) (ra : core_run_annotation)
         (prodMem₀_launchCoh [⟨8, nodeTy⟩, ⟨8, nodeTy⟩]
           lr_two_node_plan_fits)
         ψL
-        ((2 + (2 + (1 + (1 + (1 + ((3 + 1) + ((3 + 1) + ((3 + 1) +
-          ((3 + 1) + (lrCost 2 + 1)))))))))) + 0)
+        (2 + (2 + ((3 + 1) + ((3 + 1) + ((3 + 1) + ((3 + 1) +
+          (lrCost 2 + saveEntryCost (lrProdParams pbty cbty))))))))
         (by
           intro inst
           iintro ⟨-, Hcap⟩
@@ -1637,6 +1502,7 @@ theorem list_reverse_certified_production (sup : Nat) (ra : core_run_annotation)
           · iapply lrProd_wpt ra mo pbty cbty bbty nbty ubty mainSym _
               hQprod bty sbty fmapEmpty [] symFrame_empty $$ Hcap))
       (by rw [show lrCost 2 = 32 from rfl,
+          show saveEntryCost (lrProdParams pbty cbty) = 2 from rfl,
           show lemDefaultFuel = 999999 + 1 from rfl]
           omega)
       fs args
