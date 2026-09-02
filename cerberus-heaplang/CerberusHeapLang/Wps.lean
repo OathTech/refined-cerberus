@@ -57,8 +57,8 @@ THE ALLOCATION RULES (this file, §CreateRule; alloc arc P1): the
 PUBLIC `wps_create` takes `allocCap (req :: rest)` (the abstract
 finite allocation capacity — Heap.lean) and binds an existential
 pointer; it is LAUNCHABLE through the allocation-aware launchers
-(`spike_step_adequacy_alloc`, `wpt_engine_boundU/J_alloc`,
-`wpt_strongly_normalizing_alloc` — via `launchResources`, which
+(`spike_step_adequacy_alloc`, `engine_adequacyU_alloc`,
+`project_triple_alloc`, `wpt_engine_boundU_alloc` — via `launchResources`, which
 grants `allocCap` from real Cerberus memory under `LaunchCoh`). The
 exact-cursor form is `wps_create_cursor_internal`
 (heap-implementation use only). CONSUMERS: every allocating exhibit

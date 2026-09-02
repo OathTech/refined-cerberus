@@ -193,7 +193,7 @@ def ruleModules : List Name :=
 def rulePrefixes : List String := ["wp_", "wps_", "wpt_", "triple", "blockSpecs", "spike_wp_wand"]
 
 def exportSeeds : List Name := [
-  `CerberusHeapLang.engine_complete, `CerberusHeapLang.engine_step_matchU,
+  `CerberusHeapLang.engine_step_matchU,
   `CerberusHeapLang.Decomp.step_factor, `CerberusHeapLang.stepDischarge_run,
   `CerberusHeapLang.Frag.step, `CerberusHeapLang.Frag.decomp,
   `CerberusHeapLang.cerberusRound_classify, `CerberusHeapLang.step_iff_cerberusRound,
@@ -201,7 +201,7 @@ def exportSeeds : List Name := [
   `CerberusHeapLang.launchResources, `CerberusHeapLang.engine_adequacyU,
   `CerberusHeapLang.engine_adequacyJ, `CerberusHeapLang.spike_engine_adequacy,
   `CerberusHeapLang.semantic_triple_sound, `CerberusHeapLang.semantic_frame,
-  `CerberusHeapLang.driveJ_step, `CerberusHeapLang.wpt_engine_boundU,
+  `CerberusHeapLang.wpt_engine_boundU,
   `CerberusHeapLang.wpt_engine_boundJ, `CerberusHeapLang.wpt_engine_boundU_alloc,
   `CerberusHeapLang.wpt_strongly_normalizing, `CerberusHeapLang.Frag.pot_step_bound]
 

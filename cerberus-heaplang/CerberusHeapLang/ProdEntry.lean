@@ -34,15 +34,21 @@ thread 0's arena. The concrete cold-start facts (`errno_alloc_eq`
 etc.) pin that prefix; `prodMem₀` is the memory state at fragment
 start — derived through engine functions only.
 
-THE THEOREM (`sem_triple_prod`): the exported semantic-triple face
-(Adequacy.lean) restated against this pipeline. Scope honesty:
-single-threaded, fragment-only, partial correctness — plus a
-termination-within-budget hypothesis, because the production loop's
+THE THEOREM (`prod_run_eqJ`): the production pipeline on a synthetic
+one-procedure file is EXACTLY ONE Active execution whose value and
+final memory satisfy the postcondition, given the driver-delivery
+fact `DriverDoneAt` that the total judgment supplies
+(`wpt_driver_done_alloc`, ProdLoop.lean) and the registration tie
+`LabeledAt`. Scope honesty: single-threaded, fragment-only, total
+correctness at a certified step count — plus the in-budget bound
+`k + 2 ≤ lemDefaultFuel`, because the production loop's
 fuel-exhaustion leaf is the opaque `fuelExhausted` (fail-closed, D19):
-at insufficient fuel NOTHING about the production value is provable,
-so the run must provably complete for the equation to exist. Fuel
-parametricity is a registered residual (README "Registered
-divergences").
+at insufficient fuel NOTHING about the production value is provable.
+Fuel parametricity is a registered residual (README "Registered
+divergences"). The older straight-line face (`prod_run_eq`/
+`sem_triple_prod`, whose premises were operational drive equations)
+was retired at QA-2 as a second collapse of the same pipeline with
+no consumer (docs/2026-09-02_qa2-notes.md).
 
 THE REGISTRATION TIE for loops: `fib_labeledAt_production` /
 `loop_labeledAt_production` derive `LabeledAt` at the PRODUCTION
@@ -73,9 +79,7 @@ programs BIND their engine-created pointers, the creates cross the
 public rules, and this module's `prod_run_eqJ` (moved here from
 ProdLoopExhibit at P2: generic production machinery) composes the
 generic `wpt_driver_done_alloc` delivery fact with the setup
-collapse. The old cold-start operational-prefix technique survives
-only in `sem_triple_prod`'s `hpre` hypothesis (a generic partial
-face, currently without an allocating consumer).
+collapse.
 
 Dnn labels are the recorded design findings of
 docs/2026-08-30_spike-sliceB-notes.md.
@@ -324,111 +328,6 @@ theorem drive_after_setup (sup : Nat) (e : CoreExpr) (fs : CerbFS.FsState)
     exact hdrv2
   · refine (runOne_bind_active (z := dstD) (by rfl)).trans ?_
     rfl
-
-/-! ## THE PRODUCTION RUN EQUATION -/
-
-/-- The production pipeline on a synthetic one-procedure fragment
-    file: `runND` of the SHIPPED driver from the PRODUCTION initial
-    state is EXACTLY ONE Active execution, whose result value is the
-    drive's delivered value and whose final memory is the drive's
-    final memory. Hypotheses: the fragment drive from the cold-start
-    memory completes within budget (∀ action-id supplies — the
-    production aid supply starts at the entry's seed). Killed and stuck
-    productions are excluded by the equation itself: the run IS the
-    singleton Active execution. -/
-theorem prod_run_eq (sup : Nat) (e : CoreExpr) (hfrag : StraightFrag e)
-    (v : value) (σfin : Mem) (k : Nat)
-    (hterm : ∀ aids : Nat → Nat,
-      drive aids k (spikeThread e) prodMem₀ = .done v σfin)
-    (hfuel : esize e + k + 2 ≤ lemDefaultFuel)
-    (fs : CerbFS.FsState) (args : List String) :
-    ∃ (dres : driver_result) (dst' : driver_state),
-      CerbND.runND (_root_.drive fmapEmpty false (prodFile e) args)
-          ((initial_driver_state sup (prodFile e) fs).1) =
-        [(nd_status.Active dres, ([] : List String), dst')] ∧
-      dres.dres_core_value = v ∧
-      dres.dres_blocked = false ∧
-      dres.dres_stdout = "" ∧
-      dres.dres_stderr = "" ∧
-      dst'.layout_state = σfin := by
-  obtain ⟨rs', tr, ctr, hloop⟩ := prod_loop_done (prodThread e) rfl
-    (ev0 := fmapEmpty) (evs := []) rfl v σfin k lemDefaultFuel e
-    (prodEntryState sup e fs) fmapEmpty hfrag rfl (by omega) (by omega) hterm
-  have hdrv2 := driver2_done 999999 fmapEmpty (prodEntryState sup e fs) _
-    (prodThread e) { prodThread e with arena := ofVal (.pure v) } v rfl
-    hloop rfl
-  have hrun := drive_after_setup sup e fs args _ hdrv2
-  exact ⟨_, _, runND_active hrun, by
-      rw [finalize_done fmapEmpty _ _
-        { { prodThread e with arena := ofVal (.pure v) } with
-            stack0 := Stack_empty, arena := mk_value_e v } v rfl rfl],
-    rfl, rfl, rfl, rfl⟩
-
-/-! ## THE THEOREM: the semantic-triple face at the production entry
-(Extension D, D4). The exported face (SemTriple, Adequacy.lean
-D16/D17) restated against `runND ∘ Driver.drive ∘
-initial_driver_state`: for a synthetic one-procedure file wrapping a
-self-contained fragment program (its create prefix runs on the
-production cold-start memory and establishes the compute part's
-footprint), the production run is the singleton Active execution, its
-result value is the delivered value, and the final memory satisfies
-the postcondition footprint with the frame R verbatim — the same
-splitting quantifier as SemTriple.
-
-HONESTY NOTE [AGENT 2026-09-01, alloc arc P3 closure]: the `hpre`
-hypothesis (the prefix-alignment DRIVE EQUATION) and `hterm` (the
-compute part's in-budget drive equation) are OPERATIONAL
-hypotheses — this theorem is the last surviving generic face of the
-cold-start operational-prefix technique that alloc arc P2 retired
-from every positive exhibit (the allocating production exports now
-go through the PUBLIC `wpt_create` and the generic
-`wpt_driver_done_alloc` → `prod_run_eqJ` route, which needs no such
-hypothesis). Since P2 it has NO consumer in the package (only its
-Audit pin and the README's conditioned-theorem paragraph mention
-it). It is kept as the conditioned generic partial face it always
-was, with the conditions stated as part of the claim. The P5
-scaffolding pass (R-07) did NOT retire it: retiring it deletes an
-exported face, and that decision remains OPEN and operator-visible
-(README "Registered divergences and seams"). -/
-theorem sem_triple_prod (sup : Nat)
-    (e : CoreExpr) (hfrag : StraightFrag e)
-    -- the compute part and its exported triple
-    (ec : CoreExpr) (P : CellMap) (post : value → CellMap → Prop)
-    (hsem : SemTriple ec P post)
-    -- the frame quantifier, as in SemTriple
-    (R : CellMap) (hdisj : P ##ₘ R)
-    -- the program's prefix drives the production cold-start memory to
-    -- a configuration satisfying P ⊎ R in j steps (engine vocabulary)
-    (σc : Mem) (j : Nat)
-    (hpre : ∀ (aids : Nat → Nat) (n : Nat),
-      drive aids (j + n) (spikeThread e) prodMem₀ =
-        drive (fun i => aids (i + j)) n (spikeThread ec) σc)
-    (hsat : Sat fmapEmpty σc (Iris.Std.PartialMap.union P R))
-    -- termination of the compute part within the production budget
-    (v : value) (σfin : Mem) (k : Nat)
-    (hterm : ∀ aids : Nat → Nat,
-      drive aids k (spikeThread ec) σc = .done v σfin)
-    (hfuel : esize e + (j + k) + 2 ≤ lemDefaultFuel)
-    (hfuelc : esize ec + k ≤ lemDefaultFuel)
-    (fs : CerbFS.FsState) (args : List String) :
-    ∃ (dres : driver_result) (dst' : driver_state),
-      CerbND.runND (_root_.drive fmapEmpty false (prodFile e) args)
-          ((initial_driver_state sup (prodFile e) fs).1) =
-        [(nd_status.Active dres, ([] : List String), dst')] ∧
-      dres.dres_core_value = v ∧
-      dst'.layout_state = σfin ∧
-      ∃ Q : CellMap, post v Q ∧ Q ##ₘ R ∧
-        Sat fmapEmpty σfin (Iris.Std.PartialMap.union Q R) := by
-  have htermFull : ∀ aids : Nat → Nat,
-      drive aids (j + k) (spikeThread e) prodMem₀ = .done v σfin := by
-    intro aids
-    rw [hpre aids k]
-    exact hterm _
-  obtain ⟨dres, dst', heq, hval, _, _, _, hlay⟩ :=
-    prod_run_eq sup e hfrag v σfin (j + k) htermFull hfuel fs args
-  refine ⟨dres, dst', heq, hval, hlay, ?_⟩
-  have h := hsem R hdisj σc hsat k (fun _ => 0) hfuelc
-  exact h.2.2 v σfin (hterm _)
 
 /-! ## THE PRODUCTION RUN EQUATION FOR REGISTERED-LOOP PROGRAMS
 (moved here from ProdLoopExhibit at alloc arc P2 — generic

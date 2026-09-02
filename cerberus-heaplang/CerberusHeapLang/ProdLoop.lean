@@ -23,8 +23,8 @@ statement): the boundary modules consume `wpt_driver_done` to state
 the shipped-pipeline equations.
 
 Fuel: the loop budget `fl` needs `k + 2` rounds (k certified steps +
-the done-recording and drain iterations — the prod_loop_done
-accounting); the judgment's own `esize`/`pot` side conditions bound
+the done-recording and drain iterations); the judgment's own
+`esize`/`pot` side conditions bound
 get_ctx's budget exactly as in the drive lane.
 -/
 import CerberusHeapLang.DriverCollapse

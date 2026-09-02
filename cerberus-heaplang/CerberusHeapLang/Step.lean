@@ -8,8 +8,8 @@ independent authority. Every rule carries a mirror-cite into the
 engine (the cerberus-lean checkout pinned in
 ../scripts/semantics-pin.env; file:line references are into its
 lean_frontend/generated/). The certification against the engine's
-`step_ctx`/driver composite is Soundness.lean (`engine_complete` +
-the context-undisturbed per-rule lemmas); the engine-facing meaning
+`step_ctx`/driver composite is Soundness.lean (`engine_step_matchU`
++ the context-undisturbed per-rule lemmas); the engine-facing meaning
 of everything proved over Step lands through Adequacy.lean's
 semantic triples. A wrong rule here can therefore only make
 theorems unprovable, never make an exported engine statement false
@@ -1496,11 +1496,8 @@ theorem Step.create_canonical {M : MachineCtx} {a : List annot}
 /-- S3 RETIREMENT NOTE: phase-1's `Step.env_invariant(')` (no rule
     writes the env) is RETIRED as pre-declared (phase-1 notes §2
     item 6) — `Step.run` and `Step.save` rebind the environment. Its
-    two survivors: `Step.env_cons` (cons-shapedness is preserved —
-    what the sequencing proofs actually need at this stratum) and
-    the FragP-scoped invariance in Soundness.lean
-    (`Step.env_invariant_frag` — the old cone has no env-writing
-    shapes). -/
+    survivor: `Step.env_cons` (cons-shapedness is preserved — what
+    the sequencing proofs actually need at this stratum). -/
 theorem Step.env_cons' {M : MachineCtx} {c c' : CoreExpr × EnvStack × Mem}
     (h : Step M c c') :
     ∀ ev0 evs, c.2.1 = ev0 :: evs → ∃ ev0', c'.2.1 = ev0' :: evs := by
@@ -2078,12 +2075,8 @@ instances only.
 
 S1b RETIREMENT NOTE (design record §8.3, prune-don't-merge): the
 phase-1 parallel cone `FragP` (and its `Decomp`-side machinery in
-Soundness.lean) is DELETED — the ONE capability cone is `Frag`
-(Soundness.lean; the migrated `FragJ` with value-scrutinee `Ecase`
-joined). The straight-line TWO-SIDEDNESS sub-grammar that
-`engine_complete` needs survives as `StraightFrag` (Soundness.lean),
-which is NOT a capability cone (membership embeds via
-`StraightFrag.toFrag`). -/
+Soundness.lean) is DELETED — the ONE cone is `Frag` (Soundness.lean;
+the migrated `FragJ` with value-scrutinee `Ecase` joined). -/
 
 abbrev spikeLbl : LabelMap := fmapEmpty
 

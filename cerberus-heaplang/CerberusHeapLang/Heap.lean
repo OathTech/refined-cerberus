@@ -1983,11 +1983,6 @@ instance allocMeta_persistent (tds : CerbTags.TagDefsMap) (id a : Int) (aty : ct
   unfold allocMeta metaOwn
   infer_instance
 
-theorem allocMeta_dup (tds : CerbTags.TagDefsMap) (id a : Int) (aty : ctype) :
-    allocMeta (GF := GF) tds id a aty ⊣⊢
-      iprop(allocMeta tds id a aty ∗ allocMeta tds id a aty) :=
-  persistent_sep_dup
-
 /-- Persistent knowledge agrees (one allocation, one base, one type). -/
 theorem allocMeta_agree (tds : CerbTags.TagDefsMap) (id a a' : Int) (aty aty' : ctype) :
     iprop(allocMeta (GF := GF) tds id a aty ∗ allocMeta tds id a' aty') ⊢

@@ -1051,43 +1051,6 @@ theorem wpt_engine_boundU_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
   iapply wpt_drive_aux hwf hQf hQpot Ls ψ k e₀ ev00 evs0 σ₀ 0 0 aids
     hfrag hpot $$ [$Hσ $HB $Hwpt]
 
-/-- The jump-profile instance of the allocation-aware total bound
-    (mirror of `wpt_engine_boundJ`). -/
-theorem wpt_engine_boundJ_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
-    {Q : LabelMap} {p : sym} {rs : core_run_state} (hQ : LabeledAt rs p Q)
-    (hQf : ∀ l params cont, lookupLabel Q l = some (params, cont) →
-      Frag cont)
-    (hQpot : ∀ l params cont, lookupLabel Q l = some (params, cont) →
-      pot cont ≤ lemDefaultFuel)
-    (Ls : ∀ [SpikeGS .hasLC GF], LabelSpecT GF)
-    (e₀ : CoreExpr) (ev00 : Fmap sym value) (evs0 : List (Fmap sym value))
-    (σ₀ : Mem) (m₀ : SpikeHeapF SpikeCell) (reqs : List AllocReq)
-    (hfrag : Frag e₀) (hpot : pot e₀ ≤ lemDefaultFuel)
-    (hl : LaunchCoh (procCtx p rs).tagDefs σ₀ m₀ reqs)
-    (ψ : value → Mem → Prop) (k : Nat)
-    (hwp : ∀ [SpikeGS .hasLC GF],
-      iprop(([∗map] i ↦ c ∈ m₀, cellOwn (procCtx p rs).tagDefs (hlc := .hasLC) (GF := GF) i
-          (.own 1) c) ∗ allocCap (procCtx p rs).tagDefs reqs) ⊢
-        iprop(blockSpecsT (procCtx p rs) Ls (readoutPost ψ) ∗
-          wpt (procCtx p rs) Ls k (readoutPost ψ) e₀ (ev00 :: evs0)))
-    (aids : Nat → Nat) :
-    ∃ v σ', driveJ rs aids k (procThread p e₀ (ev00 :: evs0)) σ₀ = .done v σ' ∧
-      ψ v σ' ∧ (stateInert e₀ = true ∧
-        (∀ l params cont, lookupLabel Q l = some (params, cont) →
-          stateInert cont = true) → σ' = σ₀) := by
-  have hlbl : (procCtx p rs).labels = Q := procCtx_labels hQ
-  have h := wpt_engine_boundU_alloc (M := procCtx p rs) (procCtx_wf p rs)
-    (fun l params cont hlk => hQf l params cont (by rwa [hlbl] at hlk))
-    (fun l params cont hlk => hQpot l params cont (by rwa [hlbl] at hlk))
-    Ls e₀ ev00 evs0 σ₀ m₀ reqs hfrag hpot hl ψ k hwp aids
-  rw [show (procCtx p rs).thread e₀ (ev00 :: evs0) =
-    procThread p e₀ (ev00 :: evs0) from rfl,
-    driveU_procCtx p rs k aids _ σ₀] at h
-  obtain ⟨v, σ', h1, h2, h3⟩ := h
-  refine ⟨v, σ', h1, h2, fun hin => h3 ⟨hin.1, ?_⟩⟩
-  intro l params cont hlk
-  exact hin.2 l params cont (by rwa [hlbl] at hlk)
-
 /-! ## The logical half: Iris TotalAdequacy consumed as-is -/
 
 /-- TERMINATION OVER THE UNIFIED RELATION (the logical half): a
@@ -1143,52 +1106,6 @@ theorem wpt_strongly_normalizing {GF : BundledGFunctors} [SpikeGpreS GF]
   · iintro Hcred
     icases Hcred with -
     ihave HW := hwp $$ Hcells
-    icases HW with ⟨HB, Hwpt⟩
-    iapply twp.mono (fun v => BI.true_intro)
-    iapply wpt_sound k e₀ ρ₀ $$ HB Hwpt
-
-/-- ALLOCATION-AWARE strong normalization (alloc arc P1.3): as
-    `wpt_strongly_normalizing`, launched through `launchResources` —
-    the total proof may allocate (it receives `allocCap reqs`; the
-    cursor ghost heap is launched nonempty). -/
-theorem wpt_strongly_normalizing_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
-    {M : MachineCtx}
-    (Ls : ∀ [SpikeGS .hasLC GF], LabelSpecT GF)
-    (Ψ : ∀ [SpikeGS .hasLC GF], SpikeVal → EnvStack → IProp GF)
-    (e₀ : CoreExpr) (ρ₀ : EnvStack) (σ₀ : Mem) (m₀ : SpikeHeapF SpikeCell)
-    (reqs : List AllocReq) (hl : LaunchCoh M.tagDefs σ₀ m₀ reqs) (k : Nat)
-    (hwp : ∀ [SpikeGS .hasLC GF],
-      iprop(([∗map] i ↦ c ∈ m₀, cellOwn M.tagDefs (hlc := .hasLC) (GF := GF) i
-          (.own 1) c) ∗ allocCap M.tagDefs reqs) ⊢
-        iprop(blockSpecsT M Ls Ψ ∗ wpt M Ls k Ψ e₀ ρ₀)) :
-    Relation.StronglyNormalizing Language.ErasedStep
-      ([(⟨e₀, ρ₀, M⟩ : CoreRt)], σ₀) := by
-  refine twp_total (hlc := .hasLC) (GF := GF) Stuckness.NotStuck _ σ₀
-    (fun _ => iprop(True)) 0 0 ?_
-  intro instInv
-  imod (genHeap_init (L := Int) (V := MetaCell) (H := SpikeHeapF)
-    (∅ : SpikeHeapF MetaCell)) with ⟨%Gm, Hmi, -, -⟩
-  imod (genHeap_init (L := Int) (V := CerbMem.AbsByte) (H := SpikeHeapF)
-    (∅ : SpikeHeapF CerbMem.AbsByte)) with ⟨%Gb, Hbi, -, -⟩
-  imod (genHeap_init (L := Int) (V := AllocCursor) (H := SpikeHeapF)
-    (∅ : SpikeHeapF AllocCursor)) with ⟨%Gk, Hki, -, -⟩
-  letI instGS : SpikeGS .hasLC GF :=
-    { byteGS := Gb, metaGS := Gm, cursorGS := Gk }
-  imod (launchResources M.tagDefs σ₀ m₀ reqs hl) $$ [$Hmi $Hbi $Hki]
-    with ⟨Hσ, Hcells, Hcap⟩
-  imodintro
-  iexists fun (σ' : Mem) (_ : Nat) (_ : List Empty) (_ : Nat) =>
-    iprop(∃ mm mb mk, ⌜CohG σ' mm mb mk⌝ ∗
-      metaInterp mm ∗ byteInterp mb ∗ cursorInterp mk)
-  iexists fun _ => 0
-  iexists fun _ => iprop(True)
-  iexists fun _ _ _ _ => fupd_intro
-  dsimp only
-  isplitl [Hσ]
-  · iexact Hσ
-  · iintro Hcred
-    icases Hcred with -
-    ihave HW := hwp $$ [$Hcells $Hcap]
     icases HW with ⟨HB, Hwpt⟩
     iapply twp.mono (fun v => BI.true_intro)
     iapply wpt_sound k e₀ ρ₀ $$ HB Hwpt

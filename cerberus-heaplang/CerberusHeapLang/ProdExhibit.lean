@@ -32,8 +32,8 @@ conversion): ONE whole-program LOGICAL total theorem
 at derived budget 10) + the GENERIC adequacy/driver collapse
 (`wpt_driver_done_alloc` → `prod_run_eqJ`). The former operational
 create prefix (`prodA_pre`) and six-round termination trace
-(`prodA_terminates`) are DELETED — no `Step.*`, `engineSteps_*`,
-`driveJ_step`, `driverDone_step` in any proof of this module.
+(`prodA_terminates`) are DELETED — no `Step.*`, no per-step drive
+equations, no `driverDone_step` in any proof of this module.
 
 The former concrete cold-start scaffolding (`pxAddr`/`pxPtr`/`σcP`/
 `cellXP`/`mAP`/`bigSep_ptx_P`/`create_applies`) is DELETED (alloc

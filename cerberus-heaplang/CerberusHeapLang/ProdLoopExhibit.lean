@@ -40,7 +40,7 @@ engine-picked (existential) allocation ids, transported by
 `wpt_driver_done_alloc` → `prod_run_eqJ`; the former handwritten
 certified operational rounds (`Step.sseq_ctx (Step.create …)` +
 `driverDone_step` chains) are DELETED — every `Step.*`/
-`engineSteps_*`/`driveJ_step`/`driverDone_step` mention left in this
+per-step drive equation or `driverDone_step` mention left in this
 module is documentation of that deletion.
 -/
 import CerberusHeapLang.Examples.Layout
@@ -144,7 +144,7 @@ in docs/2026-09-02_qa1-notes.md. The create crosses the logic through
 the PUBLIC `wpt_create` from the one-request plan; the whole program
 is ONE total judgment collapsed by the generic
 `wpt_driver_done_alloc` → `prod_run_eqJ` — no `Step.*`,
-`engineSteps_*`, `driveJ_step` or `driverDone_step` anywhere in this
+per-step drive equation or `driverDone_step` anywhere in this
 module. -/
 
 def ctrLoopSym : sym := Symbol "" 521 SD_None
@@ -705,8 +705,8 @@ evaluation (`lr_two_node_plan_fits`). The node-WF address bounds
 The `save` node is the registration site and the entry (the pre-QA-1
 form — three constant binds, the save dummy-initialized in an untaken
 outer-sseq arm, entry by `run` — is recorded in
-docs/2026-09-02_qa1-notes.md). No `Step.*`, `engineSteps_*`,
-`driveJ_step`, `driverDone_step` anywhere. -/
+docs/2026-09-02_qa1-notes.md). No `Step.*`, no per-step drive
+equations, no `driverDone_step` anywhere. -/
 
 def lrN1Sym : sym := Symbol "" 531 SD_None
 def lrN2Sym : sym := Symbol "" 532 SD_None

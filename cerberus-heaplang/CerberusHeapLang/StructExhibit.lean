@@ -27,7 +27,7 @@ capacity `allocCap [⟨align, structTy⟩]` (no cursor vocabulary; the
 program BINDS the fresh pointer with `lets p = create(...)` and
 stores through the bound symbol), and the adequacy theorem launches
 it against the real engine from the production cold-start memory
-through `spike_engine_adequacy_alloc`/`launchResources` — the
+through `project_triple_alloc`/`launchResources` — the
 partial-lane allocation consumer of the R-01 closure test.
 -/
 import CerberusHeapLang.API
@@ -623,10 +623,10 @@ the PUBLIC create rule from the abstract capacity `allocCap` alone —
 no cursor vocabulary anywhere (the fresh pointer is bound by the
 program's own `lets p = create(...)`, and the store goes through the
 bound symbol) — and exported to the engine through the
-allocation-aware launcher (`spike_engine_adequacy_alloc`): the
-partial-lane allocation consumer the re-audit's R-01 acceptance test
-names. NO operational proof terms in this section (no `Step.*`,
-`engineSteps_*`, `driveJ_step`, `driverDone_step`). -/
+allocating projection (`project_triple_alloc`): the partial-lane
+allocation consumer the re-audit's R-01 acceptance test names. NO
+operational proof terms in this section (no `Step.*`, no per-step
+drive equations, no `driverDone_step`). -/
 
 section CreateConsumer
 

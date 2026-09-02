@@ -35,7 +35,7 @@ annotation quantified):
   iteration) through the GENERIC measure→drive-fuel simulation
   (`wpt_engine_boundJ`, TotalAdequacy.lean); the state pin comes
   from the generic state-inert-cone conjunct. ZERO example-level
-  `Step` constructors / `driveJ_step` chains remain (the former
+  `Step` constructors / per-step drive-equation chains remain (the former
   operational side proof `fib_loop_drive` is RETIRED — the audit's
   acceptance criterion). `fib_terminates` is the logical half:
   strong normalization over the unified relation via Iris
@@ -617,7 +617,7 @@ theorem fibBody_pot (n : Int) : pot (fibBody ra n) = 3 := rfl
     initial memory, any action-id supply. THE PROOF IS A COROLLARY
     of the total statement judgment through the generic
     measure→drive-fuel simulation (`wpt_engine_boundJ`): no
-    example-level `Step` constructors, no `driveJ_step` chains
+    example-level `Step` constructors, no per-step drive-equation chains
     (audit F-02 acceptance; the former operational induction
     `fib_loop_drive` is retired). -/
 theorem fib_certified_total (sbty : core_base_type) (n : Int)

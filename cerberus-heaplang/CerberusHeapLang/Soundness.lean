@@ -7,33 +7,31 @@ minimal context.
 
 WHAT IS PROVED (the certification direction, and why it suffices):
 
-ENGINE-COMPLETENESS ON THE FRAGMENT, per construct: for every
-fragment configuration (FragP below), the engine's step list at the
-frozen context is a SINGLETON whose discharge (the Driver.lean:273
-memM protocol, projected to (thread_state, MemState)) is matched by
-Step — `engine_complete`:
-  - a Step-matched successor (per-rule lemmas engineSteps_store /
-    _load / _beta_pure / _beta_annot / _merge, plus the congruence
-    closure get_ctx_decomp / Decomp.rebuild — one lemma per Step
-    rule);
-  - or the value protocol (engine_done / engine_remove_annot — the
-    D1 readout composition: the engine taus `{A}v --> v` where Step
-    treats `{A}v` as a value, then reports `Step_done2 v`);
-  - or a REFUSAL (NDkilled / Step_error2) at a configuration where
-    Step provably has NO step (`Decomp.step_factor` + the per-action
-    inversions).
+MATCH-GIVEN-STEP ON THE FRAGMENT, per construct, at ANY machine
+context: wherever the mirror `Step M` steps at a `Frag` configuration
+(cons-shaped environment, `esize e ≤ lemDefaultFuel`), the engine's
+step list is a SINGLETON whose discharge (the Driver.lean:273 memM
+protocol, projected to (thread_state, MemState)) is exactly that
+step — `engine_step_matchU`, assembled from one `step_ctx_*` lemma
+per `Step` rule (the redex fires under get_ctx's descent and
+`apply_ctx` rebuilds the context: `Decomp.step_factor`) and the
+per-action discharge computations (`dischargeStep_*`). The value
+protocol is certified separately (`outcomesU_done`,
+`outcomesU_remove_annot`: the engine taus `{A}v --> v` where Step
+treats `{A}v` as a value, then reports `Step_done2 v`). Refusals are
+classified where the engine's refusal channel is a value (Round.lean,
+`cerberusRound_refused_*`), never assumed.
 
 Why this direction suffices for adequacy (Adequacy.lean): the WP's
 NotStuck obligation (proved against Step) guarantees every reachable
-fragment configuration is a Step-value or Step-reducible; since the
-engine's one behavior is either Step-matched (so it stays inside the
-Step-reachable, WP-covered cone) or a refusal (which requires
-Step-stuckness, contradicting NotStuck), the engine can never kill
-and its final value is the one the WP's postcondition speaks about.
-The soundness direction (every Step is engine-realizable) is NOT
-needed for that statement and is not claimed; the active-path
-equalities in the per-rule lemmas are exact (iff-grade on the
-fragment), so nothing here relies on Step over-approximating.
+fragment configuration is a Step-value or Step-reducible; at such a
+configuration the engine's one behavior IS the matched step (or the
+value protocol), so the engine can never kill and its final value is
+the one the WP's postcondition speaks about. The soundness direction
+(every Step is engine-realizable) is NOT needed for that statement
+and is not claimed; the active-path equalities in the per-rule lemmas
+are exact (iff-grade on the fragment: `step_iff_cerberusRound`), so
+nothing here relies on Step over-approximating.
 
 THE DISCHARGE MIRROR (dischargeStep): Step_action_request2's request
 monad is run on the frozen core_run_state and the request discharged
@@ -58,9 +56,11 @@ FUEL HONESTY: the engine's get_ctx is fuel-bounded
 10^6) and its exhaustion leaf is opaque (LemLib fuelExhausted —
 deliberately not provably equal to anything). Every statement about
 a symbolic configuration therefore carries an `esize e ≤
-lemDefaultFuel` side condition; `esize` grows by at most 1 per step
-(Step.esize_succ), so Adequacy.lean's drive statements carry
-`esize e₀ + steps ≤ lemDefaultFuel`. This is an honest engine
+lemDefaultFuel` side condition; `esize` grows by at most 1 per
+straight-line step and is reset by a jump to the registered body's
+own size (`Frag.esize_step_bound`), so Adequacy.lean's drive
+statements carry `esize e₀ + steps ≤ lemDefaultFuel` for the program
+and for every registered label body. This is an honest engine
 artifact, not slack: past the budget the engine really does bail.
 -/
 import CerberusHeapLang.Step
@@ -111,19 +111,12 @@ def engineStepsU (M : MachineCtx) (e : CoreExpr) (ρ : EnvStack) (σ : Mem) :
     List core_step2 :=
   step_ctx M.tagDefs σ M.file M.extern M.tid (M.parent, M.thread e ρ)
 
-/-- The straight-line frozen entry — now the `spikeCtx` INSTANCE of
-    the unified entry, definitionally equal to the old frozen-profile
-    body (`step_ctx fmapEmpty σ spikeFile fmapEmpty 0 (none,
-    envThread e ρ)`). -/
-def engineSteps (e : CoreExpr) (ρ : EnvStack) (σ : Mem) : List core_step2 :=
-  engineStepsU spikeCtx e ρ σ
-
 /-! ## The discharge (the Driver.lean:273 protocol, projected) -/
 
 /-- One discharged engine behavior. `offFragment` marks core_step2
-    forms the fragment never produces (`engine_complete` proves they
-    arise, if at all, only where Step is stuck — on the fragment they
-    do not arise at all, but that stronger fact is not needed). -/
+    forms the fragment never produces (`engine_step_matchU`: wherever
+    the mirror steps, the engine's behavior is the matched `next`;
+    the off-fragment forms can only arise where Step is stuck). -/
 inductive EngineOutcome : Type where
   | next (th : thread_state) (σ : Mem)
   | done (v : value)
@@ -236,18 +229,6 @@ def outcomesU (M : MachineCtx) (aid : Nat) (e : CoreExpr) (ρ : EnvStack)
     (σ : Mem) : List EngineOutcome :=
   (engineStepsU M e ρ σ).map (dischargeStep M.tagDefs aid M.runState σ)
 
-/-- The engine's discharged behavior list at the straight-line
-    frozen entry — the `spikeCtx` instance, definitionally the old
-    body. -/
-def engineOutcomes (aid : Nat) (e : CoreExpr) (ρ : EnvStack) (σ : Mem) :
-    List EngineOutcome :=
-  outcomesU spikeCtx aid e ρ σ
-
-/-- The old frozen-entry spelling, definitionally (rewriting aid). -/
-theorem engineOutcomes_eq (aid : Nat) (e : CoreExpr) (ρ : EnvStack) (σ : Mem) :
-    engineOutcomes aid e ρ σ =
-      (engineSteps e ρ σ).map (dischargeStep spikeCtx.tagDefs aid spikeRunState σ) := rfl
-
 /-! ## The size measure (fuel accounting; see FUEL HONESTY above) -/
 
 /-! Nesting depth of the sequencing/annotation spine — an upper
@@ -287,19 +268,11 @@ def esizeAlts : List (pattern × CoreExpr) → Nat
   | (_, e) :: rest => max (esize e) (esizeAlts rest)
 end
 
-/-! ## The fragment cone
-
-S3 NOTE: `FragP` (+ `fragP_ofVal`, `FragP.step`, and the env-
-invariance survivor `Step.env_invariant_frag`) MOVED to Step.lean,
-statements unchanged — Rules.lean needs the cone for the
-FragP-scoped restatements forced by the pre-declared retirement of
-the unconditional env invariance. -/
-
 /-! ## Small facts about values and irreducibility -/
 
-/-- Canonical redex spellings (the exact node shapes FragP.store/load
-    range over; also the spellings Rules.lean's storeExpr/loadExpr
-    produce). -/
+/-- Canonical redex spellings (the exact node shapes `Frag.store`/
+    `Frag.load` range over; also the spellings Rules.lean's
+    storeExpr/loadExpr produce). -/
 def storeRedex (loc : CerbLocation.Loc) (ann : core_run_annotation) (lk : Bool)
     (ty : ctype) (pv : CerbMem.PointerValue) (cv : value) (mo : memory_order) :
     CoreExpr :=
@@ -349,10 +322,10 @@ classification (`Redex` — the migrated `Redex` with the phase-1
 base shapes inlined) and ONE decomposition judgment (`Decomp` — the
 migrated `Decomp`). The parallel phase-1 `Redex`/`Decomp` pair and
 its lemma suite are DELETED (prune-don't-merge); the straight-line
-TWO-SIDEDNESS sub-grammar `engine_complete` needs survives below as
-`StraightRoot`/`StraightFrag` (NOT capability cones — per-theorem
-domain devices for the completeness direction; the capability cone
-is `Frag`). -/
+two-sidedness island that outlived it (`StraightRoot`/`StraightFrag`/
+`engine_complete`, a second collapse of the production pipeline with
+no live consumer) was retired at QA-2 (docs/2026-09-02_qa2-notes.md).
+The one cone is `Frag`. -/
 
 /-! ## esize bookkeeping -/
 
@@ -468,9 +441,8 @@ engine code inspects):
   itself returns the run state verbatim (∀ rs, proved in the
   discharge lemmas).
 
-`engineSteps_*` (the frozen-context forms the adequacy drive
-launches from) are one-line corollaries of the `step_ctx_*` strong
-forms. -/
+The adequacy drive consumes these strong forms through
+`engine_step_matchU`; no frozen-context corollaries exist. -/
 
 /-! ### The extended redex/decomposition layer (S3)
 
@@ -982,42 +954,6 @@ theorem Decomp.step_factor {M : MachineCtx} {e : CoreExpr} {ctx : context}
       rw [hout]
       exact .inr ⟨ra, l, pes, rfl, Step.run (by rfl) hl hvs⟩
 
-/-- Rebuild of a NON-JUMP redex-step through the unified
-    decomposition (`apply_ctx` undoes the descent) — certifies Step's
-    two congruence rules against get_ctx-descent + apply_ctx-rebuild.
-    The `hnj` premise scopes it away from the run redex, whose step
-    DISCARDS the context (the right disjunct of `Decomp.step_factor`). -/
-theorem Decomp.rebuild {M : MachineCtx} {e : CoreExpr} {ctx : context}
-    {r r' : CoreExpr} {ρ ρ' : EnvStack} {σ σ' : Mem}
-    (h : Decomp e ctx r) (hnj : jumpRedex? r = none)
-    (hs : Step M (r, ρ, σ) (r', ρ', σ')) :
-    Step M (e, ρ, σ) (apply_ctx ctx r', ρ', σ') := by
-  induction h generalizing ρ ρ' σ σ' with
-  | root _ => exact hs
-  | sseq hd ih => exact Step.sseq_ctx (hd.jumpRedex?_eq.trans hnj) (ih hnj hs)
-  | sseq_spec hd ih =>
-    exact Step.sseq_ctx (hd.jumpRedex?_eq.trans hnj) (ih hnj hs)
-  | sseq_sym hd ih =>
-    exact Step.sseq_ctx (hd.jumpRedex?_eq.trans hnj) (ih hnj hs)
-  | annot hroot _ _ hd ih =>
-    exact Step.annot_ctx (hd.jumpRedex?_eq.trans hnj) hroot (ih hnj hs)
-  | wseq hd ih => exact Step.wseq_ctx (hd.jumpRedex?_eq.trans hnj) (ih hnj hs)
-
-/-- The factor theorem at a NON-run root (the old phase-1 shape,
-    recovered: the jump disjunct refutes). -/
-theorem Decomp.step_factor' {M : MachineCtx} {e : CoreExpr} {ctx : context}
-    {r : CoreExpr} {ρ : EnvStack} {σ : Mem}
-    {out : CoreExpr × EnvStack × Mem}
-    (h : Decomp e ctx r)
-    (hnr : ∀ (ra : core_run_annotation) (l : sym)
-      (pes : List (generic_pexpr Unit sym)), r ≠ runRedex ra l pes)
-    (hs : Step M (e, ρ, σ) out) :
-    ∃ r' ρ' σ', Step M (r, ρ, σ) (r', ρ', σ') ∧
-      out = (apply_ctx ctx r', ρ', σ') := by
-  rcases h.step_factor hs with ⟨r', ρ', σ', -, hr, heq⟩ | ⟨ra, l, pes, hre, -⟩
-  · exact ⟨r', ρ', σ', hr, heq⟩
-  · exact absurd hre (hnr ra l pes)
-
 /-- PROGRAM-DONE, context undisturbed: at a bare value the engine
     reports the value. Reads exactly stack0 (`hstack`: an empty call
     stack selects PROGRAM-DONE over RETURN) and the parent slot
@@ -1370,134 +1306,6 @@ theorem step_ctx_merge {e : CoreExpr} {ctx : context}
      rw [hirr]
      rfl)
 
-/-! ### The frozen-context corollaries (the adequacy drive's launch
-profile: empty tagDefs/extern, default file, tid 0, no parent,
-spikeThread) -/
-
-theorem engineSteps_done (v : value) (ρ : EnvStack) (σ : Mem) :
-    engineSteps (ofVal (.pure v)) ρ σ = [Step_done2 v] := by
-  unfold engineSteps engineStepsU
-  exact
-   step_ctx_done v fmapEmpty σ spikeFile fmapEmpty 0 _ rfl rfl
-
-theorem engineSteps_remove_annot (ds : List dyn_annotation) (v : value)
-    (ρ : EnvStack) (σ : Mem) :
-    engineSteps (ofVal (.annot ds v)) ρ σ =
-      [Step_tau2 "CTX, Eannot(value)" TSK_Misc (envThread (ofVal (.pure v)) ρ)] := by
-  unfold engineSteps engineStepsU
-  exact
-   step_ctx_remove_annot ds v fmapEmpty σ spikeFile fmapEmpty 0 none _ rfl
-
-theorem engineSteps_store {e : CoreExpr} {ctx : context}
-    {loc : CerbLocation.Loc} {ann : core_run_annotation} {lk : Bool}
-    {ty : ctype} {pv : CerbMem.PointerValue} {cv : value} {mo : memory_order}
-    {mv : CerbMem.MemValue}
-    (hd : Decomp e ctx (storeRedex loc ann lk ty pv cv mo))
-    (hsz : esize e ≤ lemDefaultFuel)
-    (hlib : CerbLocation.isLibraryLocation loc = false)
-    (hmv : memValueFromValue fmapEmpty (Ctype [] (unatomic_ ty)) cv = some mv)
-    (ρ : EnvStack) (σ : Mem) :
-    engineSteps e ρ σ =
-      [Step_action_request2 "StoreRequest" loc 0 (is_unseq_with_ccall ctx)
-        (stExceptUndef_return (StoreRequest2 mo ty lk pv mv
-          (fun (_ : Nat) (fp : CerbMem.Footprint) =>
-            envThread (apply_ctx ctx (Expr [] (Eannot [DA_pos [] fp]
-              (Expr [] (Epure (Pexpr [] () (PEval Vunit))))))) ρ)))] := by
-  unfold engineSteps engineStepsU
-  exact
-   step_ctx_store hd hsz hlib fmapEmpty hmv σ spikeFile fmapEmpty 0 none _ rfl
-
-theorem engineSteps_store_illtyped {e : CoreExpr} {ctx : context}
-    {loc : CerbLocation.Loc} {ann : core_run_annotation} {lk : Bool}
-    {ty : ctype} {pv : CerbMem.PointerValue} {cv : value} {mo : memory_order}
-    (hd : Decomp e ctx (storeRedex loc ann lk ty pv cv mo))
-    (hsz : esize e ≤ lemDefaultFuel)
-    (hmv : memValueFromValue fmapEmpty (Ctype [] (unatomic_ ty)) cv = none)
-    (ρ : EnvStack) (σ : Mem) :
-    engineSteps e ρ σ =
-      [Step_error2 (String.append (CerbLocation.stringFromLocation loc)
-        (String.append "the value of a store("
-          (String.append (CerbPP.stringFromCore_ctype (Ctype [] (unatomic_ ty)))
-            (String.append ") didn't match the lvalue type: "
-              (CerbPP.stringFromCore_value cv)))))] := by
-  unfold engineSteps engineStepsU
-  exact
-   step_ctx_store_illtyped hd hsz fmapEmpty hmv σ spikeFile fmapEmpty 0 none _ rfl
-
-theorem engineSteps_load {e : CoreExpr} {ctx : context}
-    {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
-    {pv : CerbMem.PointerValue} {mo : memory_order}
-    (hd : Decomp e ctx (loadRedex loc ann ty pv mo))
-    (hsz : esize e ≤ lemDefaultFuel)
-    (hlib : CerbLocation.isLibraryLocation loc = false)
-    (ρ : EnvStack) (σ : Mem) :
-    engineSteps e ρ σ =
-      [Step_action_request2 "LoadRequest" loc 0 (is_unseq_with_ccall ctx)
-        (stExceptUndef_return (LoadRequest2 mo ty pv
-          (fun (_ : Nat) (fp : CerbMem.Footprint) (mval : CerbMem.MemValue) =>
-            envThread (apply_ctx ctx (Expr [] (Eannot [DA_pos [] fp]
-              (Expr [] (Epure (Pexpr [] () (PEval
-                (valueFromMemValue mval).2))))))) ρ)))] := by
-  unfold engineSteps engineStepsU
-  exact
-   step_ctx_load hd hsz hlib fmapEmpty σ spikeFile fmapEmpty 0 none _ rfl
-
-theorem engineSteps_create {e : CoreExpr} {ctx : context}
-    {loc : CerbLocation.Loc} {ann : core_run_annotation}
-    {align : CerbMem.IntegerValue} {ty : ctype} {pref : prefix0}
-    (hd : Decomp e ctx (createRedex loc ann align ty pref))
-    (hsz : esize e ≤ lemDefaultFuel)
-    (hlib : CerbLocation.isLibraryLocation loc = false)
-    (ρ : EnvStack) (σ : Mem) :
-    engineSteps e ρ σ =
-      [Step_action_request2 "CreateRequest" loc 0 (is_unseq_with_ccall ctx)
-        (stExceptUndef_return (CreateRequest2 pref align ty
-          (get_with_address []) none
-          (fun (_ : Nat) (pv : CerbMem.PointerValue) =>
-            envThread (apply_ctx ctx
-              (Expr [] (Epure (Pexpr [] () (PEval (Vobject (OVpointer pv))))))) ρ))) ] := by
-  unfold engineSteps engineStepsU
-  exact
-   step_ctx_create hd hsz hlib fmapEmpty σ spikeFile fmapEmpty 0 none _ rfl
-
-theorem engineSteps_beta_pure {e : CoreExpr} {ctx : context}
-    {pa : List _root_.annot} {bty : core_base_type} {v : value} {e2 : CoreExpr}
-    (hd : Decomp e ctx
-      (Expr [] (Esseq (Pattern pa (CaseBase (none, bty))) (ofVal (.pure v)) e2)))
-    (hsz : esize e ≤ lemDefaultFuel) (ev0 : Fmap sym value)
-    (evs : List (Fmap sym value)) (σ : Mem) :
-    engineSteps e (ev0 :: evs) σ =
-      [Step_tau2 "Esseq" TSK_Misc (envThread (apply_ctx ctx e2) (ev0 :: evs))] := by
-  unfold engineSteps engineStepsU
-  exact
-   step_ctx_beta_pure hd hsz fmapEmpty σ spikeFile fmapEmpty 0 none _ rfl rfl
-
-theorem engineSteps_beta_annot {e : CoreExpr} {ctx : context}
-    {pa : List _root_.annot} {bty : core_base_type} {ds : List dyn_annotation}
-    {v : value} {e2 : CoreExpr}
-    (hd : Decomp e ctx
-      (Expr [] (Esseq (Pattern pa (CaseBase (none, bty))) (ofVal (.annot ds v)) e2)))
-    (hsz : esize e ≤ lemDefaultFuel) (ev0 : Fmap sym value)
-    (evs : List (Fmap sym value)) (σ : Mem) :
-    engineSteps e (ev0 :: evs) σ =
-      [Step_tau2 "Esseq Eannot" TSK_Misc
-        (envThread (apply_ctx ctx (Expr [] (Eannot ds e2))) (ev0 :: evs))] := by
-  unfold engineSteps engineStepsU
-  exact
-   step_ctx_beta_annot hd hsz fmapEmpty σ spikeFile fmapEmpty 0 none _ rfl rfl
-
-theorem engineSteps_merge {e : CoreExpr} {ctx : context}
-    {ds1 ds2 : List dyn_annotation} {b : CoreExpr}
-    (hd : Decomp e ctx (Expr [] (Eannot ds1 (Expr [] (Eannot ds2 b)))))
-    (hirr : is_irreducible (Expr [] (Eannot ds1 (Expr [] (Eannot ds2 b)))) = false)
-    (hsz : esize e ≤ lemDefaultFuel) (ρ : EnvStack) (σ : Mem) :
-    engineSteps e ρ σ =
-      [Step_tau2 "Eannot" TSK_Misc
-        (envThread (apply_ctx ctx (Expr [] (Eannot (ds1 ++ ds2) b))) ρ)] := by
-  unfold engineSteps engineStepsU
-  exact
-   step_ctx_merge hd hirr hsz fmapEmpty σ spikeFile fmapEmpty 0 none _ rfl
-
 /-! ## Discharge computation (the applyMemM bridge)
 
 `dischargeStep` and Step's action rules consume the same one-level
@@ -1675,540 +1483,6 @@ theorem dischargeStep_create_refusal {tds : CerbTags.TagDefsMap} {aid : Nat} {rs
 
 @[simp] theorem esize_ofVal_annot {ds : List dyn_annotation} {v : value} :
     esize (ofVal (.annot ds v)) = 2 := rfl
-
-/-! ## The straight-line two-sidedness sub-grammar (S1b)
-
-NOT capability cones (the capability cone is `Frag`, below):
-`StraightRoot`/`StraightFrag` scope the COMPLETENESS direction
-(`engine_complete` — the engine's behavior list classified
-refusals-and-all), which is genuinely two-sided only on the
-straight-line fragment: the jump/entry constructs' refusal channels
-are failwithI panics, deliberately unmodeled (design record §2 item
-5, §3). Membership embeds into the capability cone
-(`StraightFrag.toFrag`, after `Frag` below). These are the honest
-successors of the deleted phase-1 `Redex`/`FragP` pair, kept for
-exactly this per-theorem role. -/
-
-/-- The straight-line root redexes (the six shapes `engine_complete`
-    classifies two-sidedly). -/
-inductive StraightRoot : CoreExpr → Prop where
-  | store {loc : CerbLocation.Loc} {ann : core_run_annotation} {lk : Bool}
-      {ty : ctype} {pv : CerbMem.PointerValue} {cv : value} {mo : memory_order}
-      (hlib : CerbLocation.isLibraryLocation loc = false) :
-      StraightRoot (storeRedex loc ann lk ty pv cv mo)
-  | load {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
-      {pv : CerbMem.PointerValue} {mo : memory_order}
-      (hlib : CerbLocation.isLibraryLocation loc = false) :
-      StraightRoot (loadRedex loc ann ty pv mo)
-  | create {loc : CerbLocation.Loc} {ann : core_run_annotation}
-      {align : CerbMem.IntegerValue} {ty : ctype} {pref : prefix0}
-      (hlib : CerbLocation.isLibraryLocation loc = false) :
-      StraightRoot (createRedex loc ann align ty pref)
-  | beta_pure {pa : List annot} {bty : core_base_type} {v : value}
-      {e2 : CoreExpr} :
-      StraightRoot (Expr [] (Esseq (Pattern pa (CaseBase (none, bty)))
-        (ofVal (.pure v)) e2))
-  | beta_annot {pa : List annot} {bty : core_base_type}
-      {ds : List dyn_annotation} {v : value} {e2 : CoreExpr} :
-      StraightRoot (Expr [] (Esseq (Pattern pa (CaseBase (none, bty)))
-        (ofVal (.annot ds v)) e2))
-  | merge {ds1 ds2 : List dyn_annotation} {b : CoreExpr}
-      (hirr : is_irreducible
-        (Expr [] (Eannot ds1 (Expr [] (Eannot ds2 b)))) = false) :
-      StraightRoot (Expr [] (Eannot ds1 (Expr [] (Eannot ds2 b))))
-
-theorem StraightRoot.jumpRedex?_none {r : CoreExpr} (h : StraightRoot r) :
-    jumpRedex? r = none := by
-  cases h with
-  | store hlib => rfl
-  | load hlib => rfl
-  | create hlib => rfl
-  | beta_pure => rw [jumpRedex?_sseq, jumpRedex?_ofVal]
-  | beta_annot => rw [jumpRedex?_sseq, jumpRedex?_ofVal]
-  | merge hirr => exact jumpRedex?_annot_of_root _ _ rfl
-
-theorem StraightRoot.ne_run {r : CoreExpr} (h : StraightRoot r) :
-    ∀ (ra : core_run_annotation) (l : sym)
-      (pes : List (generic_pexpr Unit sym)), r ≠ runRedex ra l pes := by
-  intro ra l pes hre
-  have := h.jumpRedex?_none
-  rw [hre, show jumpRedex? (runRedex ra l pes) = some (l, pes) from rfl]
-    at this
-  cases this
-
-/-- The straight-line syntactic sub-grammar (the deleted `FragP`'s
-    shapes, re-homed for the completeness direction only). -/
-inductive StraightFrag : CoreExpr → Prop where
-  | val_pure (v : value) : StraightFrag (Expr [] (Epure (Pexpr [] () (PEval v))))
-  | store {loc : CerbLocation.Loc} {ann : core_run_annotation} {lk : Bool}
-      {ty : ctype} {pv : CerbMem.PointerValue} {cv : value} {mo : memory_order}
-      (hlib : CerbLocation.isLibraryLocation loc = false) :
-      StraightFrag (Expr [] (Eaction (Paction polarity.Pos (Action loc ann
-        (Store0 lk (Pexpr [] () (PEval (Vctype ty)))
-                   (Pexpr [] () (PEval (Vobject (OVpointer pv))))
-                   (Pexpr [] () (PEval cv)) mo)))))
-  | load {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
-      {pv : CerbMem.PointerValue} {mo : memory_order}
-      (hlib : CerbLocation.isLibraryLocation loc = false) :
-      StraightFrag (Expr [] (Eaction (Paction polarity.Pos (Action loc ann
-        (Load0 (Pexpr [] () (PEval (Vctype ty)))
-               (Pexpr [] () (PEval (Vobject (OVpointer pv)))) mo)))))
-  | create {loc : CerbLocation.Loc} {ann : core_run_annotation}
-      {align : CerbMem.IntegerValue} {ty : ctype} {pref : prefix0}
-      (hlib : CerbLocation.isLibraryLocation loc = false) :
-      StraightFrag (Expr [] (Eaction (Paction polarity.Pos (Action loc ann
-        (Create (Pexpr [] () (PEval (Vobject (OVinteger align))))
-                (Pexpr [] () (PEval (Vctype ty))) pref)))))
-  | sseq {pa : List annot} {bty : core_base_type} {e1 e2 : CoreExpr} :
-      StraightFrag e1 → StraightFrag e2 →
-      StraightFrag (Expr [] (Esseq (Pattern pa (CaseBase (none, bty))) e1 e2))
-  | annot {ds : List dyn_annotation} {b : CoreExpr} :
-      StraightFrag b → StraightFrag (Expr [] (Eannot ds b))
-
-/-- Both value forms are straight-line terms. -/
-theorem straightFrag_ofVal (w : SpikeVal) : StraightFrag (ofVal w) := by
-  cases w with
-  | pure v => exact .val_pure v
-  | annot ds v => exact .annot (.val_pure v)
-
-/-- The straight-line grammar has no jump redex. -/
-theorem StraightFrag.jumpRedex?_none {e : CoreExpr} (hf : StraightFrag e) :
-    jumpRedex? e = none := by
-  induction hf with
-  | val_pure v => rfl
-  | store hlib => rfl
-  | load hlib => rfl
-  | create hlib => rfl
-  | sseq hf1 hf2 ih1 ih2 => rw [jumpRedex?_sseq]; exact ih1
-  | annot hfb ihb =>
-    rw [jumpRedex?_annot]
-    split
-    · rfl
-    · exact ihb
-
-/-- Closure + straight-line-scoped env invariance in one pass (the
-    deleted `FragP.step_env`'s survivor: on the straight-line
-    grammar no rule writes the environment). -/
-theorem StraightFrag.step_env {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
-    {σ : Mem} {e' : CoreExpr} {ρ' : EnvStack} {σ' : Mem}
-    (hf : StraightFrag e) (hs : Step M (e, ρ, σ) (e', ρ', σ')) :
-    StraightFrag e' ∧ ρ' = ρ := by
-  induction hf generalizing e' ρ' σ' with
-  | val_pure v => exact (Step.val_elim (w := .pure v) hs).elim
-  | store hlib =>
-    obtain ⟨mv, fp, σ'', hmv, hmem, hout⟩ := hs.store_inv
-    obtain ⟨h1, h2, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ'' := by
-      simpa [Prod.mk.injEq] using hout
-    subst h1
-    exact ⟨.annot (.val_pure Vunit), h2⟩
-  | load hlib =>
-    obtain ⟨fp, mval, σ'', hmem, hout⟩ := hs.load_inv
-    obtain ⟨h1, h2, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ'' := by
-      simpa [Prod.mk.injEq] using hout
-    subst h1
-    exact ⟨.annot (.val_pure _), h2⟩
-  | create hlib =>
-    obtain ⟨pv, σ'', hmem, hout⟩ := hs.create_inv
-    obtain ⟨h1, h2, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ'' := by
-      simpa [Prod.mk.injEq] using hout
-    subst h1
-    exact ⟨.val_pure _, h2⟩
-  | sseq hf1 hf2 ih1 ih2 =>
-    rcases hs.sseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
-        ⟨_, _, v, _, _, _, _, _, hout⟩ | ⟨_, _, ds', v, _, _, _, _, _, hout⟩ |
-        ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩ |
-        ⟨_, _, _, _, _, _, _, hpat, _, _, _⟩ |
-        ⟨_, _, _, _, _, _, _, _, hpat, _, _, _⟩ |
-        ⟨_, _, _, _, _, _, hpat, _, _, _⟩
-    · obtain ⟨h1, h2, -⟩ : e' = _ ∧ ρ' = ρ'' ∧ σ' = σ'' := by
-        simpa [Prod.mk.injEq] using hout
-      subst h1 h2
-      obtain ⟨hf1', hρ⟩ := ih1 hstep
-      exact ⟨.sseq hf1' hf2, hρ⟩
-    · obtain ⟨h1, h2, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ := by
-        simpa [Prod.mk.injEq] using hout
-      subst h1
-      exact ⟨hf2, h2⟩
-    · obtain ⟨h1, h2, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ := by
-        simpa [Prod.mk.injEq] using hout
-      subst h1
-      exact ⟨.annot hf2, h2⟩
-    · rw [hf1.jumpRedex?_none] at hj
-      cases hj
-    · exact (specPat_ne_base hpat).elim
-    · exact (specPat_ne_base hpat).elim
-    · exact (symPat_ne_base hpat).elim
-  | annot hfb ihb =>
-    rcases hs.annot_inv with ⟨hg, hnj, b', ρ'', σ'', hstep, hout⟩ |
-        ⟨a2, ds2, c, hb, hout⟩ |
-        ⟨l, pes, params, cont, vs, _, _, hg, hj, _, _, _, _⟩
-    · obtain ⟨h1, h2, -⟩ : e' = _ ∧ ρ' = ρ'' ∧ σ' = σ'' := by
-        simpa [Prod.mk.injEq] using hout
-      subst h1 h2
-      obtain ⟨hfb', hρ⟩ := ihb hstep
-      exact ⟨.annot hfb', hρ⟩
-    · subst hb
-      obtain ⟨h1, h2, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ := by
-        simpa [Prod.mk.injEq] using hout
-      subst h1
-      cases hfb with
-      | annot hfc => exact ⟨.annot hfc, h2⟩
-    · rw [hfb.jumpRedex?_none] at hj
-      cases hj
-
-/-- Closure of the straight-line grammar under Step. -/
-theorem StraightFrag.step {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
-    {σ : Mem} {e' : CoreExpr} {ρ' : EnvStack} {σ' : Mem}
-    (hf : StraightFrag e) (hs : Step M (e, ρ, σ) (e', ρ', σ')) :
-    StraightFrag e' :=
-  (hf.step_env hs).1
-
-/-- Straight-line-scoped env invariance. -/
-theorem Step.env_invariant_frag {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
-    {σ : Mem} {e' : CoreExpr} {ρ' : EnvStack} {σ' : Mem}
-    (hf : StraightFrag e) (h : Step M (e, ρ, σ) (e', ρ', σ')) : ρ' = ρ :=
-  (hf.step_env h).2
-
-/-- One Step grows the spine measure by at most one ON THE PHASE-1
-    CONE (only the action rules grow it: a 1-node redex becomes a
-    2-node annotated value). S3 RESTATEMENT (forced): the
-    unconditional form is FALSE for the extended relation — a jump's
-    successor is the registered continuation (arbitrary size; the R3
-    reset), and the branch/entry rules surface subterms the phase-1
-    `esize` did not measure. S1b: the scope hypothesis is the
-    straight-line sub-grammar (the deleted `FragP`'s survivor role,
-    consumed by the driver-collapse simulation); the full-cone
-    accounting is `Frag.esize_step_bound`. -/
-theorem Step.esize_succ {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack} {σ : Mem}
-    {e' : CoreExpr} {ρ' : EnvStack} {σ' : Mem} (hf : StraightFrag e)
-    (h : Step M (e, ρ, σ) (e', ρ', σ')) :
-    esize e' ≤ esize e + 1 := by
-  induction hf generalizing e' ρ' σ' with
-  | val_pure v => exact (Step.val_elim (w := .pure v) h).elim
-  | store hlib =>
-    obtain ⟨mv, fp, σ'', hmv, hmem, hout⟩ := h.store_inv
-    obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ'' := by
-      simpa [Prod.mk.injEq] using hout
-    subst h1
-    simp
-  | load hlib =>
-    obtain ⟨fp, mval, σ'', hmem, hout⟩ := h.load_inv
-    obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ'' := by
-      simpa [Prod.mk.injEq] using hout
-    subst h1
-    simp
-  | create hlib =>
-    obtain ⟨pv, σ'', hmem, hout⟩ := h.create_inv
-    obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ'' := by
-      simpa [Prod.mk.injEq] using hout
-    subst h1
-    simp
-  | sseq hf1 hf2 ih1 ih2 =>
-    rcases h.sseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
-        ⟨_, _, v, _, _, _, _, _, hout⟩ | ⟨_, _, ds', v, _, _, _, _, _, hout⟩ |
-        ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩ |
-        ⟨_, _, _, _, _, _, _, hpat, _, _, _⟩ |
-        ⟨_, _, _, _, _, _, _, _, hpat, _, _, _⟩ |
-        ⟨_, _, _, _, _, _, hpat, _, _, _⟩
-    · obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ'' ∧ σ' = σ'' := by
-        simpa [Prod.mk.injEq] using hout
-      subst h1
-      have := ih1 hstep
-      simp at this ⊢
-      omega
-    · obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ := by
-        simpa [Prod.mk.injEq] using hout
-      subst h1
-      simp
-      omega
-    · obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ := by
-        simpa [Prod.mk.injEq] using hout
-      subst h1
-      simp
-      omega
-    · rw [hf1.jumpRedex?_none] at hj
-      cases hj
-    · exact (specPat_ne_base hpat).elim
-    · exact (specPat_ne_base hpat).elim
-    · exact (symPat_ne_base hpat).elim
-  | annot hfb ihb =>
-    rcases h.annot_inv with ⟨hg, hnj, b', ρ'', σ'', hstep, hout⟩ |
-        ⟨a2, ds2, c, hb, hout⟩ |
-        ⟨l, pes, params, cont, vs, _, _, _, hj, _, _, _, _⟩
-    · obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ'' ∧ σ' = σ'' := by
-        simpa [Prod.mk.injEq] using hout
-      subst h1
-      have := ihb hstep
-      simp at this ⊢
-      omega
-    · subst hb
-      obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ := by
-        simpa [Prod.mk.injEq] using hout
-      subst h1
-      simp
-      omega
-    · rw [hfb.jumpRedex?_none] at hj
-      cases hj
-
-/-! ## Existence of the decomposition on the straight-line grammar -/
-
-theorem Decomp.toVal_none {e : CoreExpr} {ctx : context} {r : CoreExpr}
-    (h : Decomp e ctx r) : toVal e = none := by
-  cases hv : toVal e with
-  | none => rfl
-  | some w =>
-    have := is_irreducible_of_toVal hv
-    rw [h.not_irreducible] at this
-    cases this
-
-/-- Every non-value straight-line configuration decomposes, to a
-    straight-line root. -/
-theorem StraightFrag.decomp {e : CoreExpr} (hf : StraightFrag e)
-    (hnv : toVal e = none) :
-    ∃ ctx r, Decomp e ctx r ∧ StraightRoot r := by
-  induction hf with
-  | val_pure v =>
-    rw [show toVal (Expr ([] : List _root_.annot) (Epure (Pexpr [] () (PEval v)))) =
-      some (.pure v) from rfl] at hnv
-    cases hnv
-  | store hlib => exact ⟨_, _, Decomp.root (.store hlib), .store hlib⟩
-  | load hlib => exact ⟨_, _, Decomp.root (.load hlib), .load hlib⟩
-  | create hlib => exact ⟨_, _, Decomp.root (.create hlib), .create hlib⟩
-  | @sseq pa bty e1 e2 hf1 hf2 ih1 ih2 =>
-    cases hv1 : toVal e1 with
-    | some w =>
-      have he1 := ofVal_of_toVal hv1
-      subst he1
-      cases w with
-      | pure v => exact ⟨_, _, Decomp.root .beta_pure, .beta_pure⟩
-      | annot ds v => exact ⟨_, _, Decomp.root .beta_annot, .beta_annot⟩
-    | none =>
-      obtain ⟨ctx, r, hd, hroot⟩ := ih1 hv1
-      exact ⟨_, _, Decomp.sseq hd, hroot⟩
-  | @annot ds b hfb ihb =>
-    by_cases hr : annotRooted b = true
-    · -- annot-rooted body: the whole node is the ANNOTS-merge redex
-      cases hfb with
-      | val_pure v => simp [annotRooted] at hr
-      | store hlib => simp [annotRooted] at hr
-      | load hlib => simp [annotRooted] at hr
-      | create hlib => simp [annotRooted] at hr
-      | sseq hf1 hf2 => simp [annotRooted] at hr
-      | @annot ds2 c hfc =>
-        -- irreducibility of the double-annot node: by the head shape
-        -- of c (a fragment term)
-        cases hfc with
-        | val_pure v => exact ⟨_, _, Decomp.root (.merge rfl), .merge rfl⟩
-        | store hlib => exact ⟨_, _, Decomp.root (.merge rfl), .merge rfl⟩
-        | load hlib => exact ⟨_, _, Decomp.root (.merge rfl), .merge rfl⟩
-        | create hlib => exact ⟨_, _, Decomp.root (.merge rfl), .merge rfl⟩
-        | sseq hf1 hf2 => exact ⟨_, _, Decomp.root (.merge rfl), .merge rfl⟩
-        | annot hfc' => exact ⟨_, _, Decomp.root (.merge rfl), .merge rfl⟩
-    · have hr' : annotRooted b = false := by simpa using hr
-      cases hvb : toVal b with
-      | some w =>
-        have hb := ofVal_of_toVal hvb
-        subst hb
-        cases w with
-        | pure v =>
-          rw [show toVal (Expr ([] : List _root_.annot) (Eannot ds (ofVal (.pure v)))) =
-            some (.annot ds v) from rfl] at hnv
-          cases hnv
-        | annot ds2 v => simp [annotRooted, ofVal] at hr'
-      | none =>
-        obtain ⟨ctx, r, hd, hroot⟩ := ihb hvb
-        -- the head of b is a non-value fragment shape: discharge the
-        -- annot layer's matcher facts per shape
-        cases hfb with
-        | val_pure v =>
-          rw [show toVal (Expr ([] : List _root_.annot) (Epure (Pexpr [] () (PEval v)))) =
-            some (.pure v) from rfl] at hvb
-          cases hvb
-        | store hlib => exact ⟨_, _, Decomp.annot hr' rfl (fun n => rfl) hd, hroot⟩
-        | load hlib => exact ⟨_, _, Decomp.annot hr' rfl (fun n => rfl) hd, hroot⟩
-        | create hlib => exact ⟨_, _, Decomp.annot hr' rfl (fun n => rfl) hd, hroot⟩
-        | sseq hf1 hf2 => exact ⟨_, _, Decomp.annot hr' rfl (fun n => rfl) hd, hroot⟩
-        | annot hfc => simp [annotRooted] at hr'
-
-/-! ## THE CERTIFICATION: engine-completeness on the fragment -/
-
-/-- How one discharged engine behavior is matched by Step: a
-    Step-transition, the value protocol (done / the D1 REMOVE-ANNOT
-    tau), or a refusal at a provably Step-stuck configuration.
-    S1: configurations carry the live env; the value protocol and
-    refusals leave it untouched. -/
-inductive EngineMatch (e : CoreExpr) (ρ : EnvStack) (σ : Mem) :
-    EngineOutcome → Prop where
-  | step {e' : CoreExpr} {ρ' : EnvStack} {σ' : Mem} :
-      Step spikeCtx (e, ρ, σ) (e', ρ', σ') →
-      EngineMatch e ρ σ (.next (envThread e' ρ') σ')
-  | removeAnnot {ds : List dyn_annotation} {v : value} :
-      e = ofVal (.annot ds v) →
-      EngineMatch e ρ σ (.next (envThread (ofVal (.pure v)) ρ) σ)
-  | done {v : value} : e = ofVal (.pure v) → EngineMatch e ρ σ (.done v)
-  | refused {o : EngineOutcome} : o.isRefusal →
-      (∀ out, ¬ Step spikeCtx (e, ρ, σ) out) → toVal e = none →
-      EngineMatch e ρ σ o
-
-/-- ENGINE-COMPLETENESS ON THE FRAGMENT (the artifact-4 theorem):
-    at every fragment configuration, at any aid, memory state, and
-    NONEMPTY env stack (the beta rules' one read — the empty-env
-    channel is an engine panic, excluded by the cons shape), the
-    engine has EXACTLY ONE behavior, and it is matched by Step. -/
-theorem engine_complete (aid : Nat) (σ : Mem) (ev0 : Fmap sym value)
-    (evs : List (Fmap sym value)) {e : CoreExpr}
-    (hf : StraightFrag e) (hsz : esize e ≤ lemDefaultFuel) :
-    ∃ o, engineOutcomes aid e (ev0 :: evs) σ = [o] ∧
-      EngineMatch e (ev0 :: evs) σ o := by
-  cases hv : toVal e with
-  | some w =>
-    have he := ofVal_of_toVal hv
-    subst he
-    cases w with
-    | pure v =>
-      refine ⟨.done v, ?_, .done rfl⟩
-      rw [engineOutcomes_eq]
-      rw [engineSteps_done]
-      rfl
-    | annot ds v =>
-      refine ⟨_, ?_, EngineMatch.removeAnnot rfl⟩
-      rw [engineOutcomes_eq]
-      rw [engineSteps_remove_annot]
-      rfl
-  | none =>
-    obtain ⟨ctx, r, hd, hroot⟩ := hf.decomp hv
-    have hnr := hroot.ne_run
-    have hnj := hroot.jumpRedex?_none
-    cases hroot with
-    | @store loc ann lk ty pv cv mo hlib =>
-      cases hmv : memValueFromValue fmapEmpty (Ctype [] (unatomic_ ty)) cv with
-      | none =>
-        have heq := engineSteps_store_illtyped hd hsz hmv (ev0 :: evs) σ
-        have hns : ∀ out, ¬ Step spikeCtx (e, ev0 :: evs, σ) out := by
-          intro out hstep
-          obtain ⟨r', ρ', σ', hr, _⟩ := hd.step_factor' hnr hstep
-          obtain ⟨mv', _, _, hmv', _, _⟩ := hr.store_inv
-          simp only [spikeCtx_tagDefs] at hmv'
-          rw [hmv] at hmv'
-          cases hmv'
-        have hlist : engineOutcomes aid e (ev0 :: evs) σ =
-            [EngineOutcome.error (String.append (CerbLocation.stringFromLocation loc)
-              (String.append "the value of a store("
-                (String.append (CerbPP.stringFromCore_ctype (Ctype [] (unatomic_ ty)))
-                  (String.append ") didn't match the lvalue type: "
-                    (CerbPP.stringFromCore_value cv)))))] := by
-          rw [engineOutcomes_eq]
-          rw [heq]
-          rfl
-        exact ⟨_, hlist, EngineMatch.refused True.intro hns hv⟩
-      | some mv =>
-        have heq := engineSteps_store hd hsz hlib hmv (ev0 :: evs) σ
-        cases happ : applyMemM (CerbMem.storeM spikeCtx.tagDefs loc ty lk pv mv) σ with
-        | some p =>
-          rcases p with ⟨fp, σ'⟩
-          refine ⟨_, ?_, EngineMatch.step (hd.rebuild hnj
-            (Step.store_canonical hmv happ))⟩
-          rw [engineOutcomes_eq]
-          rw [heq]
-          simp only [List.map_cons, List.map_nil]
-          rw [dischargeStep_store_active happ]
-        | none =>
-          have hns : ∀ out, ¬ Step spikeCtx (e, ev0 :: evs, σ) out := by
-            intro out hstep
-            obtain ⟨r', ρ', σ', hr, _⟩ := hd.step_factor' hnr hstep
-            obtain ⟨mv', fp', σ'', hmv', happ', _⟩ := hr.store_inv
-            simp only [spikeCtx_tagDefs] at hmv'
-            rw [hmv] at hmv'
-            obtain rfl : mv = mv' := Option.some.inj hmv'
-            rw [happ] at happ'
-            cases happ'
-          refine ⟨dischargeStep spikeCtx.tagDefs aid spikeRunState σ (Step_action_request2 "StoreRequest" loc 0
-              (is_unseq_with_ccall ctx) (stExceptUndef_return
-                (StoreRequest2 mo ty lk pv mv
-                  (fun (_ : Nat) (fp : CerbMem.Footprint) =>
-                    envThread (apply_ctx ctx (Expr [] (Eannot [DA_pos [] fp]
-                      (Expr [] (Epure (Pexpr [] () (PEval Vunit)))))))
-                      (ev0 :: evs))))), ?_,
-            EngineMatch.refused (dischargeStep_store_refusal happ) hns hv⟩
-          rw [engineOutcomes_eq]
-          rw [heq]
-          rfl
-    | @load loc ann ty pv mo hlib =>
-      have heq := engineSteps_load hd hsz hlib (ev0 :: evs) σ
-      cases happ : applyMemM (CerbMem.loadM spikeCtx.tagDefs loc ty pv) σ with
-      | some p =>
-        rcases p with ⟨⟨fp, mval⟩, σ'⟩
-        refine ⟨_, ?_, EngineMatch.step (hd.rebuild hnj (Step.load_canonical happ))⟩
-        rw [engineOutcomes_eq]
-        rw [heq]
-        simp only [List.map_cons, List.map_nil]
-        rw [dischargeStep_load_active happ]
-      | none =>
-        have hns : ∀ out, ¬ Step spikeCtx (e, ev0 :: evs, σ) out := by
-          intro out hstep
-          obtain ⟨r', ρ', σ', hr, _⟩ := hd.step_factor' hnr hstep
-          obtain ⟨fp', mval', σ'', happ', _⟩ := hr.load_inv
-          rw [happ] at happ'
-          cases happ'
-        refine ⟨dischargeStep spikeCtx.tagDefs aid spikeRunState σ (Step_action_request2 "LoadRequest" loc 0
-            (is_unseq_with_ccall ctx) (stExceptUndef_return (LoadRequest2 mo ty pv
-              (fun (_ : Nat) (fp : CerbMem.Footprint) (mval : CerbMem.MemValue) =>
-                envThread (apply_ctx ctx (Expr [] (Eannot [DA_pos [] fp]
-                  (Expr [] (Epure (Pexpr [] () (PEval
-                    (valueFromMemValue mval).2)))))))
-                  (ev0 :: evs))))), ?_,
-          EngineMatch.refused (dischargeStep_load_refusal happ) hns hv⟩
-        rw [engineOutcomes_eq]
-        rw [heq]
-        rfl
-    | @create loc ann align ty pref hlib =>
-      have heq := engineSteps_create hd hsz hlib (ev0 :: evs) σ
-      cases happ : applyMemM (CerbMem.allocateObject spikeCtx.tagDefs 0 pref align ty none none) σ with
-      | some p =>
-        rcases p with ⟨pv, σ'⟩
-        refine ⟨_, ?_, EngineMatch.step (hd.rebuild hnj
-          (Step.create_canonical happ))⟩
-        rw [engineOutcomes_eq]
-        rw [heq]
-        simp only [List.map_cons, List.map_nil]
-        rw [dischargeStep_create_active (reqAddr := get_with_address []) happ]
-      | none =>
-        have hns : ∀ out, ¬ Step spikeCtx (e, ev0 :: evs, σ) out := by
-          intro out hstep
-          obtain ⟨r', ρ', σ', hr, _⟩ := hd.step_factor' hnr hstep
-          obtain ⟨pv', σ'', happ', _⟩ := hr.create_inv
-          rw [happ] at happ'
-          cases happ'
-        refine ⟨dischargeStep spikeCtx.tagDefs aid spikeRunState σ (Step_action_request2 "CreateRequest" loc 0
-            (is_unseq_with_ccall ctx) (stExceptUndef_return (CreateRequest2 pref align ty
-              (get_with_address []) none
-              (fun (_ : Nat) (pv : CerbMem.PointerValue) =>
-                envThread (apply_ctx ctx (Expr [] (Epure
-                  (Pexpr [] () (PEval (Vobject (OVpointer pv)))))))
-                  (ev0 :: evs))))), ?_,
-          EngineMatch.refused (dischargeStep_create_refusal (reqAddr := get_with_address []) happ)
-            hns hv⟩
-        rw [engineOutcomes_eq]
-        rw [heq]
-        rfl
-    | @beta_pure pa bty v e2 =>
-      have heq := engineSteps_beta_pure hd hsz ev0 evs σ
-      refine ⟨_, ?_, EngineMatch.step (hd.rebuild hnj Step.sseq_pure)⟩
-      rw [engineOutcomes_eq]
-      rw [heq]
-      rfl
-    | @beta_annot pa bty ds v e2 =>
-      have heq := engineSteps_beta_annot hd hsz ev0 evs σ
-      refine ⟨_, ?_, EngineMatch.step (hd.rebuild hnj Step.sseq_annot)⟩
-      rw [engineOutcomes_eq]
-      rw [heq]
-      rfl
-    | @merge ds1 ds2 b hirr =>
-      have heq := engineSteps_merge hd hirr hsz (ev0 :: evs) σ
-      refine ⟨_, ?_, EngineMatch.step (hd.rebuild hnj Step.annot_merge)⟩
-      rw [engineOutcomes_eq]
-      rw [heq]
-      rfl
 
 /-! ## S3 — THE JUMP-PROFILE CERTIFICATION
 
@@ -3752,8 +3026,9 @@ the SIDE hypothesis `hQf` (the label map's own cone membership),
 which breaks the circularity a Q-indexed cone would have.
 
 The completeness shape CHANGED from phase 1 (recorded finding): the
-old `engine_complete` classified every engine behavior including
-refusals-at-stuck; the unified lane instead certifies
+phase-1 completeness theorem classified every engine behavior
+including refusals-at-stuck (retired at QA-2 with the straight-line
+island); the unified lane instead certifies
 MATCH-GIVEN-STEP (`engine_step_matchU`, the S1b replacement of the
 retired J-lane `engine_step_matchJ`): wherever the MIRROR steps, the
 engine's behavior is the singleton discharged match. That suffices
@@ -5008,9 +4283,9 @@ panics, deliberately unmodeled: those constructs are ONE-SIDED
 (match-given-step, `engine_step_matchU`), the audit-sanctioned
 outcome documented per-construct in the capability manifest). -/
 
-/-- One matched engine behavior at a machine context (the
-    straight-line `EngineMatch` re-indexed; `refused` requires
-    provable mirror stuckness, so refusals contradict NotStuck). -/
+/-- One matched engine behavior at a machine context (`refused`
+    requires provable mirror stuckness, so refusals contradict
+    NotStuck). -/
 inductive EngineMatchU (M : MachineCtx) (e : CoreExpr) (ρ : EnvStack)
     (σ : Mem) : EngineOutcome → Prop where
   | step {e' : CoreExpr} {ρ' : EnvStack} {σ' : Mem} :
@@ -5151,15 +4426,5 @@ theorem engine_complete_caseU (M : MachineCtx) (aid : Nat)
       obtain rfl : _ = cval' := Option.some.inj (valueFromPexpr_val _ _ ▸ hv)
       rw [hsel] at hsel'
       cases hsel'
-
-/-- The straight-line sub-grammar embeds into the capability cone. -/
-theorem StraightFrag.toFrag {e : CoreExpr} (hf : StraightFrag e) : Frag e := by
-  induction hf with
-  | val_pure v => exact .val_pure v
-  | store hlib => exact .store hlib
-  | load hlib => exact .load hlib
-  | create hlib => exact .create hlib
-  | sseq hf1 hf2 ih1 ih2 => exact .sseq ih1 ih2
-  | annot hfb ihb => exact .annot ihb
 
 end CerberusHeapLang

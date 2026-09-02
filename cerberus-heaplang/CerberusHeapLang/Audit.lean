@@ -77,8 +77,7 @@ def allowedAxioms : List Name :=
     name these). -/
 def trioExports : List Name := [
   -- spike: the base logic exhibit, the engine-facing spine
-  ``CerberusHeapLang.exhibit, ``CerberusHeapLang.engine_complete,
-  ``CerberusHeapLang.spike_engine_adequacy,
+  ``CerberusHeapLang.exhibit, ``CerberusHeapLang.spike_engine_adequacy,
   ``CerberusHeapLang.semantic_triple_sound, ``CerberusHeapLang.semantic_frame,
   ``CerberusHeapLang.exhibitA_engine, ``CerberusHeapLang.exhibitB_engine,
   ``CerberusHeapLang.exhibitA_semantic, ``CerberusHeapLang.exhibitB_semantic,
@@ -95,7 +94,7 @@ def trioExports : List Name := [
   ``CerberusHeapLang.wpt_sound, ``CerberusHeapLang.wpt_engine_boundJ,
   ``CerberusHeapLang.wpt_strongly_normalizing, ``CerberusHeapLang.wpt_store,
   -- the collapse layer (trio-exact: no shipped-state statement)
-  ``CerberusHeapLang.prod_loop_done, ``CerberusHeapLang.driver2_done,
+  ``CerberusHeapLang.driver2_done,
   ``CerberusHeapLang.finalize_done, ``CerberusHeapLang.loop_step_frag,
   ``CerberusHeapLang.wpt_driver_done,
   -- the exhibits
@@ -112,7 +111,6 @@ def trioExports : List Name := [
   ``CerberusHeapLang.engine_complete_loadU, ``CerberusHeapLang.engine_complete_createU,
   -- the production-entry exports (formerly the runEffectful boundary;
   -- trio-exact since the 2026-09-02 retirement re-pin — header)
-  ``CerberusHeapLang.prod_run_eq, ``CerberusHeapLang.sem_triple_prod,
   ``CerberusHeapLang.exhibitA_prod, ``CerberusHeapLang.fib_labeledAt_production,
   ``CerberusHeapLang.counter_loop_certified_registration, ``CerberusHeapLang.prod_run_eqJ,
   ``CerberusHeapLang.fib_certified_production,
@@ -124,21 +122,22 @@ def trioExports : List Name := [
   ``CerberusHeapLang.pointsToView_fractional, ``CerberusHeapLang.pointsToView_agree,
   ``CerberusHeapLang.pointsToView_persist, ``CerberusHeapLang.pointsToView_locInBounds,
   ``CerberusHeapLang.cellPtr_arrayShift, ``CerberusHeapLang.wps_fupd,
-  ``CerberusHeapLang.cellOwn_readout, ``CerberusHeapLang.pointsToCell_readout,
+  ``CerberusHeapLang.cellOwn_readout,
   ``CerberusHeapLang.struct_wps_views, ``CerberusHeapLang.struct_x_read_shared_wps,
   ``CerberusHeapLang.cell_read_shared_wps, ``CerberusHeapLang.struct_x_read_persist_wps,
   -- alloc arc P4.2: statement-level framing at both strata (R-05) and
   -- the list/tree arbitrary-frame theorems DERIVED from unframed bodies
+  -- (the tree's partial-stratum twin went through `wps_sound_frame` in
+  -- `tr_wp_readout` and was retired at QA-2)
   ``CerberusHeapLang.wps_frame_labels, ``CerberusHeapLang.blockSpecs_frame,
   ``CerberusHeapLang.wps_sound_frame, ``CerberusHeapLang.wpt_frame_labels,
   ``CerberusHeapLang.blockSpecsT_frame, ``CerberusHeapLang.wpt_frame,
   ``CerberusHeapLang.lr_wps_frame, ``CerberusHeapLang.lr_wpt_frame,
-  ``CerberusHeapLang.tree_rotate_wps_frame, ``CerberusHeapLang.tree_rotate_wpt_frame,
+  ``CerberusHeapLang.tree_rotate_wpt_frame,
   -- alloc arc P4.3: the semantic triple at any machine context (R-09) and
-  -- the counter loop's irrelevant-binding tests (R-08)
+  -- the counter loop's irrelevant-binding test at the engine (R-08)
   ``CerberusHeapLang.semantic_triple_soundU, ``CerberusHeapLang.semantic_frameU,
   ``CerberusHeapLang.SemTriple_iff_U,
-  ``CerberusHeapLang.loop_wps_irrelevant_binding,
   ``CerberusHeapLang.counter_loop_certified_irrelevant_binding,
   -- alloc arc P5: the readiness smoke test (R-07 / charter item 5) — a
   -- two-field object predicate and its load/store/allocate rules derived

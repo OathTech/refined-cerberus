@@ -1642,7 +1642,7 @@ listrev notes had ESTIMATED ~11·|ns| + 6 before the wrapper-merge
 step and the nested-wrapper merge were counted; the derived bound
 here is proved, unconditional, and delivered by the GENERIC
 simulation (`wpt_engine_boundJ`) — zero Step constructors, zero
-driveJ_step chains, per the audit's acceptance criterion. -/
+per-step drive equations, per the audit's acceptance criterion. -/
 
 /-- The derived per-label-entry step budget at remaining length r. -/
 def lrCost : Nat → Nat
@@ -2006,7 +2006,7 @@ theorem lrBody_pot : pot (lrBody loc ann ra mo bbty nbty ubty) = 6 := rfl
     footprint equality `∀ k, (get? Q k).isSome ↔ (get? m₀ k).isSome`
     stated on the maps, and the frame `R` returned VERBATIM
     (`Sat σ' (Q ∪ R)`). A corollary of the total judgment through
-    the generic simulation: zero Step constructors, zero driveJ_step
+    the generic simulation: zero Step constructors, zero per-step drive-equation
     chains. SpikeGF-concrete: no ghost-functor binder. -/
 theorem list_reverse_certified_total (sbty : core_base_type)
     (ns : List (Int × Int)) (head : CerbMem.PointerValue)

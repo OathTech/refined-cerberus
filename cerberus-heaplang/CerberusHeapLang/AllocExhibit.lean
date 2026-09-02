@@ -29,8 +29,8 @@ next phase. Contents:
 
 Every create premise here is a closed layout fact of `intTy`
 (4-byte scalar int; decode-inertness is `rfl` at every address).
-NO operational proof terms: no `Step.*`, `engineSteps_*`,
-`driveJ_step`, `driverDone_step` in any proof body of this module.
+NO operational proof terms: no `Step.*`, no per-step drive
+equations, no `driverDone_step` in any proof body of this module.
 -/
 import CerberusHeapLang.API
 import CerberusHeapLang.Examples.Layout

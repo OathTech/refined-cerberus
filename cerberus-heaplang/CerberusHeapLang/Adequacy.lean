@@ -63,8 +63,8 @@ in Iris lands as an engine fact whose statement is Iris-free except
 for the opaque pure-consequence obligation the consequence lemmas
 discharge.
 
-Certification direction used (Soundness.lean header): engine-
-completeness. Each drive step is `engine_complete`'s unique engine
+Certification direction used (Soundness.lean header): match-given-
+step. Each drive step is `engine_step_matchU`'s unique engine
 behavior; Step-matched behaviors stay in the WP-covered cone,
 refusals contradict NotStuck, and the value protocol composes the
 REMOVE-ANNOT tau with PROGRAM-DONE (annotations erased by
@@ -162,29 +162,6 @@ theorem driveU_succ (M : MachineCtx) (aids : Nat → Nat) (n : Nat)
     frozen-profile loop. -/
 def drive (aids : Nat → Nat) : Nat → thread_state → Mem → DriveResult :=
   driveU spikeCtx aids
-
-/-- The succ-step equation at the straight-line instance, in the old
-    frozen spelling (rfl — rewriting aid for the simulation lemmas). -/
-theorem drive_succ_eq (aids : Nat → Nat) (n : Nat) (th : thread_state)
-    (σ : Mem) :
-    drive aids (n+1) th σ =
-      (match (step_ctx fmapEmpty σ spikeFile fmapEmpty 0 (none, th)).map
-          (dischargeStep spikeCtx.tagDefs (aids 0) spikeRunState σ) with
-        | [.next th' σ'] => drive (fun i => aids (i+1)) n th' σ'
-        | [.done v] => DriveResult.done v σ
-        | [.killed r] => DriveResult.killed r
-        | _ => DriveResult.stuck) := rfl
-
-/-- The drive's one-step scrutinee at an envThread arena IS
-    `engineOutcomes` (definitional). -/
-theorem drive_scrutinee_env (aid : Nat) (e : CoreExpr) (ρ : EnvStack) (σ : Mem) :
-    (step_ctx fmapEmpty σ spikeFile fmapEmpty 0 (none, envThread e ρ)).map
-        (dischargeStep spikeCtx.tagDefs aid spikeRunState σ) = engineOutcomes aid e ρ σ := rfl
-
-/-- ... at the exported entry env. -/
-theorem drive_scrutinee (aid : Nat) (e : CoreExpr) (σ : Mem) :
-    (step_ctx fmapEmpty σ spikeFile fmapEmpty 0 (none, spikeThread e)).map
-        (dischargeStep spikeCtx.tagDefs aid spikeRunState σ) = engineOutcomes aid e spikeEnv σ := rfl
 
 /-! ## Step chains and iris thread-pool reachability -/
 
@@ -1031,34 +1008,6 @@ theorem engine_adequacyU_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
     rw [← hwv]
     exact hφ
 
-/-- ALLOCATION-AWARE spike-face engine adequacy (alloc arc P2): the
-    `spike_engine_adequacy` face launched through `launchResources`
-    — the drive-lane engine conclusion for a whole program that
-    allocates its own cells from `allocCap`. -/
-theorem spike_engine_adequacy_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
-    (e₀ : CoreExpr) (σ₀ : Mem) (m₀ : SpikeHeapF SpikeCell)
-    (reqs : List AllocReq)
-    (hfrag : Frag e₀) (hl : LaunchCoh spikeCtx.tagDefs σ₀ m₀ reqs)
-    (ψ : value → Mem → Prop)
-    (hwp : ∀ [SpikeGS .hasLC GF],
-      iprop(([∗map] i ↦ c ∈ m₀,
-          cellOwn spikeCtx.tagDefs (hlc := .hasLC) (GF := GF) i (.own 1) c) ∗
-        allocCap spikeCtx.tagDefs reqs) ⊢
-        WP (⟨e₀, spikeEnv, spikeCtx⟩ : CoreRt) @ Stuckness.NotStuck; ⊤
-          {{ w, iprop(∀ (σ' : Mem) (ns : Nat)
-          (κs : List Empty) (nt : Nat),
-          stateInterp σ' ns κs nt ={⊤, ∅}=∗ ⌜ψ w.val σ'⌝) }})
-    (n : Nat) (aids : Nat → Nat)
-    (hfuel : esize e₀ + n ≤ lemDefaultFuel) :
-    (∀ r, drive aids n (spikeThread e₀) σ₀ ≠ .killed r) ∧
-    (drive aids n (spikeThread e₀) σ₀ ≠ .stuck) ∧
-    (∀ (v : value) (σ' : Mem),
-      drive aids n (spikeThread e₀) σ₀ = .done v σ' → ψ v σ') :=
-  engine_adequacyU_alloc (GF := GF) (M := spikeCtx) spikeCtx_wf
-    (fun l params cont hl' => (spikeCtx_labels_none l hl').elim)
-    e₀ fmapEmpty [] σ₀ m₀ reqs hfrag hl ψ hwp n aids hfuel
-    (fun l params cont hl' => (spikeCtx_labels_none l hl').elim)
-
 /-! ## THE EXPORTED FACE: semantic triples over engine configurations
 ([USER 2026-08-30], the final-form instruction)
 
@@ -1606,17 +1555,6 @@ theorem cellOwn_readout (tds : CerbTags.TagDefsMap) {hlc : HasLC} {GF : BundledG
         stateInterp σ' ns κs nt ={⊤, ∅}=∗ ⌜CellCoh tds σ' i c⌝) :=
   stateInterp_readout fun _ _ _ _ hG => cellOwn_consequence hG tds i dq c
 
-/-- The points-to form of the single-cell readout: the pointer's
-    provenance id and address are the cell's. -/
-theorem pointsToCell_readout (tds : CerbTags.TagDefsMap) {hlc : HasLC} {GF : BundledGFunctors}
-    [SpikeGS hlc GF] (pv : CerbMem.PointerValue) (dq : DFrac) (ty : ctype)
-    (bs : List CerbMem.AbsByte) :
-    pointsToCell tds (GF := GF) pv dq ty bs ⊢
-      iprop(∀ (σ' : Mem) (ns : Nat) (κs : List Empty) (nt : Nat),
-        stateInterp σ' ns κs nt ={⊤, ∅}=∗
-          ⌜∃ i a, pv = cellPtr i a ∧ CellCoh tds σ' i ⟨a, ty, bs⟩⌝) :=
-  stateInterp_readout fun _ _ _ _ hG => pointsToCell_consequence hG tds pv dq ty bs
-
 /-- The cell-footprint readout: post-cells + frame-cells consume the
     final state interpretation into the pure semantic-triple
     conclusion. -/
@@ -1748,23 +1686,6 @@ def driveJ (rs : core_run_state) (aids : Nat → Nat) :
     Nat → thread_state → Mem → DriveResult :=
   driveU (rsCtx rs) aids
 
-theorem driveJ_scrutinee (p : sym) (rs : core_run_state) (aid : Nat)
-    (e : CoreExpr) (ρ : EnvStack) (σ : Mem) :
-    (step_ctx fmapEmpty σ spikeFile fmapEmpty 0 (none, procThread p e ρ)).map
-        (dischargeStep (rsCtx rs).tagDefs aid rs σ) = engineOutcomesP p aid rs e ρ σ := rfl
-
-/-- The succ-step equation at the run-state instance, old spelling
-    (rfl). -/
-theorem driveJ_succ_eq (rs : core_run_state) (aids : Nat → Nat) (n : Nat)
-    (th : thread_state) (σ : Mem) :
-    driveJ rs aids (n+1) th σ =
-      (match (step_ctx fmapEmpty σ spikeFile fmapEmpty 0 (none, th)).map
-          (dischargeStep (rsCtx rs).tagDefs (aids 0) rs σ) with
-        | [.next th' σ'] => driveJ rs (fun i => aids (i+1)) n th' σ'
-        | [.done v] => DriveResult.done v σ
-        | [.killed r] => DriveResult.killed r
-        | _ => DriveResult.stuck) := rfl
-
 /-- The one drive at the proc-carrying context IS the run-state
     instance (the drive loop reads no proc; pointwise the two
     contexts' read fields coincide definitionally). -/
@@ -1797,53 +1718,6 @@ theorem driveU_procCtx (p : sym) (rs : core_run_state) :
         | killed r => rfl
         | error s => rfl
         | offFragment => rfl
-
-/-- Driving a bare value at the jump profile: PROGRAM-DONE. -/
-theorem driveJ_value_pure (p : sym) (rs : core_run_state)
-    (φp : CoreRVal → Mem → Prop) (aids : Nat → Nat)
-    (v : value) (ρ : EnvStack) (σ : Mem)
-    (h : ∃ w : CoreRVal, w.val = v ∧ φp w σ) :
-    ∀ n, DriveOk φp (driveJ rs aids n (procThread p (ofVal (.pure v)) ρ) σ) :=
-  fun n => driveU_procCtx p rs n aids _ σ ▸
-    driveU_value_pure (M := procCtx p rs) (procCtx_wf p rs) φp aids v ρ σ h n
-
-/-! ## The termination-accounting primitives at the driveJ lane
-(one certified drive step per mirror step, and the value delivery;
-the fib exhibit's UNCONDITIONAL total theorem chains them by
-induction on the variant). S1b statement change (class (A)): the
-mirror step's index is the `procCtx p rs` instance (the old
-separate `Q` index is the context's DERIVED label map — interior
-lookups rewrite by `procCtx_labels hQ`). -/
-
-/-- ONE certified drive step: wherever the mirror steps at a cone
-    configuration at the proc-carrying context (tie `hQ` links the
-    quantified run state to the label map the caller reasons with),
-    driveJ takes exactly that step. -/
-theorem driveJ_step {Q : LabelMap} {p : sym} {rs : core_run_state}
-    (hQ : LabeledAt rs p Q) (aids : Nat → Nat) (n : Nat)
-    {e e' : CoreExpr} {ev0 : Fmap sym value} {evs : List (Fmap sym value)}
-    {ρ' : EnvStack} {σ σ' : Mem}
-    (hf : Frag e) (hsz : esize e ≤ lemDefaultFuel)
-    (hs : Step (procCtx p rs) (e, ev0 :: evs, σ) (e', ρ', σ')) :
-    driveJ rs aids (n + 1) (procThread p e (ev0 :: evs)) σ =
-      driveJ rs (fun i => aids (i + 1)) n (procThread p e' ρ') σ' := by
-  rw [← driveU_procCtx p rs (n+1) aids _ σ, ← driveU_procCtx p rs n _ _ σ']
-  rw [show (procThread p e (ev0 :: evs)) =
-    (procCtx p rs).thread e (ev0 :: evs) from rfl,
-    show (procThread p e' ρ') = (procCtx p rs).thread e' ρ' from rfl]
-  rw [driveU_succ, stepOutcomes_thread,
-    engine_step_matchU (aids 0) hf hsz hs]
-
-/-- Value delivery: driveJ at a bare value is PROGRAM-DONE, state
-    verbatim. -/
-theorem driveJ_done (p : sym) (rs : core_run_state) (aids : Nat → Nat)
-    (n : Nat) (v : value) (ρ : EnvStack) (σ : Mem) :
-    driveJ rs aids (n + 1) (procThread p (ofVal (.pure v)) ρ) σ =
-      .done v σ := by
-  rw [← driveU_procCtx p rs (n+1) aids _ σ,
-    show (procThread p (ofVal (.pure v)) ρ) =
-      (procCtx p rs).thread (ofVal (.pure v)) ρ from rfl,
-    driveU_succ, stepOutcomes_thread, outcomesU_done (procCtx_wf p rs)]
 
 /-- ADEQUACY AT THE JUMP PROFILE (engine-only conclusion) — the
     `procCtx` instance of `engine_adequacyU`: a proved base-WP at

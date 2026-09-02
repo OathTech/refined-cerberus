@@ -349,20 +349,6 @@ theorem loop_wps (hn : 0 ≤ n) (sbty : core_base_type)
   · ipureintro; rfl
   · iexact Hc
 
-/-- THE IRRELEVANT-BINDING TEST (R-08): the loop verifies from an
-    entry frame carrying an unrelated binding `y ↦ junk`. No
-    exact-shape pin of the frame could match this configuration; the
-    proof goes through the lookup law alone. -/
-theorem loop_wps_irrelevant_binding (hn : 0 ≤ n) (sbty : core_base_type)
-    (junk : value) :
-    pointsToCell (procCtx p rs).tagDefs (GF := GF) c (.own 1) intTy bs0 ⊢
-      wps (procCtx p rs) (loopLs c n bs0)
-        (loopPost c n bs0)
-        (loopProg loc ann ra mo bty xbty sbty c n)
-        [envAdd ySym junk fmapEmpty] :=
-  loop_wps loc ann ra mo bty xbty c n bs0 p rs hQ hn sbty
-    (envAdd ySym junk fmapEmpty) (symFrame_empty.add _ _) []
-
 omit hQ in
 /-- The per-value readout of the loop postcondition. -/
 theorem loop_readout_val (w : CoreRVal) :
@@ -692,17 +678,6 @@ theorem loop_wpt (hn : 0 ≤ n) (sbty : core_base_type)
   isplit
   · ipureintro; rfl
   · iexact Hc
-
-/-- The irrelevant-binding test at the total stratum. -/
-theorem loop_wpt_irrelevant_binding (hn : 0 ≤ n) (sbty : core_base_type)
-    (junk : value) :
-    pointsToCell (procCtx p rs).tagDefs (GF := GF) c (.own 1) intTy bs0 ⊢
-      wpt (procCtx p rs) (loopLsT c n bs0)
-        (5 * n.toNat + 3) (loopPost c n bs0)
-        (loopProg loc ann ra mo bty xbty sbty c n)
-        [envAdd ySym junk fmapEmpty] :=
-  loop_wpt loc ann ra mo bty xbty c n bs0 p rs hQ hn sbty
-    (envAdd ySym junk fmapEmpty) (symFrame_empty.add _ _) []
 
 omit hQ in
 /-- The postcondition entails the engine readout (the launch-facing

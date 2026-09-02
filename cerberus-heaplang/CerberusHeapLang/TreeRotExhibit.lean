@@ -854,8 +854,8 @@ variable (loc : CerbLocation.Loc) (ann : core_run_annotation)
 
 /-- The rotation postcondition: the delivered value is the left
     child's pointer, now heading the rotated tree. UNFRAMED (alloc arc
-    P4.2): the frame is added by the generic frame rule
-    (`tree_rotate_wps_frame`). -/
+    P4.2): the frame is added by the generic frame rules
+    (`wps_sound_frame` in `tr_wp_readout`; `tree_rotate_wpt_frame`). -/
 abbrev trPost (t' : NodeTree) :
     SpikeVal → EnvStack → IProp GF := fun w _ =>
   iprop(∃ p' : CerbMem.PointerValue, ⌜w.val = ptrVal p'⌝ ∗
@@ -1037,22 +1037,6 @@ theorem tree_rotate_wps
       isplitl [Hb]
       · iexact Hb
       · iexact Hc
-
-/-- THE ARBITRARY-FRAME FORM, by the generic frame rule (alloc arc
-    P4.2): `{ isTree px … ∗ RF } rotate-right { ret py. isTree py … ∗
-    RF }` — straight-line, so the value-channel frame `wps_frame`
-    suffices (no label is ever jumped to). -/
-theorem tree_rotate_wps_frame (RF : IProp GF)
-    (idx idy vx vy : Int) (ta tb tc : NodeTree)
-    (px : CerbMem.PointerValue) :
-    iprop(isTree (GF := GF) px
-        (.node idx vx (.node idy vy ta tb) tc) ∗ RF) ⊢
-      wps spikeCtx Ls
-        (fun w ρ' => iprop(trPost (.node idy vy ta (.node idx vx tb tc)) w ρ' ∗ RF))
-        (trProg loc ann mo xbty ybty bbty ubty px)
-        [fmapEmpty] :=
-  (BI.sep_mono (tree_rotate_wps (Ls := Ls) loc ann mo xbty ybty bbty ubty
-    idx idy vx vy ta tb tc px) .rfl).trans (wps_frame _ _)
 
 /-- Vacuous block specifications (straight-line profile) — at ANY
     postcondition. -/
