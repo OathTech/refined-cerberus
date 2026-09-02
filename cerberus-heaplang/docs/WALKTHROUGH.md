@@ -354,6 +354,25 @@ edits (the Phase-4 accident-detector).
 What do you have to trust for these theorems to mean what §3 says
 they mean? Three tiers, from nothing-new to read-this-part.
 
+*Pointer (2026-09-02; the full rewrite of this section is P6).* The
+trust story is now organized as TWO TRUST CLAIMS ([USER 2026-09-02],
+DECISIONS), stated in full in the README's "The trust story" and in
+`Adequacy.lean`'s header: (1) the closed-program exports have
+Iris-free statements — the semantics plus the pure readout predicates
+— and iris-lean sits BELOW the kernel-checked line for them (inside
+proof terms, no axiom: checked, not trusted); (2) the reusable rules
+are stated in Iris assertions whose must-read set is the
+specification idiom (tier 3 below). THE PROJECTION THEOREM
+`project_triple` (`Adequacy.lean`; record
+`2026-09-02_projection-notes.md`) is the uniform form of claim (1):
+any Iris triple with a concrete-map precondition and an arbitrary
+Iris postcondition projects to the boring triple `MemTripleU` over
+engine states — `s |= P ∧ exec(prog, s) ~~> term ⇒ term = some s' ∧
+s' |= Q` in the operator's shape — whose `Q` is every pure
+consequence of the Iris post at the final memory, discharged by the
+pure-consequence lemmas; no rule is restated. The tiers below are
+unchanged in substance and read within that structure.
+
 **Tier 1 — kernel-checked theorems about the engine's definitions.**
 Every theorem is checked by the Lean kernel, and every theorem's
 *transitive axiom cone* is BOUNDED in-build and the public exports'
@@ -1111,7 +1130,9 @@ line each:
 8. `Adequacy.lean` — the exported face: `drive`/`driveJ`,
    `SemTripleU`/`SemTriple`, `semantic_triple_soundU`/
    `semantic_triple_sound`, the frame theorems, the public
-   single-cell readouts.
+   single-cell readouts; THE PROJECTION `project_triple` into the
+   memory-post triple `MemTripleU` and the pure-consequence lemmas
+   (`*_consequence`) that discharge its post.
 9. `Exhibit.lean` — straight-line exhibits at the engine level
    (store/load, the frame exhibit, disjoint sequential stores).
 10. `LoopExhibit.lean` → `FibExhibit.lean` → `ArrayExhibit.lean` →
