@@ -75,25 +75,62 @@ The target statement shape ([USER 2026-09-02], verbatim):
 s |= P && core_exec(prog, s) ~~> term ==> term = some(s') && s' |= Q
 ```
 
-for P and Q "just memory + pure properties". The theorem that realizes
-it is `project_triple` (Adequacy.lean): ANY Iris triple with a
-concrete-map precondition and an ARBITRARY Iris postcondition projects
-to the boring triple `MemTripleU` over engine states. Symbol by symbol:
+for P and Q "just memory + pure properties". Two theorems realize it
+(Adequacy.lean), differing only in what the Iris precondition may
+contain; the postcondition side — an ARBITRARY Iris postcondition — is
+the general part of both:
+
+- `project_triple`: an Iris triple whose precondition is FOOTPRINT
+  OWNERSHIP ALONE (`[∗map] i ↦ c ∈ P, cellOwn … i (.own 1) c` — a
+  concrete cell map, no `allocCap`) projects to the boring triple
+  `MemTripleU`, launched from any memory with `Sat M.tagDefs σ (P ∪ R)`.
+  This is the non-allocating case: programs that only load and store.
+- `project_triple_alloc`: an Iris triple whose precondition is footprint
+  ownership ∗ `allocCap M.tagDefs reqs` (the capacity every `create`
+  consumes, §3.3 of the walkthrough) projects to `MemTripleU_alloc`,
+  the same boring triple launched from any memory with `LaunchCoh
+  M.tagDefs σ (P ∪ R) reqs` — `Sat` PLUS allocator health (every id
+  from the engine's `nextAllocId` up is unallocated and not dead, the
+  footprint sits at or above the downward cursor `lastAddress`, the
+  request plan `reqs` fits the actual cursor, cursor `≤ 2^64`). This
+  is the allocating case, and the answer to "how does a program that
+  allocates get a boring triple": `LaunchCoh` is what the production
+  cold-start memory satisfies (`prodMem₀_launchCoh`, ProdEntry.lean),
+  so an allocating client states its plan and launches from `prodMem₀`
+  (`struct_create_store_adequacy`, StructExhibit.lean, is the worked
+  instance). The launch premise genuinely differs (a memory can carry
+  the footprint with its cursor sitting on top of it), so the
+  allocating triple is a separate definition rather than
+  `MemTripleU` with a side condition; `MemTripleU` implies
+  `MemTripleU_alloc` at every plan (`MemTripleU_alloc_of_MemTripleU`).
+  No other precondition shape is projected: an Iris pre with
+  fractional cells, views or persistent metadata is first strengthened
+  to whole cells by the assertion laws (`cellOwn_view`, `pointsToCell_combine`).
+
+Both posts are "every pure consequence of the Iris post at the final
+memory"; both carry the frame `R` inside the definition. Symbol by
+symbol (for `MemTripleU`; `MemTripleU_alloc` differs in the `s |= P`
+row only):
 
 | Shape | In the tree |
 |---|---|
 | `s` | `σ : Mem` = the engine's `CerbMem.MemState`, arbitrary outside the footprint |
-| `s \|= P` | `Sat M.tagDefs σ (P ∪ R)` — `Sat` = `Coh` (Heap.lean): every footprint cell live, writable, in bounds, exactly those bytes, pairwise disjoint; `R` is the arbitrary rest, returned to the post (the frame, built into `MemTripleU`) |
+| `s \|= P` | `Sat M.tagDefs σ (P ∪ R)` — `Sat` (Adequacy.lean) is `Coh` (Heap.lean) by `abbrev`: every footprint cell live, writable, in bounds, exactly those bytes, pairwise disjoint; `R` is the arbitrary rest, returned to the post (the frame, built into `MemTripleU`). For `MemTripleU_alloc`: `LaunchCoh M.tagDefs σ (P ∪ R) reqs` (Adequacy.lean) — `Sat` plus the allocator-health facts above |
 | `prog` | `(e, ρ)` at a machine context `M`; `M.thread e ρ` is the engine's `thread_state` |
 | `core_exec(prog, s) ~~> term` | `driveU M aids n (M.thread e ρ) σ` — the iterated `{step_ctx → dischargeStep}` round of the sequential driver, for every action-id supply `aids` and every fuel `n` within the engine's own `get_ctx` budget (`esize e + n ≤ lemDefaultFuel`, likewise for every registered label body) |
 | `term = some(s')` | `driveU … = .done v σ'`; the two other conjuncts, `≠ .killed r` (no undefined behaviour, no error kill) and `≠ .stuck` (no refusal, no off-protocol step); `.more` (fuel exhaustion) is unconstrained — partial correctness |
-| `s' \|= Q` | `post R v σ'` — for `project_triple`, every pure `ψ` that `Q w ∗ cells(R) ∗ metaInterp mm ∗ byteInterp mb` entails under any coupling witness `CohG σ' mm mb mk`; the pure-consequence lemmas (`cellOwn_consequence`, `pointsToCell_consequence`, `cells_consequence`, `sep_/or_/exists_/pure_consequence`) turn this into `CellCoh σ' i c` facts about the final memory |
+| `s' \|= Q` | `post R v σ'` — for `project_triple` and `project_triple_alloc` alike, every pure `ψ` that `Q w ∗ cells(R) ∗ metaInterp mm ∗ byteInterp mb` entails under any coupling witness `CohG σ' mm mb mk`; the pure-consequence lemmas (`cellOwn_consequence`, `pointsToCell_consequence`, `cells_consequence`, `sep_/or_/exists_/pure_consequence`) turn this into `CellCoh σ' i c` facts about the final memory |
 
 `SemTripleU` (footprint post `Q : CellMap`, `Sat σ' (Q ∪ R)`) is the
 cells-shaped instance (`SemTripleU_iff_Mem`, definitional);
 `semantic_triple_soundU` is `project_triple` at that post; `SemTriple`
 is its fixed-profile instance (`SemTriple_iff_U`); `drive`/`driveJ` are
-`driveU` at the straight-line/proc-carrying contexts.
+`driveU` at the straight-line/proc-carrying contexts. Only the
+`exhibitA/B/C_semantic` exhibits are stated AS `SemTriple` values; the
+loop and allocation exhibits (`*_certified`,
+`struct_create_store_adequacy`) state the `MemTripleU`/`MemTripleU_alloc`
+body directly at their profile — same shape, unfolded, with the
+footprint and frame instantiated.
 
 **The production lane.** For closed programs the execution function in
 the statement is the shipped pipeline itself — `CerbND.runND
@@ -104,26 +141,36 @@ argv and the entry's symbol supply `sup` (the fragment never reads it).
 
 **The exhibits** (every one pinned trio-exact in `Audit.lean`; Lane:
 `drive`/`driveJ` = the driver's round loop projected to (thread,
-memory), `production` = the shipped pipeline; hypotheses beyond the
-seeded footprint and the engine's own fuel budget are listed):
+memory), `production` = the shipped pipeline). The last column lists
+EVERY hypothesis of the theorem: the explicit binders by name, and —
+marked SECTION — the `variable`s of the enclosing `section`, which are
+universally quantified but do not appear on the theorem line (Lean
+puts them in the statement; the file:line is where they are declared).
+`hlib` is `CerbLocation.isLibraryLocation loc = false` on the action
+location (a constructor argument of `Frag.store/load/create`,
+Soundness.lean:3585-3597); `hcoh` is the seeded-footprint premise
+(`Coh`/`Sat`); the fuel pair `hfuel`/`hfuel2` is `esize + nsteps ≤
+lemDefaultFuel` for the program and for the registered label body:
 
-| Theorem (file) | Says | Lane | Hypotheses |
+| Theorem (file) | Says | Lane | Hypotheses, exhaustively |
 |---|---|---|---|
-| `exhibitA_semantic`, `exhibitA_engine`, `exhibitA_total` (Exhibit.lean) | store 7 then load: never kills; delivers `Specified(7)`; the total form is an unconditional `.done` equation at fuel 6 | drive | seeded cell |
-| `exhibitB_semantic`, `exhibitB_engine` (Exhibit.lean) | THE FRAME: `⦃x ↦ - ∗ y ↦ a⦄ store(x,7) ⦃x ↦ 7 ∗ y ↦ a⦄` over engine configurations, `y` and all unnamed rest verbatim | drive | seeded cells |
-| `exhibitC_semantic`, `exhibitC_engine` (Exhibit.lean) | sequenced stores to disjoint cells both land | drive | seeded cells |
-| `counter_loop_certified`, `counter_loop_certified_irrelevant_binding` (LoopExhibit.lean) | the first loop: save/guard/store/back edge, final bytes data-dependent; run from an entry frame with an unrelated binding | driveJ | seeded cell |
-| `fib_certified`, `fib_certified_total`, `fib_terminates` (FibExhibit.lean) | iterative fib delivers `fib n`; TOTAL: `driveJ … (2·n+4) … = .done (fib n) σ₀` with no fuel hypothesis; strong normalization | driveJ | `0 ≤ n` |
-| `array_sum_certified` (ArrayExhibit.lean) | array walk with real pointer arithmetic delivers `vs.sum`, array preserved | driveJ | seeded one-allocation array, per-element decode facts |
-| `struct_update_certified`, `struct_wps_views`, `cell_read_shared_wps`, `struct_x_read_persist_wps`, `struct_create_store_wps`, `struct_create_store_adequacy` (StructExhibit.lean) | two-field struct update; the view/fraction/persistence laws as clients; allocate-then-initialize from `allocCap` alone, launched from the production cold-start memory | drive | seeded struct / plan |
-| `alloc_two_creates_wps`, `alloc_create_wpt`, `alloc_create_launch_smoke` (AllocExhibit.lean) | the public allocation rules' local consumers; a bare create from the cold-start memory delivers a pointer at `driveU` fuel exactly 2 | driveU | plan |
-| `list_reverse_certified`, `list_reverse_demo`, `list_reverse_certified_total`, `list_reverse_terminates` (ListRevExhibit.lean) | THE CANONICAL EXHIBIT: in-place reversal of a seeded chain next to an arbitrary disjoint frame — same allocation ids in reversed order, footprint equality on the maps, frame verbatim; TOTAL at the derived bound `13·|ns|+7`; termination; the demo instantiates a 3-node chain | driveJ | `SeedChain m₀ head ns`, `m₀ ##ₘ R` |
-| `tree_rotate_certified`, `tree_rotate_certified_total` (TreeRotExhibit.lean) | the second client: binary-tree right rotation at the same statement shape, zero core-logic edits; total at constant budget 19 | drive | `SeedTree m₀ px t`, disjoint frame |
-| `case_certified`, `wseq_certified` (CaseExhibit.lean, WseqExhibit.lean) | the `Ecase`/`Ewseq` rows' consumers | drive | — |
-| `diverge_total_unprovable` (DivergeExhibit.lean) | THE NEGATIVE TEST: a total derivation for the self-jump loop is `False` — the mandatory back-edge decrease is what blocks it | — | — |
-| `exhibitA_prod` (ProdExhibit.lean) | the production run of `lets p = create(4,int) in lets v = 7 in lets _ = store(p,v) in load(p)` is the singleton Active execution delivering 7, the final memory holding 7's image at the program's own cell (existential id/address); proof = one total judgment `progAProd_wpt` through the PUBLIC `wpt_create` | production | `fs`, `args`, `sup` only |
-| `fib_certified_production`, `counter_loop_certified_production`, `list_reverse_certified_production` (ProdLoopExhibit.lean) | the loop programs on the shipped pipeline; the counter and reversal programs BIND their engine-created cells (`ctrProd_wpt`, `lrProd_wpt`: creates through `wpt_create`, the generic list logic consumed verbatim at existential ids) | production | `0 ≤ n` + fuel budget (fib, counter); `fs`, `args`, `sup` |
-| `counter_loop_certified_registration` (ProdEntry.lean) | the counter loop with its label map DERIVED from the shipped registration (`collect_labeled_continuations_NEW`) | driveJ | as `counter_loop_certified` |
+| `exhibitA_semantic`, `exhibitA_engine`, `exhibitA_total` (Exhibit.lean) | store 7 then load: never kills; delivers `Specified(7)`; the total form is an unconditional `.done` equation at fuel 6 | drive | `_semantic`: `{GF} [SpikeGpreS GF]` only (the seeded cell `mA` is a constant; the `SemTriple` quantifies the memory). `_engine`: `n aids`, `hn : n ≤ 999998` (the fuel budget at `esize progA = 2`); memory fixed to the constant `σ₀`. `_total`: `aids` only. No section variables |
+| `exhibitB_semantic`, `exhibitB_engine` (Exhibit.lean) | THE FRAME: `⦃x ↦ - ∗ y ↦ a⦄ store(x,7) ⦃x ↦ 7 ∗ y ↦ a⦄` over engine configurations, `y` and all unnamed rest verbatim | drive | as A: `{GF} [SpikeGpreS GF]`; `n aids`, `hn : n ≤ 999999` |
+| `exhibitC_semantic`, `exhibitC_engine` (Exhibit.lean) | sequenced stores to disjoint cells both land | drive | as A: `{GF} [SpikeGpreS GF]`; `n aids`, `hn : n ≤ 999998` |
+| `counter_loop_certified`, `counter_loop_certified_irrelevant_binding` (LoopExhibit.lean) | the first loop: save/guard/store/back edge, final bytes data-dependent; run from an entry frame with an unrelated binding | driveJ | SECTION (LoopExhibit.lean:415-417): `loc ann ra mo bty xbty`. Explicit: `sbty idx addr bs0 n`, `hn : 0 ≤ n`, `hlib`, `σ₀`, `hcoh` (the seeded cell), `nsteps aids`, `hfuel : 4 + nsteps ≤ lemDefaultFuel`, `hfuel2 : 3 + nsteps ≤ lemDefaultFuel`; the `_irrelevant_binding` form adds `junk : value` |
+| `fib_certified`, `fib_certified_total`, `fib_terminates` (FibExhibit.lean) | iterative fib delivers `fib n`; TOTAL: `driveJ … (2·n+4) … = .done (fib n) σ₀` with no fuel hypothesis; strong normalization | driveJ | SECTION (FibExhibit.lean:436-437, 598-599): `ra ibty abty bbty`. Explicit: `sbty n`, `hn : 0 ≤ n`, `σ₀`; `fib_certified` adds `nsteps aids`, `hfuel : 3 + nsteps ≤ …`, `hfuel2 : 2 + nsteps ≤ …`; `_total` adds `aids` only; `_terminates` nothing more. No `hlib` (the program has no memory actions) |
+| `array_sum_certified` (ArrayExhibit.lean) | array walk with real pointer arithmetic delivers `vs.sum`, array preserved | driveJ | SECTION (ArrayExhibit.lean:636-637): `loc ann ra mo ibty accbty pbty xbty`. Explicit: `sbty vs id a aty bs`, `hsz : vs.length * 4 ≤ sizeofCtype fmapEmpty aty`, `ety`, `hdec` (each element's 4-byte slice reconstructs, by the ENGINE's `reconstructValue` at any side tables, to `MVinteger ety vs[i]`), `hlib`, `σ₀`, `hcoh` (the seeded one-allocation array), `nsteps aids`, `hfuel : 4 + nsteps ≤ …`, `hfuel2 : 3 + nsteps ≤ …` |
+| `struct_update_certified` (StructExhibit.lean) | two-field struct update at the engine | drive | no section variables. Explicit: `{GF} [SpikeGpreS GF]`, `loc ann mo mo' bty id a bs`, `hlib`, `σ₀`, `hcoh` (the seeded struct cell), `n aids`, `hfuel : 2 + n ≤ lemDefaultFuel` |
+| `struct_wps_views`, `cell_read_shared_wps`, `struct_x_read_persist_wps`, `struct_create_store_wps` (StructExhibit.lean) | the view/fraction/persistence laws as clients; allocate-then-initialize from `allocCap` alone (Iris-level triples) | — (Iris) | SECTION (StructExhibit.lean:325-326, 675-676): `{hlc GF} [SpikeGS hlc GF] {M Ls}`. Explicit: `loc ann`; `struct_wps_views`: `mo mo' bty id a b0 b1 b2 b3`, `h0 h1 h2` (the three 4-byte field lengths), `ev0 evs`; `cell_read_shared_wps`: `pv mo bs bs' ρ`, `htrap` (no `_Bool` trap representation); `struct_x_read_persist_wps`: `mo id a q dqb ρ`; `struct_create_store_wps`: `aprov alignN pref mo pbty vbty ev0 evs`, `hf : SymFrame ev0`, `hex : M.extern = fmapEmpty` |
+| `struct_create_store_adequacy` (StructExhibit.lean) | allocate-then-initialize AT THE ENGINE from the production cold-start memory `prodMem₀`, THROUGH `project_triple_alloc` (footprint `∅`, plan `[⟨8, structTy⟩]`) | drive | no section variables. Explicit: `{GF} [SpikeGpreS GF]`, `loc ann pref mo pbty vbty`, `hlib`, `n aids`, `hfuel : 3 + n ≤ lemDefaultFuel`; the memory is the constant `prodMem₀` (its `LaunchCoh` is `prodMem₀_launchCoh`, ProdEntry.lean) |
+| `alloc_two_creates_wps`, `alloc_create_wpt`, `alloc_create_launch_smoke` (AllocExhibit.lean) | the public allocation rules' local consumers; a bare create from the cold-start memory delivers a pointer at `driveU` fuel exactly 2 | driveU | `_wps`/`_wpt`: SECTION (AllocExhibit.lean:67) `{hlc GF} [SpikeGS hlc GF]`; explicit `{M Ls}`, `al₁ al₂ pref₁ pref₂ bty ev0 evs` resp. `al pref ρ`. `_launch_smoke`: `pref aids` only; memory `prodMem₀` |
+| `list_reverse_certified`, `list_reverse_demo`, `list_reverse_certified_total`, `list_reverse_terminates` (ListRevExhibit.lean) | THE CANONICAL EXHIBIT: in-place reversal of a seeded chain next to an arbitrary disjoint frame — same allocation ids in reversed order, footprint equality on the maps, frame verbatim; TOTAL at the derived bound `13·\|ns\|+7`; termination; the demo instantiates a 3-node chain | driveJ | SECTION (ListRevExhibit.lean:1153-1154, 1988-1989): `loc ann ra mo pbty cbty bbty nbty ubty`. Explicit: `sbty`, `ns head m₀`, `hseed : SeedChain m₀ head ns`, `R`, `hR : m₀ ##ₘ R`, `σ₀`, `hcoh : Sat fmapEmpty σ₀ (m₀ ∪ R)`; `_certified` and `_demo` add `hlib`, `nsteps aids`, `hfuel : 6 + nsteps ≤ …`, `hfuel2 : 5 + nsteps ≤ …` (`_demo` fixes `ns`/`head`/`m₀` to the 3-node constants); `_total` adds `hlib`, `aids` (no fuel); `_terminates` adds nothing (no `hlib`, no fuel) |
+| `tree_rotate_certified`, `tree_rotate_certified_total` (TreeRotExhibit.lean) | the second client: binary-tree right rotation at the same statement shape, zero core-logic edits; total at constant budget 19 | drive | SECTION (TreeRotExhibit.lean:1153-1154, 1426-1427): `loc ann mo xbty ybty bbty ubty`. Explicit: `idx idy vx vy ta tb tc px m₀`, `hseed : SeedTree m₀ px (.node idx vx (.node idy vy ta tb) tc)`, `R`, `hR : m₀ ##ₘ R`, `hlib`, `σ₀`, `hcoh : Sat fmapEmpty σ₀ (m₀ ∪ R)`, `aids`; `_certified` adds `sbty`, `n`, `hfuel : 6 + n ≤ lemDefaultFuel` |
+| `case_certified`, `wseq_certified` (CaseExhibit.lean, WseqExhibit.lean) | the `Ecase`/`Ewseq` rows' consumers | drive | no section variables. Explicit: `{GF} [SpikeGpreS GF]`, `v` resp. `v1 v2`, `σ₀ n aids`, `hfuel : 2 + n ≤ lemDefaultFuel` |
+| `diverge_total_unprovable` (DivergeExhibit.lean) | THE NEGATIVE TEST: a total derivation for the self-jump loop is `False` — the mandatory back-edge decrease is what blocks it | — | `ra σ₀`, `Ls Ψ k` and the derivation `hwp` are the statement's own quantifiers (any label spec, any post, any budget) |
+| `exhibitA_prod` (ProdExhibit.lean) | the production run of `lets p = create(4,int) in lets v = 7 in lets _ = store(p,v) in load(p)` is the singleton Active execution delivering 7, the final memory holding 7's image at the program's own cell (existential id/address); proof = one total judgment `progAProd_wpt` through the PUBLIC `wpt_create` | production | `sup fs args` only; no section variables |
+| `fib_certified_production`, `counter_loop_certified_production`, `list_reverse_certified_production` (ProdLoopExhibit.lean) | the loop programs on the shipped pipeline; the counter and reversal programs BIND their engine-created cells (`ctrProd_wpt`, `lrProd_wpt`: creates through `wpt_create`, the generic list logic consumed verbatim at existential ids) | production | no section variables (every binder is on the theorem line). fib: `sup ra n sbty ibty abty bbty`, `hn : 0 ≤ n`, `hfuel : 2 * n.toNat + 6 ≤ lemDefaultFuel`, `fs args`; counter: `sup ra mo bty xbty cbty sbty n`, `hn : 0 ≤ n`, `hfuel : 7 * n.toNat + 7 ≤ lemDefaultFuel`, `fs args`; reversal: `sup ra mo bty sbty pbty cbty bbty nbty ubty fs args` — nothing else |
+| `counter_loop_certified_registration` (ProdEntry.lean) | the counter loop with its label map DERIVED from the shipped registration (`collect_labeled_continuations_NEW`) | driveJ | no section variables. Explicit: `sup loc ann ra mo bty xbty sbty idx addr bs0 n`, `hn : 0 ≤ n`, `hlib`, `σ₀`, `hcoh`, `nsteps aids`, `hfuel : 4 + nsteps ≤ …`, `hfuel2 : 3 + nsteps ≤ …` |
 
 ## The trust story
 
@@ -164,12 +211,63 @@ is the only place where the story bottoms out outside the package.
   itself stays on the trust boundary. The authority is the pinned
   workspace's own record, `../.cerberus-ws/lean_frontend/VALIDATION.md`
   (primed by `../scripts/setup-cerberus-dep.sh`). Neither the semantics
-  workspace nor its lem runtime (`LemLib`) declares an axiom; the
-  engine's kernel-opaque constants (`CerberusFresh`'s native
-  `md5Hex`/`digestIO`, LemLib's `fuelExhausted` exhaustion leaf, the
-  `failwithI` panic) enter no axiom cone and cannot be unfolded by any
-  proof — the fuel side condition and the well-formedness premises
-  below are how the package stays away from them.
+  workspace nor its lem runtime (`LemLib`) declares an axiom. The
+  engine does declare KERNEL-OPAQUE constants (`opaque`, mostly with
+  `@[implemented_by]` runtime bodies): they enter no axiom cone and
+  cannot be unfolded by any proof, so a theorem can only hold for
+  EVERY value of them. Measured on the 109 export cones (P6.1, a
+  transitive constant-closure sweep in the `collectAxioms` convention;
+  script in `docs/2026-09-02_p6.1-notes.md`), the semantics-side
+  opaques reached are: `CerbGlobal.current_execution_mode`,
+  `CerbGlobal.using_concurrency` (the production lane, 11 exports),
+  `CerbGlobal.has_switch` (`inner_arg_temps`, read in
+  `core_thread_step2`'s procedure-call arm, Core_run.lean:395) and
+  `CerbGlobal.is_CHERI` (the pointer-size branch, Ctype.lean:578) — 8
+  exports, all in the production lane (`driver2_done` and the seven
+  production/collapse exports), reached through the shipped driver's
+  code and never through the fragment's own steps; no drive-lane
+  export reaches either — `CerberusImpl.typeof_enum` (102 exports,
+  via `sizeofCtype`'s enum arm), `CerberusFresh.digest` (50 exports),
+  LemLib's `failwithI` (91) and `fuelExhaustedWith` (103), `CerbMem`'s
+  private `beqMemValueSafe` (11), the root-level `normalise_ctype`
+  (module `Implementation`) and `Core.instBEqCore_base_type.beq` (8,
+  production lane). Declared but NOT in any cone:
+  `CerberusFresh.md5Hex`/`digestIO`/`setDigestIO`/`forceIO`,
+  `CerberusImpl.register_enum`, `CerbGlobal.backend_name`/`isDefacto`/
+  `isPermissive`/`isAgnostic`/`isIgnoreBitfields`/`is_PNVI`/
+  `has_strict_pointer_arith`, `CerbUtils.*`. (Also in the cones, for
+  completeness: iris-lean's `fixpointP`/`Tower.iso` and Lean core's
+  `Float.*`/`String.Internal.append`/`opaqueFix` — the same status.)
+  The fuel side condition and the well-formedness premises below are
+  how the package stays away from the leaves that could otherwise
+  block a proof (`fuelExhaustedWith`, `failwithI`).
+- *Which Cerberus configuration.* Cerberus is switch-configured
+  (PNVI variants, strict pointer arithmetic, …), so the question
+  "which configuration are these theorems about?" has a definite
+  answer, pinned by the statements: (i) the tag-definition
+  environment is `fmapEmpty` and concurrency is OFF — the production
+  statements run `_root_.drive fmapEmpty false (prodFile …) args`
+  (Driver.lean:518: `drive tagDefs with_concurrency file args`), and
+  the drive-lane profiles `spikeCtx`/`procCtx`/`rsCtx` carry
+  `tagDefs = fmapEmpty`; (ii) the switch set is NOT read at all on the
+  memory path: the Lean `CerbMem` references no `CerbGlobal` constant
+  (0 hits), so `loadM`/`storeM`/`allocateObject`/`eqPtrval` are
+  switch-independent by construction (the differential pipeline runs
+  the OCaml oracle with no switches set, and the port follows —
+  `eqPtrval`'s docstring, CerbMem.lean:1752-1754); (iii) the two
+  configuration reads that DO sit on a proved path are discharged for
+  every value: the driver's `current_execution_mode` read is proved
+  by `cases` on the opaque test (`driver2_done`,
+  DriverCollapse.lean:929-985, the `cases hmode` at :967 — both
+  scheduler branches reduce to the same singleton pick), and `using_concurrency` is read only inside
+  `Core_run_aux`'s annotation helpers (`add_to_sb`/`add_to_asw`,
+  Core_run_aux.lean:447-476) on the concurrency-tracking path the
+  sequential driver does not take; (iv) the implementation-defined
+  layout (`CerberusImpl.sizeof_ity`/`alignof_ity`, and the opaque
+  `typeof_enum` for enum types, which the fragment never uses) is the
+  port's `CerberusImpl` — the same one the OCaml oracle is validated
+  against. So every export holds under every switch setting and every
+  execution mode, at empty tag definitions, single-threaded.
 - *The pure readout predicates* in the exported statements say what
   this document says they say: `driveU`/`drive`/`driveJ` (the driver's
   round loop, cited line by line against `Driver.lean`),
@@ -286,9 +384,10 @@ way meaning flows: a proof at the source becomes a fact at the target.
      fib_certified_production, counter_loop_certified_production,
      list_reverse_certified_production)                          [∀ sup fs args]
         ▼
-   projection to boring statements   (project_triple: any Iris triple ⇒ MemTripleU
-     whose post is every pure consequence of the Iris post at the final memory;
-     *_consequence discharge it; SemTripleU_iff_Mem)
+   projection to boring statements   (project_triple: footprint-only Iris pre ⇒
+     MemTripleU;  project_triple_alloc: footprint ∗ allocCap pre ⇒ MemTripleU_alloc
+     [LaunchCoh launch];  both posts = every pure consequence of the Iris post at
+     the final memory; *_consequence discharge it; SemTripleU_iff_Mem)
 
    future semantic types and automation sit here: above the raw rules
    (API.lean), below generated client proofs (Examples/ReadinessSmoke.lean)
@@ -376,18 +475,28 @@ through the Lean kernel and then `Audit.lean` (the last import of the
 library root), which (1) pins the exact axiom set of every public
 export to the classical trio, (2) bounds every theorem of every module
 by the trio, and (3) checks every constant of every kind for
-`sorryAx`/`ofReduceBool`/`ofReduceNat`. Expected tail:
+`sorryAx`/`ofReduceBool`/`ofReduceNat`. Expected tail (the counts are
+those at the time of writing — P6.1, commit noted in
+`docs/2026-09-02_p6.1-notes.md`; the build prints the current values,
+and the pin count grows with every spec-addition slice):
 
 ```
-info: CerberusHeapLang/Audit.lean:164:0: CerberusHeapLang export pins: 107 trio-exact
-info: CerberusHeapLang/Audit.lean:164:0: CerberusHeapLang axiom sweep: 1184 theorems bounded by the trio
-info: CerberusHeapLang/Audit.lean:164:0: CerberusHeapLang banned-axiom sweep: 2030 constants of every kind checked; sorryAx/ofReduceBool/ofReduceNat absent from all cones
+info: CerberusHeapLang/Audit.lean:170:0: CerberusHeapLang export pins: 109 trio-exact
+info: CerberusHeapLang/Audit.lean:170:0: CerberusHeapLang axiom sweep: 1186 theorems bounded by the trio
+info: CerberusHeapLang/Audit.lean:170:0: CerberusHeapLang banned-axiom sweep: 2033 constants of every kind checked; sorryAx/ofReduceBool/ofReduceNat absent from all cones
 Build completed successfully (444 jobs).
 ```
 
 **The trust base is exactly three things** ([USER 2026-09-02]): the two
-capped builds with their in-build axiom sweeps, plus the banned
-proof-method grep (`native_decide`/`bv_decide`/`ofReduce*`). Everything
+capped builds with their in-build axiom sweeps — (1) the repository
+root package `RefinedCerberus` (`scripts/capped lake build` from the
+repository root; its `RefinedCerberus/Audit.lean` sweeps the port's
+own modules, which do not import this package), and (2) THIS package,
+`cerberus-heaplang` (the command above; `CerberusHeapLang/Audit.lean`)
+— plus the banned proof-method grep (`native_decide`/`bv_decide`/
+`ofReduce*`) over both trees. This package's claims rest on its own
+build alone; the root build is in the gate runner because the runner
+is repository-wide (`scripts/test_unit.sh` gates 2 and 3). Everything
 else in `scripts/test_unit.sh` is a SPEEDBUMP — a claim-point report
 that catches honest drift, not a gate designed to survive an adversary:
 the capability manifest is regenerated and diffed (a `Frag` constructor
@@ -403,6 +512,8 @@ Ask the kernel yourself (from `cerberus-heaplang/`):
 ../scripts/capped ~/.elan/bin/lake env lean --stdin <<'EOF'
 import CerberusHeapLang
 #print axioms CerberusHeapLang.project_triple
+#print axioms CerberusHeapLang.project_triple_alloc
+#print axioms CerberusHeapLang.struct_create_store_adequacy
 #print axioms CerberusHeapLang.list_reverse_certified
 #print axioms CerberusHeapLang.fib_certified_total
 #print axioms CerberusHeapLang.exhibitA_prod
@@ -464,7 +575,7 @@ order):
 | `Wpt.lean` | the total judgment by recursion on the budget; variant-indexed label preconditions with the mandatory back-edge decrease; the total rule set incl. `wpt_create`; collapse into Iris TotalWeakestPre | `wpt`, `wpt_run`, `wpt_create`, `blockSpecsT_intro`, `wpt_frame_labels`, `wpt_sound` |
 | `Soundness.lean` | the boundary module: per-construct certification of `Step` against `step_ctx` + the driver's discharge (`dischargeStep`); the fragment cone `Frag`; the unified step-match at any context | `Frag`, `engine_complete`, `engine_step_matchU`, `Decomp.step_factor` |
 | `Round.lean` | the engine-facing one-round relation and its exhaustive classification | `CerberusRound`, `cerberusRound_classify`, `step_iff_cerberusRound` |
-| `Adequacy.lean` | `driveU`/`drive`/`driveJ`; Iris adequacy with the ghost state constructed; the allocation-aware launch; the semantic triples; THE PROJECTION and the pure-consequence lemmas; the public readouts | `project_triple`, `MemTripleU`, `semantic_triple_soundU`, `engine_adequacyU`, `launchResources`, `cellOwn_readout` |
+| `Adequacy.lean` | `driveU`/`drive`/`driveJ`; Iris adequacy with the ghost state constructed; the allocation-aware launch; the semantic triples; THE TWO PROJECTIONS (footprint-only and allocating) and the pure-consequence lemmas; the public readouts | `project_triple`, `MemTripleU`, `project_triple_alloc`, `MemTripleU_alloc`, `semantic_triple_soundU`, `engine_adequacyU`, `launchResources`, `cellOwn_readout` |
 | `TotalAdequacy.lean` | termination over the unified relation (`twp_total` as-is) and the generic measure→drive-fuel simulation on the size potential `pot`; allocation-aware variants | `wpt_strongly_normalizing`, `wpt_engine_boundU`, `wpt_engine_boundJ`, `wpt_engine_boundU_alloc` |
 | `API.lean` | THE PUBLIC SURFACE as one import; the public/internal table | the header table |
 | `Examples/Layout.lean` | example support, not logic: `intTy`, the 5/6/7 values and byte images, canned exhibit shapes | `intTy`, `sevenBytes` |
@@ -483,8 +594,12 @@ History and provenance live in dated files, not here. Rulings:
 that produced the current tree and its finding-by-finding closure
 table: `docs/2026-09-01_alloc-arc-plan.md` (charter: the 2026-09-01
 skeptical re-audit, `../docs/2026-09-01_cerberus-heaplang-skeptical-re-audit.md`).
-Slice records, newest first: `docs/2026-09-02_p6-notes.md` (this
-documentation), `2026-09-02_projection-notes.md`, `2026-09-02_p5-notes.md`,
+Slice records, newest first: `docs/2026-09-02_p6.1-notes.md` (the
+fresh-eyes review's findings closed: the allocating projection, the
+exhaustive hypothesis column, the measured kernel-opaque list, the
+configuration answer), `docs/2026-09-02_p6-fresh-eyes-review.md` (the
+review), `docs/2026-09-02_p6-notes.md` (the documentation rewrite),
+`2026-09-02_projection-notes.md`, `2026-09-02_p5-notes.md`,
 `2026-09-02_p4-notes.md`, `2026-09-02_parametric-semantics-spike.md`,
 `2026-09-02_repin-notes.md`, `2026-09-02_p3.5-notes.md`,
 `2026-09-01_p{0,1,2,3}-notes.md`, the foundations-arc phase notes, and

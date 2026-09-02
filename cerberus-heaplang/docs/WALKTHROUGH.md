@@ -7,7 +7,12 @@ verbatim (§3); the memory-model view (§4); how the logic is attached to
 the engine (§5); what the in-build audit asserts (§6); what is
 deliberately out (§7). Everything in a `lean` block is quoted verbatim
 from [`CerberusHeapLang/`](../CerberusHeapLang/) at this checkout; every
-claim names a theorem you can `grep`.
+claim names a theorem you can `grep`. One reading convention: several
+quoted declarations sit inside a Lean `section` whose `variable`s are
+part of the statement without appearing on the theorem line (Lean
+adds them as leading binders). Wherever that is the case, a line
+"Section variables not shown" under the quote lists them with the
+file:line where they are declared — nothing else is hidden.
 
 **Cerberus** (Memarian, Sewell, et al.) is a semantics for C: it
 elaborates C into a small typed functional intermediate language,
@@ -101,6 +106,90 @@ cells-shaped triple `SemTripleU` (post = a footprint `Q` with `Sat σ'
 definitional), and `semantic_triple_soundU` — the older headline — is
 `project_triple` at that post.
 
+**The projection's exact scope: two theorems.** `project_triple`'s
+precondition is footprint ownership ALONE — a client whose Iris
+precondition also carries `allocCap` (every program that `create`s,
+§3.3) cannot reach `MemTripleU` through it, because the launch that
+grants `allocCap` needs more of the initial memory than `Sat`. The
+allocating case is the second theorem:
+
+```lean
+def MemTripleU_alloc (M : MachineCtx) (ρ : EnvStack) (e : CoreExpr) (P : CellMap)
+    (reqs : List AllocReq) (post : CellMap → value → Mem → Prop) : Prop :=
+  ∀ (R : CellMap), P ##ₘ R →
+  ∀ (σ : Mem), LaunchCoh M.tagDefs σ (Iris.Std.PartialMap.union P R) reqs →
+  ∀ (n : Nat) (aids : Nat → Nat), esize e + n ≤ lemDefaultFuel →
+    (∀ l params cont, lookupLabel M.labels l = some (params, cont) →
+      esize cont + n ≤ lemDefaultFuel) →
+    (∀ r, driveU M aids n (M.thread e ρ) σ ≠ .killed r) ∧
+    (driveU M aids n (M.thread e ρ) σ ≠ .stuck) ∧
+    (∀ (v : value) (σ' : Mem), driveU M aids n (M.thread e ρ) σ = .done v σ' →
+      post R v σ')
+```
+
+```lean
+theorem project_triple_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
+    {M : MachineCtx} (hwf : M.SeqWF)
+    (hQf : ∀ l params cont, lookupLabel M.labels l = some (params, cont) →
+      Frag cont)
+    {e : CoreExpr} (hfrag : Frag e) (ev0 : Fmap sym value) (evs : List (Fmap sym value))
+    (P : CellMap) (reqs : List AllocReq) (Q : ∀ [SpikeGS .hasLC GF], CoreRVal → IProp GF)
+    (hwp : ∀ [SpikeGS .hasLC GF],
+      iprop(([∗map] i ↦ c ∈ P, cellOwn M.tagDefs (hlc := .hasLC) (GF := GF) i (.own 1) c) ∗
+        allocCap M.tagDefs reqs) ⊢
+        WP (⟨e, ev0 :: evs, M⟩ : CoreRt) @ Stuckness.NotStuck; ⊤ {{ w, Q w }}) :
+    MemTripleU_alloc M (ev0 :: evs) e P reqs (fun R v σ' => ∀ ψ : Prop,
+      (∀ [SpikeGS .hasLC GF] (w : CoreRVal), w.val = v →
+        ∀ (mm : SpikeHeapF MetaCell) (mb : SpikeHeapF CerbMem.AbsByte)
+          (mk : SpikeHeapF AllocCursor), CohG σ' mm mb mk →
+        iprop(Q w ∗ ([∗map] i ↦ c ∈ R, cellOwn M.tagDefs (hlc := .hasLC) (GF := GF) i (.own 1) c) ∗
+          metaInterp mm ∗ byteInterp mb) ⊢ (⌜ψ⌝ : IProp GF)) → ψ) := by
+```
+
+Read against `project_triple`: the Iris precondition gains
+`allocCap M.tagDefs reqs` (the capacity for the finite request plan
+`reqs`); the conclusion is `MemTripleU_alloc`, which is `MemTripleU`
+with ONE change — the launch premise `LaunchCoh M.tagDefs σ (P ∪ R)
+reqs` (Adequacy.lean) in place of `Sat M.tagDefs σ (P ∪ R)`. `LaunchCoh`
+is `Sat` (its `coh` field) plus the allocator-health facts that make
+`create` safe: every allocation id from the engine's `nextAllocId`
+upwards is unallocated and not dead, every footprint cell sits at or
+above the downward cursor `lastAddress`, the plan fits the actual
+`⟨lastAddress, nextAllocId⟩` (`PlanFits`), and `lastAddress ≤ 2^64`.
+None of that follows from `Sat` — a memory can carry the footprint
+with its allocator cursor sitting on top of those very cells — which
+is why the allocating triple is a separate definition rather than
+`MemTripleU` with a side condition. The frame `R` is built in exactly
+as before; the postcondition is the same "every pure consequence of
+`Q w ∗ frame-cells`". `MemTripleU` implies `MemTripleU_alloc` at every
+plan (`MemTripleU_alloc_of_MemTripleU`): the allocating triple is the
+weaker conclusion, paid for by the stronger launch premise. So, the
+scope in one sentence: the ARBITRARY Iris postcondition is the general
+part of both theorems; the precondition is either footprint cells
+(`project_triple`) or footprint cells ∗ `allocCap reqs`
+(`project_triple_alloc`) — no other precondition shape is projected
+(fractional cells, views and persistent metadata are first traded for
+whole cells by the assertion laws, §4).
+
+**How an allocating program gets a boring triple, concretely.** State
+the plan, prove the Iris triple from `allocCap` with `wps_create`/
+`wpt_create`, and launch from a memory whose `LaunchCoh` you can
+prove — for closed programs that is the production cold-start memory
+`prodMem₀` (`prodMem₀_launchCoh reqs`, ProdEntry.lean, needs only
+`PlanFits` for your plan, a closed arithmetic fact). The worked
+instance is `struct_create_store_adequacy` (StructExhibit.lean): `lets
+p = create(8, long[2]) in lets v = 5 in store(int, p, v)` at footprint
+`∅`, frame `∅`, plan `[⟨8, structTy⟩]`; it is `project_triple_alloc` at
+`spikeCtx` with the Iris post of `struct_create_store_wps`, the
+projected obligation discharged by `exists_consequence` ∘
+`sep_consequence` ∘ `pointsToCell_consequence`, concluding that the
+engine never kills, never derails, and any delivered `(v, σ')` has
+`v = Vunit` with the initialized struct at an existential id/address
+in `σ'`. Its statement is the `MemTripleU_alloc` body unfolded at that
+profile — as the loop exhibits (`list_reverse_certified`, …) state
+the `MemTripleU` body unfolded at theirs; only `exhibitA/B/C_semantic`
+are stated as `SemTriple` values.
+
 ### 1.2 The exhibit: in-place list reversal
 
 **The program.** Written directly in Core (`ListRevExhibit.lean`),
@@ -126,7 +215,9 @@ memory model (`storeM`/`loadM`: liveness, bounds, writability, type
 checks, byte serialization) — a failed check is undefined behaviour and
 the engine KILLS the execution; the logic's job is to prove that cannot
 happen. `memop(PtrEq, …)` is the memory model's own provenance-aware
-pointer equality — the null test uses it, no flags smuggled in.
+pointer equality — the null test uses it, no flags smuggled in (how
+the rule stays clear of the comparison's differing-provenance
+nondeterministic fork: §4, "The `PtrEq` memop").
 `array_shift(p, long, 1)` advances `p` by one `long` inside the same
 allocation, provenance preserved. Each node is ONE allocation of type
 `long[2]` (`nodeTy`): value at offset 0, next pointer at offset 8; NULL
@@ -163,7 +254,8 @@ theorem list_reverse_certified_production (sup : Nat) (ra : core_run_annotation)
       dres.dres_stderr = "" := by
 ```
 
-`CerbND.runND (_root_.drive …) (initial_driver_state sup file fs).1`
+No section variables: every binder of this theorem is on the theorem
+line. `CerbND.runND (_root_.drive …) (initial_driver_state sup file fs).1`
 is exactly the composite the cerberus-lean executable runs (`_root_.drive`
 is the ENGINE's driver entry, hence the `_root_`). The theorem
 quantifies over nothing but the file-system state, argv and the entry's
@@ -180,7 +272,15 @@ hypotheses: `ns : List (Int × Int)` pairs each node's ALLOCATION ID with
 its value; `m₀ : CellMap` is a chain footprint for `ns` from `head`
 (`SeedChain m₀ head ns`, §2); `R : CellMap` is an arbitrary footprint
 with `m₀ ##ₘ R`; `σ₀ : Mem` is any engine memory with `Sat fmapEmpty σ₀
-(m₀ ∪ R)`; plus the engine's fuel budget. Its conclusion: `driveJ rs aids
+(m₀ ∪ R)`; `hlib : CerbLocation.isLibraryLocation loc = false` (the
+action location is not a library location — a constructor argument of
+`Frag.store/load/create`, the frozen well-formedness the README
+registers); the engine's fuel budget as the pair `6 + nsteps ≤
+lemDefaultFuel`, `5 + nsteps ≤ lemDefaultFuel` (program and label body);
+and, as section variables not on the theorem line
+(ListRevExhibit.lean:1153-1154), the metadata `loc ann ra mo` and the
+base-type tags `pbty cbty bbty nbty ubty`, all universally quantified.
+Its conclusion: `driveJ rs aids
 nsteps (procThread lrProcSym prog [fmapEmpty]) σ₀` is never `.killed r`,
 never `.stuck`, and whenever it is `.done v σ'` there are `p'` and `Q`
 with `v = ptrVal p'`, `SeedChain Q p' ns.reverse`, `∀ k, (get? Q
@@ -194,9 +294,12 @@ moved); the footprint-equality conjunct pins the node set on the actual
 maps (nothing allocated, nothing leaked); and the frame comes back
 VERBATIM. `list_reverse_certified_total` has the same conclusion as an
 unconditional `.done` equation at fuel `13 * ns.length + 7`, no fuel
-hypotheses; `list_reverse_terminates` is strong normalization of the
-Iris relation; `list_reverse_demo` instantiates a 3-node chain with
-every byte-level side condition by `rfl`.
+hypotheses (it keeps `hlib` and the same section variables);
+`list_reverse_terminates` is strong normalization of the Iris relation
+(no `hlib`, no fuel); `list_reverse_demo` instantiates a 3-node chain
+with every DECODE side condition (`nodeValDec`/`nodeNextDec` of the
+seeded bytes) by `rfl` — it still carries `hlib`, the fuel pair and
+the arbitrary frame `R`.
 
 **The Iris triple** it comes from. The representation predicate is
 plain structural recursion, identity-indexed, no step-indexing:
@@ -211,9 +314,10 @@ def isList : CerbMem.PointerValue → List (Int × Int) → IProp GF
       cellOwn fmapEmpty nd.1 (.own 1) (SpikeCell.mk aN nodeTy bs) ∗ isList q ns)
 ```
 
-and the specification, at the statement judgment `wps` (§3), with an
-arbitrary frame `RF` carried across every back edge by the framed label
-context:
+Section variables not shown: `{hlc : HasLC} {GF : BundledGFunctors}
+[SpikeGS hlc GF]` (ListRevExhibit.lean:395). And the specification, at
+the statement judgment `wps` (§3), with an arbitrary frame `RF` carried
+across every back edge by the framed label context:
 
 ```lean
 theorem lr_wps_frame (RF : IProp GF) (sbty : core_base_type)
@@ -227,6 +331,18 @@ theorem lr_wps_frame (RF : IProp GF) (sbty : core_base_type)
   ihave HW := lr_wps loc ann ra mo pbty cbty bbty nbty ubty ns p rs hQ sbty head $$ HL
   iapply wps_frame_labels RF _ _ $$ HW HF
 ```
+
+Section hypotheses not shown (ListRevExhibit.lean:885-893): `{hlc : HasLC}
+{GF : BundledGFunctors} [SpikeGS hlc GF]`, the metadata `loc ann ra mo`,
+the base types `pbty cbty bbty nbty ubty`, the node list `ns`, and —
+the load-bearing one — `(p : sym) (rs : core_run_state) (hQ : LabeledAt
+rs p (lrQ loc ann ra mo pbty cbty bbty nbty ubty))`: the Iris triple
+holds at the machine context `procCtx p rs` whose label table IS the
+loop's (`lrQ` maps the label `loop` to its parameters and body), not
+at a context-generic `M`. That tie is what lets `wps_run` stop
+tracking at the back edge (the jump resolves against `M.labels`, and
+`procCtx_labels hQ : (procCtx p rs).labels = lrQ …` makes the lookup
+compute). §3.5 shows how a client builds `rs` and discharges `hQ`.
 
 Read: `{ isList head ns ∗ RF } reverse { ret p'. isList p' ns.reverse ∗
 RF }`. The unframed proof `lr_wps` is textbook: loop invariant `isList
@@ -288,9 +404,11 @@ trio-exact):
    ghost state CONSTRUCTED (`genHeap_init`), `launchResources` under
    `LaunchCoh` minting the allocator cursor and granting `allocCap`;
    `wpt_strongly_normalizing` = `twp_total`.
-7. `engine_adequacyU` → `driveU` never kills/derails, readout at
-   `.done`; `project_triple` → `MemTripleU`; `wpt_engine_boundU/J(_alloc)`
-   → `driveU … k = .done v σ'` unconditionally.
+7. `engine_adequacyU` (and `engine_adequacyU_alloc`, launched through
+   `launchResources`) → `driveU` never kills/derails, readout at
+   `.done`; `project_triple` → `MemTripleU`; `project_triple_alloc` →
+   `MemTripleU_alloc`; `wpt_engine_boundU/J(_alloc)` → `driveU … k =
+   .done v σ'` unconditionally.
 8. `loop_step_frag`, `prod_loop_done`, `driver2_done`, `finalize_done`
    (DriverCollapse.lean), `wpt_driver_done(_alloc)` (ProdLoop.lean),
    `prod_run_eqJ` (ProdEntry.lean): the shipped scheduler, ND monad and
@@ -304,6 +422,43 @@ generated definitions are the semantics you care about (the
 differential validation against the OCaml oracle — the README's "What
 you are asked to take on faith" carries the lanes and the pointer to
 the authoritative record); and the pure readout predicates below.
+
+**Under which Cerberus configuration.** Cerberus is switch-configured
+(PNVI variants, strict pointer arithmetic, CHERI, …) and mode-
+configured (random/exhaustive scheduling, concurrency), and the Lean
+port declares those reads as KERNEL-OPAQUE constants (`opaque … ` with
+`@[implemented_by]` bodies: `CerbGlobal.has_switch`, `is_PNVI`,
+`is_CHERI`, `has_strict_pointer_arith`, `current_execution_mode`,
+`using_concurrency`, … in generated/CerbGlobal.lean:113-144;
+`CerberusImpl.typeof_enum`/`register_enum` for the implementation's
+enum typing, CerberusImpl.lean:67/237). A kernel-opaque constant enters
+no axiom cone and cannot be unfolded by any proof, so a theorem whose
+cone contains one holds for EVERY value of it. What the statements pin
+and the tree shows (measured — the README's trust story lists every
+opaque constant reached by the 109 export cones): the tag-definition
+environment is `fmapEmpty` and concurrency is OFF (`_root_.drive
+fmapEmpty false …` in every production statement — `drive tagDefs
+with_concurrency file args`, Driver.lean:518; `spikeCtx`/`procCtx`/
+`rsCtx` carry `tagDefs = fmapEmpty`); the Lean `CerbMem` reads NO
+`CerbGlobal` constant (0 references), so `loadM`/`storeM`/
+`allocateObject`/`eqPtrval` are switch-independent by construction —
+the memory model the exports are about is the un-switched one the
+OCaml oracle is validated against; the only configuration read on a
+proved path, the driver's `current_execution_mode`, is discharged by
+`cases` on the opaque test in `driver2_done` (DriverCollapse.lean:929-985,
+`cases hmode` at :967: both scheduler branches reduce to the same
+singleton pick); `has_switch`/`is_CHERI`/`using_concurrency` are in the
+production-lane cones only through the shipped driver's code
+(`core_thread_step2`'s procedure-call arm, `Core_run_aux`'s
+concurrency-annotation helpers, `Ctype`'s pointer-size branch), on
+paths the single-threaded fragment run never takes. Consequence: every
+export holds under every switch setting and every execution mode, at
+empty tag definitions, single-threaded. The remaining kernel-opaque
+leaves in the cones — LemLib's `fuelExhaustedWith` (the `get_ctx`
+budget's exhaustion sentinel) and `failwithI` (the panic channel),
+`CerberusFresh.digest` — are what the fuel side condition and the
+well-formedness premises keep out of range: a proof can never unfold
+them, so the statements are arranged never to need to.
 
 **Why a wrong mirror or a wrong logic cannot make a false statement
 provable.** `Step`, the rules, the judgments and iris-lean are INTERIOR:
@@ -325,9 +480,21 @@ inductive DriveResult : Type where
   | more (th : thread_state) (σ : Mem)
   /-- PROGRAM-DONE: the engine delivered a value -/
   | done (v : value) (σ : Mem)
-  /-- the engine killed: `Undef0` (UB), `Error0`, or `Other`
-      (the full loadM/storeM failure vocabulary —
-      docs/2026-08-30_spike-recon.md §2.6) -/
+  /-- the engine killed. `kill_reason mem_error` (Nondeterminism.lean:54)
+      has three constructors. `Undef0 loc ubs` — undefined behaviour:
+      from the memory model, a `mem_error` mapped through
+      `undefinedFromMem_error` (Mem_common.lean:392) by `failReason`
+      (CerbMem.lean:1439) — null/no-provenance/out-of-bounds/dead/
+      outside-lifetime/atomic-member access, the `_Bool` trap
+      representation on load, a store to a read-only allocation
+      (`loadM` CerbMem.lean:1621-1664, `storeM` :1667-1730) — or from
+      the Core-run layer's own `Undef` result (`liftCore_run`,
+      Driver.lean:245-247). `Other err` — the non-UB memory errors: a
+      store with an ill-typed memory value (`MerrOther`, :1702) and
+      function-pointer access (`MerrAccess _ FunctionPtr`). `Error0 loc
+      msg` — the Core-run layer's `Error` result (`liftCore_run`, same
+      lines; never produced by `loadM`/`storeM`). "Never kills" below
+      excludes ALL THREE, not only UB. -/
   | killed (r : kill_reason mem_error)
   /-- refusal (Step_error2 / ILLTYPED) or any off-protocol engine
       behavior -/
@@ -428,7 +595,9 @@ theorem wp_store [SpikeGS hlc GF] {s : Stuckness} {E : CoPset} {M : MachineCtx}
             pointsToCell M.tagDefs pv (.own 1) ty (CerbMem.memValueToBytes M.tagDefs [] mv).2 }} := by
 ```
 
-The classic `{p ↦ (ty, bs)} store(ty, p, v) {p ↦ (ty, bytes-of v)}`:
+Section variables not shown: `{hlc : HasLC} {GF : BundledGFunctors}`
+(Rules.lean:112; the instance `[SpikeGS hlc GF]` is on the line). The
+classic `{p ↦ (ty, bs)} store(ty, p, v) {p ↦ (ty, bytes-of v)}`:
 full ownership of the cell entails the WP of the store, whose post
 returns the cell with its bytes replaced by the engine's own
 serialization of `v` (`memValueToBytes`). The precondition excludes
@@ -476,7 +645,11 @@ theorem wps_frame_labels {Ψ : SpikeVal → EnvStack → IProp GF} (R : IProp GF
       iprop(R -∗ wps M (frameLs R Ls) (fun w ρ' => iprop(Ψ w ρ' ∗ R)) e ρ) := by
 ```
 
-Value exit: the frame joins the postcondition; jump: it joins the
+Section variables not shown (Wps.lean:120, 197-198; the same for every
+`wps_*` rule quoted here): `{hlc : HasLC} {GF : BundledGFunctors}
+[SpikeGS hlc GF] {M : MachineCtx} {Ls : LabelSpec GF}` — the rules are
+generic in the machine context and the label specification. Value
+exit: the frame joins the postcondition; jump: it joins the
 label's precondition; step: Löb. `blockSpecs_frame` frames the block
 specifications the same way and `wps_sound_frame` is the derived
 whole-loop form; `wpt_frame_labels`/`frameLsT`/`blockSpecsT_frame` are
@@ -505,7 +678,8 @@ theorem wps_create {Ψ : SpikeVal → EnvStack → IProp GF}
       wps M Ls Ψ (createExpr loc ann (.IV aprov req.align) req.ty pref) ρ := by
 ```
 
-Capacity for the plan `req :: rest` buys one `create` of `req`; the
+(Section variables as in §3.2.) Capacity for the plan `req :: rest`
+buys one `create` of `req`; the
 continuation receives an EXISTENTIAL fresh pointer with full whole-cell
 ownership at the unspecified byte image, the remaining capacity, and
 the pointer's pure machine-address bounds. Nothing in the statement
@@ -540,8 +714,8 @@ theorem blockSpecs_intro {Ψ : SpikeVal → EnvStack → IProp GF}
     ⊢ blockSpecs M Ls Ψ := by
 ```
 
-(`blockSpecs M Ls Ψ` is the persistent conjunction of those
-entailments over every registered label.) Each body's own back edges
+(Section variables as in §3.2. `blockSpecs M Ls Ψ` is the persistent
+conjunction of those entailments over every registered label.) Each body's own back edges
 discharge against `Ls` via `wps_run`. The one Löb induction lives in the
 collapse `wps_sound`: `blockSpecs M Ls Ψ ⊢ wps M Ls Ψ e ρ -∗ WP ⟨e, ρ, M⟩
 @ NotStuck; ⊤ {{ w, Ψ w.w w.ρ }}`.
@@ -591,7 +765,9 @@ def wpt [SpikeGS hlc GF] (M : MachineCtx) (Ls : LabelSpecT GF) :
   | k + 1 => wpt.pre M Ls (k + 1) (wpt M Ls k)
 ```
 
-`LabelSpecT` preconditions carry a VARIANT `m : Nat` (the classical
+Section variables not shown: `{hlc : HasLC} {GF : BundledGFunctors}`
+(Wpt.lean:69; the instance is on the line). `LabelSpecT` preconditions
+carry a VARIANT `m : Nat` (the classical
 Floyd variant as a specification parameter — heap-resident measures
 such as a chain length enter through the invariant), and the jump
 clause REQUIRES `1 + m ≤ k`: the target's budget plus the jump itself
@@ -609,13 +785,81 @@ theorem wpt_sound {Ψ : SpikeVal → EnvStack → IProp GF} (k : Nat)
         WP (⟨e, ρ, M⟩ : CoreRt) @ Stuckness.NotStuck; ⊤ [{ w, Ψ w.w w.ρ }]) := by
 ```
 
-into iris-lean's `TotalWeakestPre` (`[{ … }]`), by strong induction on
+Section variables not shown (Wpt.lean:69, 147-148; the same for every
+`wpt_*` rule): `{hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
+{M : MachineCtx} {Ls : LabelSpecT GF}`. Into iris-lean's `TotalWeakestPre` (`[{ … }]`), by strong induction on
 the budget. Deleting the decrease premise makes that induction
 unjustifiable and lets a diverging program be derived —
 `diverge_total_unprovable` (DivergeExhibit.lean) records that a total
 derivation for the self-jump loop is `False`. The same derivation
 yields both halves of total correctness (§5): termination, and an
 unconditional drive equation at the budget.
+
+### 3.5 Writing a loop client: the context, the label tie, the side conditions
+
+What a client must supply beyond the rules, with `LoopExhibit.lean`
+(the counter loop) as the worked example; `ListRevExhibit.lean` and
+`FibExhibit.lean` follow the same recipe.
+
+1. **The label map and the run state.** A `LabelMap` maps each label
+   symbol to `(params, body)`: `loopQ loc ann ra mo bty xbty c :=
+   fmapAddBy symCmpL loopSym ([(xSym, xbty)], loopBody …) fmapEmpty`
+   (LoopExhibit.lean:95). The engine keeps label maps per procedure in
+   the run state's two-level `labeled` table, so the client builds a
+   `core_run_state` whose fiber at its procedure symbol is that map:
+   `loopRS … := { spikeRunState with labeled := fmapAddBy symCmpL
+   loopProcSym (loopQ …) fmapEmpty }` (:103).
+2. **The machine context and the tie `hQ`.** The rules are generic in
+   `M : MachineCtx`; a loop client works at the jump profile `procCtx p
+   rs` (Step.lean:1882 — current procedure `p`, run state `rs`, empty
+   extern map, `tagDefs = fmapEmpty`). Its label table is DERIVED from
+   `rs`: `procCtx_labels (hQ : LabeledAt rs p Q) : (procCtx p rs).labels
+   = Q` (Step.lean:1925), where `LabeledAt rs p Q` (Soundness.lean:2694)
+   is the engine's own lookup `fmapLookupBy ordCompare p rs.labeled =
+   some Q`. The Iris section therefore carries `variable (p : sym) (rs :
+   core_run_state) (hQ : LabeledAt rs p (loopQ …))` and `include hQ`
+   (LoopExhibit.lean:218-238); every `wps_run`/`wps_save` obligation
+   `lookupLabel (procCtx p rs).labels l = some …` is closed by `rw
+   [procCtx_labels hQ]` and then computes (:274, :314). At the engine
+   face `hQ` is DISCHARGED, not assumed: `loopRS_labeledAt : LabeledAt
+   (loopRS …) loopProcSym (loopQ …)` (:138) is a lookup computation
+   (`fmapLookupBy_addBy_empty`, `if_pos (by decide +kernel)`), and
+   `engine_adequacyJ` takes it as its first argument (:462-463). For the
+   production lane the tie is derived from the SHIPPED registration
+   instead (`loop_labeledAt_production`, ProdEntry.lean:536 — the label
+   map `collect_labeled_continuations_NEW` computes from the synthetic
+   file), so nothing about labels is hypothesized there.
+3. **The label specification and the block proof.** `Ls : LabelSpec GF`
+   gives each label its precondition over the jump-time argument values
+   and environment (`loopLs`, :232: counter `i ∈ [0, n]`, any reachable
+   `SymFrame`, the cell's two states). The body is verified once under
+   `Ls` (`wps_run` at the back edge asks only for `Ls loop [i+1] ρ`);
+   `blockSpecs_intro` assembles the registered bodies; `wps_save` enters
+   the loop; the whole is collapsed by `wps_sound` (or the framed
+   `wps_sound_frame`) into the base WP the adequacy theorems consume.
+4. **The two decode side conditions.** `wps_load_at`'s `hdec : ∀ lum
+   fpm, CerbMem.reconstructValue M.tagDefs lum fpm (a + off) vty bs = mv`
+   (Wps.lean:1854) says the bytes decode — by the ENGINE's decoder, at
+   any union-member/function-pointer side tables — to `mv`; for a
+   scalar cell whose bytes are a concrete image it is `rfl`
+   (`fun _ _ => rfl`, as `five_reconstruct`, StructExhibit.lean:340), and
+   for symbolic bytes it is carried as a hypothesis (the array
+   exhibit's `hdec`, ArrayExhibit.lean:647). `wps_create`'s `hinert : ∀ a,
+   decIndep M.tagDefs a req.ty (List.replicate (sizeofCtype …) undefByte)`
+   (Wps.lean:2508) is the same independence for the unspecified image
+   of the new cell (`decIndep`, Heap.lean:1479 — `CellCoh`'s `dec_indep`
+   field, Heap.lean:311-322, explains what it buys); for the scalar and
+   array types of the exhibits it is `structTy_decIndep`/`intTy_decIndep`
+   — `fun _ _ => rfl` in substance. `wps_load_at`'s `htrap : loadTrapV
+   vty mv = false` excludes the `_Bool` trap representation, `rfl` for
+   any non-`_Bool` value.
+5. **The engine face.** `engine_adequacyJ hQ hQf e ev0 evs σ₀ m₀ hfrag
+   hcoh ψ hwp n aids hfuel hQsz` (Adequacy.lean) lands `driveJ rs … ≠
+   .killed / ≠ .stuck / .done ⇒ ψ` — `counter_loop_certified`
+   (LoopExhibit.lean:438) is exactly this application, with `hQf`/`hQsz`
+   (each registered body in `Frag`, within fuel) discharged from the
+   one-label map by `loopQ_inv`. Its statement is the `MemTripleU` body
+   at the profile `procCtx loopProcSym (loopRS …)`, unfolded.
 
 ## 4. The memory-model view
 
@@ -668,6 +912,29 @@ base and type (`pointsToView_agree`); the points-to obeys the textbook
 fractional laws (`pointsToCell_fractional`, `pointsToCell_agree`,
 `pointsToCell_combine`). Every one of these has a client in
 `StructExhibit.lean`.
+
+**The `PtrEq` memop, and how the null test avoids the provenance
+fork.** The engine's pointer comparison `eqPtrval` (CerbMem.lean:1766)
+is deterministic on every arm except one: two concrete pointers with
+DIFFERING provenance fork nondeterministically (`msum "pointer
+equality" [("using provenance", false); ("ignoring provenance", addr
+equality)]`, CerbMem.lean:1788 — a real `NDnd`, enumerated by both
+exhaustive runners). The mirror has no step for that arm, and the
+logic has no rule for it: `Step.memop_ptreq` (Step.lean:1173) steps
+only when `applyMemM (CerbMem.eqPtrval default pv1 pv2) σ = some (b,
+σ)` — a single-layer, state-preserving, deterministic verdict — and
+`applyMemM` answers `none` on the fork (fail-closed absence, the
+README's divergence register). Accordingly the rule
+`wps_memop_ptreq` (Wps.lean:1503-1509; `wpt_memop_ptreq`, Wpt.lean:685)
+asks the CLIENT for that determinism as its premise `hres : ∀ σ : Mem,
+applyMemM (CerbMem.eqPtrval default pv1 pv2) σ = some (b, σ)`. Comparing
+`cur` (`Prov_some id`) against `NULL` is not a differing-provenance
+comparison of two concrete pointers: the null arms `(PVnull, _) | (_,
+PVnull) → false` (CerbMem.lean:1768-1769) fire before provenance is
+consulted, so `hres` is a computation — `eqPtrval_cell_null`,
+`eqPtrval_null_cell`, `eqPtrval_null_null` (Heap.lean:207-218, each
+`rfl`) discharge it at the fragment's three null-test shapes. A
+comparison that could fork has no `hres` and therefore no rule.
 
 **The persistent stratum, and no liveness token.** Allocation
 knowledge is the metadata cell at the DISCARDED fraction:
@@ -894,9 +1161,10 @@ statement: everything of ours except the program, the wrapper file
 
 `CerberusHeapLang/Audit.lean` is the last import of the library root,
 so `lake build` elaborates it and a failure is a red build. It asserts,
-in order: (1) EXACT PINS — every name in `trioExports` (107 theorems:
-the rules, the adequacy and collapse theorems, every exhibit, the
-projection and its consequence lemmas) exists, is a theorem, and has
+in order: (1) EXACT PINS — every name in `trioExports` (109 theorems
+at the time of writing: the rules, the adequacy and collapse theorems,
+every exhibit, the two projections and the consequence lemmas)
+exists, is a theorem, and has
 transitive axiom set EQUAL to `[propext, Classical.choice, Quot.sound]`
 — growth or shrinkage fails until the list is re-baselined in the same
 commit with the reason; (2) THE EXHAUSTIVE SWEEP — every theorem of
@@ -910,8 +1178,11 @@ of the statements), the readout predicates' faithfulness (§2 — read
 them), coverage (the capability manifest's job, a speedbump). Together
 with the banned proof-method grep (`native_decide`/`bv_decide`/
 `ofReduce*`, `scripts/test_unit.sh` gate 1), the builds ARE the trust
-base ([USER 2026-09-02]); everything else in the gate runner is a
-report that catches honest drift.
+base ([USER 2026-09-02]) — "the two capped builds" are the repository
+root package `RefinedCerberus` (gate 2, its own `Audit.lean`; it does
+not import this package) and this package `cerberus-heaplang` (gate 3);
+this package's claims rest on gate 3 alone. Everything else in the
+gate runner is a report that catches honest drift.
 
 Check it yourself, from the repository root (offline):
 
@@ -923,12 +1194,14 @@ cd cerberus-heaplang
 
 Expected tail (linter warnings from the dependency's `generated/*`
 precede it; `capped` prints nothing on success — an `UNCAPPED` warning
-means a broken environment, stop):
+means a broken environment, stop). The three counts are those at the
+time of writing (P6.1); the build prints the current values, and the
+pin count grows with every spec-addition slice:
 
 ```
-info: CerberusHeapLang/Audit.lean:164:0: CerberusHeapLang export pins: 107 trio-exact
-info: CerberusHeapLang/Audit.lean:164:0: CerberusHeapLang axiom sweep: 1184 theorems bounded by the trio
-info: CerberusHeapLang/Audit.lean:164:0: CerberusHeapLang banned-axiom sweep: 2030 constants of every kind checked; sorryAx/ofReduceBool/ofReduceNat absent from all cones
+info: CerberusHeapLang/Audit.lean:170:0: CerberusHeapLang export pins: 109 trio-exact
+info: CerberusHeapLang/Audit.lean:170:0: CerberusHeapLang axiom sweep: 1186 theorems bounded by the trio
+info: CerberusHeapLang/Audit.lean:170:0: CerberusHeapLang banned-axiom sweep: 2033 constants of every kind checked; sorryAx/ofReduceBool/ofReduceNat absent from all cones
 Build completed successfully (444 jobs).
 ```
 
