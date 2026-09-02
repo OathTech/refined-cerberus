@@ -91,11 +91,11 @@ only, never in exported conclusions — the trust story below):
 | `array_sum_certified` (ArrayExhibit.lean) | The array walk: real pointer arithmetic, interior loads of a seeded one-allocation array — delivers `vs.sum` with the array preserved | in-budget fuel; seeded array (coherence, per-element decode, size/location) | driveJ | trio |
 | `list_reverse_certified`, `list_reverse_demo`, `list_reverse_certified_total`, `list_reverse_terminates` (ListRevExhibit.lean) | THE CANONICAL EXHIBIT AT FULL STRENGTH (Phase 4, audit F-06): SAME-FOOTPRINT, IN-PLACE reversal with FRAME PRESERVATION and TERMINATION — the predicates are indexed by the ordered node list of (allocation id, value); from a seeded chain `m₀` next to an ARBITRARY disjoint frame footprint `R`, any delivered value is a pointer heading a final footprint `Q` with `SeedChain Q p' ns.reverse` (the SAME allocation ids in exactly reversed order — a permutation of the original node set — each node still carrying its own value), the literal footprint equality `∀ k, (get? Q k).isSome ↔ (get? m₀ k).isSome`, and `Sat σ' (Q ∪ R)` — the frame verbatim; the TOTAL form is the same conclusion as an unconditional `driveJ` equation at the DERIVED bound `13·|ns| + 7`, no fuel hypotheses; plus termination over the unified relation; the demo instantiates a 3-node chain, every decode fact `rfl`. No ghost-functor binder in any of the four statements (SpikeGF-concrete) | partial: in-budget fuel + seeded chain + disjoint frame; total: seeded chain + disjoint frame only | driveJ + total | trio |
 | `tree_rotate_certified`, `tree_rotate_certified_total` (TreeRotExhibit.lean) | THE SECOND CLIENT (Phase 4 — the accident-detector): in-place right ROTATION of a binary tree (one-allocation three-field nodes: value + two child pointers) through the SAME generic layer with ZERO core-logic edits — seeded tree + arbitrary disjoint frame in; rotated tree (`SeedTree Q py (node y vy a (node x vx b c))` — same allocations, the rotated id list a PERMUTATION of the original, footprint equality stated on the maps) + frame verbatim out; the total form is an unconditional `drive` equation at the constant straight-line budget 19 | partial: in-budget fuel + seeded tree + disjoint frame; total: seeded tree + disjoint frame only | drive + total | trio |
-| `exhibitA_prod` (ProdExhibit.lean) | The production run of a self-contained create/store/load program IS the singleton Active execution delivering 7, the final memory holding 7's image at the program's own fresh cell (existential allocation id/address — the program BINDS its created pointer, alloc arc P2). WHOLE-PROGRAM LOGIC PROOF (R-02 conversion, P2 step 3): one total judgment `progAProd_wpt` (PUBLIC `wpt_create` from `allocCap [⟨4,intTy⟩]` + generic heap rules, budget 11) through the generic `wpt_driver_done_alloc` → `prod_run_eqJ` collapse — zero operational proof terms | file-system state and argv only — everything else discharged | production | trio + `runEffectful` |
-| `fib_certified_production` (ProdLoopExhibit.lean) | THE PRODUCTION LOOP THEOREM (Phase 5 — audit F-05 closed): running the SHIPPED pipeline `CerbND.runND (Driver.drive …) (initial_driver_state …)` cold on the synthetic fib file IS the singleton Active execution delivering `fib n` — a back-edge loop through the production scheduler itself, label map computed by the shipped registration, termination from the total judgment | `0 ≤ n` + the engine's own fuel budget (`2·n + 6 ≤ 10^6`) + fs/argv | production | trio + `runEffectful` |
-| `counter_loop_certified_production` (ProdLoopExhibit.lean) | THE COUNTER LOOP ON THE SHIPPED PIPELINE: a SELF-CONTAINED program that BINDS its engine-created cell (`lets p = create(4,int)`, entry jump carrying the counter AND the pointer as label arguments, the loop storing through the pointer argument); conclusion: one Active execution, value `Vunit`, the program's own cell's final bytes pinned data-dependently at an EXISTENTIAL allocation id/address. WHOLE-PROGRAM LOGIC PROOF (R-02 conversion, alloc arc P2 step 4): `ctrProd_wpt` = create through the PUBLIC `wpt_create` from the one-request plan + the loop's total judgment, collapsed by the generic `wpt_driver_done_alloc` → `prod_run_eqJ` — zero operational proof terms | `0 ≤ n` + the engine's own fuel budget (`7·n + 7 ≤ 10^6`) + fs/argv | production | trio + `runEffectful` |
-| `list_reverse_certified_production` (ProdLoopExhibit.lean) | THE FLAGSHIP'S PRODUCTION INSTANCE: a SELF-CONTAINED two-node build-and-reverse program that BINDS its engine-created nodes (two `lets n = create(8,node)` binds, four field stores through the bound pointers, entry jump into the authored flagship loop); conclusion: one Active execution whose delivered pointer heads a footprint seeded as the REVERSED chain — the program's OWN nodes at EXISTENTIAL engine-picked allocation ids, own values — satisfied by the final production memory. WHOLE-PROGRAM LOGIC PROOF (R-02 conversion, alloc arc P2 step 5): `lrProd_wpt` = two PUBLIC `wpt_create`s from the two-request plan (their exported address bounds feeding `isList`'s node WF) + the generic typed-subrange stores + the GENERIC list logic consumed VERBATIM at the existential ids (`wpt_mono_Ls` transport), collapsed by `wpt_driver_done_alloc` → `prod_run_eqJ` — zero operational proof terms | fs/argv only — everything else discharged | production | trio + `runEffectful` |
-| `counter_loop_certified_registration` (ProdEntry.lean) | THE REGISTRATION THEOREM (renamed at Phase 5 from `counter_loop_certified_production` — the F-05 naming debt paid): the counter loop re-exported with the label plumbing DERIVED from the shipped label-collection — nothing hand-built; the driveJ-lane tie, kept as a lemma | as `counter_loop_certified` | driveJ @ production run state | trio + `runEffectful` |
+| `exhibitA_prod` (ProdExhibit.lean) | The production run of a self-contained create/store/load program IS the singleton Active execution delivering 7, the final memory holding 7's image at the program's own fresh cell (existential allocation id/address — the program BINDS its created pointer, alloc arc P2). WHOLE-PROGRAM LOGIC PROOF (R-02 conversion, P2 step 3): one total judgment `progAProd_wpt` (PUBLIC `wpt_create` from `allocCap [⟨4,intTy⟩]` + generic heap rules, budget 11) through the generic `wpt_driver_done_alloc` → `prod_run_eqJ` collapse — zero operational proof terms | file-system state and argv only — everything else discharged | production | trio |
+| `fib_certified_production` (ProdLoopExhibit.lean) | THE PRODUCTION LOOP THEOREM (Phase 5 — audit F-05 closed): running the SHIPPED pipeline `CerbND.runND (Driver.drive …) (initial_driver_state …)` cold on the synthetic fib file IS the singleton Active execution delivering `fib n` — a back-edge loop through the production scheduler itself, label map computed by the shipped registration, termination from the total judgment | `0 ≤ n` + the engine's own fuel budget (`2·n + 6 ≤ 10^6`) + fs/argv | production | trio |
+| `counter_loop_certified_production` (ProdLoopExhibit.lean) | THE COUNTER LOOP ON THE SHIPPED PIPELINE: a SELF-CONTAINED program that BINDS its engine-created cell (`lets p = create(4,int)`, entry jump carrying the counter AND the pointer as label arguments, the loop storing through the pointer argument); conclusion: one Active execution, value `Vunit`, the program's own cell's final bytes pinned data-dependently at an EXISTENTIAL allocation id/address. WHOLE-PROGRAM LOGIC PROOF (R-02 conversion, alloc arc P2 step 4): `ctrProd_wpt` = create through the PUBLIC `wpt_create` from the one-request plan + the loop's total judgment, collapsed by the generic `wpt_driver_done_alloc` → `prod_run_eqJ` — zero operational proof terms | `0 ≤ n` + the engine's own fuel budget (`7·n + 7 ≤ 10^6`) + fs/argv | production | trio |
+| `list_reverse_certified_production` (ProdLoopExhibit.lean) | THE FLAGSHIP'S PRODUCTION INSTANCE: a SELF-CONTAINED two-node build-and-reverse program that BINDS its engine-created nodes (two `lets n = create(8,node)` binds, four field stores through the bound pointers, entry jump into the authored flagship loop); conclusion: one Active execution whose delivered pointer heads a footprint seeded as the REVERSED chain — the program's OWN nodes at EXISTENTIAL engine-picked allocation ids, own values — satisfied by the final production memory. WHOLE-PROGRAM LOGIC PROOF (R-02 conversion, alloc arc P2 step 5): `lrProd_wpt` = two PUBLIC `wpt_create`s from the two-request plan (their exported address bounds feeding `isList`'s node WF) + the generic typed-subrange stores + the GENERIC list logic consumed VERBATIM at the existential ids (`wpt_mono_Ls` transport), collapsed by `wpt_driver_done_alloc` → `prod_run_eqJ` — zero operational proof terms | fs/argv only — everything else discharged | production | trio |
+| `counter_loop_certified_registration` (ProdEntry.lean) | THE REGISTRATION THEOREM (renamed at Phase 5 from `counter_loop_certified_production` — the F-05 naming debt paid): the counter loop re-exported with the label plumbing DERIVED from the shipped label-collection — nothing hand-built; the driveJ-lane tie, kept as a lemma | as `counter_loop_certified` | driveJ @ production run state | trio |
 
 Two lanes appear above, and the difference is part of every claim.
 The **drive lanes** (`drive`, and `driveJ` for programs with jumps)
@@ -136,28 +136,21 @@ semantics (the Lean port of Cerberus Core, pinned by commit in
 `../scripts/semantics-pin.env` and differentially validated
 upstream against the OCaml oracle); everything in this package is
 derived and proved down into that engine. Every theorem is
-kernel-checked with its transitive axiom cone BOUNDED in-build, the
-boundary axiom's origin MECHANICALLY CHECKED, and the headline
-theorems' cones EXACTLY PINNED
+kernel-checked with its transitive axiom cone BOUNDED in-build and
+the public exports' cones EXACTLY PINNED
 (`CerberusHeapLang/Audit.lean`, the last import of the library
-root — the exhaustive sweep is an upper-bound check PLUS, in the
-boundary modules, the Phase-5 ORIGIN DISCIPLINE: `runEffectful` in
-a theorem's cone must be reachable through the statement's
-constants, so every boundary cone is exact-by-construction; the
-curated pins are additional equality checks): every cone is within
-the classical trio (`propext`, `Classical.choice`, `Quot.sound`),
-except in the three production-entry modules (`ProdEntry`,
-`ProdExhibit`, `ProdLoopExhibit`) whose
-statements mention the shipped initial driver state and are
-therefore additionally allowed the semantics repo's one residual
-axiom
-`runEffectful` — a declared TEMPORAL boundary (an effectful
-initialization seam), entering through the statements only, whose
-upstream retirement is planned (after which this boundary vanishes
-at a pin bump with no restatement here). Non-kernel proof methods
-(`native_decide`, `bv_decide`, `ofReduce*`) are banned by a grep
-gate and would in any case enter a cone and fail the audit — a
-build that weakens any of this fails.
+root): THE TRUST BASE IS THE CLASSICAL TRIO (`propext`,
+`Classical.choice`, `Quot.sound`), EXACTLY, OVER EVERY EXPORT — no
+module is allowed anything else, and the semantics dependency
+declares no axiom of its own (the lem runtime's former effect-erasure
+axiom `runEffectful`, once a declared temporal boundary of the
+production-entry statements, was retired upstream by the cerberus-lean
+effect-retirement arc and left this package at the 2026-09-02 re-pin;
+the production entry is now the pure supply-threaded
+`initial_driver_state`, over whose supply the production theorems
+quantify). Non-kernel proof methods (`native_decide`, `bv_decide`,
+`ofReduce*`) are banned by a grep gate and would in any case enter a
+cone and fail the audit — a build that weakens any of this fails.
 
 The package's own step relation (`Step`) and the Iris layer are
 INTERIOR: they appear in proofs, never in exported conclusions, and
@@ -185,34 +178,23 @@ for reading, identifier by identifier, in the
 
 ### What you are asked to take on faith
 
-Self-contained, because these are the only two places where the
-trust story bottoms out outside this package.
+Self-contained, because this is the only place where the trust
+story bottoms out outside this package.
 
-**1. The one axiom, verbatim.** The full statement of
-`runEffectful`, from the vendored lem runtime the engine builds on
-(`.lake/packages/LemLib/lean-lib/LemLib.lean:54` in this package's
-checkout):
+**No axiom beyond Lean's own three.** Every theorem's cone is exactly
+the classical trio; neither this package nor the pinned semantics
+workspace nor its lem runtime (`LemLib`, zero `axiom` declarations at
+the pin) declares an axiom. (Until 2026-09-02 there was one — the lem
+runtime's effect-erasure seam `runEffectful`, entering through the
+production-entry statements; the cerberus-lean effect-retirement arc
+deleted it, and the re-pin record is
+`docs/2026-09-02_repin-notes.md`.) What remains on the engine's
+RUNTIME trust boundary — kernel-checked opaques with native
+implementations (`CerberusFresh.digest`, the CerbGlobal switch refs)
+— contributes nothing to any axiom cone and cannot be unfolded by
+any proof.
 
-```lean
-axiom runEffectful {α : Type} : (Unit → BaseIO α) → α
-```
-
-It is the semantics port's effect-erasure seam: generated code
-uses it to read ambient state that the original OCaml reads
-effectfully. It enters this package through the STATEMENTS of the
-three production-entry modules only (mechanically enforced: the
-in-build origin discipline fails the build on any proof-borne
-occurrence) — the shipped
-`initial_driver_state` draws its symbol supply through
-`runEffectful (CerberusFresh.freshIntIO ())`, and the certified
-fragment provably never reads that field, so the theorems hold for
-every value the seam could produce. It is declared TEMPORAL:
-upstream retirement is designed and in flight on the semantics/lem
-side, after which this boundary vanishes here at a pin bump with
-no restatement (the `Audit.lean` header carries the full
-provenance).
-
-**2. What "differentially validated" covers.** The Lean port and
+**What "differentially validated" covers.** The Lean port and
 the OCaml Cerberus — both generated from the same Lem model — are
 run on the same programs and their full verdict lines compared
 (defined values, exact undefined-behaviour codes, errors) against
@@ -412,7 +394,8 @@ or growth paths. The register (each entry's home is authoritative):
 
 | Divergence / seam | Discharge / path | Registered at |
 |---|---|---|
-| `runEffectful` in the production-entry statement cones | Temporal boundary (statement printed verbatim in "What you are asked to take on faith", above); upstream retirement planned — vanishes at a pin bump, no restatement | `Audit.lean` header |
+| ~~`runEffectful` in the production-entry statement cones~~ RETIRED 2026-09-02 (alloc arc P7): the semantics pin moved to the cerberus-lean effect-retirement head; the production theorems quantify over the supply-threaded entry's supply and are trio-exact | — (closed; `docs/2026-09-02_repin-notes.md`) | `Audit.lean` header |
+| The tag-definition environment is an explicit parameter of the heap predicates and rules (`pointsToCell tds …`, `M.tagDefs` in the rules); the demos state their footprints at the program's environment `fmapEmpty`, which is what the shipped `drive fmapEmpty` passes | By design ([AGENT 2026-09-02], DECISIONS.md: the environment is a program-wide constant of the language instance, as Caesium's global environment); struct/union layouts become expressible without restatement | `Heap.lean` header; `docs/2026-09-02_repin-notes.md` |
 | tagDefs argument: the theorems pin `drive`'s tagDefs to `fmapEmpty`; the shipped `Main.lean:871` passes `CerbTags.tagDefs ()` after `setTagDefsIO` | Semantically forced equal for the synthetic file: `(prodFile e).tagDefs = fmapEmpty` by `rfl`; the effectful set-then-read global is inert here (scalar layout paths provably never read it; struct/union paths would) | This table + `docs/2026-08-30_spike-report.md` register |
 | Memory orders accepted arbitrarily: `Step.store`/`wp_store` hold at ANY `memory_order` | Mirror-true: the sequential driver drops `mo` (`action_request_sequential2`, Driver.lean:273 — `mo1` unused); NA-only side conditions would be a divergence FROM the engine | This table + `docs/2026-08-30_spike-report.md` register |
 | Allocation rules + launch REPAIRED (alloc arc P1), partial-lane whole-program consumer LANDED (P2 items 1-2): the public `wps_create`/`wpt_create` (existential pointer, `allocCap` capacity, cursor-free statements, pure address-bounds export) are launchable via the allocation-aware launchers (`launchResources` under `LaunchCoh`), with local consumers, the engine-facing smoke `alloc_create_launch_smoke` (AllocExhibit), and the struct client `struct_create_store_wps`/`struct_create_store_adequacy` (StructExhibit — public rule + engine-facing adequacy through `spike_engine_adequacy_alloc`); and — alloc arc P2 — the whole-program production consumers (`progAProd_wpt`/`ctrProd_wpt`/`lrProd_wpt` through `wpt_driver_done_alloc`); R-01's closure test PASSED (deleting the public rule breaks the struct/two-create consumers; deleting `wpt_create` breaks the create/store/load and both loop production chains; deleting `launchResources` breaks the launch family — plant transcripts in `docs/2026-09-01_p2-notes.md`) | — (CLOSED; the closure table records the transcripts: `docs/2026-09-01_alloc-arc-plan.md`) | `Wps.lean`/`Wpt.lean` §CreateRule headers; `docs/2026-09-01_p1-notes.md` + `docs/2026-09-01_p2-notes.md`; 2026-09-01 skeptical re-audit R-01 |
@@ -442,8 +425,8 @@ cd cerberus-heaplang
 A green build is the verification run for exactly what the sweeps
 check: it elaborates every proof through the Lean kernel and then
 `Audit.lean`, which (1) bounds the transitive axiom cone of every
-theorem in the package by the declared boundary, (2) pins the
-headline theorems' exact cones, and (3) checks every constant of
+theorem in the package by the classical trio, (2) pins the public
+exports' exact cones, and (3) checks every constant of
 every kind — defs included — for the banned axioms
 (`sorryAx`/`ofReduceBool`/`ofReduceNat`). It certifies nothing
 beyond that: in particular it does not discharge the scope
@@ -451,13 +434,14 @@ qualifiers above — they are part of the theorem statements. Expected
 tail:
 
 ```
-info: CerberusHeapLang/Audit.lean:622:0: CerberusHeapLang axiom sweep: 1123 theorems BOUNDED by the declared upper bounds (71 in the production-entry boundary modules, of which 13 carry the boundary axiom — each STATEMENT-BORNE, origin-checked, so every boundary cone is exact-by-construction: trio + runEffectful iff the statement carries it; all other theorems bounded by the trio; headline cones additionally pinned above)
-info: CerberusHeapLang/Audit.lean:622:0: CerberusHeapLang banned-axiom sweep: 2075 constants of every kind checked; sorryAx/ofReduceBool/ofReduceNat absent from all cones
-Build completed successfully (443 jobs).
+info: CerberusHeapLang/Audit.lean:122:0: CerberusHeapLang export pins: 62 trio-exact
+info: CerberusHeapLang/Audit.lean:122:0: CerberusHeapLang axiom sweep: 1115 theorems bounded by the trio
+info: CerberusHeapLang/Audit.lean:122:0: CerberusHeapLang banned-axiom sweep: 1948 constants of every kind checked; sorryAx/ofReduceBool/ofReduceNat absent from all cones
+Build completed successfully (441 jobs).
 ```
 
-(In sandboxed environments `../scripts/capped` may warn
-`running UNCAPPED` — the cap is a resource-limit wrapper with no
+(`../scripts/capped` is the cgroup-direct cap; an `UNCAPPED` warning
+means a broken environment — stop. The old note that sandboxes may run uncapped is retired; the cap is a resource-limit wrapper with no
 bearing on the verification claim; linter warnings from the
 dependency's `generated/*` files ahead of the tail are expected.
 The walkthrough §6 gives the full build-experience notes.)
@@ -500,17 +484,13 @@ Observed output (2026-09-01, this checkout):
 'CerberusHeapLang.list_reverse_demo' depends on axioms: [propext, Classical.choice, Quot.sound]
 'CerberusHeapLang.tree_rotate_certified' depends on axioms: [propext, Classical.choice, Quot.sound]
 'CerberusHeapLang.tree_rotate_certified_total' depends on axioms: [propext, Classical.choice, Quot.sound]
-'CerberusHeapLang.exhibitA_prod' depends on axioms: [propext, runEffectful, Classical.choice, Quot.sound]
-'CerberusHeapLang.counter_loop_certified_registration' depends on axioms: [propext,
- runEffectful,
- Classical.choice,
- Quot.sound]
+'CerberusHeapLang.exhibitA_prod' depends on axioms: [propext, Classical.choice, Quot.sound]
+'CerberusHeapLang.counter_loop_certified_registration' depends on axioms: [propext, Classical.choice, Quot.sound]
 ```
 
 Expected: everything reports exactly
-`[propext, Classical.choice, Quot.sound]` except the two
-production-entry statements, which additionally carry
-`runEffectful` (the one declared temporal boundary, above).
+`[propext, Classical.choice, Quot.sound]` — the production-entry
+statements included (since the 2026-09-02 retirement re-pin).
 `sorryAx` appearing anywhere is a failure.
 
 The [walkthrough](docs/WALKTHROUGH.md) §5 reads the three headline
@@ -555,7 +535,7 @@ In teaching order (= import order; one line each — the
 | `ProdLoop.lean` | Phase 5: the total statement judgment drives the PRODUCTION DRIVER'S OWN LOOP — the driver-level analog of the measure→drive-fuel simulation (one production round per budget unit, jump rounds included), trio-only | `wpt_driver_done` |
 | `ProdLoopExhibit.lean` | THE PRODUCTION LOOP EQUATIONS — loop programs certified as `CerbND.runND (Driver.drive …) (initial_driver_state …)` equations from the cold start (no package drive/driveJ in any statement); the counter and reversal programs are SELF-CONTAINED WHOLE-PROGRAM LOGIC PROOFS (alloc arc P2: the programs bind their engine-created pointers; creates through the PUBLIC `wpt_create`; the reversal consumes the generic list logic verbatim at existential engine-picked ids) | `ctrProd_wpt`, `lrProd_wpt`, `fib_certified_production`, `counter_loop_certified_production`, `list_reverse_certified_production` |
 | `ProdExhibit.lean` | The demonstration: a self-contained program (create/store/load — the fresh pointer BOUND by the program) run through the production pipeline delivers 7 at the program's own cell — ONE whole-program total judgment through the PUBLIC create rule and the generic driver collapse (R-02 conversion, P2 step 3) | `progAProd_wpt`, `exhibitA_prod` |
-| `Audit.lean` | The in-build axiom gate: exact axiom-set pins over the public exports (trio, or trio + `runEffectful` for the production-entry statements) + the exhaustive theorem sweep bounded per module + the banned-axiom sweep over every constant kind | the sweeps |
+| `Audit.lean` | The in-build axiom gate: exact axiom-set pins over the public exports (the classical trio, every one) + the exhaustive theorem sweep bounded by the trio + the banned-axiom sweep over every constant kind | the sweeps |
 
 History and design findings: the dated records in `docs/`
 (`2026-08-30_spike-report.md` is the founding report; plans,

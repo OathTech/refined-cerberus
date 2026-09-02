@@ -33,9 +33,10 @@ grow only for load-bearing trust properties):
 THE DECLARED BOUNDARY: the classical trio only. There are no
 project axioms; adding one requires a boundary-list entry here with
 provenance (permanent-immovable or temporal-with-mover), per the
-no-internal-trust-gaps discipline. (The one temporal boundary axiom
-of the demo, `runEffectful`, is scoped to cerberus-heaplang's own
-Audit.lean and is deliberately NOT admitted here.)
+no-internal-trust-gaps discipline. (The demo package's former
+temporal boundary axiom was retired upstream at the 2026-09-02
+re-pin; cerberus-heaplang's Audit.lean is trio-only too — see
+cerberus-heaplang/docs/2026-09-02_repin-notes.md.)
 
 The sweep is LAST in the file by design: a constant declared after
 it would dodge it, so nothing is declared below it, and this module

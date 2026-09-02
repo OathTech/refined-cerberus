@@ -75,8 +75,12 @@ if [[ ! -f "$prime_done" ]]; then
   for p in lean_frontend/generated lean_frontend/native lean_frontend/.lake; do
     [[ -e "$SRC/$p" ]] || { say "B FAIL: $SRC/$p missing — primary checkout not built?"; exit 1; }
     say "B: priming $p"
-    mkdir -p "$WS/$(dirname "$p")"
-    cp -a "$SRC/$p" "$WS/$p"
+    # copy the CONTENTS into place: native/ already exists in the clone
+    # (tracked md5.c), and `cp -a dir dest` onto an existing dest would
+    # nest it as dest/native/ (2026-09-02 re-pin finding; inert for the
+    # library build, which never links native/*.o, but wrong)
+    mkdir -p "$WS/$p"
+    cp -a "$SRC/$p/." "$WS/$p"
   done
   for f in lean_frontend/lem_sync.sha256 ocaml_frontend/lem_sync.sha256; do
     if [[ -f "$SRC/$f" ]]; then

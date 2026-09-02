@@ -300,3 +300,42 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   P3.5 plan: the manifest's hand-maintained multi-cell row table (~340
   lines) is cut to one line per construct; new checks are welcome
   when cheap and catching a real class of mistake.
+- **2026-09-02 [AGENT] THE TAG-DEFINITION ENVIRONMENT IS A PARAMETER OF
+  THE LANGUAGE INSTANCE (the retirement re-pin's second change)**
+  (coordinator adjudication, verbatim): "The C1 reader-consumer
+  threading makes the tag-definition environment an explicit leading
+  `TagDefs` argument on the memory functions (sizeofCtype,
+  memValueToBytes, reconstructValue, loadM, storeM, allocateObject,
+  alignofIval, arrayShiftPtrval, isAtomicMemberAccess) and a
+  `_lemReader_tagDefs` binder in the Driver actions. cerberus-heaplang
+  adopts option (a): the tag environment is a program-wide constant of
+  the language instance (as Caesium's global environment is in
+  RefinedC), so the heap predicates whose footprints depend on type
+  layout are indexed by it, and the rules generic in a MachineCtx
+  supply `M.tagDefs`. Rejected: (b) pinning `fmapEmpty` throughout
+  with a `M.tagDefs = fmapEmpty` premise — a representation accident
+  of the kind [USER 2026-09-02] asked to forbid, and it forecloses
+  struct types; (c) a scalar-only independence lemma — a bridge to
+  (b). The tag environment is recorded as a parameter of the language
+  instance for the parametric-semantics spike (branch
+  parametric-spike)." Operator veto open. Implementation note [AGENT
+  2026-09-02, worker]: the state interpretation must remain a plain
+  Iris instance (`StateInterp Mem Empty GF` is synthesized by type
+  class, so it cannot take the environment as an explicit argument);
+  therefore the ghost METADATA cell records the allocation's `size` as
+  ghost data — the engine's own `Allocation.size`, Caesium's
+  `allocation` start/len shape — and the coupling invariant `CohG`
+  computes no layout, while the assertions (`pointsToCell tds …`,
+  `cellOwn`, `pointsToView`, `StorableAt`, `CellCoh`, `Sat`, …) carry
+  `tds` explicitly and pin `size = sizeofCtype tds ty`. The concrete
+  profile contexts `spikeCtx`/`procCtx`/`rsCtx` are `@[reducible]` so
+  the clients' `fmapEmpty` matches the rules' `M.tagDefs` under the
+  proof mode. Record: `cerberus-heaplang/docs/2026-09-02_repin-notes.md`.
+- **2026-09-02 [AGENT] R-11 / P7 CLOSED — the runEffectful boundary is
+  retired**: semantics pin 58ec50779 → ddcfc919972a31bc43a0454e6b2e76a19e6c4594
+  (the cerberus-lean effect-retirement head; LemLib 045dcb0, zero
+  axioms). Audit.lean's boundary allowance is deleted; every export
+  and every theorem of every module is pinned/bounded by the classical
+  trio, exactly. The production-entry statements quantify over the
+  supply-threaded entry's supply ([USER 2026-09-02], resume note
+  Slice 1). Record: `cerberus-heaplang/docs/2026-09-02_repin-notes.md`.

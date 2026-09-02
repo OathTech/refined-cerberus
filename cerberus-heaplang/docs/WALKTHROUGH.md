@@ -332,32 +332,25 @@ they mean? Three tiers, from nothing-new to read-this-part.
 
 **Tier 1 — kernel-checked theorems about the engine's definitions.**
 Every theorem is checked by the Lean kernel, and every theorem's
-*transitive axiom cone* is BOUNDED in-build, the boundary axiom's
-origin MECHANICALLY CHECKED, and the headline theorems' cones
-EXACTLY PINNED (`Audit.lean`, the last import of the library; the
-exhaustive sweep is an upper-bound containment check plus — in the
-boundary modules — the Phase-5 origin discipline, under which
-`runEffectful` in a cone must be reachable through the STATEMENT's
-constants, making every boundary cone exact-by-construction; the
-curated pins are additional equality checks): every cone is within
-the classical trio
-(`propext`, `Classical.choice`, `Quot.sound`), except the three
-production-entry modules whose *statements* mention the shipped
-initial driver state and are therefore additionally allowed the
-semantics port's one
-residual axiom `runEffectful` — a declared temporal boundary (an
-effectful initialization seam scheduled for removal upstream; the
-theorems hold for every value it could produce, since the program
-fragment never reads the affected field). Non-kernel proof methods
+*transitive axiom cone* is BOUNDED in-build and the public exports'
+cones EXACTLY PINNED (`Audit.lean`, the last import of the library):
+every cone is EXACTLY the classical trio (`propext`,
+`Classical.choice`, `Quot.sound`) — every module, every export; the
+pinned semantics workspace and its lem runtime declare no axiom.
+(The semantics port's former effect-erasure seam `runEffectful`, once
+a declared temporal boundary of the production-entry statements, was
+retired upstream and left this package at the 2026-09-02 re-pin: the
+production entry is now the pure supply-threaded
+`initial_driver_state`, and the production theorems quantify over
+its supply, which the fragment never reads.) Non-kernel proof methods
 (`native_decide`, `bv_decide`, `ofReduce*`) are banned by a grep
 gate and would fail the in-build cone check anyway. At this tier
 you trust: the Lean kernel, and the engine's definitions being the
 semantics you care about (which is what the differential validation
-against the OCaml oracle is for). Both take-on-faith items — the
-axiom's statement, printed verbatim, and what that differential
-validation actually covers, with the in-package path to its
-record — are laid out in the README's ["What you are asked to take
-on faith"](../README.md#what-you-are-asked-to-take-on-faith).
+against the OCaml oracle is for). The one take-on-faith item — what
+that differential validation actually covers, with the in-package
+path to its record — is laid out in the README's ["What you are
+asked to take on faith"](../README.md#what-you-are-asked-to-take-on-faith).
 (One disambiguation on that path: the pinned semantics workspace
 also carries the semantics repo's own derived relational spine —
 `relsemcore`: `Step`/`runND_sound`/`HarnessAdequate` — which is
@@ -880,10 +873,11 @@ program, the wrapper file, and three value/address constants — no
 `Step`, no WP, no Iris, and not even `drive`/`driveJ`: the
 execution named in the conclusion is the engine's own production
 entry point. This is the exhibit that pins the drive-lane idiom to
-reality from the outside. Its axiom cone carries `runEffectful`
-(§4 tier 1) because `initial_driver_state`'s definition draws a
-symbol counter through an effectful seam — in the statement's
-*cone*, not its surface.
+reality from the outside. Its axiom cone is exactly the classical
+trio (§4 tier 1); the statement quantifies over the entry's symbol
+supply `sup` (`(initial_driver_state sup … fs).1`) because the
+shipped entry threads the supply explicitly since the 2026-09-02
+re-pin — the fragment never reads it.
 
 Census output, verbatim (2026-08-31, this checkout):
 
@@ -1000,32 +994,31 @@ cd cerberus-heaplang
 ```
 
 A green build already runs the audit: `Audit.lean` sweeps the
-axiom cone of every theorem in the package against the declared
-boundary and checks every constant of every kind for
-`sorryAx`/`ofReduceBool`/`ofReduceNat`. Expected tail:
+axiom cone of every theorem in the package against the classical
+trio, pins the exports' exact cones, and checks every constant of
+every kind for `sorryAx`/`ofReduceBool`/`ofReduceNat`. Expected
+tail:
 
 ```
-info: CerberusHeapLang/Audit.lean:622:0: CerberusHeapLang axiom sweep: 1123 theorems BOUNDED by the declared upper bounds (71 in the production-entry boundary modules, of which 13 carry the boundary axiom — each STATEMENT-BORNE, origin-checked, so every boundary cone is exact-by-construction: trio + runEffectful iff the statement carries it; all other theorems bounded by the trio; headline cones additionally pinned above)
-info: CerberusHeapLang/Audit.lean:622:0: CerberusHeapLang banned-axiom sweep: 2075 constants of every kind checked; sorryAx/ofReduceBool/ofReduceNat absent from all cones
-Build completed successfully (443 jobs).
+info: CerberusHeapLang/Audit.lean:122:0: CerberusHeapLang export pins: 62 trio-exact
+info: CerberusHeapLang/Audit.lean:122:0: CerberusHeapLang axiom sweep: 1115 theorems bounded by the trio
+info: CerberusHeapLang/Audit.lean:122:0: CerberusHeapLang banned-axiom sweep: 1948 constants of every kind checked; sorryAx/ofReduceBool/ofReduceNat absent from all cones
+Build completed successfully (441 jobs).
 ```
 
 What to expect around that tail, so nothing surprises you:
 
-- In sandboxed environments without a systemd user bus,
-  `../scripts/capped` prints
-  `capped: WARNING — systemd user bus unavailable (sandbox); running UNCAPPED`
-  (plus an `interim per [USER 2026-08-29]` governance line) and
-  proceeds. The cap is a resource-limit wrapper (a memory blast
-  radius for builds); running without it changes nothing about
-  what the build verifies.
+- `../scripts/capped` is the cgroup-direct memory cap (no systemd
+  bus needed); it prints nothing on success. An `UNCAPPED` warning
+  means a broken environment — stop and report (the 2026-08-29
+  "run uncapped in-sandbox" interim ruling is retired).
 - The tail is preceded by `unusedVariables` linter warnings from
   the semantics dependency's `generated/*` files — linter noise
   from generated code, not failures. A failure is a red `error:`
   line, a missing audit tail, or a nonzero exit.
 - Timing: with the package already built, `lake build` replays
   from cache in about a second. A from-scratch elaboration of this
-  package's 443 jobs is a long build — expect minutes to tens of
+  package's 441 jobs is a long build — expect minutes to tens of
   minutes depending on the machine (no pinned cold timing is
   recorded). The setup script itself is offline (it clones and
   primes the workspace from the local repository, prebuilt
@@ -1048,12 +1041,12 @@ Observed output (2026-08-31, this checkout):
 ```
 'CerberusHeapLang.list_reverse_certified' depends on axioms: [propext, Classical.choice, Quot.sound]
 'CerberusHeapLang.fib_certified_total' depends on axioms: [propext, Classical.choice, Quot.sound]
-'CerberusHeapLang.exhibitA_prod' depends on axioms: [propext, runEffectful, Classical.choice, Quot.sound]
+'CerberusHeapLang.exhibitA_prod' depends on axioms: [propext, Classical.choice, Quot.sound]
 ```
 
-The first two are exactly the classical trio; the production-entry
-statement additionally carries the declared `runEffectful` boundary
-(tier 1 above). `sorryAx` anywhere is a failure. To audit tier 3,
+All three are exactly the classical trio — the production-entry
+statement included (tier 1 above). `sorryAx` anywhere is a failure.
+To audit tier 3,
 read the statement vocabulary — §5 walks the three headline
 statements identifier by identifier and prints the idiom
 definitions in full; the file map:
