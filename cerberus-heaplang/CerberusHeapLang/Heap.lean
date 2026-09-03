@@ -4060,6 +4060,42 @@ theorem metaOwn_ne {i₁ i₂ : Int} {dq₂ : DFrac} {mc₁ mc₂ : MetaCell} :
   letI := SpikeGS.metaGS (hlc := hlc) (GF := GF)
   exact pointsTo_ne
 
+/-! ### Region distinctness (kill/free arc K5.1, the K5 audit's M-1)
+
+`metaOwn_ne` at the region bundles, PUBLIC: full ownership of a LIVE
+region is exclusive per allocation id, so beside any other region
+ownership — live at any fraction, or the persistent knowledge of a DEAD
+one (`.own 1 ∗ .discard` is invalid) — the ids differ. Two `deadRegion`s
+carry NO such law (both persistent, both duplicable): distinctness of
+dead ids is carried from the time they were live, which is what the
+malloc'd list's invariant does (MallocListExhibit.lean, `mlLs`). -/
+
+/-- REGION DISTINCTNESS: a fully-owned live region and any region
+    ownership (any fraction) are of different allocation ids. -/
+theorem regionOwn_ne (id id' a a' : Int) (n n' : Nat) (dq' : DFrac)
+    (bs bs' : List CerbMem.AbsByte) :
+    iprop(regionOwn (GF := GF) id a n (.own 1) bs ∗ regionOwn id' a' n' dq' bs') ⊢
+      (⌜id ≠ id'⌝ : IProp GF) := by
+  unfold regionOwn
+  iintro ⟨⟨Hm, -, -⟩, Hm', -, -⟩
+  ihave %hne := metaOwn_ne $$ Hm [Hm']
+  · iexact Hm'
+  ipureintro
+  exact hne
+
+/-- LIVE AND DEAD ARE DISTINCT: a fully-owned live region and the
+    persistent knowledge of a dead one are of different allocation ids. -/
+theorem regionOwn_deadRegion_ne (id id' a a' : Int) (n n' : Nat)
+    (bs : List CerbMem.AbsByte) :
+    iprop(regionOwn (GF := GF) id a n (.own 1) bs ∗ deadRegion id' a' n') ⊢
+      (⌜id ≠ id'⌝ : IProp GF) := by
+  unfold regionOwn deadRegion
+  iintro ⟨⟨Hm, -, -⟩, Hd⟩
+  ihave %hne := metaOwn_ne $$ Hm [Hd]
+  · iexact Hd
+  ipureintro
+  exact hne
+
 /-- Whole-cell ownership against the coupling: the cell's full
     engine-facing backing facts (the readout workhorse — exhibits
     conclude `CellCoh` of the final state from surviving cells). -/

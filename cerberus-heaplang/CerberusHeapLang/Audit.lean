@@ -388,7 +388,13 @@ def trioExports : List Name := [
   ``CerberusHeapLang.ml_wps, ``CerberusHeapLang.ml_wpt,
   ``CerberusHeapLang.ml_blockSpecs, ``CerberusHeapLang.ml_blockSpecsT,
   ``CerberusHeapLang.mlPost_readout, ``CerberusHeapLang.malloc_list_certified_total,
-  ``CerberusHeapLang.ml_labeledAt, ``CerberusHeapLang.malloc_list_certified_production]
+  ``CerberusHeapLang.ml_labeledAt, ``CerberusHeapLang.malloc_list_certified_production,
+  -- kill/free arc K5.1 (2026-09-03, the K5 range audit's M-1): REGION
+  -- DISTINCTNESS — `metaOwn_ne` at the region bundles, public: a fully
+  -- owned live region beside any region ownership / beside a dead region
+  -- is a different id (what carries `ids.Nodup` through the malloc'd
+  -- list's invariant and into its four strengthened statements).
+  ``CerberusHeapLang.regionOwn_ne, ``CerberusHeapLang.regionOwn_deadRegion_ne]
 
 def sortedNames (ns : Array Name) : Array String :=
   (ns.map (·.toString)).qsort (· < ·)

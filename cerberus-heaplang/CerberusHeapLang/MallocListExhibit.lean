@@ -43,12 +43,19 @@ nodes: `[]` is the null encoding; `id :: ids` ∃-binds the node's base
 `bs` with its next-field decode fact `nodeNextDec fmapEmpty bs q`
 (ListRevExhibit's), and owns `regionOwn id aN 16 (.own 1) bs ∗
 isRegionList q ids`. `deadRegions ids` is the persistent dead knowledge
-of the freed nodes.
+of the freed nodes. DISTINCTNESS (K5.1, the K5 audit's M-1): a fresh
+node is distinct from every live node and from every dead one by the
+public laws `regionOwn_ne`/`regionOwn_deadRegion_ne` (Heap.lean:
+`metaOwn_ne` at the region bundles — `.own 1` beside any fraction, or
+beside `.discard`, is one id twice), lifted over the two lists as
+`regionOwn_isRegionList_ne`/`regionOwn_deadRegions_ne`; two dead ids
+have no such law (both persistent), so their distinctness is CARRIED by
+the invariant from the time they were live.
 
 THE INVARIANT (one label, both phases): `allocBudget (i · regionCost al
 16) ∗ isRegionList p ids ∗ deadRegions done` with `i + |ids| + |done| =
-n` — the capacity for `i` more nodes, the list built so far, the nodes
-freed so far. In the build phase the budget is SPLIT per iteration
+n` and `(ids ++ done).Nodup` — the capacity for `i` more nodes, the list
+built so far, the nodes freed so far, all of them pairwise distinct. In the build phase the budget is SPLIT per iteration
 (`allocBudget_split`) and the new node is consed onto the list; in the
 free phase (`i = 0`) the head is freed (`wps_free`, its `deadRegion`
 kept) and the tail is the new list.
@@ -69,19 +76,21 @@ the public consequence face `deadRegion_dead`).
 
 THE STATEMENTS. `ml_wps`: `allocBudget (n.toNat * regionCost al 16) ⊢
 wps … (mlPost n) (mlProg … n) [fmapEmpty]` with `mlPost n w _ := ⌜w =
-.pure Vunit⌝ ∗ ∃ ids, ⌜ids.length = n.toNat⌝ ∗ deadRegions ids` — `n`
-nodes were allocated, written, linked, and every one of them is dead.
+.pure Vunit⌝ ∗ ∃ ids, ⌜ids.length = n.toNat ∧ ids.Nodup⌝ ∗ deadRegions
+ids` — `n` DISTINCT nodes were allocated, written, linked, and every one
+of them is dead (without `Nodup`, `deadRegion` being persistent, the post
+would say only that SOME region is dead — the K5 audit's M-1).
 `ml_wpt` at the DERIVED budget `mlCost n.toNat 0 + 1 = 25·n.toNat + 7`
 (the variant `mlCost i k = 25·i + 13·k + 6`: a build step costs 12 and
 trades one unit of `i` for one node, 25 − 13 = 12; a free step costs 13;
 exit 6; entry 1). Engine-facing: `malloc_list_certified_total` (the
 `driveU` lane, PROVISIONAL as every `driveU` export): from any memory
 launching the empty footprint with the budget, the engine DELIVERS `Vunit`
-at exactly `25·n.toNat + 7` drive steps with `n.toNat` allocation ids
-dead and erased. PRODUCTION: `malloc_list_certified_production` — the
+at exactly `25·n.toNat + 7` drive steps with `n.toNat` DISTINCT
+allocation ids dead and erased. PRODUCTION: `malloc_list_certified_production` — the
 shipped pipeline on the self-contained file is EXACTLY ONE Active
-execution delivering `Vunit` whose final memory has `n.toNat` allocation
-ids in `deadAllocations` with their records erased (the proof witnesses
+execution delivering `Vunit` whose final memory has `n.toNat` DISTINCT
+allocation ids in `deadAllocations` with their records erased (the proof witnesses
 them as the freed nodes; the statement names no node — the K4 audit's
 M-2 discipline), under the budget-fits-the-cold-start premise stated in
 ENGINE vocabulary `hB : n.toNat * (15 + max al.toNat 1) ≤
@@ -653,6 +662,38 @@ theorem isRegionList_wf (p : CerbMem.PointerValue) (ids : List Int) :
     ipureintro
     exact Or.inr ⟨id, aN, hf.1, hf.2.1, hf.2.2.1⟩
 
+/-- A fully-owned live region is NONE of the list's nodes (K5.1: the
+    public `regionOwn_ne` down the list; the pure fact read off
+    non-destructively at the call sites via `keep_pure`). -/
+theorem regionOwn_isRegionList_ne (id a : Int) (bs : List CerbMem.AbsByte) :
+    ∀ (p : CerbMem.PointerValue) (ids : List Int),
+    iprop(regionOwn (GF := GF) id a 16 (.own 1) bs ∗ isRegionList p ids) ⊢
+      (⌜id ∉ ids⌝ : IProp GF)
+  | _, [] => by
+    iintro ⟨-, -⟩
+    ipureintro
+    exact fun h => nomatch h
+  | p, id' :: ids => by
+    rw [isRegionList_cons]
+    iintro ⟨Hr, %aN, %q, %bs', -, Hr', HT⟩
+    ihave H1 : iprop(⌜id ≠ id'⌝ ∗ (regionOwn (GF := GF) id a 16 (.own 1) bs ∗
+        regionOwn id' aN 16 (.own 1) bs')) $$ [Hr Hr']
+    · iapply keep_pure (regionOwn_ne id id' a aN 16 16 (.own 1) bs bs')
+      isplitl [Hr]
+      · iexact Hr
+      · iexact Hr'
+    icases H1 with ⟨%hne, Hr, -⟩
+    ihave %hnotin : (⌜id ∉ ids⌝ : IProp GF) $$ [Hr HT]
+    · iapply regionOwn_isRegionList_ne id a bs q ids
+      isplitl [Hr]
+      · iexact Hr
+      · iexact HT
+    ipureintro
+    intro hmem
+    rcases List.mem_cons.mp hmem with rfl | hmem
+    · exact hne rfl
+    · exact hnotin hmem
+
 /-- The dead regions of an id list: for each, `deadRegion` at SOME base,
     16 bytes (the DisposeExhibit `deadNodes` shape, for regions). -/
 def deadRegions : List Int → IProp GF
@@ -664,6 +705,37 @@ def deadRegions : List Int → IProp GF
 theorem deadRegions_cons (id : Int) (ids : List Int) :
     deadRegions (GF := GF) (id :: ids) =
       iprop((∃ a : Int, deadRegion id a 16) ∗ deadRegions ids) := rfl
+
+/-- A fully-owned live region is NONE of the dead ones (K5.1: the public
+    `regionOwn_deadRegion_ne` down the dead list). -/
+theorem regionOwn_deadRegions_ne (id a : Int) (bs : List CerbMem.AbsByte) :
+    ∀ ids : List Int,
+    iprop(regionOwn (GF := GF) id a 16 (.own 1) bs ∗ deadRegions ids) ⊢
+      (⌜id ∉ ids⌝ : IProp GF)
+  | [] => by
+    iintro ⟨-, -⟩
+    ipureintro
+    exact fun h => nomatch h
+  | id' :: ids => by
+    rw [deadRegions_cons]
+    iintro ⟨Hr, ⟨%a', Hd⟩, HD⟩
+    ihave H1 : iprop(⌜id ≠ id'⌝ ∗ (regionOwn (GF := GF) id a 16 (.own 1) bs ∗
+        deadRegion id' a' 16)) $$ [Hr Hd]
+    · iapply keep_pure (regionOwn_deadRegion_ne id id' a a' 16 16 bs)
+      isplitl [Hr]
+      · iexact Hr
+      · iexact Hd
+    icases H1 with ⟨%hne, Hr, -⟩
+    ihave %hnotin : (⌜id ∉ ids⌝ : IProp GF) $$ [Hr HD]
+    · iapply regionOwn_deadRegions_ne id a bs ids
+      isplitl [Hr]
+      · iexact Hr
+      · iexact HD
+    ipureintro
+    intro hmem
+    rcases List.mem_cons.mp hmem with rfl | hmem
+    · exact hne rfl
+    · exact hnotin hmem
 
 /-- Every id of the dead list is dead in the real state — through the
     public consequence face `deadRegion_dead` (the metadata
@@ -806,20 +878,23 @@ variable (loc : CerbLocation.Loc) (ann ra : core_run_annotation)
 variable (p : sym) (rs : core_run_state)
   (hQ : LabeledAt rs p (mlQ loc ann ra mo al pref ibty pbty qbty bbty nbty ubty))
 
-/-- The postcondition: the unit value, and `n.toNat` dead regions — every
-    node the program allocated is freed. -/
+/-- The postcondition: the unit value, and `n.toNat` DISTINCT dead
+    regions — every node the program allocated is freed (K5.1: `Nodup`;
+    without it the persistent `deadRegions` would make the post say only
+    that some region is dead). -/
 abbrev mlPost : SpikeVal → EnvStack → IProp GF := fun w _ =>
   iprop(⌜w = SpikeVal.pure Vunit⌝ ∗
-    ∃ ids : List Int, ⌜ids.length = n.toNat⌝ ∗ deadRegions ids)
+    ∃ ids : List Int, ⌜ids.length = n.toNat ∧ ids.Nodup⌝ ∗ deadRegions ids)
 
 /-- THE LOOP INVARIANT (both phases): the capacity for `i` more nodes,
     the list built so far, the nodes freed so far — `i + |ids| + |done|
-    = n`. UNFRAMED. -/
+    = n`, all pairwise distinct (`(ids ++ done).Nodup`, K5.1). UNFRAMED. -/
 abbrev mlLs : LabelSpec GF := fun _ args ρ =>
   iprop(∃ (i : Int) (pc : CerbMem.PointerValue) (ids done : List Int)
       (f : Fmap sym value) (renv : List (Fmap sym value)),
     ⌜args = [ivVal i, ptrVal pc] ∧ 0 ≤ i ∧
-      i.toNat + ids.length + done.length = n.toNat ∧ ρ = f :: renv ∧ SymFrame f⌝ ∗
+      i.toNat + ids.length + done.length = n.toNat ∧ (ids ++ done).Nodup ∧
+      ρ = f :: renv ∧ SymFrame f⌝ ∗
     allocBudget (i.toNat * regionCost al 16) ∗ isRegionList pc ids ∗ deadRegions done)
 
 include hQ
@@ -834,7 +909,8 @@ include hQ
     continues with the tail. -/
 theorem ml_body_wps (i : Int) (pc : CerbMem.PointerValue) (ids done : List Int)
     (f : Fmap sym value) (renv : List (Fmap sym value)) (hf : SymFrame f)
-    (hi : 0 ≤ i) (hcnt : i.toNat + ids.length + done.length = n.toNat) :
+    (hi : 0 ≤ i) (hcnt : i.toNat + ids.length + done.length = n.toNat)
+    (hnd : (ids ++ done).Nodup) :
     iprop(allocBudget (GF := GF) (i.toNat * regionCost al 16) ∗
         isRegionList pc ids ∗ deadRegions done) ⊢
       wps (procCtx p rs) (mlLs al n) (mlPost n)
@@ -875,6 +951,21 @@ theorem ml_body_wps (i : Int) (pc : CerbMem.PointerValue) (ids done : List Int)
     ihave Hr16 : regionOwn id a 16 (.own 1) regionUndef16 $$ [Hr]
     · iapply regionOwn_alloc16 id a
       iexact Hr
+    -- the fresh node is distinct from every live node and every dead one
+    ihave HX : iprop(⌜id ∉ ids⌝ ∗ (regionOwn (GF := GF) id a 16 (.own 1) regionUndef16 ∗
+        isRegionList pc ids)) $$ [Hr16 HL]
+    · iapply keep_pure (regionOwn_isRegionList_ne id a regionUndef16 pc ids)
+      isplitl [Hr16]
+      · iexact Hr16
+      · iexact HL
+    icases HX with ⟨%hnotin, Hr16, HL⟩
+    ihave HY : iprop(⌜id ∉ done⌝ ∗ (regionOwn (GF := GF) id a 16 (.own 1) regionUndef16 ∗
+        deadRegions done)) $$ [Hr16 HD]
+    · iapply keep_pure (regionOwn_deadRegions_ne id a regionUndef16 done)
+      isplitl [Hr16]
+      · iexact Hr16
+      · iexact HD
+    icases HY with ⟨%hnotin', Hr16, HD⟩
     iexists (Vobject (OVpointer (cellPtr id a)))
     isplit
     · ipureintro
@@ -925,9 +1016,11 @@ theorem ml_body_wps (i : Int) (pc : CerbMem.PointerValue) (ids done : List Int)
       (mlFrameQ (ptrVal (cellPtr id a)) (ivVal i) (ptrVal pc) f), renv
     isplit
     · ipureintro
-      refine ⟨rfl, by omega, ?_, rfl, mlFrameQ_symFrame hf _ _ _⟩
-      simp only [List.length_cons]
-      omega
+      refine ⟨rfl, by omega, ?_, ?_, rfl, mlFrameQ_symFrame hf _ _ _⟩
+      · simp only [List.length_cons]
+        omega
+      · rw [List.cons_append]
+        exact List.nodup_cons.mpr ⟨List.not_mem_append hnotin hnotin', hnd⟩
     isplitl [Hrest]
     · iexact Hrest
     isplitl [Hr HL]
@@ -981,7 +1074,8 @@ theorem ml_body_wps (i : Int) (pc : CerbMem.PointerValue) (ids done : List Int)
       isplit
       · ipureintro
         simp only [List.length_nil] at hcnt
-        omega
+        rw [List.nil_append] at hnd
+        exact ⟨by omega, hnd⟩
       · iexact HD
     | cons id ids =>
       -- p is a node: load next, FREE the node, continue with the tail
@@ -1047,9 +1141,11 @@ theorem ml_body_wps (i : Int) (pc : CerbMem.PointerValue) (ids done : List Int)
         (mlFrameN (ptrVal q) (boolValue false) (ivVal 0) (ptrVal (cellPtr id aN)) f), renv
       isplit
       · ipureintro
-        refine ⟨rfl, Int.le_refl 0, ?_, rfl, mlFrameN_symFrame hf _ _ _ _⟩
-        simp only [List.length_cons] at hcnt ⊢
-        omega
+        refine ⟨rfl, Int.le_refl 0, ?_, ?_, rfl, mlFrameN_symFrame hf _ _ _ _⟩
+        · simp only [List.length_cons] at hcnt ⊢
+          omega
+        · -- the freed head moves from the live list to the dead one
+          exact (List.pairwise_middle (fun h => Ne.symm h)).mpr hnd
       isplitl [Hcap]
       · iexact Hcap
       isplitl [HT]
@@ -1067,7 +1163,7 @@ theorem ml_blockSpecs :
   rw [procCtx_labels hQ] at hl
   obtain ⟨rfl, rfl⟩ := mlQ_inv loc ann ra mo al pref ibty pbty qbty bbty nbty ubty hl
   iintro ⟨%i, %pc, %ids, %done, %f, %renv, %hpure, Hcap, HL, HD⟩
-  obtain ⟨rfl, hi, hcnt, hρ, hf⟩ := hpure
+  obtain ⟨rfl, hi, hcnt, hnd, hρ, hf⟩ := hpure
   obtain ⟨rfl, rfl⟩ : f = env0 ∧ renv = envs := by
     have h1 := congrArg (fun l => l.head?) hρ
     have h2 := congrArg (fun l => l.tail) hρ
@@ -1075,7 +1171,7 @@ theorem ml_blockSpecs :
     exact ⟨h1.symm, h2.symm⟩
   rw [bindArgs_ml]
   iapply ml_body_wps loc ann ra mo al pref ibty pbty qbty bbty nbty ubty n p rs hQ
-    i pc ids done f renv hf hi hcnt
+    i pc ids done f renv hf hi hcnt hnd
   isplitl [Hcap]
   · iexact Hcap
   isplitl [HL]
@@ -1083,8 +1179,8 @@ theorem ml_blockSpecs :
   · iexact HD
 
 /-- THE MALLOC'D LIST (partial): `{allocBudget (n · regionCost al 16)}
-    ml(n, NULL) {ret unit. ∃ ids, |ids| = n ∗ deadRegions ids}` — `n`
-    nodes allocated, written, linked, walked and freed. -/
+    ml(n, NULL) {ret unit. ∃ ids, |ids| = n ∧ ids.Nodup ∗ deadRegions ids}`
+    — `n` DISTINCT nodes allocated, written, linked, walked and freed. -/
 theorem ml_wps (sbty : core_base_type) (hn : 0 ≤ n) :
     allocBudget (GF := GF) (n.toNat * regionCost al 16) ⊢
       wps (procCtx p rs) (mlLs al n) (mlPost n)
@@ -1097,7 +1193,7 @@ theorem ml_wps (sbty : core_base_type) (hn : 0 ≤ n) :
   rw [bindSave_ml]
   rw [show (nullVal : value) = ptrVal nullNode from rfl]
   iapply ml_body_wps loc ann ra mo al pref ibty pbty qbty bbty nbty ubty n p rs hQ n
-    nullNode [] [] fmapEmpty [] symFrame_empty hn (by simp)
+    nullNode [] [] fmapEmpty [] symFrame_empty hn (by simp) (by simp)
   isplitl [Hcap]
   · iexact Hcap
   isplitl []
@@ -1117,21 +1213,22 @@ variable {GF : BundledGFunctors} [SpikeGS .hasLC GF]
 
 /-- THE READOUT (through the one sanctioned combinator
     `stateInterp_readout`; the dead list through the public consequence
-    face `deadRegion_dead`): unit delivered, and `n.toNat` allocation ids
-    in `deadAllocations` with their records erased. -/
+    face `deadRegion_dead`): unit delivered, and `n.toNat` DISTINCT
+    allocation ids in `deadAllocations` with their records erased. -/
 theorem mlPost_readout (n : Int) (w : SpikeVal) (ρ' : EnvStack) :
     mlPost (hlc := .hasLC) (GF := GF) n w ρ' ⊢
       readoutPost (fun v σ' => v = Vunit ∧
-        ∃ ids : List Int, ids.length = n.toNat ∧ ∀ id ∈ ids, DeadAt σ' id) w ρ' := by
-  have haux : iprop(∃ ids : List Int, ⌜ids.length = n.toNat⌝ ∗
+        ∃ ids : List Int, ids.length = n.toNat ∧ ids.Nodup ∧
+          ∀ id ∈ ids, DeadAt σ' id) w ρ' := by
+  have haux : iprop(∃ ids : List Int, ⌜ids.length = n.toNat ∧ ids.Nodup⌝ ∗
         deadRegions (hlc := .hasLC) (GF := GF) ids) ⊢
       readoutPost (GF := GF) (fun v σ' => v = Vunit ∧
-        ∃ ids : List Int, ids.length = n.toNat ∧ ∀ id ∈ ids, DeadAt σ' id)
+        ∃ ids : List Int, ids.length = n.toNat ∧ ids.Nodup ∧ ∀ id ∈ ids, DeadAt σ' id)
         (SpikeVal.pure Vunit) ρ' :=
     stateInterp_readout
-      (Φ := iprop(∃ ids : List Int, ⌜ids.length = n.toNat⌝ ∗ deadRegions ids))
+      (Φ := iprop(∃ ids : List Int, ⌜ids.length = n.toNat ∧ ids.Nodup⌝ ∗ deadRegions ids))
       (ψ := fun σ' => Vunit = Vunit ∧
-        ∃ ids : List Int, ids.length = n.toNat ∧ ∀ id ∈ ids, DeadAt σ' id)
+        ∃ ids : List Int, ids.length = n.toNat ∧ ids.Nodup ∧ ∀ id ∈ ids, DeadAt σ' id)
       (fun σ mm mb mk hG => by
         iintro ⟨⟨%ids, %hlen, HD⟩, Hmi, -⟩
         ihave H1 : iprop(⌜∀ id ∈ ids, DeadAt σ id⌝ ∗ metaInterp (GF := GF) mm) $$ [Hmi HD]
@@ -1141,7 +1238,7 @@ theorem mlPost_readout (n : Int) (w : SpikeVal) (ρ' : EnvStack) :
           · iexact HD
         icases H1 with ⟨%hdead, -⟩
         ipureintro
-        exact ⟨rfl, ids, hlen, hdead⟩)
+        exact ⟨rfl, ids, hlen.1, hlen.2, hdead⟩)
   iintro ⟨%hw, HD⟩
   subst hw
   iapply haux
@@ -1174,14 +1271,16 @@ abbrev mlLsT : LabelSpecT GF := fun _ m args ρ =>
   iprop(∃ (i : Int) (pc : CerbMem.PointerValue) (ids done : List Int)
       (f : Fmap sym value) (renv : List (Fmap sym value)),
     ⌜args = [ivVal i, ptrVal pc] ∧ 0 ≤ i ∧ m = mlCost i.toNat ids.length ∧
-      i.toNat + ids.length + done.length = n.toNat ∧ ρ = f :: renv ∧ SymFrame f⌝ ∗
+      i.toNat + ids.length + done.length = n.toNat ∧ (ids ++ done).Nodup ∧
+      ρ = f :: renv ∧ SymFrame f⌝ ∗
     allocBudget (i.toNat * regionCost al 16) ∗ isRegionList pc ids ∗ deadRegions done)
 
 include hQ
 
 theorem ml_body_wpt (i : Int) (pc : CerbMem.PointerValue) (ids done : List Int)
     (f : Fmap sym value) (renv : List (Fmap sym value)) (hf : SymFrame f)
-    (hi : 0 ≤ i) (hcnt : i.toNat + ids.length + done.length = n.toNat) :
+    (hi : 0 ≤ i) (hcnt : i.toNat + ids.length + done.length = n.toNat)
+    (hnd : (ids ++ done).Nodup) :
     iprop(allocBudget (GF := GF) (i.toNat * regionCost al 16) ∗
         isRegionList pc ids ∗ deadRegions done) ⊢
       wpt (procCtx p rs) (mlLsT al n) (mlCost i.toNat ids.length) (mlPost n)
@@ -1227,6 +1326,21 @@ theorem ml_body_wpt (i : Int) (pc : CerbMem.PointerValue) (ids done : List Int)
     ihave Hr16 : regionOwn id a 16 (.own 1) regionUndef16 $$ [Hr]
     · iapply regionOwn_alloc16 id a
       iexact Hr
+    -- the fresh node is distinct from every live node and every dead one
+    ihave HX : iprop(⌜id ∉ ids⌝ ∗ (regionOwn (GF := GF) id a 16 (.own 1) regionUndef16 ∗
+        isRegionList pc ids)) $$ [Hr16 HL]
+    · iapply keep_pure (regionOwn_isRegionList_ne id a regionUndef16 pc ids)
+      isplitl [Hr16]
+      · iexact Hr16
+      · iexact HL
+    icases HX with ⟨%hnotin, Hr16, HL⟩
+    ihave HY : iprop(⌜id ∉ done⌝ ∗ (regionOwn (GF := GF) id a 16 (.own 1) regionUndef16 ∗
+        deadRegions done)) $$ [Hr16 HD]
+    · iapply keep_pure (regionOwn_deadRegions_ne id a regionUndef16 done)
+      isplitl [Hr16]
+      · iexact Hr16
+      · iexact HD
+    icases HY with ⟨%hnotin', Hr16, HD⟩
     iexists (Vobject (OVpointer (cellPtr id a)))
     isplit
     · ipureintro
@@ -1279,9 +1393,11 @@ theorem ml_body_wpt (i : Int) (pc : CerbMem.PointerValue) (ids done : List Int)
       (mlFrameQ (ptrVal (cellPtr id a)) (ivVal i) (ptrVal pc) f), renv
     isplit
     · ipureintro
-      refine ⟨rfl, by omega, rfl, ?_, rfl, mlFrameQ_symFrame hf _ _ _⟩
-      simp only [List.length_cons]
-      omega
+      refine ⟨rfl, by omega, rfl, ?_, ?_, rfl, mlFrameQ_symFrame hf _ _ _⟩
+      · simp only [List.length_cons]
+        omega
+      · rw [List.cons_append]
+        exact List.nodup_cons.mpr ⟨List.not_mem_append hnotin hnotin', hnd⟩
     isplitl [Hrest]
     · iexact Hrest
     isplitl [Hr HL]
@@ -1335,7 +1451,8 @@ theorem ml_body_wpt (i : Int) (pc : CerbMem.PointerValue) (ids done : List Int)
       isplit
       · ipureintro
         simp only [List.length_nil] at hcnt
-        omega
+        rw [List.nil_append] at hnd
+        exact ⟨by omega, hnd⟩
       · iexact HD
     | cons id ids =>
       rw [show mlCost (Int.toNat 0) (id :: ids).length =
@@ -1409,9 +1526,11 @@ theorem ml_body_wpt (i : Int) (pc : CerbMem.PointerValue) (ids done : List Int)
         (mlFrameN (ptrVal q) (boolValue false) (ivVal 0) (ptrVal (cellPtr id aN)) f), renv
       isplit
       · ipureintro
-        refine ⟨rfl, Int.le_refl 0, rfl, ?_, rfl, mlFrameN_symFrame hf _ _ _ _⟩
-        simp only [List.length_cons] at hcnt ⊢
-        omega
+        refine ⟨rfl, Int.le_refl 0, rfl, ?_, ?_, rfl, mlFrameN_symFrame hf _ _ _ _⟩
+        · simp only [List.length_cons] at hcnt ⊢
+          omega
+        · -- the freed head moves from the live list to the dead one
+          exact (List.pairwise_middle (fun h => Ne.symm h)).mpr hnd
       isplitl [Hcap]
       · iexact Hcap
       isplitl [HT]
@@ -1429,7 +1548,7 @@ theorem ml_blockSpecsT :
   rw [procCtx_labels hQ] at hl
   obtain ⟨rfl, rfl⟩ := mlQ_inv loc ann ra mo al pref ibty pbty qbty bbty nbty ubty hl
   iintro ⟨%i, %pc, %ids, %done, %f, %renv, %hpure, Hcap, HL, HD⟩
-  obtain ⟨rfl, hi, rfl, hcnt, hρ, hf⟩ := hpure
+  obtain ⟨rfl, hi, rfl, hcnt, hnd, hρ, hf⟩ := hpure
   obtain ⟨rfl, rfl⟩ : f = env0 ∧ renv = envs := by
     have h1 := congrArg (fun l => l.head?) hρ
     have h2 := congrArg (fun l => l.tail) hρ
@@ -1437,7 +1556,7 @@ theorem ml_blockSpecsT :
     exact ⟨h1.symm, h2.symm⟩
   rw [bindArgs_ml]
   iapply ml_body_wpt loc ann ra mo al pref ibty pbty qbty bbty nbty ubty n p rs hQ
-    i pc ids done f renv hf hi hcnt
+    i pc ids done f renv hf hi hcnt hnd
   isplitl [Hcap]
   · iexact Hcap
   isplitl [HL]
@@ -1458,7 +1577,7 @@ theorem ml_wpt (sbty : core_base_type) (hn : 0 ≤ n) :
   rw [show (nullVal : value) = ptrVal nullNode from rfl]
   rw [show mlCost n.toNat 0 = mlCost n.toNat ([] : List Int).length from rfl]
   iapply ml_body_wpt loc ann ra mo al pref ibty pbty qbty bbty nbty ubty n p rs hQ n
-    nullNode [] [] fmapEmpty [] symFrame_empty hn (by simp)
+    nullNode [] [] fmapEmpty [] symFrame_empty hn (by simp) (by simp)
   isplitl [Hcap]
   · iexact Hcap
   isplitl []
@@ -1481,9 +1600,9 @@ variable (p : sym) (rs : core_run_state)
 
 include hQ
 
-/-- The engine-facing postcondition: unit, and `n.toNat` dead ids. -/
+/-- The engine-facing postcondition: unit, and `n.toNat` DISTINCT dead ids. -/
 abbrev ψML : value → Mem → Prop := fun v σ' =>
-  v = Vunit ∧ ∃ ids : List Int, ids.length = n.toNat ∧ ∀ id ∈ ids, DeadAt σ' id
+  v = Vunit ∧ ∃ ids : List Int, ids.length = n.toNat ∧ ids.Nodup ∧ ∀ id ∈ ids, DeadAt σ' id
 
 /-- The block specifications at the engine readout (what the launches consume). -/
 theorem ml_blockSpecsT_readout :
@@ -1511,8 +1630,8 @@ variable (loc : CerbLocation.Loc) (ann ra : core_run_annotation)
     memory that launches the empty footprint with the budget `n.toNat *
     regionCost al 16` (`LaunchCoh`), the engine's `driveU` at the DERIVED
     bound `25·n.toNat + 7` DELIVERS `Vunit` and the final memory has
-    `n.toNat` allocation ids in `deadAllocations` with their records
-    erased — `n` nodes allocated, written, linked, walked and freed, no
+    `n.toNat` DISTINCT allocation ids in `deadAllocations` with their
+    records erased — `n` nodes allocated, written, linked, walked and freed, no
     out-of-memory kill. A corollary of the total judgment through the
     generic simulation (`wpt_engine_boundU_alloc`). PROVISIONAL: stated
     over `driveU`. -/
@@ -1525,7 +1644,7 @@ theorem malloc_list_certified_total (n : Int) (hn : 0 ≤ n) (σ₀ : Mem)
         (procThread mlProcSym
           (mlProg loc ann ra mo al pref sbty ibty pbty qbty bbty nbty ubty n) [fmapEmpty]) σ₀ =
         .done Vunit σ' ∧
-      ∃ ids : List Int, ids.length = n.toNat ∧
+      ∃ ids : List Int, ids.length = n.toNat ∧ ids.Nodup ∧
         ∀ id ∈ ids, σ'.deadAllocations.contains id = true ∧ σ'.allocations.get? id = none := by
   have hQ := mlRS_labeledAt loc ann ra mo al pref ibty pbty qbty bbty nbty ubty
   have hk : mlCost n.toNat 0 + 1 = 25 * n.toNat + 7 := by
@@ -1611,8 +1730,8 @@ theorem ml_budget_bridge (n : Int)
 
 /-- THE MALLOC'D LIST, PRODUCTION FORM: running the SHIPPED pipeline
     cold on the self-contained file is EXACTLY ONE Active execution
-    delivering `Vunit` whose final memory has `n.toNat` allocation ids in
-    `deadAllocations` with their records erased (`killM`'s effect,
+    delivering `Vunit` whose final memory has `n.toNat` DISTINCT
+    allocation ids in `deadAllocations` with their records erased (`killM`'s effect,
     CerbMem.lean:1576-1578) — every `alloc` through the PUBLIC
     `wpt_alloc` from the split budget, every field write through the
     PUBLIC `wpt_store_regionOwn_at`, every next-field read through the
@@ -1642,7 +1761,7 @@ theorem malloc_list_certified_production (sup : Nat) (n : Int) (hn : 0 ≤ n)
             fs).1) =
         [(nd_status.Active dres, ([] : List String), dst')] ∧
       dres.dres_core_value = Vunit ∧
-      (∃ ids : List Int, ids.length = n.toNat ∧
+      (∃ ids : List Int, ids.length = n.toNat ∧ ids.Nodup ∧
         ∀ id ∈ ids, dst'.layout_state.deadAllocations.contains id = true ∧
           dst'.layout_state.allocations.get? id = none) ∧
       dres.dres_blocked = false ∧
@@ -1689,8 +1808,8 @@ theorem malloc_list_certified_production (sup : Nat) (n : Int) (hn : 0 ≤ n)
               nbty ubty n mainSym _ hQprod sbty hn $$ Hcap))
       (by unfold mlCost; omega)
       fs args
-  obtain ⟨hv, ids, hlen, hdead⟩ := hψ
-  exact ⟨dres, dst', heq, hv, ⟨ids, hlen, fun id hid => hdead id hid⟩, hbl, hout, herr⟩
+  obtain ⟨hv, ids, hlen, hnd, hdead⟩ := hψ
+  exact ⟨dres, dst', heq, hv, ⟨ids, hlen, hnd, fun id hid => hdead id hid⟩, hbl, hout, herr⟩
 
 end MlExport
 
