@@ -1640,3 +1640,75 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   ALL GATES GREEN
   GATE-EXIT=0
   ```
+- **2026-09-03 [USER] CERBERUS-LEAN MOVED (mainline de2fbf1, 28 commits past the pin
+  f95ef8d); THE RE-PIN WILL FIND IT MOVED AGAIN, "the remaining things are
+  lighter fixes".** Consumer manifests read: `lean_frontend/docs/
+  2026-09-03_zero-discrepancy-Z1-change-manifest.md` (killM arms re-mirrored,
+  `copyAllocId` real, device ranges, `casePtrval` gains `[Inhabited α]`,
+  `IvMaxAlignment` 16 → 8 so heap addresses shift, CerbFS refusals; `drive`/
+  `drive_lemFuel`/`fuelExhaustedKill`/`CerbFuel.*` UNCHANGED) and
+  `…_pin-bump-change-manifest.md` (LemLib 045dcb0 → 3c88f0d: `Fmap`/`Pset`
+  become inductive AVL ports, `fmapElements` ascending under the comparator;
+  `lemListFoldr` no longer reduces by `rfl`/`dsimp` — rewrite through
+  `LemLibTheorems.lemListFoldr_eq`; 55 generated types get OCaml-rank `Ord`).
+  [AGENT] re-pin scout priorities set by this: (1) C4's registration-order
+  `rfl` (measured on the old `Fmap`) is presumed stale — re-measure;
+  (2) every definitional unfolding of driver steps through `lemListFoldr`;
+  (3) kill/free rule proofs over the re-mirrored `killM` (statements
+  expected to survive); (4) concrete-address exhibits under 8-alignment.
+  **dynamic_addrs outcome** (`…_dynamic-addrs-investigation.md`): our note's
+  Core-level claim CONFIRMED on both oracles and Lean; its C-flavoured
+  consequence (`malloc(0)` then `free`) does NOT reproduce from C — that
+  part of our note was in error; Lean is a faithful mirror, the defect
+  stays MIRRORED and is filed upstream (tray 19); ISO-fix register R4
+  written, DEFERRED. Consequence here: the K3 `free` rule and its
+  dynamic-flag precondition stand as they are (the precondition implies
+  the engine's check); the "re-examine at the re-pin" item of the
+  2026-09-03 "proceed with C3" entry is CLOSED with no change.
+- **2026-09-03 [AGENT] F1 LANDED ON `calls-c1` (6e80579, three commits on main 328be1a):
+  the fuel-lane restatement — `driveU` deleted, the partial lane restated
+  over the genuine driver, PROVISIONAL gone.** Record:
+  `cerberus-heaplang/docs/2026-09-03_f1-notes.md`; post snapshot
+  `docs/2026-09-03_f1-signatures-post.txt`. Deleted: `driveU` and its
+  cone (`DriveResult`, `drive_classifyU`, `engine_adequacyU(_alloc)`,
+  `MemTripleU(_alloc)`, `SemTripleU`, `ProvenTripleU`, `wpt_drive_aux`,
+  `DriveDoneAt`, `wpt_engine_boundU(_alloc)`, `stateInert`, the
+  `*_certified_total` twins, the launch smokes, `call_smoke_driveU`).
+  Restated: `DriverSafeCtl` (∀ loop fuel: `NDkilled fuelExhaustedKill` or
+  program-done with the readout), `engine_adequacy(_alloc)`,
+  `MemTriple(_alloc)`, `SemTriple`, `ProvenTriple`, the projections,
+  `semantic_triple_sound`/`semantic_frame`, `CtlTied`, `prod_run_safe_procs`
+  (∀ fuel over `drive_lemFuel`; `drive` = the `driverFuel` instance by
+  `drive_wrapper_defeq`), 16 exhibit-level statements, `fib_rec_certified`
+  closed for every n ≥ 0 with no budget bound. Census (derived): 3017 →
+  2971, ADDED 27 / REMOVED 73 / CHANGED 26 = exactly the restated
+  statements; nine production statements + every rule/collapse UNCHANGED.
+  Pins 372 → 373. PROVISIONAL outside dated records: 1 files
+  (orchestrator grep). [AGENT] decision points (record §6): straight-line
+  exhibits stay at the no-procedure profile (mover: the `prodCtx` re-context
+  hygiene slice named at C4); ONE CONTENT LOSS — `tree_rotate_certified_total`
+  deleted with no twin (needs a self-contained tree-building program);
+  `hwf : SeqWF` dropped (strict generalization); MEASURED: `drive_lemFuel`'s
+  fuel bounds only the outer `driver2` rounds (Driver.lean:355-357 calls
+  the loop through its 10^8 wrapper) — the closed `∀ fuel` form is honest
+  but degenerate above 0; the run-length content lives in `DriverSafeCtl`;
+  R-3 not tightened (the slack is in `main`'s frozen wpt budget). Orchestrator
+  FULL gate at 6e80579 (main's runner, 64G cap), verbatim verdict lines:
+  ```
+  == gate 1: banned proof-method grep (native_decide / bv_decide / ofReduce*) ==
+  ok: no banned proof-method references
+  == gate 2: capped build, cerberus-heaplang (elaborates its axiom audit) ==
+  CerberusHeapLang export pins: 373 trio-exact
+  CerberusHeapLang axiom sweep: every theorem bounded by the trio (3396 swept, internal details included — count informational, environment-dependent)
+  CerberusHeapLang banned-axiom sweep: sorryAx/ofReduceBool/ofReduceNat absent from all cones (5161 constants of every kind swept, internal details included — count informational, environment-dependent)
+  Build completed successfully (456 jobs).
+  ok: cerberus-heaplang build green
+  == speedbump: capability manifest (regenerate; red on a red row or drift) ==
+  ok: capability manifest regenerated, no drift
+  == speedbump: import direction (semantics → heap → rules → adequacy → clients) ==
+  ok: import direction — no core module imports an exhibit/example/production module
+  ALL GATES GREEN
+  GATE-EXIT=0
+  ```
+  Range audit 328be1a..HEAD dispatched next on a fixed detached copy;
+  merge ask follows the audit — no merge without an explicit yes to it.
