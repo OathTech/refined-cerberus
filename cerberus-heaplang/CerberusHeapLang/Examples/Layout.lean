@@ -126,7 +126,7 @@ theorem six_storable (tds : CerbTags.TagDefsMap) : StorableAt tds intTy sixMval 
 section WpsExhibits
 
 variable [SpikeGS hlc GF]
-variable {M : MachineCtx} {ctl : Ctl} {Ls : LabelSpec GF}
+variable {M : MachineCtx} {p : Option sym} {Ls : LabelSpec GF} {Θ : ProcSpec GF}
 
 /-! The corpus's two exhibit shapes at the label-context judgment, for
 an ARBITRARY machine context, label context and environment —
@@ -143,7 +143,7 @@ theorem wps_exhibit_store_frame (x y : CerbMem.PointerValue)
     (bs bs' : List CerbMem.AbsByte) (ty' : ctype) (ρ : EnvStack) :
     iprop(pointsToCell M.tagDefs (GF := GF) x (.own 1) intTy bs ∗
         pointsToCell M.tagDefs y (.own 1) ty' bs') ⊢
-      wps M ctl Ls
+      wps M p Ls Θ
         (fun _ _ => iprop(pointsToCell M.tagDefs x (.own 1) intTy (sevenBytes M.tagDefs) ∗
           pointsToCell M.tagDefs y (.own 1) ty' bs'))
         (storeExpr loc ann intTy x sevenVal mo) ρ := by
@@ -171,12 +171,12 @@ context after the x-cell is consumed:
 
 ```
 example {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
-    {M : MachineCtx} {ctl : Ctl} {Ls : LabelSpec GF}
+    {M : MachineCtx} {p : Option sym} {Ls : LabelSpec GF} {Θ : ProcSpec GF}
     (x y : CerbMem.PointerValue) (loc : CerbLocation.Loc)
     (ann : core_run_annotation) (mo : memory_order)
     (bs bs' : List CerbMem.AbsByte) (ty' : ctype) (ρ : EnvStack) :
     pointsToCell M.tagDefs (GF := GF) x (.own 1) intTy bs ⊢
-      wps M ctl Ls
+      wps M p Ls Θ
         (fun _ _ => iprop(pointsToCell M.tagDefs x (.own 1) intTy (sevenBytes M.tagDefs) ∗
           pointsToCell M.tagDefs y (.own 1) ty' bs'))
         (storeExpr loc ann intTy x sevenVal mo) ρ := by
@@ -225,7 +225,7 @@ theorem wps_exhibit_seq_stores (x y : CerbMem.PointerValue)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value)) :
     iprop(pointsToCell M.tagDefs (GF := GF) x (.own 1) intTy bsx ∗
         pointsToCell M.tagDefs y (.own 1) intTy bsy) ⊢
-      wps M ctl Ls
+      wps M p Ls Θ
         (fun _ _ => iprop(pointsToCell M.tagDefs x (.own 1) intTy (fiveBytes M.tagDefs) ∗
           pointsToCell M.tagDefs y (.own 1) intTy (sixBytes M.tagDefs)))
         (sseqExpr bty (storeExpr loc ann intTy x fiveVal mo)

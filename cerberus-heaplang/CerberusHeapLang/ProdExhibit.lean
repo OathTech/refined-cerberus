@@ -107,26 +107,26 @@ shapes (`store_sym_lit_step`, `store_lit_sym_step`) live in
 `Examples/MirrorCoverage.lean`, which is not a client: -/
 
 /-- The rule at the symbol-pointer/literal-value shape (both strata). -/
-theorem wps_store_sym_lit [SpikeGS .hasLC GF] {M : MachineCtx} {ctl : Ctl} {Ls : LabelSpec GF}
+theorem wps_store_sym_lit [SpikeGS .hasLC GF] {M : MachineCtx} {p : Option sym} {Ls : LabelSpec GF} {Θ : ProcSpec GF}
     {Ψ : SpikeVal → EnvStack → IProp GF}
     (loc : CerbLocation.Loc) (ann : core_run_annotation) (ty : ctype)
     (x : sym) (cv : value) (mo : memory_order) (ρ : EnvStack)
     {pv : CerbMem.PointerValue}
     (hx : evalPexpr M.tagDefs M.extern ρ (Pexpr [] () (PEsym x)) =
       some (Vobject (OVpointer pv))) :
-    wps M ctl Ls Ψ (storeExpr loc ann ty pv cv mo) ρ ⊢
-      wps M ctl Ls Ψ (storeOpRedex loc ann ty (Pexpr [] () (PEsym x))
+    wps M p Ls Θ Ψ (storeExpr loc ann ty pv cv mo) ρ ⊢
+      wps M p Ls Θ Ψ (storeOpRedex loc ann ty (Pexpr [] () (PEsym x))
         (Pexpr [] () (PEval cv)) mo) ρ :=
   wps_store_eval loc ann ty _ _ mo ρ rfl hx rfl
 
-theorem wpt_store_lit_sym [SpikeGS .hasLC GF] {M : MachineCtx} {ctl : Ctl} {Ls : LabelSpecT GF}
+theorem wpt_store_lit_sym [SpikeGS .hasLC GF] {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
     {Ψ : SpikeVal → EnvStack → IProp GF}
     (loc : CerbLocation.Loc) (ann : core_run_annotation) (ty : ctype)
     (pv : CerbMem.PointerValue) (y : sym) (mo : memory_order) (ρ : EnvStack)
     {cv : value} {k : Nat}
     (hy : evalPexpr M.tagDefs M.extern ρ (Pexpr [] () (PEsym y)) = some cv) :
-    wpt M ctl Ls k Ψ (storeExpr loc ann ty pv cv mo) ρ ⊢
-      wpt M ctl Ls (k + 1) Ψ (storeOpRedex loc ann ty
+    wpt M p Ls Θ k Ψ (storeExpr loc ann ty pv cv mo) ρ ⊢
+      wpt M p Ls Θ (k + 1) Ψ (storeOpRedex loc ann ty
         (Pexpr [] () (PEval (Vobject (OVpointer pv)))) (Pexpr [] () (PEsym y)) mo) ρ :=
   wpt_store_eval loc ann ty _ _ mo ρ rfl rfl hy
 
@@ -161,12 +161,12 @@ def ψA (tds : CerbTags.TagDefsMap) : value → Mem → Prop := fun v σ' =>
     the PUBLIC `wpt_create`, the store/load through the generic heap
     rules at the PROGRAM-BOUND pointer. -/
 theorem progAProd_wpt [SpikeGS .hasLC GF]
-    {M : MachineCtx} {ctl : Ctl} {Ls : LabelSpecT GF}
+    {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
     (hex : ∀ x, resolveExtern M.extern x = x)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value))
     (hf : SymFrame ev0) :
     iprop(allocBudget (GF := GF) (allocCost M.tagDefs intTy 4)) ⊢
-      wpt M ctl Ls 10 (readoutPost (ψA M.tagDefs)) progAProd (ev0 :: evs) := by
+      wpt M p Ls Θ 10 (readoutPost (ψA M.tagDefs)) progAProd (ev0 :: evs) := by
   iintro Hcap
   rw [show progAProd =
     Expr [] (Esseq (symPat [] pASym BTy_unit)

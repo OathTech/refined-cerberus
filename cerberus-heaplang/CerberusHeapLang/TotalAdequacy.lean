@@ -386,8 +386,8 @@ theorem wpt_drive_aux {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
       (evs : List (Fmap sym value)) (σ : Mem) (ns nt : Nat) (aids : Nat → Nat),
       Frag e → pot e ≤ lemDefaultFuel →
       iprop(stateInterp (GF := GF) σ ns ([] : List Empty) nt ∗
-          blockSpecsT M ctl Ls (readoutPost ψ) ∗
-          wpt M ctl Ls k (readoutPost ψ) e (ev0 :: evs)) ⊢
+          blockSpecsT M ctl.proc Ls emptyProcSpecT (readoutPost ψ) ∗
+          wpt M ctl.proc Ls emptyProcSpecT k (readoutPost ψ) e (ev0 :: evs)) ⊢
         iprop(|={⊤|}=> ⌜DriveDoneAt M ctl aids k e (ev0 :: evs) σ ψ⌝) := by
   intro k
   induction k using Nat.strongRecOn with
@@ -438,7 +438,7 @@ theorem wpt_drive_aux {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
         Step.run_of_jumpRedex hjr hl hvs
       obtain ⟨ev0'', hbind⟩ := Step.env_cons hs
       ihave Hwpt := HB $$ %l %params %cont %vs %ev0 %evs %m %hl HLs
-      ihave Hwpt' : wpt M ctl Ls k' (readoutPost ψ) cont
+      ihave Hwpt' : wpt M ctl.proc Ls emptyProcSpecT k' (readoutPost ψ) cont
           (bindArgs params vs (ev0 :: evs)) $$ [Hwpt]
       · iapply wpt_mono_k (show m ≤ k' by omega) cont _ $$ Hwpt
       rw [hbind]
@@ -464,8 +464,9 @@ theorem wpt_drive_aux {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
     | none =>
       cases hcr : callRedex? e with
       | some q =>
-        rw [wpt_call_eq htv hjr hcr]
-        iintro ⟨-, -, %hf⟩
+        iintro ⟨-, -, H⟩
+        ihave H := wpt_empty_call_false htv hjr hcr $$ H
+        imod H with %hf
         exact hf.elim
       | none =>
       cases k with
@@ -476,7 +477,7 @@ theorem wpt_drive_aux {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
       | succ k' =>
         rw [wpt_step_eq k' htv hjr hcr]
         iintro ⟨Hσ, #HB, H⟩
-        imod H $$ %σ %ns %([] : List Empty) %nt Hσ with ⟨%hred, Hwand⟩
+        imod H $$ %(ctl.κ) %(ctl.execLoc) %σ %ns %([] : List Empty) %nt Hσ with ⟨%hred, Hwand⟩
         obtain ⟨obs0, r', σ', eₜ', hps⟩ := hred
         obtain ⟨hs, hM, hnil⟩ := hps
         subst hnil
@@ -543,8 +544,8 @@ theorem wpt_engine_boundU {GF : BundledGFunctors} [SpikeGpreS GF]
     (hwp : ∀ [SpikeGS .hasLC GF],
       iprop(([∗map] i ↦ c ∈ m₀, cellOwn M.tagDefs (hlc := .hasLC) (GF := GF) i
           (.own 1) c)) ⊢
-        iprop(blockSpecsT M ctl Ls (readoutPost ψ) ∗
-          wpt M ctl Ls k (readoutPost ψ) e₀ (ev00 :: evs0)))
+        iprop(blockSpecsT M ctl.proc Ls emptyProcSpecT (readoutPost ψ) ∗
+          wpt M ctl.proc Ls emptyProcSpecT k (readoutPost ψ) e₀ (ev00 :: evs0)))
     (aids : Nat → Nat) :
     ∃ v σ', driveU M aids k (M.thread e₀ (ev00 :: evs0) ctl) σ₀ = .done v σ' ∧
       ψ v σ' ∧ (stateInert e₀ = true ∧ StateInertLabels M ctl → σ' = σ₀) := by
@@ -607,8 +608,8 @@ theorem wpt_engine_boundU_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
     (hwp : ∀ [SpikeGS .hasLC GF],
       iprop(([∗map] i ↦ c ∈ m₀, cellOwn M.tagDefs (hlc := .hasLC) (GF := GF) i
           (.own 1) c) ∗ allocBudget B) ⊢
-        iprop(blockSpecsT M ctl Ls (readoutPost ψ) ∗
-          wpt M ctl Ls k (readoutPost ψ) e₀ (ev00 :: evs0)))
+        iprop(blockSpecsT M ctl.proc Ls emptyProcSpecT (readoutPost ψ) ∗
+          wpt M ctl.proc Ls emptyProcSpecT k (readoutPost ψ) e₀ (ev00 :: evs0)))
     (aids : Nat → Nat) :
     ∃ v σ', driveU M aids k (M.thread e₀ (ev00 :: evs0) ctl) σ₀ = .done v σ' ∧
       ψ v σ' ∧ (stateInert e₀ = true ∧ StateInertLabels M ctl → σ' = σ₀) := by

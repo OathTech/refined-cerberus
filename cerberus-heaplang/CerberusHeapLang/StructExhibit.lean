@@ -99,7 +99,7 @@ typed-subrange store -/
 section StructIris
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
-variable {M : MachineCtx} {ctl : Ctl} {Ls : LabelSpec GF}
+variable {M : MachineCtx} {p : Option sym} {Ls : LabelSpec GF} {Θ : ProcSpec GF}
 
 /-- FIELD-X STORE: `wps_store_cell_at` at offset 0, view type `int`,
     stored value 5. A client lemma — every premise is a closed
@@ -112,7 +112,7 @@ theorem wps_struct_x_store {Ψ : SpikeVal → EnvStack → IProp GF}
       (∀ fp, cellOwn M.tagDefs id (.own 1) (SpikeCell.mk a structTy
           (spliceBytes fieldX (fiveBytes M.tagDefs) bs)) -∗
         Ψ (SpikeVal.annot [DA_pos [] fp] Vunit) ρ)) ⊢
-      wps M ctl Ls Ψ (storeExpr loc ann intTy
+      wps M p Ls Θ Ψ (storeExpr loc ann intTy
         (cellPtr id (a + ((fieldX : Nat) : Int))) fiveVal mo) ρ :=
   wps_store_cell_at loc ann id a structTy fieldX intTy fiveVal mo bs ρ
     five_encodes (by rw [structTy_size, show CerbMem.sizeofCtype M.tagDefs intTy = 4 from rfl]; decide)
@@ -127,7 +127,7 @@ theorem wps_struct_y_store {Ψ : SpikeVal → EnvStack → IProp GF}
       (∀ fp, cellOwn M.tagDefs id (.own 1) (SpikeCell.mk a structTy
           (spliceBytes fieldY (sixBytes M.tagDefs) bs)) -∗
         Ψ (SpikeVal.annot [DA_pos [] fp] Vunit) ρ)) ⊢
-      wps M ctl Ls Ψ (storeExpr loc ann intTy
+      wps M p Ls Θ Ψ (storeExpr loc ann intTy
         (cellPtr id (a + ((fieldY : Nat) : Int))) sixVal mo) ρ :=
   wps_store_cell_at loc ann id a structTy fieldY intTy sixVal mo bs ρ
     six_encodes (by rw [structTy_size, show CerbMem.sizeofCtype M.tagDefs intTy = 4 from rfl]; decide)
@@ -140,7 +140,7 @@ theorem struct_wps (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (bs : List CerbMem.AbsByte) (ev0 : Fmap sym value)
     (evs : List (Fmap sym value)) :
     iprop(cellOwn M.tagDefs (GF := GF) id (.own 1) (SpikeCell.mk a structTy bs)) ⊢
-      wps M ctl Ls
+      wps M p Ls Θ
         (fun _ _ => iprop(cellOwn M.tagDefs id (.own 1) (SpikeCell.mk a structTy
           (spliceBytes fieldY (sixBytes M.tagDefs) (spliceBytes fieldX (fiveBytes M.tagDefs) bs)))))
         (progS loc ann mo mo' bty id a) (ev0 :: evs) := by
@@ -166,7 +166,7 @@ theorem struct_wps (loc : CerbLocation.Loc) (ann : core_run_annotation)
 /-- Vacuous block specifications (no labels at the straight-line
     profile). -/
 theorem struct_blockSpecs (id a : Int) (bs : List CerbMem.AbsByte) :
-    ⊢ blockSpecs (GF := GF) spikeCtx spikeCtl (fun _ _ _ => iprop(False))
+    ⊢ blockSpecs (GF := GF) spikeCtx none (fun _ _ _ => iprop(False)) emptyProcSpec
       (fun _ _ => iprop(cellOwn spikeCtx.tagDefs (hlc := hlc) id (.own 1) (SpikeCell.mk a structTy
         (spliceBytes fieldY (sixBytes spikeCtx.tagDefs) (spliceBytes fieldX (fiveBytes spikeCtx.tagDefs) bs))))) :=
   blockSpecs_intro fun l _ _ _ _ _ hl => (spikeCtx_labels_none l hl).elim
@@ -191,11 +191,11 @@ theorem struct_wp_readout (loc : CerbLocation.Loc)
             ⌜CellCoh spikeCtx.tagDefs σ' id ⟨a, structTy,
               spliceBytes fieldY (sixBytes spikeCtx.tagDefs)
                 (spliceBytes fieldX (fiveBytes spikeCtx.tagDefs) bs)⟩⌝) }} := by
-  refine (struct_wps (M := spikeCtx) (ctl := spikeCtl) (Ls := fun _ _ _ => iprop(False))
+  refine (struct_wps (M := spikeCtx) (p := none) (Θ := emptyProcSpec) (Ls := fun _ _ _ => iprop(False))
     loc ann mo mo' bty id a bs fmapEmpty []).trans ?_
   refine (BI.emp_sep.2.trans (BI.sep_mono
     ((struct_blockSpecs id a bs).trans
-      (wps_sound (ctl := spikeCtl) rfl (progS loc ann mo mo' bty id a) spikeEnv))
+      (wps_sound_empty (ctl := spikeCtl) rfl (progS loc ann mo mo' bty id a) spikeEnv))
     .rfl)).trans ?_
   refine BI.wand_elim_left.trans ?_
   refine wp_mono fun w => ?_
@@ -326,7 +326,7 @@ Every advertised law of the view algebra with a compiling consumer:
 section StructViews
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
-variable {M : MachineCtx} {ctl : Ctl} {Ls : LabelSpec GF}
+variable {M : MachineCtx} {p : Option sym} {Ls : LabelSpec GF} {Θ : ProcSpec GF}
 
 /-- The intermediate view types of the split: the struct minus its
     first field (`int[3]`, 12 bytes) and the last two fields
@@ -356,7 +356,7 @@ theorem struct_wps_views (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value)) :
     pointsToView M.tagDefs (GF := GF) id a structTy 0 (.own 1) (.own 1) structTy
         (b0 ++ (b1 ++ (b2 ++ b3))) ⊢
-      wps M ctl Ls
+      wps M p Ls Θ
         (fun _ _ => pointsToView M.tagDefs id a structTy 0 (.own 1) (.own 1) structTy
           (fiveBytes M.tagDefs ++ (b1 ++ (sixBytes M.tagDefs ++ b3))))
         (progS loc ann mo mo' bty id a) (ev0 :: evs) := by
@@ -480,7 +480,7 @@ theorem struct_wps_views_cell (loc : CerbLocation.Loc) (ann : core_run_annotatio
     (ev0 : Fmap sym value) (evs : List (Fmap sym value)) :
     cellOwn M.tagDefs (GF := GF) id (.own 1)
         (SpikeCell.mk a structTy (b0 ++ (b1 ++ (b2 ++ b3)))) ⊢
-      wps M ctl Ls
+      wps M p Ls Θ
         (fun _ _ => cellOwn M.tagDefs id (.own 1) (SpikeCell.mk a structTy
           (fiveBytes M.tagDefs ++ (b1 ++ (sixBytes M.tagDefs ++ b3)))))
         (progS loc ann mo mo' bty id a) (ev0 :: evs) := by
@@ -502,7 +502,7 @@ theorem struct_x_read_frac_wps (loc : CerbLocation.Loc) (ann : core_run_annotati
     (mo : memory_order) (id a : Int) (q : Qp) (ρ : EnvStack) :
     pointsToView M.tagDefs (GF := GF) id a structTy fieldX (.own q) (.own q) intTy
         (fiveBytes M.tagDefs) ⊢
-      wps M ctl Ls
+      wps M p Ls Θ
         (fun w _ => iprop(⌜∃ fp, w = SpikeVal.annot [DA_pos [] fp] fiveVal⌝ ∗
           pointsToView M.tagDefs id a structTy fieldX (.own q) (.own q) intTy
             (fiveBytes M.tagDefs)))
@@ -524,7 +524,7 @@ theorem struct_x_read_shared_wps (loc : CerbLocation.Loc) (ann : core_run_annota
     (mo : memory_order) (id a : Int) (ρ : EnvStack) :
     pointsToView M.tagDefs (GF := GF) id a structTy fieldX (.own 1) (.own 1) intTy
         (fiveBytes M.tagDefs) ⊢
-      wps M ctl Ls
+      wps M p Ls Θ
         (fun w _ => iprop(⌜∃ fp, w = SpikeVal.annot [DA_pos [] fp] fiveVal⌝ ∗
           pointsToView M.tagDefs id a structTy fieldX (.own 1) (.own 1) intTy
             (fiveBytes M.tagDefs)))
@@ -540,7 +540,7 @@ theorem struct_x_read_shared_wps (loc : CerbLocation.Loc) (ann : core_run_annota
     rw [Qp.half_add_half] at this
     exact this
   refine hsplit.1.trans ?_
-  refine (BI.sep_mono (struct_x_read_frac_wps (ctl := ctl) (Ls := Ls) loc ann mo id a (Qp.half 1) ρ)
+  refine (BI.sep_mono (struct_x_read_frac_wps (p := p) (Ls := Ls) (Θ := Θ) loc ann mo id a (Qp.half 1) ρ)
     .rfl).trans ?_
   refine (wps_frame _ _).trans ?_
   iintro H
@@ -564,7 +564,7 @@ theorem cell_read_shared_wps (loc : CerbLocation.Loc) (ann : core_run_annotation
     (htrap : cellLoadTrap M.tagDefs ⟨addrOf pv, intTy, bs⟩ = false) :
     iprop(pointsToCell M.tagDefs (GF := GF) pv (.own (Qp.half 1)) intTy bs ∗
       pointsToCell M.tagDefs pv (.own (Qp.half 1)) intTy bs') ⊢
-      wps M ctl Ls
+      wps M p Ls Θ
         (fun w _ => iprop(⌜∃ fp, w = SpikeVal.annot [DA_pos [] fp]
             (loadedVal M.tagDefs pv intTy bs)⌝ ∗
           pointsToCell M.tagDefs pv (.own 1) intTy bs))
@@ -597,7 +597,7 @@ theorem struct_x_read_persist_wps (loc : CerbLocation.Loc) (ann : core_run_annot
     (mo : memory_order) (id a : Int) (q : Qp) (dqb : DFrac) (ρ : EnvStack) :
     pointsToView M.tagDefs (GF := GF) id a structTy fieldX (.own q) dqb intTy
         (fiveBytes M.tagDefs) ⊢
-      wps M ctl Ls
+      wps M p Ls Θ
         (fun w _ => iprop(⌜∃ fp, w = SpikeVal.annot [DA_pos [] fp] fiveVal⌝ ∗
           locInBounds M.tagDefs id a structTy fieldX (CerbMem.sizeofCtype M.tagDefs intTy) ∗
           pointsToView M.tagDefs id a structTy fieldX .discard dqb intTy
@@ -673,7 +673,7 @@ theorem progCreateInit_frag (loc : CerbLocation.Loc)
 section CreateIris
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
-variable {M : MachineCtx} {ctl : Ctl} {Ls : LabelSpec GF}
+variable {M : MachineCtx} {p : Option sym} {Ls : LabelSpec GF} {Θ : ProcSpec GF}
 
 /-- The head frame after the two binds. -/
 abbrev structFrame (p : CerbMem.PointerValue) (f : Fmap sym value) :
@@ -708,7 +708,7 @@ theorem struct_create_store_wps
     (ev0 : Fmap sym value) (evs : List (Fmap sym value))
     (hf : SymFrame ev0) (hex : ∀ x, resolveExtern M.extern x = x) :
     iprop(allocBudget (GF := GF) (allocCost M.tagDefs structTy alignN)) ⊢
-      wps M ctl Ls
+      wps M p Ls Θ
         (fun w _ => iprop(∃ p : CerbMem.PointerValue,
           ⌜w.val = Vunit⌝ ∗
           pointsToCell M.tagDefs p (.own 1) structTy
@@ -825,14 +825,14 @@ theorem struct_create_store_adequacy {GF : BundledGFunctors} [SpikeGpreS GF]
   · -- the Iris triple: `struct_create_store_wps` collapsed by `wps_sound`
     intro inst
     iintro ⟨-, Hcap⟩
-    ihave HW := struct_create_store_wps (M := spikeCtx) (ctl := spikeCtl)
+    ihave HW := struct_create_store_wps (M := spikeCtx) (p := none) (Θ := emptyProcSpec)
       (Ls := fun _ _ _ => iprop(False)) loc ann .Prov_none 8 pref mo
       pbty vbty fmapEmpty [] symFrame_empty (resolveExtern_id_of_empty rfl) $$ Hcap
     ihave HWP : _ $$ [HW]
     · refine BI.emp_sep.2.trans (.trans (BI.sep_mono
         ((blockSpecs_intro fun l _ _ _ _ _ hl =>
           (spikeCtx_labels_none l hl).elim).trans
-          (wps_sound (ctl := spikeCtl) rfl (progCreateInit loc ann .Prov_none 8 pref mo pbty vbty)
+          (wps_sound_empty (ctl := spikeCtl) rfl (progCreateInit loc ann .Prov_none 8 pref mo pbty vbty)
             spikeEnv))
         .rfl) BI.wand_elim_left)
     iexact HWP

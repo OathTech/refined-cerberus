@@ -56,9 +56,9 @@ def wseqLs : LabelSpec GF := fun _ _ _ => iprop(True)
     application of the drift rule `wps_wseq`, then the value channel
     twice (the bound value is discarded by the wildcard —
     `SpikeVal.mergeInto (.pure v1)` is the identity). -/
-theorem wseqProg_wps (M : MachineCtx) (ctl : Ctl) (Ls : LabelSpec GF) (v1 v2 : value)
+theorem wseqProg_wps (M : MachineCtx) (p : Option sym) (Ls : LabelSpec GF) (Θ : ProcSpec GF) (v1 v2 : value)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value)) :
-    ⊢ wps (GF := GF) M ctl Ls (fun w _ => iprop(⌜w.val = v2⌝))
+    ⊢ wps (GF := GF) M p Ls Θ (fun w _ => iprop(⌜w.val = v2⌝))
         (wseqProg v1 v2) (ev0 :: evs) := by
   refine .trans ?_ (wps_wseq [] [] BTy_unit
     (ofVal (.pure v1)) (ofVal (.pure v2)) ev0 evs)
@@ -68,7 +68,7 @@ theorem wseqProg_wps (M : MachineCtx) (ctl : Ctl) (Ls : LabelSpec GF) (v1 v2 : v
 
 /-- Vacuous block specifications at the spike profile. -/
 theorem wseq_blockSpecs (v2 : value) :
-    ⊢ blockSpecs (GF := GF) spikeCtx spikeCtl wseqLs
+    ⊢ blockSpecs (GF := GF) spikeCtx none wseqLs emptyProcSpec
       (fun w _ => iprop(⌜w.val = v2⌝)) :=
   blockSpecs_intro fun l _ _ _ _ _ hl => (spikeCtx_labels_none l hl).elim
 
@@ -79,9 +79,9 @@ theorem wseq_wp_readout (v1 v2 : value) :
         {{ w, iprop(∀ (σ' : Mem) (ns : Nat) (κs : List Empty) (nt : Nat),
           (stateInterp σ' ns κs nt : IProp GF) ={⊤, ∅}=∗
             ⌜CoreRVal.val w = v2⌝) }} := by
-  refine (wseqProg_wps spikeCtx spikeCtl wseqLs v1 v2 fmapEmpty []).trans ?_
+  refine (wseqProg_wps spikeCtx none wseqLs emptyProcSpec v1 v2 fmapEmpty []).trans ?_
   refine (BI.emp_sep.2.trans (BI.sep_mono
-    ((wseq_blockSpecs v2).trans (wps_sound (ctl := spikeCtl) rfl (wseqProg v1 v2) spikeEnv))
+    ((wseq_blockSpecs v2).trans (wps_sound_empty (ctl := spikeCtl) rfl (wseqProg v1 v2) spikeEnv))
     .rfl)).trans ?_
   refine BI.wand_elim_left.trans ?_
   exact wp_mono fun w => stateInterp_readout fun _ _ _ _ _ => pure_consequence _

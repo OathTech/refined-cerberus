@@ -89,9 +89,9 @@ def caseLs : LabelSpec GF := fun _ _ _ => iprop(True)
     specification: one application of the case rule, then the value
     channel. The postcondition: the delivered value is the
     scrutinee. -/
-theorem caseProg_wps (M : MachineCtx) (ctl : Ctl) (Ls : LabelSpec GF) (v : value)
+theorem caseProg_wps (M : MachineCtx) (p : Option sym) (Ls : LabelSpec GF) (Θ : ProcSpec GF) (v : value)
     (ρ : EnvStack) :
-    ⊢ wps (GF := GF) M ctl Ls (fun w _ => iprop(⌜w.val = v⌝)) (caseProg v) ρ := by
+    ⊢ wps (GF := GF) M p Ls Θ (fun w _ => iprop(⌜w.val = v⌝)) (caseProg v) ρ := by
   refine .trans ?_ (wps_case_value [] (Pexpr [] () (PEval v))
     [(symPat [] caseXSym BTy_unit, caseBranch)] ρ
     (valueFromPexpr_val [] v) (caseProg_select v))
@@ -101,7 +101,7 @@ theorem caseProg_wps (M : MachineCtx) (ctl : Ctl) (Ls : LabelSpec GF) (v : value
 /-- Vacuous block specifications at the spike profile (no labels are
     registered — the lookup premise is unsatisfiable). -/
 theorem case_blockSpecs (v : value) :
-    ⊢ blockSpecs (GF := GF) spikeCtx spikeCtl caseLs
+    ⊢ blockSpecs (GF := GF) spikeCtx none caseLs emptyProcSpec
       (fun w _ => iprop(⌜w.val = v⌝)) :=
   blockSpecs_intro fun l _ _ _ _ _ hl => (spikeCtx_labels_none l hl).elim
 
@@ -113,9 +113,9 @@ theorem case_wp_readout (v : value) :
         {{ w, iprop(∀ (σ' : Mem) (ns : Nat) (κs : List Empty) (nt : Nat),
           (stateInterp σ' ns κs nt : IProp GF) ={⊤, ∅}=∗
             ⌜CoreRVal.val w = v⌝) }} := by
-  refine (caseProg_wps spikeCtx spikeCtl caseLs v spikeEnv).trans ?_
+  refine (caseProg_wps spikeCtx none caseLs emptyProcSpec v spikeEnv).trans ?_
   refine (BI.emp_sep.2.trans (BI.sep_mono
-    ((case_blockSpecs v).trans (wps_sound (ctl := spikeCtl) rfl (caseProg v) spikeEnv))
+    ((case_blockSpecs v).trans (wps_sound_empty (ctl := spikeCtl) rfl (caseProg v) spikeEnv))
     .rfl)).trans ?_
   refine BI.wand_elim_left.trans ?_
   exact wp_mono fun w => stateInterp_readout fun _ _ _ _ _ => pure_consequence _

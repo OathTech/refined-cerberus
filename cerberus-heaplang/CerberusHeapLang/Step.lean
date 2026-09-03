@@ -2487,6 +2487,102 @@ theorem Step.toValRt_none {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack} {ctl :
   | nil => rw [toValRt_mk, h.toVal_none rfl]; rfl
   | cons pc κ => rfl
 
+/-! ### The environment stack across steps (calls arc C3) -/
+
+/-- `SameTail ρ ρ'`: `ρ'` has the same frames BELOW THE HEAD as `ρ` — a
+    cons-shaped `ρ` yields a cons-shaped `ρ'` with the identical tail.
+    This is the shape every control-preserving step preserves
+    (`Step.sameTail`: `update_env` writes the head frame only,
+    Core_aux.lean:868; the call and the return are the two frame
+    writers). It is the invariant the CPS collapse (`wps_sound_cps`,
+    Wps.lean) hands to the caller's continuation: a callee entered at
+    `procEnv params vs :: ρ` finishes at some `ev0' :: ρ`, so RETURN pops
+    back to the caller's `ρ` VERBATIM — the caller's environment is
+    restored as a theorem, not an assumption (design note Q5). -/
+def SameTail (ρ ρ' : EnvStack) : Prop :=
+  ∀ ev0 evs, ρ = ev0 :: evs → ∃ ev0', ρ' = ev0' :: evs
+
+theorem SameTail.refl (ρ : EnvStack) : SameTail ρ ρ := fun ev0 _ h => ⟨ev0, h⟩
+
+theorem SameTail.trans {ρ₁ ρ₂ ρ₃ : EnvStack} (h12 : SameTail ρ₁ ρ₂)
+    (h23 : SameTail ρ₂ ρ₃) : SameTail ρ₁ ρ₃ := by
+  intro ev0 evs h
+  obtain ⟨ev1, h1⟩ := h12 ev0 evs h
+  exact h23 ev1 evs h1
+
+theorem SameTail.cons_inv {ev0 : Fmap sym value} {evs ρ' : EnvStack}
+    (h : SameTail (ev0 :: evs) ρ') : ∃ ev0', ρ' = ev0' :: evs :=
+  h ev0 evs rfl
+
+/-- A control-preserving step keeps the frames below the head
+    (`Step.env_cons'` in `SameTail` form). -/
+theorem Step.sameTail {M : MachineCtx} {e e' : CoreExpr} {ρ ρ' : EnvStack}
+    {ctl : Ctl} {σ σ' : Mem}
+    (h : Step M (e, ρ, ctl, σ) (e', ρ', ctl, σ')) : SameTail ρ ρ' :=
+  h.env_cons' rfl
+
+/-- THE ENVIRONMENT-DEPTH INVARIANT (the C2 range audit's N-1, stated as
+    a lemma): the environment stack is always deeper than the call
+    stack. The call pushes one frame on each (`Step.call`), the return
+    pops one from each (`Step.ret`), and every other step keeps the env
+    cons-shaped with the same tail (`Step.env_cons'`). Along every run
+    from an entry configuration (`κ = []`, `ρ ≠ []`) this is what
+    excludes RETURN's empty-env panic channel (`failwithI "end of proc,
+    found an empty Core_run env"`, Core_reduction.lean:484, col ≈2276):
+    the mirror's `Step.ret` demands a cons-shaped env, and a value under
+    a frame always has one. -/
+theorem Step.env_depth {M : MachineCtx} {e e' : CoreExpr} {ρ ρ' : EnvStack}
+    {ctl ctl' : Ctl} {σ σ' : Mem}
+    (h : Step M (e, ρ, ctl, σ) (e', ρ', ctl', σ'))
+    (hlen : ctl.κ.length < ρ.length) : ctl'.κ.length < ρ'.length := by
+  rcases h.ctl_cases with heq |
+      ⟨ctx, f, pes, params, body, vs, -, -, -, -, rfl, rfl, rfl, rfl⟩ |
+      ⟨v, ev0, evs, p, ctx, κ, q, ℓ, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+  · subst heq
+    cases ρ with
+    | nil => simp at hlen
+    | cons ev0 evs =>
+      obtain ⟨ev0', rfl⟩ := h.env_cons' rfl ev0 evs rfl
+      simpa using hlen
+  · simp only [List.length_cons]
+    omega
+  · simp only [List.length_cons] at hlen ⊢
+    omega
+
+/-- Inversion at a BARE value under a frame: the step is THE RETURN —
+    the env is cons-shaped, the value is plugged into the saved context,
+    one env frame and the top control frame pop, the caller's procedure
+    is restored, `exec_loc` rides. -/
+theorem Step.ret_inv {M : MachineCtx} {v : value} {ρ : EnvStack}
+    {pc : Option sym × context} {κ : List (Option sym × context)}
+    {q : Option sym} {ℓ : exec_location} {σ : Mem} {out : Config}
+    (h : Step M (Expr [] (Epure (Pexpr [] () (PEval v))), ρ, ⟨pc :: κ, q, ℓ⟩, σ) out) :
+    ∃ ev0 evs, ρ = ev0 :: evs ∧
+      out = (apply_ctx pc.2 (Expr [] (Epure (Pexpr [] () (PEval v)))), evs, ⟨κ, pc.1, ℓ⟩, σ) := by
+  obtain ⟨e', ρ', ctl', σ'⟩ := out
+  rcases h.ctl_cases with heq | ⟨ctx, f, pes, _, _, _, hc, -⟩ |
+      ⟨v', ev0, evs, p', ctx', κ', q', ℓ', he, hρ, hctl, he', hρ', hctl', hσ⟩
+  · exact (Step.pure_val_elim h heq).elim
+  · simp at hc
+  · cases he
+    cases hctl
+    exact ⟨ev0, evs, hρ, by rw [he', hρ', hctl', hσ]⟩
+
+/-- Inversion at an ANNOTATED value under a frame: the step is
+    REMOVE-ANNOT (the control and env untouched). -/
+theorem Step.ret_annot_inv {M : MachineCtx} {ds : List dyn_annotation} {v : value}
+    {ρ : EnvStack} {ctl : Ctl} {σ : Mem} {out : Config}
+    (h : Step M (Expr [] (Eannot ds (Expr [] (Epure (Pexpr [] () (PEval v))))), ρ, ctl, σ) out) :
+    out = (Expr [] (Epure (Pexpr [] () (PEval v))), ρ, ctl, σ) := by
+  obtain ⟨e', ρ', ctl', σ'⟩ := out
+  rcases h.ctl_cases with heq | ⟨ctx, f, pes, _, _, _, hc, -⟩ |
+      ⟨v', _, _, _, _, _, _, _, he, -⟩
+  · subst heq
+    obtain ⟨rfl, rfl, rfl, -⟩ := h.annot_val_inv rfl
+    rfl
+  · simp [callRedex?, annotRooted] at hc
+  · cases he
+
 /-- Inversion at a store redex (canonical operand instance — the
     certified cone's shape): the step is unique and fully determined
     by the memM computation; the env is returned verbatim. -/

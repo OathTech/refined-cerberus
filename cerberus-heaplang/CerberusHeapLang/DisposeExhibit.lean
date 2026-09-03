@@ -392,7 +392,7 @@ theorem dl_body_wps (done rest' : List (Int × Int))
     (renv : List (Fmap sym value)) (hf : SymFrame f)
     (hxs : ns = done ++ rest') :
     iprop(deadNodes (GF := GF) done ∗ isList pCur rest') ⊢
-      wps (procCtx rs) (procCtl p) (dlLs ns) (dlPost ns) (dlBody loc ann ra mo bbty nbty ubty)
+      wps (procCtx rs) (some p) (dlLs ns) emptyProcSpec (dlPost ns) (dlBody loc ann ra mo bbty nbty ubty)
         (dlFrame (ptrVal pCur) f :: renv) := by
   rw [show dlBody loc ann ra mo bbty nbty ubty =
     Expr [] (Esseq (symPat [] dlBSym bbty) dlMemopE
@@ -468,7 +468,7 @@ theorem dl_body_wps (done rest' : List (Int × Int))
       rfl (dl_shift_eval_B hf renv _ nd.1 aN)
     rw [show cellPtr nd.1 (aN + 8) = cellPtr nd.1 (aN + ((8 : Nat) : Int))
       from rfl]
-    iapply wps_load_node_field (M := procCtx rs) (ctl := procCtl p) loc ann nd.1 aN 8 mo (.own 1) bs _
+    iapply wps_load_node_field (M := procCtx rs) (p := some p) (Θ := emptyProcSpec) loc ann nd.1 aN 8 mo (.own 1) bs _
       (by rw [nodeTy_size]; omega)
       (fun lum fpm => hnext lum fpm _)
     isplitl [Hpt]
@@ -525,7 +525,7 @@ theorem dl_body_wps (done rest' : List (Int × Int))
 
 /-- THE BLOCK SPECIFICATION (per-label invariant rule). -/
 theorem dl_blockSpecs :
-    ⊢ blockSpecs (GF := GF) (procCtx rs) (procCtl p) (dlLs ns) (dlPost ns) := by
+    ⊢ blockSpecs (GF := GF) (procCtx rs) (some p) (dlLs ns) emptyProcSpec (dlPost ns) := by
   refine blockSpecs_intro fun l params cont args env0 envs hl => ?_
   rw [procCtx_labels hQ] at hl
   obtain ⟨rfl, rfl⟩ := dlQ_inv loc ann ra mo cbty bbty nbty ubty hl
@@ -548,7 +548,7 @@ theorem dl_blockSpecs :
     delivers unit and the persistent dead cell of every node. -/
 theorem dl_wps (sbty : core_base_type) (head : CerbMem.PointerValue) :
     isList (GF := GF) head ns ⊢
-      wps (procCtx rs) (procCtl p) (dlLs ns) (dlPost ns)
+      wps (procCtx rs) (some p) (dlLs ns) emptyProcSpec (dlPost ns)
         (dlProg loc ann ra mo sbty cbty bbty nbty ubty head) [fmapEmpty] := by
   rw [show dlProg loc ann ra mo sbty cbty bbty nbty ubty head =
     Expr [] (Esave (dlLoopSym, sbty) (dlParams cbty head)
@@ -567,7 +567,7 @@ theorem dl_wps (sbty : core_base_type) (head : CerbMem.PointerValue) :
     knowledge dropped (affinity). -/
 theorem dl_wps_emp (sbty : core_base_type) (head : CerbMem.PointerValue) :
     isList (GF := GF) head ns ⊢
-      wps (procCtx rs) (procCtl p) (dlLs ns) (fun w _ => iprop(⌜w = SpikeVal.pure Vunit⌝))
+      wps (procCtx rs) (some p) (dlLs ns) emptyProcSpec (fun w _ => iprop(⌜w = SpikeVal.pure Vunit⌝))
         (dlProg loc ann ra mo sbty cbty bbty nbty ubty head) [fmapEmpty] := by
   iintro HL
   ihave HW := dl_wps loc ann ra mo cbty bbty nbty ubty ns p rs hQ sbty head $$ HL
@@ -578,7 +578,7 @@ theorem dl_wps_emp (sbty : core_base_type) (head : CerbMem.PointerValue) :
 
 /-- The block specifications at the framed label context. -/
 theorem dl_blockSpecs_frame (RF : IProp GF) :
-    ⊢ blockSpecs (GF := GF) (procCtx rs) (procCtl p) (frameLs RF (dlLs ns))
+    ⊢ blockSpecs (GF := GF) (procCtx rs) (some p) (frameLs RF (dlLs ns)) emptyProcSpec
       (fun w ρ' => iprop(dlPost ns w ρ' ∗ RF)) :=
   (dl_blockSpecs loc ann ra mo cbty bbty nbty ubty ns p rs hQ).trans
     (blockSpecs_frame RF)
@@ -588,7 +588,7 @@ theorem dl_blockSpecs_frame (RF : IProp GF) :
 theorem dl_wps_frame (RF : IProp GF) (sbty : core_base_type)
     (head : CerbMem.PointerValue) :
     iprop(isList (GF := GF) head ns ∗ RF) ⊢
-      wps (procCtx rs) (procCtl p) (frameLs RF (dlLs ns))
+      wps (procCtx rs) (some p) (frameLs RF (dlLs ns)) emptyProcSpec
         (fun w ρ' => iprop(dlPost ns w ρ' ∗ RF))
         (dlProg loc ann ra mo sbty cbty bbty nbty ubty head) [fmapEmpty] := by
   iintro ⟨HL, HF⟩
@@ -684,7 +684,7 @@ theorem dl_body_wpt (done rest' : List (Int × Int))
     (renv : List (Fmap sym value)) (hf : SymFrame f)
     (hxs : ns = done ++ rest') :
     iprop(deadNodes (GF := GF) done ∗ isList pCur rest') ⊢
-      wpt (procCtx rs) (procCtl p) (dlLsT ns) (dlCost rest'.length)
+      wpt (procCtx rs) (some p) (dlLsT ns) emptyProcSpecT (dlCost rest'.length)
         (dlPost ns) (dlBody loc ann ra mo bbty nbty ubty)
         (dlFrame (ptrVal pCur) f :: renv) := by
   rw [show dlBody loc ann ra mo bbty nbty ubty =
@@ -765,7 +765,7 @@ theorem dl_body_wpt (done rest' : List (Int × Int))
       rfl (dl_shift_eval_B hf renv _ nd.1 aN)
     rw [show cellPtr nd.1 (aN + 8) = cellPtr nd.1 (aN + ((8 : Nat) : Int))
       from rfl]
-    iapply wpt_load_node_field (M := procCtx rs) (ctl := procCtl p) loc ann nd.1 aN 8 mo (.own 1) bs _
+    iapply wpt_load_node_field (M := procCtx rs) (p := some p) (Θ := emptyProcSpecT) loc ann nd.1 aN 8 mo (.own 1) bs _
       (by omega)
       (by rw [nodeTy_size]; omega)
       (fun lum fpm => hnext lum fpm _)
@@ -831,7 +831,7 @@ theorem dl_body_wpt_frame (RF : IProp GF) (done rest' : List (Int × Int))
     (renv : List (Fmap sym value)) (hf : SymFrame f)
     (hxs : ns = done ++ rest') :
     iprop((deadNodes (GF := GF) done ∗ isList pCur rest') ∗ RF) ⊢
-      wpt (procCtx rs) (procCtl p) (frameLsT RF (dlLsT ns)) (dlCost rest'.length)
+      wpt (procCtx rs) (some p) (frameLsT RF (dlLsT ns)) emptyProcSpecT (dlCost rest'.length)
         (fun w ρ' => iprop(dlPost ns w ρ' ∗ RF)) (dlBody loc ann ra mo bbty nbty ubty)
         (dlFrame (ptrVal pCur) f :: renv) :=
   (BI.sep_mono ((dl_body_wpt loc ann ra mo cbty bbty nbty ubty ns p rs hQ
@@ -840,7 +840,7 @@ theorem dl_body_wpt_frame (RF : IProp GF) (done rest' : List (Int × Int))
 
 /-- THE TOTAL BLOCK SPECIFICATION for the dispose loop. -/
 theorem dl_blockSpecsT :
-    ⊢ blockSpecsT (GF := GF) (procCtx rs) (procCtl p) (dlLsT ns) (dlPost ns) := by
+    ⊢ blockSpecsT (GF := GF) (procCtx rs) (some p) (dlLsT ns) emptyProcSpecT (dlPost ns) := by
   refine blockSpecsT_intro fun l params cont args env0 envs m hl => ?_
   rw [procCtx_labels hQ] at hl
   obtain ⟨rfl, rfl⟩ := dlQ_inv loc ann ra mo cbty bbty nbty ubty hl
@@ -863,7 +863,7 @@ theorem dl_blockSpecsT :
     termination. -/
 theorem dl_wpt (sbty : core_base_type) (head : CerbMem.PointerValue) :
     isList (GF := GF) head ns ⊢
-      wpt (procCtx rs) (procCtl p) (dlLsT ns) (dlCost ns.length + 1) (dlPost ns)
+      wpt (procCtx rs) (some p) (dlLsT ns) emptyProcSpecT (dlCost ns.length + 1) (dlPost ns)
         (dlProg loc ann ra mo sbty cbty bbty nbty ubty head) [fmapEmpty] := by
   rw [show dlProg loc ann ra mo sbty cbty bbty nbty ubty head =
     Expr [] (Esave (dlLoopSym, sbty) (dlParams cbty head)
@@ -880,7 +880,7 @@ theorem dl_wpt (sbty : core_base_type) (head : CerbMem.PointerValue) :
 
 /-- The total block specifications at the framed label context. -/
 theorem dl_blockSpecsT_frame (RF : IProp GF) :
-    ⊢ blockSpecsT (GF := GF) (procCtx rs) (procCtl p) (frameLsT RF (dlLsT ns))
+    ⊢ blockSpecsT (GF := GF) (procCtx rs) (some p) (frameLsT RF (dlLsT ns)) emptyProcSpecT
       (fun w ρ' => iprop(dlPost ns w ρ' ∗ RF)) :=
   (dl_blockSpecsT loc ann ra mo cbty bbty nbty ubty ns p rs hQ).trans
     (blockSpecsT_frame RF)
@@ -890,7 +890,7 @@ theorem dl_blockSpecsT_frame (RF : IProp GF) :
 theorem dl_wpt_frame (RF : IProp GF) (sbty : core_base_type)
     (head : CerbMem.PointerValue) :
     iprop(isList (GF := GF) head ns ∗ RF) ⊢
-      wpt (procCtx rs) (procCtl p) (frameLsT RF (dlLsT ns)) (dlCost ns.length + 1)
+      wpt (procCtx rs) (some p) (frameLsT RF (dlLsT ns)) emptyProcSpecT (dlCost ns.length + 1)
         (fun w ρ' => iprop(dlPost ns w ρ' ∗ RF))
         (dlProg loc ann ra mo sbty cbty bbty nbty ubty head) [fmapEmpty] := by
   iintro ⟨HL, HF⟩
@@ -1205,12 +1205,12 @@ theorem lrProdPrefix_wpt {Ls : LabelSpecT GF} (bty : core_base_type)
     (hk : ∀ (i₁ a₁ i₂ a₂ : Int), 0 < a₁ ∧ a₁ < 2 ^ 64 → 0 < a₂ ∧ a₂ < 2 ^ 64 →
       iprop(isList (hlc := .hasLC) (GF := GF) (cellPtr i₁ a₁)
           [((i₁ : Int), (1 : Int)), (i₂, 2)] ∗ RF) ⊢
-        wpt (procCtx rs) (procCtl p) Ls kk (readoutPost ψ) k
+        wpt (procCtx rs) (some p) Ls emptyProcSpecT kk (readoutPost ψ) k
           (lrPFrame (ptrVal (cellPtr i₁ a₁)) (ptrVal (cellPtr i₂ a₂)) ev0 :: evs)) :
     iprop(allocBudget (GF := GF)
         (allocCost (procCtx rs).tagDefs nodeTy 8 +
           allocCost (procCtx rs).tagDefs nodeTy 8) ∗ RF) ⊢
-      wpt (procCtx rs) (procCtl p) Ls
+      wpt (procCtx rs) (some p) Ls emptyProcSpecT
         (2 + (2 + ((3 + 1) + ((3 + 1) + ((3 + 1) + ((3 + 1) + kk))))))
         (readoutPost ψ) (lrProdPrefix ra mo bty k) (ev0 :: evs) := by
   iintro ⟨Hcap, HF⟩
@@ -1403,7 +1403,7 @@ include hQ
 /-- THE TOTAL BLOCK SPECIFICATION for the production dispose loop: the
     generic body theorem consumed verbatim at the unpacked ids. -/
 theorem dlProd_blockSpecsT :
-    ⊢ blockSpecsT (GF := GF) (procCtx rs) (procCtl p) dlProdLsT (readoutPost ψD) := by
+    ⊢ blockSpecsT (GF := GF) (procCtx rs) (some p) dlProdLsT emptyProcSpecT (readoutPost ψD) := by
   refine blockSpecsT_intro fun l params cont vs ev0 evs m hl => ?_
   rw [procCtx_labels hQ] at hl
   obtain ⟨rfl, rfl⟩ := dlQ_inv loc0 empty_annotation ra mo cbty bbty nbty ubty hl
@@ -1445,7 +1445,7 @@ theorem dlProd_wpt (bty sbty : core_base_type)
     iprop(allocBudget (GF := GF)
         (allocCost (procCtx rs).tagDefs nodeTy 8 +
           allocCost (procCtx rs).tagDefs nodeTy 8)) ⊢
-      wpt (procCtx rs) (procCtl p) dlProdLsT
+      wpt (procCtx rs) (some p) dlProdLsT emptyProcSpecT
         (2 + (2 + ((3 + 1) + ((3 + 1) + ((3 + 1) + ((3 + 1) +
           (dlCost 2 + saveEntryCost (dlProdParams cbty))))))))
         (readoutPost ψD)

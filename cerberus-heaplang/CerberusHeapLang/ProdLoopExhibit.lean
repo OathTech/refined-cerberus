@@ -397,7 +397,7 @@ theorem ctr_body_wpt (i : Int) (pptr : CerbMem.PointerValue)
     (h0 : 0 ≤ i) (hin : i ≤ n)
     (hbs : (i = n ∧ bs = (intUndefBytes fmapEmpty)) ∨ (i < n ∧ bs = (sevenBytes (procCtx rs).tagDefs))) :
     iprop(pointsToCell (procCtx rs).tagDefs (GF := GF) pptr (.own 1) intTy bs) ⊢
-      wpt (procCtx rs) (procCtl p) (ctrLsT n) (ctrCost i.toNat)
+      wpt (procCtx rs) (some p) (ctrLsT n) emptyProcSpecT (ctrCost i.toNat)
         (readoutPost (ψC n)) (ctrBody ra mo bty)
         (ctrFrame (ivVal i) (ptrVal pptr) f :: rest) := by
   rw [show ctrBody ra mo bty =
@@ -473,7 +473,7 @@ theorem ctr_body_wpt (i : Int) (pptr : CerbMem.PointerValue)
 
 /-- THE TOTAL BLOCK SPECIFICATION for the production counter loop. -/
 theorem ctr_blockSpecsT :
-    ⊢ blockSpecsT (GF := GF) (procCtx rs) (procCtl p) (ctrLsT n)
+    ⊢ blockSpecsT (GF := GF) (procCtx rs) (some p) (ctrLsT n) emptyProcSpecT
       (readoutPost (ψC n)) := by
   refine blockSpecsT_intro fun l params cont vs ev0 evs m hl => ?_
   rw [procCtx_labels hQ] at hl
@@ -498,7 +498,7 @@ theorem ctrProd_wpt (sbty : core_base_type) (hn : 0 ≤ n)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value))
     (hf : SymFrame ev0) :
     iprop(allocBudget (GF := GF) (allocCost (procCtx rs).tagDefs intTy 4)) ⊢
-      wpt (procCtx rs) (procCtl p) (ctrLsT n)
+      wpt (procCtx rs) (some p) (ctrLsT n) emptyProcSpecT
         (2 + (ctrCost n.toNat + saveEntryCost (ctrParams xbty cbty n)))
         (readoutPost (ψC n))
         (counterProdProg ra mo bty xbty cbty sbty n) (ev0 :: evs) := by
@@ -993,7 +993,7 @@ include hQ
     unpacked ids, transported into the wrapped label spec by
     `wpt_mono_Ls` and into the production readout by `wpt_mono`. -/
 theorem lrProd_blockSpecsT :
-    ⊢ blockSpecsT (GF := GF) (procCtx rs) (procCtl p) lrProdLsT
+    ⊢ blockSpecsT (GF := GF) (procCtx rs) (some p) lrProdLsT emptyProcSpecT
       (readoutPost ψL) := by
   refine blockSpecsT_intro fun l params cont vs ev0 evs m hl => ?_
   rw [procCtx_labels hQ] at hl
@@ -1041,7 +1041,7 @@ theorem lrProd_wpt (bty sbty : core_base_type)
     (hf : SymFrame ev0) :
     iprop(allocBudget (GF := GF)
         (allocCost (procCtx rs).tagDefs nodeTy 8 + allocCost (procCtx rs).tagDefs nodeTy 8)) ⊢
-      wpt (procCtx rs) (procCtl p) lrProdLsT
+      wpt (procCtx rs) (some p) lrProdLsT emptyProcSpecT
         (2 + (2 + ((3 + 1) + ((3 + 1) + ((3 + 1) + ((3 + 1) +
           (lrCost 2 + saveEntryCost (lrProdParams pbty cbty))))))))
         (readoutPost ψL)

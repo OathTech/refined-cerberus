@@ -184,8 +184,8 @@ theorem wpt_driver_aux {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
       (evs : List (Fmap sym value)) (σ : Mem) (ns nt : Nat),
       Frag e → pot e ≤ lemDefaultFuel →
       iprop(stateInterp (GF := GF) σ ns ([] : List Empty) nt ∗
-          blockSpecsT M₀ ctl Ls (readoutPost ψ) ∗
-          wpt M₀ ctl Ls k (readoutPost ψ) e (ev0 :: evs)) ⊢
+          blockSpecsT M₀ ctl.proc Ls emptyProcSpecT (readoutPost ψ) ∗
+          wpt M₀ ctl.proc Ls emptyProcSpecT k (readoutPost ψ) e (ev0 :: evs)) ⊢
         iprop(|={⊤|}=> ⌜DriverDoneAt p Q th₀ e (ev0 :: evs) σ ψ k⌝) := by
   intro k
   induction k using Nat.strongRecOn with
@@ -223,7 +223,7 @@ theorem wpt_driver_aux {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
         Step.run_of_jumpRedex hjr hl hvs
       obtain ⟨ev0'', hbind⟩ := Step.env_cons hs
       ihave Hwpt := HB $$ %l %params %cont %vs %ev0 %evs %m %hl HLs
-      ihave Hwpt' : wpt M₀ ctl Ls k' (readoutPost ψ) cont
+      ihave Hwpt' : wpt M₀ ctl.proc Ls emptyProcSpecT k' (readoutPost ψ) cont
           (bindArgs params vs (ev0 :: evs)) $$ [Hwpt]
       · iapply wpt_mono_k (show m ≤ k' by omega) cont _ $$ Hwpt
       have hf : DriverDoneAt p Q th₀ cont (bindArgs params vs (ev0 :: evs))
@@ -238,8 +238,9 @@ theorem wpt_driver_aux {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
     | none =>
       cases hcr : callRedex? e with
       | some q =>
-        rw [wpt_call_eq htv hjr hcr]
-        iintro ⟨-, -, %hf⟩
+        iintro ⟨-, -, H⟩
+        ihave H := wpt_empty_call_false htv hjr hcr $$ H
+        imod H with %hf
         exact hf.elim
       | none =>
       cases k with
@@ -250,7 +251,7 @@ theorem wpt_driver_aux {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
       | succ k' =>
         rw [wpt_step_eq k' htv hjr hcr]
         iintro ⟨Hσ, #HB, H⟩
-        imod H $$ %σ %ns %([] : List Empty) %nt Hσ with ⟨%hred, Hwand⟩
+        imod H $$ %(ctl.κ) %(ctl.execLoc) %σ %ns %([] : List Empty) %nt Hσ with ⟨%hred, Hwand⟩
         obtain ⟨obs0, r', σ', eₜ', hps⟩ := hred
         obtain ⟨hs, hM, hnil⟩ := hps
         subst hnil
@@ -301,8 +302,8 @@ theorem wpt_driver_done {GF : BundledGFunctors} [SpikeGpreS GF]
     (hwp : ∀ [SpikeGS .hasLC GF],
       iprop(([∗map] i ↦ c ∈ m₀, cellOwn M₀.tagDefs (hlc := .hasLC) (GF := GF) i
           (.own 1) c)) ⊢
-        iprop(blockSpecsT M₀ ctl Ls (readoutPost ψ) ∗
-          wpt M₀ ctl Ls k (readoutPost ψ) e₀ (ev00 :: evs0))) :
+        iprop(blockSpecsT M₀ ctl.proc Ls emptyProcSpecT (readoutPost ψ) ∗
+          wpt M₀ ctl.proc Ls emptyProcSpecT k (readoutPost ψ) e₀ (ev00 :: evs0))) :
     DriverDoneAt p Q th₀ e₀ (ev00 :: evs0) σ₀ ψ k := by
   refine pure_soundness (PROP := IProp GF) ?_
   refine (fupd_finally_soundness .hasLC 0 ⊤ _ ?_)
@@ -370,8 +371,8 @@ theorem wpt_driver_done_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
     (hwp : ∀ [SpikeGS .hasLC GF],
       iprop(([∗map] i ↦ c ∈ m₀, cellOwn M₀.tagDefs (hlc := .hasLC) (GF := GF) i
           (.own 1) c) ∗ allocBudget B) ⊢
-        iprop(blockSpecsT M₀ ctl Ls (readoutPost ψ) ∗
-          wpt M₀ ctl Ls k (readoutPost ψ) e₀ (ev00 :: evs0))) :
+        iprop(blockSpecsT M₀ ctl.proc Ls emptyProcSpecT (readoutPost ψ) ∗
+          wpt M₀ ctl.proc Ls emptyProcSpecT k (readoutPost ψ) e₀ (ev00 :: evs0))) :
     DriverDoneAt p Q th₀ e₀ (ev00 :: evs0) σ₀ ψ k := by
   refine pure_soundness (PROP := IProp GF) ?_
   refine (fupd_finally_soundness .hasLC 0 ⊤ _ ?_)

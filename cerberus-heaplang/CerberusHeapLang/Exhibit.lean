@@ -332,7 +332,7 @@ theorem provenB {GF : BundledGFunctors} [SpikeGpreS GF] :
 /-- Vacuous block specifications at the straight-line profile (no
     label is registered), at any postcondition. -/
 theorem spike_blockSpecs [SpikeGS .hasLC GF] (Ψ : SpikeVal → EnvStack → IProp GF) :
-    ⊢ blockSpecs (GF := GF) spikeCtx spikeCtl (fun _ _ _ => iprop(False)) Ψ :=
+    ⊢ blockSpecs (GF := GF) spikeCtx none (fun _ _ _ => iprop(False)) emptyProcSpec Ψ :=
   blockSpecs_intro fun l _ _ _ _ _ hl => (spikeCtx_labels_none l hl).elim
 
 /-- The store-then-load footprint triple:
@@ -346,7 +346,7 @@ theorem provenA {GF : BundledGFunctors} [SpikeGpreS GF] :
   refine .trans ?_ ((BI.emp_sep.2.trans (BI.sep_mono
     ((spike_blockSpecs (fun w _ => iprop(∃ Q : CellMap, ⌜w.val = sevenVal ∧ Q = mA7⌝ ∗
         ([∗map] i ↦ c ∈ Q, cellOwn spikeCtx.tagDefs (hlc := .hasLC) (GF := GF) i (.own 1) c)))).trans
-      (wps_sound (ctl := spikeCtl) rfl progA spikeEnv)) .rfl)).trans
+      (wps_sound_empty (ctl := spikeCtl) rfl progA spikeEnv)) .rfl)).trans
     BI.wand_elim_left)
   rw [show (progA : CoreExpr) =
     Expr [] (Esseq (Pattern [] (CaseBase (none, BTy_unit)))
@@ -551,10 +551,10 @@ def ψX (tds : CerbTags.TagDefsMap) : value → Mem → Prop := fun v σ' =>
 /-- Exhibit (a) at the TOTAL judgment, budget 6 (store 3 + load 3),
     from the seeded cell's ownership alone. -/
 theorem progA_wpt {GF : BundledGFunctors} [SpikeGS .hasLC GF]
-    {M : MachineCtx} {ctl : Ctl} {Ls : LabelSpecT GF}
+    {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
     (ev0 : Fmap sym value) (evs : List (Fmap sym value)) :
     iprop(pointsToCell M.tagDefs (GF := GF) xPtr (.own 1) intTy bytesX) ⊢
-      wpt M ctl Ls 6 (readoutPost (ψX M.tagDefs)) progA (ev0 :: evs) := by
+      wpt M p Ls Θ 6 (readoutPost (ψX M.tagDefs)) progA (ev0 :: evs) := by
   iintro Hpt
   rw [show (progA : CoreExpr) =
     Expr [] (Esseq (Pattern [] (CaseBase (none, BTy_unit)))
@@ -627,7 +627,7 @@ theorem exhibitA_total (aids : Nat → Nat) :
         · iapply blockSpecsT_intro fun l params cont _ _ _ _ hl =>
             (spikeCtx_labels_none l hl).elim
         · ihave Hpt := bigSepA_ptx $$ Hcells
-          iapply progA_wpt (M := spikeCtx) (ctl := spikeCtl) fmapEmpty [] $$ Hpt)
+          iapply progA_wpt (M := spikeCtx) (p := none) (Θ := emptyProcSpecT) fmapEmpty [] $$ Hpt)
       aids
   exact ⟨v, σ', h1, h2⟩
 
@@ -729,11 +729,11 @@ theorem cells_to_mC [SpikeGS .hasLC GF] :
 theorem provenC {GF : BundledGFunctors} [SpikeGpreS GF] :
     ProvenTripleU GF spikeCtx spikeCtl spikeEnv progC mB (fun _ Q => Q = mC) := by
   intro instGS
-  refine bigSepB_pts.trans ((wps_exhibit_seq_stores (M := spikeCtx) (ctl := spikeCtl)
+  refine bigSepB_pts.trans ((wps_exhibit_seq_stores (M := spikeCtx) (p := none) (Θ := emptyProcSpec)
     (Ls := fun _ _ _ => iprop(False)) xPtr yPtr loc0 loc0
     empty_annotation empty_annotation NA NA BTy_unit bytesX bytesY fmapEmpty []).trans ?_)
   refine ((BI.emp_sep.2.trans (BI.sep_mono
-    ((spike_blockSpecs _).trans (wps_sound (ctl := spikeCtl) rfl progC spikeEnv)) .rfl)).trans
+    ((spike_blockSpecs _).trans (wps_sound_empty (ctl := spikeCtl) rfl progC spikeEnv)) .rfl)).trans
     BI.wand_elim_left).trans ?_
   apply wp_mono
   intro v

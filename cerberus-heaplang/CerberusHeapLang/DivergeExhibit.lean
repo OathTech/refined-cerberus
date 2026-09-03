@@ -158,8 +158,8 @@ theorem diverge_total_unprovable {GF : BundledGFunctors} [SpikeGpreS GF]
     (k : Nat)
     (hwp : ∀ [SpikeGS .hasLC GF],
       iprop(([∗map] i ↦ c ∈ m₀, cellOwn fmapEmpty (hlc := .hasLC) (GF := GF) i (.own 1) c)) ⊢
-        iprop(blockSpecsT (procCtx (dgRS ra)) (procCtl dgProcSym) Ls Ψ ∗
-          wpt (procCtx (dgRS ra)) (procCtl dgProcSym) Ls k Ψ (dgBody ra) [fmapEmpty])) :
+        iprop(blockSpecsT (procCtx (dgRS ra)) (some dgProcSym) Ls emptyProcSpecT Ψ ∗
+          wpt (procCtx (dgRS ra)) (some dgProcSym) Ls emptyProcSpecT k Ψ (dgBody ra) [fmapEmpty])) :
     False := by
   have hlbl := procCtx_labels (dgRS_labeledAt ra)
   obtain ⟨v, σ', hdone, -, -⟩ :=

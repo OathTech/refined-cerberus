@@ -434,7 +434,7 @@ omit hQ hsz hdec in
     offset `4 * i`): an ordinary CLIENT lemma, not a logic extension
     (F-04). The trap premise is `rfl` (int is not _Bool); the decode
     premise is the exhibit's per-element seeded-image fact. -/
-theorem wps_arr_elem_load {M' : MachineCtx} {ctl' : Ctl} {Ls' : LabelSpec GF}
+theorem wps_arr_elem_load {M' : MachineCtx} {p' : Option sym} {Ls' : LabelSpec GF} {Θ' : ProcSpec GF}
     {Ψ : SpikeVal → EnvStack → IProp GF}
     (loc' : CerbLocation.Loc) (ann' : core_run_annotation)
     (aty' : ctype) (id' a' : Int) (i : Nat) (mo' : memory_order)
@@ -447,7 +447,7 @@ theorem wps_arr_elem_load {M' : MachineCtx} {ctl' : Ctl} {Ls' : LabelSpec GF}
     iprop(cellOwn M'.tagDefs (GF := GF) id' dq (SpikeCell.mk a' aty' bs') ∗
       (∀ fp, cellOwn M'.tagDefs id' dq (SpikeCell.mk a' aty' bs') -∗
         Ψ (SpikeVal.annot [DA_pos [] fp] ((valueFromMemValue mv).2)) ρ)) ⊢
-      wps M' ctl' Ls' Ψ (loadExpr loc' ann' intTy
+      wps M' p' Ls' Θ' Ψ (loadExpr loc' ann' intTy
         (cellPtr id' (a' + ((4 * i : Nat) : Int))) mo') ρ :=
   wps_load_cell_at loc' ann' id' a' aty' (4 * i) intTy mo' dq bs' ρ
     hbound hdec htrap
@@ -457,8 +457,8 @@ theorem arr_body_wps (i : Nat) (f : Fmap sym value)
     (rest : List (Fmap sym value)) (hf : SymFrame f)
     (hin : i ≤ vs.length) :
     iprop(cellOwn (procCtx rs).tagDefs (GF := GF) id (.own 1) (SpikeCell.mk a aty bs)) ⊢
-      wps (procCtx rs) (procCtl p)
-        (arrLs vs id a aty bs)
+      wps (procCtx rs) (some p)
+        (arrLs vs id a aty bs) emptyProcSpec
         (arrPost vs id a aty bs)
         (arrBody loc ann ra mo xbty vs.length)
         (arrFrame (ivVal i) (ivVal ((vs.take i).sum))
@@ -531,8 +531,8 @@ theorem arr_body_wps (i : Nat) (f : Fmap sym value)
 /-- THE BLOCK SPECIFICATION. -/
 theorem arr_blockSpecs :
     ⊢ blockSpecs (GF := GF)
-      (procCtx rs) (procCtl p)
-      (arrLs vs id a aty bs) (arrPost vs id a aty bs) := by
+      (procCtx rs) (some p)
+      (arrLs vs id a aty bs) emptyProcSpec (arrPost vs id a aty bs) := by
   refine blockSpecs_intro fun l params cont args ev0 evs hl => ?_
   rw [procCtx_labels hQ] at hl
   obtain ⟨rfl, rfl⟩ := arrQ_inv loc ann ra mo ibty accbty pbty xbty
@@ -551,8 +551,8 @@ theorem arr_blockSpecs :
 /-- The whole program's statement WP from the entry env. -/
 theorem arr_wps (sbty : core_base_type) :
     iprop(cellOwn (procCtx rs).tagDefs (GF := GF) id (.own 1) (SpikeCell.mk a aty bs)) ⊢
-      wps (procCtx rs) (procCtl p)
-        (arrLs vs id a aty bs) (arrPost vs id a aty bs)
+      wps (procCtx rs) (some p)
+        (arrLs vs id a aty bs) emptyProcSpec (arrPost vs id a aty bs)
         (arrProg loc ann ra mo sbty ibty accbty pbty xbty
           (cellPtr id a) vs.length) [fmapEmpty] := by
   rw [show arrProg loc ann ra mo sbty ibty accbty pbty xbty
@@ -589,7 +589,7 @@ theorem arr_wp_readout (sbty : core_base_type) :
   refine (BI.emp_sep.2.trans (BI.sep_mono
     ((arr_blockSpecs loc ann ra mo ibty accbty pbty xbty vs id a aty bs
       p rs hQ hsz ety hdec).trans
-      (wps_sound (ctl := procCtl p) rfl (arrProg loc ann ra mo sbty ibty accbty pbty xbty
+      (wps_sound_empty (ctl := procCtl p) rfl (arrProg loc ann ra mo sbty ibty accbty pbty xbty
         (cellPtr id a) vs.length) [fmapEmpty]))
     .rfl)).trans ?_
   refine BI.wand_elim_left.trans ?_

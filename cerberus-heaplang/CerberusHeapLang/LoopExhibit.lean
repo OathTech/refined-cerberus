@@ -244,7 +244,7 @@ theorem loop_body_wps (i : Int) (f : Fmap sym value)
     (h0 : 0 ≤ i) (hin : i ≤ n) :
     iprop(((⌜i = n⌝ ∗ pointsToCell (procCtx rs).tagDefs (GF := GF) c (.own 1) intTy bs0) ∨
       (⌜i < n⌝ ∗ pointsToCell (procCtx rs).tagDefs c (.own 1) intTy (sevenBytes (procCtx rs).tagDefs)))) ⊢
-      wps (procCtx rs) (procCtl p) (loopLs c n bs0)
+      wps (procCtx rs) (some p) (loopLs c n bs0) emptyProcSpec
         (loopPost c n bs0) (loopBody loc ann ra mo bty c)
         (envAdd xSym (ivVal i) f :: rest) := by
   rw [show (loopBody loc ann ra mo bty c) =
@@ -308,8 +308,8 @@ theorem loop_body_wps (i : Int) (f : Fmap sym value)
     Löb — the back edge discharged against the invariant at `i-1`
     through the jump clause). -/
 theorem loop_blockSpecs :
-    ⊢ blockSpecs (GF := GF) (procCtx rs) (procCtl p)
-      (loopLs c n bs0) (loopPost c n bs0) := by
+    ⊢ blockSpecs (GF := GF) (procCtx rs) (some p)
+      (loopLs c n bs0) emptyProcSpec (loopPost c n bs0) := by
   refine blockSpecs_intro fun l params cont vs ev0 evs hl => ?_
   rw [procCtx_labels hQ] at hl
   obtain ⟨rfl, rfl⟩ := loopQ_inv loc ann ra mo bty xbty c hl
@@ -330,7 +330,7 @@ theorem loop_blockSpecs :
 theorem loop_wps (hn : 0 ≤ n) (sbty : core_base_type)
     (f : Fmap sym value) (hf : SymFrame f) (rest : List (Fmap sym value)) :
     pointsToCell (procCtx rs).tagDefs (GF := GF) c (.own 1) intTy bs0 ⊢
-      wps (procCtx rs) (procCtl p) (loopLs c n bs0)
+      wps (procCtx rs) (some p) (loopLs c n bs0) emptyProcSpec
         (loopPost c n bs0)
         (loopProg loc ann ra mo bty xbty sbty c n) (f :: rest) := by
   iintro Hc
@@ -386,7 +386,7 @@ theorem loop_wp_readout (hn : 0 ≤ n) (sbty : core_base_type)
   refine ((loop_wps loc ann ra mo bty xbty c n bs0 p rs hQ hn sbty f hf rest).trans ?_)
   refine (BI.emp_sep.2.trans (BI.sep_mono
     ((loop_blockSpecs loc ann ra mo bty xbty c n bs0 p rs hQ).trans
-      (wps_sound (ctl := procCtl p) rfl (loopProg loc ann ra mo bty xbty sbty c n) (f :: rest)))
+      (wps_sound_empty (ctl := procCtl p) rfl (loopProg loc ann ra mo bty xbty sbty c n) (f :: rest)))
     .rfl)).trans ?_
   refine BI.wand_elim_left.trans ?_
   exact wp_mono fun w => loop_readout_val c n bs0 w

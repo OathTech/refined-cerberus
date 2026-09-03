@@ -143,7 +143,7 @@ theorem twoField_of_cell (tds : CerbTags.TagDefsMap) (p : CerbMem.PointerValue) 
 
 section Rules
 
-variable {M : MachineCtx} {ctl : Ctl} {Ls : LabelSpec GF}
+variable {M : MachineCtx} {pr : Option sym} {Ls : LabelSpec GF} {Θ : ProcSpec GF}
 
 /-! ## The derived rules (partial stratum) -/
 
@@ -157,7 +157,7 @@ theorem twoField_load_x {Ψ : SpikeVal → EnvStack → IProp GF}
     iprop(twoField M.tagDefs (GF := GF) p xb yb ∗
       (∀ fp, twoField M.tagDefs p xb yb -∗
         Ψ (SpikeVal.annot [DA_pos [] fp] ((valueFromMemValue mv).2)) ρ)) ⊢
-      wps M ctl Ls Ψ (loadExpr loc ann fieldTy p mo) ρ := by
+      wps M pr Ls Θ Ψ (loadExpr loc ann fieldTy p mo) ρ := by
   iintro ⟨H, HΨ⟩
   icases (twoField_iff _ _ _ _).mp $$ H with ⟨%id, %a, %hp, Hx, Hy⟩
   rw [hp, show loadExpr loc ann fieldTy (cellPtr id a) mo =
@@ -188,7 +188,7 @@ theorem twoField_load_y {Ψ : SpikeVal → EnvStack → IProp GF}
     iprop(twoField M.tagDefs (GF := GF) p xb yb ∗
       (∀ fp, twoField M.tagDefs p xb yb -∗
         Ψ (SpikeVal.annot [DA_pos [] fp] ((valueFromMemValue mv).2)) ρ)) ⊢
-      wps M ctl Ls Ψ (loadExpr loc ann fieldTy (fieldYPtr M.tagDefs p) mo) ρ := by
+      wps M pr Ls Θ Ψ (loadExpr loc ann fieldTy (fieldYPtr M.tagDefs p) mo) ρ := by
   iintro ⟨H, HΨ⟩
   icases (twoField_iff _ _ _ _).mp $$ H with ⟨%id, %a, %hp, Hx, Hy⟩
   rw [hp, fieldYPtr_cellPtr]
@@ -218,7 +218,7 @@ theorem twoField_store_x {Ψ : SpikeVal → EnvStack → IProp GF}
     iprop(twoField M.tagDefs (GF := GF) p xb yb ∗
       (∀ fp, twoField M.tagDefs p (CerbMem.memValueToBytes M.tagDefs [] mv).2 yb -∗
         Ψ (SpikeVal.annot [DA_pos [] fp] Vunit) ρ)) ⊢
-      wps M ctl Ls Ψ (storeExpr loc ann fieldTy p cv mo) ρ := by
+      wps M pr Ls Θ Ψ (storeExpr loc ann fieldTy p cv mo) ρ := by
   iintro ⟨H, HΨ⟩
   icases (twoField_iff _ _ _ _).mp $$ H with ⟨%id, %a, %hp, Hx, Hy⟩
   rw [hp, show storeExpr loc ann fieldTy (cellPtr id a) cv mo =
@@ -248,7 +248,7 @@ theorem twoField_store_y {Ψ : SpikeVal → EnvStack → IProp GF}
     iprop(twoField M.tagDefs (GF := GF) p xb yb ∗
       (∀ fp, twoField M.tagDefs p xb (CerbMem.memValueToBytes M.tagDefs [] mv).2 -∗
         Ψ (SpikeVal.annot [DA_pos [] fp] Vunit) ρ)) ⊢
-      wps M ctl Ls Ψ (storeExpr loc ann fieldTy (fieldYPtr M.tagDefs p) cv mo) ρ := by
+      wps M pr Ls Θ Ψ (storeExpr loc ann fieldTy (fieldYPtr M.tagDefs p) cv mo) ρ := by
   iintro ⟨H, HΨ⟩
   icases (twoField_iff _ _ _ _).mp $$ H with ⟨%id, %a, %hp, Hx, Hy⟩
   rw [hp, fieldYPtr_cellPtr]
@@ -282,7 +282,7 @@ theorem twoField_create {Ψ : SpikeVal → EnvStack → IProp GF}
         (twoField M.tagDefs p undefField undefField ∗
           ⌜0 < addrOf p ∧ addrOf p < 2 ^ 64⌝) -∗
         Ψ (SpikeVal.pure (Vobject (OVpointer p))) ρ)) ⊢
-      wps M ctl Ls Ψ (createExpr loc ann (.IV aprov alignN) objTy pref) ρ := by
+      wps M pr Ls Θ Ψ (createExpr loc ann (.IV aprov alignN) objTy pref) ρ := by
   iintro ⟨Hcap, HΨ⟩
   iapply wps_create loc ann aprov alignN objTy pref ρ objTy_size_pos objTy_nonatomic
     (fun a => objTy_decIndep a _)
