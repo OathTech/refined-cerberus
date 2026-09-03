@@ -774,7 +774,8 @@ erased). Persisting is therefore final in both directions: `.own 1 ∗
 is why persistent live knowledge stays true forever — and
 `deadObj_allocMeta_false` says dead and live persistent knowledge of one
 id never coexist. The STATIC kill rule performs the update (K2, next
-paragraph); the dynamic `free` is K3. The bundles keep the metadata at
+paragraph); the dynamic `free` rule performs the same update over the
+region bundle (K3, "The allocation and free rules"). The bundles keep the metadata at
 a fraction rather than persistent because full metadata ownership is
 both the per-allocation exclusivity anchor the frame theorem needs
 (`metaOwn_ne` → `bigSepM_own_disjoint`) and the thing a kill consumes.
@@ -816,14 +817,88 @@ false` (`metaHeap_update`, RefinedC's `alloc_alive_kill`) followed by
 `killM` leaves the bytemap alone (`CohG.bytes` is about `σ.bytemap`)
 and addresses are never reused (`lastAddress` only descends), so the
 stale ghost bytes stay coupled (`CohG.kill`; `MemWF.kill` is the
-invariant's preservation). `hstatic`: only the static kill — the
-dynamic `free(p)` over `regionOwn` is K3, and `free` of an object is
-UB179a whenever its base is not in `dynamicAddrs` — which the engine
-does NOT guarantee for a created object (a zero-size region can push a
-created base onto `dynamicAddrs`, the K0 audit's N-1), so the logic
-takes an allocation's origin from the metadata cell's `dynamic` flag,
-never from `dynamicAddrs`. Consumers: `alloc_create_kill_wps`
-and the engine-facing `kill_launch_smoke` (AllocExhibit.lean, §6).
+invariant's preservation). `hstatic`: the static kill over the OBJECT
+bundle — the dynamic `free(p)` is the next paragraph's rule over the
+REGION bundle, and `free` of a created object is UB179a whenever its
+base is not in `dynamicAddrs` — which the engine does NOT guarantee for
+a created object (a zero-size region can push a created base onto
+`dynamicAddrs`, the K0 audit's N-1), so the logic takes an allocation's
+origin from the metadata cell's `dynamic` flag, never from
+`dynamicAddrs`. Consumers: `alloc_create_kill_wps` and the engine-facing
+`kill_launch_smoke` (AllocExhibit.lean, §6).
+
+**The allocation and free rules (kill/free arc K3).** `alloc(al, n)` —
+Core's `Alloc0`, C's `malloc` — and `free(p)` — `Kill Dynamic0` — are
+the classical cons/dispose pair. `alloc` spends the budget
+`regionCost al n = n.toNat + max al 1 − 1` (the region's RAW size —
+`allocateRegion` pads nothing and admits `n = 0`, CerbMem.lean:1538 —
+plus the alignment slack, exactly `allocCost`'s arithmetic) and
+delivers an existential fresh region pointer with the whole untyped,
+writable, DYNAMIC region at full ownership and its address bounds:
+
+```lean
+theorem wps_alloc {Ψ : SpikeVal → EnvStack → IProp GF}
+    (loc : CerbLocation.Loc) (ann : core_run_annotation)
+    (aprov sprov : CerbMem.Provenance) (alignN sizeN : Int)
+    (pref : prefix0) (ρ : EnvStack)
+    (hcost : 0 < regionCost alignN sizeN) :
+    iprop(allocBudget (GF := GF) (regionCost alignN sizeN) ∗
+      (∀ (id a : Int),
+        (regionOwn id a sizeN.toNat (.own 1) (List.replicate sizeN.toNat undefByte) ∗
+          ⌜0 < a ∧ a + (sizeN.toNat : Int) ≤ 2 ^ 64⌝) -∗
+        Ψ (SpikeVal.pure (Vobject (OVpointer (cellPtr id a)))) ρ)) ⊢
+      wps M Ls Ψ (allocExpr loc ann (.IV aprov alignN) (.IV sprov sizeN) pref) ρ
+```
+
+`free` consumes the region at full ownership and hands back the unit
+value and, at most, the persistent dead region; classically `{p ↦
+region} free(p) {emp}`:
+
+```lean
+theorem wps_free {Ψ : SpikeVal → EnvStack → IProp GF}
+    (loc : CerbLocation.Loc) (ann : core_run_annotation) (kind : kill_kind)
+    (id a : Int) (n : Nat) (bs : List CerbMem.AbsByte) (ρ : EnvStack)
+    (hdyn : is_dynamic kind = true) :
+    iprop(regionOwn (GF := GF) id a n (.own 1) bs ∗
+      (deadRegion id a n -∗ Ψ (SpikeVal.pure Vunit) ρ)) ⊢
+      wps M Ls Ψ (killExpr loc ann kind (cellPtr id a)) ρ
+```
+
+`wps_free_emp` drops the dead region; `wpt_alloc`/`wpt_free`/
+`wpt_free_emp` are the same at budget `2 ≤ k` (one step plus the bare
+value's delivery — both continuations are `mk_value_e`, no footprint
+annotation); `wps_alloc_eval`/`wpt_alloc_eval` are the alloc operand
+forms (`alloc(al, n)` at a symbol), and the free operand form is the
+kind-generic `wps_kill_eval`/`wpt_kill_eval`. Both are corollaries of
+one atomic specification each — `alloc_atomic`, `free_atomic`
+(Rules.lean) — proved against the real `allocateRegion`
+(`allocateRegion_success`) and `killM` at `isDynamic = true`
+(`killM_success_dynamic`). Three things carry the weight. (a) The
+out-of-memory arm is excluded by the SAME coupling inequality as
+`create`'s, now at every size: the cursor is positive (`MemWF.la_pos`,
+the tenth component of the invariant — both cursor writers guard
+`alignedAddr ≠ 0`), so `regionCost ≤ headroom` gives a nonzero fresh
+base even for `n = 0` (`freshBase_ne_zero_of_cost'`; the K2.5 audit's
+M-2 was exactly that this needs `0 < lastAddress` or `0 < size`). The
+premise `0 < regionCost` is what makes the budget FORCE a cursor cell —
+a zero-cost fragment (`alloc(al, 0)` at `al ≤ 1`) is the unit and
+witnesses nothing; every positive size qualifies (`regionCost_pos`).
+(b) `free`'s soundness spends "this allocation is dynamic" exactly once,
+at `killM`'s dynamic check `!st.dynamicAddrs.contains alloc.base`
+(:1573, UB179a when it fails): the region cell's `dynamic = true` is
+coupled to `a ∈ dynamicAddrs` (`MetaCoh.dynamic`, `regionOwn_facts`),
+crossed to the engine's Bool by `mem_contains_int`. The flag comes from
+the cell `alloc` minted, never from the list (the K0 audit's N-1). (c)
+The ghost steps are `create`'s and `kill`'s: mint the region cell and
+bytes, spend the budget (`CohG.alloc` re-establishes the coupling —
+`MemWF.allocateRegion` inside it); flip to dead and discard
+(`CohG.kill`, stated at any live cell since K2). What has NO rule, by
+decision (README "Scope, exactly"): the engine-accepted STATIC kill of
+a region (`kill_atomic` is over `pointsToCell`, `free_atomic` over
+`regionOwn`; the fragment admits and classifies the round), `free` of a
+created object, `free(NULL)`, and the zero-cost `alloc`. Consumers:
+`alloc_free_wps` and the engine-facing `free_launch_smoke`
+(AllocExhibit.lean, §6).
 
 **Read-only allocations.** `MetaCell.readonly` is coupled to
 `Allocation.isReadonly` (`LiveCoh.alloc`: `al.isReadonly = .IsWritable
@@ -851,14 +926,15 @@ its cell is `regionCell a n true`, and `regionOwn id a n dq bs` /
 (`regionView_split`/`_join`, the bound against the region's size, no
 layout so no `tds`), fractional (`regionOwn_fractional`), agreeing
 (`regionOwn_agree`). `regionOwn_facts` reads off the coupling exactly
-what K3's `free` needs: not dead, record present at the base with the
+what `free` needs: not dead, record present at the base with the
 region's size and `ty = none`, the bytes, and `a ∈ σ.dynamicAddrs` —
 the dynamic check `killM` makes (:1573). The flag is coupled in ONE
 direction only (`dynamic = true → base ∈ dynamicAddrs`): the K0 audit's
 N-1 scenario (a zero-size region minted at a created object's base)
 puts a created base into `dynamicAddrs`, so the converse is not an
 engine invariant, and `free` of a created object is state-dependent —
-K3's `free` rule reads dynamic-ness from the cell, never from the list.
+the `free` rule (K3) reads dynamic-ness from the cell, never from the
+list. `alloc` (K3) mints `regionOwn` at `.own 1`; `free` consumes it.
 Region loads and stores will go through the generic live-cell seams
 `loadM_live`/`storeM_live` (any optional type; the store demanding
 `readonly = false`), of which the typed `loadM_at`/`storeM_at` are the
@@ -913,7 +989,7 @@ allocation-aware launch premise `LaunchCoh tds σ m B` (Adequacy.lean)
 is `coh` (the footprint, `Coh`), `wf` (the global invariant `MemWF σ`,
 Heap.lean) and `budget` (the budget fits the cursor's headroom). `MemWF σ` is a pure
 predicate on the engine's `MemState` alone — no ghost state, no
-footprint — with nine components, each an engine fact of the concrete
+footprint — with ten components, each an engine fact of the concrete
 allocator (the section header in Heap.lean carries the `CerbMem.lean`
 cites): `live_lt`/`dead_lt` (every live or dead allocation id is below
 `nextAllocId`), `live_dead` (live and dead ids are disjoint), `disj`
@@ -921,7 +997,12 @@ cites): `live_lt`/`dead_lt` (every live or dead allocation id is below
 live base is at or above the downward cursor `lastAddress`),
 `size_nonneg` (sizes are non-negative — `allocateRegion` admits
 `malloc(0)`, so positivity is not an engine fact), `la_wf` (the cursor
-is below `2^64`), and the dynamic-address facts `dyn_lo` (every address
+is below `2^64`), `la_pos` (the cursor is POSITIVE — K3, the K2.5 range
+audit's M-2: both cursor writers set `lastAddress := alignedAddr` only
+past the `alignedAddr == 0 → out of memory` guard, and the cold start is
+`0xFFFFFFFFFFFF`; without it `headroom` clamps to 0 at `lastAddress ≤
+0` and a zero-size region would pass the budget yet be killed), and the
+dynamic-address facts `dyn_lo` (every address
 in `dynamicAddrs` is at or above the cursor) and `dyn_disj` (no dynamic
 address lies strictly inside a live allocation). The same predicate is
 a field of the state interpretation `CohG` under cursor presence
@@ -937,8 +1018,9 @@ nothing dead; no dynamic address), which is what `prodMem₀_launchCoh`
 now supplies. Preservation by the fragment's memory operations is
 proved for every active outcome — `MemWF.loadM`, `MemWF.storeM` (either
 locking mode), `MemWF.allocateObject` (any initializer), `MemWF.killM`
-(K2, both arms); preservation by `allocateRegion` is K3's one remaining
-stated obligation, proved when that operation enters the fragment. Two
+(K2, both arms), and `MemWF.allocateRegion` (K3 — the last stated
+obligation; every memory operation of the fragment now has its
+preservation theorem, so acceptance goal 3 is closed). Two
 honest qualifications.
 (i) The cursor-free launches (`MetaByteOf.cohG`, from `Coh` alone) have
 no `MemWF` premise: a non-allocating program owes nothing, and the
@@ -1290,13 +1372,18 @@ the `#print axioms` recipe are in the README, "How to build and verify".
 
 ## 7. What is deliberately out, and why
 
-- **`free` (the dynamic kill) and procedures.** The static dispose
-  rule landed in K2 (§4, "The dispose rule"); the dynamic `free(p)`
-  over `alloc`ated regions is K3 (`Frag.kill`/`Frag.kill_op` carry
-  `is_dynamic kind = false`; the mirror `Step.kill` is already generic
-  in the kind), and procedure specifications (incl. recursion) are the
-  calls arc. Their absence is structural, not hidden: `MachineCtx.SeqWF`
-  (empty call stack) is a premise wherever a general context appears.
+- **Procedures.** The static dispose rule landed in K2 and the
+  dynamic `alloc`/`free` rules in K3 (§4); procedure specifications
+  (incl. recursion) are the calls arc. Their absence is structural, not
+  hidden: `MachineCtx.SeqWF` (empty call stack) is a premise wherever a
+  general context appears.
+- **The static kill of a region, `free` of a created object,
+  `free(NULL)`, the zero-cost `alloc`.** In the fragment, mirrored and
+  classified (`complete_kill`/`complete_alloc`), covered by no rule —
+  the K2 range audit's N-2, decided at K3 (README "Scope, exactly"):
+  the rules are kind-specific over the object bundle (`kill_atomic`)
+  and the region bundle (`free_atomic`); a program that disposes
+  storage under the wrong kind is outside the logic by design.
 - **Located Core.** Every node of a fragment program carries the empty
   static annotation list (`Expr []` in every `Frag` constructor and every
   redex spelling). The engine's `step_ctx` rewrites the thread's
@@ -1342,11 +1429,6 @@ the `#print axioms` recipe are in the README, "How to build and verify".
   stated over `driveU` and labelled PROVISIONAL (§1.3) until the
   cerberus-lean fuel-exhaustion request lands; no package-side driver
   works around the opaque fuel arm.
-- **Preservation of the global memory well-formedness invariant by
-  `allocateRegion`.** The invariant itself is in (§4, `MemWF`) and
-  `killM` preserves it (`MemWF.killM`, K2, both arms); `allocateRegion`
-  is outside the fragment, and its preservation lemma is K3's one
-  remaining stated obligation (Heap.lean section header).
 - **Parametric semantics interfaces.** Not adopted: the rules are proved
   directly against `Step` and the memory state, as RefinedC proves its
   memory rules by inversion.

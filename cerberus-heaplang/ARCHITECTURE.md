@@ -116,8 +116,9 @@ classification at every fragment refusal outside the residual.
 The small axioms are proved once as atomic step specifications
 (`AtomicStep`, Rules.lean: `store_atomic`, `load_atomic`,
 `storeAt_atomic`, `loadAt_atomic`, `create_atomic`, `kill_atomic` —
-the static dispose, kill/free arc K2), each against
-`Step` and the real `storeM`/`loadM`/`allocateObject`/`killM`, and lifted by
+the static dispose, kill/free arc K2 — and `alloc_atomic`/`free_atomic`
+— dynamic allocation and free, K3), each against `Step` and the real
+`storeM`/`loadM`/`allocateObject`/`allocateRegion`/`killM`, and lifted by
 `wp_of_atomic` (raw WP), `wps_of_atomic` and `wpt_of_atomic`. `wps`
 (Wps.lean) is the partial label-context judgment, a guarded fixpoint
 over iris-lean's WP; `wpt` (Wpt.lean) is the total judgment by
@@ -292,9 +293,18 @@ PROVISIONAL label is not removed before then.
   allocation model". `MemWF.killM` — preservation by `killM`, BOTH arms
   (the dynamic `free(NULL)` no-op and the record erase) — is PROVED
   (K2, from the explicit-shape `MemWF.kill` that `CohG.kill` consumes).
-  What remains open under this goal: preservation by `allocateRegion` —
-  K3's stated obligation (Heap.lean section header), proved when the
-  region allocator enters the fragment.
+  CLOSED (K3, 2026-09-03): preservation by `allocateRegion` —
+  `MemWF.allocateRegion`, the last stated obligation — is PROVED
+  (`MemWF.alloc` at `dyn := base :: dynamicAddrs`, size `sizeN.toNat`,
+  zero admitted), and the invariant gained its tenth component `la_pos :
+  0 < lastAddress` (the K2.5 range audit's M-2: both cursor writers
+  guard `alignedAddr ≠ 0`, the cold start is `0xFFFFFFFFFFFF`), under
+  which the budget's success bound holds at EVERY size
+  (`freshBase_ne_zero_of_cost'`). Every stated obligation of goal 3 has
+  its proof; "fresh" and "dynamic" are exactly what the engine has:
+  fresh = disjoint from every live allocation of the state, dynamic =
+  the base was pushed by `allocateRegion` (coupled one-way to
+  `dynamicAddrs`, which `killM` never cleans).
   The former footprint-relative launch facts (`id_lt`, `fresh_alloc`,
   `fresh_dead`, `addr_lo`, `la_wf`; `CohG`'s `cur_dead`/`cur_alloc`/
   `cur_meta_lt`/`cur_meta_lo`) are consequences and were retired as
@@ -337,5 +347,35 @@ PROVISIONAL label is not removed before then.
   and addresses are never reused (`CohG.kill`). Consumers:
   `alloc_create_kill_wps`, `kill_launch_smoke` (AllocExhibit.lean).
   Record: `docs/2026-09-03_k2-notes.md`.
+- The kill/free arc's DYNAMIC ALLOCATION AND FREE — LANDED (K3,
+  2026-09-03): the mirror `Step.alloc`/`Step.alloc_eval` (step_action's
+  Alloc0 arm — two INTEGER operands, request `AllocRequest2 pref ival1
+  ival2`, continuation the bare `mk_value_e (Vobject (OVpointer
+  ptrval))`; the driver's `liftMem (CerbMem.allocateRegion tid1 …)`,
+  tid discarded); the dynamic kill is the existing `Step.kill`, and
+  `Frag.kill`/`Frag.kill_op` LIFT K2's `is_dynamic kind = false` (a
+  strict generalization of the fragment); `Frag.alloc`/`Frag.alloc_op`,
+  `BareHead.alloc`/`alloc_op`; the certification (`step_ctx_alloc`, the
+  `dischargeStep` AllocRequest2 arm, `ars_alloc_active`,
+  `engine_step_matchU`/`loop_step_frag` re-certified — statements
+  unchanged) and the completeness pair `complete_alloc`/`complete_alloc_op`
+  (the ONLY alloc refusal is the out-of-memory `Other (MerrOther "out of
+  memory")`, `allocateRegion_killed_inv`; ILLTYPED-at-distance-one at a
+  non-integer operand pair). THE ALLOCATION RULE `alloc_atomic`
+  (Rules.lean): `allocBudget (regionCost alignN sizeN)` — `sizeN.toNat +
+  max alignN 1 − 1`, the region's raw size, zero admitted — buys one
+  `allocateRegion` and delivers `regionOwn id a sizeN.toNat (.own 1)` at
+  unspecified bytes with `0 < a ∧ a + size ≤ 2^64`; premise `0 <
+  regionCost` (the budget must force a cursor cell; every positive size).
+  THE FREE RULE `free_atomic`: `free(cellPtr id a)` consumes `regionOwn
+  id a n (.own 1) bs` and delivers the bare unit with at most
+  `deadRegion id a n` — `killM`'s dynamic check (:1573) passed through
+  the cell's `dynamic = true` (`killM_success_dynamic`), never through
+  `dynamicAddrs`. Faces: `wps_alloc`/`wpt_alloc` (+ `_eval`),
+  `wps_free`/`wpt_free` (+ `_emp`, the textbook `{p ↦ region} free(p)
+  {emp}`; the operand form is the kind-generic `wps_kill_eval`). The
+  engine-accepted static kill of a region has NO rule (README "Scope,
+  exactly"). Consumers: `alloc_free_wps`, `free_launch_smoke`
+  (AllocExhibit.lean). Record: `docs/2026-09-03_k3-notes.md`.
 - The deferred parametric semantics interfaces: the rules are proved
   directly against `Step` and the memory state (walkthrough §7).

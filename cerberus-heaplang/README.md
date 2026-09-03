@@ -32,14 +32,16 @@ more; it is not the RefinedC port (this repository's root
 ## Scope, exactly
 
 **The fragment.** Straight-line and loop programs in single-threaded
-Core: `store`/`load`/`create` actions and the STATIC `kill`
-(`kill(static ty, p)` — C's automatic-storage dispose; kill/free arc
-K2) at evaluated operands and at the operand-evaluation form the
-engine dispatches when "the operands are not all values", the `PtrEq` memop, strong sequencing `Esseq` at the
+Core: `store`/`load`/`create`/`alloc` actions and `kill` of EITHER kind
+— `kill(static ty, p)`, C's automatic-storage dispose (kill/free arc
+K2), and `free(p)`, the dynamic kill pairing with `alloc(al, n)`
+(`Alloc0`, C's `malloc`; kill/free arc K3) — at evaluated operands and
+at the operand-evaluation form the engine dispatches when "the operands
+are not all values", the `PtrEq` memop, strong sequencing `Esseq` at the
 wildcard, `Specified`-binder and plain-symbol-binder patterns (the
 plain-symbol binder's head restricted to the bare-value producers
-`BareHead` — a literal, `create`, the `PtrEq` memop — so the value it
-binds is never annotated; fragment closure, 2026-09-02), weak
+`BareHead` — a literal, `create`, `alloc`, the `PtrEq` memop — so the
+value it binds is never annotated; fragment closure, 2026-09-02), weak
 sequencing `Ewseq` at the wildcard, `Esave` at `PePure` initializers
 within the evaluator's fuel, `Eif` at a `PePure` guard, the
 context-discarding jump `Erun` at `PePure` arguments, value-scrutinee
@@ -52,16 +54,18 @@ engine success flips the allocation's `isReadonly`, has no rule, so no
 derivation traverses one; K1 audit N-2.) The per-construct authority is the
 inductive `Frag` (Soundness.lean), the premise of every adequacy
 theorem; the generated [capability manifest](docs/CAPABILITY_MANIFEST.md)
-lists one row per `Frag` constructor with the rule covering it and the
-exhibit modules whose proofs consume that rule (20 rows).
+lists one row per (`Frag` constructor, covering rule) pair with the
+exhibit modules whose proofs consume that rule (22 constructors, 23 rule
+rows: `Frag.kill` is covered by the static dispose `wps_kill` AND the
+dynamic `wps_free`, one row each).
 
 **Pure operands are in the covered grammar and carry their own static
 fuel bound.** The engine's pure-expression evaluator is fuelled at the
 same budget as its redex search (`step_eval_pexpr`/`pull_constrained`
 draw from `lemDefaultFuel`), so every `Frag` constructor that evaluates
 a pure operand — `if_` (the guard), `run` (the jump arguments), `save`
-(the initializers), `load_op`/`memop_op`/`store_op` (the operands the
-engine evaluates before dispatching the action) — carries the static
+(the initializers), `load_op`/`memop_op`/`store_op`/`kill_op`/`alloc_op`
+(the operands the engine evaluates before dispatching the action) — carries the static
 premise `peDepth pe ≤ lemDefaultFuel` per operand, where `peDepth`
 (Soundness.lean) is the operand's syntactic depth (1 at a value or a
 symbol, `1 + max` at `PEop`/`PEarray_shift`), AND restricts its
@@ -85,8 +89,9 @@ not evaluate (below).
 
 **Every node of a fragment program carries the empty static annotation
 list.** Each `Frag` constructor, and each redex spelling it ranges over
-(`storeRedex`, `loadRedex`, `createRedex`, `loadOpRedex`,
-`storeOpRedex`, `memopRedex`, `pureRedex`, `saveRedex`, `ifRedex`,
+(`storeRedex`, `loadRedex`, `createRedex`, `killRedex`, `killOpRedex`,
+`allocRedex`, `allocOpRedex`, `loadOpRedex`, `storeOpRedex`,
+`memopRedex`, `pureRedex`, `saveRedex`, `ifRedex`,
 `runRedex`, `caseRedex`, and the `Esseq`/`Ewseq`/`Eannot` constructors),
 is stated at `Expr []`. The forcing fact: in the general arm of the
 engine's `step_ctx` (generated `Core_reduction.lean`, the
@@ -102,11 +107,32 @@ programs proved here are authored Core with empty annotation lists.
 The mover is to make `current_loc` live state, part of the runtime
 tuple as the environment is.
 
-**Deliberately not here.** The DYNAMIC kill `free(p)` (`Kill
-Dynamic0`, which pairs with `Alloc0`/malloc — K3; the static kill is
-here since K2: `Frag.kill`/`Frag.kill_op` carry `is_dynamic kind =
-false`, and the mirror `Step.kill` is already generic in the kind);
-procedures (no call
+**In the fragment, mirrored and classified, but covered by NO rule
+(kill/free arc K3, the K2 range audit's N-2, decided).** (i) The STATIC
+kill of a live `alloc`ated REGION — `kill(static ty, p)` at a region's
+base. The engine ACCEPTS it (`killM` short-circuits the dynamic check at
+`isDynamic = false`, CerbMem.lean:1573), `Frag.kill` admits it (since K3
+it carries no kind premise), `Step.kill` mirrors it and `complete_kill`
+classifies its round; but the static dispose rule `kill_atomic` is stated
+over the OBJECT bundle `pointsToCell` (a created, typed cell) and the
+free rule `free_atomic` over the REGION bundle `regionOwn` (a dynamic,
+untyped cell), so no rule applies. A program that static-kills a region
+— C's freeing malloc'd storage as if it were automatic — is OUTSIDE the
+logic by design; we do not prove such programs. Symmetrically `free(p)`
+of a CREATED object has no rule: the engine kills it (UB179a) unless the
+base happens to sit in `dynamicAddrs` (the K0 audit's N-1 scenario), and
+the logic takes an allocation's origin from the metadata cell, never
+from that list. (ii) `alloc(al, 0)` at alignment `al ≤ 1` — a zero-COST
+request (`regionCost al 0 = max al 1 − 1 = 0`): the budget fragment
+`allocBudget 0` is the unit and cannot witness a cursor cell, so
+`alloc_atomic` carries `0 < regionCost alignN sizeN` (every positive
+size satisfies it, `regionCost_pos`; so does size 0 at `al ≥ 2`). The
+round is classified (`complete_alloc`: the step, or the out-of-memory
+kill), never assumed. (iii) `free(NULL)` — the engine's dynamic no-op
+(CerbMem.lean:1562): in `Frag.kill` and mirrored by `Step.kill`, no rule
+(nothing is consumed or produced; a client has no reason to write it).
+
+**Deliberately not here.** Procedures (no call
 rule, no return; every program is one `main` body with registered
 labels, and `MachineCtx.SeqWF` — empty call stack, startup thread — is
 a premise of every adequacy theorem at a general context, discharged at
@@ -265,6 +291,7 @@ statement carries a fuel hypothesis.
 | `struct_wps_views`, `cell_read_shared_wps`, `struct_x_read_persist_wps`, `struct_create_store_wps` (StructExhibit.lean) | the view/fraction/persistence laws as clients; allocate-then-initialize from `allocBudget` alone (Iris-level triples) | — (Iris) | all: `{hlc GF} [SpikeGS hlc GF] {M Ls} loc ann`; `_views`: `mo mo' bty id a b0 b1 b2 b3`, the three field lengths, `ev0 evs`; `cell_read_shared`: `pv mo bs bs' ρ`, `htrap`; `_x_read_persist`: `mo id a q dqb ρ`; `_create_store`: `aprov alignN pref mo pbty vbty ev0 evs`, `SymFrame ev0`, `∀ x, resolveExtern M.extern x = x` |
 | `struct_create_store_adequacy`, `struct_create_store_adequacy_prodMem₀` (StructExhibit.lean) | allocate-then-initialize as `MemTripleU_alloc spikeCtx spikeEnv prog ∅ [⟨8, structTy⟩] ψ`, an instance of `project_triple_pure_alloc`; `_prodMem₀` fixes the memory to the production cold start | `driveU spikeCtx` — PROVISIONAL | `{GF} [SpikeGpreS GF]`, `loc ann pref mo pbty vbty`; `_prodMem₀` adds `n aids` |
 | `alloc_two_creates_wps`, `alloc_create_wpt`, `alloc_create_launch_smoke` (AllocExhibit.lean) | the allocation rules' local consumers; a bare `create` from the cold-start memory delivers a pointer at drive length 2 | `driveU spikeCtx` — PROVISIONAL | `_wps`: `{hlc GF} [SpikeGS hlc GF] {M Ls} al₁ al₂ pref₁ pref₂ bty ev0 evs`; `_wpt`: `{hlc GF} [SpikeGS hlc GF] {M Ls} al pref ρ`; `_launch_smoke`: `pref aids` |
+| `alloc_free_wps`, `free_launch_smoke` (AllocExhibit.lean; kill/free arc K3) | allocate a REGION then FREE it: `lets p = alloc(al, n) in free(p)` through the public `wps_alloc`/`wps_kill_eval`/`wps_free` delivers the unit value, the persistent dead region `deadRegion` of some id/base and the spent budget `regionCost al n`; from the cold-start memory `lets p = alloc(4, 8) in free(p)` driven through `wpt_engine_boundU_alloc` delivers `Vunit` at drive length exactly 5 with SOME id in `σ'.deadAllocations` and its record erased — `killM`'s effect on the tables, read off `deadRegion_dead` | `driveU spikeCtx` — PROVISIONAL | `_wps`: `{hlc GF} [SpikeGS hlc GF] {M Ls} hex al n pref hcost ev0 evs hf`; `_launch_smoke`: `pref aids` |
 | `alloc_create_kill_wps`, `kill_launch_smoke` (AllocExhibit.lean; kill/free arc K2) | allocate then DISPOSE: `lets p = create(al, int) in kill(static int, p)` through the public `wps_create`/`wps_kill_eval`/`wps_kill` delivers the unit value, the persistent dead cell `deadObj` of some id/base and the spent capacity; from the cold-start memory the same program driven through `wpt_engine_boundU_alloc` delivers `Vunit` at drive length exactly 5 with SOME id in `σ'.deadAllocations` and its record erased — `killM`'s effect on the tables, read off `deadObj_dead` | `driveU spikeCtx` — PROVISIONAL | `_wps`: `{hlc GF} [SpikeGS hlc GF] {M Ls} hex al pref ev0 evs hf`; `_launch_smoke`: `pref aids` |
 | `list_reverse_certified`, `list_reverse_demo`, `list_reverse_certified_total` (ListRevExhibit.lean) | in-place reversal of a seeded chain next to an arbitrary disjoint frame — same allocation ids in reversed order, footprint equality on the maps, frame verbatim, at every drive length; total at `13 * ns.length + 7`; the demo fixes a 3-node chain | `driveU (procCtx …)` — PROVISIONAL | `loc ann ra mo pbty cbty bbty nbty ubty sbty`, `ns head m₀`, `hseed : SeedChain m₀ head ns`, `R`, `hR : m₀ ##ₘ R`, `σ₀`, `hcoh : Sat fmapEmpty σ₀ (m₀ ∪ R)`; `_certified` adds `nsteps aids`, `_total` adds `aids`; `_demo` replaces `ns head m₀ hseed` by the 3-node constants |
 | `tree_rotate_certified`, `tree_rotate_certified_total` (TreeRotExhibit.lean) | binary-tree right rotation at the same statement shape; total at drive length 19 | `driveU spikeCtx` — PROVISIONAL | `loc ann mo xbty ybty bbty ubty`, `idx idy vx vy ta tb tc px m₀`, `hseed : SeedTree m₀ px (.node idx vx (.node idy vy ta tb) tc)`, `R`, `hR`, `σ₀`, `hcoh`; `_certified` adds `sbty`, `n aids`; `_total` adds `aids` |
@@ -428,9 +455,9 @@ theorems:
 | The tag-definition environment is an explicit parameter of the heap predicates (`pointsToCell tds …`, `M.tagDefs`); the demos state footprints at `fmapEmpty` | by design: a program-wide constant of the language instance | `Heap.lean` header |
 | Memory orders accepted arbitrarily (`Step.store`/`wp_store` at any `memory_order`) | mirror-true: the sequential driver drops `mo` (`action_request_sequential2`) | `Step.lean` |
 | Mirror completeness holds on the DECLARED FRAGMENT up to a two-arm RESIDUAL (`OpenRound`, Round.lean; `frag_round_complete`; fragment closure 2026-09-02): `eval_uncovered` — an operand in the covered grammar CONTAINING A LEAF the engine's evaluator accepts where the mirror evaluator does not evaluate (a symbol unbound in the environment but naming a `Proc` of the file; one of the eight mirrored binops at two floating-point operands; `OpEq` at two ctypes — environment/file-dependent, the offending operand carried as witness, `evalClass … = .uncovered`); the classifier answers `.uncovered` at the FIRST such leaf and carries NO engine claim about the whole operand, so the arm's whole-operand outcome is NOT characterized — the engine may succeed, KILL on a later type error (`f + 1` with `f` a `Proc`-named unbound symbol is `PePure`, classified `.uncovered`, killed by the engine as `Illformed_program … ill-typed PEop` — 2026-09-03 audit, by execution) or PANIC (a float guard under `Eif`): every operand the classifier REJECTS is a proved engine KILL, operands it leaves UNCOVERED are not characterized, the residual is a SUPERSET of the engine-accepted shapes; and `run_surplus` — a jump with more arguments than the registered label's parameters whose zipped arguments evaluate and whose surplus does not (label-map-dependent). Everywhere else a mirror-stuck fragment configuration is an engine refusal in the engine's vocabulary (`ShippedRefusal`: ILLTYPED `[Step_error2 msg]`; ILLTYPED AT DISTANCE ONE — a successful round into the ill-typed load/store the engine reports on next; KILL `NDkilled r` from the shipped `advance_step`, memory kills through `liftMem` and pure-evaluator kills `Other (DErr_core_run err)` through `liftCore_run`; FORK ≥ 2 `CerbND.runND` executions; PANIC the engine's own `failwithI`, incl. the no-current-procedure lookup key). The former gaps (a) LETS-ANNOT at the symbol binder and (c) the operand grammar were closed by NARROWING `Frag` (`BareHead`, `PePure` everywhere) — fail-closed, per the ruling | the residual is not removable by a syntactic narrowing; the mover for `eval_uncovered`'s characterization is `evalClass` computing the engine's value at the three leaf shapes (reserving `.uncovered` for the leaf itself, the downstream rejections under the KILL bridge); a complete mirror evaluator (`M.file` threaded into `evalPexpr`, the float/ctype arms) would move `eval_uncovered` into `Step`; a prefix-evaluating `Step.run` would move `run_surplus` | `Round.lean` (`OpenRound`), `EvalClass.lean`; `ARCHITECTURE.md` §2, §7; `docs/2026-09-02_fragment-closure-notes.md` |
-| The global memory well-formedness invariant `MemWF` (Heap.lean) is in the state interpretation (`CohG.wf`) and the launch premise (`LaunchCoh.wf`): allocation-id discipline, live/dead consistency, pairwise range disjointness of ALL live allocations, cursor bounds, and the dynamic-address facts — each an engine fact cited in the section header; fresh = disjoint from EVERY live allocation of the state (`create_fresh_global`), not only from the tracked footprint; the cold-start state satisfies it (`prodMem₀_memWF`); `loadM`/`storeM`/`allocateObject`/`killM` preserve it (`MemWF.loadM`/`MemWF.storeM`/`MemWF.allocateObject`/`MemWF.killM`). Two honest qualifications: (i) it is carried under cursor PRESENCE — the cursor-free launches (`MetaByteOf.cohG`, from `Coh` alone) have no `MemWF` premise, so non-allocating programs owe nothing and the non-allocating exports' texts are unchanged; (ii) the dynamic-address component is what the engine maintains (`dyn_lo`, `dyn_disj`), NOT "every dynamic address is a live base" — `killM` never removes an address from `dynamicAddrs` (CerbMem.lean:1576-1578) | `allocateRegion` preservation is K3's one remaining stated obligation (Heap.lean section header; `MemWF.killM` is proved and pinned since K2); the alive/read-only/dynamic metadata landed (K1); the static kill rule landed (K2); the dynamic kill (K3) follows | `Heap.lean` (section "The global memory well-formedness invariant"), `Adequacy.lean` (`LaunchCoh` section); walkthrough §4 |
+| The global memory well-formedness invariant `MemWF` (Heap.lean) is in the state interpretation (`CohG.wf`) and the launch premise (`LaunchCoh.wf`): allocation-id discipline, live/dead consistency, pairwise range disjointness of ALL live allocations, cursor bounds, and the dynamic-address facts — each an engine fact cited in the section header; fresh = disjoint from EVERY live allocation of the state (`create_fresh_global`), not only from the tracked footprint; the cold-start state satisfies it (`prodMem₀_memWF`); `loadM`/`storeM`/`allocateObject`/`killM` preserve it (`MemWF.loadM`/`MemWF.storeM`/`MemWF.allocateObject`/`MemWF.killM`). Two honest qualifications: (i) it is carried under cursor PRESENCE — the cursor-free launches (`MetaByteOf.cohG`, from `Coh` alone) have no `MemWF` premise, so non-allocating programs owe nothing and the non-allocating exports' texts are unchanged; (ii) the dynamic-address component is what the engine maintains (`dyn_lo`, `dyn_disj`), NOT "every dynamic address is a live base" — `killM` never removes an address from `dynamicAddrs` (CerbMem.lean:1576-1578) | CLOSED at K3: `MemWF.allocateRegion` is proved and pinned — every memory operation of the fragment (`loadM`/`storeM`/`allocateObject`/`allocateRegion`/`killM`) has its preservation theorem; K3 also added the engine invariant `la_pos : 0 < lastAddress` (both cursor writers guard `alignedAddr ≠ 0`; the K2.5 range audit's M-2), which is what prices a zero-size region correctly | `Heap.lean` (section "The global memory well-formedness invariant"), `Adequacy.lean` (`LaunchCoh` section); walkthrough §4 |
 | Arrays are one allocation, not a ∗ of per-element cells: the engine bounds-checks against the pointer's provenance allocation and `arrayShiftPtrval` preserves provenance | forcing fact about Cerberus; per-element structure lives in the invariant + decode premises | `ArrayExhibit.lean` |
-| Allocation metadata at a fraction as the exclusivity anchor AND the liveness token: the cell carries `alive` (RefinedC's `al_alive` and `freeable` collapsed into one cell — Cerberus erases the record on kill, so persistent-past-death metadata has no referent); the STATIC kill rule flips it (K2: `kill_atomic`/`wps_kill`/`wpt_kill` consume `pointsToCell … (.own 1)` and hand back at most `deadObj`; `wps_kill_emp`/`wpt_kill_emp` are the textbook `{p ↦ -} kill(p) {emp}`); the byte fragments are dropped, sound because `killM` leaves the bytemap alone and addresses are never reused (`CohG.kill`) | the dynamic kill (`free` over `regionOwn`, K3) is the same ghost update | `Heap.lean` header, "THE THREE ALLOCATION FACTS"; Rules.lean `kill_atomic` |
+| Allocation metadata at a fraction as the exclusivity anchor AND the liveness token: the cell carries `alive` (RefinedC's `al_alive` and `freeable` collapsed into one cell — Cerberus erases the record on kill, so persistent-past-death metadata has no referent); the STATIC kill rule flips it (K2: `kill_atomic`/`wps_kill`/`wpt_kill` consume `pointsToCell … (.own 1)` and hand back at most `deadObj`; `wps_kill_emp`/`wpt_kill_emp` are the textbook `{p ↦ -} kill(p) {emp}`); the byte fragments are dropped, sound because `killM` leaves the bytemap alone and addresses are never reused (`CohG.kill`) | LANDED at K3: the dynamic kill `free_atomic`/`wps_free`/`wpt_free` over `regionOwn … (.own 1)` is the same ghost update, handing back at most `deadRegion`; the dynamic check `killM` makes (:1573) is passed through the cell's `dynamic` flag (`killM_success_dynamic`), never through `dynamicAddrs` | `Heap.lean` header, "THE THREE ALLOCATION FACTS"; Rules.lean `kill_atomic` |
 | Allocation capacity is the ∗-SPLITTABLE BUDGET `allocBudget n` (K2.5): `allocBudget (a + b) ⊣⊢ allocBudget a ∗ allocBudget b`, one `create` of `ty` at alignment `al` spends `allocCost = sizeof ty + max(al, 1) − 1` — the engine's worst-case cursor descent, so the bound is CONSERVATIVE by up to `align − 1` bytes per allocation (an ordered plan could fit where the summed costs do not; the exact descent depends on the cursor's residue modulo the alignment, i.e. on the request order). RefinedC has no capacity resource at all (Caesium never refuses an allocation) | the exact order-dependent descent is not expressible order-free; the slack is the price of the classical additive shape and is irrelevant at realistic cursors (the cold-start headroom is `2^48 − 9`) | `Heap.lean` ("The allocation budget"); walkthrough §4; `docs/2026-09-03_k2.5-notes.md` |
 | Read-only allocations ARE describable (K1): `MetaCell.readonly` is coupled to `Allocation.isReadonly`; `readonlyCell tds pv dq ty bs` is the read-only points-to, with `load_atomic_readonly` (loads) and NO store rule — the engine kills a store to a read-only allocation with `MerrWriteOnReadOnly kind` (`storeM_readonly_kills`, CerbMem.lean:1724-1725), stated as a fact, not absorbed. Honest qualification: no rule of this fragment MINTS a `readonlyCell` — `create` is `allocateObject … none none` (writable, :1490-1492) and the launch footprint pins `.IsWritable` | a `create_readonly`/string-literal rule (spec addition) when those constructs join the fragment | `Heap.lean` (section "The K1 bundles"), `Rules.lean` (`load_atomic_readonly`) |
 | The `Frag.case_value` premise `hbsz` (the selected branch's `esize` is bounded by the case node's) is carried, not proved. The equation whose proof would discharge it is `esize (subst_sym_expr x v e) = esize e` (with its mutual twin for `esizeAlts`): `esize` inspects only expression constructors and `subst_sym_expr` substitutes only into pure expressions. The obstacle: the engine's `subst_sym_expr` is `subst_sym_expr_lemFuel lemDefaultFuel`, a fuel-indexed recursion over the whole generated Core AST, so the proof is a fuel-indexed induction over that mutual recursion (`generic_expr`/`generic_pexpr`/patterns) — measured, not attempted. `rfl` for authored programs | that induction | `Soundness.lean` (`Frag.case_value`), `CaseExhibit.lean` header |
