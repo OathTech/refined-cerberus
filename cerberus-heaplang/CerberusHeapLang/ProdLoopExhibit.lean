@@ -91,7 +91,7 @@ theorem fib_certified_production (sup : Nat) (ra : core_run_annotation) (n : Int
   have h := prod_run_eqJ sup (fibProg ra n sbty ibty abty bbty) hQprod
     (fun v _ => v = ivVal (fibSpec n.toNat)) (2 * n.toNat + 4)
     (wpt_driver_done (GF := SpikeGF)
-      (M₀ := procCtx mainSym ((initial_core_run_state sup
+      (M₀ := procCtx ((initial_core_run_state sup
         (collect_labeled_continuations_NEW
           (prodFile (fibProg ra n sbty ibty abty bbty)))).1))
       rfl rfl (procCtx_labels hQprod) rfl rfl
@@ -395,9 +395,9 @@ theorem ctr_body_wpt (i : Int) (pptr : CerbMem.PointerValue)
     (bs : List CerbMem.AbsByte) (f : Fmap sym value)
     (rest : List (Fmap sym value)) (hf : SymFrame f)
     (h0 : 0 ≤ i) (hin : i ≤ n)
-    (hbs : (i = n ∧ bs = (intUndefBytes fmapEmpty)) ∨ (i < n ∧ bs = (sevenBytes (procCtx p rs).tagDefs))) :
-    iprop(pointsToCell (procCtx p rs).tagDefs (GF := GF) pptr (.own 1) intTy bs) ⊢
-      wpt (procCtx p rs) (ctrLsT n) (ctrCost i.toNat)
+    (hbs : (i = n ∧ bs = (intUndefBytes fmapEmpty)) ∨ (i < n ∧ bs = (sevenBytes (procCtx rs).tagDefs))) :
+    iprop(pointsToCell (procCtx rs).tagDefs (GF := GF) pptr (.own 1) intTy bs) ⊢
+      wpt (procCtx rs) (procCtl p) (ctrLsT n) (ctrCost i.toNat)
         (readoutPost (ψC n)) (ctrBody ra mo bty)
         (ctrFrame (ivVal i) (ptrVal pptr) f :: rest) := by
   rw [show ctrBody ra mo bty =
@@ -437,7 +437,7 @@ theorem ctr_body_wpt (i : Int) (pptr : CerbMem.PointerValue)
       (by rw [procCtx_extern]
           exact ctr_backedge_args_eval hf rest i (ptrVal pptr))
       (Nat.le_refl _)
-    iexists (i - 1), pptr, (CerbMem.memValueToBytes (procCtx p rs).tagDefs [] sevenMval).2,
+    iexists (i - 1), pptr, (CerbMem.memValueToBytes (procCtx rs).tagDefs [] sevenMval).2,
       (ctrFrame (ivVal i) (ptrVal pptr) f), rest
     isplit
     · ipureintro
@@ -454,15 +454,15 @@ theorem ctr_body_wpt (i : Int) (pptr : CerbMem.PointerValue)
       (by rw [procCtx_extern, ctr_guard_eval hf rest 0 (ptrVal pptr),
         decide_eq_false hpos]; rfl)
     iapply wpt_ofVal (.pure Vunit) _ (by simp [deliveryCost])
-    icases (pointsToCell_cellOwn_iff (procCtx p rs).tagDefs _ _ _ _).mp $$ Hpt
+    icases (pointsToCell_cellOwn_iff (procCtx rs).tagDefs _ _ _ _).mp $$ Hpt
       with ⟨%id, %a, %hpv, Hcell⟩
     iintro %σ' %ns %κs %nt Hσ
     icases (stateInterp_iff σ' ns κs nt).mp $$ Hσ
       with ⟨%mm, %mb, %mk, %HG, Hmi, Hbi, Hki⟩
-    ihave %Hcc : ⌜CellCoh (procCtx p rs).tagDefs σ' id ⟨a, intTy, bs⟩ ∧
-        Iris.Std.PartialMap.get? mm id = some (metaOf (procCtx p rs).tagDefs
+    ihave %Hcc : ⌜CellCoh (procCtx rs).tagDefs σ' id ⟨a, intTy, bs⟩ ∧
+        Iris.Std.PartialMap.get? mm id = some (metaOf (procCtx rs).tagDefs
           (⟨a, intTy, bs⟩ : SpikeCell))⌝ $$ [Hmi Hbi Hcell]
-    · iapply cellOwn_cellCoh (procCtx p rs).tagDefs HG id (.own 1) ⟨a, intTy, bs⟩
+    · iapply cellOwn_cellCoh (procCtx rs).tagDefs HG id (.own 1) ⟨a, intTy, bs⟩
         $$ [$Hmi $Hbi $Hcell]
     iapply fupd_mask_intro_discard Std.LawfulSet.empty_subset
     ipureintro
@@ -473,7 +473,7 @@ theorem ctr_body_wpt (i : Int) (pptr : CerbMem.PointerValue)
 
 /-- THE TOTAL BLOCK SPECIFICATION for the production counter loop. -/
 theorem ctr_blockSpecsT :
-    ⊢ blockSpecsT (GF := GF) (procCtx p rs) (ctrLsT n)
+    ⊢ blockSpecsT (GF := GF) (procCtx rs) (procCtl p) (ctrLsT n)
       (readoutPost (ψC n)) := by
   refine blockSpecsT_intro fun l params cont vs ev0 evs m hl => ?_
   rw [procCtx_labels hQ] at hl
@@ -497,8 +497,8 @@ theorem ctr_blockSpecsT :
 theorem ctrProd_wpt (sbty : core_base_type) (hn : 0 ≤ n)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value))
     (hf : SymFrame ev0) :
-    iprop(allocBudget (GF := GF) (allocCost (procCtx p rs).tagDefs intTy 4)) ⊢
-      wpt (procCtx p rs) (ctrLsT n)
+    iprop(allocBudget (GF := GF) (allocCost (procCtx rs).tagDefs intTy 4)) ⊢
+      wpt (procCtx rs) (procCtl p) (ctrLsT n)
         (2 + (ctrCost n.toNat + saveEntryCost (ctrParams xbty cbty n)))
         (readoutPost (ψC n))
         (counterProdProg ra mo bty xbty cbty sbty n) (ev0 :: evs) := by
@@ -639,9 +639,10 @@ theorem counter_loop_certified_production (sup : Nat) (ra : core_run_annotation)
   have hQprod := ctrProd_labeledAt sup ra mo bty xbty cbty sbty n
   have hQf : ∀ (l : sym) (params : List (sym × core_base_type))
       (cont : CoreExpr),
-      lookupLabel (procCtx mainSym ((initial_core_run_state sup
+      lookupLabel ((procCtx ((initial_core_run_state sup
         (collect_labeled_continuations_NEW
-          (prodFile (counterProdProg ra mo bty xbty cbty sbty n)))).1)).labels
+          (prodFile (counterProdProg ra mo bty xbty cbty sbty n)))).1)).labelsAt
+          (procCtl mainSym).proc)
         l = some (params, cont) → Frag cont := by
     intro l params cont hl
     rw [procCtx_labels hQprod] at hl
@@ -651,7 +652,7 @@ theorem counter_loop_certified_production (sup : Nat) (ra : core_run_annotation)
     prod_run_eqJ sup (counterProdProg ra mo bty xbty cbty sbty n) hQprod
       (ψC n) (2 + (ctrCost n.toNat + saveEntryCost (ctrParams xbty cbty n)))
       (wpt_driver_done_alloc (GF := SpikeGF)
-        (M₀ := procCtx mainSym ((initial_core_run_state sup
+        (M₀ := procCtx ((initial_core_run_state sup
           (collect_labeled_continuations_NEW
             (prodFile (counterProdProg ra mo bty xbty cbty sbty n)))).1))
         rfl rfl (procCtx_labels hQprod) rfl rfl hQf
@@ -992,7 +993,7 @@ include hQ
     unpacked ids, transported into the wrapped label spec by
     `wpt_mono_Ls` and into the production readout by `wpt_mono`. -/
 theorem lrProd_blockSpecsT :
-    ⊢ blockSpecsT (GF := GF) (procCtx p rs) lrProdLsT
+    ⊢ blockSpecsT (GF := GF) (procCtx rs) (procCtl p) lrProdLsT
       (readoutPost ψL) := by
   refine blockSpecsT_intro fun l params cont vs ev0 evs m hl => ?_
   rw [procCtx_labels hQ] at hl
@@ -1039,8 +1040,8 @@ theorem lrProd_wpt (bty sbty : core_base_type)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value))
     (hf : SymFrame ev0) :
     iprop(allocBudget (GF := GF)
-        (allocCost (procCtx p rs).tagDefs nodeTy 8 + allocCost (procCtx p rs).tagDefs nodeTy 8)) ⊢
-      wpt (procCtx p rs) lrProdLsT
+        (allocCost (procCtx rs).tagDefs nodeTy 8 + allocCost (procCtx rs).tagDefs nodeTy 8)) ⊢
+      wpt (procCtx rs) (procCtl p) lrProdLsT
         (2 + (2 + ((3 + 1) + ((3 + 1) + ((3 + 1) + ((3 + 1) +
           (lrCost 2 + saveEntryCost (lrProdParams pbty cbty))))))))
         (readoutPost ψL)
@@ -1098,9 +1099,9 @@ theorem lrProd_wpt (bty sbty : core_base_type)
   rw [show envAdd lrN2Sym (Vobject (OVpointer p₂))
       (envAdd lrN1Sym (Vobject (OVpointer p₁)) ev0) =
     lrPFrame (ptrVal p₁) (ptrVal p₂) ev0 from rfl]
-  icases (pointsToCell_cellOwn_iff (procCtx p rs).tagDefs _ _ _ _).mp $$ Hpt₁
+  icases (pointsToCell_cellOwn_iff (procCtx rs).tagDefs _ _ _ _).mp $$ Hpt₁
     with ⟨%i₁, %a₁, %hpv₁, Hcell₁⟩
-  icases (pointsToCell_cellOwn_iff (procCtx p rs).tagDefs _ _ _ _).mp $$ Hpt₂
+  icases (pointsToCell_cellOwn_iff (procCtx rs).tagDefs _ _ _ _).mp $$ Hpt₂
     with ⟨%i₂, %a₂, %hpv₂, Hcell₂⟩
   subst hpv₁
   subst hpv₂
@@ -1120,8 +1121,8 @@ theorem lrProd_wpt (bty sbty : core_base_type)
     rw [show a₁ + ((0 : Nat) : Int) = a₁ from by omega]]
   iapply wpt_store_cell_at (mv := longMval 1) loc0 empty_annotation i₁
     a₁ nodeTy 0 longTy (longVal 1) mo nodeUndefBytes _ (Nat.le_refl 3) rfl
-    (by rw [show CerbMem.sizeofCtype (procCtx p rs).tagDefs longTy = 8 from rfl,
-      show CerbMem.sizeofCtype (procCtx p rs).tagDefs nodeTy = 16 from rfl]; omega)
+    (by rw [show CerbMem.sizeofCtype (procCtx rs).tagDefs longTy = 8 from rfl,
+      show CerbMem.sizeofCtype (procCtx rs).tagDefs nodeTy = 16 from rfl]; omega)
     ⟨rfl, fun _ => rfl, fun _ => rfl, rfl⟩
     (fun lum fpm => nodeTy_dec_indep lum fpm a₁ _)
   isplitl [Hcell₁]
@@ -1140,7 +1141,7 @@ theorem lrProd_wpt (bty sbty : core_base_type)
   iapply wpt_store_node_field loc0 empty_annotation i₁ a₁ 8
     (ptrVal (cellPtr i₂ a₂)) mo _ _ (Nat.le_refl 3)
     (node_ptr_encodes (cellPtr i₂ a₂))
-    (by rw [show CerbMem.sizeofCtype (procCtx p rs).tagDefs nodeTy = 16 from rfl]; omega)
+    (by rw [show CerbMem.sizeofCtype (procCtx rs).tagDefs nodeTy = 16 from rfl]; omega)
     (by rw [node_ptr_img_cell]; exact ptrImg_cell_length i₂ a₂)
     (node_ptr_compat (cellPtr i₂ a₂)) (node_ptr_fpm_cell i₂ a₂)
     (node_ptr_bytes_cell i₂ a₂)
@@ -1161,8 +1162,8 @@ theorem lrProd_wpt (bty sbty : core_base_type)
     rw [show a₂ + ((0 : Nat) : Int) = a₂ from by omega]]
   iapply wpt_store_cell_at (mv := longMval 2) loc0 empty_annotation i₂
     a₂ nodeTy 0 longTy (longVal 2) mo nodeUndefBytes _ (Nat.le_refl 3) rfl
-    (by rw [show CerbMem.sizeofCtype (procCtx p rs).tagDefs longTy = 8 from rfl,
-      show CerbMem.sizeofCtype (procCtx p rs).tagDefs nodeTy = 16 from rfl]; omega)
+    (by rw [show CerbMem.sizeofCtype (procCtx rs).tagDefs longTy = 8 from rfl,
+      show CerbMem.sizeofCtype (procCtx rs).tagDefs nodeTy = 16 from rfl]; omega)
     ⟨rfl, fun _ => rfl, fun _ => rfl, rfl⟩
     (fun lum fpm => nodeTy_dec_indep lum fpm a₂ _)
   isplitl [Hcell₂]
@@ -1180,7 +1181,7 @@ theorem lrProd_wpt (bty sbty : core_base_type)
   iapply wpt_store_node_field loc0 empty_annotation i₂ a₂ 8
     nullVal mo _ _ (Nat.le_refl 3)
     (node_ptr_encodes nullNode)
-    (by rw [show CerbMem.sizeofCtype (procCtx p rs).tagDefs nodeTy = 16 from rfl]; omega)
+    (by rw [show CerbMem.sizeofCtype (procCtx rs).tagDefs nodeTy = 16 from rfl]; omega)
     (by rw [node_ptr_img_null]; exact ptrImg_null_length)
     (node_ptr_compat nullNode) (fun _ => rfl) (fun _ => rfl)
   isplitl [Hcell₂]
@@ -1239,7 +1240,7 @@ theorem lrProd_wpt (bty sbty : core_base_type)
     iapply (BigSepM.bigSepM_empty_intro
       (P := (BIBase.emp : IProp GF))
       (Φ := fun (i : Int) (c : SpikeCell) =>
-        cellOwn (procCtx p rs).tagDefs (hlc := .hasLC) (GF := GF) i (.own 1) c))
+        cellOwn (procCtx rs).tagDefs (hlc := .hasLC) (GF := GF) i (.own 1) c))
     itrivial
 
 end LrProdIris
@@ -1457,7 +1458,7 @@ theorem list_reverse_certified_production (sup : Nat) (ra : core_run_annotation)
       (2 + (2 + ((3 + 1) + ((3 + 1) + ((3 + 1) + ((3 + 1) +
         (lrCost 2 + saveEntryCost (lrProdParams pbty cbty))))))))
       (wpt_driver_done_alloc (GF := SpikeGF)
-        (M₀ := procCtx mainSym ((initial_core_run_state sup
+        (M₀ := procCtx ((initial_core_run_state sup
           (collect_labeled_continuations_NEW
             (prodFile (lrProdProg ra mo bty sbty pbty cbty bbty nbty
               ubty)))).1))

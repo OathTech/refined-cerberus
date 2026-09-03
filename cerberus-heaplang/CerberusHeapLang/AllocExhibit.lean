@@ -107,12 +107,12 @@ variable {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
     The budget is SPLIT across ∗ (`allocBudget_split`) and each create
     spends its own share — the classical additive capacity; the former
     plan `[⟨al₁,int⟩, ⟨al₂,int⟩]` had to be consumed head-first. -/
-theorem alloc_two_creates_wps {M : MachineCtx} {Ls : LabelSpec GF}
+theorem alloc_two_creates_wps {M : MachineCtx} {ctl : Ctl} {Ls : LabelSpec GF}
     (al₁ al₂ : Int) (pref₁ pref₂ : prefix0) (bty : core_base_type)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value)) :
     iprop(allocBudget (GF := GF)
         (allocCost M.tagDefs intTy al₁ + allocCost M.tagDefs intTy al₂)) ⊢
-      wps M Ls
+      wps M ctl Ls
         (fun _ _ => iprop(∃ p₁ p₂ : CerbMem.PointerValue,
           pointsToCell M.tagDefs p₁ (.own 1) intTy (intUndefBytes M.tagDefs) ∗
           pointsToCell M.tagDefs p₂ (.own 1) intTy (intUndefBytes M.tagDefs)))
@@ -148,10 +148,10 @@ theorem alloc_two_creates_wps {M : MachineCtx} {Ls : LabelSpec GF}
 /-- Total-judgment local consumer at the minimal step budget: one create
     from the allocation budget `allocCost int al`, at `k = 2` exactly (1
     create step + 1 pure-value delivery — `wpt_create`'s cost bound). -/
-theorem alloc_create_wpt {M : MachineCtx} {Ls : LabelSpecT GF}
+theorem alloc_create_wpt {M : MachineCtx} {ctl : Ctl} {Ls : LabelSpecT GF}
     (al : Int) (pref : prefix0) (ρ : EnvStack) :
     iprop(allocBudget (GF := GF) (allocCost M.tagDefs intTy al)) ⊢
-      wpt M Ls 2
+      wpt M ctl Ls 2
         (fun _ _ => iprop(∃ p : CerbMem.PointerValue,
           pointsToCell M.tagDefs p (.own 1) intTy (intUndefBytes M.tagDefs)))
         (createExpr loc0 empty_annotation (.IV .Prov_none al) intTy pref)
@@ -203,12 +203,12 @@ variable {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
     the unit value and the persistent DEAD cell of the disposed object
     (at some id and base); the budget is spent — `wps_create`, then
     `wps_kill_eval` at the bound symbol, then `wps_kill`. -/
-theorem alloc_create_kill_wps {M : MachineCtx} {Ls : LabelSpec GF}
+theorem alloc_create_kill_wps {M : MachineCtx} {ctl : Ctl} {Ls : LabelSpec GF}
     (hex : ∀ x, resolveExtern M.extern x = x)
     (al : Int) (pref : prefix0)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (hf : SymFrame ev0) :
     iprop(allocBudget (GF := GF) (allocCost M.tagDefs intTy al)) ⊢
-      wps M Ls
+      wps M ctl Ls
         (fun w _ => iprop(⌜w = SpikeVal.pure Vunit⌝ ∗
           (∃ (id a : Int), deadObj M.tagDefs id a intTy)))
         (createKillProg al pref) (ev0 :: evs) := by
@@ -280,12 +280,12 @@ variable {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
     the unit value and the persistent DEAD region of the freed allocation
     (at some id and base); the budget is spent — `wps_alloc`, then
     `wps_kill_eval` at the bound symbol (dynamic kind), then `wps_free`. -/
-theorem alloc_free_wps {M : MachineCtx} {Ls : LabelSpec GF}
+theorem alloc_free_wps {M : MachineCtx} {ctl : Ctl} {Ls : LabelSpec GF}
     (hex : ∀ x, resolveExtern M.extern x = x)
     (al n : Int) (pref : prefix0) (hcost : 0 < regionCost al n)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (hf : SymFrame ev0) :
     iprop(allocBudget (GF := GF) (regionCost al n)) ⊢
-      wps M Ls
+      wps M ctl Ls
         (fun w _ => iprop(⌜w = SpikeVal.pure Vunit⌝ ∗
           (∃ (id a : Int), deadRegion id a n.toNat)))
         (allocFreeProg al n pref) (ev0 :: evs) := by
@@ -321,28 +321,28 @@ theorem alloc_free_wps {M : MachineCtx} {Ls : LabelSpec GF}
 /-- `alloc(al, n)` at a LITERAL alignment and a SYMBOL size — the
     operand-evaluation form's client instance (the `wps_store_sym_lit`
     shape): verified through the public `wps_alloc_eval`. -/
-theorem wps_alloc_lit_sym {M : MachineCtx} {Ls : LabelSpec GF}
+theorem wps_alloc_lit_sym {M : MachineCtx} {ctl : Ctl} {Ls : LabelSpec GF}
     {Ψ : SpikeVal → EnvStack → IProp GF}
     (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (align : CerbMem.IntegerValue) (n : sym) (pref : prefix0) (ρ : EnvStack)
     {size : CerbMem.IntegerValue}
     (hn : evalPexpr M.tagDefs M.extern ρ (Pexpr [] () (PEsym n)) =
       some (Vobject (OVinteger size))) :
-    wps M Ls Ψ (allocExpr loc ann align size pref) ρ ⊢
-      wps M Ls Ψ (allocOpRedex loc ann (Pexpr [] () (PEval (Vobject (OVinteger align))))
+    wps M ctl Ls Ψ (allocExpr loc ann align size pref) ρ ⊢
+      wps M ctl Ls Ψ (allocOpRedex loc ann (Pexpr [] () (PEval (Vobject (OVinteger align))))
         (Pexpr [] () (PEsym n)) pref) ρ :=
   wps_alloc_eval loc ann _ _ pref ρ rfl rfl hn
 
 /-- The total twin, through the public `wpt_alloc_eval` (one tau). -/
-theorem wpt_alloc_lit_sym {M : MachineCtx} {Ls : LabelSpecT GF}
+theorem wpt_alloc_lit_sym {M : MachineCtx} {ctl : Ctl} {Ls : LabelSpecT GF}
     {Ψ : SpikeVal → EnvStack → IProp GF}
     (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (align : CerbMem.IntegerValue) (n : sym) (pref : prefix0) (ρ : EnvStack)
     {size : CerbMem.IntegerValue} {k : Nat}
     (hn : evalPexpr M.tagDefs M.extern ρ (Pexpr [] () (PEsym n)) =
       some (Vobject (OVinteger size))) :
-    wpt M Ls k Ψ (allocExpr loc ann align size pref) ρ ⊢
-      wpt M Ls (k + 1) Ψ (allocOpRedex loc ann (Pexpr [] () (PEval (Vobject (OVinteger align))))
+    wpt M ctl Ls k Ψ (allocExpr loc ann align size pref) ρ ⊢
+      wpt M ctl Ls (k + 1) Ψ (allocOpRedex loc ann (Pexpr [] () (PEval (Vobject (OVinteger align))))
         (Pexpr [] () (PEsym n)) pref) ρ :=
   wpt_alloc_eval loc ann _ _ pref ρ rfl rfl hn
 
@@ -376,11 +376,11 @@ theorem alloc_create_launch_smoke (pref : prefix0) (aids : Nat → Nat) :
     ∃ v σ', driveU spikeCtx aids 2
         (spikeCtx.thread
           (createExpr loc0 empty_annotation (.IV .Prov_none 4) intTy pref)
-          (fmapEmpty :: []))
+          (fmapEmpty :: []) spikeCtl)
         prodMem₀ = .done v σ' ∧
       ∃ pv : CerbMem.PointerValue, v = Vobject (OVpointer pv) := by
   obtain ⟨v, σ', h1, h2, -⟩ :=
-    wpt_engine_boundU_alloc (GF := SpikeGF) (M := spikeCtx) spikeCtx_wf
+    wpt_engine_boundU_alloc (GF := SpikeGF) (M := spikeCtx) (ctl := spikeCtl) spikeCtx_wf rfl
       (fun l params cont hl => (spikeCtx_labels_none l hl).elim)
       (fun l params cont hl => (spikeCtx_labels_none l hl).elim)
       (fun _ _ _ _ => iprop(False))
@@ -425,13 +425,13 @@ theorem alloc_create_launch_smoke (pref : prefix0) (aids : Nat → Nat) :
     stated over `driveU` (Adequacy.lean header). -/
 theorem kill_launch_smoke (pref : prefix0) (aids : Nat → Nat) :
     ∃ v σ', driveU spikeCtx aids 5
-        (spikeCtx.thread (createKillProg 4 pref) (fmapEmpty :: []))
+        (spikeCtx.thread (createKillProg 4 pref) (fmapEmpty :: []) spikeCtl)
         prodMem₀ = .done v σ' ∧
       v = Vunit ∧
       ∃ id : Int, σ'.deadAllocations.contains id = true ∧
         σ'.allocations.get? id = none := by
   obtain ⟨v, σ', h1, h2, -⟩ :=
-    wpt_engine_boundU_alloc (GF := SpikeGF) (M := spikeCtx) spikeCtx_wf
+    wpt_engine_boundU_alloc (GF := SpikeGF) (M := spikeCtx) (ctl := spikeCtl) spikeCtx_wf rfl
       (fun l params cont hl => (spikeCtx_labels_none l hl).elim)
       (fun l params cont hl => (spikeCtx_labels_none l hl).elim)
       (fun _ _ _ _ => iprop(False))
@@ -500,13 +500,13 @@ theorem kill_launch_smoke (pref : prefix0) (aids : Nat → Nat) :
     PROVISIONAL: stated over `driveU` (Adequacy.lean header). -/
 theorem free_launch_smoke (pref : prefix0) (aids : Nat → Nat) :
     ∃ v σ', driveU spikeCtx aids 5
-        (spikeCtx.thread (allocFreeProg 4 8 pref) (fmapEmpty :: []))
+        (spikeCtx.thread (allocFreeProg 4 8 pref) (fmapEmpty :: []) spikeCtl)
         prodMem₀ = .done v σ' ∧
       v = Vunit ∧
       ∃ id : Int, σ'.deadAllocations.contains id = true ∧
         σ'.allocations.get? id = none := by
   obtain ⟨v, σ', h1, h2, -⟩ :=
-    wpt_engine_boundU_alloc (GF := SpikeGF) (M := spikeCtx) spikeCtx_wf
+    wpt_engine_boundU_alloc (GF := SpikeGF) (M := spikeCtx) (ctl := spikeCtl) spikeCtx_wf rfl
       (fun l params cont hl => (spikeCtx_labels_none l hl).elim)
       (fun l params cont hl => (spikeCtx_labels_none l hl).elim)
       (fun _ _ _ _ => iprop(False))

@@ -163,7 +163,7 @@ theorem deliveryCost_pos (w : SpikeVal) : 1 ≤ deliveryCost w := by
 (2026-09-02 professor review 1, required fix 8)
 
 A memory action of the fragment is ATOMIC: one `Step` from the redex
-to a VALUE, forking nothing. `AtomicStep M e ρ c P Q` says exactly
+to a VALUE, forking nothing. `AtomicStep M ctl e ρ c P Q` says exactly
 that, in the shape every stratum's step clause consumes: under `P`
 and the state interpretation, at any mask pair `E₂ ⊆ E₁`, the
 configuration is reducible, and every step of it re-establishes the
@@ -191,29 +191,32 @@ packaging lines. -/
     postcondition `Q` on the delivered value, delivery cost bound
     `c`; mask-generic (`E₂ ⊆ E₁`), observations trivial (`Empty`),
     no forks. -/
-def AtomicStep [SpikeGS hlc GF] (M : MachineCtx) (e : CoreExpr) (ρ : EnvStack)
+def AtomicStep [SpikeGS hlc GF] (M : MachineCtx) (ctl : Ctl) (e : CoreExpr) (ρ : EnvStack)
     (c : Nat) (P : IProp GF) (Q : SpikeVal → IProp GF) : Prop :=
   ∀ (E₁ E₂ : CoPset), E₂ ⊆ E₁ →
   ∀ (σ₁ : Mem) (ns : Nat) (obs : List Empty) (nt : Nat),
     iprop(P ∗ stateInterp σ₁ ns obs nt) ⊢
-      iprop(|={E₁,E₂}=> (⌜PrimStep.Reducible ((⟨e, ρ, M⟩ : CoreRt), σ₁)⌝ ∗
+      iprop(|={E₁,E₂}=> (⌜PrimStep.Reducible ((⟨e, ρ, ctl, M⟩ : CoreRt), σ₁)⌝ ∗
         ∀ (r : CoreRt) (σ₂ : Mem) (eₜ : List CoreRt),
-          ⌜((⟨e, ρ, M⟩ : CoreRt), σ₁) -<([] : List Empty)>-> (r, σ₂, eₜ)⌝ -∗
+          ⌜((⟨e, ρ, ctl, M⟩ : CoreRt), σ₁) -<([] : List Empty)>-> (r, σ₂, eₜ)⌝ -∗
           |={E₂,E₁}=> (stateInterp σ₂ (ns + 1) obs nt ∗
-            ∃ w : SpikeVal, ⌜r = (⟨ofVal w, ρ, M⟩ : CoreRt) ∧ eₜ = [] ∧
+            ∃ w : SpikeVal, ⌜r = (⟨ofVal w, ρ, ctl, M⟩ : CoreRt) ∧ eₜ = [] ∧
               deliveryCost w ≤ c⌝ ∗ Q w)))
 
 /-- LIFTING TO THE RAW WP (any stuckness, any mask): an atomic step
     specification yields iris-lean's WP of the redex, the
     postcondition applied to the delivered value at the verbatim env
     and context. -/
-theorem wp_of_atomic [SpikeGS hlc GF] {s : Stuckness} {E : CoPset} {M : MachineCtx}
+theorem wp_of_atomic [SpikeGS hlc GF] {s : Stuckness} {E : CoPset} {M : MachineCtx} {ctl : Ctl}
     {e : CoreExpr} {ρ : EnvStack} {c : Nat} {P : IProp GF} {Q : SpikeVal → IProp GF}
-    (h : AtomicStep M e ρ c P Q) (hnv : toVal e = none)
+    (h : AtomicStep M ctl e ρ c P Q) (hnv : toVal e = none) (hκ : ctl.κ = [])
     (Φ : CoreRVal → IProp GF) :
-    iprop(P ∗ (∀ w : SpikeVal, Q w -∗ Φ (⟨w, ρ, M⟩ : CoreRVal))) ⊢
-      WP (⟨e, ρ, M⟩ : CoreRt) @ s; E {{ Φ }} := by
-  have htoval : ToVal.toVal (Val := CoreRVal) (⟨e, ρ, M⟩ : CoreRt) = none := by
+    iprop(P ∗ (∀ w : SpikeVal, Q w -∗ Φ (⟨w, ρ, ctl.proc, ctl.execLoc, M⟩ : CoreRVal))) ⊢
+      WP (⟨e, ρ, ctl, M⟩ : CoreRt) @ s; E {{ Φ }} := by
+  obtain ⟨κ, pr, ℓ⟩ := ctl
+  simp only at hκ
+  subst hκ
+  have htoval : ToVal.toVal (Val := CoreRVal) (⟨e, ρ, ⟨[], pr, ℓ⟩, M⟩ : CoreRt) = none := by
     rw [language_toVal_eq, toValRt_mk, hnv]
     rfl
   iintro ⟨HP, HΦ⟩
@@ -239,7 +242,7 @@ theorem wp_of_atomic [SpikeGS hlc GF] {s : Stuckness} {E : CoPset} {M : MachineC
   isplitl [Hσ']
   · iexact Hσ'
   isplitl [HΦ HQ]
-  · iexists (⟨w, ρ, M⟩ : CoreRVal)
+  · iexists (⟨w, ρ, pr, ℓ, M⟩ : CoreRVal)
     isplit
     · ipureintro
       rw [language_toVal_eq, toValRt_mk, toVal_ofVal]
@@ -258,13 +261,13 @@ theorem wp_of_atomic [SpikeGS hlc GF] {s : Stuckness} {E : CoPset} {M : MachineC
     non-atomicity (carried by stateInterp) kill the rest. The
     delivered value is the annotated unit `{DA_pos [] fp} unit`
     (engine-forced; no aid enters the terms). -/
-theorem store_atomic [SpikeGS hlc GF] {M : MachineCtx}
+theorem store_atomic [SpikeGS hlc GF] {M : MachineCtx} {ctl : Ctl}
     (loc : CerbLocation.Loc) (ann : core_run_annotation) (ty : ctype)
     (pv : CerbMem.PointerValue) (cv : value) (mo : memory_order)
     (mv : CerbMem.MemValue) (bs : List CerbMem.AbsByte) (ρ : EnvStack)
     (hmv : memValueFromValue M.tagDefs (Ctype [] (unatomic_ ty)) cv = some mv)
     (hst : StorableAt M.tagDefs ty mv) :
-    AtomicStep M (storeExpr loc ann ty pv cv mo) ρ 2
+    AtomicStep M ctl (storeExpr loc ann ty pv cv mo) ρ 2
       (pointsToCell M.tagDefs (GF := GF) pv (.own 1) ty bs)
       (fun w => iprop(∃ fp, ⌜w = SpikeVal.annot [DA_pos [] fp] Vunit⌝ ∗
         pointsToCell M.tagDefs pv (.own 1) ty (CerbMem.memValueToBytes M.tagDefs [] mv).2)) := by
@@ -294,7 +297,7 @@ theorem store_atomic [SpikeGS hlc GF] {M : MachineCtx}
   iintro Hclose
   isplitr
   · ipureintro
-    exact ⟨[], ⟨_, _, _⟩, _, [], ⟨Step.store_canonical hmv hrun, rfl, rfl⟩⟩
+    exact ⟨[], ⟨_, _, _, _⟩, _, [], ⟨Step.store_canonical hmv hrun, rfl, rfl⟩⟩
   iintro %r %σ₂ %eₜ %Hstep
   obtain ⟨hstep, hlbl, rfl⟩ := Hstep
   obtain ⟨mv', fp', σ'', hmv', hmem', hout⟩ := hstep.store_inv
@@ -304,15 +307,15 @@ theorem store_atomic [SpikeGS hlc GF] {M : MachineCtx}
       σ'' = CerbMem.writeBytesTo σ₁ addr (CerbMem.memValueToBytes M.tagDefs [] mv).2 := by
     have h := Option.some.inj hmem'.symm
     exact ⟨congrArg Prod.fst h, congrArg Prod.snd h⟩
-  obtain ⟨re, rρ, rM⟩ := r
+  obtain ⟨re, rρ, rctl, rM⟩ := r
   simp only at hlbl
   obtain rfl : M = rM := hlbl.symm
-  obtain ⟨hre, hrρ, hσ⟩ : re = Expr [] (Eannot
+  obtain ⟨hre, hrρ, hrctl, hσ⟩ : re = Expr [] (Eannot
         [DA_pos [] (CerbMem.Footprint.FP .W addr (CerbMem.sizeofCtype M.tagDefs ty))]
-        (Expr [] (Epure (Pexpr [] () (PEval Vunit))))) ∧ rρ = ρ ∧
+        (Expr [] (Epure (Pexpr [] () (PEval Vunit))))) ∧ rρ = ρ ∧ rctl = ctl ∧
       σ₂ = CerbMem.writeBytesTo σ₁ addr (CerbMem.memValueToBytes M.tagDefs [] mv).2 := by
     simpa [Prod.mk.injEq] using hout
-  subst hre hσ
+  subst hre hσ hrctl
   obtain rfl : ρ = rρ := hrρ.symm
   imod Hclose with -
   imod (bytesOwn_update mb addr bs (CerbMem.memValueToBytes M.tagDefs [] mv).2 hlen')
@@ -359,12 +362,12 @@ theorem store_atomic [SpikeGS hlc GF] {M : MachineCtx}
     `{DA_pos [] fp} (loadedVal …)`. `htrap` excludes the `_Bool`
     trap-representation kill arm (CerbMem.lean:1598-1604) — the one
     loadM failure the points-to alone cannot rule out. -/
-theorem load_atomic [SpikeGS hlc GF] {M : MachineCtx}
+theorem load_atomic [SpikeGS hlc GF] {M : MachineCtx} {ctl : Ctl}
     (loc : CerbLocation.Loc) (ann : core_run_annotation) (ty : ctype)
     (pv : CerbMem.PointerValue) (mo : memory_order) (dq : DFrac)
     (bs : List CerbMem.AbsByte) (ρ : EnvStack)
     (htrap : cellLoadTrap M.tagDefs ⟨addrOf pv, ty, bs⟩ = false) :
-    AtomicStep M (loadExpr loc ann ty pv mo) ρ 2
+    AtomicStep M ctl (loadExpr loc ann ty pv mo) ρ 2
       (pointsToCell M.tagDefs (GF := GF) pv dq ty bs)
       (fun w => iprop(∃ fp,
         ⌜w = SpikeVal.annot [DA_pos [] fp] (loadedVal M.tagDefs pv ty bs)⌝ ∗
@@ -390,7 +393,7 @@ theorem load_atomic [SpikeGS hlc GF] {M : MachineCtx}
   iintro Hclose
   isplitr
   · ipureintro
-    exact ⟨[], ⟨_, _, _⟩, _, [], ⟨Step.load_canonical hrun, rfl, rfl⟩⟩
+    exact ⟨[], ⟨_, _, _, _⟩, _, [], ⟨Step.load_canonical hrun, rfl, rfl⟩⟩
   iintro %r %σ₂ %eₜ %Hstep
   obtain ⟨hstep, hlbl, rfl⟩ := Hstep
   obtain ⟨fp', mval', σ'', hmem', hout⟩ := hstep.load_inv
@@ -401,16 +404,16 @@ theorem load_atomic [SpikeGS hlc GF] {M : MachineCtx}
     have h := Option.some.inj hmem'.symm
     exact ⟨⟨congrArg (fun p => p.1.1) h, congrArg (fun p => p.1.2) h⟩,
       (congrArg Prod.snd h).symm⟩
-  obtain ⟨re, rρ, rM⟩ := r
+  obtain ⟨re, rρ, rctl, rM⟩ := r
   simp only at hlbl
   obtain rfl : M = rM := hlbl.symm
-  obtain ⟨hre, hrρ, hσ⟩ : re = Expr [] (Eannot
+  obtain ⟨hre, hrρ, hrctl, hσ⟩ : re = Expr [] (Eannot
         [DA_pos [] (CerbMem.Footprint.FP .R addr (CerbMem.sizeofCtype M.tagDefs ty))]
         (Expr [] (Epure (Pexpr [] () (PEval
           (valueFromMemValue (decodeCell M.tagDefs ⟨addr, ty, bs⟩)).2))))) ∧
-      rρ = ρ ∧ σ₂ = σ₁ := by
+      rρ = ρ ∧ rctl = ctl ∧ σ₂ = σ₁ := by
     simpa [Prod.mk.injEq] using hout
-  subst hre
+  subst hre hrctl
   obtain rfl : ρ = rρ := hrρ.symm
   obtain rfl : σ₁ = σ₂ := hσ.symm
   imod Hclose with -
@@ -454,12 +457,12 @@ theorem load_atomic [SpikeGS hlc GF] {M : MachineCtx}
     There is NO store counterpart: `storeM` at a read-only allocation
     is killed with `MerrWriteOnReadOnly kind` (`storeM_readonly_kills`,
     Heap.lean; :1724-1725), and `Step` has no step at a killed arm. -/
-theorem load_atomic_readonly [SpikeGS hlc GF] {M : MachineCtx}
+theorem load_atomic_readonly [SpikeGS hlc GF] {M : MachineCtx} {ctl : Ctl}
     (loc : CerbLocation.Loc) (ann : core_run_annotation) (ty : ctype)
     (pv : CerbMem.PointerValue) (mo : memory_order) (dq : DFrac)
     (bs : List CerbMem.AbsByte) (ρ : EnvStack)
     (htrap : cellLoadTrap M.tagDefs ⟨addrOf pv, ty, bs⟩ = false) :
-    AtomicStep M (loadExpr loc ann ty pv mo) ρ 2
+    AtomicStep M ctl (loadExpr loc ann ty pv mo) ρ 2
       (readonlyCell M.tagDefs (GF := GF) pv dq ty bs)
       (fun w => iprop(∃ fp,
         ⌜w = SpikeVal.annot [DA_pos [] fp] (loadedVal M.tagDefs pv ty bs)⌝ ∗
@@ -489,7 +492,7 @@ theorem load_atomic_readonly [SpikeGS hlc GF] {M : MachineCtx}
   iintro Hclose
   isplitr
   · ipureintro
-    exact ⟨[], ⟨_, _, _⟩, _, [], ⟨Step.load_canonical hrun, rfl, rfl⟩⟩
+    exact ⟨[], ⟨_, _, _, _⟩, _, [], ⟨Step.load_canonical hrun, rfl, rfl⟩⟩
   iintro %r %σ₂ %eₜ %Hstep
   obtain ⟨hstep, hlbl, rfl⟩ := Hstep
   obtain ⟨fp', mval', σ'', hmem', hout⟩ := hstep.load_inv
@@ -500,16 +503,16 @@ theorem load_atomic_readonly [SpikeGS hlc GF] {M : MachineCtx}
     have h := Option.some.inj hmem'.symm
     exact ⟨⟨congrArg (fun p => p.1.1) h, congrArg (fun p => p.1.2) h⟩,
       (congrArg Prod.snd h).symm⟩
-  obtain ⟨re, rρ, rM⟩ := r
+  obtain ⟨re, rρ, rctl, rM⟩ := r
   simp only at hlbl
   obtain rfl : M = rM := hlbl.symm
-  obtain ⟨hre, hrρ, hσ⟩ : re = Expr [] (Eannot
+  obtain ⟨hre, hrρ, hrctl, hσ⟩ : re = Expr [] (Eannot
         [DA_pos [] (CerbMem.Footprint.FP .R addr (CerbMem.sizeofCtype M.tagDefs ty))]
         (Expr [] (Epure (Pexpr [] () (PEval
           (valueFromMemValue (decodeCell M.tagDefs ⟨addr, ty, bs⟩)).2))))) ∧
-      rρ = ρ ∧ σ₂ = σ₁ := by
+      rρ = ρ ∧ rctl = ctl ∧ σ₂ = σ₁ := by
     simpa [Prod.mk.injEq] using hout
-  subst hre
+  subst hre hrctl
   obtain rfl : ρ = rρ := hrρ.symm
   obtain rfl : σ₁ = σ₂ := hσ.symm
   imod Hclose with -
@@ -551,7 +554,7 @@ theorem load_atomic_readonly [SpikeGS hlc GF] {M : MachineCtx}
     view's table-independent decode at the interior address; `htrap`
     excludes the _Bool trap arm at the accessed type. Engine seam:
     `loadM_at`. -/
-theorem loadAt_atomic [SpikeGS hlc GF] {M : MachineCtx}
+theorem loadAt_atomic [SpikeGS hlc GF] {M : MachineCtx} {ctl : Ctl}
     (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (id a : Int) (aty : ctype) (off : Nat) (vty : ctype)
     (mo : memory_order) (dqm dqb : DFrac)
@@ -559,7 +562,7 @@ theorem loadAt_atomic [SpikeGS hlc GF] {M : MachineCtx}
     (hdec : ∀ lum fpm, CerbMem.reconstructValue M.tagDefs lum fpm (a + (off : Int))
       vty bs = mv)
     (htrap : loadTrapV vty mv = false) :
-    AtomicStep M (loadExpr loc ann vty (cellPtr id (a + (off : Int))) mo) ρ 2
+    AtomicStep M ctl (loadExpr loc ann vty (cellPtr id (a + (off : Int))) mo) ρ 2
       (pointsToView M.tagDefs (GF := GF) id a aty off dqm dqb vty bs)
       (fun w => iprop(∃ fp,
         ⌜w = SpikeVal.annot [DA_pos [] fp] ((valueFromMemValue mv).2)⌝ ∗
@@ -585,7 +588,7 @@ theorem loadAt_atomic [SpikeGS hlc GF] {M : MachineCtx}
   iintro Hclose
   isplitr
   · ipureintro
-    exact ⟨[], ⟨_, _, _⟩, _, [], ⟨Step.load_canonical hrun, rfl, rfl⟩⟩
+    exact ⟨[], ⟨_, _, _, _⟩, _, [], ⟨Step.load_canonical hrun, rfl, rfl⟩⟩
   iintro %r %σ₂ %eₜ %Hstep
   obtain ⟨hstep, hlbl, rfl⟩ := Hstep
   obtain ⟨fp', mval', σ'', hmem', hout⟩ := hstep.load_inv
@@ -597,16 +600,16 @@ theorem loadAt_atomic [SpikeGS hlc GF] {M : MachineCtx}
     exact ⟨⟨congrArg (fun p => p.1.1) h,
       (congrArg (fun p => p.1.2) h).symm⟩,
       (congrArg Prod.snd h).symm⟩
-  obtain ⟨re, rρ, rM⟩ := r
+  obtain ⟨re, rρ, rctl, rM⟩ := r
   simp only at hlbl
   obtain rfl : M = rM := hlbl.symm
-  obtain ⟨hre, hrρ, hσ⟩ : re = Expr [] (Eannot
+  obtain ⟨hre, hrρ, hrctl, hσ⟩ : re = Expr [] (Eannot
         [DA_pos [] (CerbMem.Footprint.FP .R (a + (off : Int))
           (CerbMem.sizeofCtype M.tagDefs vty))]
         (Expr [] (Epure (Pexpr [] () (PEval (valueFromMemValue mv).2))))) ∧
-      rρ = ρ ∧ σ₂ = σ₁ := by
+      rρ = ρ ∧ rctl = ctl ∧ σ₂ = σ₁ := by
     simpa [Prod.mk.injEq] using hout
-  subst hre
+  subst hre hrctl
   obtain rfl : ρ = rρ := hrρ.symm
   obtain rfl : σ₁ = σ₂ := hσ.symm
   imod Hclose with -
@@ -642,14 +645,14 @@ theorem loadAt_atomic [SpikeGS hlc GF] {M : MachineCtx}
 /-- GENERIC FULL-OWNERSHIP TYPED SUBRANGE STORE as an atomic step.
     Engine seam: `storeM_at`; `StorableView` supplies the
     type-compatibility and serialization facts. -/
-theorem storeAt_atomic [SpikeGS hlc GF] {M : MachineCtx}
+theorem storeAt_atomic [SpikeGS hlc GF] {M : MachineCtx} {ctl : Ctl}
     (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (id a : Int) (aty : ctype) (off : Nat) (vty : ctype)
     (cv : value) (mo : memory_order) (dqm : DFrac)
     (bs : List CerbMem.AbsByte) (ρ : EnvStack) {mv : CerbMem.MemValue}
     (hmv : memValueFromValue M.tagDefs (Ctype [] (unatomic_ vty)) cv = some mv)
     (hst : StorableView M.tagDefs vty mv) :
-    AtomicStep M (storeExpr loc ann vty (cellPtr id (a + (off : Int))) cv mo) ρ 2
+    AtomicStep M ctl (storeExpr loc ann vty (cellPtr id (a + (off : Int))) cv mo) ρ 2
       (pointsToView M.tagDefs (GF := GF) id a aty off dqm (.own 1) vty bs)
       (fun w => iprop(∃ fp, ⌜w = SpikeVal.annot [DA_pos [] fp] Vunit⌝ ∗
         pointsToView M.tagDefs id a aty off dqm (.own 1) vty
@@ -677,7 +680,7 @@ theorem storeAt_atomic [SpikeGS hlc GF] {M : MachineCtx}
   iintro Hclose
   isplitr
   · ipureintro
-    exact ⟨[], ⟨_, _, _⟩, _, [], ⟨Step.store_canonical hmv hrun, rfl, rfl⟩⟩
+    exact ⟨[], ⟨_, _, _, _⟩, _, [], ⟨Step.store_canonical hmv hrun, rfl, rfl⟩⟩
   iintro %r %σ₂ %eₜ %Hstep
   obtain ⟨hstep, hlbl, rfl⟩ := Hstep
   obtain ⟨mv', fp', σ'', hmv', hmem', hout⟩ := hstep.store_inv
@@ -689,17 +692,17 @@ theorem storeAt_atomic [SpikeGS hlc GF] {M : MachineCtx}
         (CerbMem.memValueToBytes M.tagDefs [] mv).2 := by
     have h := Option.some.inj hmem'.symm
     exact ⟨congrArg Prod.fst h, congrArg Prod.snd h⟩
-  obtain ⟨re, rρ, rM⟩ := r
+  obtain ⟨re, rρ, rctl, rM⟩ := r
   simp only at hlbl
   obtain rfl : M = rM := hlbl.symm
-  obtain ⟨hre, hrρ, hσ⟩ : re = Expr [] (Eannot
+  obtain ⟨hre, hrρ, hrctl, hσ⟩ : re = Expr [] (Eannot
         [DA_pos [] (CerbMem.Footprint.FP .W (a + (off : Int))
           (CerbMem.sizeofCtype M.tagDefs vty))]
-        (Expr [] (Epure (Pexpr [] () (PEval Vunit))))) ∧ rρ = ρ ∧
+        (Expr [] (Epure (Pexpr [] () (PEval Vunit))))) ∧ rρ = ρ ∧ rctl = ctl ∧
       σ₂ = CerbMem.writeBytesTo σ₁ (a + (off : Int))
         (CerbMem.memValueToBytes M.tagDefs [] mv).2 := by
     simpa [Prod.mk.injEq] using hout
-  subst hre hσ
+  subst hre hσ hrctl
   obtain rfl : ρ = rρ := hrρ.symm
   imod Hclose with -
   imod (bytesOwn_update mb (a + (off : Int)) bs
@@ -761,7 +764,7 @@ bounds) and its decode/serialization (the value). -/
     address; `htrap` excludes the _Bool trap arm. Engine seam:
     `loadM_live` at `regionCell a n true` (`alive := true`; bounds
     against `n`). -/
-theorem regionLoadAt_atomic [SpikeGS hlc GF] {M : MachineCtx}
+theorem regionLoadAt_atomic [SpikeGS hlc GF] {M : MachineCtx} {ctl : Ctl}
     (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (id a : Int) (n off : Nat) (vty : ctype)
     (mo : memory_order) (dqm dqb : DFrac)
@@ -769,7 +772,7 @@ theorem regionLoadAt_atomic [SpikeGS hlc GF] {M : MachineCtx}
     (hdec : ∀ lum fpm, CerbMem.reconstructValue M.tagDefs lum fpm (a + (off : Int))
       vty bs = mv)
     (htrap : loadTrapV vty mv = false) :
-    AtomicStep M (loadExpr loc ann vty (cellPtr id (a + (off : Int))) mo) ρ 2
+    AtomicStep M ctl (loadExpr loc ann vty (cellPtr id (a + (off : Int))) mo) ρ 2
       (typedRegionView M.tagDefs (GF := GF) id a n off dqm dqb vty bs)
       (fun w => iprop(∃ fp,
         ⌜w = SpikeVal.annot [DA_pos [] fp] ((valueFromMemValue mv).2)⌝ ∗
@@ -797,7 +800,7 @@ theorem regionLoadAt_atomic [SpikeGS hlc GF] {M : MachineCtx}
   iintro Hclose
   isplitr
   · ipureintro
-    exact ⟨[], ⟨_, _, _⟩, _, [], ⟨Step.load_canonical hrun, rfl, rfl⟩⟩
+    exact ⟨[], ⟨_, _, _, _⟩, _, [], ⟨Step.load_canonical hrun, rfl, rfl⟩⟩
   iintro %r %σ₂ %eₜ %Hstep
   obtain ⟨hstep, hlbl, rfl⟩ := Hstep
   obtain ⟨fp', mval', σ'', hmem', hout⟩ := hstep.load_inv
@@ -809,16 +812,16 @@ theorem regionLoadAt_atomic [SpikeGS hlc GF] {M : MachineCtx}
     exact ⟨⟨congrArg (fun p => p.1.1) h,
       (congrArg (fun p => p.1.2) h).symm⟩,
       (congrArg Prod.snd h).symm⟩
-  obtain ⟨re, rρ, rM⟩ := r
+  obtain ⟨re, rρ, rctl, rM⟩ := r
   simp only at hlbl
   obtain rfl : M = rM := hlbl.symm
-  obtain ⟨hre, hrρ, hσ⟩ : re = Expr [] (Eannot
+  obtain ⟨hre, hrρ, hrctl, hσ⟩ : re = Expr [] (Eannot
         [DA_pos [] (CerbMem.Footprint.FP .R (a + (off : Int))
           (CerbMem.sizeofCtype M.tagDefs vty))]
         (Expr [] (Epure (Pexpr [] () (PEval (valueFromMemValue mv).2))))) ∧
-      rρ = ρ ∧ σ₂ = σ₁ := by
+      rρ = ρ ∧ rctl = ctl ∧ σ₂ = σ₁ := by
     simpa [Prod.mk.injEq] using hout
-  subst hre
+  subst hre hrctl
   obtain rfl : ρ = rρ := hrρ.symm
   obtain rfl : σ₁ = σ₂ := hσ.symm
   imod Hclose with -
@@ -857,14 +860,14 @@ theorem regionLoadAt_atomic [SpikeGS hlc GF] {M : MachineCtx}
     `regionCell a n true` (`readonly := false` — the region is writable);
     `StorableView` supplies the type-compatibility and serialization
     facts. -/
-theorem regionStoreAt_atomic [SpikeGS hlc GF] {M : MachineCtx}
+theorem regionStoreAt_atomic [SpikeGS hlc GF] {M : MachineCtx} {ctl : Ctl}
     (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (id a : Int) (n off : Nat) (vty : ctype)
     (cv : value) (mo : memory_order) (dqm : DFrac)
     (bs : List CerbMem.AbsByte) (ρ : EnvStack) {mv : CerbMem.MemValue}
     (hmv : memValueFromValue M.tagDefs (Ctype [] (unatomic_ vty)) cv = some mv)
     (hst : StorableView M.tagDefs vty mv) :
-    AtomicStep M (storeExpr loc ann vty (cellPtr id (a + (off : Int))) cv mo) ρ 2
+    AtomicStep M ctl (storeExpr loc ann vty (cellPtr id (a + (off : Int))) cv mo) ρ 2
       (typedRegionView M.tagDefs (GF := GF) id a n off dqm (.own 1) vty bs)
       (fun w => iprop(∃ fp, ⌜w = SpikeVal.annot [DA_pos [] fp] Vunit⌝ ∗
         typedRegionView M.tagDefs id a n off dqm (.own 1) vty
@@ -897,7 +900,7 @@ theorem regionStoreAt_atomic [SpikeGS hlc GF] {M : MachineCtx}
   iintro Hclose
   isplitr
   · ipureintro
-    exact ⟨[], ⟨_, _, _⟩, _, [], ⟨Step.store_canonical hmv hrun, rfl, rfl⟩⟩
+    exact ⟨[], ⟨_, _, _, _⟩, _, [], ⟨Step.store_canonical hmv hrun, rfl, rfl⟩⟩
   iintro %r %σ₂ %eₜ %Hstep
   obtain ⟨hstep, hlbl, rfl⟩ := Hstep
   obtain ⟨mv', fp', σ'', hmv', hmem', hout⟩ := hstep.store_inv
@@ -909,17 +912,17 @@ theorem regionStoreAt_atomic [SpikeGS hlc GF] {M : MachineCtx}
         (CerbMem.memValueToBytes M.tagDefs [] mv).2 := by
     have h := Option.some.inj hmem'.symm
     exact ⟨congrArg Prod.fst h, congrArg Prod.snd h⟩
-  obtain ⟨re, rρ, rM⟩ := r
+  obtain ⟨re, rρ, rctl, rM⟩ := r
   simp only at hlbl
   obtain rfl : M = rM := hlbl.symm
-  obtain ⟨hre, hrρ, hσ⟩ : re = Expr [] (Eannot
+  obtain ⟨hre, hrρ, hrctl, hσ⟩ : re = Expr [] (Eannot
         [DA_pos [] (CerbMem.Footprint.FP .W (a + (off : Int))
           (CerbMem.sizeofCtype M.tagDefs vty))]
-        (Expr [] (Epure (Pexpr [] () (PEval Vunit))))) ∧ rρ = ρ ∧
+        (Expr [] (Epure (Pexpr [] () (PEval Vunit))))) ∧ rρ = ρ ∧ rctl = ctl ∧
       σ₂ = CerbMem.writeBytesTo σ₁ (a + (off : Int))
         (CerbMem.memValueToBytes M.tagDefs [] mv).2 := by
     simpa [Prod.mk.injEq] using hout
-  subst hre hσ
+  subst hre hσ hrctl
   obtain rfl : ρ = rρ := hrρ.symm
   imod Hclose with -
   imod (bytesOwn_update mb (a + (off : Int)) bs
@@ -985,14 +988,14 @@ open Iris.Std.PartialMap in
     real non-atomic object type; `hinert` is the unspecified image's
     decode-inertness at every address (rfl for scalar and integer-array
     types). -/
-theorem create_atomic [SpikeGS hlc GF] {M : MachineCtx}
+theorem create_atomic [SpikeGS hlc GF] {M : MachineCtx} {ctl : Ctl}
     (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (aprov : CerbMem.Provenance) (alignN : Int) (ty : ctype)
     (pref : prefix0) (ρ : EnvStack)
     (hsz : 0 < CerbMem.sizeofCtype M.tagDefs ty) (hatom : atomicTy ty = false)
     (hinert : ∀ a : Int, decIndep M.tagDefs a ty
       (List.replicate (CerbMem.sizeofCtype M.tagDefs ty) undefByte)) :
-    AtomicStep M (createExpr loc ann (.IV aprov alignN) ty pref) ρ 1
+    AtomicStep M ctl (createExpr loc ann (.IV aprov alignN) ty pref) ρ 1
       (allocBudget (GF := GF) (allocCost M.tagDefs ty alignN))
       (fun w => iprop(∃ p : CerbMem.PointerValue,
         ⌜w = SpikeVal.pure (Vobject (OVpointer p))⌝ ∗
@@ -1035,7 +1038,7 @@ theorem create_atomic [SpikeGS hlc GF] {M : MachineCtx}
   iintro Hclose
   isplitr
   · ipureintro
-    exact ⟨[], ⟨_, _, _⟩, _, [], ⟨Step.create_canonical hrun, rfl, rfl⟩⟩
+    exact ⟨[], ⟨_, _, _, _⟩, _, [], ⟨Step.create_canonical hrun, rfl, rfl⟩⟩
   iintro %r %σ₂ %eₜ %Hstep
   obtain ⟨hstep, hlbl, rfl⟩ := Hstep
   obtain ⟨pv', σ'', hmem', hout⟩ := hstep.create_inv
@@ -1058,15 +1061,15 @@ theorem create_atomic [SpikeGS hlc GF] {M : MachineCtx}
         (List.replicate (CerbMem.sizeofCtype M.tagDefs ty) undefByte) = σ'' := by
     have h := Option.some.inj hmem'
     exact ⟨congrArg Prod.fst h, congrArg Prod.snd h⟩
-  obtain ⟨re, rρ, rM⟩ := r
+  obtain ⟨re, rρ, rctl, rM⟩ := r
   simp only at hlbl
   obtain rfl : M = rM := hlbl.symm
-  obtain ⟨hre, hrρ, hσ⟩ : re = Expr [] (Epure (Pexpr [] () (PEval
+  obtain ⟨hre, hrρ, hrctl, hσ⟩ : re = Expr [] (Epure (Pexpr [] () (PEval
         (Vobject (OVpointer (cellPtr σ₁.nextAllocId
           (freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype M.tagDefs ty)))))))) ∧
-      rρ = ρ ∧ σ₂ = _ := by
+      rρ = ρ ∧ rctl = ctl ∧ σ₂ = _ := by
     simpa [Prod.mk.injEq] using hout
-  subst hre hσ
+  subst hre hσ hrctl
   obtain rfl : ρ = rρ := hrρ.symm
   imod Hclose with -
   -- ghost: advance the cursor, mint the metadata, mint the bytes, spend
@@ -1198,11 +1201,11 @@ def killExpr (loc : CerbLocation.Loc) (ann : core_run_annotation)
     addresses are never reused (`CohG.kill`). The `Static0 ty` payload
     is discarded by the engine, so the kill type is unrelated to the
     cell's type by design (design note §1(a)). -/
-theorem kill_atomic [SpikeGS hlc GF] {M : MachineCtx}
+theorem kill_atomic [SpikeGS hlc GF] {M : MachineCtx} {ctl : Ctl}
     (loc : CerbLocation.Loc) (ann : core_run_annotation) (kind : kill_kind)
     (pv : CerbMem.PointerValue) (ty : ctype) (bs : List CerbMem.AbsByte) (ρ : EnvStack)
     (hstatic : is_dynamic kind = false) :
-    AtomicStep M (killExpr loc ann kind pv) ρ 1
+    AtomicStep M ctl (killExpr loc ann kind pv) ρ 1
       (pointsToCell M.tagDefs (GF := GF) pv (.own 1) ty bs)
       (fun w => iprop(⌜w = SpikeVal.pure Vunit⌝ ∗
         ∃ (id a : Int), ⌜pv = cellPtr id a⌝ ∗ deadObj M.tagDefs id a ty)) := by
@@ -1229,18 +1232,18 @@ theorem kill_atomic [SpikeGS hlc GF] {M : MachineCtx}
   iintro Hclose
   isplitr
   · ipureintro
-    exact ⟨[], ⟨_, _, _⟩, _, [], ⟨Step.kill_canonical hrun, rfl, rfl⟩⟩
+    exact ⟨[], ⟨_, _, _, _⟩, _, [], ⟨Step.kill_canonical hrun, rfl, rfl⟩⟩
   iintro %r %σ₂ %eₜ %Hstep
   obtain ⟨hstep, hlbl, rfl⟩ := Hstep
   obtain ⟨σ'', hmem', hout⟩ := hstep.kill_inv
   rw [hrun] at hmem'
   obtain ⟨-, rfl⟩ := Prod.mk.inj (Option.some.inj hmem')
-  obtain ⟨re, rρ, rM⟩ := r
+  obtain ⟨re, rρ, rctl, rM⟩ := r
   simp only at hlbl
   obtain rfl : M = rM := hlbl.symm
   simp only [Prod.mk.injEq] at hout
-  obtain ⟨hre, hrρ, hσ⟩ := hout
-  subst hre hσ
+  obtain ⟨hre, hrρ, hrctl, hσ⟩ := hout
+  subst hre hσ hrctl
   obtain rfl : ρ = rρ := hrρ.symm
   imod Hclose with -
   -- ghost: flip the cell to dead, then discard it
@@ -1310,12 +1313,12 @@ open Iris.Std.PartialMap in
     spent (`CohG.alloc` re-establishes the coupling). The delivered value
     is the BARE pointer (cost 1). No type premise, no `hinert`: regions are
     layout-free. -/
-theorem alloc_atomic [SpikeGS hlc GF] {M : MachineCtx}
+theorem alloc_atomic [SpikeGS hlc GF] {M : MachineCtx} {ctl : Ctl}
     (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (aprov sprov : CerbMem.Provenance) (alignN sizeN : Int)
     (pref : prefix0) (ρ : EnvStack)
     (hcost : 0 < regionCost alignN sizeN) :
-    AtomicStep M (allocExpr loc ann (.IV aprov alignN) (.IV sprov sizeN) pref) ρ 1
+    AtomicStep M ctl (allocExpr loc ann (.IV aprov alignN) (.IV sprov sizeN) pref) ρ 1
       (allocBudget (GF := GF) (regionCost alignN sizeN))
       (fun w => iprop(∃ (id a : Int),
         ⌜w = SpikeVal.pure (Vobject (OVpointer (cellPtr id a)))⌝ ∗
@@ -1359,7 +1362,7 @@ theorem alloc_atomic [SpikeGS hlc GF] {M : MachineCtx}
   iintro Hclose
   isplitr
   · ipureintro
-    exact ⟨[], ⟨_, _, _⟩, _, [], ⟨Step.alloc_canonical hrun, rfl, rfl⟩⟩
+    exact ⟨[], ⟨_, _, _, _⟩, _, [], ⟨Step.alloc_canonical hrun, rfl, rfl⟩⟩
   iintro %r %σ₂ %eₜ %Hstep
   obtain ⟨hstep, hlbl, rfl⟩ := Hstep
   obtain ⟨pv', σ'', hmem', hout⟩ := hstep.alloc_inv
@@ -1379,12 +1382,12 @@ theorem alloc_atomic [SpikeGS hlc GF] {M : MachineCtx}
         (List.replicate sizeN.toNat undefByte) = σ'' := by
     have h := Option.some.inj hmem'
     exact ⟨congrArg Prod.fst h, congrArg Prod.snd h⟩
-  obtain ⟨re, rρ, rM⟩ := r
+  obtain ⟨re, rρ, rctl, rM⟩ := r
   simp only at hlbl
   obtain rfl : M = rM := hlbl.symm
   simp only [Prod.mk.injEq] at hout
-  obtain ⟨hre, hrρ, hσ⟩ := hout
-  subst hre hσ
+  obtain ⟨hre, hrρ, hrctl, hσ⟩ := hout
+  subst hre hσ hrctl
   obtain rfl : ρ = rρ := hrρ.symm
   imod Hclose with -
   -- ghost: advance the cursor, mint the region cell, mint the bytes,
@@ -1496,11 +1499,11 @@ theorem alloc_atomic [SpikeGS hlc GF] {M : MachineCtx}
     `kill_atomic`: `metaHeap_update` flips `alive := false`, `metaOwn_persist`
     discards; the byte fragments are DROPPED (`killM` leaves the bytemap
     alone, addresses are never reused — `CohG.kill`). -/
-theorem free_atomic [SpikeGS hlc GF] {M : MachineCtx}
+theorem free_atomic [SpikeGS hlc GF] {M : MachineCtx} {ctl : Ctl}
     (loc : CerbLocation.Loc) (ann : core_run_annotation) (kind : kill_kind)
     (id a : Int) (n : Nat) (bs : List CerbMem.AbsByte) (ρ : EnvStack)
     (hdyn : is_dynamic kind = true) :
-    AtomicStep M (killExpr loc ann kind (cellPtr id a)) ρ 1
+    AtomicStep M ctl (killExpr loc ann kind (cellPtr id a)) ρ 1
       (regionOwn (GF := GF) id a n (.own 1) bs)
       (fun w => iprop(⌜w = SpikeVal.pure Vunit⌝ ∗ deadRegion id a n)) := by
   intro E₁ E₂ hE σ₁ ns obs nt
@@ -1522,18 +1525,18 @@ theorem free_atomic [SpikeGS hlc GF] {M : MachineCtx}
   iintro Hclose
   isplitr
   · ipureintro
-    exact ⟨[], ⟨_, _, _⟩, _, [], ⟨Step.kill_canonical hrun, rfl, rfl⟩⟩
+    exact ⟨[], ⟨_, _, _, _⟩, _, [], ⟨Step.kill_canonical hrun, rfl, rfl⟩⟩
   iintro %r %σ₂ %eₜ %Hstep
   obtain ⟨hstep, hlbl, rfl⟩ := Hstep
   obtain ⟨σ'', hmem', hout⟩ := hstep.kill_inv
   rw [hrun] at hmem'
   obtain ⟨-, rfl⟩ := Prod.mk.inj (Option.some.inj hmem')
-  obtain ⟨re, rρ, rM⟩ := r
+  obtain ⟨re, rρ, rctl, rM⟩ := r
   simp only at hlbl
   obtain rfl : M = rM := hlbl.symm
   simp only [Prod.mk.injEq] at hout
-  obtain ⟨hre, hrρ, hσ⟩ := hout
-  subst hre hσ
+  obtain ⟨hre, hrρ, hrctl, hσ⟩ := hout
+  subst hre hσ hrctl
   obtain rfl : ρ = rρ := hrρ.symm
   imod Hclose with -
   -- ghost: flip the region cell to dead, then discard it
@@ -1578,18 +1581,18 @@ theorem free_atomic [SpikeGS hlc GF] {M : MachineCtx}
     the terms at all (DA_pos carries only the exclusion list and the
     footprint). Env: arbitrary and returned VERBATIM (the request
     path never reads it). -/
-theorem wp_store [SpikeGS hlc GF] {s : Stuckness} {E : CoPset} {M : MachineCtx}
+theorem wp_store [SpikeGS hlc GF] {s : Stuckness} {E : CoPset} {M : MachineCtx} {ctl : Ctl}
     (loc : CerbLocation.Loc) (ann : core_run_annotation) (ty : ctype)
     (pv : CerbMem.PointerValue) (cv : value) (mo : memory_order)
     (mv : CerbMem.MemValue) (bs : List CerbMem.AbsByte) (ρ : EnvStack)
     (hmv : memValueFromValue M.tagDefs (Ctype [] (unatomic_ ty)) cv = some mv)
-    (hst : StorableAt M.tagDefs ty mv) :
+    (hst : StorableAt M.tagDefs ty mv) (hκ : ctl.κ = []) :
     pointsToCell M.tagDefs (GF := GF) pv (.own 1) ty bs ⊢
-      WP (⟨storeExpr loc ann ty pv cv mo, ρ, M⟩ : CoreRt) @ s; E
-        {{ w, ∃ fp, ⌜w = (⟨SpikeVal.annot [DA_pos [] fp] Vunit, ρ, M⟩ : CoreRVal)⌝ ∗
+      WP (⟨storeExpr loc ann ty pv cv mo, ρ, ctl, M⟩ : CoreRt) @ s; E
+        {{ w, ∃ fp, ⌜w = (⟨SpikeVal.annot [DA_pos [] fp] Vunit, ρ, ctl.proc, ctl.execLoc, M⟩ : CoreRVal)⌝ ∗
             pointsToCell M.tagDefs pv (.own 1) ty (CerbMem.memValueToBytes M.tagDefs [] mv).2 }} := by
   iintro Hpt
-  iapply wp_of_atomic (store_atomic loc ann ty pv cv mo mv bs ρ hmv hst) rfl
+  iapply wp_of_atomic (store_atomic loc ann ty pv cv mo mv bs ρ hmv hst) rfl hκ
   isplitl [Hpt]
   · iexact Hpt
   · iintro %w ⟨%fp, %hw, Hpt'⟩
@@ -1608,18 +1611,18 @@ theorem wp_store [SpikeGS hlc GF] {s : Stuckness} {E : CoPset} {M : MachineCtx}
     Coh-pinned side tables). The `htrap` premise excludes the _Bool
     trap-representation kill arm (CerbMem.lean:1598-1604) — the one
     loadM failure the points-to alone cannot rule out (R4). -/
-theorem wp_load [SpikeGS hlc GF] {s : Stuckness} {E : CoPset} {M : MachineCtx}
+theorem wp_load [SpikeGS hlc GF] {s : Stuckness} {E : CoPset} {M : MachineCtx} {ctl : Ctl}
     (loc : CerbLocation.Loc) (ann : core_run_annotation) (ty : ctype)
     (pv : CerbMem.PointerValue) (mo : memory_order) (dq : DFrac)
     (bs : List CerbMem.AbsByte) (ρ : EnvStack)
-    (htrap : cellLoadTrap M.tagDefs ⟨addrOf pv, ty, bs⟩ = false) :
+    (htrap : cellLoadTrap M.tagDefs ⟨addrOf pv, ty, bs⟩ = false) (hκ : ctl.κ = []) :
     pointsToCell M.tagDefs (GF := GF) pv dq ty bs ⊢
-      WP (⟨loadExpr loc ann ty pv mo, ρ, M⟩ : CoreRt) @ s; E
+      WP (⟨loadExpr loc ann ty pv mo, ρ, ctl, M⟩ : CoreRt) @ s; E
         {{ w, ∃ fp, ⌜w = (⟨SpikeVal.annot [DA_pos [] fp] (loadedVal M.tagDefs pv ty bs),
-            ρ, M⟩ : CoreRVal)⌝ ∗
+            ρ, ctl.proc, ctl.execLoc, M⟩ : CoreRVal)⌝ ∗
             pointsToCell M.tagDefs pv dq ty bs }} := by
   iintro Hpt
-  iapply wp_of_atomic (load_atomic loc ann ty pv mo dq bs ρ htrap) rfl
+  iapply wp_of_atomic (load_atomic loc ann ty pv mo dq bs ρ htrap) rfl hκ
   isplitl [Hpt]
   · iexact Hpt
   · iintro %w ⟨%fp, %hw, Hpt'⟩

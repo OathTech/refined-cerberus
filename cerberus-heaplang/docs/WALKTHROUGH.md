@@ -40,12 +40,12 @@ The target: `s |= P && core_exec(prog, s) ~~> term ==> term = some(s')
 realization is the triple over engine states (`Adequacy.lean`):
 
 ```lean
-def MemTripleU (M : MachineCtx) (ρ : EnvStack) (e : CoreExpr) (P : CellMap)
+def MemTripleU (M : MachineCtx) (ctl : Ctl) (ρ : EnvStack) (e : CoreExpr) (P : CellMap)
     (post : CellMap → value → Mem → Prop) : Prop :=
   ∀ (R : CellMap), P ##ₘ R →
   ∀ (σ : Mem), Sat M.tagDefs σ (Iris.Std.PartialMap.union P R) →
   ∀ (n : Nat) (aids : Nat → Nat),
-    (∀ r, driveU M aids n (M.thread e ρ) σ ≠ .killed r) ∧
+    (∀ r, driveU M aids n (M.thread e ρ ctl) σ ≠ .killed r) ∧
     (driveU M aids n (M.thread e ρ) σ ≠ .stuck) ∧
     (∀ (v : value) (σ' : Mem), driveU M aids n (M.thread e ρ) σ = .done v σ' →
       post R v σ')
@@ -84,10 +84,10 @@ conclusion is):
 
 ```lean
 theorem project_triple_pure {GF : BundledGFunctors} [SpikeGpreS GF]
-    {M : MachineCtx} (hwf : M.SeqWF)
-    (hQf : ∀ l params cont, lookupLabel M.labels l = some (params, cont) →
+    {M : MachineCtx} (hwf : M.SeqWF) {ctl : Ctl} (hκ : ctl.κ = [])
+    (hQf : ∀ l params cont, lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
       Frag cont)
-    (hQpot : ∀ l params cont, lookupLabel M.labels l = some (params, cont) →
+    (hQpot : ∀ l params cont, lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
       pot cont ≤ lemDefaultFuel)
     {e : CoreExpr} (hfrag : Frag e) (hpot : pot e ≤ lemDefaultFuel)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value))
@@ -101,11 +101,14 @@ theorem project_triple_pure {GF : BundledGFunctors} [SpikeGpreS GF]
       (mk : SpikeHeapF AllocCursor), CohG σ' mm mb mk →
       iprop(Q w ∗ ([∗map] i ↦ c ∈ R, cellOwn M.tagDefs (hlc := .hasLC) (GF := GF) i (.own 1) c) ∗
         metaInterp mm ∗ byteInterp mb) ⊢ (⌜ψ R w.val σ'⌝ : IProp GF)) :
-    MemTripleU M (ev0 :: evs) e P ψ := by
+    MemTripleU M ctl (ev0 :: evs) e P ψ := by
 ```
 
-Hypotheses: a sequentially well-formed context (`SeqWF`: empty call
-stack, startup thread); the program and every registered label body in
+Hypotheses: a sequentially well-formed context (`SeqWF`: startup
+thread) and an empty-stack entry control (`hκ : ctl.κ = []` — the
+thread's live control `Ctl` = call stack, current procedure, execution
+location, calls arc C1; at a general control the label map is read at
+`ctl.proc`, `M.labelsAt ctl.proc`); the program and every registered label body in
 the fragment `Frag`; the static fuel bounds `pot e ≤ lemDefaultFuel` and
 `pot cont ≤ lemDefaultFuel` per registered body (`pot` is a
 step-monotone size potential on terms, Potential.lean; `lemDefaultFuel =
@@ -1235,7 +1238,8 @@ pinned across steps; deliberately no `Language.Context` instance (§3.3).
 DRIVER'S THREAD LOOP, stated in the driver's own vocabulary: at every
 driver state that embeds the context and the configuration
 (`MachineCtx.Embeds` — the single thread `M.tid` holds `M.thread c.1
-c.2.1`, the memory is `c.2.2`, the file, extern map and run state are
+c.2.1 c.2.2.1` (arena, env, and the three control fields from the
+configuration's `Ctl`), the memory is `c.2.2.2`, the file, extern map and run state are
 `M`'s), the engine's step list read by the loop body is a singleton `s`,
 `s` is advanceable, and the shipped `advance_step` on it is one active,
 wakeup-free transition to the state embedding `c'`:
@@ -1245,7 +1249,7 @@ def CerberusRound (M : MachineCtx) (c c' : Config) : Prop :=
   ∀ dst : driver_state, M.Embeds dst c →
     ∃ s : core_step2,
       step_ctx M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid
-        (M.parent, M.thread c.1 c.2.1) = [s] ∧
+        (M.parent, M.thread c.1 c.2.1 c.2.2.1) = [s] ∧
       can_advance s = true ∧
       ∃ (rs' : core_run_state) (tr : List trace_event) (ctr : Nat),
         rs'.labeled = dst.core_run_state0.labeled ∧
@@ -1283,10 +1287,12 @@ theorem engine_step_matchU {M : MachineCtx}
     CerberusRound M (e, ev0 :: evs, σ) (e', ρ', σ') := by
 ```
 
-Note the successor thread `M.thread e' ρ'`: the engine's successor
+Note the successor thread `M.thread e' ρ' ctl`: the engine's successor
 carries `M`'s immutable fields, `current_loc` included — which is why
-the fragment is annotation-free (§7). `cerberusRound_classify` (plus
-`hwf : M.SeqWF`) sorts every `Frag` configuration into `value_done` (a
+the fragment is annotation-free (§7) — and the configuration's control
+unchanged (no rule of this slice writes it, `Step.ctl_eq`).
+`cerberusRound_classify` (plus `hwf : M.SeqWF` and the empty-stack
+control `hκ : ctl.κ = []`) sorts every `Frag` configuration into `value_done` (a
 bare value; the engine's step list is PROGRAM-DONE, `[Step_done2 v]`),
 `value_annot` (an annotated value; the round is the REMOVE-ANNOT tau to
 the bare value, which the mirror's value protocol does not step — why a
@@ -1524,9 +1530,13 @@ the `#print axioms` recipe are in the README, "How to build and verify".
 
 - **Procedures.** The static dispose rule landed in K2 and the
   dynamic `alloc`/`free` rules in K3 (§4); procedure specifications
-  (incl. recursion) are the calls arc. Their absence is structural, not
-  hidden: `MachineCtx.SeqWF` (empty call stack) is a premise wherever a
-  general context appears.
+  (incl. recursion) are the calls arc; its first slice C1 (2026-09-03)
+  made the thread's control — call stack, current procedure, execution
+  location — LIVE STATE (`Ctl`, the fourth configuration component)
+  without adding a rule. Their absence is structural, not hidden: the
+  empty-stack entry control (`ctl.κ = []`) is a premise wherever a
+  general control appears, and `MachineCtx.SeqWF` (startup thread)
+  wherever a general context does.
 - **The static kill of a region, `free` of a created object,
   `free(NULL)`, the zero-cost `alloc`.** In the fragment, mirrored and
   classified (`complete_kill`/`complete_alloc`), covered by no rule —

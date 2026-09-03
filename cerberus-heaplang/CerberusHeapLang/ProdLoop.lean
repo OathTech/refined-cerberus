@@ -124,14 +124,14 @@ theorem driverDone_annot (p : sym) (Q : LabelMap) (th₀ : thread_state)
 /-- The round composition: one certified mirror step in front of a
     delivering continuation — `loop_step_frag` plus the field
     transport of the final record. -/
-theorem driverDone_step {M₀ : MachineCtx}
+theorem driverDone_step {M₀ : MachineCtx} {ctl : Ctl}
     (htd : M₀.tagDefs = fmapEmpty) (hex : M₀.extern = fmapEmpty)
-    {Q : LabelMap} (hlb : M₀.labels = Q)
+    {Q : LabelMap} (hlb : M₀.labelsAt ctl.proc = Q)
     {p : sym} {th₀ : thread_state} (hproc : th₀.current_proc_opt = some p)
     {e e' : CoreExpr} {ev0 : Fmap sym value} {evs : List (Fmap sym value)}
     {ρ' : EnvStack} {σ σ' : Mem} {ψ : value → Mem → Prop} {k : Nat}
     (hf : Frag e) (hsz : esize e ≤ lemDefaultFuel)
-    (hs : Step M₀ (e, ev0 :: evs, σ) (e', ρ', σ'))
+    (hs : Step M₀ (e, ev0 :: evs, ctl, σ) (e', ρ', ctl, σ'))
     (hnext : DriverDoneAt p Q th₀ e' ρ' σ' ψ k) :
     DriverDoneAt p Q th₀ e (ev0 :: evs) σ ψ (k + 1) := by
   intro dst acc fl hth hσ hext hQd hfl
@@ -166,23 +166,23 @@ theorem driverDone_step {M₀ : MachineCtx}
 driver's loop (the `wpt_drive_aux` clone at the driver level). -/
 
 theorem wpt_driver_aux {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
-    {M₀ : MachineCtx}
+    {M₀ : MachineCtx} {ctl : Ctl}
     (htd : M₀.tagDefs = fmapEmpty) (hex : M₀.extern = fmapEmpty)
-    {Q : LabelMap} (hlb : M₀.labels = Q)
+    {Q : LabelMap} (hlb : M₀.labelsAt ctl.proc = Q)
     {p : sym} {th₀ : thread_state}
     (hproc : th₀.current_proc_opt = some p)
     (hstack : th₀.stack0 = Stack_empty)
-    (hQf : ∀ l params cont, lookupLabel M₀.labels l = some (params, cont) →
+    (hQf : ∀ l params cont, lookupLabel (M₀.labelsAt ctl.proc) l = some (params, cont) →
       Frag cont)
-    (hQpot : ∀ l params cont, lookupLabel M₀.labels l = some (params, cont) →
+    (hQpot : ∀ l params cont, lookupLabel (M₀.labelsAt ctl.proc) l = some (params, cont) →
       pot cont ≤ lemDefaultFuel)
     (Ls : LabelSpecT GF) (ψ : value → Mem → Prop) :
     ∀ (k : Nat) (e : CoreExpr) (ev0 : Fmap sym value)
       (evs : List (Fmap sym value)) (σ : Mem) (ns nt : Nat),
       Frag e → pot e ≤ lemDefaultFuel →
       iprop(stateInterp (GF := GF) σ ns ([] : List Empty) nt ∗
-          blockSpecsT M₀ Ls (readoutPost ψ) ∗
-          wpt M₀ Ls k (readoutPost ψ) e (ev0 :: evs)) ⊢
+          blockSpecsT M₀ ctl Ls (readoutPost ψ) ∗
+          wpt M₀ ctl Ls k (readoutPost ψ) e (ev0 :: evs)) ⊢
         iprop(|={⊤|}=> ⌜DriverDoneAt p Q th₀ e (ev0 :: evs) σ ψ k⌝) := by
   intro k
   induction k using Nat.strongRecOn with
@@ -215,12 +215,12 @@ theorem wpt_driver_aux {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
         injection hρ with h1 h2
         exact ⟨h1, h2⟩
       obtain ⟨k', rfl⟩ : ∃ k', k = k' + 1 := ⟨k - 1, by omega⟩
-      have hs : Step M₀ (e, ev0 :: evs, σ)
-          (cont, bindArgs params vs (ev0 :: evs), σ) :=
+      have hs : Step M₀ (e, ev0 :: evs, ctl, σ)
+          (cont, bindArgs params vs (ev0 :: evs), ctl, σ) :=
         Step.run_of_jumpRedex hjr hl hvs
       obtain ⟨ev0'', hbind⟩ := Step.env_cons hs
       ihave Hwpt := HB $$ %l %params %cont %vs %ev0 %evs %m %hl HLs
-      ihave Hwpt' : wpt M₀ Ls k' (readoutPost ψ) cont
+      ihave Hwpt' : wpt M₀ ctl Ls k' (readoutPost ψ) cont
           (bindArgs params vs (ev0 :: evs)) $$ [Hwpt]
       · iapply wpt_mono_k (show m ≤ k' by omega) cont _ $$ Hwpt
       have hf : DriverDoneAt p Q th₀ cont (bindArgs params vs (ev0 :: evs))
@@ -245,14 +245,15 @@ theorem wpt_driver_aux {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
         obtain ⟨obs0, r', σ', eₜ', hps⟩ := hred
         obtain ⟨hs, hM, hnil⟩ := hps
         subst hnil
-        obtain ⟨re, rρ, rM⟩ := r'
+        obtain ⟨re, rρ, rctl, rM⟩ := r'
         simp only at hs hM
         obtain rfl : M₀ = rM := hM.symm
+        obtain rfl : ctl = rctl := (Step.ctl_eq hs).symm
         obtain ⟨ev0', rfl⟩ := Step.env_cons hs
-        imod Hwand $$ %(⟨re, ev0' :: evs, M₀⟩ : CoreRt) %σ' %([] : List CoreRt)
+        imod Hwand $$ %(⟨re, ev0' :: evs, ctl, M₀⟩ : CoreRt) %σ' %([] : List CoreRt)
           %(⟨hs, rfl, rfl⟩ :
-            ((⟨e, ev0 :: evs, M₀⟩ : CoreRt), σ) -<([] : List Empty)>->
-              ((⟨re, ev0' :: evs, M₀⟩ : CoreRt), σ', []))
+            ((⟨e, ev0 :: evs, ctl, M₀⟩ : CoreRt), σ) -<([] : List Empty)>->
+              ((⟨re, ev0' :: evs, ctl, M₀⟩ : CoreRt), σ', []))
           with ⟨Hσ', Hwpt⟩
         have hfrag' : Frag re := hfrag.step hQf hs
         have hpot' : pot re ≤ lemDefaultFuel := by
@@ -273,15 +274,15 @@ theorem wpt_driver_aux {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
 functor list (the `wpt_engine_boundU` clone). -/
 
 theorem wpt_driver_done {GF : BundledGFunctors} [SpikeGpreS GF]
-    {M₀ : MachineCtx}
+    {M₀ : MachineCtx} {ctl : Ctl}
     (htd : M₀.tagDefs = fmapEmpty) (hex : M₀.extern = fmapEmpty)
-    {Q : LabelMap} (hlb : M₀.labels = Q)
+    {Q : LabelMap} (hlb : M₀.labelsAt ctl.proc = Q)
     {p : sym} {th₀ : thread_state}
     (hproc : th₀.current_proc_opt = some p)
     (hstack : th₀.stack0 = Stack_empty)
-    (hQf : ∀ l params cont, lookupLabel M₀.labels l = some (params, cont) →
+    (hQf : ∀ l params cont, lookupLabel (M₀.labelsAt ctl.proc) l = some (params, cont) →
       Frag cont)
-    (hQpot : ∀ l params cont, lookupLabel M₀.labels l = some (params, cont) →
+    (hQpot : ∀ l params cont, lookupLabel (M₀.labelsAt ctl.proc) l = some (params, cont) →
       pot cont ≤ lemDefaultFuel)
     (Ls : ∀ [SpikeGS .hasLC GF], LabelSpecT GF)
     (e₀ : CoreExpr) (ev00 : Fmap sym value) (evs0 : List (Fmap sym value))
@@ -291,8 +292,8 @@ theorem wpt_driver_done {GF : BundledGFunctors} [SpikeGpreS GF]
     (hwp : ∀ [SpikeGS .hasLC GF],
       iprop(([∗map] i ↦ c ∈ m₀, cellOwn M₀.tagDefs (hlc := .hasLC) (GF := GF) i
           (.own 1) c)) ⊢
-        iprop(blockSpecsT M₀ Ls (readoutPost ψ) ∗
-          wpt M₀ Ls k (readoutPost ψ) e₀ (ev00 :: evs0))) :
+        iprop(blockSpecsT M₀ ctl Ls (readoutPost ψ) ∗
+          wpt M₀ ctl Ls k (readoutPost ψ) e₀ (ev00 :: evs0))) :
     DriverDoneAt p Q th₀ e₀ (ev00 :: evs0) σ₀ ψ k := by
   refine pure_soundness (PROP := IProp GF) ?_
   refine (fupd_finally_soundness .hasLC 0 ⊤ _ ?_)
@@ -341,15 +342,15 @@ theorem wpt_driver_done {GF : BundledGFunctors} [SpikeGpreS GF]
     "no arrow may be supplied by an example-specific engine
     trace"). -/
 theorem wpt_driver_done_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
-    {M₀ : MachineCtx}
+    {M₀ : MachineCtx} {ctl : Ctl}
     (htd : M₀.tagDefs = fmapEmpty) (hex : M₀.extern = fmapEmpty)
-    {Q : LabelMap} (hlb : M₀.labels = Q)
+    {Q : LabelMap} (hlb : M₀.labelsAt ctl.proc = Q)
     {p : sym} {th₀ : thread_state}
     (hproc : th₀.current_proc_opt = some p)
     (hstack : th₀.stack0 = Stack_empty)
-    (hQf : ∀ l params cont, lookupLabel M₀.labels l = some (params, cont) →
+    (hQf : ∀ l params cont, lookupLabel (M₀.labelsAt ctl.proc) l = some (params, cont) →
       Frag cont)
-    (hQpot : ∀ l params cont, lookupLabel M₀.labels l = some (params, cont) →
+    (hQpot : ∀ l params cont, lookupLabel (M₀.labelsAt ctl.proc) l = some (params, cont) →
       pot cont ≤ lemDefaultFuel)
     (Ls : ∀ [SpikeGS .hasLC GF], LabelSpecT GF)
     (e₀ : CoreExpr) (ev00 : Fmap sym value) (evs0 : List (Fmap sym value))
@@ -360,8 +361,8 @@ theorem wpt_driver_done_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
     (hwp : ∀ [SpikeGS .hasLC GF],
       iprop(([∗map] i ↦ c ∈ m₀, cellOwn M₀.tagDefs (hlc := .hasLC) (GF := GF) i
           (.own 1) c) ∗ allocBudget B) ⊢
-        iprop(blockSpecsT M₀ Ls (readoutPost ψ) ∗
-          wpt M₀ Ls k (readoutPost ψ) e₀ (ev00 :: evs0))) :
+        iprop(blockSpecsT M₀ ctl Ls (readoutPost ψ) ∗
+          wpt M₀ ctl Ls k (readoutPost ψ) e₀ (ev00 :: evs0))) :
     DriverDoneAt p Q th₀ e₀ (ev00 :: evs0) σ₀ ψ k := by
   refine pure_soundness (PROP := IProp GF) ?_
   refine (fupd_finally_soundness .hasLC 0 ⊤ _ ?_)

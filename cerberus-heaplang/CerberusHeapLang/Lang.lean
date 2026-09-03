@@ -6,12 +6,18 @@ instantiation is the template (Iris/HeapLang/Instances.lean +
 PrimitiveLaws.lean:59-90).
 
 The language expression is the runtime TUPLE `CoreRt` (Core
-expression + live env stack + the machine context `M`) and values are
-`CoreRVal`; `toVal`/`ofVal` act componentwise and the
-partial-bijection laws lift pointwise. `primStep` runs `Step` at the
-tuple's own machine context and PINS the successor's context to it
-(`q.1.M = p.1.M`): the engine never writes `labeled` on the
-sequential path, and nothing else in `M` is written by the fragment.
+expression + live env stack + the live control `ctl` + the machine
+context `M`) and values are `CoreRVal`; `toVal`/`ofVal` act
+componentwise and the partial-bijection laws lift pointwise — with
+the one control-side fact that a value is TERMINAL only at an EMPTY
+call stack (`toValRt` answers `none` at `ctl.κ ≠ []`: a value under a
+`Stack_cons2` is the engine's RETURN redex, C2). `primStep` runs
+`Step` at the tuple's own machine context and PINS the successor's
+context to it (`q.1.M = p.1.M`): the engine never writes `labeled`
+on the sequential path, and nothing else in `M` is written by the
+fragment. The control is NOT pinned by `primStep` — it is carried by
+`Step` (unchanged by every rule of this slice, `Step.ctl_eq`; written
+by the call/return rules of C2).
 
 - Observations: `Empty` (the fragment forks no threads and emits no
   observations; every `List Empty` is `[]`).
@@ -46,34 +52,34 @@ theorem List.empty_eq_nil (l : List Empty) : l = [] := by
 
 instance : Language CoreRt Mem Empty CoreRVal where
   primStep := fun p _obs q =>
-    Step p.1.M (p.1.e, p.1.ρ, p.2) (q.1.e, q.1.ρ, q.2.1) ∧
+    Step p.1.M (p.1.e, p.1.ρ, p.1.ctl, p.2) (q.1.e, q.1.ρ, q.1.ctl, q.2.1) ∧
       q.1.M = p.1.M ∧ q.2.2 = []
   toVal := toValRt
   ofVal := ofValRt
   coe_of_toVal_eq_some {r v} h := by
-    obtain ⟨e, ρ, M⟩ := r
+    obtain ⟨e, ρ, ⟨κ, pr, ℓ⟩, M⟩ := r
+    cases κ with
+    | cons pc κ => rw [toValRt_mk_cons] at h; cases h
+    | nil =>
     rw [toValRt_mk] at h
     cases he : toVal e with
     | none => rw [he] at h; cases h
     | some w =>
       rw [he] at h
       cases h
-      show ofValRt ⟨w, ρ, M⟩ = ⟨e, ρ, M⟩
+      show ofValRt ⟨w, ρ, pr, ℓ, M⟩ = ⟨e, ρ, ⟨[], pr, ℓ⟩, M⟩
       rw [ofValRt_mk, ofVal_of_toVal he]
   toVal_coe v := by
-    obtain ⟨w, ρ, M⟩ := v
+    obtain ⟨w, ρ, pr, ℓ, M⟩ := v
     rw [ofValRt_mk, toValRt_mk, toVal_ofVal]
     rfl
-  val_stuck {r σ obs r' σ' eₜ} h := by
-    obtain ⟨e, ρ, M⟩ := r
-    show toValRt ⟨e, ρ, M⟩ = none
-    rw [toValRt_mk, Step.toVal_none h.1]
-    rfl
+  val_stuck {r σ obs r' σ' eₜ} h :=
+    toValRt_eq_none_of_toVal_none (Step.toVal_none h.1)
 
 @[simp] theorem primStep_eq (r : CoreRt) (σ : Mem) (obs : List Empty)
     (r' : CoreRt) (σ' : Mem) (efs : List CoreRt) :
     (PrimStep.primStep (r, σ) obs (r', σ', efs) : Prop) ↔
-      (Step r.M (r.e, r.ρ, σ) (r'.e, r'.ρ, σ') ∧ r'.M = r.M ∧ efs = []) :=
+      (Step r.M (r.e, r.ρ, r.ctl, σ) (r'.e, r'.ρ, r'.ctl, σ') ∧ r'.M = r.M ∧ efs = []) :=
   Iff.rfl
 
 /-- Values-side sanity: `toVal` on the Language instance is the

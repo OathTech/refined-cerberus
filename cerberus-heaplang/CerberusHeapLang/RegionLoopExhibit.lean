@@ -347,7 +347,7 @@ include hcost hQ
 theorem rl_body_wps (i : Int) (f : Fmap sym value)
     (renv : List (Fmap sym value)) (hf : SymFrame f) :
     allocBudget (GF := GF) (i.toNat * regionCost al sz) ⊢
-      wps (procCtx p rs) (rlLs al sz) rlPost (rlBody loc ann ra al sz pref pbty ubty)
+      wps (procCtx rs) (procCtl p) (rlLs al sz) rlPost (rlBody loc ann ra al sz pref pbty ubty)
         (rlFrame (ivVal i) f :: renv) := by
   rw [show rlBody loc ann ra al sz pref pbty ubty =
     Expr [] (Eif rlGuardPe
@@ -405,7 +405,7 @@ theorem rl_body_wps (i : Int) (f : Fmap sym value)
 
 /-- THE BLOCK SPECIFICATION. -/
 theorem rl_blockSpecs :
-    ⊢ blockSpecs (GF := GF) (procCtx p rs) (rlLs al sz) rlPost := by
+    ⊢ blockSpecs (GF := GF) (procCtx rs) (procCtl p) (rlLs al sz) rlPost := by
   refine blockSpecs_intro fun l params cont args env0 envs hl => ?_
   rw [procCtx_labels hQ] at hl
   obtain ⟨rfl, rfl⟩ := rlQ_inv loc ann ra al sz pref ibty pbty ubty hl
@@ -424,7 +424,7 @@ theorem rl_blockSpecs :
     sz)} rl(n) {ret unit. emp}`. -/
 theorem rl_wps (sbty : core_base_type) (n : Int) :
     allocBudget (GF := GF) (n.toNat * regionCost al sz) ⊢
-      wps (procCtx p rs) (rlLs al sz) rlPost
+      wps (procCtx rs) (procCtl p) (rlLs al sz) rlPost
         (rlProg loc ann ra al sz pref sbty ibty pbty ubty n) [fmapEmpty] := by
   rw [show rlProg loc ann ra al sz pref sbty ibty pbty ubty n =
     Expr [] (Esave (rlLoopSym, sbty) (rlParams ibty n)
@@ -484,7 +484,7 @@ include hcost hQ
 theorem rl_body_wpt (i : Int) (hi : 0 ≤ i) (f : Fmap sym value)
     (renv : List (Fmap sym value)) (hf : SymFrame f) :
     allocBudget (GF := GF) (i.toNat * regionCost al sz) ⊢
-      wpt (procCtx p rs) (rlLsT al sz) (rlCost i.toNat) rlPost
+      wpt (procCtx rs) (procCtl p) (rlLsT al sz) (rlCost i.toNat) rlPost
         (rlBody loc ann ra al sz pref pbty ubty) (rlFrame (ivVal i) f :: renv) := by
   rw [show rlBody loc ann ra al sz pref pbty ubty =
     Expr [] (Eif rlGuardPe
@@ -545,7 +545,7 @@ theorem rl_body_wpt (i : Int) (hi : 0 ≤ i) (f : Fmap sym value)
 
 /-- THE TOTAL BLOCK SPECIFICATION. -/
 theorem rl_blockSpecsT :
-    ⊢ blockSpecsT (GF := GF) (procCtx p rs) (rlLsT al sz) rlPost := by
+    ⊢ blockSpecsT (GF := GF) (procCtx rs) (procCtl p) (rlLsT al sz) rlPost := by
   refine blockSpecsT_intro fun l params cont args env0 envs m hl => ?_
   rw [procCtx_labels hQ] at hl
   obtain ⟨rfl, rfl⟩ := rlQ_inv loc ann ra al sz pref ibty pbty ubty hl
@@ -563,7 +563,7 @@ theorem rl_blockSpecsT :
 /-- N REGIONS FROM ONE BUDGET (total), at budget `rlCost n.toNat + 1`. -/
 theorem rl_wpt (sbty : core_base_type) (n : Int) (hn : 0 ≤ n) :
     allocBudget (GF := GF) (n.toNat * regionCost al sz) ⊢
-      wpt (procCtx p rs) (rlLsT al sz) (rlCost n.toNat + 1) rlPost
+      wpt (procCtx rs) (procCtl p) (rlLsT al sz) (rlCost n.toNat + 1) rlPost
         (rlProg loc ann ra al sz pref sbty ibty pbty ubty n) [fmapEmpty] := by
   rw [show rlProg loc ann ra al sz pref sbty ibty pbty ubty n =
     Expr [] (Esave (rlLoopSym, sbty) (rlParams ibty n)
@@ -577,7 +577,7 @@ theorem rl_wpt (sbty : core_base_type) (n : Int) (hn : 0 ≤ n) :
 
 /-- The block specifications at the engine readout (what the launches consume). -/
 theorem rl_blockSpecsT_readout :
-    ⊢ blockSpecsT (GF := GF) (procCtx p rs) (rlLsT al sz)
+    ⊢ blockSpecsT (GF := GF) (procCtx rs) (procCtl p) (rlLsT al sz)
       (readoutPost (fun v _ => v = Vunit)) :=
   (rl_blockSpecsT loc ann ra al sz pref ibty pbty ubty hcost p rs hQ).trans
     (blockSpecsT_mono rlPost_readout)
@@ -585,7 +585,7 @@ theorem rl_blockSpecsT_readout :
 /-- The whole program at the engine readout. -/
 theorem rl_wpt_readout (sbty : core_base_type) (n : Int) (hn : 0 ≤ n) :
     allocBudget (GF := GF) (n.toNat * regionCost al sz) ⊢
-      wpt (procCtx p rs) (rlLsT al sz) (rlCost n.toNat + 1)
+      wpt (procCtx rs) (procCtl p) (rlLsT al sz) (rlCost n.toNat + 1)
         (readoutPost (fun v _ => v = Vunit))
         (rlProg loc ann ra al sz pref sbty ibty pbty ubty n) [fmapEmpty] :=
   (rl_wpt loc ann ra al sz pref ibty pbty ubty hcost p rs hQ sbty n hn).trans
@@ -611,7 +611,7 @@ theorem region_loop_certified_total (hcost : 0 < regionCost al sz)
     (hl : LaunchCoh fmapEmpty σ₀ (∅ : SpikeHeapF SpikeCell) (n.toNat * regionCost al sz))
     (aids : Nat → Nat) :
     ∃ σ' : Mem,
-      driveU (procCtx rlProcSym (rlRS loc ann ra al sz pref ibty pbty ubty)) aids
+      driveU (procCtx (rlRS loc ann ra al sz pref ibty pbty ubty)) aids
         (7 * n.toNat + 3)
         (procThread rlProcSym
           (rlProg loc ann ra al sz pref sbty ibty pbty ubty n) [fmapEmpty]) σ₀ =
@@ -624,8 +624,8 @@ theorem region_loop_certified_total (hcost : 0 < regionCost al sz)
   have hlbl := procCtx_labels hQ
   obtain ⟨v, σ', hdone, rfl, -⟩ :=
     wpt_engine_boundU_alloc (GF := SpikeGF)
-      (M := procCtx rlProcSym (rlRS loc ann ra al sz pref ibty pbty ubty))
-      (procCtx_wf _ _)
+      (M := procCtx (rlRS loc ann ra al sz pref ibty pbty ubty)) (ctl := procCtl rlProcSym)
+      (procCtx_wf _) rfl
       (fun l params cont hl => by
         rw [hlbl] at hl
         obtain ⟨-, rfl⟩ := rlQ_inv loc ann ra al sz pref ibty pbty ubty hl
@@ -712,7 +712,7 @@ theorem region_loop_certified_production (sup : Nat) (hcost : 0 < regionCost al 
     prod_run_eqJ sup (rlProg loc0 empty_annotation ra al sz pref sbty ibty pbty ubty n)
       hQprod (fun v _ => v = Vunit) (rlCost n.toNat + 1)
       (wpt_driver_done_alloc (GF := SpikeGF)
-        (M₀ := procCtx mainSym ((initial_core_run_state sup
+        (M₀ := procCtx ((initial_core_run_state sup
           (collect_labeled_continuations_NEW
             (prodFile (rlProg loc0 empty_annotation ra al sz pref sbty ibty pbty ubty n)))).1))
         rfl rfl (procCtx_labels hQprod) rfl rfl

@@ -6,7 +6,7 @@ budget-to-drive-length simulation.
 judgment's budget is realized as a concrete `driveU` length. From
 `wpt … k … e ρ` (with `blockSpecsT` for the registered bodies) plus
 the seeded footprint, the engine's drive AT LENGTH k DELIVERS:
-`driveU M aids k (M.thread e ρ) σ = .done v σ'` with the postcondition
+`driveU M aids k (M.thread e ρ ctl) σ = .done v σ'` with the postcondition
 readout — the unconditional total equations the exhibits export (fib
 at `2·n + 4`, list reversal at `13·|ns| + 7`, the tree rotation at
 19), with ZERO example-level Step constructors: the simulation is
@@ -80,20 +80,20 @@ def stateInert : CoreExpr → Bool
   | _ => true
 
 /-- Every registered label body is state-inert. -/
-def StateInertLabels (M : MachineCtx) : Prop :=
-  ∀ l params cont, lookupLabel M.labels l = some (params, cont) →
+def StateInertLabels (M : MachineCtx) (ctl : Ctl) : Prop :=
+  ∀ l params cont, lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
     stateInert cont = true
 
 /-- State-inert cone steps preserve the memory state, and inertness
     is preserved (or the step is the jump, which also preserves the
     state). -/
 theorem Frag.stateInert_step {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
-    {σ : Mem} {e' : CoreExpr} {ρ' : EnvStack} {σ' : Mem}
+    {ctl : Ctl} {σ : Mem} {e' : CoreExpr} {ρ' : EnvStack} {σ' : Mem}
     (hf : Frag e) (hin : stateInert e = true)
-    (hs : Step M (e, ρ, σ) (e', ρ', σ')) :
+    (hs : Step M (e, ρ, ctl, σ) (e', ρ', ctl, σ')) :
     σ' = σ ∧ (stateInert e' = true ∨
       ∃ l pes params cont, jumpRedex? e = some (l, pes) ∧
-        lookupLabel M.labels l = some (params, cont) ∧ e' = cont) := by
+        lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) ∧ e' = cont) := by
   induction hf generalizing e' ρ' σ' with
   | val_pure v => exact (Step.val_elim (w := .pure v) hs).elim
   | store => simp [stateInert, storeRedex] at hin
@@ -351,10 +351,10 @@ theorem readoutPost_mono {hlc : HasLC} {GF : BundledGFunctors}
 /-- The simulation's pure conclusion: the drive at fuel k DELIVERS,
     the delivered value and final state satisfy the readout, and on
     the state-inert cone the final state is the initial one. -/
-abbrev DriveDoneAt (M : MachineCtx) (aids : Nat → Nat) (k : Nat) (e : CoreExpr)
+abbrev DriveDoneAt (M : MachineCtx) (ctl : Ctl) (aids : Nat → Nat) (k : Nat) (e : CoreExpr)
     (ρ : EnvStack) (σ : Mem) (ψ : value → Mem → Prop) : Prop :=
-  ∃ v σ', driveU M aids k (M.thread e ρ) σ = .done v σ' ∧ ψ v σ' ∧
-    (stateInert e = true ∧ StateInertLabels M → σ' = σ)
+  ∃ v σ', driveU M aids k (M.thread e ρ ctl) σ = .done v σ' ∧ ψ v σ' ∧
+    (stateInert e = true ∧ StateInertLabels M ctl → σ' = σ)
 
 /-- THE SIMULATION (audit F-02, the cost half): the total statement
     judgment's budget IS drive fuel — one `driveU` step
@@ -363,19 +363,19 @@ abbrev DriveDoneAt (M : MachineCtx) (aids : Nat → Nat) (k : Nat) (e : CoreExpr
     decrease. Strong induction on the budget; no Löb, no
     step-indexing, no per-example Step chains ever again. -/
 theorem wpt_drive_aux {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
-    {M : MachineCtx} (hwf : M.SeqWF)
-    (hQf : ∀ l params cont, lookupLabel M.labels l = some (params, cont) →
+    {M : MachineCtx} (hwf : M.SeqWF) {ctl : Ctl} (hκ : ctl.κ = [])
+    (hQf : ∀ l params cont, lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
       Frag cont)
-    (hQpot : ∀ l params cont, lookupLabel M.labels l = some (params, cont) →
+    (hQpot : ∀ l params cont, lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
       pot cont ≤ lemDefaultFuel)
     (Ls : LabelSpecT GF) (ψ : value → Mem → Prop) :
     ∀ (k : Nat) (e : CoreExpr) (ev0 : Fmap sym value)
       (evs : List (Fmap sym value)) (σ : Mem) (ns nt : Nat) (aids : Nat → Nat),
       Frag e → pot e ≤ lemDefaultFuel →
       iprop(stateInterp (GF := GF) σ ns ([] : List Empty) nt ∗
-          blockSpecsT M Ls (readoutPost ψ) ∗
-          wpt M Ls k (readoutPost ψ) e (ev0 :: evs)) ⊢
-        iprop(|={⊤|}=> ⌜DriveDoneAt M aids k e (ev0 :: evs) σ ψ⌝) := by
+          blockSpecsT M ctl Ls (readoutPost ψ) ∗
+          wpt M ctl Ls k (readoutPost ψ) e (ev0 :: evs)) ⊢
+        iprop(|={⊤|}=> ⌜DriveDoneAt M ctl aids k e (ev0 :: evs) σ ψ⌝) := by
   intro k
   induction k using Nat.strongRecOn with
   | ind k IH =>
@@ -395,7 +395,7 @@ theorem wpt_drive_aux {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
         have hc' : 1 ≤ k := by simpa [deliveryCost] using hc
         omega⟩
       refine ⟨v, σ, ?_, hψ, fun _ => rfl⟩
-      rw [driveU_succ, stepOutcomes_thread, outcomesU_done hwf]
+      rw [driveU_succ, stepOutcomes_thread, outcomesU_done hwf hκ]
     | annot ds v =>
       obtain ⟨k'', rfl⟩ : ∃ k'', k = k'' + 2 := ⟨k - 2, by
         have hc' : 2 ≤ k := by simpa [deliveryCost] using hc
@@ -403,11 +403,11 @@ theorem wpt_drive_aux {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
       refine ⟨v, σ, ?_, hψ, fun _ => rfl⟩
       rw [show k'' + 2 = (k'' + 1) + 1 from rfl,
         show driveU M aids (k'' + 1 + 1)
-            (M.thread (ofVal (.annot ds v)) (ev0 :: evs)) σ =
+            (M.thread (ofVal (.annot ds v)) (ev0 :: evs) ctl) σ =
           driveU M (fun i => aids (i + 1)) (k'' + 1)
-            (M.thread (ofVal (.pure v)) (ev0 :: evs)) σ from by
+            (M.thread (ofVal (.pure v)) (ev0 :: evs) ctl) σ from by
           rw [driveU_succ, stepOutcomes_thread, outcomesU_remove_annot],
-        driveU_succ, stepOutcomes_thread, outcomesU_done hwf]
+        driveU_succ, stepOutcomes_thread, outcomesU_done hwf hκ]
   | none =>
     cases hjr : jumpRedex? e with
     | some lp =>
@@ -420,24 +420,24 @@ theorem wpt_drive_aux {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
         injection hρ with h1 h2
         exact ⟨h1, h2⟩
       obtain ⟨k', rfl⟩ : ∃ k', k = k' + 1 := ⟨k - 1, by omega⟩
-      have hs : Step M (e, ev0 :: evs, σ)
-          (cont, bindArgs params vs (ev0 :: evs), σ) :=
+      have hs : Step M (e, ev0 :: evs, ctl, σ)
+          (cont, bindArgs params vs (ev0 :: evs), ctl, σ) :=
         Step.run_of_jumpRedex hjr hl hvs
       obtain ⟨ev0'', hbind⟩ := Step.env_cons hs
       ihave Hwpt := HB $$ %l %params %cont %vs %ev0 %evs %m %hl HLs
-      ihave Hwpt' : wpt M Ls k' (readoutPost ψ) cont
+      ihave Hwpt' : wpt M ctl Ls k' (readoutPost ψ) cont
           (bindArgs params vs (ev0 :: evs)) $$ [Hwpt]
       · iapply wpt_mono_k (show m ≤ k' by omega) cont _ $$ Hwpt
       rw [hbind]
-      have hstep_eq : driveU M aids (k' + 1) (M.thread e (ev0 :: evs)) σ =
+      have hstep_eq : driveU M aids (k' + 1) (M.thread e (ev0 :: evs) ctl) σ =
           driveU M (fun i => aids (i + 1)) k'
-            (M.thread cont (ev0'' :: evs)) σ := by
+            (M.thread cont (ev0'' :: evs) ctl) σ := by
         rw [driveU_succ, stepOutcomes_thread,
           outcomesU_of_step (aids 0) hfrag
             (Nat.le_trans hfrag.esize_le_pot hpot) hs, hbind]
-      have hf : DriveDoneAt M (fun i => aids (i + 1)) k' cont
+      have hf : DriveDoneAt M ctl (fun i => aids (i + 1)) k' cont
             (ev0'' :: evs) σ ψ →
-          DriveDoneAt M aids (k' + 1) e (ev0 :: evs) σ ψ := by
+          DriveDoneAt M ctl aids (k' + 1) e (ev0 :: evs) σ ψ := by
         rintro ⟨v, σ', hdone, hψ, hin⟩
         refine ⟨v, σ', ?_, hψ, ?_⟩
         · rw [hstep_eq]
@@ -461,14 +461,15 @@ theorem wpt_drive_aux {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
         obtain ⟨obs0, r', σ', eₜ', hps⟩ := hred
         obtain ⟨hs, hM, hnil⟩ := hps
         subst hnil
-        obtain ⟨re, rρ, rM⟩ := r'
+        obtain ⟨re, rρ, rctl, rM⟩ := r'
         simp only at hs hM
         obtain rfl : M = rM := hM.symm
+        obtain rfl : ctl = rctl := (Step.ctl_eq hs).symm
         obtain ⟨ev0', rfl⟩ := Step.env_cons hs
-        imod Hwand $$ %(⟨re, ev0' :: evs, M⟩ : CoreRt) %σ' %([] : List CoreRt)
+        imod Hwand $$ %(⟨re, ev0' :: evs, ctl, M⟩ : CoreRt) %σ' %([] : List CoreRt)
           %(⟨hs, rfl, rfl⟩ :
-            ((⟨e, ev0 :: evs, M⟩ : CoreRt), σ) -<([] : List Empty)>->
-              ((⟨re, ev0' :: evs, M⟩ : CoreRt), σ', []))
+            ((⟨e, ev0 :: evs, ctl, M⟩ : CoreRt), σ) -<([] : List Empty)>->
+              ((⟨re, ev0' :: evs, ctl, M⟩ : CoreRt), σ', []))
           with ⟨Hσ', Hwpt⟩
         have hfrag' : Frag re := hfrag.step hQf hs
         have hpot' : pot re ≤ lemDefaultFuel := by
@@ -477,15 +478,15 @@ theorem wpt_drive_aux {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
           · omega
           · rw [hjr] at hj0
             cases hj0
-        have hstep_eq : driveU M aids (k' + 1) (M.thread e (ev0 :: evs)) σ =
+        have hstep_eq : driveU M aids (k' + 1) (M.thread e (ev0 :: evs) ctl) σ =
             driveU M (fun i => aids (i + 1)) k'
-              (M.thread re (ev0' :: evs)) σ' := by
+              (M.thread re (ev0' :: evs) ctl) σ' := by
           rw [driveU_succ, stepOutcomes_thread,
             outcomesU_of_step (aids 0) hfrag
               (Nat.le_trans hfrag.esize_le_pot hpot) hs]
-        have hf : DriveDoneAt M (fun i => aids (i + 1)) k' re
+        have hf : DriveDoneAt M ctl (fun i => aids (i + 1)) k' re
               (ev0' :: evs) σ' ψ →
-            DriveDoneAt M aids (k' + 1) e (ev0 :: evs) σ ψ := by
+            DriveDoneAt M ctl aids (k' + 1) e (ev0 :: evs) σ ψ := by
           rintro ⟨v, σ'', hdone, hψ, hin⟩
           refine ⟨v, σ'', ?_, hψ, ?_⟩
           · rw [hstep_eq]
@@ -510,10 +511,10 @@ list (the total analog of `engine_adequacyU`) -/
     state pinned on the state-inert cone. PROVISIONAL: stated over
     `driveU` (module header). -/
 theorem wpt_engine_boundU {GF : BundledGFunctors} [SpikeGpreS GF]
-    {M : MachineCtx} (hwf : M.SeqWF)
-    (hQf : ∀ l params cont, lookupLabel M.labels l = some (params, cont) →
+    {M : MachineCtx} (hwf : M.SeqWF) {ctl : Ctl} (hκ : ctl.κ = [])
+    (hQf : ∀ l params cont, lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
       Frag cont)
-    (hQpot : ∀ l params cont, lookupLabel M.labels l = some (params, cont) →
+    (hQpot : ∀ l params cont, lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
       pot cont ≤ lemDefaultFuel)
     (Ls : ∀ [SpikeGS .hasLC GF], LabelSpecT GF)
     (e₀ : CoreExpr) (ev00 : Fmap sym value) (evs0 : List (Fmap sym value))
@@ -523,11 +524,11 @@ theorem wpt_engine_boundU {GF : BundledGFunctors} [SpikeGpreS GF]
     (hwp : ∀ [SpikeGS .hasLC GF],
       iprop(([∗map] i ↦ c ∈ m₀, cellOwn M.tagDefs (hlc := .hasLC) (GF := GF) i
           (.own 1) c)) ⊢
-        iprop(blockSpecsT M Ls (readoutPost ψ) ∗
-          wpt M Ls k (readoutPost ψ) e₀ (ev00 :: evs0)))
+        iprop(blockSpecsT M ctl Ls (readoutPost ψ) ∗
+          wpt M ctl Ls k (readoutPost ψ) e₀ (ev00 :: evs0)))
     (aids : Nat → Nat) :
-    ∃ v σ', driveU M aids k (M.thread e₀ (ev00 :: evs0)) σ₀ = .done v σ' ∧
-      ψ v σ' ∧ (stateInert e₀ = true ∧ StateInertLabels M → σ' = σ₀) := by
+    ∃ v σ', driveU M aids k (M.thread e₀ (ev00 :: evs0) ctl) σ₀ = .done v σ' ∧
+      ψ v σ' ∧ (stateInert e₀ = true ∧ StateInertLabels M ctl → σ' = σ₀) := by
   refine pure_soundness (PROP := IProp GF) ?_
   refine (fupd_finally_soundness .hasLC 0 ⊤ _ ?_)
   iintro %Hinv Hcred
@@ -561,7 +562,7 @@ theorem wpt_engine_boundU {GF : BundledGFunctors} [SpikeGpreS GF]
     · iexact Hki
     · iapply budgetInterp_zero
       iexact HB0
-  iapply wpt_drive_aux hwf hQf hQpot Ls ψ k e₀ ev00 evs0 σ₀ 0 0 aids
+  iapply wpt_drive_aux hwf hκ hQf hQpot Ls ψ k e₀ ev00 evs0 σ₀ 0 0 aids
     hfrag hpot $$ [$Hσ $HB $Hwpt]
 
 /-- ALLOCATION-AWARE total engine bound (alloc arc P1.3): as
@@ -573,10 +574,10 @@ theorem wpt_engine_boundU {GF : BundledGFunctors} [SpikeGpreS GF]
     (charter P1.3's incremental-migration allowance). PROVISIONAL:
     stated over `driveU` (module header). -/
 theorem wpt_engine_boundU_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
-    {M : MachineCtx} (hwf : M.SeqWF)
-    (hQf : ∀ l params cont, lookupLabel M.labels l = some (params, cont) →
+    {M : MachineCtx} (hwf : M.SeqWF) {ctl : Ctl} (hκ : ctl.κ = [])
+    (hQf : ∀ l params cont, lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
       Frag cont)
-    (hQpot : ∀ l params cont, lookupLabel M.labels l = some (params, cont) →
+    (hQpot : ∀ l params cont, lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
       pot cont ≤ lemDefaultFuel)
     (Ls : ∀ [SpikeGS .hasLC GF], LabelSpecT GF)
     (e₀ : CoreExpr) (ev00 : Fmap sym value) (evs0 : List (Fmap sym value))
@@ -587,11 +588,11 @@ theorem wpt_engine_boundU_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
     (hwp : ∀ [SpikeGS .hasLC GF],
       iprop(([∗map] i ↦ c ∈ m₀, cellOwn M.tagDefs (hlc := .hasLC) (GF := GF) i
           (.own 1) c) ∗ allocBudget B) ⊢
-        iprop(blockSpecsT M Ls (readoutPost ψ) ∗
-          wpt M Ls k (readoutPost ψ) e₀ (ev00 :: evs0)))
+        iprop(blockSpecsT M ctl Ls (readoutPost ψ) ∗
+          wpt M ctl Ls k (readoutPost ψ) e₀ (ev00 :: evs0)))
     (aids : Nat → Nat) :
-    ∃ v σ', driveU M aids k (M.thread e₀ (ev00 :: evs0)) σ₀ = .done v σ' ∧
-      ψ v σ' ∧ (stateInert e₀ = true ∧ StateInertLabels M → σ' = σ₀) := by
+    ∃ v σ', driveU M aids k (M.thread e₀ (ev00 :: evs0) ctl) σ₀ = .done v σ' ∧
+      ψ v σ' ∧ (stateInert e₀ = true ∧ StateInertLabels M ctl → σ' = σ₀) := by
   refine pure_soundness (PROP := IProp GF) ?_
   refine (fupd_finally_soundness .hasLC 0 ⊤ _ ?_)
   iintro %Hinv Hcred
@@ -611,7 +612,7 @@ theorem wpt_engine_boundU_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
     with ⟨Hσ, Hcells, Hcap⟩
   ihave HW := hwp $$ [$Hcells $Hcap]
   icases HW with ⟨HB, Hwpt⟩
-  iapply wpt_drive_aux hwf hQf hQpot Ls ψ k e₀ ev00 evs0 σ₀ 0 0 aids
+  iapply wpt_drive_aux hwf hκ hQf hQpot Ls ψ k e₀ ev00 evs0 σ₀ 0 0 aids
     hfrag hpot $$ [$Hσ $HB $Hwpt]
 
 end CerberusHeapLang

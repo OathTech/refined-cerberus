@@ -35,7 +35,7 @@ Four layers:
 4. `project_triple_pure` — THE HEADLINE PROJECTION: ANY Iris triple
    with a concrete-map precondition and an ARBITRARY Iris
    postcondition `Q` whose (framed) post pure-entails `ψ R w.val σ'`
-   under the coupling projects to the BORING triple `MemTripleU M ρ e
+   under the coupling projects to the BORING triple `MemTripleU M ctl ρ e
    P ψ` — memory splits as P ⊎ R, the engine's drive never kills or
    derails at any length, and every delivered `(v, σ')` satisfies the
    PURE `ψ R v σ'` — with no Iris vocabulary in the conclusion. The
@@ -167,8 +167,8 @@ def stepOutcomes (M : MachineCtx) (aid : Nat) (th : thread_state)
     (dischargeStep M.tagDefs aid M.runState σ)
 
 theorem stepOutcomes_thread (M : MachineCtx) (aid : Nat) (e : CoreExpr)
-    (ρ : EnvStack) (σ : Mem) :
-    stepOutcomes M aid (M.thread e ρ) σ = outcomesU M aid e ρ σ := rfl
+    (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
+    stepOutcomes M aid (M.thread e ρ ctl) σ = outcomesU M aid e ρ ctl σ := rfl
 
 /-- THIS PACKAGE'S DRIVE LOOP AT A MACHINE CONTEXT (the ONE drive):
     iterate {`step_ctx` → `dischargeStep`} with every immutable drawn
@@ -205,7 +205,7 @@ theorem driveU_succ (M : MachineCtx) (aids : Nat → Nat) (n : Nat)
     carrying configurations, S1). -/
 def Reach : CoreRt × Mem → CoreRt × Mem → Prop :=
   Relation.ReflTransGen (fun a b =>
-    Step a.1.M (a.1.e, a.1.ρ, a.2) (b.1.e, b.1.ρ, b.2) ∧ b.1.M = a.1.M)
+    Step a.1.M (a.1.e, a.1.ρ, a.1.ctl, a.2) (b.1.e, b.1.ρ, b.1.ctl, b.2) ∧ b.1.M = a.1.M)
 
 /-- Transport into the iris thread-pool reduction (the pool stays a
     singleton: the fragment forks nothing). -/
@@ -819,15 +819,15 @@ def DriveOk (φp : CoreRVal → Mem → Prop) : DriveResult → Prop
   | .killed _ => False
   | .stuck => False
 
-/-- Driving a bare value at any SeqWF context: PROGRAM-DONE. -/
-theorem driveU_value_pure {M : MachineCtx} (hwf : M.SeqWF)
+/-- Driving a bare value at any SeqWF context and empty-stack control: PROGRAM-DONE. -/
+theorem driveU_value_pure {M : MachineCtx} (hwf : M.SeqWF) {ctl : Ctl} (hκ : ctl.κ = [])
     (φp : CoreRVal → Mem → Prop) (aids : Nat → Nat)
     (v : value) (ρ : EnvStack) (σ : Mem)
     (h : ∃ w : CoreRVal, w.val = v ∧ φp w σ) :
-    ∀ n, DriveOk φp (driveU M aids n (M.thread (ofVal (.pure v)) ρ) σ)
+    ∀ n, DriveOk φp (driveU M aids n (M.thread (ofVal (.pure v)) ρ ctl) σ)
   | 0 => trivial
   | n+1 => by
-    rw [driveU_succ, stepOutcomes_thread, outcomesU_done hwf]
+    rw [driveU_succ, stepOutcomes_thread, outcomesU_done hwf hκ]
     exact h
 
 /-- THE UNIFIED CLASSIFICATION (the one drive classification, at any
@@ -840,23 +840,26 @@ theorem driveU_value_pure {M : MachineCtx} (hwf : M.SeqWF)
     step (non-increase, or the jump reset to a registered body) and
     `Frag.esize_le_pot` discharges `outcomesU_of_step`'s `esize`
     obligation, so the drive length `n` is UNBOUNDED. -/
-theorem drive_classifyU {M : MachineCtx} (hwf : M.SeqWF)
-    (hQf : ∀ l params cont, lookupLabel M.labels l = some (params, cont) →
+theorem drive_classifyU {M : MachineCtx} (hwf : M.SeqWF) {ctl : Ctl} (hκ : ctl.κ = [])
+    (hQf : ∀ l params cont, lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
       Frag cont)
-    (hQpot : ∀ l params cont, lookupLabel M.labels l = some (params, cont) →
+    (hQpot : ∀ l params cont, lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
       pot cont ≤ lemDefaultFuel)
     (e₀ : CoreExpr) (ρ₀ : EnvStack) (σ₀ : Mem)
     (φp : CoreRVal → Mem → Prop)
     (hNS : ∀ (r : CoreRt) (σ : Mem),
-      Reach ((⟨e₀, ρ₀, M⟩ : CoreRt), σ₀) (r, σ) →
+      Reach ((⟨e₀, ρ₀, ctl, M⟩ : CoreRt), σ₀) (r, σ) →
       PrimStep.NotStuck (Val := CoreRVal) (r, σ))
     (hRES : ∀ (w : CoreRVal) (σ : Mem),
-      Reach ((⟨e₀, ρ₀, M⟩ : CoreRt), σ₀) (ofValRt w, σ) → φp w σ) :
+      Reach ((⟨e₀, ρ₀, ctl, M⟩ : CoreRt), σ₀) (ofValRt w, σ) → φp w σ) :
     ∀ (n : Nat) (aids : Nat → Nat) (e : CoreExpr) (ev0 : Fmap sym value)
       (evs : List (Fmap sym value)) (σ : Mem),
-      Reach ((⟨e₀, ρ₀, M⟩ : CoreRt), σ₀) ((⟨e, ev0 :: evs, M⟩ : CoreRt), σ) →
+      Reach ((⟨e₀, ρ₀, ctl, M⟩ : CoreRt), σ₀) ((⟨e, ev0 :: evs, ctl, M⟩ : CoreRt), σ) →
       Frag e → pot e ≤ lemDefaultFuel →
-      DriveOk φp (driveU M aids n (M.thread e (ev0 :: evs)) σ) := by
+      DriveOk φp (driveU M aids n (M.thread e (ev0 :: evs) ctl) σ) := by
+  obtain ⟨κ, pr, ℓ⟩ := ctl
+  simp only at hκ
+  subst hκ
   intro n
   induction n with
   | zero => intro aids e ev0 evs σ _ _ _; trivial
@@ -868,22 +871,23 @@ theorem drive_classifyU {M : MachineCtx} (hwf : M.SeqWF)
       subst he
       cases w with
       | pure v =>
-        exact driveU_value_pure hwf φp aids v (ev0 :: evs) σ
-          ⟨⟨.pure v, ev0 :: evs, M⟩, rfl,
-            hRES ⟨.pure v, ev0 :: evs, M⟩ σ hreach⟩ (n+1)
+        exact driveU_value_pure hwf (ctl := ⟨[], pr, ℓ⟩) rfl φp aids v (ev0 :: evs) σ
+          ⟨⟨.pure v, ev0 :: evs, pr, ℓ, M⟩, rfl,
+            hRES ⟨.pure v, ev0 :: evs, pr, ℓ, M⟩ σ hreach⟩ (n+1)
       | annot ds v =>
         rw [driveU_succ, stepOutcomes_thread, outcomesU_remove_annot]
-        exact driveU_value_pure hwf φp _ v (ev0 :: evs) σ
-          ⟨⟨.annot ds v, ev0 :: evs, M⟩, rfl,
-            hRES ⟨.annot ds v, ev0 :: evs, M⟩ σ hreach⟩ n
+        exact driveU_value_pure hwf (ctl := ⟨[], pr, ℓ⟩) rfl φp _ v (ev0 :: evs) σ
+          ⟨⟨.annot ds v, ev0 :: evs, pr, ℓ, M⟩, rfl,
+            hRES ⟨.annot ds v, ev0 :: evs, pr, ℓ, M⟩ σ hreach⟩ n
     | none =>
-      rcases hNS ⟨e, ev0 :: evs, M⟩ σ hreach with hval | ⟨obs, r', σ', efs, hprim⟩
+      rcases hNS ⟨e, ev0 :: evs, ⟨[], pr, ℓ⟩, M⟩ σ hreach with hval | ⟨obs, r', σ', efs, hprim⟩
       · rw [language_toVal_eq, toValRt_mk, hv] at hval
         cases hval
       · obtain ⟨hs, hM, -⟩ := hprim
-        obtain ⟨re', rρ', rM'⟩ := r'
+        obtain ⟨re', rρ', rctl', rM'⟩ := r'
         simp only at hs hM
         obtain rfl : M = rM' := hM.symm
+        obtain rfl : (⟨[], pr, ℓ⟩ : Ctl) = rctl' := (Step.ctl_eq hs).symm
         obtain ⟨ev0', rfl⟩ := Step.env_cons hs
         rw [driveU_succ, stepOutcomes_thread,
           outcomesU_of_step (aids 0) hf (Nat.le_trans hf.esize_le_pot hpot) hs]
@@ -904,10 +908,10 @@ theorem drive_classifyU {M : MachineCtx} (hwf : M.SeqWF)
     fix 1). Explicit WF hypothesis: `SeqWF`. PROVISIONAL: stated over
     `driveU` (module header). -/
 theorem engine_adequacyU {GF : BundledGFunctors} [SpikeGpreS GF]
-    {M : MachineCtx} (hwf : M.SeqWF)
-    (hQf : ∀ l params cont, lookupLabel M.labels l = some (params, cont) →
+    {M : MachineCtx} (hwf : M.SeqWF) {ctl : Ctl} (hκ : ctl.κ = [])
+    (hQf : ∀ l params cont, lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
       Frag cont)
-    (hQpot : ∀ l params cont, lookupLabel M.labels l = some (params, cont) →
+    (hQpot : ∀ l params cont, lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
       pot cont ≤ lemDefaultFuel)
     (e₀ : CoreExpr) (ev00 : Fmap sym value) (evs0 : List (Fmap sym value))
     (σ₀ : Mem) (m₀ : SpikeHeapF SpikeCell)
@@ -915,33 +919,33 @@ theorem engine_adequacyU {GF : BundledGFunctors} [SpikeGpreS GF]
     (ψ : value → Mem → Prop)
     (hwp : ∀ [SpikeGS .hasLC GF],
       iprop(([∗map] i ↦ c ∈ m₀, cellOwn M.tagDefs (hlc := .hasLC) (GF := GF) i (.own 1) c)) ⊢
-        WP (⟨e₀, ev00 :: evs0, M⟩ : CoreRt) @ Stuckness.NotStuck; ⊤
+        WP (⟨e₀, ev00 :: evs0, ctl, M⟩ : CoreRt) @ Stuckness.NotStuck; ⊤
           {{ w, iprop(∀ (σ' : Mem) (ns : Nat)
           (κs : List Empty) (nt : Nat),
           stateInterp σ' ns κs nt ={⊤, ∅}=∗ ⌜ψ w.val σ'⌝) }})
     (n : Nat) (aids : Nat → Nat) :
-    (∀ r, driveU M aids n (M.thread e₀ (ev00 :: evs0)) σ₀ ≠ .killed r) ∧
-    (driveU M aids n (M.thread e₀ (ev00 :: evs0)) σ₀ ≠ .stuck) ∧
+    (∀ r, driveU M aids n (M.thread e₀ (ev00 :: evs0) ctl) σ₀ ≠ .killed r) ∧
+    (driveU M aids n (M.thread e₀ (ev00 :: evs0) ctl) σ₀ ≠ .stuck) ∧
     (∀ (v : value) (σ' : Mem),
-      driveU M aids n (M.thread e₀ (ev00 :: evs0)) σ₀ = .done v σ' →
+      driveU M aids n (M.thread e₀ (ev00 :: evs0) ctl) σ₀ = .done v σ' →
       ψ v σ') := by
   have hadeq := fun (t2 : List CoreRt) (σ2 : Mem)
-      (h : ([(⟨e₀, ev00 :: evs0, M⟩ : CoreRt)], σ₀) -·->ₜₚ* (t2, σ2)) =>
-    spike_step_adequacy M.tagDefs ⟨e₀, ev00 :: evs0, M⟩ σ₀ m₀ hcoh
+      (h : ([(⟨e₀, ev00 :: evs0, ctl, M⟩ : CoreRt)], σ₀) -·->ₜₚ* (t2, σ2)) =>
+    spike_step_adequacy M.tagDefs ⟨e₀, ev00 :: evs0, ctl, M⟩ σ₀ m₀ hcoh
       (fun w σ' => ψ w.val σ') hwp h
   have hNS : ∀ (r : CoreRt) (σ : Mem),
-      Reach ((⟨e₀, ev00 :: evs0, M⟩ : CoreRt), σ₀) (r, σ) →
+      Reach ((⟨e₀, ev00 :: evs0, ctl, M⟩ : CoreRt), σ₀) (r, σ) →
       PrimStep.NotStuck (Val := CoreRVal) (r, σ) := by
     intro r σ hr
     exact (hadeq [r] σ (Reach.toPool hr)).1 r (by simp)
   have hRES : ∀ (w : CoreRVal) (σ : Mem),
-      Reach ((⟨e₀, ev00 :: evs0, M⟩ : CoreRt), σ₀) (ofValRt w, σ) →
+      Reach ((⟨e₀, ev00 :: evs0, ctl, M⟩ : CoreRt), σ₀) (ofValRt w, σ) →
       ψ w.val σ := by
     intro w σ hr
     exact (hadeq [ofValRt w] σ (Reach.toPool hr)).2 w [] rfl
   have hok : DriveOk (fun w σ' => ψ w.val σ')
-      (driveU M aids n (M.thread e₀ (ev00 :: evs0)) σ₀) :=
-    drive_classifyU hwf hQf hQpot e₀ (ev00 :: evs0) σ₀ _ hNS hRES
+      (driveU M aids n (M.thread e₀ (ev00 :: evs0) ctl) σ₀) :=
+    drive_classifyU hwf hκ hQf hQpot e₀ (ev00 :: evs0) σ₀ _ hNS hRES
       n aids e₀ ev00 evs0 σ₀ .refl hfrag hpot
   refine ⟨fun r hdr => ?_, fun hds => ?_, fun v σ' hdv => ?_⟩
   · rw [hdr] at hok; exact hok
@@ -955,7 +959,7 @@ theorem engine_adequacyU {GF : BundledGFunctors} [SpikeGpreS GF]
     `labeled` is empty), so the label-cone hypotheses are vacuous. -/
 theorem spikeCtx_labels_none (l : sym)
     {pc : List (sym × core_base_type) × CoreExpr}
-    (h : lookupLabel spikeCtx.labels l = some pc) : False := by
+    (h : lookupLabel (spikeCtx.labelsAt spikeCtl.proc) l = some pc) : False := by
   rw [spikeCtx_labels, lookupLabel_empty] at h
   cases h
 
@@ -963,11 +967,11 @@ theorem spikeCtx_labels_none (l : sym)
     label-budget premises of the adequacy/projection theorems are
     vacuous there (the two spellings every `spikeCtx` client passes). -/
 theorem spikeCtx_labels_frag (l : sym) (params : List (sym × core_base_type))
-    (cont : CoreExpr) (hl : lookupLabel spikeCtx.labels l = some (params, cont)) :
+    (cont : CoreExpr) (hl : lookupLabel (spikeCtx.labelsAt spikeCtl.proc) l = some (params, cont)) :
     Frag cont := (spikeCtx_labels_none l hl).elim
 
 theorem spikeCtx_labels_pot (l : sym) (params : List (sym × core_base_type))
-    (cont : CoreExpr) (hl : lookupLabel spikeCtx.labels l = some (params, cont)) :
+    (cont : CoreExpr) (hl : lookupLabel (spikeCtx.labelsAt spikeCtl.proc) l = some (params, cont)) :
     pot cont ≤ lemDefaultFuel := (spikeCtx_labels_none l hl).elim
 
 /-- ALLOCATION-AWARE engine adequacy at any machine context (alloc
@@ -977,10 +981,10 @@ theorem spikeCtx_labels_pot (l : sym) (params : List (sym × core_base_type))
     `allocBudget B` (via `spike_step_adequacy_alloc`). PROVISIONAL:
     stated over `driveU` (module header). -/
 theorem engine_adequacyU_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
-    {M : MachineCtx} (hwf : M.SeqWF)
-    (hQf : ∀ l params cont, lookupLabel M.labels l = some (params, cont) →
+    {M : MachineCtx} (hwf : M.SeqWF) {ctl : Ctl} (hκ : ctl.κ = [])
+    (hQf : ∀ l params cont, lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
       Frag cont)
-    (hQpot : ∀ l params cont, lookupLabel M.labels l = some (params, cont) →
+    (hQpot : ∀ l params cont, lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
       pot cont ≤ lemDefaultFuel)
     (e₀ : CoreExpr) (ev00 : Fmap sym value) (evs0 : List (Fmap sym value))
     (σ₀ : Mem) (m₀ : SpikeHeapF SpikeCell) (B : Nat)
@@ -991,33 +995,33 @@ theorem engine_adequacyU_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
       iprop(([∗map] i ↦ c ∈ m₀,
           cellOwn M.tagDefs (hlc := .hasLC) (GF := GF) i (.own 1) c) ∗
         allocBudget B) ⊢
-        WP (⟨e₀, ev00 :: evs0, M⟩ : CoreRt) @ Stuckness.NotStuck; ⊤
+        WP (⟨e₀, ev00 :: evs0, ctl, M⟩ : CoreRt) @ Stuckness.NotStuck; ⊤
           {{ w, iprop(∀ (σ' : Mem) (ns : Nat)
           (κs : List Empty) (nt : Nat),
           stateInterp σ' ns κs nt ={⊤, ∅}=∗ ⌜ψ w.val σ'⌝) }})
     (n : Nat) (aids : Nat → Nat) :
-    (∀ r, driveU M aids n (M.thread e₀ (ev00 :: evs0)) σ₀ ≠ .killed r) ∧
-    (driveU M aids n (M.thread e₀ (ev00 :: evs0)) σ₀ ≠ .stuck) ∧
+    (∀ r, driveU M aids n (M.thread e₀ (ev00 :: evs0) ctl) σ₀ ≠ .killed r) ∧
+    (driveU M aids n (M.thread e₀ (ev00 :: evs0) ctl) σ₀ ≠ .stuck) ∧
     (∀ (v : value) (σ' : Mem),
-      driveU M aids n (M.thread e₀ (ev00 :: evs0)) σ₀ = .done v σ' →
+      driveU M aids n (M.thread e₀ (ev00 :: evs0) ctl) σ₀ = .done v σ' →
       ψ v σ') := by
   have hadeq := fun (t2 : List CoreRt) (σ2 : Mem)
-      (h : ([(⟨e₀, ev00 :: evs0, M⟩ : CoreRt)], σ₀) -·->ₜₚ* (t2, σ2)) =>
-    spike_step_adequacy_alloc M.tagDefs ⟨e₀, ev00 :: evs0, M⟩ σ₀ m₀ B hl
+      (h : ([(⟨e₀, ev00 :: evs0, ctl, M⟩ : CoreRt)], σ₀) -·->ₜₚ* (t2, σ2)) =>
+    spike_step_adequacy_alloc M.tagDefs ⟨e₀, ev00 :: evs0, ctl, M⟩ σ₀ m₀ B hl
       (fun w σ' => ψ w.val σ') hwp h
   have hNS : ∀ (r : CoreRt) (σ : Mem),
-      Reach ((⟨e₀, ev00 :: evs0, M⟩ : CoreRt), σ₀) (r, σ) →
+      Reach ((⟨e₀, ev00 :: evs0, ctl, M⟩ : CoreRt), σ₀) (r, σ) →
       PrimStep.NotStuck (Val := CoreRVal) (r, σ) := by
     intro r σ hr
     exact (hadeq [r] σ (Reach.toPool hr)).1 r (by simp)
   have hRES : ∀ (w : CoreRVal) (σ : Mem),
-      Reach ((⟨e₀, ev00 :: evs0, M⟩ : CoreRt), σ₀) (ofValRt w, σ) →
+      Reach ((⟨e₀, ev00 :: evs0, ctl, M⟩ : CoreRt), σ₀) (ofValRt w, σ) →
       ψ w.val σ := by
     intro w σ hr
     exact (hadeq [ofValRt w] σ (Reach.toPool hr)).2 w [] rfl
   have hok : DriveOk (fun w σ' => ψ w.val σ')
-      (driveU M aids n (M.thread e₀ (ev00 :: evs0)) σ₀) :=
-    drive_classifyU hwf hQf hQpot e₀ (ev00 :: evs0) σ₀ _ hNS hRES
+      (driveU M aids n (M.thread e₀ (ev00 :: evs0) ctl) σ₀) :=
+    drive_classifyU hwf hκ hQf hQpot e₀ (ev00 :: evs0) σ₀ _ hNS hRES
       n aids e₀ ev00 evs0 σ₀ .refl hfrag hpot
   refine ⟨fun r hdr => ?_, fun hds => ?_, fun v σ' hdv => ?_⟩
   · rw [hdr] at hok; exact hok
@@ -1092,24 +1096,24 @@ theorem Sat.union_left {tds : CerbTags.TagDefsMap} {σ : Mem} {Q R : CellMap}
     budget, `pot`, is a hypothesis of the projection theorems that
     produce triples; header, FUEL HONESTY). PROVISIONAL: stated over
     `driveU` (module header). -/
-def SemTripleU (M : MachineCtx) (ρ : EnvStack) (e : CoreExpr) (P : CellMap)
+def SemTripleU (M : MachineCtx) (ctl : Ctl) (ρ : EnvStack) (e : CoreExpr) (P : CellMap)
     (post : value → CellMap → Prop) : Prop :=
   ∀ (R : CellMap), P ##ₘ R →
   ∀ (σ : Mem), Sat M.tagDefs σ (Iris.Std.PartialMap.union P R) →
   ∀ (n : Nat) (aids : Nat → Nat),
-    (∀ r, driveU M aids n (M.thread e ρ) σ ≠ .killed r) ∧
-    (driveU M aids n (M.thread e ρ) σ ≠ .stuck) ∧
-    (∀ (v : value) (σ' : Mem), driveU M aids n (M.thread e ρ) σ = .done v σ' →
+    (∀ r, driveU M aids n (M.thread e ρ ctl) σ ≠ .killed r) ∧
+    (driveU M aids n (M.thread e ρ ctl) σ ≠ .stuck) ∧
+    (∀ (v : value) (σ' : Mem), driveU M aids n (M.thread e ρ ctl) σ = .done v σ' →
       ∃ Q : CellMap, post v Q ∧ Q ##ₘ R ∧
         Sat M.tagDefs σ' (Iris.Std.PartialMap.union Q R))
 
 /-- INTERIOR, at any machine context and entry environment: the derived
     logic (Iris WP over Step) proves the footprint triple. -/
 abbrev ProvenTripleU (GF : BundledGFunctors) [SpikeGpreS GF] (M : MachineCtx)
-    (ρ : EnvStack) (e : CoreExpr) (P : CellMap) (post : value → CellMap → Prop) : Prop :=
+    (ctl : Ctl) (ρ : EnvStack) (e : CoreExpr) (P : CellMap) (post : value → CellMap → Prop) : Prop :=
   ∀ [SpikeGS .hasLC GF],
     iprop(([∗map] i ↦ c ∈ P, cellOwn M.tagDefs (hlc := .hasLC) (GF := GF) i (.own 1) c)) ⊢
-      WP (⟨e, ρ, M⟩ : CoreRt) @ Stuckness.NotStuck; ⊤ {{ w,
+      WP (⟨e, ρ, ctl, M⟩ : CoreRt) @ Stuckness.NotStuck; ⊤ {{ w,
         iprop(∃ Q : CellMap, ⌜post (CoreRVal.val w) Q⌝ ∗
           ([∗map] i ↦ c ∈ Q, cellOwn M.tagDefs (hlc := .hasLC) (GF := GF) i (.own 1) c)) }}
 
@@ -1121,7 +1125,7 @@ to state properties via iris but doesn't mirror the logic")
 Target shape ([USER], verbatim): `s |= P && core_exec(prog, s) ~~> term
 ==> term = some(s') && s' |= Q`, P/Q "just memory + pure properties".
 Here: `Sat σ (P ∪ R)` is `s |= P` (with the frame R built in, as
-`SemTripleU` does); `driveU M aids n (M.thread e ρ) σ` is
+`SemTripleU` does); `driveU M aids n (M.thread e ρ ctl) σ` is
 `core_exec(prog, s)`; `.done v σ'` is `term = some(s')` (the two
 other arms are the never-kills / never-derails conjuncts); `post R v
 σ'` is `s' |= Q`. The projection's `post` is "every pure consequence
@@ -1159,23 +1163,23 @@ static form). -/
     premise (the static `pot` bounds are the projection theorems'
     hypotheses). PROVISIONAL: stated over `driveU`, this package's
     loop around `step_ctx`, not the shipped driver (module header). -/
-def MemTripleU (M : MachineCtx) (ρ : EnvStack) (e : CoreExpr) (P : CellMap)
+def MemTripleU (M : MachineCtx) (ctl : Ctl) (ρ : EnvStack) (e : CoreExpr) (P : CellMap)
     (post : CellMap → value → Mem → Prop) : Prop :=
   ∀ (R : CellMap), P ##ₘ R →
   ∀ (σ : Mem), Sat M.tagDefs σ (Iris.Std.PartialMap.union P R) →
   ∀ (n : Nat) (aids : Nat → Nat),
-    (∀ r, driveU M aids n (M.thread e ρ) σ ≠ .killed r) ∧
-    (driveU M aids n (M.thread e ρ) σ ≠ .stuck) ∧
-    (∀ (v : value) (σ' : Mem), driveU M aids n (M.thread e ρ) σ = .done v σ' →
+    (∀ r, driveU M aids n (M.thread e ρ ctl) σ ≠ .killed r) ∧
+    (driveU M aids n (M.thread e ρ ctl) σ ≠ .stuck) ∧
+    (∀ (v : value) (σ' : Mem), driveU M aids n (M.thread e ρ ctl) σ = .done v σ' →
       post R v σ')
 
 /-- `SemTripleU` IS the memory-post triple at the cells-shaped
     postcondition (definitionally: the two unfold to the same
     proposition). -/
-theorem SemTripleU_iff_Mem (M : MachineCtx) (ρ : EnvStack) (e : CoreExpr) (P : CellMap)
+theorem SemTripleU_iff_Mem (M : MachineCtx) (ctl : Ctl) (ρ : EnvStack) (e : CoreExpr) (P : CellMap)
     (post : value → CellMap → Prop) :
-    SemTripleU M ρ e P post ↔
-      MemTripleU M ρ e P (fun R v σ' => ∃ Q : CellMap, post v Q ∧ Q ##ₘ R ∧
+    SemTripleU M ctl ρ e P post ↔
+      MemTripleU M ctl ρ e P (fun R v σ' => ∃ Q : CellMap, post v Q ∧ Q ##ₘ R ∧
         Sat M.tagDefs σ' (Iris.Std.PartialMap.union Q R)) :=
   Iff.rfl
 
@@ -1201,25 +1205,25 @@ theorem consequences_intro {GF : BundledGFunctors} {Φ : IProp GF} {H : Prop →
     `project_triple_pure` below is derived from this. PROVISIONAL:
     the conclusion is over `driveU` (module header). -/
 theorem project_triple {GF : BundledGFunctors} [SpikeGpreS GF]
-    {M : MachineCtx} (hwf : M.SeqWF)
-    (hQf : ∀ l params cont, lookupLabel M.labels l = some (params, cont) →
+    {M : MachineCtx} (hwf : M.SeqWF) {ctl : Ctl} (hκ : ctl.κ = [])
+    (hQf : ∀ l params cont, lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
       Frag cont)
-    (hQpot : ∀ l params cont, lookupLabel M.labels l = some (params, cont) →
+    (hQpot : ∀ l params cont, lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
       pot cont ≤ lemDefaultFuel)
     {e : CoreExpr} (hfrag : Frag e) (hpot : pot e ≤ lemDefaultFuel)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value))
     (P : CellMap) (Q : ∀ [SpikeGS .hasLC GF], CoreRVal → IProp GF)
     (hwp : ∀ [SpikeGS .hasLC GF],
       iprop(([∗map] i ↦ c ∈ P, cellOwn M.tagDefs (hlc := .hasLC) (GF := GF) i (.own 1) c)) ⊢
-        WP (⟨e, ev0 :: evs, M⟩ : CoreRt) @ Stuckness.NotStuck; ⊤ {{ w, Q w }}) :
-    MemTripleU M (ev0 :: evs) e P (fun R v σ' => ∀ ψ : Prop,
+        WP (⟨e, ev0 :: evs, ctl, M⟩ : CoreRt) @ Stuckness.NotStuck; ⊤ {{ w, Q w }}) :
+    MemTripleU M ctl (ev0 :: evs) e P (fun R v σ' => ∀ ψ : Prop,
       (∀ [SpikeGS .hasLC GF] (w : CoreRVal), w.val = v →
         ∀ (mm : SpikeHeapF MetaCell) (mb : SpikeHeapF CerbMem.AbsByte)
           (mk : SpikeHeapF AllocCursor), CohG σ' mm mb mk →
         iprop(Q w ∗ ([∗map] i ↦ c ∈ R, cellOwn M.tagDefs (hlc := .hasLC) (GF := GF) i (.own 1) c) ∗
           metaInterp mm ∗ byteInterp mb) ⊢ (⌜ψ⌝ : IProp GF)) → ψ) := by
   intro R hdisj σ hsat n aids
-  refine engine_adequacyU (GF := GF) hwf hQf hQpot e ev0 evs σ (Iris.Std.PartialMap.union P R)
+  refine engine_adequacyU (GF := GF) hwf hκ hQf hQpot e ev0 evs σ (Iris.Std.PartialMap.union P R)
     hfrag hpot hsat _ ?_ n aids
   intro instGS
   refine .trans (BigSepM.bigSepM_union hdisj).1 ?_
@@ -1239,7 +1243,7 @@ theorem project_triple {GF : BundledGFunctors} [SpikeGpreS GF]
 /-- THE HEADLINE: THE BORING TRIPLE (professor review 1, required fix
     2). Any Iris triple with a concrete-map precondition and an
     ARBITRARY Iris postcondition `Q` projects to the boring triple
-    `MemTripleU M ρ e P ψ` for a PURE `ψ : CellMap → value → Mem →
+    `MemTripleU M ctl ρ e P ψ` for a PURE `ψ : CellMap → value → Mem →
     Prop`, provided `Q w ∗ frame-cells` pure-entails `ψ R w.val σ'`
     against every coupling witness for the final memory σ'. The
     conclusion is engine vocabulary only: memory splits as P ⊎ R, the
@@ -1250,10 +1254,10 @@ theorem project_triple {GF : BundledGFunctors} [SpikeGpreS GF]
     strongest-post form `project_triple`. PROVISIONAL: the conclusion
     `MemTripleU` is over `driveU` (module header). -/
 theorem project_triple_pure {GF : BundledGFunctors} [SpikeGpreS GF]
-    {M : MachineCtx} (hwf : M.SeqWF)
-    (hQf : ∀ l params cont, lookupLabel M.labels l = some (params, cont) →
+    {M : MachineCtx} (hwf : M.SeqWF) {ctl : Ctl} (hκ : ctl.κ = [])
+    (hQf : ∀ l params cont, lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
       Frag cont)
-    (hQpot : ∀ l params cont, lookupLabel M.labels l = some (params, cont) →
+    (hQpot : ∀ l params cont, lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
       pot cont ≤ lemDefaultFuel)
     {e : CoreExpr} (hfrag : Frag e) (hpot : pot e ≤ lemDefaultFuel)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value))
@@ -1261,15 +1265,15 @@ theorem project_triple_pure {GF : BundledGFunctors} [SpikeGpreS GF]
     (ψ : CellMap → value → Mem → Prop)
     (hwp : ∀ [SpikeGS .hasLC GF],
       iprop(([∗map] i ↦ c ∈ P, cellOwn M.tagDefs (hlc := .hasLC) (GF := GF) i (.own 1) c)) ⊢
-        WP (⟨e, ev0 :: evs, M⟩ : CoreRt) @ Stuckness.NotStuck; ⊤ {{ w, Q w }})
+        WP (⟨e, ev0 :: evs, ctl, M⟩ : CoreRt) @ Stuckness.NotStuck; ⊤ {{ w, Q w }})
     (hpost : ∀ [SpikeGS .hasLC GF] (w : CoreRVal) (R : CellMap) (σ' : Mem)
       (mm : SpikeHeapF MetaCell) (mb : SpikeHeapF CerbMem.AbsByte)
       (mk : SpikeHeapF AllocCursor), CohG σ' mm mb mk →
       iprop(Q w ∗ ([∗map] i ↦ c ∈ R, cellOwn M.tagDefs (hlc := .hasLC) (GF := GF) i (.own 1) c) ∗
         metaInterp mm ∗ byteInterp mb) ⊢ (⌜ψ R w.val σ'⌝ : IProp GF)) :
-    MemTripleU M (ev0 :: evs) e P ψ := by
+    MemTripleU M ctl (ev0 :: evs) e P ψ := by
   intro R hdisj σ hsat n aids
-  have h := project_triple (GF := GF) hwf hQf hQpot hfrag hpot ev0 evs P Q hwp
+  have h := project_triple (GF := GF) hwf hκ hQf hQpot hfrag hpot ev0 evs P Q hwp
     R hdisj σ hsat n aids
   refine ⟨h.1, h.2.1, fun v σ' hd => h.2.2 v σ' hd (ψ R v σ') ?_⟩
   intro _ w hw mm mb mk hG
@@ -1311,14 +1315,14 @@ stronger launch premise. -/
     `driveU` (module header). Freshness under `LaunchCoh` is GLOBAL
     (`MemWF`, `create_fresh_global`; the `LaunchCoh` section
     header). -/
-def MemTripleU_alloc (M : MachineCtx) (ρ : EnvStack) (e : CoreExpr) (P : CellMap)
+def MemTripleU_alloc (M : MachineCtx) (ctl : Ctl) (ρ : EnvStack) (e : CoreExpr) (P : CellMap)
     (B : Nat) (post : CellMap → value → Mem → Prop) : Prop :=
   ∀ (R : CellMap), P ##ₘ R →
   ∀ (σ : Mem), LaunchCoh M.tagDefs σ (Iris.Std.PartialMap.union P R) B →
   ∀ (n : Nat) (aids : Nat → Nat),
-    (∀ r, driveU M aids n (M.thread e ρ) σ ≠ .killed r) ∧
-    (driveU M aids n (M.thread e ρ) σ ≠ .stuck) ∧
-    (∀ (v : value) (σ' : Mem), driveU M aids n (M.thread e ρ) σ = .done v σ' →
+    (∀ r, driveU M aids n (M.thread e ρ ctl) σ ≠ .killed r) ∧
+    (driveU M aids n (M.thread e ρ ctl) σ ≠ .stuck) ∧
+    (∀ (v : value) (σ' : Mem), driveU M aids n (M.thread e ρ ctl) σ = .done v σ' →
       post R v σ')
 
 /-- The non-allocating boring triple implies the allocating one at
@@ -1326,10 +1330,10 @@ def MemTripleU_alloc (M : MachineCtx) (ρ : EnvStack) (e : CoreExpr) (P : CellMa
     statement that needs no allocator health holds a fortiori under
     it. The converse fails (the launch premise is genuinely
     stronger). -/
-theorem MemTripleU_alloc_of_MemTripleU {M : MachineCtx} {ρ : EnvStack} {e : CoreExpr}
+theorem MemTripleU_alloc_of_MemTripleU {M : MachineCtx} {ctl : Ctl} {ρ : EnvStack} {e : CoreExpr}
     {P : CellMap} {post : CellMap → value → Mem → Prop}
-    (h : MemTripleU M ρ e P post) (B : Nat) :
-    MemTripleU_alloc M ρ e P B post :=
+    (h : MemTripleU M ctl ρ e P post) (B : Nat) :
+    MemTripleU_alloc M ctl ρ e P B post :=
   fun R hdisj σ hl n aids => h R hdisj σ hl.coh n aids
 
 /-- THE ALLOCATING PROJECTION: any Iris triple whose precondition is
@@ -1345,10 +1349,10 @@ theorem MemTripleU_alloc_of_MemTripleU {M : MachineCtx} {ρ : EnvStack} {e : Cor
     is the boring headline derived from it. PROVISIONAL: the
     conclusion is over `driveU` (module header). -/
 theorem project_triple_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
-    {M : MachineCtx} (hwf : M.SeqWF)
-    (hQf : ∀ l params cont, lookupLabel M.labels l = some (params, cont) →
+    {M : MachineCtx} (hwf : M.SeqWF) {ctl : Ctl} (hκ : ctl.κ = [])
+    (hQf : ∀ l params cont, lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
       Frag cont)
-    (hQpot : ∀ l params cont, lookupLabel M.labels l = some (params, cont) →
+    (hQpot : ∀ l params cont, lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
       pot cont ≤ lemDefaultFuel)
     {e : CoreExpr} (hfrag : Frag e) (hpot : pot e ≤ lemDefaultFuel)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value))
@@ -1356,15 +1360,15 @@ theorem project_triple_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
     (hwp : ∀ [SpikeGS .hasLC GF],
       iprop(([∗map] i ↦ c ∈ P, cellOwn M.tagDefs (hlc := .hasLC) (GF := GF) i (.own 1) c) ∗
         allocBudget B) ⊢
-        WP (⟨e, ev0 :: evs, M⟩ : CoreRt) @ Stuckness.NotStuck; ⊤ {{ w, Q w }}) :
-    MemTripleU_alloc M (ev0 :: evs) e P B (fun R v σ' => ∀ ψ : Prop,
+        WP (⟨e, ev0 :: evs, ctl, M⟩ : CoreRt) @ Stuckness.NotStuck; ⊤ {{ w, Q w }}) :
+    MemTripleU_alloc M ctl (ev0 :: evs) e P B (fun R v σ' => ∀ ψ : Prop,
       (∀ [SpikeGS .hasLC GF] (w : CoreRVal), w.val = v →
         ∀ (mm : SpikeHeapF MetaCell) (mb : SpikeHeapF CerbMem.AbsByte)
           (mk : SpikeHeapF AllocCursor), CohG σ' mm mb mk →
         iprop(Q w ∗ ([∗map] i ↦ c ∈ R, cellOwn M.tagDefs (hlc := .hasLC) (GF := GF) i (.own 1) c) ∗
           metaInterp mm ∗ byteInterp mb) ⊢ (⌜ψ⌝ : IProp GF)) → ψ) := by
   intro R hdisj σ hl n aids
-  refine engine_adequacyU_alloc (GF := GF) hwf hQf hQpot e ev0 evs σ
+  refine engine_adequacyU_alloc (GF := GF) hwf hκ hQf hQpot e ev0 evs σ
     (Iris.Std.PartialMap.union P R) B hfrag hpot hl _ ?_ n aids
   intro instGS
   refine .trans (BI.sep_mono (BigSepM.bigSepM_union hdisj).1 .rfl) ?_
@@ -1385,14 +1389,14 @@ theorem project_triple_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
     (required fix 2, `_alloc` twin of `project_triple_pure`): an Iris
     triple whose precondition is footprint cells ∗ `allocBudget B` and
     whose framed post pure-entails `ψ R w.val σ'` projects to
-    `MemTripleU_alloc M ρ e P B ψ` — engine vocabulary only in the
+    `MemTripleU_alloc M ctl ρ e P B ψ` — engine vocabulary only in the
     conclusion. Derived from `project_triple_alloc`. PROVISIONAL: the
     conclusion is over `driveU` (module header). -/
 theorem project_triple_pure_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
-    {M : MachineCtx} (hwf : M.SeqWF)
-    (hQf : ∀ l params cont, lookupLabel M.labels l = some (params, cont) →
+    {M : MachineCtx} (hwf : M.SeqWF) {ctl : Ctl} (hκ : ctl.κ = [])
+    (hQf : ∀ l params cont, lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
       Frag cont)
-    (hQpot : ∀ l params cont, lookupLabel M.labels l = some (params, cont) →
+    (hQpot : ∀ l params cont, lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
       pot cont ≤ lemDefaultFuel)
     {e : CoreExpr} (hfrag : Frag e) (hpot : pot e ≤ lemDefaultFuel)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value))
@@ -1401,15 +1405,15 @@ theorem project_triple_pure_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
     (hwp : ∀ [SpikeGS .hasLC GF],
       iprop(([∗map] i ↦ c ∈ P, cellOwn M.tagDefs (hlc := .hasLC) (GF := GF) i (.own 1) c) ∗
         allocBudget B) ⊢
-        WP (⟨e, ev0 :: evs, M⟩ : CoreRt) @ Stuckness.NotStuck; ⊤ {{ w, Q w }})
+        WP (⟨e, ev0 :: evs, ctl, M⟩ : CoreRt) @ Stuckness.NotStuck; ⊤ {{ w, Q w }})
     (hpost : ∀ [SpikeGS .hasLC GF] (w : CoreRVal) (R : CellMap) (σ' : Mem)
       (mm : SpikeHeapF MetaCell) (mb : SpikeHeapF CerbMem.AbsByte)
       (mk : SpikeHeapF AllocCursor), CohG σ' mm mb mk →
       iprop(Q w ∗ ([∗map] i ↦ c ∈ R, cellOwn M.tagDefs (hlc := .hasLC) (GF := GF) i (.own 1) c) ∗
         metaInterp mm ∗ byteInterp mb) ⊢ (⌜ψ R w.val σ'⌝ : IProp GF)) :
-    MemTripleU_alloc M (ev0 :: evs) e P B ψ := by
+    MemTripleU_alloc M ctl (ev0 :: evs) e P B ψ := by
   intro R hdisj σ hl n aids
-  have h := project_triple_alloc (GF := GF) hwf hQf hQpot hfrag hpot ev0 evs P B Q hwp
+  have h := project_triple_alloc (GF := GF) hwf hκ hQf hQpot hfrag hpot ev0 evs P B Q hwp
     R hdisj σ hl n aids
   refine ⟨h.1, h.2.1, fun v σ' hd => h.2.2 v σ' hd (ψ R v σ') ?_⟩
   intro _ w hw mm mb mk hG
@@ -1694,21 +1698,21 @@ theorem cells_readout (tds : CerbTags.TagDefsMap) {GF : BundledGFunctors} [Spike
     with the obligation discharged by `cells_consequence`.)
     PROVISIONAL: the conclusion is over `driveU` (module header). -/
 theorem semantic_triple_soundU {GF : BundledGFunctors} [SpikeGpreS GF]
-    {M : MachineCtx} (hwf : M.SeqWF)
-    (hQf : ∀ l params cont, lookupLabel M.labels l = some (params, cont) →
+    {M : MachineCtx} (hwf : M.SeqWF) {ctl : Ctl} (hκ : ctl.κ = [])
+    (hQf : ∀ l params cont, lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
       Frag cont)
-    (hQpot : ∀ l params cont, lookupLabel M.labels l = some (params, cont) →
+    (hQpot : ∀ l params cont, lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
       pot cont ≤ lemDefaultFuel)
     {e : CoreExpr} (hfrag : Frag e) (hpot : pot e ≤ lemDefaultFuel)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value))
     {P : CellMap} {post : value → CellMap → Prop}
-    (hwp : ProvenTripleU GF M (ev0 :: evs) e P post) :
-    SemTripleU M (ev0 :: evs) e P post := by
+    (hwp : ProvenTripleU GF M ctl (ev0 :: evs) e P post) :
+    SemTripleU M ctl (ev0 :: evs) e P post := by
   -- the projection at the cells-shaped post, its obligation discharged
   -- by `cells_consequence`
   rw [SemTripleU_iff_Mem]
   intro R hdisj σ hsat n aids
-  have h := project_triple (GF := GF) hwf hQf hQpot hfrag hpot ev0 evs P
+  have h := project_triple (GF := GF) hwf hκ hQf hQpot hfrag hpot ev0 evs P
     (fun w => iprop(∃ Q : CellMap, ⌜post (CoreRVal.val w) Q⌝ ∗
       ([∗map] i ↦ c ∈ Q, cellOwn M.tagDefs (hlc := .hasLC) (GF := GF) i (.own 1) c)))
     hwp R hdisj σ hsat n aids
@@ -1722,20 +1726,20 @@ theorem semantic_triple_soundU {GF : BundledGFunctors} [SpikeGpreS GF]
     ⦃P ∗ F⦄ e ⦃post ∗ F⦄, the frame F verbatim. PROVISIONAL: the
     conclusion is over `driveU` (module header). -/
 theorem semantic_frameU {GF : BundledGFunctors} [SpikeGpreS GF]
-    {M : MachineCtx} (hwf : M.SeqWF)
-    (hQf : ∀ l params cont, lookupLabel M.labels l = some (params, cont) →
+    {M : MachineCtx} (hwf : M.SeqWF) {ctl : Ctl} (hκ : ctl.κ = [])
+    (hQf : ∀ l params cont, lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
       Frag cont)
-    (hQpot : ∀ l params cont, lookupLabel M.labels l = some (params, cont) →
+    (hQpot : ∀ l params cont, lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
       pot cont ≤ lemDefaultFuel)
     {e : CoreExpr} (hfrag : Frag e) (hpot : pot e ≤ lemDefaultFuel)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value))
     {P : CellMap} (F : CellMap)
     {post : value → CellMap → Prop} (hPF : P ##ₘ F)
-    (hwp : ProvenTripleU GF M (ev0 :: evs) e P post) :
-    SemTripleU M (ev0 :: evs) e (Iris.Std.PartialMap.union P F)
+    (hwp : ProvenTripleU GF M ctl (ev0 :: evs) e P post) :
+    SemTripleU M ctl (ev0 :: evs) e (Iris.Std.PartialMap.union P F)
       (fun v Q => ∃ Q₀ : CellMap, post v Q₀ ∧ Q₀ ##ₘ F ∧
         Q = Iris.Std.PartialMap.union Q₀ F) := by
-  refine semantic_triple_soundU (GF := GF) hwf hQf hQpot hfrag hpot ev0 evs ?_
+  refine semantic_triple_soundU (GF := GF) hwf hκ hQf hQpot hfrag hpot ev0 evs ?_
   intro instGS
   refine .trans (BigSepM.bigSepM_union hPF).1 ?_
   iintro ⟨HP, HF⟩

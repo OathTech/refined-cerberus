@@ -45,22 +45,22 @@ mirror) -/
 /-- `store(ty, x, v)` — SYMBOL pointer, LITERAL value — steps. -/
 theorem store_sym_lit_step {M : MachineCtx} {loc : CerbLocation.Loc}
     {ann : core_run_annotation} {ty : ctype} {x : sym} {cv : value}
-    {mo : memory_order} {ρ : EnvStack} {σ : Mem} {pv : CerbMem.PointerValue}
+    {mo : memory_order} {ρ : EnvStack} {ctl : Ctl} {σ : Mem} {pv : CerbMem.PointerValue}
     (hx : evalPexpr M.tagDefs M.extern ρ (Pexpr [] () (PEsym x)) =
       some (Vobject (OVpointer pv))) :
     Step M (storeOpRedex loc ann ty (Pexpr [] () (PEsym x))
-        (Pexpr [] () (PEval cv)) mo, ρ, σ)
-      (storeExpr loc ann ty pv cv mo, ρ, σ) :=
+        (Pexpr [] () (PEval cv)) mo, ρ, ctl, σ)
+      (storeExpr loc ann ty pv cv mo, ρ, ctl, σ) :=
   Step.store_eval rfl hx rfl
 
 /-- `store(ty, p, y)` — LITERAL pointer, SYMBOL value — steps. -/
 theorem store_lit_sym_step {M : MachineCtx} {loc : CerbLocation.Loc}
     {ann : core_run_annotation} {ty : ctype} {pv : CerbMem.PointerValue}
-    {y : sym} {mo : memory_order} {ρ : EnvStack} {σ : Mem} {cv : value}
+    {y : sym} {mo : memory_order} {ρ : EnvStack} {ctl : Ctl} {σ : Mem} {cv : value}
     (hy : evalPexpr M.tagDefs M.extern ρ (Pexpr [] () (PEsym y)) = some cv) :
     Step M (storeOpRedex loc ann ty (Pexpr [] () (PEval (Vobject (OVpointer pv))))
-        (Pexpr [] () (PEsym y)) mo, ρ, σ)
-      (storeExpr loc ann ty pv cv mo, ρ, σ) :=
+        (Pexpr [] () (PEsym y)) mo, ρ, ctl, σ)
+      (storeExpr loc ann ty pv cv mo, ρ, ctl, σ) :=
   Step.store_eval rfl rfl hy
 
 /-! ## The kill ACTION_EVAL shape (kill/free arc K2): `kill(static ty, x)`
@@ -72,11 +72,11 @@ successor is the canonical kill redex. -/
     evaluated kill. -/
 theorem kill_sym_step {M : MachineCtx} {loc : CerbLocation.Loc}
     {ann : core_run_annotation} {kind : kill_kind} {x : sym}
-    {ρ : EnvStack} {σ : Mem} {pv : CerbMem.PointerValue}
+    {ρ : EnvStack} {ctl : Ctl} {σ : Mem} {pv : CerbMem.PointerValue}
     (hx : evalPexpr M.tagDefs M.extern ρ (Pexpr [] () (PEsym x)) =
       some (Vobject (OVpointer pv))) :
-    Step M (killOpRedex loc ann kind (Pexpr [] () (PEsym x)), ρ, σ)
-      (killRedex loc ann kind pv, ρ, σ) :=
+    Step M (killOpRedex loc ann kind (Pexpr [] () (PEsym x)), ρ, ctl, σ)
+      (killRedex loc ann kind pv, ρ, ctl, σ) :=
   Step.kill_eval rfl hx
 
 /-! ## The alloc ACTION_EVAL shape (kill/free arc K3): `alloc(al, n)` at a
@@ -88,12 +88,12 @@ step_action's Alloc0 case (the pair is not all values) is covered by
     evaluated alloc. -/
 theorem alloc_lit_sym_step {M : MachineCtx} {loc : CerbLocation.Loc}
     {ann : core_run_annotation} {align size : CerbMem.IntegerValue} {n : sym}
-    {pref : prefix0} {ρ : EnvStack} {σ : Mem}
+    {pref : prefix0} {ρ : EnvStack} {ctl : Ctl} {σ : Mem}
     (hn : evalPexpr M.tagDefs M.extern ρ (Pexpr [] () (PEsym n)) =
       some (Vobject (OVinteger size))) :
     Step M (allocOpRedex loc ann (Pexpr [] () (PEval (Vobject (OVinteger align))))
-        (Pexpr [] () (PEsym n)) pref, ρ, σ)
-      (allocRedex loc ann align size pref, ρ, σ) :=
+        (Pexpr [] () (PEsym n)) pref, ρ, ctl, σ)
+      (allocRedex loc ann align size pref, ρ, ctl, σ) :=
   Step.alloc_eval rfl rfl hn
 
 end CerberusHeapLang

@@ -90,8 +90,8 @@ theorem dgRS_labeledAt (ra : core_run_annotation) :
     empty argument list, empty parameter binding, state verbatim). -/
 theorem dg_self_step (ra : core_run_annotation) (ev0 : Fmap sym value)
     (evs : List (Fmap sym value)) (σ : Mem) :
-    Step (procCtx dgProcSym (dgRS ra))
-      (dgBody ra, ev0 :: evs, σ) (dgBody ra, ev0 :: evs, σ) :=
+    Step (procCtx (dgRS ra))
+      (dgBody ra, ev0 :: evs, procCtl dgProcSym, σ) (dgBody ra, ev0 :: evs, procCtl dgProcSym, σ) :=
   Step.run (jumpRedex?_run [] ra dgLoopSym [])
     (by rw [procCtx_labels (dgRS_labeledAt ra)]; exact dgQ_lookup ra)
     rfl
@@ -118,9 +118,9 @@ theorem dgQ_inv (ra : core_run_annotation) {l : sym}
     round is the self-step (`outcomesU_of_step` on `dg_self_step`). -/
 theorem dg_driveU_more (ra : core_run_annotation) (σ₀ : Mem) :
     ∀ (k : Nat) (aids : Nat → Nat),
-      driveU (procCtx dgProcSym (dgRS ra)) aids k
-        ((procCtx dgProcSym (dgRS ra)).thread (dgBody ra) [fmapEmpty]) σ₀ =
-      .more ((procCtx dgProcSym (dgRS ra)).thread (dgBody ra) [fmapEmpty]) σ₀
+      driveU (procCtx (dgRS ra)) aids k
+        ((procCtx (dgRS ra)).thread (dgBody ra) [fmapEmpty] (procCtl dgProcSym)) σ₀ =
+      .more ((procCtx (dgRS ra)).thread (dgBody ra) [fmapEmpty] (procCtl dgProcSym)) σ₀
   | 0, _ => rfl
   | k + 1, aids => by
     rw [driveU_succ, stepOutcomes_thread,
@@ -158,12 +158,12 @@ theorem diverge_total_unprovable {GF : BundledGFunctors} [SpikeGpreS GF]
     (k : Nat)
     (hwp : ∀ [SpikeGS .hasLC GF],
       iprop(([∗map] i ↦ c ∈ m₀, cellOwn fmapEmpty (hlc := .hasLC) (GF := GF) i (.own 1) c)) ⊢
-        iprop(blockSpecsT (procCtx dgProcSym (dgRS ra)) Ls Ψ ∗
-          wpt (procCtx dgProcSym (dgRS ra)) Ls k Ψ (dgBody ra) [fmapEmpty])) :
+        iprop(blockSpecsT (procCtx (dgRS ra)) (procCtl dgProcSym) Ls Ψ ∗
+          wpt (procCtx (dgRS ra)) (procCtl dgProcSym) Ls k Ψ (dgBody ra) [fmapEmpty])) :
     False := by
   have hlbl := procCtx_labels (dgRS_labeledAt ra)
   obtain ⟨v, σ', hdone, -, -⟩ :=
-    wpt_engine_boundU (GF := GF) (M := procCtx dgProcSym (dgRS ra)) (procCtx_wf _ _)
+    wpt_engine_boundU (GF := GF) (M := procCtx (dgRS ra)) (procCtx_wf _) (ctl := procCtl dgProcSym) rfl
       (fun l params cont hl => by
         rw [hlbl] at hl
         obtain ⟨-, rfl⟩ := dgQ_inv ra hl

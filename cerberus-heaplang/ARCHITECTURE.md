@@ -27,16 +27,22 @@ validated against the OCaml Cerberus, not proved equivalent to it
 
 Iris needs a fuel-free small-step relation; the engine's `step_ctx` is
 fuelled and monadic. `Step M` (Step.lean) is the hand-written mirror —
-a relation on (Core expression, environment stack, memory) covering
-the fragment `Frag` (Soundness.lean) — and it is the `primStep` of the
-iris-lean `Language` instance (Lang.lean). The mirror has no
-authority; its certification is `engine_step_matchU` (Round.lean),
-stated exactly as `theorem engine_step_matchU {M : MachineCtx} … (hf :
-Frag e) (hsz : esize e ≤ lemDefaultFuel) (hs : Step M (e, ev0 :: evs, σ)
-(e', ρ', σ')) : CerberusRound M (e, ev0 :: evs, σ) (e', ρ', σ')` — on
-`Frag`, at a cons-shaped environment, with `esize e ≤ lemDefaultFuel`,
-and no well-formedness premise (`SeqWF` is a premise of
-`cerberusRound_classify` only, for its `value_done` arm): every
+a relation on configurations `Config := CoreExpr × EnvStack × Ctl ×
+Mem` (Core expression, environment stack, the thread's LIVE CONTROL
+`Ctl` — call stack `κ`, current procedure `proc`, execution location
+`execLoc`, the three `thread_state` fields the engine's PCALL/RETURN
+arms write; calls arc C1 made them live, no rule writes them yet —
+and memory) covering the fragment `Frag` (Soundness.lean) — and it is
+the `primStep` of the iris-lean `Language` instance (Lang.lean). The
+mirror has no authority; its certification is `engine_step_matchU`
+(Round.lean), stated exactly as `theorem engine_step_matchU {M :
+MachineCtx} … (hf : Frag e) (hsz : esize e ≤ lemDefaultFuel) (hs : Step
+M (e, ev0 :: evs, ctl, σ) (e', ρ', ctl, σ')) : CerberusRound M (e, ev0 ::
+evs, ctl, σ) (e', ρ', ctl, σ')` — on `Frag`, at a cons-shaped
+environment, at ANY control, with `esize e ≤ lemDefaultFuel`, and no
+well-formedness premise (`SeqWF` and the empty-stack control `ctl.κ =
+[]` are premises of `cerberusRound_classify` only, for its `value_done`
+arm): every
 mirror step is exactly ONE ITERATION OF THE SHIPPED DRIVER'S THREAD LOOP
 — the relation `CerberusRound M` (Round.lean): at every driver state
 embedding the context and the configuration (`MachineCtx.Embeds`), the

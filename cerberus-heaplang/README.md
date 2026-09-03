@@ -102,7 +102,7 @@ location from the redex node's annotations and, unless it is a library
 location, rewrites the thread's `current_loc`; this package keeps
 `currentLoc` in the immutable `MachineCtx` (Step.lean), and
 `engine_step_matchU` equates the engine's successor thread with
-`M.thread e' ρ'`, whose `current_loc` is `M.currentLoc`. A located node
+`M.thread e' ρ' ctl`, whose `current_loc` is `M.currentLoc`. A located node
 would falsify that equation. Located Core — in particular every Core
 program the C elaborator produces — is therefore outside `Frag`; the
 programs proved here are authored Core with empty annotation lists.
@@ -156,10 +156,18 @@ enters through its size and its decode/serialization). The chartered
 MALLOC'D LINKED LIST is the exhibit (MallocListExhibit.lean).
 
 **Deliberately not here.** Procedures (no call
-rule, no return; every program is one `main` body with registered
-labels, and `MachineCtx.SeqWF` — empty call stack, startup thread — is
-a premise of every adequacy theorem at a general context, discharged at
-the two profiles by `spikeCtx_wf`, `procCtx_wf`); `Eunseq`; inside the
+rule, no return YET — calls arc C1, 2026-09-03, made the thread's
+control LIVE STATE in preparation: the configuration is `Config :=
+CoreExpr × EnvStack × Ctl × Mem` with `Ctl` = the call stack `κ`, the
+current procedure `proc` and the execution location `execLoc` — the
+three `thread_state` fields the engine's PCALL/RETURN arms write; no
+rule writes it yet, every `Step` threads it unchanged; every program is
+one `main` body with registered labels, launched at an entry control
+with an EMPTY call stack — `spikeCtl`/`procCtl p`, the fact `ctl.κ = []`
+is a premise of every adequacy theorem at a general control — and
+`MachineCtx.SeqWF` (startup thread) is a premise at a general context,
+discharged at the two profiles by `spikeCtx_wf`, `procCtx_wf`);
+`Eunseq`; inside the
 mirrored constructs, exactly these absences — `Ewseq` at binder
 patterns, `Ecase` with a non-value scrutinee, pure exits beyond
 `PEsym`, the memop family beyond `PtrEq`, `PtrEq`'s
@@ -240,7 +248,8 @@ triple by `project_triple_pure` (both quoted in the walkthrough §1):
 | `term = some(s')` | `driveU … = .done v σ'`; the other two conjuncts, `≠ .killed r` (no undefined behaviour, no error kill) and `≠ .stuck` (no refusal, no off-protocol step); `.more` (fuel exhaustion) is unconstrained — partial correctness |
 | `s' \|= Q` | `ψ R v σ'` for a pure `ψ : CellMap → value → Mem → Prop` |
 
-`project_triple_pure`: under `M.SeqWF`, `Frag e`, `Frag` membership of
+`project_triple_pure`: under `M.SeqWF`, an empty-stack entry control
+(`ctl.κ = []`), `Frag e`, `Frag` membership of
 every registered label body, and the static fuel bounds `pot e ≤
 lemDefaultFuel` and `pot cont ≤ lemDefaultFuel` per registered body
 (Potential.lean; `rfl` for authored programs), an Iris triple whose
@@ -504,7 +513,7 @@ theorems:
 | Fuel: the engine's `get_ctx` is fuel-bounded (`lemDefaultFuel = 10^6`) with an opaque exhaustion leaf, so the projection theorems carry the static premises `pot e ≤ lemDefaultFuel` and `pot cont ≤ lemDefaultFuel` per registered body (never a bound on the drive length); production statements carry `k + 2 ≤ CerbFuel.driverFuel` (the shipped driver's budget, 10^8 since the fuel arc) for the certified step count; the shipped driver's OWN fuel arm is the kernel-transparent kill `CerbND.fuelExhaustedKill` since pin `f95ef8d9c`, so the partial lane's PROVISIONAL label now awaits only its restatement over `CerbND.drive_lemFuel` | a fuel-irrelevance theorem for `get_ctx`; the fuel-lane restatement slice (next, after calls) | `Soundness.lean` header ("FUEL HONESTY"), `Potential.lean`; `../docs/2026-09-02_request-cerberus-lean-fuel-exhaustion-outcome.md`, `../docs/2026-09-03_repin-scout.md` |
 | The fragment is annotation-free (`Expr []` at every node); located Core is outside `Frag` | make `current_loc` live state | "Scope, exactly"; `Soundness.lean` `Frag` header |
 | Synthetic Core entry: authored Core wrapped by `prodFile`, not C through the frontend; the loop programs' label maps are nevertheless computed by the shipped registration (`*_labeledAt_production`, `LabeledAt`) | a C-frontend entry | `ProdEntry.lean` |
-| Well-formedness by shape: `MachineCtx.SeqWF` and cons-shaped environment stacks — the engine's panic channels excluded by shape, never absorbed. Action locations carry no premise: the certification equations state the request at the engine's own `requestLoc th loc`, and `storeM_loc_irrel`/`loadM_loc_irrel` (the memory operations use the location only in the kill payload) transport the mirror's premise to it | by design | `Step.lean`, `Soundness.lean` |
+| Well-formedness by shape: `MachineCtx.SeqWF` (startup thread), the empty-stack entry control (`ctl.κ = []`, the PROGRAM-DONE selector) and cons-shaped environment stacks — the engine's panic channels excluded by shape, never absorbed. Action locations carry no premise: the certification equations state the request at the engine's own `requestLoc th loc`, and `storeM_loc_irrel`/`loadM_loc_irrel` (the memory operations use the location only in the kill payload) transport the mirror's premise to it | by design | `Step.lean`, `Soundness.lean` |
 | The tag-definition environment is an explicit parameter of the heap predicates (`pointsToCell tds …`, `M.tagDefs`); the demos state footprints at `fmapEmpty` | by design: a program-wide constant of the language instance | `Heap.lean` header |
 | Memory orders accepted arbitrarily (`Step.store`/`wp_store` at any `memory_order`) | mirror-true: the sequential driver drops `mo` (`action_request_sequential2`) | `Step.lean` |
 | Mirror completeness holds on the DECLARED FRAGMENT up to a two-arm RESIDUAL (`OpenRound`, Round.lean; `frag_round_complete`; fragment closure 2026-09-02): `eval_uncovered` — an operand in the covered grammar CONTAINING A LEAF the engine's evaluator accepts where the mirror evaluator does not evaluate (a symbol unbound in the environment but naming a `Proc` of the file; one of the eight mirrored binops at two floating-point operands; `OpEq` at two ctypes — environment/file-dependent, the offending operand carried as witness, `evalClass … = .uncovered`); the classifier answers `.uncovered` at the FIRST such leaf and carries NO engine claim about the whole operand, so the arm's whole-operand outcome is NOT characterized — the engine may succeed, KILL on a later type error (`f + 1` with `f` a `Proc`-named unbound symbol is `PePure`, classified `.uncovered`, killed by the engine as `Illformed_program … ill-typed PEop` — 2026-09-03 audit, by execution) or PANIC (a float guard under `Eif`): every operand the classifier REJECTS is a proved engine KILL, operands it leaves UNCOVERED are not characterized, the residual is a SUPERSET of the engine-accepted shapes; and `run_surplus` — a jump with more arguments than the registered label's parameters whose zipped arguments evaluate and whose surplus does not (label-map-dependent). Everywhere else a mirror-stuck fragment configuration is an engine refusal in the engine's vocabulary (`ShippedRefusal`: ILLTYPED `[Step_error2 msg]`; ILLTYPED AT DISTANCE ONE — a successful round into the ill-typed load/store the engine reports on next; KILL `NDkilled r` from the shipped `advance_step`, memory kills through `liftMem` and pure-evaluator kills `Other (DErr_core_run err)` through `liftCore_run`; FORK ≥ 2 `CerbND.runND` executions; PANIC the engine's own `failwithI`, incl. the no-current-procedure lookup key). The former gaps (a) LETS-ANNOT at the symbol binder and (c) the operand grammar were closed by NARROWING `Frag` (`BareHead`, `PePure` everywhere) — fail-closed, per the ruling | the residual is not removable by a syntactic narrowing; the mover for `eval_uncovered`'s characterization is `evalClass` computing the engine's value at the three leaf shapes (reserving `.uncovered` for the leaf itself, the downstream rejections under the KILL bridge); a complete mirror evaluator (`M.file` threaded into `evalPexpr`, the float/ctype arms) would move `eval_uncovered` into `Step`; a prefix-evaluating `Step.run` would move `run_surplus` | `Round.lean` (`OpenRound`), `EvalClass.lean`; `ARCHITECTURE.md` §2, §7; `docs/2026-09-02_fragment-closure-notes.md` |
@@ -530,7 +539,7 @@ trust, which is the engine.
 Every theorem named on an arrow has axiom set exactly `propext`,
 `Classical.choice`, `Quot.sound` (`Audit.lean`: 165 export pins at the
 time of writing; every theorem of every module bounded). "Frag" = the fragment `Frag` at a
-`SeqWF` context with a cons-shaped environment; "labels" = every
+`SeqWF` context, an empty-stack control, with a cons-shaped environment; "labels" = every
 registered label body in `Frag` with its own static bound
 (`hQf`/`hQpot`). Arrows point the way meaning flows: a proof at the
 source becomes a fact at the target.
@@ -752,7 +761,7 @@ In import order, one line each:
 
 | Module | Contents | Headline |
 |---|---|---|
-| `Step.lean` | the fragment's mirror small-step over the engine's generated AST/state types, indexed by the explicit `MachineCtx`; hand-written, zero authority until certified | `Step`, `MachineCtx` |
+| `Step.lean` | the fragment's mirror small-step over the engine's generated AST/state types — on configurations `Config := CoreExpr × EnvStack × Ctl × Mem` (the thread's LIVE CONTROL `Ctl`: call stack, current procedure, execution location; calls arc C1), indexed by the explicit immutable `MachineCtx`; hand-written, zero authority until certified | `Step`, `Ctl`, `MachineCtx` |
 | `EnvLaws.lean` | lawfulness of the engine's symbol order, `SymFrame`, lookup-after-add | `envAdd_lookup` |
 | `Heap.lean` | the split ghost carrier (per-byte heap, per-allocation metadata heap — `MetaCell`: base, optional type, size, `alive`/`readonly`/`dynamic`, each coupled to the engine's `Allocation` by `MetaCoh` — allocator cursor) coupled to the real `MemState` by `CohG`; the global memory well-formedness invariant `MemWF` (in `CohG` and `LaunchCoh`), its cold-start/preservation lemmas and `create_fresh_global`; views, cells, points-to, the persistent stratum, the ∗-splittable allocation budget `allocBudget` (its authority `budgetAuth` under the coupling inequality `budgetInterp`, the cost `allocCost`, the engine bounds `freshBase_ne_zero_of_cost`/`headroom_freshBase`); the K1 bundles `regionOwn`/`readonlyCell`/`deadObj`; the `storeM`/`loadM`/`allocateObject` success lemmas and the read-only store refusal | `pointsToCell`, `pointsToView`, `allocMeta`, `regionOwn`, `readonlyCell`, `deadObj`, `allocBudget`, `allocBudget_split`, `storeM_success`, `loadM_success`, `storeM_readonly_kills` |
 | `Lang.lean` | the iris-lean `Language` instance over `Step`; no `Language.Context` (falsified by `Erun`); the ghost functors | `instance : Language CoreRt Mem Empty CoreRVal` |

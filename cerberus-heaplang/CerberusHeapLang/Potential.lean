@@ -186,11 +186,11 @@ theorem Frag.pot_le_two {e : CoreExpr} (hf : Frag e) : pot e ≤ 2 * esize e := 
     simulation's per-step `esize ≤ lemDefaultFuel` obligations
     STATIC — no fuel accumulation over the run length. -/
 theorem Frag.pot_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
-    {σ : Mem} {e' : CoreExpr} {ρ' : EnvStack} {σ' : Mem}
-    (hf : Frag e) (hs : Step M (e, ρ, σ) (e', ρ', σ')) :
+    {ctl : Ctl} {σ : Mem} {e' : CoreExpr} {ρ' : EnvStack} {σ' : Mem}
+    (hf : Frag e) (hs : Step M (e, ρ, ctl, σ) (e', ρ', ctl, σ')) :
     pot e' ≤ pot e ∨
     ∃ l pes params cont, jumpRedex? e = some (l, pes) ∧
-      lookupLabel M.labels l = some (params, cont) ∧ e' = cont := by
+      lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) ∧ e' = cont := by
   induction hf generalizing e' ρ' σ' with
   | val_pure v => exact (Step.val_elim (w := .pure v) hs).elim
   | store =>

@@ -1296,9 +1296,9 @@ tied to the DRIVER'S CURRENT run state by `hQd`); the returned run
 state either is untouched (taus, with-runstate verbatim, memop) or
 gets its aid ticked (actions) — `labeled` is preserved either way,
 which is what keeps the next round's jump certifiable. -/
-theorem loop_step_frag {M₀ : MachineCtx}
+theorem loop_step_frag {M₀ : MachineCtx} {ctl : Ctl}
     (htd : M₀.tagDefs = fmapEmpty) (hex : M₀.extern = fmapEmpty)
-    {Q : LabelMap} (hlb : M₀.labels = Q)
+    {Q : LabelMap} (hlb : M₀.labelsAt ctl.proc = Q)
     {p : sym} {th₀ : thread_state} (hproc : th₀.current_proc_opt = some p)
     (fl : Nat) (acc : Fmap thread_id (List core_step2))
     {dst : driver_state} {e e' : CoreExpr} {ev0 : Fmap sym value}
@@ -1308,7 +1308,7 @@ theorem loop_step_frag {M₀ : MachineCtx}
     (hext : dst.core_extern = fmapEmpty)
     (hQd : LabeledAt dst.core_run_state0 p Q)
     (hf : Frag e) (hsz : esize e ≤ lemDefaultFuel)
-    (hs : Step M₀ (e, ev0 :: evs, dst.layout_state) (e', ρ', σ')) :
+    (hs : Step M₀ (e, ev0 :: evs, ctl, dst.layout_state) (e', ρ', ctl, σ')) :
     ∃ (rs' : core_run_state) (tr : List trace_event) (ctr : Nat),
       rs'.labeled = dst.core_run_state0.labeled ∧
       runOne (drive_nonmemory_steps_aux2_lemFuel (Nat.succ fl)
@@ -1759,7 +1759,7 @@ theorem loop_step_frag {M₀ : MachineCtx}
           rw [valueFromPexprs_pair, valueFromPexpr_val,
             valueFromPexpr_val] at hnv
           cases hnv
-        | @memop_ptreq _ _ _ pv1 pv2 b _ _ _ h1 h2 hmem =>
+        | @memop_ptreq _ _ _ pv1 pv2 b _ _ _ _ h1 h2 hmem =>
           rw [valueFromPexpr_val] at h1 h2
           obtain rfl : v1 = Vobject (OVpointer pv1) := Option.some.inj h1
           obtain rfl : v2 = Vobject (OVpointer pv2) := Option.some.inj h2

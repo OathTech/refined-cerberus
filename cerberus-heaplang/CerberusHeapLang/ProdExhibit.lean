@@ -107,26 +107,26 @@ shapes (`store_sym_lit_step`, `store_lit_sym_step`) live in
 `Examples/MirrorCoverage.lean`, which is not a client: -/
 
 /-- The rule at the symbol-pointer/literal-value shape (both strata). -/
-theorem wps_store_sym_lit [SpikeGS .hasLC GF] {M : MachineCtx} {Ls : LabelSpec GF}
+theorem wps_store_sym_lit [SpikeGS .hasLC GF] {M : MachineCtx} {ctl : Ctl} {Ls : LabelSpec GF}
     {Ψ : SpikeVal → EnvStack → IProp GF}
     (loc : CerbLocation.Loc) (ann : core_run_annotation) (ty : ctype)
     (x : sym) (cv : value) (mo : memory_order) (ρ : EnvStack)
     {pv : CerbMem.PointerValue}
     (hx : evalPexpr M.tagDefs M.extern ρ (Pexpr [] () (PEsym x)) =
       some (Vobject (OVpointer pv))) :
-    wps M Ls Ψ (storeExpr loc ann ty pv cv mo) ρ ⊢
-      wps M Ls Ψ (storeOpRedex loc ann ty (Pexpr [] () (PEsym x))
+    wps M ctl Ls Ψ (storeExpr loc ann ty pv cv mo) ρ ⊢
+      wps M ctl Ls Ψ (storeOpRedex loc ann ty (Pexpr [] () (PEsym x))
         (Pexpr [] () (PEval cv)) mo) ρ :=
   wps_store_eval loc ann ty _ _ mo ρ rfl hx rfl
 
-theorem wpt_store_lit_sym [SpikeGS .hasLC GF] {M : MachineCtx} {Ls : LabelSpecT GF}
+theorem wpt_store_lit_sym [SpikeGS .hasLC GF] {M : MachineCtx} {ctl : Ctl} {Ls : LabelSpecT GF}
     {Ψ : SpikeVal → EnvStack → IProp GF}
     (loc : CerbLocation.Loc) (ann : core_run_annotation) (ty : ctype)
     (pv : CerbMem.PointerValue) (y : sym) (mo : memory_order) (ρ : EnvStack)
     {cv : value} {k : Nat}
     (hy : evalPexpr M.tagDefs M.extern ρ (Pexpr [] () (PEsym y)) = some cv) :
-    wpt M Ls k Ψ (storeExpr loc ann ty pv cv mo) ρ ⊢
-      wpt M Ls (k + 1) Ψ (storeOpRedex loc ann ty
+    wpt M ctl Ls k Ψ (storeExpr loc ann ty pv cv mo) ρ ⊢
+      wpt M ctl Ls (k + 1) Ψ (storeOpRedex loc ann ty
         (Pexpr [] () (PEval (Vobject (OVpointer pv)))) (Pexpr [] () (PEsym y)) mo) ρ :=
   wpt_store_eval loc ann ty _ _ mo ρ rfl rfl hy
 
@@ -161,12 +161,12 @@ def ψA (tds : CerbTags.TagDefsMap) : value → Mem → Prop := fun v σ' =>
     the PUBLIC `wpt_create`, the store/load through the generic heap
     rules at the PROGRAM-BOUND pointer. -/
 theorem progAProd_wpt [SpikeGS .hasLC GF]
-    {M : MachineCtx} {Ls : LabelSpecT GF}
+    {M : MachineCtx} {ctl : Ctl} {Ls : LabelSpecT GF}
     (hex : ∀ x, resolveExtern M.extern x = x)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value))
     (hf : SymFrame ev0) :
     iprop(allocBudget (GF := GF) (allocCost M.tagDefs intTy 4)) ⊢
-      wpt M Ls 10 (readoutPost (ψA M.tagDefs)) progAProd (ev0 :: evs) := by
+      wpt M ctl Ls 10 (readoutPost (ψA M.tagDefs)) progAProd (ev0 :: evs) := by
   iintro Hcap
   rw [show progAProd =
     Expr [] (Esseq (symPat [] pASym BTy_unit)
@@ -275,8 +275,8 @@ theorem exhibitA_prod (sup : Nat) (fs : CerbFS.FsState) (args : List String) :
   have hQe := progAProd_labeledAt sup
   have hnolabel : ∀ (l : sym) (params : List (sym × core_base_type))
       (cont : CoreExpr),
-      lookupLabel (procCtx mainSym ((initial_core_run_state sup
-        (collect_labeled_continuations_NEW (prodFile progAProd))).1)).labels l =
+      lookupLabel ((procCtx ((initial_core_run_state sup
+        (collect_labeled_continuations_NEW (prodFile progAProd))).1)).labelsAt (procCtl mainSym).proc) l =
         some (params, cont) → False := by
     intro l params cont hl
     rw [procCtx_labels hQe, lookupLabel_empty] at hl
@@ -284,7 +284,7 @@ theorem exhibitA_prod (sup : Nat) (fs : CerbFS.FsState) (args : List String) :
   obtain ⟨dres, dst', heq, hψ, hbl, hout, herr⟩ :=
     prod_run_eqJ sup progAProd hQe (ψA fmapEmpty) 10
       (wpt_driver_done_alloc (GF := SpikeGF)
-        (M₀ := procCtx mainSym ((initial_core_run_state sup
+        (M₀ := procCtx ((initial_core_run_state sup
           (collect_labeled_continuations_NEW (prodFile progAProd))).1))
         rfl rfl (procCtx_labels hQe) rfl rfl
         (fun l params cont hl => (hnolabel l params cont hl).elim)
@@ -303,7 +303,7 @@ theorem exhibitA_prod (sup : Nat) (fs : CerbFS.FsState) (args : List String) :
           isplitr [Hcap]
           · iapply blockSpecsT_intro fun l params cont _ _ _ _ hl =>
               (hnolabel l params cont hl).elim
-          · iapply progAProd_wpt (resolveExtern_id_of_empty (procCtx_extern _ _)) fmapEmpty []
+          · iapply progAProd_wpt (resolveExtern_id_of_empty (procCtx_extern _)) fmapEmpty []
               symFrame_empty $$ Hcap))
       (by rw [show CerbFuel.driverFuel = 99999999 + 1 from rfl]; omega)
       fs args

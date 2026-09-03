@@ -311,7 +311,7 @@ the field offset, and the decode facts). -/
 section NodeClients
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
-variable {M : MachineCtx} {Ls : LabelSpec GF}
+variable {M : MachineCtx} {ctl : Ctl} {Ls : LabelSpec GF}
 
 /-- NODE `node*`-FIELD LOAD — `wps_load_cell_at` at view type
     `nodePtrTy` (the old example-local lifting rule, re-derived as a
@@ -327,7 +327,7 @@ theorem wps_load_node_field {Ψ : SpikeVal → EnvStack → IProp GF}
     iprop(cellOwn M.tagDefs (GF := GF) id dq (SpikeCell.mk a nodeTy bs) ∗
       (∀ fp, cellOwn M.tagDefs id dq (SpikeCell.mk a nodeTy bs) -∗
         Ψ (SpikeVal.annot [DA_pos [] fp] ((valueFromMemValue mv).2)) ρ)) ⊢
-      wps M Ls Ψ (loadExpr loc ann nodePtrTy (cellPtr id (a + (off : Int))) mo)
+      wps M ctl Ls Ψ (loadExpr loc ann nodePtrTy (cellPtr id (a + (off : Int))) mo)
         ρ :=
   wps_load_cell_at loc ann id a nodeTy off nodePtrTy mo dq bs ρ
     (by rw [nodePtrTy_size]; exact hbound)
@@ -354,7 +354,7 @@ theorem wps_store_node_field {Ψ : SpikeVal → EnvStack → IProp GF}
       (∀ fp, cellOwn M.tagDefs id (.own 1) (SpikeCell.mk a nodeTy
           (spliceBytes off (CerbMem.memValueToBytes M.tagDefs [] mv).2 bs)) -∗
         Ψ (SpikeVal.annot [DA_pos [] fp] Vunit) ρ)) ⊢
-      wps M Ls Ψ (storeExpr loc ann nodePtrTy (cellPtr id (a + (off : Int)))
+      wps M ctl Ls Ψ (storeExpr loc ann nodePtrTy (cellPtr id (a + (off : Int)))
         cv mo) ρ :=
   wps_store_cell_at loc ann id a nodeTy off nodePtrTy cv mo bs ρ hmv
     (by rw [nodePtrTy_size]; exact hbound)
@@ -892,7 +892,8 @@ variable (loc : CerbLocation.Loc) (ann ra : core_run_annotation)
   (mo : memory_order) (pbty cbty bbty nbty ubty : core_base_type)
   (ns : List (Int × Int))
 -- S1b: the wps judgment is indexed by the MACHINE CONTEXT; the
--- exhibit works at the jump-profile instance `procCtx p rs` with the
+-- exhibit works at the jump-profile instance `procCtx rs` (entry control
+-- `procCtl p`: empty stack, in procedure `p`; calls arc C1) with the
 -- label map tied by the honest `LabeledAt` link (`procCtx_labels`).
 variable (p : sym) (rs : core_run_state)
   (hQ : LabeledAt rs p (lrQ loc ann ra mo pbty cbty bbty nbty ubty))
@@ -929,7 +930,7 @@ theorem lr_body_wps (revd rest' : List (Int × Int))
     (renv : List (Fmap sym value)) (hf : SymFrame f)
     (hxs : ns = revd.reverse ++ rest') :
     iprop(isList (GF := GF) pPrev revd ∗ isList pCur rest') ⊢
-      wps (procCtx p rs) (lrLs ns)
+      wps (procCtx rs) (procCtl p) (lrLs ns)
         (lrPost ns) (lrBody loc ann ra mo bbty nbty ubty)
         (lrFrame (ptrVal pPrev) (ptrVal pCur) f :: renv) := by
   rw [show lrBody loc ann ra mo bbty nbty ubty =
@@ -1014,7 +1015,7 @@ theorem lr_body_wps (revd rest' : List (Int × Int))
       rfl (lr_shift_eval_B hf renv _ _ nd.1 aN)
     rw [show cellPtr nd.1 (aN + 8) = cellPtr nd.1 (aN + ((8 : Nat) : Int))
       from rfl]
-    iapply wps_load_node_field (M := procCtx p rs) loc ann nd.1 aN 8 mo (.own 1) bs _
+    iapply wps_load_node_field (M := procCtx rs) (ctl := procCtl p) loc ann nd.1 aN 8 mo (.own 1) bs _
       (by rw [nodeTy_size]; omega)
       (fun lum fpm => hnext lum fpm _)
     isplitl [Hpt]
@@ -1065,7 +1066,7 @@ theorem lr_body_wps (revd rest' : List (Int × Int))
         (by rw [spliceBytes_length _ _ _ (by rw [klen, hlen]; omega)]
             exact hlen)
         (by intro lum fpm ad
-            rw [show ((spliceBytes 8 (CerbMem.memValueToBytes (procCtx p rs).tagDefs []
+            rw [show ((spliceBytes 8 (CerbMem.memValueToBytes (procCtx rs).tagDefs []
                 (CerbMem.pointerMval nodeTy pPrev)).2 bs).drop 0).take 8 =
               (bs.drop 0).take 8 from
               spliceBytes_value_slice _ bs klen hlen]
@@ -1078,7 +1079,7 @@ theorem lr_body_wps (revd rest' : List (Int × Int))
 
 /-- THE BLOCK SPECIFICATION (per-label invariant rule — no Löb). -/
 theorem lr_blockSpecs :
-    ⊢ blockSpecs (GF := GF) (procCtx p rs)
+    ⊢ blockSpecs (GF := GF) (procCtx rs) (procCtl p)
       (lrLs ns) (lrPost ns) := by
   refine blockSpecs_intro fun l params cont args env0 envs hl => ?_
   rw [procCtx_labels hQ] at hl
@@ -1102,7 +1103,7 @@ theorem lr_blockSpecs :
     (`isList head ns`). -/
 theorem lr_wps (sbty : core_base_type) (head : CerbMem.PointerValue) :
     isList (GF := GF) head ns ⊢
-      wps (procCtx p rs) (lrLs ns) (lrPost ns)
+      wps (procCtx rs) (procCtl p) (lrLs ns) (lrPost ns)
         (lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head)
         [fmapEmpty] := by
   rw [show lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head =
@@ -1128,7 +1129,7 @@ framed whole-program judgment are `blockSpecs_frame` /
 
 /-- The block specifications at the framed label context. -/
 theorem lr_blockSpecs_frame (RF : IProp GF) :
-    ⊢ blockSpecs (GF := GF) (procCtx p rs) (frameLs RF (lrLs ns))
+    ⊢ blockSpecs (GF := GF) (procCtx rs) (procCtl p) (frameLs RF (lrLs ns))
       (fun w ρ' => iprop(lrPost ns w ρ' ∗ RF)) :=
   (lr_blockSpecs loc ann ra mo pbty cbty bbty nbty ubty ns p rs hQ).trans
     (blockSpecs_frame RF)
@@ -1139,7 +1140,7 @@ theorem lr_blockSpecs_frame (RF : IProp GF) :
 theorem lr_wps_frame (RF : IProp GF) (sbty : core_base_type)
     (head : CerbMem.PointerValue) :
     iprop(isList (GF := GF) head ns ∗ RF) ⊢
-      wps (procCtx p rs) (frameLs RF (lrLs ns))
+      wps (procCtx rs) (procCtl p) (frameLs RF (lrLs ns))
         (fun w ρ' => iprop(lrPost ns w ρ' ∗ RF))
         (lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head)
         [fmapEmpty] := by
@@ -1417,19 +1418,19 @@ theorem lr_wp_readout {GF : BundledGFunctors} [SpikeGS .hasLC GF]
     (sbty : core_base_type) (head : CerbMem.PointerValue) (R : CellMap) :
     iprop(isList (hlc := .hasLC) (GF := GF) head ns ∗ lrCellFrame R) ⊢
       WP (⟨lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head,
-            [fmapEmpty], procCtx p rs⟩ : CoreRt)
+            [fmapEmpty], procCtl p, procCtx rs⟩ : CoreRt)
         @ Stuckness.NotStuck; ⊤
         {{ w, iprop(∀ (σ' : Mem) (ns' : Nat) (κs : List Empty) (nt : Nat),
           (stateInterp σ' ns' κs nt : IProp GF) ={⊤, ∅}=∗
             ⌜∃ Q : CellMap, (∃ p' : CerbMem.PointerValue,
                 CoreRVal.val w = ptrVal p' ∧ SeedChain Q p' ns.reverse) ∧
-              Q ##ₘ R ∧ Coh (procCtx p rs).tagDefs σ' (Iris.Std.PartialMap.union Q R)⌝) }} := by
+              Q ##ₘ R ∧ Coh (procCtx rs).tagDefs σ' (Iris.Std.PartialMap.union Q R)⌝) }} := by
   refine (lr_wps_frame loc ann ra mo pbty cbty bbty nbty ubty ns
     p rs hQ (lrCellFrame R) sbty head).trans ?_
   refine (BI.emp_sep.2.trans (BI.sep_mono
     ((lr_blockSpecs_frame loc ann ra mo pbty cbty bbty nbty ubty ns
       p rs hQ (lrCellFrame R)).trans
-      (wps_sound (lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head)
+      (wps_sound (ctl := procCtl p) rfl (lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head)
         [fmapEmpty]))
     .rfl)).trans ?_
   refine BI.wand_elim_left.trans ?_
@@ -1468,12 +1469,12 @@ theorem list_reverse_certified
     (nsteps : Nat) (aids : Nat → Nat) :
     let prog := lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head
     let rs := lrRS loc ann ra mo pbty cbty bbty nbty ubty
-    (∀ r, driveU (procCtx lrProcSym rs) aids nsteps
+    (∀ r, driveU (procCtx rs) aids nsteps
       (procThread lrProcSym prog [fmapEmpty]) σ₀ ≠ .killed r) ∧
-    (driveU (procCtx lrProcSym rs) aids nsteps
+    (driveU (procCtx rs) aids nsteps
       (procThread lrProcSym prog [fmapEmpty]) σ₀ ≠ .stuck) ∧
     (∀ (v : value) (σ' : Mem),
-      driveU (procCtx lrProcSym rs) aids nsteps
+      driveU (procCtx rs) aids nsteps
         (procThread lrProcSym prog [fmapEmpty]) σ₀ = .done v σ' →
       ∃ (p' : CerbMem.PointerValue) (Q : CellMap),
         v = ptrVal p' ∧
@@ -1483,10 +1484,10 @@ theorem list_reverse_certified
         Q ##ₘ R ∧
         Sat fmapEmpty σ' (Iris.Std.PartialMap.union Q R)) := by
   intro prog rs
-  have hlbl : (procCtx lrProcSym rs).labels = _ :=
+  have hlbl : (procCtx rs).labelsAt (procCtl lrProcSym).proc = _ :=
     procCtx_labels (lrRS_labeledAt loc ann ra mo pbty cbty bbty nbty ubty)
   have h := engine_adequacyU (GF := SpikeGF)
-    (M := procCtx lrProcSym rs) (procCtx_wf _ _)
+    (M := procCtx rs) (procCtx_wf _) (ctl := procCtl lrProcSym) rfl
     (fun l params cont hl => by
       rw [hlbl] at hl
       obtain ⟨-, rfl⟩ := lrQ_inv loc ann ra mo pbty cbty bbty nbty ubty hl
@@ -1606,12 +1607,12 @@ theorem list_reverse_demo (sbty : core_base_type)
     (nsteps : Nat) (aids : Nat → Nat) :
     let prog := lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty demoHead
     let rs := lrRS loc ann ra mo pbty cbty bbty nbty ubty
-    (∀ r, driveU (procCtx lrProcSym rs) aids nsteps
+    (∀ r, driveU (procCtx rs) aids nsteps
       (procThread lrProcSym prog [fmapEmpty]) σ₀ ≠ .killed r) ∧
-    (driveU (procCtx lrProcSym rs) aids nsteps
+    (driveU (procCtx rs) aids nsteps
       (procThread lrProcSym prog [fmapEmpty]) σ₀ ≠ .stuck) ∧
     (∀ (v : value) (σ' : Mem),
-      driveU (procCtx lrProcSym rs) aids nsteps
+      driveU (procCtx rs) aids nsteps
         (procThread lrProcSym prog [fmapEmpty]) σ₀ = .done v σ' →
       ∃ (p' : CerbMem.PointerValue) (Q : CellMap),
         v = ptrVal p' ∧
@@ -1667,7 +1668,7 @@ theorem lrCost_eq (r : Nat) : lrCost r = 13 * r + 6 := by
 section NodeClientsT
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
-variable {M : MachineCtx} {Ls : LabelSpecT GF}
+variable {M : MachineCtx} {ctl : Ctl} {Ls : LabelSpecT GF}
 
 /-- NODE `node*`-FIELD LOAD, total form — `wpt_load_cell_at` at view
     type `nodePtrTy` (client instance, cost 3 ≤ k). -/
@@ -1682,7 +1683,7 @@ theorem wpt_load_node_field {Ψ : SpikeVal → EnvStack → IProp GF}
     iprop(cellOwn M.tagDefs (GF := GF) id dq (SpikeCell.mk a nodeTy bs) ∗
       (∀ fp, cellOwn M.tagDefs id dq (SpikeCell.mk a nodeTy bs) -∗
         Ψ (SpikeVal.annot [DA_pos [] fp] ((valueFromMemValue mv).2)) ρ)) ⊢
-      wpt M Ls k Ψ (loadExpr loc ann nodePtrTy (cellPtr id (a + (off : Int))) mo)
+      wpt M ctl Ls k Ψ (loadExpr loc ann nodePtrTy (cellPtr id (a + (off : Int))) mo)
         ρ :=
   wpt_load_cell_at loc ann id a nodeTy off nodePtrTy mo dq bs ρ hk
     (by rw [nodePtrTy_size]; exact hbound)
@@ -1708,7 +1709,7 @@ theorem wpt_store_node_field {Ψ : SpikeVal → EnvStack → IProp GF}
       (∀ fp, cellOwn M.tagDefs id (.own 1) (SpikeCell.mk a nodeTy
           (spliceBytes off (CerbMem.memValueToBytes M.tagDefs [] mv).2 bs)) -∗
         Ψ (SpikeVal.annot [DA_pos [] fp] Vunit) ρ)) ⊢
-      wpt M Ls k Ψ (storeExpr loc ann nodePtrTy (cellPtr id (a + (off : Int)))
+      wpt M ctl Ls k Ψ (storeExpr loc ann nodePtrTy (cellPtr id (a + (off : Int)))
         cv mo) ρ :=
   wpt_store_cell_at loc ann id a nodeTy off nodePtrTy cv mo bs ρ hk hmv
     (by rw [nodePtrTy_size]; exact hbound)
@@ -1748,7 +1749,7 @@ theorem lr_body_wpt (revd rest' : List (Int × Int))
     (renv : List (Fmap sym value)) (hf : SymFrame f)
     (hxs : ns = revd.reverse ++ rest') :
     iprop(isList (GF := GF) pPrev revd ∗ isList pCur rest') ⊢
-      wpt (procCtx p rs) (lrLsT ns) (lrCost rest'.length)
+      wpt (procCtx rs) (procCtl p) (lrLsT ns) (lrCost rest'.length)
         (lrPost ns) (lrBody loc ann ra mo bbty nbty ubty)
         (lrFrame (ptrVal pPrev) (ptrVal pCur) f :: renv) := by
   rw [show lrBody loc ann ra mo bbty nbty ubty =
@@ -1843,7 +1844,7 @@ theorem lr_body_wpt (revd rest' : List (Int × Int))
       rfl (lr_shift_eval_B hf renv _ _ nd.1 aN)
     rw [show cellPtr nd.1 (aN + 8) = cellPtr nd.1 (aN + ((8 : Nat) : Int))
       from rfl]
-    iapply wpt_load_node_field (M := procCtx p rs) loc ann nd.1 aN 8 mo (.own 1) bs _
+    iapply wpt_load_node_field (M := procCtx rs) (ctl := procCtl p) loc ann nd.1 aN 8 mo (.own 1) bs _
       (by omega)
       (by rw [nodeTy_size]; omega)
       (fun lum fpm => hnext lum fpm _)
@@ -1897,7 +1898,7 @@ theorem lr_body_wpt (revd rest' : List (Int × Int))
         (by rw [spliceBytes_length _ _ _ (by rw [klen, hlen]; omega)]
             exact hlen)
         (by intro lum fpm ad
-            rw [show ((spliceBytes 8 (CerbMem.memValueToBytes (procCtx p rs).tagDefs []
+            rw [show ((spliceBytes 8 (CerbMem.memValueToBytes (procCtx rs).tagDefs []
                 (CerbMem.pointerMval nodeTy pPrev)).2 bs).drop 0).take 8 =
               (bs.drop 0).take 8 from
               spliceBytes_value_slice _ bs klen hlen]
@@ -1916,7 +1917,7 @@ theorem lr_body_wpt_frame (RF : IProp GF) (revd rest' : List (Int × Int))
     (renv : List (Fmap sym value)) (hf : SymFrame f)
     (hxs : ns = revd.reverse ++ rest') :
     iprop((isList (GF := GF) pPrev revd ∗ isList pCur rest') ∗ RF) ⊢
-      wpt (procCtx p rs) (frameLsT RF (lrLsT ns)) (lrCost rest'.length)
+      wpt (procCtx rs) (procCtl p) (frameLsT RF (lrLsT ns)) (lrCost rest'.length)
         (fun w ρ' => iprop(lrPost ns w ρ' ∗ RF)) (lrBody loc ann ra mo bbty nbty ubty)
         (lrFrame (ptrVal pPrev) (ptrVal pCur) f :: renv) :=
   (BI.sep_mono ((lr_body_wpt loc ann ra mo pbty cbty bbty nbty ubty ns p rs hQ
@@ -1925,7 +1926,7 @@ theorem lr_body_wpt_frame (RF : IProp GF) (revd rest' : List (Int × Int))
 
 /-- THE TOTAL BLOCK SPECIFICATION for the reversal loop. -/
 theorem lr_blockSpecsT :
-    ⊢ blockSpecsT (GF := GF) (procCtx p rs)
+    ⊢ blockSpecsT (GF := GF) (procCtx rs) (procCtl p)
       (lrLsT ns) (lrPost ns) := by
   refine blockSpecsT_intro fun l params cont args env0 envs m hl => ?_
   rw [procCtx_labels hQ] at hl
@@ -1947,7 +1948,7 @@ theorem lr_blockSpecsT :
 /-- The whole program's total judgment at budget `lrCost |ns| + 1`. -/
 theorem lr_wpt (sbty : core_base_type) (head : CerbMem.PointerValue) :
     isList (GF := GF) head ns ⊢
-      wpt (procCtx p rs) (lrLsT ns) (lrCost ns.length + 1) (lrPost ns)
+      wpt (procCtx rs) (procCtl p) (lrLsT ns) (lrCost ns.length + 1) (lrPost ns)
         (lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head)
         [fmapEmpty] := by
   rw [show lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head =
@@ -1968,7 +1969,7 @@ theorem lr_wpt (sbty : core_base_type) (head : CerbMem.PointerValue) :
 /-- The total block specifications at the framed label context
     (`blockSpecsT_frame` on the unframed proof). -/
 theorem lr_blockSpecsT_frame (RF : IProp GF) :
-    ⊢ blockSpecsT (GF := GF) (procCtx p rs) (frameLsT RF (lrLsT ns))
+    ⊢ blockSpecsT (GF := GF) (procCtx rs) (procCtl p) (frameLsT RF (lrLsT ns))
       (fun w ρ' => iprop(lrPost ns w ρ' ∗ RF)) :=
   (lr_blockSpecsT loc ann ra mo pbty cbty bbty nbty ubty ns p rs hQ).trans
     (blockSpecsT_frame RF)
@@ -1979,7 +1980,7 @@ theorem lr_blockSpecsT_frame (RF : IProp GF) :
 theorem lr_wpt_frame (RF : IProp GF) (sbty : core_base_type)
     (head : CerbMem.PointerValue) :
     iprop(isList (GF := GF) head ns ∗ RF) ⊢
-      wpt (procCtx p rs) (frameLsT RF (lrLsT ns)) (lrCost ns.length + 1)
+      wpt (procCtx rs) (procCtl p) (frameLsT RF (lrLsT ns)) (lrCost ns.length + 1)
         (fun w ρ' => iprop(lrPost ns w ρ' ∗ RF))
         (lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head)
         [fmapEmpty] := by
@@ -2023,7 +2024,7 @@ theorem list_reverse_certified_total (sbty : core_base_type)
     (σ₀ : Mem) (hcoh : Sat fmapEmpty σ₀ (Iris.Std.PartialMap.union m₀ R))
     (aids : Nat → Nat) :
     ∃ (p' : CerbMem.PointerValue) (Q : CellMap) (σ' : Mem),
-      driveU (procCtx lrProcSym (lrRS loc ann ra mo pbty cbty bbty nbty ubty)) aids
+      driveU (procCtx (lrRS loc ann ra mo pbty cbty bbty nbty ubty)) aids
         (13 * ns.length + 7)
         (procThread lrProcSym
           (lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head)
@@ -2040,8 +2041,8 @@ theorem list_reverse_certified_total (sbty : core_base_type)
   have hlbl := procCtx_labels hQ
   obtain ⟨v, σ', hdone, ⟨Q, ⟨p', rfl, hQseed⟩, hdisj, hsat⟩, -⟩ :=
     wpt_engine_boundU (GF := SpikeGF)
-      (M := procCtx lrProcSym (lrRS loc ann ra mo pbty cbty bbty nbty ubty))
-      (procCtx_wf _ _)
+      (M := procCtx (lrRS loc ann ra mo pbty cbty bbty nbty ubty)) (ctl := procCtl lrProcSym)
+      (procCtx_wf _) rfl
       (fun l params cont hl => by
         rw [hlbl] at hl
         obtain ⟨-, rfl⟩ := lrQ_inv loc ann ra mo pbty cbty bbty nbty ubty hl

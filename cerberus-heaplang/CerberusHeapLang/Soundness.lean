@@ -108,15 +108,15 @@ def spikeThread (e : CoreExpr) : thread_state := envThread e spikeEnv
 /-- The frozen profiles' thread literals are the context instances'
     threads, definitionally. -/
 theorem spikeCtx_thread (e : CoreExpr) (ρ : EnvStack) :
-    spikeCtx.thread e ρ = envThread e ρ := rfl
+    spikeCtx.thread e ρ spikeCtl = envThread e ρ := rfl
 
 /-- THE ENGINE ENTRY AT A MACHINE CONTEXT (S1b, the unified
     configuration): one engine step at context `M` — `step_ctx`
     (Core_reduction.lean:484) with every immutable supplied by the
     context. -/
-def engineStepsU (M : MachineCtx) (e : CoreExpr) (ρ : EnvStack) (σ : Mem) :
+def engineStepsU (M : MachineCtx) (e : CoreExpr) (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
     List core_step2 :=
-  step_ctx M.tagDefs σ M.file M.extern M.tid (M.parent, M.thread e ρ)
+  step_ctx M.tagDefs σ M.file M.extern M.tid (M.parent, M.thread e ρ ctl)
 
 /-! ## The discharge (the Driver.lean:273 protocol, projected) -/
 
@@ -259,8 +259,8 @@ def dischargeStep (tds : CerbTags.TagDefsMap) (aid : Nat) (rs : core_run_state)
 /-- The engine's discharged behavior list at a machine context
     (engine steps at `M`, discharged against `M`'s run state). -/
 def outcomesU (M : MachineCtx) (aid : Nat) (e : CoreExpr) (ρ : EnvStack)
-    (σ : Mem) : List EngineOutcome :=
-  (engineStepsU M e ρ σ).map (dischargeStep M.tagDefs aid M.runState σ)
+    (ctl : Ctl) (σ : Mem) : List EngineOutcome :=
+  (engineStepsU M e ρ ctl σ).map (dischargeStep M.tagDefs aid M.runState σ)
 
 /-! ## The size measure (fuel accounting; see FUEL HONESTY above) -/
 
@@ -853,24 +853,25 @@ theorem Redex.jumpRedex?_some_inv {r : CoreExpr} {l : sym}
     redex's OWN step — the context is DISCARDED, and the successor
     does not mention it. -/
 theorem Decomp.step_factor {M : MachineCtx} {e : CoreExpr} {ctx : context}
-    {r : CoreExpr} {ρ : EnvStack} {σ : Mem}
-    {out : CoreExpr × EnvStack × Mem}
-    (h : Decomp e ctx r) (hs : Step M (e, ρ, σ) out) :
+    {r : CoreExpr} {ρ : EnvStack} {ctl : Ctl} {σ : Mem}
+    {out : Config}
+    (h : Decomp e ctx r) (hs : Step M (e, ρ, ctl, σ) out) :
     (∃ r' ρ' σ', (∀ (ra : core_run_annotation) (l : sym)
         (pes : List (generic_pexpr Unit sym)), r ≠ runRedex ra l pes) ∧
-      Step M (r, ρ, σ) (r', ρ', σ') ∧
-      out = (apply_ctx ctx r', ρ', σ')) ∨
+      Step M (r, ρ, ctl, σ) (r', ρ', ctl, σ') ∧
+      out = (apply_ctx ctx r', ρ', ctl, σ')) ∨
     (∃ (ra : core_run_annotation) (l : sym)
       (pes : List (generic_pexpr Unit sym)),
-      r = runRedex ra l pes ∧ Step M (r, ρ, σ) out) := by
+      r = runRedex ra l pes ∧ Step M (r, ρ, ctl, σ) out) := by
   induction h generalizing out with
   | @root r hr =>
     by_cases hrun : ∃ (ra : core_run_annotation) (l : sym)
         (pes : List (generic_pexpr Unit sym)), r = runRedex ra l pes
     · obtain ⟨ra, l, pes, rfl⟩ := hrun
       exact .inr ⟨ra, l, pes, rfl, hs⟩
-    · exact .inl ⟨out.1, out.2.1, out.2.2,
-        fun ra l pes hr => hrun ⟨ra, l, pes, hr⟩, hs, rfl⟩
+    · obtain ⟨oe, oρ, octl, oσ⟩ := out
+      obtain rfl : ctl = octl := hs.ctl_eq'.symm
+      exact .inl ⟨oe, oρ, oσ, fun ra l pes hr => hrun ⟨ra, l, pes, hr⟩, hs, rfl⟩
   | @sseq pa bty e1 e2 ctx' r' hd ih =>
     rcases hs.sseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
         ⟨_, _, v, _, _, _, he1, _, _⟩ | ⟨_, _, ds, v, _, _, _, he1, _, _⟩ |
@@ -2228,7 +2229,7 @@ def procThread (p : sym) (e : CoreExpr) (ρ : EnvStack) : thread_state :=
 /-- The proc-carrying profile's thread literal is the `procCtx`
     instance's thread, definitionally. -/
 theorem procCtx_thread (p : sym) (rs : core_run_state) (e : CoreExpr)
-    (ρ : EnvStack) : (procCtx p rs).thread e ρ = procThread p e ρ := rfl
+    (ρ : EnvStack) : (procCtx rs).thread e ρ (procCtl p) = procThread p e ρ := rfl
 
 /-- The Q↔labeled tie (the donor's `⌜Q = rf.f_code⌝`,
     lifting.v:1002): the run state's two-level `labeled` map has
@@ -2240,31 +2241,30 @@ def LabeledAt (rs : core_run_state) (p : sym) (Q : LabelMap) : Prop :=
 
 /-- A successful label lookup in a DERIVED label map certifies the
     whole read path: there IS a current procedure and its resolved
-    fiber IS `M.labels` (the old `LabeledAt` tie hypothesis, now a
+    fiber IS `M.labelsAt ctl.proc` (the old `LabeledAt` tie hypothesis, now a
     derived fact — the S1a probe's `labels_lookup_some`). -/
-theorem MachineCtx.labels_lookup_some {M : MachineCtx} {l : sym}
+theorem MachineCtx.labels_lookup_some {M : MachineCtx} {ctl : Ctl} {l : sym}
     {pc : List (sym × core_base_type) × CoreExpr}
-    (h : lookupLabel M.labels l = some pc) :
-    ∃ p, M.proc = some p ∧
-      LabeledAt M.runState (M.resolveProc p) M.labels := by
-  cases hp : M.proc with
+    (h : lookupLabel (M.labelsAt ctl.proc) l = some pc) :
+    ∃ p, ctl.proc = some p ∧
+      LabeledAt M.runState (M.resolveProc p) (M.labelsAt ctl.proc) := by
+  cases hp : ctl.proc with
   | none =>
-    rw [show M.labels = fmapEmpty by unfold MachineCtx.labels; rw [hp],
-      lookupLabel_empty] at h
+    rw [hp, MachineCtx.labelsAt_none, lookupLabel_empty] at h
     cases h
   | some p =>
-    have hlab := MachineCtx.labels_eq_of_proc (M := M) hp
+    rw [hp] at h
     cases hQ : fmapLookupBy (fun (s1 : sym) (s2 : sym) =>
         Lem_Basic_classes.ordCompare s1 s2)
         (M.resolveProc p) M.runState.labeled with
     | none =>
-      rw [hQ] at hlab
-      rw [show M.labels = fmapEmpty from hlab, lookupLabel_empty] at h
+      rw [show M.labelsAt (some p) = fmapEmpty by
+        rw [MachineCtx.labelsAt_some, hQ], lookupLabel_empty] at h
       cases h
     | some Q =>
-      rw [hQ] at hlab
-      have hlab' : M.labels = Q := hlab
-      exact ⟨p, rfl, show fmapLookupBy _ _ _ = some M.labels by
+      have hlab' : M.labelsAt (some p) = Q := by
+        rw [MachineCtx.labelsAt_some, hQ]
+      exact ⟨p, rfl, show fmapLookupBy _ _ _ = some (M.labelsAt (some p)) by
         rw [hlab']; exact hQ⟩
 
 /-- Esave ENTRY, context undisturbed (one_step0's Esave
@@ -3494,9 +3494,9 @@ theorem BareHead.redex {e : CoreExpr} (h : BareHead e) (hnv : toVal e = none) :
     `BareHead` (create → its bare pointer value; memop-operand
     evaluation → the memop at values; the memop at values → its bare
     boolean). -/
-theorem BareHead.step {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack} {σ : Mem}
+theorem BareHead.step {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack} {ctl : Ctl} {σ : Mem}
     {e' : CoreExpr} {ρ' : EnvStack} {σ' : Mem}
-    (h : BareHead e) (hs : Step M (e, ρ, σ) (e', ρ', σ')) : BareHead e' := by
+    (h : BareHead e) (hs : Step M (e, ρ, ctl, σ) (e', ρ', ctl, σ')) : BareHead e' := by
   cases h with
   | val_pure v => exact (Step.val_elim (w := .pure v) hs).elim
   | create =>
@@ -3584,7 +3584,7 @@ annotation-free. The forcing fact: in the general arm of the engine's
 annotations and, unless it is a library location, rewrites the
 thread's `current_loc`; this package keeps `currentLoc` in the
 immutable `MachineCtx`, and `engine_step_matchU` equates the engine's
-successor thread with `M.thread e' ρ'`, whose `current_loc` is
+successor thread with `M.thread e' ρ' ctl`, whose `current_loc` is
 `M.currentLoc`. A located node would falsify that equation. Located
 Core — in particular every Core program the C elaborator produces — is
 therefore outside `Frag`. The mover: make `current_loc` live state,
@@ -4005,37 +4005,39 @@ theorem Frag.decomp {e : CoreExpr} (hf : Frag e) (hnv : toVal e = none) :
 /-! ## The value protocol at a machine context, and the frozen-profile
 value corollaries -/
 
-/-- PROGRAM-DONE at a bare value (reads exactly SeqWF: empty stack
-    selects PROGRAM-DONE over RETURN, no parent over THREAD-DONE). -/
-theorem outcomesU_done {M : MachineCtx} (hwf : M.SeqWF) (aid : Nat)
-    (v : value) (ρ : EnvStack) (σ : Mem) :
-    outcomesU M aid (ofVal (.pure v)) ρ σ = [.done v] := by
+/-- PROGRAM-DONE at a bare value (reads exactly the two selectors of
+    step_ctx's value arm: the EMPTY STACK of the live control selects
+    PROGRAM-DONE over RETURN, `SeqWF`'s no-parent selects it over
+    THREAD-DONE). -/
+theorem outcomesU_done {M : MachineCtx} (hwf : M.SeqWF) {ctl : Ctl} (hκ : ctl.κ = [])
+    (aid : Nat) (v : value) (ρ : EnvStack) (σ : Mem) :
+    outcomesU M aid (ofVal (.pure v)) ρ ctl σ = [.done v] := by
   unfold outcomesU engineStepsU
   rw [hwf.parent,
     step_ctx_done v M.tagDefs σ M.file M.extern M.tid
-      (M.thread (ofVal (.pure v)) ρ) rfl hwf.stack]
+      (M.thread (ofVal (.pure v)) ρ ctl) rfl (Ctl.toStack_of_κ_nil hκ)]
   rfl
 
 /-- REMOVE-ANNOT at an annotated value (no context field read). -/
 theorem outcomesU_remove_annot (M : MachineCtx) (aid : Nat)
-    (ds : List dyn_annotation) (v : value) (ρ : EnvStack) (σ : Mem) :
-    outcomesU M aid (ofVal (.annot ds v)) ρ σ =
-      [.next (M.thread (ofVal (.pure v)) ρ) σ] := by
+    (ds : List dyn_annotation) (v : value) (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
+    outcomesU M aid (ofVal (.annot ds v)) ρ ctl σ =
+      [.next (M.thread (ofVal (.pure v)) ρ ctl) σ] := by
   unfold outcomesU engineStepsU
   rw [step_ctx_remove_annot ds v M.tagDefs σ M.file M.extern M.tid M.parent
-      (M.thread (ofVal (.annot ds v)) ρ) rfl]
+      (M.thread (ofVal (.annot ds v)) ρ ctl) rfl]
   rfl
 
 /-- The extended cone is closed under Step, GIVEN the label map's
     own cone membership (`hQf` — the registered continuations are
     fragment terms; the side hypothesis breaks the circularity a
     Q-indexed cone would have). -/
-theorem Frag.step {M : MachineCtx}
-    (hQf : ∀ l params cont, lookupLabel M.labels l = some (params, cont) →
+theorem Frag.step {M : MachineCtx} {ctl : Ctl}
+    (hQf : ∀ l params cont, lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
       Frag cont)
     {e : CoreExpr} {ρ : EnvStack} {σ : Mem}
     {e' : CoreExpr} {ρ' : EnvStack} {σ' : Mem}
-    (hf : Frag e) (hs : Step M (e, ρ, σ) (e', ρ', σ')) : Frag e' := by
+    (hf : Frag e) (hs : Step M (e, ρ, ctl, σ) (e', ρ', ctl, σ')) : Frag e' := by
   induction hf generalizing e' ρ' σ' with
   | val_pure v => exact (Step.val_elim (w := .pure v) hs).elim
   | store =>
@@ -4265,11 +4267,11 @@ theorem Frag.step {M : MachineCtx}
     which RESETS to a registered continuation (the R3 reset — the
     J-lane accounting's second budget). -/
 theorem Frag.esize_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
-    {σ : Mem} {e' : CoreExpr} {ρ' : EnvStack} {σ' : Mem}
-    (hf : Frag e) (hs : Step M (e, ρ, σ) (e', ρ', σ')) :
+    {ctl : Ctl} {σ : Mem} {e' : CoreExpr} {ρ' : EnvStack} {σ' : Mem}
+    (hf : Frag e) (hs : Step M (e, ρ, ctl, σ) (e', ρ', ctl, σ')) :
     esize e' ≤ esize e + 1 ∨
     ∃ l pes params cont, jumpRedex? e = some (l, pes) ∧
-      lookupLabel M.labels l = some (params, cont) ∧ e' = cont := by
+      lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) ∧ e' = cont := by
   induction hf generalizing e' ρ' σ' with
   | val_pure v => exact (Step.val_elim (w := .pure v) hs).elim
   | store =>
@@ -4578,11 +4580,11 @@ theorem Frag.esize_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
     panic-exclusion facts — the WP is the well-formedness oracle. -/
 theorem outcomesU_of_step {M : MachineCtx} (aid : Nat)
     {e e' : CoreExpr} {ev0 : Fmap sym value} {evs : List (Fmap sym value)}
-    {ρ' : EnvStack} {σ σ' : Mem}
+    {ρ' : EnvStack} {ctl : Ctl} {σ σ' : Mem}
     (hf : Frag e) (hsz : esize e ≤ lemDefaultFuel)
-    (hs : Step M (e, ev0 :: evs, σ) (e', ρ', σ')) :
-    outcomesU M aid e (ev0 :: evs) σ =
-      [.next (M.thread e' ρ') σ'] := by
+    (hs : Step M (e, ev0 :: evs, ctl, σ) (e', ρ', ctl, σ')) :
+    outcomesU M aid e (ev0 :: evs) ctl σ =
+      [.next (M.thread e' ρ' ctl) σ'] := by
   have hnv : toVal e = none := hs.toVal_none
   obtain ⟨ctx, r, hd, hfr⟩ := hf.decomp hnv
   rcases hd.step_factor hs with ⟨r', ρr, σr, hnr, hr, heq⟩ | ⟨ra, l, pes, rfl, hr⟩
@@ -4944,7 +4946,7 @@ theorem outcomesU_of_step {M : MachineCtx} (aid : Nat)
           rw [valueFromPexprs_pair, valueFromPexpr_val,
             valueFromPexpr_val] at hnv
           cases hnv
-        | @memop_ptreq _ _ _ pv1 pv2 b _ _ _ h1 h2 hmem =>
+        | @memop_ptreq _ _ _ pv1 pv2 b _ _ _ _ h1 h2 hmem =>
           rw [valueFromPexpr_val] at h1 h2
           obtain rfl : v1 = Vobject (OVpointer pv1) := Option.some.inj h1
           obtain rfl : v2 = Vobject (OVpointer pv2) := Option.some.inj h2
@@ -5041,18 +5043,18 @@ outcome documented per-construct in the capability manifest). -/
 /-- One matched engine behavior at a machine context (`refused`
     requires provable mirror stuckness, so refusals contradict
     NotStuck). -/
-inductive EngineMatchU (M : MachineCtx) (e : CoreExpr) (ρ : EnvStack)
+inductive EngineMatchU (M : MachineCtx) (e : CoreExpr) (ρ : EnvStack) (ctl : Ctl)
     (σ : Mem) : EngineOutcome → Prop where
   | step {e' : CoreExpr} {ρ' : EnvStack} {σ' : Mem} :
-      Step M (e, ρ, σ) (e', ρ', σ') →
-      EngineMatchU M e ρ σ (.next (M.thread e' ρ') σ')
+      Step M (e, ρ, ctl, σ) (e', ρ', ctl, σ') →
+      EngineMatchU M e ρ ctl σ (.next (M.thread e' ρ' ctl) σ')
   | removeAnnot {ds : List dyn_annotation} {v : value} :
       e = ofVal (.annot ds v) →
-      EngineMatchU M e ρ σ (.next (M.thread (ofVal (.pure v)) ρ) σ)
-  | done {v : value} : e = ofVal (.pure v) → EngineMatchU M e ρ σ (.done v)
+      EngineMatchU M e ρ ctl σ (.next (M.thread (ofVal (.pure v)) ρ ctl) σ)
+  | done {v : value} : e = ofVal (.pure v) → EngineMatchU M e ρ ctl σ (.done v)
   | refused {o : EngineOutcome} : o.isRefusal →
-      (∀ out, ¬ Step M (e, ρ, σ) out) → toVal e = none →
-      EngineMatchU M e ρ σ o
+      (∀ out, ¬ Step M (e, ρ, ctl, σ) out) → toVal e = none →
+      EngineMatchU M e ρ ctl σ o
 
 /-- STORE IS TWO-SIDED at any context: the engine's behavior at a
     store redex is a singleton, and it is a mirror step exactly when
@@ -5061,9 +5063,9 @@ inductive EngineMatchU (M : MachineCtx) (e : CoreExpr) (ρ : EnvStack)
 theorem engine_complete_storeU (M : MachineCtx) (aid : Nat)
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {lk : Bool}
     {ty : ctype} {pv : CerbMem.PointerValue} {cv : value} {mo : memory_order}
-    (ρ : EnvStack) (σ : Mem) :
-    ∃ o, outcomesU M aid (storeRedex loc ann lk ty pv cv mo) ρ σ = [o] ∧
-      EngineMatchU M (storeRedex loc ann lk ty pv cv mo) ρ σ o := by
+    (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
+    ∃ o, outcomesU M aid (storeRedex loc ann lk ty pv cv mo) ρ ctl σ = [o] ∧
+      EngineMatchU M (storeRedex loc ann lk ty pv cv mo) ρ ctl σ o := by
   have hsz : esize (storeRedex loc ann lk ty pv cv mo) ≤ lemDefaultFuel := by
     rw [show esize (storeRedex loc ann lk ty pv cv mo) = 1 from rfl]
     unfold lemDefaultFuel
@@ -5078,7 +5080,7 @@ theorem engine_complete_storeU (M : MachineCtx) (aid : Nat)
     · unfold outcomesU engineStepsU storeRedex
       rw [step_ctx_store_illtyped
         (Decomp.root (Redex.store)) hsz M.tagDefs hmv
-        σ M.file M.extern M.tid M.parent (M.thread _ ρ) rfl]
+        σ M.file M.extern M.tid M.parent (M.thread _ ρ ctl) rfl]
       rfl
     · refine .refused trivial (fun out hstep => ?_) rfl
       obtain ⟨mv', -, -, hmv', -, -⟩ := hstep.store_inv
@@ -5090,22 +5092,22 @@ theorem engine_complete_storeU (M : MachineCtx) (aid : Nat)
       obtain ⟨fp, σ'⟩ := fpσ
       refine ⟨_, ?_, .step (Step.store_canonical hmv hmem)⟩
       unfold outcomesU engineStepsU storeRedex
-      rw [step_ctx_store (Decomp.root (Redex.store)) hsz M.tagDefs hmv σ M.file M.extern M.tid M.parent (M.thread _ ρ) rfl]
+      rw [step_ctx_store (Decomp.root (Redex.store)) hsz M.tagDefs hmv σ M.file M.extern M.tid M.parent (M.thread _ ρ ctl) rfl]
       simp only [List.map_cons, List.map_nil]
       rw [dischargeStep_store_active hmem]
       rfl
     | none =>
       refine ⟨dischargeStep M.tagDefs aid M.runState σ (Step_action_request2
-          "StoreRequest" (requestLoc (M.thread (storeRedex loc ann lk ty pv cv mo) ρ) loc) M.tid
+          "StoreRequest" (requestLoc (M.thread (storeRedex loc ann lk ty pv cv mo) ρ ctl) loc) M.tid
           (is_unseq_with_ccall CTX)
           (stExceptUndef_return (StoreRequest2 mo ty lk pv mv (fun _ fp =>
-            { M.thread (storeRedex loc ann lk ty pv cv mo) ρ with
+            { M.thread (storeRedex loc ann lk ty pv cv mo) ρ ctl with
               arena := apply_ctx CTX (Expr [] (Eannot [DA_pos [] fp]
                 (Expr [] (Epure (Pexpr [] () (PEval Vunit)))))) })))),
         ?_, ?_⟩
       · unfold outcomesU engineStepsU storeRedex
         rw [step_ctx_store (Decomp.root (Redex.store)) hsz M.tagDefs hmv σ M.file M.extern M.tid M.parent
-          (M.thread _ ρ) rfl]
+          (M.thread _ ρ ctl) rfl]
         rfl
       · refine .refused (dischargeStep_store_refusal hmem)
           (fun out hstep => ?_) rfl
@@ -5156,15 +5158,15 @@ theorem engine_complete_caseU (M : MachineCtx) (aid : Nat)
     {b : List annot} {cval : value} {pats : List (pattern × CoreExpr)}
     (hsz : esize (caseRedex (Pexpr b () (PEval cval)) pats)
       ≤ lemDefaultFuel)
-    (ρ : EnvStack) (σ : Mem) :
-    ∃ o, outcomesU M aid (caseRedex (Pexpr b () (PEval cval)) pats) ρ σ = [o] ∧
-      EngineMatchU M (caseRedex (Pexpr b () (PEval cval)) pats) ρ σ o := by
+    (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
+    ∃ o, outcomesU M aid (caseRedex (Pexpr b () (PEval cval)) pats) ρ ctl σ = [o] ∧
+      EngineMatchU M (caseRedex (Pexpr b () (PEval cval)) pats) ρ ctl σ o := by
   cases hsel : select_case subst_sym_expr cval pats with
   | some e' =>
     refine ⟨_, ?_, .step (Step.case_value (valueFromPexpr_val _ _) hsel)⟩
     unfold outcomesU engineStepsU caseRedex
     rw [step_ctx_case_value (Decomp.root (Redex.case_ _ _)) hsz hsel
-      M.tagDefs σ M.file M.extern M.tid M.parent (M.thread _ ρ) rfl]
+      M.tagDefs σ M.file M.extern M.tid M.parent (M.thread _ ρ ctl) rfl]
     rfl
   | none =>
     refine ⟨.error (String.append "Ecase, mismatched ==> "
@@ -5172,7 +5174,7 @@ theorem engine_complete_caseU (M : MachineCtx) (aid : Nat)
           (caseRedex (Pexpr b () (PEval cval)) pats))), ?_, ?_⟩
     · unfold outcomesU engineStepsU caseRedex
       rw [step_ctx_case_illtyped (Decomp.root (Redex.case_ _ _)) hsz hsel
-        M.tagDefs σ M.file M.extern M.tid M.parent (M.thread _ ρ) rfl]
+        M.tagDefs σ M.file M.extern M.tid M.parent (M.thread _ ρ ctl) rfl]
       rfl
     · refine .refused trivial (fun out hstep => ?_) rfl
       obtain ⟨cval', e'', hv, hsel', -⟩ := hstep.case_inv

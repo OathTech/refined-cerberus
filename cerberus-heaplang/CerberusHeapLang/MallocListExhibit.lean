@@ -913,7 +913,7 @@ theorem ml_body_wps (i : Int) (pc : CerbMem.PointerValue) (ids done : List Int)
     (hnd : (ids ++ done).Nodup) :
     iprop(allocBudget (GF := GF) (i.toNat * regionCost al 16) ∗
         isRegionList pc ids ∗ deadRegions done) ⊢
-      wps (procCtx p rs) (mlLs al n) (mlPost n)
+      wps (procCtx rs) (procCtl p) (mlLs al n) (mlPost n)
         (mlBody loc ann ra mo al pref qbty bbty nbty ubty)
         (mlFrame (ivVal i) (ptrVal pc) f :: renv) := by
   rw [show mlBody loc ann ra mo al pref qbty bbty nbty ubty =
@@ -986,7 +986,7 @@ theorem ml_body_wps (i : Int) (pc : CerbMem.PointerValue) (ids done : List Int)
       rw [show a + ((0 : Nat) : Int) = a from by omega]]
     iapply wps_store_regionOwn_at (mv := longMval i) loc ann id a 16 0 longTy (ivVal i) mo _ _
       (longMval_encodes i)
-      (by rw [show CerbMem.sizeofCtype (procCtx p rs).tagDefs longTy = 8 from rfl]; omega)
+      (by rw [show CerbMem.sizeofCtype (procCtx rs).tagDefs longTy = 8 from rfl]; omega)
       (longMval_storable i)
     isplitl [Hr16]
     · iexact Hr16
@@ -1002,7 +1002,7 @@ theorem ml_body_wps (i : Int) (pc : CerbMem.PointerValue) (ids done : List Int)
     rw [show cellPtr id (a + 8) = cellPtr id (a + ((8 : Nat) : Int)) from rfl]
     iapply wps_store_regionOwn_at (mv := CerbMem.pointerMval nodeTy pc) loc ann id a 16 8
       nodePtrTy (ptrVal pc) mo _ _ (node_ptr_encodes pc)
-      (by rw [show CerbMem.sizeofCtype (procCtx p rs).tagDefs nodePtrTy = 8 from rfl]; omega)
+      (by rw [show CerbMem.sizeofCtype (procCtx rs).tagDefs nodePtrTy = 8 from rfl]; omega)
       (nodePtr_storable hwf)
     isplitl [Hr]
     · iexact Hr
@@ -1106,9 +1106,9 @@ theorem ml_body_wps (i : Int) (pc : CerbMem.PointerValue) (ids done : List Int)
       iapply wps_load_eval loc ann nodePtrTy (lrShiftPe mlPSym) mo _
         rfl (by rw [procCtx_extern]; exact ml_shift_p_eval_B hf renv _ _ id aN)
       rw [show cellPtr id (aN + 8) = cellPtr id (aN + ((8 : Nat) : Int)) from rfl]
-      iapply wps_load_regionOwn_at (M := procCtx p rs) loc ann id aN 16 8 nodePtrTy mo
+      iapply wps_load_regionOwn_at (M := procCtx rs) (ctl := procCtl p) loc ann id aN 16 8 nodePtrTy mo
         (.own 1) bs _
-        (by rw [show CerbMem.sizeofCtype (procCtx p rs).tagDefs nodePtrTy = 8 from rfl]; omega)
+        (by rw [show CerbMem.sizeofCtype (procCtx rs).tagDefs nodePtrTy = 8 from rfl]; omega)
         (fun lum fpm => hnext lum fpm _)
         rfl
       isplitl [Hr]
@@ -1158,7 +1158,7 @@ theorem ml_body_wps (i : Int) (pc : CerbMem.PointerValue) (ids done : List Int)
 
 /-- THE BLOCK SPECIFICATION. -/
 theorem ml_blockSpecs :
-    ⊢ blockSpecs (GF := GF) (procCtx p rs) (mlLs al n) (mlPost n) := by
+    ⊢ blockSpecs (GF := GF) (procCtx rs) (procCtl p) (mlLs al n) (mlPost n) := by
   refine blockSpecs_intro fun l params cont args env0 envs hl => ?_
   rw [procCtx_labels hQ] at hl
   obtain ⟨rfl, rfl⟩ := mlQ_inv loc ann ra mo al pref ibty pbty qbty bbty nbty ubty hl
@@ -1183,7 +1183,7 @@ theorem ml_blockSpecs :
     — `n` DISTINCT nodes allocated, written, linked, walked and freed. -/
 theorem ml_wps (sbty : core_base_type) (hn : 0 ≤ n) :
     allocBudget (GF := GF) (n.toNat * regionCost al 16) ⊢
-      wps (procCtx p rs) (mlLs al n) (mlPost n)
+      wps (procCtx rs) (procCtl p) (mlLs al n) (mlPost n)
         (mlProg loc ann ra mo al pref sbty ibty pbty qbty bbty nbty ubty n) [fmapEmpty] := by
   rw [show mlProg loc ann ra mo al pref sbty ibty pbty qbty bbty nbty ubty n =
     Expr [] (Esave (mlLoopSym, sbty) (mlParams ibty pbty n)
@@ -1283,7 +1283,7 @@ theorem ml_body_wpt (i : Int) (pc : CerbMem.PointerValue) (ids done : List Int)
     (hnd : (ids ++ done).Nodup) :
     iprop(allocBudget (GF := GF) (i.toNat * regionCost al 16) ∗
         isRegionList pc ids ∗ deadRegions done) ⊢
-      wpt (procCtx p rs) (mlLsT al n) (mlCost i.toNat ids.length) (mlPost n)
+      wpt (procCtx rs) (procCtl p) (mlLsT al n) (mlCost i.toNat ids.length) (mlPost n)
         (mlBody loc ann ra mo al pref qbty bbty nbty ubty)
         (mlFrame (ivVal i) (ptrVal pc) f :: renv) := by
   rw [show mlBody loc ann ra mo al pref qbty bbty nbty ubty =
@@ -1361,7 +1361,7 @@ theorem ml_body_wpt (i : Int) (pc : CerbMem.PointerValue) (ids done : List Int)
       rw [show a + ((0 : Nat) : Int) = a from by omega]]
     iapply wpt_store_regionOwn_at (mv := longMval i) loc ann id a 16 0 longTy (ivVal i) mo _ _
       (Nat.le_refl 3) (longMval_encodes i)
-      (by rw [show CerbMem.sizeofCtype (procCtx p rs).tagDefs longTy = 8 from rfl]; omega)
+      (by rw [show CerbMem.sizeofCtype (procCtx rs).tagDefs longTy = 8 from rfl]; omega)
       (longMval_storable i)
     isplitl [Hr16]
     · iexact Hr16
@@ -1377,7 +1377,7 @@ theorem ml_body_wpt (i : Int) (pc : CerbMem.PointerValue) (ids done : List Int)
     rw [show cellPtr id (a + 8) = cellPtr id (a + ((8 : Nat) : Int)) from rfl]
     iapply wpt_store_regionOwn_at (mv := CerbMem.pointerMval nodeTy pc) loc ann id a 16 8
       nodePtrTy (ptrVal pc) mo _ _ (Nat.le_refl 3) (node_ptr_encodes pc)
-      (by rw [show CerbMem.sizeofCtype (procCtx p rs).tagDefs nodePtrTy = 8 from rfl]; omega)
+      (by rw [show CerbMem.sizeofCtype (procCtx rs).tagDefs nodePtrTy = 8 from rfl]; omega)
       (nodePtr_storable hwf)
     isplitl [Hr]
     · iexact Hr
@@ -1489,9 +1489,9 @@ theorem ml_body_wpt (i : Int) (pc : CerbMem.PointerValue) (ids done : List Int)
       iapply wpt_load_eval loc ann nodePtrTy (lrShiftPe mlPSym) mo _
         rfl (by rw [procCtx_extern]; exact ml_shift_p_eval_B hf renv _ _ id aN)
       rw [show cellPtr id (aN + 8) = cellPtr id (aN + ((8 : Nat) : Int)) from rfl]
-      iapply wpt_load_regionOwn_at (M := procCtx p rs) loc ann id aN 16 8 nodePtrTy mo
+      iapply wpt_load_regionOwn_at (M := procCtx rs) (ctl := procCtl p) loc ann id aN 16 8 nodePtrTy mo
         (.own 1) bs _ (Nat.le_refl 3)
-        (by rw [show CerbMem.sizeofCtype (procCtx p rs).tagDefs nodePtrTy = 8 from rfl]; omega)
+        (by rw [show CerbMem.sizeofCtype (procCtx rs).tagDefs nodePtrTy = 8 from rfl]; omega)
         (fun lum fpm => hnext lum fpm _)
         rfl
       isplitl [Hr]
@@ -1543,7 +1543,7 @@ theorem ml_body_wpt (i : Int) (pc : CerbMem.PointerValue) (ids done : List Int)
 
 /-- THE TOTAL BLOCK SPECIFICATION. -/
 theorem ml_blockSpecsT :
-    ⊢ blockSpecsT (GF := GF) (procCtx p rs) (mlLsT al n) (mlPost n) := by
+    ⊢ blockSpecsT (GF := GF) (procCtx rs) (procCtl p) (mlLsT al n) (mlPost n) := by
   refine blockSpecsT_intro fun l params cont args env0 envs m hl => ?_
   rw [procCtx_labels hQ] at hl
   obtain ⟨rfl, rfl⟩ := mlQ_inv loc ann ra mo al pref ibty pbty qbty bbty nbty ubty hl
@@ -1566,7 +1566,7 @@ theorem ml_blockSpecsT :
 /-- THE MALLOC'D LIST (total), at budget `mlCost n.toNat 0 + 1 = 25·n + 7`. -/
 theorem ml_wpt (sbty : core_base_type) (hn : 0 ≤ n) :
     allocBudget (GF := GF) (n.toNat * regionCost al 16) ⊢
-      wpt (procCtx p rs) (mlLsT al n) (mlCost n.toNat 0 + 1) (mlPost n)
+      wpt (procCtx rs) (procCtl p) (mlLsT al n) (mlCost n.toNat 0 + 1) (mlPost n)
         (mlProg loc ann ra mo al pref sbty ibty pbty qbty bbty nbty ubty n) [fmapEmpty] := by
   rw [show mlProg loc ann ra mo al pref sbty ibty pbty qbty bbty nbty ubty n =
     Expr [] (Esave (mlLoopSym, sbty) (mlParams ibty pbty n)
@@ -1606,14 +1606,14 @@ abbrev ψML : value → Mem → Prop := fun v σ' =>
 
 /-- The block specifications at the engine readout (what the launches consume). -/
 theorem ml_blockSpecsT_readout :
-    ⊢ blockSpecsT (GF := GF) (procCtx p rs) (mlLsT al n) (readoutPost (ψML n)) :=
+    ⊢ blockSpecsT (GF := GF) (procCtx rs) (procCtl p) (mlLsT al n) (readoutPost (ψML n)) :=
   (ml_blockSpecsT loc ann ra mo al pref ibty pbty qbty bbty nbty ubty n p rs hQ).trans
     (blockSpecsT_mono (mlPost_readout n))
 
 /-- The whole program at the engine readout. -/
 theorem ml_wpt_readout (sbty : core_base_type) (hn : 0 ≤ n) :
     allocBudget (GF := GF) (n.toNat * regionCost al 16) ⊢
-      wpt (procCtx p rs) (mlLsT al n) (mlCost n.toNat 0 + 1) (readoutPost (ψML n))
+      wpt (procCtx rs) (procCtl p) (mlLsT al n) (mlCost n.toNat 0 + 1) (readoutPost (ψML n))
         (mlProg loc ann ra mo al pref sbty ibty pbty qbty bbty nbty ubty n) [fmapEmpty] :=
   (ml_wpt loc ann ra mo al pref ibty pbty qbty bbty nbty ubty n p rs hQ sbty hn).trans
     (wpt_mono (mlPost_readout n) _ _ _)
@@ -1639,7 +1639,7 @@ theorem malloc_list_certified_total (n : Int) (hn : 0 ≤ n) (σ₀ : Mem)
     (hl : LaunchCoh fmapEmpty σ₀ (∅ : SpikeHeapF SpikeCell) (n.toNat * regionCost al 16))
     (aids : Nat → Nat) :
     ∃ σ' : Mem,
-      driveU (procCtx mlProcSym (mlRS loc ann ra mo al pref ibty pbty qbty bbty nbty ubty)) aids
+      driveU (procCtx (mlRS loc ann ra mo al pref ibty pbty qbty bbty nbty ubty)) aids
         (25 * n.toNat + 7)
         (procThread mlProcSym
           (mlProg loc ann ra mo al pref sbty ibty pbty qbty bbty nbty ubty n) [fmapEmpty]) σ₀ =
@@ -1654,8 +1654,8 @@ theorem malloc_list_certified_total (n : Int) (hn : 0 ≤ n) (σ₀ : Mem)
   have hlbl := procCtx_labels hQ
   obtain ⟨v, σ', hdone, ⟨rfl, hdead⟩, -⟩ :=
     wpt_engine_boundU_alloc (GF := SpikeGF)
-      (M := procCtx mlProcSym (mlRS loc ann ra mo al pref ibty pbty qbty bbty nbty ubty))
-      (procCtx_wf _ _)
+      (M := procCtx (mlRS loc ann ra mo al pref ibty pbty qbty bbty nbty ubty)) (ctl := procCtl mlProcSym)
+      (procCtx_wf _) rfl
       (fun l params cont hl => by
         rw [hlbl] at hl
         obtain ⟨-, rfl⟩ := mlQ_inv loc ann ra mo al pref ibty pbty qbty bbty nbty ubty hl
@@ -1773,7 +1773,7 @@ theorem malloc_list_certified_production (sup : Nat) (n : Int) (hn : 0 ≤ n)
         nbty ubty n)
       hQprod (ψML n) (mlCost n.toNat 0 + 1)
       (wpt_driver_done_alloc (GF := SpikeGF)
-        (M₀ := procCtx mainSym ((initial_core_run_state sup
+        (M₀ := procCtx ((initial_core_run_state sup
           (collect_labeled_continuations_NEW
             (prodFile (mlProg loc0 empty_annotation ra mo al pref sbty ibty pbty qbty bbty
               nbty ubty n)))).1))

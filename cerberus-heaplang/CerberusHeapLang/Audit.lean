@@ -64,6 +64,17 @@ cerberus-heaplang/docs/2026-09-03_repin-fuel-notes.md): no name moved, the
 pin list below: 296 after K5.1 (the re-pin itself moved no pin), and the production statements' side
 conditions read `k + 2 ≤ CerbFuel.driverFuel`.
 
+CALLS ARC C1 (2026-09-03, cerberus-heaplang/docs/2026-09-03_c1-notes.md):
+the configuration grew — `Config := CoreExpr × EnvStack × Ctl × Mem`,
+the thread's control (call stack, current procedure, execution
+location) is live state, `MachineCtx` lost `stack`/`proc`/`execLoc`
+and `M.thread e ρ` became `M.thread e ρ ctl`. An internals refactor
+under the frozen public spec: no name moved, the pin list below is
+unchanged (296); the changed statements change SHAPE only (the
+configuration type; `old = new` at the canonical embedding
+`ctl = ⟨[], M.proc, M.execLoc⟩`), and the production statements
+(`*_certified_production`, `prod_run_eqJ`) are textually unchanged.
+
 P3.5 ([USER 2026-09-02], docs/2026-09-02_p3.5-notes.md): the 65
 `#guard_msgs in #print axioms` blocks + prose collapsed to the export
 list below (62 names at P3.5, the same exact assertion each; the list

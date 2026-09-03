@@ -212,7 +212,8 @@ variable (loc : CerbLocation.Loc) (ann ra : core_run_annotation)
   (mo : memory_order) (bty xbty : core_base_type)
   (c : CerbMem.PointerValue) (n : Int) (bs0 : List CerbMem.AbsByte)
 -- S1b: the wps judgment is indexed by the MACHINE CONTEXT; the
--- exhibit works at the jump-profile instance `procCtx p rs` with the
+-- exhibit works at the jump-profile instance `procCtx rs` (entry control
+-- `procCtl p`: empty stack, in procedure `p`; calls arc C1) with the
 -- label map tied by the honest `LabeledAt` link (`procCtx_labels`).
 variable (p : sym) (rs : core_run_state)
   (hQ : LabeledAt rs p (loopQ loc ann ra mo bty xbty c))
@@ -241,9 +242,9 @@ include hQ
 theorem loop_body_wps (i : Int) (f : Fmap sym value)
     (rest : List (Fmap sym value)) (hf : SymFrame f)
     (h0 : 0 ≤ i) (hin : i ≤ n) :
-    iprop(((⌜i = n⌝ ∗ pointsToCell (procCtx p rs).tagDefs (GF := GF) c (.own 1) intTy bs0) ∨
-      (⌜i < n⌝ ∗ pointsToCell (procCtx p rs).tagDefs c (.own 1) intTy (sevenBytes (procCtx p rs).tagDefs)))) ⊢
-      wps (procCtx p rs) (loopLs c n bs0)
+    iprop(((⌜i = n⌝ ∗ pointsToCell (procCtx rs).tagDefs (GF := GF) c (.own 1) intTy bs0) ∨
+      (⌜i < n⌝ ∗ pointsToCell (procCtx rs).tagDefs c (.own 1) intTy (sevenBytes (procCtx rs).tagDefs)))) ⊢
+      wps (procCtx rs) (procCtl p) (loopLs c n bs0)
         (loopPost c n bs0) (loopBody loc ann ra mo bty c)
         (envAdd xSym (ivVal i) f :: rest) := by
   rw [show (loopBody loc ann ra mo bty c) =
@@ -280,7 +281,7 @@ theorem loop_body_wps (i : Int) (f : Fmap sym value)
        iright
        isplit
        · ipureintro; omega
-       rw [show (sevenBytes (procCtx p rs).tagDefs) = (CerbMem.memValueToBytes (procCtx p rs).tagDefs [] sevenMval).2 from rfl]
+       rw [show (sevenBytes (procCtx rs).tagDefs) = (CerbMem.memValueToBytes (procCtx rs).tagDefs [] sevenMval).2 from rfl]
        iexact Hc)
   · -- guard FALSE: exit with the final cell state
     have hz : i = 0 := by omega
@@ -307,7 +308,7 @@ theorem loop_body_wps (i : Int) (f : Fmap sym value)
     Löb — the back edge discharged against the invariant at `i-1`
     through the jump clause). -/
 theorem loop_blockSpecs :
-    ⊢ blockSpecs (GF := GF) (procCtx p rs)
+    ⊢ blockSpecs (GF := GF) (procCtx rs) (procCtl p)
       (loopLs c n bs0) (loopPost c n bs0) := by
   refine blockSpecs_intro fun l params cont vs ev0 evs hl => ?_
   rw [procCtx_labels hQ] at hl
@@ -328,8 +329,8 @@ theorem loop_blockSpecs :
     longer the fixed `[fmapEmpty]`). -/
 theorem loop_wps (hn : 0 ≤ n) (sbty : core_base_type)
     (f : Fmap sym value) (hf : SymFrame f) (rest : List (Fmap sym value)) :
-    pointsToCell (procCtx p rs).tagDefs (GF := GF) c (.own 1) intTy bs0 ⊢
-      wps (procCtx p rs) (loopLs c n bs0)
+    pointsToCell (procCtx rs).tagDefs (GF := GF) c (.own 1) intTy bs0 ⊢
+      wps (procCtx rs) (procCtl p) (loopLs c n bs0)
         (loopPost c n bs0)
         (loopProg loc ann ra mo bty xbty sbty c n) (f :: rest) := by
   iintro Hc
@@ -374,18 +375,18 @@ theorem loop_readout_val (w : CoreRVal) :
     consumes), from any reachable entry frame over any tail. -/
 theorem loop_wp_readout (hn : 0 ≤ n) (sbty : core_base_type)
     (f : Fmap sym value) (hf : SymFrame f) (rest : List (Fmap sym value)) :
-    pointsToCell (procCtx p rs).tagDefs (GF := GF) c (.own 1) intTy bs0 ⊢
+    pointsToCell (procCtx rs).tagDefs (GF := GF) c (.own 1) intTy bs0 ⊢
       WP (⟨loopProg loc ann ra mo bty xbty sbty c n, f :: rest,
-          procCtx p rs⟩ : CoreRt) @ Stuckness.NotStuck; ⊤
+          procCtl p, procCtx rs⟩ : CoreRt) @ Stuckness.NotStuck; ⊤
         {{ w, iprop(∀ (σ' : Mem) (ns : Nat) (κs : List Empty) (nt : Nat),
           stateInterp σ' ns κs nt ={⊤, ∅}=∗
             ⌜w.val = Vunit ∧ ∃ bs',
-              ((n = 0 ∧ bs' = bs0) ∨ (0 < n ∧ bs' = (sevenBytes (procCtx p rs).tagDefs))) ∧
-              ∃ i a, c = cellPtr i a ∧ CellCoh (procCtx p rs).tagDefs σ' i ⟨a, intTy, bs'⟩⌝) }} := by
+              ((n = 0 ∧ bs' = bs0) ∨ (0 < n ∧ bs' = (sevenBytes (procCtx rs).tagDefs))) ∧
+              ∃ i a, c = cellPtr i a ∧ CellCoh (procCtx rs).tagDefs σ' i ⟨a, intTy, bs'⟩⌝) }} := by
   refine ((loop_wps loc ann ra mo bty xbty c n bs0 p rs hQ hn sbty f hf rest).trans ?_)
   refine (BI.emp_sep.2.trans (BI.sep_mono
     ((loop_blockSpecs loc ann ra mo bty xbty c n bs0 p rs hQ).trans
-      (wps_sound (loopProg loc ann ra mo bty xbty sbty c n) (f :: rest)))
+      (wps_sound (ctl := procCtl p) rfl (loopProg loc ann ra mo bty xbty sbty c n) (f :: rest)))
     .rfl)).trans ?_
   refine BI.wand_elim_left.trans ?_
   exact wp_mono fun w => loop_readout_val c n bs0 w
@@ -430,21 +431,21 @@ theorem counter_loop_certified
     (nsteps : Nat) (aids : Nat → Nat) :
     let prog := loopProg loc ann ra mo bty xbty sbty (cellPtr idx addr) n
     let rs := loopRS loc ann ra mo bty xbty (cellPtr idx addr)
-    (∀ r, driveU (procCtx loopProcSym rs) aids nsteps
+    (∀ r, driveU (procCtx rs) aids nsteps
       (procThread loopProcSym prog [fmapEmpty]) σ₀ ≠ .killed r) ∧
-    (driveU (procCtx loopProcSym rs) aids nsteps
+    (driveU (procCtx rs) aids nsteps
       (procThread loopProcSym prog [fmapEmpty]) σ₀ ≠ .stuck) ∧
     (∀ (v : value) (σ' : Mem),
-      driveU (procCtx loopProcSym rs) aids nsteps
+      driveU (procCtx rs) aids nsteps
         (procThread loopProcSym prog [fmapEmpty]) σ₀ = .done v σ' →
       v = Vunit ∧ ∃ bs',
         ((n = 0 ∧ bs' = bs0) ∨ (0 < n ∧ bs' = (sevenBytes fmapEmpty))) ∧
         CellCoh fmapEmpty σ' idx ⟨addr, intTy, bs'⟩) := by
   intro prog rs
-  have hlbl : (procCtx loopProcSym rs).labels = _ :=
+  have hlbl : (procCtx rs).labelsAt (procCtl loopProcSym).proc = _ :=
     procCtx_labels (loopRS_labeledAt loc ann ra mo bty xbty (cellPtr idx addr))
   obtain ⟨h1, h2, h3⟩ := engine_adequacyU (GF := SpikeGF)
-    (M := procCtx loopProcSym rs) (procCtx_wf _ _)
+    (M := procCtx rs) (procCtx_wf _) (ctl := procCtl loopProcSym) rfl
     (fun l params cont hl => by
       rw [hlbl] at hl
       obtain ⟨-, rfl⟩ := loopQ_inv loc ann ra mo bty xbty _ hl
@@ -498,21 +499,21 @@ theorem counter_loop_certified_irrelevant_binding
     let prog := loopProg loc ann ra mo bty xbty sbty (cellPtr idx addr) n
     let rs := loopRS loc ann ra mo bty xbty (cellPtr idx addr)
     let ρ₀ : EnvStack := [envAdd ySym junk fmapEmpty]
-    (∀ r, driveU (procCtx loopProcSym rs) aids nsteps
+    (∀ r, driveU (procCtx rs) aids nsteps
       (procThread loopProcSym prog ρ₀) σ₀ ≠ .killed r) ∧
-    (driveU (procCtx loopProcSym rs) aids nsteps
+    (driveU (procCtx rs) aids nsteps
       (procThread loopProcSym prog ρ₀) σ₀ ≠ .stuck) ∧
     (∀ (v : value) (σ' : Mem),
-      driveU (procCtx loopProcSym rs) aids nsteps
+      driveU (procCtx rs) aids nsteps
         (procThread loopProcSym prog ρ₀) σ₀ = .done v σ' →
       v = Vunit ∧ ∃ bs',
         ((n = 0 ∧ bs' = bs0) ∨ (0 < n ∧ bs' = (sevenBytes fmapEmpty))) ∧
         CellCoh fmapEmpty σ' idx ⟨addr, intTy, bs'⟩) := by
   intro prog rs ρ₀
-  have hlbl : (procCtx loopProcSym rs).labels = _ :=
+  have hlbl : (procCtx rs).labelsAt (procCtl loopProcSym).proc = _ :=
     procCtx_labels (loopRS_labeledAt loc ann ra mo bty xbty (cellPtr idx addr))
   obtain ⟨h1, h2, h3⟩ := engine_adequacyU (GF := SpikeGF)
-    (M := procCtx loopProcSym rs) (procCtx_wf _ _)
+    (M := procCtx rs) (procCtx_wf _) (ctl := procCtl loopProcSym) rfl
     (fun l params cont hl => by
       rw [hlbl] at hl
       obtain ⟨-, rfl⟩ := loopQ_inv loc ann ra mo bty xbty _ hl

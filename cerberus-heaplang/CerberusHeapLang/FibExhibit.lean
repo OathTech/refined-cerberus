@@ -299,7 +299,8 @@ variable {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
 variable (ra : core_run_annotation) (n : Int)
   (ibty abty bbty : core_base_type)
 -- S1b: the wps judgment is indexed by the MACHINE CONTEXT; the
--- exhibit works at the jump-profile instance `procCtx p rs` with the
+-- exhibit works at the jump-profile instance `procCtx rs` (entry control
+-- `procCtl p`: empty stack, in procedure `p`; calls arc C1) with the
 -- label map tied by the honest `LabeledAt` link (`procCtx_labels`).
 variable (p : sym) (rs : core_run_state)
   (hQ : LabeledAt rs p (fibQ ra n ibty abty bbty))
@@ -322,7 +323,7 @@ include hQ
 theorem fib_body_wps (i : Int) (f : Fmap sym value)
     (rest : List (Fmap sym value)) (hf : SymFrame f)
     (h0 : 0 ≤ i) (hin : i ≤ n) :
-    ⊢ wps (GF := GF) (procCtx p rs) (fibLs n) (fibPost n)
+    ⊢ wps (GF := GF) (procCtx rs) (procCtl p) (fibLs n) (fibPost n)
         (fibBody ra n)
         (fibFrame (ivVal i) (ivVal (fibSpec i.toNat))
           (ivVal (fibSpec (i.toNat + 1))) f :: rest) := by
@@ -355,7 +356,7 @@ theorem fib_body_wps (i : Int) (f : Fmap sym value)
 
 /-- THE BLOCK SPECIFICATION (per-label invariant rule, no Löb). -/
 theorem fib_blockSpecs :
-    ⊢ blockSpecs (GF := GF) (procCtx p rs) (fibLs n)
+    ⊢ blockSpecs (GF := GF) (procCtx rs) (procCtl p) (fibLs n)
       (fibPost n) := by
   refine blockSpecs_intro fun l params cont vs ev0 evs hl => ?_
   rw [procCtx_labels hQ] at hl
@@ -372,7 +373,7 @@ theorem fib_blockSpecs :
 
 /-- The whole program's statement WP from the entry env. -/
 theorem fib_wps (hn : 0 ≤ n) (sbty : core_base_type) :
-    ⊢ wps (GF := GF) (procCtx p rs) (fibLs n) (fibPost n)
+    ⊢ wps (GF := GF) (procCtx rs) (procCtl p) (fibLs n) (fibPost n)
         (fibProg ra n sbty ibty abty bbty) [fmapEmpty] := by
   rw [show fibProg ra n sbty ibty abty bbty =
     Expr [] (Esave (fibLoopSym, sbty) (fibParams ibty abty bbty)
@@ -388,14 +389,14 @@ theorem fib_wps (hn : 0 ≤ n) (sbty : core_base_type) :
 /-- The base-WP face with the engine readout. -/
 theorem fib_wp_readout (hn : 0 ≤ n) (sbty : core_base_type) :
     ⊢ WP (⟨fibProg ra n sbty ibty abty bbty, [fmapEmpty],
-          procCtx p rs⟩ : CoreRt) @ Stuckness.NotStuck; ⊤
+          procCtl p, procCtx rs⟩ : CoreRt) @ Stuckness.NotStuck; ⊤
         {{ w, iprop(∀ (σ' : Mem) (ns : Nat) (κs : List Empty) (nt : Nat),
           (stateInterp σ' ns κs nt : IProp GF) ={⊤, ∅}=∗
             ⌜CoreRVal.val w = ivVal (fibSpec n.toNat)⌝) }} := by
   refine (fib_wps ra n ibty abty bbty p rs hQ hn sbty).trans ?_
   refine (BI.emp_sep.2.trans (BI.sep_mono
     ((fib_blockSpecs ra n ibty abty bbty p rs hQ).trans
-      (wps_sound (fibProg ra n sbty ibty abty bbty) [fmapEmpty]))
+      (wps_sound (ctl := procCtl p) rfl (fibProg ra n sbty ibty abty bbty) [fmapEmpty]))
     .rfl)).trans ?_
   refine BI.wand_elim_left.trans ?_
   exact wp_mono fun w => stateInterp_readout fun _ _ _ _ _ => pure_consequence _
@@ -448,19 +449,19 @@ theorem fib_certified
     (nsteps : Nat) (aids : Nat → Nat) :
     let prog := fibProg ra n sbty ibty abty bbty
     let rs := fibRS ra n ibty abty bbty
-    (∀ r, driveU (procCtx fibProcSym rs) aids nsteps
+    (∀ r, driveU (procCtx rs) aids nsteps
       (procThread fibProcSym prog [fmapEmpty]) σ₀ ≠ .killed r) ∧
-    (driveU (procCtx fibProcSym rs) aids nsteps
+    (driveU (procCtx rs) aids nsteps
       (procThread fibProcSym prog [fmapEmpty]) σ₀ ≠ .stuck) ∧
     (∀ (v : value) (σ' : Mem),
-      driveU (procCtx fibProcSym rs) aids nsteps
+      driveU (procCtx rs) aids nsteps
         (procThread fibProcSym prog [fmapEmpty]) σ₀ = .done v σ' →
       v = ivVal (fibSpec n.toNat)) := by
   intro prog rs
-  have hlbl : (procCtx fibProcSym rs).labels = _ :=
+  have hlbl : (procCtx rs).labelsAt (procCtl fibProcSym).proc = _ :=
     procCtx_labels (fibRS_labeledAt ra n ibty abty bbty)
   refine engine_adequacyU (GF := SpikeGF)
-    (M := procCtx fibProcSym rs) (procCtx_wf _ _)
+    (M := procCtx rs) (procCtx_wf _) (ctl := procCtl fibProcSym) rfl
     (fun l params cont hl => by
       rw [hlbl] at hl
       obtain ⟨-, rfl⟩ := fibQ_inv ra n ibty abty bbty hl
@@ -515,7 +516,7 @@ include hQ
 theorem fib_body_wpt (i : Int) (f : Fmap sym value)
     (rest : List (Fmap sym value)) (hf : SymFrame f)
     (h0 : 0 ≤ i) (hin : i ≤ n) :
-    ⊢ wpt (GF := GF) (procCtx p rs) (fibLsT n) (2 * (n - i).toNat + 3)
+    ⊢ wpt (GF := GF) (procCtx rs) (procCtl p) (fibLsT n) (2 * (n - i).toNat + 3)
         (fibPost n) (fibBody ra n)
         (fibFrame (ivVal i) (ivVal (fibSpec i.toNat))
           (ivVal (fibSpec (i.toNat + 1))) f :: rest) := by
@@ -556,7 +557,7 @@ theorem fib_body_wpt (i : Int) (f : Fmap sym value)
 /-- THE TOTAL BLOCK SPECIFICATION: every claimed variant is met (the
     real total rule — replaces the retired variant lemma). -/
 theorem fib_blockSpecsT :
-    ⊢ blockSpecsT (GF := GF) (procCtx p rs) (fibLsT n) (fibPost n) := by
+    ⊢ blockSpecsT (GF := GF) (procCtx rs) (procCtl p) (fibLsT n) (fibPost n) := by
   refine blockSpecsT_intro fun l params cont vs ev0 evs m hl => ?_
   rw [procCtx_labels hQ] at hl
   obtain ⟨rfl, rfl⟩ := fibQ_inv ra n ibty abty bbty hl
@@ -572,7 +573,7 @@ theorem fib_blockSpecsT :
 
 /-- The whole program's total judgment at budget 2·n + 4. -/
 theorem fib_wpt (hn : 0 ≤ n) (sbty : core_base_type) :
-    ⊢ wpt (GF := GF) (procCtx p rs) (fibLsT n) (2 * n.toNat + 4) (fibPost n)
+    ⊢ wpt (GF := GF) (procCtx rs) (procCtl p) (fibLsT n) (2 * n.toNat + 4) (fibPost n)
         (fibProg ra n sbty ibty abty bbty) [fmapEmpty] := by
   rw [show fibProg ra n sbty ibty abty bbty =
     Expr [] (Esave (fibLoopSym, sbty) (fibParams ibty abty bbty)
@@ -625,7 +626,7 @@ theorem fibBody_pot (n : Int) : pot (fibBody ra n) = 3 := rfl
     `fib_loop_drive` is retired). -/
 theorem fib_certified_total (sbty : core_base_type) (n : Int)
     (hn : 0 ≤ n) (σ₀ : Mem) (aids : Nat → Nat) :
-    driveU (procCtx fibProcSym (fibRS ra n ibty abty bbty)) aids (2 * n.toNat + 4)
+    driveU (procCtx (fibRS ra n ibty abty bbty)) aids (2 * n.toNat + 4)
       (procThread fibProcSym (fibProg ra n sbty ibty abty bbty)
         [fmapEmpty]) σ₀ =
       .done (ivVal (fibSpec n.toNat)) σ₀ := by
@@ -633,7 +634,7 @@ theorem fib_certified_total (sbty : core_base_type) (n : Int)
   have hlbl := procCtx_labels hQ
   obtain ⟨v, σ', hdone, hv, hinert⟩ :=
     wpt_engine_boundU (GF := SpikeGF)
-      (M := procCtx fibProcSym (fibRS ra n ibty abty bbty)) (procCtx_wf _ _)
+      (M := procCtx (fibRS ra n ibty abty bbty)) (procCtx_wf _) (ctl := procCtl fibProcSym) rfl
       (fun l params cont hl => by
         rw [hlbl] at hl
         obtain ⟨-, rfl⟩ := fibQ_inv ra n ibty abty bbty hl

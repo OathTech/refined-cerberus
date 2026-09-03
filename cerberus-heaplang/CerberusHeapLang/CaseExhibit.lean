@@ -89,9 +89,9 @@ def caseLs : LabelSpec GF := fun _ _ _ => iprop(True)
     specification: one application of the case rule, then the value
     channel. The postcondition: the delivered value is the
     scrutinee. -/
-theorem caseProg_wps (M : MachineCtx) (Ls : LabelSpec GF) (v : value)
+theorem caseProg_wps (M : MachineCtx) (ctl : Ctl) (Ls : LabelSpec GF) (v : value)
     (ρ : EnvStack) :
-    ⊢ wps (GF := GF) M Ls (fun w _ => iprop(⌜w.val = v⌝)) (caseProg v) ρ := by
+    ⊢ wps (GF := GF) M ctl Ls (fun w _ => iprop(⌜w.val = v⌝)) (caseProg v) ρ := by
   refine .trans ?_ (wps_case_value [] (Pexpr [] () (PEval v))
     [(symPat [] caseXSym BTy_unit, caseBranch)] ρ
     (valueFromPexpr_val [] v) (caseProg_select v))
@@ -101,7 +101,7 @@ theorem caseProg_wps (M : MachineCtx) (Ls : LabelSpec GF) (v : value)
 /-- Vacuous block specifications at the spike profile (no labels are
     registered — the lookup premise is unsatisfiable). -/
 theorem case_blockSpecs (v : value) :
-    ⊢ blockSpecs (GF := GF) spikeCtx caseLs
+    ⊢ blockSpecs (GF := GF) spikeCtx spikeCtl caseLs
       (fun w _ => iprop(⌜w.val = v⌝)) :=
   blockSpecs_intro fun l _ _ _ _ _ hl => (spikeCtx_labels_none l hl).elim
 
@@ -109,13 +109,13 @@ theorem case_blockSpecs (v : value) :
     (the `fib_wp_readout` collapse shape: block specifications +
     `wps_sound`, then the pure readout under the mask change). -/
 theorem case_wp_readout (v : value) :
-    ⊢ WP (⟨caseProg v, spikeEnv, spikeCtx⟩ : CoreRt) @ Stuckness.NotStuck; ⊤
+    ⊢ WP (⟨caseProg v, spikeEnv, spikeCtl, spikeCtx⟩ : CoreRt) @ Stuckness.NotStuck; ⊤
         {{ w, iprop(∀ (σ' : Mem) (ns : Nat) (κs : List Empty) (nt : Nat),
           (stateInterp σ' ns κs nt : IProp GF) ={⊤, ∅}=∗
             ⌜CoreRVal.val w = v⌝) }} := by
-  refine (caseProg_wps spikeCtx caseLs v spikeEnv).trans ?_
+  refine (caseProg_wps spikeCtx spikeCtl caseLs v spikeEnv).trans ?_
   refine (BI.emp_sep.2.trans (BI.sep_mono
-    ((case_blockSpecs v).trans (wps_sound (caseProg v) spikeEnv))
+    ((case_blockSpecs v).trans (wps_sound (ctl := spikeCtl) rfl (caseProg v) spikeEnv))
     .rfl)).trans ?_
   refine BI.wand_elim_left.trans ?_
   exact wp_mono fun w => stateInterp_readout fun _ _ _ _ _ => pure_consequence _
@@ -140,7 +140,7 @@ theorem case_certified {GF : BundledGFunctors} [SpikeGpreS GF] (v : value)
     (∀ (v' : value) (σ' : Mem),
       driveU spikeCtx aids n (spikeThread (caseProg v)) σ₀ = .done v' σ' →
       v' = v) := by
-  refine engine_adequacyU (GF := GF) (M := spikeCtx) spikeCtx_wf
+  refine engine_adequacyU (GF := GF) (M := spikeCtx) (ctl := spikeCtl) spikeCtx_wf rfl
     (fun l params cont hl => (spikeCtx_labels_none l hl).elim)
     (fun l params cont hl => (spikeCtx_labels_none l hl).elim)
     (caseProg v) fmapEmpty [] σ₀ ∅ (caseProg_frag v)

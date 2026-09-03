@@ -703,7 +703,7 @@ proof in this module) -/
 section TreeClients
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
-variable {M : MachineCtx} {Ls : LabelSpec GF}
+variable {M : MachineCtx} {ctl : Ctl} {Ls : LabelSpec GF}
 
 /-- TREE `tree*`-FIELD LOAD — `wps_load_cell_at` at view type
     `treePtrTy`. -/
@@ -718,7 +718,7 @@ theorem wps_load_tree_field {Ψ : SpikeVal → EnvStack → IProp GF}
     iprop(cellOwn M.tagDefs (GF := GF) id dq (SpikeCell.mk a treeTy bs) ∗
       (∀ fp, cellOwn M.tagDefs id dq (SpikeCell.mk a treeTy bs) -∗
         Ψ (SpikeVal.annot [DA_pos [] fp] ((valueFromMemValue mv).2)) ρ)) ⊢
-      wps M Ls Ψ (loadExpr loc ann treePtrTy (cellPtr id (a + (off : Int))) mo)
+      wps M ctl Ls Ψ (loadExpr loc ann treePtrTy (cellPtr id (a + (off : Int))) mo)
         ρ :=
   wps_load_cell_at loc ann id a treeTy off treePtrTy mo dq bs ρ
     (by rw [treePtrTy_size]; exact hbound)
@@ -743,7 +743,7 @@ theorem wps_store_tree_field {Ψ : SpikeVal → EnvStack → IProp GF}
       (∀ fp, cellOwn M.tagDefs id (.own 1) (SpikeCell.mk a treeTy
           (spliceBytes off (CerbMem.memValueToBytes M.tagDefs [] mv).2 bs)) -∗
         Ψ (SpikeVal.annot [DA_pos [] fp] Vunit) ρ)) ⊢
-      wps M Ls Ψ (storeExpr loc ann treePtrTy (cellPtr id (a + (off : Int)))
+      wps M ctl Ls Ψ (storeExpr loc ann treePtrTy (cellPtr id (a + (off : Int)))
         cv mo) ρ :=
   wps_store_cell_at loc ann id a treeTy off treePtrTy cv mo bs ρ hmv
     (by rw [treePtrTy_size]; exact hbound)
@@ -755,7 +755,7 @@ end TreeClients
 section TreeClientsT
 
 variable {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
-variable {M : MachineCtx} {Ls : LabelSpecT GF}
+variable {M : MachineCtx} {ctl : Ctl} {Ls : LabelSpecT GF}
 
 /-- Total form of the tree-field load (cost 3 ≤ k). -/
 theorem wpt_load_tree_field {Ψ : SpikeVal → EnvStack → IProp GF}
@@ -769,7 +769,7 @@ theorem wpt_load_tree_field {Ψ : SpikeVal → EnvStack → IProp GF}
     iprop(cellOwn M.tagDefs (GF := GF) id dq (SpikeCell.mk a treeTy bs) ∗
       (∀ fp, cellOwn M.tagDefs id dq (SpikeCell.mk a treeTy bs) -∗
         Ψ (SpikeVal.annot [DA_pos [] fp] ((valueFromMemValue mv).2)) ρ)) ⊢
-      wpt M Ls k Ψ (loadExpr loc ann treePtrTy (cellPtr id (a + (off : Int))) mo)
+      wpt M ctl Ls k Ψ (loadExpr loc ann treePtrTy (cellPtr id (a + (off : Int))) mo)
         ρ :=
   wpt_load_cell_at loc ann id a treeTy off treePtrTy mo dq bs ρ hk
     (by rw [treePtrTy_size]; exact hbound)
@@ -794,7 +794,7 @@ theorem wpt_store_tree_field {Ψ : SpikeVal → EnvStack → IProp GF}
       (∀ fp, cellOwn M.tagDefs id (.own 1) (SpikeCell.mk a treeTy
           (spliceBytes off (CerbMem.memValueToBytes M.tagDefs [] mv).2 bs)) -∗
         Ψ (SpikeVal.annot [DA_pos [] fp] Vunit) ρ)) ⊢
-      wpt M Ls k Ψ (storeExpr loc ann treePtrTy (cellPtr id (a + (off : Int)))
+      wpt M ctl Ls k Ψ (storeExpr loc ann treePtrTy (cellPtr id (a + (off : Int)))
         cv mo) ρ :=
   wpt_store_cell_at loc ann id a treeTy off treePtrTy cv mo bs ρ hk hmv
     (by rw [treePtrTy_size]; exact hbound)
@@ -868,7 +868,7 @@ theorem tree_rotate_wps
     (idx idy vx vy : Int) (ta tb tc : NodeTree)
     (px : CerbMem.PointerValue) :
     isTree (GF := GF) px (.node idx vx (.node idy vy ta tb) tc) ⊢
-      wps spikeCtx Ls
+      wps spikeCtx spikeCtl Ls
         (trPost (.node idy vy ta (.node idx vx tb tc)))
         (trProg loc ann mo xbty ybty bbty ubty px)
         [fmapEmpty] := by
@@ -919,7 +919,7 @@ theorem tree_rotate_wps
     rfl (tr_shift1_eval_F1 idx aX)
   rw [show cellPtr idx (aX + 8) = cellPtr idx (aX + ((8 : Nat) : Int))
     from rfl]
-  iapply wps_load_tree_field (M := spikeCtx) loc ann idx aX 8 mo (.own 1) bsx _
+  iapply wps_load_tree_field (M := spikeCtx) (ctl := spikeCtl) loc ann idx aX 8 mo (.own 1) bsx _
     (by rw [treeTy_size]; omega)
     (fun lum fpm => hLx lum fpm _)
   isplitl [HptX]
@@ -940,7 +940,7 @@ theorem tree_rotate_wps
     rfl (tr_shift2_eval_F2 idy aY _)
   rw [show cellPtr idy (aY + 16) = cellPtr idy (aY + ((16 : Nat) : Int))
     from rfl]
-  iapply wps_load_tree_field (M := spikeCtx) loc ann idy aY 16 mo (.own 1) bsy _
+  iapply wps_load_tree_field (M := spikeCtx) (ctl := spikeCtl) loc ann idy aY 16 mo (.own 1) bsy _
     (by rw [treeTy_size]; omega)
     (fun lum fpm => hRy lum fpm _)
   isplitl [HptY]
@@ -963,7 +963,7 @@ theorem tree_rotate_wps
     (tr_b_eval_F3 _ _ _)
   rw [show cellPtr idx (aX + 8) = cellPtr idx (aX + ((8 : Nat) : Int))
     from rfl]
-  iapply wps_store_tree_field (M := spikeCtx) loc ann idx aX 8 (ptrVal qb) mo bsx _
+  iapply wps_store_tree_field (M := spikeCtx) (ctl := spikeCtl) loc ann idx aX 8 (ptrVal qb) mo bsx _
     (tree_ptr_encodes qb) (by rw [treeTy_size]; omega) kBlen
     (tree_ptr_compat qb) kBfpm kBbytes
   isplitl [HptX]
@@ -976,7 +976,7 @@ theorem tree_rotate_wps
     (tr_x_eval_F3 _ _ _)
   rw [show cellPtr idy (aY + 16) = cellPtr idy (aY + ((16 : Nat) : Int))
     from rfl]
-  iapply wps_store_tree_field (M := spikeCtx) loc ann idy aY 16 (ptrVal (cellPtr idx aX))
+  iapply wps_store_tree_field (M := spikeCtx) (ctl := spikeCtl) loc ann idy aY 16 (ptrVal (cellPtr idx aX))
     mo bsy _
     (tree_ptr_encodes (cellPtr idx aX)) (by rw [treeTy_size]; omega) kXlen
     (tree_ptr_compat (cellPtr idx aX)) kXfpm kXbytes
@@ -1040,7 +1040,7 @@ theorem tree_rotate_wps
 /-- Vacuous block specifications (straight-line profile) — at ANY
     postcondition. -/
 theorem tr_blockSpecs (Ψ : SpikeVal → EnvStack → IProp GF) :
-    ⊢ blockSpecs (GF := GF) spikeCtx (fun _ _ _ => iprop(False)) Ψ :=
+    ⊢ blockSpecs (GF := GF) spikeCtx spikeCtl (fun _ _ _ => iprop(False)) Ψ :=
   blockSpecs_intro fun l _ _ _ _ _ hl => (spikeCtx_labels_none l hl).elim
 
 end TrIris
@@ -1087,7 +1087,7 @@ theorem tr_wp_readout [SpikeGS .hasLC GF]
     iprop(isTree (hlc := .hasLC) (GF := GF) px
         (.node idx vx (.node idy vy ta tb) tc) ∗ lrCellFrame R) ⊢
       WP (⟨trProg loc ann mo xbty ybty bbty ubty px, spikeEnv,
-            spikeCtx⟩ : CoreRt)
+            spikeCtl, spikeCtx⟩ : CoreRt)
         @ Stuckness.NotStuck; ⊤
         {{ w, iprop(∀ (σ' : Mem) (ns' : Nat) (κs : List Empty) (nt : Nat),
           (stateInterp σ' ns' κs nt : IProp GF) ={⊤, ∅}=∗
@@ -1099,7 +1099,7 @@ theorem tr_wp_readout [SpikeGS .hasLC GF]
     xbty ybty bbty ubty idx idy vx vy ta tb tc px) .rfl).trans ?_
   refine (BI.emp_sep.2.trans (BI.sep_mono
     ((tr_blockSpecs (trPost (NodeTree.node idy vy ta (NodeTree.node idx vx tb tc)))).trans
-      (wps_sound_frame (lrCellFrame R) (trProg loc ann mo xbty ybty bbty ubty px) spikeEnv))
+      (wps_sound_frame (ctl := spikeCtl) rfl (lrCellFrame R) (trProg loc ann mo xbty ybty bbty ubty px) spikeEnv))
     .rfl)).trans ?_
   refine BI.wand_elim_left.trans ?_
   refine wp_mono fun w => ?_
@@ -1169,7 +1169,7 @@ theorem tree_rotate_certified (sbty : core_base_type)
         Q ##ₘ R ∧
         Sat fmapEmpty σ' (union Q R)) := by
   intro prog
-  have h := engine_adequacyU (GF := SpikeGF) (M := spikeCtx) spikeCtx_wf
+  have h := engine_adequacyU (GF := SpikeGF) (M := spikeCtx) (ctl := spikeCtl) spikeCtx_wf rfl
     spikeCtx_labels_frag spikeCtx_labels_pot
     prog fmapEmpty [] σ₀ (union m₀ R)
     (trProg_frag loc ann mo xbty ybty bbty ubty px)
@@ -1212,7 +1212,7 @@ theorem tree_rotate_wpt
     (idx idy vx vy : Int) (ta tb tc : NodeTree)
     (px : CerbMem.PointerValue) :
     isTree (GF := GF) px (.node idx vx (.node idy vy ta tb) tc) ⊢
-      wpt spikeCtx Ls 19
+      wpt spikeCtx spikeCtl Ls 19
         (trPost (.node idy vy ta (.node idx vx tb tc)))
         (trProg loc ann mo xbty ybty bbty ubty px)
         [fmapEmpty] := by
@@ -1265,7 +1265,7 @@ theorem tree_rotate_wpt
     rfl (tr_shift1_eval_F1 idx aX)
   rw [show cellPtr idx (aX + 8) = cellPtr idx (aX + ((8 : Nat) : Int))
     from rfl]
-  iapply wpt_load_tree_field (M := spikeCtx) loc ann idx aX 8 mo (.own 1) bsx _
+  iapply wpt_load_tree_field (M := spikeCtx) (ctl := spikeCtl) loc ann idx aX 8 mo (.own 1) bsx _
     (by omega) (by rw [treeTy_size]; omega)
     (fun lum fpm => hLx lum fpm _)
   isplitl [HptX]
@@ -1287,7 +1287,7 @@ theorem tree_rotate_wpt
     rfl (tr_shift2_eval_F2 idy aY _)
   rw [show cellPtr idy (aY + 16) = cellPtr idy (aY + ((16 : Nat) : Int))
     from rfl]
-  iapply wpt_load_tree_field (M := spikeCtx) loc ann idy aY 16 mo (.own 1) bsy _
+  iapply wpt_load_tree_field (M := spikeCtx) (ctl := spikeCtl) loc ann idy aY 16 mo (.own 1) bsy _
     (by omega) (by rw [treeTy_size]; omega)
     (fun lum fpm => hRy lum fpm _)
   isplitl [HptY]
@@ -1311,7 +1311,7 @@ theorem tree_rotate_wpt
     (tr_b_eval_F3 _ _ _)
   rw [show cellPtr idx (aX + 8) = cellPtr idx (aX + ((8 : Nat) : Int))
     from rfl]
-  iapply wpt_store_tree_field (M := spikeCtx) loc ann idx aX 8 (ptrVal qb) mo bsx _
+  iapply wpt_store_tree_field (M := spikeCtx) (ctl := spikeCtl) loc ann idx aX 8 (ptrVal qb) mo bsx _
     (by omega)
     (tree_ptr_encodes qb) (by rw [treeTy_size]; omega) kBlen
     (tree_ptr_compat qb) kBfpm kBbytes
@@ -1326,7 +1326,7 @@ theorem tree_rotate_wpt
     (tr_x_eval_F3 _ _ _)
   rw [show cellPtr idy (aY + 16) = cellPtr idy (aY + ((16 : Nat) : Int))
     from rfl]
-  iapply wpt_store_tree_field (M := spikeCtx) loc ann idy aY 16 (ptrVal (cellPtr idx aX))
+  iapply wpt_store_tree_field (M := spikeCtx) (ctl := spikeCtl) loc ann idy aY 16 (ptrVal (cellPtr idx aX))
     mo bsy _
     (by omega)
     (tree_ptr_encodes (cellPtr idx aX)) (by rw [treeTy_size]; omega) kXlen
@@ -1393,7 +1393,7 @@ theorem tree_rotate_wpt_frame (RF : IProp GF)
     (px : CerbMem.PointerValue) :
     iprop(isTree (GF := GF) px
         (.node idx vx (.node idy vy ta tb) tc) ∗ RF) ⊢
-      wpt spikeCtx Ls 19
+      wpt spikeCtx spikeCtl Ls 19
         (fun w ρ' => iprop(trPost (.node idy vy ta (.node idx vx tb tc)) w ρ' ∗ RF))
         (trProg loc ann mo xbty ybty bbty ubty px)
         [fmapEmpty] :=
@@ -1435,7 +1435,7 @@ theorem tree_rotate_certified_total (idx idy vx vy : Int)
       Q ##ₘ R ∧
       Sat fmapEmpty σ' (union Q R) := by
   obtain ⟨v, σ', hdone, ⟨Q, ⟨py, rfl, hQseed⟩, hdisj, hsat⟩, -⟩ :=
-    wpt_engine_boundU (GF := SpikeGF) (M := spikeCtx) spikeCtx_wf
+    wpt_engine_boundU (GF := SpikeGF) (M := spikeCtx) (ctl := spikeCtl) spikeCtx_wf rfl
       (fun l params cont hl => (spikeCtx_labels_none l hl).elim)
       (fun l params cont hl => (spikeCtx_labels_none l hl).elim)
       (fun _ _ _ _ => iprop(False))

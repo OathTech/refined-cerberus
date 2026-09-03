@@ -313,12 +313,12 @@ theorem ptx_to_cells [SpikeGS .hasLC GF] :
 /-- The store's footprint triple, proved in the derived logic:
     ⦃x ↦ bytesX⦄ store(x,7) ⦃unit; x ↦ seven-bytes⦄. -/
 theorem provenB {GF : BundledGFunctors} [SpikeGpreS GF] :
-    ProvenTripleU GF spikeCtx spikeEnv progB mA (fun v Q => v = Vunit ∧ Q = mA7) := by
+    ProvenTripleU GF spikeCtx spikeCtl spikeEnv progB mA (fun v Q => v = Vunit ∧ Q = mA7) := by
   intro instGS
   refine bigSepA_ptx.trans ?_
   iintro Hx
-  ihave HW := wp_store (s := Stuckness.NotStuck) (E := ⊤) (M := spikeCtx) loc0 empty_annotation
-    intTy xPtr sevenVal NA sevenMval bytesX spikeEnv seven_encodes (seven_storable _) $$ Hx
+  ihave HW := wp_store (s := Stuckness.NotStuck) (E := ⊤) (M := spikeCtx) (ctl := spikeCtl) loc0 empty_annotation
+    intTy xPtr sevenVal NA sevenMval bytesX spikeEnv seven_encodes (seven_storable _) rfl $$ Hx
   iapply spike_wp_wand $$ HW
   iintro %v ⟨%fp, %hv, Hx⟩
   iexists mA7
@@ -332,7 +332,7 @@ theorem provenB {GF : BundledGFunctors} [SpikeGpreS GF] :
 /-- Vacuous block specifications at the straight-line profile (no
     label is registered), at any postcondition. -/
 theorem spike_blockSpecs [SpikeGS .hasLC GF] (Ψ : SpikeVal → EnvStack → IProp GF) :
-    ⊢ blockSpecs (GF := GF) spikeCtx (fun _ _ _ => iprop(False)) Ψ :=
+    ⊢ blockSpecs (GF := GF) spikeCtx spikeCtl (fun _ _ _ => iprop(False)) Ψ :=
   blockSpecs_intro fun l _ _ _ _ _ hl => (spikeCtx_labels_none l hl).elim
 
 /-- The store-then-load footprint triple:
@@ -340,13 +340,13 @@ theorem spike_blockSpecs [SpikeGS .hasLC GF] (Ψ : SpikeVal → EnvStack → IPr
     — `wps_seq` over `wps_store` then `wps_load`, collapsed into the
     base WP by `wps_sound`. -/
 theorem provenA {GF : BundledGFunctors} [SpikeGpreS GF] :
-    ProvenTripleU GF spikeCtx spikeEnv progA mA (fun v Q => v = sevenVal ∧ Q = mA7) := by
+    ProvenTripleU GF spikeCtx spikeCtl spikeEnv progA mA (fun v Q => v = sevenVal ∧ Q = mA7) := by
   intro instGS
   refine bigSepA_ptx.trans ?_
   refine .trans ?_ ((BI.emp_sep.2.trans (BI.sep_mono
     ((spike_blockSpecs (fun w _ => iprop(∃ Q : CellMap, ⌜w.val = sevenVal ∧ Q = mA7⌝ ∗
         ([∗map] i ↦ c ∈ Q, cellOwn spikeCtx.tagDefs (hlc := .hasLC) (GF := GF) i (.own 1) c)))).trans
-      (wps_sound progA spikeEnv)) .rfl)).trans
+      (wps_sound (ctl := spikeCtl) rfl progA spikeEnv)) .rfl)).trans
     BI.wand_elim_left)
   rw [show (progA : CoreExpr) =
     Expr [] (Esseq (Pattern [] (CaseBase (none, BTy_unit)))
@@ -380,8 +380,8 @@ seeded engine state -/
     delivered value is Specified(7) with x's cell updated and the
     rest verbatim. -/
 theorem exhibitA_semantic {GF : BundledGFunctors} [SpikeGpreS GF] :
-    SemTripleU spikeCtx spikeEnv progA mA (fun v Q => v = sevenVal ∧ Q = mA7) :=
-  semantic_triple_soundU (GF := GF) spikeCtx_wf spikeCtx_labels_frag spikeCtx_labels_pot
+    SemTripleU spikeCtx spikeCtl spikeEnv progA mA (fun v Q => v = sevenVal ∧ Q = mA7) :=
+  semantic_triple_soundU (GF := GF) spikeCtx_wf (ctl := spikeCtl) rfl spikeCtx_labels_frag spikeCtx_labels_pot
     fragA
     (Nat.le_trans fragA.pot_le_two
       (by rw [show esize progA = 2 from rfl]; unfold lemDefaultFuel; omega))
@@ -392,10 +392,10 @@ theorem exhibitA_semantic {GF : BundledGFunctors} [SpikeGpreS GF] :
     ⦃x ↦ - ∗ y ↦ a⦄ store(x,7) ⦃x ↦ 7 ∗ y ↦ a⦄ over engine
     configurations, y (and all unnamed rest) verbatim. -/
 theorem exhibitB_semantic {GF : BundledGFunctors} [SpikeGpreS GF] :
-    SemTripleU spikeCtx spikeEnv progB (Iris.Std.PartialMap.union mA mF)
+    SemTripleU spikeCtx spikeCtl spikeEnv progB (Iris.Std.PartialMap.union mA mF)
       (fun v Q => ∃ Q₀, (v = Vunit ∧ Q₀ = mA7) ∧ Q₀ ##ₘ mF ∧
         Q = Iris.Std.PartialMap.union Q₀ mF) :=
-  semantic_frameU (GF := GF) spikeCtx_wf spikeCtx_labels_frag spikeCtx_labels_pot
+  semantic_frameU (GF := GF) spikeCtx_wf (ctl := spikeCtl) rfl spikeCtx_labels_frag spikeCtx_labels_pot
     fragB
     (Nat.le_trans fragB.pot_le_two
       (by rw [show esize progB = 1 from rfl]; unfold lemDefaultFuel; omega))
@@ -551,10 +551,10 @@ def ψX (tds : CerbTags.TagDefsMap) : value → Mem → Prop := fun v σ' =>
 /-- Exhibit (a) at the TOTAL judgment, budget 6 (store 3 + load 3),
     from the seeded cell's ownership alone. -/
 theorem progA_wpt {GF : BundledGFunctors} [SpikeGS .hasLC GF]
-    {M : MachineCtx} {Ls : LabelSpecT GF}
+    {M : MachineCtx} {ctl : Ctl} {Ls : LabelSpecT GF}
     (ev0 : Fmap sym value) (evs : List (Fmap sym value)) :
     iprop(pointsToCell M.tagDefs (GF := GF) xPtr (.own 1) intTy bytesX) ⊢
-      wpt M Ls 6 (readoutPost (ψX M.tagDefs)) progA (ev0 :: evs) := by
+      wpt M ctl Ls 6 (readoutPost (ψX M.tagDefs)) progA (ev0 :: evs) := by
   iintro Hpt
   rw [show (progA : CoreExpr) =
     Expr [] (Esseq (Pattern [] (CaseBase (none, BTy_unit)))
@@ -607,11 +607,11 @@ theorem progA_wpt {GF : BundledGFunctors} [SpikeGS .hasLC GF]
     drive of any length can kill or derail.) -/
 theorem exhibitA_total (aids : Nat → Nat) :
     ∃ (v : value) (σ' : Mem),
-      driveU spikeCtx aids 6 (spikeCtx.thread progA spikeEnv) σ₀ =
+      driveU spikeCtx aids 6 (spikeCtx.thread progA spikeEnv spikeCtl) σ₀ =
         .done v σ' ∧
       v = sevenVal ∧ CellCoh spikeCtx.tagDefs σ' 0 ⟨xAddr, intTy, (sevenBytes spikeCtx.tagDefs)⟩ := by
   obtain ⟨v, σ', h1, h2, -⟩ :=
-    wpt_engine_boundU (GF := SpikeGF) (M := spikeCtx) spikeCtx_wf
+    wpt_engine_boundU (GF := SpikeGF) (M := spikeCtx) (ctl := spikeCtl) spikeCtx_wf rfl
       (fun l params cont hl => (spikeCtx_labels_none l hl).elim)
       (fun l params cont hl => (spikeCtx_labels_none l hl).elim)
       (fun _ _ _ _ => iprop(False))
@@ -627,7 +627,7 @@ theorem exhibitA_total (aids : Nat → Nat) :
         · iapply blockSpecsT_intro fun l params cont _ _ _ _ hl =>
             (spikeCtx_labels_none l hl).elim
         · ihave Hpt := bigSepA_ptx $$ Hcells
-          iapply progA_wpt (M := spikeCtx) fmapEmpty [] $$ Hpt)
+          iapply progA_wpt (M := spikeCtx) (ctl := spikeCtl) fmapEmpty [] $$ Hpt)
       aids
   exact ⟨v, σ', h1, h2⟩
 
@@ -727,13 +727,13 @@ theorem cells_to_mC [SpikeGS .hasLC GF] :
     repackaged at footprint granularity — no re-derivation, only
     big-sep ↔ pointsToCell fmapEmpty plumbing. -/
 theorem provenC {GF : BundledGFunctors} [SpikeGpreS GF] :
-    ProvenTripleU GF spikeCtx spikeEnv progC mB (fun _ Q => Q = mC) := by
+    ProvenTripleU GF spikeCtx spikeCtl spikeEnv progC mB (fun _ Q => Q = mC) := by
   intro instGS
-  refine bigSepB_pts.trans ((wps_exhibit_seq_stores (M := spikeCtx)
+  refine bigSepB_pts.trans ((wps_exhibit_seq_stores (M := spikeCtx) (ctl := spikeCtl)
     (Ls := fun _ _ _ => iprop(False)) xPtr yPtr loc0 loc0
     empty_annotation empty_annotation NA NA BTy_unit bytesX bytesY fmapEmpty []).trans ?_)
   refine ((BI.emp_sep.2.trans (BI.sep_mono
-    ((spike_blockSpecs _).trans (wps_sound progC spikeEnv)) .rfl)).trans
+    ((spike_blockSpecs _).trans (wps_sound (ctl := spikeCtl) rfl progC spikeEnv)) .rfl)).trans
     BI.wand_elim_left).trans ?_
   apply wp_mono
   intro v
@@ -753,8 +753,8 @@ theorem provenC {GF : BundledGFunctors} [SpikeGpreS GF] :
     derail, and any completed run updates BOTH cells (x to 5's bytes,
     y to 6's bytes) with R verbatim: the two stores do not conflict. -/
 theorem exhibitC_semantic {GF : BundledGFunctors} [SpikeGpreS GF] :
-    SemTripleU spikeCtx spikeEnv progC mB (fun _ Q => Q = mC) :=
-  semantic_triple_soundU (GF := GF) spikeCtx_wf spikeCtx_labels_frag spikeCtx_labels_pot
+    SemTripleU spikeCtx spikeCtl spikeEnv progC mB (fun _ Q => Q = mC) :=
+  semantic_triple_soundU (GF := GF) spikeCtx_wf (ctl := spikeCtl) rfl spikeCtx_labels_frag spikeCtx_labels_pot
     fragC
     (Nat.le_trans fragC.pot_le_two
       (by rw [show esize progC = 2 from rfl]; unfold lemDefaultFuel; omega))

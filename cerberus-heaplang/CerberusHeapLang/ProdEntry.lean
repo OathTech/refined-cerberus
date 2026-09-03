@@ -57,7 +57,7 @@ initial run state from the shipped `collect_labeled_continuations_NEW`
 — the loop exhibits' label maps are exactly what the production entry
 computes, nothing hand-built — and `counter_loop_certified_registration`
 re-exports the counter loop at that derived tie, stated over `driveU`
-at `procCtx mainSym rs` with the production run state `rs`. The
+at `procCtx rs` / entry control `procCtl mainSym` with the production run state `rs`. The
 production `runND` equations for the loop RUNS themselves are the
 `*_production` theorems of ProdLoopExhibit.lean, through
 `wpt_driver_done_alloc` → `prod_run_eqJ`.
@@ -488,7 +488,7 @@ theorem loop_labeledAt_production (sup : Nat) (loc : CerbLocation.Loc)
     `counter_loop_certified_production` at Phase 5 — audit F-05:
     "production" is reserved for statements whose execution function
     is the shipped runner; this one's execution function is `driveU`
-    at `procCtx mainSym rs` with the production run state `rs`): the counter-loop certification restated
+    at `procCtx rs` / entry control `procCtl mainSym` with the production run state `rs`): the counter-loop certification restated
     with the run state built by the SHIPPED registration ONLY
     (`initial_core_run_state ∘ collect_labeled_continuations_NEW` —
     nothing hand-built in the label plumbing; the drive is `driveU`
@@ -507,22 +507,22 @@ theorem counter_loop_certified_registration (sup : Nat)
     let prog := loopProg loc ann ra mo bty xbty sbty (cellPtr idx addr) n
     let rs := (initial_core_run_state sup (collect_labeled_continuations_NEW
       (prodFile prog))).1
-    (∀ r, driveU (procCtx mainSym rs) aids nsteps
+    (∀ r, driveU (procCtx rs) aids nsteps
       (procThread mainSym prog [fmapEmpty]) σ₀ ≠ .killed r) ∧
-    (driveU (procCtx mainSym rs) aids nsteps
+    (driveU (procCtx rs) aids nsteps
       (procThread mainSym prog [fmapEmpty]) σ₀ ≠ .stuck) ∧
     (∀ (v : value) (σ' : Mem),
-      driveU (procCtx mainSym rs) aids nsteps
+      driveU (procCtx rs) aids nsteps
         (procThread mainSym prog [fmapEmpty]) σ₀ = .done v σ' →
       v = Vunit ∧ ∃ bs',
         ((n = 0 ∧ bs' = bs0) ∨ (0 < n ∧ bs' = (sevenBytes fmapEmpty))) ∧
         CellCoh fmapEmpty σ' idx ⟨addr, intTy, bs'⟩) := by
   intro prog rs
-  have hlbl : (procCtx mainSym rs).labels = _ :=
+  have hlbl : (procCtx rs).labelsAt (procCtl mainSym).proc = _ :=
     procCtx_labels (loop_labeledAt_production sup loc ann ra mo bty xbty sbty
       (cellPtr idx addr) n)
   obtain ⟨h1, h2, h3⟩ := engine_adequacyU (GF := SpikeGF)
-    (M := procCtx mainSym rs) (procCtx_wf _ _)
+    (M := procCtx rs) (procCtx_wf _) (ctl := procCtl mainSym) rfl
     (fun l params cont hl => by
       rw [hlbl] at hl
       obtain ⟨-, rfl⟩ := loopQ_inv loc ann ra mo bty xbty _ hl
