@@ -15,7 +15,13 @@ as the only run-state condition — returns the PROGRAM-DONE singleton
 step map with the postcondition's value, and the final driver state is
 pinned field by field. `wpt_driver_done` and `wpt_driver_done_alloc`
 (the allocation-aware form, from `LaunchCoh`) are the faces ProdEntry's
-`prod_run_eqJ` consumes.
+`prod_run_eqJ` consumes. This single-procedure lane runs at the EMPTY
+table `emptyProcSpecT` through control-preserving rounds
+(`loop_step_frag_same`); THE LANE THROUGH CALLS — `DriverDoneCtl` at a
+live control, the CPS induction `wpt_driver_cps`, its launcher
+`wpt_driver_done_procs`, every round the live-control `loop_step_frag` —
+is the second half of this module (calls arc C4), consumed by
+`prod_run_eqJ_procs`.
 
 No statement here mentions `initial_driver_state`: the cold start is
 ProdEntry.lean's business.

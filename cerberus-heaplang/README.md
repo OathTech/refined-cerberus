@@ -40,8 +40,10 @@ at the operand-evaluation form the engine dispatches when "the operands
 are not all values", the `PtrEq` memop, strong sequencing `Esseq` at the
 wildcard, `Specified`-binder and plain-symbol-binder patterns (the
 plain-symbol binder's head restricted to the bare-value producers
-`BareHead` — a literal, `create`, `alloc`, the `PtrEq` memop — so the
-value it binds is never annotated; fragment closure, 2026-09-02), weak
+`BareHead` — a literal, `create`, `alloc`, the `PtrEq` memop and, since
+calls arc C4, a procedure call `lets x = f(args) in …` (the RETURN plugs a
+BARE value) — so the value it binds is never annotated; fragment closure,
+2026-09-02), weak
 sequencing `Ewseq` at the wildcard, `Esave` at `PePure` initializers
 within the evaluator's fuel, `Eif` at a `PePure` guard, the
 context-discarding jump `Erun` at `PePure` arguments, value-scrutinee
@@ -78,7 +80,18 @@ the judgments are indexed by the current PROCEDURE `p : Option sym`
 (RETURN does not restore `exec_loc`). Smoke: `Examples/CallSmoke.lean`
 (`main` calls `f(3)`, `{⌜0 ≤ x⌝} f(x) {ret. ⌜ret = x + 1⌝}`, driven
 through the `driveU` lane with `FragProcs` at two procedures); record
-`docs/2026-09-03_c3-notes.md`. The engine's third
+`docs/2026-09-03_c3-notes.md`. And, since C4 (2026-09-03), THE PRODUCTION
+LANE THROUGH CALLS: the CPS driver induction `wpt_driver_cps` (ProdLoop.lean
+— the driver-level twin of `wpt_sound_cps`; every PCALL and RETURN round
+the shipped driver's own, `loop_step_frag`), its launcher
+`wpt_driver_done_procs`, the N-procedure synthetic file `prodFileWith` with
+`prod_run_eqJ_procs` (ProdEntry.lean), the `exec_loc`/`current_loc` tie of
+the production entry control (`prodCtl`/`prodCtx`), and RECURSIVE FIB
+(`FibRecExhibit.lean`: `fib(n) = if n < 2 then n else lets x = fib(n-1) in
+lets y = fib(n-2) in save r(z := x+y) in pure(z)`, verified ONCE under the
+table — Hoare's rule for recursive procedures, no Löb in the client — and
+run cold on the shipped pipeline: `fib_rec_certified_production`, the
+eighth root-of-trust statement); record `docs/2026-09-03_c4-notes.md`. The engine's third
 stack constructor `Stack_cons` (the other interpreter's continuation
 stack) is unrepresentable by `Ctl.toStack` and unreachable from
 `Driver.drive` — step_ctx's value arm panics on it — a fail-closed
@@ -190,18 +203,17 @@ in-bounds offset, and the rules carry exactly that (the accessed type
 enters through its size and its decode/serialization). The chartered
 MALLOC'D LINKED LIST is the exhibit (MallocListExhibit.lean).
 
-**Deliberately not here.** The PRODUCTION lane through a call (the
-shipped-driver statements `*_certified_production` are still single-`main`
-programs: the production round `loop_step_frag_same` is consumed at the
-control-preserving rounds only, and the `exec_loc`/`current_loc` tie of
-the production entry control is C4's, with recursive fib as the flagship);
-the total DRIVER lane through a call (`wpt_drive_aux`,
-`wpt_engine_boundU`, `wpt_driver_*` are stated at the EMPTY table
-`emptyProcSpecT` — the total judgment's collapse into Iris TWP does go
-through calls, `wpt_sound_cps`, the drive-fuel simulation not yet — C4);
-mutual recursion exhibited (the rule admits it — `procSpecs` assumes the
-table for every procedure — no exhibit yet); function pointers (`Eccall`,
-another scheduler path); calls arc C1 made the thread's control LIVE
+**Deliberately not here.** Mutual recursion exhibited (the rule admits
+it — `procSpecs` assumes the table for every procedure — no exhibit yet);
+function pointers (`Eccall`, another scheduler path); the total `driveU`
+lane through a call (`wpt_drive_aux`/`wpt_engine_boundU(_alloc)` stay at
+the EMPTY table `emptyProcSpecT`, where the call clause is unsatisfiable,
+`wpt_empty_call_false` — deliberately: that lane is deleted in the
+fuel-lane restatement, and the total lane through calls is delivered on
+the SHIPPED driver, `wpt_driver_cps`; the single-procedure driver lane
+`wpt_driver_aux`/`wpt_driver_done(_alloc)` likewise stays at the empty
+table as the seven earlier production statements' route); a program with
+two `save` labels (the lookup law is here since C4, the exhibit is not); calls arc C1 made the thread's control LIVE
 STATE: `Config := CoreExpr × EnvStack × Ctl × Mem` with `Ctl` = the call
 stack `κ`, the current procedure `proc` and the execution location
 `execLoc`; every adequacy export is launched at an entry control with an
@@ -220,8 +232,8 @@ patterns, `Ecase` with a non-value scrutinee, pure exits beyond
 differing-provenance nondeterministic fork, and the symbol-binder beta
 at annotated values — each an absence of a `Step` rule, not a rule with
 a hidden assumption; concurrency, prophecy variables, the C frontend
-(programs enter as authored Core in a one-procedure `file` built by
-`prodFile`).
+(programs enter as authored Core in a synthetic `file` — one procedure
+by `prodFile`, `main` plus declared procedures by `prodFileWith`).
 
 ## The claim
 
@@ -237,16 +249,21 @@ for P and Q "just memory + pure properties".
 statements — `exhibitA_prod` (ProdExhibit.lean),
 `fib_certified_production`, `counter_loop_certified_production`,
 `list_reverse_certified_production` (ProdLoopExhibit.lean),
-`dispose_list_certified_production` (DisposeExhibit.lean) and
-`region_loop_certified_production` (RegionLoopExhibit.lean) and
-`malloc_list_certified_production` (MallocListExhibit.lean). Their
+`dispose_list_certified_production` (DisposeExhibit.lean),
+`region_loop_certified_production` (RegionLoopExhibit.lean),
+`malloc_list_certified_production` (MallocListExhibit.lean) and
+`fib_rec_certified_production` (FibRecExhibit.lean; calls arc C4). Their
 execution function is the shipped `CerbND.runND (drive fmapEmpty false
 file args) (initial_driver_state sup file fs).1`, the composite the
 cerberus-lean executable runs, applied to the authored program wrapped
-by `prodFile` (the synthetic one-procedure file); no package-defined
+by `prodFile` (the synthetic one-procedure file) or, for recursive fib,
+`prodFileWith` (`main` plus the declared `fib`); no package-defined
 driver, discharge or scheduler appears in their statements, and they
 carry no termination hypothesis — only the explicit in-budget bounds
-`hfuel` where the step count depends on an input, and, where the
+`hfuel` where the step count depends on an input (recursive fib's is
+`fibRounds n.toNat + 4 ≤ CerbFuel.driverFuel`, `fibRounds` the package's
+round count of an activation — `fibRounds n + 9 = 12 · fib (n + 1)`, so
+`n ≤ 33` is in the shipped budget), and, where the
 program allocates from a size-dependent budget, the BUDGET side
 condition that the budget fits the cold-start memory:
 `region_loop_certified_production`'s `hB : n.toNat * regionCost al sz ≤
@@ -256,12 +273,14 @@ range audit, disclosed) and `malloc_list_certified_production`'s `hB : n.toNat *
 al.toNat 1) ≤ 281474976710647` (the same fact in ENGINE vocabulary: per
 node `16 + max(al, 1) − 1` bytes of cursor descent, `281474976710647`
 the cold-start cursor's headroom; bridge `ml_budget_bridge`). These
-seven are THE root-of-trust exports of this package — the closed
-shipped-driver statements. They are reached through `prod_run_eqJ`
-(ProdEntry.lean), which is generic collapse machinery rather than a
-closed statement: its delivery premise `DriverDoneAt` (ProdLoop.lean)
-and its label tie `LabeledAt` are package-defined, and the seven
-statements discharge them.
+eight are THE root-of-trust exports of this package — the closed
+shipped-driver statements. They are reached through `prod_run_eqJ` or,
+through calls, `prod_run_eqJ_procs` (ProdEntry.lean), which are generic
+collapse machinery rather than closed statements: their delivery premise
+`DriverDoneAt`, resp. the live-control `DriverDoneCtl` (ProdLoop.lean),
+and their registration tie `LabeledAt`, resp. the whole-file
+`LabeledProcs`, are package-defined, and the eight statements discharge
+them.
 
 **PROVISIONAL.** Every export stated over `driveU` rather than the
 shipped driver — `MemTripleU`, `MemTripleU_alloc`, `SemTripleU`,
@@ -355,7 +374,7 @@ defined under "The claim"; the shipped-pipeline rows are the
 root-of-trust exports. The last column lists EVERY hypothesis of the theorem
 by name, section variables included; it is read off the
 machine-printed statement of every constant in
-`docs/2026-09-03_c2-signatures-post.txt` (`scripts/signature_snapshot.lean`),
+`docs/2026-09-03_c4-signatures-post.txt` (`scripts/signature_snapshot.lean`),
 where section variables appear as leading binders. No statement
 carries a premise on the action locations: the engine attaches
 `requestLoc th loc` (the redex's own location, or the thread's
@@ -395,6 +414,8 @@ statement carries a fuel hypothesis.
 | `exhibitA_prod` (ProdExhibit.lean) | the production run of `lets p = create(4,int) in lets _ = store(int, p, 7) in load(int, p)` is the singleton `Active` execution delivering 7, the final memory holding 7's image at the program's own cell | shipped pipeline — ROOT OF TRUST | `sup fs args` |
 | `fib_certified_production`, `counter_loop_certified_production`, `list_reverse_certified_production` (ProdLoopExhibit.lean) | the loop programs on the shipped pipeline; counter and reversal bind their engine-created cells and enter their loops through `save` with live initializers | shipped pipeline — ROOT OF TRUST | fib: `sup ra n sbty ibty abty bbty`, `0 ≤ n`, `2 * n.toNat + 6 ≤ CerbFuel.driverFuel`, `fs args`; counter: `sup ra mo bty xbty cbty sbty n`, `0 ≤ n`, `6 * n.toNat + 8 ≤ CerbFuel.driverFuel`, `fs args`; reversal: `sup ra mo bty sbty pbty cbty bbty nbty ubty fs args` |
 | `dispose_list_certified_production` (DisposeExhibit.lean), `region_loop_certified_production` (RegionLoopExhibit.lean) | kill/free arc K4 on the shipped pipeline: BUILD two nodes with `create`s (the list-reverse production's prefix, restated generically in its continuation as `lrProdPrefix_wpt`) then DISPOSE the list — EXACTLY ONE Active execution delivering `Vunit` whose final memory has two DISTINCT allocation ids in `deadAllocations` with their records erased (the proof witnesses them as the two created nodes; the statement names no node); `n` `alloc`/`free` pairs from one budget — EXACTLY ONE Active execution delivering `Vunit` (no readout of the final table: the regions are freed through the `_emp` faces, which drop the dead knowledge) | shipped pipeline — ROOT OF TRUST | dispose: `sup ra mo bty sbty cbty bbty nbty ubty fs args`; region loop: `sup ra al sz pref sbty ibty pbty ubty`, `hcost : 0 < regionCost al sz`, `n`, `hn : 0 ≤ n`, `hB : n.toNat * regionCost al sz ≤ headroom prodMem₀.lastAddress`, `hfuel : 7 * n.toNat + 5 ≤ CerbFuel.driverFuel`, `fs args` |
+| `fib_rec_certified`, `fr_wp_readout` (FibRecExhibit.lean; calls arc C4) | RECURSIVE FIB through the `driveU` lane: `main` calls `fib(n)`, `fib` calls itself twice per activation; at the two-procedure file the package loop never kills or derails and delivers `fib n`, at every drive length; `fr_wp_readout` is the collapse WITH the table into the raw WP | `driveU (prodCtx …)` — PROVISIONAL | `sup ra n nbty xbty ybty sbty zbty`, `hn : 0 ≤ n`, `σ₀`, `nsteps aids` |
+| `fib_rec_certified_production` (FibRecExhibit.lean; calls arc C4) | RECURSIVE FIB ON THE SHIPPED PIPELINE — the first multi-procedure production statement: cold on the synthetic two-procedure file `prodFileWith [(fib, [(n, nbty)], body)] (fib(n))`, EXACTLY ONE Active execution delivering `fib n`; every PCALL and RETURN round is the driver's own; the label map (fib's `save r`) computed by the shipped registration on both procedures; termination from the total judgment at `fibRounds n + 2`, the in-budget bound `fibRounds n + 4 ≤ 10^8` (`n ≤ 33`) | shipped pipeline — ROOT OF TRUST | `sup ra n nbty xbty ybty sbty zbty`, `hn : 0 ≤ n`, `hfuel : fibRounds n.toNat + 4 ≤ CerbFuel.driverFuel`, `fs args` |
 | `malloc_list_certified_production` (MallocListExhibit.lean; kill/free arc K5) | THE MALLOC'D LINKED LIST on the shipped pipeline: EXACTLY ONE Active execution delivering `Vunit` whose final memory has `n.toNat` DISTINCT allocation ids (`ids.Nodup`, K5.1) in `deadAllocations` with their records erased (the proof witnesses them as the freed nodes; the statement names no node) — every `alloc` through the public `wpt_alloc`, every field write through `wpt_store_regionOwn_at`, every next-field read through `wpt_load_regionOwn_at`, every `free` through `wpt_free` | shipped pipeline — ROOT OF TRUST | `sup ra mo al pref sbty ibty pbty qbty bbty nbty ubty`, `n`, `hn : 0 ≤ n`, `hB : n.toNat * (15 + max al.toNat 1) ≤ 281474976710647` (the budget fits the cold start, in ENGINE vocabulary), `hfuel : 25 * n.toNat + 9 ≤ CerbFuel.driverFuel`, `fs args` |
 | `counter_loop_certified_registration` (ProdEntry.lean) | the counter loop with its label map derived from the shipped registration (`collect_labeled_continuations_NEW`) | `driveU (procCtx mainSym …)` — PROVISIONAL | `sup loc ann ra mo bty xbty sbty idx addr bs0 n`, `0 ≤ n`, `σ₀`, `hcoh`, `nsteps aids` |
 
@@ -565,7 +586,7 @@ theorems:
 | The fragment is annotation-free (`Expr []` at every node); located Core is outside `Frag` | make `current_loc` live state | "Scope, exactly"; `Soundness.lean` `Frag` header |
 | Synthetic Core entry: authored Core wrapped by `prodFile`, not C through the frontend; the loop programs' label maps are nevertheless computed by the shipped registration (`*_labeledAt_production`, `LabeledAt`) | a C-frontend entry | `ProdEntry.lean` |
 | The judgments are indexed by the current PROCEDURE `p : Option sym`, not the full control, and their step clauses quantify over the call stack and execution location `(κ, ℓ)` (calls arc C3) — forcing fact: RETURN does not restore `exec_loc` (PCALL pushes `push_exec_loc`, RETURN writes `current_proc_opt`/`env`/`stack0`/`arena` only), so the caller's continuation after a return runs at a control differing from the call-time one in `execLoc`; the pre-C3 judgment at `ctl` is the instance `p := ctl.proc, κ := ctl.κ, ℓ := ctl.execLoc` at the empty table | by design (every C1/C2 rule was control-general, the C1 range audit) | `Wps.lean`, `Wpt.lean`; docs/2026-09-03_c3-notes.md |
-| The total DRIVER lanes (`wpt_drive_aux`, `wpt_engine_boundU(_alloc)`, `wpt_driver_aux`/`_done(_alloc)`) are stated at the EMPTY table `emptyProcSpecT`: the call clause is unsatisfiable there (`wpt_empty_call_false`), so no total export goes through a call yet; the collapse into Iris TWP does (`wpt_sound_cps`) | C4: the drive-fuel simulation through calls (the CPS shape at the `driveU` level), with recursive fib's budget | `TotalAdequacy.lean`, `ProdLoop.lean` |
+| The total `driveU` lane (`wpt_drive_aux`, `wpt_engine_boundU(_alloc)`) and the single-procedure driver lane (`wpt_driver_aux`/`_done(_alloc)`) are stated at the EMPTY table `emptyProcSpecT`, where the call clause is unsatisfiable (`wpt_empty_call_false`); the total lane THROUGH CALLS is the shipped-driver CPS lane `wpt_driver_cps`/`wpt_driver_done_procs` over the live-control delivery fact `DriverDoneCtl` (calls arc C4), consumed by `prod_run_eqJ_procs` — so the eight production statements are reached by two routes, the seven earlier ones at the empty table and recursive fib through calls | the `driveU` lane is deleted in the fuel-lane restatement (a second CPS induction over it was declined at C4 as throwaway, [AGENT], `docs/2026-09-03_c4-notes.md` §9); the single-procedure driver lane stays as the earlier statements' route (its restatement over the general lane was declined: the file tie is not available at its context profile, `procCtx`) | `TotalAdequacy.lean`, `ProdLoop.lean`, `ProdEntry.lean` |
 | The `driveU` adequacy exports carry `MachineCtx.FragProcs` (every declared procedure body in `Frag` within the potential bound, its label bodies too — the twin of the label-cone premises): their NotStuck oracle is the raw Iris WP, which does not exclude a call, so the drive classification follows the engine through calls and returns (`drive_classifyU_aux`, the control invariant `ControlOk`, the env-depth invariant `Step.env_depth`); vacuous at both profiles, discharged at the two-procedure smoke file (`csCtx_fragProcs`) | stays: the premise is the fragment membership of the FILE's bodies, which the specification table does not carry (a spec'd body may still be outside `Frag`) | `Adequacy.lean` |
 | Well-formedness by shape: `MachineCtx.SeqWF` (startup thread), the empty-stack entry control (`ctl.κ = []`, the PROGRAM-DONE selector) and cons-shaped environment stacks — the engine's panic channels excluded by shape, never absorbed; the RETURN's empty-env panic is excluded the same way (a frame is on the env stack whenever the call stack is non-empty). Action locations carry no premise: the certification equations state the request at the engine's own `requestLoc th loc`, and `storeM_loc_irrel`/`loadM_loc_irrel` (the memory operations use the location only in the kill payload) transport the mirror's premise to it | by design | `Step.lean`, `Soundness.lean` |
 | The tag-definition environment is an explicit parameter of the heap predicates (`pointsToCell tds …`, `M.tagDefs`); the demos state footprints at `fmapEmpty` | by design: a program-wide constant of the language instance | `Heap.lean` header |
@@ -651,9 +672,12 @@ source becomes a fact at the target.
         ▼
    generic driver collapse   (DriverCollapse.lean: loop_step_frag, driver2_done,
      finalize_done — proved from the driver's OWN round functions;
-     ProdLoop.lean: wpt_driver_done(_alloc) ⇒ DriverDoneAt;
-     ProdEntry.lean: prod_run_eqJ ⇒ runND (drive …) (initial_driver_state
-     sup …).1 = [(Active dres, [], dst')])         [labels; k + 2 ≤ CerbFuel.driverFuel]
+     ProdLoop.lean: wpt_driver_done(_alloc) ⇒ DriverDoneAt (one procedure);
+       wpt_driver_cps ⇒ wpt_driver_done_procs ⇒ DriverDoneCtl (through
+       PCALL/RETURN, at a live control; calls arc C4);
+     ProdEntry.lean: prod_run_eqJ / prod_run_eqJ_procs ⇒ runND (drive …)
+     (initial_driver_state sup …).1 = [(Active dres, [], dst')])
+                                        [labels / LabeledProcs; k + 2 ≤ CerbFuel.driverFuel]
         ▼
    whole-program production statements — THE ROOT-OF-TRUST EXPORTS
      (exhibitA_prod, fib_certified_production,
@@ -661,7 +685,8 @@ source becomes a fact at the target.
      list_reverse_certified_production,
      dispose_list_certified_production,
      region_loop_certified_production,
-     malloc_list_certified_production)                          [∀ sup fs args]
+     malloc_list_certified_production,
+     fib_rec_certified_production)                              [∀ sup fs args]
 ```
 
 What the diagram does not contain: a C frontend; any statement about
@@ -815,7 +840,7 @@ In import order, one line each:
 | Module | Contents | Headline |
 |---|---|---|
 | `Step.lean` | the fragment's mirror small-step over the engine's generated AST/state types — on configurations `Config := CoreExpr × EnvStack × Ctl × Mem` (the thread's LIVE CONTROL `Ctl`: call stack, current procedure, execution location; calls arc C1), indexed by the explicit immutable `MachineCtx`; hand-written, zero authority until certified | `Step`, `Ctl`, `MachineCtx` |
-| `EnvLaws.lean` | lawfulness of the engine's symbol order, `SymFrame`, lookup-after-add | `envAdd_lookup` |
+| `EnvLaws.lean` | lawfulness of the engine's symbol order; `SymMap`/`SymFrame`, the β-generic lookup-after-add law (env frames, procedure maps, label maps) | `symAdd_lookup`, `symAdd_lookup_two`, `envAdd_lookup` |
 | `Heap.lean` | the split ghost carrier (per-byte heap, per-allocation metadata heap — `MetaCell`: base, optional type, size, `alive`/`readonly`/`dynamic`, each coupled to the engine's `Allocation` by `MetaCoh` — allocator cursor) coupled to the real `MemState` by `CohG`; the global memory well-formedness invariant `MemWF` (in `CohG` and `LaunchCoh`), its cold-start/preservation lemmas and `create_fresh_global`; views, cells, points-to, the persistent stratum, the ∗-splittable allocation budget `allocBudget` (its authority `budgetAuth` under the coupling inequality `budgetInterp`, the cost `allocCost`, the engine bounds `freshBase_ne_zero_of_cost`/`headroom_freshBase`); the K1 bundles `regionOwn`/`readonlyCell`/`deadObj`; the `storeM`/`loadM`/`allocateObject` success lemmas and the read-only store refusal | `pointsToCell`, `pointsToView`, `allocMeta`, `regionOwn`, `readonlyCell`, `deadObj`, `allocBudget`, `allocBudget_split`, `storeM_success`, `loadM_success`, `storeM_readonly_kills` |
 | `Lang.lean` | the iris-lean `Language` instance over `Step`; no `Language.Context` (falsified by `Erun`); the ghost functors | `instance : Language CoreRt Mem Empty CoreRVal` |
 | `Rules.lean` | the atomic step specifications and their lifting to the raw WP; `wp_store`, `wp_load`; the readout combinator | `AtomicStep`, `store_atomic`, `wp_of_atomic`, `wp_store`, `stateInterp_readout` |
@@ -830,10 +855,10 @@ In import order, one line each:
 | `API.lean` | the public surface as one import; the public/internal table | the header table |
 | `Examples/Layout.lean`, `Examples/ReadinessSmoke.lean` | example support (`intTy`, byte images); the two-field object predicate and its rules from the API alone | `twoField`, `twoField_create` |
 | `Examples/MirrorCoverage.lean` | mirror-level coverage witnesses proved directly against `Step` (the mixed `store` operand shapes) — a semantic regression module, NOT a client; the only other direct `Step` use outside the semantics layer is the negative test `DivergeExhibit.lean` (its header states the exception) | `store_sym_lit_step`, `store_lit_sym_step` |
-| `Exhibit.lean`, `LoopExhibit.lean`, `FibExhibit.lean`, `DivergeExhibit.lean`, `ArrayExhibit.lean`, `StructExhibit.lean`, `AllocExhibit.lean`, `ListRevExhibit.lean`, `TreeRotExhibit.lean`, `CaseExhibit.lean`, `WseqExhibit.lean`, `DisposeExhibit.lean`, `RegionLoopExhibit.lean`, `MallocListExhibit.lean` | the exhibits (table above); the K4/K5 modules are the kill/free arc's exhibits (dispose-a-list over created nodes; n regions from one budget; THE MALLOC'D LINKED LIST — regions written, linked, read and freed through the K5 region access rules) | — |
+| `Exhibit.lean`, `LoopExhibit.lean`, `FibExhibit.lean`, `DivergeExhibit.lean`, `ArrayExhibit.lean`, `StructExhibit.lean`, `AllocExhibit.lean`, `ListRevExhibit.lean`, `TreeRotExhibit.lean`, `CaseExhibit.lean`, `WseqExhibit.lean`, `DisposeExhibit.lean`, `RegionLoopExhibit.lean`, `MallocListExhibit.lean`, `FibRecExhibit.lean` | the exhibits (table above); the K4/K5 modules are the kill/free arc's exhibits (dispose-a-list over created nodes; n regions from one budget; THE MALLOC'D LINKED LIST — regions written, linked, read and freed through the K5 region access rules); `FibRecExhibit.lean` is the calls arc's: RECURSIVE FIB under the specification table, on the `driveU` lane and on the shipped pipeline | — |
 | `DriverCollapse.lean` | the production scheduler/ND/readout collapsed onto the drive loop, proved from the driver's own round functions | `loop_step_frag`, `driver2_done`, `finalize_done` |
-| `ProdLoop.lean` | the total judgment drives the production driver's per-thread loop | `wpt_driver_done`, `wpt_driver_done_alloc` |
-| `ProdEntry.lean` | the cold start from the shipped `initial_driver_state`; the pipeline theorem; the registration ties | `prod_run_eqJ`, `fib_labeledAt_production` |
+| `ProdLoop.lean` | the total judgment drives the production driver's per-thread loop — at one procedure (`DriverDoneAt`) and, since calls arc C4, THROUGH CALLS at a live control (`DriverDoneCtl`, the CPS induction `wpt_driver_cps`, every PCALL/RETURN round `loop_step_frag`, the whole-file tie `LabeledProcs`) | `wpt_driver_done`, `wpt_driver_done_alloc`, `wpt_driver_cps`, `wpt_driver_done_procs` |
+| `ProdEntry.lean` | the cold start from the shipped `initial_driver_state`; the pipeline theorems for the one-procedure file `prodFile` and the N-procedure file `prodFileWith` (the entry control `prodCtl`, the production context `prodCtx`); the registration ties | `prod_run_eqJ`, `prod_run_eqJ_procs`, `fib_labeledAt_production` |
 | `ProdExhibit.lean`, `ProdLoopExhibit.lean` | the production statements (table above) | `exhibitA_prod`, `*_production` |
 | `Audit.lean` | the in-build axiom check: exact export pins, the exhaustive bound, the banned-axiom sweep — internal details included, the whole package | the sweeps |
 
@@ -855,8 +880,11 @@ audited with K5.1), the calls arc's C1 and C2
 overnight stack (`../docs/2026-09-03_standards-audit-overnight-stack.md`)
 and its response (`docs/2026-09-03_standards-audit-response.md`: the
 stale admission and device sentences corrected, four proof devices
-unpinned, this section). The current statement-surface snapshot is
-`docs/2026-09-03_c2-signatures-post.txt`; the pre-slice snapshots that
+unpinned, this section), then C3 (`docs/2026-09-03_c3-notes.md`, range
+audit `docs/2026-09-03_audit-c3-range.md`) and C4 — the production lane
+through calls and recursive fib — (`docs/2026-09-03_c4-notes.md`). The
+current statement-surface snapshot is
+`docs/2026-09-03_c4-signatures-post.txt`; the pre-slice snapshots that
 were byte-identical to a predecessor were deduplicated on 2026-09-03
 (one file kept per content, the records' references redirected in
 place and re-verified by md5 in the standards audit). The audit and

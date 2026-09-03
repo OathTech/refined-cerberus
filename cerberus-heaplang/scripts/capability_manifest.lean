@@ -14,9 +14,9 @@ What it does, and nothing else:
 3. THE ONE CHECK THAT HAS CAUGHT REAL OVERCLAIMS: the named rule
    exists, is a theorem, and lies in the proof-term dependency cone
    of at least one declaration of a CLIENT module — the exhibit modules
-   (`*Exhibit`) and the declared smoke `Examples.CallSmoke` (calls arc
-   C3: the call rule's client until C4's recursive-fib exhibit) —
-   the report says which. A rule consumed by no client is a red row
+   (`*Exhibit`) and the DECLARED smoke clients (`clientSmokes`:
+   `Examples.CallSmoke`, the C3 smoke, kept as a client beside C4's
+   `FibRecExhibit`) — the report says which. A rule consumed by no client is a red row
    (a construct "covered" by a rule nobody's proof flows through is
    the 2026-09-01 re-audit's R-01/R-04 class of overclaim).
 
@@ -150,12 +150,15 @@ partial def cone (env : Environment) (canReach : Name → Bool) (seeds : Array N
   let some (.inductInfo fragInfo) := env.find? `CerberusHeapLang.Frag
     | throwError "manifest FAIL: inductive CerberusHeapLang.Frag not found"
   -- the client modules, from the environment, sorted for determinism:
-  -- the exhibit modules plus the declared C3 smoke (the call rule's
-  -- client until C4's recursive-fib exhibit)
+  -- the exhibit modules plus the declared smoke clients (the other
+  -- `Examples.*` modules are NOT clients: `ReadinessSmoke` is API
+  -- practice, `MirrorCoverage` a semantic regression module, `Layout`
+  -- support)
+  let clientSmokes : List Name := [`CerberusHeapLang.Examples.CallSmoke]
   let exhibits : Array Name :=
     (env.header.moduleNames.filter fun m =>
       m.getRoot == `CerberusHeapLang &&
-        (m.toString.endsWith "Exhibit" || m == `CerberusHeapLang.Examples.CallSmoke))
+        (m.toString.endsWith "Exhibit" || clientSmokes.contains m))
     |>.qsort (fun a b => a.toString < b.toString)
   if exhibits.isEmpty then throwError "manifest FAIL: no *Exhibit module in the environment"
   -- the rule modules (of the mapped rules that exist) + the pruning predicate
@@ -231,15 +234,16 @@ partial def cone (env : Environment) (canReach : Name → Bool) (seeds : Array N
   IO.println "of the current slice — the row states it); a constructor with several kind-specific"
   IO.println "rules (`Frag.kill`: the static dispose and the dynamic free) has one row per"
   IO.println "rule. The rule column names the logical rule covering the construct; the last"
-  IO.println "column lists the exhibit modules whose proofs actually depend on that rule"
-  IO.println "(proof-term dependency cone through this package's constants). A rule"
-  IO.println "consumed by no exhibit is a red row: the construct has a rule but no client."
+  IO.println "column lists the CLIENT modules — the exhibits and the declared smoke clients —"
+  IO.println "whose proofs actually depend on that rule (proof-term dependency cone through"
+  IO.println "this package's constants). A rule consumed by no client is a red row: the"
+  IO.println "construct has a rule but no client."
   IO.println ""
-  IO.println "| Fragment constructor | Rule | Consumed by (exhibit modules) |"
+  IO.println "| Fragment constructor | Rule | Consumed by (client modules) |"
   IO.println "|---|---|---|"
   for l in lines do IO.println l
   IO.println ""
-  IO.println s!"MANIFEST: {fragInfo.ctors.length} constructors, {ruleRows} rule rows, {red} red, {exhibits.size} exhibit modules"
+  IO.println s!"MANIFEST: {fragInfo.ctors.length} constructors, {ruleRows} rule rows, {red} red, {exhibits.size} client modules"
   if red > 0 then
     throwError "capability manifest: {red} red/MISSING row(s) — see the table above"
 

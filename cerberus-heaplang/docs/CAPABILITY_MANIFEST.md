@@ -12,11 +12,12 @@ is a MISSING row and a red run unless it is a DECLARED no-rule constructor
 of the current slice — the row states it); a constructor with several kind-specific
 rules (`Frag.kill`: the static dispose and the dynamic free) has one row per
 rule. The rule column names the logical rule covering the construct; the last
-column lists the exhibit modules whose proofs actually depend on that rule
-(proof-term dependency cone through this package's constants). A rule
-consumed by no exhibit is a red row: the construct has a rule but no client.
+column lists the CLIENT modules — the exhibits and the declared smoke clients —
+whose proofs actually depend on that rule (proof-term dependency cone through
+this package's constants). A rule consumed by no client is a red row: the
+construct has a rule but no client.
 
-| Fragment constructor | Rule | Consumed by (exhibit modules) |
+| Fragment constructor | Rule | Consumed by (client modules) |
 |---|---|---|
 | `Frag.val_pure` | `wps_ofVal` | AllocExhibit, ArrayExhibit, CaseExhibit, DisposeExhibit, Examples.CallSmoke, Exhibit, FibExhibit, FibRecExhibit, ListRevExhibit, LoopExhibit, MallocListExhibit, RegionLoopExhibit, StructExhibit, TreeRotExhibit, WseqExhibit |
 | `Frag.store` | `wps_store` | Exhibit, LoopExhibit |
@@ -46,4 +47,4 @@ consumed by no exhibit is a red row: the construct has a rule but no client.
 | `Frag.call` | `wps_call_root` | Examples.CallSmoke, FibRecExhibit |
 | `Frag.call` | `wps_call` | Examples.CallSmoke, FibRecExhibit |
 
-MANIFEST: 23 constructors, 27 rule rows, 0 red, 18 exhibit modules
+MANIFEST: 23 constructors, 27 rule rows, 0 red, 18 client modules

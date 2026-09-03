@@ -12,7 +12,7 @@ quoted declarations sit inside a Lean `section` whose `variable`s are
 part of the statement without appearing on the theorem line; a line
 "Section variables not shown" lists them by name. The machine-printed
 statement of every constant, section variables included, is
-[`2026-09-03_c2-signatures-post.txt`](2026-09-03_c2-signatures-post.txt).
+[`2026-09-03_c4-signatures-post.txt`](2026-09-03_c4-signatures-post.txt).
 
 **Cerberus** (Memarian, Sewell, et al.) is a semantics for C: it
 elaborates C into a small typed functional intermediate language,
@@ -185,7 +185,7 @@ theorem list_reverse_certified_production (sup : Nat) (ra : core_run_annotation)
 
 No section variables. `CerbND.runND (_root_.drive …) (initial_driver_state
 sup file fs).1` is exactly the composite the cerberus-lean executable
-runs — this is a ROOT-OF-TRUST export, one of the seven closed
+runs — this is a ROOT-OF-TRUST export, one of the eight closed
 shipped-driver statements: the genuine driver, no package-defined loop
 in the statement (the authored program enters wrapped by `prodFile`,
 the synthetic one-procedure file). The theorem quantifies over nothing but the file-system state,
@@ -286,7 +286,7 @@ total statements only.
 **The two lanes, labelled.** Every exported execution theorem is
 either explicitly provisional over driveU or reaches the shipped
 engine; every public logical rule has a kernel-checked adequacy path
-through the package mirror to the engine. The seven production
+through the package mirror to the engine. The eight production
 statements (`exhibitA_prod`, `fib_certified_production`,
 `counter_loop_certified_production`,
 `list_reverse_certified_production`,
@@ -308,7 +308,7 @@ CerbFuel.driverFuel`) — never a driver, discharge or scheduler.
 `prod_run_eqJ`, through which they are proved, is generic collapse
 machinery, not a closed statement: its delivery premise `DriverDoneAt`
 (ProdLoop.lean) and its label tie `LabeledAt` are package-defined,
-discharged by each of the seven. Every statement over `driveU` — `MemTripleU`,
+discharged by each of the eight. Every statement over `driveU` — `MemTripleU`,
 `MemTripleU_alloc`, `SemTripleU`, `project_triple`,
 `project_triple_pure`, `project_triple_alloc`,
 `project_triple_pure_alloc`, `semantic_triple_soundU`,
@@ -778,14 +778,43 @@ of `wpt_sound_cps`, the CPS collapse by strong induction on the budget
 (a back edge lands in the target's variant budget, a call lands the
 callee in `m` and the continuation in `k'`, both below `k` by the split)
 — a metatheorem about the judgment (it is a sound total WP)
-that no export consumes: every total export goes through the engine
-simulation `wpt_drive_aux` (§5) directly, and no Iris adequacy result
-lies in any total export's cone. Deleting the decrease premise would let a diverging program
+that no export consumes: every total export goes through an engine
+simulation directly — `wpt_drive_aux` (§5) on the `driveU` lane, or, on
+the shipped driver, `wpt_driver_aux` (one procedure) and its CPS twin
+`wpt_driver_cps` (ProdLoop.lean, calls arc C4: the same induction as
+`wpt_sound_cps`, concluding the pure delivery fact `DriverDoneCtl` at a
+live control instead of an Iris TWP — the continuation budget ADDED, the
+call case applying the hypothesis to the callee at the pushed control
+and, after the RETURN round(s), to the caller's continuation; every round
+the driver's own `loop_step_frag`) — and no Iris adequacy result lies in
+any total export's cone. Deleting the decrease premise would let a diverging program
 be derived: `diverge_total_unprovable` (DivergeExhibit.lean) records
 that a total derivation for the self-jump loop is `False`, proved at the
 engine — the loop's `driveU` rests in `.more` at every drive length
 (`dg_driveU_more`), contradicting the `.done` equation
 `wpt_engine_boundU` would deliver (§5).
+
+**What a procedure client supplies** (`FibRecExhibit.lean`, recursive
+fib — calls arc C4): the procedures as a list for the synthetic file
+`prodFileWith [(fib, [(n, nbty)], body)] (fib(n₀))` (ProdEntry.lean); the
+production context `prodCtx file rs` at the production initial run state
+`prodRS`, whose derived label fibers are computed from the shipped
+registration (`collect_new_fr`, `rfl`: `fib`'s fiber holds its one `save`
+label, `main`'s is empty) and whose whole-file tie `LabeledProcs` is
+derived from them (`frCtx_labeledProcs`); `FragProcs` at both procedures
+(`frCtx_fragProcs`); the specification tables `frSpec`/`frSpecT` —
+`{⌜0 ≤ n⌝} fib(n) {ret. ⌜ret = fib n⌝}`, the total one with the budget
+`fibRounds n ≤ m`; the body verified ONCE under the table, at every
+caller tail (`frBody_wps`/`frBody_wpt`: the guard, the two calls by
+`wps_call_root`/`wpt_call_root` — the table ASSUMED for the recursive
+activations, Hoare's rule — each result bound at the plain-symbol binder
+`wps_seq_sym`/`wpt_seq_sym`, the `save` of the sum, the PURE exit), the
+procedure rule `procSpecs_intro`/`procSpecsT_intro`, `main` by the call
+rule alone; then `engine_adequacyU` for the `driveU` statement
+(`fib_rec_certified`) and, for the production statement
+(`fib_rec_certified_production`), `wpt_driver_done_procs` at the entry
+control `prodCtl` → `prod_run_eqJ_procs`, with the in-budget hypothesis
+`fibRounds n.toNat + 4 ≤ CerbFuel.driverFuel`.
 
 **What a loop client supplies** (`LoopExhibit.lean`, the counter loop):
 a `LabelMap` and a `core_run_state` whose `labeled` fiber at the
@@ -1648,11 +1677,20 @@ the `#print axioms` recipe are in the README, "How to build and verify".
   procedures, no Löb in the introduction) and the CPS collapse
   `wps_sound_cps` (§3.3; the one Löb ties back edges and calls alike),
   with the two-procedure smoke `Examples/CallSmoke.lean` through the
-  `driveU` lane (`FragProcs` discharged at two procedures). What remains
-  is C4's: the PRODUCTION lane through a call (the `exec_loc` tie), the
-  total DRIVER lane through calls (`wpt_drive_aux` is at the empty table
-  `emptyProcSpecT`), and recursive fib as the flagship. The remaining
-  absences are structural, not hidden: the empty-stack entry control
+  `driveU` lane (`FragProcs` discharged at two procedures); C4
+  (2026-09-03) closed the arc: the plain-symbol binder binds a call's
+  result (`BareHead.call`), the PRODUCTION lane goes through calls (the
+  CPS driver induction `wpt_driver_cps` over the live-control delivery
+  fact `DriverDoneCtl`, every PCALL/RETURN round the driver's own
+  `loop_step_frag`; the `exec_loc`/`current_loc` tie at the production
+  entry control `prodCtl`/`prodCtx`), the synthetic file takes declared
+  procedures (`prodFileWith`, `prod_run_eqJ_procs`), and RECURSIVE FIB is
+  the eighth root-of-trust statement (`fib_rec_certified_production`,
+  §3.3). Still out, by design: mutual recursion exhibited (the rule
+  admits it); function pointers (`Eccall`); the total `driveU` lane
+  through a call (`wpt_drive_aux` stays at the empty table
+  `emptyProcSpecT` — the lane is deleted in the fuel-lane restatement).
+  The remaining absences are structural, not hidden: the empty-stack entry control
   (`ctl.κ = []`) wherever a general control appears, `MachineCtx.SeqWF`
   (startup thread) wherever a general context does, and — for the
   `driveU` adequacy exports, whose NotStuck oracle is the raw WP — the
@@ -1673,11 +1711,12 @@ the `#print axioms` recipe are in the README, "How to build and verify".
   only so a reader of the K4-era text finds the closure here.
 - **A program with TWO `save` labels.** Every loop exhibit so far is
   single-label (the malloc'd list merges its two C loops into ONE Core
-  label with two phases): the two-label form needs a two-entry label-map
-  lookup law — `lookupLabel` at `fmapAddBy … (fmapAddBy … fmapEmpty)` —
-  and EnvLaws has only the singleton `fmapLookupBy_addBy_empty`. A
-  coverage fact about the logic's LAWS, not about the rules; the mover
-  is an EnvLaws slice (found by the K5 range audit).
+  label with two phases). The two-entry lookup law the two-label form
+  needs is here since C4 — the β-generic `symAdd_lookup`/
+  `symAdd_lookup_two` (EnvLaws), the C3 smoke's local law moved — so what
+  remains is the exhibit (found by the K5 range audit; the law's
+  comparator question measured at C4: the lookup reads the bucket head
+  and the add comparator enters only as the captured `symOrd`).
 - **Located Core.** Every node of a fragment program carries the empty
   static annotation list (`Expr []` in every `Frag` constructor and every
   redex spelling). The engine's `step_ctx` rewrites the thread's
@@ -1702,8 +1741,9 @@ the `#print axioms` recipe are in the README, "How to build and verify".
   static `pot` premises and the production statements carry `k + 2 ≤
   CerbFuel.driverFuel` (the shipped driver's budget, 10^8 since the
   fuel arc).
-- **A C frontend.** Programs enter as authored Core in a synthetic
-  one-procedure file.
+- **A C frontend.** Programs enter as authored Core in a synthetic file
+  (`prodFile`: one procedure; `prodFileWith`: `main` plus declared
+  procedures).
 - **The residual of mirror completeness** (`OpenRound`, §5;
   `2026-09-02_fragment-closure-notes.md`): an operand in the covered
   grammar containing a LEAF the engine accepts where the mirror

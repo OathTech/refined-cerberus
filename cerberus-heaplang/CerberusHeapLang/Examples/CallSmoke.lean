@@ -27,8 +27,9 @@ bound, both label fibers empty). The total twins at the `wpt` level:
 `procSpecsT_intro`, `wpt_call_root`, `wpt_sound` (the callee at budget
 `4`: SAVE-EVAL, SAVE, PURE, the RETURN — its delivery cost; the caller
 at `1 + 4 + 1`). The PRODUCTION lane (the shipped driver) through a call
-needs the `exec_loc`/`current_loc` production tie — C4, with recursive
-fib (`docs/2026-09-03_c3-notes.md`).
+is C4's, with recursive fib as its client (`FibRecExhibit.lean`,
+`wpt_driver_cps`; `docs/2026-09-03_c4-notes.md`) — this smoke stays on
+the `driveU` lane.
 -/
 import CerberusHeapLang.API
 
@@ -369,7 +370,7 @@ theorem call_smoke_driveU (σ₀ : Mem) (nsteps : Nat) (aids : Nat → Nat) :
   exact (BigSepM.bigSepM_empty).1.trans (cs_wp_readout ra bty ybty default)
 
 /-! ## The total twins (the `wpt` level; the driver-level total lane
-through calls is C4's) -/
+through calls is `wpt_driver_cps`, ProdLoop.lean — calls arc C4) -/
 
 /-- THE TOTAL TABLE: the same specification, with the callee's budget
     `4 ≤ m` in the precondition (SAVE-EVAL + SAVE + PURE + the RETURN

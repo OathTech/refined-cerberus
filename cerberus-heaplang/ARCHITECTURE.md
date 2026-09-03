@@ -72,12 +72,13 @@ consumed by NO adequacy export — the adequacy chain does not go through
 it: the `driveU` lanes (partial `drive_classifyU`, total `wpt_drive_aux`)
 discharge each drive step with the device lemma `outcomesU_of_step`
 (Soundness.lean, over `dischargeStep`), and the production collapse
-(`prod_run_eqJ`) consumes `loop_step_frag_same` (DriverCollapse.lean,
-the control-preserving core of the live-control `loop_step_frag`, which
-ties the mirror's `ctl` to the driver thread's control fields and admits
-the call and return rounds), proved independently of `CerberusRound` by
-its own per-redex case analysis (Round.lean header, "WHAT CONSUMES
-WHAT").
+consumes `loop_step_frag_same` (DriverCollapse.lean, the
+control-preserving core; `prod_run_eqJ`, the single-procedure lane) and,
+through calls, the live-control `loop_step_frag` itself (which ties the
+mirror's `ctl` to the driver thread's control fields and admits the call
+and return rounds; `wpt_driver_cps` → `prod_run_eqJ_procs`, calls arc
+C4), proved independently of `CerberusRound` by its own per-redex case
+analysis (Round.lean header, "WHAT CONSUMES WHAT").
 
 The certification is ONE-DIRECTIONAL: mirror step ⇒ shipped round;
 `step_iff_cerberusRound` is two-sided under the hypothesis that a
@@ -103,8 +104,11 @@ given the mirror step) / `refused` (with its `ShippedRefusal`) /
 `open_` (with its `OpenRound`). The fragment is DECLARED as exactly what
 the mirror covers ([USER 2026-09-02], the fragment-closure ruling): the
 plain-symbol binder's head is restricted to bare-value producers
-(`BareHead`), and every evaluating constructor's operands lie in the
-mirror evaluator's exact domain (`PePure`, the eight mirrored binops).
+(`BareHead` — a literal, `create`, `alloc`, the `PtrEq` memop and, since
+calls arc C4, the procedure call: `lets x = f(args) in …`, whose RETURN
+plugs a BARE value, `BareHead.call`), and every evaluating constructor's
+operands lie in the mirror evaluator's exact domain (`PePure`, the eight
+mirrored binops).
 So the logic is SOUND (§4) and COMPLETE for the declared fragment up to
 the residual: mirror steps iff the engine has a successful deterministic
 round — with two disclosed exceptions to the iff: the REMOVE-ANNOT value
@@ -188,11 +192,38 @@ an unpinned device: a control-general induction under the invariant
 terms — and the premise `MachineCtx.FragProcs`, every declared
 procedure body in the cone: the raw WP's NotStuck does not exclude a
 call, so the partial lane must follow the engine into the callee and
-back, under the env-depth invariant `Step.env_depth`; the total DRIVER
-lane is stated at the EMPTY table `emptyProcSpecT`, where the call clause
-is unsatisfiable — C4 extends it through calls);
+back, under the env-depth invariant `Step.env_depth`; the total `driveU`
+lane `wpt_drive_aux`/`wpt_engine_boundU` is stated at the EMPTY table
+`emptyProcSpecT`, where the call clause is unsatisfiable
+(`wpt_empty_call_false`) — left there deliberately at C4: the lane is
+scheduled for deletion in the fuel-lane restatement, and the total lane
+THROUGH CALLS is delivered on the shipped driver instead, §6);
 the shipped-round certification `engine_step_matchU` (§2) is not
 consumed by either lane.
+
+THE TOTAL DRIVER LANE THROUGH CALLS (ProdLoop.lean, calls arc C4):
+`wpt_driver_cps` is the budget induction in CONTINUATION-PASSING form
+over the ambient control — the driver-level twin of `wpt_sound_cps` —
+concluding the pure delivery fact `DriverDoneCtl M₀ th₀ e ρ ctl σ ψ k` at
+a LIVE control (the driver's per-thread loop, from any driver state
+holding the configuration at `ctlThread th₀ e ρ ctl`, with the file tie
+`dst.core_file = M₀.file` and the whole-file registration tie
+`LabeledProcs M₀ dst.core_run_state0.labeled`, returns PROGRAM-DONE for a
+value satisfying `ψ` within `k + 2` iterations), with the continuation
+budget ADDED (`k + kc`): the call case applies the induction hypothesis to
+the callee's body at the pushed control with continuation budget `k' +
+kc`, whose continuation performs the RETURN round(s) — `Step.ret`, after
+`Step.ret_annot` — into the caller's continuation `apply_ctx ctx (pure v)`
+at the popped env (in the cone by the plug lemmas) and applies the
+hypothesis to it at `k'`; the split `1 + m + k' ≤ k` pays for the call
+round. Every round is `loop_step_frag` at the live control
+(`driverDoneCtl_step`); the launcher is `wpt_driver_done_procs`
+(allocation-aware, at a populated table, the entry control `⟨[], some p,
+ℓ⟩` of a declared procedure `p`). The single-procedure lane
+(`DriverDoneAt`, `wpt_driver_aux`, `wpt_driver_done(_alloc)`) is left as
+it is — the seven earlier production statements' route, at a context
+profile (`procCtx`, the default file) where the file tie is not
+available; a restatement was weighed and declined (the C4 record, §9).
 
 ## 5. The projection
 
@@ -233,20 +264,34 @@ stays in force: `sorryAx` reaches no `CerberusHeapLang` constant.
 Concurrency is out of scope for this package (`drive fmapEmpty false
 …` in every production statement).
 
-THE ROOT-OF-TRUST LANE (total): the seven closed shipped-driver
+THE ROOT-OF-TRUST LANE (total): the eight closed shipped-driver
 statements — `exhibitA_prod` (ProdExhibit.lean),
 `fib_certified_production`, `counter_loop_certified_production`,
 `list_reverse_certified_production` (ProdLoopExhibit.lean),
 `dispose_list_certified_production` (DisposeExhibit.lean),
 `region_loop_certified_production` (RegionLoopExhibit.lean),
-`malloc_list_certified_production` (MallocListExhibit.lean). Their
+`malloc_list_certified_production` (MallocListExhibit.lean) and, since
+calls arc C4, `fib_rec_certified_production` (FibRecExhibit.lean: RECURSIVE
+fib — `main` calling `fib`, `fib` calling itself twice per activation,
+on the synthetic TWO-PROCEDURE file `prodFileWith [(fib, [n], body)]
+(fib(n₀))`; the first statement whose run makes the driver's PCALL and
+RETURN rounds). Their
 execution function is the shipped composite of §1, applied to the
-authored program wrapped as a synthetic one-procedure file by
-`prodFile` (ProdEntry.lean); their conclusions are pure readout
+authored program wrapped as a synthetic file — one procedure by
+`prodFile`, `main` plus declared procedures by `prodFileWith`
+(ProdEntry.lean; `prodFile e = prodFileWith [] e`, `rfl`); their
+conclusions are pure readout
 predicates on the delivered `driver_result`; they carry no termination
 hypothesis (where the certified step count depends on an input, the
 in-budget bound is an explicit hypothesis: `fib_certified_production`'s
 `hfuel : 2 * n.toNat + 6 ≤ CerbFuel.driverFuel`,
+`fib_rec_certified_production`'s `hfuel : fibRounds n.toNat + 4 ≤
+CerbFuel.driverFuel` (the package's round-count function for the
+recursive activation — `fibRounds 0 = fibRounds 1 = 3`, `fibRounds (n+2)
+= fibRounds (n+1) + fibRounds n + 9`, closed form `fibRounds n + 9 = 12 ·
+fib (n+1)`, derived — the second root-of-trust statement with a package
+definition in its text, disclosed as `region_loop_certified_production`'s
+budget premise is),
 `counter_loop_certified_production`'s `hfuel : 6 * n.toNat + 8 ≤
 CerbFuel.driverFuel`, `region_loop_certified_production`'s `hfuel : 7 *
 n.toNat + 5 ≤ CerbFuel.driverFuel` together with its budget-fits-the-cold-
@@ -259,18 +304,21 @@ n.toNat + 9 ≤ CerbFuel.driverFuel` with its budget premise in ENGINE
 vocabulary, `hB : n.toNat * (15 + max al.toNat 1) ≤ 281474976710647`,
 bridged to the package's `regionCost`/`headroom` inside the proof by
 `ml_budget_bridge`). "Closed shipped-driver statement" means exactly these
-seven; the headline claim of this package rests on them. They are
-reached through `wpt_driver_done`/`wpt_driver_done_alloc`
-(ProdLoop.lean) and `prod_run_eqJ` (ProdEntry.lean), which is generic
-collapse machinery, not a closed statement: its premise `hdd` is the
-package-defined delivery fact `DriverDoneAt` (ProdLoop.lean) that the
-total judgment supplies, its premise `hQe` is the package-defined label
-tie `LabeledAt`, and it carries the in-budget bound `k + 2 ≤
+eight; the headline claim of this package rests on them. They are
+reached through `wpt_driver_done`/`wpt_driver_done_alloc` and
+`prod_run_eqJ` (the single-procedure lane) or, through calls,
+`wpt_driver_done_procs` (ProdLoop.lean) and `prod_run_eqJ_procs`
+(ProdEntry.lean), which are generic collapse machinery, not closed
+statements: their delivery premise `hdd` is the package-defined fact
+`DriverDoneAt`, resp. the live-control `DriverDoneCtl` (ProdLoop.lean),
+that the total judgment supplies, their registration premise is the
+package-defined tie `LabeledAt` (one procedure), resp. the whole-file
+`LabeledProcs`, and they carry the in-budget bound `k + 2 ≤
 CerbFuel.driverFuel` on the certified step count (`CerbFuel.driverFuel =
 10^8` is the shipped driver's own budget since the cerberus-lean fuel
 arc, pin `f95ef8d9c`; the bound is stated against the name the semantics
-exports for exactly this purpose). The seven statements
-discharge the delivery and label premises (and the bound, by
+exports for exactly this purpose). The eight statements
+discharge the delivery and registration premises (and the bound, by
 computation, where the step count is fixed) and are what remains.
 
 THE PROVISIONAL LANE: `MemTripleU`, `MemTripleU_alloc`, `SemTripleU`,
@@ -310,7 +358,7 @@ status at the close of the kill/free arc (2026-09-03):
 
 - **Goal 1 — the shipped-driver generic adequacy theorem: OPEN, pending
   the upstream restatement.** Today `MemTripleU`, the projection
-  theorems and `wpt_engine_boundU` are about `driveU`, and only the seven
+  theorems and `wpt_engine_boundU` are about `driveU`, and only the eight
   closed production statements reach `CerbND.runND (drive …)
   (initial_driver_state …).1`. Closes when a generic theorem takes an
   arbitrary proved public triple to a statement over that shipped
@@ -322,11 +370,11 @@ status at the close of the kill/free arc (2026-09-03):
   (`docs/2026-09-03_repin-fuel-notes.md`; scout:
   `../docs/2026-09-03_repin-scout.md`). The sequence ruled 2026-09-03:
   the RE-PIN (done — pin + the `lemDefaultFuel → CerbFuel.driverFuel`
-  side conditions, nothing else), then the calls arc, then the
-  FUEL-LANE RESTATEMENT (delete `driveU`, restate the partial exports
-  over `drive_lemFuel`, remove PROVISIONAL) once on the final
-  configuration. Until then every `driveU` export carries the
-  PROVISIONAL label (§6).
+  side conditions, nothing else), then the calls arc (C1–C4, CLOSED
+  2026-09-03 — below), then the FUEL-LANE RESTATEMENT (delete `driveU`,
+  restate the partial exports over `drive_lemFuel`, remove PROVISIONAL)
+  once on the final configuration. Until then every `driveU` export
+  carries the PROVISIONAL label (§6).
 - **Goal 2 — mirror completeness: CLOSED fail-closed on the declared
   fragment (2026-09-02), with two characterized residuals.** `OpenRound`
   (§2, `docs/2026-09-02_fragment-closure-notes.md`): `eval_uncovered` —
@@ -418,14 +466,18 @@ THE OTHER OPEN ITEMS:
   applied at each `alloc` and carried by the invariant `(ids ++
   done).Nodup` through each `free`. Records: `docs/2026-09-03_k5-notes.md`,
   `docs/2026-09-03_k5.1-notes.md`.
-- **Two `save` labels in one program — OPEN (found by the K5 range audit).** Every
-  loop exhibit is single-label; the malloc'd list merges its two C loops
-  into one Core label with two phases because the two-label form needs a
-  two-entry label-map lookup law (`lookupLabel` at `fmapAddBy … (fmapAddBy
-  … fmapEmpty)`) and EnvLaws has only the singleton
-  `fmapLookupBy_addBy_empty`. A law gap, not a rule gap (`wps_run`/
-  `wps_save` are label-generic); the mover is an EnvLaws slice adding the
-  two-entry (or general) lookup law.
+- **Two `save` labels in one program — the LAW landed at C4, the exhibit
+  is still absent (found by the K5 range audit).** Every loop exhibit is
+  single-label; the malloc'd list merges its two C loops into one Core
+  label with two phases. The two-entry lookup law the two-label form
+  needs is now the β-generic `symAdd_lookup`/`symAdd_lookup_two` (EnvLaws,
+  calls arc C4 — the C3 smoke's local law moved and generalized;
+  `envAdd_lookup` is its `value` instance; measured: the lookup reads the
+  bucket head, so the add's `BEq` instance is irrelevant and the add
+  comparator enters only as the captured tree comparator, `symOrd` —
+  which the engine's `ordCompare`-built label maps have by definitional
+  unfolding). A rule gap it never was (`wps_run`/`wps_save` are
+  label-generic); what remains is a two-label exhibit.
 - **The kill/free arc K0–K5.1 — CLOSED (2026-09-03).** Record:
   `docs/2026-09-03_kill-free-arc-record.md` (one paragraph per slice,
   commits, audit verdicts, the corrections to the design note, what
@@ -454,5 +506,31 @@ THE OTHER OPEN ITEMS:
   (asked for by the K4 range audit). Follow-up still named in the record: the cursor
   ghost heap as a proof device (no client owns the cursor since K2.5 —
   fold it into the budget interpretation).
+- **The calls arc C1–C4 — CLOSED (2026-09-03).** Records
+  `docs/2026-09-03_c{1,2,3,4}-notes.md`, range audits
+  `docs/2026-09-03_c{1,2}-audit.md`, `docs/2026-09-03_audit-c3-range.md`;
+  design note `docs/2026-09-02_calls-design-spike.md`. In one line each:
+  C1 the live control `Ctl` (call stack, current procedure, execution
+  location) as the fourth configuration component; C2 the mirror's
+  `Step.call`/`Step.ret`/`Step.ret_annot`, their certification at a free
+  successor control and completeness rows, the live-control production
+  round `loop_step_frag`, `FragProcs` on the `driveU` lane; C3 the
+  procedure-indexed judgments with the specification table `Θ`, the call
+  clause, `wps_call(_root)`/`wpt_call(_root)`, `procSpecs(T)_intro`
+  (Hoare's rule for recursive procedures), the CPS collapses
+  `wps_sound_cps` (the one Löb)/`wpt_sound_cps`; C4 THE PRODUCTION LANE
+  THROUGH CALLS — `BareHead.call` (a call's result bound at the
+  plain-symbol binder), the CPS driver induction `wpt_driver_cps` over
+  `DriverDoneCtl` with the whole-file tie `LabeledProcs`, the N-procedure
+  entry `prodFileWith`/`prod_run_eqJ_procs`, the `exec_loc`/`current_loc`
+  tie (`prodCtl`/`prodCtx`: the parked thread's control and
+  `current_loc`, Driver.lean:530, what PCALL's `push_exec_loc` reads,
+  Core_reduction.lean:484 col 18133 — the C2 record §3(f)/the C1 audit's
+  M-1, closed), and RECURSIVE FIB as the eighth root-of-trust statement.
+  Still open from the arc, by design: mutual recursion (the rule admits
+  it — `procSpecs` assumes the table for every procedure — no exhibit);
+  function pointers (`Eccall`, another scheduler path); the total
+  `driveU` lane at the empty table (deleted with the lane); a two-label
+  exhibit (above).
 - The deferred parametric semantics interfaces: the rules are proved
   directly against `Step` and the memory state (walkthrough §7).

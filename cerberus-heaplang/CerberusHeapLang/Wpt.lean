@@ -40,11 +40,13 @@ simultaneously a step budget, so one derivation yields two results:
   engine: a proved `wpt … k` plus the seeded footprint yields the
   unconditional `driveU … k = .done` equation, the device lemma
   `outcomesU_of_step` (Soundness.lean) discharging one `driveU` step
-  per budget unit. Every total export goes this way; no Iris adequacy
-  result is in any total export's cone. It is stated at the EMPTY table
-  `emptyProcSpecT` (the call clause unsatisfiable there,
-  `wpt_empty_call_false`): the drive-fuel simulation through calls is
-  C4's, with recursive fib's budget.
+  per budget unit. Every total `driveU` export goes this way; no Iris
+  adequacy result is in any total export's cone. It is stated at the EMPTY
+  table `emptyProcSpecT` (the call clause unsatisfiable there,
+  `wpt_empty_call_false`) and stays there: the total lane THROUGH CALLS
+  is the shipped-driver CPS induction `wpt_driver_cps` (ProdLoop.lean,
+  calls arc C4 — the driver-level twin of `wpt_sound_cps`), the route of
+  the recursive-fib production statement.
 Deleting the decrease premise makes both inductions fail to elaborate
 (they are ON the budget) and would make the self-jump loop derivable;
 `diverge_total_unprovable` (DivergeExhibit.lean) records, at the

@@ -56,5 +56,6 @@ from a built checkout and checked seam-by-seam against the pin).
 
 Copyright 2026 Oath Technologies. Licensed under the Apache License,
 Version 2.0 — see [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE). The
-dependencies carry their own licenses (batteries, Qq: Apache 2.0;
-iris-lean: see its repository; cerberus-lean and LemLib: see theirs).
+dependencies carry their own licenses (batteries, Qq and iris-lean:
+Apache 2.0 — their pinned `LICENSE` files are byte-identical to ours,
+measured with `cmp` on 2026-09-03; cerberus-lean and LemLib: see theirs).

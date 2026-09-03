@@ -45,10 +45,15 @@ which is over the shipped driver and awaits the cerberus-lean
 fuel-exhaustion outcome
 (docs/2026-09-02_request-cerberus-lean-fuel-exhaustion-outcome.md,
 repository root); restated with no other change when it lands. The
-root-of-trust exports are the production statements that consume
-this simulation through `wpt_driver_done_alloc` → `prod_run_eqJ`
-(`exhibitA_prod`, `*_certified_production`): those are over the
-shipped `runND ∘ drive ∘ initial_driver_state`.
+root-of-trust exports are the production statements over the shipped
+`runND ∘ drive ∘ initial_driver_state` (`exhibitA_prod`,
+`*_certified_production`), reached through the DRIVER-level twins of
+this simulation (ProdLoop.lean): `wpt_driver_aux` → `wpt_driver_done
+(_alloc)` → `prod_run_eqJ` at one procedure, and — calls arc C4 — the
+CPS induction `wpt_driver_cps` → `wpt_driver_done_procs` →
+`prod_run_eqJ_procs` through PCALL/RETURN. This `driveU` simulation stays
+at the EMPTY table `emptyProcSpecT` (a second CPS induction over `driveU`
+was declined at C4: the lane is deleted in the fuel-lane restatement).
 -/
 import CerberusHeapLang.Wpt
 import CerberusHeapLang.Adequacy
