@@ -1146,3 +1146,21 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   fragment, mirrored and classified, NO rule by design (object bundle vs
   region bundle) — stated on every surface. K2.5-audit M-1: `wpt_create`
   pinned. Pins 221 → 248. Range audit dispatched on a fixed copy.
+- **2026-09-03 [AGENT] K2 / K2.5 / K3 RANGE AUDITS: ALL PASS** (records:
+  `cerberus-heaplang/docs/2026-09-03_k2-audit.md`, `…_k2.5-audit.md`,
+  `…_k3-audit.md`). K2: mirror = engine (arms quoted), `MemWF.killM` both
+  arms trio-exact, kill reasons exact, no fork; two doc Mediums (folded
+  into K2.5). K2.5: the budget's ghost name is FRESH (never touches
+  Iris's later-credit name), laws re-proved over the library's lemmas,
+  coupling preserved and initialised in both lanes, engine bound tight for
+  size > 0; M-1 `wpt_create` unpinned (fixed in K3), M-2 the size-0
+  claim false at `lastAddress ≤ 0` (closed in K3 by `MemWF.la_pos`, an
+  engine invariant: both cursor writers guard `alignedAddr ≠ 0`). K3:
+  `Step.alloc` = the engine's Alloc0 arm, `tid` honestly irrelevant
+  (`rfl`), OOM the only alloc failure, `free(NULL)` a mirrored no-op step,
+  `la_pos` confirmed invariant, `Frag.kill` lift a strict generalization;
+  M-1 a stale Heap header sentence + three forward-tense comments + the
+  negative-size precision (`sizeN.toNat` collapses negatives to a
+  successful size-0 region: the out-of-rule shape is `size ≤ 0 ∧ align ≤
+  1`) — folded into K4. Every audit's merge recommendation: merge (after
+  the named doc fixes). No merges overnight per the ruling.
