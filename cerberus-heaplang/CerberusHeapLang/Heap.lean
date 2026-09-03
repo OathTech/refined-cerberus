@@ -1135,10 +1135,11 @@ theorem applyMemM_eq_ndProj {α : Type} (m : CerbMem.memM α) (σ : Mem) :
     path, returns the decode of the range image, and leaves the state
     unchanged. The one load seam of every typed-access rule:
     `loadM_at` (the created-object instance) and the read-only cell's
-    rule consume it. It is stated at ANY metadata cell, so it already
-    covers K1's untyped regions (`regionOwn`/`regionView`) — for which
-    no load or store RULE exists yet (the K4 finding: README "Scope,
-    exactly"). -/
+    rule consume it. It is stated at ANY metadata cell, so it covers
+    K1's untyped regions too: the region load rule `regionLoadAt_atomic`
+    (Rules.lean, kill/free arc K5) is this seam at `regionCell a n true`
+    — at `mc.ty = none` the engine's `isAtomicMemberAccess` is `false`
+    (CerbMem.lean:1619) and no other check reads the type. -/
 theorem loadM_live (tds : CerbTags.TagDefsMap) (σ : Mem) (id : Int) (mc : MetaCell) (off : Nat)
     (vty : ctype) (bs : List AbsByte) (mv : MemValue)
     (loc : CerbLocation.Loc)
@@ -3450,6 +3451,231 @@ theorem regionOwn_agree (id a a' : Int) (n n' : Nat) (dq dq' : DFrac)
   · iapply bytesOwn_agree a dq dq' bs bs' (by omega) $$ [$Hb $Hb']
   ipureintro
   exact ⟨rfl, rfl, hbs⟩
+
+/-! ### The typed region view (kill/free arc K5): a region read at a type
+
+A region is UNTYPED in the engine (`allocateRegion` records `ty := none`,
+CerbMem.lean:1544) and the engine's typed access path is TYPE-BLIND at
+such an allocation: `loadM` (:1621-1665) and `storeM` (:1667-1730) check
+the dead list (load only, :1645), the record's presence (:1648/:1719),
+`isInBounds` against the record's SIZE (:1475: `addr >= base && addr +
+size <= base + alloc.size`), writability (store only, :1725) and
+`isAtomicMemberAccess`, which at `alloc.ty = none` is `false` (:1619) —
+there is NO effective-type check and NO alignment check anywhere on
+either path. So a region is accessed at ANY type at ANY in-bounds
+offset, which is what `malloc`'d memory is. The typed region view is the
+untyped `regionView` whose image has the accessed type's footprint
+length — `pointsToView` with `regionCell a n true` for `objCell tds a aty
+true false` and the region's size `n` for the allocation type's layout
+size; every law below is the object view's law under that substitution.
+The access rules over it are `regionLoadAt_atomic`/`regionStoreAt_atomic`
+(Rules.lean) and their faces; whole-region interior access
+(`wps_load_regionOwn_at`/`wps_store_regionOwn_at`) carves the typed view
+out of `regionOwn` by `regionOwn_carve`/`regionOwn_uncarve` below. -/
+
+/-- THE TYPED REGION VIEW: ownership of one TYPED subrange of one live
+    dynamic region — metadata knowledge (id, base, size) at fraction
+    `dqm`, the range's bytes at fraction `dqb`, the in-bounds fact
+    against the region's SIZE and the footprint-length fact at the
+    accessed type. -/
+def typedRegionView (tds : CerbTags.TagDefsMap) (id a : Int) (n off : Nat) (dqm dqb : DFrac)
+    (vty : ctype) (bs : List CerbMem.AbsByte) : IProp GF :=
+  iprop(metaOwn id dqm (regionCell a n true) ∗
+    ⌜off + CerbMem.sizeofCtype tds vty ≤ n ∧ bs.length = CerbMem.sizeofCtype tds vty⌝ ∗
+    bytesOwn (a + (off : Int)) dqb bs)
+
+theorem typedRegionView_iff (tds : CerbTags.TagDefsMap) (id a : Int) (n off : Nat)
+    (dqm dqb : DFrac) (vty : ctype) (bs : List CerbMem.AbsByte) :
+    typedRegionView (GF := GF) tds id a n off dqm dqb vty bs ⊣⊢
+      iprop(metaOwn id dqm (regionCell a n true) ∗
+        ⌜off + CerbMem.sizeofCtype tds vty ≤ n ∧ bs.length = CerbMem.sizeofCtype tds vty⌝ ∗
+        bytesOwn (a + (off : Int)) dqb bs) := .rfl
+
+/-- The typed view IS the untyped view at a type-length image — both
+    directions (the typed reading of `regionView`). -/
+theorem typedRegionView_regionView (tds : CerbTags.TagDefsMap) (id a : Int) (n off : Nat)
+    (dqm dqb : DFrac) (vty : ctype) (bs : List CerbMem.AbsByte) :
+    typedRegionView (GF := GF) tds id a n off dqm dqb vty bs ⊣⊢
+      iprop(regionView id a n off dqm dqb bs ∗ ⌜bs.length = CerbMem.sizeofCtype tds vty⌝) := by
+  unfold typedRegionView regionView
+  constructor
+  · iintro ⟨Hm, %hp, Hb⟩
+    obtain ⟨hbound, hlen⟩ := hp
+    isplitl [Hm Hb]
+    · iframe Hm
+      isplit
+      · ipureintro
+        omega
+      · iexact Hb
+    · ipureintro
+      exact hlen
+  · iintro ⟨⟨Hm, %hbound, Hb⟩, %hlen⟩
+    iframe Hm
+    isplit
+    · ipureintro
+      exact ⟨by omega, hlen⟩
+    · iexact Hb
+
+/-- TYPED REGION SPLIT: a typed region view whose footprint decomposes as
+    two type footprints splits into the two typed subviews (metadata
+    fraction split, byte range split at the list decomposition) — the
+    region as a struct of typed fields; `pointsToView_split` at the
+    region cell. -/
+theorem typedRegionView_split (tds : CerbTags.TagDefsMap) (id a : Int) (n off : Nat)
+    (q₁ q₂ : Qp) (dqb : DFrac) (vty vty₁ vty₂ : ctype)
+    (bs₁ bs₂ : List CerbMem.AbsByte)
+    (hsz : CerbMem.sizeofCtype tds vty =
+      CerbMem.sizeofCtype tds vty₁ + CerbMem.sizeofCtype tds vty₂)
+    (hlen₁ : bs₁.length = CerbMem.sizeofCtype tds vty₁) :
+    typedRegionView (GF := GF) tds id a n off (.own (q₁ + q₂)) dqb vty (bs₁ ++ bs₂) ⊢
+      iprop(typedRegionView tds id a n off (.own q₁) dqb vty₁ bs₁ ∗
+        typedRegionView tds id a n (off + CerbMem.sizeofCtype tds vty₁) (.own q₂) dqb
+          vty₂ bs₂) := by
+  unfold typedRegionView
+  iintro ⟨Hm, %hpure, Hb⟩
+  obtain ⟨hbound, hlen⟩ := hpure
+  have hlapp : (bs₁ ++ bs₂).length = bs₁.length + bs₂.length :=
+    List.length_append
+  have hlen₂ : bs₂.length = CerbMem.sizeofCtype tds vty₂ := by omega
+  icases (metaOwn_fractional id (regionCell a n true) q₁ q₂).1 $$ Hm
+    with ⟨Hm₁, Hm₂⟩
+  icases (bytesOwn_append (a + (off : Int)) dqb bs₁ bs₂).1 $$ Hb with ⟨Hb₁, Hb₂⟩
+  isplitl [Hm₁ Hb₁]
+  · isplitl [Hm₁]
+    · iexact Hm₁
+    isplit
+    · ipureintro
+      exact ⟨by omega, hlen₁⟩
+    · iexact Hb₁
+  · isplitl [Hm₂]
+    · iexact Hm₂
+    isplit
+    · ipureintro
+      exact ⟨by omega, hlen₂⟩
+    · rw [show a + ((off + CerbMem.sizeofCtype tds vty₁ : Nat) : Int) =
+        a + (off : Int) + ((bs₁.length : Nat) : Int) by omega]
+      iexact Hb₂
+
+/-- TYPED REGION JOIN: the converse — two adjacent typed subviews of one
+    region join into the containing typed view (fractions add, byte
+    ranges concatenate); `pointsToView_join` at the region cell. -/
+theorem typedRegionView_join (tds : CerbTags.TagDefsMap) (id a : Int) (n off : Nat)
+    (q₁ q₂ : Qp) (dqb : DFrac) (vty vty₁ vty₂ : ctype)
+    (bs₁ bs₂ : List CerbMem.AbsByte)
+    (hsz : CerbMem.sizeofCtype tds vty =
+      CerbMem.sizeofCtype tds vty₁ + CerbMem.sizeofCtype tds vty₂)
+    (hbound : off + CerbMem.sizeofCtype tds vty ≤ n) :
+    iprop(typedRegionView (GF := GF) tds id a n off (.own q₁) dqb vty₁ bs₁ ∗
+      typedRegionView tds id a n (off + CerbMem.sizeofCtype tds vty₁) (.own q₂) dqb
+        vty₂ bs₂) ⊢
+      typedRegionView tds id a n off (.own (q₁ + q₂)) dqb vty (bs₁ ++ bs₂) := by
+  unfold typedRegionView
+  iintro ⟨⟨Hm₁, %hp₁, Hb₁⟩, Hm₂, %hp₂, Hb₂⟩
+  obtain ⟨hbound₁, hlen₁⟩ := hp₁
+  obtain ⟨hbound₂, hlen₂⟩ := hp₂
+  isplitl [Hm₁ Hm₂]
+  · iapply (metaOwn_fractional id (regionCell a n true) q₁ q₂).2
+    isplitl [Hm₁]
+    · iexact Hm₁
+    · iexact Hm₂
+  isplit
+  · ipureintro
+    refine ⟨hbound, ?_⟩
+    have hlapp : (bs₁ ++ bs₂).length = bs₁.length + bs₂.length :=
+      List.length_append
+    omega
+  · iapply (bytesOwn_append (a + (off : Int)) dqb bs₁ bs₂).2
+    isplitl [Hb₁]
+    · iexact Hb₁
+    · rw [show a + (off : Int) + ((bs₁.length : Nat) : Int) =
+        a + ((off + CerbMem.sizeofCtype tds vty₁ : Nat) : Int) by omega]
+      iexact Hb₂
+
+/-- CARVE a typed subrange out of whole-region ownership: the metadata
+    rides WHOLE (fraction `dq`, no fraction arithmetic), the bytes split
+    into prefix / the typed middle / suffix at `List.take`/`List.drop`
+    (the byte algebra `bytesOwn_append` twice), and the region's length
+    fact is kept. The whole-region interior access rules
+    (`wps_load_regionOwn_at`/`wps_store_regionOwn_at` and the total
+    twins) are this, the typed-view rule, then `regionOwn_uncarve`. -/
+theorem regionOwn_carve (tds : CerbTags.TagDefsMap) (id a : Int) (n off : Nat) (dq : DFrac)
+    (vty : ctype) (bs : List CerbMem.AbsByte)
+    (hbound : off + CerbMem.sizeofCtype tds vty ≤ n) :
+    regionOwn (GF := GF) id a n dq bs ⊢
+      iprop(⌜bs.length = n⌝ ∗
+        typedRegionView tds id a n off dq dq vty
+          ((bs.drop off).take (CerbMem.sizeofCtype tds vty)) ∗
+        bytesOwn a dq (bs.take off) ∗
+        bytesOwn (a + (off : Int) + ((CerbMem.sizeofCtype tds vty : Nat) : Int)) dq
+          ((bs.drop off).drop (CerbMem.sizeofCtype tds vty))) := by
+  unfold regionOwn typedRegionView
+  iintro ⟨Hm, Hb, %hlen⟩
+  have htk : (bs.take off).length = off := by
+    simp [List.length_take]
+    omega
+  have hmidlen : ((bs.drop off).take (CerbMem.sizeofCtype tds vty)).length =
+      CerbMem.sizeofCtype tds vty := by
+    simp [List.length_take, List.length_drop]
+    omega
+  have hsplit : bs = bs.take off ++
+      ((bs.drop off).take (CerbMem.sizeofCtype tds vty) ++
+        (bs.drop off).drop (CerbMem.sizeofCtype tds vty)) := by
+    rw [List.take_append_drop, List.take_append_drop]
+  ihave Hb2 : bytesOwn a dq (bs.take off ++
+      ((bs.drop off).take (CerbMem.sizeofCtype tds vty) ++
+        (bs.drop off).drop (CerbMem.sizeofCtype tds vty))) $$ [Hb]
+  · rw [← hsplit]
+    iexact Hb
+  icases (bytesOwn_append a dq _ _).1 $$ Hb2 with ⟨Hpre, Hrest⟩
+  icases (bytesOwn_append _ dq _ _).1 $$ Hrest with ⟨Hmid0, Hsuf0⟩
+  isplit
+  · ipureintro
+    exact hlen
+  isplitl [Hm Hmid0]
+  · isplitl [Hm]
+    · iexact Hm
+    isplit
+    · ipureintro
+      exact ⟨hbound, hmidlen⟩
+    · rw [show a + (off : Int) = a + ((bs.take off).length : Int) by rw [htk]]
+      iexact Hmid0
+  isplitl [Hpre]
+  · iexact Hpre
+  · rw [show a + (off : Int) + ((CerbMem.sizeofCtype tds vty : Nat) : Int) =
+      a + ((bs.take off).length : Int) +
+        (((bs.drop off).take (CerbMem.sizeofCtype tds vty)).length : Int) by
+        rw [htk, hmidlen]]
+    iexact Hsuf0
+
+/-- UNCARVE: prefix bytes, a typed middle view and suffix bytes of one
+    region reassemble into whole-region ownership of the concatenation
+    (the metadata comes back from the view). -/
+theorem regionOwn_uncarve (tds : CerbTags.TagDefsMap) (id a : Int) (n off : Nat) (dq : DFrac)
+    (vty : ctype) (pre mid suf : List CerbMem.AbsByte)
+    (hpre : pre.length = off) (hlen : (pre ++ (mid ++ suf)).length = n) :
+    iprop(typedRegionView (GF := GF) tds id a n off dq dq vty mid ∗
+      bytesOwn a dq pre ∗
+      bytesOwn (a + (off : Int) + ((CerbMem.sizeofCtype tds vty : Nat) : Int)) dq suf) ⊢
+      regionOwn id a n dq (pre ++ (mid ++ suf)) := by
+  unfold regionOwn typedRegionView
+  iintro ⟨⟨Hm, %hp, Hmid⟩, Hpre, Hsuf⟩
+  obtain ⟨-, hmidlen⟩ := hp
+  isplitl [Hm]
+  · iexact Hm
+  isplitl [Hpre Hmid Hsuf]
+  · iapply (bytesOwn_append a dq _ _).2
+    isplitl [Hpre]
+    · iexact Hpre
+    rw [show a + ((pre.length : Nat) : Int) = a + (off : Int) by rw [hpre]]
+    iapply (bytesOwn_append _ dq _ _).2
+    isplitl [Hmid]
+    · iexact Hmid
+    · rw [show a + (off : Int) + ((mid.length : Nat) : Int) =
+        a + (off : Int) + ((CerbMem.sizeofCtype tds vty : Nat) : Int) by rw [hmidlen]]
+      iexact Hsuf
+  · ipureintro
+    exact hlen
+
 
 /-- THE READ-ONLY CELL: a live read-only typed object through its own
     pointer, at fraction `dq` — `pointsToCell` with the read-only flag

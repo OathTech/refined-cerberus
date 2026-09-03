@@ -32,12 +32,13 @@ namespace CapabilityManifest
 /-- THE MAPPING: fragment constructor → the rule theorem(s) covering it
     (kill/free arc K3: a constructor may be covered by several
     kind-specific rules — `Frag.kill` by the static dispose `wps_kill` AND
-    the dynamic `wps_free`; every listed rule is checked separately). An
-    empty list is a MISSING row. -/
+    the dynamic `wps_free`; K5: `Frag.load`/`Frag.store` by the object rule
+    AND the region rule `wps_load_region_at`/`wps_store_region_at`; every
+    listed rule is checked separately). An empty list is a MISSING row. -/
 def ruleFor : Name → List Name
   | `CerberusHeapLang.Frag.val_pure   => [`CerberusHeapLang.wps_ofVal]
-  | `CerberusHeapLang.Frag.store      => [`CerberusHeapLang.wps_store]
-  | `CerberusHeapLang.Frag.load       => [`CerberusHeapLang.wps_load_at]
+  | `CerberusHeapLang.Frag.store      => [`CerberusHeapLang.wps_store, `CerberusHeapLang.wps_store_region_at]
+  | `CerberusHeapLang.Frag.load       => [`CerberusHeapLang.wps_load_at, `CerberusHeapLang.wps_load_region_at]
   | `CerberusHeapLang.Frag.create     => [`CerberusHeapLang.wps_create]
   | `CerberusHeapLang.Frag.kill       => [`CerberusHeapLang.wps_kill, `CerberusHeapLang.wps_free]
   | `CerberusHeapLang.Frag.kill_op    => [`CerberusHeapLang.wps_kill_eval]

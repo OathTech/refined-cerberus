@@ -2318,6 +2318,161 @@ theorem wps_store_cell_at {Ψ : SpikeVal → EnvStack → IProp GF}
     rw [spliceBytes_length _ _ _ (by omega)]
     exact hlen
 
+/-! ## THE REGION ACCESS RULES at the statement stratum (kill/free arc K5)
+
+Typed load/store THROUGH A REGION POINTER: the `regionLoadAt_atomic`/
+`regionStoreAt_atomic` specifications lifted (the `wps_load_at`/
+`wps_store_at` twins over the typed region view), and the whole-region
+interior forms over `regionOwn` (the `wps_load_cell_at`/`wps_store_cell_at`
+twins: carve the typed subrange out of the whole region, run the typed
+rule, uncarve — the recomposition of a store IS `spliceBytes`). The
+operand forms are the pointer-generic `wps_load_eval`/`wps_store_eval`. -/
+
+/-- TYPED SUBRANGE LOAD THROUGH A REGION small axiom (any fractions,
+    UB-excluding): loading a typed region view delivers the fixed decode
+    of its byte image; the view rides through untouched. -/
+theorem wps_load_region_at {Ψ : SpikeVal → EnvStack → IProp GF}
+    (loc : CerbLocation.Loc) (ann : core_run_annotation)
+    (id a : Int) (n off : Nat) (vty : ctype)
+    (mo : memory_order) (dqm dqb : DFrac)
+    (bs : List CerbMem.AbsByte) (ρ : EnvStack) {mv : CerbMem.MemValue}
+    (hdec : ∀ lum fpm, CerbMem.reconstructValue M.tagDefs lum fpm (a + (off : Int))
+      vty bs = mv)
+    (htrap : loadTrapV vty mv = false) :
+    iprop(typedRegionView M.tagDefs (GF := GF) id a n off dqm dqb vty bs ∗
+      (∀ fp, typedRegionView M.tagDefs id a n off dqm dqb vty bs -∗
+        Ψ (SpikeVal.annot [DA_pos [] fp] ((valueFromMemValue mv).2)) ρ)) ⊢
+      wps M Ls Ψ (loadExpr loc ann vty (cellPtr id (a + (off : Int))) mo)
+        ρ := by
+  iintro ⟨Hv, HΨ⟩
+  iapply wps_of_atomic (regionLoadAt_atomic loc ann id a n off vty mo dqm dqb bs ρ hdec htrap)
+    rfl rfl
+  isplitl [Hv]
+  · iexact Hv
+  · iintro %w ⟨%fp, %hw, Hv'⟩
+    subst hw
+    iapply HΨ $$ Hv'
+
+/-- FULL-OWNERSHIP TYPED SUBRANGE STORE THROUGH A REGION small axiom
+    (UB-excluding): storing through a typed region view REPLACES the
+    view's byte image wholesale. The serialization premises are the
+    `StorableView` facts at the accessed type. -/
+theorem wps_store_region_at {Ψ : SpikeVal → EnvStack → IProp GF}
+    (loc : CerbLocation.Loc) (ann : core_run_annotation)
+    (id a : Int) (n off : Nat) (vty : ctype)
+    (cv : value) (mo : memory_order) (dqm : DFrac)
+    (bs : List CerbMem.AbsByte) (ρ : EnvStack) {mv : CerbMem.MemValue}
+    (hmv : memValueFromValue M.tagDefs (Ctype [] (unatomic_ vty)) cv = some mv)
+    (hst : StorableView M.tagDefs vty mv) :
+    iprop(typedRegionView M.tagDefs (GF := GF) id a n off dqm (.own 1) vty bs ∗
+      (∀ fp, typedRegionView M.tagDefs id a n off dqm (.own 1) vty
+          (CerbMem.memValueToBytes M.tagDefs [] mv).2 -∗
+        Ψ (SpikeVal.annot [DA_pos [] fp] Vunit) ρ)) ⊢
+      wps M Ls Ψ (storeExpr loc ann vty (cellPtr id (a + (off : Int))) cv mo)
+        ρ := by
+  iintro ⟨Hv, HΨ⟩
+  iapply wps_of_atomic (regionStoreAt_atomic loc ann id a n off vty cv mo dqm bs ρ hmv hst)
+    rfl rfl
+  isplitl [Hv]
+  · iexact Hv
+  · iintro %w ⟨%fp, %hw, Hv'⟩
+    subst hw
+    iapply HΨ $$ Hv'
+
+/-- Interior typed load THROUGH whole-region ownership (any accessed
+    type and offset; the region rides through untouched). Derived from
+    `wps_load_region_at` by `regionOwn_carve`/`regionOwn_uncarve`. -/
+theorem wps_load_regionOwn_at {Ψ : SpikeVal → EnvStack → IProp GF}
+    (loc : CerbLocation.Loc) (ann : core_run_annotation)
+    (id a : Int) (n off : Nat) (vty : ctype)
+    (mo : memory_order) (dq : DFrac)
+    (bs : List CerbMem.AbsByte) (ρ : EnvStack) {mv : CerbMem.MemValue}
+    (hbound : off + CerbMem.sizeofCtype M.tagDefs vty ≤ n)
+    (hdec : ∀ lum fpm, CerbMem.reconstructValue M.tagDefs lum fpm (a + (off : Int))
+      vty ((bs.drop off).take (CerbMem.sizeofCtype M.tagDefs vty)) = mv)
+    (htrap : loadTrapV vty mv = false) :
+    iprop(regionOwn (GF := GF) id a n dq bs ∗
+      (∀ fp, regionOwn id a n dq bs -∗
+        Ψ (SpikeVal.annot [DA_pos [] fp] ((valueFromMemValue mv).2)) ρ)) ⊢
+      wps M Ls Ψ (loadExpr loc ann vty (cellPtr id (a + (off : Int))) mo)
+        ρ := by
+  iintro ⟨Hr, HΨ⟩
+  icases (regionOwn_carve M.tagDefs id a n off dq vty bs hbound) $$ Hr
+    with ⟨%hlen, Hv, Hpre, Hsuf⟩
+  have htk : (bs.take off).length = off := by
+    simp [List.length_take]
+    omega
+  have hsplit : bs = bs.take off ++
+      ((bs.drop off).take (CerbMem.sizeofCtype M.tagDefs vty) ++
+        (bs.drop off).drop (CerbMem.sizeofCtype M.tagDefs vty)) := by
+    rw [List.take_append_drop, List.take_append_drop]
+  iapply wps_load_region_at loc ann id a n off vty mo dq dq _ ρ hdec htrap
+  isplitl [Hv]
+  · iexact Hv
+  iintro %fp Hv
+  iapply HΨ
+  have hEnt : regionOwn (GF := GF) id a n dq (bs.take off ++
+      ((bs.drop off).take (CerbMem.sizeofCtype M.tagDefs vty) ++
+        (bs.drop off).drop (CerbMem.sizeofCtype M.tagDefs vty))) ⊢
+      regionOwn id a n dq bs := by
+    rw [← hsplit]
+  iapply hEnt
+  iapply regionOwn_uncarve M.tagDefs id a n off dq vty _ _ _ htk (by rw [← hsplit]; exact hlen)
+  isplitl [Hv]
+  · iexact Hv
+  isplitl [Hpre]
+  · iexact Hpre
+  · iexact Hsuf
+
+/-- Interior typed store THROUGH whole-region ownership: the region's
+    image is SPLICED at the accessed subrange. Derived from
+    `wps_store_region_at` by `regionOwn_carve`/`regionOwn_uncarve`. No
+    decode-inertness premise: a region has no allocation type to be
+    inert at. -/
+theorem wps_store_regionOwn_at {Ψ : SpikeVal → EnvStack → IProp GF}
+    (loc : CerbLocation.Loc) (ann : core_run_annotation)
+    (id a : Int) (n off : Nat) (vty : ctype)
+    (cv : value) (mo : memory_order)
+    (bs : List CerbMem.AbsByte) (ρ : EnvStack) {mv : CerbMem.MemValue}
+    (hmv : memValueFromValue M.tagDefs (Ctype [] (unatomic_ vty)) cv = some mv)
+    (hbound : off + CerbMem.sizeofCtype M.tagDefs vty ≤ n)
+    (hst : StorableView M.tagDefs vty mv) :
+    iprop(regionOwn (GF := GF) id a n (.own 1) bs ∗
+      (∀ fp, regionOwn id a n (.own 1)
+          (spliceBytes off (CerbMem.memValueToBytes M.tagDefs [] mv).2 bs) -∗
+        Ψ (SpikeVal.annot [DA_pos [] fp] Vunit) ρ)) ⊢
+      wps M Ls Ψ (storeExpr loc ann vty (cellPtr id (a + (off : Int))) cv mo)
+        ρ := by
+  iintro ⟨Hr, HΨ⟩
+  icases (regionOwn_carve M.tagDefs id a n off (.own 1) vty bs hbound) $$ Hr
+    with ⟨%hlen, Hv, Hpre, Hsuf⟩
+  have htk : (bs.take off).length = off := by
+    simp [List.length_take]
+    omega
+  have hsplice : spliceBytes off (CerbMem.memValueToBytes M.tagDefs [] mv).2 bs =
+      bs.take off ++ ((CerbMem.memValueToBytes M.tagDefs [] mv).2 ++
+        (bs.drop off).drop (CerbMem.sizeofCtype M.tagDefs vty)) := by
+    unfold spliceBytes
+    rw [List.append_assoc, List.drop_drop, hst.len]
+  have hlen' : (bs.take off ++ ((CerbMem.memValueToBytes M.tagDefs [] mv).2 ++
+      (bs.drop off).drop (CerbMem.sizeofCtype M.tagDefs vty))).length = n := by
+    rw [List.length_append, List.length_append, htk, hst.len, List.length_drop,
+      List.length_drop, hlen]
+    omega
+  iapply wps_store_region_at loc ann id a n off vty cv mo (.own 1) _ ρ hmv hst
+  isplitl [Hv]
+  · iexact Hv
+  iintro %fp Hv
+  iapply HΨ
+  rw [hsplice]
+  iapply regionOwn_uncarve M.tagDefs id a n off (.own 1) vty _ _ _ htk hlen'
+  isplitl [Hv]
+  · iexact Hv
+  isplitl [Hpre]
+  · iexact Hpre
+  · iexact Hsuf
+
+
 /-! ## THE ALLOCATION RULE (alloc arc P1.4; RESTATED over the budget,
 kill/free arc K2.5)
 

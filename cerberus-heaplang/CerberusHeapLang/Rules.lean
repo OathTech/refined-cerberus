@@ -736,6 +736,227 @@ theorem storeAt_atomic [SpikeGS hlc GF] {M : MachineCtx}
       exact ⟨hbound, hst.len⟩
     · iexact Hb
 
+/-! ## THE REGION ACCESS RULES (kill/free arc K5)
+
+Typed load and store THROUGH A REGION POINTER — `alloc`ated storage
+read and written at any type at any in-bounds offset, which is what
+`malloc`'d memory is. Each is the object rule (`loadAt_atomic`/
+`storeAt_atomic`) with the region cell `regionCell a n true` in place of
+`objCell tds a aty true false` and the region's SIZE `n` in place of the
+allocation type's layout size, proved once through the generic live-cell
+seams `loadM_live`/`storeM_live` (Heap.lean, K1), which are stated at ANY
+metadata cell with an optional type. WHAT THE ENGINE CHECKS at an untyped
+allocation (CerbMem.lean, cited in `typedRegionView`'s section header):
+the dead list (load, :1645), the record's presence (:1648/:1719), bounds
+against the record's size (`isInBounds` :1475), writability (store, :1725
+— `allocateRegion` records `IsWritable`), and `isAtomicMemberAccess`,
+which is `false` at `alloc.ty = none` (:1619). NO effective-type check, NO
+alignment check: the accessed type enters only through its size (the
+bounds) and its decode/serialization (the value). -/
+
+/-- TYPED SUBRANGE LOAD THROUGH A REGION as an atomic step (any
+    fractions, UB-excluding): loading a typed region view delivers the
+    fixed decode of its byte image; the view rides through untouched.
+    `hdec` is the view's table-independent decode at the interior
+    address; `htrap` excludes the _Bool trap arm. Engine seam:
+    `loadM_live` at `regionCell a n true` (`alive := true`; bounds
+    against `n`). -/
+theorem regionLoadAt_atomic [SpikeGS hlc GF] {M : MachineCtx}
+    (loc : CerbLocation.Loc) (ann : core_run_annotation)
+    (id a : Int) (n off : Nat) (vty : ctype)
+    (mo : memory_order) (dqm dqb : DFrac)
+    (bs : List CerbMem.AbsByte) (ρ : EnvStack) {mv : CerbMem.MemValue}
+    (hdec : ∀ lum fpm, CerbMem.reconstructValue M.tagDefs lum fpm (a + (off : Int))
+      vty bs = mv)
+    (htrap : loadTrapV vty mv = false) :
+    AtomicStep M (loadExpr loc ann vty (cellPtr id (a + (off : Int))) mo) ρ 2
+      (typedRegionView M.tagDefs (GF := GF) id a n off dqm dqb vty bs)
+      (fun w => iprop(∃ fp,
+        ⌜w = SpikeVal.annot [DA_pos [] fp] ((valueFromMemValue mv).2)⌝ ∗
+        typedRegionView M.tagDefs id a n off dqm dqb vty bs)) := by
+  intro E₁ E₂ hE σ₁ ns obs nt
+  iintro ⟨Hv, Hσ⟩
+  icases (stateInterp_iff σ₁ ns obs nt).mp $$ Hσ
+    with ⟨%mm, %mb, %mk, %HG, Hmi, Hbi, Hki⟩
+  icases (typedRegionView_iff M.tagDefs id a n off dqm dqb vty bs).mp $$ Hv
+    with ⟨Hm, %Hpure, Hb⟩
+  obtain ⟨hbound, hlenbs⟩ := Hpure
+  ihave %Hgetm : ⌜Iris.Std.PartialMap.get? mm id = some (regionCell a n true)⌝
+      $$ [Hmi Hm]
+  · ihave >%h := metaHeap_valid $$ [$Hmi $Hm]
+    itrivial
+  ihave %Hread : ⌜CerbMem.readBytesFrom σ₁ (a + (off : Int)) bs.length = bs⌝
+      $$ [Hbi Hb]
+  · iapply bytesOwn_read HG (a + (off : Int)) dqb bs $$ [$Hbi $Hb]
+  have hrun : applyMemM (CerbMem.loadM M.tagDefs loc vty (cellPtr id (a + (off : Int)))) σ₁ =
+      some ((.FP .R (a + (off : Int)) (CerbMem.sizeofCtype M.tagDefs vty), mv), σ₁) :=
+    loadM_live M.tagDefs σ₁ id (regionCell a n true) off vty bs mv loc
+      (HG.metas id _ Hgetm) rfl hbound (hlenbs ▸ Hread)
+      (hdec σ₁.lastUsedUnionMembers σ₁.funptrmap) htrap
+  iapply fupd_mask_intro hE
+  iintro Hclose
+  isplitr
+  · ipureintro
+    exact ⟨[], ⟨_, _, _⟩, _, [], ⟨Step.load_canonical hrun, rfl, rfl⟩⟩
+  iintro %r %σ₂ %eₜ %Hstep
+  obtain ⟨hstep, hlbl, rfl⟩ := Hstep
+  obtain ⟨fp', mval', σ'', hmem', hout⟩ := hstep.load_inv
+  rw [hrun] at hmem'
+  obtain ⟨⟨rfl, rfl⟩, rfl⟩ :
+      (fp' = CerbMem.Footprint.FP .R (a + (off : Int))
+        (CerbMem.sizeofCtype M.tagDefs vty) ∧ mv = mval') ∧ σ₁ = σ'' := by
+    have h := Option.some.inj hmem'.symm
+    exact ⟨⟨congrArg (fun p => p.1.1) h,
+      (congrArg (fun p => p.1.2) h).symm⟩,
+      (congrArg Prod.snd h).symm⟩
+  obtain ⟨re, rρ, rM⟩ := r
+  simp only at hlbl
+  obtain rfl : M = rM := hlbl.symm
+  obtain ⟨hre, hrρ, hσ⟩ : re = Expr [] (Eannot
+        [DA_pos [] (CerbMem.Footprint.FP .R (a + (off : Int))
+          (CerbMem.sizeofCtype M.tagDefs vty))]
+        (Expr [] (Epure (Pexpr [] () (PEval (valueFromMemValue mv).2))))) ∧
+      rρ = ρ ∧ σ₂ = σ₁ := by
+    simpa [Prod.mk.injEq] using hout
+  subst hre
+  obtain rfl : ρ = rρ := hrρ.symm
+  obtain rfl : σ₁ = σ₂ := hσ.symm
+  imod Hclose with -
+  imodintro
+  isplitl [Hmi Hbi Hki]
+  · iapply (stateInterp_iff _ _ _ _).mpr
+    iexists mm, mb, mk
+    isplitr [Hmi Hbi Hki]
+    · ipureintro
+      exact HG
+    isplitl [Hmi]
+    · iexact Hmi
+    isplitl [Hbi]
+    · iexact Hbi
+    · iexact Hki
+  · iexists (SpikeVal.annot
+      [DA_pos [] (CerbMem.Footprint.FP .R (a + (off : Int))
+        (CerbMem.sizeofCtype M.tagDefs vty))] ((valueFromMemValue mv).2))
+    isplit
+    · ipureintro
+      exact ⟨rfl, rfl, Nat.le_refl 2⟩
+    iexists (CerbMem.Footprint.FP .R (a + (off : Int)) (CerbMem.sizeofCtype M.tagDefs vty))
+    isplit
+    · ipureintro; rfl
+    iapply (typedRegionView_iff M.tagDefs _ _ _ _ _ _ _ _).mpr
+    isplitl [Hm]
+    · iexact Hm
+    isplit
+    · ipureintro
+      exact ⟨hbound, hlenbs⟩
+    · iexact Hb
+
+/-- FULL-OWNERSHIP TYPED SUBRANGE STORE THROUGH A REGION as an atomic
+    step (UB-excluding): storing through a typed region view REPLACES the
+    view's byte image wholesale. Engine seam: `storeM_live` at
+    `regionCell a n true` (`readonly := false` — the region is writable);
+    `StorableView` supplies the type-compatibility and serialization
+    facts. -/
+theorem regionStoreAt_atomic [SpikeGS hlc GF] {M : MachineCtx}
+    (loc : CerbLocation.Loc) (ann : core_run_annotation)
+    (id a : Int) (n off : Nat) (vty : ctype)
+    (cv : value) (mo : memory_order) (dqm : DFrac)
+    (bs : List CerbMem.AbsByte) (ρ : EnvStack) {mv : CerbMem.MemValue}
+    (hmv : memValueFromValue M.tagDefs (Ctype [] (unatomic_ vty)) cv = some mv)
+    (hst : StorableView M.tagDefs vty mv) :
+    AtomicStep M (storeExpr loc ann vty (cellPtr id (a + (off : Int))) cv mo) ρ 2
+      (typedRegionView M.tagDefs (GF := GF) id a n off dqm (.own 1) vty bs)
+      (fun w => iprop(∃ fp, ⌜w = SpikeVal.annot [DA_pos [] fp] Vunit⌝ ∗
+        typedRegionView M.tagDefs id a n off dqm (.own 1) vty
+          (CerbMem.memValueToBytes M.tagDefs [] mv).2)) := by
+  intro E₁ E₂ hE σ₁ ns obs nt
+  iintro ⟨Hv, Hσ⟩
+  icases (stateInterp_iff σ₁ ns obs nt).mp $$ Hσ
+    with ⟨%mm, %mb, %mk, %HG, Hmi, Hbi, Hki⟩
+  icases (typedRegionView_iff M.tagDefs id a n off dqm (.own 1) vty bs).mp $$ Hv
+    with ⟨Hm, %Hpure, Hb⟩
+  obtain ⟨hbound, hlenbs⟩ := Hpure
+  ihave %Hgetm : ⌜Iris.Std.PartialMap.get? mm id = some (regionCell a n true)⌝
+      $$ [Hmi Hm]
+  · ihave >%h := metaHeap_valid $$ [$Hmi $Hm]
+    itrivial
+  ihave %Hcover : ⌜∀ (j : Nat), j < bs.length →
+      Iris.Std.PartialMap.get? mb ((a + (off : Int)) + (j : Int)) = bs[j]?⌝
+      $$ [Hbi Hb]
+  · iapply bytesOwn_get mb (a + (off : Int)) (.own 1) bs $$ [$Hbi $Hb]
+  have hrun : applyMemM (CerbMem.storeM M.tagDefs loc vty false
+        (cellPtr id (a + (off : Int))) mv) σ₁ =
+      some (.FP .W (a + (off : Int)) (CerbMem.sizeofCtype M.tagDefs vty),
+        CerbMem.writeBytesTo σ₁ (a + (off : Int))
+          (CerbMem.memValueToBytes M.tagDefs [] mv).2) :=
+    storeM_live M.tagDefs σ₁ id (regionCell a n true) off vty mv loc
+      (HG.metas id _ Hgetm) rfl rfl hbound hst.compat hst.fpm hst.bytes_fpm
+  have hlen' : (CerbMem.memValueToBytes M.tagDefs [] mv).2.length = bs.length := by
+    rw [hst.len, hlenbs]
+  iapply fupd_mask_intro hE
+  iintro Hclose
+  isplitr
+  · ipureintro
+    exact ⟨[], ⟨_, _, _⟩, _, [], ⟨Step.store_canonical hmv hrun, rfl, rfl⟩⟩
+  iintro %r %σ₂ %eₜ %Hstep
+  obtain ⟨hstep, hlbl, rfl⟩ := Hstep
+  obtain ⟨mv', fp', σ'', hmv', hmem', hout⟩ := hstep.store_inv
+  obtain rfl : mv = mv' := Option.some.inj (hmv.symm.trans hmv')
+  rw [hrun] at hmem'
+  obtain ⟨rfl, rfl⟩ : fp' = CerbMem.Footprint.FP .W (a + (off : Int))
+      (CerbMem.sizeofCtype M.tagDefs vty) ∧
+      σ'' = CerbMem.writeBytesTo σ₁ (a + (off : Int))
+        (CerbMem.memValueToBytes M.tagDefs [] mv).2 := by
+    have h := Option.some.inj hmem'.symm
+    exact ⟨congrArg Prod.fst h, congrArg Prod.snd h⟩
+  obtain ⟨re, rρ, rM⟩ := r
+  simp only at hlbl
+  obtain rfl : M = rM := hlbl.symm
+  obtain ⟨hre, hrρ, hσ⟩ : re = Expr [] (Eannot
+        [DA_pos [] (CerbMem.Footprint.FP .W (a + (off : Int))
+          (CerbMem.sizeofCtype M.tagDefs vty))]
+        (Expr [] (Epure (Pexpr [] () (PEval Vunit))))) ∧ rρ = ρ ∧
+      σ₂ = CerbMem.writeBytesTo σ₁ (a + (off : Int))
+        (CerbMem.memValueToBytes M.tagDefs [] mv).2 := by
+    simpa [Prod.mk.injEq] using hout
+  subst hre hσ
+  obtain rfl : ρ = rρ := hrρ.symm
+  imod Hclose with -
+  imod (bytesOwn_update mb (a + (off : Int)) bs
+    (CerbMem.memValueToBytes M.tagDefs [] mv).2 hlen') $$ [$Hbi $Hb] with ⟨Hbi, Hb⟩
+  imodintro
+  isplitl [Hmi Hbi Hki]
+  · iapply (stateInterp_iff _ _ _ _).mpr
+    iexists mm, (insertRange mb (a + (off : Int)) (CerbMem.memValueToBytes M.tagDefs [] mv).2), mk
+    isplitr [Hmi Hbi Hki]
+    · ipureintro
+      exact HG.storeRange (a + (off : Int)) (CerbMem.memValueToBytes M.tagDefs [] mv).2
+        (fun j hj => ⟨bs[j]'(by omega), by
+          rw [Hcover j (by omega)]
+          exact List.getElem?_eq_getElem _⟩)
+    isplitl [Hmi]
+    · iexact Hmi
+    isplitl [Hbi]
+    · iexact Hbi
+    · iexact Hki
+  · iexists (SpikeVal.annot
+      [DA_pos [] (CerbMem.Footprint.FP .W (a + (off : Int))
+        (CerbMem.sizeofCtype M.tagDefs vty))] Vunit)
+    isplit
+    · ipureintro
+      exact ⟨rfl, rfl, Nat.le_refl 2⟩
+    iexists (CerbMem.Footprint.FP .W (a + (off : Int)) (CerbMem.sizeofCtype M.tagDefs vty))
+    isplit
+    · ipureintro; rfl
+    iapply (typedRegionView_iff M.tagDefs _ _ _ _ _ _ _ _).mpr
+    isplitl [Hm]
+    · iexact Hm
+    isplit
+    · ipureintro
+      exact ⟨hbound, hst.len⟩
+    · iexact Hb
+
+
 /-- `create(align, ty)` — positive strong create, canonical value
     operands (what `Step.create` fires on). -/
 def createExpr (loc : CerbLocation.Loc) (ann : core_run_annotation)

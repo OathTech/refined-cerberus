@@ -16,28 +16,30 @@ consumed by no exhibit is a red row: the construct has a rule but no client.
 
 | Fragment constructor | Rule | Consumed by (exhibit modules) |
 |---|---|---|
-| `Frag.val_pure` | `wps_ofVal` | AllocExhibit, ArrayExhibit, CaseExhibit, DisposeExhibit, Exhibit, FibExhibit, ListRevExhibit, LoopExhibit, RegionLoopExhibit, StructExhibit, TreeRotExhibit, WseqExhibit |
+| `Frag.val_pure` | `wps_ofVal` | AllocExhibit, ArrayExhibit, CaseExhibit, DisposeExhibit, Exhibit, FibExhibit, ListRevExhibit, LoopExhibit, MallocListExhibit, RegionLoopExhibit, StructExhibit, TreeRotExhibit, WseqExhibit |
 | `Frag.store` | `wps_store` | Exhibit, LoopExhibit |
+| `Frag.store` | `wps_store_region_at` | MallocListExhibit |
 | `Frag.load` | `wps_load_at` | ArrayExhibit, DisposeExhibit, ListRevExhibit, StructExhibit, TreeRotExhibit |
+| `Frag.load` | `wps_load_region_at` | MallocListExhibit |
 | `Frag.create` | `wps_create` | AllocExhibit, StructExhibit |
 | `Frag.kill` | `wps_kill` | AllocExhibit, DisposeExhibit |
-| `Frag.kill` | `wps_free` | AllocExhibit, RegionLoopExhibit |
-| `Frag.kill_op` | `wps_kill_eval` | AllocExhibit, DisposeExhibit, RegionLoopExhibit |
-| `Frag.alloc` | `wps_alloc` | AllocExhibit, RegionLoopExhibit |
+| `Frag.kill` | `wps_free` | AllocExhibit, MallocListExhibit, RegionLoopExhibit |
+| `Frag.kill_op` | `wps_kill_eval` | AllocExhibit, DisposeExhibit, MallocListExhibit, RegionLoopExhibit |
+| `Frag.alloc` | `wps_alloc` | AllocExhibit, MallocListExhibit, RegionLoopExhibit |
 | `Frag.alloc_op` | `wps_alloc_eval` | AllocExhibit |
-| `Frag.sseq` | `wps_seq` | AllocExhibit, DisposeExhibit, Exhibit, ListRevExhibit, LoopExhibit, RegionLoopExhibit, StructExhibit, TreeRotExhibit |
-| `Frag.annot` | `wps_annot` | AllocExhibit, ArrayExhibit, DisposeExhibit, Exhibit, ListRevExhibit, LoopExhibit, RegionLoopExhibit, StructExhibit, TreeRotExhibit, WseqExhibit |
-| `Frag.save` | `wps_save` | ArrayExhibit, DisposeExhibit, FibExhibit, ListRevExhibit, LoopExhibit, RegionLoopExhibit |
-| `Frag.if_` | `wps_if_true` | ArrayExhibit, DisposeExhibit, FibExhibit, ListRevExhibit, LoopExhibit, RegionLoopExhibit |
-| `Frag.run` | `wps_run` | ArrayExhibit, DisposeExhibit, FibExhibit, ListRevExhibit, LoopExhibit, RegionLoopExhibit |
-| `Frag.sseq_spec` | `wps_seq_spec` | ArrayExhibit, DisposeExhibit, ListRevExhibit, TreeRotExhibit |
+| `Frag.sseq` | `wps_seq` | AllocExhibit, DisposeExhibit, Exhibit, ListRevExhibit, LoopExhibit, MallocListExhibit, RegionLoopExhibit, StructExhibit, TreeRotExhibit |
+| `Frag.annot` | `wps_annot` | AllocExhibit, ArrayExhibit, DisposeExhibit, Exhibit, ListRevExhibit, LoopExhibit, MallocListExhibit, RegionLoopExhibit, StructExhibit, TreeRotExhibit, WseqExhibit |
+| `Frag.save` | `wps_save` | ArrayExhibit, DisposeExhibit, FibExhibit, ListRevExhibit, LoopExhibit, MallocListExhibit, RegionLoopExhibit |
+| `Frag.if_` | `wps_if_true` | ArrayExhibit, DisposeExhibit, FibExhibit, ListRevExhibit, LoopExhibit, MallocListExhibit, RegionLoopExhibit |
+| `Frag.run` | `wps_run` | ArrayExhibit, DisposeExhibit, FibExhibit, ListRevExhibit, LoopExhibit, MallocListExhibit, RegionLoopExhibit |
+| `Frag.sseq_spec` | `wps_seq_spec` | ArrayExhibit, DisposeExhibit, ListRevExhibit, MallocListExhibit, TreeRotExhibit |
 | `Frag.pure_sym` | `wps_pure` | ArrayExhibit, FibExhibit, ListRevExhibit, TreeRotExhibit |
-| `Frag.load_op` | `wps_load_eval` | ArrayExhibit, DisposeExhibit, ListRevExhibit, TreeRotExhibit |
-| `Frag.sseq_sym` | `wps_seq_sym` | AllocExhibit, DisposeExhibit, ListRevExhibit, RegionLoopExhibit, StructExhibit, TreeRotExhibit |
-| `Frag.memop_vals` | `wps_memop_ptreq` | DisposeExhibit, ListRevExhibit |
-| `Frag.memop_op` | `wps_memop_eval` | DisposeExhibit, ListRevExhibit |
-| `Frag.store_op` | `wps_store_eval` | ListRevExhibit, ProdExhibit, StructExhibit, TreeRotExhibit |
+| `Frag.load_op` | `wps_load_eval` | ArrayExhibit, DisposeExhibit, ListRevExhibit, MallocListExhibit, TreeRotExhibit |
+| `Frag.sseq_sym` | `wps_seq_sym` | AllocExhibit, DisposeExhibit, ListRevExhibit, MallocListExhibit, RegionLoopExhibit, StructExhibit, TreeRotExhibit |
+| `Frag.memop_vals` | `wps_memop_ptreq` | DisposeExhibit, ListRevExhibit, MallocListExhibit |
+| `Frag.memop_op` | `wps_memop_eval` | DisposeExhibit, ListRevExhibit, MallocListExhibit |
+| `Frag.store_op` | `wps_store_eval` | ListRevExhibit, MallocListExhibit, ProdExhibit, StructExhibit, TreeRotExhibit |
 | `Frag.case_value` | `wps_case_value` | CaseExhibit |
 | `Frag.wseq` | `wps_wseq` | WseqExhibit |
 
-MANIFEST: 22 constructors, 23 rule rows, 0 red, 15 exhibit modules
+MANIFEST: 22 constructors, 25 rule rows, 0 red, 16 exhibit modules

@@ -2124,6 +2124,152 @@ theorem wpt_store_cell_at {Ψ : SpikeVal → EnvStack → IProp GF}
     rw [spliceBytes_length _ _ _ (by omega)]
     exact hlen
 
+/-! ## THE REGION ACCESS RULES at the total stratum (kill/free arc K5;
+corollaries of `regionLoadAt_atomic`/`regionStoreAt_atomic` through
+`wpt_of_atomic`, priced at 3 as the object `_at` rules; the whole-region
+forms by `regionOwn_carve`/`regionOwn_uncarve` as at `wps`) -/
+
+/-- TYPED SUBRANGE LOAD THROUGH A REGION (total form; cost 3 ≤ k). -/
+theorem wpt_load_region_at {Ψ : SpikeVal → EnvStack → IProp GF}
+    (loc : CerbLocation.Loc) (ann : core_run_annotation)
+    (id a : Int) (n off : Nat) (vty : ctype)
+    (mo : memory_order) (dqm dqb : DFrac)
+    (bs : List CerbMem.AbsByte) (ρ : EnvStack) {mv : CerbMem.MemValue}
+    {k : Nat} (hk : 3 ≤ k)
+    (hdec : ∀ lum fpm, CerbMem.reconstructValue M.tagDefs lum fpm (a + (off : Int))
+      vty bs = mv)
+    (htrap : loadTrapV vty mv = false) :
+    iprop(typedRegionView M.tagDefs (GF := GF) id a n off dqm dqb vty bs ∗
+      (∀ fp, typedRegionView M.tagDefs id a n off dqm dqb vty bs -∗
+        Ψ (SpikeVal.annot [DA_pos [] fp] ((valueFromMemValue mv).2)) ρ)) ⊢
+      wpt M Ls k Ψ (loadExpr loc ann vty (cellPtr id (a + (off : Int))) mo)
+        ρ := by
+  iintro ⟨Hv, HΨ⟩
+  iapply wpt_of_atomic (regionLoadAt_atomic loc ann id a n off vty mo dqm dqb bs ρ hdec htrap)
+    rfl rfl hk
+  isplitl [Hv]
+  · iexact Hv
+  · iintro %w ⟨%fp, %hw, Hv'⟩
+    subst hw
+    iapply HΨ $$ Hv'
+
+/-- FULL-OWNERSHIP TYPED SUBRANGE STORE THROUGH A REGION (total form;
+    cost 3 ≤ k). -/
+theorem wpt_store_region_at {Ψ : SpikeVal → EnvStack → IProp GF}
+    (loc : CerbLocation.Loc) (ann : core_run_annotation)
+    (id a : Int) (n off : Nat) (vty : ctype)
+    (cv : value) (mo : memory_order) (dqm : DFrac)
+    (bs : List CerbMem.AbsByte) (ρ : EnvStack) {mv : CerbMem.MemValue}
+    {k : Nat} (hk : 3 ≤ k)
+    (hmv : memValueFromValue M.tagDefs (Ctype [] (unatomic_ vty)) cv = some mv)
+    (hst : StorableView M.tagDefs vty mv) :
+    iprop(typedRegionView M.tagDefs (GF := GF) id a n off dqm (.own 1) vty bs ∗
+      (∀ fp, typedRegionView M.tagDefs id a n off dqm (.own 1) vty
+          (CerbMem.memValueToBytes M.tagDefs [] mv).2 -∗
+        Ψ (SpikeVal.annot [DA_pos [] fp] Vunit) ρ)) ⊢
+      wpt M Ls k Ψ (storeExpr loc ann vty (cellPtr id (a + (off : Int))) cv mo)
+        ρ := by
+  iintro ⟨Hv, HΨ⟩
+  iapply wpt_of_atomic (regionStoreAt_atomic loc ann id a n off vty cv mo dqm bs ρ hmv hst)
+    rfl rfl hk
+  isplitl [Hv]
+  · iexact Hv
+  · iintro %w ⟨%fp, %hw, Hv'⟩
+    subst hw
+    iapply HΨ $$ Hv'
+
+/-- Interior typed load THROUGH whole-region ownership (total form;
+    derived from `wpt_load_region_at` by carve/uncarve). -/
+theorem wpt_load_regionOwn_at {Ψ : SpikeVal → EnvStack → IProp GF}
+    (loc : CerbLocation.Loc) (ann : core_run_annotation)
+    (id a : Int) (n off : Nat) (vty : ctype)
+    (mo : memory_order) (dq : DFrac)
+    (bs : List CerbMem.AbsByte) (ρ : EnvStack) {mv : CerbMem.MemValue}
+    {k : Nat} (hk : 3 ≤ k)
+    (hbound : off + CerbMem.sizeofCtype M.tagDefs vty ≤ n)
+    (hdec : ∀ lum fpm, CerbMem.reconstructValue M.tagDefs lum fpm (a + (off : Int))
+      vty ((bs.drop off).take (CerbMem.sizeofCtype M.tagDefs vty)) = mv)
+    (htrap : loadTrapV vty mv = false) :
+    iprop(regionOwn (GF := GF) id a n dq bs ∗
+      (∀ fp, regionOwn id a n dq bs -∗
+        Ψ (SpikeVal.annot [DA_pos [] fp] ((valueFromMemValue mv).2)) ρ)) ⊢
+      wpt M Ls k Ψ (loadExpr loc ann vty (cellPtr id (a + (off : Int))) mo)
+        ρ := by
+  iintro ⟨Hr, HΨ⟩
+  icases (regionOwn_carve M.tagDefs id a n off dq vty bs hbound) $$ Hr
+    with ⟨%hlen, Hv, Hpre, Hsuf⟩
+  have htk : (bs.take off).length = off := by
+    simp [List.length_take]
+    omega
+  have hsplit : bs = bs.take off ++
+      ((bs.drop off).take (CerbMem.sizeofCtype M.tagDefs vty) ++
+        (bs.drop off).drop (CerbMem.sizeofCtype M.tagDefs vty)) := by
+    rw [List.take_append_drop, List.take_append_drop]
+  iapply wpt_load_region_at loc ann id a n off vty mo dq dq _ ρ hk hdec htrap
+  isplitl [Hv]
+  · iexact Hv
+  iintro %fp Hv
+  iapply HΨ
+  have hEnt : regionOwn (GF := GF) id a n dq (bs.take off ++
+      ((bs.drop off).take (CerbMem.sizeofCtype M.tagDefs vty) ++
+        (bs.drop off).drop (CerbMem.sizeofCtype M.tagDefs vty))) ⊢
+      regionOwn id a n dq bs := by
+    rw [← hsplit]
+  iapply hEnt
+  iapply regionOwn_uncarve M.tagDefs id a n off dq vty _ _ _ htk (by rw [← hsplit]; exact hlen)
+  isplitl [Hv]
+  · iexact Hv
+  isplitl [Hpre]
+  · iexact Hpre
+  · iexact Hsuf
+
+/-- Interior typed store THROUGH whole-region ownership (total form; the
+    image spliced at the accessed subrange). -/
+theorem wpt_store_regionOwn_at {Ψ : SpikeVal → EnvStack → IProp GF}
+    (loc : CerbLocation.Loc) (ann : core_run_annotation)
+    (id a : Int) (n off : Nat) (vty : ctype)
+    (cv : value) (mo : memory_order)
+    (bs : List CerbMem.AbsByte) (ρ : EnvStack) {mv : CerbMem.MemValue}
+    {k : Nat} (hk : 3 ≤ k)
+    (hmv : memValueFromValue M.tagDefs (Ctype [] (unatomic_ vty)) cv = some mv)
+    (hbound : off + CerbMem.sizeofCtype M.tagDefs vty ≤ n)
+    (hst : StorableView M.tagDefs vty mv) :
+    iprop(regionOwn (GF := GF) id a n (.own 1) bs ∗
+      (∀ fp, regionOwn id a n (.own 1)
+          (spliceBytes off (CerbMem.memValueToBytes M.tagDefs [] mv).2 bs) -∗
+        Ψ (SpikeVal.annot [DA_pos [] fp] Vunit) ρ)) ⊢
+      wpt M Ls k Ψ (storeExpr loc ann vty (cellPtr id (a + (off : Int))) cv mo)
+        ρ := by
+  iintro ⟨Hr, HΨ⟩
+  icases (regionOwn_carve M.tagDefs id a n off (.own 1) vty bs hbound) $$ Hr
+    with ⟨%hlen, Hv, Hpre, Hsuf⟩
+  have htk : (bs.take off).length = off := by
+    simp [List.length_take]
+    omega
+  have hsplice : spliceBytes off (CerbMem.memValueToBytes M.tagDefs [] mv).2 bs =
+      bs.take off ++ ((CerbMem.memValueToBytes M.tagDefs [] mv).2 ++
+        (bs.drop off).drop (CerbMem.sizeofCtype M.tagDefs vty)) := by
+    unfold spliceBytes
+    rw [List.append_assoc, List.drop_drop, hst.len]
+  have hlen' : (bs.take off ++ ((CerbMem.memValueToBytes M.tagDefs [] mv).2 ++
+      (bs.drop off).drop (CerbMem.sizeofCtype M.tagDefs vty))).length = n := by
+    rw [List.length_append, List.length_append, htk, hst.len, List.length_drop,
+      List.length_drop, hlen]
+    omega
+  iapply wpt_store_region_at loc ann id a n off vty cv mo (.own 1) _ ρ hk hmv hst
+  isplitl [Hv]
+  · iexact Hv
+  iintro %fp Hv
+  iapply HΨ
+  rw [hsplice]
+  iapply regionOwn_uncarve M.tagDefs id a n off (.own 1) vty _ _ _ htk hlen'
+  isplitl [Hv]
+  · iexact Hv
+  isplitl [Hpre]
+  · iexact Hpre
+  · iexact Hsuf
+
+
 /-- WHOLE-CELL STORE at the total stratum (the `wps_store` twin —
     Phase 5, the counter loop's total lane; named `wpt_store`
     before QA-1/Q10): the `off := 0` instance of the generic subrange

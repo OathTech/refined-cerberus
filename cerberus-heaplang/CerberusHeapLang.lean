@@ -32,4 +32,5 @@ import CerberusHeapLang.StructExhibit
 import CerberusHeapLang.AllocExhibit
 import CerberusHeapLang.DisposeExhibit
 import CerberusHeapLang.RegionLoopExhibit
+import CerberusHeapLang.MallocListExhibit
 import CerberusHeapLang.Audit

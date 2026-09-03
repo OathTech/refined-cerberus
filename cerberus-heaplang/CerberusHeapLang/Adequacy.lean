@@ -1630,6 +1630,41 @@ theorem cellOwn_readout (tds : CerbTags.TagDefsMap) {hlc : HasLC} {GF : BundledG
         stateInterp σ' ns κs nt ={⊤, ∅}=∗ ⌜CellCoh tds σ' i c⌝) :=
   stateInterp_readout fun _ _ _ _ hG => cellOwn_consequence hG tds i dq c
 
+/-- THE DEAD-CELL READOUT (kill/free arc K5; the K4 range audit's N-1):
+    persistent dead knowledge of a created object reads the engine's
+    kill effect off the final state — the id is in `deadAllocations` and
+    its record is erased (`killM`, CerbMem.lean:1576-1578). The public
+    face of `deadObj_dead` for single-allocation clients; a client
+    reading MANY dead ids off one state composes `deadObj_dead` itself
+    under `stateInterp_readout` (the consequence form). -/
+theorem deadObj_readout (tds : CerbTags.TagDefsMap) {hlc : HasLC} {GF : BundledGFunctors}
+    [SpikeGS hlc GF] (id a : Int) (ty : ctype) :
+    deadObj tds (GF := GF) id a ty ⊢
+      iprop(∀ (σ' : Mem) (ns : Nat) (κs : List Empty) (nt : Nat),
+        stateInterp σ' ns κs nt ={⊤, ∅}=∗
+          ⌜σ'.deadAllocations.contains id = true ∧ σ'.allocations.get? id = none⌝) :=
+  stateInterp_readout fun _ _ _ _ hG => by
+    iintro ⟨Hd, Hmi, -⟩
+    iapply deadObj_dead tds hG id a ty
+    isplitl [Hmi]
+    · iexact Hmi
+    · iexact Hd
+
+/-- THE DEAD-REGION READOUT (K5): the same for a freed region — the
+    public face of `deadRegion_dead`. -/
+theorem deadRegion_readout {hlc : HasLC} {GF : BundledGFunctors}
+    [SpikeGS hlc GF] (id a : Int) (n : Nat) :
+    deadRegion (GF := GF) id a n ⊢
+      iprop(∀ (σ' : Mem) (ns : Nat) (κs : List Empty) (nt : Nat),
+        stateInterp σ' ns κs nt ={⊤, ∅}=∗
+          ⌜σ'.deadAllocations.contains id = true ∧ σ'.allocations.get? id = none⌝) :=
+  stateInterp_readout fun _ _ _ _ hG => by
+    iintro ⟨Hd, Hmi, -⟩
+    iapply deadRegion_dead hG id a n
+    isplitl [Hmi]
+    · iexact Hmi
+    · iexact Hd
+
 /-- The cell-footprint readout: post-cells + frame-cells consume the
     final state interpretation into the pure semantic-triple
     conclusion. -/

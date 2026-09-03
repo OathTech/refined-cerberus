@@ -55,8 +55,9 @@ returned verbatim (`Sat σ' R`). PRODUCTION: `dispose_list_certified_production`
 self-contained file that BUILDS a two-node list with `create`s (the
 list-reverse production's prefix `lrProdPrefix`, verbatim) and then
 disposes it, is EXACTLY ONE Active execution delivering `Vunit` whose
-final memory has the two (distinct, engine-picked) node ids dead with
-their records erased.
+final memory has two DISTINCT allocation ids dead with their records
+erased (the proof witnesses them as the two created nodes; the statement
+itself names no node — the K4 range audit's M-2).
 
 WHAT IS AND IS NOT READ OFF (honest): the logic's resources speak for
 the nodes it owned — `deadObj` per node — so the readout is per-id
@@ -1372,8 +1373,8 @@ theorem lrProdPrefix_wpt {Ls : LabelSpecT GF} (bty : core_base_type)
   · iexact HF
 
 /-- The engine-facing postcondition of the production dispose: unit,
-    and the two (distinct, engine-picked) node ids dead with their
-    records erased. -/
+    and two distinct allocation ids dead with their records erased (the
+    proof's witnesses are the two nodes; the statement names none). -/
 def ψD : value → Mem → Prop := fun v σ' =>
   v = Vunit ∧ ∃ i₁ i₂ : Int, i₁ ≠ i₂ ∧ DeadAt σ' i₁ ∧ DeadAt σ' i₂
 
@@ -1580,9 +1581,11 @@ theorem dlProd_labeledAt (sup : Nat) (ra : core_run_annotation) (mo : memory_ord
     two-node list (two `create`s through the PUBLIC `wpt_create`, four
     field stores) and DISPOSES it (the dispose loop, every node through
     the PUBLIC `wpt_kill`) is EXACTLY ONE Active execution delivering the
-    unit value, and the final production memory has the two engine-picked
-    node ids — DISTINCT — in `deadAllocations` with their records erased
-    (`killM`'s effect, CerbMem.lean:1576-1578). Cold start, shipped
+    unit value, and the final production memory has two DISTINCT
+    allocation ids in `deadAllocations` with their records erased
+    (`killM`'s effect, CerbMem.lean:1576-1578) — the proof witnesses them
+    as the two created nodes; the statement itself names no node (the K4
+    range audit's M-2). Cold start, shipped
     registration, termination from the total judgment; the pipeline arrows
     are `wpt_driver_done_alloc` → `prod_run_eqJ`. -/
 theorem dispose_list_certified_production (sup : Nat) (ra : core_run_annotation)

@@ -87,6 +87,7 @@ import CerberusHeapLang.StructExhibit
 import CerberusHeapLang.AllocExhibit
 import CerberusHeapLang.DisposeExhibit
 import CerberusHeapLang.RegionLoopExhibit
+import CerberusHeapLang.MallocListExhibit
 import CerberusHeapLang.Examples.ReadinessSmoke
 import CerberusHeapLang.Examples.MirrorCoverage
 import CerberusHeapLang.Round
@@ -363,7 +364,31 @@ def trioExports : List Name := [
   ``CerberusHeapLang.rl_wps, ``CerberusHeapLang.rl_wpt,
   ``CerberusHeapLang.rl_blockSpecs, ``CerberusHeapLang.rl_blockSpecsT,
   ``CerberusHeapLang.region_loop_certified_total, ``CerberusHeapLang.rl_labeledAt,
-  ``CerberusHeapLang.region_loop_certified_production]
+  ``CerberusHeapLang.region_loop_certified_production,
+  -- kill/free arc K5 (2026-09-03): THE REGION ACCESS RULES — the typed
+  -- region view's laws (the untyped-view bridge, typed split/join, the
+  -- carve/uncarve of whole-region ownership), the two atomic specs
+  -- `regionLoadAt_atomic`/`regionStoreAt_atomic` (over `loadM_live`/
+  -- `storeM_live` at `regionCell`), their wps/wpt faces over the typed
+  -- view and over `regionOwn`; the public dead readouts (K4 audit N-1);
+  -- and THE MALLOC'D LINKED LIST exhibit (MallocListExhibit.lean): both
+  -- strata, the block specifications, the readout, the `driveU` total
+  -- equation (PROVISIONAL), the registration tie and the PRODUCTION
+  -- statement. (`typedRegionView_iff` is `.rfl`; measured trio, unpinned
+  -- as the other `_iff`s.)
+  ``CerberusHeapLang.typedRegionView_regionView, ``CerberusHeapLang.typedRegionView_split,
+  ``CerberusHeapLang.typedRegionView_join, ``CerberusHeapLang.regionOwn_carve,
+  ``CerberusHeapLang.regionOwn_uncarve,
+  ``CerberusHeapLang.regionLoadAt_atomic, ``CerberusHeapLang.regionStoreAt_atomic,
+  ``CerberusHeapLang.wps_load_region_at, ``CerberusHeapLang.wps_store_region_at,
+  ``CerberusHeapLang.wps_load_regionOwn_at, ``CerberusHeapLang.wps_store_regionOwn_at,
+  ``CerberusHeapLang.wpt_load_region_at, ``CerberusHeapLang.wpt_store_region_at,
+  ``CerberusHeapLang.wpt_load_regionOwn_at, ``CerberusHeapLang.wpt_store_regionOwn_at,
+  ``CerberusHeapLang.deadObj_readout, ``CerberusHeapLang.deadRegion_readout,
+  ``CerberusHeapLang.ml_wps, ``CerberusHeapLang.ml_wpt,
+  ``CerberusHeapLang.ml_blockSpecs, ``CerberusHeapLang.ml_blockSpecsT,
+  ``CerberusHeapLang.mlPost_readout, ``CerberusHeapLang.malloc_list_certified_total,
+  ``CerberusHeapLang.ml_labeledAt, ``CerberusHeapLang.malloc_list_certified_production]
 
 def sortedNames (ns : Array Name) : Array String :=
   (ns.map (·.toString)).qsort (· < ·)
