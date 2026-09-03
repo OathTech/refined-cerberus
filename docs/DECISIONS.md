@@ -1550,3 +1550,48 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   ALL GATES GREEN
   GATE-EXIT=0
   ```
+- **2026-09-03 [AGENT] C4 LANDED ON `calls-c1` (cac1ab4, five commits on main d05f724):
+  recursive fib on the shipped pipeline; the total DRIVER lane through
+  calls; the calls-arc docs rewrite.** Record:
+  `cerberus-heaplang/docs/2026-09-03_c4-notes.md`; post snapshot
+  `docs/2026-09-03_c4-signatures-post.txt` (pre = the C3 post). The ninth
+  production statement, `fib_rec_certified_production` (FibRecExhibit.lean):
+  over `runND ∘ drive ∘ initial_driver_state` on an N-procedure file
+  (`prodFileWith`), `hfuel : fibRounds n.toNat + 4 ≤ CerbFuel.driverFuel`,
+  result `ivVal (fibSpec n.toNat)`; `fibRounds` exact (design note's "≈9"
+  is 9; closed form `fibRounds n + 9 = 12·fib(n+1)`, derived, so n ≤ 33
+  fits the budget). The total driver lane: `wpt_driver_cps` (CPS budget
+  induction over the shipped driver loop) + `DriverDoneCtl`; the
+  `exec_loc`/`current_loc` tie closed with measured engine cites (§5).
+  Fragment change, forced by the fib shape: `BareHead.call` (a plain
+  binder binds a call's result; `BareHead.no_call` removed, fail-closed,
+  constructor set unchanged). Census (derived): ADDED 123, REMOVED 3
+  (none pinned), CHANGED 3 (recursors of the extended inductive); all
+  eight pre-C4 production statements textually unchanged. Pins 344 → 372.
+  Audit H-2/H-4 done (EnvLaws β-generic `symAdd` laws; manifest wording;
+  README license line). [AGENT] decision points, recorded §9: (a) the
+  PROVISIONAL `driveU` total lane NOT restated through calls — it is
+  deleted by the next ruled slice (fuel-lane restatement); (b) the
+  single-procedure driver lane left as is, the general lane added beside
+  it (restating = migrating seven proofs for zero export change); (c) H-3
+  parked with a measured footprint (56 projection sites incl. a pinned
+  statement). Orchestrator FULL gate at cac1ab4 (main's runner, 64G cap),
+  verbatim verdict lines (the 66 pre-C3 linter warnings unchanged):
+  ```
+  == gate 1: banned proof-method grep (native_decide / bv_decide / ofReduce*) ==
+  ok: no banned proof-method references
+  == gate 2: capped build, cerberus-heaplang (elaborates its axiom audit) ==
+  CerberusHeapLang export pins: 372 trio-exact
+  CerberusHeapLang axiom sweep: every theorem bounded by the trio (3456 swept, internal details included — count informational, environment-dependent)
+  CerberusHeapLang banned-axiom sweep: sorryAx/ofReduceBool/ofReduceNat absent from all cones (5256 constants of every kind swept, internal details included — count informational, environment-dependent)
+  Build completed successfully (456 jobs).
+  ok: cerberus-heaplang build green
+  == speedbump: capability manifest (regenerate; red on a red row or drift) ==
+  ok: capability manifest regenerated, no drift
+  == speedbump: import direction (semantics → heap → rules → adequacy → clients) ==
+  ok: import direction — no core module imports an exhibit/example/production module
+  ALL GATES GREEN
+  GATE-EXIT=0
+  ```
+  Range audit d05f724..HEAD dispatched next on a fixed detached copy;
+  merge ask follows the audit — no merge without an explicit yes to it.
