@@ -891,3 +891,13 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   derisking package); (2) the value layer (GAP 1 symbolic integer
   codec round trip; GAP 2 the pointer round trip promoted out of the
   exhibit) lives in the demo core, queued in Lane A after K1.
+- **2026-09-03 [USER] AUDITS ARE NOT SKIPPED; EVERY MERGE IS AUDITED OVER THE
+  RANGE SINCE THE LAST AUDIT** (verbatim): "I think we should not skip the
+  audit, we've repeatedly seen failed audits on this work. We should run
+  an audit on all the changes since the *last* audit". Supersedes the
+  orchestrator's recurring "propose waiving" habit: the pre-merge ask
+  still names scope, but the default is an independent, dependency-
+  tracing audit of `git diff <last-audited head>..<merge candidate>`,
+  by a fresh reviewer, before any fast-forward. First application: the
+  audit of b34998d..c2c4e4d (AR-4, the shipped round, mirror
+  completeness, fragment closure) before `fragment-closure` merges.
