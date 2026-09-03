@@ -125,8 +125,11 @@ forms, `dispose_list_certified_total` (the `driveU` equation, PROVISIONAL:
 every node id in `deadAllocations` with its record erased, the frame
 returned verbatim) and `dispose_list_certified_production` (the shipped
 pipeline on the two-node build-and-dispose file: EXACTLY ONE Active
-execution delivering `Vunit`, the two engine-picked ids distinct, dead and
-erased) — the build prefix restated generically in its continuation
+execution delivering `Vunit`, two DISTINCT allocation ids dead and
+erased — the proof witnesses them as the two created nodes; the statement
+names no node [erratum per the K4 range audit's M-2, applied at K5; the
+original sentence read "the two engine-picked ids"]) — the build prefix
+restated generically in its continuation
 (`lrProdPrefix_wpt`). RegionLoopExhibit.lean: `n` regions from one linear
 budget — `rl_wps`/`rl_wpt` (`{allocBudget (n.toNat · regionCost al sz)}
 rl(n) {emp}`, the budget as the LOOP INVARIANT split per iteration, total
@@ -206,17 +209,23 @@ erratum in the K3 record).
 - **The residuals**: `hbsz` inside `Frag.case_value` (carried, provable
   by a fuel-indexed induction over `subst_sym_expr`); `eval_uncovered`
   and `run_surplus` (`OpenRound`; movers named in ARCHITECTURE §7).
-- **Region access rules (the K4 finding)**: `regionView`-shaped
-  `storeAt_atomic`/`loadAt_atomic` twins over `loadM_live`/`storeM_live`,
-  their `wps`/`wpt` faces, the manifest rows; then the malloc'd LINKED
-  list exhibit the charter asked for.
+- **Region access rules (the K4 finding) — CLOSED at K5 (2026-09-03,
+  record `docs/2026-09-03_k5-notes.md`)**: `regionLoadAt_atomic`/
+  `regionStoreAt_atomic` over the typed region view `typedRegionView`,
+  through `loadM_live`/`storeM_live` at `regionCell`; faces at both
+  strata (typed view and whole-region forms); manifest rows for
+  `Frag.load`/`Frag.store`; THE MALLOC'D LINKED LIST exhibit
+  (MallocListExhibit.lean: `ml_wps`/`ml_wpt`, `malloc_list_certified_total`
+  PROVISIONAL, `malloc_list_certified_production`). Pins 269 → 294.
 - **The cursor heap as a device**: since K2.5 no client owns the
   allocator cursor (`cursorOwn`'s exclusive fragment lives inside
   `budgetInterp`), so the cursor ghost heap (`cursorGS`/`cursorInterp`)
   is a proof device that could be folded into the budget interpretation
   as a plain existential — an internals simplification, trust surface
   unchanged.
-- **API hygiene**: public `deadObj_readout`/`deadRegion_readout` (the K4
-  exhibits derive them locally through `stateInterp_readout`).
+- **API hygiene — DONE at K5**: public `deadObj_readout`/`deadRegion_readout`
+  (Adequacy.lean; the K4 audit's N-1), with `deadObj_dead`/`deadRegion_dead`
+  reclassified in API.lean as the public consequence faces (a list of dead
+  ids is read off one state through them under `stateInterp_readout`).
 - **Upstream**: the `dynamicAddrs` under-reporting of UB179a (`9f0c20b`,
   the tray note) — an operator network window.

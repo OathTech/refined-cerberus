@@ -184,12 +184,13 @@ upstream or separately bounded before any concurrency or whole-engine
 claim is made on this semantics; it is reported to the cerberus-lean
 team in `../docs/2026-09-02_request-cerberus-lean-fuel-exhaustion-outcome.md`.
 
-THE ROOT-OF-TRUST LANE (total): the six closed shipped-driver
+THE ROOT-OF-TRUST LANE (total): the seven closed shipped-driver
 statements — `exhibitA_prod` (ProdExhibit.lean),
 `fib_certified_production`, `counter_loop_certified_production`,
 `list_reverse_certified_production` (ProdLoopExhibit.lean),
 `dispose_list_certified_production` (DisposeExhibit.lean),
-`region_loop_certified_production` (RegionLoopExhibit.lean). Their
+`region_loop_certified_production` (RegionLoopExhibit.lean),
+`malloc_list_certified_production` (MallocListExhibit.lean). Their
 execution function is the shipped composite of §1, applied to the
 authored program wrapped as a synthetic one-procedure file by
 `prodFile` (ProdEntry.lean); their conclusions are pure readout
@@ -201,15 +202,22 @@ in-budget bound is an explicit hypothesis: `fib_certified_production`'s
 lemDefaultFuel`, `region_loop_certified_production`'s `hfuel : 7 *
 n.toNat + 5 ≤ lemDefaultFuel` together with its budget-fits-the-cold-
 start premise `hB : n.toNat * regionCost al sz ≤ headroom
-prodMem₀.lastAddress`). "Closed shipped-driver statement" means exactly these
-six; the headline claim of this package rests on them. They are
+prodMem₀.lastAddress` — the package's cost function at the package's
+cold-start cursor literal, the one root-of-trust statement with package
+definitions beyond the program and `prodFile` in its text (the K4 range
+audit's M-1); and `malloc_list_certified_production`'s `hfuel : 25 *
+n.toNat + 9 ≤ lemDefaultFuel` with its budget premise in ENGINE
+vocabulary, `hB : n.toNat * (15 + max al.toNat 1) ≤ 281474976710647`,
+bridged to the package's `regionCost`/`headroom` inside the proof by
+`ml_budget_bridge`). "Closed shipped-driver statement" means exactly these
+seven; the headline claim of this package rests on them. They are
 reached through `wpt_driver_done`/`wpt_driver_done_alloc`
 (ProdLoop.lean) and `prod_run_eqJ` (ProdEntry.lean), which is generic
 collapse machinery, not a closed statement: its premise `hdd` is the
 package-defined delivery fact `DriverDoneAt` (ProdLoop.lean) that the
 total judgment supplies, its premise `hQe` is the package-defined label
 tie `LabeledAt`, and it carries the in-budget bound `k + 2 ≤
-lemDefaultFuel` on the certified step count. The six statements
+lemDefaultFuel` on the certified step count. The seven statements
 discharge the delivery and label premises (and the bound, by
 computation, where the step count is fixed) and are what remains.
 
@@ -239,7 +247,7 @@ status at the close of the kill/free arc (2026-09-03):
 
 - **Goal 1 — the shipped-driver generic adequacy theorem: OPEN, pending
   the upstream restatement.** Today `MemTripleU`, the projection
-  theorems and `wpt_engine_boundU` are about `driveU`, and only the six
+  theorems and `wpt_engine_boundU` are about `driveU`, and only the seven
   closed production statements reach `CerbND.runND (drive …)
   (initial_driver_state …).1`. Closes when a generic theorem takes an
   arbitrary proved public triple to a statement over that shipped
@@ -310,18 +318,28 @@ status at the close of the kill/free arc (2026-09-03):
 
 THE OTHER OPEN ITEMS:
 
-- **Loads and stores through a REGION pointer have no rule (kill/free
-  arc K4's finding).** The access rules are stated over the object
-  bundles; `regionOwn`/`regionView` (K1) have `alloc` and `free` (K3)
-  but no load/store. The memM seams `loadM_live`/`storeM_live` are
-  stated at any metadata cell, so this is a rule-addition follow-up
-  (atomic specs over `regionView`, faces at both judgments, the manifest
-  rows) — not a coupling change; a `regionOwn ↔ pointsToCell` coercion
-  is unsupported by design (`MetaCoh` pins the region's `ty := none`,
-  `dynamic := true`). Until it lands, the malloc'd LINKED list — the
-  arc's originally chartered second exhibit — is outside the logic
-  (README "Scope, exactly" (iv)); the second exhibit shipped is the
-  region loop (RegionLoopExhibit.lean).
+- **Loads and stores through a REGION pointer — CLOSED at K5 (2026-09-03;
+  K4's finding).** `regionLoadAt_atomic`/`regionStoreAt_atomic`
+  (Rules.lean) over the TYPED REGION VIEW `typedRegionView` (Heap.lean:
+  `pointsToView` with `regionCell a n true` for the object cell and the
+  region's size for the layout size; laws `typedRegionView_regionView`,
+  `typedRegionView_split`/`_join`, `regionOwn_carve`/`_uncarve`),
+  proved once through the seams `loadM_live`/`storeM_live` at the region
+  cell — no coupling change, as predicted; faces `wps_load_region_at`/
+  `wps_store_region_at`, the whole-region `wps_load_regionOwn_at`/
+  `wps_store_regionOwn_at`, total twins; manifest rows `Frag.load`/
+  `Frag.store` → the region rules (22 constructors, 25 rule rows, 0 red,
+  16 exhibit modules). What the engine checks at an untyped allocation
+  is type-blind — the dead list, the record, bounds against the record's
+  size, writability, and `isAtomicMemberAccess = false` at `alloc.ty =
+  none` (CerbMem.lean:1619); no effective-type or alignment check — so
+  the rules hold at any type at any in-bounds offset. THE MALLOC'D
+  LINKED LIST (MallocListExhibit.lean) is the chartered exhibit:
+  `ml_wps`/`ml_wpt` (one label, two phases: `n` region nodes allocated
+  from the split budget, written and linked through the region rules,
+  then walked and freed), `malloc_list_certified_total` (PROVISIONAL,
+  `driveU`) and `malloc_list_certified_production` (the seventh
+  root-of-trust export). Record: `docs/2026-09-03_k5-notes.md`.
 - **The kill/free arc K0–K4 — CLOSED (2026-09-03).** Record:
   `docs/2026-09-03_kill-free-arc-record.md` (one paragraph per slice,
   commits, audit verdicts, the corrections to the design note, what
@@ -344,12 +362,11 @@ THE OTHER OPEN ITEMS:
   (DisposeExhibit.lean) and `rl_wps`/`rl_wpt`/
   `region_loop_certified_total`/`region_loop_certified_production`
   (RegionLoopExhibit.lean), every advertised kill/free/alloc law with an
-  exhibit consumer (the manifest: 22 constructors, 23 rule rows, 0 red,
-  15 exhibit modules). Follow-ups named in the record: the region access
-  rules (above); the cursor ghost heap as a proof device (no client
-  owns the cursor since K2.5 — fold it into the budget interpretation);
-  `deadObj`/`deadRegion` engine readouts promoted to public
-  `*_readout` lemmas (the K4 exhibits derive them locally through the
-  sanctioned `stateInterp_readout`).
+  exhibit consumer; K5 THE REGION ACCESS RULES and the malloc'd linked
+  list (above; the manifest now 22 constructors, 25 rule rows, 0 red, 16
+  exhibit modules), plus the public `deadObj_readout`/`deadRegion_readout`
+  (the K4 audit's N-1). Follow-up still named in the record: the cursor
+  ghost heap as a proof device (no client owns the cursor since K2.5 —
+  fold it into the budget interpretation).
 - The deferred parametric semantics interfaces: the rules are proved
   directly against `Step` and the memory state (walkthrough §7).

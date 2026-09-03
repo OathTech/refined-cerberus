@@ -55,9 +55,11 @@ derivation traverses one; K1 audit N-2.) The per-construct authority is the
 inductive `Frag` (Soundness.lean), the premise of every adequacy
 theorem; the generated [capability manifest](docs/CAPABILITY_MANIFEST.md)
 lists one row per (`Frag` constructor, covering rule) pair with the
-exhibit modules whose proofs consume that rule (22 constructors, 23 rule
+exhibit modules whose proofs consume that rule (22 constructors, 25 rule
 rows: `Frag.kill` is covered by the static dispose `wps_kill` AND the
-dynamic `wps_free`, one row each).
+dynamic `wps_free`; `Frag.load`/`Frag.store` by the object rule AND the
+region rule `wps_load_region_at`/`wps_store_region_at` (kill/free arc K5);
+one row each).
 
 **Pure operands are in the covered grammar and carry their own static
 fuel bound.** The engine's pure-expression evaluator is fuelled at the
@@ -134,22 +136,24 @@ size satisfies it, `regionCost_pos`; so does any non-positive size at
 out-of-memory kill), never assumed. (iii) `free(NULL)` — the engine's dynamic no-op
 (CerbMem.lean:1562): in `Frag.kill` and mirrored by `Step.kill`, no rule
 (nothing is consumed or produced; a client has no reason to write it).
-(iv) A `load` or `store` THROUGH A REGION POINTER (an `alloc`ated
-allocation; kill/free arc K4's finding). In the fragment (`Frag.load`/
-`Frag.store` and their operand forms are stated at any pointer),
-mirrored (`Step.load`/`Step.store`), classified (`complete_load`/
-`complete_store`), and covered by NO rule: every access rule —
-`store_atomic`/`load_atomic`, `storeAt_atomic`/`loadAt_atomic` and their
-`wps`/`wpt` faces — is stated over the OBJECT bundles (`pointsToCell`,
-`cellOwn`, `pointsToView`: metadata `ty := some ty`, `dynamic :=
-false`), and a coercion `regionOwn ↔ pointsToCell` is unsupported by the
-coupling BY DESIGN (`MetaCoh` pins a region's `ty := none` and `dynamic
-:= true` to the engine's own record). The memM seams `loadM_live`/
-`storeM_live` (Heap.lean) are stated at ANY metadata cell, so region
-access rules are a rule-addition follow-up, not a coupling change; until
-they land, a malloc'd LINKED list (regions linked by stores through
-region views) is outside the logic, and K4's second exhibit is the
-region LOOP (`n` `alloc`/`free` pairs from one budget) instead.
+(iv) — formerly K4's finding, a `load` or `store` THROUGH A REGION
+POINTER — is CLOSED at K5 (kill/free arc): `regionLoadAt_atomic`/
+`regionStoreAt_atomic` (Rules.lean) are typed load/store at any offset
+of a live region over the TYPED REGION VIEW `typedRegionView` (Heap.lean
+— `pointsToView` with the region cell for the object cell and the
+region's size for the layout size), proved once through the generic
+live-cell seams `loadM_live`/`storeM_live` at `regionCell a n true`;
+faces `wps_load_region_at`/`wps_store_region_at` and, over whole-region
+ownership `regionOwn`, `wps_load_regionOwn_at`/`wps_store_regionOwn_at`
+(+ total twins). What the ENGINE checks at an untyped allocation
+(CerbMem.lean): the dead list (load, :1645), the record's presence
+(:1648/:1719), `isInBounds` against the record's SIZE (:1475),
+writability (store, :1725) and `isAtomicMemberAccess`, which is `false`
+at `alloc.ty = none` (:1619) — NO effective-type check, NO alignment
+check: `malloc`'d memory is read and written at any type at any
+in-bounds offset, and the rules carry exactly that (the accessed type
+enters through its size and its decode/serialization). The chartered
+MALLOC'D LINKED LIST is the exhibit (MallocListExhibit.lean).
 
 **Deliberately not here.** Procedures (no call
 rule, no return; every program is one `main` body with registered
@@ -180,19 +184,30 @@ statements — `exhibitA_prod` (ProdExhibit.lean),
 `fib_certified_production`, `counter_loop_certified_production`,
 `list_reverse_certified_production` (ProdLoopExhibit.lean),
 `dispose_list_certified_production` (DisposeExhibit.lean) and
-`region_loop_certified_production` (RegionLoopExhibit.lean). Their
+`region_loop_certified_production` (RegionLoopExhibit.lean) and
+`malloc_list_certified_production` (MallocListExhibit.lean). Their
 execution function is the shipped `CerbND.runND (drive fmapEmpty false
 file args) (initial_driver_state sup file fs).1`, the composite the
 cerberus-lean executable runs, applied to the authored program wrapped
 by `prodFile` (the synthetic one-procedure file); no package-defined
-driver appears in their statements, and they carry no termination
-hypothesis (only the explicit in-budget bounds `hfuel` where the step
-count depends on an input). These six are THE root-of-trust exports of this package —
-the closed shipped-driver statements. They are reached through
-`prod_run_eqJ` (ProdEntry.lean), which is generic collapse machinery
-rather than a closed statement: its delivery premise `DriverDoneAt`
-(ProdLoop.lean) and its label tie `LabeledAt` are package-defined, and
-the six statements discharge them.
+driver, discharge or scheduler appears in their statements, and they
+carry no termination hypothesis — only the explicit in-budget bounds
+`hfuel` where the step count depends on an input, and, where the
+program allocates from a size-dependent budget, the BUDGET side
+condition that the budget fits the cold-start memory:
+`region_loop_certified_production`'s `hB : n.toNat * regionCost al sz ≤
+headroom prodMem₀.lastAddress` (in the package's pure vocabulary — its
+cost function at its cold-start cursor literal; the K4 range audit's
+M-1) and `malloc_list_certified_production`'s `hB : n.toNat * (15 + max
+al.toNat 1) ≤ 281474976710647` (the same fact in ENGINE vocabulary: per
+node `16 + max(al, 1) − 1` bytes of cursor descent, `281474976710647`
+the cold-start cursor's headroom; bridge `ml_budget_bridge`). These
+seven are THE root-of-trust exports of this package — the closed
+shipped-driver statements. They are reached through `prod_run_eqJ`
+(ProdEntry.lean), which is generic collapse machinery rather than a
+closed statement: its delivery premise `DriverDoneAt` (ProdLoop.lean)
+and its label tie `LabeledAt` are package-defined, and the seven
+statements discharge them.
 
 **PROVISIONAL.** Every export stated over `driveU` rather than the
 shipped driver — `MemTripleU`, `MemTripleU_alloc`, `SemTripleU`,
@@ -316,13 +331,15 @@ statement carries a fuel hypothesis.
 | `alloc_create_kill_wps`, `kill_launch_smoke` (AllocExhibit.lean; kill/free arc K2) | allocate then DISPOSE: `lets p = create(al, int) in kill(static int, p)` through the public `wps_create`/`wps_kill_eval`/`wps_kill` delivers the unit value, the persistent dead cell `deadObj` of some id/base and the spent capacity; from the cold-start memory the same program driven through `wpt_engine_boundU_alloc` delivers `Vunit` at drive length exactly 5 with SOME id in `σ'.deadAllocations` and its record erased — `killM`'s effect on the tables, read off `deadObj_dead` | `driveU spikeCtx` — PROVISIONAL | `_wps`: `{hlc GF} [SpikeGS hlc GF] {M Ls} hex al pref ev0 evs hf`; `_launch_smoke`: `pref aids` |
 | `dl_wps`, `dl_wps_emp`, `dl_wpt`, `dl_wps_frame`, `dl_wpt_frame`, `dispose_list_certified_total` (DisposeExhibit.lean; kill/free arc K4) | DISPOSE A LIST — the classical `{list p} dispose(p) {emp}`: the authored loop walks a chain of CREATED nodes (ListRevExhibit's `isList`) and `kill(static node, ·)`s each through the public `wps_kill`/`wpt_kill` at the node cell; `dl_wps`/`dl_wpt` deliver unit and `deadNodes ns` (every node's persistent dead cell), `dl_wps_emp` is the textbook post, the total budget is the DERIVED `12 * ns.length + 6`; the engine equation: from the seeded chain next to an arbitrary frame `R`, `driveU … (12 * ns.length + 6) … = .done Vunit σ'`, every node id in `σ'.deadAllocations` with its record erased, `Sat σ' R` | `_wps`/`_wpt`/`_frame`: Iris (`{hlc GF} [SpikeGS hlc GF] loc ann ra mo cbty bbty nbty ubty ns p rs hQ sbty head`, `_frame` adds `RF`); `_total`: `driveU (procCtx …)` — PROVISIONAL | `_total`: `loc ann ra mo cbty bbty nbty ubty sbty`, `ns head m₀`, `hseed : SeedChain m₀ head ns`, `R`, `hR : m₀ ##ₘ R`, `σ₀`, `hcoh : Sat fmapEmpty σ₀ (m₀ ∪ R)`, `aids` |
 | `rl_wps`, `rl_wpt`, `region_loop_certified_total` (RegionLoopExhibit.lean; kill/free arc K4) | N REGIONS FROM ONE LINEAR BUDGET: `save rl(i := n) in if i > 0 then lets p = alloc(al, sz) in lets _ = free(p) in run rl(i − 1) else unit` — the budget `allocBudget (n.toNat * regionCost al sz)` is the LOOP INVARIANT, split per iteration by `allocBudget_split`, spent by the public `wps_alloc`/`wpt_alloc`, each region returned by `wps_free_emp`/`wpt_free_emp`; post `emp`; total budget the DERIVED `7 * n.toNat + 3`; the engine equation: from any memory launching the empty footprint with the budget (`LaunchCoh … ∅ (n.toNat * regionCost al sz)`), `driveU … (7 * n.toNat + 3) … = .done Vunit σ'` — no out-of-memory kill because the budget fits. (The malloc'd LINKED list is blocked on the region access rules — "Scope, exactly" (iv).) | `_wps`/`_wpt`: Iris (`{hlc GF} [SpikeGS hlc GF] loc ann ra al sz pref ibty pbty ubty hcost p rs hQ sbty n`, `_wpt` adds `hn : 0 ≤ n`); `_total`: `driveU (procCtx …)` — PROVISIONAL | `_total`: `loc ann ra al sz pref sbty ibty pbty ubty`, `hcost : 0 < regionCost al sz`, `n`, `hn : 0 ≤ n`, `σ₀`, `hl : LaunchCoh fmapEmpty σ₀ ∅ (n.toNat * regionCost al sz)`, `aids` |
+| `ml_wps`, `ml_wpt`, `malloc_list_certified_total` (MallocListExhibit.lean; kill/free arc K5) | THE MALLOC'D LINKED LIST: `save ml(i := n, p := NULL) in if i > 0 then lets q = alloc(al, 16) in lets _ = store(long, q, i) in lets _ = store(node*, array_shift(q, long, 1), p) in run ml(i − 1, q) else lets b = memop(PtrEq, [p, NULL]) in if b then unit else lets Specified(nx) = load(node*, array_shift(p, long, 1)) in lets _ = free(p) in run ml(0, nx)` — ONE label, two phases: `i > 0` allocates a 16-byte REGION node from the split budget, writes the counter (offset 0, `long`) and the link (offset 8, `node*`) THROUGH THE REGION (`wps_store_regionOwn_at`, K5) and conses it onto `isRegionList`; `i = 0` walks the list reading each next field through the region (`wps_load_regionOwn_at`) and `free`s each node (`wps_free`, its `deadRegion` kept). Invariant `allocBudget (i · regionCost al 16) ∗ isRegionList p ids ∗ deadRegions done`, `i + |ids| + |done| = n`; post `unit ∗ ∃ ids, |ids| = n.toNat ∗ deadRegions ids`; total budget the DERIVED `25 · n.toNat + 7`; the engine equation: from any memory launching the empty footprint with the budget, `driveU … (25 · n.toNat + 7) … = .done Vunit σ'` with `n.toNat` ids dead and erased in `σ'` | `_wps`/`_wpt`: Iris (`{hlc GF} [SpikeGS hlc GF] loc ann ra mo al pref ibty pbty qbty bbty nbty ubty n p rs hQ sbty`, `hn : 0 ≤ n`); `_total`: `driveU (procCtx …)` — PROVISIONAL | `_total`: `loc ann ra mo al pref sbty ibty pbty qbty bbty nbty ubty`, `n`, `hn : 0 ≤ n`, `σ₀`, `hl : LaunchCoh fmapEmpty σ₀ ∅ (n.toNat * regionCost al 16)`, `aids` |
 | `list_reverse_certified`, `list_reverse_demo`, `list_reverse_certified_total` (ListRevExhibit.lean) | in-place reversal of a seeded chain next to an arbitrary disjoint frame — same allocation ids in reversed order, footprint equality on the maps, frame verbatim, at every drive length; total at `13 * ns.length + 7`; the demo fixes a 3-node chain | `driveU (procCtx …)` — PROVISIONAL | `loc ann ra mo pbty cbty bbty nbty ubty sbty`, `ns head m₀`, `hseed : SeedChain m₀ head ns`, `R`, `hR : m₀ ##ₘ R`, `σ₀`, `hcoh : Sat fmapEmpty σ₀ (m₀ ∪ R)`; `_certified` adds `nsteps aids`, `_total` adds `aids`; `_demo` replaces `ns head m₀ hseed` by the 3-node constants |
 | `tree_rotate_certified`, `tree_rotate_certified_total` (TreeRotExhibit.lean) | binary-tree right rotation at the same statement shape; total at drive length 19 | `driveU spikeCtx` — PROVISIONAL | `loc ann mo xbty ybty bbty ubty`, `idx idy vx vy ta tb tc px m₀`, `hseed : SeedTree m₀ px (.node idx vx (.node idy vy ta tb) tc)`, `R`, `hR`, `σ₀`, `hcoh`; `_certified` adds `sbty`, `n aids`; `_total` adds `aids` |
 | `case_certified`, `wseq_certified` (CaseExhibit.lean, WseqExhibit.lean) | the `Ecase`/`Ewseq` consumers | `driveU spikeCtx` — PROVISIONAL | `{GF} [SpikeGpreS GF]`, `v` resp. `v1 v2`, `σ₀ n aids` |
 | `diverge_total_unprovable` (DivergeExhibit.lean) | the negative test: a total derivation for the self-jump loop is `False` | — | `{GF} [SpikeGpreS GF]`, `ra σ₀ m₀`, `hcoh : Coh fmapEmpty σ₀ m₀`, and the statement's own quantifiers `Ls Ψ k` and the derivation from `m₀`'s cell ownership |
 | `exhibitA_prod` (ProdExhibit.lean) | the production run of `lets p = create(4,int) in lets _ = store(int, p, 7) in load(int, p)` is the singleton `Active` execution delivering 7, the final memory holding 7's image at the program's own cell | shipped pipeline — ROOT OF TRUST | `sup fs args` |
 | `fib_certified_production`, `counter_loop_certified_production`, `list_reverse_certified_production` (ProdLoopExhibit.lean) | the loop programs on the shipped pipeline; counter and reversal bind their engine-created cells and enter their loops through `save` with live initializers | shipped pipeline — ROOT OF TRUST | fib: `sup ra n sbty ibty abty bbty`, `0 ≤ n`, `2 * n.toNat + 6 ≤ lemDefaultFuel`, `fs args`; counter: `sup ra mo bty xbty cbty sbty n`, `0 ≤ n`, `6 * n.toNat + 8 ≤ lemDefaultFuel`, `fs args`; reversal: `sup ra mo bty sbty pbty cbty bbty nbty ubty fs args` |
-| `dispose_list_certified_production` (DisposeExhibit.lean), `region_loop_certified_production` (RegionLoopExhibit.lean) | kill/free arc K4 on the shipped pipeline: BUILD two nodes with `create`s (the list-reverse production's prefix, restated generically in its continuation as `lrProdPrefix_wpt`) then DISPOSE the list — EXACTLY ONE Active execution delivering `Vunit` whose final memory has the two engine-picked node ids, DISTINCT, in `deadAllocations` with their records erased; `n` `alloc`/`free` pairs from one budget — EXACTLY ONE Active execution delivering `Vunit` | shipped pipeline — ROOT OF TRUST | dispose: `sup ra mo bty sbty cbty bbty nbty ubty fs args`; region loop: `sup ra al sz pref sbty ibty pbty ubty`, `hcost : 0 < regionCost al sz`, `n`, `hn : 0 ≤ n`, `hB : n.toNat * regionCost al sz ≤ headroom prodMem₀.lastAddress`, `hfuel : 7 * n.toNat + 5 ≤ lemDefaultFuel`, `fs args` |
+| `dispose_list_certified_production` (DisposeExhibit.lean), `region_loop_certified_production` (RegionLoopExhibit.lean) | kill/free arc K4 on the shipped pipeline: BUILD two nodes with `create`s (the list-reverse production's prefix, restated generically in its continuation as `lrProdPrefix_wpt`) then DISPOSE the list — EXACTLY ONE Active execution delivering `Vunit` whose final memory has two DISTINCT allocation ids in `deadAllocations` with their records erased (the proof witnesses them as the two created nodes; the statement names no node); `n` `alloc`/`free` pairs from one budget — EXACTLY ONE Active execution delivering `Vunit` (no readout of the final table: the regions are freed through the `_emp` faces, which drop the dead knowledge) | shipped pipeline — ROOT OF TRUST | dispose: `sup ra mo bty sbty cbty bbty nbty ubty fs args`; region loop: `sup ra al sz pref sbty ibty pbty ubty`, `hcost : 0 < regionCost al sz`, `n`, `hn : 0 ≤ n`, `hB : n.toNat * regionCost al sz ≤ headroom prodMem₀.lastAddress`, `hfuel : 7 * n.toNat + 5 ≤ lemDefaultFuel`, `fs args` |
+| `malloc_list_certified_production` (MallocListExhibit.lean; kill/free arc K5) | THE MALLOC'D LINKED LIST on the shipped pipeline: EXACTLY ONE Active execution delivering `Vunit` whose final memory has `n.toNat` allocation ids in `deadAllocations` with their records erased (the proof witnesses them as the freed nodes; the statement names no node) — every `alloc` through the public `wpt_alloc`, every field write through `wpt_store_regionOwn_at`, every next-field read through `wpt_load_regionOwn_at`, every `free` through `wpt_free` | shipped pipeline — ROOT OF TRUST | `sup ra mo al pref sbty ibty pbty qbty bbty nbty ubty`, `n`, `hn : 0 ≤ n`, `hB : n.toNat * (15 + max al.toNat 1) ≤ 281474976710647` (the budget fits the cold start, in ENGINE vocabulary), `hfuel : 25 * n.toNat + 9 ≤ lemDefaultFuel`, `fs args` |
 | `counter_loop_certified_registration` (ProdEntry.lean) | the counter loop with its label map derived from the shipped registration (`collect_labeled_continuations_NEW`) | `driveU (procCtx mainSym …)` — PROVISIONAL | `sup loc ann ra mo bty xbty sbty idx addr bs0 n`, `0 ≤ n`, `σ₀`, `hcoh`, `nsteps aids` |
 
 ## The trust story
@@ -484,6 +501,7 @@ theorems:
 | Allocation metadata at a fraction as the exclusivity anchor AND the liveness token: the cell carries `alive` (RefinedC's `al_alive` and `freeable` collapsed into one cell — Cerberus erases the record on kill, so persistent-past-death metadata has no referent); the STATIC kill rule flips it (K2: `kill_atomic`/`wps_kill`/`wpt_kill` consume `pointsToCell … (.own 1)` and hand back at most `deadObj`; `wps_kill_emp`/`wpt_kill_emp` are the textbook `{p ↦ -} kill(p) {emp}`); the byte fragments are dropped, sound because `killM` leaves the bytemap alone and addresses are never reused (`CohG.kill`) | LANDED at K3: the dynamic kill `free_atomic`/`wps_free`/`wpt_free` over `regionOwn … (.own 1)` is the same ghost update, handing back at most `deadRegion`; the dynamic check `killM` makes (:1573) is passed through the cell's `dynamic` flag (`killM_success_dynamic`), never through `dynamicAddrs` | `Heap.lean` header, "THE THREE ALLOCATION FACTS"; Rules.lean `kill_atomic` |
 | Allocation capacity is the ∗-SPLITTABLE BUDGET `allocBudget n` (K2.5): `allocBudget (a + b) ⊣⊢ allocBudget a ∗ allocBudget b`, one `create` of `ty` at alignment `al` spends `allocCost = sizeof ty + max(al, 1) − 1` — the engine's worst-case cursor descent, so the bound is CONSERVATIVE by up to `align − 1` bytes per allocation (an ordered plan could fit where the summed costs do not; the exact descent depends on the cursor's residue modulo the alignment, i.e. on the request order). RefinedC has no capacity resource at all (Caesium never refuses an allocation) | the exact order-dependent descent is not expressible order-free; the slack is the price of the classical additive shape and is irrelevant at realistic cursors (the cold-start headroom is `2^48 − 9`) | `Heap.lean` ("The allocation budget"); walkthrough §4; `docs/2026-09-03_k2.5-notes.md` |
 | Read-only allocations ARE describable (K1): `MetaCell.readonly` is coupled to `Allocation.isReadonly`; `readonlyCell tds pv dq ty bs` is the read-only points-to, with `load_atomic_readonly` (loads) and NO store rule — the engine kills a store to a read-only allocation with `MerrWriteOnReadOnly kind` (`storeM_readonly_kills`, CerbMem.lean:1724-1725), stated as a fact, not absorbed. Honest qualification: no rule of this fragment MINTS a `readonlyCell` — `create` is `allocateObject … none none` (writable, :1490-1492) and the launch footprint pins `.IsWritable` | a `create_readonly`/string-literal rule (spec addition) when those constructs join the fragment | `Heap.lean` (section "The K1 bundles"), `Rules.lean` (`load_atomic_readonly`) |
+| Typed access THROUGH A REGION POINTER is type-blind in the engine (K5): at an untyped allocation `loadM`/`storeM` check the dead list, the record, bounds against the record's SIZE and writability; `isAtomicMemberAccess` is `false` at `alloc.ty = none` (CerbMem.lean:1619); no effective-type or alignment check exists. So the region access rules `regionLoadAt_atomic`/`regionStoreAt_atomic` are stated at ANY accessed type at ANY in-bounds offset over the TYPED REGION VIEW (the object view with `regionCell` for `objCell`), proved through the same seams `loadM_live`/`storeM_live` as the object rules, and a region is carved into typed fields by `typedRegionView_split`/`_join` — `malloc`'d memory as C has it | forcing fact about Cerberus (the concrete memory model tracks no effective types); RefinedC's `ty_own` at a `malloc`'d block is likewise layout-free | Heap.lean "The typed region view"; Rules.lean "THE REGION ACCESS RULES"; MallocListExhibit.lean |
 | The `Frag.case_value` premise `hbsz` (the selected branch's `esize` is bounded by the case node's) is carried, not proved. The equation whose proof would discharge it is `esize (subst_sym_expr x v e) = esize e` (with its mutual twin for `esizeAlts`): `esize` inspects only expression constructors and `subst_sym_expr` substitutes only into pure expressions. The obstacle: the engine's `subst_sym_expr` is `subst_sym_expr_lemFuel lemDefaultFuel`, a fuel-indexed recursion over the whole generated Core AST, so the proof is a fuel-indexed induction over that mutual recursion (`generic_expr`/`generic_pexpr`/patterns) — measured, not attempted. `rfl` for authored programs | that induction | `Soundness.lean` (`Frag.case_value`), `CaseExhibit.lean` header |
 | The canonical-annotation value protocol: the pure and annotation rules are stated at `Expr []` because that is where the mirror's values live; the annotation-generic forms are false | by design | `Step.lean` header |
 
@@ -567,7 +585,8 @@ source becomes a fact at the target.
      counter_loop_certified_production,
      list_reverse_certified_production,
      dispose_list_certified_production,
-     region_loop_certified_production)                          [∀ sup fs args]
+     region_loop_certified_production,
+     malloc_list_certified_production)                          [∀ sup fs args]
 ```
 
 What the diagram does not contain: a C frontend; any statement about
@@ -706,6 +725,7 @@ import CerberusHeapLang
 #print axioms CerberusHeapLang.list_reverse_certified_production
 #print axioms CerberusHeapLang.dispose_list_certified_production
 #print axioms CerberusHeapLang.region_loop_certified_production
+#print axioms CerberusHeapLang.malloc_list_certified_production
 EOF
 ```
 
@@ -736,7 +756,7 @@ In import order, one line each:
 | `API.lean` | the public surface as one import; the public/internal table | the header table |
 | `Examples/Layout.lean`, `Examples/ReadinessSmoke.lean` | example support (`intTy`, byte images); the two-field object predicate and its rules from the API alone | `twoField`, `twoField_create` |
 | `Examples/MirrorCoverage.lean` | mirror-level coverage witnesses proved directly against `Step` (the mixed `store` operand shapes) — a semantic regression module, NOT a client; the only other direct `Step` use outside the semantics layer is the negative test `DivergeExhibit.lean` (its header states the exception) | `store_sym_lit_step`, `store_lit_sym_step` |
-| `Exhibit.lean`, `LoopExhibit.lean`, `FibExhibit.lean`, `DivergeExhibit.lean`, `ArrayExhibit.lean`, `StructExhibit.lean`, `AllocExhibit.lean`, `ListRevExhibit.lean`, `TreeRotExhibit.lean`, `CaseExhibit.lean`, `WseqExhibit.lean`, `DisposeExhibit.lean`, `RegionLoopExhibit.lean` | the exhibits (table above); the two K4 modules are the kill/free arc's exhibits (dispose-a-list over created nodes; n regions from one budget) | — |
+| `Exhibit.lean`, `LoopExhibit.lean`, `FibExhibit.lean`, `DivergeExhibit.lean`, `ArrayExhibit.lean`, `StructExhibit.lean`, `AllocExhibit.lean`, `ListRevExhibit.lean`, `TreeRotExhibit.lean`, `CaseExhibit.lean`, `WseqExhibit.lean`, `DisposeExhibit.lean`, `RegionLoopExhibit.lean`, `MallocListExhibit.lean` | the exhibits (table above); the K4/K5 modules are the kill/free arc's exhibits (dispose-a-list over created nodes; n regions from one budget; THE MALLOC'D LINKED LIST — regions written, linked, read and freed through the K5 region access rules) | — |
 | `DriverCollapse.lean` | the production scheduler/ND/readout collapsed onto the drive loop, proved from the driver's own round functions | `loop_step_frag`, `driver2_done`, `finalize_done` |
 | `ProdLoop.lean` | the total judgment drives the production driver's per-thread loop | `wpt_driver_done`, `wpt_driver_done_alloc` |
 | `ProdEntry.lean` | the cold start from the shipped `initial_driver_state`; the pipeline theorem; the registration ties | `prod_run_eqJ`, `fib_labeledAt_production` |

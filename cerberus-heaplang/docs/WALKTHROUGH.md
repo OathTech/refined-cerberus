@@ -177,7 +177,7 @@ theorem list_reverse_certified_production (sup : Nat) (ra : core_run_annotation)
 
 No section variables. `CerbND.runND (_root_.drive …) (initial_driver_state
 sup file fs).1` is exactly the composite the cerberus-lean executable
-runs — this is a ROOT-OF-TRUST export, one of the six closed
+runs — this is a ROOT-OF-TRUST export, one of the seven closed
 shipped-driver statements: the genuine driver, no package-defined loop
 in the statement (the authored program enters wrapped by `prodFile`,
 the synthetic one-procedure file). The theorem quantifies over nothing but the file-system state,
@@ -270,19 +270,29 @@ total statements only.
 **The two lanes, labelled.** Every exported execution theorem is
 either explicitly provisional over driveU or reaches the shipped
 engine; every public logical rule has a kernel-checked adequacy path
-through the package mirror to the engine. The six production
+through the package mirror to the engine. The seven production
 statements (`exhibitA_prod`, `fib_certified_production`,
 `counter_loop_certified_production`,
 `list_reverse_certified_production`,
 `dispose_list_certified_production`,
-`region_loop_certified_production`) are THE ROOT-OF-TRUST exports —
+`region_loop_certified_production`,
+`malloc_list_certified_production`) are THE ROOT-OF-TRUST exports —
 the closed shipped-driver statements: the genuine Cerberus driver, and
 nothing package-defined in the statement but the authored program, its
-`prodFile` wrapper and the pure readout predicates. `prod_run_eqJ`,
-through which they are proved, is generic collapse machinery, not a
-closed statement: its delivery premise `DriverDoneAt` (ProdLoop.lean)
-and its label tie `LabeledAt` are package-defined, discharged by each
-of the six. Every statement over `driveU` — `MemTripleU`,
+`prodFile` wrapper, the pure readout predicates, and — where the
+program allocates from a size-dependent budget — the BUDGET side
+condition that the budget fits the cold start, in the package's pure
+vocabulary for `region_loop_certified_production` (`hB : n.toNat *
+regionCost al sz ≤ headroom prodMem₀.lastAddress`: its cost function,
+its headroom function, its cold-start literal; with `hfuel : 7 * n.toNat
++ 5 ≤ lemDefaultFuel`; the K4 range audit's M-1) and in ENGINE
+vocabulary for `malloc_list_certified_production` (`hB : n.toNat * (15 +
+max al.toNat 1) ≤ 281474976710647`, with `hfuel : 25 * n.toNat + 9 ≤
+lemDefaultFuel`) — never a driver, discharge or scheduler.
+`prod_run_eqJ`, through which they are proved, is generic collapse
+machinery, not a closed statement: its delivery premise `DriverDoneAt`
+(ProdLoop.lean) and its label tie `LabeledAt` are package-defined,
+discharged by each of the seven. Every statement over `driveU` — `MemTripleU`,
 `MemTripleU_alloc`, `SemTripleU`, `project_triple`,
 `project_triple_pure`, `project_triple_alloc`,
 `project_triple_pure_alloc`, `semantic_triple_soundU`,
@@ -832,10 +842,11 @@ origin from the metadata cell's `dynamic` flag, never from
 nodes — `dl_wps` (`{isList head ns} dispose {ret unit. deadNodes ns}`),
 `dl_wps_emp` (the textbook `{isList head ns} dispose {emp}`), `dl_wpt` at
 the derived budget `12 * ns.length + 6`, the `driveU` equation
-`dispose_list_certified_total` (every node id dead and erased, the frame
-returned) and the production statement
+`dispose_list_certified_total` (PROVISIONAL; every node id dead and
+erased, the frame returned) and the production statement
 `dispose_list_certified_production` (build two nodes with `create`s,
-dispose them; the two engine-picked ids distinct, dead, erased).
+dispose them; two distinct allocation ids dead and erased — the proof
+witnesses them as the two nodes, the statement names no node).
 
 **The allocation and free rules (kill/free arc K3).** `alloc(al, n)` —
 Core's `Alloc0`, C's `malloc` — and `free(p)` — `Kill Dynamic0` — are
@@ -917,9 +928,98 @@ would consume. Consumers: `alloc_free_wps` and the engine-facing
 `rl_wps`/`rl_wpt` (`{allocBudget (n.toNat * regionCost al sz)} rl(n)
 {emp}`, the budget the LOOP INVARIANT, split per iteration by
 `allocBudget_split`, spent by `wps_alloc`, returned by `wps_free_emp`;
-total at `7 * n.toNat + 3`), `region_loop_certified_total` (the `driveU`
-equation under `LaunchCoh … ∅ (n.toNat * regionCost al sz)`) and
-`region_loop_certified_production`.
+total at `7 * n.toNat + 3`), `region_loop_certified_total` (PROVISIONAL;
+the `driveU` equation under `LaunchCoh … ∅ (n.toNat * regionCost al
+sz)`) and `region_loop_certified_production` (under `hB : n.toNat *
+regionCost al sz ≤ headroom prodMem₀.lastAddress` and `hfuel : 7 *
+n.toNat + 5 ≤ lemDefaultFuel`; no readout of the final table — the
+regions are freed through the `_emp` faces). The rule-free absence
+this paragraph named at K4 — a load or store THROUGH a region pointer —
+is closed by K5, next paragraph.
+
+**The region access rules (kill/free arc K5).** A region is untyped in
+the engine (`allocateRegion` records `ty := none`) and the engine's
+typed access path is TYPE-BLIND at such an allocation: `loadM`/`storeM`
+check the dead list (load, CerbMem.lean:1645), the record's presence
+(:1648/:1719), `isInBounds` against the record's SIZE (:1475),
+writability (store, :1725) and `isAtomicMemberAccess`, which at
+`alloc.ty = none` is `false` (:1619) — no effective-type check, no
+alignment check. So `malloc`'d memory is read and written at ANY type at
+ANY in-bounds offset, and the rules say exactly that. The TYPED REGION
+VIEW is `pointsToView` at the region cell:
+
+```lean
+def typedRegionView (tds : CerbTags.TagDefsMap) (id a : Int) (n off : Nat) (dqm dqb : DFrac)
+    (vty : ctype) (bs : List CerbMem.AbsByte) : IProp GF :=
+  iprop(metaOwn id dqm (regionCell a n true) ∗
+    ⌜off + CerbMem.sizeofCtype tds vty ≤ n ∧ bs.length = CerbMem.sizeofCtype tds vty⌝ ∗
+    bytesOwn (a + (off : Int)) dqb bs)
+```
+
+with `typedRegionView_regionView` (it IS the untyped `regionView` at a
+type-length image), `typedRegionView_split`/`_join` (a region as a struct
+of typed fields; `pointsToView_split`/`_join` under the substitution) and
+`regionOwn_carve`/`_uncarve` (a typed subrange out of / back into
+whole-region ownership, the metadata whole). THE RULES are the object
+rules' proofs with `regionCell a n true` for `objCell tds a aty true
+false` and `n` for `sizeofCtype tds aty`, through the same seams
+`loadM_live`/`storeM_live` (`alive := true`, `readonly := false`, bounds
+against `n`):
+
+```lean
+theorem regionLoadAt_atomic [SpikeGS hlc GF] {M : MachineCtx}
+    (loc : CerbLocation.Loc) (ann : core_run_annotation)
+    (id a : Int) (n off : Nat) (vty : ctype)
+    (mo : memory_order) (dqm dqb : DFrac)
+    (bs : List CerbMem.AbsByte) (ρ : EnvStack) {mv : CerbMem.MemValue}
+    (hdec : ∀ lum fpm, CerbMem.reconstructValue M.tagDefs lum fpm (a + (off : Int))
+      vty bs = mv)
+    (htrap : loadTrapV vty mv = false) :
+    AtomicStep M (loadExpr loc ann vty (cellPtr id (a + (off : Int))) mo) ρ 2
+      (typedRegionView M.tagDefs (GF := GF) id a n off dqm dqb vty bs)
+      (fun w => iprop(∃ fp,
+        ⌜w = SpikeVal.annot [DA_pos [] fp] ((valueFromMemValue mv).2)⌝ ∗
+        typedRegionView M.tagDefs id a n off dqm dqb vty bs))
+```
+
+```lean
+theorem regionStoreAt_atomic [SpikeGS hlc GF] {M : MachineCtx}
+    (loc : CerbLocation.Loc) (ann : core_run_annotation)
+    (id a : Int) (n off : Nat) (vty : ctype)
+    (cv : value) (mo : memory_order) (dqm : DFrac)
+    (bs : List CerbMem.AbsByte) (ρ : EnvStack) {mv : CerbMem.MemValue}
+    (hmv : memValueFromValue M.tagDefs (Ctype [] (unatomic_ vty)) cv = some mv)
+    (hst : StorableView M.tagDefs vty mv) :
+    AtomicStep M (storeExpr loc ann vty (cellPtr id (a + (off : Int))) cv mo) ρ 2
+      (typedRegionView M.tagDefs (GF := GF) id a n off dqm (.own 1) vty bs)
+      (fun w => iprop(∃ fp, ⌜w = SpikeVal.annot [DA_pos [] fp] Vunit⌝ ∗
+        typedRegionView M.tagDefs id a n off dqm (.own 1) vty
+          (CerbMem.memValueToBytes M.tagDefs [] mv).2))
+```
+
+Faces: `wps_load_region_at`/`wps_store_region_at` (the typed view),
+`wps_load_regionOwn_at`/`wps_store_regionOwn_at` (whole-region ownership
+`regionOwn`, the image spliced — carve, the typed rule, uncarve), total
+twins at budget 3; the operand forms are the pointer-generic
+`wps_load_eval`/`wps_store_eval`. THE EXHIBIT (MallocListExhibit.lean):
+the malloc'd linked list the arc chartered — one label, two phases
+(`i > 0`: `alloc(al, 16)`, `store(long, q, i)`, `store(node*,
+array_shift(q, long, 1), p)`, `run ml(i − 1, q)`; `i = 0`: null test,
+`load(node*, array_shift(p, long, 1))`, `free(p)`, `run ml(0, nx)`),
+invariant `allocBudget (i · regionCost al 16) ∗ isRegionList p ids ∗
+deadRegions done` with `i + |ids| + |done| = n`; `ml_wps`/`ml_wpt`
+(`{allocBudget (n.toNat * regionCost al 16)} ml(n, NULL) {ret unit.
+∃ ids, |ids| = n.toNat ∗ deadRegions ids}`, total at `25 * n.toNat +
+7`), `malloc_list_certified_total` (PROVISIONAL; `driveU` under
+`LaunchCoh … ∅ (n.toNat * regionCost al 16)`, `n.toNat` ids dead and
+erased) and `malloc_list_certified_production` (under `hB : n.toNat *
+(15 + max al.toNat 1) ≤ 281474976710647` — the budget fits the cold
+start, in ENGINE vocabulary — and `hfuel : 25 * n.toNat + 9 ≤
+lemDefaultFuel`; the final memory has `n.toNat` allocation ids dead and
+erased, witnessed by the proof as the freed nodes). The dead-list
+readout goes through the public consequence face `deadRegion_dead`
+under `stateInterp_readout`; the single-allocation faces are the public
+`deadObj_readout`/`deadRegion_readout` (K5, the K4 audit's N-1).
 
 **Read-only allocations.** `MetaCell.readonly` is coupled to
 `Allocation.isReadonly` (`LiveCoh.alloc`: `al.isReadonly = .IsWritable
@@ -956,10 +1056,12 @@ puts a created base into `dynamicAddrs`, so the converse is not an
 engine invariant, and `free` of a created object is state-dependent —
 the `free` rule (K3) reads dynamic-ness from the cell, never from the
 list. `alloc` (K3) mints `regionOwn` at `.own 1`; `free` consumes it.
-Region loads and stores will go through the generic live-cell seams
+Region loads and stores go through the generic live-cell seams
 `loadM_live`/`storeM_live` (any optional type; the store demanding
 `readonly = false`), of which the typed `loadM_at`/`storeM_at` are the
-created-object instances.
+created-object instances and K5's `regionLoadAt_atomic`/
+`regionStoreAt_atomic` the region instances (§4, "The region access
+rules").
 
 **Allocation capacity, and the failure policy.** Cerberus's allocator is
 a deterministic downward cursor; a `create` that cannot be placed is a
