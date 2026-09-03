@@ -20,9 +20,9 @@ a missing rule narrows what is provable without falsifying anything;
 the per-construct coverage authority is docs/CAPABILITY_MANIFEST.md.
 
 SCOPE (the mirrored fragment): pure values; `Store0`/`Load0`/`Create0`
-actions and the `Kill` action (kill/free arc K2 — any `kill_kind` in
-`Step`; the fragment `Frag` admits the STATIC kill only until K3) at
-evaluated operands and at the operands the engine
+actions and the `Kill` action (kill/free arc K2; any `kill_kind` in
+both `Step` and `Frag` — K3 lifted the fragment's static-only
+restriction) at evaluated operands and at the operands the engine
 evaluates first (the ACTION_EVAL step); the `PtrEq` memop; strong
 sequencing `Esseq` at the wildcard, `Specified`-binder and
 plain-symbol-binder patterns; weak sequencing `Ewseq` at the

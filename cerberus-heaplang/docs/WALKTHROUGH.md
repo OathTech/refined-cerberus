@@ -12,7 +12,7 @@ quoted declarations sit inside a Lean `section` whose `variable`s are
 part of the statement without appearing on the theorem line; a line
 "Section variables not shown" lists them by name. The machine-printed
 statement of every constant, section variables included, is
-[`2026-09-02_pr3-C-signatures-post.txt`](2026-09-02_pr3-C-signatures-post.txt).
+[`2026-09-03_c2-signatures-post.txt`](2026-09-03_c2-signatures-post.txt).
 
 **Cerberus** (Memarian, Sewell, et al.) is a semantics for C: it
 elaborates C into a small typed functional intermediate language,
@@ -301,7 +301,7 @@ condition that the budget fits the cold start, in the package's pure
 vocabulary for `region_loop_certified_production` (`hB : n.toNat *
 regionCost al sz ≤ headroom prodMem₀.lastAddress`: its cost function,
 its headroom function, its cold-start literal; with `hfuel : 7 * n.toNat
-+ 5 ≤ CerbFuel.driverFuel`; the K4 range audit's M-1) and in ENGINE
++ 5 ≤ CerbFuel.driverFuel`; a finding of the K4 range audit, disclosed) and in ENGINE
 vocabulary for `malloc_list_certified_production` (`hB : n.toNat * (15 +
 max al.toNat 1) ≤ 281474976710647`, with `hfuel : 25 * n.toNat + 9 ≤
 CerbFuel.driverFuel`) — never a driver, discharge or scheduler.
@@ -313,8 +313,9 @@ discharged by each of the seven. Every statement over `driveU` — `MemTripleU`,
 `project_triple_pure`, `project_triple_alloc`,
 `project_triple_pure_alloc`, `semantic_triple_soundU`,
 `semantic_frameU`, `engine_adequacyU`, `engine_adequacyU_alloc`,
-`wpt_engine_boundU`, `wpt_engine_boundU_alloc`, and every exhibit the
-README's table lists at `driveU` — is PROVISIONAL: a sound fact about
+`wpt_engine_boundU`, `wpt_engine_boundU_alloc`, the two lemmas stated
+over those triples (`SemTripleU_iff_Mem`, `MemTripleU_alloc_of_MemTripleU`),
+and every exhibit the README's table lists at `driveU` — is PROVISIONAL: a sound fact about
 `driveU`, this package's loop around the engine's `step_ctx`; not yet
 the root-of-trust statement, which is over the shipped driver;
 restated with no other change in the fuel-lane restatement slice. The
@@ -856,7 +857,7 @@ bundle — the dynamic `free(p)` is the next paragraph's rule over the
 REGION bundle, and `free` of a created object is UB179a whenever its
 base is not in `dynamicAddrs` — which the engine does NOT guarantee for
 a created object (a zero-size region can push a created base onto
-`dynamicAddrs`, the K0 audit's N-1), so the logic takes an allocation's
+`dynamicAddrs`, the K0 range audit's scenario), so the logic takes an allocation's
 origin from the metadata cell's `dynamic` flag, never from
 `dynamicAddrs`. Consumers: `alloc_create_kill_wps` and the engine-facing
 `kill_launch_smoke` (AllocExhibit.lean, §6), and THE EXHIBIT
@@ -921,8 +922,8 @@ out-of-memory arm is excluded by the SAME coupling inequality as
 `create`'s, now at every size: the cursor is positive (`MemWF.la_pos`,
 the tenth component of the invariant — both cursor writers guard
 `alignedAddr ≠ 0`), so `regionCost ≤ headroom` gives a nonzero fresh
-base even for `n = 0` (`freshBase_ne_zero_of_cost'`; the K2.5 audit's
-M-2 was exactly that this needs `0 < lastAddress` or `0 < size`). The
+base even for `n = 0` (`freshBase_ne_zero_of_cost'`; the K2.5 range
+audit found exactly that this needs `0 < lastAddress` or `0 < size`). The
 premise `0 < regionCost` is what makes the budget FORCE a cursor cell —
 a zero-cost fragment (`alloc(al, 0)` at `al ≤ 1`) is the unit and
 witnesses nothing; every positive size qualifies (`regionCost_pos`).
@@ -931,7 +932,7 @@ at `killM`'s dynamic check `!st.dynamicAddrs.contains alloc.base`
 (:1573, UB179a when it fails): the region cell's `dynamic = true` is
 coupled to `a ∈ dynamicAddrs` (`MetaCoh.dynamic`, `regionOwn_facts`),
 crossed to the engine's Bool by `mem_contains_int`. The flag comes from
-the cell `alloc` minted, never from the list (the K0 audit's N-1). (c)
+the cell `alloc` minted, never from the list (the K0 range audit's scenario). (c)
 The ghost steps are `create`'s and `kill`'s: mint the region cell and
 bytes, spend the budget (`CohG.alloc` re-establishes the coupling —
 `MemWF.allocateRegion` inside it); flip to dead and discard
@@ -1040,7 +1041,7 @@ al.toNat 1) ≤ 281474976710647` — the budget fits the cold start, in
 ENGINE vocabulary — and `hfuel : 25 * n.toNat + 9 ≤ CerbFuel.driverFuel`; the
 final memory has `n.toNat` DISTINCT allocation ids dead and erased,
 witnessed by the proof as the freed nodes). DISTINCTNESS is stated, not
-implied (K5.1, the K5 audit's M-1): `deadRegion` is persistent, so
+implied (K5.1, the K5 range audit's finding): `deadRegion` is persistent, so
 without `ids.Nodup` each of these posts would be interderivable with
 "some region is dead"; the `Nodup` is discharged at every `alloc` by the
 public `regionOwn_ne`/`regionOwn_deadRegion_ne` (Heap.lean — the fresh
@@ -1052,7 +1053,7 @@ reads it; tracking it needs the signed-long decode round trip, not in
 this tree). The dead-list readout goes through the public consequence
 face `deadRegion_dead` under `stateInterp_readout`; the
 single-allocation faces are the public
-`deadObj_readout`/`deadRegion_readout` (K5, the K4 audit's N-1).
+`deadObj_readout`/`deadRegion_readout` (K5, asked for by the K4 range audit).
 
 **Read-only allocations.** `MetaCell.readonly` is coupled to
 `Allocation.isReadonly` (`LiveCoh.alloc`: `al.isReadonly = .IsWritable
@@ -1083,8 +1084,8 @@ layout so no `tds`), fractional (`regionOwn_fractional`), agreeing
 what `free` needs: not dead, record present at the base with the
 region's size and `ty = none`, the bytes, and `a ∈ σ.dynamicAddrs` —
 the dynamic check `killM` makes (:1573). The flag is coupled in ONE
-direction only (`dynamic = true → base ∈ dynamicAddrs`): the K0 audit's
-N-1 scenario (a zero-size region minted at a created object's base)
+direction only (`dynamic = true → base ∈ dynamicAddrs`): the K0 range
+audit's scenario (a zero-size region minted at a created object's base)
 puts a created base into `dynamicAddrs`, so the converse is not an
 engine invariant, and `free` of a created object is state-dependent —
 the `free` rule (K3) reads dynamic-ness from the cell, never from the
@@ -1153,8 +1154,8 @@ cites): `live_lt`/`dead_lt` (every live or dead allocation id is below
 live base is at or above the downward cursor `lastAddress`),
 `size_nonneg` (sizes are non-negative — `allocateRegion` admits
 `malloc(0)`, so positivity is not an engine fact), `la_wf` (the cursor
-is below `2^64`), `la_pos` (the cursor is POSITIVE — K3, the K2.5 range
-audit's M-2: both cursor writers set `lastAddress := alignedAddr` only
+is below `2^64`), `la_pos` (the cursor is POSITIVE — K3, raised by the
+K2.5 range audit: both cursor writers set `lastAddress := alignedAddr` only
 past the `alignedAddr == 0 → out of memory` guard, the engine's initial
 cursor is `0xFFFFFFFFFFFF` and the production cold start's is `errnoAddr =
 0xFFFFFFFFFFF8`; without it `headroom` clamps to 0 at `lastAddress ≤
@@ -1216,10 +1217,14 @@ irrelevant (the cold-start headroom is `2^48 − 9`); what is bought is the
 classical shape — `allocBudget (a + b) ⊣⊢ allocBudget a ∗ allocBudget
 b`, `{allocBudget (allocCost ty al)} create(al, ty) {∃ p. p ↦ −}`, and a
 callee's precondition that is simply its own budget. The rule-level
-direction IS derivable: `wps_create_of_plan`/`wpt_create_of_plan` are
-the former `allocCap (req :: rest)` statements with the plan read as
-`allocBudget (planCost reqs)`, proved from `wps_create`/`wpt_create` by
-the split law. RefinedC offers no tiebreaker here (Caesium never
+direction IS derivable, up to one explicit premise:
+`wps_create_of_plan`/`wpt_create_of_plan` are the former `allocCap (req
+:: rest)` statements with the plan read as `allocBudget (planCost
+reqs)`, proved from `wps_create`/`wpt_create` by the split law — under
+the extra premise `hsz : 0 < sizeof req.ty`, which the old statement did
+not carry explicitly because `PlanFits` implied it (its `advanceCursor`
+guard); the literal old statement is not derivable as such, `allocCap`
+being deleted. RefinedC offers no tiebreaker here (Caesium never
 refuses an allocation).
 
 ## 5. The engine attachment
@@ -1280,8 +1285,11 @@ loop-level reading `CerberusRound.loop_step` — `runOne
 (drive_nonmemory_steps_aux2_lemFuel fl …) dst'` — holds for every `fl`
 (the same shipped continuation on both sides; no fuel-zero arm is ever
 evaluated). The hand-written discharge `dischargeStep`/`outcomesU`
-(Soundness.lean) is a PROOF DEVICE of the `driveU` lane and appears in
-no export's statement (the trust rule of 2026-09-02).
+(Soundness.lean) is a PROOF DEVICE of the `driveU` lane: no EXPORT's
+statement mentions it — the lemmas that do (`stepDischarge_run`,
+`outcomesU_of_call`, `outcomesU_of_ret`, and `drive_classifyU_aux` over
+`driveU`) are proof devices, unpinned and internal, bounded by the
+package sweep but not exported (the trust rule of 2026-09-02).
 
 The certification theorem, on the fragment `Frag` at a cons-shaped
 environment and `esize e ≤ lemDefaultFuel`:
@@ -1504,7 +1512,7 @@ statements are the root-of-trust exports (§1.3).
 
 `CerberusHeapLang/Audit.lean` is the last import of the library root, so
 `lake build` elaborates it and a failure is a red build. It asserts, in
-order: (1) exact pins — every name in `trioExports` (165 theorems at the
+order: (1) exact pins — every name in `trioExports` (312 theorems at the
 time of writing, 2026-09-03: the
 rules, the adequacy and collapse theorems, every exhibit, the
 projections and the consequence lemmas) exists, is a theorem, and has
@@ -1520,16 +1528,17 @@ skipped internal-detail names, so a private `sorry` unused by any
 pinned export passed the build; a planted one is now red
 (`2026-09-02_audit-response-3-notes.md`). There is no declared boundary axiom:
 neither the semantics workspace nor its lem runtime contains an
-`axiom` declaration. The pinned semantics tree does contain one known
-generated admission: two `(sorry : String)` terms in the debug-log
-branch of `auxAddToRfLoad` in the generated concurrency model
-(`Cmm_op.lean`), which Lean reports as `declaration uses sorry` during
-the build. It is outside every current export cone — the banned-axiom
-sweep establishes that `sorryAx` reaches no `CerberusHeapLang`
-constant — and concurrency is out of scope here; it must be closed
-upstream or separately bounded before any concurrency or whole-engine
-claim is made on this semantics (reported to the cerberus-lean team,
-`../../docs/2026-09-02_request-cerberus-lean-fuel-exhaustion-outcome.md`).
+`axiom` declaration. Admissions in the pinned semantics tree: none
+(measured 2026-09-03). Until the 2026-09-03 re-pin the pinned tree
+carried one generated admission — two `(sorry : String)` terms in the
+debug-log branch of `auxAddToRfLoad` in the generated concurrency model
+(`Cmm_op.lean`), outside every export cone — which the fuel-arc head
+`f95ef8d9c` closes; measured at this pin, `grep -rn '(sorry'` over the
+primed `generated/*.lean` finds nothing and the build log contains no
+`declaration uses sorry` (README "The trust story";
+`2026-09-03_repin-fuel-notes.md`). The banned-axiom sweep stays in
+force — `sorryAx` reaches no `CerberusHeapLang` constant — and
+concurrency is out of scope here.
 What the sweep does not certify: the scope qualifiers (parts of the statements),
 the readout predicates' faithfulness (§2 — read them), coverage (the
 capability manifest's job). The build command, its expected tail and
@@ -1559,7 +1568,7 @@ the `#print axioms` recipe are in the README, "How to build and verify".
 - **The static kill of a region, `free` of a created object,
   `free(NULL)`, the zero-cost `alloc`.** In the fragment, mirrored and
   classified (`complete_kill`/`complete_alloc`), covered by no rule —
-  the K2 range audit's N-2, decided at K3 (README "Scope, exactly"):
+  raised by the K2 range audit, decided at K3 (README "Scope, exactly"):
   the rules are kind-specific over the object bundle (`kill_atomic`)
   and the region bundle (`free_atomic`); a program that disposes
   storage under the wrong kind is outside the logic by design.
@@ -1576,7 +1585,7 @@ the `#print axioms` recipe are in the README, "How to build and verify".
   lookup law — `lookupLabel` at `fmapAddBy … (fmapAddBy … fmapEmpty)` —
   and EnvLaws has only the singleton `fmapLookupBy_addBy_empty`. A
   coverage fact about the logic's LAWS, not about the rules; the mover
-  is an EnvLaws slice (the K5 audit's N-1).
+  is an EnvLaws slice (found by the K5 range audit).
 - **Located Core.** Every node of a fragment program carries the empty
   static annotation list (`Expr []` in every `Frag` constructor and every
   redex spelling). The engine's `step_ctx` rewrites the thread's
@@ -1620,9 +1629,12 @@ the `#print axioms` recipe are in the README, "How to build and verify".
   (emptying the arm), and a prefix-evaluating `Step.run`. The four gaps registered on 2026-09-02
   were closed fail-closed the same day.
 - **Partial correctness over the shipped driver.** The partial lane is
-  stated over `driveU` and labelled PROVISIONAL (§1.3) until the
-  cerberus-lean fuel-exhaustion request lands; no package-side driver
-  works around the opaque fuel arm.
+  stated over `driveU` and labelled PROVISIONAL (§1.3). The
+  cerberus-lean fuel-exhaustion request HAS landed (the pin `f95ef8d9c`,
+  §1.3); what is pending is the fuel-lane restatement slice over
+  `CerbND.drive_lemFuel`, sequenced after the calls arc, and the labels
+  stay until it lands. No package-side driver was written to work around
+  the formerly opaque fuel arm.
 - **Parametric semantics interfaces.** Not adopted: the rules are proved
   directly against `Step` and the memory state, as RefinedC proves its
   memory rules by inversion.

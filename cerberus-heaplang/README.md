@@ -69,7 +69,7 @@ stack) is unrepresentable by `Ctl.toStack` and unreachable from
 restriction, stated. (`Frag.store` admits EITHER locking mode — `lk` is unconstrained —
 while every store rule is at `Store0 false`: the locking store, whose
 engine success flips the allocation's `isReadonly`, has no rule, so no
-derivation traverses one; K1 audit N-2.) The per-construct authority is the
+derivation traverses one; noted by the K1 range audit.) The per-construct authority is the
 inductive `Frag` (Soundness.lean), the premise of every adequacy
 theorem; the generated [capability manifest](docs/CAPABILITY_MANIFEST.md)
 lists one row per (`Frag` constructor, covering rule) pair with the
@@ -128,7 +128,7 @@ The mover is to make `current_loc` live state, part of the runtime
 tuple as the environment is.
 
 **In the fragment, mirrored and classified, but covered by NO rule
-(kill/free arc K3, the K2 range audit's N-2, decided).** (i) The STATIC
+(kill/free arc K3; raised by the K2 range audit, decided).** (i) The STATIC
 kill of a live `alloc`ated REGION — `kill(static ty, p)` at a region's
 base. The engine ACCEPTS it (`killM` short-circuits the dynamic check at
 `isDynamic = false`, CerbMem.lean:1573), `Frag.kill` admits it (since K3
@@ -140,13 +140,13 @@ untyped cell), so no rule applies. A program that static-kills a region
 — C's freeing malloc'd storage as if it were automatic — is OUTSIDE the
 logic by design; we do not prove such programs. Symmetrically `free(p)`
 of a CREATED object has no rule: the engine kills it (UB179a) unless the
-base happens to sit in `dynamicAddrs` (the K0 audit's N-1 scenario), and
+base happens to sit in `dynamicAddrs` (the K0 range audit's scenario), and
 the logic takes an allocation's origin from the metadata cell, never
 from that list. (ii) `alloc(al, n)` at `n ≤ 0` and alignment `al ≤ 1` —
 a zero-COST request (`regionCost al n = n.toNat + max al 1 − 1 = 0`; the
 engine's `sizeN.toNat` collapses EVERY non-positive size to a
 successful size-0 region, so `alloc(4, −7)` is a covered size-0 request
-at cost 3 — the K3 range audit's N-2): the budget fragment
+at cost 3 — the K3 range audit's precision): the budget fragment
 `allocBudget 0` is the unit and cannot witness a cursor cell, so
 `alloc_atomic` carries `0 < regionCost alignN sizeN` (every positive
 size satisfies it, `regionCost_pos`; so does any non-positive size at
@@ -228,8 +228,8 @@ program allocates from a size-dependent budget, the BUDGET side
 condition that the budget fits the cold-start memory:
 `region_loop_certified_production`'s `hB : n.toNat * regionCost al sz ≤
 headroom prodMem₀.lastAddress` (in the package's pure vocabulary — its
-cost function at its cold-start cursor literal; the K4 range audit's
-M-1) and `malloc_list_certified_production`'s `hB : n.toNat * (15 + max
+cost function at its cold-start cursor literal; a finding of the K4
+range audit, disclosed) and `malloc_list_certified_production`'s `hB : n.toNat * (15 + max
 al.toNat 1) ≤ 281474976710647` (the same fact in ENGINE vocabulary: per
 node `16 + max(al, 1) − 1` bytes of cursor descent, `281474976710647`
 the cold-start cursor's headroom; bridge `ml_budget_bridge`). These
@@ -245,8 +245,9 @@ shipped driver — `MemTripleU`, `MemTripleU_alloc`, `SemTripleU`,
 `project_triple`, `project_triple_pure`, `project_triple_alloc`,
 `project_triple_pure_alloc`, `semantic_triple_soundU`,
 `semantic_frameU`, `engine_adequacyU`, `engine_adequacyU_alloc`,
-`wpt_engine_boundU`, `wpt_engine_boundU_alloc`, and every exhibit whose
-"Execution" column below reads `driveU` — carries the label
+`wpt_engine_boundU`, `wpt_engine_boundU_alloc`, the two lemmas stated
+over those triples (`SemTripleU_iff_Mem`, `MemTripleU_alloc_of_MemTripleU`),
+and every exhibit whose "Execution" column below reads `driveU` — carries the label
 PROVISIONAL, in exactly this sense: a sound fact about `driveU`, this
 package's loop around the engine's `step_ctx`; not yet the
 root-of-trust statement, which is over the shipped driver; restated
@@ -331,7 +332,7 @@ defined under "The claim"; the shipped-pipeline rows are the
 root-of-trust exports. The last column lists EVERY hypothesis of the theorem
 by name, section variables included; it is read off the
 machine-printed statement of every constant in
-`docs/2026-09-02_pr3-C-signatures-post.txt` (`scripts/signature_snapshot.lean`),
+`docs/2026-09-03_c2-signatures-post.txt` (`scripts/signature_snapshot.lean`),
 where section variables appear as leading binders. No statement
 carries a premise on the action locations: the engine attaches
 `requestLoc th loc` (the redex's own location, or the thread's
@@ -357,13 +358,13 @@ statement carries a fuel hypothesis.
 | `array_sum_certified` (ArrayExhibit.lean) | array walk with pointer arithmetic delivers `vs.sum`, array preserved | `driveU (procCtx …)` — PROVISIONAL | `loc ann ra mo ibty accbty pbty xbty sbty vs id a aty bs`, `hsz : vs.length * 4 ≤ sizeofCtype fmapEmpty aty`, `ety`, `hdec` (each element's 4-byte range reconstructs, by the engine's `reconstructValue` at any side tables, to `MVinteger ety vs[i]`), `σ₀`, `hcoh`, `nsteps aids` |
 | `struct_update_certified` (StructExhibit.lean) | two-field struct update at the engine | `driveU spikeCtx` — PROVISIONAL | `{GF} [SpikeGpreS GF]`, `loc ann mo mo' bty id a bs`, `σ₀`, `hcoh`, `n aids` |
 | `struct_wps_views`, `cell_read_shared_wps`, `struct_x_read_persist_wps`, `struct_create_store_wps` (StructExhibit.lean) | the view/fraction/persistence laws as clients; allocate-then-initialize from `allocBudget` alone (Iris-level triples) | — (Iris) | all: `{hlc GF} [SpikeGS hlc GF] {M Ls} loc ann`; `_views`: `mo mo' bty id a b0 b1 b2 b3`, the three field lengths, `ev0 evs`; `cell_read_shared`: `pv mo bs bs' ρ`, `htrap`; `_x_read_persist`: `mo id a q dqb ρ`; `_create_store`: `aprov alignN pref mo pbty vbty ev0 evs`, `SymFrame ev0`, `∀ x, resolveExtern M.extern x = x` |
-| `struct_create_store_adequacy`, `struct_create_store_adequacy_prodMem₀` (StructExhibit.lean) | allocate-then-initialize as `MemTripleU_alloc spikeCtx spikeEnv prog ∅ [⟨8, structTy⟩] ψ`, an instance of `project_triple_pure_alloc`; `_prodMem₀` fixes the memory to the production cold start | `driveU spikeCtx` — PROVISIONAL | `{GF} [SpikeGpreS GF]`, `loc ann pref mo pbty vbty`; `_prodMem₀` adds `n aids` |
+| `struct_create_store_adequacy`, `struct_create_store_adequacy_prodMem₀` (StructExhibit.lean) | allocate-then-initialize as `MemTripleU_alloc spikeCtx spikeCtl spikeEnv prog ∅ (allocCost fmapEmpty structTy 8) ψ` (the budget form since K2.5), an instance of `project_triple_pure_alloc`; `_prodMem₀` fixes the memory to the production cold start | `driveU spikeCtx` — PROVISIONAL | `{GF} [SpikeGpreS GF]`, `loc ann pref mo pbty vbty`; `_prodMem₀` adds `n aids` |
 | `alloc_two_creates_wps`, `alloc_create_wpt`, `alloc_create_launch_smoke` (AllocExhibit.lean) | the allocation rules' local consumers; a bare `create` from the cold-start memory delivers a pointer at drive length 2 | `driveU spikeCtx` — PROVISIONAL | `_wps`: `{hlc GF} [SpikeGS hlc GF] {M Ls} al₁ al₂ pref₁ pref₂ bty ev0 evs`; `_wpt`: `{hlc GF} [SpikeGS hlc GF] {M Ls} al pref ρ`; `_launch_smoke`: `pref aids` |
 | `alloc_free_wps`, `free_launch_smoke` (AllocExhibit.lean; kill/free arc K3) | allocate a REGION then FREE it: `lets p = alloc(al, n) in free(p)` through the public `wps_alloc`/`wps_kill_eval`/`wps_free` delivers the unit value, the persistent dead region `deadRegion` of some id/base and the spent budget `regionCost al n`; from the cold-start memory `lets p = alloc(4, 8) in free(p)` driven through `wpt_engine_boundU_alloc` delivers `Vunit` at drive length exactly 5 with SOME id in `σ'.deadAllocations` and its record erased — `killM`'s effect on the tables, read off `deadRegion_dead` | `driveU spikeCtx` — PROVISIONAL | `_wps`: `{hlc GF} [SpikeGS hlc GF] {M Ls} hex al n pref hcost ev0 evs hf`; `_launch_smoke`: `pref aids` |
 | `alloc_create_kill_wps`, `kill_launch_smoke` (AllocExhibit.lean; kill/free arc K2) | allocate then DISPOSE: `lets p = create(al, int) in kill(static int, p)` through the public `wps_create`/`wps_kill_eval`/`wps_kill` delivers the unit value, the persistent dead cell `deadObj` of some id/base and the spent capacity; from the cold-start memory the same program driven through `wpt_engine_boundU_alloc` delivers `Vunit` at drive length exactly 5 with SOME id in `σ'.deadAllocations` and its record erased — `killM`'s effect on the tables, read off `deadObj_dead` | `driveU spikeCtx` — PROVISIONAL | `_wps`: `{hlc GF} [SpikeGS hlc GF] {M Ls} hex al pref ev0 evs hf`; `_launch_smoke`: `pref aids` |
 | `dl_wps`, `dl_wps_emp`, `dl_wpt`, `dl_wps_frame`, `dl_wpt_frame`, `dispose_list_certified_total` (DisposeExhibit.lean; kill/free arc K4) | DISPOSE A LIST — the classical `{list p} dispose(p) {emp}`: the authored loop walks a chain of CREATED nodes (ListRevExhibit's `isList`) and `kill(static node, ·)`s each through the public `wps_kill`/`wpt_kill` at the node cell; `dl_wps`/`dl_wpt` deliver unit and `deadNodes ns` (every node's persistent dead cell), `dl_wps_emp` is the textbook post, the total budget is the DERIVED `12 * ns.length + 6`; the engine equation: from the seeded chain next to an arbitrary frame `R`, `driveU … (12 * ns.length + 6) … = .done Vunit σ'`, every node id in `σ'.deadAllocations` with its record erased, `Sat σ' R` | `_wps`/`_wpt`/`_frame`: Iris (`{hlc GF} [SpikeGS hlc GF] loc ann ra mo cbty bbty nbty ubty ns p rs hQ sbty head`, `_frame` adds `RF`); `_total`: `driveU (procCtx …)` — PROVISIONAL | `_total`: `loc ann ra mo cbty bbty nbty ubty sbty`, `ns head m₀`, `hseed : SeedChain m₀ head ns`, `R`, `hR : m₀ ##ₘ R`, `σ₀`, `hcoh : Sat fmapEmpty σ₀ (m₀ ∪ R)`, `aids` |
 | `rl_wps`, `rl_wpt`, `region_loop_certified_total` (RegionLoopExhibit.lean; kill/free arc K4) | N REGIONS FROM ONE LINEAR BUDGET: `save rl(i := n) in if i > 0 then lets p = alloc(al, sz) in lets _ = free(p) in run rl(i − 1) else unit` — the budget `allocBudget (n.toNat * regionCost al sz)` is the LOOP INVARIANT, split per iteration by `allocBudget_split`, spent by the public `wps_alloc`/`wpt_alloc`, each region returned by `wps_free_emp`/`wpt_free_emp`; post `emp`; total budget the DERIVED `7 * n.toNat + 3`; the engine equation: from any memory launching the empty footprint with the budget (`LaunchCoh … ∅ (n.toNat * regionCost al sz)`), `driveU … (7 * n.toNat + 3) … = .done Vunit σ'` — no out-of-memory kill because the budget fits. (The malloc'd LINKED list is the next row — MallocListExhibit.lean, K5, through the region access rules.) | `_wps`/`_wpt`: Iris (`{hlc GF} [SpikeGS hlc GF] loc ann ra al sz pref ibty pbty ubty hcost p rs hQ sbty n`, `_wpt` adds `hn : 0 ≤ n`); `_total`: `driveU (procCtx …)` — PROVISIONAL | `_total`: `loc ann ra al sz pref sbty ibty pbty ubty`, `hcost : 0 < regionCost al sz`, `n`, `hn : 0 ≤ n`, `σ₀`, `hl : LaunchCoh fmapEmpty σ₀ ∅ (n.toNat * regionCost al sz)`, `aids` |
-| `ml_wps`, `ml_wpt`, `malloc_list_certified_total` (MallocListExhibit.lean; kill/free arc K5) | THE MALLOC'D LINKED LIST: `save ml(i := n, p := NULL) in if i > 0 then lets q = alloc(al, 16) in lets _ = store(long, q, i) in lets _ = store(node*, array_shift(q, long, 1), p) in run ml(i − 1, q) else lets b = memop(PtrEq, [p, NULL]) in if b then unit else lets Specified(nx) = load(node*, array_shift(p, long, 1)) in lets _ = free(p) in run ml(0, nx)` — ONE label, two phases: `i > 0` allocates a 16-byte REGION node from the split budget, writes the counter (offset 0, `long` — stored but NOT tracked by `isRegionList`: the walk never reads it, and its signed-long decode round trip is not in this tree) and the link (offset 8, `node*`) THROUGH THE REGION (`wps_store_regionOwn_at`, K5) and conses it onto `isRegionList`; `i = 0` walks the list reading each next field through the region (`wps_load_regionOwn_at`) and `free`s each node (`wps_free`, its `deadRegion` kept). Invariant `allocBudget (i · regionCost al 16) ∗ isRegionList p ids ∗ deadRegions done`, `i + |ids| + |done| = n`, `(ids ++ done).Nodup`; post `unit ∗ ∃ ids, |ids| = n.toNat ∧ ids.Nodup ∗ deadRegions ids` — `n.toNat` DISTINCT dead ids (K5.1, the K5 audit's M-1: `deadRegion` is persistent, so without `Nodup` the post would say only that SOME region is dead; distinctness comes from the public `regionOwn_ne`/`regionOwn_deadRegion_ne` at each `alloc` and is carried through the invariant); total budget the DERIVED `25 · n.toNat + 7`; the engine equation: from any memory launching the empty footprint with the budget, `driveU … (25 · n.toNat + 7) … = .done Vunit σ'` with `n.toNat` DISTINCT ids dead and erased in `σ'` | `_wps`/`_wpt`: Iris (`{hlc GF} [SpikeGS hlc GF] loc ann ra mo al pref ibty pbty qbty bbty nbty ubty n p rs hQ sbty`, `hn : 0 ≤ n`); `_total`: `driveU (procCtx …)` — PROVISIONAL | `_total`: `loc ann ra mo al pref sbty ibty pbty qbty bbty nbty ubty`, `n`, `hn : 0 ≤ n`, `σ₀`, `hl : LaunchCoh fmapEmpty σ₀ ∅ (n.toNat * regionCost al 16)`, `aids` |
+| `ml_wps`, `ml_wpt`, `malloc_list_certified_total` (MallocListExhibit.lean; kill/free arc K5) | THE MALLOC'D LINKED LIST: `save ml(i := n, p := NULL) in if i > 0 then lets q = alloc(al, 16) in lets _ = store(long, q, i) in lets _ = store(node*, array_shift(q, long, 1), p) in run ml(i − 1, q) else lets b = memop(PtrEq, [p, NULL]) in if b then unit else lets Specified(nx) = load(node*, array_shift(p, long, 1)) in lets _ = free(p) in run ml(0, nx)` — ONE label, two phases: `i > 0` allocates a 16-byte REGION node from the split budget, writes the counter (offset 0, `long` — stored but NOT tracked by `isRegionList`: the walk never reads it, and its signed-long decode round trip is not in this tree) and the link (offset 8, `node*`) THROUGH THE REGION (`wps_store_regionOwn_at`, K5) and conses it onto `isRegionList`; `i = 0` walks the list reading each next field through the region (`wps_load_regionOwn_at`) and `free`s each node (`wps_free`, its `deadRegion` kept). Invariant `allocBudget (i · regionCost al 16) ∗ isRegionList p ids ∗ deadRegions done`, `i + |ids| + |done| = n`, `(ids ++ done).Nodup`; post `unit ∗ ∃ ids, |ids| = n.toNat ∧ ids.Nodup ∗ deadRegions ids` — `n.toNat` DISTINCT dead ids (K5.1, the K5 range audit's finding: `deadRegion` is persistent, so without `Nodup` the post would say only that SOME region is dead; distinctness comes from the public `regionOwn_ne`/`regionOwn_deadRegion_ne` at each `alloc` and is carried through the invariant); total budget the DERIVED `25 · n.toNat + 7`; the engine equation: from any memory launching the empty footprint with the budget, `driveU … (25 · n.toNat + 7) … = .done Vunit σ'` with `n.toNat` DISTINCT ids dead and erased in `σ'` | `_wps`/`_wpt`: Iris (`{hlc GF} [SpikeGS hlc GF] loc ann ra mo al pref ibty pbty qbty bbty nbty ubty n p rs hQ sbty`, `hn : 0 ≤ n`); `_total`: `driveU (procCtx …)` — PROVISIONAL | `_total`: `loc ann ra mo al pref sbty ibty pbty qbty bbty nbty ubty`, `n`, `hn : 0 ≤ n`, `σ₀`, `hl : LaunchCoh fmapEmpty σ₀ ∅ (n.toNat * regionCost al 16)`, `aids` |
 | `list_reverse_certified`, `list_reverse_demo`, `list_reverse_certified_total` (ListRevExhibit.lean) | in-place reversal of a seeded chain next to an arbitrary disjoint frame — same allocation ids in reversed order, footprint equality on the maps, frame verbatim, at every drive length; total at `13 * ns.length + 7`; the demo fixes a 3-node chain | `driveU (procCtx …)` — PROVISIONAL | `loc ann ra mo pbty cbty bbty nbty ubty sbty`, `ns head m₀`, `hseed : SeedChain m₀ head ns`, `R`, `hR : m₀ ##ₘ R`, `σ₀`, `hcoh : Sat fmapEmpty σ₀ (m₀ ∪ R)`; `_certified` adds `nsteps aids`, `_total` adds `aids`; `_demo` replaces `ns head m₀ hseed` by the 3-node constants |
 | `tree_rotate_certified`, `tree_rotate_certified_total` (TreeRotExhibit.lean) | binary-tree right rotation at the same statement shape; total at drive length 19 | `driveU spikeCtx` — PROVISIONAL | `loc ann mo xbty ybty bbty ubty`, `idx idy vx vy ta tb tc px m₀`, `hseed : SeedTree m₀ px (.node idx vx (.node idy vy ta tb) tc)`, `R`, `hR`, `σ₀`, `hcoh`; `_certified` adds `sbty`, `n aids`; `_total` adds `aids` |
 | `case_certified`, `wseq_certified` (CaseExhibit.lean, WseqExhibit.lean) | the `Ecase`/`Ewseq` consumers | `driveU spikeCtx` — PROVISIONAL | `{GF} [SpikeGpreS GF]`, `v` resp. `v1 v2`, `σ₀ n aids` |
@@ -483,7 +484,7 @@ statement carries a fuel hypothesis.
   behaviour; it is not an equivalence proof, and the OCaml oracle
   stays on the trust boundary. Neither the semantics workspace nor
   its lem runtime (`LemLib`) contains an `axiom` declaration; the
-  semantics tree does contain one generated `sorry` (next bullet). The
+  semantics tree contains no admission at this pin (next bullet). The
   engine does declare kernel-opaque constants (`opaque`, mostly with
   `@[implemented_by]` bodies): they enter no axiom cone and cannot be
   unfolded, so a theorem can only hold for every value of them. The
@@ -546,7 +547,7 @@ theorems:
 | The tag-definition environment is an explicit parameter of the heap predicates (`pointsToCell tds …`, `M.tagDefs`); the demos state footprints at `fmapEmpty` | by design: a program-wide constant of the language instance | `Heap.lean` header |
 | Memory orders accepted arbitrarily (`Step.store`/`wp_store` at any `memory_order`) | mirror-true: the sequential driver drops `mo` (`action_request_sequential2`) | `Step.lean` |
 | Mirror completeness holds on the DECLARED FRAGMENT up to a two-arm RESIDUAL (`OpenRound`, Round.lean; `frag_round_complete`; fragment closure 2026-09-02): `eval_uncovered` — an operand in the covered grammar CONTAINING A LEAF the engine's evaluator accepts where the mirror evaluator does not evaluate (a symbol unbound in the environment but naming a `Proc` of the file; one of the eight mirrored binops at two floating-point operands; `OpEq` at two ctypes — environment/file-dependent, the offending operand carried as witness, `evalClass … = .uncovered`); the classifier answers `.uncovered` at the FIRST such leaf and carries NO engine claim about the whole operand, so the arm's whole-operand outcome is NOT characterized — the engine may succeed, KILL on a later type error (`f + 1` with `f` a `Proc`-named unbound symbol is `PePure`, classified `.uncovered`, killed by the engine as `Illformed_program … ill-typed PEop` — 2026-09-03 audit, by execution) or PANIC (a float guard under `Eif`): every operand the classifier REJECTS is a proved engine KILL, operands it leaves UNCOVERED are not characterized, the residual is a SUPERSET of the engine-accepted shapes; and `run_surplus` — a jump with more arguments than the registered label's parameters whose zipped arguments evaluate and whose surplus does not (label-map-dependent). Everywhere else a mirror-stuck fragment configuration is an engine refusal in the engine's vocabulary (`ShippedRefusal`: ILLTYPED `[Step_error2 msg]`; ILLTYPED AT DISTANCE ONE — a successful round into the ill-typed load/store the engine reports on next; KILL `NDkilled r` from the shipped `advance_step`, memory kills through `liftMem` and pure-evaluator kills `Other (DErr_core_run err)` through `liftCore_run`; FORK ≥ 2 `CerbND.runND` executions; PANIC the engine's own `failwithI`, incl. the no-current-procedure lookup key). The former gaps (a) LETS-ANNOT at the symbol binder and (c) the operand grammar were closed by NARROWING `Frag` (`BareHead`, `PePure` everywhere) — fail-closed, per the ruling | the residual is not removable by a syntactic narrowing; the mover for `eval_uncovered`'s characterization is `evalClass` computing the engine's value at the three leaf shapes (reserving `.uncovered` for the leaf itself, the downstream rejections under the KILL bridge); a complete mirror evaluator (`M.file` threaded into `evalPexpr`, the float/ctype arms) would move `eval_uncovered` into `Step`; a prefix-evaluating `Step.run` would move `run_surplus` | `Round.lean` (`OpenRound`), `EvalClass.lean`; `ARCHITECTURE.md` §2, §7; `docs/2026-09-02_fragment-closure-notes.md` |
-| The global memory well-formedness invariant `MemWF` (Heap.lean) is in the state interpretation (`CohG.wf`) and the launch premise (`LaunchCoh.wf`): allocation-id discipline, live/dead consistency, pairwise range disjointness of ALL live allocations, cursor bounds, and the dynamic-address facts — each an engine fact cited in the section header; fresh = disjoint from EVERY live allocation of the state (`create_fresh_global`), not only from the tracked footprint; the cold-start state satisfies it (`prodMem₀_memWF`); `loadM`/`storeM`/`allocateObject`/`killM` preserve it (`MemWF.loadM`/`MemWF.storeM`/`MemWF.allocateObject`/`MemWF.killM`). Two honest qualifications: (i) it is carried under cursor PRESENCE — the cursor-free launches (`MetaByteOf.cohG`, from `Coh` alone) have no `MemWF` premise, so non-allocating programs owe nothing and the non-allocating exports' texts are unchanged; (ii) the dynamic-address component is what the engine maintains (`dyn_lo`, `dyn_disj`), NOT "every dynamic address is a live base" — `killM` never removes an address from `dynamicAddrs` (CerbMem.lean:1576-1578) | CLOSED at K3: `MemWF.allocateRegion` is proved and pinned — every memory operation of the fragment (`loadM`/`storeM`/`allocateObject`/`allocateRegion`/`killM`) has its preservation theorem; K3 also added the engine invariant `la_pos : 0 < lastAddress` (both cursor writers guard `alignedAddr ≠ 0`; the K2.5 range audit's M-2), which is what prices a zero-size region correctly | `Heap.lean` (section "The global memory well-formedness invariant"), `Adequacy.lean` (`LaunchCoh` section); walkthrough §4 |
+| The global memory well-formedness invariant `MemWF` (Heap.lean) is in the state interpretation (`CohG.wf`) and the launch premise (`LaunchCoh.wf`): allocation-id discipline, live/dead consistency, pairwise range disjointness of ALL live allocations, cursor bounds, and the dynamic-address facts — each an engine fact cited in the section header; fresh = disjoint from EVERY live allocation of the state (`create_fresh_global`), not only from the tracked footprint; the cold-start state satisfies it (`prodMem₀_memWF`); `loadM`/`storeM`/`allocateObject`/`killM` preserve it (`MemWF.loadM`/`MemWF.storeM`/`MemWF.allocateObject`/`MemWF.killM`). Two honest qualifications: (i) it is carried under cursor PRESENCE — the cursor-free launches (`MetaByteOf.cohG`, from `Coh` alone) have no `MemWF` premise, so non-allocating programs owe nothing and the non-allocating exports' texts are unchanged; (ii) the dynamic-address component is what the engine maintains (`dyn_lo`, `dyn_disj`), NOT "every dynamic address is a live base" — `killM` never removes an address from `dynamicAddrs` (CerbMem.lean:1576-1578) | CLOSED at K3: `MemWF.allocateRegion` is proved and pinned — every memory operation of the fragment (`loadM`/`storeM`/`allocateObject`/`allocateRegion`/`killM`) has its preservation theorem; K3 also added the engine invariant `la_pos : 0 < lastAddress` (both cursor writers guard `alignedAddr ≠ 0`; raised by the K2.5 range audit; a field added on orchestrator direction, recorded [AGENT] in DECISIONS), which is what prices a zero-size region correctly | `Heap.lean` (section "The global memory well-formedness invariant"), `Adequacy.lean` (`LaunchCoh` section); walkthrough §4 |
 | Arrays are one allocation, not a ∗ of per-element cells: the engine bounds-checks against the pointer's provenance allocation and `arrayShiftPtrval` preserves provenance | forcing fact about Cerberus; per-element structure lives in the invariant + decode premises | `ArrayExhibit.lean` |
 | Allocation metadata at a fraction as the exclusivity anchor AND the liveness token: the cell carries `alive` (RefinedC's `al_alive` and `freeable` collapsed into one cell — Cerberus erases the record on kill, so persistent-past-death metadata has no referent); the STATIC kill rule flips it (K2: `kill_atomic`/`wps_kill`/`wpt_kill` consume `pointsToCell … (.own 1)` and hand back at most `deadObj`; `wps_kill_emp`/`wpt_kill_emp` are the textbook `{p ↦ -} kill(p) {emp}`); the byte fragments are dropped, sound because `killM` leaves the bytemap alone and addresses are never reused (`CohG.kill`) | LANDED at K3: the dynamic kill `free_atomic`/`wps_free`/`wpt_free` over `regionOwn … (.own 1)` is the same ghost update, handing back at most `deadRegion`; the dynamic check `killM` makes (:1573) is passed through the cell's `dynamic` flag (`killM_success_dynamic`), never through `dynamicAddrs` | `Heap.lean` header, "THE THREE ALLOCATION FACTS"; Rules.lean `kill_atomic` |
 | Allocation capacity is the ∗-SPLITTABLE BUDGET `allocBudget n` (K2.5): `allocBudget (a + b) ⊣⊢ allocBudget a ∗ allocBudget b`, one `create` of `ty` at alignment `al` spends `allocCost = sizeof ty + max(al, 1) − 1` — the engine's worst-case cursor descent, so the bound is CONSERVATIVE by up to `align − 1` bytes per allocation (an ordered plan could fit where the summed costs do not; the exact descent depends on the cursor's residue modulo the alignment, i.e. on the request order). RefinedC has no capacity resource at all (Caesium never refuses an allocation) | the exact order-dependent descent is not expressible order-free; the slack is the price of the classical additive shape and is irrelevant at realistic cursors (the cold-start headroom is `2^48 − 9`) | `Heap.lean` ("The allocation budget"); walkthrough §4; `docs/2026-09-03_k2.5-notes.md` |
@@ -566,7 +567,7 @@ trust, which is the engine.
 ## The trust diagram
 
 Every theorem named on an arrow has axiom set exactly `propext`,
-`Classical.choice`, `Quot.sound` (`Audit.lean`: 165 export pins at the
+`Classical.choice`, `Quot.sound` (`Audit.lean`: 312 export pins at the
 time of writing; every theorem of every module bounded). "Frag" = the fragment `Frag` at a
 `SeqWF` context, an empty-stack control, with a cons-shaped environment; "labels" = every
 registered label body in `Frag` with its own static bound
@@ -746,9 +747,9 @@ lacks them, so they vary with the semantics workspace's build state at
 the same pin (measured 2249/3536 vs 2210/3474, `docs/2026-09-02_audit-response-4-notes.md`):
 
 ```
-info: CerberusHeapLang/Audit.lean:260:0: CerberusHeapLang export pins: 165 trio-exact
-info: CerberusHeapLang/Audit.lean:260:0: CerberusHeapLang axiom sweep: every theorem bounded by the trio (N swept, internal details included — count informational, environment-dependent)
-info: CerberusHeapLang/Audit.lean:260:0: CerberusHeapLang banned-axiom sweep: sorryAx/ofReduceBool/ofReduceNat absent from all cones (M constants of every kind swept, internal details included — count informational, environment-dependent)
+info: CerberusHeapLang/Audit.lean:469:0: CerberusHeapLang export pins: 312 trio-exact
+info: CerberusHeapLang/Audit.lean:469:0: CerberusHeapLang axiom sweep: every theorem bounded by the trio (N swept, internal details included — count informational, environment-dependent)
+info: CerberusHeapLang/Audit.lean:469:0: CerberusHeapLang banned-axiom sweep: sorryAx/ofReduceBool/ofReduceNat absent from all cones (M constants of every kind swept, internal details included — count informational, environment-dependent)
 Build completed successfully (… jobs).
 ```
 
@@ -817,13 +818,26 @@ In import order, one line each:
 
 History, provenance and process live in dated files, not here.
 Rulings: `../docs/DECISIONS.md` (append-only, `[USER]`/`[AGENT]`
-tagged). The kill/free arc (K0–K4, 2026-09-03) has its own record,
+tagged). The kill/free arc (K0–K5.1, 2026-09-03) has its own record,
 `docs/2026-09-03_kill-free-arc-record.md` (one paragraph per slice with
 commits and audit verdicts, the measured corrections to the design note
 `docs/2026-09-02_kill-free-design-spike.md`, what remains), indexing the
-slice notes `docs/2026-09-03_k{0,1,2,2.5,3,4}-notes.md` and the range
-audits `docs/2026-09-03_k{0,1,2,2.5,3}-audit.md`. The audit and review
-record of the tree before the arc, newest
+slice notes `docs/2026-09-03_k{0,1,2,2.5,3,4,5,5.1}-notes.md` and the
+range audits `docs/2026-09-03_k{0,1,2,2.5,3,4,5}-audit.md` and
+`docs/2026-09-03_k5.1-repin-audit.md`. After the arc, in order: the
+re-pin to the fuel-arc semantics (`docs/2026-09-03_repin-fuel-notes.md`,
+audited with K5.1), the calls arc's C1 and C2
+(`docs/2026-09-03_c{1,2}-notes.md`, range audits
+`docs/2026-09-03_c{1,2}-audit.md`), the standards audit of the whole
+overnight stack (`../docs/2026-09-03_standards-audit-overnight-stack.md`)
+and its response (`docs/2026-09-03_standards-audit-response.md`: the
+stale admission and device sentences corrected, four proof devices
+unpinned, this section). The current statement-surface snapshot is
+`docs/2026-09-03_c2-signatures-post.txt`; the pre-slice snapshots that
+were byte-identical to a predecessor were deduplicated on 2026-09-03
+(one file kept per content, the records' references redirected in
+place and re-verified by md5 in the standards audit). The audit and
+review record of the tree before the arc, newest
 first: `docs/2026-09-03_audit-since-b34998d-response.md` (the response
 to the independent audit of the range since the last audit: the
 residual's characterization corrected on every surface — the classifier

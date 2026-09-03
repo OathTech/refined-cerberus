@@ -1,4 +1,8 @@
-# The kill/free arc, K0–K4 — the record (2026-09-03)
+# The kill/free arc, K0–K5.1 — the record (2026-09-03)
+
+(Titled "K0–K4" when written at the K4 close; K5 and K5.1 are recorded
+in "What remains" below as they landed — retitled by the standards-audit
+response, 2026-09-03.)
 
 Branch `kill-free-k2` (a linear history; every hash below is on it —
 `git log --oneline 78084a7..` from the charter's DECISIONS entry). Charter: DECISIONS

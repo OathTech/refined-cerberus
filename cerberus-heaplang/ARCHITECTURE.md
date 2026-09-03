@@ -57,10 +57,14 @@ engine's step list is a singleton `s`, `s` is advanceable
 wakeup-free transition to the state embedding the mirror's successor.
 The round is stated at the loop body (no fuel dependency; its
 loop-level reading `CerberusRound.loop_step` holds at every fuel), in
-the driver's own vocabulary only: the hand-written discharge
-`dischargeStep`/`outcomesU` is a proof device of the `driveU` lane and
-appears in no export's statement (the trust rule of 2026-09-02). That
-round is the mirror's only reference: no other relational semantics is
+the driver's own vocabulary only. The hand-written discharge
+`dischargeStep`/`outcomesU` is a proof device of the `driveU` lane: no
+EXPORT's statement mentions it — the lemmas that do (`stepDischarge_run`
+over `dischargeStep`, `outcomesU_of_call`/`outcomesU_of_ret` over
+`outcomesU`, and `drive_classifyU_aux` over `driveU`) are proof devices,
+unpinned and internal, bounded by the package sweep but not exported
+(the trust rule of 2026-09-02; the 2026-09-03 standards-audit response).
+That round is the mirror's only reference: no other relational semantics is
 referenced or bridged, and none is needed for the root of trust, which
 is the engine (§1). The round is the REFERENCE RELATION the
 certification and the completeness below are stated over; it is
@@ -159,9 +163,10 @@ drive length. Total: `wpt_drive_aux` and `wpt_engine_boundU`
 Why the mirror suffices: `NotStuck` supplies a mirror step at every
 reachable configuration and the device lemmas `outcomesU_of_step`
 (Soundness.lean; control-preserving), `outcomesU_of_call` and
-`outcomesU_of_ret` (Adequacy.lean; calls arc C2) make it the drive's
-unique outcome (`drive_classifyU_aux`, a control-general induction under
-the invariant `ControlOk` — the saved frames plug values into fragment
+`outcomesU_of_ret` (Adequacy.lean; calls arc C2) — proof devices,
+unpinned — make it the drive's unique outcome (`drive_classifyU_aux`,
+an unpinned device: a control-general induction under the invariant
+`ControlOk` — the saved frames plug values into fragment
 terms — and the premise `MachineCtx.FragProcs`, every declared
 procedure body in the cone: the raw WP's NotStuck does not exclude a
 call, so the partial lane must follow the engine into the callee and
@@ -193,18 +198,20 @@ are stated in Iris; `pointsToCell`, `cellOwn`, `allocBudget`, the WP and
 BI connectives, and `CohG` (in the one hypothesis `hpost`) are
 definitions to read, not axioms to accept.
 
-THE ONE KNOWN ADMISSION IN THE PINNED SEMANTICS TREE. The pinned
-cerberus-lean tree declares no `axiom`, but it contains one generated
-admission: two `(sorry : String)` terms in the debug-log branch of
-`auxAddToRfLoad` in the generated concurrency model (`Cmm_op.lean`;
-Lean reports `declaration uses sorry` for it during the build). It is
-outside every current export cone: the package sweep (Audit.lean)
-establishes that `sorryAx` reaches no `CerberusHeapLang` constant.
+ADMISSIONS IN THE PINNED SEMANTICS TREE: NONE (measured 2026-09-03).
+The pinned cerberus-lean tree (`f95ef8d9c`, the fuel arc) declares no
+`axiom`; until the 2026-09-03 re-pin it carried one generated admission
+— two `(sorry : String)` terms in the debug-log branch of
+`auxAddToRfLoad` in the generated concurrency model (`Cmm_op.lean`),
+outside every export cone — which the fuel-arc head closes
+(`cmm_op.lem`'s `sorry` target_rep replaced by
+`CerbMem.stringFromMemValue`). Measured at this pin: `grep -rn '(sorry'`
+over the primed `generated/*.lean` finds nothing, and the build log
+contains no `declaration uses sorry` (README "The trust story";
+`docs/2026-09-03_repin-fuel-notes.md`). The package sweep (Audit.lean)
+stays in force: `sorryAx` reaches no `CerberusHeapLang` constant.
 Concurrency is out of scope for this package (`drive fmapEmpty false
-…` in every production statement). The admission must be closed
-upstream or separately bounded before any concurrency or whole-engine
-claim is made on this semantics; it is reported to the cerberus-lean
-team in `../docs/2026-09-02_request-cerberus-lean-fuel-exhaustion-outcome.md`.
+…` in every production statement).
 
 THE ROOT-OF-TRUST LANE (total): the seven closed shipped-driver
 statements — `exhibitA_prod` (ProdExhibit.lean),
@@ -226,8 +233,8 @@ n.toNat + 5 ≤ CerbFuel.driverFuel` together with its budget-fits-the-cold-
 start premise `hB : n.toNat * regionCost al sz ≤ headroom
 prodMem₀.lastAddress` — the package's cost function at the package's
 cold-start cursor literal, the one root-of-trust statement with package
-definitions beyond the program and `prodFile` in its text (the K4 range
-audit's M-1); and `malloc_list_certified_production`'s `hfuel : 25 *
+definitions beyond the program and `prodFile` in its text — a finding
+of the K4 range audit, disclosed rather than hidden); and `malloc_list_certified_production`'s `hfuel : 25 *
 n.toNat + 9 ≤ CerbFuel.driverFuel` with its budget premise in ENGINE
 vocabulary, `hB : n.toNat * (15 + max al.toNat 1) ≤ 281474976710647`,
 bridged to the package's `regionCost`/`headroom` inside the proof by
@@ -250,9 +257,14 @@ THE PROVISIONAL LANE: `MemTripleU`, `MemTripleU_alloc`, `SemTripleU`,
 `project_triple`, `project_triple_pure`, `project_triple_alloc`,
 `project_triple_pure_alloc`, `semantic_triple_soundU`,
 `semantic_frameU`, `engine_adequacyU`, `engine_adequacyU_alloc`,
-`wpt_engine_boundU`, `wpt_engine_boundU_alloc`, and every exhibit
-stated over `driveU` (`*_certified`, `*_total`, `*_engine`,
-`*_adequacy`, `*_launch_smoke`, `counter_loop_certified_registration`).
+`wpt_engine_boundU`, `wpt_engine_boundU_alloc`, the two lemmas stated
+over those triples (`SemTripleU_iff_Mem`,
+`MemTripleU_alloc_of_MemTripleU`), and every exhibit stated over
+`driveU` or over `SemTripleU` (`*_certified`, `*_total`, `*_engine`,
+`*_semantic`, `*_adequacy`, `*_launch_smoke`, `list_reverse_demo`,
+`counter_loop_certified_registration`,
+`counter_loop_certified_irrelevant_binding`) — every pinned export whose
+statement reaches `driveU` through a package definition, none other.
 PROVISIONAL means exactly: a sound fact about `driveU`, this package's
 loop around the engine's `step_ctx`; not yet the root-of-trust
 statement, which is over the shipped driver; restated with no other
@@ -335,9 +347,12 @@ status at the close of the kill/free arc (2026-09-03):
   2026-09-03).** `MemWF σ` (Heap.lean, section "The global memory
   well-formedness invariant": allocation-id discipline, live/dead
   consistency, pairwise range disjointness of ALL live allocations,
-  cursor bounds incl. `la_pos : 0 < lastAddress`, the dynamic-address
-  facts; ten components, each an engine fact with a `CerbMem.lean`
-  cite) is a field of the state interpretation `CohG` (under cursor
+  cursor bounds incl. `la_pos : 0 < lastAddress` — a field added at K3
+  on orchestrator direction, recorded [AGENT] in DECISIONS (a stronger
+  launch premise: every allocating export's claim about arbitrary states
+  is correspondingly narrower, by an engine invariant), the
+  dynamic-address facts; ten components, each an engine fact with a
+  `CerbMem.lean` cite) is a field of the state interpretation `CohG` (under cursor
   presence) and of the launch premise `LaunchCoh`; `prodMem₀_memWF` is
   the cold-start instance; `create_fresh_global` is "fresh means fresh
   in the concrete allocation model"; and EVERY memory operation of the
@@ -347,8 +362,8 @@ status at the close of the kill/free arc (2026-09-03):
   stated obligation is a theorem; "fresh" and "dynamic" are exactly what
   the engine has: fresh = disjoint from every live allocation of the
   state, dynamic = the base was pushed by `allocateRegion` (coupled
-  one-way to `dynamicAddrs`, which `killM` never cleans — the K0 audit's
-  N-1). The former footprint-relative launch facts were retired as
+  one-way to `dynamicAddrs`, which `killM` never cleans — the K0 range
+  audit's finding). The former footprint-relative launch facts were retired as
   fields (K1 re-adds `cur_meta_lo`: dead metadata cells have no record
   for `MemWF.cursor_lo` to read).
 
@@ -376,14 +391,14 @@ THE OTHER OPEN ITEMS:
   then walked and freed), `malloc_list_certified_total` (PROVISIONAL,
   `driveU`) and `malloc_list_certified_production` (the seventh
   root-of-trust export). All four state `n.toNat` DISTINCT dead ids
-  (`ids.Nodup`, K5.1 — the K5 audit's M-1: `deadRegion` is persistent,
+  (`ids.Nodup`, K5.1 — the K5 range audit's finding: `deadRegion` is persistent,
   so without it the posts said only that some region is dead); the
   distinctness laws are the public `regionOwn_ne`/
   `regionOwn_deadRegion_ne` (`metaOwn_ne` at the region bundles),
   applied at each `alloc` and carried by the invariant `(ids ++
   done).Nodup` through each `free`. Records: `docs/2026-09-03_k5-notes.md`,
   `docs/2026-09-03_k5.1-notes.md`.
-- **Two `save` labels in one program — OPEN (the K5 audit's N-1).** Every
+- **Two `save` labels in one program — OPEN (found by the K5 range audit).** Every
   loop exhibit is single-label; the malloc'd list merges its two C loops
   into one Core label with two phases because the two-label form needs a
   two-entry label-map lookup law (`lookupLabel` at `fmapAddBy … (fmapAddBy
@@ -391,7 +406,7 @@ THE OTHER OPEN ITEMS:
   `fmapLookupBy_addBy_empty`. A law gap, not a rule gap (`wps_run`/
   `wps_save` are label-generic); the mover is an EnvLaws slice adding the
   two-entry (or general) lookup law.
-- **The kill/free arc K0–K4 — CLOSED (2026-09-03).** Record:
+- **The kill/free arc K0–K5.1 — CLOSED (2026-09-03).** Record:
   `docs/2026-09-03_kill-free-arc-record.md` (one paragraph per slice,
   commits, audit verdicts, the corrections to the design note, what
   remains). In one line each: K0 `MemWF` (goal 3); K1 the metadata cell
@@ -406,9 +421,9 @@ THE OTHER OPEN ITEMS:
   `allocBudget (regionCost al n)` delivering `regionOwn`, `free_atomic`
   → `wps_free`/`wpt_free` (+ `_emp`) over `regionOwn (.own 1)` with post
   `deadRegion`, the mirror `Step.alloc`/`alloc_eval`, `Frag.kill`'s kind
-  restriction lifted, `complete_alloc`/`complete_alloc_op`, the N-2
-  decision (no rule for the static kill of a region and its three
-  companions); K4 the exhibits — `dl_wps`/`dl_wpt`/
+  restriction lifted, `complete_alloc`/`complete_alloc_op`, the decision
+  raised by the K2 range audit (no rule for the static kill of a region
+  and its three companions); K4 the exhibits — `dl_wps`/`dl_wpt`/
   `dispose_list_certified_total`/`dispose_list_certified_production`
   (DisposeExhibit.lean) and `rl_wps`/`rl_wpt`/
   `region_loop_certified_total`/`region_loop_certified_production`
@@ -416,7 +431,7 @@ THE OTHER OPEN ITEMS:
   exhibit consumer; K5 THE REGION ACCESS RULES and the malloc'd linked
   list (above; the manifest now 22 constructors, 25 rule rows, 0 red, 16
   exhibit modules), plus the public `deadObj_readout`/`deadRegion_readout`
-  (the K4 audit's N-1). Follow-up still named in the record: the cursor
+  (asked for by the K4 range audit). Follow-up still named in the record: the cursor
   ghost heap as a proof device (no client owns the cursor since K2.5 —
   fold it into the budget interpretation).
 - The deferred parametric semantics interfaces: the rules are proved

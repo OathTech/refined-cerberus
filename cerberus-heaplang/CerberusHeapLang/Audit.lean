@@ -87,6 +87,17 @@ gained the procedure well-formedness premise `MachineCtx.FragProcs`
 production round `loop_step_frag` is restated at the LIVE control (the C1
 range audit's M-1). 20 pins added: 296 → 316.
 
+STANDARDS-AUDIT RESPONSE (2026-09-03,
+cerberus-heaplang/docs/2026-09-03_standards-audit-response.md): four
+PROOF DEVICES UNPINNED — `stepDischarge_run` (its statement mentions the
+hand-written discharge `dischargeStep`), `outcomesU_of_call` and
+`outcomesU_of_ret` (mention `outcomesU`), `drive_classifyU_aux`
+(mentions `driveU`). The pin list is THE PUBLIC EXPORTS; a lemma whose
+statement's referent is a package-defined device is a proof device, not
+an export (the trust rule of 2026-09-02), so it lives in proofs and is
+bounded by the exhaustive sweep (check 2) like every other internal
+theorem. No statement or proof changed. 316 → 312.
+
 P3.5 ([USER 2026-09-02], docs/2026-09-02_p3.5-notes.md): the 65
 `#guard_msgs in #print axioms` blocks + prose collapsed to the export
 list below (62 names at P3.5, the same exact assertion each; the list
@@ -142,7 +153,7 @@ def trioExports : List Name := [
   ``CerberusHeapLang.exhibitC_semantic,
   ``CerberusHeapLang.exhibitC_engine, ``CerberusHeapLang.exhibitA_total,
   -- the jump layer + the unified relation
-  ``CerberusHeapLang.stepDischarge_run, ``CerberusHeapLang.Decomp.step_factor,
+  ``CerberusHeapLang.Decomp.step_factor,
   ``CerberusHeapLang.engine_step_matchU,
   ``CerberusHeapLang.engine_adequacyU, ``CerberusHeapLang.counter_loop_certified,
   -- the statement-stratified WP (partial) and its rules
@@ -388,9 +399,10 @@ def trioExports : List Name := [
   -- iteration (`allocBudget_split`), spent by `wps_alloc`/`wpt_alloc`,
   -- the regions returned by `wps_free_emp`/`wpt_free_emp`; both strata,
   -- the block specifications, the `driveU` total equation (PROVISIONAL)
-  -- under `LaunchCoh`, and the PRODUCTION statement. (The malloc'd LINKED
-  -- list is not statable — no load/store rule over `regionOwn`; the K4
-  -- record's finding.)
+  -- under `LaunchCoh`, and the PRODUCTION statement. (At K4 the malloc'd
+  -- LINKED list was not statable — no load/store rule over `regionOwn`;
+  -- K5 added the region access rules and the list is pinned below,
+  -- `malloc_list_certified_production`.)
   ``CerberusHeapLang.rl_wps, ``CerberusHeapLang.rl_wpt,
   ``CerberusHeapLang.rl_blockSpecs, ``CerberusHeapLang.rl_blockSpecsT,
   ``CerberusHeapLang.region_loop_certified_total, ``CerberusHeapLang.rl_labeledAt,
@@ -433,20 +445,21 @@ def trioExports : List Name := [
   -- `complete_ret`), the live-control driver round (`loop_step_frag` is
   -- pinned above; its control-preserving core `loop_step_frag_same` and
   -- the any-task-kind tau round), the adequacy lane through calls
-  -- (`drive_classifyU_aux`, the call/return device readings, the plug
-  -- lemma, the profiles' vacuous procedure premise), the total judgment's
-  -- guard, and the two-procedure smoke rounds (MirrorCoverage).
+  -- (the plug lemma, the profiles' vacuous procedure premise), the total
+  -- judgment's guard, and the two-procedure smoke rounds (MirrorCoverage).
   -- (`Decomp.callRedex?_inv`/`callRedex?_some`/`pot_plug_call_le` and
   -- `callRedex?_none_of_jumpRedex?_some` have SUB-trio cones — unpinnable
-  -- here, bounded by the sweep.)
+  -- here, bounded by the sweep. The lane's PROOF DEVICES
+  -- `drive_classifyU_aux`, `outcomesU_of_call`, `outcomesU_of_ret` were
+  -- pinned here by C2 and UNPINNED by the standards-audit response, with
+  -- `stepDischarge_run` — see the header; bounded by the sweep.)
   ``CerberusHeapLang.Step.ctl_cases, ``CerberusHeapLang.Step.call_inv,
   ``CerberusHeapLang.step_ctx_call_ws, ``CerberusHeapLang.step_ctx_call_unknown,
   ``CerberusHeapLang.step_ctx_call_arity, ``CerberusHeapLang.step_ctx_call_kill_args,
   ``CerberusHeapLang.step_ctx_ret, ``CerberusHeapLang.call_proc_eq,
   ``CerberusHeapLang.complete_call, ``CerberusHeapLang.complete_ret,
   ``CerberusHeapLang.loop_step_frag_same, ``CerberusHeapLang.loop_step_tau_tsk,
-  ``CerberusHeapLang.drive_classifyU_aux, ``CerberusHeapLang.outcomesU_of_call,
-  ``CerberusHeapLang.outcomesU_of_ret, ``CerberusHeapLang.Decomp.frag_plug_call,
+  ``CerberusHeapLang.Decomp.frag_plug_call,
   ``CerberusHeapLang.spikeCtx_fragProcs, ``CerberusHeapLang.wpt_call_eq,
   ``CerberusHeapLang.smoke_call_round, ``CerberusHeapLang.smoke_ret_round]
 
