@@ -1003,7 +1003,7 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
 - **2026-09-03 [USER] LANE B PAUSED; THE SEED IS PARKED UNMERGED** (operator:
   "the seed is just a copy at the moment, we haven't done any derisking
   work yet"; "let's pause on B since we're making good progress on A").
-  The `lane-b-seed` branch (f4f9a20: the copy at 1d2bb95, rename map,
+  Disposition [AGENT]: the `lane-b-seed` branch (f4f9a20: the copy at 1d2bb95, rename map,
   gate 3b, its PASS audit) is kept as a record of the seed mechanics
   and NOT merged; when Lane B starts it is re-seeded from the demo head
   of that day, so the demo's Lane A arcs (kill/free, calls) are in the
@@ -1356,7 +1356,7 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   RE-PIN SCHEDULED** (verbatim): "we should do an intermediate audit
   before merge. The cerberus-lean project is still moving, mostly bug
   fixes and conformance to the cerberus-ocaml upstream, so we should
-  schedule a further repin later". Disposition: the aggressive
+  schedule a further repin later". Disposition [AGENT]: the aggressive
   standards audit runs NOW over the whole overnight stack (main 9f0c20b
   .. ebda4bd: kill/free K0–K5.1, the re-pin, calls C1–C2) on a fixed copy
   by a fresh Fable-class auditor, graded against CLAUDE.md's working
