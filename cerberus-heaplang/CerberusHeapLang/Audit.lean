@@ -245,7 +245,14 @@ def trioExports : List Name := [
   ``CerberusHeapLang.struct_create_store_adequacy,
   ``CerberusHeapLang.struct_create_store_adequacy_prodMem₀,
   ``CerberusHeapLang.alloc_two_creates_wps, ``CerberusHeapLang.alloc_create_wpt,
-  ``CerberusHeapLang.alloc_create_launch_smoke]
+  ``CerberusHeapLang.alloc_create_launch_smoke,
+  -- kill/free arc K0 (2026-09-03): the global memory well-formedness
+  -- invariant `MemWF` (acceptance goal 3) — global freshness of create,
+  -- the cold-start instance, and preservation by the three memory
+  -- operations of the fragment
+  ``CerberusHeapLang.create_fresh_global, ``CerberusHeapLang.prodMem₀_memWF,
+  ``CerberusHeapLang.MemWF.loadM, ``CerberusHeapLang.MemWF.storeM,
+  ``CerberusHeapLang.MemWF.allocateObject, ``CerberusHeapLang.MemWF.create]
 
 def sortedNames (ns : Array Name) : Array String :=
   (ns.map (·.toString)).qsort (· < ·)

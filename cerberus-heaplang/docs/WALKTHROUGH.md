@@ -786,33 +786,45 @@ from the allocation-aware launchers (`launchResources`, `LaunchCoh`) and
 may stop early (`allocCap_weaken`), never reorder or skip
 (`planFits_order_sensitive`: alignment rounding does not commute).
 
-**Freshness is footprint-relative.** The allocation-aware launch
-premise `LaunchCoh tds σ m reqs` (Adequacy.lean) constrains the TRACKED
-cells only: `id_lt` (every tracked allocation id is below the engine's
-`nextAllocId`), `fresh_alloc`/`fresh_dead` (ids from `nextAllocId` up
-are absent from the live and dead tables), `addr_lo` (every tracked
-cell sits at or above the downward cursor `lastAddress`), `plan` (the
-plan fits the cursor). Neither `Coh` nor `LaunchCoh` says anything
-about allocations the footprint does not track, and the engine's
-`allocateObject` computes the fresh address from the cursor without
-scanning existing allocation ranges. So a `create` is fresh from the
-LOGICAL FOOTPRINT — every owned cell is tracked and protected by
-`addr_lo`, which is what the create rules' soundness needs — and not
-from untracked allocations an arbitrary concrete state may hold below
-the cursor; `MemTripleU_alloc` quantifies over such states too, and
-says nothing about their untracked storage, as a separation logic may.
-The production cold-start state `prodMem₀` contains only the
-allocator-created `errno` allocation and no dead allocations
-(`prodMem₀_allocations`, `prodMem₀_deadAllocations`, ProdEntry.lean);
-`prodMem₀_launchCoh` proves `LaunchCoh` for the empty footprint and any
-fitting plan, and no more — there is no global well-formedness theorem
-about it. A global memory well-formedness invariant (`MemWF`) —
-allocation-id discipline, live/dead consistency, range disjointness of
-ALL live allocations, cursor bounds — with its initialization proof
-belongs to the launch premise and the state interpretation once
-`kill`/free enters the fragment; "globally well formed" is reserved for
-it, and it is registered for the malloc/free arc (README, "Registered
-divergences and limitations").
+**Freshness is global: the memory well-formedness invariant.** The
+allocation-aware launch premise `LaunchCoh tds σ m reqs` (Adequacy.lean)
+is `coh` (the footprint, `Coh`), `wf` (the global invariant `MemWF σ`,
+Heap.lean) and `plan` (the plan fits the cursor). `MemWF σ` is a pure
+predicate on the engine's `MemState` alone — no ghost state, no
+footprint — with nine components, each an engine fact of the concrete
+allocator (the section header in Heap.lean carries the `CerbMem.lean`
+cites): `live_lt`/`dead_lt` (every live or dead allocation id is below
+`nextAllocId`), `live_dead` (live and dead ids are disjoint), `disj`
+(all live allocations are pairwise range-disjoint), `cursor_lo` (every
+live base is at or above the downward cursor `lastAddress`),
+`size_nonneg` (sizes are non-negative — `allocateRegion` admits
+`malloc(0)`, so positivity is not an engine fact), `la_wf` (the cursor
+is below `2^64`), and the dynamic-address facts `dyn_lo` (every address
+in `dynamicAddrs` is at or above the cursor) and `dyn_disj` (no dynamic
+address lies strictly inside a live allocation). The same predicate is
+a field of the state interpretation `CohG` under cursor presence
+(`CohG.wf`), so it holds at every reachable state of an
+allocation-aware run (`CohG.storeRange`, `CohG.create` preserve it).
+Consequence: a `create` is fresh from EVERY live allocation of the
+state, tracked by the logic or not — `create_fresh_global`: under
+`MemWF σ` at `allocateObject_success`'s guards, the minted id is
+neither live nor dead and the minted range ends at or below the base of
+every live allocation. The production cold-start state satisfies the
+invariant (`prodMem₀_memWF`: one allocation, `errno`, at the cursor;
+nothing dead; no dynamic address), which is what `prodMem₀_launchCoh`
+now supplies. Preservation by the fragment's memory operations is
+proved for every active outcome — `MemWF.loadM`, `MemWF.storeM` (either
+locking mode), `MemWF.allocateObject` (any initializer); preservation
+by `allocateRegion` and `killM` is stated as K3's obligation and proved
+when those operations enter the fragment. Two honest qualifications.
+(i) The cursor-free launches (`MetaByteOf.cohG`, from `Coh` alone) have
+no `MemWF` premise: a non-allocating program owes nothing, and the
+non-allocating exports' texts are unchanged — the invariant is carried
+exactly where the allocator model is exercised. (ii) The dynamic-address
+component is what the engine maintains, not the stronger "every dynamic
+address is the base of a live allocation": `killM` never removes an
+address from `dynamicAddrs` (it erases the record and marks the id dead,
+CerbMem.lean:1576-1578), so after `alloc; free` the address remains.
 
 **Why an ordered plan and not an additive budget.** The classical shape
 would be an additive resource with a split law, `budget (s + t) ⊣⊢
@@ -1114,7 +1126,7 @@ statements are the root-of-trust exports (§1.3).
 
 `CerberusHeapLang/Audit.lean` is the last import of the library root, so
 `lake build` elaborates it and a failure is a red build. It asserts, in
-order: (1) exact pins — every name in `trioExports` (159 theorems at the
+order: (1) exact pins — every name in `trioExports` (165 theorems at the
 time of writing, 2026-09-03: the
 rules, the adequacy and collapse theorems, every exhibit, the
 projections and the consequence lemmas) exists, is a theorem, and has
@@ -1197,9 +1209,11 @@ the `#print axioms` recipe are in the README, "How to build and verify".
   stated over `driveU` and labelled PROVISIONAL (§1.3) until the
   cerberus-lean fuel-exhaustion request lands; no package-side driver
   works around the opaque fuel arm.
-- **A global memory well-formedness invariant.** Freshness is
-  footprint-relative (§4); the invariant is registered for the
-  malloc/free arc.
+- **Preservation of the global memory well-formedness invariant by
+  `allocateRegion` and `killM`.** The invariant itself is in (§4,
+  `MemWF`); the two operations are outside the fragment, and their
+  preservation lemmas are K3's stated obligations (Heap.lean section
+  header).
 - **Parametric semantics interfaces.** Not adopted: the rules are proved
   directly against `Step` and the memory state, as RefinedC proves its
   memory rules by inversion.

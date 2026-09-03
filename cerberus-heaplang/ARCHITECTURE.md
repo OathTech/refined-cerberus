@@ -277,18 +277,23 @@ PROVISIONAL label is not removed before then.
   that a statement quantifying over all fuels can classify the
   driver's outcomes. The PROVISIONAL lane is then restated with no
   other change.
-- Footprint-relative freshness: `LaunchCoh` (Adequacy.lean)
-  constrains tracked cells only (`id_lt`, `addr_lo`), so a `create`
-  (`wps_create`/`wpt_create`) is fresh from the logical footprint, not
-  from untracked allocations an arbitrary concrete state may carry
-  below the cursor. The production cold-start state `prodMem₀`
-  contains only the allocator-created errno allocation and no dead
-  allocations (`prodMem₀_allocations`, `prodMem₀_deadAllocations`,
-  ProdEntry.lean); `prodMem₀_launchCoh` proves `LaunchCoh` for the
-  empty footprint and any fitting plan, and no more. "Globally well
-  formed" is reserved for the future `MemWF` invariant (allocation-id
-  discipline, live/dead consistency, range disjointness of all live
-  allocations, cursor bounds) and its initialization proof, registered
-  for the malloc/free extension.
+- Acceptance goal 3 — the global memory well-formedness invariant —
+  LANDED (K0, 2026-09-03): `MemWF σ` (Heap.lean, section "The global
+  memory well-formedness invariant": allocation-id discipline, live/dead
+  consistency, pairwise range disjointness of ALL live allocations,
+  cursor bounds, the dynamic-address facts; each component an engine
+  fact with a `CerbMem.lean` cite) is a field of the state
+  interpretation `CohG` (under cursor presence) and of the launch
+  premise `LaunchCoh`; `prodMem₀_memWF` is the cold-start instance;
+  `MemWF.loadM`/`MemWF.storeM`/`MemWF.allocateObject` are preservation
+  by the fragment's three memory operations (every active outcome);
+  `create_fresh_global` is "fresh means fresh in the concrete
+  allocation model". What remains open under this goal: preservation
+  by `allocateRegion` and `killM` — K3's stated obligations (Heap.lean
+  section header), proved when those operations enter the fragment.
+  The former footprint-relative launch facts (`id_lt`, `fresh_alloc`,
+  `fresh_dead`, `addr_lo`, `la_wf`; `CohG`'s `cur_dead`/`cur_alloc`/
+  `cur_meta_lt`/`cur_meta_lo`) are consequences and were retired as
+  fields.
 - The deferred parametric semantics interfaces: the rules are proved
   directly against `Step` and the memory state (walkthrough §7).

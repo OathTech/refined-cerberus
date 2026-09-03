@@ -240,7 +240,7 @@ theorem MetaByteOf.cohG {tds : CerbTags.TagDefsMap} {σ : Mem} {m : SpikeHeapF S
     CohG σ mm mb (∅ : SpikeHeapF AllocCursor) := by
   have hnone : ∀ k : Int, get? (∅ : SpikeHeapF AllocCursor) k = none :=
     fun k => Iris.Std.LawfulPartialMap.get?_empty k
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · intro id mc hget
     obtain ⟨c, hc, rfl⟩ := h.meta_sub id mc hget
     exact (hcoh.cells id c hc).toMetaCoh
@@ -263,12 +263,6 @@ theorem MetaByteOf.cohG {tds : CerbTags.TagDefsMap} {σ : Mem} {m : SpikeHeapF S
   · intro c hget
     rw [hnone 0] at hget
     cases hget
-  · intro hne
-    exact absurd (hnone 0) hne
-  · intro hne
-    exact absurd (hnone 0) hne
-  · intro hne
-    exact absurd (hnone 0) hne
   · intro hne
     exact absurd (hnone 0) hne
   · intro hne
@@ -441,90 +435,69 @@ theorem spikeCells_alloc (tds : CerbTags.TagDefsMap) {GF : BundledGFunctors} [Sp
     · iexact Hcells
 
 /-! ## Launch coherence and the allocation-aware launch (alloc arc
-P1.2/P1.3)
+P1.2/P1.3; K0 2026-09-03: the global invariant)
 
 `Coh` says the tracked cells exist and are disjoint. `LaunchCoh`
-extends it with exactly the allocator-health facts `CohG` states
-non-vacuously once cursor key 0 is PRESENT (charter P1.2's list):
-every tracked allocation id is below `σ.nextAllocId`; ids at or
-above `σ.nextAllocId` are absent from both the live and the dead
-allocation tables; every tracked allocation (hence every tracked
-byte) lies at or above the downward cursor `σ.lastAddress`; and the
-requested initial plan fits the actual
+extends it with THE GLOBAL MEMORY WELL-FORMEDNESS INVARIANT `MemWF σ`
+(Heap.lean, section "The global memory well-formedness invariant" —
+allocation-id discipline, live/dead consistency, pairwise range
+disjointness of ALL live allocations, cursor bounds, the
+dynamic-address facts; every component an engine fact) and the
+requested initial plan fitting the actual
 `⟨σ.lastAddress, σ.nextAllocId⟩`. (Spelling note vs the charter's
-`LaunchCoh σ m`: the plan is an explicit third argument — the
-charter's fourth fact mentions the requested plan, which is not a
+`LaunchCoh σ m`: the plan is an explicit third argument — it is not a
 function of σ and m.)
 
-FRESHNESS IS FOOTPRINT-RELATIVE (2026-09-02 audit, M-1). `LaunchCoh`
-constrains the TRACKED cells only (`id_lt`, `addr_lo` range over
-`get? m i = some c`); it says nothing about allocations the footprint
-does not track, and the engine's `allocateObject` computes the fresh
-address from the cursor without scanning existing allocation ranges.
-So a `create` is fresh from the LOGICAL FOOTPRINT — every owned cell
-is tracked and protected by `addr_lo`, which is exactly what
-`create_atomic`'s soundness needs — and NOT from untracked allocations
-an arbitrary concrete state may hold below the cursor;
-`MemTripleU_alloc` quantifies over such states and says nothing about
-their untracked storage. The production cold-start state is globally
-well formed (`prodMem₀_launchCoh`, ProdEntry.lean). A global memory
-well-formedness invariant (allocation-id discipline, live/dead
-consistency, range disjointness of ALL live allocations, cursor
-bounds) is registered for the malloc/free arc. -/
+FRESHNESS IS GLOBAL (K0; closes the 2026-09-02 detailed audit's M-1).
+The former footprint-relative fields `id_lt`/`fresh_alloc`/
+`fresh_dead`/`addr_lo`/`la_wf` are RETIRED: each is a consequence of
+`wf` (with `coh` for the tracked cells — a tracked cell IS a live
+allocation, `CellCoh.alloc`), and `wf` says strictly more: a `create`
+is fresh from EVERY live allocation of the state, tracked by the logic
+or not (`create_fresh_global`, Heap.lean). `MemTripleU_alloc`
+quantifies over exactly the states satisfying the footprint AND the
+invariant — the production cold-start state is one (`prodMem₀_memWF`,
+`prodMem₀_launchCoh`, ProdEntry.lean), and every state reached from
+one by the fragment's operations stays one (`CohG.wf` is preserved by
+`CohG.storeRange`/`CohG.create`). -/
 
 open Iris.Std.PartialMap in
-/-- Launch coherence: footprint coherence + allocator health + the
-    plan fit. What an allocation-aware launcher demands of the
-    initial state. -/
+/-- Launch coherence: footprint coherence + the global memory
+    well-formedness invariant + the plan fit. What an
+    allocation-aware launcher demands of the initial state. -/
 structure LaunchCoh (tds : CerbTags.TagDefsMap) (σ : Mem) (m : SpikeHeapF SpikeCell)
     (reqs : List AllocReq) : Prop where
   coh : Coh tds σ m
-  id_lt : ∀ i c, get? m i = some c → i < σ.nextAllocId
-  fresh_alloc : ∀ id : Int, σ.nextAllocId ≤ id →
-    σ.allocations.get? id = none
-  fresh_dead : ∀ id : Int, σ.nextAllocId ≤ id →
-    σ.deadAllocations.contains id = false
-  addr_lo : ∀ i c, get? m i = some c → σ.lastAddress ≤ c.addr
+  /-- the global memory well-formedness invariant (K0, acceptance
+      goal 3; Heap.lean) -/
+  wf : MemWF σ
   plan : PlanFits tds ⟨σ.lastAddress, σ.nextAllocId⟩ reqs
-  /-- The launch cursor respects the machine address bound (real
-      Cerberus starts the downward cursor at 0xFFFFFFFFFFFF < 2^64;
-      alloc arc P2 — rides inside `allocCap` so the public create
-      rules can export the fresh pointer's address-WF bounds). -/
-  la_wf : σ.lastAddress ≤ 2 ^ 64
 
 open Iris.Std.PartialMap in
-/-- Launch coherence at the EMPTY footprint: allocator health + the
-    plan (cold-start programs allocate everything themselves). -/
+/-- Launch coherence at the EMPTY footprint: the invariant + the plan
+    (cold-start programs allocate everything themselves). -/
 theorem LaunchCoh.empty (tds : CerbTags.TagDefsMap) (σ : Mem) (reqs : List AllocReq)
-    (halloc : ∀ id : Int, σ.nextAllocId ≤ id →
-      σ.allocations.get? id = none)
-    (hdead : ∀ id : Int, σ.nextAllocId ≤ id →
-      σ.deadAllocations.contains id = false)
-    (hplan : PlanFits tds ⟨σ.lastAddress, σ.nextAllocId⟩ reqs)
-    (hla : σ.lastAddress ≤ 2 ^ 64) :
+    (hwf : MemWF σ)
+    (hplan : PlanFits tds ⟨σ.lastAddress, σ.nextAllocId⟩ reqs) :
     LaunchCoh tds σ (∅ : SpikeHeapF SpikeCell) reqs := by
   have hnone : ∀ i : Int, get? (∅ : SpikeHeapF SpikeCell) i = none :=
     fun i => Iris.Std.LawfulPartialMap.get?_empty i
-  refine ⟨⟨?_, ?_⟩, ?_, halloc, hdead, ?_, hplan, hla⟩
+  refine ⟨⟨?_, ?_⟩, hwf, hplan⟩
   · intro i c hg
     rw [hnone i] at hg
     cases hg
   · intro i j c1 c2 hne h1 h2
     rw [hnone i] at h1
     cases h1
-  · intro i c hg
-    rw [hnone i] at hg
-    cases hg
-  · intro i c hg
-    rw [hnone i] at hg
-    cases hg
 
 open Iris.Std.PartialMap in
 /-- The launched coupling: a launch-coherent footprint's ghost
     images couple to σ WITH the cursor cell present at key 0 — the
-    `cur_*` facts of `CohG` are NON-VACUOUS here (contrast
-    `MetaByteOf.cohG` above, whose empty cursor map makes them
-    vacuous), discharged from `LaunchCoh`'s allocator health. -/
+    conditional facts of `CohG` (`wf`, `cur_byte_lo`) are NON-VACUOUS
+    here (contrast `MetaByteOf.cohG` above, whose empty cursor map
+    makes them vacuous), discharged from `LaunchCoh.wf`: the global
+    invariant verbatim, and the tracked-byte bound through the
+    tracked cell's live allocation record and `MemWF.cursor_lo`. -/
 theorem LaunchCoh.cohG {tds : CerbTags.TagDefsMap} {σ : Mem} {m : SpikeHeapF SpikeCell}
     {reqs : List AllocReq}
     {mm : SpikeHeapF MetaCell} {mb : SpikeHeapF CerbMem.AbsByte}
@@ -534,7 +507,7 @@ theorem LaunchCoh.cohG {tds : CerbTags.TagDefsMap} {σ : Mem} {m : SpikeHeapF Sp
         ⟨σ.lastAddress, σ.nextAllocId⟩) := by
   have base := hmbo.cohG h.coh
   refine ⟨base.metas, base.metas_disj, base.bytes,
-    ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+    ?_, ?_, fun _ => h.wf, ?_⟩
   · -- cursor_key
     intro k c hget
     by_cases hk : k = 0
@@ -547,30 +520,21 @@ theorem LaunchCoh.cohG {tds : CerbTags.TagDefsMap} {σ : Mem} {m : SpikeHeapF Sp
     rw [Iris.Std.get?_insert_eq rfl] at hget
     obtain rfl := Option.some.inj hget
     exact ⟨rfl, rfl⟩
-  · -- cur_dead
-    intro _ id hle
-    exact h.fresh_dead id hle
-  · -- cur_alloc
-    intro _ id hle
-    exact h.fresh_alloc id hle
-  · -- cur_meta_lt
-    intro _ id mc hget
-    obtain ⟨c, hc, rfl⟩ := hmbo.meta_sub id mc hget
-    exact h.id_lt id c hc
-  · -- cur_byte_lo: tracked bytes sit inside tracked cells, which sit
-    -- at or above the cursor
+  · -- cur_byte_lo: tracked bytes sit inside tracked cells; a tracked
+    -- cell is a live allocation (`CellCoh.alloc`), which the global
+    -- invariant places at or above the cursor
     intro _ k b hget
     obtain ⟨i, c, hc, hk1, -, -⟩ := hmbo.byte_cov k b hget
-    exact Int.le_trans (h.addr_lo i c hc) hk1
-  · -- cur_meta_lo
-    intro _ id mc hget
-    obtain ⟨c, hc, rfl⟩ := hmbo.meta_sub id mc hget
-    exact h.addr_lo id c hc
+    obtain ⟨al, hal, hbase, -⟩ := (h.coh.cells i c hc).alloc
+    have hlo := h.wf.cursor_lo i al hal
+    rw [hbase] at hlo
+    exact Int.le_trans hlo hk1
 
 /-- The launched cursor key is NONEMPTY (merge-row-3 must-prove,
     stated once): key 0 of the launched cursor map holds the real
-    allocator fields, so every `get? mk 0 ≠ none` hypothesis of
-    `CohG`'s `cur_*` fields is satisfied at launch. -/
+    allocator fields, so the `get? mk 0 ≠ none` hypothesis of
+    `CohG`'s conditional fields (`wf`, `cur_byte_lo`) is satisfied at
+    launch. -/
 theorem launchCursor_key_nonempty (σ : Mem) :
     Iris.Std.PartialMap.get?
       (Iris.Std.PartialMap.insert (∅ : SpikeHeapF AllocCursor) 0
@@ -618,7 +582,7 @@ theorem launchResources (tds : CerbTags.TagDefsMap) {GF : BundledGFunctors} [Spi
   isplitl [Hcells]
   · iexact Hcells
   · iapply allocCap_intro tds ⟨σ.lastAddress, σ.nextAllocId⟩ reqs h.plan
-      h.la_wf $$ Hc
+      h.wf.la_wf $$ Hc
 
 /-! ## Step-level adequacy: constructing SpikeGS and applying iris -/
 
@@ -1282,14 +1246,14 @@ the footprint cells AND `allocCap reqs` — and concludes the boring
 triple `MemTripleU_alloc`, whose ONLY difference from `MemTripleU` is
 the launch precondition: `LaunchCoh M.tagDefs σ (P ∪ R) reqs` in
 place of `Sat M.tagDefs σ (P ∪ R)`. The two genuinely differ:
-`LaunchCoh` is `Sat` (its `coh` field) PLUS the allocator-health
-facts the create rule's soundness needs — every id at or above the
-engine's `nextAllocId` is unallocated and not dead, every footprint
-cell sits at or above the downward cursor `lastAddress`, the request
-plan fits the actual `⟨lastAddress, nextAllocId⟩`, and the cursor is
-below `2^64` — none of which follows from `Sat` (a memory can carry
-the footprint and still have its allocator cursor sitting on top of
-those cells). The frame stays built into the definition (`R`
+`LaunchCoh` is `Sat` (its `coh` field) PLUS the global memory
+well-formedness invariant `MemWF σ` (K0: allocation-id discipline,
+live/dead consistency, range disjointness of ALL live allocations,
+cursor bounds, the dynamic-address facts) PLUS the request plan
+fitting the actual `⟨lastAddress, nextAllocId⟩` — none of which
+follows from `Sat` (a memory can carry the footprint and still have
+its allocator cursor sitting on top of those cells). The frame stays
+built into the definition (`R`
 returned to the post), the post is the same "every pure consequence
 of the Iris post" as `project_triple`'s, and `MemTripleU` implies
 `MemTripleU_alloc` at every plan (`MemTripleU_alloc_of_MemTripleU`):
@@ -1303,8 +1267,9 @@ stronger launch premise. -/
     cursor). Frame built in (`R` arbitrary, returned to the post);
     partial correctness; the drive length is unbounded and no fuel
     premise is carried, as in `MemTripleU`. PROVISIONAL: stated over
-    `driveU` (module header). Freshness under `LaunchCoh` is
-    footprint-relative (the `LaunchCoh` section header). -/
+    `driveU` (module header). Freshness under `LaunchCoh` is GLOBAL
+    (`MemWF`, `create_fresh_global`; the `LaunchCoh` section
+    header). -/
 def MemTripleU_alloc (M : MachineCtx) (ρ : EnvStack) (e : CoreExpr) (P : CellMap)
     (reqs : List AllocReq) (post : CellMap → value → Mem → Prop) : Prop :=
   ∀ (R : CellMap), P ##ₘ R →

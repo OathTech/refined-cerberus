@@ -210,33 +210,77 @@ theorem prodMem₀_allocations :
 
 theorem prodMem₀_deadAllocations : prodMem₀.deadAllocations = [] := rfl
 
-/-- Allocator health at the production cold start: errno (id 0,
-    below `nextAllocId = 1`) is the ONLY allocation, nothing is
-    dead, so any plan fitting the actual cursor `⟨errnoAddr, 1⟩`
-    launches the empty footprint allocation-aware. -/
-theorem prodMem₀_launchCoh (reqs : List AllocReq)
-    (hfit : PlanFits fmapEmpty ⟨prodMem₀.lastAddress, prodMem₀.nextAllocId⟩ reqs) :
-    LaunchCoh fmapEmpty prodMem₀ (∅ : SpikeHeapF SpikeCell) reqs := by
-  refine LaunchCoh.empty fmapEmpty prodMem₀ reqs ?_ ?_ hfit
-    (by rw [prodMem₀_lastAddress]; decide)
-  · intro id hle
-    rw [prodMem₀_nextAllocId] at hle
+theorem prodMem₀_dynamicAddrs : prodMem₀.dynamicAddrs = [] := rfl
+
+/-- THE COLD-START INVARIANT (K0, acceptance goal 3): the production
+    initial memory is globally well formed. errno (id 0, below
+    `nextAllocId = 1`) is the ONLY allocation, at the cursor
+    (`lastAddress = errnoAddr = errnoAllocRec.base`), of size 4;
+    nothing is dead; no dynamic address; the cursor is below 2^64. -/
+theorem prodMem₀_memWF : MemWF prodMem₀ := by
+  have hget : ∀ id : Int, prodMem₀.allocations.get? id =
+      if (0 : Int) = id then some errnoAllocRec
+      else ({} : Mem).allocations.get? id := by
+    intro id
     rw [prodMem₀_allocations]
-    have hget : (({} : Mem).allocations.insert 0 errnoAllocRec).get? id =
-        if (0 : Int) = id then some errnoAllocRec
-        else ({} : Mem).allocations.get? id := by
-      simp [Std.TreeMap.get?_eq_getElem?, Std.TreeMap.getElem?_insert]
-    -- NB: omega fails on this trivially-true Int goal in this proof
-    -- context (the CohG.create phenomenon, phase-2 notes); the
-    -- explicit route is used instead.
-    have hne : ¬ ((0 : Int) = id) := fun h => absurd hle (by
-      rw [← h]
-      decide)
-    rw [hget, if_neg hne]
-    rfl
-  · intro id _
+    simp [Std.TreeMap.get?_eq_getElem?, Std.TreeMap.getElem?_insert]
+  have hempty : ∀ id : Int, ({} : Mem).allocations.get? id = none := fun _ => rfl
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  · intro id al hg
+    rw [hget] at hg
+    split at hg
+    · next h0 =>
+      rw [← h0, prodMem₀_nextAllocId]
+      decide
+    · rw [hempty] at hg
+      cases hg
+  · intro id hc
+    rw [prodMem₀_deadAllocations] at hc
+    cases hc
+  · intro id al hg
     rw [prodMem₀_deadAllocations]
     rfl
+  · intro i j ai aj hne hgi hgj
+    rw [hget] at hgi hgj
+    split at hgi
+    · next hi =>
+      split at hgj
+      · next hj => exact absurd (hi.symm.trans hj) hne
+      · rw [hempty] at hgj
+        cases hgj
+    · rw [hempty] at hgi
+      cases hgi
+  · intro id al hg
+    rw [hget] at hg
+    split at hg
+    · obtain rfl := Option.some.inj hg
+      rw [prodMem₀_lastAddress]
+      exact Int.le_refl _
+    · rw [hempty] at hg
+      cases hg
+  · intro id al hg
+    rw [hget] at hg
+    split at hg
+    · obtain rfl := Option.some.inj hg
+      decide
+    · rw [hempty] at hg
+      cases hg
+  · rw [prodMem₀_lastAddress]
+    decide
+  · intro a ha
+    rw [prodMem₀_dynamicAddrs] at ha
+    cases ha
+  · intro a ha
+    rw [prodMem₀_dynamicAddrs] at ha
+    cases ha
+
+/-- Launch coherence at the production cold start: the invariant
+    (`prodMem₀_memWF`) plus any plan fitting the actual cursor
+    `⟨errnoAddr, 1⟩` launches the empty footprint allocation-aware. -/
+theorem prodMem₀_launchCoh (reqs : List AllocReq)
+    (hfit : PlanFits fmapEmpty ⟨prodMem₀.lastAddress, prodMem₀.nextAllocId⟩ reqs) :
+    LaunchCoh fmapEmpty prodMem₀ (∅ : SpikeHeapF SpikeCell) reqs :=
+  LaunchCoh.empty fmapEmpty prodMem₀ reqs prodMem₀_memWF hfit
 
 /-! ## The thread at fragment start (Driver.lean:512, the parked-main
 thread literal) -/
