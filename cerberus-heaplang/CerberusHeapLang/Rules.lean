@@ -1050,6 +1050,293 @@ theorem kill_atomic [SpikeGS hlc GF] {M : MachineCtx}
     · unfold deadObj
       iexact Hm
 
+/-- `alloc(align, size)` — positive strong dynamic allocation, canonical
+    evaluated integer operands (what `Step.alloc` fires on; `allocRedex`'s
+    spelling). -/
+def allocExpr (loc : CerbLocation.Loc) (ann : core_run_annotation)
+    (align size : CerbMem.IntegerValue) (pref : prefix0) : CoreExpr :=
+  Expr [] (Eaction (Paction polarity.Pos (Action loc ann
+    (Alloc0 (Pexpr [] () (PEval (Vobject (OVinteger align))))
+            (Pexpr [] () (PEval (Vobject (OVinteger size)))) pref))))
+
+open Iris.Std.PartialMap in
+/-- THE ALLOCATION RULE (kill/free arc K3) — the classical `{emp} cons
+    {p ↦ -}` in its budgeted form, as an atomic step: `allocBudget
+    (regionCost alignN sizeN)` buys ONE application of the real
+    `allocateRegion` (`allocateRegion_success`), which delivers an
+    EXISTENTIAL fresh region pointer `cellPtr id a` (the engine's cursor
+    picks it) with the whole REGION at full ownership — `regionOwn id a
+    sizeN.toNat (.own 1)` at unspecified bytes: untyped, writable, DYNAMIC
+    (the cell records `dynamic := true`, coupled to the base's push onto
+    `dynamicAddrs`, CerbMem.lean:1548) — and its machine-address bounds
+    `0 < a ∧ a + size ≤ 2^64` (`MemWF.la_wf` through `CohG.wf`). The budget
+    is CONSUMED. The out-of-memory arm is excluded by THE COUPLING
+    INEQUALITY exactly as for `create`, now at EVERY size: the authority is
+    at most the cursor's headroom (`budgetInterp`), the fragment is at most
+    the authority (`budgetAuth_bound`), the cursor is positive
+    (`MemWF.la_pos`, K3), so a cost within the headroom is a nonzero fresh
+    base (`freshBase_ne_zero_of_cost'`) and the headroom shrinks by at most
+    the cost (`headroom_freshBase'`). `hcost : 0 < regionCost alignN sizeN`
+    is what makes the budget FORCE a cursor cell (a zero-cost fragment,
+    `allocBudget 0`, is the unit and witnesses nothing): it holds at every
+    positive size (`regionCost_pos`) and at size 0 whenever the alignment
+    is ≥ 2; the one shape outside the rule is `alloc(al, 0)` at `al ≤ 1`
+    — an engine-classified round (`complete_alloc`), never a hidden
+    assumption. Ghost: the cursor advances, the metadata cell is minted at
+    the fresh id, the (possibly empty) byte range is minted, the budget is
+    spent (`CohG.alloc` re-establishes the coupling). The delivered value
+    is the BARE pointer (cost 1). No type premise, no `hinert`: regions are
+    layout-free. -/
+theorem alloc_atomic [SpikeGS hlc GF] {M : MachineCtx}
+    (loc : CerbLocation.Loc) (ann : core_run_annotation)
+    (aprov sprov : CerbMem.Provenance) (alignN sizeN : Int)
+    (pref : prefix0) (ρ : EnvStack)
+    (hcost : 0 < regionCost alignN sizeN) :
+    AtomicStep M (allocExpr loc ann (.IV aprov alignN) (.IV sprov sizeN) pref) ρ 1
+      (allocBudget (GF := GF) (regionCost alignN sizeN))
+      (fun w => iprop(∃ (id a : Int),
+        ⌜w = SpikeVal.pure (Vobject (OVpointer (cellPtr id a)))⌝ ∗
+        regionOwn id a sizeN.toNat (.own 1) (List.replicate sizeN.toNat undefByte) ∗
+        ⌜0 < a ∧ a + (sizeN.toNat : Int) ≤ 2 ^ 64⌝)) := by
+  intro E₁ E₂ hE σ₁ ns obs nt
+  iintro ⟨Hb, Hσ⟩
+  icases (stateInterp_iff σ₁ ns obs nt).mp $$ Hσ
+    with ⟨%mm, %mb, %mk, %HG, Hmi, Hbi, Hki, HB⟩
+  icases (budgetInterp_iff mk).mp $$ HB with ⟨%B, HBa, HBc⟩
+  -- the fragment is bounded by the authority
+  ihave %hle : ⌜regionCost alignN sizeN ≤ B⌝ $$ [HBa Hb]
+  · iapply budgetAuth_bound B (regionCost alignN sizeN)
+    isplitl [HBa]
+    · iexact HBa
+    · iexact Hb
+  obtain ⟨m, rfl⟩ := Nat.exists_eq_add_of_le hle
+  icases HBc with (%hB0 | ⟨%c, %hc, Hc⟩)
+  · -- a positive cost at the empty authority is impossible
+    exact ((by omega) : False).elim
+  obtain ⟨Hgetc, hBle⟩ := hc
+  obtain ⟨cla, cnid⟩ := c
+  obtain ⟨hla, hnid⟩ := HG.cursor _ Hgetc
+  simp only at hla hnid hBle
+  subst hla
+  subst hnid
+  have hcurne : get? mk 0 ≠ none := by
+    rw [Hgetc]
+    simp
+  have hla64 : σ₁.lastAddress ≤ 2 ^ 64 := (HG.wf hcurne).la_wf
+  have hlapos : 0 < σ₁.lastAddress := (HG.wf hcurne).la_pos
+  have hcostle : sizeN.toNat + alignN.toNat.max 1 - 1 ≤ headroom σ₁.lastAddress :=
+    Nat.le_trans (Nat.le_add_right _ _) hBle
+  have hnz : freshBase σ₁.lastAddress alignN sizeN.toNat ≠ 0 :=
+    freshBase_ne_zero_of_cost' _ _ _ hlapos hcostle
+  have hcons := headroom_freshBase' σ₁.lastAddress alignN _ hlapos hcostle
+  have hbase_le := freshBase_add_le_nat σ₁.lastAddress alignN sizeN.toNat hnz
+  have hbase_pos := freshBase_pos_nat σ₁.lastAddress alignN sizeN.toNat hnz
+  have hrun := allocateRegion_success σ₁ pref aprov sprov alignN sizeN hnz
+  iapply fupd_mask_intro hE
+  iintro Hclose
+  isplitr
+  · ipureintro
+    exact ⟨[], ⟨_, _, _⟩, _, [], ⟨Step.alloc_canonical hrun, rfl, rfl⟩⟩
+  iintro %r %σ₂ %eₜ %Hstep
+  obtain ⟨hstep, hlbl, rfl⟩ := Hstep
+  obtain ⟨pv', σ'', hmem', hout⟩ := hstep.alloc_inv
+  rw [hrun] at hmem'
+  obtain ⟨rfl, rfl⟩ : cellPtr σ₁.nextAllocId
+      (freshBase σ₁.lastAddress alignN sizeN.toNat) = pv' ∧
+      CerbMem.writeBytesTo
+        { σ₁ with
+            nextAllocId := σ₁.nextAllocId + 1,
+            lastAddress := freshBase σ₁.lastAddress alignN sizeN.toNat,
+            allocations := σ₁.allocations.insert σ₁.nextAllocId
+              { base := freshBase σ₁.lastAddress alignN sizeN.toNat,
+                size := (sizeN.toNat : Int),
+                prefix_ := pref },
+            dynamicAddrs := freshBase σ₁.lastAddress alignN sizeN.toNat :: σ₁.dynamicAddrs }
+        (freshBase σ₁.lastAddress alignN sizeN.toNat)
+        (List.replicate sizeN.toNat undefByte) = σ'' := by
+    have h := Option.some.inj hmem'
+    exact ⟨congrArg Prod.fst h, congrArg Prod.snd h⟩
+  obtain ⟨re, rρ, rM⟩ := r
+  simp only at hlbl
+  obtain rfl : M = rM := hlbl.symm
+  simp only [Prod.mk.injEq] at hout
+  obtain ⟨hre, hrρ, hσ⟩ := hout
+  subst hre hσ
+  obtain rfl : ρ = rρ := hrρ.symm
+  imod Hclose with -
+  -- ghost: advance the cursor, mint the region cell, mint the bytes,
+  -- spend the budget
+  imod (cursorHeap_update
+    (AllocCursor.mk (freshBase σ₁.lastAddress alignN sizeN.toNat)
+      (σ₁.nextAllocId + 1))) $$ [$Hki $Hc] with ⟨Hki, Hc⟩
+  have hfreshm : Iris.Std.PartialMap.get? mm σ₁.nextAllocId = none := by
+    cases hg : Iris.Std.PartialMap.get? mm σ₁.nextAllocId with
+    | none => rfl
+    | some mc =>
+      have := HG.cur_meta_lt hcurne _ _ hg
+      omega
+  imod (metaHeap_alloc
+    (regionCell (freshBase σ₁.lastAddress alignN sizeN.toNat) sizeN.toNat true)
+    hfreshm) $$ [$Hmi] with ⟨Hmi, Hmnew⟩
+  have hfreshb : (rangeMap
+      (freshBase σ₁.lastAddress alignN sizeN.toNat)
+      (List.replicate sizeN.toNat undefByte)) ##ₘ mb := by
+    rw [Iris.Std.PartialMap.disjoint_iff]
+    intro key
+    cases hg : Iris.Std.PartialMap.get? mb key with
+    | none => exact .inr rfl
+    | some b =>
+      left
+      rw [rangeMap_get?]
+      rw [if_neg ?_]
+      have hkey := HG.cur_byte_lo hcurne _ _ hg
+      intro hcon
+      obtain ⟨h1, h2⟩ := hcon
+      rw [List.length_replicate] at h2
+      exact absurd (Int.lt_of_lt_of_le h2 (Int.le_trans hbase_le hkey))
+        (Int.lt_irrefl key)
+  imod (byteHeap_alloc_big (rangeMap
+      (freshBase σ₁.lastAddress alignN sizeN.toNat)
+      (List.replicate sizeN.toNat undefByte)) hfreshb)
+    $$ [$Hbi] with ⟨Hbi, Hbnew⟩
+  imod (budgetAuth_consume (regionCost alignN sizeN) m) $$ [$HBa $Hb] with HBa
+  imodintro
+  isplitl [Hmi Hbi Hki HBa Hc]
+  · iapply (stateInterp_iff _ _ _ _).mpr
+    iexists (Iris.Std.PartialMap.insert mm σ₁.nextAllocId
+        (regionCell (freshBase σ₁.lastAddress alignN sizeN.toNat) sizeN.toNat true)),
+      (Iris.Std.PartialMap.union (rangeMap
+        (freshBase σ₁.lastAddress alignN sizeN.toNat)
+        (List.replicate sizeN.toNat undefByte)) mb),
+      (Iris.Std.PartialMap.insert mk 0
+        ⟨freshBase σ₁.lastAddress alignN sizeN.toNat, σ₁.nextAllocId + 1⟩)
+    isplitr [Hmi Hbi Hki HBa Hc]
+    · ipureintro
+      exact HG.alloc pref alignN sizeN Hgetc hnz
+    isplitl [Hmi]
+    · iexact Hmi
+    isplitl [Hbi]
+    · iexact Hbi
+    isplitl [Hki]
+    · iexact Hki
+    · -- the coupling inequality at the advanced cursor
+      iapply budgetInterp_intro _
+        ⟨freshBase σ₁.lastAddress alignN sizeN.toNat, σ₁.nextAllocId + 1⟩ m
+        (Iris.Std.get?_insert_eq rfl)
+        (by
+          show m ≤ headroom (freshBase σ₁.lastAddress alignN sizeN.toNat)
+          have hc : regionCost alignN sizeN = sizeN.toNat + alignN.toNat.max 1 - 1 := rfl
+          omega)
+      isplitl [HBa]
+      · iexact HBa
+      · iexact Hc
+  · ihave HBy : bytesOwn (freshBase σ₁.lastAddress alignN sizeN.toNat) (.own 1)
+        (List.replicate sizeN.toNat undefByte) $$ [Hbnew]
+    · iapply bigSepM_rangeMap $$ Hbnew
+    iexists (SpikeVal.pure (Vobject (OVpointer (cellPtr σ₁.nextAllocId
+        (freshBase σ₁.lastAddress alignN sizeN.toNat)))))
+    isplit
+    · ipureintro
+      exact ⟨rfl, rfl, Nat.le_refl 1⟩
+    iexists σ₁.nextAllocId, (freshBase σ₁.lastAddress alignN sizeN.toNat)
+    isplit
+    · ipureintro; rfl
+    isplitl [Hmnew HBy]
+    · unfold regionOwn
+      isplitl [Hmnew]
+      · iexact Hmnew
+      isplitl [HBy]
+      · iexact HBy
+      · ipureintro
+        simp
+    · ipureintro
+      exact ⟨hbase_pos, Int.le_trans hbase_le hla64⟩
+
+/-- THE FREE RULE (kill/free arc K3) — the classical `{p ↦ region}
+    dispose(p) {emp}` for DYNAMIC storage, as an atomic step: the dynamic
+    kill (`hdyn : is_dynamic kind = true`; `free(p)`, `Kill Dynamic0`) at
+    the base of a whole live REGION consumes the region at FULL ownership —
+    `regionOwn id a n (.own 1) bs`, whose liveness token is `metaOwn id
+    (.own 1) (regionCell a n true)` — and delivers the BARE unit (cost 1)
+    with, at most, the persistent DEAD region `deadRegion id a n` (a client
+    may drop it: `wps_free_emp`/`wpt_free_emp`). ONE application of the
+    real `CerbMem.killM` at `isDynamic = true` (`killM_success_dynamic`):
+    the `cellPtr` shape and `MetaCoh` pass the null/function/other-
+    provenance (UB179a), dead (UB179b) and out-of-bound (`Other`) arms as
+    for the static kill, and the DYNAMIC check `!st.dynamicAddrs.contains
+    alloc.base` (CerbMem.lean:1573 — UB179a when it fails) passes because
+    the cell's `dynamic = true` is coupled to `a ∈ dynamicAddrs`
+    (`MetaCoh.dynamic`, `regionOwn_facts`), crossed to the engine's Bool by
+    `mem_contains_int`. "This allocation is dynamic" is read off the
+    METADATA CELL the `alloc` rule minted, never off `dynamicAddrs` (K0
+    audit N-1: the list is never cleaned, so it is not evidence). Ghost as
+    `kill_atomic`: `metaHeap_update` flips `alive := false`, `metaOwn_persist`
+    discards; the byte fragments are DROPPED (`killM` leaves the bytemap
+    alone, addresses are never reused — `CohG.kill`). -/
+theorem free_atomic [SpikeGS hlc GF] {M : MachineCtx}
+    (loc : CerbLocation.Loc) (ann : core_run_annotation) (kind : kill_kind)
+    (id a : Int) (n : Nat) (bs : List CerbMem.AbsByte) (ρ : EnvStack)
+    (hdyn : is_dynamic kind = true) :
+    AtomicStep M (killExpr loc ann kind (cellPtr id a)) ρ 1
+      (regionOwn (GF := GF) id a n (.own 1) bs)
+      (fun w => iprop(⌜w = SpikeVal.pure Vunit⌝ ∗ deadRegion id a n)) := by
+  intro E₁ E₂ hE σ₁ ns obs nt
+  unfold regionOwn
+  iintro ⟨⟨Hm, -, -⟩, Hσ⟩
+  icases (stateInterp_iff σ₁ ns obs nt).mp $$ Hσ
+    with ⟨%mm, %mb, %mk, %HG, Hmi, Hbi, Hki⟩
+  ihave %Hgetm : ⌜Iris.Std.PartialMap.get? mm id = some (regionCell a n true)⌝
+      $$ [Hmi Hm]
+  · ihave >%h := metaHeap_valid $$ [$Hmi $Hm]
+    itrivial
+  have hrun : applyMemM (CerbMem.killM loc (is_dynamic kind) (cellPtr id a)) σ₁ =
+      some ((), { σ₁ with deadAllocations := id :: σ₁.deadAllocations,
+                          allocations := σ₁.allocations.erase id }) := by
+    rw [hdyn]
+    exact killM_success_dynamic σ₁ id (regionCell a n true) loc
+      (HG.metas id _ Hgetm) rfl rfl
+  iapply fupd_mask_intro hE
+  iintro Hclose
+  isplitr
+  · ipureintro
+    exact ⟨[], ⟨_, _, _⟩, _, [], ⟨Step.kill_canonical hrun, rfl, rfl⟩⟩
+  iintro %r %σ₂ %eₜ %Hstep
+  obtain ⟨hstep, hlbl, rfl⟩ := Hstep
+  obtain ⟨σ'', hmem', hout⟩ := hstep.kill_inv
+  rw [hrun] at hmem'
+  obtain ⟨-, rfl⟩ := Prod.mk.inj (Option.some.inj hmem')
+  obtain ⟨re, rρ, rM⟩ := r
+  simp only at hlbl
+  obtain rfl : M = rM := hlbl.symm
+  simp only [Prod.mk.injEq] at hout
+  obtain ⟨hre, hrρ, hσ⟩ := hout
+  subst hre hσ
+  obtain rfl : ρ = rρ := hrρ.symm
+  imod Hclose with -
+  -- ghost: flip the region cell to dead, then discard it
+  imod (metaHeap_update (regionCell a n false)) $$ [$Hmi $Hm] with ⟨Hmi, Hm⟩
+  imod (metaOwn_persist id (.own 1) _) $$ Hm with Hm
+  imodintro
+  isplitl [Hmi Hbi Hki]
+  · iapply (stateInterp_iff _ _ _ _).mpr
+    iexists (Iris.Std.PartialMap.insert mm id (regionCell a n false)), mb, mk
+    isplitr [Hmi Hbi Hki]
+    · ipureintro
+      exact HG.kill id _ Hgetm rfl
+    isplitl [Hmi]
+    · iexact Hmi
+    isplitl [Hbi]
+    · iexact Hbi
+    · iexact Hki
+  · iexists (SpikeVal.pure Vunit)
+    isplit
+    · ipureintro
+      exact ⟨rfl, rfl, Nat.le_refl 1⟩
+    isplit
+    · ipureintro; rfl
+    · unfold deadRegion
+      iexact Hm
+
 /-! ## The raw-WP faces of the small axioms (corollaries) -/
 
 /-- wp_store (small axiom, UB-excluding).

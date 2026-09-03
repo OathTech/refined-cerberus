@@ -29,29 +29,35 @@ open Lean
 
 namespace CapabilityManifest
 
-/-- THE MAPPING: fragment constructor → the rule theorem covering it. -/
-def ruleFor : Name → Option Name
-  | `CerberusHeapLang.Frag.val_pure   => some `CerberusHeapLang.wps_ofVal
-  | `CerberusHeapLang.Frag.store      => some `CerberusHeapLang.wps_store
-  | `CerberusHeapLang.Frag.load       => some `CerberusHeapLang.wps_load_at
-  | `CerberusHeapLang.Frag.create     => some `CerberusHeapLang.wps_create
-  | `CerberusHeapLang.Frag.kill       => some `CerberusHeapLang.wps_kill
-  | `CerberusHeapLang.Frag.kill_op    => some `CerberusHeapLang.wps_kill_eval
-  | `CerberusHeapLang.Frag.sseq       => some `CerberusHeapLang.wps_seq
-  | `CerberusHeapLang.Frag.annot      => some `CerberusHeapLang.wps_annot
-  | `CerberusHeapLang.Frag.save       => some `CerberusHeapLang.wps_save
-  | `CerberusHeapLang.Frag.if_        => some `CerberusHeapLang.wps_if_true
-  | `CerberusHeapLang.Frag.run        => some `CerberusHeapLang.wps_run
-  | `CerberusHeapLang.Frag.sseq_spec  => some `CerberusHeapLang.wps_seq_spec
-  | `CerberusHeapLang.Frag.pure_sym   => some `CerberusHeapLang.wps_pure
-  | `CerberusHeapLang.Frag.load_op    => some `CerberusHeapLang.wps_load_eval
-  | `CerberusHeapLang.Frag.sseq_sym   => some `CerberusHeapLang.wps_seq_sym
-  | `CerberusHeapLang.Frag.memop_vals => some `CerberusHeapLang.wps_memop_ptreq
-  | `CerberusHeapLang.Frag.memop_op   => some `CerberusHeapLang.wps_memop_eval
-  | `CerberusHeapLang.Frag.store_op   => some `CerberusHeapLang.wps_store_eval
-  | `CerberusHeapLang.Frag.case_value => some `CerberusHeapLang.wps_case_value
-  | `CerberusHeapLang.Frag.wseq       => some `CerberusHeapLang.wps_wseq
-  | _ => none
+/-- THE MAPPING: fragment constructor → the rule theorem(s) covering it
+    (kill/free arc K3: a constructor may be covered by several
+    kind-specific rules — `Frag.kill` by the static dispose `wps_kill` AND
+    the dynamic `wps_free`; every listed rule is checked separately). An
+    empty list is a MISSING row. -/
+def ruleFor : Name → List Name
+  | `CerberusHeapLang.Frag.val_pure   => [`CerberusHeapLang.wps_ofVal]
+  | `CerberusHeapLang.Frag.store      => [`CerberusHeapLang.wps_store]
+  | `CerberusHeapLang.Frag.load       => [`CerberusHeapLang.wps_load_at]
+  | `CerberusHeapLang.Frag.create     => [`CerberusHeapLang.wps_create]
+  | `CerberusHeapLang.Frag.kill       => [`CerberusHeapLang.wps_kill, `CerberusHeapLang.wps_free]
+  | `CerberusHeapLang.Frag.kill_op    => [`CerberusHeapLang.wps_kill_eval]
+  | `CerberusHeapLang.Frag.alloc      => [`CerberusHeapLang.wps_alloc]
+  | `CerberusHeapLang.Frag.alloc_op   => [`CerberusHeapLang.wps_alloc_eval]
+  | `CerberusHeapLang.Frag.sseq       => [`CerberusHeapLang.wps_seq]
+  | `CerberusHeapLang.Frag.annot      => [`CerberusHeapLang.wps_annot]
+  | `CerberusHeapLang.Frag.save       => [`CerberusHeapLang.wps_save]
+  | `CerberusHeapLang.Frag.if_        => [`CerberusHeapLang.wps_if_true]
+  | `CerberusHeapLang.Frag.run        => [`CerberusHeapLang.wps_run]
+  | `CerberusHeapLang.Frag.sseq_spec  => [`CerberusHeapLang.wps_seq_spec]
+  | `CerberusHeapLang.Frag.pure_sym   => [`CerberusHeapLang.wps_pure]
+  | `CerberusHeapLang.Frag.load_op    => [`CerberusHeapLang.wps_load_eval]
+  | `CerberusHeapLang.Frag.sseq_sym   => [`CerberusHeapLang.wps_seq_sym]
+  | `CerberusHeapLang.Frag.memop_vals => [`CerberusHeapLang.wps_memop_ptreq]
+  | `CerberusHeapLang.Frag.memop_op   => [`CerberusHeapLang.wps_memop_eval]
+  | `CerberusHeapLang.Frag.store_op   => [`CerberusHeapLang.wps_store_eval]
+  | `CerberusHeapLang.Frag.case_value => [`CerberusHeapLang.wps_case_value]
+  | `CerberusHeapLang.Frag.wseq       => [`CerberusHeapLang.wps_wseq]
+  | _ => []
 
 /-! ## Environment reflection -/
 
@@ -137,7 +143,7 @@ partial def cone (env : Environment) (canReach : Name → Bool) (seeds : Array N
   let ruleMods : Std.HashSet Name := Id.run do
     let mut s : Std.HashSet Name := {}
     for ctor in fragInfo.ctors do
-      if let some r := ruleFor ctor then
+      for r in ruleFor ctor do
         if env.contains r then s := s.insert (modOf env r)
     return s
   let closures : Std.HashMap Name (Std.HashSet Name) := Id.run do
@@ -165,26 +171,29 @@ partial def cone (env : Environment) (canReach : Name → Bool) (seeds : Array N
   -- rows
   let mut lines : Array String := #[]
   let mut red : Nat := 0
+  let mut ruleRows : Nat := 0
   for ctor in fragInfo.ctors do
     match ruleFor ctor with
-    | none =>
+    | [] =>
       lines := lines.push s!"| `{short ctor}` | **MISSING** — no rule mapped (add a `ruleFor` arm) | — |"
       red := red + 1
-    | some r =>
-      match env.find? r with
-      | some (.thmInfo _) =>
-        let users := cones.filter (fun (_, c) => c.contains r) |>.map (fun (ex, _) => short ex)
-        if users.isEmpty then
-          lines := lines.push s!"| `{short ctor}` | `{short r}` | **RED** — consumed by no exhibit |"
+    | rs =>
+      for r in rs do
+        ruleRows := ruleRows + 1
+        match env.find? r with
+        | some (.thmInfo _) =>
+          let users := cones.filter (fun (_, c) => c.contains r) |>.map (fun (ex, _) => short ex)
+          if users.isEmpty then
+            lines := lines.push s!"| `{short ctor}` | `{short r}` | **RED** — consumed by no exhibit |"
+            red := red + 1
+          else
+            lines := lines.push s!"| `{short ctor}` | `{short r}` | {", ".intercalate users.toList} |"
+        | some _ =>
+          lines := lines.push s!"| `{short ctor}` | `{short r}` | **RED** — exists but is not a theorem |"
           red := red + 1
-        else
-          lines := lines.push s!"| `{short ctor}` | `{short r}` | {", ".intercalate users.toList} |"
-      | some _ =>
-        lines := lines.push s!"| `{short ctor}` | `{short r}` | **RED** — exists but is not a theorem |"
-        red := red + 1
-      | none =>
-        lines := lines.push s!"| `{short ctor}` | `{short r}` | **RED** — not in the environment |"
-        red := red + 1
+        | none =>
+          lines := lines.push s!"| `{short ctor}` | `{short r}` | **RED** — not in the environment |"
+          red := red + 1
   IO.println "# The capability manifest"
   IO.println ""
   IO.println "GENERATED by `scripts/capability_manifest.lean` — do not hand-edit; regenerate with"
@@ -192,9 +201,11 @@ partial def cone (env : Environment) (canReach : Name → Bool) (seeds : Array N
   IO.println "(from `cerberus-heaplang/`). A claim-point SPEEDBUMP report ([USER 2026-09-02]):"
   IO.println "`scripts/test_unit.sh` regenerates it and reports drift or a red row."
   IO.println ""
-  IO.println "One row per constructor of the fragment `Frag` (read from the built"
-  IO.println "environment — an unmapped constructor is a MISSING row and a red run)."
-  IO.println "The rule column names the logical rule covering the construct; the last"
+  IO.println "One row per (constructor of the fragment `Frag`, covering rule) pair — the"
+  IO.println "constructors are read from the built environment; an unmapped constructor"
+  IO.println "is a MISSING row and a red run; a constructor with several kind-specific"
+  IO.println "rules (`Frag.kill`: the static dispose and the dynamic free) has one row per"
+  IO.println "rule. The rule column names the logical rule covering the construct; the last"
   IO.println "column lists the exhibit modules whose proofs actually depend on that rule"
   IO.println "(proof-term dependency cone through this package's constants). A rule"
   IO.println "consumed by no exhibit is a red row: the construct has a rule but no client."
@@ -203,7 +214,7 @@ partial def cone (env : Environment) (canReach : Name → Bool) (seeds : Array N
   IO.println "|---|---|---|"
   for l in lines do IO.println l
   IO.println ""
-  IO.println s!"MANIFEST: {fragInfo.ctors.length} rows, {red} red, {exhibits.size} exhibit modules"
+  IO.println s!"MANIFEST: {fragInfo.ctors.length} constructors, {ruleRows} rule rows, {red} red, {exhibits.size} exhibit modules"
   if red > 0 then
     throwError "capability manifest: {red} red/MISSING row(s) — see the table above"
 

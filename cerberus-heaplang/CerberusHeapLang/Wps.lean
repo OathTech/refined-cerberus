@@ -1366,6 +1366,50 @@ theorem wps_kill_eval {Ψ : SpikeVal → EnvStack → IProp GF}
   · iexact Hσ
   · iexact H
 
+/-- ACTION_EVAL for an alloc's operands (kill/free arc K3; the
+    `wps_store_eval` twin): an `alloc(pe1, pe2)` whose operands evaluate to
+    the integers `align`/`size` is verified by verifying the alloc at
+    those values. -/
+theorem wps_alloc_eval {Ψ : SpikeVal → EnvStack → IProp GF}
+    (loc : CerbLocation.Loc) (ann : core_run_annotation)
+    (pe1 pe2 : generic_pexpr Unit sym) (pref : prefix0) (ρ : EnvStack)
+    {align size : CerbMem.IntegerValue}
+    (hnv : valueFromPexprs [pe1, pe2] = none)
+    (hv1 : evalPexpr M.tagDefs M.extern ρ pe1 = some (Vobject (OVinteger align)))
+    (hv2 : evalPexpr M.tagDefs M.extern ρ pe2 = some (Vobject (OVinteger size))) :
+    wps M Ls Ψ (allocExpr loc ann align size pref) ρ ⊢
+      wps M Ls Ψ (allocOpRedex loc ann pe1 pe2 pref) ρ := by
+  rw [(wps_unfold (e := allocOpRedex loc ann pe1 pe2 pref)).to_eq]
+  simp only [wps.pre, allocOpRedex, toVal_action_node, jumpRedex?_action]
+  iintro H %σ₁ %ns %obs %obs' %nt Hσ
+  iapply fupd_mask_intro Std.LawfulSet.empty_subset
+  iintro Hclose
+  isplitr
+  · ipureintro
+    exact ⟨[], ⟨_, _, _⟩, _, [], ⟨Step.alloc_eval hnv hv1 hv2, rfl, rfl⟩⟩
+  inext
+  iintro %r %σ₂ %eₜ %Hstep Hcred
+  obtain ⟨hs, hlbl, rfl⟩ := Hstep
+  obtain ⟨al', sz', hv1', hv2', hout⟩ := hs.alloc_op_inv hnv
+  obtain rfl : align = al' := by
+    simpa using Option.some.inj (hv1.symm.trans hv1')
+  obtain rfl : size = sz' := by
+    simpa using Option.some.inj (hv2.symm.trans hv2')
+  obtain ⟨re, rρ, rM⟩ := r
+  simp only at hlbl
+  obtain rfl : M = rM := hlbl.symm
+  obtain ⟨hre, hrρ, hσ⟩ : re = allocExpr loc ann align size pref ∧
+      rρ = ρ ∧ σ₂ = σ₁ := by
+    simpa [Prod.mk.injEq, allocExpr] using hout
+  subst hre
+  obtain rfl : ρ = rρ := hrρ.symm
+  obtain rfl : σ₁ = σ₂ := hσ.symm
+  imod Hclose with -
+  imodintro
+  isplitl [Hσ]
+  · iexact Hσ
+  · iexact H
+
 /-! ## The Specified-binder sequencing rule (S4)
 
 `lets Specified(x) = e1 in e2` — the load-result unwrapping idiom
@@ -1886,6 +1930,72 @@ theorem wps_kill_emp {Ψ : SpikeVal → EnvStack → IProp GF}
   iapply wps_kill loc ann kind pv ty bs ρ hstatic
   isplitl [Hpt]
   · iexact Hpt
+  · iintro -
+    iexact HΨ
+
+/-- THE PUBLIC ALLOCATION RULE for DYNAMIC storage (kill/free arc K3;
+    `alloc_atomic` lifted): the budget `regionCost alignN sizeN` buys
+    `alloc(alignN, sizeN)`; the continuation binds the fresh region
+    pointer `cellPtr id a` with the whole REGION at full ownership
+    (`regionOwn`, untyped, unspecified bytes) and its machine-address
+    bounds. `hcost`: a positive cost — every positive size
+    (`regionCost_pos`), or size 0 at alignment ≥ 2; see `alloc_atomic`. -/
+theorem wps_alloc {Ψ : SpikeVal → EnvStack → IProp GF}
+    (loc : CerbLocation.Loc) (ann : core_run_annotation)
+    (aprov sprov : CerbMem.Provenance) (alignN sizeN : Int)
+    (pref : prefix0) (ρ : EnvStack)
+    (hcost : 0 < regionCost alignN sizeN) :
+    iprop(allocBudget (GF := GF) (regionCost alignN sizeN) ∗
+      (∀ (id a : Int),
+        (regionOwn id a sizeN.toNat (.own 1) (List.replicate sizeN.toNat undefByte) ∗
+          ⌜0 < a ∧ a + (sizeN.toNat : Int) ≤ 2 ^ 64⌝) -∗
+        Ψ (SpikeVal.pure (Vobject (OVpointer (cellPtr id a)))) ρ)) ⊢
+      wps M Ls Ψ (allocExpr loc ann (.IV aprov alignN) (.IV sprov sizeN) pref) ρ := by
+  iintro ⟨Hb, HΨ⟩
+  iapply wps_of_atomic (alloc_atomic loc ann aprov sprov alignN sizeN pref ρ hcost) rfl rfl
+  isplitl [Hb]
+  · iexact Hb
+  · iintro %w ⟨%id, %a, %hw, Hr, %hb⟩
+    subst hw
+    iapply HΨ
+    isplitl [Hr]
+    · iexact Hr
+    · ipureintro
+      exact hb
+
+/-- THE FREE RULE at the statement stratum (kill/free arc K3;
+    `free_atomic` lifted): the whole live region at full ownership is
+    consumed; the continuation runs at the BARE unit value and is offered
+    the persistent DEAD region `deadRegion` (drop it: `wps_free_emp`).
+    `hdyn`: the kill is dynamic — `free(p)`. The operand form is the
+    kind-generic `wps_kill_eval`. -/
+theorem wps_free {Ψ : SpikeVal → EnvStack → IProp GF}
+    (loc : CerbLocation.Loc) (ann : core_run_annotation) (kind : kill_kind)
+    (id a : Int) (n : Nat) (bs : List CerbMem.AbsByte) (ρ : EnvStack)
+    (hdyn : is_dynamic kind = true) :
+    iprop(regionOwn (GF := GF) id a n (.own 1) bs ∗
+      (deadRegion id a n -∗ Ψ (SpikeVal.pure Vunit) ρ)) ⊢
+      wps M Ls Ψ (killExpr loc ann kind (cellPtr id a)) ρ := by
+  iintro ⟨Hr, HΨ⟩
+  iapply wps_of_atomic (free_atomic loc ann kind id a n bs ρ hdyn) rfl rfl
+  isplitl [Hr]
+  · iexact Hr
+  · iintro %w ⟨%hw, Hd⟩
+    subst hw
+    iapply HΨ $$ Hd
+
+/-- The textbook face: `{p ↦ region} free(p) {emp}` — the dead region
+    dropped. -/
+theorem wps_free_emp {Ψ : SpikeVal → EnvStack → IProp GF}
+    (loc : CerbLocation.Loc) (ann : core_run_annotation) (kind : kill_kind)
+    (id a : Int) (n : Nat) (bs : List CerbMem.AbsByte) (ρ : EnvStack)
+    (hdyn : is_dynamic kind = true) :
+    iprop(regionOwn (GF := GF) id a n (.own 1) bs ∗ Ψ (SpikeVal.pure Vunit) ρ) ⊢
+      wps M Ls Ψ (killExpr loc ann kind (cellPtr id a)) ρ := by
+  iintro ⟨Hr, HΨ⟩
+  iapply wps_free loc ann kind id a n bs ρ hdyn
+  isplitl [Hr]
+  · iexact Hr
   · iintro -
     iexact HΨ
 

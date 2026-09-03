@@ -869,6 +869,25 @@ theorem wpt_store_eval {Ψ : SpikeVal → EnvStack → IProp GF}
       obtain rfl : cv = cv' := Option.some.inj (hv3.symm.trans hv3')
       simpa [storeExpr] using hout)
 
+/-- ACTION_EVAL for an alloc's operands (one tau; kill/free arc K3). -/
+theorem wpt_alloc_eval {Ψ : SpikeVal → EnvStack → IProp GF}
+    (loc : CerbLocation.Loc) (ann : core_run_annotation)
+    (pe1 pe2 : generic_pexpr Unit sym) (pref : prefix0) (ρ : EnvStack)
+    {align size : CerbMem.IntegerValue} {k : Nat}
+    (hnv : valueFromPexprs [pe1, pe2] = none)
+    (hv1 : evalPexpr M.tagDefs M.extern ρ pe1 = some (Vobject (OVinteger align)))
+    (hv2 : evalPexpr M.tagDefs M.extern ρ pe2 = some (Vobject (OVinteger size))) :
+    wpt M Ls k Ψ (allocExpr loc ann align size pref) ρ ⊢
+      wpt M Ls (k + 1) Ψ (allocOpRedex loc ann pe1 pe2 pref) ρ :=
+  wpt_det_step rfl rfl (fun _ => Step.alloc_eval hnv hv1 hv2)
+    (fun σ out hs => by
+      obtain ⟨al', sz', hv1', hv2', hout⟩ := hs.alloc_op_inv hnv
+      obtain rfl : align = al' := by
+        simpa using Option.some.inj (hv1.symm.trans hv1')
+      obtain rfl : size = sz' := by
+        simpa using Option.some.inj (hv2.symm.trans hv2')
+      simpa [allocExpr] using hout)
+
 /-- Memop-operand evaluation (one tau). -/
 theorem wpt_memop_eval {Ψ : SpikeVal → EnvStack → IProp GF}
     (mop : memop) (pe1 pe2 : generic_pexpr Unit sym)
@@ -2181,6 +2200,65 @@ theorem wpt_kill_emp {Ψ : SpikeVal → EnvStack → IProp GF}
   iapply wpt_kill loc ann kind pv ty bs ρ hk hstatic
   isplitl [Hpt]
   · iexact Hpt
+  · iintro -
+    iexact HΨ
+
+/-- THE PUBLIC TOTAL ALLOCATION RULE for DYNAMIC storage (kill/free arc
+    K3): `alloc_atomic` lifted at the derived cost bound `2 ≤ k` (one
+    alloc step + the bare pointer's delivery, as `wpt_create`). -/
+theorem wpt_alloc {Ψ : SpikeVal → EnvStack → IProp GF}
+    (loc : CerbLocation.Loc) (ann : core_run_annotation)
+    (aprov sprov : CerbMem.Provenance) (alignN sizeN : Int)
+    (pref : prefix0) (ρ : EnvStack) {k : Nat} (hk : 2 ≤ k)
+    (hcost : 0 < regionCost alignN sizeN) :
+    iprop(allocBudget (GF := GF) (regionCost alignN sizeN) ∗
+      (∀ (id a : Int),
+        (regionOwn id a sizeN.toNat (.own 1) (List.replicate sizeN.toNat undefByte) ∗
+          ⌜0 < a ∧ a + (sizeN.toNat : Int) ≤ 2 ^ 64⌝) -∗
+        Ψ (SpikeVal.pure (Vobject (OVpointer (cellPtr id a)))) ρ)) ⊢
+      wpt M Ls k Ψ (allocExpr loc ann (.IV aprov alignN) (.IV sprov sizeN) pref) ρ := by
+  iintro ⟨Hb, HΨ⟩
+  iapply wpt_of_atomic (alloc_atomic loc ann aprov sprov alignN sizeN pref ρ hcost)
+    rfl rfl hk
+  isplitl [Hb]
+  · iexact Hb
+  · iintro %w ⟨%id, %a, %hw, Hr, %hb⟩
+    subst hw
+    iapply HΨ
+    isplitl [Hr]
+    · iexact Hr
+    · ipureintro
+      exact hb
+
+/-- THE FREE RULE at the total stratum (kill/free arc K3): `free_atomic`
+    lifted at the derived cost bound `2 ≤ k` — one kill step plus the bare
+    unit's delivery (as `wpt_kill`). -/
+theorem wpt_free {Ψ : SpikeVal → EnvStack → IProp GF}
+    (loc : CerbLocation.Loc) (ann : core_run_annotation) (kind : kill_kind)
+    (id a : Int) (n : Nat) (bs : List CerbMem.AbsByte) (ρ : EnvStack)
+    {k : Nat} (hk : 2 ≤ k) (hdyn : is_dynamic kind = true) :
+    iprop(regionOwn (GF := GF) id a n (.own 1) bs ∗
+      (deadRegion id a n -∗ Ψ (SpikeVal.pure Vunit) ρ)) ⊢
+      wpt M Ls k Ψ (killExpr loc ann kind (cellPtr id a)) ρ := by
+  iintro ⟨Hr, HΨ⟩
+  iapply wpt_of_atomic (free_atomic loc ann kind id a n bs ρ hdyn) rfl rfl hk
+  isplitl [Hr]
+  · iexact Hr
+  · iintro %w ⟨%hw, Hd⟩
+    subst hw
+    iapply HΨ $$ Hd
+
+/-- The textbook face at the total stratum: the dead region dropped. -/
+theorem wpt_free_emp {Ψ : SpikeVal → EnvStack → IProp GF}
+    (loc : CerbLocation.Loc) (ann : core_run_annotation) (kind : kill_kind)
+    (id a : Int) (n : Nat) (bs : List CerbMem.AbsByte) (ρ : EnvStack)
+    {k : Nat} (hk : 2 ≤ k) (hdyn : is_dynamic kind = true) :
+    iprop(regionOwn (GF := GF) id a n (.own 1) bs ∗ Ψ (SpikeVal.pure Vunit) ρ) ⊢
+      wpt M Ls k Ψ (killExpr loc ann kind (cellPtr id a)) ρ := by
+  iintro ⟨Hr, HΨ⟩
+  iapply wpt_free loc ann kind id a n bs ρ hk hdyn
+  isplitl [Hr]
+  · iexact Hr
   · iintro -
     iexact HΨ
 

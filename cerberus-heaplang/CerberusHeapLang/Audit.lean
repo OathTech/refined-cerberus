@@ -302,7 +302,41 @@ def trioExports : List Name := [
   ``CerberusHeapLang.allocCost_pos, ``CerberusHeapLang.create_atomic,
   ``CerberusHeapLang.wps_create_of_plan, ``CerberusHeapLang.wpt_create_of_plan,
   ``CerberusHeapLang.launchResources, ``CerberusHeapLang.prod_one_int_budget_fits,
-  ``CerberusHeapLang.struct_budget_fits, ``CerberusHeapLang.lr_two_node_budget_fits]
+  ``CerberusHeapLang.struct_budget_fits, ``CerberusHeapLang.lr_two_node_budget_fits,
+  -- K2.5 range audit M-1 (done at K3): the public TOTAL allocation rule was
+  -- never pinned (the K2.5 record said it was) — pinned here
+  ``CerberusHeapLang.wpt_create,
+  -- kill/free arc K3 (2026-09-03): DYNAMIC ALLOCATION AND FREE — the two
+  -- atomic specs (`alloc_atomic` over the budget at the region cost,
+  -- `free_atomic` over `regionOwn`) and their wps/wpt faces (dead-region
+  -- and textbook forms, the alloc operand-evaluation forms; the free
+  -- operand form is the kind-generic `wps_kill_eval`/`wpt_kill_eval`), the
+  -- engine seams (`allocateRegion_success`, `killM_success_dynamic` — the
+  -- :1573 dynamic check through `mem_contains_int`), `MemWF.allocateRegion`
+  -- (K0's last stated obligation; acceptance goal 3 closed), the coupling
+  -- preservation `CohG.alloc`, the dead-region readout, the completeness
+  -- pair and the refusal instance (the OOM row `allocateRegion_killed_inv`),
+  -- the ILLTYPED-at-distance-one and the two KILL step equations at the
+  -- alloc operands, the cold-start region fit, the two smoke consumers.
+  -- NOT pinned (SUB-trio cones `[propext, Quot.sound]`, measured by
+  -- `#print axioms`; bounded by the exhaustive sweep, the K2/K2.5
+  -- precedent): the pure bounds `freshBase_ne_zero_of_cost'`/
+  -- `headroom_freshBase'`/`freshBase_pos_nat`/`regionCost_pos`
+  -- (`regionCost_eq` has no axioms at all).
+  ``CerberusHeapLang.alloc_atomic, ``CerberusHeapLang.free_atomic,
+  ``CerberusHeapLang.wps_alloc, ``CerberusHeapLang.wps_alloc_eval,
+  ``CerberusHeapLang.wps_free, ``CerberusHeapLang.wps_free_emp,
+  ``CerberusHeapLang.wpt_alloc, ``CerberusHeapLang.wpt_alloc_eval,
+  ``CerberusHeapLang.wpt_free, ``CerberusHeapLang.wpt_free_emp,
+  ``CerberusHeapLang.allocateRegion_success, ``CerberusHeapLang.killM_success_dynamic,
+  ``CerberusHeapLang.MemWF.allocateRegion, ``CerberusHeapLang.CohG.alloc,
+  ``CerberusHeapLang.MetaCoh.of_fields_dyn, ``CerberusHeapLang.deadRegion_dead,
+  ``CerberusHeapLang.prod_region_budget_fits,
+  ``CerberusHeapLang.cerberusRound_refused_alloc, ``CerberusHeapLang.complete_alloc,
+  ``CerberusHeapLang.complete_alloc_op, ``CerberusHeapLang.allocateRegion_killed_inv,
+  ``CerberusHeapLang.step_ctx_alloc_illtyped', ``CerberusHeapLang.step_ctx_alloc_eval_kill1,
+  ``CerberusHeapLang.step_ctx_alloc_eval_kill2,
+  ``CerberusHeapLang.alloc_free_wps, ``CerberusHeapLang.free_launch_smoke]
 
 def sortedNames (ns : Array Name) : Array String :=
   (ns.map (·.toString)).qsort (· < ·)

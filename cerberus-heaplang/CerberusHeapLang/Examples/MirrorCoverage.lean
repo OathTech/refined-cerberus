@@ -79,4 +79,21 @@ theorem kill_sym_step {M : MachineCtx} {loc : CerbLocation.Loc}
       (killRedex loc ann kind pv, ρ, σ) :=
   Step.kill_eval rfl hx
 
+/-! ## The alloc ACTION_EVAL shape (kill/free arc K3): `alloc(al, n)` at a
+SYMBOL size operand and a LITERAL alignment — the engine's `_, _` arm of
+step_action's Alloc0 case (the pair is not all values) is covered by
+`Step.alloc_eval`, whose successor is the canonical alloc redex. -/
+
+/-- `alloc(al, n)` — LITERAL alignment, SYMBOL size — steps to the
+    evaluated alloc. -/
+theorem alloc_lit_sym_step {M : MachineCtx} {loc : CerbLocation.Loc}
+    {ann : core_run_annotation} {align size : CerbMem.IntegerValue} {n : sym}
+    {pref : prefix0} {ρ : EnvStack} {σ : Mem}
+    (hn : evalPexpr M.tagDefs M.extern ρ (Pexpr [] () (PEsym n)) =
+      some (Vobject (OVinteger size))) :
+    Step M (allocOpRedex loc ann (Pexpr [] () (PEval (Vobject (OVinteger align))))
+        (Pexpr [] () (PEsym n)) pref, ρ, σ)
+      (allocRedex loc ann align size pref, ρ, σ) :=
+  Step.alloc_eval rfl rfl hn
+
 end CerberusHeapLang

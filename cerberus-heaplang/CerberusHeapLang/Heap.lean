@@ -2316,6 +2316,15 @@ def regionCost (alignN sizeN : Int) : Nat := sizeN.toNat + alignN.toNat.max 1 - 
 theorem regionCost_eq (alignN sizeN : Int) :
     regionCost alignN sizeN = sizeN.toNat + alignN.toNat.max 1 - 1 := rfl
 
+/-- A positive-size region has positive cost (the convenient face of
+    `alloc_atomic`'s `0 < regionCost` premise: `malloc(n)` at `n > 0`). -/
+theorem regionCost_pos (alignN sizeN : Int) (hsz : 0 < sizeN) : 0 < regionCost alignN sizeN := by
+  unfold regionCost
+  have h1 : 1 ≤ alignN.toNat.max 1 := Nat.le_max_right _ _
+  have h2 : 0 < sizeN.toNat := by omega
+  generalize alignN.toNat.max 1 = a at *
+  omega
+
 /-- THE SUCCESS BOUND AT ANY SIZE (section header, (i); K3): under the
     engine invariant `0 < la` (`MemWF.la_pos`) a cost within the headroom
     is a nonzero fresh base — the zero-size region included. -/
@@ -3913,6 +3922,20 @@ theorem deadObj_dead {σ : Mem} {mm : SpikeHeapF MetaCell}
     iprop(metaInterp (GF := GF) mm ∗ deadObj tds id a ty) ⊢
       (⌜σ.deadAllocations.contains id = true ∧ σ.allocations.get? id = none⌝ : IProp GF) := by
   unfold deadObj
+  iintro ⟨Hmi, Hm⟩
+  ihave >%hget := metaHeap_valid $$ [$Hmi $Hm]
+  ipureintro
+  exact (hG.metas id _ hget).dead rfl
+
+/-- THE DEAD REGION'S BACKING (kill/free arc K3): `deadRegion` pins a
+    DEAD id with its record erased (`killM`, CerbMem.lean:1576-1578) —
+    the engine-facing readout of `free`. -/
+theorem deadRegion_dead {σ : Mem} {mm : SpikeHeapF MetaCell}
+    {mb : SpikeHeapF CerbMem.AbsByte} {mk : SpikeHeapF AllocCursor}
+    (hG : CohG σ mm mb mk) (id a : Int) (n : Nat) :
+    iprop(metaInterp (GF := GF) mm ∗ deadRegion id a n) ⊢
+      (⌜σ.deadAllocations.contains id = true ∧ σ.allocations.get? id = none⌝ : IProp GF) := by
+  unfold deadRegion
   iintro ⟨Hmi, Hm⟩
   ihave >%hget := metaHeap_valid $$ [$Hmi $Hm]
   ipureintro
