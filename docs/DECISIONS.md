@@ -1595,3 +1595,48 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   ```
   Range audit d05f724..HEAD dispatched next on a fixed detached copy;
   merge ask follows the audit — no merge without an explicit yes to it.
+- **2026-09-03 [AGENT] C4 RANGE AUDIT d05f724..8094738: PASS, A− — MERGE CANDIDATE
+  e347dbf (`c4-fixes`), PENDING THE OPERATOR'S SIGN-OFF.** Fresh Fable-class
+  auditor on the fixed detached copy `worktrees/audit-c4-8094738`; report
+  `cerberus-heaplang/docs/2026-09-03_audit-c4-range.md`. No T-/C-
+  findings. Required (landed in e347dbf): R-1 TotalAdequacy.lean/API.lean
+  headers said the root-of-trust restatement "awaits the cerberus-lean
+  fuel-exhaustion outcome" — stale since the fuel re-pin, reworded to
+  "LIFTED at the pin, sequenced as the fuel-lane slice"; R-2 the
+  ARCHITECTURE §7 ledger dated to the close of the calls arc. Also H-1
+  (FibRecExhibit header quotes `fibRounds_closed` as proved). Auditor-
+  confirmed by measurement: `fib_rec_certified_production` is over
+  `runND ∘ drive ∘ initial_driver_state` with program/file-builder/
+  readout/budget vocabulary only; 28 new pins trio-exact; eight pre-C4
+  production statements byte-identical; census exact; registration
+  order confirmed by a positive and a FAILING `rfl`; `wpt_driver_cps`
+  well-founded; `BareHead.call` fail-closed; engine cites within ±20
+  bytes; zero new linter warnings; the DECISIONS gate quote line for
+  line. R-3 (note): `hfuel`'s `+ 4` carries one unit of slack (the shipped
+  loop is `NDkilled` at `fibRounds n + 2`, done at `+ 3`, n = 0..3;
+  `fibRounds` itself exact) — nothing claims tightness; a later `k + 1`
+  mover, handed to F1 with R-4 (one phrasing for "eighth root-of-trust /
+  ninth production" — both true under their counts) and H-2 (duplicated
+  `*With` entry forms, six one-shape `fr*` lemmas). Plants A (`sorry` in
+  `DriverDoneCtl.mono` → `export pin FAILED: wpt_driver_cps`), B
+  (`fibRounds` 9→8 → `frBody_wpt` omega fails), C (`prodCtx.currentLoc :=
+  unknown` → the production proof fails at the `hcl` `rfl`), D (`sorry` in
+  `decomp_call_root` → pin failure) all loud; reverts green at 372.
+  Orchestrator FULL gate at e347dbf (the candidate's Lean content; this
+  DECISIONS append is the only later change), verbatim verdict lines:
+  ```
+  == gate 1: banned proof-method grep (native_decide / bv_decide / ofReduce*) ==
+  ok: no banned proof-method references
+  == gate 2: capped build, cerberus-heaplang (elaborates its axiom audit) ==
+  CerberusHeapLang export pins: 372 trio-exact
+  CerberusHeapLang axiom sweep: every theorem bounded by the trio (3456 swept, internal details included — count informational, environment-dependent)
+  CerberusHeapLang banned-axiom sweep: sorryAx/ofReduceBool/ofReduceNat absent from all cones (5256 constants of every kind swept, internal details included — count informational, environment-dependent)
+  Build completed successfully (456 jobs).
+  ok: cerberus-heaplang build green
+  == speedbump: capability manifest (regenerate; red on a red row or drift) ==
+  ok: capability manifest regenerated, no drift
+  == speedbump: import direction (semantics → heap → rules → adequacy → clients) ==
+  ok: import direction — no core module imports an exhibit/example/production module
+  ALL GATES GREEN
+  GATE-EXIT=0
+  ```
