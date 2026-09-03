@@ -1332,3 +1332,23 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   ~2.5 h. The design note's "no judgment change in C2" and its RETURN
   column were wrong (corrections recorded). Range audit on a fixed copy;
   C3 NOT dispatched — merge discussion first ([USER], back online).
+- **2026-09-03 [AGENT] C2 RANGE AUDIT: PASS — MERGE-READY UP TO 8d28c21** (record:
+  `cerberus-heaplang/docs/2026-09-03_c2-audit.md`). Mirror = engine clause
+  for clause (PCALL/RETURN/REMOVE-ANNOT/`call_proc` re-measured; `Fun`
+  symbols fall into the unknown-procedure row; the kill strings mirrored
+  verbatim incl. the engine's missing space); the judgment guard is the
+  minimal single-arm fix and `wps_sound`/`wpt_sound` are textually
+  unchanged; `FragProcs` necessary (the `driveU` oracle is a raw WP the
+  guard does not constrain) and confined to the 9 PROVISIONAL exports;
+  the tie proved for all three control cases; the eight production
+  statements textually unchanged; 41 cones trio-exact. M-1 (record): the
+  "C2 LANDED" entry exists at 32c2619, after the audited head — its four
+  [AGENT] deviations stand recorded there. RE-ADJUDICATION ITEM for the
+  operator (the auditor's point): the design note's PRE-REGISTERED
+  criterion "`loop_step_frag`'s shape survives C2" FAILED — the lemma was
+  restated at the live control (its C1 shape survives as
+  `loop_step_frag_same`); by the note's own rule this is parked for
+  re-adjudication before C3. N-1 the env-length invariant (`κ.length <
+  ρ.length`) exists only as an IH — C3 states it as a lemma; N-2 the
+  production tie is partial (`exec_loc`/`current_loc`) — C4; N-4
+  `cerberusRound_classify` still at `κ = []`.
