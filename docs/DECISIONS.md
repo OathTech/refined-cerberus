@@ -1352,3 +1352,16 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   ρ.length`) exists only as an IH — C3 states it as a lemma; N-2 the
   production tie is partial (`exec_loc`/`current_loc`) — C4; N-4
   `cerberusRound_classify` still at `κ = []`.
+- **2026-09-03 [USER] INTERMEDIATE STANDARDS AUDIT BEFORE THE MERGE; A FURTHER
+  RE-PIN SCHEDULED** (verbatim): "we should do an intermediate audit
+  before merge. The cerberus-lean project is still moving, mostly bug
+  fixes and conformance to the cerberus-ocaml upstream, so we should
+  schedule a further repin later". Disposition: the aggressive
+  standards audit runs NOW over the whole overnight stack (main 9f0c20b
+  .. ebda4bd: kill/free K0–K5.1, the re-pin, calls C1–C2) on a fixed copy
+  by a fresh Fable-class auditor, graded against CLAUDE.md's working
+  practices and trust rules and AUDIT-BRIEF.md; findings fixed and
+  re-verified before the merge ask. A further re-pin to the then-current
+  cerberus-lean mainline is scheduled as a forced-semantics-change slice
+  after the calls arc (C3/C4), before the fuel-lane restatement — each
+  re-pin scouted first (the scout method of 2026-09-03).
