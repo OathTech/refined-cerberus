@@ -1784,3 +1784,70 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   ALL GATES GREEN
   GATE-EXIT=0
   ```
+- **2026-09-03 [USER] FUEL IS A DEFECT IN THE CERBERUS-LEAN SEMANTICS; THE FIX IS
+  ASKED OF THE CERBERUS-LEAN TEAM.** (verbatim, three messages): "just baking
+  in the 10^8 isn't very satisfying. This is a kind of refinement of the
+  real semantics, which says 'we pick some fuel value but it doesn't
+  matter what it is'"; "this a defect in the cerberus-lean semantics. The
+  correct way to do this is for the semantics to take fuel as a
+  parameter, and for the executable interpreter to pick 10^8 if it wants
+  to (it doesn't matter)"; "I've asked the cerberus-lean team to fix
+  this … The resulting semantics will have all such magic values deleted
+  and replaced with positions that can be quantified over." [AGENT]
+  assessment on the record (asked for; agreed with three refinements):
+  (1) broader than the driver — the pinned port seals ≥ 6 fuelled
+  recursions behind fixed wrappers (scheduler loop, single-thread loop,
+  exit routine, a printer, the ND monad's own `bind`) at TWO constants
+  (`CerbFuel.driverFuel = 10^8`, LemLib's `lemDefaultFuel = 10^6`), and
+  this package's adequacy exports carry `… ≤ lemDefaultFuel` hypotheses
+  at ~60 sites — the same defect baked on our side; (2) it is an
+  INTERFACE defect of the port (fuel is invisible on the
+  zero-discrepancy axis: OCaml diverges where Lean exhausts), so it
+  belongs to the lem-lean backend's fuel scheme, not to the mirror
+  register; (3) the mechanism should be ONE module-level fuel parameter
+  read by every fuelled recursion (not per-signature threading), with
+  FUEL MONOTONICITY (a run that completes at some fuel completes
+  identically at any larger fuel) as the accompanying theorem — that is
+  what turns "done at the bound" into "done at every fuel above it".
+  Consumer consequences when it lands, absorbed into the re-pin: every
+  closed statement restates fuel-parametrically — partial forms `∀ fuel`
+  (exhausted-or-done-with-post, never a fault), total forms and the nine
+  production statements `∀ fuel ≥ bound`, the shipped-constant versions
+  become corollaries; the `hpot ≤ lemDefaultFuel` hypotheses go the same
+  way; the thread-level lemmas do not change. The earlier [AGENT]
+  recommendation to state closed forms at the shipped budgets is
+  WITHDRAWN. Interim: F1's closed forms stay as they are (outer fuel
+  only; disclosed). The Reynolds/O'Hearn reading fixed in this
+  conversation: the triple's semantics is the THREAD-level statement
+  (single-thread loop, ∀ fuel); the scheduler loop is degenerate for the
+  sequential fragment ([USER]: "the outer loop is the 'scheduler' loop
+  and the inner loop is the 'single threaded' loop … the scheduler is
+  degenerate, we never see schedule changes") and becomes live under
+  concurrency or external C calls; the intended closed meaning is the
+  "for every outcome in the run's outcome list" form, of which the
+  proved singleton equation is the sequential strengthening.
+- **2026-09-03 [AGENT] RE-PIN SCOUT 2 (cerberus-lean de2fbf1, 34 commits past the
+  pin): record `docs/2026-09-03_repin-scout-2.md` on branch `repin-scout2`
+  (07ceb44).** Seams: 23/23 byte-identical; no `.lem`/native/CerbND/
+  CerbFuel change in the range; the demo's Lake manifest MUST move LemLib
+  045dcb0 → 3c88f0d (offline-capable via the local lem-lean checkout).
+  Breakage is the LemLib representation change, not the model: (a) `Fmap`
+  is an AVL port — `SymMap`'s definition (referent of the pinned
+  `symAdd_lookup*`) must be redefined with a tree invariant and needs a
+  lookup-after-insert law LemLib does not ship (L, the risk item); (a′)
+  `Pmap.join` is well-founded recursion, so `fmapUnionBy`/`collect_saves`/
+  registration no longer compute by `rfl` (17 decls, 7 files; M by
+  equation lemmas, or a structurally recursive `join` from lem-lean);
+  (a″) `fmapElements` ascending — visits main before fib, the C4 shape;
+  (b) `lemListFoldr`/`lemListZip` rewrites (13 decls, S); (c) `killM`:
+  4 proofs, ONE exported text change `killM_killed_inv` (new failure
+  rows), kill/free rules and `MemWF.killM` survive textually (S–M);
+  (d)–(h) measured ZERO for this package; nine production statements,
+  all rules and collapses textually unchanged and built green with the
+  layers beneath stubbed. Plan §6: pin+manifest → (b) → (c) → (a) →
+  (a′) → snapshot/docs → FULL gate → audit ask; 2.5–4 worker-days.
+  [AGENT] recommendation, pending the operator: request from lem-lean a
+  `Pmap` lookup-after-insert law and a reducing `join`; carry the lookup
+  law locally meanwhile. The re-pin now ALSO waits for the fuel-parameter
+  fix above (its consumer consequences land in the same slice or the
+  one after, one change at a time).
