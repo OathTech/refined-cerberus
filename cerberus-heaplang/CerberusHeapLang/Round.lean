@@ -128,7 +128,9 @@ engine step's shape; neither is a refusal, and neither is removable by
 a syntactic narrowing of `Frag`. `cerberusRound_refused_store`/`_load`/
 `_create`/`_case` are the root-redex refusal instances kept from
 commit 1 of the mirror-completeness slice (DECISIONS.md, "MIRROR
-COMPLETENESS — GO").
+COMPLETENESS — GO"); `cerberusRound_refused_kill` (kill/free arc K2)
+is the same instance at the kill redex, its three engine reasons
+enumerated by `killM_killed_inv`.
 
 THE MIRROR'S ONLY REFERENCE is this round: no other relational
 semantics is referenced or bridged, and none is needed for the root of
@@ -674,6 +676,53 @@ theorem allocateObject_layer (tds : CerbTags.TagDefsMap) (tid : Nat) (pref : pre
     | exact Or.inr ⟨_, _, rfl⟩
     | split)
 
+/-- `killM`'s one-layer result is active or killed (kill/free arc K2;
+    CerbMem.lean:1555-1580 — deterministic, no `msum`). -/
+theorem killM_layer (loc : CerbLocation.Loc) (isDyn : Bool) (pv : CerbMem.PointerValue)
+    (σ : Mem) :
+    (∃ u σ', runOne (CerbMem.killM loc isDyn pv) σ = (NDactive u, σ')) ∨
+    (∃ r σ', runOne (CerbMem.killM loc isDyn pv) σ = (NDkilled r, σ')) := by
+  unfold CerbMem.killM runOne
+  dsimp only
+  rcases pv with ⟨prov, base⟩
+  cases prov <;> cases base <;> dsimp only <;>
+    repeat' (first
+      | exact Or.inl ⟨_, _, rfl⟩
+      | exact Or.inr ⟨_, _, rfl⟩
+      | split)
+
+/-- THE KILL REFUSAL ROWS (kill/free arc K2): every killed outcome of
+    `killM` leaves the state untouched and carries one of exactly three
+    engine reasons, at the request's own location — `failReason`
+    (CerbMem.lean:1439) through `undefinedFromMem_error`
+    (Mem_common.lean:392): `Free_non_matching ↦ UB179a` (a null pointer
+    on the static path, a function pointer, no record at the id, a
+    non-dynamic origin on the dynamic path, a `Prov_none`/`Prov_device`/
+    `Prov_symbolic` pointer), `Free_dead_allocation ↦ UB179b` (a dead
+    id), and the NON-UB `Free_out_of_bound ↦ Other` (a pointer not at
+    the allocation's base). -/
+theorem killM_killed_inv (loc : CerbLocation.Loc) (isDyn : Bool) (pv : CerbMem.PointerValue)
+    (σ : Mem) {r : kill_reason mem_error} {σ' : Mem}
+    (h : runOne (CerbMem.killM loc isDyn pv) σ = (NDkilled r, σ')) :
+    σ' = σ ∧
+    (r = Undef0 loc [UB179a_non_matching_allocation_free] ∨
+     r = Undef0 loc [UB179b_dead_allocation_free] ∨
+     r = kill_reason.Other (MerrUndefinedFree Free_out_of_bound)) := by
+  unfold CerbMem.killM runOne at h
+  dsimp only at h
+  rcases pv with ⟨prov, base⟩
+  cases prov <;> cases base <;> dsimp only at h <;>
+    repeat' split at h
+  -- the active arms are closed by constructor clash; each killed arm
+  -- substitutes its reason and is one of the three rows by `rfl`
+  all_goals
+    obtain ⟨h1, h2⟩ := Prod.mk.inj h
+    cases h1
+    all_goals exact ⟨h2.symm, by first
+      | exact .inl rfl
+      | exact .inr (.inl rfl)
+      | exact .inr (.inr rfl)⟩
+
 /-! `applyMemM_eq_ndProj` (`applyMemM` is the active projection of the
 one-layer result) lives in Heap.lean since K1. -/
 
@@ -760,6 +809,24 @@ theorem ars_create_killed {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
         dst.layout_state = (NDkilled r, σ')) :
     runOne (action_request_sequential2 tds loc tid aid
         (CreateRequest2 pref align ty reqAddr initOpt k)) dst =
+      (NDkilled (match r with
+        | Undef0 l ubs => Undef0 l ubs
+        | Error0 l s => Error0 l s
+        | Other err => Other (DErr_memory err)),
+       { dst with layout_state := σ' }) := by
+  unfold action_request_sequential2
+  dsimp only
+  exact runOne_bind_killed (runOne_liftMem_killed h)
+
+/-- KillRequest2 discharge, KILLED (kill/free arc K2; Driver.lean:273):
+    the kill is the lifted `killM` kill at the request's own location
+    (the reasons: `killM_killed_inv`). -/
+theorem ars_kill_killed {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
+    {loc : CerbLocation.Loc} {isDyn : Bool} {pv : CerbMem.PointerValue}
+    {k : Nat → thread_state} {tid aid : Nat} {dst : driver_state}
+    {r : kill_reason mem_error} {σ' : Mem}
+    (h : runOne (CerbMem.killM loc isDyn pv) dst.layout_state = (NDkilled r, σ')) :
+    runOne (action_request_sequential2 tds loc tid aid (KillRequest2 isDyn pv k)) dst =
       (NDkilled (match r with
         | Undef0 l ubs => Undef0 l ubs
         | Error0 l s => Error0 l s
@@ -896,6 +963,22 @@ theorem engine_step_matchU {M : MachineCtx}
         ME_allocate_object M.tid pref align ty none pv :: dst.trace,
         dst.dr_step_counter, rfl, ?_⟩
       exact advance_action (ars_create_active (tid := M.tid)
+        (aid := dst.core_run_state0.aid_supply) hmem)
+    | @kill loc ann kind pv =>
+      obtain ⟨σ'', hmem, hout⟩ := hr.kill_inv
+      obtain ⟨h1, h2, h3⟩ : r' = Expr [] (Epure (Pexpr [] () (PEval Vunit))) ∧
+          ρ' = ev0 :: evs ∧ σ' = σ'' := by
+        simpa [Prod.mk.injEq] using hout
+      subst h1 h2 h3
+      have hsteps := step_ctx_kill hd hsz M.tagDefs
+        dst.layout_state dst.core_file dst.core_extern M.tid M.parent
+        (M.thread e (ev0 :: evs)) rfl
+      rw [hccall] at hsteps
+      refine ⟨_, hsteps, rfl, { dst.core_run_state0 with aid_supply :=
+          dst.core_run_state0.aid_supply + 1 },
+        ME_kill (requestLoc (M.thread e (ev0 :: evs)) loc) (is_dynamic kind) pv
+          :: dst.trace, dst.dr_step_counter, rfl, ?_⟩
+      exact advance_action (ars_kill_active (tid := M.tid)
         (aid := dst.core_run_state0.aid_supply) hmem)
     | @beta_pure pa bty v e2 =>
       rcases hr.sseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
@@ -1106,6 +1189,26 @@ theorem engine_step_matchU {M : MachineCtx}
         M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
         (M.thread e (ev0 :: evs)) rfl
         (by rw [hext]; exact hv2)
+      refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace,
+        dst.dr_step_counter + 1, rfl, ?_⟩
+      exact advance_withrs_eval M.tagDefs M.tid s m (hm dst.core_run_state0)
+    | @kill_op loc ann kind pe hnvK =>
+      obtain ⟨hpK, hdK⟩ : PePure pe ∧ peDepth pe ≤ lemDefaultFuel := by
+        cases hfr with
+        | kill hst =>
+          rw [show valueFromPexpr (Pexpr [] () (PEval
+            (Vobject (OVpointer _)))) = some _ from rfl] at hnvK
+          cases hnvK
+        | kill_op hst hnvK' hpK hdK => exact ⟨hpK, hdK⟩
+      obtain ⟨pv, hv, hout⟩ := hr.kill_op_inv hnvK
+      obtain ⟨h1, h2, h3⟩ : r' = killRedex loc ann kind pv ∧
+          ρ' = ev0 :: evs ∧ σ' = dst.layout_state := by
+        simpa [Prod.mk.injEq, killRedex] using hout
+      subst h1 h2 h3
+      obtain ⟨s, m, hsteps, hm⟩ := step_ctx_kill_eval_ws hd hsz hnvK hpK hdK
+        M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
+        (M.thread e (ev0 :: evs)) rfl
+        (by rw [hext]; exact hv)
       refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace,
         dst.dr_step_counter + 1, rfl, ?_⟩
       exact advance_withrs_eval M.tagDefs M.tid s m (hm dst.core_run_state0)
@@ -1499,6 +1602,39 @@ theorem cerberusRound_refused_create (M : MachineCtx)
     dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ) rfl
   rw [show is_unseq_with_ccall CTX = false from rfl] at hsteps
   exact ⟨_, _, hsteps, rfl, advance_action_killed (ars_create_killed hk)⟩
+
+/-- The refusal classification at a KILL redex (kill/free arc K2):
+    `killM`'s kill at the request's own location — one of the three
+    reasons of `killM_killed_inv` (UB179a non-matching, UB179b dead,
+    the non-UB out-of-bound `Other`), lifted through `liftMem`. -/
+theorem cerberusRound_refused_kill (M : MachineCtx)
+    {loc : CerbLocation.Loc} {ann : core_run_annotation} {kind : kill_kind}
+    {pv : CerbMem.PointerValue} (ρ : EnvStack) (σ : Mem)
+    (hstuck : ∀ c', ¬ Step M (killRedex loc ann kind pv, ρ, σ) c') :
+    ShippedRefusal M (killRedex loc ann kind pv, ρ, σ) := by
+  have hsz : esize (killRedex loc ann kind pv) ≤ lemDefaultFuel := by
+    rw [show esize (killRedex loc ann kind pv) = 1 from rfl]
+    unfold lemDefaultFuel
+    omega
+  have hnone : applyMemM (CerbMem.killM
+      (requestLoc (M.thread (killRedex loc ann kind pv) ρ) loc) (is_dynamic kind) pv) σ =
+      none := by
+    rw [killM_loc_irrel loc]
+    cases hmem : applyMemM (CerbMem.killM loc (is_dynamic kind) pv) σ with
+    | none => rfl
+    | some uσ =>
+      obtain ⟨⟨⟩, σ'⟩ := uσ
+      exact absurd (Step.kill_canonical hmem) (hstuck _)
+  obtain ⟨r, σ', hk⟩ := applyMemM_none_killed (killM_layer _ _ _ _) hnone
+  apply ShippedRefusal.killed
+  intro dst hemb
+  obtain ⟨-, hlay, -, -, -⟩ := hemb
+  simp only at hlay
+  subst hlay
+  have hsteps := step_ctx_kill (Decomp.root Redex.kill) hsz M.tagDefs
+    dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ) rfl
+  rw [show is_unseq_with_ccall CTX = false from rfl] at hsteps
+  exact ⟨_, _, hsteps, rfl, advance_action_killed (ars_kill_killed hk)⟩
 
 /-- The refusal classification at a value-scrutinee CASE redex: the
     ILLTYPED no-match report (one_step0's Ecase value arm,
@@ -2019,6 +2155,42 @@ theorem complete_create {M : MachineCtx} {e : CoreExpr} {ctx : context}
     rw [hd.unseq_ccall_false] at hsteps
     exact ⟨_, _, hsteps, rfl, advance_action_killed (ars_create_killed hk)⟩
 
+/-- KILL (kill/free arc K2): `killM`'s verdict at the request's own
+    location — active (the mirror step) or one of the three kills of
+    `killM_killed_inv` (UB179a non-matching: null on the static path,
+    function pointer, no record, non-dynamic origin on the dynamic
+    path, other provenance; UB179b dead; the non-UB out-of-bound
+    `Other`). Stated at any `kind`: the static restriction is
+    `Frag.kill`'s, not the engine's. -/
+theorem complete_kill {M : MachineCtx} {e : CoreExpr} {ctx : context}
+    {loc : CerbLocation.Loc} {ann : core_run_annotation} {kind : kill_kind}
+    {pv : CerbMem.PointerValue}
+    (hd : Decomp e ctx (killRedex loc ann kind pv))
+    (hsz : esize e ≤ lemDefaultFuel) (ρ : EnvStack) (σ : Mem) :
+    RoundComplete M (e, ρ, σ) := by
+  have hnr : ∀ (ra : core_run_annotation) (l : sym) (pes : List (generic_pexpr Unit sym)),
+      killRedex loc ann kind pv ≠ runRedex ra l pes := by
+    intro ra l pes h; cases h
+  cases hmem : applyMemM (CerbMem.killM loc (is_dynamic kind) pv) σ with
+  | some uσ =>
+    obtain ⟨⟨⟩, σ'⟩ := uσ
+    exact .inl ⟨_, hd.lift_step hnr (Step.kill_canonical hmem)⟩
+  | none =>
+    have hnone : applyMemM (CerbMem.killM
+        (requestLoc (M.thread e ρ) loc) (is_dynamic kind) pv) σ = none := by
+      rw [killM_loc_irrel loc]; exact hmem
+    obtain ⟨r, σ', hk⟩ := applyMemM_none_killed (killM_layer _ _ _ _) hnone
+    refine .inr (.inl ?_)
+    apply ShippedRefusal.killed
+    intro dst hemb
+    obtain ⟨-, hlay, -, -, -⟩ := hemb
+    simp only at hlay
+    subst hlay
+    have hsteps := step_ctx_kill hd hsz M.tagDefs
+      dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ) rfl
+    rw [hd.unseq_ccall_false] at hsteps
+    exact ⟨_, _, hsteps, rfl, advance_action_killed (ars_kill_killed hk)⟩
+
 /-- LETS-PURE at the wildcard pattern: always a mirror step (cons env). -/
 theorem complete_beta_pure {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {pa : List _root_.annot} {bty : core_base_type} {v : value} {e2 : CoreExpr}
@@ -2476,6 +2648,77 @@ theorem step_ctx_load_eval_shape {e : CoreExpr} {ctx : context}
      dsimp only [act_valueFromPexpr, valueFromPexpr]
      exact ⟨_, _, rfl⟩)
 
+/-- Kill ACTION_EVAL at ANY evaluated operand value (kill/free arc K2;
+    `step_ctx_kill_eval_ws`, DriverCollapse.lean, is the pointer
+    instance): the engine rebuilds `Kill kind (mk_value_pe cval)` for
+    any `cval` — the pointer test is the next round's. -/
+theorem step_ctx_kill_eval_ws' {e : CoreExpr} {ctx : context}
+    {loc : CerbLocation.Loc} {ann : core_run_annotation} {kind : kill_kind}
+    {pe : generic_pexpr Unit sym} {v : value}
+    (hd : Decomp e ctx (killOpRedex loc ann kind pe))
+    (hsz : esize e ≤ lemDefaultFuel)
+    (hnv : valueFromPexpr pe = none)
+    (hp : PePure pe)
+    (hdp : peDepth pe ≤ lemDefaultFuel)
+    (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
+    (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
+    (tid : Nat) (parent : Option Nat) (th : thread_state)
+    (harena : th.arena = e)
+    (hv : evalPexpr tds ext th.env pe = some v) :
+    ∃ (s : String) (m : core_runM thread_state),
+      step_ctx tds σ file ext tid (parent, th) =
+        [Step_with_runstate2 (RSK_eval s) m] ∧
+      ∀ rs, m rs = Result (Defined { th with
+        arena := apply_ctx ctx (Expr [] (Eaction (Paction polarity.Pos (Action loc ann
+          (Kill kind (Pexpr [] () (PEval v))))))) }, rs) := by
+  have hget : get_ctx th.arena = [(ctx, killOpRedex loc ann kind pe)] := by
+    rw [harena]; exact hd.get_ctx_default hsz
+  unfold step_ctx
+  dsimp only
+  rw [hget]
+  simp only [List.map_cons, List.map_nil]
+  unfold killOpRedex
+  cases ctx <;>
+    (dsimp only [get_loc]
+     dsimp only [step_action]
+     rw [act_valueFromPexpr_none hp hnv]
+     dsimp only [act_valueFromPexpr, valueFromPexpr]
+     refine ⟨_, _, rfl, fun rs => ?_⟩
+     rw [full_eval_bridge hv hdp σ file]
+     dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+       return1, except_return]
+     rfl)
+
+/-- Kill ACTION_EVAL: the engine's step is ONE `RSK_eval` with-runstate
+    step whatever the operand evaluates to (shape only). -/
+theorem step_ctx_kill_eval_shape {e : CoreExpr} {ctx : context}
+    {loc : CerbLocation.Loc} {ann : core_run_annotation} {kind : kill_kind}
+    {pe : generic_pexpr Unit sym}
+    (hd : Decomp e ctx (killOpRedex loc ann kind pe))
+    (hsz : esize e ≤ lemDefaultFuel)
+    (hnv : valueFromPexpr pe = none)
+    (hp : PePure pe)
+    (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
+    (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
+    (tid : Nat) (parent : Option Nat) (th : thread_state)
+    (harena : th.arena = e) :
+    ∃ (s : String) (m : core_runM thread_state),
+      step_ctx tds σ file ext tid (parent, th) =
+        [Step_with_runstate2 (RSK_eval s) m] := by
+  have hget : get_ctx th.arena = [(ctx, killOpRedex loc ann kind pe)] := by
+    rw [harena]; exact hd.get_ctx_default hsz
+  unfold step_ctx
+  dsimp only
+  rw [hget]
+  simp only [List.map_cons, List.map_nil]
+  unfold killOpRedex
+  cases ctx <;>
+    (dsimp only [get_loc]
+     dsimp only [step_action]
+     rw [act_valueFromPexpr_none hp hnv]
+     dsimp only [act_valueFromPexpr, valueFromPexpr]
+     exact ⟨_, _, rfl⟩)
+
 /-- Store ACTION_EVAL at ANY evaluated pointer-operand value
     (`step_ctx_store_eval_ws` is the pointer instance). -/
 theorem step_ctx_store_eval_ws' {e : CoreExpr} {ctx : context}
@@ -2720,6 +2963,36 @@ theorem step_ctx_store_illtyped' {e : CoreExpr} {ctx : context} {r : CoreExpr}
     | rfl
     | exact absurd rfl (hv _)
 
+/-- The kill twin: `[Step_error2 "Kill"]` (step_action's Kill arm,
+    `some _ => ACTION_ILLTYPED "Kill"`, at a non-pointer evaluated
+    operand; kill/free arc K2). -/
+theorem step_ctx_kill_illtyped' {e : CoreExpr} {ctx : context} {r : CoreExpr}
+    {loc : CerbLocation.Loc} {ann : core_run_annotation} {kind : kill_kind}
+    {v : value}
+    (hd : Decomp e ctx r) (hsz : esize e ≤ lemDefaultFuel)
+    (hv : ∀ pv, v ≠ Vobject (OVpointer pv))
+    (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
+    (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
+    (tid : Nat) (parent : Option Nat) (th : thread_state)
+    (harena : th.arena = apply_ctx ctx (Expr [] (Eaction (Paction polarity.Pos
+      (Action loc ann (Kill kind (Pexpr [] () (PEval v)))))))) :
+    step_ctx tds σ file ext tid (parent, th) = [Step_error2 "Kill"] := by
+  have hget : get_ctx th.arena = [(ctx, Expr [] (Eaction (Paction polarity.Pos
+      (Action loc ann (Kill kind (Pexpr [] () (PEval v)))))))] := by
+    rw [harena]; exact hd.get_ctx_rebuild_action _ lemDefaultFuel hsz
+  unfold step_ctx
+  dsimp only
+  rw [hget]
+  simp only [List.map_cons, List.map_nil]
+  rcases v with ov | lv | _ | _ | _ | _ | ⟨_, _⟩ | _ <;> (try (cases ov)) <;>
+    cases ctx <;>
+      (dsimp only [get_loc]
+       dsimp only [step_action]
+       dsimp only [act_valueFromPexpr, valueFromPexpr])
+  all_goals first
+    | rfl
+    | exact absurd rfl (hv _)
+
 /-! ### The operand-evaluation rows: the KILL equations (an operand the
 mirror evaluator does not evaluate and the engine REJECTS — the
 classifier `evalClass`/`evalClassList` answers `.kill err`, EvalClass.lean:
@@ -2937,6 +3210,42 @@ theorem step_ctx_load_eval_kill {e : CoreExpr} {ctx : context}
      refine ⟨_, _, rfl, fun rs => ?_⟩
      rw [full_eval_bridge (v := Vctype ty) rfl (peDepth_val_le _ _) σ file,
        full_eval_bridge_kill hp2 hk hd2 σ]
+     dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+       return1, except_return]
+     rfl)
+
+/-- Kill ACTION_EVAL whose operand the engine rejects (kill/free arc K2). -/
+theorem step_ctx_kill_eval_kill {e : CoreExpr} {ctx : context}
+    {loc : CerbLocation.Loc} {ann : core_run_annotation} {kind : kill_kind}
+    {pe : generic_pexpr Unit sym} {err : core_run_cause}
+    (hd : Decomp e ctx (killOpRedex loc ann kind pe))
+    (hsz : esize e ≤ lemDefaultFuel)
+    (hnv : valueFromPexpr pe = none)
+    (hp : PePure pe)
+    (hdp : peDepth pe ≤ lemDefaultFuel)
+    (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
+    (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
+    (tid : Nat) (parent : Option Nat) (th : thread_state)
+    (harena : th.arena = e)
+    (hk : evalClass tds th.current_loc ext file th.env pe = .kill err) :
+    ∃ (s : String) (m : core_runM thread_state),
+      step_ctx tds σ file ext tid (parent, th) =
+        [Step_with_runstate2 (RSK_eval s) m] ∧
+      ∀ rs, m rs = Exception err := by
+  have hget : get_ctx th.arena = [(ctx, killOpRedex loc ann kind pe)] := by
+    rw [harena]; exact hd.get_ctx_default hsz
+  unfold step_ctx
+  dsimp only
+  rw [hget]
+  simp only [List.map_cons, List.map_nil]
+  unfold killOpRedex
+  cases ctx <;>
+    (dsimp only [get_loc]
+     dsimp only [step_action]
+     rw [act_valueFromPexpr_none hp hnv]
+     dsimp only [act_valueFromPexpr, valueFromPexpr]
+     refine ⟨_, _, rfl, fun rs => ?_⟩
+     rw [full_eval_bridge_kill hp hk hdp σ]
      dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
        return1, except_return]
      rfl)
@@ -3510,6 +3819,84 @@ theorem complete_load_op {M : MachineCtx} {e : CoreExpr} {ctx : context}
         exact step_ctx_load_illtyped' hd hsz hv' M.tagDefs dst.layout_state
           dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ) rfl
 
+/-- Kill-operand EVAL (kill/free arc K2): a pointer-evaluating operand
+    is the mirror step; a non-pointer value is ILLTYPED AT DISTANCE ONE
+    (the rebuilt action's `some _ => ACTION_ILLTYPED "Kill"`); an operand
+    the classifier rejects is the KILL `Other (DErr_core_run err)`; an
+    operand the classifier leaves uncovered is the residual
+    `eval_uncovered`. Stated at any `kind`. -/
+theorem complete_kill_op {M : MachineCtx} {e : CoreExpr} {ctx : context}
+    {loc : CerbLocation.Loc} {ann : core_run_annotation} {kind : kill_kind}
+    {pe : generic_pexpr Unit sym}
+    (hd : Decomp e ctx (killOpRedex loc ann kind pe))
+    (hsz : esize e ≤ lemDefaultFuel)
+    (hnv : valueFromPexpr pe = none) (hp : PePure pe)
+    (hdp : peDepth pe ≤ lemDefaultFuel)
+    (ρ : EnvStack) (σ : Mem) :
+    RoundComplete M (e, ρ, σ) := by
+  have hnr : ∀ (ra : core_run_annotation) (l : sym) (pes : List (generic_pexpr Unit sym)),
+      killOpRedex loc ann kind pe ≠ runRedex ra l pes := by
+    intro ra l pes h; cases h
+  cases hv : evalPexpr M.tagDefs M.extern ρ pe with
+  | none =>
+    have hstuck : ∀ c'', ¬ Step M (e, ρ, σ) c'' := by
+      intro c'' hs
+      rcases hd.step_factor hs with ⟨r', ρr, σr, -, hr, -⟩ | ⟨ra, l, pes, heq, -⟩
+      · obtain ⟨pv, hv', -⟩ := hr.kill_op_inv hnv
+        rw [hv] at hv'; cases hv'
+      · exact absurd heq (hnr ra l pes)
+    have hshape : ∀ dst, M.Embeds dst (e, ρ, σ) →
+        ∃ (rsk : runstate_step_kind) (m : core_runM thread_state),
+        step_ctx M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid
+          (M.parent, M.thread e ρ) = [Step_with_runstate2 rsk m] := by
+      intro dst hemb
+      obtain ⟨-, hlay, -, -, -⟩ := hemb
+      simp only at hlay
+      subst hlay
+      obtain ⟨s, m, hsteps⟩ := step_ctx_kill_eval_shape hd hsz hnv hp M.tagDefs
+        dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ) rfl
+      exact ⟨_, _, hsteps⟩
+    rcases evalClass_of_none M.currentLoc M.file hv with ⟨err, hk⟩ | hu
+    · refine .inr (.inl (.killed (Other (DErr_core_run err)) ?_))
+      intro dst hemb
+      obtain ⟨-, hlay, hfile, hext, -⟩ := hemb
+      simp only at hlay
+      subst hlay
+      obtain ⟨s, m, hsteps, hm⟩ := step_ctx_kill_eval_kill hd hsz hnv hp hdp M.tagDefs
+        dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ) rfl
+        (by rw [hext, hfile]; exact hk)
+      exact ⟨_, dst, hsteps, rfl, advance_withrs_killed_eval M.tagDefs M.tid s m
+        (hm dst.core_run_state0)⟩
+    · exact .inr (.inr (.eval_uncovered pe hstuck
+        (by rw [hd.operandsOf_eq]; exact List.mem_singleton.mpr rfl) hp hu hshape))
+  | some v =>
+    by_cases hptr : ∃ pv, v = Vobject (OVpointer pv)
+    · obtain ⟨pv, rfl⟩ := hptr
+      exact .inl ⟨_, hd.lift_step hnr (Step.kill_eval hnv hv)⟩
+    · -- ILLTYPED AT DISTANCE ONE: the evaluation round succeeds into the
+      -- ill-typed kill, whose next step list is `[Step_error2 "Kill"]`
+      have hv' : ∀ pv, v ≠ Vobject (OVpointer pv) := fun pv h => hptr ⟨pv, h⟩
+      refine .inr (.inl (.error_next
+        (apply_ctx ctx (Expr [] (Eaction (Paction polarity.Pos (Action loc ann
+          (Kill kind (Pexpr [] () (PEval v))))))), ρ, σ)
+        "Kill" ?_ ?_))
+      · intro dst hemb
+        obtain ⟨-, hlay, -, hext, -⟩ := hemb
+        simp only at hlay
+        subst hlay
+        obtain ⟨s, m, hsteps, hm⟩ := step_ctx_kill_eval_ws' hd hsz hnv hp hdp
+          M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
+          (M.thread _ ρ) rfl (by rw [hext]; exact hv)
+        refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace,
+          dst.dr_step_counter + 1, rfl, ?_⟩
+        exact advance_withrs_eval M.tagDefs M.tid s m (hm dst.core_run_state0)
+      · intro dst hemb
+        obtain ⟨-, hlay, -, -, -⟩ := hemb
+        simp only at hlay
+        subst hlay
+        exact step_ctx_kill_illtyped' hd hsz hv' M.tagDefs dst.layout_state
+          dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ) rfl
+
 /-- Memop-operand EVAL (any memop): evaluable operands are the mirror
     step; the first operand (in the engine's left-to-right order) the
     classifier rejects is the KILL `Other (DErr_core_run err)`; the first
@@ -4050,6 +4437,16 @@ theorem frag_round_complete {M : MachineCtx}
   | store => exact complete_store hd hsz _ _
   | load => exact complete_load hd hsz _ _
   | create => exact complete_create hd hsz _ _
+  | kill => exact complete_kill hd hsz _ _
+  | @kill_op loc ann kind pe hnvK =>
+    obtain ⟨hpK, hdK⟩ : PePure pe ∧ peDepth pe ≤ lemDefaultFuel := by
+      cases hfr with
+      | kill hst =>
+        rw [show valueFromPexpr (Pexpr [] () (PEval
+          (Vobject (OVpointer _)))) = some _ from rfl] at hnvK
+        cases hnvK
+      | kill_op hst hnvK' hpK hdK => exact ⟨hpK, hdK⟩
+    exact complete_kill_op hd hsz hnvK hpK hdK _ _
   | beta_pure => exact complete_beta_pure hd _ _ _
   | beta_annot => exact complete_beta_annot hd _ _ _
   | merge hirr => exact complete_merge hd _ _

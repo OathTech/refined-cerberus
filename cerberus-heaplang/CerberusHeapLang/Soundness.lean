@@ -186,6 +186,18 @@ def dischargeStep (tds : CerbTags.TagDefsMap) (aid : Nat) (rs : core_run_state)
            | (NDactive pv, σ') => .next (k aid pv) σ'
            | (NDkilled r, _) => .killed r
            | _ => .offFragment)
+      | KillRequest2 isDyn pv k =>
+        -- kill/free arc K2: the driver's KillRequest discharge
+        -- (Driver.lean:273, `liftMem (CerbMem.killM loc1 is_dynamic1
+        -- ptr_val)`, continuation `mk_th_st' aid1`). Before K2 a kill
+        -- request was `.offFragment` here; this arm is a PROOF DEVICE
+        -- (the `driveU` lanes' discharge), not a statement referent.
+        (match CerbMem.killM loc isDyn pv with
+         | ND f =>
+           match f σ with
+           | (NDactive _, σ') => .next (k aid) σ'
+           | (NDkilled r, _) => .killed r
+           | _ => .offFragment)
       | _ => .offFragment
     | _ => .offFragment
   | Step_with_runstate2 _ m =>
@@ -492,6 +504,15 @@ inductive Redex : CoreExpr → Prop where
   | create {loc : CerbLocation.Loc} {ann : core_run_annotation}
       {align : CerbMem.IntegerValue} {ty : ctype} {pref : prefix0} :
       Redex (createRedex loc ann align ty pref)
+  /-- The kill redex at an evaluated pointer, any kind (kill/free arc K2). -/
+  | kill {loc : CerbLocation.Loc} {ann : core_run_annotation} {kind : kill_kind}
+      {pv : CerbMem.PointerValue} :
+      Redex (killRedex loc ann kind pv)
+  /-- The kill ACTION_EVAL redex (unevaluated pointer operand). -/
+  | kill_op (loc : CerbLocation.Loc) (ann : core_run_annotation)
+      (kind : kill_kind) {pe : generic_pexpr Unit sym}
+      (hnv : valueFromPexpr pe = none) :
+      Redex (killOpRedex loc ann kind pe)
   | beta_pure {pa : List annot} {bty : core_base_type} {v : value}
       {e2 : CoreExpr} :
       Redex (Expr [] (Esseq (Pattern pa (CaseBase (none, bty)))
@@ -606,6 +627,8 @@ theorem Redex.not_irreducible {r : CoreExpr} (h : Redex r) :
   | beta_sym => rfl
   | wbeta_pure => rfl
   | wbeta_annot => rfl
+  | kill => rfl
+  | kill_op loc ann kind hnv => rfl
 
 theorem Decomp.not_irreducible {e : CoreExpr} {ctx : context} {r : CoreExpr}
     (h : Decomp e ctx r) : is_irreducible e = false := by
@@ -701,6 +724,8 @@ theorem Decomp.get_ctx_at {e : CoreExpr} {ctx : context} {r : CoreExpr}
     | beta_sym => exact get_ctx_sseq_val m
     | wbeta_pure => exact get_ctx_wseq_val m
     | wbeta_annot => exact get_ctx_wseq_val m
+    | kill => exact get_ctx_action m
+    | kill_op loc ann kind hnv => exact get_ctx_action m
   | sseq hd ih =>
     intro n hn
     rw [esize_sseq] at hn
@@ -783,6 +808,8 @@ theorem Redex.jumpRedex?_some_inv {r : CoreExpr} {l : sym}
   | beta_sym => rw [jumpRedex?_sseq, jumpRedex?_ofVal] at hj; cases hj
   | wbeta_pure => rw [jumpRedex?_wseq, jumpRedex?_ofVal] at hj; cases hj
   | wbeta_annot => rw [jumpRedex?_wseq, jumpRedex?_ofVal] at hj; cases hj
+  | kill => cases hj
+  | kill_op loc ann kind hnv => cases hj
   | run ra l' pes' =>
     obtain ⟨rfl, rfl⟩ : l' = l ∧ pes' = pes := by
       have := Option.some.inj hj
@@ -1142,6 +1169,42 @@ theorem step_ctx_create {e : CoreExpr} {ctx : context}
     (dsimp only [step_action, act_valueFromPexpr, valueFromPexpr]
      first | rfl | (unfold requestLoc; rfl))
 
+/-- Kill, context undisturbed (kill/free arc K2): one `KillRequest2` at
+    the canonical evaluated pointer operand — step_action's Kill arm
+    (Core_reduction.lean:424): `KillRequest2 (is_dynamic kind1) ptrval
+    (fun (aid1 : Nat) => mk_value_e Vunit)`, rewrapped by
+    process_action into the thread continuation; the continuation
+    rebuilds the BARE unit value in context (`mk_value_e Vunit`, no
+    Eannot residue — like create, unlike store/load), thread context
+    verbatim. tagDefs is unread; `current_loc` is read into the request
+    location (`requestLoc th loc`) only; the `Static0 ty` payload is
+    discarded — only `is_dynamic kind` reaches the request. -/
+theorem step_ctx_kill {e : CoreExpr} {ctx : context}
+    {loc : CerbLocation.Loc} {ann : core_run_annotation}
+    {kind : kill_kind} {pv : CerbMem.PointerValue}
+    (hd : Decomp e ctx (killRedex loc ann kind pv))
+    (hsz : esize e ≤ lemDefaultFuel)
+    (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
+    (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
+    (tid : Nat) (parent : Option Nat)
+    (th : thread_state) (harena : th.arena = e) :
+    step_ctx tds σ file ext tid (parent, th) =
+      [Step_action_request2 "KillRequest" (requestLoc th loc) tid (is_unseq_with_ccall ctx)
+        (stExceptUndef_return (KillRequest2 (is_dynamic kind) pv
+          (fun (_ : Nat) =>
+            { th with arena := apply_ctx ctx (Expr [] (Epure (Pexpr [] ()
+                (PEval Vunit)))) })))] := by
+  have hget : get_ctx th.arena = [(ctx, killRedex loc ann kind pv)] := by
+    rw [harena]; exact hd.get_ctx_default hsz
+  unfold step_ctx
+  dsimp only
+  rw [hget]
+  simp only [List.map_cons, List.map_nil]
+  unfold killRedex
+  cases ctx <;>
+    (dsimp only [step_action, act_valueFromPexpr, valueFromPexpr]
+     first | rfl | (unfold requestLoc; rfl))
+
 /-- LETS-PURE, context undisturbed: env is READ-ONLY-UNDER-WF — the
     engine's update_env fails loudly on an empty stack (`henv`
     nonemptiness), and the wildcard update returns it verbatim
@@ -1470,6 +1533,52 @@ theorem dischargeStep_create_refusal {tds : CerbTags.TagDefsMap} {aid : Nat} {rs
     (dischargeStep tds aid rs σ (Step_action_request2 str loc tid uw
       (stExceptUndef_return (CreateRequest2 pref align ty reqAddr none k)))).isRefusal := by
   rcases hm : CerbMem.allocateObject tds 0 pref align ty reqAddr none with ⟨f⟩
+  rcases hf : f σ with ⟨act, st⟩
+  unfold applyMemM at h
+  rw [hm] at h
+  simp only [hf] at h
+  unfold dischargeStep
+  dsimp only [stExceptUndef_return, stExpect_return, return1, except_return]
+  rw [hm]
+  dsimp only
+  rw [hf]
+  cases act <;> simp only [] at h ⊢ <;> first | exact True.intro | cases h
+
+theorem dischargeStep_kill_active {tds : CerbTags.TagDefsMap} {aid : Nat} {rs : core_run_state}
+    {σ σ' : Mem} {str : String}
+    {loc loc₀ : CerbLocation.Loc} {tid : thread_id} {uw : Bool}
+    {isDyn : Bool} {pv : CerbMem.PointerValue} {k : Nat → thread_state}
+    (h : applyMemM (CerbMem.killM loc₀ isDyn pv) σ = some ((), σ')) :
+    dischargeStep tds aid rs σ (Step_action_request2 str loc tid uw
+      (stExceptUndef_return (KillRequest2 isDyn pv k))) =
+      .next (k aid) σ' := by
+  replace h := (killM_loc_irrel loc₀ loc).trans h
+  rcases hm : CerbMem.killM loc isDyn pv with ⟨f⟩
+  rcases hf : f σ with ⟨act, st⟩
+  unfold applyMemM at h
+  rw [hm] at h
+  simp only [hf] at h
+  unfold dischargeStep
+  dsimp only [stExceptUndef_return, stExpect_return, return1, except_return]
+  rw [hm]
+  dsimp only
+  rw [hf]
+  cases act <;> simp only [] at h ⊢
+  case NDactive x =>
+    obtain rfl : st = σ' := by
+      cases h; rfl
+    rfl
+  all_goals cases h
+
+theorem dischargeStep_kill_refusal {tds : CerbTags.TagDefsMap} {aid : Nat} {rs : core_run_state}
+    {σ : Mem} {str : String}
+    {loc loc₀ : CerbLocation.Loc} {tid : thread_id} {uw : Bool}
+    {isDyn : Bool} {pv : CerbMem.PointerValue} {k : Nat → thread_state}
+    (h : applyMemM (CerbMem.killM loc₀ isDyn pv) σ = none) :
+    (dischargeStep tds aid rs σ (Step_action_request2 str loc tid uw
+      (stExceptUndef_return (KillRequest2 isDyn pv k)))).isRefusal := by
+  replace h := (killM_loc_irrel loc₀ loc).trans h
+  rcases hm : CerbMem.killM loc isDyn pv with ⟨f⟩
   rcases hf : f σ with ⟨act, st⟩
   unfold applyMemM at h
   rw [hm] at h
@@ -2282,6 +2391,48 @@ theorem stepDischarge_load_eval {e : CoreExpr} {ctx : context}
      dsimp only [dischargeStep]
      rw [full_eval_bridge (v := Vctype ty) rfl (peDepth_val_le _ _) σ file,
        full_eval_bridge hv2 hd2 σ file]
+     dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+       return1, except_return]
+     rfl)
+
+/-- Kill ACTION_EVAL, context undisturbed, DISCHARGED (kill/free arc
+    K2 — step_action's Kill `none` arm + process_action's ACTION_EVAL
+    wrap): ONE engine step big-step-evaluating the pointer operand
+    through the certified evaluator, run state VERBATIM (∀ rs),
+    env/memory verbatim; the successor rebuilds the CANONICAL KILL
+    REDEX in context. -/
+theorem stepDischarge_kill_eval {e : CoreExpr} {ctx : context}
+    {loc : CerbLocation.Loc} {ann : core_run_annotation} {kind : kill_kind}
+    {pe : generic_pexpr Unit sym} {pv : CerbMem.PointerValue}
+    (hd : Decomp e ctx (killOpRedex loc ann kind pe))
+    (hsz : esize e ≤ lemDefaultFuel)
+    (hnv : valueFromPexpr pe = none)
+    (hp : PePure pe)
+    (hdp : peDepth pe ≤ lemDefaultFuel)
+    (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
+    (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
+    (tid : Nat) (parent : Option Nat) (th : thread_state)
+    (harena : th.arena = e)
+    (hv : evalPexpr tds ext th.env pe = some (Vobject (OVpointer pv)))
+    (aid : Nat) (rs : core_run_state) :
+    (step_ctx tds σ file ext tid (parent, th)).map
+        (dischargeStep tds aid rs σ) =
+      [.next { th with arena := apply_ctx ctx (killRedex loc ann kind pv) }
+        σ] := by
+  have hget : get_ctx th.arena = [(ctx, killOpRedex loc ann kind pe)] := by
+    rw [harena]; exact hd.get_ctx_default hsz
+  unfold step_ctx
+  dsimp only
+  rw [hget]
+  simp only [List.map_cons, List.map_nil]
+  unfold killOpRedex
+  cases ctx <;>
+    (dsimp only [get_loc]
+     dsimp only [step_action]
+     rw [act_valueFromPexpr_none hp hnv]
+     dsimp only [act_valueFromPexpr, valueFromPexpr]
+     dsimp only [dischargeStep]
+     rw [full_eval_bridge hv hdp σ file]
      dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
        return1, except_return]
      rfl)
@@ -3223,7 +3374,8 @@ is a superset of the engine-accepted shapes; EvalClass.lean header).
 THE FRAGMENT IS ANNOTATION-FREE: every constructor below, and every
 redex spelling it
 ranges over (`storeRedex`/`loadRedex`/`createRedex` above,
-`loadOpRedex`/`storeOpRedex`/`memopRedex`/`pureRedex` in Step.lean,
+`loadOpRedex`/`storeOpRedex`/`killRedex`/`killOpRedex`/`memopRedex`/
+`pureRedex` in Step.lean,
 `saveRedex`/`ifRedex`/`runRedex`/`caseRedex` above, and the
 `Esseq`/`Ewseq`/`Eannot` constructors), is stated at the empty static
 annotation list `Expr []` — so every node of a fragment program is
@@ -3241,6 +3393,16 @@ part of the runtime tuple as `env` is. -/
 
 inductive Frag : CoreExpr → Prop where
   | val_pure (v : value) : Frag (Expr [] (Epure (Pexpr [] () (PEval v))))
+  /-- Store at canonical evaluated operands, at EITHER locking mode:
+      `lk` is unconstrained, so the fragment ADMITS the locking store
+      `Store0 true …`, whose engine success flips the allocation's
+      `isReadonly` (CerbMem.lean:1687-1693). No rule of this package
+      covers `lk = true` (`storeExpr` is `Store0 false`; `store_atomic`,
+      `wps_store`, `wpt_store` and the subrange rules are stated at it),
+      so no derivation traverses a locking store and the coupling is
+      never asserted across one; any rule "over any live cell" that
+      involves a store fixes `lk = false` (K1 audit N-2). The kill rules
+      (K2) involve no store, so `lk` does not arise there. -/
   | store {loc : CerbLocation.Loc} {ann : core_run_annotation} {lk : Bool}
       {ty : ctype} {pv : CerbMem.PointerValue} {cv : value} {mo : memory_order} :
       Frag (storeRedex loc ann lk ty pv cv mo)
@@ -3250,6 +3412,25 @@ inductive Frag : CoreExpr → Prop where
   | create {loc : CerbLocation.Loc} {ann : core_run_annotation}
       {align : CerbMem.IntegerValue} {ty : ctype} {pref : prefix0} :
       Frag (createRedex loc ann align ty pref)
+  /-- THE STATIC KILL at the canonical evaluated pointer operand
+      (kill/free arc K2): `kill(static ty, p)` — `is_dynamic kind =
+      false` is the constructor's premise. The dynamic kill (`free(p)`,
+      `Kill Dynamic0`) pairs with `Alloc0` and joins the fragment with
+      K3 (the mirror `Step.kill` is already generic in the kind). The
+      engine DISCARDS the `Static0 ty` payload — only `is_dynamic kind`
+      reaches `killM` (Core_reduction.lean:424) — so no relation
+      between the kill type and the allocation's type is a premise
+      anywhere. -/
+  | kill {loc : CerbLocation.Loc} {ann : core_run_annotation} {kind : kill_kind}
+      {pv : CerbMem.PointerValue} (hstatic : is_dynamic kind = false) :
+      Frag (killRedex loc ann kind pv)
+  /-- The static kill at an operand in the covered grammar `PePure`,
+      within the evaluator's fuel (the ACTION_EVAL form). -/
+  | kill_op {loc : CerbLocation.Loc} {ann : core_run_annotation} {kind : kill_kind}
+      {pe : generic_pexpr Unit sym} (hstatic : is_dynamic kind = false)
+      (hnv : valueFromPexpr pe = none) (hp : PePure pe)
+      (hdp : peDepth pe ≤ lemDefaultFuel) :
+      Frag (killOpRedex loc ann kind pe)
   | sseq {pa : List annot} {bty : core_base_type} {e1 e2 : CoreExpr} :
       Frag e1 → Frag e2 →
       Frag (Expr [] (Esseq (Pattern pa (CaseBase (none, bty))) e1 e2))
@@ -3403,6 +3584,9 @@ theorem Frag.decomp {e : CoreExpr} (hf : Frag e) (hnv : toVal e = none) :
   | store => exact ⟨_, _, Decomp.root (.store), .store⟩
   | load => exact ⟨_, _, Decomp.root (.load), .load⟩
   | create => exact ⟨_, _, Decomp.root (.create), .create⟩
+  | kill hstatic => exact ⟨_, _, Decomp.root (.kill), .kill hstatic⟩
+  | kill_op hstatic hnvK hpK hdK =>
+    exact ⟨_, _, Decomp.root (.kill_op _ _ _ hnvK), .kill_op hstatic hnvK hpK hdK⟩
   | @sseq pa bty e1 e2 hf1 hf2 ih1 ih2 =>
     cases hv1 : toVal e1 with
     | some w =>
@@ -3450,6 +3634,8 @@ theorem Frag.decomp {e : CoreExpr} (hf : Frag e) (hnv : toVal e = none) :
       | store_op hnv hp2 hp3 hpd2 hpd3 =>
         simp [annotRooted, storeOpRedex] at hr
       | case_value hbr hbsz => simp [annotRooted, caseRedex] at hr
+      | kill hstatic => simp [annotRooted, killRedex] at hr
+      | kill_op hstatic hnvK hpK hdK => simp [annotRooted, killOpRedex] at hr
       | @annot ds2 c hfc =>
         have hwit : Frag (Expr ([] : List _root_.annot)
             (Eannot ds (Expr [] (Eannot ds2 c)))) := .annot (.annot hfc)
@@ -3479,6 +3665,9 @@ theorem Frag.decomp {e : CoreExpr} (hf : Frag e) (hnv : toVal e = none) :
         | store_op hnv hp2 hp3 hpd2 hpd3 =>
           exact ⟨_, _, Decomp.root (.merge rfl), hwit⟩
         | case_value hbr hbsz =>
+          exact ⟨_, _, Decomp.root (.merge rfl), hwit⟩
+        | kill hstatic => exact ⟨_, _, Decomp.root (.merge rfl), hwit⟩
+        | kill_op hstatic hnvK hpK hdK =>
           exact ⟨_, _, Decomp.root (.merge rfl), hwit⟩
     · have hr' : annotRooted b = false := by simpa using hr
       cases hvb : toVal b with
@@ -3523,6 +3712,9 @@ theorem Frag.decomp {e : CoreExpr} (hf : Frag e) (hnv : toVal e = none) :
         | store_op hnv hp2 hp3 hpd2 hpd3 =>
           exact ⟨_, _, Decomp.annot hr' rfl (fun n => rfl) hd, hfr⟩
         | case_value hbr hbsz =>
+          exact ⟨_, _, Decomp.annot hr' rfl (fun n => rfl) hd, hfr⟩
+        | kill hstatic => exact ⟨_, _, Decomp.annot hr' rfl (fun n => rfl) hd, hfr⟩
+        | kill_op hstatic hnvK hpK hdK =>
           exact ⟨_, _, Decomp.annot hr' rfl (fun n => rfl) hd, hfr⟩
   | save hp hd hb ih => exact ⟨_, _, Decomp.root (.save _ _ _), .save hp hd hb⟩
   | if_ hpg hdg hf2 hf3 ih2 ih3 =>
@@ -3627,6 +3819,18 @@ theorem Frag.step {M : MachineCtx}
       simpa [Prod.mk.injEq] using hout
     subst h1
     exact .val_pure _
+  | kill hstatic =>
+    obtain ⟨σ'', hmem, hout⟩ := hs.kill_inv
+    obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ'' := by
+      simpa [Prod.mk.injEq] using hout
+    subst h1
+    exact .val_pure _
+  | kill_op hstatic hnvK hpK hdK =>
+    obtain ⟨pv, -, hout⟩ := hs.kill_op_inv hnvK
+    obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ := by
+      simpa [Prod.mk.injEq] using hout
+    subst h1
+    exact .kill hstatic
   | sseq hf1 hf2 ih1 ih2 =>
     rcases hs.sseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
         ⟨_, _, v, _, _, _, _, _, hout⟩ | ⟨_, _, ds', v, _, _, _, _, _, hout⟩ |
@@ -3837,6 +4041,18 @@ theorem Frag.esize_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
       simpa [Prod.mk.injEq] using hout
     subst h1
     left; simp [esize, createRedex]
+  | kill hstatic =>
+    obtain ⟨σ'', hmem, hout⟩ := hs.kill_inv
+    obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ'' := by
+      simpa [Prod.mk.injEq] using hout
+    subst h1
+    left; simp [esize, killRedex]
+  | kill_op hstatic hnvK hpK hdK =>
+    obtain ⟨pv, -, hout⟩ := hs.kill_op_inv hnvK
+    obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ := by
+      simpa [Prod.mk.injEq] using hout
+    subst h1
+    left; simp [esize, killOpRedex]
   | sseq hf1 hf2 ih1 ih2 =>
     rcases hs.sseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
         ⟨_, _, v, _, _, _, _, _, hout⟩ | ⟨_, _, ds', v, _, _, _, _, _, hout⟩ |
@@ -4152,6 +4368,34 @@ theorem outcomesU_of_step {M : MachineCtx} (aid : Nat)
       simp only [List.map_cons, List.map_nil]
       rw [dischargeStep_create_active (reqAddr := get_with_address []) hmem]
       rfl
+    | @kill loc ann kind pv =>
+      obtain ⟨σ'', hmem, hout⟩ := hr.kill_inv
+      obtain ⟨h1, h2, h3⟩ : r' = Expr [] (Epure (Pexpr [] () (PEval Vunit))) ∧
+          ρ' = ev0 :: evs ∧ σ' = σ'' := by
+        simpa [Prod.mk.injEq] using hout
+      subst h1 h2 h3
+      unfold outcomesU engineStepsU
+      rw [step_ctx_kill hdOld hsz M.tagDefs σ M.file M.extern M.tid M.parent _ rfl]
+      simp only [List.map_cons, List.map_nil]
+      rw [dischargeStep_kill_active hmem]
+      rfl
+    | @kill_op loc ann kind pe hnvK =>
+      obtain ⟨hpK, hdK⟩ : PePure pe ∧ peDepth pe ≤ lemDefaultFuel := by
+        cases hfr with
+        | kill hst =>
+          rw [show valueFromPexpr (Pexpr [] () (PEval
+            (Vobject (OVpointer _)))) = some _ from rfl] at hnvK
+          cases hnvK
+        | kill_op hst hnvK' hpK hdK => exact ⟨hpK, hdK⟩
+      obtain ⟨pv, hv, hout⟩ := hr.kill_op_inv hnvK
+      obtain ⟨h1, h2, h3⟩ : r' = killRedex loc ann kind pv ∧
+          ρ' = ev0 :: evs ∧ σ' = σ := by
+        simpa [Prod.mk.injEq, killRedex] using hout
+      subst h1 h2
+      obtain rfl : σ = σ' := h3.symm
+      unfold outcomesU engineStepsU
+      exact stepDischarge_kill_eval hdOld hsz hnvK hpK hdK M.tagDefs σ M.file
+        M.extern M.tid M.parent _ rfl hv aid M.runState
     | @beta_pure pa bty v e2 =>
       rcases hr.sseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
           ⟨_, _, v', _, _, _, he1, _, hout⟩ |

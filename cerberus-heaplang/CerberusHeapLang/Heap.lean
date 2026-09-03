@@ -49,7 +49,9 @@ every demo — `spikeCtx`/`procCtx` are reducible, so `M.tagDefs`
 unfolds to it under the proof mode's matching).
 
 THE THREE ALLOCATION FACTS (after RefinedC's ghost_state.v split
-heap_mapsto / loc_in_bounds / alloc_alive):
+heap_mapsto / alloc_global / alloc_alive — NOT their `loc_in_bounds`:
+RefinedC's `alloc_meta` survives a kill, ours forecloses it; K1 audit
+N-3):
 1. LINEAR/FRACTIONAL BYTES — the per-byte heap: `bytesOwn`, split at
    any list decomposition (`bytesOwn_append`) and at any fraction sum
    (`bytesOwn_fractional`), agreeing on contents (`bytesOwn_agree`).
@@ -801,6 +803,50 @@ theorem int_beq_refl (x : Int) : (x == x) = true := by
         | LemOrdering.EQ => true | _ => false) = true
   unfold defaultCompare
   rw [Int.compare_eq_eq.mpr rfl]
+
+/-- The LemLib `BEq Int` decides equality (`int_beq_eq_false`'s
+    converse face). -/
+theorem int_beq_eq_true (x y : Int) (h : (x == y) = true) : x = y := by
+  refine Decidable.byContradiction fun hne => ?_
+  rw [int_beq_eq_false x y hne] at h
+  cases h
+
+/-! ### The `∈`/`contains` bridge for the engine's integer lists (K1
+audit M-1). The engine tests `deadAllocations`/`dynamicAddrs` with
+`List.contains`, elaborated at LemLib's `Ord`-based `BEq Int`
+(`instBEqOfEq0`, no `LawfulBEq`), so core's `List.contains_iff_mem`
+does not apply; `MetaCoh.dynamic`, `regionOwn_facts` and `MemWF.dyn_*`
+stay in `∈` form (frozen statements) and cross to the engine's Bool
+through these three lemmas — the head case is `int_beq_refl`. K3's
+`free` passes `killM`'s dynamic check (CerbMem.lean:1573) through
+`mem_contains_int`; `MemWF.killM` (below) uses the cons faces. -/
+
+theorem mem_contains_int (l : List Int) (a : Int) (h : a ∈ l) : l.contains a = true := by
+  induction l with
+  | nil => cases h
+  | cons b l ih =>
+    rcases List.mem_cons.mp h with rfl | h'
+    · show (match a == a with | true => true | false => List.elem a l) = true
+      rw [int_beq_refl]
+    · show (match a == b with | true => true | false => List.elem a l) = true
+      cases a == b
+      · exact ih h'
+      · rfl
+
+/-- `contains` at a cons: the head or the tail (LemLib instance). -/
+theorem contains_cons_int (b : Int) (l : List Int) (a : Int)
+    (h : (b :: l).contains a = true) : a = b ∨ l.contains a = true := by
+  change (match a == b with | true => true | false => List.elem a l) = true at h
+  cases hab : a == b
+  · rw [hab] at h
+    exact .inr h
+  · exact .inl (int_beq_eq_true a b hab)
+
+/-- `contains` at a cons whose head differs from the key is the tail's. -/
+theorem contains_cons_ne_int (b : Int) (l : List Int) (a : Int) (hne : a ≠ b) :
+    (b :: l).contains a = l.contains a := by
+  change (match a == b with | true => true | false => List.elem a l) = _
+  rw [int_beq_eq_false a b hne]
 
 /-- The derived BEq on provenances is reflexive (splitBytesProv's
     shared-provenance fold needs it). -/
@@ -1872,10 +1918,11 @@ provenance/metadata authority), and a one-cell ALLOCATOR-CURSOR heap
 (the D26 resource: lastAddress/nextAllocId knowledge, without which
 `create`'s reducibility is unprovable). Donor shape: Caesium's `heap :
 gmap addr byte` + `allocs : gmap alloc_id allocation` split (RefinedC
-theories/caesium/ghost_state.v; loc_in_bounds is their persistent
-metadata analogue, alloc_alive their killable one — here the liveness
-component is the cell's `alive` field, K1; the kill rules that flip it
-are K2/K3). -/
+theories/caesium/ghost_state.v; alloc_global is their persistent
+metadata analogue — not loc_in_bounds, which outlives a kill there —
+alloc_alive their killable one; here the liveness component is the
+cell's `alive` field, K1, and the static kill rule that flips it is
+K2's `kill_atomic`, the dynamic one K3's). -/
 
 /-- The allocator cursor: the two MemState fields `allocateObject`
     reads and writes (CerbMem.lean:1470-1490). -/
@@ -2247,7 +2294,7 @@ notation:50 pv " ↦c[" tds "] " ty " ; " bs:50 => pointsToCell tds pv (DFrac.ow
 
 Byte ranges split at ∗ because the carrier is per-byte; metadata
 knowledge splits fractionally (classical fractional permissions —
-Boyland; the donor's `heap_mapsto`/`loc_in_bounds` factorization). -/
+Boyland; the donor's `heap_mapsto`/`alloc_meta` factorization). -/
 
 section ViewLaws
 
@@ -2659,10 +2706,14 @@ theorem pointsToCell_combine (tds : CerbTags.TagDefsMap) (pv : CerbMem.PointerVa
 /-! ### The persistent stratum -/
 
 /-- PERSISTENT ALLOCATION KNOWLEDGE: the allocation's id, base
-    address, allocation type and size — the metadata cell at the
-    DISCARDED fraction (the donor's `loc_in_bounds`/`alloc_meta`
-    analogue). Persistent: metadata is immutable in this fragment, so
-    the knowledge holds forever once obtained. -/
+    address, allocation type and size — the LIVE metadata cell at the
+    DISCARDED fraction: the donor's `alloc_global` (`alloc_alive id
+    DfracDiscarded true`, ghost_state.v:104-105), NOT its
+    `loc_in_bounds`/`alloc_meta`: unlike RefinedC's, this does not
+    survive a kill — holding it FORECLOSES the kill (`.own 1 ∗
+    .discard` is invalid; `deadObj_allocMeta_false`), which is why it
+    stays true forever once obtained (design note §1(d)/§7; K1 audit
+    N-3). -/
 def allocMeta (tds : CerbTags.TagDefsMap) (id a : Int) (aty : ctype) : IProp GF :=
   metaOwn id .discard (objCell tds a aty true false)
 
@@ -2686,7 +2737,10 @@ theorem allocMeta_agree (tds : CerbTags.TagDefsMap) (id a a' : Int) (aty aty' : 
   exact ⟨h.1, h.2.1⟩
 
 /-- PERSISTENT IN-BOUNDS KNOWLEDGE: `n` bytes at offset `off` of the
-    allocation are inside it (the donor's `loc_in_bounds l n`). -/
+    allocation are inside it — the SHAPE of the donor's `loc_in_bounds
+    l n`, over `allocMeta`, so (unlike the donor's) immortal only
+    because it forecloses the kill: no dangling-pointer bounds fact
+    exists here (Cerberus erases the record). -/
 def locInBounds (tds : CerbTags.TagDefsMap) (id a : Int) (aty : ctype) (off n : Nat) :
     IProp GF :=
   iprop(allocMeta tds id a aty ∗ ⌜off + n ≤ CerbMem.sizeofCtype tds aty⌝)

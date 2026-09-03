@@ -13,7 +13,8 @@ API, and no exhibit imports it.
 
 Contents (moved here verbatim from ProdExhibit.lean, 2026-09-02
 detailed audit L-2 — statements unchanged): the two MIXED operand
-shapes of `store`. The engine's ACTION_EVAL arm for `store` fires
+shapes of `store`; plus (kill/free arc K2) the kill at a symbol
+operand, `kill_sym_step`. The engine's ACTION_EVAL arm for `store` fires
 whenever the operand triple is NOT all values; the mirror's
 `Step.store_eval` covers every such shape, and these two witnesses
 pin the two mixed ones (symbol pointer / literal value, literal
@@ -61,5 +62,21 @@ theorem store_lit_sym_step {M : MachineCtx} {loc : CerbLocation.Loc}
         (Pexpr [] () (PEsym y)) mo, ρ, σ)
       (storeExpr loc ann ty pv cv mo, ρ, σ) :=
   Step.store_eval rfl rfl hy
+
+/-! ## The kill ACTION_EVAL shape (kill/free arc K2): `kill(static ty, x)`
+at a SYMBOL operand — the engine's `none` arm of step_action's Kill case
+(the operand is not a value) is covered by `Step.kill_eval`, whose
+successor is the canonical kill redex. -/
+
+/-- `kill(static ty, x)` — SYMBOL pointer operand — steps to the
+    evaluated kill. -/
+theorem kill_sym_step {M : MachineCtx} {loc : CerbLocation.Loc}
+    {ann : core_run_annotation} {kind : kill_kind} {x : sym}
+    {ρ : EnvStack} {σ : Mem} {pv : CerbMem.PointerValue}
+    (hx : evalPexpr M.tagDefs M.extern ρ (Pexpr [] () (PEsym x)) =
+      some (Vobject (OVpointer pv))) :
+    Step M (killOpRedex loc ann kind (Pexpr [] () (PEsym x)), ρ, σ)
+      (killRedex loc ann kind pv, ρ, σ) :=
+  Step.kill_eval rfl hx
 
 end CerberusHeapLang

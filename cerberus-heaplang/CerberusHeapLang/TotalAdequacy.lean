@@ -99,6 +99,8 @@ theorem Frag.stateInert_step {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
   | store => simp [stateInert, storeRedex] at hin
   | load => simp [stateInert, loadRedex] at hin
   | create => simp [stateInert, createRedex] at hin
+  | kill hstatic => simp [stateInert, killRedex] at hin
+  | kill_op hstatic hnvK hpK hdK => simp [stateInert, killOpRedex] at hin
   | sseq hf1 hf2 ih1 ih2 =>
     obtain ⟨hin1, hin2⟩ : stateInert _ = true ∧ stateInert _ = true := by
       simpa [stateInert, Bool.and_eq_true] using hin

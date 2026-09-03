@@ -20,7 +20,9 @@ a missing rule narrows what is provable without falsifying anything;
 the per-construct coverage authority is docs/CAPABILITY_MANIFEST.md.
 
 SCOPE (the mirrored fragment): pure values; `Store0`/`Load0`/`Create0`
-actions at evaluated operands and at the operands the engine
+actions and the `Kill` action (kill/free arc K2 — any `kill_kind` in
+`Step`; the fragment `Frag` admits the STATIC kill only until K3) at
+evaluated operands and at the operands the engine
 evaluates first (the ACTION_EVAL step); the `PtrEq` memop; strong
 sequencing `Esseq` at the wildcard, `Specified`-binder and
 plain-symbol-binder patterns; weak sequencing `Ewseq` at the
@@ -1011,6 +1013,19 @@ theorem loadM_loc_irrel {tds : CerbTags.TagDefsMap} (loc loc' : CerbLocation.Loc
   rcases pv with ⟨prov, base⟩
   cases prov <;> cases base <;> dsimp only <;> repeat' (first | rfl | split)
 
+/-- `killM`'s outcome under `applyMemM` does not depend on the location
+    (kill/free arc K2): `loc` reaches only the `fail_` payload
+    (CerbMem.lean:1559), never the active arm or the state. -/
+theorem killM_loc_irrel (loc loc' : CerbLocation.Loc) {isDyn : Bool}
+    {pv : CerbMem.PointerValue} {σ : Mem} :
+    applyMemM (CerbMem.killM loc' isDyn pv) σ =
+      applyMemM (CerbMem.killM loc isDyn pv) σ := by
+  unfold CerbMem.killM
+  rw [applyMemM_ND, applyMemM_ND]
+  dsimp only
+  rcases pv with ⟨prov, base⟩
+  cases prov <;> cases base <;> dsimp only <;> repeat' (first | rfl | split)
+
 /-! ## The step relation -/
 
 /-- One engine step of the fragment, memory-composed: expression +
@@ -1114,6 +1129,31 @@ inductive Step (M : MachineCtx) :
       Step M (Expr a (Eaction (Paction polarity.Pos (Action loc ann
               (Create pe1 pe2 pref)))), ρ, σ)
            (Expr [] (Epure (Pexpr [] () (PEval (Vobject (OVpointer pv))))), ρ, σ')
+  /-- Positive strong KILL (kill/free arc K2), evaluated pointer
+      operand. Mirrors: step_action's Kill arm (Core_reduction.lean:424,
+      verbatim modulo whitespace: `| Kill kind1 pe => match
+      act_valueFromPexpr pe with | some (Vobject (OVpointer ptrval)) =>
+      ACTION_REQUEST "KillRequest" loc1 (KillRequest2 (is_dynamic kind1)
+      ptrval (fun (aid1 : Nat) => mk_value_e Vunit)) | some _ =>
+      ACTION_ILLTYPED "Kill" | none => ACTION_EVAL "eval operand of Kill"
+      …`), driver discharge `liftMem (CerbMem.killM loc1 is_dynamic1
+      ptr_val)` (Driver.lean:273), continuation `mk_value_e Vunit` — a
+      BARE unit, no `Eannot` residue (like create, unlike store/load).
+      The `Static0 ty` payload is DISCARDED by the engine: only
+      `is_dynamic kind` reaches the request, so the rule is generic in
+      `kind` (the fragment `Frag.kill` restricts to the static kill;
+      the dynamic kill is K3). killM: CerbMem.lean:1555-1580,
+      deterministic — every failure arm (`Free_non_matching` UB179a,
+      `Free_dead_allocation` UB179b, the non-UB `Free_out_of_bound`) is
+      absence of a step. The env is unread and returned verbatim. -/
+  | kill {a : List annot} {loc : CerbLocation.Loc} {ann : core_run_annotation}
+      {kind : kill_kind} {pe : generic_pexpr Unit sym}
+      {pv : CerbMem.PointerValue} {ρ : EnvStack} {σ σ' : Mem}
+      (h1 : valueFromPexpr pe = some (Vobject (OVpointer pv)))
+      (hmem : applyMemM (CerbMem.killM loc (is_dynamic kind) pv) σ = some ((), σ')) :
+      Step M (Expr a (Eaction (Paction polarity.Pos (Action loc ann
+              (Kill kind pe)))), ρ, σ)
+           (Expr [] (Epure (Pexpr [] () (PEval Vunit))), ρ, σ')
   /-- LETS-PURE at a wildcard pattern:
       `lets _ = v in E2 --> E2` (one_step0 Esseq bare-value arm,
       Core_reduction.lean:353 "reduction: LETS-PURE"). The env update
@@ -1481,6 +1521,28 @@ inductive Step (M : MachineCtx) :
               (Store0 lk (Pexpr [] () (PEval (Vctype ty)))
                       (Pexpr [] () (PEval (Vobject (OVpointer pv))))
                       (Pexpr [] () (PEval cv)) mo)))), ρ, σ)
+  /-- ACTION_EVAL for a positive strong kill with an unevaluated
+      pointer operand (kill/free arc K2): ONE engine step BIG-STEP
+      evaluating the operand (step_action's Kill `none` arm,
+      Core_reduction.lean:424 — `ACTION_EVAL "eval operand of Kill"`
+      over `full_eval_pexpr1 pe`, wrapped by process_action's
+      ACTION_EVAL arm into Step_with_runstate2; successor `Expr
+      e_annots (wrap_act (Kill kind1 (mk_value_pe cval)))` for ANY
+      `cval`). As `load_eval`/`store_eval`, the mirror pins the
+      evaluated value to a POINTER — the successor is exactly the
+      canonical kill redex; a non-pointer value is the engine's
+      ILLTYPED-at-distance-one round (`ShippedRefusal.error_next`,
+      `complete_kill_op`), classified, not mirrored. -/
+  | kill_eval {a : List annot} {loc : CerbLocation.Loc}
+      {ann : core_run_annotation} {kind : kill_kind}
+      {pe : generic_pexpr Unit sym} {pv : CerbMem.PointerValue}
+      {ρ : EnvStack} {σ : Mem}
+      (hnv : valueFromPexpr pe = none)
+      (hv : evalPexpr M.tagDefs M.extern ρ pe = some (Vobject (OVpointer pv))) :
+      Step M (Expr a (Eaction (Paction polarity.Pos (Action loc ann
+              (Kill kind pe)))), ρ, σ)
+           (Expr a (Eaction (Paction polarity.Pos (Action loc ann
+              (Kill kind (Pexpr [] () (PEval (Vobject (OVpointer pv)))))))), ρ, σ)
 
 /-! ## Basic metatheory of Step (inversions the logic needs) -/
 
@@ -1533,6 +1595,15 @@ theorem Step.create_canonical {M : MachineCtx} {a : List annot}
          (Expr [] (Epure (Pexpr [] () (PEval (Vobject (OVpointer pv))))), ρ, σ') :=
   Step.create rfl rfl hmem
 
+theorem Step.kill_canonical {M : MachineCtx} {a : List annot}
+    {loc : CerbLocation.Loc} {ann : core_run_annotation} {kind : kill_kind}
+    {pv : CerbMem.PointerValue} {ρ : EnvStack} {σ σ' : Mem}
+    (hmem : applyMemM (CerbMem.killM loc (is_dynamic kind) pv) σ = some ((), σ')) :
+    Step M (Expr a (Eaction (Paction polarity.Pos (Action loc ann
+            (Kill kind (Pexpr [] () (PEval (Vobject (OVpointer pv)))))))), ρ, σ)
+         (Expr [] (Epure (Pexpr [] () (PEval Vunit))), ρ, σ') :=
+  Step.kill rfl hmem
+
 /-- S3 RETIREMENT NOTE: phase-1's `Step.env_invariant(')` (no rule
     writes the env) is RETIRED as pre-declared (phase-1 notes §2
     item 6) — `Step.run` and `Step.save` rebind the environment. Its
@@ -1545,6 +1616,7 @@ theorem Step.env_cons' {M : MachineCtx} {c c' : CoreExpr × EnvStack × Mem}
   | store h1 h2 h3 hmv hmem => exact fun ev0 evs hin => ⟨ev0, hin⟩
   | load h1 h2 hmem => exact fun ev0 evs hin => ⟨ev0, hin⟩
   | create h1 h2 hmem => exact fun ev0 evs hin => ⟨ev0, hin⟩
+  | kill h1 hmem => exact fun ev0 evs hin => ⟨ev0, hin⟩
   | sseq_pure => exact fun ev0 evs hin => ⟨ev0, hin⟩
   | sseq_annot => exact fun ev0 evs hin => ⟨ev0, hin⟩
   | wseq_pure => exact fun ev0 evs hin => ⟨ev0, hin⟩
@@ -1582,6 +1654,7 @@ theorem Step.env_cons' {M : MachineCtx} {c c' : CoreExpr × EnvStack × Mem}
   | memop_ptreq h1 h2 hmem => exact fun ev0 evs hin => ⟨ev0, hin⟩
   | memop_eval hnv hv1 hv2 => exact fun ev0 evs hin => ⟨ev0, hin⟩
   | store_eval hnv hv2 hv3 => exact fun ev0 evs hin => ⟨ev0, hin⟩
+  | kill_eval hnv hv => exact fun ev0 evs hin => ⟨ev0, hin⟩
 
 theorem Step.env_cons {M : MachineCtx} {e : CoreExpr} {ev0 : Fmap sym value}
     {evs : List (Fmap sym value)} {σ : Mem}
@@ -1690,6 +1763,43 @@ theorem Step.create_inv {M : MachineCtx} {a : List annot} {loc : CerbLocation.Lo
     subst h1 h2
     exact ⟨_, _, hmem, rfl⟩
 
+/-- Inversion at a kill redex (canonical operand instance, kill/free
+    arc K2): the step is unique and fully determined by `killM`; the
+    env is returned verbatim. -/
+theorem Step.kill_inv {M : MachineCtx} {a : List annot} {loc : CerbLocation.Loc}
+    {ann : core_run_annotation} {kind : kill_kind} {pv : CerbMem.PointerValue}
+    {ρ : EnvStack} {σ : Mem} {out : CoreExpr × EnvStack × Mem}
+    (h : Step M (Expr a (Eaction (Paction polarity.Pos (Action loc ann
+            (Kill kind (Pexpr [] () (PEval (Vobject (OVpointer pv)))))))), ρ, σ) out) :
+    ∃ σ',
+      applyMemM (CerbMem.killM loc (is_dynamic kind) pv) σ = some ((), σ') ∧
+      out = (Expr [] (Epure (Pexpr [] () (PEval Vunit))), ρ, σ') := by
+  cases h with
+  | run hj hl hvs => simp at hj
+  | kill_eval hnv hv => rw [valueFromPexpr_val] at hnv; cases hnv
+  | kill h1 hmem =>
+    rw [valueFromPexpr_val] at h1
+    injection h1 with h1; injection h1 with h1; injection h1 with h1
+    subst h1
+    exact ⟨_, hmem, rfl⟩
+
+/-- Inversion at a positive kill whose pointer operand is NOT a value:
+    the ACTION_EVAL step to a POINTER value. -/
+theorem Step.kill_op_inv {M : MachineCtx} {a : List annot}
+    {loc : CerbLocation.Loc} {ann : core_run_annotation} {kind : kill_kind}
+    {pe : generic_pexpr Unit sym}
+    {ρ : EnvStack} {σ : Mem} {out : CoreExpr × EnvStack × Mem}
+    (hnv : valueFromPexpr pe = none)
+    (h : Step M (Expr a (Eaction (Paction polarity.Pos (Action loc ann
+            (Kill kind pe)))), ρ, σ) out) :
+    ∃ pv, evalPexpr M.tagDefs M.extern ρ pe = some (Vobject (OVpointer pv)) ∧
+      out = (Expr a (Eaction (Paction polarity.Pos (Action loc ann
+        (Kill kind (Pexpr [] () (PEval (Vobject (OVpointer pv)))))))), ρ, σ) := by
+  cases h with
+  | run hj hl hvs => simp at hj
+  | kill h1 hmem => rw [hnv] at h1; cases h1
+  | kill_eval hnv' hv => exact ⟨_, hv, rfl⟩
+
 /-! ### THE JUMP-REDEX INVERSION PAIR (probe Toy.lean
 `step_jump_inv`/`step_of_jumpRedex`, now on Core — the semantic
 cash-in of context-independence: at a jump redex EVERY step is THE
@@ -1715,6 +1825,8 @@ theorem Step.jump_inv {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack} {σ : Mem}
   | store h1 h2 h3 hmv hmem => simp at hj
   | load h1 h2 hmem => simp at hj
   | create h1 h2 hmem => simp at hj
+  | kill h1 hmem => simp at hj
+  | kill_eval hnv hv => simp at hj
   | sseq_pure => rw [jumpRedex?_sseq, jumpRedex?_ofVal] at hj; cases hj
   | sseq_annot => rw [jumpRedex?_sseq, jumpRedex?_ofVal] at hj; cases hj
   | wseq_pure => rw [jumpRedex?_wseq, jumpRedex?_ofVal] at hj; cases hj
@@ -2101,6 +2213,20 @@ def storeOpRedex (loc : CerbLocation.Loc) (ann : core_run_annotation)
     CoreExpr :=
   Expr [] (Eaction (Paction polarity.Pos (Action loc ann
     (Store0 false (Pexpr [] () (PEval (Vctype ty))) pe2 pe3 mo))))
+
+/-- Canonical spelling of the kill redex (kill/free arc K2): positive
+    strong kill of any kind at the canonical EVALUATED pointer operand
+    (`Rules.killExpr` is the same spelling). -/
+def killRedex (loc : CerbLocation.Loc) (ann : core_run_annotation)
+    (kind : kill_kind) (pv : CerbMem.PointerValue) : CoreExpr :=
+  Expr [] (Eaction (Paction polarity.Pos (Action loc ann
+    (Kill kind (Pexpr [] () (PEval (Vobject (OVpointer pv))))))))
+
+/-- Canonical spelling of the kill ACTION_EVAL redex: positive strong
+    kill at an UNevaluated pointer operand. -/
+def killOpRedex (loc : CerbLocation.Loc) (ann : core_run_annotation)
+    (kind : kill_kind) (pe : generic_pexpr Unit sym) : CoreExpr :=
+  Expr [] (Eaction (Paction polarity.Pos (Action loc ann (Kill kind pe))))
 
 /-! ## The frozen profiles as context instances
 

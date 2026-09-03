@@ -1073,6 +1073,7 @@ def operandsOf : CoreExpr → List (generic_pexpr Unit sym)
   | Expr _ (Epure pe) => [pe]
   | Expr _ (Eaction (Paction _ (Action _ _ (Load0 _ pe2 _)))) => [pe2]
   | Expr _ (Eaction (Paction _ (Action _ _ (Store0 _ _ pe2 pe3 _)))) => [pe2, pe3]
+  | Expr _ (Eaction (Paction _ (Action _ _ (Kill _ pe)))) => [pe]
   | Expr _ (Ememop _ pes) => pes
   | _ => []
 

@@ -453,6 +453,31 @@ theorem ars_create_active {tds : Fmap sym (CerbLocation.Loc × tag_definition)} 
     (runOne_liftMem_active (runOne_of_applyMemM happ))).trans ?_
   rfl
 
+/-- KillRequest2 discharge, active (kill/free arc K2; Driver.lean:273,
+    verbatim modulo whitespace: `nd_bind (liftMem (CerbMem.killM loc1
+    is_dynamic1 ptr_val)) (fun _ => nd_update (fun dr_st => { { dr_st
+    with trace := ME_kill loc1 is_dynamic1 ptr_val :: dr_st.trace } with
+    core_state0 := update_thread_state tid1 (mk_th_st' aid1)
+    dr_st.core_state0 }))`): `killM` runs on the layout state at the
+    request's location (`killM_loc_irrel` transports the mirror's
+    premise), the trace gets its `ME_kill` event, the thread its
+    continuation at the drawn aid. -/
+theorem ars_kill_active {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
+    {loc loc₀ : CerbLocation.Loc} {isDyn : Bool} {pv : CerbMem.PointerValue}
+    {k : Nat → thread_state} {tid aid : Nat} {dst : driver_state} {σ' : Mem}
+    (happ : applyMemM (CerbMem.killM loc₀ isDyn pv) dst.layout_state = some ((), σ')) :
+    runOne (action_request_sequential2 tds loc tid aid (KillRequest2 isDyn pv k)) dst =
+      (NDactive (), { dst with
+        layout_state := σ',
+        trace := ME_kill loc isDyn pv :: dst.trace,
+        core_state0 := update_thread_state tid (k aid) dst.core_state0 }) := by
+  replace happ := (killM_loc_irrel loc₀ loc).trans happ
+  unfold action_request_sequential2
+  dsimp only
+  refine (runOne_bind_active (z := ()) (s' := { dst with layout_state := σ' })
+    (runOne_liftMem_active (runOne_of_applyMemM happ))).trans ?_
+  rfl
+
 /-! ## D3: the finalize/hack readout -/
 
 /-- `Driver.hack` (Driver.lean:390-395) on an already-irreducible
@@ -983,6 +1008,44 @@ theorem step_ctx_load_eval_ws {e : CoreExpr} {ctx : context}
        return1, except_return]
      rfl)
 
+/-- Kill ACTION_EVAL, raw (kill/free arc K2): one `RSK_eval` step
+    rebuilding the canonical kill redex, run state verbatim. -/
+theorem step_ctx_kill_eval_ws {e : CoreExpr} {ctx : context}
+    {loc : CerbLocation.Loc} {ann : core_run_annotation} {kind : kill_kind}
+    {pe : generic_pexpr Unit sym} {pv : CerbMem.PointerValue}
+    (hd : Decomp e ctx (killOpRedex loc ann kind pe))
+    (hsz : esize e ≤ lemDefaultFuel)
+    (hnv : valueFromPexpr pe = none)
+    (hp : PePure pe)
+    (hdp : peDepth pe ≤ lemDefaultFuel)
+    (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
+    (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
+    (tid : Nat) (parent : Option Nat) (th : thread_state)
+    (harena : th.arena = e)
+    (hv : evalPexpr tds ext th.env pe = some (Vobject (OVpointer pv))) :
+    ∃ (s : String) (m : core_runM thread_state),
+      step_ctx tds σ file ext tid (parent, th) =
+        [Step_with_runstate2 (RSK_eval s) m] ∧
+      ∀ rs, m rs = Result (Defined { th with
+        arena := apply_ctx ctx (killRedex loc ann kind pv) }, rs) := by
+  have hget : get_ctx th.arena = [(ctx, killOpRedex loc ann kind pe)] := by
+    rw [harena]; exact hd.get_ctx_default hsz
+  unfold step_ctx
+  dsimp only
+  rw [hget]
+  simp only [List.map_cons, List.map_nil]
+  unfold killOpRedex
+  cases ctx <;>
+    (dsimp only [get_loc]
+     dsimp only [step_action]
+     rw [act_valueFromPexpr_none hp hnv]
+     dsimp only [act_valueFromPexpr, valueFromPexpr]
+     refine ⟨_, _, rfl, fun rs => ?_⟩
+     rw [full_eval_bridge hv hdp σ file]
+     dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+       return1, except_return]
+     rfl)
+
 /-- Store ACTION_EVAL, raw: one `RSK_eval` step rebuilding the
     canonical store redex, run state verbatim. -/
 theorem step_ctx_store_eval_ws {e : CoreExpr} {ctx : context}
@@ -1238,6 +1301,46 @@ theorem loop_step_frag {M₀ : MachineCtx}
       exact loop_step_action fl fmapEmpty acc hth hsteps
         (ars_create_active (tid := 0)
           (aid := dst.core_run_state0.aid_supply) hmem)
+    | @kill loc ann kind pv =>
+      obtain ⟨σ'', hmem, hout⟩ := hr.kill_inv
+      obtain ⟨h1, h2, h3⟩ : r' = Expr [] (Epure (Pexpr [] () (PEval Vunit))) ∧
+          ρ' = ev0 :: evs ∧ σ' = σ'' := by
+        simpa [Prod.mk.injEq] using hout
+      subst h1 h2 h3
+      have hsteps := step_ctx_kill hd hsz fmapEmpty
+        dst.layout_state dst.core_file dst.core_extern 0 none
+        { th₀ with arena := e, env := ev0 :: evs } rfl
+      rw [hccall] at hsteps
+      refine ⟨{ dst.core_run_state0 with aid_supply :=
+          dst.core_run_state0.aid_supply + 1 },
+        ME_kill (requestLoc { th₀ with arena := e, env := ev0 :: evs } loc)
+          (is_dynamic kind) pv :: dst.trace,
+        dst.dr_step_counter, rfl, ?_⟩
+      exact loop_step_action fl fmapEmpty acc hth hsteps
+        (ars_kill_active (tid := 0)
+          (aid := dst.core_run_state0.aid_supply) hmem)
+    | @kill_op loc ann kind pe hnvK =>
+      obtain ⟨hpK, hdK⟩ : PePure pe ∧ peDepth pe ≤ lemDefaultFuel := by
+        cases hfr with
+        | kill hst =>
+          rw [show valueFromPexpr (Pexpr [] () (PEval
+            (Vobject (OVpointer _)))) = some _ from rfl] at hnvK
+          cases hnvK
+        | kill_op hst hnvK' hpK hdK => exact ⟨hpK, hdK⟩
+      obtain ⟨pv, hv, hout⟩ := hr.kill_op_inv hnvK
+      obtain ⟨h1, h2, h3⟩ : r' = killRedex loc ann kind pv ∧
+          ρ' = ev0 :: evs ∧ σ' = dst.layout_state := by
+        simpa [Prod.mk.injEq, killRedex] using hout
+      subst h1 h2 h3
+      rw [htd, hex] at hv
+      obtain ⟨s, m, hsteps, hm⟩ := step_ctx_kill_eval_ws hd hsz hnvK hpK hdK
+        fmapEmpty dst.layout_state dst.core_file dst.core_extern 0 none
+        { th₀ with arena := e, env := ev0 :: evs } rfl
+        (by rw [hext]; exact hv)
+      refine ⟨dst.core_run_state0, dst.trace, dst.dr_step_counter + 1,
+        rfl, ?_⟩
+      exact loop_step_withrs_eval fl fmapEmpty acc hth hsteps
+        (hm dst.core_run_state0)
     | @beta_pure pa bty v e2 =>
       rcases hr.sseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
           ⟨_, _, v', _, _, _, he1, _, hout⟩ |

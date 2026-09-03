@@ -45,7 +45,10 @@ context-discarding jump `Erun` at `PePure` arguments, value-scrutinee
 `Ecase`, `PEsym`-shaped pure exits, the covered operand grammar
 `PePure` — `PEval`/`PEsym`/the eight mirrored `PEop` binops
 (`Add`/`Sub`/`Mul`/`Eq`/`Lt`/`Le`/`Gt`/`Ge`)/`PEarray_shift` — and the
-run-time annotation residue. The per-construct authority is the
+run-time annotation residue. (`Frag.store` admits EITHER locking mode — `lk` is unconstrained —
+while every store rule is at `Store0 false`: the locking store, whose
+engine success flips the allocation's `isReadonly`, has no rule, so no
+derivation traverses one; K1 audit N-2.) The per-construct authority is the
 inductive `Frag` (Soundness.lean), the premise of every adequacy
 theorem; the generated [capability manifest](docs/CAPABILITY_MANIFEST.md)
 lists one row per `Frag` constructor with the rule covering it and the

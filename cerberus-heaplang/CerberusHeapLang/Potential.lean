@@ -104,6 +104,8 @@ theorem Frag.esize_le_pot {e : CoreExpr} (hf : Frag e) : esize e ≤ pot e := by
   | store => simp [esize, pot, storeRedex]
   | load => simp [esize, pot, loadRedex]
   | create => simp [esize, pot, createRedex]
+  | kill hstatic => simp [esize, pot, killRedex]
+  | kill_op hstatic hnvK hpK hdK => simp [esize, pot, killOpRedex]
   | sseq hf1 hf2 ih1 ih2 => simp only [esize_sseq, pot_sseq]; omega
   | annot hfb ihb => simp only [esize_annot, pot_annot]; omega
   | save hp hd hb ih =>
@@ -142,6 +144,8 @@ theorem Frag.pot_le_two {e : CoreExpr} (hf : Frag e) : pot e ≤ 2 * esize e := 
   | store => simp [esize, pot, storeRedex]
   | load => simp [esize, pot, loadRedex]
   | create => simp [esize, pot, createRedex]
+  | kill hstatic => simp [esize, pot, killRedex]
+  | kill_op hstatic hnvK hpK hdK => simp [esize, pot, killOpRedex]
   | sseq hf1 hf2 ih1 ih2 => simp only [esize_sseq, pot_sseq]; omega
   | annot hfb ihb => simp only [esize_annot, pot_annot]; omega
   | save hp hd hb ih =>
@@ -203,6 +207,18 @@ theorem Frag.pot_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
       simpa [Prod.mk.injEq] using hout
     subst h1
     left; simp [pot, createRedex]
+  | kill hstatic =>
+    obtain ⟨σ'', hmem, hout⟩ := hs.kill_inv
+    obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ'' := by
+      simpa [Prod.mk.injEq] using hout
+    subst h1
+    left; simp [pot, killRedex]
+  | kill_op hstatic hnvK hpK hdK =>
+    obtain ⟨pv, -, hout⟩ := hs.kill_op_inv hnvK
+    obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ := by
+      simpa [Prod.mk.injEq] using hout
+    subst h1
+    left; simp [pot, killOpRedex]
   | sseq hf1 hf2 ih1 ih2 =>
     rcases hs.sseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
         ⟨_, _, v, _, _, _, he1, _, hout⟩ | ⟨_, _, ds', v, _, _, _, he1, _, hout⟩ |
