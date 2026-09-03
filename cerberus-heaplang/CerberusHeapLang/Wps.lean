@@ -131,7 +131,8 @@ abbrev ProcSpec (GF : BundledGFunctors) : Type :=
 
 /-- THE EMPTY TABLE: no procedure may be called (precondition `False`).
     Every pre-C3 statement is recovered at this table: the call clause at
-    `emptyProcSpec` is exactly C2's `⌜False⌝` guard. -/
+    `emptyProcSpec` entails `|={⊤}=> ⌜False⌝` — C2's `⌜False⌝` guard under
+    the update (`wps_empty_call_false`; the C3 range audit's R-1). -/
 def emptyProcSpec {GF : BundledGFunctors} : ProcSpec GF :=
   fun _ _ => (iprop(⌜False⌝), fun _ => iprop(⌜True⌝))
 
@@ -444,6 +445,24 @@ theorem wps_call {Ψ : SpikeVal → EnvStack → IProp GF} {e : CoreExpr} {ctx :
   · iexact Hpre
   inext
   iexact Hcont
+
+/-- At the EMPTY table a call redex is unverifiable (C2's `⌜False⌝` guard,
+    recovered under the update): the clause's precondition is `False`.
+    Twin of `wpt_empty_call_false`. -/
+theorem wps_empty_call_false {Ψ : SpikeVal → EnvStack → IProp GF} {e : CoreExpr}
+    {ρ : EnvStack} {q : context × sym × List (generic_pexpr Unit sym)}
+    (hc : callRedex? e = some q) :
+    wps M p Ls emptyProcSpec Ψ e ρ ⊢ iprop(|={⊤}=> ⌜False⌝) := by
+  have htv : toVal e = none := by
+    cases h : toVal e with
+    | none => rfl
+    | some w => rw [← ofVal_of_toVal h, callRedex?_ofVal] at hc; cases hc
+  have hjr : jumpRedex? e = none := jumpRedex?_none_of_callRedex?_some hc
+  rw [wps_unfold.to_eq]
+  simp only [wps.pre, htv, hjr, hc, emptyProcSpec_fst]
+  iintro H
+  imod H with ⟨%params, %body, %vs, %h1, %h2, %h3, %hF, -⟩
+  exact hF.elim
 
 /-- THE CALL RULE at the root redex `Eproc` (the design note's
     `wps_call`, §3 Q1): the continuation is the bare returned value at
