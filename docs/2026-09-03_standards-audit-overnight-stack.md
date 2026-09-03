@@ -509,3 +509,94 @@ edits (plus the `trioExports` edit if M-2(a)) — and M-3: one orchestrator
 FULL gate at the merge candidate with its verbatim tail in DECISIONS. The
 Notes are polish; N-1 (two provenance tags) and N-5 (the false Audit.lean
 comment) are one-line edits worth taking in the same pass.
+
+---
+
+## Post-fix verification (same auditor, 2026-09-03, copy `worktrees/audit-final`, HEAD `6eda510`)
+
+Read-only re-verification against the merge candidate (`.lake` primed at
+this tree; `.cerberus-ws` linked at `f95ef8d9c`; `pgrep -af 'lake build'`
+empty; one 10 s `lake env lean` query, scratch under the gitignored
+`.lake/` removed). Records checked: `cerberus-heaplang/docs/2026-09-03_standards-audit-response.md`
+(the worker's finding → fix table; note its path is under
+`cerberus-heaplang/docs/`, not the repo-level `docs/` the dispatch named)
+and the last two DECISIONS entries. The response's Lean edits, by
+`git show 787d23e`, are exactly: four names removed from `trioExports`,
+comments in `Audit.lean` (header + two pin-list comments), the SCOPE
+sentence in `Step.lean`, and the `API.lean` table — no statement or proof
+changed, as claimed.
+
+- **M-1 CLOSED.** No "one known admission"/"ONE KNOWN ADMISSION" sentence
+  remains in README/ARCHITECTURE/WALKTHROUGH/`CerberusHeapLang/*.lean`
+  (grep). The three remaining `auxAddToRfLoad` mentions (ARCHITECTURE
+  §6, WALKTHROUGH §6, README trust story) are all in the past tense
+  under "Admissions in the pinned semantics tree: none (measured
+  2026-09-03)". The quoted measurement is reproducible: `grep -rn '(sorry'
+  ../.cerberus-ws/lean_frontend/generated/*.lean` → no hits;
+  `Cmm_op.lean` has zero `sorry` occurrences; the bare `sorry` grep
+  returns 18 lines here, all comment text (the response says 19 — one
+  line of prose difference, not a code hit; DERIVED, grep -c).
+- **M-2 CLOSED (option a).** `trioExports` has 312 names (grep of the
+  backtick names = 312; `CerberusHeapLang.Audit.trioExports.length`
+  evaluated in the environment = 312). `stepDischarge_run`,
+  `outcomesU_of_call`, `outcomesU_of_ret`, `drive_classifyU_aux` are
+  present in the environment, NOT in the list, and still trio-exact
+  (`collectAxioms`: `[Classical.choice, Quot.sound, propext]` each). No
+  remaining pin's TYPE mentions `dischargeStep` or `outcomesU` directly
+  (measured over all 312). ARCHITECTURE §2 (lines 60-66) and WALKTHROUGH
+  §5 (lines 1287-1292) now read "no EXPORT's statement mentions it — the
+  lemmas that do (…) are proof devices, unpinned and internal, bounded by
+  the package sweep but not exported" — exact against the tree.
+  `API.lean`: the worker's premise check is right — the "engine
+  transition" row was already in the "Below the line (INTERNAL …)"
+  table (my finding mis-attributed it to the PUBLIC table; the
+  substantive point, no classification of the Adequacy-side devices,
+  stood); the new internal row "The `driveU` lane's proof devices" names
+  `dischargeStep`/`outcomesU`/`stepOutcomes`, `stepDischarge_*`,
+  `outcomesU_of_step`/`_call`/`_ret`, `drive_classifyU`,
+  `drive_classifyU_aux` and states the unpin.
+- **M-3 CLOSED.** DECISIONS' last entry quotes the orchestrator's FULL
+  gate at `787d23e` with `CerberusHeapLang export pins: 312 trio-exact`,
+  `3208 swept`, `4938 constants`, `ALL GATES GREEN`, `GATE-EXIT=0`, and
+  makes the recording rule standing. Consistency with the tree: the
+  `#eval` that prints those lines is at `Audit.lean:469` (grep `^#eval`),
+  the list has 312 names, and README's expected tail, the response
+  record (both gate tails) and DECISIONS all say `Audit.lean:469` /
+  `312`. `6eda510` is docs-only on top of `787d23e` (`git show --stat`),
+  so the recorded gate is at the merge candidate's Lean tree. Not
+  independently re-run (no build permitted).
+- **M-4 CLOSED.** README exhibits row now
+  "`MemTripleU_alloc spikeCtx spikeCtl spikeEnv prog ∅ (allocCost fmapEmpty
+  structTy 8) ψ` (the budget form since K2.5)" — the worker correctly
+  added the C1 `spikeCtl` argument my proposed text omitted; expected
+  tail "export pins: 312 trio-exact"; Records says "K0–K5.1" and names
+  the K5/K5.1/re-pin/C1/C2 notes and audits, the standards audit and
+  the response; snapshot pointers in README (two) and WALKTHROUGH:15
+  read `2026-09-03_c2-signatures-post.txt`.
+- **N-1 CLOSED.** `0b86bd2` changes exactly two lines: "Disposition
+  [AGENT]:" in the INTERMEDIATE STANDARDS AUDIT entry, and "Disposition
+  [AGENT]: the `lane-b-seed` branch …" opening the disposition paragraph
+  of LANE B PAUSED — the "Amendment to the copy ruling" sentence sits
+  inside that now-tagged paragraph (one tag covers both, an acceptable
+  reading; my suggested per-sentence tag was not used).
+- **N-2 CLOSED** — c2-notes §1 carries an erratum naming the three
+  blocks and each elision. **N-3 CLOSED** — k5-audit Q5 reads
+  "`cmp docs/2026-09-03_k5-signatures-pre.txt docs/2026-09-03_k4-signatures-post.txt`"
+  again with the dedupe note outside the span; repin-fuel-notes §6
+  untangled; the ~30 well-formed in-place rewrites left, reasonably.
+  **N-4 CLOSED** — k2.5-notes §4 erratum "holds UNDER the extra premise
+  `hsz`". **N-5 CLOSED** — Step.lean SCOPE sentence, Audit.lean K4
+  comment, ARCHITECTURE §7 heading and arc-record title now K0–K5.1,
+  WALKTHROUGH §6 count and §7 "HAS landed" sentence. **N-6 CLOSED** —
+  zero `audit's M-n/N-n` codes in README/ARCHITECTURE/WALKTHROUGH (grep;
+  the response's own "before" counts differ slightly from mine because
+  it used a broader pattern). **N-7 CLOSED** — K2 record erratum; the
+  PROVISIONAL lists name `SemTripleU_iff_Mem` and
+  `MemTripleU_alloc_of_MemTripleU` (API.lean header, ARCHITECTURE §6);
+  the `la_pos` clause added.
+
+**Verdict: all four Mediums and all Notes are closed as claimed; the
+fixes are docs plus the pin-list edit, no statement or proof moved; the
+orchestrator's FULL gate at the candidate is recorded verbatim and is
+consistent with the tree (312 pins, `Audit.lean:469`). Final merge
+recommendation: MERGE AS IS (ff-only, `6eda510`).**
