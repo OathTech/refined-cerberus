@@ -1301,3 +1301,34 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   and the driver thread's control fields (sound today — the only control
   read is via labels — but a call round changes them; the tie must land
   with `Step.call`/`Step.ret`). M-2 stale listings → C2.
+- **2026-09-03 [AGENT] CALLS C2 LANDED — CALL/RETURN MIRRORED AND CERTIFIED**
+  (record: `cerberus-heaplang/docs/2026-09-03_c2-notes.md`): `Step.call`
+  (the redex located outside-in by `callRedex?`, certified against
+  `Decomp`; args by the mirror evaluator; `lookupProc` mirrors `call_proc`
+  stdlib-first; `procEnv` = `call_proc`'s fold verbatim; the caller's
+  context and procedure pushed, `exec_loc` pushed), `Step.ret` (value
+  under a frame: pop, re-plug the caller's context — the engine's
+  "end of procedure" tau), `Step.ret_annot` (REMOVE-ANNOT at a non-empty
+  stack — not in the design note, needed for completeness). Engine facts
+  re-measured: PCALL never touches the run state; labels installed once
+  at `initial_core_run_state`. Completeness: `complete_call` (unknown
+  procedure / arity mismatch kills with the engine's exact messages),
+  `complete_ret` (always steps). [AGENT] forced corrections, each with a
+  forcing fact: (1) the judgments `wps.pre`/`wpt.pre` are `⌜False⌝` at a
+  call redex — the C1 step clause continues at the SOURCE control, so an
+  unguarded `wps_sound` is FALSE with `Step.call` (counterexample
+  recorded); C3 replaces the guard with the call clause; (2) `Step.ret_annot`;
+  (3) congruence guards `toVal e1 = none` on the sequencing lifts; (4)
+  `MachineCtx.FragProcs` (every procedure body in the file is `Frag`) as a
+  premise of the `driveU` adequacy exports — a premise ADDED to the
+  PROVISIONAL lane's statements (vacuous at both profiles by `rfl`),
+  recorded as the one narrowing of this slice. C1-audit M-1 LANDED:
+  `loop_step_frag` at the live control with `stack0`/`current_proc_opt`/
+  `exec_loc` ties; the production lane consumes `loop_step_frag_same`
+  with `hp/hstack/hproc/hκ` ties (production statements textually
+  unchanged); BORDERLINE for C4: `exec_loc`/`current_loc` are not tied in
+  the production lane (`procCtl p`'s `execLoc = default` vs the driver's
+  `ELoc_normal …`; no same-control round reads them). Pins 296 → 316.
+  ~2.5 h. The design note's "no judgment change in C2" and its RETURN
+  column were wrong (corrections recorded). Range audit on a fixed copy;
+  C3 NOT dispatched — merge discussion first ([USER], back online).
