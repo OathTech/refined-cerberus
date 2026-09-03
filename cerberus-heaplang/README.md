@@ -122,13 +122,16 @@ logic by design; we do not prove such programs. Symmetrically `free(p)`
 of a CREATED object has no rule: the engine kills it (UB179a) unless the
 base happens to sit in `dynamicAddrs` (the K0 audit's N-1 scenario), and
 the logic takes an allocation's origin from the metadata cell, never
-from that list. (ii) `alloc(al, 0)` at alignment `al ≤ 1` — a zero-COST
-request (`regionCost al 0 = max al 1 − 1 = 0`): the budget fragment
+from that list. (ii) `alloc(al, n)` at `n ≤ 0` and alignment `al ≤ 1` —
+a zero-COST request (`regionCost al n = n.toNat + max al 1 − 1 = 0`; the
+engine's `sizeN.toNat` collapses EVERY non-positive size to a
+successful size-0 region, so `alloc(4, −7)` is a covered size-0 request
+at cost 3 — the K3 range audit's N-2): the budget fragment
 `allocBudget 0` is the unit and cannot witness a cursor cell, so
 `alloc_atomic` carries `0 < regionCost alignN sizeN` (every positive
-size satisfies it, `regionCost_pos`; so does size 0 at `al ≥ 2`). The
-round is classified (`complete_alloc`: the step, or the out-of-memory
-kill), never assumed. (iii) `free(NULL)` — the engine's dynamic no-op
+size satisfies it, `regionCost_pos`; so does any non-positive size at
+`al ≥ 2`). The round is classified (`complete_alloc`: the step, or the
+out-of-memory kill), never assumed. (iii) `free(NULL)` — the engine's dynamic no-op
 (CerbMem.lean:1562): in `Frag.kill` and mirrored by `Step.kill`, no rule
 (nothing is consumed or produced; a client has no reason to write it).
 

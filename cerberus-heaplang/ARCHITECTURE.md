@@ -298,7 +298,9 @@ PROVISIONAL label is not removed before then.
   (`MemWF.alloc` at `dyn := base :: dynamicAddrs`, size `sizeN.toNat`,
   zero admitted), and the invariant gained its tenth component `la_pos :
   0 < lastAddress` (the K2.5 range audit's M-2: both cursor writers
-  guard `alignedAddr ≠ 0`, the cold start is `0xFFFFFFFFFFFF`), under
+  guard `alignedAddr ≠ 0`; the engine's initial cursor is
+  `0xFFFFFFFFFFFF` and the production cold start's `prodMem₀.lastAddress
+  = errnoAddr = 0xFFFFFFFFFFF8`), under
   which the budget's success bound holds at EVERY size
   (`freshBase_ne_zero_of_cost'`). Every stated obligation of goal 3 has
   its proof; "fresh" and "dynamic" are exactly what the engine has:

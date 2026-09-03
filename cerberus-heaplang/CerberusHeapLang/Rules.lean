@@ -1079,10 +1079,12 @@ open Iris.Std.PartialMap in
     the cost (`headroom_freshBase'`). `hcost : 0 < regionCost alignN sizeN`
     is what makes the budget FORCE a cursor cell (a zero-cost fragment,
     `allocBudget 0`, is the unit and witnesses nothing): it holds at every
-    positive size (`regionCost_pos`) and at size 0 whenever the alignment
-    is ≥ 2; the one shape outside the rule is `alloc(al, 0)` at `al ≤ 1`
-    — an engine-classified round (`complete_alloc`), never a hidden
-    assumption. Ghost: the cursor advances, the metadata cell is minted at
+    positive size (`regionCost_pos`) and at `sizeN.toNat = 0` whenever the
+    alignment is ≥ 2; the one shape outside the rule is `sizeN ≤ 0 ∧
+    alignN ≤ 1` — the engine's `sizeN.toNat` collapses EVERY non-positive
+    size to a size-0 region (so `alloc(4, −7)` IS covered, at cost 3; the
+    K3 range audit's N-2) — an engine-classified round (`complete_alloc`),
+    never a hidden assumption. Ghost: the cursor advances, the metadata cell is minted at
     the fresh id, the (possibly empty) byte range is minted, the budget is
     spent (`CohG.alloc` re-establishes the coupling). The delivered value
     is the BARE pointer (cost 1). No type premise, no `hinert`: regions are

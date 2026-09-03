@@ -85,6 +85,7 @@ import CerberusHeapLang.CaseExhibit
 import CerberusHeapLang.WseqExhibit
 import CerberusHeapLang.StructExhibit
 import CerberusHeapLang.AllocExhibit
+import CerberusHeapLang.DisposeExhibit
 import CerberusHeapLang.Examples.ReadinessSmoke
 import CerberusHeapLang.Examples.MirrorCoverage
 import CerberusHeapLang.Round
@@ -336,7 +337,20 @@ def trioExports : List Name := [
   ``CerberusHeapLang.complete_alloc_op, ``CerberusHeapLang.allocateRegion_killed_inv,
   ``CerberusHeapLang.step_ctx_alloc_illtyped', ``CerberusHeapLang.step_ctx_alloc_eval_kill1,
   ``CerberusHeapLang.step_ctx_alloc_eval_kill2,
-  ``CerberusHeapLang.alloc_free_wps, ``CerberusHeapLang.free_launch_smoke]
+  ``CerberusHeapLang.alloc_free_wps, ``CerberusHeapLang.free_launch_smoke,
+  -- kill/free arc K4 (2026-09-03): THE EXHIBITS — dispose-a-list over
+  -- created nodes (DisposeExhibit.lean): the statement judgments at both
+  -- strata (dead-list and textbook forms; framed forms), the block
+  -- specifications, the readout, the `driveU` total equation (PROVISIONAL)
+  -- and the PRODUCTION statement over the shipped pipeline; the generic
+  -- build-prefix lemma the production reuses and its registration tie.
+  ``CerberusHeapLang.dl_wps, ``CerberusHeapLang.dl_wps_emp, ``CerberusHeapLang.dl_wps_frame,
+  ``CerberusHeapLang.dl_blockSpecs, ``CerberusHeapLang.dl_wpt, ``CerberusHeapLang.dl_wpt_frame,
+  ``CerberusHeapLang.dl_blockSpecsT, ``CerberusHeapLang.dlPost_readout,
+  ``CerberusHeapLang.dispose_list_certified_total,
+  ``CerberusHeapLang.lrProdPrefix_wpt, ``CerberusHeapLang.dlProd_wpt,
+  ``CerberusHeapLang.dlProd_blockSpecsT, ``CerberusHeapLang.dlProd_labeledAt,
+  ``CerberusHeapLang.dispose_list_certified_production]
 
 def sortedNames (ns : Array Name) : Array String :=
   (ns.map (·.toString)).qsort (· < ·)

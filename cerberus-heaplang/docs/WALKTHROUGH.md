@@ -999,8 +999,9 @@ live base is at or above the downward cursor `lastAddress`),
 `malloc(0)`, so positivity is not an engine fact), `la_wf` (the cursor
 is below `2^64`), `la_pos` (the cursor is POSITIVE — K3, the K2.5 range
 audit's M-2: both cursor writers set `lastAddress := alignedAddr` only
-past the `alignedAddr == 0 → out of memory` guard, and the cold start is
-`0xFFFFFFFFFFFF`; without it `headroom` clamps to 0 at `lastAddress ≤
+past the `alignedAddr == 0 → out of memory` guard, the engine's initial
+cursor is `0xFFFFFFFFFFFF` and the production cold start's is `errnoAddr =
+0xFFFFFFFFFFF8`; without it `headroom` clamps to 0 at `lastAddress ≤
 0` and a zero-size region would pass the budget yet be killed), and the
 dynamic-address facts `dyn_lo` (every address
 in `dynamicAddrs` is at or above the cursor) and `dyn_disj` (no dynamic

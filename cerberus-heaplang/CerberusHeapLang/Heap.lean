@@ -118,9 +118,10 @@ concrete allocation model, so a `create` is fresh from EVERY live
 allocation of the state, tracked or not (`create_fresh_global`); the
 production cold-start state satisfies it (`prodMem₀_memWF`,
 ProdEntry.lean); `loadM`/`storeM`/`allocateObject` preserve it
-(`MemWF.loadM`/`MemWF.storeM`/`MemWF.allocateObject`) and `killM`
-preserves it (`MemWF.killM`, K2, both arms); `allocateRegion` is K3's
-one remaining stated obligation. The allocation capacity is the
+(`MemWF.loadM`/`MemWF.storeM`/`MemWF.allocateObject`), `killM`
+preserves it (`MemWF.killM`, K2, both arms) and `allocateRegion`
+preserves it (`MemWF.allocateRegion`, K3) — every stated obligation of
+`MemWF` is a theorem (the K3 range audit's M-1 trued this sentence). The allocation capacity is the
 additive budget (K2.5): `allocBudget (a + b) ⊣⊢ allocBudget a ∗
 allocBudget b`, weakened at `≤` (`allocBudget_weaken`) — the ordered
 plan `allocCap reqs` it replaced is history (walkthrough §4, the
@@ -1134,7 +1135,10 @@ theorem applyMemM_eq_ndProj {α : Type} (m : CerbMem.memM α) (σ : Mem) :
     path, returns the decode of the range image, and leaves the state
     unchanged. The one load seam of every typed-access rule:
     `loadM_at` (the created-object instance) and the read-only cell's
-    rule consume it; K3's region loads will. -/
+    rule consume it. It is stated at ANY metadata cell, so it already
+    covers K1's untyped regions (`regionOwn`/`regionView`) — for which
+    no load or store RULE exists yet (the K4 finding: README "Scope,
+    exactly"). -/
 theorem loadM_live (tds : CerbTags.TagDefsMap) (σ : Mem) (id : Int) (mc : MetaCell) (off : Nat)
     (vty : ctype) (bs : List AbsByte) (mv : MemValue)
     (loc : CerbLocation.Loc)
@@ -1509,14 +1513,16 @@ cited against the pinned `generated/CerbMem.lean` (cerberus-lean
   (`malloc(0)`), so positivity is NOT an engine invariant across both
   allocators — `0 ≤ size` is. (Measured; the design note's `size_pos`
   is corrected here.)
-- `la_wf` — the cursor's machine bound: the cold start is
-  `0xFFFFFFFFFFFF` (:122) and the cursor only ever decreases to a
-  fresh base below it.
+- `la_wf` — the cursor's machine bound: the engine's initial cursor is
+  `0xFFFFFFFFFFFF` (:122; the production cold start `prodMem₀` sits at
+  `errnoAddr = 0xFFFFFFFFFFF8` after the errno allocation) and the
+  cursor only ever decreases to a fresh base below it.
 - `la_pos` (K3, the K2.5 range audit's M-2) — the cursor is POSITIVE:
   the two cursor writers guard `lastAddress := alignedAddr` by
   `alignedAddr == 0 → out of memory` (:1513/:1541) and `alignedAddr` is
   a `Nat` cast, so a successful allocation leaves a cursor `≥ 1`; the
-  cold start is `0xFFFFFFFFFFFF`. Without it the budget's coupling
+  engine's initial cursor is `0xFFFFFFFFFFFF` (:122) and the production
+  cold start's is `errnoAddr = 0xFFFFFFFFFFF8`. Without it the budget's coupling
   inequality `B ≤ headroom lastAddress` is vacuous at `lastAddress ≤ 0`
   (`headroom` clamps to 0) and a zero-size region priced at `align − 1`
   would pass the budget yet be KILLED (`freshBase 0 1 0 = 0`).
@@ -1594,7 +1600,8 @@ structure MemWF (σ : Mem) : Prop where
       every successful allocation sets it to a nonzero fresh base
       (`alignedAddr ≠ 0` guards `lastAddress := alignedAddr`,
       :1513/:1522 and :1541/:1546, and `alignedAddr` is a `Nat` cast),
-      the cold start is `0xFFFFFFFFFFFF` (:122), and `killM` leaves it
+      the engine's initial cursor is `0xFFFFFFFFFFFF` (:122; the
+      production cold start's is `errnoAddr = 0xFFFFFFFFFFF8`), and `killM` leaves it
       alone — the clause that makes `allocCost ≤ headroom` a SUFFICIENT
       success condition at EVERY size, the zero-size region included
       (`freshBase_ne_zero_of_cost'`) -/
@@ -3281,7 +3288,8 @@ byte algebra (`bytesOwn_*`) apply unchanged:
   size, type are the ghost record of what was there — the engine has
   erased its record, `killM` :1576-1578). This is what the kill rules
   hand back — K2's `kill_atomic`/`wps_kill`/`wpt_kill` deliver `deadObj`
-  (dropped by the `_emp` faces); K3's `free` will deliver `deadRegion`
+  (dropped by the `_emp` faces); K3's `free_atomic`/`wps_free`/`wpt_free`
+  deliver `deadRegion`
   (RefinedC's `alloc_alive id DfracDiscarded false`
   has no separate meta; here the one cell carries both). A dead cell
   and `allocMeta` (persistent LIVE knowledge) of the same id are

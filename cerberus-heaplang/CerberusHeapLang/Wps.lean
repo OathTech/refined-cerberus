@@ -1901,7 +1901,8 @@ theorem wps_load {Ψ : SpikeVal → EnvStack → IProp GF}
     — the engine's continuation is `mk_value_e Vunit`, so no `_plain`
     form is needed) and is offered the persistent DEAD cell
     `deadObj` at the pointer's id and base (drop it: `wps_kill_emp`).
-    `hstatic`: the kill is static — the dynamic `free` is K3. -/
+    `hstatic`: the kill is static — the dynamic `free` is `wps_free`
+    (K3), over the region bundle. -/
 theorem wps_kill {Ψ : SpikeVal → EnvStack → IProp GF}
     (loc : CerbLocation.Loc) (ann : core_run_annotation) (kind : kill_kind)
     (pv : CerbMem.PointerValue) (ty : ctype) (bs : List CerbMem.AbsByte) (ρ : EnvStack)
