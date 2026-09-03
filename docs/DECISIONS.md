@@ -1106,3 +1106,22 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   non-UB out-of-bound); K1-audit items M-1 (bridge lemmas, sub-trio
   cones, sweep-bounded), N-2, N-3 done. Pins 185 → 205. Range audit
   dispatched on a fixed copy at 46ed41f so K2.5 may start.
+- **2026-09-03 [AGENT] KILL/FREE K2.5 LANDED — SPLITTABLE ALLOCATION BUDGET**
+  (record: `cerberus-heaplang/docs/2026-09-03_k2.5-notes.md`): `allocBudget n`
+  on iris-lean's later-credit camera (`Auth Credit`, `Credit := ℕ` with +;
+  no new camera or functor, a fresh ghost name), split law
+  `allocBudget (a+b) ⊣⊢ allocBudget a ∗ allocBudget b`; coupling as the
+  inequality `B ≤ headroom lastAddress` inside `stateInterp` (the cursor's
+  exclusive fragment now lives in the interpretation — no client owns the
+  cursor); engine bound `allocCost tds ty al = sizeof ty + max al 1 − 1`
+  with `freshBase_ne_zero_of_cost`; `create_atomic`/`wps_create`/`wpt_create`
+  restated over the budget, old plan forms derivable (`wps_create_of_plan`,
+  `wpt_create_of_plan`); `allocCap`/`PlanFits`/`advanceCursor` and the
+  `_cursor_internal` forms pruned with traces. Honest classification: at
+  the RULE level strictly more general; at the LAUNCH level plan ⇏ budget
+  (an order-free bound), so `MemTripleU_alloc`'s covered initial states
+  shrink by ≤ align−1 bytes per allocation — irrelevant at the cold-start
+  headroom 2^48−9, recorded as the price of the ∗-splittable shape. Named
+  `allocBudget` (the package uses "budget" for the total judgment's step
+  budget). Trust surface unchanged (derived-layer internals). Pins 205 →
+  221. K2-audit doc items M-1/M-2/N-5 done in the same slice.
