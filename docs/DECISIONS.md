@@ -1365,3 +1365,28 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   cerberus-lean mainline is scheduled as a forced-semantics-change slice
   after the calls arc (C3/C4), before the fuel-lane restatement — each
   re-pin scouted first (the scout method of 2026-09-03).
+- **2026-09-03 [AGENT] ORCHESTRATOR FULL GATE AT THE MERGE CANDIDATE 787d23e (the
+  standards audit's M-3)** — run from the calls-c1 worktree at 787d23e,
+  `CERB_MEM_MAX=48G ./scripts/test_unit.sh`, verbatim verdict lines:
+  ```
+  == gate 1: banned proof-method grep (native_decide / bv_decide / ofReduce*) ==
+  ok: no banned proof-method references
+  == gate 2: capped build, root package (elaborates its axiom audit) ==
+  RefinedCerberus axiom sweep: 2 theorems, all cones within the classical trio
+  RefinedCerberus banned-axiom sweep: 3 constants of every kind checked; sorryAx/ofReduceBool/ofReduceNat absent from all cones
+  ok: root build green
+  == gate 3: capped build, cerberus-heaplang (elaborates its axiom audit) ==
+  CerberusHeapLang export pins: 312 trio-exact
+  CerberusHeapLang axiom sweep: every theorem bounded by the trio (3208 swept, internal details included — count informational, environment-dependent)
+  CerberusHeapLang banned-axiom sweep: sorryAx/ofReduceBool/ofReduceNat absent from all cones (4938 constants of every kind swept, internal details included — count informational, environment-dependent)
+  ok: cerberus-heaplang build green
+  == speedbump: capability manifest (regenerate; red on a red row or drift) ==
+  ok: capability manifest regenerated, no drift
+  == speedbump: import direction (semantics → heap → rules → adequacy → clients) ==
+  ok: import direction — no core module imports an exhibit/example/production module
+  ALL GATES GREEN
+  GATE-EXIT=0
+  ```
+  Standing rule from here (memory + this entry): the orchestrator's gate at
+  every slice boundary is recorded with its verbatim verdict lines before
+  the log is deleted; summary lines in commit messages are not a record.
