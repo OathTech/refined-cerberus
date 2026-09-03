@@ -22,7 +22,9 @@ ProdEntry.lean's business.
 
 Fuel: the loop budget `fl` needs `k + 2` rounds (k certified steps +
 the done-recording and drain iterations), hence the production
-statements' `k + 2 ≤ lemDefaultFuel`; the judgment's own `esize`/`pot`
+statements' `k + 2 ≤ CerbFuel.driverFuel` (the drive cone's budget since
+the cerberus-lean fuel arc; `fl` is instantiated at it by
+`prod_run_eqJ`); the judgment's own `esize`/`pot`
 side conditions bound get_ctx's budget exactly as in the drive
 statements.
 -/

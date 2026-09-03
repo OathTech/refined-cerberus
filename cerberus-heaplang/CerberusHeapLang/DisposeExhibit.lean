@@ -1650,7 +1650,7 @@ theorem dispose_list_certified_production (sup : Nat) (ra : core_run_annotation)
               fmapEmpty [] symFrame_empty $$ Hcap))
       (by rw [show dlCost 2 = 29 from rfl,
           show saveEntryCost (dlProdParams cbty) = 2 from rfl,
-          show lemDefaultFuel = 999999 + 1 from rfl]
+          show CerbFuel.driverFuel = 99999999 + 1 from rfl]
           omega)
       fs args
   refine ⟨dres, dst', heq, hψ.1, ?_, hbl, hout, herr⟩

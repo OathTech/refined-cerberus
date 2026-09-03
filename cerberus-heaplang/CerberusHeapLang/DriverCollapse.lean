@@ -65,19 +65,30 @@ driver's OWN round functions.
   opaque `current_execution_mode` test (`cases` on it) — the one
   configuration read on a proved path.
 
-FUEL: the driver functions run at their production budgets
-(lemDefaultFuel = 10^6). `nd_bind`/`liftND` budgets are spent per
-LAYER of one bind and never accumulate across the run;
-`drive_nonmemory_steps_aux2`'s budget is spent once per loop
-iteration, so statements carry `n + 2 ≤ lemDefaultFuel` (n drive
+FUEL: the driver functions run at their production budgets. Since the
+cerberus-lean fuel arc (pin `f95ef8d9c`, 2026-09-03) the DRIVE CONE —
+`driver2`, `drive_nonmemory_steps_aux2`, `print_eval_conv_aux`, `hack`,
+`nd_bind`, `CerbND.ndDefaultFuel` — runs at `CerbFuel.driverFuel = 10^8`
+(the wrapper `rfl`s `CerbND.driver2_wrapper_defeq`,
+`CerbND.nd_bind_wrapper_defeq`, `CerbND.runND_eq`, … pin the generated
+wrappers to that constant); `liftND`/`liftAction`, the memory workers
+and the evaluator stay at `lemDefaultFuel = 10^6`. `nd_bind`/`liftND`
+budgets are spent per LAYER of one bind and never accumulate across the
+run; `drive_nonmemory_steps_aux2`'s budget is spent once per loop
+iteration, so statements carry `n + 2 ≤ CerbFuel.driverFuel` (n drive
 steps + the done-recording and drain iterations); `driver2`'s budget
 is spent once per non-advanceable step (exactly one: Step_done2);
 get_ctx budgets are the inherited `esize` side conditions
-(Soundness.lean FUEL HONESTY). At insufficient fuel the production
-value is the opaque `fuelExhausted` leaf — nothing is provable there;
-this is why the production-entry theorems carry a
-termination-within-budget hypothesis (README, "Registered divergences
-and limitations").
+(Soundness.lean FUEL HONESTY). At insufficient fuel the ND-typed
+workers' value is the kernel-TRANSPARENT kill
+`CerbND.fuelExhaustedKill` (`CerbND.driver2_lemFuel_zero` etc.); the
+production-entry theorems here are TOTAL statements at a certified
+step count and so carry the in-budget hypothesis (README, "Registered
+divergences and limitations"); the partial lane's restatement over
+`CerbND.drive_lemFuel` is the next slice (PROVISIONAL labels remain
+until then). Budget numerals are unfolded ONLY through the `_succ`
+lemmas below (never a `show`-forced numeral defeq: 10^8 vs 10^6 hits
+the recursion-depth limit — the 2026-09-03 re-pin's error class).
 -/
 import CerberusHeapLang.Adequacy
 import Driver
@@ -98,6 +109,9 @@ an ndM tree -/
 with it, `storeM_readonly_kills`). -/
 
 private theorem lemDefaultFuel_succ : lemDefaultFuel = Nat.succ 999999 := rfl
+/-- The drive-cone budget as a successor (the exemplar's `budget_succ`
+    idiom, cerberus-lean `test/Unit/FuelExemplar.lean`). -/
+private theorem driverFuel_succ : CerbFuel.driverFuel = Nat.succ 99999999 := rfl
 
 @[simp] theorem runOne_return {a b c d st : Type} (x : a) (s : st) :
     runOne (nd_return x : ndM a c b d st) s = (NDactive x, s) := rfl
@@ -120,8 +134,8 @@ theorem runOne_bind_active {a b cs err info st : Type}
     runOne (nd_bind m f) s = runOne (f z) s' := by
   rcases m with ⟨g⟩
   dsimp only [runOne] at h
-  show runOne (nd_bind_lemFuel lemDefaultFuel (ND g) f) s = _
-  rw [lemDefaultFuel_succ]
+  show runOne (nd_bind_lemFuel CerbFuel.driverFuel (ND g) f) s = _
+  rw [driverFuel_succ]
   unfold nd_bind_lemFuel
   dsimp only [runOne]
   rw [h]
@@ -137,8 +151,8 @@ theorem runOne_bind_killed {a b cs err info st : Type}
     runOne (nd_bind m f) s = (NDkilled r, s') := by
   rcases m with ⟨g⟩
   dsimp only [runOne] at h
-  show runOne (nd_bind_lemFuel lemDefaultFuel (ND g) f) s = _
-  rw [lemDefaultFuel_succ]
+  show runOne (nd_bind_lemFuel CerbFuel.driverFuel (ND g) f) s = _
+  rw [driverFuel_succ]
   unfold nd_bind_lemFuel
   dsimp only [runOne]
   rw [h]
@@ -217,8 +231,8 @@ theorem runND_active {a info err cs st : Type} [Inhabited a] [Inhabited st]
     CerbND.runND m s = [(nd_status.Active z, ([] : List String), s')] := by
   rcases m with ⟨g⟩
   dsimp only [runOne] at h
-  show CerbND.runNDFuel CerbND.ndDefaultFuel (ND g) s = _
-  rw [show CerbND.ndDefaultFuel = Nat.succ 999999 from rfl]
+  show CerbND.runNDFuel CerbFuel.driverFuel (ND g) s = _
+  rw [driverFuel_succ]
   unfold CerbND.runNDFuel
   dsimp only
   rw [h]
@@ -580,7 +594,7 @@ theorem driver2_done (fl : Nat)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition))
     (dst dstF : driver_state) (th thF : thread_state) (v : value)
     (hth : dst.core_state0.thread_states = [(0, (none, th))])
-    (hloop : runOne (drive_nonmemory_steps_aux2_lemFuel lemDefaultFuel tds
+    (hloop : runOne (drive_nonmemory_steps_aux2_lemFuel CerbFuel.driverFuel tds
         fmapEmpty [0]) dst =
       (NDactive (fmapAddBy defaultCompare 0 [Step_done2 v] fmapEmpty), dstF))
     (hthF : dstF.core_state0.thread_states = [(0, (none, thF))]) :

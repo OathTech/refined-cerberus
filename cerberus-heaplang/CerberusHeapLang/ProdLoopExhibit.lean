@@ -68,12 +68,13 @@ computation"). -/
     `fib n` — a back-edge loop through the production scheduler, the
     label map computed by the shipped registration, termination from
     the total statement judgment (no step-count hypothesis; the one
-    bound is the engine's own fuel budget, `lemDefaultFuel = 10^6`).
+    bound is the shipped driver's own fuel budget, `CerbFuel.driverFuel
+    = 10^8`).
     No package drive/driveJ in the statement: the execution function
     is the shipped runner. -/
 theorem fib_certified_production (sup : Nat) (ra : core_run_annotation) (n : Int)
     (sbty ibty abty bbty : core_base_type) (hn : 0 ≤ n)
-    (hfuel : 2 * n.toNat + 6 ≤ lemDefaultFuel)
+    (hfuel : 2 * n.toNat + 6 ≤ CerbFuel.driverFuel)
     (fs : CerbFS.FsState) (args : List String) :
     ∃ (dres : driver_result) (dst' : driver_state),
       CerbND.runND
@@ -619,7 +620,7 @@ theorem ctrProd_labeledAt (sup : Nat) (ra : core_run_annotation) (mo : memory_or
 theorem counter_loop_certified_production (sup : Nat) (ra : core_run_annotation)
     (mo : memory_order) (bty xbty cbty sbty : core_base_type)
     (n : Int) (hn : 0 ≤ n)
-    (hfuel : 6 * n.toNat + 8 ≤ lemDefaultFuel)
+    (hfuel : 6 * n.toNat + 8 ≤ CerbFuel.driverFuel)
     (fs : CerbFS.FsState) (args : List String) :
     ∃ (dres : driver_result) (dst' : driver_state),
       CerbND.runND
@@ -676,8 +677,7 @@ theorem counter_loop_certified_production (sup : Nat) (ra : core_run_annotation)
           · iapply ctr_blockSpecsT ra mo bty xbty cbty n mainSym _ hQprod
           · iapply ctrProd_wpt ra mo bty xbty cbty n mainSym _ hQprod sbty
               hn fmapEmpty [] symFrame_empty $$ Hcap))
-      (by rw [show lemDefaultFuel = 999999 + 1 from rfl] at hfuel ⊢
-          rw [ctrCost_eq, show saveEntryCost (ctrParams xbty cbty n) = 2 from rfl]
+      (by rw [ctrCost_eq, show saveEntryCost (ctrParams xbty cbty n) = 2 from rfl]
           omega)
       fs args
   exact ⟨dres, dst', heq, hψ.1, hψ.2, hbl, hout, herr⟩
@@ -1495,7 +1495,7 @@ theorem list_reverse_certified_production (sup : Nat) (ra : core_run_annotation)
               hQprod bty sbty fmapEmpty [] symFrame_empty $$ Hcap))
       (by rw [show lrCost 2 = 32 from rfl,
           show saveEntryCost (lrProdParams pbty cbty) = 2 from rfl,
-          show lemDefaultFuel = 999999 + 1 from rfl]
+          show CerbFuel.driverFuel = 99999999 + 1 from rfl]
           omega)
       fs args
   refine ⟨dres, dst', heq, ?_, hbl, hout, herr⟩

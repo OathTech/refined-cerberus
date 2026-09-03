@@ -692,7 +692,7 @@ theorem rl_labeledAt (sup : Nat) (n : Int) :
 theorem region_loop_certified_production (sup : Nat) (hcost : 0 < regionCost al sz)
     (n : Int) (hn : 0 ≤ n)
     (hB : n.toNat * regionCost al sz ≤ headroom prodMem₀.lastAddress)
-    (hfuel : 7 * n.toNat + 5 ≤ lemDefaultFuel)
+    (hfuel : 7 * n.toNat + 5 ≤ CerbFuel.driverFuel)
     (fs : CerbFS.FsState) (args : List String) :
     ∃ (dres : driver_result) (dst' : driver_state),
       CerbND.runND

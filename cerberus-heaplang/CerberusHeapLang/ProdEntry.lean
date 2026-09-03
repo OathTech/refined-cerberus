@@ -41,10 +41,14 @@ driver-delivery fact `DriverDoneAt` that the total judgment supplies
 (`wpt_driver_done_alloc`, ProdLoop.lean) and the registration tie
 `LabeledAt`. Scope: single-threaded, fragment-only, total correctness
 at a certified step count — plus the in-budget bound `k + 2 ≤
-lemDefaultFuel`, because the production loop's fuel-exhaustion leaf is
-the opaque `fuelExhausted`: at insufficient fuel NOTHING about the
-production value is provable (README, "Registered divergences and
-limitations"). The consumers are `exhibitA_prod` (ProdExhibit.lean)
+CerbFuel.driverFuel` (the drive cone's budget, 10^8, since the
+cerberus-lean fuel arc; the bound is stated against the name the
+semantics exports, `CerbFuel.driverFuel`, as the change manifest
+directs). Below the bound the shipped driver's value is the kernel-
+transparent kill `CerbND.fuelExhaustedKill`; the TOTAL statements here
+simply do not speak there — the partial lane's restatement over
+`CerbND.drive_lemFuel` is the next slice (README, "Registered
+divergences and limitations"). The consumers are `exhibitA_prod` (ProdExhibit.lean)
 and the three `*_production` loop theorems (ProdLoopExhibit.lean).
 
 THE REGISTRATION TIE for loops: `fib_labeledAt_production` /
@@ -327,7 +331,7 @@ setup functions (spawn_thread, the main lookup, the errno block). -/
 
 theorem drive_after_setup (sup : Nat) (e : CoreExpr) (fs : CerbFS.FsState)
     (args : List String) (dstD : driver_state)
-    (hdrv2 : runOne (driver2_lemFuel lemDefaultFuel fmapEmpty false)
+    (hdrv2 : runOne (driver2_lemFuel CerbFuel.driverFuel fmapEmpty false)
         (prodEntryState sup e fs) = (NDactive (), dstD)) :
     runOne (_root_.drive fmapEmpty false (prodFile e) args)
         ((initial_driver_state sup (prodFile e) fs).1) =
@@ -381,7 +385,7 @@ theorem prod_run_eqJ (sup : Nat) (e : CoreExpr) {Q : LabelMap}
       (collect_labeled_continuations_NEW (prodFile e))).1) mainSym Q)
     (ψ : value → Mem → Prop) (k : Nat)
     (hdd : DriverDoneAt mainSym Q (prodThread e) e [fmapEmpty] prodMem₀ ψ k)
-    (hfl : k + 2 ≤ lemDefaultFuel)
+    (hfl : k + 2 ≤ CerbFuel.driverFuel)
     (fs : CerbFS.FsState) (args : List String) :
     ∃ (dres : driver_result) (dst' : driver_state),
       CerbND.runND (_root_.drive fmapEmpty false (prodFile e) args)
@@ -392,8 +396,8 @@ theorem prod_run_eqJ (sup : Nat) (e : CoreExpr) {Q : LabelMap}
       dres.dres_stdout = "" ∧
       dres.dres_stderr = "" := by
   obtain ⟨v, σfin, ρfin, rs', tr, ctr, hψ, hloop⟩ :=
-    hdd (prodEntryState sup e fs) fmapEmpty lemDefaultFuel rfl rfl rfl hQe hfl
-  have hdrv2 := driver2_done 999999 fmapEmpty (prodEntryState sup e fs) _
+    hdd (prodEntryState sup e fs) fmapEmpty CerbFuel.driverFuel rfl rfl rfl hQe hfl
+  have hdrv2 := driver2_done 99999999 fmapEmpty (prodEntryState sup e fs) _
     (prodThread e)
     { prodThread e with arena := ofVal (.pure v), env := ρfin }
     v rfl hloop rfl

@@ -305,7 +305,7 @@ theorem exhibitA_prod (sup : Nat) (fs : CerbFS.FsState) (args : List String) :
               (hnolabel l params cont hl).elim
           · iapply progAProd_wpt (resolveExtern_id_of_empty (procCtx_extern _ _)) fmapEmpty []
               symFrame_empty $$ Hcap))
-      (by rw [show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+      (by rw [show CerbFuel.driverFuel = 99999999 + 1 from rfl]; omega)
       fs args
   exact ⟨dres, dst', heq, hψ.1, hψ.2, hbl, hout, herr⟩
 

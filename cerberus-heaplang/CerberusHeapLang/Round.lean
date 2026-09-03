@@ -4718,9 +4718,10 @@ theorem runOne_bindF_active {a b cs err info st : Type} (n : Nat)
   rcases hf : f z with ⟨g'⟩
   rfl
 
-/-- `nd_bind` (fuel `lemDefaultFuel`), forking left operand: the fork
-    survives with the same arity, every branch carrying the continuation
-    at the decremented fuel (Nondeterminism.lean:188). -/
+/-- `nd_bind` (fuel `CerbFuel.driverFuel = 10^8`, the drive-cone budget
+    since the fuel arc; `CerbND.nd_bind_wrapper_defeq`), forking left
+    operand: the fork survives with the same arity, every branch carrying
+    the continuation at the decremented fuel (Nondeterminism.lean:188). -/
 theorem runOne_bind_nd {a b cs err info st : Type}
     {m : ndM a info err cs st} (f : a → ndM b info err cs st) {s s' : st}
     {i : info} {bs : List (info × ndM a info err cs st)}
@@ -4728,13 +4729,13 @@ theorem runOne_bind_nd {a b cs err info st : Type}
     ∃ bs' : List (info × ndM b info err cs st),
       runOne (nd_bind m f) s = (NDnd i bs', s') ∧
       bs'.length = bs.length ∧
-      ∀ p' ∈ bs', ∃ p ∈ bs, p'.2 = nd_bind_lemFuel 999999 p.2 f := by
+      ∀ p' ∈ bs', ∃ p ∈ bs, p'.2 = nd_bind_lemFuel 99999999 p.2 f := by
   rcases m with ⟨g⟩
   dsimp only [runOne] at h
   have hb : runOne (nd_bind (ND g) f) s =
-      (NDnd i (bs.map (fun p => (p.1, nd_bind_lemFuel 999999 p.2 f))), s') := by
-    show runOne (nd_bind_lemFuel lemDefaultFuel (ND g) f) s = _
-    rw [show lemDefaultFuel = Nat.succ 999999 from rfl]
+      (NDnd i (bs.map (fun p => (p.1, nd_bind_lemFuel 99999999 p.2 f))), s') := by
+    show runOne (nd_bind_lemFuel CerbFuel.driverFuel (ND g) f) s = _
+    rw [show CerbFuel.driverFuel = Nat.succ 99999999 from rfl]
     conv => lhs; unfold nd_bind_lemFuel
     dsimp only [runOne]
     rw [h]
@@ -4905,7 +4906,7 @@ theorem memop_fork {tds : Fmap sym (CerbLocation.Loc × tag_definition)} {tid : 
     obtain ⟨p1, hp1, hp2e⟩ := hmem2 p2 hp2
     obtain ⟨p0, hp0, hp1e⟩ := hmem1 p1 hp1
     rw [hp4e, hp3e, hp2e, hp1e]
-    refine bind_branch_active 999998 (bind_branch_active 999998 (bind_branch_active 999998 ?_
+    refine bind_branch_active 99999998 (bind_branch_active 99999998 (bind_branch_active 99999998 ?_
       (fun z s' => ⟨_, _, rfl⟩)) (fun z s' => ⟨_, _, rfl⟩))
       (fun z s' => by cases z; exact ⟨_, _, rfl⟩)
     -- the lifted memory branch: one of the two `memReturn`s
@@ -4913,16 +4914,16 @@ theorem memop_fork {tds : Fmap sym (CerbLocation.Loc × tag_definition)} {tid : 
     rcases hp0 with rfl | rfl <;>
       exact ⟨_, _, runOne_liftNDF_active 999996 _ _ _ _ rfl⟩
   -- the runner explores both branches
-  show 2 ≤ (CerbND.runNDFuel CerbND.ndDefaultFuel _ dst).length
-  rw [show CerbND.ndDefaultFuel = Nat.succ 999999 from rfl, runNDFuel_nd 999999 hD',
-    foldl_append_singletons_length (fun p => CerbND.runNDFuel 999999 p.2
+  show 2 ≤ (CerbND.runNDFuel CerbFuel.driverFuel _ dst).length
+  rw [show CerbFuel.driverFuel = Nat.succ 99999999 from rfl, runNDFuel_nd 99999999 hD',
+    foldl_append_singletons_length (fun p => CerbND.runNDFuel 99999999 p.2
       { dst with layout_state := dst.layout_state }) bs4 [] ?_]
   · simp only [List.length_nil, Nat.zero_add]
     rw [hlen4, hlen3, hlen2, hlen1]
     simp
   · intro p hp
     obtain ⟨z, s'', hz⟩ := hact p hp
-    rw [runNDFuel_active 999998 hz]
+    rw [runNDFuel_active 99999998 hz]
     rfl
 
 /-- The driver's memop discharge at `PtrEq` operands that are NOT both

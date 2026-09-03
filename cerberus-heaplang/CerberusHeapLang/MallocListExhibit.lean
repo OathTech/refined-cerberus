@@ -97,7 +97,7 @@ ENGINE vocabulary `hB : n.toNat * (15 + max al.toNat 1) ≤
 281474976710647` (`= regionCost al 16` per node, `= headroom
 prodMem₀.lastAddress`; the K4 audit's M-1: no package cost/headroom/
 cold-start definition in the statement) and `hfuel : 25 * n.toNat + 9 ≤
-lemDefaultFuel`.
+CerbFuel.driverFuel` (the shipped driver's budget, 10^8).
 -/
 import CerberusHeapLang.DisposeExhibit
 
@@ -1747,7 +1747,7 @@ theorem ml_budget_bridge (n : Int)
     `prod_run_eqJ`. -/
 theorem malloc_list_certified_production (sup : Nat) (n : Int) (hn : 0 ≤ n)
     (hB : n.toNat * (15 + max al.toNat 1) ≤ 281474976710647)
-    (hfuel : 25 * n.toNat + 9 ≤ lemDefaultFuel)
+    (hfuel : 25 * n.toNat + 9 ≤ CerbFuel.driverFuel)
     (fs : CerbFS.FsState) (args : List String) :
     ∃ (dres : driver_result) (dst' : driver_state),
       CerbND.runND
