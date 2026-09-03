@@ -185,7 +185,7 @@ theorem Frag.stateInert_step {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
         simpa [Prod.mk.injEq] using hout
       exact ⟨h3, .inr ⟨l, pes, params, cont,
         by rw [jumpRedex?_annot_of_not_root _ _ hg, hj], hl, h1⟩⟩
-  | save hd hb ih =>
+  | save hp hd hb ih =>
     rcases hs.save_inv with ⟨cvals, ev0', evs', hρeq, hvals, hout⟩ |
         ⟨cvals, hnv, hvals, hout⟩
     · obtain ⟨h1, -, h3⟩ : e' = _ ∧ ρ' = _ ∧ σ' = σ := by
@@ -196,7 +196,7 @@ theorem Frag.stateInert_step {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
         simpa [Prod.mk.injEq] using hout
       subst h1
       exact ⟨h3, .inl (by simpa [stateInert, saveRedex] using hin)⟩
-  | if_ hdg hf2 hf3 ih2 ih3 =>
+  | if_ hpg hdg hf2 hf3 ih2 ih3 =>
     obtain ⟨hin2, hin3⟩ : stateInert _ = true ∧ stateInert _ = true := by
       simpa [stateInert, ifRedex, Bool.and_eq_true] using hin
     rcases hs.if_inv with ⟨-, hout⟩ | ⟨-, hout⟩ <;>
@@ -206,7 +206,7 @@ theorem Frag.stateInert_step {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
       exact ⟨h3, .inl hin2⟩
     · subst h1
       exact ⟨h3, .inl hin3⟩
-  | run hdep =>
+  | run hpes hdep =>
     obtain ⟨params, cont, vs, ev0', evs', hρeq, hl, hvs, hout⟩ :=
       hs.jump_inv (by rfl)
     obtain ⟨h1, -, h3⟩ : e' = cont ∧ ρ' = _ ∧ σ' = σ := by

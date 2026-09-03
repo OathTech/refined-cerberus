@@ -604,7 +604,7 @@ omit hQ hsz hdec in
 /-- The label bodies are in the certified cone. -/
 theorem arrBody_fragJ
     (n : Int) : Frag (arrBody loc ann ra mo xbty n) := by
-  refine .if_ (by
+  refine .if_ (PePure.of_isPePure rfl) (by
       rw [show peDepth (arrGuard n) = 2 from rfl,
         show lemDefaultFuel = 999999 + 1 from rfl]
       omega)
@@ -613,7 +613,7 @@ theorem arrBody_fragJ
           (PEsym arrPSym)) = 1 from rfl,
           show lemDefaultFuel = 999999 + 1 from rfl]
         omega))
-      (.run ?_))
+      (.run (PePure.all_of_isPePure rfl) ?_))
     .pure_sym
   intro pe hpe
   simp only [List.mem_cons, List.not_mem_nil, or_false] at hpe
@@ -684,8 +684,8 @@ theorem array_sum_certified
         (by rw [show esize (arrBody loc ann ra mo xbty vs.length) = 3 from rfl,
           show lemDefaultFuel = 999999 + 1 from rfl]; omega))
     prog fmapEmpty [] σ₀ _
-    (.save (saveParams_depth_of_vals rfl) (arrBody_fragJ loc ann ra mo xbty vs.length))
-    (Nat.le_trans (Frag.pot_le_two (e := prog) (.save (saveParams_depth_of_vals rfl)
+    (.save (saveParams_pure_of_vals rfl) (saveParams_depth_of_vals rfl) (arrBody_fragJ loc ann ra mo xbty vs.length))
+    (Nat.le_trans (Frag.pot_le_two (e := prog) (.save (saveParams_pure_of_vals rfl) (saveParams_depth_of_vals rfl)
         (arrBody_fragJ loc ann ra mo xbty vs.length)))
       (by rw [show esize prog = 4 from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega))
     hcoh

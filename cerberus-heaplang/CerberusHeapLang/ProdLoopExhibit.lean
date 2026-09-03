@@ -106,7 +106,7 @@ theorem fib_certified_production (sup : Nat) (ra : core_run_annotation) (n : Int
       (fibLsT n)
       (fibProg ra n sbty ibty abty bbty) fmapEmpty []
       prodMem₀ (∅ : SpikeHeapF SpikeCell)
-      (.save (saveParams_depth_of_vals rfl) (fibBody_fragJ ra n))
+      (.save (saveParams_pure_of_vals rfl) (saveParams_depth_of_vals rfl) (fibBody_fragJ ra n))
       (by rw [fibProg_pot, show lemDefaultFuel = 999999 + 1 from rfl]; omega)
       (coh_empty prodMem₀)
       (fun v _ => v = ivVal (fibSpec n.toNat)) (2 * n.toNat + 4)
@@ -536,7 +536,7 @@ end CtrIris
 
 theorem ctrBody_frag (ra : core_run_annotation) (mo : memory_order)
     (bty : core_base_type) : Frag (ctrBody ra mo bty) :=
-  .if_
+  .if_ (PePure.of_isPePure rfl)
     (by rw [show peDepth ctrGuardPe = 2 from rfl,
       show lemDefaultFuel = 999999 + 1 from rfl]; omega)
     (.sseq
@@ -545,7 +545,7 @@ theorem ctrBody_frag (ra : core_run_annotation) (mo : memory_order)
             (PEsym ctrCSym)) = 1 from rfl,
           show lemDefaultFuel = 999999 + 1 from rfl]; omega)
         (peDepth_val_le _ _))
-      (.run (by
+      (.run (PePure.all_of_isPePure rfl) (by
         intro pe hpe
         simp only [List.mem_cons, List.not_mem_nil, or_false] at hpe
         rcases hpe with rfl | rfl <;>
@@ -571,7 +571,7 @@ theorem counterProdProg_frag (ra : core_run_annotation) (mo : memory_order)
     (bty xbty cbty sbty : core_base_type) (n : Int) :
     Frag (counterProdProg ra mo bty xbty cbty sbty n) :=
   .sseq_sym .create (.create)
-    (.save (ctrParams_depth xbty cbty n) (ctrBody_frag ra mo bty))
+    (.save (PePure.all_of_isPePure rfl) (ctrParams_depth xbty cbty n) (ctrBody_frag ra mo bty))
 
 theorem ctrBody_pot (ra : core_run_annotation) (mo : memory_order)
     (bty : core_base_type) : pot (ctrBody ra mo bty) = 4 := rfl
@@ -1283,7 +1283,7 @@ theorem lrProdProg_frag (ra : core_run_annotation) (mo : memory_order)
     (bty sbty pbty cbty bbty nbty ubty : core_base_type) :
     Frag (lrProdProg ra mo bty sbty pbty cbty bbty nbty ubty) :=
   lrProdPrefix_frag ra mo bty
-    (.save (lrProdParams_depth pbty cbty)
+    (.save (PePure.all_of_isPePure rfl) (lrProdParams_depth pbty cbty)
       (lrBody_fragJ loc0 empty_annotation ra mo bbty nbty ubty))
 
 theorem lrProdPrefix_pot (ra : core_run_annotation) (mo : memory_order)

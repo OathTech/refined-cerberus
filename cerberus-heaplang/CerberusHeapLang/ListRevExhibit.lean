@@ -1164,7 +1164,7 @@ theorem lrBody_fragJ :
       (by rw [show peDepth (Pexpr ([] : List annot) () (PEval nullVal)) = 1
           from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega)
   refine .sseq_sym hb hb.frag
-    (.if_ (by
+    (.if_ (PePure.of_isPePure rfl) (by
         rw [show peDepth (Pexpr ([] : List annot) () (PEsym lrBSym)) = 1
           from rfl, show lemDefaultFuel = 999999 + 1 from rfl]
         omega)
@@ -1182,7 +1182,7 @@ theorem lrBody_fragJ :
             (by rw [show peDepth (Pexpr ([] : List annot) ()
                 (PEsym lrPrevSym)) = 1 from rfl,
               show lemDefaultFuel = 999999 + 1 from rfl]; omega))
-          (.run (by
+          (.run (PePure.all_of_isPePure rfl) (by
             intro pe hpe
             simp only [List.mem_cons, List.not_mem_nil, or_false] at hpe
             rcases hpe with rfl | rfl <;>
@@ -1493,8 +1493,8 @@ theorem list_reverse_certified
         (by rw [show esize (lrBody loc ann ra mo bbty nbty ubty) = 5 from rfl,
           show lemDefaultFuel = 999999 + 1 from rfl]; omega))
     prog fmapEmpty [] σ₀ (Iris.Std.PartialMap.union m₀ R)
-    (.save (saveParams_depth_of_vals rfl) (lrBody_fragJ loc ann ra mo bbty nbty ubty))
-    (Nat.le_trans (Frag.pot_le_two (e := prog) (.save (saveParams_depth_of_vals rfl)
+    (.save (saveParams_pure_of_vals rfl) (saveParams_depth_of_vals rfl) (lrBody_fragJ loc ann ra mo bbty nbty ubty))
+    (Nat.le_trans (Frag.pot_le_two (e := prog) (.save (saveParams_pure_of_vals rfl) (saveParams_depth_of_vals rfl)
         (lrBody_fragJ loc ann ra mo bbty nbty ubty)))
       (by rw [show esize prog = 6 from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega))
     hcoh
@@ -2049,7 +2049,7 @@ theorem list_reverse_certified_total (sbty : core_base_type)
       (frameLsT (lrCellFrame R) (lrLsT ns))
       (lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head)
       fmapEmpty [] σ₀ (Iris.Std.PartialMap.union m₀ R)
-      (.save (saveParams_depth_of_vals rfl) (lrBody_fragJ loc ann ra mo bbty nbty ubty))
+      (.save (saveParams_pure_of_vals rfl) (saveParams_depth_of_vals rfl) (lrBody_fragJ loc ann ra mo bbty nbty ubty))
       (by rw [lrProg_pot, show lemDefaultFuel = 999999 + 1 from rfl]; omega)
       hcoh
       (fun v σ' => ∃ Q : CellMap, (∃ p' : CerbMem.PointerValue,

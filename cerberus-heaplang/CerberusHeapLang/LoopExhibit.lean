@@ -404,7 +404,8 @@ variable (loc : CerbLocation.Loc) (ann ra : core_run_annotation)
 /-- The body is in the certified extended cone. -/
 theorem loopBody_fragJ :
     Frag (loopBody loc ann ra mo bty c) := by
-  refine .if_ (by decide +kernel) (.sseq (.store) (.run ?_))
+  refine .if_ (PePure.of_isPePure rfl) (by decide +kernel)
+    (.sseq (.store) (.run (PePure.all_of_isPePure rfl) ?_))
     (.val_pure Vunit)
   intro pe hpe
   simp at hpe
@@ -455,8 +456,8 @@ theorem counter_loop_certified
         (by rw [show esize (loopBody loc ann ra mo bty (cellPtr idx addr)) = 3 from rfl,
           show lemDefaultFuel = 999999 + 1 from rfl]; omega))
     prog fmapEmpty [] σ₀ _
-    (.save (saveParams_depth_of_vals rfl) (loopBody_fragJ loc ann ra mo bty _))
-    (Nat.le_trans (Frag.pot_le_two (e := prog) (.save (saveParams_depth_of_vals rfl)
+    (.save (saveParams_pure_of_vals rfl) (saveParams_depth_of_vals rfl) (loopBody_fragJ loc ann ra mo bty _))
+    (Nat.le_trans (Frag.pot_le_two (e := prog) (.save (saveParams_pure_of_vals rfl) (saveParams_depth_of_vals rfl)
         (loopBody_fragJ loc ann ra mo bty _)))
       (by rw [show esize prog = 4 from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega))
     hcoh
@@ -523,8 +524,8 @@ theorem counter_loop_certified_irrelevant_binding
         (by rw [show esize (loopBody loc ann ra mo bty (cellPtr idx addr)) = 3 from rfl,
           show lemDefaultFuel = 999999 + 1 from rfl]; omega))
     prog (envAdd ySym junk fmapEmpty) [] σ₀ _
-    (.save (saveParams_depth_of_vals rfl) (loopBody_fragJ loc ann ra mo bty _))
-    (Nat.le_trans (Frag.pot_le_two (e := prog) (.save (saveParams_depth_of_vals rfl)
+    (.save (saveParams_pure_of_vals rfl) (saveParams_depth_of_vals rfl) (loopBody_fragJ loc ann ra mo bty _))
+    (Nat.le_trans (Frag.pot_le_two (e := prog) (.save (saveParams_pure_of_vals rfl) (saveParams_depth_of_vals rfl)
         (loopBody_fragJ loc ann ra mo bty _)))
       (by rw [show esize prog = 4 from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega))
     hcoh

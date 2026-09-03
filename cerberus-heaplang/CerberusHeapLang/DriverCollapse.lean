@@ -1355,7 +1355,7 @@ theorem loop_step_frag {M₀ : MachineCtx}
     | save sb ps body =>
       have hdep : ∀ pe ∈ saveParamPexprs ps, peDepth pe ≤ lemDefaultFuel := by
         cases hfr with
-        | save hdep _ => exact hdep
+        | save _ hdep _ => exact hdep
       rcases hr.save_inv with ⟨cvals, ev0', evs', hρeq, hvals, hout⟩ |
           ⟨cvals, hnvS, hvals, hout⟩
       · obtain ⟨h1, h2, h3⟩ : r' = body ∧
@@ -1384,7 +1384,7 @@ theorem loop_step_frag {M₀ : MachineCtx}
     | if_ g e2 e3 =>
       have hdg : peDepth g ≤ lemDefaultFuel := by
         cases hfr with
-        | if_ hdg _ _ => exact hdg
+        | if_ _ hdg _ _ => exact hdg
       rcases hr.if_inv with ⟨hg, hout⟩ | ⟨hg, hout⟩
       · obtain ⟨h1, h2, h3⟩ : r' = e2 ∧ ρ' = ev0 :: evs ∧
             σ' = dst.layout_state := by
@@ -1621,7 +1621,7 @@ theorem loop_step_frag {M₀ : MachineCtx}
       hr.jump_inv (by rfl)
     have hdep : ∀ pe' ∈ pes, peDepth pe' ≤ lemDefaultFuel := by
       cases hfr with
-      | run hdep => exact hdep
+      | run _ hdep => exact hdep
     rw [hlb] at hl
     rw [htd, hex] at hvs
     obtain ⟨h1, h2, h3⟩ : e' = cont ∧

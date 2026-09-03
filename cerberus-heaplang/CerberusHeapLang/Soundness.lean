@@ -1526,11 +1526,22 @@ layer; the side condition `peDepth pe ≤ lemDefaultFuel` is carried
 explicitly (the engine's own budget; exhaustion is the opaque
 `fuelExhausted` leaf). -/
 
-/-- The covered operand sub-grammar. -/
+/-- The binops the mirror evaluator covers (`evalBinop`): integer
+    arithmetic `Add`/`Sub`/`Mul` and the comparisons
+    `Eq`/`Lt`/`Le`/`Gt`/`Ge`. `Div`/`Rem_t`/`Rem_f`/`Exp`/`And`/`Or` are
+    outside (fragment closure, 2026-09-02: the operand grammar is
+    declared as exactly what the mirror covers). -/
+def isMirroredOp : binop → Bool
+  | .OpAdd | .OpSub | .OpMul | .OpEq | .OpLt | .OpLe | .OpGt | .OpGe => true
+  | _ => false
+
+/-- The covered operand sub-grammar: value leaves, symbols, the eight
+    mirrored binops, array shifts. -/
 inductive PePure : generic_pexpr Unit sym → Prop where
   | val (a : List annot) (v : value) : PePure (Pexpr a () (PEval v))
   | sym (a : List annot) (x : sym) : PePure (Pexpr a () (PEsym x))
-  | op (a : List annot) (op : binop) {pe1 pe2 : generic_pexpr Unit sym} :
+  | op (a : List annot) (op : binop) (hop : isMirroredOp op = true)
+      {pe1 pe2 : generic_pexpr Unit sym} :
       PePure pe1 → PePure pe2 → PePure (Pexpr a () (PEop op pe1 pe2))
   | arrayShift (a : List annot) (ty : ctype)
       {pe1 pe2 : generic_pexpr Unit sym} :
@@ -1568,6 +1579,41 @@ theorem peDepth_val_le (a : List annot) (v : value) :
   rw [show peDepth (Pexpr a () (PEval v)) = 1 from rfl,
     show lemDefaultFuel = 999999 + 1 from rfl]
   omega
+
+/-- Boolean membership in the covered grammar (kernel-decidable at
+    authored operands: `PePure.of_isPePure rfl`). -/
+def isPePure : generic_pexpr Unit sym → Bool
+  | Pexpr _ _ (PEval _) => true
+  | Pexpr _ _ (PEsym _) => true
+  | Pexpr _ _ (PEop op pe1 pe2) => isMirroredOp op && isPePure pe1 && isPePure pe2
+  | Pexpr _ _ (PEarray_shift pe1 _ pe2) => isPePure pe1 && isPePure pe2
+  | _ => false
+
+theorem PePure.of_isPePure {pe : generic_pexpr Unit _root_.sym} (h : isPePure pe = true) :
+    PePure pe := by
+  induction pe using isPePure.induct with
+  | case1 a u v => cases u; exact .val a v
+  | case2 a u x => cases u; exact .sym a x
+  | case3 a u op pe1 pe2 ih1 ih2 =>
+    cases u
+    simp only [isPePure, Bool.and_eq_true] at h
+    exact .op a op h.1.1 (ih1 h.1.2) (ih2 h.2)
+  | case4 a u pe1 ty pe2 ih1 ih2 =>
+    cases u
+    simp only [isPePure, Bool.and_eq_true] at h
+    exact .arrayShift a ty (ih1 h.1) (ih2 h.2)
+  | case5 pe _ _ _ _ => simp [isPePure] at h
+
+theorem PePure.all_of_isPePure {pes : List (generic_pexpr Unit _root_.sym)}
+    (h : pes.all isPePure = true) : ∀ pe ∈ pes, PePure pe := by
+  intro pe hpe
+  exact PePure.of_isPePure (List.all_eq_true.mp h pe hpe)
+
+/-- A binop the mirror evaluates is a mirrored one. -/
+theorem evalBinop_mirrored {op : binop} {v1 v2 v : value}
+    (h : evalBinop op v1 v2 = some v) : isMirroredOp op = true := by
+  unfold evalBinop at h
+  split at h <;> first | rfl | cases h
 
 /-- Off-grammar shapes evaluate to nothing (fail-closed). -/
 theorem evalPexpr_none_of_shape {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {ρ : EnvStack}
@@ -1609,7 +1655,9 @@ theorem evalPexpr_shape {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {ρ : E
     | some v1 =>
       cases h2 : evalPexpr tds ext ρ pe2 with
       | none => rw [h1, h2] at h; cases h
-      | some v2 => exact .op a op (ih1 h1) (ih2 h2)
+      | some v2 =>
+        rw [h1, h2] at h
+        exact .op a op (evalBinop_mirrored h) (ih1 h1) (ih2 h2)
   | case4 a u pe1 ty pe2 ih1 ih2 =>
     intro v h
     rw [evalPexpr_array_shift] at h
@@ -1673,7 +1721,7 @@ theorem step_eval_bridge {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
       dsimp only
       rw [hx]
       rfl
-  | @op a op pe1 pe2 hp1 hp2 ih1 ih2 =>
+  | @op a op hop pe1 pe2 hp1 hp2 ih1 ih2 =>
     intro fuel hfuel n loc cloc mem file
     obtain ⟨f, rfl⟩ : ∃ f, fuel = f + 1 := ⟨fuel - 1, by simp at hfuel; omega⟩
     rw [evalPexpr_op] at hv
@@ -1762,7 +1810,7 @@ theorem PePure.strip {pe : generic_pexpr Unit _root_.sym} (hp : PePure pe) :
   induction hp with
   | val a v => exact .val [] v
   | sym a x => exact .sym [] x
-  | op a op hp1 hp2 ih1 ih2 => exact .op [] op ih1 ih2
+  | op a op hop hp1 hp2 ih1 ih2 => exact .op [] op hop ih1 ih2
   | arrayShift a ty hp1 hp2 ih1 ih2 => exact .arrayShift [] ty ih1 ih2
 
 theorem evalPexpr_peStrip {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {ρ : EnvStack}
@@ -1771,7 +1819,7 @@ theorem evalPexpr_peStrip {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {ρ :
   induction hp with
   | val a v => rfl
   | sym a x => rfl
-  | op a op hp1 hp2 ih1 ih2 =>
+  | op a op hop hp1 hp2 ih1 ih2 =>
     show evalPexpr tds ext ρ (Pexpr [] () (PEop op _ _)) = _
     rw [evalPexpr_op, evalPexpr_op, ih1, ih2]
   | arrayShift a ty hp1 hp2 ih1 ih2 =>
@@ -1783,7 +1831,7 @@ theorem peDepth_peStrip {pe : generic_pexpr Unit sym} (hp : PePure pe) :
   induction hp with
   | val a v => rfl
   | sym a x => rfl
-  | op a op hp1 hp2 ih1 ih2 =>
+  | op a op hop hp1 hp2 ih1 ih2 =>
     show peDepth (Pexpr [] () (PEop op _ _)) = _
     rw [peDepth_op, peDepth_op, ih1, ih2]
   | arrayShift a ty hp1 hp2 ih1 ih2 =>
@@ -1806,7 +1854,7 @@ theorem pull_bridge {pe : generic_pexpr Unit sym} (hp : PePure pe) :
     obtain ⟨f, rfl⟩ : ∃ f, fuel = f + 1 :=
       ⟨fuel - 1, by have := peDepth_pos (Pexpr a () (PEsym x)); omega⟩
     rfl
-  | @op a op pe1 pe2 hp1 hp2 ih1 ih2 =>
+  | @op a op hop pe1 pe2 hp1 hp2 ih1 ih2 =>
     intro fuel hfuel n
     obtain ⟨f, rfl⟩ : ∃ f, fuel = f + 1 := ⟨fuel - 1, by simp at hfuel; omega⟩
     have hd1 : peDepth pe1 ≤ f := by simp at hfuel; omega
@@ -1870,7 +1918,7 @@ theorem aux2_bridge {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
     rw [show step_eval_pexpr = step_eval_pexpr_lemFuel lemDefaultFuel from rfl,
       hstep]
     rfl
-  | @op a op pe1 pe2 hp1 hp2 =>
+  | @op a op hop pe1 pe2 hp1 hp2 =>
     rw [show peStrip (Pexpr a () (PEop op pe1 pe2)) =
       Pexpr [] () (PEop op (peStrip pe1) (peStrip pe2)) from rfl]
     rw [show peStrip (Pexpr a () (PEop op pe1 pe2)) =
@@ -2189,7 +2237,7 @@ theorem act_valueFromPexpr_none {pe : generic_pexpr Unit sym}
   cases hp with
   | val a v => rw [valueFromPexpr_val] at hnv; cases hnv
   | sym a x => rfl
-  | op a op hp1 hp2 => rfl
+  | op a op hop hp1 hp2 => rfl
   | arrayShift a ty hp1 hp2 => rfl
 
 /-- Load ACTION_EVAL, context undisturbed, DISCHARGED (S4 —
@@ -2724,6 +2772,46 @@ theorem saveParamsWithValues_depth
   saveParams_depth_of_vals (valueFromPexprs_withValues ps cvals
     ((List.length_map ..).symm.trans hlen))
 
+/-- Literal initializers are in the covered grammar (a value pexpr). -/
+theorem saveParams_pure_of_vals
+    {ps : List (sym × ((core_base_type ×
+      Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym))}
+    {cvals : List value}
+    (h : valueFromPexprs (saveParamPexprs ps) = some cvals) :
+    ∀ pe ∈ saveParamPexprs ps, PePure pe := by
+  generalize saveParamPexprs ps = pes at h ⊢
+  induction pes generalizing cvals with
+  | nil => intro pe hpe; cases hpe
+  | cons pe pes ih =>
+    rw [valueFromPexprs_cons] at h
+    revert h
+    cases hpe : valueFromPexpr pe with
+    | none => intro h; cases h
+    | some v =>
+      cases hpes : valueFromPexprs pes with
+      | none => intro h; cases h
+      | some vs =>
+        intro h pe' hpe'
+        rcases List.mem_cons.mp hpe' with rfl | hmem
+        · rcases pe' with ⟨a, u, pe_⟩
+          cases u
+          cases pe_ <;> simp only [valueFromPexpr] at hpe
+          all_goals first
+            | exact .val _ _
+            | (cases hpe)
+        · exact ih hpes pe' hmem
+
+/-- The EVAL arm's re-formed initializers are literal, hence covered. -/
+theorem saveParamsWithValues_pure
+    (ps : List (sym × ((core_base_type ×
+      Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym)))
+    (cvals : List value) :
+    ∀ pe ∈ saveParamPexprs (saveParamsWithValues ps cvals), PePure pe := by
+  intro pe hpe
+  simp only [saveParamPexprs, saveParamsWithValues, List.map_map, List.mem_map] at hpe
+  obtain ⟨p, -, rfl⟩ := hpe
+  exact .val _ _
+
 /-- The t0-monad sequencing of an all-`Defined` list is `Defined`
     (the tail of `stExceptUndef_mapM`, State_exception_undefined.lean:55). -/
 theorem mapM1_id_defined {α : Type} (vs : List α) :
@@ -3169,13 +3257,21 @@ inductive Frag : CoreExpr → Prop where
       {ps : List (sym × ((core_base_type ×
         Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym))}
       {body : CoreExpr}
+      (hp : ∀ pe ∈ saveParamPexprs ps, PePure pe)
       (hd : ∀ pe ∈ saveParamPexprs ps, peDepth pe ≤ lemDefaultFuel) :
       Frag body → Frag (saveRedex sb ps body)
+  /-- Eif at a guard in the covered operand grammar `PePure`, within the
+      evaluator's fuel (fragment closure, 2026-09-02: the operand grammar
+      of every evaluating constructor is `PePure` — the mirror evaluator's
+      exact domain — so an operand the mirror cannot evaluate is
+      classified in the engine, `complete_if`). -/
   | if_ {g : generic_pexpr Unit sym} {e2 e3 : CoreExpr}
-      (hdg : peDepth g ≤ lemDefaultFuel) :
+      (hpg : PePure g) (hdg : peDepth g ≤ lemDefaultFuel) :
       Frag e2 → Frag e3 → Frag (ifRedex g e2 e3)
+  /-- Erun at arguments in `PePure`, within the evaluator's fuel. -/
   | run {ra : core_run_annotation} {l : sym}
       {pes : List (generic_pexpr Unit sym)}
+      (hpes : ∀ pe ∈ pes, PePure pe)
       (hdep : ∀ pe ∈ pes, peDepth pe ≤ lemDefaultFuel) :
       Frag (runRedex ra l pes)
   | sseq_spec {pa pb : List annot} {x : sym} {bty : core_base_type}
@@ -3335,9 +3431,9 @@ theorem Frag.decomp {e : CoreExpr} (hf : Frag e) (hnv : toVal e = none) :
       | sseq hf1 hf2 => simp [annotRooted] at hr
       | wseq hf1 hf2 => simp [annotRooted] at hr
       | sseq_spec hf1 hf2 => simp [annotRooted] at hr
-      | save hd hb => simp [annotRooted, saveRedex] at hr
-      | if_ hdg hf2 hf3 => simp [annotRooted, ifRedex] at hr
-      | run hdep => simp [annotRooted, runRedex] at hr
+      | save hp hd hb => simp [annotRooted, saveRedex] at hr
+      | if_ hpg hdg hf2 hf3 => simp [annotRooted, ifRedex] at hr
+      | run hpes hdep => simp [annotRooted, runRedex] at hr
       | pure_sym => simp [annotRooted, pureRedex] at hr
       | load_op hnv2 hp2 hd2 => simp [annotRooted, loadOpRedex] at hr
       | sseq_sym hb hf1 hf2 => simp [annotRooted] at hr
@@ -3359,9 +3455,9 @@ theorem Frag.decomp {e : CoreExpr} (hf : Frag e) (hnv : toVal e = none) :
         | sseq_spec hf1 hf2 =>
           exact ⟨_, _, Decomp.root (.merge rfl), hwit⟩
         | annot hfc' => exact ⟨_, _, Decomp.root (.merge rfl), hwit⟩
-        | save hd hb => exact ⟨_, _, Decomp.root (.merge rfl), hwit⟩
-        | if_ hdg hf2 hf3 => exact ⟨_, _, Decomp.root (.merge rfl), hwit⟩
-        | run hdep => exact ⟨_, _, Decomp.root (.merge rfl), hwit⟩
+        | save hp hd hb => exact ⟨_, _, Decomp.root (.merge rfl), hwit⟩
+        | if_ hpg hdg hf2 hf3 => exact ⟨_, _, Decomp.root (.merge rfl), hwit⟩
+        | run hpes hdep => exact ⟨_, _, Decomp.root (.merge rfl), hwit⟩
         | pure_sym =>
           exact ⟨_, _, Decomp.root (.merge rfl), hwit⟩
         | load_op hnv2 hp2 hd2 =>
@@ -3402,9 +3498,9 @@ theorem Frag.decomp {e : CoreExpr} (hf : Frag e) (hnv : toVal e = none) :
           exact ⟨_, _, Decomp.annot hr' rfl (fun n => rfl) hd, hfr⟩
         | sseq_spec hf1 hf2 =>
           exact ⟨_, _, Decomp.annot hr' rfl (fun n => rfl) hd, hfr⟩
-        | save hd' hb => exact ⟨_, _, Decomp.annot hr' rfl (fun n => rfl) hd, hfr⟩
-        | if_ hdg hf2 hf3 => exact ⟨_, _, Decomp.annot hr' rfl (fun n => rfl) hd, hfr⟩
-        | run hdep => exact ⟨_, _, Decomp.annot hr' rfl (fun n => rfl) hd, hfr⟩
+        | save hp' hd' hb => exact ⟨_, _, Decomp.annot hr' rfl (fun n => rfl) hd, hfr⟩
+        | if_ hpg hdg hf2 hf3 => exact ⟨_, _, Decomp.annot hr' rfl (fun n => rfl) hd, hfr⟩
+        | run hpes hdep => exact ⟨_, _, Decomp.annot hr' rfl (fun n => rfl) hd, hfr⟩
         | annot hfc => simp [annotRooted] at hr'
         | pure_sym =>
           exact ⟨_, _, Decomp.annot hr' rfl (fun n => rfl) hd, hfr⟩
@@ -3420,10 +3516,10 @@ theorem Frag.decomp {e : CoreExpr} (hf : Frag e) (hnv : toVal e = none) :
           exact ⟨_, _, Decomp.annot hr' rfl (fun n => rfl) hd, hfr⟩
         | case_value hbr hbsz =>
           exact ⟨_, _, Decomp.annot hr' rfl (fun n => rfl) hd, hfr⟩
-  | save hd hb ih => exact ⟨_, _, Decomp.root (.save _ _ _), .save hd hb⟩
-  | if_ hdg hf2 hf3 ih2 ih3 =>
-    exact ⟨_, _, Decomp.root (.if_ _ _ _), .if_ hdg hf2 hf3⟩
-  | run hdep => exact ⟨_, _, Decomp.root (.run _ _ _), .run hdep⟩
+  | save hp hd hb ih => exact ⟨_, _, Decomp.root (.save _ _ _), .save hp hd hb⟩
+  | if_ hpg hdg hf2 hf3 ih2 ih3 =>
+    exact ⟨_, _, Decomp.root (.if_ _ _ _), .if_ hpg hdg hf2 hf3⟩
+  | run hpes hdep => exact ⟨_, _, Decomp.root (.run _ _ _), .run hpes hdep⟩
   | @sseq_spec pa pb x bty e1 e2 hf1 hf2 ih1 ih2 =>
     cases hv1 : toVal e1 with
     | some w =>
@@ -3587,7 +3683,7 @@ theorem Frag.step {M : MachineCtx}
         simpa [Prod.mk.injEq] using hout
       rw [h1]
       exact hQf l params cont hl
-  | @save sb ps body hd hb ih =>
+  | @save sb ps body hp hd hb ih =>
     rcases hs.save_inv with ⟨cvals, ev0', evs', hρeq, hvals, hout⟩ |
         ⟨cvals, hnv, hvals, hout⟩
     · obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = _ ∧ σ' = σ := by
@@ -3597,15 +3693,15 @@ theorem Frag.step {M : MachineCtx}
     · obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ := by
         simpa [Prod.mk.injEq] using hout
       subst h1
-      exact .save (saveParamsWithValues_depth ps cvals
-        (evalPexprs_length _ _ _ hvals)) hb
-  | if_ hdg hf2 hf3 ih2 ih3 =>
+      exact .save (saveParamsWithValues_pure ps cvals)
+        (saveParamsWithValues_depth ps cvals (evalPexprs_length _ _ _ hvals)) hb
+  | if_ hpg hdg hf2 hf3 ih2 ih3 =>
     rcases hs.if_inv with ⟨-, hout⟩ | ⟨-, hout⟩ <;>
       (obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ := by
         simpa [Prod.mk.injEq] using hout)
     · subst h1; exact hf2
     · subst h1; exact hf3
-  | run hdep =>
+  | run hpes hdep =>
     obtain ⟨params, cont, vs, ev0', evs', hρeq, hl, hvs, hout⟩ :=
       hs.jump_inv (by rfl)
     obtain ⟨h1, -, -⟩ : e' = cont ∧ ρ' = _ ∧ σ' = σ := by
@@ -3826,7 +3922,7 @@ theorem Frag.esize_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
         simpa [Prod.mk.injEq] using hout
       exact .inr ⟨l, pes, params, cont,
         by rw [jumpRedex?_annot_of_not_root _ _ hg, hj], hl, h1⟩
-  | @save sb ps body hd hb ih =>
+  | @save sb ps body hp hd hb ih =>
     rcases hs.save_inv with ⟨cvals, ev0', evs', hρeq, hvals, hout⟩ |
         ⟨cvals, hnv, hvals, hout⟩
     · obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = _ ∧ σ' = σ := by
@@ -3844,7 +3940,7 @@ theorem Frag.esize_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
           1 + esize body from rfl,
         show esize (saveRedex sb ps body) = 1 + esize body from rfl]
       omega
-  | if_ hdg hf2 hf3 ih2 ih3 =>
+  | if_ hpg hdg hf2 hf3 ih2 ih3 =>
     rcases hs.if_inv with ⟨-, hout⟩ | ⟨-, hout⟩ <;>
       (obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ := by
         simpa [Prod.mk.injEq] using hout)
@@ -3858,7 +3954,7 @@ theorem Frag.esize_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
       simp only [show ∀ g e2 e3, esize (ifRedex g e2 e3) =
         1 + max (esize e2) (esize e3) from fun _ _ _ => rfl]
       omega
-  | run hdep =>
+  | run hpes hdep =>
     obtain ⟨params, cont, vs, ev0', evs', hρeq, hl, hvs, hout⟩ :=
       hs.jump_inv (by rfl)
     obtain ⟨h1, -, -⟩ : e' = cont ∧ ρ' = _ ∧ σ' = σ := by
@@ -4158,7 +4254,7 @@ theorem outcomesU_of_step {M : MachineCtx} (aid : Nat)
     | save sb ps body =>
       have hdep : ∀ pe ∈ saveParamPexprs ps, peDepth pe ≤ lemDefaultFuel := by
         cases hfr with
-        | save hdep _ => exact hdep
+        | save _ hdep _ => exact hdep
       rcases hr.save_inv with ⟨cvals, ev0', evs', hρeq, hvals, hout⟩ |
           ⟨cvals, hnvS, hvals, hout⟩
       · obtain ⟨h1, h2, h3⟩ : r' = body ∧
@@ -4181,7 +4277,7 @@ theorem outcomesU_of_step {M : MachineCtx} (aid : Nat)
     | if_ g e2 e3 =>
       have hdg : peDepth g ≤ lemDefaultFuel := by
         cases hfr with
-        | if_ hdg _ _ => exact hdg
+        | if_ _ hdg _ _ => exact hdg
       rcases hr.if_inv with ⟨hg, hout⟩ | ⟨hg, hout⟩
       · obtain ⟨h1, h2, h3⟩ : r' = e2 ∧ ρ' = ev0 :: evs ∧ σ' = σ := by
           simpa [Prod.mk.injEq] using hout
@@ -4380,7 +4476,7 @@ theorem outcomesU_of_step {M : MachineCtx} (aid : Nat)
       hr.jump_inv (by rfl)
     have hdep : ∀ pe' ∈ pes, peDepth pe' ≤ lemDefaultFuel := by
       cases hfr with
-      | run hdep => exact hdep
+      | run _ hdep => exact hdep
     obtain ⟨p, hproc, hQ⟩ := MachineCtx.labels_lookup_some hl
     obtain ⟨h1, h2, h3⟩ : e' = cont ∧
         ρ' = bindArgs params vs (ev0 :: evs) ∧ σ' = σ := by

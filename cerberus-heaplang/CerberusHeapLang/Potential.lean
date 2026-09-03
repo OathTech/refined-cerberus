@@ -104,19 +104,19 @@ theorem Frag.esize_le_pot {e : CoreExpr} (hf : Frag e) : esize e ≤ pot e := by
   | create => simp [esize, pot, createRedex]
   | sseq hf1 hf2 ih1 ih2 => simp only [esize_sseq, pot_sseq]; omega
   | annot hfb ihb => simp only [esize_annot, pot_annot]; omega
-  | save hd hb ih =>
+  | save hp hd hb ih =>
     simp only [show ∀ sb ps b, esize (saveRedex sb ps b) = 1 + esize b
         from fun _ _ _ => rfl,
       show ∀ sb ps b, pot (saveRedex sb ps b) = 1 + pot b
         from fun _ _ _ => rfl]
     omega
-  | if_ hdg hf2 hf3 ih2 ih3 =>
+  | if_ hpg hdg hf2 hf3 ih2 ih3 =>
     simp only [show ∀ g e2 e3, esize (ifRedex g e2 e3) =
         1 + max (esize e2) (esize e3) from fun _ _ _ => rfl,
       show ∀ g e2 e3, pot (ifRedex g e2 e3) =
         1 + max (pot e2) (pot e3) from fun _ _ _ => rfl]
     omega
-  | run hdep => simp [esize, pot, runRedex]
+  | run hpes hdep => simp [esize, pot, runRedex]
   | sseq_spec hf1 hf2 ih1 ih2 => simp only [esize_sseq, pot_sseq]; omega
   | pure_sym => simp [esize, pot, pureRedex]
   | load_op hnv2 hp2 hd2 => simp [esize, pot, loadOpRedex]
@@ -142,19 +142,19 @@ theorem Frag.pot_le_two {e : CoreExpr} (hf : Frag e) : pot e ≤ 2 * esize e := 
   | create => simp [esize, pot, createRedex]
   | sseq hf1 hf2 ih1 ih2 => simp only [esize_sseq, pot_sseq]; omega
   | annot hfb ihb => simp only [esize_annot, pot_annot]; omega
-  | save hd hb ih =>
+  | save hp hd hb ih =>
     simp only [show ∀ sb ps b, esize (saveRedex sb ps b) = 1 + esize b
         from fun _ _ _ => rfl,
       show ∀ sb ps b, pot (saveRedex sb ps b) = 1 + pot b
         from fun _ _ _ => rfl]
     omega
-  | if_ hdg hf2 hf3 ih2 ih3 =>
+  | if_ hpg hdg hf2 hf3 ih2 ih3 =>
     simp only [show ∀ g e2 e3, esize (ifRedex g e2 e3) =
         1 + max (esize e2) (esize e3) from fun _ _ _ => rfl,
       show ∀ g e2 e3, pot (ifRedex g e2 e3) =
         1 + max (pot e2) (pot e3) from fun _ _ _ => rfl]
     omega
-  | run hdep => simp [esize, pot, runRedex]
+  | run hpes hdep => simp [esize, pot, runRedex]
   | sseq_spec hf1 hf2 ih1 ih2 => simp only [esize_sseq, pot_sseq]; omega
   | pure_sym => simp [esize, pot, pureRedex]
   | load_op hnv2 hp2 hd2 => simp [esize, pot, loadOpRedex]
@@ -294,7 +294,7 @@ theorem Frag.pot_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
         simpa [Prod.mk.injEq] using hout
       exact .inr ⟨l, pes, params, cont,
         by rw [jumpRedex?_annot_of_not_root _ _ hg, hj], hl, h1⟩
-  | @save sb ps body hd hb ih =>
+  | @save sb ps body hp hd hb ih =>
     rcases hs.save_inv with ⟨cvals, ev0', evs', hρeq, hvals, hout⟩ |
         ⟨cvals, hnv, hvals, hout⟩
     · obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = _ ∧ σ' = σ := by
@@ -312,7 +312,7 @@ theorem Frag.pot_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
           1 + pot body from rfl,
         show pot (saveRedex sb ps body) = 1 + pot body from rfl]
       omega
-  | if_ hdg hf2 hf3 ih2 ih3 =>
+  | if_ hpg hdg hf2 hf3 ih2 ih3 =>
     rcases hs.if_inv with ⟨-, hout⟩ | ⟨-, hout⟩ <;>
       (obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ := by
         simpa [Prod.mk.injEq] using hout)
@@ -326,7 +326,7 @@ theorem Frag.pot_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
       simp only [show ∀ g e2 e3, pot (ifRedex g e2 e3) =
         1 + max (pot e2) (pot e3) from fun _ _ _ => rfl]
       omega
-  | run hdep =>
+  | run hpes hdep =>
     obtain ⟨params, cont, vs, ev0', evs', hρeq, hl, hvs, hout⟩ :=
       hs.jump_inv (by rfl)
     obtain ⟨h1, -, -⟩ : e' = cont ∧ ρ' = _ ∧ σ' = σ := by

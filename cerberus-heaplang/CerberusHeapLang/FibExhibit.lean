@@ -403,10 +403,10 @@ theorem fib_wp_readout (hn : 0 ≤ n) (sbty : core_base_type) :
 omit hQ in
 /-- The label bodies are in the certified cone. -/
 theorem fibBody_fragJ : Frag (fibBody ra n) := by
-  refine .if_ (by
+  refine .if_ (PePure.of_isPePure rfl) (by
     rw [show peDepth (fibGuard n) = 2 from rfl,
       show lemDefaultFuel = 999999 + 1 from rfl]
-    omega) (.run ?_) .pure_sym
+    omega) (.run (PePure.all_of_isPePure rfl) ?_) .pure_sym
   intro pe hpe
   simp only [List.mem_cons, List.not_mem_nil, or_false] at hpe
   rcases hpe with rfl | rfl | rfl <;>
@@ -471,8 +471,8 @@ theorem fib_certified
       exact Nat.le_trans (fibBody_fragJ ra n).pot_le_two
         (by rw [show esize (fibBody ra n) = 2 from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega))
     prog fmapEmpty [] σ₀ (∅ : SpikeHeapF SpikeCell)
-    (.save (saveParams_depth_of_vals rfl) (fibBody_fragJ ra n))
-    (Nat.le_trans (Frag.pot_le_two (e := prog) (.save (saveParams_depth_of_vals rfl) (fibBody_fragJ ra n)))
+    (.save (saveParams_pure_of_vals rfl) (saveParams_depth_of_vals rfl) (fibBody_fragJ ra n))
+    (Nat.le_trans (Frag.pot_le_two (e := prog) (.save (saveParams_pure_of_vals rfl) (saveParams_depth_of_vals rfl) (fibBody_fragJ ra n)))
       (by rw [show esize prog = 3 from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega))
     (coh_empty σ₀)
     (fun v _ => v = ivVal (fibSpec n.toNat))
@@ -646,7 +646,7 @@ theorem fib_certified_total (sbty : core_base_type) (n : Int)
       (fibLsT n)
       (fibProg ra n sbty ibty abty bbty) fmapEmpty [] σ₀
       (∅ : SpikeHeapF SpikeCell)
-      (.save (saveParams_depth_of_vals rfl) (fibBody_fragJ ra n))
+      (.save (saveParams_pure_of_vals rfl) (saveParams_depth_of_vals rfl) (fibBody_fragJ ra n))
       (by rw [fibProg_pot, show lemDefaultFuel = 999999 + 1 from rfl]; omega)
       (coh_empty σ₀)
       (fun v _ => v = ivVal (fibSpec n.toNat)) (2 * n.toNat + 4)

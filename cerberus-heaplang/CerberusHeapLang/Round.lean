@@ -880,7 +880,7 @@ theorem engine_step_matchU {M : MachineCtx}
     | save sb ps body =>
       have hdep : ∀ pe ∈ saveParamPexprs ps, peDepth pe ≤ lemDefaultFuel := by
         cases hfr with
-        | save hdep _ => exact hdep
+        | save _ hdep _ => exact hdep
       rcases hr.save_inv with ⟨cvals, ev0', evs', hρeq, hvals, hout⟩ |
           ⟨cvals, hnvS, hvals, hout⟩
       · obtain ⟨h1, h2, h3⟩ : r' = body ∧
@@ -906,7 +906,7 @@ theorem engine_step_matchU {M : MachineCtx}
     | if_ g e2 e3 =>
       have hdg : peDepth g ≤ lemDefaultFuel := by
         cases hfr with
-        | if_ hdg _ _ => exact hdg
+        | if_ _ hdg _ _ => exact hdg
       rcases hr.if_inv with ⟨hg, hout⟩ | ⟨hg, hout⟩
       · obtain ⟨h1, h2, h3⟩ : r' = e2 ∧ ρ' = ev0 :: evs ∧
             σ' = dst.layout_state := by
@@ -1126,7 +1126,7 @@ theorem engine_step_matchU {M : MachineCtx}
       hr.jump_inv (by rfl)
     have hdep : ∀ pe' ∈ pes, peDepth pe' ≤ lemDefaultFuel := by
       cases hfr with
-      | run hdep => exact hdep
+      | run _ hdep => exact hdep
     obtain ⟨p, hp, hQ⟩ := MachineCtx.labels_lookup_some hl
     obtain ⟨h1, h2, h3⟩ : e' = cont ∧
         ρ' = bindArgs params vs (ev0 :: evs) ∧ σ' = dst.layout_state := by
@@ -2413,7 +2413,7 @@ theorem step_ctx_store_eval_ws' {e : CoreExpr} {ctx : context}
        dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
          return1, except_return]
        rfl)
-  | op a2 op2 hp21 hp22 =>
+  | op a2 op2 hop2 hp21 hp22 =>
     cases hp3 <;> cases ctx <;>
       (dsimp only [get_loc]
        dsimp only [step_action]
@@ -2480,7 +2480,7 @@ theorem step_ctx_store_eval_shape {e : CoreExpr} {ctx : context}
        dsimp only [step_action]
        dsimp only [act_valueFromPexpr, valueFromPexpr]
        exact ⟨_, _, rfl⟩)
-  | op a2 op2 hp21 hp22 =>
+  | op a2 op2 hop2 hp21 hp22 =>
     cases hp3 <;> cases ctx <;>
       (dsimp only [get_loc]
        dsimp only [step_action]
@@ -3235,7 +3235,7 @@ theorem frag_round_complete {M : MachineCtx}
   | if_ g e2 e3 =>
     have hdg : peDepth g ≤ lemDefaultFuel := by
       cases hfr with
-      | if_ hdg _ _ => exact hdg
+      | if_ _ hdg _ _ => exact hdg
     exact complete_if hd hsz hdg _ _
   | case_ pe pats =>
     cases hfr with

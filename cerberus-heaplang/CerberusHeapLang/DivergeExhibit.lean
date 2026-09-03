@@ -99,7 +99,7 @@ theorem dg_self_step (ra : core_run_annotation) (ev0 : Fmap sym value)
 /-- The registered body is in the fragment (a jump redex with no
     arguments). -/
 theorem dgBody_frag (ra : core_run_annotation) : Frag (dgBody ra) :=
-  Frag.run (fun _ h => nomatch h)
+  Frag.run (fun _ h => nomatch h) (fun _ h => nomatch h)
 
 /-- The label map registers exactly the self-jump body. -/
 theorem dgQ_inv (ra : core_run_annotation) {l : sym}
