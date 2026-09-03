@@ -981,3 +981,22 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   regions. Calls arc second (configuration growth first — the note's
   C1). Both dispatch only after mirror completeness merges (shared
   files; the per-constructor completeness obligation).
+- **2026-09-03 [AGENT] KILL/FREE K0 LANDED — TWO CHARTER PREMISES FALSE BY
+  MEASUREMENT** (record: `cerberus-heaplang/docs/2026-09-03_k0-notes.md`):
+  `MemWF` (nine components, each cited to the engine's writers) placed in
+  `CohG` (conditional on cursor presence — the cursor-free lane launches
+  from `Coh` alone; an unconditional field would add a `MemWF` premise to
+  every non-allocating export, a second change) and in `LaunchCoh`
+  (unconditional); five footprint-relative launch facts retired;
+  `create_fresh_global`; `prodMem₀_memWF`; preservation for load/store/
+  allocateObject; the `allocateRegion`/`killM` obligations stated for K3
+  without stubs. Measured against the pinned CerbMem.lean: (a) the engine
+  admits zero-size regions (`allocateRegion`: `sizeN.toNat`, no `max 1`),
+  so the invariant carries `size_nonneg`, not the design note's
+  `size_pos`; (b) `killM` NEVER touches `dynamicAddrs` — the only writer
+  is `allocateRegion`'s prepend, duplicates possible — so "every dynamic
+  address is the base of a live allocation" is NOT an engine invariant;
+  the dynamic component is `dyn_lo`/`dyn_disj`, and K3's `free` rule must
+  take "this allocation is dynamic" from the metadata cell (a `MetaCoh`
+  clause), not from `dynamicAddrs`. Pins 159 → 165. Range audit
+  (1d2bb95..89cd906) dispatched before merge per the audit rule.
