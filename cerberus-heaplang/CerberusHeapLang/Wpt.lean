@@ -2237,9 +2237,11 @@ theorem wpt_load_plain {Ψ : SpikeVal → EnvStack → IProp GF} (hΨ : AnnotIns
 
 /-! ## The allocation rules at the total stratum (alloc arc P1.4)
 
-Total mirrors of Wps.lean §CreateRule: `wpt_create_cursor_internal`
-(exact-cursor, HEAP-IMPLEMENTATION USE ONLY) and the public
-`wpt_create` (`allocCap`-premised, cursor-free statement).
+Total mirror of Wps.lean §CreateRule (RESTATED over the budget at
+K2.5): the public `wpt_create` (`allocBudget`-premised, cursor-free
+statement, `create_atomic` lifted by `wpt_of_atomic`) and its
+plan-shaped reading `wpt_create_of_plan`; the former exact-cursor
+`wpt_create_cursor_internal` is RETIRED with the plan.
 
 THE COST BOUND, DERIVED AGAINST `driveU` (not copied from the
 charter): a bare create is one relational create step — the wpt step
@@ -2255,85 +2257,73 @@ ANNOT value, whose delivery pays the REMOVE-ANNOT tau first). -/
 section CreateRuleT
 open Iris.Std.PartialMap
 
-/-- CREATE small axiom, EXACT-CURSOR, total (INTERNAL — see the
-    section header): the total mirror of
-    `wps_create_cursor_internal` at budget `2 ≤ k` (1 create step +
-    1 pure-value delivery, derived above). -/
-theorem wpt_create_cursor_internal {Ψ : SpikeVal → EnvStack → IProp GF}
+/-- THE PUBLIC TOTAL ALLOCATION RULE (alloc arc P1.4, restated K2.5):
+    the total analogue of `wps_create` at the DERIVED cost bound `2 ≤ k`
+    (see the section header — one create step + one pure-value delivery
+    against `driveU`). Statement is cursor-free (the P1 grep test);
+    the budget `allocCost ty alignN` buys the create, the continuation
+    binds the fresh pointer with full whole-cell ownership and (alloc
+    arc P2) its pure machine-address bounds `0 < addrOf p < 2^64`. -/
+theorem wpt_create {Ψ : SpikeVal → EnvStack → IProp GF}
     (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (aprov : CerbMem.Provenance) (alignN : Int) (ty : ctype)
-    (pref : prefix0) (la nid : Int) (ρ : EnvStack) {k : Nat} (hk : 2 ≤ k)
+    (pref : prefix0) (ρ : EnvStack) {k : Nat} (hk : 2 ≤ k)
     (hsz : 0 < CerbMem.sizeofCtype M.tagDefs ty) (hatom : atomicTy ty = false)
-    (hnz : freshBase la alignN (CerbMem.sizeofCtype M.tagDefs ty) ≠ 0)
-    (hinert : decIndep M.tagDefs (freshBase la alignN (CerbMem.sizeofCtype M.tagDefs ty)) ty
+    (hinert : ∀ a : Int, decIndep M.tagDefs a ty
       (List.replicate (CerbMem.sizeofCtype M.tagDefs ty) undefByte)) :
-    iprop(cursorOwn (GF := GF) ⟨la, nid⟩ ∗
-      ((pointsToCell M.tagDefs (cellPtr nid (freshBase la alignN (CerbMem.sizeofCtype M.tagDefs ty)))
-          (.own 1) ty (List.replicate (CerbMem.sizeofCtype M.tagDefs ty) undefByte) ∗
-        cursorOwn ⟨freshBase la alignN (CerbMem.sizeofCtype M.tagDefs ty), nid + 1⟩) -∗
-        Ψ (SpikeVal.pure (Vobject (OVpointer
-          (cellPtr nid (freshBase la alignN (CerbMem.sizeofCtype M.tagDefs ty)))))) ρ)) ⊢
+    iprop(allocBudget (GF := GF) (allocCost M.tagDefs ty alignN) ∗
+      (∀ p : CerbMem.PointerValue,
+        (pointsToCell M.tagDefs p (.own 1) ty
+            (List.replicate (CerbMem.sizeofCtype M.tagDefs ty) undefByte) ∗
+          ⌜0 < addrOf p ∧ addrOf p < 2 ^ 64⌝) -∗
+        Ψ (SpikeVal.pure (Vobject (OVpointer p))) ρ)) ⊢
       wpt M Ls k Ψ (createExpr loc ann (.IV aprov alignN) ty pref) ρ := by
-  iintro ⟨Hc, HΨ⟩
-  iapply wpt_of_atomic (create_atomic loc ann aprov alignN ty pref la nid ρ hsz hatom hnz hinert)
+  iintro ⟨Hb, HΨ⟩
+  iapply wpt_of_atomic (create_atomic loc ann aprov alignN ty pref ρ hsz hatom hinert)
     rfl rfl hk
-  isplitl [Hc]
-  · iexact Hc
-  · iintro %w ⟨%hw, Hpt, Hc'⟩
+  isplitl [Hb]
+  · iexact Hb
+  · iintro %w ⟨%p, %hw, Hpt, %hb⟩
     subst hw
     iapply HΨ
     isplitl [Hpt]
     · iexact Hpt
-    · iexact Hc'
+    · ipureintro
+      exact hb
 
-/-- THE PUBLIC TOTAL ALLOCATION RULE (alloc arc P1.4): the total
-    analogue of `wps_create` at the DERIVED cost bound `2 ≤ k` (see
-    the section header — one create step + one pure-value delivery
-    against `driveU`). Statement is cursor-free (the P1 grep test);
-    capacity for `req :: rest` buys the create, the continuation
-    binds the fresh pointer with full whole-cell ownership,
-    `allocCap rest`, and (alloc arc P2, mirroring `wps_create`) the
-    fresh pointer's pure machine-address bounds
-    `0 < addrOf p < 2^64`. -/
-theorem wpt_create {Ψ : SpikeVal → EnvStack → IProp GF}
+/-- The plan-shaped reading of `wpt_create` (mirror of
+    `wps_create_of_plan`): capacity for `req :: rest` buys the head
+    request and returns capacity for the rest, by `allocBudget_split`. -/
+theorem wpt_create_of_plan {Ψ : SpikeVal → EnvStack → IProp GF}
     (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (aprov : CerbMem.Provenance) (req : AllocReq) (rest : List AllocReq)
     (pref : prefix0) (ρ : EnvStack) {k : Nat} (hk : 2 ≤ k)
-    (hatom : atomicTy req.ty = false)
+    (hsz : 0 < CerbMem.sizeofCtype M.tagDefs req.ty) (hatom : atomicTy req.ty = false)
     (hinert : ∀ a : Int, decIndep M.tagDefs a req.ty
       (List.replicate (CerbMem.sizeofCtype M.tagDefs req.ty) undefByte)) :
-    iprop(allocCap M.tagDefs (GF := GF) (req :: rest) ∗
+    iprop(allocBudget (GF := GF) (planCost M.tagDefs (req :: rest)) ∗
       (∀ p : CerbMem.PointerValue,
         (pointsToCell M.tagDefs p (.own 1) req.ty
             (List.replicate (CerbMem.sizeofCtype M.tagDefs req.ty) undefByte) ∗
-          allocCap M.tagDefs rest ∗
+          allocBudget (planCost M.tagDefs rest) ∗
           ⌜0 < addrOf p ∧ addrOf p < 2 ^ 64⌝) -∗
         Ψ (SpikeVal.pure (Vobject (OVpointer p))) ρ)) ⊢
       wpt M Ls k Ψ (createExpr loc ann (.IV aprov req.align) req.ty pref) ρ := by
-  unfold allocCap
-  iintro ⟨⟨%c, Hc, %hfit⟩, HΨ⟩
-  obtain ⟨hplan, hla⟩ := hfit
-  obtain ⟨c', hadv, hrest⟩ := (PlanFits_cons_iff M.tagDefs c req rest).mp hplan
-  obtain ⟨hsz, hnz, rfl⟩ := advanceCursor_some_inv M.tagDefs hadv
-  iapply wpt_create_cursor_internal loc ann aprov req.align req.ty pref
-    c.lastAddr c.nextId ρ hk hsz hatom hnz (hinert _)
-  isplitl [Hc]
-  · iexact Hc
-  iintro ⟨Hpt, Hc⟩
+  rw [planCost_cons]
+  iintro ⟨Hb, HΨ⟩
+  icases (allocBudget_split (allocCost M.tagDefs req.ty req.align)
+    (planCost M.tagDefs rest)).1 $$ Hb with ⟨Hb, Hrest⟩
+  iapply wpt_create loc ann aprov req.align req.ty pref ρ hk hsz hatom hinert
+  isplitl [Hb]
+  · iexact Hb
+  iintro %p ⟨Hpt, %hb⟩
   iapply HΨ
   isplitl [Hpt]
   · iexact Hpt
-  isplitl [Hc]
-  · iexists ⟨freshBase c.lastAddr req.align (CerbMem.sizeofCtype M.tagDefs req.ty),
-      c.nextId + 1⟩
-    isplitl [Hc]
-    · iexact Hc
-    · ipureintro
-      exact ⟨hrest, Int.le_of_lt (freshBase_lt_two64 M.tagDefs c.lastAddr req.align
-        req.ty hsz hnz hla)⟩
+  isplitl [Hrest]
+  · iexact Hrest
   · ipureintro
-    exact ⟨freshBase_pos M.tagDefs c.lastAddr req.align req.ty hnz,
-      freshBase_lt_two64 M.tagDefs c.lastAddr req.align req.ty hsz hnz hla⟩
+    exact hb
 
 end CreateRuleT
 

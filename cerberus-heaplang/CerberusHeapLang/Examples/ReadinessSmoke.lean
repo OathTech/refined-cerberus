@@ -20,7 +20,7 @@ rules alone,
 - LOAD of either field (`twoField_load_x`, `twoField_load_y`),
 - STORE to either field (`twoField_store_x`, `twoField_store_y`),
 - ALLOCATE (`twoField_create`): a fresh two-field object from the
-  abstract capacity `allocCap`,
+  allocation budget `allocBudget (allocCost objTy align)`,
 
 each a one-screen client proof: the field-x rules are `wps_load_at`/
 `wps_store_at` at offset 0; the field-y rules address the field the
@@ -62,6 +62,11 @@ def objTy : ctype := Ctype [] (.Array0 fieldTy (some 2))
 
 theorem fieldTy_size {tds : CerbTags.TagDefsMap} : CerbMem.sizeofCtype tds fieldTy = 8 := rfl
 theorem objTy_size {tds : CerbTags.TagDefsMap} : CerbMem.sizeofCtype tds objTy = 16 := rfl
+
+/-- The object type has positive size (the public create rules' `hsz`). -/
+theorem objTy_size_pos {tds : CerbTags.TagDefsMap} : 0 < CerbMem.sizeofCtype tds objTy := by
+  rw [objTy_size]
+  decide
 theorem objTy_nonatomic : atomicTy objTy = false := rfl
 
 /-- The long-array decode consults no side table (the layout's
@@ -262,31 +267,31 @@ theorem twoField_store_y {Ψ : SpikeVal → EnvStack → IProp GF}
   · iexact Hx
   · iexact Hy
 
-/-- ALLOCATE: from the abstract capacity `allocCap (⟨align, long[2]⟩ ::
-    rest)`, `create` delivers a fresh uninitialized two-field object
-    (both fields unspecified), the remaining capacity, and the address
-    bounds — the PUBLIC `wps_create` followed by `twoField_of_cell`. -/
+/-- ALLOCATE: from the allocation budget `allocBudget (allocCost
+    long[2] align)` (K2.5; formerly the plan `allocCap (⟨align, long[2]⟩
+    :: rest)`), `create` delivers a fresh uninitialized two-field object
+    (both fields unspecified) and the address bounds — the PUBLIC
+    `wps_create` followed by `twoField_of_cell`. A client holding more
+    budget splits it first (`allocBudget_split`). -/
 theorem twoField_create {Ψ : SpikeVal → EnvStack → IProp GF}
     (loc : CerbLocation.Loc) (ann : core_run_annotation)
-    (aprov : CerbMem.Provenance) (alignN : Int) (rest : List AllocReq)
+    (aprov : CerbMem.Provenance) (alignN : Int)
     (pref : prefix0) (ρ : EnvStack) :
-    iprop(allocCap M.tagDefs (GF := GF) (⟨alignN, objTy⟩ :: rest) ∗
+    iprop(allocBudget (GF := GF) (allocCost M.tagDefs objTy alignN) ∗
       (∀ p : CerbMem.PointerValue,
-        (twoField M.tagDefs p undefField undefField ∗ allocCap M.tagDefs rest ∗
+        (twoField M.tagDefs p undefField undefField ∗
           ⌜0 < addrOf p ∧ addrOf p < 2 ^ 64⌝) -∗
         Ψ (SpikeVal.pure (Vobject (OVpointer p))) ρ)) ⊢
       wps M Ls Ψ (createExpr loc ann (.IV aprov alignN) objTy pref) ρ := by
   iintro ⟨Hcap, HΨ⟩
-  iapply wps_create loc ann aprov ⟨alignN, objTy⟩ rest pref ρ objTy_nonatomic
+  iapply wps_create loc ann aprov alignN objTy pref ρ objTy_size_pos objTy_nonatomic
     (fun a => objTy_decIndep a _)
   isplitl [Hcap]
   · iexact Hcap
-  iintro %p ⟨Hpt, Hcap, %hb⟩
+  iintro %p ⟨Hpt, %hb⟩
   iapply HΨ
   isplitl [Hpt]
   · iapply twoField_of_cell M.tagDefs p $$ Hpt
-  isplitl [Hcap]
-  · iexact Hcap
   · ipureintro
     exact hb
 

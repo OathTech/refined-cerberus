@@ -28,7 +28,7 @@ id/address — the logic binds the pointer, the engine picks it).
 PROOF CLASSIFICATION (alloc arc P2, charter step 3 — the R-02
 conversion): ONE whole-program LOGICAL total theorem
 (`progAProd_wpt`: create through the PUBLIC `wpt_create` from
-`allocCap [⟨4, intTy⟩]`, store/load through the generic heap rules,
+`allocBudget (allocCost intTy 4)`, store/load through the generic heap rules,
 at derived budget 10) + the GENERIC adequacy/driver collapse
 (`wpt_driver_done_alloc` → `prod_run_eqJ`). The former operational
 create prefix (`prodA_pre`) and six-round termination trace
@@ -157,7 +157,7 @@ def ψA (tds : CerbTags.TagDefsMap) : value → Mem → Prop := fun v σ' =>
 
 /-- THE WHOLE PROGRAM AT THE TOTAL JUDGMENT, budget 10 (derived:
     create 2 + store-operand eval 1 + store 3 + load-operand eval 1 +
-    load 3): from `allocCap [⟨4, intTy⟩]` ALONE — the create through
+    load 3): from `allocBudget (allocCost intTy 4)` ALONE — the create through
     the PUBLIC `wpt_create`, the store/load through the generic heap
     rules at the PROGRAM-BOUND pointer. -/
 theorem progAProd_wpt [SpikeGS .hasLC GF]
@@ -165,7 +165,7 @@ theorem progAProd_wpt [SpikeGS .hasLC GF]
     (hex : ∀ x, resolveExtern M.extern x = x)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value))
     (hf : SymFrame ev0) :
-    iprop(allocCap M.tagDefs (GF := GF) [⟨4, intTy⟩]) ⊢
+    iprop(allocBudget (GF := GF) (allocCost M.tagDefs intTy 4)) ⊢
       wpt M Ls 10 (readoutPost (ψA M.tagDefs)) progAProd (ev0 :: evs) := by
   iintro Hcap
   rw [show progAProd =
@@ -179,12 +179,12 @@ theorem progAProd_wpt [SpikeGS .hasLC GF]
           (Pexpr [] () (PEsym pASym)) NA)))) from rfl,
     show (10 : Nat) = 2 + 8 from rfl]
   iapply wpt_seq_sym
-  iapply wpt_create loc0 empty_annotation .Prov_none ⟨4, intTy⟩ []
-    (PrefOther "spike-x") (ev0 :: evs) (Nat.le_refl 2) intTy_nonatomic
+  iapply wpt_create loc0 empty_annotation .Prov_none 4 intTy
+    (PrefOther "spike-x") (ev0 :: evs) (Nat.le_refl 2) intTy_size_pos intTy_nonatomic
     (fun a => intTy_decIndep a _)
   isplitl [Hcap]
   · iexact Hcap
-  iintro %p ⟨Hpt, -, -⟩
+  iintro %p ⟨Hpt, -⟩
   iexists (Vobject (OVpointer p))
   isplit
   · ipureintro
@@ -291,11 +291,11 @@ theorem exhibitA_prod (sup : Nat) (fs : CerbFS.FsState) (args : List String) :
         (fun l params cont hl => (hnolabel l params cont hl).elim)
         (fun _ _ _ _ => iprop(False))
         progAProd fmapEmpty [] prodMem₀ (∅ : SpikeHeapF SpikeCell)
-        [⟨4, intTy⟩] progAProd_frag
+        (allocCost fmapEmpty intTy 4) progAProd_frag
         (by rw [show pot progAProd = 4 from rfl,
             show lemDefaultFuel = 999999 + 1 from rfl]
             omega)
-        (prodMem₀_launchCoh [⟨4, intTy⟩] prod_one_int_plan_fits)
+        (prodMem₀_launchCoh _ prod_one_int_budget_fits)
         (ψA fmapEmpty) 10
         (by
           intro inst

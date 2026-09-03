@@ -30,7 +30,7 @@ PROOF CLASSIFICATION (alloc arc P2 steps 4-5 — the R-02 conversion):
 ALL THREE exports are WHOLE-PROGRAM LOGIC PROOFS. The two
 heap-allocating programs BIND their engine-created pointers (the P2
 pointer-flow design record, docs/2026-09-01_p2-notes.md), their
-creates cross the PUBLIC `wpt_create` from abstract capacity plans
+creates cross the PUBLIC `wpt_create` from allocation budgets
 (one-request for the counter, two-request for the reversal), their
 field stores cross the generic typed-subrange rules at the bound
 pointers, and the loops ride the total statement judgment — the
@@ -141,7 +141,7 @@ form (a dummy-initialized `save` in an untaken sseq arm, entry by
 `run` from outside it, and a per-iteration `lets s = 7` bind because
 the mirrored store-EVAL arm required non-value operands) is recorded
 in docs/2026-09-02_qa1-notes.md. The create crosses the logic through
-the PUBLIC `wpt_create` from the one-request plan; the whole program
+the PUBLIC `wpt_create` from the one-int budget; the whole program
 is ONE total judgment collapsed by the generic
 `wpt_driver_done_alloc` → `prod_run_eqJ` — no `Step.*`,
 per-step drive equation or `driverDone_step` anywhere in this
@@ -496,7 +496,7 @@ theorem ctr_blockSpecsT :
 theorem ctrProd_wpt (sbty : core_base_type) (hn : 0 ≤ n)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value))
     (hf : SymFrame ev0) :
-    iprop(allocCap (procCtx p rs).tagDefs (GF := GF) [⟨4, intTy⟩]) ⊢
+    iprop(allocBudget (GF := GF) (allocCost (procCtx p rs).tagDefs intTy 4)) ⊢
       wpt (procCtx p rs) (ctrLsT n)
         (2 + (ctrCost n.toNat + saveEntryCost (ctrParams xbty cbty n)))
         (readoutPost (ψC n))
@@ -509,12 +509,12 @@ theorem ctrProd_wpt (sbty : core_base_type) (hn : 0 ≤ n)
       (Expr [] (Esave (ctrLoopSym, sbty) (ctrParams xbty cbty n)
         (ctrBody ra mo bty)))) from rfl]
   iapply wpt_seq_sym
-  iapply wpt_create loc0 empty_annotation .Prov_none ⟨4, intTy⟩ []
-    (PrefOther "spike-x") (ev0 :: evs) (Nat.le_refl 2) intTy_nonatomic
+  iapply wpt_create loc0 empty_annotation .Prov_none 4 intTy
+    (PrefOther "spike-x") (ev0 :: evs) (Nat.le_refl 2) intTy_size_pos intTy_nonatomic
     (fun a => intTy_decIndep a _)
   isplitl [Hcap]
   · iexact Hcap
-  iintro %pptr ⟨Hpt, -, -⟩
+  iintro %pptr ⟨Hpt, -⟩
   iexists (Vobject (OVpointer pptr))
   isplit
   · ipureintro
@@ -662,12 +662,12 @@ theorem counter_loop_certified_production (sup : Nat) (ra : core_run_annotation)
           omega)
         (ctrLsT n)
         (counterProdProg ra mo bty xbty cbty sbty n) fmapEmpty []
-        prodMem₀ (∅ : SpikeHeapF SpikeCell) [⟨4, intTy⟩]
+        prodMem₀ (∅ : SpikeHeapF SpikeCell) (allocCost fmapEmpty intTy 4)
         (counterProdProg_frag ra mo bty xbty cbty sbty n)
         (by rw [counterProdProg_pot ra mo bty xbty cbty sbty n,
             show lemDefaultFuel = 999999 + 1 from rfl]
             omega)
-        (prodMem₀_launchCoh [⟨4, intTy⟩] prod_one_int_plan_fits)
+        (prodMem₀_launchCoh _ prod_one_int_budget_fits)
         (ψC n) (2 + (ctrCost n.toNat + saveEntryCost (ctrParams xbty cbty n)))
         (by
           intro inst
@@ -686,7 +686,7 @@ theorem counter_loop_certified_production (sup : Nat) (ra : core_run_annotation)
 production instance, WHOLE-PROGRAM LOGIC PROOF (alloc arc P2 step 5;
 the R-02 conversion). The program BUILDS its two-node chain with the
 engine's own operations, ALL THROUGH THE LOGIC: two creates through
-the PUBLIC `wpt_create` from a two-request plan (the fresh pointers
+the PUBLIC `wpt_create` from one two-node budget split across ∗ (the fresh pointers
 BOUND by the program — the P2 pointer-flow design record), four
 field stores through the generic typed-subrange rules at the bound
 pointers — the constants stored DIRECTLY (`store(long, n1, 1)`,
@@ -699,8 +699,8 @@ charter's demand): `lrBody`/`lrQ`/`lrLsT`/`lr_body_wpt` are consumed
 verbatim at the node list `[(i₁,1),(i₂,2)]` for the ENGINE-PICKED
 allocation ids i₁ i₂ (existential — the production label spec wraps
 the generic one in `∃ i₁ i₂`, transported by `wpt_mono_Ls`); the
-exact cold-start pointers live only in the plan's boundary
-evaluation (`lr_two_node_plan_fits`). The node-WF address bounds
+exact cold-start cursor lives only in the budget's boundary
+evaluation (`lr_two_node_budget_fits`). The node-WF address bounds
 `isList` demands come from the PUBLIC create rule's bounds export.
 The `save` node is the registration site and the entry (the pre-QA-1
 form — three constant binds, the save dummy-initialized in an untaken
@@ -1038,7 +1038,8 @@ theorem lrProd_blockSpecsT :
 theorem lrProd_wpt (bty sbty : core_base_type)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value))
     (hf : SymFrame ev0) :
-    iprop(allocCap (procCtx p rs).tagDefs (GF := GF) [⟨8, nodeTy⟩, ⟨8, nodeTy⟩]) ⊢
+    iprop(allocBudget (GF := GF)
+        (allocCost (procCtx p rs).tagDefs nodeTy 8 + allocCost (procCtx p rs).tagDefs nodeTy 8)) ⊢
       wpt (procCtx p rs) lrProdLsT
         (2 + (2 + ((3 + 1) + ((3 + 1) + ((3 + 1) + ((3 + 1) +
           (lrCost 2 + saveEntryCost (lrProdParams pbty cbty))))))))
@@ -1069,24 +1070,25 @@ theorem lrProd_wpt (bty sbty : core_base_type)
                   (lrBody loc0 empty_annotation ra mo bbty nbty ubty))))))))))))))
     from rfl]
   iapply wpt_seq_sym
-  iapply wpt_create loc0 empty_annotation .Prov_none ⟨8, nodeTy⟩
-    [⟨8, nodeTy⟩] (PrefOther "lr-n1") (ev0 :: evs) (Nat.le_refl 2)
-    nodeTy_nonatomic nodeTy_decIndep_undef
+  icases (allocBudget_split _ _).1 $$ Hcap with ⟨Hcap, Hcap₂⟩
+  iapply wpt_create loc0 empty_annotation .Prov_none 8 nodeTy
+    (PrefOther "lr-n1") (ev0 :: evs) (Nat.le_refl 2)
+    nodeTy_size_pos nodeTy_nonatomic nodeTy_decIndep_undef
   isplitl [Hcap]
   · iexact Hcap
-  iintro %p₁ ⟨Hpt₁, Hcap, %hb₁⟩
+  iintro %p₁ ⟨Hpt₁, %hb₁⟩
   iexists (Vobject (OVpointer p₁))
   isplit
   · ipureintro
     rfl
   rw [update_env_sym lrN1Sym bty]
   iapply wpt_seq_sym
-  iapply wpt_create loc0 empty_annotation .Prov_none ⟨8, nodeTy⟩
-    [] (PrefOther "lr-n2") _ (Nat.le_refl 2)
-    nodeTy_nonatomic nodeTy_decIndep_undef
-  isplitl [Hcap]
-  · iexact Hcap
-  iintro %p₂ ⟨Hpt₂, -, %hb₂⟩
+  iapply wpt_create loc0 empty_annotation .Prov_none 8 nodeTy
+    (PrefOther "lr-n2") _ (Nat.le_refl 2)
+    nodeTy_size_pos nodeTy_nonatomic nodeTy_decIndep_undef
+  isplitl [Hcap₂]
+  · iexact Hcap₂
+  iintro %p₂ ⟨Hpt₂, %hb₂⟩
   iexists (Vobject (OVpointer p₂))
   isplit
   · ipureintro
@@ -1406,22 +1408,14 @@ theorem lrProd_labeledAt (sup : Nat) (ra : core_run_annotation) (mo : memory_ord
   rw [fmapLookupBy_addBy_empty]
   rw [if_pos (by decide +kernel)]
 
-/-- The two-node plan fits the production cold-start cursor (closed
-    allocator arithmetic — the boundary evaluation of the concrete
-    plan; the exact cold-start pointers live HERE, not in the logic). -/
-theorem lr_two_node_plan_fits :
-    PlanFits fmapEmpty ⟨prodMem₀.lastAddress, prodMem₀.nextAllocId⟩
-      [⟨8, nodeTy⟩, ⟨8, nodeTy⟩] := by
-  rw [prodMem₀_lastAddress, prodMem₀_nextAllocId, PlanFits_cons_iff]
-  refine ⟨⟨freshBase errnoAddr 8 (CerbMem.sizeofCtype fmapEmpty nodeTy), 1 + 1⟩,
-    ?_, ?_⟩
-  · rw [advanceCursor_mk, nodeTy_size]
-    exact if_pos ⟨by decide, by decide⟩
-  · rw [PlanFits_cons_iff]
-    refine ⟨⟨freshBase (freshBase errnoAddr 8 (CerbMem.sizeofCtype fmapEmpty nodeTy))
-      8 (CerbMem.sizeofCtype fmapEmpty nodeTy), 1 + 1 + 1⟩, ?_, PlanFits_nil fmapEmpty _⟩
-    rw [advanceCursor_mk, nodeTy_size]
-    exact if_pos ⟨by decide, by decide⟩
+/-- The two-node budget fits the production cold-start cursor's headroom
+    (closed arithmetic — the boundary evaluation of the concrete
+    budget; the exact cold-start cursor lives HERE, not in the logic). -/
+theorem lr_two_node_budget_fits :
+    allocCost fmapEmpty nodeTy 8 + allocCost fmapEmpty nodeTy 8 ≤
+      headroom prodMem₀.lastAddress := by
+  rw [prodMem₀_lastAddress]
+  decide
 
 /-! ### THE EXPORT -/
 
@@ -1481,13 +1475,13 @@ theorem list_reverse_certified_production (sup : Nat) (ra : core_run_annotation)
           omega)
         lrProdLsT
         (lrProdProg ra mo bty sbty pbty cbty bbty nbty ubty) fmapEmpty []
-        prodMem₀ (∅ : SpikeHeapF SpikeCell) [⟨8, nodeTy⟩, ⟨8, nodeTy⟩]
+        prodMem₀ (∅ : SpikeHeapF SpikeCell)
+        (allocCost fmapEmpty nodeTy 8 + allocCost fmapEmpty nodeTy 8)
         (lrProdProg_frag ra mo bty sbty pbty cbty bbty nbty ubty)
         (by rw [lrProdProg_pot ra mo bty sbty pbty cbty bbty nbty ubty,
             show lemDefaultFuel = 999999 + 1 from rfl]
             omega)
-        (prodMem₀_launchCoh [⟨8, nodeTy⟩, ⟨8, nodeTy⟩]
-          lr_two_node_plan_fits)
+        (prodMem₀_launchCoh _ lr_two_node_budget_fits)
         ψL
         (2 + (2 + ((3 + 1) + ((3 + 1) + ((3 + 1) + ((3 + 1) +
           (lrCost 2 + saveEntryCost (lrProdParams pbty cbty))))))))

@@ -22,8 +22,8 @@ Phase-2 exit criterion).
 Also here: THE ALLOCATION CLIENT (`struct_create_store_wps` +
 `struct_create_store_adequacy`) — allocate a fresh struct and
 initialize its x field. CONVERTED at alloc arc P2 (charter items
-1-2): the client consumes the PUBLIC `wps_create` from the abstract
-capacity `allocCap [⟨align, structTy⟩]` (no cursor vocabulary; the
+1-2): the client consumes the PUBLIC `wps_create` from the allocation
+budget `allocBudget (allocCost structTy align)` (no cursor vocabulary; the
 program BINDS the fresh pointer with `lets p = create(...)` and
 stores through the bound symbol), and the adequacy theorem launches
 it against the real engine from the production cold-start memory
@@ -48,6 +48,11 @@ open Iris Iris.BI Iris.ProgramLogic
 def structTy : ctype := Ctype [] (.Array0 intTy (some 4))
 
 theorem structTy_size {tds : CerbTags.TagDefsMap} : CerbMem.sizeofCtype tds structTy = 16 := rfl
+
+/-- The struct type has positive size (the public create rules' `hsz`). -/
+theorem structTy_size_pos {tds : CerbTags.TagDefsMap} : 0 < CerbMem.sizeofCtype tds structTy := by
+  rw [structTy_size]
+  decide
 
 theorem structTy_nonatomic : atomicTy structTy = false := rfl
 
@@ -619,7 +624,7 @@ end StructViews
 /-! ## THE ALLOCATION CLIENT (alloc arc P2, charter items 1-2)
 
 The self-contained allocate-then-initialize program, proved through
-the PUBLIC create rule from the abstract capacity `allocCap` alone —
+the PUBLIC create rule from the allocation budget `allocBudget` alone —
 no cursor vocabulary anywhere (the fresh pointer is bound by the
 program's own `lets p = create(...)`, and the store goes through the
 bound symbol) — and exported to the engine through the
@@ -690,26 +695,25 @@ theorem structFrame_lookup_v {f : Fmap sym value} (hf : SymFrame f)
   rw [envAdd_lookup (hf.add _ _) symCmpK, if_pos (by decide +kernel)]
 
 /-- ALLOCATE-THEN-INITIALIZE, THE PUBLIC-RULE CLIENT (charter P2 item
-    1): from the abstract capacity `allocCap [⟨align, structTy⟩]`
-    ALONE, the whole program verifies — the create through the PUBLIC
-    `wps_create` (existential pointer, no cursor vocabulary), the
+    1): from the allocation budget `allocBudget (allocCost structTy
+    align)` ALONE, the whole program verifies — the create through the
+    PUBLIC `wps_create` (existential pointer, no cursor vocabulary), the
     x-field store through the generic typed-subrange rule at the
     program-bound pointer. The postcondition returns the initialized
-    fresh struct (existential pointer) and the spent capacity. -/
+    fresh struct (existential pointer); the budget is spent. -/
 theorem struct_create_store_wps
     (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (aprov : CerbMem.Provenance) (alignN : Int) (pref : prefix0)
     (mo : memory_order) (pbty vbty : core_base_type)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value))
     (hf : SymFrame ev0) (hex : ∀ x, resolveExtern M.extern x = x) :
-    iprop(allocCap M.tagDefs (GF := GF) [⟨alignN, structTy⟩]) ⊢
+    iprop(allocBudget (GF := GF) (allocCost M.tagDefs structTy alignN)) ⊢
       wps M Ls
         (fun w _ => iprop(∃ p : CerbMem.PointerValue,
           ⌜w.val = Vunit⌝ ∗
           pointsToCell M.tagDefs p (.own 1) structTy
             (spliceBytes fieldX (fiveBytes M.tagDefs)
-              (List.replicate (CerbMem.sizeofCtype M.tagDefs structTy) undefByte)) ∗
-          allocCap M.tagDefs []))
+              (List.replicate (CerbMem.sizeofCtype M.tagDefs structTy) undefByte))))
         (progCreateInit loc ann aprov alignN pref mo pbty vbty)
         (ev0 :: evs) := by
   iintro Hcap
@@ -721,11 +725,11 @@ theorem struct_create_store_wps
         (storeOpRedex loc ann intTy (Pexpr [] () (PEsym structPSym))
           (Pexpr [] () (PEsym structVSym)) mo)))) from rfl]
   iapply wps_seq_sym
-  iapply wps_create loc ann aprov ⟨alignN, structTy⟩ [] pref (ev0 :: evs)
-    structTy_nonatomic (fun a => structTy_decIndep a _)
+  iapply wps_create loc ann aprov alignN structTy pref (ev0 :: evs)
+    structTy_size_pos structTy_nonatomic (fun a => structTy_decIndep a _)
   isplitl [Hcap]
   · iexact Hcap
-  iintro %p ⟨Hpt, Hcap, -⟩
+  iintro %p ⟨Hpt, -⟩
   iexists (Vobject (OVpointer p))
   isplit
   · ipureintro
@@ -757,14 +761,12 @@ theorem struct_create_store_wps
   isplit
   · ipureintro
     rfl
-  isplitl [Hcell]
-  · iapply (pointsToCell_cellOwn_iff M.tagDefs _ _ _ _).mpr
-    iexists id, a
-    isplit
-    · ipureintro
-      exact hpv
-    · iexact Hcell
-  · iexact Hcap
+  iapply (pointsToCell_cellOwn_iff M.tagDefs _ _ _ _).mpr
+  iexists id, a
+  isplit
+  · ipureintro
+    exact hpv
+  · iexact Hcell
 
 end CreateIris
 
@@ -773,26 +775,22 @@ local entailment to an engine-facing theorem CLOSES): the program at
 the production cold-start memory, launched through the
 allocation-aware launcher. -/
 
-/-- The one-struct plan fits the production cold-start cursor
-    (closed allocator arithmetic — the boundary evaluation of the
-    concrete plan). -/
-theorem struct_plan_fits :
-    PlanFits fmapEmpty ⟨prodMem₀.lastAddress, prodMem₀.nextAllocId⟩
-      [⟨8, structTy⟩] := by
-  rw [prodMem₀_lastAddress, prodMem₀_nextAllocId, PlanFits_cons_iff]
-  refine ⟨⟨freshBase errnoAddr 8 (CerbMem.sizeofCtype fmapEmpty structTy), 1 + 1⟩,
-    ?_, PlanFits_nil fmapEmpty _⟩
-  rw [advanceCursor_mk, structTy_size]
-  exact if_pos ⟨by decide, by decide⟩
+/-- The one-struct budget fits the production cold-start cursor's
+    headroom (closed arithmetic — the boundary evaluation of the
+    concrete budget). -/
+theorem struct_budget_fits :
+    allocCost fmapEmpty structTy 8 ≤ headroom prodMem₀.lastAddress := by
+  rw [prodMem₀_lastAddress]
+  decide
 
 /-- ALLOCATE-THEN-INITIALIZE AS A BORING TRIPLE (the R-01 partial-lane
     closure consumer; since P6.1 THE CONSUMER OF THE ALLOCATING
     PROJECTION — since the 2026-09-02 professor review an INSTANCE of
     its pure headline `project_triple_pure_alloc`): the self-contained
     create-then-store program, at the straight-line profile, from the
-    EMPTY footprint with the one-request plan `[⟨8, structTy⟩]` —
-    `MemTripleU_alloc spikeCtx spikeEnv prog ∅ [⟨8, structTy⟩] ψ`:
-    for every memory launch-coherent with the plan (any frame `R`),
+    EMPTY footprint with the one-struct budget `allocCost structTy 8` —
+    `MemTripleU_alloc spikeCtx spikeEnv prog ∅ (allocCost structTy 8) ψ`:
+    for every memory launch-coherent with the budget (any frame `R`),
     the engine's drive (any length) never kills, never derails, and
     any delivered value is unit with the final memory holding the
     initialized fresh struct (existential allocation id/address: the
@@ -804,25 +802,25 @@ theorem struct_create_store_adequacy {GF : BundledGFunctors} [SpikeGpreS GF]
     (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (pref : prefix0) (mo : memory_order) (pbty vbty : core_base_type) :
     MemTripleU_alloc spikeCtx spikeEnv
-      (progCreateInit loc ann .Prov_none 8 pref mo pbty vbty) ∅ [⟨8, structTy⟩]
+      (progCreateInit loc ann .Prov_none 8 pref mo pbty vbty) ∅
+      (allocCost fmapEmpty structTy 8)
       (fun _ v σ' => v = Vunit ∧ ∃ i a : Int, CellCoh fmapEmpty σ' i ⟨a, structTy,
         spliceBytes fieldX (fiveBytes fmapEmpty)
           (List.replicate (CerbMem.sizeofCtype fmapEmpty structTy) undefByte)⟩) := by
-  -- the allocating projection at the spike profile: footprint ∅, plan
-  -- [⟨8, structTy⟩], the Iris post = `struct_create_store_wps`'s post
+  -- the allocating projection at the spike profile: footprint ∅, budget
+  -- `allocCost structTy 8`, the Iris post = `struct_create_store_wps`'s post
   refine project_triple_pure_alloc (GF := GF) (M := spikeCtx) spikeCtx_wf
     spikeCtx_labels_frag spikeCtx_labels_pot
     (progCreateInit_frag loc ann .Prov_none 8 pref mo pbty vbty)
     (Nat.le_trans (progCreateInit_frag loc ann .Prov_none 8 pref mo pbty vbty).pot_le_two
       (by rw [show esize (progCreateInit loc ann .Prov_none 8 pref mo pbty vbty) = 3
           from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega))
-    fmapEmpty [] (∅ : CellMap) [⟨8, structTy⟩]
+    fmapEmpty [] (∅ : CellMap) (allocCost fmapEmpty structTy 8)
     (fun w => iprop(∃ p : CerbMem.PointerValue,
       ⌜w.w.val = Vunit⌝ ∗
       pointsToCell fmapEmpty (GF := GF) p (.own 1) structTy
         (spliceBytes fieldX (fiveBytes fmapEmpty)
-          (List.replicate (CerbMem.sizeofCtype fmapEmpty structTy) undefByte)) ∗
-      allocCap fmapEmpty []))
+          (List.replicate (CerbMem.sizeofCtype fmapEmpty structTy) undefByte))))
     _ ?_ ?_
   · -- the Iris triple: `struct_create_store_wps` collapsed by `wps_sound`
     intro inst
@@ -843,14 +841,13 @@ theorem struct_create_store_adequacy {GF : BundledGFunctors} [SpikeGpreS GF]
     intro _ w R σ' mm mb mk hG
     refine .trans (BI.sep_mono .rfl BI.sep_elim_right) ?_
     refine (exists_consequence fun p => sep_consequence (pure_consequence _)
-      (sep_consequence (pointsToCell_consequence hG fmapEmpty p (.own 1) structTy _)
-        (BI.pure_intro True.intro))).trans ?_
-    exact BI.pure_mono fun ⟨_, hval, ⟨id, a, _, hcc⟩, _⟩ => ⟨hval, id, a, hcc⟩
+      (pointsToCell_consequence hG fmapEmpty p (.own 1) structTy _)).trans ?_
+    exact BI.pure_mono fun ⟨_, hval, ⟨id, a, _, hcc⟩⟩ => ⟨hval, id, a, hcc⟩
 
 /-- The boring triple INSTANTIATED at the production cold-start memory
     `prodMem₀` (frame ∅): the launch premise `LaunchCoh` is dischargeable
-    at a real engine memory — `prodMem₀_launchCoh` with the plan fitting
-    the actual cursor (`struct_plan_fits`). -/
+    at a real engine memory — `prodMem₀_launchCoh` with the budget within
+    the actual cursor's headroom (`struct_budget_fits`). -/
 theorem struct_create_store_adequacy_prodMem₀ {GF : BundledGFunctors} [SpikeGpreS GF]
     (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (pref : prefix0) (mo : memory_order) (pbty vbty : core_base_type)
@@ -872,7 +869,7 @@ theorem struct_create_store_adequacy_prodMem₀ {GF : BundledGFunctors} [SpikeGp
     (∅ : CellMap) (Iris.Std.LawfulPartialMap.disjoint_empty_right _) prodMem₀
     (by rw [show Iris.Std.PartialMap.union (∅ : CellMap) (∅ : CellMap) = ∅ from
           Iris.Std.LawfulPartialMap.union_empty_right]
-        exact prodMem₀_launchCoh [⟨8, structTy⟩] struct_plan_fits)
+        exact prodMem₀_launchCoh _ struct_budget_fits)
     n aids
 
 end CreateConsumer

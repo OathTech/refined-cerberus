@@ -19,9 +19,16 @@ GenHeaps coupled to the real `CerbMem.MemState` by `CohG`.
   (`metaOwn`). `objCell`/`regionCell` name the two allocators' cells.
 - A one-cell ALLOCATOR-CURSOR heap (`AllocCursor`: `lastAddress` and
   `nextAllocId`, the two `MemState` fields `allocateObject` reads and
-  writes; `cursorOwn`). Without it `create`'s reducibility is
-  unprovable from footprints; with it the out-of-memory arm is a pure
-  guard on owned state.
+  writes; `cursorOwn`). Since K2.5 its exclusive fragment lives INSIDE
+  the state interpretation (`budgetInterp`): no client owns the cursor.
+- THE ALLOCATION BUDGET (K2.5): the ∗-splittable capacity `allocBudget
+  n` — the fragment `◯ n` of an authoritative (ℕ, +) whose authority
+  `● B` the state interpretation holds under the coupling inequality
+  `B ≤ headroom lastAddress` (section "The allocation budget"). The
+  out-of-memory arm is excluded by that inequality: a `create` costs
+  `allocCost = sizeof ty + max(align, 1) − 1`, the engine's worst-case
+  cursor descent, and a cost within the headroom is a nonzero fresh
+  base (`freshBase_ne_zero_of_cost`).
 The whole-allocation `pointsToCell` is the MAXIMAL VIEW (offset 0,
 view type = allocation type) plus the image's decode-inertness fact;
 `SpikeCell`/`Coh`/`CellCoh` are the PURE footprint vocabulary of the
@@ -36,7 +43,7 @@ of the language instance (Caesium's global environment in RefinedC),
 so every predicate here whose footprint depends on type LAYOUT is
 indexed by it explicitly — `(tds : CerbTags.TagDefsMap)` on
 `StorableAt`, `CellCoh`, `Coh`, `decIndep`, `pointsToView`, `cellOwn`,
-`pointsToCell`, `advanceCursor`, `PlanFits`, `allocCap` and the memory
+`pointsToCell`, `allocCost`, `planCost` and the memory
 lemmas — and the rules generic in a `MachineCtx` supply `M.tagDefs`
 (the mirror's `Step.store/load/create` use `M.tagDefs` exactly as the
 engine uses its reader). The STATE INTERPRETATION computes no layout:
@@ -96,10 +103,12 @@ its PRESENCE carrying THE GLOBAL MEMORY WELL-FORMEDNESS INVARIANT
 `MemWF σ` (`CohG.wf`) plus the two ghost-side bounds `MemWF` cannot
 supply (tracked bytes and tracked metadata cells — alive or dead — at
 or above the cursor, `cur_byte_lo`/`cur_meta_lo`) — cursor-free
-launches owe nothing new. The allocation-aware launchers
-(`launchResources`, Adequacy.lean, under `LaunchCoh`, whose `wf` field
-is `MemWF σ`) mint the cursor cell and grant the abstract capacity
-`allocCap` (this file) to the public create rules; the cursor-free
+launches owe nothing new; and the budget authority `● B` under `B ≤
+headroom lastAddress` (`budgetInterp`, K2.5). The allocation-aware
+launchers (`launchResources`, Adequacy.lean, under `LaunchCoh … B`,
+whose `wf` field is `MemWF σ` and whose `budget` field is that
+inequality) mint the cursor cell and grant the ∗-splittable capacity
+`allocBudget B` (this file) to the public create rules; the cursor-free
 launchers remain for programs that do not allocate. FRESHNESS IS
 GLOBAL (K0, acceptance goal 3): `MemWF` (section "The global memory
 well-formedness invariant") states allocation-id discipline, live/dead
@@ -109,12 +118,13 @@ concrete allocation model, so a `create` is fresh from EVERY live
 allocation of the state, tracked or not (`create_fresh_global`); the
 production cold-start state satisfies it (`prodMem₀_memWF`,
 ProdEntry.lean); `loadM`/`storeM`/`allocateObject` preserve it
-(`MemWF.loadM`/`MemWF.storeM`/`MemWF.allocateObject`); `allocateRegion`
-and `killM` are K3's stated obligations. `allocCap reqs` is an ORDERED REQUEST PLAN over
-the exclusive cursor (`PlanFits`, whose guard is exactly
-`allocateObject_success`'s premise pair), weakened only to a prefix
-(`allocCap_weaken`) and never split across ∗ — the register row and
-walkthrough §4 state the cost and the additive alternative. The
+(`MemWF.loadM`/`MemWF.storeM`/`MemWF.allocateObject`) and `killM`
+preserves it (`MemWF.killM`, K2, both arms); `allocateRegion` is K3's
+one remaining stated obligation. The allocation capacity is the
+additive budget (K2.5): `allocBudget (a + b) ⊣⊢ allocBudget a ∗
+allocBudget b`, weakened at `≤` (`allocBudget_weaken`) — the ordered
+plan `allocCap reqs` it replaced is history (walkthrough §4, the
+record docs/2026-09-03_k2.5-notes.md). The
 union-member/function-pointer side tables are SYMBOLIC (read-only
 context): decode-inertness rides as a pure payload of `pointsToCell`
 (`decIndep`; per-view decode premises on the generic rules), and
@@ -2050,163 +2060,143 @@ structure AllocCursor where
   nextId : Int
   deriving Inhabited
 
-/-! ## The allocation plan (alloc arc P1.1 — the pure model of the
-abstract allocation-capacity policy)
+/-! ## The allocation budget — the pure engine bound (kill/free arc K2.5)
 
 An `AllocReq` is the client-visible read-set of one `create`: the
-alignment operand and the C object type. `advanceCursor` is the PURE
-image of one successful `allocateObject` on the cursor fields — it
-reuses EXACTLY the guards of `allocateObject_success` (this file,
-§"The allocator engine seam": `0 < sizeofCtype ty` pins the engine's
-`max 1` padding away, and `freshBase … ≠ 0` is the out-of-memory
-kill arm, CerbMem.lean:1479) and EXACTLY its cursor update
-(`lastAddress := freshBase la align (sizeof ty)`,
-`nextAllocId := nid + 1` — CerbMem.lean:1475-1490). `PlanFits` runs
-a request list IN ORDER (alignment rounding is not commutative —
-`planFits_order_sensitive` below). The type-specific non-atomic and
-decode-inert premises stay on the logical create rules, not here
-(charter P1.1). -/
+alignment operand and the C object type. It is KEPT as the pure
+vocabulary of plan-shaped statements (`planCost`, `wps_create_of_plan`);
+the ordered-plan model it used to drive (`advanceCursor`/`PlanFits`/
+`allocCap`, alloc arc P1.1) is RETIRED — the record is
+docs/2026-09-03_k2.5-notes.md.
 
-/-- One allocation request: alignment operand + C object type. -/
+THE ENGINE BOUND, verbatim from the pinned CerbMem.lean (`allocateObject`
+:1504-1531, `allocateRegion` :1533-1551 — the same arithmetic in both):
+`align := alignN.toNat.max 1`, `size` the byte count (`(sizeofCtype ty).max
+1` for an object, `sizeN.toNat` for a region), `addrAfterSize :=
+st.lastAddress - size`, `alignedAddr := alignDown addrAfterSize.toNat align`
+with `alignDown n a = n / a * a` (:1451); the allocation is KILLED
+("out of memory", :1513/:1541) iff `alignedAddr == 0`, otherwise
+`lastAddress := alignedAddr` (:1522/:1546). Two arithmetic consequences:
+
+(i) SUCCESS. `alignedAddr ≠ 0 ↔ size + align ≤ lastAddress`, i.e.
+    `allocCost = size + align − 1 ≤ headroom = lastAddress − 1`
+    (`freshBase_ne_zero_of_cost`, the sufficient direction the rules use).
+(ii) CONSUMPTION. The cursor descends by exactly
+    `size + (lastAddress − size) % align ≤ size + align − 1 = allocCost`,
+    so the headroom after a successful allocation is at least the headroom
+    before minus `allocCost` (`headroom_freshBase`).
+
+`allocCost` is the tightest ORDER-FREE bound: the exact descent depends on
+the cursor's residue modulo the alignment, i.e. on the sequence of
+preceding requests. That is exactly why an ordered plan and an additive
+budget are NOT interderivable at the launch: a plan can fit where the
+summed costs exceed the headroom (cursor 32: `[⟨16, 16 bytes⟩, ⟨8, 8
+bytes⟩]` fits — 32 → 16 → 8 — while the costs sum to 31 + 15 = 46 > 31);
+conversely a budget that fits never over-promises. The budget trades that
+slack for a ∗-splittable, order-free capacity (the notes, §2). -/
+
+/-- One allocation request: alignment operand + C object type (the pure
+    vocabulary of plan-shaped statements; see the section header). -/
 structure AllocReq where
   align : Int
   ty : ctype
 
-/-- One successful `allocateObject`, on the cursor fields alone.
-    Guard and update mirror `allocateObject_success` exactly (see
-    the section note above); `none` is the engine's out-of-memory
-    kill arm (or a zero-size type, which stays outside the logic). -/
-def advanceCursor (tds : CerbTags.TagDefsMap) (c : AllocCursor) (r : AllocReq) : Option AllocCursor :=
-  if 0 < CerbMem.sizeofCtype tds r.ty ∧
-      freshBase c.lastAddr r.align (CerbMem.sizeofCtype tds r.ty) ≠ 0 then
-    some ⟨freshBase c.lastAddr r.align (CerbMem.sizeofCtype tds r.ty),
-      c.nextId + 1⟩
-  else
-    none
+/-- The budget one `create` of `ty` at alignment operand `al` consumes:
+    `sizeof ty + max(al, 1) − 1`, the engine's worst-case cursor descent
+    (section header, (ii)). -/
+def allocCost (tds : CerbTags.TagDefsMap) (ty : ctype) (al : Int) : Nat :=
+  CerbMem.sizeofCtype tds ty + al.toNat.max 1 - 1
 
-/-- A request list fits a cursor when every request advances it, in
-    order. -/
-def PlanFits (tds : CerbTags.TagDefsMap) (c : AllocCursor) : List AllocReq → Prop
-  | [] => True
-  | r :: rs =>
-    match advanceCursor tds c r with
-    | some c' => PlanFits tds c' rs
-    | none => False
+/-- The summed cost of a request list — the plan-shaped reading of a
+    budget (`wps_create_of_plan`). -/
+def planCost (tds : CerbTags.TagDefsMap) : List AllocReq → Nat
+  | [] => 0
+  | r :: rs => allocCost tds r.ty r.align + planCost tds rs
 
-theorem advanceCursor_pos (tds : CerbTags.TagDefsMap) (c : AllocCursor) (r : AllocReq)
-    (hsz : 0 < CerbMem.sizeofCtype tds r.ty)
-    (hnz : freshBase c.lastAddr r.align (CerbMem.sizeofCtype tds r.ty) ≠ 0) :
-    advanceCursor tds c r =
-      some ⟨freshBase c.lastAddr r.align (CerbMem.sizeofCtype tds r.ty),
-        c.nextId + 1⟩ := by
-  unfold advanceCursor
-  rw [if_pos ⟨hsz, hnz⟩]
+/-- The cursor's HEADROOM at `la`: `la − 1`, the number of bytes an
+    allocation may consume before `alignedAddr` would reach the kill
+    value 0 (section header, (i)). -/
+def headroom (la : Int) : Nat := (la - 1).toNat
 
-/-- Inversion: a successful advance carries both engine guards and
-    pins the next cursor to the allocator arithmetic. (Deleting the
-    nonzero guard from `advanceCursor` breaks exactly this — and with
-    it the internal create rule's `allocateObject_success` discharge:
-    the P1.4 guard-deletion plant.) -/
-theorem advanceCursor_some_inv {c c' : AllocCursor} {r : AllocReq} (tds : CerbTags.TagDefsMap)
-    (h : advanceCursor tds c r = some c') :
-    0 < CerbMem.sizeofCtype tds r.ty ∧
-    freshBase c.lastAddr r.align (CerbMem.sizeofCtype tds r.ty) ≠ 0 ∧
-    c' = ⟨freshBase c.lastAddr r.align (CerbMem.sizeofCtype tds r.ty),
-      c.nextId + 1⟩ := by
-  unfold advanceCursor at h
-  split at h
-  · next hc => exact ⟨hc.1, hc.2, (Option.some.inj h).symm⟩
-  · cases h
+@[simp] theorem planCost_nil (tds : CerbTags.TagDefsMap) : planCost tds [] = 0 := rfl
 
-/-- Constructor-argument form (unfolds the projections; the concrete
-    unit tests rewrite with this). -/
-theorem advanceCursor_mk (tds : CerbTags.TagDefsMap) (la nid al : Int) (ty : ctype) :
-    advanceCursor tds ⟨la, nid⟩ ⟨al, ty⟩ =
-      if 0 < CerbMem.sizeofCtype tds ty ∧
-          freshBase la al (CerbMem.sizeofCtype tds ty) ≠ 0 then
-        some ⟨freshBase la al (CerbMem.sizeofCtype tds ty), nid + 1⟩
-      else none := rfl
+@[simp] theorem planCost_cons (tds : CerbTags.TagDefsMap) (r : AllocReq) (rs : List AllocReq) :
+    planCost tds (r :: rs) = allocCost tds r.ty r.align + planCost tds rs := rfl
 
-@[simp] theorem PlanFits_nil (tds : CerbTags.TagDefsMap) (c : AllocCursor) :
-    PlanFits tds c [] := trivial
+/-- A real object type has positive cost (the budget a `create` consumes
+    is never 0 — `allocBudget 0` buys nothing). -/
+theorem allocCost_pos (tds : CerbTags.TagDefsMap) (ty : ctype) (al : Int)
+    (hsz : 0 < CerbMem.sizeofCtype tds ty) : 0 < allocCost tds ty al := by
+  unfold allocCost
+  have h1 : 1 ≤ al.toNat.max 1 := Nat.le_max_right _ _
+  generalize al.toNat.max 1 = a at *
+  omega
 
-theorem PlanFits_cons_iff (tds : CerbTags.TagDefsMap) (c : AllocCursor) (r : AllocReq)
-    (rs : List AllocReq) :
-    PlanFits tds c (r :: rs) ↔
-      ∃ c', advanceCursor tds c r = some c' ∧ PlanFits tds c' rs := by
-  constructor
-  · intro h
-    unfold PlanFits at h
-    split at h
-    · next c' hc' => exact ⟨c', hc', h⟩
-    · exact h.elim
-  · rintro ⟨c', hc', h⟩
-    unfold PlanFits
-    rw [hc']
-    exact h
+/-- THE SUCCESS BOUND (section header, (i)): a positive-size allocation
+    whose cost fits the cursor's headroom does not hit the out-of-memory
+    arm — `alignedAddr ≠ 0`. -/
+theorem freshBase_ne_zero_of_cost (la al : Int) (size : Nat) (hsz : 0 < size)
+    (h : size + al.toNat.max 1 - 1 ≤ headroom la) :
+    freshBase la al size ≠ 0 := by
+  have ha : 0 < al.toNat.max 1 := Nat.lt_of_lt_of_le Nat.one_pos (Nat.le_max_right _ _)
+  have hdm := Nat.div_add_mod (la - size).toNat (al.toNat.max 1)
+  have hml := Nat.mod_lt (la - size).toNat ha
+  rw [Nat.mul_comm] at hdm
+  unfold headroom at h
+  unfold freshBase CerbMem.alignDown
+  generalize al.toNat.max 1 = a at *
+  generalize (la - (size : Int)).toNat / a * a = m at hdm ⊢
+  generalize (la - (size : Int)).toNat % a = r at hdm hml
+  intro hz
+  omega
 
-/-- Prefix weakening: a plan that fits still fits after dropping a
-    TAIL (stopping early is always allowed; dropping the HEAD is
-    not — see `planFits_order_sensitive`). -/
-theorem PlanFits.prefix {c : AllocCursor} {rs rs' : List AllocReq} (tds : CerbTags.TagDefsMap)
-    (h : PlanFits tds c (rs ++ rs')) : PlanFits tds c rs := by
-  induction rs generalizing c with
-  | nil => trivial
-  | cons r rs ih =>
-    rw [List.cons_append, PlanFits_cons_iff] at h
-    rw [PlanFits_cons_iff]
-    obtain ⟨c', hc', h⟩ := h
-    exact ⟨c', hc', ih h⟩
+/-- THE CONSUMPTION BOUND (section header, (ii)): after a successful
+    allocation the headroom has shrunk by at most the cost. -/
+theorem headroom_freshBase (la al : Int) (size : Nat) (hsz : 0 < size)
+    (h : size + al.toNat.max 1 - 1 ≤ headroom la) :
+    headroom la ≤ headroom (freshBase la al size) + (size + al.toNat.max 1 - 1) := by
+  have ha : 0 < al.toNat.max 1 := Nat.lt_of_lt_of_le Nat.one_pos (Nat.le_max_right _ _)
+  have hdm := Nat.div_add_mod (la - size).toNat (al.toNat.max 1)
+  have hml := Nat.mod_lt (la - size).toNat ha
+  rw [Nat.mul_comm] at hdm
+  unfold headroom at h ⊢
+  unfold freshBase CerbMem.alignDown
+  generalize al.toNat.max 1 = a at *
+  generalize (la - (size : Int)).toNat / a * a = m at hdm ⊢
+  generalize (la - (size : Int)).toNat % a = r at hdm hml
+  omega
 
-/-! The P1.4 pure unit tests, generic over ANY 4-byte object type
-(no example constants in this module — the charter's merge-row-2
-constraint; the exhibits instantiate these at `intTy`). -/
+/-! ## The allocation budget — the ghost algebra (kill/free arc K2.5)
 
-/-- PLAN-ORDER SENSITIVITY: at a 4-byte type, `[align 16, align 1]`
-    fits cursor 21 (16-aligned base 16, then base 12) but the SWAPPED
-    plan does not (align-1 base 17, then `alignDown 13 16 = 0` — the
-    out-of-memory arm). Request order is semantically binding. -/
-theorem planFits_order_sensitive (tds : CerbTags.TagDefsMap) (ty : ctype)
-    (h4 : CerbMem.sizeofCtype tds ty = 4) :
-    PlanFits tds ⟨21, 0⟩ [⟨16, ty⟩, ⟨1, ty⟩] ∧
-      ¬ PlanFits tds ⟨21, 0⟩ [⟨1, ty⟩, ⟨16, ty⟩] := by
-  constructor
-  · rw [PlanFits_cons_iff]
-    refine ⟨⟨freshBase 21 16 (CerbMem.sizeofCtype tds ty), 0 + 1⟩, ?_, ?_⟩
-    · rw [advanceCursor_mk, h4]
-      exact if_pos ⟨by decide, by decide⟩
-    · rw [PlanFits_cons_iff]
-      refine ⟨⟨freshBase (freshBase 21 16 (CerbMem.sizeofCtype tds ty)) 1
-        (CerbMem.sizeofCtype tds ty), 0 + 1 + 1⟩, ?_, PlanFits_nil tds _⟩
-      rw [advanceCursor_mk, h4]
-      exact if_pos ⟨by decide, by decide⟩
-  · intro h
-    rw [PlanFits_cons_iff] at h
-    obtain ⟨c', hc', h⟩ := h
-    rw [advanceCursor_mk, h4, if_pos ⟨by decide, by decide⟩] at hc'
-    obtain rfl := Option.some.inj hc'
-    rw [PlanFits_cons_iff] at h
-    obtain ⟨c'', hc'', -⟩ := h
-    rw [advanceCursor_mk, h4,
-      if_neg (fun hcon => hcon.2 (by decide))] at hc''
-    cases hc''
+THE CAMERA is iris-lean's authoritative (ℕ, +): `Auth Credit` with `Credit
+:= Nat` under the `CommMonoidLike` constant-core UCMRA
+(Iris/Algebra/Numbers.lean — op is `+`, unit `0`, inclusion is `≤`), the
+SAME camera iris-lean's later credits use (Iris/Instances/Lib/
+LaterCredits.lean: `lc i := ◯ i`, `lc_supply i := ● i`, `lc_split`,
+`lc_supply_bound`, `lc_decrease_supply` — the budget laws below are those
+four, renamed). Its functor slot `AuthURF (constOF Credit)` is already in
+every `GF` through `InvGpreS.toLcGpreS.lc_elem`, so the budget adds NO
+functor to the ghost state — only a fresh ghost name (`BudgetGS.name`;
+the later credits live at `LcGS.lc_name`). `allocBudget n` is the
+fragment `◯ n` (the client's ∗-splittable capacity, `allocBudget_split`);
+`budgetAuth B` is the authority `● B`, held by the state interpretation
+under THE COUPLING INEQUALITY `B ≤ headroom lastAddress` (`budgetInterp`
+below; `allocBudget_le_headroom`). RefinedC has no counterpart: Caesium
+never refuses an allocation (`alloc_new_blocks`, theories/caesium/lang.v —
+no failure arm), so the tiebreaker is silent; the shape is the classical
+additive capacity both professor reviews asked for (review-1 Q1,
+review-2 Q1 and "Deliver the additive capacity face"). -/
 
-/-- INSUFFICIENT PLAN: a 4-byte request cannot fit cursor 2 (the
-    fresh range would underflow to base 0 — the engine's kill arm).
-    An empty or too-small capacity proves no create (the create rules
-    consume `PlanFits` through `advanceCursor_some_inv`). -/
-theorem planFits_insufficient (tds : CerbTags.TagDefsMap) (ty : ctype)
-    (h4 : CerbMem.sizeofCtype tds ty = 4) :
-    ¬ PlanFits tds ⟨2, 0⟩ [⟨1, ty⟩] := by
-  intro h
-  rw [PlanFits_cons_iff] at h
-  obtain ⟨c', hc', -⟩ := h
-  rw [advanceCursor_mk, h4,
-    if_neg (fun hcon => hcon.2 (by decide))] at hc'
-  cases hc'
+/-- The budget's ghost slot: the functor element (the later credits'
+    — same camera; never registered as an instance, so the two never
+    compete) and a ghost name of its own. -/
+structure BudgetGS (GF : BundledGFunctors) where
+  elem : ElemG GF (Auth.AuthURF (constOF Credit))
+  name : GName
 
 /-- Ghost-state prerequisites: invariants + the three GenHeaps
-    (bytes, allocation metadata, allocator cursor). -/
+    (bytes, allocation metadata, allocator cursor). The budget's
+    functor rides in `InvGpreS` (the later-credit slot). -/
 class SpikeGpreS (GF : BundledGFunctors) extends InvGpreS GF where
   byte_pre : genHeapPreS Int CerbMem.AbsByte GF SpikeHeapF
   meta_pre : genHeapPreS Int MetaCell GF SpikeHeapF
@@ -2224,6 +2214,8 @@ class SpikeGS (hlc : outParam HasLC) (GF : BundledGFunctors) where
   byteGS : genHeapGS Int CerbMem.AbsByte GF SpikeHeapF
   metaGS : genHeapGS Int MetaCell GF SpikeHeapF
   cursorGS : genHeapGS Int AllocCursor GF SpikeHeapF
+  /-- the allocation budget's ghost slot (K2.5) -/
+  budgetGS : BudgetGS GF
 
 variable {hlc : HasLC} {GF : BundledGFunctors}
 
@@ -2256,6 +2248,165 @@ def bytesOwn [SpikeGS hlc GF] (a : Int) (dq : DFrac) :
     List CerbMem.AbsByte → IProp GF
   | [] => iprop(emp)
   | b :: bs => iprop(byteOwn a dq b ∗ bytesOwn (a + 1) dq bs)
+
+/-! ### The budget resource and its laws -/
+
+section Budget
+open Auth CommMonoidLike
+
+/-- THE ∗-SPLITTABLE ALLOCATION CAPACITY: the fragment `◯ n` of the
+    authoritative (ℕ, +). `allocBudget (a + b) ⊣⊢ allocBudget a ∗
+    allocBudget b` (`allocBudget_split`); one `create` of `ty` at
+    alignment `al` consumes `allocBudget (allocCost tds ty al)`
+    (`create_atomic`, Rules.lean). -/
+def allocBudget [SpikeGS hlc GF] (n : Nat) : IProp GF :=
+  iOwn (E := (SpikeGS.budgetGS (hlc := hlc) (GF := GF)).elem)
+    (SpikeGS.budgetGS (hlc := hlc) (GF := GF)).name (◯ (n : Credit))
+
+/-- The budget AUTHORITY `● B` (state-interpretation side only): the
+    total capacity handed out, coupled to the cursor by `budgetInterp`. -/
+def budgetAuth [SpikeGS hlc GF] (B : Nat) : IProp GF :=
+  iOwn (E := (SpikeGS.budgetGS (hlc := hlc) (GF := GF)).elem)
+    (SpikeGS.budgetGS (hlc := hlc) (GF := GF)).name (● (B : Credit))
+
+/-- THE SPLIT LAW (iris-lean `lc_split`, renamed). -/
+theorem allocBudget_split [SpikeGS hlc GF] (a b : Nat) :
+    allocBudget (hlc := hlc) (GF := GF) (a + b) ⊣⊢ iprop(allocBudget a ∗ allocBudget b) := by
+  letI inst := (SpikeGS.budgetGS (hlc := hlc) (GF := GF)).elem
+  unfold allocBudget
+  refine .trans ?_ (iOwn_op (E := inst))
+  exact .rfl
+
+/-- Weakening: a budget serves any smaller need (replaces the plan's
+    prefix-only `allocCap_weaken`; any component may hold MORE than it
+    spends). -/
+theorem allocBudget_weaken [SpikeGS hlc GF] (a b : Nat) :
+    allocBudget (hlc := hlc) (GF := GF) (a + b) ⊢ allocBudget a :=
+  (allocBudget_split a b).1.trans BI.sep_elim_left
+
+/-- Weakening at `≤`. -/
+theorem allocBudget_le [SpikeGS hlc GF] {a b : Nat} (h : a ≤ b) :
+    allocBudget (hlc := hlc) (GF := GF) b ⊢ allocBudget a := by
+  obtain ⟨k, rfl⟩ := Nat.exists_eq_add_of_le h
+  exact allocBudget_weaken a k
+
+/-- The authority bounds every fragment (iris-lean `lc_supply_bound`). -/
+theorem budgetAuth_bound [SpikeGS hlc GF] (B n : Nat) :
+    iprop(budgetAuth (hlc := hlc) (GF := GF) B ∗ allocBudget n) ⊢ (⌜n ≤ B⌝ : IProp GF) := by
+  letI := (SpikeGS.budgetGS (hlc := hlc) (GF := GF)).elem
+  unfold budgetAuth allocBudget
+  iintro ⟨Ha, Hf⟩
+  icases iOwn_cmraValid_op $$ [$Ha $Hf] with %Hvalid
+  ipureintro
+  obtain ⟨⟨k, hk⟩, -⟩ := auth_both_valid_discrete.mp Hvalid
+  rw [hk]
+  exact n.le_add_right k
+
+/-- Spending: the authority absorbs a fragment (iris-lean
+    `lc_decrease_supply`). -/
+theorem budgetAuth_consume [SpikeGS hlc GF] (n m : Nat) :
+    iprop(budgetAuth (hlc := hlc) (GF := GF) (n + m) ∗ allocBudget n) ==∗ budgetAuth m := by
+  letI inst := (SpikeGS.budgetGS (hlc := hlc) (GF := GF)).elem
+  unfold budgetAuth allocBudget
+  iintro ⟨Ha, Hf⟩
+  imod iOwn_update_op (E := inst)
+    (auth_update (a := ((n + m : Nat) : Credit)) (b := (n : Credit)) (a' := (m : Credit))
+      (b' := (0 : Credit))
+      (leftCancelAdd_local_update (by show n + m + 0 = m + n; omega))) $$ [Ha Hf] with H
+  · isplitl [Ha] <;> iassumption
+  icases iOwn_op $$ H with ⟨H, -⟩
+  imodintro
+  iexact H
+
+/-- Granting: from the empty authority, mint a total `B` and hand out
+    the fragment `allocBudget B` (iris-lean `lc_increase_supply`). -/
+theorem budgetAuth_grant [SpikeGS hlc GF] (B : Nat) :
+    budgetAuth (hlc := hlc) (GF := GF) 0 ==∗ iprop(budgetAuth B ∗ allocBudget B) := by
+  letI inst := (SpikeGS.budgetGS (hlc := hlc) (GF := GF)).elem
+  unfold budgetAuth allocBudget
+  iintro H
+  imod iOwn_update (E := inst) $$ H with Hown
+  · exact auth_update_alloc (a := (0 : Credit)) (a' := (B : Credit)) (b' := (B : Credit))
+      (leftCancelAdd_local_update (by show 0 + B = B + 0; omega))
+  icases iOwn_op $$ Hown with ⟨Ha, Hf⟩
+  imodintro
+  isplitl [Ha]
+  · iexact Ha
+  · iexact Hf
+
+/-- The launch step: allocate the budget's ghost cell at the empty
+    authority (the `genHeap_init` analogue; the functor element is the
+    later-credit slot every `GF` carries). -/
+theorem budgetInit [E : ElemG GF (Auth.AuthURF (constOF Credit))] :
+    ⊢ (|==> ∃ G : BudgetGS GF, iOwn (E := G.elem) G.name (● (0 : Credit)) : IProp GF) := by
+  imod (iOwn_alloc (E := E) (● (0 : Credit)) (auth_valid.mpr trivial)) with ⟨%γ, H⟩
+  imodintro
+  iexists ⟨E, γ⟩
+  iexact H
+
+/-- The launched authority, read at the bundled instance (the launchers
+    build `SpikeGS` from `budgetInit`'s slot and cross this `rfl`). -/
+theorem budgetAuth_of_init [SpikeGS hlc GF] :
+    iOwn (E := (SpikeGS.budgetGS (hlc := hlc) (GF := GF)).elem)
+      (SpikeGS.budgetGS (hlc := hlc) (GF := GF)).name (● (0 : Credit)) ⊢
+      budgetAuth (hlc := hlc) (GF := GF) 0 := by
+  unfold budgetAuth
+  exact .rfl
+
+/-- THE BUDGET'S STATE-INTERPRETATION CONJUNCT: the authority `● B`
+    under the coupling inequality `B ≤ headroom lastAddress`, stated
+    through the cursor cell (which `CohG.cursor` ties to the real
+    `lastAddress`). The cursor's exclusive fragment `cursorOwn c` lives
+    HERE since K2.5 — no client owns the cursor any more (the budget
+    only needs the bound; the exact value stays tracked by `CohG.cursor`
+    and `MemWF.cursor_lo`); a nonzero total forces a cursor cell, so
+    every allocation finds `CohG`'s conditional facts (`wf`,
+    `cur_byte_lo`, `cur_meta_lo`) non-vacuous. The cursor-free launches
+    take the left disjunct at `B = 0`. -/
+def budgetInterp [SpikeGS hlc GF] (mk : SpikeHeapF AllocCursor) : IProp GF :=
+  iprop(∃ B : Nat, budgetAuth B ∗
+    (⌜B = 0⌝ ∨ ∃ c : AllocCursor,
+      ⌜Iris.Std.PartialMap.get? mk 0 = some c ∧ B ≤ headroom c.lastAddr⌝ ∗ cursorOwn c))
+
+theorem budgetInterp_iff [SpikeGS hlc GF] (mk : SpikeHeapF AllocCursor) :
+    budgetInterp (hlc := hlc) (GF := GF) mk ⊣⊢
+      iprop(∃ B : Nat, budgetAuth B ∗
+        (⌜B = 0⌝ ∨ ∃ c : AllocCursor,
+          ⌜Iris.Std.PartialMap.get? mk 0 = some c ∧ B ≤ headroom c.lastAddr⌝ ∗ cursorOwn c)) :=
+  .rfl
+
+/-- The cursor-free form: the empty authority satisfies the conjunct at
+    any cursor map. -/
+theorem budgetInterp_zero [SpikeGS hlc GF] (mk : SpikeHeapF AllocCursor) :
+    budgetAuth (hlc := hlc) (GF := GF) 0 ⊢ budgetInterp mk := by
+  unfold budgetInterp
+  iintro H
+  iexists 0
+  isplitl [H]
+  · iexact H
+  · ileft
+    ipureintro
+    rfl
+
+/-- The allocation-aware form: authority `B` plus the cursor cell at
+    headroom `≥ B`. -/
+theorem budgetInterp_intro [SpikeGS hlc GF] (mk : SpikeHeapF AllocCursor)
+    (c : AllocCursor) (B : Nat)
+    (hget : Iris.Std.PartialMap.get? mk 0 = some c) (hB : B ≤ headroom c.lastAddr) :
+    iprop(budgetAuth (hlc := hlc) (GF := GF) B ∗ cursorOwn c) ⊢ budgetInterp mk := by
+  unfold budgetInterp
+  iintro ⟨Ha, Hc⟩
+  iexists B
+  isplitl [Ha]
+  · iexact Ha
+  · iright
+    iexists c
+    isplitr [Hc]
+    · ipureintro
+      exact ⟨hget, hB⟩
+    · iexact Hc
+
+end Budget
 
 /-! ## The coupling invariant (ghost side) -/
 
@@ -2333,16 +2484,17 @@ theorem CohG.cur_meta_lt {σ : Mem} {mm : SpikeHeapF MetaCell} {mb : SpikeHeapF 
     exact (hG.wf hne).dead_lt id hdead
 
 /-- The state interpretation: memory only (no driver state), coupled
-    to the three ghost maps by CohG. -/
+    to the three ghost maps by CohG, plus the budget authority under
+    its coupling inequality (`budgetInterp`, K2.5). -/
 instance SpikeState [SpikeGS hlc GF] : StateInterp Mem Empty GF where
   stateInterp σ _ _ _ := iprop(∃ mm mb mk, ⌜CohG σ mm mb mk⌝ ∗
-    metaInterp mm ∗ byteInterp mb ∗ cursorInterp mk)
+    metaInterp mm ∗ byteInterp mb ∗ cursorInterp mk ∗ budgetInterp mk)
 
 theorem stateInterp_eq [SpikeGS hlc GF] (σ : Mem) (ns : Nat)
     (κs : List Empty) (nt : Nat) :
     stateInterp (GF := GF) σ ns κs nt =
       iprop(∃ mm mb mk, ⌜CohG σ mm mb mk⌝ ∗
-        metaInterp mm ∗ byteInterp mb ∗ cursorInterp mk) := rfl
+        metaInterp mm ∗ byteInterp mb ∗ cursorInterp mk ∗ budgetInterp mk) := rfl
 
 /-! ## The view stratum: typed subrange ownership -/
 
@@ -3263,61 +3415,10 @@ theorem pointsToCell_deadObj_false (tds : CerbTags.TagDefsMap) (id a a' : Int) (
 
 end K1Bundles
 
-/-! ## The abstract allocation capacity (alloc arc P1.1)
-
-`allocCap reqs` certifies that the known finite request list `reqs`
-will not hit the allocator's out-of-memory kill arm — the charter's
-recommended abstract finite allocation-capacity resource, faithful
-to the deterministic downward cursor while hiding it.
-
-IMPLEMENTATION (this module and the create-rule internals only):
-existential ownership of the cursor fragment plus a pure `PlanFits`
-proof. CLIENT DISCIPLINE (the public abstraction): clients use ONLY
-the introduction/weakening lemmas below plus the public create
-rules; client-visible statements never name `AllocCursor`,
-`lastAddress`/`nextAllocId`, `freshBase` or `cursorOwn` (the P1
-grep test, recorded in the slice notes). -/
-
-section AllocCap
-
-/-- The abstract finite allocation capacity for a request plan. The
-    machine bound on the hidden cursor (alloc arc P2) is what lets
-    the public create rules export address-WF bounds for the fresh
-    pointer (`freshBase_lt_two64`) without naming the cursor. -/
-def allocCap [SpikeGS hlc GF] (tds : CerbTags.TagDefsMap) (reqs : List AllocReq) : IProp GF :=
-  iprop(∃ c : AllocCursor, cursorOwn c ∗
-    ⌜PlanFits tds c reqs ∧ c.lastAddr ≤ 2 ^ 64⌝)
-
-/-- Introduction (implementation/launch side): cursor ownership plus
-    a fitting plan at a machine-bounded cursor. Clients receive
-    `allocCap` from the allocation-aware launchers; they never build
-    it. -/
-theorem allocCap_intro [SpikeGS hlc GF] (tds : CerbTags.TagDefsMap) (c : AllocCursor)
-    (reqs : List AllocReq) (hfit : PlanFits tds c reqs)
-    (hla : c.lastAddr ≤ 2 ^ 64) :
-    cursorOwn (GF := GF) c ⊢ allocCap tds reqs := by
-  unfold allocCap
-  iintro Hc
-  iexists c
-  isplitl [Hc]
-  · iexact Hc
-  · ipureintro
-    exact ⟨hfit, hla⟩
-
-/-- Weakening: capacity for a longer plan serves any PREFIX (a
-    client may stop allocating early; it may never reorder or skip
-    a request — `planFits_order_sensitive`). -/
-theorem allocCap_weaken [SpikeGS hlc GF] (tds : CerbTags.TagDefsMap) (reqs rest : List AllocReq) :
-    allocCap tds (GF := GF) (reqs ++ rest) ⊢ allocCap tds reqs := by
-  unfold allocCap
-  iintro ⟨%c, Hc, %hfit⟩
-  iexists c
-  isplitl [Hc]
-  · iexact Hc
-  · ipureintro
-    exact ⟨hfit.1.prefix, hfit.2⟩
-
-end AllocCap
+/-! The former "abstract allocation capacity" section (`allocCap`,
+`allocCap_intro`, `allocCap_weaken`; alloc arc P1.1-P1.4) was RETIRED
+at K2.5 in favour of the ∗-splittable `allocBudget` above
+(docs/2026-09-03_k2.5-notes.md, the pruned-names table). -/
 
 /-! ## Ghost extraction and update (the rule-facing interp lemmas) -/
 

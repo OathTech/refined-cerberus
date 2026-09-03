@@ -1573,8 +1573,8 @@ theorem cerberusRound_refused_load (M : MachineCtx)
 
 /-- The refusal classification at a CREATE redex: the out-of-memory
     kill (CerbMem.lean:1513, `Other (MerrOther "out of memory")`, lifted
-    to `Other (DErr_memory _)`) — the arm `allocCap`'s plan-fit
-    excludes. -/
+    to `Other (DErr_memory _)`) — the arm the budget's coupling
+    inequality excludes (`create_atomic`, K2.5). -/
 theorem cerberusRound_refused_create (M : MachineCtx)
     {loc : CerbLocation.Loc} {ann : core_run_annotation}
     {align : CerbMem.IntegerValue} {ty : ctype} {pref : prefix0}

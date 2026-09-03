@@ -537,13 +537,15 @@ theorem wpt_engine_boundU {GF : BundledGFunctors} [SpikeGpreS GF]
     (∅ : SpikeHeapF CerbMem.AbsByte)) with ⟨%Gb, Hbi, -, -⟩
   imod (genHeap_init (L := Int) (V := AllocCursor) (H := SpikeHeapF)
     (∅ : SpikeHeapF AllocCursor)) with ⟨%Gk, Hki, -, -⟩
+  imod budgetInit with ⟨%Gc, HBa⟩
   letI instGS : SpikeGS .hasLC GF :=
-    { byteGS := Gb, metaGS := Gm, cursorGS := Gk }
+    { byteGS := Gb, metaGS := Gm, cursorGS := Gk, budgetGS := Gc }
+  ihave HB0 := budgetAuth_of_init (hlc := .hasLC) (GF := GF) $$ HBa
   imod (spikeCells_alloc M.tagDefs σ₀ m₀ hcoh) $$ [$Hmi $Hbi]
     with ⟨%mm, %mb, %hmbo, Hmi, Hbi, Hcells⟩
   ihave HW := hwp $$ Hcells
   icases HW with ⟨HB, Hwpt⟩
-  ihave Hσ : stateInterp (GF := GF) σ₀ 0 ([] : List Empty) 0 $$ [Hmi Hbi Hki]
+  ihave Hσ : stateInterp (GF := GF) σ₀ 0 ([] : List Empty) 0 $$ [Hmi Hbi Hki HB0]
   · rw [stateInterp_eq]
     iexists mm, mb, (∅ : SpikeHeapF AllocCursor)
     isplit
@@ -553,14 +555,17 @@ theorem wpt_engine_boundU {GF : BundledGFunctors} [SpikeGpreS GF]
     · iexact Hmi
     isplitl [Hbi]
     · iexact Hbi
+    isplitl [Hki]
     · iexact Hki
+    · iapply budgetInterp_zero
+      iexact HB0
   iapply wpt_drive_aux hwf hQf hQpot Ls ψ k e₀ ev00 evs0 σ₀ 0 0 aids
     hfrag hpot $$ [$Hσ $HB $Hwpt]
 
 /-- ALLOCATION-AWARE total engine bound (alloc arc P1.3): as
     `wpt_engine_boundU`, but launched through the one shared
     `launchResources` helper — the client's total proof receives the
-    footprint cells AND `allocCap reqs`; the cursor ghost heap is
+    footprint cells AND the budget `allocBudget B` (K2.5); the cursor ghost heap is
     launched NONEMPTY at the real `⟨lastAddress, nextAllocId⟩`. The
     cursor-free launcher above remains for no-allocation programs
     (charter P1.3's incremental-migration allowance). PROVISIONAL:
@@ -573,13 +578,13 @@ theorem wpt_engine_boundU_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
       pot cont ≤ lemDefaultFuel)
     (Ls : ∀ [SpikeGS .hasLC GF], LabelSpecT GF)
     (e₀ : CoreExpr) (ev00 : Fmap sym value) (evs0 : List (Fmap sym value))
-    (σ₀ : Mem) (m₀ : SpikeHeapF SpikeCell) (reqs : List AllocReq)
+    (σ₀ : Mem) (m₀ : SpikeHeapF SpikeCell) (B : Nat)
     (hfrag : Frag e₀) (hpot : pot e₀ ≤ lemDefaultFuel)
-    (hl : LaunchCoh M.tagDefs σ₀ m₀ reqs)
+    (hl : LaunchCoh M.tagDefs σ₀ m₀ B)
     (ψ : value → Mem → Prop) (k : Nat)
     (hwp : ∀ [SpikeGS .hasLC GF],
       iprop(([∗map] i ↦ c ∈ m₀, cellOwn M.tagDefs (hlc := .hasLC) (GF := GF) i
-          (.own 1) c) ∗ allocCap M.tagDefs reqs) ⊢
+          (.own 1) c) ∗ allocBudget B) ⊢
         iprop(blockSpecsT M Ls (readoutPost ψ) ∗
           wpt M Ls k (readoutPost ψ) e₀ (ev00 :: evs0)))
     (aids : Nat → Nat) :
@@ -596,9 +601,11 @@ theorem wpt_engine_boundU_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
     (∅ : SpikeHeapF CerbMem.AbsByte)) with ⟨%Gb, Hbi, -, -⟩
   imod (genHeap_init (L := Int) (V := AllocCursor) (H := SpikeHeapF)
     (∅ : SpikeHeapF AllocCursor)) with ⟨%Gk, Hki, -, -⟩
+  imod budgetInit with ⟨%Gc, HBa⟩
   letI instGS : SpikeGS .hasLC GF :=
-    { byteGS := Gb, metaGS := Gm, cursorGS := Gk }
-  imod (launchResources M.tagDefs σ₀ m₀ reqs hl) $$ [$Hmi $Hbi $Hki]
+    { byteGS := Gb, metaGS := Gm, cursorGS := Gk, budgetGS := Gc }
+  ihave HB0 := budgetAuth_of_init (hlc := .hasLC) (GF := GF) $$ HBa
+  imod (launchResources M.tagDefs σ₀ m₀ B hl) $$ [$Hmi $Hbi $Hki $HB0]
     with ⟨Hσ, Hcells, Hcap⟩
   ihave HW := hwp $$ [$Hcells $Hcap]
   icases HW with ⟨HB, Hwpt⟩

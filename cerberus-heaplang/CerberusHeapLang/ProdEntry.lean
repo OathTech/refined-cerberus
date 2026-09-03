@@ -61,9 +61,9 @@ production `runND` equations for the loop RUNS themselves are the
 On `create`: an UNCONDITIONAL `wp_create` from cell ownership alone is
 unprovable — `allocateObject` can kill ("out of memory",
 CerbMem.lean:1479) from configurations no cell footprint constrains.
-The allocator-cursor resource supplies the missing authority: the
-create rules take the abstract capacity `allocCap` (Heap.lean), the
-allocation-aware launchers grant it from real memory
+The allocation budget supplies the missing authority (K2.5): the
+create rules take `allocBudget (allocCost ty align)` (Heap.lean), the
+allocation-aware launchers grant a budget from real memory
 (`launchResources` under `LaunchCoh` — this module proves the concrete
 cold-start instance `prodMem₀_launchCoh`), and every allocating
 production exhibit is a whole-program logic proof whose creates cross
@@ -275,12 +275,13 @@ theorem prodMem₀_memWF : MemWF prodMem₀ := by
     cases ha
 
 /-- Launch coherence at the production cold start: the invariant
-    (`prodMem₀_memWF`) plus any plan fitting the actual cursor
-    `⟨errnoAddr, 1⟩` launches the empty footprint allocation-aware. -/
-theorem prodMem₀_launchCoh (reqs : List AllocReq)
-    (hfit : PlanFits fmapEmpty ⟨prodMem₀.lastAddress, prodMem₀.nextAllocId⟩ reqs) :
-    LaunchCoh fmapEmpty prodMem₀ (∅ : SpikeHeapF SpikeCell) reqs :=
-  LaunchCoh.empty fmapEmpty prodMem₀ reqs prodMem₀_memWF hfit
+    (`prodMem₀_memWF`) plus any budget within the actual cursor's
+    headroom (`errnoAddr − 1`) launches the empty footprint
+    allocation-aware (K2.5; formerly a plan fitting the cursor). -/
+theorem prodMem₀_launchCoh (B : Nat)
+    (hB : B ≤ headroom prodMem₀.lastAddress) :
+    LaunchCoh fmapEmpty prodMem₀ (∅ : SpikeHeapF SpikeCell) B :=
+  LaunchCoh.empty fmapEmpty prodMem₀ B prodMem₀_memWF hB
 
 /-! ## The thread at fragment start (Driver.lean:512, the parked-main
 thread literal) -/

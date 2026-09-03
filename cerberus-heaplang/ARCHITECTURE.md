@@ -153,8 +153,8 @@ precondition is footprint ownership and whose framed post pure-entails
 `ψ R w.val σ'` under the coupling invariant projects to the Iris-free
 `MemTripleU M ρ e P ψ` — memory splits as P ⊎ R, `driveU` never kills
 or derails, every delivered `(v, σ')` satisfies `ψ R v σ'`.
-`project_triple_pure_alloc` is the allocating twin (`allocCap reqs` in
-the precondition, `MemTripleU_alloc` under `LaunchCoh`). The one
+`project_triple_pure_alloc` is the allocating twin (`allocBudget B` in
+the precondition, `MemTripleU_alloc` under `LaunchCoh … B`). The one
 Iris-shaped hypothesis is discharged by `cellOwn_consequence`,
 `pointsToCell_consequence`, `cellsOwn_consequence`,
 `cells_consequence` and the `pure_`/`sep_`/`or_`/`exists_consequence`
@@ -166,7 +166,7 @@ combinators; the pure memory view they deliver is `CellCoh`/`Sat`.
 appears only inside kernel-checked proof terms and contributes no
 axiom — every export's axiom set is exactly `propext`,
 `Classical.choice`, `Quot.sound` (Audit.lean). (2) The reusable rules
-are stated in Iris; `pointsToCell`, `cellOwn`, `allocCap`, the WP and
+are stated in Iris; `pointsToCell`, `cellOwn`, `allocBudget`, the WP and
 BI connectives, and `CohG` (in the one hypothesis `hpost`) are
 definitions to read, not axioms to accept.
 

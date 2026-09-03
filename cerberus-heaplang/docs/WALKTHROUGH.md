@@ -118,7 +118,7 @@ discharge it for the points-to shapes (`cellOwn_consequence`,
 facts about the final memory. Beneath it sits the strongest-post form
 `project_triple`; `SemTripleU` is `MemTripleU` at the cells-shaped post
 (`SemTripleU_iff_Mem`). The allocating twin `project_triple_pure_alloc`
-adds `∗ allocCap M.tagDefs reqs` (§3.2) to `hwp` and concludes
+adds `∗ allocBudget B` (§3.2) to `hwp` and concludes
 `MemTripleU_alloc`, whose launch premise `LaunchCoh` is `Sat` plus
 allocator health (README, "The claim"); `struct_create_store_adequacy`
 (StructExhibit.lean) is its worked instance.
@@ -527,30 +527,36 @@ no Löb). Consequence: `wps_wand`, `wps_fupd`; `wpt_mono`, `wpt_mono_k`,
 ```lean
 theorem wps_create {Ψ : SpikeVal → EnvStack → IProp GF}
     (loc : CerbLocation.Loc) (ann : core_run_annotation)
-    (aprov : CerbMem.Provenance) (req : AllocReq) (rest : List AllocReq)
+    (aprov : CerbMem.Provenance) (alignN : Int) (ty : ctype)
     (pref : prefix0) (ρ : EnvStack)
-    (hatom : atomicTy req.ty = false)
-    (hinert : ∀ a : Int, decIndep M.tagDefs a req.ty
-      (List.replicate (CerbMem.sizeofCtype M.tagDefs req.ty) undefByte)) :
-    iprop(allocCap M.tagDefs (GF := GF) (req :: rest) ∗
+    (hsz : 0 < CerbMem.sizeofCtype M.tagDefs ty) (hatom : atomicTy ty = false)
+    (hinert : ∀ a : Int, decIndep M.tagDefs a ty
+      (List.replicate (CerbMem.sizeofCtype M.tagDefs ty) undefByte)) :
+    iprop(allocBudget (GF := GF) (allocCost M.tagDefs ty alignN) ∗
       (∀ p : CerbMem.PointerValue,
-        (pointsToCell M.tagDefs p (.own 1) req.ty
-            (List.replicate (CerbMem.sizeofCtype M.tagDefs req.ty) undefByte) ∗
-          allocCap M.tagDefs rest ∗
+        (pointsToCell M.tagDefs p (.own 1) ty
+            (List.replicate (CerbMem.sizeofCtype M.tagDefs ty) undefByte) ∗
           ⌜0 < addrOf p ∧ addrOf p < 2 ^ 64⌝) -∗
         Ψ (SpikeVal.pure (Vobject (OVpointer p))) ρ)) ⊢
-      wps M Ls Ψ (createExpr loc ann (.IV aprov req.align) req.ty pref) ρ := by
+      wps M Ls Ψ (createExpr loc ann (.IV aprov alignN) ty pref) ρ := by
 ```
 
-Capacity for the plan `req :: rest` buys one `create` of `req`; the
+The budget `allocCost ty alignN = sizeof ty + max(alignN, 1) − 1` buys
+one `create` of `ty` at alignment `alignN` and is spent; the
 continuation receives an existential fresh pointer with full whole-cell
-ownership at the unspecified byte image, the remaining capacity, and
-the pointer's machine-address bounds. `hatom`: a non-atomic type;
-`hinert`: the unspecified image decodes independently of the side
-tables (`rfl` for the exhibits' types). Nothing in the statement names
-the allocator's cursor. `wpt_create` is the same at the total judgment
-with the cost bound `2 ≤ k`. Why `allocCap` has this shape, and what it
-costs, is §4.
+ownership at the unspecified byte image and the pointer's
+machine-address bounds. `hsz`: a real object type (positive size);
+`hatom`: a non-atomic type; `hinert`: the unspecified image decodes
+independently of the side tables (`rfl` for the exhibits' types).
+Nothing in the statement names the allocator's cursor. `allocBudget` is
+a genuine separation-logic resource — `allocBudget (a + b) ⊣⊢
+allocBudget a ∗ allocBudget b` (`allocBudget_split`), so two components
+can each own part of the capacity and allocate independently, in any
+order; `wps_create_of_plan` is the plan-shaped reading (capacity for
+`req :: rest` buys the head and returns capacity for the rest), derived
+by the split law. `wpt_create` is the same at the total judgment with
+the cost bound `2 ≤ k`. Why the budget has this cost, and what the
+shape costs, is §4.
 
 ### 3.3 One loop rule, and the total judgment
 
@@ -811,9 +817,12 @@ false` (`metaHeap_update`, RefinedC's `alloc_alive_kill`) followed by
 and addresses are never reused (`lastAddress` only descends), so the
 stale ghost bytes stay coupled (`CohG.kill`; `MemWF.kill` is the
 invariant's preservation). `hstatic`: only the static kill — the
-dynamic `free(p)` over `regionOwn` is K3, and `free` of a CREATED
-object is UB179a (a created base is never in `dynamicAddrs`; the K0
-audit's N-1 exception is state-dependent). Consumers: `alloc_create_kill_wps`
+dynamic `free(p)` over `regionOwn` is K3, and `free` of an object is
+UB179a whenever its base is not in `dynamicAddrs` — which the engine
+does NOT guarantee for a created object (a zero-size region can push a
+created base onto `dynamicAddrs`, the K0 audit's N-1), so the logic
+takes an allocation's origin from the metadata cell's `dynamic` flag,
+never from `dynamicAddrs`. Consumers: `alloc_create_kill_wps`
 and the engine-facing `kill_launch_smoke` (AllocExhibit.lean, §6).
 
 **Read-only allocations.** `MetaCell.readonly` is coupled to
@@ -855,35 +864,54 @@ Region loads and stores will go through the generic live-cell seams
 `readonly = false`), of which the typed `loadM_at`/`storeM_at` are the
 created-object instances.
 
-**Allocation capacity, and the failure policy.** An `AllocReq` is an
-alignment operand and a C object type;
+**Allocation capacity, and the failure policy.** Cerberus's allocator is
+a deterministic downward cursor; a `create` that cannot be placed is a
+kill ("out of memory", the `alignedAddr == 0` arm of `allocateObject`,
+CerbMem.lean:1513) — a killed outcome, not a value. RefinedC models
+allocation failure as a deliberate `AllocFailed` divergence (and Caesium
+never refuses an allocation); this package does not import that
+behaviour. Instead the capacity is a resource:
 
 ```lean
-def allocCap [SpikeGS hlc GF] (tds : CerbTags.TagDefsMap) (reqs : List AllocReq) : IProp GF :=
-  iprop(∃ c : AllocCursor, cursorOwn c ∗
-    ⌜PlanFits tds c reqs ∧ c.lastAddr ≤ 2 ^ 64⌝)
+def allocBudget [SpikeGS hlc GF] (n : Nat) : IProp GF :=
+  iOwn (E := (SpikeGS.budgetGS (hlc := hlc) (GF := GF)).elem)
+    (SpikeGS.budgetGS (hlc := hlc) (GF := GF)).name (◯ (n : Credit))
 ```
 
-Cerberus's allocator is a deterministic downward cursor; a `create` that
-cannot be placed is a kill ("out of memory", the `alignedAddr == 0` arm
-of `allocateObject`) — a killed outcome, not a value. RefinedC models
-allocation failure as a deliberate `AllocFailed` divergence; this
-package does not import that behaviour. Instead `allocCap reqs`
-certifies that the finite request plan `reqs`, run in order, never hits
-the kill arm: `PlanFits tds c reqs` runs the requests through
-`advanceCursor`, whose guard is exactly `allocateObject_success`'s
-premise pair (`0 < sizeofCtype tds ty`, `freshBase … ≠ 0`) and whose
-update is exactly that theorem's state update — while hiding the cursor
-(client statements never name `AllocCursor`, `lastAddress`,
-`nextAllocId`, `freshBase` or `cursorOwn`). Clients receive capacity
-from the allocation-aware launchers (`launchResources`, `LaunchCoh`) and
-may stop early (`allocCap_weaken`), never reorder or skip
-(`planFits_order_sensitive`: alignment rounding does not commute).
+the fragment `◯ n` of an authoritative (ℕ, +) — iris-lean's `Auth` over
+`Credit := Nat` with the constant-core `CommMonoidLike` UCMRA, the very
+camera its later credits use — so `allocBudget (a + b) ⊣⊢ allocBudget a
+∗ allocBudget b` is `iOwn_op` (`allocBudget_split`). The authority `●
+B` sits in the state interpretation under THE COUPLING INEQUALITY `B ≤
+headroom lastAddress`, `headroom la := la − 1` (`budgetInterp`; the
+cursor cell's fragment lives there too since K2.5 — no client owns the
+cursor). One `create` of `ty` at alignment operand `al` spends
+`allocCost tds ty al := sizeof ty + max(al, 1) − 1`. THE ENGINE BOUND
+behind it, verbatim from `allocateObject` (CerbMem.lean:1509-1522):
+`align := alignN.toNat.max 1`, `addrAfterSize := lastAddress − size`,
+`alignedAddr := alignDown addrAfterSize.toNat align` with `alignDown n a
+= n / a * a`, killed iff `alignedAddr == 0`, else `lastAddress :=
+alignedAddr`. Hence (i) SUCCESS: `alignedAddr ≠ 0 ↔ size + align ≤
+lastAddress ↔ allocCost ≤ headroom` (`freshBase_ne_zero_of_cost`), and
+(ii) CONSUMPTION: the cursor descends by `size + (lastAddress − size) %
+align ≤ allocCost`, so the headroom shrinks by at most the cost
+(`headroom_freshBase`). `create_atomic` (Rules.lean) is the rule: a
+fragment is at most the authority (`budgetAuth_bound`), the authority is
+at most the headroom, so the cost fits and the kill arm is excluded;
+after the step the authority has lost exactly the cost
+(`budgetAuth_consume`) and the headroom at most the cost, so the
+inequality is re-established. Client statements never name
+`AllocCursor`, `lastAddress`, `nextAllocId`, `freshBase` or
+`cursorOwn`. Clients receive the budget from the allocation-aware
+launchers (`launchResources` under `LaunchCoh tds σ m B`, whose `budget`
+field is `B ≤ headroom σ.lastAddress`; `budgetAuth_grant` mints `● B ∗
+◯ B` from the empty authority) and may hold more than they spend
+(`allocBudget_weaken`, `allocBudget_le`).
 
 **Freshness is global: the memory well-formedness invariant.** The
-allocation-aware launch premise `LaunchCoh tds σ m reqs` (Adequacy.lean)
+allocation-aware launch premise `LaunchCoh tds σ m B` (Adequacy.lean)
 is `coh` (the footprint, `Coh`), `wf` (the global invariant `MemWF σ`,
-Heap.lean) and `plan` (the plan fits the cursor). `MemWF σ` is a pure
+Heap.lean) and `budget` (the budget fits the cursor's headroom). `MemWF σ` is a pure
 predicate on the engine's `MemState` alone — no ghost state, no
 footprint — with nine components, each an engine fact of the concrete
 allocator (the section header in Heap.lean carries the `CerbMem.lean`
@@ -908,9 +936,10 @@ invariant (`prodMem₀_memWF`: one allocation, `errno`, at the cursor;
 nothing dead; no dynamic address), which is what `prodMem₀_launchCoh`
 now supplies. Preservation by the fragment's memory operations is
 proved for every active outcome — `MemWF.loadM`, `MemWF.storeM` (either
-locking mode), `MemWF.allocateObject` (any initializer); preservation
-by `allocateRegion` and `killM` is stated as K3's obligation and proved
-when those operations enter the fragment. Two honest qualifications.
+locking mode), `MemWF.allocateObject` (any initializer), `MemWF.killM`
+(K2, both arms); preservation by `allocateRegion` is K3's one remaining
+stated obligation, proved when that operation enters the fragment. Two
+honest qualifications.
 (i) The cursor-free launches (`MetaByteOf.cohG`, from `Coh` alone) have
 no `MemWF` premise: a non-allocating program owes nothing, and the
 non-allocating exports' texts are unchanged — the invariant is carried
@@ -920,32 +949,39 @@ address is the base of a live allocation": `killM` never removes an
 address from `dynamicAddrs` (it erases the record and marks the id dead,
 CerbMem.lean:1576-1578), so after `alloc; free` the address remains.
 
-**Why an ordered plan and not an additive budget.** The classical shape
-would be an additive resource with a split law, `budget (s + t) ⊣⊢
-budget s ∗ budget t`, letting two components each own part of the
-capacity and allocate independently. It is sound here in a conservative
-form: one `create` of `ty` at alignment `al` moves the cursor down by at
-most `sizeof ty + al − 1` bytes (`freshBase la al size = alignDown (la −
-size) al`), so a budget of the summed per-request costs guarantees
-`freshBase ≠ 0`. It was weighed and not adopted, for one forcing fact
-about the engine and one about the carrier. The engine's allocator is a
-single monotone cursor, so the address of each fresh object is a
-function of the exact sequence of preceding requests; the coupling
-invariant tracks that cursor exactly (`CohG.cursor` equates the ghost
-cursor with `⟨σ.lastAddress, σ.nextAllocId⟩`), and `create_atomic` is
-proved by simulating `allocateObject`'s update step for step
-(`advanceCursor` is that update on the cursor fields). An additive
-budget tracks a bound on the cursor, not its value: it needs an
-authoritative-sum ghost algebra (a total with splittable fragments) in
-place of the exclusive `GenHeap` cell the cursor lives in, and a
-coupling invariant stated as an inequality. The cost of the plan shape
-is stated plainly: capacity is not a separation-logic resource in this
-package — `allocCap reqs` cannot be split across ∗, it is weakened only
-to a prefix (`allocCap_weaken`), and every allocating specification is
-parametric in `rest` and threads the plan in order. An additive budget
-as a derived, weaker face over the plan, sound by the bound above, is
-registered as a future improvement (README, "Registered divergences and
-limitations"); it is not a correction to anything proved.
+**Why an additive budget, and what it costs (the design record of the
+exact face).** Until K2.5 the capacity was an ORDERED PLAN — `allocCap
+reqs := ∃ c, cursorOwn c ∗ ⌜PlanFits tds c reqs ∧ c.lastAddr ≤ 2^64⌝`,
+the client owning the exclusive cursor cell with a proof that the
+request list, run in order through the engine's own cursor update,
+never hits the kill arm. It was exact (each fresh address is a function
+of the exact sequence of preceding requests, and the plan tracked it)
+but it was not a separation-logic resource: it could not be split
+across ∗, it was weakened only to a prefix, and every allocating
+specification threaded `rest` in order — so an allocating callee's
+precondition could never be a prefix of its caller's plan. The budget
+replaces it (the record: docs/2026-09-03_k2.5-notes.md). What changed
+underneath: the authority moved from an exclusive `GenHeap` cell owned
+by the client to an authoritative sum `● B` owned by the state
+interpretation (the cursor cell stays, as the exact tracker `CohG.cursor`
+and `MemWF.cursor_lo` need; its fragment is held by the interpretation),
+and the coupling became an inequality, `B ≤ headroom lastAddress`. What
+it costs, stated plainly: `allocCost` is the tightest ORDER-FREE bound,
+conservative by up to `align − 1` bytes per allocation — a plan can fit
+where the summed costs exceed the headroom (cursor 32, requests 16 bytes
+at 16 then 8 at 8: the plan runs 32 → 16 → 8, the costs sum to 31 + 15 =
+46 > 31), so the plan-launched and budget-launched statements are NOT
+interderivable at the launch; a budget that fits never over-promises
+(`freshBase_ne_zero_of_cost`). At any realistic cursor the slack is
+irrelevant (the cold-start headroom is `2^48 − 9`); what is bought is the
+classical shape — `allocBudget (a + b) ⊣⊢ allocBudget a ∗ allocBudget
+b`, `{allocBudget (allocCost ty al)} create(al, ty) {∃ p. p ↦ −}`, and a
+callee's precondition that is simply its own budget. The rule-level
+direction IS derivable: `wps_create_of_plan`/`wpt_create_of_plan` are
+the former `allocCap (req :: rest)` statements with the plan read as
+`allocBudget (planCost reqs)`, proved from `wps_create`/`wpt_create` by
+the split law. RefinedC offers no tiebreaker here (Caesium never
+refuses an allocation).
 
 ## 5. The engine attachment
 
@@ -1164,7 +1200,8 @@ operands (bounded by `peDepth`).
 `wp_strong_adequacy_gen` with the ghost state constructed by
 `genHeap_init` and the initial cells minted from `Coh`
 (`spikeCells_alloc`; for allocating programs `launchResources` under
-`LaunchCoh` also mints the cursor and grants `allocCap`). The engine
+`LaunchCoh … B` also mints the cursor and grants the budget
+`allocBudget B`). The engine
 face, `engine_adequacyU` (Adequacy.lean): for `Frag e₀` with `pot e₀ ≤
 lemDefaultFuel` at a `SeqWF` context whose registered bodies are in
 `Frag` with their static bounds, `Coh M.tagDefs σ₀ m₀`, and an Iris
@@ -1306,10 +1343,10 @@ the `#print axioms` recipe are in the README, "How to build and verify".
   cerberus-lean fuel-exhaustion request lands; no package-side driver
   works around the opaque fuel arm.
 - **Preservation of the global memory well-formedness invariant by
-  `allocateRegion` and `killM`.** The invariant itself is in (§4,
-  `MemWF`); the two operations are outside the fragment, and their
-  preservation lemmas are K3's stated obligations (Heap.lean section
-  header).
+  `allocateRegion`.** The invariant itself is in (§4, `MemWF`) and
+  `killM` preserves it (`MemWF.killM`, K2, both arms); `allocateRegion`
+  is outside the fragment, and its preservation lemma is K3's one
+  remaining stated obligation (Heap.lean section header).
 - **Parametric semantics interfaces.** Not adopted: the rules are proved
   directly against `Step` and the memory state, as RefinedC proves its
   memory rules by inversion.

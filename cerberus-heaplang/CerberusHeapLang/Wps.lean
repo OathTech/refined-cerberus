@@ -36,9 +36,9 @@ THE CONTENTS: the memory rules as corollaries of the atomic step
 specifications (`wps_of_atomic`; `wps_store`/`wps_load`, the typed
 sub-range forms `wps_load_at`/`wps_store_at`/`wps_load_cell_at`/
 `wps_store_cell_at`, the plain-value forms `wps_store_plain`/
-`wps_load_plain`); the allocation rule `wps_create` from the abstract
-capacity `allocCap (req :: rest)` (Heap.lean; the exact-cursor form
-`wps_create_cursor_internal` is heap-implementation vocabulary); the
+`wps_load_plain`); the allocation rule `wps_create` from the
+∗-splittable budget `allocBudget (allocCost ty align)` (Heap.lean, K2.5;
+`wps_create_of_plan` is its plan-shaped reading); the
 sequencing rules at the three binder shapes and `Ewseq` (`wps_seq`,
 `wps_seq_spec`, `wps_seq_sym`, `wps_wseq`); the conditional with the
 guard's verdict as a pure premise (`wps_if`; `wps_if_true`/`_false`
@@ -2207,138 +2207,116 @@ theorem wps_store_cell_at {Ψ : SpikeVal → EnvStack → IProp GF}
     rw [spliceBytes_length _ _ _ (by omega)]
     exact hlen
 
-/-! ## THE ALLOCATION RULES (Phase 2 internal rule; alloc arc P1.4
-public rule)
+/-! ## THE ALLOCATION RULE (alloc arc P1.4; RESTATED over the budget,
+kill/free arc K2.5)
 
-Two strata (charter P1.4):
-
-- `wps_create_cursor_internal` — the exact-cursor rule: sound
-  allocation THROUGH the allocator-cursor resource. The cursor cell
-  carries exactly the two MemState fields `allocateObject` reads
-  (lastAddress/nextAllocId), so the fresh base address is a CLOSED
-  FORM of owned state and the out-of-memory kill arm
-  (`alignedAddr == 0`, CerbMem.lean:1479) becomes the PURE premise
-  `hnz` — allocation failure is excluded by ownership arithmetic,
-  not assumed away. HEAP-IMPLEMENTATION USE ONLY: it names
-  `lastAddress`/`nextAllocId`/`freshBase`/`cursorOwn` and may be
-  consumed only by this module's public rule and its total mirror
-  (Wpt.lean). (The last legacy client, StructExhibit's, converted to
-  the public rule at alloc arc P2 item 1.)
-- `wps_create` — THE PUBLIC RULE: precondition `allocCap
-  (req :: rest)`, existential/continuation-bound pointer result
-  with the fresh whole-cell points-to plus `allocCap rest`. NO
-  cursor vocabulary in the statement (the P1 grep test). Launchable:
-  the allocation-aware launchers (Adequacy/TotalAdequacy) grant
-  `allocCap` from real Cerberus memory via `launchResources`.
+- `wps_create` — THE PUBLIC RULE: precondition `allocBudget (allocCost
+  ty alignN)` (the ∗-splittable capacity, Heap.lean "The allocation
+  budget"), existential/continuation-bound pointer result with the
+  fresh whole-cell points-to and the pointer's machine-address bounds;
+  the budget is CONSUMED. It is `create_atomic` (Rules.lean) lifted by
+  `wps_of_atomic` — no cursor stratum remains: the former exact-cursor
+  `wps_create_cursor_internal` and the ordered plan `allocCap (req ::
+  rest)` are RETIRED (no client owns the cursor since K2.5; its
+  fragment lives in the state interpretation, `budgetInterp`). NO
+  cursor vocabulary in the statement (the P1 grep test, unchanged).
+  Launchable: the allocation-aware launchers (Adequacy/TotalAdequacy)
+  grant `allocBudget B` from real Cerberus memory via `launchResources`
+  under `LaunchCoh … B` (`B ≤ headroom lastAddress`).
+- `wps_create_of_plan` — the plan-shaped reading: the former statement
+  with `allocCap reqs` read as `allocBudget (planCost reqs)`, derived
+  from `wps_create` by `allocBudget_split` (the notes' plan → budget
+  derivation).
 
 Donor shape: RefinedC's alloc_new_blocks/alloc_alive discipline
-(theories/caesium/ghost_state.v) — there the allocator is part of
-the state interpretation and the client sees an existential fresh
-location (lifting.v:979-998); here the authority is a one-cell ghost
-heap because the engine's allocator is a deterministic cursor, and
-`allocCap` is the abstract finite-capacity face of that cursor
-(no-OOM policy: docs/2026-09-01_p1-notes.md, the P1.1 design
-record). -/
+(theories/caesium/ghost_state.v) — there the allocator is part of the
+state interpretation and the client sees an existential fresh location
+(lifting.v:979-998), and Caesium never refuses an allocation; here the
+engine's allocator is a deterministic downward cursor WITH an
+out-of-memory kill, so a capacity resource is forced — the classical
+additive budget, coupled by the inequality `B ≤ headroom lastAddress`
+(no-OOM policy: docs/2026-09-03_k2.5-notes.md, superseding the P1.1
+plan record). -/
 
 section CreateRule
 open Iris.Std.PartialMap
 
-/-- CREATE small axiom, EXACT-CURSOR (INTERNAL — see the section
-    header): with the allocator cursor at `⟨la, nid⟩` and a nonzero
-    fresh base, `create` allocates exactly
-    `cellPtr nid (freshBase la alignN (sizeof ty))`, delivers the
-    whole-allocation points-to at unspecified bytes, and advances
-    the cursor. UB/OOM-excluding: `hnz` is the out-of-memory guard,
-    `hsz`/`hatom` pin a real non-atomic object type, `hinert` is the
-    unspecified image's decode-inertness at the allocated type (rfl
-    for scalar and integer-array types). Clients use the PUBLIC
-    `wps_create` below. `create_atomic` (Rules.lean) lifted. -/
-theorem wps_create_cursor_internal {Ψ : SpikeVal → EnvStack → IProp GF}
+/-- THE PUBLIC ALLOCATION RULE (alloc arc P1.4, restated K2.5): the
+    budget `allocCost ty alignN = sizeof ty + max(alignN, 1) − 1` buys
+    one `create` of `ty` at alignment `alignN`; the returned pointer is
+    CONTINUATION-BOUND (its allocation id and address occur nowhere in
+    the precondition), delivered with full whole-cell ownership at
+    unspecified bytes and its pure machine-address bounds `0 < addrOf p
+    < 2^64` (alloc arc P2). Side premises: `hsz` pins a real object
+    type (the engine's `max 1` padding away — formerly carried inside
+    the plan), `hatom` a non-atomic one; `hinert` is the unspecified
+    image's decode-inertness AT EVERY ADDRESS (rfl for scalar and
+    integer-array types). The no-OOM guard is NOT a premise: it rides
+    inside the budget (the coupling inequality, `create_atomic`). The
+    statement contains no `AllocCursor`/`lastAddress`/`nextAllocId`/
+    `freshBase`/`cursorOwn` — the P1 grep test. -/
+theorem wps_create {Ψ : SpikeVal → EnvStack → IProp GF}
     (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (aprov : CerbMem.Provenance) (alignN : Int) (ty : ctype)
-    (pref : prefix0) (la nid : Int) (ρ : EnvStack)
+    (pref : prefix0) (ρ : EnvStack)
     (hsz : 0 < CerbMem.sizeofCtype M.tagDefs ty) (hatom : atomicTy ty = false)
-    (hnz : freshBase la alignN (CerbMem.sizeofCtype M.tagDefs ty) ≠ 0)
-    (hinert : decIndep M.tagDefs (freshBase la alignN (CerbMem.sizeofCtype M.tagDefs ty)) ty
+    (hinert : ∀ a : Int, decIndep M.tagDefs a ty
       (List.replicate (CerbMem.sizeofCtype M.tagDefs ty) undefByte)) :
-    iprop(cursorOwn (GF := GF) ⟨la, nid⟩ ∗
-      ((pointsToCell M.tagDefs (cellPtr nid (freshBase la alignN (CerbMem.sizeofCtype M.tagDefs ty)))
-          (.own 1) ty (List.replicate (CerbMem.sizeofCtype M.tagDefs ty) undefByte) ∗
-        cursorOwn ⟨freshBase la alignN (CerbMem.sizeofCtype M.tagDefs ty), nid + 1⟩) -∗
-        Ψ (SpikeVal.pure (Vobject (OVpointer
-          (cellPtr nid (freshBase la alignN (CerbMem.sizeofCtype M.tagDefs ty)))))) ρ)) ⊢
+    iprop(allocBudget (GF := GF) (allocCost M.tagDefs ty alignN) ∗
+      (∀ p : CerbMem.PointerValue,
+        (pointsToCell M.tagDefs p (.own 1) ty
+            (List.replicate (CerbMem.sizeofCtype M.tagDefs ty) undefByte) ∗
+          ⌜0 < addrOf p ∧ addrOf p < 2 ^ 64⌝) -∗
+        Ψ (SpikeVal.pure (Vobject (OVpointer p))) ρ)) ⊢
       wps M Ls Ψ (createExpr loc ann (.IV aprov alignN) ty pref) ρ := by
-  iintro ⟨Hc, HΨ⟩
-  iapply wps_of_atomic (create_atomic loc ann aprov alignN ty pref la nid ρ hsz hatom hnz hinert)
-    rfl rfl
-  isplitl [Hc]
-  · iexact Hc
-  · iintro %w ⟨%hw, Hpt, Hc'⟩
+  iintro ⟨Hb, HΨ⟩
+  iapply wps_of_atomic (create_atomic loc ann aprov alignN ty pref ρ hsz hatom hinert) rfl rfl
+  isplitl [Hb]
+  · iexact Hb
+  · iintro %w ⟨%p, %hw, Hpt, %hb⟩
     subst hw
     iapply HΨ
     isplitl [Hpt]
     · iexact Hpt
-    · iexact Hc'
+    · ipureintro
+      exact hb
 
-/-- THE PUBLIC ALLOCATION RULE (alloc arc P1.4, the charter's exact
-    logical shape): capacity for `req :: rest` buys one `create` of
-    `req`; the returned pointer is CONTINUATION-BOUND (its allocation
-    id and address occur nowhere in the precondition), delivered with
-    full whole-cell ownership at unspecified bytes and the remaining
-    capacity `allocCap rest`. Side premises: `hatom` pins a
-    non-atomic object type; `hinert` is the unspecified image's
-    decode-inertness AT EVERY ADDRESS (rfl for scalar and
-    integer-array types) — address-independent so the statement stays
-    cursor-free. Positivity of `sizeof req.ty` and the no-OOM guard
-    are NOT premises: they ride inside `allocCap` (the plan fits).
-    The continuation ALSO receives the fresh pointer's pure
-    machine-address bounds `0 < addrOf p < 2^64` (alloc arc P2 —
-    the charter P1.4 "bounds knowledge" allowance, needed by the
-    allocating whole-program clients, e.g. `isList`'s node-WF facts;
-    kept in pure form — the persistent-metadata form of bounds
-    knowledge is `pointsToView_locInBounds`, Heap.lean). The statement contains
-    no `AllocCursor`/`lastAddress`/`nextAllocId`/`freshBase`/
-    `cursorOwn` — the P1 grep test. -/
-theorem wps_create {Ψ : SpikeVal → EnvStack → IProp GF}
+/-- THE PLAN-SHAPED READING (the K2.5 plan → budget derivation): the
+    former `allocCap (req :: rest)` rule with the plan read as its
+    summed cost — capacity for the whole plan buys the head request and
+    returns capacity for the rest. Derived from `wps_create` by
+    `allocBudget_split`; a client may also hold MORE than the plan
+    (`allocBudget_weaken`), which the ordered plan could not express. -/
+theorem wps_create_of_plan {Ψ : SpikeVal → EnvStack → IProp GF}
     (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (aprov : CerbMem.Provenance) (req : AllocReq) (rest : List AllocReq)
     (pref : prefix0) (ρ : EnvStack)
-    (hatom : atomicTy req.ty = false)
+    (hsz : 0 < CerbMem.sizeofCtype M.tagDefs req.ty) (hatom : atomicTy req.ty = false)
     (hinert : ∀ a : Int, decIndep M.tagDefs a req.ty
       (List.replicate (CerbMem.sizeofCtype M.tagDefs req.ty) undefByte)) :
-    iprop(allocCap M.tagDefs (GF := GF) (req :: rest) ∗
+    iprop(allocBudget (GF := GF) (planCost M.tagDefs (req :: rest)) ∗
       (∀ p : CerbMem.PointerValue,
         (pointsToCell M.tagDefs p (.own 1) req.ty
             (List.replicate (CerbMem.sizeofCtype M.tagDefs req.ty) undefByte) ∗
-          allocCap M.tagDefs rest ∗
+          allocBudget (planCost M.tagDefs rest) ∗
           ⌜0 < addrOf p ∧ addrOf p < 2 ^ 64⌝) -∗
         Ψ (SpikeVal.pure (Vobject (OVpointer p))) ρ)) ⊢
       wps M Ls Ψ (createExpr loc ann (.IV aprov req.align) req.ty pref) ρ := by
-  unfold allocCap
-  iintro ⟨⟨%c, Hc, %hfit⟩, HΨ⟩
-  obtain ⟨hplan, hla⟩ := hfit
-  obtain ⟨c', hadv, hrest⟩ := (PlanFits_cons_iff M.tagDefs c req rest).mp hplan
-  obtain ⟨hsz, hnz, rfl⟩ := advanceCursor_some_inv M.tagDefs hadv
-  iapply wps_create_cursor_internal loc ann aprov req.align req.ty pref
-    c.lastAddr c.nextId ρ hsz hatom hnz (hinert _)
-  isplitl [Hc]
-  · iexact Hc
-  iintro ⟨Hpt, Hc⟩
+  rw [planCost_cons]
+  iintro ⟨Hb, HΨ⟩
+  icases (allocBudget_split (allocCost M.tagDefs req.ty req.align)
+    (planCost M.tagDefs rest)).1 $$ Hb with ⟨Hb, Hrest⟩
+  iapply wps_create loc ann aprov req.align req.ty pref ρ hsz hatom hinert
+  isplitl [Hb]
+  · iexact Hb
+  iintro %p ⟨Hpt, %hb⟩
   iapply HΨ
   isplitl [Hpt]
   · iexact Hpt
-  isplitl [Hc]
-  · -- rebuild the (unfolded) capacity from the advanced cursor
-    iexists ⟨freshBase c.lastAddr req.align (CerbMem.sizeofCtype M.tagDefs req.ty),
-      c.nextId + 1⟩
-    isplitl [Hc]
-    · iexact Hc
-    · ipureintro
-      exact ⟨hrest, Int.le_of_lt (freshBase_lt_two64 M.tagDefs c.lastAddr req.align
-        req.ty hsz hnz hla)⟩
+  isplitl [Hrest]
+  · iexact Hrest
   · ipureintro
-    exact ⟨freshBase_pos M.tagDefs c.lastAddr req.align req.ty hnz,
-      freshBase_lt_two64 M.tagDefs c.lastAddr req.align req.ty hsz hnz hla⟩
+    exact hb
 
 end CreateRule
 

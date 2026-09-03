@@ -83,16 +83,16 @@ def isEnv (env : Environment) (n : Name) : Bool :=
     refinement) and the pure allocation-PLAN model (`isPlan` below). -/
 def isGhost (n : Name) : Bool :=
   Bool.and (n != `CerberusHeapLang.pointsToCell_cellOwn_iff)
-    (hasSub n ["CohG", "cursorOwn", "cursorInterp",
+    (hasSub n ["CohG", "cursorOwn", "cursorInterp", "budgetInterp", "budgetAuth",
             "cursorHeap", "byteInterp", "metaInterp", "byteHeap", "metaHeap",
             "stateInterp_eq", "stateInterp_iff", "pointsToCell_iff",
             "cellOwn_iff", "pointsToView_iff", "bytesOwn",
             "byteOwn", "metaOwn", "MetaByteOf", "LaunchCoh", "genHeapInterp", "GenHeap"])
-/-- The pure allocation-plan model (alloc arc P1.1: the cursor arithmetic
-    `PlanFits`/`advanceCursor`/`freshBase` a launch's plan-fit fact is
+/-- The pure allocation-budget model (K2.5: the cursor arithmetic
+    `allocCost`/`headroom`/`freshBase` a launch's budget-fit fact is
     computed with) — separated from the ghost maps at P4. -/
 def isPlan (n : Name) : Bool :=
-  hasSub n ["AllocCursor", "advanceCursor", "PlanFits", "freshBase"]
+  hasSub n ["AllocCursor", "allocCost", "planCost", "headroom", "freshBase"]
 def judgNs : List Name := [`CerberusHeapLang.wps.pre, `CerberusHeapLang.wpt.pre]
 def isJudg (n : Name) : Bool := judgNs.any fun j => Bool.or (n == j) (j.isPrefixOf n)
 def layoutSubs : List String :=

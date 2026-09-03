@@ -303,13 +303,15 @@ theorem wpt_driver_done {GF : BundledGFunctors} [SpikeGpreS GF]
     (∅ : SpikeHeapF CerbMem.AbsByte)) with ⟨%Gb, Hbi, -, -⟩
   imod (genHeap_init (L := Int) (V := AllocCursor) (H := SpikeHeapF)
     (∅ : SpikeHeapF AllocCursor)) with ⟨%Gk, Hki, -, -⟩
+  imod budgetInit with ⟨%Gc, HBa⟩
   letI instGS : SpikeGS .hasLC GF :=
-    { byteGS := Gb, metaGS := Gm, cursorGS := Gk }
+    { byteGS := Gb, metaGS := Gm, cursorGS := Gk, budgetGS := Gc }
+  ihave HB0 := budgetAuth_of_init (hlc := .hasLC) (GF := GF) $$ HBa
   imod (spikeCells_alloc M₀.tagDefs σ₀ m₀ hcoh) $$ [$Hmi $Hbi]
     with ⟨%mm, %mb, %hmbo, Hmi, Hbi, Hcells⟩
   ihave HW := hwp $$ Hcells
   icases HW with ⟨HB, Hwpt⟩
-  ihave Hσ : stateInterp (GF := GF) σ₀ 0 ([] : List Empty) 0 $$ [Hmi Hbi Hki]
+  ihave Hσ : stateInterp (GF := GF) σ₀ 0 ([] : List Empty) 0 $$ [Hmi Hbi Hki HB0]
   · rw [stateInterp_eq]
     iexists mm, mb, (∅ : SpikeHeapF AllocCursor)
     isplit
@@ -319,7 +321,10 @@ theorem wpt_driver_done {GF : BundledGFunctors} [SpikeGpreS GF]
     · iexact Hmi
     isplitl [Hbi]
     · iexact Hbi
+    isplitl [Hki]
     · iexact Hki
+    · iapply budgetInterp_zero
+      iexact HB0
   iapply wpt_driver_aux htd hex hlb hproc hstack hQf hQpot Ls ψ k e₀
     ev00 evs0 σ₀ 0 0 hfrag hpot $$ [$Hσ $HB $Hwpt]
 
@@ -327,7 +332,7 @@ theorem wpt_driver_done {GF : BundledGFunctors} [SpikeGpreS GF]
     lane's missing launcher variant): as `wpt_driver_done`, but
     launched through the one shared `launchResources` helper — the
     client's total proof receives the footprint cells AND
-    `allocCap reqs`, so a whole program may allocate through the
+    the budget `allocBudget B` (K2.5), so a whole program may allocate through the
     PUBLIC `wpt_create` and still conclude the driver-delivery fact
     `prod_run_eqJ` consumes. This is the arrow that replaces the
     example-specific `driverDone_step` create prefixes (charter P2:
@@ -346,13 +351,13 @@ theorem wpt_driver_done_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
       pot cont ≤ lemDefaultFuel)
     (Ls : ∀ [SpikeGS .hasLC GF], LabelSpecT GF)
     (e₀ : CoreExpr) (ev00 : Fmap sym value) (evs0 : List (Fmap sym value))
-    (σ₀ : Mem) (m₀ : SpikeHeapF SpikeCell) (reqs : List AllocReq)
+    (σ₀ : Mem) (m₀ : SpikeHeapF SpikeCell) (B : Nat)
     (hfrag : Frag e₀) (hpot : pot e₀ ≤ lemDefaultFuel)
-    (hl : LaunchCoh M₀.tagDefs σ₀ m₀ reqs)
+    (hl : LaunchCoh M₀.tagDefs σ₀ m₀ B)
     (ψ : value → Mem → Prop) (k : Nat)
     (hwp : ∀ [SpikeGS .hasLC GF],
       iprop(([∗map] i ↦ c ∈ m₀, cellOwn M₀.tagDefs (hlc := .hasLC) (GF := GF) i
-          (.own 1) c) ∗ allocCap M₀.tagDefs reqs) ⊢
+          (.own 1) c) ∗ allocBudget B) ⊢
         iprop(blockSpecsT M₀ Ls (readoutPost ψ) ∗
           wpt M₀ Ls k (readoutPost ψ) e₀ (ev00 :: evs0))) :
     DriverDoneAt p Q th₀ e₀ (ev00 :: evs0) σ₀ ψ k := by
@@ -367,9 +372,11 @@ theorem wpt_driver_done_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
     (∅ : SpikeHeapF CerbMem.AbsByte)) with ⟨%Gb, Hbi, -, -⟩
   imod (genHeap_init (L := Int) (V := AllocCursor) (H := SpikeHeapF)
     (∅ : SpikeHeapF AllocCursor)) with ⟨%Gk, Hki, -, -⟩
+  imod budgetInit with ⟨%Gc, HBa⟩
   letI instGS : SpikeGS .hasLC GF :=
-    { byteGS := Gb, metaGS := Gm, cursorGS := Gk }
-  imod (launchResources M₀.tagDefs σ₀ m₀ reqs hl) $$ [$Hmi $Hbi $Hki]
+    { byteGS := Gb, metaGS := Gm, cursorGS := Gk, budgetGS := Gc }
+  ihave HB0 := budgetAuth_of_init (hlc := .hasLC) (GF := GF) $$ HBa
+  imod (launchResources M₀.tagDefs σ₀ m₀ B hl) $$ [$Hmi $Hbi $Hki $HB0]
     with ⟨Hσ, Hcells, Hcap⟩
   ihave HW := hwp $$ [$Hcells $Hcap]
   icases HW with ⟨HB, Hwpt⟩

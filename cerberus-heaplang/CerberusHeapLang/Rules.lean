@@ -99,7 +99,7 @@ theorem stateInterp_iff [SpikeGS hlc GF] (σ : Mem) (ns : Nat) (κs : List Empty
     (nt : Nat) :
     stateInterp (GF := GF) σ ns κs nt ⊣⊢
       iprop(∃ mm mb mk, ⌜CohG σ mm mb mk⌝ ∗
-        metaInterp mm ∗ byteInterp mb ∗ cursorInterp mk) := .rfl
+        metaInterp mm ∗ byteInterp mb ∗ cursorInterp mk ∗ budgetInterp mk) := .rfl
 
 /-- THE READOUT COMBINATOR (foundations Phase 4 — the phase-2
     residual's registered tidy): the ONE open/close of the state
@@ -745,44 +745,70 @@ def createExpr (loc : CerbLocation.Loc) (ann : core_run_annotation)
             (Pexpr [] () (PEval (Vctype ty))) pref))))
 
 open Iris.Std.PartialMap in
-/-- CREATE, EXACT-CURSOR, as an atomic step (the heap-implementation
-    form the public `allocCap` rules are derived from — Wps.lean
-    §CreateRule header): with the allocator cursor at `⟨la, nid⟩`
-    and a nonzero fresh base, `create` allocates exactly
-    `cellPtr nid (freshBase la alignN (sizeof ty))` (ONE application
-    of the real `allocateObject`, `allocateObject_success`), delivers
-    the whole-allocation points-to at unspecified bytes, and
-    advances the cursor. The delivered value is the BARE pointer
-    (cost 1). UB/OOM-excluding: `hnz` is the out-of-memory guard,
-    `hsz`/`hatom` pin a real non-atomic object type, `hinert` is the
-    unspecified image's decode-inertness at the allocated type. -/
+/-- CREATE FROM THE BUDGET, as an atomic step (kill/free arc K2.5 — the
+    heap-implementation form the public rules `wps_create`/`wpt_create`
+    lift): `allocBudget (allocCost ty alignN)` buys ONE application of
+    the real `allocateObject` (`allocateObject_success`), which delivers
+    an EXISTENTIAL fresh pointer (the engine's cursor picks it; no
+    client sees the cursor since K2.5) with the whole-allocation
+    points-to at unspecified bytes and its machine-address bounds
+    `0 < addrOf p < 2^64` (`MemWF.la_wf` through `CohG.wf`). The budget
+    is CONSUMED (nothing comes back). The out-of-memory arm is excluded
+    by THE COUPLING INEQUALITY: the budget authority is at most the
+    cursor's headroom (`budgetInterp`), a fragment is at most the
+    authority (`budgetAuth_bound`), and a cost within the headroom is a
+    nonzero fresh base (`freshBase_ne_zero_of_cost`); the authority
+    shrinks by the cost while the headroom shrinks by at most the cost
+    (`headroom_freshBase`), so the inequality is re-established. The
+    delivered value is the BARE pointer (cost 1). `hsz`/`hatom` pin a
+    real non-atomic object type; `hinert` is the unspecified image's
+    decode-inertness at every address (rfl for scalar and integer-array
+    types). -/
 theorem create_atomic [SpikeGS hlc GF] {M : MachineCtx}
     (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (aprov : CerbMem.Provenance) (alignN : Int) (ty : ctype)
-    (pref : prefix0) (la nid : Int) (ρ : EnvStack)
+    (pref : prefix0) (ρ : EnvStack)
     (hsz : 0 < CerbMem.sizeofCtype M.tagDefs ty) (hatom : atomicTy ty = false)
-    (hnz : freshBase la alignN (CerbMem.sizeofCtype M.tagDefs ty) ≠ 0)
-    (hinert : decIndep M.tagDefs (freshBase la alignN (CerbMem.sizeofCtype M.tagDefs ty)) ty
+    (hinert : ∀ a : Int, decIndep M.tagDefs a ty
       (List.replicate (CerbMem.sizeofCtype M.tagDefs ty) undefByte)) :
     AtomicStep M (createExpr loc ann (.IV aprov alignN) ty pref) ρ 1
-      (cursorOwn (GF := GF) ⟨la, nid⟩)
-      (fun w => iprop(⌜w = SpikeVal.pure (Vobject (OVpointer
-          (cellPtr nid (freshBase la alignN (CerbMem.sizeofCtype M.tagDefs ty)))))⌝ ∗
-        pointsToCell M.tagDefs (cellPtr nid (freshBase la alignN (CerbMem.sizeofCtype M.tagDefs ty)))
-          (.own 1) ty (List.replicate (CerbMem.sizeofCtype M.tagDefs ty) undefByte) ∗
-        cursorOwn ⟨freshBase la alignN (CerbMem.sizeofCtype M.tagDefs ty), nid + 1⟩)) := by
+      (allocBudget (GF := GF) (allocCost M.tagDefs ty alignN))
+      (fun w => iprop(∃ p : CerbMem.PointerValue,
+        ⌜w = SpikeVal.pure (Vobject (OVpointer p))⌝ ∗
+        pointsToCell M.tagDefs p (.own 1) ty
+          (List.replicate (CerbMem.sizeofCtype M.tagDefs ty) undefByte) ∗
+        ⌜0 < addrOf p ∧ addrOf p < 2 ^ 64⌝)) := by
   intro E₁ E₂ hE σ₁ ns obs nt
-  iintro ⟨Hc, Hσ⟩
+  iintro ⟨Hb, Hσ⟩
   icases (stateInterp_iff σ₁ ns obs nt).mp $$ Hσ
-    with ⟨%mm, %mb, %mk, %HG, Hmi, Hbi, Hki⟩
-  ihave %Hgetc : ⌜Iris.Std.PartialMap.get? mk 0 =
-      some (⟨la, nid⟩ : AllocCursor)⌝ $$ [Hki Hc]
-  · ihave >%h := cursorHeap_valid $$ [$Hki $Hc]
-    itrivial
+    with ⟨%mm, %mb, %mk, %HG, Hmi, Hbi, Hki, HB⟩
+  icases (budgetInterp_iff mk).mp $$ HB with ⟨%B, HBa, HBc⟩
+  -- the fragment is bounded by the authority
+  ihave %hle : ⌜allocCost M.tagDefs ty alignN ≤ B⌝ $$ [HBa Hb]
+  · iapply budgetAuth_bound B (allocCost M.tagDefs ty alignN)
+    isplitl [HBa]
+    · iexact HBa
+    · iexact Hb
+  obtain ⟨m, rfl⟩ := Nat.exists_eq_add_of_le hle
+  have hpos := allocCost_pos M.tagDefs ty alignN hsz
+  icases HBc with (%hB0 | ⟨%c, %hc, Hc⟩)
+  · -- a positive cost at the empty authority is impossible
+    exact ((by omega) : False).elim
+  obtain ⟨Hgetc, hBle⟩ := hc
+  obtain ⟨cla, cnid⟩ := c
   obtain ⟨hla, hnid⟩ := HG.cursor _ Hgetc
-  simp only at hla hnid
+  simp only at hla hnid hBle
   subst hla
   subst hnid
+  have hcurne : get? mk 0 ≠ none := by
+    rw [Hgetc]
+    simp
+  have hla64 : σ₁.lastAddress ≤ 2 ^ 64 := (HG.wf hcurne).la_wf
+  have hcost : allocCost M.tagDefs ty alignN ≤ headroom σ₁.lastAddress :=
+    Nat.le_trans (Nat.le_add_right _ _) hBle
+  have hnz : freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype M.tagDefs ty) ≠ 0 :=
+    freshBase_ne_zero_of_cost _ _ _ hsz hcost
+  have hcons := headroom_freshBase σ₁.lastAddress alignN _ hsz hcost
   have hrun := allocateObject_success M.tagDefs σ₁ pref aprov alignN ty hsz hnz
   iapply fupd_mask_intro hE
   iintro Hclose
@@ -822,7 +848,8 @@ theorem create_atomic [SpikeGS hlc GF] {M : MachineCtx}
   subst hre hσ
   obtain rfl : ρ = rρ := hrρ.symm
   imod Hclose with -
-  -- ghost: advance the cursor, mint the metadata, mint the bytes
+  -- ghost: advance the cursor, mint the metadata, mint the bytes, spend
+  -- the budget
   imod (cursorHeap_update
     (AllocCursor.mk (freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype M.tagDefs ty))
       (σ₁.nextAllocId + 1))) $$ [$Hki $Hc] with ⟨Hki, Hc⟩
@@ -830,7 +857,7 @@ theorem create_atomic [SpikeGS hlc GF] {M : MachineCtx}
     cases hg : Iris.Std.PartialMap.get? mm σ₁.nextAllocId with
     | none => rfl
     | some mc =>
-      have := HG.cur_meta_lt (by rw [Hgetc]; simp) _ _ hg
+      have := HG.cur_meta_lt hcurne _ _ hg
       omega
   imod (metaHeap_alloc
     (objCell M.tagDefs (freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype M.tagDefs ty))
@@ -847,7 +874,7 @@ theorem create_atomic [SpikeGS hlc GF] {M : MachineCtx}
       left
       rw [rangeMap_get?]
       rw [if_neg ?_]
-      have hkey := HG.cur_byte_lo (by rw [Hgetc]; simp) _ _ hg
+      have hkey := HG.cur_byte_lo hcurne _ _ hg
       have hbase_le : freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype M.tagDefs ty) +
           (CerbMem.sizeofCtype M.tagDefs ty : Int) ≤ σ₁.lastAddress :=
         freshBase_add_le M.tagDefs σ₁.lastAddress alignN ty hsz hnz
@@ -860,8 +887,9 @@ theorem create_atomic [SpikeGS hlc GF] {M : MachineCtx}
       (freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype M.tagDefs ty))
       (List.replicate (CerbMem.sizeofCtype M.tagDefs ty) undefByte)) hfreshb)
     $$ [$Hbi] with ⟨Hbi, Hbnew⟩
+  imod (budgetAuth_consume (allocCost M.tagDefs ty alignN) m) $$ [$HBa $Hb] with HBa
   imodintro
-  isplitl [Hmi Hbi Hki]
+  isplitl [Hmi Hbi Hki HBa Hc]
   · iapply (stateInterp_iff _ _ _ _).mpr
     iexists (Iris.Std.PartialMap.insert mm σ₁.nextAllocId
         (objCell M.tagDefs (freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype M.tagDefs ty))
@@ -872,26 +900,42 @@ theorem create_atomic [SpikeGS hlc GF] {M : MachineCtx}
       (Iris.Std.PartialMap.insert mk 0
         ⟨freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype M.tagDefs ty),
           σ₁.nextAllocId + 1⟩)
-    isplitr [Hmi Hbi Hki]
+    isplitr [Hmi Hbi Hki HBa Hc]
     · ipureintro
       exact HG.create M.tagDefs pref alignN ty hsz hatom Hgetc hnz
     isplitl [Hmi]
     · iexact Hmi
     isplitl [Hbi]
     · iexact Hbi
+    isplitl [Hki]
     · iexact Hki
+    · -- the coupling inequality at the advanced cursor: the authority
+      -- lost the cost, the headroom lost at most the cost
+      iapply budgetInterp_intro _
+        ⟨freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype M.tagDefs ty),
+          σ₁.nextAllocId + 1⟩ m (Iris.Std.get?_insert_eq rfl)
+        (by
+          show m ≤ headroom (freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype M.tagDefs ty))
+          have hc : allocCost M.tagDefs ty alignN =
+            CerbMem.sizeofCtype M.tagDefs ty + alignN.toNat.max 1 - 1 := rfl
+          omega)
+      isplitl [HBa]
+      · iexact HBa
+      · iexact Hc
   · iexists (SpikeVal.pure (Vobject (OVpointer (cellPtr σ₁.nextAllocId
         (freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype M.tagDefs ty))))))
     isplit
     · ipureintro
       exact ⟨rfl, rfl, Nat.le_refl 1⟩
-    ihave HB : bytesOwn (freshBase σ₁.lastAddress alignN
+    ihave HBy : bytesOwn (freshBase σ₁.lastAddress alignN
         (CerbMem.sizeofCtype M.tagDefs ty)) (.own 1)
         (List.replicate (CerbMem.sizeofCtype M.tagDefs ty) undefByte) $$ [Hbnew]
     · iapply bigSepM_rangeMap $$ Hbnew
+    iexists (cellPtr σ₁.nextAllocId
+      (freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype M.tagDefs ty)))
     isplit
     · ipureintro; rfl
-    isplitl [Hmnew HB]
+    isplitl [Hmnew HBy]
     · iapply (pointsToCell_iff M.tagDefs _ _ _ _).mpr
       iexists σ₁.nextAllocId,
         (freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype M.tagDefs ty))
@@ -899,11 +943,13 @@ theorem create_atomic [SpikeGS hlc GF] {M : MachineCtx}
       · ipureintro; rfl
       isplitl [Hmnew]
       · iexact Hmnew
-      isplitl [HB]
-      · iexact HB
+      isplitl [HBy]
+      · iexact HBy
       · ipureintro
-        exact ⟨by simp, hinert⟩
-    · iexact Hc
+        exact ⟨by simp, hinert _⟩
+    · ipureintro
+      exact ⟨freshBase_pos M.tagDefs σ₁.lastAddress alignN ty hnz,
+        freshBase_lt_two64 M.tagDefs σ₁.lastAddress alignN ty hsz hnz hla64⟩
 
 /-- `kill(kind, pv)` — positive strong kill, canonical evaluated pointer
     operand (what `Step.kill` fires on; `killRedex`'s spelling). -/

@@ -21,8 +21,9 @@ Four layers:
    variant is needed because the fragment's postconditions read out
    the FINAL MEMORY STATE (through the state interpretation), not
    just the value. `spike_step_adequacy_alloc` is the allocation-aware
-   twin: `launchResources` under `LaunchCoh` also mints the allocator
-   cursor and grants `allocCap`.
+   twin: `launchResources` under `LaunchCoh … B` also mints the
+   allocator cursor and grants the ∗-splittable budget `allocBudget B`
+   (K2.5; the ordered plan `allocCap` is retired).
 3. `engine_adequacyU` (+ `_alloc`) — THE ENGINE-ONLY STATEMENT: a
    proved WP plus a seeded MemState satisfying the precondition
    footprint implies the engine's drive never kills (no UB, no error
@@ -47,8 +48,8 @@ Four layers:
    `project_triple` at the cells-shaped post (`SemTripleU_iff_Mem`).
    The precondition is footprint cells ONLY; the ALLOCATING twins
    `project_triple_pure_alloc` / `project_triple_alloc` take footprint
-   cells ∗ `allocCap reqs` and conclude `MemTripleU_alloc` (the same
-   triple launched under `LaunchCoh` with the plan;
+   cells ∗ `allocBudget B` and conclude `MemTripleU_alloc` (the same
+   triple launched under `LaunchCoh` with the budget `B`;
    `MemTripleU_alloc_of_MemTripleU` records the direction that holds
    between the two); `struct_create_store_adequacy` is an instance.
 
@@ -444,11 +445,14 @@ extends it with THE GLOBAL MEMORY WELL-FORMEDNESS INVARIANT `MemWF σ`
 (Heap.lean, section "The global memory well-formedness invariant" —
 allocation-id discipline, live/dead consistency, pairwise range
 disjointness of ALL live allocations, cursor bounds, the
-dynamic-address facts; every component an engine fact) and the
-requested initial plan fitting the actual
-`⟨σ.lastAddress, σ.nextAllocId⟩`. (Spelling note vs the charter's
-`LaunchCoh σ m`: the plan is an explicit third argument — it is not a
-function of σ and m.)
+dynamic-address facts; every component an engine fact) and THE BUDGET
+COUPLING INEQUALITY `B ≤ headroom σ.lastAddress` (K2.5, Heap.lean "The
+allocation budget": the granted capacity `B` fits below the actual
+cursor). (Spelling note vs the charter's `LaunchCoh σ m`: the budget
+is an explicit third argument — it is not a function of σ and m. Until
+K2.5 this argument was the ordered request plan `reqs` with `PlanFits`;
+the record docs/2026-09-03_k2.5-notes.md §5 states why plan and budget
+are not interderivable at the launch.)
 
 FRESHNESS IS GLOBAL (K0; closes the 2026-09-02 detailed audit's M-1).
 The former footprint-relative fields `id_lt`/`fresh_alloc`/
@@ -465,26 +469,29 @@ one by the fragment's operations stays one (`CohG.wf` is preserved by
 
 open Iris.Std.PartialMap in
 /-- Launch coherence: footprint coherence + the global memory
-    well-formedness invariant + the plan fit. What an
-    allocation-aware launcher demands of the initial state. -/
+    well-formedness invariant + the budget fitting the cursor's
+    headroom. What an allocation-aware launcher demands of the initial
+    state. -/
 structure LaunchCoh (tds : CerbTags.TagDefsMap) (σ : Mem) (m : SpikeHeapF SpikeCell)
-    (reqs : List AllocReq) : Prop where
+    (B : Nat) : Prop where
   coh : Coh tds σ m
   /-- the global memory well-formedness invariant (K0, acceptance
       goal 3; Heap.lean) -/
   wf : MemWF σ
-  plan : PlanFits tds ⟨σ.lastAddress, σ.nextAllocId⟩ reqs
+  /-- the budget coupling inequality (K2.5): the granted capacity is at
+      most the cursor's headroom -/
+  budget : B ≤ headroom σ.lastAddress
 
 open Iris.Std.PartialMap in
-/-- Launch coherence at the EMPTY footprint: the invariant + the plan
+/-- Launch coherence at the EMPTY footprint: the invariant + the budget
     (cold-start programs allocate everything themselves). -/
-theorem LaunchCoh.empty (tds : CerbTags.TagDefsMap) (σ : Mem) (reqs : List AllocReq)
+theorem LaunchCoh.empty (tds : CerbTags.TagDefsMap) (σ : Mem) (B : Nat)
     (hwf : MemWF σ)
-    (hplan : PlanFits tds ⟨σ.lastAddress, σ.nextAllocId⟩ reqs) :
-    LaunchCoh tds σ (∅ : SpikeHeapF SpikeCell) reqs := by
+    (hB : B ≤ headroom σ.lastAddress) :
+    LaunchCoh tds σ (∅ : SpikeHeapF SpikeCell) B := by
   have hnone : ∀ i : Int, get? (∅ : SpikeHeapF SpikeCell) i = none :=
     fun i => Iris.Std.LawfulPartialMap.get?_empty i
-  refine ⟨⟨?_, ?_⟩, hwf, hplan⟩
+  refine ⟨⟨?_, ?_⟩, hwf, hB⟩
   · intro i c hg
     rw [hnone i] at hg
     cases hg
@@ -501,9 +508,9 @@ open Iris.Std.PartialMap in
     invariant verbatim, and the tracked-byte bound through the
     tracked cell's live allocation record and `MemWF.cursor_lo`. -/
 theorem LaunchCoh.cohG {tds : CerbTags.TagDefsMap} {σ : Mem} {m : SpikeHeapF SpikeCell}
-    {reqs : List AllocReq}
+    {B : Nat}
     {mm : SpikeHeapF MetaCell} {mb : SpikeHeapF CerbMem.AbsByte}
-    (h : LaunchCoh tds σ m reqs) (hmbo : MetaByteOf tds m mm mb) :
+    (h : LaunchCoh tds σ m B) (hmbo : MetaByteOf tds m mm mb) :
     CohG σ mm mb
       (Iris.Std.PartialMap.insert (∅ : SpikeHeapF AllocCursor) 0
         ⟨σ.lastAddress, σ.nextAllocId⟩) := by
@@ -555,29 +562,32 @@ theorem launchCursor_key_nonempty (σ : Mem) :
 
 open Iris.Std.PartialMap in
 /-- THE SHARED ALLOCATION-AWARE LAUNCH (charter P1.3, the one
-    helper): from the three empty ghost heaps, allocate every
-    footprint cell AND the allocator cursor at key 0 — the
-    previously missing allocation step in the launch path (R-01).
-    Delivers the assembled state interpretation (cursor key
-    nonempty; `CohG` non-vacuous through `LaunchCoh.cohG`), the
-    per-cell ownership, and the abstract capacity `allocCap reqs`
-    wrapping the exclusive cursor fragment. -/
+    helper; K2.5: the budget): from the three empty ghost heaps and
+    the empty budget authority, allocate every footprint cell AND the
+    allocator cursor at key 0 — the previously missing allocation step
+    in the launch path (R-01) — and GRANT the budget `B`
+    (`budgetAuth_grant`). Delivers the assembled state interpretation
+    (cursor key nonempty; `CohG` non-vacuous through `LaunchCoh.cohG`;
+    the cursor fragment and the authority `● B` under the coupling
+    inequality `LaunchCoh.budget`, `budgetInterp_intro`), the per-cell
+    ownership, and the ∗-splittable capacity `allocBudget B`. -/
 theorem launchResources (tds : CerbTags.TagDefsMap) {GF : BundledGFunctors} [SpikeGS .hasLC GF]
-    (σ : Mem) (m : SpikeHeapF SpikeCell) (reqs : List AllocReq)
-    (h : LaunchCoh tds σ m reqs) :
+    (σ : Mem) (m : SpikeHeapF SpikeCell) (B : Nat)
+    (h : LaunchCoh tds σ m B) :
     iprop(metaInterp (GF := GF) (∅ : SpikeHeapF MetaCell) ∗
         byteInterp (∅ : SpikeHeapF CerbMem.AbsByte) ∗
-        cursorInterp (∅ : SpikeHeapF AllocCursor)) ⊢
+        cursorInterp (∅ : SpikeHeapF AllocCursor) ∗ budgetAuth 0) ⊢
       |==> iprop(stateInterp σ 0 ([] : List Empty) 0 ∗
         ([∗map] i ↦ c ∈ m, cellOwn tds (hlc := .hasLC) i (.own 1) c) ∗
-        allocCap tds reqs) := by
-  iintro ⟨Hmi, Hbi, Hki⟩
+        allocBudget B) := by
+  iintro ⟨Hmi, Hbi, Hki, HBa⟩
   imod (spikeCells_alloc tds σ m h.coh) $$ [$Hmi $Hbi]
     with ⟨%mm, %mb, %hmbo, Hmi, Hbi, Hcells⟩
   imod (cursorHeap_alloc (⟨σ.lastAddress, σ.nextAllocId⟩ : AllocCursor)
     (Iris.Std.LawfulPartialMap.get?_empty 0)) $$ [$Hki] with ⟨Hki, Hc⟩
+  imod (budgetAuth_grant B) $$ [$HBa] with ⟨HBa, Hbud⟩
   imodintro
-  isplitl [Hmi Hbi Hki]
+  isplitl [Hmi Hbi Hki HBa Hc]
   · iapply (stateInterp_iff _ _ _ _).mpr
     iexists mm, mb,
       (Iris.Std.PartialMap.insert (∅ : SpikeHeapF AllocCursor) 0
@@ -589,11 +599,16 @@ theorem launchResources (tds : CerbTags.TagDefsMap) {GF : BundledGFunctors} [Spi
     · iexact Hmi
     isplitl [Hbi]
     · iexact Hbi
+    isplitl [Hki]
     · iexact Hki
+    · iapply budgetInterp_intro _ ⟨σ.lastAddress, σ.nextAllocId⟩ B
+        (launchCursor_key_nonempty σ) h.budget
+      isplitl [HBa]
+      · iexact HBa
+      · iexact Hc
   isplitl [Hcells]
   · iexact Hcells
-  · iapply allocCap_intro tds ⟨σ.lastAddress, σ.nextAllocId⟩ reqs h.plan
-      h.wf.la_wf $$ Hc
+  · iexact Hbud
 
 /-! ## Step-level adequacy: constructing SpikeGS and applying iris -/
 
@@ -625,20 +640,22 @@ theorem spike_step_adequacy (tds : CerbTags.TagDefsMap) {GF : BundledGFunctors} 
     (∅ : SpikeHeapF CerbMem.AbsByte)) with ⟨%Gb, Hbi, -, -⟩
   imod (genHeap_init (L := Int) (V := AllocCursor) (H := SpikeHeapF)
     (∅ : SpikeHeapF AllocCursor)) with ⟨%Gk, Hki, -, -⟩
+  imod budgetInit with ⟨%Gc, HBa⟩
   letI instGS : SpikeGS .hasLC GF :=
-    { byteGS := Gb, metaGS := Gm, cursorGS := Gk }
+    { byteGS := Gb, metaGS := Gm, cursorGS := Gk, budgetGS := Gc }
+  ihave HB0 := budgetAuth_of_init (hlc := .hasLC) (GF := GF) $$ HBa
   imod (spikeCells_alloc tds σ m₀ hcoh) $$ [$Hmi $Hbi]
     with ⟨%mm, %mb, %hmbo, Hmi, Hbi, Hcells⟩
   imodintro
   iexists fun (σ' : Mem) (_ : Nat) (_ : List Empty) (_ : Nat) =>
     iprop(∃ mm mb mk, ⌜CohG σ' mm mb mk⌝ ∗
-      metaInterp mm ∗ byteInterp mb ∗ cursorInterp mk)
+      metaInterp mm ∗ byteInterp mb ∗ cursorInterp mk ∗ budgetInterp mk)
   iexists [fun (v : CoreRVal) => iprop(∀ (σ' : Mem) (ns : Nat)
     (κs' : List Empty) (nt : Nat), stateInterp σ' ns κs' nt ={⊤, ∅}=∗ ⌜φp v σ'⌝)]
   iexists fun _ => iprop(True)
   iexists fun _ _ _ _ => fupd_intro
   dsimp only
-  isplitl [Hmi Hbi Hki]
+  isplitl [Hmi Hbi Hki HB0]
   · iexists mm, mb, (∅ : SpikeHeapF AllocCursor)
     isplit
     · ipureintro
@@ -647,7 +664,10 @@ theorem spike_step_adequacy (tds : CerbTags.TagDefsMap) {GF : BundledGFunctors} 
     · iexact Hmi
     isplitl [Hbi]
     · iexact Hbi
+    isplitl [Hki]
     · iexact Hki
+    · iapply budgetInterp_zero
+      iexact HB0
   isplitl [Hcells]
   · iapply BigSepL2.bigSepL2_singleton
     ihave HW := hwp $$ Hcells
@@ -691,19 +711,20 @@ theorem spike_step_adequacy (tds : CerbTags.TagDefsMap) {GF : BundledGFunctors} 
 /-- ALLOCATION-AWARE step adequacy (alloc arc P1.3): as
     `spike_step_adequacy`, but launched through the one shared
     `launchResources` helper — the client's proof receives the
-    footprint cells AND `allocCap reqs`, and the cursor ghost heap is
-    launched NONEMPTY at the real `⟨lastAddress, nextAllocId⟩`. The
+    footprint cells AND the budget `allocBudget B` (K2.5), and the
+    cursor ghost heap is launched NONEMPTY at the real `⟨lastAddress,
+    nextAllocId⟩`. The
     cursor-free launcher above remains for no-allocation programs
     (charter P1.3's incremental-migration allowance; retire it for
     one complete launcher once every client is ported). -/
 theorem spike_step_adequacy_alloc (tds : CerbTags.TagDefsMap) {GF : BundledGFunctors} [SpikeGpreS GF]
     (e : CoreRt) (σ : Mem) (m₀ : SpikeHeapF SpikeCell)
-    (reqs : List AllocReq) (hl : LaunchCoh tds σ m₀ reqs)
+    (B : Nat) (hl : LaunchCoh tds σ m₀ B)
     (φp : CoreRVal → Mem → Prop)
     (hwp : ∀ [SpikeGS .hasLC GF],
       iprop(([∗map] i ↦ c ∈ m₀,
           cellOwn tds (hlc := .hasLC) (GF := GF) i (.own 1) c) ∗
-        allocCap tds reqs) ⊢
+        allocBudget B) ⊢
         WP e @ Stuckness.NotStuck; ⊤ {{ v, iprop(∀ (σ' : Mem) (ns : Nat)
           (κs : List Empty) (nt : Nat),
           stateInterp σ' ns κs nt ={⊤, ∅}=∗ ⌜φp v σ'⌝) }})
@@ -721,14 +742,16 @@ theorem spike_step_adequacy_alloc (tds : CerbTags.TagDefsMap) {GF : BundledGFunc
     (∅ : SpikeHeapF CerbMem.AbsByte)) with ⟨%Gb, Hbi, -, -⟩
   imod (genHeap_init (L := Int) (V := AllocCursor) (H := SpikeHeapF)
     (∅ : SpikeHeapF AllocCursor)) with ⟨%Gk, Hki, -, -⟩
+  imod budgetInit with ⟨%Gc, HBa⟩
   letI instGS : SpikeGS .hasLC GF :=
-    { byteGS := Gb, metaGS := Gm, cursorGS := Gk }
-  imod (launchResources tds σ m₀ reqs hl) $$ [$Hmi $Hbi $Hki]
+    { byteGS := Gb, metaGS := Gm, cursorGS := Gk, budgetGS := Gc }
+  ihave HB0 := budgetAuth_of_init (hlc := .hasLC) (GF := GF) $$ HBa
+  imod (launchResources tds σ m₀ B hl) $$ [$Hmi $Hbi $Hki $HB0]
     with ⟨Hσ, Hcells, Hcap⟩
   imodintro
   iexists fun (σ' : Mem) (_ : Nat) (_ : List Empty) (_ : Nat) =>
     iprop(∃ mm mb mk, ⌜CohG σ' mm mb mk⌝ ∗
-      metaInterp mm ∗ byteInterp mb ∗ cursorInterp mk)
+      metaInterp mm ∗ byteInterp mb ∗ cursorInterp mk ∗ budgetInterp mk)
   iexists [fun (v : CoreRVal) => iprop(∀ (σ' : Mem) (ns : Nat)
     (κs' : List Empty) (nt : Nat), stateInterp σ' ns κs' nt ={⊤, ∅}=∗ ⌜φp v σ'⌝)]
   iexists fun _ => iprop(True)
@@ -943,8 +966,8 @@ theorem spikeCtx_labels_pot (l : sym) (params : List (sym × core_base_type))
 /-- ALLOCATION-AWARE engine adequacy at any machine context (alloc
     arc P2 — the partial lane's engine face for allocating clients):
     as `engine_adequacyU`, but launched through `launchResources` —
-    the client's WP proof receives the footprint cells AND
-    `allocCap reqs` (via `spike_step_adequacy_alloc`). PROVISIONAL:
+    the client's WP proof receives the footprint cells AND the budget
+    `allocBudget B` (via `spike_step_adequacy_alloc`). PROVISIONAL:
     stated over `driveU` (module header). -/
 theorem engine_adequacyU_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
     {M : MachineCtx} (hwf : M.SeqWF)
@@ -953,14 +976,14 @@ theorem engine_adequacyU_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
     (hQpot : ∀ l params cont, lookupLabel M.labels l = some (params, cont) →
       pot cont ≤ lemDefaultFuel)
     (e₀ : CoreExpr) (ev00 : Fmap sym value) (evs0 : List (Fmap sym value))
-    (σ₀ : Mem) (m₀ : SpikeHeapF SpikeCell) (reqs : List AllocReq)
+    (σ₀ : Mem) (m₀ : SpikeHeapF SpikeCell) (B : Nat)
     (hfrag : Frag e₀) (hpot : pot e₀ ≤ lemDefaultFuel)
-    (hl : LaunchCoh M.tagDefs σ₀ m₀ reqs)
+    (hl : LaunchCoh M.tagDefs σ₀ m₀ B)
     (ψ : value → Mem → Prop)
     (hwp : ∀ [SpikeGS .hasLC GF],
       iprop(([∗map] i ↦ c ∈ m₀,
           cellOwn M.tagDefs (hlc := .hasLC) (GF := GF) i (.own 1) c) ∗
-        allocCap M.tagDefs reqs) ⊢
+        allocBudget B) ⊢
         WP (⟨e₀, ev00 :: evs0, M⟩ : CoreRt) @ Stuckness.NotStuck; ⊤
           {{ w, iprop(∀ (σ' : Mem) (ns : Nat)
           (κs : List Empty) (nt : Nat),
@@ -973,7 +996,7 @@ theorem engine_adequacyU_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
       ψ v σ') := by
   have hadeq := fun (t2 : List CoreRt) (σ2 : Mem)
       (h : ([(⟨e₀, ev00 :: evs0, M⟩ : CoreRt)], σ₀) -·->ₜₚ* (t2, σ2)) =>
-    spike_step_adequacy_alloc M.tagDefs ⟨e₀, ev00 :: evs0, M⟩ σ₀ m₀ reqs hl
+    spike_step_adequacy_alloc M.tagDefs ⟨e₀, ev00 :: evs0, M⟩ σ₀ m₀ B hl
       (fun w σ' => ψ w.val σ') hwp h
   have hNS : ∀ (r : CoreRt) (σ : Mem),
       Reach ((⟨e₀, ev00 :: evs0, M⟩ : CoreRt), σ₀) (r, σ) →
@@ -1249,42 +1272,42 @@ theorem project_triple_pure {GF : BundledGFunctors} [SpikeGpreS GF]
 /-! ## THE ALLOCATING PROJECTION (P6.1, review finding H-1)
 
 `project_triple`'s precondition is footprint ownership ALONE, so a
-client whose Iris precondition includes `allocCap` (every program
+client whose Iris precondition includes `allocBudget` (every program
 that `create`s) cannot reach `MemTripleU` through it. The allocating
 projection below launches as `engine_adequacyU_alloc` does —
 `launchResources` under `LaunchCoh`, the client's WP proof receiving
-the footprint cells AND `allocCap reqs` — and concludes the boring
+the footprint cells AND `allocBudget B` — and concludes the boring
 triple `MemTripleU_alloc`, whose ONLY difference from `MemTripleU` is
-the launch precondition: `LaunchCoh M.tagDefs σ (P ∪ R) reqs` in
+the launch precondition: `LaunchCoh M.tagDefs σ (P ∪ R) B` in
 place of `Sat M.tagDefs σ (P ∪ R)`. The two genuinely differ:
 `LaunchCoh` is `Sat` (its `coh` field) PLUS the global memory
 well-formedness invariant `MemWF σ` (K0: allocation-id discipline,
 live/dead consistency, range disjointness of ALL live allocations,
-cursor bounds, the dynamic-address facts) PLUS the request plan
-fitting the actual `⟨lastAddress, nextAllocId⟩` — none of which
+cursor bounds, the dynamic-address facts) PLUS the budget coupling
+inequality `B ≤ headroom lastAddress` (K2.5) — none of which
 follows from `Sat` (a memory can carry the footprint and still have
 its allocator cursor sitting on top of those cells). The frame stays
 built into the definition (`R`
 returned to the post), the post is the same "every pure consequence
 of the Iris post" as `project_triple`'s, and `MemTripleU` implies
-`MemTripleU_alloc` at every plan (`MemTripleU_alloc_of_MemTripleU`):
+`MemTripleU_alloc` at every budget (`MemTripleU_alloc_of_MemTripleU`):
 the allocating triple is the weaker conclusion, paid for by the
 stronger launch premise. -/
 
 /-- THE BORING TRIPLE WITH A MEMORY POSTCONDITION, LAUNCHED WITH AN
-    ALLOCATION PLAN: `MemTripleU` with `Sat σ (P ∪ R)` replaced by
-    `LaunchCoh M.tagDefs σ (P ∪ R) reqs` (footprint satisfied AND the
-    allocator healthy with the plan `reqs` fitting the engine's own
-    cursor). Frame built in (`R` arbitrary, returned to the post);
+    ALLOCATION BUDGET: `MemTripleU` with `Sat σ (P ∪ R)` replaced by
+    `LaunchCoh M.tagDefs σ (P ∪ R) B` (footprint satisfied AND the
+    allocator healthy with the budget `B` below the engine's own
+    cursor's headroom). Frame built in (`R` arbitrary, returned to the post);
     partial correctness; the drive length is unbounded and no fuel
     premise is carried, as in `MemTripleU`. PROVISIONAL: stated over
     `driveU` (module header). Freshness under `LaunchCoh` is GLOBAL
     (`MemWF`, `create_fresh_global`; the `LaunchCoh` section
     header). -/
 def MemTripleU_alloc (M : MachineCtx) (ρ : EnvStack) (e : CoreExpr) (P : CellMap)
-    (reqs : List AllocReq) (post : CellMap → value → Mem → Prop) : Prop :=
+    (B : Nat) (post : CellMap → value → Mem → Prop) : Prop :=
   ∀ (R : CellMap), P ##ₘ R →
-  ∀ (σ : Mem), LaunchCoh M.tagDefs σ (Iris.Std.PartialMap.union P R) reqs →
+  ∀ (σ : Mem), LaunchCoh M.tagDefs σ (Iris.Std.PartialMap.union P R) B →
   ∀ (n : Nat) (aids : Nat → Nat),
     (∀ r, driveU M aids n (M.thread e ρ) σ ≠ .killed r) ∧
     (driveU M aids n (M.thread e ρ) σ ≠ .stuck) ∧
@@ -1292,18 +1315,18 @@ def MemTripleU_alloc (M : MachineCtx) (ρ : EnvStack) (e : CoreExpr) (P : CellMa
       post R v σ')
 
 /-- The non-allocating boring triple implies the allocating one at
-    every plan: `LaunchCoh` contains `Sat` (its `coh` field), so a
+    every budget: `LaunchCoh` contains `Sat` (its `coh` field), so a
     statement that needs no allocator health holds a fortiori under
     it. The converse fails (the launch premise is genuinely
     stronger). -/
 theorem MemTripleU_alloc_of_MemTripleU {M : MachineCtx} {ρ : EnvStack} {e : CoreExpr}
     {P : CellMap} {post : CellMap → value → Mem → Prop}
-    (h : MemTripleU M ρ e P post) (reqs : List AllocReq) :
-    MemTripleU_alloc M ρ e P reqs post :=
+    (h : MemTripleU M ρ e P post) (B : Nat) :
+    MemTripleU_alloc M ρ e P B post :=
   fun R hdisj σ hl n aids => h R hdisj σ hl.coh n aids
 
 /-- THE ALLOCATING PROJECTION: any Iris triple whose precondition is
-    footprint ownership plus the allocation capacity `allocCap reqs`,
+    footprint ownership plus the allocation budget `allocBudget B`,
     with an ARBITRARY Iris postcondition `Q`, projects to the boring
     triple `MemTripleU_alloc` whose postcondition is every pure
     consequence of `Q w ∗ frame-cells` at the final memory — the
@@ -1322,12 +1345,12 @@ theorem project_triple_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
       pot cont ≤ lemDefaultFuel)
     {e : CoreExpr} (hfrag : Frag e) (hpot : pot e ≤ lemDefaultFuel)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value))
-    (P : CellMap) (reqs : List AllocReq) (Q : ∀ [SpikeGS .hasLC GF], CoreRVal → IProp GF)
+    (P : CellMap) (B : Nat) (Q : ∀ [SpikeGS .hasLC GF], CoreRVal → IProp GF)
     (hwp : ∀ [SpikeGS .hasLC GF],
       iprop(([∗map] i ↦ c ∈ P, cellOwn M.tagDefs (hlc := .hasLC) (GF := GF) i (.own 1) c) ∗
-        allocCap M.tagDefs reqs) ⊢
+        allocBudget B) ⊢
         WP (⟨e, ev0 :: evs, M⟩ : CoreRt) @ Stuckness.NotStuck; ⊤ {{ w, Q w }}) :
-    MemTripleU_alloc M (ev0 :: evs) e P reqs (fun R v σ' => ∀ ψ : Prop,
+    MemTripleU_alloc M (ev0 :: evs) e P B (fun R v σ' => ∀ ψ : Prop,
       (∀ [SpikeGS .hasLC GF] (w : CoreRVal), w.val = v →
         ∀ (mm : SpikeHeapF MetaCell) (mb : SpikeHeapF CerbMem.AbsByte)
           (mk : SpikeHeapF AllocCursor), CohG σ' mm mb mk →
@@ -1335,7 +1358,7 @@ theorem project_triple_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
           metaInterp mm ∗ byteInterp mb) ⊢ (⌜ψ⌝ : IProp GF)) → ψ) := by
   intro R hdisj σ hl n aids
   refine engine_adequacyU_alloc (GF := GF) hwf hQf hQpot e ev0 evs σ
-    (Iris.Std.PartialMap.union P R) reqs hfrag hpot hl _ ?_ n aids
+    (Iris.Std.PartialMap.union P R) B hfrag hpot hl _ ?_ n aids
   intro instGS
   refine .trans (BI.sep_mono (BigSepM.bigSepM_union hdisj).1 .rfl) ?_
   iintro ⟨⟨HP, HR⟩, HC⟩
@@ -1353,9 +1376,9 @@ theorem project_triple_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
 
 /-- THE ALLOCATING HEADLINE: the boring triple for allocating clients
     (required fix 2, `_alloc` twin of `project_triple_pure`): an Iris
-    triple whose precondition is footprint cells ∗ `allocCap reqs` and
+    triple whose precondition is footprint cells ∗ `allocBudget B` and
     whose framed post pure-entails `ψ R w.val σ'` projects to
-    `MemTripleU_alloc M ρ e P reqs ψ` — engine vocabulary only in the
+    `MemTripleU_alloc M ρ e P B ψ` — engine vocabulary only in the
     conclusion. Derived from `project_triple_alloc`. PROVISIONAL: the
     conclusion is over `driveU` (module header). -/
 theorem project_triple_pure_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
@@ -1366,20 +1389,20 @@ theorem project_triple_pure_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
       pot cont ≤ lemDefaultFuel)
     {e : CoreExpr} (hfrag : Frag e) (hpot : pot e ≤ lemDefaultFuel)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value))
-    (P : CellMap) (reqs : List AllocReq) (Q : ∀ [SpikeGS .hasLC GF], CoreRVal → IProp GF)
+    (P : CellMap) (B : Nat) (Q : ∀ [SpikeGS .hasLC GF], CoreRVal → IProp GF)
     (ψ : CellMap → value → Mem → Prop)
     (hwp : ∀ [SpikeGS .hasLC GF],
       iprop(([∗map] i ↦ c ∈ P, cellOwn M.tagDefs (hlc := .hasLC) (GF := GF) i (.own 1) c) ∗
-        allocCap M.tagDefs reqs) ⊢
+        allocBudget B) ⊢
         WP (⟨e, ev0 :: evs, M⟩ : CoreRt) @ Stuckness.NotStuck; ⊤ {{ w, Q w }})
     (hpost : ∀ [SpikeGS .hasLC GF] (w : CoreRVal) (R : CellMap) (σ' : Mem)
       (mm : SpikeHeapF MetaCell) (mb : SpikeHeapF CerbMem.AbsByte)
       (mk : SpikeHeapF AllocCursor), CohG σ' mm mb mk →
       iprop(Q w ∗ ([∗map] i ↦ c ∈ R, cellOwn M.tagDefs (hlc := .hasLC) (GF := GF) i (.own 1) c) ∗
         metaInterp mm ∗ byteInterp mb) ⊢ (⌜ψ R w.val σ'⌝ : IProp GF)) :
-    MemTripleU_alloc M (ev0 :: evs) e P reqs ψ := by
+    MemTripleU_alloc M (ev0 :: evs) e P B ψ := by
   intro R hdisj σ hl n aids
-  have h := project_triple_alloc (GF := GF) hwf hQf hQpot hfrag hpot ev0 evs P reqs Q hwp
+  have h := project_triple_alloc (GF := GF) hwf hQf hQpot hfrag hpot ev0 evs P B Q hwp
     R hdisj σ hl n aids
   refine ⟨h.1, h.2.1, fun v σ' hd => h.2.2 v σ' hd (ψ R v σ') ?_⟩
   intro _ w hw mm mb mk hG

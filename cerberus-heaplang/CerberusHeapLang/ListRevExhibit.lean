@@ -113,6 +113,11 @@ def nullNode : CerbMem.PointerValue := CerbMem.nullPtrval nodeTy
 
 theorem longTy_size {tds : CerbTags.TagDefsMap} : CerbMem.sizeofCtype tds longTy = 8 := rfl
 theorem nodeTy_size {tds : CerbTags.TagDefsMap} : CerbMem.sizeofCtype tds nodeTy = 16 := rfl
+
+/-- The node type has positive size (the public create rules' `hsz`). -/
+theorem nodeTy_size_pos {tds : CerbTags.TagDefsMap} : 0 < CerbMem.sizeofCtype tds nodeTy := by
+  rw [nodeTy_size]
+  decide
 theorem nodePtrTy_size {tds : CerbTags.TagDefsMap} : CerbMem.sizeofCtype tds nodePtrTy = 8 := rfl
 
 /-- One long-element shift of a fragment pointer — the ENGINE's own

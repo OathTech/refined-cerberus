@@ -223,9 +223,9 @@ def trioExports : List Name := [
   ``CerberusHeapLang.cellOwn_consequence, ``CerberusHeapLang.pointsToCell_consequence,
   ``CerberusHeapLang.cellsOwn_consequence, ``CerberusHeapLang.cells_consequence,
   -- P6.1 (fresh-eyes review H-1): the ALLOCATING projection — an Iris
-  -- triple whose pre is footprint cells ∗ `allocCap reqs` projects to
-  -- `MemTripleU_alloc` (launch premise `LaunchCoh`); `MemTripleU`
-  -- implies it at every plan
+  -- triple whose pre is footprint cells ∗ `allocBudget B` (K2.5; formerly
+  -- the plan `allocCap reqs`) projects to `MemTripleU_alloc` (launch
+  -- premise `LaunchCoh`); `MemTripleU` implies it at every budget
   ``CerberusHeapLang.project_triple_alloc,
   ``CerberusHeapLang.MemTripleU_alloc_of_MemTripleU,
   -- QA-1 (2026-09-02 quality audit, H-1/M-3): the generalized block-entry
@@ -286,7 +286,23 @@ def trioExports : List Name := [
   ``CerberusHeapLang.cerberusRound_refused_kill, ``CerberusHeapLang.complete_kill,
   ``CerberusHeapLang.complete_kill_op, ``CerberusHeapLang.step_ctx_kill_illtyped',
   ``CerberusHeapLang.step_ctx_kill_eval_kill,
-  ``CerberusHeapLang.alloc_create_kill_wps, ``CerberusHeapLang.kill_launch_smoke]
+  ``CerberusHeapLang.alloc_create_kill_wps, ``CerberusHeapLang.kill_launch_smoke,
+  -- kill/free arc K2.5: THE SPLITTABLE ALLOCATION BUDGET — the ghost
+  -- algebra's laws (split/weaken/bound/consume/grant), the state-
+  -- interpretation conjunct's two introduction forms, the budget-premised
+  -- atomic create (its public faces `wps_create`/`wpt_create` are pinned
+  -- above; restated over the budget), the plan-shaped readings, the
+  -- launcher and the three cold-start budget fits. NOT pinned (sub-trio
+  -- cones `[propext, Quot.sound]`, bounded by the exhaustive sweep): the
+  -- pure engine bounds `freshBase_ne_zero_of_cost`/`headroom_freshBase`.
+  ``CerberusHeapLang.allocBudget_split, ``CerberusHeapLang.allocBudget_weaken,
+  ``CerberusHeapLang.allocBudget_le, ``CerberusHeapLang.budgetAuth_bound,
+  ``CerberusHeapLang.budgetAuth_consume, ``CerberusHeapLang.budgetAuth_grant,
+  ``CerberusHeapLang.budgetInterp_zero, ``CerberusHeapLang.budgetInterp_intro,
+  ``CerberusHeapLang.allocCost_pos, ``CerberusHeapLang.create_atomic,
+  ``CerberusHeapLang.wps_create_of_plan, ``CerberusHeapLang.wpt_create_of_plan,
+  ``CerberusHeapLang.launchResources, ``CerberusHeapLang.prod_one_int_budget_fits,
+  ``CerberusHeapLang.struct_budget_fits, ``CerberusHeapLang.lr_two_node_budget_fits]
 
 def sortedNames (ns : Array Name) : Array String :=
   (ns.map (·.toString)).qsort (· < ·)
