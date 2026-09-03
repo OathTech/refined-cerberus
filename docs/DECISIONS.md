@@ -1214,3 +1214,20 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   dead ids not proved distinct. K4-audit M-1/M-2/N-1/N-5 folded (public
   `deadObj_readout`/`deadRegion_readout`). Pins 269 → 294. NEXT: the
   RE-PIN to cerberus-lean `f95ef8d9c` (the fuel arc), then calls.
+- **2026-09-03 [AGENT] K5 RANGE AUDIT: PASS WITH TWO MEDIUMS → K5.1** (record:
+  `cerberus-heaplang/docs/2026-09-03_k5-audit.md`). Verified: the engine's
+  checks at untyped allocations exactly as the worker quoted (no
+  effective-type or alignment check); the region rules are the object
+  `_at` proofs under the region substitution; the production statement's
+  TYPE mentions only `loc0`/`mlProg`/`prodFile`; bridge arithmetic
+  re-proved; 294 pins trio-exact; manifest/snapshot regenerated
+  identical. M-1: the malloc'd-list exports never state DISTINCTNESS of
+  the `n` dead ids — `deadRegion` is persistent, so the post is
+  interderivable with "one dead region" and the readout with "one
+  dead-and-erased id", while every shop-window surface says "`n.toNat`
+  allocation ids" — a real statement weakness; K5.1 strengthens the four
+  statements with `ids.Nodup` carried through the invariant and
+  discharged by new region distinctness laws (fallback: an honesty
+  sentence if the alloc-side distinctness is not derivable). M-2: two
+  stale sentences contradicting the closure. N-1 two-label limitation
+  to the ledger; N-2 the untracked counter field qualified.
