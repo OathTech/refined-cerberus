@@ -1125,3 +1125,24 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   `allocBudget` (the package uses "budget" for the total judgment's step
   budget). Trust surface unchanged (derived-layer internals). Pins 205 →
   221. K2-audit doc items M-1/M-2/N-5 done in the same slice.
+- **2026-09-03 [AGENT] KILL/FREE K3 LANDED — ACCEPTANCE GOAL 3 CLOSED** (record:
+  `cerberus-heaplang/docs/2026-09-03_k3-notes.md`): `Step.alloc`/`alloc_eval`
+  mirror `step_action`'s Alloc0 arm (two integer operands; bare pointer
+  continuation; ILLTYPED/EVAL arms); the dynamic kill is the EXISTING
+  `Step.kill` — `Frag.kill`/`kill_op`'s static-only restriction LIFTED (a
+  strict generalization); `MemWF.allocateRegion` PROVED — every stated
+  obligation of the global invariant is now a theorem; on the K2.5 audit's
+  M-2, option (b): `MemWF.la_pos : 0 < lastAddress` added (both cursor
+  writers guard `alignedAddr ≠ 0`; cold start re-proved) — a deliberate
+  field addition to `MemWF` on orchestrator direction, recorded; the
+  `alloc` rule carries `0 < regionCost` (only `alloc(al, 0)` at `al ≤ 1`
+  is outside the rule, classified). Rules: `alloc_atomic`/`wps_alloc`/
+  `wpt_alloc` over `allocBudget (regionCost al sz)` → `regionOwn` of
+  unspecified bytes; `free_atomic`/`wps_free`/`wpt_free` (+ `_emp`, the
+  textbook `{p ↦ region} free(p) {emp}`) at `regionOwn (.own 1)` → `deadRegion`.
+  Completeness: alloc's only refusal is the OOM kill; the dynamic kill's
+  `free(NULL)` is a no-op STEP; UB179a/UB179b/`Free_out_of_bound`
+  enumerated. K2-audit N-2 disposition: static kill of a region is in the
+  fragment, mirrored and classified, NO rule by design (object bundle vs
+  region bundle) — stated on every surface. K2.5-audit M-1: `wpt_create`
+  pinned. Pins 221 → 248. Range audit dispatched on a fixed copy.
