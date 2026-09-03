@@ -1712,3 +1712,75 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   ```
   Range audit 328be1a..HEAD dispatched next on a fixed detached copy;
   merge ask follows the audit — no merge without an explicit yes to it.
+- **2026-09-03 [AGENT] F1 RANGE AUDIT 328be1a..2bbfd70: PASS WITH FIXES REQUIRED
+  (docs-only), A− — MERGE CANDIDATE 04fe3b9 (`f1-fixes`), PENDING THE OPERATOR'S
+  SIGN-OFF.** Fresh Fable-class auditor on the fixed detached copy
+  `worktrees/audit-f1-2bbfd70`; report `cerberus-heaplang/docs/
+  2026-09-03_audit-f1-range.md`. No T-/C- findings. Required, landed in
+  04fe3b9: R-1 WALKTHROUGH's `project_triple_pure` quote was truncated
+  mid-token (this range's regression) — pasted verbatim from Adequacy.lean;
+  R-2 ERRATUM to the F1 landing entry above: "ONE CONTENT LOSS" UNDERSTATED
+  the deletions — the six `_total` twins were TOTAL equations at the derived
+  bounds from an ARBITRARY seeded memory (fib's with the final state
+  pinned); their cold-start production twins cover the same programs, not
+  the same facts; the surviving seeded forms are partial; for the `procCtx`
+  exhibits a shipped-loop total twin was available (`wpt_driver_done`) and
+  declined; tree rotation alone has no shipped-pipeline statement of any
+  kind. Restating is NOT required for this merge; mover: the shipped-loop
+  total twins at `procCtx` in the `prodCtx` re-context hygiene slice.
+  Further errata to the two entries above: H-1 de2fbf1 is 34 commits past
+  the pin, not 28 (`git rev-list --count`); the "PROVISIONAL … 1 files"
+  grep hit is `CLAUDE.md:101`, the standing RULE sentence, not a label
+  (auditor-confirmed: zero labels on any surface). H-2/H-4/H-5 wording
+  fixed; H-3 (`LoopOutcome` duplicates `DriverSafeCtl`'s conclusion —
+  one outcome predicate) → hygiene queue. Auditor-confirmed by
+  measurement: census exact (3017 → 2971, 27/73/26), nine production
+  statements + the collapse/driver lemmas byte-identical, 14 new pins
+  trio-exact, `runND_killed` correctly unpinned, zero new linter
+  warnings, six plants loud (incl. the killed arm's constant: type
+  mismatch at the `fuelExhaustedKill` sites), the DECISIONS gate tail line
+  for line.
+  **The fuel scope, measured** (auditor and orchestrator independently, on
+  the pinned `driver.lem`/generated Driver.lean): the shipped driver has
+  TWO fuelled loops behind fixed 10^8 wrappers — the outer SCHEDULER loop
+  `driver2` (picks a thread's saved step: done / external C call / blocked
+  wait / fs / unsequenced-with-ccall action; the concurrency arbiter) and
+  the inner SINGLE-THREAD loop `drive_nonmemory_steps_aux2` (advances one
+  thread as far as `can_advance` allows, memory actions performed eagerly —
+  upstream's own "only correct if there is only ONE thread" comments). The
+  fuel-arc seam `drive_lemFuel fuel` threads fuel to the OUTER loop only
+  (the one `driver2` occurrence; accepted by our review §7). [USER
+  2026-09-03] (verbatim): "the outer loop is the 'scheduler' loop and the
+  inner loop is the 'single threaded' loop. And for our logic, which (for
+  now) is sequential, the scheduler is degenerate, we never see schedule
+  changes." Consequences: the production statements' `hfuel` bounds are on
+  the inner loop (the real run-length axis) — correct as they stand; F1's
+  loop-level `DriverSafeCtl` quantifies over all inner fuels — real
+  content; F1's CLOSED partial forms quantify over the outer fuel, which
+  for every program in the fragment is one round (fuel 0 kills at entry to
+  main; fuel ≥ 1 = `drive`) — true, about the genuine driver, disclosed on
+  the surfaces (auditor: no reword required), but the quantifier does no
+  work. It stops being degenerate under concurrency OR external C calls.
+  [AGENT] recommendation, QUEUED for the operator (not applied): state the
+  closed partial forms over `drive` at the shipped budgets and drop the
+  outer-fuel quantifier; a fuel-parametric closed export would need a
+  second mirror threading the inner fuel (a request to the cerberus-lean
+  team) — not asked for now.
+  Orchestrator FULL gate at 04fe3b9 (the candidate's Lean content; this
+  DECISIONS append is the only later change), verbatim verdict lines:
+  ```
+  == gate 1: banned proof-method grep (native_decide / bv_decide / ofReduce*) ==
+  ok: no banned proof-method references
+  == gate 2: capped build, cerberus-heaplang (elaborates its axiom audit) ==
+  CerberusHeapLang export pins: 373 trio-exact
+  CerberusHeapLang axiom sweep: every theorem bounded by the trio (3396 swept, internal details included — count informational, environment-dependent)
+  CerberusHeapLang banned-axiom sweep: sorryAx/ofReduceBool/ofReduceNat absent from all cones (5161 constants of every kind swept, internal details included — count informational, environment-dependent)
+  Build completed successfully (456 jobs).
+  ok: cerberus-heaplang build green
+  == speedbump: capability manifest (regenerate; red on a red row or drift) ==
+  ok: capability manifest regenerated, no drift
+  == speedbump: import direction (semantics → heap → rules → adequacy → clients) ==
+  ok: import direction — no core module imports an exhibit/example/production module
+  ALL GATES GREEN
+  GATE-EXIT=0
+  ```
