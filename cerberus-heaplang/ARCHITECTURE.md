@@ -294,6 +294,23 @@ PROVISIONAL label is not removed before then.
   The former footprint-relative launch facts (`id_lt`, `fresh_alloc`,
   `fresh_dead`, `addr_lo`, `la_wf`; `CohG`'s `cur_dead`/`cur_alloc`/
   `cur_meta_lt`/`cur_meta_lo`) are consequences and were retired as
-  fields.
+  fields (K1 re-adds `cur_meta_lo` as a field: dead metadata cells
+  have no record for `MemWF.cursor_lo` to read).
+- The kill/free arc's METADATA CELL — LANDED (K1, 2026-09-03): `MetaCell`
+  is ⟨base, optional type, size, `alive`, `readonly`, `dynamic`⟩, every
+  field coupled to the engine's `Allocation` record by `MetaCoh`
+  (Heap.lean: live cells to not-dead present records agreeing on base/
+  size/type/writability; dead cells to a dead id with its record erased;
+  `dynamic = true → base ∈ dynamicAddrs`, the one direction the engine
+  preserves). RefinedC's `al_alive`/`al_kind`; the read-only flag and
+  the optional type are Cerberus-forced (`Allocation.isReadonly`;
+  `allocateRegion` records no type). The frozen bundles are the live,
+  writable, created-object instance (`objCell … true false`), so their
+  statements did not change; the new bundles `regionOwn`/`regionView`
+  (untyped live dynamic regions), `readonlyCell` (loads only —
+  `load_atomic_readonly`; the store refusal `storeM_readonly_kills` is
+  an engine fact) and `deadObj`/`deadRegion` (persistent knowledge of a
+  kill) are what K2/K3's rules produce and consume. Record:
+  `docs/2026-09-03_k1-notes.md`.
 - The deferred parametric semantics interfaces: the rules are proved
   directly against `Step` and the memory state (walkthrough §7).

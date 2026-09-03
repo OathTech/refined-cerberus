@@ -252,7 +252,20 @@ def trioExports : List Name := [
   -- operations of the fragment
   ``CerberusHeapLang.create_fresh_global, ``CerberusHeapLang.prodMem₀_memWF,
   ``CerberusHeapLang.MemWF.loadM, ``CerberusHeapLang.MemWF.storeM,
-  ``CerberusHeapLang.MemWF.allocateObject, ``CerberusHeapLang.MemWF.create]
+  ``CerberusHeapLang.MemWF.allocateObject, ``CerberusHeapLang.MemWF.create,
+  -- kill/free arc K1: the extended metadata cell — the generic live-cell
+  -- seams, the read-only store refusal (engine fact) and load rule, the
+  -- region and dead-cell bundles' laws and coupling readouts
+  ``CerberusHeapLang.loadM_live, ``CerberusHeapLang.storeM_live,
+  ``CerberusHeapLang.storeM_readonly_kills, ``CerberusHeapLang.storeM_readonly_none,
+  ``CerberusHeapLang.load_atomic_readonly, ``CerberusHeapLang.readonlyCell_fractional,
+  ``CerberusHeapLang.readonlyCell_agree, ``CerberusHeapLang.readonlyCell_pointsToCell_false,
+  ``CerberusHeapLang.readonlyCell_readonly, ``CerberusHeapLang.pointsToCell_live,
+  ``CerberusHeapLang.regionView_split, ``CerberusHeapLang.regionView_join,
+  ``CerberusHeapLang.regionOwn_view, ``CerberusHeapLang.regionOwn_fractional,
+  ``CerberusHeapLang.regionOwn_agree, ``CerberusHeapLang.regionOwn_facts,
+  ``CerberusHeapLang.deadObj_agree, ``CerberusHeapLang.deadObj_allocMeta_false,
+  ``CerberusHeapLang.pointsToCell_deadObj_false, ``CerberusHeapLang.deadObj_dead]
 
 def sortedNames (ns : Array Name) : Array String :=
   (ns.map (·.toString)).qsort (· < ·)

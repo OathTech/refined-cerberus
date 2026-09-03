@@ -445,6 +445,105 @@ theorem load_atomic [SpikeGS hlc GF] {M : MachineCtx}
     · ipureintro
       exact ⟨hlen, hdec⟩
 
+/-- LOAD FROM A READ-ONLY CELL (whole cell, any fraction, UB-excluding)
+    as an atomic step (K1): the same engine path as `load_atomic` —
+    `loadM` never consults writability (CerbMem.lean:1621-1664) — so a
+    `readonlyCell` supports the load spec verbatim; the engine seam is
+    the live-cell load `loadM_live` at the read-only metadata literal.
+    There is NO store counterpart: `storeM` at a read-only allocation
+    is killed with `MerrWriteOnReadOnly kind` (`storeM_readonly_kills`,
+    Heap.lean; :1724-1725), and `Step` has no step at a killed arm. -/
+theorem load_atomic_readonly [SpikeGS hlc GF] {M : MachineCtx}
+    (loc : CerbLocation.Loc) (ann : core_run_annotation) (ty : ctype)
+    (pv : CerbMem.PointerValue) (mo : memory_order) (dq : DFrac)
+    (bs : List CerbMem.AbsByte) (ρ : EnvStack)
+    (htrap : cellLoadTrap M.tagDefs ⟨addrOf pv, ty, bs⟩ = false) :
+    AtomicStep M (loadExpr loc ann ty pv mo) ρ 2
+      (readonlyCell M.tagDefs (GF := GF) pv dq ty bs)
+      (fun w => iprop(∃ fp,
+        ⌜w = SpikeVal.annot [DA_pos [] fp] (loadedVal M.tagDefs pv ty bs)⌝ ∗
+        readonlyCell M.tagDefs pv dq ty bs)) := by
+  intro E₁ E₂ hE σ₁ ns obs nt
+  iintro ⟨Hpt, Hσ⟩
+  icases (stateInterp_iff σ₁ ns obs nt).mp $$ Hσ
+    with ⟨%mm, %mb, %mk, %HG, Hmi, Hbi, Hki⟩
+  icases (readonlyCell_iff M.tagDefs pv dq ty bs).mp $$ Hpt
+    with ⟨%i, %addr, %Hpv, Hm, Hb, %Hpure⟩
+  subst Hpv
+  obtain ⟨hlen, hdec⟩ := Hpure
+  ihave %Hgetm : ⌜Iris.Std.PartialMap.get? mm i = some (objCell M.tagDefs addr ty true true)⌝
+      $$ [Hmi Hm]
+  · ihave >%h := metaHeap_valid $$ [$Hmi $Hm]
+    itrivial
+  ihave %Hread : ⌜CerbMem.readBytesFrom σ₁ addr bs.length = bs⌝ $$ [Hbi Hb]
+  · iapply bytesOwn_read HG addr dq bs $$ [$Hbi $Hb]
+  have hrun := loadM_live M.tagDefs σ₁ i (objCell M.tagDefs addr ty true true) 0 ty bs
+    (decodeCell M.tagDefs ⟨addr, ty, bs⟩) loc (HG.metas i _ Hgetm) rfl
+    (by simp [objCell])
+    (by rw [hlen] at Hread; simpa [objCell] using Hread)
+    (by simpa [objCell] using hdec σ₁.lastUsedUnionMembers σ₁.funptrmap)
+    htrap
+  simp only [objCell, Int.natCast_zero, Int.add_zero] at hrun
+  iapply fupd_mask_intro hE
+  iintro Hclose
+  isplitr
+  · ipureintro
+    exact ⟨[], ⟨_, _, _⟩, _, [], ⟨Step.load_canonical hrun, rfl, rfl⟩⟩
+  iintro %r %σ₂ %eₜ %Hstep
+  obtain ⟨hstep, hlbl, rfl⟩ := Hstep
+  obtain ⟨fp', mval', σ'', hmem', hout⟩ := hstep.load_inv
+  rw [hrun] at hmem'
+  obtain ⟨⟨rfl, rfl⟩, rfl⟩ :
+      (fp' = CerbMem.Footprint.FP .R addr (CerbMem.sizeofCtype M.tagDefs ty) ∧
+        mval' = decodeCell M.tagDefs ⟨addr, ty, bs⟩) ∧ σ₁ = σ'' := by
+    have h := Option.some.inj hmem'.symm
+    exact ⟨⟨congrArg (fun p => p.1.1) h, congrArg (fun p => p.1.2) h⟩,
+      (congrArg Prod.snd h).symm⟩
+  obtain ⟨re, rρ, rM⟩ := r
+  simp only at hlbl
+  obtain rfl : M = rM := hlbl.symm
+  obtain ⟨hre, hrρ, hσ⟩ : re = Expr [] (Eannot
+        [DA_pos [] (CerbMem.Footprint.FP .R addr (CerbMem.sizeofCtype M.tagDefs ty))]
+        (Expr [] (Epure (Pexpr [] () (PEval
+          (valueFromMemValue (decodeCell M.tagDefs ⟨addr, ty, bs⟩)).2))))) ∧
+      rρ = ρ ∧ σ₂ = σ₁ := by
+    simpa [Prod.mk.injEq] using hout
+  subst hre
+  obtain rfl : ρ = rρ := hrρ.symm
+  obtain rfl : σ₁ = σ₂ := hσ.symm
+  imod Hclose with -
+  imodintro
+  isplitl [Hmi Hbi Hki]
+  · iapply (stateInterp_iff _ _ _ _).mpr
+    iexists mm, mb, mk
+    isplitr [Hmi Hbi Hki]
+    · ipureintro
+      exact HG
+    isplitl [Hmi]
+    · iexact Hmi
+    isplitl [Hbi]
+    · iexact Hbi
+    · iexact Hki
+  · iexists (SpikeVal.annot
+      [DA_pos [] (CerbMem.Footprint.FP .R addr (CerbMem.sizeofCtype M.tagDefs ty))]
+      (loadedVal M.tagDefs (cellPtr i addr) ty bs))
+    isplit
+    · ipureintro
+      exact ⟨rfl, rfl, Nat.le_refl 2⟩
+    iexists (CerbMem.Footprint.FP .R addr (CerbMem.sizeofCtype M.tagDefs ty))
+    isplit
+    · ipureintro; rfl
+    iapply (readonlyCell_iff M.tagDefs _ _ _ _).mpr
+    iexists i, addr
+    isplit
+    · ipureintro; rfl
+    isplitl [Hm]
+    · iexact Hm
+    isplitl [Hb]
+    · iexact Hb
+    · ipureintro
+      exact ⟨hlen, hdec⟩
+
 /-- GENERIC TYPED SUBRANGE LOAD as an atomic step (any fractions,
     UB-excluding): loading a typed view delivers the fixed decode of
     its byte image; the view rides through untouched. `hdec` is the

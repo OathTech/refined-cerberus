@@ -8,12 +8,15 @@ GenHeaps coupled to the real `CerbMem.MemState` by `CohG`.
 - A per-BYTE heap (absolute address ↦ `AbsByte`, the ghost fragment
   of the engine's own bytemap), so sub-range ownership splits and
   joins at real ∗ (`bytesOwn`, `pointsToView`).
-- A per-allocation METADATA heap (allocation id ↦ base/type/size) —
-  the provenance authority: `loadM`/`storeM` success is decided by the
-  allocation table (liveness, bounds, writability, atomicity —
-  CerbMem.lean:1586-1696), so byte content alone can never entail
-  access success; the metadata cell carries exactly those facts and
-  is the per-allocation exclusivity anchor (`metaOwn`).
+- A per-allocation METADATA heap (allocation id ↦ `MetaCell`: base,
+  OPTIONAL type, size, and the three flags `alive`/`readonly`/`dynamic`
+  — K1) — the provenance authority: `loadM`/`storeM`/`killM` success is
+  decided by the allocation table (liveness, bounds, writability,
+  atomicity, dynamic-ness — CerbMem.lean:1555-1730), so byte content
+  alone can never entail access success; the metadata cell carries
+  exactly those facts, each coupled to the engine's `Allocation` record
+  by `MetaCoh`, and is the per-allocation exclusivity anchor
+  (`metaOwn`). `objCell`/`regionCell` name the two allocators' cells.
 - A one-cell ALLOCATOR-CURSOR heap (`AllocCursor`: `lastAddress` and
   `nextAllocId`, the two `MemState` fields `allocateObject` reads and
   writes; `cursorOwn`). Without it `create`'s reducibility is
@@ -51,35 +54,46 @@ heap_mapsto / loc_in_bounds / alloc_alive):
    any list decomposition (`bytesOwn_append`) and at any fraction sum
    (`bytesOwn_fractional`), agreeing on contents (`bytesOwn_agree`).
 2. PERSISTENT ALLOCATION KNOWLEDGE — id, base, allocation type, size
-   and in-bounds facts, all read off the IMMUTABLE metadata cell:
-   `allocMeta`/`locInBounds` (the metadata cell at the discarded
-   fraction; the `Persistent` instances are the persistence law). Any
-   view's metadata fraction can be traded for it
-   (`pointsToView_persist`), and a persistent-metadata view yields its
-   bounds knowledge without giving anything up
-   (`pointsToView_locInBounds`). The bundles (`pointsToView`,
-   `cellOwn`, `pointsToCell`) keep the metadata at a FRACTION `dqm`
-   because full metadata ownership is the per-allocation EXCLUSIVITY
-   anchor the frame theorem needs (`metaOwn_ne` →
-   `bigSepM_own_disjoint`, Adequacy.lean) — a deliberate divergence
-   from the donor, where the anchor is the killable `alloc_alive`.
-3. NO LIVENESS/FREEABILITY TOKEN. kill/free is outside the fragment:
-   METADATA IS IMMUTABLE — no rule updates a metadata cell
-   (`metaHeap_alloc` mints; nothing writes) — so knowledge about an
-   allocation, once obtained, holds forever, and there is no token to
-   guard a deallocation that cannot happen. Named mover: when kill
-   joins the fragment, the metadata heap gains the donor's
-   alloc_alive/freeable split and the exclusivity anchor moves there.
+   and in-bounds facts, read off the metadata cell at the DISCARDED
+   fraction: `allocMeta`/`locInBounds` (the `Persistent` instances are
+   the persistence law). Any view's metadata fraction can be traded
+   for it (`pointsToView_persist`), and a persistent-metadata view
+   yields its bounds knowledge without giving anything up
+   (`pointsToView_locInBounds`). Persisting is FINAL: the killable
+   cell is `.own 1` and `.own 1 ∗ .discard` is invalid, so holding
+   `allocMeta` forecloses the kill — that is why it stays true forever
+   (RefinedC's `alloc_global`). The bundles (`pointsToView`, `cellOwn`,
+   `pointsToCell`) keep the metadata at a FRACTION `dqm` because full
+   metadata ownership is the per-allocation EXCLUSIVITY anchor the
+   frame theorem needs (`metaOwn_ne` → `bigSepM_own_disjoint`,
+   Adequacy.lean) — and, since K1, the LIVENESS TOKEN.
+3. THE LIVENESS/FREEABILITY TOKEN IS THE CELL'S `alive` FLAG (K1;
+   RefinedC's `al_alive`, `freeable` collapsed into the one cell): every
+   access bundle carries `alive := true`; a kill (K2 static, K3 dynamic)
+   consumes the cell at `.own 1` and is the ghost update to `alive :=
+   false`, handing back at most the persistent DEAD cell
+   (`deadObj`/`deadRegion`; `deadObj_allocMeta_false`: dead and live
+   persistent knowledge of one id are contradictory). In THIS fragment
+   no rule performs the update yet (`metaHeap_alloc` mints; nothing
+   writes) — the kill rules are K2/K3's spec additions; K1 is the
+   internals they need. The extended cell also carries `readonly`
+   (`readonlyCell`: loads only — `storeM_readonly_kills` is the engine's
+   refusal) and `dynamic` (K3's `free` premise; `regionOwn`), and an
+   OPTIONAL type (regions are untyped).
 
 STATE INTERPRETATION (memory only — no driver state):
 `stateInterp σ _ _ _ := ∃ mm mb mk, ⌜CohG σ mm mb mk⌝ ∗ interps` over
 the real `CerbMem.MemState`. `CohG` couples: byte cells to the bytemap
-readout; metadata cells to live/writable/typed/non-atomic allocations,
-pairwise range-disjoint; the cursor cell (key 0) to
-`lastAddress`/`nextAllocId`, its PRESENCE carrying THE GLOBAL MEMORY
-WELL-FORMEDNESS INVARIANT `MemWF σ` (`CohG.wf`) plus the one ghost-side
-bound (tracked bytes at or above the cursor, `cur_byte_lo`) —
-cursor-free launches owe nothing new. The allocation-aware launchers
+readout; metadata cells to the allocation tables field by field
+(`MetaCoh`: live cells to not-dead, present records agreeing on base/
+size/type/writability; dead cells to a dead id with its record erased;
+non-atomic type; a dynamic cell's base in `dynamicAddrs`), pairwise
+range-disjoint; the cursor cell (key 0) to `lastAddress`/`nextAllocId`,
+its PRESENCE carrying THE GLOBAL MEMORY WELL-FORMEDNESS INVARIANT
+`MemWF σ` (`CohG.wf`) plus the two ghost-side bounds `MemWF` cannot
+supply (tracked bytes and tracked metadata cells — alive or dead — at
+or above the cursor, `cur_byte_lo`/`cur_meta_lo`) — cursor-free
+launches owe nothing new. The allocation-aware launchers
 (`launchResources`, Adequacy.lean, under `LaunchCoh`, whose `wf` field
 is `MemWF σ`) mint the cursor cell and grant the abstract capacity
 `allocCap` (this file) to the public create rules; the cursor-free
@@ -105,8 +119,12 @@ context): decode-inertness rides as a pure payload of `pointsToCell`
 integer-array images all of these are `rfl`.
 
 Also here: the engine-memory success lemmas the rule proofs run —
-`storeM_success`, `loadM_success`, `storeM_at`, `loadM_at`,
-`allocateObject_success` — and the byte-map algebra
+`storeM_success`, `loadM_success`, the generic live-cell seams
+`loadM_live`/`storeM_live` with their created-object instances
+`loadM_at`/`storeM_at`, `allocateObject_success` — the engine's
+read-only refusal (`storeM_readonly_kills`), the K1 bundles
+(`regionView`/`regionOwn`, `readonlyCell`, `deadObj`/`deadRegion`) with
+their laws and coupling readouts, and the byte-map algebra
 (`writeBytesTo_*`, `readBytesFrom_*`, `spliceBytes_*`).
 -/
 import Iris
@@ -1849,16 +1867,15 @@ end RangeMaps
 THE CARRIER (the registered growth step, executed): a per-BYTE heap
 (absolute address ↦ AbsByte — the ghost fragment of the engine's own
 `bytemap`), a per-allocation METADATA heap (allocation id ↦
-base/type — the provenance/metadata authority), and a one-cell
-ALLOCATOR-CURSOR heap (the D26 resource: lastAddress/nextAllocId
-knowledge, without which `create`'s reducibility is unprovable).
-Donor shape: Caesium's `heap : gmap addr byte` + `allocs : gmap
-alloc_id allocation` split (RefinedC theories/caesium/ghost_state.v;
-loc_in_bounds is their persistent metadata analogue, alloc_alive
-their killable one — kill/free is outside this fragment, so the
-metadata here is plain fractional and never dies; when kill joins
-the fragment the metadata heap gains a liveness component — named
-mover, registered in the phase notes). -/
+`MetaCell`: base, optional type, size, alive/readonly/dynamic — the
+provenance/metadata authority), and a one-cell ALLOCATOR-CURSOR heap
+(the D26 resource: lastAddress/nextAllocId knowledge, without which
+`create`'s reducibility is unprovable). Donor shape: Caesium's `heap :
+gmap addr byte` + `allocs : gmap alloc_id allocation` split (RefinedC
+theories/caesium/ghost_state.v; loc_in_bounds is their persistent
+metadata analogue, alloc_alive their killable one — here the liveness
+component is the cell's `alive` field, K1; the kill rules that flip it
+are K2/K3). -/
 
 /-- The allocator cursor: the two MemState fields `allocateObject`
     reads and writes (CerbMem.lean:1470-1490). -/
@@ -2720,6 +2737,357 @@ theorem pointsToView_locInBounds (tds : CerbTags.TagDefsMap) (id a : Int) (aty :
 
 end AllocFacts
 
+/-! ## The K1 bundles: regions, read-only cells, dead cells
+
+The extended metadata cell admits three kinds of allocation the frozen
+bundles (`pointsToCell`/`pointsToView`/`cellOwn` — live, writable,
+typed, created) cannot describe; each gets its own derived bundle over
+the SAME two ghost heaps, so the frame theorem (`metaOwn_ne`) and the
+byte algebra (`bytesOwn_*`) apply unchanged:
+- `regionView`/`regionOwn` — an untyped LIVE DYNAMIC region
+  (`regionCell a n true`: `allocateRegion` records no type and pushes
+  the base onto `dynamicAddrs`, CerbMem.lean:1544/:1548). The view's
+  bound is against the region's SIZE (no layout enters, so no `tds`).
+  K3's `alloc`/`free` rules produce and consume `regionOwn … (.own 1)`;
+  the region loads/stores go through `loadM_live`/`storeM_live`.
+- `readonlyCell` — a live READ-ONLY typed object (`objCell … true
+  true`). Loads are supported (`load_atomic_readonly`, Rules.lean);
+  stores are not, as an ENGINE fact (`storeM_readonly_kills`). No rule
+  of this fragment mints one (`create` is `allocateObject … none none`,
+  writable; the launch footprint `CellCoh` pins `.IsWritable`) — it is
+  the assertion vocabulary for `create_readonly`/string literals when
+  those join the fragment (a spec-addition slice).
+- `deadObj`/`deadRegion` — the metadata of a KILLED allocation at the
+  discarded fraction: persistent knowledge that `id` is dead (its base,
+  size, type are the ghost record of what was there — the engine has
+  erased its record, `killM` :1576-1578). This is what K2/K3's kill
+  rules can hand back (RefinedC's `alloc_alive id DfracDiscarded false`
+  has no separate meta; here the one cell carries both). A dead cell
+  and `allocMeta` (persistent LIVE knowledge) of the same id are
+  contradictory (`deadObj_allocMeta_false`): persisting metadata is
+  giving up the right to dispose, and disposing forecloses persisting
+  live knowledge — `.own 1 ∗ .discard` is invalid. -/
+
+section K1Bundles
+
+variable [SpikeGS hlc GF]
+
+open Iris.BI
+
+/-- REGION VIEW: ownership of one untyped subrange (`bs.length` bytes at
+    offset `off`) of one live dynamic region of `n` bytes — metadata at
+    fraction `dqm`, bytes at fraction `dqb`, the in-bounds fact pure. -/
+def regionView (id a : Int) (n off : Nat) (dqm dqb : DFrac)
+    (bs : List CerbMem.AbsByte) : IProp GF :=
+  iprop(metaOwn id dqm (regionCell a n true) ∗ ⌜off + bs.length ≤ n⌝ ∗
+    bytesOwn (a + (off : Int)) dqb bs)
+
+/-- REGION OWNERSHIP: the whole live dynamic region `id` at base `a`,
+    `n` bytes, contents `bs`, at fraction `dq` (the untyped analogue of
+    `pointsToCell`; the shape K3's `alloc` delivers and `free` consumes
+    at `.own 1`). -/
+def regionOwn (id a : Int) (n : Nat) (dq : DFrac) (bs : List CerbMem.AbsByte) : IProp GF :=
+  iprop(metaOwn id dq (regionCell a n true) ∗ bytesOwn a dq bs ∗ ⌜bs.length = n⌝)
+
+/-- Region ownership IS the maximal region view. -/
+theorem regionOwn_view (id a : Int) (n : Nat) (dq : DFrac) (bs : List CerbMem.AbsByte) :
+    regionOwn (GF := GF) id a n dq bs ⊣⊢
+      iprop(regionView id a n 0 dq dq bs ∗ ⌜bs.length = n⌝) := by
+  unfold regionOwn regionView
+  constructor
+  · iintro ⟨Hm, Hb, %hlen⟩
+    isplitl [Hm Hb]
+    · iframe Hm
+      isplit
+      · ipureintro
+        omega
+      · rw [show a + ((0 : Nat) : Int) = a by omega]
+        iexact Hb
+    · ipureintro
+      exact hlen
+  · iintro ⟨⟨Hm, -, Hb⟩, %hlen⟩
+    iframe Hm
+    isplit
+    · rw [show a + ((0 : Nat) : Int) = a by omega]
+      iexact Hb
+    · ipureintro
+      exact hlen
+
+/-- REGION SPLIT: a region view splits at any decomposition of its
+    byte list (metadata fraction split, byte range split at the list
+    decomposition) — the untyped `pointsToView_split`. -/
+theorem regionView_split (id a : Int) (n off : Nat) (q₁ q₂ : Qp) (dqb : DFrac)
+    (bs₁ bs₂ : List CerbMem.AbsByte) :
+    regionView (GF := GF) id a n off (.own (q₁ + q₂)) dqb (bs₁ ++ bs₂) ⊢
+      iprop(regionView id a n off (.own q₁) dqb bs₁ ∗
+        regionView id a n (off + bs₁.length) (.own q₂) dqb bs₂) := by
+  unfold regionView
+  iintro ⟨Hm, %hbound, Hb⟩
+  have hlapp : (bs₁ ++ bs₂).length = bs₁.length + bs₂.length := List.length_append
+  icases (metaOwn_fractional id (regionCell a n true) q₁ q₂).1 $$ Hm with ⟨Hm₁, Hm₂⟩
+  icases (bytesOwn_append (a + (off : Int)) dqb bs₁ bs₂).1 $$ Hb with ⟨Hb₁, Hb₂⟩
+  isplitl [Hm₁ Hb₁]
+  · isplitl [Hm₁]
+    · iexact Hm₁
+    isplit
+    · ipureintro
+      omega
+    · iexact Hb₁
+  · isplitl [Hm₂]
+    · iexact Hm₂
+    isplit
+    · ipureintro
+      omega
+    · rw [show a + ((off + bs₁.length : Nat) : Int) =
+        a + (off : Int) + ((bs₁.length : Nat) : Int) by omega]
+      iexact Hb₂
+
+/-- REGION JOIN: two adjacent views of one region join (fractions add,
+    byte ranges concatenate); the containing bound follows from the
+    second view's. -/
+theorem regionView_join (id a : Int) (n off : Nat) (q₁ q₂ : Qp) (dqb : DFrac)
+    (bs₁ bs₂ : List CerbMem.AbsByte) :
+    iprop(regionView (GF := GF) id a n off (.own q₁) dqb bs₁ ∗
+      regionView id a n (off + bs₁.length) (.own q₂) dqb bs₂) ⊢
+      regionView id a n off (.own (q₁ + q₂)) dqb (bs₁ ++ bs₂) := by
+  unfold regionView
+  iintro ⟨⟨Hm₁, %hb₁, Hb₁⟩, Hm₂, %hb₂, Hb₂⟩
+  isplitl [Hm₁ Hm₂]
+  · iapply (metaOwn_fractional id (regionCell a n true) q₁ q₂).2
+    isplitl [Hm₁]
+    · iexact Hm₁
+    · iexact Hm₂
+  isplit
+  · ipureintro
+    have hlapp : (bs₁ ++ bs₂).length = bs₁.length + bs₂.length := List.length_append
+    omega
+  · iapply (bytesOwn_append (a + (off : Int)) dqb bs₁ bs₂).2
+    isplitl [Hb₁]
+    · iexact Hb₁
+    · rw [show a + (off : Int) + ((bs₁.length : Nat) : Int) =
+        a + ((off + bs₁.length : Nat) : Int) by omega]
+      iexact Hb₂
+
+/-- REGION FRACTIONAL: the textbook fractional law for regions. -/
+theorem regionOwn_fractional (id a : Int) (n : Nat) (q₁ q₂ : Qp)
+    (bs : List CerbMem.AbsByte) :
+    regionOwn (GF := GF) id a n (.own (q₁ + q₂)) bs ⊣⊢
+      iprop(regionOwn id a n (.own q₁) bs ∗ regionOwn id a n (.own q₂) bs) := by
+  unfold regionOwn
+  constructor
+  · iintro ⟨Hm, Hb, %hlen⟩
+    icases (metaOwn_fractional id (regionCell a n true) q₁ q₂).1 $$ Hm with ⟨Hm₁, Hm₂⟩
+    icases (bytesOwn_fractional a q₁ q₂ bs).1 $$ Hb with ⟨Hb₁, Hb₂⟩
+    isplitl [Hm₁ Hb₁]
+    · isplitl [Hm₁]
+      · iexact Hm₁
+      isplitl [Hb₁]
+      · iexact Hb₁
+      · ipureintro
+        exact hlen
+    · isplitl [Hm₂]
+      · iexact Hm₂
+      isplitl [Hb₂]
+      · iexact Hb₂
+      · ipureintro
+        exact hlen
+  · iintro ⟨⟨Hm₁, Hb₁, %hlen⟩, Hm₂, Hb₂, -⟩
+    isplitl [Hm₁ Hm₂]
+    · iapply (metaOwn_fractional id (regionCell a n true) q₁ q₂).2
+      isplitl [Hm₁]
+      · iexact Hm₁
+      · iexact Hm₂
+    isplitl [Hb₁ Hb₂]
+    · iapply (bytesOwn_fractional a q₁ q₂ bs).2
+      isplitl [Hb₁]
+      · iexact Hb₁
+      · iexact Hb₂
+    · ipureintro
+      exact hlen
+
+/-- REGION AGREEMENT: two ownerships of one region agree on base, size
+    and contents. -/
+theorem regionOwn_agree (id a a' : Int) (n n' : Nat) (dq dq' : DFrac)
+    (bs bs' : List CerbMem.AbsByte) :
+    iprop(regionOwn (GF := GF) id a n dq bs ∗ regionOwn id a' n' dq' bs') ⊢
+      (⌜a = a' ∧ n = n' ∧ bs = bs'⌝ : IProp GF) := by
+  unfold regionOwn
+  iintro ⟨⟨Hm, Hb, %hlen⟩, Hm', Hb', %hlen'⟩
+  ihave %h : ⌜regionCell a n true = regionCell a' n' true⌝ $$ [Hm Hm']
+  · iapply metaOwn_agree id dq dq' _ _ $$ [$Hm $Hm']
+  simp only [regionCell, MetaCell.mk.injEq, and_true, true_and] at h
+  obtain ⟨rfl, rfl⟩ := h
+  ihave %hbs : ⌜bs = bs'⌝ $$ [Hb Hb']
+  · iapply bytesOwn_agree a dq dq' bs bs' (by omega) $$ [$Hb $Hb']
+  ipureintro
+  exact ⟨rfl, rfl, hbs⟩
+
+/-- THE READ-ONLY CELL: a live read-only typed object through its own
+    pointer, at fraction `dq` — `pointsToCell` with the read-only flag
+    set. -/
+def readonlyCell (tds : CerbTags.TagDefsMap) (pv : CerbMem.PointerValue) (dq : DFrac)
+    (ty : ctype) (bs : List CerbMem.AbsByte) : IProp GF :=
+  iprop(∃ (id : Int) (a : Int),
+    ⌜pv = cellPtr id a⌝ ∗ metaOwn id dq (objCell tds a ty true true) ∗
+    bytesOwn a dq bs ∗
+    ⌜bs.length = CerbMem.sizeofCtype tds ty ∧ decIndep tds a ty bs⌝)
+
+theorem readonlyCell_iff (tds : CerbTags.TagDefsMap) (pv : CerbMem.PointerValue) (dq : DFrac)
+    (ty : ctype) (bs : List CerbMem.AbsByte) :
+    readonlyCell (GF := GF) tds pv dq ty bs ⊣⊢
+      iprop(∃ (id : Int) (a : Int),
+        ⌜pv = cellPtr id a⌝ ∗ metaOwn id dq (objCell tds a ty true true) ∗
+        bytesOwn a dq bs ∗
+        ⌜bs.length = CerbMem.sizeofCtype tds ty ∧ decIndep tds a ty bs⌝) := .rfl
+
+/-- READ-ONLY FRACTIONAL: read-only cells split for read-sharing. -/
+theorem readonlyCell_fractional (tds : CerbTags.TagDefsMap) (pv : CerbMem.PointerValue)
+    (q₁ q₂ : Qp) (ty : ctype) (bs : List CerbMem.AbsByte) :
+    readonlyCell (GF := GF) tds pv (.own (q₁ + q₂)) ty bs ⊣⊢
+      iprop(readonlyCell tds pv (.own q₁) ty bs ∗ readonlyCell tds pv (.own q₂) ty bs) := by
+  unfold readonlyCell
+  constructor
+  · iintro ⟨%id, %a, %hpv, Hm, Hb, %hp⟩
+    icases (metaOwn_fractional id (objCell tds a ty true true) q₁ q₂).1 $$ Hm with ⟨Hm₁, Hm₂⟩
+    icases (bytesOwn_fractional a q₁ q₂ bs).1 $$ Hb with ⟨Hb₁, Hb₂⟩
+    isplitl [Hm₁ Hb₁]
+    · iexists id, a
+      isplit
+      · ipureintro
+        exact hpv
+      isplitl [Hm₁]
+      · iexact Hm₁
+      isplitl [Hb₁]
+      · iexact Hb₁
+      · ipureintro
+        exact hp
+    · iexists id, a
+      isplit
+      · ipureintro
+        exact hpv
+      isplitl [Hm₂]
+      · iexact Hm₂
+      isplitl [Hb₂]
+      · iexact Hb₂
+      · ipureintro
+        exact hp
+  · iintro ⟨⟨%id₁, %a₁, %h₁, Hm₁, Hb₁, %hp⟩, %id₂, %a₂, %h₂, Hm₂, Hb₂, -⟩
+    obtain ⟨rfl, rfl⟩ := cellPtr_inj (h₁.symm.trans h₂)
+    iexists id₁, a₁
+    isplit
+    · ipureintro
+      exact h₁
+    isplitl [Hm₁ Hm₂]
+    · iapply (metaOwn_fractional id₁ (objCell tds a₁ ty true true) q₁ q₂).2
+      isplitl [Hm₁]
+      · iexact Hm₁
+      · iexact Hm₂
+    isplitl [Hb₁ Hb₂]
+    · iapply (bytesOwn_fractional a₁ q₁ q₂ bs).2
+      isplitl [Hb₁]
+      · iexact Hb₁
+      · iexact Hb₂
+    · ipureintro
+      exact hp
+
+/-- READ-ONLY AGREEMENT: two read-only cells of one pointer agree on
+    type and contents. -/
+theorem readonlyCell_agree (tds : CerbTags.TagDefsMap) (pv : CerbMem.PointerValue)
+    (dq₁ dq₂ : DFrac) (ty₁ ty₂ : ctype) (bs₁ bs₂ : List CerbMem.AbsByte) :
+    iprop(readonlyCell (GF := GF) tds pv dq₁ ty₁ bs₁ ∗ readonlyCell tds pv dq₂ ty₂ bs₂) ⊢
+      (⌜ty₁ = ty₂ ∧ bs₁ = bs₂⌝ : IProp GF) := by
+  unfold readonlyCell
+  iintro ⟨⟨%id₁, %a₁, %h₁, Hm₁, Hb₁, %hp₁⟩, %id₂, %a₂, %h₂, Hm₂, Hb₂, %hp₂⟩
+  obtain ⟨rfl, rfl⟩ := cellPtr_inj (h₁.symm.trans h₂)
+  ihave %h : ⌜objCell tds a₁ ty₁ true true = objCell tds a₁ ty₂ true true⌝ $$ [Hm₁ Hm₂]
+  · iapply metaOwn_agree id₁ dq₁ dq₂ _ _ $$ [$Hm₁ $Hm₂]
+  simp only [objCell, MetaCell.mk.injEq, Option.some.injEq] at h
+  obtain ⟨-, rfl, -⟩ := h
+  ihave %hbs : ⌜bs₁ = bs₂⌝ $$ [Hb₁ Hb₂]
+  · iapply bytesOwn_agree a₁ dq₁ dq₂ bs₁ bs₂ (by rw [hp₁.1, hp₂.1]) $$ [$Hb₁ $Hb₂]
+  ipureintro
+  exact ⟨rfl, hbs⟩
+
+/-- A pointer is not both a read-only cell and a (writable) points-to:
+    the metadata cells disagree on the flag. -/
+theorem readonlyCell_pointsToCell_false (tds : CerbTags.TagDefsMap) (pv : CerbMem.PointerValue)
+    (dq dq' : DFrac) (ty ty' : ctype) (bs bs' : List CerbMem.AbsByte) :
+    iprop(readonlyCell (GF := GF) tds pv dq ty bs ∗ pointsToCell tds pv dq' ty' bs') ⊢
+      (⌜False⌝ : IProp GF) := by
+  unfold readonlyCell pointsToCell cellOwn
+  iintro ⟨⟨%id₁, %a₁, %h₁, Hm₁, -, -⟩, %id₂, %a₂, %h₂, Hm₂, -, -⟩
+  obtain ⟨rfl, rfl⟩ := cellPtr_inj (h₁.symm.trans h₂)
+  ihave %h : ⌜objCell tds a₁ ty true true = metaOf tds ⟨a₁, ty', bs'⟩⌝ $$ [Hm₁ Hm₂]
+  · iapply metaOwn_agree id₁ dq dq' _ _ $$ [$Hm₁ $Hm₂]
+  ipureintro
+  simp [objCell, metaOf] at h
+
+/-- THE DEAD OBJECT: persistent knowledge that allocation `id` — a
+    created object of type `ty` that was at base `a` — has been killed
+    (the metadata cell at `alive := false`, discarded fraction). -/
+def deadObj (tds : CerbTags.TagDefsMap) (id a : Int) (ty : ctype) : IProp GF :=
+  metaOwn id .discard (objCell tds a ty false false)
+
+instance deadObj_persistent (tds : CerbTags.TagDefsMap) (id a : Int) (ty : ctype) :
+    Persistent (deadObj (GF := GF) tds id a ty) := by
+  letI := SpikeGS.metaGS (hlc := hlc) (GF := GF)
+  unfold deadObj metaOwn
+  infer_instance
+
+/-- THE DEAD REGION: the same for a killed (freed) dynamic region. -/
+def deadRegion (id a : Int) (n : Nat) : IProp GF :=
+  metaOwn id .discard (regionCell a n false)
+
+instance deadRegion_persistent (id a : Int) (n : Nat) :
+    Persistent (deadRegion (GF := GF) id a n) := by
+  letI := SpikeGS.metaGS (hlc := hlc) (GF := GF)
+  unfold deadRegion metaOwn
+  infer_instance
+
+/-- Dead knowledge agrees (one allocation, one base, one type). -/
+theorem deadObj_agree (tds : CerbTags.TagDefsMap) (id a a' : Int) (ty ty' : ctype) :
+    iprop(deadObj (GF := GF) tds id a ty ∗ deadObj tds id a' ty') ⊢
+      (⌜a = a' ∧ ty = ty'⌝ : IProp GF) := by
+  unfold deadObj
+  iintro ⟨H, H'⟩
+  ihave %h : ⌜objCell tds a ty false false = objCell tds a' ty' false false⌝ $$ [H H']
+  · iapply metaOwn_agree id .discard .discard _ _ $$ [$H $H']
+  ipureintro
+  simp only [objCell, MetaCell.mk.injEq, Option.some.injEq] at h
+  exact ⟨h.1, h.2.1⟩
+
+/-- DEAD AND LIVE KNOWLEDGE ARE CONTRADICTORY: persistent metadata of a
+    live allocation (`allocMeta`) and of its death (`deadObj`) cannot
+    both be held — the cells disagree on `alive`. (How `alive = false`
+    relates to the persistent stratum: `allocMeta` remains TRUE of
+    everything it was ever asserted of, because holding it forecloses
+    the kill — the killable cell is `.own 1`, and `.own 1 ∗ .discard`
+    is invalid.) -/
+theorem deadObj_allocMeta_false (tds : CerbTags.TagDefsMap) (id a a' : Int) (ty ty' : ctype) :
+    iprop(deadObj (GF := GF) tds id a ty ∗ allocMeta tds id a' ty') ⊢ (⌜False⌝ : IProp GF) := by
+  unfold deadObj allocMeta
+  iintro ⟨H, H'⟩
+  ihave %h : ⌜objCell tds a ty false false = objCell tds a' ty' true false⌝ $$ [H H']
+  · iapply metaOwn_agree id .discard .discard _ _ $$ [$H $H']
+  ipureintro
+  simp [objCell] at h
+
+/-- A dead id is the id of no points-to: any `pointsToCell` (alive)
+    and `deadObj` of the same id are contradictory. -/
+theorem pointsToCell_deadObj_false (tds : CerbTags.TagDefsMap) (id a a' : Int) (dq : DFrac)
+    (ty ty' : ctype) (bs : List CerbMem.AbsByte) :
+    iprop(pointsToCell (GF := GF) tds (cellPtr id a) dq ty bs ∗ deadObj tds id a' ty') ⊢
+      (⌜False⌝ : IProp GF) := by
+  unfold pointsToCell cellOwn deadObj
+  iintro ⟨⟨%id₁, %a₁, %h₁, Hm₁, -, -⟩, H⟩
+  obtain ⟨rfl, rfl⟩ := cellPtr_inj h₁
+  ihave %h : ⌜metaOf tds ⟨a, ty, bs⟩ = objCell tds a' ty' false false⌝ $$ [Hm₁ H]
+  · iapply metaOwn_agree id dq .discard _ _ $$ [$Hm₁ $H]
+  ipureintro
+  simp [objCell, metaOf] at h
+
+end K1Bundles
+
 /-! ## The abstract allocation capacity (alloc arc P1.1)
 
 `allocCap reqs` certifies that the known finite request list `reqs`
@@ -2996,6 +3364,86 @@ theorem cellOwn_cellCoh {σ : Mem} {mm : SpikeHeapF MetaCell}
   · iapply bytesOwn_read hG c.addr dq c.bytes $$ [$Hbi $Hb]
   ipureintro
   exact ⟨CellCoh.ofParts tds (hG.metas i _ Hgetm) hlen (hlen ▸ Hread) hdec, Hgetm⟩
+
+/-- POINTS-TO IMPLIES ALIVE (the liveness content of the frozen bundle,
+    read off the coupling): a points-to at any fraction pins a
+    NOT-DEAD id whose record is present, at the pointer's base, of the
+    asserted type, writable. -/
+theorem pointsToCell_live {σ : Mem} {mm : SpikeHeapF MetaCell}
+    {mb : SpikeHeapF CerbMem.AbsByte} {mk : SpikeHeapF AllocCursor} (tds : CerbTags.TagDefsMap)
+    (hG : CohG σ mm mb mk) (pv : CerbMem.PointerValue) (dq : DFrac) (ty : ctype)
+    (bs : List CerbMem.AbsByte) :
+    iprop(metaInterp (GF := GF) mm ∗ pointsToCell tds pv dq ty bs) ⊢
+      (⌜∃ id a, pv = cellPtr id a ∧ σ.deadAllocations.contains id = false ∧
+        ∃ al, σ.allocations.get? id = some al ∧ al.base = a ∧ al.ty = some ty ∧
+          al.isReadonly = .IsWritable⌝ : IProp GF) := by
+  unfold pointsToCell cellOwn
+  iintro ⟨Hmi, %id, %a, %hpv, Hm, -, -⟩
+  ihave >%hget := metaHeap_valid $$ [$Hmi $Hm]
+  obtain ⟨hdead, al, hal, hbase, -, hty, hro⟩ := (hG.metas id _ hget).live rfl
+  ipureintro
+  exact ⟨id, a, hpv, hdead, al, hal, hbase, hty, hro.mpr rfl⟩
+
+/-- THE READ-ONLY CELL'S BACKING: a read-only cell at any fraction pins
+    a not-dead id whose record is present, at the pointer's base, of
+    the asserted type, and READ-ONLY of some kind — the premise of
+    `storeM_readonly_kills`. -/
+theorem readonlyCell_readonly {σ : Mem} {mm : SpikeHeapF MetaCell}
+    {mb : SpikeHeapF CerbMem.AbsByte} {mk : SpikeHeapF AllocCursor} (tds : CerbTags.TagDefsMap)
+    (hG : CohG σ mm mb mk) (pv : CerbMem.PointerValue) (dq : DFrac) (ty : ctype)
+    (bs : List CerbMem.AbsByte) :
+    iprop(metaInterp (GF := GF) mm ∗ readonlyCell tds pv dq ty bs) ⊢
+      (⌜∃ id a, pv = cellPtr id a ∧ σ.deadAllocations.contains id = false ∧
+        ∃ al kind, σ.allocations.get? id = some al ∧ al.base = a ∧ al.ty = some ty ∧
+          al.isReadonly = .IsReadOnly kind⌝ : IProp GF) := by
+  unfold readonlyCell
+  iintro ⟨Hmi, %id, %a, %hpv, Hm, -, -⟩
+  ihave >%hget := metaHeap_valid $$ [$Hmi $Hm]
+  obtain ⟨hdead, al, hal, hbase, -, hty, hiff⟩ := (hG.metas id _ hget).live rfl
+  ipureintro
+  refine ⟨id, a, hpv, hdead, al, ?_⟩
+  cases hst : al.isReadonly with
+  | IsWritable =>
+    have := hiff.mp hst
+    cases this
+  | IsReadOnly kind => exact ⟨kind, hal, hbase, hty, rfl⟩
+
+/-- THE REGION'S BACKING (what K3's `free` rule reads): region
+    ownership at any fraction pins a not-dead id whose record is
+    present at the base with the region's size, UNTYPED, writable; the
+    bytes are the bytemap's; and the base IS in `dynamicAddrs` — the
+    dynamic check `killM` makes (CerbMem.lean:1573) passes. -/
+theorem regionOwn_facts {σ : Mem} {mm : SpikeHeapF MetaCell}
+    {mb : SpikeHeapF CerbMem.AbsByte} {mk : SpikeHeapF AllocCursor}
+    (hG : CohG σ mm mb mk) (id a : Int) (n : Nat) (dq : DFrac)
+    (bs : List CerbMem.AbsByte) :
+    iprop(metaInterp (GF := GF) mm ∗ byteInterp mb ∗ regionOwn id a n dq bs) ⊢
+      (⌜σ.deadAllocations.contains id = false ∧
+        (∃ al, σ.allocations.get? id = some al ∧ al.base = a ∧ al.size = (n : Int) ∧
+          al.ty = none ∧ al.isReadonly = .IsWritable) ∧
+        CerbMem.readBytesFrom σ a n = bs ∧ a ∈ σ.dynamicAddrs⌝ : IProp GF) := by
+  unfold regionOwn
+  iintro ⟨Hmi, Hbi, Hm, Hb, %hlen⟩
+  ihave >%hget := metaHeap_valid $$ [$Hmi $Hm]
+  have hmc := hG.metas id _ hget
+  obtain ⟨hdead, al, hal, hbase, hsize, hty, hiff⟩ := hmc.live rfl
+  ihave %Hread : ⌜CerbMem.readBytesFrom σ a bs.length = bs⌝ $$ [Hbi Hb]
+  · iapply bytesOwn_read hG a dq bs $$ [$Hbi $Hb]
+  ipureintro
+  exact ⟨hdead, ⟨al, hal, hbase, hsize, hty, hiff.mpr rfl⟩, hlen ▸ Hread, hmc.dynamic rfl⟩
+
+/-- THE DEAD CELL'S BACKING: `deadObj` pins a DEAD id with its record
+    erased (`killM`, CerbMem.lean:1576-1578). -/
+theorem deadObj_dead {σ : Mem} {mm : SpikeHeapF MetaCell}
+    {mb : SpikeHeapF CerbMem.AbsByte} {mk : SpikeHeapF AllocCursor} (tds : CerbTags.TagDefsMap)
+    (hG : CohG σ mm mb mk) (id a : Int) (ty : ctype) :
+    iprop(metaInterp (GF := GF) mm ∗ deadObj tds id a ty) ⊢
+      (⌜σ.deadAllocations.contains id = true ∧ σ.allocations.get? id = none⌝ : IProp GF) := by
+  unfold deadObj
+  iintro ⟨Hmi, Hm⟩
+  ihave >%hget := metaHeap_valid $$ [$Hmi $Hm]
+  ipureintro
+  exact (hG.metas id _ hget).dead rfl
 
 end GhostOps
 

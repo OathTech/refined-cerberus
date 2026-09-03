@@ -690,14 +690,22 @@ postcondition side the pure consequences of the Iris post under any
 coupling witness (`hpost`). The three heaps (RefinedC's `ghost_state.v`
 heap/allocs factorization is the reference): a per-byte heap, the ghost
 fragment of the engine's bytemap (`bytesOwn`); a per-allocation metadata
-heap (allocation id ↦ base, type, size), the provenance authority —
-`loadM`/`storeM` success is decided by the allocation table, so byte
-content alone can never entail access success (`metaOwn`); and a
-one-cell allocator-cursor heap (`lastAddress`, `nextAllocId`, the two
-fields `allocateObject` reads and writes). `CohG σ mm mb mk` couples
-byte cells to the bytemap, metadata cells to live, writable, typed,
-non-atomic, pairwise range-disjoint allocations, and the cursor, when
-present, to the allocator fields. Assertions:
+heap (allocation id ↦ `MetaCell`: base, OPTIONAL type, size, and the
+three flags `alive`, `readonly`, `dynamic` — K1), the provenance
+authority — `loadM`/`storeM`/`killM` success is decided by the
+allocation table, so byte content alone can never entail access success
+(`metaOwn`); and a one-cell allocator-cursor heap (`lastAddress`,
+`nextAllocId`, the two fields `allocateObject` reads and writes). `CohG
+σ mm mb mk` couples byte cells to the bytemap, metadata cells field by
+field to the allocation tables (`MetaCoh`: a live cell is a not-dead id
+whose record is present and agrees on base, size, type and writability;
+a dead cell is a dead id with its record erased — `killM` does both in
+one update; the type is non-atomic; a dynamic cell's base is in
+`dynamicAddrs`), pairwise range-disjoint, and the cursor, when present,
+to the allocator fields. The two allocators' cells are named: `objCell
+tds a ty alive readonly` (a `create`d object: `some ty`, layout size,
+never dynamic) and `regionCell a n alive` (an `alloc`ated region:
+untyped, `n` bytes, writable, dynamic). Assertions:
 
 ```lean
 def cellOwn [SpikeGS hlc GF] (tds : CerbTags.TagDefsMap) (i : Int) (dq : DFrac) (c : SpikeCell) : IProp GF :=
@@ -738,28 +746,69 @@ arms fire before provenance is consulted, so `hres` is a computation
 `rfl`). A comparison that could fork has no `hres` and therefore no
 rule.
 
-**The persistent stratum, and no liveness token.** Allocation knowledge
-is the metadata cell at the discarded fraction (`allocMeta tds id a aty
-:= metaOwn id .discard ⟨a, aty, sizeofCtype tds aty⟩`; `locInBounds`
-adds the pure bound), with `Persistent` instances
+**The persistent stratum, and the liveness token.** Allocation
+knowledge is the metadata cell at the discarded fraction (`allocMeta tds
+id a aty := metaOwn id .discard (objCell tds a aty true false)`;
+`locInBounds` adds the pure bound), with `Persistent` instances
 (`allocMeta_persistent`, `locInBounds_persistent`); any view's metadata
-fraction can be traded for it (`pointsToView_persist`). This is
-admissible because metadata is immutable in the fragment — no rule
-updates a metadata cell (nothing frees) — so there is no liveness token
-to guard a deallocation that cannot happen. The bundles keep the
-metadata at a fraction rather than persistent because full metadata
-ownership is the per-allocation exclusivity anchor the frame theorem
-needs (`metaOwn_ne` → `bigSepM_own_disjoint`); RefinedC's anchor is the
-killable `alloc_alive`, and when `kill` joins the fragment the anchor
-moves there.
+fraction can be traded for it (`pointsToView_persist`). The liveness
+token is the same cell's `alive` flag at the full fraction (RefinedC's
+`al_alive` and `freeable`, collapsed into one cell because Cerberus
+erases the allocation record on kill — there is no fact about a dead
+allocation's range left to keep separately): every access bundle
+carries `alive := true` (`pointsToCell_live` reads not-dead-and-present
+off the coupling), and a kill will consume the cell at `.own 1` and
+flip it to `false`, handing back at most the persistent DEAD cell
+`deadObj tds id a ty := metaOwn id .discard (objCell tds a ty false
+false)` (`deadObj_dead`: the id is in `deadAllocations`, its record
+erased). Persisting is therefore final in both directions: `.own 1 ∗
+.discard` is invalid, so holding `allocMeta` forecloses the kill — that
+is why persistent live knowledge stays true forever — and
+`deadObj_allocMeta_false` says dead and live persistent knowledge of one
+id never coexist. No rule of this fragment performs the update yet (the
+kill rules are K2/K3); the bundles keep the metadata at a fraction
+rather than persistent because full metadata ownership is both the
+per-allocation exclusivity anchor the frame theorem needs (`metaOwn_ne`
+→ `bigSepM_own_disjoint`) and the thing a kill consumes.
 
-**Read-only allocations cannot be described.** `CellCoh.alloc` and
-`MetaCoh.alloc` fix `al.isReadonly = .IsWritable`, and `MetaCell`
-records address, type and size but no read-only flag. So every
-`pointsToCell`, at any fraction, asserts a writable allocation, and an
-object the elaborator marks read-only cannot be the subject of any
-assertion. A registered limitation; the mover is a read-only flag in
-`MetaCell`, with writability demanded by the store rule only.
+**Read-only allocations.** `MetaCell.readonly` is coupled to
+`Allocation.isReadonly` (`LiveCoh.alloc`: `al.isReadonly = .IsWritable
+↔ mc.readonly = false`); `pointsToCell` fixes `readonly := false`, and
+`readonlyCell tds pv dq ty bs` is the read-only points-to (`objCell …
+true true`). Loads are supported verbatim — `loadM` never consults
+writability — by `load_atomic_readonly` (Rules.lean); there is NO store
+rule, and the reason is stated as an engine fact rather than absorbed:
+`storeM_readonly_kills` — at a live read-only cell, an in-bounds
+type-compatible `storeM` is `NDkilled (failReason (MerrWriteOnReadOnly
+kind) loc)` (CerbMem.lean:1724-1725; UB033/UB064 by kind). A pointer is
+never both (`readonlyCell_pointsToCell_false`). Honest qualification:
+nothing in this fragment MINTS a `readonlyCell` — `create` is
+`allocateObject … none none`, writable (`readonlyStatusForAlloc pref
+none = .IsWritable`, CerbMem.lean:1490-1492), and the launch footprint
+`CellCoh` pins `.IsWritable`; the bundle is the assertion vocabulary for
+`create_readonly`/string literals when those constructs join the
+fragment.
+
+**Untyped regions.** `allocateRegion` (`Alloc0`, malloc) records no
+type and pushes the base onto `dynamicAddrs` (CerbMem.lean:1544/:1548);
+its cell is `regionCell a n true`, and `regionOwn id a n dq bs` /
+`regionView id a n off dqm dqb bs` are the untyped analogues of
+`pointsToCell`/`pointsToView` — split/join at any list decomposition
+(`regionView_split`/`_join`, the bound against the region's size, no
+layout so no `tds`), fractional (`regionOwn_fractional`), agreeing
+(`regionOwn_agree`). `regionOwn_facts` reads off the coupling exactly
+what K3's `free` needs: not dead, record present at the base with the
+region's size and `ty = none`, the bytes, and `a ∈ σ.dynamicAddrs` —
+the dynamic check `killM` makes (:1573). The flag is coupled in ONE
+direction only (`dynamic = true → base ∈ dynamicAddrs`): the K0 audit's
+N-1 scenario (a zero-size region minted at a created object's base)
+puts a created base into `dynamicAddrs`, so the converse is not an
+engine invariant, and `free` of a created object is state-dependent —
+K3's `free` rule reads dynamic-ness from the cell, never from the list.
+Region loads and stores will go through the generic live-cell seams
+`loadM_live`/`storeM_live` (any optional type; the store demanding
+`readonly = false`), of which the typed `loadM_at`/`storeM_at` are the
+created-object instances.
 
 **Allocation capacity, and the failure policy.** An `AllocReq` is an
 alignment operand and a C object type;
@@ -1161,8 +1210,9 @@ the `#print axioms` recipe are in the README, "How to build and verify".
 
 - **`kill`/free and procedures.** The classical logic's dispose rule and
   procedure specifications (incl. recursion) are the next two additions.
-  Their absence is structural, not hidden: no liveness token exists
-  because metadata is immutable (§4); `MachineCtx.SeqWF` (empty call
+  Their absence is structural, not hidden: the liveness token (the
+  metadata cell's `alive` flag, §4) exists since K1 but no rule flips
+  it yet — the kill rules are K2/K3; `MachineCtx.SeqWF` (empty call
   stack) is a premise wherever a general context appears.
 - **Located Core.** Every node of a fragment program carries the empty
   static annotation list (`Expr []` in every `Frag` constructor and every
