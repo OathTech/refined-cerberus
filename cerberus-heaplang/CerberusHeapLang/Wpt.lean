@@ -36,11 +36,12 @@ simultaneously a step budget, so one derivation yields two results:
   `twp_ret_annot`) — `wpt_sound`/`wpt_sound_empty` are its entry-control
   faces — a metatheorem (the judgment is a sound total WP) that no
   export consumes;
-- `wpt_drive_aux` (TotalAdequacy.lean) is the simulation into the
+- `wpt_driver_aux` (ProdLoop.lean) is the simulation into the
   engine: a proved `wpt … k` plus the seeded footprint yields the
-  unconditional `driveU … k = .done` equation, the device lemma
-  `outcomesU_of_step` (Soundness.lean) discharging one `driveU` step
-  per budget unit. Every total `driveU` export goes this way; no Iris
+  driver-delivery fact `DriverDoneAt` — the SHIPPED driver's per-thread
+  loop returns PROGRAM-DONE within `k + 2` iterations — the shipped
+  round `loop_step_frag_same` (DriverCollapse.lean) discharging one
+  budget unit per iteration. Every total export goes this way; no Iris
   adequacy result is in any total export's cone. It is stated at the EMPTY
   table `emptyProcSpecT` (the call clause unsatisfiable there,
   `wpt_empty_call_false`) and stays there: the total lane THROUGH CALLS
@@ -2854,14 +2855,14 @@ statement, `create_atomic` lifted by `wpt_of_atomic`) and its
 plan-shaped reading `wpt_create_of_plan`; the former exact-cursor
 `wpt_create_cursor_internal` is RETIRED with the plan.
 
-THE COST BOUND, DERIVED AGAINST `driveU` (not copied from the
-charter): a bare create is one relational create step — the wpt step
-clause consumes 1 budget unit, which `wpt_drive_aux` maps to one
-`driveU` round (`outcomesU_of_step` at the create redex) — and its
-result is the BARE pure pointer value (`Step.create` — "a BARE
-value, no Eannot residue", Step.lean's create docstring), whose
-delivery costs `deliveryCost (.pure _) = 1` — one `driveU` round
-(`outcomesU_done`). Total: `2 ≤ k`, the charter's expected minimum,
+THE COST BOUND, DERIVED AGAINST THE DRIVER'S ROUNDS (not copied from
+the charter): a bare create is one relational create step — the wpt
+step clause consumes 1 budget unit, which `wpt_driver_aux` maps to one
+iteration of the shipped loop (`loop_step_frag_same` at the create
+redex) — and its result is the BARE pure pointer value (`Step.create` —
+"a BARE value, no Eannot residue", Step.lean's create docstring), whose
+delivery costs `deliveryCost (.pure _) = 1` — one PROGRAM-DONE round
+(`loop_step_done`). Total: `2 ≤ k`, the charter's expected minimum,
 confirmed (contrast `wpt_store_at`'s `3 ≤ k`: a store's result is an
 ANNOT value, whose delivery pays the REMOVE-ANNOT tau first). -/
 
@@ -2871,7 +2872,7 @@ open Iris.Std.PartialMap
 /-- THE PUBLIC TOTAL ALLOCATION RULE (alloc arc P1.4, restated K2.5):
     the total analogue of `wps_create` at the DERIVED cost bound `2 ≤ k`
     (see the section header — one create step + one pure-value delivery
-    against `driveU`). Statement is cursor-free (the P1 grep test);
+    against the driver's rounds). Statement is cursor-free (the P1 grep test);
     the budget `allocCost ty alignN` buys the create, the continuation
     binds the fresh pointer with full whole-cell ownership and (alloc
     arc P2) its pure machine-address bounds `0 < addrOf p < 2^64`. -/

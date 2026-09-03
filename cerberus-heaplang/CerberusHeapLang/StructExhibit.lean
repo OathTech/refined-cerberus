@@ -26,9 +26,10 @@ initialize its x field. CONVERTED at alloc arc P2 (charter items
 budget `allocBudget (allocCost structTy align)` (no cursor vocabulary; the
 program BINDS the fresh pointer with `lets p = create(...)` and
 stores through the bound symbol), and the adequacy theorem launches
-it against the real engine from the production cold-start memory
-through `project_triple_alloc`/`launchResources` — the
-partial-lane allocation consumer of the R-01 closure test.
+it against the real engine — the shipped driver's per-thread loop at
+every fuel, from the production cold-start memory in the instance —
+through `project_triple_pure_alloc`/`launchResources`: the partial-lane
+allocation consumer of the R-01 closure test.
 -/
 import CerberusHeapLang.API
 import CerberusHeapLang.Examples.Layout
@@ -224,22 +225,16 @@ theorem struct_update_certified {GF : BundledGFunctors} [SpikeGpreS GF]
     (id a : Int) (bs : List CerbMem.AbsByte)
     (σ₀ : Mem)
     (hcoh : Coh fmapEmpty σ₀ ((Iris.Std.PartialMap.singleton id
-      (SpikeCell.mk a structTy bs)) : SpikeHeapF SpikeCell))
-    (n : Nat) (aids : Nat → Nat) :
-    (∀ r, driveU spikeCtx aids n (spikeThread (progS loc ann mo mo' bty id a)) σ₀ ≠
-      .killed r) ∧
-    (driveU spikeCtx aids n (spikeThread (progS loc ann mo mo' bty id a)) σ₀ ≠
-      .stuck) ∧
-    (∀ (v : value) (σ' : Mem),
-      driveU spikeCtx aids n (spikeThread (progS loc ann mo mo' bty id a)) σ₀ =
-        .done v σ' →
-      CerbMem.readBytesFrom σ' (a + ((fieldX : Nat) : Int)) 4 = (fiveBytes fmapEmpty) ∧
-      CerbMem.readBytesFrom σ' (a + ((fieldY : Nat) : Int)) 4 = (sixBytes fmapEmpty)) := by
+      (SpikeCell.mk a structTy bs)) : SpikeHeapF SpikeCell)) :
+    DriverSafeCtl spikeCtx (spikeThread (progS loc ann mo mo' bty id a))
+      (progS loc ann mo mo' bty id a) spikeEnv spikeCtl σ₀ (fun _ σ' =>
+        CerbMem.readBytesFrom σ' (a + ((fieldX : Nat) : Int)) 4 = (fiveBytes fmapEmpty) ∧
+        CerbMem.readBytesFrom σ' (a + ((fieldY : Nat) : Int)) 4 = (sixBytes fmapEmpty)) := by
   have hbs : bs.length = 16 := by
     have h := (hcoh.cells id _ (Iris.Std.LawfulPartialMap.get?_singleton_eq rfl)).len
     rw [structTy_size] at h
     exact h
-  have hres := engine_adequacyU (GF := GF) (M := spikeCtx) (ctl := spikeCtl) spikeCtx_wf rfl
+  refine (engine_adequacy (GF := GF) (M := spikeCtx) rfl rfl (ctl := spikeCtl) rfl
     spikeCtx_labels_frag spikeCtx_labels_pot spikeCtx_fragProcs
     (progS loc ann mo mo' bty id a) fmapEmpty [] σ₀
     (Iris.Std.PartialMap.singleton id (SpikeCell.mk a structTy bs))
@@ -257,9 +252,8 @@ theorem struct_update_certified {GF : BundledGFunctors} [SpikeGpreS GF]
       refine wp_mono fun w => ?_
       iintro H
       iexact H)
-    n aids
-  refine ⟨hres.1, hres.2.1, fun v σ' hd => ?_⟩
-  have hcc := hres.2.2 v σ' hd
+    (th₀ := spikeThread (progS loc ann mo mo' bty id a)) rfl).mono ?_
+  intro v σ' hcc
   -- read the two field slices back out of the spliced image
   have hlen1 : (spliceBytes fieldX (fiveBytes fmapEmpty) bs).length = 16 := by
     rw [spliceBytes_length fieldX (fiveBytes fmapEmpty) bs (by rw [fiveBytes_len, hbs]; decide)]
@@ -789,19 +783,20 @@ theorem struct_budget_fits :
     its pure headline `project_triple_pure_alloc`): the self-contained
     create-then-store program, at the straight-line profile, from the
     EMPTY footprint with the one-struct budget `allocCost structTy 8` —
-    `MemTripleU_alloc spikeCtx spikeCtl spikeEnv prog ∅ (allocCost structTy 8) ψ`:
-    for every memory launch-coherent with the budget (any frame `R`),
-    the engine's drive (any length) never kills, never derails, and
-    any delivered value is unit with the final memory holding the
-    initialized fresh struct (existential allocation id/address: the
-    logic binds the pointer, the engine picks it). Verified ONLY
-    through the public `wps_create` + the generic store rule; the
-    pure-consequence obligation is discharged by the `*_consequence`
-    lemmas. -/
+    `MemTriple_alloc spikeCtx spikeCtl spikeEnv prog ∅ (allocCost structTy 8) ψ`:
+    for every memory launch-coherent with the budget (any frame `R`)
+    and every driver state holding the program there, the shipped
+    driver's per-thread loop at every fuel exhausts or delivers, never
+    kills otherwise, never derails, and any delivered value is unit
+    with the final memory holding the initialized fresh struct
+    (existential allocation id/address: the logic binds the pointer,
+    the engine picks it). Verified ONLY through the public `wps_create`
+    + the generic store rule; the pure-consequence obligation is
+    discharged by the `*_consequence` lemmas. -/
 theorem struct_create_store_adequacy {GF : BundledGFunctors} [SpikeGpreS GF]
     (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (pref : prefix0) (mo : memory_order) (pbty vbty : core_base_type) :
-    MemTripleU_alloc spikeCtx spikeCtl spikeEnv
+    MemTriple_alloc spikeCtx spikeCtl spikeEnv
       (progCreateInit loc ann .Prov_none 8 pref mo pbty vbty) ∅
       (allocCost fmapEmpty structTy 8)
       (fun _ v σ' => v = Vunit ∧ ∃ i a : Int, CellCoh fmapEmpty σ' i ⟨a, structTy,
@@ -809,7 +804,7 @@ theorem struct_create_store_adequacy {GF : BundledGFunctors} [SpikeGpreS GF]
           (List.replicate (CerbMem.sizeofCtype fmapEmpty structTy) undefByte)⟩) := by
   -- the allocating projection at the spike profile: footprint ∅, budget
   -- `allocCost structTy 8`, the Iris post = `struct_create_store_wps`'s post
-  refine project_triple_pure_alloc (GF := GF) (M := spikeCtx) (ctl := spikeCtl) spikeCtx_wf rfl
+  refine project_triple_pure_alloc (GF := GF) (M := spikeCtx) rfl rfl (ctl := spikeCtl) rfl
     spikeCtx_labels_frag spikeCtx_labels_pot spikeCtx_fragProcs
     (progCreateInit_frag loc ann .Prov_none 8 pref mo pbty vbty)
     (Nat.le_trans (progCreateInit_frag loc ann .Prov_none 8 pref mo pbty vbty).pot_le_two
@@ -847,22 +842,15 @@ theorem struct_create_store_adequacy {GF : BundledGFunctors} [SpikeGpreS GF]
 /-- The boring triple INSTANTIATED at the production cold-start memory
     `prodMem₀` (frame ∅): the launch premise `LaunchCoh` is dischargeable
     at a real engine memory — `prodMem₀_launchCoh` with the budget within
-    the actual cursor's headroom (`struct_budget_fits`). -/
+    the actual cursor's headroom (`struct_budget_fits`). From any driver
+    state holding the program at `prodMem₀`, the shipped loop at every
+    fuel exhausts or delivers the initialized fresh struct. -/
 theorem struct_create_store_adequacy_prodMem₀ {GF : BundledGFunctors} [SpikeGpreS GF]
     (loc : CerbLocation.Loc) (ann : core_run_annotation)
-    (pref : prefix0) (mo : memory_order) (pbty vbty : core_base_type)
-    (n : Nat) (aids : Nat → Nat) :
-    (∀ r, driveU spikeCtx aids n (spikeThread
-        (progCreateInit loc ann .Prov_none 8 pref mo pbty vbty)) prodMem₀ ≠
-      .killed r) ∧
-    (driveU spikeCtx aids n (spikeThread
-        (progCreateInit loc ann .Prov_none 8 pref mo pbty vbty)) prodMem₀ ≠
-      .stuck) ∧
-    (∀ (v : value) (σ' : Mem),
-      driveU spikeCtx aids n (spikeThread
-          (progCreateInit loc ann .Prov_none 8 pref mo pbty vbty)) prodMem₀ =
-        .done v σ' →
-      v = Vunit ∧ ∃ i a : Int, CellCoh fmapEmpty σ' i ⟨a, structTy,
+    (pref : prefix0) (mo : memory_order) (pbty vbty : core_base_type) :
+    DriverSafeCtl spikeCtx (spikeThread (progCreateInit loc ann .Prov_none 8 pref mo pbty vbty))
+      (progCreateInit loc ann .Prov_none 8 pref mo pbty vbty) spikeEnv spikeCtl prodMem₀
+      (fun v σ' => v = Vunit ∧ ∃ i a : Int, CellCoh fmapEmpty σ' i ⟨a, structTy,
         spliceBytes fieldX (fiveBytes fmapEmpty)
           (List.replicate (CerbMem.sizeofCtype fmapEmpty structTy) undefByte)⟩) :=
   struct_create_store_adequacy (GF := GF) loc ann pref mo pbty vbty
@@ -870,7 +858,7 @@ theorem struct_create_store_adequacy_prodMem₀ {GF : BundledGFunctors} [SpikeGp
     (by rw [show Iris.Std.PartialMap.union (∅ : CellMap) (∅ : CellMap) = ∅ from
           Iris.Std.LawfulPartialMap.union_empty_right]
         exact prodMem₀_launchCoh _ struct_budget_fits)
-    n aids
+    (spikeThread (progCreateInit loc ann .Prov_none 8 pref mo pbty vbty)) rfl
 
 end CreateConsumer
 

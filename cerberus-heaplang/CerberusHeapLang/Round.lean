@@ -43,10 +43,11 @@ is `runOne` (DriverCollapse.lean): `match m with | ND f => f s`, the
 `ND` constructor's eliminator — the very operation `nd_bind` performs
 on its left argument (Nondeterminism.lean:188). It carries no driver,
 discharge or scheduler content; it is to `ndM` what `Prod.fst` is to
-pairs. `dischargeStep`/`outcomesU`/`stepOutcomes` and the `outcomesU`
+pairs. `dischargeStep`/`outcomesU` and the `outcomesU`
 step-match (`outcomesU_of_step`, Soundness.lean) remain as PROOF
-DEVICES — they are how the `driveU` lane's proofs go — and appear in
-no export's statement here.
+DEVICES of this module's classification — and appear in no export's
+statement here (since the fuel-lane restatement of 2026-09-03 no
+adequacy lane consumes them: both lanes run on `loop_step_frag`).
 
 WHAT IS PROVED — the classification (`cerberusRound_classify`): for
 every well-sized `Frag` configuration at a sequentially well-formed
@@ -140,15 +141,16 @@ WHAT CONSUMES WHAT (2026-09-03 audit, N-1). `CerberusRound`,
 `engine_step_matchU`, `step_iff_cerberusRound`, `cerberusRound_classify`
 and `frag_round_complete` are the reference relation and the
 certification/completeness statements OVER it; they are consumed by NO
-adequacy export. The `driveU` lanes — partial (`drive_classifyU`,
-Adequacy.lean) and total (`wpt_drive_aux`, TotalAdequacy.lean) — discharge
-each drive step with the device lemma `outcomesU_of_step` (Soundness.lean,
-over `dischargeStep`); the production collapse (`prod_run_eqJ`,
-ProdEntry.lean, via `wpt_driver_done`) consumes `loop_step_frag`
-(DriverCollapse.lean), proved independently of this module. Deriving
+adequacy export. Both adequacy lanes — the partial fuel induction
+(`drive_safe_aux`, Adequacy.lean) and the total budget inductions
+(`wpt_driver_aux`/`wpt_driver_cps`, ProdLoop.lean, consumed by the
+production collapse `prod_run_eqJ`/`prod_run_eqJ_procs`) — consume the
+shipped round `loop_step_frag`/`loop_step_frag'` (DriverCollapse.lean),
+proved independently of this module. Deriving
 `loop_step_frag` from `CerberusRound.loop_step` via a context-transport
 lemma would retire that duplication; today they stand side by side.
 -/
+import CerberusHeapLang.Heap
 import CerberusHeapLang.DriverCollapse
 import CerberusHeapLang.EnvLaws
 import CerberusHeapLang.EvalClass
@@ -1903,8 +1905,8 @@ theorem cerberusRound_refused_case (M : MachineCtx)
 
 The four completeness pairs over the hand-written discharge (`store`
 and `case` in Soundness.lean, `load` and `create` here) are kept as
-proof devices: they are how the `driveU` lane's classification goes.
-They appear in no export's statement. -/
+proof devices of this module's classification. They appear in no
+export's statement. -/
 
 /-- LOAD IS TWO-SIDED at the discharge device. -/
 theorem engine_complete_loadU (M : MachineCtx) (aid : Nat)

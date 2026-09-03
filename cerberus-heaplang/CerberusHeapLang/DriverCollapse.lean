@@ -13,7 +13,7 @@ driver's OWN round functions.
   the fuelled per-thread loop {step_ctx → find_can_advance →
   advance_step}. For a single-threaded state whose thread holds a
   fragment configuration, ONE iteration of that loop is exactly one
-  `driveU` round: the step_ctx singleton (the per-rule
+  mirror step: the step_ctx singleton (the per-rule
   context-undisturbed lemmas, Soundness.lean) is advanced in place —
   taus via `advance_step`'s Step_tau2 arm (Driver.lean:336, ticking
   dr_step_counter), actions via `advance_step` → `liftCore_run` (the
@@ -58,7 +58,8 @@ driver's OWN round functions.
   BARE value form (the REMOVE-ANNOT tau precedes PROGRAM-DONE), so
   the annotated form never reaches `hack`; composition with the
   REMOVE-ANNOT readout happens inside `wpt_driver_aux`'s value
-  protocol (ProdLoop.lean), exactly as in `driveU`.
+  protocol (ProdLoop.lean) and the partial lane's `drive_safe_aux`
+  (Adequacy.lean).
 
 - `driver2_done`: the whole `driver2` computation from a PROGRAM-DONE
   thread is the singleton `Active` execution, for both values of the
@@ -84,13 +85,15 @@ workers' value is the kernel-TRANSPARENT kill
 `CerbND.fuelExhaustedKill` (`CerbND.driver2_lemFuel_zero` etc.); the
 production-entry theorems here are TOTAL statements at a certified
 step count and so carry the in-budget hypothesis (README, "Registered
-divergences and limitations"); the partial lane's restatement over
-`CerbND.drive_lemFuel` is the next slice (PROVISIONAL labels remain
-until then). Budget numerals are unfolded ONLY through the `_succ`
+divergences and limitations"); the partial lane (Adequacy.lean,
+`DriverSafeCtl`) states the kill arm as an admissible outcome at every
+fuel, and the exhaustion rounds below (`loop_zero_exhausts`,
+`loop_step_done_exhaust`, `driver2_killed`, `runND_killed`) are its
+driver arms. Budget numerals are unfolded ONLY through the `_succ`
 lemmas below (never a `show`-forced numeral defeq: 10^8 vs 10^6 hits
 the recursion-depth limit — the 2026-09-03 re-pin's error class).
 -/
-import CerberusHeapLang.Adequacy
+import CerberusHeapLang.Soundness
 import Driver
 import CerbND
 
@@ -1371,17 +1374,18 @@ tied to the DRIVER'S CURRENT run state by `hQd`); the returned run
 state either is untouched (taus, with-runstate verbatim, memop) or
 gets its aid ticked (actions) — `labeled` is preserved either way,
 which is what keeps the next round's jump certifiable. -/
-theorem loop_step_frag_same {M₀ : MachineCtx} {ctl : Ctl}
+theorem loop_step_frag_same' {M₀ : MachineCtx} {ctl : Ctl}
     (htd : M₀.tagDefs = fmapEmpty) (hex : M₀.extern = fmapEmpty)
-    {Q : LabelMap} (hlb : M₀.labelsAt ctl.proc = Q)
-    {p : sym} {th₀ : thread_state} (hproc : th₀.current_proc_opt = some p)
+    {th₀ : thread_state}
     (fl : Nat) (acc : Fmap thread_id (List core_step2))
     {dst : driver_state} {e e' : CoreExpr} {ev0 : Fmap sym value}
     {evs : List (Fmap sym value)} {ρ' : EnvStack} {σ' : Mem}
     (hth : dst.core_state0.thread_states =
       [(0, (none, { th₀ with arena := e, env := ev0 :: evs }))])
     (hext : dst.core_extern = fmapEmpty)
-    (hQd : LabeledAt dst.core_run_state0 p Q)
+    (hjmp : ∀ l params cont, lookupLabel (M₀.labelsAt ctl.proc) l = some (params, cont) →
+      ∃ p, th₀.current_proc_opt = some p ∧
+        LabeledAt dst.core_run_state0 p (M₀.labelsAt ctl.proc))
     (hf : Frag e) (hsz : esize e ≤ lemDefaultFuel)
     (hs : Step M₀ (e, ev0 :: evs, ctl, dst.layout_state) (e', ρ', ctl, σ')) :
     ∃ (rs' : core_run_state) (tr : List trace_event) (ctr : Nat),
@@ -1953,7 +1957,7 @@ theorem loop_step_frag_same {M₀ : MachineCtx} {ctl : Ctl}
     have hdep : ∀ pe' ∈ pes, peDepth pe' ≤ lemDefaultFuel := by
       cases hfr with
       | run _ hdep => exact hdep
-    rw [hlb] at hl
+    obtain ⟨p, hproc, hQd⟩ := hjmp l params cont hl
     rw [htd, hex] at hvs
     obtain ⟨h1, h2, h3⟩ : e' = cont ∧
         ρ' = bindArgs params vs (ev0 :: evs) ∧ σ' = dst.layout_state := by
@@ -1969,6 +1973,37 @@ theorem loop_step_frag_same {M₀ : MachineCtx} {ctl : Ctl}
       (hm dst.core_run_state0
         (by rw [hext, resolveExtern_empty]; exact hQd))
   · exact absurd (congrArg (fun c : Config => c.2.2.1.κ) hcout) (by simp)
+
+/-- The control-preserving round at a KNOWN current procedure (the calls
+    arc C2 statement, unchanged): `loop_step_frag_same'` with the jump
+    tie supplied by the thread's `current_proc_opt` and the run-state tie
+    `hQd` at the context's derived label map `hlb`. -/
+theorem loop_step_frag_same {M₀ : MachineCtx} {ctl : Ctl}
+    (htd : M₀.tagDefs = fmapEmpty) (hex : M₀.extern = fmapEmpty)
+    {Q : LabelMap} (hlb : M₀.labelsAt ctl.proc = Q)
+    {p : sym} {th₀ : thread_state} (hproc : th₀.current_proc_opt = some p)
+    (fl : Nat) (acc : Fmap thread_id (List core_step2))
+    {dst : driver_state} {e e' : CoreExpr} {ev0 : Fmap sym value}
+    {evs : List (Fmap sym value)} {ρ' : EnvStack} {σ' : Mem}
+    (hth : dst.core_state0.thread_states =
+      [(0, (none, { th₀ with arena := e, env := ev0 :: evs }))])
+    (hext : dst.core_extern = fmapEmpty)
+    (hQd : LabeledAt dst.core_run_state0 p Q)
+    (hf : Frag e) (hsz : esize e ≤ lemDefaultFuel)
+    (hs : Step M₀ (e, ev0 :: evs, ctl, dst.layout_state) (e', ρ', ctl, σ')) :
+    ∃ (rs' : core_run_state) (tr : List trace_event) (ctr : Nat),
+      rs'.labeled = dst.core_run_state0.labeled ∧
+      runOne (drive_nonmemory_steps_aux2_lemFuel (Nat.succ fl)
+          fmapEmpty acc [0]) dst =
+        runOne (drive_nonmemory_steps_aux2_lemFuel fl fmapEmpty acc [0])
+          { dst with
+              core_state0 := update_thread_state 0
+                { th₀ with arena := e', env := ρ' } dst.core_state0,
+              layout_state := σ',
+              core_run_state0 := rs', trace := tr,
+              dr_step_counter := ctr } :=
+  loop_step_frag_same' htd hex fl acc hth hext
+    (fun _ _ _ _ => ⟨p, hproc, by rw [hlb]; exact hQd⟩) hf hsz hs
 
 /-- THE DRIVER STEP-MATCH AT THE LIVE CONTROL (calls arc C2 — the C1
     range audit's M-1 obligation: the mirror's control TIED to the
@@ -1986,10 +2021,9 @@ theorem loop_step_frag_same {M₀ : MachineCtx} {ctl : Ctl}
     `step_ctx_call_ws` + `loop_step_withrs_eval` (run state verbatim);
     the RETURN round is `step_ctx_ret` + `loop_step_tau_tsk` (trace
     existential). -/
-theorem loop_step_frag {M₀ : MachineCtx} {ctl ctl' : Ctl}
+theorem loop_step_frag' {M₀ : MachineCtx} {ctl ctl' : Ctl}
     (htd : M₀.tagDefs = fmapEmpty) (hex : M₀.extern = fmapEmpty)
-    {Q : LabelMap} (hlb : M₀.labelsAt ctl.proc = Q)
-    {p : sym} (hp : ctl.proc = some p) {th₀ : thread_state}
+    {th₀ : thread_state}
     (hstack : th₀.stack0 = ctl.toStack) (hproc : th₀.current_proc_opt = ctl.proc)
     (hel : th₀.exec_loc = ctl.execLoc) (hcl : th₀.current_loc = M₀.currentLoc)
     (fl : Nat) (acc : Fmap thread_id (List core_step2))
@@ -1998,7 +2032,9 @@ theorem loop_step_frag {M₀ : MachineCtx} {ctl ctl' : Ctl}
     (hth : dst.core_state0.thread_states =
       [(0, (none, { th₀ with arena := e, env := ev0 :: evs }))])
     (hext : dst.core_extern = fmapEmpty) (hfile : dst.core_file = M₀.file)
-    (hQd : LabeledAt dst.core_run_state0 p Q)
+    (hjmp : ∀ l params cont, lookupLabel (M₀.labelsAt ctl.proc) l = some (params, cont) →
+      ∃ p, th₀.current_proc_opt = some p ∧
+        LabeledAt dst.core_run_state0 p (M₀.labelsAt ctl.proc))
     (hf : Frag e) (hsz : esize e ≤ lemDefaultFuel)
     (hs : Step M₀ (e, ev0 :: evs, ctl, dst.layout_state) (e', ρ', ctl', σ')) :
     ∃ (rs' : core_run_state) (tr : List trace_event) (ctr : Nat),
@@ -2023,7 +2059,7 @@ theorem loop_step_frag {M₀ : MachineCtx} {ctl ctl' : Ctl}
   · -- control-preserving: the successor's control fields are th₀'s own
     subst heq
     obtain ⟨rs', tr, ctr, hlab, hrun⟩ :=
-      loop_step_frag_same htd hex hlb (hproc.trans hp) fl acc hth hext hQd hf hsz hs
+      loop_step_frag_same' htd hex fl acc hth hext hjmp hf hsz hs
     refine ⟨rs', tr, ctr, hlab, ?_⟩
     rw [hrun, ← hstack, ← hproc, ← hel]
   · -- THE CALL
@@ -2075,5 +2111,205 @@ theorem loop_step_frag {M₀ : MachineCtx} {ctl ctl' : Ctl}
         thread_state).exec_loc = ℓ from hel]
     rcases dst with ⟨cf, ce, cs, crs, ls, cc, fs, tr0, sa, bl, ctr0⟩
     rfl
+
+/-- The live-control round at a KNOWN, TIED current procedure (the calls
+    arc C2 statement, unchanged; pinned): `loop_step_frag'` with the jump
+    tie supplied by `hp`/`hproc`/`hlb`/`hQd`. -/
+theorem loop_step_frag {M₀ : MachineCtx} {ctl ctl' : Ctl}
+    (htd : M₀.tagDefs = fmapEmpty) (hex : M₀.extern = fmapEmpty)
+    {Q : LabelMap} (hlb : M₀.labelsAt ctl.proc = Q)
+    {p : sym} (hp : ctl.proc = some p) {th₀ : thread_state}
+    (hstack : th₀.stack0 = ctl.toStack) (hproc : th₀.current_proc_opt = ctl.proc)
+    (hel : th₀.exec_loc = ctl.execLoc) (hcl : th₀.current_loc = M₀.currentLoc)
+    (fl : Nat) (acc : Fmap thread_id (List core_step2))
+    {dst : driver_state} {e e' : CoreExpr} {ev0 : Fmap sym value}
+    {evs : List (Fmap sym value)} {ρ' : EnvStack} {σ' : Mem}
+    (hth : dst.core_state0.thread_states =
+      [(0, (none, { th₀ with arena := e, env := ev0 :: evs }))])
+    (hext : dst.core_extern = fmapEmpty) (hfile : dst.core_file = M₀.file)
+    (hQd : LabeledAt dst.core_run_state0 p Q)
+    (hf : Frag e) (hsz : esize e ≤ lemDefaultFuel)
+    (hs : Step M₀ (e, ev0 :: evs, ctl, dst.layout_state) (e', ρ', ctl', σ')) :
+    ∃ (rs' : core_run_state) (tr : List trace_event) (ctr : Nat),
+      rs'.labeled = dst.core_run_state0.labeled ∧
+      runOne (drive_nonmemory_steps_aux2_lemFuel (Nat.succ fl)
+          fmapEmpty acc [0]) dst =
+        runOne (drive_nonmemory_steps_aux2_lemFuel fl fmapEmpty acc [0])
+          { dst with
+              core_state0 := update_thread_state 0
+                { th₀ with
+                  arena := e'
+                  env := ρ'
+                  stack0 := ctl'.toStack
+                  current_proc_opt := ctl'.proc
+                  exec_loc := ctl'.execLoc } dst.core_state0,
+              layout_state := σ',
+              core_run_state0 := rs', trace := tr,
+              dr_step_counter := ctr } :=
+  loop_step_frag' htd hex hstack hproc hel hcl fl acc hth hext hfile
+    (fun _ _ _ _ => ⟨p, by rw [hproc, hp], by rw [hlb]; exact hQd⟩) hf hsz hs
+
+/-! ## The live-control vocabulary of BOTH driver lanes (moved here from
+ProdLoop.lean in the fuel-lane restatement, 2026-09-03: the partial lane
+in Adequacy.lean states its facts over the same thread shape and the same
+registration ties as the total lane in ProdLoop.lean). -/
+
+/-- The driver thread at a LIVE control over the immutables of `th₀`:
+    the arena, the env and the three control fields PCALL/RETURN write
+    (`stack0 := ctl.toStack`, `current_proc_opt := ctl.proc`, `exec_loc
+    := ctl.execLoc`); `errno` and `current_loc` are `th₀`'s.
+    `loop_step_frag`'s successor record IS this shape. -/
+def ctlThread (th₀ : thread_state) (e : CoreExpr) (ρ : EnvStack) (ctl : Ctl) : thread_state :=
+  { th₀ with
+    arena := e
+    env := ρ
+    stack0 := ctl.toStack
+    current_proc_opt := ctl.proc
+    exec_loc := ctl.execLoc }
+
+@[simp] theorem ctlThread_current_loc (th₀ : thread_state) (e : CoreExpr) (ρ : EnvStack)
+    (ctl : Ctl) : (ctlThread th₀ e ρ ctl).current_loc = th₀.current_loc := rfl
+
+/-- THE WHOLE-FILE REGISTRATION TIE: the run state's two-level `labeled`
+    map has, at every DECLARED procedure (`lookupProc`, the stdlib-first
+    read `call_proc` makes), exactly the context's derived fiber
+    `M₀.labelsAt (some f)`. The single-procedure lane's `LabeledAt` is
+    this at one procedure. -/
+def LabeledProcs (M₀ : MachineCtx) (lab : Fmap sym LabelMap) : Prop :=
+  ∀ f params body, lookupProc M₀.file M₀.extern f = some (params, body) →
+    fmapLookupBy (fun (s1 : sym) (s2 : sym) => Lem_Basic_classes.ordCompare s1 s2) f lab =
+      some (M₀.labelsAt (some f))
+
+/-- The tie holds at the context's OWN run state as soon as every
+    declared procedure has SOME fiber there (the registration installs
+    one per `Proc` of the file): the derived fiber is that fiber. -/
+theorem LabeledProcs.of_fibers {M₀ : MachineCtx} (hex : M₀.extern = fmapEmpty)
+    (h : ∀ f params body, lookupProc M₀.file M₀.extern f = some (params, body) →
+      ∃ Q : LabelMap, fmapLookupBy (fun (s1 : sym) (s2 : sym) =>
+        Lem_Basic_classes.ordCompare s1 s2) f M₀.runState.labeled = some Q) :
+    LabeledProcs M₀ M₀.runState.labeled := by
+  intro f params body hf
+  obtain ⟨Q, hQ⟩ := h f params body hf
+  rw [hQ, MachineCtx.labelsAt_some, MachineCtx.resolveProc_of_extern_empty hex, hQ]
+
+/-- THE CONTROL'S REGISTRATION TIE (the partial lane's tie for the
+    procedures ALREADY ON the control): the run state's `labeled` map has,
+    at the current procedure and at every procedure saved on the call
+    stack, exactly the context's derived fiber — what the jump round reads
+    (`loop_step_frag'`'s `hjmp`). Vacuous at a control with no current
+    procedure and an empty stack (`CtlTied.noproc` — the straight-line
+    profile, where the derived map is empty and no jump can fire); at a
+    declared entry procedure it follows from the whole-file tie
+    (`CtlTied.entry`); the callees entered by PCALL are tied by
+    `LabeledProcs`, so the tie is preserved along a run. -/
+def CtlTied (M₀ : MachineCtx) (lab : Fmap sym LabelMap) (ctl : Ctl) : Prop :=
+  (∀ p, ctl.proc = some p →
+    fmapLookupBy (fun (s1 : sym) (s2 : sym) => Lem_Basic_classes.ordCompare s1 s2) p lab =
+      some (M₀.labelsAt (some p))) ∧
+  ∀ pc ∈ ctl.κ, ∀ p, pc.1 = some p →
+    fmapLookupBy (fun (s1 : sym) (s2 : sym) => Lem_Basic_classes.ordCompare s1 s2) p lab =
+      some (M₀.labelsAt (some p))
+
+theorem CtlTied.noproc (M₀ : MachineCtx) (lab : Fmap sym LabelMap) (ℓ : exec_location) :
+    CtlTied M₀ lab ⟨[], none, ℓ⟩ :=
+  ⟨fun _ h => (by cases h), fun _ h => (by cases h)⟩
+
+theorem CtlTied.entry {M₀ : MachineCtx} {lab : Fmap sym LabelMap} (hlab : LabeledProcs M₀ lab)
+    {p : sym} {params : List (sym × core_base_type)} {body : CoreExpr}
+    (hq : lookupProc M₀.file M₀.extern p = some (params, body)) (ℓ : exec_location) :
+    CtlTied M₀ lab ⟨[], some p, ℓ⟩ :=
+  ⟨fun q hq' => (by cases hq'; exact hlab p params body hq), fun _ h => (by cases h)⟩
+
+/-- A successful label lookup at the control's current procedure names a
+    procedure the run state ties: the jump round's tie (`hjmp`) from the
+    control's tie. -/
+theorem CtlTied.jump {M₀ : MachineCtx} {lab : Fmap sym LabelMap} {ctl : Ctl}
+    (h : CtlTied M₀ lab ctl) {l : sym} {params : List (sym × core_base_type)} {cont : CoreExpr}
+    (hl : lookupLabel (M₀.labelsAt ctl.proc) l = some (params, cont)) :
+    ∃ p, ctl.proc = some p ∧
+      fmapLookupBy (fun (s1 : sym) (s2 : sym) => Lem_Basic_classes.ordCompare s1 s2) p lab =
+        some (M₀.labelsAt ctl.proc) := by
+  cases hp : ctl.proc with
+  | none =>
+    rw [hp, MachineCtx.labelsAt_none, show lookupLabel fmapEmpty l = none from rfl] at hl
+    cases hl
+  | some p => exact ⟨p, rfl, h.1 p hp⟩
+
+/-! ## The exhaustion rounds and the killed pipeline (the partial lane's
+driver arms, fuel-lane restatement 2026-09-03). The shipped loop's
+out-of-fuel value is the kernel-transparent kill `CerbND.fuelExhaustedKill`
+(`CerbND.drive_nonmemory_steps_aux2_lemFuel_zero`, the cerberus-lean fuel
+arc); an exhausted loop kills `driver2` through the ND bind's killed arm,
+and a one-layer killed tree is the singleton killed execution of `runND`. -/
+
+/-- The loop at fuel 0: the exhaustion kill, the state untouched. -/
+theorem loop_zero_exhausts (tds : Fmap sym (CerbLocation.Loc × tag_definition))
+    (acc : Fmap thread_id (List core_step2)) (xs : List Nat) (dst : driver_state) :
+    runOne (drive_nonmemory_steps_aux2_lemFuel 0 tds acc xs) dst =
+      (NDkilled CerbND.fuelExhaustedKill, dst) := by
+  rw [CerbND.drive_nonmemory_steps_aux2_lemFuel_zero]
+  rfl
+
+/-- Done round at fuel EXACTLY ONE: PROGRAM-DONE is not advanceable, the
+    singleton is recorded, and the drain iteration on the empty thread
+    list has no fuel — the exhaustion kill (the reason the total lane's
+    delivery needs `k + 2` iterations). -/
+theorem loop_step_done_exhaust (tds : Fmap sym (CerbLocation.Loc × tag_definition))
+    (acc : Fmap thread_id (List core_step2))
+    {dst : driver_state} {th : thread_state} {v : value}
+    (hth : dst.core_state0.thread_states = [(0, (none, th))])
+    (hsteps : step_ctx tds dst.layout_state dst.core_file dst.core_extern 0
+      (none, th) = [Step_done2 v]) :
+    runOne (drive_nonmemory_steps_aux2_lemFuel (Nat.succ 0) tds acc [0]) dst =
+      (NDkilled CerbND.fuelExhaustedKill, dst) := by
+  conv => lhs; unfold drive_nonmemory_steps_aux2_lemFuel
+  refine (runOne_bind_active (z := [Step_done2 v]) (s' := dst) ?_).trans ?_
+  · rw [runOne_read]
+    refine congrArg (fun x => (NDactive x, dst)) ?_
+    show (let th_info := match lookupBy (fun x y => x == y) 0
+            dst.core_state0.thread_states with
+          | some z => z
+          | none => failwithI _;
+        step_ctx tds dst.layout_state dst.core_file dst.core_extern 0 th_info) = _
+    rw [hth]
+    exact hsteps
+  · dsimp only [find_can_advance, can_advance]
+    exact loop_zero_exhausts tds _ _ dst
+
+/-- `runND` (CerbND.lean) of a computation whose one-layer application
+    is KILLED: exactly one execution, the killed one (the runner's
+    `NDkilled` arm; the killed-side twin of `runND_active`). -/
+theorem runND_killed {a info err cs st : Type}
+    {m : ndM a info err cs st} {s s' : st} {r : kill_reason err}
+    (h : runOne m s = (NDkilled r, s')) :
+    CerbND.runND m s = [(nd_status.Killed s' r, ([] : List String), s')] := by
+  rcases m with ⟨g⟩
+  dsimp only [runOne] at h
+  show CerbND.runNDFuel CerbFuel.driverFuel (ND g) s = _
+  rw [driverFuel_succ]
+  unfold CerbND.runNDFuel
+  dsimp only
+  rw [h]
+
+/-- `driver2` when the per-thread loop KILLS (in the partial lane: the
+    exhaustion kill at the shipped loop budget): `new_drive_core_threads`
+    runs the loop on the singleton thread list and the ND bind's killed
+    arm propagates the kill — the round is the kill, the state the
+    loop's. -/
+theorem driver2_killed (fl : Nat)
+    (tds : Fmap sym (CerbLocation.Loc × tag_definition))
+    (dst dstK : driver_state) (th : thread_state) (r : kill_reason driver_error)
+    (hth : dst.core_state0.thread_states = [(0, (none, th))])
+    (hloop : runOne (drive_nonmemory_steps_aux2_lemFuel CerbFuel.driverFuel tds
+        fmapEmpty [0]) dst = (NDkilled r, dstK)) :
+    runOne (driver2_lemFuel (Nat.succ fl) tds false) dst = (NDkilled r, dstK) := by
+  conv => lhs; unfold driver2_lemFuel
+  refine runOne_bind_killed ?_
+  unfold new_drive_core_threads
+  refine (runOne_bind_active (z := dst) (by rfl)).trans ?_
+  dsimp only
+  rw [hth]
+  dsimp only [List.map]
+  exact runOne_bind_killed hloop
 
 end CerberusHeapLang

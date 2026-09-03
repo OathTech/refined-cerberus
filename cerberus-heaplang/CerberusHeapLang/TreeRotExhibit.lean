@@ -1077,7 +1077,7 @@ theorem trPost_readout [SpikeGS .hasLC GF] (t' : NodeTree) (R : CellMap) :
     · iexact HQ
   · iexact HF
 
-/-- The base-WP face (the launch shape `engine_adequacyU`
+/-- The base-WP face (the launch shape `engine_adequacy`
     consumes) — through THE WHOLE-LOOP FRAME RULE `wps_sound_frame`
     (alloc arc P4.2): the unframed rotation proof plus the cell frame
     collapse to the base WP with the frame in the postcondition. -/
@@ -1143,7 +1143,9 @@ theorem trProg_esize (px : CerbMem.PointerValue) :
     shape — audit F-06 item 6): driving the REAL engine on the
     right rotation, from ANY memory satisfying the seeded tree
     `m₀` next to an ARBITRARY disjoint frame footprint `R`:
-    never killed, never derailed, and any delivered value is the
+    from any driver state holding the straight-line thread: the shipped
+    loop at every fuel exhausts or delivers, never kills otherwise,
+    never derails, and any delivered value is the
     left child's pointer heading a final footprint `Q` seeded as
     the ROTATED tree — the SAME allocations (footprint equality
     stated on the maps; the rotated id list is a permutation of the
@@ -1155,13 +1157,9 @@ theorem tree_rotate_certified (sbty : core_base_type)
     (m₀ : CellMap)
     (hseed : SeedTree m₀ px (.node idx vx (.node idy vy ta tb) tc))
     (R : CellMap) (hR : m₀ ##ₘ R)
-    (σ₀ : Mem) (hcoh : Sat fmapEmpty σ₀ (union m₀ R))
-    (n : Nat) (aids : Nat → Nat) :
+    (σ₀ : Mem) (hcoh : Sat fmapEmpty σ₀ (union m₀ R)) :
     let prog := trProg loc ann mo xbty ybty bbty ubty px
-    (∀ r, driveU spikeCtx aids n (spikeThread prog) σ₀ ≠ .killed r) ∧
-    (driveU spikeCtx aids n (spikeThread prog) σ₀ ≠ .stuck) ∧
-    (∀ (v : value) (σ' : Mem),
-      driveU spikeCtx aids n (spikeThread prog) σ₀ = .done v σ' →
+    DriverSafeCtl spikeCtx (spikeThread prog) prog spikeEnv spikeCtl σ₀ (fun v σ' =>
       ∃ (py : CerbMem.PointerValue) (Q : CellMap),
         v = ptrVal py ∧
         SeedTree Q py (.node idy vy ta (.node idx vx tb tc)) ∧
@@ -1169,7 +1167,7 @@ theorem tree_rotate_certified (sbty : core_base_type)
         Q ##ₘ R ∧
         Sat fmapEmpty σ' (union Q R)) := by
   intro prog
-  have h := engine_adequacyU (GF := SpikeGF) (M := spikeCtx) (ctl := spikeCtl) spikeCtx_wf rfl
+  refine (engine_adequacy (GF := SpikeGF) (M := spikeCtx) rfl rfl (ctl := spikeCtl) rfl
     spikeCtx_labels_frag spikeCtx_labels_pot spikeCtx_fragProcs
     prog fmapEmpty [] σ₀ (union m₀ R)
     (trProg_frag loc ann mo xbty ybty bbty ubty px)
@@ -1185,9 +1183,9 @@ theorem tree_rotate_certified (sbty : core_base_type)
         (BI.sep_mono (seedTree_isTree _ m₀ px hseed) .rfl)).trans ?_
       exact tr_wp_readout loc ann mo xbty ybty bbty ubty
         idx idy vx vy ta tb tc px R)
-    n aids
-  refine ⟨h.1, h.2.1, fun v σ' hdone => ?_⟩
-  obtain ⟨Q, ⟨py, rfl, hQseed⟩, hdisj, hsat⟩ := h.2.2 v σ' hdone
+    (th₀ := spikeThread prog) rfl).mono ?_
+  intro v σ' hpost
+  obtain ⟨Q, ⟨py, rfl, hQseed⟩, hdisj, hsat⟩ := hpost
   refine ⟨py, Q, rfl, hQseed, fun k => ?_, hdisj, hsat⟩
   rw [SeedTree.footprint _ Q py hQseed k,
     SeedTree.footprint _ m₀ px hseed k]
@@ -1414,59 +1412,6 @@ theorem trProg_pot (px : CerbMem.PointerValue) :
   rw [show pot (trProg loc ann mo xbty ybty bbty ubty px) = 7 from rfl,
     show lemDefaultFuel = 999999 + 1 from rfl]
   omega
-
-/-- TREE ROTATION, THE UNCONDITIONAL TOTAL ENGINE EQUATION: the
-    engine's drive at the constant fuel 19 DELIVERS the rotated
-    tree — same allocations, frame verbatim, no fuel hypotheses, no
-    partiality. Straight-line totality through the same generic
-    simulation the loops use. -/
-theorem tree_rotate_certified_total (idx idy vx vy : Int)
-    (ta tb tc : NodeTree) (px : CerbMem.PointerValue)
-    (m₀ : CellMap)
-    (hseed : SeedTree m₀ px (.node idx vx (.node idy vy ta tb) tc))
-    (R : CellMap) (hR : m₀ ##ₘ R)
-    (σ₀ : Mem) (hcoh : Sat fmapEmpty σ₀ (union m₀ R)) (aids : Nat → Nat) :
-    ∃ (py : CerbMem.PointerValue) (Q : CellMap) (σ' : Mem),
-      driveU spikeCtx aids 19
-        (spikeThread (trProg loc ann mo xbty ybty bbty ubty px)) σ₀ =
-          .done (ptrVal py) σ' ∧
-      SeedTree Q py (.node idy vy ta (.node idx vx tb tc)) ∧
-      (∀ k, (get? Q k).isSome ↔ (get? m₀ k).isSome) ∧
-      Q ##ₘ R ∧
-      Sat fmapEmpty σ' (union Q R) := by
-  obtain ⟨v, σ', hdone, ⟨Q, ⟨py, rfl, hQseed⟩, hdisj, hsat⟩, -⟩ :=
-    wpt_engine_boundU (GF := SpikeGF) (M := spikeCtx) (ctl := spikeCtl) spikeCtx_wf rfl
-      (fun l params cont hl => (spikeCtx_labels_none l hl).elim)
-      (fun l params cont hl => (spikeCtx_labels_none l hl).elim)
-      (fun _ _ _ _ => iprop(False))
-      (trProg loc ann mo xbty ybty bbty ubty px)
-      fmapEmpty [] σ₀ (union m₀ R)
-      (trProg_frag loc ann mo xbty ybty bbty ubty px)
-      (trProg_pot loc ann mo xbty ybty bbty ubty px)
-      hcoh
-      (fun v σ' => ∃ Q : CellMap, (∃ p' : CerbMem.PointerValue,
-          v = ptrVal p' ∧
-          SeedTree Q p' (.node idy vy ta (.node idx vx tb tc))) ∧
-        Q ##ₘ R ∧ Coh fmapEmpty σ' (union Q R))
-      19
-      (by
-        intro inst
-        refine ((BigSepM.bigSepM_union hR).1.trans
-          (BI.sep_mono (seedTree_isTree _ m₀ px hseed) .rfl)).trans ?_
-        refine .trans BI.emp_sep.2 (BI.sep_mono ?_ ?_)
-        · exact (blockSpecsT_intro fun l _ _ _ _ _ _ hl =>
-            (spikeCtx_labels_none l hl).elim)
-        · exact (tree_rotate_wpt_frame (Ls := fun _ _ _ _ => iprop(False))
-              loc ann mo xbty ybty bbty ubty (lrCellFrame R)
-              idx idy vx vy ta tb tc px).trans
-            (wpt_mono (trPost_readout
-              (NodeTree.node idy vy ta (NodeTree.node idx vx tb tc)) R)
-              _ _ _))
-      aids
-  refine ⟨py, Q, σ', hdone, hQseed, fun k => ?_, hdisj, hsat⟩
-  rw [SeedTree.footprint _ Q py hQseed k,
-    SeedTree.footprint _ m₀ px hseed k]
-  exact rotate_ids_mem idx idy vx vy ta tb tc k
 
 end TrTotalExport
 

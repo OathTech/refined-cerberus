@@ -3,10 +3,13 @@ CerberusHeapLang.FibRecExhibit — RECURSIVE FIB (calls arc C4): a
 procedure calling itself, verified through the SPECIFICATION TABLE
 (Hoare's rule for recursive procedures: the body assumes the table,
 `procSpecs_intro`/`procSpecsT_intro` — no Löb in the client), driven
-through the PROVISIONAL `driveU` lane (`fib_rec_certified`) and, THE
-FLAGSHIP, through the SHIPPED PIPELINE from the cold start
-(`fib_rec_certified_production`): the eighth root-of-trust statement,
-the first over a MULTI-PROCEDURE file, the first whose run makes the
+through the SHIPPED PIPELINE from the cold start in both lanes: the
+PARTIAL `fib_rec_certified` (every `n ≥ 0`, no budget bound: at every
+fuel the run is the exhaustion kill or Active with `fib n` —
+`prod_run_safe_procs`, the fuel-lane restatement's closed form) and, THE
+FLAGSHIP, the TOTAL `fib_rec_certified_production` (the certified round
+count in the shipped budget): the eighth root-of-trust statement, the
+first over a MULTI-PROCEDURE file, the first whose run makes the
 driver's PCALL and RETURN rounds.
 
 THE PROGRAM (Core):
@@ -798,37 +801,55 @@ section FrEngine
 variable (sup : Nat) (ra : core_run_annotation) (n : Int)
   (nbty xbty ybty sbty zbty : core_base_type)
 
-/-- RECURSIVE FIB THROUGH THE `driveU` LANE (PROVISIONAL, as every `driveU`
-    export): the package loop at the two-procedure file never kills or
-    derails, and delivers `fib n` — `engine_adequacyU` with `FragProcs` at
-    the production context, from any memory, at every drive length. -/
-theorem fib_rec_certified (hn : 0 ≤ n) (σ₀ : Mem) (nsteps : Nat) (aids : Nat → Nat) :
-    let M := frCtx ra n nbty xbty ybty sbty zbty sup
-    (∀ r, driveU M aids nsteps (M.thread (frMain ra n) [fmapEmpty] prodCtl) σ₀ ≠ .killed r) ∧
-    (driveU M aids nsteps (M.thread (frMain ra n) [fmapEmpty] prodCtl) σ₀ ≠ .stuck) ∧
-    (∀ (v : value) (σ' : Mem),
-      driveU M aids nsteps (M.thread (frMain ra n) [fmapEmpty] prodCtl) σ₀ = .done v σ' →
-      v = ivVal (fibSpec n.toNat)) := by
-  intro M
-  refine engine_adequacyU (GF := SpikeGF) (M := M) ⟨rfl⟩ (ctl := prodCtl) rfl
-    (fun l params cont hl => by
-      rw [show prodCtl.proc = some mainSym from rfl, frCtx_labels_main,
-        show lookupLabel fmapEmpty l = none from rfl] at hl
-      cases hl)
-    (fun l params cont hl => by
-      rw [show prodCtl.proc = some mainSym from rfl, frCtx_labels_main,
-        show lookupLabel fmapEmpty l = none from rfl] at hl
-      cases hl)
-    (frCtx_fragProcs ra n nbty xbty ybty sbty zbty sup)
-    (frMain ra n) fmapEmpty [] σ₀ (∅ : SpikeHeapF SpikeCell)
-    (frMain_frag ra n)
-    (by rw [frMain_pot, show lemDefaultFuel = 999999 + 1 from rfl]; omega)
-    (coh_empty σ₀)
-    (fun v _ => v = ivVal (fibSpec n.toNat))
-    ?_ nsteps aids
-  intro inst
-  exact (BigSepM.bigSepM_empty).1.trans
-    (fr_wp_readout ra n nbty xbty ybty sbty zbty sup hn _)
+/-- RECURSIVE FIB, PARTIAL FORM ON THE SHIPPED PIPELINE (the fuel-lane
+    restatement's closed statement): for EVERY `n ≥ 0` — no budget bound
+    — and every `fuel`, the production pipeline `CerbND.drive_lemFuel fuel`
+    (the shipped `drive` at `fuel := CerbFuel.driverFuel`,
+    `CerbND.drive_wrapper_defeq`) cold on the synthetic TWO-PROCEDURE file
+    is EXACTLY ONE execution, and it is either the fuel-exhaustion kill
+    `CerbND.fuelExhaustedKill` or an Active execution delivering `fib n`.
+    Every other outcome — a kill of any other reason, an ILLTYPED refusal,
+    a second execution — is excluded. `engine_adequacy` with `FragProcs` at
+    the production context, then `prod_run_safe_procs`. -/
+theorem fib_rec_certified (hn : 0 ≤ n) (fs : CerbFS.FsState) (args : List String) (fuel : Nat) :
+    ∃ (st : nd_status driver_result driver_error driver_state) (dst' : driver_state),
+      CerbND.runND
+          (CerbND.drive_lemFuel fuel fmapEmpty false
+            (prodFileWith (frProcs ra nbty xbty ybty sbty zbty) (frMain ra n)) args)
+          ((initial_driver_state sup
+            (prodFileWith (frProcs ra nbty xbty ybty sbty zbty) (frMain ra n)) fs).1) =
+        [(st, ([] : List String), dst')] ∧
+      (st = nd_status.Killed dst' CerbND.fuelExhaustedKill ∨
+       ∃ dres : driver_result, st = nd_status.Active dres ∧
+         dres.dres_core_value = ivVal (fibSpec n.toNat) ∧
+         dres.dres_blocked = false ∧
+         dres.dres_stdout = "" ∧
+         dres.dres_stderr = "") := by
+  have hsafe : DriverSafeCtl (frCtx ra n nbty xbty ybty sbty zbty sup) (prodThread (frMain ra n))
+      (frMain ra n) [fmapEmpty] prodCtl prodMem₀ (fun v _ => v = ivVal (fibSpec n.toNat)) := by
+    refine engine_adequacy (GF := SpikeGF) (M := frCtx ra n nbty xbty ybty sbty zbty sup) rfl rfl
+      (ctl := prodCtl) rfl
+      (fun l params cont hl => by
+        rw [show prodCtl.proc = some mainSym from rfl, frCtx_labels_main,
+          show lookupLabel fmapEmpty l = none from rfl] at hl
+        cases hl)
+      (fun l params cont hl => by
+        rw [show prodCtl.proc = some mainSym from rfl, frCtx_labels_main,
+          show lookupLabel fmapEmpty l = none from rfl] at hl
+        cases hl)
+      (frCtx_fragProcs ra n nbty xbty ybty sbty zbty sup)
+      (frMain ra n) fmapEmpty [] prodMem₀ (∅ : SpikeHeapF SpikeCell)
+      (frMain_frag ra n)
+      (by rw [frMain_pot, show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+      (coh_empty prodMem₀)
+      (fun v _ => v = ivVal (fibSpec n.toNat))
+      ?_ (th₀ := prodThread (frMain ra n)) rfl
+    intro inst
+    exact (BigSepM.bigSepM_empty).1.trans
+      (fr_wp_readout ra n nbty xbty ybty sbty zbty sup hn _)
+  obtain ⟨st, dst', heq, hor⟩ := prod_run_safe_procs sup (frProcs ra nbty xbty ybty sbty zbty)
+    (frMain ra n) (frCtx_labeledProcs ra n nbty xbty ybty sbty zbty sup) _ hsafe fs args fuel
+  exact ⟨st, dst', heq, hor⟩
 
 /-- RECURSIVE FIB, PRODUCTION FORM — THE FLAGSHIP OF THE CALLS ARC: running
     the SHIPPED pipeline cold on the synthetic TWO-PROCEDURE file (`main`

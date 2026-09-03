@@ -4,9 +4,9 @@ on fragment terms: the STATIC fuel bound both adequacy theorems carry.
 
 The engine's `get_ctx` is fuel-bounded (budget `lemDefaultFuel`,
 Soundness.lean header "FUEL HONESTY") and its exhaustion leaf is
-opaque, so every per-step engine equation — the device lemma
-`outcomesU_of_step` the `driveU` lanes consume, `loop_step_frag` the
-production collapse consumes, the certification `engine_step_matchU` —
+opaque, so every per-step engine equation — the shipped round
+`loop_step_frag` both driver lanes consume, the device lemma
+`outcomesU_of_step`, the certification `engine_step_matchU` —
 carries `esize e ≤ lemDefaultFuel` for the CURRENT term. The generic
 growth bound `Frag.esize_step_bound` (≤ +1 per step) would couple a
 drive statement's fuel premise to the run length. This module installs
@@ -23,8 +23,8 @@ branch size — such that
 So the two STATIC premises `pot e₀ ≤ lemDefaultFuel` and
 `pot cont ≤ lemDefaultFuel` (per registered label body) bound `esize`
 at every reachable term, independent of the run length. Both the
-partial drive classification (Adequacy.lean, `drive_classifyU`) and
-the total budget simulation (TotalAdequacy.lean, `wpt_drive_aux`)
+partial fuel induction (Adequacy.lean, `drive_safe_aux`) and the total
+budget inductions (ProdLoop.lean, `wpt_driver_aux`/`wpt_driver_cps`)
 consume exactly these; `Frag.pot_le_two` (`pot e ≤ 2 * esize e`) is
 how the exhibits discharge them from a closed `esize`.
 -/

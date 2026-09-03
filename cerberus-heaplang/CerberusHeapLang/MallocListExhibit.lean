@@ -83,11 +83,10 @@ would say only that SOME region is dead — the K5 audit's M-1).
 `ml_wpt` at the DERIVED budget `mlCost n.toNat 0 + 1 = 25·n.toNat + 7`
 (the variant `mlCost i k = 25·i + 13·k + 6`: a build step costs 12 and
 trades one unit of `i` for one node, 25 − 13 = 12; a free step costs 13;
-exit 6; entry 1). Engine-facing: `malloc_list_certified_total` (the
-`driveU` lane, PROVISIONAL as every `driveU` export): from any memory
-launching the empty footprint with the budget, the engine DELIVERS `Vunit`
-at exactly `25·n.toNat + 7` drive steps with `n.toNat` DISTINCT
-allocation ids dead and erased. PRODUCTION: `malloc_list_certified_production` — the
+exit 6; entry 1). (The former `malloc_list_certified_total` over the
+package loop `driveU` was deleted with the loop, fuel-lane restatement
+2026-09-03; its content is the production statement.) PRODUCTION:
+`malloc_list_certified_production` — the
 shipped pipeline on the self-contained file is EXACTLY ONE Active
 execution delivering `Vunit` whose final memory has `n.toNat` DISTINCT
 allocation ids in `deadAllocations` with their records erased (the proof witnesses
@@ -1625,66 +1624,6 @@ section MlExport
 variable (loc : CerbLocation.Loc) (ann ra : core_run_annotation)
   (mo : memory_order) (al : Int) (pref : prefix0)
   (sbty ibty pbty qbty bbty nbty ubty : core_base_type)
-
-/-- THE MALLOC'D LIST, THE UNCONDITIONAL TOTAL ENGINE EQUATION: from any
-    memory that launches the empty footprint with the budget `n.toNat *
-    regionCost al 16` (`LaunchCoh`), the engine's `driveU` at the DERIVED
-    bound `25·n.toNat + 7` DELIVERS `Vunit` and the final memory has
-    `n.toNat` DISTINCT allocation ids in `deadAllocations` with their
-    records erased — `n` nodes allocated, written, linked, walked and freed, no
-    out-of-memory kill. A corollary of the total judgment through the
-    generic simulation (`wpt_engine_boundU_alloc`). PROVISIONAL: stated
-    over `driveU`. -/
-theorem malloc_list_certified_total (n : Int) (hn : 0 ≤ n) (σ₀ : Mem)
-    (hl : LaunchCoh fmapEmpty σ₀ (∅ : SpikeHeapF SpikeCell) (n.toNat * regionCost al 16))
-    (aids : Nat → Nat) :
-    ∃ σ' : Mem,
-      driveU (procCtx (mlRS loc ann ra mo al pref ibty pbty qbty bbty nbty ubty)) aids
-        (25 * n.toNat + 7)
-        (procThread mlProcSym
-          (mlProg loc ann ra mo al pref sbty ibty pbty qbty bbty nbty ubty n) [fmapEmpty]) σ₀ =
-        .done Vunit σ' ∧
-      ∃ ids : List Int, ids.length = n.toNat ∧ ids.Nodup ∧
-        ∀ id ∈ ids, σ'.deadAllocations.contains id = true ∧ σ'.allocations.get? id = none := by
-  have hQ := mlRS_labeledAt loc ann ra mo al pref ibty pbty qbty bbty nbty ubty
-  have hk : mlCost n.toNat 0 + 1 = 25 * n.toNat + 7 := by
-    unfold mlCost
-    omega
-  rw [← hk]
-  have hlbl := procCtx_labels hQ
-  obtain ⟨v, σ', hdone, ⟨rfl, hdead⟩, -⟩ :=
-    wpt_engine_boundU_alloc (GF := SpikeGF)
-      (M := procCtx (mlRS loc ann ra mo al pref ibty pbty qbty bbty nbty ubty)) (ctl := procCtl mlProcSym)
-      (procCtx_wf _) rfl
-      (fun l params cont hl => by
-        rw [hlbl] at hl
-        obtain ⟨-, rfl⟩ := mlQ_inv loc ann ra mo al pref ibty pbty qbty bbty nbty ubty hl
-        exact mlBody_frag loc ann ra mo al pref qbty bbty nbty ubty)
-      (fun l params cont hl => by
-        rw [hlbl] at hl
-        obtain ⟨-, rfl⟩ := mlQ_inv loc ann ra mo al pref ibty pbty qbty bbty nbty ubty hl
-        rw [mlBody_pot, show lemDefaultFuel = 999999 + 1 from rfl]
-        omega)
-      (mlLsT al n)
-      (mlProg loc ann ra mo al pref sbty ibty pbty qbty bbty nbty ubty n)
-      fmapEmpty [] σ₀ (∅ : SpikeHeapF SpikeCell) (n.toNat * regionCost al 16)
-      (.save (saveParams_pure_of_vals rfl) (saveParams_depth_of_vals rfl)
-        (mlBody_frag loc ann ra mo al pref qbty bbty nbty ubty))
-      (by rw [mlProg_pot, show lemDefaultFuel = 999999 + 1 from rfl]; omega)
-      hl
-      (ψML n)
-      (mlCost n.toNat 0 + 1)
-      (by
-        intro inst
-        iintro ⟨-, Hcap⟩
-        isplitr [Hcap]
-        · iapply ml_blockSpecsT_readout loc ann ra mo al pref ibty pbty qbty bbty nbty ubty n
-            mlProcSym (mlRS loc ann ra mo al pref ibty pbty qbty bbty nbty ubty) hQ
-        · iapply ml_wpt_readout loc ann ra mo al pref ibty pbty qbty bbty nbty ubty n
-            mlProcSym (mlRS loc ann ra mo al pref ibty pbty qbty bbty nbty ubty) hQ sbty hn
-            $$ Hcap)
-      aids
-  exact ⟨σ', hdone, hdead⟩
 
 /-! ### Registration and the production statement -/
 

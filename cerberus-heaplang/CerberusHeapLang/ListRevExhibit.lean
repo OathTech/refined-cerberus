@@ -64,9 +64,10 @@ each program construct discharged by its small axiom or rule
 THE FLAGSHIP (Phase 4 statement — audit F-06's exit criterion
 verbatim: "the public theorem literally states same-footprint,
 in-place reversal plus termination and frame preservation"):
-`list_reverse_certified` (partial, any budget) and
-`list_reverse_certified_total` (unconditional `.done` at the DERIVED
-bound `13·|ns| + 7`). Both flagships are stated with the `SemTripleU`
+`list_reverse_certified` (partial, over the shipped driver's loop at
+every fuel) and `list_reverse_certified_production`
+(ProdLoopExhibit.lean: the shipped pipeline delivers at the DERIVED
+bound `13·|ns| + 7`). The partial flagship is stated with the `SemTriple`
 rest-quantifier shape at the proc-carrying context:
 an ARBITRARY disjoint frame footprint `R` rides next to the seeded
 chain `m₀` and is returned VERBATIM (`Sat σ' (Q ∪ R)`); the
@@ -1411,7 +1412,7 @@ theorem lrPost_readout {GF : BundledGFunctors} [SpikeGS .hasLC GF]
   · iexact HF
 
 /-- The base-WP face with the engine readout (the launch shape
-    `engine_adequacyU` consumes). -/
+    `engine_adequacy` consumes). -/
 theorem lr_wp_readout {GF : BundledGFunctors} [SpikeGS .hasLC GF]
     (ns : List (Int × Int)) (p : sym) (rs : core_run_state)
     (hQ : LabeledAt rs p (lrQ loc ann ra mo pbty cbty bbty nbty ubty))
@@ -1444,8 +1445,8 @@ theorem lr_wp_readout {GF : BundledGFunctors} [SpikeGS .hasLC GF]
     `core_run_state.labeled`) on the authored in-place reversal,
     from ANY memory that satisfies the seeded input chain `m₀`
     TOGETHER WITH an arbitrary disjoint frame footprint `R` (the
-    `SemTripleU` rest-quantifier, at the proc-carrying context):
-    - the engine never kills, never derails, and
+    `SemTriple` rest-quantifier, at the proc-carrying context):
+    - the engine never kills otherwise, never derails, and
     - any delivered value is a POINTER `p'` heading a final
       footprint `Q` with `SeedChain Q p' ns.reverse` — IN-PLACE,
       SAME-FOOTPRINT REVERSAL in the literal sense: the final chain
@@ -1457,37 +1458,33 @@ theorem lr_wp_readout {GF : BundledGFunctors} [SpikeGS .hasLC GF]
       SET on the actual maps (nothing allocated, nothing leaked);
     - THE FRAME `R` IS RETURNED VERBATIM: `Sat σ' (Q ∪ R)` — every
       allocation outside the chain is untouched.
-    Partial correctness at EVERY drive length; the TOTAL form below
-    delivers at the derived budget.
+    Partial correctness at EVERY fuel of the shipped driver's per-thread
+    loop, from any driver state holding the proc-carrying thread
+    (`DriverSafeCtl`: exhaustion or delivery, nothing else); the TOTAL
+    form is `list_reverse_certified_production` (ProdLoopExhibit.lean).
     SpikeGF-concrete: no ghost-functor binder in the statement. -/
 theorem list_reverse_certified
     (sbty : core_base_type) (ns : List (Int × Int))
     (head : CerbMem.PointerValue)
     (m₀ : CellMap) (hseed : SeedChain m₀ head ns)
     (R : CellMap) (hR : m₀ ##ₘ R)
-    (σ₀ : Mem) (hcoh : Sat fmapEmpty σ₀ (Iris.Std.PartialMap.union m₀ R))
-    (nsteps : Nat) (aids : Nat → Nat) :
+    (σ₀ : Mem) (hcoh : Sat fmapEmpty σ₀ (Iris.Std.PartialMap.union m₀ R)) :
     let prog := lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head
     let rs := lrRS loc ann ra mo pbty cbty bbty nbty ubty
-    (∀ r, driveU (procCtx rs) aids nsteps
-      (procThread lrProcSym prog [fmapEmpty]) σ₀ ≠ .killed r) ∧
-    (driveU (procCtx rs) aids nsteps
-      (procThread lrProcSym prog [fmapEmpty]) σ₀ ≠ .stuck) ∧
-    (∀ (v : value) (σ' : Mem),
-      driveU (procCtx rs) aids nsteps
-        (procThread lrProcSym prog [fmapEmpty]) σ₀ = .done v σ' →
-      ∃ (p' : CerbMem.PointerValue) (Q : CellMap),
-        v = ptrVal p' ∧
-        SeedChain Q p' ns.reverse ∧
-        (∀ k, (Iris.Std.PartialMap.get? Q k).isSome ↔
-          (Iris.Std.PartialMap.get? m₀ k).isSome) ∧
-        Q ##ₘ R ∧
-        Sat fmapEmpty σ' (Iris.Std.PartialMap.union Q R)) := by
+    DriverSafeCtl (procCtx rs) (procThread lrProcSym prog [fmapEmpty]) prog [fmapEmpty]
+      (procCtl lrProcSym) σ₀ (fun v σ' =>
+        ∃ (p' : CerbMem.PointerValue) (Q : CellMap),
+          v = ptrVal p' ∧
+          SeedChain Q p' ns.reverse ∧
+          (∀ k, (Iris.Std.PartialMap.get? Q k).isSome ↔
+            (Iris.Std.PartialMap.get? m₀ k).isSome) ∧
+          Q ##ₘ R ∧
+          Sat fmapEmpty σ' (Iris.Std.PartialMap.union Q R)) := by
   intro prog rs
   have hlbl : (procCtx rs).labelsAt (procCtl lrProcSym).proc = _ :=
     procCtx_labels (lrRS_labeledAt loc ann ra mo pbty cbty bbty nbty ubty)
-  have h := engine_adequacyU (GF := SpikeGF)
-    (M := procCtx rs) (procCtx_wf _) (ctl := procCtl lrProcSym) rfl
+  refine (engine_adequacy (GF := SpikeGF)
+    (M := procCtx rs) rfl rfl (ctl := procCtl lrProcSym) rfl
     (fun l params cont hl => by
       rw [hlbl] at hl
       obtain ⟨-, rfl⟩ := lrQ_inv loc ann ra mo pbty cbty bbty nbty ubty hl
@@ -1515,9 +1512,9 @@ theorem list_reverse_certified
       exact lr_wp_readout loc ann ra mo pbty cbty bbty nbty ubty ns
         lrProcSym rs (lrRS_labeledAt loc ann ra mo pbty cbty bbty nbty ubty)
         sbty head R)
-    nsteps aids
-  refine ⟨h.1, h.2.1, fun v σ' hdone => ?_⟩
-  obtain ⟨Q, ⟨p', rfl, hQseed⟩, hdisj, hsat⟩ := h.2.2 v σ' hdone
+    (th₀ := procThread lrProcSym prog [fmapEmpty]) rfl).mono ?_
+  intro v σ' hpost
+  obtain ⟨Q, ⟨p', rfl, hQseed⟩, hdisj, hsat⟩ := hpost
   refine ⟨p', Q, rfl, hQseed, fun k => ?_, hdisj, hsat⟩
   rw [SeedChain.footprint ns.reverse Q p' hQseed k,
     SeedChain.footprint ns m₀ head hseed k]
@@ -1604,30 +1601,24 @@ theorem demo_seed : SeedChain demoM demoHead demoNs := by
     final memory is included (via `seedChain_chainAt`). -/
 theorem list_reverse_demo (sbty : core_base_type)
     (R : CellMap) (hR : demoM ##ₘ R)
-    (σ₀ : Mem) (hcoh : Sat fmapEmpty σ₀ (Iris.Std.PartialMap.union demoM R))
-    (nsteps : Nat) (aids : Nat → Nat) :
+    (σ₀ : Mem) (hcoh : Sat fmapEmpty σ₀ (Iris.Std.PartialMap.union demoM R)) :
     let prog := lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty demoHead
     let rs := lrRS loc ann ra mo pbty cbty bbty nbty ubty
-    (∀ r, driveU (procCtx rs) aids nsteps
-      (procThread lrProcSym prog [fmapEmpty]) σ₀ ≠ .killed r) ∧
-    (driveU (procCtx rs) aids nsteps
-      (procThread lrProcSym prog [fmapEmpty]) σ₀ ≠ .stuck) ∧
-    (∀ (v : value) (σ' : Mem),
-      driveU (procCtx rs) aids nsteps
-        (procThread lrProcSym prog [fmapEmpty]) σ₀ = .done v σ' →
-      ∃ (p' : CerbMem.PointerValue) (Q : CellMap),
-        v = ptrVal p' ∧
-        SeedChain Q p' [(3, 3), (2, 2), (1, 1)] ∧
-        (∀ k, (Iris.Std.PartialMap.get? Q k).isSome ↔
-          (Iris.Std.PartialMap.get? demoM k).isSome) ∧
-        Q ##ₘ R ∧
-        Sat fmapEmpty σ' (Iris.Std.PartialMap.union Q R) ∧
-        ChainAt σ' p' [(3, 3), (2, 2), (1, 1)]) := by
+    DriverSafeCtl (procCtx rs) (procThread lrProcSym prog [fmapEmpty]) prog [fmapEmpty]
+      (procCtl lrProcSym) σ₀ (fun v σ' =>
+        ∃ (p' : CerbMem.PointerValue) (Q : CellMap),
+          v = ptrVal p' ∧
+          SeedChain Q p' [(3, 3), (2, 2), (1, 1)] ∧
+          (∀ k, (Iris.Std.PartialMap.get? Q k).isSome ↔
+            (Iris.Std.PartialMap.get? demoM k).isSome) ∧
+          Q ##ₘ R ∧
+          Sat fmapEmpty σ' (Iris.Std.PartialMap.union Q R) ∧
+          ChainAt σ' p' [(3, 3), (2, 2), (1, 1)]) := by
   intro prog rs
-  have h := list_reverse_certified loc ann ra mo pbty cbty bbty nbty ubty
-    sbty demoNs demoHead demoM demo_seed R hR σ₀ hcoh nsteps aids
-  refine ⟨h.1, h.2.1, fun v σ' hdone => ?_⟩
-  obtain ⟨p', Q, hval, hQSeed, hfoot, hdisj, hsat⟩ := h.2.2 v σ' hdone
+  refine (list_reverse_certified loc ann ra mo pbty cbty bbty nbty ubty
+    sbty demoNs demoHead demoM demo_seed R hR σ₀ hcoh).mono ?_
+  intro v σ' hpost
+  obtain ⟨p', Q, hval, hQSeed, hfoot, hdisj, hsat⟩ := hpost
   have hrev : demoNs.reverse = [(3, 3), (2, 2), (1, 1)] := rfl
   rw [hrev] at hQSeed
   exact ⟨p', Q, hval, hQSeed, hfoot, hdisj, hsat,
@@ -1650,9 +1641,12 @@ the engine spends one, so the budget is one unit per iteration above
 the engine's true 12), program bound `13·|ns| + 7`. The 2026-08-31
 listrev notes had ESTIMATED ~11·|ns| + 6 before the wrapper-merge
 step and the nested-wrapper merge were counted; the derived bound
-here is proved, unconditional, and delivered by the GENERIC
-simulation (`wpt_engine_boundU`) — zero Step constructors, zero
-per-step drive equations, per the audit's acceptance criterion. -/
+here is proved and unconditional, and its engine-facing delivery is
+`list_reverse_certified_production` (ProdLoopExhibit.lean) on the
+shipped pipeline — zero Step constructors, zero per-step drive
+equations, per the audit's acceptance criterion. (The former
+`list_reverse_certified_total` over the package loop `driveU` was
+deleted with the loop, fuel-lane restatement 2026-09-03.) -/
 
 /-- The derived per-label-entry step budget at remaining length r. -/
 def lrCost : Nat → Nat
@@ -2002,85 +1996,6 @@ theorem lrProg_pot (sbty : core_base_type) (head : CerbMem.PointerValue) :
     pot (lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head) = 7 := rfl
 
 theorem lrBody_pot : pot (lrBody loc ann ra mo bbty nbty ubty) = 6 := rfl
-
-/-- LIST-REVERSE, THE UNCONDITIONAL TOTAL ENGINE EQUATION — THE
-    FLAGSHIP AT FULL STRENGTH (foundations Phase 4; audit F-06's
-    exit criterion: same-footprint, in-place reversal + TERMINATION
-    + frame preservation, in one statement, no fuel hypotheses):
-    from any memory satisfying the seeded chain `m₀` next to an
-    ARBITRARY disjoint frame footprint `R`, the engine's `driveU` at
-    the DERIVED bound `13·|ns| + 7` (13 per iteration + 6 exit + 1
-    entry) DELIVERS a pointer `p'` heading a final footprint `Q`
-    with `SeedChain Q p' ns.reverse` — the SAME allocation ids in
-    exactly reversed order, each node carrying its own value — the
-    footprint equality `∀ k, (get? Q k).isSome ↔ (get? m₀ k).isSome`
-    stated on the maps, and the frame `R` returned VERBATIM
-    (`Sat σ' (Q ∪ R)`). A corollary of the total judgment through
-    the generic simulation: zero Step constructors, zero per-step drive-equation
-    chains. SpikeGF-concrete: no ghost-functor binder. -/
-theorem list_reverse_certified_total (sbty : core_base_type)
-    (ns : List (Int × Int)) (head : CerbMem.PointerValue)
-    (m₀ : CellMap) (hseed : SeedChain m₀ head ns)
-    (R : CellMap) (hR : m₀ ##ₘ R)
-    (σ₀ : Mem) (hcoh : Sat fmapEmpty σ₀ (Iris.Std.PartialMap.union m₀ R))
-    (aids : Nat → Nat) :
-    ∃ (p' : CerbMem.PointerValue) (Q : CellMap) (σ' : Mem),
-      driveU (procCtx (lrRS loc ann ra mo pbty cbty bbty nbty ubty)) aids
-        (13 * ns.length + 7)
-        (procThread lrProcSym
-          (lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head)
-          [fmapEmpty]) σ₀ = .done (ptrVal p') σ' ∧
-      SeedChain Q p' ns.reverse ∧
-      (∀ k, (Iris.Std.PartialMap.get? Q k).isSome ↔
-        (Iris.Std.PartialMap.get? m₀ k).isSome) ∧
-      Q ##ₘ R ∧
-      Sat fmapEmpty σ' (Iris.Std.PartialMap.union Q R) := by
-  have hQ := lrRS_labeledAt loc ann ra mo pbty cbty bbty nbty ubty
-  have hk : lrCost ns.length + 1 = 13 * ns.length + 7 := by
-    rw [lrCost_eq]
-  rw [← hk]
-  have hlbl := procCtx_labels hQ
-  obtain ⟨v, σ', hdone, ⟨Q, ⟨p', rfl, hQseed⟩, hdisj, hsat⟩, -⟩ :=
-    wpt_engine_boundU (GF := SpikeGF)
-      (M := procCtx (lrRS loc ann ra mo pbty cbty bbty nbty ubty)) (ctl := procCtl lrProcSym)
-      (procCtx_wf _) rfl
-      (fun l params cont hl => by
-        rw [hlbl] at hl
-        obtain ⟨-, rfl⟩ := lrQ_inv loc ann ra mo pbty cbty bbty nbty ubty hl
-        exact lrBody_fragJ loc ann ra mo bbty nbty ubty)
-      (fun l params cont hl => by
-        rw [hlbl] at hl
-        obtain ⟨-, rfl⟩ := lrQ_inv loc ann ra mo pbty cbty bbty nbty ubty hl
-        rw [lrBody_pot, show lemDefaultFuel = 999999 + 1 from rfl]
-        omega)
-      (frameLsT (lrCellFrame R) (lrLsT ns))
-      (lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head)
-      fmapEmpty [] σ₀ (Iris.Std.PartialMap.union m₀ R)
-      (.save (saveParams_pure_of_vals rfl) (saveParams_depth_of_vals rfl) (lrBody_fragJ loc ann ra mo bbty nbty ubty))
-      (by rw [lrProg_pot, show lemDefaultFuel = 999999 + 1 from rfl]; omega)
-      hcoh
-      (fun v σ' => ∃ Q : CellMap, (∃ p' : CerbMem.PointerValue,
-          v = ptrVal p' ∧ SeedChain Q p' ns.reverse) ∧ Q ##ₘ R ∧
-        Coh fmapEmpty σ' (Iris.Std.PartialMap.union Q R))
-      (lrCost ns.length + 1)
-      (by
-        intro inst
-        refine ((BigSepM.bigSepM_union hR).1.trans
-          (BI.sep_mono (seedChain_isList ns m₀ head hseed) .rfl)).trans ?_
-        refine .trans BI.emp_sep.2 (BI.sep_mono ?_ ?_)
-        · exact (lr_blockSpecsT_frame loc ann ra mo pbty cbty bbty nbty ubty ns
-            lrProcSym (lrRS loc ann ra mo pbty cbty bbty nbty ubty) hQ
-            (lrCellFrame R)).trans
-            (blockSpecsT_mono (lrPost_readout ns R))
-        · exact (lr_wpt_frame loc ann ra mo pbty cbty bbty nbty ubty ns
-              lrProcSym (lrRS loc ann ra mo pbty cbty bbty nbty ubty) hQ
-              (lrCellFrame R) sbty head).trans
-              (wpt_mono (lrPost_readout ns R) _ _ _))
-      aids
-  refine ⟨p', Q, σ', hdone, hQseed, fun k => ?_, hdisj, hsat⟩
-  rw [SeedChain.footprint ns.reverse Q p' hQseed k,
-    SeedChain.footprint ns m₀ head hseed k]
-  simp
 
 end LrTotalExport
 

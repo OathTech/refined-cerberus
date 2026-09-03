@@ -7,9 +7,11 @@ BINDER pattern, so the engine's substitution TAU genuinely fires
 (`select_case` binds `x := v` through `subst_sym_expr`). The theorem
 chain: `wps_case_value` (the logic rule) → `wps_sound` (the Löb-tied
 collapse, block specifications vacuous at `spikeCtx`) →
-`engine_adequacyU` — concluding, in engine vocabulary only: the drive
-of the case program never kills, never derails, and any delivered
-value IS the scrutinee (`case_certified`).
+`engine_adequacy` — concluding, in engine vocabulary only
+(`DriverSafeCtl`): from any driver state holding the case program, the
+shipped driver's per-thread loop at every fuel exhausts or delivers,
+never kills otherwise, never derails, and any delivered value IS the
+scrutinee (`case_certified`).
 
 ON THE BRANCH PREMISES. `Frag.case_value` carries branch closure as
 EXPLICIT per-branch premises (`hbr`: the selected branch is in `Frag`;
@@ -127,20 +129,16 @@ end CaseIris
 /-- THE ADEQUACY-LEVEL CASE REGRESSION (the manifest's Ecase consumer
     cell; F-01 acceptance): driving THE ENGINE ({step_ctx →
     sequential discharge} at the straight-line launch profile) on
-    `case v of x => pure(x) end`, from ANY memory state: never
-    killed, never stuck, and any delivered value IS the scrutinee —
-    the value fact flows from the proved WP through
-    `engine_adequacyU`, not by evaluation. Step 1 of any such
-    run is the engine's Ecase substitution TAU (`Step.case_value` is
-    the only rule that fires). -/
-theorem case_certified {GF : BundledGFunctors} [SpikeGpreS GF] (v : value)
-    (σ₀ : Mem) (n : Nat) (aids : Nat → Nat) :
-    (∀ r, driveU spikeCtx aids n (spikeThread (caseProg v)) σ₀ ≠ .killed r) ∧
-    (driveU spikeCtx aids n (spikeThread (caseProg v)) σ₀ ≠ .stuck) ∧
-    (∀ (v' : value) (σ' : Mem),
-      driveU spikeCtx aids n (spikeThread (caseProg v)) σ₀ = .done v' σ' →
-      v' = v) := by
-  refine engine_adequacyU (GF := GF) (M := spikeCtx) (ctl := spikeCtl) spikeCtx_wf rfl
+    `case v of x => pure(x) end`, from ANY memory state: the shipped
+    loop at every fuel exhausts or delivers, never kills otherwise,
+    never gets stuck, and any delivered value IS the scrutinee — the
+    value fact flows from the proved WP through `engine_adequacy`, not
+    by evaluation. Step 1 of any such run is the engine's Ecase
+    substitution TAU (`Step.case_value` is the only rule that fires). -/
+theorem case_certified {GF : BundledGFunctors} [SpikeGpreS GF] (v : value) (σ₀ : Mem) :
+    DriverSafeCtl spikeCtx (spikeThread (caseProg v)) (caseProg v) spikeEnv spikeCtl σ₀
+      (fun v' _ => v' = v) := by
+  refine engine_adequacy (GF := GF) (M := spikeCtx) rfl rfl (ctl := spikeCtl) rfl
     (fun l params cont hl => (spikeCtx_labels_none l hl).elim)
     (fun l params cont hl => (spikeCtx_labels_none l hl).elim)
     spikeCtx_fragProcs
@@ -156,7 +154,7 @@ theorem case_certified {GF : BundledGFunctors} [SpikeGpreS GF] (v : value)
         (Iris.Std.LawfulPartialMap.get?_empty (M := SpikeHeapF) _))
         (Option.some_ne_none c1)))
     (fun v' _ => v' = v)
-    ?_ n aids
+    ?_ (th₀ := spikeThread (caseProg v)) rfl
   intro inst
   exact (BigSepM.bigSepM_empty).1.trans (case_wp_readout v)
 

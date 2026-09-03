@@ -98,6 +98,20 @@ an export (the trust rule of 2026-09-02), so it lives in proofs and is
 bounded by the exhaustive sweep (check 2) like every other internal
 theorem. No statement or proof changed. 316 → 312.
 
+FUEL-LANE RESTATEMENT (2026-09-03, cerberus-heaplang/docs/2026-09-03_f1-notes.md):
+the package loop `driveU` and every export over it are DELETED (13 pins
+removed: `exhibitA_total`, `wpt_engine_boundU`, `wpt_engine_boundU_alloc`,
+`fib_certified_total`, `list_reverse_certified_total`,
+`tree_rotate_certified_total`, `counter_loop_certified_registration`,
+`alloc_create_launch_smoke`, `kill_launch_smoke`, `free_launch_smoke`,
+`dispose_list_certified_total`, `region_loop_certified_total`,
+`malloc_list_certified_total`); the partial lane is restated over the
+SHIPPED driver's per-thread loop (`DriverSafeCtl`, `engine_adequacy`,
+`MemTriple`/`SemTriple`, the projections — the `U` suffix dropped from
+every renamed pin) and its closed form over `CerbND.drive_lemFuel`
+(`prod_run_safe_procs`, `fib_rec_certified`); `call_smoke_driveU` →
+`call_smoke_engine`; 14 pins added (list end). 372 → 373.
+
 P3.5 ([USER 2026-09-02], docs/2026-09-02_p3.5-notes.md): the 65
 `#guard_msgs in #print axioms` blocks + prose collapsed to the export
 list below (62 names at P3.5, the same exact assertion each; the list
@@ -153,28 +167,26 @@ def trioExports : List Name := [
   ``CerberusHeapLang.exhibitA_engine, ``CerberusHeapLang.exhibitB_engine,
   ``CerberusHeapLang.exhibitA_semantic, ``CerberusHeapLang.exhibitB_semantic,
   ``CerberusHeapLang.exhibitC_semantic,
-  ``CerberusHeapLang.exhibitC_engine, ``CerberusHeapLang.exhibitA_total,
+  ``CerberusHeapLang.exhibitC_engine,
   -- the jump layer + the unified relation
   ``CerberusHeapLang.Decomp.step_factor,
   ``CerberusHeapLang.engine_step_matchU,
-  ``CerberusHeapLang.engine_adequacyU, ``CerberusHeapLang.counter_loop_certified,
+  ``CerberusHeapLang.engine_adequacy, ``CerberusHeapLang.counter_loop_certified,
   -- the statement-stratified WP (partial) and its rules
   ``CerberusHeapLang.wps_sound, ``CerberusHeapLang.wps_seq, ``CerberusHeapLang.wps_store,
   ``CerberusHeapLang.wps_create, ``CerberusHeapLang.wps_load_at, ``CerberusHeapLang.wps_store_at,
   -- the total layer
-  ``CerberusHeapLang.wpt_sound, ``CerberusHeapLang.wpt_engine_boundU,
-  ``CerberusHeapLang.wpt_engine_boundU_alloc, ``CerberusHeapLang.wpt_store,
+  ``CerberusHeapLang.wpt_sound, ``CerberusHeapLang.wpt_store,
   -- the collapse layer (trio-exact: no shipped-state statement)
   ``CerberusHeapLang.driver2_done,
   ``CerberusHeapLang.finalize_done, ``CerberusHeapLang.loop_step_frag,
   ``CerberusHeapLang.wpt_driver_done,
   -- the exhibits
-  ``CerberusHeapLang.fib_certified, ``CerberusHeapLang.fib_certified_total,
+  ``CerberusHeapLang.fib_certified,
   ``CerberusHeapLang.array_sum_certified,
   ``CerberusHeapLang.struct_update_certified, ``CerberusHeapLang.struct_create_store_wps,
   ``CerberusHeapLang.list_reverse_certified, ``CerberusHeapLang.list_reverse_demo,
-  ``CerberusHeapLang.list_reverse_certified_total,
-  ``CerberusHeapLang.tree_rotate_certified, ``CerberusHeapLang.tree_rotate_certified_total,
+  ``CerberusHeapLang.tree_rotate_certified,
   ``CerberusHeapLang.diverge_total_unprovable,
   ``CerberusHeapLang.case_certified, ``CerberusHeapLang.wseq_certified,
   -- the shipped engine round and its classification (Round.lean; the
@@ -220,7 +232,7 @@ def trioExports : List Name := [
   -- the production-entry exports (formerly the runEffectful boundary;
   -- trio-exact since the 2026-09-02 retirement re-pin — header)
   ``CerberusHeapLang.exhibitA_prod, ``CerberusHeapLang.fib_labeledAt_production,
-  ``CerberusHeapLang.counter_loop_certified_registration, ``CerberusHeapLang.prod_run_eqJ,
+  ``CerberusHeapLang.prod_run_eqJ,
   ``CerberusHeapLang.fib_certified_production,
   ``CerberusHeapLang.counter_loop_certified_production,
   ``CerberusHeapLang.list_reverse_certified_production,
@@ -244,7 +256,7 @@ def trioExports : List Name := [
   ``CerberusHeapLang.tree_rotate_wpt_frame,
   -- alloc arc P4.3: the semantic triple at any machine context (R-09) and
   -- the counter loop's irrelevant-binding test at the engine (R-08)
-  ``CerberusHeapLang.semantic_triple_soundU, ``CerberusHeapLang.semantic_frameU,
+  ``CerberusHeapLang.semantic_triple_sound, ``CerberusHeapLang.semantic_frame,
   ``CerberusHeapLang.counter_loop_certified_irrelevant_binding,
   -- alloc arc P5: the readiness smoke test (R-07 / charter item 5) — a
   -- two-field object predicate and its load/store/allocate rules derived
@@ -259,11 +271,11 @@ def trioExports : List Name := [
   -- projection theorem only"): any Iris triple projects to the boring
   -- memory-post triple; the pure-consequence lemmas discharge its post.
   -- Professor review 1 (required fix 2): the HEADLINE is the pure form
-  -- `project_triple_pure` (+ `_alloc`) — a boring `MemTripleU` for a
+  -- `project_triple_pure` (+ `_alloc`) — a boring `MemTriple` for a
   -- pure ψ, no Iris in the conclusion; `project_triple` is the
   -- strongest-post form beneath it
   ``CerberusHeapLang.project_triple_pure, ``CerberusHeapLang.project_triple_pure_alloc,
-  ``CerberusHeapLang.project_triple, ``CerberusHeapLang.SemTripleU_iff_Mem,
+  ``CerberusHeapLang.project_triple, ``CerberusHeapLang.SemTriple_iff_Mem,
   ``CerberusHeapLang.pure_consequence, ``CerberusHeapLang.sep_consequence,
   ``CerberusHeapLang.or_consequence, ``CerberusHeapLang.exists_consequence,
   ``CerberusHeapLang.cellOwn_consequence, ``CerberusHeapLang.pointsToCell_consequence,
@@ -271,9 +283,9 @@ def trioExports : List Name := [
   -- P6.1 (fresh-eyes review H-1): the ALLOCATING projection — an Iris
   -- triple whose pre is footprint cells ∗ `allocBudget B` (K2.5; formerly
   -- the plan `allocCap reqs`) projects to `MemTripleU_alloc` (launch
-  -- premise `LaunchCoh`); `MemTripleU` implies it at every budget
+  -- premise `LaunchCoh`); `MemTriple` implies it at every budget
   ``CerberusHeapLang.project_triple_alloc,
-  ``CerberusHeapLang.MemTripleU_alloc_of_MemTripleU,
+  ``CerberusHeapLang.MemTriple_alloc_of_MemTriple,
   -- QA-1 (2026-09-02 quality audit, H-1/M-3): the generalized block-entry
   -- rules (save at evaluated initializers) and the six stratum twins
   ``CerberusHeapLang.wps_save, ``CerberusHeapLang.wpt_save,
@@ -291,7 +303,6 @@ def trioExports : List Name := [
   ``CerberusHeapLang.struct_create_store_adequacy,
   ``CerberusHeapLang.struct_create_store_adequacy_prodMem₀,
   ``CerberusHeapLang.alloc_two_creates_wps, ``CerberusHeapLang.alloc_create_wpt,
-  ``CerberusHeapLang.alloc_create_launch_smoke,
   -- kill/free arc K0 (2026-09-03): the global memory well-formedness
   -- invariant `MemWF` (acceptance goal 3) — global freshness of create,
   -- the cold-start instance, and preservation by the three memory
@@ -332,7 +343,7 @@ def trioExports : List Name := [
   ``CerberusHeapLang.cerberusRound_refused_kill, ``CerberusHeapLang.complete_kill,
   ``CerberusHeapLang.complete_kill_op, ``CerberusHeapLang.step_ctx_kill_illtyped',
   ``CerberusHeapLang.step_ctx_kill_eval_kill,
-  ``CerberusHeapLang.alloc_create_kill_wps, ``CerberusHeapLang.kill_launch_smoke,
+  ``CerberusHeapLang.alloc_create_kill_wps,
   -- kill/free arc K2.5: THE SPLITTABLE ALLOCATION BUDGET — the ghost
   -- algebra's laws (split/weaken/bound/consume/grant), the state-
   -- interpretation conjunct's two introduction forms, the budget-premised
@@ -382,17 +393,17 @@ def trioExports : List Name := [
   ``CerberusHeapLang.complete_alloc_op, ``CerberusHeapLang.allocateRegion_killed_inv,
   ``CerberusHeapLang.step_ctx_alloc_illtyped', ``CerberusHeapLang.step_ctx_alloc_eval_kill1,
   ``CerberusHeapLang.step_ctx_alloc_eval_kill2,
-  ``CerberusHeapLang.alloc_free_wps, ``CerberusHeapLang.free_launch_smoke,
+  ``CerberusHeapLang.alloc_free_wps,
   -- kill/free arc K4 (2026-09-03): THE EXHIBITS — dispose-a-list over
   -- created nodes (DisposeExhibit.lean): the statement judgments at both
   -- strata (dead-list and textbook forms; framed forms), the block
-  -- specifications, the readout, the `driveU` total equation (PROVISIONAL)
-  -- and the PRODUCTION statement over the shipped pipeline; the generic
-  -- build-prefix lemma the production reuses and its registration tie.
+  -- specifications, the readout and the PRODUCTION statement over the
+  -- shipped pipeline; the generic build-prefix lemma the production reuses
+  -- and its registration tie. (The `driveU` total equation was deleted in
+  -- the fuel-lane restatement, 2026-09-03.)
   ``CerberusHeapLang.dl_wps, ``CerberusHeapLang.dl_wps_emp, ``CerberusHeapLang.dl_wps_frame,
   ``CerberusHeapLang.dl_blockSpecs, ``CerberusHeapLang.dl_wpt, ``CerberusHeapLang.dl_wpt_frame,
   ``CerberusHeapLang.dl_blockSpecsT, ``CerberusHeapLang.dlPost_readout,
-  ``CerberusHeapLang.dispose_list_certified_total,
   ``CerberusHeapLang.lrProdPrefix_wpt, ``CerberusHeapLang.dlProd_wpt,
   ``CerberusHeapLang.dlProd_blockSpecsT, ``CerberusHeapLang.dlProd_labeledAt,
   ``CerberusHeapLang.dispose_list_certified_production,
@@ -400,14 +411,13 @@ def trioExports : List Name := [
   -- (RegionLoopExhibit.lean): the budget as a loop invariant split per
   -- iteration (`allocBudget_split`), spent by `wps_alloc`/`wpt_alloc`,
   -- the regions returned by `wps_free_emp`/`wpt_free_emp`; both strata,
-  -- the block specifications, the `driveU` total equation (PROVISIONAL)
-  -- under `LaunchCoh`, and the PRODUCTION statement. (At K4 the malloc'd
+  -- the block specifications and the PRODUCTION statement. (At K4 the malloc'd
   -- LINKED list was not statable — no load/store rule over `regionOwn`;
   -- K5 added the region access rules and the list is pinned below,
   -- `malloc_list_certified_production`.)
   ``CerberusHeapLang.rl_wps, ``CerberusHeapLang.rl_wpt,
   ``CerberusHeapLang.rl_blockSpecs, ``CerberusHeapLang.rl_blockSpecsT,
-  ``CerberusHeapLang.region_loop_certified_total, ``CerberusHeapLang.rl_labeledAt,
+  ``CerberusHeapLang.rl_labeledAt,
   ``CerberusHeapLang.region_loop_certified_production,
   -- kill/free arc K5 (2026-09-03): THE REGION ACCESS RULES — the typed
   -- region view's laws (the untyped-view bridge, typed split/join, the
@@ -416,9 +426,8 @@ def trioExports : List Name := [
   -- `storeM_live` at `regionCell`), their wps/wpt faces over the typed
   -- view and over `regionOwn`; the public dead readouts (K4 audit N-1);
   -- and THE MALLOC'D LINKED LIST exhibit (MallocListExhibit.lean): both
-  -- strata, the block specifications, the readout, the `driveU` total
-  -- equation (PROVISIONAL), the registration tie and the PRODUCTION
-  -- statement. (`typedRegionView_iff` is `.rfl`; measured trio, unpinned
+  -- strata, the block specifications, the readout, the registration tie
+  -- and the PRODUCTION statement. (`typedRegionView_iff` is `.rfl`; measured trio, unpinned
   -- as the other `_iff`s.)
   ``CerberusHeapLang.typedRegionView_regionView, ``CerberusHeapLang.typedRegionView_split,
   ``CerberusHeapLang.typedRegionView_join, ``CerberusHeapLang.regionOwn_carve,
@@ -431,7 +440,7 @@ def trioExports : List Name := [
   ``CerberusHeapLang.deadObj_readout, ``CerberusHeapLang.deadRegion_readout,
   ``CerberusHeapLang.ml_wps, ``CerberusHeapLang.ml_wpt,
   ``CerberusHeapLang.ml_blockSpecs, ``CerberusHeapLang.ml_blockSpecsT,
-  ``CerberusHeapLang.mlPost_readout, ``CerberusHeapLang.malloc_list_certified_total,
+  ``CerberusHeapLang.mlPost_readout,
   ``CerberusHeapLang.ml_labeledAt, ``CerberusHeapLang.malloc_list_certified_production,
   -- kill/free arc K5.1 (2026-09-03, the K5 range audit's M-1): REGION
   -- DISTINCTNESS — `metaOwn_ne` at the region bundles, public: a fully
@@ -474,8 +483,8 @@ def trioExports : List Name := [
   -- total judgment's empty-table call fact, and the two-procedure SMOKE
   -- (Examples/CallSmoke): `f`'s body once at every caller tail, the
   -- table discharged by `procSpecs_intro`, `main` by the call rule, the
-  -- collapse WITH the table, the `driveU` lane with `FragProcs` at two
-  -- procedures (PROVISIONAL), and the total twins.
+  -- collapse WITH the table, the partial lane over the shipped loop with
+  -- `FragProcs` at two procedures (`call_smoke_engine`), and the total twins.
   ``CerberusHeapLang.Step.sameTail, ``CerberusHeapLang.Step.env_depth,
   ``CerberusHeapLang.Step.ret_inv, ``CerberusHeapLang.Step.ret_annot_inv,
   ``CerberusHeapLang.wps_call, ``CerberusHeapLang.wps_call_root,
@@ -490,7 +499,7 @@ def trioExports : List Name := [
   ``CerberusHeapLang.wpt_sound_cps, ``CerberusHeapLang.wpt_sound_empty,
   ``CerberusHeapLang.csF_body_wps, ``CerberusHeapLang.csCtx_procSpecs,
   ``CerberusHeapLang.csMain_wps, ``CerberusHeapLang.cs_wp_readout,
-  ``CerberusHeapLang.call_smoke_driveU,
+  ``CerberusHeapLang.call_smoke_engine,
   ``CerberusHeapLang.csF_body_wpt, ``CerberusHeapLang.csCtx_procSpecsT,
   ``CerberusHeapLang.csMain_wpt, ``CerberusHeapLang.cs_twp_readout,
   ``CerberusHeapLang.csCtx_fragProcs,
@@ -506,8 +515,9 @@ def trioExports : List Name := [
   -- (`collect_new_fr`) and its whole-file registration
   -- tie, `FragProcs` at two procedures, `fib`'s body ONCE under each table
   -- (Hoare's rule for recursive procedures — no Löb in the client), `main`
-  -- by the call rule, the `driveU` lane (PROVISIONAL) and THE EIGHTH
-  -- ROOT-OF-TRUST STATEMENT `fib_rec_certified_production`.
+  -- by the call rule, the partial closed statement `fib_rec_certified`
+  -- (restated over `drive_lemFuel` in the fuel-lane restatement) and THE
+  -- EIGHTH ROOT-OF-TRUST STATEMENT `fib_rec_certified_production`.
   -- (`BareHead.decomp_call_root` — `[propext]` — and `fibRounds_closed` —
   -- `[propext, Quot.sound]` — have SUB-trio cones: unpinnable here, bounded
   -- by the sweep.)
@@ -526,7 +536,30 @@ def trioExports : List Name := [
   ``CerberusHeapLang.frMain_wps, ``CerberusHeapLang.fr_wp_readout,
   ``CerberusHeapLang.fib_rec_certified,
   ``CerberusHeapLang.frBody_wpt, ``CerberusHeapLang.frCtx_procSpecsT,
-  ``CerberusHeapLang.frMain_wpt, ``CerberusHeapLang.fib_rec_certified_production]
+  ``CerberusHeapLang.frMain_wpt, ``CerberusHeapLang.fib_rec_certified_production,
+  -- THE FUEL-LANE RESTATEMENT (2026-09-03, docs/2026-09-03_f1-notes.md):
+  -- the package loop `driveU` and its lane are DELETED; the partial lane is
+  -- over the SHIPPED driver's per-thread loop at every fuel. New exports:
+  -- the two round lemmas at a jump-only procedure tie (the pinned
+  -- `loop_step_frag_same`/`loop_step_frag` are their instances), the
+  -- control tie `CtlTied`'s three laws, the exhaustion rounds and the
+  -- killed pipeline arms, the partial adequacy `engine_adequacy(_alloc)`
+  -- into `DriverSafeCtl` with its monotonicity, the fuel-generic setup
+  -- collapses and THE CLOSED PARTIAL PIPELINE `prod_run_safe_procs` over
+  -- `CerbND.drive_lemFuel fuel`, and the negative test's engine fact
+  -- `dg_loop_exhausts`. (`runND_killed` has NO axioms — measured — so it
+  -- cannot sit in an EXACT-trio pin list; the exhaustive sweep bounds it.
+  -- The restated exhibits keep their pins above under their names.)
+  ``CerberusHeapLang.loop_step_frag_same', ``CerberusHeapLang.loop_step_frag',
+  ``CerberusHeapLang.CtlTied.noproc, ``CerberusHeapLang.CtlTied.entry,
+  ``CerberusHeapLang.CtlTied.jump,
+  ``CerberusHeapLang.loop_zero_exhausts, ``CerberusHeapLang.loop_step_done_exhaust,
+  ``CerberusHeapLang.driver2_killed,
+  ``CerberusHeapLang.engine_adequacy_alloc, ``CerberusHeapLang.DriverSafeCtl.mono,
+  ``CerberusHeapLang.drive_after_setup_with_lemFuel,
+  ``CerberusHeapLang.drive_after_setup_with_killed,
+  ``CerberusHeapLang.prod_run_safe_procs,
+  ``CerberusHeapLang.dg_loop_exhausts]
 
 def sortedNames (ns : Array Name) : Array String :=
   (ns.map (·.toString)).qsort (· < ·)

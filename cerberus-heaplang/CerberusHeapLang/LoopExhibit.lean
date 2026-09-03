@@ -20,15 +20,17 @@ THE PROGRAM (authored Core, all metadata quantified):
   procedure (`LabeledAt` — the donor's `⌜Q = f_code⌝`).
 - VERIFIED via the per-label invariant rule (`blockSpecs_intro` — no
   Löb) + `wps_sound` (the one Löb) and EXPORTED through the
-  engine adequacy at the proc-carrying context (`engine_adequacyU`):
-  the CONCLUSION quantifies over engine objects only — `driveU` from the
-  proc-carrying thread never kills, never derails, and a delivered
-  value is `Vunit` with the cell's final bytes pinned by the
-  data-dependent post (`n = 0` → untouched; `0 < n` → the stored
-  image). Partial correctness at EVERY drive length: the statement
+  engine adequacy at the proc-carrying context (`engine_adequacy`):
+  the CONCLUSION quantifies over engine objects only — `DriverSafeCtl`
+  (Adequacy.lean): from any driver state holding the proc-carrying
+  thread, the SHIPPED driver's per-thread loop at every fuel either
+  exhausts (the kill `CerbND.fuelExhaustedKill`) or delivers `Vunit`
+  with the cell's final bytes pinned by the data-dependent post (`n = 0`
+  → untouched; `0 < n` → the stored image); it never kills otherwise
+  and never derails. Partial correctness at EVERY fuel: the statement
   carries no fuel hypothesis (the static `pot` bounds are discharged
-  inside the proof); the total form of the same shape is
-  `fib_certified_total`, FibExhibit.lean.
+  inside the proof); the total form is `counter_loop_certified_production`,
+  ProdLoopExhibit.lean.
 
 THE ENVIRONMENT: the per-label invariant carries the reachable-frame
 predicate `SymFrame` (EnvLaws.lean) and every lookup goes through THE
@@ -371,7 +373,7 @@ theorem loop_readout_val (w : CoreRVal) :
       (fun ⟨hn0, hc⟩ => ⟨bs0, .inl ⟨hn0, rfl⟩, hc⟩)
       (fun ⟨hpos, hc⟩ => ⟨sevenBytes fmapEmpty, .inr ⟨hpos, rfl⟩, hc⟩)⟩)
 
-/-- The base-WP face with the engine readout (what `engine_adequacyU`
+/-- The base-WP face with the engine readout (what `engine_adequacy`
     consumes), from any reachable entry frame over any tail. -/
 theorem loop_wp_readout (hn : 0 ≤ n) (sbty : core_base_type)
     (f : Fmap sym value) (hf : SymFrame f) (rest : List (Fmap sym value)) :
@@ -427,25 +429,19 @@ theorem counter_loop_certified
     (n : Int) (hn : 0 ≤ n)
     (σ₀ : Mem)
     (hcoh : Coh fmapEmpty σ₀ ((Iris.Std.PartialMap.singleton idx
-      (SpikeCell.mk addr intTy bs0)) : SpikeHeapF SpikeCell))
-    (nsteps : Nat) (aids : Nat → Nat) :
+      (SpikeCell.mk addr intTy bs0)) : SpikeHeapF SpikeCell)) :
     let prog := loopProg loc ann ra mo bty xbty sbty (cellPtr idx addr) n
     let rs := loopRS loc ann ra mo bty xbty (cellPtr idx addr)
-    (∀ r, driveU (procCtx rs) aids nsteps
-      (procThread loopProcSym prog [fmapEmpty]) σ₀ ≠ .killed r) ∧
-    (driveU (procCtx rs) aids nsteps
-      (procThread loopProcSym prog [fmapEmpty]) σ₀ ≠ .stuck) ∧
-    (∀ (v : value) (σ' : Mem),
-      driveU (procCtx rs) aids nsteps
-        (procThread loopProcSym prog [fmapEmpty]) σ₀ = .done v σ' →
-      v = Vunit ∧ ∃ bs',
-        ((n = 0 ∧ bs' = bs0) ∨ (0 < n ∧ bs' = (sevenBytes fmapEmpty))) ∧
-        CellCoh fmapEmpty σ' idx ⟨addr, intTy, bs'⟩) := by
+    DriverSafeCtl (procCtx rs) (procThread loopProcSym prog [fmapEmpty]) prog [fmapEmpty]
+      (procCtl loopProcSym) σ₀ (fun v σ' =>
+        v = Vunit ∧ ∃ bs',
+          ((n = 0 ∧ bs' = bs0) ∨ (0 < n ∧ bs' = (sevenBytes fmapEmpty))) ∧
+          CellCoh fmapEmpty σ' idx ⟨addr, intTy, bs'⟩) := by
   intro prog rs
   have hlbl : (procCtx rs).labelsAt (procCtl loopProcSym).proc = _ :=
     procCtx_labels (loopRS_labeledAt loc ann ra mo bty xbty (cellPtr idx addr))
-  obtain ⟨h1, h2, h3⟩ := engine_adequacyU (GF := SpikeGF)
-    (M := procCtx rs) (procCtx_wf _) (ctl := procCtl loopProcSym) rfl
+  refine (engine_adequacy (GF := SpikeGF)
+    (M := procCtx rs) rfl rfl (ctl := procCtl loopProcSym) rfl
     (fun l params cont hl => by
       rw [hlbl] at hl
       obtain ⟨-, rfl⟩ := loopQ_inv loc ann ra mo bty xbty _ hl
@@ -479,9 +475,8 @@ theorem counter_loop_certified
       isplit
       · ipureintro; rfl
       · iexact Hpt)
-    nsteps aids
-  refine ⟨h1, h2, fun v σ' hd => ?_⟩
-  obtain ⟨hv, bs', hbs, i, a, heq, hc⟩ := h3 v σ' hd
+    (th₀ := procThread loopProcSym prog [fmapEmpty]) rfl).mono ?_
+  intro v σ' ⟨hv, bs', hbs, i, a, heq, hc⟩
   obtain ⟨rfl, rfl⟩ := cellPtr_inj heq
   exact ⟨hv, bs', hbs, hc⟩
 
@@ -495,26 +490,20 @@ theorem counter_loop_certified_irrelevant_binding
     (n : Int) (hn : 0 ≤ n) (junk : value)
     (σ₀ : Mem)
     (hcoh : Coh fmapEmpty σ₀ ((Iris.Std.PartialMap.singleton idx
-      (SpikeCell.mk addr intTy bs0)) : SpikeHeapF SpikeCell))
-    (nsteps : Nat) (aids : Nat → Nat) :
+      (SpikeCell.mk addr intTy bs0)) : SpikeHeapF SpikeCell)) :
     let prog := loopProg loc ann ra mo bty xbty sbty (cellPtr idx addr) n
     let rs := loopRS loc ann ra mo bty xbty (cellPtr idx addr)
     let ρ₀ : EnvStack := [envAdd ySym junk fmapEmpty]
-    (∀ r, driveU (procCtx rs) aids nsteps
-      (procThread loopProcSym prog ρ₀) σ₀ ≠ .killed r) ∧
-    (driveU (procCtx rs) aids nsteps
-      (procThread loopProcSym prog ρ₀) σ₀ ≠ .stuck) ∧
-    (∀ (v : value) (σ' : Mem),
-      driveU (procCtx rs) aids nsteps
-        (procThread loopProcSym prog ρ₀) σ₀ = .done v σ' →
-      v = Vunit ∧ ∃ bs',
-        ((n = 0 ∧ bs' = bs0) ∨ (0 < n ∧ bs' = (sevenBytes fmapEmpty))) ∧
-        CellCoh fmapEmpty σ' idx ⟨addr, intTy, bs'⟩) := by
+    DriverSafeCtl (procCtx rs) (procThread loopProcSym prog ρ₀) prog ρ₀
+      (procCtl loopProcSym) σ₀ (fun v σ' =>
+        v = Vunit ∧ ∃ bs',
+          ((n = 0 ∧ bs' = bs0) ∨ (0 < n ∧ bs' = (sevenBytes fmapEmpty))) ∧
+          CellCoh fmapEmpty σ' idx ⟨addr, intTy, bs'⟩) := by
   intro prog rs ρ₀
   have hlbl : (procCtx rs).labelsAt (procCtl loopProcSym).proc = _ :=
     procCtx_labels (loopRS_labeledAt loc ann ra mo bty xbty (cellPtr idx addr))
-  obtain ⟨h1, h2, h3⟩ := engine_adequacyU (GF := SpikeGF)
-    (M := procCtx rs) (procCtx_wf _) (ctl := procCtl loopProcSym) rfl
+  refine (engine_adequacy (GF := SpikeGF)
+    (M := procCtx rs) rfl rfl (ctl := procCtl loopProcSym) rfl
     (fun l params cont hl => by
       rw [hlbl] at hl
       obtain ⟨-, rfl⟩ := loopQ_inv loc ann ra mo bty xbty _ hl
@@ -548,9 +537,8 @@ theorem counter_loop_certified_irrelevant_binding
       isplit
       · ipureintro; rfl
       · iexact Hpt)
-    nsteps aids
-  refine ⟨h1, h2, fun v σ' hd => ?_⟩
-  obtain ⟨hv, bs', hbs, i, a, heq, hc⟩ := h3 v σ' hd
+    (th₀ := procThread loopProcSym prog ρ₀) rfl).mono ?_
+  intro v σ' ⟨hv, bs', hbs, i, a, heq, hc⟩
   obtain ⟨rfl, rfl⟩ := cellPtr_inj heq
   exact ⟨hv, bs', hbs, hc⟩
 

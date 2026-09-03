@@ -40,8 +40,7 @@ statements unchanged) — so no `Step.*`, no per-step drive equations,
 no `driverDone_step` in any proof of this module: it is a CLIENT,
 reasoning through the public rules only. `exhibitA_prod` is a
 ROOT-OF-TRUST export: its execution function is the shipped
-`runND ∘ drive ∘ initial_driver_state` (Adequacy.lean header,
-PROVISIONAL, for the contrast with the `driveU` lane).
+`runND ∘ drive ∘ initial_driver_state`.
 
 The former concrete cold-start scaffolding (`pxAddr`/`pxPtr`/`σcP`/
 `cellXP`/`mAP`/`bigSep_ptx_P`/`create_applies`) is DELETED (alloc

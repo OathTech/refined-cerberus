@@ -637,10 +637,12 @@ variable (loc : CerbLocation.Loc) (ann ra : core_run_annotation)
 /-- ARRAY-SUM, END TO END: driving the REAL engine on the authored
     array-walk loop — real pointer arithmetic, interior loads of the
     seeded array allocation, the Specified-binder unwrap — from any
-    memory carrying the seeded array cell: the engine never kills,
-    never derails, and any delivered value IS `vs.sum`, with the
-    ARRAY PRESERVED in the final memory (`CellCoh` at the original
-    bytes). Partial correctness at every drive length. -/
+    memory carrying the seeded array cell, from any driver state holding
+    the proc-carrying thread: the shipped loop at every fuel exhausts or
+    delivers, never kills otherwise, never derails, and any delivered
+    value IS `vs.sum`, with the ARRAY PRESERVED in the final memory
+    (`CellCoh` at the original bytes). Partial correctness at every
+    fuel. -/
 theorem array_sum_certified
     (sbty : core_base_type) (vs : List Int) (id a : Int)
     (aty : ctype) (bs : List CerbMem.AbsByte)
@@ -653,24 +655,18 @@ theorem array_sum_certified
         CerbMem.MemValue.MVinteger ety (CerbMem.integerIval vs[i]))
     (σ₀ : Mem)
     (hcoh : Coh fmapEmpty σ₀ ((Iris.Std.PartialMap.singleton id
-      (SpikeCell.mk a aty bs)) : SpikeHeapF SpikeCell))
-    (nsteps : Nat) (aids : Nat → Nat) :
+      (SpikeCell.mk a aty bs)) : SpikeHeapF SpikeCell)) :
     let prog := arrProg loc ann ra mo sbty ibty accbty pbty xbty
       (cellPtr id a) vs.length
     let rs := arrRS loc ann ra mo ibty accbty pbty xbty vs.length
-    (∀ r, driveU (procCtx rs) aids nsteps
-      (procThread arrProcSym prog [fmapEmpty]) σ₀ ≠ .killed r) ∧
-    (driveU (procCtx rs) aids nsteps
-      (procThread arrProcSym prog [fmapEmpty]) σ₀ ≠ .stuck) ∧
-    (∀ (v : value) (σ' : Mem),
-      driveU (procCtx rs) aids nsteps
-        (procThread arrProcSym prog [fmapEmpty]) σ₀ = .done v σ' →
-      v = ivVal vs.sum ∧ CellCoh fmapEmpty σ' id ⟨a, aty, bs⟩) := by
+    DriverSafeCtl (procCtx rs) (procThread arrProcSym prog [fmapEmpty]) prog [fmapEmpty]
+      (procCtl arrProcSym) σ₀
+      (fun v σ' => v = ivVal vs.sum ∧ CellCoh fmapEmpty σ' id ⟨a, aty, bs⟩) := by
   intro prog rs
   have hlbl : (procCtx rs).labelsAt (procCtl arrProcSym).proc = _ :=
     procCtx_labels (arrRS_labeledAt loc ann ra mo ibty accbty pbty xbty vs.length)
-  refine engine_adequacyU (GF := SpikeGF)
-    (M := procCtx rs) (procCtx_wf _) (ctl := procCtl arrProcSym) rfl
+  refine engine_adequacy (GF := SpikeGF)
+    (M := procCtx rs) rfl rfl (ctl := procCtl arrProcSym) rfl
     (fun l params cont hl => by
       rw [hlbl] at hl
       obtain ⟨-, rfl⟩ := arrQ_inv loc ann ra mo ibty accbty pbty xbty
@@ -691,7 +687,7 @@ theorem array_sum_certified
       (by rw [show esize prog = 4 from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega))
     hcoh
     (fun v σ' => v = ivVal vs.sum ∧ CellCoh fmapEmpty σ' id ⟨a, aty, bs⟩)
-    ?_ nsteps aids
+    ?_ (th₀ := procThread arrProcSym prog [fmapEmpty]) rfl
   intro inst
   refine .trans ?_ (arr_wp_readout loc ann ra mo ibty accbty pbty xbty
     vs id a aty bs arrProcSym rs

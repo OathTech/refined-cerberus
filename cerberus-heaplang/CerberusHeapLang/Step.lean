@@ -13,7 +13,7 @@ Soundness.lean (`engine_step_matchU`: wherever the mirror steps at a
 that step). A wrong rule here can only make theorems unprovable,
 never make an exported engine statement false. Two caveats bound
 that guarantee: it does not cover the statement-level readout
-vocabulary (`driveU`, `dischargeStep`, `Sat`/`CellCoh` — a wrong
+vocabulary (`DriverSafeCtl`/`DriverDoneCtl`, `Sat`/`CellCoh` — a wrong
 definition THERE yields a true but irrelevant theorem, which is why
 the walkthrough prints them), and coverage is fail-open by nature —
 a missing rule narrows what is provable without falsifying anything;

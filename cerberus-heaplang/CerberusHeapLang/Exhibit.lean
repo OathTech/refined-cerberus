@@ -6,9 +6,9 @@ concluded AT THE ENGINE LEVEL via adequacy.
     own allocateObject, the engine's drive of
     `lets _ = store(x,7) in load(x)` delivers the stored integer —
     a THEOREM whose value fact flows from the proved WP through
-    engine_adequacyU (the drive's termination step-count is by
-    execution; the VALUE and SAFETY facts are by adequacy, not by
-    evaluation).
+    `engine_adequacy` (the VALUE and SAFETY facts are by adequacy, not
+    by evaluation; the referent is the shipped driver's per-thread loop
+    at every fuel, `DriverSafeCtl`).
 (b) the frame exhibit, discharged end-to-end:
     {x ↦ - ∗ y ↦ a} store(x,7) {x ↦ 7 ∗ y ↦ a} (`wps_exhibit_store_frame`,
     Examples/Layout.lean, built by FRAME on the store small axiom)
@@ -266,7 +266,7 @@ theorem bigSepA_ptx [SpikeGS .hasLC GF] :
   · iexact Hx
 
 /-! ## The proved footprint triples (interior derivations:
-small axioms + SEQ from slice A, ending in the ProvenTripleU shape at
+small axioms + SEQ from slice A, ending in the ProvenTriple shape at
 the straight-line profile `spikeCtx`/`spikeEnv`) -/
 
 /-- x's cell after the store of 7. -/
@@ -313,7 +313,7 @@ theorem ptx_to_cells [SpikeGS .hasLC GF] :
 /-- The store's footprint triple, proved in the derived logic:
     ⦃x ↦ bytesX⦄ store(x,7) ⦃unit; x ↦ seven-bytes⦄. -/
 theorem provenB {GF : BundledGFunctors} [SpikeGpreS GF] :
-    ProvenTripleU GF spikeCtx spikeCtl spikeEnv progB mA (fun v Q => v = Vunit ∧ Q = mA7) := by
+    ProvenTriple GF spikeCtx spikeCtl spikeEnv progB mA (fun v Q => v = Vunit ∧ Q = mA7) := by
   intro instGS
   refine bigSepA_ptx.trans ?_
   iintro Hx
@@ -340,7 +340,7 @@ theorem spike_blockSpecs [SpikeGS .hasLC GF] (Ψ : SpikeVal → EnvStack → IPr
     — `wps_seq` over `wps_store` then `wps_load`, collapsed into the
     base WP by `wps_sound`. -/
 theorem provenA {GF : BundledGFunctors} [SpikeGpreS GF] :
-    ProvenTripleU GF spikeCtx spikeCtl spikeEnv progA mA (fun v Q => v = sevenVal ∧ Q = mA7) := by
+    ProvenTriple GF spikeCtx spikeCtl spikeEnv progA mA (fun v Q => v = sevenVal ∧ Q = mA7) := by
   intro instGS
   refine bigSepA_ptx.trans ?_
   refine .trans ?_ ((BI.emp_sep.2.trans (BI.sep_mono
@@ -380,8 +380,8 @@ seeded engine state -/
     delivered value is Specified(7) with x's cell updated and the
     rest verbatim. -/
 theorem exhibitA_semantic {GF : BundledGFunctors} [SpikeGpreS GF] :
-    SemTripleU spikeCtx spikeCtl spikeEnv progA mA (fun v Q => v = sevenVal ∧ Q = mA7) :=
-  semantic_triple_soundU (GF := GF) spikeCtx_wf (ctl := spikeCtl) rfl spikeCtx_labels_frag spikeCtx_labels_pot spikeCtx_fragProcs
+    SemTriple spikeCtx spikeCtl spikeEnv progA mA (fun v Q => v = sevenVal ∧ Q = mA7) :=
+  semantic_triple_sound (GF := GF) rfl rfl (ctl := spikeCtl) rfl spikeCtx_labels_frag spikeCtx_labels_pot spikeCtx_fragProcs
     fragA
     (Nat.le_trans fragA.pot_le_two
       (by rw [show esize progA = 2 from rfl]; unfold lemDefaultFuel; omega))
@@ -392,39 +392,36 @@ theorem exhibitA_semantic {GF : BundledGFunctors} [SpikeGpreS GF] :
     ⦃x ↦ - ∗ y ↦ a⦄ store(x,7) ⦃x ↦ 7 ∗ y ↦ a⦄ over engine
     configurations, y (and all unnamed rest) verbatim. -/
 theorem exhibitB_semantic {GF : BundledGFunctors} [SpikeGpreS GF] :
-    SemTripleU spikeCtx spikeCtl spikeEnv progB (Iris.Std.PartialMap.union mA mF)
+    SemTriple spikeCtx spikeCtl spikeEnv progB (Iris.Std.PartialMap.union mA mF)
       (fun v Q => ∃ Q₀, (v = Vunit ∧ Q₀ = mA7) ∧ Q₀ ##ₘ mF ∧
         Q = Iris.Std.PartialMap.union Q₀ mF) :=
-  semantic_frameU (GF := GF) spikeCtx_wf (ctl := spikeCtl) rfl spikeCtx_labels_frag spikeCtx_labels_pot spikeCtx_fragProcs
+  semantic_frame (GF := GF) rfl rfl (ctl := spikeCtl) rfl spikeCtx_labels_frag spikeCtx_labels_pot spikeCtx_fragProcs
     fragB
     (Nat.le_trans fragB.pot_le_two
       (by rw [show esize progB = 1 from rfl]; unfold lemDefaultFuel; omega))
     fmapEmpty [] mF mA_disj_mF provenB
 
-/-- Exhibit (a) at the seeded engine instance (rest := ∅). -/
-theorem exhibitA_engine (n : Nat) (aids : Nat → Nat) :
-    (∀ r, driveU spikeCtx aids n (spikeThread progA) σ₀ ≠ .killed r) ∧
-    (driveU spikeCtx aids n (spikeThread progA) σ₀ ≠ .stuck) ∧
-    (∀ (v : value) (σ' : Mem),
-      driveU spikeCtx aids n (spikeThread progA) σ₀ = .done v σ' → v = sevenVal) := by
-  have h := exhibitA_semantic (GF := SpikeGF) ∅
+/-- Exhibit (a) at the seeded engine instance (rest := ∅): from any
+    driver state holding the straight-line thread at the seeded memory,
+    the shipped loop at every fuel exhausts or delivers `Specified(7)`. -/
+theorem exhibitA_engine :
+    DriverSafeCtl spikeCtx (spikeThread progA) progA spikeEnv spikeCtl σ₀
+      (fun v _ => v = sevenVal) := by
+  refine (exhibitA_semantic (GF := SpikeGF) ∅
     (Iris.Std.LawfulPartialMap.disjoint_empty_right mA) σ₀
     (by rw [show Iris.Std.PartialMap.union mA ∅ = mA from
         Iris.Std.LawfulPartialMap.union_empty_right]
         exact coh_mA)
-    n aids
-  refine ⟨h.1, h.2.1, fun v σ' hd => ?_⟩
-  obtain ⟨Q, ⟨hv, _⟩, _, _⟩ := h.2.2 v σ' hd
+    (spikeThread progA) rfl).mono ?_
+  intro v σ' ⟨Q, ⟨hv, _⟩, _, _⟩
   exact hv
 
 /-- Exhibit (b) at the seeded engine instance: after the store, the
     engine's bytemap holds 7's image at x and y's bytes UNCHANGED —
     frame locality read back from the real memory. -/
-theorem exhibitB_engine (n : Nat) (aids : Nat → Nat) :
-    (∀ r, driveU spikeCtx aids n (spikeThread progB) σ₀ ≠ .killed r) ∧
-    (driveU spikeCtx aids n (spikeThread progB) σ₀ ≠ .stuck) ∧
-    (∀ (v : value) (σ' : Mem),
-      driveU spikeCtx aids n (spikeThread progB) σ₀ = .done v σ' →
+theorem exhibitB_engine :
+    DriverSafeCtl spikeCtx (spikeThread progB) progB spikeEnv spikeCtl σ₀
+      (fun v σ' =>
         v = Vunit ∧
         CerbMem.readBytesFrom σ' xAddr 4 =
           (CerbMem.memValueToBytes fmapEmpty [] sevenMval).2 ∧
@@ -487,10 +484,11 @@ theorem exhibitB_engine (n : Nat) (aids : Nat → Nat) :
       · exact Or.symm cells_disjoint
       · exact cells_disjoint
       · exact absurd rfl hne
-  have h := exhibitB_semantic (GF := SpikeGF) ∅
-    (Iris.Std.LawfulPartialMap.disjoint_empty_right _) σ₀ hcohBu n aids
-  refine ⟨h.1, h.2.1, fun v σ' hd => ?_⟩
-  obtain ⟨Q, ⟨Q₀, ⟨hv, hQ0⟩, hdisj, hQ⟩, _, hsat⟩ := h.2.2 v σ' hd
+  refine (exhibitB_semantic (GF := SpikeGF) ∅
+    (Iris.Std.LawfulPartialMap.disjoint_empty_right _) σ₀ hcohBu
+    (spikeThread progB) rfl).mono ?_
+  intro v σ' hpost
+  obtain ⟨Q, ⟨Q₀, ⟨hv, hQ0⟩, hdisj, hQ⟩, _, hsat⟩ := hpost
   subst hQ0 hQ
   have hsat' : Sat fmapEmpty σ' (Iris.Std.PartialMap.union mA7 mF) :=
     Sat.mono hsat (by
@@ -520,15 +518,15 @@ theorem exhibitB_engine (n : Nat) (aids : Nat → Nat) :
   rw [show CerbMem.sizeofCtype fmapEmpty intTy = 4 from rfl] at hcx hcy
   exact ⟨hv, hcx, hcy⟩
 
-/-! ## Termination of exhibit (a) — THE GENERIC TOTAL ROUTE (alloc
-arc P2, the re-audit's parenthetical on this module's trace): the
-former example-specific six-step engine simulation
-(`exhibitA_terminates` — `engineSteps_store`/beta/load/merge/remove/
-done chains) is RETIRED; termination is delivered by the total
-statement judgment (`progA_wpt`, budget 6 = store 3 + load 3)
-through the GENERIC measure→fuel simulation (`wpt_engine_boundU`) —
-an unconditional `driveU .done` equation, zero operational proof
-terms in this module. -/
+/-! ## The total judgment for exhibit (a): `progA_wpt` (budget 6 =
+store 3 + load 3) is the derivation the total lane runs; its
+shipped-pipeline export is `exhibitA_prod` (ProdExhibit.lean, on the
+self-contained twin `progAProd` that creates its own cell — the seeded
+`progA` cannot start from the cold-start memory). The former
+example-specific six-step engine simulation (`exhibitA_terminates`) is
+RETIRED (alloc arc P2), and the former `exhibitA_total` over the package
+loop `driveU` was deleted with the loop (fuel-lane restatement,
+2026-09-03). Zero operational proof terms in this module. -/
 
 /-- The seven image decodes back to `sevenMval` at ANY address (the
     table- and address-independent int decode). -/
@@ -598,39 +596,6 @@ theorem progA_wpt {GF : BundledGFunctors} [SpikeGS .hasLC GF]
   ipureintro
   exact ⟨seven_fromMemValue, Hcc.1⟩
 
-/-- TERMINATION-WITH-DELIVERY, THE GENERIC ROUTE (replaces the
-    retired `exhibitA_terminates` trace): the engine's own drive at
-    fuel 6 DELIVERS `Specified(7)` from the seeded state, with the
-    final memory holding 7's image at the cell — an unconditional
-    `.done` equation, a corollary of the total judgment through the
-    generic simulation. (Adequacy's `exhibitA_engine` pins that no
-    drive of any length can kill or derail.) -/
-theorem exhibitA_total (aids : Nat → Nat) :
-    ∃ (v : value) (σ' : Mem),
-      driveU spikeCtx aids 6 (spikeCtx.thread progA spikeEnv spikeCtl) σ₀ =
-        .done v σ' ∧
-      v = sevenVal ∧ CellCoh spikeCtx.tagDefs σ' 0 ⟨xAddr, intTy, (sevenBytes spikeCtx.tagDefs)⟩ := by
-  obtain ⟨v, σ', h1, h2, -⟩ :=
-    wpt_engine_boundU (GF := SpikeGF) (M := spikeCtx) (ctl := spikeCtl) spikeCtx_wf rfl
-      (fun l params cont hl => (spikeCtx_labels_none l hl).elim)
-      (fun l params cont hl => (spikeCtx_labels_none l hl).elim)
-      (fun _ _ _ _ => iprop(False))
-      progA fmapEmpty [] σ₀ mA fragA
-      (by rw [show pot progA = 3 from rfl,
-          show lemDefaultFuel = 999999 + 1 from rfl]
-          omega)
-      coh_mA (ψX fmapEmpty) 6
-      (by
-        intro inst
-        iintro Hcells
-        isplitr [Hcells]
-        · iapply blockSpecsT_intro fun l params cont _ _ _ _ hl =>
-            (spikeCtx_labels_none l hl).elim
-        · ihave Hpt := bigSepA_ptx $$ Hcells
-          iapply progA_wpt (M := spikeCtx) (p := none) (Θ := emptyProcSpecT) fmapEmpty [] $$ Hpt)
-      aids
-  exact ⟨v, σ', h1, h2⟩
-
 /-! ## EXHIBIT C ([USER 2026-08-30]): disjoint sequential stores,
 exported to the engine level
 
@@ -638,7 +603,7 @@ exported to the engine level
 interior derivation is `wps_exhibit_seq_stores` (Examples/Layout.lean)
 — the store small axiom per leg, glued by the sequencing rule; the
 export below collapses it into the base WP (`wps_sound`) and
-repackages its footprint form through `semantic_triple_soundU`. The
+repackages its footprint form through `semantic_triple_sound`. The
 postcondition carries NO value clause: the exhibit's assertion-only
 postcondition (deliberately, the wildcard-binding fragment shape)
 discards the delivered value — the update facts are the content. -/
@@ -727,7 +692,7 @@ theorem cells_to_mC [SpikeGS .hasLC GF] :
     repackaged at footprint granularity — no re-derivation, only
     big-sep ↔ pointsToCell fmapEmpty plumbing. -/
 theorem provenC {GF : BundledGFunctors} [SpikeGpreS GF] :
-    ProvenTripleU GF spikeCtx spikeCtl spikeEnv progC mB (fun _ Q => Q = mC) := by
+    ProvenTriple GF spikeCtx spikeCtl spikeEnv progC mB (fun _ Q => Q = mC) := by
   intro instGS
   refine bigSepB_pts.trans ((wps_exhibit_seq_stores (M := spikeCtx) (p := none) (Θ := emptyProcSpec)
     (Ls := fun _ _ _ => iprop(False)) xPtr yPtr loc0 loc0
@@ -753,8 +718,8 @@ theorem provenC {GF : BundledGFunctors} [SpikeGpreS GF] :
     derail, and any completed run updates BOTH cells (x to 5's bytes,
     y to 6's bytes) with R verbatim: the two stores do not conflict. -/
 theorem exhibitC_semantic {GF : BundledGFunctors} [SpikeGpreS GF] :
-    SemTripleU spikeCtx spikeCtl spikeEnv progC mB (fun _ Q => Q = mC) :=
-  semantic_triple_soundU (GF := GF) spikeCtx_wf (ctl := spikeCtl) rfl spikeCtx_labels_frag spikeCtx_labels_pot spikeCtx_fragProcs
+    SemTriple spikeCtx spikeCtl spikeEnv progC mB (fun _ Q => Q = mC) :=
+  semantic_triple_sound (GF := GF) rfl rfl (ctl := spikeCtl) rfl spikeCtx_labels_frag spikeCtx_labels_pot spikeCtx_fragProcs
     fragC
     (Nat.le_trans fragC.pot_le_two
       (by rw [show esize progC = 2 from rfl]; unfold lemDefaultFuel; omega))
@@ -764,21 +729,19 @@ theorem exhibitC_semantic {GF : BundledGFunctors} [SpikeGpreS GF] :
     two stores, the engine's bytemap holds 5's image at x AND 6's
     image at y — the non-conflicting update read back from the real
     memory. -/
-theorem exhibitC_engine (n : Nat) (aids : Nat → Nat) :
-    (∀ r, driveU spikeCtx aids n (spikeThread progC) σ₀ ≠ .killed r) ∧
-    (driveU spikeCtx aids n (spikeThread progC) σ₀ ≠ .stuck) ∧
-    (∀ (v : value) (σ' : Mem),
-      driveU spikeCtx aids n (spikeThread progC) σ₀ = .done v σ' →
+theorem exhibitC_engine :
+    DriverSafeCtl spikeCtx (spikeThread progC) progC spikeEnv spikeCtl σ₀
+      (fun _ σ' =>
         CerbMem.readBytesFrom σ' xAddr 4 = (fiveBytes fmapEmpty) ∧
         CerbMem.readBytesFrom σ' yAddr 4 = (sixBytes fmapEmpty)) := by
-  have h := exhibitC_semantic (GF := SpikeGF) ∅
+  refine (exhibitC_semantic (GF := SpikeGF) ∅
     (Iris.Std.LawfulPartialMap.disjoint_empty_right mB) σ₀
     (by rw [show Iris.Std.PartialMap.union mB ∅ = mB from
         Iris.Std.LawfulPartialMap.union_empty_right]
         exact coh_mB)
-    n aids
-  refine ⟨h.1, h.2.1, fun v σ' hd => ?_⟩
-  obtain ⟨Q, hQ, _, hsat⟩ := h.2.2 v σ' hd
+    (spikeThread progC) rfl).mono ?_
+  intro v σ' hpost
+  obtain ⟨Q, hQ, _, hsat⟩ := hpost
   subst hQ
   have hsat' : Sat fmapEmpty σ' mC :=
     Sat.mono hsat (by

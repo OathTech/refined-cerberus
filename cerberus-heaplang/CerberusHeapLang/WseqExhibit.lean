@@ -9,8 +9,9 @@ node at the wildcard pattern whose first step is the engine's
 LETW-PURE TAU (one_step0 Ewseq bare-value arm, Core_reduction.lean:
 353) and whose delivered value is the CONTINUATION's value. The
 theorem chain is the WP LANE end to end: `wps_wseq` (the drift
-rule) → `wps_sound` → `engine_adequacyU` — concluding, engine
-vocabulary only: the drive never kills, never derails, and any
+rule) → `wps_sound` → `engine_adequacy` — concluding, engine
+vocabulary only (`DriverSafeCtl`): the shipped loop at every fuel
+exhausts or delivers, never kills otherwise, never derails, and any
 delivered value IS v2.
 
 DRIFT-TEST RECORD: this construct entered through the GENERIC route
@@ -92,19 +93,16 @@ end WseqIris
 
 /-- THE ADEQUACY-LEVEL DRIFT-TEST REGRESSION (the manifest's Ewseq
     consumer cell): driving THE ENGINE on `letw _ = pure(v1) in
-    pure(v2)`, from ANY memory state: never killed, never stuck, and
-    any delivered value IS v2 — the value fact flows from the proved
-    WP through `engine_adequacyU`, not by evaluation. Step 1 of
-    any such run is the engine's LETW-PURE TAU (`Step.wseq_pure` is
-    the only rule that fires). -/
-theorem wseq_certified {GF : BundledGFunctors} [SpikeGpreS GF] (v1 v2 : value)
-    (σ₀ : Mem) (n : Nat) (aids : Nat → Nat) :
-    (∀ r, driveU spikeCtx aids n (spikeThread (wseqProg v1 v2)) σ₀ ≠ .killed r) ∧
-    (driveU spikeCtx aids n (spikeThread (wseqProg v1 v2)) σ₀ ≠ .stuck) ∧
-    (∀ (v' : value) (σ' : Mem),
-      driveU spikeCtx aids n (spikeThread (wseqProg v1 v2)) σ₀ = .done v' σ' →
-      v' = v2) := by
-  refine engine_adequacyU (GF := GF) (M := spikeCtx) (ctl := spikeCtl) spikeCtx_wf rfl
+    pure(v2)`, from ANY memory state: the shipped loop at every fuel
+    exhausts or delivers, never kills otherwise, never gets stuck, and
+    any delivered value IS v2 — the value fact flows from the proved WP
+    through `engine_adequacy`, not by evaluation. Step 1 of any such run
+    is the engine's LETW-PURE TAU (`Step.wseq_pure` is the only rule
+    that fires). -/
+theorem wseq_certified {GF : BundledGFunctors} [SpikeGpreS GF] (v1 v2 : value) (σ₀ : Mem) :
+    DriverSafeCtl spikeCtx (spikeThread (wseqProg v1 v2)) (wseqProg v1 v2) spikeEnv spikeCtl σ₀
+      (fun v' _ => v' = v2) := by
+  refine engine_adequacy (GF := GF) (M := spikeCtx) rfl rfl (ctl := spikeCtl) rfl
     (fun l params cont hl => (spikeCtx_labels_none l hl).elim)
     (fun l params cont hl => (spikeCtx_labels_none l hl).elim)
     spikeCtx_fragProcs
@@ -120,7 +118,7 @@ theorem wseq_certified {GF : BundledGFunctors} [SpikeGpreS GF] (v1 v2 : value)
         (Iris.Std.LawfulPartialMap.get?_empty (M := SpikeHeapF) _))
         (Option.some_ne_none c1)))
     (fun v' _ => v' = v2)
-    ?_ n aids
+    ?_ (th₀ := spikeThread (wseqProg v1 v2)) rfl
   intro inst
   exact (BigSepM.bigSepM_empty).1.trans (wseq_wp_readout v1 v2)
 

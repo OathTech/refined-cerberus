@@ -2,12 +2,10 @@
 CerberusHeapLang.ProdLoop — the total judgment drives THE PRODUCTION
 DRIVER'S OWN per-thread loop.
 
-`wpt_driver_aux` is the driver-level analogue of the engine simulation
-`wpt_drive_aux` (TotalAdequacy.lean): strong induction on the total
-judgment's budget, ONE production round (`loop_step_frag`,
-DriverCollapse.lean) per budget unit, the delivery protocol prepaid by
-the value clause. Where the drive simulation concludes a `driveU
-.done` equation, this one concludes `DriverDoneAt`: the driver's
+`wpt_driver_aux` is the total judgment's budget realized as driver
+iterations: strong induction on the budget, ONE production round
+(`loop_step_frag`, DriverCollapse.lean) per budget unit, the delivery
+protocol prepaid by the value clause. It concludes `DriverDoneAt`: the driver's
 per-thread loop (`drive_nonmemory_steps_aux2`) from ANY driver state
 holding the thread — quantified over the accumulator, the loop fuel
 and the whole driver-state context, with the run-state tie `LabeledAt`
@@ -172,7 +170,7 @@ theorem driverDone_step {M₀ : MachineCtx} {ctl : Ctl}
   rfl
 
 /-! ## THE SIMULATION: the total judgment drives the production
-driver's loop (the `wpt_drive_aux` clone at the driver level). -/
+driver's loop. -/
 
 theorem wpt_driver_aux {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
     {M₀ : MachineCtx} {ctl : Ctl}
@@ -287,7 +285,7 @@ theorem wpt_driver_aux {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
           hfrag' hpot' $$ [$Hσ' $HB $Hwpt]
 
 /-! ## The launch: the pure driver-delivery fact from a SpikeGpreS
-functor list (the `wpt_engine_boundU` clone). -/
+functor list. -/
 
 theorem wpt_driver_done {GF : BundledGFunctors} [SpikeGpreS GF]
     {M₀ : MachineCtx} {ctl : Ctl}
@@ -440,43 +438,10 @@ ELoc_normal [(mainSym, CerbLocation.other "Driver.drive")]⟩`, the parked
 thread literal of `Driver.drive` (Driver.lean:530), and `prodCtx` fixes
 `currentLoc := CerbLocation.other "Driver.drive"`, the same literal. -/
 
-/-- The driver thread at a LIVE control over the immutables of `th₀`:
-    the arena, the env and the three control fields PCALL/RETURN write
-    (`stack0 := ctl.toStack`, `current_proc_opt := ctl.proc`, `exec_loc
-    := ctl.execLoc`); `errno` and `current_loc` are `th₀`'s.
-    `loop_step_frag`'s successor record IS this shape. -/
-def ctlThread (th₀ : thread_state) (e : CoreExpr) (ρ : EnvStack) (ctl : Ctl) : thread_state :=
-  { th₀ with
-    arena := e
-    env := ρ
-    stack0 := ctl.toStack
-    current_proc_opt := ctl.proc
-    exec_loc := ctl.execLoc }
-
-@[simp] theorem ctlThread_current_loc (th₀ : thread_state) (e : CoreExpr) (ρ : EnvStack)
-    (ctl : Ctl) : (ctlThread th₀ e ρ ctl).current_loc = th₀.current_loc := rfl
-
-/-- THE WHOLE-FILE REGISTRATION TIE: the run state's two-level `labeled`
-    map has, at every DECLARED procedure (`lookupProc`, the stdlib-first
-    read `call_proc` makes), exactly the context's derived fiber
-    `M₀.labelsAt (some f)`. The single-procedure lane's `LabeledAt` is
-    this at one procedure. -/
-def LabeledProcs (M₀ : MachineCtx) (lab : Fmap sym LabelMap) : Prop :=
-  ∀ f params body, lookupProc M₀.file M₀.extern f = some (params, body) →
-    fmapLookupBy (fun (s1 : sym) (s2 : sym) => Lem_Basic_classes.ordCompare s1 s2) f lab =
-      some (M₀.labelsAt (some f))
-
-/-- The tie holds at the context's OWN run state as soon as every
-    declared procedure has SOME fiber there (the registration installs
-    one per `Proc` of the file): the derived fiber is that fiber. -/
-theorem LabeledProcs.of_fibers {M₀ : MachineCtx} (hex : M₀.extern = fmapEmpty)
-    (h : ∀ f params body, lookupProc M₀.file M₀.extern f = some (params, body) →
-      ∃ Q : LabelMap, fmapLookupBy (fun (s1 : sym) (s2 : sym) =>
-        Lem_Basic_classes.ordCompare s1 s2) f M₀.runState.labeled = some Q) :
-    LabeledProcs M₀ M₀.runState.labeled := by
-  intro f params body hf
-  obtain ⟨Q, hQ⟩ := h f params body hf
-  rw [hQ, MachineCtx.labelsAt_some, MachineCtx.resolveProc_of_extern_empty hex, hQ]
+/-! `ctlThread` (the driver thread at a live control) and the whole-file
+registration tie `LabeledProcs` live in DriverCollapse.lean since the
+fuel-lane restatement (2026-09-03): the partial lane (Adequacy.lean) states
+its facts over the same thread shape and ties. -/
 
 /-- THE DRIVER-DELIVERY FACT AT A LIVE CONTROL: from any driver state
     whose singleton thread holds `(e, ρ)` at the control `ctl` over
@@ -620,12 +585,6 @@ theorem driverDoneCtl_step {M₀ : MachineCtx}
   rcases dst with ⟨cf, ce, cs, crs, ls, cc, fs, tr0, sa, bl, ctr0⟩
   rcases cs with ⟨ths, io⟩
   rfl
-
-/-- The two value shapes are small fragment terms within the fuel. -/
-theorem esize_ofVal_le (w : SpikeVal) : esize (ofVal w) ≤ lemDefaultFuel := by
-  refine Nat.le_trans (frag_ofVal w).esize_le_pot ?_
-  cases w <;> simp only [pot_ofVal_pure, pot_ofVal_annot] <;>
-    (rw [show lemDefaultFuel = 999999 + 1 from rfl]; omega)
 
 /-! ## THE SIMULATION THROUGH CALLS: the total judgment drives the
 production driver's loop at a live control, in continuation-passing form. -/

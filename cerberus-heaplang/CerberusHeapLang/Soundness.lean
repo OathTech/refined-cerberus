@@ -192,7 +192,7 @@ def dischargeStep (tds : CerbTags.TagDefsMap) (aid : Nat) (rs : core_run_state)
         -- (Driver.lean:273, `liftMem (CerbMem.killM loc1 is_dynamic1
         -- ptr_val)`, continuation `mk_th_st' aid1`). Before K2 a kill
         -- request was `.offFragment` here; this arm is a PROOF DEVICE
-        -- (the `driveU` lanes' discharge), not a statement referent.
+        -- (the discharge projection Round.lean classifies), not a statement referent.
         (match CerbMem.killM loc isDyn pv with
          | ND f =>
            match f σ with
@@ -206,7 +206,7 @@ def dischargeStep (tds : CerbTags.TagDefsMap) (aid : Nat) (rs : core_run_state)
         -- allocateRegion discards its tid argument (CerbMem.lean:1533,
         -- `_ : Nat`), so the projection passes 0 (`allocateRegion_arg_irrel`).
         -- Before K3 an alloc request was `.offFragment` here; the arm is a
-        -- PROOF DEVICE (the `driveU` lanes' discharge), not a statement referent.
+        -- PROOF DEVICE (the discharge projection Round.lean classifies), not a statement referent.
         (match CerbMem.allocateRegion 0 pref align size with
          | ND f =>
            match f σ with
@@ -5162,8 +5162,9 @@ theorem Frag.esize_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
     `engine_step_matchJ` over the full cone at ANY machine context;
     2026-09-02 mirror-completeness slice: renamed from
     `engine_step_matchU`, which is now the SHIPPED-driver statement in
-    Round.lean — this `outcomesU` form is a PROOF DEVICE consumed by
-    the `driveU` lane, Adequacy/TotalAdequacy, not an export): wherever
+    Round.lean — this `outcomesU` form is a PROOF DEVICE of Round.lean's
+    classification, not an export; since the fuel-lane restatement of
+    2026-09-03 no adequacy lane consumes it): wherever
     the mirror steps at a cone configuration, the engine's discharged
     behavior list is EXACTLY the matching singleton. GONE relative to
     the J form:

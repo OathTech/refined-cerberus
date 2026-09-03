@@ -44,11 +44,10 @@ DERIVED budget `dlCost |ns| + 1 = 12·|ns| + 6` (12 per node: null test 3
 + unit delivery 1; entry 1). Both by the label-context loop with the
 invariant `deadNodes done ∗ isList cur rest`, `ns = done ++ rest`, the
 variant the remaining chain's length; frame theorems by the generic
-statement frame rules. Engine-facing: `dispose_list_certified_total`
-(the `driveU` lane, PROVISIONAL as every `driveU` export — API.lean
-header): from any memory carrying the seeded chain next to an arbitrary
-disjoint frame `R`, the engine DELIVERS `Vunit` at exactly `12·|ns| + 6`
-drive steps, EVERY node's id is in `deadAllocations` with its record
+statement frame rules. Engine-facing: `dispose_list_certified_production`
+(the shipped pipeline; the former `dispose_list_certified_total` over the
+package loop `driveU` was deleted with the loop, 2026-09-03): the run
+DELIVERS `Vunit`, EVERY node's id is in `deadAllocations` with its record
 erased (`killM`'s effect, CerbMem.lean:1576-1578), and the frame is
 returned verbatim (`Sat σ' R`). PRODUCTION: `dispose_list_certified_production`
 — the shipped pipeline (`runND ∘ drive ∘ initial_driver_state`) on the
@@ -1013,8 +1012,10 @@ theorem dlPost_readout (ns : List (Int × Int)) (R : CellMap) :
 
 end DlReadoutLC
 
-/-! ## THE ENGINE-FACING STATEMENT (the `driveU` lane — PROVISIONAL, as
-every `driveU` export: API.lean header) -/
+/-! The engine-facing TOTAL statement is `dispose_list_certified_production`
+below (the shipped pipeline). The former `dispose_list_certified_total` over
+the package loop `driveU` was deleted with the loop (fuel-lane restatement,
+2026-09-03). -/
 
 section DlExport
 
@@ -1022,74 +1023,6 @@ open Iris.Std.PartialMap
 
 variable (loc : CerbLocation.Loc) (ann ra : core_run_annotation)
   (mo : memory_order) (cbty bbty nbty ubty : core_base_type)
-
-/-- DISPOSE A LIST, THE UNCONDITIONAL TOTAL ENGINE EQUATION: from any
-    memory satisfying the seeded chain `m₀` next to an ARBITRARY disjoint
-    frame footprint `R`, the engine's `driveU` at the DERIVED bound
-    `12·|ns| + 6` DELIVERS `Vunit`, EVERY node id of the chain is in
-    `deadAllocations` with its record erased (`killM`'s effect,
-    CerbMem.lean:1576-1578), and the frame `R` is returned VERBATIM
-    (`Sat σ' R`). A corollary of the total judgment through the generic
-    simulation (`wpt_engine_boundU`): zero Step constructors. PROVISIONAL:
-    stated over `driveU`. -/
-theorem dispose_list_certified_total (sbty : core_base_type)
-    (ns : List (Int × Int)) (head : CerbMem.PointerValue)
-    (m₀ : CellMap) (hseed : SeedChain m₀ head ns)
-    (R : CellMap) (hR : m₀ ##ₘ R)
-    (σ₀ : Mem) (hcoh : Sat fmapEmpty σ₀ (Iris.Std.PartialMap.union m₀ R))
-    (aids : Nat → Nat) :
-    ∃ σ' : Mem,
-      driveU (procCtx (dlRS loc ann ra mo cbty bbty nbty ubty)) aids
-        (12 * ns.length + 6)
-        (procThread dlProcSym
-          (dlProg loc ann ra mo sbty cbty bbty nbty ubty head) [fmapEmpty]) σ₀ =
-        .done Vunit σ' ∧
-      (∀ nd ∈ ns, σ'.deadAllocations.contains nd.1 = true ∧
-        σ'.allocations.get? nd.1 = none) ∧
-      Sat fmapEmpty σ' R := by
-  have hQ := dlRS_labeledAt loc ann ra mo cbty bbty nbty ubty
-  have hk : dlCost ns.length + 1 = 12 * ns.length + 6 := by
-    unfold dlCost
-    omega
-  rw [← hk]
-  have hlbl := procCtx_labels hQ
-  obtain ⟨v, σ', hdone, ⟨rfl, hdead, hsat⟩, -⟩ :=
-    wpt_engine_boundU (GF := SpikeGF)
-      (M := procCtx (dlRS loc ann ra mo cbty bbty nbty ubty)) (ctl := procCtl dlProcSym)
-      (procCtx_wf _) rfl
-      (fun l params cont hl => by
-        rw [hlbl] at hl
-        obtain ⟨-, rfl⟩ := dlQ_inv loc ann ra mo cbty bbty nbty ubty hl
-        exact dlBody_fragJ loc ann ra mo bbty nbty ubty)
-      (fun l params cont hl => by
-        rw [hlbl] at hl
-        obtain ⟨-, rfl⟩ := dlQ_inv loc ann ra mo cbty bbty nbty ubty hl
-        rw [dlBody_pot, show lemDefaultFuel = 999999 + 1 from rfl]
-        omega)
-      (frameLsT (lrCellFrame R) (dlLsT ns))
-      (dlProg loc ann ra mo sbty cbty bbty nbty ubty head)
-      fmapEmpty [] σ₀ (Iris.Std.PartialMap.union m₀ R)
-      (.save (saveParams_pure_of_vals rfl) (saveParams_depth_of_vals rfl)
-        (dlBody_fragJ loc ann ra mo bbty nbty ubty))
-      (by rw [dlProg_pot, show lemDefaultFuel = 999999 + 1 from rfl]; omega)
-      hcoh
-      (fun v σ' => v = Vunit ∧ (∀ nd ∈ ns, DeadAt σ' nd.1) ∧ Coh fmapEmpty σ' R)
-      (dlCost ns.length + 1)
-      (by
-        intro inst
-        refine ((BigSepM.bigSepM_union hR).1.trans
-          (BI.sep_mono (seedChain_isList ns m₀ head hseed) .rfl)).trans ?_
-        refine .trans BI.emp_sep.2 (BI.sep_mono ?_ ?_)
-        · exact (dl_blockSpecsT_frame loc ann ra mo cbty bbty nbty ubty ns
-            dlProcSym (dlRS loc ann ra mo cbty bbty nbty ubty) hQ
-            (lrCellFrame R)).trans
-            (blockSpecsT_mono (dlPost_readout ns R))
-        · exact (dl_wpt_frame loc ann ra mo cbty bbty nbty ubty ns
-              dlProcSym (dlRS loc ann ra mo cbty bbty nbty ubty) hQ
-              (lrCellFrame R) sbty head).trans
-              (wpt_mono (dlPost_readout ns R) _ _ _))
-      aids
-  exact ⟨σ', hdone, hdead, hsat⟩
 
 end DlExport
 

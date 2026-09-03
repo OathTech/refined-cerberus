@@ -32,7 +32,7 @@ GenHeaps coupled to the real `CerbMem.MemState` by `CohG`.
 The whole-allocation `pointsToCell` is the MAXIMAL VIEW (offset 0,
 view type = allocation type) plus the image's decode-inertness fact;
 `SpikeCell`/`Coh`/`CellCoh` are the PURE footprint vocabulary of the
-exported engine-facing statements (`Sat`/`MemTripleU`).
+exported engine-facing statements (`Sat`/`MemTriple`).
 
 THE TAG-DEFINITION ENVIRONMENT. The engine's memory functions take the
 tag-definition environment as an explicit leading argument

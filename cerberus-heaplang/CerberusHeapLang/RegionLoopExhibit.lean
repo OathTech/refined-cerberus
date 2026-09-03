@@ -48,12 +48,10 @@ wps … (fun w _ => ⌜w = .pure Vunit⌝) (rlProg … n) [fmapEmpty]` (partial;
 the invariant `allocBudget (i.toNat * regionCost al sz)` at loop counter
 `i ≥ 0`); `rl_wpt` at the DERIVED budget `rlCost n.toNat + 1 = 7·n.toNat
 + 3` (7 per iteration: guard 1 + alloc 2 + free 3 + jump 1; exit 2:
-guard 1 + unit delivery 1; entry 1). Engine-facing:
-`region_loop_certified_total` (the `driveU` lane, PROVISIONAL as every
-`driveU` export): from any memory launching the empty footprint with the
-budget (`LaunchCoh … ∅ (n.toNat * regionCost al sz)`), the engine
-DELIVERS `Vunit` at exactly `7·n.toNat + 3` drive steps — `n` regions
-allocated and freed, no out-of-memory kill, because the budget fits.
+guard 1 + unit delivery 1; entry 1). (The former
+`region_loop_certified_total` over the package loop `driveU` was deleted
+with the loop, fuel-lane restatement 2026-09-03; its content is the
+production statement below.)
 PRODUCTION: `region_loop_certified_production` — the shipped pipeline on
 the self-contained file is EXACTLY ONE Active execution delivering
 `Vunit`, under the budget-fits-the-cold-start premise `n.toNat *
@@ -597,63 +595,6 @@ section RlExport
 
 variable (loc : CerbLocation.Loc) (ann ra : core_run_annotation)
   (al sz : Int) (pref : prefix0) (sbty ibty pbty ubty : core_base_type)
-
-/-- N REGIONS FROM ONE BUDGET, THE UNCONDITIONAL TOTAL ENGINE EQUATION:
-    from any memory that launches the empty footprint with the budget
-    `n.toNat * regionCost al sz` (`LaunchCoh`: the invariant holds and the
-    budget fits below the cursor), the engine's `driveU` at the DERIVED
-    bound `7·n.toNat + 3` DELIVERS `Vunit` — `n` regions allocated and
-    freed, no out-of-memory kill. A corollary of the total judgment through
-    the generic simulation (`wpt_engine_boundU_alloc`). PROVISIONAL: stated
-    over `driveU`. -/
-theorem region_loop_certified_total (hcost : 0 < regionCost al sz)
-    (n : Int) (hn : 0 ≤ n) (σ₀ : Mem)
-    (hl : LaunchCoh fmapEmpty σ₀ (∅ : SpikeHeapF SpikeCell) (n.toNat * regionCost al sz))
-    (aids : Nat → Nat) :
-    ∃ σ' : Mem,
-      driveU (procCtx (rlRS loc ann ra al sz pref ibty pbty ubty)) aids
-        (7 * n.toNat + 3)
-        (procThread rlProcSym
-          (rlProg loc ann ra al sz pref sbty ibty pbty ubty n) [fmapEmpty]) σ₀ =
-        .done Vunit σ' := by
-  have hQ := rlRS_labeledAt loc ann ra al sz pref ibty pbty ubty
-  have hk : rlCost n.toNat + 1 = 7 * n.toNat + 3 := by
-    unfold rlCost
-    omega
-  rw [← hk]
-  have hlbl := procCtx_labels hQ
-  obtain ⟨v, σ', hdone, rfl, -⟩ :=
-    wpt_engine_boundU_alloc (GF := SpikeGF)
-      (M := procCtx (rlRS loc ann ra al sz pref ibty pbty ubty)) (ctl := procCtl rlProcSym)
-      (procCtx_wf _) rfl
-      (fun l params cont hl => by
-        rw [hlbl] at hl
-        obtain ⟨-, rfl⟩ := rlQ_inv loc ann ra al sz pref ibty pbty ubty hl
-        exact rlBody_frag loc ann ra al sz pref pbty ubty)
-      (fun l params cont hl => by
-        rw [hlbl] at hl
-        obtain ⟨-, rfl⟩ := rlQ_inv loc ann ra al sz pref ibty pbty ubty hl
-        rw [rlBody_pot, show lemDefaultFuel = 999999 + 1 from rfl]
-        omega)
-      (rlLsT al sz)
-      (rlProg loc ann ra al sz pref sbty ibty pbty ubty n)
-      fmapEmpty [] σ₀ (∅ : SpikeHeapF SpikeCell) (n.toNat * regionCost al sz)
-      (.save (saveParams_pure_of_vals rfl) (saveParams_depth_of_vals rfl)
-        (rlBody_frag loc ann ra al sz pref pbty ubty))
-      (by rw [rlProg_pot, show lemDefaultFuel = 999999 + 1 from rfl]; omega)
-      hl
-      (fun v _ => v = Vunit)
-      (rlCost n.toNat + 1)
-      (by
-        intro inst
-        iintro ⟨-, Hcap⟩
-        isplitr [Hcap]
-        · iapply rl_blockSpecsT_readout loc ann ra al sz pref ibty pbty ubty hcost rlProcSym
-            (rlRS loc ann ra al sz pref ibty pbty ubty) hQ
-        · iapply rl_wpt_readout loc ann ra al sz pref ibty pbty ubty hcost rlProcSym
-            (rlRS loc ann ra al sz pref ibty pbty ubty) hQ sbty n hn $$ Hcap)
-      aids
-  exact ⟨σ', hdone⟩
 
 /-! ### Registration and the production statement -/
 

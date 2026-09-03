@@ -10,21 +10,23 @@ THE PROGRAM: the self-jump loop
 
 whose registered body is its own back edge. Its configuration steps
 to ITSELF (`dg_self_step` — the context-discarding jump with no
-arguments and no state effect), so THE ENGINE'S DRIVE of it rests in
-`.more` at EVERY fuel (`dg_driveU_more`: each round is the self-step,
-discharged by the device lemma `outcomesU_of_step`) — it never delivers.
+arguments and no state effect), so THE SHIPPED DRIVER'S per-thread loop
+on it EXHAUSTS at EVERY fuel (`dg_loop_exhausts`: each round is the
+self-step, the shipped round `loop_step_frag_same`, and the out-of-fuel
+arm is the kill `CerbND.fuelExhaustedKill`) — it never delivers.
 
 THE UNPROVABILITY, engine form (`diverge_total_unprovable`): a total
 derivation for this loop — from ANY footprint's cell ownership (any
 `m₀` coherent with any memory), at ANY ghost functor list, ANY label
 context, ANY postcondition, ANY budget `k` — is FALSE, not merely
-unprovable: through the total engine bound (`wpt_engine_boundU`) it
-would give `driveU … k … = .done v σ'`, contradicting `.more`. (Until
-the 2026-09-02 professor review this was argued through strong
-normalization of the mirror relation, `wpt_strongly_normalizing`; that
-theorem and the mirror-only `dg_not_normalizing` are retired — the
-negative test is now a fact about the engine's execution, like every
-other export.)
+unprovable: through the total driver lane (`wpt_driver_done`, ProdLoop)
+it would make the shipped loop return PROGRAM-DONE within `k + 2`
+iterations from a driver state holding the thread, contradicting the
+exhaustion. (Until the 2026-09-02 professor review this was argued
+through strong normalization of the mirror relation,
+`wpt_strongly_normalizing`; that theorem and the mirror-only
+`dg_not_normalizing` are retired; until the fuel-lane restatement of
+2026-09-03 the contradiction was against the package loop `driveU`.)
 
 WHERE A DIRECT ATTEMPT STICKS (the mandatory decrease doing its
 job): to install the loop via `blockSpecsT`, the body must be
@@ -36,7 +38,7 @@ jump must re-enter the same label at a strictly smaller variant,
 forever). Deleting the `⌜1 + m ≤ k⌝` conjunct from `wpt.pre`'s jump
 clause would make the loop derivable at any budget — and make THIS
 THEOREM (and the budget inductions of `wpt_sound` /
-`wpt_drive_aux`) fail to elaborate: the structural tripwire.
+`wpt_driver_aux`) fail to elaborate: the structural tripwire.
 
 THE ONE DIRECT `Step` USE IN AN EXHIBIT, AND WHY (2026-09-02 detailed
 audit, L-2): `dg_self_step` is proved by `Step.run`. A client of the
@@ -44,13 +46,14 @@ logic reasons through the public rules and never through `Step`
 (API.lean, "Below the line"); this module is the NEGATIVE test, not a
 client — it shows a derivation is impossible by exhibiting what the
 engine actually does, and the engine's behaviour at the self-jump is
-reached through the mirror step (`outcomesU_of_step` on `dg_self_step`
-in `dg_driveU_more`). The narrow exception: a
+reached through the mirror step (the shipped round `loop_step_frag_same`
+on `dg_self_step` in `dg_loop_exhausts`). The narrow exception: a
 NEGATIVE test may name a mirror step to reach an engine fact; a
 POSITIVE exhibit may not. Mirror-level coverage witnesses live in
 `Examples/MirrorCoverage.lean`.
 -/
 import CerberusHeapLang.FibExhibit
+import CerberusHeapLang.ProdLoop
 
 set_option autoImplicit false
 
@@ -113,22 +116,37 @@ theorem dgQ_inv (ra : core_run_annotation) {l : sym}
     exact ⟨h1.symm ▸ rfl, h2.symm ▸ rfl⟩
   · cases h
 
-/-- THE ENGINE NEVER DELIVERS: driving the self-jump loop for ANY
-    number of rounds rests in `.more` at the same configuration — each
-    round is the self-step (`outcomesU_of_step` on `dg_self_step`). -/
-theorem dg_driveU_more (ra : core_run_annotation) (σ₀ : Mem) :
-    ∀ (k : Nat) (aids : Nat → Nat),
-      driveU (procCtx (dgRS ra)) aids k
-        ((procCtx (dgRS ra)).thread (dgBody ra) [fmapEmpty] (procCtl dgProcSym)) σ₀ =
-      .more ((procCtx (dgRS ra)).thread (dgBody ra) [fmapEmpty] (procCtl dgProcSym)) σ₀
-  | 0, _ => rfl
-  | k + 1, aids => by
-    rw [driveU_succ, stepOutcomes_thread,
-      outcomesU_of_step (aids 0) (dgBody_frag ra)
+/-- THE SHIPPED LOOP NEVER DELIVERS: from any driver state holding the
+    proc-carrying thread at the self-jump body, with the label tie at the
+    current procedure, the production driver's per-thread loop EXHAUSTS
+    at EVERY fuel — each round is the self-step (the shipped round
+    `loop_step_frag_same` on `dg_self_step`), so the run never reaches
+    PROGRAM-DONE and the out-of-fuel kill `CerbND.fuelExhaustedKill` is
+    the loop's only value. -/
+theorem dg_loop_exhausts (ra : core_run_annotation) :
+    ∀ (fl : Nat) (dst : driver_state) (acc : Fmap thread_id (List core_step2)),
+      dst.core_state0.thread_states =
+        [(0, (none, procThread dgProcSym (dgBody ra) [fmapEmpty]))] →
+      dst.core_extern = fmapEmpty →
+      LabeledAt dst.core_run_state0 dgProcSym (dgQ ra) →
+      ∃ dst' : driver_state,
+        runOne (drive_nonmemory_steps_aux2_lemFuel fl fmapEmpty acc [0]) dst =
+          (NDkilled CerbND.fuelExhaustedKill, dst')
+  | 0, dst, acc, _, _, _ => ⟨dst, loop_zero_exhausts _ _ _ _⟩
+  | fl + 1, dst, acc, hth, hext, hQd => by
+    obtain ⟨rs', tr, ctr, hlbl, hrun⟩ :=
+      loop_step_frag_same (th₀ := procThread dgProcSym (dgBody ra) [fmapEmpty])
+        rfl rfl (procCtx_labels (dgRS_labeledAt ra)) rfl fl acc hth hext hQd (dgBody_frag ra)
         (by rw [show esize (dgBody ra) = 1 from rfl,
           show lemDefaultFuel = 999999 + 1 from rfl]; omega)
-        (dg_self_step ra fmapEmpty [] σ₀)]
-    exact dg_driveU_more ra σ₀ k _
+        (dg_self_step ra fmapEmpty [] dst.layout_state)
+    rw [hrun]
+    exact dg_loop_exhausts ra fl _ acc
+      (by rw [update_thread_state_single _ _ _ hth]; rfl) hext
+      (by show LabeledAt rs' dgProcSym (dgQ ra)
+          unfold LabeledAt
+          rw [hlbl]
+          exact hQd)
 
 /-- Any postcondition weakens to the trivial engine readout. -/
 theorem dg_post_to_readout {GF : BundledGFunctors} [SpikeGS .hasLC GF]
@@ -148,8 +166,9 @@ theorem dg_post_to_readout {GF : BundledGFunctors} [SpikeGS .hasLC GF]
     direct attempt is the jump clause's mandatory decrease
     `∃ m', 1 + m' ≤ m` against a body that must be verified at every
     claimed variant, including m = 0). Proved AT THE ENGINE: the total
-    bound would deliver `.done` at fuel `k`; the engine rests in
-    `.more`. -/
+    driver lane would make the shipped loop deliver PROGRAM-DONE within
+    `k + 2` iterations from a driver state holding the thread; the loop
+    exhausts instead (`dg_loop_exhausts`). -/
 theorem diverge_total_unprovable {GF : BundledGFunctors} [SpikeGpreS GF]
     (ra : core_run_annotation) (σ₀ : Mem) (m₀ : SpikeHeapF SpikeCell)
     (hcoh : Coh fmapEmpty σ₀ m₀)
@@ -162,8 +181,9 @@ theorem diverge_total_unprovable {GF : BundledGFunctors} [SpikeGpreS GF]
           wpt (procCtx (dgRS ra)) (some dgProcSym) Ls emptyProcSpecT k Ψ (dgBody ra) [fmapEmpty])) :
     False := by
   have hlbl := procCtx_labels (dgRS_labeledAt ra)
-  obtain ⟨v, σ', hdone, -, -⟩ :=
-    wpt_engine_boundU (GF := GF) (M := procCtx (dgRS ra)) (procCtx_wf _) (ctl := procCtl dgProcSym) rfl
+  have hdd :=
+    wpt_driver_done (GF := GF) (M₀ := procCtx (dgRS ra)) (ctl := procCtl dgProcSym) rfl rfl hlbl
+      rfl (th₀ := procThread dgProcSym (dgBody ra) [fmapEmpty]) rfl rfl rfl
       (fun l params cont hl => by
         rw [hlbl] at hl
         obtain ⟨-, rfl⟩ := dgQ_inv ra hl
@@ -183,8 +203,16 @@ theorem diverge_total_unprovable {GF : BundledGFunctors} [SpikeGpreS GF]
         refine hwp.trans (BI.sep_mono ?_ ?_)
         · exact blockSpecsT_mono (dg_post_to_readout Ψ)
         · exact wpt_mono (dg_post_to_readout Ψ) _ _ _)
-      (fun _ => 0)
-  rw [dg_driveU_more ra σ₀ k] at hdone
-  cases hdone
+  -- a driver state holding the thread at σ₀, with the tied run state
+  let dst : driver_state :=
+    { (default : driver_state) with
+        core_state0 := { (default : driver_state).core_state0 with
+          thread_states := [(0, (none, procThread dgProcSym (dgBody ra) [fmapEmpty]))] },
+        layout_state := σ₀, core_run_state0 := dgRS ra, core_extern := fmapEmpty }
+  obtain ⟨v, σf, ρf, rs', tr, ctr, -, hrun⟩ :=
+    hdd dst fmapEmpty (k + 2) rfl rfl rfl (dgRS_labeledAt ra) (Nat.le_refl _)
+  obtain ⟨dst', hkill⟩ := dg_loop_exhausts ra (k + 2) dst fmapEmpty rfl rfl (dgRS_labeledAt ra)
+  rw [hrun] at hkill
+  cases hkill
 
 end CerberusHeapLang

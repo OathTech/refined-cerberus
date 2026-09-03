@@ -2,8 +2,9 @@
 CerberusHeapLang.Examples.CallSmoke — the calls arc C3 SMOKE: a
 two-procedure file verified through the SPECIFICATION TABLE, the call
 rule and the procedure rule, collapsed with the table, and driven
-through the PROVISIONAL `driveU` lane (not a client exhibit — a
-structurally-forcing example that every C3 surface is consumed once).
+through the partial lane over the shipped driver's loop
+(`call_smoke_engine`; not a client exhibit — a structurally-forcing
+example that every C3 surface is consumed once).
 
 THE PROGRAM. `main` calls `f(3)`; `f(x)` is `save ret(y := x + 1) in
 pure(y)` — the fragment's binder for pure computation (`Esave` at an
@@ -20,7 +21,7 @@ WHAT IS EXERCISED, once each: `ProcSpec`/`emptyProcSpec`,
 `∀ ρ` costs nothing: every read of the body is a head-frame hit on the
 `SymFrame` `procEnv` builds), `wps_call_root` (the caller: the table's
 precondition, then the continuation at the returned value),
-`wps_sound` (the collapse WITH the table), and `engine_adequacyU` with
+`wps_sound` (the collapse WITH the table), and `engine_adequacy` with
 `MachineCtx.FragProcs` discharged at a two-procedure file (the premise's
 first non-vacuous instance: both bodies in `Frag` within the potential
 bound, both label fibers empty). The total twins at the `wpt` level:
@@ -28,8 +29,9 @@ bound, both label fibers empty). The total twins at the `wpt` level:
 `4`: SAVE-EVAL, SAVE, PURE, the RETURN — its delivery cost; the caller
 at `1 + 4 + 1`). The PRODUCTION lane (the shipped driver) through a call
 is C4's, with recursive fib as its client (`FibRecExhibit.lean`,
-`wpt_driver_cps`; `docs/2026-09-03_c4-notes.md`) — this smoke stays on
-the `driveU` lane.
+`wpt_driver_cps`; `docs/2026-09-03_c4-notes.md`) — this smoke's engine
+statement is the loop-level partial fact (its file `csFile` is not of
+the production shape `prodFileWith`, so it has no cold-start form).
 -/
 import CerberusHeapLang.API
 
@@ -182,7 +184,7 @@ theorem csMainBody_frag (ra : core_run_annotation) : Frag (csMainBody ra) :=
         show lemDefaultFuel = 999999 + 1 from rfl]
       omega)
 
-/-- THE PROCEDURE WELL-FORMEDNESS PREMISE of the `driveU` lane at a
+/-- THE PROCEDURE WELL-FORMEDNESS PREMISE of the partial lane at a
     two-procedure file: both bodies in the certified cone within the
     potential bound; both label fibers empty. -/
 theorem csCtx_fragProcs (ra : core_run_annotation) (bty ybty : core_base_type) :
@@ -313,7 +315,7 @@ theorem csMain_wps (ρ : EnvStack) :
     ipureintro
     rfl
 
-/-! ## The collapse WITH the table, and the `driveU` lane -/
+/-! ## The collapse WITH the table, and the partial lane at the shipped loop -/
 
 /-- The base-WP face with the engine readout: `wps_sound` at the entry
     control under `procSpecs ∗ blockSpecs`. -/
@@ -338,23 +340,18 @@ theorem csCoh_empty (σ : Mem) : Coh fmapEmpty σ ((∅ : SpikeHeapF SpikeCell))
   · rw [Iris.Std.LawfulPartialMap.get?_empty] at h1
     cases h1
 
-/-- THE `driveU` LANE THROUGH A CALL (PROVISIONAL, as every `driveU`
-    export): the package loop at the two-procedure file never kills or
-    derails, and delivers `4` — `engine_adequacyU` with `FragProcs`
-    discharged at both procedures (the first non-vacuous instance). -/
-theorem call_smoke_driveU (σ₀ : Mem) (nsteps : Nat) (aids : Nat → Nat) :
-    (∀ r, driveU (csCtx ra bty ybty) aids nsteps
-      ((csCtx ra bty ybty).thread (csMainBody ra) [fmapEmpty] ⟨[], some csMain, default⟩) σ₀
-        ≠ .killed r) ∧
-    (driveU (csCtx ra bty ybty) aids nsteps
-      ((csCtx ra bty ybty).thread (csMainBody ra) [fmapEmpty] ⟨[], some csMain, default⟩) σ₀
-        ≠ .stuck) ∧
-    (∀ (v : value) (σ' : Mem),
-      driveU (csCtx ra bty ybty) aids nsteps
-        ((csCtx ra bty ybty).thread (csMainBody ra) [fmapEmpty] ⟨[], some csMain, default⟩) σ₀
-          = .done v σ' →
-      v = csInt 4) := by
-  refine engine_adequacyU (GF := SpikeGF) (M := csCtx ra bty ybty) ⟨rfl⟩
+/-- THE PARTIAL LANE THROUGH A CALL at the shipped driver's loop: from
+    any driver state holding `main`'s thread at the two-procedure file
+    (the file tie `dst.core_file = csFile …`, the registration ties), the
+    shipped per-thread loop at every fuel exhausts or delivers `4` — the
+    PCALL and RETURN rounds are the driver's own — `engine_adequacy` with
+    `FragProcs` discharged at both procedures (the first non-vacuous
+    instance). -/
+theorem call_smoke_engine (σ₀ : Mem) :
+    DriverSafeCtl (csCtx ra bty ybty)
+      ((csCtx ra bty ybty).thread (csMainBody ra) [fmapEmpty] ⟨[], some csMain, default⟩)
+      (csMainBody ra) [fmapEmpty] ⟨[], some csMain, default⟩ σ₀ (fun v _ => v = csInt 4) := by
+  refine engine_adequacy (GF := SpikeGF) (M := csCtx ra bty ybty) rfl rfl
     (ctl := ⟨[], some csMain, default⟩) rfl
     (fun l params cont hl => by rw [csCtx_lookupLabel] at hl; cases hl)
     (fun l params cont hl => by rw [csCtx_lookupLabel] at hl; cases hl)
@@ -365,7 +362,8 @@ theorem call_smoke_driveU (σ₀ : Mem) (nsteps : Nat) (aids : Nat → Nat) :
       (by rw [show esize (csMainBody ra) = 1 from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega))
     (csCoh_empty σ₀)
     (fun v _ => v = csInt 4)
-    ?_ nsteps aids
+    ?_ (th₀ := (csCtx ra bty ybty).thread (csMainBody ra) [fmapEmpty] ⟨[], some csMain, default⟩)
+    rfl
   intro inst
   exact (BigSepM.bigSepM_empty).1.trans (cs_wp_readout ra bty ybty default)
 

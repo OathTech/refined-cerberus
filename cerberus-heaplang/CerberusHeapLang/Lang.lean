@@ -38,7 +38,8 @@ a value.
 
 SOUNDNESS STATUS: the WP is over Step; Step's certification against
 the engine is Soundness.lean, and the engine-facing meaning lands
-through Adequacy.lean (`MemTripleU` / `project_triple_pure`).
+through Adequacy.lean (`MemTriple` / `project_triple_pure`, over the
+shipped driver's per-thread loop).
 -/
 import CerberusHeapLang.Heap
 
