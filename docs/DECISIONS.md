@@ -938,3 +938,22 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   into an ILLTYPED-next configuration, filed under refusals) wherever it
   appears. Whether `error_next` belongs under `ShippedRefusal` is a
   naming decision left to the operator (audit N-4).
+- **2026-09-03 [USER] THE ROOT PACKAGE'S RAW LOGIC IS A COPY, NOT A LAKE
+  DEPENDENCY ON THE DEMO** — operator: "it depends on the exact blast
+  radius. I'm reluctant to couple the demo to a further exploration
+  which might break the demo as a nice persistent artifact"; "what
+  benefit do we get from this? We're not literally going to reuse the
+  demo infra? We'll need to make changes". Agreed [AGENT]: the root
+  needs the demo GROWN (a fragment covering compiled Core — `Eunseq`,
+  member shifts, the case evaluation arm, more memops, bounds,
+  alloc/kill, calls), which changes `Frag`/`Step`/the certification/
+  completeness — exactly what the demo freeze keeps fixed; a dependency
+  on the frozen demo is a foundation too small to build on and its "one
+  trust base" benefit is moot (the grown fragment is re-certified
+  anyway). Disposition: the demo stays the pristine persistent
+  reference; the derisking sibling package (Lane B) is seeded by copy
+  from the closure head, grows the fragment, and becomes the root's
+  raw-logic layer; reused are the architecture and proof techniques,
+  not the artifacts; the codec laws (GAP 1/2) land in the grown copy
+  and enter the demo only if its own examples want them. The Lane C
+  note's S0 is corrected accordingly (design-refinedc, bff3208).
