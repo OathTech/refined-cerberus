@@ -1247,3 +1247,21 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   known admission" paragraph replaced by "none (measured)". Pins 294
   unchanged. The branch rebases over K5.1 when it lands; range audit
   then.
+- **2026-09-03 [AGENT] K5.1 LANDED; THE RE-PIN REBASED OVER IT; CALLS C1 OPENED**
+  (records: `cerberus-heaplang/docs/2026-09-03_k5.1-notes.md`,
+  `…_repin-fuel-notes.md`): K5.1 — `regionOwn_ne`/`regionOwn_deadRegion_ne`
+  (from `metaOwn_ne`; no `deadRegion_ne` is derivable, both persistent),
+  `(ids ++ done).Nodup` carried through the malloc'd-list invariant and
+  the four statements strengthened by one conjunct (`ids.Nodup`) — the
+  alloc-side distinctness against dead regions IS derivable (the fresh
+  region at `.own 1` beside each dead one); pins 294 → 296. The re-pin
+  branch `repin-fuel` was rebased over K5.1 by the orchestrator: two doc
+  conflicts (README exhibits rows; WALKTHROUGH §4) resolved by keeping
+  K5.1's text with the re-pin's `≤ CerbFuel.driverFuel` substitution; the
+  Lean commit applied cleanly. Combined range 226c0d3..f2f9701 (K5.1 +
+  re-pin) under audit on a fixed copy. CALLS C1 (the configuration grows:
+  `Ctl` = stack/proc/execLoc as live state; internals under the frozen
+  spec at the canonical embedding; the arc's named grind risk with an
+  explicit 6-hour park threshold) dispatched from f2f9701 on branch
+  `calls-c1`, which is now the tip of the overnight stack; DECISIONS
+  entries continue at the tip.
