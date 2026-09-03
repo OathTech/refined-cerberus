@@ -1390,3 +1390,40 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   Standing rule from here (memory + this entry): the orchestrator's gate at
   every slice boundary is recorded with its verbatim verdict lines before
   the log is deleted; summary lines in commit messages are not a record.
+- **2026-09-03 [USER] SHAREABLE MAIN: cerberus-heaplang + DURABLE INFRASTRUCTURE ONLY;
+  THE RefinedC-FAMILY WORK ON BRANCH `refinedc/dev`** (verbatim): "I'm going
+  to share the refined-cerberus repo with some external people. Can you
+  figure out a plan for moving the more broken / prototype-y bits onto
+  a branch? Ideally main would contain just cerberus-heaplang and any
+  durable bits of infrastructure that's reasonable to share. Then
+  RefinedCerberus and the spike live on a feature branch while we get
+  it to a reasonable state. What's on main doesn't need to be perfect,
+  just not misleading"; DECISIONS.md stays on main ("yes, this is fine
+  to keep on main"). Disposition [AGENT], operator-approved ("your
+  proposal is good, we can go ahead now"): branch `refinedc/dev` cut at
+  main b82e472 (retains everything); main trimmed on `main-share`:
+  removed the stub root package `RefinedCerberus` (3 files) with its
+  lakefile/manifest/toolchain, the donor-toolchain scripts, and the
+  RefinedC-facing design records (port map, toolchain setup, the
+  superseded attachment charter, the Caesium shape study, the
+  relational-semantics candidates + review, the pause note, the layer
+  design spike); gate runner = gate 1 + the demo build + speedbumps;
+  root README and CLAUDE.md rewritten so nothing reads as a port of
+  RefinedC. Historical mentions inside dated records and this register
+  are left as records. Orchestrator FULL gate at the trimmed tree
+  (24c2410), verbatim verdict lines:
+  ```
+  == gate 1: banned proof-method grep (native_decide / bv_decide / ofReduce*) ==
+  ok: no banned proof-method references
+  == gate 2: capped build, cerberus-heaplang (elaborates its axiom audit) ==
+  CerberusHeapLang export pins: 312 trio-exact
+  CerberusHeapLang axiom sweep: every theorem bounded by the trio (3208 swept, internal details included — count informational, environment-dependent)
+  CerberusHeapLang banned-axiom sweep: sorryAx/ofReduceBool/ofReduceNat absent from all cones (4938 constants of every kind swept, internal details included — count informational, environment-dependent)
+  ok: cerberus-heaplang build green
+  == speedbump: capability manifest (regenerate; red on a red row or drift) ==
+  ok: capability manifest regenerated, no drift
+  == speedbump: import direction (semantics → heap → rules → adequacy → clients) ==
+  ok: import direction — no core module imports an exhibit/example/production module
+  ALL GATES GREEN
+  GATE-EXIT=0
+  ```

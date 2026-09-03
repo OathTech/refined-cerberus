@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Idempotent setup of the cerberus-lean SEMANTICS dependency workspace
-# (.cerberus-ws) — the pattern of setup-refinedc.sh, adapted: a git
+# (.cerberus-ws) — the pattern of the donor-toolchain setup script on branch refinedc/dev, adapted: a git
 # clone of the local cerberus-lean repo at the pinned commit, PRIMED
 # with the gitignored build state a bare clone lacks (generated/,
 # native/, .lake, the lem-sync stamps). Lake consumes it as a path

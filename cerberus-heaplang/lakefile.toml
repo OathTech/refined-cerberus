@@ -5,7 +5,7 @@ moreLeanArgs = ["-DautoImplicit=false"]
 # cerberus-heaplang — the standalone DEMO development ([USER
 # 2026-08-31]: the spike restructured as a separate Lean package,
 # the HeapLang-analog for the Cerberus Core engine, alongside the
-# future RefinedC port which lives in the repo's root package).
+# RefinedC-family layer, which lives on the branch `refinedc/dev`).
 #
 # Dependency wiring mirrors cerberus-lean lean_frontend/lakefile.toml
 # (the proven offline recipe): plain git requires, resolved to local
@@ -34,7 +34,7 @@ rev = "34390a0133986385c62bf59a6eb01938945b48ec"
 subDir = "Iris"
 
 # The SEMANTICS dependency: the SAME pinned+primed workspace clone
-# the root package uses (.cerberus-ws at the repo root — see
+# this repository primes (.cerberus-ws at the repo root — see
 # scripts/setup-cerberus-dep.sh; the pin lives in
 # scripts/semantics-pin.env, drift-checked).
 [[require]]
