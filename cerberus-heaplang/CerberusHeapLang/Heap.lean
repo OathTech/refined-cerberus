@@ -814,33 +814,128 @@ section GenericAccess
 
 open CerbMem
 
-/-- Allocation metadata: everything an access needs to know about
-    the backing allocation, minus the byte contents. -/
+/-- Allocation metadata: everything an access (and, from K2/K3 on, a
+    kill) needs to know about the backing allocation, minus the byte
+    contents. THE METADATA CELL (kill/free arc K1; RefinedC's
+    `allocation` record, `theories/caesium/ghost_state.v` — `al_alive`
+    is their liveness flag, `al_kind` their origin; the read-only flag
+    and the OPTIONAL type are Cerberus-forced: `Allocation.isReadonly`
+    exists, and `allocateRegion` records no type). Every field is
+    coupled to the engine's `Allocation` record by `MetaCoh`; cites
+    are `generated/CerbMem.lean` at the pin (cerberus-lean
+    `ddcfc9199`). -/
 structure MetaCell where
+  /-- the allocation's base address (`Allocation.base`, :110) -/
   addr : Int
-  ty : ctype
+  /-- the allocation's type — `Allocation.ty : Option ctype` (:112,
+      default `none`): `allocateObject` records `some ty` (:1518);
+      `allocateRegion` records NOTHING (:1544 — regions are untyped;
+      `isAtomicMemberAccess` :1609-1620 treats `none` as non-atomic). -/
+  ty : Option ctype
   /-- the allocation's size in bytes — the engine's `Allocation.size`
-      (registered by `allocateObject`, CerbMem.lean:1504-1530), carried
+      (registered by `allocateObject` :1518 as `(sizeofCtype tagDefs
+      ty).max 1`, by `allocateRegion` :1544 as `sizeN.toNat`), carried
       as GHOST DATA so the coupling invariant computes no layout: the
       tag-definition environment enters only through the assertions
       (`metaOf`/`pointsToView`/`cellOwn` pin `size = sizeofCtype tds ty`). -/
   size : Nat
+  /-- LIVENESS (RefinedC's `al_alive`): `true` iff the id is not in
+      `deadAllocations` and its record is in `allocations`; `false` iff
+      the id is dead and its record erased — `killM` does both in one
+      update (:1576-1578). Nothing else writes either table (K0's writer
+      census). The kill rules (K2/K3) are the ghost update to `false`;
+      the bundles that grant access carry `true`. -/
+  alive : Bool
+  /-- READ-ONLY: `Allocation.isReadonly ≠ .IsWritable` (:113, :89-92).
+      `allocateObject` sets `readonlyStatusForAlloc pref initOpt`
+      (:1519) — `.IsWritable` at `initOpt = none` (:1490-1492, :1501),
+      which is the only form the fragment's `create` issues
+      (`Step.create`: `allocateObject … none none`; `CreateReadOnly` is
+      not in the fragment); `allocateRegion` leaves the default
+      `.IsWritable` (:1544). `storeM` refuses a read-only allocation
+      with `MerrWriteOnReadOnly kind` (:1724-1725; UB033/UB064/
+      UB_modifying_temporary_lifetime by kind, Mem_common.lean:392).
+      The `isLocking` store (:1687-1693) is the only writer that flips
+      it — outside every rule here (`storeExpr` is `Store0 false`). -/
+  readonly : Bool
+  /-- DYNAMIC (RefinedC's `al_kind = HeapAlloc`): the allocation's
+      ORIGIN — `allocateRegion` (`Alloc0`/malloc) pushes the base onto
+      `dynamicAddrs` (:1548) and is the only writer of that list;
+      `allocateObject` (`Create`) does not (:1521-1523). Coupled in ONE
+      direction only, `dynamic = true → base ∈ dynamicAddrs` (the K0
+      range audit's N-1: the converse is not an engine invariant — a
+      zero-size region at a created object's base puts that base in
+      `dynamicAddrs`). K3's `free` rule takes "this allocation is
+      dynamic" from here, never from `dynamicAddrs`. -/
+  dynamic : Bool
 
+/-- The metadata cell of a `create`d object: typed, at its layout
+    size, of the given liveness and writability, never dynamic. -/
+@[reducible] def objCell (tds : CerbTags.TagDefsMap) (a : Int) (ty : ctype)
+    (alive readonly : Bool) : MetaCell :=
+  ⟨a, some ty, sizeofCtype tds ty, alive, readonly, false⟩
+
+/-- The metadata cell of an `alloc`ated region: untyped, of the
+    requested size, writable, dynamic. -/
+@[reducible] def regionCell (a : Int) (n : Nat) (alive : Bool) : MetaCell :=
+  ⟨a, none, n, alive, false, true⟩
+
+/-- The metadata of a footprint cell: a live, writable, created
+    object of the cell's type. -/
 @[reducible] def metaOf (tds : CerbTags.TagDefsMap) (c : SpikeCell) : MetaCell :=
-  ⟨c.addr, c.ty, sizeofCtype tds c.ty⟩
+  objCell tds c.addr c.ty true false
 
-/-- Per-allocation metadata facts in the real state: exactly
-    `CellCoh` minus the byte-contents facts. -/
-structure MetaCoh (σ : Mem) (id : Int) (mc : MetaCell) : Prop where
+/-- Atomicity of an optional allocation type (`isAtomicMemberAccess`
+    :1609-1620 reads `alloc.ty`; `none` is never atomic). -/
+def atomicTyOpt : Option ctype → Bool
+  | none => false
+  | some ty => atomicTy ty
+
+/-- The backing facts of a LIVE metadata cell in the real state: the
+    id is not dead, its record is present and agrees with the cell on
+    base, size, type and writability. -/
+structure LiveCoh (σ : Mem) (id : Int) (mc : MetaCell) : Prop where
   dead : σ.deadAllocations.contains id = false
   alloc : ∃ al, σ.allocations.get? id = some al ∧ al.base = mc.addr ∧
-    al.size = (mc.size : Int) ∧ al.ty = some mc.ty ∧
-    al.isReadonly = .IsWritable
-  nonAtomic : atomicTy mc.ty = false
+    al.size = (mc.size : Int) ∧ al.ty = mc.ty ∧
+    (al.isReadonly = .IsWritable ↔ mc.readonly = false)
+
+/-- Per-allocation metadata facts in the real state (the coupling of
+    every field of `MetaCell` to the engine's tables): a live cell is
+    `LiveCoh`; a dead cell's id is in `deadAllocations` and its record
+    is erased (`killM` :1576-1578); the type is non-atomic; a dynamic
+    cell's base is in `dynamicAddrs` (`allocateRegion` :1548). For a
+    footprint cell this is exactly `CellCoh` minus the byte-contents
+    facts (`CellCoh.toMetaCoh`/`CellCoh.ofParts`). -/
+structure MetaCoh (σ : Mem) (id : Int) (mc : MetaCell) : Prop where
+  live : mc.alive = true → LiveCoh σ id mc
+  dead : mc.alive = false → σ.deadAllocations.contains id = true ∧
+    σ.allocations.get? id = none
+  nonAtomic : atomicTyOpt mc.ty = false
+  dynamic : mc.dynamic = true → mc.addr ∈ σ.dynamicAddrs
+
+/-- `MetaCoh` reads three things of the state: the dead list, the
+    record at `id`, and the dynamic list; any operation leaving them
+    alone preserves it (byte writes, and — for the ids it does not
+    touch — an allocation or a kill). -/
+theorem MetaCoh.of_fields {σ σ' : Mem} {id : Int} {mc : MetaCell} (h : MetaCoh σ id mc)
+    (h1 : σ'.deadAllocations = σ.deadAllocations)
+    (h2 : σ'.allocations.get? id = σ.allocations.get? id)
+    (h3 : σ'.dynamicAddrs = σ.dynamicAddrs) : MetaCoh σ' id mc := by
+  refine ⟨fun ha => ?_, fun ha => ?_, h.nonAtomic, fun hd => ?_⟩
+  · obtain ⟨hdead, al, hal, hb, hs, ht, hro⟩ := h.live ha
+    exact ⟨by rw [h1]; exact hdead, al, by rw [h2]; exact hal, hb, hs, ht, hro⟩
+  · obtain ⟨hdead, hnone⟩ := h.dead ha
+    exact ⟨by rw [h1]; exact hdead, by rw [h2]; exact hnone⟩
+  · rw [h3]
+    exact h.dynamic hd
 
 theorem CellCoh.toMetaCoh {σ : Mem} {id : Int} {c : SpikeCell} (tds : CerbTags.TagDefsMap)
-    (h : CellCoh tds σ id c) : MetaCoh σ id (metaOf tds c) :=
-  ⟨h.dead, h.alloc, h.nonAtomic⟩
+    (h : CellCoh tds σ id c) : MetaCoh σ id (metaOf tds c) := by
+  refine ⟨fun _ => ⟨h.dead, ?_⟩, fun ha => by simp at ha,
+    by simpa [atomicTyOpt] using h.nonAtomic, fun hd => by simp at hd⟩
+  obtain ⟨al, hal, hb, hs, ht, hro⟩ := h.alloc
+  exact ⟨al, hal, hb, hs, ht, ⟨fun _ => rfl, fun _ => hro⟩⟩
 
 /-- CellCoh assembled from its split parts: metadata authority +
     length + byte-range readout + decode inertness. -/
@@ -850,8 +945,10 @@ theorem CellCoh.ofParts {σ : Mem} {id : Int} {c : SpikeCell} (tds : CerbTags.Ta
     (hread : readBytesFrom σ c.addr (sizeofCtype tds c.ty) = c.bytes)
     (hdec : ∀ (lum : List (Int × identifier)) (fpm : Funptrmap),
       reconstructValue tds lum fpm c.addr c.ty c.bytes = decodeCell tds c) :
-    CellCoh tds σ id c :=
-  ⟨hm.dead, hm.alloc, hm.nonAtomic, hlen, hread, hdec⟩
+    CellCoh tds σ id c := by
+  obtain ⟨hdead, al, hal, hb, hs, ht, hro⟩ := hm.live rfl
+  exact ⟨hdead, ⟨al, hal, hb, hs, ht, hro.mpr rfl⟩,
+    by simpa [atomicTyOpt] using hm.nonAtomic, hlen, hread, hdec⟩
 
 /-- Range-disjointness of allocation metadata (the same formula as
     `cellsDisjoint`). -/
@@ -874,6 +971,19 @@ theorem isAtomicMemberAccess_false' (tds : CerbTags.TagDefsMap) (al : Allocation
   cases aty with
   | Ctype q t => cases t <;> simp_all [atomicTy]
 
+/-- The same at an OPTIONAL allocation type (the metadata cell's
+    `ty`): an untyped region (`none`, `isAtomicMemberAccess`
+    :1619-1620) or a non-atomic object type. -/
+theorem isAtomicMemberAccess_false_opt (tds : CerbTags.TagDefsMap) (al : Allocation)
+    (oty : Option ctype) (lty : ctype) (addr : Int) (hty : al.ty = oty)
+    (hatom : atomicTyOpt oty = false) :
+    isAtomicMemberAccess tds al lty addr = false := by
+  cases oty with
+  | none =>
+    unfold isAtomicMemberAccess
+    rw [hty]
+  | some aty => exact isAtomicMemberAccess_false' tds al aty lty addr hty hatom
+
 /-- The _Bool trap-representation guard at a decoded value (mirror of
     loadM's `isTrap`, CerbMem.lean:1598-1604); `cellLoadTrap` is its
     whole-cell instance (`cellLoadTrap_eq`). -/
@@ -887,32 +997,41 @@ def loadTrapV (ty : ctype) (mv : MemValue) : Bool :=
 theorem cellLoadTrap_eq (tds : CerbTags.TagDefsMap) (c : SpikeCell) :
     cellLoadTrap tds c = loadTrapV c.ty (decodeCell tds c) := rfl
 
-/-- GENERIC IN-BOUNDS TYPED LOAD (memM stratum): with allocation
-    metadata backing, an in-bounds offset, the range's byte image,
-    and a non-trap decode, `loadM` at the accessed type takes the
-    active path, returns the decode of the range image, and leaves
-    the state unchanged. Generalizes `loadM_success` (off 0, cell
-    type) and the retired per-layout interior lemmas. -/
-theorem loadM_at (tds : CerbTags.TagDefsMap) (σ : Mem) (id a : Int) (aty : ctype) (off : Nat)
+/-- `applyMemM` is the active projection of the one-layer result
+    (`runOne`, Step.lean). Stated here (moved from Round.lean at K1)
+    so the KILLED arms can be stated as engine facts at the heap layer. -/
+theorem applyMemM_eq_ndProj {α : Type} (m : CerbMem.memM α) (σ : Mem) :
+    applyMemM m σ = ndProj (runOne m σ) := by
+  rcases m with ⟨g⟩; rfl
+
+/-- GENERIC IN-BOUNDS TYPED LOAD at a LIVE metadata cell (memM
+    stratum): with metadata backing (any type, optional; any
+    writability), an in-bounds offset, the range's byte image, and a
+    non-trap decode, `loadM` at the accessed type takes the active
+    path, returns the decode of the range image, and leaves the state
+    unchanged. The one load seam of every typed-access rule:
+    `loadM_at` (the created-object instance) and the read-only cell's
+    rule consume it; K3's region loads will. -/
+theorem loadM_live (tds : CerbTags.TagDefsMap) (σ : Mem) (id : Int) (mc : MetaCell) (off : Nat)
     (vty : ctype) (bs : List AbsByte) (mv : MemValue)
     (loc : CerbLocation.Loc)
-    (hmeta : MetaCoh σ id ⟨a, aty, sizeofCtype tds aty⟩)
-    (hbound : off + sizeofCtype tds vty ≤ sizeofCtype tds aty)
-    (hread : readBytesFrom σ (a + (off : Int)) (sizeofCtype tds vty) = bs)
+    (hmeta : MetaCoh σ id mc) (halive : mc.alive = true)
+    (hbound : off + sizeofCtype tds vty ≤ mc.size)
+    (hread : readBytesFrom σ (mc.addr + (off : Int)) (sizeofCtype tds vty) = bs)
     (hdec : reconstructValue tds σ.lastUsedUnionMembers σ.funptrmap
-      (a + (off : Int)) vty bs = mv)
+      (mc.addr + (off : Int)) vty bs = mv)
     (htrap : loadTrapV vty mv = false) :
-    applyMemM (loadM tds loc vty (cellPtr id (a + (off : Int)))) σ =
-      some ((.FP .R (a + (off : Int)) (sizeofCtype tds vty), mv), σ) := by
-  obtain ⟨al, hal, hbase, hsize, hty, hro⟩ := hmeta.alloc
-  have hbounds : isInBounds al (a + (off : Int)) (sizeofCtype tds vty) = true := by
+    applyMemM (loadM tds loc vty (cellPtr id (mc.addr + (off : Int)))) σ =
+      some ((.FP .R (mc.addr + (off : Int)) (sizeofCtype tds vty), mv), σ) := by
+  obtain ⟨hdead, al, hal, hbase, hsize, hty, -⟩ := hmeta.live halive
+  have hbounds : isInBounds al (mc.addr + (off : Int)) (sizeofCtype tds vty) = true := by
     simp only [isInBounds, hbase, hsize]
     simp
     omega
-  have hatomic := isAtomicMemberAccess_false' tds al aty vty (a + (off : Int))
+  have hatomic := isAtomicMemberAccess_false_opt tds al mc.ty vty (mc.addr + (off : Int))
     hty hmeta.nonAtomic
   unfold loadM applyMemM
-  simp only [cellPtr, hmeta.dead, Bool.false_eq_true, if_false, hal, hbounds,
+  simp only [cellPtr, hdead, Bool.false_eq_true, if_false, hal, hbounds,
     Bool.not_true, hatomic, hread, hdec]
   -- the trap gate: the unfolded matchers are stuck on the type and
   -- value scrutinees; explode them against the htrap hypothesis.
@@ -932,30 +1051,50 @@ theorem loadM_at (tds : CerbTags.TagDefsMap) (σ : Mem) (id a : Int) (aty : ctyp
     rw [htrap h1] at h2
     cases h2)]
 
-/-- GENERIC FULL-OWNERSHIP TYPED SUBRANGE STORE (memM stratum): with
-    metadata backing and an in-bounds offset, `storeM` at the
-    accessed type takes the active path and the state change is
-    exactly the byte write of the serialized image at the interior
-    address. Generalizes `storeM_success` and the retired per-layout
-    interior lemmas; the serialization premises are the `StorableAt`
-    facts at the accessed type. -/
-theorem storeM_at (tds : CerbTags.TagDefsMap) (σ : Mem) (id a : Int) (aty : ctype) (off : Nat)
-    (vty : ctype) (mv : MemValue) (loc : CerbLocation.Loc)
-    (hmeta : MetaCoh σ id ⟨a, aty, sizeofCtype tds aty⟩)
+/-- GENERIC IN-BOUNDS TYPED LOAD at a created object (the `objCell`
+    instance of `loadM_live`; statement-frozen from Phase 2, the
+    metadata literal now spelled through the extended cell). -/
+theorem loadM_at (tds : CerbTags.TagDefsMap) (σ : Mem) (id a : Int) (aty : ctype) (off : Nat)
+    (vty : ctype) (bs : List AbsByte) (mv : MemValue)
+    (loc : CerbLocation.Loc)
+    (hmeta : MetaCoh σ id (objCell tds a aty true false))
     (hbound : off + sizeofCtype tds vty ≤ sizeofCtype tds aty)
+    (hread : readBytesFrom σ (a + (off : Int)) (sizeofCtype tds vty) = bs)
+    (hdec : reconstructValue tds σ.lastUsedUnionMembers σ.funptrmap
+      (a + (off : Int)) vty bs = mv)
+    (htrap : loadTrapV vty mv = false) :
+    applyMemM (loadM tds loc vty (cellPtr id (a + (off : Int)))) σ =
+      some ((.FP .R (a + (off : Int)) (sizeofCtype tds vty), mv), σ) :=
+  loadM_live tds σ id (objCell tds a aty true false) off vty bs mv loc hmeta rfl hbound
+    hread hdec htrap
+
+/-- GENERIC FULL-OWNERSHIP TYPED SUBRANGE STORE at a LIVE, WRITABLE
+    metadata cell (memM stratum): with metadata backing and an
+    in-bounds offset, `storeM` at the accessed type takes the active
+    path and the state change is exactly the byte write of the
+    serialized image at the interior address. The serialization
+    premises are the `StorableAt` facts at the accessed type. The one
+    store seam (`storeM_at` is its created-object instance); the
+    writability premise `hro` is what the read-only cell cannot supply
+    (`storeM_readonly_kills`). -/
+theorem storeM_live (tds : CerbTags.TagDefsMap) (σ : Mem) (id : Int) (mc : MetaCell) (off : Nat)
+    (vty : ctype) (mv : MemValue) (loc : CerbLocation.Loc)
+    (hmeta : MetaCoh σ id mc) (halive : mc.alive = true) (hro : mc.readonly = false)
+    (hbound : off + sizeofCtype tds vty ≤ mc.size)
     (hcompat : ctypeMemCompatible vty (typeofMval mv) = true)
     (hfpm : ∀ fpm, (memValueToBytes tds fpm mv).1 = fpm)
     (hbytes : ∀ fpm, (memValueToBytes tds fpm mv).2 =
       (memValueToBytes tds [] mv).2) :
-    applyMemM (storeM tds loc vty false (cellPtr id (a + (off : Int))) mv) σ =
-      some (.FP .W (a + (off : Int)) (sizeofCtype tds vty),
-        writeBytesTo σ (a + (off : Int)) (memValueToBytes tds [] mv).2) := by
-  obtain ⟨al, hal, hbase, hsize, hty, hro⟩ := hmeta.alloc
-  have hbounds : isInBounds al (a + (off : Int)) (sizeofCtype tds vty) = true := by
+    applyMemM (storeM tds loc vty false (cellPtr id (mc.addr + (off : Int))) mv) σ =
+      some (.FP .W (mc.addr + (off : Int)) (sizeofCtype tds vty),
+        writeBytesTo σ (mc.addr + (off : Int)) (memValueToBytes tds [] mv).2) := by
+  obtain ⟨-, al, hal, hbase, hsize, hty, hiff⟩ := hmeta.live halive
+  have hw : al.isReadonly = .IsWritable := hiff.mpr hro
+  have hbounds : isInBounds al (mc.addr + (off : Int)) (sizeofCtype tds vty) = true := by
     simp only [isInBounds, hbase, hsize]
     simp
     omega
-  have hatomic := isAtomicMemberAccess_false' tds al aty vty (a + (off : Int))
+  have hatomic := isAtomicMemberAccess_false_opt tds al mc.ty vty (mc.addr + (off : Int))
     hty hmeta.nonAtomic
   rcases hmvb : memValueToBytes tds σ.funptrmap mv with ⟨fpm', bs'⟩
   have hfpm' : fpm' = σ.funptrmap := by
@@ -969,7 +1108,73 @@ theorem storeM_at (tds : CerbTags.TagDefsMap) (σ : Mem) (id a : Int) (aty : cty
   subst hfpm' hbs'
   unfold storeM applyMemM
   simp only [hcompat, Bool.not_true, Bool.false_eq_true, if_false, cellPtr,
-    hal, hbounds, hro, hatomic, hmvb]
+    hal, hbounds, hw, hatomic, hmvb]
+
+/-- GENERIC FULL-OWNERSHIP TYPED SUBRANGE STORE at a created object
+    (the `objCell` instance of `storeM_live`; statement-frozen from
+    Phase 2, the metadata literal now spelled through the extended
+    cell). -/
+theorem storeM_at (tds : CerbTags.TagDefsMap) (σ : Mem) (id a : Int) (aty : ctype) (off : Nat)
+    (vty : ctype) (mv : MemValue) (loc : CerbLocation.Loc)
+    (hmeta : MetaCoh σ id (objCell tds a aty true false))
+    (hbound : off + sizeofCtype tds vty ≤ sizeofCtype tds aty)
+    (hcompat : ctypeMemCompatible vty (typeofMval mv) = true)
+    (hfpm : ∀ fpm, (memValueToBytes tds fpm mv).1 = fpm)
+    (hbytes : ∀ fpm, (memValueToBytes tds fpm mv).2 =
+      (memValueToBytes tds [] mv).2) :
+    applyMemM (storeM tds loc vty false (cellPtr id (a + (off : Int))) mv) σ =
+      some (.FP .W (a + (off : Int)) (sizeofCtype tds vty),
+        writeBytesTo σ (a + (off : Int)) (memValueToBytes tds [] mv).2) :=
+  storeM_live tds σ id (objCell tds a aty true false) off vty mv loc hmeta rfl rfl hbound
+    hcompat hfpm hbytes
+
+/-- THE STORE REFUSAL AT A READ-ONLY ALLOCATION, as an engine fact: at
+    a live READ-ONLY metadata cell, an in-bounds, type-compatible
+    `storeM` is KILLED with `MerrWriteOnReadOnly kind` for the
+    allocation's read-only kind (CerbMem.lean:1724-1725, mirroring
+    impl_mem.ml:1768-1770; the UB is UB033 / UB064 /
+    UB_modifying_temporary_lifetime by kind, Mem_common.lean:392), the
+    state untouched. Bounds are checked before writability (:1721-1723),
+    hence `hbound`; the ill-typed-value guard comes first of all
+    (:1702-1703), hence `hcompat`. This is why no store rule exists over
+    `readonlyCell`: the engine's outcome is a kill, and `Step` has no
+    step at a killed arm (`storeM_readonly_none`). -/
+theorem storeM_readonly_kills (tds : CerbTags.TagDefsMap) (σ : Mem) (id : Int) (mc : MetaCell)
+    (off : Nat) (vty : ctype) (mv : MemValue) (loc : CerbLocation.Loc)
+    (hmeta : MetaCoh σ id mc) (halive : mc.alive = true) (hro : mc.readonly = true)
+    (hbound : off + sizeofCtype tds vty ≤ mc.size)
+    (hcompat : ctypeMemCompatible vty (typeofMval mv) = true) :
+    ∃ kind, runOne (storeM tds loc vty false (cellPtr id (mc.addr + (off : Int))) mv) σ =
+      (NDkilled (failReason (MerrWriteOnReadOnly kind) loc), σ) := by
+  obtain ⟨-, al, hal, hbase, hsize, -, hiff⟩ := hmeta.live halive
+  have hbounds : isInBounds al (mc.addr + (off : Int)) (sizeofCtype tds vty) = true := by
+    simp only [isInBounds, hbase, hsize]
+    simp
+    omega
+  obtain ⟨kind, hk⟩ : ∃ kind, al.isReadonly = .IsReadOnly kind := by
+    cases hst : al.isReadonly with
+    | IsWritable =>
+      have := hiff.mp hst
+      rw [hro] at this
+      cases this
+    | IsReadOnly kind => exact ⟨kind, rfl⟩
+  refine ⟨kind, ?_⟩
+  unfold storeM runOne
+  simp only [hcompat, Bool.not_true, Bool.false_eq_true, if_false, cellPtr,
+    hal, hbounds, hk]
+
+/-- The read-only store has NO active arm: under the projection the
+    fragment's `Step` fires on, the outcome is `none`. -/
+theorem storeM_readonly_none (tds : CerbTags.TagDefsMap) (σ : Mem) (id : Int) (mc : MetaCell)
+    (off : Nat) (vty : ctype) (mv : MemValue) (loc : CerbLocation.Loc)
+    (hmeta : MetaCoh σ id mc) (halive : mc.alive = true) (hro : mc.readonly = true)
+    (hbound : off + sizeofCtype tds vty ≤ mc.size)
+    (hcompat : ctypeMemCompatible vty (typeofMval mv) = true) :
+    applyMemM (storeM tds loc vty false (cellPtr id (mc.addr + (off : Int))) mv) σ = none := by
+  obtain ⟨kind, hk⟩ := storeM_readonly_kills tds σ id mc off vty mv loc hmeta halive hro
+    hbound hcompat
+  rw [applyMemM_eq_ndProj, hk]
+  rfl
 
 end GenericAccess
 
@@ -1557,10 +1762,8 @@ theorem byteAt_writeBytesTo_out (σ : Mem) (a : Int) (bs : List AbsByte)
     tables are untouched). -/
 theorem MetaCoh.writeBytes {σ : Mem} {id : Int} {mc : MetaCell}
     (h : MetaCoh σ id mc) (a : Int) (bs : List AbsByte) :
-    MetaCoh (writeBytesTo σ a bs) id mc := by
-  refine ⟨by simpa using h.dead, ?_, h.nonAtomic⟩
-  obtain ⟨al, hal, h1, h2, h3, h4⟩ := h.alloc
-  exact ⟨al, by simpa using hal, h1, h2, h3, h4⟩
+    MetaCoh (writeBytesTo σ a bs) id mc :=
+  h.of_fields rfl rfl rfl
 
 end ByteAt
 
@@ -1903,9 +2106,19 @@ structure CohG (σ : Mem) (mm : SpikeHeapF MetaCell)
   wf : get? mk 0 ≠ none → MemWF σ
   cur_byte_lo : get? mk 0 ≠ none → ∀ k b, get? mb k = some b →
     σ.lastAddress ≤ k
+  /-- every ghost-tracked metadata cell, ALIVE OR DEAD, sits at or
+      above the cursor (K1): for a live cell this is `MemWF.cursor_lo`
+      through `metas`; for a dead cell `MemWF` has forgotten the record
+      (`killM` erases it), so the fact that dead ranges are never reused
+      — the cursor only descends — is ghost-side, exactly as
+      `cur_byte_lo`. `CohG.create` needs it for `metas_disj` against
+      every tracked cell. -/
+  cur_meta_lo : get? mk 0 ≠ none → ∀ id mc, get? mm id = some mc →
+    σ.lastAddress ≤ mc.addr
 
-/-! The four retired `CohG` fields, as consequences (same names, same
-shapes; `CohG.create` and the launch lemmas consume them). -/
+/-! Three of the four `CohG` fields K0 retired, as consequences (same
+names, same shapes; `CohG.create` and the launch lemmas consume them).
+The fourth, `cur_meta_lo`, is a FIELD again since K1 (dead cells). -/
 
 /-- Fresh ids are not dead (`MemWF.dead_lt`). -/
 theorem CohG.cur_dead {σ : Mem} {mm : SpikeHeapF MetaCell} {mb : SpikeHeapF CerbMem.AbsByte}
@@ -1921,25 +2134,20 @@ theorem CohG.cur_alloc {σ : Mem} {mm : SpikeHeapF MetaCell} {mb : SpikeHeapF Ce
     σ.allocations.get? id = none :=
   (hG.wf hne).fresh_alloc id hle
 
-/-- Every ghost-tracked allocation id is below the next id (`metas` +
-    `MemWF.live_lt`). -/
+/-- Every ghost-tracked allocation id, alive or dead, is below the
+    next id (`metas` + `MemWF.live_lt`/`MemWF.dead_lt`). -/
 theorem CohG.cur_meta_lt {σ : Mem} {mm : SpikeHeapF MetaCell} {mb : SpikeHeapF CerbMem.AbsByte}
     {mk : SpikeHeapF AllocCursor} (hG : CohG σ mm mb mk)
     (hne : Iris.Std.PartialMap.get? mk 0 ≠ none) (id : Int) (mc : MetaCell)
     (hget : Iris.Std.PartialMap.get? mm id = some mc) : id < σ.nextAllocId := by
-  obtain ⟨al, hal, -⟩ := (hG.metas id mc hget).alloc
-  exact (hG.wf hne).live_lt id al hal
-
-/-- Every ghost-tracked allocation sits at or above the cursor
-    (`metas` + `MemWF.cursor_lo`). -/
-theorem CohG.cur_meta_lo {σ : Mem} {mm : SpikeHeapF MetaCell} {mb : SpikeHeapF CerbMem.AbsByte}
-    {mk : SpikeHeapF AllocCursor} (hG : CohG σ mm mb mk)
-    (hne : Iris.Std.PartialMap.get? mk 0 ≠ none) (id : Int) (mc : MetaCell)
-    (hget : Iris.Std.PartialMap.get? mm id = some mc) : σ.lastAddress ≤ mc.addr := by
-  obtain ⟨al, hal, hbase, -⟩ := (hG.metas id mc hget).alloc
-  have := (hG.wf hne).cursor_lo id al hal
-  rw [hbase] at this
-  exact this
+  have hm := hG.metas id mc hget
+  cases ha : mc.alive with
+  | true =>
+    obtain ⟨-, al, hal, -⟩ := hm.live ha
+    exact (hG.wf hne).live_lt id al hal
+  | false =>
+    obtain ⟨hdead, -⟩ := hm.dead ha
+    exact (hG.wf hne).dead_lt id hdead
 
 /-- The state interpretation: memory only (no driver state), coupled
     to the three ghost maps by CohG. -/
@@ -1968,7 +2176,7 @@ def decIndep (tds : CerbTags.TagDefsMap) (a : Int) (ty : ctype) (bs : List CerbM
     the in-bounds and footprint-length facts. -/
 def pointsToView [SpikeGS hlc GF] (tds : CerbTags.TagDefsMap) (id a : Int) (aty : ctype) (off : Nat)
     (dqm dqb : DFrac) (vty : ctype) (bs : List CerbMem.AbsByte) : IProp GF :=
-  iprop(metaOwn id dqm ⟨a, aty, CerbMem.sizeofCtype tds aty⟩ ∗
+  iprop(metaOwn id dqm (objCell tds a aty true false) ∗
     ⌜off + CerbMem.sizeofCtype tds vty ≤ CerbMem.sizeofCtype tds aty ∧
       bs.length = CerbMem.sizeofCtype tds vty⌝ ∗
     bytesOwn (a + (off : Int)) dqb bs)
@@ -1977,7 +2185,7 @@ theorem pointsToView_iff {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF] 
     (id a : Int) (aty : ctype) (off : Nat) (dqm dqb : DFrac) (vty : ctype)
     (bs : List CerbMem.AbsByte) :
     pointsToView tds (GF := GF) id a aty off dqm dqb vty bs ⊣⊢
-      iprop(metaOwn id dqm ⟨a, aty, CerbMem.sizeofCtype tds aty⟩ ∗
+      iprop(metaOwn id dqm (objCell tds a aty true false) ∗
         ⌜off + CerbMem.sizeofCtype tds vty ≤ CerbMem.sizeofCtype tds aty ∧
           bs.length = CerbMem.sizeofCtype tds vty⌝ ∗
         bytesOwn (a + (off : Int)) dqb bs) := .rfl
@@ -2089,7 +2297,7 @@ theorem pointsToView_split (tds : CerbTags.TagDefsMap) (id a : Int) (aty : ctype
   have hlapp : (bs₁ ++ bs₂).length = bs₁.length + bs₂.length :=
     List.length_append
   have hlen₂ : bs₂.length = CerbMem.sizeofCtype tds vty₂ := by omega
-  icases (metaOwn_fractional id ⟨a, aty, CerbMem.sizeofCtype tds aty⟩ q₁ q₂).1 $$ Hm
+  icases (metaOwn_fractional id (objCell tds a aty true false) q₁ q₂).1 $$ Hm
     with ⟨Hm₁, Hm₂⟩
   icases (bytesOwn_append (a + (off : Int)) dqb bs₁ bs₂).1 $$ Hb with ⟨Hb₁, Hb₂⟩
   isplitl [Hm₁ Hb₁]
@@ -2126,7 +2334,7 @@ theorem pointsToView_join (tds : CerbTags.TagDefsMap) (id a : Int) (aty : ctype)
   obtain ⟨hbound₁, hlen₁⟩ := hp₁
   obtain ⟨hbound₂, hlen₂⟩ := hp₂
   isplitl [Hm₁ Hm₂]
-  · iapply (metaOwn_fractional id ⟨a, aty, CerbMem.sizeofCtype tds aty⟩ q₁ q₂).2
+  · iapply (metaOwn_fractional id (objCell tds a aty true false) q₁ q₂).2
     isplitl [Hm₁]
     · iexact Hm₁
     · iexact Hm₂
@@ -2271,7 +2479,7 @@ theorem pointsToView_fractional (tds : CerbTags.TagDefsMap) (id a : Int) (aty : 
   unfold pointsToView
   constructor
   · iintro ⟨Hm, %hp, Hb⟩
-    icases (metaOwn_fractional id ⟨a, aty, CerbMem.sizeofCtype tds aty⟩ q₁ q₂).1 $$ Hm
+    icases (metaOwn_fractional id (objCell tds a aty true false) q₁ q₂).1 $$ Hm
       with ⟨Hm₁, Hm₂⟩
     icases (bytesOwn_fractional (a + (off : Int)) q₁ q₂ bs).1 $$ Hb with ⟨Hb₁, Hb₂⟩
     isplitl [Hm₁ Hb₁]
@@ -2289,7 +2497,7 @@ theorem pointsToView_fractional (tds : CerbTags.TagDefsMap) (id a : Int) (aty : 
       · iexact Hb₂
   · iintro ⟨⟨Hm₁, %hp, Hb₁⟩, Hm₂, -, Hb₂⟩
     isplitl [Hm₁ Hm₂]
-    · iapply (metaOwn_fractional id ⟨a, aty, CerbMem.sizeofCtype tds aty⟩ q₁ q₂).2
+    · iapply (metaOwn_fractional id (objCell tds a aty true false) q₁ q₂).2
       isplitl [Hm₁]
       · iexact Hm₁
       · iexact Hm₂
@@ -2312,11 +2520,10 @@ theorem pointsToView_agree (tds : CerbTags.TagDefsMap) (id a a' : Int) (aty aty'
       (⌜a = a' ∧ aty = aty'⌝ : IProp GF) := by
   unfold pointsToView
   iintro ⟨⟨Hm, -, -⟩, Hm', -, -⟩
-  ihave %h : ⌜(⟨a, aty, CerbMem.sizeofCtype tds aty⟩ : MetaCell) =
-      ⟨a', aty', CerbMem.sizeofCtype tds aty'⟩⌝ $$ [Hm Hm']
+  ihave %h : ⌜objCell tds a aty true false = objCell tds a' aty' true false⌝ $$ [Hm Hm']
   · iapply metaOwn_agree id dqm dqm' _ _ $$ [$Hm $Hm']
   ipureintro
-  simp only [MetaCell.mk.injEq] at h
+  simp only [objCell, MetaCell.mk.injEq, Option.some.injEq] at h
   exact ⟨h.1, h.2.1⟩
 
 /-- CELL FRACTIONAL: whole-cell ownership splits at any fraction sum. -/
@@ -2440,7 +2647,7 @@ theorem pointsToCell_combine (tds : CerbTags.TagDefsMap) (pv : CerbMem.PointerVa
     analogue). Persistent: metadata is immutable in this fragment, so
     the knowledge holds forever once obtained. -/
 def allocMeta (tds : CerbTags.TagDefsMap) (id a : Int) (aty : ctype) : IProp GF :=
-  metaOwn id .discard ⟨a, aty, CerbMem.sizeofCtype tds aty⟩
+  metaOwn id .discard (objCell tds a aty true false)
 
 /-- THE PERSISTENCE LAW. -/
 instance allocMeta_persistent (tds : CerbTags.TagDefsMap) (id a : Int) (aty : ctype) :
@@ -2455,11 +2662,10 @@ theorem allocMeta_agree (tds : CerbTags.TagDefsMap) (id a a' : Int) (aty aty' : 
       (⌜a = a' ∧ aty = aty'⌝ : IProp GF) := by
   unfold allocMeta
   iintro ⟨H, H'⟩
-  ihave %h : ⌜(⟨a, aty, CerbMem.sizeofCtype tds aty⟩ : MetaCell) =
-      ⟨a', aty', CerbMem.sizeofCtype tds aty'⟩⌝ $$ [H H']
+  ihave %h : ⌜objCell tds a aty true false = objCell tds a' aty' true false⌝ $$ [H H']
   · iapply metaOwn_agree id .discard .discard _ _ $$ [$H $H']
   ipureintro
-  simp only [MetaCell.mk.injEq] at h
+  simp only [objCell, MetaCell.mk.injEq, Option.some.injEq] at h
   exact ⟨h.1, h.2.1⟩
 
 /-- PERSISTENT IN-BOUNDS KNOWLEDGE: `n` bytes at offset `off` of the
@@ -2810,7 +3016,7 @@ theorem CohG.storeRange {σ : Mem} {mm : SpikeHeapF MetaCell}
     CohG (writeBytesTo σ a bs') mm (insertRange mb a bs') mk := by
   have hnext : (writeBytesTo σ a bs').nextAllocId = σ.nextAllocId := rfl
   have hlast : (writeBytesTo σ a bs').lastAddress = σ.lastAddress := rfl
-  refine ⟨?_, hG.metas_disj, ?_, hG.cursor_key, ?_, ?_, ?_⟩
+  refine ⟨?_, hG.metas_disj, ?_, hG.cursor_key, ?_, ?_, ?_, ?_⟩
   · intro id mc hget
     exact (hG.metas id mc hget).writeBytes a bs'
   · intro k b hget
@@ -2842,6 +3048,9 @@ theorem CohG.storeRange {σ : Mem} {mm : SpikeHeapF MetaCell}
       exact hG.cur_byte_lo hne k b₀ hb₀
     · rw [if_neg hin] at hget
       exact hG.cur_byte_lo hne k b hget
+  · intro hne id mc hget
+    rw [hlast]
+    exact hG.cur_meta_lo hne id mc hget
 
 /-- CohG survives an allocation: the cursor advances downward, the
     fresh metadata and the fresh (unspecified) byte range join the
@@ -2866,8 +3075,7 @@ theorem CohG.create {σ : Mem} {mm : SpikeHeapF MetaCell}
         (freshBase σ.lastAddress alignN (sizeofCtype tds ty))
         (List.replicate (sizeofCtype tds ty) undefByte))
       (Iris.Std.PartialMap.insert mm σ.nextAllocId
-        ⟨freshBase σ.lastAddress alignN (sizeofCtype tds ty), ty,
-          sizeofCtype tds ty⟩)
+        (objCell tds (freshBase σ.lastAddress alignN (sizeofCtype tds ty)) ty true false))
       (Iris.Std.PartialMap.union
         (rangeMap (freshBase σ.lastAddress alignN (sizeofCtype tds ty))
           (List.replicate (sizeofCtype tds ty) undefByte)) mb)
@@ -2990,41 +3198,37 @@ theorem CohG.create {σ : Mem} {mm : SpikeHeapF MetaCell}
       else σ.allocations.get? id := by
     intro id
     simp [Std.TreeMap.get?_eq_getElem?, Std.TreeMap.getElem?_insert]
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-  · -- metas
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  · -- metas: the fresh cell is live, writable, typed, not dynamic;
+    -- the old cells see none of their three readouts change
     intro id mc hget
     by_cases hid : id = σ.nextAllocId
     · subst hid
       rw [Iris.Std.get?_insert_eq rfl] at hget
-      obtain rfl : (⟨base, ty, sizeofCtype tds ty⟩ : MetaCell) = mc := Option.some.inj hget
-      refine ⟨?_, ?_, hatom⟩
+      obtain rfl : objCell tds base ty true false = mc := Option.some.inj hget
+      refine ⟨fun _ => ⟨?_, ?_⟩, fun h => by simp at h,
+        by simpa [atomicTyOpt] using hatom, fun h => by simp at h⟩
       · rw [hdead']
         exact hG.cur_dead hcurne _ (Int.le_refl _)
       · refine ⟨Allocation.mk base (sizeofCtype tds ty : Int) (some ty)
-          .IsWritable .Unexposed pref, ?_, rfl, rfl, rfl, rfl⟩
+          .IsWritable .Unexposed pref, ?_, rfl, rfl, rfl, ⟨fun _ => rfl, fun _ => rfl⟩⟩
         rw [halloc', hallocs_get, if_pos rfl]
     · rw [Iris.Std.get?_insert_ne (fun h => hid h.symm)] at hget
-      have hold := hG.metas id mc hget
-      refine ⟨?_, ?_, hold.nonAtomic⟩
-      · rw [hdead']
-        exact hold.dead
-      · obtain ⟨al, hal, h1, h2, h3, h4⟩ := hold.alloc
-        refine ⟨al, ?_, h1, h2, h3, h4⟩
-        rw [halloc', hallocs_get, if_neg (fun h => hid h.symm)]
-        exact hal
+      refine (hG.metas id mc hget).of_fields hdead' ?_ rfl
+      rw [halloc', hallocs_get, if_neg (fun h => hid h.symm)]
   · -- metas_disj
     intro i j mci mcj hne hgi hgj
     by_cases hi : i = σ.nextAllocId
     · subst hi
       rw [Iris.Std.get?_insert_eq rfl] at hgi
-      obtain rfl : (⟨base, ty, sizeofCtype tds ty⟩ : MetaCell) = mci := Option.some.inj hgi
+      obtain rfl : objCell tds base ty true false = mci := Option.some.inj hgi
       rw [Iris.Std.get?_insert_ne hne] at hgj
       exact .inl (hmeta_hi j mcj hgj)
     · rw [Iris.Std.get?_insert_ne (fun h => hi h.symm)] at hgi
       by_cases hj : j = σ.nextAllocId
       · subst hj
         rw [Iris.Std.get?_insert_eq rfl] at hgj
-        obtain rfl : (⟨base, ty, sizeofCtype tds ty⟩ : MetaCell) = mcj := Option.some.inj hgj
+        obtain rfl : objCell tds base ty true false = mcj := Option.some.inj hgj
         exact .inr (hmeta_hi i mci hgi)
       · rw [Iris.Std.get?_insert_ne (fun h => hj h.symm)] at hgj
         exact hG.metas_disj i j mci mcj hne hgi hgj
@@ -3072,6 +3276,18 @@ theorem CohG.create {σ : Mem} {mm : SpikeHeapF MetaCell}
       simp only [Option.orElse] at hget
       exact Int.le_trans (Int.le_add_of_nonneg_right (Int.natCast_nonneg _))
         (hbyte_hi k b hget)
+  · -- cur_meta_lo: the fresh cell IS the new cursor; every old cell
+    -- ends at or below it
+    intro _ id mc hget
+    rw [hlast']
+    by_cases hid : id = σ.nextAllocId
+    · subst hid
+      rw [Iris.Std.get?_insert_eq rfl] at hget
+      obtain rfl : objCell tds base ty true false = mc := Option.some.inj hget
+      exact Int.le_refl _
+    · rw [Iris.Std.get?_insert_ne (fun h => hid h.symm)] at hget
+      exact Int.le_trans (Int.le_add_of_nonneg_right (Int.natCast_nonneg _))
+        (hmeta_hi id mc hget)
 
 end CohGLemmas
 

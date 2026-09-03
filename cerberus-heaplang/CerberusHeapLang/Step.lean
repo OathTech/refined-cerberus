@@ -977,6 +977,14 @@ def ndProj {α : Type} :
   | (NDactive x, st') => some (x, st')
   | _ => none
 
+/-- One-layer application of an ndM computation — the raw
+    `nd_action × state` pair `applyMemM` projects (killed outcomes stay
+    visible; the driver collapse's `runOne` layer, DriverCollapse.lean,
+    is this same function at the driver's state). -/
+def runOne {a info err cs st : Type} (m : ndM a info err cs st) (s : st) :
+    nd_action a info err cs st × st :=
+  match m with | ND f => f s
+
 theorem applyMemM_ND {α : Type}
     (f : Mem → nd_action α String mem_error (mem_constraint CerbMem.IntegerValue) CerbMem.MemState × Mem)
     (σ : Mem) : applyMemM (ND f) σ = ndProj (f σ) := rfl

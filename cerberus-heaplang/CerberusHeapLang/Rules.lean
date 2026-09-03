@@ -135,7 +135,7 @@ theorem pointsToCell_iff [SpikeGS hlc GF] (tds : CerbTags.TagDefsMap)
     (pv : CerbMem.PointerValue) (dq : DFrac) (ty : ctype) (bs : List CerbMem.AbsByte) :
     pointsToCell (GF := GF) tds pv dq ty bs ⊣⊢
       iprop(∃ (i : Int) (a : Int),
-        ⌜pv = cellPtr i a⌝ ∗ metaOwn i dq ⟨a, ty, CerbMem.sizeofCtype tds ty⟩ ∗
+        ⌜pv = cellPtr i a⌝ ∗ metaOwn i dq (objCell tds a ty true false) ∗
         bytesOwn a dq bs ∗
         ⌜bs.length = CerbMem.sizeofCtype tds ty ∧ decIndep tds a ty bs⌝) := .rfl
 
@@ -275,7 +275,7 @@ theorem store_atomic [SpikeGS hlc GF] {M : MachineCtx}
     with ⟨%i, %addr, %Hpv, Hm, Hb, %Hpure⟩
   subst Hpv
   obtain ⟨hlen, hdec⟩ := Hpure
-  ihave %Hgetm : ⌜Iris.Std.PartialMap.get? mm i = some (⟨addr, ty, CerbMem.sizeofCtype M.tagDefs ty⟩ : MetaCell)⌝
+  ihave %Hgetm : ⌜Iris.Std.PartialMap.get? mm i = some (objCell M.tagDefs addr ty true false)⌝
       $$ [Hmi Hm]
   · ihave >%h := metaHeap_valid $$ [$Hmi $Hm]
     itrivial
@@ -376,7 +376,7 @@ theorem load_atomic [SpikeGS hlc GF] {M : MachineCtx}
     with ⟨%i, %addr, %Hpv, Hm, Hb, %Hpure⟩
   subst Hpv
   obtain ⟨hlen, hdec⟩ := Hpure
-  ihave %Hgetm : ⌜Iris.Std.PartialMap.get? mm i = some (⟨addr, ty, CerbMem.sizeofCtype M.tagDefs ty⟩ : MetaCell)⌝
+  ihave %Hgetm : ⌜Iris.Std.PartialMap.get? mm i = some (objCell M.tagDefs addr ty true false)⌝
       $$ [Hmi Hm]
   · ihave >%h := metaHeap_valid $$ [$Hmi $Hm]
     itrivial
@@ -471,7 +471,7 @@ theorem loadAt_atomic [SpikeGS hlc GF] {M : MachineCtx}
   icases (pointsToView_iff M.tagDefs id a aty off dqm dqb vty bs).mp $$ Hv
     with ⟨Hm, %Hpure, Hb⟩
   obtain ⟨hbound, hlenbs⟩ := Hpure
-  ihave %Hgetm : ⌜Iris.Std.PartialMap.get? mm id = some (⟨a, aty, CerbMem.sizeofCtype M.tagDefs aty⟩ : MetaCell)⌝
+  ihave %Hgetm : ⌜Iris.Std.PartialMap.get? mm id = some (objCell M.tagDefs a aty true false)⌝
       $$ [Hmi Hm]
   · ihave >%h := metaHeap_valid $$ [$Hmi $Hm]
     itrivial
@@ -561,7 +561,7 @@ theorem storeAt_atomic [SpikeGS hlc GF] {M : MachineCtx}
   icases (pointsToView_iff M.tagDefs id a aty off dqm (.own 1) vty bs).mp $$ Hv
     with ⟨Hm, %Hpure, Hb⟩
   obtain ⟨hbound, hlenbs⟩ := Hpure
-  ihave %Hgetm : ⌜Iris.Std.PartialMap.get? mm id = some (⟨a, aty, CerbMem.sizeofCtype M.tagDefs aty⟩ : MetaCell)⌝
+  ihave %Hgetm : ⌜Iris.Std.PartialMap.get? mm id = some (objCell M.tagDefs a aty true false)⌝
       $$ [Hmi Hm]
   · ihave >%h := metaHeap_valid $$ [$Hmi $Hm]
     itrivial
@@ -733,8 +733,8 @@ theorem create_atomic [SpikeGS hlc GF] {M : MachineCtx}
       have := HG.cur_meta_lt (by rw [Hgetc]; simp) _ _ hg
       omega
   imod (metaHeap_alloc
-    (MetaCell.mk (freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype M.tagDefs ty)) ty
-      (CerbMem.sizeofCtype M.tagDefs ty))
+    (objCell M.tagDefs (freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype M.tagDefs ty))
+      ty true false)
     hfreshm) $$ [$Hmi] with ⟨Hmi, Hmnew⟩
   have hfreshb : (rangeMap
       (freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype M.tagDefs ty))
@@ -764,8 +764,8 @@ theorem create_atomic [SpikeGS hlc GF] {M : MachineCtx}
   isplitl [Hmi Hbi Hki]
   · iapply (stateInterp_iff _ _ _ _).mpr
     iexists (Iris.Std.PartialMap.insert mm σ₁.nextAllocId
-        ⟨freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype M.tagDefs ty), ty,
-          CerbMem.sizeofCtype M.tagDefs ty⟩),
+        (objCell M.tagDefs (freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype M.tagDefs ty))
+          ty true false)),
       (Iris.Std.PartialMap.union (rangeMap
         (freshBase σ₁.lastAddress alignN (CerbMem.sizeofCtype M.tagDefs ty))
         (List.replicate (CerbMem.sizeofCtype M.tagDefs ty) undefByte)) mb),

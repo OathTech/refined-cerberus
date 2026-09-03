@@ -674,10 +674,8 @@ theorem allocateObject_layer (tds : CerbTags.TagDefsMap) (tid : Nat) (pref : pre
     | exact Or.inr ⟨_, _, rfl⟩
     | split)
 
-/-- `applyMemM` is the active projection of the one-layer result. -/
-theorem applyMemM_eq_ndProj {α : Type} (m : CerbMem.memM α) (σ : Mem) :
-    applyMemM m σ = ndProj (runOne m σ) := by
-  rcases m with ⟨g⟩; rfl
+/-! `applyMemM_eq_ndProj` (`applyMemM` is the active projection of the
+one-layer result) lives in Heap.lean since K1. -/
 
 /-- A one-layer memory operation that `applyMemM` refuses is KILLED. -/
 theorem applyMemM_none_killed {α : Type} {m : CerbMem.memM α} {σ : Mem}

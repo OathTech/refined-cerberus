@@ -92,12 +92,10 @@ open Lem_Basic_classes Lem_Maybe Lem_List
 /-! ## The runOne layer (the ND collapse): one-layer application of
 an ndM tree -/
 
-/-- One-layer application of an ndM computation — the driver-level
-    analog of `applyMemM` (Step.lean), kept at the raw
-    `nd_action × state` level so killed outcomes stay visible. -/
-def runOne {a info err cs st : Type} (m : ndM a info err cs st) (s : st) :
-    nd_action a info err cs st × st :=
-  match m with | ND f => f s
+/-! `runOne` — one-layer application of an ndM computation at the raw
+`nd_action × state` level — lives in Step.lean beside `applyMemM`/
+`ndProj` since K1 (the heap layer states the engine's KILLED store arm
+with it, `storeM_readonly_kills`). -/
 
 private theorem lemDefaultFuel_succ : lemDefaultFuel = Nat.succ 999999 := rfl
 

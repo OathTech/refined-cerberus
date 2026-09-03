@@ -240,7 +240,7 @@ theorem MetaByteOf.cohG {tds : CerbTags.TagDefsMap} {σ : Mem} {m : SpikeHeapF S
     CohG σ mm mb (∅ : SpikeHeapF AllocCursor) := by
   have hnone : ∀ k : Int, get? (∅ : SpikeHeapF AllocCursor) k = none :=
     fun k => Iris.Std.LawfulPartialMap.get?_empty k
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · intro id mc hget
     obtain ⟨c, hc, rfl⟩ := h.meta_sub id mc hget
     exact (hcoh.cells id c hc).toMetaCoh
@@ -263,6 +263,8 @@ theorem MetaByteOf.cohG {tds : CerbTags.TagDefsMap} {σ : Mem} {m : SpikeHeapF S
   · intro c hget
     rw [hnone 0] at hget
     cases hget
+  · intro hne
+    exact absurd (hnone 0) hne
   · intro hne
     exact absurd (hnone 0) hne
   · intro hne
@@ -507,7 +509,7 @@ theorem LaunchCoh.cohG {tds : CerbTags.TagDefsMap} {σ : Mem} {m : SpikeHeapF Sp
         ⟨σ.lastAddress, σ.nextAllocId⟩) := by
   have base := hmbo.cohG h.coh
   refine ⟨base.metas, base.metas_disj, base.bytes,
-    ?_, ?_, fun _ => h.wf, ?_⟩
+    ?_, ?_, fun _ => h.wf, ?_, ?_⟩
   · -- cursor_key
     intro k c hget
     by_cases hk : k = 0
@@ -529,6 +531,15 @@ theorem LaunchCoh.cohG {tds : CerbTags.TagDefsMap} {σ : Mem} {m : SpikeHeapF Sp
     have hlo := h.wf.cursor_lo i al hal
     rw [hbase] at hlo
     exact Int.le_trans hlo hk1
+  · -- cur_meta_lo: a tracked metadata cell is a footprint cell's, i.e.
+    -- a live allocation's, which the global invariant places at or
+    -- above the cursor
+    intro _ id mc hget
+    obtain ⟨c, hc, rfl⟩ := hmbo.meta_sub id mc hget
+    obtain ⟨al, hal, hbase, -⟩ := (h.coh.cells id c hc).alloc
+    have hlo := h.wf.cursor_lo id al hal
+    rw [hbase] at hlo
+    exact hlo
 
 /-- The launched cursor key is NONEMPTY (merge-row-3 must-prove,
     stated once): key 0 of the launched cursor map holds the real
