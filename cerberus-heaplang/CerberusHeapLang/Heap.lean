@@ -2173,15 +2173,17 @@ THE CAMERA is iris-lean's authoritative (ℕ, +): `Auth Credit` with `Credit
 (Iris/Algebra/Numbers.lean — op is `+`, unit `0`, inclusion is `≤`), the
 SAME camera iris-lean's later credits use (Iris/Instances/Lib/
 LaterCredits.lean: `lc i := ◯ i`, `lc_supply i := ● i`, `lc_split`,
-`lc_supply_bound`, `lc_decrease_supply` — the budget laws below are those
-four, renamed). Its functor slot `AuthURF (constOF Credit)` is already in
+`lc_supply_bound`, `lc_decrease_supply`, `lc_increase_supply` — the budget
+laws below are those five, renamed). Its functor slot `AuthURF (constOF Credit)` is already in
 every `GF` through `InvGpreS.toLcGpreS.lc_elem`, so the budget adds NO
 functor to the ghost state — only a fresh ghost name (`BudgetGS.name`;
 the later credits live at `LcGS.lc_name`). `allocBudget n` is the
 fragment `◯ n` (the client's ∗-splittable capacity, `allocBudget_split`);
 `budgetAuth B` is the authority `● B`, held by the state interpretation
 under THE COUPLING INEQUALITY `B ≤ headroom lastAddress` (`budgetInterp`
-below; `allocBudget_le_headroom`). RefinedC has no counterpart: Caesium
+below; a fragment is bounded by the authority, `budgetAuth_bound`, and the
+authority by the cursor's headroom, which `CohG.cursor` ties to the real
+`lastAddress`). RefinedC has no counterpart: Caesium
 never refuses an allocation (`alloc_new_blocks`, theories/caesium/lang.v —
 no failure arm), so the tiebreaker is silent; the shape is the classical
 additive capacity both professor reviews asked for (review-1 Q1,
