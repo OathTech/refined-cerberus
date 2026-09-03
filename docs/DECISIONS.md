@@ -1030,3 +1030,24 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   clause; the new record's own base satisfies it by reflexivity); all
   nine components verified against every `MemState` writer; snapshot
   re-derived byte-identical; ten cones trio-exact.
+- **2026-09-03 [AGENT] KILL/FREE K1 LANDED** (record:
+  `cerberus-heaplang/docs/2026-09-03_k1-notes.md`): `MetaCell` gains
+  `alive`, `readonly`, `dynamic : Bool` and `ty : Option ctype` (regions
+  untyped), each field cited to its engine writer; coupling `MetaCoh`:
+  live → record present with matching base/size/type and read-only
+  agreement; dead → dead-listed and record absent; dynamic → base ∈
+  dynamicAddrs (the ONE direction the engine preserves, per the K0 audit's
+  N-1; the converse is not claimed). The `dynamic` flag is added NOW
+  ([AGENT], RefinedC `al_kind` tiebreaker; deferring would re-touch every
+  literal site). New bundles: `regionOwn`/`regionView` (split/join/
+  fractional/agree + the readout K3's `free` premise needs),
+  `readonlyCell` (+ `load_atomic_readonly`; NO store rule — the engine
+  fact `storeM_readonly_kills`), `deadObj`/`deadRegion` (persistent).
+  Frozen bundles are defined at alive/writable/typed, so 0 public
+  statements changed (snapshot: ADDED 45 / REMOVED 1 / CHANGED 24, all
+  internal). `cur_meta_lo` RETURNS as a `CohG` field (K0 had derived it):
+  with dead cells in the ghost map the bound is not derivable from
+  `MemWF` (the record is erased); projection type byte-identical. The
+  read-only, region and dead bundles have NO producer in this fragment
+  (stated on every surface; producers are K2/K3). Pins 165 → 185. Range
+  audit (b374671..29f475f) dispatched before merge.
