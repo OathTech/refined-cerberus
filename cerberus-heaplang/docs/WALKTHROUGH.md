@@ -1641,6 +1641,6 @@ the `#print axioms` recipe are in the README, "How to build and verify".
 
 Records — design history, decision provenance, the audits and reviews —
 are the dated files under [`docs/`](.) (the README's "Records" section
-lists the current ones) and `../docs/DECISIONS.md`; the README carries
+lists the current ones) and `../../docs/DECISIONS.md`; the README carries
 the claims surface, the trust diagram and the register of divergences
 and limitations.

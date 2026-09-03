@@ -379,7 +379,7 @@ THE OTHER OPEN ITEMS:
   cell — no coupling change, as predicted; faces `wps_load_region_at`/
   `wps_store_region_at`, the whole-region `wps_load_regionOwn_at`/
   `wps_store_regionOwn_at`, total twins; manifest rows `Frag.load`/
-  `Frag.store` → the region rules (22 constructors, 25 rule rows, 0 red,
+  `Frag.store` → the region rules (23 constructors, 25 rule rows, 0 red,
   16 exhibit modules). What the engine checks at an untyped allocation
   is type-blind — the dead list, the record, bounds against the record's
   size, writability, and `isAtomicMemberAccess = false` at `alloc.ty =
@@ -429,7 +429,7 @@ THE OTHER OPEN ITEMS:
   `region_loop_certified_total`/`region_loop_certified_production`
   (RegionLoopExhibit.lean), every advertised kill/free/alloc law with an
   exhibit consumer; K5 THE REGION ACCESS RULES and the malloc'd linked
-  list (above; the manifest now 22 constructors, 25 rule rows, 0 red, 16
+  list (above; the manifest now 23 constructors, 25 rule rows, 0 red, 16
   exhibit modules), plus the public `deadObj_readout`/`deadRegion_readout`
   (asked for by the K4 range audit). Follow-up still named in the record: the cursor
   ghost heap as a proof device (no client owns the cursor since K2.5 —

@@ -5,7 +5,7 @@ links this file; findings are graded against it.
 
 **What we are building.** A small, well-designed, minimal
 Reynolds/O'Hearn-style separation logic over the real cerberus-lean
-Core semantics (cerberus-heaplang), as the derisking demo for the
+Core semantics (cerberus-heaplang), as the derisking demo for the (longer-term, branch `refinedc/dev`)
 RefinedC-architecture port. The trust base is the cerberus-lean
 operational semantics plus the proof artifacts themselves.
 

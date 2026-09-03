@@ -1,5 +1,12 @@
 # Decisions register
 
+Append-only and CHRONOLOGICAL: later entries govern earlier ones where
+they conflict, and rulings are never edited in place — read the tail
+for what stands. In particular the 2026-08-29 north-star entries below
+describe the longer-term RefinedC-family direction, which the
+2026-09-02/03 entries scope to branch `refinedc/dev`; `main` is the
+cerberus-heaplang demo (see the root README).
+
 Append-only log of design rulings and their provenance. One entry
 per ruling: date, [USER]/[AGENT] tag, the ruling, pointer to the
 fuller record. CLAUDE.md is working practices ONLY and never logs

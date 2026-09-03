@@ -756,10 +756,9 @@ Build completed successfully (… jobs).
 (pin count and `Audit.lean` line as at the time of writing, 2026-09-03;
 the pin list grows with the exports)
 
-The trust base is this build with its in-build sweep, the root
-package's build with its own sweep, and a grep for banned proof methods
-(`native_decide`/`bv_decide`/`ofReduce*`) over both trees — the three
-checks `scripts/test_unit.sh --fast` runs. The full `scripts/test_unit.sh`
+The trust base is this build with its in-build sweep and a grep for
+banned proof methods (`native_decide`/`bv_decide`/`ofReduce*`) over the
+tree — the two checks `scripts/test_unit.sh --fast` runs. The full `scripts/test_unit.sh`
 adds two drift reports: the capability manifest is regenerated and
 diffed, and the import direction semantics → heap → rules → adequacy →
 clients is checked. Ask the kernel yourself (from `cerberus-heaplang/`):

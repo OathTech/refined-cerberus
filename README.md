@@ -5,8 +5,8 @@ The product of this repository is the package
 separation logic for a fragment of Cerberus's Core intermediate language,
 built on iris-lean, whose exported theorems are statements about the
 execution and memory states of the
-[cerberus-lean](../cerberus-lean) semantics (the Lean 4 port of the
-Cerberus C semantics). Start with its normative architecture statement,
+cerberus-lean semantics (the Lean 4 port of the Cerberus C semantics,
+a sibling repository — see Prerequisites). Start with its normative architecture statement,
 [`cerberus-heaplang/ARCHITECTURE.md`](cerberus-heaplang/ARCHITECTURE.md);
 its [README](cerberus-heaplang/README.md) and
 [walkthrough](cerberus-heaplang/docs/WALKTHROUGH.md) follow from there.
@@ -28,6 +28,17 @@ notes) while it is brought to a presentable state; nothing of it is on
 `main`, and nothing here should be read as a port of RefinedC.
 
 ## Building
+
+Prerequisites: a BUILT checkout of cerberus-lean as the sibling directory
+`../cerberus-lean`, at (or content-equal on the semantics-bearing paths to)
+the commit in `scripts/semantics-pin.env`, built with cerberus-lean's own
+toolchain (its `lean_frontend/generated`, `native`, `.lake` are copied
+into the workspace here — they are not in any git tree). The setup
+script fails closed, naming the mismatch, if the sibling is absent or
+differs from the pin. Lean 4.32.2 via elan. The Lake dependencies are
+git-pinned and resolve either from the network or from local mirrors
+via a `GIT_CONFIG_GLOBAL` redirect file (this development environment
+uses the latter; `scripts/capped` loads it when present).
 
 ```bash
 scripts/setup-cerberus-dep.sh            # once: the pinned cerberus-lean workspace (see scripts/semantics-pin.env)
