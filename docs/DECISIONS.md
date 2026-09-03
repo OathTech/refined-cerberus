@@ -1164,3 +1164,22 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   successful size-0 region: the out-of-rule shape is `size ≤ 0 ∧ align ≤
   1`) — folded into K4. Every audit's merge recommendation: merge (after
   the named doc fixes). No merges overnight per the ruling.
+- **2026-09-03 [AGENT] KILL/FREE K4 LANDED — AND A GAP: NO REGION ACCESS RULES**
+  (records: `cerberus-heaplang/docs/2026-09-03_k4-notes.md`,
+  `…_kill-free-arc-record.md`): DisposeExhibit (walk-and-kill a created
+  list; `dispose_list_certified_production` over the shipped
+  `runND ∘ drive ∘ initial_driver_state`, both node ids dead and erased)
+  and RegionLoopExhibit (n regions from one linear budget, the budget as
+  the loop invariant split per iteration; `region_loop_certified_production`).
+  Both production lanes went through `loop_step_frag` unchanged. Pins
+  248 → 269. FINDING (stop-and-report, the arc's own): the chartered
+  malloc'd LINKED list is NOT statable — no load/store rule exists over
+  `regionOwn`/`regionView` (every access rule is over the object
+  bundles; a region↔object coercion is unsupported by design: `MetaCoh`
+  pins `ty := none`/`dynamic := true` to the engine record). Dynamic
+  storage can be allocated and freed but not read or written — not
+  Reynolds/O'Hearn's `cons`. Disposition [AGENT]: K5 REGION ACCESS RULES
+  (typed load/store at an offset over `regionView`, via the existing memM
+  seams `loadM_live`/`storeM_live` which hold at any metadata cell) plus
+  the malloc'd linked list exhibit, BEFORE the re-pin; the region loop
+  stands as the alloc/free exhibit. K3-audit doc items applied.
