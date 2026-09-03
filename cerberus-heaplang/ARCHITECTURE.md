@@ -12,10 +12,11 @@ types and the functions `step_ctx`, `action_request_sequential2`,
 `loadM`/`storeM`/`allocateObject`, and the shipped driver composite
 `CerbND.runND (drive fmapEmpty false file args) (initial_driver_state
 sup file fs).1`. Nothing in this package has semantic authority of its
-own. Every exported execution theorem is either explicitly provisional
-over driveU or reaches the shipped engine; every public logical rule
-has a kernel-checked adequacy path through the package mirror to the
-engine. (The reusable rules and assertion laws are statements in Iris
+own. Every exported execution theorem reaches the shipped engine — the
+closed statements through that composite, the generic ones through the
+driver's own per-thread loop `drive_nonmemory_steps_aux2_lemFuel` at
+every fuel (§4, §6) — and every public logical rule has a kernel-checked
+adequacy path through the package mirror to the engine. (The reusable rules and assertion laws are statements in Iris
 over the mirror `Step` and the ghost resources, §3, §6; what makes them
 statements about the engine is that adequacy path, not their own
 text.) A disagreement between any definition here and the engine is a
@@ -58,27 +59,28 @@ wakeup-free transition to the state embedding the mirror's successor.
 The round is stated at the loop body (no fuel dependency; its
 loop-level reading `CerberusRound.loop_step` holds at every fuel), in
 the driver's own vocabulary only. The hand-written discharge
-`dischargeStep`/`outcomesU` is a proof device of the `driveU` lane: no
-EXPORT's statement mentions it — the lemmas that do (`stepDischarge_run`
-over `dischargeStep`, `outcomesU_of_call`/`outcomesU_of_ret` over
-`outcomesU`, and `drive_classifyU_aux` over `driveU`) are proof devices,
-unpinned and internal, bounded by the package sweep but not exported
-(the trust rule of 2026-09-02; the 2026-09-03 standards-audit response).
-That round is the mirror's only reference: no other relational semantics is
+`dischargeStep`/`outcomesU` (Soundness.lean) is a proof device of this
+module's classification: no EXPORT's statement mentions it — the lemmas
+that do (`stepDischarge_run` over `dischargeStep`, `outcomesU_of_step`
+over `outcomesU`) are proof devices, unpinned and internal, bounded by
+the package sweep but not exported (the trust rule of 2026-09-02; the
+2026-09-03 standards-audit response), and since the fuel-lane
+restatement (2026-09-03) no adequacy lane consumes them at all. That
+round is the mirror's only reference: no other relational semantics is
 referenced or bridged, and none is needed for the root of trust, which
 is the engine (§1). The round is the REFERENCE RELATION the
 certification and the completeness below are stated over; it is
 consumed by NO adequacy export — the adequacy chain does not go through
-it: the `driveU` lanes (partial `drive_classifyU`, total `wpt_drive_aux`)
-discharge each drive step with the device lemma `outcomesU_of_step`
-(Soundness.lean, over `dischargeStep`), and the production collapse
-consumes `loop_step_frag_same` (DriverCollapse.lean, the
-control-preserving core; `prod_run_eqJ`, the single-procedure lane) and,
-through calls, the live-control `loop_step_frag` itself (which ties the
-mirror's `ctl` to the driver thread's control fields and admits the call
-and return rounds; `wpt_driver_cps` → `prod_run_eqJ_procs`, calls arc
-C4), proved independently of `CerberusRound` by its own per-redex case
-analysis (Round.lean header, "WHAT CONSUMES WHAT").
+it: BOTH adequacy lanes consume the shipped round `loop_step_frag`
+(DriverCollapse.lean — the live-control round that ties the mirror's
+`ctl` to the driver thread's control fields and admits the call and
+return rounds; its control-preserving core `loop_step_frag_same`, and
+their generalizations `loop_step_frag'`/`loop_step_frag_same'`, which
+ask for the current procedure's registration tie only at a jump),
+proved independently of `CerberusRound` by its own per-redex case
+analysis (Round.lean header, "WHAT CONSUMES WHAT"): the total lane
+through `wpt_driver_aux`/`wpt_driver_cps` (ProdLoop.lean), the partial
+lane through the fuel induction `drive_safe_aux` (Adequacy.lean).
 
 The certification is ONE-DIRECTIONAL: mirror step ⇒ shipped round;
 `step_iff_cerberusRound` is two-sided under the hypothesis that a
@@ -172,34 +174,45 @@ it is false (Rules.lean).
 
 ## 4. Adequacy
 
-Partial: `spike_step_adequacy` (Adequacy.lean) is iris-lean's
-`wp_strong_adequacy_gen` with the ghost state constructed
-(`genHeap_init`, `spikeCells_alloc`; `launchResources` under
-`LaunchCoh` for allocating programs), and `engine_adequacyU`
-(`_alloc`) turns it into the engine fact: `driveU` never kills, never
-gets stuck, and `.done v σ'` implies the readout `ψ v σ'`, at every
-drive length. Total: `wpt_drive_aux` and `wpt_engine_boundU`
-(`_alloc`, TotalAdequacy.lean) realize the budget as a drive length:
-`driveU M aids k … = .done v σ'`. Both are stated over `driveU`
-(Adequacy.lean), this package's loop {`step_ctx` → `dischargeStep`}.
+Both lanes are stated over the SHIPPED driver's own per-thread loop
+`drive_nonmemory_steps_aux2_lemFuel` (Driver.lean:346; the shipped
+`drive_nonmemory_steps_aux2` is its instance at `CerbFuel.driverFuel`,
+`CerbND.drive_nonmemory_steps_aux2_wrapper_defeq`), from any driver state
+holding the configuration at a live control, and both are proved by
+iterating the shipped round `loop_step_frag`/`loop_step_frag'` (§2).
+
+THE PARTIAL LANE (Adequacy.lean; the fuel-lane restatement, 2026-09-03):
+`spike_step_adequacy` is iris-lean's `wp_strong_adequacy_gen` with the
+ghost state constructed (`genHeap_init`, `spikeCells_alloc`;
+`launchResources` under `LaunchCoh` for allocating programs), and
+`engine_adequacy` (`_alloc`) turns it into the engine fact
+`DriverSafeCtl M th₀ e ρ ctl σ ψ`: from any driver state whose singleton
+thread holds `(e, ρ)` at the control `ctl` over `th₀`'s immutables, at
+layout state `σ`, with empty extern, the context's file and the
+registration ties (`LabeledProcs` for the callees, `CtlTied` for the
+procedures already on the control), the loop with `fl` iterations
+available — AT EVERY `fl` — either EXHAUSTS (its value is the kill
+`CerbND.fuelExhaustedKill`, the cerberus-lean fuel arc's transparent
+out-of-fuel arm, `CerbND.drive_nonmemory_steps_aux2_lemFuel_zero`) or
+returns PROGRAM-DONE for a value satisfying the readout `ψ` at the final
+memory, the final thread at the empty call stack; no other outcome (no
+kill of any other reason, no ILLTYPED refusal, no off-protocol step).
 Why the mirror suffices: `NotStuck` supplies a mirror step at every
-reachable configuration and the device lemmas `outcomesU_of_step`
-(Soundness.lean; control-preserving), `outcomesU_of_call` and
-`outcomesU_of_ret` (Adequacy.lean; calls arc C2) — proof devices,
-unpinned — make it the drive's unique outcome (`drive_classifyU_aux`,
-an unpinned device: a control-general induction under the invariant
-`ControlOk` — the saved frames plug values into fragment
-terms — and the premise `MachineCtx.FragProcs`, every declared
-procedure body in the cone: the raw WP's NotStuck does not exclude a
-call, so the partial lane must follow the engine into the callee and
-back, under the env-depth invariant `Step.env_depth`; the total `driveU`
-lane `wpt_drive_aux`/`wpt_engine_boundU` is stated at the EMPTY table
-`emptyProcSpecT`, where the call clause is unsatisfiable
-(`wpt_empty_call_false`) — left there deliberately at C4: the lane is
-scheduled for deletion in the fuel-lane restatement, and the total lane
-THROUGH CALLS is delivered on the shipped driver instead, §6);
-the shipped-round certification `engine_step_matchU` (§2) is not
-consumed by either lane.
+reachable configuration and the shipped round `loop_step_frag'` makes it
+the loop's unique next iteration (`drive_safe_aux`, an unpinned device: an
+induction on the fuel, control-general under the invariant `ControlOk` —
+the saved frames plug values into fragment terms — the env-depth
+invariant `Step.env_depth`, and the premise `MachineCtx.FragProcs`, every
+declared procedure body in the cone: the raw WP's NotStuck does not
+exclude a call, so the partial lane follows the engine into the callee
+and back through the driver's own PCALL and RETURN rounds); fuel 0 is
+the exhaustion kill, fuel 1 at a delivered value is the exhaustion of the
+drain iteration (`loop_step_done_exhaust`), fuel ≥ 2 there is
+PROGRAM-DONE (`loop_step_done`). The shipped-round certification
+`engine_step_matchU` (§2) is not consumed by either lane.
+
+THE TOTAL LANE is the driver lane (ProdLoop.lean): the same loop,
+delivery within `k + 2` iterations.
 
 THE TOTAL DRIVER LANE THROUGH CALLS (ProdLoop.lean, calls arc C4):
 `wpt_driver_cps` is the budget induction in CONTINUATION-PASSING form
@@ -230,10 +243,12 @@ available; a restatement was weighed and declined (the C4 record, §9).
 `project_triple_pure` (Adequacy.lean): any Iris triple whose
 precondition is footprint ownership and whose framed post pure-entails
 `ψ R w.val σ'` under the coupling invariant projects to the Iris-free
-`MemTripleU M ρ e P ψ` — memory splits as P ⊎ R, `driveU` never kills
-or derails, every delivered `(v, σ')` satisfies `ψ R v σ'`.
-`project_triple_pure_alloc` is the allocating twin (`allocBudget B` in
-the precondition, `MemTripleU_alloc` under `LaunchCoh … B`). The one
+`MemTriple M ctl ρ e P ψ` — memory splits as P ⊎ R, and from any driver
+state holding the configuration there the shipped loop at every fuel
+exhausts or delivers (`DriverSafeCtl`), every delivered `(v, σ')`
+satisfying `ψ R v σ'`. `project_triple_pure_alloc` is the allocating
+twin (`allocBudget B` in the precondition, `MemTriple_alloc` under
+`LaunchCoh … B`). The one
 Iris-shaped hypothesis is discharged by `cellOwn_consequence`,
 `pointsToCell_consequence`, `cellsOwn_consequence`,
 `cells_consequence` and the `pure_`/`sep_`/`or_`/`exists_consequence`
@@ -304,7 +319,9 @@ n.toNat + 9 ≤ CerbFuel.driverFuel` with its budget premise in ENGINE
 vocabulary, `hB : n.toNat * (15 + max al.toNat 1) ≤ 281474976710647`,
 bridged to the package's `regionCost`/`headroom` inside the proof by
 `ml_budget_bridge`). "Closed shipped-driver statement" means exactly these
-eight; the headline claim of this package rests on them. They are
+eight (the DECISIONS register's "nine production statements" count the
+generic pipeline theorem `prod_run_eqJ` as well — the same set); the
+headline claim of this package rests on them. They are
 reached through `wpt_driver_done`/`wpt_driver_done_alloc` and
 `prod_run_eqJ` (the single-procedure lane) or, through calls,
 `wpt_driver_done_procs` (ProdLoop.lean) and `prod_run_eqJ_procs`
@@ -321,60 +338,73 @@ exports for exactly this purpose). The eight statements
 discharge the delivery and registration premises (and the bound, by
 computation, where the step count is fixed) and are what remains.
 
-THE PROVISIONAL LANE: `MemTripleU`, `MemTripleU_alloc`, `SemTripleU`,
+THE PARTIAL LANE (the fuel-lane restatement, 2026-09-03; record
+`docs/2026-09-03_f1-notes.md`): `DriverSafeCtl`, `engine_adequacy`,
+`engine_adequacy_alloc`, `MemTriple`, `MemTriple_alloc`, `SemTriple`,
 `project_triple`, `project_triple_pure`, `project_triple_alloc`,
-`project_triple_pure_alloc`, `semantic_triple_soundU`,
-`semantic_frameU`, `engine_adequacyU`, `engine_adequacyU_alloc`,
-`wpt_engine_boundU`, `wpt_engine_boundU_alloc`, the two lemmas stated
-over those triples (`SemTripleU_iff_Mem`,
-`MemTripleU_alloc_of_MemTripleU`), and every exhibit stated over
-`driveU` or over `SemTripleU` (`*_certified`, `*_total`, `*_engine`,
-`*_semantic`, `*_adequacy`, `*_launch_smoke`, `list_reverse_demo`,
-`counter_loop_certified_registration`,
-`counter_loop_certified_irrelevant_binding`) — every pinned export whose
-statement reaches `driveU` through a package definition, none other.
-PROVISIONAL means exactly: a sound fact about `driveU`, this package's
-loop around the engine's `step_ctx`; not yet the root-of-trust
-statement, which is over the shipped driver; restated with no other
-change in the fuel-lane restatement slice. The former obstacle — the
-shipped driver's out-of-fuel arm was LemLib's kernel-opaque
-`fuelExhaustedWith`, so no statement quantifying over all fuels could
-classify its outcomes (the request:
-`../docs/2026-09-02_request-cerberus-lean-fuel-exhaustion-outcome.md`)
-— is LIFTED at the current pin (cerberus-lean `f95ef8d9c`, the fuel arc,
-re-pinned 2026-09-03: the arm is the kernel-transparent kill
-`CerbND.fuelExhaustedKill`, `CerbND.driver2_lemFuel_zero`; the
-fuel-parametric `CerbND.drive_lemFuel` is pinned to `drive` by
-`CerbND.drive_wrapper_defeq`); the restatement is sequenced after the
-calls arc (§7) and the labels stay until it lands. `driveU` is tied to
-the shipped driver by
-`loop_step_frag` (DriverCollapse.lean) only where the mirror steps,
-which is what the production collapse (`prod_run_eqJ`) consumes.
+`project_triple_pure_alloc`, `semantic_triple_sound`, `semantic_frame`,
+`SemTriple_iff_Mem`, `MemTriple_alloc_of_MemTriple`, and every exhibit
+stated over them (`*_certified`, `*_engine`, `*_semantic`,
+`*_adequacy`, `list_reverse_demo`, `call_smoke_engine`). Their referent
+is the SHIPPED driver's per-thread loop `drive_nonmemory_steps_aux2_lemFuel
+fl` (§4) at EVERY fuel `fl`, from any driver state holding the
+configuration — the same loop, thread shape (`ctlThread`) and
+registration ties (`LabeledProcs`, `CtlTied`; DriverCollapse.lean) as
+the total lane's `DriverDoneCtl`, with exhaustion (`CerbND.fuelExhaustedKill`)
+the admitted outcome beside delivery. The CLOSED partial form over the
+pipeline is `prod_run_safe_procs` (ProdEntry.lean): at every `fuel`,
+`CerbND.runND (CerbND.drive_lemFuel fuel fmapEmpty false (prodFileWith
+procs e) args) (initial_driver_state sup (prodFileWith procs e) fs).1` is
+EXACTLY ONE execution, either `nd_status.Killed dst' CerbND.fuelExhaustedKill`
+or `nd_status.Active dres` with the postcondition; the shipped `drive` is
+the instance at `fuel := CerbFuel.driverFuel` (`CerbND.drive_wrapper_defeq`,
+`rfl`), and `fib_rec_certified` (FibRecExhibit.lean) is its client: every
+`n ≥ 0`, no budget bound. MEASURED at the pin (the F1 record §3): the
+`fuel` parameter of `drive_lemFuel` bounds the OUTER `driver2` rounds
+only — `new_drive_core_threads` (Driver.lean:355) calls the per-thread
+loop through its wrapper at the fixed `10^8` — so at every `fuel ≥ 1` the
+closed statement is the one about the shipped `drive`, and the
+"however long the run" content lives in the loop-level fact `DriverSafeCtl`
+(∀ `fl`). Two honest qualifications: (i) the seeded exhibits (Exhibit A/B/C,
+the counter loop, array sum, list reversal, tree rotation, the struct
+update) start from a memory holding pre-seeded cells, which the cold start
+never contains, so their engine statements are loop-level facts
+(`DriverSafeCtl` at their profiles), not closed pipeline runs; (ii) the
+straight-line exhibits keep the profile `spikeCtx`/`spikeCtl` (no current
+procedure, the default file) — a thread state the shipped driver never
+parks `main` in (it parks it at `current_proc_opt := some main_sym`,
+Driver.lean:530), admitted by the loop-level fact because the round
+lemma needs the current procedure only at a jump (`loop_step_frag'`'s
+`hjmp`; `CtlTied.noproc`). The former package loop `driveU` around the
+engine's `step_ctx`, and every statement over it, are deleted; the
+former obstacle (the shipped driver's out-of-fuel arm was LemLib's
+kernel-opaque `fuelExhaustedWith`) was lifted by the cerberus-lean fuel
+arc (pin `f95ef8d9c`; the request:
+`../docs/2026-09-02_request-cerberus-lean-fuel-exhaustion-outcome.md`).
 
 ## 7. Open items, and the acceptance goals
 
 THE THREE ACCEPTANCE GOALS ([USER 2026-09-02], DECISIONS.md), with their
 status at the close of the calls arc (2026-09-03):
 
-- **Goal 1 — the shipped-driver generic adequacy theorem: OPEN, pending
-  the upstream restatement.** Today `MemTripleU`, the projection
-  theorems and `wpt_engine_boundU` are about `driveU`, and only the eight
-  closed production statements reach `CerbND.runND (drive …)
-  (initial_driver_state …).1`. Closes when a generic theorem takes an
-  arbitrary proved public triple to a statement over that shipped
-  composite. The semantics-side prerequisite HAS LANDED AND IS PINNED:
-  this package builds against cerberus-lean mainline `f95ef8d9c` (the
-  fuel arc: a transparent, distinguished fuel-exhaustion outcome
-  `CerbND.fuelExhaustedKill`, the fuel-parametric `CerbND.drive_lemFuel`,
-  the budget name `CerbFuel.driverFuel`) since the 2026-09-03 re-pin
-  (`docs/2026-09-03_repin-fuel-notes.md`; scout:
-  `../docs/2026-09-03_repin-scout.md`). The sequence ruled 2026-09-03:
-  the RE-PIN (done — pin + the `lemDefaultFuel → CerbFuel.driverFuel`
-  side conditions, nothing else), then the calls arc (C1–C4, CLOSED
-  2026-09-03 — below), then the FUEL-LANE RESTATEMENT (delete `driveU`,
-  restate the partial exports over `drive_lemFuel`, remove PROVISIONAL)
-  once on the final configuration. Until then every `driveU` export
-  carries the PROVISIONAL label (§6).
+- **Goal 1 — the shipped-driver generic adequacy theorem: CLOSED
+  (2026-09-03, the fuel-lane restatement).** The generic theorems take
+  an arbitrary proved public triple to a statement over the shipped
+  driver: `project_triple_pure` (→ `MemTriple`, the shipped per-thread
+  loop at every fuel from any driver state holding the configuration) and
+  `prod_run_safe_procs` (→ the shipped composite `runND (drive_lemFuel
+  fuel …) (initial_driver_state …).1` at every fuel, `drive` its instance
+  at `CerbFuel.driverFuel`), with exhaustion the classified outcome
+  `CerbND.fuelExhaustedKill`; no export carries an interim label; the
+  package loop `driveU` is deleted. The semantics-side prerequisite
+  landed in the cerberus-lean fuel arc (pin `f95ef8d9c`, re-pinned
+  2026-09-03; `docs/2026-09-03_repin-fuel-notes.md`, scout
+  `../docs/2026-09-03_repin-scout.md`); the ruled sequence (re-pin →
+  calls arc C1–C4 → fuel-lane restatement) is complete. What the closure
+  does NOT include, stated in §6: the seeded exhibits have no cold-start
+  form (their statements are the loop-level facts), and `drive_lemFuel`'s
+  fuel bounds only the outer `driver2` rounds (measured). Record:
+  `docs/2026-09-03_f1-notes.md`.
 - **Goal 2 — mirror completeness: CLOSED fail-closed on the declared
   fragment (2026-09-02), with two characterized residuals.** `OpenRound`
   (§2, `docs/2026-09-02_fragment-closure-notes.md`): `eval_uncovered` —
@@ -456,8 +486,7 @@ THE OTHER OPEN ITEMS:
   LINKED LIST (MallocListExhibit.lean) is the chartered exhibit:
   `ml_wps`/`ml_wpt` (one label, two phases: `n` region nodes allocated
   from the split budget, written and linked through the region rules,
-  then walked and freed), `malloc_list_certified_total` (PROVISIONAL,
-  `driveU`) and `malloc_list_certified_production` (the seventh
+  then walked and freed) and `malloc_list_certified_production` (the seventh
   root-of-trust export). All four state `n.toNat` DISTINCT dead ids
   (`ids.Nodup`, K5.1 — the K5 range audit's finding: `deadRegion` is persistent,
   so without it the posts said only that some region is dead); the
@@ -496,9 +525,10 @@ THE OTHER OPEN ITEMS:
   restriction lifted, `complete_alloc`/`complete_alloc_op`, the decision
   raised by the K2 range audit (no rule for the static kill of a region
   and its three companions); K4 the exhibits — `dl_wps`/`dl_wpt`/
-  `dispose_list_certified_total`/`dispose_list_certified_production`
+  `dispose_list_certified_production` (and, until the fuel-lane
+  restatement of 2026-09-03, a `_total` twin over the package loop)
   (DisposeExhibit.lean) and `rl_wps`/`rl_wpt`/
-  `region_loop_certified_total`/`region_loop_certified_production`
+  `region_loop_certified_production` (likewise)
   (RegionLoopExhibit.lean), every advertised kill/free/alloc law with an
   exhibit consumer; K5 THE REGION ACCESS RULES and the malloc'd linked
   list (above; the manifest now 23 constructors, 25 rule rows, 0 red, 16
@@ -514,7 +544,7 @@ THE OTHER OPEN ITEMS:
   location) as the fourth configuration component; C2 the mirror's
   `Step.call`/`Step.ret`/`Step.ret_annot`, their certification at a free
   successor control and completeness rows, the live-control production
-  round `loop_step_frag`, `FragProcs` on the `driveU` lane; C3 the
+  round `loop_step_frag`, `FragProcs` on the partial adequacy exports; C3 the
   procedure-indexed judgments with the specification table `Θ`, the call
   clause, `wps_call(_root)`/`wpt_call(_root)`, `procSpecs(T)_intro`
   (Hoare's rule for recursive procedures), the CPS collapses
@@ -529,8 +559,9 @@ THE OTHER OPEN ITEMS:
   M-1, closed), and RECURSIVE FIB as the eighth root-of-trust statement.
   Still open from the arc, by design: mutual recursion (the rule admits
   it — `procSpecs` assumes the table for every procedure — no exhibit);
-  function pointers (`Eccall`, another scheduler path); the total
-  `driveU` lane at the empty table (deleted with the lane); a two-label
-  exhibit (above).
+  function pointers (`Eccall`, another scheduler path); a two-label
+  exhibit (above). (The total `driveU` lane at the empty table, left at
+  C4, was deleted with the loop in the fuel-lane restatement,
+  2026-09-03.)
 - The deferred parametric semantics interfaces: the rules are proved
   directly against `Step` and the memory state (walkthrough §7).
