@@ -1851,3 +1851,12 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   law locally meanwhile. The re-pin now ALSO waits for the fuel-parameter
   fix above (its consumer consequences land in the same slice or the
   one after, one change at a time).
+- **2026-09-03 [USER] "yeah, can you write this up as a note?"** → request note to
+  the lem-lean team, `docs/2026-09-03_request-lem-lean-pmap-laws-and-fuel-scheme.md`:
+  (1) a `Pmap`/`Fmap` lookup-after-insert law (blocks the re-pin; local
+  interim allowed), (2) a structurally recursive `Pmap.join` so closed
+  engine maps reduce in the kernel (17 decls stalled at de2fbf1), (3) the
+  consumer requirements on the fuel scheme raised by the operator (one
+  quantifiable fuel position, one kernel-transparent exhaustion outcome,
+  fuel monotonicity; interface defect, not a mirror discrepancy). For the
+  operator to relay.
