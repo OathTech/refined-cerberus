@@ -1434,3 +1434,21 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   ALL GATES GREEN
   GATE-EXIT=0
   ```
+- **2026-09-03 [USER] MERGED AT b82e472; PROCEED WITH C3 AND BEYOND** (verbatim):
+  "the cerberus-lean team say the fix is landing in the next pin. The
+  scope sounds good to me, keep pushing forward on the C3 and beyond. You
+  can keep working until you get to a decision point or a possible
+  merge". Dispositions: (1) the C2 audit's re-adjudication item (the
+  design note's pre-registered "`loop_step_frag`'s shape survives"
+  criterion failed; the lemma was restated at the live control) is
+  RESOLVED: continue — the criterion was wrong, the work right; (2) the
+  `dynamic_addrs` upstream fix lands in the next cerberus-lean pin → the
+  scheduled further re-pin (after C3/C4, scouted first) picks it up and
+  the K3 `free` rule's dynamic-flag design is re-examined then (the flag
+  stays the sound precondition; the fix may make the engine's check
+  precise); (3) sequence: C3 (spec table, procedure-indexed judgment
+  replacing C2's guard with the call clause, the call rule, recursion via
+  the one Löb) → C4 (recursive fib production statement + the
+  `exec_loc`/`current_loc` production-lane tie + docs) → fuel-lane
+  restatement (delete `driveU`, PROVISIONAL off) → the further re-pin →
+  range audits each, merge ask at the next candidate.
