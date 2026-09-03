@@ -61,7 +61,7 @@ Re-pinned 2026-09-03 to cerberus-lean `f95ef8d9c317fa6b50cf6691216a8c37b1d3eabf`
 kill `CerbND.fuelExhaustedKill`, its budget the citable
 `CerbFuel.driverFuel = 10^8`; record:
 cerberus-heaplang/docs/2026-09-03_repin-fuel-notes.md): no name moved, the
-pin list below is unchanged (294), and the production statements' side
+pin list below: 296 after K5.1 (the re-pin itself moved no pin), and the production statements' side
 conditions read `k + 2 ≤ CerbFuel.driverFuel`.
 
 P3.5 ([USER 2026-09-02], docs/2026-09-02_p3.5-notes.md): the 65
