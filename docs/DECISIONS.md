@@ -1051,3 +1051,21 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   read-only, region and dead bundles have NO producer in this fragment
   (stated on every surface; producers are K2/K3). Pins 165 → 185. Range
   audit (b374671..29f475f) dispatched before merge.
+- **2026-09-03 [AGENT] K1 RANGE AUDIT: PASS** (record:
+  `cerberus-heaplang/docs/2026-09-03_k1-audit.md`). Coupling sound and
+  complete against every engine writer; frozen statements confirmed at
+  the type level (bodies of `metaOf`/`pointsToView`/`allocMeta` changed
+  in the metadata literal with meaning preserved via unchanged
+  `CellCoh`); the three producer-less bundles proved NON-VACUOUS by
+  constructed `CohG` states (engine-reachable, not fragment-reachable);
+  `deadObj_allocMeta_false` is consistent with the design note (the
+  immortal `allocMeta` forecloses kill; K2's post is `deadObj` or `emp`,
+  never `allocMeta`/`locInBounds`). Carried into K2's brief: M-1 the
+  `∈ dynamicAddrs` vs engine `contains` (LemLib's Ord-based `BEq Int`,
+  no `LawfulBEq`) vocabulary — restate `MetaCoh.dynamic`/`regionOwn_facts`
+  in `contains` form or land the bridge lemma (the auditor proved the
+  instance); N-2 `Frag.store`'s `lk` is unconstrained, so the fragment
+  admits the LOCKING store whose success flips `isReadonly` — K2's rules
+  fix `lk = false` (or ghost-update `readonly`) and say so; N-3
+  `allocMeta`/`locInBounds` are RefinedC's `alloc_global`, not
+  `loc_in_bounds` — wording.
