@@ -396,14 +396,27 @@ continuation), R3 (named solvers), R4 (`_plain` rules only).
 ## 5. The first arc of the root package (Q5)
 
 **Arc R1 — "scalar and struct types with a straight-line executor, over
-`wps`".** Package: `RefinedCerberus/` (root). Dependency: the demo's
-`CerberusHeapLang.API` — via a Lake path `require` on `cerberus-heaplang`
-(today the root has none, lakefile.toml measured; the alternative, a COPY
-per the derisking ruling, is wrong here: the root is the product and the
-demo API its declared base — operator decision needed).
+`wps`".** Package: `RefinedCerberus/` (root). Raw-logic base: NOT a Lake
+dependency on the demo. [USER 2026-09-03] ruling after this note's
+draft: the root's raw logic is a COPY (the "plunder"), because the root
+needs the demo GROWN — a fragment covering compiled Core (`Eunseq`,
+member shifts, the case evaluation arm, more memops, bounds, alloc/kill,
+calls), which changes `Frag`, `Step`, the certification and the
+completeness theorem, exactly the parts the demo freeze keeps fixed. A
+dependency on the frozen demo would give a foundation too small to build
+on, and its one benefit ("one trust base") is moot since the grown
+fragment must be re-certified anyway. The demo stays the pristine
+persistent reference; the derisking sibling package (Lane B) is seeded
+by copy from the closure head, grows the fragment, and becomes the
+root's raw-logic layer. Reused: the architecture and proof techniques
+(state interpretation, atomic-step lifting, the label-context judgment,
+the shipped-round certification, per-constructor completeness), not the
+compiled artifacts. GAP 1/GAP 2 (the codec laws) therefore land in the
+GROWN copy; they MAY also enter the demo as classical content if its
+examples want them, but the root does not require it.
 
 Slices (one change each; FAST-GATE between, FULL gate at the end):
-- S0 wiring: the path require; a smoke import. (est. 0.5 d)
+- S0 seed: the derisking package copied from the closure head (Lane B's first step); the root's lakefile requires THAT package. (est. 0.5 d)
 - S1 value layer: `valToZ`; GAP 1 (symbolic integer round trip) and GAP 2
   (pointer round trip, general pointee) — both landing in the DEMO as Lane
   A spec-addition slices, consumed here. (est. 2 d)
@@ -490,4 +503,4 @@ priced. Decision criterion in every row: the agent-leverage test.
    normal form and prove every shift law into it before S5.
 Also: the PROVISIONAL inheritance until the fuel-exhaustion request lands;
 the `.Struct` decode's OCaml addr-quirk (CerbMem.lean:765-782) if real
-struct ctypes replace array stand-ins; the root↔demo Lake wiring decision.
+struct ctypes replace array stand-ins; the root↔demo wiring is DECIDED: copy, not dependency ([USER 2026-09-03]).
