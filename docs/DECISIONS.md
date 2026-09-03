@@ -1196,3 +1196,21 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   region-access gap confirmed (a region↔object coercion is UNSOUND:
   `LiveCoh.alloc` pins `al.ty = mc.ty` against the engine's `ty := none`)
   and honestly presented. M-1/M-2/N-1/N-5 folded into K5.
+- **2026-09-03 [AGENT] KILL/FREE K5 LANDED — THE ARC IS COMPLETE (K0–K5)**
+  (record: `cerberus-heaplang/docs/2026-09-03_k5-notes.md`): typed region
+  access — `typedRegionView`, `regionLoadAt_atomic`/`regionStoreAt_atomic`
+  proved via the K1 seams at the region cell (the engine's only
+  type-reading check on either path is the atomic-member test, `none →
+  false`; no effective-type or alignment check — measured, arms quoted),
+  lifted to `wps/wpt_{load,store}_region_at` and the whole-region
+  `_regionOwn_at` faces; typed split/join and carve/uncarve laws. The
+  chartered MALLOC'D LINKED LIST (`MallocListExhibit`): n regions from one
+  linear budget, linked by typed stores, walked and freed;
+  `malloc_list_certified_production` over the shipped pipeline with `hB`
+  in ENGINE vocabulary; the `driveU` lane PROVISIONAL. One-label two-phase
+  program ([AGENT]: a two-label build/free needs a two-entry label-map law
+  the tree lacks — recorded). Honest limits recorded: the value field is
+  stored but not tracked (signed-long codec round trip not in the tree);
+  dead ids not proved distinct. K4-audit M-1/M-2/N-1/N-5 folded (public
+  `deadObj_readout`/`deadRegion_readout`). Pins 269 → 294. NEXT: the
+  RE-PIN to cerberus-lean `f95ef8d9c` (the fuel arc), then calls.
