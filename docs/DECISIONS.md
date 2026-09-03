@@ -1012,3 +1012,21 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   port demo → ext per merged arc through the rename map, never the
   reverse; and Lane B's fragment-growing slices (Eunseq, pointer ops)
   come after the ports.
+- **2026-09-03 [AGENT] K0 RANGE AUDIT: PASS AFTER ONE CORRECTION; A K3 DESIGN
+  CONSTRAINT** (record: `cerberus-heaplang/docs/2026-09-03_k0-audit.md`).
+  M-1: the K0 record said the alloc-lane exports' "meaning strengthens";
+  `LaunchCoh` is a HYPOTHESIS there, so a stronger `LaunchCoh` makes those
+  exports weaker claims about arbitrary initial states (they now cover
+  only globally well-formed ones — the intended design; nothing reachable
+  from `prodMem₀` is lost); corrected. N-1 (load-bearing for K3, reasoned
+  from the engine, not executed): after `create` at base B, a
+  `malloc(0)` whose alignment divides B inserts `{base := B, size := 0}`
+  and pushes B onto `dynamicAddrs`; a subsequent `free` of the created
+  object passes `killM`'s dynamic check and SUCCEEDS. Hence only
+  `dynamic = true → base ∈ dynamicAddrs` is preserved, not its converse;
+  K3's `free` rule requires the metadata cell's dynamic flag, and "free
+  of a created object is UB" is state-dependent, not a theorem. Auditor
+  confirmed: `dyn_disj` is TRUE after `allocateRegion` (inclusive
+  clause; the new record's own base satisfies it by reflexivity); all
+  nine components verified against every `MemState` writer; snapshot
+  re-derived byte-identical; ten cones trio-exact.
