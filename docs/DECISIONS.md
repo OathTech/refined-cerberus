@@ -1183,3 +1183,16 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   seams `loadM_live`/`storeM_live` which hold at any metadata cell) plus
   the malloc'd linked list exhibit, BEFORE the re-pin; the region loop
   stands as the alloc/free exhibit. K3-audit doc items applied.
+- **2026-09-03 [AGENT] K4 RANGE AUDIT: PASS** (record:
+  `cerberus-heaplang/docs/2026-09-03_k4-audit.md`). Both production
+  statements traced: no package-defined driver/discharge/scheduler in
+  either text; `dispose_list_certified_production` mentions only the
+  authored program and `prodFile`; `region_loop_certified_production`'s
+  budget side condition `hB` carries `regionCost`/`headroom`/`prodMem₀`
+  (pure vocabulary, not a driver — the shop-window sentences claiming
+  "only `hfuel`" are corrected in K5). 201 constants of the two modules
+  axiom-trio; client discipline confirmed (no `Step`, no ghost carriers,
+  no judgment unfoldings); budgets re-derived to the rule minimum; the
+  region-access gap confirmed (a region↔object coercion is UNSOUND:
+  `LiveCoh.alloc` pins `al.ty = mc.ty` against the engine's `ty := none`)
+  and honestly presented. M-1/M-2/N-1/N-5 folded into K5.
