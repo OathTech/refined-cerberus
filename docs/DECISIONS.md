@@ -1000,3 +1000,15 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   take "this allocation is dynamic" from the metadata cell (a `MetaCoh`
   clause), not from `dynamicAddrs`. Pins 159 → 165. Range audit
   (1d2bb95..89cd906) dispatched before merge per the audit rule.
+- **2026-09-03 [USER] LANE B PAUSED; THE SEED IS PARKED UNMERGED** (operator:
+  "the seed is just a copy at the moment, we haven't done any derisking
+  work yet"; "let's pause on B since we're making good progress on A").
+  The `lane-b-seed` branch (f4f9a20: the copy at 1d2bb95, rename map,
+  gate 3b, its PASS audit) is kept as a record of the seed mechanics
+  and NOT merged; when Lane B starts it is re-seeded from the demo head
+  of that day, so the demo's Lane A arcs (kill/free, calls) are in the
+  copy from birth and no forward-port debt accrues. Amendment to the
+  copy ruling, for whenever a seed does precede a demo arc: forward-
+  port demo → ext per merged arc through the rename map, never the
+  reverse; and Lane B's fragment-growing slices (Eunseq, pointer ops)
+  come after the ports.
