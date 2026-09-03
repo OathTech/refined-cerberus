@@ -86,6 +86,7 @@ import CerberusHeapLang.WseqExhibit
 import CerberusHeapLang.StructExhibit
 import CerberusHeapLang.AllocExhibit
 import CerberusHeapLang.DisposeExhibit
+import CerberusHeapLang.RegionLoopExhibit
 import CerberusHeapLang.Examples.ReadinessSmoke
 import CerberusHeapLang.Examples.MirrorCoverage
 import CerberusHeapLang.Round
@@ -350,7 +351,19 @@ def trioExports : List Name := [
   ``CerberusHeapLang.dispose_list_certified_total,
   ``CerberusHeapLang.lrProdPrefix_wpt, ``CerberusHeapLang.dlProd_wpt,
   ``CerberusHeapLang.dlProd_blockSpecsT, ``CerberusHeapLang.dlProd_labeledAt,
-  ``CerberusHeapLang.dispose_list_certified_production]
+  ``CerberusHeapLang.dispose_list_certified_production,
+  -- K4, the second exhibit — n regions from one linear budget
+  -- (RegionLoopExhibit.lean): the budget as a loop invariant split per
+  -- iteration (`allocBudget_split`), spent by `wps_alloc`/`wpt_alloc`,
+  -- the regions returned by `wps_free_emp`/`wpt_free_emp`; both strata,
+  -- the block specifications, the `driveU` total equation (PROVISIONAL)
+  -- under `LaunchCoh`, and the PRODUCTION statement. (The malloc'd LINKED
+  -- list is not statable — no load/store rule over `regionOwn`; the K4
+  -- record's finding.)
+  ``CerberusHeapLang.rl_wps, ``CerberusHeapLang.rl_wpt,
+  ``CerberusHeapLang.rl_blockSpecs, ``CerberusHeapLang.rl_blockSpecsT,
+  ``CerberusHeapLang.region_loop_certified_total, ``CerberusHeapLang.rl_labeledAt,
+  ``CerberusHeapLang.region_loop_certified_production]
 
 def sortedNames (ns : Array Name) : Array String :=
   (ns.map (·.toString)).qsort (· < ·)
