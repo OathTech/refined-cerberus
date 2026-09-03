@@ -17,7 +17,9 @@ ticked — `labeled` untouched — the trace extended, the step counter
 moved). `CerberusRound.loop_step` is the loop-level reading of the same
 fact: `runOne (drive_nonmemory_steps_aux2_lemFuel (fl+1) …) dst =
 runOne (drive_nonmemory_steps_aux2_lemFuel fl …) dst'` — the shape
-`loop_step_frag` (DriverCollapse.lean) ships at the production profile.
+`loop_step_frag` (DriverCollapse.lean) ships at the production profile —
+proved there INDEPENDENTLY, by its own per-redex case analysis, not
+derived from this round (see "WHAT CONSUMES WHAT" below).
 
 NO FUEL DEPENDENCY. The round is stated at the loop BODY: the step
 list, `find_can_advance` and `advance_step` are not fuelled (`nd_bind`
@@ -100,14 +102,26 @@ head is restricted to the bare-value producers `BareHead`
 (Soundness.lean); (b) the ACTION_EVAL to a non-pointer value is ILLTYPED
 AT DISTANCE ONE; (d) the jump without a current procedure is
 PANIC-noproc; (c) operand evaluation outside the mirror evaluator is
-closed to the KILL classification for every operand the engine rejects
-(`evalClass … = .kill err`, EvalClass.lean — the failure twin of the
-success bridge) and leaves THE RESIDUAL `OpenRound`: `eval_uncovered`
-(an operand in the covered grammar that the engine ACCEPTS where the
-mirror does not evaluate: a symbol unbound in the environment but naming
-a `Proc` of the file, a mirrored binop at two floats, `OpEq` at two
-ctypes — environment/file-dependent, carrying the offending operand as
-witness) and `run_surplus` (a jump with more arguments than the label's
+closed to the KILL classification for every operand the CLASSIFIER
+rejects (`evalClass … = .kill err`, EvalClass.lean — the failure twin of
+the success bridge) and leaves THE RESIDUAL `OpenRound`: `eval_uncovered`
+(an operand in the covered grammar CONTAINING A LEAF the mirror evaluator
+does not evaluate and the engine's evaluator accepts: a symbol unbound in
+the environment but naming a `Proc` of the file, a mirrored binop at two
+floats, `OpEq` at two ctypes — environment/file-dependent, carrying the
+offending operand as witness). `evalClass` answers `.uncovered` at the
+FIRST such leaf and carries NO engine claim about the whole operand, so
+the engine's outcome on that operand is NOT characterized here — it may
+succeed, KILL on a later type error (`f + 1` with `f` a `Proc`-named
+unbound symbol is `PePure`, classified `.uncovered`, and the engine kills
+it as `Illformed_program … ill-typed PEop`; 2026-09-03 audit, by
+execution), or PANIC (a float guard under `Eif`). Precisely: every
+operand the classifier REJECTS is a proved engine KILL; operands the
+classifier leaves UNCOVERED are not characterized (the residual is a
+SUPERSET of the engine-accepted shapes). The mover is `evalClass`
+computing the engine's value at the three leaf shapes, which reserves
+`.uncovered` for the leaf itself and puts the downstream rejections under
+the KILL bridge. The other arm is `run_surplus` (a jump with more arguments than the label's
 parameters whose zipped arguments evaluate and whose surplus does not —
 label-map-dependent). Both arms record that the mirror is stuck and the
 engine step's shape; neither is a refusal, and neither is removable by
@@ -119,6 +133,19 @@ COMPLETENESS — GO").
 THE MIRROR'S ONLY REFERENCE is this round: no other relational
 semantics is referenced or bridged, and none is needed for the root of
 trust, which is the engine (`step_ctx` and the shipped driver).
+
+WHAT CONSUMES WHAT (2026-09-03 audit, N-1). `CerberusRound`,
+`engine_step_matchU`, `step_iff_cerberusRound`, `cerberusRound_classify`
+and `frag_round_complete` are the reference relation and the
+certification/completeness statements OVER it; they are consumed by NO
+adequacy export. The `driveU` lanes — partial (`drive_classifyU`,
+Adequacy.lean) and total (`wpt_drive_aux`, TotalAdequacy.lean) — discharge
+each drive step with the device lemma `outcomesU_of_step` (Soundness.lean,
+over `dischargeStep`); the production collapse (`prod_run_eqJ`,
+ProdEntry.lean, via `wpt_driver_done`) consumes `loop_step_frag`
+(DriverCollapse.lean), proved independently of this module. Deriving
+`loop_step_frag` from `CerberusRound.loop_step` via a context-transport
+lemma would retire that duplication; today they stand side by side.
 -/
 import CerberusHeapLang.DriverCollapse
 import CerberusHeapLang.EnvLaws
@@ -318,20 +345,34 @@ inductive ShippedRefusal (M : MachineCtx) (c : Config) : Prop where
     `BareHead` premise, `ShippedRefusal.error_next`,
     `ShippedRefusal.panic_noproc` — and gap (c) is closed up to what
     follows). Both arms record that the mirror IS stuck, name the engine
-    step's shape, and carry a mirror-side witness that pins the class
-    down exactly; every instance is environment-, file- or label-map-
-    dependent, so no syntactic narrowing of `Frag` removes it. -/
+    step's shape, and carry a mirror-side witness that names the class;
+    every instance is environment-, file- or label-map-dependent, so no
+    syntactic narrowing of `Frag` removes it. Neither arm carries an
+    engine claim beyond the step's shape: the whole-operand outcome in
+    `eval_uncovered` and the successor in `run_surplus` are NOT
+    characterized here (2026-09-03 audit, M-1). -/
 inductive OpenRound (M : MachineCtx) (c : Config) : Prop where
   /-- An operand of the configuration's redex, in the covered grammar,
-      that the mirror evaluator does not evaluate and that the engine's
-      evaluator does NOT reject: `evalClass … = .uncovered` (EvalClass.lean)
-      — a symbol unbound in the environment but naming a `Proc` of the
-      file (the engine evaluates it to the null function pointer), one of
-      the eight mirrored binops at two floating-point operands, or `OpEq`
-      at two ctypes. The engine's round is the operand-evaluation
-      with-runstate step; its successor is not characterized here. Every
-      OTHER mirror-stuck operand is a classified KILL (`ShippedRefusal.
-      killed (Other (DErr_core_run err))`, the `complete_*` lemmas). -/
+      that the mirror evaluator does not evaluate and that the CLASSIFIER
+      leaves uncovered: `evalClass … = .uncovered` (EvalClass.lean). The
+      classifier answers `.uncovered` at the FIRST uncovered LEAF — a
+      symbol unbound in the environment but naming a `Proc` of the file
+      (the engine evaluates that leaf to the null function pointer), one
+      of the eight mirrored binops at two floating-point operands, or
+      `OpEq` at two ctypes — and carries NO engine claim about the whole
+      operand. So this arm contains operands whose whole-operand outcome
+      is NOT characterized, INCLUDING ones the engine KILLS (`f + 1` with
+      `f` a `Proc`-named unbound symbol is `PePure`, classified
+      `.uncovered`, and the engine kills it as `Illformed_program …
+      ill-typed PEop` — 2026-09-03 audit, by execution) or PANICS (a float
+      guard under `Eif`). The engine's round is the
+      operand-evaluation with-runstate step; its successor is not
+      characterized here. Every operand the classifier REJECTS
+      (`evalClass … = .kill err`) is a proved engine KILL (`ShippedRefusal.
+      killed (Other (DErr_core_run err))`, the `complete_*` lemmas);
+      operands the classifier leaves UNCOVERED are not characterized — the
+      residual is a SUPERSET of the engine-accepted shapes. The mover:
+      `evalClass` computing the engine's value at the three leaf shapes. -/
   | eval_uncovered (pe : generic_pexpr Unit sym) :
       (∀ c'', ¬ Step M c c'') →
       pe ∈ operandsOf c.1 → PePure pe →
@@ -782,8 +823,10 @@ theorem CerberusRound.runND {M : MachineCtx} {c c' : Config}
     discharged by the engine equation of the redex (`step_ctx_*`,
     Soundness.lean / DriverCollapse.lean) and the matching
     `advance_step` arm. Stated at the context's OWN tagDefs and extern
-    map (the driver functions take the reader argument; `loop_step_frag`
-    is this theorem's instance at the production profile `fmapEmpty`). -/
+    map (the driver functions take the reader argument; `loop_step_frag`,
+    DriverCollapse.lean, has this theorem's shape at the production
+    profile `fmapEmpty` — proved there independently, not derived from
+    this theorem; the module header, "WHAT CONSUMES WHAT"). -/
 theorem engine_step_matchU {M : MachineCtx}
     {e e' : CoreExpr} {ev0 : Fmap sym value} {evs : List (Fmap sym value)}
     {ρ' : EnvStack} {σ σ' : Mem}
@@ -3130,9 +3173,10 @@ theorem step_ctx_memop_eval_kill {e : CoreExpr} {ctx : context}
 /-! ### The operand-evaluation rows, classified -/
 
 /-- Eif: a boolean guard is the mirror step; a non-boolean value is the
-    engine's PANIC; a guard the engine rejects is the KILL `Other
-    (DErr_core_run err)`; a guard outside the mirror evaluator that the
-    engine accepts is the residual `eval_uncovered`. -/
+    engine's PANIC; a guard the classifier rejects is the KILL `Other
+    (DErr_core_run err)`; a guard the classifier leaves uncovered (an
+    accepted-but-unmirrored leaf; the whole guard's outcome not
+    characterized) is the residual `eval_uncovered`. -/
 theorem complete_if {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {g : generic_pexpr Unit sym} {e2 e3 : CoreExpr}
     (hd : Decomp e ctx (ifRedex g e2 e3))
@@ -3194,10 +3238,11 @@ theorem complete_if {M : MachineCtx} {e : CoreExpr} {ctx : context}
 /-- Erun at a context with a current procedure: a registered label with
     evaluable arguments is the mirror step (the context is discarded);
     an unregistered label is the engine's PANIC; a zipped argument the
-    engine rejects is the KILL `Other (DErr_core_run err)`; a zipped
-    argument outside the mirror evaluator that the engine accepts is the
-    residual `eval_uncovered`; every zipped argument evaluating but a
-    SURPLUS argument not is the residual `run_surplus`. -/
+    classifier rejects is the KILL `Other (DErr_core_run err)`; a zipped
+    argument the classifier leaves uncovered (an accepted-but-unmirrored
+    leaf; the whole argument's outcome not characterized) is the residual
+    `eval_uncovered`; every zipped argument evaluating but a SURPLUS
+    argument not is the residual `run_surplus`. -/
 theorem complete_run {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {ra : core_run_annotation} {l : sym} {pes : List (generic_pexpr Unit sym)}
     (hd : Decomp e ctx (runRedex ra l pes))
@@ -3283,9 +3328,10 @@ theorem complete_run {M : MachineCtx} {e : CoreExpr} {ctx : context}
       (stExceptUndef_bind_return_right m).symm, hpan⟩
 
 /-- Esave: value initializers are the entry step, evaluable initializers
-    the evaluation step; an initializer the engine rejects is the KILL
-    `Other (DErr_core_run err)`; an initializer outside the mirror
-    evaluator that the engine accepts is the residual `eval_uncovered`. -/
+    the evaluation step; an initializer the classifier rejects is the
+    KILL `Other (DErr_core_run err)`; an initializer the classifier leaves
+    uncovered (an accepted-but-unmirrored leaf; the whole initializer's
+    outcome not characterized) is the residual `eval_uncovered`. -/
 theorem complete_save {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {sb : sym × core_base_type}
     {ps : List (sym × ((core_base_type ×
@@ -3390,9 +3436,10 @@ theorem complete_pure_sym {M : MachineCtx} {e : CoreExpr} {ctx : context}
     non-pointer value is ILLTYPED AT DISTANCE ONE (the engine's
     evaluation round succeeds into the ill-typed load, whose next step
     list is `[Step_error2 "Load"]` — `ShippedRefusal.error_next`); an
-    operand the engine rejects is the KILL `Other (DErr_core_run err)`;
-    an operand outside the mirror evaluator that the engine accepts is
-    the residual `eval_uncovered`. -/
+    operand the classifier rejects is the KILL `Other (DErr_core_run err)`;
+    an operand the classifier leaves uncovered (an accepted-but-unmirrored
+    leaf; the whole operand's outcome not characterized) is the residual
+    `eval_uncovered`. -/
 theorem complete_load_op {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
     {pe2 : generic_pexpr Unit sym} {mo : memory_order}
@@ -3467,9 +3514,10 @@ theorem complete_load_op {M : MachineCtx} {e : CoreExpr} {ctx : context}
 
 /-- Memop-operand EVAL (any memop): evaluable operands are the mirror
     step; the first operand (in the engine's left-to-right order) the
-    engine rejects is the KILL `Other (DErr_core_run err)`; the first
-    operand outside the mirror evaluator that the engine accepts is the
-    residual `eval_uncovered`. -/
+    classifier rejects is the KILL `Other (DErr_core_run err)`; the first
+    operand the classifier leaves uncovered (an accepted-but-unmirrored
+    leaf; the whole operand's outcome not characterized) is the residual
+    `eval_uncovered`. -/
 theorem complete_memop_op {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {mop : memop} {pe1 pe2 : generic_pexpr Unit sym}
     (hd : Decomp e ctx (memopRedex mop [pe1, pe2]))
@@ -3567,9 +3615,10 @@ theorem complete_memop_op {M : MachineCtx} {e : CoreExpr} {ctx : context}
     evaluable value operand is the mirror step; a non-pointer pointer
     operand is ILLTYPED AT DISTANCE ONE (`[Step_error2 "Store"]` on the
     next round — `ShippedRefusal.error_next`); the first operand (pointer
-    before value, the engine's order) the engine rejects is the KILL
-    `Other (DErr_core_run err)`; the first operand outside the mirror
-    evaluator that the engine accepts is the residual `eval_uncovered`. -/
+    before value, the engine's order) the classifier rejects is the KILL
+    `Other (DErr_core_run err)`; the first operand the classifier leaves
+    uncovered (an accepted-but-unmirrored leaf; the whole operand's
+    outcome not characterized) is the residual `eval_uncovered`. -/
 theorem complete_store_op {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
     {pe2 pe3 : generic_pexpr Unit sym} {mo : memory_order}

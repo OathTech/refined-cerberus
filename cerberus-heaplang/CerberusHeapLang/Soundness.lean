@@ -3214,8 +3214,11 @@ evaluator's exact domain (fragment closure, 2026-09-02: before it,
 Both are `rfl` for authored programs (`peDepth_sym_le`, `peDepth_val_le`,
 `PePure.of_isPePure rfl`). Where the mirror evaluator answers `none` on
 a `PePure` operand, the engine's outcome is classified (EvalClass.lean,
-Round.lean): a KILL where the engine rejects the operand, the residual
-`OpenRound.eval_uncovered` where it accepts it.
+Round.lean): a proved engine KILL where the classifier `evalClass`
+rejects the operand, the residual `OpenRound.eval_uncovered` where the
+classifier leaves it uncovered — decided at the first uncovered LEAF,
+so the whole operand's outcome there is NOT characterized (the residual
+is a superset of the engine-accepted shapes; EvalClass.lean header).
 
 THE FRAGMENT IS ANNOTATION-FREE: every constructor below, and every
 redex spelling it

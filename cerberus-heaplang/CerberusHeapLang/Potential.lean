@@ -4,7 +4,9 @@ on fragment terms: the STATIC fuel bound both adequacy theorems carry.
 
 The engine's `get_ctx` is fuel-bounded (budget `lemDefaultFuel`,
 Soundness.lean header "FUEL HONESTY") and its exhaustion leaf is
-opaque, so every engine-step certification (`engine_step_matchU`)
+opaque, so every per-step engine equation — the device lemma
+`outcomesU_of_step` the `driveU` lanes consume, `loop_step_frag` the
+production collapse consumes, the certification `engine_step_matchU` —
 carries `esize e ≤ lemDefaultFuel` for the CURRENT term. The generic
 growth bound `Frag.esize_step_bound` (≤ +1 per step) would couple a
 drive statement's fuel premise to the run length. This module installs

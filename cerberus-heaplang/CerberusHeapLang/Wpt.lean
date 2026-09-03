@@ -28,8 +28,9 @@ simultaneously a step budget, so one derivation yields two results:
   export consumes;
 - `wpt_drive_aux` (TotalAdequacy.lean) is the simulation into the
   engine: a proved `wpt … k` plus the seeded footprint yields the
-  unconditional `driveU … k = .done` equation, `engine_step_matchU`
-  discharging one engine step per budget unit. Every total export
+  unconditional `driveU … k = .done` equation, the device lemma
+  `outcomesU_of_step` (Soundness.lean) discharging one `driveU` step
+  per budget unit. Every total export
   goes this way; no Iris adequacy result is in any total export's cone.
 Deleting the decrease premise makes both inductions fail to elaborate
 (they are ON the budget) and would make the self-jump loop derivable;
@@ -2193,7 +2194,7 @@ Total mirrors of Wps.lean §CreateRule: `wpt_create_cursor_internal`
 THE COST BOUND, DERIVED AGAINST `driveU` (not copied from the
 charter): a bare create is one relational create step — the wpt step
 clause consumes 1 budget unit, which `wpt_drive_aux` maps to one
-engine round (`engine_step_matchU` at the create redex) — and its
+`driveU` round (`outcomesU_of_step` at the create redex) — and its
 result is the BARE pure pointer value (`Step.create` — "a BARE
 value, no Eannot residue", Step.lean's create docstring), whose
 delivery costs `deliveryCost (.pure _) = 1` — one `driveU` round

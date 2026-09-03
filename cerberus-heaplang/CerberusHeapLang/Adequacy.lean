@@ -89,8 +89,11 @@ engine fact whose statement is Iris-free except for the
 pure-consequence obligation the consequence lemmas discharge.
 
 Certification direction used (Soundness.lean header): match-given-
-step. Each drive step is `engine_step_matchU`'s unique engine
-behaviour (`drive_classifyU`); Step-matched behaviours stay in the
+step. Each drive step is discharged by the device lemma
+`outcomesU_of_step` (Soundness.lean): the mirror step's unique
+`outcomesU` outcome over `dischargeStep` (`drive_classifyU`) — NOT by
+the shipped-round certification `engine_step_matchU` (Round.lean),
+which this lane does not consume; Step-matched behaviours stay in the
 WP-covered cone, refusals contradict NotStuck, and the value protocol
 composes the REMOVE-ANNOT tau with PROGRAM-DONE (annotations erased by
 `SpikeVal.val` in the readout).
@@ -824,13 +827,13 @@ theorem driveU_value_pure {M : MachineCtx} (hwf : M.SeqWF)
 
 /-- THE UNIFIED CLASSIFICATION (the one drive classification, at any
     machine context): from Step-level NotStuck + value readout over
-    `Reach`, every driveU outcome is DriveOk — via
-    `engine_step_matchU`, one certification case per step. The fuel
+    `Reach`, every driveU outcome is DriveOk — via the device lemma
+    `outcomesU_of_step` (Soundness.lean), one case per step. The fuel
     premises are STATIC (required fix 1): `pot e ≤ lemDefaultFuel` at
     the current term and `pot cont ≤ lemDefaultFuel` for every
     registered body; `Frag.pot_step_bound` carries the bound across a
     step (non-increase, or the jump reset to a registered body) and
-    `Frag.esize_le_pot` discharges `engine_step_matchU`'s `esize`
+    `Frag.esize_le_pot` discharges `outcomesU_of_step`'s `esize`
     obligation, so the drive length `n` is UNBOUNDED. -/
 theorem drive_classifyU {M : MachineCtx} (hwf : M.SeqWF)
     (hQf : ∀ l params cont, lookupLabel M.labels l = some (params, cont) →

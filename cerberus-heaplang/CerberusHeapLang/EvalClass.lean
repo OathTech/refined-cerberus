@@ -25,10 +25,20 @@ the engine does where the mirror answers `none`:
   operands (`opFval`, the float comparisons); `OpEq` at two ctypes
   (`ctypeEqual`); the six non-mirrored binops (`Div`/`Rem_t`/`Rem_f`/
   `Exp` — integer successes; `And`/`Or` — the boolean arms), which
-  `PePure` excludes syntactically. This is the RESIDUAL of mirror
-  completeness (`OpenRound.eval_uncovered`, Round.lean): every
-  occurrence is environment- or file-dependent, so no syntactic
-  narrowing of `Frag` removes it.
+  `PePure` excludes syntactically. `.uncovered` is decided at the FIRST
+  uncovered LEAF — the `PEop`/`PEarray_shift` arms propagate a child's
+  `.uncovered` without evaluating the rest — so a compound operand with
+  an accepted-but-unmirrored leaf is `.uncovered` whatever the engine then
+  does with that leaf's value: succeed, KILL (`f + 1` with `f` a
+  `Proc`-named unbound symbol is `PePure`, `.uncovered`, and the engine's
+  `Illformed_program … ill-typed PEop` — 2026-09-03 audit, by execution),
+  or PANIC (a float guard under `Eif`). This is the RESIDUAL of mirror
+  completeness (`OpenRound.eval_uncovered`, Round.lean) — a SUPERSET of
+  the engine-accepted shapes: every occurrence is environment- or
+  file-dependent, so no syntactic narrowing of `Frag` removes it; the
+  mover is computing the engine's value at the three leaf shapes here,
+  which reserves `.uncovered` for the leaf itself and puts the downstream
+  rejections under the KILL bridge.
 
 `evalClass` is a CLASSIFICATION VOCABULARY like `PePure`: it is not a
 mirror rule, and it appears in no `Step`. Its `.val` face is the mirror

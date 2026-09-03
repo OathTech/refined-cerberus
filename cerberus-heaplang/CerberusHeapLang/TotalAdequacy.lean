@@ -10,12 +10,14 @@ the seeded footprint, the engine's drive AT LENGTH k DELIVERS:
 readout — the unconditional total equations the exhibits export (fib
 at `2·n + 4`, list reversal at `13·|ns| + 7`, the tree rotation at
 19), with ZERO example-level Step constructors: the simulation is
-proved once, here, by strong induction on the budget with
-`engine_step_matchU` discharging one engine step per budget unit. No
+proved once, here, by strong induction on the budget with the device
+lemma `outcomesU_of_step` (Soundness.lean, over `dischargeStep`)
+discharging one `driveU` step per budget unit — the shipped-round
+certification `engine_step_matchU` (Round.lean) is not consumed here. No
 Iris adequacy result is in the cone: `wpt_sound` (Wpt.lean) is a
 metatheorem consumed by no export.
 
-FUEL HONESTY WITHOUT ACCUMULATION: the per-step `engine_step_matchU`
+FUEL HONESTY WITHOUT ACCUMULATION: the per-step `outcomesU_of_step`
 obligation is `esize e ≤ lemDefaultFuel` for the CURRENT term only;
 the static potential `pot` (Potential.lean — `Frag.pot_step_bound`,
 `Frag.esize_le_pot`) turns it into the two run-length-independent
@@ -351,8 +353,8 @@ abbrev DriveDoneAt (M : MachineCtx) (aids : Nat → Nat) (k : Nat) (e : CoreExpr
     (stateInert e = true ∧ StateInertLabels M → σ' = σ)
 
 /-- THE SIMULATION (audit F-02, the cost half): the total statement
-    judgment's budget IS drive fuel — one engine step
-    (`engine_step_matchU`) per budget unit, the delivery protocol
+    judgment's budget IS drive fuel — one `driveU` step
+    (`outcomesU_of_step`, the device lemma) per budget unit, the delivery protocol
     prepaid by the value clause, jumps prepaid by the mandatory
     decrease. Strong induction on the budget; no Löb, no
     step-indexing, no per-example Step chains ever again. -/

@@ -68,6 +68,13 @@ if [[ ! -f "$prime_done" ]]; then
     # primed with a green guard. They are on it now; and section C below
     # checks the primed copies against the PINNED clone's seam sources
     # directly, independent of this guard.
+    # 2026-09-03 audit N-5: the lean_frontend/generated leg of this list
+    # is VACUOUS for git-diff — the directory is gitignored upstream
+    # (`git -C cerberus-lean ls-files lean_frontend/generated` is empty),
+    # so the diff on it is always quiet. The lem-generated content is
+    # protected by the `frontend` (.lem) leg plus the Lean lem-sync
+    # STAMP (tools/check_lem_sync.sh --check-lean), which is the real
+    # check and is re-run in --check mode below, not only at prime time.
     CONTENT_PATHS=(frontend lean_frontend/generated lean_frontend/native \
       'lean_frontend/*.lean' lean_frontend/handwritten_copy.manifest \
       lean_frontend/lakefile.toml lean_frontend/Makefile Makefile)
@@ -113,6 +120,13 @@ if [[ ! -f "$prime_done" ]]; then
   echo "$src_at $(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo unstamped)" > "$prime_done"
 else
   say "B ok: primed ($(cat "$prime_done"))"
+  # 2026-09-03 audit N-5: re-verify the lem-generated content on every
+  # run over an already-primed workspace (this is what --check does),
+  # not only at prime time — the stamp is the only non-vacuous check on
+  # generated/ (see the CONTENT_PATHS note above).
+  ( cd "$WS" && tools/check_lem_sync.sh --check-lean ) || {
+    say "B FAIL: Lean lem-sync stamp check red in the workspace (generated/ drifted from the stamp — re-prime: rm -rf $WS; re-run)"; exit 1; }
+  say "B ok: Lean lem-sync stamp verified in the workspace"
 fi
 
 # --- C: hand-written seam identity (runs in BOTH modes; fail-closed) ---------

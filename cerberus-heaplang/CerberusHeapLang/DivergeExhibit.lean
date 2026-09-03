@@ -11,8 +11,8 @@ THE PROGRAM: the self-jump loop
 whose registered body is its own back edge. Its configuration steps
 to ITSELF (`dg_self_step` — the context-discarding jump with no
 arguments and no state effect), so THE ENGINE'S DRIVE of it rests in
-`.more` at EVERY fuel (`dg_driveU_more`: each round is the certified
-self-step, `engine_step_matchU`) — it never delivers.
+`.more` at EVERY fuel (`dg_driveU_more`: each round is the self-step,
+discharged by the device lemma `outcomesU_of_step`) — it never delivers.
 
 THE UNPROVABILITY, engine form (`diverge_total_unprovable`): a total
 derivation for this loop — from ANY footprint's cell ownership (any
@@ -44,8 +44,8 @@ logic reasons through the public rules and never through `Step`
 (API.lean, "Below the line"); this module is the NEGATIVE test, not a
 client — it shows a derivation is impossible by exhibiting what the
 engine actually does, and the engine's behaviour at the self-jump is
-reached through the certified mirror step (`engine_step_matchU` on
-`dg_self_step` in `dg_driveU_more`). The narrow exception: a
+reached through the mirror step (`outcomesU_of_step` on `dg_self_step`
+in `dg_driveU_more`). The narrow exception: a
 NEGATIVE test may name a mirror step to reach an engine fact; a
 POSITIVE exhibit may not. Mirror-level coverage witnesses live in
 `Examples/MirrorCoverage.lean`.
@@ -115,8 +115,7 @@ theorem dgQ_inv (ra : core_run_annotation) {l : sym}
 
 /-- THE ENGINE NEVER DELIVERS: driving the self-jump loop for ANY
     number of rounds rests in `.more` at the same configuration — each
-    round is the certified self-step (`engine_step_matchU` on
-    `dg_self_step`). -/
+    round is the self-step (`outcomesU_of_step` on `dg_self_step`). -/
 theorem dg_driveU_more (ra : core_run_annotation) (σ₀ : Mem) :
     ∀ (k : Nat) (aids : Nat → Nat),
       driveU (procCtx dgProcSym (dgRS ra)) aids k

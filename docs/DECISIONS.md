@@ -901,3 +901,40 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   by a fresh reviewer, before any fast-forward. First application: the
   audit of b34998d..c2c4e4d (AR-4, the shipped round, mirror
   completeness, fragment closure) before `fragment-closure` merges.
+- **2026-09-03 [AGENT] ERRATUM to "2026-09-02/03 [AGENT] FRAGMENT CLOSURE
+  LANDED"** (source: the independent audit
+  `cerberus-heaplang/docs/2026-09-03_audit-since-b34998d.md`, finding M-1,
+  established by execution; response record
+  `cerberus-heaplang/docs/2026-09-03_audit-since-b34998d-response.md`).
+  The entry above says "every rejected operand is now a proved engine
+  KILL" and describes `eval_uncovered` as "value-dependent engine
+  successes". Both overstate what the theorems say. Tree's truth: the
+  classifier `evalClass` (EvalClass.lean) answers `.uncovered` at the
+  FIRST uncovered LEAF of an operand and carries NO engine claim, so the
+  residual `OpenRound.eval_uncovered` contains operands whose
+  whole-operand outcome is NOT characterized — including ones the engine
+  KILLS (the auditor's counterexample: `f + 1` with `f` a `Proc`-named
+  unbound symbol is `PePure`, classified `.uncovered`, and the engine
+  kills it as `Illformed_program … ill-typed PEop`) and ones it PANICS
+  on (a float guard under `Eif`). Corrected statement: every operand the
+  classifier REJECTS (`evalClass … = .kill err`) is a proved engine KILL;
+  operands the classifier leaves UNCOVERED are not characterized (the
+  residual is a SUPERSET of the engine-accepted shapes). The Lean
+  statements (`frag_round_complete`, `OpenRound`) were and are honest —
+  the arm claims only the step's shape; the overclaim was prose, now
+  corrected on every surface (Round.lean docstrings, EvalClass.lean and
+  Soundness.lean headers, README, ARCHITECTURE §2/§7, WALKTHROUGH §5/§7).
+  Mover: `evalClass` computing the engine's value at the three leaf
+  shapes (`nullPtrval` for the `Proc`-named symbol, the float binops,
+  `ctypeEqual`), which reserves `.uncovered` for the leaf itself and
+  puts the downstream rejections under the KILL bridge. Also corrected
+  in the same pass (audit N-1/N-3/N-4): the round `CerberusRound` and
+  its certification/completeness are consumed by NO adequacy export (the
+  `driveU` lanes consume the device lemma `outcomesU_of_step`, the
+  production collapse `loop_step_frag`); `engine_step_matchU` has no
+  `SeqWF` premise; the slogan "mirror steps iff the engine has a
+  successful deterministic round" carries its two disclosed exceptions
+  (the REMOVE-ANNOT value round; `error_next`, an engine SUCCESS round
+  into an ILLTYPED-next configuration, filed under refusals) wherever it
+  appears. Whether `error_next` belongs under `ShippedRefusal` is a
+  naming decision left to the operator (audit N-4).

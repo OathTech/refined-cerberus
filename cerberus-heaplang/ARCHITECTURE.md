@@ -30,8 +30,13 @@ fuelled and monadic. `Step M` (Step.lean) is the hand-written mirror —
 a relation on (Core expression, environment stack, memory) covering
 the fragment `Frag` (Soundness.lean) — and it is the `primStep` of the
 iris-lean `Language` instance (Lang.lean). The mirror has no
-authority; its certification is `engine_step_matchU` (Round.lean): on
-`Frag`, at a `SeqWF` context with `esize e ≤ lemDefaultFuel`, every
+authority; its certification is `engine_step_matchU` (Round.lean),
+stated exactly as `theorem engine_step_matchU {M : MachineCtx} … (hf :
+Frag e) (hsz : esize e ≤ lemDefaultFuel) (hs : Step M (e, ev0 :: evs, σ)
+(e', ρ', σ')) : CerberusRound M (e, ev0 :: evs, σ) (e', ρ', σ')` — on
+`Frag`, at a cons-shaped environment, with `esize e ≤ lemDefaultFuel`,
+and no well-formedness premise (`SeqWF` is a premise of
+`cerberusRound_classify` only, for its `value_done` arm): every
 mirror step is exactly ONE ITERATION OF THE SHIPPED DRIVER'S THREAD LOOP
 — the relation `CerberusRound M` (Round.lean): at every driver state
 embedding the context and the configuration (`MachineCtx.Embeds`), the
@@ -45,7 +50,15 @@ the driver's own vocabulary only: the hand-written discharge
 appears in no export's statement (the trust rule of 2026-09-02). That
 round is the mirror's only reference: no other relational semantics is
 referenced or bridged, and none is needed for the root of trust, which
-is the engine (§1).
+is the engine (§1). The round is the REFERENCE RELATION the
+certification and the completeness below are stated over; it is
+consumed by NO adequacy export — the adequacy chain does not go through
+it: the `driveU` lanes (partial `drive_classifyU`, total `wpt_drive_aux`)
+discharge each drive step with the device lemma `outcomesU_of_step`
+(Soundness.lean, over `dischargeStep`), and the production collapse
+(`prod_run_eqJ`) consumes `loop_step_frag` (DriverCollapse.lean), which
+is proved independently of `CerberusRound` by its own per-redex case
+analysis (Round.lean header, "WHAT CONSUMES WHAT").
 
 The certification is ONE-DIRECTIONAL: mirror step ⇒ shipped round;
 `step_iff_cerberusRound` is two-sided under the hypothesis that a
@@ -75,13 +88,24 @@ plain-symbol binder's head is restricted to bare-value producers
 mirror evaluator's exact domain (`PePure`, the eight mirrored binops).
 So the logic is SOUND (§4) and COMPLETE for the declared fragment up to
 the residual: mirror steps iff the engine has a successful deterministic
-round, and every stuck configuration is classified — a configuration
-the mirror refuses is one the engine refuses too, in the engine's own
-vocabulary, except at the residual's two shapes (an operand the engine
-ACCEPTS where the mirror evaluator does not evaluate — a procedure-
-named symbol, a binop at two floats, `OpEq` at two ctypes; a jump with
-surplus arguments), where the engine's step is stated by shape and the
-class is named exactly. What is established, in the auditor's words: "a
+round — with two disclosed exceptions to the iff: the REMOVE-ANNOT value
+round (an annotated value's annotation is stripped by an engine round
+the mirror treats as a value step, `value_annot`) and `error_next` (an
+engine SUCCESS round into a configuration whose next round is ILLTYPED,
+filed under refusals) — and every stuck configuration is classified: a
+configuration the mirror refuses is one the engine refuses too, in the
+engine's own vocabulary, except at the residual's two shapes, where the
+engine's step is stated by shape only. The residual's operand arm is an
+operand CONTAINING A LEAF the engine accepts where the mirror evaluator
+does not evaluate (a procedure-named symbol, a binop at two floats,
+`OpEq` at two ctypes); the classifier `evalClass` answers `.uncovered`
+at the first such leaf and carries NO engine claim about the whole
+operand, whose outcome is therefore NOT characterized — it may succeed,
+kill on a later type error, or panic. Precisely: every operand the
+classifier REJECTS is a proved engine KILL; operands the classifier
+leaves UNCOVERED are not characterized (the residual is a SUPERSET of
+the engine-accepted shapes). The other arm is a jump with surplus
+arguments. What is established, in the auditor's words: "a
 sound Iris program logic for the package's restricted relational
 mirror, with a verified forward connection to successful Cerberus
 engine rounds on proved-safe executions" — now with the backward
@@ -116,8 +140,10 @@ drive length. Total: `wpt_drive_aux` and `wpt_engine_boundU`
 `driveU M aids k … = .done v σ'`. Both are stated over `driveU`
 (Adequacy.lean), this package's loop {`step_ctx` → `dischargeStep`}.
 Why the mirror suffices: `NotStuck` supplies a mirror step at every
-reachable configuration and `engine_step_matchU` makes it the
-engine's round (`drive_classifyU`).
+reachable configuration and the device lemma `outcomesU_of_step`
+(Soundness.lean) makes it the drive's unique outcome
+(`drive_classifyU`); the shipped-round certification
+`engine_step_matchU` (§2) is not consumed by either lane.
 
 ## 5. The projection
 
@@ -197,7 +223,7 @@ shipped driver's out-of-fuel arm is LemLib's kernel-opaque
 `fuelExhaustedWith`, so no statement quantifying over all fuels can
 classify its outcomes; `driveU` is tied to the shipped driver by
 `loop_step_frag` (DriverCollapse.lean) only where the mirror steps,
-which is what the total lane consumes.
+which is what the production collapse (`prod_run_eqJ`) consumes.
 
 ## 7. Open items
 
@@ -209,15 +235,29 @@ PROVISIONAL label is not removed before then.
 
 - The residual of mirror completeness (§2, `OpenRound`,
   `docs/2026-09-02_fragment-closure-notes.md`): `eval_uncovered` — an
-  operand in the covered grammar that the engine's evaluator ACCEPTS
-  where the mirror evaluator does not evaluate (a symbol unbound in the
-  environment but naming a `Proc` of the file, evaluated by the engine
-  to the null function pointer; one of the eight mirrored binops at two
-  floating-point operands; `OpEq` at two ctypes) — environment- and
+  operand in the covered grammar CONTAINING A LEAF the engine's evaluator
+  accepts where the mirror evaluator does not evaluate (a symbol unbound
+  in the environment but naming a `Proc` of the file, evaluated by the
+  engine to the null function pointer; one of the eight mirrored binops
+  at two floating-point operands; `OpEq` at two ctypes). The classifier
+  `evalClass` answers `.uncovered` at the FIRST such leaf and carries no
+  engine claim about the whole operand, so the arm's whole-operand
+  outcome is NOT characterized: it contains operands the engine
+  SUCCEEDS on, operands it KILLS (`f + 1` with `f` a `Proc`-named
+  unbound symbol is `PePure`, classified `.uncovered`, killed as
+  `Illformed_program … ill-typed PEop` — 2026-09-03 audit, by
+  execution) and operands it PANICS on (a float guard under `Eif`).
+  Every operand the classifier REJECTS is a proved engine KILL;
+  operands it leaves UNCOVERED are not characterized — the residual is
+  a SUPERSET of the engine-accepted shapes. Environment- and
   file-dependent, so not removable by a syntactic narrowing of `Frag`;
-  the mover is a mirror evaluator complete relative to
-  `eval_pexpr_aux2` on `PePure` (`M.file` threaded into `evalPexpr`, the
-  float/ctype arms), which moves the arm into `Step`. `run_surplus` — a
+  the mover for the characterization is `evalClass` computing the
+  engine's value at the three leaf shapes (reserving `.uncovered` for
+  the leaf itself, the downstream rejections falling under the KILL
+  bridge); the mover that empties the arm is a mirror evaluator
+  complete relative to `eval_pexpr_aux2` on `PePure` (`M.file` threaded
+  into `evalPexpr`, the float/ctype arms), which moves it into `Step`.
+  `run_surplus` — a
   jump with more arguments than the registered label's parameters whose
   zipped arguments evaluate and whose surplus does not (the engine's
   fold truncates, the mirror's `Step.run` evaluates every argument) —
@@ -225,7 +265,7 @@ PROVISIONAL label is not removed before then.
   the four gaps registered on 2026-09-02, (a) and (c)'s grammar were
   closed by narrowing `Frag` (`BareHead`, `PePure` everywhere), (b) and
   (d) by classification (`ShippedRefusal.error_next`, `panic_noproc`),
-  and (c)'s engine rejections by the KILL bridge (EvalClass.lean).
+  and (c)'s classifier rejections by the KILL bridge (EvalClass.lean).
 - The shipped-driver generic adequacy theorem (§6). Today
   `MemTripleU`, the projection theorems and `wpt_engine_boundU` are
   about `driveU`, and only the four closed production statements reach

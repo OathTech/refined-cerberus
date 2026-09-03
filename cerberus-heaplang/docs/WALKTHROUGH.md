@@ -971,9 +971,19 @@ integer) pair (`Illformed_program`), certified against the engine's
 evaluator tower level by level exactly as the success bridge is.
 `OpenRound` is the RESIDUAL, two arms each recording that the mirror is
 stuck and carrying a mirror-side witness: `eval_uncovered` (an operand
-in the covered grammar that the engine ACCEPTS where the mirror does not
-evaluate — a symbol unbound in the environment but naming a `Proc` of
-the file, a mirrored binop at two floats, `OpEq` at two ctypes) and
+in the covered grammar CONTAINING A LEAF the engine accepts where the
+mirror evaluator does not evaluate — a symbol unbound in the environment
+but naming a `Proc` of the file, a mirrored binop at two floats, `OpEq`
+at two ctypes; `evalClass` answers `.uncovered` at the FIRST such leaf
+and carries no engine claim, so the whole operand's outcome is NOT
+characterized — the engine may succeed, kill on a later type error
+(`f + 1` with `f` a `Proc`-named unbound symbol is `PePure`, classified
+`.uncovered`, and killed as `Illformed_program … ill-typed PEop`;
+2026-09-03 audit, by execution), or panic (a float guard under `Eif`);
+so every operand the classifier REJECTS is a proved engine KILL,
+operands it leaves UNCOVERED are not characterized, and the residual is
+a SUPERSET of the engine-accepted shapes; the mover is `evalClass`
+computing the engine's value at the three leaf shapes) and
 `run_surplus` (a jump with more arguments than the label's parameters,
 the zipped ones evaluating and a surplus one not). `cerberusRound_classify`
 sorts every `Frag` configuration into `value_done` / `value_annot` /
@@ -981,8 +991,12 @@ sorts every `Frag` configuration into `value_done` / `value_annot` /
 its `OpenRound`). Hence the logic is SOUND (every proved-safe execution
 is an engine execution) and COMPLETE for the declared fragment up to
 the residual (§7): mirror steps iff the engine has a successful
-deterministic round, and every stuck configuration is classified. What
-is established, in the words of the 2026-09-02 audit: "a sound Iris
+deterministic round — with two disclosed exceptions to the iff, the
+REMOVE-ANNOT value round (`value_annot`: an annotated value's annotation
+is stripped by an engine round the mirror treats as a value step) and
+`error_next` (an engine SUCCESS round into a configuration whose next
+round is ILLTYPED, filed under refusals) — and every stuck configuration
+is classified. What is established, in the words of the 2026-09-02 audit: "a sound Iris
 program logic for the package's restricted relational mirror, with a
 verified forward connection to successful Cerberus engine rounds on
 proved-safe executions" — now with the backward classification of every
@@ -1052,8 +1066,10 @@ proof that the footprint cells entail the WP with the readout post `∀ σ'
 ns κs nt, stateInterp σ' ns κs nt ={⊤, ∅}=∗ ⌜ψ w.val σ'⌝`: for every `n`,
 `driveU M aids n (M.thread e₀ (ev00 :: evs0)) σ₀` is never `.killed r`,
 never `.stuck`, and `.done v σ'` implies `ψ v σ'` — by
-`drive_classifyU`: every drive step is `engine_step_matchU`'s unique
-engine behaviour, refusals contradict `NotStuck`, and the value protocol
+`drive_classifyU`: every drive step is discharged by the device lemma
+`outcomesU_of_step` (Soundness.lean; the shipped-round certification
+`engine_step_matchU` is not consumed by this lane — §5 above),
+refusals contradict `NotStuck`, and the value protocol
 composes REMOVE-ANNOT with PROGRAM-DONE. `project_triple_pure` is this
 theorem plus `stateInterp_readout` (Rules.lean) on the Iris post. The
 total half, `wpt_engine_boundU` (TotalAdequacy.lean): from `blockSpecsT
@@ -1061,8 +1077,8 @@ M Ls (readoutPost ψ) ∗ wpt M Ls k (readoutPost ψ) e₀ (ev00 :: evs0)`, `∃
 v σ', driveU M aids k (M.thread e₀ (ev00 :: evs0)) σ₀ = .done v σ' ∧ ψ v
 σ' ∧ (stateInert e₀ = true ∧ StateInertLabels M → σ' = σ₀)` — the
 judgment's budget is drive length, proved once by induction on the
-budget with `engine_step_matchU` discharging one engine step per unit
-(`wpt_drive_aux`). Both faces, `engine_adequacyU` and
+budget with the device lemma `outcomesU_of_step` discharging one
+`driveU` step per unit (`wpt_drive_aux`). Both faces, `engine_adequacyU` and
 `wpt_engine_boundU` (and their `_alloc` twins), are over `driveU` and
 therefore PROVISIONAL (§1.3).
 
@@ -1098,7 +1114,8 @@ statements are the root-of-trust exports (§1.3).
 
 `CerberusHeapLang/Audit.lean` is the last import of the library root, so
 `lake build` elaborates it and a failure is a red build. It asserts, in
-order: (1) exact pins — every name in `trioExports` (139 theorems: the
+order: (1) exact pins — every name in `trioExports` (159 theorems at the
+time of writing, 2026-09-03: the
 rules, the adequacy and collapse theorems, every exhibit, the
 projections and the consequence lemmas) exists, is a theorem, and has
 transitive axiom set equal to `[propext, Classical.choice, Quot.sound]`
@@ -1162,12 +1179,19 @@ the `#print axioms` recipe are in the README, "How to build and verify".
   one-procedure file.
 - **The residual of mirror completeness** (`OpenRound`, §5;
   `2026-09-02_fragment-closure-notes.md`): an operand in the covered
-  grammar the engine accepts where the mirror evaluator does not
-  evaluate (a procedure-named symbol, a mirrored binop at two floats,
-  `OpEq` at two ctypes), and a jump with surplus arguments. Both are
-  environment-, file- or label-map-dependent; the movers are a mirror
-  evaluator complete relative to `eval_pexpr_aux2` on `PePure`, and a
-  prefix-evaluating `Step.run`. The four gaps registered on 2026-09-02
+  grammar containing a LEAF the engine accepts where the mirror
+  evaluator does not evaluate (a procedure-named symbol, a mirrored
+  binop at two floats, `OpEq` at two ctypes) — the classifier answers
+  `.uncovered` at the first such leaf and carries no engine claim, so
+  the whole operand's outcome is NOT characterized (it may succeed,
+  kill, or panic; every operand the classifier REJECTS is a proved
+  engine KILL, operands it leaves UNCOVERED are not characterized, the
+  residual is a superset of the engine-accepted shapes) — and a jump
+  with surplus arguments. Both are environment-, file- or
+  label-map-dependent; the movers are `evalClass` computing the
+  engine's value at the three leaf shapes (the characterization), a
+  mirror evaluator complete relative to `eval_pexpr_aux2` on `PePure`
+  (emptying the arm), and a prefix-evaluating `Step.run`. The four gaps registered on 2026-09-02
   were closed fail-closed the same day.
 - **Partial correctness over the shipped driver.** The partial lane is
   stated over `driveU` and labelled PROVISIONAL (§1.3) until the
