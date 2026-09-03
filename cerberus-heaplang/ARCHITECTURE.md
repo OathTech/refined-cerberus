@@ -354,7 +354,7 @@ which is what the production collapse (`prod_run_eqJ`) consumes.
 ## 7. Open items, and the acceptance goals
 
 THE THREE ACCEPTANCE GOALS ([USER 2026-09-02], DECISIONS.md), with their
-status at the close of the kill/free arc (2026-09-03):
+status at the close of the calls arc (2026-09-03):
 
 - **Goal 1 — the shipped-driver generic adequacy theorem: OPEN, pending
   the upstream restatement.** Today `MemTripleU`, the projection

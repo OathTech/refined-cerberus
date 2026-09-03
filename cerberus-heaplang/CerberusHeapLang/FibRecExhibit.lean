@@ -36,8 +36,8 @@ EVAL and TAU rounds) and PURE + delivery (2) — nine rounds beside the
 callees. `main` costs `fibRounds n + 2` (call + callee + the delivery of
 the returned value at the empty stack), and the production statement's
 in-budget bound is `fibRounds n.toNat + 4 ≤ CerbFuel.driverFuel`
-(`prod_run_eqJ_procs`'s `k + 2`); `fibRounds n ≤ 9 · fib (n + 2)`
-(derived), so `n ≤ 33` is in the shipped budget `10^8`.
+(`prod_run_eqJ_procs`'s `k + 2`); `fibRounds n + 9 = 12 · fib (n + 1)`
+(`fibRounds_closed`), so `n ≤ 33` is in the shipped budget `10^8`.
 
 `main` is unreachable under the table (arity 0 against a one-argument
 precondition), exactly as in the smoke. Every statement here is

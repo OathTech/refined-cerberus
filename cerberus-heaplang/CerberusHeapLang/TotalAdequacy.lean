@@ -41,10 +41,11 @@ PROVISIONAL ([USER 2026-09-02], DECISIONS.md; Adequacy.lean header).
 (`*_total`, `alloc_create_launch_smoke`). Each is PROVISIONAL, in
 exactly this sense: a sound fact about `driveU`, this package's loop
 around the engine's `step_ctx`; not yet the root-of-trust statement,
-which is over the shipped driver and awaits the cerberus-lean
-fuel-exhaustion outcome
-(docs/2026-09-02_request-cerberus-lean-fuel-exhaustion-outcome.md,
-repository root); restated with no other change when it lands. The
+which is over the shipped driver; restated with no other change in the
+fuel-lane restatement slice. The former obstacle (the request
+docs/2026-09-02_request-cerberus-lean-fuel-exhaustion-outcome.md,
+repository root) is LIFTED at the current pin — see Adequacy.lean's
+header for the outcome. The
 root-of-trust exports are the production statements over the shipped
 `runND ∘ drive ∘ initial_driver_state` (`exhibitA_prod`,
 `*_certified_production`), reached through the DRIVER-level twins of

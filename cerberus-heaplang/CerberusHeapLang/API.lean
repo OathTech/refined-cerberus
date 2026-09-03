@@ -52,10 +52,11 @@ the shipped driver — `MemTripleU`, `MemTripleU_alloc`, `SemTripleU`,
 `MemTripleU_alloc_of_MemTripleU` — is PROVISIONAL, in
 exactly this sense: a sound fact about `driveU`, this package's loop
 around the engine's `step_ctx`; not yet the root-of-trust statement,
-which is over the shipped driver and awaits the cerberus-lean
-fuel-exhaustion outcome
-(docs/2026-09-02_request-cerberus-lean-fuel-exhaustion-outcome.md,
-repository root); restated with no other change when it lands. The
+which is over the shipped driver; restated with no other change in the
+fuel-lane restatement slice. The former obstacle (the request
+docs/2026-09-02_request-cerberus-lean-fuel-exhaustion-outcome.md,
+repository root) is LIFTED at the current pin — see Adequacy.lean's
+header for the outcome. The
 root-of-trust exports are the total-lane production statements
 (`exhibitA_prod`, `*_certified_production`, `prod_run_eqJ`), which
 live in the production layer this module does not import.
