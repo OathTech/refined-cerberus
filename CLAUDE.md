@@ -1,90 +1,62 @@
-# refined-cerberus
+# refined-cerberus (main: the cerberus-heaplang demo)
 
-**NORTH STAR [USER 2026-08-29]: the product is a Lean-native C
-verification framework** — RefinedC's architecture (type system +
-Lithium-class automation) rebuilt natively in Lean on iris-lean,
-attached directly to the cerberus-lean Core semantics, able to
-verify NEW C programs with specs and proofs authored in Lean,
-kernel-certified against the executable semantics. Replay harnesses,
-transfer walls, and donor fidelity are MECHANISMS driving the build,
-never the product: the product gauge is the native-verification
-exhibit (a never-seen program verified end-to-end) at every arc
-close; build metrics and product capability live on separate
-ledgers. Full ruling + the three binding instruments: DECISIONS.md.
-
-The Iris program logic is instantiated directly over Core; RefinedC
-is the design target (not an end state); its frontend/annotation
-layer is out of scope.
+**What this repository's `main` contains**: the demo package
+`cerberus-heaplang/` — a classical (Reynolds/O'Hearn) separation logic
+over a fragment of Cerberus Core, built on iris-lean, whose exports are
+statements about the cerberus-lean semantics' execution and memory
+states — plus the durable infrastructure around it (gate runner,
+capped builds, the pinned semantics workspace) and the records.
 
 **TRUST ARCHITECTURE [USER 2026-08-29]: the cerberus-lean
 operational semantics is the ONLY trusted semantics.** Everything
-above it — the relational layer, the WP, the type system, the
+above it — the relational mirror, the WP, any type system or
 automation — is DERIVED and has no independent semantic authority;
 any disagreement with the engine is by definition a defect in the
-derived layer. **The intended end state is an adequacy result stated
-EXCLUSIVELY over the cerberus-lean semantics.** The named failure
-mode ([USER], verbatim): "a big pile of RefinedC garbage" that
-doesn't couple to cerberus-lean "would have no value, irrespective
-how closely it matches RefinedC. We are building a reasoning
-capability for cerberus-lean's operational semantics — 'mirroring'
-without proof is valueless." Operational consequence: no ported
-layer counts as capability until its downward theorem into the
-engine exists — the adequacy spine is load-bearing from the first
-rung, built continuously, never retrofitted at the end.
+derived layer. The exports are adequacy results stated EXCLUSIVELY
+over the cerberus-lean semantics ([USER], verbatim: "'mirroring'
+without proof is valueless"). Operational consequence: no layer
+counts as capability until its downward theorem into the engine
+exists — the adequacy spine is load-bearing from the first rung.
+
+**Longer-term direction** ([USER 2026-08-29, 2026-09-03]): an
+agent-driven C verification layer in the RefinedC design family,
+built above this logic, adopting only the slice of RefinedC that
+serves that goal. That work — its Lake package, the donor toolchain,
+the design notes — lives on the branch `refinedc/dev` until it is
+presentable; nothing of it is on `main`.
 
 This file is WORKING PRACTICES ONLY. Design rulings live in
 `docs/DECISIONS.md` (append-only register, [USER]/[AGENT]
 provenance) — never here. Founding rationale:
-`docs/2026-08-29_rules-of-engagement.md`. Predecessor history: the
-cerberus-lean park branch `arc/segment-ladder`,
-`lean_frontend/docs/reasoning-era/POSTMORTEM-AND-FORWARD-BRIEF.md`
-— read it before touching design.
+`docs/2026-08-29_rules-of-engagement.md`.
 
 ## Layout
 
 | Path | What |
 |------|------|
-| `RefinedCerberus/` | the Lean package (Audit.lean = in-build axiom gate, last import of the lib root) |
-| `cerberus-heaplang/` | standalone DEMO development ([USER 2026-08-31]): the spike as a separate nested Lake package — its own README/docs/audit; the root package stays the port's home |
+| `cerberus-heaplang/` | THE package: its own lakefile, README, ARCHITECTURE.md, docs/, and in-build axiom audit (Audit.lean, last import of the lib root) |
 | `docs/` | dated records + `DECISIONS.md` (rulings register) |
-| `scripts/` | `capped` (cgroup-capped builds), `test_unit.sh` (gates), `new-worktree.sh`, `setup-refinedc.sh`/`env-refinedc.sh`/`refinedc-pins.env` (donor toolchain) |
+| `scripts/` | `capped` (cgroup-capped builds), `test_unit.sh` (the gates), `new-worktree.sh`, `setup-cerberus-dep.sh` + `semantics-pin.env` (the pinned semantics workspace) |
 | `worktrees/` | build-primed parallel checkouts (gitignored) |
-| `.refinedc-ws/`, `.opamroot/` | repo-local RUNNABLE RefinedC (Rocq 9.1 + frontend, gitignored; see docs/2026-08-29_refinedc-toolchain-setup.md) — donor questions can be answered by running their code |
-| `../deps/refinedc` | the NORMATIVE donor source (BSD) — read-only |
 | `../deps/iris-lean` | iris-lean checkout backing the Lake pin — read-only |
 | `../cerberus-lean` | the semantics repo — read-only from here |
 
 ## Building
 
 ```bash
-scripts/capped ~/.elan/bin/lake build   # NEVER uncapped; elaborates the audit
-scripts/test_unit.sh                    # gates 1-3 (+ speedbump report); --fast = builds only
+scripts/setup-cerberus-dep.sh                                   # once: the pinned semantics workspace
+cd cerberus-heaplang && ../scripts/capped ~/.elan/bin/lake build # NEVER uncapped; elaborates the audit
+scripts/test_unit.sh                                            # gates 1-2 (+ speedbump reports); --fast = the build only
 ```
 
 Toolchain: Lean 4.32.2 (elan). Deps (batteries, Qq, iris) are
-git-pinned in lakefile.toml and resolve offline through the
-container's `deps/gitconfig` redirects (`capped` self-loads the
-container env). `lake update` only with `GIT_CONFIG_GLOBAL` set,
-and only to move a pin deliberately. The cerberus-lean dependency
-is added when its mainline pin lands (see DECISIONS).
-
-## The referent discipline
-
-- `deps/refinedc` is the normative spec for everything above the
-  semantics. Design questions are answered by reading their code.
-- **The PORT LEDGER is the central artifact**: every ported
-  judgment/rule/type-former/tactic cites its donor (file:line);
-  every divergence carries a forcing fact **about Cerberus** (never
-  about our Lean port's internals), binned: (a) unnecessary
-  invention → adopt theirs; (b) real Cerberus constraint → forcing
-  fact stated; (c) inherited pseudo-constraint → named and priced.
-  The operator adjudicates the ledger.
-- The attachment layer (Iris-over-Core) is the one sanctioned
-  design zone; its scope is decided in operator conversation before
-  any brief. Acceptance question for every choice there: "does this
-  let RefinedC's next layer port literally?"
-- For concrete Core-wrangling obligations, search the park-branch
-  proof quarry before re-deriving (see DECISIONS).
+git-pinned in `cerberus-heaplang/lakefile.toml` and resolve offline
+through the container's `deps/gitconfig` redirects (`capped`
+self-loads the container env). `lake update` only with
+`GIT_CONFIG_GLOBAL` set, and only to move a pin deliberately. The
+semantics dependency is the pinned workspace `.cerberus-ws/lean_frontend`
+(`scripts/semantics-pin.env`; re-pins are forced-semantics-change
+slices, scouted first).
 
 ## Process
 
@@ -170,6 +142,6 @@ is added when its mainline pin lands (see DECISIONS).
 
 ## Current state
 
-See `docs/DECISIONS.md` tail + the latest dated doc in
-`cerberus-heaplang/docs/` (the demo is the active work; the RefinedC
-port proper starts after it, per the demo-first ruling).
+See `docs/DECISIONS.md` tail and `cerberus-heaplang/ARCHITECTURE.md` §7
+(the acceptance-goals ledger). The RefinedC-family layer is on
+`refinedc/dev`.

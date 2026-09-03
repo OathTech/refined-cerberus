@@ -26,8 +26,8 @@ statement — the semantic authority, the mirror's one-directional
 certification, the two lanes, the open items, every sentence naming
 its theorem — is [ARCHITECTURE.md](ARCHITECTURE.md). This package is a
 demonstration of classical separation logic over Core and nothing
-more; it is not the RefinedC port (this repository's root
-`RefinedCerberus` package).
+more; it is not a port of RefinedC (the RefinedC-family layer is
+longer-term work on the branch `refinedc/dev`, not on `main`).
 
 ## Scope, exactly
 
