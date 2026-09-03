@@ -36,7 +36,7 @@ toolchain (its `lean_frontend/generated`, `native`, `.lake` are copied
 into the workspace here — they are not in any git tree). The setup
 script fails closed, naming the mismatch, if the sibling is absent or
 differs from the pin. Lean 4.32.2 via elan. The Lake dependencies are
-git-pinned and resolve either from the network or from local mirrors
+git-pinned to public repositories and resolve either from the network or from local mirrors
 via a `GIT_CONFIG_GLOBAL` redirect file (this development environment
 uses the latter; `scripts/capped` loads it when present).
 
@@ -51,3 +51,10 @@ git-pinned in `cerberus-heaplang/lakefile.toml`; the semantics enters as a
 path dependency on the pinned workspace `.cerberus-ws/lean_frontend`
 (a clone of cerberus-lean at `scripts/semantics-pin.env`'s commit, primed
 from a built checkout and checked seam-by-seam against the pin).
+
+## License
+
+Copyright 2026 Oath Technologies. Licensed under the Apache License,
+Version 2.0 — see [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE). The
+dependencies carry their own licenses (batteries, Qq: Apache 2.0;
+iris-lean: see its repository; cerberus-lean and LemLib: see theirs).
