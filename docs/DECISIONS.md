@@ -1283,3 +1283,21 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   controls); `procCtx p rs → procCtx rs`, `labels → labelsAt`. ~5 h wall,
   no park, no heartbeat option touched. Range audit on a fixed copy; C2
   (call/return mirror, certification, completeness) dispatched.
+- **2026-09-03 [AGENT] C1 RANGE AUDIT: PASS** (record:
+  `cerberus-heaplang/docs/2026-09-03_c1-audit.md`): `Ctl` is the engine's
+  control (all seven `thread_state` fields set; `exec_loc` kept live —
+  the design note's redo risk avoided); the engine's third stack
+  constructor `Stack_cons` is unrepresentable by `Ctl.toStack` and
+  unreachable from `Driver.drive` (its only writer is the other
+  interpreter; `step_ctx` panics on it) — a fail-closed restriction to be
+  STATED (N-1, → C2); 547 changed statements verified shape-only at the
+  embedding (56 hand-read + whole-set screens: exactly 22 gained `hκ`);
+  the eight production statements byte-identical; `hκ` is FORCED by the
+  Iris value law and carried only by the raw lifting and the collapses —
+  every `wps`/`wpt` rule is control-general, so a store inside a callee
+  HAS a rule; what is missing is the collapse at a non-empty stack (C3's
+  CPS `wps_sound`, by plan). M-1 (a C2 OBLIGATION): the production lane's
+  `loop_step_frag`/`DriverDoneAt` carry no tie between the mirror's `ctl`
+  and the driver thread's control fields (sound today — the only control
+  read is via labels — but a call round changes them; the tie must land
+  with `Step.call`/`Step.ret`). M-2 stale listings → C2.
