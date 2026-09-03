@@ -895,11 +895,13 @@ theorem pot_pos (e : CoreExpr) : 1 ≤ pot e := by
   unfold pot
   split <;> omega
 
-/-- A `BareHead` term never decomposes to a call redex (its shapes are
-    root redexes or values, none a call). -/
-theorem BareHead.no_call {e : CoreExpr} (hb : BareHead e) {ctx : context}
+/-- A `BareHead` term decomposes to a call redex only at the ROOT: its
+    shapes are root redexes or values, none a frame, and the one call
+    shape is the call redex itself (calls arc C4: `BareHead.call` — the
+    plain-symbol binder binds a call's result). -/
+theorem BareHead.decomp_call_root {e : CoreExpr} (hb : BareHead e) {ctx : context}
     {ra : core_run_annotation} {f : sym} {pes : List (generic_pexpr Unit sym)}
-    (hd : Decomp e ctx (callRedex ra f pes)) : False := by
+    (hd : Decomp e ctx (callRedex ra f pes)) : ctx = CTX := by
   have hc := hd.callRedex?_some
   cases hb with
   | val_pure v => cases hc
@@ -908,11 +910,15 @@ theorem BareHead.no_call {e : CoreExpr} (hb : BareHead e) {ctx : context}
   | memop_op hnv hp1 hp2 hd1 hd2 => cases hc
   | alloc => cases hc
   | alloc_op hnv hp1 hp2 hd1 hd2 => cases hc
+  | call hpes hdep =>
+    rw [callRedex?_callRedex] at hc
+    exact (Prod.mk.inj (Option.some.inj hc)).1.symm
 
 /-- Plugging a BARE value into the context of a decomposed CALL redex of
     a fragment term yields a fragment term: what RETURN installs is in
-    the cone. (The sym-binder frame is impossible: its head is a
-    `BareHead`, never a call.) -/
+    the cone. (At the sym-binder frame the head IS the call redex, at
+    the root — `BareHead.decomp_call_root` — and the plugged head is the
+    bare value; calls arc C4.) -/
 theorem Decomp.frag_plug_call' {e : CoreExpr} {ctx : context} {r : CoreExpr}
     (hd : Decomp e ctx r) {ra : core_run_annotation} {f : sym}
     {pes : List (generic_pexpr Unit sym)} (hr : r = callRedex ra f pes)
@@ -928,7 +934,10 @@ theorem Decomp.frag_plug_call' {e : CoreExpr} {ctx : context} {r : CoreExpr}
     | sseq_spec hf1 hf2 => exact .sseq_spec (ih hr hf1) hf2
   | sseq_sym hd ih =>
     cases hf with
-    | sseq_sym hb hf1 hf2 => subst hr; exact (hb.no_call hd).elim
+    | sseq_sym hb hf1 hf2 =>
+      subst hr
+      obtain rfl := hb.decomp_call_root hd
+      exact .sseq_sym (.val_pure v) (.val_pure v) hf2
   | annot _ _ _ hd ih =>
     cases hf with
     | annot hfb => exact .annot (ih hr hfb)

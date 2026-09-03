@@ -83,10 +83,24 @@ def symCmpL : sym → sym → LemOrdering :=
     instance). -/
 def symCmpK : sym → sym → LemOrdering := @mapKeyCompare sym _
 
+/-- A map add at the symbol key comparator, at ANY value type β — the
+    engine's `fmapAddBy … mapKeyCompare` shape (calls arc C4, the C3
+    range audit's H-2: the law below is stated once here, β-generic). The
+    env frame's `envAdd` is the `value` instance; a file's procedure map
+    (`prodFileWith`, ProdEntry.lean) and a label map are others. MEASURED
+    (LemLib.lean:497–517): the `BEq` instance enters `fmapAddBy` only in
+    the `.mk` arm's bucket filter, never the lookup, which reads the
+    bucket HEAD `(n, k, v) :: kept`; the add comparator enters only the
+    `.empty` arm, as the CAPTURED tree comparator `lemCmpToOrd cmp` — so
+    the lookup law needs the captured comparator to be `symOrd` (`SymMap`)
+    and nothing about the add's `BEq`. -/
+abbrev symAdd {β : Type} (k : sym) (v : β) (m : Fmap sym β) : Fmap sym β :=
+  @fmapAddBy sym β instBEqOfMapKeyType symCmpK k v m
+
 /-- The head-frame add in the ENGINE's exact elaboration
     (update_env_aux's comparator AND its MapKeyType-derived BEq —
     the derived structural `BEq sym` is a DIFFERENT instance and
-    must not leak in). -/
+    must not leak in). The `value` instance of `symAdd`. -/
 abbrev envAdd (x : sym) (v : value) (m : Fmap sym value) : Fmap sym value :=
   @fmapAddBy sym value instBEqOfMapKeyType symCmpK x v m
 
@@ -256,35 +270,36 @@ instance : Std.TransCmp symOrd := by
 
 /-! ## The reachable-frame predicate and THE LOOKUP LAW -/
 
-/-- Frames reachable by engine `update_env` chains: empty, or a tree
-    captured at the symbol comparator. -/
-def SymFrame (f : Fmap sym value) : Prop :=
-  f = Fmap.empty ∨
-  ∃ (bk : Std.TreeMap sym (List (Nat × sym × value)) symOrd)
-    (bs : Std.TreeMap Nat (sym × value)) (n : Nat),
-    f = Fmap.mk symOrd bk bs n
+/-- Maps reachable by `symAdd` chains at any value type: empty, or a
+    tree captured at the symbol comparator (calls arc C4; the `value`
+    instance is `SymFrame`). -/
+def SymMap {β : Type} (m : Fmap sym β) : Prop :=
+  m = Fmap.empty ∨
+  ∃ (bk : Std.TreeMap sym (List (Nat × sym × β)) symOrd)
+    (bs : Std.TreeMap Nat (sym × β)) (n : Nat),
+    m = Fmap.mk symOrd bk bs n
 
-theorem symFrame_empty : SymFrame fmapEmpty := .inl rfl
+theorem symMap_empty {β : Type} : SymMap (fmapEmpty : Fmap sym β) := .inl rfl
 
-theorem SymFrame.add {f : Fmap sym value} (h : SymFrame f)
-    (k : sym) (v : value) : SymFrame (envAdd k v f) := by
+theorem SymMap.add {β : Type} {m : Fmap sym β} (h : SymMap m)
+    (k : sym) (v : β) : SymMap (symAdd k v m) := by
   rcases h with rfl | ⟨bk, bs, n, rfl⟩
   · exact .inr ⟨_, _, _, rfl⟩
   · exact .inr ⟨_, _, _, rfl⟩
 
-/-- THE LOOKUP LAW: lookup after add on any reachable frame is a
-    single comparator case split (the Std.TreeMap insert law under
+/-- THE LOOKUP LAW, β-generic: lookup after add on any reachable map is
+    a single comparator case split (the Std.TreeMap insert law under
     `Std.TransCmp symOrd`). The lookup's own comparator argument is
     irrelevant (the representation searches with the CAPTURED
     comparator). -/
-theorem envAdd_lookup {f : Fmap sym value} (h : SymFrame f)
-    (cmp' : sym → sym → LemOrdering) (l k : sym) (v : value) :
-    fmapLookupBy cmp' l (envAdd k v f) =
-      (if symOrd l k = .eq then some v else fmapLookupBy cmp' l f) := by
+theorem symAdd_lookup {β : Type} {m : Fmap sym β} (h : SymMap m)
+    (cmp' : sym → sym → LemOrdering) (l k : sym) (v : β) :
+    fmapLookupBy cmp' l (symAdd k v m) =
+      (if symOrd l k = .eq then some v else fmapLookupBy cmp' l m) := by
   rcases h with rfl | ⟨bk, bs, n, rfl⟩
-  · rw [show fmapLookupBy cmp' l (Fmap.empty : Fmap sym value) = none from rfl]
+  · rw [show fmapLookupBy cmp' l (Fmap.empty : Fmap sym β) = none from rfl]
     exact fmapLookupBy_addBy_empty symCmpK cmp' k v l
-  · dsimp only [envAdd]
+  · dsimp only [symAdd]
     unfold fmapAddBy fmapLookupBy
     dsimp only
     rw [Std.TreeMap.get?_eq_getElem?, Std.TreeMap.get?_eq_getElem?,
@@ -296,6 +311,41 @@ theorem envAdd_lookup {f : Fmap sym value} (h : SymFrame f)
     · rw [if_pos (hswap.mpr hc), if_pos hc]
     · rw [if_neg (fun h => hc (hswap.mp h)), if_neg hc]
       rfl
+
+/-- The two-entry instance (a file's `main`-plus-one procedure map, a
+    two-label map): the smoke's former local `csAdd_lookup_two`, here
+    once (H-2). -/
+theorem symAdd_lookup_two {β : Type} (cmp' : sym → sym → LemOrdering) (k2 k1 l : sym)
+    (v2 v1 : β) :
+    fmapLookupBy cmp' l (symAdd k2 v2 (symAdd k1 v1 fmapEmpty)) =
+      (if symOrd l k2 = .eq then some v2
+       else if symOrd l k1 = .eq then some v1 else none) := by
+  rw [symAdd_lookup (symMap_empty.add _ _), symAdd_lookup symMap_empty]
+  rfl
+
+/-- Frames reachable by engine `update_env` chains: empty, or a tree
+    captured at the symbol comparator — `SymMap` at `value`. -/
+def SymFrame (f : Fmap sym value) : Prop := SymMap f
+
+theorem symFrame_empty : SymFrame fmapEmpty := symMap_empty
+
+theorem SymFrame.add {f : Fmap sym value} (h : SymFrame f)
+    (k : sym) (v : value) : SymFrame (envAdd k v f) := SymMap.add h k v
+
+/-- The callee's parameter frame at ONE parameter is the one-entry head
+    frame `envAdd x v ∅` (`call_proc`'s fold at one step, Core_run.lean:93;
+    the comparator instances agree definitionally). Moved here from the C3
+    smoke (calls arc C4). -/
+theorem procEnv_single (x : sym) (bty : core_base_type) (v : value) :
+    procEnv [(x, bty)] [v] = envAdd x v fmapEmpty := rfl
+
+/-- THE LOOKUP LAW at the env frame (the `value` instance of
+    `symAdd_lookup`). -/
+theorem envAdd_lookup {f : Fmap sym value} (h : SymFrame f)
+    (cmp' : sym → sym → LemOrdering) (l k : sym) (v : value) :
+    fmapLookupBy cmp' l (envAdd k v f) =
+      (if symOrd l k = .eq then some v else fmapLookupBy cmp' l f) :=
+  symAdd_lookup h cmp' l k v
 
 /-! ## The binding-pattern computations (engine `update_env_aux`
 computed at the authored pattern shapes) -/

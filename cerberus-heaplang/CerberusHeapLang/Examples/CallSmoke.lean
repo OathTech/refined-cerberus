@@ -74,12 +74,6 @@ def csFBody (bty ybty : core_base_type) : CoreExpr :=
 def csMainBody (ra : core_run_annotation) : CoreExpr :=
   callRedex ra csF [Pexpr [] () (PEval (csInt 3))]
 
-/-- A map add at the engine's symbol comparator, at any value type (the
-    `envAdd` shape; the file's procedure map is built with it so the
-    generic lookup law below applies). -/
-abbrev csAdd {β : Type} (k : sym) (v : β) (m : Fmap sym β) : Fmap sym β :=
-  @fmapAddBy sym β instBEqOfMapKeyType symCmpK k v m
-
 /-- The two-procedure file: `main ↦ Proc … [] (f(3))`, `f ↦ Proc … [(x, bty)]
     (save ret(y := x + 1) in pure(y))`; no stdlib, no externs. -/
 def csFile (ra : core_run_annotation) (bty ybty : core_base_type) :
@@ -90,8 +84,8 @@ def csFile (ra : core_run_annotation) (bty ybty : core_base_type) :
     stdlib := fmapEmpty,
     impl0 := fmapEmpty,
     globs := [],
-    funs := csAdd csMain (Proc CerbLocation.unknown none bty [] (csMainBody ra))
-      (csAdd csF (Proc CerbLocation.unknown none bty [(csX, bty)] (csFBody bty ybty)) fmapEmpty),
+    funs := symAdd csMain (Proc CerbLocation.unknown none bty [] (csMainBody ra))
+      (symAdd csF (Proc CerbLocation.unknown none bty [(csX, bty)] (csFBody bty ybty)) fmapEmpty),
     extern := fmapEmpty,
     funinfo := fmapEmpty,
     loop_attributes1 := default,
@@ -103,30 +97,9 @@ def csFile (ra : core_run_annotation) (bty ybty : core_base_type) :
 
 /-! ## The file's lookups -/
 
-/-- Lookup in a two-entry map built by `csAdd` on empty (the generic
-    twin of `envAdd_lookup`, at the value type of the file's procedure
-    map; the lookup's own comparator is irrelevant). -/
-theorem csAdd_lookup_two {β : Type} (cmp' : sym → sym → LemOrdering) (k2 k1 l : sym)
-    (v2 v1 : β) :
-    fmapLookupBy cmp' l (csAdd k2 v2 (csAdd k1 v1 fmapEmpty)) =
-      (if symOrd l k2 = .eq then some v2
-       else if symOrd l k1 = .eq then some v1 else none) := by
-  have h1 : fmapLookupBy cmp' l (csAdd k1 v1 fmapEmpty) =
-      (if symOrd l k1 = .eq then some v1 else none) :=
-    fmapLookupBy_addBy_empty symCmpK cmp' k1 v1 l
-  rw [← h1]
-  dsimp only [csAdd]
-  unfold fmapAddBy fmapLookupBy fmapEmpty
-  dsimp only
-  rw [Std.TreeMap.get?_eq_getElem?, Std.TreeMap.get?_eq_getElem?,
-    Std.TreeMap.getElem?_insert]
-  have hswap : (symOrd k2 l = .eq) ↔ (symOrd l k2 = .eq) := by
-    rw [Std.OrientedCmp.eq_swap (cmp := symOrd) (a := k2) (b := l)]
-    cases symOrd l k2 <;> simp [Ordering.swap]
-  by_cases hc : symOrd l k2 = .eq
-  · rw [if_pos (hswap.mpr hc), if_pos hc]
-  · rw [if_neg (fun h => hc (hswap.mp h)), if_neg hc]
-    rfl
+/-! The two-entry lookups below read `call_proc`'s map off the file
+through the β-generic `symAdd_lookup_two` (EnvLaws; C4 moved the smoke's
+former local law there — the C3 range audit's H-2). -/
 
 /-- `call_proc`'s lookup finds `f` (computed). -/
 theorem csFile_lookup_f (ra : core_run_annotation) (bty ybty : core_base_type) :
@@ -135,9 +108,9 @@ theorem csFile_lookup_f (ra : core_run_annotation) (bty ybty : core_base_type) :
   rw [show fmapLookupBy (fun (s1 : sym) (s2 : sym) => Lem_Basic_classes.ordCompare s1 s2) csF
       (csFile ra bty ybty).stdlib = none from rfl]
   rw [resolveExtern_id_of_empty rfl, show (csFile ra bty ybty).funs =
-      csAdd csMain (Proc CerbLocation.unknown none bty [] (csMainBody ra))
-        (csAdd csF (Proc CerbLocation.unknown none bty [(csX, bty)] (csFBody bty ybty)) fmapEmpty)
-      from rfl, csAdd_lookup_two]
+      symAdd csMain (Proc CerbLocation.unknown none bty [] (csMainBody ra))
+        (symAdd csF (Proc CerbLocation.unknown none bty [(csX, bty)] (csFBody bty ybty)) fmapEmpty)
+      from rfl, symAdd_lookup_two]
   rw [if_neg (by decide +kernel), if_pos (by decide +kernel)]
 
 /-- Every procedure the file declares is `main` or `f` — read off the
@@ -151,9 +124,9 @@ theorem csFile_lookup_inv (ra : core_run_annotation) (bty ybty : core_base_type)
   rw [show fmapLookupBy (fun (s1 : sym) (s2 : sym) => Lem_Basic_classes.ordCompare s1 s2) g
       (csFile ra bty ybty).stdlib = none from rfl] at h
   rw [resolveExtern_id_of_empty rfl, show (csFile ra bty ybty).funs =
-      csAdd csMain (Proc CerbLocation.unknown none bty [] (csMainBody ra))
-        (csAdd csF (Proc CerbLocation.unknown none bty [(csX, bty)] (csFBody bty ybty)) fmapEmpty)
-      from rfl, csAdd_lookup_two] at h
+      symAdd csMain (Proc CerbLocation.unknown none bty [] (csMainBody ra))
+        (symAdd csF (Proc CerbLocation.unknown none bty [(csX, bty)] (csFBody bty ybty)) fmapEmpty)
+      from rfl, symAdd_lookup_two] at h
   by_cases h1 : symOrd g csMain = .eq
   · rw [if_pos h1] at h
     obtain ⟨hp, hb⟩ := Prod.mk.inj (Option.some.inj h)
@@ -247,12 +220,6 @@ def csLs : LabelSpec GF := fun _ _ _ => iprop(⌜False⌝)
 def csPost : SpikeVal → EnvStack → IProp GF := fun w _ => iprop(⌜w.val = csInt 4⌝)
 
 /-! ## The callee's body: one proof at every caller tail -/
-
-/-- The parameter frame `procEnv [(x, bty)] [v]` is the one-entry head
-    frame `envAdd x v ∅` (`call_proc`'s fold at one parameter; the
-    comparator instances agree definitionally). -/
-theorem procEnv_single (x : sym) (bty : core_base_type) (v : value) :
-    procEnv [(x, bty)] [v] = envAdd x v fmapEmpty := rfl
 
 theorem csFrame_lookup_x (v : value) :
     fmapLookupBy symCmpK csX (procEnv [(csX, bty)] [v]) = some v := by

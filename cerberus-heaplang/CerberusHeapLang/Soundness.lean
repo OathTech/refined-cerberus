@@ -4004,6 +4004,20 @@ inductive BareHead : CoreExpr → Prop where
       (hd1 : peDepth pe1 ≤ lemDefaultFuel)
       (hd2 : peDepth pe2 ≤ lemDefaultFuel) :
       BareHead (allocOpRedex loc ann pe1 pe2 pref)
+  /-- THE PROCEDURE CALL (calls arc C4): `lets x = f(args) in …` binds the
+      callee's result. Its terminal value is BARE — the RETURN arm plugs
+      `mk_value_pe cval` (Core_reduction.lean:484 col 2276; the mirror
+      `Step.ret`, after `Step.ret_annot` has stripped an annotated
+      callee value), so the LETS-ANNOT beta stays unreachable. The call
+      redex itself takes no control-preserving step (`BareHead.step` is
+      vacuous at it: `Step.call` changes the control), and the frame's
+      plugged successor `lets x = pure(v) in …` is `val_pure`-headed
+      (`BareHead.decomp_call_root`, Adequacy.lean). Same operand grammar
+      as `Frag.call`. -/
+  | call {ra : core_run_annotation} {f : sym} {pes : List (generic_pexpr Unit sym)}
+      (hpes : ∀ pe ∈ pes, PePure pe)
+      (hdep : ∀ pe ∈ pes, peDepth pe ≤ lemDefaultFuel) :
+      BareHead (callRedex ra f pes)
 
 /-- An annotated value is never a `BareHead` (the LETS-ANNOT beta at
     the symbol binder is unreachable in the fragment). -/
@@ -4017,6 +4031,7 @@ theorem BareHead.not_annot {ds : List dyn_annotation} {v : value}
   | memop_op hnv hp1 hp2 hd1 hd2 => simp [memopRedex, ofVal] at he
   | alloc => simp [allocRedex, ofVal] at he
   | alloc_op hnv hp1 hp2 hd1 hd2 => simp [allocOpRedex, ofVal] at he
+  | call hpes hdep => simp [callRedex, ofVal] at he
 
 /-- A non-value `BareHead` is itself a root redex. -/
 theorem BareHead.redex {e : CoreExpr} (h : BareHead e) (hnv : toVal e = none) :
@@ -4031,16 +4046,18 @@ theorem BareHead.redex {e : CoreExpr} (h : BareHead e) (hnv : toVal e = none) :
   | memop_op hnv hp1 hp2 hd1 hd2 => exact .memop _ _
   | alloc => exact .alloc
   | alloc_op hnvA hp1 hp2 hd1 hd2 => exact .alloc_op _ _ _ hnvA
+  | call hpes hdep => exact .call _ _ _
 
 /-- Closure under the mirror step: a `BareHead` steps only to a
     `BareHead` (create → its bare pointer value; memop-operand
     evaluation → the memop at values; the memop at values → its bare
-    boolean). -/
+    boolean; the call takes no control-preserving step at all). -/
 theorem BareHead.step {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack} {ctl : Ctl} {σ : Mem}
     {e' : CoreExpr} {ρ' : EnvStack} {σ' : Mem}
     (h : BareHead e) (hs : Step M (e, ρ, ctl, σ) (e', ρ', ctl, σ')) : BareHead e' := by
   cases h with
   | val_pure v => exact (Step.pure_val_elim hs rfl).elim
+  | call hpes hdep => exact (Step.call_ne_same_ctl (callRedex?_callRedex _ _ _) hs).elim
   | create =>
     obtain ⟨pv, σ'', hmem, hout⟩ := hs.create_inv
     obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ'' := by
@@ -4313,6 +4330,7 @@ theorem BareHead.frag {e : CoreExpr} (h : BareHead e) : Frag e := by
   | memop_op hnv hp1 hp2 hd1 hd2 => exact .memop_op hnv hp1 hp2 hd1 hd2
   | alloc => exact .alloc
   | alloc_op hnv hp1 hp2 hd1 hd2 => exact .alloc_op hnv hp1 hp2 hd1 hd2
+  | call hpes hdep => exact .call hpes hdep
 
 /-! matcher facts for the pure-redex shapes (the fuelled matchers
 examine the pexpr's head constructor; a non-value premise dismisses
