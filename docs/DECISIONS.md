@@ -1397,6 +1397,24 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   Standing rule from here (memory + this entry): the orchestrator's gate at
   every slice boundary is recorded with its verbatim verdict lines before
   the log is deleted; summary lines in commit messages are not a record.
+- **2026-09-03 [USER] MERGED AT b82e472; PROCEED WITH C3 AND BEYOND** (verbatim):
+  "the cerberus-lean team say the fix is landing in the next pin. The
+  scope sounds good to me, keep pushing forward on the C3 and beyond. You
+  can keep working until you get to a decision point or a possible
+  merge". Dispositions: (1) the C2 audit's re-adjudication item (the
+  design note's pre-registered "`loop_step_frag`'s shape survives"
+  criterion failed; the lemma was restated at the live control) is
+  RESOLVED: continue — the criterion was wrong, the work right; (2) the
+  `dynamic_addrs` upstream fix lands in the next cerberus-lean pin → the
+  scheduled further re-pin (after C3/C4, scouted first) picks it up and
+  the K3 `free` rule's dynamic-flag design is re-examined then (the flag
+  stays the sound precondition; the fix may make the engine's check
+  precise); (3) sequence: C3 (spec table, procedure-indexed judgment
+  replacing C2's guard with the call clause, the call rule, recursion via
+  the one Löb) → C4 (recursive fib production statement + the
+  `exec_loc`/`current_loc` production-lane tie + docs) → fuel-lane
+  restatement (delete `driveU`, PROVISIONAL off) → the further re-pin →
+  range audits each, merge ask at the next candidate.
 - **2026-09-03 [USER] SHAREABLE MAIN: cerberus-heaplang + DURABLE INFRASTRUCTURE ONLY;
   THE RefinedC-FAMILY WORK ON BRANCH `refinedc/dev`** (verbatim): "I'm going
   to share the refined-cerberus repo with some external people. Can you
@@ -1434,21 +1452,59 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   ALL GATES GREEN
   GATE-EXIT=0
   ```
-- **2026-09-03 [USER] MERGED AT b82e472; PROCEED WITH C3 AND BEYOND** (verbatim):
-  "the cerberus-lean team say the fix is landing in the next pin. The
-  scope sounds good to me, keep pushing forward on the C3 and beyond. You
-  can keep working until you get to a decision point or a possible
-  merge". Dispositions: (1) the C2 audit's re-adjudication item (the
-  design note's pre-registered "`loop_step_frag`'s shape survives"
-  criterion failed; the lemma was restated at the live control) is
-  RESOLVED: continue — the criterion was wrong, the work right; (2) the
-  `dynamic_addrs` upstream fix lands in the next cerberus-lean pin → the
-  scheduled further re-pin (after C3/C4, scouted first) picks it up and
-  the K3 `free` rule's dynamic-flag design is re-examined then (the flag
-  stays the sound precondition; the fix may make the engine's check
-  precise); (3) sequence: C3 (spec table, procedure-indexed judgment
-  replacing C2's guard with the call clause, the call rule, recursion via
-  the one Löb) → C4 (recursive fib production statement + the
-  `exec_loc`/`current_loc` production-lane tie + docs) → fuel-lane
-  restatement (delete `driveU`, PROVISIONAL off) → the further re-pin →
-  range audits each, merge ask at the next candidate.
+- **2026-09-03 [USER] LICENSE: APACHE 2.0, (c) OATH TECHNOLOGIES; THE LAKE PINS ARE
+  PUBLIC** (verbatim: "License: Apache 2.0, (c) Oath Technologies";
+  "Lake pins are public"). Landed on main at c75d416: `LICENSE` (the
+  canonical text, byte-identical to the batteries/Qq dependency
+  copies), `NOTICE` (Copyright 2026 Oath Technologies), README license
+  section + "git-pinned to public repositories".
+- **2026-09-03 [USER] EVERY MERGE IS PRECEDED BY A CHECK-IN; NO CARRY-OVER OF
+  APPROVAL** (verbatim): "We don't need to revert anything, but in
+  general *every* merge should be preceded by a check-in with the user.
+  So your second merge there should not have gone ahead - please seek
+  explicit signoff." [AGENT] acknowledgment: the license fast-forward
+  (6d54a89 → c75d416) was merged without its own sign-off, on the
+  earlier "we can go ahead now" for the shareable-main trim plus the
+  license instruction. Ruled a violation (not reverted). Rule as
+  applied from here: an instruction that implies content authorizes a
+  commit on a branch, never the merge; each fast-forward to main gets
+  its own ask (candidate head, range, gate + audit status) and proceeds
+  only on an explicit yes to that ask, docs-only included.
+- **2026-09-03 [AGENT] C3 LANDED ON `calls-c1` (93ca8b7, rebased onto main c75d416):
+  the specification table and the call rule.** Record:
+  `cerberus-heaplang/docs/2026-09-03_c3-notes.md`; post snapshot
+  `docs/2026-09-03_c3-signatures-post.txt`. Judgments re-indexed by the
+  current procedure with a table (`wps M p Ls Θ Ψ e ρ`, `wpt` with a
+  budgeted table, now well-founded over the budget split `1 + m + k'`);
+  C2's `⌜False⌝` call guard replaced by the call clause (pre-C3 =
+  the empty-table instance); `procSpecs`/`procSpecs_intro` (one body
+  proof per procedure, no Löb), `wps_call(_root)`/`wpt_call(_root)`;
+  the collapse `wps_sound_cps` = the one Löb with `SameTail`;
+  `Step.env_depth` closes the C2 audit's N-1. Two-procedure smoke
+  `Examples/CallSmoke.lean` (first non-vacuous `FragProcs`). Pins
+  312 → 344. Worker-flagged, carried to C4: the total DRIVER lane
+  through calls stays at the empty table; docs rewrite proper.
+  Orchestrator FULL gate at 93ca8b7 (main's runner), verbatim verdict
+  lines (the build log also carries 66 linter warnings in
+  `CerberusHeapLang/*` modules — unused simp arguments / unused
+  variables, warnings not errors, Potential.lean the bulk; hygiene
+  item handed to the range audit, C3-attribution not established):
+  ```
+  == gate 1: banned proof-method grep (native_decide / bv_decide / ofReduce*) ==
+  ok: no banned proof-method references
+  == gate 2: capped build, cerberus-heaplang (elaborates its axiom audit) ==
+  CerberusHeapLang export pins: 344 trio-exact
+  CerberusHeapLang axiom sweep: every theorem bounded by the trio (3301 swept, internal details included — count informational, environment-dependent)
+  CerberusHeapLang banned-axiom sweep: sorryAx/ofReduceBool/ofReduceNat absent from all cones (5053 constants of every kind swept, internal details included — count informational, environment-dependent)
+  Build completed successfully (455 jobs).
+  ok: cerberus-heaplang build green
+  == speedbump: capability manifest (regenerate; red on a red row or drift) ==
+  ok: capability manifest regenerated, no drift
+  == speedbump: import direction (semantics → heap → rules → adequacy → clients) ==
+  ok: import direction — no core module imports an exhibit/example/production module
+  ALL GATES GREEN
+  GATE-EXIT=0
+  ```
+  Range audit 6d54a89..HEAD (license commit + the DECISIONS replay +
+  C3) dispatched next on a fixed detached copy; merge ask follows the
+  audit — no merge without an explicit yes to that ask.
