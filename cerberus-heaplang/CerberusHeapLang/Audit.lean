@@ -129,6 +129,7 @@ import CerberusHeapLang.AllocExhibit
 import CerberusHeapLang.DisposeExhibit
 import CerberusHeapLang.RegionLoopExhibit
 import CerberusHeapLang.MallocListExhibit
+import CerberusHeapLang.FibRecExhibit
 import CerberusHeapLang.Examples.ReadinessSmoke
 import CerberusHeapLang.Examples.MirrorCoverage
 import CerberusHeapLang.Examples.CallSmoke
@@ -492,7 +493,40 @@ def trioExports : List Name := [
   ``CerberusHeapLang.call_smoke_driveU,
   ``CerberusHeapLang.csF_body_wpt, ``CerberusHeapLang.csCtx_procSpecsT,
   ``CerberusHeapLang.csMain_wpt, ``CerberusHeapLang.cs_twp_readout,
-  ``CerberusHeapLang.csCtx_fragProcs]
+  ``CerberusHeapLang.csCtx_fragProcs,
+  -- calls arc C4 (2026-09-03): RECURSIVE FIB ON THE SHIPPED PIPELINE — the
+  -- β-generic symbol-map lookup law (EnvLaws; the smoke's law moved), the
+  -- plain-symbol binder's call head (`BareHead.decomp_call_root`), THE
+  -- TOTAL DRIVER LANE THROUGH CALLS (the live-control delivery fact's
+  -- value/annot/step rounds, the CPS driver induction `wpt_driver_cps`, its
+  -- launcher `wpt_driver_done_procs`, the whole-file registration tie), the
+  -- N-procedure production entry (`prodFile_eq_with`, `prodFileWith_lookup_main`,
+  -- `prodThread_eq_ctlThread`, `drive_after_setup_with`, `prod_run_eqJ_procs`),
+  -- and the exhibit: the file's lookups, its registration computed
+  -- (`collect_new_fr`) and its whole-file registration
+  -- tie, `FragProcs` at two procedures, `fib`'s body ONCE under each table
+  -- (Hoare's rule for recursive procedures — no Löb in the client), `main`
+  -- by the call rule, the `driveU` lane (PROVISIONAL) and THE EIGHTH
+  -- ROOT-OF-TRUST STATEMENT `fib_rec_certified_production`.
+  -- (`BareHead.decomp_call_root` — `[propext]` — and `fibRounds_closed` —
+  -- `[propext, Quot.sound]` — have SUB-trio cones: unpinnable here, bounded
+  -- by the sweep.)
+  ``CerberusHeapLang.symAdd_lookup, ``CerberusHeapLang.symAdd_lookup_two,
+  ``CerberusHeapLang.procEnv_single,
+  ``CerberusHeapLang.LabeledProcs.of_fibers, ``CerberusHeapLang.driverDoneCtl_value,
+  ``CerberusHeapLang.driverDoneCtl_annot, ``CerberusHeapLang.driverDoneCtl_step,
+  ``CerberusHeapLang.wpt_driver_cps, ``CerberusHeapLang.wpt_driver_done_procs,
+  ``CerberusHeapLang.prodFile_eq_with, ``CerberusHeapLang.prodFileWith_lookup_main,
+  ``CerberusHeapLang.prodThread_eq_ctlThread, ``CerberusHeapLang.drive_after_setup_with,
+  ``CerberusHeapLang.prod_run_eqJ_procs,
+  ``CerberusHeapLang.frFile_lookup_fib, ``CerberusHeapLang.frFile_lookup_inv,
+  ``CerberusHeapLang.collect_new_fr,
+  ``CerberusHeapLang.frCtx_labeledProcs, ``CerberusHeapLang.frCtx_fragProcs,
+  ``CerberusHeapLang.frBody_wps, ``CerberusHeapLang.frCtx_procSpecs,
+  ``CerberusHeapLang.frMain_wps, ``CerberusHeapLang.fr_wp_readout,
+  ``CerberusHeapLang.fib_rec_certified,
+  ``CerberusHeapLang.frBody_wpt, ``CerberusHeapLang.frCtx_procSpecsT,
+  ``CerberusHeapLang.frMain_wpt, ``CerberusHeapLang.fib_rec_certified_production]
 
 def sortedNames (ns : Array Name) : Array String :=
   (ns.map (·.toString)).qsort (· < ·)
