@@ -100,6 +100,7 @@ def pot : CoreExpr → Nat
 /-- `esize` is bounded by the potential on the cone. -/
 theorem Frag.esize_le_pot {e : CoreExpr} (hf : Frag e) : esize e ≤ pot e := by
   induction hf with
+  | call hpes hdep => simp [esize, pot, callRedex]
   | val_pure v => simp [esize, pot]
   | store => simp [esize, pot, storeRedex]
   | load => simp [esize, pot, loadRedex]
@@ -142,6 +143,7 @@ theorem Frag.esize_le_pot {e : CoreExpr} (hf : Frag e) : esize e ≤ pot e := by
     case-branch reset bound). -/
 theorem Frag.pot_le_two {e : CoreExpr} (hf : Frag e) : pot e ≤ 2 * esize e := by
   induction hf with
+  | call hpes hdep => simp [esize, pot, callRedex]
   | val_pure v => simp [esize, pot]
   | store => simp [esize, pot, storeRedex]
   | load => simp [esize, pot, loadRedex]
@@ -192,7 +194,8 @@ theorem Frag.pot_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
     ∃ l pes params cont, jumpRedex? e = some (l, pes) ∧
       lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) ∧ e' = cont := by
   induction hf generalizing e' ρ' σ' with
-  | val_pure v => exact (Step.val_elim (w := .pure v) hs).elim
+  | call hpes hdep => exact (Step.call_ne_same_ctl (callRedex?_callRedex _ _ _) hs).elim
+  | val_pure v => exact (Step.pure_val_elim hs rfl).elim
   | store =>
     obtain ⟨mv, fp, σ'', hmv, hmem, hout⟩ := hs.store_inv
     obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ'' := by
@@ -236,12 +239,13 @@ theorem Frag.pot_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
     subst h1
     left; simp [pot, allocOpRedex]
   | sseq hf1 hf2 ih1 ih2 =>
-    rcases hs.sseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
+    rcases hs.sseq_inv with ⟨e1', ρ'', σ'', hnj, hnv', hstep, hout⟩ |
         ⟨_, _, v, _, _, _, he1, _, hout⟩ | ⟨_, _, ds', v, _, _, _, he1, _, hout⟩ |
         ⟨l, pes, params, cont, vs, _, _, hj, _, hl, _, hout⟩ |
         ⟨_, _, _, _, _, _, _, hpat, _, _, hout⟩ |
         ⟨_, _, _, _, _, _, _, _, hpat, _, _, hout⟩ |
-        ⟨_, _, _, _, _, _, hpat, _, _, hout⟩
+        ⟨_, _, _, _, _, _, hpat, _, _, hout⟩ |
+        hcall
     · obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ'' ∧ σ' = σ'' := by
         simpa [Prod.mk.injEq] using hout
       subst h1
@@ -275,10 +279,12 @@ theorem Frag.pot_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
       left
       simp only [pot_sseq]
       omega
+    · exact hcall.ne_same_ctl.elim
   | wseq hf1 hf2 ih1 ih2 =>
-    rcases hs.wseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
+    rcases hs.wseq_inv with ⟨e1', ρ'', σ'', hnj, hnv', hstep, hout⟩ |
         ⟨_, _, v, _, _, _, he1, _, hout⟩ | ⟨_, _, ds', v, _, _, _, he1, _, hout⟩ |
-        ⟨l, pes, params, cont, vs, _, _, hj, _, hl, _, hout⟩
+        ⟨l, pes, params, cont, vs, _, _, hj, _, hl, _, hout⟩ |
+        hcall
     · obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ'' ∧ σ' = σ'' := by
         simpa [Prod.mk.injEq] using hout
       subst h1
@@ -304,10 +310,12 @@ theorem Frag.pot_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
     · obtain ⟨h1, -, -⟩ : e' = cont ∧ ρ' = _ ∧ σ' = σ := by
         simpa [Prod.mk.injEq] using hout
       exact .inr ⟨l, pes, params, cont, by rw [jumpRedex?_wseq, hj], hl, h1⟩
+    · exact hcall.ne_same_ctl.elim
   | annot hfb ihb =>
     rcases hs.annot_inv with ⟨hg, hnj, b', ρ'', σ'', hstep, hout⟩ |
         ⟨a2, ds2, c, hb, hout⟩ |
-        ⟨l, pes, params, cont, vs, _, _, hg, hj, _, hl, _, hout⟩
+        ⟨l, pes, params, cont, vs, _, _, hg, hj, _, hl, _, hout⟩ |
+        ⟨-, hcall⟩ | ⟨v', pc', κ', ha', hb', hκ', hout'⟩
     · obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ'' ∧ σ' = σ'' := by
         simpa [Prod.mk.injEq] using hout
       subst h1
@@ -328,6 +336,11 @@ theorem Frag.pot_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
         simpa [Prod.mk.injEq] using hout
       exact .inr ⟨l, pes, params, cont,
         by rw [jumpRedex?_annot_of_not_root _ _ hg, hj], hl, h1⟩
+    · exact hcall.ne_same_ctl.elim
+    · obtain ⟨rfl, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ := by simpa [Prod.mk.injEq] using hout'
+      left
+      simp only [pot_annot, pot_pure_val]
+      omega
   | @save sb ps body hp hd hb ih =>
     rcases hs.save_inv with ⟨cvals, ev0', evs', hρeq, hvals, hout⟩ |
         ⟨cvals, hnv, hvals, hout⟩
@@ -367,13 +380,14 @@ theorem Frag.pot_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
       simpa [Prod.mk.injEq] using hout
     exact .inr ⟨_, _, params, cont, rfl, hl, h1⟩
   | sseq_spec hf1 hf2 ih1 ih2 =>
-    rcases hs.sseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
+    rcases hs.sseq_inv with ⟨e1', ρ'', σ'', hnj, hnv', hstep, hout⟩ |
         ⟨_, _, v, _, _, hpat, _, _, hout⟩ |
         ⟨_, _, ds', v, _, _, hpat, _, _, hout⟩ |
         ⟨l, pes, params, cont, vs, _, _, hj, _, hl, _, hout⟩ |
         ⟨_, _, _, _, _, _, _, hpat, he1, _, hout⟩ |
         ⟨_, _, _, _, _, _, _, _, hpat, he1, _, hout⟩ |
-        ⟨_, _, _, _, _, _, hpat, _, _, hout⟩
+        ⟨_, _, _, _, _, _, hpat, _, _, hout⟩ |
+        hcall
     · obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ'' ∧ σ' = σ'' := by
         simpa [Prod.mk.injEq] using hout
       subst h1
@@ -402,8 +416,9 @@ theorem Frag.pot_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
       simp only [pot_sseq, pot_annot, pot_ofVal_annot]
       omega
     · exact (symPat_ne_spec hpat).elim
+    · exact hcall.ne_same_ctl.elim
   | pure_sym =>
-    obtain ⟨v, -, -, hout⟩ := hs.pure_inv
+    obtain ⟨v, -, -, hout⟩ := hs.pure_inv rfl
     obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ := by
       simpa [Prod.mk.injEq] using hout
     subst h1
@@ -417,13 +432,14 @@ theorem Frag.pot_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
     left
     simp [pot, loadOpRedex]
   | sseq_sym hb hf1 hf2 ih1 ih2 =>
-    rcases hs.sseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
+    rcases hs.sseq_inv with ⟨e1', ρ'', σ'', hnj, hnv', hstep, hout⟩ |
         ⟨_, _, v, _, _, hpat, _, _, hout⟩ |
         ⟨_, _, ds', v, _, _, hpat, _, _, hout⟩ |
         ⟨l, pes, params, cont, vs, _, _, hj, _, hl, _, hout⟩ |
         ⟨_, _, _, _, _, _, _, hpat, _, _, hout⟩ |
         ⟨_, _, _, _, _, _, _, _, hpat, _, _, hout⟩ |
-        ⟨_, _, _, _, _, _, hpat, _, _, hout⟩
+        ⟨_, _, _, _, _, _, hpat, _, _, hout⟩ |
+        hcall
     · obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ'' ∧ σ' = σ'' := by
         simpa [Prod.mk.injEq] using hout
       subst h1
@@ -446,17 +462,14 @@ theorem Frag.pot_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
       left
       simp only [pot_sseq]
       omega
+    · exact hcall.ne_same_ctl.elim
   | memop_vals v1 v2 =>
-    rw [show memopPtrEqVals v1 v2 = Expr [] (Ememop PtrEq
-      [Pexpr [] () (PEval v1), Pexpr [] () (PEval v2)]) from rfl] at hs
-    cases hs with
-    | run hj hl hvs => simp at hj
-    | memop_ptreq h1 h2 hmem =>
-      left
-      simp [pot, memopPtrEqVals, memopRedex]
-    | memop_eval hnv hv1 hv2 =>
-      rw [valueFromPexprs_pair, valueFromPexpr_val, valueFromPexpr_val] at hnv
-      cases hnv
+    obtain ⟨pv1, pv2, b, σ'', -, -, -, hout⟩ := hs.memop_vals_inv
+    obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ'' := by
+      simpa [Prod.mk.injEq] using hout
+    subst h1
+    left
+    simp [pot, memopPtrEqVals, memopRedex]
   | memop_op hnv hp1 hp2 hpd1 hpd2 =>
     obtain ⟨v1, v2, hv1, hv2, hout⟩ := hs.memop_op_inv hnv
     obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ := by

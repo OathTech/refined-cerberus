@@ -456,6 +456,7 @@ theorem counter_loop_certified
       exact Nat.le_trans (loopBody_fragJ loc ann ra mo bty _).pot_le_two
         (by rw [show esize (loopBody loc ann ra mo bty (cellPtr idx addr)) = 3 from rfl,
           show lemDefaultFuel = 999999 + 1 from rfl]; omega))
+    (procCtx_fragProcs _)
     prog fmapEmpty [] σ₀ _
     (.save (saveParams_pure_of_vals rfl) (saveParams_depth_of_vals rfl) (loopBody_fragJ loc ann ra mo bty _))
     (Nat.le_trans (Frag.pot_le_two (e := prog) (.save (saveParams_pure_of_vals rfl) (saveParams_depth_of_vals rfl)
@@ -524,6 +525,7 @@ theorem counter_loop_certified_irrelevant_binding
       exact Nat.le_trans (loopBody_fragJ loc ann ra mo bty _).pot_le_two
         (by rw [show esize (loopBody loc ann ra mo bty (cellPtr idx addr)) = 3 from rfl,
           show lemDefaultFuel = 999999 + 1 from rfl]; omega))
+    (procCtx_fragProcs _)
     prog (envAdd ySym junk fmapEmpty) [] σ₀ _
     (.save (saveParams_pure_of_vals rfl) (saveParams_depth_of_vals rfl) (loopBody_fragJ loc ann ra mo bty _))
     (Nat.le_trans (Frag.pot_le_two (e := prog) (.save (saveParams_pure_of_vals rfl) (saveParams_depth_of_vals rfl)

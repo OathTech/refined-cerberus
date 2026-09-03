@@ -471,6 +471,7 @@ theorem fib_certified
       obtain ⟨-, rfl⟩ := fibQ_inv ra n ibty abty bbty hl
       exact Nat.le_trans (fibBody_fragJ ra n).pot_le_two
         (by rw [show esize (fibBody ra n) = 2 from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega))
+    (procCtx_fragProcs _)
     prog fmapEmpty [] σ₀ (∅ : SpikeHeapF SpikeCell)
     (.save (saveParams_pure_of_vals rfl) (saveParams_depth_of_vals rfl) (fibBody_fragJ ra n))
     (Nat.le_trans (Frag.pot_le_two (e := prog) (.save (saveParams_pure_of_vals rfl) (saveParams_depth_of_vals rfl) (fibBody_fragJ ra n)))

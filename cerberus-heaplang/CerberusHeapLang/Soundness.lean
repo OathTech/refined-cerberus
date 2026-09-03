@@ -72,6 +72,7 @@ below). Both are honest engine artifacts, not slack: past the budget
 the engine really does bail.
 -/
 import CerberusHeapLang.Step
+import CerberusHeapLang.EnvLaws
 import Core_reduction
 
 set_option autoImplicit false
@@ -586,6 +587,11 @@ inductive Redex : CoreExpr → Prop where
       {ds : List dyn_annotation} {v : value} {e2 : CoreExpr} :
       Redex (Expr [] (Ewseq (Pattern pa (CaseBase (none, bty)))
         (ofVal (.annot ds v)) e2))
+  /-- The procedure-call redex (calls arc C2): `Eproc` at a Core
+      identifier — get_ctx's `| Eproc _ _ _ => [(CTX, expr1)]` root
+      (Core_reduction.lean:375). -/
+  | call (ra : core_run_annotation) (f : sym)
+      (pes : List (generic_pexpr Unit sym)) : Redex (callRedex ra f pes)
 
 /-- The extended decomposition: the same three layers as `Decomp`
     (get_ctx's arm order), over the extended root set. -/
@@ -654,6 +660,7 @@ theorem Redex.not_irreducible {r : CoreExpr} (h : Redex r) :
   | kill_op loc ann kind hnv => rfl
   | alloc => rfl
   | alloc_op loc ann pref hnv => rfl
+  | call ra f pes => rfl
 
 theorem Decomp.not_irreducible {e : CoreExpr} {ctx : context} {r : CoreExpr}
     (h : Decomp e ctx r) : is_irreducible e = false := by
@@ -721,6 +728,12 @@ theorem get_ctx_memop {mop : memop} {pes : List (generic_pexpr Unit sym)}
     get_ctx_lemFuel (n+1) (memopRedex mop pes) =
       [(CTX, memopRedex mop pes)] := rfl
 
+/-- get_ctx roots at the call redex (Core_reduction.lean:375, `| Eproc
+    _ _ _ => [(CTX, expr1)]` — no descent into the arguments). -/
+theorem get_ctx_call {ra : core_run_annotation} {f : sym}
+    {pes : List (generic_pexpr Unit sym)} (n : Nat) :
+    get_ctx_lemFuel (n+1) (callRedex ra f pes) = [(CTX, callRedex ra f pes)] := rfl
+
 /-- The engine's singleton decomposition, extended roots. -/
 theorem Decomp.get_ctx_at {e : CoreExpr} {ctx : context} {r : CoreExpr}
     (h : Decomp e ctx r) :
@@ -753,6 +766,7 @@ theorem Decomp.get_ctx_at {e : CoreExpr} {ctx : context} {r : CoreExpr}
     | kill_op loc ann kind hnv => exact get_ctx_action m
     | alloc => exact get_ctx_action m
     | alloc_op loc ann pref hnv => exact get_ctx_action m
+    | call ra f pes => exact get_ctx_call m
   | sseq hd ih =>
     intro n hn
     rw [esize_sseq] at hn
@@ -839,12 +853,147 @@ theorem Redex.jumpRedex?_some_inv {r : CoreExpr} {l : sym}
   | kill_op loc ann kind hnv => cases hj
   | alloc => cases hj
   | alloc_op loc ann pref hnv => cases hj
+  | call ra f pes => cases hj
   | run ra l' pes' =>
     obtain ⟨rfl, rfl⟩ : l' = l ∧ pes' = pes := by
       have := Option.some.inj hj
       exact ⟨congrArg Prod.fst this, congrArg Prod.snd this⟩
     exact ⟨ra, rfl⟩
 
+
+/-- A redex with a positive call-redex answer IS the call redex, at the
+    root context (the `jumpRedex?_some_inv` twin). -/
+theorem Redex.callRedex?_some_inv {r : CoreExpr} {ctx : context} {f : sym}
+    {pes : List (generic_pexpr Unit sym)} (h : Redex r)
+    (hc : callRedex? r = some (ctx, f, pes)) :
+    ctx = CTX ∧ ∃ ra : core_run_annotation, r = callRedex ra f pes := by
+  cases h with
+  | store => cases hc
+  | load => cases hc
+  | create => cases hc
+  | beta_pure => rw [callRedex?_sseq, callRedex?_ofVal] at hc; cases hc
+  | beta_annot => rw [callRedex?_sseq, callRedex?_ofVal] at hc; cases hc
+  | merge hirr => rw [callRedex?_annot_of_root _ _ rfl] at hc; cases hc
+  | save sb ps body => cases hc
+  | if_ g e2 e3 => cases hc
+  | case_ pe pats => cases hc
+  | run ra l pes' => cases hc
+  | pure_e hnv => cases hc
+  | load_op loc ann ty mo hnv2 => cases hc
+  | beta_spec => rw [callRedex?_sseq, callRedex?_ofVal] at hc; cases hc
+  | memop mop pes' => cases hc
+  | store_op loc ann ty mo hnv => cases hc
+  | beta_sym => rw [callRedex?_sseq, callRedex?_ofVal] at hc; cases hc
+  | wbeta_pure => rw [callRedex?_wseq, callRedex?_ofVal] at hc; cases hc
+  | wbeta_annot => rw [callRedex?_wseq, callRedex?_ofVal] at hc; cases hc
+  | kill => cases hc
+  | kill_op loc ann kind hnv => cases hc
+  | alloc => cases hc
+  | alloc_op loc ann pref hnv => cases hc
+  | call ra f' pes' =>
+    rw [callRedex?_callRedex] at hc
+    obtain ⟨rfl, rfl, rfl⟩ : CTX = ctx ∧ f' = f ∧ pes' = pes := by
+      have := Option.some.inj hc
+      exact ⟨congrArg Prod.fst this, congrArg (fun q => q.2.1) this,
+        congrArg (fun q => q.2.2) this⟩
+    exact ⟨rfl, ra, rfl⟩
+
+/-- `callRedex?` along an extended decomposition: `some` exactly at a call
+    redex, and then the CAPTURED context is the decomposition's context —
+    the syntactic search computes what get_ctx pairs the redex with. -/
+theorem Decomp.callRedex?_inv {e : CoreExpr} {ctx : context} {r : CoreExpr}
+    (hd : Decomp e ctx r) {ctx' : context} {f : sym} {pes : List (generic_pexpr Unit sym)}
+    (hc : callRedex? e = some (ctx', f, pes)) :
+    ctx' = ctx ∧ ∃ ra : core_run_annotation, r = callRedex ra f pes := by
+  induction hd generalizing ctx' with
+  | root hr => exact hr.callRedex?_some_inv hc
+  | sseq _ ih =>
+    rw [callRedex?_sseq, Option.map_eq_some_iff] at hc
+    obtain ⟨⟨c1, f1, pes1⟩, hc1, hq⟩ := hc
+    obtain ⟨rfl, rfl, rfl⟩ : _ ∧ _ ∧ _ := by
+      exact ⟨congrArg Prod.fst hq, congrArg (fun q => q.2.1) hq,
+        congrArg (fun q => q.2.2) hq⟩
+    obtain ⟨rfl, ra, rfl⟩ := ih hc1
+    exact ⟨rfl, ra, rfl⟩
+  | sseq_spec _ ih =>
+    rw [callRedex?_sseq, Option.map_eq_some_iff] at hc
+    obtain ⟨⟨c1, f1, pes1⟩, hc1, hq⟩ := hc
+    obtain ⟨rfl, rfl, rfl⟩ : _ ∧ _ ∧ _ := by
+      exact ⟨congrArg Prod.fst hq, congrArg (fun q => q.2.1) hq,
+        congrArg (fun q => q.2.2) hq⟩
+    obtain ⟨rfl, ra, rfl⟩ := ih hc1
+    exact ⟨rfl, ra, rfl⟩
+  | sseq_sym _ ih =>
+    rw [callRedex?_sseq, Option.map_eq_some_iff] at hc
+    obtain ⟨⟨c1, f1, pes1⟩, hc1, hq⟩ := hc
+    obtain ⟨rfl, rfl, rfl⟩ : _ ∧ _ ∧ _ := by
+      exact ⟨congrArg Prod.fst hq, congrArg (fun q => q.2.1) hq,
+        congrArg (fun q => q.2.2) hq⟩
+    obtain ⟨rfl, ra, rfl⟩ := ih hc1
+    exact ⟨rfl, ra, rfl⟩
+  | annot hroot _ _ _ ih =>
+    rw [callRedex?_annot_of_not_root _ _ hroot, Option.map_eq_some_iff] at hc
+    obtain ⟨⟨c1, f1, pes1⟩, hc1, hq⟩ := hc
+    obtain ⟨rfl, rfl, rfl⟩ : _ ∧ _ ∧ _ := by
+      exact ⟨congrArg Prod.fst hq, congrArg (fun q => q.2.1) hq,
+        congrArg (fun q => q.2.2) hq⟩
+    obtain ⟨rfl, ra, rfl⟩ := ih hc1
+    exact ⟨rfl, ra, rfl⟩
+  | wseq _ ih =>
+    rw [callRedex?_wseq, Option.map_eq_some_iff] at hc
+    obtain ⟨⟨c1, f1, pes1⟩, hc1, hq⟩ := hc
+    obtain ⟨rfl, rfl, rfl⟩ : _ ∧ _ ∧ _ := by
+      exact ⟨congrArg Prod.fst hq, congrArg (fun q => q.2.1) hq,
+        congrArg (fun q => q.2.2) hq⟩
+    obtain ⟨rfl, ra, rfl⟩ := ih hc1
+    exact ⟨rfl, ra, rfl⟩
+
+/-- At a decomposed CALL redex the search answers the decomposition's
+    context (the certification of `callRedex?` against get_ctx: the
+    captured frame IS get_ctx's). -/
+theorem Decomp.callRedex?_some' {e : CoreExpr} {ctx : context} {r : CoreExpr}
+    (hd : Decomp e ctx r) {ra : core_run_annotation} {f : sym}
+    {pes : List (generic_pexpr Unit sym)} (hr : r = callRedex ra f pes) :
+    callRedex? e = some (ctx, f, pes) := by
+  induction hd with
+  | root _ => subst hr; rfl
+  | sseq _ ih => rw [callRedex?_sseq, ih hr]; rfl
+  | sseq_spec _ ih => rw [callRedex?_sseq, ih hr]; rfl
+  | sseq_sym _ ih => rw [callRedex?_sseq, ih hr]; rfl
+  | annot hroot _ _ _ ih => rw [callRedex?_annot_of_not_root _ _ hroot, ih hr]; rfl
+  | wseq _ ih => rw [callRedex?_wseq, ih hr]; rfl
+
+theorem Decomp.callRedex?_some {e : CoreExpr} {ctx : context}
+    {ra : core_run_annotation} {f : sym} {pes : List (generic_pexpr Unit sym)}
+    (hd : Decomp e ctx (callRedex ra f pes)) :
+    callRedex? e = some (ctx, f, pes) :=
+  hd.callRedex?_some' rfl
+
+/-- At a decomposed NON-call redex the search answers `none`. -/
+theorem Decomp.callRedex?_none {e : CoreExpr} {ctx : context} {r : CoreExpr}
+    (hd : Decomp e ctx r)
+    (hnr : ∀ (ra : core_run_annotation) (f : sym) (pes : List (generic_pexpr Unit sym)),
+      r ≠ callRedex ra f pes) :
+    callRedex? e = none := by
+  cases hc : callRedex? e with
+  | none => rfl
+  | some q =>
+    obtain ⟨ctx', f, pes⟩ := q
+    obtain ⟨-, ra, hr⟩ := hd.callRedex?_inv hc
+    exact absurd hr (hnr ra f pes)
+
+/-- A decomposed term is not a value (values are irreducible;
+    `Decomp.not_irreducible`). -/
+theorem Decomp.toVal_none {e : CoreExpr} {ctx : context} {r : CoreExpr}
+    (hd : Decomp e ctx r) : toVal e = none := by
+  cases hv : toVal e with
+  | none => rfl
+  | some w =>
+    have he := ofVal_of_toVal hv
+    subst he
+    have h1 := hd.not_irreducible
+    rw [is_irreducible_ofVal] at h1
+    cases h1
 
 /-- THE FACTOR THEOREM WITH THE JUMP DISJUNCT (readiness R1: "the
     factor theorem gains one disjunct"): a step of a decomposed term
@@ -858,37 +1007,57 @@ theorem Decomp.step_factor {M : MachineCtx} {e : CoreExpr} {ctx : context}
     (h : Decomp e ctx r) (hs : Step M (e, ρ, ctl, σ) out) :
     (∃ r' ρ' σ', (∀ (ra : core_run_annotation) (l : sym)
         (pes : List (generic_pexpr Unit sym)), r ≠ runRedex ra l pes) ∧
+      (∀ (ra : core_run_annotation) (f : sym)
+        (pes : List (generic_pexpr Unit sym)), r ≠ callRedex ra f pes) ∧
       Step M (r, ρ, ctl, σ) (r', ρ', ctl, σ') ∧
       out = (apply_ctx ctx r', ρ', ctl, σ')) ∨
     (∃ (ra : core_run_annotation) (l : sym)
       (pes : List (generic_pexpr Unit sym)),
-      r = runRedex ra l pes ∧ Step M (r, ρ, ctl, σ) out) := by
+      r = runRedex ra l pes ∧ Step M (r, ρ, ctl, σ) out) ∨
+    (∃ (ra : core_run_annotation) (f : sym) (pes : List (generic_pexpr Unit sym))
+      (params : List (sym × core_base_type)) (body : CoreExpr) (vs : List value),
+      r = callRedex ra f pes ∧
+      evalPexprs M.tagDefs M.extern ρ pes = some vs ∧
+      lookupProc M.file M.extern f = some (params, body) ∧ params.length = vs.length ∧
+      out = (body, procEnv params vs :: ρ,
+        ⟨(ctl.proc, ctx) :: ctl.κ, some f, push_exec_loc f M.currentLoc ctl.execLoc⟩, σ)) := by
   induction h generalizing out with
   | @root r hr =>
     by_cases hrun : ∃ (ra : core_run_annotation) (l : sym)
         (pes : List (generic_pexpr Unit sym)), r = runRedex ra l pes
     · obtain ⟨ra, l, pes, rfl⟩ := hrun
-      exact .inr ⟨ra, l, pes, rfl, hs⟩
+      exact .inr (.inl ⟨ra, l, pes, rfl, hs⟩)
+    by_cases hcall : ∃ (ra : core_run_annotation) (f : sym)
+        (pes : List (generic_pexpr Unit sym)), r = callRedex ra f pes
+    · obtain ⟨ra, f, pes, rfl⟩ := hcall
+      obtain ⟨params, body, vs, hvs, hf, hlen, rfl⟩ := hs.call_inv (callRedex?_callRedex ra f pes)
+      exact .inr (.inr ⟨ra, f, pes, params, body, vs, rfl, hvs, hf, hlen, rfl⟩)
     · obtain ⟨oe, oρ, octl, oσ⟩ := out
-      obtain rfl : ctl = octl := hs.ctl_eq'.symm
-      exact .inl ⟨oe, oρ, oσ, fun ra l pes hr => hrun ⟨ra, l, pes, hr⟩, hs, rfl⟩
+      have hnc : callRedex? r = none :=
+        (Decomp.root hr).callRedex?_none (fun ra f pes hr' => hcall ⟨ra, f, pes, hr'⟩)
+      obtain rfl : ctl = octl := (hs.ctl_eq hnc (Decomp.root hr).toVal_none).symm
+      exact .inl ⟨oe, oρ, oσ, fun ra l pes hr => hrun ⟨ra, l, pes, hr⟩,
+        fun ra f pes hr => hcall ⟨ra, f, pes, hr⟩, hs, rfl⟩
   | @sseq pa bty e1 e2 ctx' r' hd ih =>
-    rcases hs.sseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
+    rcases hs.sseq_inv with ⟨e1', ρ'', σ'', hnj, hnv, hstep, hout⟩ |
         ⟨_, _, v, _, _, _, he1, _, _⟩ | ⟨_, _, ds, v, _, _, _, he1, _, _⟩ |
         ⟨l, pes, params, cont, vs, ev0, evs, hj, hρ, hl, hvs, hout⟩ |
         ⟨_, _, _, _, _, _, _, hpat, _, _, _⟩ |
         ⟨_, _, _, _, _, _, _, _, hpat, _, _, _⟩ |
-        ⟨_, _, _, _, _, _, hpat, _, _, _⟩
-    · rcases ih hstep with ⟨r2, ρr, σr, hnr2, hr2, heq⟩ | ⟨ra, l, pes, rfl, hr2⟩
+        ⟨_, _, _, _, _, _, hpat, _, _, _⟩ |
+        hcall
+    · rcases ih hstep with ⟨r2, ρr, σr, hnr2, hnc2, hr2, heq⟩ | ⟨ra, l, pes, rfl, hr2⟩ |
+          ⟨ra, f, pes, params, body, vs, rfl, -, -, -, hcout⟩
       · obtain ⟨he, hρ2, hσ2⟩ : e1' = apply_ctx _ r2 ∧ ρ'' = ρr ∧
             σ'' = σr := by
           simpa [Prod.mk.injEq] using heq
         subst he hρ2 hσ2
-        exact .inl ⟨r2, _, _, hnr2, hr2, by rw [hout]; rfl⟩
+        exact .inl ⟨r2, _, _, hnr2, hnc2, hr2, by rw [hout]; rfl⟩
       · rw [hd.jumpRedex?_eq] at hnj
         rw [show jumpRedex? (runRedex ra l pes) = some (l, pes) from rfl]
           at hnj
         cases hnj
+      · exact absurd (congrArg (fun c : Config => c.2.2.1.κ) hcout) (by simp)
     · rw [he1] at hd
       exact absurd hd.not_irreducible (by simp [is_irreducible_ofVal])
     · rw [he1] at hd
@@ -900,27 +1069,33 @@ theorem Decomp.step_factor {M : MachineCtx} {e : CoreExpr} {ctx : context}
       obtain ⟨ra, rfl⟩ := hd.redex.jumpRedex?_some_inv hje
       subst hρ
       rw [hout]
-      exact .inr ⟨ra, l, pes, rfl, Step.run (by rfl) hl hvs⟩
+      exact .inr (.inl ⟨ra, l, pes, rfl, Step.run (by rfl) hl hvs⟩)
     · exact (specPat_ne_base hpat).elim
     · exact (specPat_ne_base hpat).elim
     · exact (symPat_ne_base hpat).elim
+    · obtain ⟨ctx1, f, pes, params, body, vs, hc1, hvs, hf, hlen, rfl⟩ := hcall
+      obtain ⟨rfl, ra, rfl⟩ := hd.callRedex?_inv hc1
+      exact .inr (.inr ⟨ra, f, pes, params, body, vs, rfl, hvs, hf, hlen, rfl⟩)
   | @sseq_spec pa pb x bty e1 e2 ctx' r' hd ih =>
-    rcases hs.sseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
+    rcases hs.sseq_inv with ⟨e1', ρ'', σ'', hnj, hnv, hstep, hout⟩ |
         ⟨_, _, v, _, _, _, he1, _, _⟩ | ⟨_, _, ds, v, _, _, _, he1, _, _⟩ |
         ⟨l, pes, params, cont, vs, ev0, evs, hj, hρ, hl, hvs, hout⟩ |
         ⟨_, _, _, _, _, _, _, _, he1, _, _⟩ |
         ⟨_, _, _, _, _, _, _, _, _, he1, _, _⟩ |
-        ⟨_, _, _, _, _, _, _, he1, _, _⟩
-    · rcases ih hstep with ⟨r2, ρr, σr, hnr2, hr2, heq⟩ | ⟨ra, l, pes, rfl, hr2⟩
+        ⟨_, _, _, _, _, _, _, he1, _, _⟩ |
+        hcall
+    · rcases ih hstep with ⟨r2, ρr, σr, hnr2, hnc2, hr2, heq⟩ | ⟨ra, l, pes, rfl, hr2⟩ |
+          ⟨ra, f, pes, params, body, vs, rfl, -, -, -, hcout⟩
       · obtain ⟨he, hρ2, hσ2⟩ : e1' = apply_ctx _ r2 ∧ ρ'' = ρr ∧
             σ'' = σr := by
           simpa [Prod.mk.injEq] using heq
         subst he hρ2 hσ2
-        exact .inl ⟨r2, _, _, hnr2, hr2, by rw [hout]; rfl⟩
+        exact .inl ⟨r2, _, _, hnr2, hnc2, hr2, by rw [hout]; rfl⟩
       · rw [hd.jumpRedex?_eq] at hnj
         rw [show jumpRedex? (runRedex ra l pes) = some (l, pes) from rfl]
           at hnj
         cases hnj
+      · exact absurd (congrArg (fun c : Config => c.2.2.1.κ) hcout) (by simp)
     · rw [he1] at hd
       exact absurd hd.not_irreducible (by simp [is_irreducible_ofVal])
     · rw [he1] at hd
@@ -930,30 +1105,36 @@ theorem Decomp.step_factor {M : MachineCtx} {e : CoreExpr} {ctx : context}
       obtain ⟨ra, rfl⟩ := hd.redex.jumpRedex?_some_inv hje
       subst hρ
       rw [hout]
-      exact .inr ⟨ra, l, pes, rfl, Step.run (by rfl) hl hvs⟩
+      exact .inr (.inl ⟨ra, l, pes, rfl, Step.run (by rfl) hl hvs⟩)
     · rw [he1] at hd
       exact absurd hd.not_irreducible (by simp [is_irreducible_ofVal])
     · rw [he1] at hd
       exact absurd hd.not_irreducible (by simp [is_irreducible_ofVal])
     · rw [he1] at hd
       exact absurd hd.not_irreducible (by simp [is_irreducible_ofVal])
+    · obtain ⟨ctx1, f, pes, params, body, vs, hc1, hvs, hf, hlen, rfl⟩ := hcall
+      obtain ⟨rfl, ra, rfl⟩ := hd.callRedex?_inv hc1
+      exact .inr (.inr ⟨ra, f, pes, params, body, vs, rfl, hvs, hf, hlen, rfl⟩)
   | @sseq_sym pa x bty e1 e2 ctx' r' hd ih =>
-    rcases hs.sseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
+    rcases hs.sseq_inv with ⟨e1', ρ'', σ'', hnj, hnv, hstep, hout⟩ |
         ⟨_, _, v, _, _, _, he1, _, _⟩ | ⟨_, _, ds, v, _, _, _, he1, _, _⟩ |
         ⟨l, pes, params, cont, vs, ev0, evs, hj, hρ, hl, hvs, hout⟩ |
         ⟨_, _, _, _, _, _, _, _, he1, _, _⟩ |
         ⟨_, _, _, _, _, _, _, _, _, he1, _, _⟩ |
-        ⟨_, _, _, _, _, _, _, he1, _, _⟩
-    · rcases ih hstep with ⟨r2, ρr, σr, hnr2, hr2, heq⟩ | ⟨ra, l, pes, rfl, hr2⟩
+        ⟨_, _, _, _, _, _, _, he1, _, _⟩ |
+        hcall
+    · rcases ih hstep with ⟨r2, ρr, σr, hnr2, hnc2, hr2, heq⟩ | ⟨ra, l, pes, rfl, hr2⟩ |
+          ⟨ra, f, pes, params, body, vs, rfl, -, -, -, hcout⟩
       · obtain ⟨he, hρ2, hσ2⟩ : e1' = apply_ctx _ r2 ∧ ρ'' = ρr ∧
             σ'' = σr := by
           simpa [Prod.mk.injEq] using heq
         subst he hρ2 hσ2
-        exact .inl ⟨r2, _, _, hnr2, hr2, by rw [hout]; rfl⟩
+        exact .inl ⟨r2, _, _, hnr2, hnc2, hr2, by rw [hout]; rfl⟩
       · rw [hd.jumpRedex?_eq] at hnj
         rw [show jumpRedex? (runRedex ra l pes) = some (l, pes) from rfl]
           at hnj
         cases hnj
+      · exact absurd (congrArg (fun c : Config => c.2.2.1.κ) hcout) (by simp)
     · rw [he1] at hd
       exact absurd hd.not_irreducible (by simp [is_irreducible_ofVal])
     · rw [he1] at hd
@@ -963,27 +1144,33 @@ theorem Decomp.step_factor {M : MachineCtx} {e : CoreExpr} {ctx : context}
       obtain ⟨ra, rfl⟩ := hd.redex.jumpRedex?_some_inv hje
       subst hρ
       rw [hout]
-      exact .inr ⟨ra, l, pes, rfl, Step.run (by rfl) hl hvs⟩
+      exact .inr (.inl ⟨ra, l, pes, rfl, Step.run (by rfl) hl hvs⟩)
     · rw [he1] at hd
       exact absurd hd.not_irreducible (by simp [is_irreducible_ofVal])
     · rw [he1] at hd
       exact absurd hd.not_irreducible (by simp [is_irreducible_ofVal])
     · rw [he1] at hd
       exact absurd hd.not_irreducible (by simp [is_irreducible_ofVal])
+    · obtain ⟨ctx1, f, pes, params, body, vs, hc1, hvs, hf, hlen, rfl⟩ := hcall
+      obtain ⟨rfl, ra, rfl⟩ := hd.callRedex?_inv hc1
+      exact .inr (.inr ⟨ra, f, pes, params, body, vs, rfl, hvs, hf, hlen, rfl⟩)
   | @wseq pa bty e1 e2 ctx' r' hd ih =>
-    rcases hs.wseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
+    rcases hs.wseq_inv with ⟨e1', ρ'', σ'', hnj, hnv, hstep, hout⟩ |
         ⟨_, _, v, _, _, _, he1, _, _⟩ | ⟨_, _, ds, v, _, _, _, he1, _, _⟩ |
-        ⟨l, pes, params, cont, vs, ev0, evs, hj, hρ, hl, hvs, hout⟩
-    · rcases ih hstep with ⟨r2, ρr, σr, hnr2, hr2, heq⟩ | ⟨ra, l, pes, rfl, hr2⟩
+        ⟨l, pes, params, cont, vs, ev0, evs, hj, hρ, hl, hvs, hout⟩ |
+        hcall
+    · rcases ih hstep with ⟨r2, ρr, σr, hnr2, hnc2, hr2, heq⟩ | ⟨ra, l, pes, rfl, hr2⟩ |
+          ⟨ra, f, pes, params, body, vs, rfl, -, -, -, hcout⟩
       · obtain ⟨he, hρ2, hσ2⟩ : e1' = apply_ctx _ r2 ∧ ρ'' = ρr ∧
             σ'' = σr := by
           simpa [Prod.mk.injEq] using heq
         subst he hρ2 hσ2
-        exact .inl ⟨r2, _, _, hnr2, hr2, by rw [hout]; rfl⟩
+        exact .inl ⟨r2, _, _, hnr2, hnc2, hr2, by rw [hout]; rfl⟩
       · rw [hd.jumpRedex?_eq] at hnj
         rw [show jumpRedex? (runRedex ra l pes) = some (l, pes) from rfl]
           at hnj
         cases hnj
+      · exact absurd (congrArg (fun c : Config => c.2.2.1.κ) hcout) (by simp)
     · rw [he1] at hd
       exact absurd hd.not_irreducible (by simp [is_irreducible_ofVal])
     · rw [he1] at hd
@@ -993,21 +1180,27 @@ theorem Decomp.step_factor {M : MachineCtx} {e : CoreExpr} {ctx : context}
       obtain ⟨ra, rfl⟩ := hd.redex.jumpRedex?_some_inv hje
       subst hρ
       rw [hout]
-      exact .inr ⟨ra, l, pes, rfl, Step.run (by rfl) hl hvs⟩
+      exact .inr (.inl ⟨ra, l, pes, rfl, Step.run (by rfl) hl hvs⟩)
+    · obtain ⟨ctx1, f, pes, params, body, vs, hc1, hvs, hf, hlen, rfl⟩ := hcall
+      obtain ⟨rfl, ra, rfl⟩ := hd.callRedex?_inv hc1
+      exact .inr (.inr ⟨ra, f, pes, params, body, vs, rfl, hvs, hf, hlen, rfl⟩)
   | @annot ds b ctx' r' hroot hirr hmap hd ih =>
     rcases hs.annot_inv with ⟨_, hnj, b', ρ'', σ'', hstep, hout⟩ |
         ⟨a2, ds2, c, hb, _⟩ |
-        ⟨l, pes, params, cont, vs, ev0, evs, hg, hj, hρ, hl, hvs, hout⟩
-    · rcases ih hstep with ⟨r2, ρr, σr, hnr2, hr2, heq⟩ | ⟨ra, l, pes, rfl, hr2⟩
+        ⟨l, pes, params, cont, vs, ev0, evs, hg, hj, hρ, hl, hvs, hout⟩ |
+        ⟨-, hcall⟩ | ⟨v, pc, κ, -, hb, -, -⟩
+    · rcases ih hstep with ⟨r2, ρr, σr, hnr2, hnc2, hr2, heq⟩ | ⟨ra, l, pes, rfl, hr2⟩ |
+          ⟨ra, f, pes, params, body, vs, rfl, -, -, -, hcout⟩
       · obtain ⟨he, hρ2, hσ2⟩ : b' = apply_ctx _ r2 ∧ ρ'' = ρr ∧
             σ'' = σr := by
           simpa [Prod.mk.injEq] using heq
         subst he hρ2 hσ2
-        exact .inl ⟨r2, _, _, hnr2, hr2, by rw [hout]; rfl⟩
+        exact .inl ⟨r2, _, _, hnr2, hnc2, hr2, by rw [hout]; rfl⟩
       · rw [hd.jumpRedex?_eq] at hnj
         rw [show jumpRedex? (runRedex ra l pes) = some (l, pes) from rfl]
           at hnj
         cases hnj
+      · exact absurd (congrArg (fun c : Config => c.2.2.1.κ) hcout) (by simp)
     · rw [hb] at hroot
       simp [annotRooted] at hroot
     · have hje : jumpRedex? r' = some (l, pes) := by
@@ -1015,7 +1208,15 @@ theorem Decomp.step_factor {M : MachineCtx} {e : CoreExpr} {ctx : context}
       obtain ⟨ra, rfl⟩ := hd.redex.jumpRedex?_some_inv hje
       subst hρ
       rw [hout]
-      exact .inr ⟨ra, l, pes, rfl, Step.run (by rfl) hl hvs⟩
+      exact .inr (.inl ⟨ra, l, pes, rfl, Step.run (by rfl) hl hvs⟩)
+    · obtain ⟨ctx1, f, pes, params, body, vs, hc1, hvs, hf, hlen, rfl⟩ := hcall
+      obtain ⟨rfl, ra, rfl⟩ := hd.callRedex?_inv hc1
+      exact .inr (.inr ⟨ra, f, pes, params, body, vs, rfl, hvs, hf, hlen, rfl⟩)
+    · rw [hb] at hd
+      have h1 := hd.not_irreducible
+      rw [show is_irreducible (Expr ([] : List _root_.annot)
+        (Epure (Pexpr [] () (PEval v)))) = true from rfl] at h1
+      cases h1
 
 /-- PROGRAM-DONE, context undisturbed: at a bare value the engine
     reports the value. Reads exactly stack0 (`hstack`: an empty call
@@ -1055,6 +1256,43 @@ theorem step_ctx_remove_annot (ds : List dyn_annotation) (v : value)
   dsimp only
   rw [hget]
   rfl
+
+/-- RETURN, in the engine's own terms (calls arc C2): at a BARE value
+    arena over a NON-EMPTY call stack with a cons-shaped env, step_ctx's
+    value arm takes its `Stack_cons2 parent_proc_opt caller_ctx sk'` branch
+    (Core_reduction.lean:484, col 2276): ONE `Step_tau2 "end of procedure"
+    tsk` whose successor restores the caller's procedure, POPS the env
+    frame, pops the stack and plugs the value into the caller's saved
+    context. `tsk` (`TSK_Return psym (memValueFromValue …)` when
+    `file1.funinfo` has the current procedure, `TSK_Misc` otherwise)
+    reaches only the driver's trace — existential here; `exec_loc` is
+    untouched; the parent slot is not read (the branch is selected by the
+    stack alone). -/
+theorem step_ctx_ret (v : value)
+    (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
+    (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
+    (tid : Nat) (parent : Option Nat) (th : thread_state)
+    (harena : th.arena = Expr [] (Epure (Pexpr [] () (PEval v))))
+    {p : Option sym} {ctx : context} {sk' : _root_.stack core_run_annotation}
+    (hstack : th.stack0 = Stack_cons2 p ctx sk')
+    {ev0 : Fmap sym value} {evs : List (Fmap sym value)} (henv : th.env = ev0 :: evs) :
+    ∃ tsk : core_tau_step_kind,
+      step_ctx tds σ file ext tid (parent, th) =
+        [Step_tau2 "end of procedure" tsk
+          { th with
+            current_proc_opt := p
+            env := evs
+            stack0 := sk'
+            arena := apply_ctx ctx (Expr [] (Epure (Pexpr [] () (PEval v)))) }] := by
+  have hget : get_ctx th.arena =
+      [(CTX, Expr [] (Epure (Pexpr [] () (PEval v))))] := by
+    rw [harena]; exact get_ctx_ofVal (.pure v) 999999
+  unfold step_ctx
+  dsimp only
+  rw [hget]
+  simp only [List.map_cons, List.map_nil]
+  rw [hstack, henv]
+  exact ⟨_, rfl⟩
 
 /-- The location the engine attaches to an action request: the redex's
     own, unless it is a library location, in which case the thread's
@@ -3168,6 +3406,310 @@ theorem mapM_save_bridge {ext : Fmap sym sym} {th : thread_state}
   show Result (mapM1 (fun (x : t0 _) => x) ((saveParamsWithValues ps cvals).map Defined), rs) = _
   rw [mapM1_id_defined]
 
+/-! ### The procedure call (calls arc C2): the PCALL round in the engine's
+own terms — the argument map, `call_proc`, the thread update -/
+
+/-- The PCALL arm's argument map (`stExceptUndef_mapM full_eval_pexpr'
+    pes`, step_ctx's Eproc arm, Core_reduction.lean:484 col 18133)
+    computes the mirror's argument values, STATE-VERBATIM: every argument
+    evaluates against the FIXED `th.env` (the `full_eval_pexpr'` closure)
+    through the certified evaluator (`full_eval_bridge`). The per-argument
+    body is abstract with a pointwise characterization (`mapM_save_bridge`'s
+    pattern). -/
+theorem mapM_full_eval_bridge {th : thread_state}
+    {tds : Fmap sym (CerbLocation.Loc × tag_definition)} {σ : Mem}
+    {file : generic_file Unit core_run_annotation} {ext : Fmap sym sym}
+    (f : generic_pexpr Unit sym → core_run_state →
+      exceptM ((t0 value × core_run_state)) core_run_cause)
+    (hf : ∀ (pe : generic_pexpr Unit sym) (rs' : core_run_state),
+      f pe rs' = full_eval_pexpr tds th ext σ file pe rs') :
+    ∀ (pes : List (generic_pexpr Unit sym)) {vs : List value},
+      evalPexprs tds ext th.env pes = some vs →
+      (∀ pe ∈ pes, peDepth pe ≤ lemDefaultFuel) →
+      ∀ rs, stExceptUndef_mapM f pes rs = Result (Defined vs, rs) := by
+  intro pes vs hvs hd rs
+  have hmap : stExpect_mapM f pes rs = Result (vs.map Defined, rs) := by
+    induction pes generalizing vs with
+    | nil =>
+      rw [evalPexprs_nil] at hvs
+      obtain rfl : [] = vs := Option.some.inj hvs
+      rfl
+    | cons pe pes ih =>
+      rw [evalPexprs_cons] at hvs
+      revert hvs
+      cases hvp : evalPexpr tds ext th.env pe with
+      | none => intro hvs; cases hvs
+      | some v =>
+        cases hvs' : evalPexprs tds ext th.env pes with
+        | none => intro hvs; cases hvs
+        | some vs' =>
+          intro hvs
+          obtain rfl : v :: vs' = vs := Option.some.inj hvs
+          have hdp : peDepth pe ≤ lemDefaultFuel := hd _ (List.mem_cons_self ..)
+          have hds : ∀ pe ∈ pes, peDepth pe ≤ lemDefaultFuel :=
+            fun pe hpe => hd pe (List.mem_cons_of_mem _ hpe)
+          have h1 : f pe rs = Result (Defined v, rs) := by
+            rw [hf, full_eval_bridge hvp hdp σ file]
+            rfl
+          show stExpect_bind (f pe) (fun x => stExpect_bind (stExpect_mapM f pes)
+            (fun xs => stExpect_return (x :: xs))) rs = _
+          rw [stExpect_bind_result _ _ _ _ _ h1, stExpect_bind_result _ _ _ _ _ (ih hvs' hds)]
+          rfl
+  unfold stExceptUndef_mapM
+  rw [stExpect_bind_result _ _ _ _ _ hmap]
+  show Result (mapM1 (fun (x : t0 _) => x) (vs.map Defined), rs) = _
+  rw [mapM1_id_defined]
+
+/-- `call_proc` (Core_run.lean:93) in the mirror's terms: the lookup half
+    is `lookupProc`, then the arity check, then the fresh frame
+    `procEnv`; the two failures are the `Illformed_program` kills with
+    the engine's own messages (quoted verbatim). -/
+theorem call_proc_eq (ext : Fmap sym sym) (file : generic_file Unit core_run_annotation)
+    (f : sym) (vs : List value) :
+    call_proc ext file f vs =
+      match lookupProc file ext f with
+      | some (params, body) =>
+        if not (@BEq.beq Nat (@Lem_Basic_classes.instBEqOfEq0 Nat Lem_Num.instEq0Nat_1)
+            params.length vs.length) then
+          fail0 (Illformed_program (String.append "calling procedure `"
+            (String.append (show_symbol f)
+              (String.append "' with the wrong number of args: |args|="
+                (String.append (Lem_String_extra.stringFromNat vs.length)
+                  (String.append "expecting: "
+                    (Lem_String_extra.stringFromNat params.length)))))))
+        else except_return (procEnv params vs, body)
+      | none => fail0 (Illformed_program
+          (String.append "calling an unknown procedure: " (show_symbol f))) := by
+  unfold call_proc lookupProc procEnv resolveExtern
+  cases hx : fmapLookupBy (fun (s1 : sym) (s2 : sym) => Lem_Basic_classes.ordCompare s1 s2)
+      f ext with
+  | some y =>
+    simp only []
+    cases h1 : fmapLookupBy (fun (s1 : sym) (s2 : sym) => Lem_Basic_classes.ordCompare s1 s2)
+        f file.stdlib with
+    | none =>
+      simp only []
+      cases h2 : fmapLookupBy (fun (s1 : sym) (s2 : sym) => Lem_Basic_classes.ordCompare s1 s2)
+          y file.funs with
+      | none => rfl
+      | some d => cases d <;> rfl
+    | some d =>
+      cases d <;> simp only [] <;> first
+        | rfl
+        | (cases h2 : fmapLookupBy (fun (s1 : sym) (s2 : sym) =>
+              Lem_Basic_classes.ordCompare s1 s2) y file.funs with
+           | none => rfl
+           | some d' => cases d' <;> rfl)
+  | none =>
+    simp only []
+    cases h1 : fmapLookupBy (fun (s1 : sym) (s2 : sym) => Lem_Basic_classes.ordCompare s1 s2)
+        f file.stdlib with
+    | none =>
+      simp only []
+      cases h2 : fmapLookupBy (fun (s1 : sym) (s2 : sym) => Lem_Basic_classes.ordCompare s1 s2)
+          f file.funs with
+      | none => rfl
+      | some d => cases d <;> rfl
+    | some d =>
+      cases d <;> simp only [] <;> first
+        | rfl
+        | (cases h2 : fmapLookupBy (fun (s1 : sym) (s2 : sym) =>
+              Lem_Basic_classes.ordCompare s1 s2) f file.funs with
+           | none => rfl
+           | some d' => cases d' <;> rfl)
+
+/-- `call_proc` SUCCEEDS exactly at a found procedure of matching arity. -/
+theorem call_proc_of_lookupProc {file : generic_file Unit core_run_annotation}
+    {ext : Fmap sym sym} {f : sym} {params : List (sym × core_base_type)}
+    {body : CoreExpr} {vs : List value}
+    (hf : lookupProc file ext f = some (params, body)) (hlen : params.length = vs.length) :
+    call_proc ext file f vs = except_return (procEnv params vs, body) := by
+  rw [call_proc_eq, hf]
+  dsimp only
+  have hb : (@BEq.beq Nat (@Lem_Basic_classes.instBEqOfEq0 Nat Lem_Num.instEq0Nat_1)
+      params.length vs.length) = true := (lemNatBeq_iff _ _).mpr hlen
+  rw [hb]
+  rfl
+
+/-- `call_proc` at an UNKNOWN procedure: the engine's kill, verbatim. -/
+theorem call_proc_unknown {file : generic_file Unit core_run_annotation}
+    {ext : Fmap sym sym} {f : sym} {vs : List value}
+    (hf : lookupProc file ext f = none) :
+    call_proc ext file f vs = fail0 (Illformed_program
+      (String.append "calling an unknown procedure: " (show_symbol f))) := by
+  rw [call_proc_eq, hf]
+
+/-- `call_proc` at an ARITY MISMATCH: the engine's kill, verbatim. -/
+theorem call_proc_arity {file : generic_file Unit core_run_annotation}
+    {ext : Fmap sym sym} {f : sym} {params : List (sym × core_base_type)}
+    {body : CoreExpr} {vs : List value}
+    (hf : lookupProc file ext f = some (params, body)) (hlen : params.length ≠ vs.length) :
+    call_proc ext file f vs = fail0 (Illformed_program (String.append "calling procedure `"
+      (String.append (show_symbol f)
+        (String.append "' with the wrong number of args: |args|="
+          (String.append (Lem_String_extra.stringFromNat vs.length)
+            (String.append "expecting: "
+              (Lem_String_extra.stringFromNat params.length))))))) := by
+  rw [call_proc_eq, hf]
+  dsimp only
+  have hb : (@BEq.beq Nat (@Lem_Basic_classes.instBEqOfEq0 Nat Lem_Num.instEq0Nat_1)
+      params.length vs.length) = false := by
+    cases hb : (@BEq.beq Nat (@Lem_Basic_classes.instBEqOfEq0 Nat Lem_Num.instEq0Nat_1)
+        params.length vs.length) with
+    | false => rfl
+    | true => exact absurd ((lemNatBeq_iff _ _).mp hb) hlen
+  rw [hb]
+  rfl
+
+/-- THE PROCEDURE CALL, in the engine's own terms (calls arc C2): at a
+    thread whose arena decomposes to a call redex with arguments in the
+    certified grammar, step_ctx takes EXACTLY ONE step — the PCALL arm's
+    `Step_with_runstate2 (RSK_eval "Eproc") m` (Core_reduction.lean:484
+    col 18133) — and, at a found procedure of matching arity, `m` at ANY
+    run state is the thread with the callee installed, the fresh frame
+    pushed, the current procedure set, the caller's procedure and the
+    REDEX'S CONTEXT `ctx` pushed on the stack, the execution location
+    pushed, the run state returned VERBATIM (the map and `runEU` are
+    state-verbatim: no `labeled` write). The two `call_proc` failures are
+    `step_ctx_call_unknown`/`step_ctx_call_arity` (Round.lean). -/
+theorem step_ctx_call_ws {e : CoreExpr} {ctx : context}
+    {ra : core_run_annotation} {f : sym} {pes : List (generic_pexpr Unit sym)}
+    (hd : Decomp e ctx (callRedex ra f pes))
+    (hsz : esize e ≤ lemDefaultFuel)
+    (hdep : ∀ pe ∈ pes, peDepth pe ≤ lemDefaultFuel)
+    (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
+    (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
+    (tid : Nat) (parent : Option Nat) (th : thread_state)
+    (harena : th.arena = e)
+    {vs : List value} (hvs : evalPexprs tds ext th.env pes = some vs)
+    {params : List (sym × core_base_type)} {body : CoreExpr}
+    (hf : lookupProc file ext f = some (params, body)) (hlen : params.length = vs.length) :
+    ∃ m : core_runM thread_state,
+      step_ctx tds σ file ext tid (parent, th) =
+        [Step_with_runstate2 (RSK_eval "Eproc") m] ∧
+      ∀ rs, m rs = Result (Defined
+        { th with
+          current_proc_opt := some f
+          env := procEnv params vs :: th.env
+          exec_loc := push_exec_loc f th.current_loc th.exec_loc
+          stack0 := Stack_cons2 th.current_proc_opt ctx th.stack0
+          arena := body }, rs) := by
+  have hget : get_ctx th.arena = [(ctx, callRedex ra f pes)] := by
+    rw [harena]; exact hd.get_ctx_default hsz
+  unfold step_ctx
+  dsimp only
+  rw [hget]
+  simp only [List.map_cons, List.map_nil]
+  unfold callRedex
+  cases ctx <;>
+    (dsimp only [get_loc]
+     refine ⟨_, rfl, fun rs => ?_⟩
+     rw [stExceptUndef_bind_apply,
+       mapM_full_eval_bridge _ (fun _ _ => rfl) pes hvs hdep rs]
+     dsimp only []
+     rw [stExceptUndef_bind_apply, call_proc_of_lookupProc hf hlen]
+     rfl)
+
+/-- The PCALL round's SHAPE alone (any lookup outcome, any arguments):
+    one `RSK_eval "Eproc"` with-runstate step. -/
+theorem step_ctx_call_shape {e : CoreExpr} {ctx : context}
+    {ra : core_run_annotation} {f : sym} {pes : List (generic_pexpr Unit sym)}
+    (hd : Decomp e ctx (callRedex ra f pes))
+    (hsz : esize e ≤ lemDefaultFuel)
+    (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
+    (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
+    (tid : Nat) (parent : Option Nat) (th : thread_state)
+    (harena : th.arena = e) :
+    ∃ m : core_runM thread_state,
+      step_ctx tds σ file ext tid (parent, th) =
+        [Step_with_runstate2 (RSK_eval "Eproc") m] := by
+  have hget : get_ctx th.arena = [(ctx, callRedex ra f pes)] := by
+    rw [harena]; exact hd.get_ctx_default hsz
+  unfold step_ctx
+  dsimp only
+  rw [hget]
+  simp only [List.map_cons, List.map_nil]
+  unfold callRedex
+  cases ctx <;>
+    (dsimp only [get_loc]
+     exact ⟨_, rfl⟩)
+
+/-- The PCALL round at an UNKNOWN procedure (arguments evaluating): the
+    monad RAISES `Illformed_program "calling an unknown procedure: …"` —
+    the driver's transparent kill `Other (DErr_core_run …)`
+    (`liftCore_run`, Driver.lean:245). -/
+theorem step_ctx_call_unknown {e : CoreExpr} {ctx : context}
+    {ra : core_run_annotation} {f : sym} {pes : List (generic_pexpr Unit sym)}
+    (hd : Decomp e ctx (callRedex ra f pes))
+    (hsz : esize e ≤ lemDefaultFuel)
+    (hdep : ∀ pe ∈ pes, peDepth pe ≤ lemDefaultFuel)
+    (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
+    (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
+    (tid : Nat) (parent : Option Nat) (th : thread_state)
+    (harena : th.arena = e)
+    {vs : List value} (hvs : evalPexprs tds ext th.env pes = some vs)
+    (hf : lookupProc file ext f = none) :
+    ∃ m : core_runM thread_state,
+      step_ctx tds σ file ext tid (parent, th) =
+        [Step_with_runstate2 (RSK_eval "Eproc") m] ∧
+      ∀ rs, m rs = Exception (Illformed_program
+        (String.append "calling an unknown procedure: " (show_symbol f))) := by
+  have hget : get_ctx th.arena = [(ctx, callRedex ra f pes)] := by
+    rw [harena]; exact hd.get_ctx_default hsz
+  unfold step_ctx
+  dsimp only
+  rw [hget]
+  simp only [List.map_cons, List.map_nil]
+  unfold callRedex
+  cases ctx <;>
+    (dsimp only [get_loc]
+     refine ⟨_, rfl, fun rs => ?_⟩
+     rw [stExceptUndef_bind_apply,
+       mapM_full_eval_bridge _ (fun _ _ => rfl) pes hvs hdep rs]
+     dsimp only []
+     rw [stExceptUndef_bind_apply, call_proc_unknown hf]
+     rfl)
+
+/-- The PCALL round at an ARITY MISMATCH (arguments evaluating): the
+    monad RAISES `Illformed_program "calling procedure `f' with the wrong
+    number of args: …"` — the driver's transparent kill. -/
+theorem step_ctx_call_arity {e : CoreExpr} {ctx : context}
+    {ra : core_run_annotation} {f : sym} {pes : List (generic_pexpr Unit sym)}
+    (hd : Decomp e ctx (callRedex ra f pes))
+    (hsz : esize e ≤ lemDefaultFuel)
+    (hdep : ∀ pe ∈ pes, peDepth pe ≤ lemDefaultFuel)
+    (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
+    (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
+    (tid : Nat) (parent : Option Nat) (th : thread_state)
+    (harena : th.arena = e)
+    {vs : List value} (hvs : evalPexprs tds ext th.env pes = some vs)
+    {params : List (sym × core_base_type)} {body : CoreExpr}
+    (hf : lookupProc file ext f = some (params, body)) (hlen : params.length ≠ vs.length) :
+    ∃ m : core_runM thread_state,
+      step_ctx tds σ file ext tid (parent, th) =
+        [Step_with_runstate2 (RSK_eval "Eproc") m] ∧
+      ∀ rs, m rs = Exception (Illformed_program (String.append "calling procedure `"
+        (String.append (show_symbol f)
+          (String.append "' with the wrong number of args: |args|="
+            (String.append (Lem_String_extra.stringFromNat vs.length)
+              (String.append "expecting: "
+                (Lem_String_extra.stringFromNat params.length))))))) := by
+  have hget : get_ctx th.arena = [(ctx, callRedex ra f pes)] := by
+    rw [harena]; exact hd.get_ctx_default hsz
+  unfold step_ctx
+  dsimp only
+  rw [hget]
+  simp only [List.map_cons, List.map_nil]
+  unfold callRedex
+  cases ctx <;>
+    (dsimp only [get_loc]
+     refine ⟨_, rfl, fun rs => ?_⟩
+     rw [stExceptUndef_bind_apply,
+       mapM_full_eval_bridge _ (fun _ _ => rfl) pes hvs hdep rs]
+     dsimp only []
+     rw [stExceptUndef_bind_apply, call_proc_arity hf hlen]
+     rfl)
+
 /-- Esave PARAMETER EVALUATION, context undisturbed, DISCHARGED
     (one_step0's Esave EVAL arm + step_ctx's EVAL wrap + the
     liftCore_run protocol): ONE engine step mapping `eval_pexpr1` over
@@ -3498,7 +4040,7 @@ theorem BareHead.step {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack} {ctl : Ctl
     {e' : CoreExpr} {ρ' : EnvStack} {σ' : Mem}
     (h : BareHead e) (hs : Step M (e, ρ, ctl, σ) (e', ρ', ctl, σ')) : BareHead e' := by
   cases h with
-  | val_pure v => exact (Step.val_elim (w := .pure v) hs).elim
+  | val_pure v => exact (Step.pure_val_elim hs rfl).elim
   | create =>
     obtain ⟨pv, σ'', hmem, hout⟩ := hs.create_inv
     obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ'' := by
@@ -3506,14 +4048,11 @@ theorem BareHead.step {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack} {ctl : Ctl
     subst h1
     exact .val_pure _
   | memop_vals v1 v2 =>
-    rw [show memopPtrEqVals v1 v2 = Expr [] (Ememop PtrEq
-      [Pexpr [] () (PEval v1), Pexpr [] () (PEval v2)]) from rfl] at hs
-    cases hs with
-    | run hj hl hvs => simp at hj
-    | memop_ptreq h1 h2 hmem => exact .val_pure _
-    | memop_eval hnv hv1 hv2 =>
-      rw [valueFromPexprs_pair, valueFromPexpr_val, valueFromPexpr_val] at hnv
-      cases hnv
+    obtain ⟨pv1, pv2, b, σ'', -, -, -, hout⟩ := hs.memop_vals_inv
+    obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ'' := by
+      simpa [Prod.mk.injEq] using hout
+    subst h1
+    exact .val_pure _
   | memop_op hnv hp1 hp2 hd1 hd2 =>
     obtain ⟨v1, v2, hv1, hv2, hout⟩ := hs.memop_op_inv hnv
     obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ := by
@@ -3744,6 +4283,21 @@ inductive Frag : CoreExpr → Prop where
   | wseq {pa : List annot} {bty : core_base_type} {e1 e2 : CoreExpr} :
       Frag e1 → Frag e2 →
       Frag (Expr [] (Ewseq (Pattern pa (CaseBase (none, bty))) e1 e2))
+  /-- THE PROCEDURE CALL (calls arc C2): `Eproc` at a Core identifier,
+      arguments in the covered grammar `PePure` within the evaluator's
+      fuel (the engine evaluates ALL of them by `full_eval_pexpr'` in the
+      PCALL round, Core_reduction.lean:484 col 18133). Any `f`: the
+      unknown procedure and the arity mismatch are the engine's two
+      `Illformed_program` KILLS, classified in Round.lean (`complete_call`),
+      not narrowed here. The callee's BODY is not a `Frag` premise — `Frag`
+      is a predicate on the expression, the body lives in the FILE — so
+      adequacy through a call carries `MachineCtx.FragProcs` (Adequacy.lean:
+      every procedure the file declares has a `Frag` body within the
+      potential bound and `Frag` label bodies), the twin of `hQf`/`hQpot`. -/
+  | call {ra : core_run_annotation} {f : sym} {pes : List (generic_pexpr Unit sym)}
+      (hpes : ∀ pe ∈ pes, PePure pe)
+      (hdep : ∀ pe ∈ pes, peDepth pe ≤ lemDefaultFuel) :
+      Frag (callRedex ra f pes)
 
 theorem frag_ofVal (w : SpikeVal) : Frag (ofVal w) := by
   cases w with
@@ -3816,6 +4370,7 @@ theorem Frag.decomp {e : CoreExpr} (hf : Frag e) (hnv : toVal e = none) :
   | alloc => exact ⟨_, _, Decomp.root (.alloc), .alloc⟩
   | alloc_op hnvA hp1 hp2 hd1 hd2 =>
     exact ⟨_, _, Decomp.root (.alloc_op _ _ _ hnvA), .alloc_op hnvA hp1 hp2 hd1 hd2⟩
+  | call hpes hdep => exact ⟨_, _, Decomp.root (.call _ _ _), .call hpes hdep⟩
   | @sseq pa bty e1 e2 hf1 hf2 ih1 ih2 =>
     cases hv1 : toVal e1 with
     | some w =>
@@ -3867,6 +4422,7 @@ theorem Frag.decomp {e : CoreExpr} (hf : Frag e) (hnv : toVal e = none) :
       | kill_op hnvK hpK hdK => simp [annotRooted, killOpRedex] at hr
       | alloc => simp [annotRooted, allocRedex] at hr
       | alloc_op hnvA hp1 hp2 hd1 hd2 => simp [annotRooted, allocOpRedex] at hr
+      | call hpes hdep => simp [annotRooted, callRedex] at hr
       | @annot ds2 c hfc =>
         have hwit : Frag (Expr ([] : List _root_.annot)
             (Eannot ds (Expr [] (Eannot ds2 c)))) := .annot (.annot hfc)
@@ -3903,6 +4459,7 @@ theorem Frag.decomp {e : CoreExpr} (hf : Frag e) (hnv : toVal e = none) :
         | alloc => exact ⟨_, _, Decomp.root (.merge rfl), hwit⟩
         | alloc_op hnvA hp1 hp2 hd1 hd2 =>
           exact ⟨_, _, Decomp.root (.merge rfl), hwit⟩
+        | call hpes hdep => exact ⟨_, _, Decomp.root (.merge rfl), hwit⟩
     · have hr' : annotRooted b = false := by simpa using hr
       cases hvb : toVal b with
       | some w =>
@@ -3953,6 +4510,7 @@ theorem Frag.decomp {e : CoreExpr} (hf : Frag e) (hnv : toVal e = none) :
         | alloc => exact ⟨_, _, Decomp.annot hr' rfl (fun n => rfl) hd, hfr⟩
         | alloc_op hnvA hp1 hp2 hd1 hd2 =>
           exact ⟨_, _, Decomp.annot hr' rfl (fun n => rfl) hd, hfr⟩
+        | call hpes hdep => exact ⟨_, _, Decomp.annot hr' rfl (fun n => rfl) hd, hfr⟩
   | save hp hd hb ih => exact ⟨_, _, Decomp.root (.save _ _ _), .save hp hd hb⟩
   | if_ hpg hdg hf2 hf3 ih2 ih3 =>
     exact ⟨_, _, Decomp.root (.if_ _ _ _), .if_ hpg hdg hf2 hf3⟩
@@ -4039,7 +4597,8 @@ theorem Frag.step {M : MachineCtx} {ctl : Ctl}
     {e' : CoreExpr} {ρ' : EnvStack} {σ' : Mem}
     (hf : Frag e) (hs : Step M (e, ρ, ctl, σ) (e', ρ', ctl, σ')) : Frag e' := by
   induction hf generalizing e' ρ' σ' with
-  | val_pure v => exact (Step.val_elim (w := .pure v) hs).elim
+  | call hpes hdep => exact (Step.call_ne_same_ctl (callRedex?_callRedex _ _ _) hs).elim
+  | val_pure v => exact (Step.pure_val_elim hs rfl).elim
   | store =>
     obtain ⟨mv, fp, σ'', hmv, hmem, hout⟩ := hs.store_inv
     obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ'' := by
@@ -4083,12 +4642,13 @@ theorem Frag.step {M : MachineCtx} {ctl : Ctl}
     subst h1
     exact .alloc
   | sseq hf1 hf2 ih1 ih2 =>
-    rcases hs.sseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
+    rcases hs.sseq_inv with ⟨e1', ρ'', σ'', hnj, hnv', hstep, hout⟩ |
         ⟨_, _, v, _, _, _, _, _, hout⟩ | ⟨_, _, ds', v, _, _, _, _, _, hout⟩ |
         ⟨l, pes, params, cont, vs, _, _, hj, _, hl, _, hout⟩ |
         ⟨_, _, _, _, _, _, _, hpat, _, _, _⟩ |
         ⟨_, _, _, _, _, _, _, _, hpat, _, _, _⟩ |
-        ⟨_, _, _, _, _, _, hpat, _, _, _⟩
+        ⟨_, _, _, _, _, _, hpat, _, _, _⟩ |
+        hcall
     · obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ'' ∧ σ' = σ'' := by
         simpa [Prod.mk.injEq] using hout
       subst h1
@@ -4108,10 +4668,12 @@ theorem Frag.step {M : MachineCtx} {ctl : Ctl}
     · exact (specPat_ne_base hpat).elim
     · exact (specPat_ne_base hpat).elim
     · exact (symPat_ne_base hpat).elim
+    · exact hcall.ne_same_ctl.elim
   | wseq hf1 hf2 ih1 ih2 =>
-    rcases hs.wseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
+    rcases hs.wseq_inv with ⟨e1', ρ'', σ'', hnj, hnv', hstep, hout⟩ |
         ⟨_, _, v, _, _, _, _, _, hout⟩ | ⟨_, _, ds', v, _, _, _, _, _, hout⟩ |
-        ⟨l, pes, params, cont, vs, _, _, hj, _, hl, _, hout⟩
+        ⟨l, pes, params, cont, vs, _, _, hj, _, hl, _, hout⟩ |
+        hcall
     · obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ'' ∧ σ' = σ'' := by
         simpa [Prod.mk.injEq] using hout
       subst h1
@@ -4128,10 +4690,12 @@ theorem Frag.step {M : MachineCtx} {ctl : Ctl}
         simpa [Prod.mk.injEq] using hout
       rw [h1]
       exact hQf l params cont hl
+    · exact hcall.ne_same_ctl.elim
   | annot hfb ihb =>
     rcases hs.annot_inv with ⟨hg, hnj, b', ρ'', σ'', hstep, hout⟩ |
         ⟨a2, ds2, c, hb, hout⟩ |
-        ⟨l, pes, params, cont, vs, _, _, hg, hj, _, hl, _, hout⟩
+        ⟨l, pes, params, cont, vs, _, _, hg, hj, _, hl, _, hout⟩ |
+        ⟨-, hcall⟩ | ⟨v', pc', κ', ha', hb', hκ', hout'⟩
     · obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ'' ∧ σ' = σ'' := by
         simpa [Prod.mk.injEq] using hout
       subst h1
@@ -4146,6 +4710,9 @@ theorem Frag.step {M : MachineCtx} {ctl : Ctl}
         simpa [Prod.mk.injEq] using hout
       rw [h1]
       exact hQf l params cont hl
+    · exact hcall.ne_same_ctl.elim
+    · obtain ⟨rfl, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ := by simpa [Prod.mk.injEq] using hout'
+      exact .val_pure _
   | @save sb ps body hp hd hb ih =>
     rcases hs.save_inv with ⟨cvals, ev0', evs', hρeq, hvals, hout⟩ |
         ⟨cvals, hnv, hvals, hout⟩
@@ -4172,13 +4739,14 @@ theorem Frag.step {M : MachineCtx} {ctl : Ctl}
     rw [h1]
     exact hQf _ params cont hl
   | sseq_spec hf1 hf2 ih1 ih2 =>
-    rcases hs.sseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
+    rcases hs.sseq_inv with ⟨e1', ρ'', σ'', hnj, hnv', hstep, hout⟩ |
         ⟨_, _, v, _, _, hpat, _, _, hout⟩ |
         ⟨_, _, ds', v, _, _, hpat, _, _, hout⟩ |
         ⟨l, pes, params, cont, vs, _, _, hj, _, hl, _, hout⟩ |
         ⟨_, _, _, _, _, _, _, hpat, _, _, hout⟩ |
         ⟨_, _, _, _, _, _, _, _, hpat, _, _, hout⟩ |
-        ⟨_, _, _, _, _, _, hpat, _, _, hout⟩
+        ⟨_, _, _, _, _, _, hpat, _, _, hout⟩ |
+        hcall
     · obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ'' ∧ σ' = σ'' := by
         simpa [Prod.mk.injEq] using hout
       subst h1
@@ -4198,14 +4766,16 @@ theorem Frag.step {M : MachineCtx} {ctl : Ctl}
       subst h1
       exact .annot hf2
     · exact (symPat_ne_spec hpat).elim
+    · exact hcall.ne_same_ctl.elim
   | sseq_sym hb hf1 hf2 ih1 ih2 =>
-    rcases hs.sseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
+    rcases hs.sseq_inv with ⟨e1', ρ'', σ'', hnj, hnv', hstep, hout⟩ |
         ⟨_, _, v, _, _, hpat, _, _, hout⟩ |
         ⟨_, _, ds', v, _, _, hpat, _, _, hout⟩ |
         ⟨l, pes, params, cont, vs, _, _, hj, _, hl, _, hout⟩ |
         ⟨_, _, _, _, _, _, _, hpat, _, _, hout⟩ |
         ⟨_, _, _, _, _, _, _, _, hpat, _, _, hout⟩ |
-        ⟨_, _, _, _, _, _, hpat, _, _, hout⟩
+        ⟨_, _, _, _, _, _, hpat, _, _, hout⟩ |
+        hcall
     · obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ'' ∧ σ' = σ'' := by
         simpa [Prod.mk.injEq] using hout
       subst h1
@@ -4222,15 +4792,13 @@ theorem Frag.step {M : MachineCtx} {ctl : Ctl}
         simpa [Prod.mk.injEq] using hout
       subst h1
       exact hf2
+    · exact hcall.ne_same_ctl.elim
   | memop_vals v1 v2 =>
-    rw [show memopPtrEqVals v1 v2 = Expr [] (Ememop PtrEq
-      [Pexpr [] () (PEval v1), Pexpr [] () (PEval v2)]) from rfl] at hs
-    cases hs with
-    | run hj hl hvs => simp at hj
-    | memop_ptreq h1 h2 hmem => exact .val_pure _
-    | memop_eval hnv hv1 hv2 =>
-      rw [valueFromPexprs_pair, valueFromPexpr_val, valueFromPexpr_val] at hnv
-      cases hnv
+    obtain ⟨pv1, pv2, b, σ'', -, -, -, hout⟩ := hs.memop_vals_inv
+    obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ'' := by
+      simpa [Prod.mk.injEq] using hout
+    subst h1
+    exact .val_pure _
   | memop_op hnv hp1 hp2 hpd1 hpd2 =>
     obtain ⟨v1, v2, hv1, hv2, hout⟩ := hs.memop_op_inv hnv
     obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ := by
@@ -4244,7 +4812,7 @@ theorem Frag.step {M : MachineCtx} {ctl : Ctl}
     subst h1
     exact .store
   | pure_sym =>
-    obtain ⟨v, -, -, hout⟩ := hs.pure_inv
+    obtain ⟨v, -, -, hout⟩ := hs.pure_inv rfl
     obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ := by
       simpa [Prod.mk.injEq] using hout
     subst h1
@@ -4273,7 +4841,8 @@ theorem Frag.esize_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
     ∃ l pes params cont, jumpRedex? e = some (l, pes) ∧
       lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) ∧ e' = cont := by
   induction hf generalizing e' ρ' σ' with
-  | val_pure v => exact (Step.val_elim (w := .pure v) hs).elim
+  | call hpes hdep => exact (Step.call_ne_same_ctl (callRedex?_callRedex _ _ _) hs).elim
+  | val_pure v => exact (Step.pure_val_elim hs rfl).elim
   | store =>
     obtain ⟨mv, fp, σ'', hmv, hmem, hout⟩ := hs.store_inv
     obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ'' := by
@@ -4317,12 +4886,13 @@ theorem Frag.esize_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
     subst h1
     left; simp [esize, allocOpRedex]
   | sseq hf1 hf2 ih1 ih2 =>
-    rcases hs.sseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
+    rcases hs.sseq_inv with ⟨e1', ρ'', σ'', hnj, hnv', hstep, hout⟩ |
         ⟨_, _, v, _, _, _, _, _, hout⟩ | ⟨_, _, ds', v, _, _, _, _, _, hout⟩ |
         ⟨l, pes, params, cont, vs, _, _, hj, _, hl, _, hout⟩ |
         ⟨_, _, _, _, _, _, _, hpat, _, _, hout⟩ |
         ⟨_, _, _, _, _, _, _, _, hpat, _, _, hout⟩ |
-        ⟨_, _, _, _, _, _, hpat, _, _, hout⟩
+        ⟨_, _, _, _, _, _, hpat, _, _, hout⟩ |
+        hcall
     · obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ'' ∧ σ' = σ'' := by
         simpa [Prod.mk.injEq] using hout
       subst h1
@@ -4357,10 +4927,12 @@ theorem Frag.esize_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
       left
       simp only [esize_sseq]
       omega
+    · exact hcall.ne_same_ctl.elim
   | wseq hf1 hf2 ih1 ih2 =>
-    rcases hs.wseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
+    rcases hs.wseq_inv with ⟨e1', ρ'', σ'', hnj, hnv', hstep, hout⟩ |
         ⟨_, _, v, _, _, _, _, _, hout⟩ | ⟨_, _, ds', v, _, _, _, _, _, hout⟩ |
-        ⟨l, pes, params, cont, vs, _, _, hj, _, hl, _, hout⟩
+        ⟨l, pes, params, cont, vs, _, _, hj, _, hl, _, hout⟩ |
+        hcall
     · obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ'' ∧ σ' = σ'' := by
         simpa [Prod.mk.injEq] using hout
       subst h1
@@ -4385,10 +4957,12 @@ theorem Frag.esize_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
     · obtain ⟨h1, -, -⟩ : e' = cont ∧ ρ' = _ ∧ σ' = σ := by
         simpa [Prod.mk.injEq] using hout
       exact .inr ⟨l, pes, params, cont, by rw [jumpRedex?_wseq, hj], hl, h1⟩
+    · exact hcall.ne_same_ctl.elim
   | annot hfb ihb =>
     rcases hs.annot_inv with ⟨hg, hnj, b', ρ'', σ'', hstep, hout⟩ |
         ⟨a2, ds2, c, hb, hout⟩ |
-        ⟨l, pes, params, cont, vs, _, _, hg, hj, _, hl, _, hout⟩
+        ⟨l, pes, params, cont, vs, _, _, hg, hj, _, hl, _, hout⟩ |
+        ⟨-, hcall⟩ | ⟨v', pc', κ', ha', hb', hκ', hout'⟩
     · obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ'' ∧ σ' = σ'' := by
         simpa [Prod.mk.injEq] using hout
       subst h1
@@ -4409,6 +4983,11 @@ theorem Frag.esize_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
         simpa [Prod.mk.injEq] using hout
       exact .inr ⟨l, pes, params, cont,
         by rw [jumpRedex?_annot_of_not_root _ _ hg, hj], hl, h1⟩
+    · exact hcall.ne_same_ctl.elim
+    · obtain ⟨rfl, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ := by simpa [Prod.mk.injEq] using hout'
+      left
+      simp only [esize_annot, esize_pure]
+      omega
   | @save sb ps body hp hd hb ih =>
     rcases hs.save_inv with ⟨cvals, ev0', evs', hρeq, hvals, hout⟩ |
         ⟨cvals, hnv, hvals, hout⟩
@@ -4448,13 +5027,14 @@ theorem Frag.esize_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
       simpa [Prod.mk.injEq] using hout
     exact .inr ⟨_, _, params, cont, rfl, hl, h1⟩
   | sseq_spec hf1 hf2 ih1 ih2 =>
-    rcases hs.sseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
+    rcases hs.sseq_inv with ⟨e1', ρ'', σ'', hnj, hnv', hstep, hout⟩ |
         ⟨_, _, v, _, _, hpat, _, _, hout⟩ |
         ⟨_, _, ds', v, _, _, hpat, _, _, hout⟩ |
         ⟨l, pes, params, cont, vs, _, _, hj, _, hl, _, hout⟩ |
         ⟨_, _, _, _, _, _, _, hpat, _, _, hout⟩ |
         ⟨_, _, _, _, _, _, _, _, hpat, _, _, hout⟩ |
-        ⟨_, _, _, _, _, _, hpat, _, _, hout⟩
+        ⟨_, _, _, _, _, _, hpat, _, _, hout⟩ |
+        hcall
     · obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ'' ∧ σ' = σ'' := by
         simpa [Prod.mk.injEq] using hout
       subst h1
@@ -4482,8 +5062,9 @@ theorem Frag.esize_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
       simp only [esize_sseq, esize_annot]
       omega
     · exact (symPat_ne_spec hpat).elim
+    · exact hcall.ne_same_ctl.elim
   | pure_sym =>
-    obtain ⟨v, -, -, hout⟩ := hs.pure_inv
+    obtain ⟨v, -, -, hout⟩ := hs.pure_inv rfl
     obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ := by
       simpa [Prod.mk.injEq] using hout
     subst h1
@@ -4497,13 +5078,14 @@ theorem Frag.esize_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
     left
     simp [esize, loadOpRedex]
   | sseq_sym hb hf1 hf2 ih1 ih2 =>
-    rcases hs.sseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
+    rcases hs.sseq_inv with ⟨e1', ρ'', σ'', hnj, hnv', hstep, hout⟩ |
         ⟨_, _, v, _, _, hpat, _, _, hout⟩ |
         ⟨_, _, ds', v, _, _, hpat, _, _, hout⟩ |
         ⟨l, pes, params, cont, vs, _, _, hj, _, hl, _, hout⟩ |
         ⟨_, _, _, _, _, _, _, hpat, _, _, hout⟩ |
         ⟨_, _, _, _, _, _, _, _, hpat, _, _, hout⟩ |
-        ⟨_, _, _, _, _, _, hpat, _, _, hout⟩
+        ⟨_, _, _, _, _, _, hpat, _, _, hout⟩ |
+        hcall
     · obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ'' ∧ σ' = σ'' := by
         simpa [Prod.mk.injEq] using hout
       subst h1
@@ -4526,17 +5108,14 @@ theorem Frag.esize_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
       left
       simp only [esize_sseq]
       omega
+    · exact hcall.ne_same_ctl.elim
   | memop_vals v1 v2 =>
-    rw [show memopPtrEqVals v1 v2 = Expr [] (Ememop PtrEq
-      [Pexpr [] () (PEval v1), Pexpr [] () (PEval v2)]) from rfl] at hs
-    cases hs with
-    | run hj hl hvs => simp at hj
-    | memop_ptreq h1 h2 hmem =>
-      left
-      simp [esize, memopPtrEqVals, memopRedex]
-    | memop_eval hnv hv1 hv2 =>
-      rw [valueFromPexprs_pair, valueFromPexpr_val, valueFromPexpr_val] at hnv
-      cases hnv
+    obtain ⟨pv1, pv2, b, σ'', -, -, -, hout⟩ := hs.memop_vals_inv
+    obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ'' := by
+      simpa [Prod.mk.injEq] using hout
+    subst h1
+    left
+    simp [esize, memopPtrEqVals, memopRedex]
   | memop_op hnv hp1 hp2 hpd1 hpd2 =>
     obtain ⟨v1, v2, hv1, hv2, hout⟩ := hs.memop_op_inv hnv
     obtain ⟨h1, -, -⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ := by
@@ -4585,15 +5164,27 @@ theorem outcomesU_of_step {M : MachineCtx} (aid : Nat)
     (hs : Step M (e, ev0 :: evs, ctl, σ) (e', ρ', ctl, σ')) :
     outcomesU M aid e (ev0 :: evs) ctl σ =
       [.next (M.thread e' ρ' ctl) σ'] := by
-  have hnv : toVal e = none := hs.toVal_none
+  cases hv : toVal e with
+  | some w =>
+    have he := ofVal_of_toVal hv
+    subst he
+    cases w with
+    | pure v => exact (Step.pure_val_elim hs rfl).elim
+    | annot ds v =>
+      obtain ⟨rfl, rfl, rfl, -⟩ := Step.annot_val_inv hs rfl
+      exact outcomesU_remove_annot M aid ds v (ev0 :: evs) ctl _
+  | none =>
+  have hnv : toVal e = none := hv
   obtain ⟨ctx, r, hd, hfr⟩ := hf.decomp hnv
-  rcases hd.step_factor hs with ⟨r', ρr, σr, hnr, hr, heq⟩ | ⟨ra, l, pes, rfl, hr⟩
+  rcases hd.step_factor hs with ⟨r', ρr, σr, hnr, hnc, hr, heq⟩ | ⟨ra, l, pes, rfl, hr⟩ |
+    ⟨ra, f, pes, params, body, vs, rfl, -, -, -, hcout⟩
   · obtain ⟨he', hρ', hσ'⟩ : e' = apply_ctx ctx r' ∧ ρ' = ρr ∧ σ' = σr := by
       simpa [Prod.mk.injEq] using heq
     subst he' hρ' hσ'
     have hdOld : Decomp e ctx r := hd
     have hrj := hd.redex
     cases hrj with
+    | call ra f pes => exact absurd rfl (hnc ra f pes)
     | @store loc ann lk ty pv cv mo =>
       obtain ⟨mv, fp, σ'', hmv, hmem, hout⟩ := hr.store_inv
       obtain ⟨h1, h2, h3⟩ : r' = Expr [] (Eannot [DA_pos [] fp]
@@ -4689,14 +5280,15 @@ theorem outcomesU_of_step {M : MachineCtx} (aid : Nat)
       exact stepDischarge_alloc_eval hdOld hsz hnvA hp1 hp2 hd1 hd2 M.tagDefs σ M.file
         M.extern M.tid M.parent _ rfl hv1 hv2 aid M.runState
     | @beta_pure pa bty v e2 =>
-      rcases hr.sseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
+      rcases hr.sseq_inv with ⟨e1', ρ'', σ'', hnj, hnv', hstep, hout⟩ |
           ⟨_, _, v', _, _, _, he1, _, hout⟩ |
           ⟨_, _, ds', v', _, _, _, he1, _, hout⟩ |
           ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩ |
           ⟨_, _, _, _, _, _, _, hpat, _, _, _⟩ |
           ⟨_, _, _, _, _, _, _, _, hpat, _, _, _⟩ |
-          ⟨_, _, _, _, _, _, hpat, _, _, _⟩
-      · exact absurd hstep (fun h => Step.val_elim h)
+          ⟨_, _, _, _, _, _, hpat, _, _, _⟩ |
+          hcall
+      · rw [toVal_ofVal] at hnv'; cases hnv'
       · obtain rfl : v' = v := by
           have : ofVal (.pure v') = ofVal (.pure v) := he1.symm
           simpa [ofVal] using this
@@ -4713,15 +5305,17 @@ theorem outcomesU_of_step {M : MachineCtx} (aid : Nat)
       · exact (specPat_ne_base hpat).elim
       · exact (specPat_ne_base hpat).elim
       · exact (symPat_ne_base hpat).elim
+      · exact hcall.ne_same_ctl.elim
     | @beta_annot pa bty ds v e2 =>
-      rcases hr.sseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
+      rcases hr.sseq_inv with ⟨e1', ρ'', σ'', hnj, hnv', hstep, hout⟩ |
           ⟨_, _, v', _, _, _, he1, _, hout⟩ |
           ⟨_, _, ds', v', _, _, _, he1, _, hout⟩ |
           ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩ |
           ⟨_, _, _, _, _, _, _, hpat, _, _, _⟩ |
           ⟨_, _, _, _, _, _, _, _, hpat, _, _, _⟩ |
-          ⟨_, _, _, _, _, _, hpat, _, _, _⟩
-      · exact absurd hstep (fun h => Step.val_elim h)
+          ⟨_, _, _, _, _, _, hpat, _, _, _⟩ |
+          hcall
+      · rw [toVal_ofVal] at hnv'; cases hnv'
       · exact absurd he1 (by simp [ofVal])
       · obtain ⟨hds, hv⟩ : ds = ds' ∧ v = v' := by simpa [ofVal] using he1
         subst hds hv
@@ -4737,12 +5331,14 @@ theorem outcomesU_of_step {M : MachineCtx} (aid : Nat)
       · exact (specPat_ne_base hpat).elim
       · exact (specPat_ne_base hpat).elim
       · exact (symPat_ne_base hpat).elim
+      · exact hcall.ne_same_ctl.elim
     | @wbeta_pure pa bty v e2 =>
-      rcases hr.wseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
+      rcases hr.wseq_inv with ⟨e1', ρ'', σ'', hnj, hnv', hstep, hout⟩ |
           ⟨_, _, v', _, _, _, he1, _, hout⟩ |
           ⟨_, _, ds', v', _, _, _, he1, _, hout⟩ |
-          ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩
-      · exact absurd hstep (fun h => Step.val_elim h)
+          ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩ |
+          hcall
+      · rw [toVal_ofVal] at hnv'; cases hnv'
       · obtain rfl : v' = v := by
           have : ofVal (.pure v') = ofVal (.pure v) := he1.symm
           simpa [ofVal] using this
@@ -4756,12 +5352,14 @@ theorem outcomesU_of_step {M : MachineCtx} (aid : Nat)
         rfl
       · exact absurd he1 (by simp [ofVal])
       · rw [jumpRedex?_ofVal] at hj; cases hj
+      · exact hcall.ne_same_ctl.elim
     | @wbeta_annot pa bty ds v e2 =>
-      rcases hr.wseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
+      rcases hr.wseq_inv with ⟨e1', ρ'', σ'', hnj, hnv', hstep, hout⟩ |
           ⟨_, _, v', _, _, _, he1, _, hout⟩ |
           ⟨_, _, ds', v', _, _, _, he1, _, hout⟩ |
-          ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩
-      · exact absurd hstep (fun h => Step.val_elim h)
+          ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩ |
+          hcall
+      · rw [toVal_ofVal] at hnv'; cases hnv'
       · exact absurd he1 (by simp [ofVal])
       · obtain ⟨hds, hv⟩ : ds = ds' ∧ v = v' := by simpa [ofVal] using he1
         subst hds hv
@@ -4774,10 +5372,12 @@ theorem outcomesU_of_step {M : MachineCtx} (aid : Nat)
         rw [step_ctx_wseq_annot hdOld hsz M.tagDefs σ M.file M.extern M.tid M.parent _ rfl rfl]
         rfl
       · rw [jumpRedex?_ofVal] at hj; cases hj
+      · exact hcall.ne_same_ctl.elim
     | @merge ds1 ds2 b hirr =>
       rcases hr.annot_inv with ⟨hg, hnj, b', ρ'', σ'', hstep, hout⟩ |
           ⟨a2, ds2', c, hbeq, hout⟩ |
-          ⟨l, pes, params, cont, vs, _, _, hg, hj, _, _, _, _⟩
+          ⟨l, pes, params, cont, vs, _, _, hg, hj, _, _, _, _⟩ |
+          ⟨-, hcall⟩ | ⟨v', pc', κ', ha', hb', hκ', hout'⟩
       · rw [show annotRooted (Expr ([] : List annot) (Eannot ds2 b)) = true
           from rfl] at hg
         cases hg
@@ -4795,6 +5395,8 @@ theorem outcomesU_of_step {M : MachineCtx} (aid : Nat)
       · rw [show annotRooted (Expr ([] : List annot) (Eannot ds2 b)) = true
           from rfl] at hg
         cases hg
+      · exact hcall.ne_same_ctl.elim
+      · cases hb'
     | save sb ps body =>
       have hdep : ∀ pe ∈ saveParamPexprs ps, peDepth pe ≤ lemDefaultFuel := by
         cases hfr with
@@ -4862,7 +5464,7 @@ theorem outcomesU_of_step {M : MachineCtx} (aid : Nat)
         cases hfr with
         | val_pure v => rw [valueFromPexpr_val] at hnv; cases hnv
         | pure_sym => exact ⟨_, _, rfl⟩
-      obtain ⟨v, -, hv, hout⟩ := hr.pure_inv
+      obtain ⟨v, -, hv, hout⟩ := hr.pure_inv hnv
       obtain ⟨h1, h2, h3⟩ : r' = Expr [] (Epure (Pexpr [] () (PEval v))) ∧
           ρ' = ev0 :: evs ∧ σ' = σ := by
         simpa [Prod.mk.injEq] using hout
@@ -4889,14 +5491,15 @@ theorem outcomesU_of_step {M : MachineCtx} (aid : Nat)
       exact stepDischarge_load_eval hd hsz hnv2 hp2 hd2 M.tagDefs σ M.file
         M.extern M.tid M.parent _ rfl hv2 aid M.runState
     | @beta_spec pa pb x bty w e2 =>
-      rcases hr.sseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
+      rcases hr.sseq_inv with ⟨e1', ρ'', σ'', hnj, hnv', hstep, hout⟩ |
           ⟨_, _, v', _, _, hpat, he1, _, hout⟩ |
           ⟨_, _, ds', v', _, _, hpat, he1, _, hout⟩ |
           ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩ |
           ⟨pa', pb', x', bty', ov', _, _, hpat, he1, _, hout⟩ |
           ⟨pa', pb', x', bty', ds', ov', _, _, hpat, he1, _, hout⟩ |
-          ⟨pa', x', bty', v', _, _, hpat, he1, _, hout⟩
-      · exact absurd hstep (fun h => Step.val_elim h)
+          ⟨pa', x', bty', v', _, _, hpat, he1, _, hout⟩ |
+          hcall
+      · rw [toVal_ofVal] at hnv'; cases hnv'
       · exact (specPat_ne_base hpat.symm).elim
       · exact (specPat_ne_base hpat.symm).elim
       · rw [jumpRedex?_ofVal] at hj; cases hj
@@ -4937,24 +5540,20 @@ theorem outcomesU_of_step {M : MachineCtx} (aid : Nat)
         rw [step_ctx_beta_spec_annot hd hsz M.tagDefs σ M.file M.extern M.tid M.parent _ rfl rfl]
         rfl
       · exact (symPat_ne_spec hpat).elim
+      · exact hcall.ne_same_ctl.elim
     | @memop mop pes =>
       cases hfr with
       | memop_vals v1 v2 =>
-        cases hr with
-        | run hj hl hvs => simp [memopRedex] at hj
-        | memop_eval hnv hv1' hv2' =>
-          rw [valueFromPexprs_pair, valueFromPexpr_val,
-            valueFromPexpr_val] at hnv
-          cases hnv
-        | @memop_ptreq _ _ _ pv1 pv2 b _ _ _ _ h1 h2 hmem =>
-          rw [valueFromPexpr_val] at h1 h2
-          obtain rfl : v1 = Vobject (OVpointer pv1) := Option.some.inj h1
-          obtain rfl : v2 = Vobject (OVpointer pv2) := Option.some.inj h2
-          unfold outcomesU engineStepsU
-          rw [step_ctx_memop hd hsz rfl rfl M.tagDefs σ M.file M.extern M.tid M.parent _ rfl]
-          simp only [List.map_cons, List.map_nil]
-          rw [dischargeStep_memop_active hmem]
-          rfl
+        obtain ⟨pv1, pv2, b, σ'', rfl, rfl, hmem, hout⟩ := hr.memop_vals_inv
+        obtain ⟨h1, h2, h3⟩ : r' = Expr [] (Epure (Pexpr [] () (PEval (boolValue b)))) ∧
+            ρ' = ev0 :: evs ∧ σ' = σ'' := by
+          simpa [Prod.mk.injEq] using hout
+        subst h1 h2 h3
+        unfold outcomesU engineStepsU
+        rw [step_ctx_memop hd hsz rfl rfl M.tagDefs σ M.file M.extern M.tid M.parent _ rfl]
+        simp only [List.map_cons, List.map_nil]
+        rw [dischargeStep_memop_active hmem]
+        rfl
       | memop_op hnvF hp1 hp2 hpd1 hpd2 =>
         obtain ⟨v1, v2, hv1', hv2', hout⟩ := hr.memop_op_inv hnvF
         obtain ⟨h1, h2, h3⟩ : r' = Expr [] (Ememop PtrEq
@@ -4987,14 +5586,15 @@ theorem outcomesU_of_step {M : MachineCtx} (aid : Nat)
         M.tagDefs σ M.file M.extern M.tid M.parent _ rfl hv2 hv3 aid
         M.runState
     | @beta_sym pa x bty w e2 =>
-      rcases hr.sseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
+      rcases hr.sseq_inv with ⟨e1', ρ'', σ'', hnj, hnv', hstep, hout⟩ |
           ⟨_, _, v', _, _, hpat, he1, _, hout⟩ |
           ⟨_, _, ds', v', _, _, hpat, he1, _, hout⟩ |
           ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩ |
           ⟨pa', pb', x', bty', ov', _, _, hpat, he1, _, hout⟩ |
           ⟨pa', pb', x', bty', ds', ov', _, _, hpat, he1, _, hout⟩ |
-          ⟨pa', x', bty', v', _, _, hpat, he1, _, hout⟩
-      · exact absurd hstep (fun h => Step.val_elim h)
+          ⟨pa', x', bty', v', _, _, hpat, he1, _, hout⟩ |
+          hcall
+      · rw [toVal_ofVal] at hnv'; cases hnv'
       · exact (symPat_ne_base hpat.symm).elim
       · exact (symPat_ne_base hpat.symm).elim
       · rw [jumpRedex?_ofVal] at hj; cases hj
@@ -5016,6 +5616,7 @@ theorem outcomesU_of_step {M : MachineCtx} (aid : Nat)
         unfold outcomesU engineStepsU
         rw [step_ctx_beta_sym_pure hd hsz M.tagDefs σ M.file M.extern M.tid M.parent _ rfl rfl]
         rfl
+      · exact hcall.ne_same_ctl.elim
   · obtain ⟨params, cont, vs, ev0', evs', hρeq, hl, hvs, hout⟩ :=
       hr.jump_inv (by rfl)
     have hdep : ∀ pe' ∈ pes, peDepth pe' ≤ lemDefaultFuel := by
@@ -5030,7 +5631,7 @@ theorem outcomesU_of_step {M : MachineCtx} (aid : Nat)
     unfold outcomesU engineStepsU
     exact stepDischarge_run hd hsz hl hdep M.tagDefs σ M.file M.extern M.tid
       M.parent p _ rfl hproc hvs aid M.runState hQ
-
+  · exact absurd (congrArg (fun c : Config => c.2.2.1.κ) hcout) (by simp)
 
 
 /-! ## Engine-completeness, per construct, at any machine context

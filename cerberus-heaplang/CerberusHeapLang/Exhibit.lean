@@ -381,7 +381,7 @@ seeded engine state -/
     rest verbatim. -/
 theorem exhibitA_semantic {GF : BundledGFunctors} [SpikeGpreS GF] :
     SemTripleU spikeCtx spikeCtl spikeEnv progA mA (fun v Q => v = sevenVal ∧ Q = mA7) :=
-  semantic_triple_soundU (GF := GF) spikeCtx_wf (ctl := spikeCtl) rfl spikeCtx_labels_frag spikeCtx_labels_pot
+  semantic_triple_soundU (GF := GF) spikeCtx_wf (ctl := spikeCtl) rfl spikeCtx_labels_frag spikeCtx_labels_pot spikeCtx_fragProcs
     fragA
     (Nat.le_trans fragA.pot_le_two
       (by rw [show esize progA = 2 from rfl]; unfold lemDefaultFuel; omega))
@@ -395,7 +395,7 @@ theorem exhibitB_semantic {GF : BundledGFunctors} [SpikeGpreS GF] :
     SemTripleU spikeCtx spikeCtl spikeEnv progB (Iris.Std.PartialMap.union mA mF)
       (fun v Q => ∃ Q₀, (v = Vunit ∧ Q₀ = mA7) ∧ Q₀ ##ₘ mF ∧
         Q = Iris.Std.PartialMap.union Q₀ mF) :=
-  semantic_frameU (GF := GF) spikeCtx_wf (ctl := spikeCtl) rfl spikeCtx_labels_frag spikeCtx_labels_pot
+  semantic_frameU (GF := GF) spikeCtx_wf (ctl := spikeCtl) rfl spikeCtx_labels_frag spikeCtx_labels_pot spikeCtx_fragProcs
     fragB
     (Nat.le_trans fragB.pot_le_two
       (by rw [show esize progB = 1 from rfl]; unfold lemDefaultFuel; omega))
@@ -754,7 +754,7 @@ theorem provenC {GF : BundledGFunctors} [SpikeGpreS GF] :
     y to 6's bytes) with R verbatim: the two stores do not conflict. -/
 theorem exhibitC_semantic {GF : BundledGFunctors} [SpikeGpreS GF] :
     SemTripleU spikeCtx spikeCtl spikeEnv progC mB (fun _ Q => Q = mC) :=
-  semantic_triple_soundU (GF := GF) spikeCtx_wf (ctl := spikeCtl) rfl spikeCtx_labels_frag spikeCtx_labels_pot
+  semantic_triple_soundU (GF := GF) spikeCtx_wf (ctl := spikeCtl) rfl spikeCtx_labels_frag spikeCtx_labels_pot spikeCtx_fragProcs
     fragC
     (Nat.le_trans fragC.pot_le_two
       (by rw [show esize progC = 2 from rfl]; unfold lemDefaultFuel; omega))

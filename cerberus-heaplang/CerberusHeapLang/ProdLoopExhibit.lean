@@ -94,7 +94,7 @@ theorem fib_certified_production (sup : Nat) (ra : core_run_annotation) (n : Int
       (M₀ := procCtx ((initial_core_run_state sup
         (collect_labeled_continuations_NEW
           (prodFile (fibProg ra n sbty ibty abty bbty)))).1))
-      rfl rfl (procCtx_labels hQprod) rfl rfl
+      rfl rfl (procCtx_labels hQprod) rfl rfl rfl rfl
       (fun l params cont hl => by
         rw [procCtx_labels hQprod] at hl
         obtain ⟨-, rfl⟩ := fibQ_inv ra n ibty abty bbty hl
@@ -655,7 +655,7 @@ theorem counter_loop_certified_production (sup : Nat) (ra : core_run_annotation)
         (M₀ := procCtx ((initial_core_run_state sup
           (collect_labeled_continuations_NEW
             (prodFile (counterProdProg ra mo bty xbty cbty sbty n)))).1))
-        rfl rfl (procCtx_labels hQprod) rfl rfl hQf
+        rfl rfl (procCtx_labels hQprod) rfl rfl rfl rfl hQf
         (fun l params cont hl => by
           rw [procCtx_labels hQprod] at hl
           obtain ⟨-, rfl⟩ := ctrQ_inv ra mo bty xbty cbty hl
@@ -1462,7 +1462,7 @@ theorem list_reverse_certified_production (sup : Nat) (ra : core_run_annotation)
           (collect_labeled_continuations_NEW
             (prodFile (lrProdProg ra mo bty sbty pbty cbty bbty nbty
               ubty)))).1))
-        rfl rfl (procCtx_labels hQprod) rfl rfl
+        rfl rfl (procCtx_labels hQprod) rfl rfl rfl rfl
         (fun l params cont hl => by
           rw [procCtx_labels hQprod] at hl
           obtain ⟨-, rfl⟩ := lrQ_inv loc0 empty_annotation ra mo pbty cbty

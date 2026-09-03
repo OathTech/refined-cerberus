@@ -16,8 +16,12 @@ call stack (`toValRt` answers `none` at `ctl.κ ≠ []`: a value under a
 context to it (`q.1.M = p.1.M`): the engine never writes `labeled`
 on the sequential path, and nothing else in `M` is written by the
 fragment. The control is NOT pinned by `primStep` — it is carried by
-`Step` (unchanged by every rule of this slice, `Step.ctl_eq`; written
-by the call/return rules of C2).
+`Step` (written by exactly two rules, the call and the return —
+`Step.ctl_cases`, calls arc C2; every other rule threads it,
+`Step.ctl_eq` under its two guards). A value at a non-empty stack is
+not a Language value, so `val_stuck` is `Step.toValRt_none`: at the
+empty stack values do not step, at a non-empty stack the tuple is not
+a value.
 
 - Observations: `Empty` (the fragment forks no threads and emits no
   observations; every `List Empty` is `[]`).
@@ -73,8 +77,7 @@ instance : Language CoreRt Mem Empty CoreRVal where
     obtain ⟨w, ρ, pr, ℓ, M⟩ := v
     rw [ofValRt_mk, toValRt_mk, toVal_ofVal]
     rfl
-  val_stuck {r σ obs r' σ' eₜ} h :=
-    toValRt_eq_none_of_toVal_none (Step.toVal_none h.1)
+  val_stuck {r σ obs r' σ' eₜ} h := Step.toValRt_none h.1
 
 @[simp] theorem primStep_eq (r : CoreRt) (σ : Mem) (obs : List Empty)
     (r' : CoreRt) (σ' : Mem) (efs : List CoreRt) :

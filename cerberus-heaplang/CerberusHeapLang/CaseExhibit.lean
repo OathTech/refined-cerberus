@@ -143,6 +143,7 @@ theorem case_certified {GF : BundledGFunctors} [SpikeGpreS GF] (v : value)
   refine engine_adequacyU (GF := GF) (M := spikeCtx) (ctl := spikeCtl) spikeCtx_wf rfl
     (fun l params cont hl => (spikeCtx_labels_none l hl).elim)
     (fun l params cont hl => (spikeCtx_labels_none l hl).elim)
+    spikeCtx_fragProcs
     (caseProg v) fmapEmpty [] σ₀ ∅ (caseProg_frag v)
     (Nat.le_trans (caseProg_frag v).pot_le_two
       (by rw [show esize (caseProg v) = 2 from rfl,

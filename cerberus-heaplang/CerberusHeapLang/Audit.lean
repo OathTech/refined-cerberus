@@ -75,6 +75,18 @@ configuration type; `old = new` at the canonical embedding
 `ctl = ⟨[], M.proc, M.execLoc⟩`), and the production statements
 (`*_certified_production`, `prod_run_eqJ`) are textually unchanged.
 
+CALLS ARC C2 (2026-09-03, cerberus-heaplang/docs/2026-09-03_c2-notes.md):
+the procedure call and the return as MIRROR STEPS (`Step.call`, `Step.ret`,
+`Step.ret_annot`), their engine certification (`engine_step_matchU` now at a
+FREE successor control) and completeness rows (`complete_call`,
+`complete_ret`); no logic rule (C3). The judgments `wps`/`wpt` gained the
+guard "`⌜False⌝` at a call redex" (the C1 collapses are otherwise false
+once the mirror calls — the record's §3); the `driveU` adequacy exports
+gained the procedure well-formedness premise `MachineCtx.FragProcs`
+(vacuous at both profiles, `spikeCtx_fragProcs`/`procCtx_fragProcs`); the
+production round `loop_step_frag` is restated at the LIVE control (the C1
+range audit's M-1). 20 pins added: 296 → 316.
+
 P3.5 ([USER 2026-09-02], docs/2026-09-02_p3.5-notes.md): the 65
 `#guard_msgs in #print axioms` blocks + prose collapsed to the export
 list below (62 names at P3.5, the same exact assertion each; the list
@@ -412,7 +424,31 @@ def trioExports : List Name := [
   -- owned live region beside any region ownership / beside a dead region
   -- is a different id (what carries `ids.Nodup` through the malloc'd
   -- list's invariant and into its four strengthened statements).
-  ``CerberusHeapLang.regionOwn_ne, ``CerberusHeapLang.regionOwn_deadRegion_ne]
+  ``CerberusHeapLang.regionOwn_ne, ``CerberusHeapLang.regionOwn_deadRegion_ne,
+  -- calls arc C2 (2026-09-03): THE PROCEDURE CALL AND RETURN AS MIRROR
+  -- STEPS — the control-writing case analysis (`Step.ctl_cases`), the call
+  -- inversion, the engine bridges (the PCALL round succeeding, its two
+  -- `call_proc` kills and the argument kill; the RETURN round), `call_proc`
+  -- in the mirror's terms, the completeness rows (`complete_call`,
+  -- `complete_ret`), the live-control driver round (`loop_step_frag` is
+  -- pinned above; its control-preserving core `loop_step_frag_same` and
+  -- the any-task-kind tau round), the adequacy lane through calls
+  -- (`drive_classifyU_aux`, the call/return device readings, the plug
+  -- lemma, the profiles' vacuous procedure premise), the total judgment's
+  -- guard, and the two-procedure smoke rounds (MirrorCoverage).
+  -- (`Decomp.callRedex?_inv`/`callRedex?_some`/`pot_plug_call_le` and
+  -- `callRedex?_none_of_jumpRedex?_some` have SUB-trio cones — unpinnable
+  -- here, bounded by the sweep.)
+  ``CerberusHeapLang.Step.ctl_cases, ``CerberusHeapLang.Step.call_inv,
+  ``CerberusHeapLang.step_ctx_call_ws, ``CerberusHeapLang.step_ctx_call_unknown,
+  ``CerberusHeapLang.step_ctx_call_arity, ``CerberusHeapLang.step_ctx_call_kill_args,
+  ``CerberusHeapLang.step_ctx_ret, ``CerberusHeapLang.call_proc_eq,
+  ``CerberusHeapLang.complete_call, ``CerberusHeapLang.complete_ret,
+  ``CerberusHeapLang.loop_step_frag_same, ``CerberusHeapLang.loop_step_tau_tsk,
+  ``CerberusHeapLang.drive_classifyU_aux, ``CerberusHeapLang.outcomesU_of_call,
+  ``CerberusHeapLang.outcomesU_of_ret, ``CerberusHeapLang.Decomp.frag_plug_call,
+  ``CerberusHeapLang.spikeCtx_fragProcs, ``CerberusHeapLang.wpt_call_eq,
+  ``CerberusHeapLang.smoke_call_round, ``CerberusHeapLang.smoke_ret_round]
 
 def sortedNames (ns : Array Name) : Array String :=
   (ns.map (·.toString)).qsort (· < ·)

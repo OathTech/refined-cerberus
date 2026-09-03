@@ -1059,7 +1059,8 @@ theorem foldM_args_kill {th : thread_state}
 of them) -/
 
 /-- The pure operands the engine evaluates at a fragment configuration's
-    redex: the guard of `Eif`, the arguments of `Erun`, the initializers
+    redex: the guard of `Eif`, the arguments of `Erun` and of `Eproc` (calls
+    arc C2), the initializers
     of `Esave`, the operand of a pure exit, the pointer operand of a load
     (and the value operand of a store), the operands of a memop; frames
     (`Esseq`/`Ewseq`/`Eannot`) are transparent. -/
@@ -1069,6 +1070,7 @@ def operandsOf : CoreExpr → List (generic_pexpr Unit sym)
   | Expr _ (Eannot _ b) => operandsOf b
   | Expr _ (Eif g _ _) => [g]
   | Expr _ (Erun _ _ pes) => pes
+  | Expr _ (Eproc _ _ pes) => pes
   | Expr _ (Esave _ ps _) => saveParamPexprs ps
   | Expr _ (Epure pe) => [pe]
   | Expr _ (Eaction (Paction _ (Action _ _ (Load0 _ pe2 _)))) => [pe2]

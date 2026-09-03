@@ -1498,6 +1498,7 @@ theorem list_reverse_certified
       exact Nat.le_trans (lrBody_fragJ loc ann ra mo bbty nbty ubty).pot_le_two
         (by rw [show esize (lrBody loc ann ra mo bbty nbty ubty) = 5 from rfl,
           show lemDefaultFuel = 999999 + 1 from rfl]; omega))
+    (procCtx_fragProcs _)
     prog fmapEmpty [] σ₀ (Iris.Std.PartialMap.union m₀ R)
     (.save (saveParams_pure_of_vals rfl) (saveParams_depth_of_vals rfl) (lrBody_fragJ loc ann ra mo bbty nbty ubty))
     (Nat.le_trans (Frag.pot_le_two (e := prog) (.save (saveParams_pure_of_vals rfl) (saveParams_depth_of_vals rfl)

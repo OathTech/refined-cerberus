@@ -830,6 +830,302 @@ theorem driveU_value_pure {M : MachineCtx} (hwf : M.SeqWF) {ctl : Ctl} (hκ : ct
     rw [driveU_succ, stepOutcomes_thread, outcomesU_done hwf hκ]
     exact h
 
+/-! ## Calls (arc C2): the file's procedures as a WELL-FORMEDNESS PREMISE
+of the adequacy exports, and the drive through a call and a return
+
+`Frag` is a predicate on the EXPRESSION; the callee's body lives in the
+FILE (`lookupProc M.file M.extern f`). So the fact that every procedure
+a run may enter is a fragment term within the potential bound — the
+twin of `hQf`/`hQpot` for the label bodies — cannot be a `Frag`
+premise: it is a premise on the machine context, carried by every
+adequacy export whose proof drives THROUGH calls (the `driveU` lane:
+its NotStuck oracle is the raw Iris WP, which does not exclude a call
+redex, so the drive classification must follow the engine into the
+callee and back). The label bodies of a CALLEE are read at the LIVE
+procedure (`M.labelsAt (some f)`), so the premise carries them per
+procedure as well. -/
+
+/-- Every procedure the file declares (extern-resolved, stdlib first —
+    `lookupProc`) has a fragment body within the potential bound, and
+    fragment label bodies within the bound at its own label fiber. -/
+structure MachineCtx.FragProcs (M : MachineCtx) : Prop where
+  body : ∀ f params body, lookupProc M.file M.extern f = some (params, body) → Frag body
+  potBound : ∀ f params body, lookupProc M.file M.extern f = some (params, body) →
+    pot body ≤ lemDefaultFuel
+  labels : ∀ f params body, lookupProc M.file M.extern f = some (params, body) →
+    ∀ l params' cont, lookupLabel (M.labelsAt (some f)) l = some (params', cont) →
+      Frag cont ∧ pot cont ≤ lemDefaultFuel
+
+/-- The default file declares no procedure. -/
+theorem lookupProc_spikeFile (ext : Fmap sym sym) (f : sym) :
+    lookupProc spikeFile ext f = none := rfl
+
+/-- The two frozen profiles share the default file: the procedure
+    premise is vacuous there (what every current export client passes). -/
+theorem spikeCtx_fragProcs : spikeCtx.FragProcs :=
+  ⟨fun f _ _ h => (by rw [lookupProc_spikeFile] at h; cases h),
+   fun f _ _ h => (by rw [lookupProc_spikeFile] at h; cases h),
+   fun f _ _ h => (by rw [lookupProc_spikeFile] at h; cases h)⟩
+
+theorem procCtx_fragProcs (rs : core_run_state) : (procCtx rs).FragProcs :=
+  ⟨fun f _ _ h => (by rw [lookupProc_spikeFile] at h; cases h),
+   fun f _ _ h => (by rw [lookupProc_spikeFile] at h; cases h),
+   fun f _ _ h => (by rw [lookupProc_spikeFile] at h; cases h)⟩
+
+/-- The control invariant of a drive (proof device): the current
+    procedure's label bodies are fragment terms within the bound, and
+    every saved frame on the call stack (caller's procedure, caller's
+    context) has fragment label bodies and yields a fragment term within
+    the bound when a value is plugged into it (what RETURN produces). At
+    the entry control (`κ = []`) it is the label-cone premise alone. -/
+def ControlOk (M : MachineCtx) (ctl : Ctl) : Prop :=
+  (∀ l params cont, lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
+    Frag cont ∧ pot cont ≤ lemDefaultFuel) ∧
+  ∀ pc ∈ ctl.κ,
+    (∀ l params cont, lookupLabel (M.labelsAt pc.1) l = some (params, cont) →
+      Frag cont ∧ pot cont ≤ lemDefaultFuel) ∧
+    ∀ v : value, Frag (apply_ctx pc.2 (Expr [] (Epure (Pexpr [] () (PEval v))))) ∧
+      pot (apply_ctx pc.2 (Expr [] (Epure (Pexpr [] () (PEval v))))) ≤ lemDefaultFuel
+
+/-- The potential is positive (a redex leaf weighs at least 1). -/
+theorem pot_pos (e : CoreExpr) : 1 ≤ pot e := by
+  unfold pot
+  split <;> omega
+
+/-- A `BareHead` term never decomposes to a call redex (its shapes are
+    root redexes or values, none a call). -/
+theorem BareHead.no_call {e : CoreExpr} (hb : BareHead e) {ctx : context}
+    {ra : core_run_annotation} {f : sym} {pes : List (generic_pexpr Unit sym)}
+    (hd : Decomp e ctx (callRedex ra f pes)) : False := by
+  have hc := hd.callRedex?_some
+  cases hb with
+  | val_pure v => cases hc
+  | create => cases hc
+  | memop_vals v1 v2 => cases hc
+  | memop_op hnv hp1 hp2 hd1 hd2 => cases hc
+  | alloc => cases hc
+  | alloc_op hnv hp1 hp2 hd1 hd2 => cases hc
+
+/-- Plugging a BARE value into the context of a decomposed CALL redex of
+    a fragment term yields a fragment term: what RETURN installs is in
+    the cone. (The sym-binder frame is impossible: its head is a
+    `BareHead`, never a call.) -/
+theorem Decomp.frag_plug_call' {e : CoreExpr} {ctx : context} {r : CoreExpr}
+    (hd : Decomp e ctx r) {ra : core_run_annotation} {f : sym}
+    {pes : List (generic_pexpr Unit sym)} (hr : r = callRedex ra f pes)
+    (hf : Frag e) (v : value) :
+    Frag (apply_ctx ctx (Expr [] (Epure (Pexpr [] () (PEval v))))) := by
+  induction hd with
+  | root _ => exact .val_pure v
+  | sseq hd ih =>
+    cases hf with
+    | sseq hf1 hf2 => exact .sseq (ih hr hf1) hf2
+  | sseq_spec hd ih =>
+    cases hf with
+    | sseq_spec hf1 hf2 => exact .sseq_spec (ih hr hf1) hf2
+  | sseq_sym hd ih =>
+    cases hf with
+    | sseq_sym hb hf1 hf2 => subst hr; exact (hb.no_call hd).elim
+  | annot _ _ _ hd ih =>
+    cases hf with
+    | annot hfb => exact .annot (ih hr hfb)
+  | wseq hd ih =>
+    cases hf with
+    | wseq hf1 hf2 => exact .wseq (ih hr hf1) hf2
+
+theorem Decomp.frag_plug_call {e : CoreExpr} {ctx : context}
+    {ra : core_run_annotation} {f : sym} {pes : List (generic_pexpr Unit sym)}
+    (hd : Decomp e ctx (callRedex ra f pes)) (hf : Frag e) (v : value) :
+    Frag (apply_ctx ctx (Expr [] (Epure (Pexpr [] () (PEval v))))) :=
+  hd.frag_plug_call' rfl hf v
+
+/-- … and its potential does not exceed the caller's term's. -/
+theorem Decomp.pot_plug_call_le' {e : CoreExpr} {ctx : context} {r : CoreExpr}
+    (hd : Decomp e ctx r) {ra : core_run_annotation} {f : sym}
+    {pes : List (generic_pexpr Unit sym)} (hr : r = callRedex ra f pes) (v : value) :
+    pot (apply_ctx ctx (Expr [] (Epure (Pexpr [] () (PEval v))))) ≤ pot e := by
+  induction hd with
+  | root _ =>
+    subst hr
+    show pot (Expr ([] : List _root_.annot) (Epure (Pexpr [] () (PEval v)))) ≤ 2
+    rw [pot_pure_val]
+    omega
+  | sseq hd ih => have := ih hr; simp only [apply_ctx, pot_sseq]; omega
+  | sseq_spec hd ih => have := ih hr; simp only [apply_ctx, pot_sseq]; omega
+  | sseq_sym hd ih => have := ih hr; simp only [apply_ctx, pot_sseq]; omega
+  | annot _ _ _ hd ih => have := ih hr; simp only [apply_ctx, pot_annot]; omega
+  | wseq hd ih => have := ih hr; simp only [apply_ctx, pot_wseq]; omega
+
+theorem Decomp.pot_plug_call_le {e : CoreExpr} {ctx : context}
+    {ra : core_run_annotation} {f : sym} {pes : List (generic_pexpr Unit sym)}
+    (hd : Decomp e ctx (callRedex ra f pes)) (v : value) :
+    pot (apply_ctx ctx (Expr [] (Epure (Pexpr [] () (PEval v))))) ≤ pot e :=
+  hd.pot_plug_call_le' rfl v
+
+/-- The engine's discharged behaviour at a CALL (device form): the
+    singleton `next` at the pushed control — `step_ctx_call_ws` under
+    `dischargeStep`'s with-runstate arm (the run state is returned
+    verbatim, `labeled` untouched). -/
+theorem outcomesU_of_call {M : MachineCtx} (aid : Nat) {e : CoreExpr} {ctx : context}
+    {ra : core_run_annotation} {f : sym} {pes : List (generic_pexpr Unit sym)}
+    (hd : Decomp e ctx (callRedex ra f pes)) (hsz : esize e ≤ lemDefaultFuel)
+    (hdep : ∀ pe ∈ pes, peDepth pe ≤ lemDefaultFuel)
+    {ρ : EnvStack} {ctl : Ctl} {σ : Mem} {vs : List value}
+    (hvs : evalPexprs M.tagDefs M.extern ρ pes = some vs)
+    {params : List (sym × core_base_type)} {body : CoreExpr}
+    (hf : lookupProc M.file M.extern f = some (params, body)) (hlen : params.length = vs.length) :
+    outcomesU M aid e ρ ctl σ =
+      [.next (M.thread body (procEnv params vs :: ρ)
+        ⟨(ctl.proc, ctx) :: ctl.κ, some f, push_exec_loc f M.currentLoc ctl.execLoc⟩) σ] := by
+  unfold outcomesU engineStepsU
+  obtain ⟨m, hsteps, hm⟩ := step_ctx_call_ws hd hsz hdep M.tagDefs σ M.file M.extern M.tid
+    M.parent (M.thread e ρ ctl) rfl hvs hf hlen
+  rw [hsteps]
+  simp only [List.map_cons, List.map_nil]
+  dsimp only [dischargeStep]
+  rw [hm M.runState]
+  rfl
+
+/-- The engine's discharged behaviour at a RETURN (device form): the
+    singleton `next` at the popped control (`step_ctx_ret` under
+    `dischargeStep`'s tau arm). -/
+theorem outcomesU_of_ret {M : MachineCtx} (aid : Nat) (v : value)
+    (ev0 : Fmap sym value) (evs : List (Fmap sym value))
+    {p : Option sym} {ctx : context} {κ : List (Option sym × context)}
+    {q : Option sym} {ℓ : exec_location} (σ : Mem) :
+    outcomesU M aid (ofVal (.pure v)) (ev0 :: evs) ⟨(p, ctx) :: κ, q, ℓ⟩ σ =
+      [.next (M.thread (apply_ctx ctx (ofVal (.pure v))) evs ⟨κ, p, ℓ⟩) σ] := by
+  unfold outcomesU engineStepsU
+  obtain ⟨tsk, hsteps⟩ := step_ctx_ret v M.tagDefs σ M.file M.extern M.tid M.parent
+    (M.thread (ofVal (.pure v)) (ev0 :: evs) ⟨(p, ctx) :: κ, q, ℓ⟩) rfl rfl rfl
+  rw [hsteps]
+  rfl
+
+/-- THE DRIVE CLASSIFICATION THROUGH CALLS AND RETURNS (calls arc C2; the
+    control-general induction behind `drive_classifyU`): at every reachable
+    configuration whose control satisfies `ControlOk` and whose env stack
+    is deeper than the call stack, every `driveU` outcome is `DriveOk`. A
+    value at the empty stack is a Language value (the readout); a value
+    under a frame RETURNs (`Step.ret`/`Step.ret_annot`, `outcomesU_of_ret`)
+    into the frame's plugged term, which is in the cone by the invariant; a
+    CALL (`outcomesU_of_call`) enters the callee, in the cone by
+    `FragProcs`, pushing a frame that satisfies the invariant by the plug
+    lemmas; every other step is control-preserving (`outcomesU_of_step`). -/
+theorem drive_classifyU_aux {M : MachineCtx} (hwf : M.SeqWF) (hPf : M.FragProcs)
+    (e₀ : CoreExpr) (ρ₀ : EnvStack) (ctl₀ : Ctl) (σ₀ : Mem)
+    (φp : CoreRVal → Mem → Prop)
+    (hNS : ∀ (r : CoreRt) (σ : Mem),
+      Reach ((⟨e₀, ρ₀, ctl₀, M⟩ : CoreRt), σ₀) (r, σ) →
+      PrimStep.NotStuck (Val := CoreRVal) (r, σ))
+    (hRES : ∀ (w : CoreRVal) (σ : Mem),
+      Reach ((⟨e₀, ρ₀, ctl₀, M⟩ : CoreRt), σ₀) (ofValRt w, σ) → φp w σ) :
+    ∀ (n : Nat) (aids : Nat → Nat) (e : CoreExpr) (ρ : EnvStack) (ctl : Ctl) (σ : Mem),
+      Reach ((⟨e₀, ρ₀, ctl₀, M⟩ : CoreRt), σ₀) ((⟨e, ρ, ctl, M⟩ : CoreRt), σ) →
+      Frag e → pot e ≤ lemDefaultFuel → ControlOk M ctl → ctl.κ.length < ρ.length →
+      DriveOk φp (driveU M aids n (M.thread e ρ ctl) σ) := by
+  intro n
+  induction n with
+  | zero => intro aids e ρ ctl σ _ _ _ _ _; trivial
+  | succ n ih =>
+    intro aids e ρ ctl σ hreach hf hpot hok hlen
+    obtain ⟨κ, pr, ℓ⟩ := ctl
+    cases hv : toVal e with
+    | some w =>
+      have he := ofVal_of_toVal hv
+      subst he
+      cases κ with
+      | nil =>
+        cases w with
+        | pure v =>
+          exact driveU_value_pure hwf (ctl := ⟨[], pr, ℓ⟩) rfl φp aids v ρ σ
+            ⟨⟨.pure v, ρ, pr, ℓ, M⟩, rfl, hRES ⟨.pure v, ρ, pr, ℓ, M⟩ σ hreach⟩ (n+1)
+        | annot ds v =>
+          rw [driveU_succ, stepOutcomes_thread, outcomesU_remove_annot]
+          exact driveU_value_pure hwf (ctl := ⟨[], pr, ℓ⟩) rfl φp _ v ρ σ
+            ⟨⟨.annot ds v, ρ, pr, ℓ, M⟩, rfl, hRES ⟨.annot ds v, ρ, pr, ℓ, M⟩ σ hreach⟩ n
+      | cons pc κ =>
+        obtain ⟨p, ctx⟩ := pc
+        rcases hNS ⟨ofVal w, ρ, ⟨(p, ctx) :: κ, pr, ℓ⟩, M⟩ σ hreach with hval |
+            ⟨obs, r', σ', efs, hprim⟩
+        · rw [language_toVal_eq, toValRt_mk_cons] at hval
+          cases hval
+        obtain ⟨hs, hM, -⟩ := hprim
+        obtain ⟨re', rρ', rctl', rM'⟩ := r'
+        simp only at hs hM
+        obtain rfl : M = rM' := hM.symm
+        obtain ⟨hlabP, hκ⟩ := hok
+        obtain ⟨hlabC, hplug⟩ := hκ (p, ctx) (List.mem_cons_self ..)
+        cases w with
+        | pure v =>
+          rcases hs.ctl_cases with heq | ⟨_, _, _, _, _, _, hc, -⟩ |
+              ⟨v', ev0, evs, p', ctx', κ', q', ℓ', he, hρ, hctl, rfl, rfl, rfl, rfl⟩
+          · exact (Step.pure_val_elim hs heq).elim
+          · simp [ofVal] at hc
+          · obtain rfl : v = v' := by simpa [ofVal] using he
+            cases hctl
+            subst hρ
+            rw [driveU_succ, stepOutcomes_thread, outcomesU_of_ret]
+            refine ih _ _ _ ⟨κ, p, ℓ⟩ _ (hreach.tail ⟨hs, rfl⟩) (hplug v).1
+              (hplug v).2 ⟨hlabC, fun pc' hpc' => hκ pc' (List.mem_cons_of_mem _ hpc')⟩ ?_
+            simp only [List.length_cons] at hlen
+            exact Nat.lt_of_succ_lt_succ hlen
+        | annot ds v =>
+          rcases hs.ctl_cases with heq | ⟨_, _, _, _, _, _, hc, -⟩ |
+              ⟨v', _, _, _, _, _, _, _, he, -⟩
+          · subst heq
+            obtain ⟨rfl, rfl, rfl, -⟩ := Step.annot_val_inv hs rfl
+            rw [driveU_succ, stepOutcomes_thread, outcomesU_remove_annot]
+            exact ih _ _ _ ⟨(p, ctx) :: κ, pr, ℓ⟩ _ (hreach.tail ⟨hs, rfl⟩) (.val_pure v)
+              (by rw [pot_ofVal_pure]; rw [pot_ofVal_annot] at hpot; omega)
+              ⟨hlabP, hκ⟩ hlen
+          · simp [ofVal, callRedex?, annotRooted] at hc
+          · simp [ofVal] at he
+    | none =>
+      rcases hNS ⟨e, ρ, ⟨κ, pr, ℓ⟩, M⟩ σ hreach with hval | ⟨obs, r', σ', efs, hprim⟩
+      · rw [language_toVal_eq, toValRt_eq_none_of_toVal_none hv] at hval
+        cases hval
+      obtain ⟨hs, hM, -⟩ := hprim
+      obtain ⟨re', rρ', rctl', rM'⟩ := r'
+      simp only at hs hM
+      obtain rfl : M = rM' := hM.symm
+      obtain ⟨hlabP, hκ⟩ := hok
+      obtain ⟨ev0, evs, rfl⟩ : ∃ ev0 evs, ρ = ev0 :: evs := by
+        cases ρ with
+        | nil => simp at hlen
+        | cons ev0 evs => exact ⟨ev0, evs, rfl⟩
+      rcases hs.ctl_cases with heq | ⟨ctx, f, pes, params, body, vs, hc, hvs, hfl, hlen', rfl, rfl, rfl, rfl⟩ |
+          ⟨v, _, _, _, _, _, _, _, he, -⟩
+      · subst heq
+        rw [driveU_succ, stepOutcomes_thread,
+          outcomesU_of_step (aids 0) hf (Nat.le_trans hf.esize_le_pot hpot) hs]
+        obtain ⟨ev0', rfl⟩ := Step.env_cons hs
+        refine ih _ re' (ev0' :: evs) ⟨κ, pr, ℓ⟩ σ' (hreach.tail ⟨hs, rfl⟩)
+          (hf.step (fun l params cont hl => (hlabP l params cont hl).1) hs) ?_ ⟨hlabP, hκ⟩ hlen
+        rcases hf.pot_step_bound hs with hle | ⟨l, pes, params, cont, -, hl, hec⟩
+        · exact Nat.le_trans hle hpot
+        · rw [hec]
+          exact (hlabP l params cont hl).2
+      · -- THE CALL: the redex in context, the callee in the cone by `FragProcs`
+        obtain ⟨ctx', r, hd, hfr⟩ := hf.decomp hv
+        obtain ⟨rfl, ra, rfl⟩ := hd.callRedex?_inv hc
+        have hdep : ∀ pe ∈ pes, peDepth pe ≤ lemDefaultFuel := by
+          cases hfr with
+          | call _ hdep => exact hdep
+        rw [driveU_succ, stepOutcomes_thread,
+          outcomesU_of_call (aids 0) hd (Nat.le_trans hf.esize_le_pot hpot) hdep hvs hfl hlen']
+        refine ih _ _ (procEnv params vs :: ev0 :: evs) _ σ' (hreach.tail ⟨hs, rfl⟩)
+          (hPf.body f params _ hfl) (hPf.potBound f params _ hfl) ⟨?_, ?_⟩ ?_
+        · exact hPf.labels f params _ hfl
+        · intro pc hpc
+          rcases List.mem_cons.mp hpc with rfl | hpc'
+          · exact ⟨hlabP, fun v => ⟨hd.frag_plug_call hf v,
+              Nat.le_trans (hd.pot_plug_call_le v) hpot⟩⟩
+          · exact hκ pc hpc'
+        · simp only [List.length_cons] at hlen ⊢
+          omega
+      · rw [he] at hv
+        cases hv
+
 /-- THE UNIFIED CLASSIFICATION (the one drive classification, at any
     machine context): from Step-level NotStuck + value readout over
     `Reach`, every driveU outcome is DriveOk — via the device lemma
@@ -845,6 +1141,7 @@ theorem drive_classifyU {M : MachineCtx} (hwf : M.SeqWF) {ctl : Ctl} (hκ : ctl.
       Frag cont)
     (hQpot : ∀ l params cont, lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
       pot cont ≤ lemDefaultFuel)
+    (hPf : M.FragProcs)
     (e₀ : CoreExpr) (ρ₀ : EnvStack) (σ₀ : Mem)
     (φp : CoreRVal → Mem → Prop)
     (hNS : ∀ (r : CoreRt) (σ : Mem),
@@ -857,46 +1154,14 @@ theorem drive_classifyU {M : MachineCtx} (hwf : M.SeqWF) {ctl : Ctl} (hκ : ctl.
       Reach ((⟨e₀, ρ₀, ctl, M⟩ : CoreRt), σ₀) ((⟨e, ev0 :: evs, ctl, M⟩ : CoreRt), σ) →
       Frag e → pot e ≤ lemDefaultFuel →
       DriveOk φp (driveU M aids n (M.thread e (ev0 :: evs) ctl) σ) := by
-  obtain ⟨κ, pr, ℓ⟩ := ctl
-  simp only at hκ
-  subst hκ
-  intro n
-  induction n with
-  | zero => intro aids e ev0 evs σ _ _ _; trivial
-  | succ n ih =>
-    intro aids e ev0 evs σ hreach hf hpot
-    cases hv : toVal e with
-    | some w =>
-      have he := ofVal_of_toVal hv
-      subst he
-      cases w with
-      | pure v =>
-        exact driveU_value_pure hwf (ctl := ⟨[], pr, ℓ⟩) rfl φp aids v (ev0 :: evs) σ
-          ⟨⟨.pure v, ev0 :: evs, pr, ℓ, M⟩, rfl,
-            hRES ⟨.pure v, ev0 :: evs, pr, ℓ, M⟩ σ hreach⟩ (n+1)
-      | annot ds v =>
-        rw [driveU_succ, stepOutcomes_thread, outcomesU_remove_annot]
-        exact driveU_value_pure hwf (ctl := ⟨[], pr, ℓ⟩) rfl φp _ v (ev0 :: evs) σ
-          ⟨⟨.annot ds v, ev0 :: evs, pr, ℓ, M⟩, rfl,
-            hRES ⟨.annot ds v, ev0 :: evs, pr, ℓ, M⟩ σ hreach⟩ n
-    | none =>
-      rcases hNS ⟨e, ev0 :: evs, ⟨[], pr, ℓ⟩, M⟩ σ hreach with hval | ⟨obs, r', σ', efs, hprim⟩
-      · rw [language_toVal_eq, toValRt_mk, hv] at hval
-        cases hval
-      · obtain ⟨hs, hM, -⟩ := hprim
-        obtain ⟨re', rρ', rctl', rM'⟩ := r'
-        simp only at hs hM
-        obtain rfl : M = rM' := hM.symm
-        obtain rfl : (⟨[], pr, ℓ⟩ : Ctl) = rctl' := (Step.ctl_eq hs).symm
-        obtain ⟨ev0', rfl⟩ := Step.env_cons hs
-        rw [driveU_succ, stepOutcomes_thread,
-          outcomesU_of_step (aids 0) hf (Nat.le_trans hf.esize_le_pot hpot) hs]
-        refine ih _ re' ev0' evs σ'
-          (hreach.tail ⟨hs, rfl⟩) (hf.step hQf hs) ?_
-        rcases hf.pot_step_bound hs with hle | ⟨l, pes, params, cont, -, hl, hec⟩
-        · exact Nat.le_trans hle hpot
-        · rw [hec]
-          exact hQpot l params cont hl
+  intro n aids e ev0 evs σ hreach hf hpot
+  refine drive_classifyU_aux hwf hPf e₀ ρ₀ ctl σ₀ φp hNS hRES n aids e (ev0 :: evs) ctl σ
+    hreach hf hpot ⟨fun l params cont hl => ⟨hQf l params cont hl, hQpot l params cont hl⟩, ?_⟩ ?_
+  · intro pc hpc
+    rw [hκ] at hpc
+    cases hpc
+  · rw [hκ]
+    simp
 
 /-- ADEQUACY AT A MACHINE CONTEXT (engine-only conclusion — THE
     adequacy, every closed-program export is an instance): a proved
@@ -913,6 +1178,7 @@ theorem engine_adequacyU {GF : BundledGFunctors} [SpikeGpreS GF]
       Frag cont)
     (hQpot : ∀ l params cont, lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
       pot cont ≤ lemDefaultFuel)
+    (hPf : M.FragProcs)
     (e₀ : CoreExpr) (ev00 : Fmap sym value) (evs0 : List (Fmap sym value))
     (σ₀ : Mem) (m₀ : SpikeHeapF SpikeCell)
     (hfrag : Frag e₀) (hpot : pot e₀ ≤ lemDefaultFuel) (hcoh : Coh M.tagDefs σ₀ m₀)
@@ -945,7 +1211,7 @@ theorem engine_adequacyU {GF : BundledGFunctors} [SpikeGpreS GF]
     exact (hadeq [ofValRt w] σ (Reach.toPool hr)).2 w [] rfl
   have hok : DriveOk (fun w σ' => ψ w.val σ')
       (driveU M aids n (M.thread e₀ (ev00 :: evs0) ctl) σ₀) :=
-    drive_classifyU hwf hκ hQf hQpot e₀ (ev00 :: evs0) σ₀ _ hNS hRES
+    drive_classifyU hwf hκ hQf hQpot hPf e₀ (ev00 :: evs0) σ₀ _ hNS hRES
       n aids e₀ ev00 evs0 σ₀ .refl hfrag hpot
   refine ⟨fun r hdr => ?_, fun hds => ?_, fun v σ' hdv => ?_⟩
   · rw [hdr] at hok; exact hok
@@ -986,6 +1252,7 @@ theorem engine_adequacyU_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
       Frag cont)
     (hQpot : ∀ l params cont, lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
       pot cont ≤ lemDefaultFuel)
+    (hPf : M.FragProcs)
     (e₀ : CoreExpr) (ev00 : Fmap sym value) (evs0 : List (Fmap sym value))
     (σ₀ : Mem) (m₀ : SpikeHeapF SpikeCell) (B : Nat)
     (hfrag : Frag e₀) (hpot : pot e₀ ≤ lemDefaultFuel)
@@ -1021,7 +1288,7 @@ theorem engine_adequacyU_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
     exact (hadeq [ofValRt w] σ (Reach.toPool hr)).2 w [] rfl
   have hok : DriveOk (fun w σ' => ψ w.val σ')
       (driveU M aids n (M.thread e₀ (ev00 :: evs0) ctl) σ₀) :=
-    drive_classifyU hwf hκ hQf hQpot e₀ (ev00 :: evs0) σ₀ _ hNS hRES
+    drive_classifyU hwf hκ hQf hQpot hPf e₀ (ev00 :: evs0) σ₀ _ hNS hRES
       n aids e₀ ev00 evs0 σ₀ .refl hfrag hpot
   refine ⟨fun r hdr => ?_, fun hds => ?_, fun v σ' hdv => ?_⟩
   · rw [hdr] at hok; exact hok
@@ -1210,6 +1477,7 @@ theorem project_triple {GF : BundledGFunctors} [SpikeGpreS GF]
       Frag cont)
     (hQpot : ∀ l params cont, lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
       pot cont ≤ lemDefaultFuel)
+    (hPf : M.FragProcs)
     {e : CoreExpr} (hfrag : Frag e) (hpot : pot e ≤ lemDefaultFuel)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value))
     (P : CellMap) (Q : ∀ [SpikeGS .hasLC GF], CoreRVal → IProp GF)
@@ -1223,7 +1491,7 @@ theorem project_triple {GF : BundledGFunctors} [SpikeGpreS GF]
         iprop(Q w ∗ ([∗map] i ↦ c ∈ R, cellOwn M.tagDefs (hlc := .hasLC) (GF := GF) i (.own 1) c) ∗
           metaInterp mm ∗ byteInterp mb) ⊢ (⌜ψ⌝ : IProp GF)) → ψ) := by
   intro R hdisj σ hsat n aids
-  refine engine_adequacyU (GF := GF) hwf hκ hQf hQpot e ev0 evs σ (Iris.Std.PartialMap.union P R)
+  refine engine_adequacyU (GF := GF) hwf hκ hQf hQpot hPf e ev0 evs σ (Iris.Std.PartialMap.union P R)
     hfrag hpot hsat _ ?_ n aids
   intro instGS
   refine .trans (BigSepM.bigSepM_union hdisj).1 ?_
@@ -1259,6 +1527,7 @@ theorem project_triple_pure {GF : BundledGFunctors} [SpikeGpreS GF]
       Frag cont)
     (hQpot : ∀ l params cont, lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
       pot cont ≤ lemDefaultFuel)
+    (hPf : M.FragProcs)
     {e : CoreExpr} (hfrag : Frag e) (hpot : pot e ≤ lemDefaultFuel)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value))
     (P : CellMap) (Q : ∀ [SpikeGS .hasLC GF], CoreRVal → IProp GF)
@@ -1273,7 +1542,7 @@ theorem project_triple_pure {GF : BundledGFunctors} [SpikeGpreS GF]
         metaInterp mm ∗ byteInterp mb) ⊢ (⌜ψ R w.val σ'⌝ : IProp GF)) :
     MemTripleU M ctl (ev0 :: evs) e P ψ := by
   intro R hdisj σ hsat n aids
-  have h := project_triple (GF := GF) hwf hκ hQf hQpot hfrag hpot ev0 evs P Q hwp
+  have h := project_triple (GF := GF) hwf hκ hQf hQpot hPf hfrag hpot ev0 evs P Q hwp
     R hdisj σ hsat n aids
   refine ⟨h.1, h.2.1, fun v σ' hd => h.2.2 v σ' hd (ψ R v σ') ?_⟩
   intro _ w hw mm mb mk hG
@@ -1354,6 +1623,7 @@ theorem project_triple_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
       Frag cont)
     (hQpot : ∀ l params cont, lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
       pot cont ≤ lemDefaultFuel)
+    (hPf : M.FragProcs)
     {e : CoreExpr} (hfrag : Frag e) (hpot : pot e ≤ lemDefaultFuel)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value))
     (P : CellMap) (B : Nat) (Q : ∀ [SpikeGS .hasLC GF], CoreRVal → IProp GF)
@@ -1368,7 +1638,7 @@ theorem project_triple_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
         iprop(Q w ∗ ([∗map] i ↦ c ∈ R, cellOwn M.tagDefs (hlc := .hasLC) (GF := GF) i (.own 1) c) ∗
           metaInterp mm ∗ byteInterp mb) ⊢ (⌜ψ⌝ : IProp GF)) → ψ) := by
   intro R hdisj σ hl n aids
-  refine engine_adequacyU_alloc (GF := GF) hwf hκ hQf hQpot e ev0 evs σ
+  refine engine_adequacyU_alloc (GF := GF) hwf hκ hQf hQpot hPf e ev0 evs σ
     (Iris.Std.PartialMap.union P R) B hfrag hpot hl _ ?_ n aids
   intro instGS
   refine .trans (BI.sep_mono (BigSepM.bigSepM_union hdisj).1 .rfl) ?_
@@ -1398,6 +1668,7 @@ theorem project_triple_pure_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
       Frag cont)
     (hQpot : ∀ l params cont, lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
       pot cont ≤ lemDefaultFuel)
+    (hPf : M.FragProcs)
     {e : CoreExpr} (hfrag : Frag e) (hpot : pot e ≤ lemDefaultFuel)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value))
     (P : CellMap) (B : Nat) (Q : ∀ [SpikeGS .hasLC GF], CoreRVal → IProp GF)
@@ -1413,7 +1684,7 @@ theorem project_triple_pure_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
         metaInterp mm ∗ byteInterp mb) ⊢ (⌜ψ R w.val σ'⌝ : IProp GF)) :
     MemTripleU_alloc M ctl (ev0 :: evs) e P B ψ := by
   intro R hdisj σ hl n aids
-  have h := project_triple_alloc (GF := GF) hwf hκ hQf hQpot hfrag hpot ev0 evs P B Q hwp
+  have h := project_triple_alloc (GF := GF) hwf hκ hQf hQpot hPf hfrag hpot ev0 evs P B Q hwp
     R hdisj σ hl n aids
   refine ⟨h.1, h.2.1, fun v σ' hd => h.2.2 v σ' hd (ψ R v σ') ?_⟩
   intro _ w hw mm mb mk hG
@@ -1703,6 +1974,7 @@ theorem semantic_triple_soundU {GF : BundledGFunctors} [SpikeGpreS GF]
       Frag cont)
     (hQpot : ∀ l params cont, lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
       pot cont ≤ lemDefaultFuel)
+    (hPf : M.FragProcs)
     {e : CoreExpr} (hfrag : Frag e) (hpot : pot e ≤ lemDefaultFuel)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value))
     {P : CellMap} {post : value → CellMap → Prop}
@@ -1712,7 +1984,7 @@ theorem semantic_triple_soundU {GF : BundledGFunctors} [SpikeGpreS GF]
   -- by `cells_consequence`
   rw [SemTripleU_iff_Mem]
   intro R hdisj σ hsat n aids
-  have h := project_triple (GF := GF) hwf hκ hQf hQpot hfrag hpot ev0 evs P
+  have h := project_triple (GF := GF) hwf hκ hQf hQpot hPf hfrag hpot ev0 evs P
     (fun w => iprop(∃ Q : CellMap, ⌜post (CoreRVal.val w) Q⌝ ∗
       ([∗map] i ↦ c ∈ Q, cellOwn M.tagDefs (hlc := .hasLC) (GF := GF) i (.own 1) c)))
     hwp R hdisj σ hsat n aids
@@ -1731,6 +2003,7 @@ theorem semantic_frameU {GF : BundledGFunctors} [SpikeGpreS GF]
       Frag cont)
     (hQpot : ∀ l params cont, lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
       pot cont ≤ lemDefaultFuel)
+    (hPf : M.FragProcs)
     {e : CoreExpr} (hfrag : Frag e) (hpot : pot e ≤ lemDefaultFuel)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value))
     {P : CellMap} (F : CellMap)
@@ -1739,7 +2012,7 @@ theorem semantic_frameU {GF : BundledGFunctors} [SpikeGpreS GF]
     SemTripleU M ctl (ev0 :: evs) e (Iris.Std.PartialMap.union P F)
       (fun v Q => ∃ Q₀ : CellMap, post v Q₀ ∧ Q₀ ##ₘ F ∧
         Q = Iris.Std.PartialMap.union Q₀ F) := by
-  refine semantic_triple_soundU (GF := GF) hwf hκ hQf hQpot hfrag hpot ev0 evs ?_
+  refine semantic_triple_soundU (GF := GF) hwf hκ hQf hQpot hPf hfrag hpot ev0 evs ?_
   intro instGS
   refine .trans (BigSepM.bigSepM_union hPF).1 ?_
   iintro ⟨HP, HF⟩

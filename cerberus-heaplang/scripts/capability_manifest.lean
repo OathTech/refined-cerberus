@@ -60,6 +60,21 @@ def ruleFor : Name → List Name
   | `CerberusHeapLang.Frag.wseq       => [`CerberusHeapLang.wps_wseq]
   | _ => []
 
+/-- DECLARED NO-RULE constructors: in the fragment, MIRRORED and
+    CLASSIFIED, with no logical rule BY DESIGN of the current slice —
+    each with the record that says so and names the slice that adds the
+    rule. Printed as an explicit row (not red): the absence is stated, not
+    silent. An unmapped, undeclared constructor is still MISSING and red.
+    - `Frag.call` (calls arc C2, 2026-09-03): the procedure call is
+      mirrored (`Step.call`/`Step.ret`), certified (`engine_step_matchU`)
+      and classified (`complete_call`/`complete_ret`); the call rule and
+      the specification table are C3 (docs/2026-09-03_c2-notes.md). -/
+def declaredNoRule : Name → Option String
+  | `CerberusHeapLang.Frag.call =>
+    some "NO RULE YET (declared: calls arc C2 — mirror-level only; the call rule is C3, \
+      docs/2026-09-03_c2-notes.md)"
+  | _ => none
+
 /-! ## Environment reflection -/
 
 def modOf (env : Environment) (n : Name) : Name :=
@@ -176,8 +191,12 @@ partial def cone (env : Environment) (canReach : Name → Bool) (seeds : Array N
   for ctor in fragInfo.ctors do
     match ruleFor ctor with
     | [] =>
-      lines := lines.push s!"| `{short ctor}` | **MISSING** — no rule mapped (add a `ruleFor` arm) | — |"
-      red := red + 1
+      match declaredNoRule ctor with
+      | some why =>
+        lines := lines.push s!"| `{short ctor}` | {why} | — |"
+      | none =>
+        lines := lines.push s!"| `{short ctor}` | **MISSING** — no rule mapped (add a `ruleFor` arm) | — |"
+        red := red + 1
     | rs =>
       for r in rs do
         ruleRows := ruleRows + 1
@@ -204,7 +223,9 @@ partial def cone (env : Environment) (canReach : Name → Bool) (seeds : Array N
   IO.println ""
   IO.println "One row per (constructor of the fragment `Frag`, covering rule) pair — the"
   IO.println "constructors are read from the built environment; an unmapped constructor"
-  IO.println "is a MISSING row and a red run; a constructor with several kind-specific"
+  IO.println "is a MISSING row and a red run unless it is a DECLARED no-rule constructor"
+  IO.println "(`declaredNoRule`: in the fragment, mirrored and classified, no rule by design"
+  IO.println "of the current slice — the row states it); a constructor with several kind-specific"
   IO.println "rules (`Frag.kill`: the static dispose and the dynamic free) has one row per"
   IO.println "rule. The rule column names the logical rule covering the construct; the last"
   IO.println "column lists the exhibit modules whose proofs actually depend on that rule"

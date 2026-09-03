@@ -47,16 +47,34 @@ within the evaluator's fuel, `Eif` at a `PePure` guard, the
 context-discarding jump `Erun` at `PePure` arguments, value-scrutinee
 `Ecase`, `PEsym`-shaped pure exits, the covered operand grammar
 `PePure` — `PEval`/`PEsym`/the eight mirrored `PEop` binops
-(`Add`/`Sub`/`Mul`/`Eq`/`Lt`/`Le`/`Gt`/`Ge`)/`PEarray_shift` — and the
-run-time annotation residue. (`Frag.store` admits EITHER locking mode — `lk` is unconstrained —
+(`Add`/`Sub`/`Mul`/`Eq`/`Lt`/`Le`/`Gt`/`Ge`)/`PEarray_shift` — the
+run-time annotation residue, and (calls arc C2, 2026-09-03) THE
+PROCEDURE CALL `Eproc () (Sym f) pes` at `PePure` arguments AND THE
+RETURN — a value at a non-empty call stack — AT THE MIRROR LEVEL ONLY:
+`Step.call` (the engine's PCALL round: every argument evaluated, the
+callee installed with a fresh parameter frame, the caller's procedure and
+the call redex's CAPTURED evaluation context pushed on the live control's
+call stack, the execution location pushed) and `Step.ret`/`Step.ret_annot`
+(the RETURN round: the value plugged into the captured context, the
+frame and the callee's env frame popped; REMOVE-ANNOT under a frame),
+certified (`engine_step_matchU`, now at a FREE successor control) and
+classified (`complete_call`: unknown procedure and arity mismatch are
+`call_proc`'s two `Illformed_program` KILLS, verbatim; `complete_ret`: a
+value under a frame ALWAYS steps) — with NO logic rule yet: the call rule,
+the specification table and recursion are C3, and until then both
+judgments are `⌜False⌝` at a call redex (the guard). The engine's third
+stack constructor `Stack_cons` (the other interpreter's continuation
+stack) is unrepresentable by `Ctl.toStack` and unreachable from
+`Driver.drive` — step_ctx's value arm panics on it — a fail-closed
+restriction, stated. (`Frag.store` admits EITHER locking mode — `lk` is unconstrained —
 while every store rule is at `Store0 false`: the locking store, whose
 engine success flips the allocation's `isReadonly`, has no rule, so no
 derivation traverses one; K1 audit N-2.) The per-construct authority is the
 inductive `Frag` (Soundness.lean), the premise of every adequacy
 theorem; the generated [capability manifest](docs/CAPABILITY_MANIFEST.md)
 lists one row per (`Frag` constructor, covering rule) pair with the
-exhibit modules whose proofs consume that rule (22 constructors, 25 rule
-rows: `Frag.kill` is covered by the static dispose `wps_kill` AND the
+exhibit modules whose proofs consume that rule (23 constructors, 25 rule
+rows plus the one DECLARED no-rule row `Frag.call`: `Frag.kill` is covered by the static dispose `wps_kill` AND the
 dynamic `wps_free`; `Frag.load`/`Frag.store` by the object rule AND the
 region rule `wps_load_region_at`/`wps_store_region_at` (kill/free arc K5);
 one row each).
@@ -155,18 +173,23 @@ in-bounds offset, and the rules carry exactly that (the accessed type
 enters through its size and its decode/serialization). The chartered
 MALLOC'D LINKED LIST is the exhibit (MallocListExhibit.lean).
 
-**Deliberately not here.** Procedures (no call
-rule, no return YET — calls arc C1, 2026-09-03, made the thread's
-control LIVE STATE in preparation: the configuration is `Config :=
-CoreExpr × EnvStack × Ctl × Mem` with `Ctl` = the call stack `κ`, the
-current procedure `proc` and the execution location `execLoc` — the
-three `thread_state` fields the engine's PCALL/RETURN arms write; no
-rule writes it yet, every `Step` threads it unchanged; every program is
-one `main` body with registered labels, launched at an entry control
-with an EMPTY call stack — `spikeCtl`/`procCtl p`, the fact `ctl.κ = []`
-is a premise of every adequacy theorem at a general control — and
-`MachineCtx.SeqWF` (startup thread) is a premise at a general context,
-discharged at the two profiles by `spikeCtx_wf`, `procCtx_wf`);
+**Deliberately not here.** Procedure SPECIFICATIONS (no call rule, no
+spec table, no recursion — C3; calls arc C1 made the thread's control
+LIVE STATE: `Config := CoreExpr × EnvStack × Ctl × Mem` with `Ctl` = the
+call stack `κ`, the current procedure `proc` and the execution location
+`execLoc`; C2 added the two rules that WRITE it, `Step.call`/`Step.ret`,
+and their certification and completeness, above; every verified program
+is still one `main` body with registered labels, launched at an entry
+control with an EMPTY call stack — `spikeCtl`/`procCtl p`, `ctl.κ = []`
+a premise of every adequacy export at a general control — the judgments
+are `⌜False⌝` at a call redex, and the `driveU` adequacy exports carry
+the procedure well-formedness premise `MachineCtx.FragProcs` (every
+declared procedure body in `Frag` within the potential bound, with
+`Frag` label bodies — vacuous at both profiles, `spikeCtx_fragProcs`/
+`procCtx_fragProcs`), since their proofs follow the engine through a
+call and back; `MachineCtx.SeqWF` (startup thread) is a premise at a
+general context, discharged at the two profiles by `spikeCtx_wf`,
+`procCtx_wf`);
 `Eunseq`; inside the
 mirrored constructs, exactly these absences — `Ewseq` at binder
 patterns, `Ecase` with a non-value scrutinee, pure exits beyond
@@ -243,8 +266,8 @@ triple by `project_triple_pure` (both quoted in the walkthrough §1):
 |---|---|
 | `s` | `σ : Mem` = the engine's `CerbMem.MemState`, arbitrary outside the footprint |
 | `s \|= P` | `Sat M.tagDefs σ (P ∪ R)` — `Sat` is `Coh` (Heap.lean) by `abbrev`: every footprint cell live, writable, in bounds, exactly those bytes, pairwise disjoint; `R` is the arbitrary rest, returned to the post (the frame is part of the definition) |
-| `prog` | `(e, ρ)` at a machine context `M`; `M.thread e ρ` is the engine's `thread_state` |
-| `core_exec(prog, s) ~~> term` | `driveU M aids n (M.thread e ρ) σ` — `n` rounds of `step_ctx` followed by request discharge, for every action-id supply `aids` and every `n`; the triple carries no fuel premise |
+| `prog` | `(e, ρ)` at a machine context `M` and a live control `ctl`; `M.thread e ρ ctl` is the engine's `thread_state` |
+| `core_exec(prog, s) ~~> term` | `driveU M aids n (M.thread e ρ ctl) σ` — `n` rounds of `step_ctx` followed by request discharge, for every action-id supply `aids` and every `n`; the triple carries no fuel premise |
 | `term = some(s')` | `driveU … = .done v σ'`; the other two conjuncts, `≠ .killed r` (no undefined behaviour, no error kill) and `≠ .stuck` (no refusal, no off-protocol step); `.more` (fuel exhaustion) is unconstrained — partial correctness |
 | `s' \|= Q` | `ψ R v σ'` for a pure `ψ : CellMap → value → Mem → Prop` |
 
@@ -301,9 +324,9 @@ the fuel-exhaustion request unblocks.
 Every theorem below is pinned in `Audit.lean` with axioms exactly
 `propext`, `Classical.choice`, `Quot.sound`. "Execution" names the
 execution function in the statement: `driveU` at `spikeCtx` (the
-straight-line context) or at `procCtx p rs` (the context carrying a
-procedure symbol and a run state with registered labels), or the
-shipped pipeline. Every `driveU` row is PROVISIONAL in the sense
+straight-line context, entry control `spikeCtl`) or at `procCtx rs`
+(the context carrying a run state with registered labels, entry control
+`procCtl p` — in procedure `p`), or the shipped pipeline. Every `driveU` row is PROVISIONAL in the sense
 defined under "The claim"; the shipped-pipeline rows are the
 root-of-trust exports. The last column lists EVERY hypothesis of the theorem
 by name, section variables included; it is read off the
@@ -374,7 +397,11 @@ statement carries a fuel hypothesis.
    shipped driver; restated with no other change in the fuel-lane
    restatement slice (the semantics-side prerequisite has landed at the
    current pin — below). `driveU` is tied to
-   the shipped driver by `loop_step_frag` (DriverCollapse.lean) — one
+   the shipped driver by `loop_step_frag` (DriverCollapse.lean; since C2
+   stated at the LIVE control — the mirror's `ctl` is the driver thread's
+   `stack0`/`current_proc_opt`/`exec_loc`, call and return rounds
+   included; the production lane consumes its control-preserving core
+   `loop_step_frag_same`) — one
    production scheduler round is one `driveU` round — but only at
    configurations where the mirror `Step` steps, and that tie is
    consumed only by the total judgment (`wpt_driver_done`,
@@ -513,7 +540,9 @@ theorems:
 | Fuel: the engine's `get_ctx` is fuel-bounded (`lemDefaultFuel = 10^6`) with an opaque exhaustion leaf, so the projection theorems carry the static premises `pot e ≤ lemDefaultFuel` and `pot cont ≤ lemDefaultFuel` per registered body (never a bound on the drive length); production statements carry `k + 2 ≤ CerbFuel.driverFuel` (the shipped driver's budget, 10^8 since the fuel arc) for the certified step count; the shipped driver's OWN fuel arm is the kernel-transparent kill `CerbND.fuelExhaustedKill` since pin `f95ef8d9c`, so the partial lane's PROVISIONAL label now awaits only its restatement over `CerbND.drive_lemFuel` | a fuel-irrelevance theorem for `get_ctx`; the fuel-lane restatement slice (next, after calls) | `Soundness.lean` header ("FUEL HONESTY"), `Potential.lean`; `../docs/2026-09-02_request-cerberus-lean-fuel-exhaustion-outcome.md`, `../docs/2026-09-03_repin-scout.md` |
 | The fragment is annotation-free (`Expr []` at every node); located Core is outside `Frag` | make `current_loc` live state | "Scope, exactly"; `Soundness.lean` `Frag` header |
 | Synthetic Core entry: authored Core wrapped by `prodFile`, not C through the frontend; the loop programs' label maps are nevertheless computed by the shipped registration (`*_labeledAt_production`, `LabeledAt`) | a C-frontend entry | `ProdEntry.lean` |
-| Well-formedness by shape: `MachineCtx.SeqWF` (startup thread), the empty-stack entry control (`ctl.κ = []`, the PROGRAM-DONE selector) and cons-shaped environment stacks — the engine's panic channels excluded by shape, never absorbed. Action locations carry no premise: the certification equations state the request at the engine's own `requestLoc th loc`, and `storeM_loc_irrel`/`loadM_loc_irrel` (the memory operations use the location only in the kill payload) transport the mirror's premise to it | by design | `Step.lean`, `Soundness.lean` |
+| The judgments are `⌜False⌝` at a CALL redex in context (`wps.pre`/`wpt.pre`, calls arc C2): no call rule yet, and the step clauses continue at the SOURCE control, so a judged configuration never calls — forced fact: with `Step.call` in the mirror the unguarded C1 collapses are FALSE (a `wps` at a call configuration whose post reads the callee's env is provable, the WP is not; docs/2026-09-03_c2-notes.md §3) | C3's call clause replaces the guard arm | `Wps.lean`, `Wpt.lean` |
+| The `driveU` adequacy exports carry `MachineCtx.FragProcs` (every declared procedure body in `Frag` within the potential bound, its label bodies too — the twin of the label-cone premises): their NotStuck oracle is the raw Iris WP, which does not exclude a call, so the drive classification follows the engine through calls and returns (`drive_classifyU_aux`, the control invariant `ControlOk`); vacuous at both profiles | C3 discharges it from the specification table at a multi-procedure file | `Adequacy.lean` |
+| Well-formedness by shape: `MachineCtx.SeqWF` (startup thread), the empty-stack entry control (`ctl.κ = []`, the PROGRAM-DONE selector) and cons-shaped environment stacks — the engine's panic channels excluded by shape, never absorbed; the RETURN's empty-env panic is excluded the same way (a frame is on the env stack whenever the call stack is non-empty). Action locations carry no premise: the certification equations state the request at the engine's own `requestLoc th loc`, and `storeM_loc_irrel`/`loadM_loc_irrel` (the memory operations use the location only in the kill payload) transport the mirror's premise to it | by design | `Step.lean`, `Soundness.lean` |
 | The tag-definition environment is an explicit parameter of the heap predicates (`pointsToCell tds …`, `M.tagDefs`); the demos state footprints at `fmapEmpty` | by design: a program-wide constant of the language instance | `Heap.lean` header |
 | Memory orders accepted arbitrarily (`Step.store`/`wp_store` at any `memory_order`) | mirror-true: the sequential driver drops `mo` (`action_request_sequential2`) | `Step.lean` |
 | Mirror completeness holds on the DECLARED FRAGMENT up to a two-arm RESIDUAL (`OpenRound`, Round.lean; `frag_round_complete`; fragment closure 2026-09-02): `eval_uncovered` — an operand in the covered grammar CONTAINING A LEAF the engine's evaluator accepts where the mirror evaluator does not evaluate (a symbol unbound in the environment but naming a `Proc` of the file; one of the eight mirrored binops at two floating-point operands; `OpEq` at two ctypes — environment/file-dependent, the offending operand carried as witness, `evalClass … = .uncovered`); the classifier answers `.uncovered` at the FIRST such leaf and carries NO engine claim about the whole operand, so the arm's whole-operand outcome is NOT characterized — the engine may succeed, KILL on a later type error (`f + 1` with `f` a `Proc`-named unbound symbol is `PePure`, classified `.uncovered`, killed by the engine as `Illformed_program … ill-typed PEop` — 2026-09-03 audit, by execution) or PANIC (a float guard under `Eif`): every operand the classifier REJECTS is a proved engine KILL, operands it leaves UNCOVERED are not characterized, the residual is a SUPERSET of the engine-accepted shapes; and `run_surplus` — a jump with more arguments than the registered label's parameters whose zipped arguments evaluate and whose surplus does not (label-map-dependent). Everywhere else a mirror-stuck fragment configuration is an engine refusal in the engine's vocabulary (`ShippedRefusal`: ILLTYPED `[Step_error2 msg]`; ILLTYPED AT DISTANCE ONE — a successful round into the ill-typed load/store the engine reports on next; KILL `NDkilled r` from the shipped `advance_step`, memory kills through `liftMem` and pure-evaluator kills `Other (DErr_core_run err)` through `liftCore_run`; FORK ≥ 2 `CerbND.runND` executions; PANIC the engine's own `failwithI`, incl. the no-current-procedure lookup key). The former gaps (a) LETS-ANNOT at the symbol binder and (c) the operand grammar were closed by NARROWING `Frag` (`BareHead`, `PePure` everywhere) — fail-closed, per the ruling | the residual is not removable by a syntactic narrowing; the mover for `eval_uncovered`'s characterization is `evalClass` computing the engine's value at the three leaf shapes (reserving `.uncovered` for the leaf itself, the downstream rejections under the KILL bridge); a complete mirror evaluator (`M.file` threaded into `evalPexpr`, the float/ctype arms) would move `eval_uncovered` into `Step`; a prefix-evaluating `Step.run` would move `run_surplus` | `Round.lean` (`OpenRound`), `EvalClass.lean`; `ARCHITECTURE.md` §2, §7; `docs/2026-09-02_fragment-closure-notes.md` |

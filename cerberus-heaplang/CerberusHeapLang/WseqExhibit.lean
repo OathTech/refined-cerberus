@@ -107,6 +107,7 @@ theorem wseq_certified {GF : BundledGFunctors} [SpikeGpreS GF] (v1 v2 : value)
   refine engine_adequacyU (GF := GF) (M := spikeCtx) (ctl := spikeCtl) spikeCtx_wf rfl
     (fun l params cont hl => (spikeCtx_labels_none l hl).elim)
     (fun l params cont hl => (spikeCtx_labels_none l hl).elim)
+    spikeCtx_fragProcs
     (wseqProg v1 v2) fmapEmpty [] σ₀ ∅ (wseqProg_frag v1 v2)
     (Nat.le_trans (wseqProg_frag v1 v2).pot_le_two
       (by rw [show esize (wseqProg v1 v2) = 2 from rfl,

@@ -240,7 +240,7 @@ theorem struct_update_certified {GF : BundledGFunctors} [SpikeGpreS GF]
     rw [structTy_size] at h
     exact h
   have hres := engine_adequacyU (GF := GF) (M := spikeCtx) (ctl := spikeCtl) spikeCtx_wf rfl
-    spikeCtx_labels_frag spikeCtx_labels_pot
+    spikeCtx_labels_frag spikeCtx_labels_pot spikeCtx_fragProcs
     (progS loc ann mo mo' bty id a) fmapEmpty [] σ₀
     (Iris.Std.PartialMap.singleton id (SpikeCell.mk a structTy bs))
     (progS_frag loc ann mo mo' bty id a)
@@ -810,7 +810,7 @@ theorem struct_create_store_adequacy {GF : BundledGFunctors} [SpikeGpreS GF]
   -- the allocating projection at the spike profile: footprint ∅, budget
   -- `allocCost structTy 8`, the Iris post = `struct_create_store_wps`'s post
   refine project_triple_pure_alloc (GF := GF) (M := spikeCtx) (ctl := spikeCtl) spikeCtx_wf rfl
-    spikeCtx_labels_frag spikeCtx_labels_pot
+    spikeCtx_labels_frag spikeCtx_labels_pot spikeCtx_fragProcs
     (progCreateInit_frag loc ann .Prov_none 8 pref mo pbty vbty)
     (Nat.le_trans (progCreateInit_frag loc ann .Prov_none 8 pref mo pbty vbty).pot_le_two
       (by rw [show esize (progCreateInit loc ann .Prov_none 8 pref mo pbty vbty) = 3

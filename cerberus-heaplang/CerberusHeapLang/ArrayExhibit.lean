@@ -683,6 +683,7 @@ theorem array_sum_certified
       exact Nat.le_trans (arrBody_fragJ loc ann ra mo xbty vs.length).pot_le_two
         (by rw [show esize (arrBody loc ann ra mo xbty vs.length) = 3 from rfl,
           show lemDefaultFuel = 999999 + 1 from rfl]; omega))
+    (procCtx_fragProcs _)
     prog fmapEmpty [] σ₀ _
     (.save (saveParams_pure_of_vals rfl) (saveParams_depth_of_vals rfl) (arrBody_fragJ loc ann ra mo xbty vs.length))
     (Nat.le_trans (Frag.pot_le_two (e := prog) (.save (saveParams_pure_of_vals rfl) (saveParams_depth_of_vals rfl)

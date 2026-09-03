@@ -28,7 +28,10 @@ sequencing `Esseq` at the wildcard, `Specified`-binder and
 plain-symbol-binder patterns; weak sequencing `Ewseq` at the
 wildcard; `Esave`, `Eif`, value-scrutinee `Ecase`, the
 context-discarding `Erun`; `PEsym`-shaped pure exits; and the
-run-time `Eannot` residue those produce. Every rule uses the
+run-time `Eannot` residue those produce; and (calls arc C2) THE
+PROCEDURE CALL `Eproc () (Sym f) pes` at `PePure` arguments and THE
+RETURN — a value at a non-empty call stack — as mirror steps, certified
+and classified, with NO logic rule yet (C3). Every rule uses the
 CANONICAL node shapes (empty `List annot`, `()` at the base-type
 slot) that `mk_value_e`/`mk_value_pe` (Core_aux.lean:302,645) and the
 fragment's authored programs produce; the engine's redex patterns
@@ -48,10 +51,15 @@ configuration holds and the fragment leaves immutable — `step_ctx`'s
 parameters (tag definitions, file, extern map, thread id, parent), the
 thread's `errno`/`current_loc`, and the run state the discharge
 protocol threads (read-only under the fragment: `Erun` reads `labeled`
-through it) — is the explicit index `MachineCtx`; `M.thread e ρ ctl`
-is the engine `thread_state` the configuration denotes. In THIS slice
-no rule writes the control: every `Step` constructor threads `ctl`
-unchanged (the call/return rules are the next slice, C2); the entry
+through it; the PCALL round's argument map and `runEU` are
+state-verbatim too) — is the explicit index `MachineCtx`; `M.thread e
+ρ ctl` is the engine `thread_state` the configuration denotes. EXACTLY
+TWO RULES WRITE THE CONTROL (calls arc C2): `Step.call` pushes the frame
+`(ctl.proc, ctx)` — the caller's procedure and the CAPTURED evaluation
+context of the call redex — sets the callee as the current procedure
+and pushes the execution location; `Step.ret` pops the frame back.
+Every other constructor threads `ctl` unchanged (`Step.ctl_cases`,
+`Step.ctl_eq` under its two guards); the entry
 controls are `spikeCtl` (empty stack, no procedure) and `procCtl p`
 (empty stack, in procedure `p`). `spikeCtx` (the straight-line
 profile) and `procCtx rs` (the profile with a run state) are INSTANCES
@@ -142,6 +150,7 @@ Design history: the dated records under docs/.
 -/
 import Core_aux
 import Core_run_aux
+import Core_reduction
 import CerbMem
 
 set_option autoImplicit false
@@ -351,8 +360,14 @@ theorem resolveExtern_id_of_empty {ext : Fmap sym sym} (h : ext = fmapEmpty)
       PROGRAM-DONE selector of the value arm);
     - `proc`: `current_proc_opt` (what `Erun` reads the label map at);
     - `execLoc`: `exec_loc` (pushed on call, never popped).
-    In this slice no rule writes the control (`Step.ctl_eq`); the
-    call/return rules are C2. -/
+    The engine's THIRD stack constructor, `Stack_cons` (Core_run_aux.lean:
+    191-203, the continuation stack of the OTHER interpreter, Core_run.lean:
+    395 its only writer), is not representable by `Ctl.toStack` and is
+    unreachable from `Driver.drive`; step_ctx's value arm PANICS on it
+    (`failwithI "Core_reduction ==> Stack_cons"`, col ≈2698) — a
+    fail-closed restriction, stated (the C1 range audit's N-1). The two
+    writers of the control are `Step.call` and `Step.ret` (calls arc C2);
+    every other rule threads it (`Step.ctl_cases`). -/
 structure Ctl where
   κ : List (Option sym × context)
   proc : Option sym
@@ -666,6 +681,175 @@ theorem jumpRedex?_annot (a : List annot) (ds : List dyn_annotation)
     jumpRedex? (ofVal w) = none := by
   cases w <;> rfl
 
+/-! ## The call-redex search WITH its captured context (calls arc C2)
+
+`callRedex?` is the `Eproc` twin of `jumpRedex?`, following the same
+spine (get_ctx's decomposition path, Core_reduction.lean:375: Esseq-left
+and Ewseq-left into a `Csseq`/`Cwseq` frame, the guarded `Eannot`
+descent into a `Cannot` frame — a double-annot root is the ANNOTS-merge
+redex, never a descent), and it BUILDS the engine's own `context` on
+the way down, outside-in exactly as get_ctx does (`Csseq annot1 pat ctx
+e2` at a node `Expr annot1 (Esseq pat e1 e2)`). The engine's PCALL arm
+(Core_reduction.lean:484, col 18133) CAPTURES that context onto the
+call stack — `stack0 := Stack_cons2 th_st.current_proc_opt ctx
+th_st.stack0` — and the RETURN arm plugs the callee's value back into
+it (`apply_ctx caller_ctx …`, col 2276). So a call is a third context
+discipline beside the PRESERVING redexes (`apply_ctx ctx r'`) and the
+DISCARDING jump: CAPTURING. `Step.call` is therefore stated at the
+WHOLE expression, like `Step.run`, with the context it pushes computed
+by this function; `Decomp.callRedex?_some` (Soundness.lean) certifies
+it against the engine's decomposition. The implementation-constant call
+`Eproc _ (Impl _) _` is outside the fragment (`none`). -/
+def callRedex? : CoreExpr → Option (context × sym × List (generic_pexpr Unit sym))
+  | Expr _ (Eproc _ (Sym f) pes) => some (CTX, f, pes)
+  | Expr a (Esseq pat e1 e2) =>
+      (callRedex? e1).map fun q => (Csseq a pat q.1 e2, q.2)
+  | Expr a (Ewseq pat e1 e2) =>
+      (callRedex? e1).map fun q => (Cwseq a pat q.1 e2, q.2)
+  | Expr a (Eannot ds b) =>
+      if annotRooted b then none else (callRedex? b).map fun q => (Cannot a ds q.1, q.2)
+  | _ => none
+
+@[simp] theorem callRedex?_proc (a : List annot) (ra : core_run_annotation)
+    (f : sym) (pes : List (generic_pexpr Unit sym)) :
+    callRedex? (Expr a (Eproc ra (Sym f) pes)) = some (CTX, f, pes) := rfl
+
+@[simp] theorem callRedex?_proc_impl (a : List annot) (ra : core_run_annotation)
+    (ic : implementation_constant) (pes : List (generic_pexpr Unit sym)) :
+    callRedex? (Expr a (Eproc ra (Impl ic) pes)) = none := rfl
+
+@[simp] theorem callRedex?_sseq (a : List annot) (pat : pattern) (e1 e2 : CoreExpr) :
+    callRedex? (Expr a (Esseq pat e1 e2)) =
+      (callRedex? e1).map fun q => (Csseq a pat q.1 e2, q.2) := rfl
+
+@[simp] theorem callRedex?_wseq (a : List annot) (pat : pattern) (e1 e2 : CoreExpr) :
+    callRedex? (Expr a (Ewseq pat e1 e2)) =
+      (callRedex? e1).map fun q => (Cwseq a pat q.1 e2, q.2) := rfl
+
+theorem callRedex?_annot (a : List annot) (ds : List dyn_annotation) (b : CoreExpr) :
+    callRedex? (Expr a (Eannot ds b)) =
+      if annotRooted b then none
+      else (callRedex? b).map fun q => (Cannot a ds q.1, q.2) := rfl
+
+@[simp] theorem callRedex?_annot_of_root {b : CoreExpr}
+    (a : List annot) (ds : List dyn_annotation) (h : annotRooted b = true) :
+    callRedex? (Expr a (Eannot ds b)) = none := by
+  rw [callRedex?_annot, h]; rfl
+
+@[simp] theorem callRedex?_annot_of_not_root {b : CoreExpr}
+    (a : List annot) (ds : List dyn_annotation) (h : annotRooted b = false) :
+    callRedex? (Expr a (Eannot ds b)) =
+      (callRedex? b).map fun q => (Cannot a ds q.1, q.2) := by
+  rw [callRedex?_annot, h]; rfl
+
+@[simp] theorem callRedex?_pure (a : List annot) (pe : generic_pexpr Unit sym) :
+    callRedex? (Expr a (Epure pe)) = none := rfl
+
+@[simp] theorem callRedex?_action (a : List annot)
+    (p : generic_paction core_run_annotation Unit sym) :
+    callRedex? (Expr a (Eaction p)) = none := rfl
+
+@[simp] theorem callRedex?_memop (a : List annot) (mop : memop)
+    (pes : List (generic_pexpr Unit sym)) :
+    callRedex? (Expr a (Ememop mop pes)) = none := rfl
+
+@[simp] theorem callRedex?_run (a : List annot) (ra : core_run_annotation)
+    (l : sym) (pes : List (generic_pexpr Unit sym)) :
+    callRedex? (Expr a (Erun ra l pes)) = none := rfl
+
+@[simp] theorem callRedex?_save (a : List annot) (sb : sym × core_base_type)
+    (ps : List (sym × ((core_base_type ×
+      Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym)))
+    (body : CoreExpr) :
+    callRedex? (Expr a (Esave sb ps body)) = none := rfl
+
+@[simp] theorem callRedex?_if (a : List annot) (g : generic_pexpr Unit sym)
+    (e2 e3 : CoreExpr) :
+    callRedex? (Expr a (Eif g e2 e3)) = none := rfl
+
+@[simp] theorem callRedex?_case (a : List annot) (pe : generic_pexpr Unit sym)
+    (pats : List (pattern × CoreExpr)) :
+    callRedex? (Expr a (Ecase pe pats)) = none := rfl
+
+@[simp] theorem callRedex?_ofVal (w : SpikeVal) :
+    callRedex? (ofVal w) = none := by
+  cases w <;> rfl
+
+/-- A frame with no call redex has none in its body (the `Option.map`
+    shape of `callRedex?` at the three descents). -/
+theorem callRedex?_e1_none_of_sseq {a : List annot} {pat : pattern} {e1 e2 : CoreExpr}
+    (h : callRedex? (Expr a (Esseq pat e1 e2)) = none) : callRedex? e1 = none := by
+  rw [callRedex?_sseq] at h
+  exact Option.map_eq_none_iff.mp h
+
+theorem callRedex?_e1_none_of_wseq {a : List annot} {pat : pattern} {e1 e2 : CoreExpr}
+    (h : callRedex? (Expr a (Ewseq pat e1 e2)) = none) : callRedex? e1 = none := by
+  rw [callRedex?_wseq] at h
+  exact Option.map_eq_none_iff.mp h
+
+theorem callRedex?_body_none_of_annot {a : List annot} {ds : List dyn_annotation}
+    {b : CoreExpr} (hg : annotRooted b = false)
+    (h : callRedex? (Expr a (Eannot ds b)) = none) : callRedex? b = none := by
+  rw [callRedex?_annot_of_not_root _ _ hg] at h
+  exact Option.map_eq_none_iff.mp h
+
+/-- The converse direction, for the frame nodes' guards. -/
+theorem callRedex?_sseq_none {a : List annot} {pat : pattern} {e1 e2 : CoreExpr}
+    (h : callRedex? e1 = none) : callRedex? (Expr a (Esseq pat e1 e2)) = none := by
+  rw [callRedex?_sseq, h]; rfl
+
+theorem callRedex?_wseq_none {a : List annot} {pat : pattern} {e1 e2 : CoreExpr}
+    (h : callRedex? e1 = none) : callRedex? (Expr a (Ewseq pat e1 e2)) = none := by
+  rw [callRedex?_wseq, h]; rfl
+
+theorem callRedex?_annot_none {a : List annot} {ds : List dyn_annotation} {b : CoreExpr}
+    (h : callRedex? b = none) : callRedex? (Expr a (Eannot ds b)) = none := by
+  rw [callRedex?_annot]
+  split
+  · rfl
+  · rw [h]; rfl
+
+/-- The two spine searches are exclusive: the hole is unique. -/
+theorem callRedex?_none_of_jumpRedex?_some :
+    ∀ {e : CoreExpr} {lp : sym × List (generic_pexpr Unit sym)},
+      jumpRedex? e = some lp → callRedex? e = none
+  | Expr a (Esseq pat e1 e2), lp, h => by
+      rw [jumpRedex?_sseq] at h
+      rw [callRedex?_sseq, callRedex?_none_of_jumpRedex?_some h]; rfl
+  | Expr a (Ewseq pat e1 e2), lp, h => by
+      rw [jumpRedex?_wseq] at h
+      rw [callRedex?_wseq, callRedex?_none_of_jumpRedex?_some h]; rfl
+  | Expr a (Eannot ds b), lp, h => by
+      rw [jumpRedex?_annot] at h
+      rw [callRedex?_annot]
+      split at h
+      · cases h
+      · rename_i hr
+        rw [if_neg hr, callRedex?_none_of_jumpRedex?_some h]; rfl
+  | Expr a (Erun ra l pes), lp, h => rfl
+  | Expr a (Epure _), lp, h => by simp [jumpRedex?] at h
+  | Expr a (Ememop _ _), lp, h => by simp [jumpRedex?] at h
+  | Expr a (Eaction _), lp, h => by simp [jumpRedex?] at h
+  | Expr a (Ecase _ _), lp, h => by simp [jumpRedex?] at h
+  | Expr a (Elet _ _ _), lp, h => by simp [jumpRedex?] at h
+  | Expr a (Eif _ _ _), lp, h => by simp [jumpRedex?] at h
+  | Expr a (Eccall _ _ _ _), lp, h => by simp [jumpRedex?] at h
+  | Expr a (Eproc _ _ _), lp, h => by simp [jumpRedex?] at h
+  | Expr a (Eunseq _), lp, h => by simp [jumpRedex?] at h
+  | Expr a (Ebound _), lp, h => by simp [jumpRedex?] at h
+  | Expr a (End _), lp, h => by simp [jumpRedex?] at h
+  | Expr a (Esave _ _ _), lp, h => by simp [jumpRedex?] at h
+  | Expr a (Epar _), lp, h => by simp [jumpRedex?] at h
+  | Expr a (Ewait _), lp, h => by simp [jumpRedex?] at h
+  | Expr a (Eexcluded _ _), lp, h => by simp [jumpRedex?] at h
+
+theorem jumpRedex?_none_of_callRedex?_some {e : CoreExpr}
+    {q : context × sym × List (generic_pexpr Unit sym)}
+    (h : callRedex? e = some q) : jumpRedex? e = none := by
+  cases hj : jumpRedex? e with
+  | none => rfl
+  | some lp => rw [callRedex?_none_of_jumpRedex?_some hj] at h; cases h
+
 /-! ## The pure pexpr evaluator (S3 — header note 5)
 
 A hand-written PARTIAL mirror of the engine's pexpr evaluation on
@@ -809,6 +993,94 @@ theorem evalPexprs_cons (tds : CerbTags.TagDefsMap) (ext : Fmap sym sym) (ρ : E
       let v ← evalPexpr tds ext ρ pe
       let vs ← evalPexprs tds ext ρ pes
       pure (v :: vs)) := rfl
+
+/-! ## The procedure table and the callee's environment frame (calls arc C2)
+
+`call_proc` (Core_run.lean:93, verbatim modulo whitespace):
+```
+let bTy_params_body_opt :=
+  match fmapLookupBy ordCompare psym file1.stdlib with
+  | some (Proc _ _ bTy params body) => some (bTy, params, body)
+  | _ => (let core_sym := match fmapLookupBy ordCompare psym core_extern1 with
+            | some sym1 => sym1 | none => psym;
+          match fmapLookupBy ordCompare core_sym file1.funs with
+          | some (Proc _ _ bTy params body) => some (bTy, params, body)
+          | _ => none);
+match bTy_params_body_opt with
+| some (bTy, params, body) =>
+  if not (List.length params == List.length cvals) then
+    fail0 (Illformed_program ("calling procedure `" ++ show_symbol psym ++
+      "' with the wrong number of args: |args|=" ++ stringFromNat (length cvals) ++
+      "expecting: " ++ stringFromNat (length params)))
+  else let env1 := foldl2 (fun acc (sym1, _) cval => fmapAddBy ordCompare sym1 cval acc)
+                     fmapEmpty params cvals;
+       except_return (env1, body)
+| none => fail0 (Illformed_program ("calling an unknown procedure: " ++ show_symbol psym))
+```
+`lookupProc` is the lookup half (stdlib first — a user procedure cannot
+hide a stdlib one, the engine's own NOTE — then the EXTERN-RESOLVED
+`funs` read; anything but a `Proc` declaration is `none`); its two
+failures, the unknown procedure and the arity mismatch, are the two
+`Illformed_program` KILLS of the completeness rows (Round.lean,
+`complete_call`). `procEnv` is the binding half: the parameters bound
+into a FRESH frame by the engine's own `foldl2`, pushed on the env stack
+(`env := proc_env :: th_st.env`) — the caller's frames ride below,
+untouched (`update_env` writes the head frame only, Core_aux.lean:868),
+and RETURN pops exactly one frame. -/
+def lookupProc (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
+    (f : sym) : Option (List (sym × core_base_type) × CoreExpr) :=
+  match fmapLookupBy (fun (s1 : sym) (s2 : sym) => Lem_Basic_classes.ordCompare s1 s2)
+      f file.stdlib with
+  | some (Proc _ _ _ params body) => some (params, body)
+  | _ =>
+    match fmapLookupBy (fun (s1 : sym) (s2 : sym) => Lem_Basic_classes.ordCompare s1 s2)
+        (resolveExtern ext f) file.funs with
+    | some (Proc _ _ _ params body) => some (params, body)
+    | _ => none
+
+/-- The callee's fresh parameter frame: `call_proc`'s `foldl2` VERBATIM
+    (Core_run.lean:93; `foldl2`, Utils.lean:93, panics on a length
+    mismatch — excluded by the arity premise `params.length = vs.length`
+    of `Step.call`, exactly where the engine's `if not (length params ==
+    length cvals)` guard sits). -/
+def procEnv (params : List (sym × core_base_type)) (vs : List value) : Fmap sym value :=
+  foldl2 (fun (acc : Fmap sym value) (p : (sym × core_base_type)) (cval : value) =>
+      match acc, p, cval with
+      | acc, (sym1, _), cval =>
+        fmapAddBy (fun (s1 : sym) (s2 : sym) => Lem_Basic_classes.ordCompare s1 s2)
+          sym1 cval acc)
+    fmapEmpty params vs
+
+@[simp] theorem procEnv_nil : procEnv [] [] = fmapEmpty := rfl
+
+theorem procEnv_cons (x : sym) (bty : core_base_type) (params : List (sym × core_base_type))
+    (v : value) (vs : List value) :
+    procEnv ((x, bty) :: params) (v :: vs) =
+      foldl2 (fun (acc : Fmap sym value) (p : (sym × core_base_type)) (cval : value) =>
+          match acc, p, cval with
+          | acc, (sym1, _), cval =>
+            fmapAddBy (fun (s1 : sym) (s2 : sym) => Lem_Basic_classes.ordCompare s1 s2)
+              sym1 cval acc)
+        (fmapAddBy (fun (s1 : sym) (s2 : sym) => Lem_Basic_classes.ordCompare s1 s2)
+          x v fmapEmpty) params vs := rfl
+
+/-- Canonical spelling of the procedure-call redex: `Eproc` at a Core
+    identifier (`Sym f`), annotation-free node. -/
+def callRedex (ra : core_run_annotation) (f : sym)
+    (pes : List (generic_pexpr Unit sym)) : CoreExpr :=
+  Expr [] (Eproc ra (Sym f) pes)
+
+@[simp] theorem callRedex?_callRedex (ra : core_run_annotation) (f : sym)
+    (pes : List (generic_pexpr Unit sym)) :
+    callRedex? (callRedex ra f pes) = some (CTX, f, pes) := rfl
+
+@[simp] theorem jumpRedex?_callRedex (ra : core_run_annotation) (f : sym)
+    (pes : List (generic_pexpr Unit sym)) :
+    jumpRedex? (callRedex ra f pes) = none := rfl
+
+@[simp] theorem toVal_callRedex (ra : core_run_annotation) (f : sym)
+    (pes : List (generic_pexpr Unit sym)) :
+    toVal (callRedex ra f pes) = none := rfl
 
 /-! ## The plain-symbol binder pattern (list-reverse arc, phase A)
 
@@ -1442,20 +1714,31 @@ inductive Step (M : MachineCtx) : Config → Config → Prop where
       S3 GUARD (header note 4): `jumpRedex? e1 = none` — a jump of
       e1 is NEVER framed; the engine's Erun arm discards the context
       (no `apply_ctx`), so `K[run …] --> cont`, covered by
-      `Step.run` alone. -/
+      `Step.run` alone.
+      C2 GUARD (calls arc): `toVal e1 = none` — get_ctx descends into
+      `e1` only when `is_irreducible e1 = false` (Core_reduction.lean:375,
+      `if is_irreducible e1 then [(CTX, expr1)] else …`). Until C2 the
+      guard was derivable (no rule stepped a value); `Step.ret_annot`
+      steps the annotated value `{A}v` at a non-empty call stack
+      WITHOUT changing the control, and the engine never frames that
+      round (at `Esseq pat {A}v e2` the root IS the LETS-ANNOT redex),
+      so the engine's own guard becomes load-bearing. A call of `e1`
+      (`Step.call`) and a return (`Step.ret`) change the control, so
+      they are never instances of the premise. -/
   | sseq_ctx {a : List annot} {pat : pattern} {e1 e1' e2 : CoreExpr}
       {ρ ρ' : EnvStack} {ctl : Ctl} {σ σ' : Mem}
-      (hnj : jumpRedex? e1 = none) :
+      (hnj : jumpRedex? e1 = none) (hnv : toVal e1 = none) :
       Step M (e1, ρ, ctl, σ) (e1', ρ', ctl, σ') →
       Step M (Expr a (Esseq pat e1 e2), ρ, ctl, σ) (Expr a (Esseq pat e1' e2), ρ', ctl, σ')
   /-- Reduction under the weak-sequencing frame (S1b DRIFT TEST).
       Mirrors get_ctx's Ewseq arm (descend into e1 when it is not
       irreducible — Core_reduction.lean:375) + apply_ctx's Cwseq
       rebuild (Core_reduction.lean:389). Same S3 congruence guard
-      as `sseq_ctx`: a jump of e1 is never framed. -/
+      as `sseq_ctx`: a jump of e1 is never framed; same C2 guard: a
+      value `e1` is never descended into. -/
   | wseq_ctx {a : List annot} {pat : pattern} {e1 e1' e2 : CoreExpr}
       {ρ ρ' : EnvStack} {ctl : Ctl} {σ σ' : Mem}
-      (hnj : jumpRedex? e1 = none) :
+      (hnj : jumpRedex? e1 = none) (hnv : toVal e1 = none) :
       Step M (e1, ρ, ctl, σ) (e1', ρ', ctl, σ') →
       Step M (Expr a (Ewseq pat e1 e2), ρ, ctl, σ) (Expr a (Ewseq pat e1' e2), ρ', ctl, σ')
   /-- Reduction under a dyn-annotation frame. Mirrors get_ctx's plain
@@ -1727,6 +2010,95 @@ inductive Step (M : MachineCtx) : Config → Config → Prop where
            (Expr a (Eaction (Paction polarity.Pos (Action loc ann
               (Alloc0 (Pexpr [] () (PEval (Vobject (OVinteger align))))
                       (Pexpr [] () (PEval (Vobject (OVinteger size)))) pref)))), ρ, ctl, σ)
+  /-- THE PROCEDURE CALL (calls arc C2) — context CAPTURING. Mirrors
+      step_ctx's PCALL arm (Core_reduction.lean:484, col 18133; verbatim
+      modulo whitespace): `| Eproc _ (Sym psym) pes => Step_with_runstate2
+      (RSK_eval "Eproc") (stExceptUndef_bind (stExceptUndef_mapM
+      full_eval_pexpr' pes) (fun cvals => stExceptUndef_bind (runEU
+      (except_bind (call_proc core_extern1 file1 psym cvals)
+      exception_undef_return)) (fun (proc_env, expr1) =>
+      stExceptUndef_return { { { { { th_st with current_proc_opt := some
+      psym } with env := proc_env :: th_st.env } with exec_loc :=
+      push_exec_loc psym th_st.current_loc th_st.exec_loc } with stack0 :=
+      Stack_cons2 th_st.current_proc_opt ctx th_st.stack0 } with arena :=
+      expr1 })))`. ONE round evaluates every argument against the
+      CURRENT env (`full_eval_pexpr'` closed over `th_st`; the mirror
+      premise is the certified pure evaluator over the whole list,
+      `hvs`) AND performs the call: `call_proc`'s lookup (`hf`, the
+      mirror `lookupProc`) and arity check (`hlen`), the fresh parameter
+      frame pushed (`procEnv`), the callee installed as the arena, the
+      current procedure set to the callee, the caller's procedure and
+      the redex's EVALUATION CONTEXT `ctx` pushed on the call stack
+      (`Stack_cons2 th_st.current_proc_opt ctx th_st.stack0` — the
+      control's `κ` grows by `(ctl.proc, ctx)`), the execution location
+      pushed (`push_exec_loc`, Core_run_aux.lean:380, at the thread's
+      `current_loc` = `M.currentLoc`). The rule is stated at the WHOLE
+      expression, like `Step.run`: `callRedex? e = some (ctx, f, pes)`
+      names the redex AND the context get_ctx pairs it with, which is
+      what the engine captures (a call under `Esseq pat [·] e₂` pushes
+      `Csseq [] pat CTX e₂`, so the return re-enters the sequencing
+      frame — `Step.ret`). Memory and run state untouched (the monad is
+      `runEU`-lifted and state-verbatim; `labeled` is installed once at
+      `initial_core_run_state`, never by a call). The two `call_proc`
+      failures are ABSENCE of a step: transparent `Illformed_program`
+      kills, classified in Round.lean (`complete_call`). The
+      implementation-constant call `Eproc _ (Impl _) _` (`Step_fs2`) is
+      outside the fragment (`callRedex?` answers `none`). -/
+  | call {e : CoreExpr} {ctx : context} {f : sym} {pes : List (generic_pexpr Unit sym)}
+      {params : List (sym × core_base_type)} {body : CoreExpr} {vs : List value}
+      {ρ : EnvStack} {ctl : Ctl} {σ : Mem}
+      (hc : callRedex? e = some (ctx, f, pes))
+      (hvs : evalPexprs M.tagDefs M.extern ρ pes = some vs)
+      (hf : lookupProc M.file M.extern f = some (params, body))
+      (hlen : params.length = vs.length) :
+      Step M (e, ρ, ctl, σ)
+           (body, procEnv params vs :: ρ,
+            ⟨(ctl.proc, ctx) :: ctl.κ, some f, push_exec_loc f M.currentLoc ctl.execLoc⟩, σ)
+  /-- THE RETURN (calls arc C2). Mirrors step_ctx's value arm at a
+      NON-EMPTY call stack (Core_reduction.lean:484, col 2276; verbatim
+      modulo whitespace): `| (CTX, Expr e_annots (Epure (Pexpr _ _ (PEval
+      cval)))) => match th_st.stack0 with … | Stack_cons2 parent_proc_opt
+      caller_ctx sk' => … /- reduction: RETURN -/ Step_tau2 "end of
+      procedure" tsk (match th_st.env with | [] => failwithI "end of proc,
+      found an empty Core_run env" | _ :: env' => { { { { th_st with
+      current_proc_opt := parent_proc_opt } with env := env' } with stack0
+      := sk' } with arena := apply_ctx caller_ctx (Expr e_annots (Epure
+      (mk_value_pe cval))) })`. Core has no return statement: the callee's
+      arena reducing to a BARE value at `Stack_cons2` IS the return. The
+      value is plugged into the caller's SAVED context (`apply_ctx
+      caller_ctx`, the context `Step.call` captured), the env stack pops
+      one frame (the callee's `procEnv`), the current procedure is
+      restored from the frame, `exec_loc` is NOT popped; memory and run
+      state untouched (a `Step_tau2`; `tsk` — `TSK_Return` when
+      `file1.funinfo` has the procedure, `TSK_Misc` otherwise — reaches
+      only the driver's trace). At `Stack_empty` the value arm is
+      PROGRAM-DONE (the value protocol, `κ = []`). The empty-env
+      `failwithI` PANIC channel is excluded by the cons-shaped env
+      premise (the WF-shape discipline, header note 1: the callee's frame
+      is on the stack whenever the call stack is non-empty). -/
+  | ret {v : value} {ev0 : Fmap sym value} {evs : List (Fmap sym value)}
+      {p : Option sym} {ctx : context} {κ : List (Option sym × context)}
+      {q : Option sym} {ℓ : exec_location} {σ : Mem} :
+      Step M (Expr [] (Epure (Pexpr [] () (PEval v))), ev0 :: evs, ⟨(p, ctx) :: κ, q, ℓ⟩, σ)
+           (apply_ctx ctx (Expr [] (Epure (Pexpr [] () (PEval v)))), evs, ⟨κ, p, ℓ⟩, σ)
+  /-- REMOVE-ANNOT at a NON-EMPTY call stack (calls arc C2). Mirrors
+      step_ctx's second arm (Core_reduction.lean:484, col ≈2700): `| (CTX,
+      Expr _ (Eannot _ (expr'@(Expr _ (Epure (Pexpr _ _ (PEval _))))))) =>
+      Step_tau2 "CTX, Eannot(value)" TSK_Misc { th_st with arena := expr'
+      }` — the one-layer annotation of a value is tau'd off, at ANY stack
+      (the arm precedes the general arm and does not read `stack0`). At
+      `κ = []` the annotated value is a TERMINAL for the mirror (`toValRt`,
+      the D1 value protocol; the shipped round is `shipped_remove_annot`,
+      Round.lean) and no rule fires; at `κ ≠ []` it is NOT a terminal (a
+      value under `Stack_cons2` is on its way to RETURN), so the round
+      must be a mirror step: this one. The control is unchanged; the
+      bare value then takes `Step.ret`. -/
+  | ret_annot {ds : List dyn_annotation} {v : value} {ρ : EnvStack}
+      {pc : Option sym × context} {κ : List (Option sym × context)}
+      {q : Option sym} {ℓ : exec_location} {σ : Mem} :
+      Step M (Expr [] (Eannot ds (Expr [] (Epure (Pexpr [] () (PEval v))))), ρ,
+              ⟨pc :: κ, q, ℓ⟩, σ)
+           (Expr [] (Epure (Pexpr [] () (PEval v))), ρ, ⟨pc :: κ, q, ℓ⟩, σ)
 
 /-! ## Basic metatheory of Step (inversions the logic needs) -/
 
@@ -1803,9 +2175,12 @@ theorem Step.alloc_canonical {M : MachineCtx} {a : List annot}
     writes the env) is RETIRED as pre-declared (phase-1 notes §2
     item 6) — `Step.run` and `Step.save` rebind the environment. Its
     survivor: `Step.env_cons` (cons-shapedness is preserved — what
-    the sequencing proofs actually need at this stratum). -/
+    the sequencing proofs actually need at this stratum). C2: the
+    call PUSHES a frame and the return POPS one, so the survivor holds
+    at CONTROL-PRESERVING steps (`hctl`); the call/return frame
+    discipline is `Step.ctl_cases`. -/
 theorem Step.env_cons' {M : MachineCtx} {c c' : Config}
-    (h : Step M c c') :
+    (h : Step M c c') (hctl : c'.2.2.1 = c.2.2.1) :
     ∀ ev0 evs, c.2.1 = ev0 :: evs → ∃ ev0', c'.2.1 = ev0' :: evs := by
   induction h with
   | store h1 h2 h3 hmv hmem => exact fun ev0 evs hin => ⟨ev0, hin⟩
@@ -1826,9 +2201,9 @@ theorem Step.env_cons' {M : MachineCtx} {c c' : Config}
     exact ⟨_, update_env_cons ..⟩
   | pure_eval hnv hv => exact fun ev0 evs hin => ⟨ev0, hin⟩
   | load_eval hnv2 hv2 => exact fun ev0 evs hin => ⟨ev0, hin⟩
-  | sseq_ctx hnj hs ih => exact ih
-  | wseq_ctx hnj hs ih => exact ih
-  | annot_ctx hnj hg hs ih => exact ih
+  | sseq_ctx hnj hnv hs ih => exact ih hctl
+  | wseq_ctx hnj hnv hs ih => exact ih hctl
+  | annot_ctx hnj hg hs ih => exact ih hctl
   | annot_merge => exact fun ev0 evs hin => ⟨ev0, hin⟩
   | run hj hl hvs =>
     intro ev0 evs hin
@@ -1852,49 +2227,213 @@ theorem Step.env_cons' {M : MachineCtx} {c c' : Config}
   | kill_eval hnv hv => exact fun ev0 evs hin => ⟨ev0, hin⟩
   | alloc h1 h2 hmem => exact fun ev0 evs hin => ⟨ev0, hin⟩
   | alloc_eval hnv hv1 hv2 => exact fun ev0 evs hin => ⟨ev0, hin⟩
+  | call hc hvs hf hlen =>
+    exact absurd (congrArg Ctl.κ hctl) (by simp)
+  | ret =>
+    exact absurd (congrArg Ctl.κ hctl) (by simp)
+  | ret_annot => exact fun ev0 evs hin => ⟨ev0, hin⟩
 
 theorem Step.env_cons {M : MachineCtx} {e : CoreExpr} {ev0 : Fmap sym value}
     {evs : List (Fmap sym value)} {ctl : Ctl} {σ : Mem}
     {e' : CoreExpr} {ρ' : EnvStack} {σ' : Mem}
     (h : Step M (e, ev0 :: evs, ctl, σ) (e', ρ', ctl, σ')) :
     ∃ ev0', ρ' = ev0' :: evs :=
-  h.env_cons' ev0 evs rfl
+  h.env_cons' rfl ev0 evs rfl
 
-/-- NO RULE OF THIS SLICE WRITES THE CONTROL: every step threads the
-    configuration's `Ctl` unchanged (calls arc C1). The call/return
-    rules that write it are C2, where this lemma becomes a case
-    analysis. -/
-theorem Step.ctl_eq' {M : MachineCtx} {c c' : Config} (h : Step M c c') :
-    c'.2.2.1 = c.2.2.1 := by
-  induction h <;> first | rfl | assumption
-
-theorem Step.ctl_eq {M : MachineCtx} {e e' : CoreExpr} {ρ ρ' : EnvStack}
-    {ctl ctl' : Ctl} {σ σ' : Mem}
-    (h : Step M (e, ρ, ctl, σ) (e', ρ', ctl', σ')) : ctl' = ctl :=
-  h.ctl_eq'
-
-/-- A step's successor control IS the source control (`Step.ctl_eq`),
-    restated on the step itself so that congruence rules apply to a
-    step whose successor was produced by the Language interface
-    (where the control component is an opaque projection). -/
-theorem Step.retag {M : MachineCtx} {e e' : CoreExpr} {ρ ρ' : EnvStack}
+/-- THE CONTROL IS WRITTEN BY EXACTLY TWO RULES (calls arc C2): every
+    step either threads the configuration's `Ctl` unchanged, or is THE
+    CALL (the control grows by the captured frame `(ctl.proc, ctx)`, the
+    callee becomes the current procedure, the execution location is
+    pushed) or THE RETURN (the top frame pops, the caller's procedure is
+    restored). C1's `Step.ctl_eq` (every step preserves the control) is
+    now the first disjunct under the two guards `Step.ctl_eq`. -/
+theorem Step.ctl_cases {M : MachineCtx} {e e' : CoreExpr} {ρ ρ' : EnvStack}
     {ctl ctl' : Ctl} {σ σ' : Mem}
     (h : Step M (e, ρ, ctl, σ) (e', ρ', ctl', σ')) :
+    ctl' = ctl ∨
+    (∃ ctx f pes params body vs, callRedex? e = some (ctx, f, pes) ∧
+      evalPexprs M.tagDefs M.extern ρ pes = some vs ∧
+      lookupProc M.file M.extern f = some (params, body) ∧ params.length = vs.length ∧
+      e' = body ∧ ρ' = procEnv params vs :: ρ ∧
+      ctl' = ⟨(ctl.proc, ctx) :: ctl.κ, some f, push_exec_loc f M.currentLoc ctl.execLoc⟩ ∧
+      σ' = σ) ∨
+    (∃ v ev0 evs p ctx κ q ℓ, e = Expr [] (Epure (Pexpr [] () (PEval v))) ∧
+      ρ = ev0 :: evs ∧ ctl = ⟨(p, ctx) :: κ, q, ℓ⟩ ∧
+      e' = apply_ctx ctx (Expr [] (Epure (Pexpr [] () (PEval v)))) ∧ ρ' = evs ∧
+      ctl' = ⟨κ, p, ℓ⟩ ∧ σ' = σ) := by
+  cases h
+  all_goals first
+    | exact .inl rfl
+    | exact .inr (.inl ⟨_, _, _, _, _, _, ‹callRedex? _ = some _›,
+        ‹evalPexprs _ _ _ _ = some _›, ‹lookupProc _ _ _ = some _›,
+        ‹List.length _ = List.length _›, rfl, rfl, rfl, rfl⟩)
+    | exact .inr (.inr ⟨_, _, _, _, _, _, _, _, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩)
+
+/-- The control is preserved at every configuration that is neither a
+    call redex (in context) nor a value: the two guards are exactly the
+    sources of `Step.call` and `Step.ret`/`Step.ret_annot`. -/
+theorem Step.ctl_eq {M : MachineCtx} {e e' : CoreExpr} {ρ ρ' : EnvStack}
+    {ctl ctl' : Ctl} {σ σ' : Mem}
+    (h : Step M (e, ρ, ctl, σ) (e', ρ', ctl', σ'))
+    (hc : callRedex? e = none) (hv : toVal e = none) : ctl' = ctl := by
+  rcases h.ctl_cases with heq | ⟨ctx, f, pes, _, _, _, hc', -⟩ |
+      ⟨v, _, _, _, _, _, _, _, rfl, -⟩
+  · exact heq
+  · rw [hc'] at hc; cases hc
+  · rw [show toVal (Expr ([] : List _root_.annot) (Epure (Pexpr [] () (PEval v)))) =
+      some (.pure v) from rfl] at hv
+    cases hv
+
+theorem Step.ctl_eq' {M : MachineCtx} {c c' : Config} (h : Step M c c')
+    (hc : callRedex? c.1 = none) (hv : toVal c.1 = none) : c'.2.2.1 = c.2.2.1 := by
+  obtain ⟨e, ρ, ctl, σ⟩ := c
+  obtain ⟨e', ρ', ctl', σ'⟩ := c'
+  exact h.ctl_eq hc hv
+
+/-- A control-preserving step's successor control IS the source
+    control (`Step.ctl_eq`), restated on the step itself so that
+    congruence rules apply to a step whose successor was produced by
+    the Language interface (where the control component is an opaque
+    projection). -/
+theorem Step.retag {M : MachineCtx} {e e' : CoreExpr} {ρ ρ' : EnvStack}
+    {ctl ctl' : Ctl} {σ σ' : Mem}
+    (h : Step M (e, ρ, ctl, σ) (e', ρ', ctl', σ'))
+    (hc : callRedex? e = none) (hv : toVal e = none) :
     Step M (e, ρ, ctl, σ) (e', ρ', ctl, σ') := by
-  obtain rfl := h.ctl_eq
+  obtain rfl := h.ctl_eq hc hv
   exact h
 
-/-- Values do not step (the Language interface's `val_stuck`).
-    Engine analogue: is_irreducible short-circuits both get_ctx and
-    one_step0 (Core_reduction.lean:293,353,375). -/
+/-- Inversion at a call redex IN CONTEXT: the step is THE CALL, its
+    successor determined by the file lookup, the argument values and the
+    captured context — the successor does not depend on how the redex
+    was reached beyond `ctx`. By induction on the step: a congruence
+    rule cannot frame a call of its sub-expression (the pushed control
+    differs from the threaded one), so the only rule at a configuration
+    with a call redex is `Step.call`. -/
+theorem Step.call_inv' {M : MachineCtx} {c : Config}
+    {out : Config} (h : Step M c out) :
+    ∀ {ctx : context} {f : sym} {pes : List (generic_pexpr Unit sym)},
+      callRedex? c.1 = some (ctx, f, pes) →
+      ∃ params body vs, evalPexprs M.tagDefs M.extern c.2.1 pes = some vs ∧
+        lookupProc M.file M.extern f = some (params, body) ∧ params.length = vs.length ∧
+        out = (body, procEnv params vs :: c.2.1,
+          ⟨(c.2.2.1.proc, ctx) :: c.2.2.1.κ, some f,
+            push_exec_loc f M.currentLoc c.2.2.1.execLoc⟩, c.2.2.2) := by
+  induction h with
+  | call hc' hvs hf hlen =>
+    intro ctx f pes hc
+    rw [hc'] at hc
+    obtain ⟨rfl, rfl, rfl⟩ : _ ∧ _ ∧ _ := by
+      have := Option.some.inj hc
+      exact ⟨congrArg Prod.fst this, congrArg (fun q => q.2.1) this,
+        congrArg (fun q => q.2.2) this⟩
+    exact ⟨_, _, _, hvs, hf, hlen, rfl⟩
+  | ret => intro ctx f pes hc; simp at hc
+  | ret_annot => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
+  | sseq_ctx hnj hnv hs ih =>
+    intro ctx f pes hc
+    rw [callRedex?_sseq, Option.map_eq_some_iff] at hc
+    obtain ⟨⟨ctx1, f1, pes1⟩, hc1, hq⟩ := hc
+    obtain ⟨rfl, rfl, rfl⟩ : _ ∧ _ ∧ _ := by
+      exact ⟨congrArg Prod.fst hq, congrArg (fun q => q.2.1) hq,
+        congrArg (fun q => q.2.2) hq⟩
+    obtain ⟨_, _, _, -, -, -, hout⟩ := ih hc1
+    exact absurd (congrArg (fun c : Config => c.2.2.1.κ) hout) (by simp)
+  | wseq_ctx hnj hnv hs ih =>
+    intro ctx f pes hc
+    rw [callRedex?_wseq, Option.map_eq_some_iff] at hc
+    obtain ⟨⟨ctx1, f1, pes1⟩, hc1, hq⟩ := hc
+    obtain ⟨rfl, rfl, rfl⟩ : _ ∧ _ ∧ _ := by
+      exact ⟨congrArg Prod.fst hq, congrArg (fun q => q.2.1) hq,
+        congrArg (fun q => q.2.2) hq⟩
+    obtain ⟨_, _, _, -, -, -, hout⟩ := ih hc1
+    exact absurd (congrArg (fun c : Config => c.2.2.1.κ) hout) (by simp)
+  | annot_ctx hnj hg hs ih =>
+    intro ctx f pes hc
+    rw [callRedex?_annot_of_not_root _ _ hg, Option.map_eq_some_iff] at hc
+    obtain ⟨⟨ctx1, f1, pes1⟩, hc1, hq⟩ := hc
+    obtain ⟨rfl, rfl, rfl⟩ : _ ∧ _ ∧ _ := by
+      exact ⟨congrArg Prod.fst hq, congrArg (fun q => q.2.1) hq,
+        congrArg (fun q => q.2.2) hq⟩
+    obtain ⟨_, _, _, -, -, -, hout⟩ := ih hc1
+    exact absurd (congrArg (fun c : Config => c.2.2.1.κ) hout) (by simp)
+  | annot_merge => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
+  | sseq_pure => intro ctx f pes hc; simp at hc
+  | sseq_annot => intro ctx f pes hc; simp at hc
+  | wseq_pure => intro ctx f pes hc; simp at hc
+  | wseq_annot => intro ctx f pes hc; simp at hc
+  | sseq_spec_pure => intro ctx f pes hc; simp at hc
+  | sseq_spec_annot => intro ctx f pes hc; simp at hc
+  | sseq_sym_pure => intro ctx f pes hc; simp at hc
+  | store h1 h2 h3 hmv hmem => intro ctx f pes hc; simp at hc
+  | load h1 h2 hmem => intro ctx f pes hc; simp at hc
+  | create h1 h2 hmem => intro ctx f pes hc; simp at hc
+  | kill h1 hmem => intro ctx f pes hc; simp at hc
+  | alloc h1 h2 hmem => intro ctx f pes hc; simp at hc
+  | pure_eval hnv hv => intro ctx f pes hc; simp at hc
+  | load_eval hnv2 hv2 => intro ctx f pes hc; simp at hc
+  | run hj hl hvs => intro ctx f pes hc; rw [callRedex?_none_of_jumpRedex?_some hj] at hc; cases hc
+  | save hvals => intro ctx f pes hc; simp at hc
+  | save_eval hnv hvals => intro ctx f pes hc; simp at hc
+  | if_true hg => intro ctx f pes hc; simp at hc
+  | if_false hg => intro ctx f pes hc; simp at hc
+  | case_value hv hsel => intro ctx f pes hc; simp at hc
+  | memop_ptreq h1 h2 hmem => intro ctx f pes hc; simp at hc
+  | memop_eval hnv hv1 hv2 => intro ctx f pes hc; simp at hc
+  | store_eval hnv hv2 hv3 => intro ctx f pes hc; simp at hc
+  | kill_eval hnv hv => intro ctx f pes hc; simp at hc
+  | alloc_eval hnv hv1 hv2 => intro ctx f pes hc; simp at hc
+
+theorem Step.call_inv {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack} {ctl : Ctl} {σ : Mem}
+    {out : Config} (h : Step M (e, ρ, ctl, σ) out)
+    {ctx : context} {f : sym} {pes : List (generic_pexpr Unit sym)}
+    (hc : callRedex? e = some (ctx, f, pes)) :
+    ∃ params body vs, evalPexprs M.tagDefs M.extern ρ pes = some vs ∧
+      lookupProc M.file M.extern f = some (params, body) ∧ params.length = vs.length ∧
+      out = (body, procEnv params vs :: ρ,
+        ⟨(ctl.proc, ctx) :: ctl.κ, some f, push_exec_loc f M.currentLoc ctl.execLoc⟩, σ) :=
+  h.call_inv' hc
+
+/-- A call step is never control-preserving (the frame is pushed). -/
+theorem Step.call_ne_same_ctl {M : MachineCtx} {e e' : CoreExpr} {ρ ρ' : EnvStack}
+    {ctl : Ctl} {σ σ' : Mem} {ctx : context} {f : sym}
+    {pes : List (generic_pexpr Unit sym)}
+    (hc : callRedex? e = some (ctx, f, pes))
+    (h : Step M (e, ρ, ctl, σ) (e', ρ', ctl, σ')) : False := by
+  obtain ⟨_, _, _, -, -, -, hout⟩ := h.call_inv hc
+  exact absurd (congrArg (fun c : Config => c.2.2.1.κ) hout) (by simp)
+
+/-- Reducibility at a call redex in context whose lookup, arity and
+    arguments succeed. -/
+theorem Step.call_of_callRedex {M : MachineCtx} {e : CoreExpr} {ctx : context} {f : sym}
+    {pes : List (generic_pexpr Unit sym)} {params : List (sym × core_base_type)}
+    {body : CoreExpr} {vs : List value} {ρ : EnvStack} {ctl : Ctl} {σ : Mem}
+    (hc : callRedex? e = some (ctx, f, pes))
+    (hvs : evalPexprs M.tagDefs M.extern ρ pes = some vs)
+    (hf : lookupProc M.file M.extern f = some (params, body))
+    (hlen : params.length = vs.length) :
+    Step M (e, ρ, ctl, σ)
+      (body, procEnv params vs :: ρ,
+       ⟨(ctl.proc, ctx) :: ctl.κ, some f, push_exec_loc f M.currentLoc ctl.execLoc⟩, σ) :=
+  Step.call hc hvs hf hlen
+
+/-- Values do not step AT THE EMPTY CALL STACK (the Language interface's
+    `val_stuck`; C2: at a non-empty stack a value is the RETURN redex,
+    `Step.ret`/`Step.ret_annot`). Engine analogue: is_irreducible
+    short-circuits both get_ctx and one_step0 (Core_reduction.lean:293,
+    353,375), and the value arm at `Stack_empty` is PROGRAM-DONE. -/
 theorem Step.val_elim {M : MachineCtx} {w : SpikeVal} {ρ : EnvStack} {ctl : Ctl} {σ : Mem}
-    {out : Config}
+    {out : Config} (hκ : ctl.κ = [])
     (h : Step M (ofVal w, ρ, ctl, σ) out) : False := by
+  obtain ⟨κ, p, ℓ⟩ := ctl
+  simp only at hκ
+  subst hκ
   cases w with
   | pure v =>
     cases h with
     | run hj hl hvs => simp [ofVal] at hj
     | pure_eval hnv hv => rw [valueFromPexpr_val] at hnv; cases hnv
+    | call hc hvs hf hlen => simp [ofVal] at hc
   | annot ds v =>
     cases h with
     | annot_ctx hnj hg hs =>
@@ -1902,13 +2441,51 @@ theorem Step.val_elim {M : MachineCtx} {w : SpikeVal} {ρ : EnvStack} {ctl : Ctl
       | run hj hl hvs => simp at hj
       | pure_eval hnv hv => rw [valueFromPexpr_val] at hnv; cases hnv
     | run hj hl hvs => simp [ofVal, jumpRedex?, annotRooted] at hj
+    | call hc hvs hf hlen => simp [ofVal, callRedex?, annotRooted] at hc
+
+/-- A BARE value never takes a control-preserving step (its only rule,
+    `Step.ret`, pops the call stack). -/
+theorem Step.pure_val_elim {M : MachineCtx} {v : value} {ρ : EnvStack} {ctl ctl' : Ctl}
+    {σ : Mem} {e' : CoreExpr} {ρ' : EnvStack} {σ' : Mem}
+    (h : Step M (Expr [] (Epure (Pexpr [] () (PEval v))), ρ, ctl, σ) (e', ρ', ctl', σ'))
+    (hctl : ctl' = ctl) : False := by
+  cases h with
+  | run hj hl hvs => simp at hj
+  | pure_eval hnv hv => rw [valueFromPexpr_val] at hnv; cases hnv
+  | call hc hvs hf hlen => simp at hc
+  | ret => exact absurd (congrArg Ctl.κ hctl) (by simp)
+
+/-- The ANNOTATED value's only control-preserving step is REMOVE-ANNOT
+    at a non-empty call stack. -/
+theorem Step.annot_val_inv {M : MachineCtx} {ds : List dyn_annotation} {v : value}
+    {ρ : EnvStack} {ctl ctl' : Ctl} {σ : Mem} {e' : CoreExpr} {ρ' : EnvStack} {σ' : Mem}
+    (h : Step M (Expr [] (Eannot ds (Expr [] (Epure (Pexpr [] () (PEval v))))), ρ, ctl, σ)
+      (e', ρ', ctl', σ')) (hctl : ctl' = ctl) :
+    e' = Expr [] (Epure (Pexpr [] () (PEval v))) ∧ ρ' = ρ ∧ σ' = σ ∧
+      ∃ pc κ, ctl.κ = pc :: κ := by
+  cases h with
+  | annot_ctx hnj hg hs => exact (Step.pure_val_elim hs rfl).elim
+  | run hj hl hvs => simp [jumpRedex?, annotRooted] at hj
+  | call hc hvs hf hlen => simp [callRedex?, annotRooted] at hc
+  | ret_annot => exact ⟨rfl, rfl, rfl, _, _, rfl⟩
 
 theorem Step.toVal_none {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack} {ctl : Ctl} {σ : Mem}
-    {out : Config}
+    {out : Config} (hκ : ctl.κ = [])
     (h : Step M (e, ρ, ctl, σ) out) : toVal e = none := by
   cases hv : toVal e with
   | none => rfl
-  | some w => exact absurd (ofVal_of_toVal hv ▸ h) (fun h => h.val_elim)
+  | some w => exact absurd (ofVal_of_toVal hv ▸ h) (fun h => h.val_elim hκ)
+
+/-- A stepping tuple is not a Language value: at the empty stack because
+    values do not step there, at a non-empty stack by `toValRt`'s
+    definition (the `val_stuck` law, Lang.lean). -/
+theorem Step.toValRt_none {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack} {ctl : Ctl} {σ : Mem}
+    {out : Config} (h : Step M (e, ρ, ctl, σ) out) :
+    toValRt ⟨e, ρ, ctl, M⟩ = none := by
+  obtain ⟨κ, p, ℓ⟩ := ctl
+  cases κ with
+  | nil => rw [toValRt_mk, h.toVal_none rfl]; rfl
+  | cons pc κ => rfl
 
 /-- Inversion at a store redex (canonical operand instance — the
     certified cone's shape): the step is unique and fully determined
@@ -1928,6 +2505,7 @@ theorem Step.store_inv {M : MachineCtx} {a : List annot} {loc : CerbLocation.Loc
               (Expr [] (Epure (Pexpr [] () (PEval Vunit))))), ρ, ctl, σ') := by
   cases h with
   | run hj hl hvs => simp at hj
+  | call hc hvs hf hlen => simp at hc
   | store_eval hnv hv2 hv3 =>
     rw [valueFromPexprs_pair, valueFromPexpr_val, valueFromPexpr_val] at hnv
     cases hnv
@@ -1955,6 +2533,7 @@ theorem Step.load_inv {M : MachineCtx} {a : List annot} {loc : CerbLocation.Loc}
                 (valueFromMemValue mval).2))))), ρ, ctl, σ') := by
   cases h with
   | run hj hl hvs => simp at hj
+  | call hc hvs hf hlen => simp at hc
   | load_eval hnv2 hv2 => rw [valueFromPexpr_val] at hnv2; cases hnv2
   | load h1 h2 hmem =>
     rw [valueFromPexpr_val] at h1 h2
@@ -1977,6 +2556,7 @@ theorem Step.create_inv {M : MachineCtx} {a : List annot} {loc : CerbLocation.Lo
       out = (Expr [] (Epure (Pexpr [] () (PEval (Vobject (OVpointer pv))))), ρ, ctl, σ') := by
   cases h with
   | run hj hl hvs => simp at hj
+  | call hc hvs hf hlen => simp at hc
   | create h1 h2 hmem =>
     rw [valueFromPexpr_val] at h1 h2
     injection h1 with h1; injection h1 with h1; injection h1 with h1
@@ -1997,6 +2577,7 @@ theorem Step.kill_inv {M : MachineCtx} {a : List annot} {loc : CerbLocation.Loc}
       out = (Expr [] (Epure (Pexpr [] () (PEval Vunit))), ρ, ctl, σ') := by
   cases h with
   | run hj hl hvs => simp at hj
+  | call hc hvs hf hlen => simp at hc
   | kill_eval hnv hv => rw [valueFromPexpr_val] at hnv; cases hnv
   | kill h1 hmem =>
     rw [valueFromPexpr_val] at h1
@@ -2018,6 +2599,7 @@ theorem Step.kill_op_inv {M : MachineCtx} {a : List annot}
         (Kill kind (Pexpr [] () (PEval (Vobject (OVpointer pv)))))))), ρ, ctl, σ) := by
   cases h with
   | run hj hl hvs => simp at hj
+  | call hc hvs hf hlen => simp at hc
   | kill h1 hmem => rw [hnv] at h1; cases h1
   | kill_eval hnv' hv => exact ⟨_, hv, rfl⟩
 
@@ -2036,6 +2618,7 @@ theorem Step.alloc_inv {M : MachineCtx} {a : List annot} {loc : CerbLocation.Loc
       out = (Expr [] (Epure (Pexpr [] () (PEval (Vobject (OVpointer pv))))), ρ, ctl, σ') := by
   cases h with
   | run hj hl hvs => simp at hj
+  | call hc hvs hf hlen => simp at hc
   | alloc_eval hnv hv1 hv2 =>
     rw [valueFromPexprs_pair, valueFromPexpr_val, valueFromPexpr_val] at hnv
     cases hnv
@@ -2062,6 +2645,7 @@ theorem Step.alloc_op_inv {M : MachineCtx} {a : List annot}
                 (Pexpr [] () (PEval (Vobject (OVinteger size)))) pref)))), ρ, ctl, σ) := by
   cases h with
   | run hj hl hvs => simp at hj
+  | call hc hvs hf hlen => simp at hc
   | alloc h1 h2 hmem => rw [valueFromPexprs_pair, h1, h2] at hnv; cases hnv
   | alloc_eval hnv' hv1 hv2 => exact ⟨_, _, hv1, hv2, rfl⟩
 
@@ -2116,6 +2700,9 @@ theorem Step.jump_inv {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack} {ctl : Ctl
   | store_eval hnv hv2 hv3 => simp at hj
   | alloc h1 h2 hmem => simp at hj
   | alloc_eval hnv hv1 hv2 => simp at hj
+  | call hc hvs hf hlen => rw [callRedex?_none_of_jumpRedex?_some hj] at hc; cases hc
+  | ret => simp at hj
+  | ret_annot => simp [jumpRedex?, annotRooted] at hj
 
 /-- Reducibility at a registered jump redex (the probe's
     `step_of_jumpRedex`). -/
@@ -2129,17 +2716,51 @@ theorem Step.run_of_jumpRedex {M : MachineCtx} {e : CoreExpr} {l : sym}
     Step M (e, ev0 :: evs, ctl, σ) (cont, bindArgs params vs (ev0 :: evs), ctl, σ) :=
   Step.run hj hl hvs
 
+/-- A CALL step of `e` seen from a node whose frame is `fr` (calls arc
+    C2): the redex `callRedex? e = some (ctx, f, pes)` under the frame,
+    the arguments evaluated at the CURRENT env, the callee found with
+    the right arity, and the successor at the pushed control — the
+    captured context is the frame applied to the redex's own context
+    (`Csseq a pat · e2` at an `Esseq` node, `Cwseq …`, `Cannot a ds ·`),
+    exactly get_ctx's outside-in construction. One disjunct of each
+    frame inversion below; `fr := id` at the root. -/
+def Step.CallOf (M : MachineCtx) (e : CoreExpr) (fr : context → context)
+    (ρ : EnvStack) (ctl : Ctl) (σ : Mem) (out : Config) : Prop :=
+  ∃ ctx f pes params body vs, callRedex? e = some (ctx, f, pes) ∧
+    evalPexprs M.tagDefs M.extern ρ pes = some vs ∧
+    lookupProc M.file M.extern f = some (params, body) ∧ params.length = vs.length ∧
+    out = (body, procEnv params vs :: ρ,
+      ⟨(ctl.proc, fr ctx) :: ctl.κ, some f, push_exec_loc f M.currentLoc ctl.execLoc⟩, σ)
+
+/-- A `CallOf` successor never sits at the source control. -/
+theorem Step.CallOf.ne_same_ctl {M : MachineCtx} {e : CoreExpr} {fr : context → context}
+    {ρ : EnvStack} {ctl : Ctl} {σ : Mem} {e' : CoreExpr} {ρ' : EnvStack} {σ' : Mem}
+    (h : Step.CallOf M e fr ρ ctl σ (e', ρ', ctl, σ')) : False := by
+  obtain ⟨_, _, _, _, _, _, -, -, -, -, hout⟩ := h
+  exact absurd (congrArg (fun c : Config => c.2.2.1.κ) hout) (by simp)
+
+/-- A `CallOf` witness names a call redex of `e`. -/
+theorem Step.CallOf.callRedex?_some {M : MachineCtx} {e : CoreExpr} {fr : context → context}
+    {ρ : EnvStack} {ctl : Ctl} {σ : Mem} {out : Config}
+    (h : Step.CallOf M e fr ρ ctl σ out) :
+    ∃ ctx f pes, callRedex? e = some (ctx, f, pes) := by
+  obtain ⟨ctx, f, pes, _, _, _, hc, -⟩ := h
+  exact ⟨ctx, f, pes, hc⟩
+
 /-- Inversion at an Esseq node (S3 form): a frame step of a
-    NON-jump-redex e1, one of the two betas, or THE GLOBAL JUMP
-    (frame discarded — the successor is e1's own jump successor).
-    The frame case's `jumpRedex? e1 = none` is the S3 congruence
-    guard surfacing; the jump disjunct is the readiness's "factor
-    theorem gains one disjunct" at the Esseq node. -/
+    NON-jump-redex, non-value e1, one of the betas, THE GLOBAL JUMP
+    (frame discarded — the successor is e1's own jump successor), or
+    (C2) THE CALL of e1 with the `Csseq` frame CAPTURED. The frame
+    case's `jumpRedex? e1 = none`/`toVal e1 = none` are the congruence
+    guards surfacing; the jump disjunct is the readiness's "factor
+    theorem gains one disjunct" at the Esseq node; the call disjunct is
+    C2's third context discipline. -/
 theorem Step.sseq_inv {M : MachineCtx} {a : List annot} {pat : pattern}
     {e1 e2 : CoreExpr}
     {ρ : EnvStack} {ctl : Ctl} {σ : Mem} {out : Config}
     (h : Step M (Expr a (Esseq pat e1 e2), ρ, ctl, σ) out) :
-    (∃ e1' ρ' σ', jumpRedex? e1 = none ∧ Step M (e1, ρ, ctl, σ) (e1', ρ', ctl, σ') ∧
+    (∃ e1' ρ' σ', jumpRedex? e1 = none ∧ toVal e1 = none ∧
+        Step M (e1, ρ, ctl, σ) (e1', ρ', ctl, σ') ∧
         out = (Expr a (Esseq pat e1' e2), ρ', ctl, σ')) ∨
     (∃ pa bty v ev0 evs, pat = Pattern pa (CaseBase (none, bty)) ∧
         e1 = ofVal (.pure v) ∧ ρ = ev0 :: evs ∧ out = (e2, ρ, ctl, σ)) ∨
@@ -2160,9 +2781,10 @@ theorem Step.sseq_inv {M : MachineCtx} {a : List annot} {pat : pattern}
           (Vloaded (LVspecified ov)) ρ, ctl, σ)) ∨
     (∃ pa' x bty' v ev0 evs, pat = symPat pa' x bty' ∧
         e1 = ofVal (.pure v) ∧ ρ = ev0 :: evs ∧
-        out = (e2, update_env (symPat pa' x bty') v ρ, ctl, σ)) := by
+        out = (e2, update_env (symPat pa' x bty') v ρ, ctl, σ)) ∨
+    Step.CallOf M e1 (fun c => Csseq a pat c e2) ρ ctl σ out := by
   cases h with
-  | sseq_ctx hnj hs => exact .inl ⟨_, _, _, hnj, hs, rfl⟩
+  | sseq_ctx hnj hnv hs => exact .inl ⟨_, _, _, hnj, hnv, hs, rfl⟩
   | sseq_pure => exact .inr (.inl ⟨_, _, _, _, _, rfl, rfl, rfl, rfl⟩)
   | sseq_annot => exact .inr (.inr (.inl ⟨_, _, _, _, _, _, rfl, rfl, rfl, rfl⟩))
   | run hj hl hvs =>
@@ -2175,20 +2797,30 @@ theorem Step.sseq_inv {M : MachineCtx} {a : List annot} {pat : pattern}
     exact .inr (.inr (.inr (.inr (.inr (.inl
       ⟨_, _, _, _, _, _, _, _, rfl, rfl, rfl, rfl⟩)))))
   | sseq_sym_pure =>
-    exact .inr (.inr (.inr (.inr (.inr (.inr
-      ⟨_, _, _, _, _, _, rfl, rfl, rfl, rfl⟩)))))
+    exact .inr (.inr (.inr (.inr (.inr (.inr (.inl
+      ⟨_, _, _, _, _, _, rfl, rfl, rfl, rfl⟩))))))
+  | call hc hvs hf hlen =>
+    rw [callRedex?_sseq, Option.map_eq_some_iff] at hc
+    obtain ⟨⟨ctx1, f1, pes1⟩, hc1, hq⟩ := hc
+    obtain ⟨rfl, rfl, rfl⟩ : _ ∧ _ ∧ _ := by
+      exact ⟨congrArg Prod.fst hq, congrArg (fun q => q.2.1) hq,
+        congrArg (fun q => q.2.2) hq⟩
+    exact .inr (.inr (.inr (.inr (.inr (.inr (.inr
+      ⟨ctx1, f1, pes1, _, _, _, hc1, hvs, hf, hlen, rfl⟩))))))
 
 /-- Inversion at an Ewseq node (S1b DRIFT TEST — the wildcard-only
-    `sseq_inv` shape): a frame step of a non-jump-redex e1, one of
-    the two wildcard betas, or THE GLOBAL JUMP (frame discarded).
-    Only the wildcard pattern has beta rules (the mirrored Ewseq
-    fragment — spec/sym binder patterns remain outside, README
-    registered divergences). -/
+    `sseq_inv` shape): a frame step of a non-jump-redex, non-value e1,
+    one of the two wildcard betas, THE GLOBAL JUMP (frame discarded), or
+    (C2) THE CALL of e1 with the `Cwseq` frame captured. Only the
+    wildcard pattern has beta rules (the mirrored Ewseq fragment —
+    spec/sym binder patterns remain outside, README registered
+    divergences). -/
 theorem Step.wseq_inv {M : MachineCtx} {a : List annot} {pat : pattern}
     {e1 e2 : CoreExpr}
     {ρ : EnvStack} {ctl : Ctl} {σ : Mem} {out : Config}
     (h : Step M (Expr a (Ewseq pat e1 e2), ρ, ctl, σ) out) :
-    (∃ e1' ρ' σ', jumpRedex? e1 = none ∧ Step M (e1, ρ, ctl, σ) (e1', ρ', ctl, σ') ∧
+    (∃ e1' ρ' σ', jumpRedex? e1 = none ∧ toVal e1 = none ∧
+        Step M (e1, ρ, ctl, σ) (e1', ρ', ctl, σ') ∧
         out = (Expr a (Ewseq pat e1' e2), ρ', ctl, σ')) ∨
     (∃ pa bty v ev0 evs, pat = Pattern pa (CaseBase (none, bty)) ∧
         e1 = ofVal (.pure v) ∧ ρ = ev0 :: evs ∧ out = (e2, ρ, ctl, σ)) ∨
@@ -2198,18 +2830,28 @@ theorem Step.wseq_inv {M : MachineCtx} {a : List annot} {pat : pattern}
     (∃ l pes params cont vs ev0 evs, jumpRedex? e1 = some (l, pes) ∧
         ρ = ev0 :: evs ∧ lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) ∧
         evalPexprs M.tagDefs M.extern ρ pes = some vs ∧
-        out = (cont, bindArgs params vs ρ, ctl, σ)) := by
+        out = (cont, bindArgs params vs ρ, ctl, σ)) ∨
+    Step.CallOf M e1 (fun c => Cwseq a pat c e2) ρ ctl σ out := by
   cases h with
-  | wseq_ctx hnj hs => exact .inl ⟨_, _, _, hnj, hs, rfl⟩
+  | wseq_ctx hnj hnv hs => exact .inl ⟨_, _, _, hnj, hnv, hs, rfl⟩
   | wseq_pure => exact .inr (.inl ⟨_, _, _, _, _, rfl, rfl, rfl, rfl⟩)
   | wseq_annot => exact .inr (.inr (.inl ⟨_, _, _, _, _, _, rfl, rfl, rfl, rfl⟩))
   | run hj hl hvs =>
     rw [jumpRedex?_wseq] at hj
-    exact .inr (.inr (.inr ⟨_, _, _, _, _, _, _, hj, rfl, hl, hvs, rfl⟩))
+    exact .inr (.inr (.inr (.inl ⟨_, _, _, _, _, _, _, hj, rfl, hl, hvs, rfl⟩)))
+  | call hc hvs hf hlen =>
+    rw [callRedex?_wseq, Option.map_eq_some_iff] at hc
+    obtain ⟨⟨ctx1, f1, pes1⟩, hc1, hq⟩ := hc
+    obtain ⟨rfl, rfl, rfl⟩ : _ ∧ _ ∧ _ := by
+      exact ⟨congrArg Prod.fst hq, congrArg (fun q => q.2.1) hq,
+        congrArg (fun q => q.2.2) hq⟩
+    exact .inr (.inr (.inr (.inr ⟨ctx1, f1, pes1, _, _, _, hc1, hvs, hf, hlen, rfl⟩)))
 
 /-- Inversion at an Eannot node (S3 form): Cannot-descent of a
-    non-jump-redex body, the ANNOTS merge, or the global jump
-    through the Cannot frame. -/
+    non-jump-redex body, the ANNOTS merge, the global jump through the
+    Cannot frame, or (C2) THE CALL of the body with the `Cannot` frame
+    captured, or (C2) REMOVE-ANNOT at a non-empty call stack (the body a
+    bare value, the node annotation-free). -/
 theorem Step.annot_inv {M : MachineCtx} {a : List annot}
     {ds : List dyn_annotation}
     {b : CoreExpr} {ρ : EnvStack} {ctl : Ctl} {σ : Mem}
@@ -2224,7 +2866,10 @@ theorem Step.annot_inv {M : MachineCtx} {a : List annot}
         jumpRedex? b = some (l, pes) ∧
         ρ = ev0 :: evs ∧ lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) ∧
         evalPexprs M.tagDefs M.extern ρ pes = some vs ∧
-        out = (cont, bindArgs params vs ρ, ctl, σ)) := by
+        out = (cont, bindArgs params vs ρ, ctl, σ)) ∨
+    (annotRooted b = false ∧ Step.CallOf M b (fun c => Cannot a ds c) ρ ctl σ out) ∨
+    (∃ v pc κ, a = [] ∧ b = Expr [] (Epure (Pexpr [] () (PEval v))) ∧ ctl.κ = pc :: κ ∧
+        out = (Expr [] (Epure (Pexpr [] () (PEval v))), ρ, ctl, σ)) := by
   cases h with
   | annot_ctx hnj hg hs => exact .inl ⟨hg, hnj, _, _, _, hs, rfl⟩
   | annot_merge => exact .inr (.inl ⟨_, _, _, rfl, rfl⟩)
@@ -2233,7 +2878,18 @@ theorem Step.annot_inv {M : MachineCtx} {a : List annot}
     · rw [jumpRedex?_annot_of_root _ _ hr] at hj; cases hj
     · have hr' : annotRooted b = false := by simpa using hr
       rw [jumpRedex?_annot_of_not_root _ _ hr'] at hj
-      exact .inr (.inr ⟨_, _, _, _, _, _, _, hr', hj, rfl, hl, hvs, rfl⟩)
+      exact .inr (.inr (.inl ⟨_, _, _, _, _, _, _, hr', hj, rfl, hl, hvs, rfl⟩))
+  | call hc hvs hf hlen =>
+    by_cases hr : annotRooted b = true
+    · rw [callRedex?_annot_of_root _ _ hr] at hc; cases hc
+    · have hr' : annotRooted b = false := by simpa using hr
+      rw [callRedex?_annot_of_not_root _ _ hr', Option.map_eq_some_iff] at hc
+      obtain ⟨⟨ctx1, f1, pes1⟩, hc1, hq⟩ := hc
+      obtain ⟨rfl, rfl, rfl⟩ : _ ∧ _ ∧ _ := by
+        exact ⟨congrArg Prod.fst hq, congrArg (fun q => q.2.1) hq,
+          congrArg (fun q => q.2.2) hq⟩
+      exact .inr (.inr (.inr (.inl ⟨hr', ctx1, f1, pes1, _, _, _, hc1, hvs, hf, hlen, rfl⟩)))
+  | ret_annot => exact .inr (.inr (.inr (.inr ⟨_, _, _, rfl, rfl, rfl, rfl⟩)))
 
 /-- Inversion at an Esave node: either the entry TAU (value-shaped
     initializers) or the parameter-EVAL step (initializers not all
@@ -2255,6 +2911,7 @@ theorem Step.save_inv {M : MachineCtx} {a : List annot}
   | save hvals => exact .inl ⟨_, _, _, rfl, hvals, rfl⟩
   | save_eval hnv hvals => exact .inr ⟨_, hnv, hvals, rfl⟩
   | run hj hl hvs => simp [jumpRedex?] at hj
+  | call hc hvs hf hlen => simp at hc
 
 /-- Inversion at an Esave node with VALUE initializers: the entry TAU
     only (the pre-QA-1 shape, retained as the literal instance). -/
@@ -2301,6 +2958,7 @@ theorem Step.if_inv {M : MachineCtx} {a : List annot}
   | if_true hg => exact .inl ⟨hg, rfl⟩
   | if_false hg => exact .inr ⟨hg, rfl⟩
   | run hj hl hvs => simp [jumpRedex?] at hj
+  | call hc hvs hf hlen => simp at hc
 
 /-- Inversion at an Ecase node: the value-scrutinee selection TAU. -/
 theorem Step.case_inv {M : MachineCtx} {a : List annot}
@@ -2313,17 +2971,21 @@ theorem Step.case_inv {M : MachineCtx} {a : List annot}
   cases h with
   | case_value hv hsel => exact ⟨_, _, hv, hsel, rfl⟩
   | run hj hl hvs => simp [jumpRedex?] at hj
+  | call hc hvs hf hlen => simp at hc
 
 /-- Inversion at an Epure node (S4): the big-step PURE evaluation. -/
 theorem Step.pure_inv {M : MachineCtx} {a : List annot}
     {pe : generic_pexpr Unit sym} {ρ : EnvStack} {ctl : Ctl} {σ : Mem}
     {out : Config}
+    (hnv : valueFromPexpr pe = none)
     (h : Step M (Expr a (Epure pe), ρ, ctl, σ) out) :
     ∃ v, valueFromPexpr pe = none ∧ evalPexpr M.tagDefs M.extern ρ pe = some v ∧
       out = (Expr a (Epure (Pexpr [] () (PEval v))), ρ, ctl, σ) := by
   cases h with
   | pure_eval hnv hv => exact ⟨_, hnv, hv, rfl⟩
   | run hj hl hvs => simp at hj
+  | call hc hvs hf hlen => simp at hc
+  | ret => rw [valueFromPexpr_val] at hnv; cases hnv
 
 /-- Inversion at a positive load whose pointer operand is NOT a
     value (S4): the ACTION_EVAL step. The operand's non-value shape
@@ -2342,6 +3004,7 @@ theorem Step.load_op_inv {M : MachineCtx} {a : List annot}
                (Pexpr [] () (PEval (Vobject (OVpointer pv)))) mo)))), ρ, ctl, σ) := by
   cases h with
   | run hj hl hvs => simp at hj
+  | call hc hvs hf hlen => simp at hc
   | load h1 h2 hmem => rw [hnv2] at h2; cases h2
   | load_eval hnv2' hv2 => exact ⟨_, hv2, rfl⟩
 
@@ -2357,6 +3020,7 @@ theorem Step.memop_ptreq_inv {M : MachineCtx} {a : List annot}
       out = (Expr [] (Epure (Pexpr [] () (PEval (boolValue b)))), ρ, ctl, σ') := by
   cases h with
   | run hj hl hvs => simp at hj
+  | call hc hvs hf hlen => simp at hc
   | memop_ptreq h1' h2' hmem =>
     rw [h1] at h1'
     rw [h2] at h2'
@@ -2365,6 +3029,26 @@ theorem Step.memop_ptreq_inv {M : MachineCtx} {a : List annot}
     exact ⟨_, _, hmem, rfl⟩
   | memop_eval hnv hv1 hv2 =>
     rw [valueFromPexprs_pair, h1, h2] at hnv
+    cases hnv
+
+/-- Inversion at the pointer-equality memop with VALUE operands, any
+    values (the successor-general form of `memop_ptreq_inv`, for the
+    same-control sweeps): the step is the PtrEq round at two pointers. -/
+theorem Step.memop_vals_inv {M : MachineCtx} {a : List annot} {v1 v2 : value}
+    {ρ : EnvStack} {ctl : Ctl} {σ : Mem} {out : Config}
+    (h : Step M (Expr a (Ememop PtrEq [Pexpr [] () (PEval v1), Pexpr [] () (PEval v2)]),
+      ρ, ctl, σ) out) :
+    ∃ pv1 pv2 b σ', v1 = Vobject (OVpointer pv1) ∧ v2 = Vobject (OVpointer pv2) ∧
+      applyMemM (CerbMem.eqPtrval default pv1 pv2) σ = some (b, σ') ∧
+      out = (Expr [] (Epure (Pexpr [] () (PEval (boolValue b)))), ρ, ctl, σ') := by
+  cases h with
+  | run hj hl hvs => simp at hj
+  | call hc hvs hf hlen => simp at hc
+  | memop_ptreq h1 h2 hmem =>
+    rw [valueFromPexpr_val] at h1 h2
+    exact ⟨_, _, _, _, Option.some.inj h1, Option.some.inj h2, hmem, rfl⟩
+  | memop_eval hnv hv1 hv2 =>
+    rw [valueFromPexprs_pair, valueFromPexpr_val, valueFromPexpr_val] at hnv
     cases hnv
 
 /-- Inversion at a two-operand memop with a NON-value operand list:
@@ -2379,6 +3063,7 @@ theorem Step.memop_op_inv {M : MachineCtx} {a : List annot} {mop : memop}
         [Pexpr [] () (PEval v1), Pexpr [] () (PEval v2)]), ρ, ctl, σ) := by
   cases h with
   | run hj hl hvs => simp at hj
+  | call hc hvs hf hlen => simp at hc
   | memop_ptreq h1 h2 hmem =>
     rw [valueFromPexprs_pair, h1, h2] at hnv
     cases hnv
@@ -2402,6 +3087,7 @@ theorem Step.store_op_inv {M : MachineCtx} {a : List annot}
                 (Pexpr [] () (PEval cv)) mo)))), ρ, ctl, σ) := by
   cases h with
   | run hj hl hvs => simp at hj
+  | call hc hvs hf hlen => simp at hc
   | store h1 h2 h3 hmv hmem => rw [valueFromPexprs_pair, h2, h3] at hnv; cases hnv
   | store_eval hnv' hv2 hv3 => exact ⟨_, _, hv2, hv3, rfl⟩
 

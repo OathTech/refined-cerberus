@@ -46,15 +46,15 @@ def MemTripleU (M : MachineCtx) (ctl : Ctl) (ρ : EnvStack) (e : CoreExpr) (P : 
   ∀ (σ : Mem), Sat M.tagDefs σ (Iris.Std.PartialMap.union P R) →
   ∀ (n : Nat) (aids : Nat → Nat),
     (∀ r, driveU M aids n (M.thread e ρ ctl) σ ≠ .killed r) ∧
-    (driveU M aids n (M.thread e ρ) σ ≠ .stuck) ∧
-    (∀ (v : value) (σ' : Mem), driveU M aids n (M.thread e ρ) σ = .done v σ' →
+    (driveU M aids n (M.thread e ρ ctl) σ ≠ .stuck) ∧
+    (∀ (v : value) (σ' : Mem), driveU M aids n (M.thread e ρ ctl) σ = .done v σ' →
       post R v σ')
 ```
 
 `σ : Mem` is a real engine memory state (`CerbMem.MemState`); `Sat
 M.tagDefs σ (P ∪ R)` is `s |= P` with the frame built in — `P` the
 footprint (a finite map of allocation-rooted cells), `R` an arbitrary
-disjoint rest (§2). `driveU M aids n (M.thread e ρ) σ` is `core_exec`:
+disjoint rest (§2). `driveU M aids n (M.thread e ρ ctl) σ` is `core_exec`:
 `n` rounds of the engine's `step_ctx`, each followed by request
 discharge, at every action-id supply `aids` (§1.3). The conclusion: the
 engine never kills (no undefined behaviour, no error kill), never gets
@@ -222,7 +222,7 @@ the framed label context:
 theorem lr_wps_frame (RF : IProp GF) (sbty : core_base_type)
     (head : CerbMem.PointerValue) :
     iprop(isList (GF := GF) head ns ∗ RF) ⊢
-      wps (procCtx p rs) (frameLs RF (lrLs ns))
+      wps (procCtx rs) (procCtl p) (frameLs RF (lrLs ns))
         (fun w ρ' => iprop(lrPost ns w ρ' ∗ RF))
         (lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head)
         [fmapEmpty] := by
@@ -235,8 +235,9 @@ Section variables not shown: `{hlc : HasLC} {GF : BundledGFunctors}
 [SpikeGS hlc GF]`, `loc ann ra mo`, `pbty cbty bbty nbty ubty`, `ns`,
 and — the load-bearing one — `(p : sym) (rs : core_run_state) (hQ :
 LabeledAt rs p (lrQ loc ann ra mo pbty cbty bbty nbty ubty))`: the
-triple holds at the machine context `procCtx p rs` whose label table is
-the loop's (`procCtx_labels hQ`), which is what lets `wps_run` resolve
+triple holds at the machine context `procCtx rs`, entry control `procCtl
+p`, whose label table is the loop's (`procCtx_labels hQ`), which is what
+lets `wps_run` resolve
 the jump. Read: `{ isList head ns ∗ RF } reverse { ret p'. isList p'
 ns.reverse ∗ RF }`. The unframed proof `lr_wps` is textbook — invariant
 `isList prev reversed ∗ isList cur rest` (`lrLs`), each construct
@@ -593,9 +594,10 @@ The partial judgment `wps M Ls Ψ e ρ` is a guarded fixpoint (iris-lean's
 jump redex, step. `Ls : LabelSpec GF` (`sym → List value → EnvStack →
 IProp GF`) gives each registered label a precondition over its argument
 values and the jump-time environment. The jump rule `wps_run`: under
-`lookupLabel M.labels l = some (params, cont)` and `evalPexprs M.tagDefs
-M.extern (ev0 :: evs) pes = some vs`, `Ls l vs (ev0 :: evs) ⊢ wps M Ls Ψ
-(Expr a (Erun ra l pes)) (ev0 :: evs)` — the label's precondition
+`lookupLabel (M.labelsAt ctl.proc) l = some (params, cont)` and
+`evalPexprs M.tagDefs M.extern (ev0 :: evs) pes = some vs`, `Ls l vs (ev0
+:: evs) ⊢ wps M ctl Ls Ψ (Expr a (Erun ra l pes)) (ev0 :: evs)` — the
+label's precondition
 suffices and tracking stops: a jump's postcondition is the label's
 business. The loop rule assembles the registered bodies' specifications
 with no Löb and no mutual assumption:
@@ -603,10 +605,10 @@ with no Löb and no mutual assumption:
 ```lean
 theorem blockSpecs_intro {Ψ : SpikeVal → EnvStack → IProp GF}
     (h : ∀ l params cont vs ev0 evs,
-      lookupLabel M.labels l = some (params, cont) →
-      Ls l vs (ev0 :: evs) ⊢ wps (GF := GF) M Ls Ψ cont
+      lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
+      Ls l vs (ev0 :: evs) ⊢ wps (GF := GF) M ctl Ls Ψ cont
         (bindArgs params vs (ev0 :: evs))) :
-    ⊢ blockSpecs M Ls Ψ := by
+    ⊢ blockSpecs M ctl Ls Ψ := by
 ```
 
 The one Löb induction lives in the collapse `wps_sound`: `blockSpecs M
@@ -646,10 +648,13 @@ def wpt.pre [SpikeGS hlc GF] (M : MachineCtx) (Ls : LabelSpecT GF)
       iprop(|={⊤}=> ∃ (params : List (sym × core_base_type)) (cont : CoreExpr)
         (vs : List value) (ev0 : Fmap sym value) (evs : List (Fmap sym value))
         (m : Nat),
-        ⌜ρ = ev0 :: evs⌝ ∗ ⌜lookupLabel M.labels lp.1 = some (params, cont)⌝ ∗
+        ⌜ρ = ev0 :: evs⌝ ∗ ⌜lookupLabel (M.labelsAt ctl.proc) lp.1 = some (params, cont)⌝ ∗
         ⌜evalPexprs M.tagDefs M.extern ρ lp.2 = some vs⌝ ∗
         ⌜1 + m ≤ k⌝ ∗ Ls lp.1 m vs ρ)
     | none =>
+      match callRedex? e with
+      | some _ => iprop(⌜False⌝)   -- calls arc C2: no call rule yet (C3)
+      | none =>
       match k with
       | 0 => iprop(⌜False⌝)
       | _ + 1 =>
@@ -700,8 +705,9 @@ engine — the loop's `driveU` rests in `.more` at every drive length
 **What a loop client supplies** (`LoopExhibit.lean`, the counter loop):
 a `LabelMap` and a `core_run_state` whose `labeled` fiber at the
 procedure symbol is that map (`loopQ`, `loopRS`); the machine context
-`procCtx p rs` (Step.lean), whose label table is derived from `rs` by
-`procCtx_labels (hQ : LabeledAt rs p Q) : (procCtx p rs).labels = Q` —
+`procCtx rs` (Step.lean) with the entry control `procCtl p`, whose label
+table is derived from `rs` by `procCtx_labels (hQ : LabeledAt rs p Q) :
+(procCtx rs).labelsAt (procCtl p).proc = Q` —
 `LabeledAt` (Soundness.lean) is the engine's own lookup `fmapLookupBy
 ordCompare p rs.labeled = some Q`; the Iris proof carries `hQ` as a
 section `variable`, the engine face discharges it by computation
@@ -1218,8 +1224,10 @@ refuses an allocation).
 
 ## 5. The engine attachment
 
-`Step M : CoreExpr × EnvStack × Mem → CoreExpr × EnvStack × Mem → Prop`
-(Step.lean) is a hand-written small-step relation over the engine's
+`Step M : Config → Config → Prop` with `Config := CoreExpr × EnvStack ×
+Ctl × Mem` (Step.lean; the live control `Ctl` = call stack, current
+procedure, execution location — written by exactly two rules, the call
+and the return, calls arc C2) is a hand-written small-step relation over the engine's
 generated types, each rule with a citation into the engine in its
 docstring; it has zero authority. iris-lean runs it:
 
@@ -1281,16 +1289,17 @@ environment and `esize e ≤ lemDefaultFuel`:
 ```lean
 theorem engine_step_matchU {M : MachineCtx}
     {e e' : CoreExpr} {ev0 : Fmap sym value} {evs : List (Fmap sym value)}
-    {ρ' : EnvStack} {σ σ' : Mem}
+    {ρ' : EnvStack} {ctl ctl' : Ctl} {σ σ' : Mem}
     (hf : Frag e) (hsz : esize e ≤ lemDefaultFuel)
-    (hs : Step M (e, ev0 :: evs, σ) (e', ρ', σ')) :
-    CerberusRound M (e, ev0 :: evs, σ) (e', ρ', σ') := by
+    (hs : Step M (e, ev0 :: evs, ctl, σ) (e', ρ', ctl', σ')) :
+    CerberusRound M (e, ev0 :: evs, ctl, σ) (e', ρ', ctl', σ') := by
 ```
 
-Note the successor thread `M.thread e' ρ' ctl`: the engine's successor
+Note the successor thread `M.thread e' ρ' ctl'`: the engine's successor
 carries `M`'s immutable fields, `current_loc` included — which is why
-the fragment is annotation-free (§7) — and the configuration's control
-unchanged (no rule of this slice writes it, `Step.ctl_eq`).
+the fragment is annotation-free (§7) — and the successor CONTROL: the
+call round pushes the frame, the return round pops it, every other
+round threads it (`Step.ctl_cases`; calls arc C2).
 `cerberusRound_classify` (plus `hwf : M.SeqWF` and the empty-stack
 control `hκ : ctl.κ = []`) sorts every `Frag` configuration into `value_done` (a
 bare value; the engine's step list is PROGRAM-DONE, `[Step_done2 v]`),
@@ -1313,8 +1322,8 @@ classified refusal, or the configuration is in the two-arm residual:
 theorem frag_round_complete {M : MachineCtx}
     {e : CoreExpr} {ev0 : Fmap sym value} {evs : List (Fmap sym value)} {σ : Mem}
     (hf : Frag e) (hsz : esize e ≤ lemDefaultFuel) (hnv : toVal e = none) :
-    (∃ c', Step M (e, ev0 :: evs, σ) c') ∨
-    ShippedRefusal M (e, ev0 :: evs, σ) ∨ OpenRound M (e, ev0 :: evs, σ)
+    RoundComplete M (e, ev0 :: evs, ctl, σ)
+-- i.e. (∃ c', Step M c c') ∨ ShippedRefusal M c ∨ OpenRound M c at c := (e, ev0 :: evs, ctl, σ)
 ```
 
 The refusal vocabulary `ShippedRefusal` is the shipped driver's own:
@@ -1528,15 +1537,25 @@ the `#print axioms` recipe are in the README, "How to build and verify".
 
 ## 7. What is deliberately out, and why
 
-- **Procedures.** The static dispose rule landed in K2 and the
-  dynamic `alloc`/`free` rules in K3 (§4); procedure specifications
-  (incl. recursion) are the calls arc; its first slice C1 (2026-09-03)
+- **Procedure specifications.** The static dispose rule landed in K2
+  and the dynamic `alloc`/`free` rules in K3 (§4); procedure
+  specifications (incl. recursion) are the calls arc: C1 (2026-09-03)
   made the thread's control — call stack, current procedure, execution
-  location — LIVE STATE (`Ctl`, the fourth configuration component)
-  without adding a rule. Their absence is structural, not hidden: the
-  empty-stack entry control (`ctl.κ = []`) is a premise wherever a
-  general control appears, and `MachineCtx.SeqWF` (startup thread)
-  wherever a general context does.
+  location — LIVE STATE (`Ctl`, the fourth configuration component); C2
+  added the two rules that write it, `Step.call` (the PCALL round, the
+  call redex's evaluation context CAPTURED on the stack) and `Step.ret`
+  (the RETURN round, the value plugged back into it), certified them
+  (`engine_step_matchU` at a free successor control; the two-procedure
+  smoke rounds in `Examples/MirrorCoverage.lean`) and classified them
+  (`complete_call`: `call_proc`'s two `Illformed_program` kills verbatim;
+  `complete_ret`: a value under a frame always steps) — with NO logic
+  rule: the judgments are `⌜False⌝` at a call redex until C3's call
+  clause and specification table. The absence is structural, not hidden:
+  the guard, the empty-stack entry control (`ctl.κ = []`) wherever a
+  general control appears, `MachineCtx.SeqWF` (startup thread) wherever
+  a general context does, and — for the `driveU` adequacy exports, whose
+  NotStuck oracle is the raw WP — the procedure well-formedness premise
+  `MachineCtx.FragProcs` (vacuous at both profiles).
 - **The static kill of a region, `free` of a created object,
   `free(NULL)`, the zero-cost `alloc`.** In the fragment, mirrored and
   classified (`complete_kill`/`complete_alloc`), covered by no rule —

@@ -307,6 +307,81 @@ theorem loop_step_tau {dst : driver_state} {th th' : thread_state} {s : String}
       rfl
     · rfl
 
+/-- One loop iteration from a singleton advanceable step whose shipped
+    advance is active and wakeup-free (the thread-0 instance of Round.lean's
+    `loop_step_of_advance`, stated here for the RETURN round). -/
+theorem loop_step_of_advance0 {dst dst' : driver_state} {th : thread_state} {s0 : core_step2}
+    (hth : dst.core_state0.thread_states = [(0, (none, th))])
+    (hsteps : step_ctx tds dst.layout_state dst.core_file dst.core_extern 0 (none, th) = [s0])
+    (hca : can_advance s0 = true)
+    (hadv : runOne (advance_step tds 0 s0) dst = (NDactive NOWAKEUP, dst')) :
+    runOne (drive_nonmemory_steps_aux2_lemFuel (Nat.succ fl) tds acc [0]) dst =
+      runOne (drive_nonmemory_steps_aux2_lemFuel fl tds acc [0]) dst' := by
+  conv => lhs; unfold drive_nonmemory_steps_aux2_lemFuel
+  refine (runOne_bind_active (z := [s0]) (s' := dst) ?_).trans ?_
+  · rw [runOne_read]
+    refine congrArg (fun x => (NDactive x, dst)) ?_
+    show (let th_info := match lookupBy (fun x y => x == y) 0
+            dst.core_state0.thread_states with
+          | some z => z
+          | none => failwithI _;
+        step_ctx tds dst.layout_state dst.core_file dst.core_extern 0 th_info) = _
+    rw [hth]
+    exact hsteps
+  · dsimp only [find_can_advance]
+    rw [hca, if_pos rfl]
+    refine (runOne_bind_active (z := NOWAKEUP) (s' := dst') hadv).trans ?_
+    rfl
+
+/-- `advance_step`'s tau arm at ANY task kind (Driver.lean:336): the
+    `TSK_Return` kind pushes `ME_function_return` on the trace, the others
+    leave it — the trace is existential; thread updated, counter ticked. -/
+theorem advance_tau_tsk0 (s : String) (tsk : core_tau_step_kind) (th' : thread_state)
+    (dst : driver_state) :
+    ∃ tr : List trace_event,
+      runOne (advance_step tds 0 (Step_tau2 s tsk th')) dst =
+        (NDactive NOWAKEUP,
+         { { { dst with trace := tr } with dr_step_counter := dst.dr_step_counter + 1 }
+             with core_state0 := update_thread_state 0 th' dst.core_state0 }) := by
+  unfold advance_step
+  dsimp only
+  cases tsk with
+  | TSK_Return sym1 mval_opt =>
+    refine ⟨ME_function_return sym1 mval_opt :: dst.trace, ?_⟩
+    refine (runOne_bind_active (z := ())
+      (s' := { dst with trace := ME_function_return sym1 mval_opt :: dst.trace })
+      (by rfl)).trans ?_
+    refine (runOne_bind_active (z := ()) (by rfl)).trans ?_
+    rfl
+  | TSK_Ccall sym1 mvals =>
+    refine ⟨dst.trace, ?_⟩
+    refine (runOne_bind_active (z := ()) (s' := dst) (by rfl)).trans ?_
+    refine (runOne_bind_active (z := ()) (by rfl)).trans ?_
+    rfl
+  | TSK_Misc =>
+    refine ⟨dst.trace, ?_⟩
+    refine (runOne_bind_active (z := ()) (s' := dst) (by rfl)).trans ?_
+    refine (runOne_bind_active (z := ()) (by rfl)).trans ?_
+    rfl
+
+/-- Tau round at ANY task kind (calls arc C2 — the RETURN round's
+    `Step_tau2 "end of procedure" tsk`, whose `tsk` is `TSK_Return` when
+    `file.funinfo` names the procedure): as `loop_step_tau`, plus the
+    trace push `advance_step` makes for `TSK_Return` (Driver.lean:336;
+    existential — the trace is driver bookkeeping). -/
+theorem loop_step_tau_tsk {dst : driver_state} {th th' : thread_state} {s : String}
+    {tsk : core_tau_step_kind}
+    (hth : dst.core_state0.thread_states = [(0, (none, th))])
+    (hsteps : step_ctx tds dst.layout_state dst.core_file dst.core_extern 0
+      (none, th) = [Step_tau2 s tsk th']) :
+    ∃ tr : List trace_event,
+      runOne (drive_nonmemory_steps_aux2_lemFuel (Nat.succ fl) tds acc [0]) dst =
+        runOne (drive_nonmemory_steps_aux2_lemFuel fl tds acc [0])
+          { { { dst with trace := tr } with dr_step_counter := dst.dr_step_counter + 1 }
+              with core_state0 := update_thread_state 0 th' dst.core_state0 } := by
+  obtain ⟨tr, hadv⟩ := advance_tau_tsk0 tds s tsk th' dst
+  exact ⟨tr, loop_step_of_advance0 fl tds acc hth hsteps rfl hadv⟩
+
 /-- Done round (two loop iterations): PROGRAM-DONE is not advanceable
     (can_advance, Driver.lean:310), so the singleton is recorded in
     the step map and the drained list returns it — the state
@@ -1296,7 +1371,7 @@ tied to the DRIVER'S CURRENT run state by `hQd`); the returned run
 state either is untouched (taus, with-runstate verbatim, memop) or
 gets its aid ticked (actions) — `labeled` is preserved either way,
 which is what keeps the next round's jump certifiable. -/
-theorem loop_step_frag {M₀ : MachineCtx} {ctl : Ctl}
+theorem loop_step_frag_same {M₀ : MachineCtx} {ctl : Ctl}
     (htd : M₀.tagDefs = fmapEmpty) (hex : M₀.extern = fmapEmpty)
     {Q : LabelMap} (hlb : M₀.labelsAt ctl.proc = Q)
     {p : sym} {th₀ : thread_state} (hproc : th₀.current_proc_opt = some p)
@@ -1320,16 +1395,32 @@ theorem loop_step_frag {M₀ : MachineCtx} {ctl : Ctl}
               layout_state := σ',
               core_run_state0 := rs', trace := tr,
               dr_step_counter := ctr } := by
-  have hnv : toVal e = none := hs.toVal_none
+  cases hv : toVal e with
+  | some w =>
+    have he := ofVal_of_toVal hv
+    subst he
+    cases w with
+    | pure v => exact (Step.pure_val_elim hs rfl).elim
+    | annot ds v =>
+      -- REMOVE-ANNOT at a non-empty call stack (`Step.ret_annot`): the
+      -- engine's tau, in place
+      obtain ⟨rfl, rfl, rfl, -⟩ := Step.annot_val_inv hs rfl
+      refine ⟨dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, ?_⟩
+      exact loop_step_tau fl fmapEmpty acc hth
+        (step_ctx_remove_annot ds v fmapEmpty dst.layout_state dst.core_file
+          dst.core_extern 0 none { th₀ with arena := ofVal (.annot ds v), env := ev0 :: evs } rfl)
+  | none =>
+  have hnv : toVal e = none := hv
   obtain ⟨ctx, r, hd, hfr⟩ := hf.decomp hnv
-  rcases hd.step_factor hs with ⟨r', ρr, σr, hnr, hr, heq⟩ |
-    ⟨ra, l, pes, rfl, hr⟩
+  rcases hd.step_factor hs with ⟨r', ρr, σr, hnr, hnc, hr, heq⟩ |
+    ⟨ra, l, pes, rfl, hr⟩ | ⟨ra, f, pes, params, body, vs, rfl, -, -, -, hcout⟩
   · obtain ⟨he', hρ', hσ'⟩ : e' = apply_ctx ctx r' ∧ ρ' = ρr ∧ σ' = σr := by
       simpa [Prod.mk.injEq] using heq
     subst he' hρ' hσ'
     have hccall := hd.unseq_ccall_false
     have hrj := hd.redex
     cases hrj with
+    | call ra f pes => exact absurd rfl (hnc ra f pes)
     | @store loc ann lk ty pv cv mo =>
       obtain ⟨mv, fp, σ'', hmv, hmem, hout⟩ := hr.store_inv
       rw [htd] at hmv hmem
@@ -1471,14 +1562,15 @@ theorem loop_step_frag {M₀ : MachineCtx} {ctl : Ctl}
       exact loop_step_withrs_eval fl fmapEmpty acc hth hsteps
         (hm dst.core_run_state0)
     | @beta_pure pa bty v e2 =>
-      rcases hr.sseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
+      rcases hr.sseq_inv with ⟨e1', ρ'', σ'', hnj, hnv', hstep, hout⟩ |
           ⟨_, _, v', _, _, _, he1, _, hout⟩ |
           ⟨_, _, ds', v', _, _, _, he1, _, hout⟩ |
           ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩ |
           ⟨_, _, _, _, _, _, _, hpat, _, _, _⟩ |
           ⟨_, _, _, _, _, _, _, _, hpat, _, _, _⟩ |
-          ⟨_, _, _, _, _, _, hpat, _, _, _⟩
-      · exact absurd hstep (fun h => Step.val_elim h)
+          ⟨_, _, _, _, _, _, hpat, _, _, _⟩ |
+          hcall
+      · rw [toVal_ofVal] at hnv'; cases hnv'
       · obtain rfl : v' = v := by
           have : ofVal (.pure v') = ofVal (.pure v) := he1.symm
           simpa [ofVal] using this
@@ -1496,15 +1588,17 @@ theorem loop_step_frag {M₀ : MachineCtx} {ctl : Ctl}
       · exact (specPat_ne_base hpat).elim
       · exact (specPat_ne_base hpat).elim
       · exact (symPat_ne_base hpat).elim
+      · exact hcall.ne_same_ctl.elim
     | @beta_annot pa bty ds v e2 =>
-      rcases hr.sseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
+      rcases hr.sseq_inv with ⟨e1', ρ'', σ'', hnj, hnv', hstep, hout⟩ |
           ⟨_, _, v', _, _, _, he1, _, hout⟩ |
           ⟨_, _, ds', v', _, _, _, he1, _, hout⟩ |
           ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩ |
           ⟨_, _, _, _, _, _, _, hpat, _, _, _⟩ |
           ⟨_, _, _, _, _, _, _, _, hpat, _, _, _⟩ |
-          ⟨_, _, _, _, _, _, hpat, _, _, _⟩
-      · exact absurd hstep (fun h => Step.val_elim h)
+          ⟨_, _, _, _, _, _, hpat, _, _, _⟩ |
+          hcall
+      · rw [toVal_ofVal] at hnv'; cases hnv'
       · exact absurd he1 (by simp [ofVal])
       · obtain ⟨hds, hv⟩ : ds = ds' ∧ v = v' := by simpa [ofVal] using he1
         subst hds hv
@@ -1521,12 +1615,14 @@ theorem loop_step_frag {M₀ : MachineCtx} {ctl : Ctl}
       · exact (specPat_ne_base hpat).elim
       · exact (specPat_ne_base hpat).elim
       · exact (symPat_ne_base hpat).elim
+      · exact hcall.ne_same_ctl.elim
     | @wbeta_pure pa bty v e2 =>
-      rcases hr.wseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
+      rcases hr.wseq_inv with ⟨e1', ρ'', σ'', hnj, hnv', hstep, hout⟩ |
           ⟨_, _, v', _, _, _, he1, _, hout⟩ |
           ⟨_, _, ds', v', _, _, _, he1, _, hout⟩ |
-          ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩
-      · exact absurd hstep (fun h => Step.val_elim h)
+          ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩ |
+          hcall
+      · rw [toVal_ofVal] at hnv'; cases hnv'
       · obtain rfl : v' = v := by
           have : ofVal (.pure v') = ofVal (.pure v) := he1.symm
           simpa [ofVal] using this
@@ -1541,12 +1637,14 @@ theorem loop_step_frag {M₀ : MachineCtx} {ctl : Ctl}
             dst.core_file dst.core_extern 0 none _ rfl rfl)
       · exact absurd he1 (by simp [ofVal])
       · rw [jumpRedex?_ofVal] at hj; cases hj
+      · exact hcall.ne_same_ctl.elim
     | @wbeta_annot pa bty ds v e2 =>
-      rcases hr.wseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
+      rcases hr.wseq_inv with ⟨e1', ρ'', σ'', hnj, hnv', hstep, hout⟩ |
           ⟨_, _, v', _, _, _, he1, _, hout⟩ |
           ⟨_, _, ds', v', _, _, _, he1, _, hout⟩ |
-          ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩
-      · exact absurd hstep (fun h => Step.val_elim h)
+          ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩ |
+          hcall
+      · rw [toVal_ofVal] at hnv'; cases hnv'
       · exact absurd he1 (by simp [ofVal])
       · obtain ⟨hds, hv⟩ : ds = ds' ∧ v = v' := by simpa [ofVal] using he1
         subst hds hv
@@ -1560,10 +1658,12 @@ theorem loop_step_frag {M₀ : MachineCtx} {ctl : Ctl}
           (step_ctx_wseq_annot hd hsz fmapEmpty dst.layout_state
             dst.core_file dst.core_extern 0 none _ rfl rfl)
       · rw [jumpRedex?_ofVal] at hj; cases hj
+      · exact hcall.ne_same_ctl.elim
     | @merge ds1 ds2 b hirr =>
       rcases hr.annot_inv with ⟨hg, hnj, b', ρ'', σ'', hstep, hout⟩ |
           ⟨a2, ds2', c, hbeq, hout⟩ |
-          ⟨l, pes, params, cont, vs, _, _, hg, hj, _, _, _, _⟩
+          ⟨l, pes, params, cont, vs, _, _, hg, hj, _, _, _, _⟩ |
+          ⟨-, hcall⟩ | ⟨v', pc', κ', ha', hb', hκ', hout'⟩
       · rw [show annotRooted (Expr ([] : List annot) (Eannot ds2 b)) = true
           from rfl] at hg
         cases hg
@@ -1582,6 +1682,8 @@ theorem loop_step_frag {M₀ : MachineCtx} {ctl : Ctl}
       · rw [show annotRooted (Expr ([] : List annot) (Eannot ds2 b)) = true
           from rfl] at hg
         cases hg
+      · exact hcall.ne_same_ctl.elim
+      · cases hb'
     | save sb ps body =>
       have hdep : ∀ pe ∈ saveParamPexprs ps, peDepth pe ≤ lemDefaultFuel := by
         cases hfr with
@@ -1663,7 +1765,7 @@ theorem loop_step_frag {M₀ : MachineCtx} {ctl : Ctl}
         cases hfr with
         | val_pure v => rw [valueFromPexpr_val] at hnv2; cases hnv2
         | pure_sym => exact ⟨_, _, rfl⟩
-      obtain ⟨v, -, hv, hout⟩ := hr.pure_inv
+      obtain ⟨v, -, hv, hout⟩ := hr.pure_inv hnv2
       obtain ⟨h1, h2, h3⟩ : r' = Expr [] (Epure (Pexpr [] () (PEval v))) ∧
           ρ' = ev0 :: evs ∧ σ' = dst.layout_state := by
         simpa [Prod.mk.injEq] using hout
@@ -1700,14 +1802,15 @@ theorem loop_step_frag {M₀ : MachineCtx} {ctl : Ctl}
       exact loop_step_withrs_eval fl fmapEmpty acc hth hsteps
         (hm dst.core_run_state0)
     | @beta_spec pa pb x bty w e2 =>
-      rcases hr.sseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
+      rcases hr.sseq_inv with ⟨e1', ρ'', σ'', hnj, hnv', hstep, hout⟩ |
           ⟨_, _, v', _, _, hpat, he1, _, hout⟩ |
           ⟨_, _, ds', v', _, _, hpat, he1, _, hout⟩ |
           ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩ |
           ⟨pa', pb', x', bty', ov', _, _, hpat, he1, _, hout⟩ |
           ⟨pa', pb', x', bty', ds', ov', _, _, hpat, he1, _, hout⟩ |
-          ⟨pa', x', bty', v', _, _, hpat, he1, _, hout⟩
-      · exact absurd hstep (fun h => Step.val_elim h)
+          ⟨pa', x', bty', v', _, _, hpat, he1, _, hout⟩ |
+          hcall
+      · rw [toVal_ofVal] at hnv'; cases hnv'
       · exact (specPat_ne_base hpat.symm).elim
       · exact (specPat_ne_base hpat.symm).elim
       · rw [jumpRedex?_ofVal] at hj; cases hj
@@ -1750,20 +1853,16 @@ theorem loop_step_frag {M₀ : MachineCtx} {ctl : Ctl}
           (step_ctx_beta_spec_annot hd hsz fmapEmpty dst.layout_state
             dst.core_file dst.core_extern 0 none _ rfl rfl)
       · exact (symPat_ne_spec hpat).elim
+      · exact hcall.ne_same_ctl.elim
     | @memop mop pes =>
       cases hfr with
       | memop_vals v1 v2 =>
-        cases hr with
-        | run hj hl hvs => simp [memopRedex] at hj
-        | memop_eval hnv hv1' hv2' =>
-          rw [valueFromPexprs_pair, valueFromPexpr_val,
-            valueFromPexpr_val] at hnv
-          cases hnv
-        | @memop_ptreq _ _ _ pv1 pv2 b _ _ _ _ h1 h2 hmem =>
-          rw [valueFromPexpr_val] at h1 h2
-          obtain rfl : v1 = Vobject (OVpointer pv1) := Option.some.inj h1
-          obtain rfl : v2 = Vobject (OVpointer pv2) := Option.some.inj h2
-          have hsteps := step_ctx_memop hd hsz rfl rfl fmapEmpty
+        obtain ⟨pv1, pv2, b, σ'', rfl, rfl, hmem, hout⟩ := hr.memop_vals_inv
+        obtain ⟨h1, h2, h3⟩ : r' = Expr [] (Epure (Pexpr [] () (PEval (boolValue b)))) ∧
+            ρ' = ev0 :: evs ∧ σ' = σ'' := by
+          simpa [Prod.mk.injEq] using hout
+        subst h1 h2 h3
+        · have hsteps := step_ctx_memop hd hsz rfl rfl fmapEmpty
             dst.layout_state dst.core_file dst.core_extern 0 none
             { th₀ with arena := e, env := ev0 :: evs } rfl
           rw [hccall] at hsteps
@@ -1815,14 +1914,15 @@ theorem loop_step_frag {M₀ : MachineCtx} {ctl : Ctl}
       exact loop_step_withrs_eval fl fmapEmpty acc hth hsteps
         (hm dst.core_run_state0)
     | @beta_sym pa x bty w e2 =>
-      rcases hr.sseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
+      rcases hr.sseq_inv with ⟨e1', ρ'', σ'', hnj, hnv', hstep, hout⟩ |
           ⟨_, _, v', _, _, hpat, he1, _, hout⟩ |
           ⟨_, _, ds', v', _, _, hpat, he1, _, hout⟩ |
           ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩ |
           ⟨pa', pb', x', bty', ov', _, _, hpat, he1, _, hout⟩ |
           ⟨pa', pb', x', bty', ds', ov', _, _, hpat, he1, _, hout⟩ |
-          ⟨pa', x', bty', v', _, _, hpat, he1, _, hout⟩
-      · exact absurd hstep (fun h => Step.val_elim h)
+          ⟨pa', x', bty', v', _, _, hpat, he1, _, hout⟩ |
+          hcall
+      · rw [toVal_ofVal] at hnv'; cases hnv'
       · exact (symPat_ne_base hpat.symm).elim
       · exact (symPat_ne_base hpat.symm).elim
       · rw [jumpRedex?_ofVal] at hj; cases hj
@@ -1845,6 +1945,7 @@ theorem loop_step_frag {M₀ : MachineCtx} {ctl : Ctl}
         exact loop_step_tau fl fmapEmpty acc hth
           (step_ctx_beta_sym_pure hd hsz fmapEmpty dst.layout_state
             dst.core_file dst.core_extern 0 none _ rfl rfl)
+      · exact hcall.ne_same_ctl.elim
   · -- the jump disjunct: the context is discarded, the label read
     -- resolves in the DRIVER'S run state through the tie hQd
     obtain ⟨params, cont, vs, ev0', evs', hρeq, hl, hvs, hout⟩ :=
@@ -1867,5 +1968,112 @@ theorem loop_step_frag {M₀ : MachineCtx} {ctl : Ctl}
     exact loop_step_withrs_eval fl fmapEmpty acc hth hsteps
       (hm dst.core_run_state0
         (by rw [hext, resolveExtern_empty]; exact hQd))
+  · exact absurd (congrArg (fun c : Config => c.2.2.1.κ) hcout) (by simp)
+
+/-- THE DRIVER STEP-MATCH AT THE LIVE CONTROL (calls arc C2 — the C1
+    range audit's M-1 obligation: the mirror's control TIED to the
+    driver thread's control fields). The driver thread is `th₀` with the
+    live `(e, ρ)` installed and its three control fields equal to the
+    mirror's `ctl` (`hstack`/`hproc`/`hel`) and its `current_loc` the
+    context's (`hcl`; what the PCALL arm pushes onto `exec_loc`); the
+    file is the context's (`hfile`; what `call_proc` reads). Wherever
+    the mirror steps at a cone configuration — control-preserving,
+    CALL or RETURN — the production driver's per-thread round advances
+    the singleton thread to EXACTLY the mirror's successor, the three
+    control fields written to the successor control's. Proof: the
+    control-preserving rounds are `loop_step_frag_same` (the successor's
+    control fields are `th₀`'s own, by the ties); the CALL round is
+    `step_ctx_call_ws` + `loop_step_withrs_eval` (run state verbatim);
+    the RETURN round is `step_ctx_ret` + `loop_step_tau_tsk` (trace
+    existential). -/
+theorem loop_step_frag {M₀ : MachineCtx} {ctl ctl' : Ctl}
+    (htd : M₀.tagDefs = fmapEmpty) (hex : M₀.extern = fmapEmpty)
+    {Q : LabelMap} (hlb : M₀.labelsAt ctl.proc = Q)
+    {p : sym} (hp : ctl.proc = some p) {th₀ : thread_state}
+    (hstack : th₀.stack0 = ctl.toStack) (hproc : th₀.current_proc_opt = ctl.proc)
+    (hel : th₀.exec_loc = ctl.execLoc) (hcl : th₀.current_loc = M₀.currentLoc)
+    (fl : Nat) (acc : Fmap thread_id (List core_step2))
+    {dst : driver_state} {e e' : CoreExpr} {ev0 : Fmap sym value}
+    {evs : List (Fmap sym value)} {ρ' : EnvStack} {σ' : Mem}
+    (hth : dst.core_state0.thread_states =
+      [(0, (none, { th₀ with arena := e, env := ev0 :: evs }))])
+    (hext : dst.core_extern = fmapEmpty) (hfile : dst.core_file = M₀.file)
+    (hQd : LabeledAt dst.core_run_state0 p Q)
+    (hf : Frag e) (hsz : esize e ≤ lemDefaultFuel)
+    (hs : Step M₀ (e, ev0 :: evs, ctl, dst.layout_state) (e', ρ', ctl', σ')) :
+    ∃ (rs' : core_run_state) (tr : List trace_event) (ctr : Nat),
+      rs'.labeled = dst.core_run_state0.labeled ∧
+      runOne (drive_nonmemory_steps_aux2_lemFuel (Nat.succ fl)
+          fmapEmpty acc [0]) dst =
+        runOne (drive_nonmemory_steps_aux2_lemFuel fl fmapEmpty acc [0])
+          { dst with
+              core_state0 := update_thread_state 0
+                { th₀ with
+                  arena := e'
+                  env := ρ'
+                  stack0 := ctl'.toStack
+                  current_proc_opt := ctl'.proc
+                  exec_loc := ctl'.execLoc } dst.core_state0,
+              layout_state := σ',
+              core_run_state0 := rs', trace := tr,
+              dr_step_counter := ctr } := by
+  rcases hs.ctl_cases with heq |
+      ⟨ctx, f, pes, params, body, vs, hc, hvs, hfl, hlen, rfl, rfl, rfl, rfl⟩ |
+      ⟨v, ev0', evs', pq, ctx, κ, q, ℓ, he, hρ, hctl, rfl, rfl, rfl, rfl⟩
+  · -- control-preserving: the successor's control fields are th₀'s own
+    subst heq
+    obtain ⟨rs', tr, ctr, hlab, hrun⟩ :=
+      loop_step_frag_same htd hex hlb (hproc.trans hp) fl acc hth hext hQd hf hsz hs
+    refine ⟨rs', tr, ctr, hlab, ?_⟩
+    rw [hrun, ← hstack, ← hproc, ← hel]
+  · -- THE CALL
+    have hnv : toVal e = none := by
+      cases hv : toVal e with
+      | none => rfl
+      | some w =>
+        have he := ofVal_of_toVal hv
+        subst he
+        rw [callRedex?_ofVal] at hc
+        cases hc
+    obtain ⟨ctx', r, hd, hfr⟩ := hf.decomp hnv
+    obtain ⟨rfl, ra, rfl⟩ := hd.callRedex?_inv hc
+    have hdep : ∀ pe ∈ pes, peDepth pe ≤ lemDefaultFuel := by
+      cases hfr with
+      | call _ hdep => exact hdep
+    rw [htd, hex] at hvs
+    obtain ⟨m, hsteps, hm⟩ := step_ctx_call_ws hd hsz hdep fmapEmpty dst.layout_state
+      dst.core_file dst.core_extern 0 none { th₀ with arena := e, env := ev0 :: evs } rfl
+      (by rw [hext]; exact hvs) (by rw [hfile, hext, ← hex]; exact hfl) hlen
+    refine ⟨dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, ?_⟩
+    rw [loop_step_withrs_eval fl fmapEmpty acc hth hsteps (hm dst.core_run_state0)]
+    show _ = runOne (drive_nonmemory_steps_aux2_lemFuel fl fmapEmpty acc [0]) _
+    rw [show ({ th₀ with arena := e, env := ev0 :: evs } : thread_state).current_proc_opt =
+        ctl.proc from hproc,
+      show ({ th₀ with arena := e, env := ev0 :: evs } : thread_state).stack0 =
+        ctl.toStack from hstack,
+      show ({ th₀ with arena := e, env := ev0 :: evs } : thread_state).exec_loc =
+        ctl.execLoc from hel,
+      show ({ th₀ with arena := e, env := ev0 :: evs } : thread_state).current_loc =
+        M₀.currentLoc from hcl]
+    rcases dst with ⟨cf, ce, cs, crs, ls, cc, fs, tr0, sa, bl, ctr0⟩
+    rfl
+  · -- THE RETURN
+    subst hctl
+    injection hρ with h1 h2
+    subst h1
+    subst h2
+    subst he
+    obtain ⟨tsk, hsteps⟩ := step_ctx_ret v fmapEmpty dst.layout_state dst.core_file
+      dst.core_extern 0 none
+      { th₀ with arena := Expr [] (Epure (Pexpr [] () (PEval v))), env := ev0 :: evs }
+      rfl hstack rfl
+    obtain ⟨tr, hrun⟩ := loop_step_tau_tsk fl fmapEmpty acc hth hsteps
+    refine ⟨dst.core_run_state0, tr, dst.dr_step_counter + 1, rfl, ?_⟩
+    rw [hrun]
+    show _ = runOne (drive_nonmemory_steps_aux2_lemFuel fl fmapEmpty acc [0]) _
+    rw [show ({ th₀ with arena := Expr [] (Epure (Pexpr [] () (PEval v))), env := ev0 :: evs } :
+        thread_state).exec_loc = ℓ from hel]
+    rcases dst with ⟨cf, ce, cs, crs, ls, cc, fs, tr0, sa, bl, ctr0⟩
+    rfl
 
 end CerberusHeapLang

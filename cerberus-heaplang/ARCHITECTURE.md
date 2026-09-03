@@ -31,15 +31,21 @@ a relation on configurations `Config := CoreExpr × EnvStack × Ctl ×
 Mem` (Core expression, environment stack, the thread's LIVE CONTROL
 `Ctl` — call stack `κ`, current procedure `proc`, execution location
 `execLoc`, the three `thread_state` fields the engine's PCALL/RETURN
-arms write; calls arc C1 made them live, no rule writes them yet —
-and memory) covering the fragment `Frag` (Soundness.lean) — and it is
+arms write; calls arc C1 made them live, C2 added the two rules that
+write them: `Step.call` — stated at the WHOLE expression like the jump,
+the captured context computed by the syntactic search `callRedex?`,
+certified against get_ctx's decomposition — pushes `(ctl.proc, ctx)`,
+`Step.ret` pops it, every other rule threads the control
+(`Step.ctl_cases`) — and memory) covering the fragment `Frag`
+(Soundness.lean) — and it is
 the `primStep` of the iris-lean `Language` instance (Lang.lean). The
 mirror has no authority; its certification is `engine_step_matchU`
 (Round.lean), stated exactly as `theorem engine_step_matchU {M :
 MachineCtx} … (hf : Frag e) (hsz : esize e ≤ lemDefaultFuel) (hs : Step
-M (e, ev0 :: evs, ctl, σ) (e', ρ', ctl, σ')) : CerberusRound M (e, ev0 ::
-evs, ctl, σ) (e', ρ', ctl, σ')` — on `Frag`, at a cons-shaped
-environment, at ANY control, with `esize e ≤ lemDefaultFuel`, and no
+M (e, ev0 :: evs, ctl, σ) (e', ρ', ctl', σ')) : CerberusRound M (e, ev0 ::
+evs, ctl, σ) (e', ρ', ctl', σ')` — on `Frag`, at a cons-shaped
+environment, at ANY control and ANY successor control (the call and
+return rounds write it), with `esize e ≤ lemDefaultFuel`, and no
 well-formedness premise (`SeqWF` and the empty-stack control `ctl.κ =
 []` are premises of `cerberusRound_classify` only, for its `value_done`
 arm): every
@@ -62,9 +68,12 @@ consumed by NO adequacy export — the adequacy chain does not go through
 it: the `driveU` lanes (partial `drive_classifyU`, total `wpt_drive_aux`)
 discharge each drive step with the device lemma `outcomesU_of_step`
 (Soundness.lean, over `dischargeStep`), and the production collapse
-(`prod_run_eqJ`) consumes `loop_step_frag` (DriverCollapse.lean), which
-is proved independently of `CerberusRound` by its own per-redex case
-analysis (Round.lean header, "WHAT CONSUMES WHAT").
+(`prod_run_eqJ`) consumes `loop_step_frag_same` (DriverCollapse.lean,
+the control-preserving core of the live-control `loop_step_frag`, which
+ties the mirror's `ctl` to the driver thread's control fields and admits
+the call and return rounds), proved independently of `CerberusRound` by
+its own per-redex case analysis (Round.lean header, "WHAT CONSUMES
+WHAT").
 
 The certification is ONE-DIRECTIONAL: mirror step ⇒ shipped round;
 `step_iff_cerberusRound` is two-sided under the hypothesis that a
@@ -148,10 +157,17 @@ drive length. Total: `wpt_drive_aux` and `wpt_engine_boundU`
 `driveU M aids k … = .done v σ'`. Both are stated over `driveU`
 (Adequacy.lean), this package's loop {`step_ctx` → `dischargeStep`}.
 Why the mirror suffices: `NotStuck` supplies a mirror step at every
-reachable configuration and the device lemma `outcomesU_of_step`
-(Soundness.lean) makes it the drive's unique outcome
-(`drive_classifyU`); the shipped-round certification
-`engine_step_matchU` (§2) is not consumed by either lane.
+reachable configuration and the device lemmas `outcomesU_of_step`
+(Soundness.lean; control-preserving), `outcomesU_of_call` and
+`outcomesU_of_ret` (Adequacy.lean; calls arc C2) make it the drive's
+unique outcome (`drive_classifyU_aux`, a control-general induction under
+the invariant `ControlOk` — the saved frames plug values into fragment
+terms — and the premise `MachineCtx.FragProcs`, every declared
+procedure body in the cone: the raw WP's NotStuck does not exclude a
+call, so the partial lane must follow the engine into the callee and
+back; the total lane needs neither, its judgment is `⌜False⌝` at a call);
+the shipped-round certification `engine_step_matchU` (§2) is not
+consumed by either lane.
 
 ## 5. The projection
 

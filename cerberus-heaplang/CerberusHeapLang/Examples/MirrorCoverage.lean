@@ -14,7 +14,14 @@ API, and no exhibit imports it.
 Contents (moved here verbatim from ProdExhibit.lean, 2026-09-02
 detailed audit L-2 — statements unchanged): the two MIXED operand
 shapes of `store`; plus (kill/free arc K2) the kill at a symbol
-operand, `kill_sym_step`. The engine's ACTION_EVAL arm for `store` fires
+operand, `kill_sym_step`; plus (calls arc C2) THE PROCEDURE CALL AND
+RETURN ROUNDS at the mirror level on a two-procedure file — `main`
+calls `f`, `f` returns a constant — as `engine_step_matchU` instances
+(`smoke_call_round`, `smoke_ret_round`): the shipped driver's round at
+the call IS `Step.call`'s successor (the callee installed, the frame
+pushed, the caller's control captured) and at the callee's value IS
+`Step.ret`'s (the value plugged into the captured context, the frame
+popped). NOT a client of a rule — there is no call rule yet (C3). The engine's ACTION_EVAL arm for `store` fires
 whenever the operand triple is NOT all values; the mirror's
 `Step.store_eval` covers every such shape, and these two witnesses
 pin the two mixed ones (symbol pointer / literal value, literal
@@ -32,6 +39,7 @@ at the self-jump is reached through the certified mirror step — the
 exception is stated in that module's header.
 -/
 import CerberusHeapLang.Rules
+import CerberusHeapLang.Round
 
 set_option autoImplicit false
 
@@ -95,5 +103,79 @@ theorem alloc_lit_sym_step {M : MachineCtx} {loc : CerbLocation.Loc}
         (Pexpr [] () (PEsym n)) pref, ρ, ctl, σ)
       (allocRedex loc ann align size pref, ρ, ctl, σ) :=
   Step.alloc_eval rfl rfl hn
+
+/-! ## The procedure call and return (calls arc C2): the two rounds on a
+two-procedure file, at the mirror level
+
+`smokeFile` declares `main` (body: `f()`, the call redex at the root) and
+`f` (body: the constant `Vtrue`). No rule is applied — these are the
+CERTIFICATION instances: `engine_step_matchU` at `Step.call` and at
+`Step.ret`, i.e. the shipped driver's round at the call configuration is
+the callee's body at the pushed control, and at the callee's value it is
+the caller's plugged context at the popped control. -/
+
+/-- The startup symbol of the smoke file. -/
+def smokeMain : sym := Symbol "" 0 SD_None
+
+/-- The callee. -/
+def smokeF : sym := Symbol "" 1 SD_None
+
+/-- `f`'s body: a constant. -/
+def smokeFBody : CoreExpr := Expr [] (Epure (Pexpr [] () (PEval Vtrue)))
+
+/-- The two-procedure file: `main ↦ Proc … [] (f())`, `f ↦ Proc … []
+    Vtrue`; no stdlib, no externs. -/
+def smokeFile (ra : core_run_annotation) : file core_run_annotation :=
+  { main := some smokeMain,
+    calling_convention0 := default,
+    tagDefs := default,
+    stdlib := fmapEmpty,
+    impl0 := fmapEmpty,
+    globs := [],
+    funs := fmapAddBy (fun (s1 : sym) (s2 : sym) => ordCompare s1 s2) smokeF
+      (Proc CerbLocation.unknown none BTy_boolean [] smokeFBody)
+      (fmapAddBy (fun (s1 : sym) (s2 : sym) => ordCompare s1 s2) smokeMain
+        (Proc CerbLocation.unknown none BTy_boolean [] (callRedex ra smokeF []))
+        fmapEmpty),
+    extern := fmapEmpty,
+    funinfo := fmapEmpty,
+    loop_attributes1 := default,
+    visible_objects_env0 := default }
+
+/-- The straight-line profile over the smoke file. -/
+@[reducible] def smokeCtx (ra : core_run_annotation) : MachineCtx :=
+  { spikeCtx with file := smokeFile ra }
+
+/-- `call_proc`'s lookup finds `f` (computed). -/
+theorem smokeFile_lookup_f (ra : core_run_annotation) :
+    lookupProc (smokeFile ra) fmapEmpty smokeF = some ([], smokeFBody) := rfl
+
+/-- THE CALL ROUND: at `main`'s body (the call redex at the root, `κ = []`),
+    the shipped driver's round installs `f`'s body at the pushed control
+    `⟨[(some main, CTX)], some f, push_exec_loc f …⟩` with the fresh empty
+    frame — exactly `Step.call`'s successor. -/
+theorem smoke_call_round (ra : core_run_annotation) (ev0 : Fmap sym value)
+    (evs : List (Fmap sym value)) (ℓ : exec_location) (σ : Mem) :
+    CerberusRound (smokeCtx ra) (callRedex ra smokeF [], ev0 :: evs, ⟨[], some smokeMain, ℓ⟩, σ)
+      (smokeFBody, procEnv [] [] :: (ev0 :: evs),
+       ⟨[(some smokeMain, CTX)], some smokeF, push_exec_loc smokeF default ℓ⟩, σ) :=
+  engine_step_matchU (Frag.call (fun _ h => by cases h) (fun _ h => by cases h))
+    (by rw [show esize (callRedex ra smokeF []) = 1 from rfl,
+      show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+    (Step.call rfl rfl (smokeFile_lookup_f ra) rfl)
+
+/-- THE RETURN ROUND: at `f`'s value under the captured frame, the shipped
+    driver's round pops the frame, restores `main`, drops `f`'s env frame
+    and plugs the value into the captured context — exactly `Step.ret`'s
+    successor. -/
+theorem smoke_ret_round (ra : core_run_annotation) (v : value) (ev0 : Fmap sym value)
+    (evs : List (Fmap sym value)) (ℓ : exec_location) (σ : Mem) :
+    CerberusRound (smokeCtx ra) (ofVal (.pure v), ev0 :: evs,
+        ⟨[(some smokeMain, CTX)], some smokeF, ℓ⟩, σ)
+      (apply_ctx CTX (ofVal (.pure v)), evs, ⟨[], some smokeMain, ℓ⟩, σ) :=
+  engine_step_matchU (frag_ofVal _)
+    (by rw [show esize (ofVal (.pure v)) = 1 from rfl,
+      show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+    Step.ret
 
 end CerberusHeapLang

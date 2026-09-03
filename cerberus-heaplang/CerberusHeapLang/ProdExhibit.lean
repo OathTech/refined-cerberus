@@ -286,7 +286,7 @@ theorem exhibitA_prod (sup : Nat) (fs : CerbFS.FsState) (args : List String) :
       (wpt_driver_done_alloc (GF := SpikeGF)
         (M₀ := procCtx ((initial_core_run_state sup
           (collect_labeled_continuations_NEW (prodFile progAProd))).1))
-        rfl rfl (procCtx_labels hQe) rfl rfl
+        rfl rfl (procCtx_labels hQe) rfl rfl rfl rfl
         (fun l params cont hl => (hnolabel l params cont hl).elim)
         (fun l params cont hl => (hnolabel l params cont hl).elim)
         (fun _ _ _ _ => iprop(False))

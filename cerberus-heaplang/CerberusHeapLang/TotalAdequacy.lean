@@ -95,7 +95,8 @@ theorem Frag.stateInert_step {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
       ∃ l pes params cont, jumpRedex? e = some (l, pes) ∧
         lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) ∧ e' = cont) := by
   induction hf generalizing e' ρ' σ' with
-  | val_pure v => exact (Step.val_elim (w := .pure v) hs).elim
+  | call hpes hdep => exact (Step.call_ne_same_ctl (callRedex?_callRedex _ _ _) hs).elim
+  | val_pure v => exact (Step.pure_val_elim hs rfl).elim
   | store => simp [stateInert, storeRedex] at hin
   | load => simp [stateInert, loadRedex] at hin
   | create => simp [stateInert, createRedex] at hin
@@ -106,12 +107,13 @@ theorem Frag.stateInert_step {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
   | sseq hf1 hf2 ih1 ih2 =>
     obtain ⟨hin1, hin2⟩ : stateInert _ = true ∧ stateInert _ = true := by
       simpa [stateInert, Bool.and_eq_true] using hin
-    rcases hs.sseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
+    rcases hs.sseq_inv with ⟨e1', ρ'', σ'', hnj, hnv', hstep, hout⟩ |
         ⟨_, _, v, _, _, _, he1, _, hout⟩ | ⟨_, _, ds', v, _, _, _, he1, _, hout⟩ |
         ⟨l, pes, params, cont, vs, _, _, hj, _, hl, _, hout⟩ |
         ⟨_, _, _, _, _, _, _, hpat, _, _, hout⟩ |
         ⟨_, _, _, _, _, _, _, _, hpat, _, _, hout⟩ |
-        ⟨_, _, _, _, _, _, hpat, _, _, hout⟩
+        ⟨_, _, _, _, _, _, hpat, _, _, hout⟩ |
+        hcall
     · obtain ⟨h1, -, h3⟩ : e' = _ ∧ ρ' = ρ'' ∧ σ' = σ'' := by
         simpa [Prod.mk.injEq] using hout
       subst h1
@@ -139,12 +141,14 @@ theorem Frag.stateInert_step {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
         simpa [Prod.mk.injEq] using hout
       subst h1
       exact ⟨h3, .inl hin2⟩
+    · exact hcall.ne_same_ctl.elim
   | wseq hf1 hf2 ih1 ih2 =>
     obtain ⟨hin1, hin2⟩ : stateInert _ = true ∧ stateInert _ = true := by
       simpa [stateInert, Bool.and_eq_true] using hin
-    rcases hs.wseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
+    rcases hs.wseq_inv with ⟨e1', ρ'', σ'', hnj, hnv', hstep, hout⟩ |
         ⟨_, _, v, _, _, _, he1, _, hout⟩ | ⟨_, _, ds', v, _, _, _, he1, _, hout⟩ |
-        ⟨l, pes, params, cont, vs, _, _, hj, _, hl, _, hout⟩
+        ⟨l, pes, params, cont, vs, _, _, hj, _, hl, _, hout⟩ |
+        hcall
     · obtain ⟨h1, -, h3⟩ : e' = _ ∧ ρ' = ρ'' ∧ σ' = σ'' := by
         simpa [Prod.mk.injEq] using hout
       subst h1
@@ -166,12 +170,14 @@ theorem Frag.stateInert_step {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
         simpa [Prod.mk.injEq] using hout
       exact ⟨h3, .inr ⟨l, pes, params, cont,
         by rw [jumpRedex?_wseq, hj], hl, h1⟩⟩
+    · exact hcall.ne_same_ctl.elim
   | annot hfb ihb =>
     rename_i ds0 b0
     have hinb : stateInert b0 = true := by simpa [stateInert] using hin
     rcases hs.annot_inv with ⟨hg, hnj, b', ρ'', σ'', hstep, hout⟩ |
         ⟨a2, ds2, c, hb, hout⟩ |
-        ⟨l, pes, params, cont, vs, _, _, hg, hj, _, hl, _, hout⟩
+        ⟨l, pes, params, cont, vs, _, _, hg, hj, _, hl, _, hout⟩ |
+        ⟨-, hcall⟩ | ⟨v', pc', κ', ha', hb', hκ', hout'⟩
     · obtain ⟨h1, -, h3⟩ : e' = _ ∧ ρ' = ρ'' ∧ σ' = σ'' := by
         simpa [Prod.mk.injEq] using hout
       subst h1
@@ -191,6 +197,9 @@ theorem Frag.stateInert_step {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
         simpa [Prod.mk.injEq] using hout
       exact ⟨h3, .inr ⟨l, pes, params, cont,
         by rw [jumpRedex?_annot_of_not_root _ _ hg, hj], hl, h1⟩⟩
+    · exact hcall.ne_same_ctl.elim
+    · obtain ⟨rfl, -, h3⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ := by simpa [Prod.mk.injEq] using hout'
+      exact ⟨h3, .inl rfl⟩
   | save hp hd hb ih =>
     rcases hs.save_inv with ⟨cvals, ev0', evs', hρeq, hvals, hout⟩ |
         ⟨cvals, hnv, hvals, hout⟩
@@ -221,13 +230,14 @@ theorem Frag.stateInert_step {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
   | sseq_spec hf1 hf2 ih1 ih2 =>
     obtain ⟨hin1, hin2⟩ : stateInert _ = true ∧ stateInert _ = true := by
       simpa [stateInert, Bool.and_eq_true] using hin
-    rcases hs.sseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
+    rcases hs.sseq_inv with ⟨e1', ρ'', σ'', hnj, hnv', hstep, hout⟩ |
         ⟨_, _, v, _, _, hpat, _, _, hout⟩ |
         ⟨_, _, ds', v, _, _, hpat, _, _, hout⟩ |
         ⟨l, pes, params, cont, vs, _, _, hj, _, hl, _, hout⟩ |
         ⟨_, _, _, _, _, _, _, hpat, he1, _, hout⟩ |
         ⟨_, _, _, _, _, _, _, _, hpat, he1, _, hout⟩ |
-        ⟨_, _, _, _, _, _, hpat, _, _, hout⟩
+        ⟨_, _, _, _, _, _, hpat, _, _, hout⟩ |
+        hcall
     · obtain ⟨h1, -, h3⟩ : e' = _ ∧ ρ' = ρ'' ∧ σ' = σ'' := by
         simpa [Prod.mk.injEq] using hout
       subst h1
@@ -252,8 +262,9 @@ theorem Frag.stateInert_step {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
       subst h1
       exact ⟨h3, .inl (by simpa [stateInert] using hin2)⟩
     · exact (symPat_ne_spec hpat).elim
+    · exact hcall.ne_same_ctl.elim
   | pure_sym =>
-    obtain ⟨v, -, -, hout⟩ := hs.pure_inv
+    obtain ⟨v, -, -, hout⟩ := hs.pure_inv rfl
     obtain ⟨h1, -, h3⟩ : e' = _ ∧ ρ' = ρ ∧ σ' = σ := by
       simpa [Prod.mk.injEq] using hout
     subst h1
@@ -262,13 +273,14 @@ theorem Frag.stateInert_step {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
   | sseq_sym hb hf1 hf2 ih1 ih2 =>
     obtain ⟨hin1, hin2⟩ : stateInert _ = true ∧ stateInert _ = true := by
       simpa [stateInert, Bool.and_eq_true] using hin
-    rcases hs.sseq_inv with ⟨e1', ρ'', σ'', hnj, hstep, hout⟩ |
+    rcases hs.sseq_inv with ⟨e1', ρ'', σ'', hnj, hnv', hstep, hout⟩ |
         ⟨_, _, v, _, _, hpat, _, _, hout⟩ |
         ⟨_, _, ds', v, _, _, hpat, _, _, hout⟩ |
         ⟨l, pes, params, cont, vs, _, _, hj, _, hl, _, hout⟩ |
         ⟨_, _, _, _, _, _, _, hpat, _, _, hout⟩ |
         ⟨_, _, _, _, _, _, _, _, hpat, _, _, hout⟩ |
-        ⟨_, _, _, _, _, _, hpat, _, _, hout⟩
+        ⟨_, _, _, _, _, _, hpat, _, _, hout⟩ |
+        hcall
     · obtain ⟨h1, -, h3⟩ : e' = _ ∧ ρ' = ρ'' ∧ σ' = σ'' := by
         simpa [Prod.mk.injEq] using hout
       subst h1
@@ -290,6 +302,7 @@ theorem Frag.stateInert_step {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
         simpa [Prod.mk.injEq] using hout
       subst h1
       exact ⟨h3, .inl hin2⟩
+    · exact hcall.ne_same_ctl.elim
   | memop_vals v1 v2 => simp [stateInert, memopPtrEqVals, memopRedex] at hin
   | memop_op hnv hp1 hp2 hpd1 hpd2 => simp [stateInert, memopRedex] at hin
   | store_op hnv hp2 hp3 hpd2 hpd3 =>
@@ -449,13 +462,19 @@ theorem wpt_drive_aux {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
         (fun i => aids (i + 1)) (hQf l params cont hl)
         (hQpot l params cont hl) $$ [$Hσ $HB $Hwpt']
     | none =>
+      cases hcr : callRedex? e with
+      | some q =>
+        rw [wpt_call_eq htv hjr hcr]
+        iintro ⟨-, -, %hf⟩
+        exact hf.elim
+      | none =>
       cases k with
       | zero =>
-        rw [wpt_zero_step_eq htv hjr]
+        rw [wpt_zero_step_eq htv hjr hcr]
         iintro ⟨-, -, %hf⟩
         exact hf.elim
       | succ k' =>
-        rw [wpt_step_eq k' htv hjr]
+        rw [wpt_step_eq k' htv hjr hcr]
         iintro ⟨Hσ, #HB, H⟩
         imod H $$ %σ %ns %([] : List Empty) %nt Hσ with ⟨%hred, Hwand⟩
         obtain ⟨obs0, r', σ', eₜ', hps⟩ := hred
@@ -464,7 +483,7 @@ theorem wpt_drive_aux {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
         obtain ⟨re, rρ, rctl, rM⟩ := r'
         simp only at hs hM
         obtain rfl : M = rM := hM.symm
-        obtain rfl : ctl = rctl := (Step.ctl_eq hs).symm
+        obtain rfl : ctl = rctl := (Step.ctl_eq hs hcr htv).symm
         obtain ⟨ev0', rfl⟩ := Step.env_cons hs
         imod Hwand $$ %(⟨re, ev0' :: evs, ctl, M⟩ : CoreRt) %σ' %([] : List CoreRt)
           %(⟨hs, rfl, rfl⟩ :
