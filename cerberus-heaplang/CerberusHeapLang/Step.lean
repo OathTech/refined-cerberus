@@ -1129,6 +1129,37 @@ inductive Step (M : MachineCtx) :
       Step M (Expr a (Eaction (Paction polarity.Pos (Action loc ann
               (Create pe1 pe2 pref)))), ρ, σ)
            (Expr [] (Epure (Pexpr [] () (PEval (Vobject (OVpointer pv))))), ρ, σ')
+  /-- Positive strong ALLOC — dynamic allocation, Core's `alloc(al, n)`
+      (`Alloc0`, C's `malloc`; kill/free arc K3), evaluated INTEGER
+      operands. Mirrors: step_action's Alloc0 arm (Core_reduction.lean:424,
+      verbatim modulo whitespace: `| Alloc0 pe1 pe2 pref => match
+      act_valueFromPexpr pe1, act_valueFromPexpr pe2 with | some (Vobject
+      (OVinteger ival1)), some (Vobject (OVinteger ival2)) => ACTION_REQUEST
+      "AllocRequest" loc1 (AllocRequest2 pref ival1 ival2 (fun (aid1 : Nat)
+      (ptrval : CerbMem.PointerValue) => mk_value_e (Vobject (OVpointer
+      ptrval)))) | some _, some _ => ACTION_ILLTYPED "Alloc" | _, _ =>
+      ACTION_EVAL "eval operands of Alloc" …`), driver discharge `liftMem
+      (CerbMem.allocateRegion tid1 pref align_ival size_ival)` with the
+      continuation `mk_th_st' aid1 ptrval` (Driver.lean:273) — the
+      continuation value is `mk_value_e (Vobject (OVpointer ptrval))`, a
+      BARE pointer value, no `Eannot` residue (exactly create's shape).
+      `allocateRegion` DISCARDS the thread id (CerbMem.lean:1533, `_ :
+      Nat`), so the rule pins it to `0`; the certification bridges to the
+      engine's `tid1` by `rfl` (`allocateRegion_arg_irrel`). The region
+      is UNTYPED (`ty := none`, :1544), of size `sizeN.toNat` (ZERO
+      admitted, no `max 1`), its base pushed onto `dynamicAddrs` (:1548).
+      Failure — the "out of memory" `Other` kill at `alignedAddr == 0`
+      (:1541) — is absence of a step, exactly as for create. -/
+  | alloc {a : List annot} {loc : CerbLocation.Loc} {ann : core_run_annotation}
+      {pe1 pe2 : generic_pexpr Unit sym}
+      {align size : CerbMem.IntegerValue} {pref : prefix0}
+      {pv : CerbMem.PointerValue} {ρ : EnvStack} {σ σ' : Mem}
+      (h1 : valueFromPexpr pe1 = some (Vobject (OVinteger align)))
+      (h2 : valueFromPexpr pe2 = some (Vobject (OVinteger size)))
+      (hmem : applyMemM (CerbMem.allocateRegion 0 pref align size) σ = some (pv, σ')) :
+      Step M (Expr a (Eaction (Paction polarity.Pos (Action loc ann
+              (Alloc0 pe1 pe2 pref)))), ρ, σ)
+           (Expr [] (Epure (Pexpr [] () (PEval (Vobject (OVpointer pv))))), ρ, σ')
   /-- Positive strong KILL (kill/free arc K2), evaluated pointer
       operand. Mirrors: step_action's Kill arm (Core_reduction.lean:424,
       verbatim modulo whitespace: `| Kill kind1 pe => match
@@ -1543,6 +1574,33 @@ inductive Step (M : MachineCtx) :
               (Kill kind pe)))), ρ, σ)
            (Expr a (Eaction (Paction polarity.Pos (Action loc ann
               (Kill kind (Pexpr [] () (PEval (Vobject (OVpointer pv)))))))), ρ, σ)
+  /-- ACTION_EVAL for a positive strong alloc whose operands are NOT
+      all values (kill/free arc K3): ONE engine step BIG-STEP
+      evaluating both operands, alignment first (step_action's Alloc0
+      `_, _` arm, Core_reduction.lean:424 — `ACTION_EVAL "eval operands
+      of Alloc" (stExceptUndef_bind (full_eval_pexpr1 pe1) (fun cval1 =>
+      stExceptUndef_bind (full_eval_pexpr1 pe2) (fun cval2 =>
+      stExceptUndef_return (wrap (Alloc0 (mk_value_pe cval1) (mk_value_pe
+      cval2) pref)))))`; an already-evaluated operand re-evaluates to
+      itself). The arm fires exactly when the operand pair is not all
+      values (`hnv`, the engine's `valueFromPexprs` test — mixed shapes
+      included, as `store_eval`). As `load_eval`/`store_eval`/`kill_eval`,
+      the mirror pins the evaluated values to INTEGERS — the successor is
+      exactly the canonical alloc redex; a non-integer value is the
+      engine's ILLTYPED-at-distance-one round (`ShippedRefusal.error_next
+      … "Alloc"`, `complete_alloc_op`), classified, not mirrored. -/
+  | alloc_eval {a : List annot} {loc : CerbLocation.Loc}
+      {ann : core_run_annotation} {pe1 pe2 : generic_pexpr Unit sym}
+      {align size : CerbMem.IntegerValue} {pref : prefix0}
+      {ρ : EnvStack} {σ : Mem}
+      (hnv : valueFromPexprs [pe1, pe2] = none)
+      (hv1 : evalPexpr M.tagDefs M.extern ρ pe1 = some (Vobject (OVinteger align)))
+      (hv2 : evalPexpr M.tagDefs M.extern ρ pe2 = some (Vobject (OVinteger size))) :
+      Step M (Expr a (Eaction (Paction polarity.Pos (Action loc ann
+              (Alloc0 pe1 pe2 pref)))), ρ, σ)
+           (Expr a (Eaction (Paction polarity.Pos (Action loc ann
+              (Alloc0 (Pexpr [] () (PEval (Vobject (OVinteger align))))
+                      (Pexpr [] () (PEval (Vobject (OVinteger size)))) pref)))), ρ, σ)
 
 /-! ## Basic metatheory of Step (inversions the logic needs) -/
 
@@ -1604,6 +1662,17 @@ theorem Step.kill_canonical {M : MachineCtx} {a : List annot}
          (Expr [] (Epure (Pexpr [] () (PEval Vunit))), ρ, σ') :=
   Step.kill rfl hmem
 
+theorem Step.alloc_canonical {M : MachineCtx} {a : List annot}
+    {loc : CerbLocation.Loc} {ann : core_run_annotation}
+    {align size : CerbMem.IntegerValue} {pref : prefix0}
+    {pv : CerbMem.PointerValue} {ρ : EnvStack} {σ σ' : Mem}
+    (hmem : applyMemM (CerbMem.allocateRegion 0 pref align size) σ = some (pv, σ')) :
+    Step M (Expr a (Eaction (Paction polarity.Pos (Action loc ann
+            (Alloc0 (Pexpr [] () (PEval (Vobject (OVinteger align))))
+                    (Pexpr [] () (PEval (Vobject (OVinteger size)))) pref)))), ρ, σ)
+         (Expr [] (Epure (Pexpr [] () (PEval (Vobject (OVpointer pv))))), ρ, σ') :=
+  Step.alloc rfl rfl hmem
+
 /-- S3 RETIREMENT NOTE: phase-1's `Step.env_invariant(')` (no rule
     writes the env) is RETIRED as pre-declared (phase-1 notes §2
     item 6) — `Step.run` and `Step.save` rebind the environment. Its
@@ -1655,6 +1724,8 @@ theorem Step.env_cons' {M : MachineCtx} {c c' : CoreExpr × EnvStack × Mem}
   | memop_eval hnv hv1 hv2 => exact fun ev0 evs hin => ⟨ev0, hin⟩
   | store_eval hnv hv2 hv3 => exact fun ev0 evs hin => ⟨ev0, hin⟩
   | kill_eval hnv hv => exact fun ev0 evs hin => ⟨ev0, hin⟩
+  | alloc h1 h2 hmem => exact fun ev0 evs hin => ⟨ev0, hin⟩
+  | alloc_eval hnv hv1 hv2 => exact fun ev0 evs hin => ⟨ev0, hin⟩
 
 theorem Step.env_cons {M : MachineCtx} {e : CoreExpr} {ev0 : Fmap sym value}
     {evs : List (Fmap sym value)} {σ : Mem}
@@ -1800,6 +1871,50 @@ theorem Step.kill_op_inv {M : MachineCtx} {a : List annot}
   | kill h1 hmem => rw [hnv] at h1; cases h1
   | kill_eval hnv' hv => exact ⟨_, hv, rfl⟩
 
+/-- Inversion at an alloc redex (canonical operand instance, kill/free
+    arc K3): the step is unique and fully determined by
+    `allocateRegion`; the env is returned verbatim. -/
+theorem Step.alloc_inv {M : MachineCtx} {a : List annot} {loc : CerbLocation.Loc}
+    {ann : core_run_annotation} {align size : CerbMem.IntegerValue}
+    {pref : prefix0} {ρ : EnvStack} {σ : Mem}
+    {out : CoreExpr × EnvStack × Mem}
+    (h : Step M (Expr a (Eaction (Paction polarity.Pos (Action loc ann
+            (Alloc0 (Pexpr [] () (PEval (Vobject (OVinteger align))))
+                    (Pexpr [] () (PEval (Vobject (OVinteger size)))) pref)))), ρ, σ) out) :
+    ∃ pv σ',
+      applyMemM (CerbMem.allocateRegion 0 pref align size) σ = some (pv, σ') ∧
+      out = (Expr [] (Epure (Pexpr [] () (PEval (Vobject (OVpointer pv))))), ρ, σ') := by
+  cases h with
+  | run hj hl hvs => simp at hj
+  | alloc_eval hnv hv1 hv2 =>
+    rw [valueFromPexprs_pair, valueFromPexpr_val, valueFromPexpr_val] at hnv
+    cases hnv
+  | alloc h1 h2 hmem =>
+    rw [valueFromPexpr_val] at h1 h2
+    injection h1 with h1; injection h1 with h1; injection h1 with h1
+    injection h2 with h2; injection h2 with h2; injection h2 with h2
+    subst h1 h2
+    exact ⟨_, _, hmem, rfl⟩
+
+/-- Inversion at a positive alloc whose operands are NOT all values:
+    the ACTION_EVAL step to INTEGER values. -/
+theorem Step.alloc_op_inv {M : MachineCtx} {a : List annot}
+    {loc : CerbLocation.Loc} {ann : core_run_annotation}
+    {pe1 pe2 : generic_pexpr Unit sym} {pref : prefix0}
+    {ρ : EnvStack} {σ : Mem} {out : CoreExpr × EnvStack × Mem}
+    (hnv : valueFromPexprs [pe1, pe2] = none)
+    (h : Step M (Expr a (Eaction (Paction polarity.Pos (Action loc ann
+            (Alloc0 pe1 pe2 pref)))), ρ, σ) out) :
+    ∃ align size, evalPexpr M.tagDefs M.extern ρ pe1 = some (Vobject (OVinteger align)) ∧
+      evalPexpr M.tagDefs M.extern ρ pe2 = some (Vobject (OVinteger size)) ∧
+      out = (Expr a (Eaction (Paction polarity.Pos (Action loc ann
+        (Alloc0 (Pexpr [] () (PEval (Vobject (OVinteger align))))
+                (Pexpr [] () (PEval (Vobject (OVinteger size)))) pref)))), ρ, σ) := by
+  cases h with
+  | run hj hl hvs => simp at hj
+  | alloc h1 h2 hmem => rw [valueFromPexprs_pair, h1, h2] at hnv; cases hnv
+  | alloc_eval hnv' hv1 hv2 => exact ⟨_, _, hv1, hv2, rfl⟩
+
 /-! ### THE JUMP-REDEX INVERSION PAIR (probe Toy.lean
 `step_jump_inv`/`step_of_jumpRedex`, now on Core — the semantic
 cash-in of context-independence: at a jump redex EVERY step is THE
@@ -1849,6 +1964,8 @@ theorem Step.jump_inv {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack} {σ : Mem}
   | memop_ptreq h1 h2 hmem => simp at hj
   | memop_eval hnv hv1 hv2 => simp at hj
   | store_eval hnv hv2 hv3 => simp at hj
+  | alloc h1 h2 hmem => simp at hj
+  | alloc_eval hnv hv1 hv2 => simp at hj
 
 /-- Reducibility at a registered jump redex (the probe's
     `step_of_jumpRedex`). -/
@@ -2227,6 +2344,21 @@ def killRedex (loc : CerbLocation.Loc) (ann : core_run_annotation)
 def killOpRedex (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (kind : kill_kind) (pe : generic_pexpr Unit sym) : CoreExpr :=
   Expr [] (Eaction (Paction polarity.Pos (Action loc ann (Kill kind pe))))
+
+/-- Canonical spelling of the alloc redex (kill/free arc K3): positive
+    strong dynamic allocation at canonical EVALUATED integer operands
+    (`Rules.allocExpr` is the same spelling). -/
+def allocRedex (loc : CerbLocation.Loc) (ann : core_run_annotation)
+    (align size : CerbMem.IntegerValue) (pref : prefix0) : CoreExpr :=
+  Expr [] (Eaction (Paction polarity.Pos (Action loc ann
+    (Alloc0 (Pexpr [] () (PEval (Vobject (OVinteger align))))
+            (Pexpr [] () (PEval (Vobject (OVinteger size)))) pref))))
+
+/-- Canonical spelling of the alloc ACTION_EVAL redex: positive strong
+    dynamic allocation at operands that are NOT all values. -/
+def allocOpRedex (loc : CerbLocation.Loc) (ann : core_run_annotation)
+    (pe1 pe2 : generic_pexpr Unit sym) (pref : prefix0) : CoreExpr :=
+  Expr [] (Eaction (Paction polarity.Pos (Action loc ann (Alloc0 pe1 pe2 pref))))
 
 /-! ## The frozen profiles as context instances
 

@@ -225,7 +225,7 @@ theorem prodMem₀_memWF : MemWF prodMem₀ := by
     rw [prodMem₀_allocations]
     simp [Std.TreeMap.get?_eq_getElem?, Std.TreeMap.getElem?_insert]
   have hempty : ∀ id : Int, ({} : Mem).allocations.get? id = none := fun _ => rfl
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · intro id al hg
     rw [hget] at hg
     split at hg
@@ -265,6 +265,8 @@ theorem prodMem₀_memWF : MemWF prodMem₀ := by
       decide
     · rw [hempty] at hg
       cases hg
+  · rw [prodMem₀_lastAddress]
+    decide
   · rw [prodMem₀_lastAddress]
     decide
   · intro a ha

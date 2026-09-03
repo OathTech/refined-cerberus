@@ -168,7 +168,7 @@ def createKillProg (al : Int) (pref : prefix0) : CoreExpr :=
     kill at a symbol operand. -/
 theorem createKillProg_frag (al : Int) (pref : prefix0) : Frag (createKillProg al pref) :=
   .sseq_sym .create .create
-    (.kill_op rfl rfl (.sym [] pKSym)
+    (.kill_op rfl (.sym [] pKSym)
       (by rw [show peDepth (Pexpr ([] : List annot) () (PEsym pKSym)) = 1 from rfl,
         show lemDefaultFuel = 999999 + 1 from rfl]; omega))
 

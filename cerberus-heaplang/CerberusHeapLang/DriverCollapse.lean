@@ -478,6 +478,35 @@ theorem ars_kill_active {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
     (runOne_liftMem_active (runOne_of_applyMemM happ))).trans ?_
   rfl
 
+/-- AllocRequest2 discharge, active (kill/free arc K3; Driver.lean:273,
+    verbatim modulo whitespace: `nd_bind (liftMem (CerbMem.allocateRegion
+    tid1 pref align_ival size_ival)) (fun ptrval => nd_update (fun dr_st
+    => { { dr_st with trace := ME_allocate_region tid1 pref align_ival
+    size_ival ptrval :: dr_st.trace } with core_state0 :=
+    update_thread_state tid1 (mk_th_st' aid1 ptrval) dr_st.core_state0
+    }))`): `allocateRegion` discards the thread id (CerbMem.lean:1533),
+    so the hypothesis is stated at 0 and bridges to the driver's `tid1`
+    definitionally; the trace gets its `ME_allocate_region` event, the
+    thread its continuation at the drawn aid and the minted pointer. -/
+theorem ars_alloc_active {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
+    {loc : CerbLocation.Loc} {pref : prefix0}
+    {align size : CerbMem.IntegerValue}
+    {k : Nat → CerbMem.PointerValue → thread_state}
+    {tid aid : Nat} {dst : driver_state} {pv : CerbMem.PointerValue} {σ' : Mem}
+    (happ : applyMemM (CerbMem.allocateRegion 0 pref align size)
+        dst.layout_state = some (pv, σ')) :
+    runOne (action_request_sequential2 tds loc tid aid
+        (AllocRequest2 pref align size k)) dst =
+      (NDactive (), { dst with
+        layout_state := σ',
+        trace := ME_allocate_region tid pref align size pv :: dst.trace,
+        core_state0 := update_thread_state tid (k aid pv) dst.core_state0 }) := by
+  unfold action_request_sequential2
+  dsimp only
+  refine (runOne_bind_active (z := pv) (s' := { dst with layout_state := σ' })
+    (runOne_liftMem_active (runOne_of_applyMemM happ))).trans ?_
+  rfl
+
 /-! ## D3: the finalize/hack readout -/
 
 /-- `Driver.hack` (Driver.lean:390-395) on an already-irreducible
@@ -1095,6 +1124,52 @@ theorem step_ctx_store_eval_ws {e : CoreExpr} {ctx : context}
          return1, except_return]
        rfl)
 
+/-- Alloc ACTION_EVAL, raw (kill/free arc K3): one `RSK_eval` step
+    rebuilding the canonical alloc redex, run state verbatim. -/
+theorem step_ctx_alloc_eval_ws {e : CoreExpr} {ctx : context}
+    {loc : CerbLocation.Loc} {ann : core_run_annotation}
+    {pe1 pe2 : generic_pexpr Unit sym} {pref : prefix0}
+    {align size : CerbMem.IntegerValue}
+    (hd : Decomp e ctx (allocOpRedex loc ann pe1 pe2 pref))
+    (hsz : esize e ≤ lemDefaultFuel)
+    (hnv : valueFromPexprs [pe1, pe2] = none)
+    (hp1 : PePure pe1) (hp2 : PePure pe2)
+    (hd1 : peDepth pe1 ≤ lemDefaultFuel)
+    (hd2 : peDepth pe2 ≤ lemDefaultFuel)
+    (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
+    (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
+    (tid : Nat) (parent : Option Nat) (th : thread_state)
+    (harena : th.arena = e)
+    (hv1 : evalPexpr tds ext th.env pe1 = some (Vobject (OVinteger align)))
+    (hv2 : evalPexpr tds ext th.env pe2 = some (Vobject (OVinteger size))) :
+    ∃ (s : String) (m : core_runM thread_state),
+      step_ctx tds σ file ext tid (parent, th) =
+        [Step_with_runstate2 (RSK_eval s) m] ∧
+      ∀ rs, m rs = Result (Defined { th with
+        arena := apply_ctx ctx (allocRedex loc ann align size pref) }, rs) := by
+  have hget : get_ctx th.arena = [(ctx, allocOpRedex loc ann pe1 pe2 pref)] := by
+    rw [harena]; exact hd.get_ctx_default hsz
+  unfold step_ctx
+  dsimp only
+  rw [hget]
+  simp only [List.map_cons, List.map_nil]
+  unfold allocOpRedex
+  rw [valueFromPexprs_pair] at hnv
+  cases hp1 <;> cases hp2 <;>
+    try (rw [valueFromPexpr_val, valueFromPexpr_val] at hnv; cases hnv)
+  all_goals try (obtain rfl := Option.some.inj ((evalPexpr_val _ _ _ _ _).symm.trans hv1))
+  all_goals try (obtain rfl := Option.some.inj ((evalPexpr_val _ _ _ _ _).symm.trans hv2))
+  all_goals
+    cases ctx <;>
+      (dsimp only [get_loc]
+       dsimp only [step_action]
+       dsimp only [act_valueFromPexpr, valueFromPexpr]
+       refine ⟨_, _, rfl, fun rs => ?_⟩
+       rw [full_eval_bridge hv1 hd1 σ file, full_eval_bridge hv2 hd2 σ file]
+       dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+         return1, except_return]
+       rfl)
+
 /-- Esave PARAMETER EVALUATION, raw: one `RSK_eval` step rebuilding the
     Esave node with its evaluated initializers, run state verbatim
     (the driver-lane twin of `stepDischarge_save_eval`). -/
@@ -1322,11 +1397,11 @@ theorem loop_step_frag {M₀ : MachineCtx}
     | @kill_op loc ann kind pe hnvK =>
       obtain ⟨hpK, hdK⟩ : PePure pe ∧ peDepth pe ≤ lemDefaultFuel := by
         cases hfr with
-        | kill hst =>
+        | kill =>
           rw [show valueFromPexpr (Pexpr [] () (PEval
             (Vobject (OVpointer _)))) = some _ from rfl] at hnvK
           cases hnvK
-        | kill_op hst hnvK' hpK hdK => exact ⟨hpK, hdK⟩
+        | kill_op hnvK' hpK hdK => exact ⟨hpK, hdK⟩
       obtain ⟨pv, hv, hout⟩ := hr.kill_op_inv hnvK
       obtain ⟨h1, h2, h3⟩ : r' = killRedex loc ann kind pv ∧
           ρ' = ev0 :: evs ∧ σ' = dst.layout_state := by
@@ -1337,6 +1412,46 @@ theorem loop_step_frag {M₀ : MachineCtx}
         fmapEmpty dst.layout_state dst.core_file dst.core_extern 0 none
         { th₀ with arena := e, env := ev0 :: evs } rfl
         (by rw [hext]; exact hv)
+      refine ⟨dst.core_run_state0, dst.trace, dst.dr_step_counter + 1,
+        rfl, ?_⟩
+      exact loop_step_withrs_eval fl fmapEmpty acc hth hsteps
+        (hm dst.core_run_state0)
+    | @alloc loc ann align size pref =>
+      obtain ⟨pv, σ'', hmem, hout⟩ := hr.alloc_inv
+      obtain ⟨h1, h2, h3⟩ : r' = Expr [] (Epure (Pexpr [] ()
+          (PEval (Vobject (OVpointer pv))))) ∧
+          ρ' = ev0 :: evs ∧ σ' = σ'' := by
+        simpa [Prod.mk.injEq] using hout
+      subst h1 h2 h3
+      have hsteps := step_ctx_alloc hd hsz fmapEmpty
+        dst.layout_state dst.core_file dst.core_extern 0 none
+        { th₀ with arena := e, env := ev0 :: evs } rfl
+      rw [hccall] at hsteps
+      refine ⟨{ dst.core_run_state0 with aid_supply :=
+          dst.core_run_state0.aid_supply + 1 },
+        ME_allocate_region 0 pref align size pv :: dst.trace,
+        dst.dr_step_counter, rfl, ?_⟩
+      exact loop_step_action fl fmapEmpty acc hth hsteps
+        (ars_alloc_active (tid := 0)
+          (aid := dst.core_run_state0.aid_supply) hmem)
+    | @alloc_op loc ann pref pe1 pe2 hnvA =>
+      obtain ⟨hp1, hp2, hd1, hd2⟩ : PePure pe1 ∧ PePure pe2 ∧
+          peDepth pe1 ≤ lemDefaultFuel ∧ peDepth pe2 ≤ lemDefaultFuel := by
+        cases hfr with
+        | alloc =>
+          rw [valueFromPexprs_pair, valueFromPexpr_val, valueFromPexpr_val] at hnvA
+          cases hnvA
+        | alloc_op hnvA' hp1 hp2 hd1 hd2 => exact ⟨hp1, hp2, hd1, hd2⟩
+      obtain ⟨al, sz, hv1, hv2, hout⟩ := hr.alloc_op_inv hnvA
+      obtain ⟨h1, h2, h3⟩ : r' = allocRedex loc ann al sz pref ∧
+          ρ' = ev0 :: evs ∧ σ' = dst.layout_state := by
+        simpa [Prod.mk.injEq, allocRedex] using hout
+      subst h1 h2 h3
+      rw [htd, hex] at hv1 hv2
+      obtain ⟨s, m, hsteps, hm⟩ := step_ctx_alloc_eval_ws hd hsz hnvA hp1 hp2 hd1 hd2
+        fmapEmpty dst.layout_state dst.core_file dst.core_extern 0 none
+        { th₀ with arena := e, env := ev0 :: evs } rfl
+        (by rw [hext]; exact hv1) (by rw [hext]; exact hv2)
       refine ⟨dst.core_run_state0, dst.trace, dst.dr_step_counter + 1,
         rfl, ?_⟩
       exact loop_step_withrs_eval fl fmapEmpty acc hth hsteps

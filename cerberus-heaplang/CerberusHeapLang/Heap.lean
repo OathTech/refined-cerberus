@@ -1006,6 +1006,19 @@ theorem MetaCoh.of_fields {σ σ' : Mem} {id : Int} {mc : MetaCell} (h : MetaCoh
   · rw [h3]
     exact h.dynamic hd
 
+/-- `MetaCoh.of_fields` at a dynamic list that only GROWS (kill/free
+    arc K3): `allocateRegion` prepends the fresh base (CerbMem.lean:1548);
+    the `dynamic → base ∈ dynamicAddrs` clause is monotone in the list. -/
+theorem MetaCoh.of_fields_dyn {σ σ' : Mem} {id : Int} {mc : MetaCell} (h : MetaCoh σ id mc)
+    (h1 : σ'.deadAllocations = σ.deadAllocations)
+    (h2 : σ'.allocations.get? id = σ.allocations.get? id)
+    (h3 : ∀ a, a ∈ σ.dynamicAddrs → a ∈ σ'.dynamicAddrs) : MetaCoh σ' id mc := by
+  refine ⟨fun ha => ?_, fun ha => ?_, h.nonAtomic, fun hd => h3 _ (h.dynamic hd)⟩
+  · obtain ⟨hdead, al, hal, hb, hs, ht, hro⟩ := h.live ha
+    exact ⟨by rw [h1]; exact hdead, al, by rw [h2]; exact hal, hb, hs, ht, hro⟩
+  · obtain ⟨hdead, hnone⟩ := h.dead ha
+    exact ⟨by rw [h1]; exact hdead, by rw [h2]; exact hnone⟩
+
 /-- The record lookup after `killM`'s erase (CerbMem.lean:1578):
     `none` at the killed id, unchanged elsewhere. -/
 theorem allocations_erase_get? (σ : Mem) (id id' : Int) :
@@ -1309,6 +1322,27 @@ theorem killM_success (σ : Mem) (id : Int) (mc : MetaCell) (loc : CerbLocation.
   simp only [cellPtr, hdead, Bool.false_eq_true, if_false, hal, hbase, bne, int_beq_refl,
     Bool.not_true, Bool.false_and]
 
+/-- `killM`'s active arm at `isDynamic = true` — the FREE seam (kill/free
+    arc K3): at a live DYNAMIC cell (`mc.dynamic = true`, coupled to
+    `mc.addr ∈ dynamicAddrs` by `MetaCoh.dynamic`), the dynamic check
+    `!st.dynamicAddrs.contains alloc.base` (CerbMem.lean:1573) is
+    `!true = false` through `mem_contains_int` (the K1 audit's `∈`/
+    `contains` bridge), and the kill proceeds exactly as the static arm.
+    This is the ONLY place the rule's "this allocation is dynamic" premise
+    is spent; it comes from the METADATA CELL, never from `dynamicAddrs`
+    (the K0 audit's N-1). -/
+theorem killM_success_dynamic (σ : Mem) (id : Int) (mc : MetaCell) (loc : CerbLocation.Loc)
+    (hmeta : MetaCoh σ id mc) (halive : mc.alive = true) (hdyn : mc.dynamic = true) :
+    applyMemM (CerbMem.killM loc true (cellPtr id mc.addr)) σ =
+      some ((), { σ with deadAllocations := id :: σ.deadAllocations,
+                         allocations := σ.allocations.erase id }) := by
+  obtain ⟨hdead, al, hal, hbase, -, -, -⟩ := hmeta.live halive
+  have hcont : σ.dynamicAddrs.contains mc.addr = true :=
+    mem_contains_int _ _ (hmeta.dynamic hdyn)
+  unfold CerbMem.killM applyMemM
+  simp only [cellPtr, hdead, Bool.false_eq_true, if_false, hal, hbase, bne, int_beq_refl,
+    Bool.not_true, Bool.true_and, hcont]
+
 /-! ## The allocator engine seam (Phase 2, D26 retirement) -/
 
 section Allocator
@@ -1403,6 +1437,37 @@ theorem allocateObject_success (tds : CerbTags.TagDefsMap) (σ : Mem) (pref : pr
   simp only [readonlyStatusForAlloc_none, Bool.false_eq_true, if_false]
   rfl
 
+/-- allocateRegion SUCCESS, symbolic state (kill/free arc K3): at a
+    nonzero fresh base the region allocator (CerbMem.lean:1533-1551)
+    takes the active path, mints exactly `cellPtr σ.nextAllocId base`,
+    bumps the cursor, registers an UNTYPED writable record of raw size
+    `sizeN.toNat` (ZERO admitted — no `max 1`, :1538), PUSHES the base
+    onto `dynamicAddrs` (:1548) and clears the range to unspecified
+    bytes. The thread id is discarded by the engine (`_ : Nat`), so `0`
+    here is definitionally the driver's `tid1`. -/
+theorem allocateRegion_success (σ : Mem) (pref : prefix0)
+    (aprov sprov : Provenance) (alignN sizeN : Int)
+    (hnz : freshBase σ.lastAddress alignN sizeN.toNat ≠ 0) :
+    applyMemM (allocateRegion 0 pref (.IV aprov alignN) (.IV sprov sizeN)) σ =
+      some (cellPtr σ.nextAllocId (freshBase σ.lastAddress alignN sizeN.toNat),
+        writeBytesTo
+          { σ with
+              nextAllocId := σ.nextAllocId + 1,
+              lastAddress := freshBase σ.lastAddress alignN sizeN.toNat,
+              allocations := σ.allocations.insert σ.nextAllocId
+                { base := freshBase σ.lastAddress alignN sizeN.toNat,
+                  size := (sizeN.toNat : Int),
+                  prefix_ := pref },
+              dynamicAddrs := freshBase σ.lastAddress alignN sizeN.toNat :: σ.dynamicAddrs }
+          (freshBase σ.lastAddress alignN sizeN.toNat)
+          (List.replicate sizeN.toNat undefByte)) := by
+  have hbeq : ((freshBase σ.lastAddress alignN sizeN.toNat == 0) = false) :=
+    int_beq_eq_false _ _ hnz
+  unfold allocateRegion applyMemM
+  simp only [freshBase] at hbeq ⊢
+  rw [hbeq]
+  rfl
+
 end Allocator
 
 /-! ## The global memory well-formedness invariant (kill/free arc K0;
@@ -1447,6 +1512,14 @@ cited against the pinned `generated/CerbMem.lean` (cerberus-lean
 - `la_wf` — the cursor's machine bound: the cold start is
   `0xFFFFFFFFFFFF` (:122) and the cursor only ever decreases to a
   fresh base below it.
+- `la_pos` (K3, the K2.5 range audit's M-2) — the cursor is POSITIVE:
+  the two cursor writers guard `lastAddress := alignedAddr` by
+  `alignedAddr == 0 → out of memory` (:1513/:1541) and `alignedAddr` is
+  a `Nat` cast, so a successful allocation leaves a cursor `≥ 1`; the
+  cold start is `0xFFFFFFFFFFFF`. Without it the budget's coupling
+  inequality `B ≤ headroom lastAddress` is vacuous at `lastAddress ≤ 0`
+  (`headroom` clamps to 0) and a zero-size region priced at `align − 1`
+  would pass the budget yet be KILLED (`freshBase 0 1 0 = 0`).
 - `dyn_lo`/`dyn_disj` — the DYNAMIC-ADDRESS component ([USER
   2026-09-02]: the arc includes dynamic allocation). MEASURED: the ONLY
   writer of `dynamicAddrs` in CerbMem.lean is `allocateRegion`'s
@@ -1480,12 +1553,14 @@ coupling lemma `CohG.create` consumes and the byte-only
 `CohG.kill` consumes: the erase shrinks `live_*`/`disj`/`cursor_lo`/
 `size_nonneg`/`dyn_disj`, `dead_lt` at the new dead id is `live_lt` of
 the erased record, `live_dead` for the survivors is the erase; the
-dynamic `free(NULL)` arm leaves the state alone). K3's REMAINING PROOF
-OBLIGATION (stated, not proved here — no alloc rule yet):
-  `MemWF.allocateRegion : MemWF σ → applyMemM (allocateRegion tid pref
-    align size) σ = some (pv, σ') → MemWF σ'`
-(`MemWF.alloc` at `dyn := base :: σ.dynamicAddrs` with `size :=
-sizeN.toNat`). -/
+dynamic `free(NULL)` arm leaves the state alone). PRESERVATION BY
+`allocateRegion` (K3 — the last stated obligation of acceptance goal 3,
+PROVED): `MemWF.allocateRegion`, `MemWF.alloc` at `dyn := base ::
+σ.dynamicAddrs` with `size := sizeN.toNat` (zero admitted; `size_nonneg`
+is the honest clause) — the new record satisfies `dyn_disj`'s inclusive
+clause by reflexivity, every older dynamic address by the old
+`cursor_lo`/`dyn_lo`. Every memory operation of the fragment now has its
+preservation theorem; goal 3 is CLOSED. -/
 
 section MemWF
 
@@ -1515,6 +1590,15 @@ structure MemWF (σ : Mem) : Prop where
   size_nonneg : ∀ id al, σ.allocations.get? id = some al → 0 ≤ al.size
   /-- the cursor respects the machine address bound -/
   la_wf : σ.lastAddress ≤ 2 ^ 64
+  /-- the cursor is POSITIVE (kill/free arc K3, the K2.5 audit's M-2):
+      every successful allocation sets it to a nonzero fresh base
+      (`alignedAddr ≠ 0` guards `lastAddress := alignedAddr`,
+      :1513/:1522 and :1541/:1546, and `alignedAddr` is a `Nat` cast),
+      the cold start is `0xFFFFFFFFFFFF` (:122), and `killM` leaves it
+      alone — the clause that makes `allocCost ≤ headroom` a SUFFICIENT
+      success condition at EVERY size, the zero-size region included
+      (`freshBase_ne_zero_of_cost'`) -/
+  la_pos : 0 < σ.lastAddress
   /-- every dynamic address is at or above the cursor -/
   dyn_lo : ∀ a, a ∈ σ.dynamicAddrs → σ.lastAddress ≤ a
   /-- no dynamic address lies strictly inside a live allocation -/
@@ -1543,7 +1627,7 @@ theorem MemWF.of_fields {σ σ' : Mem} (h : MemWF σ)
     (h1 : σ'.nextAllocId = σ.nextAllocId) (h2 : σ'.lastAddress = σ.lastAddress)
     (h3 : σ'.allocations = σ.allocations) (h4 : σ'.deadAllocations = σ.deadAllocations)
     (h5 : σ'.dynamicAddrs = σ.dynamicAddrs) : MemWF σ' := by
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · rw [h3, h1]; exact h.live_lt
   · rw [h4, h1]; exact h.dead_lt
   · rw [h3, h4]; exact h.live_dead
@@ -1551,6 +1635,7 @@ theorem MemWF.of_fields {σ σ' : Mem} (h : MemWF σ)
   · rw [h3, h2]; exact h.cursor_lo
   · rw [h3]; exact h.size_nonneg
   · rw [h2]; exact h.la_wf
+  · rw [h2]; exact h.la_pos
   · rw [h5, h2]; exact h.dyn_lo
   · rw [h5, h3]; exact h.dyn_disj
 
@@ -1566,6 +1651,7 @@ theorem MemWF.writeBytesTo {σ : Mem} (h : MemWF σ) (a : Int) (bs : List AbsByt
     list either stays or gains the new base. -/
 theorem MemWF.alloc {σ : Mem} (h : MemWF σ) (al : Allocation) (dyn : List Address)
     (hsize : 0 ≤ al.size) (hle : al.base + al.size ≤ σ.lastAddress)
+    (hpos : 0 < al.base)
     (hdyn : ∀ a, a ∈ dyn → a = al.base ∨ a ∈ σ.dynamicAddrs) :
     MemWF { σ with
               nextAllocId := σ.nextAllocId + 1,
@@ -1576,7 +1662,7 @@ theorem MemWF.alloc {σ : Mem} (h : MemWF σ) (al : Allocation) (dyn : List Addr
       if σ.nextAllocId = id then some al else σ.allocations.get? id := by
     intro id
     simp [Std.TreeMap.get?_eq_getElem?, Std.TreeMap.getElem?_insert]
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · intro id al' hg
     dsimp only at hg ⊢
     rw [hget] at hg
@@ -1625,6 +1711,8 @@ theorem MemWF.alloc {σ : Mem} (h : MemWF σ) (al : Allocation) (dyn : List Addr
     · exact h.size_nonneg id al' hg
   · dsimp only
     exact Int.le_trans (Int.le_trans (Int.le_add_of_nonneg_right hsize) hle) h.la_wf
+  · dsimp only
+    exact hpos
   · intro a ha
     dsimp only at ha ⊢
     rcases hdyn a ha with rfl | ha'
@@ -1665,6 +1753,12 @@ theorem freshBase_add_le_nat (la alignN : Int) (size : Nat)
   show (alignDown (la - (size : Int)).toNat (alignN.toNat.max 1) : Int) + (size : Int) ≤ la
   omega
 
+/-- A nonzero fresh base is positive (any byte count). -/
+theorem freshBase_pos_nat (la alignN : Int) (size : Nat)
+    (hnz : freshBase la alignN size ≠ 0) : 0 < freshBase la alignN size := by
+  have h0 : 0 ≤ freshBase la alignN size := Int.natCast_nonneg _
+  omega
+
 /-- `MemWF` survives `create` in the exact shape `allocateObject_success`
     delivers (what `CohG.create` consumes). -/
 theorem MemWF.create (tds : CerbTags.TagDefsMap) {σ : Mem} (h : MemWF σ) (pref : prefix0)
@@ -1687,7 +1781,7 @@ theorem MemWF.create (tds : CerbTags.TagDefsMap) {σ : Mem} (h : MemWF σ) (pref
              size := (sizeofCtype tds ty : Int), ty := some ty,
              isReadonly := .IsWritable, prefix_ := pref } σ.dynamicAddrs
     (Int.natCast_nonneg _) (freshBase_add_le tds _ _ _ hsz hnz)
-    (fun _ ha => Or.inr ha)).writeBytesTo _ _
+    (freshBase_pos_nat _ _ _ hnz) (fun _ ha => Or.inr ha)).writeBytesTo _ _
 
 /-- GLOBAL FRESHNESS OF `create` (acceptance goal 3's "fresh means fresh
     in the concrete allocation model"): under `MemWF`, at the guards of
@@ -1742,7 +1836,7 @@ theorem MemWF.map_allocs {σ : Mem} (h : MemWF σ) (f : Int → Allocation → A
     | some al =>
       rw [hal] at hg
       exact ⟨al, hal, (Option.some.inj hg).symm⟩
-  refine ⟨?_, h.dead_lt, ?_, ?_, ?_, ?_, h.la_wf, h.dyn_lo, ?_⟩
+  refine ⟨?_, h.dead_lt, ?_, ?_, ?_, ?_, h.la_wf, h.la_pos, h.dyn_lo, ?_⟩
   · intro id al' hg
     obtain ⟨al, hal, -⟩ := hget id al' hg
     exact h.live_lt id al hal
@@ -1818,11 +1912,49 @@ theorem MemWF.allocateObject (tds : CerbTags.TagDefsMap) (tid : Nat) (pref : pre
         size := (((sizeofCtype tds ty).max 1 : Nat) : Int), ty := some ty,
         isReadonly := readonlyStatusForAlloc pref initOpt, prefix_ := pref }
       σ.dynamicAddrs (Int.natCast_nonneg _) (freshBase_add_le_nat _ _ _ hnz)
-      (fun _ ha => Or.inr ha)
+      (freshBase_pos_nat _ _ _ hnz) (fun _ ha => Or.inr ha)
     split at hrun <;>
     · dsimp only [ndProj] at hrun
       obtain ⟨-, rfl⟩ := Prod.mk.inj (Option.some.inj hrun)
       exact hwf'.of_fields rfl rfl rfl rfl rfl
+
+/-- `allocateRegion`'s active arm (kill/free arc K3 — K0's LAST stated
+    obligation under acceptance goal 3, PROVED): the allocation step on
+    an UNTYPED record of raw size `sizeN.toNat` (zero admitted,
+    CerbMem.lean:1538), the fresh base PUSHED onto `dynamicAddrs`
+    (:1548), followed by the byte write (:1549-1550). Every component is
+    `MemWF.alloc`'s at `dyn := base :: σ.dynamicAddrs` — the new record
+    satisfies `dyn_disj`'s inclusive clause by reflexivity, each older
+    dynamic address by the old `dyn_lo`; `la_pos` is the nonzero guard. -/
+theorem MemWF.allocateRegion (tid : Nat) (pref : prefix0) (align size : IntegerValue)
+    {σ σ' : Mem} {pv : PointerValue} (h : MemWF σ)
+    (hrun : applyMemM (CerbMem.allocateRegion tid pref align size) σ = some (pv, σ')) :
+    MemWF σ' := by
+  unfold CerbMem.allocateRegion at hrun
+  rcases align with ⟨_, alignN⟩
+  rcases size with ⟨_, sizeN⟩
+  rw [applyMemM_ND] at hrun
+  dsimp only at hrun
+  split at hrun
+  · dsimp only [ndProj] at hrun
+    cases hrun
+  · next hne =>
+    have hnz : freshBase σ.lastAddress alignN sizeN.toNat ≠ 0 := by
+      intro heq
+      apply hne
+      rw [show (alignDown (σ.lastAddress - (sizeN.toNat : Nat)).toNat
+        (alignN.toNat.max 1) : Int) = freshBase σ.lastAddress alignN sizeN.toNat
+        from rfl, heq]
+      rfl
+    have hwf' := h.alloc
+      { base := freshBase σ.lastAddress alignN sizeN.toNat,
+        size := (sizeN.toNat : Int), prefix_ := pref }
+      (freshBase σ.lastAddress alignN sizeN.toNat :: σ.dynamicAddrs)
+      (Int.natCast_nonneg _) (freshBase_add_le_nat _ _ _ hnz) (freshBase_pos_nat _ _ _ hnz)
+      (fun _ ha => List.mem_cons.mp ha)
+    dsimp only [ndProj] at hrun
+    obtain ⟨-, rfl⟩ := Prod.mk.inj (Option.some.inj hrun)
+    exact hwf'.writeBytesTo _ _
 
 /-- THE KILL STEP on the allocator tables (CerbMem.lean:1576-1578): a
     LIVE record's id moves to `deadAllocations` and its record is
@@ -1842,7 +1974,7 @@ theorem MemWF.kill {σ : Mem} (h : MemWF σ) (id : Int) (al : Allocation)
     split at hg
     · cases hg
     · next hne => exact ⟨fun h => hne h.symm, hg⟩
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, h.la_wf, h.dyn_lo, ?_⟩
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, h.la_wf, h.la_pos, h.dyn_lo, ?_⟩
   · intro i al' hg
     exact h.live_lt i al' (hget i al' hg).2
   · intro i hc
@@ -2078,9 +2210,17 @@ with `alignDown n a = n / a * a` (:1451); the allocation is KILLED
 ("out of memory", :1513/:1541) iff `alignedAddr == 0`, otherwise
 `lastAddress := alignedAddr` (:1522/:1546). Two arithmetic consequences:
 
-(i) SUCCESS. `alignedAddr ≠ 0 ↔ size + align ≤ lastAddress`, i.e.
-    `allocCost = size + align − 1 ≤ headroom = lastAddress − 1`
-    (`freshBase_ne_zero_of_cost`, the sufficient direction the rules use).
+(i) SUCCESS. `alignedAddr ≠ 0 ↔ size + align ≤ lastAddress` at every
+    size and cursor (`toNat (la − size) ≥ align ↔ la − size ≥ align`,
+    `align ≥ 1`). The step to `allocCost = size + align − 1 ≤ headroom =
+    (lastAddress − 1).toNat` needs ONE of: a positive size (then the cost
+    is ≥ 1 and a headroom that clamps to 0 refuses it —
+    `freshBase_ne_zero_of_cost`, `create_atomic`'s `hsz`), or the engine
+    invariant `0 < lastAddress` (`MemWF.la_pos`, K3), under which
+    `headroom` does not clamp and the equivalence holds at EVERY size,
+    zero included (`freshBase_ne_zero_of_cost'`, `alloc_atomic`). Without
+    either, `freshBase 0 1 0 = 0` while `0 ≤ headroom 0` — the K2.5 range
+    audit's M-2; the rules were always sound, this sentence was not.
 (ii) CONSUMPTION. The cursor descends by exactly
     `size + (lastAddress − size) % align ≤ size + align − 1 = allocCost`,
     so the headroom after a successful allocation is at least the headroom
@@ -2153,6 +2293,49 @@ theorem freshBase_ne_zero_of_cost (la al : Int) (size : Nat) (hsz : 0 < size)
 /-- THE CONSUMPTION BOUND (section header, (ii)): after a successful
     allocation the headroom has shrunk by at most the cost. -/
 theorem headroom_freshBase (la al : Int) (size : Nat) (hsz : 0 < size)
+    (h : size + al.toNat.max 1 - 1 ≤ headroom la) :
+    headroom la ≤ headroom (freshBase la al size) + (size + al.toNat.max 1 - 1) := by
+  have ha : 0 < al.toNat.max 1 := Nat.lt_of_lt_of_le Nat.one_pos (Nat.le_max_right _ _)
+  have hdm := Nat.div_add_mod (la - size).toNat (al.toNat.max 1)
+  have hml := Nat.mod_lt (la - size).toNat ha
+  rw [Nat.mul_comm] at hdm
+  unfold headroom at h ⊢
+  unfold freshBase CerbMem.alignDown
+  generalize al.toNat.max 1 = a at *
+  generalize (la - (size : Int)).toNat / a * a = m at hdm ⊢
+  generalize (la - (size : Int)).toNat % a = r at hdm hml
+  omega
+
+/-- The budget one `alloc` of `sizeN` bytes at alignment operand `alignN`
+    consumes (kill/free arc K3): `sizeN.toNat + max(alignN, 1) − 1` —
+    `allocateRegion`'s worst-case cursor descent, the same arithmetic as
+    `allocCost` at the region's RAW size (no `max 1` padding: a zero-size
+    region is admitted by the engine and costs `max(alignN, 1) − 1`). -/
+def regionCost (alignN sizeN : Int) : Nat := sizeN.toNat + alignN.toNat.max 1 - 1
+
+theorem regionCost_eq (alignN sizeN : Int) :
+    regionCost alignN sizeN = sizeN.toNat + alignN.toNat.max 1 - 1 := rfl
+
+/-- THE SUCCESS BOUND AT ANY SIZE (section header, (i); K3): under the
+    engine invariant `0 < la` (`MemWF.la_pos`) a cost within the headroom
+    is a nonzero fresh base — the zero-size region included. -/
+theorem freshBase_ne_zero_of_cost' (la al : Int) (size : Nat) (hla : 0 < la)
+    (h : size + al.toNat.max 1 - 1 ≤ headroom la) :
+    freshBase la al size ≠ 0 := by
+  have ha : 0 < al.toNat.max 1 := Nat.lt_of_lt_of_le Nat.one_pos (Nat.le_max_right _ _)
+  have hdm := Nat.div_add_mod (la - size).toNat (al.toNat.max 1)
+  have hml := Nat.mod_lt (la - size).toNat ha
+  rw [Nat.mul_comm] at hdm
+  unfold headroom at h
+  unfold freshBase CerbMem.alignDown
+  generalize al.toNat.max 1 = a at *
+  generalize (la - (size : Int)).toNat / a * a = m at hdm ⊢
+  generalize (la - (size : Int)).toNat % a = r at hdm hml
+  intro hz
+  omega
+
+/-- THE CONSUMPTION BOUND AT ANY SIZE (section header, (ii); K3). -/
+theorem headroom_freshBase' (la al : Int) (size : Nat) (hla : 0 < la)
     (h : size + al.toNat.max 1 - 1 ≤ headroom la) :
     headroom la ≤ headroom (freshBase la al size) + (size + al.toNat.max 1 - 1) := by
   have ha : 0 < al.toNat.max 1 := Nat.lt_of_lt_of_le Nat.one_pos (Nat.le_max_right _ _)
@@ -4003,7 +4186,7 @@ theorem CohG.create {σ : Mem} {mm : SpikeHeapF MetaCell}
     exact (MemWF.alloc (hG.wf hcurne)
       { base := base, size := (sizeofCtype tds ty : Int), ty := some ty,
         isReadonly := .IsWritable, prefix_ := pref } σ.dynamicAddrs
-      (Int.natCast_nonneg _) hbase_le (fun _ ha => Or.inr ha)).writeBytesTo _ _
+      (Int.natCast_nonneg _) hbase_le hbase_pos (fun _ ha => Or.inr ha)).writeBytesTo _ _
   · -- cur_byte_lo
     intro _ k b hget
     rw [hlast']
@@ -4022,6 +4205,228 @@ theorem CohG.create {σ : Mem} {mm : SpikeHeapF MetaCell}
     · subst hid
       rw [Iris.Std.get?_insert_eq rfl] at hget
       obtain rfl : objCell tds base ty true false = mc := Option.some.inj hget
+      exact Int.le_refl _
+    · rw [Iris.Std.get?_insert_ne (fun h => hid h.symm)] at hget
+      exact Int.le_trans (Int.le_add_of_nonneg_right (Int.natCast_nonneg _))
+        (hmeta_hi id mc hget)
+
+/-- CohG survives `alloc` (kill/free arc K3) in the exact shape
+    `allocateRegion_success` delivers: the fresh UNTYPED, writable,
+    DYNAMIC region cell `regionCell base n true` is inserted at the
+    fresh id, its (possibly EMPTY — `n = 0` admitted) byte range at
+    unspecified bytes is unioned into the byte map, the cursor cell
+    advances, and the base is pushed onto `dynamicAddrs`. `metas`: the
+    new cell is live-coupled (record at the base, `ty = none`, size `n`,
+    writable) and dynamic-coupled by `List.mem_cons_self`; every older
+    cell rides on `MetaCoh.of_fields_dyn` (the dynamic list only grew).
+    `wf`: `MemWF.alloc` at `dyn := base :: σ.dynamicAddrs`; the range
+    facts (`metas_disj`, `cur_meta_lo`, `cur_byte_lo`, `bytes`) are
+    `CohG.create`'s with `sizeof ty` replaced by `n` — none needs `0 <
+    n`. No `tds` enters: regions are layout-free. -/
+theorem CohG.alloc {σ : Mem} {mm : SpikeHeapF MetaCell}
+    {mb : SpikeHeapF AbsByte} {mk : SpikeHeapF AllocCursor}
+    (hG : CohG σ mm mb mk) (pref : prefix0) (alignN sizeN : Int)
+    (hcur : get? mk 0 = some ⟨σ.lastAddress, σ.nextAllocId⟩)
+    (hnz : freshBase σ.lastAddress alignN sizeN.toNat ≠ 0) :
+    CohG
+      (writeBytesTo
+        { σ with
+            nextAllocId := σ.nextAllocId + 1,
+            lastAddress := freshBase σ.lastAddress alignN sizeN.toNat,
+            allocations := σ.allocations.insert σ.nextAllocId
+              { base := freshBase σ.lastAddress alignN sizeN.toNat,
+                size := (sizeN.toNat : Int),
+                prefix_ := pref },
+            dynamicAddrs := freshBase σ.lastAddress alignN sizeN.toNat :: σ.dynamicAddrs }
+        (freshBase σ.lastAddress alignN sizeN.toNat)
+        (List.replicate sizeN.toNat undefByte))
+      (Iris.Std.PartialMap.insert mm σ.nextAllocId
+        (regionCell (freshBase σ.lastAddress alignN sizeN.toNat) sizeN.toNat true))
+      (Iris.Std.PartialMap.union
+        (rangeMap (freshBase σ.lastAddress alignN sizeN.toNat)
+          (List.replicate sizeN.toNat undefByte)) mb)
+      (Iris.Std.PartialMap.insert mk 0
+        ⟨freshBase σ.lastAddress alignN sizeN.toNat, σ.nextAllocId + 1⟩) := by
+  have hcurne : get? mk 0 ≠ none := by
+    rw [hcur]
+    simp
+  have hbase_le0 := freshBase_add_le_nat σ.lastAddress alignN sizeN.toNat hnz
+  have hbase_pos0 := freshBase_pos_nat σ.lastAddress alignN sizeN.toNat hnz
+  generalize hn_def : sizeN.toNat = n at hnz hbase_le0 hbase_pos0 ⊢
+  generalize hbase_def : freshBase σ.lastAddress alignN n = base
+    at hnz hbase_le0 hbase_pos0 ⊢
+  have hbase_le : base + (n : Int) ≤ σ.lastAddress := hbase_le0
+  have hbase_pos : 0 < base := hbase_pos0
+  have hreplen : (List.replicate n undefByte).length = n := by simp
+  -- the fresh range is disjoint from every tracked byte and cell (old
+  -- ones sit at or above the OLD cursor; the fresh range ends at or
+  -- below it)
+  have hbyte_hi : ∀ k b, get? mb k = some b → base + (n : Int) ≤ k := by
+    intro k b hget
+    exact Int.le_trans hbase_le (hG.cur_byte_lo hcurne k b hget)
+  have hmeta_hi : ∀ id mc, get? mm id = some mc → base + (n : Int) ≤ mc.addr := by
+    intro id mc hget
+    exact Int.le_trans hbase_le (hG.cur_meta_lo hcurne id mc hget)
+  have hrange_get : ∀ k,
+      get? (rangeMap base (List.replicate n undefByte)) k =
+      if base ≤ k ∧ k < base + (n : Int) then some undefByte else none := by
+    intro k
+    rw [rangeMap_get?, hreplen]
+    by_cases h : base ≤ k ∧ k < base + (n : Int)
+    · rw [if_pos h, if_pos h,
+        List.getElem?_eq_getElem
+          (by rw [hreplen]; omega :
+            (k - base).toNat < (List.replicate n undefByte).length),
+        List.getElem_replicate]
+    · rw [if_neg h, if_neg h]
+  -- state-side readouts of the post-allocation state
+  have hdead' : (writeBytesTo
+      { σ with
+          nextAllocId := σ.nextAllocId + 1,
+          lastAddress := base,
+          allocations := σ.allocations.insert σ.nextAllocId
+            { base := base, size := (n : Int), prefix_ := pref },
+          dynamicAddrs := base :: σ.dynamicAddrs }
+      base (List.replicate n undefByte)).deadAllocations = σ.deadAllocations := rfl
+  have hnext' : (writeBytesTo
+      { σ with
+          nextAllocId := σ.nextAllocId + 1,
+          lastAddress := base,
+          allocations := σ.allocations.insert σ.nextAllocId
+            { base := base, size := (n : Int), prefix_ := pref },
+          dynamicAddrs := base :: σ.dynamicAddrs }
+      base (List.replicate n undefByte)).nextAllocId = σ.nextAllocId + 1 := rfl
+  have hlast' : (writeBytesTo
+      { σ with
+          nextAllocId := σ.nextAllocId + 1,
+          lastAddress := base,
+          allocations := σ.allocations.insert σ.nextAllocId
+            { base := base, size := (n : Int), prefix_ := pref },
+          dynamicAddrs := base :: σ.dynamicAddrs }
+      base (List.replicate n undefByte)).lastAddress = base := rfl
+  have halloc' : (writeBytesTo
+      { σ with
+          nextAllocId := σ.nextAllocId + 1,
+          lastAddress := base,
+          allocations := σ.allocations.insert σ.nextAllocId
+            { base := base, size := (n : Int), prefix_ := pref },
+          dynamicAddrs := base :: σ.dynamicAddrs }
+      base (List.replicate n undefByte)).allocations =
+      σ.allocations.insert σ.nextAllocId
+        { base := base, size := (n : Int), prefix_ := pref } := rfl
+  have hdyn' : (writeBytesTo
+      { σ with
+          nextAllocId := σ.nextAllocId + 1,
+          lastAddress := base,
+          allocations := σ.allocations.insert σ.nextAllocId
+            { base := base, size := (n : Int), prefix_ := pref },
+          dynamicAddrs := base :: σ.dynamicAddrs }
+      base (List.replicate n undefByte)).dynamicAddrs = base :: σ.dynamicAddrs := rfl
+  have hbytemid : ∀ k, byteAt
+      { σ with
+          nextAllocId := σ.nextAllocId + 1,
+          lastAddress := base,
+          allocations := σ.allocations.insert σ.nextAllocId
+            { base := base, size := (n : Int), prefix_ := pref },
+          dynamicAddrs := base :: σ.dynamicAddrs } k =
+      byteAt σ k := fun _ => rfl
+  have hallocs_get : ∀ (id : Int),
+      (σ.allocations.insert σ.nextAllocId
+        ({ base := base, size := (n : Int), prefix_ := pref } : Allocation)).get? id =
+      if σ.nextAllocId = id then
+        some ({ base := base, size := (n : Int), prefix_ := pref } : Allocation)
+      else σ.allocations.get? id := by
+    intro id
+    simp [Std.TreeMap.get?_eq_getElem?, Std.TreeMap.getElem?_insert]
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  · -- metas: the fresh cell is live, writable, untyped, DYNAMIC; the old
+    -- cells see their dead-list and record readouts unchanged and the
+    -- dynamic list grow
+    intro id mc hget
+    by_cases hid : id = σ.nextAllocId
+    · subst hid
+      rw [Iris.Std.get?_insert_eq rfl] at hget
+      obtain rfl : regionCell base n true = mc := Option.some.inj hget
+      refine ⟨fun _ => ⟨?_, ?_⟩, fun h => by simp at h, rfl,
+        fun _ => by rw [hdyn']; exact List.mem_cons_self ..⟩
+      · rw [hdead']
+        exact hG.cur_dead hcurne _ (Int.le_refl _)
+      · refine ⟨Allocation.mk base (n : Int) none .IsWritable .Unexposed pref, ?_,
+          rfl, rfl, rfl, ⟨fun _ => rfl, fun _ => rfl⟩⟩
+        rw [halloc', hallocs_get, if_pos rfl]
+    · rw [Iris.Std.get?_insert_ne (fun h => hid h.symm)] at hget
+      refine (hG.metas id mc hget).of_fields_dyn hdead' ?_ ?_
+      · rw [halloc', hallocs_get, if_neg (fun h => hid h.symm)]
+      · intro a ha
+        rw [hdyn']
+        exact List.mem_cons_of_mem _ ha
+  · -- metas_disj
+    intro i j mci mcj hne hgi hgj
+    by_cases hi : i = σ.nextAllocId
+    · subst hi
+      rw [Iris.Std.get?_insert_eq rfl] at hgi
+      obtain rfl : regionCell base n true = mci := Option.some.inj hgi
+      rw [Iris.Std.get?_insert_ne hne] at hgj
+      exact .inl (hmeta_hi j mcj hgj)
+    · rw [Iris.Std.get?_insert_ne (fun h => hi h.symm)] at hgi
+      by_cases hj : j = σ.nextAllocId
+      · subst hj
+        rw [Iris.Std.get?_insert_eq rfl] at hgj
+        obtain rfl : regionCell base n true = mcj := Option.some.inj hgj
+        exact .inr (hmeta_hi i mci hgi)
+      · rw [Iris.Std.get?_insert_ne (fun h => hj h.symm)] at hgj
+        exact hG.metas_disj i j mci mcj hne hgi hgj
+  · -- bytes
+    intro k b hget
+    rw [PMunion_get?, hrange_get] at hget
+    by_cases hin : base ≤ k ∧ k < base + (n : Int)
+    · rw [if_pos hin] at hget
+      simp only [Option.orElse] at hget
+      obtain rfl : undefByte = b := Option.some.inj hget
+      rw [byteAt_writeBytesTo_in _ base (List.replicate n undefByte) k
+        hin.1 (by rw [hreplen]; exact_mod_cast hin.2)]
+      exact List.getElem_replicate _
+    · rw [if_neg hin] at hget
+      simp only [Option.orElse] at hget
+      rw [byteAt_writeBytesTo_out _ base (List.replicate n undefByte) k
+        (by rw [hreplen]; exact_mod_cast hin), hbytemid]
+      exact hG.bytes k b hget
+  · -- cursor_key
+    intro k c hget
+    by_cases hk : k = 0
+    · exact hk
+    · rw [Iris.Std.get?_insert_ne (fun h => hk h.symm)] at hget
+      exact hG.cursor_key k c hget
+  · -- cursor
+    intro c hget
+    rw [Iris.Std.get?_insert_eq rfl] at hget
+    obtain rfl := Option.some.inj hget
+    exact ⟨hlast'.symm, hnext'.symm⟩
+  · -- wf: the global invariant survives the allocation step at the
+    -- grown dynamic list, then the byte write
+    intro _
+    exact (MemWF.alloc (hG.wf hcurne)
+      { base := base, size := (n : Int), prefix_ := pref } (base :: σ.dynamicAddrs)
+      (Int.natCast_nonneg _) hbase_le hbase_pos
+      (fun _ ha => List.mem_cons.mp ha)).writeBytesTo _ _
+  · -- cur_byte_lo
+    intro _ k b hget
+    rw [hlast']
+    rw [PMunion_get?, hrange_get] at hget
+    by_cases hin : base ≤ k ∧ k < base + (n : Int)
+    · exact hin.1
+    · rw [if_neg hin] at hget
+      simp only [Option.orElse] at hget
+      exact Int.le_trans (Int.le_add_of_nonneg_right (Int.natCast_nonneg _))
+        (hbyte_hi k b hget)
+  · -- cur_meta_lo: the fresh cell IS the new cursor; every old cell
+    -- ends at or below it
+    intro _ id mc hget
+    rw [hlast']
+    by_cases hid : id = σ.nextAllocId
+    · subst hid
+      rw [Iris.Std.get?_insert_eq rfl] at hget
+      obtain rfl : regionCell base n true = mc := Option.some.inj hget
       exact Int.le_refl _
     · rw [Iris.Std.get?_insert_ne (fun h => hid h.symm)] at hget
       exact Int.le_trans (Int.le_add_of_nonneg_right (Int.natCast_nonneg _))
