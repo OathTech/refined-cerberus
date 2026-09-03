@@ -47,9 +47,10 @@ M (e, ev0 :: evs, ctl, σ) (e', ρ', ctl', σ')) : CerberusRound M (e, ev0 ::
 evs, ctl, σ) (e', ρ', ctl', σ')` — on `Frag`, at a cons-shaped
 environment, at ANY control and ANY successor control (the call and
 return rounds write it), with `esize e ≤ lemDefaultFuel`, and no
-well-formedness premise (`SeqWF` and the empty-stack control `ctl.κ =
-[]` are premises of `cerberusRound_classify` only, for its `value_done`
-arm): every
+well-formedness premise (`SeqWF` is a premise of `cerberusRound_classify`,
+for its `value_done` arm, and of `shipped_done`/`outcomesU_done`; the
+empty-stack control `ctl.κ = []` is a premise of those and of every
+adequacy export's entry control): every
 mirror step is exactly ONE ITERATION OF THE SHIPPED DRIVER'S THREAD LOOP
 — the relation `CerberusRound M` (Round.lean): at every driver state
 embedding the context and the configuration (`MachineCtx.Embeds`), the
@@ -320,7 +321,8 @@ vocabulary, `hB : n.toNat * (15 + max al.toNat 1) ≤ 281474976710647`,
 bridged to the package's `regionCost`/`headroom` inside the proof by
 `ml_budget_bridge`). "Closed shipped-driver statement" means exactly these
 eight (the DECISIONS register's "nine production statements" count the
-generic pipeline theorem `prod_run_eqJ` as well — the same set); the
+generic pipeline theorem `prod_run_eqJ` as well — the same eight plus
+`prod_run_eqJ`); the
 headline claim of this package rests on them. They are
 reached through `wpt_driver_done`/`wpt_driver_done_alloc` and
 `prod_run_eqJ` (the single-procedure lane) or, through calls,

@@ -39,8 +39,10 @@ annotation quantified):
   normalization of the MIRROR relation, not an engine fact — was
   retired at the 2026-09-02 professor review, required fix 5; the former
   `fib_certified_total` over the package loop `driveU` was deleted with
-  the loop in the fuel-lane restatement, 2026-09-03, its content carried
-  by `fib_certified_production`).
+  the loop in the fuel-lane restatement, 2026-09-03; its value content is
+  carried by `fib_certified_production`, the any-memory termination
+  equation and the state pin are not restated — mover: the shipped-loop
+  total twin at `procCtx`, F1 record §6 item 5).
 -/
 import CerberusHeapLang.API
 import CerberusHeapLang.LoopExhibit

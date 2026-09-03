@@ -126,7 +126,14 @@ theorem project_triple_pure {GF : BundledGFunctors} [SpikeGpreS GF]
     (P : CellMap) (Q : ∀ [SpikeGS .hasLC GF], CoreRVal → IProp GF)
     (ψ : CellMap → value → Mem → Prop)
     (hwp : ∀ [SpikeGS .hasLC GF],
-      iprop(([∗map] i ↦ c ∈ P, cellOwn M.tagDefs (hlc := by
+      iprop(([∗map] i ↦ c ∈ P, cellOwn M.tagDefs (hlc := .hasLC) (GF := GF) i (.own 1) c)) ⊢
+        WP (⟨e, ev0 :: evs, ctl, M⟩ : CoreRt) @ Stuckness.NotStuck; ⊤ {{ w, Q w }})
+    (hpost : ∀ [SpikeGS .hasLC GF] (w : CoreRVal) (R : CellMap) (σ' : Mem)
+      (mm : SpikeHeapF MetaCell) (mb : SpikeHeapF CerbMem.AbsByte)
+      (mk : SpikeHeapF AllocCursor), CohG σ' mm mb mk →
+      iprop(Q w ∗ ([∗map] i ↦ c ∈ R, cellOwn M.tagDefs (hlc := .hasLC) (GF := GF) i (.own 1) c) ∗
+        metaInterp mm ∗ byteInterp mb) ⊢ (⌜ψ R w.val σ'⌝ : IProp GF)) :
+    MemTriple M ctl (ev0 :: evs) e P ψ := by
 ```
 
 Hypotheses: empty tag definitions and extern (`htd`, `hex` — the
