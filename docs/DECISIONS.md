@@ -1069,3 +1069,40 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   fix `lk = false` (or ghost-update `readonly`) and say so; N-3
   `allocMeta`/`locInBounds` are RefinedC's `alloc_global`, not
   `loc_in_bounds` — wording.
+- **2026-09-03 [USER] OVERNIGHT AUTONOMY — BUILD THROUGH MALLOC/FREE AND
+  CALLS; AUDIT AGGRESSIVELY; MERGE IN THE MORNING** (verbatim): "Can you
+  run the build through malloc/ free, and then build the call / return
+  feature too? … You'll want to aggressively audit at the end for
+  adherence to project standards (you can launch that audit autonomously,
+  and fix the results too). Ideally tomorrow morning you'd have got to
+  the end of that build and be ready to discuss merging with me".
+  Rulings folded in the same conversation: (1) SPLITTABLE CAPACITY IS
+  INCLUDED ("Great, let's include it") — the operator corrected the
+  orchestrator: it "shouldn't modify the trust model at all, all the
+  trust surfaces are based on cerberus-lean" — it is an internals
+  refactor of the derived layer (ghost algebra + coupling), so it goes
+  BEFORE K3 so `alloc` is stated once over the budget; K2.5. (2) THE
+  FUEL FIX LANDED (cerberus-lean mainline `f95ef8d9c`; change manifest
+  `lean_frontend/docs/2026-09-03_fuel-arc-change-manifest.md`): migrate
+  to the real driver, in parallel if possible — the scout
+  (`docs/2026-09-03_repin-scout.md`, branch repin-scout) found R1/R2/R3
+  delivered, zero renames/signature changes, zero measured breakage from
+  the memory-model body changes, four errors of one cause (the 10^8
+  budget vs `Nat.succ` rfl idioms); the RE-PIN (cheap) is sequenced
+  after K4 and before calls; the FUEL-LANE RESTATEMENT (delete `driveU`,
+  restate the partial exports over `drive_lemFuel`, remove PROVISIONAL —
+  the long pole, ~1 week est.) after calls so it is done once on the
+  final configuration. [AGENT] sequence: K2 → K2.5 → K3 → K4 → re-pin →
+  C1–C4 → fuel-lane restatement → the aggressive standards audit + fixes.
+  NO MERGES overnight; every slice gated twice and range-audited.
+- **2026-09-03 [AGENT] KILL/FREE K2 LANDED** (record:
+  `cerberus-heaplang/docs/2026-09-03_k2-notes.md`): `kill_atomic`/`wps_kill`/
+  `wpt_kill` (+ `_emp` textbook forms, `_eval` operand forms) at
+  `pointsToCell … (.own 1)` with post `deadObj`; `Step.kill`/`kill_eval`
+  mirror the engine's arm verbatim (bare `Vunit` continuation);
+  `Frag.kill`/`kill_op` static only; `MemWF.killM` PROVED for both arms
+  (K3's remaining goal-3 obligation: `MemWF.allocateRegion`);
+  completeness rows with the exact kill reasons (UB179a/UB179b/the
+  non-UB out-of-bound); K1-audit items M-1 (bridge lemmas, sub-trio
+  cones, sweep-bounded), N-2, N-3 done. Pins 185 → 205. Range audit
+  dispatched on a fixed copy at 46ed41f so K2.5 may start.
