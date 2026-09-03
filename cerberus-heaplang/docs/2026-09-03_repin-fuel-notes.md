@@ -471,3 +471,29 @@ Exit code 0.
   sits on `367af77` (the K5 audit record + DECISIONS entry, docs only — no
   conflicts). If K5.1 lands, the orchestrator rebases (coordinator's
   sequencing note).
+
+## Addendum (orchestrator, 2026-09-03): the FULL gate at the COMBINED head
+
+The record above describes the pre-rebase tree (294 pins). After the rebase over K5.1 and the audit's N-1 comment fix (head cf40966), the orchestrator ran `scripts/test_unit.sh` at that head. Verbatim verdict lines:
+
+```
+== gate 1: banned proof-method grep (native_decide / bv_decide / ofReduce*) ==
+ok: no banned proof-method references
+== gate 2: capped build, root package (elaborates its axiom audit) ==
+RefinedCerberus axiom sweep: 2 theorems, all cones within the classical trio
+RefinedCerberus banned-axiom sweep: 3 constants of every kind checked; sorryAx/ofReduceBool/ofReduceNat absent from all cones
+ok: root build green
+== gate 3: capped build, cerberus-heaplang (elaborates its axiom audit) ==
+CerberusHeapLang export pins: 296 trio-exact
+CerberusHeapLang axiom sweep: every theorem bounded by the trio (3050 swept, internal details included — count informational, environment-dependent)
+CerberusHeapLang banned-axiom sweep: sorryAx/ofReduceBool/ofReduceNat absent from all cones (4701 constants of every kind swept, internal details included — count informational, environment-dependent)
+ok: cerberus-heaplang build green
+== speedbump: capability manifest (regenerate; red on a red row or drift) ==
+ok: capability manifest regenerated, no drift
+== speedbump: import direction (semantics → heap → rules → adequacy → clients) ==
+ok: import direction — no core module imports an exhibit/example/production module
+ALL GATES GREEN
+GATE-EXIT=0
+```
+
+This answers the combined audit's M-1 (no recorded gate at the combined head) and N-3/N-4 (the 294 in the record and commit message are the pre-rebase count; the merged content has 296 pins).
