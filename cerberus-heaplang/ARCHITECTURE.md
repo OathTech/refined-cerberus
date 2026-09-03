@@ -339,7 +339,22 @@ THE OTHER OPEN ITEMS:
   from the split budget, written and linked through the region rules,
   then walked and freed), `malloc_list_certified_total` (PROVISIONAL,
   `driveU`) and `malloc_list_certified_production` (the seventh
-  root-of-trust export). Record: `docs/2026-09-03_k5-notes.md`.
+  root-of-trust export). All four state `n.toNat` DISTINCT dead ids
+  (`ids.Nodup`, K5.1 — the K5 audit's M-1: `deadRegion` is persistent,
+  so without it the posts said only that some region is dead); the
+  distinctness laws are the public `regionOwn_ne`/
+  `regionOwn_deadRegion_ne` (`metaOwn_ne` at the region bundles),
+  applied at each `alloc` and carried by the invariant `(ids ++
+  done).Nodup` through each `free`. Records: `docs/2026-09-03_k5-notes.md`,
+  `docs/2026-09-03_k5.1-notes.md`.
+- **Two `save` labels in one program — OPEN (the K5 audit's N-1).** Every
+  loop exhibit is single-label; the malloc'd list merges its two C loops
+  into one Core label with two phases because the two-label form needs a
+  two-entry label-map lookup law (`lookupLabel` at `fmapAddBy … (fmapAddBy
+  … fmapEmpty)`) and EnvLaws has only the singleton
+  `fmapLookupBy_addBy_empty`. A law gap, not a rule gap (`wps_run`/
+  `wps_save` are label-generic); the mover is an EnvLaws slice adding the
+  two-entry (or general) lookup law.
 - **The kill/free arc K0–K4 — CLOSED (2026-09-03).** Record:
   `docs/2026-09-03_kill-free-arc-record.md` (one paragraph per slice,
   commits, audit verdicts, the corrections to the design note, what

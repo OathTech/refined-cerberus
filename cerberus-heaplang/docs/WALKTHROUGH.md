@@ -1007,18 +1007,29 @@ the malloc'd linked list the arc chartered — one label, two phases
 array_shift(q, long, 1), p)`, `run ml(i − 1, q)`; `i = 0`: null test,
 `load(node*, array_shift(p, long, 1))`, `free(p)`, `run ml(0, nx)`),
 invariant `allocBudget (i · regionCost al 16) ∗ isRegionList p ids ∗
-deadRegions done` with `i + |ids| + |done| = n`; `ml_wps`/`ml_wpt`
-(`{allocBudget (n.toNat * regionCost al 16)} ml(n, NULL) {ret unit.
-∃ ids, |ids| = n.toNat ∗ deadRegions ids}`, total at `25 * n.toNat +
-7`), `malloc_list_certified_total` (PROVISIONAL; `driveU` under
-`LaunchCoh … ∅ (n.toNat * regionCost al 16)`, `n.toNat` ids dead and
-erased) and `malloc_list_certified_production` (under `hB : n.toNat *
-(15 + max al.toNat 1) ≤ 281474976710647` — the budget fits the cold
-start, in ENGINE vocabulary — and `hfuel : 25 * n.toNat + 9 ≤
-lemDefaultFuel`; the final memory has `n.toNat` allocation ids dead and
-erased, witnessed by the proof as the freed nodes). The dead-list
-readout goes through the public consequence face `deadRegion_dead`
-under `stateInterp_readout`; the single-allocation faces are the public
+deadRegions done` with `i + |ids| + |done| = n` and `(ids ++ done).Nodup`;
+`ml_wps`/`ml_wpt` (`{allocBudget (n.toNat * regionCost al 16)} ml(n,
+NULL) {ret unit. ∃ ids, |ids| = n.toNat ∧ ids.Nodup ∗ deadRegions ids}`,
+total at `25 * n.toNat + 7`), `malloc_list_certified_total`
+(PROVISIONAL; `driveU` under `LaunchCoh … ∅ (n.toNat * regionCost al
+16)`, `n.toNat` DISTINCT ids dead and erased) and
+`malloc_list_certified_production` (under `hB : n.toNat * (15 + max
+al.toNat 1) ≤ 281474976710647` — the budget fits the cold start, in
+ENGINE vocabulary — and `hfuel : 25 * n.toNat + 9 ≤ lemDefaultFuel`; the
+final memory has `n.toNat` DISTINCT allocation ids dead and erased,
+witnessed by the proof as the freed nodes). DISTINCTNESS is stated, not
+implied (K5.1, the K5 audit's M-1): `deadRegion` is persistent, so
+without `ids.Nodup` each of these posts would be interderivable with
+"some region is dead"; the `Nodup` is discharged at every `alloc` by the
+public `regionOwn_ne`/`regionOwn_deadRegion_ne` (Heap.lean — the fresh
+region at `.own 1` beside every live node and beside every dead one) and
+carried by the invariant through every `free` (two dead regions have no
+distinctness law — both are persistent). The counter field is stored
+THROUGH the region but NOT tracked by `isRegionList` (the walk never
+reads it; tracking it needs the signed-long decode round trip, not in
+this tree). The dead-list readout goes through the public consequence
+face `deadRegion_dead` under `stateInterp_readout`; the
+single-allocation faces are the public
 `deadObj_readout`/`deadRegion_readout` (K5, the K4 audit's N-1).
 
 **Read-only allocations.** `MetaCell.readonly` is coupled to
@@ -1508,14 +1519,20 @@ the `#print axioms` recipe are in the README, "How to build and verify".
   the rules are kind-specific over the object bundle (`kill_atomic`)
   and the region bundle (`free_atomic`); a program that disposes
   storage under the wrong kind is outside the logic by design.
-- **Loads and stores through a region pointer.** In the fragment,
-  mirrored and classified, covered by no rule — an ABSENCE, not a
-  decision (kill/free arc K4's finding; README "Scope, exactly" (iv)):
-  the access rules are stated over the object bundles, and the memM
-  seams `loadM_live`/`storeM_live` already hold at any metadata cell, so
-  region access rules are a rule-addition follow-up. Until then the
-  malloc'd LINKED list is outside the logic; the region LOOP
-  (RegionLoopExhibit.lean) is the `alloc`/`free` exhibit.
+- **Loads and stores through a region pointer — no longer out.** K4
+  found them covered by no rule (an ABSENCE, not a decision); K5 added
+  `regionLoadAt_atomic`/`regionStoreAt_atomic` over the typed region
+  view through the seams `loadM_live`/`storeM_live` (§4, "The region
+  access rules"; README "Scope, exactly" (iv) CLOSED), and the malloc'd
+  LINKED list (MallocListExhibit.lean) is the exhibit. Kept in this list
+  only so a reader of the K4-era text finds the closure here.
+- **A program with TWO `save` labels.** Every loop exhibit so far is
+  single-label (the malloc'd list merges its two C loops into ONE Core
+  label with two phases): the two-label form needs a two-entry label-map
+  lookup law — `lookupLabel` at `fmapAddBy … (fmapAddBy … fmapEmpty)` —
+  and EnvLaws has only the singleton `fmapLookupBy_addBy_empty`. A
+  coverage fact about the logic's LAWS, not about the rules; the mover
+  is an EnvLaws slice (the K5 audit's N-1).
 - **Located Core.** Every node of a fragment program carries the empty
   static annotation list (`Expr []` in every `Frag` constructor and every
   redex spelling). The engine's `step_ctx` rewrites the thread's

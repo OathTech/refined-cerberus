@@ -216,7 +216,16 @@ erratum in the K3 record).
   strata (typed view and whole-region forms); manifest rows for
   `Frag.load`/`Frag.store`; THE MALLOC'D LINKED LIST exhibit
   (MallocListExhibit.lean: `ml_wps`/`ml_wpt`, `malloc_list_certified_total`
-  PROVISIONAL, `malloc_list_certified_production`). Pins 269 → 294.
+  PROVISIONAL, `malloc_list_certified_production`). Pins 269 → 294. K5.1
+  (the K5 range audit's M-1, record `docs/2026-09-03_k5.1-notes.md`): the
+  four statements STRENGTHENED to `n.toNat` DISTINCT dead ids
+  (`ids.Nodup`) via the new public `regionOwn_ne`/`regionOwn_deadRegion_ne`;
+  pins 294 → 296.
+- **Two `save` labels in one program (the K5 audit's N-1)**: the malloc'd
+  list is ONE label with two phases because the two-label form needs a
+  two-entry label-map lookup law (`lookupLabel` at `fmapAddBy … (fmapAddBy
+  … fmapEmpty)`; EnvLaws has only the singleton `fmapLookupBy_addBy_empty`).
+  Mover: an EnvLaws slice with the two-entry (or general) lookup law.
 - **The cursor heap as a device**: since K2.5 no client owns the
   allocator cursor (`cursorOwn`'s exclusive fragment lives inside
   `budgetInterp`), so the cursor ghost heap (`cursorGS`/`cursorInterp`)
