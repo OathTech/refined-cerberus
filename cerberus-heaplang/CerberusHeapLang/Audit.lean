@@ -56,6 +56,13 @@ The production entry is now the pure, supply-threaded
 seeds `sym_supply` from `sup`), and the production-entry theorems
 quantify over the supply — the fragment never reads it. The nine
 former boundary exports sit in `trioExports` like everything else.
+Re-pinned 2026-09-03 to cerberus-lean `f95ef8d9c317fa6b50cf6691216a8c37b1d3eabf`
+(the fuel arc: the drive cone's fuel exhaustion is the kernel-transparent
+kill `CerbND.fuelExhaustedKill`, its budget the citable
+`CerbFuel.driverFuel = 10^8`; record:
+cerberus-heaplang/docs/2026-09-03_repin-fuel-notes.md): no name moved, the
+pin list below is unchanged (294), and the production statements' side
+conditions read `k + 2 ≤ CerbFuel.driverFuel`.
 
 P3.5 ([USER 2026-09-02], docs/2026-09-02_p3.5-notes.md): the 65
 `#guard_msgs in #print axioms` blocks + prose collapsed to the export

@@ -197,16 +197,16 @@ authored program wrapped as a synthetic one-procedure file by
 predicates on the delivered `driver_result`; they carry no termination
 hypothesis (where the certified step count depends on an input, the
 in-budget bound is an explicit hypothesis: `fib_certified_production`'s
-`hfuel : 2 * n.toNat + 6 ≤ lemDefaultFuel`,
+`hfuel : 2 * n.toNat + 6 ≤ CerbFuel.driverFuel`,
 `counter_loop_certified_production`'s `hfuel : 6 * n.toNat + 8 ≤
-lemDefaultFuel`, `region_loop_certified_production`'s `hfuel : 7 *
-n.toNat + 5 ≤ lemDefaultFuel` together with its budget-fits-the-cold-
+CerbFuel.driverFuel`, `region_loop_certified_production`'s `hfuel : 7 *
+n.toNat + 5 ≤ CerbFuel.driverFuel` together with its budget-fits-the-cold-
 start premise `hB : n.toNat * regionCost al sz ≤ headroom
 prodMem₀.lastAddress` — the package's cost function at the package's
 cold-start cursor literal, the one root-of-trust statement with package
 definitions beyond the program and `prodFile` in its text (the K4 range
 audit's M-1); and `malloc_list_certified_production`'s `hfuel : 25 *
-n.toNat + 9 ≤ lemDefaultFuel` with its budget premise in ENGINE
+n.toNat + 9 ≤ CerbFuel.driverFuel` with its budget premise in ENGINE
 vocabulary, `hB : n.toNat * (15 + max al.toNat 1) ≤ 281474976710647`,
 bridged to the package's `regionCost`/`headroom` inside the proof by
 `ml_budget_bridge`). "Closed shipped-driver statement" means exactly these
@@ -217,7 +217,10 @@ collapse machinery, not a closed statement: its premise `hdd` is the
 package-defined delivery fact `DriverDoneAt` (ProdLoop.lean) that the
 total judgment supplies, its premise `hQe` is the package-defined label
 tie `LabeledAt`, and it carries the in-budget bound `k + 2 ≤
-lemDefaultFuel` on the certified step count. The seven statements
+CerbFuel.driverFuel` on the certified step count (`CerbFuel.driverFuel =
+10^8` is the shipped driver's own budget since the cerberus-lean fuel
+arc, pin `f95ef8d9c`; the bound is stated against the name the semantics
+exports for exactly this purpose). The seven statements
 discharge the delivery and label premises (and the bound, by
 computation, where the step count is fixed) and are what remains.
 
@@ -230,13 +233,19 @@ stated over `driveU` (`*_certified`, `*_total`, `*_engine`,
 `*_adequacy`, `*_launch_smoke`, `counter_loop_certified_registration`).
 PROVISIONAL means exactly: a sound fact about `driveU`, this package's
 loop around the engine's `step_ctx`; not yet the root-of-trust
-statement, which is over the shipped driver and awaits the
-cerberus-lean fuel-exhaustion outcome
-(`../docs/2026-09-02_request-cerberus-lean-fuel-exhaustion-outcome.md`);
-restated with no other change when it lands. The obstacle: the
-shipped driver's out-of-fuel arm is LemLib's kernel-opaque
-`fuelExhaustedWith`, so no statement quantifying over all fuels can
-classify its outcomes; `driveU` is tied to the shipped driver by
+statement, which is over the shipped driver; restated with no other
+change in the fuel-lane restatement slice. The former obstacle — the
+shipped driver's out-of-fuel arm was LemLib's kernel-opaque
+`fuelExhaustedWith`, so no statement quantifying over all fuels could
+classify its outcomes (the request:
+`../docs/2026-09-02_request-cerberus-lean-fuel-exhaustion-outcome.md`)
+— is LIFTED at the current pin (cerberus-lean `f95ef8d9c`, the fuel arc,
+re-pinned 2026-09-03: the arm is the kernel-transparent kill
+`CerbND.fuelExhaustedKill`, `CerbND.driver2_lemFuel_zero`; the
+fuel-parametric `CerbND.drive_lemFuel` is pinned to `drive` by
+`CerbND.drive_wrapper_defeq`); the restatement is sequenced after the
+calls arc (§7) and the labels stay until it lands. `driveU` is tied to
+the shipped driver by
 `loop_step_frag` (DriverCollapse.lean) only where the mirror steps,
 which is what the production collapse (`prod_run_eqJ`) consumes.
 
@@ -251,13 +260,18 @@ status at the close of the kill/free arc (2026-09-03):
   closed production statements reach `CerbND.runND (drive …)
   (initial_driver_state …).1`. Closes when a generic theorem takes an
   arbitrary proved public triple to a statement over that shipped
-  composite. The semantics-side prerequisite HAS LANDED (cerberus-lean
-  mainline `f95ef8d9c`, the fuel arc: a transparent, distinguished
-  fuel-exhaustion outcome; `../docs/2026-09-03_repin-scout.md`); the
-  sequence ruled 2026-09-03 is the cheap RE-PIN after K4, then the calls
-  arc, then the FUEL-LANE RESTATEMENT (delete `driveU`, restate the
-  partial exports over the fuelled driver, remove PROVISIONAL) once on
-  the final configuration. Until then every `driveU` export carries the
+  composite. The semantics-side prerequisite HAS LANDED AND IS PINNED:
+  this package builds against cerberus-lean mainline `f95ef8d9c` (the
+  fuel arc: a transparent, distinguished fuel-exhaustion outcome
+  `CerbND.fuelExhaustedKill`, the fuel-parametric `CerbND.drive_lemFuel`,
+  the budget name `CerbFuel.driverFuel`) since the 2026-09-03 re-pin
+  (`docs/2026-09-03_repin-fuel-notes.md`; scout:
+  `../docs/2026-09-03_repin-scout.md`). The sequence ruled 2026-09-03:
+  the RE-PIN (done — pin + the `lemDefaultFuel → CerbFuel.driverFuel`
+  side conditions, nothing else), then the calls arc, then the
+  FUEL-LANE RESTATEMENT (delete `driveU`, restate the partial exports
+  over `drive_lemFuel`, remove PROVISIONAL) once on the final
+  configuration. Until then every `driveU` export carries the
   PROVISIONAL label (§6).
 - **Goal 2 — mirror completeness: CLOSED fail-closed on the declared
   fragment (2026-09-02), with two characterized residuals.** `OpenRound`

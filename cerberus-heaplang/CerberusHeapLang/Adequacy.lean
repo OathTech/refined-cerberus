@@ -63,12 +63,19 @@ that is stated over `driveU` — `MemTripleU`, `MemTripleU_alloc`,
 `engine_adequacyU_alloc` — carries the label PROVISIONAL, in exactly
 this sense: a sound fact about `driveU`, this package's loop around
 the engine's `step_ctx`; not yet the root-of-trust statement, which is
-over the shipped driver and awaits the cerberus-lean fuel-exhaustion
-outcome (docs/2026-09-02_request-cerberus-lean-fuel-exhaustion-outcome.md,
-repository root); restated with no other change when it lands. The
-obstacle: the shipped driver's out-of-fuel arm is LemLib's
-kernel-opaque `fuelExhaustedWith`, so no statement quantifying over
-all fuels can classify its outcomes. The root-of-trust exports are the
+over the shipped driver; restated with no other change in the fuel-lane
+restatement slice. The former obstacle — the shipped driver's
+out-of-fuel arm was LemLib's kernel-opaque `fuelExhaustedWith`, so no
+statement quantifying over all fuels could classify its outcomes (the
+request: docs/2026-09-02_request-cerberus-lean-fuel-exhaustion-outcome.md,
+repository root) — is LIFTED at the current pin (cerberus-lean
+`f95ef8d9c`, the fuel arc, re-pinned 2026-09-03): the arm is the
+kernel-transparent kill `CerbND.fuelExhaustedKill`
+(`CerbND.driver2_lemFuel_zero` and its ND-typed siblings, `rfl`), and
+the fuel-parametric `CerbND.drive_lemFuel` is pinned to `drive` by
+`CerbND.drive_wrapper_defeq`. The restatement over `drive_lemFuel` is
+sequenced after the calls arc ([USER 2026-09-03]); the PROVISIONAL
+labels stay until it lands. The root-of-trust exports are the
 total-lane production statements over the shipped
 `runND ∘ drive ∘ initial_driver_state` (`exhibitA_prod`,
 `*_certified_production`, `prod_run_eqJ`). The PROVISIONAL statements

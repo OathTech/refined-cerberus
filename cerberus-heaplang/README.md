@@ -218,14 +218,14 @@ shipped driver — `MemTripleU`, `MemTripleU_alloc`, `SemTripleU`,
 "Execution" column below reads `driveU` — carries the label
 PROVISIONAL, in exactly this sense: a sound fact about `driveU`, this
 package's loop around the engine's `step_ctx`; not yet the
-root-of-trust statement, which is over the shipped driver and awaits
-the cerberus-lean fuel-exhaustion outcome
-([`../docs/2026-09-02_request-cerberus-lean-fuel-exhaustion-outcome.md`](../docs/2026-09-02_request-cerberus-lean-fuel-exhaustion-outcome.md));
-restated with no other change when it lands. The obstacle is stated
-under "The trust story": the shipped driver's out-of-fuel arm is a
-kernel-opaque constant, so no theorem quantifying over all fuels can
-classify its outcomes. The PROVISIONAL statements are not deleted:
-they are sound, and they are the shape that will be restated.
+root-of-trust statement, which is over the shipped driver; restated
+with no other change in the fuel-lane restatement slice. The semantics-side prerequisite HAS LANDED at the current pin (cerberus-lean `f95ef8d9c`, the fuel arc, re-pinned 2026-09-03: the shipped driver's fuel exhaustion is now the kernel-transparent kill `CerbND.fuelExhaustedKill`, and the fuel-parametric `CerbND.drive_lemFuel` is pinned to `drive` by `CerbND.drive_wrapper_defeq`); the partial lane's restatement over `drive_lemFuel` is the next slice (sequenced after the calls arc, [USER 2026-09-03]), and the PROVISIONAL labels remain until then.
+The former obstacle — the shipped driver's out-of-fuel arm was a
+kernel-opaque constant, so no theorem quantifying over all fuels could
+classify its outcomes — is lifted ("The trust story"; the request was
+[`../docs/2026-09-02_request-cerberus-lean-fuel-exhaustion-outcome.md`](../docs/2026-09-02_request-cerberus-lean-fuel-exhaustion-outcome.md)).
+The PROVISIONAL statements are not deleted: they are sound, and they
+are the shape that will be restated.
 
 The partial-correctness realization of the target shape is the triple
 `MemTripleU` (Adequacy.lean; PROVISIONAL), produced from an Iris
@@ -337,9 +337,9 @@ statement carries a fuel hypothesis.
 | `case_certified`, `wseq_certified` (CaseExhibit.lean, WseqExhibit.lean) | the `Ecase`/`Ewseq` consumers | `driveU spikeCtx` — PROVISIONAL | `{GF} [SpikeGpreS GF]`, `v` resp. `v1 v2`, `σ₀ n aids` |
 | `diverge_total_unprovable` (DivergeExhibit.lean) | the negative test: a total derivation for the self-jump loop is `False` | — | `{GF} [SpikeGpreS GF]`, `ra σ₀ m₀`, `hcoh : Coh fmapEmpty σ₀ m₀`, and the statement's own quantifiers `Ls Ψ k` and the derivation from `m₀`'s cell ownership |
 | `exhibitA_prod` (ProdExhibit.lean) | the production run of `lets p = create(4,int) in lets _ = store(int, p, 7) in load(int, p)` is the singleton `Active` execution delivering 7, the final memory holding 7's image at the program's own cell | shipped pipeline — ROOT OF TRUST | `sup fs args` |
-| `fib_certified_production`, `counter_loop_certified_production`, `list_reverse_certified_production` (ProdLoopExhibit.lean) | the loop programs on the shipped pipeline; counter and reversal bind their engine-created cells and enter their loops through `save` with live initializers | shipped pipeline — ROOT OF TRUST | fib: `sup ra n sbty ibty abty bbty`, `0 ≤ n`, `2 * n.toNat + 6 ≤ lemDefaultFuel`, `fs args`; counter: `sup ra mo bty xbty cbty sbty n`, `0 ≤ n`, `6 * n.toNat + 8 ≤ lemDefaultFuel`, `fs args`; reversal: `sup ra mo bty sbty pbty cbty bbty nbty ubty fs args` |
-| `dispose_list_certified_production` (DisposeExhibit.lean), `region_loop_certified_production` (RegionLoopExhibit.lean) | kill/free arc K4 on the shipped pipeline: BUILD two nodes with `create`s (the list-reverse production's prefix, restated generically in its continuation as `lrProdPrefix_wpt`) then DISPOSE the list — EXACTLY ONE Active execution delivering `Vunit` whose final memory has two DISTINCT allocation ids in `deadAllocations` with their records erased (the proof witnesses them as the two created nodes; the statement names no node); `n` `alloc`/`free` pairs from one budget — EXACTLY ONE Active execution delivering `Vunit` (no readout of the final table: the regions are freed through the `_emp` faces, which drop the dead knowledge) | shipped pipeline — ROOT OF TRUST | dispose: `sup ra mo bty sbty cbty bbty nbty ubty fs args`; region loop: `sup ra al sz pref sbty ibty pbty ubty`, `hcost : 0 < regionCost al sz`, `n`, `hn : 0 ≤ n`, `hB : n.toNat * regionCost al sz ≤ headroom prodMem₀.lastAddress`, `hfuel : 7 * n.toNat + 5 ≤ lemDefaultFuel`, `fs args` |
-| `malloc_list_certified_production` (MallocListExhibit.lean; kill/free arc K5) | THE MALLOC'D LINKED LIST on the shipped pipeline: EXACTLY ONE Active execution delivering `Vunit` whose final memory has `n.toNat` DISTINCT allocation ids (`ids.Nodup`, K5.1) in `deadAllocations` with their records erased (the proof witnesses them as the freed nodes; the statement names no node) — every `alloc` through the public `wpt_alloc`, every field write through `wpt_store_regionOwn_at`, every next-field read through `wpt_load_regionOwn_at`, every `free` through `wpt_free` | shipped pipeline — ROOT OF TRUST | `sup ra mo al pref sbty ibty pbty qbty bbty nbty ubty`, `n`, `hn : 0 ≤ n`, `hB : n.toNat * (15 + max al.toNat 1) ≤ 281474976710647` (the budget fits the cold start, in ENGINE vocabulary), `hfuel : 25 * n.toNat + 9 ≤ lemDefaultFuel`, `fs args` |
+| `fib_certified_production`, `counter_loop_certified_production`, `list_reverse_certified_production` (ProdLoopExhibit.lean) | the loop programs on the shipped pipeline; counter and reversal bind their engine-created cells and enter their loops through `save` with live initializers | shipped pipeline — ROOT OF TRUST | fib: `sup ra n sbty ibty abty bbty`, `0 ≤ n`, `2 * n.toNat + 6 ≤ CerbFuel.driverFuel`, `fs args`; counter: `sup ra mo bty xbty cbty sbty n`, `0 ≤ n`, `6 * n.toNat + 8 ≤ CerbFuel.driverFuel`, `fs args`; reversal: `sup ra mo bty sbty pbty cbty bbty nbty ubty fs args` |
+| `dispose_list_certified_production` (DisposeExhibit.lean), `region_loop_certified_production` (RegionLoopExhibit.lean) | kill/free arc K4 on the shipped pipeline: BUILD two nodes with `create`s (the list-reverse production's prefix, restated generically in its continuation as `lrProdPrefix_wpt`) then DISPOSE the list — EXACTLY ONE Active execution delivering `Vunit` whose final memory has two DISTINCT allocation ids in `deadAllocations` with their records erased (the proof witnesses them as the two created nodes; the statement names no node); `n` `alloc`/`free` pairs from one budget — EXACTLY ONE Active execution delivering `Vunit` (no readout of the final table: the regions are freed through the `_emp` faces, which drop the dead knowledge) | shipped pipeline — ROOT OF TRUST | dispose: `sup ra mo bty sbty cbty bbty nbty ubty fs args`; region loop: `sup ra al sz pref sbty ibty pbty ubty`, `hcost : 0 < regionCost al sz`, `n`, `hn : 0 ≤ n`, `hB : n.toNat * regionCost al sz ≤ headroom prodMem₀.lastAddress`, `hfuel : 7 * n.toNat + 5 ≤ CerbFuel.driverFuel`, `fs args` |
+| `malloc_list_certified_production` (MallocListExhibit.lean; kill/free arc K5) | THE MALLOC'D LINKED LIST on the shipped pipeline: EXACTLY ONE Active execution delivering `Vunit` whose final memory has `n.toNat` DISTINCT allocation ids (`ids.Nodup`, K5.1) in `deadAllocations` with their records erased (the proof witnesses them as the freed nodes; the statement names no node) — every `alloc` through the public `wpt_alloc`, every field write through `wpt_store_regionOwn_at`, every next-field read through `wpt_load_regionOwn_at`, every `free` through `wpt_free` | shipped pipeline — ROOT OF TRUST | `sup ra mo al pref sbty ibty pbty qbty bbty nbty ubty`, `n`, `hn : 0 ≤ n`, `hB : n.toNat * (15 + max al.toNat 1) ≤ 281474976710647` (the budget fits the cold start, in ENGINE vocabulary), `hfuel : 25 * n.toNat + 9 ≤ CerbFuel.driverFuel`, `fs args` |
 | `counter_loop_certified_registration` (ProdEntry.lean) | the counter loop with its label map derived from the shipped registration (`collect_labeled_continuations_NEW`) | `driveU (procCtx mainSym …)` — PROVISIONAL | `sup loc ann ra mo bty xbty sbty idx addr bs0 n`, `0 ≤ n`, `σ₀`, `hcoh`, `nsteps aids` |
 
 ## The trust story
@@ -362,21 +362,30 @@ statement carries a fuel hypothesis.
    onto (thread state, memory). Each such statement is PROVISIONAL: a
    sound fact about `driveU`, this package's loop around the engine's
    `step_ctx`; not yet the root-of-trust statement, which is over the
-   shipped driver and awaits the cerberus-lean fuel-exhaustion outcome
-   (`../docs/2026-09-02_request-cerberus-lean-fuel-exhaustion-outcome.md`);
-   restated with no other change when it lands. `driveU` is tied to
+   shipped driver; restated with no other change in the fuel-lane
+   restatement slice (the semantics-side prerequisite has landed at the
+   current pin — below). `driveU` is tied to
    the shipped driver by `loop_step_frag` (DriverCollapse.lean) — one
    production scheduler round is one `driveU` round — but only at
    configurations where the mirror `Step` steps, and that tie is
    consumed only by the total judgment (`wpt_driver_done`,
    `wpt_driver_done_alloc` → `prod_run_eqJ`). No partial-correctness
-   statement about the shipped pipeline is proved, and none can be by
-   this route today: at insufficient fuel the production driver's
-   value is LemLib's `fuelExhausted`, a wrapper around the
-   kernel-opaque `fuelExhaustedWith`, about which nothing is provable
-   — the semantics-side limitation the request asks the cerberus-lean
-   team to lift (a transparent, distinguished fuel-exhaustion outcome
-   in the driver monad); no package-side workaround driver is built.
+   statement about the shipped pipeline is proved YET. Until the
+   2026-09-03 re-pin none could be by this route: at insufficient fuel
+   the production driver's value was LemLib's `fuelExhausted`, a
+   wrapper around the kernel-opaque `fuelExhaustedWith`, about which
+   nothing is provable — the semantics-side limitation the request
+   (`../docs/2026-09-02_request-cerberus-lean-fuel-exhaustion-outcome.md`)
+   asked the cerberus-lean team to lift. At the current pin
+   (cerberus-lean `f95ef8d9c`, the fuel arc) the shipped driver's fuel
+   exhaustion is the kernel-TRANSPARENT kill `CerbND.fuelExhaustedKill`
+   (`CerbND.driver2_lemFuel_zero` and its eight ND-typed siblings, all
+   `rfl`), the fuel-parametric `CerbND.drive_lemFuel` is pinned to
+   `drive` by `CerbND.drive_wrapper_defeq`, and the drive cone's budget
+   is the citable `CerbFuel.driverFuel = 10^8` (the production
+   statements' `k + 2 ≤ CerbFuel.driverFuel`); the partial lane's
+   restatement over `drive_lemFuel` is the next slice, and no
+   package-side workaround driver is built.
    What the mirror-to-engine connection establishes, in the words of
    the 2026-09-02 audit: "a sound Iris program logic for the package's
    restricted relational mirror, with a verified forward connection
@@ -453,17 +462,20 @@ statement carries a fuel hypothesis.
   `Core.instBEqCore_base_type.beq`. The fuel and well-formedness
   premises below are how the statements stay away from
   `fuelExhaustedWith` and `failwithI`.
-- *The one known admission in the pinned semantics tree.* The pinned
-  cerberus-lean tree contains one generated admission: two `(sorry :
-  String)` terms in the debug-log branch of `auxAddToRfLoad` in the
-  generated concurrency model (`Cmm_op.lean`), which Lean reports as
-  `declaration uses sorry` during the build. It is outside every
-  current export cone: the package sweep (`Audit.lean`) establishes
-  that `sorryAx` reaches no `CerberusHeapLang` constant. Concurrency is
-  out of scope for this package. The admission must be closed upstream
-  or separately bounded before any concurrency or whole-engine claim
-  is made on this semantics; it is reported to the cerberus-lean team
-  (`../docs/2026-09-02_request-cerberus-lean-fuel-exhaustion-outcome.md`).
+- *Admissions in the pinned semantics tree: none (measured 2026-09-03).*
+  Until the 2026-09-03 re-pin the pinned tree carried one generated
+  admission — two `(sorry : String)` terms in the debug-log branch of
+  `auxAddToRfLoad` in the generated concurrency model (`Cmm_op.lean`),
+  reported as `declaration uses sorry` during the build, outside every
+  export cone (the package sweep, `Audit.lean`, established that
+  `sorryAx` reached no `CerberusHeapLang` constant) and reported to the
+  cerberus-lean team. The fuel-arc head `f95ef8d9c` closes it
+  (`cmm_op.lem`'s `sorry` target_rep replaced by
+  `CerbMem.stringFromMemValue`). Measured at this pin: `grep -rn sorry`
+  over the primed `generated/` finds comment text only, and neither
+  build log contains `declaration uses sorry`
+  (`docs/2026-09-03_repin-fuel-notes.md`). The sweep stays in force;
+  concurrency remains out of scope for this package.
 - *Which Cerberus configuration.* Cerberus is switch-configured (PNVI
   variants, strict pointer arithmetic, …). The statements pin: the
   tag-definition environment is `fmapEmpty` and concurrency is off
@@ -489,7 +501,7 @@ theorems:
 
 | Divergence / limitation | Discharge / mover | Home |
 |---|---|---|
-| Fuel: the engine's `get_ctx` is fuel-bounded (`lemDefaultFuel = 10^6`) with an opaque exhaustion leaf, so the projection theorems carry the static premises `pot e ≤ lemDefaultFuel` and `pot cont ≤ lemDefaultFuel` per registered body (never a bound on the drive length); production statements carry `k + 2 ≤ lemDefaultFuel` for the certified step count; the shipped driver's OWN fuel arm is kernel-opaque, which is why the partial lane is PROVISIONAL | a fuel-irrelevance theorem for `get_ctx`; for the driver's fuel, the fuel-exhaustion request to the cerberus-lean team | `Soundness.lean` header ("FUEL HONESTY"), `Potential.lean`; `../docs/2026-09-02_request-cerberus-lean-fuel-exhaustion-outcome.md` |
+| Fuel: the engine's `get_ctx` is fuel-bounded (`lemDefaultFuel = 10^6`) with an opaque exhaustion leaf, so the projection theorems carry the static premises `pot e ≤ lemDefaultFuel` and `pot cont ≤ lemDefaultFuel` per registered body (never a bound on the drive length); production statements carry `k + 2 ≤ CerbFuel.driverFuel` (the shipped driver's budget, 10^8 since the fuel arc) for the certified step count; the shipped driver's OWN fuel arm is the kernel-transparent kill `CerbND.fuelExhaustedKill` since pin `f95ef8d9c`, so the partial lane's PROVISIONAL label now awaits only its restatement over `CerbND.drive_lemFuel` | a fuel-irrelevance theorem for `get_ctx`; the fuel-lane restatement slice (next, after calls) | `Soundness.lean` header ("FUEL HONESTY"), `Potential.lean`; `../docs/2026-09-02_request-cerberus-lean-fuel-exhaustion-outcome.md`, `../docs/2026-09-03_repin-scout.md` |
 | The fragment is annotation-free (`Expr []` at every node); located Core is outside `Frag` | make `current_loc` live state | "Scope, exactly"; `Soundness.lean` `Frag` header |
 | Synthetic Core entry: authored Core wrapped by `prodFile`, not C through the frontend; the loop programs' label maps are nevertheless computed by the shipped registration (`*_labeledAt_production`, `LabeledAt`) | a C-frontend entry | `ProdEntry.lean` |
 | Well-formedness by shape: `MachineCtx.SeqWF` and cons-shaped environment stacks — the engine's panic channels excluded by shape, never absorbed. Action locations carry no premise: the certification equations state the request at the engine's own `requestLoc th loc`, and `storeM_loc_irrel`/`loadM_loc_irrel` (the memory operations use the location only in the kill payload) transport the mirror's premise to it | by design | `Step.lean`, `Soundness.lean` |
@@ -578,7 +590,7 @@ source becomes a fact at the target.
      finalize_done — proved from the driver's OWN round functions;
      ProdLoop.lean: wpt_driver_done(_alloc) ⇒ DriverDoneAt;
      ProdEntry.lean: prod_run_eqJ ⇒ runND (drive …) (initial_driver_state
-     sup …).1 = [(Active dres, [], dst')])         [labels; k + 2 ≤ lemDefaultFuel]
+     sup …).1 = [(Active dres, [], dst')])         [labels; k + 2 ≤ CerbFuel.driverFuel]
         ▼
    whole-program production statements — THE ROOT-OF-TRUST EXPORTS
      (exhibitA_prod, fib_certified_production,
@@ -591,8 +603,8 @@ source becomes a fact at the target.
 
 What the diagram does not contain: a C frontend; any statement about
 `.more` (fuel exhaustion); any partial-correctness statement about the
-shipped pipeline (the PROVISIONAL lane's restatement awaits the
-fuel-exhaustion request); any engine fact at a mirror-stuck
+shipped pipeline (the PROVISIONAL lane's restatement over
+`CerbND.drive_lemFuel` is the next slice); any engine fact at a mirror-stuck
 configuration beyond the four refusal rows.
 
 ## The logic

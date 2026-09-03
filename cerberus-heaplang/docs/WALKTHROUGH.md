@@ -68,10 +68,15 @@ shipped driver, and so is every theorem below whose execution function
 is `driveU` (§1.3 lists them). Each is PROVISIONAL in exactly this
 sense: a sound fact about `driveU`, this package's loop around the
 engine's `step_ctx`; not yet the root-of-trust statement, which is over
-the shipped driver and awaits the cerberus-lean fuel-exhaustion outcome
-([`../../docs/2026-09-02_request-cerberus-lean-fuel-exhaustion-outcome.md`](../../docs/2026-09-02_request-cerberus-lean-fuel-exhaustion-outcome.md));
-restated with no other change when it lands. The root-of-trust exports
-are the total-lane production statements (§1.2).
+the shipped driver; restated with no other change in the fuel-lane
+restatement slice — the semantics-side prerequisite has landed at the
+current pin (cerberus-lean `f95ef8d9c`, the fuel arc: the shipped
+driver's fuel exhaustion is the kernel-transparent kill
+`CerbND.fuelExhaustedKill`, the fuel-parametric `CerbND.drive_lemFuel`
+is pinned to `drive`; the request was
+[`../../docs/2026-09-02_request-cerberus-lean-fuel-exhaustion-outcome.md`](../../docs/2026-09-02_request-cerberus-lean-fuel-exhaustion-outcome.md)),
+and the labels stay until the restatement lands (§1.3). The
+root-of-trust exports are the total-lane production statements (§1.2).
 
 There is no Iris in `MemTripleU`. The theorem that produces one from an
 Iris triple is the headline of the partial lane (PROVISIONAL, as its
@@ -256,11 +261,18 @@ the production scheduler at a single-threaded fragment configuration is
 one `driveU` round — but that theorem is stated at configurations where
 the mirror `Step` steps, and it is consumed only by the total judgment
 (`wpt_driver_done`, `wpt_driver_done_alloc` → `prod_run_eqJ`). No
-partial-correctness statement about the shipped pipeline is proved, and
-none can be by this route: when the production loop's fuel runs out its
-value is LemLib's `fuelExhausted`, a wrapper around the kernel-opaque
-constant `fuelExhaustedWith`, and nothing is provable about an opaque
-constant's value. So the partial logic's "engine" is `driveU`:
+partial-correctness statement about the shipped pipeline is proved YET.
+Until the 2026-09-03 re-pin none could be by this route: when the
+production loop's fuel ran out its value was LemLib's `fuelExhausted`, a
+wrapper around the kernel-opaque constant `fuelExhaustedWith`, and
+nothing is provable about an opaque constant's value. At the current
+pin (cerberus-lean `f95ef8d9c`, the fuel arc) it is the kernel-
+transparent kill `CerbND.fuelExhaustedKill` (`CerbND.driver2_lemFuel_zero`
+and its ND-typed siblings, all `rfl`), the fuel-parametric
+`CerbND.drive_lemFuel` is pinned to `drive` by `drive_wrapper_defeq`, and
+the drive cone's budget is the citable `CerbFuel.driverFuel = 10^8`; the
+restatement of the partial lane over `drive_lemFuel` is the next slice
+(after the calls arc). Today the partial logic's "engine" is `driveU`:
 `step_ctx` (the engine) plus `dischargeStep` (this package's projection,
 a readout predicate you must read, §2). In the production statements —
 `exhibitA_prod`, `*_production` — it is the shipped `CerbND.runND (drive
@@ -285,10 +297,10 @@ condition that the budget fits the cold start, in the package's pure
 vocabulary for `region_loop_certified_production` (`hB : n.toNat *
 regionCost al sz ≤ headroom prodMem₀.lastAddress`: its cost function,
 its headroom function, its cold-start literal; with `hfuel : 7 * n.toNat
-+ 5 ≤ lemDefaultFuel`; the K4 range audit's M-1) and in ENGINE
++ 5 ≤ CerbFuel.driverFuel`; the K4 range audit's M-1) and in ENGINE
 vocabulary for `malloc_list_certified_production` (`hB : n.toNat * (15 +
 max al.toNat 1) ≤ 281474976710647`, with `hfuel : 25 * n.toNat + 9 ≤
-lemDefaultFuel`) — never a driver, discharge or scheduler.
+CerbFuel.driverFuel`) — never a driver, discharge or scheduler.
 `prod_run_eqJ`, through which they are proved, is generic collapse
 machinery, not a closed statement: its delivery premise `DriverDoneAt`
 (ProdLoop.lean) and its label tie `LabeledAt` are package-defined,
@@ -300,13 +312,14 @@ discharged by each of the seven. Every statement over `driveU` — `MemTripleU`,
 `wpt_engine_boundU`, `wpt_engine_boundU_alloc`, and every exhibit the
 README's table lists at `driveU` — is PROVISIONAL: a sound fact about
 `driveU`, this package's loop around the engine's `step_ctx`; not yet
-the root-of-trust statement, which is over the shipped driver and
-awaits the cerberus-lean fuel-exhaustion outcome
-(`../../docs/2026-09-02_request-cerberus-lean-fuel-exhaustion-outcome.md`);
-restated with no other change when it lands. The request asks the
-cerberus-lean team for a transparent, distinguished fuel-exhaustion
-outcome in the driver monad; no package-side driver is written to work
-around the opaque one.
+the root-of-trust statement, which is over the shipped driver;
+restated with no other change in the fuel-lane restatement slice. The
+request (`../../docs/2026-09-02_request-cerberus-lean-fuel-exhaustion-outcome.md`)
+asked the cerberus-lean team for a transparent, distinguished
+fuel-exhaustion outcome in the driver monad; it landed (cerberus-lean
+`f95ef8d9c`, `CerbND.fuelExhaustedKill`, `CerbND.drive_lemFuel`) and is
+the pinned semantics since 2026-09-03; no package-side driver was
+written to work around the formerly opaque one.
 
 ## 2. The readout predicates
 
@@ -932,7 +945,7 @@ total at `7 * n.toNat + 3`), `region_loop_certified_total` (PROVISIONAL;
 the `driveU` equation under `LaunchCoh … ∅ (n.toNat * regionCost al
 sz)`) and `region_loop_certified_production` (under `hB : n.toNat *
 regionCost al sz ≤ headroom prodMem₀.lastAddress` and `hfuel : 7 *
-n.toNat + 5 ≤ lemDefaultFuel`; no readout of the final table — the
+n.toNat + 5 ≤ CerbFuel.driverFuel`; no readout of the final table — the
 regions are freed through the `_emp` faces). The rule-free absence
 this paragraph named at K4 — a load or store THROUGH a region pointer —
 is closed by K5, next paragraph.
@@ -1015,7 +1028,7 @@ total at `25 * n.toNat + 7`), `malloc_list_certified_total`
 16)`, `n.toNat` DISTINCT ids dead and erased) and
 `malloc_list_certified_production` (under `hB : n.toNat * (15 + max
 al.toNat 1) ≤ 281474976710647` — the budget fits the cold start, in
-ENGINE vocabulary — and `hfuel : 25 * n.toNat + 9 ≤ lemDefaultFuel`; the
+ENGINE vocabulary — and `hfuel : 25 * n.toNat + 9 ≤ CerbFuel.driverFuel`; the
 final memory has `n.toNat` DISTINCT allocation ids dead and erased,
 witnessed by the proof as the freed nodes). DISTINCTNESS is stated, not
 implied (K5.1, the K5 audit's M-1): `deadRegion` is persistent, so
@@ -1464,9 +1477,11 @@ e) args) ((initial_driver_state sup (prodFile e) fs).1) =
 dst'.layout_state`, under the label tie `LabeledAt` derived from the
 shipped registration (`collect_labeled_continuations_NEW`;
 `fib_labeledAt_production`, `loop_labeledAt_production`) and `k + 2 ≤
-lemDefaultFuel`, the production loop's own budget for `k` rounds plus
-the done-recording and drain iterations — below it the production value
-is the opaque `fuelExhausted` leaf (§1.3). The theorems hold for every
+CerbFuel.driverFuel`, the shipped driver's own budget (10^8 since the
+cerberus-lean fuel arc) for `k` rounds plus the done-recording and drain
+iterations — below it the shipped driver's value is the kernel-transparent
+kill `CerbND.fuelExhaustedKill`, about which these TOTAL statements say
+nothing (§1.3). The theorems hold for every
 supply `sup` because the fragment never reads it. These production
 statements are the root-of-trust exports (§1.3).
 
@@ -1555,7 +1570,8 @@ the `#print axioms` recipe are in the README, "How to build and verify".
 - **Fuel parametricity.** The engine's `get_ctx` fuel is real (the
   interpreter bails past `10^6`), so the projection theorems carry the
   static `pot` premises and the production statements carry `k + 2 ≤
-  lemDefaultFuel`.
+  CerbFuel.driverFuel` (the shipped driver's budget, 10^8 since the
+  fuel arc).
 - **A C frontend.** Programs enter as authored Core in a synthetic
   one-procedure file.
 - **The residual of mirror completeness** (`OpenRound`, §5;
