@@ -1231,3 +1231,19 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   sentence if the alloc-side distinctness is not derivable). M-2: two
   stale sentences contradicting the closure. N-1 two-label limitation
   to the ledger; N-2 the untracked counter field qualified.
+- **2026-09-03 [AGENT] RE-PIN TO cerberus-lean f95ef8d9c LANDED (branch repin-fuel,
+  over the kill/free head)** (record:
+  `cerberus-heaplang/docs/2026-09-03_repin-fuel-notes.md`): pin moved to
+  the fuel-arc head; setup `--check` green (23 seams; lem-sync stamp);
+  LemLib rev unchanged; error census hit = the scout's census exactly
+  (DriverCollapse 4, Round 2, ProdEntry 2, ProdExhibit 1, RegionLoop 1 —
+  one cause, the 10^8 budget vs `lemDefaultFuel`/`Nat.succ` idioms); zero
+  renames, zero signature changes, zero memory-model breakage; the
+  production statements' fuel side conditions restated `≤ CerbFuel.driverFuel`
+  (10^6 ≤ 10^8: strict generalizations); `driveU` and the PROVISIONAL
+  exports untouched (their restatement over `drive_lemFuel` is the slice
+  after calls). MEASURED at the new pin: the generated tree carries NO
+  `sorry` (the Cmm_op admission is closed upstream) — the README's "one
+  known admission" paragraph replaced by "none (measured)". Pins 294
+  unchanged. The branch rebases over K5.1 when it lands; range audit
+  then.
