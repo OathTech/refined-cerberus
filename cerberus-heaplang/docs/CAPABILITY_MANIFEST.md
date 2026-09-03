@@ -18,7 +18,7 @@ consumed by no exhibit is a red row: the construct has a rule but no client.
 
 | Fragment constructor | Rule | Consumed by (exhibit modules) |
 |---|---|---|
-| `Frag.val_pure` | `wps_ofVal` | AllocExhibit, ArrayExhibit, CaseExhibit, DisposeExhibit, Exhibit, FibExhibit, ListRevExhibit, LoopExhibit, MallocListExhibit, RegionLoopExhibit, StructExhibit, TreeRotExhibit, WseqExhibit |
+| `Frag.val_pure` | `wps_ofVal` | AllocExhibit, ArrayExhibit, CaseExhibit, DisposeExhibit, Examples.CallSmoke, Exhibit, FibExhibit, ListRevExhibit, LoopExhibit, MallocListExhibit, RegionLoopExhibit, StructExhibit, TreeRotExhibit, WseqExhibit |
 | `Frag.store` | `wps_store` | Exhibit, LoopExhibit |
 | `Frag.store` | `wps_store_region_at` | MallocListExhibit |
 | `Frag.load` | `wps_load_at` | ArrayExhibit, DisposeExhibit, ListRevExhibit, StructExhibit, TreeRotExhibit |
@@ -31,11 +31,11 @@ consumed by no exhibit is a red row: the construct has a rule but no client.
 | `Frag.alloc_op` | `wps_alloc_eval` | AllocExhibit |
 | `Frag.sseq` | `wps_seq` | AllocExhibit, DisposeExhibit, Exhibit, ListRevExhibit, LoopExhibit, MallocListExhibit, RegionLoopExhibit, StructExhibit, TreeRotExhibit |
 | `Frag.annot` | `wps_annot` | AllocExhibit, ArrayExhibit, DisposeExhibit, Exhibit, ListRevExhibit, LoopExhibit, MallocListExhibit, RegionLoopExhibit, StructExhibit, TreeRotExhibit, WseqExhibit |
-| `Frag.save` | `wps_save` | ArrayExhibit, DisposeExhibit, FibExhibit, ListRevExhibit, LoopExhibit, MallocListExhibit, RegionLoopExhibit |
+| `Frag.save` | `wps_save` | ArrayExhibit, DisposeExhibit, Examples.CallSmoke, FibExhibit, ListRevExhibit, LoopExhibit, MallocListExhibit, RegionLoopExhibit |
 | `Frag.if_` | `wps_if_true` | ArrayExhibit, DisposeExhibit, FibExhibit, ListRevExhibit, LoopExhibit, MallocListExhibit, RegionLoopExhibit |
 | `Frag.run` | `wps_run` | ArrayExhibit, DisposeExhibit, FibExhibit, ListRevExhibit, LoopExhibit, MallocListExhibit, RegionLoopExhibit |
 | `Frag.sseq_spec` | `wps_seq_spec` | ArrayExhibit, DisposeExhibit, ListRevExhibit, MallocListExhibit, TreeRotExhibit |
-| `Frag.pure_sym` | `wps_pure` | ArrayExhibit, FibExhibit, ListRevExhibit, TreeRotExhibit |
+| `Frag.pure_sym` | `wps_pure` | ArrayExhibit, Examples.CallSmoke, FibExhibit, ListRevExhibit, TreeRotExhibit |
 | `Frag.load_op` | `wps_load_eval` | ArrayExhibit, DisposeExhibit, ListRevExhibit, MallocListExhibit, TreeRotExhibit |
 | `Frag.sseq_sym` | `wps_seq_sym` | AllocExhibit, DisposeExhibit, ListRevExhibit, MallocListExhibit, RegionLoopExhibit, StructExhibit, TreeRotExhibit |
 | `Frag.memop_vals` | `wps_memop_ptreq` | DisposeExhibit, ListRevExhibit, MallocListExhibit |
@@ -43,6 +43,7 @@ consumed by no exhibit is a red row: the construct has a rule but no client.
 | `Frag.store_op` | `wps_store_eval` | ListRevExhibit, MallocListExhibit, ProdExhibit, StructExhibit, TreeRotExhibit |
 | `Frag.case_value` | `wps_case_value` | CaseExhibit |
 | `Frag.wseq` | `wps_wseq` | WseqExhibit |
-| `Frag.call` | NO RULE YET (declared: calls arc C2 — mirror-level only; the call rule is C3, docs/2026-09-03_c2-notes.md) | — |
+| `Frag.call` | `wps_call_root` | Examples.CallSmoke |
+| `Frag.call` | `wps_call` | Examples.CallSmoke |
 
-MANIFEST: 23 constructors, 25 rule rows, 0 red, 16 exhibit modules
+MANIFEST: 23 constructors, 27 rule rows, 0 red, 17 exhibit modules

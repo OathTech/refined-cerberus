@@ -60,9 +60,25 @@ frame and the callee's env frame popped; REMOVE-ANNOT under a frame),
 certified (`engine_step_matchU`, now at a FREE successor control) and
 classified (`complete_call`: unknown procedure and arity mismatch are
 `call_proc`'s two `Illformed_program` KILLS, verbatim; `complete_ret`: a
-value under a frame ALWAYS steps) — with NO logic rule yet: the call rule,
-the specification table and recursion are C3, and until then both
-judgments are `⌜False⌝` at a call redex (the guard). The engine's third
+value under a frame ALWAYS steps) — and, since C3 (2026-09-03), THE LOGIC
+over them: the PROCEDURE SPECIFICATION TABLE `Θ : ProcSpec GF` (per
+procedure symbol and argument values, a precondition and a postcondition
+on the delivered value; `emptyProcSpec` recovers every pre-C3 statement),
+the CALL CLAUSE of both judgments in place of C2's guard (lookup, arity,
+argument evaluation, the table's precondition, and a step later the
+caller's continuation `apply_ctx ctx (pure ret)` at the caller's own env),
+the call rule `wps_call`/`wps_call_root` (`wpt_call`/`wpt_call_root` with
+the budget split `1 + m + k' ≤ k`), the procedure rule
+`procSpecs`/`procSpecs_intro` (Hoare's rule for recursive procedures:
+every body verified once, at every caller tail, assuming the table — no
+Löb in the introduction), and the CPS collapse `wps_sound_cps` — the ONE
+Löb, whose call case runs the callee under `procSpecs` and returns into
+the caller's continuation with the environment restored (`SameTail`);
+the judgments are indexed by the current PROCEDURE `p : Option sym`
+(RETURN does not restore `exec_loc`). Smoke: `Examples/CallSmoke.lean`
+(`main` calls `f(3)`, `{⌜0 ≤ x⌝} f(x) {ret. ⌜ret = x + 1⌝}`, driven
+through the `driveU` lane with `FragProcs` at two procedures); record
+`docs/2026-09-03_c3-notes.md`. The engine's third
 stack constructor `Stack_cons` (the other interpreter's continuation
 stack) is unrepresentable by `Ctl.toStack` and unreachable from
 `Driver.drive` — step_ctx's value arm panics on it — a fail-closed
@@ -73,8 +89,9 @@ derivation traverses one; noted by the K1 range audit.) The per-construct author
 inductive `Frag` (Soundness.lean), the premise of every adequacy
 theorem; the generated [capability manifest](docs/CAPABILITY_MANIFEST.md)
 lists one row per (`Frag` constructor, covering rule) pair with the
-exhibit modules whose proofs consume that rule (23 constructors, 25 rule
-rows plus the one DECLARED no-rule row `Frag.call`: `Frag.kill` is covered by the static dispose `wps_kill` AND the
+client modules — the exhibits and the C3 smoke `Examples/CallSmoke` —
+whose proofs consume that rule (23 constructors, 27 rule rows, 0 red;
+`Frag.call` → `wps_call_root`/`wps_call`; `Frag.kill` is covered by the static dispose `wps_kill` AND the
 dynamic `wps_free`; `Frag.load`/`Frag.store` by the object rule AND the
 region rule `wps_load_region_at`/`wps_store_region_at` (kill/free arc K5);
 one row each).
@@ -173,23 +190,29 @@ in-bounds offset, and the rules carry exactly that (the accessed type
 enters through its size and its decode/serialization). The chartered
 MALLOC'D LINKED LIST is the exhibit (MallocListExhibit.lean).
 
-**Deliberately not here.** Procedure SPECIFICATIONS (no call rule, no
-spec table, no recursion — C3; calls arc C1 made the thread's control
-LIVE STATE: `Config := CoreExpr × EnvStack × Ctl × Mem` with `Ctl` = the
-call stack `κ`, the current procedure `proc` and the execution location
-`execLoc`; C2 added the two rules that WRITE it, `Step.call`/`Step.ret`,
-and their certification and completeness, above; every verified program
-is still one `main` body with registered labels, launched at an entry
-control with an EMPTY call stack — `spikeCtl`/`procCtl p`, `ctl.κ = []`
-a premise of every adequacy export at a general control — the judgments
-are `⌜False⌝` at a call redex, and the `driveU` adequacy exports carry
-the procedure well-formedness premise `MachineCtx.FragProcs` (every
-declared procedure body in `Frag` within the potential bound, with
-`Frag` label bodies — vacuous at both profiles, `spikeCtx_fragProcs`/
-`procCtx_fragProcs`), since their proofs follow the engine through a
-call and back; `MachineCtx.SeqWF` (startup thread) is a premise at a
-general context, discharged at the two profiles by `spikeCtx_wf`,
-`procCtx_wf`);
+**Deliberately not here.** The PRODUCTION lane through a call (the
+shipped-driver statements `*_certified_production` are still single-`main`
+programs: the production round `loop_step_frag_same` is consumed at the
+control-preserving rounds only, and the `exec_loc`/`current_loc` tie of
+the production entry control is C4's, with recursive fib as the flagship);
+the total DRIVER lane through a call (`wpt_drive_aux`,
+`wpt_engine_boundU`, `wpt_driver_*` are stated at the EMPTY table
+`emptyProcSpecT` — the total judgment's collapse into Iris TWP does go
+through calls, `wpt_sound_cps`, the drive-fuel simulation not yet — C4);
+mutual recursion exhibited (the rule admits it — `procSpecs` assumes the
+table for every procedure — no exhibit yet); function pointers (`Eccall`,
+another scheduler path); calls arc C1 made the thread's control LIVE
+STATE: `Config := CoreExpr × EnvStack × Ctl × Mem` with `Ctl` = the call
+stack `κ`, the current procedure `proc` and the execution location
+`execLoc`; every adequacy export is launched at an entry control with an
+EMPTY call stack (`ctl.κ = []`), and the `driveU` exports carry the
+procedure well-formedness premise `MachineCtx.FragProcs` (every declared
+procedure body in `Frag` within the potential bound, with `Frag` label
+bodies — vacuous at both frozen profiles, `spikeCtx_fragProcs`/
+`procCtx_fragProcs`; discharged at the two-procedure smoke file,
+`csCtx_fragProcs`), since their proofs follow the engine through a call
+and back; `MachineCtx.SeqWF` (startup thread) is a premise at a general
+context, discharged at the two profiles by `spikeCtx_wf`, `procCtx_wf`);
 `Eunseq`; inside the
 mirrored constructs, exactly these absences — `Ewseq` at binder
 patterns, `Ecase` with a non-value scrutinee, pure exits beyond
@@ -541,8 +564,9 @@ theorems:
 | Fuel: the engine's `get_ctx` is fuel-bounded (`lemDefaultFuel = 10^6`) with an opaque exhaustion leaf, so the projection theorems carry the static premises `pot e ≤ lemDefaultFuel` and `pot cont ≤ lemDefaultFuel` per registered body (never a bound on the drive length); production statements carry `k + 2 ≤ CerbFuel.driverFuel` (the shipped driver's budget, 10^8 since the fuel arc) for the certified step count; the shipped driver's OWN fuel arm is the kernel-transparent kill `CerbND.fuelExhaustedKill` since pin `f95ef8d9c`, so the partial lane's PROVISIONAL label now awaits only its restatement over `CerbND.drive_lemFuel` | a fuel-irrelevance theorem for `get_ctx`; the fuel-lane restatement slice (next, after calls) | `Soundness.lean` header ("FUEL HONESTY"), `Potential.lean`; `../docs/2026-09-02_request-cerberus-lean-fuel-exhaustion-outcome.md`, `../docs/2026-09-03_repin-scout.md` |
 | The fragment is annotation-free (`Expr []` at every node); located Core is outside `Frag` | make `current_loc` live state | "Scope, exactly"; `Soundness.lean` `Frag` header |
 | Synthetic Core entry: authored Core wrapped by `prodFile`, not C through the frontend; the loop programs' label maps are nevertheless computed by the shipped registration (`*_labeledAt_production`, `LabeledAt`) | a C-frontend entry | `ProdEntry.lean` |
-| The judgments are `⌜False⌝` at a CALL redex in context (`wps.pre`/`wpt.pre`, calls arc C2): no call rule yet, and the step clauses continue at the SOURCE control, so a judged configuration never calls — forced fact: with `Step.call` in the mirror the unguarded C1 collapses are FALSE (a `wps` at a call configuration whose post reads the callee's env is provable, the WP is not; docs/2026-09-03_c2-notes.md §3) | C3's call clause replaces the guard arm | `Wps.lean`, `Wpt.lean` |
-| The `driveU` adequacy exports carry `MachineCtx.FragProcs` (every declared procedure body in `Frag` within the potential bound, its label bodies too — the twin of the label-cone premises): their NotStuck oracle is the raw Iris WP, which does not exclude a call, so the drive classification follows the engine through calls and returns (`drive_classifyU_aux`, the control invariant `ControlOk`); vacuous at both profiles | C3 discharges it from the specification table at a multi-procedure file | `Adequacy.lean` |
+| The judgments are indexed by the current PROCEDURE `p : Option sym`, not the full control, and their step clauses quantify over the call stack and execution location `(κ, ℓ)` (calls arc C3) — forcing fact: RETURN does not restore `exec_loc` (PCALL pushes `push_exec_loc`, RETURN writes `current_proc_opt`/`env`/`stack0`/`arena` only), so the caller's continuation after a return runs at a control differing from the call-time one in `execLoc`; the pre-C3 judgment at `ctl` is the instance `p := ctl.proc, κ := ctl.κ, ℓ := ctl.execLoc` at the empty table | by design (every C1/C2 rule was control-general, the C1 range audit) | `Wps.lean`, `Wpt.lean`; docs/2026-09-03_c3-notes.md |
+| The total DRIVER lanes (`wpt_drive_aux`, `wpt_engine_boundU(_alloc)`, `wpt_driver_aux`/`_done(_alloc)`) are stated at the EMPTY table `emptyProcSpecT`: the call clause is unsatisfiable there (`wpt_empty_call_false`), so no total export goes through a call yet; the collapse into Iris TWP does (`wpt_sound_cps`) | C4: the drive-fuel simulation through calls (the CPS shape at the `driveU` level), with recursive fib's budget | `TotalAdequacy.lean`, `ProdLoop.lean` |
+| The `driveU` adequacy exports carry `MachineCtx.FragProcs` (every declared procedure body in `Frag` within the potential bound, its label bodies too — the twin of the label-cone premises): their NotStuck oracle is the raw Iris WP, which does not exclude a call, so the drive classification follows the engine through calls and returns (`drive_classifyU_aux`, the control invariant `ControlOk`, the env-depth invariant `Step.env_depth`); vacuous at both profiles, discharged at the two-procedure smoke file (`csCtx_fragProcs`) | stays: the premise is the fragment membership of the FILE's bodies, which the specification table does not carry (a spec'd body may still be outside `Frag`) | `Adequacy.lean` |
 | Well-formedness by shape: `MachineCtx.SeqWF` (startup thread), the empty-stack entry control (`ctl.κ = []`, the PROGRAM-DONE selector) and cons-shaped environment stacks — the engine's panic channels excluded by shape, never absorbed; the RETURN's empty-env panic is excluded the same way (a frame is on the env stack whenever the call stack is non-empty). Action locations carry no premise: the certification equations state the request at the engine's own `requestLoc th loc`, and `storeM_loc_irrel`/`loadM_loc_irrel` (the memory operations use the location only in the kill payload) transport the mirror's premise to it | by design | `Step.lean`, `Soundness.lean` |
 | The tag-definition environment is an explicit parameter of the heap predicates (`pointsToCell tds …`, `M.tagDefs`); the demos state footprints at `fmapEmpty` | by design: a program-wide constant of the language instance | `Heap.lean` header |
 | Memory orders accepted arbitrarily (`Step.store`/`wp_store` at any `memory_order`) | mirror-true: the sequential driver drops `mo` (`action_request_sequential2`) | `Step.lean` |

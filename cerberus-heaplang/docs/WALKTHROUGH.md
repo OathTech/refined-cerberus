@@ -590,30 +590,93 @@ shape costs, is §4.
 
 ### 3.3 One loop rule, and the total judgment
 
-The partial judgment `wps M Ls Ψ e ρ` is a guarded fixpoint (iris-lean's
-`fixpoint` over a contractive `wps.pre`) with three clauses — value,
-jump redex, step. `Ls : LabelSpec GF` (`sym → List value → EnvStack →
-IProp GF`) gives each registered label a precondition over its argument
-values and the jump-time environment. The jump rule `wps_run`: under
-`lookupLabel (M.labelsAt ctl.proc) l = some (params, cont)` and
-`evalPexprs M.tagDefs M.extern (ev0 :: evs) pes = some vs`, `Ls l vs (ev0
-:: evs) ⊢ wps M ctl Ls Ψ (Expr a (Erun ra l pes)) (ev0 :: evs)` — the
-label's precondition
-suffices and tracking stops: a jump's postcondition is the label's
-business. The loop rule assembles the registered bodies' specifications
-with no Löb and no mutual assumption:
+The partial judgment `wps M p Ls Θ Ψ e ρ` — at the current procedure
+`p : Option sym`, the label specification `Ls`, the procedure
+specification table `Θ` (calls arc C3) — is a guarded fixpoint
+(iris-lean's `fixpoint` over a contractive `wps.pre`) with four clauses
+— value, jump redex, CALL redex, step. `Ls : LabelSpec GF` (`sym → List
+value → EnvStack → IProp GF`) gives each registered label a precondition
+over its argument values and the jump-time environment; `Θ : ProcSpec
+GF` (`sym → List value → IProp GF × (value → IProp GF)`) gives each
+procedure, per argument list, a precondition and a postcondition on the
+delivered value. The jump rule `wps_run`: under `lookupLabel (M.labelsAt
+p) l = some (params, cont)` and `evalPexprs M.tagDefs M.extern (ev0 ::
+evs) pes = some vs`, `Ls l vs (ev0 :: evs) ⊢ wps M p Ls Θ Ψ (Expr a (Erun
+ra l pes)) (ev0 :: evs)` — the label's precondition suffices and tracking
+stops: a jump's postcondition is the label's business. The call rule
+`wps_call_root` (the in-context form is `wps_call`): under `lookupProc
+M.file M.extern f = some (params, body)`, `params.length = vs.length` and
+`evalPexprs M.tagDefs M.extern ρ pes = some vs`,
+
+```lean
+    iprop((Θ f vs).1 ∗ (∀ (ret : value), (Θ f vs).2 ret -∗
+        wps M p Ls Θ Ψ (Expr [] (Epure (Pexpr [] () (PEval ret)))) ρ)) ⊢
+      wps M p Ls Θ Ψ (Expr a (Eproc ra (Sym f) pes)) ρ
+```
+
+— the table's precondition now, and the CALLER'S CONTINUATION at the
+returned value, at the caller's own environment (RETURN pops the
+callee's frame and plugs the value into the captured context; in
+context the continuation is `apply_ctx ctx (pure ret)`). The loop rule
+assembles the registered bodies' specifications with no Löb and no
+mutual assumption:
 
 ```lean
 theorem blockSpecs_intro {Ψ : SpikeVal → EnvStack → IProp GF}
     (h : ∀ l params cont vs ev0 evs,
-      lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
-      Ls l vs (ev0 :: evs) ⊢ wps (GF := GF) M ctl Ls Ψ cont
+      lookupLabel (M.labelsAt p) l = some (params, cont) →
+      Ls l vs (ev0 :: evs) ⊢ wps (GF := GF) M p Ls Θ Ψ cont
         (bindArgs params vs (ev0 :: evs))) :
-    ⊢ blockSpecs M ctl Ls Ψ := by
+    ⊢ blockSpecs M p Ls Θ Ψ := by
 ```
 
-The one Löb induction lives in the collapse `wps_sound`: `blockSpecs M
-Ls Ψ ⊢ wps M Ls Ψ e ρ -∗ WP ⟨e, ρ, M⟩ @ NotStuck; ⊤ {{ w, Ψ w.w w.ρ }}`.
+and the procedure rule assembles the declared bodies' specifications the
+same way — every body verified once, at every caller tail `ρ`
+(`lookup_env` searches all frames, so the spec must hold for every tail;
+a body whose reads are head-frame hits never sees it), ASSUMING the
+table for every procedure, itself included (Hoare's rule for recursive
+procedures; RefinedC's `typed_function` conjunction):
+
+```lean
+theorem procSpecs_intro (Lsₚ : sym → List value → LabelSpec GF)
+    (hB : ∀ f params body vs, lookupProc M.file M.extern f = some (params, body) →
+      params.length = vs.length →
+      ⊢ blockSpecs (GF := GF) M (some f) (Lsₚ f vs) Θ (fun w _ => (Θ f vs).2 w.val))
+    (hW : ∀ f params body vs (ρ : EnvStack),
+      lookupProc M.file M.extern f = some (params, body) → params.length = vs.length →
+      (Θ f vs).1 ⊢ wps (GF := GF) M (some f) (Lsₚ f vs) Θ (fun w _ => (Θ f vs).2 w.val) body
+        (procEnv params vs :: ρ)) :
+    ⊢ procSpecs M Θ := by
+```
+
+The one Löb induction lives in the collapse, now in CPS over the
+ambient control (`wps_sound_cps`; RefinedC's `stmt_wp_def` shape):
+
+```lean
+theorem wps_sound_cps (p : Option sym) (Ls : LabelSpec GF) {Ψ : SpikeVal → EnvStack → IProp GF}
+    (κ : List (Option sym × context)) (ℓ : exec_location) (e : CoreExpr) (ρ : EnvStack)
+    (Φ : CoreRVal → IProp GF) :
+    procSpecs M Θ ⊢
+      iprop(blockSpecs M p Ls Θ Ψ -∗ wps M p Ls Θ Ψ e ρ -∗
+        (∀ (ℓ' : exec_location) (w : SpikeVal) (ρ' : EnvStack), ⌜SameTail ρ ρ'⌝ -∗ Ψ w ρ' -∗
+          WP (⟨ofVal w, ρ', ⟨κ, p, ℓ'⟩, M⟩ : CoreRt) @ Stuckness.NotStuck; ⊤ {{ Φ }}) -∗
+        WP (⟨e, ρ, ⟨κ, p, ℓ⟩, M⟩ : CoreRt) @ Stuckness.NotStuck; ⊤ {{ Φ }})
+```
+
+— under the procedure and block specifications, the statement WP at any
+call stack `κ` and execution location `ℓ` entails the base WP, given a
+continuation `K` for the delivered value at a final env with the frames
+below the head preserved (`SameTail`) and at any execution location
+(RETURN does not restore it). Its call case runs the callee's body (from
+`procSpecs`, at the pushed frame and control) with the continuation that
+performs the RETURN (`wp_ret`/`wp_ret_annot`: the callee's final env is
+`ev0' :: ρ`, so the caller's `ρ` comes back verbatim) and re-enters the
+caller's continuation through the induction hypothesis — where the one
+Löb and the frame stack meet. At the entry control `wps_sound`: `procSpecs
+M Θ ∗ blockSpecs M ctl.proc Ls Θ Ψ ⊢ wps M ctl.proc Ls Θ Ψ e ρ -∗ WP ⟨e, ρ,
+ctl, M⟩ @ NotStuck; ⊤ {{ w, Ψ w.w w.ρ }}` at `ctl.κ = []`, and at the
+empty table (`wps_sound_empty`, no procedure specifications needed) the
+pre-C3 statement verbatim.
 This is the classical label-context treatment of `goto`-like control
 (de Bruin-style label assumptions), and the reason no `wp_bind` is
 needed: `Erun` discards its evaluation context, so a bind rule's frame
@@ -632,13 +695,15 @@ fuel-indexed induction over that mutual recursion — measured and not
 attempted; the gap is registered (README, "Registered divergences and
 limitations"). For authored programs `hbsz` is `rfl`.
 
-**The total judgment** is defined by structural recursion on a step
-budget, no fixpoint, no ▷:
+**The total judgment** is defined by well-founded recursion on a step
+budget (over every smaller budget — the call clause splits it), no
+fixpoint, no ▷:
 
 ```lean
-def wpt.pre [SpikeGS hlc GF] (M : MachineCtx) (Ls : LabelSpecT GF)
-    (k : Nat)
-    (F : (SpikeVal → EnvStack → IProp GF) → CoreExpr → EnvStack → IProp GF)
+def wpt.pre [SpikeGS hlc GF] (M : MachineCtx) (p : Option sym) (Ls : LabelSpecT GF)
+    (Θ : ProcSpecT GF) (k : Nat)
+    (F : ∀ (k' : Nat), k' < k →
+      (SpikeVal → EnvStack → IProp GF) → CoreExpr → EnvStack → IProp GF)
     (Ψ : SpikeVal → EnvStack → IProp GF) (e : CoreExpr) (ρ : EnvStack) :
     IProp GF :=
   match toVal e with
@@ -649,31 +714,47 @@ def wpt.pre [SpikeGS hlc GF] (M : MachineCtx) (Ls : LabelSpecT GF)
       iprop(|={⊤}=> ∃ (params : List (sym × core_base_type)) (cont : CoreExpr)
         (vs : List value) (ev0 : Fmap sym value) (evs : List (Fmap sym value))
         (m : Nat),
-        ⌜ρ = ev0 :: evs⌝ ∗ ⌜lookupLabel (M.labelsAt ctl.proc) lp.1 = some (params, cont)⌝ ∗
+        ⌜ρ = ev0 :: evs⌝ ∗ ⌜lookupLabel (M.labelsAt p) lp.1 = some (params, cont)⌝ ∗
         ⌜evalPexprs M.tagDefs M.extern ρ lp.2 = some vs⌝ ∗
         ⌜1 + m ≤ k⌝ ∗ Ls lp.1 m vs ρ)
     | none =>
       match callRedex? e with
-      | some _ => iprop(⌜False⌝)   -- calls arc C2: no call rule yet (C3)
+      | some q =>
+        iprop(|={⊤}=> ∃ (params : List (sym × core_base_type)) (body : CoreExpr)
+          (vs : List value) (m k' : Nat) (hb : 1 + m + k' ≤ k),
+          ⌜lookupProc M.file M.extern q.2.1 = some (params, body)⌝ ∗
+          ⌜params.length = vs.length⌝ ∗
+          ⌜evalPexprs M.tagDefs M.extern ρ q.2.2 = some vs⌝ ∗
+          (Θ q.2.1 m vs).1 ∗
+          ∀ (ret : value), (Θ q.2.1 m vs).2 ret -∗
+            F k' (by omega) Ψ (apply_ctx q.1 (Expr [] (Epure (Pexpr [] () (PEval ret))))) ρ)
       | none =>
-      match k with
-      | 0 => iprop(⌜False⌝)
-      | _ + 1 =>
-        iprop(∀ (σ₁ : Mem) (ns : Nat) (obs : List Empty) (nt : Nat),
-          stateInterp σ₁ ns obs nt ={⊤,∅}=∗
-          ⌜PrimStep.Reducible ((⟨e, ρ, M⟩ : CoreRt), σ₁)⌝ ∗
-          ∀ (r : CoreRt) (σ₂ : Mem) (eₜ : List CoreRt),
-            ⌜((⟨e, ρ, M⟩ : CoreRt), σ₁) -<([] : List Empty)>-> (r, σ₂, eₜ)⌝
-              ={∅,⊤}=∗
-            stateInterp σ₂ (ns + 1) obs nt ∗ F Ψ r.e r.ρ)
+        match hk : k with
+        | 0 => iprop(⌜False⌝)
+        | k' + 1 =>
+          iprop(∀ (κ : List (Option sym × context)) (ℓ : exec_location)
+            (σ₁ : Mem) (ns : Nat) (obs : List Empty) (nt : Nat),
+            stateInterp σ₁ ns obs nt ={⊤,∅}=∗
+            ⌜PrimStep.Reducible ((⟨e, ρ, ⟨κ, p, ℓ⟩, M⟩ : CoreRt), σ₁)⌝ ∗
+            ∀ (r : CoreRt) (σ₂ : Mem) (eₜ : List CoreRt),
+              ⌜((⟨e, ρ, ⟨κ, p, ℓ⟩, M⟩ : CoreRt), σ₁) -<([] : List Empty)>-> (r, σ₂, eₜ)⌝
+                ={∅,⊤}=∗
+              stateInterp σ₂ (ns + 1) obs nt ∗ F k' (by omega) Ψ r.e r.ρ)
 ```
 
 ```lean
-def wpt [SpikeGS hlc GF] (M : MachineCtx) (Ls : LabelSpecT GF) :
+def wpt [SpikeGS hlc GF] (M : MachineCtx) (p : Option sym) (Ls : LabelSpecT GF)
+    (Θ : ProcSpecT GF) :
     Nat → (SpikeVal → EnvStack → IProp GF) → CoreExpr → EnvStack → IProp GF
-  | 0 => wpt.pre M Ls 0 (fun _ _ _ => iprop(⌜False⌝))
-  | k + 1 => wpt.pre M Ls (k + 1) (wpt M Ls k)
+  | k => wpt.pre M p Ls Θ k (fun k' _ => wpt M p Ls Θ k')
+termination_by k => k
 ```
+
+The call clause's budget split `1 + m + k' ≤ k` is one unit for the call
+round, the callee's budget `m` (the table's index, `ProcSpecT`; the
+callee's delivery cost IS its return protocol — 1 for a bare value, the
+RETURN tau; 2 for an annotated one, REMOVE-ANNOT then RETURN), and the
+continuation's `k'`.
 
 Section variables not shown: `{hlc : HasLC} {GF : BundledGFunctors}`.
 `LabelSpecT` preconditions carry a variant `m : Nat` (the Floyd variant
@@ -685,15 +766,18 @@ measure. The total jump rule is `wpt_run`, with `(hμ : 1 + m ≤ k)`; the
 collapse is
 
 ```lean
-theorem wpt_sound {Ψ : SpikeVal → EnvStack → IProp GF} (k : Nat)
-    (e : CoreExpr) (ρ : EnvStack) :
-    blockSpecsT M Ls Ψ ⊢
-      iprop(wpt M Ls k Ψ e ρ -∗
-        WP (⟨e, ρ, M⟩ : CoreRt) @ Stuckness.NotStuck; ⊤ [{ w, Ψ w.w w.ρ }]) := by
+theorem wpt_sound {Ψ : SpikeVal → EnvStack → IProp GF} {ctl : Ctl} (hκ : ctl.κ = [])
+    (k : Nat) (e : CoreExpr) (ρ : EnvStack) :
+    iprop(procSpecsT M Θ ∗ blockSpecsT M ctl.proc Ls Θ Ψ) ⊢
+      iprop(wpt M ctl.proc Ls Θ k Ψ e ρ -∗
+        WP (⟨e, ρ, ctl, M⟩ : CoreRt) @ Stuckness.NotStuck; ⊤ [{ w, Ψ w.w w.ρ }]) := by
 ```
 
-into iris-lean's `TotalWeakestPre` (`[{ … }]`), by strong induction on
-the budget — a metatheorem about the judgment (it is a sound total WP)
+into iris-lean's `TotalWeakestPre` (`[{ … }]`) — the entry-control face
+of `wpt_sound_cps`, the CPS collapse by strong induction on the budget
+(a back edge lands in the target's variant budget, a call lands the
+callee in `m` and the continuation in `k'`, both below `k` by the split)
+— a metatheorem about the judgment (it is a sound total WP)
 that no export consumes: every total export goes through the engine
 simulation `wpt_drive_aux` (§5) directly, and no Iris adequacy result
 lies in any total export's cone. Deleting the decrease premise would let a diverging program
@@ -1557,14 +1641,22 @@ the `#print axioms` recipe are in the README, "How to build and verify".
   (`engine_step_matchU` at a free successor control; the two-procedure
   smoke rounds in `Examples/MirrorCoverage.lean`) and classified them
   (`complete_call`: `call_proc`'s two `Illformed_program` kills verbatim;
-  `complete_ret`: a value under a frame always steps) — with NO logic
-  rule: the judgments are `⌜False⌝` at a call redex until C3's call
-  clause and specification table. The absence is structural, not hidden:
-  the guard, the empty-stack entry control (`ctl.κ = []`) wherever a
-  general control appears, `MachineCtx.SeqWF` (startup thread) wherever
-  a general context does, and — for the `driveU` adequacy exports, whose
-  NotStuck oracle is the raw WP — the procedure well-formedness premise
-  `MachineCtx.FragProcs` (vacuous at both profiles).
+  `complete_ret`: a value under a frame always steps); C3 (2026-09-03)
+  added the LOGIC: the specification table `ProcSpec`, the call clause of
+  both judgments, the call rule (`wps_call_root`/`wpt_call_root`), the
+  procedure rule (`procSpecs_intro` — Hoare's rule for recursive
+  procedures, no Löb in the introduction) and the CPS collapse
+  `wps_sound_cps` (§3.3; the one Löb ties back edges and calls alike),
+  with the two-procedure smoke `Examples/CallSmoke.lean` through the
+  `driveU` lane (`FragProcs` discharged at two procedures). What remains
+  is C4's: the PRODUCTION lane through a call (the `exec_loc` tie), the
+  total DRIVER lane through calls (`wpt_drive_aux` is at the empty table
+  `emptyProcSpecT`), and recursive fib as the flagship. The remaining
+  absences are structural, not hidden: the empty-stack entry control
+  (`ctl.κ = []`) wherever a general control appears, `MachineCtx.SeqWF`
+  (startup thread) wherever a general context does, and — for the
+  `driveU` adequacy exports, whose NotStuck oracle is the raw WP — the
+  procedure well-formedness premise `MachineCtx.FragProcs`.
 - **The static kill of a region, `free` of a created object,
   `free(NULL)`, the zero-cost `alloc`.** In the fragment, mirrored and
   classified (`complete_kill`/`complete_alloc`), covered by no rule —

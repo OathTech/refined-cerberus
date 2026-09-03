@@ -138,15 +138,33 @@ The small axioms are proved once as atomic step specifications
 the static dispose, kill/free arc K2 — and `alloc_atomic`/`free_atomic`
 — dynamic allocation and free, K3), each against `Step` and the real
 `storeM`/`loadM`/`allocateObject`/`allocateRegion`/`killM`, and lifted by
-`wp_of_atomic` (raw WP), `wps_of_atomic` and `wpt_of_atomic`. `wps`
-(Wps.lean) is the partial label-context judgment, a guarded fixpoint
-over iris-lean's WP; `wpt` (Wpt.lean) is the total judgment by
-recursion on a step budget with the mandatory back-edge decrease
-(`1 + m ≤ k` in `wpt.pre`). Frame across back edges:
+`wp_of_atomic` (raw WP), `wps_of_atomic` and `wpt_of_atomic`. `wps M p
+Ls Θ Ψ e ρ` (Wps.lean) is the partial label-context judgment at the
+current procedure `p` with the label specification `Ls` and the
+PROCEDURE SPECIFICATION TABLE `Θ : ProcSpec GF` (calls arc C3), a
+guarded fixpoint over iris-lean's WP with four clauses — value, jump
+redex, CALL redex (the table's precondition now; a step later the
+caller's continuation `apply_ctx ctx (pure ret)` at the caller's env, for
+every `ret` meeting the postcondition), step (quantified over the call
+stack and execution location); `wpt M p Ls Θ k Ψ e ρ` (Wpt.lean) is the
+total judgment by well-founded recursion on a step budget with the
+mandatory back-edge decrease (`1 + m ≤ k`) and the call clause's budget
+split (`1 + m + k' ≤ k`: call round, callee incl. its return,
+continuation). Frame across back edges and calls:
 `wps_frame_labels`/`wpt_frame_labels`; loops: `blockSpecs_intro`/
-`blockSpecsT_intro`; collapses: `wps_sound` (Löb) into WP, `wpt_sound`
-into TWP (a metatheorem no export consumes). There is no raw-WP
-sequencing rule: at a populated label map it is false (Rules.lean).
+`blockSpecsT_intro`; procedures: `procSpecs_intro`/`procSpecsT_intro`
+(every declared body verified once, at every caller tail, assuming the
+table — Hoare's rule for recursive procedures; no Löb in the
+introduction); the call rule `wps_call`/`wps_call_root`,
+`wpt_call`/`wpt_call_root`; collapses: `wps_sound_cps` (THE ONE LÖB, in
+CPS over the ambient control — RefinedC's `stmt_wp_def` shape — whose
+call case runs the callee under `procSpecs` and returns into the
+caller's continuation, `wp_ret`/`wp_ret_annot`, the environment restored
+by `SameTail`) with `wps_sound`/`wps_sound_empty` at the entry control,
+and `wpt_sound_cps` (strong induction on the budget) with
+`wpt_sound`/`wpt_sound_empty` into TWP (metatheorems no export
+consumes). There is no raw-WP sequencing rule: at a populated label map
+it is false (Rules.lean).
 
 ## 4. Adequacy
 
@@ -170,7 +188,9 @@ an unpinned device: a control-general induction under the invariant
 terms — and the premise `MachineCtx.FragProcs`, every declared
 procedure body in the cone: the raw WP's NotStuck does not exclude a
 call, so the partial lane must follow the engine into the callee and
-back; the total lane needs neither, its judgment is `⌜False⌝` at a call);
+back, under the env-depth invariant `Step.env_depth`; the total DRIVER
+lane is stated at the EMPTY table `emptyProcSpecT`, where the call clause
+is unsatisfiable — C4 extends it through calls);
 the shipped-round certification `engine_step_matchU` (§2) is not
 consumed by either lane.
 

@@ -872,7 +872,10 @@ theorem procCtx_fragProcs (rs : core_run_state) : (procCtx rs).FragProcs :=
    fun f _ _ h => (by rw [lookupProc_spikeFile] at h; cases h),
    fun f _ _ h => (by rw [lookupProc_spikeFile] at h; cases h)⟩
 
-/-- The control invariant of a drive (proof device): the current
+/-- The control invariant of a drive (proof device; its companion, the
+    env-depth invariant `ctl.κ.length < ρ.length`, is `Step.env_depth` —
+    the C2 range audit's N-1, stated as a lemma and consumed at the
+    call and return rounds below): the current
     procedure's label bodies are fragment terms within the bound, and
     every saved frame on the call stack (caller's procedure, caller's
     context) has fragment label bodies and yields a fragment term within
@@ -1066,9 +1069,8 @@ theorem drive_classifyU_aux {M : MachineCtx} (hwf : M.SeqWF) (hPf : M.FragProcs)
             subst hρ
             rw [driveU_succ, stepOutcomes_thread, outcomesU_of_ret]
             refine ih _ _ _ ⟨κ, p, ℓ⟩ _ (hreach.tail ⟨hs, rfl⟩) (hplug v).1
-              (hplug v).2 ⟨hlabC, fun pc' hpc' => hκ pc' (List.mem_cons_of_mem _ hpc')⟩ ?_
-            simp only [List.length_cons] at hlen
-            exact Nat.lt_of_succ_lt_succ hlen
+              (hplug v).2 ⟨hlabC, fun pc' hpc' => hκ pc' (List.mem_cons_of_mem _ hpc')⟩
+              (hs.env_depth hlen)
         | annot ds v =>
           rcases hs.ctl_cases with heq | ⟨_, _, _, _, _, _, hc, -⟩ |
               ⟨v', _, _, _, _, _, _, _, he, -⟩
@@ -1121,8 +1123,7 @@ theorem drive_classifyU_aux {M : MachineCtx} (hwf : M.SeqWF) (hPf : M.FragProcs)
           · exact ⟨hlabP, fun v => ⟨hd.frag_plug_call hf v,
               Nat.le_trans (hd.pot_plug_call_le v) hpot⟩⟩
           · exact hκ pc hpc'
-        · simp only [List.length_cons] at hlen ⊢
-          omega
+        · exact hs.env_depth hlen
       · rw [he] at hv
         cases hv
 

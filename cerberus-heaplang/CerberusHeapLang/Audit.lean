@@ -131,6 +131,7 @@ import CerberusHeapLang.RegionLoopExhibit
 import CerberusHeapLang.MallocListExhibit
 import CerberusHeapLang.Examples.ReadinessSmoke
 import CerberusHeapLang.Examples.MirrorCoverage
+import CerberusHeapLang.Examples.CallSmoke
 import CerberusHeapLang.Round
 
 namespace CerberusHeapLang.Audit
@@ -461,7 +462,37 @@ def trioExports : List Name := [
   ``CerberusHeapLang.loop_step_frag_same, ``CerberusHeapLang.loop_step_tau_tsk,
   ``CerberusHeapLang.Decomp.frag_plug_call,
   ``CerberusHeapLang.spikeCtx_fragProcs, ``CerberusHeapLang.wpt_call_eq,
-  ``CerberusHeapLang.smoke_call_round, ``CerberusHeapLang.smoke_ret_round]
+  ``CerberusHeapLang.smoke_call_round, ``CerberusHeapLang.smoke_ret_round,
+  -- calls arc C3 (2026-09-03): PROCEDURE SPECIFICATIONS AND THE CALL RULE —
+  -- the env-stack facts the CPS collapse threads (`SameTail` across a
+  -- control-preserving step, the env-depth invariant, the two return
+  -- inversions), the call rule at both strata (in context and at the root
+  -- redex), the procedure rule's introduction and the empty table, the
+  -- return devices at the raw WP/TWP, THE CPS COLLAPSES (the one Löb;
+  -- the budget induction) and their entry-control/empty-table faces, the
+  -- total judgment's empty-table call fact, and the two-procedure SMOKE
+  -- (Examples/CallSmoke): `f`'s body once at every caller tail, the
+  -- table discharged by `procSpecs_intro`, `main` by the call rule, the
+  -- collapse WITH the table, the `driveU` lane with `FragProcs` at two
+  -- procedures (PROVISIONAL), and the total twins.
+  ``CerberusHeapLang.Step.sameTail, ``CerberusHeapLang.Step.env_depth,
+  ``CerberusHeapLang.Step.ret_inv, ``CerberusHeapLang.Step.ret_annot_inv,
+  ``CerberusHeapLang.wps_call, ``CerberusHeapLang.wps_call_root,
+  ``CerberusHeapLang.procSpecs_intro, ``CerberusHeapLang.procSpecs_empty,
+  ``CerberusHeapLang.wp_ret, ``CerberusHeapLang.wp_ret_annot,
+  ``CerberusHeapLang.wps_sound_cps, ``CerberusHeapLang.wps_sound_empty,
+  ``CerberusHeapLang.wps_sound_frame_empty,
+  ``CerberusHeapLang.wpt_call, ``CerberusHeapLang.wpt_call_root,
+  ``CerberusHeapLang.wpt_empty_call_false,
+  ``CerberusHeapLang.procSpecsT_intro, ``CerberusHeapLang.procSpecsT_empty,
+  ``CerberusHeapLang.twp_ret, ``CerberusHeapLang.twp_ret_annot,
+  ``CerberusHeapLang.wpt_sound_cps, ``CerberusHeapLang.wpt_sound_empty,
+  ``CerberusHeapLang.csF_body_wps, ``CerberusHeapLang.csCtx_procSpecs,
+  ``CerberusHeapLang.csMain_wps, ``CerberusHeapLang.cs_wp_readout,
+  ``CerberusHeapLang.call_smoke_driveU,
+  ``CerberusHeapLang.csF_body_wpt, ``CerberusHeapLang.csCtx_procSpecsT,
+  ``CerberusHeapLang.csMain_wpt, ``CerberusHeapLang.cs_twp_readout,
+  ``CerberusHeapLang.csCtx_fragProcs]
 
 def sortedNames (ns : Array Name) : Array String :=
   (ns.map (·.toString)).qsort (· < ·)

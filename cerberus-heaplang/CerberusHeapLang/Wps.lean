@@ -8,29 +8,54 @@ judgment also takes), realized as a guarded fixpoint over the
 fragment's `Step` via iris-lean's public Banach machinery
 (`fixpoint`/`OFE.Contractive` — the same machinery `wp` itself is
 built from; iris-lean untouched). `wps M p Ls Θ Ψ e ρ` is indexed by the
-machine context `M` (whose derived `(M.labelsAt p)` is the current
-procedure's static label map — Step.lean header note 3), the label
+machine context `M`, the CURRENT PROCEDURE `p : Option sym` (whose
+derived `M.labelsAt p` is its static label map — Step.lean header note
+3; calls arc C3: the judgment is procedure-indexed, not control-indexed —
+RETURN does not restore `exec_loc`, so the step clause quantifies over
+the call stack and execution location `(κ, ℓ)`), the label
 specification `Ls : LabelSpec GF` (`sym → List value → EnvStack →
 IProp GF`: a precondition per registered label over the jump-argument
-values and the jump-time environment), the postcondition `Ψ` over the
-delivered value and the final environment, the expression, and the
-live environment stack.
+values and the jump-time environment), the PROCEDURE SPECIFICATION
+TABLE `Θ : ProcSpec GF` (`sym → List value → IProp GF × (value → IProp
+GF)`: per procedure and argument values, a precondition and a
+postcondition on the delivered value; `emptyProcSpec` recovers every
+pre-C3 statement), the postcondition `Ψ` over the delivered value and
+the final environment, the expression, and the live environment stack.
 
-THE JUMP CLAUSE: `wps.pre` has three clauses (value / jump redex /
-step). The jump clause fires at `jumpRedex? e` (Step.lean — the
+THE JUMP CLAUSE: `wps.pre` has four clauses (value / jump redex / call
+redex / step). The jump clause fires at `jumpRedex? e` (Step.lean — the
 syntactic image of `step_ctx`'s `Erun` context-discard through the
-`Esseq`/`Eannot` spine) and demands: the label resolves in `(M.labelsAt p)`
+`Esseq`/`Eannot` spine) and demands: the label resolves in `M.labelsAt p`
 (`lookupLabel`), the arguments evaluate under the CURRENT environment
 by the pure evaluator (`evalPexprs`, certified against the engine's
 `full_eval_pexpr` in Soundness.lean), the environment stack is
 cons-shaped (the `update_env` panic exclusion), and the label's
 precondition `Ls l vs ρ` holds — then TRACKING STOPS: a jump's
 postcondition is the label's business, so the postcondition clash
-that would sink a bind-style rule never forms. The collapse
-`wps_sound` into iris-lean's WP carries the `blockSpecs` premise
-(every registered body re-establishes its label's precondition) and
-is the package's one Löb induction; its jump case is where the clause
-meets the step relation (`Step.jump_inv`/`Step.run_of_jumpRedex`).
+that would sink a bind-style rule never forms.
+
+THE CALL CLAUSE (calls arc C3, replacing C2's `⌜False⌝` guard) fires at
+`callRedex? e = some (ctx, f, pes)` (the call redex located outside-in
+with the context PCALL captures) and demands what the engine's round
+needs — the procedure resolves (`lookupProc`), the arity matches, the
+arguments evaluate — and the SPECIFICATION: the table's precondition
+`(Θ f vs).1` now and, a step later, the CALLER'S CONTINUATION `apply_ctx
+ctx (pure ret)` at the caller's own environment for every `ret` meeting
+the postcondition — exactly what RETURN produces. The callee's body is
+`procSpecs`' business: every declared body verified once, at every caller
+tail (`lookup_env` searches all frames — `∀ ρ` is forced), assuming the
+table for every procedure, itself included — Hoare's rule for recursive
+procedures, `procSpecs_intro` with no Löb. The collapse `wps_sound_cps`
+into iris-lean's WP — CPS over the ambient control, RefinedC's
+`stmt_wp_def` shape — carries the `procSpecs` and `blockSpecs` premises
+and is the package's ONE Löb induction: its jump case is where the jump
+clause meets the step relation (`Step.jump_inv`/`Step.run_of_jumpRedex`),
+its call case is where the one Löb and the frame stack meet — the callee
+runs under the induction hypothesis, and the RETURN (`Step.ret_inv`,
+`wp_ret`/`wp_ret_annot`; the caller's env restored by `SameTail`) hands
+the value to the caller's continuation, again through the hypothesis.
+`wps_sound` (entry control) and `wps_sound_empty` (empty table: the
+pre-C3 statement verbatim) are its faces.
 
 THE CONTENTS: the memory rules as corollaries of the atomic step
 specifications (`wps_of_atomic`; `wps_store`/`wps_load`, the typed
@@ -47,13 +72,18 @@ jump (`wps_save` at evaluated initializers, `wps_run`); operand
 evaluation and the `PtrEq` memop (`wps_load_eval`, `wps_store_eval`,
 `wps_memop_eval`, `wps_memop_ptreq`); the pure exit and the
 annotation layer (`wps_pure`, `wps_ofVal`, `wps_annot`,
-`wps_annot_reindex`); consequence (`wps_wand`, `wps_fupd`,
+`wps_annot_reindex`); the call rule (`wps_call` in context,
+`wps_call_root` at the `Eproc` redex); consequence (`wps_wand`, `wps_fupd`,
 `wps_mono_Ls`); framing at the statement level (`wps_frame`, and
 `wps_frame_labels` through the framed label context `frameLs`, which
-carries a frame across every back edge); the per-label invariant rule
-`blockSpecs_intro` (no Löb) with `blockSpecs_frame`/`blockSpecs_mono`;
-and the collapses `wps_sound`/`wps_sound_frame` into the raw WP — the
-adequacy interface (Adequacy.lean). There is deliberately no raw-WP
+carries a frame across every back edge and into every call's
+continuation); the per-label invariant rule `blockSpecs_intro` (no Löb)
+with `blockSpecs_frame`/`blockSpecs_mono`; the procedure rule
+`procSpecs_intro` (no Löb) with `procSpecs_empty`; the return devices
+`wp_ret`/`wp_ret_annot`; and the collapses `wps_sound_cps` (CPS, the one
+Löb), `wps_sound`/`wps_sound_frame` (entry control) and
+`wps_sound_empty`/`wps_sound_frame_empty` (empty table) into the raw WP
+— the adequacy interface (Adequacy.lean). There is deliberately no raw-WP
 sequencing rule and no `Language.Context` instance: both are false
 once labels are populated (Rules.lean and Lang.lean headers).
 -/

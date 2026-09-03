@@ -13,8 +13,10 @@ What it does, and nothing else:
    that covers it (`ruleFor` below).
 3. THE ONE CHECK THAT HAS CAUGHT REAL OVERCLAIMS: the named rule
    exists, is a theorem, and lies in the proof-term dependency cone
-   of at least one declaration of an exhibit module (`*Exhibit`) —
-   the report says which. A rule consumed by no exhibit is a red row
+   of at least one declaration of a CLIENT module — the exhibit modules
+   (`*Exhibit`) and the declared smoke `Examples.CallSmoke` (calls arc
+   C3: the call rule's client until C4's recursive-fib exhibit) —
+   the report says which. A rule consumed by no client is a red row
    (a construct "covered" by a rule nobody's proof flows through is
    the 2026-09-01 re-audit's R-01/R-04 class of overclaim).
 
@@ -58,6 +60,7 @@ def ruleFor : Name → List Name
   | `CerberusHeapLang.Frag.store_op   => [`CerberusHeapLang.wps_store_eval]
   | `CerberusHeapLang.Frag.case_value => [`CerberusHeapLang.wps_case_value]
   | `CerberusHeapLang.Frag.wseq       => [`CerberusHeapLang.wps_wseq]
+  | `CerberusHeapLang.Frag.call       => [`CerberusHeapLang.wps_call_root, `CerberusHeapLang.wps_call]
   | _ => []
 
 /-- DECLARED NO-RULE constructors: in the fragment, MIRRORED and
@@ -65,14 +68,11 @@ def ruleFor : Name → List Name
     each with the record that says so and names the slice that adds the
     rule. Printed as an explicit row (not red): the absence is stated, not
     silent. An unmapped, undeclared constructor is still MISSING and red.
-    - `Frag.call` (calls arc C2, 2026-09-03): the procedure call is
-      mirrored (`Step.call`/`Step.ret`), certified (`engine_step_matchU`)
-      and classified (`complete_call`/`complete_ret`); the call rule and
-      the specification table are C3 (docs/2026-09-03_c2-notes.md). -/
+    (Calls arc C2 declared `Frag.call` here — mirror-level only; C3 landed
+    its rules `wps_call_root`/`wps_call`, docs/2026-09-03_c3-notes.md — so
+    the list is currently empty; the mechanism stays for the next slice
+    that mirrors before it rules.) -/
 def declaredNoRule : Name → Option String
-  | `CerberusHeapLang.Frag.call =>
-    some "NO RULE YET (declared: calls arc C2 — mirror-level only; the call rule is C3, \
-      docs/2026-09-03_c2-notes.md)"
   | _ => none
 
 /-! ## Environment reflection -/
@@ -149,10 +149,13 @@ partial def cone (env : Environment) (canReach : Name → Bool) (seeds : Array N
   let env ← getEnv
   let some (.inductInfo fragInfo) := env.find? `CerberusHeapLang.Frag
     | throwError "manifest FAIL: inductive CerberusHeapLang.Frag not found"
-  -- the exhibit modules, from the environment, sorted for determinism
+  -- the client modules, from the environment, sorted for determinism:
+  -- the exhibit modules plus the declared C3 smoke (the call rule's
+  -- client until C4's recursive-fib exhibit)
   let exhibits : Array Name :=
     (env.header.moduleNames.filter fun m =>
-      m.getRoot == `CerberusHeapLang && m.toString.endsWith "Exhibit")
+      m.getRoot == `CerberusHeapLang &&
+        (m.toString.endsWith "Exhibit" || m == `CerberusHeapLang.Examples.CallSmoke))
     |>.qsort (fun a b => a.toString < b.toString)
   if exhibits.isEmpty then throwError "manifest FAIL: no *Exhibit module in the environment"
   -- the rule modules (of the mapped rules that exist) + the pruning predicate

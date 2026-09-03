@@ -5,13 +5,19 @@ THE SHAPE: the total analogue of `wps` (Wps.lean) — the same
 label-context statement logic, but TOTAL: `wpt M p Ls Θ k Ψ e ρ` means
 "e delivers a value satisfying Ψ within k engine-drive steps
 (delivery protocol included), given that every registered label body
-meets its own budget" (`blockSpecsT`). It is defined WITHOUT a
-fixpoint, by structural recursion on the step budget `k` (`wpt.pre`:
-value / jump redex / step clauses; the recursive occurrence in the
-step clause is at `k - 1`, and the jump clause does not recurse — the
-body's obligation lives in `blockSpecsT` at the target's own budget).
-No Löb and no ▷: the least-fixpoint discipline of iris-lean's own
-`TotalWeakestPre`, realized through the budget's well-foundedness.
+meets its own budget (`blockSpecsT`) and every declared procedure body
+its table entry at its budget (`procSpecsT`, calls arc C3)". It is
+defined WITHOUT a fixpoint, by well-founded recursion on the step
+budget `k` (`wpt.pre`: value / jump redex / call redex / step clauses;
+the recursive occurrence in the step clause is at `k - 1`, in the call
+clause at the continuation's budget `k'` with the split `1 + m + k' ≤ k`
+— the call round, the callee's budget `m` (its return included), the
+rest of the caller — and the jump clause does not recurse — the body's
+obligation lives in `blockSpecsT` at the target's own budget). No Löb
+and no ▷: the least-fixpoint discipline of iris-lean's own
+`TotalWeakestPre`, realized through the budget's well-foundedness. The
+judgment is indexed by the current PROCEDURE `p`, the step clause
+quantified over the call stack and execution location, as `wps` is.
 
 THE MANDATORY DECREASE: label preconditions are INDEXED BY A VARIANT
 `m : Nat` (`LabelSpecT` — the classical Floyd variant as a
@@ -22,16 +28,23 @@ fit in the remaining budget. Since a body is verified (`blockSpecsT`)
 at budget `m` and budgets only shrink along steps, every back edge
 strictly decreases a well-founded `Nat` measure. The variant is
 simultaneously a step budget, so one derivation yields two results:
-- `wpt_sound` collapses the judgment into iris-lean's
-  `TotalWeakestPre` (`WP … [{ … }]`), by strong induction on the
-  budget — a metatheorem (the judgment is a sound total WP) that no
+- `wpt_sound_cps` collapses the judgment into iris-lean's
+  `TotalWeakestPre` (`WP … [{ … }]`), in CPS over the ambient control by
+  strong induction on the budget (a back edge lands in the target's
+  variant budget, a call lands the callee in `m` and the continuation in
+  `k'`, both below `k` by the split; the return is `twp_ret`/
+  `twp_ret_annot`) — `wpt_sound`/`wpt_sound_empty` are its entry-control
+  faces — a metatheorem (the judgment is a sound total WP) that no
   export consumes;
 - `wpt_drive_aux` (TotalAdequacy.lean) is the simulation into the
   engine: a proved `wpt … k` plus the seeded footprint yields the
   unconditional `driveU … k = .done` equation, the device lemma
   `outcomesU_of_step` (Soundness.lean) discharging one `driveU` step
-  per budget unit. Every total export
-  goes this way; no Iris adequacy result is in any total export's cone.
+  per budget unit. Every total export goes this way; no Iris adequacy
+  result is in any total export's cone. It is stated at the EMPTY table
+  `emptyProcSpecT` (the call clause unsatisfiable there,
+  `wpt_empty_call_false`): the drive-fuel simulation through calls is
+  C4's, with recursive fib's budget.
 Deleting the decrease premise makes both inductions fail to elaborate
 (they are ON the budget) and would make the self-jump loop derivable;
 `diverge_total_unprovable` (DivergeExhibit.lean) records, at the
@@ -53,11 +66,15 @@ THE CONTENTS mirror Wps.lean rule for rule: the memory rules through
 forms, `wpt_create` at cost `2 ≤ k`); sequencing (`wpt_seq`,
 `wpt_seq_spec`, `wpt_seq_sym`, `wpt_wseq`); `wpt_if`, `wpt_case_value`;
 `wpt_save`/`wpt_run` (the latter with the decrease premise `1 + m ≤
-k`); operand evaluation and the memop; the pure exit and the
+k`); the call rule `wpt_call`/`wpt_call_root` (with the budget split);
+operand evaluation and the memop; the pure exit and the
 annotation layer; consequence (`wpt_mono`, `wpt_mono_k`, `wpt_mono_Ls`,
-`wpt_fupd`); framing (`wpt_frame`, `wpt_frame_labels`/`frameLsT`);
-`blockSpecsT_intro` with `blockSpecsT_frame`/`blockSpecsT_mono`; and
-the collapse `wpt_sound`.
+`wpt_fupd` — by strong induction on the budget since C3, the call
+clause's continuation sitting below `k - 1`); framing (`wpt_frame`,
+`wpt_frame_labels`/`frameLsT`); `blockSpecsT_intro` with
+`blockSpecsT_frame`/`blockSpecsT_mono`; `procSpecsT_intro` with
+`procSpecsT_empty`; and the collapses `wpt_sound_cps`/`wpt_sound`/
+`wpt_sound_empty`.
 -/
 import CerberusHeapLang.Wps
 

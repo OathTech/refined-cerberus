@@ -14,6 +14,7 @@ import CerberusHeapLang.API
 import CerberusHeapLang.Examples.Layout
 import CerberusHeapLang.Examples.ReadinessSmoke
 import CerberusHeapLang.Examples.MirrorCoverage
+import CerberusHeapLang.Examples.CallSmoke
 import CerberusHeapLang.Exhibit
 import CerberusHeapLang.DriverCollapse
 import CerberusHeapLang.ProdLoop
