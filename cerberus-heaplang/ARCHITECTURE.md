@@ -184,10 +184,12 @@ upstream or separately bounded before any concurrency or whole-engine
 claim is made on this semantics; it is reported to the cerberus-lean
 team in `../docs/2026-09-02_request-cerberus-lean-fuel-exhaustion-outcome.md`.
 
-THE ROOT-OF-TRUST LANE (total): the four closed shipped-driver
+THE ROOT-OF-TRUST LANE (total): the six closed shipped-driver
 statements — `exhibitA_prod` (ProdExhibit.lean),
 `fib_certified_production`, `counter_loop_certified_production`,
-`list_reverse_certified_production` (ProdLoopExhibit.lean). Their
+`list_reverse_certified_production` (ProdLoopExhibit.lean),
+`dispose_list_certified_production` (DisposeExhibit.lean),
+`region_loop_certified_production` (RegionLoopExhibit.lean). Their
 execution function is the shipped composite of §1, applied to the
 authored program wrapped as a synthetic one-procedure file by
 `prodFile` (ProdEntry.lean); their conclusions are pure readout
@@ -196,15 +198,18 @@ hypothesis (where the certified step count depends on an input, the
 in-budget bound is an explicit hypothesis: `fib_certified_production`'s
 `hfuel : 2 * n.toNat + 6 ≤ lemDefaultFuel`,
 `counter_loop_certified_production`'s `hfuel : 6 * n.toNat + 8 ≤
-lemDefaultFuel`). "Closed shipped-driver statement" means exactly these
-four; the headline claim of this package rests on them. They are
+lemDefaultFuel`, `region_loop_certified_production`'s `hfuel : 7 *
+n.toNat + 5 ≤ lemDefaultFuel` together with its budget-fits-the-cold-
+start premise `hB : n.toNat * regionCost al sz ≤ headroom
+prodMem₀.lastAddress`). "Closed shipped-driver statement" means exactly these
+six; the headline claim of this package rests on them. They are
 reached through `wpt_driver_done`/`wpt_driver_done_alloc`
 (ProdLoop.lean) and `prod_run_eqJ` (ProdEntry.lean), which is generic
 collapse machinery, not a closed statement: its premise `hdd` is the
 package-defined delivery fact `DriverDoneAt` (ProdLoop.lean) that the
 total judgment supplies, its premise `hQe` is the package-defined label
 tie `LabeledAt`, and it carries the in-budget bound `k + 2 ≤
-lemDefaultFuel` on the certified step count. The four statements
+lemDefaultFuel` on the certified step count. The six statements
 discharge the delivery and label premises (and the bound, by
 computation, where the step count is fixed) and are what remains.
 
@@ -227,25 +232,37 @@ classify its outcomes; `driveU` is tied to the shipped driver by
 `loop_step_frag` (DriverCollapse.lean) only where the mirror steps,
 which is what the production collapse (`prod_run_eqJ`) consumes.
 
-## 7. Open items
+## 7. Open items, and the acceptance goals
 
-The first two are the explicit open ACCEPTANCE items (the 2026-09-02
-re-review's next action 1; mirror completeness landed 2026-09-02 and was
-closed fail-closed on the declared fragment the same day, up to the
-residual below): each stays open until the named theorem exists, and the
-PROVISIONAL label is not removed before then.
+THE THREE ACCEPTANCE GOALS ([USER 2026-09-02], DECISIONS.md), with their
+status at the close of the kill/free arc (2026-09-03):
 
-- The residual of mirror completeness (§2, `OpenRound`,
-  `docs/2026-09-02_fragment-closure-notes.md`): `eval_uncovered` — an
-  operand in the covered grammar CONTAINING A LEAF the engine's evaluator
-  accepts where the mirror evaluator does not evaluate (a symbol unbound
-  in the environment but naming a `Proc` of the file, evaluated by the
-  engine to the null function pointer; one of the eight mirrored binops
-  at two floating-point operands; `OpEq` at two ctypes). The classifier
-  `evalClass` answers `.uncovered` at the FIRST such leaf and carries no
-  engine claim about the whole operand, so the arm's whole-operand
-  outcome is NOT characterized: it contains operands the engine
-  SUCCEEDS on, operands it KILLS (`f + 1` with `f` a `Proc`-named
+- **Goal 1 — the shipped-driver generic adequacy theorem: OPEN, pending
+  the upstream restatement.** Today `MemTripleU`, the projection
+  theorems and `wpt_engine_boundU` are about `driveU`, and only the six
+  closed production statements reach `CerbND.runND (drive …)
+  (initial_driver_state …).1`. Closes when a generic theorem takes an
+  arbitrary proved public triple to a statement over that shipped
+  composite. The semantics-side prerequisite HAS LANDED (cerberus-lean
+  mainline `f95ef8d9c`, the fuel arc: a transparent, distinguished
+  fuel-exhaustion outcome; `../docs/2026-09-03_repin-scout.md`); the
+  sequence ruled 2026-09-03 is the cheap RE-PIN after K4, then the calls
+  arc, then the FUEL-LANE RESTATEMENT (delete `driveU`, restate the
+  partial exports over the fuelled driver, remove PROVISIONAL) once on
+  the final configuration. Until then every `driveU` export carries the
+  PROVISIONAL label (§6).
+- **Goal 2 — mirror completeness: CLOSED fail-closed on the declared
+  fragment (2026-09-02), with two characterized residuals.** `OpenRound`
+  (§2, `docs/2026-09-02_fragment-closure-notes.md`): `eval_uncovered` —
+  an operand in the covered grammar CONTAINING A LEAF the engine's
+  evaluator accepts where the mirror evaluator does not evaluate (a
+  symbol unbound in the environment but naming a `Proc` of the file,
+  evaluated by the engine to the null function pointer; one of the eight
+  mirrored binops at two floating-point operands; `OpEq` at two ctypes).
+  The classifier `evalClass` answers `.uncovered` at the FIRST such leaf
+  and carries no engine claim about the whole operand, so the arm's
+  whole-operand outcome is NOT characterized: it contains operands the
+  engine SUCCEEDS on, operands it KILLS (`f + 1` with `f` a `Proc`-named
   unbound symbol is `PePure`, classified `.uncovered`, killed as
   `Illformed_program … ill-typed PEop` — 2026-09-03 audit, by
   execution) and operands it PANICS on (a float guard under `Eif`).
@@ -259,125 +276,80 @@ PROVISIONAL label is not removed before then.
   bridge); the mover that empties the arm is a mirror evaluator
   complete relative to `eval_pexpr_aux2` on `PePure` (`M.file` threaded
   into `evalPexpr`, the float/ctype arms), which moves it into `Step`.
-  `run_surplus` — a
-  jump with more arguments than the registered label's parameters whose
-  zipped arguments evaluate and whose surplus does not (the engine's
-  fold truncates, the mirror's `Step.run` evaluates every argument) —
-  label-map-dependent; the mover is a prefix-evaluating `Step.run`. Of
-  the four gaps registered on 2026-09-02, (a) and (c)'s grammar were
-  closed by narrowing `Frag` (`BareHead`, `PePure` everywhere), (b) and
-  (d) by classification (`ShippedRefusal.error_next`, `panic_noproc`),
-  and (c)'s classifier rejections by the KILL bridge (EvalClass.lean).
-- The shipped-driver generic adequacy theorem (§6). Today
-  `MemTripleU`, the projection theorems and `wpt_engine_boundU` are
-  about `driveU`, and only the four closed production statements reach
-  `CerbND.runND (drive …) (initial_driver_state …).1`. Closes when a
-  generic theorem takes an arbitrary proved public triple to a
-  statement over that shipped composite — which needs the
-  fuel-exhaustion request below (a transparent, distinguished
-  fuel-exhaustion outcome in the engine's driver monad) to land, so
-  that a statement quantifying over all fuels can classify the
-  driver's outcomes. The PROVISIONAL lane is then restated with no
-  other change.
-- Acceptance goal 3 — the global memory well-formedness invariant —
-  LANDED (K0, 2026-09-03): `MemWF σ` (Heap.lean, section "The global
-  memory well-formedness invariant": allocation-id discipline, live/dead
+  `run_surplus` — a jump with more arguments than the registered label's
+  parameters whose zipped arguments evaluate and whose surplus does not
+  (the engine's fold truncates, the mirror's `Step.run` evaluates every
+  argument) — label-map-dependent; the mover is a prefix-evaluating
+  `Step.run`. Of the four gaps registered on 2026-09-02, (a) and (c)'s
+  grammar were closed by narrowing `Frag` (`BareHead`, `PePure`
+  everywhere), (b) and (d) by classification
+  (`ShippedRefusal.error_next`, `panic_noproc`), and (c)'s classifier
+  rejections by the KILL bridge (EvalClass.lean). A third registered
+  premise stays carried, not proved: `hbsz` inside `Frag.case_value`
+  (README "Registered divergences and limitations").
+- **Goal 3 — the global memory well-formedness invariant: CLOSED (K0–K3,
+  2026-09-03).** `MemWF σ` (Heap.lean, section "The global memory
+  well-formedness invariant": allocation-id discipline, live/dead
   consistency, pairwise range disjointness of ALL live allocations,
-  cursor bounds, the dynamic-address facts; each component an engine
-  fact with a `CerbMem.lean` cite) is a field of the state
-  interpretation `CohG` (under cursor presence) and of the launch
-  premise `LaunchCoh`; `prodMem₀_memWF` is the cold-start instance;
-  `MemWF.loadM`/`MemWF.storeM`/`MemWF.allocateObject` are preservation
-  by the fragment's three memory operations (every active outcome);
-  `create_fresh_global` is "fresh means fresh in the concrete
-  allocation model". `MemWF.killM` — preservation by `killM`, BOTH arms
-  (the dynamic `free(NULL)` no-op and the record erase) — is PROVED
-  (K2, from the explicit-shape `MemWF.kill` that `CohG.kill` consumes).
-  CLOSED (K3, 2026-09-03): preservation by `allocateRegion` —
-  `MemWF.allocateRegion`, the last stated obligation — is PROVED
-  (`MemWF.alloc` at `dyn := base :: dynamicAddrs`, size `sizeN.toNat`,
-  zero admitted), and the invariant gained its tenth component `la_pos :
-  0 < lastAddress` (the K2.5 range audit's M-2: both cursor writers
-  guard `alignedAddr ≠ 0`; the engine's initial cursor is
-  `0xFFFFFFFFFFFF` and the production cold start's `prodMem₀.lastAddress
-  = errnoAddr = 0xFFFFFFFFFFF8`), under
-  which the budget's success bound holds at EVERY size
-  (`freshBase_ne_zero_of_cost'`). Every stated obligation of goal 3 has
-  its proof; "fresh" and "dynamic" are exactly what the engine has:
-  fresh = disjoint from every live allocation of the state, dynamic =
-  the base was pushed by `allocateRegion` (coupled one-way to
-  `dynamicAddrs`, which `killM` never cleans).
-  The former footprint-relative launch facts (`id_lt`, `fresh_alloc`,
-  `fresh_dead`, `addr_lo`, `la_wf`; `CohG`'s `cur_dead`/`cur_alloc`/
-  `cur_meta_lt`/`cur_meta_lo`) are consequences and were retired as
-  fields (K1 re-adds `cur_meta_lo` as a field: dead metadata cells
-  have no record for `MemWF.cursor_lo` to read).
-- The kill/free arc's METADATA CELL — LANDED (K1, 2026-09-03): `MetaCell`
-  is ⟨base, optional type, size, `alive`, `readonly`, `dynamic`⟩, every
-  field coupled to the engine's `Allocation` record by `MetaCoh`
-  (Heap.lean: live cells to not-dead present records agreeing on base/
-  size/type/writability; dead cells to a dead id with its record erased;
-  `dynamic = true → base ∈ dynamicAddrs`, the one direction the engine
-  preserves). RefinedC's `al_alive`/`al_kind`; the read-only flag and
-  the optional type are Cerberus-forced (`Allocation.isReadonly`;
-  `allocateRegion` records no type). The frozen bundles are the live,
-  writable, created-object instance (`objCell … true false`), so their
-  statements did not change; the new bundles `regionOwn`/`regionView`
-  (untyped live dynamic regions), `readonlyCell` (loads only —
-  `load_atomic_readonly`; the store refusal `storeM_readonly_kills` is
-  an engine fact) and `deadObj`/`deadRegion` (persistent knowledge of a
-  kill) are what K2/K3's rules produce and consume. Record:
-  `docs/2026-09-03_k1-notes.md`.
-- The kill/free arc's STATIC KILL — LANDED (K2, 2026-09-03): the mirror
-  `Step.kill`/`Step.kill_eval` (step_action's Kill arm — the request
-  `KillRequest2 (is_dynamic kind) ptrval`, continuation the bare
-  `mk_value_e Vunit`; generic in the kind since the engine discards the
-  `Static0 ty` payload), `Frag.kill`/`Frag.kill_op` restricted to the
-  static kill (`is_dynamic kind = false`), the certification
-  (`step_ctx_kill`, `ars_kill_active`, `engine_step_matchU` and
-  `loop_step_frag` re-certified — statements unchanged), and the
-  completeness pair `complete_kill`/`complete_kill_op` with the refusal
-  rows `killM_killed_inv` (UB179a non-matching, UB179b dead, the non-UB
-  out-of-bound `Other`; ILLTYPED-at-distance-one at a non-pointer
-  operand). THE DISPOSE RULE `kill_atomic` (Rules.lean) consumes
-  `pointsToCell … (.own 1)` and delivers the bare unit with at most the
-  persistent dead cell `deadObj`; `wps_kill`/`wpt_kill` (dead-cell form),
-  `wps_kill_emp`/`wpt_kill_emp` (the textbook `{p ↦ -} kill(p) {emp}`),
-  `wps_kill_eval`/`wpt_kill_eval` (operand form). The ghost step is
-  `metaHeap_update` to `alive := false` then `metaOwn_persist`; the byte
-  fragments are dropped — sound because `killM` leaves the bytemap alone
-  and addresses are never reused (`CohG.kill`). Consumers:
-  `alloc_create_kill_wps`, `kill_launch_smoke` (AllocExhibit.lean).
-  Record: `docs/2026-09-03_k2-notes.md`.
-- The kill/free arc's DYNAMIC ALLOCATION AND FREE — LANDED (K3,
-  2026-09-03): the mirror `Step.alloc`/`Step.alloc_eval` (step_action's
-  Alloc0 arm — two INTEGER operands, request `AllocRequest2 pref ival1
-  ival2`, continuation the bare `mk_value_e (Vobject (OVpointer
-  ptrval))`; the driver's `liftMem (CerbMem.allocateRegion tid1 …)`,
-  tid discarded); the dynamic kill is the existing `Step.kill`, and
-  `Frag.kill`/`Frag.kill_op` LIFT K2's `is_dynamic kind = false` (a
-  strict generalization of the fragment); `Frag.alloc`/`Frag.alloc_op`,
-  `BareHead.alloc`/`alloc_op`; the certification (`step_ctx_alloc`, the
-  `dischargeStep` AllocRequest2 arm, `ars_alloc_active`,
-  `engine_step_matchU`/`loop_step_frag` re-certified — statements
-  unchanged) and the completeness pair `complete_alloc`/`complete_alloc_op`
-  (the ONLY alloc refusal is the out-of-memory `Other (MerrOther "out of
-  memory")`, `allocateRegion_killed_inv`; ILLTYPED-at-distance-one at a
-  non-integer operand pair). THE ALLOCATION RULE `alloc_atomic`
-  (Rules.lean): `allocBudget (regionCost alignN sizeN)` — `sizeN.toNat +
-  max alignN 1 − 1`, the region's raw size, zero admitted — buys one
-  `allocateRegion` and delivers `regionOwn id a sizeN.toNat (.own 1)` at
-  unspecified bytes with `0 < a ∧ a + size ≤ 2^64`; premise `0 <
-  regionCost` (the budget must force a cursor cell; every positive size).
-  THE FREE RULE `free_atomic`: `free(cellPtr id a)` consumes `regionOwn
-  id a n (.own 1) bs` and delivers the bare unit with at most
-  `deadRegion id a n` — `killM`'s dynamic check (:1573) passed through
-  the cell's `dynamic = true` (`killM_success_dynamic`), never through
-  `dynamicAddrs`. Faces: `wps_alloc`/`wpt_alloc` (+ `_eval`),
-  `wps_free`/`wpt_free` (+ `_emp`, the textbook `{p ↦ region} free(p)
-  {emp}`; the operand form is the kind-generic `wps_kill_eval`). The
-  engine-accepted static kill of a region has NO rule (README "Scope,
-  exactly"). Consumers: `alloc_free_wps`, `free_launch_smoke`
-  (AllocExhibit.lean). Record: `docs/2026-09-03_k3-notes.md`.
+  cursor bounds incl. `la_pos : 0 < lastAddress`, the dynamic-address
+  facts; ten components, each an engine fact with a `CerbMem.lean`
+  cite) is a field of the state interpretation `CohG` (under cursor
+  presence) and of the launch premise `LaunchCoh`; `prodMem₀_memWF` is
+  the cold-start instance; `create_fresh_global` is "fresh means fresh
+  in the concrete allocation model"; and EVERY memory operation of the
+  fragment has its preservation theorem — `MemWF.loadM`, `MemWF.storeM`
+  (either locking mode), `MemWF.allocateObject` (any initializer),
+  `MemWF.killM` (both arms, K2), `MemWF.allocateRegion` (K3). Every
+  stated obligation is a theorem; "fresh" and "dynamic" are exactly what
+  the engine has: fresh = disjoint from every live allocation of the
+  state, dynamic = the base was pushed by `allocateRegion` (coupled
+  one-way to `dynamicAddrs`, which `killM` never cleans — the K0 audit's
+  N-1). The former footprint-relative launch facts were retired as
+  fields (K1 re-adds `cur_meta_lo`: dead metadata cells have no record
+  for `MemWF.cursor_lo` to read).
+
+THE OTHER OPEN ITEMS:
+
+- **Loads and stores through a REGION pointer have no rule (kill/free
+  arc K4's finding).** The access rules are stated over the object
+  bundles; `regionOwn`/`regionView` (K1) have `alloc` and `free` (K3)
+  but no load/store. The memM seams `loadM_live`/`storeM_live` are
+  stated at any metadata cell, so this is a rule-addition follow-up
+  (atomic specs over `regionView`, faces at both judgments, the manifest
+  rows) — not a coupling change; a `regionOwn ↔ pointsToCell` coercion
+  is unsupported by design (`MetaCoh` pins the region's `ty := none`,
+  `dynamic := true`). Until it lands, the malloc'd LINKED list — the
+  arc's originally chartered second exhibit — is outside the logic
+  (README "Scope, exactly" (iv)); the second exhibit shipped is the
+  region loop (RegionLoopExhibit.lean).
+- **The kill/free arc K0–K4 — CLOSED (2026-09-03).** Record:
+  `docs/2026-09-03_kill-free-arc-record.md` (one paragraph per slice,
+  commits, audit verdicts, the corrections to the design note, what
+  remains). In one line each: K0 `MemWF` (goal 3); K1 the metadata cell
+  `⟨base, optional type, size, alive, readonly, dynamic⟩` coupled by
+  `MetaCoh`, the bundles `regionOwn`/`regionView`/`readonlyCell`/
+  `deadObj`/`deadRegion`; K2 THE DISPOSE RULE `kill_atomic` →
+  `wps_kill`/`wpt_kill` (+ `_emp`, `_eval`) over `pointsToCell … (.own
+  1)` with post `deadObj`, the mirror `Step.kill`/`kill_eval`,
+  `complete_kill`/`complete_kill_op`; K2.5 the ∗-splittable budget
+  `allocBudget` (`allocBudget_split`), the create rules restated over
+  it; K3 `alloc_atomic` → `wps_alloc`/`wpt_alloc` (+ `_eval`) over
+  `allocBudget (regionCost al n)` delivering `regionOwn`, `free_atomic`
+  → `wps_free`/`wpt_free` (+ `_emp`) over `regionOwn (.own 1)` with post
+  `deadRegion`, the mirror `Step.alloc`/`alloc_eval`, `Frag.kill`'s kind
+  restriction lifted, `complete_alloc`/`complete_alloc_op`, the N-2
+  decision (no rule for the static kill of a region and its three
+  companions); K4 the exhibits — `dl_wps`/`dl_wpt`/
+  `dispose_list_certified_total`/`dispose_list_certified_production`
+  (DisposeExhibit.lean) and `rl_wps`/`rl_wpt`/
+  `region_loop_certified_total`/`region_loop_certified_production`
+  (RegionLoopExhibit.lean), every advertised kill/free/alloc law with an
+  exhibit consumer (the manifest: 22 constructors, 23 rule rows, 0 red,
+  15 exhibit modules). Follow-ups named in the record: the region access
+  rules (above); the cursor ghost heap as a proof device (no client
+  owns the cursor since K2.5 — fold it into the budget interpretation);
+  `deadObj`/`deadRegion` engine readouts promoted to public
+  `*_readout` lemmas (the K4 exhibits derive them locally through the
+  sanctioned `stateInterp_readout`).
 - The deferred parametric semantics interfaces: the rules are proved
   directly against `Step` and the memory state (walkthrough §7).

@@ -177,7 +177,7 @@ theorem list_reverse_certified_production (sup : Nat) (ra : core_run_annotation)
 
 No section variables. `CerbND.runND (_root_.drive …) (initial_driver_state
 sup file fs).1` is exactly the composite the cerberus-lean executable
-runs — this is a ROOT-OF-TRUST export, one of the four closed
+runs — this is a ROOT-OF-TRUST export, one of the six closed
 shipped-driver statements: the genuine driver, no package-defined loop
 in the statement (the authored program enters wrapped by `prodFile`,
 the synthetic one-procedure file). The theorem quantifies over nothing but the file-system state,
@@ -270,17 +270,19 @@ total statements only.
 **The two lanes, labelled.** Every exported execution theorem is
 either explicitly provisional over driveU or reaches the shipped
 engine; every public logical rule has a kernel-checked adequacy path
-through the package mirror to the engine. The four production
+through the package mirror to the engine. The six production
 statements (`exhibitA_prod`, `fib_certified_production`,
 `counter_loop_certified_production`,
-`list_reverse_certified_production`) are THE ROOT-OF-TRUST exports —
+`list_reverse_certified_production`,
+`dispose_list_certified_production`,
+`region_loop_certified_production`) are THE ROOT-OF-TRUST exports —
 the closed shipped-driver statements: the genuine Cerberus driver, and
 nothing package-defined in the statement but the authored program, its
 `prodFile` wrapper and the pure readout predicates. `prod_run_eqJ`,
 through which they are proved, is generic collapse machinery, not a
 closed statement: its delivery premise `DriverDoneAt` (ProdLoop.lean)
 and its label tie `LabeledAt` are package-defined, discharged by each
-of the four. Every statement over `driveU` — `MemTripleU`,
+of the six. Every statement over `driveU` — `MemTripleU`,
 `MemTripleU_alloc`, `SemTripleU`, `project_triple`,
 `project_triple_pure`, `project_triple_alloc`,
 `project_triple_pure_alloc`, `semantic_triple_soundU`,
@@ -825,7 +827,15 @@ a created object (a zero-size region can push a created base onto
 `dynamicAddrs`, the K0 audit's N-1), so the logic takes an allocation's
 origin from the metadata cell's `dynamic` flag, never from
 `dynamicAddrs`. Consumers: `alloc_create_kill_wps` and the engine-facing
-`kill_launch_smoke` (AllocExhibit.lean, §6).
+`kill_launch_smoke` (AllocExhibit.lean, §6), and THE EXHIBIT
+(DisposeExhibit.lean, K4): dispose-a-list over ListRevExhibit's created
+nodes — `dl_wps` (`{isList head ns} dispose {ret unit. deadNodes ns}`),
+`dl_wps_emp` (the textbook `{isList head ns} dispose {emp}`), `dl_wpt` at
+the derived budget `12 * ns.length + 6`, the `driveU` equation
+`dispose_list_certified_total` (every node id dead and erased, the frame
+returned) and the production statement
+`dispose_list_certified_production` (build two nodes with `create`s,
+dispose them; the two engine-picked ids distinct, dead, erased).
 
 **The allocation and free rules (kill/free arc K3).** `alloc(al, n)` —
 Core's `Alloc0`, C's `malloc` — and `free(p)` — `Kill Dynamic0` — are
@@ -896,9 +906,20 @@ bytes, spend the budget (`CohG.alloc` re-establishes the coupling —
 decision (README "Scope, exactly"): the engine-accepted STATIC kill of
 a region (`kill_atomic` is over `pointsToCell`, `free_atomic` over
 `regionOwn`; the fragment admits and classifies the round), `free` of a
-created object, `free(NULL)`, and the zero-cost `alloc`. Consumers:
-`alloc_free_wps` and the engine-facing `free_launch_smoke`
-(AllocExhibit.lean, §6).
+created object, `free(NULL)`, and the zero-cost `alloc`. Also with NO
+rule, by ABSENCE rather than decision (K4's finding, README "Scope,
+exactly" (iv)): a load or store THROUGH a region pointer — the access
+rules are over the object bundles, and `loadM_live`/`storeM_live` (the
+memM seams, stated at any metadata cell) are what a region access rule
+would consume. Consumers: `alloc_free_wps` and the engine-facing
+`free_launch_smoke` (AllocExhibit.lean, §6), and THE EXHIBIT
+(RegionLoopExhibit.lean, K4): `n` regions from one linear budget —
+`rl_wps`/`rl_wpt` (`{allocBudget (n.toNat * regionCost al sz)} rl(n)
+{emp}`, the budget the LOOP INVARIANT, split per iteration by
+`allocBudget_split`, spent by `wps_alloc`, returned by `wps_free_emp`;
+total at `7 * n.toNat + 3`), `region_loop_certified_total` (the `driveU`
+equation under `LaunchCoh … ∅ (n.toNat * regionCost al sz)`) and
+`region_loop_certified_production`.
 
 **Read-only allocations.** `MetaCell.readonly` is coupled to
 `Allocation.isReadonly` (`LiveCoh.alloc`: `al.isReadonly = .IsWritable
@@ -1385,6 +1406,14 @@ the `#print axioms` recipe are in the README, "How to build and verify".
   the rules are kind-specific over the object bundle (`kill_atomic`)
   and the region bundle (`free_atomic`); a program that disposes
   storage under the wrong kind is outside the logic by design.
+- **Loads and stores through a region pointer.** In the fragment,
+  mirrored and classified, covered by no rule — an ABSENCE, not a
+  decision (kill/free arc K4's finding; README "Scope, exactly" (iv)):
+  the access rules are stated over the object bundles, and the memM
+  seams `loadM_live`/`storeM_live` already hold at any metadata cell, so
+  region access rules are a rule-addition follow-up. Until then the
+  malloc'd LINKED list is outside the logic; the region LOOP
+  (RegionLoopExhibit.lean) is the `alloc`/`free` exhibit.
 - **Located Core.** Every node of a fragment program carries the empty
   static annotation list (`Expr []` in every `Frag` constructor and every
   redex spelling). The engine's `step_ctx` rewrites the thread's
