@@ -54,25 +54,38 @@ constructor: `frag_round_complete` (Round.lean) states that at every
 non-value `Frag` configuration the mirror steps, or the shipped round is
 a classified REFUSAL (`ShippedRefusal`: ILLTYPED — the step list is
 `[Step_error2 msg]`; KILL — the shipped `advance_step` returns
-`NDkilled r` for an engine `kill_reason`; FORK — the shipped runner
+`NDkilled r` for an engine `kill_reason` — memory kills through
+`liftMem`, pure-evaluator kills `Other (DErr_core_run err)` through
+`liftCore_run`; ILLTYPED AT DISTANCE ONE — a successful round into a
+configuration whose next step list is `[Step_error2 msg]`, the
+load/store ACTION_EVAL at a non-pointer value; FORK — the shipped runner
 `CerbND.runND` delivers at least two executions; PANIC — the redex's
-monad or the successor's environment IS the engine's own `failwithI`),
-or the configuration is one of the REGISTERED GAPS (`OpenRound`, four
-arms, each an engine fact naming the gap; §7). One lemma per redex root
-(`complete_store` … `complete_memop_vals`) carries the classification;
-`cerberusRound_classify` sorts every well-sized `Frag` configuration
-into `value_done` / `value_annot` / `step` (two-sided given the mirror
-step) / `refused` (with its `ShippedRefusal`) / `open_` (with its
-`OpenRound`). So the logic is SOUND (§4) and COMPLETE for the fragment
-up to the registered gaps: a configuration the mirror refuses is one
-the engine refuses too, in the engine's own vocabulary — except at the
-four named shapes, where the engine's behaviour is stated as far as it
-is characterized and the gap is named. What is established, in the
-auditor's words: "a sound Iris program logic for the package's
-restricted relational mirror, with a verified forward connection to
-successful Cerberus engine rounds on proved-safe executions" — now with
-the backward classification at every fragment refusal outside the four
-gaps.
+monad, the successor's environment, or the jump's label-lookup key IS
+the engine's own `failwithI`), or the configuration is in the RESIDUAL
+(`OpenRound`, two arms, each recording that the mirror is stuck, the
+engine step's shape and a mirror-side witness; §7). One lemma per redex
+root (`complete_store` … `complete_memop_vals`) carries the
+classification; `cerberusRound_classify` sorts every well-sized `Frag`
+configuration into `value_done` / `value_annot` / `step` (two-sided
+given the mirror step) / `refused` (with its `ShippedRefusal`) /
+`open_` (with its `OpenRound`). The fragment is DECLARED as exactly what
+the mirror covers ([USER 2026-09-02], the fragment-closure ruling): the
+plain-symbol binder's head is restricted to bare-value producers
+(`BareHead`), and every evaluating constructor's operands lie in the
+mirror evaluator's exact domain (`PePure`, the eight mirrored binops).
+So the logic is SOUND (§4) and COMPLETE for the declared fragment up to
+the residual: mirror steps iff the engine has a successful deterministic
+round, and every stuck configuration is classified — a configuration
+the mirror refuses is one the engine refuses too, in the engine's own
+vocabulary, except at the residual's two shapes (an operand the engine
+ACCEPTS where the mirror evaluator does not evaluate — a procedure-
+named symbol, a binop at two floats, `OpEq` at two ctypes; a jump with
+surplus arguments), where the engine's step is stated by shape and the
+class is named exactly. What is established, in the auditor's words: "a
+sound Iris program logic for the package's restricted relational
+mirror, with a verified forward connection to successful Cerberus
+engine rounds on proved-safe executions" — now with the backward
+classification at every fragment refusal outside the residual.
 
 ## 3. The two judgments
 
@@ -189,28 +202,30 @@ which is what the total lane consumes.
 ## 7. Open items
 
 The first two are the explicit open ACCEPTANCE items (the 2026-09-02
-re-review's next action 1; mirror completeness landed 2026-09-02 up to
-its four registered gaps): each stays open until the named theorem
-exists, and the PROVISIONAL label is not removed before then.
+re-review's next action 1; mirror completeness landed 2026-09-02 and was
+closed fail-closed on the declared fragment the same day, up to the
+residual below): each stays open until the named theorem exists, and the
+PROVISIONAL label is not removed before then.
 
-- The four registered gaps of mirror completeness (§2,
-  `OpenRound`, `docs/2026-09-02_mirror-completeness-notes.md`): (a) the
-  LETS-ANNOT beta at the symbol binder (`lets x = {A}v in e` — the
-  engine's tau succeeds; no `Step.sseq_sym_annot` rule; a mechanical
-  rule whose ripple reaches every `Step.sseq_inv` consumer); (b) a
-  load/store ACTION_EVAL whose pointer operand evaluates to a
-  non-pointer value (the engine's evaluation round succeeds into the
-  ill-typed action it reports ILLTYPED on next; the fix generalizes
-  `Frag.load`/`Frag.store`'s pointer slot and `Step.load_eval`/
-  `store_eval` to any value); (c) operand evaluation outside the mirror
-  evaluator `evalPexpr` (unbound symbols, binops outside the mirrored
-  eight or at non-integer operands, the non-`PePure` pure language of
-  `if_`/`run`/`save` initializers — the engine's evaluator decides; the
-  fix is a mirror evaluator complete relative to `eval_pexpr_aux2` on
-  the fragment's operand grammar, or a recorded narrowing of that
-  grammar); (d) a jump at a context without a current procedure (the
-  engine's OCaml `failwith`, deferred by Lean's opaque `failwithI` into
-  the lookup key). Each closes when its arm of `OpenRound` is removed.
+- The residual of mirror completeness (§2, `OpenRound`,
+  `docs/2026-09-02_fragment-closure-notes.md`): `eval_uncovered` — an
+  operand in the covered grammar that the engine's evaluator ACCEPTS
+  where the mirror evaluator does not evaluate (a symbol unbound in the
+  environment but naming a `Proc` of the file, evaluated by the engine
+  to the null function pointer; one of the eight mirrored binops at two
+  floating-point operands; `OpEq` at two ctypes) — environment- and
+  file-dependent, so not removable by a syntactic narrowing of `Frag`;
+  the mover is a mirror evaluator complete relative to
+  `eval_pexpr_aux2` on `PePure` (`M.file` threaded into `evalPexpr`, the
+  float/ctype arms), which moves the arm into `Step`. `run_surplus` — a
+  jump with more arguments than the registered label's parameters whose
+  zipped arguments evaluate and whose surplus does not (the engine's
+  fold truncates, the mirror's `Step.run` evaluates every argument) —
+  label-map-dependent; the mover is a prefix-evaluating `Step.run`. Of
+  the four gaps registered on 2026-09-02, (a) and (c)'s grammar were
+  closed by narrowing `Frag` (`BareHead`, `PePure` everywhere), (b) and
+  (d) by classification (`ShippedRefusal.error_next`, `panic_noproc`),
+  and (c)'s engine rejections by the KILL bridge (EvalClass.lean).
 - The shipped-driver generic adequacy theorem (§6). Today
   `MemTripleU`, the projection theorems and `wpt_engine_boundU` are
   about `driveU`, and only the four closed production statements reach

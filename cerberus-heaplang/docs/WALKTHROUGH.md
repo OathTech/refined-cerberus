@@ -929,7 +929,7 @@ ONE-DIRECTIONAL: mirror step ⇒ shipped round. `step_iff_cerberusRound`
 is two-sided under the hypothesis `∃ c', Step M c c'`. The completeness
 direction is `frag_round_complete` (Round.lean): at every non-value
 `Frag` configuration, the mirror steps, or the shipped round is a
-classified refusal, or the configuration is one of four registered gaps:
+classified refusal, or the configuration is in the two-arm residual:
 
 ```lean
 theorem frag_round_complete {M : MachineCtx}
@@ -940,32 +940,49 @@ theorem frag_round_complete {M : MachineCtx}
 ```
 
 The refusal vocabulary `ShippedRefusal` is the shipped driver's own:
-ILLTYPED (the step list is `[Step_error2 msg]`), KILL (the shipped
+ILLTYPED (the step list is `[Step_error2 msg]`), ILLTYPED AT DISTANCE
+ONE (`error_next`: a successful round `CerberusRound M c c'` into a
+configuration whose next step list is `[Step_error2 msg]` — the
+load/store ACTION_EVAL at a non-pointer value), KILL (the shipped
 `advance_step` returns `NDkilled r` for an engine `kill_reason` — the
-memory kills arrive through `liftMem`'s `DErr_memory`), FORK (the shipped
-runner `CerbND.runND` delivers at least two executions — `eqPtrval`'s
-differing-provenance `msum`), PANIC (the redex's monad, or the
-successor's environment head, IS the engine's own `failwithI msg` —
-LemLib's opaque rendering of OCaml `failwith`). One lemma per redex root
-carries the classification (`complete_store`: ILLTYPED or `storeM`'s
-kill; `complete_load`/`_create`: the memory kill; `complete_case`: the
-no-match report; `complete_if`: the non-boolean-guard panic;
-`complete_run`: the unregistered-label panic; `complete_beta_spec`: the
-binding panic at a non-`Specified` value; `complete_memop_vals`: the
-fork and the driver's INVALID-memop panic; the betas at the wildcard
-pattern and the merge always step). `OpenRound` names the four gaps as
-engine facts: `unmirrored_success` (the engine's round succeeds where
-the mirror has no rule — the LETS-ANNOT beta at the symbol binder, and a
-load/store ACTION_EVAL whose pointer operand evaluates to a non-pointer
-value), `eval_uncovered` (an operand-evaluation step on an operand the
-mirror evaluator does not cover — the engine's own evaluator decides),
-`no_current_proc` (a jump at a context without a current procedure).
-`cerberusRound_classify` sorts every `Frag` configuration into
-`value_done` / `value_annot` / `step` / `refused` (carrying its
-`ShippedRefusal`) / `open_` (carrying its `OpenRound`). Hence the logic
-is SOUND (every proved-safe execution is an engine execution) and
-COMPLETE for the fragment up to the four registered gaps (§7). What is
-established, in the words of the 2026-09-02 audit: "a sound Iris
+memory kills arrive through `liftMem`'s `DErr_memory`, the pure
+evaluator's exceptions through `liftCore_run` as `Other (DErr_core_run
+err)`), FORK (the shipped runner `CerbND.runND` delivers at least two
+executions — `eqPtrval`'s differing-provenance `msum`), PANIC (the
+redex's monad, the successor's environment head, or the jump's
+label-lookup key IS the engine's own `failwithI msg` — LemLib's opaque
+rendering of OCaml `failwith`). One lemma per redex root carries the
+classification (`complete_store`: ILLTYPED or `storeM`'s kill;
+`complete_load`/`_create`: the memory kill; `complete_case`: the no-match
+report; `complete_if`: the non-boolean-guard panic, or the evaluator's
+kill; `complete_run`: the unregistered-label panic, or the evaluator's
+kill at a zipped argument; `complete_run_noproc`: the no-current-
+procedure panic; `complete_beta_spec`: the binding panic at a
+non-`Specified` value; `complete_load_op`/`_store_op`: ILLTYPED at
+distance one, or the evaluator's kill; `complete_save`/`_pure_sym`/
+`_memop_op`: the evaluator's kill; `complete_memop_vals`: the fork and
+the driver's INVALID-memop panic; the betas at the wildcard pattern, at
+the plain-symbol binder — whose head is a bare-value producer,
+`BareHead` — and the merge always step). The evaluator's kills are the
+classifier `evalClass` (EvalClass.lean) answering `.kill err`: an
+unbound symbol naming no procedure (`Unresolved_symbol`), a binop at
+operands of mismatched kinds, an array shift at a non-(pointer,
+integer) pair (`Illformed_program`), certified against the engine's
+evaluator tower level by level exactly as the success bridge is.
+`OpenRound` is the RESIDUAL, two arms each recording that the mirror is
+stuck and carrying a mirror-side witness: `eval_uncovered` (an operand
+in the covered grammar that the engine ACCEPTS where the mirror does not
+evaluate — a symbol unbound in the environment but naming a `Proc` of
+the file, a mirrored binop at two floats, `OpEq` at two ctypes) and
+`run_surplus` (a jump with more arguments than the label's parameters,
+the zipped ones evaluating and a surplus one not). `cerberusRound_classify`
+sorts every `Frag` configuration into `value_done` / `value_annot` /
+`step` / `refused` (carrying its `ShippedRefusal`) / `open_` (carrying
+its `OpenRound`). Hence the logic is SOUND (every proved-safe execution
+is an engine execution) and COMPLETE for the declared fragment up to
+the residual (§7): mirror steps iff the engine has a successful
+deterministic round, and every stuck configuration is classified. What
+is established, in the words of the 2026-09-02 audit: "a sound Iris
 program logic for the package's restricted relational mirror, with a
 verified forward connection to successful Cerberus engine rounds on
 proved-safe executions" — now with the backward classification of every
@@ -1143,12 +1160,15 @@ the `#print axioms` recipe are in the README, "How to build and verify".
   lemDefaultFuel`.
 - **A C frontend.** Programs enter as authored Core in a synthetic
   one-procedure file.
-- **The four registered gaps of mirror completeness** (`OpenRound`,
-  §5; `2026-09-02_mirror-completeness-notes.md`): the LETS-ANNOT beta at
-  the symbol binder; a load/store ACTION_EVAL to a non-pointer value;
-  operand evaluation outside the mirror evaluator `evalPexpr`; a jump
-  without a current procedure. Each is stated as an engine fact and
-  closes when its arm is removed.
+- **The residual of mirror completeness** (`OpenRound`, §5;
+  `2026-09-02_fragment-closure-notes.md`): an operand in the covered
+  grammar the engine accepts where the mirror evaluator does not
+  evaluate (a procedure-named symbol, a mirrored binop at two floats,
+  `OpEq` at two ctypes), and a jump with surplus arguments. Both are
+  environment-, file- or label-map-dependent; the movers are a mirror
+  evaluator complete relative to `eval_pexpr_aux2` on `PePure`, and a
+  prefix-evaluating `Step.run`. The four gaps registered on 2026-09-02
+  were closed fail-closed the same day.
 - **Partial correctness over the shipped driver.** The partial lane is
   stated over `driveU` and labelled PROVISIONAL (§1.3) until the
   cerberus-lean fuel-exhaustion request lands; no package-side driver

@@ -68,7 +68,7 @@ if [[ $fast -eq 0 ]]; then
 
   echo "== speedbump: import direction (semantics → heap → rules → adequacy → clients) =="
   # No core module may import an exhibit, example-support or production module (a missing core file is red too).
-  core=(Step Lang Heap EnvLaws Rules Wps Wpt Soundness Potential Round Adequacy TotalAdequacy DriverCollapse API)
+  core=(Step Lang Heap EnvLaws Rules Wps Wpt Soundness EvalClass Potential Round Adequacy TotalAdequacy DriverCollapse API)
   files=(); for m in "${core[@]}"; do files+=("cerberus-heaplang/CerberusHeapLang/$m.lean"); done
   if ! ls "${files[@]}" > /dev/null || grep -nE '^import CerberusHeapLang\.([A-Za-z]*Exhibit|Examples\.|Prod)' "${files[@]}"; then
     echo "FAIL (speedbump): a core module is missing or imports an exhibit/example/production module (above)" >&2; fail=1

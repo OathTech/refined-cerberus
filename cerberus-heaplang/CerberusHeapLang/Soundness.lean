@@ -3202,15 +3202,20 @@ threading well-formedness through the engine: the panic-exclusion
 facts live as RULE PREMISES, extracted by the inversions from the
 given step — the WP is the well-formedness oracle.
 
-THE SECOND FUEL BOUND. The engine's pure-expression evaluator is
-fuelled at `lemDefaultFuel` too (the pure-evaluator bridge above), so
-every constructor that evaluates a pure operand carries `peDepth pe ≤
-lemDefaultFuel` per operand (`if_`, `run`, `save`, `load_op`,
-`memop_op`, `store_op`), and the three operand-evaluation constructors
-restrict their operands to the covered sub-grammar `PePure`; for
-`if_`/`run`/`save` the grammar follows from the rule's `evalPexpr`
-success premise (`evalPexpr_shape`). Both are `rfl` for authored
-programs (`peDepth_sym_le`, `peDepth_val_le`).
+THE SECOND FUEL BOUND, AND THE OPERAND GRAMMAR. The engine's
+pure-expression evaluator is fuelled at `lemDefaultFuel` too (the
+pure-evaluator bridge above), so every constructor that evaluates a
+pure operand carries `peDepth pe ≤ lemDefaultFuel` per operand (`if_`,
+`run`, `save`, `load_op`, `memop_op`, `store_op`), and EVERY such
+constructor restricts its operands to the covered sub-grammar `PePure`
+(values, symbols, the eight mirrored binops, array shifts) — the mirror
+evaluator's exact domain (fragment closure, 2026-09-02: before it,
+`if_`/`run`/`save` took any operand and `PePure` admitted every binop).
+Both are `rfl` for authored programs (`peDepth_sym_le`, `peDepth_val_le`,
+`PePure.of_isPePure rfl`). Where the mirror evaluator answers `none` on
+a `PePure` operand, the engine's outcome is classified (EvalClass.lean,
+Round.lean): a KILL where the engine rejects the operand, the residual
+`OpenRound.eval_uncovered` where it accepts it.
 
 THE FRAGMENT IS ANNOTATION-FREE: every constructor below, and every
 redex spelling it

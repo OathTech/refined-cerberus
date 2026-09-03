@@ -35,38 +35,49 @@ more; it is not the RefinedC port (this repository's root
 Core: `store`/`load`/`create` actions (evaluated operands, and the
 operand-evaluation form the engine dispatches when "the operands are
 not all values"), the `PtrEq` memop, strong sequencing `Esseq` at the
-wildcard, `Specified`-binder and plain-symbol-binder patterns, weak
-sequencing `Ewseq` at the wildcard, `Esave` at any initializers within
-the evaluator's fuel, `Eif`, the context-discarding jump `Erun`,
-value-scrutinee `Ecase`, `PEsym`-shaped pure exits,
-`PEval`/`PEsym`/integer-`PEop`/`PEarray_shift` operands, and the
+wildcard, `Specified`-binder and plain-symbol-binder patterns (the
+plain-symbol binder's head restricted to the bare-value producers
+`BareHead` — a literal, `create`, the `PtrEq` memop — so the value it
+binds is never annotated; fragment closure, 2026-09-02), weak
+sequencing `Ewseq` at the wildcard, `Esave` at `PePure` initializers
+within the evaluator's fuel, `Eif` at a `PePure` guard, the
+context-discarding jump `Erun` at `PePure` arguments, value-scrutinee
+`Ecase`, `PEsym`-shaped pure exits, the covered operand grammar
+`PePure` — `PEval`/`PEsym`/the eight mirrored `PEop` binops
+(`Add`/`Sub`/`Mul`/`Eq`/`Lt`/`Le`/`Gt`/`Ge`)/`PEarray_shift` — and the
 run-time annotation residue. The per-construct authority is the
 inductive `Frag` (Soundness.lean), the premise of every adequacy
 theorem; the generated [capability manifest](docs/CAPABILITY_MANIFEST.md)
 lists one row per `Frag` constructor with the rule covering it and the
 exhibit modules whose proofs consume that rule (18 rows).
 
-**Pure operands carry their own static fuel bound.** The engine's
-pure-expression evaluator is fuelled at the same budget as its redex
-search (`step_eval_pexpr`/`pull_constrained` draw from
-`lemDefaultFuel`), so every `Frag` constructor that evaluates a pure
-operand — `if_` (the guard), `run` (the jump arguments), `save` (the
-initializers), `load_op`/`memop_op`/`store_op` (the operands the engine
-evaluates before dispatching the action) — carries the static premise
-`peDepth pe ≤ lemDefaultFuel` per operand, where `peDepth`
+**Pure operands are in the covered grammar and carry their own static
+fuel bound.** The engine's pure-expression evaluator is fuelled at the
+same budget as its redex search (`step_eval_pexpr`/`pull_constrained`
+draw from `lemDefaultFuel`), so every `Frag` constructor that evaluates
+a pure operand — `if_` (the guard), `run` (the jump arguments), `save`
+(the initializers), `load_op`/`memop_op`/`store_op` (the operands the
+engine evaluates before dispatching the action) — carries the static
+premise `peDepth pe ≤ lemDefaultFuel` per operand, where `peDepth`
 (Soundness.lean) is the operand's syntactic depth (1 at a value or a
-symbol, `1 + max` at `PEop`/`PEarray_shift`); the three
-operand-evaluation constructors also restrict their operands to the
-sub-grammar `PePure` the mirror evaluator covers (values, symbols,
-`PEop` binops, `PEarray_shift`), while for `if_`/`run`/`save` the grammar
-is enforced by the rule's `evalPexpr … = some …` premise
-(`evalPexpr_shape`: success implies membership). Verbatim, the premises
+symbol, `1 + max` at `PEop`/`PEarray_shift`), AND restricts its
+operands to the sub-grammar `PePure` the mirror evaluator covers exactly
+(values, symbols, the eight mirrored binops — `PePure.op` carries `hop :
+isMirroredOp op = true` — and `PEarray_shift`). Verbatim, the premises
 of `Frag.store_op`: `(hp2 : PePure pe2) (hp3 : PePure pe3) (hd2 : peDepth
-pe2 ≤ lemDefaultFuel) (hd3 : peDepth pe3 ≤ lemDefaultFuel)`. Like the
-`pot` bounds below, this bound is `rfl` for every authored program
-(`peDepth_sym_le`, `peDepth_val_le`) and never mentions the run length;
-unlike them it lives inside `Frag`, so it appears on no exhibit as a
-separate hypothesis.
+pe2 ≤ lemDefaultFuel) (hd3 : peDepth pe3 ≤ lemDefaultFuel)`; of
+`Frag.if_`: `(hpg : PePure g) (hdg : peDepth g ≤ lemDefaultFuel)`; of
+`Frag.run`: `(hpes : ∀ pe ∈ pes, PePure pe) (hdep : ∀ pe ∈ pes, peDepth
+pe ≤ lemDefaultFuel)`; of `Frag.save`: `(hp : ∀ pe ∈ saveParamPexprs ps,
+PePure pe) (hd : ∀ pe ∈ saveParamPexprs ps, peDepth pe ≤ lemDefaultFuel)`.
+Like the `pot` bounds below, both are `rfl` for every authored program
+(`peDepth_sym_le`, `peDepth_val_le`, `PePure.of_isPePure rfl`) and never
+mention the run length; unlike them they live inside `Frag`, so they
+appear on no exhibit as a separate hypothesis. The declared grammar is
+the mirror's exact domain by the fragment-closure ruling ([USER
+2026-09-02]: the fragment is exactly what the mirror covers), which is
+what lets mirror completeness classify every operand the mirror does
+not evaluate (below).
 
 **Every node of a fragment program carries the empty static annotation
 list.** Each `Frag` constructor, and each redex spelling it ranges over
@@ -297,10 +308,15 @@ statement carries a fuel hypothesis.
    `dischargeStep` being a proof device only), and
    `frag_round_complete` is the completeness direction: where the
    mirror is stuck, the shipped round is a classified refusal
-   (`ShippedRefusal`: ILLTYPED / KILL / FORK / PANIC) or one of the
-   four registered gaps (`OpenRound`; the register below), so the logic
-   is SOUND and COMPLETE for the fragment up to those gaps. The
-   remaining vocabulary
+   (`ShippedRefusal`: ILLTYPED / ILLTYPED-at-distance-one / KILL / FORK /
+   PANIC) or the configuration is in the RESIDUAL (`OpenRound`, two
+   arms: an operand the engine accepts where the mirror evaluator does
+   not evaluate — a procedure-named symbol, a binop at two floats,
+   `OpEq` at two ctypes — and a jump with surplus arguments; the
+   register below), so the logic is SOUND and COMPLETE for the declared
+   fragment up to that residual — "mirror steps iff the engine has a
+   successful deterministic round, on the declared fragment; every
+   stuck configuration classified". The remaining vocabulary
    is the pure readout predicates (`Sat`/`CellCoh`, `SeedChain`,
    `SeedTree`, `readBytesFrom`) and the authored programs. iris-lean
    appears only inside the kernel-checked proof terms and contributes
@@ -389,7 +405,7 @@ theorems:
 | Well-formedness by shape: `MachineCtx.SeqWF` and cons-shaped environment stacks — the engine's panic channels excluded by shape, never absorbed. Action locations carry no premise: the certification equations state the request at the engine's own `requestLoc th loc`, and `storeM_loc_irrel`/`loadM_loc_irrel` (the memory operations use the location only in the kill payload) transport the mirror's premise to it | by design | `Step.lean`, `Soundness.lean` |
 | The tag-definition environment is an explicit parameter of the heap predicates (`pointsToCell tds …`, `M.tagDefs`); the demos state footprints at `fmapEmpty` | by design: a program-wide constant of the language instance | `Heap.lean` header |
 | Memory orders accepted arbitrarily (`Step.store`/`wp_store` at any `memory_order`) | mirror-true: the sequential driver drops `mo` (`action_request_sequential2`) | `Step.lean` |
-| Mirror completeness holds UP TO FOUR REGISTERED GAPS (`OpenRound`, Round.lean; `frag_round_complete`): (a) the LETS-ANNOT beta at the symbol binder (`lets x = {A}v in e`) — the engine's tau succeeds, no `Step.sseq_sym_annot` rule; (b) a load/store ACTION_EVAL whose pointer operand evaluates to a non-pointer value — the engine's evaluation round succeeds into the ill-typed action it reports ILLTYPED on next; (c) operand evaluation outside the mirror evaluator `evalPexpr` (unbound symbols, binops outside the mirrored eight or at non-integer operands, the non-`PePure` pure language of `if_`/`run`/`save` initializers) — the engine's own evaluator decides; (d) a jump at a context without a current procedure. Everywhere else a mirror-stuck fragment configuration is an engine refusal in the engine's vocabulary (`ShippedRefusal`: ILLTYPED `[Step_error2 msg]`, KILL `NDkilled r` from the shipped `advance_step`, FORK ≥ 2 `CerbND.runND` executions, PANIC the engine's own `failwithI`) | (a) the mechanical rule + its `Step.sseq_inv` ripple; (b) generalize `Frag.load`/`Frag.store`'s pointer slot and `Step.load_eval`/`store_eval` to any value; (c) a mirror evaluator complete relative to `eval_pexpr_aux2` on the fragment's operand grammar, or a recorded grammar narrowing; (d) by design (every shipped thread in a procedure body has a current procedure) | `Round.lean` (`OpenRound`); `ARCHITECTURE.md` §2, §7; `docs/2026-09-02_mirror-completeness-notes.md` |
+| Mirror completeness holds on the DECLARED FRAGMENT up to a two-arm RESIDUAL (`OpenRound`, Round.lean; `frag_round_complete`; fragment closure 2026-09-02): `eval_uncovered` — an operand in the covered grammar that the engine ACCEPTS where the mirror evaluator does not evaluate (a symbol unbound in the environment but naming a `Proc` of the file; one of the eight mirrored binops at two floating-point operands; `OpEq` at two ctypes — environment/file-dependent, the offending operand carried as witness, `evalClass … = .uncovered`), and `run_surplus` — a jump with more arguments than the registered label's parameters whose zipped arguments evaluate and whose surplus does not (label-map-dependent). Everywhere else a mirror-stuck fragment configuration is an engine refusal in the engine's vocabulary (`ShippedRefusal`: ILLTYPED `[Step_error2 msg]`; ILLTYPED AT DISTANCE ONE — a successful round into the ill-typed load/store the engine reports on next; KILL `NDkilled r` from the shipped `advance_step`, memory kills through `liftMem` and pure-evaluator kills `Other (DErr_core_run err)` through `liftCore_run`; FORK ≥ 2 `CerbND.runND` executions; PANIC the engine's own `failwithI`, incl. the no-current-procedure lookup key). The former gaps (a) LETS-ANNOT at the symbol binder and (c) the operand grammar were closed by NARROWING `Frag` (`BareHead`, `PePure` everywhere) — fail-closed, per the ruling | the residual is not removable by a syntactic narrowing; a complete mirror evaluator (`M.file` threaded into `evalPexpr`, the float/ctype arms) would move `eval_uncovered` into `Step`; a prefix-evaluating `Step.run` would move `run_surplus` | `Round.lean` (`OpenRound`), `EvalClass.lean`; `ARCHITECTURE.md` §2, §7; `docs/2026-09-02_fragment-closure-notes.md` |
 | Freshness is footprint-relative: `LaunchCoh` constrains TRACKED cells only (`id_lt`, `addr_lo`), so a `create` (`wps_create`/`wpt_create`) is fresh from the logical footprint, not from untracked allocations an arbitrary concrete state may hold below the cursor (`allocateObject` scans no ranges); every owned cell is protected; the production cold-start state `prodMem₀` contains only the allocator-created errno allocation and no dead allocations (`prodMem₀_allocations`, `prodMem₀_deadAllocations`), and `prodMem₀_launchCoh` proves `LaunchCoh` for the empty footprint and any fitting plan — no global well-formedness theorem exists yet | a global memory well-formedness invariant (`MemWF`: id discipline, live/dead consistency, range disjointness of all live allocations, cursor bounds) with its initialization proof, in the launch premise and the state interpretation, registered for the malloc/free arc; "globally well formed" is reserved for it | `Adequacy.lean` (`LaunchCoh` section), `Heap.lean` header; walkthrough §4 |
 | Arrays are one allocation, not a ∗ of per-element cells: the engine bounds-checks against the pointer's provenance allocation and `arrayShiftPtrval` preserves provenance | forcing fact about Cerberus; per-element structure lives in the invariant + decode premises | `ArrayExhibit.lean` |
 | Allocation metadata at a fraction as the exclusivity anchor; a persistent stratum instead of a liveness token (no `kill`) | the dispose rule adds the donor's `alloc_alive`/freeable split and moves the anchor | `Heap.lean` header |
@@ -429,8 +445,9 @@ source becomes a fact at the target.
         │  Step M  (Step.lean) — the hand-written mirror; interior, zero authority
         │    certified: engine_step_matchU  Step ⇒ shipped round  [Frag]
         │      (step_iff_cerberusRound: two-sided GIVEN a mirror step);
-        │    COMPLETE up to four registered gaps: frag_round_complete
-        │      mirror stuck ⇒ ShippedRefusal (ILLTYPED/KILL/FORK/PANIC) ∨ OpenRound
+        │    COMPLETE on the declared fragment up to the residual: frag_round_complete
+        │      mirror stuck ⇒ ShippedRefusal (ILLTYPED/ILLTYPED-next/KILL/FORK/PANIC)
+        │                      ∨ OpenRound (eval_uncovered / run_surplus)
         │      (cerberusRound_classify: value_done/value_annot/step/refused/open_)
         ▼
    iris-lean Language instance over Step   (Lang.lean: instance Language CoreRt
@@ -628,7 +645,8 @@ In import order, one line each:
 | `Wps.lean` | the partial label-context judgment as a guarded fixpoint; its rule set; statement-level framing; the Löb collapse into the raw WP | `wps`, `wps_seq`, `wps_create`, `blockSpecs_intro`, `wps_frame_labels`, `wps_sound` |
 | `Wpt.lean` | the total judgment by recursion on the budget; variant-indexed label preconditions with the mandatory back-edge decrease; collapse into Iris `TotalWeakestPre` | `wpt`, `wpt_run`, `wpt_create`, `blockSpecsT_intro`, `wpt_frame_labels`, `wpt_sound` |
 | `Soundness.lean` | the boundary module: the per-construct engine equations of `Step` against `step_ctx` (`step_ctx_*`), the fragment `Frag`, the decomposition `Decomp`; the discharge device `dischargeStep`/`outcomesU` and its step match (`outcomesU_of_step`, the `driveU` lane's device) | `Frag`, `Decomp.step_factor`, `step_ctx_store` |
-| `Round.lean` | the shipped engine round (one iteration of the driver's thread loop, in the driver's own vocabulary), the certification `engine_step_matchU`, mirror completeness per redex root and its assembly, the exhaustive classification, the shipped refusal vocabulary and the registered gaps | `CerberusRound`, `engine_step_matchU`, `frag_round_complete`, `complete_*`, `cerberusRound_classify`, `ShippedRefusal`, `OpenRound` |
+| `EvalClass.lean` | the engine's pure-evaluator outcome on the covered grammar, classified (`evalClass`: value / kill / uncovered) and its KILL bridge level by level — the failure twin of the success bridge | `evalClass`, `evalClass_val_iff`, `step_eval_bridge_kill`, `full_eval_bridge_kill`, `evalClassList` |
+| `Round.lean` | the shipped engine round (one iteration of the driver's thread loop, in the driver's own vocabulary), the certification `engine_step_matchU`, mirror completeness per redex root and its assembly, the exhaustive classification, the shipped refusal vocabulary and the residual | `CerberusRound`, `engine_step_matchU`, `frag_round_complete`, `complete_*`, `cerberusRound_classify`, `ShippedRefusal`, `OpenRound` |
 | `Potential.lean` | the step-monotone size potential `pot` — the static fuel bound | `pot`, `Frag.esize_le_pot`, `Frag.pot_step_bound` |
 | `Adequacy.lean` | the drive `driveU`; Iris adequacy with the ghost state constructed; the allocation-aware launch; the triples; the projections and the pure-consequence lemmas | `project_triple_pure`, `MemTripleU`, `project_triple_pure_alloc`, `MemTripleU_alloc`, `engine_adequacyU` |
 | `TotalAdequacy.lean` | the budget-to-drive-length simulation on `pot` | `wpt_engine_boundU`, `wpt_engine_boundU_alloc` |
@@ -647,7 +665,11 @@ In import order, one line each:
 History, provenance and process live in dated files, not here.
 Rulings: `../docs/DECISIONS.md` (append-only, `[USER]`/`[AGENT]`
 tagged). The audit and review record of the current tree, newest
-first: `docs/2026-09-02_audit-response-4-notes.md` (the response to
+first: `docs/2026-09-02_fragment-closure-notes.md` (the fragment-closure
+slice: the four completeness gaps closed fail-closed, the residual, the
+narrowing premises), `docs/2026-09-02_mirror-completeness-notes.md`
+(mirror completeness landed, the four gaps as found),
+`docs/2026-09-02_audit-response-4-notes.md` (the response to
 the re-review's four Low findings: the exported-theorem sentence, the
 cold-start claim, the non-reproducible sweep totals diagnosed, the
 known generated `sorry` in the trust story),

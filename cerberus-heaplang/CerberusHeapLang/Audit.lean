@@ -152,6 +152,25 @@ def trioExports : List Name := [
   ``CerberusHeapLang.complete_save, ``CerberusHeapLang.complete_pure_sym,
   ``CerberusHeapLang.complete_load_op, ``CerberusHeapLang.complete_memop_op,
   ``CerberusHeapLang.complete_store_op, ``CerberusHeapLang.complete_memop_vals,
+  -- fragment closure (2026-09-02/03): the closure facts of the narrowed
+  -- binder head, the ILLTYPED-at-distance-one equations at the rebuilt
+  -- action, the no-current-procedure panic shape, the classifier's value
+  -- face, the KILL bridge level by level, the eight KILL step equations
+  -- and the driver's with-runstate kill
+  -- (`BareHead.not_annot` and `Decomp.get_ctx_rebuild_action` have
+  -- SUB-trio cones — [propext] / [Quot.sound, propext] — so they cannot
+  -- sit in an EXACT-trio pin list; the exhaustive sweep bounds them)
+  ``CerberusHeapLang.BareHead.step,
+  ``CerberusHeapLang.step_ctx_load_illtyped', ``CerberusHeapLang.step_ctx_store_illtyped',
+  ``CerberusHeapLang.step_ctx_run_noproc,
+  ``CerberusHeapLang.evalClass_val_iff, ``CerberusHeapLang.evalClassList_vals_iff,
+  ``CerberusHeapLang.step_eval_bridge_kill, ``CerberusHeapLang.aux2_bridge_kill,
+  ``CerberusHeapLang.full_eval_bridge_kill, ``CerberusHeapLang.eval1_bridge_kill,
+  ``CerberusHeapLang.step_ctx_if_kill, ``CerberusHeapLang.step_ctx_run_kill,
+  ``CerberusHeapLang.step_ctx_save_eval_kill, ``CerberusHeapLang.step_ctx_pure_sym_kill,
+  ``CerberusHeapLang.step_ctx_load_eval_kill, ``CerberusHeapLang.step_ctx_store_eval_kill2,
+  ``CerberusHeapLang.step_ctx_store_eval_kill3, ``CerberusHeapLang.step_ctx_memop_eval_kill,
+  ``CerberusHeapLang.advance_withrs_killed_eval, ``CerberusHeapLang.advance_withrs_killed_tau,
   -- the production-entry exports (formerly the runEffectful boundary;
   -- trio-exact since the 2026-09-02 retirement re-pin — header)
   ``CerberusHeapLang.exhibitA_prod, ``CerberusHeapLang.fib_labeledAt_production,
