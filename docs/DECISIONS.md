@@ -1265,3 +1265,21 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   explicit 6-hour park threshold) dispatched from f2f9701 on branch
   `calls-c1`, which is now the tip of the overnight stack; DECISIONS
   entries continue at the tip.
+- **2026-09-03 [AGENT] CALLS C1 LANDED — THE CONFIGURATION GROWS** (record:
+  `cerberus-heaplang/docs/2026-09-03_c1-notes.md`): `Ctl := {κ : List (Option
+  sym × context), proc, execLoc}` (the engine's `stack0`/`current_proc_opt`/
+  `exec_loc`, each read cited at the pin), `Config := CoreExpr × EnvStack ×
+  Ctl × Mem`; `MachineCtx` loses the three fields; `SeqWF := parent = none`;
+  a value at a non-empty stack is a RETURN redex (`toValRt = none` at `κ ≠
+  []`); every `Step` constructor threads `ctl` unchanged (call/return are
+  C2). Census: 547 changed statements, ALL configuration-shape (437
+  normalizer-verified, 40 auxiliaries, 70 hand-inspected); 0 public rules
+  removed; ALL EIGHT production statements textually unchanged; pins 296
+  unchanged. Footprint 36 files +2008/−1709 vs the note's ~200-statement
+  estimate (undercounted exhibit `procCtx` sites). [AGENT] choices:
+  judgments indexed by the full `ctl` (C3's procedure-indexed form is a
+  strict generalization); `hκ : ctl.κ = []` explicit on the raw-WP small
+  axioms, the collapses and the adequacy exports (rfl at the entry
+  controls); `procCtx p rs → procCtx rs`, `labels → labelsAt`. ~5 h wall,
+  no park, no heartbeat option touched. Range audit on a fixed copy; C2
+  (call/return mirror, certification, completeness) dispatched.
