@@ -806,3 +806,88 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   the compiled-Core derisking package); accept (d) as the engine's own
   panic, classified by shape. Pins 116 → 139. Verified by the
   orchestrator: FULL gate ALL GATES GREEN, GATE-EXIT=0.
+- **2026-09-02 [USER] THE BOUNDARY IS FAIL-CLOSED; NON-MIRRORED SHAPES ARE
+  CAPTURED, NEVER ACCIDENTAL** (verbatim): "the aim here is that
+  non-mirrored statements are captured, and we can't accidentally
+  introduce them. It's fine to have a carefully characterized boundary
+  that is fail-closed outside the boundary"; earlier: "Are (a-c)
+  actually in scope for our demo though? Another reasonable way to
+  handle this is to fail-closed if we've achieved complete coverage."
+  Mechanism: `Frag` is the boundary (refused at the adequacy premise);
+  inside it `frag_round_complete` dispatches exhaustively over the
+  constructors, so a constructor without its coverage lemma breaks the
+  proof and an engine success without a mirror step is an undischargeable
+  obligation.
+- **2026-09-02/03 [AGENT] FRAGMENT CLOSURE LANDED** (record:
+  `cerberus-heaplang/docs/2026-09-02_fragment-closure-notes.md`): (a)
+  `Frag.sseq_sym` narrowed to `BareHead` heads (values, `create`, the
+  PtrEq memop forms — `create` added beyond the brief because exhibits
+  bind its result there); (b) reclassified as `ShippedRefusal.error_next`
+  (ILLTYPED at distance one, engine facts proved); (c) operand grammar
+  narrowed to `PePure` for `if_`/`run`/`save`, and `PePure.op` to the
+  eight mirrored binops (measured: `Div/Rem/Exp` at integers are engine
+  SUCCESSES, so the brief's "division-class UB" premise was wrong —
+  excluded syntactically instead); every rejected operand is now a
+  proved engine KILL (`Other (DErr_core_run …)`, exact payload) through
+  the new `EvalClass` kill bridge; (d) `ShippedRefusal.panic_noproc`.
+  TWO RESIDUAL `OpenRound` ARMS remain, each with a mirror-side witness
+  and the engine shape: `eval_uncovered` — value-dependent engine
+  successes not syntactically excludable (the eight binops at two
+  floats, `OpEq` at two ctypes, a procedure-named symbol evaluating to a
+  function pointer); `run_surplus` — NOT anticipated: `step_ctx`'s Erun
+  arm zips (truncating) and succeeds when a surplus argument fails to
+  evaluate while the mirror requires all arguments. Pins 139 → 159; all
+  rules, exhibits and production statements byte-identical.
+  Orchestrator recommendation: LEAVE both registered (they are
+  characterized, per the ruling) — the closer is a well-formedness
+  premise on `M` (exact `run` arity against `M.labels`; no procedure
+  name among operand symbols; integer/pointer-only fragment types with
+  an env-typing invariant), moderate effort with no RefinedC value now;
+  the compiled-Core derisking package needs a complete evaluator anyway,
+  at which point both vanish.
+- **2026-09-03 [USER] POLISH IS SIZED BY RefinedC VALUE; SCHEDULE STRICTLY TO
+  THE refined-cerberus BUILD-OUT; THE REST IS A SIDE THREAD** (verbatim):
+  "which of these polish steps actually helps us with RefinedC - we
+  wouldn't want to spend a lot of effort we later throw away. We should
+  size everything proportionate to effort"; "for things like
+  presentation polish, they can be done in parallel on the demo later,
+  and therefore aren't blocking on refinedC build-out. We want to
+  schedule strictly to enable our refined-cerberus build, and then do
+  the rest as a side thread". Ranking [AGENT, operator agreed]: KEEP —
+  partial lane over the shipped driver (upstream fuel; our restatement
+  small); the global memory well-formedness invariant (K0); SPLITTABLE
+  CAPACITY upgraded to needed-for-calls (an allocating callee's
+  precondition cannot be an ordered prefix of the caller's plan; done
+  inside the calls arc); the read-only metadata flag folded into K1
+  (same mechanism as `alive`). LEAVE — gap (c) residuals (the compiled-
+  Core package's complete evaluator subsumes them), `hbsz` (whole-AST
+  induction), `finalize`'s opaque leaf (upstream), presentation polish
+  (side thread).
+- **2026-09-03 [USER] THREE LANES** (operator: "I agree with this analysis"):
+  LANE A, the demo core, strictly sequential (shared `Step`/`Soundness`/
+  `Round`): fragment closure → kill/free K0–K4 (read-only flag in K1) →
+  calls with splittable capacity → the partial-lane restatement when the
+  fuel outcome ships; LANE B, the derisking sibling package (a copy
+  seeded at the closure landing), parallel: compiled-Core exhibit first,
+  then value-indexed cells, then the straight-line tactic; LANE C,
+  design, read-only, parallel: the refined-cerberus design notes. Two
+  build lanes at most on the box.
+- **2026-09-03 [USER] ADOPT ONLY THE SLICE OF RefinedC THAT SERVES AGENT-DRIVEN
+  VERIFICATION AT SCALE** (verbatim): "we only want to adopt refinedC
+  inasmuch as it supports our goal of agent-driven formal verification
+  for very large bits of software. We mostly want to support an
+  agent-driven verification workflow over core. So this doesn't
+  literally require refined-C, it requires the slice of refinedC which
+  supports that goal." Applied as the organizing criterion of the Lane
+  C note `docs/2026-09-03_refinedc-layer-design-spike.md` (branch
+  design-refinedc, efcb888): taken — types as uniform spec vocabulary,
+  the syntax-directed judgment shape, per-procedure specs with a
+  persistent table; not taken — Lithium's engine/completeness
+  engineering, subtyping/coercion instance families, Shr/Copyable for
+  now, annotation conveniences, mem_cast generality. Two decisions
+  PENDING the operator: (1) the root package depends on the demo via a
+  Lake path-require (orchestrator recommends: dependency, not copy —
+  one trust base, fixes propagate; the copy ruling was for the
+  derisking package); (2) the value layer (GAP 1 symbolic integer
+  codec round trip; GAP 2 the pointer round trip promoted out of the
+  exhibit) lives in the demo core, queued in Lane A after K1.
