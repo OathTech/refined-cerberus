@@ -464,11 +464,13 @@ def AtomicStep [SpikeGS hlc GF] (M : MachineCtx) (e : CoreExpr) (ρ : EnvStack)
               deliveryCost w ≤ c⌝ ∗ Q w)))
 ```
 
-Five specifications are proved directly against `Step`, each running the
+Six specifications are proved directly against `Step`, each running the
 real engine function inside the proof: `store_atomic`
 (`storeM_success`), `load_atomic` (`loadM_success`),
 `storeAt_atomic`/`loadAt_atomic` (typed subranges,
-`storeM_at`/`loadM_at`), `create_atomic` (`allocateObject_success`).
+`storeM_at`/`loadM_at`), `create_atomic` (`allocateObject_success`),
+`kill_atomic` (`killM_success` — the static dispose, kill/free arc K2;
+§4, "The dispose rule").
 Three lifting lemmas turn a specification into a rule: `wp_of_atomic`
 (the raw WP, any stuckness and mask), `wps_of_atomic` (the partial
 judgment; premise: the redex is not a jump), `wpt_of_atomic` (the total
@@ -765,11 +767,54 @@ erased). Persisting is therefore final in both directions: `.own 1 ∗
 .discard` is invalid, so holding `allocMeta` forecloses the kill — that
 is why persistent live knowledge stays true forever — and
 `deadObj_allocMeta_false` says dead and live persistent knowledge of one
-id never coexist. No rule of this fragment performs the update yet (the
-kill rules are K2/K3); the bundles keep the metadata at a fraction
-rather than persistent because full metadata ownership is both the
-per-allocation exclusivity anchor the frame theorem needs (`metaOwn_ne`
-→ `bigSepM_own_disjoint`) and the thing a kill consumes.
+id never coexist. The STATIC kill rule performs the update (K2, next
+paragraph); the dynamic `free` is K3. The bundles keep the metadata at
+a fraction rather than persistent because full metadata ownership is
+both the per-allocation exclusivity anchor the frame theorem needs
+(`metaOwn_ne` → `bigSepM_own_disjoint`) and the thing a kill consumes.
+
+**The dispose rule (kill/free arc K2).** `kill(static ty, p)` — Core's
+`Kill (Static0 ty) pe`, C's end of automatic storage — consumes the
+whole created object at full ownership and hands back the unit value
+and, at most, the persistent dead cell; classically `{p ↦ -} kill(p)
+{emp}`:
+
+```lean
+theorem wps_kill {Ψ : SpikeVal → EnvStack → IProp GF}
+    (loc : CerbLocation.Loc) (ann : core_run_annotation) (kind : kill_kind)
+    (pv : CerbMem.PointerValue) (ty : ctype) (bs : List CerbMem.AbsByte) (ρ : EnvStack)
+    (hstatic : is_dynamic kind = false) :
+    iprop(pointsToCell M.tagDefs (GF := GF) pv (.own 1) ty bs ∗
+      ((∃ (id a : Int), ⌜pv = cellPtr id a⌝ ∗ deadObj M.tagDefs id a ty) -∗
+        Ψ (SpikeVal.pure Vunit) ρ)) ⊢
+      wps M Ls Ψ (killExpr loc ann kind pv) ρ
+```
+
+`wps_kill_emp` drops the dead cell (`pointsToCell … (.own 1) ty bs ∗ Ψ
+(.pure Vunit) ρ ⊢ wps … (killExpr …) ρ`); `wpt_kill`/`wpt_kill_emp`
+are the same at budget `2 ≤ k` (one kill step plus the bare unit's
+delivery — the engine's continuation is `mk_value_e Vunit`, so unlike
+store/load there is no footprint annotation and no `_plain` form is
+needed); `wps_kill_eval`/`wpt_kill_eval` are the operand forms
+(`kill(static ty, x)` at a symbol). All are corollaries of one atomic
+specification, `kill_atomic` (Rules.lean), proved against the real
+`killM` (`killM_success`, Heap.lean): the points-to's `cellPtr` shape
+and the coupling put the pointer AT THE BASE of a live record of that
+id, so every kill arm — null/function/other-provenance (UB179a), dead
+(UB179b), the non-UB out-of-bound — is passed, and the engine checks
+nothing about bytes, type or size (the `Static0 ty` payload is
+discarded by `step_action`, so the kill type is unrelated to the cell's
+type by design). The ghost step is the metadata update to `alive :=
+false` (`metaHeap_update`, RefinedC's `alloc_alive_kill`) followed by
+`metaOwn_persist`; the byte fragments are DROPPED — sound because
+`killM` leaves the bytemap alone (`CohG.bytes` is about `σ.bytemap`)
+and addresses are never reused (`lastAddress` only descends), so the
+stale ghost bytes stay coupled (`CohG.kill`; `MemWF.kill` is the
+invariant's preservation). `hstatic`: only the static kill — the
+dynamic `free(p)` over `regionOwn` is K3, and `free` of a CREATED
+object is UB179a (a created base is never in `dynamicAddrs`; the K0
+audit's N-1 exception is state-dependent). Consumers: `alloc_create_kill_wps`
+and the engine-facing `kill_launch_smoke` (AllocExhibit.lean, §6).
 
 **Read-only allocations.** `MetaCell.readonly` is coupled to
 `Allocation.isReadonly` (`LiveCoh.alloc`: `al.isReadonly = .IsWritable
@@ -1208,12 +1253,13 @@ the `#print axioms` recipe are in the README, "How to build and verify".
 
 ## 7. What is deliberately out, and why
 
-- **`kill`/free and procedures.** The classical logic's dispose rule and
-  procedure specifications (incl. recursion) are the next two additions.
-  Their absence is structural, not hidden: the liveness token (the
-  metadata cell's `alive` flag, §4) exists since K1 but no rule flips
-  it yet — the kill rules are K2/K3; `MachineCtx.SeqWF` (empty call
-  stack) is a premise wherever a general context appears.
+- **`free` (the dynamic kill) and procedures.** The static dispose
+  rule landed in K2 (§4, "The dispose rule"); the dynamic `free(p)`
+  over `alloc`ated regions is K3 (`Frag.kill`/`Frag.kill_op` carry
+  `is_dynamic kind = false`; the mirror `Step.kill` is already generic
+  in the kind), and procedure specifications (incl. recursion) are the
+  calls arc. Their absence is structural, not hidden: `MachineCtx.SeqWF`
+  (empty call stack) is a premise wherever a general context appears.
 - **Located Core.** Every node of a fragment program carries the empty
   static annotation list (`Expr []` in every `Frag` constructor and every
   redex spelling). The engine's `step_ctx` rewrites the thread's

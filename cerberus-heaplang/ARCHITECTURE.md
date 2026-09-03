@@ -115,8 +115,9 @@ classification at every fragment refusal outside the residual.
 
 The small axioms are proved once as atomic step specifications
 (`AtomicStep`, Rules.lean: `store_atomic`, `load_atomic`,
-`storeAt_atomic`, `loadAt_atomic`, `create_atomic`), each against
-`Step` and the real `storeM`/`loadM`/`allocateObject`, and lifted by
+`storeAt_atomic`, `loadAt_atomic`, `create_atomic`, `kill_atomic` —
+the static dispose, kill/free arc K2), each against
+`Step` and the real `storeM`/`loadM`/`allocateObject`/`killM`, and lifted by
 `wp_of_atomic` (raw WP), `wps_of_atomic` and `wpt_of_atomic`. `wps`
 (Wps.lean) is the partial label-context judgment, a guarded fixpoint
 over iris-lean's WP; `wpt` (Wpt.lean) is the total judgment by
@@ -288,9 +289,12 @@ PROVISIONAL label is not removed before then.
   `MemWF.loadM`/`MemWF.storeM`/`MemWF.allocateObject` are preservation
   by the fragment's three memory operations (every active outcome);
   `create_fresh_global` is "fresh means fresh in the concrete
-  allocation model". What remains open under this goal: preservation
-  by `allocateRegion` and `killM` — K3's stated obligations (Heap.lean
-  section header), proved when those operations enter the fragment.
+  allocation model". `MemWF.killM` — preservation by `killM`, BOTH arms
+  (the dynamic `free(NULL)` no-op and the record erase) — is PROVED
+  (K2, from the explicit-shape `MemWF.kill` that `CohG.kill` consumes).
+  What remains open under this goal: preservation by `allocateRegion` —
+  K3's stated obligation (Heap.lean section header), proved when the
+  region allocator enters the fragment.
   The former footprint-relative launch facts (`id_lt`, `fresh_alloc`,
   `fresh_dead`, `addr_lo`, `la_wf`; `CohG`'s `cur_dead`/`cur_alloc`/
   `cur_meta_lt`/`cur_meta_lo`) are consequences and were retired as
@@ -312,5 +316,26 @@ PROVISIONAL label is not removed before then.
   an engine fact) and `deadObj`/`deadRegion` (persistent knowledge of a
   kill) are what K2/K3's rules produce and consume. Record:
   `docs/2026-09-03_k1-notes.md`.
+- The kill/free arc's STATIC KILL — LANDED (K2, 2026-09-03): the mirror
+  `Step.kill`/`Step.kill_eval` (step_action's Kill arm — the request
+  `KillRequest2 (is_dynamic kind) ptrval`, continuation the bare
+  `mk_value_e Vunit`; generic in the kind since the engine discards the
+  `Static0 ty` payload), `Frag.kill`/`Frag.kill_op` restricted to the
+  static kill (`is_dynamic kind = false`), the certification
+  (`step_ctx_kill`, `ars_kill_active`, `engine_step_matchU` and
+  `loop_step_frag` re-certified — statements unchanged), and the
+  completeness pair `complete_kill`/`complete_kill_op` with the refusal
+  rows `killM_killed_inv` (UB179a non-matching, UB179b dead, the non-UB
+  out-of-bound `Other`; ILLTYPED-at-distance-one at a non-pointer
+  operand). THE DISPOSE RULE `kill_atomic` (Rules.lean) consumes
+  `pointsToCell … (.own 1)` and delivers the bare unit with at most the
+  persistent dead cell `deadObj`; `wps_kill`/`wpt_kill` (dead-cell form),
+  `wps_kill_emp`/`wpt_kill_emp` (the textbook `{p ↦ -} kill(p) {emp}`),
+  `wps_kill_eval`/`wpt_kill_eval` (operand form). The ghost step is
+  `metaHeap_update` to `alive := false` then `metaOwn_persist`; the byte
+  fragments are dropped — sound because `killM` leaves the bytemap alone
+  and addresses are never reused (`CohG.kill`). Consumers:
+  `alloc_create_kill_wps`, `kill_launch_smoke` (AllocExhibit.lean).
+  Record: `docs/2026-09-03_k2-notes.md`.
 - The deferred parametric semantics interfaces: the rules are proved
   directly against `Step` and the memory state (walkthrough §7).

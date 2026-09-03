@@ -265,7 +265,28 @@ def trioExports : List Name := [
   ``CerberusHeapLang.regionOwn_view, ``CerberusHeapLang.regionOwn_fractional,
   ``CerberusHeapLang.regionOwn_agree, ``CerberusHeapLang.regionOwn_facts,
   ``CerberusHeapLang.deadObj_agree, ``CerberusHeapLang.deadObj_allocMeta_false,
-  ``CerberusHeapLang.pointsToCell_deadObj_false, ``CerberusHeapLang.deadObj_dead]
+  ``CerberusHeapLang.pointsToCell_deadObj_false, ``CerberusHeapLang.deadObj_dead,
+  -- kill/free arc K2 (2026-09-03): THE DISPOSE RULE (static kill) — the
+  -- atomic spec and its wps/wpt faces (dead-cell and textbook forms),
+  -- the operand-evaluation forms, the engine seam `killM_success`, the
+  -- refusal rows, `MemWF` preservation by `killM` (K0's obligation) and
+  -- the coupling preservation `CohG.kill`; the completeness pair and the
+  -- refusal instance; the ILLTYPED-at-distance-one and KILL step
+  -- equations at the kill operand; the two smoke consumers. (The
+  -- `∈`/`contains` bridge lemmas of K1 audit M-1 — `mem_contains_int`,
+  -- `contains_cons_int`, `contains_cons_ne_int`, `int_beq_eq_true` —
+  -- have SUB-trio cones, [propext, Quot.sound], measured, so they
+  -- cannot sit in an EXACT-trio pin list; the exhaustive sweep bounds
+  -- them, and `MemWF.kill`/`CohG.kill` consume them.)
+  ``CerberusHeapLang.kill_atomic, ``CerberusHeapLang.wps_kill, ``CerberusHeapLang.wps_kill_emp,
+  ``CerberusHeapLang.wps_kill_eval, ``CerberusHeapLang.wpt_kill, ``CerberusHeapLang.wpt_kill_emp,
+  ``CerberusHeapLang.wpt_kill_eval, ``CerberusHeapLang.killM_success,
+  ``CerberusHeapLang.killM_killed_inv, ``CerberusHeapLang.MemWF.kill, ``CerberusHeapLang.MemWF.killM,
+  ``CerberusHeapLang.CohG.kill, ``CerberusHeapLang.MetaCoh.kill_other,
+  ``CerberusHeapLang.cerberusRound_refused_kill, ``CerberusHeapLang.complete_kill,
+  ``CerberusHeapLang.complete_kill_op, ``CerberusHeapLang.step_ctx_kill_illtyped',
+  ``CerberusHeapLang.step_ctx_kill_eval_kill,
+  ``CerberusHeapLang.alloc_create_kill_wps, ``CerberusHeapLang.kill_launch_smoke]
 
 def sortedNames (ns : Array Name) : Array String :=
   (ns.map (·.toString)).qsort (· < ·)

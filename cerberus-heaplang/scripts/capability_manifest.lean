@@ -35,6 +35,8 @@ def ruleFor : Name → Option Name
   | `CerberusHeapLang.Frag.store      => some `CerberusHeapLang.wps_store
   | `CerberusHeapLang.Frag.load       => some `CerberusHeapLang.wps_load_at
   | `CerberusHeapLang.Frag.create     => some `CerberusHeapLang.wps_create
+  | `CerberusHeapLang.Frag.kill       => some `CerberusHeapLang.wps_kill
+  | `CerberusHeapLang.Frag.kill_op    => some `CerberusHeapLang.wps_kill_eval
   | `CerberusHeapLang.Frag.sseq       => some `CerberusHeapLang.wps_seq
   | `CerberusHeapLang.Frag.annot      => some `CerberusHeapLang.wps_annot
   | `CerberusHeapLang.Frag.save       => some `CerberusHeapLang.wps_save

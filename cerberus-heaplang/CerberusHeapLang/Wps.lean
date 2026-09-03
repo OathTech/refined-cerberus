@@ -1326,6 +1326,46 @@ theorem wps_load_eval {Ψ : SpikeVal → EnvStack → IProp GF}
   · iexact Hσ
   · iexact H
 
+/-- ACTION_EVAL for a kill's pointer operand (kill/free arc K2; the
+    `wps_load_eval` twin): a `kill(kind, pe)` whose operand evaluates
+    to the pointer `pv` is verified by verifying the kill at `pv`. -/
+theorem wps_kill_eval {Ψ : SpikeVal → EnvStack → IProp GF}
+    (loc : CerbLocation.Loc) (ann : core_run_annotation) (kind : kill_kind)
+    (pe : generic_pexpr Unit sym) (ρ : EnvStack)
+    {pv : CerbMem.PointerValue}
+    (hnv : valueFromPexpr pe = none)
+    (hv : evalPexpr M.tagDefs M.extern ρ pe = some (Vobject (OVpointer pv))) :
+    wps M Ls Ψ (killExpr loc ann kind pv) ρ ⊢
+      wps M Ls Ψ (killOpRedex loc ann kind pe) ρ := by
+  rw [(wps_unfold (e := killOpRedex loc ann kind pe)).to_eq]
+  simp only [wps.pre, killOpRedex, toVal_action_node, jumpRedex?_action]
+  iintro H %σ₁ %ns %obs %obs' %nt Hσ
+  iapply fupd_mask_intro Std.LawfulSet.empty_subset
+  iintro Hclose
+  isplitr
+  · ipureintro
+    exact ⟨[], ⟨_, _, _⟩, _, [], ⟨Step.kill_eval hnv hv, rfl, rfl⟩⟩
+  inext
+  iintro %r %σ₂ %eₜ %Hstep Hcred
+  obtain ⟨hs, hlbl, rfl⟩ := Hstep
+  obtain ⟨pv', hv', hout⟩ := hs.kill_op_inv hnv
+  obtain rfl : pv = pv' := by
+    simpa using Option.some.inj (hv.symm.trans hv')
+  obtain ⟨re, rρ, rM⟩ := r
+  simp only at hlbl
+  obtain rfl : M = rM := hlbl.symm
+  obtain ⟨hre, hrρ, hσ⟩ : re = killExpr loc ann kind pv ∧
+      rρ = ρ ∧ σ₂ = σ₁ := by
+    simpa [Prod.mk.injEq, killExpr] using hout
+  subst hre
+  obtain rfl : ρ = rρ := hrρ.symm
+  obtain rfl : σ₁ = σ₂ := hσ.symm
+  imod Hclose with -
+  imodintro
+  isplitl [Hσ]
+  · iexact Hσ
+  · iexact H
+
 /-! ## The Specified-binder sequencing rule (S4)
 
 `lets Specified(x) = e1 in e2` — the load-result unwrapping idiom
@@ -1809,6 +1849,45 @@ theorem wps_load {Ψ : SpikeVal → EnvStack → IProp GF}
   · iintro %w ⟨%fp, %hw, Hpt'⟩
     subst hw
     iapply HΨ $$ Hpt'
+
+/-- THE DISPOSE RULE over `wps` (kill/free arc K2): `kill_atomic`
+    lifted. The classical `{p ↦ -} kill(static ty, p) {emp}`: full
+    ownership of the created object's cell is consumed; the
+    continuation runs at the BARE unit value (no footprint annotation
+    — the engine's continuation is `mk_value_e Vunit`, so no `_plain`
+    form is needed) and is offered the persistent DEAD cell
+    `deadObj` at the pointer's id and base (drop it: `wps_kill_emp`).
+    `hstatic`: the kill is static — the dynamic `free` is K3. -/
+theorem wps_kill {Ψ : SpikeVal → EnvStack → IProp GF}
+    (loc : CerbLocation.Loc) (ann : core_run_annotation) (kind : kill_kind)
+    (pv : CerbMem.PointerValue) (ty : ctype) (bs : List CerbMem.AbsByte) (ρ : EnvStack)
+    (hstatic : is_dynamic kind = false) :
+    iprop(pointsToCell M.tagDefs (GF := GF) pv (.own 1) ty bs ∗
+      ((∃ (id a : Int), ⌜pv = cellPtr id a⌝ ∗ deadObj M.tagDefs id a ty) -∗
+        Ψ (SpikeVal.pure Vunit) ρ)) ⊢
+      wps M Ls Ψ (killExpr loc ann kind pv) ρ := by
+  iintro ⟨Hpt, HΨ⟩
+  iapply wps_of_atomic (kill_atomic loc ann kind pv ty bs ρ hstatic) rfl rfl
+  isplitl [Hpt]
+  · iexact Hpt
+  · iintro %w ⟨%hw, Hd⟩
+    subst hw
+    iapply HΨ $$ Hd
+
+/-- The textbook face: `{p ↦ -} kill(static ty, p) {emp}` — the dead
+    cell dropped. -/
+theorem wps_kill_emp {Ψ : SpikeVal → EnvStack → IProp GF}
+    (loc : CerbLocation.Loc) (ann : core_run_annotation) (kind : kill_kind)
+    (pv : CerbMem.PointerValue) (ty : ctype) (bs : List CerbMem.AbsByte) (ρ : EnvStack)
+    (hstatic : is_dynamic kind = false) :
+    iprop(pointsToCell M.tagDefs (GF := GF) pv (.own 1) ty bs ∗ Ψ (SpikeVal.pure Vunit) ρ) ⊢
+      wps M Ls Ψ (killExpr loc ann kind pv) ρ := by
+  iintro ⟨Hpt, HΨ⟩
+  iapply wps_kill loc ann kind pv ty bs ρ hstatic
+  isplitl [Hpt]
+  · iexact Hpt
+  · iintro -
+    iexact HΨ
 
 /-! ## The plain-value forms of the whole-cell small axioms (QA-1/Q12;
 the total twins and `AnnotInsensitive` are in Wpt.lean — this module

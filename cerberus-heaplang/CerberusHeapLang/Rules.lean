@@ -5,7 +5,8 @@ and the readout combinator.
 
 The contents:
 - THE ATOMIC STEP SPECIFICATIONS (`AtomicStep`; `store_atomic`,
-  `load_atomic`, `loadAt_atomic`, `storeAt_atomic`, `create_atomic`)
+  `load_atomic`, `loadAt_atomic`, `storeAt_atomic`, `create_atomic`,
+  `kill_atomic`)
   — every memory small axiom proved ONCE, against `Step`, in the
   mask-generic one-step-to-value shape all three judgments lift
   (`wp_of_atomic` here; `wps_of_atomic`, `wpt_of_atomic` in Wps.lean
@@ -903,6 +904,105 @@ theorem create_atomic [SpikeGS hlc GF] {M : MachineCtx}
       · ipureintro
         exact ⟨by simp, hinert⟩
     · iexact Hc
+
+/-- `kill(kind, pv)` — positive strong kill, canonical evaluated pointer
+    operand (what `Step.kill` fires on; `killRedex`'s spelling). -/
+def killExpr (loc : CerbLocation.Loc) (ann : core_run_annotation)
+    (kind : kill_kind) (pv : CerbMem.PointerValue) : CoreExpr :=
+  Expr [] (Eaction (Paction polarity.Pos (Action loc ann
+    (Kill kind (Pexpr [] () (PEval (Vobject (OVpointer pv))))))))
+
+/-- THE DISPOSE RULE (kill/free arc K2) — the classical `{p ↦ -}
+    dispose(p) {emp}` as an atomic step: the STATIC kill (`hstatic :
+    is_dynamic kind = false`; `kill(static ty, p)`, C's automatic
+    storage) of a whole created object consumes the cell at FULL
+    ownership — the liveness token `metaOwn id (.own 1) (objCell … true
+    false)` inside `pointsToCell` — and delivers the BARE unit (cost 1)
+    with, at most, the persistent DEAD cell `deadObj` (a client may drop
+    it; `wps_kill_emp`/`wpt_kill_emp`). ONE application of the real
+    `CerbMem.killM` (`killM_success`): the points-to's `cellPtr` shape
+    and `MetaCoh` (via the state interpretation) pass every kill arm
+    (null/function/other-provenance UB179a, dead UB179b, out-of-bound
+    `Other`); nothing about bytes, type or size is checked by the
+    engine. Ghost: `metaHeap_update` flips `alive := false`
+    (RefinedC's `alloc_alive_kill`), then `metaOwn_persist` discards the
+    dead cell; the byte fragments are DROPPED — sound because `killM`
+    leaves the bytemap alone (`CohG.bytes` is about `σ.bytemap`) and
+    addresses are never reused (`CohG.kill`). The `Static0 ty` payload
+    is discarded by the engine, so the kill type is unrelated to the
+    cell's type by design (design note §1(a)). -/
+theorem kill_atomic [SpikeGS hlc GF] {M : MachineCtx}
+    (loc : CerbLocation.Loc) (ann : core_run_annotation) (kind : kill_kind)
+    (pv : CerbMem.PointerValue) (ty : ctype) (bs : List CerbMem.AbsByte) (ρ : EnvStack)
+    (hstatic : is_dynamic kind = false) :
+    AtomicStep M (killExpr loc ann kind pv) ρ 1
+      (pointsToCell M.tagDefs (GF := GF) pv (.own 1) ty bs)
+      (fun w => iprop(⌜w = SpikeVal.pure Vunit⌝ ∗
+        ∃ (id a : Int), ⌜pv = cellPtr id a⌝ ∗ deadObj M.tagDefs id a ty)) := by
+  intro E₁ E₂ hE σ₁ ns obs nt
+  iintro ⟨Hpt, Hσ⟩
+  icases (stateInterp_iff σ₁ ns obs nt).mp $$ Hσ
+    with ⟨%mm, %mb, %mk, %HG, Hmi, Hbi, Hki⟩
+  -- the byte fragments and the pure layout facts are dropped: the
+  -- engine's kill reads none of them
+  icases (pointsToCell_iff M.tagDefs pv (.own 1) ty bs).mp $$ Hpt
+    with ⟨%i, %addr, %Hpv, Hm, -, -⟩
+  subst Hpv
+  ihave %Hgetm : ⌜Iris.Std.PartialMap.get? mm i = some (objCell M.tagDefs addr ty true false)⌝
+      $$ [Hmi Hm]
+  · ihave >%h := metaHeap_valid $$ [$Hmi $Hm]
+    itrivial
+  have hrun : applyMemM (CerbMem.killM loc (is_dynamic kind) (cellPtr i addr)) σ₁ =
+      some ((), { σ₁ with deadAllocations := i :: σ₁.deadAllocations,
+                          allocations := σ₁.allocations.erase i }) := by
+    rw [hstatic]
+    exact killM_success σ₁ i (objCell M.tagDefs addr ty true false) loc
+      (HG.metas i _ Hgetm) rfl
+  iapply fupd_mask_intro hE
+  iintro Hclose
+  isplitr
+  · ipureintro
+    exact ⟨[], ⟨_, _, _⟩, _, [], ⟨Step.kill_canonical hrun, rfl, rfl⟩⟩
+  iintro %r %σ₂ %eₜ %Hstep
+  obtain ⟨hstep, hlbl, rfl⟩ := Hstep
+  obtain ⟨σ'', hmem', hout⟩ := hstep.kill_inv
+  rw [hrun] at hmem'
+  obtain ⟨-, rfl⟩ := Prod.mk.inj (Option.some.inj hmem')
+  obtain ⟨re, rρ, rM⟩ := r
+  simp only at hlbl
+  obtain rfl : M = rM := hlbl.symm
+  simp only [Prod.mk.injEq] at hout
+  obtain ⟨hre, hrρ, hσ⟩ := hout
+  subst hre hσ
+  obtain rfl : ρ = rρ := hrρ.symm
+  imod Hclose with -
+  -- ghost: flip the cell to dead, then discard it
+  imod (metaHeap_update (objCell M.tagDefs addr ty false false)) $$ [$Hmi $Hm]
+    with ⟨Hmi, Hm⟩
+  imod (metaOwn_persist i (.own 1) _) $$ Hm with Hm
+  imodintro
+  isplitl [Hmi Hbi Hki]
+  · iapply (stateInterp_iff _ _ _ _).mpr
+    iexists (Iris.Std.PartialMap.insert mm i (objCell M.tagDefs addr ty false false)), mb, mk
+    isplitr [Hmi Hbi Hki]
+    · ipureintro
+      exact HG.kill i _ Hgetm rfl
+    isplitl [Hmi]
+    · iexact Hmi
+    isplitl [Hbi]
+    · iexact Hbi
+    · iexact Hki
+  · iexists (SpikeVal.pure Vunit)
+    isplit
+    · ipureintro
+      exact ⟨rfl, rfl, Nat.le_refl 1⟩
+    isplit
+    · ipureintro; rfl
+    iexists i, addr
+    isplit
+    · ipureintro; rfl
+    · unfold deadObj
+      iexact Hm
 
 /-! ## The raw-WP faces of the small axioms (corollaries) -/
 

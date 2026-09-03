@@ -18,6 +18,8 @@ consumed by no exhibit is a red row: the construct has a rule but no client.
 | `Frag.store` | `wps_store` | Exhibit, LoopExhibit |
 | `Frag.load` | `wps_load_at` | ArrayExhibit, ListRevExhibit, StructExhibit, TreeRotExhibit |
 | `Frag.create` | `wps_create` | AllocExhibit, StructExhibit |
+| `Frag.kill` | `wps_kill` | AllocExhibit |
+| `Frag.kill_op` | `wps_kill_eval` | AllocExhibit |
 | `Frag.sseq` | `wps_seq` | AllocExhibit, Exhibit, ListRevExhibit, LoopExhibit, StructExhibit, TreeRotExhibit |
 | `Frag.annot` | `wps_annot` | AllocExhibit, ArrayExhibit, Exhibit, ListRevExhibit, LoopExhibit, StructExhibit, TreeRotExhibit, WseqExhibit |
 | `Frag.save` | `wps_save` | ArrayExhibit, FibExhibit, ListRevExhibit, LoopExhibit |
@@ -26,11 +28,11 @@ consumed by no exhibit is a red row: the construct has a rule but no client.
 | `Frag.sseq_spec` | `wps_seq_spec` | ArrayExhibit, ListRevExhibit, TreeRotExhibit |
 | `Frag.pure_sym` | `wps_pure` | ArrayExhibit, FibExhibit, ListRevExhibit, TreeRotExhibit |
 | `Frag.load_op` | `wps_load_eval` | ArrayExhibit, ListRevExhibit, TreeRotExhibit |
-| `Frag.sseq_sym` | `wps_seq_sym` | ListRevExhibit, StructExhibit, TreeRotExhibit |
+| `Frag.sseq_sym` | `wps_seq_sym` | AllocExhibit, ListRevExhibit, StructExhibit, TreeRotExhibit |
 | `Frag.memop_vals` | `wps_memop_ptreq` | ListRevExhibit |
 | `Frag.memop_op` | `wps_memop_eval` | ListRevExhibit |
 | `Frag.store_op` | `wps_store_eval` | ListRevExhibit, ProdExhibit, StructExhibit, TreeRotExhibit |
 | `Frag.case_value` | `wps_case_value` | CaseExhibit |
 | `Frag.wseq` | `wps_wseq` | WseqExhibit |
 
-MANIFEST: 18 rows, 0 red, 13 exhibit modules
+MANIFEST: 20 rows, 0 red, 13 exhibit modules

@@ -75,10 +75,11 @@ N-3):
    consumes the cell at `.own 1` and is the ghost update to `alive :=
    false`, handing back at most the persistent DEAD cell
    (`deadObj`/`deadRegion`; `deadObj_allocMeta_false`: dead and live
-   persistent knowledge of one id are contradictory). In THIS fragment
-   no rule performs the update yet (`metaHeap_alloc` mints; nothing
-   writes) — the kill rules are K2/K3's spec additions; K1 is the
-   internals they need. The extended cell also carries `readonly`
+   persistent knowledge of one id are contradictory). The STATIC kill
+   performs the update since K2 (`kill_atomic`, Rules.lean: `metaHeap_update`
+   to `alive := false`, then `metaOwn_persist`; the coupling survives by
+   `CohG.kill`); the dynamic kill is K3's spec addition. The extended
+   cell also carries `readonly`
    (`readonlyCell`: loads only — `storeM_readonly_kills` is the engine's
    refusal) and `dynamic` (K3's `free` premise; `regionOwn`), and an
    OPTIONAL type (regions are untyped).
@@ -907,8 +908,9 @@ structure MetaCell where
       `deadAllocations` and its record is in `allocations`; `false` iff
       the id is dead and its record erased — `killM` does both in one
       update (:1576-1578). Nothing else writes either table (K0's writer
-      census). The kill rules (K2/K3) are the ghost update to `false`;
-      the bundles that grant access carry `true`. -/
+      census). The kill rules are the ghost update to `false` (K2's
+      static `kill_atomic`; K3's dynamic `free`); the bundles that grant
+      access carry `true`. -/
   alive : Bool
   /-- READ-ONLY: `Allocation.isReadonly ≠ .IsWritable` (:113, :89-92).
       `allocateObject` sets `readonlyStatusForAlloc pref initOpt`
@@ -993,6 +995,40 @@ theorem MetaCoh.of_fields {σ σ' : Mem} {id : Int} {mc : MetaCell} (h : MetaCoh
     exact ⟨by rw [h1]; exact hdead, by rw [h2]; exact hnone⟩
   · rw [h3]
     exact h.dynamic hd
+
+/-- The record lookup after `killM`'s erase (CerbMem.lean:1578):
+    `none` at the killed id, unchanged elsewhere. -/
+theorem allocations_erase_get? (σ : Mem) (id id' : Int) :
+    (σ.allocations.erase id).get? id' =
+      if id = id' then none else σ.allocations.get? id' := by
+  simp [Std.TreeMap.get?_eq_getElem?, Std.TreeMap.getElem?_erase]
+
+/-- `MetaCoh` of every OTHER id survives a kill (kill/free arc K2): the
+    kill state prepends the killed id to `deadAllocations` and erases its
+    record (CerbMem.lean:1576-1578), so for `id' ≠ id` the dead test
+    (`contains_cons_ne_int`) and the record lookup are unchanged and
+    `dynamicAddrs` is untouched. -/
+theorem MetaCoh.kill_other {σ : Mem} {id id' : Int} {mc : MetaCell}
+    (h : MetaCoh σ id' mc) (hne : id' ≠ id) :
+    MetaCoh { σ with deadAllocations := id :: σ.deadAllocations,
+                     allocations := σ.allocations.erase id } id' mc := by
+  refine ⟨fun ha => ?_, fun ha => ?_, h.nonAtomic, fun hd => h.dynamic hd⟩
+  · obtain ⟨hdead, al, hal, hb, hs, ht, hro⟩ := h.live ha
+    refine ⟨?_, al, ?_, hb, hs, ht, hro⟩
+    · show (id :: σ.deadAllocations).contains id' = false
+      rw [contains_cons_ne_int id σ.deadAllocations id' hne]
+      exact hdead
+    · show (σ.allocations.erase id).get? id' = some al
+      rw [allocations_erase_get?, if_neg (fun h => hne h.symm)]
+      exact hal
+  · obtain ⟨hdead, hnone⟩ := h.dead ha
+    refine ⟨?_, ?_⟩
+    · show (id :: σ.deadAllocations).contains id' = true
+      rw [contains_cons_ne_int id σ.deadAllocations id' hne]
+      exact hdead
+    · show (σ.allocations.erase id).get? id' = none
+      rw [allocations_erase_get?, if_neg (fun h => hne h.symm)]
+      exact hnone
 
 theorem CellCoh.toMetaCoh {σ : Mem} {id : Int} {c : SpikeCell} (tds : CerbTags.TagDefsMap)
     (h : CellCoh tds σ id c) : MetaCoh σ id (metaOf tds c) := by
@@ -1242,6 +1278,27 @@ theorem storeM_readonly_none (tds : CerbTags.TagDefsMap) (σ : Mem) (id : Int) (
 
 end GenericAccess
 
+/-- THE STATIC KILL SUCCEEDS at a live metadata cell (kill/free arc K2;
+    `killM` CerbMem.lean:1555-1580, static path): the pointer is
+    `cellPtr id mc.addr` — `Prov_some id`, concrete, AT THE BASE — the
+    id is not dead and its record is present at that base (`LiveCoh`),
+    so the null/function/other-provenance arms (UB179a), the dead arm
+    (UB179b) and the out-of-bound arm are all passed, and the dynamic
+    check is skipped (`isDynamic = false`). The active arm prepends the
+    id to `deadAllocations` and erases its record; nothing else changes
+    (`lastAddress`, `nextAllocId`, `dynamicAddrs`, the bytemap). Stated
+    at any live cell — typed or untyped, writable or read-only: the
+    engine checks none of those on a kill. -/
+theorem killM_success (σ : Mem) (id : Int) (mc : MetaCell) (loc : CerbLocation.Loc)
+    (hmeta : MetaCoh σ id mc) (halive : mc.alive = true) :
+    applyMemM (CerbMem.killM loc false (cellPtr id mc.addr)) σ =
+      some ((), { σ with deadAllocations := id :: σ.deadAllocations,
+                         allocations := σ.allocations.erase id }) := by
+  obtain ⟨hdead, al, hal, hbase, -, -, -⟩ := hmeta.live halive
+  unfold CerbMem.killM applyMemM
+  simp only [cellPtr, hdead, Bool.false_eq_true, if_false, hal, hbase, bne, int_beq_refl,
+    Bool.not_true, Bool.false_and]
+
 /-! ## The allocator engine seam (Phase 2, D26 retirement) -/
 
 section Allocator
@@ -1408,17 +1465,17 @@ PRESERVATION (this slice): every active outcome of `loadM`
 :1689-1693) and `allocateObject` at any initializer
 (`MemWF.allocateObject`), plus the explicit-shape `MemWF.create` the
 coupling lemma `CohG.create` consumes and the byte-only
-`MemWF.writeBytesTo`. K3's PROOF OBLIGATIONS (stated, not proved
-here — no kill/alloc rules in this slice):
+`MemWF.writeBytesTo`. PRESERVATION BY `killM` (K2, both arms —
+`MemWF.killM`, from the explicit-shape `MemWF.kill` the coupling lemma
+`CohG.kill` consumes: the erase shrinks `live_*`/`disj`/`cursor_lo`/
+`size_nonneg`/`dyn_disj`, `dead_lt` at the new dead id is `live_lt` of
+the erased record, `live_dead` for the survivors is the erase; the
+dynamic `free(NULL)` arm leaves the state alone). K3's REMAINING PROOF
+OBLIGATION (stated, not proved here — no alloc rule yet):
   `MemWF.allocateRegion : MemWF σ → applyMemM (allocateRegion tid pref
     align size) σ = some (pv, σ') → MemWF σ'`
-  `MemWF.killM : MemWF σ → applyMemM (killM loc isDynamic pv) σ =
-    some ((), σ') → MemWF σ'`
-(the first is `MemWF.alloc` at `dyn := base :: σ.dynamicAddrs` with
-`size := sizeN.toNat`; the second erases one live record: `disj`/
-`cursor_lo`/`size_nonneg`/`dyn_disj` shrink, `dead_lt` for the new
-dead id is `live_lt` of the erased record, `live_dead` for the others
-is the erase). -/
+(`MemWF.alloc` at `dyn := base :: σ.dynamicAddrs` with `size :=
+sizeN.toNat`). -/
 
 section MemWF
 
@@ -1756,6 +1813,68 @@ theorem MemWF.allocateObject (tds : CerbTags.TagDefsMap) (tid : Nat) (pref : pre
     · dsimp only [ndProj] at hrun
       obtain ⟨-, rfl⟩ := Prod.mk.inj (Option.some.inj hrun)
       exact hwf'.of_fields rfl rfl rfl rfl rfl
+
+/-- THE KILL STEP on the allocator tables (CerbMem.lean:1576-1578): a
+    LIVE record's id moves to `deadAllocations` and its record is
+    erased; the cursor, the id supply and the dynamic list are
+    untouched. Every component shrinks or transfers: `live_*`, `disj`,
+    `cursor_lo`, `size_nonneg`, `dyn_disj` through the erase; `dead_lt`
+    at the new dead id is `live_lt` of the erased record; `live_dead`
+    for the survivors is the erase plus `contains_cons_ne_int`. -/
+theorem MemWF.kill {σ : Mem} (h : MemWF σ) (id : Int) (al : Allocation)
+    (hal : σ.allocations.get? id = some al) :
+    MemWF { σ with deadAllocations := id :: σ.deadAllocations,
+                   allocations := σ.allocations.erase id } := by
+  have hget : ∀ (i : Int) (al' : Allocation), (σ.allocations.erase id).get? i = some al' →
+      i ≠ id ∧ σ.allocations.get? i = some al' := by
+    intro i al' hg
+    rw [allocations_erase_get?] at hg
+    split at hg
+    · cases hg
+    · next hne => exact ⟨fun h => hne h.symm, hg⟩
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, h.la_wf, h.dyn_lo, ?_⟩
+  · intro i al' hg
+    exact h.live_lt i al' (hget i al' hg).2
+  · intro i hc
+    rcases contains_cons_int id σ.deadAllocations i hc with rfl | hc'
+    · exact h.live_lt i al hal
+    · exact h.dead_lt i hc'
+  · intro i al' hg
+    obtain ⟨hne, hg'⟩ := hget i al' hg
+    show (id :: σ.deadAllocations).contains i = false
+    rw [contains_cons_ne_int id σ.deadAllocations i hne]
+    exact h.live_dead i al' hg'
+  · intro i j ai aj hne hgi hgj
+    exact h.disj i j ai aj hne (hget i ai hgi).2 (hget j aj hgj).2
+  · intro i al' hg
+    exact h.cursor_lo i al' (hget i al' hg).2
+  · intro i al' hg
+    exact h.size_nonneg i al' (hget i al' hg).2
+  · intro a ha i al' hg
+    exact h.dyn_disj a ha i al' (hget i al' hg).2
+
+/-- `killM`'s active arm, at EITHER kind (kill/free arc K2 — K0's stated
+    obligation, both arms): the dynamic `free(NULL)` arm returns the
+    state unchanged (CerbMem.lean:1562); the concrete arm is the kill
+    step on a present record (:1576-1578). Every other arm is a kill. -/
+theorem MemWF.killM (loc : CerbLocation.Loc) (isDyn : Bool) (pv : PointerValue)
+    {σ σ' : Mem} (h : MemWF σ)
+    (hrun : applyMemM (CerbMem.killM loc isDyn pv) σ = some ((), σ')) : MemWF σ' := by
+  unfold CerbMem.killM at hrun
+  rw [applyMemM_ND] at hrun
+  dsimp only at hrun
+  rcases pv with ⟨prov, base⟩
+  cases prov <;> cases base <;> dsimp only at hrun <;>
+    repeat' split at hrun
+  all_goals (try dsimp only [ndProj] at hrun)
+  -- the killed arms are constructor clashes (`none = some _`); the two
+  -- active arms are the unchanged state (`free(NULL)`) and the kill step
+  all_goals first
+    | (obtain ⟨-, rfl⟩ := Prod.mk.inj (Option.some.inj hrun)
+       first
+         | exact h.of_fields rfl rfl rfl rfl rfl
+         | exact h.kill _ _ ‹_›)
+    | cases hrun
 
 end MemWF
 
@@ -2814,8 +2933,10 @@ byte algebra (`bytesOwn_*`) apply unchanged:
 - `deadObj`/`deadRegion` — the metadata of a KILLED allocation at the
   discarded fraction: persistent knowledge that `id` is dead (its base,
   size, type are the ghost record of what was there — the engine has
-  erased its record, `killM` :1576-1578). This is what K2/K3's kill
-  rules can hand back (RefinedC's `alloc_alive id DfracDiscarded false`
+  erased its record, `killM` :1576-1578). This is what the kill rules
+  hand back — K2's `kill_atomic`/`wps_kill`/`wpt_kill` deliver `deadObj`
+  (dropped by the `_emp` faces); K3's `free` will deliver `deadRegion`
+  (RefinedC's `alloc_alive id DfracDiscarded false`
   has no separate meta; here the one cell carries both). A dead cell
   and `allocMeta` (persistent LIVE knowledge) of the same id are
   contradictory (`deadObj_allocMeta_false`): persisting metadata is
@@ -3254,6 +3375,18 @@ theorem metaHeap_alloc {mm : SpikeHeapF MetaCell} {id : Int}
   letI := SpikeGS.metaGS (hlc := hlc) (GF := GF)
   exact BI.entails_wand ((genHeap_alloc (v := mc) hfresh).trans
     (bupd_mono (BI.sep_mono .rfl BI.sep_elim_left)))
+
+/-- Metadata-heap update at full ownership (kill/free arc K2): the
+    kill's ghost step — RefinedC's `alloc_alive_kill` is exactly a
+    `ghost_map_update` to `false` (ghost_state.v:344-347); here the
+    whole cell is rewritten, the rules use it at `alive := false`. -/
+theorem metaHeap_update {mm : SpikeHeapF MetaCell} {id : Int} {mc : MetaCell}
+    (mc' : MetaCell) :
+    iprop(metaInterp (GF := GF) mm ∗ metaOwn id (.own 1) mc) ==∗
+      iprop(metaInterp (Iris.Std.PartialMap.insert mm id mc') ∗
+        metaOwn id (.own 1) mc') := by
+  letI := SpikeGS.metaGS (hlc := hlc) (GF := GF)
+  exact genHeap_update
 
 /-- Cursor-heap allocation (alloc arc P1.3 — the previously MISSING
     launch step, R-01): mint the cursor cell at key 0 from an empty
@@ -3790,6 +3923,76 @@ theorem CohG.create {σ : Mem} {mm : SpikeHeapF MetaCell}
     · rw [Iris.Std.get?_insert_ne (fun h => hid h.symm)] at hget
       exact Int.le_trans (Int.le_add_of_nonneg_right (Int.natCast_nonneg _))
         (hmeta_hi id mc hget)
+
+/-- CohG survives a kill (kill/free arc K2): the killed id's cell is
+    rewritten to `alive := false` (same base/size/type/flags), the
+    state moves the id to `deadAllocations` and erases its record. The
+    byte map is untouched — `killM` leaves the bytemap alone (the ghost
+    byte fragments the rule drops stay coupled: `CohG.bytes` is about
+    `σ.bytemap`) — and so are the cursor and its bounds (addresses are
+    never reused: `lastAddress` only descends, and the dead cell keeps
+    its address, so `cur_meta_lo` and `metas_disj` transfer verbatim).
+    `wf` is `MemWF.kill`. -/
+theorem CohG.kill {σ : Mem} {mm : SpikeHeapF MetaCell}
+    {mb : SpikeHeapF AbsByte} {mk : SpikeHeapF AllocCursor}
+    (hG : CohG σ mm mb mk) (id : Int) (mc : MetaCell)
+    (hget : get? mm id = some mc) (halive : mc.alive = true) :
+    CohG { σ with deadAllocations := id :: σ.deadAllocations,
+                  allocations := σ.allocations.erase id }
+      (Iris.Std.PartialMap.insert mm id { mc with alive := false }) mb mk := by
+  obtain ⟨-, al, hal, -, -, -, -⟩ := (hG.metas id mc hget).live halive
+  refine ⟨?_, ?_, ?_, hG.cursor_key, ?_, ?_, ?_, ?_⟩
+  · -- metas: the killed cell is dead-coupled; every other cell rides
+    intro i mci hgi
+    by_cases hi : i = id
+    · subst hi
+      rw [Iris.Std.get?_insert_eq rfl] at hgi
+      obtain rfl : { mc with alive := false } = mci := Option.some.inj hgi
+      refine ⟨fun h => by simp at h, fun _ => ⟨?_, ?_⟩,
+        (hG.metas i mc hget).nonAtomic, fun hd => (hG.metas i mc hget).dynamic hd⟩
+      · show (i :: σ.deadAllocations).contains i = true
+        exact mem_contains_int _ _ (List.mem_cons_self ..)
+      · show (σ.allocations.erase i).get? i = none
+        rw [allocations_erase_get?, if_pos rfl]
+    · rw [Iris.Std.get?_insert_ne (fun h => hi h.symm)] at hgi
+      exact (hG.metas i mci hgi).kill_other hi
+  · -- metas_disj: the dead cell keeps its range
+    intro i j mci mcj hne hgi hgj
+    by_cases hi : i = id
+    · subst hi
+      rw [Iris.Std.get?_insert_eq rfl] at hgi
+      obtain rfl : { mc with alive := false } = mci := Option.some.inj hgi
+      rw [Iris.Std.get?_insert_ne hne] at hgj
+      exact hG.metas_disj i j mc mcj hne hget hgj
+    · rw [Iris.Std.get?_insert_ne (fun h => hi h.symm)] at hgi
+      by_cases hj : j = id
+      · subst hj
+        rw [Iris.Std.get?_insert_eq rfl] at hgj
+        obtain rfl : { mc with alive := false } = mcj := Option.some.inj hgj
+        exact hG.metas_disj i j mci mc hne hgi hget
+      · rw [Iris.Std.get?_insert_ne (fun h => hj h.symm)] at hgj
+        exact hG.metas_disj i j mci mcj hne hgi hgj
+  · -- bytes: the bytemap is untouched
+    intro k b hb
+    exact hG.bytes k b hb
+  · -- cursor: untouched
+    intro c hc
+    exact hG.cursor c hc
+  · -- wf
+    intro hne
+    exact (hG.wf hne).kill id al hal
+  · -- cur_byte_lo
+    intro hne k b hb
+    exact hG.cur_byte_lo hne k b hb
+  · -- cur_meta_lo: the dead cell keeps its address
+    intro hne i mci hgi
+    by_cases hi : i = id
+    · subst hi
+      rw [Iris.Std.get?_insert_eq rfl] at hgi
+      obtain rfl : { mc with alive := false } = mci := Option.some.inj hgi
+      exact hG.cur_meta_lo hne i mc hget
+    · rw [Iris.Std.get?_insert_ne (fun h => hi h.symm)] at hgi
+      exact hG.cur_meta_lo hne i mci hgi
 
 end CohGLemmas
 

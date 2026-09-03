@@ -19,6 +19,20 @@ Contents:
   either breaks it). The delivered value is a pointer. Engine
   vocabulary only in the statement (GF discharged at the
   satisfiability witness `SpikeGF`).
+- KILL/FREE ARC K2, the dispose rule's smoke: `createKillProg` is
+  `lets p = create(al, int) in kill(static int, p)` — allocate, then
+  dispose through the bound symbol (so both `wps_kill_eval`/`wpt_kill_eval`
+  and `wps_kill`/`wpt_kill` are consumed). `alloc_create_kill_wps` is the
+  partial-judgment consumer (post: the unit value, the persistent dead
+  cell of SOME id/base, the spent capacity); `kill_launch_smoke` drives
+  it from `prodMem₀` through `wpt_engine_boundU_alloc` at drive length
+  exactly 5 with the ENGINE-FACING readout `∃ id, σ'.deadAllocations.contains
+  id = true ∧ σ'.allocations.get? id = none` — the effect `killM` has on
+  the tables (CerbMem.lean:1576-1578), read off `deadObj_dead`. (The
+  design note's readout `σ'.deadAllocations = [1]` is not derivable from
+  the logic's resources — the public `wps_create` abstracts the id and no
+  resource speaks for the WHOLE dead list — so the honest engine-facing
+  readout is the `contains`/erased pair at the existential id.)
 
 The whole-program allocating exports — `struct_create_store_adequacy`
 (StructExhibit.lean) at the drive, `exhibitA_prod`,
@@ -138,6 +152,85 @@ theorem alloc_create_wpt {M : MachineCtx} {Ls : LabelSpecT GF}
 
 end AllocIris
 
+/-! ## Kill/free arc K2: allocate, then dispose (the static kill's
+local consumer) -/
+
+/-- The bound fresh-pointer symbol of the kill smoke. -/
+def pKSym : sym := Symbol "" 513 SD_None
+
+/-- `lets p = create(al, int) in kill(static int, p)`. -/
+def createKillProg (al : Int) (pref : prefix0) : CoreExpr :=
+  Expr [] (Esseq (symPat [] pKSym BTy_unit)
+    (createExpr loc0 empty_annotation (.IV .Prov_none al) intTy pref)
+    (killOpRedex loc0 empty_annotation (Static0 intTy) (Pexpr [] () (PEsym pKSym))))
+
+/-- Cone membership: `create` is a `BareHead`; the kill is the static
+    kill at a symbol operand. -/
+theorem createKillProg_frag (al : Int) (pref : prefix0) : Frag (createKillProg al pref) :=
+  .sseq_sym .create .create
+    (.kill_op rfl rfl (.sym [] pKSym)
+      (by rw [show peDepth (Pexpr ([] : List annot) () (PEsym pKSym)) = 1 from rfl,
+        show lemDefaultFuel = 999999 + 1 from rfl]; omega))
+
+/-- The head frame after `p` is bound looks `p` up. -/
+theorem createKill_lookup_p {f : Fmap sym value} (hf : SymFrame f)
+    (p : CerbMem.PointerValue) :
+    fmapLookupBy symCmpK pKSym (envAdd pKSym (Vobject (OVpointer p)) f) =
+      some (Vobject (OVpointer p)) := by
+  rw [envAdd_lookup hf symCmpK, if_pos (by decide +kernel)]
+
+section KillIris
+
+variable {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
+
+/-- ALLOCATE THEN DISPOSE (partial judgment): from capacity for one int
+    alone, `lets p = create(al, int) in kill(static int, p)` delivers
+    the unit value, the persistent DEAD cell of the disposed object (at
+    some id and base) and the spent capacity — `wps_create`, then
+    `wps_kill_eval` at the bound symbol, then `wps_kill`. -/
+theorem alloc_create_kill_wps {M : MachineCtx} {Ls : LabelSpec GF}
+    (hex : ∀ x, resolveExtern M.extern x = x)
+    (al : Int) (pref : prefix0)
+    (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (hf : SymFrame ev0) :
+    iprop(allocCap M.tagDefs (GF := GF) [⟨al, intTy⟩]) ⊢
+      wps M Ls
+        (fun w _ => iprop(⌜w = SpikeVal.pure Vunit⌝ ∗
+          (∃ (id a : Int), deadObj M.tagDefs id a intTy) ∗ allocCap M.tagDefs []))
+        (createKillProg al pref) (ev0 :: evs) := by
+  iintro Hcap
+  rw [show createKillProg al pref =
+    Expr [] (Esseq (symPat [] pKSym BTy_unit)
+      (createExpr loc0 empty_annotation (.IV .Prov_none al) intTy pref)
+      (killOpRedex loc0 empty_annotation (Static0 intTy) (Pexpr [] () (PEsym pKSym))))
+    from rfl]
+  iapply wps_seq_sym
+  iapply wps_create loc0 empty_annotation .Prov_none ⟨al, intTy⟩ [] pref (ev0 :: evs)
+    intTy_nonatomic (fun a => intTy_decIndep a _)
+  isplitl [Hcap]
+  · iexact Hcap
+  iintro %p ⟨Hpt, Hcap, -⟩
+  iexists (Vobject (OVpointer p))
+  isplit
+  · ipureintro
+    rfl
+  rw [update_env_sym pKSym BTy_unit]
+  iapply wps_kill_eval loc0 empty_annotation (Static0 intTy) _ _ rfl (pv := p)
+    (by rw [evalPexpr_sym_of_resolve _ _ _ (hex _)]
+        exact lookup_env_head (createKill_lookup_p hf p) evs)
+  iapply wps_kill loc0 empty_annotation (Static0 intTy) p intTy _ _ rfl
+  isplitl [Hpt]
+  · iexact Hpt
+  iintro ⟨%id, %a, %hpv, Hd⟩
+  isplit
+  · ipureintro
+    rfl
+  isplitl [Hd]
+  · iexists id, a
+    iexact Hd
+  · iexact Hcap
+
+end KillIris
+
 /-! ## The launcher smoke: the chain closes at the engine -/
 
 /-- The one-request plan fits the production cold-start cursor
@@ -195,6 +288,81 @@ theorem alloc_create_launch_smoke (pref : prefix0) (aids : Nat → Nat) :
           iapply fupd_mask_intro_discard Std.LawfulSet.empty_subset
           ipureintro
           exact ⟨p, rfl⟩)
+      aids
+  exact ⟨v, σ', h1, h2⟩
+
+/-- ALLOCATE THEN DISPOSE AT THE ENGINE (kill/free arc K2): from the
+    production cold-start memory, `lets p = create(4, int) in
+    kill(static int, p)`, proved ONLY through the public `wpt_create`,
+    `wpt_kill_eval` and `wpt_kill` and launched through
+    `wpt_engine_boundU_alloc`, DELIVERS at drive length exactly 5
+    (create 2, operand evaluation 1, kill 2) the unit value, and the
+    final memory has SOME id dead with its record erased — the
+    engine-visible effect of `killM` (CerbMem.lean:1576-1578), read off
+    the dead cell (`deadObj_dead`). Engine vocabulary only. -/
+theorem kill_launch_smoke (pref : prefix0) (aids : Nat → Nat) :
+    ∃ v σ', driveU spikeCtx aids 5
+        (spikeCtx.thread (createKillProg 4 pref) (fmapEmpty :: []))
+        prodMem₀ = .done v σ' ∧
+      v = Vunit ∧
+      ∃ id : Int, σ'.deadAllocations.contains id = true ∧
+        σ'.allocations.get? id = none := by
+  obtain ⟨v, σ', h1, h2, -⟩ :=
+    wpt_engine_boundU_alloc (GF := SpikeGF) (M := spikeCtx) spikeCtx_wf
+      (fun l params cont hl => (spikeCtx_labels_none l hl).elim)
+      (fun l params cont hl => (spikeCtx_labels_none l hl).elim)
+      (fun _ _ _ _ => iprop(False))
+      (createKillProg 4 pref)
+      fmapEmpty [] prodMem₀ (∅ : SpikeHeapF SpikeCell) [⟨4, intTy⟩]
+      (createKillProg_frag 4 pref)
+      (by rw [show pot (createKillProg 4 pref) = 3 from rfl,
+          show lemDefaultFuel = 999999 + 1 from rfl]
+          omega)
+      (prodMem₀_launchCoh [⟨4, intTy⟩] prod_one_int_plan_fits)
+      (fun v σ' => v = Vunit ∧ ∃ id : Int, σ'.deadAllocations.contains id = true ∧
+        σ'.allocations.get? id = none)
+      5
+      (by
+        intro inst
+        iintro ⟨-, Hcap⟩
+        isplitr [Hcap]
+        · iapply blockSpecsT_intro fun l _ _ _ _ _ _ hl =>
+            (spikeCtx_labels_none l hl).elim
+        · rw [show createKillProg 4 pref =
+            Expr [] (Esseq (symPat [] pKSym BTy_unit)
+              (createExpr loc0 empty_annotation (.IV .Prov_none 4) intTy pref)
+              (killOpRedex loc0 empty_annotation (Static0 intTy)
+                (Pexpr [] () (PEsym pKSym)))) from rfl,
+            show (5 : Nat) = 2 + 3 from rfl]
+          iapply wpt_seq_sym
+          iapply wpt_create loc0 empty_annotation .Prov_none ⟨4, intTy⟩ []
+            pref (fmapEmpty :: []) (Nat.le_refl 2) intTy_nonatomic
+            (fun a => intTy_decIndep a _)
+          isplitl [Hcap]
+          · iexact Hcap
+          iintro %p ⟨Hpt, -, -⟩
+          iexists (Vobject (OVpointer p))
+          isplit
+          · ipureintro
+            rfl
+          rw [update_env_sym pKSym BTy_unit, show (3 : Nat) = 2 + 1 from rfl]
+          iapply wpt_kill_eval loc0 empty_annotation (Static0 intTy) _ _ rfl (pv := p)
+            (by rw [evalPexpr_sym_of_resolve _ _ _ (resolveExtern_id_of_empty rfl _)]
+                exact lookup_env_head (createKill_lookup_p symFrame_empty p) [])
+          iapply wpt_kill loc0 empty_annotation (Static0 intTy) p intTy _ _
+            (Nat.le_refl 2) rfl
+          isplitl [Hpt]
+          · iexact Hpt
+          iintro ⟨%id, %a, %hpv, Hd⟩
+          iintro %σ' %ns %κs %nt Hσ
+          icases (stateInterp_iff σ' ns κs nt).mp $$ Hσ
+            with ⟨%mm, %mb, %mk, %HG, Hmi, -, -⟩
+          ihave %hdead : ⌜σ'.deadAllocations.contains id = true ∧
+              σ'.allocations.get? id = none⌝ $$ [Hmi Hd]
+          · iapply deadObj_dead spikeCtx.tagDefs HG id a intTy $$ [$Hmi $Hd]
+          iapply fupd_mask_intro_discard Std.LawfulSet.empty_subset
+          ipureintro
+          exact ⟨rfl, id, hdead⟩)
       aids
   exact ⟨v, σ', h1, h2⟩
 

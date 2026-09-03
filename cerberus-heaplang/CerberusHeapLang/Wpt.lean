@@ -835,6 +835,22 @@ theorem wpt_load_eval {Ψ : SpikeVal → EnvStack → IProp GF}
         simpa using Option.some.inj (hv2.symm.trans hv2')
       simpa [loadExpr] using hout)
 
+/-- ACTION_EVAL for a kill's pointer operand (one tau; kill/free arc K2). -/
+theorem wpt_kill_eval {Ψ : SpikeVal → EnvStack → IProp GF}
+    (loc : CerbLocation.Loc) (ann : core_run_annotation) (kind : kill_kind)
+    (pe : generic_pexpr Unit sym) (ρ : EnvStack)
+    {pv : CerbMem.PointerValue} {k : Nat}
+    (hnv : valueFromPexpr pe = none)
+    (hv : evalPexpr M.tagDefs M.extern ρ pe = some (Vobject (OVpointer pv))) :
+    wpt M Ls k Ψ (killExpr loc ann kind pv) ρ ⊢
+      wpt M Ls (k + 1) Ψ (killOpRedex loc ann kind pe) ρ :=
+  wpt_det_step rfl rfl (fun _ => Step.kill_eval hnv hv)
+    (fun σ out hs => by
+      obtain ⟨pv', hv', hout⟩ := hs.kill_op_inv hnv
+      obtain rfl : pv = pv' := by
+        simpa using Option.some.inj (hv.symm.trans hv')
+      simpa [killExpr] using hout)
+
 /-- ACTION_EVAL for a store's operands (one tau). -/
 theorem wpt_store_eval {Ψ : SpikeVal → EnvStack → IProp GF}
     (loc : CerbLocation.Loc) (ann : core_run_annotation) (ty : ctype)
@@ -2133,6 +2149,40 @@ theorem wpt_load {Ψ : SpikeVal → EnvStack → IProp GF}
   · iintro %w ⟨%fp, %hw, Hpt'⟩
     subst hw
     iapply HΨ $$ Hpt'
+
+/-- THE DISPOSE RULE at the total stratum (kill/free arc K2):
+    `kill_atomic` lifted at the derived cost bound `2 ≤ k` — one kill
+    step plus the bare unit's delivery (`deliveryCost (.pure Vunit) =
+    1`, as `wpt_create`). -/
+theorem wpt_kill {Ψ : SpikeVal → EnvStack → IProp GF}
+    (loc : CerbLocation.Loc) (ann : core_run_annotation) (kind : kill_kind)
+    (pv : CerbMem.PointerValue) (ty : ctype) (bs : List CerbMem.AbsByte) (ρ : EnvStack)
+    {k : Nat} (hk : 2 ≤ k) (hstatic : is_dynamic kind = false) :
+    iprop(pointsToCell M.tagDefs (GF := GF) pv (.own 1) ty bs ∗
+      ((∃ (id a : Int), ⌜pv = cellPtr id a⌝ ∗ deadObj M.tagDefs id a ty) -∗
+        Ψ (SpikeVal.pure Vunit) ρ)) ⊢
+      wpt M Ls k Ψ (killExpr loc ann kind pv) ρ := by
+  iintro ⟨Hpt, HΨ⟩
+  iapply wpt_of_atomic (kill_atomic loc ann kind pv ty bs ρ hstatic) rfl rfl hk
+  isplitl [Hpt]
+  · iexact Hpt
+  · iintro %w ⟨%hw, Hd⟩
+    subst hw
+    iapply HΨ $$ Hd
+
+/-- The textbook face at the total stratum: the dead cell dropped. -/
+theorem wpt_kill_emp {Ψ : SpikeVal → EnvStack → IProp GF}
+    (loc : CerbLocation.Loc) (ann : core_run_annotation) (kind : kill_kind)
+    (pv : CerbMem.PointerValue) (ty : ctype) (bs : List CerbMem.AbsByte) (ρ : EnvStack)
+    {k : Nat} (hk : 2 ≤ k) (hstatic : is_dynamic kind = false) :
+    iprop(pointsToCell M.tagDefs (GF := GF) pv (.own 1) ty bs ∗ Ψ (SpikeVal.pure Vunit) ρ) ⊢
+      wpt M Ls k Ψ (killExpr loc ann kind pv) ρ := by
+  iintro ⟨Hpt, HΨ⟩
+  iapply wpt_kill loc ann kind pv ty bs ρ hk hstatic
+  isplitl [Hpt]
+  · iexact Hpt
+  · iintro -
+    iexact HΨ
 
 /-! ## The plain-value forms of the whole-cell small axioms (QA-1/Q12)
 
