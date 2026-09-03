@@ -143,7 +143,7 @@ trio-exact pins.
 
 ### Snapshot (commit 1)
 
-`docs/2026-09-02_mirror-completeness-signatures-pre.txt` (18,687 lines)
+`docs/2026-09-02_pr3-C-signatures-post.txt (byte-identical to the former 2026-09-02_mirror-completeness-signatures-pre.txt, deduplicated 2026-09-03)` (18,687 lines)
 → `docs/2026-09-02_mirror-completeness-signatures-post1.txt` (19,289
 lines). Diff (derived by name/statement comparison; counts derived):
 
