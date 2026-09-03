@@ -1508,3 +1508,45 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   Range audit 6d54a89..HEAD (license commit + the DECISIONS replay +
   C3) dispatched next on a fixed detached copy; merge ask follows the
   audit — no merge without an explicit yes to that ask.
+- **2026-09-03 [AGENT] C3 RANGE AUDIT 6d54a89..ebd4076: PASS, A− — MERGE CANDIDATE
+  f5fb366 (`c3-fixes`), PENDING THE OPERATOR'S SIGN-OFF.** Fresh Fable-class
+  auditor on the fixed detached copy `worktrees/audit-c3-ebd4076`; report
+  `cerberus-heaplang/docs/2026-09-03_audit-c3-range.md`. No T-/C- findings
+  above Low. Required (landed in f5fb366): R-1 the empty-table call
+  clause ENTAILS `|={⊤}=> ⌜False⌝` rather than being C2's guard IProp —
+  docstring + notes reworded, `wps_empty_call_false` added as the `wps`
+  twin of `wpt_empty_call_false`; R-2 the eight production statements are
+  in the UNCHANGED set (byte-identical snapshot entries and source at
+  both range ends) — notes reworded. Auditor-confirmed by measurement:
+  the `1 + m + k'` split (`driveU` on the smoke: `.more` at budgets 0–5,
+  `.done` at exactly 6), the §2/§4 forcing facts on the pin, the census
+  (208 normalizer-equal by the auditor's rules, remainder the record's six
+  shape classes), 47 names trio-exact, the DECISIONS gate quote line for
+  line, LICENSE byte-identical to the batteries/iris/Qq copies. Plants A
+  (`sorry` in `emptyProcSpec_fst` → `export pin FAILED … GATE-EXIT=1`),
+  B (clause precondition dropped → Wps.lean fails at the contractive
+  instance and every Löb call case), C (`SameTail` → `True` → fails at
+  the return continuation's env pop) all loud; reverts rebuilt green.
+  Hygiene: H-1 the 66 linter warnings all pre-date the range (blame) —
+  the previous entry's "attribution not established" is settled: not C3;
+  H-2 (`csAdd_lookup_two` → EnvLaws), H-3 (destructure the call clause's
+  tuple), H-4 (manifest header, generator module name, iris-lean license
+  line) → handed to C4. Orchestrator FULL gate at f5fb366 (the merge
+  candidate's Lean content; this DECISIONS append is the only later
+  change), verbatim verdict lines:
+  ```
+  == gate 1: banned proof-method grep (native_decide / bv_decide / ofReduce*) ==
+  ok: no banned proof-method references
+  == gate 2: capped build, cerberus-heaplang (elaborates its axiom audit) ==
+  CerberusHeapLang export pins: 344 trio-exact
+  CerberusHeapLang axiom sweep: every theorem bounded by the trio (3302 swept, internal details included — count informational, environment-dependent)
+  CerberusHeapLang banned-axiom sweep: sorryAx/ofReduceBool/ofReduceNat absent from all cones (5054 constants of every kind swept, internal details included — count informational, environment-dependent)
+  Build completed successfully (455 jobs).
+  ok: cerberus-heaplang build green
+  == speedbump: capability manifest (regenerate; red on a red row or drift) ==
+  ok: capability manifest regenerated, no drift
+  == speedbump: import direction (semantics → heap → rules → adequacy → clients) ==
+  ok: import direction — no core module imports an exhibit/example/production module
+  ALL GATES GREEN
+  GATE-EXIT=0
+  ```
