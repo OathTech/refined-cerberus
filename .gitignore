@@ -4,3 +4,5 @@
 .lia.cache
 .nia.cache
 /.cerberus-ws
+/.refinedc-ws
+/.opamroot

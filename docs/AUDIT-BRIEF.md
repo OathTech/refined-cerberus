@@ -42,3 +42,11 @@ sneak an unproved claim past a name-level test, or a process gap is
 at most a Note unless it hides a gap that actually exists in the
 tree — say which, by dependency tracing of the live proof terms, not
 by the existence of a check.
+
+## Known open items — read before auditing
+
+`docs/KNOWN-OPEN-ITEMS.md` is the register of everything already known,
+disclosed and owned (upstream defects with requests filed, disclosed
+statement-shape limitations, the hygiene queue, applied errata). Do NOT
+re-cite an entry as a new finding; cite it only if the entry is wrong,
+the item is worse than recorded, or a claimed mover has been missed.
