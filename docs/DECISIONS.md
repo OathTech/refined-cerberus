@@ -2346,3 +2346,37 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   fixes landed). Core-document review count for this revision: three
   fresh reviewers (3: B−; 4: B+; 5: B+; 6: A−) — the same-reviewer-delta
   ban held throughout.
+- **2026-09-04 [USER] LANE C WHILE THE PINS ARE BLOCKED; A SHARED IRIS↔CERBERUS COUPLING
+  LIBRARY AS A DESIGN QUESTION** (verbatim): "Are there useful things we could do
+  on thread C while we're waiting for Cerberus to figure out the fuel
+  issue?"; "we previously were discussing the demo as a totally separate
+  copy-paste from the refinedc build. But I'm wondering if there are
+  iris<>cerberus coupling things that should really be factored into a
+  shared library. I'm uncertain about this, it probably should be another
+  item for the design agent"; "There's also a bit of value in factoring the
+  library in that any updates are then required to keep the demo working -
+  the demo as regression suite." → two design notes for operator discussion,
+  nothing built: (1) `docs/2026-09-04_refinedc-layer-design-2.md` (Lane C,
+  read-only design agent [AGENT]; six items: what the layer builds on —
+  with a NEW FINDING that `ProcSpec := sym → List value → IProp × (value →
+  IProp)` cannot state specs whose logical variable is not determined by
+  the argument values, so RefinedC's `fn_params` shape is the layer's first
+  judgment change; masks — none for the first four slices, at the first
+  invariant-backed type; function pointers — `Eccall` is a scheduler-round
+  path, so the slice lifts adequacy to a `driver2` induction and makes the
+  outer fuel do work, closed forms in the outcome-list shape from birth;
+  annotations — verify LOCATED Core directly, specs as Lean values keyed by
+  symbol, Cerberus already carries attributes to Core, no cerberus-lean
+  request; the RefinedC slice — judgment map, type set, Lithium's algorithm
+  as a Lean `MetaM` executor over `AtomicStep` leaves, four slices L1–L4
+  with acceptance tests; the shared library — YES for the fragment-
+  independent coupling (`Heap`/`MemWF`/bundles, `EnvLaws`, `MachineCtx`/
+  `Ctl`/`Config`, the ND collapse, the cold start; ≈8k lines) after the
+  demo's v1 tag, with "pristine" meaning always-green-and-re-audited; copy
+  the mirror/fragment and the statement logic per the standing ruling;
+  nine open questions in its §7); (2) `docs/2026-09-04_fuel-restatement-design.md`
+  (the orchestrator [AGENT]: F2's inventory, target statement shapes — one
+  hypothesis variable against the ambient, shipped corollaries at ⟨10^8⟩
+  discharged by the closed forms, closed partial forms over both loops
+  provided the evaluators' exhaustion is a kill at the pin — slice plan,
+  risks; to be sequenced with the library extraction, not across it).
