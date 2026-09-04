@@ -2443,3 +2443,42 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   each construct at the pin, the sequential driver's `unseq`/`nd`
   behaviour, the evaluator's std.core unfolding, loaded-value shapes; slice
   sizes) for the operator to see before any build is briefed.
+- **2026-09-04 [AGENT] E0 LANDED (`dialect-e0` 2e561cc): the emitted-Core dialect
+  design-measurement note `docs/2026-09-04_emitted-core-dialect-design.md` +
+  the corpus `docs/corpus-e0/` (ten libc-free C programs, their raw emitted
+  Core verbatim — the arc's acceptance material).** Findings: the referent
+  is RAW elaborated Core (no sequentialise/rewrite pass in the pipeline);
+  `unseq` is deterministic in the sequential driver for reads (last
+  component first; 9/10 programs have ONE execution; factorial forks to 16
+  because a load beside a `ccall` is not advanceable); the arithmetic
+  wrappers are AST constructors (`PEconv_int`, …), only four genuine
+  std.core calls, unfolding through `file.stdlib`, which the demo's file
+  object leaves EMPTY; two load-bearing constructs the trigger note missed
+  — the negative-action protocol behind every assignment (60 occurrences,
+  ~8 rounds, draws fresh symbols from the RUN STATE) and `seq_rmw` +
+  `PtrValidForDeref`; `Eccall` confirmed a scheduler round and a C call is
+  a protocol (function-value resolution, `params_length/nth`, one argument
+  CELL per parameter, a kill pair); `nd` never fires for specified scalars
+  (OUT-OF-SCOPE row); the struct program is blocked by KOI B4, not the
+  dialect. Slice order (measured): E1 annotations+bound+constants (L) → E2
+  loaded values/patterns (M–L) → E3 impl arithmetic + std.core + the file
+  object (M–L) → E4 `unseq` (M) → t1 certifies → E5 negative actions +
+  `seq_rmw` (L) → E6 `Eccall` protocol + `PtrValidForDeref` + scheduler
+  lift (L) → seven programs certify → E7 outcome-list closed form (M);
+  ≈ 8–10 worker-weeks serial.
+- **2026-09-04 [USER] E0's TEN QUESTIONS RATIFIED** ("Yeah I agree with this plan"):
+  (1) referent = raw Core; (2) acceptance = t1 after E1–E4 as the
+  milestone, the corpus minus the struct program at arc end; (3) the
+  pipeline's Core enters a statement as a HAND-TRANSCRIBED TERM checked by
+  an EXECUTABLE EQUALITY speedbump against the oracle's emitted Core (the
+  operator: "we look at the standard form for such constructs, and then
+  basically build the program by hand? This is fine, and makes sense");
+  the elaborator-in-the-statement form is the named target, not done
+  (grind risk); (4) both live-state changes (`current_loc`, run-state
+  supplies) designed in E1's shape; (5) E5 approved as a slice; (6) t7
+  stays outside E as KOI B4's acceptance program; (7) the sixteen authored
+  exhibits stay as the regression suite until their emitted twins
+  certify; (8) the substitution-size lemma carried locally, noted
+  upstream; (9) the `mk_conv_int` vs std.core `conv_int` divergence — a
+  note to the cerberus-lean team; (10) COMMIT TO E1–E4 NOW, reassess
+  velocity at the t1 milestone. E1 is briefed after this lands.
