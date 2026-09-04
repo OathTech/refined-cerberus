@@ -117,8 +117,8 @@ kill of a region, `free(NULL)`, the zero-cost `alloc`, the union-member
 pointer, the read-only-cell load at the statement level, the zero-size/
 atomic/non-inert `create` types, the colliding `free`, the function-vs-
 concrete `PtrEq`) or OUT-OF-SCOPE (excluded by the fragment/mirror
-boundary): 23 constructors, 47 rows, 27 RULE, 3 RULE-TOTAL-UNDEMONSTRATED,
-12 NO-RULE, 5 OUT-OF-SCOPE at this writing. Green means exactly what the
+boundary): 23 constructors, 50 rows, 27 RULE, 3 RULE-TOTAL-UNDEMONSTRATED,
+15 NO-RULE, 5 OUT-OF-SCOPE at this writing. Green means exactly what the
 manifest header says — every constructor classified, every named theorem a
 theorem, every RULE consumed in both judgments — and NOT that the variant
 table is exhaustive over the engine's success shapes or that a NO-RULE
@@ -820,9 +820,8 @@ claim point by `scripts/boundary_check.sh` (the full gate's client-boundary
 speedbump: the modules classified `positive-client`/`declared-smoke`/
 `example-support` in `scripts/module_classes.tsv` must not mention the
 internals outside comments; per-module allowances carry their reason in
-the TSV — at this writing the dead-object readout helpers of
-`DisposeExhibit`/`MallocListExhibit`, being relocated, and `progA_wpt` in
-`Exhibit`), and at the proof-term level on demand by
+the TSV — one at this writing: `progA_wpt` in `Exhibit`,
+KNOWN-OPEN-ITEMS C8), and at the proof-term level on demand by
 `scripts/parametric_inventory.lean` (fail-closed on its configuration since
 2026-09-04; not a gate — ARCHITECTURE §7).
 

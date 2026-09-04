@@ -52,8 +52,14 @@ strip() {
 }
 
 fail=0; checked=0; hits_total=0
-while IFS=$'\t' read -r module cls allow note; do
+while IFS=$'\t' read -r module cls allow note || [[ -n "$module" ]]; do
   [[ -z "$module" || "$module" == \#* ]] && continue
+  # C-1 of the AR5 range audit: a row with fewer than four cells is MALFORMED
+  # and red — a missing allow cell must never read as an (empty) allowance.
+  if [[ -z "$cls" || -z "$allow" || -z "$note" ]]; then
+    echo "boundary FAIL: $tsv: malformed row for module $module (need 4 tab-separated cells: module, class, internals-allow or -, note)" >&2
+    fail=1; continue
+  fi
   case "$cls" in
     positive-client|declared-smoke|example-support) ;;
     core|production-core|audit|semantic-test|engine-mirror-test|production-wrapper|negative-test) continue ;;

@@ -68,10 +68,16 @@ if [[ $fast -eq 0 ]]; then
   # missing core file, or an empty class, is red too).
   tsv=cerberus-heaplang/scripts/module_classes.tsv
   files=()
-  while IFS=$'\t' read -r module cls _allow _note; do
-    [[ -z "$module" || "$module" == \#* || "$cls" != core ]] && continue
+  tsv_bad=0
+  while IFS=$'\t' read -r module cls _allow _note || [[ -n "$module" ]]; do
+    [[ -z "$module" || "$module" == \#* ]] && continue
+    if [[ -z "$cls" || -z "$_allow" || -z "$_note" ]]; then
+      echo "FAIL (speedbump): $tsv: malformed row for module $module (need 4 cells)" >&2; tsv_bad=1; continue
+    fi
+    [[ "$cls" != core ]] && continue
     files+=("cerberus-heaplang/${module//./\/}.lean")
   done < "$tsv"
+  [[ $tsv_bad -eq 1 ]] && fail=1
   if [[ ${#files[@]} -eq 0 ]] || ! ls "${files[@]}" > /dev/null || \
       grep -nE '^import CerberusHeapLang\.([A-Za-z]*Exhibit|Examples\.|Prod)' "${files[@]}"; then
     echo "FAIL (speedbump): a core module is missing, the core class is empty, or a core module imports an exhibit/example/production module (above)" >&2; fail=1

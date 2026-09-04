@@ -594,8 +594,8 @@ Finding 1 and the instrument half of Finding 2; record
   exists), NO-RULE (admitted by the fragment and the engine, no rule — the
   reason and the record that decided it) and OUT-OF-SCOPE (excluded by the
   fragment/mirror boundary, with the record). At the landing: 23
-  constructors, 47 rows — 27 RULE, 3 RULE-TOTAL-UNDEMONSTRATED (`wpt_load`,
-  `wpt_case_value`, `wpt_wseq`), 0 PARTIAL-ONLY, 12 NO-RULE (the locking
+  constructors, 50 rows — 27 RULE, 3 RULE-TOTAL-UNDEMONSTRATED (`wpt_load`,
+  `wpt_case_value`, `wpt_wseq`), 0 PARTIAL-ONLY, 15 NO-RULE (the locking
   store; union-member pointers at load and store; the read-only-cell load
   at the statement level; zero-size, atomic and non-inert `create` types;
   the static kill of a region; `free(NULL)`; `free` of a created object at
@@ -643,13 +643,13 @@ Finding 1 and the instrument half of Finding 2; record
   `loop_step_frag*`, `engine_step_matchU`, `CerberusRound`). Text-based:
   it catches honest drift, not an adversary (the proof-term measurement is
   the inventory). Per-module allowances live in the TSV with their reason
-  and print as ALLOWLISTED; at the landing three: `DisposeExhibit` and
-  `MallocListExhibit` (the dead-object readout helpers over
-  `CohG`/`metaInterp`, being relocated into Adequacy/API by the
-  concurrent `ar5-readout` slice) and `Exhibit` (`progA_wpt` opens
-  `stateInterp_iff` — found by the check; consumerless since F1,
-  KNOWN-OPEN-ITEMS C3). An allowance with no hits left prints a warning to
-  remove it, so the check is green on either ordering of the two slices.
+  and print as ALLOWLISTED; ONE at the combined landing: `Exhibit`
+  (`progA_wpt` opens `stateInterp_iff` — found by the check; consumerless
+  since F1, KNOWN-OPEN-ITEMS C8). The two the manifest slice carried while
+  `ar5-readout` was in flight (`DisposeExhibit`/`MallocListExhibit`, the
+  readout helpers since relocated into Adequacy/API) were dropped when the
+  slices combined. An allowance with no hits left prints a warning to
+  remove it; a malformed TSV row is red (AR5 range audit C-1).
 - **The claim matrix** (`docs/CLAIMS.md`, hand-written prose stated as
   such): for every headline claim its exported theorem(s), kind
   (partial/total/semantic/projected), demonstrating exhibits, supported
@@ -662,7 +662,7 @@ Finding 1 and the instrument half of Finding 2; record
   measurement without a verdict is not a check; adding a full-import Lean
   run per claim point for it would be gate cruft. What changed: its
   configuration is fail-closed (a missing export seed or an unclassified
-  module aborts the run; the ten stale seeds of the F1 renaming are
+  module aborts the run; the six stale seeds of the F1 renaming are
   refreshed — `engine_adequacy(_alloc)`, `semantic_triple_sound`,
   `semantic_frame`, the driver-lane theorems `wpt_driver_done(_alloc)`/
   `wpt_driver_done_procs`, the pipeline forms) and its client list is the
