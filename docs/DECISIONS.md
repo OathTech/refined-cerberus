@@ -2380,3 +2380,22 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   discharged by the closed forms, closed partial forms over both loops
   provided the evaluators' exhaustion is a kill at the pin — slice plan,
   risks; to be sequenced with the library extraction, not across it).
+- **2026-09-04 [USER] THE OBJECT IS CORE EMITTED FROM C; AUTHORED CORE IS SCAFFOLDING**
+  (verbatim): "our aim here is to build a logic over Core emitted as an
+  output from C code. Authored-core is just a confection which we do to
+  make the build possible and to keep us sane. So we should lift this
+  restriction whenever we have derisked enough to do so." Context: the
+  Lane C design note's item 4 (verify LOCATED Core directly — annotations
+  admitted into the fragment as inert rounds plus the location update the
+  control state already carries; erasure rejected because exact
+  preservation fails on location fields and a stated erasure would put a
+  hand-written function in an export; no cerberus-lean request needed).
+  [AGENT] recommendation, pending the operator: since the mirror/fragment
+  layer is the architecture the layer's copy inherits, lift the
+  restriction IN THE DEMO as the last pre-v1 slice (after the three
+  pin-blocked slices), so that the demo's version one is a logic over
+  emitted Core and the copy is seeded from it; the demo's "feature set
+  closed" ruling is about logic features — this is the referent's syntax,
+  not a feature. The acceptance test: a C program elaborated by the
+  pinned Cerberus pipeline, unmodified, certified end-to-end through the
+  production lane.
