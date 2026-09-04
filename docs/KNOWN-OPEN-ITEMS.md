@@ -1,7 +1,7 @@
 # Known open items — the register auditors read FIRST
 
-State: main `e34b30b` (2026-09-03, after the calls arc C1–C4 and the
-fuel-lane restatement F1). Maintained by the orchestrator; every entry
+State: candidate `ar5-manifest` head (2026-09-04, after the calls arc,
+the fuel-lane restatement F1 and the external-audit response AR5). Maintained by the orchestrator; every entry
 points at the record that owns it. PURPOSE: an auditor should not
 re-cite an item listed here as a new finding. Cite it ONLY if (a) the
 entry is factually wrong, (b) the item is worse than recorded, or (c) a
@@ -34,6 +34,10 @@ or a ruled disposition. Provenance tags as in `docs/DECISIONS.md`.
 | B8 | **Not in the fragment, by design**: mutual recursion (rule admits it, no exhibit), function pointers (`Eccall`, a scheduler path), a two-`save`-label exhibit (the law landed at C4, exhibit absent), concurrency, external C calls. | ARCHITECTURE §7 "still open from the arc" | Scope rulings; not defects. |
 | B9 | **Deferred parametric-semantics interfaces**: rules are proved directly against `Step` and the memory state. | ARCHITECTURE §7; `docs/2026-09-02_parametric-semantics-spike.md` (DEFERRED banner) | [USER] deferred, "possibly forever". |
 | B10 | **The referent rule's interim clause** ("until it lands the affected exports are labelled PROVISIONAL") remains in `CLAUDE.md` as RULE text; there are ZERO PROVISIONAL labels on any surface after F1. | F1 audit §6 | Not a finding. |
+| B11 | **Mask generalisation (external audit F3)**: `wps`/`wpt` hard-code the top invariant mask (21 + 26 sites); mask-polymorphic composition is not available. | `docs/2026-09-04_reynolds-ohearn-separation-logic-audit.md` F3; DECISIONS 2026-09-04 | DEFERRED pending the operator; design-level slice after the fuel restatement, with top-mask aliases. |
+| B12 | **Two engine-round bridges** (`engine_step_matchU` for the mirror's certification; `loop_step_frag` for both adequacy lanes) — a documented design (ARCHITECTURE §2), duplication/drift risk noted by the external audit. | audit "Note"; ARCHITECTURE §2 | By design; consolidation not scheduled. |
+| B13 | **Three total rules proved but undemonstrated** (`wpt_load`, `wpt_case_value`, `wpt_wseq`): RULE-TOTAL-UNDEMONSTRATED rows; the manifest turns red if a consumer appears without reclassification. | `docs/CAPABILITY_MANIFEST.md`; AR5-manifest record §3 | Consumers welcome; hygiene. |
+| B14 | **Seven NO-RULE variants classified by [AGENT]** from the engine's admitted cases (union-member-pointer store/load, read-only-cell load face, zero-size/atomic/non-inert `create` types, function-vs-concrete `PtrEq`) — reviewer confirmation requested. | manifest rows; AR5-manifest record §1–§2 | Open until a reviewer confirms or re-classifies. |
 
 ## C. Hygiene queue (no trust or correctness content)
 
@@ -46,9 +50,13 @@ or a ruled disposition. Provenance tags as in `docs/DECISIONS.md`.
 | C5 | 66 linter warnings in `CerberusHeapLang/*` (unused simp arguments / unused variables; Potential.lean the bulk); ALL pre-date C3 (blame-verified); zero added since. | C3 audit H-1; DECISIONS | Queued; low value. |
 | C6 | The manifest generator hard-codes the smoke module list (`clientSmokes`). | C3 audit H-4; C4 (H-4 done for the header) | Cosmetic. |
 | C7 | The cursor ghost heap as a proof device (kill/free record's item). | `docs/2026-09-03_kill-free-arc-record.md`; C4 notes §12 | Untouched; design note only. |
+| C8 | `progA_wpt` (Exhibit.lean) opens `stateInterp_iff` directly — the one boundary-check ALLOWLISTED entry; consumerless since F1 (C3). | boundary check output; AR5-manifest record | Delete or rewrite; then drop the allowance. |
+| C9 | `API.lean:19` still describes the parametricity inventory as the boundary instrument; the gate twin is now `scripts/boundary_check.sh`. | AR5-manifest record §8 | One-sentence pointer. |
+| C10 | `deadObj_dead`/`deadRegion_dead` reclassified below the API line in prose only (statements unchanged). | AR5-readout record §6 | Confirm at the next API pass. |
 
 ## D. Record errata already applied (append-only register — do not re-report)
 
+- DECISIONS 2026-09-04 external-audit entry: "10 stale seeds" → 6 (worker probe).
 - DECISIONS "28 commits past the pin" → 34 (F1 audit H-1); "ONE CONTENT
   LOSS" → the B1 loss class (F1 audit R-2); "PROVISIONAL … 1 files" → the
   CLAUDE.md rule sentence (B10); "two linter warnings" → 66 pre-existing
@@ -73,6 +81,7 @@ or a ruled disposition. Provenance tags as in `docs/DECISIONS.md`.
   `.opamroot/` (a sandbox opam root, ~150 MB). Both are ignored as of
   this commit; the RefinedC layer lives on branch `refinedc/dev`.
 - Gates: `scripts/test_unit.sh` (FULL) / `--fast`; every Lean build
-  through `scripts/capped`. Expected FULL tail at `e34b30b`: 373 pins
-  trio-exact, `ALL GATES GREEN`, `GATE-EXIT=0` (DECISIONS F1-audit entry,
-  verbatim).
+  through `scripts/capped`. Expected FULL tail at the AR5 candidate: 376 pins trio-exact, manifest
+  no drift, import direction ok, boundary check exit 0 with ONE
+  ALLOWLISTED line (`progA_wpt`, C8), `ALL GATES GREEN`, `GATE-EXIT=0`
+  (DECISIONS 2026-09-04 AR5-manifest entry, verbatim).

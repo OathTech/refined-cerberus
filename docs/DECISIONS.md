@@ -1860,3 +1860,119 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   quantifiable fuel position, one kernel-transparent exhaustion outcome,
   fuel monotonicity; interface defect, not a mirror discrepancy). For the
   operator to relay.
+- **2026-09-04 [USER] EXTERNAL AUDIT LANDED ("some reasonable findings to work on
+  while waiting for cerberus-lean")**: `docs/2026-09-04_reynolds-ohearn-separation-logic-audit.md`
+  (committed verbatim, `cmp`-identical; a source-level audit — its capped
+  build was blocked by the sandbox, so its build evidence is this register's
+  recorded gates). Verdict quoted: "A credible and unusually careful research
+  implementation whose supported fragment looks logically sound, but whose
+  public coverage and abstraction claims are currently stronger than its
+  machinery justifies." No soundness/vacuity finding. [AGENT] premises
+  MEASURED before remedy (2026-09-04): F1 High — `declaredNoRule` was
+  `| _ => none`; rules variant-restricted (non-locking store, static
+  object kill, positive-size/cost alloc, free over an owned region); rows
+  per constructor; prose "covering rule"/"0 red" — CONFIRMED. F2 Medium —
+  `DeadAt` exhibit-local; Dispose/MallocList readout helpers over
+  `CohG`/`metaInterp`; `parametric_inventory` not in the gate, 6 of 18
+  clients, stale seeds rendered `(MISSING)` (fail-open, a defect under our
+  rules regardless of the audit) — CONFIRMED; the orchestrator's count of
+  10 stale seeds was WRONG: 6 (worker probe; 4 names exist). F3 Medium —
+  `⊤` hard-coded in `wps`/`wpt` (21 + 26 sites) — CONFIRMED; DEFERRED as a
+  design-level slice to schedule with the operator after the fuel
+  restatement (same files, orthogonal axis; top-mask aliases would keep
+  the classic interface) — PENDING THE OPERATOR. Note 4 (two engine-round
+  bridges) — a documented design choice (ARCHITECTURE §2); consolidation
+  not scheduled; registered. Dispositions F1/F2 → the two AR5 slices below.
+- **2026-09-04 [AGENT] AR5-READOUT LANDED (`ar5-readout` a40ba88 on main 5d08237):
+  the client boundary sealed.** Record `cerberus-heaplang/docs/2026-09-04_ar5-readout-notes.md`;
+  post snapshot `docs/2026-09-04_ar5-readout-signatures-post.txt`. Public
+  (Adequacy.lean, Consequences): `deadObj_consequence`, `deadRegion_consequence`,
+  `bigSepL_consequence` (the generic `[∗list]` fold); `DeadAt` moved public
+  with identical name/type/body; exhibit helpers `deadObj_dead_keep`/
+  `deadNodes_dead`/`deadRegions_dead` deleted. Census (derived): ADDED 3 /
+  REMOVED 3 / CHANGED 0 (2968 unchanged incl. both production statements).
+  Pins 373 → 376. Boundary grep: 15 code hits in positive exhibits → 0;
+  remaining code hits are the mirror-coverage semantic tests and the
+  divergence negative test, by design. [AGENT]: `deadObj_dead`/
+  `deadRegion_dead` reclassified below the API line in prose only (flag for
+  the range auditor); a first-draft heartbeat timeout fixed structurally, no
+  option bump. Orchestrator FULL gate at a40ba88 (40G cap), verbatim:
+  ```
+  == gate 1: banned proof-method grep (native_decide / bv_decide / ofReduce*) ==
+  ok: no banned proof-method references
+  == gate 2: capped build, cerberus-heaplang (elaborates its axiom audit) ==
+  CerberusHeapLang export pins: 376 trio-exact
+  CerberusHeapLang axiom sweep: every theorem bounded by the trio (3396 swept, internal details included — count informational, environment-dependent)
+  CerberusHeapLang banned-axiom sweep: sorryAx/ofReduceBool/ofReduceNat absent from all cones (5153 constants of every kind swept, internal details included — count informational, environment-dependent)
+  Build completed successfully (456 jobs).
+  ok: cerberus-heaplang build green
+  == speedbump: capability manifest (regenerate; red on a red row or drift) ==
+  ok: capability manifest regenerated, no drift
+  == speedbump: import direction (semantics → heap → rules → adequacy → clients) ==
+  ok: import direction — no core module imports an exhibit/example/production module
+  ALL GATES GREEN
+  GATE-EXIT=0
+  ```
+- **2026-09-04 [AGENT] AR5-MANIFEST LANDED and COMBINED (`ar5-manifest` rebased onto
+  `ar5-readout`; combined head 5e39386, seven commits on main 5d08237): truthful
+  capability reporting.** Record `cerberus-heaplang/docs/2026-09-04_ar5-manifest-notes.md`.
+  The RULE-USE AND CLASSIFICATION manifest: 23 constructors → 47 variant
+  rows — 27 RULE (partial + total, both consumed), 3 RULE-TOTAL-UNDEMONSTRATED
+  (`wpt_load`, `wpt_case_value`, `wpt_wseq`: proved, no consumer; red if a
+  consumer appears), 12 NO-RULE (the four the audit named + 7 found by
+  reading the engine against the rules' hypotheses: union-member-pointer
+  store/load, read-only-cell load face, zero-size/atomic/non-inert `create`
+  types, function-vs-concrete `PtrEq` — [AGENT], reviewer confirmation
+  requested), 5 OUT-OF-SCOPE; what green establishes stated exactly in the
+  manifest header; the "0 red = coverage" reading removed from every
+  surface. ONE module classification `cerberus-heaplang/scripts/module_classes.tsv`
+  consumed by the manifest, the inventory and the new `scripts/boundary_check.sh`
+  (gate speedbump: positive clients mention no logic internals; plants:
+  injected `CohG` → red). Inventory FAIL-CLOSED (missing seed = hard fail),
+  on demand; consumer set 18 → 16 ([AGENT], no rule lost a consumer).
+  `docs/CLAIMS.md` (claim matrix). Zero theorem/definition changes in this
+  slice. Combination: rebase clean; the two Dispose/MallocList allowances
+  dropped (boundary check: 0 hits); the FIRST combined gate went RED on the
+  manifest-drift speedbump (the allow cells) — correct behaviour;
+  regenerated deliberately in its own commit (5e39386). Orchestrator FULL
+  gate at 5e39386 (64G cap), verbatim (the one ALLOWLISTED line is
+  `progA_wpt`, consumerless since F1, KOI C3):
+  ```
+  == gate 1: banned proof-method grep (native_decide / bv_decide / ofReduce*) ==
+  ok: no banned proof-method references
+  == gate 2: capped build, cerberus-heaplang (elaborates its axiom audit) ==
+  CerberusHeapLang export pins: 376 trio-exact
+  CerberusHeapLang axiom sweep: every theorem bounded by the trio (3396 swept, internal details included — count informational, environment-dependent)
+  CerberusHeapLang banned-axiom sweep: sorryAx/ofReduceBool/ofReduceNat absent from all cones (5153 constants of every kind swept, internal details included — count informational, environment-depend
+  Build completed successfully (456 jobs).
+  ok: cerberus-heaplang build green
+  == speedbump: rule-use and classification manifest (regenerate; red on a red row or drift) ==
+  ok: capability manifest regenerated, no drift
+  == speedbump: import direction (semantics → heap → rules → adequacy → clients) ==
+  ok: import direction — 15 core modules, none imports an exhibit/example/production module
+  == speedbump: client boundary (positive clients mention no logic internals; scripts/boundary_check.sh) ==
+  ALLOWLISTED: Exhibit — 1 internals mention(s): `progA_wpt` (Exhibit.lean, the raw-WP readout of exhibit (a) at the total judgment) opens `stateInterp_iff` directly — found by this check at ar5-m
+  ok:   LoopExhibit — 0 internals mentions
+  ok:   FibExhibit — 0 internals mentions
+  ok:   ArrayExhibit — 0 internals mentions
+  ok:   ListRevExhibit — 0 internals mentions
+  ok:   TreeRotExhibit — 0 internals mentions
+  ok:   CaseExhibit — 0 internals mentions
+  ok:   WseqExhibit — 0 internals mentions
+  ok:   StructExhibit — 0 internals mentions
+  ok:   AllocExhibit — 0 internals mentions
+  ok:   DisposeExhibit — 0 internals mentions
+  ok:   RegionLoopExhibit — 0 internals mentions
+  ok:   MallocListExhibit — 0 internals mentions
+  ok:   FibRecExhibit — 0 internals mentions
+  ok:   Examples.CallSmoke — 0 internals mentions
+  ok:   Examples.ReadinessSmoke — 0 internals mentions
+  ok:   Examples.Layout — 0 internals mentions
+  BOUNDARY: 17 modules checked, 1 internals mention(s) in total, exit=0
+  ok: client boundary — no unallowlisted internals mention
+  ALL GATES GREEN
+  GATE-EXIT=0
+  ```
+  KNOWN-OPEN-ITEMS updated in the same commit. Range audit 5d08237..HEAD
+  dispatched next on a fixed detached copy; merge ask follows — no merge
+  without an explicit yes to it.
