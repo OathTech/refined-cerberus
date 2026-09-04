@@ -2229,3 +2229,81 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   mask sentences (§1, §6) to the ruling in this commit. Re-review
   dispatched next; the range audit of the whole branch and ONE merge ask
   follow it.
+- **2026-09-04 [AGENT] H1 RANGE AUDIT e242342..cd68c46: PASS WITH FIXES REQUIRED, A−.**
+  Fresh Fable-class auditor on the fixed detached copy `worktrees/audit-h1-cd68c46`;
+  report `cerberus-heaplang/docs/2026-09-04_audit-h1-range.md` (committed in
+  dd7b852). No logical or coverage gap; every Lean claim of the range
+  reproduced (census 2971 → 2966 → 3081 with the listed sets; `wpt_call_eq`
+  mechanically equal to its old text under exactly four substitutions;
+  projection sites 76 → 0; `progA_wpt` statement unchanged and a genuine
+  `wpt_load` consumer, `wpt_store`'s sole consumer before — the worker's
+  premise verified; 28/28 affected pins trio-exact; registration order
+  exactly one insertion order by `rfl`; `hn : 0 ≤ n` needed — the program
+  returns 1 at n = −1; boundary plant → red, reverted). Fixes landed:
+  H-1 the unused `1 ≤ n` hypothesis dropped from `eo_parity_even/odd` and
+  four call sites (dd7b852; two lemma statements change by that binder,
+  unpinned) — package linter warnings 64 → 62; R-1 the consumerless count
+  is THIRTEEN not ten (KOI C14, record erratum); R-2 the `wps_sound_empty`
+  consumer list (fixed in the ARCHITECTURE second pass, reviewer 4's T-2).
+  Notes → register: Note-1 "402 pins" = list length, 400 distinct (KOI
+  C15); Note-2 the two-label and even/odd total budgets carry disclosed
+  slack (KOI B6); Note-3 DECISIONS entry 63 non-chronological
+  (pre-existing; left as written, register rule). Orchestrator FULL gate at
+  dd7b852 (64G cap), verbatim (selection rule as stated in the AR5 entry):
+  ```
+  == gate 1: banned proof-method grep (native_decide / bv_decide / ofReduce*) ==
+  ok: no banned proof-method references
+  == gate 2: capped build, cerberus-heaplang (elaborates its axiom audit) ==
+  info: CerberusHeapLang/Audit.lean:603:0: CerberusHeapLang export pins: 402 trio-exact
+  info: CerberusHeapLang/Audit.lean:603:0: CerberusHeapLang axiom sweep: every theorem bounded by the trio (3551 swept, internal details included — count informational, environment-dependent)
+  info: CerberusHeapLang/Audit.lean:603:0: CerberusHeapLang banned-axiom sweep: sorryAx/ofReduceBool/ofReduceNat absent from all cones (5353 constants of every kind swept, internal details included — count informational, environment-dependent)
+  Build completed successfully (458 jobs).
+  ok: cerberus-heaplang build green
+  == speedbump: rule-use and classification manifest (regenerate; red on a red row or drift) ==
+  ok: capability manifest regenerated, no drift
+  == speedbump: import direction (semantics → heap → rules → adequacy → clients) ==
+  ok: import direction — 15 core modules, none imports an exhibit/example/production module
+  == speedbump: client boundary (positive clients mention no logic internals; scripts/boundary_check.sh) ==
+  ok:   Exhibit — 0 internals mentions
+  ok:   LoopExhibit — 0 internals mentions
+  ok:   FibExhibit — 0 internals mentions
+  ok:   ArrayExhibit — 0 internals mentions
+  ok:   ListRevExhibit — 0 internals mentions
+  ok:   TreeRotExhibit — 0 internals mentions
+  ok:   CaseExhibit — 0 internals mentions
+  ok:   WseqExhibit — 0 internals mentions
+  ok:   StructExhibit — 0 internals mentions
+  ok:   AllocExhibit — 0 internals mentions
+  ok:   DisposeExhibit — 0 internals mentions
+  ok:   RegionLoopExhibit — 0 internals mentions
+  ok:   MallocListExhibit — 0 internals mentions
+  ok:   FibRecExhibit — 0 internals mentions
+  ok:   TwoLabelExhibit — 0 internals mentions
+  ok:   EvenOddExhibit — 0 internals mentions
+  ok:   Examples.CallSmoke — 0 internals mentions
+  ok:   Examples.ReadinessSmoke — 0 internals mentions
+  ok:   Examples.Layout — 0 internals mentions
+  BOUNDARY: 19 modules checked, 0 internals mention(s) in total, exit=0
+  ok: client boundary — no unallowlisted internals mention
+  ALL GATES GREEN
+  GATE-EXIT=0
+  ```
+- **2026-09-04 [AGENT] ARCHITECTURE.md REVIEW 4 (at cd68c46): B+ — FAIL, near pass;
+  SECOND AUTHOR PASS landed (1856685 review copied; b61a9c0 the edits +
+  stale pointers in CLAIMS.md/README.md; 35c9ce3 notes).** Reviewer 4
+  verified 60+ cites and found no gap in what is proved; 14 local findings.
+  Its top finding P-1 ("the [USER] two-loop quote is not in the register")
+  is DISPUTED WITH EVIDENCE: the remark is verbatim at DECISIONS:1753–1756;
+  the reviewer matched the elided re-quote at :1823 — the quote stays, the
+  register cite was added beside it. T-1 (the raw-WP layer of Rules.lean is
+  mask-generic, not only `AtomicStep`/`wp_of_atomic`), T-2 (nine
+  `wps_sound_empty` consumers), T-3 (the package-definitions-in-statements
+  table re-derived from all nine texts: `ivVal`, `ptrVal`, `SeedChain`,
+  `CellMap`, `Sat`, `sevenVal`/`sevenBytes`/`intTy`), D-1 (`hbsz`
+  explained), D-2, T-4–T-7, S-1, S-2 (CLAIMS.md:44, README.md:835
+  repointed; KOI B7/B9/B12 repointed by the orchestrator in this commit),
+  C-2 fixed. C-1 (length): every listed sentence split — 298 prose
+  sentences, ZERO over 4 lines (author's checker); the ~630-line target NOT
+  reached (731) — [AGENT] deviation with arithmetic in the notes: the
+  required additions offset the cuts. Reviewer 5 (fresh) dispatched at
+  dd7b852 to judge that and re-mark; the merge ask waits for an A.
