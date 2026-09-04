@@ -41,6 +41,6 @@ with no logic in its statement; **rule** — a proof rule of a judgment.
 
 ## Not claimed (so no row)
 
-- Concurrency, function pointers, external C calls, located Core (every C-elaborated program): outside `Frag` (ARCHITECTURE §7, KOI B8; Soundness.lean `Frag` header).
+- Concurrency, function pointers, external C calls, located Core (every C-elaborated program): outside `Frag` (ARCHITECTURE §6, KOI B8; Soundness.lean `Frag` header).
 - Mask-polymorphic judgments (the audit's Finding 3): `wps`/`wpt` are top-mask; not a claim of this package.
 - Exhaustiveness of the manifest's variant table over the engine's success shapes: the table is a reviewed reading of the engine, not a theorem (CAPABILITY_MANIFEST.md header).

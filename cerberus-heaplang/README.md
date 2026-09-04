@@ -832,7 +832,7 @@ internals outside comments; per-module allowances carry their reason in
 the TSV — NONE at this writing: the last, `progA_wpt` in `Exhibit`, was
 rewritten over the public readout 2026-09-04, KNOWN-OPEN-ITEMS C8), and at the proof-term level on demand by
 `scripts/parametric_inventory.lean` (fail-closed on its configuration since
-2026-09-04; not a gate — ARCHITECTURE §7).
+2026-09-04; not a gate — ARCHITECTURE §5).
 
 ## How to build and verify
 
