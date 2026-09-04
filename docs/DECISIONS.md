@@ -2109,3 +2109,21 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   ALL GATES GREEN
   GATE-EXIT=0
   ```
+- **2026-09-04 [USER] "take a look at the note from the cerberus-lean team"** (the
+  lem-lean fuel-parameter design, R1, asking for the consumer review
+  before either merge) → `docs/2026-09-04_review-of-fuel-parameter-design.md`.
+  [AGENT] verdict: ACCEPT the mechanism (one ambient `LemFuel` class,
+  full-ambient per call — decisive for our per-expression bounds —,
+  generated `_zero` lemmas, data-measure recursion replacing fuel, the
+  no-numeral gate); ONE requirement to be in scope for the cerberus half:
+  every fuel'd function reachable from `drive` must be (A) structurally
+  recursive on a data measure, (B) exhausting into an ABSORBING typed
+  outcome the monad propagates, or (C) gate-checked unreachable — an
+  opaque-default exhaustion on the execution path makes our `∀ fuel`
+  statements FALSE at small fuels and monotonicity unprovable (the
+  record's own §5 analysis; its TODO row 13 should ride with the half);
+  D2 recommendation (i): structural equality for `Eq ctype`/`Eq
+  core_base_type`/`Eq mem_value` (`ctypeEqual` is on our path). Our
+  restatement sized (§5): CHANGED ≈ everything by one binder, ~60
+  hypotheses and the production `hfuel`s move to `LemFuel.fuel`, A2
+  closes; one slice after the LemLib re-pin.
