@@ -1,0 +1,27 @@
+proc main (): eff loaded integer :=
+  let strong x: pointer = create(Ivalignof('signed int'), 'signed int') in
+  let strong y: pointer = create(Ivalignof('signed int'), 'signed int') in
+  store('signed int', x, conv_loaded_int('signed int', Specified(3))) ;
+  let strong a_509: loaded integer =
+    bound(
+      let weak a_510: loaded integer = load('signed int', x) in
+      let weak a_511: loaded integer = pure(Specified(1)) in
+      pure(
+        case (a_510, a_511) of
+          | (Specified(a_512: integer), Specified(a_513: integer)) =>
+              Specified(catch_exceptional_condition_add('signed int', __conv_int__('signed int', a_512), __conv_int__('signed int', a_513)))
+          | _: (loaded integer,loaded integer) =>
+              undef(<<UB036_exceptional_condition>>)
+        end
+      )
+    ) in
+  store('signed int', y, conv_loaded_int('signed int', a_509)) ;
+  let strong a_517: loaded integer = bound(load('signed int', y)) in
+  kill('signed int', x) ;
+  kill('signed int', y) ;
+  run ret_507(conv_loaded_int('signed int', a_517)) ;
+  kill('signed int', x) ;
+  kill('signed int', y) ;
+  save ret_507: loaded integer (a_518: loaded integer:= Specified(0)) in
+    pure(a_518)
+

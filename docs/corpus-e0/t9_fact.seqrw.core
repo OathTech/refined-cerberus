@@ -1,0 +1,134 @@
+proc fact (n: pointer): eff loaded integer :=
+  let strong a_525: loaded integer =
+    bound(
+      let weak a_527: loaded integer =
+        let weak a_533: loaded integer = load('signed int', n) in
+        let weak a_534: loaded integer = pure(Specified(1)) in
+        case (a_533, a_534) of
+          | (Specified(a_535: integer), Specified(a_536: integer)) =>
+              pure(
+                if conv_int('signed int', a_535) <=
+                conv_int('signed int', a_536) then
+                  Specified(1)
+                else
+                  Specified(0)
+              )
+          | _: (loaded integer,loaded integer) =>
+              pure(Unspecified('signed int'))
+        end in
+      let weak a_528: loaded integer = pure(Specified(0)) in
+      pure(
+        case (a_527, a_528) of
+          | (Specified(a_529: integer), Specified(a_530: integer)) =>
+              if conv_int('signed int', a_529) = conv_int('signed int', a_530) then
+                Specified(1)
+              else
+                Specified(0)
+          | _: (loaded integer,loaded integer) =>
+              Unspecified('signed int')
+        end
+      )
+    ) in
+  let strong a_524: boolean =
+    case a_525 of
+      | Specified(a_526: integer) =>
+          pure(if not(a_526 = 1) then True else False)
+      | Unspecified(_: ctype) =>
+          nd(pure(True), pure(False))
+    end in
+  if a_524 then
+    run ret_523(conv_loaded_int('signed int', Specified(1))) ;
+    pure(Unit)
+  else
+    pure(Unit) ;
+  let strong a_562: loaded integer =
+    bound(
+      let weak a_557: loaded integer = load('signed int', n) in
+      let weak a_558: loaded integer =
+        let strong (a_541: loaded pointer,
+        (a_542: ctype, a_543: [ctype], a_544: boolean, a_545: boolean)) =
+          pure(
+            (Specified(Cfunction(fact)), cfunction(Specified(Cfunction(fact))))
+          ) in
+        let strong a_547: loaded integer =
+          let weak a_549: loaded integer = load('signed int', n) in
+          let weak a_550: loaded integer = pure(Specified(1)) in
+          pure(
+            case (a_549, a_550) of
+              | (Specified(a_551: integer), Specified(a_552: integer)) =>
+                  Specified(catch_exceptional_condition_sub('signed int', conv_int('signed int',
+                  a_551), conv_int('signed int', a_552)))
+              | _: (loaded integer,loaded integer) =>
+                  undef(<<UB036_exceptional_condition>>)
+            end
+          ) in
+        if not(params_length(a_543) = 1) then
+          pure(undef(<<UB038_number_of_args>>))
+        else
+          if a_544 \/ not(are_compatible ('signed int', a_542)) then
+            pure(undef(<<UB041_function_not_compatible>>))
+          else
+            let strong a_546: pointer =
+              let a_554: ctype = params_nth(a_543, 0) in
+              if not(are_compatible ('signed int', a_554)) then
+                pure(undef(<<UB041_function_not_compatible>>))
+              else
+                let weak a_555: pointer =
+                  create(Ivalignof('signed int'), 'signed int') in
+                let weak _: unit =
+                  store('signed int', a_555,
+                  conv_loaded_int('signed int', a_547)) in
+                pure(a_555) in
+            let strong a_556: loaded integer =
+              ccall('signed int (*) (signed int)', a_541, a_546) in
+            kill('signed int', a_546) ;
+            pure(a_556) in
+      pure(
+        case (a_557, a_558) of
+          | (Specified(a_559: integer), Specified(a_560: integer)) =>
+              Specified(catch_exceptional_condition_mul('signed int', conv_int('signed int',
+              a_559), conv_int('signed int', a_560)))
+          | _: (loaded integer,loaded integer) =>
+              undef(<<UB036_exceptional_condition>>)
+        end
+      )
+    ) in
+  run ret_523(conv_loaded_int('signed int', a_562)) ;
+  save ret_523: loaded integer (a_563: loaded integer:= undef(<<UB088_reached_end_of_function>>)) in
+    pure(a_563)
+
+proc main (): eff loaded integer :=
+  let strong a_520: loaded integer =
+    bound(
+      let strong ((a_510: loaded pointer,
+      (a_511: ctype, a_512: [ctype], a_513: boolean, a_514: boolean)),
+      a_516: loaded integer) =
+        pure(
+          ((Specified(Cfunction(fact)), cfunction(Specified(Cfunction(fact)))),
+          Specified(5))
+        ) in
+      if not(params_length(a_512) = 1) then
+        pure(undef(<<UB038_number_of_args>>))
+      else
+        if a_513 \/ not(are_compatible ('signed int', a_511)) then
+          pure(undef(<<UB041_function_not_compatible>>))
+        else
+          let strong a_515: pointer =
+            let a_517: ctype = params_nth(a_512, 0) in
+            if not(are_compatible ('signed int', a_517)) then
+              pure(undef(<<UB041_function_not_compatible>>))
+            else
+              let weak a_518: pointer =
+                create(Ivalignof('signed int'), 'signed int') in
+              let weak _: unit =
+                store('signed int', a_518, conv_loaded_int('signed int', a_516)) in
+              pure(a_518) in
+          let strong a_519: loaded integer =
+            ccall('signed int (*) (signed int)', a_510, a_515) in
+          kill('signed int', a_515) ;
+          pure(a_519)
+    ) in
+  run ret_508(conv_loaded_int('signed int', a_520)) ;
+  save ret_508: loaded integer (a_521: loaded integer:= Specified(0)) in
+    pure(a_521)
+

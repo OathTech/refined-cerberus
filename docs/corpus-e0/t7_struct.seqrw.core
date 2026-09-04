@@ -1,0 +1,44 @@
+-- Aggregates
+def struct P :=
+  a: 'signed int'
+  b: 'signed int'
+
+-- Fun map
+proc main (): eff loaded integer :=
+  let strong p: pointer = create(Ivalignof('struct P'), 'struct P') in
+  store('struct P', p, Unspecified('struct P')) ;
+  let strong _: loaded integer =
+    bound(
+      let weak _: unit =
+        neg(store('signed int', member_shift(p, P, .a),
+        conv_loaded_int('signed int', Specified(1)))) in
+      pure(conv_loaded_int('signed int', Specified(1)))
+    ) in
+  let strong _: loaded integer =
+    bound(
+      let weak _: unit =
+        neg(store('signed int', member_shift(p, P, .b),
+        conv_loaded_int('signed int', Specified(2)))) in
+      pure(conv_loaded_int('signed int', Specified(2)))
+    ) in
+  let strong a_523: loaded integer =
+    bound(
+      let weak a_514: loaded integer =
+        load('signed int', member_shift(p, P, .a)) in
+      let weak a_515: loaded integer =
+        load('signed int', member_shift(p, P, .b)) in
+      pure(
+        case (a_514, a_515) of
+          | (Specified(a_516: integer), Specified(a_517: integer)) =>
+              Specified(catch_exceptional_condition_add('signed int', __conv_int__('signed int', a_516), __conv_int__('signed int', a_517)))
+          | _: (loaded integer,loaded integer) =>
+              undef(<<UB036_exceptional_condition>>)
+        end
+      )
+    ) in
+  kill('struct P', p) ;
+  run ret_507(conv_loaded_int('signed int', a_523)) ;
+  kill('struct P', p) ;
+  save ret_507: loaded integer (a_524: loaded integer:= Specified(0)) in
+    pure(a_524)
+

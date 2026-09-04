@@ -1,0 +1,76 @@
+proc main (): eff loaded integer :=
+  let strong x: pointer = create(Ivalignof('signed int'), 'signed int') in
+  let strong r: pointer = create(Ivalignof('signed int'), 'signed int') in
+  let strong a_514: loaded integer = bound(pure(Specified(2))) in
+  store('signed int', x, conv_loaded_int('signed int', a_514)) ;
+  let strong a_515: loaded integer = bound(pure(Specified(0))) in
+  store('signed int', r, conv_loaded_int('signed int', a_515)) ;
+  let strong a_517: loaded integer =
+    bound(
+      let weak a_516: pointer = pure(x) in
+      load('signed int', a_516)
+    ) in
+  case a_517 of
+    | Specified(a_518: integer) =>
+        let strong a_519: integer = pure(conv_int('signed int', a_518)) in
+        if a_519 = 1 then run case_521(x, r) else pure(Unit) ;
+        if a_519 = 2 then run case_520(x, r) else pure(Unit) ;
+        run default_522(x, r) ;
+        run break_513(x, r) ;
+        save case_521: unit (x: pointer:= x, r: pointer:= r) in
+          let strong _: loaded integer =
+            bound(
+              let weak a_523: pointer = pure(r) in
+              let weak a_524: loaded integer = pure(Specified(10)) in
+              let weak _: unit =
+                neg(store('signed int', a_523,
+                conv_loaded_int('signed int', a_524))) in
+              pure(conv_loaded_int('signed int', a_524))
+            ) in
+          pure(Unit) ;
+        run break_513(x, r) ;
+        save case_520: unit (x: pointer:= x, r: pointer:= r) in
+          let strong _: loaded integer =
+            bound(
+              let weak a_525: pointer = pure(r) in
+              let weak a_526: loaded integer = pure(Specified(20)) in
+              let weak _: unit =
+                neg(store('signed int', a_525,
+                conv_loaded_int('signed int', a_526))) in
+              pure(conv_loaded_int('signed int', a_526))
+            ) in
+          pure(Unit) ;
+        run break_513(x, r) ;
+        save default_522: unit (x: pointer:= x, r: pointer:= r) in
+          let strong _: loaded integer =
+            bound(
+              let weak a_527: pointer = pure(r) in
+              let weak a_528: loaded integer = pure(Specified(30)) in
+              let weak _: unit =
+                neg(store('signed int', a_527,
+                conv_loaded_int('signed int', a_528))) in
+              pure(conv_loaded_int('signed int', a_528))
+            ) in
+          pure(Unit) ;
+        run break_513(x, r) ;
+        pure(Unit) ;
+        pure(Unit)
+    | Unspecified(_: ctype) =>
+        pure(undef(<<UB036_exceptional_condition>>))
+  end ;
+  save break_513: unit (x: pointer:= x, r: pointer:= r) in  pure(Unit) ;
+  pure(Unit) ;
+  let strong a_530: loaded integer =
+    bound(
+      let weak a_529: pointer = pure(r) in
+      load('signed int', a_529)
+    ) in
+  kill('signed int', x) ;
+  kill('signed int', r) ;
+  run ret_511(conv_loaded_int('signed int', a_530)) ;
+  kill('signed int', x) ;
+  kill('signed int', r) ;
+  pure(Unit) ;
+  save ret_511: loaded integer (a_531: loaded integer:= Specified(0)) in
+    pure(a_531)
+

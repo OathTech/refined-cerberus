@@ -1,0 +1,251 @@
+proc add (a: pointer, b: pointer): eff loaded integer :=
+  {-# <refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:1:22, refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:1:39> #-} {-# <refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:1:24, refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:1:37> #-} let strong a_569: loaded integer =
+    {-# §6.5#2 #-}
+    bound(
+      {-# §6.5.6 #-}
+      {-# <refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:1:31, refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:1:36> refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:1:33 #-} let weak (a_562: loaded integer,
+      a_563: loaded integer) =
+        unseq(
+          {-# <refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:1:31, refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:1:32> #-} let weak a_567: pointer =
+            {-# <refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:1:31, refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:1:32> #-} pure(
+              a
+            ) in
+          load('signed int', a_567)
+        ,
+          {-# <refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:1:35, refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:1:36> #-} let weak a_568: pointer =
+            {-# <refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:1:35, refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:1:36> #-} pure(
+              b
+            ) in
+          load('signed int', a_568)
+        ) in
+      pure(
+        case (a_562, a_563) of
+          | (Specified(a_564: integer), Specified(a_565: integer)) =>
+              Specified(catch_exceptional_condition_add('signed int', __conv_int__('signed int', a_564), __conv_int__('signed int', a_565)))
+          | _: (loaded integer,loaded integer) =>
+              undef(<<UB036_exceptional_condition>>)
+        end
+      )
+    ) in
+  run ret_561(conv_loaded_int('signed int', a_569)) ;
+  pure(Unit) ;
+  {-# <refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:1:0, refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:1:39> refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:1:4 - refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:1:7 #-} save ret_561: loaded integer (a_570: loaded integer:= undef(<<UB088_reached_end_of_function>>)) in
+    pure(a_570)
+
+proc main (): eff loaded integer :=
+  {-# <refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:15, refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:86> #-} let strong s: pointer =
+    create(Ivalignof('signed int'), 'signed int') in
+  {-# <refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:17, refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:27> #-} let strong a_517: loaded integer =
+    {-# §6.5#2 #-}
+    bound(
+      {-# <refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:25, refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:26> #-} pure(
+        Specified(0)
+      )
+    ) in
+  store('signed int', s, conv_loaded_int('signed int', a_517)) ;
+  {-# <refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:28, refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:74> #-} let strong i: pointer =
+    create(Ivalignof('signed int'), 'signed int') in
+  {-# <refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:33, refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:43> #-} let strong a_518: loaded integer =
+    {-# §6.5#2 #-}
+    bound(
+      {-# <refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:41, refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:42> #-} pure(
+        Specified(0)
+      )
+    ) in
+  store('signed int', i, conv_loaded_int('signed int', a_518)) ;
+  {-# <refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:28, refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:74> #-} {-# <refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:28, refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:74> #-} save while_519: unit (i: pointer:= i,
+  s: pointer:= s) in
+    let strong a_521: loaded integer =
+      {-# §6.5#2 #-}
+      bound(
+        {-# <refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:44, refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:49> refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:46 #-} let weak (a_523: loaded integer,
+        a_524: loaded integer) =
+          unseq(
+            {-# §6.5.8 #-}
+            {-# <refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:44, refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:49> refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:46 #-} let weak (a_529: loaded integer,
+            a_530: loaded integer) =
+              unseq(
+                {-# <refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:44, refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:45> #-} let weak a_528: pointer =
+                  {-# <refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:44, refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:45> #-} pure(
+                    i
+                  ) in
+                load('signed int', a_528)
+              ,
+                {-# <refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:48, refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:49> #-} pure(
+                  Specified(3)
+                )
+              ) in
+            case (a_529, a_530) of
+              | (Specified(a_531: integer), Specified(a_532: integer)) =>
+                  {-# §6.5.8#6 #-}
+                  pure(
+                    if conv_int('signed int', a_531) <
+                    conv_int('signed int', a_532) then
+                      Specified(1)
+                    else
+                      Specified(0)
+                  )
+              | _: (loaded integer,loaded integer) =>
+                  pure(Unspecified('signed int'))
+            end
+          ,
+            {-# <refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:44, refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:49> refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:46 #-} pure(
+              Specified(0)
+            )
+          ) in
+        pure(
+          case (a_523, a_524) of
+            | (Specified(a_525: integer), Specified(a_526: integer)) =>
+                if conv_int('signed int', a_525) = conv_int('signed int', a_526) then
+                  Specified(1)
+                else
+                  Specified(0)
+            | _: (loaded integer,loaded integer) =>
+                Unspecified('signed int')
+          end
+        )
+      ) in
+    let strong a_520: boolean =
+      case a_521 of
+        | Specified(a_522: integer) =>
+            pure(if not(a_522 = 1) then True else False)
+        | Unspecified(_: ctype) =>
+            nd(pure(True), pure(False))
+      end in
+    if a_520 then
+      {-# <refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:28, refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:74> #-} {-# <refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:56, refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:74> #-} {-# <refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:58, refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:72> #-} let strong _: loaded integer =
+        {-# §6.5#2 #-}
+        bound(
+          {-# §6.5.16#3, sentence 4 #-}
+          {-# <refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:58, refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:71> refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:60 #-} let weak (a_534: pointer,
+          a_552: loaded integer) =
+            {-# §6.5.16#3, sentence 5 #-}
+            unseq(
+              {-# <refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:58, refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:59> #-} pure(
+                s
+              )
+            ,
+              {-# §6.5.2.2#10, sentence 1 #-}
+              {-# <refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:62, refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:71> #-} let strong ((a_536: loaded pointer,
+              (a_537: ctype, a_538: [ctype], a_539: boolean, a_540: boolean)),
+              a_543: loaded integer, a_545: loaded integer) =
+                {-# §6.5.2.2#4, sentence 2 #-}
+                unseq(
+                  let strong a_535: loaded pointer =
+                    {-# <refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:62, refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:65> #-} pure(
+                      Specified(Cfunction(add))
+                    ) in
+                  pure((a_535, cfunction(a_535)))
+                ,
+                  {-# <refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:66, refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:67> #-} let weak a_544: pointer =
+                    {-# <refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:66, refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:67> #-} pure(
+                      s
+                    ) in
+                  load('signed int', a_544)
+                ,
+                  {-# <refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:69, refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:70> #-} let weak a_546: pointer =
+                    {-# <refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:69, refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:70> #-} pure(
+                      i
+                    ) in
+                  load('signed int', a_546)
+                ) in
+              if not(params_length(a_538) = 2) then
+                pure(undef(<<UB038_number_of_args>>))
+              else
+                if a_539 \/ not(are_compatible ('signed int', a_537)) then
+                  pure(undef(<<UB041_function_not_compatible>>))
+                else
+                  let strong a_541: pointer =
+                    let a_547: ctype = params_nth(a_538, 0) in
+                    if not(are_compatible ('signed int', a_547)) then
+                      pure(undef(<<UB041_function_not_compatible>>))
+                    else
+                      {-# §6.5.2.2#7, sentence 1 #-}
+                      let weak a_548: pointer =
+                        create(Ivalignof('signed int'), 'signed int') in
+                      let weak _: unit =
+                        store('signed int', a_548,
+                        conv_loaded_int('signed int', a_543)) in
+                      pure(a_548) in
+                  let strong a_542: pointer =
+                    let a_549: ctype = params_nth(a_538, 1) in
+                    if not(are_compatible ('signed int', a_549)) then
+                      pure(undef(<<UB041_function_not_compatible>>))
+                    else
+                      {-# §6.5.2.2#7, sentence 1 #-}
+                      let weak a_550: pointer =
+                        create(Ivalignof('signed int'), 'signed int') in
+                      let weak _: unit =
+                        store('signed int', a_550,
+                        conv_loaded_int('signed int', a_545)) in
+                      pure(a_550) in
+                  let strong a_551: loaded integer =
+                    {-# §6.5.16.1#1, bullet 1 #-}
+                    ccall('signed int (*) (signed int, signed int)', a_536,
+                    a_541, a_542) in
+                  let strong _: (unit,unit) =
+                    unseq(kill('signed int', a_541), kill('signed int', a_542)) in
+                  pure(a_551)
+            ) in
+          let weak _: unit =
+            {-# §6.5.16.1#2, store #-}
+            neg(store('signed int', a_534, conv_loaded_int('signed int', a_552))) in
+          pure(conv_loaded_int('signed int', a_552))
+        ) in
+      pure(Unit) ;
+      {-# <refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:28, refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:74> #-} save __cerb_continue0: unit (i: pointer:= i,
+      s: pointer:= s) in
+        {-# <unknown location> #-} let strong _: loaded integer =
+          {-# §6.5#2 #-}
+          bound(
+            {-# §6.5.2.4#2, sentence 3 #-}
+            {-# §6.5.2.4#2, sentence 1 #-}
+            {-# §6.5.2.4 #-}
+            {-# <refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:51, refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:54> refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:52 #-} let weak a_553: pointer =
+              {-# <refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:51, refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:52> #-} pure(
+                i
+              ) in
+            seq_rmw('signed int', a_553, a_554 => case a_554 of
+              | Specified(a_555: integer) =>
+                  Specified(conv_int('signed int',
+                  catch_exceptional_condition_add('signed int', conv_int('signed int',
+                  a_555), 1)))
+              | Unspecified(_: ctype) =>
+                  Unspecified('signed int')
+            end)
+          ) in
+        pure(Unit) ;
+      pure(Unit) ;
+      {-# <refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:28, refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:74> #-} save continue_515: unit (i: pointer:= i,
+      s: pointer:= s) in
+        {-# <refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:28, refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:74> #-} pure(
+          Unit
+        ) ;
+      pure(Unit) ;
+      run while_519(i, s)
+    else
+      pure(Unit) ;
+  {-# <refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:28, refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:74> #-} save break_516: unit (i: pointer:= i,
+  s: pointer:= s) in
+    {-# <refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:28, refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:74> #-} pure(
+      Unit
+    ) ;
+  pure(Unit) ;
+  kill('signed int', i) ;
+  pure(Unit) ;
+  {-# <refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:75, refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:84> #-} let strong a_557: loaded integer =
+    {-# §6.5#2 #-}
+    bound(
+      {-# <refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:82, refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:83> #-} let weak a_556: pointer =
+        {-# <refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:82, refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:83> #-} pure(
+          s
+        ) in
+      load('signed int', a_556)
+    ) in
+  kill('signed int', s) ;
+  run ret_514(conv_loaded_int('signed int', a_557)) ;
+  kill('signed int', s) ;
+  pure(Unit) ;
+  {-# <refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:0, refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:86> refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:4 - refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t2.c:2:8 #-} save ret_514: loaded integer (a_558: loaded integer:= Specified(0)) in
+    pure(a_558)
+

@@ -1,0 +1,87 @@
+proc main (): eff loaded integer :=
+  let strong x: pointer = create(Ivalignof('signed int'), 'signed int') in
+  let strong r: pointer = create(Ivalignof('signed int'), 'signed int') in
+  let strong a_508: loaded integer = bound(pure(Specified(3))) in
+  store('signed int', x, conv_loaded_int('signed int', a_508)) ;
+  store('signed int', r, Unspecified('signed int')) ;
+  let strong a_510: loaded integer =
+    bound(
+      let weak (a_512: loaded integer, a_513: loaded integer) =
+        unseq(
+          let weak (a_518: loaded integer, a_519: loaded integer) =
+            unseq(
+              let weak a_517: pointer = pure(x) in
+              load('signed int', a_517)
+            ,
+              pure(Specified(2))
+            ) in
+          case (a_518, a_519) of
+            | (Specified(a_520: integer), Specified(a_521: integer)) =>
+                pure(
+                  if conv_int('signed int', a_520) >
+                  conv_int('signed int', a_521) then
+                    Specified(1)
+                  else
+                    Specified(0)
+                )
+            | _: (loaded integer,loaded integer) =>
+                pure(Unspecified('signed int'))
+          end
+        ,
+          pure(Specified(0))
+        ) in
+      pure(
+        case (a_512, a_513) of
+          | (Specified(a_514: integer), Specified(a_515: integer)) =>
+              if conv_int('signed int', a_514) = conv_int('signed int', a_515) then
+                Specified(1)
+              else
+                Specified(0)
+          | _: (loaded integer,loaded integer) =>
+              Unspecified('signed int')
+        end
+      )
+    ) in
+  let strong a_509: boolean =
+    case a_510 of
+      | Specified(a_511: integer) =>
+          pure(if not(a_511 = 1) then True else False)
+      | Unspecified(_: ctype) =>
+          nd(pure(True), pure(False))
+    end in
+  if a_509 then
+    let strong _: loaded integer =
+      bound(
+        let weak (a_523: pointer, a_524: loaded integer) =
+          unseq(pure(r), pure(Specified(1))) in
+        let weak _: unit =
+          neg(store('signed int', a_523, conv_loaded_int('signed int', a_524))) in
+        pure(conv_loaded_int('signed int', a_524))
+      ) in
+    pure(Unit) ;
+    pure(Unit)
+  else
+    let strong _: loaded integer =
+      bound(
+        let weak (a_525: pointer, a_526: loaded integer) =
+          unseq(pure(r), pure(Specified(0))) in
+        let weak _: unit =
+          neg(store('signed int', a_525, conv_loaded_int('signed int', a_526))) in
+        pure(conv_loaded_int('signed int', a_526))
+      ) in
+    pure(Unit) ;
+    pure(Unit) ;
+  let strong a_528: loaded integer =
+    bound(
+      let weak a_527: pointer = pure(r) in
+      load('signed int', a_527)
+    ) in
+  kill('signed int', x) ;
+  kill('signed int', r) ;
+  run ret_507(conv_loaded_int('signed int', a_528)) ;
+  kill('signed int', x) ;
+  kill('signed int', r) ;
+  pure(Unit) ;
+  save ret_507: loaded integer (a_529: loaded integer:= Specified(0)) in
+    pure(a_529)
+
