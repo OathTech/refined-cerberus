@@ -589,7 +589,12 @@ inside `DriverSafeCtl`).
   `CerbMem`'s private `beqMemValueSafe`, `normalise_ctype`,
   `Core.instBEqCore_base_type.beq`. The fuel and well-formedness
   premises below are how the statements stay away from
-  `fuelExhaustedWith` and `failwithI`.
+  `fuelExhaustedWith` and `failwithI`. The hand-written seams also carry
+  `panic!` arms (61 at this pin, 40 in `CerbMem.lean`; mirrors of OCaml
+  `assert false`/`failwith`), which the kernel reads as the return
+  type's `Inhabited` default, not as an abort. The rules' premises keep
+  proved programs away from them; no theorem states that an export's
+  run reaches none (ARCHITECTURE §3; KOI A5).
 - *Admissions in the pinned semantics tree: none (measured 2026-09-03).*
   Until the 2026-09-03 re-pin the pinned tree carried one generated
   admission — two `(sorry : String)` terms in the debug-log branch of

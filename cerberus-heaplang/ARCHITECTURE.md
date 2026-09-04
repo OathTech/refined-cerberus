@@ -3,13 +3,15 @@
 What this package is, what it proves, what it trusts, and how to read
 one of its theorems. Every claim is about the tree at this revision and
 carries a `file:line` cite into `CerberusHeapLang/*.lean`, the pinned
-semantics workspace `.cerberus-ws/lean_frontend/` (cerberus-lean
+semantics workspace `../.cerberus-ws/lean_frontend/` (cerberus-lean
 `f95ef8d9c`, `../scripts/semantics-pin.env`), or a script. The
-[README](README.md) carries the exhibits table, the register of
-limitations and the build recipe; the [walkthrough](docs/WALKTHROUGH.md)
-quotes the definitions at length. The history of how the package got
-here is not in this document: it is in the dated records under `docs/`,
-indexed by `docs/2026-09-04_architecture-history-archive.md`. Rulings
+[README](README.md) carries the exhibits table and the build recipe, and
+gives each limitation its discharge or mover; §6 here lists the
+limitations with their register numbers (the two overlap by design).
+The [walkthrough](docs/WALKTHROUGH.md) quotes the definitions at
+length. The history of how the package got here is not in this
+document: it is in the dated records under `docs/`, indexed by
+`docs/2026-09-04_architecture-history-archive.md`. Rulings
 are cited with their `[USER date]`/`[AGENT date]` tag and live in
 `../docs/DECISIONS.md`; open items are numbered in
 `../docs/KNOWN-OPEN-ITEMS.md` ("KOI").
@@ -51,6 +53,19 @@ are cited with their `[USER date]`/`[AGENT date]` tag and live in
   conclusion about the delivered `driver_result`: *the root of trust*.
 - *the trio* — the three classical axioms `propext`, `Classical.choice`,
   `Quot.sound`; *trio-exact* means an axiom set equal to it (§3).
+- *pinned* / *unpinned* — a theorem is pinned when `Audit.lean` lists it
+  in `trioExports` and the build asserts its axiom set is exactly the
+  trio; every other theorem is unpinned (§3).
+- *the sweep* — `Audit.lean`'s check that every theorem of every package
+  module has an axiom set within the trio (§3).
+- *a tie* — a hypothesis of `DriverSafeCtl`/`DriverDoneCtl` fixing a
+  field of the driver state from the configuration (`Adequacy.lean:935`–
+  `:940`; `ProdLoop.lean:459`–`:463`). The ties: the thread, the memory,
+  the extern table, the file, the registration predicate `LabeledProcs`
+  and, in the partial fact only, the control's `CtlTied`.
+- *a readout* — the pure conclusion about a delivered result, `ψ v σ'` on
+  the value and the final memory; by extension an exhibit lemma that
+  reads it off an Iris conclusion (`*_readout`).
 - *speedbump* — a claim-point check that catches honest drift, not a
   trust gate ([USER 2026-09-02], DECISIONS "SPEEDBUMPS, NOT ADVERSARIAL
   GATES").
@@ -84,7 +99,7 @@ the bare-value producers `BareHead` (`:3981`: a literal, `create`,
   engine's `step_ctx` reads a source location off a located redex and
   rewrites the thread's `current_loc`. This package keeps that field
   immutable in `MachineCtx.currentLoc`, so a located node would falsify
-  the certification equation. The programs proved here are authored
+  the certification (§2.2). The programs proved here are authored
   Core. (The mover, named there: make `current_loc` live state.)
 - *It is declared as exactly what the mirror covers* ([USER 2026-09-02],
   DECISIONS "THE BOUNDARY IS FAIL-CLOSED"): a shape without a mirror
@@ -191,7 +206,7 @@ exactly (non-comment occurrences, every package module):
 
 | Collapse | Consumed by (the Iris-level readouts) |
 |---|---|
-| `wps_sound` | `Examples/CallSmoke.lean:330`, `FibRecExhibit.lean:648`, `EvenOddExhibit.lean:501` |
+| `wps_sound` | `Examples/CallSmoke.lean:330`, `FibRecExhibit.lean:648`, `EvenOddExhibit.lean:502` |
 | `wps_sound_empty` | Exhibit (`:349`, `:701`), StructExhibit (`:199`, `:830`), CaseExhibit (`:143`), LoopExhibit (`:391`), FibExhibit (`:402`), ArrayExhibit (`:592`), WseqExhibit (`:107`), ListRevExhibit (`:1434`), TwoLabelExhibit (`:531`) |
 | `wpt_sound` | the pinned export `cs_twp_readout` (`Examples/CallSmoke.lean:455`, at `:461`) |
 
@@ -204,7 +219,8 @@ No shipped-driver statement consumes any of them: the driver lanes
 own vocabulary. At every driver state embedding the context and the
 configuration `c`: the engine's step list is a singleton, it is
 advanceable, and the shipped `advance_step` on it is one active
-wakeup-free transition to the state embedding `c'`. It is stated at the
+transition to the state embedding `c'`. Active means `NDactive
+NOWAKEUP`: no other thread is woken. It is stated at the
 loop body, with no fuel dependency (loop-level reading
 `CerberusRound.loop_step`, `:965`). The certification is
 
@@ -229,7 +245,8 @@ configuration is in the residual. The refusals (`ShippedRefusal`, `:214`)
 are stated in the engine's vocabulary. `error`: the step list is
 `[Step_error2 msg]`. `killed`: `advance_step` returns `NDkilled r`.
 `fork`: `CerbND.runND` delivers at least two executions. The `panic`
-family: the engine's own `failwithI`. `error_next`: a success round into
+family: the engine's own `failwithI`, LemLib's kernel-opaque failure
+(not the `panic!` arms of §3). `error_next`: a success round into
 an ill-typed next round. The residual (`OpenRound`, `:357`) has two arms.
 `eval_uncovered`: an operand containing a leaf the engine's evaluator
 accepts where the mirror evaluator does not (a `Proc`-named unbound
@@ -289,9 +306,10 @@ unpinned fuel induction under the control invariant `ControlOk` (`:800`).
 Its premise `MachineCtx.FragProcs` (`:767`: every declared procedure body
 in `Frag` with its static bound) lets it follow the engine into a callee
 and back. Fuel 0 is the exhaustion kill (`loop_zero_exhausts`,
-`DriverCollapse.lean:2246`); fuel 1 at a delivered value is the
-exhaustion of the drain iteration (`loop_step_done_exhaust`, `:2257`);
-fuel ≥ 2 there is PROGRAM-DONE (`loop_step_done`, `:392`).
+`DriverCollapse.lean:2246`). Fuel 1 at a delivered value is the
+exhaustion of the drain iteration, the loop's last pass over the
+emptied thread list (`loop_step_done_exhaust`, `:2257`); fuel ≥ 2 there
+is PROGRAM-DONE (`loop_step_done`, `:392`).
 
 **The total lane** (`ProdLoop.lean`). `wpt_driver_cps` (`:609`) is the
 budget induction in continuation-passing form over the ambient control,
@@ -365,7 +383,7 @@ exports for this purpose (`CerbFuel.driverFuel = 100000000`, generated
 | `region_loop_certified_production` | `RegionLoopExhibit.lean:633` | `hcost : 0 < regionCost al sz`, `hn`, `hB : n.toNat * regionCost al sz ≤ headroom prodMem₀.lastAddress`, `hfuel : 7 * n.toNat + 5 ≤ CerbFuel.driverFuel` |
 | `malloc_list_certified_production` | `MallocListExhibit.lean:1654` | `hn`, `hB : n.toNat * (15 + max al.toNat 1) ≤ 281474976710647`, `hfuel : 25 * n.toNat + 9 ≤ CerbFuel.driverFuel` |
 | `fib_rec_certified_production` | `FibRecExhibit.lean:865` | `hn`, `hfuel : fibRounds n.toNat + 4 ≤ CerbFuel.driverFuel` |
-| `even_odd_certified_production` | `EvenOddExhibit.lean:721` | `hn`, `hfuel : 3 * n.toNat + 6 ≤ CerbFuel.driverFuel` |
+| `even_odd_certified_production` | `EvenOddExhibit.lean:722` | `hn`, `hfuel : 3 * n.toNat + 6 ≤ CerbFuel.driverFuel` |
 
 Package definitions in these statements, exactly — beyond the authored
 program and its wrapper (`prodFile`/`prodFileWith`), read off the nine
@@ -385,7 +403,7 @@ statement texts:
 
 Beside them, two closed PARTIAL forms consume `prod_run_safe_procs`:
 `fib_rec_certified` (`FibRecExhibit.lean:814`) and `even_odd_certified`
-(`EvenOddExhibit.lean:673`) — every `n ≥ 0`, at every `drive_lemFuel`
+(`EvenOddExhibit.lean:674`) — every `n ≥ 0`, at every `drive_lemFuel`
 fuel, no budget bound.
 
 ### 2.6 The memory invariant
@@ -415,25 +433,47 @@ contribute no axiom; the closed statements' texts are Iris-free. (iii)
 The pinned cerberus-lean semantics (`f95ef8d9c`) as the semantics of
 Core: a policy decision, sampled by differential validation against the
 OCaml oracle, not proved (README "What you are asked to take on faith").
-The pinned tree declares no `axiom` and contains no `sorry`:
-`grep -rn '(sorry'` over the primed `generated/*.lean` is empty and the
-build log has no `declaration uses sorry` (README "The trust story";
-`docs/2026-09-03_repin-fuel-notes.md`).
+It is a pin, not the mainline; the queued re-pin and its one
+exported-text change (`killM_killed_inv`) are KOI A6. The pinned tree
+declares no `axiom` and contains no `sorry`: `grep -rn '(sorry'` over the
+primed `generated/*.lean` is empty and the build log has no `declaration
+uses sorry` (README "The trust story"; `docs/2026-09-03_repin-fuel-notes.md`).
+
+**The `panic!` arms.** The pinned tree does contain `panic!` arms: 61
+in the hand-written seams, 40 of them in `CerbMem.lean` (e.g.
+`sizeofCtype` at `Void`, generated `CerbMem.lean:380`), none in
+lem-generated code (counts DERIVED, `grep -c 'panic!'` less comment
+lines). Each mirrors an OCaml `assert false`/`failwith` arm, where the
+OCaml run aborts. The kernel reads `panic!` as the return type's
+`Inhabited` default (`= default` by `rfl`, generated
+`CerbMem.lean:1127`–`:1132`). A theorem about `drive` is therefore about
+the Lean definition, which on a state reaching such an arm continues
+where the OCaml faults. The rules' premises keep proved programs away
+from them (`create_atomic`'s `hsz : 0 < sizeofCtype …`, `Rules.lean:995`;
+the NO-RULE `create` rows, §6). No theorem states that an export's run
+reaches none, and the sweep cannot see one (a term, not an axiom).
+Owner: cerberus-lean's typed-failure-outcomes pass (KOI A5). This is
+distinct from §2.2's `panic` family: LemLib's `failwithI`/
+`fuelExhaustedWith` are `opaque`
+(`.lake/packages/LemLib/lean-lib/LemLib.lean:160`–`:187`), so the kernel
+has no equation for them and a theorem holds at every value they take.
 
 **What the build checks** (`Audit.lean`, the last import of the library
 root, elaborated by every `lake build`). Every pinned export exists, is
 a theorem, and has axiom set EXACTLY the trio (`:615`–`:616`; 402 pins at
-this revision, `docs/2026-09-04_h1-notes.md` §8). Every theorem of every
-`CerberusHeapLang.*` module, internal details included, is bounded by
-the trio (`:617`–`:636`). `sorryAx`/`ofReduceBool`/`ofReduceNat` reach no
-constant of any kind (`:637`–`:653`). Precision: "exactly the trio" is
-the pinned exports' property. A few public-named lemmas have SUB-trio
-cones and are deliberately unpinned, bounded by the sweep:
-`fibRounds_closed` (`[propext, Quot.sound]`); `regionCost_pos`,
-`freshBase_*`, `runND_killed` (no axioms; `:354`–`:356`, `:380`–`:384`,
-`:523`–`:525`, `:552`–`:553`). Kernel-only proof methods:
-no `native_decide`, `bv_decide` or `ofReduce*` anywhere (gate 1,
-`../scripts/test_unit.sh:28`).
+this revision, `docs/2026-09-04_h1-notes.md` §8, the gate at `29d9195`).
+Every theorem of every `CerberusHeapLang.*` module, internal details
+included, is bounded by the trio (`:617`–`:636`). `sorryAx`/
+`ofReduceBool`/`ofReduceNat` reach no constant of any kind (`:637`–
+`:653`). Precision: "exactly the trio" is the pinned exports' property;
+every other theorem's cone is bounded by the trio, by the sweep. The
+public-named lemmas with SUB-trio cones are therefore unpinned, as
+`Audit.lean`'s comments record them. `fibRounds_closed`, `regionCost_pos`
+and the `freshBase_*` bounds have `[propext, Quot.sound]` (`:354`–`:356`,
+`:380`–`:384`, `:523`–`:525`). `BareHead.decomp_call_root` has `[propext]`
+(`:523`); `regionCost_eq` and `runND_killed` have no axioms (`:384`,
+`:552`–`:553`). Kernel-only proof methods: no `native_decide`, `bv_decide`
+or `ofReduce*` anywhere (gate 1, `../scripts/test_unit.sh:28`).
 
 **The declared boundary is empty** ("There is no declared boundary
 axiom", `Audit.lean:45`). What is NOT trusted: the mirror `Step`, the
@@ -444,7 +484,7 @@ genuine semantics"). No hand-written driver loop, scheduler or discharge
 function occurs in any export's statement. The closed statements name
 the shipped composite; the generic statements name
 `drive_nonmemory_steps_aux2_lemFuel`, `runOne`, `driver_state` and the
-engine's result types. No export carries an interim label.
+engine's result types.
 
 ## 4. How to read an export
 
@@ -537,8 +577,10 @@ meaning of the triple (below), and its ∀ `fl` is real run-length content.
   fragment (`Adequacy.lean:767`).
 - `hpot : pot e ≤ lemDefaultFuel`, `hQpot`, `FragProcs.potBound` — THE
   STATIC FUEL PREMISE. `pot` (`Potential.lean:43`) is a step-monotone
-  size potential on terms. The engine's pure-expression evaluator and
-  context search are fuelled at LemLib's constant
+  size potential on terms; it dominates §2.2's round-level measure
+  `esize` (`Frag.esize_le_pot : esize e ≤ pot e`, `:100`), so this premise
+  discharges the certification's `hsz`. The engine's pure-expression
+  evaluator and context search are fuelled at LemLib's constant
   `lemDefaultFuel = 1000000` (`.lake/packages/LemLib/lean-lib/LemLib.lean:56`).
   These premises keep every reachable term's size under it independently
   of the run length. Together with the loop budget
@@ -603,10 +645,7 @@ Three run in the full gate; one instrument is on demand.
   PARTIAL-ONLY, 15 NO-RULE, 5 OUT-OF-SCOPE, 0 red, 18 consumer modules.
   What green establishes is stated exactly by the generated, gate-diffed
   header (`docs/CAPABILITY_MANIFEST.md:8`–`:26`, "WHAT GREEN ESTABLISHES,
-  EXACTLY"). In short: the table covers every `Frag` constructor and
-  names no stale one; every named theorem exists; every RULE/PARTIAL-ONLY
-  rule is in a listed consumer's proof-term cone; the classification is
-  complete and exact; every claim-matrix name exists. Not established:
+  EXACTLY"). Not established:
   exhaustiveness of the table over the engine's success shapes (a
   reviewed reading); a NO-RULE or OUT-OF-SCOPE row is a stated absence,
   not coverage.
@@ -632,7 +671,8 @@ Three run in the full gate; one instrument is on demand.
   `boundary_check.sh:46`. Text-based: it catches honest drift.
   Per-module allowances live in the TSV with their reason; there are
   ZERO at this revision (`BOUNDARY: 19 modules checked, 0 internals
-  mention(s) in total, exit=0`, `docs/2026-09-04_h1-notes.md` §8). A
+  mention(s) in total, exit=0`, `docs/2026-09-04_h1-notes.md` §8, the
+  gate at `29d9195`). A
   malformed TSV row is red.
 - **The claim matrix** (`docs/CLAIMS.md`, hand-written prose stated as
   such in its header). Per headline claim: exported theorems, kind,
@@ -640,8 +680,8 @@ Three run in the full gate; one instrument is on demand.
   exclusions (KOI pointers), freshness check. The generator checks that
   every declaration a claim row names exists (11 rows, 90 names).
 - **The parametric inventory** (`scripts/parametric_inventory.lean`) is
-  ON DEMAND, not in the gate — [AGENT 2026-09-04] (DECISIONS AR5-manifest
-  entry): the boundary check is its cheap gate twin, and a proof-term
+  ON DEMAND, not in the gate — [AGENT 2026-09-04] (DECISIONS "AR5-MANIFEST
+  LANDED and COMBINED"): the boundary check is its cheap gate twin, and a proof-term
   measurement without a verdict is not a check. Its configuration is
   fail-closed: a missing export seed or an unclassified module aborts
   the run (`parametric_inventory.lean:1`–`:16`).
@@ -650,9 +690,7 @@ Three run in the full gate; one instrument is on demand.
 
 Each item points at its register entry; none is hidden in a proof.
 
-- **The fragment boundary.** Located (C-elaborated) Core, concurrency,
-  function pointers (`Eccall`), external C calls, the `Impl` call —
-  outside `Frag` (§1; KOI B8; CLAIMS "Not claimed").
+- **The fragment boundary** is §1's (KOI B8; CLAIMS "Not claimed").
   Five OUT-OF-SCOPE variants lie inside the fragment's constructors but
   outside the mirror (manifest OUT-OF-SCOPE rows): a jump with a
   non-evaluating surplus argument; `pure(x)` at a `Proc`-named unbound
@@ -677,6 +715,11 @@ Each item points at its register entry; none is hidden in a proof.
 - **The fuel constants** `lemDefaultFuel`/`CerbFuel.driverFuel` (§4; KOI
   A1, a ruled semantics defect, fix pending upstream); the outer-fuel
   quantifier (KOI A2); the singleton equation (KOI B5).
+- **The engine's `panic!` arms** (§3; KOI A5, the typed-failure-outcomes
+  pass upstream). A5 names `killM`'s dead-static-kill arm: at this pin
+  that arm is a kill (generated `CerbMem.lean:1906`–`:1907`); the mainline's
+  re-mirroring, which the re-pin brings, makes it a `panic!`. The pin's
+  drift from the mainline is KOI A6.
 - **Empty tag definitions and extern** in every proved configuration
   (§4; KOI B4).
 - **The mirror-completeness residual.** `OpenRound`'s two arms are
