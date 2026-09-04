@@ -318,3 +318,125 @@ re-reviewer judge whether 731 lines of ≤ 4-line sentences reads.
   reading, the fifteen NO-RULE and five OUT-OF-SCOPE variants,
   `diverge_total_unprovable`, "There is no declared boundary axiom", the
   nine premises, `hcost`, the two verbatim theorem texts unchanged).
+
+## Third pass (reviewer 5)
+
+Author: the third-pass worker (not reviewer 5; not the first- or
+second-pass author). Branch `hygiene-h1`, worktree `worktrees/hygiene-h1`,
+base `b623107`. Scope: DOCS ONLY — `ARCHITECTURE.md`, one README trust
+sentence, this record. No `.lean`, no script, no `docs/DECISIONS.md`, no
+`docs/KNOWN-OPEN-ITEMS.md` change; no `lake`/`lean` invocation. Every fix
+was verified by READING the `.lean` text at `b623107`, the pinned
+workspace at `f95ef8d9c` (`git -C ../.cerberus-ws log -1 --format=%h` =
+`f95ef8d9c`), LemLib at `.lake/packages/LemLib`, `../docs/DECISIONS.md`
+and `../docs/KNOWN-OPEN-ITEMS.md`. Commits: (1) `284a556` review 5 copied
+verbatim (`cmp`-identical to
+`worktrees/review-arch-5/cerberus-heaplang/docs/2026-09-04_architecture-review-5.md`);
+(2) `f477504` the edits + the README sentence; (3) this record.
+
+### Disposition table
+
+| Id | Done | Where (ARCHITECTURE at `f477504`) | Verified against |
+|---|---|---|---|
+| T-1 | The sub-trio list restated exactly as `Audit.lean`'s comments record it: `fibRounds_closed`, `regionCost_pos` and the `freshBase_*` bounds `[propext, Quot.sound]`; `BareHead.decomp_call_root` `[propext]`; `regionCost_eq` and `runND_killed` no axioms. The rule stated: "exactly the trio" = the pinned exports; every other theorem bounded by the trio, by the sweep; the sub-trio public names are therefore unpinned. The five-line sentence split into three | §3 "What the build checks" | `Audit.lean:354`–`:356` ("sub-trio cones `[propext, Quot.sound]` … `freshBase_ne_zero_of_cost`/`headroom_freshBase`"), `:380`–`:384` ("SUB-trio cones `[propext, Quot.sound]` … `freshBase_ne_zero_of_cost'`/`headroom_freshBase'`/`freshBase_pos_nat`/`regionCost_pos` (`regionCost_eq` has no axioms at all)"), `:523`–`:525` ("`BareHead.decomp_call_root` — `[propext]` — and `fibRounds_closed` — `[propext, Quot.sound]`"), `:552`–`:553` ("`runND_killed` has NO axioms — measured"); pin loop `:615`–`:616`, sweep `:617`–`:636`, banned sweep `:637`–`:653` re-read. Cones as the comments record them, not re-measured (no `lake`) |
+| D-1 | New §3 paragraph "The `panic!` arms" (18 lines; see deviation 1): the counts (61 code arms in the hand-written seams, 40 in `CerbMem.lean`, none in lem-generated code; DERIVED), what they are (OCaml `assert false`/`failwith` mirrors, where the OCaml aborts), the kernel reading (`Inhabited` default, `= default` by `rfl`), why it matters (a theorem about `drive` is about the Lean definition, which continues where the OCaml faults), how the rules stay away (`create_atomic`'s `hsz`; the NO-RULE `create` rows), what is NOT checked (no theorem says an export's run reaches none; the sweep sees axioms, not terms), the owner (KOI A5, the typed-failure-outcomes pass), and the distinction from §2.2's `panic` family (`failwithI`/`fuelExhaustedWith` are `opaque`: no kernel equation, theorems hold at every value). §2.2's "`panic` family" sentence now says "LemLib's kernel-opaque failure (not the `panic!` arms of §3)". §6 item "The engine's `panic!` arms" with KOI A5 (and the pin-vs-mainline `killM` fact, below). README "What you are asked to take on faith", second bullet: two sentences after "…stay away from `fuelExhaustedWith` and `failwithI`." | §3; §2.2; §6; `README.md:592`–`:597` | Counts: the command and output below. Kernel reading: generated `CerbMem.lean:1127`–`:1132` (comment "every such term is definitionally `default`" and `have hp : … (panicWithPosWithDecl m d l c msg : α) = default := … rfl`), `:2553`–`:2556` ("a plain `panic!` body is kernel-visible, making the fuel-exhausted branch provably equal to `default` — semantically false. Opaque core ⇒ no equations"); cerberus-lean `lean_frontend/docs/2026-09-03_typed-failure-outcomes-ruling.md` header ("for the semantics AS A MATHEMATICAL OBJECT, the failure site DENOTES the default value — the definition disagrees with the oracle exactly where the oracle crashes"; read-only reference). `failwithI`/`fuelExhaustedWith`: `.lake/packages/LemLib/lean-lib/LemLib.lean:160`–`:187` (`opaque failwithI … := default`, "opaque: NO equations"; `opaque fuelExhaustedWith … := witness`). `create_atomic` `Rules.lean:991`, `hsz : 0 < CerbMem.sizeofCtype M.tagDefs ty` at `:995`; `sizeofCtype` returns `Nat`, `Void0` arm `panic!` at generated `CerbMem.lean:380`. Hand-written = generated copies: `cmp` identical for all nine files with `panic!`; `handwritten_copy.manifest` is the copy list |
+| D-2 | "It is a pin, not the mainline; the queued re-pin and its one exported-text change (`killM_killed_inv`) are KOI A6." | §3 "The trust base" (iii) | KOI A6 row (`../docs/KNOWN-OPEN-ITEMS.md:22`): "mainline is ≥ 34 commits ahead (`de2fbf1`) … `killM` re-mirroring (one exported text change: `killM_killed_inv`)" |
+| T-2 | `:501` → `:502` (the `wps_sound` call), `:673` → `:674` (`theorem even_odd_certified`), `:721` → `:722` (`theorem even_odd_certified_production`). Every `EvenOddExhibit.lean:` cite in the document re-verified at HEAD: exactly these three, all now exact | §2.1 table; §2.5 both tables | `sed -n 502p` = "(wps_sound (ctl := ⟨[], some mainSym, ℓ⟩) rfl (eoMain ra n) [fmapEmpty])) .rfl)).trans ?_"; `:674` = "theorem even_odd_certified (hn : 0 ≤ n) …"; `:722` = "theorem even_odd_certified_production (hn : 0 ≤ n)"; `git show dd7b852 -- CerberusHeapLang/EvenOddExhibit.lean` hunk `@@ -307,11 +307,12 @@` (one line added at the `eo_parity_even` docstring; the four later hunks are same-length). `FibRecExhibit.lean` untouched by `dd7b852` (`--stat`: only EvenOddExhibit.lean and the audit report) |
+| C-1 | `../.cerberus-ws/lean_frontend/` | header | `ls ../.cerberus-ws/lean_frontend/generated/Driver.lean` from the package directory |
+| C-2 | "`pot` … is a step-monotone size potential on terms; it dominates §2.2's round-level measure `esize` (`Frag.esize_le_pot : esize e ≤ pot e`, `:100`), so this premise discharges the certification's `hsz`." | §4 premise list, `hpot` | `Potential.lean:100` "theorem Frag.esize_le_pot {e : CoreExpr} (hf : Frag e) : esize e ≤ pot e"; `esize` `Soundness.lean:289`; the use `Adequacy.lean:1208` "have hsz : esize e ≤ lemDefaultFuel := Nat.le_trans hf.esize_le_pot hpot" |
+| C-3 | Glossary entries *pinned*/*unpinned*, *the sweep*, *a tie*, *a readout*; "drain iteration" glossed in place ("the loop's last pass over the emptied thread list"); "wakeup-free" replaced by "Active means `NDactive NOWAKEUP`: no other thread is woken"; "the certification equation" → "the certification (§2.2)" | glossary; §2.4; §2.2; §1 | `Audit.lean:159`–`:160`, `:604`–`:636` (`trioExports`, the pin loop, the sweep); `DriverSafeCtl` `Adequacy.lean:935`–`:940` (six hypotheses: thread, `layout_state`, `core_extern`, `core_file`, `LabeledProcs`, `CtlTied`), `DriverDoneCtl` `ProdLoop.lean:459`–`:463` (the first five; `k + 2 ≤ fl` is the budget, not a tie); `loop_step_done_exhaust` docstring `DriverCollapse.lean:2253`–`:2256` ("the drain iteration on the empty thread list has no fuel"), the loop's `[] => nd_return acc` arm generated `Driver.lean:348`; `CerberusRound` `Round.lean:203` "(NDactive NOWAKEUP, …)"; `engine_step_matchU` is an implication `Step → CerberusRound` (`Round.lean:1010`–`:1017`) |
+| S-1 | (a) "No export carries an interim label." deleted. (b) "(DECISIONS AR5-manifest entry)" → "(DECISIONS \"AR5-MANIFEST LANDED and COMBINED\")" | §3 last paragraph; §5 inventory bullet | `../docs/DECISIONS.md:1916` "2026-09-04 [AGENT] AR5-MANIFEST LANDED and COMBINED (…" |
+| S-2 | Both cites: "`docs/2026-09-04_h1-notes.md` §8, the gate at `29d9195`" | §3; §5 boundary bullet | `h1-notes.md:254` "## 8. The FULL gate at `4acb10d`" and `:746` "## 8. The FULL gate at `29d9195`"; the cited lines `:752` ("export pins: 402 trio-exact") and `:781` ("BOUNDARY: 19 modules checked, 0 internals mention(s) in total, exit=0") are in the second |
+| C-4 | (i) §5 "In short: …" paraphrase deleted; "Not established: …" kept. (ii) §6 first bullet → "**The fragment boundary** is §1's (KOI B8; CLAIMS \"Not claimed\")." + the five OUT-OF-SCOPE variants. (iii) Header: "The README carries the exhibits table and the build recipe, and gives each limitation its discharge or mover; §6 here lists the limitations with their register numbers (the two overlap by design)." The 430–434 sentence split (T-1) | §5; §6; header | README "Registered divergences and limitations" table (`README.md:628`–`:650`; columns Divergence / Discharge or mover / Home) — the README IS a register of limitations by discharge, §6 by KOI number, so the header now says both |
+
+Reviewer 5's note to the orchestrator (T-2: a `.lean`-touching commit over a
+cite-bearing front document must re-check the cites into the touched
+file) is relayed unchanged; nothing in this pass addresses process.
+
+### The `panic!` counts, as measured (verbatim; pinned workspace `f95ef8d9c`)
+
+```
+$ for f in ../.cerberus-ws/lean_frontend/*.lean; do c=$(grep -c "panic!" "$f"); [ "$c" != 0 ] && echo "$(basename $f): $c"; done
+CerbDecode.lean: 6
+CerberusImpl.lean: 2
+CerbFloat.lean: 5
+CerbFS.lean: 8
+CerbMem.lean: 42
+CerbND.lean: 1
+CerbTags.lean: 1
+CerbUtils.lean: 4
+CoreParser.lean: 1
+$ cat ../.cerberus-ws/lean_frontend/generated/*.lean | grep -c "panic!"
+70
+```
+
+Raw total 70 = the sum over the nine hand-written files (6+2+5+8+42+1+1+4+1),
+so the lem-generated files contain none (DERIVED). Of the 70 lines, nine
+are comment lines, read one by one: `CerbFS.lean:47`, `:51`, `:91`;
+`CerbFloat.lean:84`, `:163`, `:294`; `CerbND.lean:42`; `CerbMem.lean:1127`,
+`:2555`. Code arms therefore 61, of which `CerbMem.lean` 40, `CerbDecode`
+6, `CerbFS` 5, `CerbUtils` 4, `CerbFloat` 2, `CerberusImpl` 2, `CerbTags` 1,
+`CoreParser` 1, `CerbND` 0 (DERIVED). The hand-written files and their
+`generated/` copies are byte-identical (`cmp`, all nine). The document
+quotes 61 and 40 with "counts DERIVED, `grep -c 'panic!'` less comment
+lines"; the README sentence quotes the same two numbers.
+
+### [AGENT] observations for the orchestrator (not edited here)
+
+1. **KOI A5's wording describes the mainline, not the pin.** At the pin,
+   `killM`'s dead-static-kill arm is a KILL — generated `CerbMem.lean:1906`–
+   `:1907` "if st.deadAllocations.contains allocId then fail_
+   (MerrUndefinedFree Free_dead_allocation)"; `grep -n 'panic!'` over the
+   pinned `killM` (`:1895`–`:1919`) finds none. The `panic!` arm ("Concrete:
+   FREE was called on a dead allocation") is on the cerberus-lean mainline
+   (`../../cerberus-lean/lean_frontend/CerbMem.lean:2158` at `1b57bcf26`,
+   read-only). A5's own source, scout-2 §8 (γ), says the same in context
+   ("re-check `MemWF.killM` at that re-pin"). ARCHITECTURE §6 states the
+   pin's fact and the mainline's; A5's first sentence could say "at the
+   next pin".
+2. **KOI A4–A6 cite `docs/2026-09-03_repin-scout-2.md`, which is not on
+   `hygiene-h1`** (nor on `main`): `git branch --contains 07ceb44` =
+   `repin-scout2` only; the file exists only in `worktrees/repin-scout2/`.
+   The register points at an off-branch record.
+
+### [AGENT] deviations from the brief (each with its reason)
+
+1. **The §3 `panic!` disclosure is 18 lines, not three to six.** The brief
+   mandates seven contents (count, what they are, the kernel reading, why
+   it matters, what is not checked, the owner, the distinction from
+   `failwithI`); written as ≤ 4-line sentences with cites they do not fit
+   in six lines without dropping one. Decision: keep all seven, each as
+   short as its cite allows. Removing any is a disclosure loss in the
+   trust section — the reviewer's ground for the grade.
+2. **README: two sentences, not one.** The single sentence ran six wrapped
+   lines with a colon splice; split at the colon. Content unchanged.
+3. **Length 774, not 731.** Net +43: the glossary +13 (four entries), the
+   `panic!` paragraph +19, the §6 `panic!` item +5, the T-1 restatement
+   +3, D-2 +2, C-2 +3, the drain/NOWAKEUP glosses +2, the header +1;
+   the cuts −5 (§5 paraphrase −4, §6 first bullet −2, S-1a −1, +2 from
+   the README/§6 fix). Every addition is one the review asked for.
+
+### Self-check (at `f477504`)
+
+- **Sentence length**: a paragraph-aware script (prose only; headings,
+  code blocks, tables and the block quote excluded; list items start a
+  paragraph; a sentence ends at `.`/`?`/`!`/`:` followed by whitespace and
+  a capital, quote, backtick, bracket or end of paragraph) counts 348
+  sentences, **0 over four wrapped lines** (DERIVED).
+- **Line count**: 774 (`wc -l`). Long lines > 90 characters: only table
+  rows, the code blocks' lines and the `CerbND.runND …` identifiers.
+- **Dates**: 25 `2026-` tokens; **0 outside** a `[USER 2026-…]`/`[AGENT
+  2026-…]` tag or a `docs/2026-…` record path (DERIVED, `grep -v`).
+- **Cites re-verified at HEAD**: every `EvenOddExhibit.lean:` cite (`:502`,
+  `:674`, `:722` — the only three) and every `Audit.lean:` cite (`:45`,
+  `:159`–`:160`, `:354`–`:356`, `:380`–`:384`, `:523`–`:525`, `:552`–`:553`,
+  `:615`–`:616`, `:617`–`:636`, `:637`–`:653`) read at the cited lines;
+  the new cites `Potential.lean:100`, `Rules.lean:995`, `Adequacy.lean:935`–
+  `:940`, `ProdLoop.lean:459`–`:463`, `DriverCollapse.lean:2253`–`:2257`,
+  `Round.lean:203`, generated `CerbMem.lean:380`/`:1127`–`:1132`/`:1906`–
+  `:1907`, `LemLib.lean:160`–`:187`, `DECISIONS.md:1916`, `h1-notes.md:254`/
+  `:746`/`:752`/`:781`, KOI rows A5/A6 read.
+- **Record paths**: every `docs/…`/`../docs/…` path cited exists (scripted
+  `ls`, zero missing).
+- **Nothing lost**: every disclosure the second pass's self-check lists is
+  still present (grep for each); the two verbatim theorem texts unchanged.
