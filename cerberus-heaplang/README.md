@@ -103,14 +103,27 @@ while every store rule is at `Store0 false`: the locking store, whose
 engine success flips the allocation's `isReadonly`, has no rule, so no
 derivation traverses one; noted by the K1 range audit.) The per-construct authority is the
 inductive `Frag` (Soundness.lean), the premise of every adequacy
-theorem; the generated [capability manifest](docs/CAPABILITY_MANIFEST.md)
-lists one row per (`Frag` constructor, covering rule) pair with the
-client modules — the exhibits and the C3 smoke `Examples/CallSmoke` —
-whose proofs consume that rule (23 constructors, 27 rule rows, 0 red;
-`Frag.call` → `wps_call_root`/`wps_call`; `Frag.kill` is covered by the static dispose `wps_kill` AND the
-dynamic `wps_free`; `Frag.load`/`Frag.store` by the object rule AND the
-region rule `wps_load_region_at`/`wps_store_region_at` (kill/free arc K5);
-one row each).
+theorem; the generated [rule-use and classification
+manifest](docs/CAPABILITY_MANIFEST.md) lists one row per engine-SUCCESS
+VARIANT of each `Frag` constructor (ar5-manifest, 2026-09-04; ARCHITECTURE
+§7 "The instruments around the claims"), each classified RULE (a partial
+and a total rule, both in the proof-term cone of a consumer module — the
+sixteen modules classified `positive-client`/`declared-smoke` in
+`scripts/module_classes.tsv`, listed per row), RULE-TOTAL-UNDEMONSTRATED
+(the total rule proved but consumed by no client: `wpt_load`,
+`wpt_case_value`, `wpt_wseq`), NO-RULE (admitted by the fragment and the
+engine, no rule, with the deciding record — the locking store, the static
+kill of a region, `free(NULL)`, the zero-cost `alloc`, the union-member
+pointer, the read-only-cell load at the statement level, the zero-size/
+atomic/non-inert `create` types, the colliding `free`, the function-vs-
+concrete `PtrEq`) or OUT-OF-SCOPE (excluded by the fragment/mirror
+boundary): 23 constructors, 47 rows, 27 RULE, 3 RULE-TOTAL-UNDEMONSTRATED,
+12 NO-RULE, 5 OUT-OF-SCOPE at this writing. Green means exactly what the
+manifest header says — every constructor classified, every named theorem a
+theorem, every RULE consumed in both judgments — and NOT that the variant
+table is exhaustive over the engine's success shapes or that a NO-RULE
+shape is covered; the former "0 red = every constructor has a covering
+rule" reading is withdrawn.
 
 **Pure operands are in the covered grammar and carry their own static
 fuel bound.** The engine's pure-expression evaluator is fuelled at the
@@ -760,9 +773,12 @@ with the mandatory decrease `1 + m ≤ k`); the total judgment's collapse
 evaluation, the `PtrEq` memop and the value protocol; the assertion
 laws; and the environment laws (`SymFrame`, `envAdd_lookup`).
 
-Every rule in that table is consumed by an exhibit (the capability
-manifest reports the fragment rows), except the laws kept as laws of the
-logic: `allocMeta_agree`, `allocBudget_weaken`/`allocBudget_le`, the
+Every partial rule in that table is consumed by a client (the manifest
+reports, per variant, which consumer modules' proofs flow through each
+rule); three TOTAL rules are proved but consumed by no client
+(`wpt_load`, `wpt_case_value`, `wpt_wseq` — the manifest's
+RULE-TOTAL-UNDEMONSTRATED rows, each with its mover); the laws kept as
+laws of the logic are exempt from the consumer check: `allocMeta_agree`, `allocBudget_weaken`/`allocBudget_le`, the
 plan-shaped readings `wps_create_of_plan`/`wpt_create_of_plan`, and the raw-WP `wp_load`
 (the exhibits consume `wps_load`; its sibling `wp_store` is consumed by
 `provenB`, Exhibit.lean). Representation predicates are ordinary
@@ -799,7 +815,16 @@ public rules alone (`twoField_load_x/_y`, `twoField_store_x/_y`,
 by the engine's own `arrayShiftPtrval` through `cellPtr_arrayShift`,
 `wps_create` + `cellOwn_view` + one `pointsToView_split`). It has zero
 direct references to the ghost maps, `CohG`, the cursor, `Step` or the
-judgment unfoldings (`scripts/parametric_inventory.lean`, on demand).
+judgment unfoldings. The line is checked two ways: textually at every
+claim point by `scripts/boundary_check.sh` (the full gate's client-boundary
+speedbump: the modules classified `positive-client`/`declared-smoke`/
+`example-support` in `scripts/module_classes.tsv` must not mention the
+internals outside comments; per-module allowances carry their reason in
+the TSV — at this writing the dead-object readout helpers of
+`DisposeExhibit`/`MallocListExhibit`, being relocated, and `progA_wpt` in
+`Exhibit`), and at the proof-term level on demand by
+`scripts/parametric_inventory.lean` (fail-closed on its configuration since
+2026-09-04; not a gate — ARCHITECTURE §7).
 
 ## How to build and verify
 
@@ -845,9 +870,13 @@ the pin list grows with the exports)
 The trust base is this build with its in-build sweep and a grep for
 banned proof methods (`native_decide`/`bv_decide`/`ofReduce*`) over the
 tree — the two checks `scripts/test_unit.sh --fast` runs. The full `scripts/test_unit.sh`
-adds two drift reports: the capability manifest is regenerated and
-diffed, and the import direction semantics → heap → rules → adequacy →
-clients is checked. Ask the kernel yourself (from `cerberus-heaplang/`):
+adds three speedbumps: the rule-use and classification manifest is
+regenerated and diffed, the import direction semantics → heap → rules →
+adequacy → clients is checked (the protected set is the class `core` of
+`scripts/module_classes.tsv`), and the client boundary is checked
+(`scripts/boundary_check.sh`). The claim matrix `docs/CLAIMS.md` names, for
+every headline claim, its theorems, kind, exhibits, supported variants and
+known exclusions; the manifest generator checks its names exist. Ask the kernel yourself (from `cerberus-heaplang/`):
 
 ```bash
 ../scripts/capped ~/.elan/bin/lake env lean --stdin <<'EOF'

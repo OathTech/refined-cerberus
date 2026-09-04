@@ -484,9 +484,10 @@ THE OTHER OPEN ITEMS:
   proved once through the seams `loadM_live`/`storeM_live` at the region
   cell — no coupling change, as predicted; faces `wps_load_region_at`/
   `wps_store_region_at`, the whole-region `wps_load_regionOwn_at`/
-  `wps_store_regionOwn_at`, total twins; manifest rows `Frag.load`/
-  `Frag.store` → the region rules (23 constructors, 25 rule rows, 0 red,
-  16 exhibit modules). What the engine checks at an untyped allocation
+  `wps_store_regionOwn_at`, total twins; the manifest's `Frag.load`/
+  `Frag.store` region rows (docs/CAPABILITY_MANIFEST.md — since
+  2026-09-04 one row per engine-success VARIANT, below). What the engine
+  checks at an untyped allocation
   is type-blind — the dead list, the record, bounds against the record's
   size, writability, and `isAtomicMemberAccess = false` at `alloc.ty =
   none` (CerbMem.lean:1619); no effective-type or alignment check — so
@@ -539,8 +540,8 @@ THE OTHER OPEN ITEMS:
   `region_loop_certified_production` (likewise)
   (RegionLoopExhibit.lean), every advertised kill/free/alloc law with an
   exhibit consumer; K5 THE REGION ACCESS RULES and the malloc'd linked
-  list (above; the manifest now 23 constructors, 25 rule rows, 0 red, 16
-  exhibit modules), plus the public `deadObj_readout`/`deadRegion_readout`
+  list (above; the kill/free rows of the manifest), plus the public
+  `deadObj_readout`/`deadRegion_readout`
   (asked for by the K4 range audit). Follow-up still named in the record: the cursor
   ghost heap as a proof device (no client owns the cursor since K2.5 —
   fold it into the budget interpretation).
@@ -573,3 +574,101 @@ THE OTHER OPEN ITEMS:
   2026-09-03.)
 - The deferred parametric semantics interfaces: the rules are proved
   directly against `Step` and the memory state (walkthrough §7).
+
+THE INSTRUMENTS AROUND THE CLAIMS (ar5-manifest, 2026-09-04 — the external
+audit `../docs/2026-09-04_reynolds-ohearn-separation-logic-audit.md`,
+Finding 1 and the instrument half of Finding 2; record
+`docs/2026-09-04_ar5-manifest-notes.md`). Four pieces, all speedbumps
+([USER 2026-09-02]), none a trust gate:
+
+- **The rule-use and classification manifest**
+  (`scripts/capability_manifest.lean` → `docs/CAPABILITY_MANIFEST.md`,
+  regenerated and diffed by the full gate). Its rows are the engine-SUCCESS
+  VARIANTS of every `Frag` constructor — a hand-maintained table read off
+  `Frag`, `Step` and the engine's `storeM`/`loadM`/`allocateObject`/
+  `allocateRegion`/`killM`/`eqPtrval` arms — each in exactly one class:
+  RULE (a partial and a total rule, both theorems, each in the proof-term
+  cone of a consumer module), RULE-TOTAL-UNDEMONSTRATED (the partial rule
+  consumed; the total rule proved but in no consumer's cone — stated with
+  its mover, red the day a consumer appears), PARTIAL-ONLY (no total rule
+  exists), NO-RULE (admitted by the fragment and the engine, no rule — the
+  reason and the record that decided it) and OUT-OF-SCOPE (excluded by the
+  fragment/mirror boundary, with the record). At the landing: 23
+  constructors, 47 rows — 27 RULE, 3 RULE-TOTAL-UNDEMONSTRATED (`wpt_load`,
+  `wpt_case_value`, `wpt_wseq`), 0 PARTIAL-ONLY, 12 NO-RULE (the locking
+  store; union-member pointers at load and store; the read-only-cell load
+  at the statement level; zero-size, atomic and non-inert `create` types;
+  the static kill of a region; `free(NULL)`; `free` of a created object at
+  a colliding base; the zero-cost `alloc`; the function-vs-concrete
+  `PtrEq`), 5 OUT-OF-SCOPE (`run` surplus, the `Proc`-named unbound symbol,
+  the annotated head at the symbol binder, the differing-provenance
+  `PtrEq`, the `Impl` call). WHAT GREEN ESTABLISHES, EXACTLY: the table
+  covers every constructor of `Frag` in the built environment and names no
+  stale one; every theorem a row names exists and is a theorem; every RULE
+  row's partial and total rule (and every PARTIAL-ONLY rule) is in the
+  proof-term cone of at least one consumer module, listed in the row; the
+  module classification is complete and exact; the claim matrix names only
+  existing declarations. GREEN DOES NOT ESTABLISH that the variant table is
+  exhaustive over the engine's success shapes (it is a reviewed reading,
+  not a theorem), that a rule is the strongest statement of its variant, or
+  that a consumer's dependency on a rule is the load-bearing step of its
+  headline proof. A NO-RULE row is a stated absence, not coverage. The
+  former constructor-level "0 red" reading — "every constructor has a
+  covering rule" — is withdrawn from every surface: it never said which
+  semantic forms of a constructor a rule covers.
+- **One module classification** (`scripts/module_classes.tsv`, pure data;
+  the table is reprinted at the head of the manifest). Classes: `core`,
+  `production-core`, `audit`, `positive-client`, `declared-smoke`,
+  `semantic-test`, `engine-mirror-test` (vocabulary reserved, currently
+  no member), `production-wrapper`, `negative-test`, `example-support`.
+  The manifest's consumer set is `positive-client` ∪ `declared-smoke` (16
+  modules — the fourteen program exhibits, `Examples.CallSmoke`,
+  `Examples.ReadinessSmoke`; the two production wrappers and the negative
+  test, formerly counted among the 18 "client modules", are not consumers:
+  their rule use is through the clients they wrap); the inventory's
+  client-module section reads the same two classes; the import-direction
+  speedbump's protected set is the class `core`; the boundary check's
+  subjects are `positive-client`, `declared-smoke`, `example-support`.
+  Every instrument fails hard on an unclassified package module, a
+  classified module absent from the build, or a class outside the
+  vocabulary.
+- **The client-boundary check** (`../scripts/boundary_check.sh`, in the
+  full gate): after stripping comments, a subject module must not mention
+  the coupling invariant and state interpretation (`CohG`, `metaInterp`,
+  `byteInterp`, `cursorInterp`, `budgetInterp`, `budgetAuth`,
+  `stateInterp_iff`/`_eq`), the judgment unfoldings (`wps.pre`, `wpt.pre`,
+  `wps_unfold`, `wpt_unfold`), the mirror transition (`Step.<name>`) or the
+  generated engine's transition/driver definitions (`step_ctx`,
+  `one_step0`, `step_action`, `drive_nonmemory_steps*`, `driver2`,
+  `loop_step_frag*`, `engine_step_matchU`, `CerberusRound`). Text-based:
+  it catches honest drift, not an adversary (the proof-term measurement is
+  the inventory). Per-module allowances live in the TSV with their reason
+  and print as ALLOWLISTED; at the landing three: `DisposeExhibit` and
+  `MallocListExhibit` (the dead-object readout helpers over
+  `CohG`/`metaInterp`, being relocated into Adequacy/API by the
+  concurrent `ar5-readout` slice) and `Exhibit` (`progA_wpt` opens
+  `stateInterp_iff` — found by the check; consumerless since F1,
+  KNOWN-OPEN-ITEMS C3). An allowance with no hits left prints a warning to
+  remove it, so the check is green on either ordering of the two slices.
+- **The claim matrix** (`docs/CLAIMS.md`, hand-written prose stated as
+  such): for every headline claim its exported theorem(s), kind
+  (partial/total/semantic/projected), demonstrating exhibits, supported
+  variants (pointing at the manifest rows), known exclusions (pointing at
+  `../docs/KNOWN-OPEN-ITEMS.md`) and the check that keeps it fresh. The
+  generator checks that every declaration a claim row names exists.
+- **The parametric inventory** (`scripts/parametric_inventory.lean`) stays
+  ON DEMAND — [AGENT 2026-09-04]: its client-module section has a cheap
+  text-based twin in the gate (the boundary check), and a proof-term
+  measurement without a verdict is not a check; adding a full-import Lean
+  run per claim point for it would be gate cruft. What changed: its
+  configuration is fail-closed (a missing export seed or an unclassified
+  module aborts the run; the ten stale seeds of the F1 renaming are
+  refreshed — `engine_adequacy(_alloc)`, `semantic_triple_sound`,
+  `semantic_frame`, the driver-lane theorems `wpt_driver_done(_alloc)`/
+  `wpt_driver_done_procs`, the pipeline forms) and its client list is the
+  classification's. Its 2026-09-04 reading is in the record: zero
+  `Step`/judgment references in every client; the `Ghost-direct = 1` of the
+  `*_wp_readout` theorems is the documented exception (the `hpost` premise
+  of `project_triple_pure` names `CohG`/`metaInterp`; API.lean), entering
+  the proof term through the projection lemma's type, not through a client
+  spelling the internal.
