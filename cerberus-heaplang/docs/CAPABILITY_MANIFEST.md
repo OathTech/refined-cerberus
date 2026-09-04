@@ -35,7 +35,7 @@ classified in Round.lean).
 | `ArrayExhibit` | positive-client | yes | — | array sum |
 | `Audit` | audit | no | — | exact export pins and the banned-axiom sweep |
 | `CaseExhibit` | positive-client | yes | — | value-scrutinee case |
-| `DisposeExhibit` | positive-client | yes | readout helpers `deadObj_dead_keep`/`deadNodes_dead` over `CohG`/`metaInterp` (the documented exception, API.lean) — being removed by ar5-readout (relocation into Adequacy/API) | dispose a list |
+| `DisposeExhibit` | positive-client | yes | — | dispose a list |
 | `DivergeExhibit` | negative-test | no | — | the total lane's unprovability result |
 | `DriverCollapse` | core | no | — | the shipped round at a live control |
 | `EnvLaws` | core | no | — | symbol-map laws |
@@ -51,7 +51,7 @@ classified in Round.lean).
 | `Lang` | core | no | — | the iris-lean Language instance |
 | `ListRevExhibit` | positive-client | yes | — | in-place list reversal |
 | `LoopExhibit` | positive-client | yes | — | the counter loop |
-| `MallocListExhibit` | positive-client | yes | readout helper `deadRegions_dead` over `CohG`/`metaInterp` (the documented exception, API.lean) — being removed by ar5-readout (relocation into Adequacy/API) | the malloc'd linked list |
+| `MallocListExhibit` | positive-client | yes | — | the malloc'd linked list |
 | `Potential` | core | no | — | the static fuel bound |
 | `ProdEntry` | production-core | no | — | the cold start and the pipeline theorems |
 | `ProdExhibit` | production-wrapper | no | — | exhibit A at the production entry |
