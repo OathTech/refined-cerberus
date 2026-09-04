@@ -2307,3 +2307,42 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   reached (731) — [AGENT] deviation with arithmetic in the notes: the
   required additions offset the cuts. Reviewer 5 (fresh) dispatched at
   dd7b852 to judge that and re-mark; the merge ask waits for an A.
+- **2026-09-04 [AGENT] ARCHITECTURE.md: REVIEW 5 B+ FAIL → THIRD AUTHOR PASS → REVIEW 6
+  A− PASS. MERGE CANDIDATE = this commit on `hygiene-h1`, PENDING THE OPERATOR'S
+  SIGN-OFF.** Reviewer 5 (at dd7b852; report committed 284a556): two MEDIUM
+  findings in the trust section — the sub-trio cone list inexact, and the
+  `panic!` arms of the pinned hand-written semantics undisclosed on every
+  shop-window surface — plus lows; P-1 of review 4 confirmed
+  disputed-correctly. Third author pass (f477504, notes 0d36d4f): the
+  `panic!` disclosure (61 code arms at the pin, 40 in `CerbMem.lean`, none
+  lem-generated — counts DERIVED and re-derived by reviewer 6; the kernel
+  reads them as `Inhabited` defaults, `= default` by `rfl`; distinct from
+  LemLib's `opaque` failure family; what is NOT checked stated; owner KOI
+  A5) in §3 and two README sentences; the exact sub-trio list; A6; every
+  low. Reviewer 6 (at d80b639, ~30+ cites re-verified incl. the `panic!`
+  counts and the `rfl`/`opaque` facts): **A− — PASS**, two one-clause
+  exactness fixes required before the ask, applied by the orchestrator
+  in this commit and verified against `Audit.lean`'s comments and the
+  seam files: T-1 the sub-trio list now names all seventeen (adds
+  `BareHead.not_annot`, `Decomp.get_ctx_rebuild_action`, the four
+  `∈`/`contains` bridge lemmas, `Decomp.callRedex?_inv`/`callRedex?_some`/
+  `pot_plug_call_le`/`callRedex?_none_of_jumpRedex?_some`); T-2 fifty-four
+  of the sixty-one arms mirror OCaml aborts, seven are Lean-side guards
+  (five `CerbFS` refusals, `CerbTags.lean:34`, `CoreParser.lean:2097`).
+  Lows applied: T-3 (consumer counts exclude the defining module and the
+  pin list), T-4 (19 code `⊤` sites in Wps.lean, DERIVED), S-1 (B6 names
+  all three slack bounds), C-1 (`generated/` holds the seam copies), C-2
+  (which instruments run in the gate), C-3 (`BareHead` excludes the
+  annotated head). Reviewer 6's aside VERIFIED by the orchestrator: KOI
+  C15 ("402 pins = 400 distinct", from the H1 range audit's Note-1) was
+  FALSE — `trioExports` has 402 entries, 402 distinct; the two pairs are
+  primed twins; C15 withdrawn, erratum in KOI §D. Also in this range: the
+  re-pin scout record copied verbatim from branch `repin-scout2`
+  (d80b639); KOI A5 restated for the pin vs the mainline (at `f95ef8d9c`
+  the dead-static-kill arm is a kill; the `panic!` arm is on the mainline).
+  Every commit after dd7b852 is docs-only; the orchestrator FULL gate
+  recorded at dd7b852 covers the candidate's Lean content. Range audit of
+  the Lean content: the H1 range audit entry above (PASS WITH FIXES, A−,
+  fixes landed). Core-document review count for this revision: three
+  fresh reviewers (3: B−; 4: B+; 5: B+; 6: A−) — the same-reviewer-delta
+  ban held throughout.

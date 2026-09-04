@@ -1,6 +1,6 @@
 # Known open items — the register auditors read FIRST
 
-State: candidate `hygiene-h1` head dd7b852+ (2026-09-04, after the calls arc,
+State: candidate `hygiene-h1` head (2026-09-04, ARCHITECTURE at review-6 A−, after the calls arc,
 the fuel-lane restatement F1, the external-audit response AR5, the H1
 hygiene/coverage slices, their range audit, and the ARCHITECTURE rewrite). Maintained by the orchestrator; every entry
 points at the record that owns it. PURPOSE: an auditor should not
@@ -58,11 +58,12 @@ or a ruled disposition. Provenance tags as in `docs/DECISIONS.md`.
 | C12 | Boundary allowances are per-module: a second, new internals mention in an allowlisted module (`Exhibit`) would not turn red. | AR5 range audit H-2 | Optional expected-count cell; moot once C8 removes the last allowance. |
 | C13 | CLOSED at H1a (TSV header: "rule use only through imported clients"). | `docs/2026-09-04_h1-notes.md` | Closed. |
 | C14 | THIRTEEN consumerless lemmas in Soundness.lean since H1a deleted `outcomesU_of_step`: the ten `stepDischarge_*` plus `dischargeStep_kill_active`/`dischargeStep_alloc_active`/`dischargeStep_memop_active` (in-degree 0 at HEAD, measured by the H1 range audit — the worker's count of ten was corrected there, R-1); DriverCollapse documents the `stepDischarge_*` as its twins. | H1 record + `docs/2026-09-04_audit-h1-range.md` R-1 | Delete or re-home; hygiene. |
-| C15 | `Audit.lean`'s pin list has two duplicate entries (`loop_step_frag`, `loop_step_frag_same`): "402 pins" is the list length; 400 distinct names (376 = 374 distinct at the AR5 candidate). | H1 range audit Note-1 | Dedupe; then every "402" on the surfaces becomes 400 — do it in one docs+Audit commit. |
+| C15 | ~~duplicate pin entries~~ WITHDRAWN: the H1 range audit's Note-1 was wrong — `trioExports` has 402 entries, 402 distinct (orchestrator measurement at d80b639; `loop_step_frag`/`loop_step_frag'` and `loop_step_frag_same`/`loop_step_frag_same'` are primed twins, not duplicates; reviewer 6's aside). | ARCHITECTURE review 6 | Closed as a non-item. |
 
 ## D. Record errata already applied (append-only register — do not re-report)
 
 - DECISIONS 2026-09-04 external-audit entry: "10 stale seeds" → 6 (worker probe).
+- KNOWN-OPEN-ITEMS C15 (2026-09-04, from the H1 range audit's Note-1 "402 pins = 400 distinct") was FALSE: 402 distinct, measured; withdrawn the same day.
 - DECISIONS 2026-09-04 AR5 landing entries: gate quotes were trimmed (prefix stripped, lines cut at 200 chars) → re-quoted untrimmed in the AR5 range-audit entry, with the elision rule for all earlier gate quotes stated there (AR5 range audit R-1).
 - DECISIONS "28 commits past the pin" → 34 (F1 audit H-1); "ONE CONTENT
   LOSS" → the B1 loss class (F1 audit R-2); "PROVISIONAL … 1 files" → the

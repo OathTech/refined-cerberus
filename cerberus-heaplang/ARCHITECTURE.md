@@ -140,7 +140,8 @@ well-founded recursion on a step budget `k`. A jump must decrease the
 budget, `⌜1 + m ≤ k⌝` (`:167`). A call splits it, `1 + m + k' ≤ k`
 (`:172`): the call round, the callee including its return, the
 continuation. Both judgments are stated at the top invariant mask `⊤`
-(21 sites in `Wps.lean`, 26 in `Wpt.lean`). The raw-WP layer of
+(19 code sites in `Wps.lean`, 26 in `Wpt.lean`, docstring mentions
+excluded; DERIVED by grep). The raw-WP layer of
 `Rules.lean` is mask-generic — `AtomicStep` (`:194`), `wp_of_atomic`
 (`:210`), `wp_store` (`:1584`), `wp_load` (`:1614`), `spike_wp_wand`
 (`:1676`) — the two statement judgments are not. This is classical
@@ -202,7 +203,8 @@ caller's continuation (`wp_ret`/`wp_ret_annot`, `:3326`/`:3367`).
 faces into iris-lean's WP. `wpt_sound_cps` (`Wpt.lean:3173`, strong
 induction on the budget) with `wpt_sound`/`wpt_sound_empty`
 (`:3382`/`:3400`) collapse into iris-lean's total WP. Their consumers,
-exactly (non-comment occurrences, every package module):
+exactly (non-comment occurrences in every package module outside the
+defining module and `Audit.lean`'s pin list):
 
 | Collapse | Consumed by (the Iris-level readouts) |
 |---|---|
@@ -443,8 +445,13 @@ uses sorry` (README "The trust story"; `docs/2026-09-03_repin-fuel-notes.md`).
 in the hand-written seams, 40 of them in `CerbMem.lean` (e.g.
 `sizeofCtype` at `Void`, generated `CerbMem.lean:380`), none in
 lem-generated code (counts DERIVED, `grep -c 'panic!'` less comment
-lines). Each mirrors an OCaml `assert false`/`failwith` arm, where the
-OCaml run aborts. The kernel reads `panic!` as the return type's
+lines; the `generated/` directory holds byte-identical copies of the
+hand-written seams named in `handwritten_copy.manifest`, which is why a
+seam file is cited as generated `CerbMem.lean`). Fifty-four of them mirror an OCaml `assert false`/`failwith` arm,
+where the OCaml run aborts; seven are Lean-side guards with no OCaml
+abort behind them (the five `CerbFS.lean` refusals at the file-system
+model's boundary, `CerbFS.lean:47`; `CerbTags.lean:34`;
+`CoreParser.lean:2097`). The kernel reads `panic!` as the return type's
 `Inhabited` default (`= default` by `rfl`, generated
 `CerbMem.lean:1127`–`:1132`). A theorem about `drive` is therefore about
 the Lean definition, which on a state reaching such an arm continues
@@ -468,11 +475,16 @@ included, is bounded by the trio (`:617`–`:636`). `sorryAx`/
 `:653`). Precision: "exactly the trio" is the pinned exports' property;
 every other theorem's cone is bounded by the trio, by the sweep. The
 public-named lemmas with SUB-trio cones are therefore unpinned, as
-`Audit.lean`'s comments record them. `fibRounds_closed`, `regionCost_pos`
-and the `freshBase_*` bounds have `[propext, Quot.sound]` (`:354`–`:356`,
-`:380`–`:384`, `:523`–`:525`). `BareHead.decomp_call_root` has `[propext]`
-(`:523`); `regionCost_eq` and `runND_killed` have no axioms (`:384`,
-`:552`–`:553`). Kernel-only proof methods: no `native_decide`, `bv_decide`
+`Audit.lean`'s comments record them — seventeen names. `fibRounds_closed`,
+`regionCost_pos` and the `freshBase_*` bounds have `[propext, Quot.sound]`
+(`:354`–`:356`, `:380`–`:384`, `:523`–`:525`); so do the four `∈`/`contains`
+bridge lemmas `mem_contains_int`, `contains_cons_int`, `contains_cons_ne_int`,
+`int_beq_eq_true` (`:334`–`:339`). `BareHead.decomp_call_root` and
+`BareHead.not_annot` have `[propext]` (`:523`, `:220`–`:222`);
+`Decomp.get_ctx_rebuild_action` has `[Quot.sound, propext]` (`:220`–`:222`);
+`Decomp.callRedex?_inv`, `callRedex?_some`, `pot_plug_call_le` and
+`callRedex?_none_of_jumpRedex?_some` are sub-trio (`:463`–`:465`).
+`regionCost_eq` and `runND_killed` have no axioms (`:384`, `:552`–`:553`). Kernel-only proof methods: no `native_decide`, `bv_decide`
 or `ofReduce*` anywhere (gate 1, `../scripts/test_unit.sh:28`).
 
 **The declared boundary is empty** ("There is no declared boundary
@@ -632,7 +644,10 @@ under concurrency or external C calls, both outside `Frag`.
 The trust base is gates 1–2 of `../scripts/test_unit.sh` (`:28`, `:39`):
 the banned-methods grep and the capped build that elaborates
 `Audit.lean` (§3). Everything else is a speedbump ([USER 2026-09-02]).
-Three run in the full gate; one instrument is on demand.
+The manifest, the import-direction check and the boundary check run in
+the full gate (the claim matrix's name check rides in the manifest run);
+the inventory is on demand; the module classification is the data all of
+them read.
 
 - **The rule-use and classification manifest**
   (`scripts/capability_manifest.lean` → `docs/CAPABILITY_MANIFEST.md`,
@@ -692,7 +707,8 @@ Each item points at its register entry; none is hidden in a proof.
 
 - **The fragment boundary** is §1's (KOI B8; CLAIMS "Not claimed").
   Five OUT-OF-SCOPE variants lie inside the fragment's constructors but
-  outside the mirror (manifest OUT-OF-SCOPE rows): a jump with a
+  outside the mirror — or, for the annotated head at the symbol binder,
+  outside `Frag` itself by `BareHead` (manifest OUT-OF-SCOPE rows): a jump with a
   non-evaluating surplus argument; `pure(x)` at a `Proc`-named unbound
   symbol; an annotated value at the plain-symbol binder. The other two:
   `PtrEq` at two concrete pointers of differing provenance (the engine
@@ -737,8 +753,9 @@ Each item points at its register entry; none is hidden in a proof.
   the current procedure only at a jump (`loop_step_frag'`'s `hjmp`,
   `DriverCollapse.lean:2035`; `CtlTied.noproc`, `:2213`) (KOI B2). Six
   any-memory total equations have no twins, and tree rotation has no
-  shipped-pipeline statement (KOI B1). `fib_rec_certified_production`'s
-  bound has one unit of slack; nothing claims tightness (KOI B6).
+  shipped-pipeline statement (KOI B1). The round-count bounds of
+  `fib_rec_certified_production`, `even_odd_certified_production` and
+  `tl_wpt` carry disclosed slack; nothing claims tightness (KOI B6).
 - **Two engine-round bridges** by design (§2.2; KOI B12).
 - **Deferred parametric semantics interfaces**: the rules are proved
   directly against `Step` and the memory state ([USER 2026-09-02]
