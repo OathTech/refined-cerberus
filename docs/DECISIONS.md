@@ -1976,3 +1976,136 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   KNOWN-OPEN-ITEMS updated in the same commit. Range audit 5d08237..HEAD
   dispatched next on a fixed detached copy; merge ask follows — no merge
   without an explicit yes to it.
+- **2026-09-04 [AGENT] AR5 RANGE AUDIT 5d08237..ebf9423: PASS WITH FIXES REQUIRED, A− —
+  MERGE CANDIDATE `ar5-fixes` (this entry's commit), PENDING THE OPERATOR'S SIGN-OFF.**
+  Fresh Fable-class auditor on the fixed detached copy `worktrees/audit-ar5-ebf9423`;
+  report `cerberus-heaplang/docs/2026-09-04_audit-ar5-range.md` (committed in
+  be1ff58). No T- finding; the Lean change verified exact (three lemmas
+  trio-exact, `DeadAt` byte-identical, census 3/3/0 re-derived, snapshot
+  `cmp`-identical). Fixes landed in be1ff58, each premise measured by the
+  auditor and re-plant-tested by the orchestrator: C-1 `boundary_check.sh`
+  was FAIL-OPEN on a malformed TSV row (a missing allow cell read as an
+  empty allowance) → four cells required, red otherwise (plant, verbatim:
+  `boundary FAIL: cerberus-heaplang/scripts/module_classes.tsv: malformed row
+  for module CerberusHeapLang.LoopExhibit (need 4 tab-separated cells: …)`,
+  `exit=1`); the import-direction loop likewise; C-2 both bash TSV loops
+  dropped the LAST row without a trailing newline → `read … || [[ -n $module ]]`
+  (plant: file stripped of its final newline → `BOUNDARY: 17 modules checked`);
+  C-3 two engine-admitted success shapes had no row → three NO-RULE rows
+  (kill of either kind through a union-member pointer; whole-object load /
+  store at an atomic-typed allocation): 47 → 50 rows, 12 → 15 NO-RULE,
+  manifest regenerated, counts updated in README/ARCHITECTURE; C-4 the
+  function-vs-concrete `PtrEq` rows sharpened (only an `SD_Id`-named function
+  pointer reads `funptrmap`; the RULE row lists null/any and function
+  (non-`SD_Id`)/concrete) — with this, all seven [AGENT] NO-RULE variants of
+  B14 are auditor-confirmed; R-2 ARCHITECTURE "ten stale seeds" → six; R-3
+  README/ARCHITECTURE allowance sentences → one allowance at HEAD. Notes →
+  register: H-1 comment stripping is not string-literal-aware (no such
+  literal exists in any subject module today), H-2 allowances are
+  per-module, H-3 `production-wrapper`'s TSV definition vs its use, H-4
+  `deadObj_dead`/`deadRegion_dead` pins consistent (C10).
+  **R-1 — RECORD ERRATUM, the orchestrator's:** the gate blocks quoted in
+  the two 2026-09-04 AR5 landing entries above were NOT verbatim — the
+  extraction stripped the `info: CerberusHeapLang/Audit.lean:L:0: ` prefix
+  and cut lines at 200 characters (two lines truncated mid-word), and the
+  `ALLOWLISTED`/env lines were elided. The three blocks below re-quote the
+  same logs UNTRIMMED. Standing elision rule, stated once here for every
+  earlier gate quote in this register since the C3 landing entry: those
+  blocks are the log lines matching `^==`, `^ok:`, `^info: CerberusHeapLang`
+  (with the `info: CerberusHeapLang/Audit.lean:L:0: ` prefix removed),
+  `^Build completed`, `^ALL GATES`, `^GATE-EXIT`; lines were not otherwise
+  edited before this range. From this entry on, gate quotes are the
+  matching lines UNMODIFIED (selection: `^==|^ok:|^info: CerberusHeapLang|
+  ^ALL GATES|^GATE-EXIT|^Build completed|^BOUNDARY|^ALLOWLISTED|^FAIL`).
+  Orchestrator FULL gate at a40ba88 (`ar5-readout`, 40G cap):
+  ```
+  == gate 1: banned proof-method grep (native_decide / bv_decide / ofReduce*) ==
+  ok: no banned proof-method references
+  == gate 2: capped build, cerberus-heaplang (elaborates its axiom audit) ==
+  info: CerberusHeapLang/Audit.lean:576:0: CerberusHeapLang export pins: 376 trio-exact
+  info: CerberusHeapLang/Audit.lean:576:0: CerberusHeapLang axiom sweep: every theorem bounded by the trio (3396 swept, internal details included — count informational, environment-dependent)
+  info: CerberusHeapLang/Audit.lean:576:0: CerberusHeapLang banned-axiom sweep: sorryAx/ofReduceBool/ofReduceNat absent from all cones (5153 constants of every kind swept, internal details included — count informational, environment-dependent)
+  Build completed successfully (456 jobs).
+  ok: cerberus-heaplang build green
+  == speedbump: capability manifest (regenerate; red on a red row or drift) ==
+  ok: capability manifest regenerated, no drift
+  == speedbump: import direction (semantics → heap → rules → adequacy → clients) ==
+  ok: import direction — no core module imports an exhibit/example/production module
+  ALL GATES GREEN
+  GATE-EXIT=0
+  ```
+  Orchestrator FULL gate at 5e39386 (the combined head, 64G cap):
+  ```
+  == gate 1: banned proof-method grep (native_decide / bv_decide / ofReduce*) ==
+  ok: no banned proof-method references
+  == gate 2: capped build, cerberus-heaplang (elaborates its axiom audit) ==
+  info: CerberusHeapLang/Audit.lean:576:0: CerberusHeapLang export pins: 376 trio-exact
+  info: CerberusHeapLang/Audit.lean:576:0: CerberusHeapLang axiom sweep: every theorem bounded by the trio (3396 swept, internal details included — count informational, environment-dependent)
+  info: CerberusHeapLang/Audit.lean:576:0: CerberusHeapLang banned-axiom sweep: sorryAx/ofReduceBool/ofReduceNat absent from all cones (5153 constants of every kind swept, internal details included — count informational, environment-dependent)
+  Build completed successfully (456 jobs).
+  ok: cerberus-heaplang build green
+  == speedbump: rule-use and classification manifest (regenerate; red on a red row or drift) ==
+  ok: capability manifest regenerated, no drift
+  == speedbump: import direction (semantics → heap → rules → adequacy → clients) ==
+  ok: import direction — 15 core modules, none imports an exhibit/example/production module
+  == speedbump: client boundary (positive clients mention no logic internals; scripts/boundary_check.sh) ==
+  ALLOWLISTED: Exhibit — 1 internals mention(s): `progA_wpt` (Exhibit.lean, the raw-WP readout of exhibit (a) at the total judgment) opens `stateInterp_iff` directly — found by this check at ar5-manifest 2026-09-04; `progA_wpt` is consumerless since F1 (docs/KNOWN-OPEN-ITEMS.md C3), its deletion or a rewrite over the public `stateInterp_readout` removes the entry
+  ok:   LoopExhibit — 0 internals mentions
+  ok:   FibExhibit — 0 internals mentions
+  ok:   ArrayExhibit — 0 internals mentions
+  ok:   ListRevExhibit — 0 internals mentions
+  ok:   TreeRotExhibit — 0 internals mentions
+  ok:   CaseExhibit — 0 internals mentions
+  ok:   WseqExhibit — 0 internals mentions
+  ok:   StructExhibit — 0 internals mentions
+  ok:   AllocExhibit — 0 internals mentions
+  ok:   DisposeExhibit — 0 internals mentions
+  ok:   RegionLoopExhibit — 0 internals mentions
+  ok:   MallocListExhibit — 0 internals mentions
+  ok:   FibRecExhibit — 0 internals mentions
+  ok:   Examples.CallSmoke — 0 internals mentions
+  ok:   Examples.ReadinessSmoke — 0 internals mentions
+  ok:   Examples.Layout — 0 internals mentions
+  BOUNDARY: 17 modules checked, 1 internals mention(s) in total, exit=0
+  ok: client boundary — no unallowlisted internals mention
+  ALL GATES GREEN
+  GATE-EXIT=0
+  ```
+  Orchestrator FULL gate at be1ff58 (the fixes; the candidate's content —
+  this DECISIONS/KNOWN-OPEN-ITEMS append is the only later change; 64G cap):
+  ```
+  == gate 1: banned proof-method grep (native_decide / bv_decide / ofReduce*) ==
+  ok: no banned proof-method references
+  == gate 2: capped build, cerberus-heaplang (elaborates its axiom audit) ==
+  info: CerberusHeapLang/Audit.lean:576:0: CerberusHeapLang export pins: 376 trio-exact
+  info: CerberusHeapLang/Audit.lean:576:0: CerberusHeapLang axiom sweep: every theorem bounded by the trio (3396 swept, internal details included — count informational, environment-dependent)
+  info: CerberusHeapLang/Audit.lean:576:0: CerberusHeapLang banned-axiom sweep: sorryAx/ofReduceBool/ofReduceNat absent from all cones (5153 constants of every kind swept, internal details included — count informational, environment-dependent)
+  Build completed successfully (456 jobs).
+  ok: cerberus-heaplang build green
+  == speedbump: rule-use and classification manifest (regenerate; red on a red row or drift) ==
+  ok: capability manifest regenerated, no drift
+  == speedbump: import direction (semantics → heap → rules → adequacy → clients) ==
+  ok: import direction — 15 core modules, none imports an exhibit/example/production module
+  == speedbump: client boundary (positive clients mention no logic internals; scripts/boundary_check.sh) ==
+  ALLOWLISTED: Exhibit — 1 internals mention(s): `progA_wpt` (Exhibit.lean, the raw-WP readout of exhibit (a) at the total judgment) opens `stateInterp_iff` directly — found by this check at ar5-manifest 2026-09-04; `progA_wpt` is consumerless since F1 (docs/KNOWN-OPEN-ITEMS.md C3), its deletion or a rewrite over the public `stateInterp_readout` removes the entry
+  ok:   LoopExhibit — 0 internals mentions
+  ok:   FibExhibit — 0 internals mentions
+  ok:   ArrayExhibit — 0 internals mentions
+  ok:   ListRevExhibit — 0 internals mentions
+  ok:   TreeRotExhibit — 0 internals mentions
+  ok:   CaseExhibit — 0 internals mentions
+  ok:   WseqExhibit — 0 internals mentions
+  ok:   StructExhibit — 0 internals mentions
+  ok:   AllocExhibit — 0 internals mentions
+  ok:   DisposeExhibit — 0 internals mentions
+  ok:   RegionLoopExhibit — 0 internals mentions
+  ok:   MallocListExhibit — 0 internals mentions
+  ok:   FibRecExhibit — 0 internals mentions
+  ok:   Examples.CallSmoke — 0 internals mentions
+  ok:   Examples.ReadinessSmoke — 0 internals mentions
+  ok:   Examples.Layout — 0 internals mentions
+  BOUNDARY: 17 modules checked, 1 internals mention(s) in total, exit=0
+  ok: client boundary — no unallowlisted internals mention
+  ALL GATES GREEN
+  GATE-EXIT=0
+  ```

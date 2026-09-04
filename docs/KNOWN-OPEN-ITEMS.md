@@ -1,7 +1,8 @@
 # Known open items — the register auditors read FIRST
 
-State: candidate `ar5-manifest` head (2026-09-04, after the calls arc,
-the fuel-lane restatement F1 and the external-audit response AR5). Maintained by the orchestrator; every entry
+State: candidate `ar5-fixes` head (2026-09-04, after the calls arc, the
+fuel-lane restatement F1, the external-audit response AR5 and its range
+audit). Maintained by the orchestrator; every entry
 points at the record that owns it. PURPOSE: an auditor should not
 re-cite an item listed here as a new finding. Cite it ONLY if (a) the
 entry is factually wrong, (b) the item is worse than recorded, or (c) a
@@ -37,7 +38,7 @@ or a ruled disposition. Provenance tags as in `docs/DECISIONS.md`.
 | B11 | **Mask generalisation (external audit F3)**: `wps`/`wpt` hard-code the top invariant mask (21 + 26 sites); mask-polymorphic composition is not available. | `docs/2026-09-04_reynolds-ohearn-separation-logic-audit.md` F3; DECISIONS 2026-09-04 | DEFERRED pending the operator; design-level slice after the fuel restatement, with top-mask aliases. |
 | B12 | **Two engine-round bridges** (`engine_step_matchU` for the mirror's certification; `loop_step_frag` for both adequacy lanes) — a documented design (ARCHITECTURE §2), duplication/drift risk noted by the external audit. | audit "Note"; ARCHITECTURE §2 | By design; consolidation not scheduled. |
 | B13 | **Three total rules proved but undemonstrated** (`wpt_load`, `wpt_case_value`, `wpt_wseq`): RULE-TOTAL-UNDEMONSTRATED rows; the manifest turns red if a consumer appears without reclassification. | `docs/CAPABILITY_MANIFEST.md`; AR5-manifest record §3 | Consumers welcome; hygiene. |
-| B14 | **Seven NO-RULE variants classified by [AGENT]** from the engine's admitted cases (union-member-pointer store/load, read-only-cell load face, zero-size/atomic/non-inert `create` types, function-vs-concrete `PtrEq`) — reviewer confirmation requested. | manifest rows; AR5-manifest record §1–§2 | Open until a reviewer confirms or re-classifies. |
+| B14 | **NO-RULE variants classified by [AGENT]** from the engine's admitted cases (union-member-pointer store/load/kill, read-only-cell load face, zero-size/atomic/non-inert `create` types, whole-object load/store at an atomic-typed allocation, `SD_Id`-named-function-vs-concrete `PtrEq`). | manifest rows; AR5-manifest record §1–§2; AR5 range audit §2.2, C-3, C-4 | CONFIRMED by the AR5 range auditor (seven exactly, one sharpened, two added by the audit). Any further variant found is a new row, not a new finding class. |
 
 ## C. Hygiene queue (no trust or correctness content)
 
@@ -53,10 +54,14 @@ or a ruled disposition. Provenance tags as in `docs/DECISIONS.md`.
 | C8 | `progA_wpt` (Exhibit.lean) opens `stateInterp_iff` directly — the one boundary-check ALLOWLISTED entry; consumerless since F1 (C3). | boundary check output; AR5-manifest record | Delete or rewrite; then drop the allowance. |
 | C9 | `API.lean:19` still describes the parametricity inventory as the boundary instrument; the gate twin is now `scripts/boundary_check.sh`. | AR5-manifest record §8 | One-sentence pointer. |
 | C10 | `deadObj_dead`/`deadRegion_dead` reclassified below the API line in prose only (statements unchanged). | AR5-readout record §6 | Confirm at the next API pass. |
+| C11 | The boundary check's comment stripping is not string-literal-aware: a `"--"` or `"/-"` inside a string literal would hide following code from the grep. No such literal exists in any subject module today (auditor-measured). | AR5 range audit H-1 | Low; fix if a literal ever appears, or make the stripper literal-aware. |
+| C12 | Boundary allowances are per-module: a second, new internals mention in an allowlisted module (`Exhibit`) would not turn red. | AR5 range audit H-2 | Optional expected-count cell; moot once C8 removes the last allowance. |
+| C13 | `production-wrapper`'s definition in `module_classes.tsv` ("closed statements over the shipped pipeline") is not the criterion actually applied (four positive clients carry `*_certified_production`); the operative criterion is "rule use only through imported clients". | AR5 range audit H-3 | Reword the TSV header. |
 
 ## D. Record errata already applied (append-only register — do not re-report)
 
 - DECISIONS 2026-09-04 external-audit entry: "10 stale seeds" → 6 (worker probe).
+- DECISIONS 2026-09-04 AR5 landing entries: gate quotes were trimmed (prefix stripped, lines cut at 200 chars) → re-quoted untrimmed in the AR5 range-audit entry, with the elision rule for all earlier gate quotes stated there (AR5 range audit R-1).
 - DECISIONS "28 commits past the pin" → 34 (F1 audit H-1); "ONE CONTENT
   LOSS" → the B1 loss class (F1 audit R-2); "PROVISIONAL … 1 files" → the
   CLAUDE.md rule sentence (B10); "two linter warnings" → 66 pre-existing
@@ -82,6 +87,6 @@ or a ruled disposition. Provenance tags as in `docs/DECISIONS.md`.
   this commit; the RefinedC layer lives on branch `refinedc/dev`.
 - Gates: `scripts/test_unit.sh` (FULL) / `--fast`; every Lean build
   through `scripts/capped`. Expected FULL tail at the AR5 candidate: 376 pins trio-exact, manifest
-  no drift, import direction ok, boundary check exit 0 with ONE
+  (50 rows) no drift, import direction ok, boundary check exit 0 with ONE
   ALLOWLISTED line (`progA_wpt`, C8), `ALL GATES GREEN`, `GATE-EXIT=0`
   (DECISIONS 2026-09-04 AR5-manifest entry, verbatim).
