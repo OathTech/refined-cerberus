@@ -2399,3 +2399,22 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   not a feature. The acceptance test: a C program elaborated by the
   pinned Cerberus pipeline, unmodified, certified end-to-end through the
   production lane.
+- **2026-09-04 [USER] "whether the demo's list of constructs could actually support a
+  compiled C program? … confected-core is much simpler than real-core. C
+  programs just do a lot of stuff, even very simple C programs."** MEASURED
+  ([AGENT], `docs/2026-09-04_emitted-core-gap-measurement.md`, the pinned
+  OCaml oracle's `--pp=core` on two tiny programs, verbatim): even `int x =
+  3; int y = x + 1; return y;` emits `bound`, `unseq`, pure std/impl calls
+  (`__conv_int__`, `catch_exceptional_condition_add`, `conv_loaded_int`),
+  loaded values with `Specified`/`undef` arms, tuple-pattern `case`, and an
+  `Ivalignof` operand — none in the fragment; a direct C call elaborates to
+  `Eccall` (the scheduler-round path), and loops bring `nd`. ERRATUM to the
+  [AGENT] recommendation in the entry above: lifting the annotation
+  restriction in the demo does NOT yield a logic over emitted Core; the gap
+  is the emitted-Core dialect. Revised recommendation, pending the
+  operator: the demo's v1 stays authored Core (the ruling that authored
+  Core is scaffolding stands — the demo IS the scaffolding); the
+  emitted-Core acceptance test is the LAYER's, reached by one measured
+  slice per gap (annotations first, then `Ebound`/`Eunseq`, loaded values,
+  pure impl calls with the impl-defined integer semantics, `Eccall`, `nd`);
+  the Lane C note's item 4 is to be read with this measurement.
