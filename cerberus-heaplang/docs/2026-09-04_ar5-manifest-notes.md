@@ -49,14 +49,19 @@ Reading the rules' hypotheses against the engine's admitted successes:
   fail-closed there.
 - `parametric_inventory.lean` was not run by the gate, listed 6 client
   modules against the manifest's 18, and its `analyze` rendered a missing
-  name as a `(MISSING)` row with exit 0. Measured at `5d08237` (by the
-  refreshed script's resolution check, seed by seed): of the twenty seeds,
-  six did not resolve — `engine_adequacyU`, `engine_adequacyU_alloc`,
-  `semantic_triple_soundU`, `semantic_frameU`, `wpt_engine_boundU`,
-  `wpt_engine_boundU_alloc` (the F1 renaming and the `driveU` deletion);
-  `Decomp.step_factor`, `Frag.step`, `Frag.decomp`, `Frag.pot_step_bound`
-  DO exist (Soundness.lean:1004/4611/4375, Potential.lean:190) — the brief's
-  "ten stale" counted them; corrected here to six ([AGENT], measured).
+  name as a `(MISSING)` row with exit 0. MEASURED (a twenty-line probe
+  script over the built environment at this pin, `env.contains` per old
+  seed, run at `3f21303`; verbatim): 14 `EXISTS`, and
+  `CerberusHeapLang.engine_adequacyU: MISSING`,
+  `CerberusHeapLang.engine_adequacyU_alloc: MISSING`,
+  `CerberusHeapLang.semantic_triple_soundU: MISSING`,
+  `CerberusHeapLang.semantic_frameU: MISSING`,
+  `CerberusHeapLang.wpt_engine_boundU: MISSING`,
+  `CerberusHeapLang.wpt_engine_boundU_alloc: MISSING` — the F1 renaming and
+  the `driveU` deletion. `Decomp.step_factor`, `Frag.step`, `Frag.decomp`,
+  `Frag.pot_step_bound` EXIST (Soundness.lean:1004/4611/4375,
+  Potential.lean:190) — the brief's "ten stale" counted them; corrected here
+  to SIX ([AGENT], measured as stated).
 
 ## 2. The variant classification, as landed (docs/CAPABILITY_MANIFEST.md)
 
