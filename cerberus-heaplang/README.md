@@ -108,7 +108,7 @@ manifest](docs/CAPABILITY_MANIFEST.md) lists one row per engine-SUCCESS
 VARIANT of each `Frag` constructor (ar5-manifest, 2026-09-04; ARCHITECTURE
 §7 "The instruments around the claims"), each classified RULE (a partial
 and a total rule, both in the proof-term cone of a consumer module — the
-sixteen modules classified `positive-client`/`declared-smoke` in
+eighteen modules classified `positive-client`/`declared-smoke` in
 `scripts/module_classes.tsv`, listed per row), RULE-TOTAL-UNDEMONSTRATED
 (the total rule proved but consumed by no client — none since the
 hygiene slice H1b of 2026-09-04 gave `wpt_load`, `wpt_case_value` and
