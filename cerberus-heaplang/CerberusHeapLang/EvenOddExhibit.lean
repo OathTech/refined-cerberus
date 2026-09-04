@@ -307,11 +307,12 @@ theorem eoDec_eval (n : Int) (ρ : EnvStack) :
   rfl
 
 /-- The recursive case's values: `odd (n - 1)` is `even n`, `even (n - 1)` is
-    `odd n`, at `n ≥ 1`. -/
-theorem eo_parity_even {n : Int} (h : 1 ≤ n) : ivVal ((n - 1) % 2) = ivVal (1 - n % 2) := by
+    `odd n` — identities of `Int` arithmetic, for every `n` (the H1 range
+    audit dropped the unused `1 ≤ n` hypothesis). -/
+theorem eo_parity_even {n : Int} : ivVal ((n - 1) % 2) = ivVal (1 - n % 2) := by
   rw [show (n - 1) % 2 = 1 - n % 2 by omega]
 
-theorem eo_parity_odd {n : Int} (h : 1 ≤ n) : ivVal (1 - (n - 1) % 2) = ivVal (n % 2) := by
+theorem eo_parity_odd {n : Int} : ivVal (1 - (n - 1) % 2) = ivVal (n % 2) := by
   rw [show 1 - (n - 1) % 2 = n % 2 by omega]
 
 /-! ## THE SPECIFICATION TABLES -/
@@ -390,7 +391,7 @@ theorem eoEvenBody_wps (g : sym) (hodd : symOrd g eoOddSym ≠ .eq) (vs : List v
       ipureintro
       refine ⟨n', rfl, ?_⟩
       rw [if_neg hodd]
-      exact eo_parity_even (by omega)
+      exact eo_parity_even
 
 /-- THE BODY OF `odd` UNDER THE TABLE (partial), at a symbol the table reads
     as `odd`: the base value `0`; otherwise `even(n - 1)`. -/
@@ -435,7 +436,7 @@ theorem eoOddBody_wps (g : sym) (hodd : symOrd g eoOddSym = .eq) (vs : List valu
       ipureintro
       refine ⟨n', rfl, ?_⟩
       rw [if_pos hodd]
-      exact eo_parity_odd (by omega)
+      exact eo_parity_odd
 
 /-- THE PROCEDURE SPECIFICATIONS HOLD (partial): each body once, under the
     table for BOTH; `main` is unreachable under the table (arity). -/
@@ -552,7 +553,7 @@ theorem eoEvenBody_wpt (g : sym) (hodd : symOrd g eoOddSym ≠ .eq) (m : Nat) (v
       ipureintro
       refine ⟨n', rfl, ?_⟩
       rw [if_neg hodd]
-      exact eo_parity_even (by omega)
+      exact eo_parity_even
 
 /-- THE BODY OF `odd` WITHIN ITS BUDGET `3 * n + 2`. -/
 theorem eoOddBody_wpt (g : sym) (hodd : symOrd g eoOddSym = .eq) (m : Nat) (vs : List value)
@@ -600,7 +601,7 @@ theorem eoOddBody_wpt (g : sym) (hodd : symOrd g eoOddSym = .eq) (m : Nat) (vs :
       ipureintro
       refine ⟨n', rfl, ?_⟩
       rw [if_pos hodd]
-      exact eo_parity_odd (by omega)
+      exact eo_parity_odd
 
 theorem eoCtx_procSpecsT : ⊢ procSpecsT (GF := GF) (eoCtx ra n nbty sup) eoSpecT := by
   refine procSpecsT_intro (fun _ _ _ => eoLsT) ?_ ?_
