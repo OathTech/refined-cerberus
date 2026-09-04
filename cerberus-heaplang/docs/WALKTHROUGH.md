@@ -219,7 +219,7 @@ theorem list_reverse_certified_production (sup : Nat) (ra : core_run_annotation)
 
 No section variables. `CerbND.runND (_root_.drive …) (initial_driver_state
 sup file fs).1` is exactly the composite the cerberus-lean executable
-runs — this is a ROOT-OF-TRUST export, one of the eight closed
+runs — this is a ROOT-OF-TRUST export, one of the nine closed
 shipped-driver statements: the genuine driver, no package-defined loop
 in the statement (the authored program enters wrapped by `prodFile`,
 the synthetic one-procedure file). The theorem quantifies over nothing but the file-system state,
@@ -330,7 +330,7 @@ closed partial statement is the one about the shipped `drive`, and the
 **The two lanes, both on the shipped driver.** Every exported execution
 theorem reaches the shipped engine; every public logical rule has a
 kernel-checked adequacy path through the package mirror to the engine.
-The eight production statements (`exhibitA_prod`,
+The nine production statements (`exhibitA_prod`,
 `fib_certified_production`, `counter_loop_certified_production`,
 `list_reverse_certified_production`,
 `dispose_list_certified_production`,
@@ -355,7 +355,8 @@ closed statements: their delivery premises `DriverDoneAt`/`DriverDoneCtl`
 resp. the driver-safety fact `DriverSafeCtl` and their registration ties
 `LabeledAt`/`LabeledProcs` are package-defined, discharged by each
 client. The partial closed statement `fib_rec_certified` — every `n ≥ 0`,
-no budget bound, at every `drive_lemFuel` fuel — sits beside the eight.
+no budget bound, at every `drive_lemFuel` fuel — sits beside the nine, as does
+`even_odd_certified` (EvenOddExhibit.lean, mutual recursion; H1b 2026-09-04).
 The generic partial exports — `MemTriple`, `MemTriple_alloc`,
 `SemTriple`, `project_triple`, `project_triple_pure`,
 `project_triple_alloc`, `project_triple_pure_alloc`,
@@ -1741,8 +1742,10 @@ the `#print axioms` recipe are in the README, "How to build and verify".
   entry control `prodCtl`/`prodCtx`), the synthetic file takes declared
   procedures (`prodFileWith`, `prod_run_eqJ_procs`), and RECURSIVE FIB is
   the eighth root-of-trust statement (`fib_rec_certified_production`,
-  §3.3). Still out, by design: mutual recursion exhibited (the rule
-  admits it); function pointers (`Eccall`). (The total `driveU` lane at
+  §3.3); MUTUAL RECURSION is exhibited since 2026-09-04 (H1b,
+  EvenOddExhibit.lean: `even`/`odd` under the symbol-dependent table,
+  `even_odd_certified_production` the ninth root-of-trust statement).
+  Still out, by design: function pointers (`Eccall`). (The total `driveU` lane at
   the empty table was deleted with the package loop in the fuel-lane
   restatement, 2026-09-03.) The remaining absences are structural, not
   hidden: the empty-stack entry control (`ctl.κ = []`) wherever a general
@@ -1764,8 +1767,10 @@ the `#print axioms` recipe are in the README, "How to build and verify".
   access rules"; README "Scope, exactly" (iv) CLOSED), and the malloc'd
   LINKED list (MallocListExhibit.lean) is the exhibit. Kept in this list
   only so a reader of the K4-era text finds the closure here.
-- **A program with TWO `save` labels.** Every loop exhibit so far is
-  single-label (the malloc'd list merges its two C loops into ONE Core
+- **A program with TWO `save` labels — CLOSED 2026-09-04 (H1b,
+  TwoLabelExhibit.lean: `two_label_certified`, `tl_wpt`; the label
+  specification is label-dependent, no rule changed).** Until then every
+  loop exhibit was single-label (the malloc'd list merges its two C loops into ONE Core
   label with two phases). The two-entry lookup law the two-label form
   needs is here since C4 — the β-generic `symAdd_lookup`/
   `symAdd_lookup_two` (EnvLaws), the C3 smoke's local law moved — so what

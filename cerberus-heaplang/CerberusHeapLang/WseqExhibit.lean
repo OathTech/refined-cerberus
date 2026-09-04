@@ -12,7 +12,10 @@ theorem chain is the WP LANE end to end: `wps_wseq` (the drift
 rule) → `wps_sound` → `engine_adequacy` — concluding, engine
 vocabulary only (`DriverSafeCtl`): the shipped loop at every fuel
 exhausts or delivers, never kills otherwise, never derails, and any
-delivered value IS v2.
+delivered value IS v2. The TOTAL twin `wseqProg_wpt` (H1b, 2026-09-04)
+is the drift rule at the total judgment, budget 1 + 1, with the engine
+readout as its postcondition — the consumer of `wpt_wseq`
+(KNOWN-OPEN-ITEMS B13); no shipped-loop total form (B1's deferred class).
 
 DRIFT-TEST RECORD: this construct entered through the GENERIC route
 only — relation rules (Step.wseq_pure/wseq_annot/wseq_ctx) + cone
@@ -65,6 +68,25 @@ theorem wseqProg_wps (M : MachineCtx) (p : Option sym) (Ls : LabelSpec GF) (Θ :
     (ofVal (.pure v1)) (ofVal (.pure v2)) ev0 evs)
   refine .trans ?_ (wps_ofVal (.pure v1) (ev0 :: evs))
   refine .trans ?_ (wps_ofVal (.pure v2) (ev0 :: evs))
+  exact BI.pure_intro rfl
+
+/-- THE TOTAL TWIN (hygiene slice H1b, 2026-09-04; KNOWN-OPEN-ITEMS B13 —
+    the consumer of `wpt_wseq`): the drift rule at the total judgment
+    with the budget split `1 + 1` (each value injection's delivery,
+    `wpt_ofVal`), at any machine context, label specification and table;
+    the postcondition is the engine readout `readoutPost`, through the
+    public `stateInterp_readout`/`pure_consequence` alone. -/
+theorem wseqProg_wpt (M : MachineCtx) (p : Option sym) (Ls : LabelSpecT GF) (Θ : ProcSpecT GF)
+    (v1 v2 : value) (ev0 : Fmap sym value) (evs : List (Fmap sym value)) :
+    ⊢ wpt (GF := GF) M p Ls Θ 2 (readoutPost (fun v' _ => v' = v2))
+        (wseqProg v1 v2) (ev0 :: evs) := by
+  refine .trans ?_ (wpt_mono (Ψ₁ := fun w _ => iprop(⌜w.val = v2⌝))
+    (fun _ _ => stateInterp_readout fun _ _ _ _ _ => pure_consequence _) 2
+    (wseqProg v1 v2) (ev0 :: evs))
+  refine .trans ?_ (wpt_wseq [] [] BTy_unit
+    (ofVal (.pure v1)) (ofVal (.pure v2)) ev0 evs 1 1)
+  refine .trans ?_ (wpt_ofVal (.pure v1) (ev0 :: evs) (Nat.le_refl 1))
+  refine .trans ?_ (wpt_ofVal (.pure v2) (ev0 :: evs) (Nat.le_refl 1))
   exact BI.pure_intro rfl
 
 /-- Vacuous block specifications at the spike profile. -/

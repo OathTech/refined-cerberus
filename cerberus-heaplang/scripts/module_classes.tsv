@@ -56,6 +56,8 @@ CerberusHeapLang.DisposeExhibit	positive-client	-	dispose a list
 CerberusHeapLang.RegionLoopExhibit	positive-client	-	n regions from one budget
 CerberusHeapLang.MallocListExhibit	positive-client	-	the malloc'd linked list
 CerberusHeapLang.FibRecExhibit	positive-client	-	recursive fib through the specification table
+CerberusHeapLang.TwoLabelExhibit	positive-client	-	two save labels in one procedure body (two sequential loops over one cell)
+CerberusHeapLang.EvenOddExhibit	positive-client	-	mutual recursion (even/odd) through the symbol-dependent specification table
 CerberusHeapLang.Examples.CallSmoke	declared-smoke	-	the C3 call/procedure smoke (kept as a consumer beside FibRecExhibit)
 CerberusHeapLang.Examples.ReadinessSmoke	declared-smoke	-	the API-only two-field predicate smoke
 CerberusHeapLang.Examples.Layout	example-support	-	layout constants and canned shapes

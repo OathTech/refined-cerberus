@@ -144,6 +144,8 @@ import CerberusHeapLang.DisposeExhibit
 import CerberusHeapLang.RegionLoopExhibit
 import CerberusHeapLang.MallocListExhibit
 import CerberusHeapLang.FibRecExhibit
+import CerberusHeapLang.TwoLabelExhibit
+import CerberusHeapLang.EvenOddExhibit
 import CerberusHeapLang.Examples.ReadinessSmoke
 import CerberusHeapLang.Examples.MirrorCoverage
 import CerberusHeapLang.Examples.CallSmoke
@@ -568,7 +570,32 @@ def trioExports : List Name := [
   -- (Adequacy.lean). Each measured trio-exact by `#print axioms` before
   -- pinning (the notes, §5).
   ``CerberusHeapLang.deadObj_consequence, ``CerberusHeapLang.deadRegion_consequence,
-  ``CerberusHeapLang.bigSepL_consequence]
+  ``CerberusHeapLang.bigSepL_consequence,
+  -- HYGIENE SLICE H1b (2026-09-04, docs/2026-09-04_h1-notes.md): the coverage
+  -- exhibits. The total twins of the case and weak-sequencing consumers
+  -- (`wpt_case_value`/`wpt_wseq` gain their consumers; the two
+  -- RULE-TOTAL-UNDEMONSTRATED rows become RULE); TWO `save` LABELS in one
+  -- procedure body (TwoLabelExhibit.lean: the label-dependent specification,
+  -- both bodies, both block specifications, the entry, the engine fact
+  -- `two_label_certified` at `procCtx`, and the total twins at budget
+  -- `5 * n₁ + 5 * n₂ + 5`); MUTUAL RECURSION (EvenOddExhibit.lean: `even`/`odd`
+  -- under the symbol-dependent table on the THREE-procedure file, the closed
+  -- partial form `even_odd_certified` and THE NINTH ROOT-OF-TRUST STATEMENT
+  -- `even_odd_certified_production`). Each measured trio-exact by the build.
+  ``CerberusHeapLang.caseProg_wpt, ``CerberusHeapLang.wseqProg_wpt,
+  ``CerberusHeapLang.tl_body2_wps, ``CerberusHeapLang.tl_body1_wps,
+  ``CerberusHeapLang.tl_blockSpecs, ``CerberusHeapLang.tl_wps,
+  ``CerberusHeapLang.tl_wp_readout, ``CerberusHeapLang.two_label_certified,
+  ``CerberusHeapLang.tl_body2_wpt, ``CerberusHeapLang.tl_body1_wpt,
+  ``CerberusHeapLang.tl_blockSpecsT, ``CerberusHeapLang.tl_wpt,
+  ``CerberusHeapLang.tl_wpt_readout,
+  ``CerberusHeapLang.eoCtx_labeledProcs, ``CerberusHeapLang.eoCtx_fragProcs,
+  ``CerberusHeapLang.eoEvenBody_wps, ``CerberusHeapLang.eoOddBody_wps,
+  ``CerberusHeapLang.eoCtx_procSpecs, ``CerberusHeapLang.eoMain_wps,
+  ``CerberusHeapLang.eo_wp_readout, ``CerberusHeapLang.even_odd_certified,
+  ``CerberusHeapLang.eoEvenBody_wpt, ``CerberusHeapLang.eoOddBody_wpt,
+  ``CerberusHeapLang.eoCtx_procSpecsT, ``CerberusHeapLang.eoMain_wpt,
+  ``CerberusHeapLang.even_odd_certified_production]
 
 def sortedNames (ns : Array Name) : Array String :=
   (ns.map (·.toString)).qsort (· < ·)

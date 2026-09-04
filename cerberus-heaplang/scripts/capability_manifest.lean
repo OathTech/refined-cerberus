@@ -260,12 +260,10 @@ def variants : List Variant := [
     cls := .rule (N "wps_store_eval") (N "wpt_store_eval") },
   { ctor := `CerberusHeapLang.Frag.case_value,
     shape := "`case v of pats` at a VALUE scrutinee with a matching pattern (the substitution TAU)",
-    cls := .ruleTotalUndemonstrated (N "wps_case_value") (N "wpt_case_value")
-      "a total twin of `CaseExhibit` (its consumer is partial-only)" },
+    cls := .rule (N "wps_case_value") (N "wpt_case_value") },
   { ctor := `CerberusHeapLang.Frag.wseq,
     shape := "`letw _ = e1 in e2` — reduction under the frame, then LETW-PURE / LETW-ANNOT",
-    cls := .ruleTotalUndemonstrated (N "wps_wseq") (N "wpt_wseq")
-      "a total twin of `WseqExhibit` (its consumer is partial-only)" },
+    cls := .rule (N "wps_wseq") (N "wpt_wseq") },
   -- calls
   { ctor := `CerberusHeapLang.Frag.call,
     shape := "`Eproc` of a DECLARED procedure at matching arity, arguments evaluating, AT THE ROOT of the arena",

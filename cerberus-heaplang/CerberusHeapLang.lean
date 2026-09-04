@@ -35,4 +35,6 @@ import CerberusHeapLang.DisposeExhibit
 import CerberusHeapLang.RegionLoopExhibit
 import CerberusHeapLang.MallocListExhibit
 import CerberusHeapLang.FibRecExhibit
+import CerberusHeapLang.TwoLabelExhibit
+import CerberusHeapLang.EvenOddExhibit
 import CerberusHeapLang.Audit

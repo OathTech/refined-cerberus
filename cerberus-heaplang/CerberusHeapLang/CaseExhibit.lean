@@ -11,7 +11,11 @@ collapse, block specifications vacuous at `spikeCtx`) →
 (`DriverSafeCtl`): from any driver state holding the case program, the
 shipped driver's per-thread loop at every fuel exhausts or delivers,
 never kills otherwise, never derails, and any delivered value IS the
-scrutinee (`case_certified`).
+scrutinee (`case_certified`). The TOTAL twin `caseProg_wpt` (H1b,
+2026-09-04) is the same derivation at the total judgment, budget 2, with
+the engine readout as its postcondition — the consumer of
+`wpt_case_value` (KNOWN-OPEN-ITEMS B13); like every seeded/no-procedure
+exhibit it has no shipped-loop total form (B1's deferred class).
 
 ON THE BRANCH PREMISES. `Frag.case_value` carries branch closure as
 EXPLICIT per-branch premises (`hbr`: the selected branch is in `Frag`;
@@ -98,6 +102,25 @@ theorem caseProg_wps (M : MachineCtx) (p : Option sym) (Ls : LabelSpec GF) (Θ :
     [(symPat [] caseXSym BTy_unit, caseBranch)] ρ
     (valueFromPexpr_val [] v) (caseProg_select v))
   refine .trans ?_ (wps_ofVal (.pure v) ρ)
+  exact BI.pure_intro rfl
+
+/-- THE TOTAL TWIN (hygiene slice H1b, 2026-09-04; KNOWN-OPEN-ITEMS B13 —
+    the consumer of `wpt_case_value`): the same derivation at the total
+    judgment, budget 2 = the substitution TAU (`wpt_case_value`, `+ 1`) +
+    the bare value's delivery (`wpt_ofVal`, `deliveryCost (.pure v) = 1`),
+    at any machine context, label specification and table; the
+    postcondition is the engine readout `readoutPost` (the total lane's
+    shape), obtained through the public `stateInterp_readout`/
+    `pure_consequence` alone. -/
+theorem caseProg_wpt (M : MachineCtx) (p : Option sym) (Ls : LabelSpecT GF) (Θ : ProcSpecT GF)
+    (v : value) (ρ : EnvStack) :
+    ⊢ wpt (GF := GF) M p Ls Θ 2 (readoutPost (fun v' _ => v' = v)) (caseProg v) ρ := by
+  refine .trans ?_ (wpt_mono (Ψ₁ := fun w _ => iprop(⌜w.val = v⌝))
+    (fun _ _ => stateInterp_readout fun _ _ _ _ _ => pure_consequence _) 2 (caseProg v) ρ)
+  refine .trans ?_ (wpt_case_value [] (Pexpr [] () (PEval v))
+    [(symPat [] caseXSym BTy_unit, caseBranch)] ρ
+    (valueFromPexpr_val [] v) (caseProg_select v))
+  refine .trans ?_ (wpt_ofVal (.pure v) ρ (Nat.le_refl 1))
   exact BI.pure_intro rfl
 
 /-- Vacuous block specifications at the spike profile (no labels are

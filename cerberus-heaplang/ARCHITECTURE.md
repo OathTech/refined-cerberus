@@ -504,9 +504,14 @@ THE OTHER OPEN ITEMS:
   applied at each `alloc` and carried by the invariant `(ids ++
   done).Nodup` through each `free`. Records: `docs/2026-09-03_k5-notes.md`,
   `docs/2026-09-03_k5.1-notes.md`.
-- **Two `save` labels in one program — the LAW landed at C4, the exhibit
-  is still absent (found by the K5 range audit).** Every loop exhibit is
-  single-label; the malloc'd list merges its two C loops into one Core
+- **Two `save` labels in one program — CLOSED 2026-09-04 ([AGENT], hygiene
+  slice H1b, record `docs/2026-09-04_h1-notes.md`: `TwoLabelExhibit.lean` —
+  `two_label_certified`, the partial engine fact at `procCtx`; `tl_wpt`/
+  `tl_wpt_readout`, the total derivation at budget `5 * n₁ + 5 * n₂ + 5`;
+  the label specification is LABEL-DEPENDENT, a Lean `if` on the comparator
+  verdict; no rule or judgment changed). The LAW landed at C4, the exhibit
+  was found absent by the K5 range audit.** Until then every loop exhibit
+  was single-label; the malloc'd list merges its two C loops into one Core
   label with two phases. The two-entry lookup law the two-label form
   needs is now the β-generic `symAdd_lookup`/`symAdd_lookup_two` (EnvLaws,
   calls arc C4 — the C3 smoke's local law moved and generalized;
@@ -515,7 +520,8 @@ THE OTHER OPEN ITEMS:
   comparator enters only as the captured tree comparator, `symOrd` —
   which the engine's `ordCompare`-built label maps have by definitional
   unfolding). A rule gap it never was (`wps_run`/`wps_save` are
-  label-generic); what remains is a two-label exhibit.
+  label-generic); the exhibit's two-entry map `tlQ` is read by exactly that
+  law.
 - **The kill/free arc K0–K5.1 — CLOSED (2026-09-03).** Record:
   `docs/2026-09-03_kill-free-arc-record.md` (one paragraph per slice,
   commits, audit verdicts, the corrections to the design note, what
@@ -566,10 +572,16 @@ THE OTHER OPEN ITEMS:
   `current_loc`, Driver.lean:530, what PCALL's `push_exec_loc` reads,
   Core_reduction.lean:484 col 18133 — the C2 record §3(f)/the C1 audit's
   M-1, closed), and RECURSIVE FIB as the eighth root-of-trust statement.
-  Still open from the arc, by design: mutual recursion (the rule admits
-  it — `procSpecs` assumes the table for every procedure — no exhibit);
-  function pointers (`Eccall`, another scheduler path); a two-label
-  exhibit (above). (The total `driveU` lane at the empty table, left at
+  MUTUAL RECURSION — CLOSED 2026-09-04 ([AGENT], hygiene slice H1b, record
+  `docs/2026-09-04_h1-notes.md`: `EvenOddExhibit.lean` — `even`/`odd`
+  calling each other under the SYMBOL-DEPENDENT table `eoSpec`/`eoSpecT`
+  on the synthetic THREE-procedure file; `even_odd_certified` the closed
+  partial form, `even_odd_certified_production` the NINTH closed
+  shipped-driver statement, in-budget bound `3 * n + 6 ≤
+  CerbFuel.driverFuel`; both through the existing `prodFileWith`/
+  `prod_run_eqJ_procs`/`prod_run_safe_procs` entry, no new machinery). Still
+  open from the arc, by design: function pointers (`Eccall`, another
+  scheduler path). The two-label exhibit: closed (above). (The total `driveU` lane at the empty table, left at
   C4, was deleted with the loop in the fuel-lane restatement,
   2026-09-03.)
 - The deferred parametric semantics interfaces: the rules are proved
