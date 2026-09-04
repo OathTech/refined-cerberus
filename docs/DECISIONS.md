@@ -2482,3 +2482,14 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   upstream; (9) the `mk_conv_int` vs std.core `conv_int` divergence — a
   note to the cerberus-lean team; (10) COMMIT TO E1–E4 NOW, reassess
   velocity at the t1 milestone. E1 is briefed after this lands.
+- **2026-09-04 [USER] "a query from the team working on the cerberus concurrency
+  semantics. Can you write them a note in response"** → `docs/2026-09-04_response-concurrency-S1-interface-review.md`
+  ([AGENT]): accept the explicit `concurrency_model` selector (Q1); YES to
+  distinguished, data-carrying, kernel-transparent error constructors —
+  theorems exclude failures by constructor (Q2); YES ship `sc_fragment_ok`,
+  structural over the file, `rfl`-evaluable, scope stated (Q3); YES to the
+  SC-instance labelling PLUS the one-tree AGREEMENT LEMMA (`CM_sequential`
+  = `CM_sc` on `Epar`-free programs) — the bridge that reads every
+  single-thread certificate under `CM_sc`, with a real outer-fuel side
+  condition (Q4); STAGED re-pin, our FULL gate + one-token census as the
+  fourth evidence form (Q5). For the operator to relay.
