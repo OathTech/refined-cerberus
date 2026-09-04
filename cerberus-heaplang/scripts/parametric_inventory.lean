@@ -1,13 +1,25 @@
 /-
-parametric_inventory.lean — READ-ONLY measurement for the 2026-09-02
-parametric-semantics spike (docs/2026-09-02_parametric-semantics-spike.md).
+parametric_inventory.lean — READ-ONLY measurement, ON DEMAND (not run by
+the gate — [AGENT 2026-09-04] decision, docs/2026-09-04_ar5-manifest-notes.md
+§4: the cheap text-based twin of its client-module section,
+scripts/boundary_check.sh, IS a gate speedbump; this proof-term instrument
+stays a measurement without a verdict, run at design points).
+Born for the 2026-09-02 parametric-semantics spike
+(docs/2026-09-02_parametric-semantics-spike.md, DEFERRED).
 
-For each rule theorem (Rules/Wps/Wpt) and the named Soundness/Round/
-Adequacy/TotalAdequacy exports, split the constants of the PROOF TERM
-into "statement" (in the type) and "proof-only" (in the value, not the
-type), then classify DIRECT (the theorem's own value) vs TRANSITIVE
-(closure through CerberusHeapLang constants only; engine/Iris/Lean
-constants are leaves, never expanded) usage of:
+FAIL-CLOSED CONFIGURATION (ar5-manifest 2026-09-04, the external audit's
+Finding 2): every export seed below MUST resolve to a declaration of the
+built environment — a missing name is a HARD FAILURE (nonzero exit), never
+a `(MISSING)` row; the client-module list is READ from the one authoritative
+module classification scripts/module_classes.tsv (classes `positive-client`
+and `declared-smoke`), which must be complete and exact (every package
+module classified, every classified module present).
+
+For each rule theorem (Rules/Wps/Wpt) and the named export seeds, split the
+constants of the PROOF TERM into "statement" (in the type) and "proof-only"
+(in the value, not the type), then classify DIRECT (the theorem's own value)
+vs TRANSITIVE (closure through CerberusHeapLang constants only; engine/Iris/
+Lean constants are leaves, never expanded) usage of:
   StepDef  — the `Step` inductive, its constructors/rec/casesOn
   StepLem  — theorems in the `Step.` namespace (inversions, canonical)
   Env      — map OPERATIONS: LemLib `fmapAddBy`/`fmapLookupBy`, `Std.TreeMap*`,
@@ -23,16 +35,9 @@ constants are leaves, never expanded) usage of:
              isAtomicMemberAccess) — the re-pin's TagDefs parameter set.
 NB: Iris redefines ` || ` (SetNotation.lean:16), hence `Bool.or`/`.any`.
 Run (from cerberus-heaplang/, box free, capped):
-  CERB_MEM_MAX=48G ../scripts/capped ~/.elan/bin/lake env lean scripts/parametric_inventory.lean
+  CERB_MEM_MAX=40G ../scripts/capped ~/.elan/bin/lake env lean scripts/parametric_inventory.lean
 -/
-import CerberusHeapLang.TotalAdequacy
-import CerberusHeapLang.Round
-import CerberusHeapLang.ArrayExhibit
-import CerberusHeapLang.StructExhibit
-import CerberusHeapLang.ListRevExhibit
-import CerberusHeapLang.TreeRotExhibit
-import CerberusHeapLang.LoopExhibit
-import CerberusHeapLang.Examples.ReadinessSmoke
+import CerberusHeapLang
 
 open Lean
 
@@ -163,8 +168,10 @@ def short (n : Name) : String :=
 
 def count (xs : Array Name) (p : Name → Bool) : Nat := (xs.filter p).size
 
-def analyze (env : Environment) (n : Name) : DepM Row := do
-  let some ci := env.find? n | return { name := s!"{short n} (MISSING)" }
+/-- Measurement of one declaration. The caller resolves the name (the
+    resolution failure is the HARD FAILURE `resolve` below — the
+    pre-2026-09-04 script rendered it as a `(MISSING)` row and exited 0). -/
+def analyze (env : Environment) (n : Name) (ci : ConstantInfo) : DepM Row := do
   let tset : Std.HashSet Name := Std.HashSet.ofArray ci.type.getUsedConstants
   let direct := (valueConsts ci).filter (fun c => !tset.contains c)
   let direct := (Std.HashSet.ofArray direct).toArray
@@ -184,14 +191,21 @@ def analyze (env : Environment) (n : Name) : DepM Row := do
     engD := engD, engTyD := engTyD, engT := count trans (isEngineDef env)
     layoutD := layoutD, layoutT := layoutT }
 
-def clientModules : List Name :=
-  [`CerberusHeapLang.ArrayExhibit, `CerberusHeapLang.StructExhibit,
-   `CerberusHeapLang.ListRevExhibit, `CerberusHeapLang.TreeRotExhibit,
-   `CerberusHeapLang.LoopExhibit, `CerberusHeapLang.Examples.ReadinessSmoke]
+/-! ## Configuration -/
+
 def ruleModules : List Name :=
   [`CerberusHeapLang.Rules, `CerberusHeapLang.Wps, `CerberusHeapLang.Wpt]
 def rulePrefixes : List String := ["wp_", "wps_", "wpt_", "triple", "blockSpecs", "spike_wp_wand"]
 
+/-- The named exports measured: the certification spine (Soundness/Round),
+    the partial lane (Adequacy), the total lane (ProdLoop/ProdEntry).
+    Refreshed at ar5-manifest 2026-09-04 to the post-F1 names
+    (`engine_adequacyU(_alloc)` → `engine_adequacy(_alloc)`,
+    `semantic_triple_soundU` → `semantic_triple_sound`, `semantic_frameU` →
+    `semantic_frame`; `wpt_engine_boundU(_alloc)` are GONE with the package
+    loop `driveU` — the total lane's theorems are `wpt_driver_done(_alloc)`,
+    `wpt_driver_done_procs` and the pipeline forms). Every name is checked
+    against the environment: a missing one aborts the run. -/
 def exportSeeds : List Name := [
   `CerberusHeapLang.engine_step_matchU,
   `CerberusHeapLang.Decomp.step_factor, `CerberusHeapLang.stepDischarge_run,
@@ -200,11 +214,37 @@ def exportSeeds : List Name := [
   `CerberusHeapLang.frag_round_complete,
   `CerberusHeapLang.spike_step_adequacy, `CerberusHeapLang.spike_step_adequacy_alloc,
   `CerberusHeapLang.launchResources,
-  `CerberusHeapLang.engine_adequacyU, `CerberusHeapLang.engine_adequacyU_alloc,
-  `CerberusHeapLang.semantic_triple_soundU, `CerberusHeapLang.semantic_frameU,
+  `CerberusHeapLang.engine_adequacy, `CerberusHeapLang.engine_adequacy_alloc,
+  `CerberusHeapLang.semantic_triple_sound, `CerberusHeapLang.semantic_frame,
   `CerberusHeapLang.project_triple_pure, `CerberusHeapLang.project_triple_pure_alloc,
-  `CerberusHeapLang.wpt_engine_boundU, `CerberusHeapLang.wpt_engine_boundU_alloc,
+  `CerberusHeapLang.wpt_driver_done, `CerberusHeapLang.wpt_driver_done_alloc,
+  `CerberusHeapLang.wpt_driver_done_procs,
+  `CerberusHeapLang.prod_run_eqJ, `CerberusHeapLang.prod_run_eqJ_procs,
+  `CerberusHeapLang.prod_run_safe_procs,
   `CerberusHeapLang.Frag.pot_step_bound]
+
+/-- The module classification (scripts/module_classes.tsv): module, class. -/
+def classVocabulary : List String :=
+  ["core", "production-core", "audit", "positive-client", "declared-smoke",
+   "semantic-test", "engine-mirror-test", "production-wrapper", "negative-test",
+   "example-support"]
+def clientClasses : List String := ["positive-client", "declared-smoke"]
+
+def trim (s : String) : String := s.trimAscii.toString
+
+def readModuleClasses (path : System.FilePath) : IO (Array (Name × String)) := do
+  let txt ← IO.FS.readFile path
+  let mut rows : Array (Name × String) := #[]
+  for (line, i) in (txt.splitOn "\n").zipIdx do
+    if (trim line).isEmpty || line.startsWith "#" then continue
+    let cells := line.splitOn "\t"
+    if cells.length != 4 then
+      throw <| IO.userError s!"module_classes.tsv:{i+1}: expected 4 TAB-separated cells, got {cells.length}"
+    unless classVocabulary.contains cells[1]! do
+      throw <| IO.userError s!"module_classes.tsv:{i+1}: class `{cells[1]!}` not in the vocabulary"
+    rows := rows.push (cells[0]!.toName, cells[1]!)
+  if rows.isEmpty then throw <| IO.userError "module_classes.tsv: no rows"
+  return rows
 
 def fmt (r : Row) : String :=
   let eng := if r.engD.isEmpty then "-" else
@@ -223,10 +263,33 @@ def score (r : Row) : Nat := r.engD.size + r.ghostD + r.stepDefD
 
 end ParametricInventory
 
+/-- FAIL-CLOSED name resolution: a configured name absent from the built
+    environment aborts the run (nonzero exit). -/
+def ParametricInventory.resolve (env : Environment) (what : String) (n : Name) : CoreM (Name × ConstantInfo) := do
+  match env.find? n with
+  | some ci => return (n, ci)
+  | none => throwError "parametric_inventory FAIL: {what} `{n}` is not a declaration of the built environment (stale configuration — refresh it)"
+
 open ParametricInventory in
 #eval show CoreM Unit from do
   let env ← getEnv
-  let mut seeds : Array (Name × Name) := #[]   -- (module, name)
+  -- ---- fail-closed configuration checks, before any measurement
+  let seedCis ← exportSeeds.toArray.mapM (resolve env "export seed")
+  let modRows ← readModuleClasses "scripts/module_classes.tsv"
+  let pkgMods : Array Name :=
+    env.header.moduleNames.filter fun m => m.getRoot == `CerberusHeapLang && m != `CerberusHeapLang
+  for m in pkgMods do
+    unless modRows.any (·.1 == m) do
+      throwError "parametric_inventory FAIL: module `{m}` is in the environment but not classified in scripts/module_classes.tsv"
+  for (m, _) in modRows do
+    unless pkgMods.contains m do
+      throwError "parametric_inventory FAIL: module_classes.tsv lists `{m}`, which is not a module of the built package"
+  let clientModules : Array Name :=
+    (modRows.filter (fun r => clientClasses.contains r.2)).map (·.1)
+    |>.qsort (fun a b => a.toString < b.toString)
+  if clientModules.isEmpty then throwError "parametric_inventory FAIL: no client module classified"
+  -- ---- the rule theorems
+  let mut seeds : Array (Name × Name × ConstantInfo) := #[]   -- (module, name, info)
   for (n, ci) in env.constants.toList do
     let m := modOf env n
     unless ruleModules.contains m do continue
@@ -235,10 +298,10 @@ open ParametricInventory in
     let last := n.components.getLast!.toString
     unless rulePrefixes.any (last.startsWith ·) do continue
     if (last.splitOn "exhibit").length > 1 then continue
-    seeds := seeds.push (m, n)
+    seeds := seeds.push (m, n, ci)
   let sorted := seeds.qsort fun a b =>
-    if a.1 == b.1 then a.2.toString < b.2.toString else a.1.toString < b.1.toString
-  let (rows, _) := (sorted.mapM (fun p => analyze env p.2)).run {}
+    if a.1 == b.1 then a.2.1.toString < b.2.1.toString else a.1.toString < b.1.toString
+  let (rows, _) := (sorted.mapM (fun p => analyze env p.2.1 p.2.2)).run {}
   IO.println s!"## Rule theorems (Rules/Wps/Wpt): {rows.size} seeds (measured)\n"
   let mut curMod : Name := .anonymous
   for (p, r) in sorted.zip rows do
@@ -264,8 +327,8 @@ open ParametricInventory in
   let worst := (rows.qsort (fun a b => score a > score b)).toList.take 8
   IO.println (s!"- WORST (engine-direct + ghost-direct + StepDef-direct): " ++
     ", ".intercalate (worst.map fun r => s!"`{r.name}` ({r.engD.size}+{r.ghostD}+{r.stepDefD})"))
-  let (erows, _) := (exportSeeds.toArray.mapM (analyze env)).run {}
-  IO.println s!"\n## Soundness / Round / Adequacy / TotalAdequacy exports ({erows.size}, measured)\n\n{header}"
+  let (erows, _) := (seedCis.mapM (fun (n, ci) => analyze env n ci)).run {}
+  IO.println s!"\n## Certification / adequacy / production exports ({erows.size}, measured; every seed resolved)\n\n{header}"
   for r in erows do IO.println (fmt r)
   IO.println "\n## Layout-dependent package DEFINITIONS (non-theorem constants whose type or body directly names a TagDefs-parameterized memory function; measured)\n"
   let mut defs : Array String := #[]
@@ -279,21 +342,22 @@ open ParametricInventory in
     defs := defs.push s!"- `{short n}` ({short (modOf env n)}): {", ".intercalate hits}"
   for d in defs.qsort (· < ·) do IO.println d
   IO.println s!"\nTOTAL layout-dependent definitions: {defs.size}"
-  -- CLIENT MODULES (alloc arc P4 definition of done: the array, struct,
-  -- list and tree clients import only the public raw-logic API — none
-  -- unfolds the ghost maps / CohG / the cursor (Ghost), the engine
-  -- transition (StepDef / StepLem), or the judgment (Judg)). Per module:
-  -- theorem count and the DIRECT offenders by category.
-  IO.println "\n## Client modules: direct references per theorem (alloc arc P4 DoD; measured)\n"
+  -- CLIENT MODULES (the classes `positive-client` and `declared-smoke` of
+  -- scripts/module_classes.tsv — the same set the manifest counts as
+  -- consumers and boundary_check.sh checks textually): per module, the
+  -- theorem count and the DIRECT offenders by category. Zero is the
+  -- expected reading (alloc arc P4 definition of done); a nonzero here is
+  -- a finding about the public surface (API.lean), not a gate verdict.
+  IO.println "\n## Client modules: direct references per theorem (the classification's positive clients and declared smokes; measured)\n"
   for m in clientModules do
-    let mut thms : Array Name := #[]
+    let mut thms : Array (Name × ConstantInfo) := #[]
     for (n, ci) in env.constants.toList do
       unless modOf env n == m do continue
       unless ci matches .thmInfo _ do continue
       if n.isInternalDetail then continue
-      thms := thms.push n
-    let sortedThms := thms.qsort (·.toString < ·.toString)
-    let (rows, _) := (sortedThms.mapM (analyze env)).run {}
+      thms := thms.push (n, ci)
+    let sortedThms := thms.qsort (·.1.toString < ·.1.toString)
+    let (rows, _) := (sortedThms.mapM (fun (n, ci) => analyze env n ci)).run {}
     let off (f : Row → Bool) : List String :=
       (rows.filter f).toList.map (fun r => s!"`{r.name}`")
     let ghost := off (·.ghostD > 0)
@@ -303,3 +367,4 @@ open ParametricInventory in
     let plan := off (·.planD > 0)
     let fmtL (l : List String) := if l.isEmpty then "0" else s!"{l.length}: " ++ ", ".intercalate l
     IO.println s!"- {short m}: {rows.size} theorems; Ghost-direct {fmtL ghost}; StepDef-direct {fmtL sdef}; StepLem-direct {fmtL slem}; Judg-direct {fmtL judg}; Plan-direct {fmtL plan}"
+  IO.println s!"\nINVENTORY: {rows.size} rule theorems, {erows.size} export seeds (all resolved), {clientModules.size} client modules"

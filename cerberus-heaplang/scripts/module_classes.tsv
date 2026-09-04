@@ -1,0 +1,65 @@
+# module_classes.tsv — THE ONE AUTHORITATIVE MODULE CLASSIFICATION of the
+# package (pure data; ar5-manifest slice, 2026-09-04 — the external audit's
+# Finding 2 asked for one classification consumed by every instrument).
+# Consumed by: scripts/capability_manifest.lean (consumer set = the modules
+# whose proof cones count as "a client consumes this rule"),
+# scripts/parametric_inventory.lean (the client-module section), and
+# scripts/boundary_check.sh (the negative architectural check: which modules
+# must not mention logic internals; which are exempt by class) — all three
+# fail hard on a class outside the vocabulary, on a listed module absent from
+# the built environment, and (the Lean scripts) on a package module absent
+# from this list. Columns are TAB-separated: module, class, internals-allow,
+# note. `internals-allow` is `-` or the reason a module's CURRENT mentions of
+# logic internals are tolerated by the boundary check (per module; the check
+# prints the entry as ALLOWLISTED and warns when an entry has no hits left).
+#
+# Class vocabulary (exactly one per module):
+#   core                 the logic and its certification: semantics -> heap -> rules -> adequacy (the import-direction check's protected set)
+#   production-core      the production lanes (driver collapse into the shipped pipeline); clients of adequacy, imported by production wrappers
+#   audit                the in-build axiom sweep
+#   positive-client      a program proof through the PUBLIC rules only; manifest consumer; boundary check applies
+#   declared-smoke       a structurally-forcing smoke of a public surface, through the public rules only; manifest consumer; boundary check applies
+#   semantic-test        regression witnesses proved directly against `Step`/the engine round; NOT a consumer; boundary check exempt by class
+#   engine-mirror-test   generated-engine round = mirror step witnesses as a module of their own; NOT a consumer; exempt (vocabulary reserved; currently no member — MirrorCoverage holds its `engine_step_matchU` instances beside the `Step` witnesses and is classified by its header as semantic-test)
+#   production-wrapper   closed statements over the shipped pipeline (root-of-trust lane); NOT a consumer (its rule use is through the positive clients it wraps); exempt (it names the driver lane by design)
+#   negative-test        an unprovability result exhibited through the engine's actual behaviour; NOT a consumer; exempt (its header states the `Step` exception)
+#   example-support      layout constants and canned shapes; NOT a consumer; boundary check applies
+CerberusHeapLang.Step	core	-	the mirror small-step and the machine context
+CerberusHeapLang.Lang	core	-	the iris-lean Language instance
+CerberusHeapLang.Heap	core	-	ghost carrier, coupling, bundles, MemWF
+CerberusHeapLang.EnvLaws	core	-	symbol-map laws
+CerberusHeapLang.Rules	core	-	atomic specifications and the raw-WP lifting
+CerberusHeapLang.Wps	core	-	the partial judgment and its rules
+CerberusHeapLang.Wpt	core	-	the total judgment and its rules
+CerberusHeapLang.Soundness	core	-	Frag, Decomp, the step match
+CerberusHeapLang.EvalClass	core	-	the evaluator outcome classification
+CerberusHeapLang.Potential	core	-	the static fuel bound
+CerberusHeapLang.Round	core	-	the shipped round, certification, completeness
+CerberusHeapLang.Adequacy	core	-	the partial lane and the projections
+CerberusHeapLang.TotalAdequacy	core	-	the total lane's readout vocabulary
+CerberusHeapLang.DriverCollapse	core	-	the shipped round at a live control
+CerberusHeapLang.API	core	-	the public surface as one import
+CerberusHeapLang.ProdLoop	production-core	-	the total judgment drives the shipped loop
+CerberusHeapLang.ProdEntry	production-core	-	the cold start and the pipeline theorems
+CerberusHeapLang.Audit	audit	-	exact export pins and the banned-axiom sweep
+CerberusHeapLang.Exhibit	positive-client	`progA_wpt` (Exhibit.lean, the raw-WP readout of exhibit (a) at the total judgment) opens `stateInterp_iff` directly — found by this check at ar5-manifest 2026-09-04; `progA_wpt` is consumerless since F1 (docs/KNOWN-OPEN-ITEMS.md C3), its deletion or a rewrite over the public `stateInterp_readout` removes the entry	straight-line store/load exhibits (A/B/C)
+CerberusHeapLang.LoopExhibit	positive-client	-	the counter loop
+CerberusHeapLang.FibExhibit	positive-client	-	iterative fib
+CerberusHeapLang.ArrayExhibit	positive-client	-	array sum
+CerberusHeapLang.ListRevExhibit	positive-client	-	in-place list reversal
+CerberusHeapLang.TreeRotExhibit	positive-client	-	tree rotation
+CerberusHeapLang.CaseExhibit	positive-client	-	value-scrutinee case
+CerberusHeapLang.WseqExhibit	positive-client	-	weak sequencing
+CerberusHeapLang.StructExhibit	positive-client	-	two-field struct update
+CerberusHeapLang.AllocExhibit	positive-client	-	create/kill/alloc/free local consumers
+CerberusHeapLang.DisposeExhibit	positive-client	readout helpers `deadObj_dead_keep`/`deadNodes_dead` over `CohG`/`metaInterp` (the documented exception, API.lean) — being removed by ar5-readout (relocation into Adequacy/API)	dispose a list
+CerberusHeapLang.RegionLoopExhibit	positive-client	-	n regions from one budget
+CerberusHeapLang.MallocListExhibit	positive-client	readout helper `deadRegions_dead` over `CohG`/`metaInterp` (the documented exception, API.lean) — being removed by ar5-readout (relocation into Adequacy/API)	the malloc'd linked list
+CerberusHeapLang.FibRecExhibit	positive-client	-	recursive fib through the specification table
+CerberusHeapLang.Examples.CallSmoke	declared-smoke	-	the C3 call/procedure smoke (kept as a consumer beside FibRecExhibit)
+CerberusHeapLang.Examples.ReadinessSmoke	declared-smoke	-	the API-only two-field predicate smoke
+CerberusHeapLang.Examples.Layout	example-support	-	layout constants and canned shapes
+CerberusHeapLang.Examples.MirrorCoverage	semantic-test	-	mirror-level coverage witnesses against `Step`; engine-round instances
+CerberusHeapLang.ProdExhibit	production-wrapper	-	exhibit A at the production entry
+CerberusHeapLang.ProdLoopExhibit	production-wrapper	-	the production loop theorems
+CerberusHeapLang.DivergeExhibit	negative-test	-	the total lane's unprovability result

@@ -7,8 +7,12 @@
 # sweep). Everything after that is a SPEEDBUMP ([USER 2026-09-02]): a
 # claim-point report that catches honest drift; it is not designed to
 # survive adversarial attack.
-#   default : gates 1-2 + the speedbumps (capability manifest, import direction) — the claim gate
+#   default : gates 1-2 + the speedbumps (the rule-use and classification
+#             manifest, the import direction, the client-boundary check) —
+#             the claim gate
 #   --fast  : gates 1-2 only (intermediate commits; say fast-gate in the message)
+# The module classification every speedbump reads is the one file
+# cerberus-heaplang/scripts/module_classes.tsv (ar5-manifest 2026-09-04).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -40,7 +44,7 @@ else
 fi
 
 if [[ $fast -eq 0 ]]; then
-  echo "== speedbump: capability manifest (regenerate; red on a red row or drift) =="
+  echo "== speedbump: rule-use and classification manifest (regenerate; red on a red row or drift) =="
   manifest=cerberus-heaplang/docs/CAPABILITY_MANIFEST.md
   tmp="$(mktemp "${TMPDIR:-/tmp}/capability_manifest.XXXXXX")"
   if (cd cerberus-heaplang && ../scripts/capped "$HOME/.elan/bin/lake" env lean \
@@ -48,24 +52,38 @@ if [[ $fast -eq 0 ]]; then
     if [[ -f "$manifest" ]] && diff -u "$manifest" "$tmp"; then
       echo "ok: capability manifest regenerated, no drift"
     else
-      echo "FAIL (speedbump): capability manifest drift/missing (diff above) —" \
+      echo "FAIL (speedbump): manifest drift/missing (diff above) —" \
         "regenerate docs/CAPABILITY_MANIFEST.md deliberately, same commit" >&2; fail=1
     fi
   else
-    echo "FAIL (speedbump): capability manifest generator red (a MISSING/red row);" \
-      "generator output:" >&2
+    echo "FAIL (speedbump): manifest generator red (a red row / an unclassified constructor or module /" \
+      "a stale claim-matrix name); generator output:" >&2
     cat "$tmp" >&2; fail=1
   fi
   rm -f "$tmp"
 
   echo "== speedbump: import direction (semantics → heap → rules → adequacy → clients) =="
-  # No core module may import an exhibit, example-support or production module (a missing core file is red too).
-  core=(Step Lang Heap EnvLaws Rules Wps Wpt Soundness EvalClass Potential Round Adequacy TotalAdequacy DriverCollapse API)
-  files=(); for m in "${core[@]}"; do files+=("cerberus-heaplang/CerberusHeapLang/$m.lean"); done
-  if ! ls "${files[@]}" > /dev/null || grep -nE '^import CerberusHeapLang\.([A-Za-z]*Exhibit|Examples\.|Prod)' "${files[@]}"; then
-    echo "FAIL (speedbump): a core module is missing or imports an exhibit/example/production module (above)" >&2; fail=1
+  # No core module may import an exhibit, example-support or production module.
+  # The core set is the class `core` of the one module classification (a
+  # missing core file, or an empty class, is red too).
+  tsv=cerberus-heaplang/scripts/module_classes.tsv
+  files=()
+  while IFS=$'\t' read -r module cls _allow _note; do
+    [[ -z "$module" || "$module" == \#* || "$cls" != core ]] && continue
+    files+=("cerberus-heaplang/${module//./\/}.lean")
+  done < "$tsv"
+  if [[ ${#files[@]} -eq 0 ]] || ! ls "${files[@]}" > /dev/null || \
+      grep -nE '^import CerberusHeapLang\.([A-Za-z]*Exhibit|Examples\.|Prod)' "${files[@]}"; then
+    echo "FAIL (speedbump): a core module is missing, the core class is empty, or a core module imports an exhibit/example/production module (above)" >&2; fail=1
   else
-    echo "ok: import direction — no core module imports an exhibit/example/production module"
+    echo "ok: import direction — ${#files[@]} core modules, none imports an exhibit/example/production module"
+  fi
+
+  echo "== speedbump: client boundary (positive clients mention no logic internals; scripts/boundary_check.sh) =="
+  if scripts/boundary_check.sh; then
+    echo "ok: client boundary — no unallowlisted internals mention"
+  else
+    echo "FAIL (speedbump): client boundary — an internals mention in a client module without an allowance (above)" >&2; fail=1
   fi
 fi
 
