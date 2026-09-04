@@ -21,7 +21,7 @@
 #   declared-smoke       a structurally-forcing smoke of a public surface, through the public rules only; manifest consumer; boundary check applies
 #   semantic-test        regression witnesses proved directly against `Step`/the engine round; NOT a consumer; boundary check exempt by class
 #   engine-mirror-test   generated-engine round = mirror step witnesses as a module of their own; NOT a consumer; exempt (vocabulary reserved; currently no member — MirrorCoverage holds its `engine_step_matchU` instances beside the `Step` witnesses and is classified by its header as semantic-test)
-#   production-wrapper   closed statements over the shipped pipeline (root-of-trust lane); NOT a consumer (its rule use is through the positive clients it wraps); exempt (it names the driver lane by design)
+#   production-wrapper   a module whose rule use is ONLY through the imported clients it wraps (the operative criterion — NOT "carries closed statements over the shipped pipeline": four positive clients carry `*_certified_production` too, AR5 range audit H-3); NOT a consumer; exempt (it names the driver lane by design)
 #   negative-test        an unprovability result exhibited through the engine's actual behaviour; NOT a consumer; exempt (its header states the `Step` exception)
 #   example-support      layout constants and canned shapes; NOT a consumer; boundary check applies
 CerberusHeapLang.Step	core	-	the mirror small-step and the machine context
@@ -42,7 +42,7 @@ CerberusHeapLang.API	core	-	the public surface as one import
 CerberusHeapLang.ProdLoop	production-core	-	the total judgment drives the shipped loop
 CerberusHeapLang.ProdEntry	production-core	-	the cold start and the pipeline theorems
 CerberusHeapLang.Audit	audit	-	exact export pins and the banned-axiom sweep
-CerberusHeapLang.Exhibit	positive-client	`progA_wpt` (Exhibit.lean, the raw-WP readout of exhibit (a) at the total judgment) opens `stateInterp_iff` directly — found by this check at ar5-manifest 2026-09-04; `progA_wpt` is consumerless since F1 (docs/KNOWN-OPEN-ITEMS.md C3), its deletion or a rewrite over the public `stateInterp_readout` removes the entry	straight-line store/load exhibits (A/B/C)
+CerberusHeapLang.Exhibit	positive-client	-	straight-line store/load exhibits (A/B/C)
 CerberusHeapLang.LoopExhibit	positive-client	-	the counter loop
 CerberusHeapLang.FibExhibit	positive-client	-	iterative fib
 CerberusHeapLang.ArrayExhibit	positive-client	-	array sum

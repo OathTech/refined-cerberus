@@ -128,8 +128,7 @@ def variants : List Variant := [
   -- load
   { ctor := `CerberusHeapLang.Frag.load,
     shape := "`Load0` at a live OBJECT through its own pointer, whole cell at any fraction, non-trap decode",
-    cls := .ruleTotalUndemonstrated (N "wps_load") (N "wpt_load")
-      "a total exhibit loading a WHOLE cell (every total client loads through a view, `wpt_load_at`)",
+    cls := .rule (N "wps_load") (N "wpt_load"),
     also := [N "wps_load_plain", N "wpt_load_plain", N "load_atomic"] },
   { ctor := `CerberusHeapLang.Frag.load,
     shape := "`Load0` at a typed SUB-RANGE of an object (`pointsToView`)",

@@ -3378,10 +3378,6 @@ def spikeRunState : core_run_state :=
     (no current procedure). -/
 @[simp] theorem spikeCtx_labels : spikeCtx.labelsAt spikeCtl.proc = spikeLbl := rfl
 
-theorem spikeCtx_wf : spikeCtx.SeqWF := ⟨rfl⟩
-
-theorem procCtx_wf (rs : core_run_state) : (procCtx rs).SeqWF := ⟨rfl⟩
-
 /-- The jump profile's DERIVED label map at a successful two-level
     `labeled` read (the old `LabeledAt` tie, consumed): the fiber at
     the current procedure IS the context's label map. Stated in the

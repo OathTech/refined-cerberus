@@ -526,7 +526,14 @@ self-contained twin `progAProd` that creates its own cell — the seeded
 example-specific six-step engine simulation (`exhibitA_terminates`) is
 RETIRED (alloc arc P2), and the former `exhibitA_total` over the package
 loop `driveU` was deleted with the loop (fuel-lane restatement,
-2026-09-03). Zero operational proof terms in this module. -/
+2026-09-03). REWRITTEN 2026-09-04 (hygiene slice H1a,
+docs/2026-09-04_h1-notes.md; KNOWN-OPEN-ITEMS C8): the load is the
+WHOLE-CELL rule `wpt_load` (the partial `provenA`'s `wps_load` twin — the
+former proof went through the sub-range view `wpt_load_cell_at` at the
+cell's id and address) and the readout is the public
+`stateInterp_readout`/`pointsToCell_consequence` (the former proof opened
+`stateInterp_iff`, the boundary check's one ALLOWLISTED entry). Statement
+unchanged. Zero operational proof terms in this module. -/
 
 /-- The seven image decodes back to `sevenMval` at ANY address (the
     table- and address-independent int decode). -/
@@ -567,34 +574,27 @@ theorem progA_wpt {GF : BundledGFunctors} [SpikeGS .hasLC GF]
   iintro %fp Hpt
   iapply wpt_mono
     (fun u ρ' => readoutPost_annot_absorb (ψX M.tagDefs) [DA_pos [] fp] Vunit u ρ') _ _
-  icases (pointsToCell_cellOwn_iff M.tagDefs _ _ _ _).mp $$ Hpt
-    with ⟨%id, %a, %hpv, Hcell⟩
-  obtain ⟨rfl, rfl⟩ := cellPtr_inj (xPtr_eq.symm.trans hpv)
-  rw [show (xPtr : CerbMem.PointerValue) =
-      cellPtr 0 (xAddr + ((0 : Nat) : Int)) from by
-    rw [xPtr_eq]
-    exact congrArg (cellPtr 0) (by omega)]
-  iapply wpt_load_cell_at loc0 empty_annotation 0 xAddr intTy 0 intTy NA
-    (.own 1) (CerbMem.memValueToBytes M.tagDefs [] sevenMval).2 _
-    (mv := sevenMval) (Nat.le_refl 3) (by omega)
-    (fun lum fpm => seven_reconstruct lum fpm _) seven_loadTrap
-  isplitl [Hcell]
-  · iexact Hcell
-  iintro %fp2 Hcell
-  iintro %σ2 %ns %κs %nt Hσ
-  icases (stateInterp_iff σ2 ns κs nt).mp $$ Hσ
-    with ⟨%mm, %mb, %mk, %HG, Hmi, Hbi, Hki⟩
-  ihave %Hcc : ⌜CellCoh M.tagDefs σ2 0 ⟨xAddr, intTy,
-      (CerbMem.memValueToBytes M.tagDefs [] sevenMval).2⟩ ∧
-      Iris.Std.PartialMap.get? mm 0 = some (metaOf M.tagDefs
-        (⟨xAddr, intTy, (CerbMem.memValueToBytes M.tagDefs [] sevenMval).2⟩ :
-          SpikeCell))⌝ $$ [Hmi Hbi Hcell]
-  · iapply cellOwn_cellCoh M.tagDefs HG 0 (.own 1)
-      ⟨xAddr, intTy, (CerbMem.memValueToBytes M.tagDefs [] sevenMval).2⟩
-      $$ [$Hmi $Hbi $Hcell]
-  iapply fupd_mask_intro_discard Std.LawfulSet.empty_subset
-  ipureintro
-  exact ⟨seven_fromMemValue, Hcc.1⟩
+  iapply wpt_load loc0 empty_annotation intTy xPtr NA (.own 1)
+    (CerbMem.memValueToBytes M.tagDefs [] sevenMval).2 _ (Nat.le_refl 3) htrap_seven
+  isplitl [Hpt]
+  · iexact Hpt
+  iintro %fp2 Hpt
+  -- the readout, through the public projection layer only: the seven
+  -- image's ownership reads out as `CellCoh` at the seeded cell
+  -- (`pointsToCell_consequence` under `stateInterp_readout`), the loaded
+  -- value is `Specified 7` by the decode fact `loaded_seven`
+  have hread : pointsToCell M.tagDefs (GF := GF) xPtr (.own 1) intTy
+        (CerbMem.memValueToBytes M.tagDefs [] sevenMval).2 ⊢
+      readoutPost (ψX M.tagDefs)
+        (SpikeVal.annot [DA_pos [] fp2]
+          (loadedVal M.tagDefs xPtr intTy (CerbMem.memValueToBytes M.tagDefs [] sevenMval).2))
+        (ev0 :: evs) :=
+    stateInterp_readout fun _ _ _ _ hG =>
+      (pointsToCell_consequence hG M.tagDefs xPtr (.own 1) intTy _).trans
+        (BI.pure_mono fun ⟨_, _, hpv, hc⟩ => by
+          obtain ⟨rfl, rfl⟩ := cellPtr_inj (xPtr_eq.symm.trans hpv)
+          exact ⟨loaded_seven, hc⟩)
+  iapply hread $$ Hpt
 
 /-! ## EXHIBIT C ([USER 2026-08-30]): disjoint sequential stores,
 exported to the engine level

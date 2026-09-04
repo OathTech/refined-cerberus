@@ -1447,11 +1447,12 @@ loop-level reading `CerberusRound.loop_step` — `runOne
 (the same shipped continuation on both sides; no fuel-zero arm is ever
 evaluated). The hand-written discharge `dischargeStep`/`outcomesU`
 (Soundness.lean) is a PROOF DEVICE of this classification: no EXPORT's
-statement mentions it — the lemmas that do (`stepDischarge_run`,
-`outcomesU_of_step`) are proof devices, unpinned and internal, bounded by
-the package sweep but not exported (the trust rule of 2026-09-02); since
-the fuel-lane restatement (2026-09-03) no adequacy lane consumes them —
-both lanes iterate the shipped round `loop_step_frag`.
+statement mentions it — the lemmas that do (`stepDischarge_run` and its
+siblings) are proof devices, unpinned and internal, bounded by the package
+sweep but not exported (the trust rule of 2026-09-02); since the fuel-lane
+restatement (2026-09-03) no adequacy lane consumes them — both lanes
+iterate the shipped round `loop_step_frag` (the former unified step-match
+`outcomesU_of_step` was deleted 2026-09-04, consumerless).
 
 The certification theorem, on the fragment `Frag` at a cons-shaped
 environment and `esize e ≤ lemDefaultFuel`:

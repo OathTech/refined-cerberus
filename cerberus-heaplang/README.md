@@ -110,14 +110,14 @@ VARIANT of each `Frag` constructor (ar5-manifest, 2026-09-04; ARCHITECTURE
 and a total rule, both in the proof-term cone of a consumer module — the
 sixteen modules classified `positive-client`/`declared-smoke` in
 `scripts/module_classes.tsv`, listed per row), RULE-TOTAL-UNDEMONSTRATED
-(the total rule proved but consumed by no client: `wpt_load`,
-`wpt_case_value`, `wpt_wseq`), NO-RULE (admitted by the fragment and the
+(the total rule proved but consumed by no client: `wpt_case_value`,
+`wpt_wseq`), NO-RULE (admitted by the fragment and the
 engine, no rule, with the deciding record — the locking store, the static
 kill of a region, `free(NULL)`, the zero-cost `alloc`, the union-member
 pointer, the read-only-cell load at the statement level, the zero-size/
 atomic/non-inert `create` types, the colliding `free`, the function-vs-
 concrete `PtrEq`) or OUT-OF-SCOPE (excluded by the fragment/mirror
-boundary): 23 constructors, 50 rows, 27 RULE, 3 RULE-TOTAL-UNDEMONSTRATED,
+boundary): 23 constructors, 50 rows, 28 RULE, 2 RULE-TOTAL-UNDEMONSTRATED,
 15 NO-RULE, 5 OUT-OF-SCOPE at this writing. Green means exactly what the
 manifest header says — every constructor classified, every named theorem a
 theorem, every RULE consumed in both judgments — and NOT that the variant
@@ -239,8 +239,8 @@ label bodies — vacuous at both frozen profiles, `spikeCtx_fragProcs`/
 `procCtx_fragProcs`; discharged at the two-procedure files,
 `csCtx_fragProcs`/`frCtx_fragProcs`), since their proofs follow the
 engine through a call and back; `MachineCtx.SeqWF` (startup thread) is a
-premise of the round classification `cerberusRound_classify` only,
-discharged at the two profiles by `spikeCtx_wf`, `procCtx_wf`);
+premise of the round classification `cerberusRound_classify` only —
+`⟨rfl⟩` at either frozen profile);
 `Eunseq`; inside the
 mirrored constructs, exactly these absences — `Ewseq` at binder
 patterns, `Ecase` with a non-value scrutinee, pure exits beyond
@@ -775,9 +775,10 @@ laws; and the environment laws (`SymFrame`, `envAdd_lookup`).
 
 Every partial rule in that table is consumed by a client (the manifest
 reports, per variant, which consumer modules' proofs flow through each
-rule); three TOTAL rules are proved but consumed by no client
-(`wpt_load`, `wpt_case_value`, `wpt_wseq` — the manifest's
-RULE-TOTAL-UNDEMONSTRATED rows, each with its mover); the laws kept as
+rule); two TOTAL rules are proved but consumed by no client
+(`wpt_case_value`, `wpt_wseq` — the manifest's RULE-TOTAL-UNDEMONSTRATED
+rows, each with its mover; `wpt_load` gained its whole-cell consumer
+`progA_wpt` on 2026-09-04); the laws kept as
 laws of the logic are exempt from the consumer check: `allocMeta_agree`, `allocBudget_weaken`/`allocBudget_le`, the
 plan-shaped readings `wps_create_of_plan`/`wpt_create_of_plan`, and the raw-WP `wp_load`
 (the exhibits consume `wps_load`; its sibling `wp_store` is consumed by
@@ -820,8 +821,8 @@ claim point by `scripts/boundary_check.sh` (the full gate's client-boundary
 speedbump: the modules classified `positive-client`/`declared-smoke`/
 `example-support` in `scripts/module_classes.tsv` must not mention the
 internals outside comments; per-module allowances carry their reason in
-the TSV — one at this writing: `progA_wpt` in `Exhibit`,
-KNOWN-OPEN-ITEMS C8), and at the proof-term level on demand by
+the TSV — NONE at this writing: the last, `progA_wpt` in `Exhibit`, was
+rewritten over the public readout 2026-09-04, KNOWN-OPEN-ITEMS C8), and at the proof-term level on demand by
 `scripts/parametric_inventory.lean` (fail-closed on its configuration since
 2026-09-04; not a gate — ARCHITECTURE §7).
 
@@ -913,7 +914,7 @@ In import order, one line each:
 | `Rules.lean` | the atomic step specifications and their lifting to the raw WP; `wp_store`, `wp_load`; the readout combinator | `AtomicStep`, `store_atomic`, `wp_of_atomic`, `wp_store`, `stateInterp_readout` |
 | `Wps.lean` | the partial label-context judgment as a guarded fixpoint; its rule set; statement-level framing; the Löb collapse into the raw WP | `wps`, `wps_seq`, `wps_create`, `blockSpecs_intro`, `wps_frame_labels`, `wps_sound` |
 | `Wpt.lean` | the total judgment by recursion on the budget; variant-indexed label preconditions with the mandatory back-edge decrease; collapse into Iris `TotalWeakestPre` | `wpt`, `wpt_run`, `wpt_create`, `blockSpecsT_intro`, `wpt_frame_labels`, `wpt_sound` |
-| `Soundness.lean` | the boundary module: the per-construct engine equations of `Step` against `step_ctx` (`step_ctx_*`), the fragment `Frag`, the decomposition `Decomp`; the discharge device `dischargeStep`/`outcomesU` and its step match (`outcomesU_of_step` — Round.lean's classification device) | `Frag`, `Decomp.step_factor`, `step_ctx_store` |
+| `Soundness.lean` | the boundary module: the per-construct engine equations of `Step` against `step_ctx` (`step_ctx_*`), the fragment `Frag`, the decomposition `Decomp`; the discharge device `dischargeStep`/`outcomesU` and its per-action computations `stepDischarge_*` (Round.lean's classification devices) | `Frag`, `Decomp.step_factor`, `step_ctx_store` |
 | `EvalClass.lean` | the engine's pure-evaluator outcome on the covered grammar, classified (`evalClass`: value / kill / uncovered) and its KILL bridge level by level — the failure twin of the success bridge | `evalClass`, `evalClass_val_iff`, `step_eval_bridge_kill`, `full_eval_bridge_kill`, `evalClassList` |
 | `Round.lean` | the shipped engine round (one iteration of the driver's thread loop, in the driver's own vocabulary), the certification `engine_step_matchU`, mirror completeness per redex root and its assembly, the exhaustive classification, the shipped refusal vocabulary and the residual — the reference relation the certification and completeness are stated over, consumed by no adequacy export (both adequacy lanes consume the shipped round `loop_step_frag`) | `CerberusRound`, `engine_step_matchU`, `frag_round_complete`, `complete_*`, `cerberusRound_classify`, `ShippedRefusal`, `OpenRound` |
 | `Potential.lean` | the step-monotone size potential `pot` — the static fuel bound | `pot`, `Frag.esize_le_pot`, `Frag.pot_step_bound` |

@@ -43,11 +43,12 @@ is `runOne` (DriverCollapse.lean): `match m with | ND f => f s`, the
 `ND` constructor's eliminator — the very operation `nd_bind` performs
 on its left argument (Nondeterminism.lean:188). It carries no driver,
 discharge or scheduler content; it is to `ndM` what `Prod.fst` is to
-pairs. `dischargeStep`/`outcomesU` and the `outcomesU`
-step-match (`outcomesU_of_step`, Soundness.lean) remain as PROOF
-DEVICES of this module's classification — and appear in no export's
-statement here (since the fuel-lane restatement of 2026-09-03 no
-adequacy lane consumes them: both lanes run on `loop_step_frag`).
+pairs. `dischargeStep`/`outcomesU` (Soundness.lean) remain as PROOF
+DEVICES of this module's classification (the discharge-device readings
+below) — and appear in no export's statement here (since the fuel-lane
+restatement of 2026-09-03 no adequacy lane consumes them: both lanes run
+on `loop_step_frag`; the `outcomesU` step-match `outcomesU_of_step` was
+deleted 2026-09-04, consumerless — KNOWN-OPEN-ITEMS C3).
 
 WHAT IS PROVED — the classification (`cerberusRound_classify`): for
 every well-sized `Frag` configuration at a sequentially well-formed
