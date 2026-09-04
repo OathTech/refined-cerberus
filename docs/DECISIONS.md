@@ -2127,3 +2127,105 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   restatement sized (§5): CHANGED ≈ everything by one binder, ~60
   hypotheses and the production `hfuel`s move to `LemFuel.fuel`, A2
   closes; one slice after the LemLib re-pin.
+- **2026-09-04 [USER] THE DEMO'S SCOPE, RESTATED** (verbatim): "The demo should be
+  the best possible version of Reynolds/O'Hearn, just because it's a nice
+  stable interface but it shakes out many of the theory difficulties. Fancy
+  logic features aren't needed for that purpose." And on the two open
+  feature questions: function pointers (`Eccall`) — "I think that belongs
+  in the refinedc arc"; mask generalisation (the external audit's F3) —
+  asked what it buys for Reynolds/O'Hearn ([AGENT]: nothing; masks are
+  Iris's bookkeeping for invariants, which classical sequential SL has
+  none of; the need appears with RefinedC's shared reference types) and
+  ruled with the scope statement: both go to the RefinedC arc. The demo's
+  FEATURE SET IS CLOSED: what remains is the re-pin, the fuel-general
+  restatement, the statement-shape slice, the hygiene/coverage slices and
+  the ARCHITECTURE re-review; then the demo is tagged as its version one
+  and effort moves to the RefinedC-family layer (Lane B re-seeds from that
+  head). [USER] agreed the six-step plan ("Yeah, agree on 1-6").
+- **2026-09-04 [AGENT] H1 LANDED ON `hygiene-h1` (b8413a5, six commits on main e242342):
+  logic-layer hygiene (H1a) and coverage exhibits (H1b).** Record
+  `cerberus-heaplang/docs/2026-09-04_h1-notes.md`; snapshots `docs/2026-09-04_h1a-signatures-post.txt`,
+  `…h1b-signatures-post.txt`. H1a: the call clause destructured in both
+  judgments, the two `hq` eta-hacks gone (76 projection occurrences → 0);
+  census 2971 → 2966: REMOVED 5 (`outcomesU_done`, `outcomesU_of_step`,
+  `outcomesU_remove_annot`, `procCtx_wf`, `spikeCtx_wf`), CHANGED 1
+  (`wpt_call_eq`, by exactly the destructuring), ADDED 0. [AGENT] forced
+  deviation: `progA_wpt` was REWRITTEN over the public readout, not deleted
+  — deleting it turned the manifest RED as `wpt_store`'s only consumer (the
+  instrument working as designed); with it `wpt_load` gained a consumer.
+  Boundary check: ZERO allowances. H1b: `caseProg_wpt`/`wseqProg_wpt` (the
+  last two undemonstrated totals), `TwoLabelExhibit` (`two_label_certified`,
+  `tl_wpt`), `EvenOddExhibit` (mutual recursion; `even_odd_certified` closed
+  partial ∀ fuel; `even_odd_certified_production` — the NINTH closed
+  shipped-driver statement, three-procedure file); census 2966 → 3081,
+  ADDED 115 / CHANGED 0 / REMOVED 0; pins 376 → 402; manifest 30 RULE / 0
+  undemonstrated / 15 NO-RULE / 5 OUT-OF-SCOPE, 18 consumers. New hygiene
+  finding: the ten `stepDischarge_*` lemmas are consumerless (KOI C14).
+  Measured: the three-procedure registration order is one specific
+  insertion order by `rfl`, not "ascending by symbol" (record). Orchestrator
+  FULL gate at b8413a5 (64G cap), verbatim (selection rule as stated in the
+  AR5 range-audit entry):
+  ```
+  == gate 1: banned proof-method grep (native_decide / bv_decide / ofReduce*) ==
+  ok: no banned proof-method references
+  == gate 2: capped build, cerberus-heaplang (elaborates its axiom audit) ==
+  info: CerberusHeapLang/Audit.lean:603:0: CerberusHeapLang export pins: 402 trio-exact
+  info: CerberusHeapLang/Audit.lean:603:0: CerberusHeapLang axiom sweep: every theorem bounded by the trio (3555 swept, internal details included — count informational, environment-dependent)
+  info: CerberusHeapLang/Audit.lean:603:0: CerberusHeapLang banned-axiom sweep: sorryAx/ofReduceBool/ofReduceNat absent from all cones (5357 constants of every kind swept, internal details included — count informational, environment-dependent)
+  Build completed successfully (458 jobs).
+  ok: cerberus-heaplang build green
+  == speedbump: rule-use and classification manifest (regenerate; red on a red row or drift) ==
+  ok: capability manifest regenerated, no drift
+  == speedbump: import direction (semantics → heap → rules → adequacy → clients) ==
+  ok: import direction — 15 core modules, none imports an exhibit/example/production module
+  == speedbump: client boundary (positive clients mention no logic internals; scripts/boundary_check.sh) ==
+  ok:   Exhibit — 0 internals mentions
+  ok:   LoopExhibit — 0 internals mentions
+  ok:   FibExhibit — 0 internals mentions
+  ok:   ArrayExhibit — 0 internals mentions
+  ok:   ListRevExhibit — 0 internals mentions
+  ok:   TreeRotExhibit — 0 internals mentions
+  ok:   CaseExhibit — 0 internals mentions
+  ok:   WseqExhibit — 0 internals mentions
+  ok:   StructExhibit — 0 internals mentions
+  ok:   AllocExhibit — 0 internals mentions
+  ok:   DisposeExhibit — 0 internals mentions
+  ok:   RegionLoopExhibit — 0 internals mentions
+  ok:   MallocListExhibit — 0 internals mentions
+  ok:   FibRecExhibit — 0 internals mentions
+  ok:   TwoLabelExhibit — 0 internals mentions
+  ok:   EvenOddExhibit — 0 internals mentions
+  ok:   Examples.CallSmoke — 0 internals mentions
+  ok:   Examples.ReadinessSmoke — 0 internals mentions
+  ok:   Examples.Layout — 0 internals mentions
+  BOUNDARY: 19 modules checked, 0 internals mention(s) in total, exit=0
+  ok: client boundary — no unallowlisted internals mention
+  ALL GATES GREEN
+  GATE-EXIT=0
+  ```
+- **2026-09-04 [AGENT] ARCHITECTURE.md FRESH FULL REVIEW (reviewer 3, at e242342): B− —
+  FAIL** (`cerberus-heaplang/docs/2026-09-04_architecture-review-3.md`). Two
+  truth errors (the total collapse IS consumed by the pinned
+  `cs_twp_readout`; the NO-RULE list enumerated 12 of 15), five disclosure
+  gaps (the `pot ≤ lemDefaultFuel` premise, the annotation-free fragment,
+  the fixed `⊤` mask, the ruled R/O'H reading, the empty-tagDefs premise),
+  the negative total-correctness result unmentioned, and shop-window
+  failure (674 lines, 42 date stamps, closed-arc chronicles, a paragraph
+  about an admission no longer in the pinned tree, slice ids as
+  vocabulary). Orchestrator verified the load-bearing findings by grep
+  before briefing. REWRITE by a fresh author (docs-only, on `hygiene-h1`
+  above b8413a5: 240d640 review copied verbatim; cd05543 the rewrite + the
+  archive record `docs/2026-09-04_architecture-history-archive.md` + one
+  WALKTHROUGH sentence; 69a1774 the notes): every review finding
+  dispositioned (table in `docs/2026-09-04_architecture-rewrite-notes.md`),
+  history moved verbatim to the archive, zero dates outside provenance
+  tags. [AGENT] deviation: 734 lines, not the brief's third-to-half — the
+  required new content (glossary, two theorem readings, the premise list,
+  the 15 variants, the nine-statement premise table, the ruled reading,
+  the negative result, the manifest header) outweighs the ~250 lines of
+  narrative removed; the RE-REVIEW (new reviewer) judges whether the
+  length serves the reader. The author's flagged mask-tag question is
+  resolved by the [USER] entry above: the orchestrator re-tagged the two
+  mask sentences (§1, §6) to the ruling in this commit. Re-review
+  dispatched next; the range audit of the whole branch and ONE merge ask
+  follow it.

@@ -123,8 +123,10 @@ invariant mask `⊤` (21 sites in `Wps.lean`, 26 in `Wpt.lean`; only
 `AtomicStep`/`wp_of_atomic`, `Rules.lean:194`/`:210`, are mask-generic).
 This is classical sequential separation logic: no invariants, no
 mask-polymorphic composition. Masks are Iris's device for sharing;
-their generalisation is deferred (KOI B11; DECISIONS 2026-09-04
-external-audit entry, pending the operator's scheduling).
+their generalisation belongs to the RefinedC arc, not to this demo
+([USER 2026-09-04]: "The demo should be the best possible version of
+Reynolds/O'Hearn … Fancy logic features aren't needed for that
+purpose"; KOI B11).
 
 **"Reynolds/O'Hearn over Core" means:** the assertions are the classical
 points-to family over the engine's own memory state (§2.1); the rules
@@ -657,7 +659,9 @@ Each item points at its register entry; none is hidden in a proof.
   `PtrEq` at an `SD_Id`-named function pointer against a concrete pointer
   (the one arm reading `funptrmap`).
 - **Masks.** Both judgments are fixed at `⊤`: no invariants, no
-  mask-polymorphic composition (§1; KOI B11).
+  mask-polymorphic composition — classical sequential separation logic
+  by ruling; the generalisation is a RefinedC-arc item ([USER
+  2026-09-04]; §1; KOI B11).
 - **The fuel constants.** Every adequacy theorem carries the static
   `pot … ≤ lemDefaultFuel` premises and every production `hfuel` is an
   instance of `CerbFuel.driverFuel` (§4; KOI A1, ruled a semantics
