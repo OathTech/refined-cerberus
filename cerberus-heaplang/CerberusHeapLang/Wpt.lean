@@ -167,15 +167,15 @@ def wpt.pre [SpikeGS hlc GF] (M : MachineCtx) (p : Option sym) (Ls : LabelSpecT 
         ⌜1 + m ≤ k⌝ ∗ Ls lp.1 m vs ρ)
     | none =>
       match callRedex? e with
-      | some q =>
+      | some (ctx, f, pes) =>
         iprop(|={⊤}=> ∃ (params : List (sym × core_base_type)) (body : CoreExpr)
           (vs : List value) (m k' : Nat) (hb : 1 + m + k' ≤ k),
-          ⌜lookupProc M.file M.extern q.2.1 = some (params, body)⌝ ∗
+          ⌜lookupProc M.file M.extern f = some (params, body)⌝ ∗
           ⌜params.length = vs.length⌝ ∗
-          ⌜evalPexprs M.tagDefs M.extern ρ q.2.2 = some vs⌝ ∗
-          (Θ q.2.1 m vs).1 ∗
-          ∀ (ret : value), (Θ q.2.1 m vs).2 ret -∗
-            F k' (by omega) Ψ (apply_ctx q.1 (Expr [] (Epure (Pexpr [] () (PEval ret))))) ρ)
+          ⌜evalPexprs M.tagDefs M.extern ρ pes = some vs⌝ ∗
+          (Θ f m vs).1 ∗
+          ∀ (ret : value), (Θ f m vs).2 ret -∗
+            F k' (by omega) Ψ (apply_ctx ctx (Expr [] (Epure (Pexpr [] () (PEval ret))))) ρ)
       | none =>
         match hk : k with
         | 0 => iprop(⌜False⌝)
@@ -244,17 +244,18 @@ theorem wpt_zero_step_eq {Ψ : SpikeVal → EnvStack → IProp GF}
     the continuation judged at `k'`. -/
 theorem wpt_call_eq {Ψ : SpikeVal → EnvStack → IProp GF} {k : Nat}
     {e : CoreExpr} {ρ : EnvStack} (htv : toVal e = none)
-    (hjr : jumpRedex? e = none) {q : context × sym × List (generic_pexpr Unit sym)}
-    (hcr : callRedex? e = some q) :
+    (hjr : jumpRedex? e = none) {ctx : context} {f : sym}
+    {pes : List (generic_pexpr Unit sym)}
+    (hcr : callRedex? e = some (ctx, f, pes)) :
     wpt M p Ls Θ k Ψ e ρ =
       iprop(|={⊤}=> ∃ (params : List (sym × core_base_type)) (body : CoreExpr)
         (vs : List value) (m k' : Nat) (_ : 1 + m + k' ≤ k),
-        ⌜lookupProc M.file M.extern q.2.1 = some (params, body)⌝ ∗
+        ⌜lookupProc M.file M.extern f = some (params, body)⌝ ∗
         ⌜params.length = vs.length⌝ ∗
-        ⌜evalPexprs M.tagDefs M.extern ρ q.2.2 = some vs⌝ ∗
-        (Θ q.2.1 m vs).1 ∗
-        ∀ (ret : value), (Θ q.2.1 m vs).2 ret -∗
-          wpt M p Ls Θ k' Ψ (apply_ctx q.1 (Expr [] (Epure (Pexpr [] () (PEval ret))))) ρ) := by
+        ⌜evalPexprs M.tagDefs M.extern ρ pes = some vs⌝ ∗
+        (Θ f m vs).1 ∗
+        ∀ (ret : value), (Θ f m vs).2 ret -∗
+          wpt M p Ls Θ k' Ψ (apply_ctx ctx (Expr [] (Epure (Pexpr [] () (PEval ret))))) ρ) := by
   rw [wpt_unfold]; simp only [wpt.pre, htv, hjr, hcr]
 
 theorem wpt_step_eq {Ψ : SpikeVal → EnvStack → IProp GF} (k : Nat)
@@ -278,6 +279,7 @@ theorem wpt_empty_call_false {Ψ : SpikeVal → EnvStack → IProp GF} {k : Nat}
     (hjr : jumpRedex? e = none) {q : context × sym × List (generic_pexpr Unit sym)}
     (hcr : callRedex? e = some q) :
     wpt M p Ls emptyProcSpecT k Ψ e ρ ⊢ iprop(|={⊤}=> ⌜False⌝) := by
+  obtain ⟨ctx, f, pes⟩ := q
   rw [wpt_call_eq htv hjr hcr]
   simp only [emptyProcSpecT_fst]
   iintro H
@@ -322,6 +324,7 @@ theorem wpt_mono_k {Ψ : SpikeVal → EnvStack → IProp GF} {k k' : Nat}
     | none =>
     cases hcr : callRedex? e with
     | some q =>
+      obtain ⟨ctx, f, pes⟩ := q
       rw [wpt_call_eq htv hjr hcr, wpt_call_eq htv hjr hcr]
       iintro H
       imod H with ⟨%params, %body, %vs, %m, %k₁, %hb, %h1, %h2, %h3, Hpre, Hcont⟩
@@ -381,6 +384,7 @@ theorem wpt_mono {Ψ₁ Ψ₂ : SpikeVal → EnvStack → IProp GF}
     | none =>
     cases hcr : callRedex? e with
     | some q =>
+      obtain ⟨ctx, f, pes⟩ := q
       rw [wpt_call_eq (Ψ := Ψ₁) htv hjr hcr, wpt_call_eq (Ψ := Ψ₂) htv hjr hcr]
       iintro H
       imod H with ⟨%params, %body, %vs, %m, %k₁, %hb, %h1, %h2, %h3, Hpre, Hcont⟩
@@ -396,7 +400,7 @@ theorem wpt_mono {Ψ₁ Ψ₂ : SpikeVal → EnvStack → IProp GF}
       · iexact Hpre
       iintro %ret Hpost
       ihave H' := Hcont $$ %ret Hpost
-      iapply IH k₁ (by omega) (apply_ctx q.1 (Expr [] (Epure (Pexpr [] () (PEval ret))))) ρ $$ H'
+      iapply IH k₁ (by omega) (apply_ctx ctx (Expr [] (Epure (Pexpr [] () (PEval ret))))) ρ $$ H'
     | none =>
       cases k with
       | zero =>
@@ -448,6 +452,7 @@ theorem wpt_mono_Ls {Ls₁ Ls₂ : LabelSpecT GF}
     | none =>
     cases hcr : callRedex? e with
     | some q =>
+      obtain ⟨ctx, f, pes⟩ := q
       rw [wpt_call_eq (Ls := Ls₁) htv hjr hcr, wpt_call_eq (Ls := Ls₂) htv hjr hcr]
       iintro H
       imod H with ⟨%params, %body, %vs, %m, %k₁, %hb, %h1, %h2, %h3, Hpre, Hcont⟩
@@ -463,7 +468,7 @@ theorem wpt_mono_Ls {Ls₁ Ls₂ : LabelSpecT GF}
       · iexact Hpre
       iintro %ret Hpost
       ihave H' := Hcont $$ %ret Hpost
-      iapply IH k₁ (by omega) (apply_ctx q.1 (Expr [] (Epure (Pexpr [] () (PEval ret))))) ρ $$ H'
+      iapply IH k₁ (by omega) (apply_ctx ctx (Expr [] (Epure (Pexpr [] () (PEval ret))))) ρ $$ H'
     | none =>
       cases k with
       | zero =>
@@ -508,6 +513,7 @@ theorem wpt_fupd {Ψ : SpikeVal → EnvStack → IProp GF} (k : Nat) (e : CoreEx
     | none =>
     cases hcr : callRedex? e with
     | some q =>
+      obtain ⟨ctx, f, pes⟩ := q
       rw [wpt_call_eq (Ψ := fun w ρ' => iprop(|={⊤}=> Ψ w ρ')) htv hjr hcr,
         wpt_call_eq (Ψ := Ψ) htv hjr hcr]
       iintro H
@@ -524,7 +530,7 @@ theorem wpt_fupd {Ψ : SpikeVal → EnvStack → IProp GF} (k : Nat) (e : CoreEx
       · iexact Hpre
       iintro %ret Hpost
       ihave H' := Hcont $$ %ret Hpost
-      iapply IH k₁ (by omega) (apply_ctx q.1 (Expr [] (Epure (Pexpr [] () (PEval ret))))) ρ $$ H'
+      iapply IH k₁ (by omega) (apply_ctx ctx (Expr [] (Epure (Pexpr [] () (PEval ret))))) ρ $$ H'
     | none =>
       cases k with
       | zero =>
@@ -594,6 +600,7 @@ theorem wpt_frame_labels {Ψ : SpikeVal → EnvStack → IProp GF} (R : IProp GF
     | none =>
     cases hcr : callRedex? e with
     | some q =>
+      obtain ⟨ctx, f, pes⟩ := q
       rw [wpt_call_eq (Ls := Ls) htv hjr hcr, wpt_call_eq (Ls := frameLsT R Ls) htv hjr hcr]
       iintro H HR
       imod H with ⟨%params, %body, %vs, %m, %k₁, %hb, %h1, %h2, %h3, Hpre, Hcont⟩
@@ -609,7 +616,7 @@ theorem wpt_frame_labels {Ψ : SpikeVal → EnvStack → IProp GF} (R : IProp GF
       · iexact Hpre
       iintro %ret Hpost
       ihave H' := Hcont $$ %ret Hpost
-      iapply IH k₁ (by omega) (apply_ctx q.1 (Expr [] (Epure (Pexpr [] () (PEval ret))))) ρ
+      iapply IH k₁ (by omega) (apply_ctx ctx (Expr [] (Epure (Pexpr [] () (PEval ret))))) ρ
         $$ H' HR
     | none =>
       cases k with
@@ -1139,13 +1146,13 @@ theorem wpt_annot_reindex (a : List annot) (dsA dsB : List dyn_annotation)
         cases hr : annotRooted c with
         | false => rfl
         | true => rw [callRedex?_annot_of_root _ _ hr] at hcr; cases hcr
-      obtain ⟨q₀, hq₀⟩ : ∃ q₀, callRedex? c = some q₀ := by
+      obtain ⟨c₀, f₀, pes₀, hq₀⟩ : ∃ c₀ f₀ pes₀, callRedex? c = some (c₀, f₀, pes₀) := by
         cases hc : callRedex? c with
         | none => rw [callRedex?_annot_of_not_root _ _ hnr, hc] at hcr; cases hcr
-        | some q₀ => exact ⟨q₀, rfl⟩
-      have hcrA : callRedex? (Expr a (Eannot dsA c)) = some (Cannot a dsA q₀.1, q₀.2) := by
+        | some q₀ => obtain ⟨c₀, f₀, pes₀⟩ := q₀; exact ⟨c₀, f₀, pes₀, rfl⟩
+      have hcrA : callRedex? (Expr a (Eannot dsA c)) = some (Cannot a dsA c₀, f₀, pes₀) := by
         rw [callRedex?_annot_of_not_root _ _ hnr, hq₀]; rfl
-      have hcrB : callRedex? (Expr a (Eannot dsB c)) = some (Cannot a dsB q₀.1, q₀.2) := by
+      have hcrB : callRedex? (Expr a (Eannot dsB c)) = some (Cannot a dsB c₀, f₀, pes₀) := by
         rw [callRedex?_annot_of_not_root _ _ hnr, hq₀]; rfl
       rw [wpt_call_eq (Ψ := Ψ₁) hA hjr hcrA, wpt_call_eq (Ψ := Ψ₂) hB (hEq.trans hjr) hcrB]
       simp only [apply_ctx_annot]
@@ -1163,7 +1170,7 @@ theorem wpt_annot_reindex (a : List annot) (dsA dsB : List dyn_annotation)
       · iexact Hpre
       iintro %ret Hpost
       ihave H' := Hcont $$ %ret Hpost
-      iapply IH k' (by omega) a dsA dsB (apply_ctx q₀.1 (Expr [] (Epure (Pexpr [] () (PEval ret))))) ρ hΦ $$ H'
+      iapply IH k' (by omega) a dsA dsB (apply_ctx c₀ (Expr [] (Epure (Pexpr [] () (PEval ret))))) ρ hΦ $$ H'
     | none =>
       have hcrB : callRedex? (Expr a (Eannot dsB c)) = none := hEqC.mpr hcr
       cases k with
@@ -1409,10 +1416,11 @@ theorem wpt_annot (ds : List dyn_annotation) (e : CoreExpr) (ρ : EnvStack)
       | none =>
       cases hcr : callRedex? e with
       | some q =>
+        obtain ⟨ctx, f, pes⟩ := q
         rw [wpt_call_eq hv hjr hcr,
           wpt_call_eq hwrap ((jumpRedex?_annot_of_not_root ([] : List annot) ds hr').trans hjr)
             (show callRedex? (Expr ([] : List annot) (Eannot ds e)) =
-                some (Cannot [] ds q.1, q.2) by
+                some (Cannot [] ds ctx, f, pes) by
               rw [callRedex?_annot_of_not_root ([] : List annot) ds hr', hcr]; rfl)]
         simp only [apply_ctx_annot]
         iintro H
@@ -1429,7 +1437,7 @@ theorem wpt_annot (ds : List dyn_annotation) (e : CoreExpr) (ρ : EnvStack)
         · iexact Hpre
         iintro %ret Hpost
         ihave H' := Hcont $$ %ret Hpost
-        iapply IH k' (by omega) ds (apply_ctx q.1 (Expr [] (Epure (Pexpr [] () (PEval ret))))) ρ $$ H'
+        iapply IH k' (by omega) ds (apply_ctx ctx (Expr [] (Epure (Pexpr [] () (PEval ret))))) ρ $$ H'
       | none =>
         cases k with
         | zero =>
@@ -1617,11 +1625,12 @@ theorem wpt_seq {Ψ : SpikeVal → EnvStack → IProp GF}
     | none =>
     cases hcr : callRedex? e1 with
     | some q =>
+      obtain ⟨ctx, f, pes⟩ := q
       rw [wpt_call_eq htv hjr hcr,
         wpt_call_eq (toVal_sseq_node a (Pattern pa (CaseBase (none, bty))) e1 e2)
           (by rw [jumpRedex?_sseq]; exact hjr)
           (show callRedex? (Expr a (Esseq (Pattern pa (CaseBase (none, bty))) e1 e2)) =
-              some (Csseq a (Pattern pa (CaseBase (none, bty))) q.1 e2, q.2) by
+              some (Csseq a (Pattern pa (CaseBase (none, bty))) ctx e2, f, pes) by
             rw [callRedex?_sseq, hcr]; rfl)]
       simp only [apply_ctx_sseq]
       iintro H
@@ -1638,7 +1647,7 @@ theorem wpt_seq {Ψ : SpikeVal → EnvStack → IProp GF}
       · iexact Hpre
       iintro %ret Hpost
       ihave H' := Hcont $$ %ret Hpost
-      iapply IH k' (by omega) (apply_ctx q.1 (Expr [] (Epure (Pexpr [] () (PEval ret))))) ev0 evs $$ H'
+      iapply IH k' (by omega) (apply_ctx ctx (Expr [] (Epure (Pexpr [] () (PEval ret))))) ev0 evs $$ H'
     | none =>
       cases k1 with
       | zero =>
@@ -1821,11 +1830,12 @@ theorem wpt_wseq {Ψ : SpikeVal → EnvStack → IProp GF}
     | none =>
     cases hcr : callRedex? e1 with
     | some q =>
+      obtain ⟨ctx, f, pes⟩ := q
       rw [wpt_call_eq htv hjr hcr,
         wpt_call_eq (toVal_wseq_node a (Pattern pa (CaseBase (none, bty))) e1 e2)
           (by rw [jumpRedex?_wseq]; exact hjr)
           (show callRedex? (Expr a (Ewseq (Pattern pa (CaseBase (none, bty))) e1 e2)) =
-              some (Cwseq a (Pattern pa (CaseBase (none, bty))) q.1 e2, q.2) by
+              some (Cwseq a (Pattern pa (CaseBase (none, bty))) ctx e2, f, pes) by
             rw [callRedex?_wseq, hcr]; rfl)]
       simp only [apply_ctx_wseq]
       iintro H
@@ -1842,7 +1852,7 @@ theorem wpt_wseq {Ψ : SpikeVal → EnvStack → IProp GF}
       · iexact Hpre
       iintro %ret Hpost
       ihave H' := Hcont $$ %ret Hpost
-      iapply IH k' (by omega) (apply_ctx q.1 (Expr [] (Epure (Pexpr [] () (PEval ret))))) ev0 evs $$ H'
+      iapply IH k' (by omega) (apply_ctx ctx (Expr [] (Epure (Pexpr [] () (PEval ret))))) ev0 evs $$ H'
     | none =>
       cases k1 with
       | zero =>
@@ -2026,11 +2036,12 @@ theorem wpt_seq_spec {Ψ : SpikeVal → EnvStack → IProp GF}
     | none =>
     cases hcr : callRedex? e1 with
     | some q =>
+      obtain ⟨ctx, f, pes⟩ := q
       rw [wpt_call_eq htv hjr hcr,
         wpt_call_eq (toVal_sseq_node a (specPat pa pb x bty) e1 e2)
           (by rw [jumpRedex?_sseq]; exact hjr)
           (show callRedex? (Expr a (Esseq (specPat pa pb x bty) e1 e2)) =
-              some (Csseq a (specPat pa pb x bty) q.1 e2, q.2) by
+              some (Csseq a (specPat pa pb x bty) ctx e2, f, pes) by
             rw [callRedex?_sseq, hcr]; rfl)]
       simp only [apply_ctx_sseq]
       iintro H
@@ -2047,7 +2058,7 @@ theorem wpt_seq_spec {Ψ : SpikeVal → EnvStack → IProp GF}
       · iexact Hpre
       iintro %ret Hpost
       ihave H' := Hcont $$ %ret Hpost
-      iapply IH k' (by omega) (apply_ctx q.1 (Expr [] (Epure (Pexpr [] () (PEval ret))))) ev0 evs $$ H'
+      iapply IH k' (by omega) (apply_ctx ctx (Expr [] (Epure (Pexpr [] () (PEval ret))))) ev0 evs $$ H'
     | none =>
       cases k1 with
       | zero =>
@@ -2181,11 +2192,12 @@ theorem wpt_seq_sym {Ψ : SpikeVal → EnvStack → IProp GF}
     | none =>
     cases hcr : callRedex? e1 with
     | some q =>
+      obtain ⟨ctx, f, pes⟩ := q
       rw [wpt_call_eq htv hjr hcr,
         wpt_call_eq (toVal_sseq_node a (symPat pa x bty) e1 e2)
           (by rw [jumpRedex?_sseq]; exact hjr)
           (show callRedex? (Expr a (Esseq (symPat pa x bty) e1 e2)) =
-              some (Csseq a (symPat pa x bty) q.1 e2, q.2) by
+              some (Csseq a (symPat pa x bty) ctx e2, f, pes) by
             rw [callRedex?_sseq, hcr]; rfl)]
       simp only [apply_ctx_sseq]
       iintro H
@@ -2202,7 +2214,7 @@ theorem wpt_seq_sym {Ψ : SpikeVal → EnvStack → IProp GF}
       · iexact Hpre
       iintro %ret Hpost
       ihave H' := Hcont $$ %ret Hpost
-      iapply IH k' (by omega) (apply_ctx q.1 (Expr [] (Epure (Pexpr [] () (PEval ret))))) ev0 evs $$ H'
+      iapply IH k' (by omega) (apply_ctx ctx (Expr [] (Epure (Pexpr [] () (PEval ret))))) ev0 evs $$ H'
     | none =>
       cases k1 with
       | zero =>
@@ -3240,12 +3252,12 @@ theorem wpt_sound_cps (p : Option sym) (Ls : LabelSpecT GF)
     | none =>
     cases hcr : callRedex? e with
     | some q =>
+      obtain ⟨ctx, f, pes⟩ := q
       -- THE CALL: the callee's body under `procSpecsT` at its budget, the
       -- IH twice (body, then the caller's continuation after the return)
       rw [wpt_call_eq htv hjr hcr,
         (twp.unfold (e := (⟨e, ρ, ⟨κ, p, ℓ⟩, M⟩ : CoreRt))).to_eq]
       simp only [twp.pre, htoval]
-      have hq : callRedex? e = some (q.1, q.2.1, q.2.2) := hcr
       iintro H HK %σ₁ %ns %obs %nt Hσ
       imod H with ⟨%params, %body, %vs, %m, %k', %hb, %hf, %hlen, %hvs, Hpre, Hcont⟩
       iapply fupd_mask_intro Std.LawfulSet.empty_subset
@@ -3253,11 +3265,11 @@ theorem wpt_sound_cps (p : Option sym) (Ls : LabelSpecT GF)
       isplitr
       · ipureintro
         exact ⟨⟨body, procEnv params vs :: ρ,
-          ⟨(p, q.1) :: κ, some q.2.1, push_exec_loc q.2.1 M.currentLoc ℓ⟩, M⟩, σ₁, [],
-          ⟨Step.call hq hvs hf hlen, rfl, rfl⟩⟩
+          ⟨(p, ctx) :: κ, some f, push_exec_loc f M.currentLoc ℓ⟩, M⟩, σ₁, [],
+          ⟨Step.call hcr hvs hf hlen, rfl, rfl⟩⟩
       iintro %obs₂ %r %σ₂ %eₜ %Hstep
       obtain ⟨hs, hlbl, rfl⟩ := Hstep
-      obtain ⟨params', body', vs', hvs', hf', hlen', hout⟩ := hs.call_inv hq
+      obtain ⟨params', body', vs', hvs', hf', hlen', hout⟩ := hs.call_inv hcr
       obtain ⟨rfl, rfl⟩ : params = params' ∧ body = body' := by
         rw [hf] at hf'
         exact ⟨congrArg Prod.fst (Option.some.inj hf'),
@@ -3269,12 +3281,12 @@ theorem wpt_sound_cps (p : Option sym) (Ls : LabelSpecT GF)
       simp only at hlbl
       obtain rfl : M = rM := hlbl.symm
       obtain ⟨hre, hrρ, hrctl, hσ⟩ : re = body ∧ rρ = procEnv params vs :: ρ ∧
-          rctl = ⟨(p, q.1) :: κ, some q.2.1, push_exec_loc q.2.1 M.currentLoc ℓ⟩ ∧
+          rctl = ⟨(p, ctx) :: κ, some f, push_exec_loc f M.currentLoc ℓ⟩ ∧
           σ₂ = σ₁ := by
         simpa [Prod.mk.injEq] using hout
       obtain rfl : body = re := hre.symm
       obtain rfl : procEnv params vs :: ρ = rρ := hrρ.symm
-      obtain rfl : (⟨(p, q.1) :: κ, some q.2.1, push_exec_loc q.2.1 M.currentLoc ℓ⟩ : Ctl) = rctl :=
+      obtain rfl : (⟨(p, ctx) :: κ, some f, push_exec_loc f M.currentLoc ℓ⟩ : Ctl) = rctl :=
         hrctl.symm
       obtain rfl : σ₁ = σ₂ := hσ.symm
       imod Hclose with -
@@ -3286,11 +3298,11 @@ theorem wpt_sound_cps (p : Option sym) (Ls : LabelSpecT GF)
       · simp only [List.length_nil, Nat.add_zero]
         iexact Hσ
       isplitr []
-      · ihave HS := HP $$ %(q.2.1) %params %body %m %vs %ρ %hf %hlen
+      · ihave HS := HP $$ %(f) %params %body %m %vs %ρ %hf %hlen
         icases HS with ⟨%Ls', #HB', Hbody⟩
         ihave Hbody := Hbody $$ Hpre
-        iapply IH m (by omega) (some q.2.1) Ls' (fun w _ => (Θ q.2.1 m vs).2 w.val)
-          ((p, q.1) :: κ) (push_exec_loc q.2.1 M.currentLoc ℓ) body
+        iapply IH m (by omega) (some f) Ls' (fun w _ => (Θ f m vs).2 w.val)
+          ((p, ctx) :: κ) (push_exec_loc f M.currentLoc ℓ) body
           (procEnv params vs :: ρ) Φ $$ HP HB' Hbody
         -- K': the RETURN into the caller's continuation at budget k'
         iintro %ℓ' %w %ρ' %hst
@@ -3303,7 +3315,7 @@ theorem wpt_sound_cps (p : Option sym) (Ls : LabelSpecT GF)
           rw [show ofVal (SpikeVal.pure v) = Expr [] (Epure (Pexpr [] () (PEval v))) from rfl]
           iapply twp_ret
           iapply IH k' (by omega) p Ls Ψ κ ℓ'
-            (apply_ctx q.1 (Expr [] (Epure (Pexpr [] () (PEval v))))) ρ Φ $$ HP HB Hw HK
+            (apply_ctx ctx (Expr [] (Epure (Pexpr [] () (PEval v))))) ρ Φ $$ HP HB Hw HK
         | annot ds v =>
           rw [show (SpikeVal.annot ds v).val = v from rfl]
           iintro Hpost
@@ -3313,7 +3325,7 @@ theorem wpt_sound_cps (p : Option sym) (Ls : LabelSpecT GF)
           iapply twp_ret_annot
           iapply twp_ret
           iapply IH k' (by omega) p Ls Ψ κ ℓ'
-            (apply_ctx q.1 (Expr [] (Epure (Pexpr [] () (PEval v))))) ρ Φ $$ HP HB Hw HK
+            (apply_ctx ctx (Expr [] (Epure (Pexpr [] () (PEval v))))) ρ Φ $$ HP HB Hw HK
       · simp only [Algebra.BigOpL.bigOpL_nil]
         itrivial
     | none =>
