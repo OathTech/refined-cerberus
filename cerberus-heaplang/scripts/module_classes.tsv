@@ -52,9 +52,9 @@ CerberusHeapLang.CaseExhibit	positive-client	-	value-scrutinee case
 CerberusHeapLang.WseqExhibit	positive-client	-	weak sequencing
 CerberusHeapLang.StructExhibit	positive-client	-	two-field struct update
 CerberusHeapLang.AllocExhibit	positive-client	-	create/kill/alloc/free local consumers
-CerberusHeapLang.DisposeExhibit	positive-client	readout helpers `deadObj_dead_keep`/`deadNodes_dead` over `CohG`/`metaInterp` (the documented exception, API.lean) — being removed by ar5-readout (relocation into Adequacy/API)	dispose a list
+CerberusHeapLang.DisposeExhibit	positive-client	-	dispose a list
 CerberusHeapLang.RegionLoopExhibit	positive-client	-	n regions from one budget
-CerberusHeapLang.MallocListExhibit	positive-client	readout helper `deadRegions_dead` over `CohG`/`metaInterp` (the documented exception, API.lean) — being removed by ar5-readout (relocation into Adequacy/API)	the malloc'd linked list
+CerberusHeapLang.MallocListExhibit	positive-client	-	the malloc'd linked list
 CerberusHeapLang.FibRecExhibit	positive-client	-	recursive fib through the specification table
 CerberusHeapLang.Examples.CallSmoke	declared-smoke	-	the C3 call/procedure smoke (kept as a consumer beside FibRecExhibit)
 CerberusHeapLang.Examples.ReadinessSmoke	declared-smoke	-	the API-only two-field predicate smoke
