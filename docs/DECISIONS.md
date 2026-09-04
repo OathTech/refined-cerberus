@@ -2418,3 +2418,28 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   slice per gap (annotations first, then `Ebound`/`Eunseq`, loaded values,
   pure impl calls with the impl-defined integer semantics, `Eccall`, `nd`);
   the Lane C note's item 4 is to be read with this measurement.
+- **2026-09-04 [USER] THE EMITTED-CORE DIALECT ARC (E) — APPROVED** (verbatim): "I think
+  there *could* be value in shifting the demo so it's not gratuitously
+  different from emitted-core. That is, if we can make the demo cover
+  real-core *for the features it covers* at reasonable cost, that seems
+  potentially worthwhile. When we're working on the full logic, we'll
+  probably do a lot of synthetic-core litmus tests but the trick will be
+  pushing this close enough to emitted-core that we can step to full
+  coverage." / "This is good, I think it pushes the demo to be more useful
+  without compromising the overall goal of keeping it a simple
+  demonstrator. Approved, go ahead (& it's good work to be doing while
+  we're waiting for the fuel fix)". Scope: the demo's COVERED features
+  restated in the emitted-Core dialect — annotations/`bound`/alignment
+  constants, loaded values, pure std/impl calls for arithmetic (C's
+  integer semantics enters the logic), `unseq` (the outcome-list closed
+  form), `nd`, `Eccall` for direct calls (the scheduler lift) — one
+  construct per slice, each with mirror rules, classification rows and a
+  range audit; acceptance tests: the measurement note's t1 certified end to
+  end after the arithmetic slice, t2 after `Eccall`. This supersedes "THE
+  DEMO'S SCOPE, RESTATED" on the DIALECT axis only (no new logic features);
+  the v1 tag moves to the arc's end. Sequencing: starts NOW (the pins are
+  blocked), on branches that rebase over the LemLib re-pin and F2 when
+  they land; E0 = a read-only design-measurement pass (engine semantics of
+  each construct at the pin, the sequential driver's `unseq`/`nd`
+  behaviour, the evaluator's std.core unfolding, loaded-value shapes; slice
+  sizes) for the operator to see before any build is briefed.
