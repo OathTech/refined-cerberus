@@ -31,7 +31,12 @@ IS the unit value), `wps_run`, `wps_save_vals`/`wpt_save_vals`, and the
 label-context rules (`blockSpecs_intro`, `wps_frame_labels`,
 `blockSpecs_frame`; total twins). No `Step.*`, no per-step drive
 equations, no state-interpretation opening outside the ONE sanctioned
-readout combinator `stateInterp_readout`.
+readout combinator `stateInterp_readout`, whose obligation is
+discharged by the PUBLIC consequence lemmas alone (`bigSepL_consequence`
+folding `exists_consequence`/`deadObj_consequence` over the dead list,
+`cellsOwn_consequence` for the frame — Adequacy.lean; this module names
+neither the coupling invariant nor the state interpretation's
+components, 2026-09-04).
 
 THE STATEMENTS. Partial: `dl_wps` —
 `isList head ns ⊢ wps … (dlPost ns) (dlProg … head) [fmapEmpty]` where
@@ -332,10 +337,12 @@ variable {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
 
 /-- The dead cells of a node list: for each node, `deadObj` at its
     allocation id (SOME base — the address is not part of the list's
-    identity), the node type. Structural recursion, as `isList`. -/
-def deadNodes : List (Int × Int) → IProp GF
-  | [] => iprop(emp)
-  | nd :: ns => iprop((∃ a : Int, deadObj fmapEmpty nd.1 a nodeTy) ∗ deadNodes ns)
+    identity), the node type. The big separating conjunction over the
+    list (`[∗list]`, since 2026-09-04 — formerly structural recursion):
+    the PUBLIC fold `bigSepL_consequence` reads it out; `deadNodes_nil`/
+    `deadNodes_cons` are its `rfl` unfoldings. -/
+def deadNodes (ns : List (Int × Int)) : IProp GF :=
+  iprop([∗list] nd ∈ ns, ∃ a : Int, deadObj fmapEmpty nd.1 a nodeTy)
 
 @[simp] theorem deadNodes_nil : deadNodes (GF := GF) [] = iprop(emp) := rfl
 
@@ -900,78 +907,36 @@ end DlTotal
 
 /-! ## THE READOUT: the dead list reads out as engine table facts -/
 
-section DlReadout
+section KeepPure
 
-variable {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
-
-/-- The engine-facing dead fact of one id: in `deadAllocations`, record
-    erased (`killM`, CerbMem.lean:1576-1578). -/
-def DeadAt (σ : Mem) (id : Int) : Prop :=
-  σ.deadAllocations.contains id = true ∧ σ.allocations.get? id = none
+variable {GF : BundledGFunctors}
 
 /-- A pure consequence is kept alongside its source (pure facts are
-    persistent; `IProp` is affine). -/
+    persistent; `IProp` is affine). A BI utility (no state
+    interpretation involved), consumed by the distinctness bookkeeping
+    here and in MallocListExhibit. -/
 theorem keep_pure {P : IProp GF} {φ : Prop} (h : P ⊢ (⌜φ⌝ : IProp GF)) :
     P ⊢ iprop(⌜φ⌝ ∗ P) :=
   (BI.and_intro h .rfl).trans BI.persistent_and_sep.1
 
-/-- One dead cell's readout, the metadata interpretation returned. -/
-theorem deadObj_dead_keep {σ : Mem} {mm : SpikeHeapF MetaCell}
-    {mb : SpikeHeapF CerbMem.AbsByte} {mk : SpikeHeapF AllocCursor}
-    (hG : CohG σ mm mb mk) (id a : Int) (ty : ctype) :
-    iprop(metaInterp (GF := GF) mm ∗ deadObj fmapEmpty id a ty) ⊢
-      iprop(⌜DeadAt σ id⌝ ∗ metaInterp mm) :=
-  (keep_pure (deadObj_dead fmapEmpty hG id a ty)).trans
-    (BI.sep_mono_right BI.sep_elim_left)
-
-/-- Every node of the dead list is dead in the real state. -/
-theorem deadNodes_dead {σ : Mem} {mm : SpikeHeapF MetaCell}
-    {mb : SpikeHeapF CerbMem.AbsByte} {mk : SpikeHeapF AllocCursor}
-    (hG : CohG σ mm mb mk) :
-    ∀ ns : List (Int × Int),
-    iprop(metaInterp (GF := GF) mm ∗ deadNodes ns) ⊢
-      iprop(⌜∀ nd ∈ ns, DeadAt σ nd.1⌝ ∗ metaInterp mm)
-  | [] => by
-    rw [deadNodes_nil]
-    iintro ⟨Hmi, -⟩
-    isplitr [Hmi]
-    · ipureintro
-      intro _ h
-      nomatch h
-    · iexact Hmi
-  | nd :: ns => by
-    rw [deadNodes_cons]
-    iintro ⟨Hmi, ⟨%a, Hd⟩, Hrest⟩
-    ihave H1 : iprop(⌜DeadAt σ nd.1⌝ ∗ metaInterp (GF := GF) mm) $$ [Hmi Hd]
-    · iapply deadObj_dead_keep hG nd.1 a nodeTy
-      isplitl [Hmi]
-      · iexact Hmi
-      · iexact Hd
-    icases H1 with ⟨%h1, Hmi⟩
-    ihave H2 : iprop(⌜∀ x ∈ ns, DeadAt σ x.1⌝ ∗ metaInterp (GF := GF) mm) $$ [Hmi Hrest]
-    · iapply deadNodes_dead hG ns
-      isplitl [Hmi]
-      · iexact Hmi
-      · iexact Hrest
-    icases H2 with ⟨%h2, Hmi⟩
-    isplitr [Hmi]
-    · ipureintro
-      intro x hx
-      rcases List.mem_cons.mp hx with rfl | hx
-      · exact h1
-      · exact h2 x hx
-    · iexact Hmi
-
-end DlReadout
+end KeepPure
 
 section DlReadoutLC
 
 variable {GF : BundledGFunctors} [SpikeGS .hasLC GF]
 
 /-- THE READOUT (through the one sanctioned combinator
-    `stateInterp_readout`): the dispose postcondition with a cell-map
+    `stateInterp_readout`, its obligation discharged by the PUBLIC
+    consequence lemmas alone — the fold `bigSepL_consequence` over
+    `exists_consequence`/`deadObj_consequence` for the dead list,
+    `cellsOwn_consequence` for the frame, `sep_consequence` between
+    them; Adequacy.lean): the dispose postcondition with a cell-map
     frame entails the engine-facing conclusion — unit delivered, every
-    node id dead with its record erased, the frame's cells intact. -/
+    node id dead with its record erased, the frame's cells intact.
+    (Until 2026-09-04 this module carried its own helpers over the
+    coupling invariant and the metadata interpretation —
+    `deadObj_dead_keep`, `deadNodes_dead` — the Reynolds/O'Hearn audit's
+    Finding 2; they are the public lemmas now.) -/
 theorem dlPost_readout (ns : List (Int × Int)) (R : CellMap) :
     ∀ (w : SpikeVal) (ρ' : EnvStack),
     iprop(dlPost (hlc := .hasLC) (GF := GF) ns w ρ' ∗ lrCellFrame R) ⊢
@@ -983,32 +948,22 @@ theorem dlPost_readout (ns : List (Int × Int)) (R : CellMap) :
         Coh fmapEmpty σ' R) (SpikeVal.pure Vunit) ρ' :=
     stateInterp_readout (Φ := iprop(deadNodes ns ∗ lrCellFrame R))
       (ψ := fun σ' => Vunit = Vunit ∧ (∀ nd ∈ ns, DeadAt σ' nd.1) ∧ Coh fmapEmpty σ' R)
-      (fun σ mm mb mk hG => by
-        iintro ⟨⟨HD, HF⟩, Hmi, Hbi⟩
-        ihave H1 : iprop(⌜∀ nd ∈ ns, DeadAt σ nd.1⌝ ∗ metaInterp (GF := GF) mm) $$ [Hmi HD]
-        · iapply deadNodes_dead hG ns
-          isplitl [Hmi]
-          · iexact Hmi
-          · iexact HD
-        icases H1 with ⟨%hdead, Hmi⟩
-        ihave %hcoh : ⌜Coh fmapEmpty σ R⌝ $$ [HF Hmi Hbi]
-        · iapply cellsOwn_consequence (hG := hG) fmapEmpty R
-          isplitl [HF]
-          · iexact HF
-          isplitl [Hmi]
-          · iexact Hmi
-          · iexact Hbi
-        ipureintro
-        exact ⟨rfl, hdead, hcoh⟩)
+      (fun _ _ _ _ hG => by
+        unfold deadNodes
+        refine (sep_consequence
+          (bigSepL_consequence
+            (Φ := fun nd : Int × Int => iprop(∃ a : Int, deadObj fmapEmpty nd.1 a nodeTy))
+            (fun nd => exists_consequence fun a =>
+              deadObj_consequence hG fmapEmpty nd.1 a nodeTy) ns)
+          (cellsOwn_consequence hG fmapEmpty R)).trans ?_
+        exact BI.pure_mono fun ⟨hdead, hcoh⟩ =>
+          ⟨rfl, fun nd hnd => (hdead nd hnd).elim fun _ h => h, hcoh⟩)
   iintro ⟨⟨%hw, HD⟩, HF⟩
   subst hw
-  ihave H : readoutPost (GF := GF) (fun v σ' => v = Vunit ∧ (∀ nd ∈ ns, DeadAt σ' nd.1) ∧
-      Coh fmapEmpty σ' R) (SpikeVal.pure Vunit) ρ' $$ [HD HF]
-  · iapply haux
-    isplitl [HD]
-    · iexact HD
-    · iexact HF
-  iexact H
+  iapply haux
+  isplitl [HD]
+  · iexact HD
+  · iexact HF
 
 end DlReadoutLC
 

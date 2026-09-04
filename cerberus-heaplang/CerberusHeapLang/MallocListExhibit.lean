@@ -71,8 +71,11 @@ THE RULES CONSUMED (all public, API.lean): `wps_alloc`/`wpt_alloc` (K3),
 rules; total twins. The storability and decode facts of the stored
 pointers are ListRevExhibit's (`node_ptr_*`, `reconstruct_ptrImg_*`).
 No `Step.*`, no per-step drive equations, no state-interpretation
-opening outside `stateInterp_readout` (the dead-list readout, through
-the public consequence face `deadRegion_dead`).
+opening outside `stateInterp_readout`, whose obligation is discharged by
+the PUBLIC consequence lemmas alone (the dead-list readout: the fold
+`bigSepL_consequence` over `exists_consequence`/`deadRegion_consequence`
+— Adequacy.lean; this module names neither the coupling invariant nor
+the state interpretation's components, 2026-09-04).
 
 THE STATEMENTS. `ml_wps`: `allocBudget (n.toNat * regionCost al 16) ⊢
 wps … (mlPost n) (mlProg … n) [fmapEmpty]` with `mlPost n w _ := ⌜w =
@@ -694,10 +697,12 @@ theorem regionOwn_isRegionList_ne (id a : Int) (bs : List CerbMem.AbsByte) :
     · exact hnotin hmem
 
 /-- The dead regions of an id list: for each, `deadRegion` at SOME base,
-    16 bytes (the DisposeExhibit `deadNodes` shape, for regions). -/
-def deadRegions : List Int → IProp GF
-  | [] => iprop(emp)
-  | id :: ids => iprop((∃ a : Int, deadRegion id a 16) ∗ deadRegions ids)
+    16 bytes (the DisposeExhibit `deadNodes` shape, for regions): the
+    big separating conjunction over the list (`[∗list]`, since
+    2026-09-04), read out by the PUBLIC fold `bigSepL_consequence`;
+    `deadRegions_nil`/`deadRegions_cons` are its `rfl` unfoldings. -/
+def deadRegions (ids : List Int) : IProp GF :=
+  iprop([∗list] id ∈ ids, ∃ a : Int, deadRegion id a 16)
 
 @[simp] theorem deadRegions_nil : deadRegions (GF := GF) [] = iprop(emp) := rfl
 
@@ -735,48 +740,6 @@ theorem regionOwn_deadRegions_ne (id a : Int) (bs : List CerbMem.AbsByte) :
     rcases List.mem_cons.mp hmem with rfl | hmem
     · exact hne rfl
     · exact hnotin hmem
-
-/-- Every id of the dead list is dead in the real state — through the
-    public consequence face `deadRegion_dead` (the metadata
-    interpretation returned each time). -/
-theorem deadRegions_dead {σ : Mem} {mm : SpikeHeapF MetaCell}
-    {mb : SpikeHeapF CerbMem.AbsByte} {mk : SpikeHeapF AllocCursor}
-    (hG : CohG σ mm mb mk) :
-    ∀ ids : List Int,
-    iprop(metaInterp (GF := GF) mm ∗ deadRegions ids) ⊢
-      iprop(⌜∀ id ∈ ids, DeadAt σ id⌝ ∗ metaInterp mm)
-  | [] => by
-    rw [deadRegions_nil]
-    iintro ⟨Hmi, -⟩
-    isplitr [Hmi]
-    · ipureintro
-      intro _ h
-      nomatch h
-    · iexact Hmi
-  | id :: ids => by
-    rw [deadRegions_cons]
-    iintro ⟨Hmi, ⟨%a, Hd⟩, Hrest⟩
-    ihave H1 : iprop(⌜σ.deadAllocations.contains id = true ∧ σ.allocations.get? id = none⌝ ∗
-        metaInterp (GF := GF) mm) $$ [Hmi Hd]
-    · iapply (keep_pure (deadRegion_dead hG id a 16)).trans
-        (BI.sep_mono_right BI.sep_elim_left)
-      isplitl [Hmi]
-      · iexact Hmi
-      · iexact Hd
-    icases H1 with ⟨%h1, Hmi⟩
-    ihave H2 : iprop(⌜∀ x ∈ ids, DeadAt σ x⌝ ∗ metaInterp (GF := GF) mm) $$ [Hmi Hrest]
-    · iapply deadRegions_dead hG ids
-      isplitl [Hmi]
-      · iexact Hmi
-      · iexact Hrest
-    icases H2 with ⟨%h2, Hmi⟩
-    isplitr [Hmi]
-    · ipureintro
-      intro x hx
-      rcases List.mem_cons.mp hx with rfl | hx
-      · exact h1
-      · exact h2 x hx
-    · iexact Hmi
 
 end RegionList
 
@@ -1211,9 +1174,15 @@ section MlReadout
 variable {GF : BundledGFunctors} [SpikeGS .hasLC GF]
 
 /-- THE READOUT (through the one sanctioned combinator
-    `stateInterp_readout`; the dead list through the public consequence
-    face `deadRegion_dead`): unit delivered, and `n.toNat` DISTINCT
-    allocation ids in `deadAllocations` with their records erased. -/
+    `stateInterp_readout`, its obligation discharged by the PUBLIC
+    consequence lemmas alone — `exists_consequence`, `sep_consequence`,
+    `pure_consequence`, and the fold `bigSepL_consequence` over
+    `exists_consequence`/`deadRegion_consequence` for the dead list;
+    Adequacy.lean): unit delivered, and `n.toNat` DISTINCT allocation
+    ids in `deadAllocations` with their records erased. (Until
+    2026-09-04 this module carried its own `deadRegions_dead` over the
+    coupling invariant and the metadata interpretation — the
+    Reynolds/O'Hearn audit's Finding 2.) -/
 theorem mlPost_readout (n : Int) (w : SpikeVal) (ρ' : EnvStack) :
     mlPost (hlc := .hasLC) (GF := GF) n w ρ' ⊢
       readoutPost (fun v σ' => v = Vunit ∧
@@ -1228,16 +1197,14 @@ theorem mlPost_readout (n : Int) (w : SpikeVal) (ρ' : EnvStack) :
       (Φ := iprop(∃ ids : List Int, ⌜ids.length = n.toNat ∧ ids.Nodup⌝ ∗ deadRegions ids))
       (ψ := fun σ' => Vunit = Vunit ∧
         ∃ ids : List Int, ids.length = n.toNat ∧ ids.Nodup ∧ ∀ id ∈ ids, DeadAt σ' id)
-      (fun σ mm mb mk hG => by
-        iintro ⟨⟨%ids, %hlen, HD⟩, Hmi, -⟩
-        ihave H1 : iprop(⌜∀ id ∈ ids, DeadAt σ id⌝ ∗ metaInterp (GF := GF) mm) $$ [Hmi HD]
-        · iapply deadRegions_dead hG ids
-          isplitl [Hmi]
-          · iexact Hmi
-          · iexact HD
-        icases H1 with ⟨%hdead, -⟩
-        ipureintro
-        exact ⟨rfl, ids, hlen.1, hlen.2, hdead⟩)
+      (fun _ _ _ _ hG => by
+        unfold deadRegions
+        refine (exists_consequence fun ids =>
+          sep_consequence (pure_consequence _)
+            (bigSepL_consequence (Φ := fun id : Int => iprop(∃ a : Int, deadRegion id a 16))
+              (fun id => exists_consequence fun a => deadRegion_consequence hG id a 16) ids)).trans ?_
+        exact BI.pure_mono fun ⟨ids, hlen, hdead⟩ =>
+          ⟨rfl, ids, hlen.1, hlen.2, fun id hid => (hdead id hid).elim fun _ h => h⟩)
   iintro ⟨%hw, HD⟩
   subst hw
   iapply haux

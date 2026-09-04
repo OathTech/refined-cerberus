@@ -252,8 +252,14 @@ twin (`allocBudget B` in the precondition, `MemTriple_alloc` under
 `LaunchCoh … B`). The one
 Iris-shaped hypothesis is discharged by `cellOwn_consequence`,
 `pointsToCell_consequence`, `cellsOwn_consequence`,
-`cells_consequence` and the `pure_`/`sep_`/`or_`/`exists_consequence`
-combinators; the pure memory view they deliver is `CellCoh`/`Sat`.
+`cells_consequence`, the dead-token faces `deadObj_consequence`/
+`deadRegion_consequence` and the `pure_`/`sep_`/`or_`/`exists_consequence`
+combinators with the `[∗list]` fold `bigSepL_consequence`; the pure
+memory view they deliver is `CellCoh`/`Sat`/`DeadAt`. THE CLIENT
+BOUNDARY: a positive exhibit obtains every engine-facing fact through
+these lemmas under `stateInterp_readout` and names neither `CohG` nor
+the interpretations — measured 2026-09-04 (the Reynolds/O'Hearn audit's
+Finding 2; `docs/2026-09-04_ar5-readout-notes.md` §3).
 
 ## 6. The two trust claims, and the two lanes
 

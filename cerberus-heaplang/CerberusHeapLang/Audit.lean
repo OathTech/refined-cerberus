@@ -559,7 +559,16 @@ def trioExports : List Name := [
   ``CerberusHeapLang.drive_after_setup_with_lemFuel,
   ``CerberusHeapLang.drive_after_setup_with_killed,
   ``CerberusHeapLang.prod_run_safe_procs,
-  ``CerberusHeapLang.dg_loop_exhausts]
+  ``CerberusHeapLang.dg_loop_exhausts,
+  -- THE READOUT LAYER SEALED (2026-09-04, the Reynolds/O'Hearn audit's
+  -- Finding 2, Lean part; docs/2026-09-04_ar5-readout-notes.md): the
+  -- dead-token consequence faces and the `[∗list]` fold — the two
+  -- exhibits' local helpers over `CohG`/`metaInterp` (`deadObj_dead_keep`,
+  -- `deadNodes_dead`, `deadRegions_dead`) deleted, `DeadAt` public
+  -- (Adequacy.lean). Each measured trio-exact by `#print axioms` before
+  -- pinning (the notes, §5).
+  ``CerberusHeapLang.deadObj_consequence, ``CerberusHeapLang.deadRegion_consequence,
+  ``CerberusHeapLang.bigSepL_consequence]
 
 def sortedNames (ns : Array Name) : Array String :=
   (ns.map (·.toString)).qsort (· < ·)

@@ -1881,9 +1881,24 @@ Shape: `Φ ∗ metaInterp mm ∗ byteInterp mb ⊢ ⌜<memory fact about σ>⌝`
 under `CohG σ mm mb mk` — exactly the hypothesis `stateInterp_readout`
 consumes and the obligation `project_triple`'s post states. One lemma
 per assertion shape the exhibits' postconditions use (whole cell,
-points-to, a cell footprint with a frame) and the `∗`/`∨`/`∃`/pure
-combinators; the readouts below and the exhibits' readouts are
-`stateInterp_readout` applied to compositions of these. -/
+points-to, a cell footprint with a frame, a dead object / dead region
+token) and the `∗`/`∨`/`∃`/pure/`[∗list]` combinators; the readouts
+below and the exhibits' readouts are `stateInterp_readout` applied to
+compositions of these — a client composes these lemmas and NEVER
+opens `CohG` or the interpretations itself (API.lean, the documented
+exception; the 2026-09-04 Reynolds/O'Hearn audit's Finding 2 moved the
+last two exhibit-local readout helpers here as `deadObj_consequence`/
+`deadRegion_consequence` and the fold `bigSepL_consequence`). -/
+
+/-- THE DEAD ID (the pure memory view's vocabulary for a kill/free
+    post; until 2026-09-04 DisposeExhibit-local): allocation `id` is
+    dead in `σ` — in `deadAllocations`, its record erased (`killM`,
+    CerbMem.lean:1576-1578). What a `deadObj`/`deadRegion` token reads
+    out as (`deadObj_consequence`/`deadRegion_consequence` below;
+    `deadObj_readout`/`deadRegion_readout` state the conjunction
+    directly). -/
+def DeadAt (σ : Mem) (id : Int) : Prop :=
+  σ.deadAllocations.contains id = true ∧ σ.allocations.get? id = none
 
 section Consequences
 
@@ -1918,6 +1933,23 @@ theorem exists_consequence {α : Type _} {Φ : α → IProp GF} {ψ : α → Pro
     iprop((∃ a, Φ a) ∗ metaInterp mm ∗ byteInterp mb) ⊢ (⌜∃ a, ψ a⌝ : IProp GF) :=
   BI.sep_exists_right.1.trans ((BI.exists_mono h).trans BI.pure_exists.1)
 
+/-- `[∗list]`: THE FOLD OVER A FINITE COLLECTION — a per-element
+    consequence reads out for every element of a big separating
+    conjunction (pure conclusions are duplicable: `sep_consequence`
+    element by element down the list). A dead list `[∗list] id ∈ ids,
+    ∃ a, deadRegion id a n` reads out as `∀ id ∈ ids, ∃ a, DeadAt σ id`
+    through `exists_consequence` and `deadRegion_consequence` below. -/
+theorem bigSepL_consequence {α : Type _} {Φ : α → IProp GF} {ψ : α → Prop}
+    (h : ∀ x, iprop(Φ x ∗ metaInterp mm ∗ byteInterp mb) ⊢ (⌜ψ x⌝ : IProp GF)) :
+    ∀ xs : List α,
+    iprop(([∗list] x ∈ xs, Φ x) ∗ metaInterp mm ∗ byteInterp mb) ⊢
+      (⌜∀ x ∈ xs, ψ x⌝ : IProp GF)
+  | [] => BI.pure_intro fun _ hx => nomatch hx
+  | x :: xs =>
+    (sep_consequence (h x) (bigSepL_consequence h xs)).trans
+      (BI.pure_mono fun ⟨hx, hxs⟩ y hy =>
+        (List.mem_cons.mp hy).elim (fun e => e ▸ hx) (hxs y))
+
 variable {σ : Mem} {mk : SpikeHeapF AllocCursor} (hG : CohG σ mm mb mk)
 include hG
 
@@ -1938,6 +1970,19 @@ theorem pointsToCell_consequence (tds : CerbTags.TagDefsMap) (pv : CerbMem.Point
   refine (BI.sep_mono_left (pointsToCell_cellOwn_iff tds pv dq ty bs).1).trans ?_
   exact exists_consequence fun i => exists_consequence fun a =>
     sep_consequence (pure_consequence _) (cellOwn_consequence hG tds i dq _)
+
+/-- A dead object token: its id is dead in σ — `deadObj_dead` (Heap.lean)
+    in the consequence shape (the byte interpretation is not consulted). -/
+theorem deadObj_consequence (tds : CerbTags.TagDefsMap) (id a : Int) (ty : ctype) :
+    iprop(deadObj tds (GF := GF) id a ty ∗ metaInterp mm ∗ byteInterp mb) ⊢
+      (⌜DeadAt σ id⌝ : IProp GF) :=
+  ((BI.sep_mono_right BI.sep_elim_left).trans BI.sep_comm.1).trans (deadObj_dead tds hG id a ty)
+
+/-- A dead region token: the same, through `deadRegion_dead`. -/
+theorem deadRegion_consequence (id a : Int) (n : Nat) :
+    iprop(deadRegion (GF := GF) id a n ∗ metaInterp mm ∗ byteInterp mb) ⊢
+      (⌜DeadAt σ id⌝ : IProp GF) :=
+  ((BI.sep_mono_right BI.sep_elim_left).trans BI.sep_comm.1).trans (deadRegion_dead hG id a n)
 
 end Consequences
 
