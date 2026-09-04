@@ -831,7 +831,9 @@ of `wpt_sound_cps`, the CPS collapse by strong induction on the budget
 (a back edge lands in the target's variant budget, a call lands the
 callee in `m` and the continuation in `k'`, both below `k` by the split)
 — a metatheorem about the judgment (it is a sound total WP)
-that no export consumes: every total export goes through an engine
+that no shipped-driver statement consumes (the pinned Iris-level readout
+`cs_twp_readout`, `Examples/CallSmoke.lean:455`, does consume it): every
+total export over the shipped driver goes through an engine
 simulation directly — on the shipped driver, `wpt_driver_aux` (one
 procedure) and its CPS twin `wpt_driver_cps` (ProdLoop.lean, calls arc
 C4: the same induction as
