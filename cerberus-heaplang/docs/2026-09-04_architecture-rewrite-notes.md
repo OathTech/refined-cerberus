@@ -221,3 +221,100 @@ No sentence of prose exceeds four wrapped lines after the second pass
 except list items that enumerate names with cites. Zero dates outside
 `[USER …]`/`[AGENT …]` tags and record paths; zero "former/until/since/
 deleted"; zero `driveU`.
+
+## Second pass (reviewer 4)
+
+Author: the second-pass worker (not reviewer 4; not the first-pass
+author). Branch `hygiene-h1`, worktree `worktrees/hygiene-h1`, base
+`cd68c46`. Scope: DOCS ONLY — `ARCHITECTURE.md`, two stale section
+pointers (`docs/CLAIMS.md:44`, `README.md:835`), this record. No `.lean`,
+no script, no `docs/DECISIONS.md`, no `docs/KNOWN-OPEN-ITEMS.md` change;
+no `lake`/`lean` invocation. Every fix below was verified by READING the
+`.lean` text at `cd68c46`, the pinned workspace at `f95ef8d9c`
+(`git -C .cerberus-ws rev-parse` = `f95ef8d9c`), `docs/DECISIONS.md`,
+`docs/KNOWN-OPEN-ITEMS.md` and `docs/CAPABILITY_MANIFEST.md`. Commits:
+(1) `1856685` review 4 copied verbatim (`cmp`-identical to
+`worktrees/review-arch-4/cerberus-heaplang/docs/2026-09-04_architecture-review-4.md`);
+(2) `b61a9c0` the edits; (3) this record.
+
+### Disposition table
+
+| Id | Done | Where (ARCHITECTURE at `b61a9c0`) | Verified against |
+|---|---|---|---|
+| P-1 | **DISPUTED — not applied** ([AGENT]). The phrase "And for our logic, which (for now) is sequential," IS in the register verbatim: `docs/DECISIONS.md:1753`–`:1756`, the fuel-scope paragraph of the entry "2026-09-03 [AGENT] F1 RANGE AUDIT 328be1a..2bbfd70". The reviewer matched the later entry's re-quote with an ellipsis (`:1823`, "FUEL IS A DEFECT…"). The full quotation is kept, set as a block quote so the register text is not re-wrapped inside a sentence, with BOTH register cites beside it so the next reviewer finds the source line. | §4 "The ruled reading" (block quote) | `grep -n "for now) is sequential" docs/DECISIONS.md` → `1755`; `sed -n 1752,1757p` read |
+| T-1 | Sentence fixed: the raw-WP layer of `Rules.lean` is mask-generic — `AtomicStep` `:194`, `wp_of_atomic` `:210`, `wp_store` `:1584`, `wp_load` `:1614`, `spike_wp_wand` `:1676` — the two statement judgments are not | §1 "The two judgments" | `grep -n CoPset Rules.lean` → exactly lines 196, 210, 1584, 1614, 1676 (no other mask-generic declaration exists) |
+| T-2 | `wps_sound_empty` consumers completed to nine, with lines; the three lists made a table | §2.1 consumer table | grep over `CerberusHeapLang/**/*.lean`, non-comment lines: Exhibit :349/:701, StructExhibit :199/:830, CaseExhibit :143, LoopExhibit :391, FibExhibit :402, ArrayExhibit :592, WseqExhibit :107, ListRevExhibit :1434, TwoLabelExhibit :531; `wps_sound` CallSmoke :330, FibRecExhibit :648, EvenOddExhibit :501; `wpt_sound` CallSmoke :461 |
+| T-3 | Paragraph replaced by a per-statement table re-derived from the nine statement texts (not patched): exhibitA `sevenVal`/`sevenBytes`/`intTy` (`Examples/Layout.lean:57`/`:65`/`:50`) + `CellCoh`; fib `ivVal` (`LoopExhibit.lean:63`) + `fibSpec` (`FibExhibit.lean:60`); counter `intUndefBytes` (`AllocExhibit.lean:88`) + `sevenBytes`/`intTy`/`CellCoh`; list_reverse `ptrVal` (`ListRevExhibit.lean:466`), `SeedChain` (`:1210`), `CellMap` (`Adequacy.lean:1407`), `Sat` (`:1415`); dispose/region/malloc engine fields only; fib_rec `ivVal`/`fibSpec` (+ premise `fibRounds`); even/odd `ivVal`. A lead sentence exempts the authored program and its wrapper explicitly | §2.5 second table | all nine signatures read in full (`ProdExhibit.lean:264`; `ProdLoopExhibit.lean:75`, `:620`, `:1435`; `DisposeExhibit.lean:1479`; `RegionLoopExhibit.lean:633`; `MallocListExhibit.lean:1654`; `FibRecExhibit.lean:865`; `EvenOddExhibit.lean:721`); `Vunit` is the engine's (`generated/Core.lean:459`) |
+| D-1 | `hbsz` explained at its one remaining mention: the selected branch's `esize` is bounded by the case node's; a membership premise the client discharges per program, `rfl` for authored programs (`caseProg_select`, `CaseExhibit.lean:68`), not a theorem | §6 "The mirror-completeness residual"; §7 Goal 2 only points there | `Soundness.lean:4296`–`:4297` read (`hbsz : ∀ e', select_case … = some e' → esize e' ≤ esize (caseRedex …)`); the header note `:4292` ("both premises are `rfl`") |
+| C-1 | Every reviewer-listed long sentence split (95–103 → a two-item list; 79–86; 142–151; 165–172; 194–200; 269–276; 278–284; 305–311; 484–492; 545–551; 564–574; 605–616) and every other prose sentence brought to ≤ 4 wrapped lines (checker below: 0 over). §5's manifest bullet no longer copies the header: green in short (4 lines) + the header cite `CAPABILITY_MANIFEST.md:8`–`:26`. §7 Goals 1–2 are one status line each pointing at §2.4/§2.2/§6. §6's mask/fuel/tag items are one to two lines each pointing at §1/§4. Goal 3's `MemWF` content moved to a new §2.6 "The memory invariant"; §7 points at it. Three enumerations became tables (collapse consumers, package definitions, NO-RULE variants). Length: see the deviation below | whole document | — |
+| T-4 | "`_op` forms" now exactly `store`/`load`/`kill`/`alloc` (no `create_op`) | §1 "The fragment" | `Frag` constructors `Soundness.lean:4150`–`:4314` listed: `store_op`, `load_op`, `kill_op`, `alloc_op`, `memop_op`; `create` only at evaluated operands |
+| T-5 | `Driver.lean:355`–`:358` | §4 "The ruled reading" | generated `Driver.lean`: `def new_drive_core_threads` at `:355`, the call `(drive_nonmemory_steps_aux2 _lemReader_tagDefs) fmapEmpty … tids` at `:358` |
+| T-6 | "(§5; KOI C11, C12); the claim matrix is prose, as its own header states (CLAIMS.md)" | §6 "The instruments' limits" | `docs/KNOWN-OPEN-ITEMS.md:57`–`:59` (C11 stripper, C12 per-module allowances, C13 CLOSED at H1a); `docs/CLAIMS.md:3` "HAND-WRITTEN PROSE, stated as such" |
+| T-7 | (a) `MachineCtx`'s eight fields named: `tagDefs`, `file`, `extern`, `tid`, `parent`, `errno`, `currentLoc`, `runState`; (b) `../scripts/semantics-pin.env` | §1 "Configurations and the mirror"; header | `Step.lean:405`–`:413` read; `ls ../scripts/semantics-pin.env` from the package |
+| D-2 | "`false` is the shipped driver's own sequential mode (the generated `drive` fails with "CONCURRENCY IS BROKEN" at `true`, `Driver.lean:530`); `fmapEmpty` is the wrapped file's tag-definition table, empty — the `htd` narrowing of KOI B4" | §4 production reading | generated `Driver.lean:530` (one line: the `drive` body, containing both `current_proc_opt := (some main_sym)` and `"CONCURRENCY IS BROKEN"`); KOI B4 row `docs/KNOWN-OPEN-ITEMS.md:31` ("a narrowing") |
+| S-1 | "added on orchestrator direction" removed (the `la_pos` provenance tag alone remains, now in §2.6); the closing sentence is "The records of the arcs that closed the goals are indexed in …" | §2.6; §7 | grep: zero "slice"/"slices"/"orchestrator direction" |
+| C-2 | Glossary entries "the trio" / "trio-exact" and "PCALL, RETURN, PROGRAM-DONE" added before first use; the parametric deferral tagged [USER 2026-09-02] | glossary; §6 | `Audit.lean:159`–`:160`; `reduction: PCALL`/`RETURN`/`PROGRAM-DONE` in generated `Core_reduction.lean` (`step_ctx`, one occurrence each); `docs/DECISIONS.md:372` "2026-09-02 [USER] PARAMETRIC INTERFACES NOT ADOPTED" |
+| S-2 | `docs/CLAIMS.md:44` "ARCHITECTURE §7, KOI B8" → "ARCHITECTURE §6, KOI B8"; `README.md:835` "not a gate — ARCHITECTURE §7" → "§5". KOI B7/B9: not edited (orchestrator-owned); replacement text below. Also checked: KOI B8 "ARCHITECTURE §6" still right; KOI B12 "ARCHITECTURE §2" still resolves (the bridges are §2.2); `capability_manifest.lean:97` "ARCHITECTURE §7 Goal 2" still resolves; `EvenOddExhibit.lean:4`/`TwoLabelExhibit.lean:4` are module-header history, not touched (no `.lean` edits) | CLAIMS.md; README.md | `grep -n "ARCHITECTURE §"` over the package docs, scripts, KOI |
+
+### KOI pointer fixes FOR THE ORCHESTRATOR (`docs/KNOWN-OPEN-ITEMS.md`, not edited here)
+
+- B7 (line 34), "Where" cell: replace `ARCHITECTURE §6 (lines ~412–444); docs/2026-09-02_fragment-closure-notes.md`
+  with `ARCHITECTURE §2.2 (the residual) and §6 "The mirror-completeness residual" (the hbsz premise); docs/2026-09-02_fragment-closure-notes.md`.
+- B9 (line 36), "Where" cell: replace `ARCHITECTURE §7; docs/2026-09-02_parametric-semantics-spike.md (DEFERRED banner)`
+  with `ARCHITECTURE §6 "Deferred parametric semantics interfaces"; docs/2026-09-02_parametric-semantics-spike.md (DEFERRED banner)`.
+- Optional precision, B12 (line 39): `ARCHITECTURE §2` → `ARCHITECTURE §2.2` (still resolves as is).
+- Still open from the first pass (deviation 6 above): B8 lists mutual recursion/two-label as exhibited already — consistent; nothing further.
+
+### [AGENT] deviation: length 731, not ~630
+
+The reviewer's concrete cuts were all applied: the manifest bullet 26 → 20
+lines (the class definitions and the header copy are gone; green is stated
+in four lines and the header is cited); §7 39 → 23 (Goal 3 moved out;
+Goals 1–2 one status line each); §6's mask/fuel/tag items 12 → 8; the
+glossary's "round"/"lane" one to two lines. These save about 30 lines.
+Against them the review REQUIRES additions: a §2.6 (the `MemWF` content
+plus a heading, +3 net), two glossary entries (+5), the block-quoted
+quotation with its two register cites (+6 net), three consumer lines and
+the table framing (+4), the exact package-definitions table (+5 net vs.
+the paragraph), the `hbsz` explanation (+3), the eight `MachineCtx`
+fields and the two-item list (+3), and — the dominant term — splitting
+every sentence over four lines, which adds roughly one line per split
+across ~25 splits. Net: 738 → 731 (DERIVED, `wc -l`; words 5882 → 5883).
+Reaching ~630 would require removing content the review itself lists as
+disclosure (the fifteen variants, the nine-statement premises, the
+generic premise list, the two verbatim readings, the negative result).
+Decision: keep every disclosure, record the arithmetic, and let the
+re-reviewer judge whether 731 lines of ≤ 4-line sentences reads.
+
+### Self-check
+
+- **Sentence length**: a script (prose only; code blocks, tables and the
+  block quote excluded; a sentence ends at `.`/`?`/`!`/`:` followed by a
+  capital, backtick or end of line) counts 298 sentences, **0 over four
+  wrapped lines** (DERIVED). Long lines > 90 characters are exactly the
+  table rows, the code block's comment line and the three unbreakable
+  `CerbND.runND …` identifiers.
+- **Line count**: 731 (`wc -l`); words 5883.
+- **Dates**: 25 `2026-` tokens, every one inside a `[USER 2026-…]`/`[AGENT
+  2026-…]` tag or a `docs/2026-…` record path; **0 outside** (DERIVED,
+  `grep -v` of the two forms).
+- **Vocabulary**: zero "former/formerly/until/since/deleted/driveU/slice";
+  `K3`, `F1`, `AR5` occur only inside the three cited DECISIONS entry
+  titles; `C5`/`C10` are CLAIMS row ids, `C11`/`C12` KOI ids.
+- **Record paths**: every `docs/…`/`../docs/…` path cited exists (scripted
+  `ls`, zero missing).
+- **Every finding's fix re-read against the source**: the "Verified
+  against" column above; additionally the round-name glossary entry
+  against generated `Core_reduction.lean` (`reduction: PCALL` at `Eproc`,
+  `reduction: RETURN` at "end of procedure", `reduction: PROGRAM-DONE` at
+  the startup thread's `Step_done2`), the `MemWF` field list against
+  `Heap.lean:1583`–`:1613` (ten fields: `live_lt`, `dead_lt`, `live_dead`,
+  `disj`, `cursor_lo`, `size_nonneg`, `la_wf`, `la_pos`, `dyn_lo`,
+  `dyn_disj`), the manifest header range against
+  `docs/CAPABILITY_MANIFEST.md:8`–`:26`.
+- **Nothing lost**: every disclosure the review lists as present in the
+  first pass is present (grep for each: `pot … ≤ lemDefaultFuel`,
+  annotation-free, `⊤` with 21/26, `tagDefs = fmapEmpty`, the ruled
+  reading, the fifteen NO-RULE and five OUT-OF-SCOPE variants,
+  `diverge_total_unprovable`, "There is no declared boundary axiom", the
+  nine premises, `hcost`, the two verbatim theorem texts unchanged).
