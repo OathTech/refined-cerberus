@@ -1423,16 +1423,21 @@ driver state that embeds the context and the configuration
 (`MachineCtx.Embeds` — the single thread `M.tid` holds `M.thread c.1
 c.2.1 c.2.2.1` (arena, env, and the three control fields from the
 configuration's `Ctl`), the memory is `c.2.2.2`, the file, extern map and run state are
-`M`'s), the engine's step list read by the loop body is a singleton `s`,
-`s` is advanceable, and the shipped `advance_step` on it is one active,
-wakeup-free transition to the state embedding `c'`:
+`M`'s), the engine's step list read by the loop body is `s :: post` —
+HEAD form since E4: at a reducible `unseq` the list has one entry per
+reducible component, last-first, and the sequential loop reads the head
+(the singleton reading holds for value arenas, root redexes and
+`Cunseq`-free decompositions: `step_ctx_singleton_of_root`,
+`Decomp.get_ctx_single`) — the head `s` is advanceable, and the shipped
+`advance_step` on it is one active, wakeup-free transition to the state
+embedding `c'`:
 
 ```lean
 def CerberusRound (M : MachineCtx) (c c' : Config) : Prop :=
   ∀ dst : driver_state, M.Embeds dst c →
-    ∃ s : core_step2,
+    ∃ (s : core_step2) (post : List core_step2),
       step_ctx M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid
-        (M.parent, M.thread c.1 c.2.1 c.2.2.1) = [s] ∧
+        (M.parent, M.thread c.1 c.2.1 c.2.2.1) = s :: post ∧
       can_advance s = true ∧
       ∃ (rs' : core_run_state) (tr : List trace_event) (ctr : Nat),
         rs'.labeled = dst.core_run_state0.labeled ∧
@@ -1542,8 +1547,10 @@ evaluator tower level by level exactly as the success bridge is.
 stuck and carrying a mirror-side witness: `eval_uncovered` (an operand
 the classifier does not decide: a LEAF the engine accepts where the
 mirror evaluator does not evaluate — a symbol unbound in the environment
-but naming a `Proc` of the file, a mirrored binop at two floats, `OpEq`
-at two ctypes — or, since E2, a shape the engine refuses but the
+but naming a `Proc` of the file, a mirrored binop at two floats, a
+comparison at symbolic integers (`OpEq` at two ctypes was one until E3
+mirrored `ctypeEqual`), since E3 a std.core call whose body exceeds its
+static budget `stdBudget` — or, since E2, a shape the engine refuses but the
 classifier does not certify — a `case` matching no pattern (the engine's
 opaque `failwithI` PANIC), `UB088` (its location is the call-location
 parameter), a constructor dispatch failure (an engine KILL), an
@@ -1806,12 +1813,21 @@ the `#print axioms` recipe are in the README, "How to build and verify".
   (`conv_loaded_int → conv_int → is_representable_integer`; the mirror
   evaluator reads `M.file`'s `stdlib`), the first C integer rules
   `wps_c_add`/`wpt_c_add` and `wps_conv_loaded_int`/`wpt_conv_loaded_int`,
-  `EmittedCExhibit` (`x + 1` certified on the library-carrying file
-  `prodFileLib stdlibE3`) and `OverflowExhibit` (the UB036 kill at
-  `INT_MAX` over the genuine driver's round). What still keeps t1's `main`
-  out of `Frag` is its `unseq` alone (`CorpusE0.t1MainWith_frag`,
-  `t1_unseq_not_frag`, `t1_uncovered_exactly_unseq`; E4), then negative
-  actions (E5), `Eccall` (E6) — the dialect arc's remaining slices
+  `EmittedCExhibit` (`x + 1` — a SYNTHETIC program, t1 with its `unseq`
+  replaced by a weak binder, outside the corpus speedbump — certified on
+  the library-carrying file `prodFileLib stdlibE3`, itself a synthetic
+  THREE-function std.core fragment with an empty `impl` map, README
+  "Scope, exactly") and `OverflowExhibit` (the UB036 kill at `INT_MAX`
+  over the genuine driver's round). E4 (2026-09-05) adds `unseq` — the
+  sequential driver's last-reducible-component order under the `Cunseq`
+  frame, the completion into the annotated tuple, the UB035 race kill —
+  and the annotated-tuple weak binder, restates the certification in
+  HEAD form (§5), and reaches THE MILESTONE: t1's `main` transcribed
+  verbatim is in `Frag` (`CorpusE0.t1Main_frag`) and certified end to end
+  (`t1_certified_production`, CorpusT1Exhibit — the tenth closed
+  shipped-driver statement; `docs/2026-09-05_e4-notes.md`). What keeps
+  the rest of the corpus out: negative actions (E5), `Eccall` (E6) — the
+  dialect arc's remaining slices
   (`../docs/2026-09-04_emitted-core-dialect-design.md`; README, "Scope,
   exactly").
 - **`Eunseq`.** Core's unsequenced composition is a semantic gap for a
@@ -1842,7 +1858,8 @@ the `#print axioms` recipe are in the README, "How to build and verify".
   `2026-09-05_fragment-closure-e2-notes.md`): an operand the classifier
   does not decide — a LEAF the engine accepts where the mirror evaluator
   does not evaluate (a procedure-named symbol, a mirrored binop at two
-  floats, `OpEq` at two ctypes) or, since E2, a shape the engine refuses
+  floats, a symbolic comparison; since E3 a std.core call over its
+  `stdBudget`; `OpEq` at two ctypes is mirrored since E3) or, since E2, a shape the engine refuses
   but the classifier does not certify (a `case` matching no pattern,
   `UB088`, a constructor dispatch failure, an undef-then-raise
   constructor operand list, a branch the depth guard rejects) — the

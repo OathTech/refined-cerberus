@@ -22,7 +22,9 @@ WHAT IS PROVED (kernel-only, over the shipped engine):
   the residual program at that round (`progCE3_atAdd`) is the ONE
   with-runstate EVAL step whose monad FAILS with that undef
   (`step_ctx_pure_op_fail`, the classifier bridge).
-* `overflow_driver2_killed` — THE GENUINE DRIVER at EVERY fuel: `driver2`
+* `overflow_driver2_killed` — THE GENUINE DRIVER at every POSITIVE fuel
+  (`Nat.succ fl`; fuel 0 is the exhaustion sentinel `fuelExhaustedKill`,
+  E3 range audit D-7): `driver2`
   from any driver state whose single thread is at that round is
   `NDkilled (Undef0 loc [UB036])` — the round's only outcome
   (`loop_step_withrs_eval_killed`, `driver2_killed`).
@@ -40,7 +42,7 @@ whole-run fact was MEASURED by compiled evaluation (`#eval`, recorded
 verbatim in §6: `killed undef ubs=1 ub036=true
 loc=exhibitC.c:1:36-exhibitC.c:1:41 out=[]`); it is a measurement, not a
 theorem of this module. The theorems above are the driver-level kill at
-the round the measurement kills at, at every fuel.
+the round the measurement kills at, at every positive fuel.
 
 Module class: negative-test (a statement of what the pipeline REFUSES).
 -/
@@ -135,7 +137,8 @@ theorem overflow_step_ctx (tds : Fmap sym (CerbLocation.Loc × tag_definition)) 
   rw [progCE3_atAdd_decomp.get_ctx_single rfl lemDefaultFuel hsz]
   rfl
 
-/-- THE GENUINE DRIVER KILLS AT THE ROUND, AT EVERY FUEL: from any driver
+/-- THE GENUINE DRIVER KILLS AT THE ROUND, AT EVERY POSITIVE FUEL (`Nat.succ
+    fl`; fuel 0 is `driver2_lemFuel`'s exhaustion sentinel): from any driver
     state whose single thread is at the `+` round (arena `progCE3_atAdd`,
     `b1 ↦ Specified(INT_MAX)`, `b2 ↦ Specified(1)`), `driver2` is exactly
     `NDkilled (Undef0 current_loc [UB036_exceptional_condition])`. -/
@@ -188,7 +191,7 @@ theorem symK_eval {tds : CerbTags.TagDefsMap} {file : generic_file Unit core_run
   exact lookup_env_head hl evs
 
 /-- THE NEGATIVE EXHIBIT AT THE CONCRETE FRAME: the genuine driver, at
-    every fuel, from a state whose thread is at the `+` round with the
+    every positive fuel, from a state whose thread is at the `+` round with the
     frame `frBK` (any allocation `px`, any symbol-keyed base frame) and the
     production extern map, is exactly the UB036 kill. -/
 theorem overflow_driver2_killed_frame (fl : Nat) (dst : driver_state) (th : thread_state)

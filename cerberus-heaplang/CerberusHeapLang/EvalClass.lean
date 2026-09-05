@@ -29,8 +29,13 @@ the engine does where the mirror answers `none`:
   not compute, or the outcome is not characterized here: a symbol unbound
   in the environment but naming a `Proc` of the file (the engine returns
   the null function pointer); the eight mirrored binops at two floating
-  operands (`opFval`, the float comparisons); `OpEq` at two ctypes
-  (`ctypeEqual`); the six non-mirrored binops (`Div`/`Rem_t`/`Rem_f`/
+  operands (`opFval`, the float comparisons); a comparison at symbolic
+  integers (`PEconstrained`); (E3) a std.core call whose callee is FOUND
+  in `stdlib`/`funs` but the mirror does not unfold — arity mismatch or a
+  non-`Fun` declaration (the engine's `failwithI` PANIC, `callOut`) or a
+  body over its static budget `stdBudget`/outside `PePure` (the engine
+  unfolds and continues) — `OpEq` at two ctypes was a member until E3
+  mirrored `ctypeEqual` (`evalBinop`, Step.lean); the six non-mirrored binops (`Div`/`Rem_t`/`Rem_f`/
   `Exp` — integer successes; `And`/`Or` — the boolean arms), which
   `PePure` excludes syntactically; a `case` whose value matches no
   pattern (the engine's `failwithI` PANIC, opaque); a constructor
@@ -215,7 +220,9 @@ def illtypedOr (loc : CerbLocation.Loc) : core_run_cause :=
     `evalBinop` answers `none`): two integers — the engine's success
     outside the mirror (a non-mirrored op, or a symbolic comparison's
     `PEconstrained`); two floats — an engine success outside the mirror;
-    two ctypes — a success at `OpEq`; `And`/`Or` — not characterized
+    two ctypes at `OpEq` — an arm the mirror's `evalBinop` now answers
+    (E3, `ctypeEqual`), kept for the classification's totality but
+    unreachable from `evalClass`; `And`/`Or` — not characterized
     (outside `PePure`); everything else — the ill-typed-`PEop`
     exception. -/
 def binopOut (loc : CerbLocation.Loc) (op : binop) (pe1 pe2 : generic_pexpr Unit sym)

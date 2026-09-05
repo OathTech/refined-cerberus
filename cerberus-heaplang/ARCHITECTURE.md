@@ -116,10 +116,14 @@ reader must know first:
   `PEcall` unfolded through the FILE OBJECT — `evalPexpr` reads `M.file`'s
   `stdlib` exactly as `call_function` does, under a static per-callee
   inlining budget `stdBudget` keyed by the callee's printed name; `PePure`
-  gains `convInt`/`wrapI`/`catchExc`/`isUnsigned`/`call`); t1's `main` is
-  in the cone MODULO ITS `unseq` (E4): `CorpusE0.t1MainWith_frag`,
-  `t1_unseq_not_frag`, and the kernel-decided walk
-  `t1_uncovered_exactly_unseq` (`Examples/CorpusE0.lean`).
+  gains `convInt`/`wrapI`/`catchExc`/`isUnsigned`/`call`; E4: `unseq` —
+  the sequential driver's last-reducible-component order under the
+  `Cunseq` frame and the completion into the annotated tuple, with
+  ccall-free components — and the annotated-tuple weak binder); t1's
+  `main` transcribed VERBATIM is in `Frag` (`CorpusE0.t1Main_frag`, the
+  kernel-decided walk `CorpusE0.t1_uncovered_none`, `Examples/CorpusE0.lean`)
+  and certified end to end (`t1_certified_production`, CorpusT1Exhibit.lean;
+  E4, `docs/2026-09-05_e4-notes.md`).
 - *It is declared as exactly what the mirror covers* ([USER 2026-09-02],
   DECISIONS "THE BOUNDARY IS FAIL-CLOSED"): a shape without a mirror
   rule is outside `Frag`. Inside `Frag` the completeness theorem (§2.2)
@@ -243,12 +247,16 @@ No shipped-driver statement consumes any of them: the driver lanes
 
 `CerberusRound M c c'` (`Round.lean:202`) is one round in the driver's
 own vocabulary. At every driver state embedding the context and the
-configuration `c`: the engine's step list is a singleton, it is
-advanceable, and the shipped `advance_step` on it is one active
-transition to the state embedding `c'`. Active means `NDactive
-NOWAKEUP`: no other thread is woken. It is stated at the
-loop body, with no fuel dependency (loop-level reading
-`CerberusRound.loop_step`, `:1034`). The certification is
+configuration `c`: the engine's step list is `s :: post` — HEAD form
+since E4: at a reducible `unseq` the engine's list has one entry per
+reducible component, last-first (`get_ctx_unseq_aux`), and the shipped
+loop reads its head; the singleton reading is a theorem for value arenas,
+root redexes and `Cunseq`-free decompositions (`step_ctx_singleton_of_root`,
+`Decomp.get_ctx_single`) — the head `s` is advanceable, and the shipped
+`advance_step` on it is one active transition to the state embedding
+`c'`. Active means `NDactive NOWAKEUP`: no other thread is woken. It is
+stated at the loop body, with no fuel dependency (loop-level reading
+`CerberusRound.loop_step`, `:1037`). The certification is
 
 ```lean
 theorem engine_step_matchU {M : MachineCtx}
@@ -256,16 +264,16 @@ theorem engine_step_matchU {M : MachineCtx}
     {ρ' : EnvStack} {ctl ctl' : Ctl} {σ σ' : Mem}
     (hf : Frag e) (hsz : esize e ≤ lemDefaultFuel)
     (hs : Step M (e, ev0 :: evs, ctl, σ) (e', ρ', ctl', σ')) :
-    CerberusRound M (e, ev0 :: evs, ctl, σ) (e', ρ', ctl', σ') := by      -- Round.lean:1100
+    CerberusRound M (e, ev0 :: evs, ctl, σ) (e', ρ', ctl', σ') := by      -- Round.lean:1103
 ```
 
 — on `Frag`, at a cons-shaped environment, at any control and successor
 control, with the static size bound, and no well-formedness premise;
-`step_iff_cerberusRound` (`:1845`) is two-sided under the hypothesis
+`step_iff_cerberusRound` (`:1872`) is two-sided under the hypothesis
 that a mirror step exists.
 
 Completeness is the other direction, per constructor.
-`frag_round_complete` (`:6165`): at every non-value `Frag` configuration
+`frag_round_complete` (`:6532`): at every non-value `Frag` configuration
 the mirror steps, or the round is a classified refusal, or the
 configuration is in the residual. The refusals (`ShippedRefusal`, `:222`)
 are stated in the engine's vocabulary. `error`: the step list is
@@ -277,7 +285,13 @@ an ill-typed next round. The residual (`OpenRound`, `:368`) has two arms.
 `eval_uncovered`: an operand whose outcome the classifier `evalClass`
 does not decide. Its members: a leaf the engine's evaluator accepts
 where the mirror evaluator does not (a `Proc`-named unbound symbol, a
-binop at two floats, `OpEq` at two ctypes), and — since E2 — shapes the
+binop at two floats, a comparison at symbolic integers — `OpEq` at two
+ctypes was a member until E3 mirrored `ctypeEqual`), since E3 a std.core
+call whose body exceeds its static budget `stdBudget` (the engine unfolds
+and continues, the mirror stops; reached by no transcribed std.core
+function), since E4 the same leaves at an operand of the focused
+component under a `Cunseq` frame (`operandsOfU`; no new leaf), and —
+since E2 — shapes the
 engine does NOT accept but whose refusal the classifier does not
 certify: a `case` matching no pattern (the engine's opaque `failwithI`
 PANIC), `undef(<<UB088>>)` (its location is the call-location
@@ -500,12 +514,12 @@ has no equation for them and a theorem holds at every value they take.
 
 **What the build checks** (`Audit.lean`, the last import of the library
 root, elaborated by every `lake build`). Every pinned export exists, is
-a theorem, and has axiom set EXACTLY the trio (`:691`–`:702`; 509 pins at
-this revision, `docs/2026-09-05_e2-notes.md` "E2 audit fixes", the gate
-at the E2 audit-fixes head). Every theorem of every `CerberusHeapLang.*`
-module, internal details included, is bounded by the trio (`:703`–`:722`).
+a theorem, and has axiom set EXACTLY the trio (`:820`–`:831`; 650 pins at
+this revision, `docs/2026-09-05_e4-notes.md` §8, the gate at the E4
+head). Every theorem of every `CerberusHeapLang.*`
+module, internal details included, is bounded by the trio (`:832`–`:851`).
 `sorryAx`/`ofReduceBool`/`ofReduceNat` reach no constant of any kind
-(`:723`–`:737`). Precision: "exactly the trio" is the pinned exports' property;
+(`:852`–`:868`). Precision: "exactly the trio" is the pinned exports' property;
 every other theorem's cone is bounded by the trio, by the sweep. The
 public-named lemmas with SUB-trio cones are therefore unpinned, as
 `Audit.lean`'s comments record them (among them `fibRounds_closed`,
@@ -519,9 +533,12 @@ bridge `pull_bridge`). The `BareHead` lemmas are gone with `BareHead`
 (E1). E3 adds 80 pins (589 at the combined head: E3's 80 plus the E2 audit's
 `unspec_bytes`; `docs/2026-09-05_e3-notes.md` §9) and leaves unpinned, with sub-trio cones, the `rfl`/`decide` facts of
 StdCore/IntRules and CorpusE0's kernel-decided walk (listed in
-`Audit.lean`'s E3 paragraph).
+`Audit.lean`'s E3 paragraph). E4 removes 1 (`CorpusE0.t1_unseq_not_frag`,
+false since `Frag.unseq`) and adds 62 (650; `docs/2026-09-05_e4-notes.md`
+§8), leaving unpinned the sub-trio `rfl`/`simp` facts at the new
+constructors (listed in `Audit.lean`'s E4 paragraph).
 `regionCost_eq`, `runND_killed` and, since the E2 audit fixes,
-`unspec_paddingByte` have no axioms (`:389`, `:557`–`:558`). Kernel-only proof methods: no `native_decide`, `bv_decide`
+`unspec_paddingByte` have no axioms (`:437`, `:730`–`:731`). Kernel-only proof methods: no `native_decide`, `bv_decide`
 or `ofReduce*` anywhere (gate 1, `../scripts/test_unit.sh:28`).
 
 **The declared boundary is empty** ("There is no declared boundary
@@ -748,7 +765,8 @@ Each item points at its register entry; none is hidden in a proof.
   non-evaluating surplus argument; `pure(e)` at a covered operand the
   classifier does not decide — a leaf the engine evaluates but the
   mirror evaluator does not (a `Proc`-named unbound symbol, two floats,
-  `OpEq` at two ctypes), or an E2 shape the engine refuses but the
+  a symbolic comparison; since E3 a std.core call over its `stdBudget`;
+  `OpEq` at two ctypes is mirrored since E3), or an E2 shape the engine refuses but the
   classifier does not certify (a `case` matching no pattern, `UB088`, a
   constructor dispatch failure, an undef-then-raise constructor operand
   list, a branch the depth guard rejects) — the characterized residual
@@ -825,8 +843,10 @@ well-formed allocator model"), with their status at this revision:
   the declared fragment**, by `frag_round_complete`/`cerberusRound_classify`
   (§2.2); the residuals and the carried `hbsz` are §6's item (KOI B7).
   Records: `docs/2026-09-02_fragment-closure-notes.md`, re-established
-  after each dialect slice in `docs/2026-09-05_fragment-closure-e1-notes.md`
-  and `docs/2026-09-05_fragment-closure-e2-notes.md`.
+  after each dialect slice in `docs/2026-09-05_fragment-closure-e1-notes.md`,
+  `docs/2026-09-05_fragment-closure-e2-notes.md`,
+  `docs/2026-09-05_fragment-closure-e3-notes.md` and
+  `docs/2026-09-05_fragment-closure-e4-notes.md`.
 - **Goal 3 — a global memory well-formedness invariant: CLOSED**, by
   `MemWF`, its cold-start instance and its preservation theorems for
   every memory operation of the fragment (§2.6). Record:

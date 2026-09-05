@@ -13,7 +13,7 @@ DIRECTLY. A TODO comment at that arm records that the std.core/ISO path
 would instead call the impl-defined
 `<Integer.conv_nonrepresentable_signed_integer>` for signed types. For the
 pinned gcc impl that function IS `wrapI(ty, n)`
-(`…gcc_4.9.0….impl:18`–`:20`), so the two agree today and no lane can
+(`…gcc_4.9.0….impl:17`–`:19`), so the two agree today and no lane can
 observe a difference. For any impl whose signed non-representable
 conversion is not wrap, the engine and std.core's own `conv_int` would
 disagree — the OCaml oracle has the same code, so this is not a

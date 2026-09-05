@@ -99,9 +99,9 @@ THE FRAGMENT IS EXACTLY WHAT THE MIRROR COVERS ([USER 2026-09-02], the
 fragment-closure ruling: "fail-closed if we've achieved complete
 coverage"; record `docs/2026-09-02_fragment-closure-notes.md`). Of the
 four gaps the 2026-09-02 mirror-completeness slice registered, (a) the
-LETS-ANNOT beta at the plain-symbol binder is UNREACHABLE — the binder's
-head is restricted to the bare-value producers `BareHead`
-(Soundness.lean); (b) the ACTION_EVAL to a non-pointer value is ILLTYPED
+LETS-ANNOT beta at the plain-symbol binder — kept out by `BareHead` until
+E1 — is MIRRORED since E1 (`Step.sseq_sym_annot`, `complete_beta_sym`);
+(b) the ACTION_EVAL to a non-pointer value is ILLTYPED
 AT DISTANCE ONE; (d) the jump without a current procedure is
 PANIC-noproc; (c) operand evaluation outside the mirror evaluator is
 closed to the KILL classification for every operand the CLASSIFIER
@@ -110,8 +110,11 @@ the success bridge) and leaves THE RESIDUAL `OpenRound`: `eval_uncovered`
 (an operand in the covered grammar CONTAINING A LEAF the mirror evaluator
 does not evaluate and the engine's evaluator accepts: a symbol unbound in
 the environment but naming a `Proc` of the file, a mirrored binop at two
-floats, `OpEq` at two ctypes — environment/file-dependent, carrying the
-offending operand as witness). `evalClass` answers `.uncovered` at the
+floats, a comparison at symbolic integers (`PEconstrained`) — `OpEq` at
+two ctypes was a member until E3 mirrored `ctypeEqual` — and, since E3, a
+std.core call whose body exceeds its static budget `stdBudget` (the
+engine unfolds and continues, the mirror stops); environment/file-dependent,
+carrying the offending operand as witness). `evalClass` answers `.uncovered` at the
 FIRST such leaf and carries NO engine claim about the whole operand, so
 the engine's outcome on that operand is NOT characterized here — it may
 succeed, KILL on a later type error (`f + 1` with `f` a `Proc`-named
@@ -372,8 +375,12 @@ inductive OpenRound (M : MachineCtx) (c : Config) : Prop where
       classifier answers `.uncovered` at the FIRST uncovered LEAF — a
       symbol unbound in the environment but naming a `Proc` of the file
       (the engine evaluates that leaf to the null function pointer), one
-      of the eight mirrored binops at two floating-point operands, or
-      `OpEq` at two ctypes — and carries NO engine claim about the whole
+      of the eight mirrored binops at two floating-point operands, a
+      comparison at symbolic integers, or (E3) a std.core call whose body
+      exceeds its static budget `stdBudget` (`OpEq` at two ctypes left
+      the list when E3 mirrored `ctypeEqual`; E4 adds no leaf — the
+      operand may sit in the focused component under a `Cunseq` frame,
+      `operandsOfU`) — and carries NO engine claim about the whole
       operand. So this arm contains operands whose whole-operand outcome
       is NOT characterized, INCLUDING ones the engine KILLS (`f + 1` with
       `f` a `Proc`-named unbound symbol is `PePure`, classified
@@ -386,7 +393,8 @@ inductive OpenRound (M : MachineCtx) (c : Config) : Prop where
       killed (Other (DErr_core_run err))`, the `complete_*` lemmas);
       operands the classifier leaves UNCOVERED are not characterized — the
       residual is a SUPERSET of the engine-accepted shapes. The mover:
-      `evalClass` computing the engine's value at the three leaf shapes. -/
+      `evalClass` computing the engine's value at the leaf shapes and
+      unfolding beyond the static budget. -/
   | eval_uncovered (pe : generic_pexpr Unit sym) :
       (∀ c'', ¬ Step M c c'') →
       pe ∈ operandsOf c.1 → PePure pe →
