@@ -1,44 +1,80 @@
 /-
 CerberusHeapLang.Examples.CorpusE0 — THE CORPUS TRANSCRIPTIONS AND THE
-SKELETON INSTRUMENT (dialect arc E1; [USER 2026-09-04] ratified E0
-question 3: the pipeline's Core enters a statement as a HAND-TRANSCRIBED
-term checked by an EXECUTABLE EQUALITY speedbump against the oracle's
-emitted Core).
+SKELETON INSTRUMENT (dialect arc E1, extended at E2; [USER 2026-09-04]
+ratified E0 question 3: the pipeline's Core enters a statement as a
+HAND-TRANSCRIBED term checked by an EXECUTABLE EQUALITY speedbump against
+the oracle's emitted Core).
 
-Two things live here, both data/instruments, no proofs:
+Three things live here — data, an instrument, and membership witnesses:
 
 1. THE TRANSCRIPTION TABLE `corpusTable`: for each corpus program
    (docs/corpus-e0/<name>.annot.core at the repository root) the
    procedure it names and the hand-transcribed `CoreExpr` of that
-   procedure's body. E1 transcribes t1 (`t1Main`). Later slices add rows.
+   procedure's body. E1 transcribes t1 (`t1Main`); E2 names its
+   sub-terms (`t1LoadX`, `t1Spec3`, …). Later slices add rows.
 
 2. THE SKELETON CHECK (`scripts/corpus_skeleton.lean` runs it): the
-   ANNOTATION/BOUND SKELETON of a term — the preorder token stream of
-   its expression nodes, each node contributing the annotations the
-   pretty-printer shows (`Astd` strings, in the printer's order; one
-   `loc` marker when `get_loc` finds an `Aloc`) followed by its node kind
+   SKELETON of a term — the preorder token stream of its expression
+   nodes, each node contributing the annotations the pretty-printer
+   shows (`Astd` strings, in the printer's order; one `loc` marker when
+   `get_loc` finds an `Aloc`) followed by its node kind
    (`lets`/`letw`/`seq`/`bound`/`unseq`…`endunseq`/`pure`/`store`/…, the
-   printer's keywords) — must EQUAL the token stream read off the
-   emitted text by `tokenize`. The printer facts the two sides share:
+   printer's keywords) and, SINCE E2, the constructor-level skeleton of
+   the pure expressions under `pure`, under every action and under `run`
+   (`pexprSkeleton`: the printed constructor/keyword names `Specified`,
+   `Unspecified`, `Ivalignof`, `tuple`, `case`/`alt`/`endcase`, `undef`,
+   `not`, `if`/`then`/`else`, `op` for an infix binop, `array_shift`,
+   `__conv_int__`, `catch_exceptional_condition_<op>`, a `PEcall`'s
+   printed name; every symbol, literal, ctype and typed pattern binder is
+   the opaque token `leaf`) — must EQUAL the token stream read off the
+   emitted text by `tokenizeProc`. The printer facts the two sides share:
    pp_core.ml:549–680 (`Astd` comments are PREPENDED by a fold, so they
    print in REVERSE list order, then the `get_loc` marker, then the node;
    the wildcard-unit `Esseq` prints as `e1 ; e2`; `Ewseq` always prints
-   `let weak`; `bound(e)`; action keywords pp_core.ml:690–745).
+   `let weak`; `bound(e)`; action keywords pp_core.ml:690–745); for pure
+   expressions pp_core.ml:304–308 (`Specified(…)`/`Unspecified('ty')`
+   loaded values), :338–372 (`pp_ctor`), :376–385 (patterns; a `Ctuple`
+   pattern prints as a parenthesised list, a binder as `x: ty`, the
+   wildcard as `_: ty`), :412–419 (`iop_string`), :436–503 (`pp_pexpr`:
+   `undef(<<UB>>)`, `PEctor Ctuple` as a parenthesised list, other
+   constructors `Name(args)`, `case … of | pat => e … end`,
+   `array_shift(p, ty, n)`, `not(e)`, the infix `PEop`, `__conv_int__(ty,
+   e)`, `catch_exceptional_condition_<op>(ty, e1, e2)`).
 
-   WHAT THE SKELETON DOES NOT CHECK (E1 scope): pure expressions are
-   LEAVES — a `pure(...)`/operand's contents, patterns, symbols, ctypes
-   and memory orders are not compared; the association of a `;` chain is
-   not observable in the text (no parentheses are printed) and is not
-   compared. FAIL-CLOSED where the instrument is blind: a term whose pure
-   expressions carry `Astd`/`Aloc` annotations, or a text with a
-   `{-# … #-}` marker inside an opaque (pure-expression) region, is an
-   ERROR, not a pass. E2/E3 extend the printer to pure expressions.
+   WHAT THE SKELETON DOES NOT CHECK (E2 scope): symbols, literals, ctypes,
+   binder types and memory orders are LEAVES (not compared); the pure
+   expressions of `save` initialisers, `if`/`case` scrutinees at the
+   EXPRESSION level, `let` (Elet), `memop`, `pcall`/`ccall` arguments are
+   still OPAQUE (checked annotation-free only); the association of a `;`
+   chain is not observable in the text (no parentheses are printed) and is
+   not compared. FAIL-CLOSED where the instrument is blind: a pure
+   expression node carrying a printed annotation (the printer's
+   `maybe_print_location`), a text `{-# … #-}` marker inside a pure or
+   opaque region, a list literal (`[`), a constructor or pure-expression
+   form outside the vocabulary above, a value the printer spells in a
+   shape the skeleton does not know (a pointer, a float, a struct) — each
+   is an ERROR, not a pass. A precedence parenthesis the printer inserts
+   around a nested infix operand would be read as a `tuple` and MISMATCH
+   (loud, not silent). The printed name of a `PEcall` is compared as the
+   text spells it (`conv_loaded_int`, the builtin printed without its
+   symbol number) against the transcription's `SD_Id` string.
+
+3. E2 MEMBERSHIP WITNESSES for t1's sub-terms: the sub-terms E2 admits
+   are in `Frag` (`t1LoadX_frag`, `t1LoadY_frag`, `t1Spec3_frag`,
+   `t1Spec1_frag`, `t1KillX_frag`) — constructive `Frag` derivations,
+   kernel-checked; and the two E3 shapes are OUTSIDE the covered operand
+   grammar by kernel decision (`t1_convLoadedInt_uncovered`: the `PEcall`;
+   `t1_case_uncovered`: the `case` whose first branch is a
+   `catch_exceptional_condition`). `t1Main` as a whole is NOT in the E2
+   fragment (it needs `conv_loaded_int`, the `catch_exceptional_condition`
+   branch — E3 — and `unseq` — E4).
 
 Plants (the vacuity check the script runs on every row): dropping the
-first `bound` of a transcription, or every `Astd`, MUST make the check
-fail; a plant that passes fails the script.
+first `bound` of a transcription, every `Astd`, or (E2) the first
+`Specified(…)` constructor under a `pure`, MUST make the check fail; a
+plant that passes fails the script.
 -/
-import CerberusHeapLang.Step
+import CerberusHeapLang.Soundness
 import CerberusHeapLang.Examples.Layout
 
 set_option autoImplicit false
@@ -133,17 +169,123 @@ def checkClean (pes : List (generic_pexpr Unit sym)) : Except String Unit :=
   else throw "a pure expression carries a printed annotation (Astd/Aloc) — \
     the skeleton instrument is blind inside pure expressions; extend it (E2/E3)"
 
+/-! ## E2: the constructor-level skeleton of a pure expression -/
+
+/-- The printer's constructor name (pp_core.ml:338–372 `pp_ctor`; `Ctuple`
+    prints as a parenthesised list, :481, so its token is `tuple`). The
+    list constructors (`[]: ty`, `::`, pp_core.ml:458–480) and
+    `CivNULLcap` (an extra printed argument) are outside the vocabulary —
+    fail-closed. -/
+def ctorName : ctor → Except String String
+  | Ctuple => pure "tuple"
+  | Cspecified => pure "Specified"
+  | Cunspecified => pure "Unspecified"
+  | Civalignof => pure "Ivalignof"
+  | Civsizeof => pure "Ivsizeof"
+  | Civmax => pure "Ivmax"
+  | Civmin => pure "Ivmin"
+  | Carray => pure "Array"
+  | CivCOMPL => pure "IvCOMPL"
+  | CivAND => pure "IvAND"
+  | CivOR => pure "IvOR"
+  | CivXOR => pure "IvXOR"
+  | Cfvfromint => pure "Cfvfromint"
+  | Civfromfloat => pure "Civfromfloat"
+  | _ => throw "a list constructor or CivNULLcap in a pure expression: outside the \
+    skeleton's vocabulary (fail-closed; extend `ctorName` deliberately)"
+
+/-- pp_core.ml:412–419 `iop_string`. -/
+def iopSuffix : iop → String
+  | IOpAdd => "_add"
+  | IOpSub => "_sub"
+  | IOpMul => "_mul"
+  | IOpShl => "_shl"
+  | IOpShr => "_shr"
+  | IOpDiv => "_div"
+  | IOpRem_t => "_rem_t"
+
+/-- A VALUE's skeleton: the printer spells loaded values and tuples with
+    the same surface as the constructors (pp_core.ml:304–308), so a
+    transcription may write `Specified(3)` as `PEctor Cspecified [PEval 3]`
+    or as `PEval (Vloaded (LVspecified 3))` — both print `Specified(3)`
+    and both skeletonise to `Specified leaf`. Integers, ctypes, `Unit`,
+    `True`/`False` are leaves; a pointer/float/array/struct/union value or
+    a list is outside the vocabulary (fail-closed). -/
+partial def valueSkeleton : value → Except String (List String)
+  | Vunit | Vtrue | Vfalse | Vctype _ => pure ["leaf"]
+  | Vobject (OVinteger _) => pure ["leaf"]
+  | Vloaded (LVspecified ov) => do pure ("Specified" :: (← valueSkeleton (Vobject ov)))
+  | Vloaded (LVunspecified _) => pure ["Unspecified", "leaf"]
+  | Vtuple vs => do pure ("tuple" :: (← vs.mapM valueSkeleton).flatten)
+  | _ => throw "a value the printer spells in a shape outside the skeleton's vocabulary \
+    (pointer/float/array/struct/union/list) — fail-closed"
+
+/-- A PATTERN's skeleton (pp_core.ml:376–385): a binder `x: ty` or the
+    wildcard `_: ty` is a `leaf`; a constructor pattern is its name then
+    its sub-patterns; a tuple pattern is `tuple` then its components. -/
+partial def patSkeleton : pattern → Except String (List String)
+  | Pattern an p => do
+    if hasShownAnnot an then throw "a pattern carries a printed annotation"
+    match p with
+    | CaseBase _ => pure ["leaf"]
+    | CaseCtor c ps => do pure ((← ctorName c) :: (← ps.mapM patSkeleton).flatten)
+
+/-- THE PURE-EXPRESSION SKELETON (pp_core.ml:436–503 `pp_pexpr`). -/
+partial def pexprSkeleton : generic_pexpr Unit sym → Except String (List String)
+  | Pexpr an _ pe => do
+    if hasShownAnnot an then
+      throw "a pure expression node carries a printed annotation (Astd/Aloc) — the \
+        skeleton compares no location inside pure expressions (fail-closed)"
+    match pe with
+    | PEsym _ => pure ["leaf"]
+    | PEval v => valueSkeleton v
+    | PEundef _ _ => pure ["undef"]
+    | PEctor c ps => do pure ((← ctorName c) :: (← ps.mapM pexprSkeleton).flatten)
+    | PEcase p alts => do
+      let sp ← pexprSkeleton p
+      let sa ← alts.mapM fun x => do
+        pure ("alt" :: (← patSkeleton x.1) ++ (← pexprSkeleton x.2))
+      pure ("case" :: sp ++ sa.flatten ++ ["endcase"])
+    | PEcall (Sym (Symbol _ _ (SD_Id name))) ps => do
+      pure (name :: (← ps.mapM pexprSkeleton).flatten)
+    | PEcall _ _ => throw "a PEcall at a name the printer does not spell as an identifier"
+    | PEconv_int _ p => do pure ("__conv_int__" :: "leaf" :: (← pexprSkeleton p))
+    | PEcatch_exceptional_condition _ op p1 p2 => do
+      pure (("catch_exceptional_condition" ++ iopSuffix op) :: "leaf" ::
+        (← pexprSkeleton p1) ++ (← pexprSkeleton p2))
+    | PEwrapI _ op p1 p2 => do
+      pure (("wrapI" ++ iopSuffix op) :: "leaf" :: (← pexprSkeleton p1) ++ (← pexprSkeleton p2))
+    | PEop _ p1 p2 => do pure ((← pexprSkeleton p1) ++ "op" :: (← pexprSkeleton p2))
+    | PEnot p => do pure ("not" :: (← pexprSkeleton p))
+    | PEif p1 p2 p3 => do
+      pure ("if" :: (← pexprSkeleton p1) ++ "then" :: (← pexprSkeleton p2) ++
+        "else" :: (← pexprSkeleton p3))
+    | PEarray_shift p1 _ p2 => do
+      pure ("array_shift" :: (← pexprSkeleton p1) ++ "leaf" :: (← pexprSkeleton p2))
+    | _ => throw "a pure-expression form outside the skeleton's vocabulary (fail-closed; \
+      extend `pexprSkeleton` deliberately, with the pp_core.ml cite)"
+
+def pexprsSkeleton (pes : List (generic_pexpr Unit sym)) : Except String (List String) := do
+  pure (← pes.mapM pexprSkeleton).flatten
+
+/-- An ACTION's operand skeleton: `kill('ty', p)` prints the static kind's
+    ctype as a first argument (pp_core.ml `pp_action`), a leaf; every other
+    operand is a pure expression. -/
+def actionSkeleton (act : generic_action_ Unit sym) : Except String (List String) :=
+  match act with
+  | Kill (Static0 _) p => do pure ("leaf" :: (← pexprSkeleton p))
+  | act => pexprsSkeleton (actionPexprs act)
+
 /-- THE SKELETON: the preorder token stream of the expression nodes. -/
 partial def skeleton : CoreExpr → Except String (List String)
   | Expr an e => do
     let hd := annotTokens an
     match e with
-    | Epure pe => do checkClean [pe]; pure (hd ++ ["pure"])
+    | Epure pe => do pure (hd ++ ["pure"] ++ (← pexprSkeleton pe))
     | Ememop _ pes => do checkClean pes; pure (hd ++ ["memop"])
     | Eaction (Paction pol (Action _ _ act)) => do
-      checkClean (actionPexprs act)
       let neg := match pol with | polarity.Pos => [] | polarity.Neg0 => ["neg"]
-      pure (hd ++ neg ++ [actionKeyword act])
+      pure (hd ++ neg ++ [actionKeyword act] ++ (← actionSkeleton act))
     | Ecase pe alts => do
       checkClean [pe]
       let bodies ← alts.mapM fun x => skeleton x.2
@@ -167,7 +309,7 @@ partial def skeleton : CoreExpr → Except String (List String)
     | Esave _ inits body => do
       checkClean (inits.map fun x => x.2.2)
       pure (hd ++ ["save"] ++ (← skeleton body))
-    | Erun _ _ pes => do checkClean pes; pure (hd ++ ["run"])
+    | Erun _ _ pes => do pure (hd ++ ["run"] ++ (← pexprsSkeleton pes))
     | Epar es => do
       let ts ← es.mapM skeleton
       pure (hd ++ ["par"] ++ ts.flatten ++ ["endpar"])
@@ -266,12 +408,94 @@ partial def takeMarker (cs : List Char) (acc : String := "") : Except String (St
   | c :: rest =>
     if startsWith cs "#-}" then pure (acc, cs.drop 3) else takeMarker rest (acc.push c)
 
-/-- Action/leaf keywords: `kw(…)`, the parenthesised contents opaque. -/
-def leafKeywords : List String :=
-  ["pure", "memop", "pcall", "ccall", "wait", "create", "create_readonly", "alloc", "kill",
-   "free", "store", "store_lock", "load", "seq_rmw", "seq_rmw_with_forward", "rmw", "fence",
-   "compare_exchange_strong", "compare_exchange_weak", "linux_fence", "linux_load",
-   "linux_store", "linux_rmw"]
+/-- Skip a number literal (digits; the printer prints integers in decimal). -/
+partial def skipNumber : List Char → List Char
+  | c :: rest => if c.isDigit then skipNumber rest else c :: rest
+  | [] => []
+
+/-- Skip a printed type after a binder's `:` — at depth 0 up to (not
+    consuming) `,`, `)` or `=>`; parentheses nest (`(loaded integer,loaded
+    integer)`). -/
+partial def skipType (cs : List Char) (depth : Nat := 0) : Except String (List Char) :=
+  match cs with
+  | [] => throw "unterminated type annotation in a pure expression"
+  | c :: rest =>
+    if Bool.and (depth == 0) (Bool.or (Bool.or (c == ',') (c == ')')) (startsWith cs "=>")) then pure cs
+    else if c == '(' then skipType rest (depth + 1)
+    else if c == ')' then skipType rest (depth - 1)
+    else skipType rest depth
+
+/-- The characters of the printer's infix binops (`pp_binop`: `+ - * / rem_t
+    rem_f ^ = > < >= <= /\\ \\/`). -/
+def isOpChar (c : Char) : Bool :=
+  ['+', '-', '*', '/', '\\', '^', '=', '<', '>', '!', '%'].contains c
+
+partial def skipOps : List Char → List Char
+  | c :: rest => if isOpChar c then skipOps rest else c :: rest
+  | [] => []
+
+/-- E2: THE PURE-EXPRESSION TOKENIZER over the text inside an opened `(`
+    (`pure(`, an action's or a `run`'s argument list; depth 1 at entry,
+    `depth` counts the OPEN parentheses inside the region): returns the
+    tokens and the rest after the region's closing `)`. An identifier
+    followed by `(` is a constructor/keyword/call name (its own token, the
+    arguments inline); a bare `(` is a `tuple`; an identifier followed by
+    `:` is a typed binder (`leaf`, its type skipped); any other identifier,
+    a number, a quoted ctype is a `leaf`; `case`/`|`/`=>`/`end` give
+    `case`/`alt`/(nothing)/`endcase`; `if`/`then`/`else` are themselves;
+    an operator run is `op`; `undef(…)`'s angle-bracketed payload is
+    opaque; `,` and `of` are separators. A marker or a list literal is an
+    ERROR. -/
+partial def pexScan (cs : List Char) (depth : Nat) (toks : Array String) :
+    Except String (Array String × List Char) :=
+  match cs with
+  | [] => throw "unterminated pure-expression region"
+  | c :: rest =>
+    if startsWith cs "{-#" then
+      throw "an annotation marker inside a pure expression — the skeleton compares none there"
+    else if Bool.or c.isWhitespace (c == ',') then pexScan rest depth toks
+    else if c == ')' then
+      if depth == 1 then pure (toks, rest) else pexScan rest (depth - 1) toks
+    else if c == '(' then pexScan rest (depth + 1) (toks.push "tuple")
+    else if c == '[' then throw "a list literal in a pure expression: outside the vocabulary"
+    else if isQuote c then do pexScan (← skipQuoted c rest) depth (toks.push "leaf")
+    else if c.isDigit then pexScan (skipNumber rest) depth (toks.push "leaf")
+    else if Bool.and (c == '-') (match rest with | d :: _ => d.isDigit | [] => false) then
+      pexScan (skipNumber rest) depth (toks.push "leaf")
+    else if startsWith cs "=>" then pexScan (cs.drop 2) depth toks
+    else if c == '|' then pexScan rest depth (toks.push "alt")
+    else if isOpChar c then pexScan (skipOps rest) depth (toks.push "op")
+    else if Bool.or c.isAlpha (c == '_') then
+      let (ident, rest') := takeIdent cs
+      match ident with
+      | "case" => pexScan rest' depth (toks.push "case")
+      | "of" => pexScan rest' depth toks
+      | "end" => pexScan rest' depth (toks.push "endcase")
+      | "if" | "then" | "else" => pexScan rest' depth (toks.push ident)
+      | "undef" => do
+        pexScan (← skipBalanced (← expectParen rest' ident)) depth (toks.push "undef")
+      | _ =>
+        match skipWs rest' with
+        | '(' :: r => pexScan r (depth + 1) (toks.push ident)
+        | ':' :: ':' :: _ => throw "a list cons `::` in a pure expression: outside the vocabulary"
+        | ':' :: r => do pexScan (← skipType r) depth (toks.push "leaf")
+        | _ => pexScan rest' depth (toks.push "leaf")
+    else throw s!"unexpected character `{c}` in a pure expression"
+
+/-- Tokenize the pure-expression region after `kw(` and append. -/
+def pexRegion (cs : List Char) (toks : Array String) : Except String (Array String × List Char) :=
+  pexScan cs 1 toks
+
+/-- The keywords whose parenthesised operands the E2 skeleton READS:
+    `pure` and the actions (`actionSkeleton`). -/
+def pexKeywords : List String :=
+  ["pure", "create", "create_readonly", "alloc", "kill", "free", "store", "store_lock", "load",
+   "seq_rmw", "seq_rmw_with_forward", "rmw", "fence", "compare_exchange_strong",
+   "compare_exchange_weak", "linux_fence", "linux_load", "linux_store", "linux_rmw"]
+
+/-- Leaf keywords whose parenthesised contents stay OPAQUE (the Lean side
+    checks them annotation-free only): `memop`, `pcall`, `ccall`, `wait`. -/
+def leafKeywords : List String := ["memop", "pcall", "ccall", "wait"]
 
 /-- THE TOKENIZER over the body of one procedure (the text after `:=`;
     stops at the next top-level `proc`/`fun`/`glob` or at the end). -/
@@ -334,7 +558,8 @@ partial def scan (cs : List Char) (toks : Array String) (frames : List Frame) :
       | "save" => do scan (← skipUntilKw rest' "in") (toks.push "save") frames
       | "run" => do
         let (_, r) := takeIdent (skipWs rest')
-        scan (← skipBalanced (← expectParen r ident)) (toks.push "run") frames
+        let (toks', r') ← pexRegion (← expectParen r ident) (toks.push "run")
+        scan r' toks' frames
       | "if" => do scan (← skipUntilKw rest' "then") (toks.push "if") frames
       | "case" => do scan (← skipUntilKw rest' "of") (toks.push "case") (.caseF :: frames)
       | "end" =>
@@ -343,7 +568,10 @@ partial def scan (cs : List Char) (toks : Array String) (frames : List Frame) :
         | _ => throw "`end` outside a case"
       | "then" | "else" | "in" | "of" => scan rest' toks frames
       | _ =>
-        if leafKeywords.contains ident then do
+        if pexKeywords.contains ident then do
+          let (toks', r') ← pexRegion (← expectParen rest' ident) (toks.push ident)
+          scan r' toks' frames
+        else if leafKeywords.contains ident then do
           scan (← skipBalanced (← expectParen rest' ident)) (toks.push ident) frames
         else throw s!"unexpected identifier `{ident}` at expression level"
     else throw s!"unexpected character `{c}`"
@@ -392,6 +620,38 @@ partial def dropFirstBound : CoreExpr → CoreExpr × Bool
       if d then (Expr an (Eif pe e2' e3), true)
       else let (e3', d3) := dropFirstBound e3; (Expr an (Eif pe e2 e3'), d3)
     | Elet pat pe b => let (b', d) := dropFirstBound b; (Expr an (Elet pat pe b'), d)
+    | _ => (Expr an e, false)
+
+/-- E2 plant: unwrap the first `pure(Specified(e))` met in preorder into
+    `pure(e)` (the token `Specified` disappears from the skeleton). -/
+partial def unwrapFirstSpecified : CoreExpr → CoreExpr × Bool
+  | Expr an e =>
+    match e with
+    | Epure (Pexpr _ _ (PEctor Cspecified [p])) => (Expr an (Epure p), true)
+    | Esseq pat e1 e2 =>
+      let (e1', d) := unwrapFirstSpecified e1
+      if d then (Expr an (Esseq pat e1' e2), true)
+      else let (e2', d2) := unwrapFirstSpecified e2; (Expr an (Esseq pat e1 e2'), d2)
+    | Ewseq pat e1 e2 =>
+      let (e1', d) := unwrapFirstSpecified e1
+      if d then (Expr an (Ewseq pat e1' e2), true)
+      else let (e2', d2) := unwrapFirstSpecified e2; (Expr an (Ewseq pat e1 e2'), d2)
+    | Eunseq es =>
+      let rec go : List CoreExpr → List CoreExpr × Bool
+        | [] => ([], false)
+        | x :: xs =>
+          let (x', d) := unwrapFirstSpecified x
+          if d then (x' :: xs, true) else let (xs', d') := go xs; (x :: xs', d')
+      let (es', d) := go es
+      (Expr an (Eunseq es'), d)
+    | Ebound b => let (b', d) := unwrapFirstSpecified b; (Expr an (Ebound b'), d)
+    | Eannot ds b => let (b', d) := unwrapFirstSpecified b; (Expr an (Eannot ds b'), d)
+    | Esave sb inits b => let (b', d) := unwrapFirstSpecified b; (Expr an (Esave sb inits b'), d)
+    | Eif pe e2 e3 =>
+      let (e2', d) := unwrapFirstSpecified e2
+      if d then (Expr an (Eif pe e2' e3), true)
+      else let (e3', d3) := unwrapFirstSpecified e3; (Expr an (Eif pe e2 e3'), d3)
+    | Elet pat pe b => let (b', d) := unwrapFirstSpecified b; (Expr an (Elet pat pe b'), d)
     | _ => (Expr an e, false)
 
 /-- Strip every `Astd` annotation from every expression node. -/
@@ -471,37 +731,55 @@ def createInt (loc : CerbLocation.Loc) (x : sym) : CoreExpr :=
   act loc (Create (Pexpr [] () (PEctor Civalignof [intCty])) intCty (PrefSource loc [x]))
 def killInt (x : sym) : CoreExpr := act (t1Reg 0 54) (Kill (Static0 intTy) (psym x))
 
+/-- t1's `let weak a_515: pointer = pure(x) in load('signed int', a_515)`
+    (the loaded read of `x`, t1.annot.core:22–27) — E2-admitted:
+    `Frag.wseq_sym` over `Frag.pure_op` and `Frag.load_op`. -/
+def t1LoadX : CoreExpr :=
+  letW [Aloc (t1Reg 36 37), Aexpr] a515 ptrTy
+    (Expr [Aloc (t1Reg 36 37), Aexpr] (Epure (psym xSym)))
+    (act (t1Reg 36 37) (Load0 intCty (psym a515) NA))
+
+/-- t1's `let weak a_516: pointer = pure(y) in load('signed int', a_516)`
+    (t1.annot.core:47–51). -/
+def t1LoadY : CoreExpr :=
+  letW [Aloc (t1Reg 50 51), Aexpr] a516 ptrTy
+    (Expr [Aloc (t1Reg 50 51), Aexpr] (Epure (psym ySym)))
+    (act (t1Reg 50 51) (Load0 intCty (psym a516) NA))
+
+/-- t1's `{-# §6.5#2 #-} bound({loc} pure(Specified(3)))` (t1.annot.core:6–10). -/
+def t1Spec3 : CoreExpr := bnd (Expr [Aloc (t1Reg 25 26), Aexpr] (Epure (specInt 3)))
+
+/-- t1's `{loc} pure(Specified(1))` — the `unseq`'s second arm (t1.annot.core:28–30). -/
+def t1Spec1 : CoreExpr := Expr [Aloc (t1Reg 40 41), Aexpr] (Epure (specInt 1))
+
+/-- t1's `pure(case (a_510, a_511) of …)` (t1.annot.core:32–39) — NOT
+    E2-admitted: the first branch is a `catch_exceptional_condition` (E3). -/
+def t1CasePe : generic_pexpr Unit sym :=
+  Pexpr [] () (PEcase
+    (Pexpr [] () (PEctor Ctuple [psym a510, psym a511]))
+    [(Pattern [] (CaseCtor Ctuple
+        [Pattern [] (CaseCtor Cspecified [Pattern [] (CaseBase (some a512, BTy_object OTy_integer))]),
+         Pattern [] (CaseCtor Cspecified [Pattern [] (CaseBase (some a513, BTy_object OTy_integer))])]),
+      Pexpr [] () (PEctor Cspecified
+        [Pexpr [] () (PEcatch_exceptional_condition (.Signed .Int_) IOpAdd
+          (convInt a512) (convInt a513))])),
+     (Pattern [] (CaseBase (none, BTy_tuple [lint, lint])),
+      Pexpr [] () (PEundef (t1Reg 36 41) UB036_exceptional_condition))])
+
 /-- `main`'s body. -/
 def t1Main : CoreExpr :=
   letS [Aloc (t1Reg 15 54), Astmt] xSym ptrTy (createInt (t1Reg 15 54) xSym)
   (letS [Astmt] ySym ptrTy (createInt (t1Reg 15 54) ySym)
-  (letS [Aloc (t1Reg 17 27), Astmt] a508 lint
-    (bnd (Expr [Aloc (t1Reg 25 26), Aexpr] (Epure (specInt 3))))
+  (letS [Aloc (t1Reg 17 27), Astmt] a508 lint t1Spec3
   (seqE (act (t1Reg 17 27) (Store0 false intCty (psym xSym) (convLoadedInt a508) NA))
   (letS [Aloc (t1Reg 28 42), Astmt] a509 lint
     (bnd (Expr [Astd "§6.5.6", Aloc (t1RegP 36 41 38), Aexpr]
       (Ewseq (Pattern [] (CaseCtor Ctuple
           [Pattern [] (CaseBase (some a510, lint)), Pattern [] (CaseBase (some a511, lint))]))
-        (Expr [] (Eunseq
-          [letW [Aloc (t1Reg 36 37), Aexpr] a515 ptrTy
-            (Expr [Aloc (t1Reg 36 37), Aexpr] (Epure (psym xSym)))
-            (act (t1Reg 36 37) (Load0 intCty (psym a515) NA)),
-           Expr [Aloc (t1Reg 40 41), Aexpr] (Epure (specInt 1))]))
-        (Expr [] (Epure (Pexpr [] () (PEcase
-          (Pexpr [] () (PEctor Ctuple [psym a510, psym a511]))
-          [(Pattern [] (CaseCtor Ctuple
-              [Pattern [] (CaseCtor Cspecified [Pattern [] (CaseBase (some a512, BTy_object OTy_integer))]),
-               Pattern [] (CaseCtor Cspecified [Pattern [] (CaseBase (some a513, BTy_object OTy_integer))])]),
-            Pexpr [] () (PEctor Cspecified
-              [Pexpr [] () (PEcatch_exceptional_condition (.Signed .Int_) IOpAdd
-                (convInt a512) (convInt a513))])),
-           (Pattern [] (CaseBase (none, BTy_tuple [lint, lint])),
-            Pexpr [] () (PEundef (t1Reg 36 41) UB036_exceptional_condition))])))))))
+        (Expr [] (Eunseq [t1LoadX, t1Spec1]))
+        (Expr [] (Epure t1CasePe)))))
   (seqE (act (t1Reg 28 42) (Store0 false intCty (psym ySym) (convLoadedInt a509) NA))
-  (letS [Aloc (t1Reg 43 52), Astmt] a517 lint
-    (bnd (letW [Aloc (t1Reg 50 51), Aexpr] a516 ptrTy
-      (Expr [Aloc (t1Reg 50 51), Aexpr] (Epure (psym ySym)))
-      (act (t1Reg 50 51) (Load0 intCty (psym a516) NA))))
+  (letS [Aloc (t1Reg 43 52), Astmt] a517 lint (bnd t1LoadY)
   (seqE (killInt xSym)
   (seqE (killInt ySym)
   (seqE (Expr [] (Erun empty_annotation retSym [convLoadedInt a517]))
@@ -511,6 +789,43 @@ def t1Main : CoreExpr :=
   (Expr [Aloc (t1RegR 0 54 4 8), Astmt]
     (Esave (retSym, lint) [(a518, ((lint, none), specInt 0))]
       (Expr [] (Epure (psym a518)))))))))))))))))
+
+/-! ## E2: membership witnesses for t1's sub-terms -/
+
+/-- The evaluator-fuel bound at an authored operand (its depth is tiny). -/
+theorem depLe {pe : generic_pexpr Unit sym} (h : peDepth pe ≤ 9) :
+    peDepth pe ≤ lemDefaultFuel := by
+  rw [show lemDefaultFuel = 999999 + 1 from rfl]; omega
+
+theorem specInt_pePure (n : Int) : PePure (specInt n) :=
+  PePure.ctor _ _ rfl fun pe h => by
+    rcases List.mem_singleton.mp h with rfl; exact PePure.val _ _
+
+theorem t1LoadX_frag : Frag t1LoadX :=
+  Frag.wseq_sym (Frag.pure_op rfl (PePure.sym _ _) (depLe (by decide)))
+    (Frag.load_op rfl (PePure.sym _ _) (depLe (by decide)))
+
+theorem t1LoadY_frag : Frag t1LoadY :=
+  Frag.wseq_sym (Frag.pure_op rfl (PePure.sym _ _) (depLe (by decide)))
+    (Frag.load_op rfl (PePure.sym _ _) (depLe (by decide)))
+
+theorem t1Spec3_frag : Frag t1Spec3 :=
+  Frag.bound (Frag.pure_op rfl (specInt_pePure 3) (depLe (by decide)))
+
+theorem t1Spec1_frag : Frag t1Spec1 :=
+  Frag.pure_op rfl (specInt_pePure 1) (depLe (by decide))
+
+theorem t1KillX_frag : Frag (killInt xSym) :=
+  Frag.kill_op rfl (PePure.sym _ _) (depLe (by decide))
+
+/-- `conv_loaded_int('signed int', a_508)` is a `PEcall`: OUTSIDE the covered
+    operand grammar (NO-RULE, pending E3) — decided by the kernel. -/
+theorem t1_convLoadedInt_uncovered : isPePure (convLoadedInt a508) = false := by decide
+
+/-- t1's `case` is outside the covered grammar: its first branch is a
+    `catch_exceptional_condition` (E3). The wildcard `undef` arm alone
+    would be covered (`PePure.undef`). -/
+theorem t1_case_uncovered : isPePure t1CasePe = false := by decide
 
 /-! ## The table -/
 

@@ -6279,9 +6279,12 @@ pure-evaluator bridge above), so every constructor that evaluates a
 pure operand carries `peDepth pe ≤ lemDefaultFuel` per operand (`if_`,
 `run`, `save`, `load_op`, `memop_op`, `store_op`, `create_op`), and
 EVERY such constructor restricts its operands to the covered sub-grammar
-`PePure` (values, symbols, the eight mirrored binops, array shifts, and
+`PePure` (values, symbols, the eight mirrored binops, array shifts,
 — E1 — the constructor constants `Ivalignof(ty)`/`Ivsizeof(ty)` at a
-literal ctype) — the mirror evaluator's exact domain (fragment closure,
+literal ctype, and — E2 — `Unspecified(ty)`, the mirrored constructors
+`Specified(e)` and the tuple at covered operands, `case` at a covered
+scrutinee and covered branch bodies, `not`, the pure `if`, and
+`undef(UB)`) — the mirror evaluator's exact domain (fragment closure,
 2026-09-02: before it, `if_`/`run`/`save` took any operand and `PePure`
 admitted every binop). Both are `rfl` for authored programs
 (`peDepth_sym_le`, `peDepth_val_le`, `PePure.of_isPePure rfl`). Where
@@ -6305,6 +6308,25 @@ is a library location — and the mirror mirrors that write as
 successor) and get_ctx are annotation-inert. The pre-E1 fragment was
 annotation-free (`Expr []` everywhere) because `currentLoc` lived in the
 immutable `MachineCtx`; that forcing fact is gone.
+
+THE LOADED-VALUE CURRENCY (E2, docs/2026-09-05_e2-notes.md): the
+elaborator's Core carries C values as LOADED values — `Specified(v)` /
+`Unspecified(ty)` (`Vloaded`) built by the pure constructors `Cspecified`
+/`Cunspecified` and taken apart by `case` at tuple/`Specified` patterns
+with a wildcard `undef(<<UB…>>)` arm. E2 admits that currency in
+`PePure` (above), the PURE round at any covered non-value operand
+(`Frag.pure_op`, replacing the E1 `pure_sym`: `Step.pure_eval` through
+the certified evaluator, the KILL faces through the classifier — the
+`undef(UB)` arm is `ShippedRefusal.killed (Undef0 …)`, never a default),
+the flat TUPLE binders `let strong (a, b, …)`/`let weak (a, b, …)`
+(`Frag.sseq_tuple`/`Frag.wseq_tuple`; the engine's `update_env` zips
+leaves against components, a non-tuple head is its `failwithI` PANIC,
+classified in `complete_beta_tuple`/`complete_wbeta_tuple`) and the
+weak plain-symbol binder `let weak x = … in …` (`Frag.wseq_sym`). The
+store of `Unspecified(ty)` needs no new rule: `wps_store`/`wpt_store` at
+`cv = Vloaded (LVunspecified ty)` write the engine's own byte image of
+`MVunspecified ty` (EmittedBExhibit.lean, `unspec_storable`).
+`conv_loaded_int` is a `PEcall`, outside `PePure` (NO-RULE, pending E3).
 
 THE PLAIN-SYMBOL BINDER (E1): `Frag.sseq_sym` admits ANY fragment head.
 The pre-E1 `BareHead` restriction excluded the LETS-ANNOT beta (the

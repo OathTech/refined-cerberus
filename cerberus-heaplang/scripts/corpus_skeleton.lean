@@ -4,8 +4,8 @@ dialect arc (E1; [USER 2026-09-04] E0 question 3). For every row of
 `CerberusHeapLang.CorpusE0.corpusTable` the annotation/bound skeleton of
 the hand-transcribed term must equal the token stream tokenized off the
 oracle's emitted text `docs/corpus-e0/<file>` (repository root); and the
-two PLANTS of every row (first `bound` dropped; every `Astd` stripped)
-must NOT match — a plant that matches means the instrument is vacuous and
+three PLANTS of every row (first `bound` dropped; every `Astd` stripped;
+E2: the first `pure(Specified(…))` unwrapped) must NOT match — a plant that matches means the instrument is vacuous and
 fails the run. Scope and blind spots: the module's header
 (CerberusHeapLang/Examples/CorpusE0.lean).
 
@@ -88,7 +88,7 @@ def coverageSweep (quiet : Bool) (rows : List Row) (pending : List (String × St
 
 def main : IO Unit := do
   let mut fail := false
-  IO.println "# Corpus skeleton check (E1)"
+  IO.println "# Corpus skeleton check (E1 skeleton; E2 pure expressions)"
   IO.println ""
   -- the coverage sweep, and its plant: the ledger with t1's row removed
   -- (and not made pending) MUST fail
@@ -107,8 +107,8 @@ def main : IO Unit := do
   else
     IO.println "coverage sweep: every corpus file rowed or pending; plant (t1 row dropped) fails (expected)"
   IO.println ""
-  IO.println "| file | proc | tokens | term = text | plant: bound dropped | plant: Astd stripped |"
-  IO.println "|---|---|---|---|---|---|"
+  IO.println "| file | proc | tokens | term = text | plant: bound dropped | plant: Astd stripped | plant: Specified unwrapped |"
+  IO.println "|---|---|---|---|---|---|---|"
   for row in corpusTable do
     match ← rowStreams row with
     | none => fail := true
@@ -137,7 +137,18 @@ def main : IO Unit := do
       if badStd then
         IO.eprintln s!"FAIL: {row.file}: plant `Astd stripped` STILL MATCHES — vacuous instrument"
         fail := true
-      IO.println s!"| {row.file} | {row.proc} | {termToks.length} | {if eqMain then "equal" else "DIFFER"} | {plantBound} | {plantStd} |"
+      let (plantedSp, foundSp) := unwrapFirstSpecified row.term
+      let mut plantSp := "no Specified to unwrap"
+      if !foundSp then
+        IO.eprintln s!"FAIL: {row.file}: plant `Specified unwrapped` — the term has no pure(Specified(…))"
+        fail := true
+      else
+        let (msg, bad) := plantVerdict textToks plantedSp
+        plantSp := msg
+        if bad then
+          IO.eprintln s!"FAIL: {row.file}: plant `Specified unwrapped` STILL MATCHES — vacuous instrument"
+          fail := true
+      IO.println s!"| {row.file} | {row.proc} | {termToks.length} | {if eqMain then "equal" else "DIFFER"} | {plantBound} | {plantStd} | {plantSp} |"
   IO.println ""
   if fail then
     IO.println "corpus-skeleton: FAIL"

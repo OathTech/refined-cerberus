@@ -24,11 +24,15 @@ actions and the `Kill` action (kill/free arc K2; any `kill_kind` in
 both `Step` and `Frag` — K3 lifted the fragment's static-only
 restriction) at evaluated operands and at the operands the engine
 evaluates first (the ACTION_EVAL step); the `PtrEq` memop; strong
-sequencing `Esseq` at the wildcard, `Specified`-binder and
-plain-symbol-binder patterns; weak sequencing `Ewseq` at the
-wildcard; `Esave`, `Eif`, value-scrutinee `Ecase`, the
-context-discarding `Erun`; `PEsym`-shaped pure exits; and the
-run-time `Eannot` residue those produce; and (calls arc C2) THE
+sequencing `Esseq` at the wildcard, `Specified`-binder,
+plain-symbol-binder and (E2) flat-tuple-binder patterns; weak
+sequencing `Ewseq` at the wildcard and (E2) at the plain-symbol and
+flat-tuple binders; `Esave`, `Eif`, `Ecase` at a value scrutinee and
+(E2) at a covered non-value scrutinee (`case_eval`), the
+context-discarding `Erun`; the PURE round at any covered non-value
+operand (`pure_eval`; E2 — the E1 mirror took `PEsym` only); `bound`
+and located nodes (E1); and the run-time `Eannot` residue those
+produce; and (calls arc C2) THE
 PROCEDURE CALL `Eproc () (Sym f) pes` at `PePure` arguments and THE
 RETURN — a value at a non-empty call stack — as mirror steps, certified
 and classified, with NO logic rule yet (C3). Every rule uses the
@@ -41,24 +45,29 @@ fragment and a sub-relation elsewhere — a deliberate divergence
 (README, "Registered divergences and limitations").
 
 THE CONFIGURATION (calls arc C1, 2026-09-03 — the configuration
-GROWS). The live state is the quadruple `Config := CoreExpr × EnvStack
-× Ctl × Mem`: the arena, the environment stack, the thread's LIVE
-CONTROL `Ctl` (the call stack `κ`, the current procedure `proc`, the
-execution location `execLoc` — the three `thread_state` fields a
-procedure call and a return WRITE, step_ctx's PCALL/RETURN arms,
-Core_reduction.lean:484) and the memory. Everything else the engine's
+GROWS; dialect arc E1, 2026-09-04 — it grows again). The live state is
+the quadruple `Config := CoreExpr × EnvStack × Ctl × Mem`: the arena,
+the environment stack, the thread's LIVE CONTROL `Ctl` (the call stack
+`κ`, the current procedure `proc`, the execution location `execLoc` —
+the three `thread_state` fields a procedure call and a return WRITE,
+step_ctx's PCALL/RETURN arms, Core_reduction.lean:484 — and, since E1,
+the current location `curLoc`, which the general arm of `step_ctx`
+rewrites from the redex node's first non-library `Aloc`, and the run
+state's two supplies `sup : RunSup`, which no rule writes yet and E5's
+negative actions will) and the memory. Everything else the engine's
 configuration holds and the fragment leaves immutable — `step_ctx`'s
 parameters (tag definitions, file, extern map, thread id, parent), the
-thread's `errno`/`current_loc`, and the run state the discharge
-protocol threads (read-only under the fragment: `Erun` reads `labeled`
-through it; the PCALL round's argument map and `runEU` are
-state-verbatim too) — is the explicit index `MachineCtx`; `M.thread e
-ρ ctl` is the engine `thread_state` the configuration denotes. EXACTLY
-TWO RULES WRITE THE CONTROL (calls arc C2): `Step.call` pushes the frame
-`(ctl.proc, ctx)` — the caller's procedure and the CAPTURED evaluation
-context of the call redex — sets the callee as the current procedure
-and pushes the execution location; `Step.ret` pops the frame back.
-Every other constructor threads `ctl` unchanged (`Step.ctl_cases`,
+thread's `errno`, and the run state's `labeled` map the discharge
+protocol threads (read-only under the fragment: `Erun` reads it; the
+PCALL round's argument map and `runEU` are state-verbatim too) — is the
+explicit index `MachineCtx`; `M.thread e ρ ctl` is the engine
+`thread_state` the configuration denotes. EXACTLY TWO RULES WRITE THE
+CALL-STACK PART OF THE CONTROL (calls arc C2): `Step.call` pushes the
+frame `(ctl.proc, ctx)` — the caller's procedure and the CAPTURED
+evaluation context of the call redex — sets the callee as the current
+procedure and pushes the execution location; `Step.ret` pops the frame
+back. Every other constructor threads `κ`/`proc`/`execLoc` unchanged
+and writes the location (`ctl.upd a`, E1; `Step.ctl_cases`,
 `Step.ctl_eq` under its two guards); the entry
 controls are `spikeCtl` (empty stack, no procedure) and `procCtl p`
 (empty stack, in procedure `p`). `spikeCtx` (the straight-line
