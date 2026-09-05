@@ -142,7 +142,10 @@ THE MILESTONE: t1's `main` transcribed verbatim is in `Frag`
 (`CorpusE0.t1Main_frag`) and certified end to end over the shipped driver
 (`t1_certified_production`, CorpusT1Exhibit.lean). 1 pin REMOVED
 (`CorpusE0.t1_unseq_not_frag` — false since `Frag.unseq`), 62 added (list
-end): 588 → 650. Left UNPINNED with sub-trio cones (measured, e4-notes §8):
+end): 588 → 650; the E4 range audit R-1 (docs/2026-09-05_audit-e4-range.md §3.6)
+measured two more trio-exact theorems unpinned — the MirrorCoverage rounds
+`unseq_focus_round`/`unseq_vals_round` — and they are pinned: 652 (the E4
+split is 64 trio-exact / 91 sub-trio, not 62/93). Left UNPINNED with sub-trio cones (measured, e4-notes §8):
 the `rfl`/`decide`/`simp` facts of Step/Soundness/Potential/EvalClass at the
 new constructors (`valsOnly_*`, `ccallFree*`, `isValE_*`, `is_irreducible_*`,
 `esizeList_*`, `potList_*`, `pot_unseq`, `esize_unseq`, `focus_exists`/
@@ -810,7 +813,10 @@ def trioExports : List Name := [
   ``CerberusHeapLang.t1frB_lookup_a511, ``CerberusHeapLang.t1frB_sf,
   ``CerberusHeapLang.t1frX_lookup_x, ``CerberusHeapLang.t1frX_sf,
   ``CerberusHeapLang.t1frY_lookup_x, ``CerberusHeapLang.t1frY_lookup_y,
-  ``CerberusHeapLang.t1frY_sf, ``CerberusHeapLang.t1sym_eval]
+  ``CerberusHeapLang.t1frY_sf, ``CerberusHeapLang.t1sym_eval,
+  -- E4 range audit R-1 (2026-09-05, docs/2026-09-05_audit-e4-range.md §3.6): the two
+  -- MirrorCoverage `unseq` rounds, measured trio-exact and missed by the E4 pass (650 → 652)
+  ``CerberusHeapLang.unseq_focus_round, ``CerberusHeapLang.unseq_vals_round]
 
 def sortedNames (ns : Array Name) : Array String :=
   (ns.map (·.toString)).qsort (· < ·)

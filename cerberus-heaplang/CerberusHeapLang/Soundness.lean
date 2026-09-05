@@ -8949,7 +8949,7 @@ theorem engine_complete_storeU {an : List _root_.annot} (M : MachineCtx) (aid : 
         σ M.file M.extern M.tid M.parent (M.thread _ ρ ctl) rfl
       rw [step_ctx_singleton_of_root (by
         show (get_ctx (storeRedex an loc ann lk ty pv cv mo)).length = 1
-        unfold storeRedex; exact congrArg List.length (get_ctx_action 999999)) hs]
+        unfold storeRedex; exact congrArg List.length (get_ctx_action (lemDefaultFuel - 1))) hs]
       rfl
     · refine .refused trivial (fun out hstep => ?_) rfl
       obtain ⟨mv', -, -, hmv', -, -⟩ := hstep.store_inv
@@ -8964,7 +8964,7 @@ theorem engine_complete_storeU {an : List _root_.annot} (M : MachineCtx) (aid : 
       obtain ⟨post, hs⟩ := step_ctx_store (Decomp.root (Redex.store)) hsz M.tagDefs hmv σ M.file M.extern M.tid M.parent (M.thread _ ρ ctl) rfl
       rw [step_ctx_singleton_of_root (by
         show (get_ctx (storeRedex an loc ann lk ty pv cv mo)).length = 1
-        unfold storeRedex; exact congrArg List.length (get_ctx_action 999999)) hs]
+        unfold storeRedex; exact congrArg List.length (get_ctx_action (lemDefaultFuel - 1))) hs]
       simp only [List.map_cons, List.map_nil]
       rw [dischargeStep_store_active hmem, MachineCtx.thread_upd_arena]
       rfl
@@ -8982,7 +8982,7 @@ theorem engine_complete_storeU {an : List _root_.annot} (M : MachineCtx) (aid : 
           (M.thread _ ρ ctl) rfl
         rw [step_ctx_singleton_of_root (by
           show (get_ctx (storeRedex an loc ann lk ty pv cv mo)).length = 1
-          unfold storeRedex; exact congrArg List.length (get_ctx_action 999999)) hs]
+          unfold storeRedex; exact congrArg List.length (get_ctx_action (lemDefaultFuel - 1))) hs]
         rfl
       · refine .refused (dischargeStep_store_refusal hmem)
           (fun out hstep => ?_) rfl
@@ -9045,7 +9045,7 @@ theorem engine_complete_caseU {an : List _root_.annot} (M : MachineCtx) (aid : N
       M.tagDefs σ M.file M.extern M.tid M.parent (M.thread _ ρ ctl) rfl
     rw [step_ctx_singleton_of_root (by
         show (get_ctx (caseRedex an (Pexpr b () (PEval cval)) pats)).length = 1
-        unfold caseRedex; exact congrArg List.length (get_ctx_case 999999)) hs,
+        unfold caseRedex; exact congrArg List.length (get_ctx_case (lemDefaultFuel - 1))) hs,
       MachineCtx.thread_upd_arena]
     rfl
   | none =>
@@ -9057,7 +9057,7 @@ theorem engine_complete_caseU {an : List _root_.annot} (M : MachineCtx) (aid : N
         M.tagDefs σ M.file M.extern M.tid M.parent (M.thread _ ρ ctl) rfl
       rw [step_ctx_singleton_of_root (by
         show (get_ctx (caseRedex an (Pexpr b () (PEval cval)) pats)).length = 1
-        unfold caseRedex; exact congrArg List.length (get_ctx_case 999999)) hs]
+        unfold caseRedex; exact congrArg List.length (get_ctx_case (lemDefaultFuel - 1))) hs]
       rfl
     · refine .refused trivial (fun out hstep => ?_) rfl
       obtain ⟨e'', hsel', -⟩ := hstep.case_value_inv (valueFromPexpr_val _ _)

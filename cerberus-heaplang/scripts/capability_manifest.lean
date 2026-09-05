@@ -58,7 +58,11 @@ WHAT THE GENERATOR CHECKS (red = nonzero exit):
    keywords, hypothesis names and other prose tokens, listed in this file;
    a listed word no row uses is red — stale vocabulary). The check is
    PLANTED: a synthetic row naming a deleted theorem in a prose cell must
-   come out red, or the run is red.
+   come out red, or the run is red. RETIRED exports (`retiredNames`: former
+   theorems, deleted) may be named as history only with the marker
+   `(retired …)` directly after the span — unmarked is red, and a retired
+   entry that resolves or that no row names is red (E4 range audit N-4);
+   planted both ways (unmarked red, marked clean).
 
 WHAT GREEN DOES NOT ESTABLISH: that the variant list is exhaustive over the
 engine's success shapes (it is a reviewed reading of the engine, not a
@@ -246,8 +250,8 @@ def variants : List Variant := [
     shape := "`pure(e)` at a `PePure` non-value operand the mirror evaluator EVALUATES — a bound symbol, a mirrored binop/array-shift/ctor at evaluating operands (`Specified(e)`, `(e1, e2)`, `Ivalignof(ty)`, `Unspecified(ty)`), `case … end` selecting a branch that evaluates, `not`/`if` at boolean operands (the PURE round through the certified evaluator)",
     cls := .rule (N "wps_pure") (N "wpt_pure") },
   { ctor := `CerberusHeapLang.Frag.pure_op,
-    shape := "`pure(e)` at a `PePure` operand the engine evaluates but the mirror does NOT: a symbol UNBOUND in the environment but naming a `Proc` of the file (the null function pointer), a mirrored binop at two floats (`OpEq` at two ctypes is MIRRORED since E3), a comparison at symbolic integers (`PEconstrained`), a `case` whose selected branch the depth guard rejects, a std.core call whose body exceeds its static budget `stdBudget`",
-    cls := .outOfScope s!"the mirror evaluator answers `none`; the characterized residual `OpenRound.eval_uncovered` (`evalClass` `.uncovered`, EvalClass.lean); {recE2}; the ctype-equality leaf and the budget arm: {recE3}" },
+    shape := "`pure(e)` at a `PePure` operand the classifier does NOT decide (`evalClass` `.uncovered`) — either a LEAF the engine evaluates but the mirror does not: a symbol UNBOUND in the environment but naming a `Proc` of the file (the null function pointer), a mirrored binop at two floats (`OpEq` at two ctypes is MIRRORED since E3), a comparison at symbolic integers (`PEconstrained`), since E3 a std.core call whose body exceeds its static budget `stdBudget` (the engine unfolds and continues; reached by no transcribed std.core function); or, since E2, a shape the engine REFUSES but the classifier does not certify: a `case` matching no pattern (the engine's opaque `failwithI` PANIC), `undef(<<UB088>>)` (its location is the call-location parameter), a constructor dispatch failure (an engine KILL), a constructor operand list whose first failing operand is an undef followed by another failure (the engine's Exception-first `except_sequence`), a `case` whose selected branch the mirror's depth guard rejects",
+    cls := .outOfScope s!"the mirror evaluator answers `none`; the characterized residual `OpenRound.eval_uncovered` (`evalClass` `.uncovered`, EvalClass.lean's header lists the members); {recE2}; the ctype-equality leaf and the budget arm: {recE3}; the E2 refusal members added to this row at the E4 range audit N-3 (KOI C16, docs/2026-09-05_audit-e4-range.md)" },
   -- E3: the emitted integer arithmetic and the standard-library calls
   { ctor := `CerberusHeapLang.Frag.pure_op,
     shape := "THE EMITTED C `+`: `pure(case (a, b) of | (Specified(a'), Specified(b')) => Specified(catch_exceptional_condition_add('signed int', __conv_int__('signed int', a'), __conv_int__('signed int', b'))) | _ => undef(<<UB036>>) end)` at `a ↦ Specified(n1)`, `b ↦ Specified(n2)` in `int`'s range with an IN-RANGE sum (the engine's `select_case`, `mk_conv_int`, `mk_call_catch_exceptional_condition`; the out-of-range sum is the `.undef` KILL, `evalClass_cAdd_overflow`, exhibited by OverflowExhibit)",
@@ -482,19 +486,23 @@ def claimNames (txt : String) : Array (String × Array String) := Id.run do
 
 /-- E3 range audit D-2: the backticked spans of EVERY cell (the claim cell
     included) of every `| C<digits> |` row, with the cell index. -/
-def claimSpansAll (txt : String) : Array (String × Array (Nat × String)) := Id.run do
-  let mut out : Array (String × Array (Nat × String)) := #[]
+def claimSpansAll (txt : String) : Array (String × Array (Nat × String × Bool)) := Id.run do
+  let mut out : Array (String × Array (Nat × String × Bool)) := #[]
   for line in txt.splitOn "\n" do
     let cells := (line.splitOn "|").map trim
     if cells.length < 3 then continue
     let idCell := cells[1]!
     let id := (idCell.takeWhile Char.isAlphanum).toString
     unless id.startsWith "C" && (id.drop 1).all Char.isDigit && id.length > 1 do continue
-    let mut spans : Array (Nat × String) := #[]
+    let mut spans : Array (Nat × String × Bool) := #[]
     for (cell, k) in cells.zipIdx do
       let pieces := cell.splitOn "`"
       for (p, i) in pieces.zipIdx do
-        if i % 2 == 1 then spans := spans.push (k, p)
+        -- the Bool: the prose directly after the span opens with `(retired` —
+        -- the marker a RETIRED export name must carry (E4 range audit N-4)
+        if i % 2 == 1 then
+          let after := (pieces.getD (i + 1) "").dropWhile Char.isWhitespace
+          spans := spans.push (k, p, after.startsWith "(retired" || after.startsWith "(RETIRED")
     out := out.push (id, spans)
   return out
 
@@ -523,6 +531,15 @@ def claimVocabulary : List String :=
    "mk_conv_int", "native_decide", "panic!", "run", "run_surplus", "stdlib", "store", "unseq",
    "wrapI"]
 
+/-- Former exports RETIRED from the package (deleted; their statements became
+    false or were superseded). A claim row may name one ONLY as history, with
+    the marker `(retired …)` directly after the backticked span — the name
+    check then sees it (E4 range audit N-4, docs/2026-09-05_audit-e4-range.md:
+    C13 named two retired theorems unbackticked, invisible to the check). An
+    entry that resolves in the environment, or that no row names, is red. -/
+def retiredNames : List String :=
+  ["t1_unseq_not_frag", "t1_uncovered_exactly_unseq"]
+
 /-- A declaration-shaped span resolves if it is a constant of the environment
     under `CerberusHeapLang.`, at the root, or under `CerbND.`. -/
 def resolvesAnywhere (env : Environment) (s : String) : Bool :=
@@ -530,12 +547,20 @@ def resolvesAnywhere (env : Environment) (s : String) : Bool :=
 
 /-- The D-2 problems of one claim row: every declaration-shaped span of
     every cell that neither resolves nor is vocabulary. -/
-def claimRowProblems (env : Environment) (id : String) (spans : Array (Nat × String)) :
+def claimRowProblems (env : Environment) (id : String) (spans : Array (Nat × String × Bool)) :
     Array String := Id.run do
   let mut out : Array String := #[]
-  for (k, sp) in spans do
-    if Bool.and (isDeclShaped sp) (Bool.and (!resolvesAnywhere env sp) (!claimVocabulary.contains sp)) then
-      out := out.push s!"docs/CLAIMS.md {id} (cell {k}): `{sp}` is declaration-shaped but is neither a constant of the environment (`CerberusHeapLang.`/root/`CerbND.`) nor a `claimVocabulary` word"
+  for (k, sp, retiredMarked) in spans do
+    unless isDeclShaped sp do continue
+    if resolvesAnywhere env sp then
+      if retiredNames.contains sp then
+        out := out.push s!"docs/CLAIMS.md {id} (cell {k}): `{sp}` is listed in `retiredNames` but IS a constant of the environment — stale retired list"
+    else if claimVocabulary.contains sp then pure ()
+    else if retiredNames.contains sp then
+      unless retiredMarked do
+        out := out.push s!"docs/CLAIMS.md {id} (cell {k}): `{sp}` is a RETIRED export named without the `(retired …)` marker directly after it — spell the retirement or drop the name"
+    else
+      out := out.push s!"docs/CLAIMS.md {id} (cell {k}): `{sp}` is declaration-shaped but is neither a constant of the environment (`CerberusHeapLang.`/root/`CerbND.`), a `claimVocabulary` word, nor a marked `retiredNames` entry"
   return out
 
 /-! ## The report -/
@@ -697,11 +722,13 @@ def classLabel : Class → String
   let allSpans := claimSpansAll claimsTxt
   let mut nAllSpans := 0
   let mut usedVocab : Array String := #[]
+  let mut usedRetired : Array String := #[]
   for (id, spans) in allSpans do
-    for (_, sp) in spans do
+    for (_, sp, _) in spans do
       if isDeclShaped sp then
         nAllSpans := nAllSpans + 1
         if Bool.and (claimVocabulary.contains sp) (!usedVocab.contains sp) then usedVocab := usedVocab.push sp
+        if Bool.and (retiredNames.contains sp) (!usedRetired.contains sp) then usedRetired := usedRetired.push sp
     for pr in claimRowProblems env id spans do
       problems := problems.push pr
       red := red + 1
@@ -709,12 +736,28 @@ def classLabel : Class → String
     unless usedVocab.contains w do
       problems := problems.push s!"docs/CLAIMS.md: `claimVocabulary` word `{w}` is used by no claim row — stale vocabulary (remove it)"
       red := red + 1
+  for w in retiredNames do
+    unless usedRetired.contains w do
+      problems := problems.push s!"docs/CLAIMS.md: `retiredNames` entry `{w}` is named by no claim row — stale retired list (remove it)"
+      red := red + 1
   -- the plant: a row naming a deleted theorem in its PROSE cell must be red
   let plantRow := "| C0 — plant: the E2 exclusion `t1_case_uncovered` (deleted at E3) named as current state | `engine_step_matchU` | semantic | — | — | — | — |"
   let plantSpans := claimSpansAll plantRow
   let plantProblems := plantSpans.foldl (fun acc (id, spans) => acc ++ claimRowProblems env id spans) #[]
   if plantProblems.isEmpty then
     problems := problems.push "docs/CLAIMS.md name check PLANT: a row naming the deleted `t1_case_uncovered` in its prose cell came out clean — the D-2 check is vacuous"
+    red := red + 1
+  -- plant 2 (E4 range audit N-4): a retired export named WITHOUT its marker must be
+  -- red; the same span WITH the marker must be clean (else the marker path is broken)
+  let plantRow2 := "| C0 — plant: E3's witness `t1_unseq_not_frag` named as if current | `engine_step_matchU` | semantic | — | — | — | — |"
+  let plantProblems2 := (claimSpansAll plantRow2).foldl (fun acc (id, spans) => acc ++ claimRowProblems env id spans) #[]
+  if plantProblems2.isEmpty then
+    problems := problems.push "docs/CLAIMS.md name check PLANT 2: a row naming the retired `t1_unseq_not_frag` without the `(retired …)` marker came out clean — the retired-name check is vacuous"
+    red := red + 1
+  let controlRow2 := "| C0 — control: E3's witness `t1_unseq_not_frag` (retired at E4) named as history | `engine_step_matchU` | semantic | — | — | — | — |"
+  let controlProblems2 := (claimSpansAll controlRow2).foldl (fun acc (id, spans) => acc ++ claimRowProblems env id spans) #[]
+  unless controlProblems2.isEmpty do
+    problems := problems.push s!"docs/CLAIMS.md name check CONTROL 2: a row naming the retired `t1_unseq_not_frag` WITH the `(retired …)` marker came out red — the marker path is broken: {controlProblems2}"
     red := red + 1
   -- ---- print
   IO.println "# The rule-use and classification manifest"
@@ -764,7 +807,7 @@ def classLabel : Class → String
   for l in lines do IO.println l
   IO.println ""
   IO.println s!"MANIFEST: {fragInfo.ctors.length} constructors, {variants.length} variant rows ({nRule} RULE, {nRuleU} RULE-TOTAL-UNDEMONSTRATED, {nPartial} PARTIAL-ONLY, {nNoRule} NO-RULE, {nOut} OUT-OF-SCOPE), {red} red, {consumers.size} consumer modules"
-  IO.println s!"CLAIMS: {claims.size} claim rows, {nClaimNames} declaration names checked in the theorem cell, {nAllSpans} declaration-shaped spans checked across every cell ({claimVocabulary.length} vocabulary words); plant (deleted name in a prose cell) red as expected"
+  IO.println s!"CLAIMS: {claims.size} claim rows, {nClaimNames} declaration names checked in the theorem cell, {nAllSpans} declaration-shaped spans checked across every cell ({claimVocabulary.length} vocabulary words, {retiredNames.length} retired names); plants (deleted name in a prose cell; retired name without its marker) red as expected"
   if !problems.isEmpty then
     IO.println ""
     IO.println "## PROBLEMS"

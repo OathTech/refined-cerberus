@@ -2223,7 +2223,7 @@ theorem engine_complete_loadU {an : List _root_.annot} (M : MachineCtx) (aid : N
       M.file M.extern M.tid M.parent (M.thread _ ρ ctl) rfl
     rw [step_ctx_singleton_of_root (by
       show (get_ctx (loadRedex an loc ann ty pv mo)).length = 1
-      unfold loadRedex; exact congrArg List.length (get_ctx_action 999999)) hs]
+      unfold loadRedex; exact congrArg List.length (get_ctx_action (lemDefaultFuel - 1))) hs]
     simp only [List.map_cons, List.map_nil]
     rw [dischargeStep_load_active hmem]
     simp only [MachineCtx.locUpdTh_thread]
@@ -2243,7 +2243,7 @@ theorem engine_complete_loadU {an : List _root_.annot} (M : MachineCtx) (aid : N
         M.file M.extern M.tid M.parent (M.thread _ ρ ctl) rfl
       rw [step_ctx_singleton_of_root (by
         show (get_ctx (loadRedex an loc ann ty pv mo)).length = 1
-        unfold loadRedex; exact congrArg List.length (get_ctx_action 999999)) hs]
+        unfold loadRedex; exact congrArg List.length (get_ctx_action (lemDefaultFuel - 1))) hs]
       rfl
     · refine .refused (dischargeStep_load_refusal hmem) (fun out hstep => ?_) rfl
       obtain ⟨fp', mval', σ'', hmem', -⟩ := hstep.load_inv
@@ -2271,7 +2271,7 @@ theorem engine_complete_createU {an : List _root_.annot} (M : MachineCtx) (aid :
       M.file M.extern M.tid M.parent (M.thread _ ρ ctl) rfl
     rw [step_ctx_singleton_of_root (by
       show (get_ctx (createRedex an loc ann align ty pref)).length = 1
-      unfold createRedex; exact congrArg List.length (get_ctx_action 999999)) hs]
+      unfold createRedex; exact congrArg List.length (get_ctx_action (lemDefaultFuel - 1))) hs]
     simp only [List.map_cons, List.map_nil]
     rw [dischargeStep_create_active (hirr ▸ hmem)]
     simp only [MachineCtx.locUpdTh_thread]
@@ -2291,7 +2291,7 @@ theorem engine_complete_createU {an : List _root_.annot} (M : MachineCtx) (aid :
         M.file M.extern M.tid M.parent (M.thread _ ρ ctl) rfl
       rw [step_ctx_singleton_of_root (by
         show (get_ctx (createRedex an loc ann align ty pref)).length = 1
-        unfold createRedex; exact congrArg List.length (get_ctx_action 999999)) hs]
+        unfold createRedex; exact congrArg List.length (get_ctx_action (lemDefaultFuel - 1))) hs]
       rfl
     · refine .refused (dischargeStep_create_refusal (hirr ▸ hmem)) (fun out hstep => ?_) rfl
       obtain ⟨pv', σ'', hmem', -⟩ := hstep.create_inv

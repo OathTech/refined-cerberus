@@ -550,9 +550,14 @@ theorem t1_blockSpecsT [SpikeGS .hasLC GF]
   rfl
 
 /-- THE WHOLE PROGRAM, total judgment, BUDGET 48: from the two cells' summed
-    allocation budget to the readout `Specified(4)`. The budget is the
-    round count of the run plus the delivered values' costs, rule by rule
-    (the E4 record §4 tabulates it). -/
+    allocation budget to the readout `Specified(4)`. The budget is an UPPER
+    BOUND assembled rule by rule (the E4 record §6 (ii) tabulates it: each
+    rule's constant covers its round and the delivered value's cost), not
+    the exact round count: the shipped inner loop delivers the value after
+    40 rounds and reports PROGRAM-DONE at fuel 42 (measured — the E4 range
+    audit N-1, docs/2026-09-05_audit-e4-range.md §3.4), so the `k + 2` of
+    `wpt_driver_done_alloc` carries 8 units of slack; nothing claims
+    tightness (KOI B6). -/
 theorem t1_wpt [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} (hstd : StdE3 M.file)
     (hex : ∀ x, resolveExtern M.extern x = x) (hQ : M.labelsAt p = t1RetQ)
