@@ -75,6 +75,7 @@ first `bound` of a transcription, every `Astd`, or (E2) the first
 plant that passes fails the script.
 -/
 import CerberusHeapLang.Soundness
+import CerberusHeapLang.StdCore
 import CerberusHeapLang.Examples.Layout
 
 set_option autoImplicit false
@@ -705,7 +706,6 @@ def a515 : sym := sId 515 "a"
 def a516 : sym := sId 516 "a"
 def a517 : sym := sId 517 "a"
 def a518 : sym := sId 518 "a"
-def convLoadedIntSym : sym := sId 0 "conv_loaded_int"
 
 def lint : core_base_type := BTy_loaded OTy_integer
 def ptrTy : core_base_type := BTy_object OTy_pointer
@@ -790,6 +790,34 @@ def t1Main : CoreExpr :=
     (Esave (retSym, lint) [(a518, ((lint, none), specInt 0))]
       (Expr [] (Epure (psym a518)))))))))))))))))
 
+/-- E3: `main`'s body with the `unseq` node — the read of `x` beside
+    `Specified(1)` — as a PARAMETER `u`: the witness shape of acceptance (i)
+    (`t1MainWith_frag`: every other node is in the cone). -/
+def t1MainWith (u : CoreExpr) : CoreExpr :=
+  letS [Aloc (t1Reg 15 54), Astmt] xSym ptrTy (createInt (t1Reg 15 54) xSym)
+  (letS [Astmt] ySym ptrTy (createInt (t1Reg 15 54) ySym)
+  (letS [Aloc (t1Reg 17 27), Astmt] a508 lint t1Spec3
+  (seqE (act (t1Reg 17 27) (Store0 false intCty (psym xSym) (convLoadedInt a508) NA))
+  (letS [Aloc (t1Reg 28 42), Astmt] a509 lint
+    (bnd (Expr [Astd "§6.5.6", Aloc (t1RegP 36 41 38), Aexpr]
+      (Ewseq (Pattern [] (CaseCtor Ctuple
+          [Pattern [] (CaseBase (some a510, lint)), Pattern [] (CaseBase (some a511, lint))]))
+        u
+        (Expr [] (Epure t1CasePe)))))
+  (seqE (act (t1Reg 28 42) (Store0 false intCty (psym ySym) (convLoadedInt a509) NA))
+  (letS [Aloc (t1Reg 43 52), Astmt] a517 lint (bnd t1LoadY)
+  (seqE (killInt xSym)
+  (seqE (killInt ySym)
+  (seqE (Expr [] (Erun empty_annotation retSym [convLoadedInt a517]))
+  (seqE (killInt xSym)
+  (seqE (killInt ySym)
+  (seqE (Expr [] (Epure (Pexpr [] () (PEval Vunit))))
+  (Expr [Aloc (t1RegR 0 54 4 8), Astmt]
+    (Esave (retSym, lint) [(a518, ((lint, none), specInt 0))]
+      (Expr [] (Epure (psym a518)))))))))))))))))
+
+theorem t1Main_eq_with : t1Main = t1MainWith (Expr [] (Eunseq [t1LoadX, t1Spec1])) := rfl
+
 /-! ## E2: membership witnesses for t1's sub-terms -/
 
 /-- The evaluator-fuel bound at an authored operand (its depth is tiny). -/
@@ -827,6 +855,93 @@ theorem t1_convLoadedInt_covered : isPePure (convLoadedInt a508) = true := by de
     `catch_exceptional_condition_add(__conv_int__(…), __conv_int__(…))` is
     admitted since E3. -/
 theorem t1_case_covered : isPePure t1CasePe = true := by decide
+
+/-! ## E3: t1 is in the cone EXCEPT the `unseq` node (acceptance (i)) -/
+
+/-- The evaluator-fuel bound at E3's larger operands (`conv_loaded_int(…)`
+    carries the callee's static inlining budget, `stdBudget`). -/
+theorem depLe40 {pe : generic_pexpr Unit sym} (h : peDepth pe ≤ 40) :
+    peDepth pe ≤ lemDefaultFuel := by
+  rw [show lemDefaultFuel = 999999 + 1 from rfl]; omega
+
+/-- EVERY node of t1's `main` other than the `unseq` is in the cone: with
+    any fragment `u` in the `unseq`'s position, `main` is a `Frag`. The
+    `conv_loaded_int` calls (store operands, `run` argument), the
+    `catch_exceptional_condition_add(__conv_int__ …)` case and the return
+    protocol are E3's admissions; the rest E1/E2's. -/
+theorem t1MainWith_frag (u : CoreExpr) (hu : Frag u) : Frag (t1MainWith u) :=
+  .sseq_sym
+    (.create_op rfl (.ctorTy [] Civalignof rfl [] intTy) (.val [] (Vctype intTy))
+      (depLe (by decide)) (peDepth_val_le _ _))
+    (.sseq_sym
+      (.create_op rfl (.ctorTy [] Civalignof rfl [] intTy) (.val [] (Vctype intTy))
+        (depLe (by decide)) (peDepth_val_le _ _))
+      (.sseq_sym t1Spec3_frag
+        (.sseq
+          (.store_op rfl (.sym [] xSym) (PePure.of_isPePure rfl) (depLe (by decide))
+            (depLe40 (by decide)))
+          (.sseq_sym
+            (.bound (Frag.wseq_tuple (pa := []) (ls := [([], some a510, lint), ([], some a511, lint)])
+              hu (.pure_op rfl (PePure.of_isPePure rfl) (depLe40 (by decide)))))
+            (.sseq
+              (.store_op rfl (.sym [] ySym) (PePure.of_isPePure rfl) (depLe (by decide))
+                (depLe40 (by decide)))
+              (.sseq_sym (.bound t1LoadY_frag)
+                (.sseq t1KillX_frag
+                  (.sseq (.kill_op rfl (.sym [] ySym) (depLe (by decide)))
+                    (.sseq
+                      (.run (fun pe h => by rcases List.mem_singleton.mp h with rfl; exact PePure.of_isPePure rfl)
+                        (fun pe h => by rcases List.mem_singleton.mp h with rfl; exact depLe40 (by decide)))
+                      (.sseq t1KillX_frag
+                        (.sseq (.kill_op rfl (.sym [] ySym) (depLe (by decide)))
+                          (.sseq (.val_pure Vunit)
+                            (.save
+                              (fun pe h => by rcases List.mem_singleton.mp h with rfl; exact PePure.of_isPePure rfl)
+                              (fun pe h => by rcases List.mem_singleton.mp h with rfl; exact depLe (by decide))
+                              (.pure_op rfl (.sym [] a518) (depLe (by decide))))))))))))))))
+
+/-- The `unseq` node itself is NOT in the cone (no `Frag` constructor
+    covers `Eunseq`; E4 owes it). -/
+theorem t1_unseq_not_frag : ¬ Frag (Expr [] (Eunseq [t1LoadX, t1Spec1])) := fun h => nomatch h
+
+/-- THE SYNTACTIC COVERAGE WALK (an instrument, not a theorem about
+    `Frag`): descends the spine constructs the cone admits — `let strong`/
+    `let weak` at symbol, wildcard and flat-tuple binders, `bound`,
+    `annot`, `save` — and lists the node kinds it cannot descend into or
+    admit: `pure`/action/`run` operands outside `isPePure`, `unseq`, `nd`,
+    `par`, `if`/`case`/`let` at expression level, calls, `wait`. -/
+def uncoveredKinds : CoreExpr → List String
+  | Expr _ e =>
+    match e with
+    | Esseq (Pattern _ (CaseBase _)) e1 e2 => uncoveredKinds e1 ++ uncoveredKinds e2
+    | Ewseq (Pattern _ (CaseBase _)) e1 e2 => uncoveredKinds e1 ++ uncoveredKinds e2
+    | Esseq (Pattern _ (CaseCtor Ctuple _)) e1 e2 => uncoveredKinds e1 ++ uncoveredKinds e2
+    | Ewseq (Pattern _ (CaseCtor Ctuple _)) e1 e2 => uncoveredKinds e1 ++ uncoveredKinds e2
+    | Esseq _ _ _ => ["sseq-pattern"]
+    | Ewseq _ _ _ => ["wseq-pattern"]
+    | Ebound b => uncoveredKinds b
+    | Eannot _ b => uncoveredKinds b
+    | Esave _ inits body =>
+      (if (inits.map fun x => x.2.2).all isPePure then [] else ["save-init"]) ++ uncoveredKinds body
+    | Epure pe => if isPePure pe then [] else ["pure-operand"]
+    | Eaction (Paction _ (Action _ _ act)) =>
+      if (actionPexprs act).all isPePure then [] else ["action-operand"]
+    | Erun _ _ pes => if pes.all isPePure then [] else ["run-operand"]
+    | Eunseq _ => ["unseq"]
+    | End _ => ["nd"]
+    | Epar _ => ["par"]
+    | Eif _ _ _ => ["if"]
+    | Ecase _ _ => ["case"]
+    | Elet _ _ _ => ["let"]
+    | Eccall _ _ _ _ => ["ccall"]
+    | Eproc _ _ _ => ["pcall"]
+    | Ememop _ _ => ["memop"]
+    | Ewait _ => ["wait"]
+    | Eexcluded _ _ => ["excluded"]
+
+/-- KERNEL-DECIDED: t1's `main` has EXACTLY ONE uncovered position, the
+    `unseq` (E3 acceptance (i); the walk's verdict, `decide`). -/
+theorem t1_uncovered_exactly_unseq : uncoveredKinds t1Main = ["unseq"] := by decide
 
 /-! ## The table -/
 

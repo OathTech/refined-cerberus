@@ -6,6 +6,8 @@ import CerberusHeapLang.Rules
 import CerberusHeapLang.Wps
 import CerberusHeapLang.Wpt
 import CerberusHeapLang.Soundness
+import CerberusHeapLang.StdCore
+import CerberusHeapLang.IntRules
 import CerberusHeapLang.Round
 import CerberusHeapLang.Potential
 import CerberusHeapLang.Adequacy
@@ -40,4 +42,6 @@ import CerberusHeapLang.TwoLabelExhibit
 import CerberusHeapLang.EvenOddExhibit
 import CerberusHeapLang.EmittedAExhibit
 import CerberusHeapLang.EmittedBExhibit
+import CerberusHeapLang.EmittedCExhibit
+import CerberusHeapLang.OverflowExhibit
 import CerberusHeapLang.Audit

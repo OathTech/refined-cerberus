@@ -6306,4 +6306,40 @@ theorem cerberusRound_classify {M : MachineCtx} (hwf : M.SeqWF) {ctl : Ctl} (hκ
       · exact .refused hv (fun c' hs => hstep ⟨c', hs⟩) hr
       · exact .open_ hv (fun c' hs => hstep ⟨c', hs⟩) ho
 
+/-! ## E3: the killed EVAL-kind round (the negative exhibit's driver round) -/
+
+/-- With-runstate round, EVAL kind, FAILED (E3, the negative exhibit's
+    round): the step's monad returns the failing outcome `fl0` at the
+    thread's run state (`hm`; discharged by `step_ctx_pure_op_fail`), so
+    `advance_step`'s liftCore_run protocol KILLS the driver with
+    `fl0.reason` (`advance_withrs_failed_eval`) and the loop's bind
+    propagates the kill (Driver.lean `drive_nonmemory_steps_aux2`). The
+    final driver state is existential (driver bookkeeping). -/
+theorem loop_step_withrs_eval_killed (fl : Nat) (tds : Fmap sym (CerbLocation.Loc × tag_definition))
+    (acc : Fmap thread_id (List core_step2)) {dst : driver_state} {th : thread_state}
+    {s : String} {m : core_runM thread_state} {fl0 : EvalFail}
+    (hth : dst.core_state0.thread_states = [(0, (none, th))])
+    (hsteps : step_ctx tds dst.layout_state dst.core_file dst.core_extern 0
+      (none, th) = [Step_with_runstate2 (RSK_eval s) m])
+    (hm : m dst.core_run_state0 = fl0.run thread_state core_run_state dst.core_run_state0) :
+    ∃ dst', runOne (drive_nonmemory_steps_aux2_lemFuel (Nat.succ fl) tds acc [0]) dst =
+      (NDkilled fl0.reason, dst') := by
+  obtain ⟨dst', hadv⟩ := advance_withrs_failed_eval tds 0 s m hm
+  refine ⟨dst', ?_⟩
+  conv => lhs; unfold drive_nonmemory_steps_aux2_lemFuel
+  refine (runOne_bind_active (z := [Step_with_runstate2 (RSK_eval s) m])
+    (s' := dst) ?_).trans ?_
+  · rw [runOne_read]
+    refine congrArg (fun x => (NDactive x, dst)) ?_
+    show (let th_info := match lookupBy (fun x y => x == y) 0
+            dst.core_state0.thread_states with
+          | some z => z
+          | none => failwithI _;
+        step_ctx tds dst.layout_state dst.core_file dst.core_extern 0 th_info) = _
+    rw [hth]
+    exact hsteps
+  · dsimp only [find_can_advance, can_advance]
+    rw [if_pos rfl]
+    exact runOne_bind_killed hadv
+
 end CerberusHeapLang
