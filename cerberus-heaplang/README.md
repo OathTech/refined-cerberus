@@ -315,12 +315,18 @@ statements — `exhibitA_prod` (ProdExhibit.lean),
 `dispose_list_certified_production` (DisposeExhibit.lean),
 `region_loop_certified_production` (RegionLoopExhibit.lean),
 `malloc_list_certified_production` (MallocListExhibit.lean) and
-`fib_rec_certified_production` (FibRecExhibit.lean; calls arc C4). Their
+`fib_rec_certified_production` (FibRecExhibit.lean; calls arc C4),
+`even_odd_certified_production` (EvenOddExhibit.lean; H1b) and, since
+E4, `t1_certified_production` (CorpusT1Exhibit.lean: the emitted t1's
+`main` on the library-carrying synthetic file `prodFileLib stdlibE3`,
+"Scope, exactly" above). Their
 execution function is the shipped `CerbND.runND (drive fmapEmpty false
 file args) (initial_driver_state sup file fs).1`, the composite the
 cerberus-lean executable runs, applied to the authored program wrapped
 by `prodFile` (the synthetic one-procedure file) or, for recursive fib,
-`prodFileWith` (`main` plus the declared `fib`); no package-defined
+`prodFileWith` (`main` plus the declared `fib`) or, for t1,
+`prodFileLib stdlibE3` (`main` plus the three-function std.core
+fragment, KOI A7); no package-defined
 driver, discharge or scheduler appears in their statements, and they
 carry no termination hypothesis — only the explicit in-budget bounds
 `hfuel` where the step count depends on an input (recursive fib's is
@@ -339,13 +345,14 @@ the cold-start cursor's headroom; bridge `ml_budget_bridge`); and, since
 2026-09-04 (H1b), `even_odd_certified_production` (EvenOddExhibit.lean:
 MUTUAL RECURSION, `even`/`odd` calling each other on the synthetic
 THREE-procedure file, `hfuel : 3 * n.toNat + 6 ≤ CerbFuel.driverFuel`). These
-nine are THE root-of-trust exports of this package — the closed
+ten are THE root-of-trust exports of this package — the closed
 shipped-driver statements. They are reached through `prod_run_eqJ` or,
-through calls, `prod_run_eqJ_procs` (ProdEntry.lean), which are generic
+through calls, `prod_run_eqJ_procs`, or, on the library-carrying file,
+`prod_run_eqJ_lib1` (ProdEntry.lean), which are generic
 collapse machinery rather than closed statements: their delivery premise
 `DriverDoneAt`, resp. the live-control `DriverDoneCtl` (ProdLoop.lean),
 and their registration tie `LabeledAt`, resp. the whole-file
-`LabeledProcs`, are package-defined, and the nine statements discharge
+`LabeledProcs`, are package-defined, and the ten statements discharge
 them.
 
 **The partial lane, over the same driver.** Every generic
@@ -574,8 +581,8 @@ inside `DriverSafeCtl`).
    (`ShippedRefusal`: ILLTYPED / ILLTYPED-at-distance-one / KILL / FORK /
    PANIC) or the configuration is in the RESIDUAL (`OpenRound`, two
    arms: an operand the classifier `evalClass` does not decide — a LEAF
-   the engine accepts where the mirror evaluator does not evaluate (a
-   procedure-named symbol, a binop at two floats, `OpEq` at two ctypes)
+   the engine accepts where the mirror evaluator does not evaluate
+   (a procedure-named symbol, a mirrored binop at two floats, a symbolic comparison; since E3 a std.core call over its `stdBudget`; `OpEq` at two ctypes is mirrored since E3)
    or, since E2, a shape the engine refuses but the classifier does not
    certify (a `case` matching no pattern, `UB088`, a constructor dispatch
    failure, an undef-then-raise constructor operand list, a branch the

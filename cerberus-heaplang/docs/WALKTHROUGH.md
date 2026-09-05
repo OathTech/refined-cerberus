@@ -224,8 +224,9 @@ theorem list_reverse_certified_production (sup : Nat) (ra : core_run_annotation)
 
 No section variables. `CerbND.runND (_root_.drive …) (initial_driver_state
 sup file fs).1` is exactly the composite the cerberus-lean executable
-runs — this is a ROOT-OF-TRUST export, one of the nine closed
-shipped-driver statements: the genuine driver, no package-defined loop
+runs — this is a ROOT-OF-TRUST export, one of the ten closed
+shipped-driver statements (the README's table; `t1_certified_production`
+is the tenth, §7): the genuine driver, no package-defined loop
 in the statement (the authored program enters wrapped by `prodFile`,
 the synthetic one-procedure file). The theorem quantifies over nothing but the file-system state,
 argv and the entry's symbol supply `sup` (the fragment never reads it):
@@ -335,12 +336,13 @@ closed partial statement is the one about the shipped `drive`, and the
 **The two lanes, both on the shipped driver.** Every exported execution
 theorem reaches the shipped engine; every public logical rule has a
 kernel-checked adequacy path through the package mirror to the engine.
-The nine production statements (`exhibitA_prod`,
+The ten production statements (`exhibitA_prod`,
 `fib_certified_production`, `counter_loop_certified_production`,
 `list_reverse_certified_production`,
 `dispose_list_certified_production`,
 `region_loop_certified_production`,
-`malloc_list_certified_production`, `fib_rec_certified_production`) are
+`malloc_list_certified_production`, `fib_rec_certified_production`,
+`even_odd_certified_production`, `t1_certified_production`) are
 THE ROOT-OF-TRUST exports — the closed shipped-driver statements: the
 genuine Cerberus driver, and nothing package-defined in the statement but
 the authored program, its `prodFile`/`prodFileWith` wrapper, the pure
@@ -360,7 +362,7 @@ closed statements: their delivery premises `DriverDoneAt`/`DriverDoneCtl`
 resp. the driver-safety fact `DriverSafeCtl` and their registration ties
 `LabeledAt`/`LabeledProcs` are package-defined, discharged by each
 client. The partial closed statement `fib_rec_certified` — every `n ≥ 0`,
-no budget bound, at every `drive_lemFuel` fuel — sits beside the nine, as does
+no budget bound, at every `drive_lemFuel` fuel — sits beside the ten, as does
 `even_odd_certified` (EvenOddExhibit.lean, mutual recursion; H1b 2026-09-04).
 The generic partial exports — `MemTriple`, `MemTriple_alloc`,
 `SemTriple`, `project_triple`, `project_triple_pure`,
@@ -1857,9 +1859,9 @@ the `#print axioms` recipe are in the README, "How to build and verify".
   `2026-09-02_fragment-closure-notes.md`,
   `2026-09-05_fragment-closure-e2-notes.md`): an operand the classifier
   does not decide — a LEAF the engine accepts where the mirror evaluator
-  does not evaluate (a procedure-named symbol, a mirrored binop at two
-  floats, a symbolic comparison; since E3 a std.core call over its
-  `stdBudget`; `OpEq` at two ctypes is mirrored since E3) or, since E2, a shape the engine refuses
+  does not evaluate
+  (a procedure-named symbol, a mirrored binop at two floats, a symbolic comparison; since E3 a std.core call over its `stdBudget`; `OpEq` at two ctypes is mirrored since E3)
+  or, since E2, a shape the engine refuses
   but the classifier does not certify (a `case` matching no pattern,
   `UB088`, a constructor dispatch failure, an undef-then-raise
   constructor operand list, a branch the depth guard rejects) — the
