@@ -35862,10 +35862,18 @@ theorem CerberusHeapLang.unspecIntPe_eval :
 def CerberusHeapLang.unspecMval :
 CerbMem.MemValue
 ----
+theorem CerberusHeapLang.unspec_bytes :
+∀ (tds : CerbTags.TagDefsMap),
+  (CerbMem.memValueToBytes tds [] CerberusHeapLang.unspecMval).snd =
+    CerberusHeapLang.intUndefBytes tds
+----
 theorem CerberusHeapLang.unspec_encodes :
 memValueFromValue fmapEmpty (Ctype [] (unatomic_ CerberusHeapLang.intTy))
     (Vloaded (LVunspecified CerberusHeapLang.intTy)) =
   some CerberusHeapLang.unspecMval
+----
+theorem CerberusHeapLang.unspec_paddingByte :
+CerbMem.paddingByte = CerberusHeapLang.undefByte
 ----
 theorem CerberusHeapLang.unspec_storable :
 ∀ (tds : CerbTags.TagDefsMap),
