@@ -288,6 +288,7 @@ theorem ctr_guard_eval (i : Int) (vc : value) :
       (Pexpr [] () (PEsym ctrXSym)) = some (ivVal i) from by
     rw [evalPexpr_sym_empty]
     exact lookup_env_head (ctrFrame_lookup_x hf _ _) rest]
+  rw [evalPexpr_val]
   show evalBinop binop.OpGt (ivVal i) (ivVal 0) = _
   unfold evalBinop ivVal
   show (CerbMem.ltIval (CerbMem.integerIval 0)
@@ -313,6 +314,7 @@ theorem ctr_backedge_args_eval (i : Int) (vc : value) :
         (Pexpr [] () (PEsym ctrXSym)) = some (ivVal i) from by
       rw [evalPexpr_sym_empty]
       exact lookup_env_head (ctrFrame_lookup_x hf _ _) rest]
+    rw [evalPexpr_val]
     rfl]
   rw [evalPexprs_cons]
   rw [show evalPexpr fmapEmpty fmapEmpty (ctrFrame (ivVal i) vc f :: rest)
@@ -424,7 +426,7 @@ theorem ctr_body_wpt (i : Int) (pptr : CerbMem.PointerValue)
       (pv := pptr) (cv := sevenVal)
       (by rw [procCtx_extern]
           exact ctr_store_ptr_eval hf rest (ivVal i) (ptrVal pptr))
-      rfl
+      (evalPexpr_val _ _ _ _ _)
     iapply wpt_store [] loc0 empty_annotation intTy pptr sevenVal mo
       sevenMval bs _ (Nat.le_refl 3) seven_encodes (seven_storable _)
     isplitl [Hpt]
@@ -815,6 +817,7 @@ theorem lrPFrame_shift_n1 (i a : Int) :
       (Pexpr [] () (PEsym lrN1Sym)) = some (ptrVal (cellPtr i a)) from by
     rw [evalPexpr_sym_empty]
     exact lookup_env_head (lrPFrame_lookup_n1 hf _ _) rest]
+  rw [evalPexpr_val]
   show evalArrayShift fmapEmpty longTy (Vobject (OVpointer (cellPtr i a))) (ivVal 1) = _
   exact evalArrayShift_long_one i a
 
@@ -828,6 +831,7 @@ theorem lrPFrame_shift_n2 (i a : Int) :
       (Pexpr [] () (PEsym lrN2Sym)) = some (ptrVal (cellPtr i a)) from by
     rw [evalPexpr_sym_empty]
     exact lookup_env_head (lrPFrame_lookup_n2 hf _ _) rest]
+  rw [evalPexpr_val]
   show evalArrayShift fmapEmpty longTy (Vobject (OVpointer (cellPtr i a))) (ivVal 1) = _
   exact evalArrayShift_long_one i a
 
@@ -1113,7 +1117,7 @@ theorem lrProd_wpt (bty sbty : core_base_type)
     (pv := cellPtr i₁ a₁) (cv := longVal 1)
     (by rw [procCtx_extern, evalPexpr_sym_empty]
         exact lookup_env_head (lrPFrame_lookup_n1 hf _ _) evs)
-    rfl
+    (evalPexpr_val _ _ _ _ _)
   rw [show (storeExpr [] loc0 empty_annotation longTy (cellPtr i₁ a₁)
       (longVal 1) mo : CoreExpr) =
     storeExpr [] loc0 empty_annotation longTy
@@ -1154,7 +1158,7 @@ theorem lrProd_wpt (bty sbty : core_base_type)
     (pv := cellPtr i₂ a₂) (cv := longVal 2)
     (by rw [procCtx_extern, evalPexpr_sym_empty]
         exact lookup_env_head (lrPFrame_lookup_n2 hf _ _) evs)
-    rfl
+    (evalPexpr_val _ _ _ _ _)
   rw [show (storeExpr [] loc0 empty_annotation longTy (cellPtr i₂ a₂)
       (longVal 2) mo : CoreExpr) =
     storeExpr [] loc0 empty_annotation longTy
@@ -1175,7 +1179,7 @@ theorem lrProd_wpt (bty sbty : core_base_type)
     (pv := cellPtr i₂ (a₂ + 8)) (cv := nullVal)
     (by rw [procCtx_extern]
         exact lrPFrame_shift_n2 hf (ptrVal (cellPtr i₁ a₁)) evs i₂ a₂)
-    rfl
+    (evalPexpr_val _ _ _ _ _)
   rw [show (cellPtr i₂ (a₂ + 8)) = cellPtr i₂ (a₂ + ((8 : Nat) : Int))
     from rfl]
   iapply wpt_store_node_field loc0 empty_annotation i₂ a₂ 8

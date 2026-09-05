@@ -390,21 +390,21 @@ theorem frN_eval (n : Int) (ρ : EnvStack) :
 theorem frGuard_eval (n : Int) (ρ : EnvStack) :
     evalPexpr fmapEmpty fmapEmpty (frF0 n :: ρ) frGuard = some (boolValue (decide (n < 2))) := by
   unfold frGuard
-  rw [evalPexpr_op, frN_eval]
+  rw [evalPexpr_op, frN_eval, evalPexpr_val]
   rfl
 
 theorem frDec1_eval (n : Int) (ρ : EnvStack) :
     evalPexprs fmapEmpty fmapEmpty (frF0 n :: ρ) [frDec1] = some [ivVal (n - 1)] := by
   rw [evalPexprs_cons]
   unfold frDec1
-  rw [evalPexpr_op, frN_eval]
+  rw [evalPexpr_op, frN_eval, evalPexpr_val]
   rfl
 
 theorem frDec2_eval (n a : Int) (ρ : EnvStack) :
     evalPexprs fmapEmpty fmapEmpty (frF1 n a :: ρ) [frDec2] = some [ivVal (n - 2)] := by
   rw [evalPexprs_cons]
   unfold frDec2
-  rw [evalPexpr_op, evalPexpr_sym_empty, lookup_env_head (frF1_lookup_n n a) ρ]
+  rw [evalPexpr_op, evalPexpr_sym_empty, lookup_env_head (frF1_lookup_n n a) ρ, evalPexpr_val]
   rfl
 
 theorem frSum_eval (zbty : core_base_type) (n a b : Int) (ρ : EnvStack) :
@@ -613,7 +613,7 @@ theorem frMain_wps (hn : 0 ≤ n) (ρ : EnvStack) :
       (frPost n) (frMain ra n) ρ := by
   unfold frMain callRedex
   iapply wps_call_root [] ra frSym [Pexpr [] () (PEval (ivVal n))] ρ (vs := [ivVal n])
-    (frFile_lookup_fib ra n nbty xbty ybty sbty zbty) rfl rfl
+    (frFile_lookup_fib ra n nbty xbty ybty sbty zbty) rfl (evalPexprs_single_val _ _ _ _ _)
   dsimp only [frSpec]
   isplitl []
   · ipureintro
@@ -761,7 +761,8 @@ theorem frMain_wpt (hn : 0 ≤ n) (ρ : EnvStack) :
   unfold frMain callRedex
   iapply wpt_call_root [] ra frSym [Pexpr [] () (PEval (ivVal n))] ρ (vs := [ivVal n])
     (m := fibRounds n.toNat) (k' := 1)
-    (frFile_lookup_fib ra n nbty xbty ybty sbty zbty) rfl rfl (by omega)
+    (frFile_lookup_fib ra n nbty xbty ybty sbty zbty) rfl (evalPexprs_single_val _ _ _ _ _)
+    (by omega)
   dsimp only [frSpecT]
   isplitl []
   · ipureintro

@@ -68,7 +68,7 @@ theorem store_sym_lit_step {M : MachineCtx} {loc : CerbLocation.Loc}
     Step M (storeOpRedex [] loc ann ty (Pexpr [] () (PEsym x))
         (Pexpr [] () (PEval cv)) mo, ρ, ctl, σ)
       (storeExpr [] loc ann ty pv cv mo, ρ, ctl, σ) :=
-  Step.store_eval rfl hx rfl
+  Step.store_eval rfl hx (evalPexpr_val _ _ _ _ _)
 
 /-- `store(ty, p, y)` — LITERAL pointer, SYMBOL value — steps. -/
 theorem store_lit_sym_step {M : MachineCtx} {loc : CerbLocation.Loc}
@@ -78,7 +78,7 @@ theorem store_lit_sym_step {M : MachineCtx} {loc : CerbLocation.Loc}
     Step M (storeOpRedex [] loc ann ty (Pexpr [] () (PEval (Vobject (OVpointer pv))))
         (Pexpr [] () (PEsym y)) mo, ρ, ctl, σ)
       (storeExpr [] loc ann ty pv cv mo, ρ, ctl, σ) :=
-  Step.store_eval rfl rfl hy
+  Step.store_eval rfl (evalPexpr_val _ _ _ _ _) hy
 
 /-! ## The kill ACTION_EVAL shape (kill/free arc K2): `kill(static ty, x)`
 at a SYMBOL operand — the engine's `none` arm of step_action's Kill case
@@ -111,7 +111,7 @@ theorem alloc_lit_sym_step {M : MachineCtx} {loc : CerbLocation.Loc}
     Step M (allocOpRedex [] loc ann (Pexpr [] () (PEval (Vobject (OVinteger align))))
         (Pexpr [] () (PEsym n)) pref, ρ, ctl, σ)
       (allocRedex [] loc ann align size pref, ρ, ctl, σ) :=
-  Step.alloc_eval rfl rfl hn
+  Step.alloc_eval rfl (evalPexpr_val _ _ _ _ _) hn
 
 /-! ## The procedure call and return (calls arc C2): the two rounds on a
 two-procedure file, at the mirror level
@@ -221,7 +221,7 @@ theorem store_located_step {M : MachineCtx} (l : CerbLocation.Loc) {loc : CerbLo
     Step M (storeOpRedex [Aloc l, Aexpr] loc ann ty (Pexpr [] () (PEsym x))
         (Pexpr [] () (PEval cv)) mo, ρ, ctl, σ)
       (storeExpr [Aloc l, Aexpr] loc ann ty pv cv mo, ρ, ctl.upd [Aloc l, Aexpr], σ) :=
-  Step.store_eval rfl hx rfl
+  Step.store_eval rfl hx (evalPexpr_val _ _ _ _ _)
 
 /-- REMOVE-BOUND at an ANNOTATED value: the shipped driver's round at
     `bound({A}v)` delivers `v` BARE — the dynamic annotations are dropped
@@ -267,7 +267,8 @@ theorem create_alignof_round {M : MachineCtx} (a : List annot) (loc : CerbLocati
         (Pexpr [] () (PEctor Civalignof [Pexpr [] () (PEval (Vctype ty))]))
         (Pexpr [] () (PEval (Vctype ty))) pref) = 1 from rfl,
       show lemDefaultFuel = 999999 + 1 from rfl]; omega)
-    (Step.create_eval rfl (by rw [evalPexpr_tyctor, evalTyCtor_alignof]) rfl)
+    (Step.create_eval rfl (by rw [evalPexpr_tyctor _ _ _ _ _ _ _ rfl, evalTyCtor_alignof])
+      (evalPexpr_val _ _ _ _ _))
 
 /-- LETS-ANNOT AT THE PLAIN-SYMBOL BINDER (core_reduction.lem's second
     LETS beta): the round binds the BARE value and re-wraps the dynamic

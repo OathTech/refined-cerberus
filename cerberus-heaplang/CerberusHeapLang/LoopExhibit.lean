@@ -165,6 +165,7 @@ theorem guard_eval {f : Fmap sym value} (hf : SymFrame f) (i : Int)
   rw [show evalPexpr fmapEmpty fmapEmpty (envAdd xSym (ivVal i) f :: rest)
       (Pexpr [] () (PEsym xSym)) = some (ivVal i) from by
       rw [evalPexpr_sym_empty]; exact lookup_env_x hf (ivVal i) rest]
+  rw [evalPexpr_val]
   show evalBinop binop.OpGt (ivVal i) (ivVal 0) = _
   unfold evalBinop ivVal
   show (CerbMem.ltIval (CerbMem.integerIval 0)
@@ -183,6 +184,7 @@ theorem dec_eval {f : Fmap sym value} (hf : SymFrame f) (i : Int)
     rw [show evalPexpr fmapEmpty fmapEmpty (envAdd xSym (ivVal i) f :: rest)
         (Pexpr [] () (PEsym xSym)) = some (ivVal i) from by
         rw [evalPexpr_sym_empty]; exact lookup_env_x hf (ivVal i) rest]
+    rw [evalPexpr_val]
     rfl]
   rfl
 
@@ -342,7 +344,7 @@ theorem loop_wps (hn : 0 ≤ n) (sbty : core_base_type)
         Pexpr [] () (PEval (ivVal n))))]
       (loopBody loc ann ra mo bty c)) from rfl]
   iapply wps_save [] (loopSym, sbty) _ _ f rest
-    (cvals := [ivVal n]) rfl
+    (cvals := [ivVal n]) (evalPexprs_single_val _ _ _ _ _)
   rw [bindSave_x]
   iapply loop_body_wps loc ann ra mo bty xbty c n bs0 p rs hQ n f rest
     hf hn (by omega)

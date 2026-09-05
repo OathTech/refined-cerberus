@@ -201,6 +201,7 @@ theorem tl_guard1_eval {f : Fmap sym value} (hf : SymFrame f) (i : Int)
   rw [show evalPexpr fmapEmpty fmapEmpty (envAdd tlXSym (ivVal i) f :: rest)
       (Pexpr [] () (PEsym tlXSym)) = some (ivVal i) from by
       rw [evalPexpr_sym_empty]; exact tl_lookup_x hf (ivVal i) rest]
+  rw [evalPexpr_val]
   show evalBinop binop.OpGt (ivVal i) (ivVal 0) = _
   unfold evalBinop ivVal
   show (CerbMem.ltIval (CerbMem.integerIval 0)
@@ -216,6 +217,7 @@ theorem tl_guard2_eval {f : Fmap sym value} (hf : SymFrame f) (j : Int)
   rw [show evalPexpr fmapEmpty fmapEmpty (envAdd tlYSym (ivVal j) f :: rest)
       (Pexpr [] () (PEsym tlYSym)) = some (ivVal j) from by
       rw [evalPexpr_sym_empty]; exact tl_lookup_y hf (ivVal j) rest]
+  rw [evalPexpr_val]
   show evalBinop binop.OpGt (ivVal j) (ivVal 0) = _
   unfold evalBinop ivVal
   show (CerbMem.ltIval (CerbMem.integerIval 0)
@@ -234,6 +236,7 @@ theorem tl_dec1_eval {f : Fmap sym value} (hf : SymFrame f) (i : Int)
     rw [show evalPexpr fmapEmpty fmapEmpty (envAdd tlXSym (ivVal i) f :: rest)
         (Pexpr [] () (PEsym tlXSym)) = some (ivVal i) from by
         rw [evalPexpr_sym_empty]; exact tl_lookup_x hf (ivVal i) rest]
+    rw [evalPexpr_val]
     rfl]
   rfl
 
@@ -249,6 +252,7 @@ theorem tl_dec2_eval {f : Fmap sym value} (hf : SymFrame f) (j : Int)
     rw [show evalPexpr fmapEmpty fmapEmpty (envAdd tlYSym (ivVal j) f :: rest)
         (Pexpr [] () (PEsym tlYSym)) = some (ivVal j) from by
         rw [evalPexpr_sym_empty]; exact tl_lookup_y hf (ivVal j) rest]
+    rw [evalPexpr_val]
     rfl]
   rfl
 
@@ -432,7 +436,7 @@ theorem tl_body1_wps (hn₂ : 0 ≤ n₂) (i : Int) (f : Fmap sym value)
     iapply wps_if_false [] tlGuard1 _ _ _
       (by rw [procCtx_extern, tl_guard1_eval hf 0 rest, decide_eq_false hpos]; rfl)
     iapply wps_save [] (tlL2Sym, sbty₂) (tlParams2 ybty n₂) _ (envAdd tlXSym (ivVal 0) f) rest
-      (cvals := [ivVal n₂]) rfl
+      (cvals := [ivVal n₂]) (evalPexprs_single_val _ _ _ _ _)
     rw [tl_bindSave2]
     icases Hcell with (⟨%hieq, Hc⟩ | ⟨%hlt, Hc⟩)
     · iapply tl_body2_wps loc ann ra mo bty xbty ybty sbty₂ c n₁ n₂ bs0 p rs hQ n₂
@@ -490,7 +494,7 @@ theorem tl_wps (hn₁ : 0 ≤ n₁) (hn₂ : 0 ≤ n₂) (sbty₁ : core_base_ty
   rw [show tlProg loc ann ra mo bty xbty ybty sbty₁ sbty₂ c n₁ n₂ =
     Expr [] (Esave (tlL1Sym, sbty₁) (tlParams1 xbty n₁)
       (tlBody1 loc ann ra mo bty ybty sbty₂ c n₂)) from rfl]
-  iapply wps_save [] (tlL1Sym, sbty₁) _ _ f rest (cvals := [ivVal n₁]) rfl
+  iapply wps_save [] (tlL1Sym, sbty₁) _ _ f rest (cvals := [ivVal n₁]) (evalPexprs_single_val _ _ _ _ _)
   rw [tl_bindSave1]
   iapply tl_body1_wps loc ann ra mo bty xbty ybty sbty₂ c n₁ n₂ bs0 p rs hQ hn₂ n₁ f rest hf
     hn₁ (Int.le_refl n₁)
@@ -668,7 +672,7 @@ theorem tl_body1_wpt (hn₂ : 0 ≤ n₂) (i : Int) (f : Fmap sym value)
     iapply wpt_if_false [] tlGuard1 _ _ _
       (by rw [procCtx_extern, tl_guard1_eval hf 0 rest, decide_eq_false hpos]; rfl)
     iapply wpt_save [] (tlL2Sym, sbty₂) (tlParams2 ybty n₂) _ (envAdd tlXSym (ivVal 0) f) rest
-      (cvals := [ivVal n₂]) rfl
+      (cvals := [ivVal n₂]) (evalPexprs_single_val _ _ _ _ _)
     rw [tl_bindSave2]
     icases Hcell with (⟨%hieq, Hc⟩ | ⟨%hlt, Hc⟩)
     · iapply tl_body2_wpt loc ann ra mo bty xbty ybty sbty₂ c n₁ n₂ bs0 p rs hQ n₂
@@ -729,7 +733,7 @@ theorem tl_wpt (hn₁ : 0 ≤ n₁) (hn₂ : 0 ≤ n₂) (sbty₁ : core_base_ty
     show 5 * n₁.toNat + 5 * n₂.toNat + 5 =
       (5 * n₁.toNat + 5 * n₂.toNat + 4) + saveEntryCost (tlParams1 xbty n₁) by
       rw [show saveEntryCost (tlParams1 xbty n₁) = 1 from rfl]]
-  iapply wpt_save [] (tlL1Sym, sbty₁) _ _ f rest (cvals := [ivVal n₁]) rfl
+  iapply wpt_save [] (tlL1Sym, sbty₁) _ _ f rest (cvals := [ivVal n₁]) (evalPexprs_single_val _ _ _ _ _)
   rw [tl_bindSave1]
   iapply tl_body1_wpt loc ann ra mo bty xbty ybty sbty₂ c n₁ n₂ bs0 p rs hQ hn₂ n₁ f rest hf
     hn₁ (Int.le_refl n₁)

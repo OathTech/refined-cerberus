@@ -258,6 +258,8 @@ theorem Frag.pot_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
         ⟨_, _, _, _, _, _, _, _, _, _, _, hpat, _, _, hout⟩ |
         ⟨_, _, _, _, _, _, _, _, hpat, _, _, hout⟩ |
         ⟨_, _, _, _, _, _, _, _, _, _, hpat, _, _, hout⟩ |
+        ⟨_, _, _, _, _, _, _, hpatT1, _, _, _⟩ |
+        ⟨_, _, _, _, _, _, _, _, _, hpatT2, _, _, _⟩ |
         hcall
     · obtain ⟨h1, -, h3, -⟩ := Config.mk_inj hout
       subst h1 h3
@@ -284,11 +286,17 @@ theorem Frag.pot_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
     · exact (specPat_ne_base hpat).elim
     · exact (symPat_ne_base hpat).elim
     · exact (symPat_ne_base hpat).elim
+    · exact (tuplePat_ne_base hpatT1).elim
+    · exact (tuplePat_ne_base hpatT2).elim
     · exact (hcall.ne_same_κ hκ).elim
   | wseq hf1 hf2 ih1 ih2 =>
     rcases hs.wseq_inv with ⟨e1', ρ'', ctl'', σ'', hnj, hnc', hnv', hstep, hout⟩ |
         ⟨_, _, _, _, v, _, _, _, he1, _, hout⟩ | ⟨_, _, _, _, _, ds', v, _, _, _, he1, _, hout⟩ |
         ⟨l, pes, params, cont, vs, _, _, hj, _, hl, _, hout⟩ |
+        ⟨_, _, _, _, _, _, _, _, hpatS1, _, _, _⟩ |
+        ⟨_, _, _, _, _, _, _, _, _, _, hpatS2, _, _, _⟩ |
+        ⟨_, _, _, _, _, _, _, hpatT1, _, _, _⟩ |
+        ⟨_, _, _, _, _, _, _, _, _, hpatT2, _, _, _⟩ |
         hcall
     · obtain ⟨h1, -, h3, -⟩ := Config.mk_inj hout
       subst h1 h3
@@ -311,6 +319,10 @@ theorem Frag.pot_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
       omega
     · obtain ⟨h1, -, -, -⟩ := Config.mk_inj hout
       exact .inr ⟨l, pes, params, cont, by rw [jumpRedex?_wseq, hj], hl, h1⟩
+    · exact (symPat_ne_base hpatS1).elim
+    · exact (symPat_ne_base hpatS2).elim
+    · exact (tuplePat_ne_base hpatT1).elim
+    · exact (tuplePat_ne_base hpatT2).elim
     · exact (hcall.ne_same_κ hκ).elim
   | annot hfb ihb =>
     rcases hs.annot_inv with ⟨hg, hnj, hnc', hnv', b', ρ'', ctl'', σ'', hstep, hout⟩ |
@@ -409,6 +421,8 @@ theorem Frag.pot_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
         ⟨_, _, _, _, _, _, _, _, _, _, _, hpat, he1, _, hout⟩ |
         ⟨_, _, _, _, _, _, _, _, hpat, _, _, hout⟩ |
         ⟨_, _, _, _, _, _, _, _, _, _, hpat, _, _, hout⟩ |
+        ⟨_, _, _, _, _, _, _, hpatT1, _, _, _⟩ |
+        ⟨_, _, _, _, _, _, _, _, _, hpatT2, _, _, _⟩ |
         hcall
     · obtain ⟨h1, -, h3, -⟩ := Config.mk_inj hout
       subst h1 h3
@@ -435,6 +449,8 @@ theorem Frag.pot_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
       omega
     · exact (symPat_ne_spec hpat).elim
     · exact (symPat_ne_spec hpat).elim
+    · exact (specPat_ne_tuple hpatT1).elim
+    · exact (specPat_ne_tuple hpatT2).elim
     · exact (hcall.ne_same_κ hκ).elim
   | pure_sym =>
     obtain ⟨v, -, -, hout⟩ := hs.pure_inv rfl
@@ -457,6 +473,8 @@ theorem Frag.pot_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
         ⟨_, _, _, _, _, _, _, _, _, _, _, hpat, _, _, hout⟩ |
         ⟨_, _, _, _, _, _, _, _, hpat, he1, _, hout⟩ |
         ⟨_, _, _, _, _, _, _, _, _, _, hpat, he1, _, hout⟩ |
+        ⟨_, _, _, _, _, _, _, hpatT1, _, _, _⟩ |
+        ⟨_, _, _, _, _, _, _, _, _, hpatT2, _, _, _⟩ |
         hcall
     · obtain ⟨h1, -, h3, -⟩ := Config.mk_inj hout
       subst h1 h3
@@ -483,6 +501,8 @@ theorem Frag.pot_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
       left
       simp only [pot_sseq, pot_annot, ofValA, pot_pure_val]
       omega
+    · exact (symPat_ne_tuple hpatT1).elim
+    · exact (symPat_ne_tuple hpatT2).elim
     · exact (hcall.ne_same_κ hκ).elim
   | memop_vals v1 v2 =>
     obtain ⟨pv1, pv2, b, σ'', -, -, -, hout⟩ := hs.memop_vals_inv
@@ -503,8 +523,7 @@ theorem Frag.pot_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
     left
     simp [pot, storeOpRedex]
   | case_value hbr hbsz =>
-    obtain ⟨cval', e'', hv, hsel, hout⟩ := hs.case_inv
-    obtain rfl : _ = cval' := Option.some.inj (valueFromPexpr_val _ _ ▸ hv)
+    obtain ⟨e'', hsel, hout⟩ := hs.case_value_inv (valueFromPexpr_val _ _)
     obtain ⟨h1, -, -, -⟩ := Config.mk_inj hout
     subst h1
     left

@@ -639,6 +639,7 @@ theorem tr_shift1_eval_F1 (id aX : Int) :
       (Pexpr [] () (PEsym trXSym)) = some (ptrVal (cellPtr id aX)) from by
     rw [evalPexpr_sym_empty]
     exact lookup_env_head (trF1_lookup_x _) []]
+  rw [evalPexpr_val]
   show evalArrayShift fmapEmpty longTy (Vobject (OVpointer (cellPtr id aX))) (ivVal 1) = _
   exact evalArrayShift_long_one id aX
 
@@ -651,6 +652,7 @@ theorem tr_shift2_eval_F2 (id aY : Int) (vx : value) :
       (Pexpr [] () (PEsym trYSym)) = some (ptrVal (cellPtr id aY)) from by
     rw [evalPexpr_sym_empty]
     exact lookup_env_head (trF2_lookup_y _ _) []]
+  rw [evalPexpr_val]
   show evalArrayShift fmapEmpty longTy (Vobject (OVpointer (cellPtr id aY))) (ivVal 2) = _
   exact evalArrayShift_long_two id aY
 
@@ -663,6 +665,7 @@ theorem tr_shift1_eval_F3 (vb vy : value) (id aX : Int) :
       (Pexpr [] () (PEsym trXSym)) = some (ptrVal (cellPtr id aX)) from by
     rw [evalPexpr_sym_empty]
     exact lookup_env_head (trF3_lookup_x _ _ _) []]
+  rw [evalPexpr_val]
   show evalArrayShift fmapEmpty longTy (Vobject (OVpointer (cellPtr id aX))) (ivVal 1) = _
   exact evalArrayShift_long_one id aX
 
@@ -675,6 +678,7 @@ theorem tr_shift2_eval_F3 (vb vx : value) (id aY : Int) :
       (Pexpr [] () (PEsym trYSym)) = some (ptrVal (cellPtr id aY)) from by
     rw [evalPexpr_sym_empty]
     exact lookup_env_head (trF3_lookup_y _ _ _) []]
+  rw [evalPexpr_val]
   show evalArrayShift fmapEmpty longTy (Vobject (OVpointer (cellPtr id aY))) (ivVal 2) = _
   exact evalArrayShift_long_two id aY
 

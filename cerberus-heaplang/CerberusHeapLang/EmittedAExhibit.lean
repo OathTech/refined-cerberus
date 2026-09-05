@@ -132,7 +132,7 @@ theorem progAE1_frag : Frag progAE1 :=
 theorem alignofIntPe_eval {tds : CerbTags.TagDefsMap} (ext : Fmap sym sym) (ρ : EnvStack) :
     evalPexpr tds ext ρ alignofIntPe =
       some (Vobject (OVinteger (CerbMem.alignofIval tds intTy))) := by
-  simp only [alignofIntPe, evalPexpr_tyctor, evalTyCtor_alignof]
+  simp only [alignofIntPe, evalPexpr_tyctor, evalTyCtor_alignof, isTyCtor]
 
 theorem alignofIval_intTy {tds : CerbTags.TagDefsMap} :
     CerbMem.alignofIval tds intTy = .IV .Prov_none 4 := rfl
@@ -154,7 +154,7 @@ theorem progAE1_wps [SpikeGS .hasLC GF]
   iapply wps_seq_sym
   iapply wps_create_eval _ _ empty_annotation alignofIntPe intTyPe (PrefOther "spike-x")
     (ev0 :: evs) (align := CerbMem.alignofIval M.tagDefs intTy) (ty := intTy) rfl
-    (alignofIntPe_eval _ _) rfl
+    (alignofIntPe_eval _ _) (evalPexpr_val _ _ _ _ _)
   rw [alignofIval_intTy]
   iapply wps_create _ _ empty_annotation .Prov_none 4 intTy (PrefOther "spike-x") (ev0 :: evs)
     intTy_size_pos intTy_nonatomic (fun a => intTy_decIndep a _)
@@ -172,7 +172,7 @@ theorem progAE1_wps [SpikeGS .hasLC GF]
     (pv := p) (cv := sevenVal)
     (by rw [evalPexpr_sym_of_resolve _ _ _ (hex _)]
         exact lookup_env_head (prodAFrame_lookup_p hf p) evs)
-    rfl
+    (evalPexpr_val _ _ _ _ _)
   iapply wps_store _ _ empty_annotation intTy p sevenVal NA sevenMval
     (intUndefBytes M.tagDefs) _ seven_encodes (seven_storable _)
   isplitl [Hpt]
@@ -219,7 +219,7 @@ theorem progAE1_wpt [SpikeGS .hasLC GF]
   rw [show (3 : Nat) = 2 + 1 from rfl]
   iapply wpt_create_eval _ _ empty_annotation alignofIntPe intTyPe (PrefOther "spike-x")
     (ev0 :: evs) (align := CerbMem.alignofIval M.tagDefs intTy) (ty := intTy) rfl
-    (alignofIntPe_eval _ _) rfl
+    (alignofIntPe_eval _ _) (evalPexpr_val _ _ _ _ _)
   rw [alignofIval_intTy]
   iapply wpt_create _ _ empty_annotation .Prov_none 4 intTy
     (PrefOther "spike-x") (ev0 :: evs) (Nat.le_refl 2) intTy_size_pos intTy_nonatomic
@@ -240,7 +240,7 @@ theorem progAE1_wpt [SpikeGS .hasLC GF]
     (pv := p) (cv := sevenVal)
     (by rw [evalPexpr_sym_of_resolve _ _ _ (hex _)]
         exact lookup_env_head (prodAFrame_lookup_p hf p) evs)
-    rfl
+    (evalPexpr_val _ _ _ _ _)
   iapply wpt_store _ _ empty_annotation intTy p sevenVal NA sevenMval
     (intUndefBytes M.tagDefs) _ (Nat.le_refl 3) seven_encodes (seven_storable _)
   isplitl [Hpt]

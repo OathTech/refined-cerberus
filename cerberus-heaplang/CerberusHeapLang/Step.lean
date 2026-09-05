@@ -1299,35 +1299,189 @@ def evalArrayShift (tds : CerbTags.TagDefsMap) (ty : ctype) :
       some (Vobject (OVpointer (CerbMem.arrayShiftPtrval tds pv ty iv)))
   | _, _ => none
 
-/-- The pure evaluator (fragment operands; partial, fail-closed).
-    S1b′: EXTERN IS THREADED — the engine resolves EVERY `PEsym`
-    through the extern indirection with identity fallback
-    (Core_eval.lean:142, the `let sym1 := match fmapLookupBy … ` of
-    the PEsym arm); the S1a probe found the old extern-free evaluator
-    pinned the whole bridge tower at `extern = fmapEmpty` (design
-    record §5.2). The lookup-failure proc-pointer fallback channel
-    (`file1.funs`) is fail-closed absence, as before.
+/-! ## The pure-expression depth measure (E2: moved here from
+Soundness.lean, extended to the loaded-value grammar)
 
-    E1: the two TYPE-CONSTANT constructors the C elaborator emits as
-    operands — `Ivalignof(ty)` (every `create`) and `Ivsizeof(ty)`
-    (core.lem:207–208) — evaluated on a literal ctype argument by the
-    engine's own `alignofIval`/`sizeofIval` at the tag environment
-    (`PEctor` arm of `step_eval_pexpr`, core_eval.lem:648–651; the
-    reader-threaded `CerbMem.alignofIval _lemReader_tagDefs ty`,
-    Core_eval.lean:145; `alignofIval`/`sizeofIval` = `integerIval ∘
-    alignofCtype/sizeofCtype`, CerbMem.lean:1299–1300 — fuelled at
-    `lemDefaultFuel`, the standing `≤ lemDefaultFuel` idiom applies to
-    the surrounding evaluator's depth only) — `isTyCtor`/`evalTyCtor`
-    below, the `PEctor c [Vctype ty]` arm of `evalPexpr`. -/
+`peDepth` bounds the per-level fuel draw of the engine's
+`step_eval_pexpr`/`pull_constrained` (both recurse one fuel level per
+operand level) AND, since E2, the number of evaluator PASSES (iterations
+of `eval_pexpr_aux2`, Core_eval.lean:152): the arms that return an
+UNEVALUATED pexpr — `PEcase` (the selected branch, core_eval.lem:725–745)
+and the operand REBUILDS at a non-value operand — strictly decrease it
+(`stepPexpr_depth_lt`, Soundness.lean), so `peDepth pe ≤ lemDefaultFuel`
+bounds every pass's depth and the pass count at once. The measure is a
+SUM at the two constructs whose operand keeps evaluating beside a large
+sibling (`PEcase`'s scrutinee beside its alternatives, `PEif`'s guard
+beside its branches) and a MAX elsewhere — a max would not decrease when
+the sibling dominates. The pre-E2 equations (`peDepth_op`,
+`peDepth_array_shift`, `peDepth_ctor1`, `peDepth_val`) hold verbatim. -/
+mutual
+def peDepth : generic_pexpr Unit sym → Nat
+  | Pexpr _ _ (PEop _ pe1 pe2) => 1 + max (peDepth pe1) (peDepth pe2)
+  | Pexpr _ _ (PEarray_shift pe1 _ pe2) => 1 + max (peDepth pe1) (peDepth pe2)
+  | Pexpr _ _ (PEctor _ pes) => 1 + peDepthList pes
+  | Pexpr _ _ (PEcase pe pats) => 1 + peDepth pe + peDepthAlts pats
+  | Pexpr _ _ (PEnot pe) => 1 + peDepth pe
+  | Pexpr _ _ (PEif pe1 pe2 pe3) => 1 + peDepth pe1 + max (peDepth pe2) (peDepth pe3)
+  | _ => 1
+
+/-- SUM of the depths of an operand list (0 at nil) — a sum so that a
+    pass strictly decreases it whenever one operand strictly decreases
+    and none increases. -/
+def peDepthList : List (generic_pexpr Unit sym) → Nat
+  | [] => 0
+  | pe :: pes => peDepth pe + peDepthList pes
+
+/-- Max depth of a case alternative list's bodies (0 at nil). -/
+def peDepthAlts : List (pattern × generic_pexpr Unit sym) → Nat
+  | [] => 0
+  | (_, pe) :: rest => max (peDepth pe) (peDepthAlts rest)
+end
+
+@[simp] theorem peDepth_val (a : List annot) (v : value) :
+    peDepth (Pexpr a () (PEval v)) = 1 := rfl
+
+@[simp] theorem peDepth_sym (a : List annot) (x : sym) :
+    peDepth (Pexpr a () (PEsym x)) = 1 := rfl
+
+@[simp] theorem peDepth_undef (a : List annot) (loc : CerbLocation.Loc) (ub : undefined_behaviour) :
+    peDepth (Pexpr a () (PEundef loc ub)) = 1 := rfl
+
+@[simp] theorem peDepth_op (a : List annot) (op : binop)
+    (pe1 pe2 : generic_pexpr Unit sym) :
+    peDepth (Pexpr a () (PEop op pe1 pe2)) =
+      1 + max (peDepth pe1) (peDepth pe2) := rfl
+
+@[simp] theorem peDepth_array_shift (a : List annot) (ty : ctype)
+    (pe1 pe2 : generic_pexpr Unit sym) :
+    peDepth (Pexpr a () (PEarray_shift pe1 ty pe2)) =
+      1 + max (peDepth pe1) (peDepth pe2) := rfl
+
+@[simp] theorem peDepth_ctor (a : List annot) (c : ctor)
+    (pes : List (generic_pexpr Unit sym)) :
+    peDepth (Pexpr a () (PEctor c pes)) = 1 + peDepthList pes := rfl
+
+@[simp] theorem peDepth_ctor1 (a : List annot) (c : ctor)
+    (pe : generic_pexpr Unit sym) :
+    peDepth (Pexpr a () (PEctor c [pe])) = 1 + peDepth pe := by
+  simp [peDepth, peDepthList]
+
+@[simp] theorem peDepth_case (a : List annot) (pe : generic_pexpr Unit sym)
+    (pats : List (pattern × generic_pexpr Unit sym)) :
+    peDepth (Pexpr a () (PEcase pe pats)) = 1 + peDepth pe + peDepthAlts pats := rfl
+
+@[simp] theorem peDepth_not (a : List annot) (pe : generic_pexpr Unit sym) :
+    peDepth (Pexpr a () (PEnot pe)) = 1 + peDepth pe := rfl
+
+@[simp] theorem peDepth_if (a : List annot) (pe1 pe2 pe3 : generic_pexpr Unit sym) :
+    peDepth (Pexpr a () (PEif pe1 pe2 pe3)) =
+      1 + peDepth pe1 + max (peDepth pe2) (peDepth pe3) := rfl
+
+@[simp] theorem peDepthList_nil : peDepthList [] = 0 := rfl
+@[simp] theorem peDepthList_cons (pe : generic_pexpr Unit sym)
+    (pes : List (generic_pexpr Unit sym)) :
+    peDepthList (pe :: pes) = peDepth pe + peDepthList pes := rfl
+@[simp] theorem peDepthAlts_nil : peDepthAlts [] = 0 := rfl
+@[simp] theorem peDepthAlts_cons (pat : pattern) (pe : generic_pexpr Unit sym)
+    (rest : List (pattern × generic_pexpr Unit sym)) :
+    peDepthAlts ((pat, pe) :: rest) = max (peDepth pe) (peDepthAlts rest) := rfl
+
+theorem peDepth_pos (pe : generic_pexpr Unit sym) : 1 ≤ peDepth pe := by
+  rcases pe with ⟨a, u, pe_⟩
+  cases pe_ <;> simp [peDepth] <;> omega
+
+theorem peDepth_le_list_of_mem {pe : generic_pexpr Unit sym}
+    {pes : List (generic_pexpr Unit sym)} (h : pe ∈ pes) :
+    peDepth pe ≤ peDepthList pes := by
+  induction pes with
+  | nil => cases h
+  | cons q qs ih =>
+    rw [peDepthList_cons]
+    rcases List.mem_cons.mp h with rfl | h'
+    · omega
+    · have := ih h'; omega
+
+theorem peDepth_le_alts_of_mem {pat : pattern} {pe : generic_pexpr Unit sym}
+    {pats : List (pattern × generic_pexpr Unit sym)} (h : (pat, pe) ∈ pats) :
+    peDepth pe ≤ peDepthAlts pats := by
+  induction pats with
+  | nil => cases h
+  | cons q qs ih =>
+    obtain ⟨qp, qe⟩ := q
+    rw [peDepthAlts_cons]
+    rcases List.mem_cons.mp h with heq | h'
+    · cases heq; exact Nat.le_max_left _ _
+    · exact Nat.le_trans (ih h') (Nat.le_max_right _ _)
+
+/-! ## The pure evaluator
+
+Two functions mirror the engine's evaluator tower (Core_eval.lean:135–158 /
+core_eval.lem:536–1140):
+
+* `stepPexpr` is ONE PASS of `step_eval_pexpr` on the covered grammar,
+  FAITHFUL to the pass structure: an arm whose operands all reach values
+  in the pass delivers the value (`valPe v`); the arms that return an
+  UNEVALUATED pexpr — `PEcase` at a value scrutinee returns the selected
+  branch `strip pe''` (core_eval.lem:736–740, `Pexpr [] () <$>`), `PEif`
+  returns the pass on the chosen branch (`strip <$> self pe2`, :1015–1018),
+  and every arm at a NON-value operand REBUILDS the node around the
+  operands' pass results (`PEop binop pe1' pe2'`, :533; `PEctor ctor pes'`,
+  :722; `PEcase pe' pat_pes`, :743; `PEnot pe'`, :815; `PEif pe1' pe2 pe3`,
+  :1046; `PEarray_shift pe1' ty pe2'`, :759) — are mirrored EXACTLY, so
+  the mirror's successive passes are the engine's. Every engine KILL
+  (`Illformed_program …`), UNDEF (`PEundef`, `Undefined.undef loc' [ub]`,
+  :596–604) and PANIC (`PEcase` without a matching pattern, :741) is `none`
+  here (fail-closed) and classified in EvalClass.lean. Certified pass by
+  pass against `step_eval_pexpr` in Soundness.lean (`step_eval_bridge`).
+* `evalPexpr` is the BIG-STEP value: structural over the operands
+  (`PEop`, `PEarray_shift`, `PEctor`, `PEnot`, `PEif`) and, at `PEcase`,
+  the value of the selected branch — GUARDED by grammar membership of the
+  alternatives (`isPePureAlts pats`; likewise both branches of a pure `if`,
+  so that a big-step value implies the covered shape of the WHOLE term,
+  unselected branches included — `evalPexpr_shape`) and by the depth check
+  `peDepth (reannot0 pe'') ≤ peDepthAlts pats` (the substituted branch's
+  depth does not exceed the alternatives' — true of every substitution
+  the engine performs, symbols for values, but stated as a CHECK rather
+  than proved through the fuelled `subst_sym_pexpr`: [USER 2026-09-04]
+  E0 question 8, the substitution-size lemma is carried locally). The
+  check is what makes `evalPexpr` a well-founded recursion on `peDepth`
+  and what bounds the engine's PASS COUNT by `peDepth pe`
+  (`stepPexpr_depth_lt`, Soundness.lean). The mirror rules consume
+  `evalPexpr`; its pre-E2 equations (`evalPexpr_val`/`_sym`/`_op`/
+  `_array_shift`/`_tyctor`) are unchanged in statement.
+
+The two agree on successes: a pass preserves the big-step value
+(`evalPexpr_step`), so the engine's iteration until a value delivers
+`evalPexpr`'s answer (`aux2_bridge`). -/
+
+/-- The engine's canonical value pexpr (`mk_value_pe`, Core_aux.lean:302). -/
+def valPe (v : value) : generic_pexpr Unit sym := Pexpr [] () (PEval v)
+
+/-- The engine's `Pexpr [] () (strip1 pe)` — the outer annotation list
+    and type annotation reset (step_eval_pexpr's result wrapper,
+    Core_eval.lean:142). -/
+def reannot0 : generic_pexpr Unit sym → generic_pexpr Unit sym
+  | Pexpr _ _ p => Pexpr [] () p
+
+@[simp] theorem reannot0_mk (a : List annot) (u : Unit) (p : generic_pexpr_ Unit sym) :
+    reannot0 (Pexpr a u p) = Pexpr [] () p := rfl
+
+@[simp] theorem valueFromPexpr_valPe (v : value) : valueFromPexpr (valPe v) = some v := rfl
+
+/-- The type-argument constructors at a literal ctype: E1's `Ivalignof`/
+    `Ivsizeof` and (E2) `Unspecified(ty)` — `Cunspecified [Vctype ty] ↦
+    Vloaded (LVunspecified ty)` (core_eval.lem:682–683). -/
 def isTyCtor : ctor → Bool
   | .Civalignof => true
   | .Civsizeof => true
+  | .Cunspecified => true
   | _ => false
 
-/-- The value of a type-constant constructor at a ctype. -/
+/-- The value of a type-argument constructor at a ctype. -/
 def evalTyCtor (tds : CerbTags.TagDefsMap) : ctor → ctype → Option value
   | .Civalignof, ty => some (Vobject (OVinteger (CerbMem.alignofIval tds ty)))
   | .Civsizeof, ty => some (Vobject (OVinteger (CerbMem.sizeofIval tds ty)))
+  | .Cunspecified, ty => some (Vloaded (LVunspecified ty))
   | _, _ => none
 
 @[simp] theorem evalTyCtor_alignof (tds : CerbTags.TagDefsMap) (ty : ctype) :
@@ -1336,10 +1490,152 @@ def evalTyCtor (tds : CerbTags.TagDefsMap) : ctor → ctype → Option value
 @[simp] theorem evalTyCtor_sizeof (tds : CerbTags.TagDefsMap) (ty : ctype) :
     evalTyCtor tds .Civsizeof ty = some (Vobject (OVinteger (CerbMem.sizeofIval tds ty))) := rfl
 
+@[simp] theorem evalTyCtor_unspecified (tds : CerbTags.TagDefsMap) (ty : ctype) :
+    evalTyCtor tds .Cunspecified ty = some (Vloaded (LVunspecified ty)) := rfl
+
 theorem evalTyCtor_isSome {tds : CerbTags.TagDefsMap} {c : ctor} {ty : ctype} {v : value}
     (h : evalTyCtor tds c ty = some v) : isTyCtor c = true := by
   cases c <;> first | rfl | (cases h)
 
+/-- The constructor dispatch at evaluated operands — the `PEctor` arm's
+    value match (core_eval.lem:607–723, Core_eval.lean:145), on the
+    constructors the mirror covers: the type-argument constructors
+    (`evalTyCtor`), `Cspecified [Vobject ov] ↦ Vloaded (LVspecified ov)`
+    (:680–681), `Ctuple cvals ↦ Vtuple cvals` (:614–615). Every other
+    (constructor, operand) pairing is `none`: the engine's success arms
+    outside the mirror (`Cnil`/`Ccons`/`Carray`/the bitwise constants/
+    `Cfvfromint`/`Civfromfloat`/`CivNULLcap`) and its ill-typed KILL
+    (`(_, Just cvals)`, :720–722) are classified in EvalClass.lean. -/
+def evalCtor (tds : CerbTags.TagDefsMap) : ctor → List value → Option value
+  | .Civalignof, [Vctype ty] => evalTyCtor tds .Civalignof ty
+  | .Civsizeof, [Vctype ty] => evalTyCtor tds .Civsizeof ty
+  | .Cunspecified, [Vctype ty] => evalTyCtor tds .Cunspecified ty
+  | .Cspecified, [Vobject ov] => some (Vloaded (LVspecified ov))
+  | .Ctuple, vs => some (Vtuple vs)
+  | _, _ => none
+
+@[simp] theorem evalCtor_spec (tds : CerbTags.TagDefsMap) (ov : object_value) :
+    evalCtor tds .Cspecified [Vobject ov] = some (Vloaded (LVspecified ov)) := rfl
+
+@[simp] theorem evalCtor_tuple (tds : CerbTags.TagDefsMap) (vs : List value) :
+    evalCtor tds .Ctuple vs = some (Vtuple vs) := rfl
+
+theorem evalCtor_tyCtor (tds : CerbTags.TagDefsMap) {c : ctor} (hc : isTyCtor c = true)
+    (ty : ctype) : evalCtor tds c [Vctype ty] = evalTyCtor tds c ty := by
+  cases c <;> first | rfl | (cases hc)
+
+/-- The binops the mirror evaluator covers (`evalBinop`): integer
+    arithmetic `Add`/`Sub`/`Mul` and the comparisons
+    `Eq`/`Lt`/`Le`/`Gt`/`Ge`. `Div`/`Rem_t`/`Rem_f`/`Exp`/`And`/`Or` are
+    outside (fragment closure, 2026-09-02: the operand grammar is
+    declared as exactly what the mirror covers). -/
+def isMirroredOp : binop → Bool
+  | .OpAdd | .OpSub | .OpMul | .OpEq | .OpLt | .OpLe | .OpGt | .OpGe => true
+  | _ => false
+
+/-- E2: the constructors the mirror evaluator covers (`evalCtor`): the
+    type-argument constants, `Specified`, tuples. -/
+def isMirroredCtor : ctor → Bool
+  | .Civalignof | .Civsizeof | .Cunspecified | .Cspecified | .Ctuple => true
+  | _ => false
+
+/-! Boolean membership in the covered operand grammar (the Prop form is
+`PePure`, Soundness.lean; `PePure.of_isPePure`/`isPePure_of_PePure` relate
+them). Kernel-decidable at authored operands. E2: the one-pass mirror is
+GUARDED by it at every pass (`stepPexpr`), which is what makes a pass's
+success imply the covered shape without any lemma about the engine's
+substitution. -/
+mutual
+def isPePure : generic_pexpr Unit sym → Bool
+  | Pexpr _ _ (PEval _) => true
+  | Pexpr _ _ (PEsym _) => true
+  | Pexpr _ _ (PEop op pe1 pe2) => isMirroredOp op && isPePure pe1 && isPePure pe2
+  | Pexpr _ _ (PEarray_shift pe1 _ pe2) => isPePure pe1 && isPePure pe2
+  | Pexpr _ _ (PEctor c pes) => isMirroredCtor c && isPePureList pes
+  | Pexpr _ _ (PEcase pe pats) => isPePure pe && isPePureAlts pats
+  | Pexpr _ _ (PEnot pe) => isPePure pe
+  | Pexpr _ _ (PEif pe1 pe2 pe3) => isPePure pe1 && isPePure pe2 && isPePure pe3
+  | Pexpr _ _ (PEundef _ _) => true
+  | _ => false
+
+def isPePureList : List (generic_pexpr Unit sym) → Bool
+  | [] => true
+  | pe :: pes => isPePure pe && isPePureList pes
+
+def isPePureAlts : List (pattern × generic_pexpr Unit sym) → Bool
+  | [] => true
+  | (_, pe) :: rest => isPePure pe && isPePureAlts rest
+end
+
+mutual
+/-- ONE PASS of `step_eval_pexpr`, UNGUARDED (module section header):
+    faithful to the engine's pass on the covered constructors, `none` at
+    the engine's kills/undefs/panics and off the grammar. -/
+def stepPexprRaw (tds : CerbTags.TagDefsMap) (ext : Fmap sym sym) (ρ : EnvStack) :
+    generic_pexpr Unit sym → Option (generic_pexpr Unit sym)
+  | Pexpr _ _ (PEval v) => some (valPe v)
+  | Pexpr _ _ (PEsym x) => (lookup_env (resolveExtern ext x) ρ).map valPe
+  | Pexpr _ _ (PEop op pe1 pe2) => do
+      let r1 ← stepPexprRaw tds ext ρ pe1
+      let r2 ← stepPexprRaw tds ext ρ pe2
+      match valueFromPexpr r1, valueFromPexpr r2 with
+      | some v1, some v2 => (evalBinop op v1 v2).map valPe
+      | _, _ => some (Pexpr [] () (PEop op r1 r2))
+  | Pexpr _ _ (PEarray_shift pe1 ty pe2) => do
+      let r1 ← stepPexprRaw tds ext ρ pe1
+      let r2 ← stepPexprRaw tds ext ρ pe2
+      match valueFromPexpr r1, valueFromPexpr r2 with
+      | some v1, some v2 => (evalArrayShift tds ty v1 v2).map valPe
+      | _, _ => some (Pexpr [] () (PEarray_shift r1 ty r2))
+  | Pexpr _ _ (PEctor c pes) => do
+      let rs ← stepPexprsRaw tds ext ρ pes
+      match valueFromPexprs rs with
+      | some vs => (evalCtor tds c vs).map valPe
+      | none => some (Pexpr [] () (PEctor c rs))
+  | Pexpr _ _ (PEcase pe pats) => do
+      let r ← stepPexprRaw tds ext ρ pe
+      match valueFromPexpr r with
+      | some cval => (select_case subst_sym_pexpr cval pats).map reannot0
+      | none => some (Pexpr [] () (PEcase r pats))
+  | Pexpr _ _ (PEnot pe) => do
+      let r ← stepPexprRaw tds ext ρ pe
+      match valueFromPexpr r with
+      | some Vtrue => some (valPe Vfalse)
+      | some Vfalse => some (valPe Vtrue)
+      | some _ => none
+      | none => some (Pexpr [] () (PEnot r))
+  | Pexpr _ _ (PEif pe1 pe2 pe3) => do
+      let r1 ← stepPexprRaw tds ext ρ pe1
+      match valueFromPexpr r1 with
+      | some Vtrue => (stepPexprRaw tds ext ρ pe2).map reannot0
+      | some Vfalse => (stepPexprRaw tds ext ρ pe3).map reannot0
+      | some _ => none
+      | none => some (Pexpr [] () (PEif r1 pe2 pe3))
+  | _ => none
+
+/-- The pass mapped over an operand list (the engine's
+    `exception_undef_mapM self pes`). -/
+def stepPexprsRaw (tds : CerbTags.TagDefsMap) (ext : Fmap sym sym) (ρ : EnvStack) :
+    List (generic_pexpr Unit sym) → Option (List (generic_pexpr Unit sym))
+  | [] => some []
+  | pe :: pes => do
+      let r ← stepPexprRaw tds ext ρ pe
+      let rs ← stepPexprsRaw tds ext ρ pes
+      some (r :: rs)
+end
+
+/-- ONE PASS of `step_eval_pexpr` on the covered grammar: the faithful
+    pass, GUARDED by grammar membership (`isPePure`) — so a pass succeeds
+    only at a covered term, and the term the engine iterates on next is
+    covered exactly when the mirror's next pass succeeds. -/
+def stepPexpr (tds : CerbTags.TagDefsMap) (ext : Fmap sym sym) (ρ : EnvStack)
+    (pe : generic_pexpr Unit sym) : Option (generic_pexpr Unit sym) :=
+  if isPePure pe then stepPexprRaw tds ext ρ pe else none
+
+/-! THE BIG-STEP VALUE (module section header): what the mirror rules
+consume. Mutually recursive with its list form, well-founded on the depth (a
+pexpr weighs `2 * peDepth`, an operand list `2 * peDepthList + 1`). -/
+mutual
 def evalPexpr (tds : CerbTags.TagDefsMap) (ext : Fmap sym sym) (ρ : EnvStack) :
     generic_pexpr Unit sym → Option value
   | Pexpr _ _ (PEval v) => some v
@@ -1352,28 +1648,77 @@ def evalPexpr (tds : CerbTags.TagDefsMap) (ext : Fmap sym sym) (ρ : EnvStack) :
       let v1 ← evalPexpr tds ext ρ pe1
       let v2 ← evalPexpr tds ext ρ pe2
       evalArrayShift tds ty v1 v2
-  | Pexpr _ _ (PEctor c [Pexpr _ _ (PEval (Vctype ty))]) => evalTyCtor tds c ty
+  | Pexpr _ _ (PEctor c pes) => do
+      let vs ← evalPexprList tds ext ρ pes
+      evalCtor tds c vs
+  | Pexpr _ _ (PEcase pe pats) =>
+      if isPePureAlts pats then do
+        let cval ← evalPexpr tds ext ρ pe
+        let pe'' ← select_case subst_sym_pexpr cval pats
+        if peDepth (reannot0 pe'') ≤ peDepthAlts pats then evalPexpr tds ext ρ (reannot0 pe'')
+        else none
+      else none
+  | Pexpr _ _ (PEnot pe) => do
+      let v ← evalPexpr tds ext ρ pe
+      match v with
+      | Vtrue => some Vfalse
+      | Vfalse => some Vtrue
+      | _ => none
+  | Pexpr _ _ (PEif pe1 pe2 pe3) =>
+      if isPePure pe2 && isPePure pe3 then do
+        let b ← evalPexpr tds ext ρ pe1
+        match b with
+        | Vtrue => evalPexpr tds ext ρ pe2
+        | Vfalse => evalPexpr tds ext ρ pe3
+        | _ => none
+      else none
   | _ => none
+termination_by pe => 2 * peDepth pe
+decreasing_by
+  all_goals simp_wf
+  all_goals first
+    | omega
+    | (simp only [peDepth]; omega)
+    | (simp only [peDepth, peDepthList_cons]; omega)
+    | (rename_i h; simp only [peDepth]; omega)
 
-@[simp] theorem evalPexpr_tyctor (tds : CerbTags.TagDefsMap) (ext : Fmap sym sym) (ρ : EnvStack)
-    (a b : List annot) (c : ctor) (ty : ctype) :
-    evalPexpr tds ext ρ (Pexpr a () (PEctor c [Pexpr b () (PEval (Vctype ty))])) =
-      evalTyCtor tds c ty := rfl
+/-- The big-step values of an operand list (all or nothing). -/
+def evalPexprList (tds : CerbTags.TagDefsMap) (ext : Fmap sym sym) (ρ : EnvStack) :
+    List (generic_pexpr Unit sym) → Option (List value)
+  | [] => some []
+  | pe :: pes => do
+      let v ← evalPexpr tds ext ρ pe
+      let vs ← evalPexprList tds ext ρ pes
+      some (v :: vs)
+termination_by pes => 2 * peDepthList pes + 1
+decreasing_by
+  all_goals simp_wf
+  all_goals first | omega | (have := peDepth_pos pe; omega)
+end
+
+/-! ### The big-step equations (statements as before E2) -/
 
 @[simp] theorem evalPexpr_val (tds : CerbTags.TagDefsMap) (ext : Fmap sym sym) (ρ : EnvStack)
     (a : List annot) (v : value) :
-    evalPexpr tds ext ρ (Pexpr a () (PEval v)) = some v := rfl
+    evalPexpr tds ext ρ (Pexpr a () (PEval v)) = some v := by
+  rw [evalPexpr]
+
+@[simp] theorem evalPexpr_valPe (tds : CerbTags.TagDefsMap) (ext : Fmap sym sym) (ρ : EnvStack)
+    (v : value) : evalPexpr tds ext ρ (valPe v) = some v := by
+  rw [valPe, evalPexpr]
 
 @[simp] theorem evalPexpr_sym (tds : CerbTags.TagDefsMap) (ext : Fmap sym sym) (ρ : EnvStack)
     (a : List annot) (x : sym) :
     evalPexpr tds ext ρ (Pexpr a () (PEsym x)) =
-      lookup_env (resolveExtern ext x) ρ := rfl
+      lookup_env (resolveExtern ext x) ρ := by
+  rw [evalPexpr]
 
 /-- ... at the empty extern the indirection is the identity (the
-    frozen profiles' instance; rfl). -/
+    frozen profiles' instance). -/
 @[simp] theorem evalPexpr_sym_empty (tds : CerbTags.TagDefsMap) (ρ : EnvStack)
     (a : List annot) (x : sym) :
-    evalPexpr tds fmapEmpty ρ (Pexpr a () (PEsym x)) = lookup_env x ρ := rfl
+    evalPexpr tds fmapEmpty ρ (Pexpr a () (PEsym x)) = lookup_env x ρ := by
+  rw [evalPexpr_sym]; rfl
 
 /-- ... and at ANY extern map that does not redirect `x` (QA-1/Q13: the
     SymFrame-level lookup discharges `resolveExtern` without naming the
@@ -1388,7 +1733,8 @@ theorem evalPexpr_op (tds : CerbTags.TagDefsMap) (ext : Fmap sym sym) (ρ : EnvS
     evalPexpr tds ext ρ (Pexpr a () (PEop op pe1 pe2)) = (do
       let v1 ← evalPexpr tds ext ρ pe1
       let v2 ← evalPexpr tds ext ρ pe2
-      evalBinop op v1 v2) := rfl
+      evalBinop op v1 v2) := by
+  rw [evalPexpr]
 
 theorem evalPexpr_array_shift (tds : CerbTags.TagDefsMap) (ext : Fmap sym sym) (ρ : EnvStack)
     (a : List annot) (ty : ctype)
@@ -1396,7 +1742,92 @@ theorem evalPexpr_array_shift (tds : CerbTags.TagDefsMap) (ext : Fmap sym sym) (
     evalPexpr tds ext ρ (Pexpr a () (PEarray_shift pe1 ty pe2)) = (do
       let v1 ← evalPexpr tds ext ρ pe1
       let v2 ← evalPexpr tds ext ρ pe2
-      evalArrayShift tds ty v1 v2) := rfl
+      evalArrayShift tds ty v1 v2) := by
+  rw [evalPexpr]
+
+theorem evalPexpr_ctor (tds : CerbTags.TagDefsMap) (ext : Fmap sym sym) (ρ : EnvStack)
+    (a : List annot) (c : ctor) (pes : List (generic_pexpr Unit sym)) :
+    evalPexpr tds ext ρ (Pexpr a () (PEctor c pes)) = (do
+      let vs ← evalPexprList tds ext ρ pes
+      evalCtor tds c vs) := by
+  rw [evalPexpr]
+
+@[simp] theorem evalPexprList_nil (tds : CerbTags.TagDefsMap) (ext : Fmap sym sym) (ρ : EnvStack) :
+    evalPexprList tds ext ρ [] = some [] := by
+  rw [evalPexprList]
+
+theorem evalPexprList_cons (tds : CerbTags.TagDefsMap) (ext : Fmap sym sym) (ρ : EnvStack)
+    (pe : generic_pexpr Unit sym) (pes : List (generic_pexpr Unit sym)) :
+    evalPexprList tds ext ρ (pe :: pes) = (do
+      let v ← evalPexpr tds ext ρ pe
+      let vs ← evalPexprList tds ext ρ pes
+      some (v :: vs)) := by
+  rw [evalPexprList]
+
+theorem evalPexpr_ctor1 (tds : CerbTags.TagDefsMap) (ext : Fmap sym sym) (ρ : EnvStack)
+    (a : List annot) (c : ctor) (pe : generic_pexpr Unit sym) :
+    evalPexpr tds ext ρ (Pexpr a () (PEctor c [pe])) = (do
+      let v ← evalPexpr tds ext ρ pe
+      evalCtor tds c [v]) := by
+  rw [evalPexpr_ctor, evalPexprList_cons, evalPexprList_nil]
+  cases evalPexpr tds ext ρ pe <;> rfl
+
+theorem evalPexpr_ctor2 (tds : CerbTags.TagDefsMap) (ext : Fmap sym sym) (ρ : EnvStack)
+    (a : List annot) (c : ctor) (pe1 pe2 : generic_pexpr Unit sym) :
+    evalPexpr tds ext ρ (Pexpr a () (PEctor c [pe1, pe2])) = (do
+      let v1 ← evalPexpr tds ext ρ pe1
+      let v2 ← evalPexpr tds ext ρ pe2
+      evalCtor tds c [v1, v2]) := by
+  rw [evalPexpr_ctor, evalPexprList_cons, evalPexprList_cons, evalPexprList_nil]
+  cases evalPexpr tds ext ρ pe1 <;> cases evalPexpr tds ext ρ pe2 <;> rfl
+
+/-- E2: stated at a TYPE-ARGUMENT constructor (`hc`) — a one-tuple of a
+    ctype, `Ctuple [Vctype ty]`, is a genuine engine value (`Vtuple [Vctype
+    ty]`) outside `evalTyCtor`, so the pre-E2 unconditional statement is
+    false at `Ctuple`; `evalPexpr_ctor1` is the unconditional form. -/
+@[simp] theorem evalPexpr_tyctor (tds : CerbTags.TagDefsMap) (ext : Fmap sym sym) (ρ : EnvStack)
+    (a b : List annot) (c : ctor) (ty : ctype) (hc : isTyCtor c = true) :
+    evalPexpr tds ext ρ (Pexpr a () (PEctor c [Pexpr b () (PEval (Vctype ty))])) =
+      evalTyCtor tds c ty := by
+  rw [evalPexpr_ctor1, evalPexpr_val]
+  cases c <;> first | rfl | (cases hc)
+
+theorem evalPexpr_case (tds : CerbTags.TagDefsMap) (ext : Fmap sym sym) (ρ : EnvStack)
+    (a : List annot) (pe : generic_pexpr Unit sym) (pats : List (pattern × generic_pexpr Unit sym)) :
+    evalPexpr tds ext ρ (Pexpr a () (PEcase pe pats)) =
+      (if isPePureAlts pats then (do
+        let cval ← evalPexpr tds ext ρ pe
+        let pe'' ← select_case subst_sym_pexpr cval pats
+        if peDepth (reannot0 pe'') ≤ peDepthAlts pats then evalPexpr tds ext ρ (reannot0 pe'')
+        else none) else none) := by
+  rw [evalPexpr]
+
+theorem evalPexpr_not (tds : CerbTags.TagDefsMap) (ext : Fmap sym sym) (ρ : EnvStack)
+    (a : List annot) (pe : generic_pexpr Unit sym) :
+    evalPexpr tds ext ρ (Pexpr a () (PEnot pe)) = (do
+      let v ← evalPexpr tds ext ρ pe
+      match v with
+      | Vtrue => some Vfalse
+      | Vfalse => some Vtrue
+      | _ => none) := by
+  rw [evalPexpr]
+
+theorem evalPexpr_if (tds : CerbTags.TagDefsMap) (ext : Fmap sym sym) (ρ : EnvStack)
+    (a : List annot) (pe1 pe2 pe3 : generic_pexpr Unit sym) :
+    evalPexpr tds ext ρ (Pexpr a () (PEif pe1 pe2 pe3)) =
+      (if isPePure pe2 && isPePure pe3 then (do
+        let b ← evalPexpr tds ext ρ pe1
+        match b with
+        | Vtrue => evalPexpr tds ext ρ pe2
+        | Vfalse => evalPexpr tds ext ρ pe3
+        | _ => none) else none) := by
+  rw [evalPexpr]
+
+@[simp] theorem evalPexpr_undef (tds : CerbTags.TagDefsMap) (ext : Fmap sym sym) (ρ : EnvStack)
+    (a : List annot) (loc : CerbLocation.Loc) (ub : undefined_behaviour) :
+    evalPexpr tds ext ρ (Pexpr a () (PEundef loc ub)) = none := by
+  rw [evalPexpr.eq_def]
+
 
 /-- All-or-nothing list evaluation (the engine's per-argument
     `full_eval_pexpr'` fold in step_ctx's Erun arm evaluates each
@@ -1421,6 +1852,21 @@ theorem evalPexprs_cons (tds : CerbTags.TagDefsMap) (ext : Fmap sym sym) (ρ : E
       let v ← evalPexpr tds ext ρ pe
       let vs ← evalPexprs tds ext ρ pes
       pure (v :: vs)) := rfl
+
+/-- A singleton literal operand list evaluates to its value. -/
+theorem evalPexprs_single_val (tds : CerbTags.TagDefsMap) (ext : Fmap sym sym) (ρ : EnvStack)
+    (a : List annot) (v : value) :
+    evalPexprs tds ext ρ [Pexpr a () (PEval v)] = some [v] := by
+  rw [evalPexprs_cons, evalPexpr_val, evalPexprs_nil]
+  rfl
+
+/-- A literal head evaluates to its value in front of an evaluated tail. -/
+theorem evalPexprs_cons_val (tds : CerbTags.TagDefsMap) (ext : Fmap sym sym) (ρ : EnvStack)
+    (a : List annot) (v : value) (pes : List (generic_pexpr Unit sym)) (vs : List value)
+    (h : evalPexprs tds ext ρ pes = some vs) :
+    evalPexprs tds ext ρ (Pexpr a () (PEval v) :: pes) = some (v :: vs) := by
+  rw [evalPexprs_cons, evalPexpr_val, h]
+  rfl
 
 /-! ## The procedure table and the callee's environment frame (calls arc C2)
 
@@ -1537,6 +1983,31 @@ patterns are the engine's own unwrapping mechanism; no new
 evaluation machinery). -/
 def specPat (pa pb : List annot) (x : sym) (bty : core_base_type) : pattern :=
   Pattern pa (CaseCtor Cspecified [Pattern pb (CaseBase (some x, bty))])
+
+/-! ## The flat TUPLE binder pattern (E2)
+
+`let weak (a: loaded integer, b: loaded integer) = …` — the shape of every
+corpus tuple binder (docs/corpus-e0: the pair delivered by an `unseq`):
+a `Ctuple` pattern whose components are BASE patterns (a symbol or a
+wildcard at a base type). `update_env_aux`'s `CaseCtor Ctuple pats',
+Vtuple cvals` arm binds by a `foldr` over `zip pats' cvals`
+(core_aux.lem:2444–2447; Core_aux.lean:861): `zip` TRUNCATES, so an arity
+mismatch binds the common prefix and the engine does NOT fail — mirrored
+verbatim through `update_env`. The base components always match, so the
+ONLY binding failure at this pattern is a head value that is not a
+`Vtuple` — `update_env_aux`'s catch-all `failwithI` (the binding PANIC,
+classified in Round.lean). NESTED tuple patterns (the C call protocol's
+`((fp, (ret, params, variadic, proto)), arg…)`) are E6's: a mismatch at
+an inner component leaves the panic under a `fmapAddBy`, outside
+`ShippedRefusal.panic_env`'s shape. -/
+
+/-- A base component: `(x : bty)` or `(_ : bty)` at its own annotations. -/
+abbrev TupleLeaf : Type := List annot × Option sym × core_base_type
+
+def leafPat (t : TupleLeaf) : pattern := Pattern t.1 (CaseBase (t.2.1, t.2.2))
+
+def tuplePat (pa : List annot) (ls : List TupleLeaf) : pattern :=
+  Pattern pa (CaseCtor Ctuple (ls.map leafPat))
 
 /-! ## The env-binding folds (Erun / Esave successors) -/
 
@@ -2233,6 +2704,68 @@ inductive Step (M : MachineCtx) : Config → Config → Prop where
       {ev0 : Fmap sym value} {evs : List (Fmap sym value)} {ctl : Ctl} {σ : Mem} :
       Step M (Expr a (Esseq (symPat pa x bty) (ofValA (.annot a1 a2 b1 ds v)) e2), ev0 :: evs, ctl, σ)
            (Expr [] (Eannot ds e2), update_env (symPat pa x bty) v (ev0 :: evs), ctl.upd a, σ)
+  /-- E2: LETS-PURE at a flat TUPLE binder — `lets (x1, …, xn) = (v1, …, vn)
+      in E2 --> E2` with each `xi ↦ vi` (one_step0's Esseq bare-value arm,
+      core_reduction.lem:407–414, binding through `update_env`'s `CaseCtor
+      Ctuple pats', Vtuple cvals` arm, core_aux.lem:2444–2447 — a `foldr`
+      over the TRUNCATING `zip`, so any arity is an engine success). The
+      head value is pinned to a TUPLE: at any other value the engine's
+      binder is the `failwithI` PANIC (classified, not mirrored —
+      `complete_beta_tuple`). -/
+  | sseq_tuple_pure {a pa a1 b1 : List annot} {ls : List TupleLeaf} {vs : List value}
+      {e2 : CoreExpr} {ev0 : Fmap sym value} {evs : List (Fmap sym value)} {ctl : Ctl} {σ : Mem} :
+      Step M (Expr a (Esseq (tuplePat pa ls) (ofValA (.pure a1 b1 (Vtuple vs))) e2), ev0 :: evs, ctl, σ)
+           (e2, update_env (tuplePat pa ls) (Vtuple vs) (ev0 :: evs), ctl.upd a, σ)
+  /-- E2: LETS-ANNOT at a flat tuple binder (core_reduction.lem:416–423). -/
+  | sseq_tuple_annot {a pa a1 a2 b1 : List annot} {ls : List TupleLeaf} {vs : List value}
+      {ds : List dyn_annotation} {e2 : CoreExpr}
+      {ev0 : Fmap sym value} {evs : List (Fmap sym value)} {ctl : Ctl} {σ : Mem} :
+      Step M (Expr a (Esseq (tuplePat pa ls) (ofValA (.annot a1 a2 b1 ds (Vtuple vs))) e2), ev0 :: evs, ctl, σ)
+           (Expr [] (Eannot ds e2), update_env (tuplePat pa ls) (Vtuple vs) (ev0 :: evs), ctl.upd a, σ)
+  /-- E2: LETW-PURE at a flat tuple binder — the corpus's `let weak (a, b) =
+      …` (one_step0's Ewseq bare-value arm, core_reduction.lem:389–396). -/
+  | wseq_tuple_pure {a pa a1 b1 : List annot} {ls : List TupleLeaf} {vs : List value}
+      {e2 : CoreExpr} {ev0 : Fmap sym value} {evs : List (Fmap sym value)} {ctl : Ctl} {σ : Mem} :
+      Step M (Expr a (Ewseq (tuplePat pa ls) (ofValA (.pure a1 b1 (Vtuple vs))) e2), ev0 :: evs, ctl, σ)
+           (e2, update_env (tuplePat pa ls) (Vtuple vs) (ev0 :: evs), ctl.upd a, σ)
+  /-- E2: LETW-ANNOT at a flat tuple binder (core_reduction.lem:397–405) —
+      the shape every corpus `let weak (a, b) = unseq(…)` reaches once E4
+      delivers the unseq's ANNOTATED tuple. -/
+  | wseq_tuple_annot {a pa a1 a2 b1 : List annot} {ls : List TupleLeaf} {vs : List value}
+      {ds : List dyn_annotation} {e2 : CoreExpr}
+      {ev0 : Fmap sym value} {evs : List (Fmap sym value)} {ctl : Ctl} {σ : Mem} :
+      Step M (Expr a (Ewseq (tuplePat pa ls) (ofValA (.annot a1 a2 b1 ds (Vtuple vs))) e2), ev0 :: evs, ctl, σ)
+           (Expr [] (Eannot ds e2), update_env (tuplePat pa ls) (Vtuple vs) (ev0 :: evs), ctl.upd a, σ)
+  /-- E2: LETW-PURE at the plain-symbol binder — the corpus's `let weak
+      a_515: pointer = pure(x) in load('signed int', a_515)` (one_step0's
+      Ewseq bare-value arm, core_reduction.lem:389–396; `update_env_aux`'s
+      `CaseBase (Just sym, _)` arm binds any value verbatim). -/
+  | wseq_sym_pure {a pa a1 b1 : List annot} {x : sym} {bty : core_base_type}
+      {v : value} {e2 : CoreExpr}
+      {ev0 : Fmap sym value} {evs : List (Fmap sym value)} {ctl : Ctl} {σ : Mem} :
+      Step M (Expr a (Ewseq (symPat pa x bty) (ofValA (.pure a1 b1 v)) e2), ev0 :: evs, ctl, σ)
+           (e2, update_env (symPat pa x bty) v (ev0 :: evs), ctl.upd a, σ)
+  /-- E2: LETW-ANNOT at the plain-symbol binder (core_reduction.lem:397–405). -/
+  | wseq_sym_annot {a pa a1 a2 b1 : List annot} {x : sym} {bty : core_base_type}
+      {ds : List dyn_annotation} {v : value} {e2 : CoreExpr}
+      {ev0 : Fmap sym value} {evs : List (Fmap sym value)} {ctl : Ctl} {σ : Mem} :
+      Step M (Expr a (Ewseq (symPat pa x bty) (ofValA (.annot a1 a2 b1 ds v)) e2), ev0 :: evs, ctl, σ)
+           (Expr [] (Eannot ds e2), update_env (symPat pa x bty) v (ev0 :: evs), ctl.upd a, σ)
+  /-- E2: Ecase at a NON-value scrutinee — the EVAL round (one_step0's Ecase
+      `Nothing` arm, core_reduction.lem:323–339: `EVAL "Ecase" (eval_pexpr pe
+      >>= fun pe' -> E.return (Expr annots (Ecase pe' pat_es)))`; step_ctx's
+      `eval_pexpr` is the iterate-until-value evaluator under its `Sum`
+      readout, delivering `mk_value_pe cval`, :1092–1098): the scrutinee
+      evaluated through the certified big-step evaluator, the node REBUILT
+      with the value scrutinee at its own annotations; the next round is
+      `case_value`. -/
+  | case_eval {a : List annot} {pe : generic_pexpr Unit sym}
+      {pats : List (pattern × CoreExpr)} {cval : value}
+      {ρ : EnvStack} {ctl : Ctl} {σ : Mem}
+      (hnv : valueFromPexpr pe = none)
+      (hv : evalPexpr M.tagDefs M.extern ρ pe = some cval) :
+      Step M (Expr a (Ecase pe pats), ρ, ctl, σ)
+           (Expr a (Ecase (Pexpr [] () (PEval cval)) pats), ρ, ctl.upd a, σ)
   /-- THE POINTER-EQUALITY MEMOP at evaluated operands: ONE engine step
       (one_step0's Ememop arm at values → `MEMOP PtrEq cvals`; step_ctx's
       MEMOP dispatch `Step_memop_request2 th_st.current_loc …`,
@@ -2545,6 +3078,13 @@ theorem Step.ctl_cases {M : MachineCtx} {e e' : CoreExpr} {ρ ρ' : EnvStack}
   | case_value hv hsel => cases hcfg; cases hcfg'; exact .inl ⟨_, rfl⟩
   | sseq_sym_pure => cases hcfg; cases hcfg'; exact .inl ⟨_, rfl⟩
   | sseq_sym_annot => cases hcfg; cases hcfg'; exact .inl ⟨_, rfl⟩
+  | sseq_tuple_pure => cases hcfg; cases hcfg'; exact .inl ⟨_, rfl⟩
+  | sseq_tuple_annot => cases hcfg; cases hcfg'; exact .inl ⟨_, rfl⟩
+  | wseq_tuple_pure => cases hcfg; cases hcfg'; exact .inl ⟨_, rfl⟩
+  | wseq_tuple_annot => cases hcfg; cases hcfg'; exact .inl ⟨_, rfl⟩
+  | wseq_sym_pure => cases hcfg; cases hcfg'; exact .inl ⟨_, rfl⟩
+  | wseq_sym_annot => cases hcfg; cases hcfg'; exact .inl ⟨_, rfl⟩
+  | case_eval hnv hv => cases hcfg; cases hcfg'; exact .inl ⟨_, rfl⟩
   | memop_ptreq h1 h2 hmem => cases hcfg; cases hcfg'; exact .inl ⟨_, rfl⟩
   | memop_eval hnv hv1 hv2 => cases hcfg; cases hcfg'; exact .inl ⟨_, rfl⟩
   | store_eval hnv hv2 hv3 => cases hcfg; cases hcfg'; exact .inl ⟨_, rfl⟩
@@ -2662,6 +3202,31 @@ theorem Step.env_cons' {M : MachineCtx} {c c' : Config}
     intro ev0 evs hin
     obtain ⟨rfl, rfl⟩ := List.cons.inj hin
     exact ⟨_, update_env_cons ..⟩
+  | sseq_tuple_pure =>
+    intro ev0 evs hin
+    obtain ⟨rfl, rfl⟩ := List.cons.inj hin
+    exact ⟨_, update_env_cons ..⟩
+  | sseq_tuple_annot =>
+    intro ev0 evs hin
+    obtain ⟨rfl, rfl⟩ := List.cons.inj hin
+    exact ⟨_, update_env_cons ..⟩
+  | wseq_tuple_pure =>
+    intro ev0 evs hin
+    obtain ⟨rfl, rfl⟩ := List.cons.inj hin
+    exact ⟨_, update_env_cons ..⟩
+  | wseq_tuple_annot =>
+    intro ev0 evs hin
+    obtain ⟨rfl, rfl⟩ := List.cons.inj hin
+    exact ⟨_, update_env_cons ..⟩
+  | wseq_sym_pure =>
+    intro ev0 evs hin
+    obtain ⟨rfl, rfl⟩ := List.cons.inj hin
+    exact ⟨_, update_env_cons ..⟩
+  | wseq_sym_annot =>
+    intro ev0 evs hin
+    obtain ⟨rfl, rfl⟩ := List.cons.inj hin
+    exact ⟨_, update_env_cons ..⟩
+  | case_eval hnv hv => exact fun ev0 evs hin => ⟨ev0, hin⟩
   | memop_ptreq h1 h2 hmem => exact fun ev0 evs hin => ⟨ev0, hin⟩
   | memop_eval hnv hv1 hv2 => exact fun ev0 evs hin => ⟨ev0, hin⟩
   | store_eval hnv hv2 hv3 => exact fun ev0 evs hin => ⟨ev0, hin⟩
@@ -2721,6 +3286,13 @@ theorem Step.call_inv' {M : MachineCtx} {c : Config}
   | case_value hv hsel => intro ctx f pes hc; simp [callRedex?] at hc
   | sseq_sym_pure => intro ctx f pes hc; simp [callRedex?] at hc
   | sseq_sym_annot => intro ctx f pes hc; simp [callRedex?] at hc
+  | sseq_tuple_pure => intro ctx f pes hc; simp [callRedex?] at hc
+  | sseq_tuple_annot => intro ctx f pes hc; simp [callRedex?] at hc
+  | wseq_tuple_pure => intro ctx f pes hc; simp [callRedex?] at hc
+  | wseq_tuple_annot => intro ctx f pes hc; simp [callRedex?] at hc
+  | wseq_sym_pure => intro ctx f pes hc; simp [callRedex?] at hc
+  | wseq_sym_annot => intro ctx f pes hc; simp [callRedex?] at hc
+  | case_eval hnv hv => intro ctx f pes hc; simp [callRedex?] at hc
   | memop_ptreq h1 h2 hmem => intro ctx f pes hc; simp [callRedex?] at hc
   | memop_eval hnv hv1 hv2 => intro ctx f pes hc; simp [callRedex?] at hc
   | store_eval hnv hv2 hv3 => intro ctx f pes hc; simp [callRedex?] at hc
@@ -3156,6 +3728,13 @@ theorem Step.jump_inv {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack} {ctl : Ctl
   | case_value hv hsel => simp [jumpRedex?] at hj0
   | sseq_sym_pure => simp [jumpRedex?] at hj0
   | sseq_sym_annot => simp [jumpRedex?] at hj0
+  | sseq_tuple_pure => simp [jumpRedex?] at hj0
+  | sseq_tuple_annot => simp [jumpRedex?] at hj0
+  | wseq_tuple_pure => simp [jumpRedex?] at hj0
+  | wseq_tuple_annot => simp [jumpRedex?] at hj0
+  | wseq_sym_pure => simp [jumpRedex?] at hj0
+  | wseq_sym_annot => simp [jumpRedex?] at hj0
+  | case_eval hnv hv => simp [jumpRedex?] at hj0
   | memop_ptreq h1 h2 hmem => simp [jumpRedex?] at hj0
   | memop_eval hnv hv1 hv2 => simp [jumpRedex?] at hj0
   | store_eval hnv hv2 hv3 => simp [jumpRedex?] at hj0
@@ -3274,6 +3853,12 @@ theorem Step.sseq_inv {M : MachineCtx} {a : List annot} {pat : pattern}
     (∃ pa' x bty' a1 a2 b1 ds v ev0 evs, pat = symPat pa' x bty' ∧
         e1 = ofValA (.annot a1 a2 b1 ds v) ∧ ρ = ev0 :: evs ∧
         out = (Expr [] (Eannot ds e2), update_env (symPat pa' x bty') v ρ, ctl.upd a, σ)) ∨
+    (∃ pa' ls a1 b1 vs ev0 evs, pat = tuplePat pa' ls ∧
+        e1 = ofValA (.pure a1 b1 (Vtuple vs)) ∧ ρ = ev0 :: evs ∧
+        out = (e2, update_env (tuplePat pa' ls) (Vtuple vs) ρ, ctl.upd a, σ)) ∨
+    (∃ pa' ls a1 a2 b1 ds vs ev0 evs, pat = tuplePat pa' ls ∧
+        e1 = ofValA (.annot a1 a2 b1 ds (Vtuple vs)) ∧ ρ = ev0 :: evs ∧
+        out = (Expr [] (Eannot ds e2), update_env (tuplePat pa' ls) (Vtuple vs) ρ, ctl.upd a, σ)) ∨
     Step.CallOf M e1 (fun c => Csseq a pat c e2) ρ ctl σ out := by
   cases h with
   | sseq_ctx hnj hnc hnv hs => exact .inl ⟨_, _, _, _, hnj, hnc, hnv, hs, rfl⟩
@@ -3295,9 +3880,15 @@ theorem Step.sseq_inv {M : MachineCtx} {a : List annot} {pat : pattern}
   | sseq_sym_annot =>
     exact .inr (.inr (.inr (.inr (.inr (.inr (.inr (.inl
       ⟨_, _, _, _, _, _, _, _, _, _, rfl, rfl, rfl, rfl⟩)))))))
+  | sseq_tuple_pure =>
+    exact .inr (.inr (.inr (.inr (.inr (.inr (.inr (.inr (.inl
+      ⟨_, _, _, _, _, _, _, rfl, rfl, rfl, rfl⟩))))))))
+  | sseq_tuple_annot =>
+    exact .inr (.inr (.inr (.inr (.inr (.inr (.inr (.inr (.inr (.inl
+      ⟨_, _, _, _, _, _, _, _, _, rfl, rfl, rfl, rfl⟩)))))))))
   | call hc hvs hf hlen =>
-    exact .inr (.inr (.inr (.inr (.inr (.inr (.inr (.inr
-      (Step.callOf_of_call_sseq hc hvs hf hlen))))))))
+    exact .inr (.inr (.inr (.inr (.inr (.inr (.inr (.inr (.inr (.inr
+      (Step.callOf_of_call_sseq hc hvs hf hlen))))))))))
 
 theorem Step.callOf_of_call_wseq {M : MachineCtx} {a : List annot} {pat : pattern}
     {e1 e2 : CoreExpr} {ctx : context} {f : sym} {pes : List (generic_pexpr Unit sym)}
@@ -3335,17 +3926,41 @@ theorem Step.wseq_inv {M : MachineCtx} {a : List annot} {pat : pattern}
         ρ = ev0 :: evs ∧ lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) ∧
         evalPexprs M.tagDefs M.extern ρ pes = some vs ∧
         out = (cont, bindArgs params vs ρ, ctl.upd (redexAnnots e1), σ)) ∨
+    (∃ pa' x bty' a1 b1 v ev0 evs, pat = symPat pa' x bty' ∧
+        e1 = ofValA (.pure a1 b1 v) ∧ ρ = ev0 :: evs ∧
+        out = (e2, update_env (symPat pa' x bty') v ρ, ctl.upd a, σ)) ∨
+    (∃ pa' x bty' a1 a2 b1 ds v ev0 evs, pat = symPat pa' x bty' ∧
+        e1 = ofValA (.annot a1 a2 b1 ds v) ∧ ρ = ev0 :: evs ∧
+        out = (Expr [] (Eannot ds e2), update_env (symPat pa' x bty') v ρ, ctl.upd a, σ)) ∨
+    (∃ pa' ls a1 b1 vs ev0 evs, pat = tuplePat pa' ls ∧
+        e1 = ofValA (.pure a1 b1 (Vtuple vs)) ∧ ρ = ev0 :: evs ∧
+        out = (e2, update_env (tuplePat pa' ls) (Vtuple vs) ρ, ctl.upd a, σ)) ∨
+    (∃ pa' ls a1 a2 b1 ds vs ev0 evs, pat = tuplePat pa' ls ∧
+        e1 = ofValA (.annot a1 a2 b1 ds (Vtuple vs)) ∧ ρ = ev0 :: evs ∧
+        out = (Expr [] (Eannot ds e2), update_env (tuplePat pa' ls) (Vtuple vs) ρ, ctl.upd a, σ)) ∨
     Step.CallOf M e1 (fun c => Cwseq a pat c e2) ρ ctl σ out := by
   cases h with
   | wseq_ctx hnj hnc hnv hs => exact .inl ⟨_, _, _, _, hnj, hnc, hnv, hs, rfl⟩
   | wseq_pure => exact .inr (.inl ⟨_, _, _, _, _, _, _, rfl, rfl, rfl, rfl⟩)
   | wseq_annot => exact .inr (.inr (.inl ⟨_, _, _, _, _, _, _, _, _, rfl, rfl, rfl, rfl⟩))
+  | wseq_sym_pure =>
+    exact .inr (.inr (.inr (.inr (.inl ⟨_, _, _, _, _, _, _, _, rfl, rfl, rfl, rfl⟩))))
+  | wseq_sym_annot =>
+    exact .inr (.inr (.inr (.inr (.inr (.inl
+      ⟨_, _, _, _, _, _, _, _, _, _, rfl, rfl, rfl, rfl⟩)))))
+  | wseq_tuple_pure =>
+    exact .inr (.inr (.inr (.inr (.inr (.inr (.inl
+      ⟨_, _, _, _, _, _, _, rfl, rfl, rfl, rfl⟩))))))
+  | wseq_tuple_annot =>
+    exact .inr (.inr (.inr (.inr (.inr (.inr (.inr (.inl
+      ⟨_, _, _, _, _, _, _, _, _, rfl, rfl, rfl, rfl⟩)))))))
   | run hj hl hvs =>
     rw [jumpRedex?_wseq] at hj
     refine .inr (.inr (.inr (.inl ⟨_, _, _, _, _, _, _, hj, rfl, hl, hvs, ?_⟩)))
     rw [redexAnnots_wseq_of_nv _ _ _ (toVal_none_of_jumpRedex?_some hj)]
   | call hc hvs hf hlen =>
-    exact .inr (.inr (.inr (.inr (Step.callOf_of_call_wseq hc hvs hf hlen))))
+    exact .inr (.inr (.inr (.inr (.inr (.inr (.inr (.inr
+      (Step.callOf_of_call_wseq hc hvs hf hlen))))))))
 
 theorem Step.callOf_of_call_annot {M : MachineCtx} {a : List annot} {ds : List dyn_annotation}
     {b : CoreExpr} {ctx : context} {f : sym} {pes : List (generic_pexpr Unit sym)}
@@ -3520,18 +4135,46 @@ theorem Step.if_inv {M : MachineCtx} {a : List annot}
   | run hj hl hvs => simp [jumpRedex?] at hj
   | call hc hvs hf hlen => simp at hc
 
-/-- Inversion at an Ecase node: the value-scrutinee selection TAU. -/
+/-- Inversion at an Ecase node (E2: two arms — the substitution TAU at a
+    value scrutinee, the EVAL round at a non-value one). -/
 theorem Step.case_inv {M : MachineCtx} {a : List annot}
     {pe : generic_pexpr Unit sym} {pats : List (pattern × CoreExpr)}
     {ρ : EnvStack} {ctl : Ctl} {σ : Mem} {out : Config}
     (h : Step M (Expr a (Ecase pe pats), ρ, ctl, σ) out) :
-    ∃ cval e', valueFromPexpr pe = some cval ∧
+    (∃ cval e', valueFromPexpr pe = some cval ∧
       select_case subst_sym_expr cval pats = some e' ∧
-      out = (e', ρ, ctl.upd a, σ) := by
+      out = (e', ρ, ctl.upd a, σ)) ∨
+    (∃ cval, valueFromPexpr pe = none ∧ evalPexpr M.tagDefs M.extern ρ pe = some cval ∧
+      out = (Expr a (Ecase (Pexpr [] () (PEval cval)) pats), ρ, ctl.upd a, σ)) := by
   cases h with
-  | case_value hv hsel => exact ⟨_, _, hv, hsel, rfl⟩
+  | case_value hv hsel => exact .inl ⟨_, _, hv, hsel, rfl⟩
+  | case_eval hnv hv => exact .inr ⟨_, hnv, hv, rfl⟩
   | run hj hl hvs => simp [jumpRedex?] at hj
   | call hc hvs hf hlen => simp at hc
+
+/-- The value-scrutinee instance of `case_inv` (the pre-E2 statement). -/
+theorem Step.case_value_inv {M : MachineCtx} {a : List annot}
+    {pe : generic_pexpr Unit sym} {pats : List (pattern × CoreExpr)}
+    {cval : value} {ρ : EnvStack} {ctl : Ctl} {σ : Mem} {out : Config}
+    (hv : valueFromPexpr pe = some cval)
+    (h : Step M (Expr a (Ecase pe pats), ρ, ctl, σ) out) :
+    ∃ e', select_case subst_sym_expr cval pats = some e' ∧ out = (e', ρ, ctl.upd a, σ) := by
+  rcases h.case_inv with ⟨cval', e', hv', hsel, hout⟩ | ⟨_, hnv, -, -⟩
+  · obtain rfl : cval = cval' := Option.some.inj (hv.symm.trans hv')
+    exact ⟨e', hsel, hout⟩
+  · rw [hv] at hnv; cases hnv
+
+/-- The non-value-scrutinee instance of `case_inv` (E2). -/
+theorem Step.case_op_inv {M : MachineCtx} {a : List annot}
+    {pe : generic_pexpr Unit sym} {pats : List (pattern × CoreExpr)}
+    {ρ : EnvStack} {ctl : Ctl} {σ : Mem} {out : Config}
+    (hnv : valueFromPexpr pe = none)
+    (h : Step M (Expr a (Ecase pe pats), ρ, ctl, σ) out) :
+    ∃ cval, evalPexpr M.tagDefs M.extern ρ pe = some cval ∧
+      out = (Expr a (Ecase (Pexpr [] () (PEval cval)) pats), ρ, ctl.upd a, σ) := by
+  rcases h.case_inv with ⟨cval, e', hv, -, -⟩ | ⟨cval, -, hv, hout⟩
+  · rw [hnv] at hv; cases hv
+  · exact ⟨cval, hv, hout⟩
 
 /-- Inversion at an Epure node (S4): the big-step PURE evaluation. -/
 theorem Step.pure_inv {M : MachineCtx} {a : List annot}
@@ -3673,6 +4316,48 @@ theorem symPat_ne_spec {pa pb : List annot} {x : sym} {bty : core_base_type}
     {pa' : List annot} {x' : sym} {bty' : core_base_type}
     (h : specPat pa pb x bty = symPat pa' x' bty') : False := by
   simp [specPat, symPat] at h
+
+/-! E2: the flat tuple binder pattern against the three other binder shapes. -/
+
+theorem tuplePat_ne_base {pa' : List annot} {bty' : core_base_type}
+    {pa : List annot} {ls : List TupleLeaf}
+    (h : Pattern pa' (CaseBase (none, bty')) = tuplePat pa ls) : False := by
+  simp [tuplePat] at h
+
+theorem symPat_ne_tuple {pa : List annot} {x : sym} {bty : core_base_type}
+    {pa' : List annot} {ls : List TupleLeaf}
+    (h : symPat pa x bty = tuplePat pa' ls) : False := by
+  simp [symPat, tuplePat] at h
+
+theorem specPat_ne_tuple {pa pb : List annot} {x : sym} {bty : core_base_type}
+    {pa' : List annot} {ls : List TupleLeaf}
+    (h : specPat pa pb x bty = tuplePat pa' ls) : False := by
+  simp [specPat, tuplePat] at h
+
+theorem leafPat_inj {t t' : TupleLeaf} (h : leafPat t = leafPat t') : t = t' := by
+  obtain ⟨a, x, b⟩ := t
+  obtain ⟨a', x', b'⟩ := t'
+  cases h
+  rfl
+
+theorem map_leafPat_inj {ls ls' : List TupleLeaf}
+    (h : ls.map leafPat = ls'.map leafPat) : ls = ls' := by
+  induction ls generalizing ls' with
+  | nil => cases ls' with
+    | nil => rfl
+    | cons _ _ => cases h
+  | cons t ts ih => cases ls' with
+    | nil => cases h
+    | cons t' ts' =>
+      simp only [List.map_cons, List.cons.injEq] at h
+      rw [leafPat_inj h.1, ih h.2]
+
+theorem tuplePat_inj {pa pa' : List annot} {ls ls' : List TupleLeaf}
+    (h : tuplePat pa ls = tuplePat pa' ls') : pa = pa' ∧ ls = ls' := by
+  unfold tuplePat at h
+  injection h with h1 h2
+  injection h2 with _ h3
+  exact ⟨h1, map_leafPat_inj h3⟩
 
 theorem symPat_inj {pa pa' : List annot} {x x' : sym}
     {bty bty' : core_base_type}

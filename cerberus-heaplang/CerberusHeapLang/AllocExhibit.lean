@@ -324,7 +324,7 @@ theorem wps_alloc_lit_sym {M : MachineCtx} {p : Option sym} {Ls : LabelSpec GF} 
     wps M p Ls Θ Ψ (allocExpr [] loc ann align size pref) ρ ⊢
       wps M p Ls Θ Ψ (allocOpRedex [] loc ann (Pexpr [] () (PEval (Vobject (OVinteger align))))
         (Pexpr [] () (PEsym n)) pref) ρ :=
-  wps_alloc_eval [] loc ann _ _ pref ρ rfl rfl hn
+  wps_alloc_eval [] loc ann _ _ pref ρ rfl (evalPexpr_val _ _ _ _ _) hn
 
 /-- The total twin, through the public `wpt_alloc_eval` (one tau). -/
 theorem wpt_alloc_lit_sym {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
@@ -337,7 +337,7 @@ theorem wpt_alloc_lit_sym {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF}
     wpt M p Ls Θ k Ψ (allocExpr [] loc ann align size pref) ρ ⊢
       wpt M p Ls Θ (k + 1) Ψ (allocOpRedex [] loc ann (Pexpr [] () (PEval (Vobject (OVinteger align))))
         (Pexpr [] () (PEsym n)) pref) ρ :=
-  wpt_alloc_eval [] loc ann _ _ pref ρ rfl rfl hn
+  wpt_alloc_eval [] loc ann _ _ pref ρ rfl (evalPexpr_val _ _ _ _ _) hn
 
 end FreeIris
 

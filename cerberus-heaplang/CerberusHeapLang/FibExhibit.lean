@@ -249,6 +249,7 @@ theorem fib_guard_eval (n : Int) :
       (Pexpr [] () (PEsym fibISym)) = some (ivVal i) from by
     rw [evalPexpr_sym_empty]
     exact lookup_env_head (fibFrame_lookup_i hf _ _ _) rest]
+  rw [evalPexpr_val]
   show evalBinop binop.OpLt (ivVal i) (ivVal n) = _
   rfl
 
@@ -272,7 +273,7 @@ theorem fib_args_eval :
   rw [show evalPexpr fmapEmpty fmapEmpty (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
       fibIncPe = some (ivVal (i + 1)) from by
     unfold fibIncPe
-    rw [evalPexpr_op, hi]
+    rw [evalPexpr_op, hi, evalPexpr_val]
     rfl]
   rw [evalPexprs_cons]
   rw [show evalPexpr fmapEmpty fmapEmpty (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
@@ -382,7 +383,9 @@ theorem fib_wps (hn : 0 ≤ n) (sbty : core_base_type) :
     Expr [] (Esave (fibLoopSym, sbty) (fibParams ibty abty bbty)
       (fibBody ra n)) from rfl]
   iapply wps_save [] (fibLoopSym, sbty) _ _ fmapEmpty []
-    (cvals := [ivVal 0, ivVal 0, ivVal 1]) rfl
+    (cvals := [ivVal 0, ivVal 0, ivVal 1])
+    (evalPexprs_cons_val _ _ _ _ _ _ _ (evalPexprs_cons_val _ _ _ _ _ _ _
+      (evalPexprs_single_val _ _ _ _ _)))
   rw [bindSave_fib]
   have h := fib_body_wps (GF := GF) ra n ibty abty bbty p rs hQ 0 fmapEmpty []
     symFrame_empty (by omega) hn

@@ -1346,6 +1346,8 @@ theorem wps_seq {Ψ : SpikeVal → EnvStack → IProp GF}
         ⟨_, _, _, _, _, _, _, _, _, _, _, hpat, _, _, _⟩ |
         ⟨_, _, _, _, _, _, _, _, hpat, _, _, _⟩ |
         ⟨_, _, _, _, _, _, _, _, _, _, hpat, _, _, _⟩ |
+        ⟨_, _, _, _, _, _, _, hpatT1, _, _, _⟩ |
+        ⟨_, _, _, _, _, _, _, _, _, hpatT2, _, _, _⟩ |
         hcall
     · rw [toVal_ofValA] at hnv'; cases hnv'
     · -- LETS-PURE: successor (e2, ρ, σ)
@@ -1388,6 +1390,8 @@ theorem wps_seq {Ψ : SpikeVal → EnvStack → IProp GF}
     · exact (specPat_ne_base hpat).elim
     · exact (symPat_ne_base hpat).elim
     · exact (symPat_ne_base hpat).elim
+    · exact (tuplePat_ne_base hpatT1).elim
+    · exact (tuplePat_ne_base hpatT2).elim
     · obtain ⟨_, _, _, h⟩ := hcall.callRedex?_some
       simp at h
   | none =>
@@ -1462,6 +1466,8 @@ theorem wps_seq {Ψ : SpikeVal → EnvStack → IProp GF}
           ⟨_, _, _, _, _, _, _, _, _, _, _, hpat, _, _, _⟩ |
           ⟨_, _, _, _, _, _, _, _, hpat, _, _, _⟩ |
           ⟨_, _, _, _, _, _, _, _, _, _, hpat, _, _, _⟩ |
+          ⟨_, _, _, _, _, _, _, hpatT1, _, _, _⟩ |
+          ⟨_, _, _, _, _, _, _, _, _, hpatT2, _, _, _⟩ |
           hcall
       · obtain ⟨a', rfl⟩ := Step.ctl_upd hs' hnc' hnv'
         obtain ⟨ev0', rfl⟩ := Step.env_cons hs' rfl
@@ -1484,6 +1490,8 @@ theorem wps_seq {Ψ : SpikeVal → EnvStack → IProp GF}
       · exact (specPat_ne_base hpat).elim
       · exact (symPat_ne_base hpat).elim
       · exact (symPat_ne_base hpat).elim
+      · exact (tuplePat_ne_base hpatT1).elim
+      · exact (tuplePat_ne_base hpatT2).elim
       · obtain ⟨_, _, _, h⟩ := hcall.callRedex?_some
         rw [hcr] at h; cases h
 
@@ -1523,6 +1531,10 @@ theorem wps_wseq {Ψ : SpikeVal → EnvStack → IProp GF}
         ⟨_, _, a1, b1, v, _, _, _, he1, _, hout⟩ |
         ⟨_, _, a1, a2, b1, ds, v, _, _, _, he1, _, hout⟩ |
         ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩ |
+        ⟨_, _, _, _, _, _, _, _, hpatS1, _, _, _⟩ |
+        ⟨_, _, _, _, _, _, _, _, _, _, hpatS2, _, _, _⟩ |
+        ⟨_, _, _, _, _, _, _, hpatT1, _, _, _⟩ |
+        ⟨_, _, _, _, _, _, _, _, _, hpatT2, _, _, _⟩ |
         hcall
     · rw [toVal_ofValA] at hnv'; cases hnv'
     · -- LETW-PURE: successor (e2, ρ, σ)
@@ -1561,6 +1573,10 @@ theorem wps_wseq {Ψ : SpikeVal → EnvStack → IProp GF}
           = fun u ρ'' => Ψ (SpikeVal.merge ds u) ρ'' from rfl]
         iapply wps_annot [] ds e2 (ev0 :: evs) $$ H
     · rw [jumpRedex?_ofValA] at hj; cases hj
+    · exact (symPat_ne_base hpatS1).elim
+    · exact (symPat_ne_base hpatS2).elim
+    · exact (tuplePat_ne_base hpatT1).elim
+    · exact (tuplePat_ne_base hpatT2).elim
     · obtain ⟨_, _, _, h⟩ := hcall.callRedex?_some
       simp at h
   | none =>
@@ -1622,6 +1638,10 @@ theorem wps_wseq {Ψ : SpikeVal → EnvStack → IProp GF}
           ⟨_, _, _, _, v, _, _, _, he1, _, _⟩ |
           ⟨_, _, _, _, _, ds, v, _, _, _, he1, _, _⟩ |
           ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩ |
+          ⟨_, _, _, _, _, _, _, _, hpatS1, _, _, _⟩ |
+          ⟨_, _, _, _, _, _, _, _, _, _, hpatS2, _, _, _⟩ |
+          ⟨_, _, _, _, _, _, _, hpatT1, _, _, _⟩ |
+          ⟨_, _, _, _, _, _, _, _, _, hpatT2, _, _, _⟩ |
           hcall
       · obtain ⟨a', rfl⟩ := Step.ctl_upd hs' hnc' hnv'
         obtain ⟨ev0', rfl⟩ := Step.env_cons hs' rfl
@@ -1640,6 +1660,10 @@ theorem wps_wseq {Ψ : SpikeVal → EnvStack → IProp GF}
       · rw [he1, toVal_ofValA] at htv; cases htv
       · rw [he1, toVal_ofValA] at htv; cases htv
       · rw [hjr] at hj; cases hj
+      · exact (symPat_ne_base hpatS1).elim
+      · exact (symPat_ne_base hpatS2).elim
+      · exact (tuplePat_ne_base hpatT1).elim
+      · exact (tuplePat_ne_base hpatT2).elim
       · obtain ⟨_, _, _, h⟩ := hcall.callRedex?_some
         rw [hcr] at h; cases h
 
@@ -1851,8 +1875,7 @@ theorem wps_case_value {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot
   inext
   iintro %r %σ₂ %eₜ %Hstep Hcred
   obtain ⟨hs, hlbl, rfl⟩ := Hstep
-  obtain ⟨cval', e'', hv', hsel', hout⟩ := hs.case_inv
-  obtain rfl : cval = cval' := Option.some.inj (hv.symm.trans hv')
+  obtain ⟨e'', hsel', hout⟩ := hs.case_value_inv hv
   obtain rfl : e' = e'' := Option.some.inj (hsel.symm.trans hsel')
   obtain ⟨re, rρ, rctl, rM⟩ := r
   simp only at hlbl
@@ -2134,6 +2157,8 @@ theorem wps_seq_spec {Ψ : SpikeVal → EnvStack → IProp GF}
           ⟨pa', pb', x', bty', _, _, _, ds', ov', _, _, hpat, he1, _, hout⟩ |
           ⟨_, _, _, _, _, _, _, _, hpat, _, _, _⟩ |
           ⟨_, _, _, _, _, _, _, _, _, _, hpat, _, _, _⟩ |
+          ⟨_, _, _, _, _, _, _, hpatT1, _, _, _⟩ |
+          ⟨_, _, _, _, _, _, _, _, _, hpatT2, _, _, _⟩ |
           hcall
       · rw [toVal_ofValA] at hnv'; cases hnv'
       · exact (specPat_ne_base hpat.symm).elim
@@ -2162,6 +2187,8 @@ theorem wps_seq_spec {Ψ : SpikeVal → EnvStack → IProp GF}
       · exact absurd (ofValA_inj he1) (by simp)
       · exact (symPat_ne_spec hpat).elim
       · exact (symPat_ne_spec hpat).elim
+      · exact (specPat_ne_tuple hpatT1).elim
+      · exact (specPat_ne_tuple hpatT2).elim
       · obtain ⟨_, _, _, h⟩ := hcall.callRedex?_some
         simp at h
     | annot a1 a2 b1 ds v =>
@@ -2180,6 +2207,8 @@ theorem wps_seq_spec {Ψ : SpikeVal → EnvStack → IProp GF}
           ⟨pa', pb', x', bty', a1', a2', b1', ds', ov', _, _, hpat, he1, _, hout⟩ |
           ⟨_, _, _, _, _, _, _, _, hpat, _, _, _⟩ |
           ⟨_, _, _, _, _, _, _, _, _, _, hpat, _, _, _⟩ |
+          ⟨_, _, _, _, _, _, _, hpatT1, _, _, _⟩ |
+          ⟨_, _, _, _, _, _, _, _, _, hpatT2, _, _, _⟩ |
           hcall
       · rw [toVal_ofValA] at hnv'; cases hnv'
       · exact (specPat_ne_base hpat.symm).elim
@@ -2208,6 +2237,8 @@ theorem wps_seq_spec {Ψ : SpikeVal → EnvStack → IProp GF}
           iapply wps_annot [] ds e2 _ $$ Hinner
       · exact (symPat_ne_spec hpat).elim
       · exact (symPat_ne_spec hpat).elim
+      · exact (specPat_ne_tuple hpatT1).elim
+      · exact (specPat_ne_tuple hpatT2).elim
       · obtain ⟨_, _, _, h⟩ := hcall.callRedex?_some
         simp [callRedex?, annotRooted] at h
   | none =>
@@ -2267,6 +2298,8 @@ theorem wps_seq_spec {Ψ : SpikeVal → EnvStack → IProp GF}
           ⟨_, _, _, _, _, _, _, _, _, _, _, _, he1, _, _⟩ |
           ⟨_, _, _, _, _, _, _, _, _, he1, _, _⟩ |
           ⟨_, _, _, _, _, _, _, _, _, _, _, he1, _, _⟩ |
+          ⟨_, _, _, _, _, _, _, hpatT1, _, _, _⟩ |
+          ⟨_, _, _, _, _, _, _, _, _, hpatT2, _, _, _⟩ |
           hcall
       · obtain ⟨a', rfl⟩ := Step.ctl_upd hs' hnc' hnv'
         obtain ⟨ev0', rfl⟩ := Step.env_cons hs' rfl
@@ -2288,6 +2321,8 @@ theorem wps_seq_spec {Ψ : SpikeVal → EnvStack → IProp GF}
       · rw [he1, toVal_ofValA] at htv; cases htv
       · rw [he1, toVal_ofValA] at htv; cases htv
       · rw [he1, toVal_ofValA] at htv; cases htv
+      · exact (specPat_ne_tuple hpatT1).elim
+      · exact (specPat_ne_tuple hpatT2).elim
       · obtain ⟨_, _, _, h⟩ := hcall.callRedex?_some
         rw [hcr] at h; cases h
 
@@ -2343,6 +2378,8 @@ theorem wps_seq_sym {Ψ : SpikeVal → EnvStack → IProp GF}
         ⟨_, _, _, _, _, _, _, _, _, _, _, hpat, _, _, _⟩ |
         ⟨pa', x', bty', a1', b1', v', _, _, hpat, he1, _, hout⟩ |
         ⟨pa', x', bty', _, _, _, _, _, _, _, hpat, he1, _, hout⟩ |
+        ⟨_, _, _, _, _, _, _, hpatT1, _, _, _⟩ |
+        ⟨_, _, _, _, _, _, _, _, _, hpatT2, _, _, _⟩ |
         hcall
     · rw [toVal_ofValA] at hnv'; cases hnv'
     · exact (symPat_ne_base hpat.symm).elim
@@ -2368,6 +2405,8 @@ theorem wps_seq_sym {Ψ : SpikeVal → EnvStack → IProp GF}
       · iexact Hσ
       · iexact Hinner
     · exact absurd (ofValA_inj he1) (by simp)
+    · exact (symPat_ne_tuple hpatT1).elim
+    · exact (symPat_ne_tuple hpatT2).elim
     · obtain ⟨_, _, _, h⟩ := hcall.callRedex?_some
       simp at h
   | none =>
@@ -2427,6 +2466,8 @@ theorem wps_seq_sym {Ψ : SpikeVal → EnvStack → IProp GF}
           ⟨_, _, _, _, _, _, _, _, _, _, _, _, he1, _, _⟩ |
           ⟨_, _, _, _, _, _, _, _, _, he1, _, _⟩ |
           ⟨_, _, _, _, _, _, _, _, _, _, _, he1, _, _⟩ |
+          ⟨_, _, _, _, _, _, _, hpatT1, _, _, _⟩ |
+          ⟨_, _, _, _, _, _, _, _, _, hpatT2, _, _, _⟩ |
           hcall
       · obtain ⟨a', rfl⟩ := Step.ctl_upd hs' hnc' hnv'
         obtain ⟨ev0', rfl⟩ := Step.env_cons hs' rfl
@@ -2448,6 +2489,8 @@ theorem wps_seq_sym {Ψ : SpikeVal → EnvStack → IProp GF}
       · rw [he1, toVal_ofValA] at htv; cases htv
       · rw [he1, toVal_ofValA] at htv; cases htv
       · rw [he1, toVal_ofValA] at htv; cases htv
+      · exact (symPat_ne_tuple hpatT1).elim
+      · exact (symPat_ne_tuple hpatT2).elim
       · obtain ⟨_, _, _, h⟩ := hcall.callRedex?_some
         rw [hcr] at h; cases h
 

@@ -116,7 +116,7 @@ theorem wps_store_sym_lit [SpikeGS .hasLC GF] {M : MachineCtx} {p : Option sym} 
     wps M p Ls Θ Ψ (storeExpr [] loc ann ty pv cv mo) ρ ⊢
       wps M p Ls Θ Ψ (storeOpRedex [] loc ann ty (Pexpr [] () (PEsym x))
         (Pexpr [] () (PEval cv)) mo) ρ :=
-  wps_store_eval [] loc ann ty _ _ mo ρ rfl hx rfl
+  wps_store_eval [] loc ann ty _ _ mo ρ rfl hx (evalPexpr_val _ _ _ _ _)
 
 theorem wpt_store_lit_sym [SpikeGS .hasLC GF] {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
     {Ψ : SpikeVal → EnvStack → IProp GF}
@@ -127,7 +127,7 @@ theorem wpt_store_lit_sym [SpikeGS .hasLC GF] {M : MachineCtx} {p : Option sym} 
     wpt M p Ls Θ k Ψ (storeExpr [] loc ann ty pv cv mo) ρ ⊢
       wpt M p Ls Θ (k + 1) Ψ (storeOpRedex [] loc ann ty
         (Pexpr [] () (PEval (Vobject (OVpointer pv)))) (Pexpr [] () (PEsym y)) mo) ρ :=
-  wpt_store_eval [] loc ann ty _ _ mo ρ rfl rfl hy
+  wpt_store_eval [] loc ann ty _ _ mo ρ rfl (evalPexpr_val _ _ _ _ _) hy
 
 /-! ## The frame after the bind, and its lookup -/
 
@@ -195,7 +195,7 @@ theorem progAProd_wpt [SpikeGS .hasLC GF]
     (pv := p) (cv := sevenVal)
     (by rw [evalPexpr_sym_of_resolve _ _ _ (hex _)]
         exact lookup_env_head (prodAFrame_lookup_p hf p) evs)
-    rfl
+    (evalPexpr_val _ _ _ _ _)
   iapply wpt_store [] loc0 empty_annotation intTy p sevenVal NA sevenMval
     (intUndefBytes M.tagDefs) _ (Nat.le_refl 3) seven_encodes (seven_storable _)
   isplitl [Hpt]

@@ -320,6 +320,7 @@ theorem arr_guard_eval (n : Int) :
       (Pexpr [] () (PEsym arrISym)) = some (ivVal i) from by
     rw [evalPexpr_sym_empty]
     exact lookup_env_head (arrFrame_lookup_i hf _ _ _) rest]
+  rw [evalPexpr_val]
   show evalBinop binop.OpLt (ivVal i) (ivVal n) = _
   rfl
 
@@ -361,7 +362,7 @@ theorem arr_args_eval (x : Int) (id a : Int) :
       (Vobject (OVpointer (cellPtr id a))) f :: rest) arrIncPe =
       some (ivVal ((i : Int) + 1)) from by
     unfold arrIncPe
-    rw [evalPexpr_op, hi]
+    rw [evalPexpr_op, hi, evalPexpr_val]
     rfl]
   rw [evalPexprs_cons]
   rw [show evalPexpr fmapEmpty fmapEmpty (arrFrameX (ivVal x) (ivVal i) (ivVal acc)
@@ -375,7 +376,7 @@ theorem arr_args_eval (x : Int) (id a : Int) :
       (Vobject (OVpointer (cellPtr id a))) f :: rest) arrShiftPe =
       some (Vobject (OVpointer (cellPtr id (a + 4)))) from by
     unfold arrShiftPe
-    rw [evalPexpr_array_shift, hp]
+    rw [evalPexpr_array_shift, hp, evalPexpr_val]
     show evalArrayShift fmapEmpty intTy (Vobject (OVpointer (cellPtr id a)))
       (ivVal 1) = _
     exact evalArrayShift_ptr_one id a]
@@ -562,7 +563,9 @@ theorem arr_wps (sbty : core_base_type) :
       (arrBody loc ann ra mo xbty vs.length)) from rfl]
   iintro Hpt
   iapply wps_save [] (arrLoopSym, sbty) _ _ fmapEmpty []
-    (cvals := [ivVal 0, ivVal 0, Vobject (OVpointer (cellPtr id a))]) rfl
+    (cvals := [ivVal 0, ivVal 0, Vobject (OVpointer (cellPtr id a))])
+    (evalPexprs_cons_val _ _ _ _ _ _ _ (evalPexprs_cons_val _ _ _ _ _ _ _
+      (evalPexprs_single_val _ _ _ _ _)))
   rw [bindSave_arr]
   have h := arr_body_wps (GF := GF) loc ann ra mo ibty accbty pbty xbty
     vs id a aty bs p rs hQ hsz ety hdec 0 fmapEmpty [] symFrame_empty

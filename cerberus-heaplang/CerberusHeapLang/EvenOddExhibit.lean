@@ -296,14 +296,14 @@ theorem eoN_eval (n : Int) (ρ : EnvStack) :
 theorem eoGuard_eval (n : Int) (ρ : EnvStack) :
     evalPexpr fmapEmpty fmapEmpty (eoF0 n :: ρ) eoGuard = some (boolValue (decide (n < 1))) := by
   unfold eoGuard
-  rw [evalPexpr_op, eoN_eval]
+  rw [evalPexpr_op, eoN_eval, evalPexpr_val]
   rfl
 
 theorem eoDec_eval (n : Int) (ρ : EnvStack) :
     evalPexprs fmapEmpty fmapEmpty (eoF0 n :: ρ) [eoDec] = some [ivVal (n - 1)] := by
   rw [evalPexprs_cons]
   unfold eoDec
-  rw [evalPexpr_op, eoN_eval]
+  rw [evalPexpr_op, eoN_eval, evalPexpr_val]
   rfl
 
 /-- The recursive case's values: `odd (n - 1)` is `even n`, `even (n - 1)` is
@@ -466,7 +466,7 @@ theorem eoMain_wps (hn : 0 ≤ n) (ρ : EnvStack) :
     ⊢ wps (GF := GF) (eoCtx ra n nbty sup) (some mainSym) eoLs eoSpec (eoPost n) (eoMain ra n) ρ := by
   unfold eoMain callRedex
   iapply wps_call_root [] ra eoEvenSym [Pexpr [] () (PEval (ivVal n))] ρ (vs := [ivVal n])
-    (eoFile_lookup_even ra n nbty) rfl rfl
+    (eoFile_lookup_even ra n nbty) rfl (evalPexprs_single_val _ _ _ _ _)
   dsimp only [eoSpec]
   isplitl []
   · ipureintro
@@ -625,7 +625,7 @@ theorem eoMain_wpt (hn : 0 ≤ n) (ρ : EnvStack) :
   unfold eoMain callRedex
   iapply wpt_call_root [] ra eoEvenSym [Pexpr [] () (PEval (ivVal n))] ρ (vs := [ivVal n])
     (m := 3 * n.toNat + 2) (k' := 1) (k := 3 * n.toNat + 4)
-    (eoFile_lookup_even ra n nbty) rfl rfl (by omega)
+    (eoFile_lookup_even ra n nbty) rfl (evalPexprs_single_val _ _ _ _ _) (by omega)
   dsimp only [eoSpecT]
   isplitl []
   · ipureintro

@@ -1121,7 +1121,7 @@ theorem step_ctx_load_eval_ws {an : List _root_.annot} {e : CoreExpr} {ctx : con
      rw [act_valueFromPexpr_none hp2 hnv2]
      dsimp only [act_valueFromPexpr, valueFromPexpr]
      refine ⟨_, _, rfl, fun rs => ?_⟩
-     rw [full_eval_bridge (v := Vctype ty) rfl (peDepth_val_le _ _) σ file,
+     rw [full_eval_bridge (v := Vctype ty) (evalPexpr_val _ _ _ _ _) (peDepth_val_le _ _) σ file,
        full_eval_bridge hv2 hd2 σ file]
      dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
        return1, except_return]
@@ -1197,15 +1197,17 @@ theorem step_ctx_store_eval_ws {an : List _root_.annot} {e : CoreExpr} {ctx : co
   simp only [List.map_cons, List.map_nil]
   unfold storeOpRedex
   rw [valueFromPexprs_pair] at hnv
-  cases hp2 <;> cases hp3 <;>
-    try (rw [valueFromPexpr_val, valueFromPexpr_val] at hnv; cases hnv)
+  rcases act_valueFromPexpr_cases hp2 with ⟨hn2, ha2⟩ | ⟨a2, v2', rfl⟩ <;>
+  cases hp3
+  all_goals try (rw [valueFromPexpr_val, valueFromPexpr_val] at hnv; cases hnv)
   all_goals try (obtain rfl := Option.some.inj ((evalPexpr_val _ _ _ _ _).symm.trans hv2))
   all_goals
     cases ctx <;>
       (dsimp only [step_action]
+       try rw [ha2]
        dsimp only [act_valueFromPexpr, valueFromPexpr]
        refine ⟨_, _, rfl, fun rs => ?_⟩
-       rw [full_eval_bridge (v := Vctype ty) rfl (peDepth_val_le _ _) σ file,
+       rw [full_eval_bridge (v := Vctype ty) (evalPexpr_val _ _ _ _ _) (peDepth_val_le _ _) σ file,
          full_eval_bridge hv2 hd2 σ file,
          full_eval_bridge hv3 hd3 σ file]
        dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
@@ -1243,14 +1245,17 @@ theorem step_ctx_alloc_eval_ws {an : List _root_.annot} {e : CoreExpr} {ctx : co
   simp only [List.map_cons, List.map_nil]
   unfold allocOpRedex
   rw [valueFromPexprs_pair] at hnv
-  cases hp1 <;> cases hp2 <;>
-    try (rw [valueFromPexpr_val, valueFromPexpr_val] at hnv; cases hnv)
+  rcases act_valueFromPexpr_cases hp1 with ⟨hn1, ha1⟩ | ⟨a1, v1', rfl⟩ <;>
+  rcases act_valueFromPexpr_cases hp2 with ⟨hn2, ha2⟩ | ⟨a2, v2', rfl⟩
+  all_goals try (rw [valueFromPexpr_val, valueFromPexpr_val] at hnv; cases hnv)
   all_goals try (obtain rfl := Option.some.inj ((evalPexpr_val _ _ _ _ _).symm.trans hv1))
   all_goals try (obtain rfl := Option.some.inj ((evalPexpr_val _ _ _ _ _).symm.trans hv2))
   all_goals
     cases ctx <;>
       (dsimp only [step_action]
-       dsimp only [act_valueFromPexpr, valueFromPexpr]
+       try rw [ha1]
+       try rw [ha2]
+       try dsimp only [act_valueFromPexpr, valueFromPexpr]
        refine ⟨_, _, rfl, fun rs => ?_⟩
        rw [full_eval_bridge hv1 hd1 σ file, full_eval_bridge hv2 hd2 σ file]
        dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
@@ -1290,14 +1295,17 @@ theorem step_ctx_create_eval_ws {an : List _root_.annot} {e : CoreExpr} {ctx : c
   simp only [List.map_cons, List.map_nil]
   unfold createOpRedex
   rw [valueFromPexprs_pair] at hnv
-  cases hp1 <;> cases hp2 <;>
-    try (rw [valueFromPexpr_val, valueFromPexpr_val] at hnv; cases hnv)
+  rcases act_valueFromPexpr_cases hp1 with ⟨hn1, ha1⟩ | ⟨a1, v1', rfl⟩ <;>
+  rcases act_valueFromPexpr_cases hp2 with ⟨hn2, ha2⟩ | ⟨a2, v2', rfl⟩
+  all_goals try (rw [valueFromPexpr_val, valueFromPexpr_val] at hnv; cases hnv)
   all_goals try (obtain rfl := Option.some.inj ((evalPexpr_val _ _ _ _ _).symm.trans hv1))
   all_goals try (obtain rfl := Option.some.inj ((evalPexpr_val _ _ _ _ _).symm.trans hv2))
   all_goals
     cases ctx <;>
       (dsimp only [step_action]
-       dsimp only [act_valueFromPexpr, valueFromPexpr]
+       try rw [ha1]
+       try rw [ha2]
+       try dsimp only [act_valueFromPexpr, valueFromPexpr]
        refine ⟨_, _, rfl, fun rs => ?_⟩
        rw [full_eval_bridge hv1 hd1 σ file, full_eval_bridge hv2 hd2 σ file]
        dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
@@ -1625,6 +1633,8 @@ theorem loop_step_frag_same' {M₀ : MachineCtx} {ctl ctl' : Ctl}
           ⟨_, _, _, _, _, _, _, _, _, _, _, hpat, _, _, _⟩ |
           ⟨_, _, _, _, _, _, _, _, hpat, _, _, _⟩ |
           ⟨_, _, _, _, _, _, _, _, _, _, hpat, _, _, _⟩ |
+          ⟨_, _, _, _, _, _, _, hpatT1, _, _, _⟩ |
+          ⟨_, _, _, _, _, _, _, _, _, hpatT2, _, _, _⟩ |
           hcall
       · rw [toVal_ofValA] at hnv'; cases hnv'
       · obtain ⟨rfl, rfl, rfl⟩ : a1 = a1' ∧ b1 = b1' ∧ v = v' := by
@@ -1643,6 +1653,8 @@ theorem loop_step_frag_same' {M₀ : MachineCtx} {ctl ctl' : Ctl}
       · exact (specPat_ne_base hpat).elim
       · exact (symPat_ne_base hpat).elim
       · exact (symPat_ne_base hpat).elim
+      · exact (tuplePat_ne_base hpatT1).elim
+      · exact (tuplePat_ne_base hpatT2).elim
       · exact (hcall.ne_same_κ hκ).elim
     | @beta_annot an pa a1 a2 b1 bty ds v e2 =>
       rcases hr.sseq_inv with ⟨e1', ρ'', ctl'', σ'', hnj, hnc', hnv', hstep, hout⟩ |
@@ -1653,6 +1665,8 @@ theorem loop_step_frag_same' {M₀ : MachineCtx} {ctl ctl' : Ctl}
           ⟨_, _, _, _, _, _, _, _, _, _, _, hpat, _, _, _⟩ |
           ⟨_, _, _, _, _, _, _, _, hpat, _, _, _⟩ |
           ⟨_, _, _, _, _, _, _, _, _, _, hpat, _, _, _⟩ |
+          ⟨_, _, _, _, _, _, _, hpatT1, _, _, _⟩ |
+          ⟨_, _, _, _, _, _, _, _, _, hpatT2, _, _, _⟩ |
           hcall
       · rw [toVal_ofValA] at hnv'; cases hnv'
       · cases ofValA_inj he1
@@ -1671,12 +1685,18 @@ theorem loop_step_frag_same' {M₀ : MachineCtx} {ctl ctl' : Ctl}
       · exact (specPat_ne_base hpat).elim
       · exact (symPat_ne_base hpat).elim
       · exact (symPat_ne_base hpat).elim
+      · exact (tuplePat_ne_base hpatT1).elim
+      · exact (tuplePat_ne_base hpatT2).elim
       · exact (hcall.ne_same_κ hκ).elim
     | @wbeta_pure an pa a1 b1 bty v e2 =>
       rcases hr.wseq_inv with ⟨e1', ρ'', ctl'', σ'', hnj, hnc', hnv', hstep, hout⟩ |
           ⟨_, _, a1', b1', v', _, _, _, he1, _, hout⟩ |
           ⟨_, _, _, _, _, ds', v', _, _, _, he1, _, hout⟩ |
           ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩ |
+          ⟨_, _, _, _, _, _, _, _, hpatS1, _, _, _⟩ |
+          ⟨_, _, _, _, _, _, _, _, _, _, hpatS2, _, _, _⟩ |
+          ⟨_, _, _, _, _, _, _, hpatT1, _, _, _⟩ |
+          ⟨_, _, _, _, _, _, _, _, _, hpatT2, _, _, _⟩ |
           hcall
       · rw [toVal_ofValA] at hnv'; cases hnv'
       · obtain ⟨rfl, rfl, rfl⟩ : a1 = a1' ∧ b1 = b1' ∧ v = v' := by
@@ -1691,12 +1711,20 @@ theorem loop_step_frag_same' {M₀ : MachineCtx} {ctl ctl' : Ctl}
         exact loop_step_tau fl fmapEmpty acc hth hsteps
       · cases ofValA_inj he1
       · rw [jumpRedex?_ofValA] at hj; cases hj
+      · exact (symPat_ne_base hpatS1).elim
+      · exact (symPat_ne_base hpatS2).elim
+      · exact (tuplePat_ne_base hpatT1).elim
+      · exact (tuplePat_ne_base hpatT2).elim
       · exact (hcall.ne_same_κ hκ).elim
     | @wbeta_annot an pa a1 a2 b1 bty ds v e2 =>
       rcases hr.wseq_inv with ⟨e1', ρ'', ctl'', σ'', hnj, hnc', hnv', hstep, hout⟩ |
           ⟨_, _, _, _, v', _, _, _, he1, _, hout⟩ |
           ⟨_, _, a1', a2', b1', ds', v', _, _, _, he1, _, hout⟩ |
           ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩ |
+          ⟨_, _, _, _, _, _, _, _, hpatS1, _, _, _⟩ |
+          ⟨_, _, _, _, _, _, _, _, _, _, hpatS2, _, _, _⟩ |
+          ⟨_, _, _, _, _, _, _, hpatT1, _, _, _⟩ |
+          ⟨_, _, _, _, _, _, _, _, _, hpatT2, _, _, _⟩ |
           hcall
       · rw [toVal_ofValA] at hnv'; cases hnv'
       · cases ofValA_inj he1
@@ -1711,6 +1739,10 @@ theorem loop_step_frag_same' {M₀ : MachineCtx} {ctl ctl' : Ctl}
         refine ⟨dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, ?_⟩
         exact loop_step_tau fl fmapEmpty acc hth hsteps
       · rw [jumpRedex?_ofValA] at hj; cases hj
+      · exact (symPat_ne_base hpatS1).elim
+      · exact (symPat_ne_base hpatS2).elim
+      · exact (tuplePat_ne_base hpatT1).elim
+      · exact (tuplePat_ne_base hpatT2).elim
       · exact (hcall.ne_same_κ hκ).elim
     | @merge an a2 ds1 ds2 b hirr =>
       rcases hr.annot_inv with ⟨hg, hnj, hnc', hnv', b', ρ'', ctl'', σ'', hstep, hout⟩ |
@@ -1789,8 +1821,7 @@ theorem loop_step_frag_same' {M₀ : MachineCtx} {ctl ctl' : Ctl}
     | @case_ an pe pats =>
       cases hfr with
       | case_value hbr hbsz =>
-        obtain ⟨cval', e'', hv, hsel, hout⟩ := hr.case_inv
-        obtain rfl : _ = cval' := Option.some.inj (valueFromPexpr_val _ _ ▸ hv)
+        obtain ⟨e'', hsel, hout⟩ := hr.case_value_inv (valueFromPexpr_val _ _)
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
         have hsteps := step_ctx_case_value hd hsz hsel fmapEmpty dst.layout_state
@@ -1847,6 +1878,8 @@ theorem loop_step_frag_same' {M₀ : MachineCtx} {ctl ctl' : Ctl}
           ⟨pa', pb', x', bty', a1', a2', b1', ds', ov', _, _, hpat, he1, _, hout⟩ |
           ⟨pa', x', bty', a1', b1', v', _, _, hpat, he1, _, hout⟩ |
           ⟨pa', x', bty', a1', a2', b1', ds', v', _, _, hpat, he1, _, hout⟩ |
+          ⟨_, _, _, _, _, _, _, hpatT1, _, _, _⟩ |
+          ⟨_, _, _, _, _, _, _, _, _, hpatT2, _, _, _⟩ |
           hcall
       · rw [toVal_ofValA] at hnv'; cases hnv'
       · exact (specPat_ne_base hpat.symm).elim
@@ -1874,6 +1907,8 @@ theorem loop_step_frag_same' {M₀ : MachineCtx} {ctl ctl' : Ctl}
         exact loop_step_tau fl fmapEmpty acc hth hsteps
       · exact (symPat_ne_spec hpat).elim
       · exact (symPat_ne_spec hpat).elim
+      · exact (specPat_ne_tuple hpatT1).elim
+      · exact (specPat_ne_tuple hpatT2).elim
       · exact (hcall.ne_same_κ hκ).elim
     | @memop an mop pes =>
       cases hfr with
@@ -1935,6 +1970,8 @@ theorem loop_step_frag_same' {M₀ : MachineCtx} {ctl ctl' : Ctl}
           ⟨pa', pb', x', bty', a1', a2', b1', ds', ov', _, _, hpat, he1, _, hout⟩ |
           ⟨pa', x', bty', a1', b1', v', _, _, hpat, he1, _, hout⟩ |
           ⟨pa', x', bty', a1', a2', b1', ds', v', _, _, hpat, he1, _, hout⟩ |
+          ⟨_, _, _, _, _, _, _, hpatT1, _, _, _⟩ |
+          ⟨_, _, _, _, _, _, _, _, _, hpatT2, _, _, _⟩ |
           hcall
       · rw [toVal_ofValA] at hnv'; cases hnv'
       · exact (symPat_ne_base hpat.symm).elim
@@ -1962,6 +1999,8 @@ theorem loop_step_frag_same' {M₀ : MachineCtx} {ctl ctl' : Ctl}
         rw [MachineCtx.locUpdTh_ctl hcl] at hsteps
         refine ⟨dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, ?_⟩
         exact loop_step_tau fl fmapEmpty acc hth hsteps
+      · exact (symPat_ne_tuple hpatT1).elim
+      · exact (symPat_ne_tuple hpatT2).elim
       · exact (hcall.ne_same_κ hκ).elim
     | @bound_pure an a1 b1 v =>
       rcases hr.bound_inv with ⟨b', ρ'', ctl'', σ'', hnj, hnc', hnv', hstep, hout⟩ |

@@ -233,7 +233,8 @@ theorem csIncPe_eval (x : Int) (ρ : EnvStack) :
     evalPexpr fmapEmpty fmapEmpty (procEnv [(csX, bty)] [csInt x] :: ρ) csIncPe =
       some (csInt (x + 1)) := by
   unfold csIncPe
-  rw [evalPexpr_op, evalPexpr_sym_empty, lookup_env_head (csFrame_lookup_x bty _) ρ]
+  rw [evalPexpr_op, evalPexpr_sym_empty, lookup_env_head (csFrame_lookup_x bty _) ρ,
+    evalPexpr_val]
   rfl
 
 /-- The body of `f` under the table's precondition, at EVERY caller
@@ -300,7 +301,7 @@ theorem csMain_wps (ρ : EnvStack) :
     ⊢ wps (GF := GF) (csCtx ra bty ybty) (some csMain) csLs csSpec csPost (csMainBody ra) ρ := by
   unfold csMainBody callRedex
   iapply wps_call_root [] ra csF [Pexpr [] () (PEval (csInt 3))] ρ
-    (csFile_lookup_f ra bty ybty) rfl rfl
+    (csFile_lookup_f ra bty ybty) rfl (evalPexprs_single_val _ _ _ _ _)
   dsimp only [csSpec]
   isplitl []
   · ipureintro
@@ -433,7 +434,7 @@ theorem csMain_wpt (ρ : EnvStack) :
     ⊢ wpt (GF := GF) (csCtx ra bty ybty) (some csMain) csLsT csSpecT 6 csPost (csMainBody ra) ρ := by
   unfold csMainBody callRedex
   iapply wpt_call_root [] ra csF [Pexpr [] () (PEval (csInt 3))] ρ (m := 4) (k' := 1)
-    (csFile_lookup_f ra bty ybty) rfl rfl (Nat.le_refl 6)
+    (csFile_lookup_f ra bty ybty) rfl (evalPexprs_single_val _ _ _ _ _) (Nat.le_refl 6)
   dsimp only [csSpecT]
   isplitl []
   · ipureintro

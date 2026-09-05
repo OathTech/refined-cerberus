@@ -307,6 +307,7 @@ theorem dl_shift_eval_B (vb : value) (id aN : Int) :
       (Pexpr [] () (PEsym dlCurSym)) = some (ptrVal (cellPtr id aN)) from by
     rw [evalPexpr_sym_empty]
     exact lookup_env_head (dlFrameB_lookup_cur hf _ _) rest]
+  rw [evalPexpr_val]
   show evalArrayShift fmapEmpty longTy (Vobject (OVpointer (cellPtr id aN))) (ivVal 1) = _
   exact evalArrayShift_long_one id aN
 
@@ -416,7 +417,7 @@ theorem dl_body_wps (done rest' : List (Int × Int))
     rw [show dlMemopE = memopRedex [] PtrEq
       [Pexpr [] () (PEsym dlCurSym), Pexpr [] () (PEval nullVal)] from rfl]
     iapply wps_memop_eval [] PtrEq _ _ _
-      dl_memop_operands_nonvalue (dl_cur_eval hf renv _) rfl
+      dl_memop_operands_nonvalue (dl_cur_eval hf renv _) (evalPexpr_val _ _ _ _ _)
     rw [show memopRedex [] PtrEq [Pexpr [] () (PEval (ptrVal nullNode)),
         Pexpr [] () (PEval nullVal)] =
       memopPtrEqVals [] (Vobject (OVpointer nullNode))
@@ -446,7 +447,7 @@ theorem dl_body_wps (done rest' : List (Int × Int))
     rw [show dlMemopE = memopRedex [] PtrEq
       [Pexpr [] () (PEsym dlCurSym), Pexpr [] () (PEval nullVal)] from rfl]
     iapply wps_memop_eval [] PtrEq _ _ _
-      dl_memop_operands_nonvalue (dl_cur_eval hf renv _) rfl
+      dl_memop_operands_nonvalue (dl_cur_eval hf renv _) (evalPexpr_val _ _ _ _ _)
     rw [show memopRedex [] PtrEq [Pexpr [] () (PEval (ptrVal (cellPtr nd.1 aN))),
         Pexpr [] () (PEval nullVal)] =
       memopPtrEqVals [] (Vobject (OVpointer (cellPtr nd.1 aN)))
@@ -560,7 +561,7 @@ theorem dl_wps (sbty : core_base_type) (head : CerbMem.PointerValue) :
     Expr [] (Esave (dlLoopSym, sbty) (dlParams cbty head)
       (dlBody loc ann ra mo bbty nbty ubty)) from rfl]
   iintro HL
-  iapply wps_save [] (dlLoopSym, sbty) _ _ fmapEmpty [] (cvals := [ptrVal head]) rfl
+  iapply wps_save [] (dlLoopSym, sbty) _ _ fmapEmpty [] (cvals := [ptrVal head]) (evalPexprs_single_val _ _ _ _ _)
   rw [bindSave_dl]
   iapply dl_body_wps loc ann ra mo cbty bbty nbty ubty ns p rs hQ [] ns
     head fmapEmpty [] symFrame_empty (by simp)
@@ -709,7 +710,7 @@ theorem dl_body_wpt (done rest' : List (Int × Int))
       [Pexpr [] () (PEsym dlCurSym), Pexpr [] () (PEval nullVal)] from rfl,
       show (3 : Nat) = 2 + 1 from rfl]
     iapply wpt_memop_eval [] PtrEq _ _ _
-      dl_memop_operands_nonvalue (dl_cur_eval hf renv _) rfl
+      dl_memop_operands_nonvalue (dl_cur_eval hf renv _) (evalPexpr_val _ _ _ _ _)
     rw [show memopRedex [] PtrEq [Pexpr [] () (PEval (ptrVal nullNode)),
         Pexpr [] () (PEval nullVal)] =
       memopPtrEqVals [] (Vobject (OVpointer nullNode))
@@ -740,7 +741,7 @@ theorem dl_body_wpt (done rest' : List (Int × Int))
       [Pexpr [] () (PEsym dlCurSym), Pexpr [] () (PEval nullVal)] from rfl,
       show (3 : Nat) = 2 + 1 from rfl]
     iapply wpt_memop_eval [] PtrEq _ _ _
-      dl_memop_operands_nonvalue (dl_cur_eval hf renv _) rfl
+      dl_memop_operands_nonvalue (dl_cur_eval hf renv _) (evalPexpr_val _ _ _ _ _)
     rw [show memopRedex [] PtrEq [Pexpr [] () (PEval (ptrVal (cellPtr nd.1 aN))),
         Pexpr [] () (PEval nullVal)] =
       memopPtrEqVals [] (Vobject (OVpointer (cellPtr nd.1 aN)))
@@ -1163,7 +1164,7 @@ theorem lrProdPrefix_wpt {Ls : LabelSpecT GF} (bty : core_base_type)
     (pv := cellPtr i₁ a₁) (cv := longVal 1)
     (by rw [procCtx_extern, evalPexpr_sym_empty]
         exact lookup_env_head (lrPFrame_lookup_n1 hf _ _) evs)
-    rfl
+    (evalPexpr_val _ _ _ _ _)
   rw [show (storeExpr [] loc0 empty_annotation longTy (cellPtr i₁ a₁)
       (longVal 1) mo : CoreExpr) =
     storeExpr [] loc0 empty_annotation longTy
@@ -1204,7 +1205,7 @@ theorem lrProdPrefix_wpt {Ls : LabelSpecT GF} (bty : core_base_type)
     (pv := cellPtr i₂ a₂) (cv := longVal 2)
     (by rw [procCtx_extern, evalPexpr_sym_empty]
         exact lookup_env_head (lrPFrame_lookup_n2 hf _ _) evs)
-    rfl
+    (evalPexpr_val _ _ _ _ _)
   rw [show (storeExpr [] loc0 empty_annotation longTy (cellPtr i₂ a₂)
       (longVal 2) mo : CoreExpr) =
     storeExpr [] loc0 empty_annotation longTy
@@ -1225,7 +1226,7 @@ theorem lrProdPrefix_wpt {Ls : LabelSpecT GF} (bty : core_base_type)
     (pv := cellPtr i₂ (a₂ + 8)) (cv := nullVal)
     (by rw [procCtx_extern]
         exact lrPFrame_shift_n2 hf (ptrVal (cellPtr i₁ a₁)) evs i₂ a₂)
-    rfl
+    (evalPexpr_val _ _ _ _ _)
   rw [show (cellPtr i₂ (a₂ + 8)) = cellPtr i₂ (a₂ + ((8 : Nat) : Int))
     from rfl]
   iapply wpt_store_node_field loc0 empty_annotation i₂ a₂ 8

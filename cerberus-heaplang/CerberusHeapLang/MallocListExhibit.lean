@@ -395,6 +395,7 @@ theorem ml_guard_eval (vp : value) (i : Int) :
       (Pexpr [] () (PEsym mlISym)) = some (ivVal i) from by
     rw [evalPexpr_sym_empty]
     exact lookup_env_head (mlFrame_lookup_i hf _ _) rest]
+  (try rw [evalPexpr_val])
   show evalBinop binop.OpGt (ivVal i) (ivVal 0) = _
   unfold evalBinop ivVal
   show (CerbMem.ltIval (CerbMem.integerIval 0)
@@ -437,6 +438,7 @@ theorem ml_shift_q_eval (vi vp : value) (id a : Int) :
       (Pexpr [] () (PEsym mlQSym)) = some (ptrVal (cellPtr id a)) from by
     rw [evalPexpr_sym_empty]
     exact lookup_env_head (mlFrameQ_lookup_q hf _ _ _) rest]
+  rw [evalPexpr_val]
   show evalArrayShift fmapEmpty longTy (Vobject (OVpointer (cellPtr id a))) (ivVal 1) = _
   exact evalArrayShift_long_one id a
 
@@ -453,6 +455,7 @@ theorem ml_args_build_eval (vq : value) (i : Int) (vp : value) :
         (Pexpr [] () (PEsym mlISym)) = some (ivVal i) from by
       rw [evalPexpr_sym_empty]
       exact lookup_env_head (mlFrameQ_lookup_i hf _ _ _) rest]
+    (try rw [evalPexpr_val])
     rfl]
   rw [evalPexprs_cons]
   rw [show evalPexpr fmapEmpty fmapEmpty (mlFrameQ vq (ivVal i) vp f :: rest)
@@ -477,6 +480,7 @@ theorem ml_shift_p_eval_B (vb vi : value) (id aN : Int) :
       (Pexpr [] () (PEsym mlPSym)) = some (ptrVal (cellPtr id aN)) from by
     rw [evalPexpr_sym_empty]
     exact lookup_env_head (mlFrameB_lookup_p hf _ _ _) rest]
+  rw [evalPexpr_val]
   show evalArrayShift fmapEmpty longTy (Vobject (OVpointer (cellPtr id aN))) (ivVal 1) = _
   exact evalArrayShift_long_one id aN
 
@@ -1014,7 +1018,7 @@ theorem ml_body_wps (i : Int) (pc : CerbMem.PointerValue) (ids done : List Int)
       rw [show mlMemopE = memopRedex [] PtrEq
         [Pexpr [] () (PEsym mlPSym), Pexpr [] () (PEval nullVal)] from rfl]
       iapply wps_memop_eval [] PtrEq _ _ _
-        ml_memop_operands_nonvalue (ml_p_eval hf renv _ _) rfl
+        ml_memop_operands_nonvalue (ml_p_eval hf renv _ _) (evalPexpr_val _ _ _ _ _)
       rw [show memopRedex [] PtrEq [Pexpr [] () (PEval (ptrVal nullNode)),
           Pexpr [] () (PEval nullVal)] =
         memopPtrEqVals [] (Vobject (OVpointer nullNode))
@@ -1048,7 +1052,7 @@ theorem ml_body_wps (i : Int) (pc : CerbMem.PointerValue) (ids done : List Int)
       rw [show mlMemopE = memopRedex [] PtrEq
         [Pexpr [] () (PEsym mlPSym), Pexpr [] () (PEval nullVal)] from rfl]
       iapply wps_memop_eval [] PtrEq _ _ _
-        ml_memop_operands_nonvalue (ml_p_eval hf renv _ _) rfl
+        ml_memop_operands_nonvalue (ml_p_eval hf renv _ _) (evalPexpr_val _ _ _ _ _)
       rw [show memopRedex [] PtrEq [Pexpr [] () (PEval (ptrVal (cellPtr id aN))),
           Pexpr [] () (PEval nullVal)] =
         memopPtrEqVals [] (Vobject (OVpointer (cellPtr id aN)))
@@ -1151,7 +1155,7 @@ theorem ml_wps (sbty : core_base_type) (hn : 0 ≤ n) :
     Expr [] (Esave (mlLoopSym, sbty) (mlParams ibty pbty n)
       (mlBody loc ann ra mo al pref qbty bbty nbty ubty)) from rfl]
   iintro Hcap
-  iapply wps_save [] (mlLoopSym, sbty) _ _ fmapEmpty [] (cvals := [ivVal n, nullVal]) rfl
+  iapply wps_save [] (mlLoopSym, sbty) _ _ fmapEmpty [] (cvals := [ivVal n, nullVal]) (evalPexprs_cons_val _ _ _ _ _ _ _ (evalPexprs_single_val _ _ _ _ _))
   rw [bindSave_ml]
   rw [show (nullVal : value) = ptrVal nullNode from rfl]
   iapply ml_body_wps loc ann ra mo al pref ibty pbty qbty bbty nbty ubty n p rs hQ n
@@ -1395,7 +1399,7 @@ theorem ml_body_wpt (i : Int) (pc : CerbMem.PointerValue) (ids done : List Int)
       rw [show mlMemopE = memopRedex [] PtrEq
         [Pexpr [] () (PEsym mlPSym), Pexpr [] () (PEval nullVal)] from rfl]
       iapply wpt_memop_eval [] PtrEq _ _ _
-        ml_memop_operands_nonvalue (ml_p_eval hf renv _ _) rfl
+        ml_memop_operands_nonvalue (ml_p_eval hf renv _ _) (evalPexpr_val _ _ _ _ _)
       rw [show memopRedex [] PtrEq [Pexpr [] () (PEval (ptrVal nullNode)),
           Pexpr [] () (PEval nullVal)] =
         memopPtrEqVals [] (Vobject (OVpointer nullNode))
@@ -1435,7 +1439,7 @@ theorem ml_body_wpt (i : Int) (pc : CerbMem.PointerValue) (ids done : List Int)
       rw [show mlMemopE = memopRedex [] PtrEq
         [Pexpr [] () (PEsym mlPSym), Pexpr [] () (PEval nullVal)] from rfl]
       iapply wpt_memop_eval [] PtrEq _ _ _
-        ml_memop_operands_nonvalue (ml_p_eval hf renv _ _) rfl
+        ml_memop_operands_nonvalue (ml_p_eval hf renv _ _) (evalPexpr_val _ _ _ _ _)
       rw [show memopRedex [] PtrEq [Pexpr [] () (PEval (ptrVal (cellPtr id aN))),
           Pexpr [] () (PEval nullVal)] =
         memopPtrEqVals [] (Vobject (OVpointer (cellPtr id aN)))

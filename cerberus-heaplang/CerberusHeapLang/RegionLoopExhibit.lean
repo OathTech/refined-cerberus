@@ -238,6 +238,7 @@ theorem rl_guard_eval (i : Int) :
       (Pexpr [] () (PEsym rlISym)) = some (ivVal i) from by
     rw [evalPexpr_sym_empty]
     exact lookup_env_head (rlFrame_lookup_i hf _) rest]
+  rw [evalPexpr_val]
   show evalBinop binop.OpGt (ivVal i) (ivVal 0) = _
   unfold evalBinop ivVal
   show (CerbMem.ltIval (CerbMem.integerIval 0)
@@ -264,6 +265,7 @@ theorem rl_args_eval (vp : value) (i : Int) :
         (Pexpr [] () (PEsym rlISym)) = some (ivVal i) from by
       rw [evalPexpr_sym_empty]
       exact lookup_env_head (rlFrameP_lookup_i hf _ _) rest]
+    rw [evalPexpr_val]
     rfl]
   rfl
 
@@ -428,7 +430,7 @@ theorem rl_wps (sbty : core_base_type) (n : Int) :
     Expr [] (Esave (rlLoopSym, sbty) (rlParams ibty n)
       (rlBody loc ann ra al sz pref pbty ubty)) from rfl]
   iintro Hcap
-  iapply wps_save [] (rlLoopSym, sbty) _ _ fmapEmpty [] (cvals := [ivVal n]) rfl
+  iapply wps_save [] (rlLoopSym, sbty) _ _ fmapEmpty [] (cvals := [ivVal n]) (evalPexprs_single_val _ _ _ _ _)
   rw [bindSave_rl]
   iapply rl_body_wps loc ann ra al sz pref ibty pbty ubty hcost p rs hQ n
     fmapEmpty [] symFrame_empty
