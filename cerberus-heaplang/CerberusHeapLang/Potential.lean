@@ -35,6 +35,7 @@ namespace CerberusHeapLang
 
 /-! ## The size potential -/
 
+mutual
 /-- The step-monotone size potential (header note): like `esize`,
     but value leaves cost 1, all other leaves 2 (a redex leaf's
     rewrite into an annotated value is prepaid), and a case node
@@ -48,8 +49,17 @@ def pot : CoreExpr → Nat
   | Expr _ (Eif _ e2 e3) => 1 + max (pot e2) (pot e3)
   | Expr _ (Esave _ _ body) => 1 + pot body
   | Expr _ (Ecase _ pats) => 2 * (1 + esizeAlts pats)
+  | Expr _ (Eunseq es) => 1 + potList es
   | Expr _ (Epure (Pexpr _ _ (PEval _))) => 1
   | _ => 2
+/-- E4: the potential of an `unseq`'s components — one unit per component
+    (the completion round rewrites the node into the annotated tuple,
+    which costs 2, so a one-component `unseq` still decreases) plus the
+    components' potentials (a component's step decreases its own). -/
+def potList : List CoreExpr → Nat
+  | [] => 0
+  | e :: rest => 1 + pot e + potList rest
+end
 
 @[simp] theorem pot_sseq {a : List annot} {pat : pattern} {e1 e2 : CoreExpr} :
     pot (Expr a (Esseq pat e1 e2)) = 1 + max (pot e1) (pot e2) := rfl
@@ -62,6 +72,51 @@ def pot : CoreExpr → Nat
 
 @[simp] theorem pot_bound {a : List annot} {b : CoreExpr} :
     pot (Expr a (Ebound b)) = 1 + pot b := rfl
+
+@[simp] theorem pot_unseq {a : List annot} {es : List CoreExpr} :
+    pot (Expr a (Eunseq es)) = 1 + potList es := rfl
+
+@[simp] theorem potList_nil : potList [] = 0 := rfl
+@[simp] theorem potList_cons (e : CoreExpr) (es : List CoreExpr) :
+    potList (e :: es) = 1 + pot e + potList es := rfl
+
+theorem potList_append (es1 es2 : List CoreExpr) :
+    potList (es1 ++ es2) = potList es1 + potList es2 := by
+  induction es1 with
+  | nil => simp
+  | cons e es ih => simp [ih]; omega
+
+theorem pot_pos (e : CoreExpr) : 1 ≤ pot e := by
+  rcases e with ⟨a, e_⟩
+  cases e_ <;> first
+    | (simp only [pot]; omega)
+    | exact Nat.le_succ _
+    | (rename_i pe
+       rcases pe with ⟨b, u, p⟩
+       cases p <;> first | exact Nat.le_refl _ | exact Nat.le_succ _)
+
+theorem esizeList_le_potList_of {es : List CoreExpr} (h : ∀ e ∈ es, esize e ≤ pot e) :
+    esizeList es ≤ potList es := by
+  induction es with
+  | nil => simp
+  | cons e es ih =>
+    have := h e (List.mem_cons_self ..)
+    have := ih (fun x hx => h x (List.mem_cons_of_mem _ hx))
+    simp; omega
+
+theorem potList_le_two_of {es : List CoreExpr} (h : ∀ e ∈ es, pot e ≤ 2 * esize e) :
+    potList es ≤ 2 * esizeList es := by
+  induction es with
+  | nil => simp
+  | cons e es ih =>
+    have := h e (List.mem_cons_self ..)
+    have := ih (fun x hx => h x (List.mem_cons_of_mem _ hx))
+    simp; omega
+
+/-- A component's potential decrease is the list's. -/
+theorem potList_append_cons_le {e e' : CoreExpr} (es1 es2 : List CoreExpr) (h : pot e' ≤ pot e) :
+    potList (es1 ++ e' :: es2) ≤ potList (es1 ++ e :: es2) := by
+  rw [potList_append, potList_append, potList_cons, potList_cons]; omega
 
 @[simp] theorem pot_if {a : List annot} {g : generic_pexpr Unit sym}
     {e2 e3 : CoreExpr} :
@@ -159,6 +214,10 @@ theorem Frag.esize_le_pot {e : CoreExpr} (hf : Frag e) : esize e ≤ pot e := by
         2 * (1 + esizeAlts pats) from fun _ _ _ _ => rfl]
     omega
   | wseq hf1 hf2 ih1 ih2 => simp only [esize_wseq, pot_wseq]; omega
+  | unseq hne hcc hf ih =>
+    simp only [esize_unseq, pot_unseq]
+    have := esizeList_le_potList_of ih
+    omega
 
 /-- The potential is at most twice `esize` on the cone (feeds the
     case-branch reset bound). -/
@@ -207,6 +266,10 @@ theorem Frag.pot_le_two {e : CoreExpr} (hf : Frag e) : pot e ≤ 2 * esize e := 
         2 * (1 + esizeAlts pats) from fun _ _ _ _ => rfl]
     omega
   | wseq hf1 hf2 ih1 ih2 => simp only [esize_wseq, pot_wseq]; omega
+  | unseq hne hcc hf ih =>
+    simp only [esize_unseq, pot_unseq]
+    have := potList_le_two_of ih
+    omega
 
 /-- THE POTENTIAL IS STEP-MONOTONE on the cone (jumps reset to the
     registered continuation — the second disjunct). This is what makes
@@ -661,5 +724,32 @@ theorem Frag.pot_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
       pot (caseRedex an (Pexpr b () (PEval cval)) pats) =
         2 * (1 + esizeAlts pats) from fun _ _ _ _ => rfl]
     omega
+  | @unseq an es hne hcc hf ih =>
+    rcases hs.unseq_inv with
+        ⟨es1, e0, es2, e0', ρ'', ctl'', σ'', rfl, hv2, -, hnj, hnc', hnv', hstep, hout⟩ |
+        ⟨ws, fps, cvals, rfl, hcol, hout⟩ |
+        ⟨l, pes, params, cont, vs, _, _, hj, _, hl, _, hout⟩ |
+        ⟨es1, e0, es2, rfl, hnv', hv2, hcall⟩
+    · obtain ⟨h1, -, h3, -⟩ := Config.mk_inj hout
+      subst h1 h3
+      rcases ih e0 (by simp) hstep hκ with hle | ⟨l, pes, params, cont, hj1, hl, rfl⟩
+      · left
+        simp only [pot_unseq]
+        have := potList_append_cons_le es1 es2 hle
+        omega
+      · rw [hnj] at hj1
+        cases hj1
+    · obtain ⟨h1, -, -, -⟩ := Config.mk_inj hout
+      subst h1
+      left
+      cases ws with
+      | nil => exact absurd rfl hne
+      | cons w ws =>
+        simp only [pot_unseq, pot_annot, pot_pure_val, List.map_cons, potList_cons]
+        have := pot_pos (ofValA w)
+        omega
+    · obtain ⟨h1, -, -, -⟩ := Config.mk_inj hout
+      exact .inr ⟨l, pes, params, cont, hj, hl, h1⟩
+    · exact (hcall.ne_same_κ hκ).elim
 
 end CerberusHeapLang

@@ -971,16 +971,38 @@ theorem t1MainWith_frag (u : CoreExpr) (hu : Frag u) : Frag (t1MainWith u) :=
                               (fun pe h => by rcases List.mem_singleton.mp h with rfl; exact depLe (by decide))
                               (.pure_op rfl (.sym [] a518) (depLe (by decide))))))))))))))))
 
-/-- The `unseq` node itself is NOT in the cone (no `Frag` constructor
-    covers `Eunseq`; E4 owes it). -/
-theorem t1_unseq_not_frag : ¬ Frag (Expr [] (Eunseq [t1LoadX, t1Spec1])) := fun h => nomatch h
+/-- E4 — THE FLIP OF E3's `t1_unseq_not_frag`: the `unseq` node IS in the
+    cone. Its components are the E2 fragments `t1LoadX` (the read of `x`)
+    and `t1Spec1` (`pure(Specified(1))`), both ccall-free
+    (`ccallFreeList`, `rfl`). E3 stated `¬ Frag (Expr [] (Eunseq [t1LoadX,
+    t1Spec1]))` by `nomatch` — true then because no constructor covered
+    `Eunseq`; E4's `Frag.unseq` makes it false, so the E3 theorem is
+    RETIRED (recorded, docs/2026-09-05_e4-notes.md §3). -/
+theorem t1_unseq_frag : Frag (Expr [] (Eunseq [t1LoadX, t1Spec1])) :=
+  Frag.unseq (by simp) rfl fun e he => by
+    rcases List.mem_cons.mp he with rfl | he
+    · exact t1LoadX_frag
+    · rcases List.mem_singleton.mp he with rfl
+      exact t1Spec1_frag
 
+/-- E4 ACCEPTANCE (i) — THE MILESTONE'S FIRST HALF: t1's `main`, transcribed
+    verbatim from docs/corpus-e0/t1.core, IS a `Frag` (kernel-decided:
+    every node of the emitted program is in the cone — E1's annotations,
+    `bound` and `Ivalignof`, E2's loaded values and binders, E3's
+    `conv_loaded_int`/`catch_exceptional_condition_add`, E4's `unseq`). -/
+theorem t1Main_frag : Frag t1Main := by
+  rw [t1Main_eq_with]
+  exact t1MainWith_frag _ t1_unseq_frag
+
+mutual
 /-- THE SYNTACTIC COVERAGE WALK (an instrument, not a theorem about
     `Frag`): descends the spine constructs the cone admits — `let strong`/
     `let weak` at symbol, wildcard and flat-tuple binders, `bound`,
-    `annot`, `save` — and lists the node kinds it cannot descend into or
-    admit: `pure`/action/`run` operands outside `isPePure`, `unseq`, `nd`,
-    `par`, `if`/`case`/`let` at expression level, calls, `wait`. -/
+    `annot`, `save`, and (E4) `unseq` into every component — and lists the
+    node kinds it cannot descend into or admit: `pure`/action/`run`
+    operands outside `isPePure`, a `ccall`-carrying or `case`-carrying
+    `unseq` component (`ccallFree`), `nd`, `par`, `if`/`case`/`let` at
+    expression level, calls, `wait`. -/
 def uncoveredKinds : CoreExpr → List String
   | Expr _ e =>
     match e with
@@ -998,7 +1020,9 @@ def uncoveredKinds : CoreExpr → List String
     | Eaction (Paction _ (Action _ _ act)) =>
       if (actionPexprs act).all isPePure then [] else ["action-operand"]
     | Erun _ _ pes => if pes.all isPePure then [] else ["run-operand"]
-    | Eunseq _ => ["unseq"]
+    | Eunseq es =>
+      (if es.isEmpty then ["unseq-empty"] else []) ++
+      (if ccallFreeList es then [] else ["unseq-component-ccall-or-case"]) ++ uncoveredKindsList es
     | End _ => ["nd"]
     | Epar _ => ["par"]
     | Eif _ _ _ => ["if"]
@@ -1009,10 +1033,15 @@ def uncoveredKinds : CoreExpr → List String
     | Ememop _ _ => ["memop"]
     | Ewait _ => ["wait"]
     | Eexcluded _ _ => ["excluded"]
+def uncoveredKindsList : List CoreExpr → List String
+  | [] => []
+  | e :: es => uncoveredKinds e ++ uncoveredKindsList es
+end
 
-/-- KERNEL-DECIDED: t1's `main` has EXACTLY ONE uncovered position, the
-    `unseq` (E3 acceptance (i); the walk's verdict, `decide`). -/
-theorem t1_uncovered_exactly_unseq : uncoveredKinds t1Main = ["unseq"] := by decide
+/-- KERNEL-DECIDED: t1's `main` has NO uncovered position (E4; E3's
+    `t1_uncovered_exactly_unseq` — `= ["unseq"]` — is retired, the walk's
+    verdict having flipped with the `unseq` descent). -/
+theorem t1_uncovered_none : uncoveredKinds t1Main = [] := by decide
 
 /-! ## The table -/
 

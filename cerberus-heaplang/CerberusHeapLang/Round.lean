@@ -201,9 +201,9 @@ theorem MachineCtx.embeds_exists (M : MachineCtx) (c : Config) : ∃ dst, M.Embe
     step counter arbitrary. -/
 def CerberusRound (M : MachineCtx) (c c' : Config) : Prop :=
   ∀ dst : driver_state, M.Embeds dst c →
-    ∃ s : core_step2,
+    ∃ (s : core_step2) (post : List core_step2),
       step_ctx M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid
-        (M.parent, M.thread c.1 c.2.1 c.2.2.1) = [s] ∧
+        (M.parent, M.thread c.1 c.2.1 c.2.2.1) = s :: post ∧
       can_advance s = true ∧
       ∃ (rs' : core_run_state) (tr : List trace_event) (ctr : Nat),
         rs'.labeled = dst.core_run_state0.labeled ∧
@@ -226,9 +226,9 @@ inductive ShippedRefusal (M : MachineCtx) (c : Config) : Prop where
       this step is the panic `failwithI ("can_advance: Step_error2 ==>
       " ++ msg)` (Driver.lean:310) — recorded, not modelled. -/
   | error (msg : String) :
-      (∀ dst, M.Embeds dst c →
+      (∀ dst, M.Embeds dst c → ∃ post : List core_step2,
         step_ctx M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid
-          (M.parent, M.thread c.1 c.2.1 c.2.2.1) = [Step_error2 msg]) →
+          (M.parent, M.thread c.1 c.2.1 c.2.2.1) = Step_error2 msg :: post) →
       ShippedRefusal M c
   /-- KILL: the step is advanceable and the shipped `advance_step`
       returns `NDkilled r` — `r` in the engine's own `kill_reason`
@@ -236,9 +236,9 @@ inductive ShippedRefusal (M : MachineCtx) (c : Config) : Prop where
       `Other err` for the driver's non-UB kills; memory kills arrive
       through `liftMem`'s `DErr_memory`, Driver.lean:218). -/
   | killed (r : kill_reason driver_error) :
-      (∀ dst, M.Embeds dst c → ∃ (s : core_step2) (dst' : driver_state),
+      (∀ dst, M.Embeds dst c → ∃ (s : core_step2) (post : List core_step2) (dst' : driver_state),
         step_ctx M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid
-          (M.parent, M.thread c.1 c.2.1 c.2.2.1) = [s] ∧
+          (M.parent, M.thread c.1 c.2.1 c.2.2.1) = s :: post ∧
         can_advance s = true ∧
         runOne (advance_step M.tagDefs M.tid s) dst = (NDkilled r, dst')) →
       ShippedRefusal M c
@@ -248,9 +248,9 @@ inductive ShippedRefusal (M : MachineCtx) (c : Config) : Prop where
       operation). Determinism is not baked in: a later mirror may cover
       this class with a nondeterministic step. -/
   | fork :
-      (∀ dst, M.Embeds dst c → ∃ s : core_step2,
+      (∀ dst, M.Embeds dst c → ∃ (s : core_step2) (post : List core_step2),
         step_ctx M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid
-          (M.parent, M.thread c.1 c.2.1 c.2.2.1) = [s] ∧
+          (M.parent, M.thread c.1 c.2.1 c.2.2.1) = s :: post ∧
         can_advance s = true ∧
         2 ≤ (CerbND.runND (advance_step M.tagDefs M.tid s) dst).length) →
       ShippedRefusal M c
@@ -269,9 +269,9 @@ inductive ShippedRefusal (M : MachineCtx) (c : Config) : Prop where
           (inst : Inhabited (core_run_state → exceptM (t0 d × core_run_state) core_run_cause))
           (step_m : core_run_state → exceptM (t0 d × core_run_state) core_run_cause)
           (k : d → core_run_state → exceptM (t0 thread_state × core_run_state) core_run_cause)
-          (msg : String),
+          (msg : String) (post : List core_step2),
         step_ctx M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid
-          (M.parent, M.thread c.1 c.2.1 c.2.2.1) = [Step_with_runstate2 rsk m] ∧
+          (M.parent, M.thread c.1 c.2.1 c.2.2.1) = Step_with_runstate2 rsk m :: post ∧
         m = stExceptUndef_bind step_m k ∧
         step_m dst.core_run_state0 = @failwithI _ inst msg dst.core_run_state0) →
       ShippedRefusal M c
@@ -286,9 +286,9 @@ inductive ShippedRefusal (M : MachineCtx) (c : Config) : Prop where
       `failwithI` defers the same abort to the first read. -/
   | panic_env (msg : String) :
       (∀ dst, M.Embeds dst c →
-        ∃ (s : String) (th' : thread_state) (evs : List (Fmap sym value)),
+        ∃ (s : String) (th' : thread_state) (evs : List (Fmap sym value)) (post : List core_step2),
         step_ctx M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid
-          (M.parent, M.thread c.1 c.2.1 c.2.2.1) = [Step_tau2 s TSK_Misc th'] ∧
+          (M.parent, M.thread c.1 c.2.1 c.2.2.1) = Step_tau2 s TSK_Misc th' :: post ∧
         th'.env = (failwithI msg : Fmap sym value) :: evs) →
       ShippedRefusal M c
   /-- PANIC (memop): the step is a memop request and the shipped
@@ -300,9 +300,9 @@ inductive ShippedRefusal (M : MachineCtx) (c : Config) : Prop where
         ∃ (loc : CerbLocation.Loc) (mop : memop) (cvals : List value) (uw : Bool)
           (k : value → thread_state)
           (g : thread_state → ndM Unit step_kind driver_error
-            (mem_constraint CerbMem.IntegerValue) driver_state),
+            (mem_constraint CerbMem.IntegerValue) driver_state) (post : List core_step2),
         step_ctx M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid
-          (M.parent, M.thread c.1 c.2.1 c.2.2.1) = [Step_memop_request2 loc mop cvals M.tid uw k] ∧
+          (M.parent, M.thread c.1 c.2.1 c.2.2.1) = Step_memop_request2 loc mop cvals M.tid uw k :: post ∧
         perform_memop_request2 M.tagDefs loc mop cvals M.tid k =
           nd_bind (failwithI msg) g) →
       ShippedRefusal M c
@@ -317,9 +317,9 @@ inductive ShippedRefusal (M : MachineCtx) (c : Config) : Prop where
       (`"Store"`). An ill-typed program: classified, not narrowed. -/
   | error_next (c' : Config) (msg : String) :
       CerberusRound M c c' →
-      (∀ dst, M.Embeds dst c' →
+      (∀ dst, M.Embeds dst c' → ∃ post : List core_step2,
         step_ctx M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid
-          (M.parent, M.thread c'.1 c'.2.1 c'.2.2.1) = [Step_error2 msg]) →
+          (M.parent, M.thread c'.1 c'.2.1 c'.2.2.1) = Step_error2 msg :: post) →
       ShippedRefusal M c
   /-- PANIC (jump without a current procedure; fragment closure, gap
       (d)): at a configuration whose control has `proc = none` the engine's Erun step
@@ -338,10 +338,10 @@ inductive ShippedRefusal (M : MachineCtx) (c : Config) : Prop where
       (∀ dst, M.Embeds dst c →
         ∃ (s : String) (l : sym) (inst : Inhabited sym)
           (k : Option (List (sym × core_base_type) × CoreExpr) → core_run_state →
-            exceptM (t0 thread_state × core_run_state) core_run_cause),
+            exceptM (t0 thread_state × core_run_state) core_run_cause) (post : List core_step2),
         step_ctx M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid
           (M.parent, M.thread c.1 c.2.1 c.2.2.1) =
-          [Step_with_runstate2 (RSK_eval s)
+          Step_with_runstate2 (RSK_eval s)
             (stExceptUndef_bind
               (runSE (state_except_read (fun rs : core_run_state =>
                 Lem_Maybe.bind0
@@ -350,7 +350,7 @@ inductive ShippedRefusal (M : MachineCtx) (c : Config) : Prop where
                     (resolveExtern dst.core_extern (@failwithI sym inst msg)) rs.labeled)
                   (fmapLookupBy (fun (s1 : sym) (s2 : sym) =>
                     Lem_Basic_classes.ordCompare s1 s2) l))))
-              k)]) →
+              k) :: post) →
       ShippedRefusal M c
 
 /-- THE RESIDUAL — the configuration classes the mirror does not step at
@@ -391,9 +391,10 @@ inductive OpenRound (M : MachineCtx) (c : Config) : Prop where
       (∀ c'', ¬ Step M c c'') →
       pe ∈ operandsOf c.1 → PePure pe →
       evalClass M.tagDefs c.2.2.1.curLoc M.extern M.file c.2.1 pe = .uncovered →
-      (∀ dst, M.Embeds dst c → ∃ (rsk : runstate_step_kind) (m : core_runM thread_state),
+      (∀ dst, M.Embeds dst c → ∃ (rsk : runstate_step_kind) (m : core_runM thread_state)
+          (post : List core_step2),
         step_ctx M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid
-          (M.parent, M.thread c.1 c.2.1 c.2.2.1) = [Step_with_runstate2 rsk m]) →
+          (M.parent, M.thread c.1 c.2.1 c.2.2.1) = Step_with_runstate2 rsk m :: post) →
       OpenRound M c
   /-- A jump whose argument list is LONGER than the registered label's
       parameter list, every zipped argument evaluating and some surplus
@@ -408,9 +409,10 @@ inductive OpenRound (M : MachineCtx) (c : Config) : Prop where
       lookupLabel (M.labelsAt c.2.2.1.proc) l = some (params, cont) →
       (∃ vs, evalPexprs M.tagDefs M.extern M.file c.2.1 (zipArgs params pes) = some vs) →
       evalPexprs M.tagDefs M.extern M.file c.2.1 pes = none →
-      (∀ dst, M.Embeds dst c → ∃ (rsk : runstate_step_kind) (m : core_runM thread_state),
+      (∀ dst, M.Embeds dst c → ∃ (rsk : runstate_step_kind) (m : core_runM thread_state)
+          (post : List core_step2),
         step_ctx M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid
-          (M.parent, M.thread c.1 c.2.1 c.2.2.1) = [Step_with_runstate2 rsk m]) →
+          (M.parent, M.thread c.1 c.2.1 c.2.2.1) = Step_with_runstate2 rsk m :: post) →
       OpenRound M c
 
 /-- The completeness disjunction at a configuration: the mirror steps,
@@ -456,14 +458,15 @@ theorem loop_step_of_advance {tds : Fmap sym (CerbLocation.Loc × tag_definition
     {tid : Nat} {parent : Option Nat} {th : thread_state} {s : core_step2}
     {dst dst' : driver_state} (fl : Nat) (acc : Fmap thread_id (List core_step2))
     (hth : dst.core_state0.thread_states = [(tid, (parent, th))])
+    {post : List core_step2}
     (hsteps : step_ctx tds dst.layout_state dst.core_file dst.core_extern tid
-      (parent, th) = [s])
+      (parent, th) = s :: post)
     (hca : can_advance s = true)
     (hadv : runOne (advance_step tds tid s) dst = (NDactive NOWAKEUP, dst')) :
     runOne (drive_nonmemory_steps_aux2_lemFuel (Nat.succ fl) tds acc [tid]) dst =
       runOne (drive_nonmemory_steps_aux2_lemFuel fl tds acc [tid]) dst' := by
   conv => lhs; unfold drive_nonmemory_steps_aux2_lemFuel
-  refine (runOne_bind_active (z := [s]) (s' := dst) ?_).trans ?_
+  refine (runOne_bind_active (z := s :: post) (s' := dst) ?_).trans ?_
   · rw [runOne_read]
     refine congrArg (fun x => (NDactive x, dst)) ?_
     show (let th_info := match lookupBy (fun x y => x == y) tid
@@ -1042,7 +1045,7 @@ theorem CerberusRound.loop_step {M : MachineCtx} {c c' : Config}
               core_state0 := update_thread_state M.tid (M.thread c'.1 c'.2.1 c'.2.2.1) dst.core_state0,
               layout_state := c'.2.2.2,
               core_run_state0 := rs', trace := tr, dr_step_counter := ctr } := by
-  obtain ⟨s, hsteps, hca, rs', tr, ctr, hlab, -, -, hadv⟩ := h dst hemb
+  obtain ⟨s, post, hsteps, hca, rs', tr, ctr, hlab, -, -, hadv⟩ := h dst hemb
   exact ⟨rs', tr, ctr, hlab, loop_step_of_advance fl acc hemb.thread hsteps hca hadv⟩
 
 /-- THE RUNNER-LEVEL READING: the shipped exhaustive runner
@@ -1050,9 +1053,9 @@ theorem CerberusRound.loop_step {M : MachineCtx} {c c' : Config}
     one `Active` execution. -/
 theorem CerberusRound.runND {M : MachineCtx} {c c' : Config}
     (h : CerberusRound M c c') {dst : driver_state} (hemb : M.Embeds dst c) :
-    ∃ s : core_step2,
+    ∃ (s : core_step2) (post : List core_step2),
       step_ctx M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid
-        (M.parent, M.thread c.1 c.2.1 c.2.2.1) = [s] ∧
+        (M.parent, M.thread c.1 c.2.1 c.2.2.1) = s :: post ∧
       ∃ (rs' : core_run_state) (tr : List trace_event) (ctr : Nat),
         CerbND.runND (advance_step M.tagDefs M.tid s) dst =
           [(nd_status.Active NOWAKEUP, ([] : List String),
@@ -1060,8 +1063,8 @@ theorem CerberusRound.runND {M : MachineCtx} {c c' : Config}
               core_state0 := update_thread_state M.tid (M.thread c'.1 c'.2.1 c'.2.2.1) dst.core_state0,
               layout_state := c'.2.2.2,
               core_run_state0 := rs', trace := tr, dr_step_counter := ctr })] := by
-  obtain ⟨s, hsteps, -, rs', tr, ctr, -, -, -, hadv⟩ := h dst hemb
-  exact ⟨s, hsteps, rs', tr, ctr, runND_active hadv⟩
+  obtain ⟨s, post, hsteps, -, rs', tr, ctr, -, -, -, hadv⟩ := h dst hemb
+  exact ⟨s, post, hsteps, rs', tr, ctr, runND_active hadv⟩
 
 /-- E1 proof device: `loc_split` also normalizing a hypothesis stated at
     `th.current_loc` (the KILL bridges' classifier premise). -/
@@ -1124,7 +1127,7 @@ theorem engine_step_matchU {M : MachineCtx}
           dst.core_extern M.tid M.parent
           (M.thread (ofValA (.pure a b v)) (ev0 :: evs) ⟨(p, ctx) :: κ, q, ℓ, lc, sp⟩) rfl rfl rfl
         obtain ⟨tr, hadv⟩ := advance_tau_tsk M.tagDefs M.tid "end of procedure" tsk _ dst
-        exact ⟨_, hsteps, rfl, dst.core_run_state0, tr, dst.dr_step_counter + 1, rfl, hsym, hexc,
+        exact ⟨_, _, hsteps, rfl, dst.core_run_state0, tr, dst.dr_step_counter + 1, rfl, hsym, hexc,
           hadv⟩
     | annot a a2 b ds v =>
       rcases hs.ctl_cases with ⟨a', heq⟩ | ⟨_, _, _, _, _, _, hc, -⟩ |
@@ -1135,7 +1138,7 @@ theorem engine_step_matchU {M : MachineCtx}
       -- REMOVE-ANNOT at a non-empty call stack (`Step.ret_annot`): the
       -- engine's tau, in place (no location write — the value arm)
       obtain ⟨rfl, rfl, rfl, rfl, -⟩ := Step.annot_val_inv hs hκ'
-      refine ⟨_, step_ctx_remove_annot ds v M.tagDefs dst.layout_state dst.core_file
+      refine ⟨_, _, step_ctx_remove_annot ds v M.tagDefs dst.layout_state dst.core_file
           dst.core_extern M.tid M.parent _ rfl,
         rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
       exact advance_tau M.tagDefs M.tid _ _ dst
@@ -1146,7 +1149,7 @@ theorem engine_step_matchU {M : MachineCtx}
     ⟨an, ra, l, pes, rfl, hr⟩ | ⟨an, ra, f, pes, params, body, vs, rfl, hvs, hfl, hlen, hout⟩
   · obtain ⟨he', hρ', hc', hσ'⟩ := Config.mk_inj heq
     subst he' hρ' hc' hσ'
-    have hccall := hd.unseq_ccall_false
+    have hccall := hd.unseq_ccall_false hsz
     have hrj := hd.redex
     cases hrj with
     | @call an ra f pes => exact absurd rfl (hnc an ra f pes)
@@ -1154,11 +1157,11 @@ theorem engine_step_matchU {M : MachineCtx}
       obtain ⟨mv, fp, σ'', hmv, hmem, hout⟩ := hr.store_inv
       obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
       subst h1 h2 h3 h4
-      have hsteps := step_ctx_store hd hsz M.tagDefs hmv
+      obtain ⟨post, hsteps⟩ := step_ctx_store hd hsz M.tagDefs hmv
         dst.layout_state dst.core_file dst.core_extern M.tid M.parent
         (M.thread e (ev0 :: evs) ctl) rfl
       rw [hccall, MachineCtx.locUpdTh_thread] at hsteps
-      refine ⟨_, hsteps, rfl, { dst.core_run_state0 with aid_supply :=
+      refine ⟨_, _, hsteps, rfl, { dst.core_run_state0 with aid_supply :=
           dst.core_run_state0.aid_supply + 1 },
         ME_store (requestLoc (M.thread e (ev0 :: evs) (ctl.upd an)) loc)
           none ty lk pv mv :: dst.trace,
@@ -1169,11 +1172,11 @@ theorem engine_step_matchU {M : MachineCtx}
       obtain ⟨fp, mval, σ'', hmem, hout⟩ := hr.load_inv
       obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
       subst h1 h2 h3 h4
-      have hsteps := step_ctx_load hd hsz M.tagDefs
+      obtain ⟨post, hsteps⟩ := step_ctx_load hd hsz M.tagDefs
         dst.layout_state dst.core_file dst.core_extern M.tid M.parent
         (M.thread e (ev0 :: evs) ctl) rfl
       rw [hccall, MachineCtx.locUpdTh_thread] at hsteps
-      refine ⟨_, hsteps, rfl, { dst.core_run_state0 with aid_supply :=
+      refine ⟨_, _, hsteps, rfl, { dst.core_run_state0 with aid_supply :=
           dst.core_run_state0.aid_supply + 1 },
         ME_load (requestLoc (M.thread e (ev0 :: evs) (ctl.upd an)) loc)
           none ty pv mval :: dst.trace,
@@ -1184,11 +1187,11 @@ theorem engine_step_matchU {M : MachineCtx}
       obtain ⟨pv, σ'', hmem, hout⟩ := hr.create_inv
       obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
       subst h1 h2 h3 h4
-      have hsteps := step_ctx_create hd hsz M.tagDefs
+      obtain ⟨post, hsteps⟩ := step_ctx_create hd hsz M.tagDefs
         dst.layout_state dst.core_file dst.core_extern M.tid M.parent
         (M.thread e (ev0 :: evs) ctl) rfl
       rw [hccall, MachineCtx.locUpdTh_thread] at hsteps
-      refine ⟨_, hsteps, rfl, { dst.core_run_state0 with aid_supply :=
+      refine ⟨_, _, hsteps, rfl, { dst.core_run_state0 with aid_supply :=
           dst.core_run_state0.aid_supply + 1 },
         ME_allocate_object M.tid pref align ty none pv :: dst.trace,
         dst.dr_step_counter, rfl, hsym, hexc, ?_⟩
@@ -1205,22 +1208,22 @@ theorem engine_step_matchU {M : MachineCtx}
       obtain ⟨al, ty, hv1, hv2, hout⟩ := hr.create_op_inv hnvC
       obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
       subst h1 h2 h3 h4
-      obtain ⟨s, m, hsteps, hm⟩ := step_ctx_create_eval_ws hd hsz hnvC hp1 hp2 hd1 hd2
+      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_create_eval_ws hd hsz hnvC hp1 hp2 hd1 hd2
         M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
         (M.thread e (ev0 :: evs) ctl) rfl
         (by rw [hext, hfile]; exact hv1) (by rw [hext, hfile]; exact hv2)
       rw [MachineCtx.locUpdTh_thread] at hm
-      refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
+      refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
       exact advance_withrs_eval M.tagDefs M.tid s m (hm dst.core_run_state0)
     | @kill an loc ann kind pv =>
       obtain ⟨σ'', hmem, hout⟩ := hr.kill_inv
       obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
       subst h1 h2 h3 h4
-      have hsteps := step_ctx_kill hd hsz M.tagDefs
+      obtain ⟨post, hsteps⟩ := step_ctx_kill hd hsz M.tagDefs
         dst.layout_state dst.core_file dst.core_extern M.tid M.parent
         (M.thread e (ev0 :: evs) ctl) rfl
       rw [hccall, MachineCtx.locUpdTh_thread] at hsteps
-      refine ⟨_, hsteps, rfl, { dst.core_run_state0 with aid_supply :=
+      refine ⟨_, _, hsteps, rfl, { dst.core_run_state0 with aid_supply :=
           dst.core_run_state0.aid_supply + 1 },
         ME_kill (requestLoc (M.thread e (ev0 :: evs) (ctl.upd an)) loc)
           (is_dynamic kind) pv :: dst.trace,
@@ -1238,22 +1241,22 @@ theorem engine_step_matchU {M : MachineCtx}
       obtain ⟨pv, hv, hout⟩ := hr.kill_op_inv hnvK
       obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
       subst h1 h2 h3 h4
-      obtain ⟨s, m, hsteps, hm⟩ := step_ctx_kill_eval_ws hd hsz hnvK hpK hdK
+      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_kill_eval_ws hd hsz hnvK hpK hdK
         M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
         (M.thread e (ev0 :: evs) ctl) rfl
         (by rw [hext, hfile]; exact hv)
       rw [MachineCtx.locUpdTh_thread] at hm
-      refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
+      refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
       exact advance_withrs_eval M.tagDefs M.tid s m (hm dst.core_run_state0)
     | @alloc an loc ann align size pref =>
       obtain ⟨pv, σ'', hmem, hout⟩ := hr.alloc_inv
       obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
       subst h1 h2 h3 h4
-      have hsteps := step_ctx_alloc hd hsz M.tagDefs
+      obtain ⟨post, hsteps⟩ := step_ctx_alloc hd hsz M.tagDefs
         dst.layout_state dst.core_file dst.core_extern M.tid M.parent
         (M.thread e (ev0 :: evs) ctl) rfl
       rw [hccall, MachineCtx.locUpdTh_thread] at hsteps
-      refine ⟨_, hsteps, rfl, { dst.core_run_state0 with aid_supply :=
+      refine ⟨_, _, hsteps, rfl, { dst.core_run_state0 with aid_supply :=
           dst.core_run_state0.aid_supply + 1 },
         ME_allocate_region M.tid pref align size pv :: dst.trace,
         dst.dr_step_counter, rfl, hsym, hexc, ?_⟩
@@ -1270,12 +1273,12 @@ theorem engine_step_matchU {M : MachineCtx}
       obtain ⟨al, sz, hv1, hv2, hout⟩ := hr.alloc_op_inv hnvA
       obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
       subst h1 h2 h3 h4
-      obtain ⟨s, m, hsteps, hm⟩ := step_ctx_alloc_eval_ws hd hsz hnvA hp1 hp2 hd1 hd2
+      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_alloc_eval_ws hd hsz hnvA hp1 hp2 hd1 hd2
         M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
         (M.thread e (ev0 :: evs) ctl) rfl
         (by rw [hext, hfile]; exact hv1) (by rw [hext, hfile]; exact hv2)
       rw [MachineCtx.locUpdTh_thread] at hm
-      refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
+      refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
       exact advance_withrs_eval M.tagDefs M.tid s m (hm dst.core_run_state0)
     | @beta_pure an pa a1 b1 bty v e2 =>
       rcases hr.sseq_inv with ⟨e1', ρ'', ctl'', σ'', hnj, hnc', hnv', hstep, hout⟩ |
@@ -1294,11 +1297,11 @@ theorem engine_step_matchU {M : MachineCtx}
           simpa using ofValA_inj he1
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        have hsteps := step_ctx_beta_pure hd hsz M.tagDefs dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_beta_pure hd hsz M.tagDefs dst.layout_state
           dst.core_file dst.core_extern M.tid M.parent
           (M.thread e (ev0 :: evs) ctl) rfl rfl
         rw [MachineCtx.locUpdTh_thread] at hsteps
-        refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
+        refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
         exact advance_tau M.tagDefs M.tid _ _ dst
       · cases ofValA_inj he1
       · rw [jumpRedex?_ofValA] at hj; cases hj
@@ -1327,11 +1330,11 @@ theorem engine_step_matchU {M : MachineCtx}
           simpa using ofValA_inj he1
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        have hsteps := step_ctx_beta_annot hd hsz M.tagDefs dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_beta_annot hd hsz M.tagDefs dst.layout_state
           dst.core_file dst.core_extern M.tid M.parent
           (M.thread e (ev0 :: evs) ctl) rfl rfl
         rw [MachineCtx.locUpdTh_thread] at hsteps
-        refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
+        refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
         exact advance_tau M.tagDefs M.tid _ _ dst
       · rw [jumpRedex?_ofValA] at hj; cases hj
       · exact (specPat_ne_base hpat).elim
@@ -1356,11 +1359,11 @@ theorem engine_step_matchU {M : MachineCtx}
           simpa using ofValA_inj he1
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        have hsteps := step_ctx_wseq_pure hd hsz M.tagDefs dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_wseq_pure hd hsz M.tagDefs dst.layout_state
           dst.core_file dst.core_extern M.tid M.parent
           (M.thread e (ev0 :: evs) ctl) rfl rfl
         rw [MachineCtx.locUpdTh_thread] at hsteps
-        refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
+        refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
         exact advance_tau M.tagDefs M.tid _ _ dst
       · cases ofValA_inj he1
       · rw [jumpRedex?_ofValA] at hj; cases hj
@@ -1385,11 +1388,11 @@ theorem engine_step_matchU {M : MachineCtx}
           simpa using ofValA_inj he1
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        have hsteps := step_ctx_wseq_annot hd hsz M.tagDefs dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_wseq_annot hd hsz M.tagDefs dst.layout_state
           dst.core_file dst.core_extern M.tid M.parent
           (M.thread e (ev0 :: evs) ctl) rfl rfl
         rw [MachineCtx.locUpdTh_thread] at hsteps
-        refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
+        refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
         exact advance_tau M.tagDefs M.tid _ _ dst
       · rw [jumpRedex?_ofValA] at hj; cases hj
       · exact (symPat_ne_base hpatS1).elim
@@ -1409,11 +1412,11 @@ theorem engine_step_matchU {M : MachineCtx}
         subst hb1 hb3 hb4
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        have hsteps := step_ctx_merge hd hirr hsz M.tagDefs dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_merge hd hirr hsz M.tagDefs dst.layout_state
           dst.core_file dst.core_extern M.tid M.parent
           (M.thread e (ev0 :: evs) ctl) rfl
         rw [MachineCtx.locUpdTh_thread] at hsteps
-        refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
+        refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
         exact advance_tau M.tagDefs M.tid _ _ dst
       · rw [show annotRooted (Expr a2 (Eannot ds2 b)) = true from rfl] at hg
         cases hg
@@ -1428,20 +1431,20 @@ theorem engine_step_matchU {M : MachineCtx}
           ⟨cvals, hnvS, hvals, hout⟩
       · obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        have hsteps := step_ctx_save hd hsz hvals M.tagDefs dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_save hd hsz hvals M.tagDefs dst.layout_state
           dst.core_file dst.core_extern M.tid M.parent
           (M.thread e (ev0 :: evs) ctl) rfl rfl
         rw [MachineCtx.locUpdTh_thread] at hsteps
-        refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
+        refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
         exact advance_tau M.tagDefs M.tid _ _ dst
       · obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        obtain ⟨s, m, hsteps, hm⟩ := step_ctx_save_eval_ws hd hsz hnvS hdep
+        obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_save_eval_ws hd hsz hnvS hdep
           M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
           (M.thread e (ev0 :: evs) ctl) rfl
           (by rw [hext, hfile]; exact hvals)
         rw [MachineCtx.locUpdTh_thread] at hm
-        refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
+        refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
         exact advance_withrs_eval M.tagDefs M.tid s m (hm dst.core_run_state0)
     | @if_ an g e2 e3 =>
       have hdg : peDepth g ≤ lemDefaultFuel := by
@@ -1450,21 +1453,21 @@ theorem engine_step_matchU {M : MachineCtx}
       rcases hr.if_inv with ⟨hg, hout⟩ | ⟨hg, hout⟩
       · obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        obtain ⟨s, m, hsteps, hm⟩ := step_ctx_if_true_ws hd hsz hdg
+        obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_if_true_ws hd hsz hdg
           M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
           (M.thread e (ev0 :: evs) ctl) rfl
           (by rw [hext, hfile]; exact hg)
         rw [MachineCtx.locUpdTh_thread] at hm
-        refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
+        refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
         exact advance_withrs_tau M.tagDefs M.tid s m (hm dst.core_run_state0)
       · obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        obtain ⟨s, m, hsteps, hm⟩ := step_ctx_if_false_ws hd hsz hdg
+        obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_if_false_ws hd hsz hdg
           M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
           (M.thread e (ev0 :: evs) ctl) rfl
           (by rw [hext, hfile]; exact hg)
         rw [MachineCtx.locUpdTh_thread] at hm
-        refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
+        refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
         exact advance_withrs_tau M.tagDefs M.tid s m (hm dst.core_run_state0)
     | @case_ an pe pats =>
       cases hfr with
@@ -1472,11 +1475,11 @@ theorem engine_step_matchU {M : MachineCtx}
         obtain ⟨e'', hsel, hout⟩ := hr.case_value_inv (valueFromPexpr_val _ _)
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        have hsteps := step_ctx_case_value hd hsz hsel M.tagDefs dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_case_value hd hsz hsel M.tagDefs dst.layout_state
           dst.core_file dst.core_extern M.tid M.parent
           (M.thread e (ev0 :: evs) ctl) rfl
         rw [MachineCtx.locUpdTh_thread] at hsteps
-        refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
+        refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
         exact advance_tau M.tagDefs M.tid _ _ dst
     | @run an ra l pes =>
       exact absurd rfl (hnr an ra l pes)
@@ -1488,12 +1491,12 @@ theorem engine_step_matchU {M : MachineCtx}
       obtain ⟨v, -, hv, hout⟩ := hr.pure_inv hnv2
       obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
       subst h1 h2 h3 h4
-      obtain ⟨s, m, hsteps, hm⟩ := step_ctx_pure_op_ws hd hsz hnv2 hdp
+      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_pure_op_ws hd hsz hnv2 hdp
         M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
         (M.thread e (ev0 :: evs) ctl) rfl
         (by rw [hext, hfile]; exact hv)
       rw [MachineCtx.locUpdTh_thread] at hm
-      refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
+      refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
       exact advance_withrs_eval M.tagDefs M.tid s m (hm dst.core_run_state0)
     | @load_op an loc ann ty pe2 mo hnv2 =>
       obtain ⟨hp2, hd2⟩ : PePure pe2 ∧ peDepth pe2 ≤ lemDefaultFuel := by
@@ -1506,12 +1509,12 @@ theorem engine_step_matchU {M : MachineCtx}
       obtain ⟨pv, hv2, hout⟩ := hr.load_op_inv hnv2
       obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
       subst h1 h2 h3 h4
-      obtain ⟨s, m, hsteps, hm⟩ := step_ctx_load_eval_ws hd hsz hnv2 hp2 hd2
+      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_load_eval_ws hd hsz hnv2 hp2 hd2
         M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
         (M.thread e (ev0 :: evs) ctl) rfl
         (by rw [hext, hfile]; exact hv2)
       rw [MachineCtx.locUpdTh_thread] at hm
-      refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
+      refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
       exact advance_withrs_eval M.tagDefs M.tid s m (hm dst.core_run_state0)
     | @beta_spec an pa pb x bty wa e2 =>
       rcases hr.sseq_inv with ⟨e1', ρ'', ctl'', σ'', hnj, hnc', hnv', hstep, hout⟩ |
@@ -1533,21 +1536,21 @@ theorem engine_step_matchU {M : MachineCtx}
         obtain rfl := ofValA_inj he1
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        have hsteps := step_ctx_beta_spec_pure hd hsz M.tagDefs dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_beta_spec_pure hd hsz M.tagDefs dst.layout_state
           dst.core_file dst.core_extern M.tid M.parent
           (M.thread e (ev0 :: evs) ctl) rfl rfl
         rw [MachineCtx.locUpdTh_thread] at hsteps
-        refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
+        refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
         exact advance_tau M.tagDefs M.tid _ _ dst
       · obtain ⟨rfl, rfl, rfl, rfl⟩ := specPat_inj hpat
         obtain rfl := ofValA_inj he1
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        have hsteps := step_ctx_beta_spec_annot hd hsz M.tagDefs dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_beta_spec_annot hd hsz M.tagDefs dst.layout_state
           dst.core_file dst.core_extern M.tid M.parent
           (M.thread e (ev0 :: evs) ctl) rfl rfl
         rw [MachineCtx.locUpdTh_thread] at hsteps
-        refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
+        refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
         exact advance_tau M.tagDefs M.tid _ _ dst
       · exact (symPat_ne_spec hpat).elim
       · exact (symPat_ne_spec hpat).elim
@@ -1560,11 +1563,11 @@ theorem engine_step_matchU {M : MachineCtx}
         obtain ⟨pv1, pv2, b, σ'', rfl, rfl, hmem, hout⟩ := hr.memop_vals_inv
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        have hsteps := step_ctx_memop hd hsz rfl rfl M.tagDefs
+        obtain ⟨post, hsteps⟩ := step_ctx_memop hd hsz rfl rfl M.tagDefs
           dst.layout_state dst.core_file dst.core_extern M.tid M.parent
           (M.thread e (ev0 :: evs) ctl) rfl
         rw [hccall, MachineCtx.locUpdTh_thread] at hsteps
-        refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter, rfl,
+        refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter, rfl,
           hsym, hexc, ?_⟩
         exact advance_memop (ars_memop_active M.tagDefs (by
           rw [eqPtrval_loc_irrel _ default pv1 pv2]; exact hmem))
@@ -1572,13 +1575,13 @@ theorem engine_step_matchU {M : MachineCtx}
         obtain ⟨v1, v2, hv1', hv2', hout⟩ := hr.memop_op_inv hnvF
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        obtain ⟨s, m, hsteps, hm⟩ := step_ctx_memop_eval_ws hd hsz hnvF
+        obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_memop_eval_ws hd hsz hnvF
           hpd1 hpd2 M.tagDefs dst.layout_state dst.core_file
           dst.core_extern M.tid M.parent
           (M.thread e (ev0 :: evs) ctl) rfl
           (by rw [hext, hfile]; exact hv1') (by rw [hext, hfile]; exact hv2')
         rw [MachineCtx.locUpdTh_thread] at hm
-        refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
+        refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
         exact advance_withrs_eval M.tagDefs M.tid s m (hm dst.core_run_state0)
     | @store_op an loc ann ty pe2 pe3 mo hnvR =>
       obtain ⟨hp2, hp3, hpd2, hpd3⟩ :
@@ -1593,13 +1596,13 @@ theorem engine_step_matchU {M : MachineCtx}
       obtain ⟨pv, cv, hv2, hv3, hout⟩ := hr.store_op_inv hnvR
       obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
       subst h1 h2 h3 h4
-      obtain ⟨s, m, hsteps, hm⟩ := step_ctx_store_eval_ws hd hsz hnvR
+      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_store_eval_ws hd hsz hnvR
         hp2 hp3 hpd2 hpd3 M.tagDefs dst.layout_state dst.core_file
         dst.core_extern M.tid M.parent
         (M.thread e (ev0 :: evs) ctl) rfl
         (by rw [hext, hfile]; exact hv2) (by rw [hext, hfile]; exact hv3)
       rw [MachineCtx.locUpdTh_thread] at hm
-      refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
+      refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
       exact advance_withrs_eval M.tagDefs M.tid s m (hm dst.core_run_state0)
     | @beta_sym an pa x bty wa e2 =>
       rcases hr.sseq_inv with ⟨e1', ρ'', ctl'', σ'', hnj, hnc', hnv', hstep, hout⟩ |
@@ -1623,21 +1626,21 @@ theorem engine_step_matchU {M : MachineCtx}
         obtain rfl := ofValA_inj he1
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        have hsteps := step_ctx_beta_sym_pure hd hsz M.tagDefs dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_beta_sym_pure hd hsz M.tagDefs dst.layout_state
           dst.core_file dst.core_extern M.tid M.parent
           (M.thread e (ev0 :: evs) ctl) rfl rfl
         rw [MachineCtx.locUpdTh_thread] at hsteps
-        refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
+        refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
         exact advance_tau M.tagDefs M.tid _ _ dst
       · obtain ⟨rfl, rfl, rfl⟩ := symPat_inj hpat
         obtain rfl := ofValA_inj he1
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        have hsteps := step_ctx_beta_sym_annot hd hsz M.tagDefs dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_beta_sym_annot hd hsz M.tagDefs dst.layout_state
           dst.core_file dst.core_extern M.tid M.parent
           (M.thread e (ev0 :: evs) ctl) rfl rfl
         rw [MachineCtx.locUpdTh_thread] at hsteps
-        refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
+        refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
         exact advance_tau M.tagDefs M.tid _ _ dst
       · exact (symPat_ne_tuple hpatT1).elim
       · exact (symPat_ne_tuple hpatT2).elim
@@ -1666,21 +1669,21 @@ theorem engine_step_matchU {M : MachineCtx}
         obtain rfl := ofValA_inj he1
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        have hsteps := step_ctx_sseq_val_pure hd hsz M.tagDefs dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_sseq_val_pure hd hsz M.tagDefs dst.layout_state
           dst.core_file dst.core_extern M.tid M.parent
           (M.thread e (ev0 :: evs) ctl) rfl rfl
         rw [MachineCtx.locUpdTh_thread] at hsteps
-        refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
+        refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
         exact advance_tau M.tagDefs M.tid _ _ dst
       · obtain ⟨rfl, rfl⟩ := tuplePat_inj hpat
         obtain rfl := ofValA_inj he1
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        have hsteps := step_ctx_sseq_val_annot hd hsz M.tagDefs dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_sseq_val_annot hd hsz M.tagDefs dst.layout_state
           dst.core_file dst.core_extern M.tid M.parent
           (M.thread e (ev0 :: evs) ctl) rfl rfl
         rw [MachineCtx.locUpdTh_thread] at hsteps
-        refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
+        refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
         exact advance_tau M.tagDefs M.tid _ _ dst
       · exact hcall.not_val.elim
     | @wbeta_tuple an pa ls wa e2 =>
@@ -1703,21 +1706,21 @@ theorem engine_step_matchU {M : MachineCtx}
         obtain rfl := ofValA_inj he1
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        have hsteps := step_ctx_wseq_val_pure hd hsz M.tagDefs dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_wseq_val_pure hd hsz M.tagDefs dst.layout_state
           dst.core_file dst.core_extern M.tid M.parent
           (M.thread e (ev0 :: evs) ctl) rfl rfl
         rw [MachineCtx.locUpdTh_thread] at hsteps
-        refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
+        refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
         exact advance_tau M.tagDefs M.tid _ _ dst
       · obtain ⟨rfl, rfl⟩ := tuplePat_inj hpat
         obtain rfl := ofValA_inj he1
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        have hsteps := step_ctx_wseq_val_annot hd hsz M.tagDefs dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_wseq_val_annot hd hsz M.tagDefs dst.layout_state
           dst.core_file dst.core_extern M.tid M.parent
           (M.thread e (ev0 :: evs) ctl) rfl rfl
         rw [MachineCtx.locUpdTh_thread] at hsteps
-        refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
+        refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
         exact advance_tau M.tagDefs M.tid _ _ dst
       · exact hcall.not_val.elim
     | @wbeta_sym an pa x bty wa e2 =>
@@ -1738,25 +1741,49 @@ theorem engine_step_matchU {M : MachineCtx}
         obtain rfl := ofValA_inj he1
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        have hsteps := step_ctx_wseq_val_pure hd hsz M.tagDefs dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_wseq_val_pure hd hsz M.tagDefs dst.layout_state
           dst.core_file dst.core_extern M.tid M.parent
           (M.thread e (ev0 :: evs) ctl) rfl rfl
         rw [MachineCtx.locUpdTh_thread] at hsteps
-        refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
+        refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
         exact advance_tau M.tagDefs M.tid _ _ dst
       · obtain ⟨rfl, rfl, rfl⟩ := symPat_inj hpat
         obtain rfl := ofValA_inj he1
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        have hsteps := step_ctx_wseq_val_annot hd hsz M.tagDefs dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_wseq_val_annot hd hsz M.tagDefs dst.layout_state
           dst.core_file dst.core_extern M.tid M.parent
           (M.thread e (ev0 :: evs) ctl) rfl rfl
         rw [MachineCtx.locUpdTh_thread] at hsteps
-        refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
+        refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
         exact advance_tau M.tagDefs M.tid _ _ dst
       · exact (symPat_ne_tuple hpat).elim
       · exact (symPat_ne_tuple hpat).elim
       · exact hcall.not_val.elim
+    | @unseq_vals an ws =>
+      rcases hr.unseq_inv with
+          ⟨es1, e0, es2, _, _, _, _, heq, hv2, -, -, -, hnv0, -, -⟩ |
+          ⟨ws', fps, cvals, heq, hcol, hout⟩ |
+          ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩ |
+          ⟨es1, e0, es2, heq, hnv0, hv2, hcall⟩
+      · have h1 : valsOnly (es1 ++ e0 :: es2) = true := by
+          rw [← heq]; exact valsOnly_map_ofValA ws
+        rw [valsOnly_append_cons_false hnv0] at h1
+        cases h1
+      · obtain rfl := map_ofValA_inj heq
+        obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
+        subst h1 h2 h3 h4
+        obtain ⟨post, hsteps⟩ := step_ctx_unseq_vals hd hsz hcol M.tagDefs dst.layout_state
+          dst.core_file dst.core_extern M.tid M.parent
+          (M.thread e (ev0 :: evs) ctl) rfl
+        rw [MachineCtx.locUpdTh_thread] at hsteps
+        refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
+        exact advance_tau M.tagDefs M.tid _ _ dst
+      · rw [jumpRedex?_unseq_vals] at hj; cases hj
+      · have h1 : valsOnly (es1 ++ e0 :: es2) = true := by
+          rw [← heq]; exact valsOnly_map_ofValA ws
+        rw [valsOnly_append_cons_false hnv0] at h1
+        cases h1
     | @bound_pure an a1 b1 v =>
       rcases hr.bound_inv with ⟨b', ρ'', ctl'', σ'', hnj, hnc', hnv', hstep, hout⟩ |
           ⟨a1', b1', v', hb, hout⟩ | ⟨_, _, _, _, _, hb, hout⟩ |
@@ -1766,11 +1793,11 @@ theorem engine_step_matchU {M : MachineCtx}
           simpa using ofValA_inj hb
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        have hsteps := step_ctx_bound_pure hd hsz M.tagDefs dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_bound_pure hd hsz M.tagDefs dst.layout_state
           dst.core_file dst.core_extern M.tid M.parent
           (M.thread e (ev0 :: evs) ctl) rfl
         rw [MachineCtx.locUpdTh_thread] at hsteps
-        refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
+        refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
         exact advance_tau M.tagDefs M.tid _ _ dst
       · cases ofValA_inj hb
       · rw [jumpRedex?_ofValA] at hj; cases hj
@@ -1785,11 +1812,11 @@ theorem engine_step_matchU {M : MachineCtx}
           simpa using ofValA_inj hb
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        have hsteps := step_ctx_bound_annot hd hsz M.tagDefs dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_bound_annot hd hsz M.tagDefs dst.layout_state
           dst.core_file dst.core_extern M.tid M.parent
           (M.thread e (ev0 :: evs) ctl) rfl
         rw [MachineCtx.locUpdTh_thread] at hsteps
-        refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
+        refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
         exact advance_tau M.tagDefs M.tid _ _ dst
       · rw [jumpRedex?_ofValA] at hj; cases hj
       · exact hcall.not_val.elim
@@ -1803,12 +1830,12 @@ theorem engine_step_matchU {M : MachineCtx}
     obtain ⟨p, hproc, hQd⟩ := MachineCtx.labels_lookup_some hl
     obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
     subst h1 h2 h3 h4
-    obtain ⟨s, m, hsteps, hm⟩ := step_ctx_run_ws hd hsz hl hdep
+    obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_run_ws hd hsz hl hdep
       M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent p
       (M.thread e (ev0 :: evs) ctl) rfl hproc
       (by rw [hext, hfile]; exact hvs)
     rw [MachineCtx.locUpdTh_thread] at hm
-    refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl,
+    refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl,
       hsym, hexc, ?_⟩
     exact advance_withrs_eval M.tagDefs M.tid s m
       (hm dst.core_run_state0 (by unfold LabeledAt; rw [hext, hlabd]; exact hQd))
@@ -1818,11 +1845,11 @@ theorem engine_step_matchU {M : MachineCtx}
       | call _ hdep => exact hdep
     obtain ⟨h1, h2, h4, h3⟩ := Config.mk_inj hout
     subst h1 h2 h4 h3
-    obtain ⟨m, hsteps, hm⟩ := step_ctx_call_ws hd hsz hdep M.tagDefs dst.layout_state
+    obtain ⟨m, post, hsteps, hm⟩ := step_ctx_call_ws hd hsz hdep M.tagDefs dst.layout_state
       dst.core_file dst.core_extern M.tid M.parent (M.thread e (ev0 :: evs) ctl) rfl
       (by rw [hext, hfile]; exact hvs) (by rw [hfile, hext]; exact hfl) hlen
     rw [MachineCtx.locUpdTh_thread] at hm
-    refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl,
+    refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl,
       hsym, hexc, ?_⟩
     exact advance_withrs_eval M.tagDefs M.tid _ m (hm dst.core_run_state0)
 
@@ -1853,8 +1880,8 @@ theorem step_iff_cerberusRound {M : MachineCtx} {e : CoreExpr}
     obtain ⟨c₀, hs₀⟩ := hstep
     have hr₀ := Step.toCerberusRound hf hsz hs₀
     obtain ⟨dst, hemb⟩ := M.embeds_exists (e, ev0 :: evs, ctl, σ)
-    obtain ⟨s, hsteps, -, rs', tr, ctr, -, hsym, hexc, hadv⟩ := hr dst hemb
-    obtain ⟨s₀, hsteps₀, -, rs₀, tr₀, ctr₀, -, hsym₀, hexc₀, hadv₀⟩ := hr₀ dst hemb
+    obtain ⟨s, post, hsteps, -, rs', tr, ctr, -, hsym, hexc, hadv⟩ := hr dst hemb
+    obtain ⟨s₀, post₀, hsteps₀, -, rs₀, tr₀, ctr₀, -, hsym₀, hexc₀, hadv₀⟩ := hr₀ dst hemb
     obtain rfl : s₀ = s := by
       rw [hsteps₀] at hsteps
       exact (List.cons.inj hsteps).1
@@ -1934,7 +1961,7 @@ theorem shipped_remove_annot (M : MachineCtx) (a a2 b : List _root_.annot)
   obtain ⟨hth, hlay, -, -, -, hsym, hexc⟩ := hemb
   simp only at hth hlay
   subst hlay
-  refine ⟨_, step_ctx_remove_annot ds v M.tagDefs dst.layout_state dst.core_file
+  refine ⟨_, _, step_ctx_remove_annot ds v M.tagDefs dst.layout_state dst.core_file
       dst.core_extern M.tid M.parent (M.thread (ofValA (.annot a a2 b ds v)) ρ ctl) rfl,
     rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
   exact advance_tau M.tagDefs M.tid _ _ dst
@@ -2003,10 +2030,10 @@ theorem cerberusRound_refused_store {an : List _root_.annot} (M : MachineCtx)
     obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
     simp only at hlay
     subst hlay
-    have hsteps := step_ctx_store (Decomp.root Redex.store) hsz M.tagDefs hmv
+    obtain ⟨post, hsteps⟩ := step_ctx_store (Decomp.root Redex.store) hsz M.tagDefs hmv
       dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
     rw [show is_unseq_with_ccall CTX = false from rfl] at hsteps
-    exact ⟨_, _, hsteps, rfl, advance_action_killed (ars_store_killed hk)⟩
+    exact ⟨_, _, _, hsteps, rfl, advance_action_killed (ars_store_killed hk)⟩
 
 /-- The refusal classification at a LOAD redex: `loadM`'s kill
     (CerbMem.lean:1621 — null/function/out-of-bounds/dead pointers are
@@ -2037,10 +2064,10 @@ theorem cerberusRound_refused_load {an : List _root_.annot} (M : MachineCtx)
   obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
   simp only at hlay
   subst hlay
-  have hsteps := step_ctx_load (Decomp.root Redex.load) hsz M.tagDefs
+  obtain ⟨post, hsteps⟩ := step_ctx_load (Decomp.root Redex.load) hsz M.tagDefs
     dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
   rw [show is_unseq_with_ccall CTX = false from rfl] at hsteps
-  exact ⟨_, _, hsteps, rfl, advance_action_killed (ars_load_killed hk)⟩
+  exact ⟨_, _, _, hsteps, rfl, advance_action_killed (ars_load_killed hk)⟩
 
 /-- The refusal classification at a CREATE redex: the out-of-memory
     kill (CerbMem.lean:1513, `Other (MerrOther "out of memory")`, lifted
@@ -2069,10 +2096,10 @@ theorem cerberusRound_refused_create {an : List _root_.annot} (M : MachineCtx)
   obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
   simp only at hlay
   subst hlay
-  have hsteps := step_ctx_create (Decomp.root Redex.create) hsz M.tagDefs
+  obtain ⟨post, hsteps⟩ := step_ctx_create (Decomp.root Redex.create) hsz M.tagDefs
     dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
   rw [show is_unseq_with_ccall CTX = false from rfl] at hsteps
-  exact ⟨_, _, hsteps, rfl, advance_action_killed (ars_create_killed hk)⟩
+  exact ⟨_, _, _, hsteps, rfl, advance_action_killed (ars_create_killed hk)⟩
 
 /-- The refusal classification at a KILL redex (kill/free arc K2):
     `killM`'s kill at the request's own location — one of the three
@@ -2102,10 +2129,10 @@ theorem cerberusRound_refused_kill {an : List _root_.annot} (M : MachineCtx)
   obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
   simp only at hlay
   subst hlay
-  have hsteps := step_ctx_kill (Decomp.root Redex.kill) hsz M.tagDefs
+  obtain ⟨post, hsteps⟩ := step_ctx_kill (Decomp.root Redex.kill) hsz M.tagDefs
     dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
   rw [show is_unseq_with_ccall CTX = false from rfl] at hsteps
-  exact ⟨_, _, hsteps, rfl, advance_action_killed (ars_kill_killed hk)⟩
+  exact ⟨_, _, _, hsteps, rfl, advance_action_killed (ars_kill_killed hk)⟩
 
 /-- The refusal classification at an ALLOC redex (kill/free arc K3): the
     out-of-memory kill (CerbMem.lean:1541, `Other (MerrOther "out of
@@ -2133,10 +2160,10 @@ theorem cerberusRound_refused_alloc {an : List _root_.annot} (M : MachineCtx)
   obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
   simp only at hlay
   subst hlay
-  have hsteps := step_ctx_alloc (Decomp.root Redex.alloc) hsz M.tagDefs
+  obtain ⟨post, hsteps⟩ := step_ctx_alloc (Decomp.root Redex.alloc) hsz M.tagDefs
     dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
   rw [show is_unseq_with_ccall CTX = false from rfl] at hsteps
-  exact ⟨_, _, hsteps, rfl, advance_action_killed (ars_alloc_killed hk)⟩
+  exact ⟨_, _, _, hsteps, rfl, advance_action_killed (ars_alloc_killed hk)⟩
 
 /-- The refusal classification at a value-scrutinee CASE redex: the
     ILLTYPED no-match report (one_step0's Ecase value arm,
@@ -2184,8 +2211,11 @@ theorem engine_complete_loadU {an : List _root_.annot} (M : MachineCtx) (aid : N
     obtain ⟨⟨fp, mval⟩, σ'⟩ := r
     refine ⟨_, ?_, .step (Step.load_canonical hmem)⟩
     unfold outcomesU engineStepsU loadRedex
-    rw [step_ctx_load (Decomp.root (Redex.load)) hsz M.tagDefs σ
-      M.file M.extern M.tid M.parent (M.thread _ ρ ctl) rfl]
+    obtain ⟨post, hs⟩ := step_ctx_load (Decomp.root (Redex.load)) hsz M.tagDefs σ
+      M.file M.extern M.tid M.parent (M.thread _ ρ ctl) rfl
+    rw [step_ctx_singleton_of_root (by
+      show (get_ctx (loadRedex an loc ann ty pv mo)).length = 1
+      unfold loadRedex; exact congrArg List.length (get_ctx_action 999999)) hs]
     simp only [List.map_cons, List.map_nil]
     rw [dischargeStep_load_active hmem]
     simp only [MachineCtx.locUpdTh_thread]
@@ -2201,8 +2231,11 @@ theorem engine_complete_loadU {an : List _root_.annot} (M : MachineCtx) (aid : N
                 (valueFromMemValue mval).2)))))) })))),
       ?_, ?_⟩
     · unfold outcomesU engineStepsU loadRedex
-      rw [step_ctx_load (Decomp.root (Redex.load)) hsz M.tagDefs σ
-        M.file M.extern M.tid M.parent (M.thread _ ρ ctl) rfl]
+      obtain ⟨post, hs⟩ := step_ctx_load (Decomp.root (Redex.load)) hsz M.tagDefs σ
+        M.file M.extern M.tid M.parent (M.thread _ ρ ctl) rfl
+      rw [step_ctx_singleton_of_root (by
+        show (get_ctx (loadRedex an loc ann ty pv mo)).length = 1
+        unfold loadRedex; exact congrArg List.length (get_ctx_action 999999)) hs]
       rfl
     · refine .refused (dischargeStep_load_refusal hmem) (fun out hstep => ?_) rfl
       obtain ⟨fp', mval', σ'', hmem', -⟩ := hstep.load_inv
@@ -2226,8 +2259,11 @@ theorem engine_complete_createU {an : List _root_.annot} (M : MachineCtx) (aid :
     obtain ⟨pv, σ'⟩ := r
     refine ⟨_, ?_, .step (Step.create_canonical hmem)⟩
     unfold outcomesU engineStepsU createRedex
-    rw [step_ctx_create (Decomp.root (Redex.create)) hsz M.tagDefs σ
-      M.file M.extern M.tid M.parent (M.thread _ ρ ctl) rfl]
+    obtain ⟨post, hs⟩ := step_ctx_create (Decomp.root (Redex.create)) hsz M.tagDefs σ
+      M.file M.extern M.tid M.parent (M.thread _ ρ ctl) rfl
+    rw [step_ctx_singleton_of_root (by
+      show (get_ctx (createRedex an loc ann align ty pref)).length = 1
+      unfold createRedex; exact congrArg List.length (get_ctx_action 999999)) hs]
     simp only [List.map_cons, List.map_nil]
     rw [dischargeStep_create_active (hirr ▸ hmem)]
     simp only [MachineCtx.locUpdTh_thread]
@@ -2243,8 +2279,11 @@ theorem engine_complete_createU {an : List _root_.annot} (M : MachineCtx) (aid :
               (PEval (Vobject (OVpointer pv)))))) })))),
       ?_, ?_⟩
     · unfold outcomesU engineStepsU createRedex
-      rw [step_ctx_create (Decomp.root (Redex.create)) hsz M.tagDefs σ
-        M.file M.extern M.tid M.parent (M.thread _ ρ ctl) rfl]
+      obtain ⟨post, hs⟩ := step_ctx_create (Decomp.root (Redex.create)) hsz M.tagDefs σ
+        M.file M.extern M.tid M.parent (M.thread _ ρ ctl) rfl
+      rw [step_ctx_singleton_of_root (by
+        show (get_ctx (createRedex an loc ann align ty pref)).length = 1
+        unfold createRedex; exact congrArg List.length (get_ctx_action 999999)) hs]
       rfl
     · refine .refused (dischargeStep_create_refusal (hirr ▸ hmem)) (fun out hstep => ?_) rfl
       obtain ⟨pv', σ'', hmem', -⟩ := hstep.create_inv
@@ -2323,6 +2362,15 @@ theorem Decomp.lift_step {M : MachineCtx} {e : CoreExpr} {ctx : context} {r : Co
   | wseq_sym hd ih =>
     exact Step.wseq_ctx (hd.jumpRedex?_eq.trans hnj) (hd.callRedex?_none hnc) hd.toVal_none
       (ih hnr hnc hs hnj hncall)
+  | unseq hv2 hcc hd ih =>
+    exact Step.unseq_ctx hv2 hcc (hd.jumpRedex?_eq.trans hnj) (hd.callRedex?_none hnc) hd.toVal_none
+      (ih hnr hnc hs hnj hncall)
+
+theorem get_ctx_annot_unseq {a a' : List _root_.annot} {ds : List dyn_annotation}
+    {es : List CoreExpr} (n : Nat) :
+    get_ctx_lemFuel (n+1) (Expr a (Eannot ds (Expr a' (Eunseq es)))) =
+      List.map (fun q => (Cannot a ds q.1, q.2))
+        (get_ctx_lemFuel n (Expr a' (Eunseq es))) := rfl
 
 /-! `get_ctx`'s plain-`Eannot` arm (Core_reduction.lean:375) at a body
 whose head is a sequencing frame or an action: the outer irreducibility
@@ -2370,6 +2418,7 @@ theorem Decomp.rebuild_not_irreducible {e : CoreExpr} {ctx : context} {r : CoreE
   | sseq_tuple _ _ => rfl
   | wseq_tuple _ _ => rfl
   | wseq_sym _ _ => rfl
+  | unseq _ _ _ _ => rfl
   | annot hroot _ _ hd _ =>
     cases hd with
     | root _ => rfl
@@ -2381,129 +2430,161 @@ theorem Decomp.rebuild_not_irreducible {e : CoreExpr} {ctx : context} {r : CoreE
     | sseq_tuple _ => rfl
     | wseq_tuple _ => rfl
     | wseq_sym _ => rfl
+    | unseq _ _ _ => rfl
     | annot _ _ _ _ => simp [annotRooted, apply_ctx] at hroot
 
 /-- Rebuilding a decomposition's hole with an ACTION node keeps the
-    decomposition: the engine's `get_ctx` at the rebuilt arena is the
-    singleton `[(ctx, action)]`, at the ORIGINAL arena's size bound
-    (every frame draws one fuel level, the root one). The successor of a
-    load/store ACTION_EVAL round is such a rebuilt arena
+    decomposition: the engine's `get_ctx` at the rebuilt arena HEADS with
+    `(ctx, action)` (E4 head form; the singleton at every frame but a
+    `Cunseq` with reducible earlier siblings), at the ORIGINAL arena's
+    size bound (every frame draws one fuel level, the root one). The
+    successor of a load/store ACTION_EVAL round is such a rebuilt arena
     (`step_ctx_load_eval_ws'`/`store_eval_ws'`). -/
 theorem Decomp.get_ctx_rebuild_action {e : CoreExpr} {ctx : context} {r : CoreExpr}
     (hd : Decomp e ctx r) (a0 : List _root_.annot)
     (p : generic_paction core_run_annotation Unit sym) :
     ∀ n : Nat, esize e ≤ n →
-      get_ctx_lemFuel n (apply_ctx ctx (Expr a0 (Eaction p))) =
-        [(ctx, Expr a0 (Eaction p))] := by
+      ∃ rest, get_ctx_lemFuel n (apply_ctx ctx (Expr a0 (Eaction p))) =
+        (ctx, Expr a0 (Eaction p)) :: rest := by
   induction hd with
   | @root r0 hr =>
     intro n hn
     obtain ⟨m, rfl⟩ : ∃ m, n = m + 1 :=
       ⟨n - 1, by have := esize_pos r0; omega⟩
-    exact get_ctx_action m
+    exact ⟨[], get_ctx_action m⟩
   | @sseq an pa bty e1 e2 ctx' r' hd ih =>
     intro n hn
     rw [esize_sseq] at hn
     obtain ⟨m, rfl⟩ : ∃ m, n = m + 1 := ⟨n - 1, by omega⟩
-    show get_ctx_lemFuel (m+1)
+    obtain ⟨rest, hr⟩ := ih m (by omega)
+    show ∃ rest, get_ctx_lemFuel (m+1)
       (Expr an (Esseq (Pattern pa (CaseBase (none, bty)))
         (apply_ctx ctx' (Expr a0 (Eaction p))) e2)) = _
-    rw [get_ctx_sseq (hd.rebuild_not_irreducible a0 p) m, ih m (by omega)]
-    rfl
+    rw [get_ctx_sseq (hd.rebuild_not_irreducible a0 p) m, hr]
+    exact ⟨_, rfl⟩
   | @sseq_spec an pa pb x bty e1 e2 ctx' r' hd ih =>
     intro n hn
     rw [esize_sseq] at hn
     obtain ⟨m, rfl⟩ : ∃ m, n = m + 1 := ⟨n - 1, by omega⟩
-    show get_ctx_lemFuel (m+1)
+    obtain ⟨rest, hr⟩ := ih m (by omega)
+    show ∃ rest, get_ctx_lemFuel (m+1)
       (Expr an (Esseq (specPat pa pb x bty) (apply_ctx ctx' (Expr a0 (Eaction p))) e2)) = _
-    rw [get_ctx_sseq (hd.rebuild_not_irreducible a0 p) m, ih m (by omega)]
-    rfl
+    rw [get_ctx_sseq (hd.rebuild_not_irreducible a0 p) m, hr]
+    exact ⟨_, rfl⟩
   | @sseq_sym an pa x bty e1 e2 ctx' r' hd ih =>
     intro n hn
     rw [esize_sseq] at hn
     obtain ⟨m, rfl⟩ : ∃ m, n = m + 1 := ⟨n - 1, by omega⟩
-    show get_ctx_lemFuel (m+1)
+    obtain ⟨rest, hr⟩ := ih m (by omega)
+    show ∃ rest, get_ctx_lemFuel (m+1)
       (Expr an (Esseq (symPat pa x bty) (apply_ctx ctx' (Expr a0 (Eaction p))) e2)) = _
-    rw [get_ctx_sseq (hd.rebuild_not_irreducible a0 p) m, ih m (by omega)]
-    rfl
+    rw [get_ctx_sseq (hd.rebuild_not_irreducible a0 p) m, hr]
+    exact ⟨_, rfl⟩
   | @wseq an pa bty e1 e2 ctx' r' hd ih =>
     intro n hn
     rw [esize_wseq] at hn
     obtain ⟨m, rfl⟩ : ∃ m, n = m + 1 := ⟨n - 1, by omega⟩
-    show get_ctx_lemFuel (m+1)
+    obtain ⟨rest, hr⟩ := ih m (by omega)
+    show ∃ rest, get_ctx_lemFuel (m+1)
       (Expr an (Ewseq (Pattern pa (CaseBase (none, bty)))
         (apply_ctx ctx' (Expr a0 (Eaction p))) e2)) = _
-    rw [get_ctx_wseq (hd.rebuild_not_irreducible a0 p) m, ih m (by omega)]
-    rfl
+    rw [get_ctx_wseq (hd.rebuild_not_irreducible a0 p) m, hr]
+    exact ⟨_, rfl⟩
   | @sseq_tuple an pa ls e1 e2 ctx' r' hd ih =>
     intro n hn
     rw [esize_sseq] at hn
     obtain ⟨m, rfl⟩ : ∃ m, n = m + 1 := ⟨n - 1, by omega⟩
-    show get_ctx_lemFuel (m+1)
+    obtain ⟨rest, hr⟩ := ih m (by omega)
+    show ∃ rest, get_ctx_lemFuel (m+1)
       (Expr an (Esseq (tuplePat pa ls) (apply_ctx ctx' (Expr a0 (Eaction p))) e2)) = _
-    rw [get_ctx_sseq (hd.rebuild_not_irreducible a0 p) m, ih m (by omega)]
-    rfl
+    rw [get_ctx_sseq (hd.rebuild_not_irreducible a0 p) m, hr]
+    exact ⟨_, rfl⟩
   | @wseq_tuple an pa ls e1 e2 ctx' r' hd ih =>
     intro n hn
     rw [esize_wseq] at hn
     obtain ⟨m, rfl⟩ : ∃ m, n = m + 1 := ⟨n - 1, by omega⟩
-    show get_ctx_lemFuel (m+1)
+    obtain ⟨rest, hr⟩ := ih m (by omega)
+    show ∃ rest, get_ctx_lemFuel (m+1)
       (Expr an (Ewseq (tuplePat pa ls) (apply_ctx ctx' (Expr a0 (Eaction p))) e2)) = _
-    rw [get_ctx_wseq (hd.rebuild_not_irreducible a0 p) m, ih m (by omega)]
-    rfl
+    rw [get_ctx_wseq (hd.rebuild_not_irreducible a0 p) m, hr]
+    exact ⟨_, rfl⟩
   | @wseq_sym an pa x bty e1 e2 ctx' r' hd ih =>
     intro n hn
     rw [esize_wseq] at hn
     obtain ⟨m, rfl⟩ : ∃ m, n = m + 1 := ⟨n - 1, by omega⟩
-    show get_ctx_lemFuel (m+1)
+    obtain ⟨rest, hr⟩ := ih m (by omega)
+    show ∃ rest, get_ctx_lemFuel (m+1)
       (Expr an (Ewseq (symPat pa x bty) (apply_ctx ctx' (Expr a0 (Eaction p))) e2)) = _
-    rw [get_ctx_wseq (hd.rebuild_not_irreducible a0 p) m, ih m (by omega)]
-    rfl
+    rw [get_ctx_wseq (hd.rebuild_not_irreducible a0 p) m, hr]
+    exact ⟨_, rfl⟩
   | @bound an b ctx' r' hd ih =>
     intro n hn
     rw [esize_bound] at hn
     obtain ⟨m, rfl⟩ : ∃ m, n = m + 1 := ⟨n - 1, by omega⟩
-    show get_ctx_lemFuel (m+1)
+    obtain ⟨rest, hr⟩ := ih m (by omega)
+    show ∃ rest, get_ctx_lemFuel (m+1)
       (Expr an (Ebound (apply_ctx ctx' (Expr a0 (Eaction p))))) = _
-    rw [get_ctx_bound (hd.rebuild_not_irreducible a0 p) m, ih m (by omega)]
-    rfl
+    rw [get_ctx_bound (hd.rebuild_not_irreducible a0 p) m, hr]
+    exact ⟨_, rfl⟩
+  | @unseq an es1 e0 es2 ctx' r' hv2 hcc hd ih =>
+    intro n hn
+    rw [esize_unseq, esizeList_append, esizeList_cons] at hn
+    obtain ⟨m, rfl⟩ : ∃ m, n = m + 1 := ⟨n - 1, by omega⟩
+    have hl1 := length_le_esizeList es1
+    have hl2 := length_le_esizeList es2
+    have hpos := esize_pos e0
+    have hsub := hd.esize_le
+    have hnv0 : toVal (apply_ctx ctx' (Expr a0 (Eaction p))) = none :=
+      toVal_none_of_isValE_false (by
+        rw [← is_irreducible_eq_isValE]; exact hd.rebuild_not_irreducible a0 p)
+    show ∃ rest, get_ctx_lemFuel (m+1)
+      (Expr an (Eunseq (es1 ++ apply_ctx ctx' (Expr a0 (Eaction p)) :: es2))) = _
+    rw [get_ctx_unseq_nonvals (valsOnly_append_cons_false hnv0) m]
+    obtain ⟨rest, hrest⟩ :=
+      get_ctx_unseq_aux_focus an (hd.rebuild_not_irreducible a0 p) hv2 es1 m [] [] (by omega)
+    obtain ⟨rest', hr'⟩ := ih (m - es1.length - 1) (by omega)
+    rw [hrest, hr', List.map_cons, List.nil_append]
+    exact ⟨_, rfl⟩
   | @annot an ds b ctx' r' hroot hirr hmap hd ih =>
     intro n hn
     rw [esize_annot] at hn
     obtain ⟨m, rfl⟩ : ∃ m, n = m + 1 := ⟨n - 1, by omega⟩
-    have ih' := ih m (by omega)
-    show get_ctx_lemFuel (m+1)
+    obtain ⟨rest, ih'⟩ := ih m (by omega)
+    show ∃ rest, get_ctx_lemFuel (m+1)
       (Expr an (Eannot ds (apply_ctx ctx' (Expr a0 (Eaction p))))) = _
     -- the plain-`Eannot` arm of `get_ctx` (Core_reduction.lean:375): the
     -- body's head is a frame or the action, never an annotation
     cases hd with
     | root _ =>
       dsimp only [apply_ctx] at ih' ⊢
-      rw [get_ctx_annot_action m, ih']; rfl
+      rw [get_ctx_annot_action m, ih']; exact ⟨_, rfl⟩
     | sseq _ =>
       dsimp only [apply_ctx] at ih' ⊢
-      rw [get_ctx_annot_sseq m, ih']; rfl
+      rw [get_ctx_annot_sseq m, ih']; exact ⟨_, rfl⟩
     | sseq_spec _ =>
       dsimp only [apply_ctx] at ih' ⊢
-      rw [get_ctx_annot_sseq m, ih']; rfl
+      rw [get_ctx_annot_sseq m, ih']; exact ⟨_, rfl⟩
     | sseq_sym _ =>
       dsimp only [apply_ctx] at ih' ⊢
-      rw [get_ctx_annot_sseq m, ih']; rfl
+      rw [get_ctx_annot_sseq m, ih']; exact ⟨_, rfl⟩
     | wseq _ =>
       dsimp only [apply_ctx] at ih' ⊢
-      rw [get_ctx_annot_wseq m, ih']; rfl
+      rw [get_ctx_annot_wseq m, ih']; exact ⟨_, rfl⟩
     | bound _ =>
       dsimp only [apply_ctx] at ih' ⊢
-      rw [get_ctx_annot_bound m, ih']; rfl
+      rw [get_ctx_annot_bound m, ih']; exact ⟨_, rfl⟩
     | sseq_tuple _ =>
       dsimp only [apply_ctx] at ih' ⊢
-      rw [get_ctx_annot_sseq m, ih']; rfl
+      rw [get_ctx_annot_sseq m, ih']; exact ⟨_, rfl⟩
     | wseq_tuple _ =>
       dsimp only [apply_ctx] at ih' ⊢
-      rw [get_ctx_annot_wseq m, ih']; rfl
+      rw [get_ctx_annot_wseq m, ih']; exact ⟨_, rfl⟩
     | wseq_sym _ =>
       dsimp only [apply_ctx] at ih' ⊢
-      rw [get_ctx_annot_wseq m, ih']; rfl
+      rw [get_ctx_annot_wseq m, ih']; exact ⟨_, rfl⟩
+    | unseq _ _ _ =>
+      dsimp only [apply_ctx] at ih' ⊢
+      rw [get_ctx_annot_unseq m, ih']; exact ⟨_, rfl⟩
     | annot _ _ _ _ => simp [annotRooted, apply_ctx] at hroot
 
 /-- The right unit law of the engine's state-except monad. -/
@@ -2536,18 +2617,19 @@ theorem step_ctx_beta_spec_pure' {an a1 b1 : List _root_.annot} {e : CoreExpr} {
     (harena : th.arena = e)
     {ev0 : Fmap sym value} {evs : List (Fmap sym value)}
     (henv : th.env = ev0 :: evs) :
-    step_ctx tds σ file ext tid (parent, th) =
-      [Step_tau2 "Esseq" TSK_Misc
+    ∃ post, step_ctx tds σ file ext tid (parent, th) =
+      Step_tau2 "Esseq" TSK_Misc
         ({ locUpdTh an th with
             env := update_env (specPat pa pb x bty) v (ev0 :: evs),
-            arena := apply_ctx ctx e2 })] := by
-  have hget : get_ctx th.arena =
-      [(ctx, Expr an (Esseq (specPat pa pb x bty) (ofValA (.pure a1 b1 v)) e2))] := by
+            arena := apply_ctx ctx e2 }) :: post := by
+  obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena =
+      (ctx, Expr an (Esseq (specPat pa pb x bty) (ofValA (.pure a1 b1 v)) e2)) :: rest := by
     rw [harena]; exact hd.get_ctx_default hsz
   unfold step_ctx
   dsimp only
   rw [hget]
-  simp only [List.map_cons, List.map_nil]
+  simp only [List.map_cons]
+  refine ⟨_, List.cons_eq_cons.mpr ⟨?_, rfl⟩⟩
   cases ctx <;>
     (simp only [one_step0, ofValA, is_irreducible_sseq, Bool.false_eq_true,
        if_false, valueFromPexpr]
@@ -2568,18 +2650,19 @@ theorem step_ctx_beta_spec_annot' {an a1 a2 b1 : List _root_.annot} {e : CoreExp
     (harena : th.arena = e)
     {ev0 : Fmap sym value} {evs : List (Fmap sym value)}
     (henv : th.env = ev0 :: evs) :
-    step_ctx tds σ file ext tid (parent, th) =
-      [Step_tau2 "Esseq Eannot" TSK_Misc
+    ∃ post, step_ctx tds σ file ext tid (parent, th) =
+      Step_tau2 "Esseq Eannot" TSK_Misc
         ({ locUpdTh an th with
             env := update_env (specPat pa pb x bty) v (ev0 :: evs),
-            arena := apply_ctx ctx (Expr [] (Eannot ds e2)) })] := by
-  have hget : get_ctx th.arena =
-      [(ctx, Expr an (Esseq (specPat pa pb x bty) (ofValA (.annot a1 a2 b1 ds v)) e2))] := by
+            arena := apply_ctx ctx (Expr [] (Eannot ds e2)) }) :: post := by
+  obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena =
+      (ctx, Expr an (Esseq (specPat pa pb x bty) (ofValA (.annot a1 a2 b1 ds v)) e2)) :: rest := by
     rw [harena]; exact hd.get_ctx_default hsz
   unfold step_ctx
   dsimp only
   rw [hget]
-  simp only [List.map_cons, List.map_nil]
+  simp only [List.map_cons]
+  refine ⟨_, List.cons_eq_cons.mpr ⟨?_, rfl⟩⟩
   cases ctx <;>
     (simp only [one_step0, ofValA, is_irreducible_sseq, Bool.false_eq_true,
        if_false, valueFromPexpr]
@@ -2668,10 +2751,10 @@ theorem complete_store {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} 
       obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
-      have hsteps := step_ctx_store hd hsz M.tagDefs hmv
+      obtain ⟨post, hsteps⟩ := step_ctx_store hd hsz M.tagDefs hmv
         dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
-      rw [hd.unseq_ccall_false] at hsteps
-      exact ⟨_, _, hsteps, rfl, advance_action_killed (ars_store_killed hk)⟩
+      rw [hd.unseq_ccall_false hsz] at hsteps
+      exact ⟨_, _, _, hsteps, rfl, advance_action_killed (ars_store_killed hk)⟩
 
 /-- LOAD: `loadM`'s verdict — active (the mirror step) or killed. -/
 theorem complete_load {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
@@ -2703,10 +2786,10 @@ theorem complete_load {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {
     obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
     simp only at hlay
     subst hlay
-    have hsteps := step_ctx_load hd hsz M.tagDefs
+    obtain ⟨post, hsteps⟩ := step_ctx_load hd hsz M.tagDefs
       dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
-    rw [hd.unseq_ccall_false] at hsteps
-    exact ⟨_, _, hsteps, rfl, advance_action_killed (ars_load_killed hk)⟩
+    rw [hd.unseq_ccall_false hsz] at hsteps
+    exact ⟨_, _, _, hsteps, rfl, advance_action_killed (ars_load_killed hk)⟩
 
 /-- CREATE: `allocateObject`'s verdict — active (the mirror step) or
     the out-of-memory kill. -/
@@ -2736,10 +2819,10 @@ theorem complete_create {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr}
     obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
     simp only at hlay
     subst hlay
-    have hsteps := step_ctx_create hd hsz M.tagDefs
+    obtain ⟨post, hsteps⟩ := step_ctx_create hd hsz M.tagDefs
       dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
-    rw [hd.unseq_ccall_false] at hsteps
-    exact ⟨_, _, hsteps, rfl, advance_action_killed (ars_create_killed hk)⟩
+    rw [hd.unseq_ccall_false hsz] at hsteps
+    exact ⟨_, _, _, hsteps, rfl, advance_action_killed (ars_create_killed hk)⟩
 
 /-- KILL (kill/free arc K2): `killM`'s verdict at the request's own
     location — active (the mirror step) or one of the three kills of
@@ -2777,10 +2860,10 @@ theorem complete_kill {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {
     obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
     simp only at hlay
     subst hlay
-    have hsteps := step_ctx_kill hd hsz M.tagDefs
+    obtain ⟨post, hsteps⟩ := step_ctx_kill hd hsz M.tagDefs
       dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
-    rw [hd.unseq_ccall_false] at hsteps
-    exact ⟨_, _, hsteps, rfl, advance_action_killed (ars_kill_killed hk)⟩
+    rw [hd.unseq_ccall_false hsz] at hsteps
+    exact ⟨_, _, _, hsteps, rfl, advance_action_killed (ars_kill_killed hk)⟩
 
 /-- ALLOC (kill/free arc K3): `allocateRegion`'s verdict — active (the
     mirror step) or the out-of-memory kill, its ONLY refusal
@@ -2811,10 +2894,10 @@ theorem complete_alloc {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} 
     obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
     simp only at hlay
     subst hlay
-    have hsteps := step_ctx_alloc hd hsz M.tagDefs
+    obtain ⟨post, hsteps⟩ := step_ctx_alloc hd hsz M.tagDefs
       dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
-    rw [hd.unseq_ccall_false] at hsteps
-    exact ⟨_, _, hsteps, rfl, advance_action_killed (ars_alloc_killed hk)⟩
+    rw [hd.unseq_ccall_false hsz] at hsteps
+    exact ⟨_, _, _, hsteps, rfl, advance_action_killed (ars_alloc_killed hk)⟩
 
 /-- LETS-PURE at the wildcard pattern: always a mirror step (cons env). -/
 theorem complete_beta_pure {an a1 b1 : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
@@ -2909,8 +2992,9 @@ theorem complete_beta_spec {an : List _root_.annot} {M : MachineCtx} {e : CoreEx
       obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
-      refine ⟨_, _, evs, step_ctx_beta_spec_pure' hd hsz M.tagDefs dst.layout_state
-        dst.core_file dst.core_extern M.tid M.parent (M.thread _ (ev0 :: evs) ctl) rfl rfl, ?_⟩
+      obtain ⟨post, hsteps⟩ := step_ctx_beta_spec_pure' hd hsz M.tagDefs dst.layout_state
+        dst.core_file dst.core_extern M.tid M.parent (M.thread _ (ev0 :: evs) ctl) rfl rfl
+      refine ⟨_, _, evs, post, hsteps, ?_⟩
       show update_env (specPat pa pb x bty) v (ev0 :: evs) = _
       rw [update_env_cons, hmsg]
   | annot a1 a2 b1 ds v =>
@@ -2924,8 +3008,9 @@ theorem complete_beta_spec {an : List _root_.annot} {M : MachineCtx} {e : CoreEx
       obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
-      refine ⟨_, _, evs, step_ctx_beta_spec_annot' hd hsz M.tagDefs dst.layout_state
-        dst.core_file dst.core_extern M.tid M.parent (M.thread _ (ev0 :: evs) ctl) rfl rfl, ?_⟩
+      obtain ⟨post, hsteps⟩ := step_ctx_beta_spec_annot' hd hsz M.tagDefs dst.layout_state
+        dst.core_file dst.core_extern M.tid M.parent (M.thread _ (ev0 :: evs) ctl) rfl rfl
+      refine ⟨_, _, evs, post, hsteps, ?_⟩
       show update_env (specPat pa pb x bty) v (ev0 :: evs) = _
       rw [update_env_cons, hmsg]
 
@@ -2979,8 +3064,9 @@ theorem complete_beta_tuple {an : List _root_.annot} {M : MachineCtx} {e : CoreE
       obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
-      refine ⟨_, _, evs, step_ctx_sseq_val_pure hd hsz M.tagDefs dst.layout_state
-        dst.core_file dst.core_extern M.tid M.parent (M.thread _ (ev0 :: evs) ctl) rfl rfl, ?_⟩
+      obtain ⟨post, hsteps⟩ := step_ctx_sseq_val_pure hd hsz M.tagDefs dst.layout_state
+        dst.core_file dst.core_extern M.tid M.parent (M.thread _ (ev0 :: evs) ctl) rfl rfl
+      refine ⟨_, _, evs, post, hsteps, ?_⟩
       show update_env (tuplePat pa ls) v (ev0 :: evs) = _
       rw [update_env_cons, hmsg]
   | annot a1 a2 b1 ds v =>
@@ -2994,8 +3080,9 @@ theorem complete_beta_tuple {an : List _root_.annot} {M : MachineCtx} {e : CoreE
       obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
-      refine ⟨_, _, evs, step_ctx_sseq_val_annot hd hsz M.tagDefs dst.layout_state
-        dst.core_file dst.core_extern M.tid M.parent (M.thread _ (ev0 :: evs) ctl) rfl rfl, ?_⟩
+      obtain ⟨post, hsteps⟩ := step_ctx_sseq_val_annot hd hsz M.tagDefs dst.layout_state
+        dst.core_file dst.core_extern M.tid M.parent (M.thread _ (ev0 :: evs) ctl) rfl rfl
+      refine ⟨_, _, evs, post, hsteps, ?_⟩
       show update_env (tuplePat pa ls) v (ev0 :: evs) = _
       rw [update_env_cons, hmsg]
 
@@ -3028,8 +3115,9 @@ theorem complete_wbeta_tuple {an : List _root_.annot} {M : MachineCtx} {e : Core
       obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
-      refine ⟨_, _, evs, step_ctx_wseq_val_pure hd hsz M.tagDefs dst.layout_state
-        dst.core_file dst.core_extern M.tid M.parent (M.thread _ (ev0 :: evs) ctl) rfl rfl, ?_⟩
+      obtain ⟨post, hsteps⟩ := step_ctx_wseq_val_pure hd hsz M.tagDefs dst.layout_state
+        dst.core_file dst.core_extern M.tid M.parent (M.thread _ (ev0 :: evs) ctl) rfl rfl
+      refine ⟨_, _, evs, post, hsteps, ?_⟩
       show update_env (tuplePat pa ls) v (ev0 :: evs) = _
       rw [update_env_cons, hmsg]
   | annot a1 a2 b1 ds v =>
@@ -3043,8 +3131,9 @@ theorem complete_wbeta_tuple {an : List _root_.annot} {M : MachineCtx} {e : Core
       obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
-      refine ⟨_, _, evs, step_ctx_wseq_val_annot hd hsz M.tagDefs dst.layout_state
-        dst.core_file dst.core_extern M.tid M.parent (M.thread _ (ev0 :: evs) ctl) rfl rfl, ?_⟩
+      obtain ⟨post, hsteps⟩ := step_ctx_wseq_val_annot hd hsz M.tagDefs dst.layout_state
+        dst.core_file dst.core_extern M.tid M.parent (M.thread _ (ev0 :: evs) ctl) rfl rfl
+      refine ⟨_, _, evs, post, hsteps, ?_⟩
       show update_env (tuplePat pa ls) v (ev0 :: evs) = _
       rw [update_env_cons, hmsg]
 
@@ -3100,21 +3189,27 @@ theorem step_ctx_if_shape {an : List _root_.annot} {e : CoreExpr} {ctx : context
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = e) :
-    ∃ (s : String) (m : core_runM thread_state),
+    ∃ (s : String) (m : core_runM thread_state) (post : List core_step2),
       step_ctx tds σ file ext tid (parent, th) =
-        [Step_with_runstate2 (RSK_tau s TSK_Misc) m] := by
-  have hget : get_ctx th.arena = [(ctx, ifRedex an g e2 e3)] := by
+        Step_with_runstate2 (RSK_tau s TSK_Misc) m :: post := by
+  obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, ifRedex an g e2 e3) :: rest := by
     rw [harena]; exact hd.get_ctx_default hsz
-  unfold step_ctx
-  dsimp only
-  rw [hget]
-  simp only [List.map_cons, List.map_nil]
-  unfold ifRedex
-  cases ctx <;>
-    (dsimp only [one_step0]
-     rw [show is_irreducible (Expr an (Eif g e2 e3)) = false
-       from rfl]
-     exact ⟨_, _, rfl⟩)
+  have key : ∃ (s : String) (m : core_runM thread_state),
+      (step_ctx tds σ file ext tid (parent, th)).head? =
+        some (Step_with_runstate2 (RSK_tau s TSK_Misc) m) := by
+    unfold step_ctx
+    dsimp only
+    rw [hget]
+    simp only [List.map_cons, List.head?_cons]
+    unfold ifRedex
+    cases ctx <;>
+      (dsimp only [one_step0]
+       rw [show is_irreducible (Expr an (Eif g e2 e3)) = false
+         from rfl]
+       exact ⟨_, _, rfl⟩)
+  obtain ⟨s, m, hh⟩ := key
+  obtain ⟨post, hpost⟩ := cons_of_head? hh
+  exact ⟨s, m, post, hpost⟩
 
 /-- Eif at a guard that evaluates to a NON-BOOLEAN value: the redex's
     own monad is the engine's panic (one_step0's Eif arm,
@@ -3139,29 +3234,44 @@ theorem step_ctx_if_panic {an : List _root_.annot} {e : CoreExpr} {ctx : context
         exceptM (t0 (List (Fmap sym value) × CoreExpr) × core_run_state) core_run_cause)
       (k : (List (Fmap sym value) × CoreExpr) → core_run_state →
         exceptM (t0 thread_state × core_run_state) core_run_cause)
-      (msg : String),
+      (msg : String) (post : List core_step2),
       step_ctx tds σ file ext tid (parent, th) =
-        [Step_with_runstate2 (RSK_tau s TSK_Misc) m] ∧
+        Step_with_runstate2 (RSK_tau s TSK_Misc) m :: post ∧
       m = stExceptUndef_bind step_m k ∧
       ∀ rs, step_m rs = @failwithI _ inst msg rs := by
-  have hget : get_ctx th.arena = [(ctx, ifRedex an g e2 e3)] := by
+  obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, ifRedex an g e2 e3) :: rest := by
     rw [harena]; exact hd.get_ctx_default hsz
-  unfold step_ctx
-  dsimp only
-  rw [hget]
-  simp only [List.map_cons, List.map_nil]
-  unfold ifRedex
-  cases ctx <;>
-    (dsimp only [one_step0]
-     rw [show is_irreducible (Expr an (Eif g e2 e3)) = false
-       from rfl]
-     exact ⟨_, _, _, _, _, _, rfl, rfl, fun rs => by
-       rw [stExceptUndef_bind_apply, full_eval_bridge hg hdg σ,
-         stExceptUndef_return_apply]
-       cases v with
-       | Vtrue => exact absurd rfl hvt
-       | Vfalse => exact absurd rfl hvf
-       | _ => rfl⟩)
+  have key : ∃ (s : String) (m : core_runM thread_state)
+      (inst : Inhabited (core_run_state →
+        exceptM (t0 (List (Fmap sym value) × CoreExpr) × core_run_state) core_run_cause))
+      (step_m : core_run_state →
+        exceptM (t0 (List (Fmap sym value) × CoreExpr) × core_run_state) core_run_cause)
+      (k : (List (Fmap sym value) × CoreExpr) → core_run_state →
+        exceptM (t0 thread_state × core_run_state) core_run_cause)
+      (msg : String),
+      (step_ctx tds σ file ext tid (parent, th)).head? =
+        some (Step_with_runstate2 (RSK_tau s TSK_Misc) m) ∧
+      m = stExceptUndef_bind step_m k ∧
+      ∀ rs, step_m rs = @failwithI _ inst msg rs := by
+    unfold step_ctx
+    dsimp only
+    rw [hget]
+    simp only [List.map_cons, List.head?_cons]
+    unfold ifRedex
+    cases ctx <;>
+      (dsimp only [one_step0]
+       rw [show is_irreducible (Expr an (Eif g e2 e3)) = false
+         from rfl]
+       exact ⟨_, _, _, _, _, _, rfl, rfl, fun rs => by
+         rw [stExceptUndef_bind_apply, full_eval_bridge hg hdg σ,
+           stExceptUndef_return_apply]
+         cases v with
+         | Vtrue => exact absurd rfl hvt
+         | Vfalse => exact absurd rfl hvf
+         | _ => rfl⟩)
+  obtain ⟨s, m, inst, step_m, k, msg, hh, hrest⟩ := key
+  obtain ⟨post, hpost⟩ := cons_of_head? hh
+  exact ⟨s, m, inst, step_m, k, msg, post, hpost, hrest⟩
 
 /-- Erun: the engine's step at a current procedure is ONE `RSK_eval`
     with-runstate step (shape only). -/
@@ -3173,18 +3283,24 @@ theorem step_ctx_run_shape {an : List _root_.annot} {e : CoreExpr} {ctx : contex
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = e) :
-    ∃ (s : String) (m : core_runM thread_state),
+    ∃ (s : String) (m : core_runM thread_state) (post : List core_step2),
       step_ctx tds σ file ext tid (parent, th) =
-        [Step_with_runstate2 (RSK_eval s) m] := by
-  have hget : get_ctx th.arena = [(ctx, runRedex an ra l pes)] := by
+        Step_with_runstate2 (RSK_eval s) m :: post := by
+  obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, runRedex an ra l pes) :: rest := by
     rw [harena]; exact hd.get_ctx_default hsz
-  unfold step_ctx
-  dsimp only
-  rw [hget]
-  simp only [List.map_cons, List.map_nil]
-  unfold runRedex
-  cases ctx <;>
-    (exact ⟨_, _, rfl⟩)
+  have key : ∃ (s : String) (m : core_runM thread_state),
+      (step_ctx tds σ file ext tid (parent, th)).head? =
+        some (Step_with_runstate2 (RSK_eval s) m) := by
+    unfold step_ctx
+    dsimp only
+    rw [hget]
+    simp only [List.map_cons, List.head?_cons]
+    unfold runRedex
+    cases ctx <;>
+      (exact ⟨_, _, rfl⟩)
+  obtain ⟨s, m, hh⟩ := key
+  obtain ⟨post, hpost⟩ := cons_of_head? hh
+  exact ⟨s, m, post, hpost⟩
 
 /-- Erun at a label the run state's two-level `labeled` table does not
     resolve (at the extern-resolved current procedure): the step's monad
@@ -3207,35 +3323,44 @@ theorem step_ctx_run_unresolved {an : List _root_.annot} {e : CoreExpr} {ctx : c
       = none) :
     ∃ (s : String) (m : core_runM thread_state)
       (inst : Inhabited (core_run_state →
-        exceptM (t0 thread_state × core_run_state) core_run_cause)) (msg : String),
+        exceptM (t0 thread_state × core_run_state) core_run_cause)) (msg : String) (post : List core_step2),
       step_ctx tds σ file ext tid (parent, th) =
-        [Step_with_runstate2 (RSK_eval s) m] ∧
+        Step_with_runstate2 (RSK_eval s) m :: post ∧
       m rs = @failwithI _ inst msg rs := by
-  have hget : get_ctx th.arena = [(ctx, runRedex an ra l pes)] := by
+  obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, runRedex an ra l pes) :: rest := by
     rw [harena]; exact hd.get_ctx_default hsz
-  unfold step_ctx
-  dsimp only
-  rw [hget]
-  simp only [List.map_cons, List.map_nil]
-  unfold runRedex
-  cases ctx <;> (loc_split an) <;>
-    (try dsimp only
-     rw [hproc]
-     exact ⟨_, _, _, _, rfl, by
-       rw [stExceptUndef_bind_apply, runSE_read_apply]
-       try dsimp only []
-       cases hres : fmapLookupBy (fun (sym1 : sym) (sym2 : sym) =>
-           Lem_Basic_classes.ordCompare sym1 sym2) p ext with
-       | none =>
-         rw [show resolveExtern ext p = p by
-           unfold resolveExtern; rw [hres]] at hnone
+  have key : ∃ (s : String) (m : core_runM thread_state)
+      (inst : Inhabited (core_run_state →
+        exceptM (t0 thread_state × core_run_state) core_run_cause)) (msg : String),
+      (step_ctx tds σ file ext tid (parent, th)).head? =
+        some (Step_with_runstate2 (RSK_eval s) m) ∧
+      m rs = @failwithI _ inst msg rs := by
+    unfold step_ctx
+    dsimp only
+    rw [hget]
+    simp only [List.map_cons, List.head?_cons]
+    unfold runRedex
+    cases ctx <;> (loc_split an) <;>
+      (try dsimp only
+       rw [hproc]
+       exact ⟨_, _, _, _, rfl, by
+         rw [stExceptUndef_bind_apply, runSE_read_apply]
          try dsimp only []
-         rw [hnone]
-       | some y =>
-         rw [show resolveExtern ext p = y by
-           unfold resolveExtern; rw [hres]] at hnone
-         try dsimp only []
-         rw [hnone]⟩)
+         cases hres : fmapLookupBy (fun (sym1 : sym) (sym2 : sym) =>
+             Lem_Basic_classes.ordCompare sym1 sym2) p ext with
+         | none =>
+           rw [show resolveExtern ext p = p by
+             unfold resolveExtern; rw [hres]] at hnone
+           try dsimp only []
+           rw [hnone]
+         | some y =>
+           rw [show resolveExtern ext p = y by
+             unfold resolveExtern; rw [hres]] at hnone
+           try dsimp only []
+           rw [hnone]⟩)
+  obtain ⟨s, m, inst, msg, hh, hrest⟩ := key
+  obtain ⟨post, hpost⟩ := cons_of_head? hh
+  exact ⟨s, m, inst, msg, post, hpost, hrest⟩
 
 /-- Erun at a thread WITHOUT a current procedure: the step's monad is
     the `labeled` read keyed by the engine's panic `failwithI
@@ -3254,9 +3379,9 @@ theorem step_ctx_run_noproc {an : List _root_.annot} {e : CoreExpr} {ctx : conte
     (hproc : th.current_proc_opt = none) :
     ∃ (s : String) (inst : Inhabited sym)
       (k : Option (List (sym × core_base_type) × CoreExpr) → core_run_state →
-        exceptM (t0 thread_state × core_run_state) core_run_cause),
+        exceptM (t0 thread_state × core_run_state) core_run_cause) (post : List core_step2),
       step_ctx tds σ file ext tid (parent, th) =
-        [Step_with_runstate2 (RSK_eval s)
+        Step_with_runstate2 (RSK_eval s)
           (stExceptUndef_bind
             (runSE (state_except_read (fun rs : core_run_state =>
               Lem_Maybe.bind0
@@ -3266,18 +3391,36 @@ theorem step_ctx_run_noproc {an : List _root_.annot} {e : CoreExpr} {ctx : conte
                     "Core_reduction ==> Erun outside of a proc")) rs.labeled)
                 (fmapLookupBy (fun (s1 : sym) (s2 : sym) =>
                   Lem_Basic_classes.ordCompare s1 s2) l))))
-            k)] := by
-  have hget : get_ctx th.arena = [(ctx, runRedex an ra l pes)] := by
+            k) :: post := by
+  obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, runRedex an ra l pes) :: rest := by
     rw [harena]; exact hd.get_ctx_default hsz
-  unfold step_ctx
-  dsimp only
-  rw [hget]
-  simp only [List.map_cons, List.map_nil]
-  unfold runRedex
-  cases ctx <;> (loc_split an) <;>
-    (try dsimp only
-     rw [hproc]
-     exact ⟨_, _, _, rfl⟩)
+  have key : ∃ (s : String) (inst : Inhabited sym)
+      (k : Option (List (sym × core_base_type) × CoreExpr) → core_run_state →
+        exceptM (t0 thread_state × core_run_state) core_run_cause),
+      (step_ctx tds σ file ext tid (parent, th)).head? =
+        some (Step_with_runstate2 (RSK_eval s)
+          (stExceptUndef_bind
+            (runSE (state_except_read (fun rs : core_run_state =>
+              Lem_Maybe.bind0
+                (fmapLookupBy (fun (s1 : sym) (s2 : sym) =>
+                    Lem_Basic_classes.ordCompare s1 s2)
+                  (resolveExtern ext (@failwithI sym inst
+                    "Core_reduction ==> Erun outside of a proc")) rs.labeled)
+                (fmapLookupBy (fun (s1 : sym) (s2 : sym) =>
+                  Lem_Basic_classes.ordCompare s1 s2) l))))
+            k)) := by
+    unfold step_ctx
+    dsimp only
+    rw [hget]
+    simp only [List.map_cons, List.head?_cons]
+    unfold runRedex
+    cases ctx <;> (loc_split an) <;>
+      (try dsimp only
+       rw [hproc]
+       exact ⟨_, _, _, rfl⟩)
+  obtain ⟨s, inst, k, hh⟩ := key
+  obtain ⟨post, hpost⟩ := cons_of_head? hh
+  exact ⟨s, inst, k, post, hpost⟩
 
 /-- Esave with non-value initializers: the engine's step is ONE
     `RSK_eval` with-runstate step (shape only). -/
@@ -3293,28 +3436,34 @@ theorem step_ctx_save_eval_shape {an : List _root_.annot} {e : CoreExpr} {ctx : 
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = e) :
-    ∃ (s : String) (m : core_runM thread_state),
+    ∃ (s : String) (m : core_runM thread_state) (post : List core_step2),
       step_ctx tds σ file ext tid (parent, th) =
-        [Step_with_runstate2 (RSK_eval s) m] := by
-  have hget : get_ctx th.arena = [(ctx, saveRedex an sb ps body)] := by
+        Step_with_runstate2 (RSK_eval s) m :: post := by
+  obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, saveRedex an sb ps body) :: rest := by
     rw [harena]; exact hd.get_ctx_default hsz
-  have hnv' : valueFromPexprs
-      (List.map (fun p => match p with | (_, (_, z)) => z) ps) = none := by
-    rw [show (List.map (fun (p : sym × ((core_base_type ×
-        Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym))
-        => match p with | (_, (_, z)) => z) ps) = saveParamPexprs ps from rfl]
-    exact hnv
-  unfold step_ctx
-  dsimp only
-  rw [hget]
-  simp only [List.map_cons, List.map_nil]
-  unfold saveRedex
-  cases ctx <;>
-    (dsimp only [one_step0]
-     rw [show is_irreducible (Expr an (Esave sb ps body)) = false from rfl]
-     rw [hnv']
-     simp only [Bool.false_eq_true, if_false]
-     exact ⟨_, _, rfl⟩)
+  have key : ∃ (s : String) (m : core_runM thread_state),
+      (step_ctx tds σ file ext tid (parent, th)).head? =
+        some (Step_with_runstate2 (RSK_eval s) m) := by
+    have hnv' : valueFromPexprs
+        (List.map (fun p => match p with | (_, (_, z)) => z) ps) = none := by
+      rw [show (List.map (fun (p : sym × ((core_base_type ×
+          Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym))
+          => match p with | (_, (_, z)) => z) ps) = saveParamPexprs ps from rfl]
+      exact hnv
+    unfold step_ctx
+    dsimp only
+    rw [hget]
+    simp only [List.map_cons, List.head?_cons]
+    unfold saveRedex
+    cases ctx <;>
+      (dsimp only [one_step0]
+       rw [show is_irreducible (Expr an (Esave sb ps body)) = false from rfl]
+       rw [hnv']
+       simp only [Bool.false_eq_true, if_false]
+       exact ⟨_, _, rfl⟩)
+  obtain ⟨s, m, hh⟩ := key
+  obtain ⟨post, hpost⟩ := cons_of_head? hh
+  exact ⟨s, m, post, hpost⟩
 
 /-- E2: PURE at any covered non-value operand: the engine's step is ONE
     `RSK_eval` with-runstate step (shape only). -/
@@ -3327,11 +3476,11 @@ theorem step_ctx_pure_op_shape {an : List _root_.annot} {e : CoreExpr} {ctx : co
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = e) :
-    ∃ (s : String) (m : core_runM thread_state),
+    ∃ (s : String) (m : core_runM thread_state) (post : List core_step2),
       step_ctx tds σ file ext tid (parent, th) =
-        [Step_with_runstate2 (RSK_eval s) m] := by
-  obtain ⟨s, m, hsteps, -⟩ := step_ctx_pure_op_raw hd hsz hnv tds σ file ext tid parent th harena
-  exact ⟨s, m, hsteps⟩
+        Step_with_runstate2 (RSK_eval s) m :: post := by
+  obtain ⟨s, m, post, hsteps, -⟩ := step_ctx_pure_op_raw hd hsz hnv tds σ file ext tid parent th harena
+  exact ⟨s, m, post, hsteps⟩
 
 /-- The plain-symbol instance (E1's statement). -/
 theorem step_ctx_pure_sym_shape {an : List _root_.annot} {e : CoreExpr} {ctx : context}
@@ -3342,9 +3491,9 @@ theorem step_ctx_pure_sym_shape {an : List _root_.annot} {e : CoreExpr} {ctx : c
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = e) :
-    ∃ (s : String) (m : core_runM thread_state),
+    ∃ (s : String) (m : core_runM thread_state) (post : List core_step2),
       step_ctx tds σ file ext tid (parent, th) =
-        [Step_with_runstate2 (RSK_eval s) m] :=
+        Step_with_runstate2 (RSK_eval s) m :: post :=
   step_ctx_pure_op_shape hd hsz rfl tds σ file ext tid parent th harena
 
 /-- Load ACTION_EVAL at ANY evaluated pointer-operand value: the raw
@@ -3363,30 +3512,40 @@ theorem step_ctx_load_eval_ws' {an : List _root_.annot} {e : CoreExpr} {ctx : co
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = e)
     (hv2 : evalPexpr tds ext file th.env pe2 = some v) :
-    ∃ (s : String) (m : core_runM thread_state),
+    ∃ (s : String) (m : core_runM thread_state) (post : List core_step2),
       step_ctx tds σ file ext tid (parent, th) =
-        [Step_with_runstate2 (RSK_eval s) m] ∧
+        Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, m rs = Result (Defined { locUpdTh an th with
         arena := apply_ctx ctx (Expr an (Eaction (Paction polarity.Pos (Action loc ann
           (Load0 (Pexpr [] () (PEval (Vctype ty))) (Pexpr [] () (PEval v)) mo))))) }, rs) := by
-  have hget : get_ctx th.arena = [(ctx, loadOpRedex an loc ann ty pe2 mo)] := by
+  obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, loadOpRedex an loc ann ty pe2 mo) :: rest := by
     rw [harena]; exact hd.get_ctx_default hsz
-  unfold step_ctx
-  dsimp only
-  rw [hget]
-  simp only [List.map_cons, List.map_nil]
-  unfold loadOpRedex
-  cases ctx <;> dsimp only [step_action]
-  all_goals (
-    (rw [act_valueFromPexpr_none hp2 hnv2]
-     dsimp only [act_valueFromPexpr, valueFromPexpr]
-     refine ⟨_, _, rfl, fun rs => ?_⟩
-     rw [full_eval_bridge (v := Vctype ty) (evalPexpr_val _ _ _ _ _) (peDepth_val_le _ _) σ,
-     full_eval_bridge hv2 hd2 σ]
-     dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
-     return1, except_return]
-     rfl)
-  )
+  have key : ∃ (s : String) (m : core_runM thread_state),
+      (step_ctx tds σ file ext tid (parent, th)).head? =
+        some (Step_with_runstate2 (RSK_eval s) m) ∧
+      ∀ rs, m rs = Result (Defined { locUpdTh an th with
+        arena := apply_ctx ctx (Expr an (Eaction (Paction polarity.Pos (Action loc ann
+          (Load0 (Pexpr [] () (PEval (Vctype ty))) (Pexpr [] () (PEval v)) mo))))) }, rs) := by
+    unfold step_ctx
+    dsimp only
+    rw [hget]
+    simp only [List.map_cons, List.head?_cons]
+    unfold loadOpRedex
+    cases ctx <;> dsimp only [step_action]
+    all_goals (
+      (rw [act_valueFromPexpr_none hp2 hnv2]
+       dsimp only [act_valueFromPexpr, valueFromPexpr]
+       refine ⟨_, _, rfl, fun rs => ?_⟩
+       rw [full_eval_bridge (v := Vctype ty) (evalPexpr_val _ _ _ _ _) (peDepth_val_le _ _) σ,
+       full_eval_bridge hv2 hd2 σ]
+       dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+       return1, except_return]
+       rfl)
+    )
+  obtain ⟨s, m, hh, hrest⟩ := key
+  obtain ⟨post, hpost⟩ := cons_of_head? hh
+  exact ⟨s, m, post, hpost, hrest⟩
+
 /-- Load ACTION_EVAL: the engine's step is ONE `RSK_eval` with-runstate
     step whatever the operand evaluates to (shape only). -/
 theorem step_ctx_load_eval_shape {an : List _root_.annot} {e : CoreExpr} {ctx : context}
@@ -3400,22 +3559,29 @@ theorem step_ctx_load_eval_shape {an : List _root_.annot} {e : CoreExpr} {ctx : 
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = e) :
-    ∃ (s : String) (m : core_runM thread_state),
+    ∃ (s : String) (m : core_runM thread_state) (post : List core_step2),
       step_ctx tds σ file ext tid (parent, th) =
-        [Step_with_runstate2 (RSK_eval s) m] := by
-  have hget : get_ctx th.arena = [(ctx, loadOpRedex an loc ann ty pe2 mo)] := by
+        Step_with_runstate2 (RSK_eval s) m :: post := by
+  obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, loadOpRedex an loc ann ty pe2 mo) :: rest := by
     rw [harena]; exact hd.get_ctx_default hsz
-  unfold step_ctx
-  dsimp only
-  rw [hget]
-  simp only [List.map_cons, List.map_nil]
-  unfold loadOpRedex
-  cases ctx <;> dsimp only [step_action]
-  all_goals (
-    (rw [act_valueFromPexpr_none hp2 hnv2]
-     dsimp only [act_valueFromPexpr, valueFromPexpr]
-     exact ⟨_, _, rfl⟩)
-  )
+  have key : ∃ (s : String) (m : core_runM thread_state),
+      (step_ctx tds σ file ext tid (parent, th)).head? =
+        some (Step_with_runstate2 (RSK_eval s) m) := by
+    unfold step_ctx
+    dsimp only
+    rw [hget]
+    simp only [List.map_cons, List.head?_cons]
+    unfold loadOpRedex
+    cases ctx <;> dsimp only [step_action]
+    all_goals (
+      (rw [act_valueFromPexpr_none hp2 hnv2]
+       dsimp only [act_valueFromPexpr, valueFromPexpr]
+       exact ⟨_, _, rfl⟩)
+    )
+  obtain ⟨s, m, hh⟩ := key
+  obtain ⟨post, hpost⟩ := cons_of_head? hh
+  exact ⟨s, m, post, hpost⟩
+
 /-- Kill ACTION_EVAL at ANY evaluated operand value (kill/free arc K2;
     `step_ctx_kill_eval_ws`, DriverCollapse.lean, is the pointer
     instance): the engine rebuilds `Kill kind (mk_value_pe cval)` for
@@ -3433,29 +3599,39 @@ theorem step_ctx_kill_eval_ws' {an : List _root_.annot} {e : CoreExpr} {ctx : co
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = e)
     (hv : evalPexpr tds ext file th.env pe = some v) :
-    ∃ (s : String) (m : core_runM thread_state),
+    ∃ (s : String) (m : core_runM thread_state) (post : List core_step2),
       step_ctx tds σ file ext tid (parent, th) =
-        [Step_with_runstate2 (RSK_eval s) m] ∧
+        Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, m rs = Result (Defined { locUpdTh an th with
         arena := apply_ctx ctx (Expr an (Eaction (Paction polarity.Pos (Action loc ann
           (Kill kind (Pexpr [] () (PEval v))))))) }, rs) := by
-  have hget : get_ctx th.arena = [(ctx, killOpRedex an loc ann kind pe)] := by
+  obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, killOpRedex an loc ann kind pe) :: rest := by
     rw [harena]; exact hd.get_ctx_default hsz
-  unfold step_ctx
-  dsimp only
-  rw [hget]
-  simp only [List.map_cons, List.map_nil]
-  unfold killOpRedex
-  cases ctx <;> dsimp only [step_action]
-  all_goals (
-    (rw [act_valueFromPexpr_none hp hnv]
-     dsimp only [act_valueFromPexpr, valueFromPexpr]
-     refine ⟨_, _, rfl, fun rs => ?_⟩
-     rw [full_eval_bridge hv hdp σ]
-     dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
-     return1, except_return]
-     rfl)
-  )
+  have key : ∃ (s : String) (m : core_runM thread_state),
+      (step_ctx tds σ file ext tid (parent, th)).head? =
+        some (Step_with_runstate2 (RSK_eval s) m) ∧
+      ∀ rs, m rs = Result (Defined { locUpdTh an th with
+        arena := apply_ctx ctx (Expr an (Eaction (Paction polarity.Pos (Action loc ann
+          (Kill kind (Pexpr [] () (PEval v))))))) }, rs) := by
+    unfold step_ctx
+    dsimp only
+    rw [hget]
+    simp only [List.map_cons, List.head?_cons]
+    unfold killOpRedex
+    cases ctx <;> dsimp only [step_action]
+    all_goals (
+      (rw [act_valueFromPexpr_none hp hnv]
+       dsimp only [act_valueFromPexpr, valueFromPexpr]
+       refine ⟨_, _, rfl, fun rs => ?_⟩
+       rw [full_eval_bridge hv hdp σ]
+       dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+       return1, except_return]
+       rfl)
+    )
+  obtain ⟨s, m, hh, hrest⟩ := key
+  obtain ⟨post, hpost⟩ := cons_of_head? hh
+  exact ⟨s, m, post, hpost, hrest⟩
+
 /-- Kill ACTION_EVAL: the engine's step is ONE `RSK_eval` with-runstate
     step whatever the operand evaluates to (shape only). -/
 theorem step_ctx_kill_eval_shape {an : List _root_.annot} {e : CoreExpr} {ctx : context}
@@ -3469,20 +3645,26 @@ theorem step_ctx_kill_eval_shape {an : List _root_.annot} {e : CoreExpr} {ctx : 
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = e) :
-    ∃ (s : String) (m : core_runM thread_state),
+    ∃ (s : String) (m : core_runM thread_state) (post : List core_step2),
       step_ctx tds σ file ext tid (parent, th) =
-        [Step_with_runstate2 (RSK_eval s) m] := by
-  have hget : get_ctx th.arena = [(ctx, killOpRedex an loc ann kind pe)] := by
+        Step_with_runstate2 (RSK_eval s) m :: post := by
+  obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, killOpRedex an loc ann kind pe) :: rest := by
     rw [harena]; exact hd.get_ctx_default hsz
-  unfold step_ctx
-  dsimp only
-  rw [hget]
-  simp only [List.map_cons, List.map_nil]
-  unfold killOpRedex
-  cases ctx <;>
-    (dsimp only
-     rw [step_action_kill_eval (act_valueFromPexpr_none hp hnv)]
-     exact ⟨_, _, rfl⟩)
+  have key : ∃ (s : String) (m : core_runM thread_state),
+      (step_ctx tds σ file ext tid (parent, th)).head? =
+        some (Step_with_runstate2 (RSK_eval s) m) := by
+    unfold step_ctx
+    dsimp only
+    rw [hget]
+    simp only [List.map_cons, List.head?_cons]
+    unfold killOpRedex
+    cases ctx <;>
+      (dsimp only
+       rw [step_action_kill_eval (act_valueFromPexpr_none hp hnv)]
+       exact ⟨_, _, rfl⟩)
+  obtain ⟨s, m, hh⟩ := key
+  obtain ⟨post, hpost⟩ := cons_of_head? hh
+  exact ⟨s, m, post, hpost⟩
 
 /-- Store ACTION_EVAL at ANY evaluated pointer-operand value
     (`step_ctx_store_eval_ws` is the pointer instance). -/
@@ -3502,29 +3684,39 @@ theorem step_ctx_store_eval_ws' {an : List _root_.annot} {e : CoreExpr} {ctx : c
     (harena : th.arena = e)
     (hv2 : evalPexpr tds ext file th.env pe2 = some v)
     (hv3 : evalPexpr tds ext file th.env pe3 = some cv) :
-    ∃ (s : String) (m : core_runM thread_state),
+    ∃ (s : String) (m : core_runM thread_state) (post : List core_step2),
       step_ctx tds σ file ext tid (parent, th) =
-        [Step_with_runstate2 (RSK_eval s) m] ∧
+        Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, m rs = Result (Defined { locUpdTh an th with
         arena := apply_ctx ctx (Expr an (Eaction (Paction polarity.Pos (Action loc ann
           (Store0 false (Pexpr [] () (PEval (Vctype ty))) (Pexpr [] () (PEval v))
             (Pexpr [] () (PEval cv)) mo))))) }, rs) := by
-  have hget : get_ctx th.arena = [(ctx, storeOpRedex an loc ann ty pe2 pe3 mo)] := by
+  obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, storeOpRedex an loc ann ty pe2 pe3 mo) :: rest := by
     rw [harena]; exact hd.get_ctx_default hsz
-  unfold step_ctx
-  dsimp only
-  rw [hget]
-  simp only [List.map_cons, List.map_nil]
-  unfold storeOpRedex
-  cases ctx <;>
-    (dsimp only
-     rw [step_action_store_eval (.inr (act_none_of_pair hp2 hp3 hnv)) hp3.not_constrained]
-     refine ⟨_, _, rfl, fun rs => ?_⟩
-     rw [full_eval_bridge (v := Vctype ty) (evalPexpr_val _ _ _ _ _) (peDepth_val_le _ _) σ,
-       full_eval_bridge hv2 hd2 σ, full_eval_bridge hv3 hd3 σ]
-     dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
-       return1, except_return]
-     rfl)
+  have key : ∃ (s : String) (m : core_runM thread_state),
+      (step_ctx tds σ file ext tid (parent, th)).head? =
+        some (Step_with_runstate2 (RSK_eval s) m) ∧
+      ∀ rs, m rs = Result (Defined { locUpdTh an th with
+        arena := apply_ctx ctx (Expr an (Eaction (Paction polarity.Pos (Action loc ann
+          (Store0 false (Pexpr [] () (PEval (Vctype ty))) (Pexpr [] () (PEval v))
+            (Pexpr [] () (PEval cv)) mo))))) }, rs) := by
+    unfold step_ctx
+    dsimp only
+    rw [hget]
+    simp only [List.map_cons, List.head?_cons]
+    unfold storeOpRedex
+    cases ctx <;>
+      (dsimp only
+       rw [step_action_store_eval (.inr (act_none_of_pair hp2 hp3 hnv)) hp3.not_constrained]
+       refine ⟨_, _, rfl, fun rs => ?_⟩
+       rw [full_eval_bridge (v := Vctype ty) (evalPexpr_val _ _ _ _ _) (peDepth_val_le _ _) σ,
+         full_eval_bridge hv2 hd2 σ, full_eval_bridge hv3 hd3 σ]
+       dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+         return1, except_return]
+       rfl)
+  obtain ⟨s, m, hh, hrest⟩ := key
+  obtain ⟨post, hpost⟩ := cons_of_head? hh
+  exact ⟨s, m, post, hpost, hrest⟩
 
 /-- Store ACTION_EVAL: the engine's step is ONE `RSK_eval` with-runstate
     step whatever the operands evaluate to (shape only). -/
@@ -3539,20 +3731,26 @@ theorem step_ctx_store_eval_shape {an : List _root_.annot} {e : CoreExpr} {ctx :
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = e) :
-    ∃ (s : String) (m : core_runM thread_state),
+    ∃ (s : String) (m : core_runM thread_state) (post : List core_step2),
       step_ctx tds σ file ext tid (parent, th) =
-        [Step_with_runstate2 (RSK_eval s) m] := by
-  have hget : get_ctx th.arena = [(ctx, storeOpRedex an loc ann ty pe2 pe3 mo)] := by
+        Step_with_runstate2 (RSK_eval s) m :: post := by
+  obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, storeOpRedex an loc ann ty pe2 pe3 mo) :: rest := by
     rw [harena]; exact hd.get_ctx_default hsz
-  unfold step_ctx
-  dsimp only
-  rw [hget]
-  simp only [List.map_cons, List.map_nil]
-  unfold storeOpRedex
-  cases ctx <;>
-    (dsimp only
-     rw [step_action_store_eval (.inr (act_none_of_pair hp2 hp3 hnv)) hp3.not_constrained]
-     exact ⟨_, _, rfl⟩)
+  have key : ∃ (s : String) (m : core_runM thread_state),
+      (step_ctx tds σ file ext tid (parent, th)).head? =
+        some (Step_with_runstate2 (RSK_eval s) m) := by
+    unfold step_ctx
+    dsimp only
+    rw [hget]
+    simp only [List.map_cons, List.head?_cons]
+    unfold storeOpRedex
+    cases ctx <;>
+      (dsimp only
+       rw [step_action_store_eval (.inr (act_none_of_pair hp2 hp3 hnv)) hp3.not_constrained]
+       exact ⟨_, _, rfl⟩)
+  obtain ⟨s, m, hh⟩ := key
+  obtain ⟨post, hpost⟩ := cons_of_head? hh
+  exact ⟨s, m, post, hpost⟩
 
 /-- Alloc ACTION_EVAL at ANY evaluated operand values (kill/free arc K3;
     `step_ctx_alloc_eval_ws`, DriverCollapse.lean, is the integer
@@ -3574,27 +3772,36 @@ theorem step_ctx_alloc_eval_ws' {an : List _root_.annot} {e : CoreExpr} {ctx : c
     (harena : th.arena = e)
     (hv1 : evalPexpr tds ext file th.env pe1 = some v1)
     (hv2 : evalPexpr tds ext file th.env pe2 = some v2) :
-    ∃ (s : String) (m : core_runM thread_state),
+    ∃ (s : String) (m : core_runM thread_state) (post : List core_step2),
       step_ctx tds σ file ext tid (parent, th) =
-        [Step_with_runstate2 (RSK_eval s) m] ∧
+        Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, m rs = Result (Defined { locUpdTh an th with
         arena := apply_ctx ctx (Expr an (Eaction (Paction polarity.Pos (Action loc ann
           (Alloc0 (Pexpr [] () (PEval v1)) (Pexpr [] () (PEval v2)) pref))))) }, rs) := by
-  have hget : get_ctx th.arena = [(ctx, allocOpRedex an loc ann pe1 pe2 pref)] := by
+  obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, allocOpRedex an loc ann pe1 pe2 pref) :: rest := by
     rw [harena]; exact hd.get_ctx_default hsz
-  unfold step_ctx
-  dsimp only
-  rw [hget]
-  simp only [List.map_cons, List.map_nil]
-  unfold allocOpRedex
-  cases ctx <;>
-    (dsimp only
-     rw [step_action_alloc_eval (act_none_of_pair hp1 hp2 hnv)]
-     refine ⟨_, _, rfl, fun rs => ?_⟩
-     rw [full_eval_bridge hv1 hd1 σ, full_eval_bridge hv2 hd2 σ]
-     dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
-       return1, except_return]
-     rfl)
+  have key : ∃ (s : String) (m : core_runM thread_state),
+      (step_ctx tds σ file ext tid (parent, th)).head? =
+        some (Step_with_runstate2 (RSK_eval s) m) ∧
+      ∀ rs, m rs = Result (Defined { locUpdTh an th with
+        arena := apply_ctx ctx (Expr an (Eaction (Paction polarity.Pos (Action loc ann
+          (Alloc0 (Pexpr [] () (PEval v1)) (Pexpr [] () (PEval v2)) pref))))) }, rs) := by
+    unfold step_ctx
+    dsimp only
+    rw [hget]
+    simp only [List.map_cons, List.head?_cons]
+    unfold allocOpRedex
+    cases ctx <;>
+      (dsimp only
+       rw [step_action_alloc_eval (act_none_of_pair hp1 hp2 hnv)]
+       refine ⟨_, _, rfl, fun rs => ?_⟩
+       rw [full_eval_bridge hv1 hd1 σ, full_eval_bridge hv2 hd2 σ]
+       dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+         return1, except_return]
+       rfl)
+  obtain ⟨s, m, hh, hrest⟩ := key
+  obtain ⟨post, hpost⟩ := cons_of_head? hh
+  exact ⟨s, m, post, hpost, hrest⟩
 
 /-- Alloc ACTION_EVAL: the engine's step is ONE `RSK_eval` with-runstate
     step whatever the operands evaluate to (shape only). -/
@@ -3609,20 +3816,26 @@ theorem step_ctx_alloc_eval_shape {an : List _root_.annot} {e : CoreExpr} {ctx :
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = e) :
-    ∃ (s : String) (m : core_runM thread_state),
+    ∃ (s : String) (m : core_runM thread_state) (post : List core_step2),
       step_ctx tds σ file ext tid (parent, th) =
-        [Step_with_runstate2 (RSK_eval s) m] := by
-  have hget : get_ctx th.arena = [(ctx, allocOpRedex an loc ann pe1 pe2 pref)] := by
+        Step_with_runstate2 (RSK_eval s) m :: post := by
+  obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, allocOpRedex an loc ann pe1 pe2 pref) :: rest := by
     rw [harena]; exact hd.get_ctx_default hsz
-  unfold step_ctx
-  dsimp only
-  rw [hget]
-  simp only [List.map_cons, List.map_nil]
-  unfold allocOpRedex
-  cases ctx <;>
-    (dsimp only
-     rw [step_action_alloc_eval (act_none_of_pair hp1 hp2 hnv)]
-     exact ⟨_, _, rfl⟩)
+  have key : ∃ (s : String) (m : core_runM thread_state),
+      (step_ctx tds σ file ext tid (parent, th)).head? =
+        some (Step_with_runstate2 (RSK_eval s) m) := by
+    unfold step_ctx
+    dsimp only
+    rw [hget]
+    simp only [List.map_cons, List.head?_cons]
+    unfold allocOpRedex
+    cases ctx <;>
+      (dsimp only
+       rw [step_action_alloc_eval (act_none_of_pair hp1 hp2 hnv)]
+       exact ⟨_, _, rfl⟩)
+  obtain ⟨s, m, hh⟩ := key
+  obtain ⟨post, hpost⟩ := cons_of_head? hh
+  exact ⟨s, m, post, hpost⟩
 
 /-- Memop-operand EVAL: the engine's step is ONE `RSK_eval` with-runstate
     step whatever the operands evaluate to (shape only). -/
@@ -3635,23 +3848,29 @@ theorem step_ctx_memop_eval_shape {an : List _root_.annot} {e : CoreExpr} {ctx :
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = e) :
-    ∃ (s : String) (m : core_runM thread_state),
+    ∃ (s : String) (m : core_runM thread_state) (post : List core_step2),
       step_ctx tds σ file ext tid (parent, th) =
-        [Step_with_runstate2 (RSK_eval s) m] := by
-  have hget : get_ctx th.arena = [(ctx, memopRedex an mop [pe1, pe2])] := by
+        Step_with_runstate2 (RSK_eval s) m :: post := by
+  obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, memopRedex an mop [pe1, pe2]) :: rest := by
     rw [harena]; exact hd.get_ctx_default hsz
-  unfold step_ctx
-  dsimp only
-  rw [hget]
-  simp only [List.map_cons, List.map_nil]
-  unfold memopRedex
-  cases ctx <;>
-    (dsimp only [one_step0]
-     rw [show is_irreducible (Expr an (Ememop mop [pe1, pe2]))
-       = false from rfl]
-     rw [hnv]
-     simp only [Bool.false_eq_true, if_false]
-     exact ⟨_, _, rfl⟩)
+  have key : ∃ (s : String) (m : core_runM thread_state),
+      (step_ctx tds σ file ext tid (parent, th)).head? =
+        some (Step_with_runstate2 (RSK_eval s) m) := by
+    unfold step_ctx
+    dsimp only
+    rw [hget]
+    simp only [List.map_cons, List.head?_cons]
+    unfold memopRedex
+    cases ctx <;>
+      (dsimp only [one_step0]
+       rw [show is_irreducible (Expr an (Ememop mop [pe1, pe2]))
+         = false from rfl]
+       rw [hnv]
+       simp only [Bool.false_eq_true, if_false]
+       exact ⟨_, _, rfl⟩)
+  obtain ⟨s, m, hh⟩ := key
+  obtain ⟨post, hpost⟩ := cons_of_head? hh
+  exact ⟨s, m, post, hpost⟩
 
 /-! ### ILLTYPED at the rebuilt action (the second round of gap (b)) -/
 
@@ -3674,15 +3893,16 @@ theorem step_ctx_load_illtyped' {an : List _root_.annot} {e : CoreExpr} {ctx : c
     (harena : th.arena = apply_ctx ctx (Expr an (Eaction (Paction polarity.Pos
       (Action loc ann (Load0 (Pexpr [] () (PEval (Vctype ty)))
         (Pexpr [] () (PEval v)) mo)))))) :
-    step_ctx tds σ file ext tid (parent, th) = [Step_error2 "Load"] := by
-  have hget : get_ctx th.arena = [(ctx, Expr an (Eaction (Paction polarity.Pos
+    ∃ post, step_ctx tds σ file ext tid (parent, th) = Step_error2 "Load" :: post := by
+  obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, Expr an (Eaction (Paction polarity.Pos
       (Action loc ann (Load0 (Pexpr [] () (PEval (Vctype ty)))
-        (Pexpr [] () (PEval v)) mo)))))] := by
+        (Pexpr [] () (PEval v)) mo))))) :: rest := by
     rw [harena]; exact hd.get_ctx_rebuild_action an _ lemDefaultFuel hsz
   unfold step_ctx
   dsimp only
   rw [hget]
-  simp only [List.map_cons, List.map_nil]
+  simp only [List.map_cons]
+  refine ⟨_, List.cons_eq_cons.mpr ⟨?_, rfl⟩⟩
   rcases v with ov | lv | _ | _ | _ | _ | ⟨_, _⟩ | _ <;> (try (cases ov)) <;>
     cases ctx <;>
       (dsimp only [step_action]
@@ -3704,15 +3924,16 @@ theorem step_ctx_store_illtyped' {an : List _root_.annot} {e : CoreExpr} {ctx : 
     (harena : th.arena = apply_ctx ctx (Expr an (Eaction (Paction polarity.Pos
       (Action loc ann (Store0 false (Pexpr [] () (PEval (Vctype ty)))
         (Pexpr [] () (PEval v)) (Pexpr [] () (PEval cv)) mo)))))) :
-    step_ctx tds σ file ext tid (parent, th) = [Step_error2 "Store"] := by
-  have hget : get_ctx th.arena = [(ctx, Expr an (Eaction (Paction polarity.Pos
+    ∃ post, step_ctx tds σ file ext tid (parent, th) = Step_error2 "Store" :: post := by
+  obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, Expr an (Eaction (Paction polarity.Pos
       (Action loc ann (Store0 false (Pexpr [] () (PEval (Vctype ty)))
-        (Pexpr [] () (PEval v)) (Pexpr [] () (PEval cv)) mo)))))] := by
+        (Pexpr [] () (PEval v)) (Pexpr [] () (PEval cv)) mo))))) :: rest := by
     rw [harena]; exact hd.get_ctx_rebuild_action an _ lemDefaultFuel hsz
   unfold step_ctx
   dsimp only
   rw [hget]
-  simp only [List.map_cons, List.map_nil]
+  simp only [List.map_cons]
+  refine ⟨_, List.cons_eq_cons.mpr ⟨?_, rfl⟩⟩
   rcases v with ov | lv | _ | _ | _ | _ | ⟨_, _⟩ | _ <;> (try (cases ov)) <;>
     cases ctx <;>
       (dsimp only [step_action]
@@ -3734,14 +3955,15 @@ theorem step_ctx_kill_illtyped' {an : List _root_.annot} {e : CoreExpr} {ctx : c
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = apply_ctx ctx (Expr an (Eaction (Paction polarity.Pos
       (Action loc ann (Kill kind (Pexpr [] () (PEval v)))))))) :
-    step_ctx tds σ file ext tid (parent, th) = [Step_error2 "Kill"] := by
-  have hget : get_ctx th.arena = [(ctx, Expr an (Eaction (Paction polarity.Pos
-      (Action loc ann (Kill kind (Pexpr [] () (PEval v)))))))] := by
+    ∃ post, step_ctx tds σ file ext tid (parent, th) = Step_error2 "Kill" :: post := by
+  obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, Expr an (Eaction (Paction polarity.Pos
+      (Action loc ann (Kill kind (Pexpr [] () (PEval v))))))) :: rest := by
     rw [harena]; exact hd.get_ctx_rebuild_action an _ lemDefaultFuel hsz
   unfold step_ctx
   dsimp only
   rw [hget]
-  simp only [List.map_cons, List.map_nil]
+  simp only [List.map_cons]
+  refine ⟨_, List.cons_eq_cons.mpr ⟨?_, rfl⟩⟩
   rcases v with ov | lv | _ | _ | _ | _ | ⟨_, _⟩ | _ <;> (try (cases ov)) <;>
     cases ctx <;>
       (dsimp only [step_action]
@@ -3763,14 +3985,15 @@ theorem step_ctx_alloc_illtyped' {an : List _root_.annot} {e : CoreExpr} {ctx : 
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = apply_ctx ctx (Expr an (Eaction (Paction polarity.Pos
       (Action loc ann (Alloc0 (Pexpr [] () (PEval v1)) (Pexpr [] () (PEval v2)) pref)))))) :
-    step_ctx tds σ file ext tid (parent, th) = [Step_error2 "Alloc"] := by
-  have hget : get_ctx th.arena = [(ctx, Expr an (Eaction (Paction polarity.Pos
-      (Action loc ann (Alloc0 (Pexpr [] () (PEval v1)) (Pexpr [] () (PEval v2)) pref)))))] := by
+    ∃ post, step_ctx tds σ file ext tid (parent, th) = Step_error2 "Alloc" :: post := by
+  obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, Expr an (Eaction (Paction polarity.Pos
+      (Action loc ann (Alloc0 (Pexpr [] () (PEval v1)) (Pexpr [] () (PEval v2)) pref))))) :: rest := by
     rw [harena]; exact hd.get_ctx_rebuild_action an _ lemDefaultFuel hsz
   unfold step_ctx
   dsimp only
   rw [hget]
-  simp only [List.map_cons, List.map_nil]
+  simp only [List.map_cons]
+  refine ⟨_, List.cons_eq_cons.mpr ⟨?_, rfl⟩⟩
   rcases v1 with ov1 | lv1 | _ | _ | _ | _ | ⟨_, _⟩ | _ <;> (try (cases ov1)) <;>
     cases ctx <;>
       (dsimp only [step_action]
@@ -3799,25 +4022,32 @@ theorem step_ctx_if_fail {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = e)
     (hf : (evalClass tds th.current_loc ext file th.env g).fail? = some fl) :
-    ∃ (s : String) (m : core_runM thread_state),
+    ∃ (s : String) (m : core_runM thread_state) (post : List core_step2),
       step_ctx tds σ file ext tid (parent, th) =
-        [Step_with_runstate2 (RSK_tau s TSK_Misc) m] ∧
+        Step_with_runstate2 (RSK_tau s TSK_Misc) m :: post ∧
       ∀ rs, m rs = fl.run thread_state core_run_state rs := by
-  have hget : get_ctx th.arena = [(ctx, ifRedex an g e2 e3)] := by
+  obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, ifRedex an g e2 e3) :: rest := by
     rw [harena]; exact hd.get_ctx_default hsz
-  unfold step_ctx
-  dsimp only
-  rw [hget]
-  simp only [List.map_cons, List.map_nil]
-  unfold ifRedex
-  cases ctx <;>
-    (dsimp only [one_step0]
-     rw [show is_irreducible (Expr an (Eif g e2 e3)) = false
-       from rfl]
-     refine ⟨_, _, rfl, fun rs => ?_⟩
-     rw [stExceptUndef_bind_apply, stExceptUndef_bind_apply,
-       full_eval_bridge_fail hpg hf hdg σ]
-     cases fl <;> rfl)
+  have key : ∃ (s : String) (m : core_runM thread_state),
+      (step_ctx tds σ file ext tid (parent, th)).head? =
+        some (Step_with_runstate2 (RSK_tau s TSK_Misc) m) ∧
+      ∀ rs, m rs = fl.run thread_state core_run_state rs := by
+    unfold step_ctx
+    dsimp only
+    rw [hget]
+    simp only [List.map_cons, List.head?_cons]
+    unfold ifRedex
+    cases ctx <;>
+      (dsimp only [one_step0]
+       rw [show is_irreducible (Expr an (Eif g e2 e3)) = false
+         from rfl]
+       refine ⟨_, _, rfl, fun rs => ?_⟩
+       rw [stExceptUndef_bind_apply, stExceptUndef_bind_apply,
+         full_eval_bridge_fail hpg hf hdg σ]
+       cases fl <;> rfl)
+  obtain ⟨s, m, hh, hrest⟩ := key
+  obtain ⟨post, hpost⟩ := cons_of_head? hh
+  exact ⟨s, m, post, hpost, hrest⟩
 
 /-- … the kill face (E1's statement). -/
 theorem step_ctx_if_kill {an : List _root_.annot} {e : CoreExpr} {ctx : context}
@@ -3830,9 +4060,9 @@ theorem step_ctx_if_kill {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = e)
     (hk : evalClass tds th.current_loc ext file th.env g = .kill err) :
-    ∃ (s : String) (m : core_runM thread_state),
+    ∃ (s : String) (m : core_runM thread_state) (post : List core_step2),
       step_ctx tds σ file ext tid (parent, th) =
-        [Step_with_runstate2 (RSK_tau s TSK_Misc) m] ∧
+        Step_with_runstate2 (RSK_tau s TSK_Misc) m :: post ∧
       ∀ rs, m rs = Exception err :=
   step_ctx_if_fail hd hsz hpg hdg tds σ file ext tid parent th harena (fl := .kill err) (by rw [hk]; rfl)
 
@@ -3852,48 +4082,55 @@ theorem step_ctx_run_fail {an : List _root_.annot} {e : CoreExpr} {ctx : context
     (harena : th.arena = e)
     (hproc : th.current_proc_opt = some p) {fl : EvalFail}
     (hf : (evalClassFold tds th.current_loc ext file th.env (zipArgs params pes)).fail? = some fl) :
-    ∃ (s : String) (m : core_runM thread_state),
+    ∃ (s : String) (m : core_runM thread_state) (post : List core_step2),
       step_ctx tds σ file ext tid (parent, th) =
-        [Step_with_runstate2 (RSK_eval s) m] ∧
+        Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, LabeledAt rs (resolveExtern ext p) Q → m rs = fl.run thread_state core_run_state rs := by
-  have hget : get_ctx th.arena = [(ctx, runRedex an ra l pes)] := by
+  obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, runRedex an ra l pes) :: rest := by
     rw [harena]; exact hd.get_ctx_default hsz
-  have hl' : (fmapLookupBy (fun (sym1 : sym) (sym2 : sym) =>
-      Lem_Basic_classes.ordCompare sym1 sym2) l Q) = some (params, cont) := hl
-  unfold step_ctx
-  dsimp only
-  rw [hget]
-  simp only [List.map_cons, List.map_nil]
-  unfold runRedex
-  cases ctx <;> (loc_split an) <;>
-    (try dsimp only
-     rw [hproc]
-     refine ⟨_, _, rfl, fun rs hQ => ?_⟩
-     replace hQ : (fmapLookupBy (fun (sym1 : sym) (sym2 : sym) =>
-       Lem_Basic_classes.ordCompare sym1 sym2) (resolveExtern ext p)
-       rs.labeled) = some Q := hQ
-     rw [stExceptUndef_bind_apply, runSE_read_apply]
-     try dsimp only []
-     cases hres : fmapLookupBy (fun (sym1 : sym) (sym2 : sym) =>
-         Lem_Basic_classes.ordCompare sym1 sym2) p ext with
-     | none =>
-       rw [show resolveExtern ext p = p by
-         unfold resolveExtern; rw [hres]] at hQ
+  have key : ∃ (s : String) (m : core_runM thread_state),
+      (step_ctx tds σ file ext tid (parent, th)).head? =
+        some (Step_with_runstate2 (RSK_eval s) m) ∧
+      ∀ rs, LabeledAt rs (resolveExtern ext p) Q → m rs = fl.run thread_state core_run_state rs := by
+    have hl' : (fmapLookupBy (fun (sym1 : sym) (sym2 : sym) =>
+        Lem_Basic_classes.ordCompare sym1 sym2) l Q) = some (params, cont) := hl
+    unfold step_ctx
+    dsimp only
+    rw [hget]
+    simp only [List.map_cons, List.head?_cons]
+    unfold runRedex
+    cases ctx <;> (loc_split an) <;>
+      (try dsimp only
+       rw [hproc]
+       refine ⟨_, _, rfl, fun rs hQ => ?_⟩
+       replace hQ : (fmapLookupBy (fun (sym1 : sym) (sym2 : sym) =>
+         Lem_Basic_classes.ordCompare sym1 sym2) (resolveExtern ext p)
+         rs.labeled) = some Q := hQ
+       rw [stExceptUndef_bind_apply, runSE_read_apply]
        try dsimp only []
-       rw [hQ, bind0_some, hl']
-       try dsimp only []
-       rw [stExceptUndef_bind_apply,
-         foldM_args_fail _ (fun _ _ _ _ _ => rfl) params pes th.env rs hpes hdep hf]
-       cases fl <;> rfl
-     | some y =>
-       rw [show resolveExtern ext p = y by
-         unfold resolveExtern; rw [hres]] at hQ
-       try dsimp only []
-       rw [hQ, bind0_some, hl']
-       try dsimp only []
-       rw [stExceptUndef_bind_apply,
-         foldM_args_fail _ (fun _ _ _ _ _ => rfl) params pes th.env rs hpes hdep hf]
-       cases fl <;> rfl)
+       cases hres : fmapLookupBy (fun (sym1 : sym) (sym2 : sym) =>
+           Lem_Basic_classes.ordCompare sym1 sym2) p ext with
+       | none =>
+         rw [show resolveExtern ext p = p by
+           unfold resolveExtern; rw [hres]] at hQ
+         try dsimp only []
+         rw [hQ, bind0_some, hl']
+         try dsimp only []
+         rw [stExceptUndef_bind_apply,
+           foldM_args_fail _ (fun _ _ _ _ _ => rfl) params pes th.env rs hpes hdep hf]
+         cases fl <;> rfl
+       | some y =>
+         rw [show resolveExtern ext p = y by
+           unfold resolveExtern; rw [hres]] at hQ
+         try dsimp only []
+         rw [hQ, bind0_some, hl']
+         try dsimp only []
+         rw [stExceptUndef_bind_apply,
+           foldM_args_fail _ (fun _ _ _ _ _ => rfl) params pes th.env rs hpes hdep hf]
+         cases fl <;> rfl)
+  obtain ⟨s, m, hh, hrest⟩ := key
+  obtain ⟨post, hpost⟩ := cons_of_head? hh
+  exact ⟨s, m, post, hpost, hrest⟩
 
 /-- … the kill face (E1's statement). -/
 theorem step_ctx_run_kill {an : List _root_.annot} {e : CoreExpr} {ctx : context}
@@ -3911,9 +4148,9 @@ theorem step_ctx_run_kill {an : List _root_.annot} {e : CoreExpr} {ctx : context
     (hproc : th.current_proc_opt = some p) {err : core_run_cause}
     (hk : evalClassFold tds th.current_loc ext file th.env (zipArgs params pes) =
       .kill err) :
-    ∃ (s : String) (m : core_runM thread_state),
+    ∃ (s : String) (m : core_runM thread_state) (post : List core_step2),
       step_ctx tds σ file ext tid (parent, th) =
-        [Step_with_runstate2 (RSK_eval s) m] ∧
+        Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, LabeledAt rs (resolveExtern ext p) Q → m rs = Exception err :=
   step_ctx_run_fail hd hsz hl hpes hdep tds σ file ext tid parent p th harena hproc (fl := .kill err) (by rw [hk]; rfl)
 
@@ -3933,41 +4170,48 @@ theorem step_ctx_save_eval_fail {an : List _root_.annot} {e : CoreExpr} {ctx : c
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = e)
     (hf : (evalClassList tds th.current_loc ext file th.env (saveParamPexprs ps)).fail? = some fl) :
-    ∃ (s : String) (m : core_runM thread_state),
+    ∃ (s : String) (m : core_runM thread_state) (post : List core_step2),
       step_ctx tds σ file ext tid (parent, th) =
-        [Step_with_runstate2 (RSK_eval s) m] ∧
+        Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, m rs = fl.run thread_state core_run_state rs := by
-  have hget : get_ctx th.arena = [(ctx, saveRedex an sb ps body)] := by
+  obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, saveRedex an sb ps body) :: rest := by
     rw [harena]; exact hd.get_ctx_default hsz
-  have hnv' : valueFromPexprs
-      (List.map (fun p => match p with | (_, (_, z)) => z) ps) = none := by
-    rw [show (List.map (fun (p : sym × ((core_base_type ×
-        Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym))
-        => match p with | (_, (_, z)) => z) ps) = saveParamPexprs ps from rfl]
-    exact hnv
-  unfold step_ctx
-  dsimp only
-  rw [hget]
-  simp only [List.map_cons, List.map_nil]
-  unfold saveRedex
-  cases ctx <;>
-    (dsimp only [one_step0]
-     rw [show is_irreducible (Expr an (Esave sb ps body)) = false from rfl]
-     rw [hnv']
-     simp only [Bool.false_eq_true, if_false]
-     refine ⟨_, _, rfl, fun rs => ?_⟩
-     rw [stExceptUndef_bind_apply, stExceptUndef_bind_apply,
-       mapM_save_fail (tds := tds) (σ := σ) (file := file)
-         (fun pe => stExceptUndef_bind
-           (E.eval_pexpr20 (a := core_run_state) tds th ext σ file pe)
-           (fun x => match x with
-             | Sum.inl pe' => stExceptUndef_return pe'
-             | Sum.inr cval => stExceptUndef_return (mk_value_pe cval)))
-         (fun _ _ => rfl) _ ?_ ps hp hdep hf rs] <;>
-       first
-         | (cases fl <;> rfl)
-         | (intro p rs'
-            rfl))
+  have key : ∃ (s : String) (m : core_runM thread_state),
+      (step_ctx tds σ file ext tid (parent, th)).head? =
+        some (Step_with_runstate2 (RSK_eval s) m) ∧
+      ∀ rs, m rs = fl.run thread_state core_run_state rs := by
+    have hnv' : valueFromPexprs
+        (List.map (fun p => match p with | (_, (_, z)) => z) ps) = none := by
+      rw [show (List.map (fun (p : sym × ((core_base_type ×
+          Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym))
+          => match p with | (_, (_, z)) => z) ps) = saveParamPexprs ps from rfl]
+      exact hnv
+    unfold step_ctx
+    dsimp only
+    rw [hget]
+    simp only [List.map_cons, List.head?_cons]
+    unfold saveRedex
+    cases ctx <;>
+      (dsimp only [one_step0]
+       rw [show is_irreducible (Expr an (Esave sb ps body)) = false from rfl]
+       rw [hnv']
+       simp only [Bool.false_eq_true, if_false]
+       refine ⟨_, _, rfl, fun rs => ?_⟩
+       rw [stExceptUndef_bind_apply, stExceptUndef_bind_apply,
+         mapM_save_fail (tds := tds) (σ := σ) (file := file)
+           (fun pe => stExceptUndef_bind
+             (E.eval_pexpr20 (a := core_run_state) tds th ext σ file pe)
+             (fun x => match x with
+               | Sum.inl pe' => stExceptUndef_return pe'
+               | Sum.inr cval => stExceptUndef_return (mk_value_pe cval)))
+           (fun _ _ => rfl) _ ?_ ps hp hdep hf rs] <;>
+         first
+           | (cases fl <;> rfl)
+           | (intro p rs'
+              rfl))
+  obtain ⟨s, m, hh, hrest⟩ := key
+  obtain ⟨post, hpost⟩ := cons_of_head? hh
+  exact ⟨s, m, post, hpost, hrest⟩
 
 /-- … the kill face (E1's statement). -/
 theorem step_ctx_save_eval_kill {an : List _root_.annot} {e : CoreExpr} {ctx : context}
@@ -3986,9 +4230,9 @@ theorem step_ctx_save_eval_kill {an : List _root_.annot} {e : CoreExpr} {ctx : c
     (harena : th.arena = e)
     (hk : evalClassList tds th.current_loc ext file th.env (saveParamPexprs ps) =
       .kill err) :
-    ∃ (s : String) (m : core_runM thread_state),
+    ∃ (s : String) (m : core_runM thread_state) (post : List core_step2),
       step_ctx tds σ file ext tid (parent, th) =
-        [Step_with_runstate2 (RSK_eval s) m] ∧
+        Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, m rs = Exception err :=
   step_ctx_save_eval_fail hd hsz hnv hp hdep tds σ file ext tid parent th harena (fl := .kill err) (by rw [hk]; rfl)
 
@@ -4005,12 +4249,12 @@ theorem step_ctx_pure_op_fail {an : List _root_.annot} {e : CoreExpr} {ctx : con
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = e)
     (hf : (evalClass tds th.current_loc ext file th.env pe).fail? = some fl) :
-    ∃ (s : String) (m : core_runM thread_state),
+    ∃ (s : String) (m : core_runM thread_state) (post : List core_step2),
       step_ctx tds σ file ext tid (parent, th) =
-        [Step_with_runstate2 (RSK_eval s) m] ∧
+        Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, m rs = fl.run thread_state core_run_state rs := by
-  obtain ⟨s, m, hsteps, hm⟩ := step_ctx_pure_op_raw hd hsz hnv tds σ file ext tid parent th harena
-  refine ⟨s, m, hsteps, fun rs => ?_⟩
+  obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_pure_op_raw hd hsz hnv tds σ file ext tid parent th harena
+  refine ⟨s, m, post, hsteps, fun rs => ?_⟩
   rw [hm rs]
   exact stExceptUndef_bind_fail_apply _
     (stExceptUndef_bind_fail_apply _ (by rw [full_eval_bridge_fail hp hf hdp σ]))
@@ -4025,9 +4269,9 @@ theorem step_ctx_pure_sym_fail {an : List _root_.annot} {e : CoreExpr} {ctx : co
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = e)
     (hf : (evalClass tds th.current_loc ext file th.env (Pexpr pb () (PEsym x))).fail? = some fl) :
-    ∃ (s : String) (m : core_runM thread_state),
+    ∃ (s : String) (m : core_runM thread_state) (post : List core_step2),
       step_ctx tds σ file ext tid (parent, th) =
-        [Step_with_runstate2 (RSK_eval s) m] ∧
+        Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, m rs = fl.run thread_state core_run_state rs :=
   step_ctx_pure_op_fail hd hsz rfl (.sym pb x) (peDepth_sym_le pb x) tds σ file ext tid parent th
     harena hf
@@ -4043,9 +4287,9 @@ theorem step_ctx_pure_sym_kill {an : List _root_.annot} {e : CoreExpr} {ctx : co
     (harena : th.arena = e)
     (hk : evalClass tds th.current_loc ext file th.env (Pexpr pb () (PEsym x)) =
       .kill err) :
-    ∃ (s : String) (m : core_runM thread_state),
+    ∃ (s : String) (m : core_runM thread_state) (post : List core_step2),
       step_ctx tds σ file ext tid (parent, th) =
-        [Step_with_runstate2 (RSK_eval s) m] ∧
+        Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, m rs = Exception err :=
   step_ctx_pure_sym_fail hd hsz tds σ file ext tid parent th harena (fl := .kill err) (by rw [hk]; rfl)
 
@@ -4063,27 +4307,34 @@ theorem step_ctx_load_eval_fail {an : List _root_.annot} {e : CoreExpr} {ctx : c
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = e)
     (hf : (evalClass tds th.current_loc ext file th.env pe2).fail? = some fl) :
-    ∃ (s : String) (m : core_runM thread_state),
+    ∃ (s : String) (m : core_runM thread_state) (post : List core_step2),
       step_ctx tds σ file ext tid (parent, th) =
-        [Step_with_runstate2 (RSK_eval s) m] ∧
+        Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, m rs = fl.run thread_state core_run_state rs := by
-  have hget : get_ctx th.arena = [(ctx, loadOpRedex an loc ann ty pe2 mo)] := by
+  obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, loadOpRedex an loc ann ty pe2 mo) :: rest := by
     rw [harena]; exact hd.get_ctx_default hsz
-  unfold step_ctx
-  dsimp only
-  rw [hget]
-  simp only [List.map_cons, List.map_nil]
-  unfold loadOpRedex
-  cases ctx <;>
-    (dsimp only
-     rw [step_action_load_eval (.inr (act_valueFromPexpr_none hp2 hnv2))]
-     refine ⟨_, _, rfl, fun rs => ?_⟩
-     rw [full_eval_bridge (v := Vctype ty) (evalPexpr_val _ _ _ _ _) (peDepth_val_le _ _) σ,
-       full_eval_bridge_fail hp2 hf hd2 σ]
-     cases fl <;>
-       (dsimp only [EvalFail.run, stExceptUndef_bind, stExceptUndef_return, stExpect_return,
-          return1, except_return]
-        rfl))
+  have key : ∃ (s : String) (m : core_runM thread_state),
+      (step_ctx tds σ file ext tid (parent, th)).head? =
+        some (Step_with_runstate2 (RSK_eval s) m) ∧
+      ∀ rs, m rs = fl.run thread_state core_run_state rs := by
+    unfold step_ctx
+    dsimp only
+    rw [hget]
+    simp only [List.map_cons, List.head?_cons]
+    unfold loadOpRedex
+    cases ctx <;>
+      (dsimp only
+       rw [step_action_load_eval (.inr (act_valueFromPexpr_none hp2 hnv2))]
+       refine ⟨_, _, rfl, fun rs => ?_⟩
+       rw [full_eval_bridge (v := Vctype ty) (evalPexpr_val _ _ _ _ _) (peDepth_val_le _ _) σ,
+         full_eval_bridge_fail hp2 hf hd2 σ]
+       cases fl <;>
+         (dsimp only [EvalFail.run, stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+            return1, except_return]
+          rfl))
+  obtain ⟨s, m, hh, hrest⟩ := key
+  obtain ⟨post, hpost⟩ := cons_of_head? hh
+  exact ⟨s, m, post, hpost, hrest⟩
 
 /-- … the kill face (E1's statement). -/
 theorem step_ctx_load_eval_kill {an : List _root_.annot} {e : CoreExpr} {ctx : context}
@@ -4099,9 +4350,9 @@ theorem step_ctx_load_eval_kill {an : List _root_.annot} {e : CoreExpr} {ctx : c
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = e)
     (hk : evalClass tds th.current_loc ext file th.env pe2 = .kill err) :
-    ∃ (s : String) (m : core_runM thread_state),
+    ∃ (s : String) (m : core_runM thread_state) (post : List core_step2),
       step_ctx tds σ file ext tid (parent, th) =
-        [Step_with_runstate2 (RSK_eval s) m] ∧
+        Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, m rs = Exception err :=
   step_ctx_load_eval_fail hd hsz hnv2 hp2 hd2 tds σ file ext tid parent th harena (fl := .kill err) (by rw [hk]; rfl)
 
@@ -4119,26 +4370,33 @@ theorem step_ctx_kill_eval_fail {an : List _root_.annot} {e : CoreExpr} {ctx : c
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = e)
     (hf : (evalClass tds th.current_loc ext file th.env pe).fail? = some fl) :
-    ∃ (s : String) (m : core_runM thread_state),
+    ∃ (s : String) (m : core_runM thread_state) (post : List core_step2),
       step_ctx tds σ file ext tid (parent, th) =
-        [Step_with_runstate2 (RSK_eval s) m] ∧
+        Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, m rs = fl.run thread_state core_run_state rs := by
-  have hget : get_ctx th.arena = [(ctx, killOpRedex an loc ann kind pe)] := by
+  obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, killOpRedex an loc ann kind pe) :: rest := by
     rw [harena]; exact hd.get_ctx_default hsz
-  unfold step_ctx
-  dsimp only
-  rw [hget]
-  simp only [List.map_cons, List.map_nil]
-  unfold killOpRedex
-  cases ctx <;>
-    (dsimp only
-     rw [step_action_kill_eval (act_valueFromPexpr_none hp hnv)]
-     refine ⟨_, _, rfl, fun rs => ?_⟩
-     rw [full_eval_bridge_fail hp hf hdp σ]
-     cases fl <;>
-       (dsimp only [EvalFail.run, stExceptUndef_bind, stExceptUndef_return, stExpect_return,
-          return1, except_return]
-        rfl))
+  have key : ∃ (s : String) (m : core_runM thread_state),
+      (step_ctx tds σ file ext tid (parent, th)).head? =
+        some (Step_with_runstate2 (RSK_eval s) m) ∧
+      ∀ rs, m rs = fl.run thread_state core_run_state rs := by
+    unfold step_ctx
+    dsimp only
+    rw [hget]
+    simp only [List.map_cons, List.head?_cons]
+    unfold killOpRedex
+    cases ctx <;>
+      (dsimp only
+       rw [step_action_kill_eval (act_valueFromPexpr_none hp hnv)]
+       refine ⟨_, _, rfl, fun rs => ?_⟩
+       rw [full_eval_bridge_fail hp hf hdp σ]
+       cases fl <;>
+         (dsimp only [EvalFail.run, stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+            return1, except_return]
+          rfl))
+  obtain ⟨s, m, hh, hrest⟩ := key
+  obtain ⟨post, hpost⟩ := cons_of_head? hh
+  exact ⟨s, m, post, hpost, hrest⟩
 
 /-- … the kill face (E1's statement). -/
 theorem step_ctx_kill_eval_kill {an : List _root_.annot} {e : CoreExpr} {ctx : context}
@@ -4154,9 +4412,9 @@ theorem step_ctx_kill_eval_kill {an : List _root_.annot} {e : CoreExpr} {ctx : c
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = e)
     (hk : evalClass tds th.current_loc ext file th.env pe = .kill err) :
-    ∃ (s : String) (m : core_runM thread_state),
+    ∃ (s : String) (m : core_runM thread_state) (post : List core_step2),
       step_ctx tds σ file ext tid (parent, th) =
-        [Step_with_runstate2 (RSK_eval s) m] ∧
+        Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, m rs = Exception err :=
   step_ctx_kill_eval_fail hd hsz hnv hp hdp tds σ file ext tid parent th harena (fl := .kill err) (by rw [hk]; rfl)
 
@@ -4175,27 +4433,34 @@ theorem step_ctx_store_eval_fail2 {an : List _root_.annot} {e : CoreExpr} {ctx :
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = e)
     (hf : (evalClass tds th.current_loc ext file th.env pe2).fail? = some fl) :
-    ∃ (s : String) (m : core_runM thread_state),
+    ∃ (s : String) (m : core_runM thread_state) (post : List core_step2),
       step_ctx tds σ file ext tid (parent, th) =
-        [Step_with_runstate2 (RSK_eval s) m] ∧
+        Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, m rs = fl.run thread_state core_run_state rs := by
-  have hget : get_ctx th.arena = [(ctx, storeOpRedex an loc ann ty pe2 pe3 mo)] := by
+  obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, storeOpRedex an loc ann ty pe2 pe3 mo) :: rest := by
     rw [harena]; exact hd.get_ctx_default hsz
-  unfold step_ctx
-  dsimp only
-  rw [hget]
-  simp only [List.map_cons, List.map_nil]
-  unfold storeOpRedex
-  cases ctx <;>
-    (dsimp only
-     rw [step_action_store_eval (.inr (act_none_of_pair hp2 hp3 hnv)) hp3.not_constrained]
-     refine ⟨_, _, rfl, fun rs => ?_⟩
-     rw [full_eval_bridge (v := Vctype ty) (evalPexpr_val _ _ _ _ _) (peDepth_val_le _ _) σ,
-       full_eval_bridge_fail hp2 hf hd2 σ]
-     cases fl <;>
-       (dsimp only [EvalFail.run, stExceptUndef_bind, stExceptUndef_return, stExpect_return,
-          return1, except_return]
-        rfl))
+  have key : ∃ (s : String) (m : core_runM thread_state),
+      (step_ctx tds σ file ext tid (parent, th)).head? =
+        some (Step_with_runstate2 (RSK_eval s) m) ∧
+      ∀ rs, m rs = fl.run thread_state core_run_state rs := by
+    unfold step_ctx
+    dsimp only
+    rw [hget]
+    simp only [List.map_cons, List.head?_cons]
+    unfold storeOpRedex
+    cases ctx <;>
+      (dsimp only
+       rw [step_action_store_eval (.inr (act_none_of_pair hp2 hp3 hnv)) hp3.not_constrained]
+       refine ⟨_, _, rfl, fun rs => ?_⟩
+       rw [full_eval_bridge (v := Vctype ty) (evalPexpr_val _ _ _ _ _) (peDepth_val_le _ _) σ,
+         full_eval_bridge_fail hp2 hf hd2 σ]
+       cases fl <;>
+         (dsimp only [EvalFail.run, stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+            return1, except_return]
+          rfl))
+  obtain ⟨s, m, hh, hrest⟩ := key
+  obtain ⟨post, hpost⟩ := cons_of_head? hh
+  exact ⟨s, m, post, hpost, hrest⟩
 
 /-- … the kill face (E1's statement). -/
 theorem step_ctx_store_eval_kill2 {an : List _root_.annot} {e : CoreExpr} {ctx : context}
@@ -4211,9 +4476,9 @@ theorem step_ctx_store_eval_kill2 {an : List _root_.annot} {e : CoreExpr} {ctx :
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = e)
     (hk : evalClass tds th.current_loc ext file th.env pe2 = .kill err) :
-    ∃ (s : String) (m : core_runM thread_state),
+    ∃ (s : String) (m : core_runM thread_state) (post : List core_step2),
       step_ctx tds σ file ext tid (parent, th) =
-        [Step_with_runstate2 (RSK_eval s) m] ∧
+        Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, m rs = Exception err :=
   step_ctx_store_eval_fail2 hd hsz hnv hp2 hp3 hd2 tds σ file ext tid parent th harena (fl := .kill err) (by rw [hk]; rfl)
 
@@ -4235,27 +4500,34 @@ theorem step_ctx_store_eval_fail3 {an : List _root_.annot} {e : CoreExpr} {ctx :
     (harena : th.arena = e)
     (hv2 : evalPexpr tds ext file th.env pe2 = some v)
     (hf : (evalClass tds th.current_loc ext file th.env pe3).fail? = some fl) :
-    ∃ (s : String) (m : core_runM thread_state),
+    ∃ (s : String) (m : core_runM thread_state) (post : List core_step2),
       step_ctx tds σ file ext tid (parent, th) =
-        [Step_with_runstate2 (RSK_eval s) m] ∧
+        Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, m rs = fl.run thread_state core_run_state rs := by
-  have hget : get_ctx th.arena = [(ctx, storeOpRedex an loc ann ty pe2 pe3 mo)] := by
+  obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, storeOpRedex an loc ann ty pe2 pe3 mo) :: rest := by
     rw [harena]; exact hd.get_ctx_default hsz
-  unfold step_ctx
-  dsimp only
-  rw [hget]
-  simp only [List.map_cons, List.map_nil]
-  unfold storeOpRedex
-  cases ctx <;>
-    (dsimp only
-     rw [step_action_store_eval (.inr (act_none_of_pair hp2 hp3 hnv)) hp3.not_constrained]
-     refine ⟨_, _, rfl, fun rs => ?_⟩
-     rw [full_eval_bridge (v := Vctype ty) (evalPexpr_val _ _ _ _ _) (peDepth_val_le _ _) σ,
-       full_eval_bridge hv2 hd2 σ, full_eval_bridge_fail hp3 hf hd3 σ]
-     cases fl <;>
-       (dsimp only [EvalFail.run, stExceptUndef_bind, stExceptUndef_return, stExpect_return,
-          return1, except_return]
-        rfl))
+  have key : ∃ (s : String) (m : core_runM thread_state),
+      (step_ctx tds σ file ext tid (parent, th)).head? =
+        some (Step_with_runstate2 (RSK_eval s) m) ∧
+      ∀ rs, m rs = fl.run thread_state core_run_state rs := by
+    unfold step_ctx
+    dsimp only
+    rw [hget]
+    simp only [List.map_cons, List.head?_cons]
+    unfold storeOpRedex
+    cases ctx <;>
+      (dsimp only
+       rw [step_action_store_eval (.inr (act_none_of_pair hp2 hp3 hnv)) hp3.not_constrained]
+       refine ⟨_, _, rfl, fun rs => ?_⟩
+       rw [full_eval_bridge (v := Vctype ty) (evalPexpr_val _ _ _ _ _) (peDepth_val_le _ _) σ,
+         full_eval_bridge hv2 hd2 σ, full_eval_bridge_fail hp3 hf hd3 σ]
+       cases fl <;>
+         (dsimp only [EvalFail.run, stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+            return1, except_return]
+          rfl))
+  obtain ⟨s, m, hh, hrest⟩ := key
+  obtain ⟨post, hpost⟩ := cons_of_head? hh
+  exact ⟨s, m, post, hpost, hrest⟩
 
 /-- … the kill face (E1's statement). -/
 theorem step_ctx_store_eval_kill3 {an : List _root_.annot} {e : CoreExpr} {ctx : context}
@@ -4274,9 +4546,9 @@ theorem step_ctx_store_eval_kill3 {an : List _root_.annot} {e : CoreExpr} {ctx :
     (harena : th.arena = e)
     (hv2 : evalPexpr tds ext file th.env pe2 = some v)
     (hk : evalClass tds th.current_loc ext file th.env pe3 = .kill err) :
-    ∃ (s : String) (m : core_runM thread_state),
+    ∃ (s : String) (m : core_runM thread_state) (post : List core_step2),
       step_ctx tds σ file ext tid (parent, th) =
-        [Step_with_runstate2 (RSK_eval s) m] ∧
+        Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, m rs = Exception err :=
   step_ctx_store_eval_fail3 hd hsz hnv hp2 hp3 hd2 hd3 tds σ file ext tid parent th harena hv2 (fl := .kill err) (by rw [hk]; rfl)
 
@@ -4295,26 +4567,33 @@ theorem step_ctx_alloc_eval_fail1 {an : List _root_.annot} {e : CoreExpr} {ctx :
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = e)
     (hf : (evalClass tds th.current_loc ext file th.env pe1).fail? = some fl) :
-    ∃ (s : String) (m : core_runM thread_state),
+    ∃ (s : String) (m : core_runM thread_state) (post : List core_step2),
       step_ctx tds σ file ext tid (parent, th) =
-        [Step_with_runstate2 (RSK_eval s) m] ∧
+        Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, m rs = fl.run thread_state core_run_state rs := by
-  have hget : get_ctx th.arena = [(ctx, allocOpRedex an loc ann pe1 pe2 pref)] := by
+  obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, allocOpRedex an loc ann pe1 pe2 pref) :: rest := by
     rw [harena]; exact hd.get_ctx_default hsz
-  unfold step_ctx
-  dsimp only
-  rw [hget]
-  simp only [List.map_cons, List.map_nil]
-  unfold allocOpRedex
-  cases ctx <;>
-    (dsimp only
-     rw [step_action_alloc_eval (act_none_of_pair hp1 hp2 hnv)]
-     refine ⟨_, _, rfl, fun rs => ?_⟩
-     rw [full_eval_bridge_fail hp1 hf hd1 σ]
-     cases fl <;>
-       (dsimp only [EvalFail.run, stExceptUndef_bind, stExceptUndef_return, stExpect_return,
-          return1, except_return]
-        rfl))
+  have key : ∃ (s : String) (m : core_runM thread_state),
+      (step_ctx tds σ file ext tid (parent, th)).head? =
+        some (Step_with_runstate2 (RSK_eval s) m) ∧
+      ∀ rs, m rs = fl.run thread_state core_run_state rs := by
+    unfold step_ctx
+    dsimp only
+    rw [hget]
+    simp only [List.map_cons, List.head?_cons]
+    unfold allocOpRedex
+    cases ctx <;>
+      (dsimp only
+       rw [step_action_alloc_eval (act_none_of_pair hp1 hp2 hnv)]
+       refine ⟨_, _, rfl, fun rs => ?_⟩
+       rw [full_eval_bridge_fail hp1 hf hd1 σ]
+       cases fl <;>
+         (dsimp only [EvalFail.run, stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+            return1, except_return]
+          rfl))
+  obtain ⟨s, m, hh, hrest⟩ := key
+  obtain ⟨post, hpost⟩ := cons_of_head? hh
+  exact ⟨s, m, post, hpost, hrest⟩
 
 /-- … the kill face (E1's statement). -/
 theorem step_ctx_alloc_eval_kill1 {an : List _root_.annot} {e : CoreExpr} {ctx : context}
@@ -4330,9 +4609,9 @@ theorem step_ctx_alloc_eval_kill1 {an : List _root_.annot} {e : CoreExpr} {ctx :
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = e)
     (hk : evalClass tds th.current_loc ext file th.env pe1 = .kill err) :
-    ∃ (s : String) (m : core_runM thread_state),
+    ∃ (s : String) (m : core_runM thread_state) (post : List core_step2),
       step_ctx tds σ file ext tid (parent, th) =
-        [Step_with_runstate2 (RSK_eval s) m] ∧
+        Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, m rs = Exception err :=
   step_ctx_alloc_eval_fail1 hd hsz hnv hp1 hp2 hd1 tds σ file ext tid parent th harena (fl := .kill err) (by rw [hk]; rfl)
 
@@ -4354,26 +4633,33 @@ theorem step_ctx_alloc_eval_fail2 {an : List _root_.annot} {e : CoreExpr} {ctx :
     (harena : th.arena = e)
     (hv1 : evalPexpr tds ext file th.env pe1 = some v1)
     (hf : (evalClass tds th.current_loc ext file th.env pe2).fail? = some fl) :
-    ∃ (s : String) (m : core_runM thread_state),
+    ∃ (s : String) (m : core_runM thread_state) (post : List core_step2),
       step_ctx tds σ file ext tid (parent, th) =
-        [Step_with_runstate2 (RSK_eval s) m] ∧
+        Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, m rs = fl.run thread_state core_run_state rs := by
-  have hget : get_ctx th.arena = [(ctx, allocOpRedex an loc ann pe1 pe2 pref)] := by
+  obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, allocOpRedex an loc ann pe1 pe2 pref) :: rest := by
     rw [harena]; exact hd.get_ctx_default hsz
-  unfold step_ctx
-  dsimp only
-  rw [hget]
-  simp only [List.map_cons, List.map_nil]
-  unfold allocOpRedex
-  cases ctx <;>
-    (dsimp only
-     rw [step_action_alloc_eval (act_none_of_pair hp1 hp2 hnv)]
-     refine ⟨_, _, rfl, fun rs => ?_⟩
-     rw [full_eval_bridge hv1 hd1 σ, full_eval_bridge_fail hp2 hf hd2 σ]
-     cases fl <;>
-       (dsimp only [EvalFail.run, stExceptUndef_bind, stExceptUndef_return, stExpect_return,
-          return1, except_return]
-        rfl))
+  have key : ∃ (s : String) (m : core_runM thread_state),
+      (step_ctx tds σ file ext tid (parent, th)).head? =
+        some (Step_with_runstate2 (RSK_eval s) m) ∧
+      ∀ rs, m rs = fl.run thread_state core_run_state rs := by
+    unfold step_ctx
+    dsimp only
+    rw [hget]
+    simp only [List.map_cons, List.head?_cons]
+    unfold allocOpRedex
+    cases ctx <;>
+      (dsimp only
+       rw [step_action_alloc_eval (act_none_of_pair hp1 hp2 hnv)]
+       refine ⟨_, _, rfl, fun rs => ?_⟩
+       rw [full_eval_bridge hv1 hd1 σ, full_eval_bridge_fail hp2 hf hd2 σ]
+       cases fl <;>
+         (dsimp only [EvalFail.run, stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+            return1, except_return]
+          rfl))
+  obtain ⟨s, m, hh, hrest⟩ := key
+  obtain ⟨post, hpost⟩ := cons_of_head? hh
+  exact ⟨s, m, post, hpost, hrest⟩
 
 /-- … the kill face (E1's statement). -/
 theorem step_ctx_alloc_eval_kill2 {an : List _root_.annot} {e : CoreExpr} {ctx : context}
@@ -4392,9 +4678,9 @@ theorem step_ctx_alloc_eval_kill2 {an : List _root_.annot} {e : CoreExpr} {ctx :
     (harena : th.arena = e)
     (hv1 : evalPexpr tds ext file th.env pe1 = some v1)
     (hk : evalClass tds th.current_loc ext file th.env pe2 = .kill err) :
-    ∃ (s : String) (m : core_runM thread_state),
+    ∃ (s : String) (m : core_runM thread_state) (post : List core_step2),
       step_ctx tds σ file ext tid (parent, th) =
-        [Step_with_runstate2 (RSK_eval s) m] ∧
+        Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, m rs = Exception err :=
   step_ctx_alloc_eval_fail2 hd hsz hnv hp1 hp2 hd1 hd2 tds σ file ext tid parent th harena hv1 (fl := .kill err) (by rw [hk]; rfl)
 
@@ -4413,39 +4699,46 @@ theorem step_ctx_memop_eval_fail {an : List _root_.annot} {e : CoreExpr} {ctx : 
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = e)
     (hf : (evalClassList tds th.current_loc ext file th.env [pe1, pe2]).fail? = some fl) :
-    ∃ (s : String) (m : core_runM thread_state),
+    ∃ (s : String) (m : core_runM thread_state) (post : List core_step2),
       step_ctx tds σ file ext tid (parent, th) =
-        [Step_with_runstate2 (RSK_eval s) m] ∧
+        Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, m rs = fl.run thread_state core_run_state rs := by
-  have hget : get_ctx th.arena = [(ctx, memopRedex an mop [pe1, pe2])] := by
+  obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, memopRedex an mop [pe1, pe2]) :: rest := by
     rw [harena]; exact hd.get_ctx_default hsz
-  have hp : ∀ pe ∈ [pe1, pe2], PePure pe := by
-    intro pe hpe
-    simp only [List.mem_cons, List.not_mem_nil, or_false] at hpe
-    rcases hpe with rfl | rfl <;> assumption
-  have hdp : ∀ pe ∈ [pe1, pe2], peDepth pe ≤ lemDefaultFuel := by
-    intro pe hpe
-    simp only [List.mem_cons, List.not_mem_nil, or_false] at hpe
-    rcases hpe with rfl | rfl <;> assumption
-  unfold step_ctx
-  dsimp only
-  rw [hget]
-  simp only [List.map_cons, List.map_nil]
-  unfold memopRedex
-  cases ctx <;>
-    (dsimp only [one_step0]
-     rw [show is_irreducible (Expr an (Ememop mop [pe1, pe2]))
-       = false from rfl]
-     rw [hnv]
-     simp only [Bool.false_eq_true, if_false]
-     refine ⟨_, _, rfl, fun rs => ?_⟩
-     rw [stExceptUndef_bind_apply, stExceptUndef_bind_apply,
-       mapM_eval1_fail (tds := tds) (σ := σ) (file := file)
-         _ ?_ [pe1, pe2] hp hdp hf rs] <;>
-       first
-         | (intro pe rs'
-            rfl)
-         | (cases fl <;> (try (loc_split an)) <;> rfl))
+  have key : ∃ (s : String) (m : core_runM thread_state),
+      (step_ctx tds σ file ext tid (parent, th)).head? =
+        some (Step_with_runstate2 (RSK_eval s) m) ∧
+      ∀ rs, m rs = fl.run thread_state core_run_state rs := by
+    have hp : ∀ pe ∈ [pe1, pe2], PePure pe := by
+      intro pe hpe
+      simp only [List.mem_cons, List.not_mem_nil, or_false] at hpe
+      rcases hpe with rfl | rfl <;> assumption
+    have hdp : ∀ pe ∈ [pe1, pe2], peDepth pe ≤ lemDefaultFuel := by
+      intro pe hpe
+      simp only [List.mem_cons, List.not_mem_nil, or_false] at hpe
+      rcases hpe with rfl | rfl <;> assumption
+    unfold step_ctx
+    dsimp only
+    rw [hget]
+    simp only [List.map_cons, List.head?_cons]
+    unfold memopRedex
+    cases ctx <;>
+      (dsimp only [one_step0]
+       rw [show is_irreducible (Expr an (Ememop mop [pe1, pe2]))
+         = false from rfl]
+       rw [hnv]
+       simp only [Bool.false_eq_true, if_false]
+       refine ⟨_, _, rfl, fun rs => ?_⟩
+       rw [stExceptUndef_bind_apply, stExceptUndef_bind_apply,
+         mapM_eval1_fail (tds := tds) (σ := σ) (file := file)
+           _ ?_ [pe1, pe2] hp hdp hf rs] <;>
+         first
+           | (intro pe rs'
+              rfl)
+           | (cases fl <;> (try (loc_split an)) <;> rfl))
+  obtain ⟨s, m, hh, hrest⟩ := key
+  obtain ⟨post, hpost⟩ := cons_of_head? hh
+  exact ⟨s, m, post, hpost, hrest⟩
 
 /-- … the kill face (E1's statement). -/
 theorem step_ctx_memop_eval_kill {an : List _root_.annot} {e : CoreExpr} {ctx : context}
@@ -4461,9 +4754,9 @@ theorem step_ctx_memop_eval_kill {an : List _root_.annot} {e : CoreExpr} {ctx : 
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = e)
     (hk : evalClassList tds th.current_loc ext file th.env [pe1, pe2] = .kill err) :
-    ∃ (s : String) (m : core_runM thread_state),
+    ∃ (s : String) (m : core_runM thread_state) (post : List core_step2),
       step_ctx tds σ file ext tid (parent, th) =
-        [Step_with_runstate2 (RSK_eval s) m] ∧
+        Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, m rs = Exception err :=
   step_ctx_memop_eval_fail hd hsz hnv hp1 hp2 hd1 hd2 tds σ file ext tid parent th harena (fl := .kill err) (by rw [hk]; rfl)
 
@@ -4487,27 +4780,36 @@ theorem step_ctx_create_eval_ws' {an : List _root_.annot} {e : CoreExpr} {ctx : 
     (harena : th.arena = e)
     (hv1 : evalPexpr tds ext file th.env pe1 = some v1)
     (hv2 : evalPexpr tds ext file th.env pe2 = some v2) :
-    ∃ (s : String) (m : core_runM thread_state),
+    ∃ (s : String) (m : core_runM thread_state) (post : List core_step2),
       step_ctx tds σ file ext tid (parent, th) =
-        [Step_with_runstate2 (RSK_eval s) m] ∧
+        Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, m rs = Result (Defined { locUpdTh an th with
         arena := apply_ctx ctx (Expr an (Eaction (Paction polarity.Pos (Action loc ann
           (Create (Pexpr [] () (PEval v1)) (Pexpr [] () (PEval v2)) pref))))) }, rs) := by
-  have hget : get_ctx th.arena = [(ctx, createOpRedex an loc ann pe1 pe2 pref)] := by
+  obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, createOpRedex an loc ann pe1 pe2 pref) :: rest := by
     rw [harena]; exact hd.get_ctx_default hsz
-  unfold step_ctx
-  dsimp only
-  rw [hget]
-  simp only [List.map_cons, List.map_nil]
-  unfold createOpRedex
-  cases ctx <;>
-    (dsimp only
-     rw [step_action_create_eval (act_none_of_pair hp1 hp2 hnv)]
-     refine ⟨_, _, rfl, fun rs => ?_⟩
-     rw [full_eval_bridge hv1 hd1 σ, full_eval_bridge hv2 hd2 σ]
-     dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
-       return1, except_return]
-     rfl)
+  have key : ∃ (s : String) (m : core_runM thread_state),
+      (step_ctx tds σ file ext tid (parent, th)).head? =
+        some (Step_with_runstate2 (RSK_eval s) m) ∧
+      ∀ rs, m rs = Result (Defined { locUpdTh an th with
+        arena := apply_ctx ctx (Expr an (Eaction (Paction polarity.Pos (Action loc ann
+          (Create (Pexpr [] () (PEval v1)) (Pexpr [] () (PEval v2)) pref))))) }, rs) := by
+    unfold step_ctx
+    dsimp only
+    rw [hget]
+    simp only [List.map_cons, List.head?_cons]
+    unfold createOpRedex
+    cases ctx <;>
+      (dsimp only
+       rw [step_action_create_eval (act_none_of_pair hp1 hp2 hnv)]
+       refine ⟨_, _, rfl, fun rs => ?_⟩
+       rw [full_eval_bridge hv1 hd1 σ, full_eval_bridge hv2 hd2 σ]
+       dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+         return1, except_return]
+       rfl)
+  obtain ⟨s, m, hh, hrest⟩ := key
+  obtain ⟨post, hpost⟩ := cons_of_head? hh
+  exact ⟨s, m, post, hpost, hrest⟩
 
 /-- Create ACTION_EVAL (E1): the engine's step is ONE `RSK_eval` with-runstate
     step whatever the operands evaluate to (shape only). -/
@@ -4522,20 +4824,26 @@ theorem step_ctx_create_eval_shape {an : List _root_.annot} {e : CoreExpr} {ctx 
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = e) :
-    ∃ (s : String) (m : core_runM thread_state),
+    ∃ (s : String) (m : core_runM thread_state) (post : List core_step2),
       step_ctx tds σ file ext tid (parent, th) =
-        [Step_with_runstate2 (RSK_eval s) m] := by
-  have hget : get_ctx th.arena = [(ctx, createOpRedex an loc ann pe1 pe2 pref)] := by
+        Step_with_runstate2 (RSK_eval s) m :: post := by
+  obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, createOpRedex an loc ann pe1 pe2 pref) :: rest := by
     rw [harena]; exact hd.get_ctx_default hsz
-  unfold step_ctx
-  dsimp only
-  rw [hget]
-  simp only [List.map_cons, List.map_nil]
-  unfold createOpRedex
-  cases ctx <;>
-    (dsimp only
-     rw [step_action_create_eval (act_none_of_pair hp1 hp2 hnv)]
-     exact ⟨_, _, rfl⟩)
+  have key : ∃ (s : String) (m : core_runM thread_state),
+      (step_ctx tds σ file ext tid (parent, th)).head? =
+        some (Step_with_runstate2 (RSK_eval s) m) := by
+    unfold step_ctx
+    dsimp only
+    rw [hget]
+    simp only [List.map_cons, List.head?_cons]
+    unfold createOpRedex
+    cases ctx <;>
+      (dsimp only
+       rw [step_action_create_eval (act_none_of_pair hp1 hp2 hnv)]
+       exact ⟨_, _, rfl⟩)
+  obtain ⟨s, m, hh⟩ := key
+  obtain ⟨post, hpost⟩ := cons_of_head? hh
+  exact ⟨s, m, post, hpost⟩
 
 /-- The create twin (E1): `[Step_error2 "Create"]` (step_action's
     Create arm, `some _, some _ => ACTION_ILLTYPED "Create"`) at an evaluated
@@ -4550,14 +4858,15 @@ theorem step_ctx_create_illtyped' {an : List _root_.annot} {e : CoreExpr} {ctx :
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = apply_ctx ctx (Expr an (Eaction (Paction polarity.Pos
       (Action loc ann (Create (Pexpr [] () (PEval v1)) (Pexpr [] () (PEval v2)) pref)))))) :
-    step_ctx tds σ file ext tid (parent, th) = [Step_error2 "Create"] := by
-  have hget : get_ctx th.arena = [(ctx, Expr an (Eaction (Paction polarity.Pos
-      (Action loc ann (Create (Pexpr [] () (PEval v1)) (Pexpr [] () (PEval v2)) pref)))))] := by
+    ∃ post, step_ctx tds σ file ext tid (parent, th) = Step_error2 "Create" :: post := by
+  obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, Expr an (Eaction (Paction polarity.Pos
+      (Action loc ann (Create (Pexpr [] () (PEval v1)) (Pexpr [] () (PEval v2)) pref))))) :: rest := by
     rw [harena]; exact hd.get_ctx_rebuild_action an _ lemDefaultFuel hsz
   unfold step_ctx
   dsimp only
   rw [hget]
-  simp only [List.map_cons, List.map_nil]
+  simp only [List.map_cons]
+  refine ⟨_, List.cons_eq_cons.mpr ⟨?_, rfl⟩⟩
   rcases v1 with ov1 | lv1 | _ | _ | _ | _ | ⟨_, _⟩ | _ <;> (try (cases ov1)) <;>
     cases ctx <;>
       (dsimp only [step_action]
@@ -4590,26 +4899,33 @@ theorem step_ctx_create_eval_fail1 {an : List _root_.annot} {e : CoreExpr} {ctx 
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = e)
     (hf : (evalClass tds th.current_loc ext file th.env pe1).fail? = some fl) :
-    ∃ (s : String) (m : core_runM thread_state),
+    ∃ (s : String) (m : core_runM thread_state) (post : List core_step2),
       step_ctx tds σ file ext tid (parent, th) =
-        [Step_with_runstate2 (RSK_eval s) m] ∧
+        Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, m rs = fl.run thread_state core_run_state rs := by
-  have hget : get_ctx th.arena = [(ctx, createOpRedex an loc ann pe1 pe2 pref)] := by
+  obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, createOpRedex an loc ann pe1 pe2 pref) :: rest := by
     rw [harena]; exact hd.get_ctx_default hsz
-  unfold step_ctx
-  dsimp only
-  rw [hget]
-  simp only [List.map_cons, List.map_nil]
-  unfold createOpRedex
-  cases ctx <;>
-    (dsimp only
-     rw [step_action_create_eval (act_none_of_pair hp1 hp2 hnv)]
-     refine ⟨_, _, rfl, fun rs => ?_⟩
-     rw [full_eval_bridge_fail hp1 hf hd1 σ]
-     cases fl <;>
-       (dsimp only [EvalFail.run, stExceptUndef_bind, stExceptUndef_return, stExpect_return,
-          return1, except_return]
-        rfl))
+  have key : ∃ (s : String) (m : core_runM thread_state),
+      (step_ctx tds σ file ext tid (parent, th)).head? =
+        some (Step_with_runstate2 (RSK_eval s) m) ∧
+      ∀ rs, m rs = fl.run thread_state core_run_state rs := by
+    unfold step_ctx
+    dsimp only
+    rw [hget]
+    simp only [List.map_cons, List.head?_cons]
+    unfold createOpRedex
+    cases ctx <;>
+      (dsimp only
+       rw [step_action_create_eval (act_none_of_pair hp1 hp2 hnv)]
+       refine ⟨_, _, rfl, fun rs => ?_⟩
+       rw [full_eval_bridge_fail hp1 hf hd1 σ]
+       cases fl <;>
+         (dsimp only [EvalFail.run, stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+            return1, except_return]
+          rfl))
+  obtain ⟨s, m, hh, hrest⟩ := key
+  obtain ⟨post, hpost⟩ := cons_of_head? hh
+  exact ⟨s, m, post, hpost, hrest⟩
 
 /-- … the kill face (E1's statement). -/
 theorem step_ctx_create_eval_kill1 {an : List _root_.annot} {e : CoreExpr} {ctx : context}
@@ -4625,9 +4941,9 @@ theorem step_ctx_create_eval_kill1 {an : List _root_.annot} {e : CoreExpr} {ctx 
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = e)
     (hk : evalClass tds th.current_loc ext file th.env pe1 = .kill err) :
-    ∃ (s : String) (m : core_runM thread_state),
+    ∃ (s : String) (m : core_runM thread_state) (post : List core_step2),
       step_ctx tds σ file ext tid (parent, th) =
-        [Step_with_runstate2 (RSK_eval s) m] ∧
+        Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, m rs = Exception err :=
   step_ctx_create_eval_fail1 hd hsz hnv hp1 hp2 hd1 tds σ file ext tid parent th harena (fl := .kill err) (by rw [hk]; rfl)
 
@@ -4649,26 +4965,33 @@ theorem step_ctx_create_eval_fail2 {an : List _root_.annot} {e : CoreExpr} {ctx 
     (harena : th.arena = e)
     (hv1 : evalPexpr tds ext file th.env pe1 = some v1)
     (hf : (evalClass tds th.current_loc ext file th.env pe2).fail? = some fl) :
-    ∃ (s : String) (m : core_runM thread_state),
+    ∃ (s : String) (m : core_runM thread_state) (post : List core_step2),
       step_ctx tds σ file ext tid (parent, th) =
-        [Step_with_runstate2 (RSK_eval s) m] ∧
+        Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, m rs = fl.run thread_state core_run_state rs := by
-  have hget : get_ctx th.arena = [(ctx, createOpRedex an loc ann pe1 pe2 pref)] := by
+  obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, createOpRedex an loc ann pe1 pe2 pref) :: rest := by
     rw [harena]; exact hd.get_ctx_default hsz
-  unfold step_ctx
-  dsimp only
-  rw [hget]
-  simp only [List.map_cons, List.map_nil]
-  unfold createOpRedex
-  cases ctx <;>
-    (dsimp only
-     rw [step_action_create_eval (act_none_of_pair hp1 hp2 hnv)]
-     refine ⟨_, _, rfl, fun rs => ?_⟩
-     rw [full_eval_bridge hv1 hd1 σ, full_eval_bridge_fail hp2 hf hd2 σ]
-     cases fl <;>
-       (dsimp only [EvalFail.run, stExceptUndef_bind, stExceptUndef_return, stExpect_return,
-          return1, except_return]
-        rfl))
+  have key : ∃ (s : String) (m : core_runM thread_state),
+      (step_ctx tds σ file ext tid (parent, th)).head? =
+        some (Step_with_runstate2 (RSK_eval s) m) ∧
+      ∀ rs, m rs = fl.run thread_state core_run_state rs := by
+    unfold step_ctx
+    dsimp only
+    rw [hget]
+    simp only [List.map_cons, List.head?_cons]
+    unfold createOpRedex
+    cases ctx <;>
+      (dsimp only
+       rw [step_action_create_eval (act_none_of_pair hp1 hp2 hnv)]
+       refine ⟨_, _, rfl, fun rs => ?_⟩
+       rw [full_eval_bridge hv1 hd1 σ, full_eval_bridge_fail hp2 hf hd2 σ]
+       cases fl <;>
+         (dsimp only [EvalFail.run, stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+            return1, except_return]
+          rfl))
+  obtain ⟨s, m, hh, hrest⟩ := key
+  obtain ⟨post, hpost⟩ := cons_of_head? hh
+  exact ⟨s, m, post, hpost, hrest⟩
 
 /-- … the kill face (E1's statement). -/
 theorem step_ctx_create_eval_kill2 {an : List _root_.annot} {e : CoreExpr} {ctx : context}
@@ -4687,9 +5010,9 @@ theorem step_ctx_create_eval_kill2 {an : List _root_.annot} {e : CoreExpr} {ctx 
     (harena : th.arena = e)
     (hv1 : evalPexpr tds ext file th.env pe1 = some v1)
     (hk : evalClass tds th.current_loc ext file th.env pe2 = .kill err) :
-    ∃ (s : String) (m : core_runM thread_state),
+    ∃ (s : String) (m : core_runM thread_state) (post : List core_step2),
       step_ctx tds σ file ext tid (parent, th) =
-        [Step_with_runstate2 (RSK_eval s) m] ∧
+        Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, m rs = Exception err :=
   step_ctx_create_eval_fail2 hd hsz hnv hp1 hp2 hd1 hd2 tds σ file ext tid parent th harena hv1 (fl := .kill err) (by rw [hk]; rfl)
 
@@ -4724,28 +5047,28 @@ theorem complete_if {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ct
       · exact absurd heq (hnr an' ra l pes)
       · cases hceq
     have hshape : ∀ dst, M.Embeds dst (e, ρ, ctl, σ) →
-        ∃ (rsk : runstate_step_kind) (m : core_runM thread_state),
+        ∃ (rsk : runstate_step_kind) (m : core_runM thread_state) (post : List core_step2),
         step_ctx M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid
-          (M.parent, M.thread e ρ ctl) = [Step_with_runstate2 rsk m] := by
+          (M.parent, M.thread e ρ ctl) = Step_with_runstate2 rsk m :: post := by
       intro dst hemb
       obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
-      obtain ⟨s, m, hsteps⟩ := step_ctx_if_shape hd hsz M.tagDefs dst.layout_state
+      obtain ⟨s, m, post, hsteps⟩ := step_ctx_if_shape hd hsz M.tagDefs dst.layout_state
         dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
-      exact ⟨_, _, hsteps⟩
+      exact ⟨_, _, _, hsteps⟩
     rcases evalClass_of_none ctl.curLoc M.file hg with ⟨fl, hf⟩ | hu
     · refine .inr (.inl (.killed fl.reason ?_))
       intro dst hemb
       obtain ⟨-, hlay, hfile, hext, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
-      obtain ⟨s, m, hsteps, hm⟩ := step_ctx_if_fail hd hsz hpg hdg M.tagDefs
+      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_if_fail hd hsz hpg hdg M.tagDefs
         dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
         (by rw [hext, hfile]; exact hf)
       obtain ⟨dst', hadv⟩ := advance_withrs_failed_tau M.tagDefs M.tid s m
         (hm dst.core_run_state0)
-      exact ⟨_, dst', hsteps, rfl, hadv⟩
+      exact ⟨_, _, dst', hsteps, rfl, hadv⟩
     · exact .inr (.inr (.eval_uncovered g hstuck
         (by rw [hd.operandsOf_eq]; exact List.mem_singleton.mpr rfl) hpg hu hshape))
   | some v =>
@@ -4760,11 +5083,11 @@ theorem complete_if {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ct
         obtain ⟨-, hlay, hfile, hext, -, -, -⟩ := hemb
         simp only at hlay
         subst hlay
-        obtain ⟨s, m, inst, step_m, k, msg, hsteps, hm, hpan⟩ :=
+        obtain ⟨s, m, inst, step_m, k, msg, post, hsteps, hm, hpan⟩ :=
           step_ctx_if_panic hd hsz hdg M.tagDefs dst.layout_state dst.core_file
             dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
             (by rw [hext, hfile]; exact hg) hvt hvf
-        exact ⟨_, _, _, inst, step_m, k, msg, hsteps, hm, hpan dst.core_run_state0⟩
+        exact ⟨_, _, _, inst, step_m, k, msg, _, hsteps, hm, hpan dst.core_run_state0⟩
 
 /-- Erun at a context with a current procedure: a registered label with
     evaluable arguments is the mirror step (the context is discarded);
@@ -4796,16 +5119,16 @@ theorem complete_run {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {c
         rw [hvs] at hvs'
         cases hvs'
       have hshape : ∀ dst, M.Embeds dst (e, ev0 :: evs, ctl, σ) →
-          ∃ (rsk : runstate_step_kind) (m : core_runM thread_state),
+          ∃ (rsk : runstate_step_kind) (m : core_runM thread_state) (post : List core_step2),
           step_ctx M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid
-            (M.parent, M.thread e (ev0 :: evs) ctl) = [Step_with_runstate2 rsk m] := by
+            (M.parent, M.thread e (ev0 :: evs) ctl) = Step_with_runstate2 rsk m :: post := by
         intro dst hemb
         obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
         simp only at hlay
         subst hlay
-        obtain ⟨s, m, hsteps⟩ := step_ctx_run_shape hd hsz M.tagDefs dst.layout_state
+        obtain ⟨s, m, post, hsteps⟩ := step_ctx_run_shape hd hsz M.tagDefs dst.layout_state
           dst.core_file dst.core_extern M.tid M.parent (M.thread _ _ ctl) rfl
-        exact ⟨_, _, hsteps⟩
+        exact ⟨_, _, _, hsteps⟩
       have hfail : ∀ (fl : EvalFail),
           (evalClassFold M.tagDefs ctl.curLoc M.extern M.file (ev0 :: evs)
             (zipArgs params pes)).fail? = some fl →
@@ -4818,12 +5141,12 @@ theorem complete_run {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {c
         obtain ⟨-, hlay, hfile, hext, hlabd, -, -⟩ := hemb
         simp only at hlay
         subst hlay
-        obtain ⟨s, m, hsteps, hm⟩ := step_ctx_run_fail hd hsz hl hpes hdep M.tagDefs
+        obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_run_fail hd hsz hl hpes hdep M.tagDefs
           dst.layout_state dst.core_file dst.core_extern M.tid M.parent p
           (M.thread _ _ ctl) rfl hproc (by rw [hext, hfile]; exact hf)
         obtain ⟨dst', hadv⟩ := advance_withrs_failed_eval M.tagDefs M.tid s m
           (hm dst.core_run_state0 (by unfold LabeledAt; rw [hext, hlabd]; exact hQ))
-        exact ⟨_, dst', hsteps, rfl, hadv⟩
+        exact ⟨_, _, dst', hsteps, rfl, hadv⟩
       cases hcl : evalClassFold M.tagDefs ctl.curLoc M.extern M.file (ev0 :: evs)
           (zipArgs params pes) with
       | kill err => exact hfail _ (by rw [hcl]; rfl)
@@ -4859,10 +5182,10 @@ theorem complete_run {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {c
         rw [show resolveExtern M.extern p = M.resolveProc p from rfl, hQ, bind0_some]
         rw [show (M.labelsAt ctl.proc) = Q from hlab] at hl
         exact hl
-    obtain ⟨s, m, inst, msg, hsteps, hpan⟩ := step_ctx_run_unresolved hd hsz M.tagDefs
+    obtain ⟨s, m, inst, msg, post, hsteps, hpan⟩ := step_ctx_run_unresolved hd hsz M.tagDefs
       dst.layout_state dst.core_file dst.core_extern M.tid M.parent p (M.thread _ _ ctl) rfl
       hproc dst.core_run_state0 hnone
-    exact ⟨_, _, _, inst, m, (fun z => stExceptUndef_return z), msg, hsteps,
+    exact ⟨_, _, _, inst, m, (fun z => stExceptUndef_return z), msg, _, hsteps,
       (stExceptUndef_bind_return_right m).symm, hpan⟩
 
 /-- Esave: value initializers are the entry step, evaluable initializers
@@ -4905,28 +5228,28 @@ theorem complete_save {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {
         · exact absurd heq (hnr an' ra l pes)
         · cases hceq
       have hshape : ∀ dst, M.Embeds dst (e, ev0 :: evs, ctl, σ) →
-          ∃ (rsk : runstate_step_kind) (m : core_runM thread_state),
+          ∃ (rsk : runstate_step_kind) (m : core_runM thread_state) (post : List core_step2),
           step_ctx M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid
-            (M.parent, M.thread e (ev0 :: evs) ctl) = [Step_with_runstate2 rsk m] := by
+            (M.parent, M.thread e (ev0 :: evs) ctl) = Step_with_runstate2 rsk m :: post := by
         intro dst hemb
         obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
         simp only at hlay
         subst hlay
-        obtain ⟨s, m, hsteps⟩ := step_ctx_save_eval_shape hd hsz hvals M.tagDefs
+        obtain ⟨s, m, post, hsteps⟩ := step_ctx_save_eval_shape hd hsz hvals M.tagDefs
           dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ _ ctl) rfl
-        exact ⟨_, _, hsteps⟩
+        exact ⟨_, _, _, hsteps⟩
       rcases evalClassList_of_none ctl.curLoc M.file hev with ⟨fl, hf⟩ | ⟨pe, hu⟩
       · refine .inr (.inl (.killed fl.reason ?_))
         intro dst hemb
         obtain ⟨-, hlay, hfile, hext, -, -, -⟩ := hemb
         simp only at hlay
         subst hlay
-        obtain ⟨s, m, hsteps, hm⟩ := step_ctx_save_eval_fail hd hsz hvals hp hdep M.tagDefs
+        obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_save_eval_fail hd hsz hvals hp hdep M.tagDefs
           dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ _ ctl) rfl
           (by rw [hext, hfile]; exact hf)
         obtain ⟨dst', hadv⟩ := advance_withrs_failed_eval M.tagDefs M.tid s m
           (hm dst.core_run_state0)
-        exact ⟨_, dst', hsteps, rfl, hadv⟩
+        exact ⟨_, _, dst', hsteps, rfl, hadv⟩
       · obtain ⟨hmem, hu'⟩ := evalClassList_uncovered hu
         exact .inr (.inr (.eval_uncovered pe hstuck
           (by rw [hd.operandsOf_eq]; exact hmem) (hp pe hmem) hu' hshape))
@@ -4962,28 +5285,28 @@ theorem complete_pure_op {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr
       · exact absurd heq (hnr an' ra l pes)
       · cases hceq
     have hshape : ∀ dst, M.Embeds dst (e, ρ, ctl, σ) →
-        ∃ (rsk : runstate_step_kind) (m : core_runM thread_state),
+        ∃ (rsk : runstate_step_kind) (m : core_runM thread_state) (post : List core_step2),
         step_ctx M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid
-          (M.parent, M.thread e ρ ctl) = [Step_with_runstate2 rsk m] := by
+          (M.parent, M.thread e ρ ctl) = Step_with_runstate2 rsk m :: post := by
       intro dst hemb
       obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
-      obtain ⟨s, m, hsteps⟩ := step_ctx_pure_op_shape hd hsz hnv M.tagDefs
+      obtain ⟨s, m, post, hsteps⟩ := step_ctx_pure_op_shape hd hsz hnv M.tagDefs
         dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
-      exact ⟨_, _, hsteps⟩
+      exact ⟨_, _, _, hsteps⟩
     rcases evalClass_of_none ctl.curLoc M.file hv with ⟨fl, hf⟩ | hu
     · refine .inr (.inl (.killed fl.reason ?_))
       intro dst hemb
       obtain ⟨-, hlay, hfile, hext, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
-      obtain ⟨s, m, hsteps, hm⟩ := step_ctx_pure_op_fail hd hsz hnv hp hdp M.tagDefs
+      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_pure_op_fail hd hsz hnv hp hdp M.tagDefs
         dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
         (by rw [hext, hfile]; exact hf)
       obtain ⟨dst', hadv⟩ := advance_withrs_failed_eval M.tagDefs M.tid s m
         (hm dst.core_run_state0)
-      exact ⟨_, dst', hsteps, rfl, hadv⟩
+      exact ⟨_, _, dst', hsteps, rfl, hadv⟩
     · exact .inr (.inr (.eval_uncovered pe hstuck
         (by rw [hd.operandsOf_eq]; exact List.mem_singleton.mpr rfl) hp hu hshape))
 
@@ -5031,28 +5354,28 @@ theorem complete_load_op {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr
       · exact absurd heq (hnr an' ra l pes)
       · cases hceq
     have hshape : ∀ dst, M.Embeds dst (e, ρ, ctl, σ) →
-        ∃ (rsk : runstate_step_kind) (m : core_runM thread_state),
+        ∃ (rsk : runstate_step_kind) (m : core_runM thread_state) (post : List core_step2),
         step_ctx M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid
-          (M.parent, M.thread e ρ ctl) = [Step_with_runstate2 rsk m] := by
+          (M.parent, M.thread e ρ ctl) = Step_with_runstate2 rsk m :: post := by
       intro dst hemb
       obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
-      obtain ⟨s, m, hsteps⟩ := step_ctx_load_eval_shape hd hsz hnv2 hp2 M.tagDefs
+      obtain ⟨s, m, post, hsteps⟩ := step_ctx_load_eval_shape hd hsz hnv2 hp2 M.tagDefs
         dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
-      exact ⟨_, _, hsteps⟩
+      exact ⟨_, _, _, hsteps⟩
     rcases evalClass_of_none ctl.curLoc M.file hv2 with ⟨fl, hf⟩ | hu
     · refine .inr (.inl (.killed fl.reason ?_))
       intro dst hemb
       obtain ⟨-, hlay, hfile, hext, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
-      obtain ⟨s, m, hsteps, hm⟩ := step_ctx_load_eval_fail hd hsz hnv2 hp2 hd2 M.tagDefs
+      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_load_eval_fail hd hsz hnv2 hp2 hd2 M.tagDefs
         dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
         (by rw [hext, hfile]; exact hf)
       obtain ⟨dst', hadv⟩ := advance_withrs_failed_eval M.tagDefs M.tid s m
         (hm dst.core_run_state0)
-      exact ⟨_, dst', hsteps, rfl, hadv⟩
+      exact ⟨_, _, dst', hsteps, rfl, hadv⟩
     · exact .inr (.inr (.eval_uncovered pe2 hstuck
         (by rw [hd.operandsOf_eq]; exact List.mem_singleton.mpr rfl) hp2 hu hshape))
   | some v =>
@@ -5070,11 +5393,11 @@ theorem complete_load_op {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr
         obtain ⟨-, hlay, hfile, hext, -, hsym, hexc⟩ := hemb
         simp only at hlay hsym hexc
         subst hlay
-        obtain ⟨s, m, hsteps, hm⟩ := step_ctx_load_eval_ws' hd hsz hnv2 hp2 hd2
+        obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_load_eval_ws' hd hsz hnv2 hp2 hd2
           M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
           (M.thread _ ρ ctl) rfl (by rw [hext, hfile]; exact hv2)
         rw [MachineCtx.locUpdTh_thread] at hm
-        refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace,
+        refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace,
           dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
         exact advance_withrs_eval M.tagDefs M.tid s m (hm dst.core_run_state0)
       · intro dst hemb
@@ -5118,28 +5441,28 @@ theorem complete_kill_op {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr
       · exact absurd heq (hnr an' ra l pes)
       · cases hceq
     have hshape : ∀ dst, M.Embeds dst (e, ρ, ctl, σ) →
-        ∃ (rsk : runstate_step_kind) (m : core_runM thread_state),
+        ∃ (rsk : runstate_step_kind) (m : core_runM thread_state) (post : List core_step2),
         step_ctx M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid
-          (M.parent, M.thread e ρ ctl) = [Step_with_runstate2 rsk m] := by
+          (M.parent, M.thread e ρ ctl) = Step_with_runstate2 rsk m :: post := by
       intro dst hemb
       obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
-      obtain ⟨s, m, hsteps⟩ := step_ctx_kill_eval_shape hd hsz hnv hp M.tagDefs
+      obtain ⟨s, m, post, hsteps⟩ := step_ctx_kill_eval_shape hd hsz hnv hp M.tagDefs
         dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
-      exact ⟨_, _, hsteps⟩
+      exact ⟨_, _, _, hsteps⟩
     rcases evalClass_of_none ctl.curLoc M.file hv with ⟨fl, hf⟩ | hu
     · refine .inr (.inl (.killed fl.reason ?_))
       intro dst hemb
       obtain ⟨-, hlay, hfile, hext, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
-      obtain ⟨s, m, hsteps, hm⟩ := step_ctx_kill_eval_fail hd hsz hnv hp hdp M.tagDefs
+      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_kill_eval_fail hd hsz hnv hp hdp M.tagDefs
         dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
         (by rw [hext, hfile]; exact hf)
       obtain ⟨dst', hadv⟩ := advance_withrs_failed_eval M.tagDefs M.tid s m
         (hm dst.core_run_state0)
-      exact ⟨_, dst', hsteps, rfl, hadv⟩
+      exact ⟨_, _, dst', hsteps, rfl, hadv⟩
     · exact .inr (.inr (.eval_uncovered pe hstuck
         (by rw [hd.operandsOf_eq]; exact List.mem_singleton.mpr rfl) hp hu hshape))
   | some v =>
@@ -5157,11 +5480,11 @@ theorem complete_kill_op {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr
         obtain ⟨-, hlay, hfile, hext, -, hsym, hexc⟩ := hemb
         simp only at hlay hsym hexc
         subst hlay
-        obtain ⟨s, m, hsteps, hm⟩ := step_ctx_kill_eval_ws' hd hsz hnv hp hdp
+        obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_kill_eval_ws' hd hsz hnv hp hdp
           M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
           (M.thread _ ρ ctl) rfl (by rw [hext, hfile]; exact hv)
         rw [MachineCtx.locUpdTh_thread] at hm
-        refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace,
+        refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace,
           dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
         exact advance_withrs_eval M.tagDefs M.tid s m (hm dst.core_run_state0)
       · intro dst hemb
@@ -5197,16 +5520,16 @@ theorem complete_alloc_op {an : List _root_.annot} {M : MachineCtx} {e : CoreExp
       allocOpRedex an loc ann pe1 pe2 pref ≠ callRedex an' ra f pes := by
     intro an' ra f pes h; cases h
   have hshape : ∀ dst, M.Embeds dst (e, ρ, ctl, σ) →
-      ∃ (rsk : runstate_step_kind) (m : core_runM thread_state),
+      ∃ (rsk : runstate_step_kind) (m : core_runM thread_state) (post : List core_step2),
       step_ctx M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid
-        (M.parent, M.thread e ρ ctl) = [Step_with_runstate2 rsk m] := by
+        (M.parent, M.thread e ρ ctl) = Step_with_runstate2 rsk m :: post := by
     intro dst hemb
     obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
     simp only at hlay
     subst hlay
-    obtain ⟨s, m, hsteps⟩ := step_ctx_alloc_eval_shape hd hsz hnv hp1 hp2 M.tagDefs
+    obtain ⟨s, m, post, hsteps⟩ := step_ctx_alloc_eval_shape hd hsz hnv hp1 hp2 M.tagDefs
       dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
-    exact ⟨_, _, hsteps⟩
+    exact ⟨_, _, _, hsteps⟩
   cases hv1 : evalPexpr M.tagDefs M.extern M.file ρ pe1 with
   | none =>
     have hstuck : ∀ c'', ¬ Step M (e, ρ, ctl, σ) c'' := by
@@ -5223,12 +5546,12 @@ theorem complete_alloc_op {an : List _root_.annot} {M : MachineCtx} {e : CoreExp
       obtain ⟨-, hlay, hfile, hext, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
-      obtain ⟨s, m, hsteps, hm⟩ := step_ctx_alloc_eval_fail1 hd hsz hnv hp1 hp2 hd1
+      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_alloc_eval_fail1 hd hsz hnv hp1 hp2 hd1
         M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
         (M.thread _ ρ ctl) rfl (by rw [hext, hfile]; exact hf)
       obtain ⟨dst', hadv⟩ := advance_withrs_failed_eval M.tagDefs M.tid s m
         (hm dst.core_run_state0)
-      exact ⟨_, dst', hsteps, rfl, hadv⟩
+      exact ⟨_, _, dst', hsteps, rfl, hadv⟩
     · exact .inr (.inr (.eval_uncovered pe1 hstuck
         (by rw [hd.operandsOf_eq]; exact List.mem_cons_self ..) hp1 hu hshape))
   | some v1 =>
@@ -5248,12 +5571,12 @@ theorem complete_alloc_op {an : List _root_.annot} {M : MachineCtx} {e : CoreExp
         obtain ⟨-, hlay, hfile, hext, -, -, -⟩ := hemb
         simp only at hlay
         subst hlay
-        obtain ⟨s, m, hsteps, hm⟩ := step_ctx_alloc_eval_fail2 hd hsz hnv hp1 hp2 hd1 hd2
+        obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_alloc_eval_fail2 hd hsz hnv hp1 hp2 hd1 hd2
           M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
           (M.thread _ ρ ctl) rfl (by rw [hext, hfile]; exact hv1) (by rw [hext, hfile]; exact hf)
         obtain ⟨dst', hadv⟩ := advance_withrs_failed_eval M.tagDefs M.tid s m
           (hm dst.core_run_state0)
-        exact ⟨_, dst', hsteps, rfl, hadv⟩
+        exact ⟨_, _, dst', hsteps, rfl, hadv⟩
       · exact .inr (.inr (.eval_uncovered pe2 hstuck
           (by rw [hd.operandsOf_eq]; exact List.mem_cons_of_mem _ (List.mem_singleton.mpr rfl))
           hp2 hu hshape))
@@ -5272,11 +5595,11 @@ theorem complete_alloc_op {an : List _root_.annot} {M : MachineCtx} {e : CoreExp
           obtain ⟨-, hlay, hfile, hext, -, hsym, hexc⟩ := hemb
           simp only at hlay hsym hexc
           subst hlay
-          obtain ⟨s, m, hsteps, hm⟩ := step_ctx_alloc_eval_ws' hd hsz hnv hp1 hp2 hd1 hd2
+          obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_alloc_eval_ws' hd hsz hnv hp1 hp2 hd1 hd2
             M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
             (M.thread _ ρ ctl) rfl (by rw [hext, hfile]; exact hv1) (by rw [hext, hfile]; exact hv2)
           rw [MachineCtx.locUpdTh_thread] at hm
-          refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace,
+          refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace,
             dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
           exact advance_withrs_eval M.tagDefs M.tid s m (hm dst.core_run_state0)
         · intro dst hemb
@@ -5312,16 +5635,16 @@ theorem complete_create_op {an : List _root_.annot} {M : MachineCtx} {e : CoreEx
       createOpRedex an loc ann pe1 pe2 pref ≠ callRedex an' ra f pes := by
     intro an' ra f pes h; cases h
   have hshape : ∀ dst, M.Embeds dst (e, ρ, ctl, σ) →
-      ∃ (rsk : runstate_step_kind) (m : core_runM thread_state),
+      ∃ (rsk : runstate_step_kind) (m : core_runM thread_state) (post : List core_step2),
       step_ctx M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid
-        (M.parent, M.thread e ρ ctl) = [Step_with_runstate2 rsk m] := by
+        (M.parent, M.thread e ρ ctl) = Step_with_runstate2 rsk m :: post := by
     intro dst hemb
     obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
     simp only at hlay
     subst hlay
-    obtain ⟨s, m, hsteps⟩ := step_ctx_create_eval_shape hd hsz hnv hp1 hp2 M.tagDefs
+    obtain ⟨s, m, post, hsteps⟩ := step_ctx_create_eval_shape hd hsz hnv hp1 hp2 M.tagDefs
       dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
-    exact ⟨_, _, hsteps⟩
+    exact ⟨_, _, _, hsteps⟩
   cases hv1 : evalPexpr M.tagDefs M.extern M.file ρ pe1 with
   | none =>
     have hstuck : ∀ c'', ¬ Step M (e, ρ, ctl, σ) c'' := by
@@ -5338,12 +5661,12 @@ theorem complete_create_op {an : List _root_.annot} {M : MachineCtx} {e : CoreEx
       obtain ⟨-, hlay, hfile, hext, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
-      obtain ⟨s, m, hsteps, hm⟩ := step_ctx_create_eval_fail1 hd hsz hnv hp1 hp2 hd1
+      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_create_eval_fail1 hd hsz hnv hp1 hp2 hd1
         M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
         (M.thread _ ρ ctl) rfl (by rw [hext, hfile]; exact hf)
       obtain ⟨dst', hadv⟩ := advance_withrs_failed_eval M.tagDefs M.tid s m
         (hm dst.core_run_state0)
-      exact ⟨_, dst', hsteps, rfl, hadv⟩
+      exact ⟨_, _, dst', hsteps, rfl, hadv⟩
     · exact .inr (.inr (.eval_uncovered pe1 hstuck
         (by rw [hd.operandsOf_eq]; exact List.mem_cons_self ..) hp1 hu hshape))
   | some v1 =>
@@ -5363,12 +5686,12 @@ theorem complete_create_op {an : List _root_.annot} {M : MachineCtx} {e : CoreEx
         obtain ⟨-, hlay, hfile, hext, -, -, -⟩ := hemb
         simp only at hlay
         subst hlay
-        obtain ⟨s, m, hsteps, hm⟩ := step_ctx_create_eval_fail2 hd hsz hnv hp1 hp2 hd1 hd2
+        obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_create_eval_fail2 hd hsz hnv hp1 hp2 hd1 hd2
           M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
           (M.thread _ ρ ctl) rfl (by rw [hext, hfile]; exact hv1) (by rw [hext, hfile]; exact hf)
         obtain ⟨dst', hadv⟩ := advance_withrs_failed_eval M.tagDefs M.tid s m
           (hm dst.core_run_state0)
-        exact ⟨_, dst', hsteps, rfl, hadv⟩
+        exact ⟨_, _, dst', hsteps, rfl, hadv⟩
       · exact .inr (.inr (.eval_uncovered pe2 hstuck
           (by rw [hd.operandsOf_eq]; exact List.mem_cons_of_mem _ (List.mem_singleton.mpr rfl))
           hp2 hu hshape))
@@ -5387,11 +5710,11 @@ theorem complete_create_op {an : List _root_.annot} {M : MachineCtx} {e : CoreEx
           obtain ⟨-, hlay, hfile, hext, -, hsym, hexc⟩ := hemb
           simp only at hlay hsym hexc
           subst hlay
-          obtain ⟨s, m, hsteps, hm⟩ := step_ctx_create_eval_ws' hd hsz hnv hp1 hp2 hd1 hd2
+          obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_create_eval_ws' hd hsz hnv hp1 hp2 hd1 hd2
             M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
             (M.thread _ ρ ctl) rfl (by rw [hext, hfile]; exact hv1) (by rw [hext, hfile]; exact hv2)
           rw [MachineCtx.locUpdTh_thread] at hm
-          refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace,
+          refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace,
             dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
           exact advance_withrs_eval M.tagDefs M.tid s m (hm dst.core_run_state0)
         · intro dst hemb
@@ -5425,16 +5748,16 @@ theorem complete_memop_op {an : List _root_.annot} {M : MachineCtx} {e : CoreExp
       memopRedex an mop [pe1, pe2] ≠ callRedex an' ra f pes := by
     intro an' ra f pes h; cases h
   have hshape : ∀ dst, M.Embeds dst (e, ρ, ctl, σ) →
-      ∃ (rsk : runstate_step_kind) (m : core_runM thread_state),
+      ∃ (rsk : runstate_step_kind) (m : core_runM thread_state) (post : List core_step2),
       step_ctx M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid
-        (M.parent, M.thread e ρ ctl) = [Step_with_runstate2 rsk m] := by
+        (M.parent, M.thread e ρ ctl) = Step_with_runstate2 rsk m :: post := by
     intro dst hemb
     obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
     simp only at hlay
     subst hlay
-    obtain ⟨s, m, hsteps⟩ := step_ctx_memop_eval_shape hd hsz hnv M.tagDefs
+    obtain ⟨s, m, post, hsteps⟩ := step_ctx_memop_eval_shape hd hsz hnv M.tagDefs
       dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
-    exact ⟨_, _, hsteps⟩
+    exact ⟨_, _, _, hsteps⟩
   -- the FAILURE at a classified operand list (MAP-shaped: the engine's
   -- `stExceptUndef_mapM`)
   have hfail : ∀ (fl : EvalFail),
@@ -5446,11 +5769,11 @@ theorem complete_memop_op {an : List _root_.annot} {M : MachineCtx} {e : CoreExp
     obtain ⟨-, hlay, hfile, hext, -, -, -⟩ := hemb
     simp only at hlay
     subst hlay
-    obtain ⟨s, m, hsteps, hm⟩ := step_ctx_memop_eval_fail hd hsz hnv hp1 hp2 hd1 hd2
+    obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_memop_eval_fail hd hsz hnv hp1 hp2 hd1 hd2
       M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
       (M.thread _ ρ ctl) rfl (by rw [hext, hfile]; exact hf)
     obtain ⟨dst', hadv⟩ := advance_withrs_failed_eval M.tagDefs M.tid s m (hm dst.core_run_state0)
-    exact ⟨_, dst', hsteps, rfl, hadv⟩
+    exact ⟨_, _, dst', hsteps, rfl, hadv⟩
   -- an operand list the mirror does not evaluate: the classifier decides
   have hrest : (∀ c'', ¬ Step M (e, ρ, ctl, σ) c'') →
       evalPexprs M.tagDefs M.extern M.file ρ [pe1, pe2] = none →
@@ -5521,16 +5844,16 @@ theorem complete_store_op {an : List _root_.annot} {M : MachineCtx} {e : CoreExp
       storeOpRedex an loc ann ty pe2 pe3 mo ≠ callRedex an' ra f pes := by
     intro an' ra f pes h; cases h
   have hshape : ∀ dst, M.Embeds dst (e, ρ, ctl, σ) →
-      ∃ (rsk : runstate_step_kind) (m : core_runM thread_state),
+      ∃ (rsk : runstate_step_kind) (m : core_runM thread_state) (post : List core_step2),
       step_ctx M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid
-        (M.parent, M.thread e ρ ctl) = [Step_with_runstate2 rsk m] := by
+        (M.parent, M.thread e ρ ctl) = Step_with_runstate2 rsk m :: post := by
     intro dst hemb
     obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
     simp only at hlay
     subst hlay
-    obtain ⟨s, m, hsteps⟩ := step_ctx_store_eval_shape hd hsz hnv hp2 hp3 M.tagDefs
+    obtain ⟨s, m, post, hsteps⟩ := step_ctx_store_eval_shape hd hsz hnv hp2 hp3 M.tagDefs
       dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
-    exact ⟨_, _, hsteps⟩
+    exact ⟨_, _, _, hsteps⟩
   cases hv2 : evalPexpr M.tagDefs M.extern M.file ρ pe2 with
   | none =>
     have hstuck : ∀ c'', ¬ Step M (e, ρ, ctl, σ) c'' := by
@@ -5547,12 +5870,12 @@ theorem complete_store_op {an : List _root_.annot} {M : MachineCtx} {e : CoreExp
       obtain ⟨-, hlay, hfile, hext, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
-      obtain ⟨s, m, hsteps, hm⟩ := step_ctx_store_eval_fail2 hd hsz hnv hp2 hp3 hd2
+      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_store_eval_fail2 hd hsz hnv hp2 hp3 hd2
         M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
         (M.thread _ ρ ctl) rfl (by rw [hext, hfile]; exact hf)
       obtain ⟨dst', hadv⟩ := advance_withrs_failed_eval M.tagDefs M.tid s m
         (hm dst.core_run_state0)
-      exact ⟨_, dst', hsteps, rfl, hadv⟩
+      exact ⟨_, _, dst', hsteps, rfl, hadv⟩
     · exact .inr (.inr (.eval_uncovered pe2 hstuck
         (by rw [hd.operandsOf_eq]; exact List.mem_cons_self ..) hp2 hu hshape))
   | some v =>
@@ -5572,12 +5895,12 @@ theorem complete_store_op {an : List _root_.annot} {M : MachineCtx} {e : CoreExp
         obtain ⟨-, hlay, hfile, hext, -, -, -⟩ := hemb
         simp only at hlay
         subst hlay
-        obtain ⟨s, m, hsteps, hm⟩ := step_ctx_store_eval_fail3 hd hsz hnv hp2 hp3 hd2 hd3
+        obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_store_eval_fail3 hd hsz hnv hp2 hp3 hd2 hd3
           M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
           (M.thread _ ρ ctl) rfl (by rw [hext, hfile]; exact hv2) (by rw [hext, hfile]; exact hf)
         obtain ⟨dst', hadv⟩ := advance_withrs_failed_eval M.tagDefs M.tid s m
           (hm dst.core_run_state0)
-        exact ⟨_, dst', hsteps, rfl, hadv⟩
+        exact ⟨_, _, dst', hsteps, rfl, hadv⟩
       · exact .inr (.inr (.eval_uncovered pe3 hstuck
           (by rw [hd.operandsOf_eq]; exact List.mem_cons_of_mem _ (List.mem_singleton.mpr rfl))
           hp3 hu hshape))
@@ -5596,11 +5919,11 @@ theorem complete_store_op {an : List _root_.annot} {M : MachineCtx} {e : CoreExp
           obtain ⟨-, hlay, hfile, hext, -, hsym, hexc⟩ := hemb
           simp only at hlay hsym hexc
           subst hlay
-          obtain ⟨s, m, hsteps, hm⟩ := step_ctx_store_eval_ws' hd hsz hnv hp2 hp3 hd2 hd3
+          obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_store_eval_ws' hd hsz hnv hp2 hp3 hd2 hd3
             M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
             (M.thread _ ρ ctl) rfl (by rw [hext, hfile]; exact hv2) (by rw [hext, hfile]; exact hv3)
           rw [MachineCtx.locUpdTh_thread] at hm
-          refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace,
+          refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace,
             dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
           exact advance_withrs_eval M.tagDefs M.tid s m (hm dst.core_run_state0)
         · intro dst hemb
@@ -5898,10 +6221,10 @@ theorem complete_memop_vals {an : List _root_.annot} {M : MachineCtx} {e : CoreE
       obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
-      have hsteps := step_ctx_memop hd hsz rfl rfl M.tagDefs dst.layout_state
+      obtain ⟨post, hsteps⟩ := step_ctx_memop hd hsz rfl rfl M.tagDefs dst.layout_state
         dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
-      rw [hd.unseq_ccall_false] at hsteps
-      refine ⟨_, hsteps, rfl, ?_⟩
+      rw [hd.unseq_ccall_false hsz] at hsteps
+      refine ⟨_, _, hsteps, rfl, ?_⟩
       exact memop_fork (by rw [eqPtrval_loc_irrel _ default]; exact hnd)
   · obtain ⟨msg, g, hpm⟩ := perform_memop_ptreq_panic M.tagDefs
       (locUpdTh an (M.thread e ρ ctl)).current_loc M.tid
@@ -5912,10 +6235,10 @@ theorem complete_memop_vals {an : List _root_.annot} {M : MachineCtx} {e : CoreE
     obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
     simp only at hlay
     subst hlay
-    have hsteps := step_ctx_memop hd hsz rfl rfl M.tagDefs dst.layout_state
+    obtain ⟨post, hsteps⟩ := step_ctx_memop hd hsz rfl rfl M.tagDefs dst.layout_state
       dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
-    rw [hd.unseq_ccall_false] at hsteps
-    exact ⟨_, _, _, _, _, g, hsteps, hpm⟩
+    rw [hd.unseq_ccall_false hsz] at hsteps
+    exact ⟨_, _, _, _, _, g, _, hsteps, hpm⟩
 
 /-- Erun at a context WITHOUT a current procedure: the engine's PANIC
     in the label lookup's key (`ShippedRefusal.panic_noproc`; the
@@ -5931,9 +6254,9 @@ theorem complete_run_noproc {an : List _root_.annot} {M : MachineCtx} {e : CoreE
   obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
   simp only at hlay
   subst hlay
-  obtain ⟨s, inst, k, hsteps⟩ := step_ctx_run_noproc hd hsz M.tagDefs dst.layout_state
+  obtain ⟨s, inst, k, post, hsteps⟩ := step_ctx_run_noproc hd hsz M.tagDefs dst.layout_state
     dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl hproc
-  exact ⟨s, l, inst, k, hsteps⟩
+  exact ⟨s, l, inst, k, post, hsteps⟩
 
 /-! ### The call rows (calls arc C2): the PCALL round classified -/
 
@@ -6006,22 +6329,29 @@ theorem step_ctx_call_fail_args {an : List _root_.annot} {e : CoreExpr} {ctx : c
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = e) {fl : EvalFail}
     (hf : (evalClassList tds th.current_loc ext file th.env pes).fail? = some fl) :
-    ∃ m : core_runM thread_state,
+    ∃ (m : core_runM thread_state) (post : List core_step2),
       step_ctx tds σ file ext tid (parent, th) =
-        [Step_with_runstate2 (RSK_eval "Eproc") m] ∧
+        Step_with_runstate2 (RSK_eval "Eproc") m :: post ∧
       ∀ rs, m rs = fl.run thread_state core_run_state rs := by
-  have hget : get_ctx th.arena = [(ctx, callRedex an ra f pes)] := by
+  obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, callRedex an ra f pes) :: rest := by
     rw [harena]; exact hd.get_ctx_default hsz
-  unfold step_ctx
-  dsimp only
-  rw [hget]
-  simp only [List.map_cons, List.map_nil]
-  unfold callRedex
-  cases ctx <;>
-    (refine ⟨_, rfl, fun rs => ?_⟩
-     rw [stExceptUndef_bind_apply,
-       mapM_full_eval_fail _ (fun _ _ => rfl) pes hpes hdep hf rs]
-     cases fl <;> rfl)
+  have key : ∃ m : core_runM thread_state,
+      (step_ctx tds σ file ext tid (parent, th)).head? =
+        some (Step_with_runstate2 (RSK_eval "Eproc") m) ∧
+      ∀ rs, m rs = fl.run thread_state core_run_state rs := by
+    unfold step_ctx
+    dsimp only
+    rw [hget]
+    simp only [List.map_cons, List.head?_cons]
+    unfold callRedex
+    cases ctx <;>
+      (refine ⟨_, rfl, fun rs => ?_⟩
+       rw [stExceptUndef_bind_apply,
+         mapM_full_eval_fail _ (fun _ _ => rfl) pes hpes hdep hf rs]
+       cases fl <;> rfl)
+  obtain ⟨m, hh, hrest⟩ := key
+  obtain ⟨post, hpost⟩ := cons_of_head? hh
+  exact ⟨m, post, hpost, hrest⟩
 
 /-- … the kill face (E1's statement). -/
 theorem step_ctx_call_kill_args {an : List _root_.annot} {e : CoreExpr} {ctx : context}
@@ -6035,9 +6365,9 @@ theorem step_ctx_call_kill_args {an : List _root_.annot} {e : CoreExpr} {ctx : c
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = e) {err : core_run_cause}
     (hk : evalClassList tds th.current_loc ext file th.env pes = .kill err) :
-    ∃ m : core_runM thread_state,
+    ∃ (m : core_runM thread_state) (post : List core_step2),
       step_ctx tds σ file ext tid (parent, th) =
-        [Step_with_runstate2 (RSK_eval "Eproc") m] ∧
+        Step_with_runstate2 (RSK_eval "Eproc") m :: post ∧
       ∀ rs, m rs = Exception err :=
   step_ctx_call_fail_args hd hsz hpes hdep tds σ file ext tid parent th harena (fl := .kill err) (by rw [hk]; rfl)
 
@@ -6078,10 +6408,10 @@ theorem complete_call {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {
         obtain ⟨-, hlay, hfile, hext, -, -, -⟩ := hemb
         simp only at hlay
         subst hlay
-        obtain ⟨m, hsteps, hm⟩ := step_ctx_call_arity hd hsz hdep M.tagDefs dst.layout_state
+        obtain ⟨m, post, hsteps, hm⟩ := step_ctx_call_arity hd hsz hdep M.tagDefs dst.layout_state
           dst.core_file dst.core_extern M.tid M.parent (M.thread e ρ ctl) rfl
           (by rw [hext, hfile]; exact hvs) (by rw [hfile, hext]; exact hf) hlen
-        exact ⟨_, dst, hsteps, rfl,
+        exact ⟨_, _, dst, hsteps, rfl,
           advance_withrs_killed_eval M.tagDefs M.tid _ m (hm dst.core_run_state0)⟩
     | none =>
       -- UNKNOWN PROCEDURE: `call_proc`'s kill, verbatim
@@ -6091,10 +6421,10 @@ theorem complete_call {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {
       obtain ⟨-, hlay, hfile, hext, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
-      obtain ⟨m, hsteps, hm⟩ := step_ctx_call_unknown hd hsz hdep M.tagDefs dst.layout_state
+      obtain ⟨m, post, hsteps, hm⟩ := step_ctx_call_unknown hd hsz hdep M.tagDefs dst.layout_state
         dst.core_file dst.core_extern M.tid M.parent (M.thread e ρ ctl) rfl
         (by rw [hext, hfile]; exact hvs) (by rw [hfile, hext]; exact hf)
-      exact ⟨_, dst, hsteps, rfl,
+      exact ⟨_, _, dst, hsteps, rfl,
         advance_withrs_killed_eval M.tagDefs M.tid _ m (hm dst.core_run_state0)⟩
   | none =>
     have hstuck : ∀ c'', ¬ Step M (e, ρ, ctl, σ) c'' := by
@@ -6103,16 +6433,16 @@ theorem complete_call {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {
       rw [hvs] at hvs'
       cases hvs'
     have hshape : ∀ dst, M.Embeds dst (e, ρ, ctl, σ) →
-        ∃ (rsk : runstate_step_kind) (m : core_runM thread_state),
+        ∃ (rsk : runstate_step_kind) (m : core_runM thread_state) (post : List core_step2),
         step_ctx M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid
-          (M.parent, M.thread e ρ ctl) = [Step_with_runstate2 rsk m] := by
+          (M.parent, M.thread e ρ ctl) = Step_with_runstate2 rsk m :: post := by
       intro dst hemb
       obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
-      obtain ⟨m, hsteps⟩ := step_ctx_call_shape hd hsz M.tagDefs dst.layout_state
+      obtain ⟨m, post, hsteps⟩ := step_ctx_call_shape hd hsz M.tagDefs dst.layout_state
         dst.core_file dst.core_extern M.tid M.parent (M.thread _ _ ctl) rfl
-      exact ⟨_, _, hsteps⟩
+      exact ⟨_, _, _, hsteps⟩
     have hfail : ∀ (fl : EvalFail),
         (evalClassList M.tagDefs ctl.curLoc M.extern M.file ρ pes).fail? = some fl →
         RoundComplete M (e, ρ, ctl, σ) := by
@@ -6122,11 +6452,11 @@ theorem complete_call {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {
       obtain ⟨-, hlay, hfile, hext, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
-      obtain ⟨m, hsteps, hm⟩ := step_ctx_call_fail_args hd hsz hpes hdep M.tagDefs
+      obtain ⟨m, post, hsteps, hm⟩ := step_ctx_call_fail_args hd hsz hpes hdep M.tagDefs
         dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ _ ctl) rfl
         (by rw [hext, hfile]; exact hf)
       obtain ⟨dst', hadv⟩ := advance_withrs_failed_eval M.tagDefs M.tid _ m (hm dst.core_run_state0)
-      exact ⟨_, dst', hsteps, rfl, hadv⟩
+      exact ⟨_, _, dst', hsteps, rfl, hadv⟩
     cases hcl : evalClassList M.tagDefs ctl.curLoc M.extern M.file ρ pes with
     | kill err => exact hfail _ (by rw [hcl]; rfl)
     | undef l u => exact hfail _ (by rw [hcl]; rfl)
@@ -6152,6 +6482,43 @@ theorem complete_ret {M : MachineCtx} (w : SpikeValA) (ev0 : Fmap sym value)
   cases w with
   | pure a b v => exact .inl ⟨_, Step.ret⟩
   | annot a a2 b ds v => exact .inl ⟨_, Step.ret_annot⟩
+
+/-- E4: the `unseq` COMPLETION at all-value components — the annotated
+    tuple (the mirror step) when the components' dynamic annotations do
+    not race, the engine's UNSEQUENCED-RACE kill `Undef0 … [UB035]` when
+    they do (`do_race`, core_reduction.lem:215–242; the with-runstate EVAL
+    step's undef at the location-updated thread's `current_loc`,
+    :1480–1484, killed by `advance_step`'s `liftCore_run` protocol). -/
+theorem complete_unseq_vals {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
+    {ws : List SpikeValA}
+    (hd : Decomp e ctx (Expr an (Eunseq (ws.map ofValA))))
+    (hsz : esize e ≤ lemDefaultFuel) (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
+    RoundComplete M (e, ρ, ctl, σ) := by
+  have hnr : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (l : sym)
+      (pes : List (generic_pexpr Unit sym)),
+      Expr an (Eunseq (ws.map ofValA)) ≠ runRedex an' ra l pes := by
+    intro an' ra l pes h; cases h
+  have hnc : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (f : sym)
+      (pes : List (generic_pexpr Unit sym)),
+      Expr an (Eunseq (ws.map ofValA)) ≠ callRedex an' ra f pes := by
+    intro an' ra f pes h; cases h
+  cases hcol : collectUnseq ([], []) ws with
+  | some q =>
+    obtain ⟨fps, cvals⟩ := q
+    exact .inl ⟨_, hd.lift_step hnr hnc (Step.unseq_vals hcol)⟩
+  | none =>
+    refine .inr (.inl (.killed
+      (Undef0 (locUpdTh an (M.thread e ρ ctl)).current_loc [UB035_unsequenced_race]) ?_))
+    intro dst hemb
+    obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
+    simp only at hlay
+    subst hlay
+    obtain ⟨post, hsteps⟩ := step_ctx_unseq_race hd hsz hcol M.tagDefs dst.layout_state
+      dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
+    obtain ⟨dst', hadv⟩ := advance_withrs_failed_eval M.tagDefs M.tid "unsequenced race" _
+      (dst := dst) (fl := .undef (locUpdTh an (M.thread e ρ ctl)).current_loc [UB035_unsequenced_race])
+      rfl
+    exact ⟨_, post, dst', hsteps, rfl, hadv⟩
 
 /-! ### THE ASSEMBLED COMPLETENESS THEOREM -/
 
@@ -6194,6 +6561,7 @@ theorem frag_round_complete {M : MachineCtx}
     exact complete_create_op hd hsz hnvC hp1 hp2 hd1 hd2 _ _ _
   | bound_pure => exact complete_bound_pure hd _ _ _
   | bound_annot => exact complete_bound_annot hd _ _ _
+  | unseq_vals => exact complete_unseq_vals hd hsz _ _ _
   | @alloc_op an loc ann pref pe1 pe2 hnvA =>
     obtain ⟨hp1, hp2, hd1, hd2⟩ : PePure pe1 ∧ PePure pe2 ∧
         peDepth pe1 ≤ lemDefaultFuel ∧ peDepth pe2 ≤ lemDefaultFuel := by
@@ -6319,15 +6687,16 @@ theorem loop_step_withrs_eval_killed (fl : Nat) (tds : Fmap sym (CerbLocation.Lo
     (acc : Fmap thread_id (List core_step2)) {dst : driver_state} {th : thread_state}
     {s : String} {m : core_runM thread_state} {fl0 : EvalFail}
     (hth : dst.core_state0.thread_states = [(0, (none, th))])
+    {post : List core_step2}
     (hsteps : step_ctx tds dst.layout_state dst.core_file dst.core_extern 0
-      (none, th) = [Step_with_runstate2 (RSK_eval s) m])
+      (none, th) = Step_with_runstate2 (RSK_eval s) m :: post)
     (hm : m dst.core_run_state0 = fl0.run thread_state core_run_state dst.core_run_state0) :
     ∃ dst', runOne (drive_nonmemory_steps_aux2_lemFuel (Nat.succ fl) tds acc [0]) dst =
       (NDkilled fl0.reason, dst') := by
   obtain ⟨dst', hadv⟩ := advance_withrs_failed_eval tds 0 s m hm
   refine ⟨dst', ?_⟩
   conv => lhs; unfold drive_nonmemory_steps_aux2_lemFuel
-  refine (runOne_bind_active (z := [Step_with_runstate2 (RSK_eval s) m])
+  refine (runOne_bind_active (z := Step_with_runstate2 (RSK_eval s) m :: post)
     (s' := dst) ?_).trans ?_
   · rw [runOne_read]
     refine congrArg (fun x => (NDactive x, dst)) ?_

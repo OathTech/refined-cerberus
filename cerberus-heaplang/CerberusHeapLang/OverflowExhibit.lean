@@ -121,11 +121,19 @@ theorem overflow_step_ctx (tds : Fmap sym (CerbLocation.Loc × tag_definition)) 
       step_ctx tds σ file ext tid (parent, th) =
         [Step_with_runstate2 (RSK_eval s) m] ∧
       ∀ rs, m rs = (EvalFail.undef th.current_loc [UB036_exceptional_condition]).run
-        thread_state core_run_state rs :=
-  step_ctx_pure_op_fail progCE3_atAdd_decomp
-    (by rw [show lemDefaultFuel = 999999 + 1 from rfl]; decide)
+        thread_state core_run_state rs := by
+  have hsz : esize progCE3_atAdd ≤ lemDefaultFuel := by
+    rw [show lemDefaultFuel = 999999 + 1 from rfl]; decide
+  obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_pure_op_fail progCE3_atAdd_decomp hsz
     rfl (PePure.of_isPePure rfl) (depLeC (by decide)) tds σ file ext tid parent th harena
     (by rw [overflow_evalClass th.current_loc hb1 hb2]; rfl)
+  -- E4: the engine's step list is a SINGLETON here — no `unseq` frame is
+  -- open at the `+` round (`ctxNoUnseq`, the pre-E4 singleton reading)
+  refine ⟨s, m, step_ctx_singleton_of_root ?_ hsteps, hm⟩
+  rw [harena]
+  show (get_ctx_lemFuel lemDefaultFuel progCE3_atAdd).length = 1
+  rw [progCE3_atAdd_decomp.get_ctx_single rfl lemDefaultFuel hsz]
+  rfl
 
 /-- THE GENUINE DRIVER KILLS AT THE ROUND, AT EVERY FUEL: from any driver
     state whose single thread is at the `+` round (arena `progCE3_atAdd`,

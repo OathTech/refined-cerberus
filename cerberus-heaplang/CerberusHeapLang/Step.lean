@@ -389,6 +389,16 @@ theorem ofValA_inj {w w' : SpikeValA} (h : ofValA w = ofValA w') : w = w' := by
   rw [toValA_ofValA, toValA_ofValA] at this
   exact Option.some.inj this
 
+/-- E4: the value injection is injective on lists. -/
+theorem map_ofValA_inj : ∀ {ws ws' : List SpikeValA}, ws.map ofValA = ws'.map ofValA → ws = ws'
+  | [], [], _ => rfl
+  | [], _ :: _, h => by cases h
+  | _ :: _, [], h => by cases h
+  | w :: ws, w' :: ws', h => by
+    rw [List.map_cons, List.map_cons] at h
+    obtain ⟨h1, h2⟩ := List.cons.inj h
+    rw [ofValA_inj h1, map_ofValA_inj h2]
+
 /-- The erased value test's witness: a value expression is `ofValA` of
     some exact value erasing to it (the pre-E1 `ofVal_of_toVal`, up to
     the annotation lists). -/
@@ -420,6 +430,182 @@ theorem ofVal_of_toVal {e : CoreExpr} {w : SpikeVal}
 def annotRooted : CoreExpr → Bool
   | Expr _ (Eannot _ _) => true
   | _ => false
+
+/-! ## E4: the `unseq` vocabulary (dialect arc E4, docs/2026-09-05_e4-notes.md)
+
+The sequential driver's `Eunseq`: get_ctx at an `unseq` whose components are
+not all irreducible walks the components LEFT TO RIGHT and PREPENDS each
+reducible component's contexts to the accumulator (`get_ctx_unseq_aux`,
+core_reduction.lem:590–601), so the LAST reducible component's entry heads
+the engine's step list and the shipped loop, which takes the FIRST
+advanceable entry (`find_can_advance`, driver.lem:1049–1057), reduces that
+component — deterministically, while every entry is advanceable. The
+mirror FOCUSES the last reducible component (`jumpRedexU?`/`callRedexU?`/
+`redexAnnotsU` below, `Step.unseq_ctx`); at all-value components the
+node completes into the annotated tuple (`Step.unseq_vals`, the engine's
+`one_step_unseq_aux`, mirrored by `collectUnseq`). -/
+
+/-- E4: the engine's value test as a Boolean — `is_irreducible`'s two value
+    shapes (Core_reduction.lean:293; `is_irreducible_eq_isValE`,
+    Soundness.lean). -/
+def isValE (e : CoreExpr) : Bool := (toVal e).isSome
+
+/-- E4: every component is a value — get_ctx's `List.all es is_irreducible`
+    at an `Eunseq` node (core_reduction.lem:545). -/
+def valsOnly (es : List CoreExpr) : Bool := es.all isValE
+
+@[simp] theorem isValE_ofValA (w : SpikeValA) : isValE (ofValA w) = true := by
+  simp [isValE, toVal_ofValA]
+
+theorem isValE_of_toVal_none {e : CoreExpr} (h : toVal e = none) : isValE e = false := by
+  simp [isValE, h]
+
+theorem toVal_none_of_isValE_false {e : CoreExpr} (h : isValE e = false) : toVal e = none := by
+  unfold isValE at h
+  cases hv : toVal e with
+  | none => rfl
+  | some w => rw [hv] at h; cases h
+
+@[simp] theorem valsOnly_nil : valsOnly [] = true := rfl
+
+@[simp] theorem valsOnly_cons (e : CoreExpr) (es : List CoreExpr) :
+    valsOnly (e :: es) = (isValE e && valsOnly es) := rfl
+
+theorem valsOnly_append (es1 es2 : List CoreExpr) :
+    valsOnly (es1 ++ es2) = (valsOnly es1 && valsOnly es2) := by
+  simp [valsOnly, List.all_append]
+
+theorem valsOnly_map_ofValA (ws : List SpikeValA) : valsOnly (ws.map ofValA) = true := by
+  induction ws with
+  | nil => rfl
+  | cons w ws ih => rw [List.map_cons, valsOnly_cons, isValE_ofValA, ih]; rfl
+
+/-- A list with a non-value component is not all values. -/
+theorem valsOnly_append_cons_false {es1 : List CoreExpr} {e : CoreExpr} {es2 : List CoreExpr}
+    (hnv : toVal e = none) : valsOnly (es1 ++ e :: es2) = false := by
+  rw [valsOnly_append, valsOnly_cons, isValE_of_toVal_none hnv]
+  simp
+
+/-- An all-values list is the image of its exact values. -/
+theorem valsOnly_true_map {es : List CoreExpr} (h : valsOnly es = true) :
+    ∃ ws : List SpikeValA, es = ws.map ofValA := by
+  induction es with
+  | nil => exact ⟨[], rfl⟩
+  | cons e es ih =>
+    rw [valsOnly_cons, Bool.and_eq_true] at h
+    obtain ⟨ws, rfl⟩ := ih h.2
+    have h1 := h.1
+    unfold isValE at h1
+    cases hv : toVal e with
+    | none => rw [hv] at h1; cases h1
+    | some w =>
+      obtain ⟨wa, -, rfl⟩ := ofValA_of_toVal hv
+      exact ⟨wa :: ws, rfl⟩
+
+/-- THE FOCUS EXISTS: a component list that is not all values has a LAST
+    reducible component (`e`), every later component (`es2`) a value. -/
+theorem focus_exists {es : List CoreExpr} (h : valsOnly es = false) :
+    ∃ (es1 : List CoreExpr) (e : CoreExpr) (es2 : List CoreExpr),
+      es = es1 ++ e :: es2 ∧ toVal e = none ∧ valsOnly es2 = true := by
+  induction es with
+  | nil => cases h
+  | cons e es ih =>
+    cases hv2 : valsOnly es with
+    | true =>
+      refine ⟨[], e, es, rfl, ?_, hv2⟩
+      rw [valsOnly_cons, hv2, Bool.and_true] at h
+      exact toVal_none_of_isValE_false h
+    | false =>
+      obtain ⟨es1, e', es2, rfl, hnv, hv2'⟩ := ih hv2
+      exact ⟨e :: es1, e', es2, rfl, hnv, hv2'⟩
+
+/-- THE FOCUS IS UNIQUE: two focus splits of one list agree. -/
+theorem focus_unique {es1 es1' : List CoreExpr} {e e' : CoreExpr} {es2 es2' : List CoreExpr}
+    (h : es1 ++ e :: es2 = es1' ++ e' :: es2') (hnv : toVal e = none) (hnv' : toVal e' = none)
+    (hv2 : valsOnly es2 = true) (hv2' : valsOnly es2' = true) :
+    es1 = es1' ∧ e = e' ∧ es2 = es2' := by
+  induction es1 generalizing es1' with
+  | nil =>
+    cases es1' with
+    | nil =>
+      rw [List.nil_append, List.nil_append] at h
+      obtain ⟨rfl, rfl⟩ := List.cons.inj h
+      exact ⟨rfl, rfl, rfl⟩
+    | cons x xs =>
+      rw [List.nil_append, List.cons_append] at h
+      obtain ⟨rfl, h2⟩ := List.cons.inj h
+      rw [h2, valsOnly_append_cons_false hnv'] at hv2
+      cases hv2
+  | cons x xs ih =>
+    cases es1' with
+    | nil =>
+      rw [List.nil_append, List.cons_append] at h
+      obtain ⟨rfl, h2⟩ := List.cons.inj h
+      rw [← h2, valsOnly_append_cons_false hnv] at hv2'
+      cases hv2'
+    | cons y ys =>
+      rw [List.cons_append, List.cons_append] at h
+      obtain ⟨rfl, h2⟩ := List.cons.inj h
+      obtain ⟨rfl, rfl, rfl⟩ := ih h2
+      exact ⟨rfl, rfl, rfl⟩
+
+mutual
+/-- E4: the sibling condition of the engine's `is_unseq_with_ccall`
+    (core_reduction.lem:501–519: at a `Cunseq` frame the accumulator
+    becomes `acc || List.any (es1 ++ es2) has_ccall`): no `Eccall` anywhere
+    in the term, on the shapes whose `has_ccall` recursion `esize` bounds
+    (the fuelled engine function, core_reduction.lem:474–498 —
+    `has_ccall_lemFuel`; bridge `ccallFree_has_ccall`, Soundness.lean).
+    `Ecase`, `Elet` and `End` are answered `false`: an expression-level
+    `case` inside an `unseq` component is OUTSIDE E4's fragment (its
+    selected branch's ccall-freedom would need the substitution lemma KOI
+    B7 carries), the other two are outside `Frag`. -/
+def ccallFree : CoreExpr → Bool
+  | Expr _ (Eccall _ _ _ _) => false
+  | Expr _ (Ecase _ _) => false
+  | Expr _ (Elet _ _ _) => false
+  | Expr _ (End _) => false
+  | Expr _ (Esseq _ e1 e2) => ccallFree e1 && ccallFree e2
+  | Expr _ (Ewseq _ e1 e2) => ccallFree e1 && ccallFree e2
+  | Expr _ (Eif _ e2 e3) => ccallFree e2 && ccallFree e3
+  | Expr _ (Eannot _ b) => ccallFree b
+  | Expr _ (Ebound b) => ccallFree b
+  | Expr _ (Esave _ _ body) => ccallFree body
+  | Expr _ (Eunseq es) => ccallFreeList es
+  | _ => true
+def ccallFreeList : List CoreExpr → Bool
+  | [] => true
+  | e :: es => ccallFree e && ccallFreeList es
+end
+
+@[simp] theorem ccallFreeList_nil : ccallFreeList [] = true := rfl
+@[simp] theorem ccallFreeList_cons (e : CoreExpr) (es : List CoreExpr) :
+    ccallFreeList (e :: es) = (ccallFree e && ccallFreeList es) := rfl
+
+theorem ccallFreeList_append (es1 es2 : List CoreExpr) :
+    ccallFreeList (es1 ++ es2) = (ccallFreeList es1 && ccallFreeList es2) := by
+  induction es1 with
+  | nil => simp
+  | cons e es ih => simp [ih, Bool.and_assoc]
+
+@[simp] theorem ccallFree_ofValA (w : SpikeValA) : ccallFree (ofValA w) = true := by
+  cases w <;> rfl
+
+/-- E4: the completion of an `unseq` at all-value components — the engine's
+    `one_step_unseq_aux` (core_reduction.lem:258–274) on the mirror's exact
+    values: the values are collected in order (the accumulator is reversed
+    at the end), the dynamic annotations of the annotated components are
+    combined (`combine_dyn_annotations` = `++`, :246–247) after the race
+    test `do_race` (:215–242) against the accumulator — a race is `none`
+    (the engine's UNSEQUENCED-RACE, UB035). Bridge:
+    `one_step_unseq_aux_collect` (Soundness.lean). -/
+def collectUnseq : List dyn_annotation × List value → List SpikeValA →
+    Option (List dyn_annotation × List value)
+  | (fps, vs), [] => some (fps, vs.reverse)
+  | (fps, vs), .pure _ _ v :: ws => collectUnseq (fps, v :: vs) ws
+  | (fps, vs), .annot _ _ _ ds v :: ws =>
+      if do_race ds fps then none
+      else collectUnseq (combine_dyn_annotations ds fps, v :: vs) ws
 
 /-! ## The label context (S3 — header note 3) -/
 
@@ -935,13 +1121,29 @@ sequencing frames (probe report §3 case 2). The Eannot guard mirrors
 get_ctx's arm order: a double-annot root is the ANNOTS-merge redex,
 never a descent. -/
 
+mutual
+/-- The jump-redex search along get_ctx's spine (header note 4; E4: through the
+    `Cunseq` descent, `jumpRedexU?`). -/
 def jumpRedex? : CoreExpr → Option (sym × List (generic_pexpr Unit sym))
   | Expr _ (Erun _ l pes) => some (l, pes)
   | Expr _ (Esseq _ e1 _) => jumpRedex? e1
   | Expr _ (Ewseq _ e1 _) => jumpRedex? e1
   | Expr _ (Eannot _ b) => if annotRooted b then none else jumpRedex? b
   | Expr _ (Ebound b) => jumpRedex? b
+  | Expr _ (Eunseq es) => jumpRedexU? es
   | _ => none
+/-- E4: the search at the FOCUSED component of an `unseq` — the LAST
+    reducible one (get_ctx's `Cunseq` descent, core_reduction.lem:544–548,
+    :590–601: the last reducible component's context heads the step list;
+    the spine follows it). At all-value components: `none` (the
+    completion redex). -/
+def jumpRedexU? : List CoreExpr → Option (sym × List (generic_pexpr Unit sym))
+  | [] => none
+  | e :: es => if valsOnly es then jumpRedex? e else jumpRedexU? es
+end
+
+@[simp] theorem jumpRedex?_unseq (a : List annot) (es : List CoreExpr) :
+    jumpRedex? (Expr a (Eunseq es)) = jumpRedexU? es := rfl
 
 /-- E1: the `Cbound` frame joins the spine (get_ctx's `Ebound` arm,
     core_reduction.lem:563–568: descend when the body is reducible —
@@ -957,6 +1159,7 @@ def rootAnnots : CoreExpr → List annot
 @[simp] theorem rootAnnots_mk (a : List annot) (e : generic_expr_ core_run_annotation Unit sym) :
     rootAnnots (Expr a e) = a := rfl
 
+mutual
 /-- THE REDEX NODE'S ANNOTATIONS (E1): the static annotation list of the
     node at the end of get_ctx's decomposition path (Esseq-left, Ewseq-left,
     the guarded `Eannot` descent, the `Ebound` descent — core_reduction.lem:
@@ -969,7 +1172,17 @@ def redexAnnots : CoreExpr → List annot
   | Expr a (Ewseq _ e1 _) => if (toVal e1).isSome then a else redexAnnots e1
   | Expr a (Eannot _ b) => if annotRooted b then a else redexAnnots b
   | Expr a (Ebound b) => if (toVal b).isSome then a else redexAnnots b
+  | Expr a (Eunseq es) => redexAnnotsU a es
   | Expr a _ => a
+/-- E4: the redex node's annotations under the `Cunseq` descent — the
+    focused (last reducible) component's; the node's own at all values. -/
+def redexAnnotsU (a : List annot) : List CoreExpr → List annot
+  | [] => a
+  | e :: es => if valsOnly es then (if isValE e then a else redexAnnots e) else redexAnnotsU a es
+end
+
+@[simp] theorem redexAnnots_unseq (a : List annot) (es : List CoreExpr) :
+    redexAnnots (Expr a (Eunseq es)) = redexAnnotsU a es := rfl
 
 @[simp] theorem redexAnnots_run (a : List annot) (ra : core_run_annotation) (l : sym)
     (pes : List (generic_pexpr Unit sym)) : redexAnnots (Expr a (Erun ra l pes)) = a := rfl
@@ -1080,6 +1293,10 @@ WHOLE expression, like `Step.run`, with the context it pushes computed
 by this function; `Decomp.callRedex?_some` (Soundness.lean) certifies
 it against the engine's decomposition. The implementation-constant call
 `Eproc _ (Impl _) _` is outside the fragment (`none`). -/
+
+mutual
+/-- The call-redex search WITH its captured context (E4: through the `Cunseq`
+    descent, `callRedexU?`). -/
 def callRedex? : CoreExpr → Option (context × sym × List (generic_pexpr Unit sym))
   | Expr _ (Eproc _ (Sym f) pes) => some (CTX, f, pes)
   | Expr a (Esseq pat e1 e2) =>
@@ -1089,7 +1306,22 @@ def callRedex? : CoreExpr → Option (context × sym × List (generic_pexpr Unit
   | Expr a (Eannot ds b) =>
       if annotRooted b then none else (callRedex? b).map fun q => (Cannot a ds q.1, q.2)
   | Expr a (Ebound b) => (callRedex? b).map fun q => (Cbound a q.1, q.2)
+  | Expr a (Eunseq es) => callRedexU? a [] es
   | _ => none
+/-- E4: the search under the `Cunseq` frame at the focused component,
+    building the engine's frame `Cunseq annot es1 ctx es2` outside-in
+    (`pre` accumulates the earlier components; apply_ctx's `Cunseq` arm,
+    core_reduction.lem:616–617). -/
+def callRedexU? (a : List annot) (pre : List CoreExpr) :
+    List CoreExpr → Option (context × sym × List (generic_pexpr Unit sym))
+  | [] => none
+  | e :: es =>
+      if valsOnly es then (callRedex? e).map fun q => (Cunseq a pre q.1 es, q.2)
+      else callRedexU? a (pre ++ [e]) es
+end
+
+@[simp] theorem callRedex?_unseq (a : List annot) (es : List CoreExpr) :
+    callRedex? (Expr a (Eunseq es)) = callRedexU? a [] es := rfl
 
 /-- E1: the `Cbound` frame (get_ctx's `Ebound` arm, core_reduction.lem:
     563–568; `apply_ctx (Cbound annot ctx') e = Expr annot (Ebound …)`,
@@ -1205,6 +1437,104 @@ theorem callRedex?_annot_none {a : List annot} {ds : List dyn_annotation} {b : C
   · rfl
   · rw [h]; rfl
 
+/-! ### E4: the three spine searches at the `Cunseq` descent -/
+
+theorem jumpRedexU?_focus {es1 : List CoreExpr} {e : CoreExpr} {es2 : List CoreExpr}
+    (hnv : toVal e = none) (hv2 : valsOnly es2 = true) :
+    jumpRedexU? (es1 ++ e :: es2) = jumpRedex? e := by
+  induction es1 with
+  | nil => simp only [List.nil_append, jumpRedexU?, hv2, ↓reduceIte]
+  | cons x xs ih =>
+    simp only [List.cons_append, jumpRedexU?, valsOnly_append_cons_false hnv, Bool.false_eq_true,
+      ↓reduceIte]
+    exact ih
+
+/-- The jump search at an `unseq` with a focus IS the focused component's. -/
+theorem jumpRedex?_unseq_focus (a : List annot) {es1 : List CoreExpr} {e : CoreExpr}
+    {es2 : List CoreExpr} (hnv : toVal e = none) (hv2 : valsOnly es2 = true) :
+    jumpRedex? (Expr a (Eunseq (es1 ++ e :: es2))) = jumpRedex? e := by
+  rw [jumpRedex?_unseq, jumpRedexU?_focus hnv hv2]
+
+theorem jumpRedexU?_vals (ws : List SpikeValA) : jumpRedexU? (ws.map ofValA) = none := by
+  cases ws with
+  | nil => rfl
+  | cons w ws =>
+    simp only [List.map_cons, jumpRedexU?, valsOnly_map_ofValA, ↓reduceIte]
+    cases w <;> simp [jumpRedex?, annotRooted]
+
+@[simp] theorem jumpRedex?_unseq_vals (a : List annot) (ws : List SpikeValA) :
+    jumpRedex? (Expr a (Eunseq (ws.map ofValA))) = none := by
+  rw [jumpRedex?_unseq, jumpRedexU?_vals]
+
+theorem redexAnnotsU_focus (a : List annot) {es1 : List CoreExpr} {e : CoreExpr}
+    {es2 : List CoreExpr} (hnv : toVal e = none) (hv2 : valsOnly es2 = true) :
+    redexAnnotsU a (es1 ++ e :: es2) = redexAnnots e := by
+  induction es1 with
+  | nil =>
+    simp only [List.nil_append, redexAnnotsU, hv2, ↓reduceIte, isValE_of_toVal_none hnv,
+      Bool.false_eq_true]
+  | cons x xs ih =>
+    simp only [List.cons_append, redexAnnotsU, valsOnly_append_cons_false hnv, Bool.false_eq_true,
+      ↓reduceIte]
+    exact ih
+
+@[simp] theorem redexAnnots_unseq_focus (a : List annot) {es1 : List CoreExpr} {e : CoreExpr}
+    {es2 : List CoreExpr} (hnv : toVal e = none) (hv2 : valsOnly es2 = true) :
+    redexAnnots (Expr a (Eunseq (es1 ++ e :: es2))) = redexAnnots e := by
+  rw [redexAnnots_unseq, redexAnnotsU_focus a hnv hv2]
+
+theorem redexAnnotsU_vals (a : List annot) (ws : List SpikeValA) :
+    redexAnnotsU a (ws.map ofValA) = a := by
+  cases ws with
+  | nil => rfl
+  | cons w ws => simp only [List.map_cons, redexAnnotsU, valsOnly_map_ofValA, isValE_ofValA, ↓reduceIte]
+
+@[simp] theorem redexAnnots_unseq_vals (a : List annot) (ws : List SpikeValA) :
+    redexAnnots (Expr a (Eunseq (ws.map ofValA))) = a := by
+  rw [redexAnnots_unseq, redexAnnotsU_vals]
+
+theorem callRedexU?_focus (a : List annot) {es1 : List CoreExpr} {e : CoreExpr}
+    {es2 : List CoreExpr} (hnv : toVal e = none) (hv2 : valsOnly es2 = true) :
+    ∀ pre : List CoreExpr, callRedexU? a pre (es1 ++ e :: es2) =
+      (callRedex? e).map fun q => (Cunseq a (pre ++ es1) q.1 es2, q.2) := by
+  induction es1 with
+  | nil => intro pre; simp only [List.nil_append, callRedexU?, hv2, ↓reduceIte, List.append_nil]
+  | cons x xs ih =>
+    intro pre
+    simp only [List.cons_append, callRedexU?, valsOnly_append_cons_false hnv, Bool.false_eq_true,
+      ↓reduceIte]
+    rw [ih (pre ++ [x]), List.append_assoc, List.singleton_append]
+
+/-- The call search at an `unseq` with a focus: the focused component's,
+    its captured context under the engine's `Cunseq annot es1 _ es2` frame. -/
+theorem callRedex?_unseq_focus (a : List annot) {es1 : List CoreExpr} {e : CoreExpr}
+    {es2 : List CoreExpr} (hnv : toVal e = none) (hv2 : valsOnly es2 = true) :
+    callRedex? (Expr a (Eunseq (es1 ++ e :: es2))) =
+      (callRedex? e).map fun q => (Cunseq a es1 q.1 es2, q.2) := by
+  rw [callRedex?_unseq, callRedexU?_focus a hnv hv2 [], List.nil_append]
+
+theorem callRedexU?_vals (a : List annot) (pre : List CoreExpr) (ws : List SpikeValA) :
+    callRedexU? a pre (ws.map ofValA) = none := by
+  cases ws with
+  | nil => rfl
+  | cons w ws =>
+    simp only [List.map_cons, callRedexU?, valsOnly_map_ofValA, ↓reduceIte]
+    cases w <;> simp [callRedex?, annotRooted]
+
+@[simp] theorem callRedex?_unseq_vals (a : List annot) (ws : List SpikeValA) :
+    callRedex? (Expr a (Eunseq (ws.map ofValA))) = none := by
+  rw [callRedex?_unseq, callRedexU?_vals]
+
+theorem callRedex?_unseq_none {a : List annot} {es1 : List CoreExpr} {e : CoreExpr}
+    {es2 : List CoreExpr} (hnv : toVal e = none) (hv2 : valsOnly es2 = true)
+    (h : callRedex? e = none) : callRedex? (Expr a (Eunseq (es1 ++ e :: es2))) = none := by
+  rw [callRedex?_unseq_focus a hnv hv2, h]; rfl
+
+theorem apply_ctx_unseq (a : List annot) (es1 : List CoreExpr) (ctx : context)
+    (es2 : List CoreExpr) (e : CoreExpr) :
+    apply_ctx (Cunseq a es1 ctx es2) e = Expr a (Eunseq (es1 ++ apply_ctx ctx e :: es2)) := rfl
+
+mutual
 /-- The two spine searches are exclusive: the hole is unique. -/
 theorem callRedex?_none_of_jumpRedex?_some :
     ∀ {e : CoreExpr} {lp : sym × List (generic_pexpr Unit sym)},
@@ -1231,7 +1561,10 @@ theorem callRedex?_none_of_jumpRedex?_some :
   | Expr a (Eif _ _ _), lp, h => by simp [jumpRedex?] at h
   | Expr a (Eccall _ _ _ _), lp, h => by simp [jumpRedex?] at h
   | Expr a (Eproc _ _ _), lp, h => by simp [jumpRedex?] at h
-  | Expr a (Eunseq _), lp, h => by simp [jumpRedex?] at h
+  | Expr a (Eunseq es), lp, h => by
+      rw [jumpRedex?_unseq] at h
+      rw [callRedex?_unseq]
+      exact callRedexU?_none_of_jumpRedexU?_some h
   | Expr a (Ebound b), lp, h => by
       rw [jumpRedex?_bound] at h
       rw [callRedex?_bound, callRedex?_none_of_jumpRedex?_some h]; rfl
@@ -1240,6 +1573,22 @@ theorem callRedex?_none_of_jumpRedex?_some :
   | Expr a (Epar _), lp, h => by simp [jumpRedex?] at h
   | Expr a (Ewait _), lp, h => by simp [jumpRedex?] at h
   | Expr a (Eexcluded _ _), lp, h => by simp [jumpRedex?] at h
+/-- The list twin at the `Cunseq` descent (E4). -/
+theorem callRedexU?_none_of_jumpRedexU?_some :
+    ∀ {a : List annot} {pre : List CoreExpr} {es : List CoreExpr}
+      {lp : sym × List (generic_pexpr Unit sym)},
+      jumpRedexU? es = some lp → callRedexU? a pre es = none
+  | a, pre, [], lp, h => by cases h
+  | a, pre, e :: es, lp, h => by
+      simp only [jumpRedexU?] at h
+      simp only [callRedexU?]
+      split at h
+      · rename_i hv
+        rw [if_pos hv, callRedex?_none_of_jumpRedex?_some h]; rfl
+      · rename_i hv
+        rw [if_neg hv]
+        exact callRedexU?_none_of_jumpRedexU?_some h
+end
 
 theorem jumpRedex?_none_of_callRedex?_some {e : CoreExpr}
     {q : context × sym × List (generic_pexpr Unit sym)}
@@ -2998,6 +3347,43 @@ inductive Step (M : MachineCtx) : Config → Config → Prop where
       {b : CoreExpr} {ρ : EnvStack} {ctl : Ctl} {σ : Mem} :
       Step M (Expr a1 (Eannot ds1 (Expr a2 (Eannot ds2 b))), ρ, ctl, σ)
            (Expr (a1 ++ a2) (Eannot (ds1 ++ ds2) b), ρ, ctl.upd a1, σ)
+  /-- E4: reduction under the `Cunseq` frame at the FOCUSED component — the
+      LAST reducible one, every later component (`es2`) a value (get_ctx's
+      `Eunseq` arm and `get_ctx_unseq_aux`, core_reduction.lem:544–548,
+      :590–601: each reducible component's contexts are PREPENDED to the
+      accumulator, so the last reducible component's entry heads the
+      engine's step list, and the shipped loop takes the head when it is
+      advanceable — `find_can_advance`, driver.lem:1049–1057; apply_ctx's
+      `Cunseq` rebuild `Expr annot (Eunseq (es1 ++ [apply_ctx ctx' e] ++
+      es2))`, :616–617). The SIBLINGS are ccall-free (`ccallFreeList`):
+      `is_unseq_with_ccall` is then `false` at the frame
+      (core_reduction.lem:501–519), so an action or memop request under it
+      IS advanceable (driver.lem:914–917, :925–927) — the ccall-sibling
+      pattern (t9) is E6/E7's. Same three guards as `sseq_ctx`; `toVal e =
+      none` is get_ctx's `is_irreducible e = false`. -/
+  | unseq_ctx {a : List annot} {es1 : List CoreExpr} {e e' : CoreExpr} {es2 : List CoreExpr}
+      {ρ ρ' : EnvStack} {ctl ctl' : Ctl} {σ σ' : Mem}
+      (hv2 : valsOnly es2 = true) (hcc : ccallFreeList (es1 ++ es2) = true)
+      (hnj : jumpRedex? e = none) (hnc : callRedex? e = none) (hnv : toVal e = none) :
+      Step M (e, ρ, ctl, σ) (e', ρ', ctl', σ') →
+      Step M (Expr a (Eunseq (es1 ++ e :: es2)), ρ, ctl, σ)
+           (Expr a (Eunseq (es1 ++ e' :: es2)), ρ', ctl', σ')
+  /-- E4: UNSEQ-PURE / UNSEQ-ANNOT — `unseq({A_1}?v_1, …, {A_n}?v_n) -->
+      {A_1 ++ … ++ A_n}(v_1, …, v_n)` (one_step0's `Eunseq` arm at
+      all-irreducible components, core_reduction.lem:375–386, through
+      `one_step_unseq_aux` :258–274 — the mirror's `collectUnseq`; step_ctx's
+      general arm wraps the TAU as `Step_tau2 "…" TSK_Misc` at the
+      location-updated thread with the env verbatim, :1461–1463; the
+      successor `Expr annots (Eannot fps (mk_value_e (Vtuple cvals)))`
+      VERBATIM — an `Eannot` node even at `fps = []`). A race
+      (`collectUnseq … = none`) is the engine's UNSEQUENCED-RACE kill
+      (UB035, :1480–1484), classified in Round.lean, never a step. -/
+  | unseq_vals {a : List annot} {ws : List SpikeValA} {fps : List dyn_annotation}
+      {cvals : List value} {ρ : EnvStack} {ctl : Ctl} {σ : Mem}
+      (hcol : collectUnseq ([], []) ws = some (fps, cvals)) :
+      Step M (Expr a (Eunseq (ws.map ofValA)), ρ, ctl, σ)
+           (Expr a (Eannot fps (Expr [] (Epure (Pexpr [] () (PEval (Vtuple cvals)))))),
+            ρ, ctl.upd a, σ)
   /-- THE GLOBAL JUMP (S3, header note 4). Mirrors step_ctx's Erun arm
       (core_reduction.lem:1414–1441): the spine hole holds `run l pes`;
       the label resolves in the CURRENT procedure's registered map
@@ -3438,6 +3824,14 @@ theorem Step.ctl_cases {M : MachineCtx} {e e' : CoreExpr} {ρ ρ' : EnvStack}
     · rw [hc1] at hnc; cases hnc
     · rw [toVal_ofValA] at hnv; cases hnv
   | bound_pure => cases hcfg; cases hcfg'; exact .inl ⟨_, rfl⟩
+  | unseq_ctx hv2 hcc hnj hnc hnv hs ih =>
+    cases hcfg; cases hcfg'
+    rcases ih rfl rfl with ⟨a, rfl⟩ | ⟨_, _, _, _, _, _, hc1, -⟩ |
+      ⟨_, _, _, _, _, _, _, _, _, _, _, _, rfl, -⟩
+    · exact .inl ⟨a, rfl⟩
+    · rw [hc1] at hnc; cases hnc
+    · rw [toVal_ofValA] at hnv; cases hnv
+  | unseq_vals hcol => cases hcfg; cases hcfg'; exact .inl ⟨_, rfl⟩
   | bound_annot => cases hcfg; cases hcfg'; exact .inl ⟨_, rfl⟩
   | annot_merge => cases hcfg; cases hcfg'; exact .inl ⟨_, rfl⟩
   | run hj hl hvs => cases hcfg; cases hcfg'; exact .inl ⟨_, rfl⟩
@@ -3550,6 +3944,8 @@ theorem Step.env_cons' {M : MachineCtx} {c c' : Config}
   | annot_ctx hnj hnc hnv hg hs ih => exact ih hκ
   | bound_ctx hnj hnc hnv hs ih => exact ih hκ
   | bound_pure => exact fun ev0 evs hin => ⟨ev0, hin⟩
+  | unseq_ctx hv2 hcc hnj hnc hnv hs ih => exact ih hκ
+  | unseq_vals hcol => exact fun ev0 evs hin => ⟨ev0, hin⟩
   | bound_annot => exact fun ev0 evs hin => ⟨ev0, hin⟩
   | annot_merge => exact fun ev0 evs hin => ⟨ev0, hin⟩
   | run hj hl hvs =>
@@ -3614,6 +4010,121 @@ theorem Step.env_cons {M : MachineCtx} {e : CoreExpr} {ev0 : Fmap sym value}
     ∃ ev0', ρ' = ev0' :: evs :=
   h.env_cons' hκ ev0 evs rfl
 
+/-- E4: ccall-freedom is preserved by every framed step (a step that is not
+    a jump, not a call, not at a value): the successors are subterms,
+    values, rebuilt actions or annotation wrappers of subterms; the
+    `case` rounds are excluded by `ccallFree (Ecase …) = false` (the
+    substituted branch would need KOI B7's substitution lemma). What
+    `Frag.step` needs at the `unseq` frame: the focused component stays
+    an admissible sibling. -/
+theorem Step.ccallFree_preserved {M : MachineCtx} {e e' : CoreExpr} {ρ ρ' : EnvStack}
+    {ctl ctl' : Ctl} {σ σ' : Mem}
+    (h : Step M (e, ρ, ctl, σ) (e', ρ', ctl', σ')) :
+    jumpRedex? e = none → callRedex? e = none → toVal e = none →
+    ccallFree e = true → ccallFree e' = true := by
+  generalize hcfg : (e, ρ, ctl, σ) = c at h
+  generalize hcfg' : (e', ρ', ctl', σ') = c' at h
+  induction h generalizing e ρ ctl σ e' ρ' ctl' σ' with
+  | store h1 h2 h3 hmv hmem => cases hcfg; cases hcfg'; exact fun _ _ _ _ => rfl
+  | load h1 h2 hmem => cases hcfg; cases hcfg'; exact fun _ _ _ _ => rfl
+  | create h1 h2 hmem => cases hcfg; cases hcfg'; exact fun _ _ _ _ => rfl
+  | alloc h1 h2 hmem => cases hcfg; cases hcfg'; exact fun _ _ _ _ => rfl
+  | kill h1 hmem => cases hcfg; cases hcfg'; exact fun _ _ _ _ => rfl
+  | sseq_pure =>
+    cases hcfg; cases hcfg'; intro _ _ _ hcc
+    simp only [ccallFree, Bool.and_eq_true] at hcc; exact hcc.2
+  | sseq_annot =>
+    cases hcfg; cases hcfg'; intro _ _ _ hcc
+    simp only [ccallFree, Bool.and_eq_true] at hcc ⊢; exact hcc.2
+  | wseq_pure =>
+    cases hcfg; cases hcfg'; intro _ _ _ hcc
+    simp only [ccallFree, Bool.and_eq_true] at hcc; exact hcc.2
+  | wseq_annot =>
+    cases hcfg; cases hcfg'; intro _ _ _ hcc
+    simp only [ccallFree, Bool.and_eq_true] at hcc ⊢; exact hcc.2
+  | sseq_spec_pure =>
+    cases hcfg; cases hcfg'; intro _ _ _ hcc
+    simp only [ccallFree, Bool.and_eq_true] at hcc; exact hcc.2
+  | sseq_spec_annot =>
+    cases hcfg; cases hcfg'; intro _ _ _ hcc
+    simp only [ccallFree, Bool.and_eq_true] at hcc ⊢; exact hcc.2
+  | pure_eval hnv hv => cases hcfg; cases hcfg'; exact fun _ _ _ _ => rfl
+  | load_eval hnv2 hv2 => cases hcfg; cases hcfg'; exact fun _ _ _ _ => rfl
+  | sseq_ctx hnj hnc hnv hs ih =>
+    cases hcfg; cases hcfg'; intro _ _ _ hcc
+    simp only [ccallFree, Bool.and_eq_true] at hcc ⊢
+    exact ⟨ih rfl rfl hnj hnc hnv hcc.1, hcc.2⟩
+  | wseq_ctx hnj hnc hnv hs ih =>
+    cases hcfg; cases hcfg'; intro _ _ _ hcc
+    simp only [ccallFree, Bool.and_eq_true] at hcc ⊢
+    exact ⟨ih rfl rfl hnj hnc hnv hcc.1, hcc.2⟩
+  | annot_ctx hnj hnc hnv hg hs ih =>
+    cases hcfg; cases hcfg'; intro _ _ _ hcc
+    simp only [ccallFree] at hcc ⊢
+    exact ih rfl rfl hnj hnc hnv hcc
+  | bound_ctx hnj hnc hnv hs ih =>
+    cases hcfg; cases hcfg'; intro _ _ _ hcc
+    simp only [ccallFree] at hcc ⊢
+    exact ih rfl rfl hnj hnc hnv hcc
+  | unseq_ctx hv2 hcc0 hnj hnc hnv hs ih =>
+    cases hcfg; cases hcfg'; intro _ _ _ hcc
+    simp only [ccallFree, ccallFreeList_append, ccallFreeList_cons, Bool.and_eq_true] at hcc ⊢
+    exact ⟨hcc.1, ih rfl rfl hnj hnc hnv hcc.2.1, hcc.2.2⟩
+  | unseq_vals hcol => cases hcfg; cases hcfg'; exact fun _ _ _ _ => rfl
+  | bound_pure => cases hcfg; cases hcfg'; exact fun _ _ _ _ => rfl
+  | bound_annot => cases hcfg; cases hcfg'; exact fun _ _ _ _ => rfl
+  | annot_merge =>
+    cases hcfg; cases hcfg'; intro _ _ _ hcc
+    simpa only [ccallFree] using hcc
+  | run hj hl hvs => cases hcfg; cases hcfg'; intro hnj; rw [hj] at hnj; cases hnj
+  | save hvals =>
+    cases hcfg; cases hcfg'; intro _ _ _ hcc
+    simpa only [ccallFree] using hcc
+  | save_eval hnv hvals =>
+    cases hcfg; cases hcfg'; intro _ _ _ hcc
+    simpa only [ccallFree] using hcc
+  | if_true hg =>
+    cases hcfg; cases hcfg'; intro _ _ _ hcc
+    simp only [ccallFree, Bool.and_eq_true] at hcc; exact hcc.1
+  | if_false hg =>
+    cases hcfg; cases hcfg'; intro _ _ _ hcc
+    simp only [ccallFree, Bool.and_eq_true] at hcc; exact hcc.2
+  | case_value hv hsel => cases hcfg; cases hcfg'; intro _ _ _ hcc; simp [ccallFree] at hcc
+  | sseq_sym_pure =>
+    cases hcfg; cases hcfg'; intro _ _ _ hcc
+    simp only [ccallFree, Bool.and_eq_true] at hcc; exact hcc.2
+  | sseq_sym_annot =>
+    cases hcfg; cases hcfg'; intro _ _ _ hcc
+    simp only [ccallFree, Bool.and_eq_true] at hcc ⊢; exact hcc.2
+  | sseq_tuple_pure =>
+    cases hcfg; cases hcfg'; intro _ _ _ hcc
+    simp only [ccallFree, Bool.and_eq_true] at hcc; exact hcc.2
+  | sseq_tuple_annot =>
+    cases hcfg; cases hcfg'; intro _ _ _ hcc
+    simp only [ccallFree, Bool.and_eq_true] at hcc ⊢; exact hcc.2
+  | wseq_tuple_pure =>
+    cases hcfg; cases hcfg'; intro _ _ _ hcc
+    simp only [ccallFree, Bool.and_eq_true] at hcc; exact hcc.2
+  | wseq_tuple_annot =>
+    cases hcfg; cases hcfg'; intro _ _ _ hcc
+    simp only [ccallFree, Bool.and_eq_true] at hcc ⊢; exact hcc.2
+  | wseq_sym_pure =>
+    cases hcfg; cases hcfg'; intro _ _ _ hcc
+    simp only [ccallFree, Bool.and_eq_true] at hcc; exact hcc.2
+  | wseq_sym_annot =>
+    cases hcfg; cases hcfg'; intro _ _ _ hcc
+    simp only [ccallFree, Bool.and_eq_true] at hcc ⊢; exact hcc.2
+  | case_eval hnv hv => cases hcfg; cases hcfg'; intro _ _ _ hcc; simp [ccallFree] at hcc
+  | memop_ptreq h1 h2 hmem => cases hcfg; cases hcfg'; exact fun _ _ _ _ => rfl
+  | memop_eval hnv hv1 hv2 => cases hcfg; cases hcfg'; exact fun _ _ _ _ => rfl
+  | store_eval hnv hv2 hv3 => cases hcfg; cases hcfg'; exact fun _ _ _ _ => rfl
+  | kill_eval hnv hv => cases hcfg; cases hcfg'; exact fun _ _ _ _ => rfl
+  | alloc_eval hnv hv1 hv2 => cases hcfg; cases hcfg'; exact fun _ _ _ _ => rfl
+  | create_eval hnv hv1 hv2 => cases hcfg; cases hcfg'; exact fun _ _ _ _ => rfl
+  | call hc hvs hf hlen => cases hcfg; cases hcfg'; intro _ hnc; rw [hc] at hnc; cases hnc
+  | ret => cases hcfg; cases hcfg'; intro _ _ hnv; rw [toVal_ofValA] at hnv; cases hnv
+  | ret_annot => cases hcfg; cases hcfg'; intro _ _ hnv; rw [toVal_ofValA] at hnv; cases hnv
+
 /-- Inversion at a call redex IN CONTEXT: the step is THE CALL, its
     successor determined by the file lookup, the argument values and the
     captured context. By induction on the step: a congruence rule cannot
@@ -3646,6 +4157,9 @@ theorem Step.call_inv' {M : MachineCtx} {c : Config}
   | annot_ctx hnj hnc hnv hg hs => intro ctx f pes hc; rw [callRedex?_annot_of_not_root _ _ hg, hnc] at hc; cases hc
   | bound_ctx hnj hnc hnv hs => intro ctx f pes hc; rw [callRedex?_bound, hnc] at hc; cases hc
   | bound_pure => intro ctx f pes hc; simp [callRedex?] at hc
+  | unseq_ctx hv2 hcc hnj hnc hnv hs =>
+    intro ctx f pes hc; rw [callRedex?_unseq_focus _ hnv hv2, hnc] at hc; cases hc
+  | unseq_vals hcol => intro ctx f pes hc; rw [callRedex?_unseq_vals] at hc; cases hc
   | bound_annot => intro ctx f pes hc; simp [callRedex?] at hc
   | annot_merge => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
   | run hj hl hvs => intro ctx f pes hc; rw [callRedex?_none_of_jumpRedex?_some hj] at hc; cases hc
@@ -4083,6 +4597,8 @@ theorem Step.jump_inv {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack} {ctl : Ctl
   | annot_ctx hnj hnc hnv hg hs => rw [jumpRedex?_annot_of_not_root _ _ hg, hnj] at hj0; cases hj0
   | bound_ctx hnj hnc hnv hs => rw [jumpRedex?_bound, hnj] at hj0; cases hj0
   | bound_pure => simp [jumpRedex?] at hj0
+  | unseq_ctx hv2 hcc hnj hnc hnv hs => rw [jumpRedex?_unseq_focus _ hnv hv2, hnj] at hj0; cases hj0
+  | unseq_vals hcol => rw [jumpRedex?_unseq_vals] at hj0; cases hj0
   | bound_annot => simp [jumpRedex?] at hj0
   | annot_merge => simp [jumpRedex?, annotRooted] at hj0
   | run hj hl hvs =>
@@ -4438,6 +4954,67 @@ theorem Step.bound_inv {M : MachineCtx} {a : List annot} {b : CoreExpr}
     rw [redexAnnots_bound_of_nv _ (toVal_none_of_jumpRedex?_some hj)]
   | call hc hvs hf hlen =>
     exact .inr (.inr (.inr (.inr (Step.callOf_of_call_bound hc hvs hf hlen))))
+
+/-- The call rule seen from the `Cunseq` frame (E4). -/
+theorem Step.callOf_of_call_unseq {M : MachineCtx} {a : List annot}
+    {es1 : List CoreExpr} {e : CoreExpr} {es2 : List CoreExpr}
+    {ctx : context} {f : sym} {pes : List (generic_pexpr Unit sym)}
+    {params : List (sym × core_base_type)} {body : CoreExpr} {vs : List value}
+    {ρ : EnvStack} {ctl : Ctl} {σ : Mem}
+    (hnv : toVal e = none) (hv2 : valsOnly es2 = true)
+    (hc : callRedex? (Expr a (Eunseq (es1 ++ e :: es2))) = some (ctx, f, pes))
+    (hvs : evalPexprs M.tagDefs M.extern M.file ρ pes = some vs)
+    (hf : lookupProc M.file M.extern f = some (params, body))
+    (hlen : params.length = vs.length) :
+    Step.CallOf M e (fun c => Cunseq a es1 c es2) ρ ctl σ
+      (body, procEnv params vs :: ρ,
+       ctl.callPush (redexAnnots (Expr a (Eunseq (es1 ++ e :: es2)))) ctx f, σ) := by
+  rw [callRedex?_unseq_focus a hnv hv2, Option.map_eq_some_iff] at hc
+  obtain ⟨⟨ctx1, f1, pes1⟩, hc1, hq⟩ := hc
+  obtain ⟨rfl, rfl, rfl⟩ : _ ∧ _ ∧ _ := by
+    exact ⟨congrArg Prod.fst hq, congrArg (fun q => q.2.1) hq,
+      congrArg (fun q => q.2.2) hq⟩
+  refine ⟨ctx1, f1, pes1, _, _, _, hc1, hvs, hf, hlen, ?_⟩
+  rw [redexAnnots_unseq_focus a hnv hv2]
+
+/-- Inversion at an `Eunseq` node (E4): a frame step of the FOCUSED
+    component (the last reducible one — `focus_unique` identifies it with
+    any other focus split), the completion at all values, THE GLOBAL JUMP
+    (the search descends to the focus, frame discarded), or THE CALL of the
+    focused component with the `Cunseq` frame CAPTURED. -/
+theorem Step.unseq_inv {M : MachineCtx} {a : List annot} {es : List CoreExpr}
+    {ρ : EnvStack} {ctl : Ctl} {σ : Mem} {out : Config}
+    (h : Step M (Expr a (Eunseq es), ρ, ctl, σ) out) :
+    (∃ es1 e es2 e' ρ' ctl' σ', es = es1 ++ e :: es2 ∧ valsOnly es2 = true ∧
+        ccallFreeList (es1 ++ es2) = true ∧
+        jumpRedex? e = none ∧ callRedex? e = none ∧ toVal e = none ∧
+        Step M (e, ρ, ctl, σ) (e', ρ', ctl', σ') ∧
+        out = (Expr a (Eunseq (es1 ++ e' :: es2)), ρ', ctl', σ')) ∨
+    (∃ ws fps cvals, es = ws.map ofValA ∧ collectUnseq ([], []) ws = some (fps, cvals) ∧
+        out = (Expr a (Eannot fps (Expr [] (Epure (Pexpr [] () (PEval (Vtuple cvals)))))),
+          ρ, ctl.upd a, σ)) ∨
+    (∃ l pes params cont vs ev0 evs, jumpRedex? (Expr a (Eunseq es)) = some (l, pes) ∧
+        ρ = ev0 :: evs ∧ lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) ∧
+        evalPexprs M.tagDefs M.extern M.file ρ pes = some vs ∧
+        out = (cont, bindArgs params vs ρ, ctl.upd (redexAnnots (Expr a (Eunseq es))), σ)) ∨
+    (∃ es1 e es2, es = es1 ++ e :: es2 ∧ toVal e = none ∧ valsOnly es2 = true ∧
+        Step.CallOf M e (fun c => Cunseq a es1 c es2) ρ ctl σ out) := by
+  cases h with
+  | unseq_ctx hv2 hcc hnj hnc hnv hs =>
+    exact .inl ⟨_, _, _, _, _, _, _, rfl, hv2, hcc, hnj, hnc, hnv, hs, rfl⟩
+  | unseq_vals hcol => exact .inr (.inl ⟨_, _, _, rfl, hcol, rfl⟩)
+  | run hj hl hvs => exact .inr (.inr (.inl ⟨_, _, _, _, _, _, _, hj, rfl, hl, hvs, rfl⟩))
+  | call hc hvs hf hlen =>
+    have hnvU : toVal (Expr a (Eunseq es)) = none := rfl
+    cases hvo : valsOnly es with
+    | true =>
+      obtain ⟨ws, rfl⟩ := valsOnly_true_map hvo
+      rw [callRedex?_unseq_vals] at hc
+      cases hc
+    | false =>
+      obtain ⟨es1, e, es2, rfl, hnv, hv2⟩ := focus_exists hvo
+      exact .inr (.inr (.inr ⟨es1, e, es2, rfl, hnv, hv2,
+        Step.callOf_of_call_unseq hnv hv2 hc hvs hf hlen⟩))
 
 /-- Inversion at an Esave node: either the entry TAU (value-shaped
     initializers) or the parameter-EVAL step. -/

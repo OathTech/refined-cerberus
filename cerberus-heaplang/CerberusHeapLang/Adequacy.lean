@@ -806,11 +806,6 @@ def ControlOk (M : MachineCtx) (ctl : Ctl) : Prop :=
     ∀ (a : List _root_.annot) (v : value), Frag (apply_ctx pc.2 (ofValA (.pure a [] v))) ∧
       pot (apply_ctx pc.2 (ofValA (.pure a [] v))) ≤ lemDefaultFuel
 
-/-- The potential is positive (a redex leaf weighs at least 1). -/
-theorem pot_pos (e : CoreExpr) : 1 ≤ pot e := by
-  unfold pot
-  split <;> omega
-
 /-- Plugging the RETURNED value node (`ofValA (.pure a [] v)` — the
     callee's node annotations over a fresh pexpr, `Step.ret`) into the
     context of a decomposed CALL redex of a fragment term yields a
@@ -851,6 +846,20 @@ theorem Decomp.frag_plug_call' {e : CoreExpr} {ctx : context} {r : CoreExpr}
   | wseq_sym hd ih =>
     obtain ⟨hf1, hf2⟩ := hf.wseq_inv_any
     exact .wseq_sym (ih hr hf1) hf2
+  | @unseq an es1 e0 es2 ctx' r' hv2 hcc hd ih =>
+    cases hf with
+    | unseq hne hccl hfl =>
+      have hcc0 : ccallFree e0 = true :=
+        ccallFree_of_mem hccl (List.mem_append_right _ (List.mem_cons_self ..))
+      refine .unseq (by simp) ?_ ?_
+      · rw [ccallFreeList_append, ccallFreeList_cons, Bool.and_eq_true, Bool.and_eq_true] at hccl ⊢
+        exact ⟨hccl.1, hd.ccallFree_plug hcc0 rfl, hccl.2.2⟩
+      · intro x hx
+        rcases List.mem_append.mp hx with hx | hx
+        · exact hfl x (List.mem_append_left _ hx)
+        · rcases List.mem_cons.mp hx with rfl | hx
+          · exact ih hr (hfl e0 (List.mem_append_right _ (List.mem_cons_self ..)))
+          · exact hfl x (List.mem_append_right _ (List.mem_cons_of_mem _ hx))
 
 theorem Decomp.frag_plug_call {e : CoreExpr} {ctx : context} {an : List _root_.annot}
     {ra : core_run_annotation} {f : sym} {pes : List (generic_pexpr Unit sym)}
@@ -880,6 +889,10 @@ theorem Decomp.pot_plug_call_le' {e : CoreExpr} {ctx : context} {r : CoreExpr}
   | sseq_tuple hd ih => have := ih hr; simp only [apply_ctx, pot_sseq]; omega
   | wseq_tuple hd ih => have := ih hr; simp only [apply_ctx, pot_wseq]; omega
   | wseq_sym hd ih => have := ih hr; simp only [apply_ctx, pot_wseq]; omega
+  | @unseq an es1 e0 es2 ctx' r' _ _ hd ih =>
+    have := potList_append_cons_le es1 es2 (ih hr)
+    simp only [apply_ctx, pot_unseq]
+    omega
 
 theorem Decomp.pot_plug_call_le {e : CoreExpr} {ctx : context} {an : List _root_.annot}
     {ra : core_run_annotation} {f : sym} {pes : List (generic_pexpr Unit sym)}

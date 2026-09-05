@@ -736,7 +736,7 @@ def trioExports : List Name := [
   ``CerberusHeapLang.drive_after_setup_lib_killed, ``CerberusHeapLang.drive_after_setup_lib,
   ``CerberusHeapLang.prod_run_eqJ_lib, ``CerberusHeapLang.prod_run_eqJ_lib1,
   ``CerberusHeapLang.prod_run_safe_lib, ``CerberusHeapLang.CorpusE0.t1MainWith_frag,
-  ``CerberusHeapLang.CorpusE0.t1_unseq_not_frag, ``CerberusHeapLang.cAdd_pure_round,
+  ``CerberusHeapLang.cAdd_pure_round,
   ``CerberusHeapLang.store_conv_loaded_int_round,
   ``CerberusHeapLang.loop_step_withrs_eval_killed,
   ``CerberusHeapLang.call_function_exception_of_callOut,

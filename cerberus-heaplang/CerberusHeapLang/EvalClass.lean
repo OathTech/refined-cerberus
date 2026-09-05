@@ -2646,6 +2646,7 @@ theorem foldM_args_kill {th : thread_state}
 /-! ## The operands of a configuration (the residual's witness is one
 of them) -/
 
+mutual
 /-- The pure operands the engine evaluates at a fragment configuration's
     redex: the guard of `Eif`, the arguments of `Erun` and of `Eproc` (calls
     arc C2), the initializers
@@ -2670,7 +2671,24 @@ def operandsOf : CoreExpr → List (generic_pexpr Unit sym)
   | Expr _ (Eaction (Paction _ (Action _ _ (Create pe1 pe2 _)))) => [pe1, pe2]
   | Expr _ (Ememop _ pes) => pes
   | Expr _ (Ebound b) => operandsOf b
+  | Expr _ (Eunseq es) => operandsOfU es
   | _ => []
+/-- E4: the focused (last reducible) component's operands under the
+    `Cunseq` frame (`jumpRedexU?`'s spine); `[]` at all values. -/
+def operandsOfU : List CoreExpr → List (generic_pexpr Unit sym)
+  | [] => []
+  | e :: es => if valsOnly es then operandsOf e else operandsOfU es
+end
+
+theorem operandsOfU_focus {es1 : List CoreExpr} {e : CoreExpr} {es2 : List CoreExpr}
+    (hnv : toVal e = none) (hv2 : valsOnly es2 = true) :
+    operandsOfU (es1 ++ e :: es2) = operandsOf e := by
+  induction es1 with
+  | nil => simp only [List.nil_append, operandsOfU, hv2, ↓reduceIte]
+  | cons x xs ih =>
+    simp only [List.cons_append, operandsOfU, valsOnly_append_cons_false hnv, Bool.false_eq_true,
+      ↓reduceIte]
+    exact ih
 
 /-- A decomposition's frames are transparent to `operandsOf`. -/
 theorem Decomp.operandsOf_eq {e : CoreExpr} {ctx : context} {r : CoreExpr}
@@ -2686,5 +2704,9 @@ theorem Decomp.operandsOf_eq {e : CoreExpr} {ctx : context} {r : CoreExpr}
   | sseq_tuple _ ih => exact ih
   | wseq_tuple _ ih => exact ih
   | wseq_sym _ ih => exact ih
+  | unseq hv2 _ hd ih =>
+    rw [show operandsOf (Expr _ (Eunseq _)) = operandsOfU _ from rfl,
+      operandsOfU_focus hd.toVal_none hv2]
+    exact ih
 
 end CerberusHeapLang
