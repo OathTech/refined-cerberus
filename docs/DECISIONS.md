@@ -2744,3 +2744,71 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   ALL GATES GREEN
   GATE-EXIT=0
   ```
+- **2026-09-05 [AGENT] E3 LANDED ON `dialect-e1` (f22f4b7 after rebase onto the E2-fixes
+  candidate f9c3c2e; three E3 commits b94bc2f/981714d/f22f4b7): impl arithmetic,
+  std.core unfolding, the file object.** Record `cerberus-heaplang/docs/2026-09-05_e3-notes.md`;
+  closure successor `docs/2026-09-05_fragment-closure-e3-notes.md`; post
+  snapshot `docs/2026-09-05_e3-signatures-post.txt`. Admitted (engine cites
+  §1): `PEconv_int` (`mk_conv_int`), `PEwrapI` (`mk_wrapI_op`),
+  `PEcatch_exceptional_condition` at all iops (ruled for Add only), `PEis_unsigned`
+  at a leaf, `Civmin`/`Civmax`, ctype `OpEq`, `OpAnd`/`OpOr`, `PEcall` at a
+  stdlib symbol unfolded by `callBody` on the SAME file object the engine
+  reads (`call_function`; budgets 4/17/23). THE FIRST C INTEGER RULES
+  (IntRules.lean): `wps_c_add`/`wpt_c_add` (two bound `Specified` operands,
+  the `int` range conditions, the selected-branch equation),
+  `wps/wpt_conv_loaded_int`; overflow face `evalClass_cAdd_overflow = .undef
+  loc [UB036]`. FILE OBJECT: option (a) of the design — `stdlibE3` (three
+  transcribed std.core bodies), `prodFileLib`, `prod_run_eqJ_lib(1)`/
+  `prod_run_safe_lib`; the speedbump checks the bodies against the pinned
+  std.core SOURCE (the oracle cannot print its stdlib — four measured
+  failures recorded). Acceptance: `t1_uncovered_exactly_unseq` (kernel-
+  decided: t1's `main` is outside `Frag` at exactly `unseq`);
+  `exhibitC_prod_e3` (emitted `x + 1`, delivers `Specified(4)`, at the
+  literal 3 — no storability lemma for a symbolic `int` image, a heap-layer
+  gap); the NEGATIVE result `overflow_driver2_killed(_frame)`: at `INT_MAX`
+  the genuine `driver2` at every fuel from the `+` round is exactly
+  `NDkilled (Undef0 current_loc [UB036])` (the whole run from the initial
+  state measured by compiled `#eval`, not a theorem — kernel reduction of
+  the prefix measured not to reduce). Census (derived) 3853 → 4162: ADDED
+  312 / REMOVED 3 / CHANGED 369 = 268 file-parameter-forced + 11 driver-lane
+  file tie + 56 loop-exhibit derivations at `procCtxF` (exports keep
+  `procCtx`) + 34 recursors. Manifest 28 constructors / 66 rows (37 RULE /
+  24 NO-RULE / 5 OUT-OF-SCOPE) / 21 consumers. Pins 508 → 588 on E3's base;
+  589 at the combined head (+ the E2 audit's `unspec_bytes`) — the E3 record
+  says 588 (erratum: its base predates the E2 fixes). [AGENT] decision points
+  (record §5–§7): `-`/`*`/`/`/`%`/shifts/`wrapI`/standalone conversions
+  mirrored, NO-RULE; `PElet` withdrawn (pull/strip non-commutation);
+  `is_unsigned` at a leaf only (engine quirk core_eval.lem:1086, an
+  upstream-tray candidate); `stdBudget` keyed by printed name; pure nodes of
+  `progCE3` at `Expr []` (E4 note). REBASE onto f9c3c2e: five conflict
+  hunks in four files (Audit.lean pin list — both groups kept; CLAIMS C12
+  (E2-fixes text) + C13; README/ARCHITECTURE prose — E3's superseding text;
+  the pin sentence corrected to 589), resolved by the orchestrator. The
+  first combined gate run was killed by the background command's own
+  15-minute window during manifest regeneration (build green, memory 13G of
+  125G — NOT box OOM); rerun with the build cached. Orchestrator FULL gate at
+  f22f4b7 (64G cap), verbatim (per-module boundary lines elided; record):
+  ```
+  == gate 1: banned proof-method grep (native_decide / bv_decide / ofReduce*) ==
+  ok: no banned proof-method references
+  == gate 2: capped build, cerberus-heaplang (elaborates its axiom audit) ==
+  info: CerberusHeapLang/Audit.lean:754:0: CerberusHeapLang export pins: 589 trio-exact
+  info: CerberusHeapLang/Audit.lean:754:0: CerberusHeapLang axiom sweep: every theorem bounded by the trio (4725 swept, internal details included — count informational, environment-dependent)
+  info: CerberusHeapLang/Audit.lean:754:0: CerberusHeapLang banned-axiom sweep: sorryAx/ofReduceBool/ofReduceNat absent from all cones (7370 constants of every kind swept, internal details included — count informational, environment-dependent)
+  Build completed successfully (465 jobs).
+  ok: cerberus-heaplang build green
+  == speedbump: rule-use and classification manifest (regenerate; red on a red row or drift) ==
+  ok: capability manifest regenerated, no drift
+  == speedbump: corpus skeleton (hand-transcribed emitted Core vs docs/corpus-e0; scripts/corpus_skeleton.lean) ==
+  ok: corpus skeleton — every transcription matches its emitted text, every plant mismatches
+  == speedbump: import direction (semantics → heap → rules → adequacy → clients) ==
+  ok: import direction — 17 core modules, none imports an exhibit/example/production module
+  == speedbump: client boundary (positive clients mention no logic internals; scripts/boundary_check.sh) ==
+  BOUNDARY: 23 modules checked, 0 internals mention(s) in total, exit=0
+  ok: client boundary — no unallowlisted internals mention
+  ALL GATES GREEN
+  GATE-EXIT=0
+  ```
+  Range audit f9c3c2e..HEAD dispatched next on a fixed detached copy; E4
+  (`unseq`, the last slice before the t1 milestone) dispatched in parallel
+  on this branch; E3's merge ask follows its audit.
