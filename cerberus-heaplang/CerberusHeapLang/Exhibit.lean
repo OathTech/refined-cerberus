@@ -346,7 +346,7 @@ theorem provenA {GF : BundledGFunctors} [SpikeGpreS GF] :
   refine .trans ?_ ((BI.emp_sep.2.trans (BI.sep_mono
     ((spike_blockSpecs (fun w _ => iprop(∃ Q : CellMap, ⌜w.val = sevenVal ∧ Q = mA7⌝ ∗
         ([∗map] i ↦ c ∈ Q, cellOwn spikeCtx.tagDefs (hlc := .hasLC) (GF := GF) i (.own 1) c)))).trans
-      (wps_sound_empty (ctl := spikeCtl) rfl progA spikeEnv)) .rfl)).trans
+      (wps_sound_empty (ctl := spikeCtl) rfl (Nat.zero_le _) progA spikeEnv)) .rfl)).trans
     BI.wand_elim_left)
   rw [show (progA : CoreExpr) =
     Expr [] (Esseq (Pattern [] (CaseBase (none, BTy_unit)))
@@ -696,7 +696,7 @@ theorem provenC {GF : BundledGFunctors} [SpikeGpreS GF] :
     (Ls := fun _ _ _ => iprop(False)) xPtr yPtr loc0 loc0
     empty_annotation empty_annotation NA NA BTy_unit bytesX bytesY fmapEmpty []).trans ?_)
   refine ((BI.emp_sep.2.trans (BI.sep_mono
-    ((spike_blockSpecs _).trans (wps_sound_empty (ctl := spikeCtl) rfl progC spikeEnv)) .rfl)).trans
+    ((spike_blockSpecs _).trans (wps_sound_empty (ctl := spikeCtl) rfl (Nat.zero_le _) progC spikeEnv)) .rfl)).trans
     BI.wand_elim_left).trans ?_
   apply wp_mono
   intro v

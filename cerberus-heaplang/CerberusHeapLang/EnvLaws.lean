@@ -347,6 +347,31 @@ theorem envAdd_lookup {f : Fmap sym value} (h : SymFrame f)
       (if symOrd l k = .eq then some v else fmapLookupBy cmp' l f) :=
   symAdd_lookup h cmp' l k v
 
+/-- E5 (slice 2): the symbol order is reflexive at `.eq` — for a SYMBOLIC
+    symbol (the negative-action round's fresh binder), where the exhibits'
+    `decide +kernel` at concrete symbols does not apply. Through
+    `symOrd_eq_compareOn`: both `compare` components are reflexive. -/
+theorem symOrd_self (x : sym) : symOrd x x = .eq := by
+  obtain ⟨d, n, sd⟩ := x
+  rw [symOrd_eq_compareOn]
+  simp only [compareLex, compareOn, symKey]
+  rw [string_compare_self, Nat.compare_eq_eq.mpr rfl]
+  rfl
+
+/-- E5 (slice 2): a symbol with a DIFFERENT symbol NUMBER is never `.eq`
+    (`symbolEquality` demands equal digests AND equal numbers): the fresh
+    binder `fresh_given_int k` at `k` above every program symbol's number
+    collides with none of them, whatever the opaque `digest ()` is. -/
+theorem symOrd_ne_eq_of_num_ne {d1 d2 : String} {n1 n2 : Nat} {sd1 sd2 : symbol_description}
+    (h : n1 ≠ n2) : symOrd (Symbol d1 n1 sd1) (Symbol d2 n2 sd2) ≠ .eq := by
+  rw [symOrd_eq_compareOn]
+  simp only [compareLex, compareOn, symKey]
+  intro hc
+  cases hd : compare d1 d2 <;> simp only [hd, Ordering.then] at hc
+  · cases hc
+  · exact h (Nat.compare_eq_eq.mp hc)
+  · cases hc
+
 /-! ## The binding-pattern computations (engine `update_env_aux`
 computed at the authored pattern shapes) -/
 
@@ -393,6 +418,22 @@ theorem update_env_sym (x : sym) (bty : core_base_type) (v : value)
   rw [update_env_cons]
   show update_env_aux (mk_sym_pat x bty) v ev0 :: evs = _
   rw [update_env_aux_sym]
+
+/-- E5 (slice 2): `update_env` at the negative-action rewrite's binder
+    `let weak (_: unit, s: unit) = …` (`negRewrite`'s `mk_tuple_pat
+    [mk_empty_pat BTy_unit, mk_sym_pat s BTy_unit]`) at the completed
+    `unseq`'s tuple `(Unit, v)`: the wildcard leaf binds nothing, the symbol
+    leaf binds `s ↦ v` onto the head frame (the `Ctuple` arm's `foldr` over
+    the zipped leaves, Core_aux.lean:861). -/
+theorem update_env_tuple_wild_sym (s : sym) (v : value) (u : value)
+    (ev0 : Fmap sym value) (evs : List (Fmap sym value)) :
+    update_env (tuplePat [] [([], none, BTy_unit), ([], some s, BTy_unit)]) (Vtuple [u, v])
+        (ev0 :: evs) =
+      envAdd s v ev0 :: evs := by
+  rw [update_env_cons]
+  show update_env_aux_lemFuel lemDefaultFuel _ _ _ :: evs = _
+  rw [show lemDefaultFuel = 999999 + 1 from rfl]
+  rfl
 
 /-! ## Head-frame lookups through `lookup_env` -/
 

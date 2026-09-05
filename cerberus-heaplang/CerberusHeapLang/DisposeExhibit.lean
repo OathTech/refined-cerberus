@@ -1507,7 +1507,7 @@ theorem dispose_list_certified_production (sup : Nat) (ra : core_run_annotation)
         (M₀ := procCtxF (prodFile (dlProdProg ra mo bty sbty cbty bbty nbty ubty)) ((initial_core_run_state sup
           (collect_labeled_continuations_NEW
             (prodFile (dlProdProg ra mo bty sbty cbty bbty nbty ubty)))).1))
-        rfl rfl (procCtxF_labels hQprod) rfl rfl rfl rfl
+        rfl rfl (procCtxF_labels hQprod) rfl rfl rfl rfl (Nat.zero_le _)
         (fun l params cont hl => by
           rw [procCtxF_labels hQprod] at hl
           obtain ⟨-, rfl⟩ := dlQ_inv loc0 empty_annotation ra mo cbty bbty nbty ubty hl

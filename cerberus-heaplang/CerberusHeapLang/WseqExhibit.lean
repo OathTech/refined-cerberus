@@ -104,7 +104,7 @@ theorem wseq_wp_readout (v1 v2 : value) :
             ⌜CoreRVal.val w = v2⌝) }} := by
   refine (wseqProg_wps spikeCtx none wseqLs emptyProcSpec v1 v2 fmapEmpty []).trans ?_
   refine (BI.emp_sep.2.trans (BI.sep_mono
-    ((wseq_blockSpecs v2).trans (wps_sound_empty (ctl := spikeCtl) rfl (wseqProg v1 v2) spikeEnv))
+    ((wseq_blockSpecs v2).trans (wps_sound_empty (ctl := spikeCtl) rfl (Nat.zero_le _) (wseqProg v1 v2) spikeEnv))
     .rfl)).trans ?_
   refine BI.wand_elim_left.trans ?_
   exact wp_mono fun w => stateInterp_readout fun _ _ _ _ _ => pure_consequence _

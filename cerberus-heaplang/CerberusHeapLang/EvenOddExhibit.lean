@@ -483,7 +483,8 @@ theorem eoMain_wps (hn : 0 ≤ n) (ρ : EnvStack) :
 
 /-- The base-WP face with the engine readout: `wps_sound` WITH the table at
     the production entry control. -/
-theorem eo_wp_readout (hn : 0 ≤ n) (ℓ : exec_location) (lc : CerbLocation.Loc) (sp : RunSup) :
+theorem eo_wp_readout (hn : 0 ≤ n) (ℓ : exec_location) (lc : CerbLocation.Loc) (sp : RunSup)
+    (hsb : sup ≤ sp.sym) :
     ⊢ WP (⟨eoMain ra n, [fmapEmpty], ⟨[], some mainSym, ℓ, lc, sp⟩, eoCtx ra n nbty sup⟩ : CoreRt)
         @ Stuckness.NotStuck; ⊤
         {{ w, iprop(∀ (σ' : Mem) (ns : Nat) (κs : List Empty) (nt : Nat),
@@ -493,7 +494,7 @@ theorem eo_wp_readout (hn : 0 ≤ n) (ℓ : exec_location) (lc : CerbLocation.Lo
   refine (BI.emp_sep.2.trans (BI.sep_mono
     ((BI.emp_sep.2.trans (BI.sep_mono (eoCtx_procSpecs ra n nbty sup)
       (eo_blockSpecs ra n nbty sup))).trans
-      (wps_sound (ctl := ⟨[], some mainSym, ℓ, lc, sp⟩) rfl (eoMain ra n) [fmapEmpty])) .rfl)).trans ?_
+      (wps_sound (ctl := ⟨[], some mainSym, ℓ, lc, sp⟩) rfl hsb (eoMain ra n) [fmapEmpty])) .rfl)).trans ?_
   refine BI.wand_elim_left.trans ?_
   exact wp_mono fun w => stateInterp_readout fun _ _ _ _ _ => pure_consequence _
 
@@ -692,7 +693,7 @@ theorem even_odd_certified (hn : 0 ≤ n) (fs : CerbFS.FsState) (args : List Str
       (fun v _ => v = ivVal (1 - n % 2))
       ?_ (th₀ := prodThread (eoMain ra n))
     intro inst
-    exact (BigSepM.bigSepM_empty).1.trans (eo_wp_readout ra n nbty sup hn _ _ _)
+    exact (BigSepM.bigSepM_empty).1.trans (eo_wp_readout ra n nbty sup hn _ _ _ (Nat.le_refl _))
   obtain ⟨st, dst', heq, hor⟩ := prod_run_safe_procs sup (eoProcs ra nbty) (eoMain ra n)
     (eoCtx_labeledProcs ra n nbty sup) _ hsafe fs args fuel
   exact ⟨st, dst', heq, hor⟩
@@ -726,7 +727,7 @@ theorem even_odd_certified_production (hn : 0 ≤ n)
       (eoCtx_fragProcs ra n nbty sup)
       (th₀ := prodThread (eoMain ra n))
       (eoFile_lookup_main ra n nbty) (prodCtl sup).execLoc (prodCtl sup).curLoc (prodCtl sup).sup
-      eoSpecT eoLsT
+      (Nat.le_refl _) eoSpecT eoLsT
       (eoMain ra n) fmapEmpty [] prodMem₀ (∅ : SpikeHeapF SpikeCell) 0
       (eoMain_frag ra n)
       (by rw [eoMain_pot, show lemDefaultFuel = 999999 + 1 from rfl]; omega)

@@ -1434,7 +1434,7 @@ theorem lr_wp_readout {GF : BundledGFunctors} [SpikeGS .hasLC GF]
   refine (BI.emp_sep.2.trans (BI.sep_mono
     ((lr_blockSpecs_frame (F := spikeFile) loc ann ra mo pbty cbty bbty nbty ubty ns
       p rs hQ (lrCellFrame R)).trans
-      (wps_sound_empty (ctl := procCtl p) rfl (lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head)
+      (wps_sound_empty (ctl := procCtl p) rfl (Nat.zero_le _) (lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head)
         [fmapEmpty]))
     .rfl)).trans ?_
   refine BI.wand_elim_left.trans ?_

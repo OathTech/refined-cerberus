@@ -658,7 +658,7 @@ theorem region_loop_certified_production (sup : Nat) (hcost : 0 < regionCost al 
         (M₀ := procCtxF (prodFile (rlProg loc0 empty_annotation ra al sz pref sbty ibty pbty ubty n)) ((initial_core_run_state sup
           (collect_labeled_continuations_NEW
             (prodFile (rlProg loc0 empty_annotation ra al sz pref sbty ibty pbty ubty n)))).1))
-        rfl rfl (procCtxF_labels hQprod) rfl rfl rfl rfl
+        rfl rfl (procCtxF_labels hQprod) rfl rfl rfl rfl (Nat.zero_le _)
         (fun l params cont hl => by
           rw [procCtxF_labels hQprod] at hl
           obtain ⟨-, rfl⟩ := rlQ_inv loc0 empty_annotation ra al sz pref ibty pbty ubty hl

@@ -390,7 +390,7 @@ theorem loop_wp_readout (hn : 0 ≤ n) (sbty : core_base_type)
   refine ((loop_wps (F := spikeFile) loc ann ra mo bty xbty c n bs0 p rs hQ hn sbty f hf rest).trans ?_)
   refine (BI.emp_sep.2.trans (BI.sep_mono
     ((loop_blockSpecs (F := spikeFile) loc ann ra mo bty xbty c n bs0 p rs hQ).trans
-      (wps_sound_empty (ctl := procCtl p) rfl (loopProg loc ann ra mo bty xbty sbty c n) (f :: rest)))
+      (wps_sound_empty (ctl := procCtl p) rfl (Nat.zero_le _) (loopProg loc ann ra mo bty xbty sbty c n) (f :: rest)))
     .rfl)).trans ?_
   refine BI.wand_elim_left.trans ?_
   exact wp_mono fun w => loop_readout_val c n bs0 w

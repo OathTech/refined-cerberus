@@ -592,7 +592,7 @@ theorem arr_wp_readout (sbty : core_base_type) :
   refine (BI.emp_sep.2.trans (BI.sep_mono
     ((arr_blockSpecs loc ann ra mo ibty accbty pbty xbty vs id a aty bs
       p rs hQ hsz ety hdec).trans
-      (wps_sound_empty (ctl := procCtl p) rfl (arrProg loc ann ra mo sbty ibty accbty pbty xbty
+      (wps_sound_empty (ctl := procCtl p) rfl (Nat.zero_le _) (arrProg loc ann ra mo sbty ibty accbty pbty xbty
         (cellPtr id a) vs.length) [fmapEmpty]))
     .rfl)).trans ?_
   refine BI.wand_elim_left.trans ?_

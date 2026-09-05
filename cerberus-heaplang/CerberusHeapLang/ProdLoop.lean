@@ -198,6 +198,7 @@ theorem wpt_driver_aux {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
     ∀ (k : Nat) (e : CoreExpr) (ev0 : Fmap sym value)
       (evs : List (Fmap sym value)) (σ : Mem) (ns nt : Nat)
       (lc : CerbLocation.Loc) (sp : RunSup),
+      M₀.runState.sym_supply ≤ sp.sym →
       Frag e → pot e ≤ lemDefaultFuel →
       iprop(stateInterp (GF := GF) σ ns ([] : List Empty) nt ∗
           blockSpecsT M₀ ctl.proc Ls emptyProcSpecT (readoutPost ψ) ∗
@@ -206,7 +207,7 @@ theorem wpt_driver_aux {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
   intro k
   induction k using Nat.strongRecOn with
   | ind k IH =>
-  intro e ev0 evs σ ns nt lc sp hfrag hpot
+  intro e ev0 evs σ ns nt lc sp hsb hfrag hpot
   -- the live control of this round: the ambient control's κ/proc/execLoc at the
   -- thread's location and supplies
   have hlbC : M₀.labelsAt (Ctl.mk ctl.κ ctl.proc ctl.execLoc lc sp).proc = Q := hlb
@@ -257,7 +258,7 @@ theorem wpt_driver_aux {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
       iapply fupd_finally_mono (pure_mono hf)
       rw [hbind]
       iapply IH k' (Nat.lt_succ_self k') cont ev0'' evs σ ns nt (locUpd (redexAnnots e) lc) sp
-        (hQf l params cont hl) (hQpot l params cont hl) $$ [$Hσ $HB $Hwpt']
+        hsb (hQf l params cont hl) (hQpot l params cont hl) $$ [$Hσ $HB $Hwpt']
     | none =>
       cases hcr : callRedex? e with
       | some q =>
@@ -274,7 +275,7 @@ theorem wpt_driver_aux {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
       | succ k' =>
         rw [wpt_step_eq k' htv hjr hcr]
         iintro ⟨Hσ, #HB, H⟩
-        imod H $$ %(ctl.κ) %(ctl.execLoc) %lc %(sp) %σ %ns %([] : List Empty) %nt Hσ
+        imod H $$ %(ctl.κ) %(ctl.execLoc) %lc %(sp) %σ %ns %([] : List Empty) %nt %hsb Hσ
           with ⟨%hred, Hwand⟩
         obtain ⟨obs0, r', σ', eₜ', hps⟩ := hred
         obtain ⟨hs, hM, hnil⟩ := hps
@@ -308,7 +309,7 @@ theorem wpt_driver_aux {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
             hproc hfrag (Nat.le_trans hfrag.esize_le_pot hpot) hs rfl h
         iapply fupd_finally_mono (pure_mono hf)
         iapply IH k' (Nat.lt_succ_self k') re ev0' evs σ' (ns + 1) nt lc' sp'
-          hfrag' hpot' $$ [$Hσ' $HB $Hwpt]
+          (Nat.le_trans hsb hs.sup_sym_le) hfrag' hpot' $$ [$Hσ' $HB $Hwpt]
 
 /-! ## The launch: the pure driver-delivery fact from a SpikeGpreS
 functor list. -/
@@ -319,7 +320,7 @@ theorem wpt_driver_done {GF : BundledGFunctors} [SpikeGpreS GF]
     {Q : LabelMap} (hlb : M₀.labelsAt ctl.proc = Q)
     {p : sym} (hp : ctl.proc = some p) {th₀ : thread_state}
     (hstack : th₀.stack0 = ctl.toStack) (hproc : th₀.current_proc_opt = ctl.proc)
-    (hκ : ctl.κ = [])
+    (hκ : ctl.κ = []) (hsb : M₀.runState.sym_supply ≤ ctl.sup.sym)
     (hQf : ∀ l params cont, lookupLabel (M₀.labelsAt ctl.proc) l = some (params, cont) →
       Frag cont)
     (hQpot : ∀ l params cont, lookupLabel (M₀.labelsAt ctl.proc) l = some (params, cont) →
@@ -369,7 +370,7 @@ theorem wpt_driver_done {GF : BundledGFunctors} [SpikeGpreS GF]
     · iapply budgetInterp_zero
       iexact HB0
   iapply wpt_driver_aux htd hex hlb hp hstack hproc hκ hQf hQpot Ls ψ k e₀
-    ev00 evs0 σ₀ 0 0 ctl.curLoc ctl.sup hfrag hpot $$ [$Hσ $HB $Hwpt]
+    ev00 evs0 σ₀ 0 0 ctl.curLoc ctl.sup hsb hfrag hpot $$ [$Hσ $HB $Hwpt]
 
 /-- ALLOCATION-AWARE driver delivery (alloc arc P2 — the production
     lane's missing launcher variant): as `wpt_driver_done`, but
@@ -387,7 +388,7 @@ theorem wpt_driver_done_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
     {Q : LabelMap} (hlb : M₀.labelsAt ctl.proc = Q)
     {p : sym} (hp : ctl.proc = some p) {th₀ : thread_state}
     (hstack : th₀.stack0 = ctl.toStack) (hproc : th₀.current_proc_opt = ctl.proc)
-    (hκ : ctl.κ = [])
+    (hκ : ctl.κ = []) (hsb : M₀.runState.sym_supply ≤ ctl.sup.sym)
     (hQf : ∀ l params cont, lookupLabel (M₀.labelsAt ctl.proc) l = some (params, cont) →
       Frag cont)
     (hQpot : ∀ l params cont, lookupLabel (M₀.labelsAt ctl.proc) l = some (params, cont) →
@@ -424,7 +425,7 @@ theorem wpt_driver_done_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
   ihave HW := hwp $$ [$Hcells $Hcap]
   icases HW with ⟨HB, Hwpt⟩
   iapply wpt_driver_aux htd hex hlb hp hstack hproc hκ hQf hQpot Ls ψ k e₀
-    ev00 evs0 σ₀ 0 0 ctl.curLoc ctl.sup hfrag hpot $$ [$Hσ $HB $Hwpt]
+    ev00 evs0 σ₀ 0 0 ctl.curLoc ctl.sup hsb hfrag hpot $$ [$Hσ $HB $Hwpt]
 
 /-! ## THE TOTAL DRIVER LANE THROUGH CALLS (calls arc C4)
 
@@ -652,13 +653,15 @@ theorem wpt_driver_cps {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
       (e : CoreExpr) (ev0 : Fmap sym value) (evs : List (Fmap sym value))
       (σ : Mem) (ns nt : Nat) (kc : Nat),
       (∃ params body, lookupProc M₀.file M₀.extern p = some (params, body)) →
+      M₀.runState.sym_supply ≤ sp.sym →
       Frag e → pot e ≤ lemDefaultFuel →
       iprop(stateInterp (GF := GF) σ ns ([] : List Empty) nt ∗
           procSpecsT M₀ Θ ∗ blockSpecsT M₀ (some p) Ls Θ Ψ ∗
           wpt M₀ (some p) Ls Θ k Ψ e (ev0 :: evs)) ⊢
         iprop((∀ (w : SpikeValA) (ρ' : EnvStack) (ℓ' : exec_location) (lc' : CerbLocation.Loc)
             (sp' : RunSup) (σ' : Mem) (ns' k' : Nat),
-            ⌜SameTail (ev0 :: evs) ρ'⌝ -∗ ⌜deliveryCost w.erase ≤ k'⌝ -∗
+            ⌜SameTail (ev0 :: evs) ρ'⌝ -∗ ⌜M₀.runState.sym_supply ≤ sp'.sym⌝ -∗
+            ⌜deliveryCost w.erase ≤ k'⌝ -∗
             stateInterp σ' ns' ([] : List Empty) nt -∗ Ψ w.erase ρ' -∗
             |={⊤|}=> ⌜DriverDoneCtl M₀ th₀ (ofValA w) ρ' ⟨κ, some p, ℓ', lc', sp'⟩ σ' ψ
               (k' + kc)⌝) -∗
@@ -666,7 +669,7 @@ theorem wpt_driver_cps {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
   intro k
   induction k using Nat.strongRecOn with
   | ind k IH =>
-  intro p Ls Ψ κ ℓ lc sp e ev0 evs σ ns nt kc hq hfrag hpot
+  intro p Ls Ψ κ ℓ lc sp e ev0 evs σ ns nt kc hq hsb hfrag hpot
   obtain ⟨params₀, body₀, hq₀⟩ := hq
   have hQf : ∀ l params cont, lookupLabel (M₀.labelsAt (some p)) l = some (params, cont) →
       Frag cont := fun l params cont hl => (hPf.labels p params₀ body₀ hq₀ l params cont hl).1
@@ -679,7 +682,7 @@ theorem wpt_driver_cps {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
     rw [wpt_val_eq k (toVal_ofValA wa)]
     iintro ⟨Hσ, -, -, ⟨%hc, Hpost⟩⟩ HK
     imod Hpost with Hpost
-    iapply HK $$ %wa %(ev0 :: evs) %ℓ %lc %sp %σ %ns %k %(SameTail.refl _) %hc Hσ Hpost
+    iapply HK $$ %wa %(ev0 :: evs) %ℓ %lc %sp %σ %ns %k %(SameTail.refl _) %hsb %hc Hσ Hpost
   | none =>
     cases hjr : jumpRedex? e with
     | some lp =>
@@ -711,10 +714,10 @@ theorem wpt_driver_cps {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
       iapply fupd_finally_mono (pure_mono hf)
       rw [hbind] at hst0 ⊢
       iapply IH k' (Nat.lt_succ_self k') p Ls Ψ κ ℓ (locUpd (redexAnnots e) lc) sp cont ev0'' evs
-        σ ns nt kc ⟨_, _, hq₀⟩ (hQf l params cont hl) (hQpot l params cont hl)
+        σ ns nt kc ⟨_, _, hq₀⟩ hsb (hQf l params cont hl) (hQpot l params cont hl)
         $$ [$Hσ $HP $HB $Hwpt']
-      iintro %w %ρ' %ℓ' %lc' %sp' %σ' %ns' %k'' %hst %hc Hσ' HΨ
-      iapply HK $$ %w %ρ' %ℓ' %lc' %sp' %σ' %ns' %k'' %(hst0.trans hst) %hc Hσ' HΨ
+      iintro %w %ρ' %ℓ' %lc' %sp' %σ' %ns' %k'' %hst %hsb' %hc Hσ' HΨ
+      iapply HK $$ %w %ρ' %ℓ' %lc' %sp' %σ' %ns' %k'' %(hst0.trans hst) %hsb' %hc Hσ' HΨ
     | none =>
       cases hcr : callRedex? e with
       | some q =>
@@ -749,10 +752,10 @@ theorem wpt_driver_cps {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
         iapply IH m (by omega) f Ls' (fun w _ => (Θ f m vs).2 w.val) ((some p, ctx) :: κ)
           (push_exec_loc f (locUpd (redexAnnots e) lc) ℓ) (locUpd (redexAnnots e) lc) sp
           body (procEnv params vs) (ev0 :: evs) σ ns nt
-          (k' + kc) ⟨_, _, hf⟩ (hPf.body f params body hf) (hPf.potBound f params body hf)
+          (k' + kc) ⟨_, _, hf⟩ hsb (hPf.body f params body hf) (hPf.potBound f params body hf)
           $$ [$Hσ $HP $HB' $Hbody]
         -- K': the RETURN round(s) into the caller's continuation at budget k', then the IH
-        iintro %w %ρ' %ℓ' %lc' %sp' %σ' %ns' %krem %hst %hc Hσ'
+        iintro %w %ρ' %ℓ' %lc' %sp' %σ' %ns' %krem %hst %hsb' %hc Hσ'
         obtain ⟨ev0', rfl⟩ := hst.cons_inv
         cases w with
         | pure a1 b1 v =>
@@ -768,7 +771,7 @@ theorem wpt_driver_cps {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
               (by simp only [SpikeValA.erase, deliveryCost_pure] at hc; omega)
           iapply fupd_finally_mono (pure_mono hret)
           iapply IH k' (by omega) p Ls Ψ κ ℓ' lc' sp' (apply_ctx ctx (ofValA (.pure a1 [] v)))
-            ev0 evs σ' ns' nt kc ⟨_, _, hq₀⟩ (hfplug a1 v) (hpplug a1 v) $$ [$Hσ' $HP $HB $Hw]
+            ev0 evs σ' ns' nt kc ⟨_, _, hq₀⟩ hsb' (hfplug a1 v) (hpplug a1 v) $$ [$Hσ' $HP $HB $Hw]
           iexact HK
         | annot a1 a2 b1 ds v =>
           rw [show (SpikeValA.annot a1 a2 b1 ds v).erase.val = v from rfl]
@@ -786,7 +789,7 @@ theorem wpt_driver_cps {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
               (by simp only [SpikeValA.erase, deliveryCost_annot] at hc; omega)
           iapply fupd_finally_mono (pure_mono hret)
           iapply IH k' (by omega) p Ls Ψ κ ℓ' lc' sp' (apply_ctx ctx (ofValA (.pure a2 [] v)))
-            ev0 evs σ' ns' nt kc ⟨_, _, hq₀⟩ (hfplug a2 v) (hpplug a2 v) $$ [$Hσ' $HP $HB $Hw]
+            ev0 evs σ' ns' nt kc ⟨_, _, hq₀⟩ hsb' (hfplug a2 v) (hpplug a2 v) $$ [$Hσ' $HP $HB $Hw]
           iexact HK
       | none =>
       cases k with
@@ -797,7 +800,7 @@ theorem wpt_driver_cps {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
       | succ k' =>
         rw [wpt_step_eq k' htv hjr hcr]
         iintro ⟨Hσ, #HP, #HB, H⟩ HK
-        imod H $$ %κ %ℓ %lc %sp %σ %ns %([] : List Empty) %nt Hσ with ⟨%hred, Hwand⟩
+        imod H $$ %κ %ℓ %lc %sp %σ %ns %([] : List Empty) %nt %hsb Hσ with ⟨%hred, Hwand⟩
         obtain ⟨obs0, r', σ', eₜ', hps⟩ := hred
         obtain ⟨hs, hM, hnil⟩ := hps
         subst hnil
@@ -830,9 +833,9 @@ theorem wpt_driver_cps {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
             (Nat.le_trans hfrag.esize_le_pot hpot) hs h
         iapply fupd_finally_mono (pure_mono hf)
         iapply IH k' (Nat.lt_succ_self k') p Ls Ψ κ ℓ lc' sp' re ev0' evs σ' (ns + 1) nt kc
-          ⟨_, _, hq₀⟩ hfrag' hpot' $$ [$Hσ' $HP $HB $Hwpt]
-        iintro %w %ρ' %ℓ' %lc' %sp' %σ'' %ns' %k'' %hst %hc Hσ'' HΨ
-        iapply HK $$ %w %ρ' %ℓ' %lc' %sp' %σ'' %ns' %k'' %((hs.sameTail rfl).trans hst) %hc Hσ'' HΨ
+          ⟨_, _, hq₀⟩ (Nat.le_trans hsb hs.sup_sym_le) hfrag' hpot' $$ [$Hσ' $HP $HB $Hwpt]
+        iintro %w %ρ' %ℓ' %lc' %sp' %σ'' %ns' %k'' %hst %hsb' %hc Hσ'' HΨ
+        iapply HK $$ %w %ρ' %ℓ' %lc' %sp' %σ'' %ns' %k'' %((hs.sameTail rfl).trans hst) %hsb' %hc Hσ'' HΨ
 
 /-! ## The launch through calls: the pure driver-delivery fact at the
 production entry control from a SpikeGpreS functor list, with the
@@ -852,7 +855,7 @@ theorem wpt_driver_done_procs {GF : BundledGFunctors} [SpikeGpreS GF]
     (hPf : M₀.FragProcs) {th₀ : thread_state}
     {p : sym} {params : List (sym × core_base_type)} {body : CoreExpr}
     (hq : lookupProc M₀.file M₀.extern p = some (params, body)) (ℓ : exec_location)
-    (lc : CerbLocation.Loc) (sp : RunSup)
+    (lc : CerbLocation.Loc) (sp : RunSup) (hsb : M₀.runState.sym_supply ≤ sp.sym)
     (Θ : ∀ [SpikeGS .hasLC GF], ProcSpecT GF) (Ls : ∀ [SpikeGS .hasLC GF], LabelSpecT GF)
     (e₀ : CoreExpr) (ev00 : Fmap sym value) (evs0 : List (Fmap sym value))
     (σ₀ : Mem) (m₀ : SpikeHeapF SpikeCell) (B : Nat)
@@ -885,8 +888,8 @@ theorem wpt_driver_done_procs {GF : BundledGFunctors} [SpikeGpreS GF]
   ihave HW := hwp $$ [$Hcells $Hcap]
   icases HW with ⟨HP, HB, Hwpt⟩
   iapply wpt_driver_cps htd hex hPf Θ ψ k p Ls (readoutPost ψ) [] ℓ lc sp e₀ ev00 evs0 σ₀ 0 0 0
-    ⟨_, _, hq⟩ hfrag hpot $$ [$Hσ $HP $HB $Hwpt]
-  iintro %w %ρ' %ℓ' %lc' %sp' %σ' %ns' %k' %hst %hc Hσ' HΨ
+    ⟨_, _, hq⟩ hsb hfrag hpot $$ [$Hσ $HP $HB $Hwpt]
+  iintro %w %ρ' %ℓ' %lc' %sp' %σ' %ns' %k' %hst %_ %hc Hσ' HΨ
   imod HΨ $$ %σ' %ns' %([] : List Empty) %0 Hσ' with %hψ
   ipureintro
   cases w with

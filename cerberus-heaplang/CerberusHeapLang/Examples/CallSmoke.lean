@@ -324,7 +324,7 @@ theorem cs_wp_readout (ℓ : exec_location) (lc : CerbLocation.Loc) (sp : RunSup
   refine (csMain_wps ra bty ybty [fmapEmpty]).trans ?_
   refine (BI.emp_sep.2.trans (BI.sep_mono
     ((BI.emp_sep.2.trans (BI.sep_mono (csCtx_procSpecs ra bty ybty) (cs_blockSpecs ra bty ybty))).trans
-      (wps_sound (ctl := ⟨[], some csMain, ℓ, lc, sp⟩) rfl (csMainBody ra) [fmapEmpty])) .rfl)).trans ?_
+      (wps_sound (ctl := ⟨[], some csMain, ℓ, lc, sp⟩) rfl (Nat.zero_le _) (csMainBody ra) [fmapEmpty])) .rfl)).trans ?_
   refine BI.wand_elim_left.trans ?_
   exact wp_mono fun w => stateInterp_readout fun _ _ _ _ _ => pure_consequence _
 
@@ -451,7 +451,7 @@ theorem cs_twp_readout (ℓ : exec_location) (lc : CerbLocation.Loc) (sp : RunSu
   refine (csMain_wpt ra bty ybty [fmapEmpty]).trans ?_
   refine (BI.emp_sep.2.trans (BI.sep_mono
     ((BI.emp_sep.2.trans (BI.sep_mono (csCtx_procSpecsT ra bty ybty) (cs_blockSpecsT ra bty ybty))).trans
-      (wpt_sound (ctl := ⟨[], some csMain, ℓ, lc, sp⟩) rfl 6 (csMainBody ra) [fmapEmpty])) .rfl)).trans ?_
+      (wpt_sound (ctl := ⟨[], some csMain, ℓ, lc, sp⟩) rfl (Nat.zero_le _) 6 (csMainBody ra) [fmapEmpty])) .rfl)).trans ?_
   exact BI.wand_elim_left
 
 end CerberusHeapLang

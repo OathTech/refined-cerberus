@@ -1124,8 +1124,12 @@ theorem Step.pot_le {M : MachineCtx} {e e' : CoreExpr} {ρ ρ' : EnvStack}
     cases hcfg; cases hcfg'; intro _ _ _ hnf
     simp only [negFree] at hnf
     rw [negRedex?_none_of_negFree hnf] at hn; cases hn
-  | excluded_store h1 h2 h3 hmv hmem => cases hcfg; cases hcfg'; intro _ _ _ hnf; simp [negFree] at hnf
-  | excluded_store_eval hnv hv2 hv3 => cases hcfg; cases hcfg'; intro _ _ _ hnf; simp [negFree] at hnf
+  | excluded_store h1 h2 h3 hmv hmem =>
+    cases hcfg; cases hcfg'; intro _ _ _ _
+    simp only [pot_excluded, pot_annot, pot_pure_val]; omega
+  | excluded_store_eval hnv hv2 hv3 =>
+    cases hcfg; cases hcfg'; intro _ _ _ _
+    simp only [pot_excluded]; exact Nat.le_refl _
   | run hj hl hvs => cases hcfg; cases hcfg'; intro hnj; rw [hj] at hnj; cases hnj
   | call hc hvs hf hlen => cases hcfg; cases hcfg'; intro _ hnc; rw [hc] at hnc; cases hnc
   | ret => cases hcfg; cases hcfg'; intro _ _ hnv; rw [toVal_ofValA] at hnv; cases hnv

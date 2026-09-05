@@ -844,7 +844,7 @@ theorem t1_certified_production (sup : Nat) (fs : CerbFS.FsState) (args : List S
     prod_run_eqJ_lib1 sup stdlibE3 t1Main hQe ψT1 48
       (wpt_driver_done_alloc (GF := SpikeGF) (ctl := prodCtl sup)
         (M₀ := prodCtx (prodFileLib stdlibE3 [] t1Main) (prodRSLib stdlibE3 [] sup t1Main))
-        rfl rfl hlbl rfl rfl rfl rfl
+        rfl rfl hlbl rfl rfl rfl rfl (Nat.le_refl _)
         (fun l params cont hl => by
           rw [hlbl] at hl
           obtain ⟨-, rfl⟩ := t1RetQ_inv hl

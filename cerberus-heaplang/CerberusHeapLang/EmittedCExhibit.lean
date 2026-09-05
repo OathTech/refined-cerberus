@@ -743,7 +743,7 @@ theorem exhibitC_prod_e3 (sup : Nat) (fs : CerbFS.FsState) (args : List String) 
     prod_run_eqJ_lib1 sup stdlibE3 (progCE3 3) hQe ψCE3 28
       (wpt_driver_done_alloc (GF := SpikeGF) (ctl := prodCtl sup)
         (M₀ := prodCtx (prodFileLib stdlibE3 [] (progCE3 3)) (prodRSLib stdlibE3 [] sup (progCE3 3)))
-        rfl rfl hlbl rfl rfl rfl rfl
+        rfl rfl hlbl rfl rfl rfl rfl (Nat.le_refl _)
         (fun l params cont hl => by
           rw [hlbl] at hl
           obtain ⟨-, rfl⟩ := retQ_inv hl

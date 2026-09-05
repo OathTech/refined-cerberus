@@ -145,7 +145,7 @@ theorem case_wp_readout (v : value) :
             ⌜CoreRVal.val w = v⌝) }} := by
   refine (caseProg_wps spikeCtx none caseLs emptyProcSpec v spikeEnv).trans ?_
   refine (BI.emp_sep.2.trans (BI.sep_mono
-    ((case_blockSpecs v).trans (wps_sound_empty (ctl := spikeCtl) rfl (caseProg v) spikeEnv))
+    ((case_blockSpecs v).trans (wps_sound_empty (ctl := spikeCtl) rfl (Nat.zero_le _) (caseProg v) spikeEnv))
     .rfl)).trans ?_
   refine BI.wand_elim_left.trans ?_
   exact wp_mono fun w => stateInterp_readout fun _ _ _ _ _ => pure_consequence _

@@ -1769,8 +1769,8 @@ theorem Step.negFree_preserved {M : MachineCtx} {e e' : CoreExpr} {ρ ρ' : EnvS
     cases hcfg; cases hcfg'; intro _ _ _ hcc
     simp only [negFree] at hcc
     rw [negRedex?_none_of_negFree hcc] at hn; cases hn
-  | excluded_store h1 h2 h3 hmv hmem => cases hcfg; cases hcfg'; intro _ _ _ hcc; simp [negFree] at hcc
-  | excluded_store_eval hnv hv2 hv3 => cases hcfg; cases hcfg'; intro _ _ _ hcc; simp [negFree] at hcc
+  | excluded_store h1 h2 h3 hmv hmem => cases hcfg; cases hcfg'; exact fun _ _ _ _ => rfl
+  | excluded_store_eval hnv hv2 hv3 => cases hcfg; cases hcfg'; exact fun _ _ _ _ => rfl
   | annot_merge =>
     cases hcfg; cases hcfg'; intro _ _ _ hcc
     simpa only [negFree] using hcc

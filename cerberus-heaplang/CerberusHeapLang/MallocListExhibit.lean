@@ -1688,7 +1688,7 @@ theorem malloc_list_certified_production (sup : Nat) (n : Int) (hn : 0 ≤ n)
           (collect_labeled_continuations_NEW
             (prodFile (mlProg loc0 empty_annotation ra mo al pref sbty ibty pbty qbty bbty
               nbty ubty n)))).1))
-        rfl rfl (procCtxF_labels hQprod) rfl rfl rfl rfl
+        rfl rfl (procCtxF_labels hQprod) rfl rfl rfl rfl (Nat.zero_le _)
         (fun l params cont hl => by
           rw [procCtxF_labels hQprod] at hl
           obtain ⟨-, rfl⟩ := mlQ_inv loc0 empty_annotation ra mo al pref ibty pbty qbty bbty

@@ -614,16 +614,19 @@ theorem ccallFreeList_append (es1 es2 : List CoreExpr) :
 @[simp] theorem ccallFree_ofValA (w : SpikeValA) : ccallFree (ofValA w) = true := by
   cases w <;> rfl
 mutual
-/-- E5: NEGATIVE-FREE terms — no `Paction Neg0` and no `Eexcluded` node
-    anywhere. The static premise of `wps_bound`/`wpt_bound`: the `bound`
-    frame PERFORMS the negative-action round itself (`Step.neg_bound`,
-    core_reduction.lem:1290–1338), so the `bound` congruence rule is sound
-    only for bodies that never reach one; the predicate is preserved by
-    every stack-preserving non-jump round (`Step.negFree_preserved`,
-    Soundness.lean). Descends exactly where `ccallFree` does. -/
+/-- E5: NEGATIVE-FREE terms — no `Paction Neg0` node anywhere. The static
+    premise of `wps_bound`/`wpt_bound`: the `bound` frame PERFORMS the
+    negative-action round itself (`Step.neg_bound`, core_reduction.lem:
+    1290–1338), so the `bound` congruence rule is sound only for bodies that
+    never reach one; the predicate is preserved by every stack-preserving
+    non-jump round (`Step.negFree_preserved`, Soundness.lean). Descends
+    exactly where `ccallFree` does. E5 slice 2: an `Eexcluded n act` node
+    IS negative-free (slice 1 excluded it): the excluded action's rounds
+    (`Step.excluded_store`/`_eval`) are ordinary rounds of the body — the
+    body the negative-action round REWRITES TO (`negRewrite`) contains one,
+    and `wps_bound` must apply to it for the protocol to compose. -/
 def negFree : CoreExpr → Bool
   | Expr _ (Eaction (Paction polarity.Neg0 _)) => false
-  | Expr _ (Eexcluded _ _) => false
   | Expr _ (Ecase _ pats) => negFreeAlts pats
   | Expr _ (Elet _ _ e2) => negFree e2
   | Expr _ (End es) => negFreeList es
@@ -929,9 +932,19 @@ structure MachineCtx where
   tid : Nat
   parent : Option Nat
   errno : CerbMem.PointerValue
-  /-- The run state's IMMUTABLE part: only `labeled` is read by the mirror
+  /-- The run state's IMMUTABLE part: `labeled` is read by the mirror
       (`labelsAt`); the two live supplies live in `Ctl.sup` (E1) and the
-      driver ties fix only `labeled` to this field (`MachineCtx.Embeds`). -/
+      driver ties fix only `labeled` to this field (`MachineCtx.Embeds`).
+      E5 (slice 2): this field's `sym_supply` is READ by the judgments as
+      THE SUPPLY FLOOR — the run's initial symbol supply, below which no
+      symbol is ever drawn: `wps.pre`/`wpt.pre` carry `M.runState.sym_supply
+      ≤ sp.sym` at every step, `Step.sup_sym_le` preserves it, and the
+      negative-action rule (`wps_neg_bound`) delivers its fresh symbol's id
+      at or above it. The production context (`prodCtx`, ProdEntry.lean)
+      carries the genuine initial run state, whose `sym_supply` IS the
+      entry supply `sup` (`initial_core_run_state sup`, `LemLib.supplySplit`);
+      the seeded profiles (`spikeCtx`/`procCtx`/`procCtxF`) carry the floor
+      `0`, their entry controls' supply (`default`). -/
   runState : core_run_state
 
 namespace MachineCtx
@@ -1843,7 +1856,7 @@ theorem negRedex?_none_of_negFree : ∀ {e : CoreExpr}, negFree e = true → neg
   | Expr a (Esave _ _ _), h => rfl
   | Expr a (Epar _), h => rfl
   | Expr a (Ewait _), h => rfl
-  | Expr a (Eexcluded _ _), h => by simp [negFree] at h
+  | Expr a (Eexcluded _ _), h => rfl
 theorem negRedexU?_none_of_negFreeList :
     ∀ {a : List annot} {pre es : List CoreExpr},
       negFreeList es = true → negRedexU? a pre es = none
@@ -1879,6 +1892,54 @@ def negRewrite (n : Nat) (s : sym) (ctxA : context) (act : CoreAction) : CoreExp
     (mk_unseq_e [Expr [] (Eexcluded n act),
       apply_ctx (add_exclusion n ctxA) (mk_pure_e mk_unit_pe)])
     (mk_pure_e (mk_sym_pe s))
+
+/-- E5 (slice 2): the engine's per-annotation exclusion write of
+    `add_exclusion` (core_reduction.lem:939–958; Core_reduction.lean:472 —
+    the `Cannot` arm's `List.map`): the drawn exclusion id `n` is pushed onto
+    the exclusion list of every dynamic annotation of the frame. -/
+def addExcl (n : Nat) : dyn_annotation → dyn_annotation
+  | DA_neg id excl fp => DA_neg id (n :: excl) fp
+  | DA_pos excl fp => DA_pos (n :: excl) fp
+
+@[simp] theorem add_exclusion_CTX (n : Nat) : add_exclusion n CTX = CTX := rfl
+@[simp] theorem add_exclusion_wseq (n : Nat) (a : List annot) (pat : pattern) (ctx : context)
+    (e2 : CoreExpr) :
+    add_exclusion n (Cwseq a pat ctx e2) = Cwseq a pat (add_exclusion n ctx) e2 := rfl
+@[simp] theorem add_exclusion_sseq (n : Nat) (a : List annot) (pat : pattern) (ctx : context)
+    (e2 : CoreExpr) :
+    add_exclusion n (Csseq a pat ctx e2) = Csseq a pat (add_exclusion n ctx) e2 := rfl
+@[simp] theorem add_exclusion_annot (n : Nat) (a : List annot) (ds : List dyn_annotation)
+    (ctx : context) :
+    add_exclusion n (Cannot a ds ctx) = Cannot a (ds.map (addExcl n)) (add_exclusion n ctx) := by
+  show Cannot a (List.map _ ds) _ = _
+  congr 1
+
+/-- E5 (slice 2): `do_race` against NO annotations is `false` (`do_race`,
+    Core_reduction.lean:300: `List.any xs1 (fun … => List.any xs2 …)` at
+    `xs2 = []`). -/
+theorem do_race_nil_right (ds : List dyn_annotation) : do_race ds [] = false := by
+  induction ds with
+  | nil => rfl
+  | cons d rest ih =>
+    cases d <;> simp only [do_race, List.any_cons, List.any_nil, Bool.false_or] at ih ⊢ <;> exact ih
+
+/-- E5 (slice 2): THE EXCLUSION PROTOCOL'S RACE VERDICT — annotations that
+    all carry the exclusion id `n` never race with the excluded action's own
+    `DA_neg n [] fp` (`do_race`'s `Lem_List.elem id1 exclusion2` tests,
+    Core_reduction.lean:300): the footprints are never compared. -/
+theorem lem_nat_beq_self (n : Nat) : (n == n) = true := by
+  simp only [BEq.beq, Lem_Basic_classes.isEqual, Lem_Basic_classes.setElemCompare,
+    defaultCompare, Nat.compare_eq_eq.mpr rfl]
+theorem lem_elem_self (n : Nat) (l : List Nat) : Lem_List.elem n (n :: l) = true := by
+  simp only [Lem_List.elem, listMemberBy, lem_nat_beq_self, Bool.true_or]
+theorem do_race_addExcl_neg (n : Nat) (ds : List dyn_annotation) (fp : CerbMem.Footprint) :
+    do_race (ds.map (addExcl n)) [DA_neg n [] fp] = false := by
+  induction ds with
+  | nil => rfl
+  | cons d rest ih =>
+    cases d <;>
+      simp only [List.map_cons, addExcl, do_race, List.any_cons, List.any_nil, Bool.or_false,
+        lem_elem_self, if_true, Bool.false_or] at ih ⊢ <;> exact ih
 
 /-- The rewrite, spelled out: `mk_tuple_pat` at two components IS the
     `Ctuple` pattern (Core_aux.lean:121), `mk_wseq_e`/`mk_unseq_e`/`mk_pure_e`
@@ -4660,6 +4721,23 @@ theorem Step.ctl_eq' {M : MachineCtx} {c c' : Config} (h : Step M c c')
   obtain ⟨e', ρ', ctl', σ'⟩ := c'
   exact h.ctl_upd hc hv
 
+/-- E5 (slice 2): THE CONTROL'S SYMBOL SUPPLY NEVER DECREASES along a step —
+    its only writer is the negative-action round's draw (`Ctl.draw`,
+    `Step.neg_bound`); the general arm's location write, the call push and
+    the return carry `sup` verbatim. This is what preserves the WP-level
+    supply bound `M.runState.sym_supply ≤ sp.sym` of `wps.pre`/`wpt.pre`
+    (Wps.lean/Wpt.lean) from a configuration to its successor. -/
+theorem Step.sup_sym_le {M : MachineCtx} {e e' : CoreExpr} {ρ ρ' : EnvStack}
+    {ctl ctl' : Ctl} {σ σ' : Mem}
+    (h : Step M (e, ρ, ctl, σ) (e', ρ', ctl', σ')) : ctl.sup.sym ≤ ctl'.sup.sym := by
+  rcases h.ctl_cases with ⟨a, rfl⟩ | ⟨a, rfl⟩ |
+      ⟨ctx, f, pes, params, body, vs, -, -, -, -, -, -, rfl, -⟩ |
+      ⟨a1, b1, v, ev0, evs, q, ctx, κ, q', ℓ, lc, sp, -, -, rfl, -, -, rfl, -⟩
+  · exact Nat.le_refl _
+  · exact Nat.le_succ _
+  · exact Nat.le_refl _
+  · exact Nat.le_refl _
+
 /-- A general-arm step's successor control IS an update of the source
     control — or its supply draw (E5) — restated on the step itself so that
     congruence rules apply to a step whose successor was produced by
@@ -6228,9 +6306,13 @@ def spikeRunState : core_run_state :=
 
 /-- The jump profile (parameterized run state) as a context instance
     (reducible — see `spikeCtx`); its thread is IN a procedure through
-    the entry control `procCtl p`, not through the context (C1). -/
+    the entry control `procCtl p`, not through the context (C1). E5
+    (slice 2): the run state's two supplies are NORMALISED to the entry
+    control's (`procCtl p`'s `sup = default = ⟨0, 0⟩`) — the profile reads
+    `rs` for its label registry only, and the supply floor the judgments
+    read (`MachineCtx.runState`) must be the entry control's supply. -/
 @[reducible] def procCtx (rs : core_run_state) : MachineCtx :=
-  { spikeCtx with runState := rs }
+  { spikeCtx with runState := { rs with sym_supply := 0, excluded_supply := 0 } }
 
 /-- Field-projection equations for the two profile instances. -/
 @[simp] theorem spikeCtx_tagDefs : spikeCtx.tagDefs = fmapEmpty := rfl
@@ -6240,8 +6322,10 @@ def spikeRunState : core_run_state :=
     (procCtx rs).tagDefs = fmapEmpty := rfl
 @[simp] theorem procCtx_extern (rs : core_run_state) :
     (procCtx rs).extern = fmapEmpty := rfl
-@[simp] theorem procCtx_runState (rs : core_run_state) :
-    (procCtx rs).runState = rs := rfl
+@[simp] theorem procCtx_runState_labeled (rs : core_run_state) :
+    (procCtx rs).runState.labeled = rs.labeled := rfl
+@[simp] theorem procCtx_sym_supply (rs : core_run_state) :
+    (procCtx rs).runState.sym_supply = 0 := rfl
 
 /-- The straight-line profile's label map at its entry control: empty
     (no current procedure). -/
@@ -6276,14 +6360,16 @@ instance at the default file (the file-blind exhibits keep it; the
 production statements run their derivations at `procCtxF (prodFile …)`). -/
 @[reducible] def procCtxF (f : generic_file Unit core_run_annotation) (rs : core_run_state) :
     MachineCtx :=
-  { spikeCtx with file := f, runState := rs }
+  { spikeCtx with file := f, runState := { rs with sym_supply := 0, excluded_supply := 0 } }
 
 @[simp] theorem procCtxF_tagDefs (f : generic_file Unit core_run_annotation) (rs : core_run_state) :
     (procCtxF f rs).tagDefs = fmapEmpty := rfl
 @[simp] theorem procCtxF_extern (f : generic_file Unit core_run_annotation) (rs : core_run_state) :
     (procCtxF f rs).extern = fmapEmpty := rfl
-@[simp] theorem procCtxF_runState (f : generic_file Unit core_run_annotation) (rs : core_run_state) :
-    (procCtxF f rs).runState = rs := rfl
+@[simp] theorem procCtxF_runState_labeled (f : generic_file Unit core_run_annotation)
+    (rs : core_run_state) : (procCtxF f rs).runState.labeled = rs.labeled := rfl
+@[simp] theorem procCtxF_sym_supply (f : generic_file Unit core_run_annotation)
+    (rs : core_run_state) : (procCtxF f rs).runState.sym_supply = 0 := rfl
 @[simp] theorem procCtxF_file (f : generic_file Unit core_run_annotation) (rs : core_run_state) :
     (procCtxF f rs).file = f := rfl
 

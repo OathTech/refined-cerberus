@@ -68,6 +68,18 @@ def storeExpr (a : List annot) (loc : CerbLocation.Loc) (ann : core_run_annotati
       (Pexpr [] () (PEval (Vobject (OVpointer pv))))
       (Pexpr [] () (PEval cv)) mo))))
 
+/-- E5: `excluded[n](store(ty, pv, cv))` — the negative store's performance
+    node after the negative-action round (`Eexcluded n act`, the engine's
+    `process_action (Just n)` arm, core_reduction.lem:1345–1346; non-locking,
+    canonical operands). -/
+def excludedStoreExpr (a : List annot) (n : Nat) (loc : CerbLocation.Loc)
+    (ann : core_run_annotation) (ty : ctype)
+    (pv : CerbMem.PointerValue) (cv : value) (mo : memory_order) : CoreExpr :=
+  Expr a (Eexcluded n (Action loc ann
+    (Store0 false (Pexpr [] () (PEval (Vctype ty)))
+      (Pexpr [] () (PEval (Vobject (OVpointer pv))))
+      (Pexpr [] () (PEval cv)) mo)))
+
 /-- `load(ty, pv)` — positive strong load. -/
 def loadExpr (a : List annot) (loc : CerbLocation.Loc) (ann : core_run_annotation) (ty : ctype)
     (pv : CerbMem.PointerValue) (mo : memory_order) : CoreExpr :=
@@ -342,6 +354,111 @@ theorem store_atomic [SpikeGS hlc GF] {M : MachineCtx} {ctl : Ctl}
     · iexact Hki
   · iexists (SpikeVal.annot
       [DA_pos [] (CerbMem.Footprint.FP .W addr (CerbMem.sizeofCtype M.tagDefs ty))] Vunit)
+    isplit
+    · ipureintro
+      exact ⟨rfl, rfl, Nat.le_refl 2⟩
+    iexists (CerbMem.Footprint.FP .W addr (CerbMem.sizeofCtype M.tagDefs ty))
+    isplit
+    · ipureintro; rfl
+    iapply (pointsToCell_iff M.tagDefs _ _ _ _).mpr
+    iexists i, addr
+    isplit
+    · ipureintro; rfl
+    isplitl [Hm]
+    · iexact Hm
+    isplitl [Hb]
+    · iexact Hb
+    · ipureintro
+      refine ⟨hst.len [], ?_⟩
+      intro lum fpm
+      exact hst.stored_dec lum fpm addr
+
+/-- E5 (slice 2): THE EXCLUDED STORE as an atomic step — `store_atomic`'s twin
+    at the node `Eexcluded n (store(ty, pv, cv))` the negative-action round
+    produces (`negRewrite`): step_ctx's `Eexcluded n act => process_action
+    (Just n) …` arm (core_reduction.lem:1345–1346) issues the SAME
+    `StoreRequest2` as the positive store (step_action's Store0 arm at
+    `is_excluded = Just n`, :694–711; `Step.excluded_store`), discharged by
+    the same `CerbMem.storeM`; the delivered value is the NEGATIVE annotated
+    unit `{DA_neg n [] fp} unit` — the exclusion id `n` rides on the dynamic
+    annotation (the `unseq` completion's race check reads it, `do_race`,
+    :300). Same precondition, same postcondition on the cell. -/
+theorem excluded_store_atomic [SpikeGS hlc GF] {M : MachineCtx} {ctl : Ctl}
+    (a : List annot) (n : Nat) (loc : CerbLocation.Loc) (ann : core_run_annotation) (ty : ctype)
+    (pv : CerbMem.PointerValue) (cv : value) (mo : memory_order)
+    (mv : CerbMem.MemValue) (bs : List CerbMem.AbsByte) (ρ : EnvStack)
+    (hmv : memValueFromValue M.tagDefs (Ctype [] (unatomic_ ty)) cv = some mv)
+    (hst : StorableAt M.tagDefs ty mv) :
+    AtomicStep M ctl (excludedStoreExpr a n loc ann ty pv cv mo) ρ 2
+      (pointsToCell M.tagDefs (GF := GF) pv (.own 1) ty bs)
+      (fun w => iprop(∃ fp, ⌜w = SpikeVal.annot [DA_neg n [] fp] Vunit⌝ ∗
+        pointsToCell M.tagDefs pv (.own 1) ty (CerbMem.memValueToBytes M.tagDefs [] mv).2)) := by
+  intro E₁ E₂ hE σ₁ ns obs nt
+  iintro ⟨Hpt, Hσ⟩
+  icases (stateInterp_iff σ₁ ns obs nt).mp $$ Hσ
+    with ⟨%mm, %mb, %mk, %HG, Hmi, Hbi, Hki⟩
+  icases (pointsToCell_iff M.tagDefs pv (.own 1) ty bs).mp $$ Hpt
+    with ⟨%i, %addr, %Hpv, Hm, Hb, %Hpure⟩
+  subst Hpv
+  obtain ⟨hlen, hdec⟩ := Hpure
+  ihave %Hgetm : ⌜Iris.Std.PartialMap.get? mm i = some (objCell M.tagDefs addr ty true false)⌝
+      $$ [Hmi Hm]
+  · ihave >%h := metaHeap_valid $$ [$Hmi $Hm]
+    itrivial
+  ihave %Hcover : ⌜∀ (j : Nat), j < bs.length →
+      Iris.Std.PartialMap.get? mb (addr + (j : Int)) = bs[j]?⌝ $$ [Hbi Hb]
+  · iapply bytesOwn_get mb addr (.own 1) bs $$ [$Hbi $Hb]
+  ihave %Hread : ⌜CerbMem.readBytesFrom σ₁ addr bs.length = bs⌝ $$ [Hbi Hb]
+  · iapply bytesOwn_read HG addr (.own 1) bs $$ [$Hbi $Hb]
+  have hcell : CellCoh M.tagDefs σ₁ i ⟨addr, ty, bs⟩ :=
+    CellCoh.ofParts M.tagDefs (HG.metas i _ Hgetm) hlen (hlen ▸ Hread) hdec
+  have hrun := storeM_success M.tagDefs σ₁ i ⟨addr, ty, bs⟩ mv loc hcell hst
+  have hlen' : (CerbMem.memValueToBytes M.tagDefs [] mv).2.length = bs.length := by
+    rw [hst.len [], hlen]
+  iapply fupd_mask_intro hE
+  iintro Hclose
+  isplitr
+  · ipureintro
+    exact ⟨[], ⟨_, _, _, _⟩, _, [], ⟨Step.excluded_store rfl rfl rfl hmv hrun, rfl, rfl⟩⟩
+  iintro %r %σ₂ %eₜ %Hstep
+  obtain ⟨hstep, hlbl, rfl⟩ := Hstep
+  obtain ⟨mv', fp', σ'', hmv', hmem', hout⟩ := hstep.excluded_store_inv
+  obtain rfl : mv = mv' := Option.some.inj (hmv.symm.trans hmv')
+  rw [hrun] at hmem'
+  obtain ⟨rfl, rfl⟩ : fp' = CerbMem.Footprint.FP .W addr (CerbMem.sizeofCtype M.tagDefs ty) ∧
+      σ'' = CerbMem.writeBytesTo σ₁ addr (CerbMem.memValueToBytes M.tagDefs [] mv).2 := by
+    have h := Option.some.inj hmem'.symm
+    exact ⟨congrArg Prod.fst h, congrArg Prod.snd h⟩
+  obtain ⟨re, rρ, rctl, rM⟩ := r
+  simp only at hlbl
+  obtain rfl : M = rM := hlbl.symm
+  obtain ⟨hre, hrρ, hrctl, hσ⟩ : re = Expr [] (Eannot
+        [DA_neg n [] (CerbMem.Footprint.FP .W addr (CerbMem.sizeofCtype M.tagDefs ty))]
+        (Expr [] (Epure (Pexpr [] () (PEval Vunit))))) ∧ rρ = ρ ∧ rctl = ctl.upd a ∧
+      σ₂ = CerbMem.writeBytesTo σ₁ addr (CerbMem.memValueToBytes M.tagDefs [] mv).2 := by
+    simpa [Prod.mk.injEq] using hout
+  subst hre hσ hrctl
+  obtain rfl : ρ = rρ := hrρ.symm
+  imod Hclose with -
+  imod (bytesOwn_update mb addr bs (CerbMem.memValueToBytes M.tagDefs [] mv).2 hlen')
+    $$ [$Hbi $Hb] with ⟨Hbi, Hb⟩
+  imodintro
+  isplitl [Hmi Hbi Hki]
+  · iapply (stateInterp_iff _ _ _ _).mpr
+    iexists mm, (insertRange mb addr (CerbMem.memValueToBytes M.tagDefs [] mv).2), mk
+    isplitr [Hmi Hbi Hki]
+    · ipureintro
+      exact HG.storeRange addr (CerbMem.memValueToBytes M.tagDefs [] mv).2
+        (fun j hj => ⟨bs[j]'(by omega), by
+          rw [Hcover j (by omega)]
+          exact List.getElem?_eq_getElem _⟩)
+    isplitl [Hmi]
+    · iexact Hmi
+    isplitl [Hbi]
+    · iexact Hbi
+    · iexact Hki
+  · iexists (SpikeVal.annot
+      [DA_neg n [] (CerbMem.Footprint.FP .W addr (CerbMem.sizeofCtype M.tagDefs ty))] Vunit)
     isplit
     · ipureintro
       exact ⟨rfl, rfl, Nat.le_refl 2⟩

@@ -196,7 +196,7 @@ theorem struct_wp_readout (loc : CerbLocation.Loc)
     loc ann mo mo' bty id a bs fmapEmpty []).trans ?_
   refine (BI.emp_sep.2.trans (BI.sep_mono
     ((struct_blockSpecs id a bs).trans
-      (wps_sound_empty (ctl := spikeCtl) rfl (progS loc ann mo mo' bty id a) spikeEnv))
+      (wps_sound_empty (ctl := spikeCtl) rfl (Nat.zero_le _) (progS loc ann mo mo' bty id a) spikeEnv))
     .rfl)).trans ?_
   refine BI.wand_elim_left.trans ?_
   refine wp_mono fun w => ?_
@@ -823,7 +823,7 @@ theorem struct_create_store_adequacy {GF : BundledGFunctors} [SpikeGpreS GF]
     · refine BI.emp_sep.2.trans (.trans (BI.sep_mono
         ((blockSpecs_intro fun l _ _ _ _ _ hl =>
           (spikeCtx_labels_none l hl).elim).trans
-          (wps_sound_empty (ctl := spikeCtl) rfl (progCreateInit loc ann .Prov_none 8 pref mo pbty vbty)
+          (wps_sound_empty (ctl := spikeCtl) rfl (Nat.zero_le _) (progCreateInit loc ann .Prov_none 8 pref mo pbty vbty)
             spikeEnv))
         .rfl) BI.wand_elim_left)
     iexact HWP

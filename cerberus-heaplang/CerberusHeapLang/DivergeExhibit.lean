@@ -187,7 +187,7 @@ theorem diverge_total_unprovable {GF : BundledGFunctors} [SpikeGpreS GF]
   have hlbl := procCtx_labels (dgRS_labeledAt ra)
   have hdd :=
     wpt_driver_done (GF := GF) (M₀ := procCtx (dgRS ra)) (ctl := procCtl dgProcSym) rfl rfl hlbl
-      rfl (th₀ := procThread dgProcSym (dgBody ra) [fmapEmpty]) rfl rfl rfl
+      rfl (th₀ := procThread dgProcSym (dgBody ra) [fmapEmpty]) rfl rfl rfl (Nat.zero_le _)
       (fun l params cont hl => by
         rw [hlbl] at hl
         obtain ⟨-, rfl⟩ := dgQ_inv ra hl

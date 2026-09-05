@@ -1103,7 +1103,7 @@ theorem tr_wp_readout [SpikeGS .hasLC GF]
     xbty ybty bbty ubty idx idy vx vy ta tb tc px) .rfl).trans ?_
   refine (BI.emp_sep.2.trans (BI.sep_mono
     ((tr_blockSpecs (trPost (NodeTree.node idy vy ta (NodeTree.node idx vx tb tc)))).trans
-      (wps_sound_frame_empty (ctl := spikeCtl) rfl (lrCellFrame R) (trProg loc ann mo xbty ybty bbty ubty px) spikeEnv))
+      (wps_sound_frame_empty (ctl := spikeCtl) rfl (Nat.zero_le _) (lrCellFrame R) (trProg loc ann mo xbty ybty bbty ubty px) spikeEnv))
     .rfl)).trans ?_
   refine BI.wand_elim_left.trans ?_
   refine wp_mono fun w => ?_

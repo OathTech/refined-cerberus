@@ -402,7 +402,7 @@ theorem fib_wp_readout (hn : 0 ≤ n) (sbty : core_base_type) :
   refine (fib_wps (F := spikeFile) ra n ibty abty bbty p rs hQ hn sbty).trans ?_
   refine (BI.emp_sep.2.trans (BI.sep_mono
     ((fib_blockSpecs (F := spikeFile) ra n ibty abty bbty p rs hQ).trans
-      (wps_sound_empty (ctl := procCtl p) rfl (fibProg ra n sbty ibty abty bbty) [fmapEmpty]))
+      (wps_sound_empty (ctl := procCtl p) rfl (Nat.zero_le _) (fibProg ra n sbty ibty abty bbty) [fmapEmpty]))
     .rfl)).trans ?_
   refine BI.wand_elim_left.trans ?_
   exact wp_mono fun w => stateInterp_readout fun _ _ _ _ _ => pure_consequence _

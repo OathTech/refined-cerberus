@@ -626,7 +626,8 @@ theorem frMain_wps (hn : 0 ≤ n) (ρ : EnvStack) :
 
 /-- The base-WP face with the engine readout: `wps_sound` WITH the table
     at the production entry control. -/
-theorem fr_wp_readout (hn : 0 ≤ n) (ℓ : exec_location) (lc : CerbLocation.Loc) (sp : RunSup) :
+theorem fr_wp_readout (hn : 0 ≤ n) (ℓ : exec_location) (lc : CerbLocation.Loc) (sp : RunSup)
+    (hsb : sup ≤ sp.sym) :
     ⊢ WP (⟨frMain ra n, [fmapEmpty], ⟨[], some mainSym, ℓ, lc, sp⟩,
           frCtx ra n nbty xbty ybty sbty zbty sup⟩ : CoreRt)
         @ Stuckness.NotStuck; ⊤
@@ -637,7 +638,7 @@ theorem fr_wp_readout (hn : 0 ≤ n) (ℓ : exec_location) (lc : CerbLocation.Lo
   refine (BI.emp_sep.2.trans (BI.sep_mono
     ((BI.emp_sep.2.trans (BI.sep_mono (frCtx_procSpecs ra n nbty xbty ybty sbty zbty sup)
       (fr_blockSpecs ra n nbty xbty ybty sbty zbty sup))).trans
-      (wps_sound (ctl := ⟨[], some mainSym, ℓ, lc, sp⟩) rfl (frMain ra n) [fmapEmpty])) .rfl)).trans ?_
+      (wps_sound (ctl := ⟨[], some mainSym, ℓ, lc, sp⟩) rfl hsb (frMain ra n) [fmapEmpty])) .rfl)).trans ?_
   refine BI.wand_elim_left.trans ?_
   exact wp_mono fun w => stateInterp_readout fun _ _ _ _ _ => pure_consequence _
 
@@ -833,7 +834,7 @@ theorem fib_rec_certified (hn : 0 ≤ n) (fs : CerbFS.FsState) (args : List Stri
       ?_ (th₀ := prodThread (frMain ra n))
     intro inst
     exact (BigSepM.bigSepM_empty).1.trans
-      (fr_wp_readout ra n nbty xbty ybty sbty zbty sup hn _ _ _)
+      (fr_wp_readout ra n nbty xbty ybty sbty zbty sup hn _ _ _ (Nat.le_refl _))
   obtain ⟨st, dst', heq, hor⟩ := prod_run_safe_procs sup (frProcs ra nbty xbty ybty sbty zbty)
     (frMain ra n) (frCtx_labeledProcs ra n nbty xbty ybty sbty zbty sup) _ hsafe fs args fuel
   exact ⟨st, dst', heq, hor⟩
@@ -871,7 +872,7 @@ theorem fib_rec_certified_production (hn : 0 ≤ n)
       (frCtx_fragProcs ra n nbty xbty ybty sbty zbty sup)
       (th₀ := prodThread (frMain ra n))
       (frFile_lookup_main ra n nbty xbty ybty sbty zbty) (prodCtl sup).execLoc (prodCtl sup).curLoc (prodCtl sup).sup
-      frSpecT frLsT
+      (Nat.le_refl _) frSpecT frLsT
       (frMain ra n) fmapEmpty [] prodMem₀ (∅ : SpikeHeapF SpikeCell) 0
       (frMain_frag ra n)
       (by rw [frMain_pot, show lemDefaultFuel = 999999 + 1 from rfl]; omega)

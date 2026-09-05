@@ -532,7 +532,7 @@ theorem tl_wp_readout (hn₁ : 0 ≤ n₁) (hn₂ : 0 ≤ n₂) (sbty₁ : core_
     rest).trans ?_)
   refine (BI.emp_sep.2.trans (BI.sep_mono
     ((tl_blockSpecs loc ann ra mo bty xbty ybty sbty₂ c n₁ n₂ bs0 p rs hQ hn₂).trans
-      (wps_sound_empty (ctl := procCtl p) rfl
+      (wps_sound_empty (ctl := procCtl p) rfl (Nat.zero_le _)
         (tlProg loc ann ra mo bty xbty ybty sbty₁ sbty₂ c n₁ n₂) (f :: rest)))
     .rfl)).trans ?_
   refine BI.wand_elim_left.trans ?_
