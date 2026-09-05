@@ -328,9 +328,9 @@ theorem wps_load_node_field {Ψ : SpikeVal → EnvStack → IProp GF}
     iprop(cellOwn M.tagDefs (GF := GF) id dq (SpikeCell.mk a nodeTy bs) ∗
       (∀ fp, cellOwn M.tagDefs id dq (SpikeCell.mk a nodeTy bs) -∗
         Ψ (SpikeVal.annot [DA_pos [] fp] ((valueFromMemValue mv).2)) ρ)) ⊢
-      wps M p Ls Θ Ψ (loadExpr loc ann nodePtrTy (cellPtr id (a + (off : Int))) mo)
+      wps M p Ls Θ Ψ (loadExpr [] loc ann nodePtrTy (cellPtr id (a + (off : Int))) mo)
         ρ :=
-  wps_load_cell_at loc ann id a nodeTy off nodePtrTy mo dq bs ρ
+  wps_load_cell_at [] loc ann id a nodeTy off nodePtrTy mo dq bs ρ
     (by rw [nodePtrTy_size]; exact hbound)
     (by rw [nodePtrTy_size]; exact hdec) rfl
 
@@ -355,9 +355,9 @@ theorem wps_store_node_field {Ψ : SpikeVal → EnvStack → IProp GF}
       (∀ fp, cellOwn M.tagDefs id (.own 1) (SpikeCell.mk a nodeTy
           (spliceBytes off (CerbMem.memValueToBytes M.tagDefs [] mv).2 bs)) -∗
         Ψ (SpikeVal.annot [DA_pos [] fp] Vunit) ρ)) ⊢
-      wps M p Ls Θ Ψ (storeExpr loc ann nodePtrTy (cellPtr id (a + (off : Int)))
+      wps M p Ls Θ Ψ (storeExpr [] loc ann nodePtrTy (cellPtr id (a + (off : Int)))
         cv mo) ρ :=
-  wps_store_cell_at loc ann id a nodeTy off nodePtrTy cv mo bs ρ hmv
+  wps_store_cell_at [] loc ann id a nodeTy off nodePtrTy cv mo bs ρ hmv
     (by rw [nodePtrTy_size]; exact hbound)
     ⟨hcompat, hfpm, hbytes, by rw [nodePtrTy_size]; exact hlen⟩
     (fun lum fpm => nodeTy_dec_indep lum fpm a _)
@@ -471,7 +471,7 @@ def nullVal : value := ptrVal nullNode
 /-- The null test: `memop(PtrEq, [cur, NULL(node)])` — the engine's
     own pointer-equality memop. -/
 def lrMemopE : CoreExpr :=
-  memopRedex PtrEq [Pexpr [] () (PEsym lrCurSym), Pexpr [] () (PEval nullVal)]
+  memopRedex [] PtrEq [Pexpr [] () (PEsym lrCurSym), Pexpr [] () (PEval nullVal)]
 
 /-- The next-field address: `array_shift(s, long, 1)` — intra-node
     arithmetic (offset 8 within the node allocation). -/
@@ -482,13 +482,13 @@ def lrShiftPe (s : sym) : generic_pexpr Unit sym :=
 /-- `load(node*, array_shift(cur, long, 1))` — n := cur->next. -/
 def lrLoadE (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (mo : memory_order) : CoreExpr :=
-  loadOpRedex loc ann nodePtrTy (lrShiftPe lrCurSym) mo
+  loadOpRedex [] loc ann nodePtrTy (lrShiftPe lrCurSym) mo
 
 /-- `store(node*, array_shift(cur, long, 1), prev)` —
     cur->next := prev. -/
 def lrStoreE (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (mo : memory_order) : CoreExpr :=
-  storeOpRedex loc ann nodePtrTy (lrShiftPe lrCurSym)
+  storeOpRedex [] loc ann nodePtrTy (lrShiftPe lrCurSym)
     (Pexpr [] () (PEsym lrPrevSym)) mo
 
 /-- The exit: `pure(prev)`. -/
@@ -948,15 +948,15 @@ theorem lr_body_wps (revd rest' : List (Int × Int))
     icases HC with %hnull
     subst hnull
     iapply wps_seq_sym
-    rw [show lrMemopE = memopRedex PtrEq
+    rw [show lrMemopE = memopRedex [] PtrEq
       [Pexpr [] () (PEsym lrCurSym), Pexpr [] () (PEval nullVal)] from rfl]
-    iapply wps_memop_eval PtrEq _ _ _
+    iapply wps_memop_eval [] PtrEq _ _ _
       lr_memop_operands_nonvalue (lr_cur_eval hf renv _ _) rfl
-    rw [show memopRedex PtrEq [Pexpr [] () (PEval (ptrVal nullNode)),
+    rw [show memopRedex [] PtrEq [Pexpr [] () (PEval (ptrVal nullNode)),
         Pexpr [] () (PEval nullVal)] =
-      memopPtrEqVals (Vobject (OVpointer nullNode))
+      memopPtrEqVals [] (Vobject (OVpointer nullNode))
         (Vobject (OVpointer nullNode)) from rfl]
-    iapply wps_memop_ptreq nullNode nullNode _
+    iapply wps_memop_ptreq [] nullNode nullNode _
       (fun σ => eqPtrval_null_null nodeTy nodeTy σ)
     iexists (boolValue true)
     isplit
@@ -984,15 +984,15 @@ theorem lr_body_wps (revd rest' : List (Int × Int))
     have kit := node_store_kit (tds := fmapEmpty) pPrev hshape
     obtain ⟨klen, kfpm, kbytes, knext⟩ := kit
     iapply wps_seq_sym
-    rw [show lrMemopE = memopRedex PtrEq
+    rw [show lrMemopE = memopRedex [] PtrEq
       [Pexpr [] () (PEsym lrCurSym), Pexpr [] () (PEval nullVal)] from rfl]
-    iapply wps_memop_eval PtrEq _ _ _
+    iapply wps_memop_eval [] PtrEq _ _ _
       lr_memop_operands_nonvalue (lr_cur_eval hf renv _ _) rfl
-    rw [show memopRedex PtrEq [Pexpr [] () (PEval (ptrVal (cellPtr nd.1 aN))),
+    rw [show memopRedex [] PtrEq [Pexpr [] () (PEval (ptrVal (cellPtr nd.1 aN))),
         Pexpr [] () (PEval nullVal)] =
-      memopPtrEqVals (Vobject (OVpointer (cellPtr nd.1 aN)))
+      memopPtrEqVals [] (Vobject (OVpointer (cellPtr nd.1 aN)))
         (Vobject (OVpointer nullNode)) from rfl]
-    iapply wps_memop_ptreq (cellPtr nd.1 aN) nullNode _
+    iapply wps_memop_ptreq [] (cellPtr nd.1 aN) nullNode _
       (fun σ => eqPtrval_cell_null nd.1 aN nodeTy σ)
     iexists (boolValue false)
     isplit
@@ -1011,8 +1011,8 @@ theorem lr_body_wps (revd rest' : List (Int × Int))
       from rfl]
     iapply wps_seq_spec
     rw [show lrLoadE loc ann mo =
-      loadOpRedex loc ann nodePtrTy (lrShiftPe lrCurSym) mo from rfl]
-    iapply wps_load_eval loc ann nodePtrTy (lrShiftPe lrCurSym) mo _
+      loadOpRedex [] loc ann nodePtrTy (lrShiftPe lrCurSym) mo from rfl]
+    iapply wps_load_eval [] loc ann nodePtrTy (lrShiftPe lrCurSym) mo _
       rfl (lr_shift_eval_B hf renv _ _ nd.1 aN)
     rw [show cellPtr nd.1 (aN + 8) = cellPtr nd.1 (aN + ((8 : Nat) : Int))
       from rfl]
@@ -1033,9 +1033,9 @@ theorem lr_body_wps (revd rest' : List (Int × Int))
       lrFrameN (ptrVal q) (boolValue false) (ptrVal pPrev)
         (ptrVal (cellPtr nd.1 aN)) f from rfl]
     iapply wps_seq
-    rw [show lrStoreE loc ann mo = storeOpRedex loc ann nodePtrTy
+    rw [show lrStoreE loc ann mo = storeOpRedex [] loc ann nodePtrTy
       (lrShiftPe lrCurSym) (Pexpr [] () (PEsym lrPrevSym)) mo from rfl]
-    iapply wps_store_eval loc ann nodePtrTy _ _ mo _
+    iapply wps_store_eval [] loc ann nodePtrTy _ _ mo _
       rfl (lr_shift_eval_N hf renv _ _ _ nd.1 aN)
       (lr_store_value_eval hf renv _ _ _ _)
     rw [show cellPtr nd.1 (aN + 8) = cellPtr nd.1 (aN + ((8 : Nat) : Int))
@@ -1163,14 +1163,14 @@ variable (loc : CerbLocation.Loc) (ann ra : core_run_annotation)
 /-- The label body is in the certified cone. -/
 theorem lrBody_fragJ :
     Frag (lrBody loc ann ra mo bbty nbty ubty) := by
-  have hb : BareHead (memopRedex PtrEq
+  have hb : Frag (memopRedex [] PtrEq
       [Pexpr [] () (PEsym lrCurSym), Pexpr [] () (PEval nullVal)]) :=
     .memop_op rfl (.sym _ _) (.val _ _)
       (by rw [show peDepth (Pexpr ([] : List annot) () (PEsym lrCurSym)) = 1
           from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega)
       (by rw [show peDepth (Pexpr ([] : List annot) () (PEval nullVal)) = 1
           from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega)
-  refine .sseq_sym hb hb.frag
+  refine .sseq_sym hb
     (.if_ (PePure.of_isPePure rfl) (by
         rw [show peDepth (Pexpr ([] : List annot) () (PEsym lrBSym)) = 1
           from rfl, show lemDefaultFuel = 999999 + 1 from rfl]
@@ -1436,7 +1436,7 @@ theorem lr_wp_readout {GF : BundledGFunctors} [SpikeGS .hasLC GF]
     .rfl)).trans ?_
   refine BI.wand_elim_left.trans ?_
   refine wp_mono fun w => ?_
-  exact lrPost_readout ns R w.w w.ρ
+  exact lrPost_readout ns R w.sv w.ρ
 
 /-- LIST-REVERSE, END TO END — THE FLAGSHIP AT FULL STRENGTH
     (foundations Phase 4; audit F-06's exit criterion): driving the
@@ -1512,7 +1512,7 @@ theorem list_reverse_certified
       exact lr_wp_readout loc ann ra mo pbty cbty bbty nbty ubty ns
         lrProcSym rs (lrRS_labeledAt loc ann ra mo pbty cbty bbty nbty ubty)
         sbty head R)
-    (th₀ := procThread lrProcSym prog [fmapEmpty]) rfl).mono ?_
+    (th₀ := procThread lrProcSym prog [fmapEmpty])).mono ?_
   intro v σ' hpost
   obtain ⟨Q, ⟨p', rfl, hQseed⟩, hdisj, hsat⟩ := hpost
   refine ⟨p', Q, rfl, hQseed, fun k => ?_, hdisj, hsat⟩
@@ -1678,9 +1678,9 @@ theorem wpt_load_node_field {Ψ : SpikeVal → EnvStack → IProp GF}
     iprop(cellOwn M.tagDefs (GF := GF) id dq (SpikeCell.mk a nodeTy bs) ∗
       (∀ fp, cellOwn M.tagDefs id dq (SpikeCell.mk a nodeTy bs) -∗
         Ψ (SpikeVal.annot [DA_pos [] fp] ((valueFromMemValue mv).2)) ρ)) ⊢
-      wpt M p Ls Θ k Ψ (loadExpr loc ann nodePtrTy (cellPtr id (a + (off : Int))) mo)
+      wpt M p Ls Θ k Ψ (loadExpr [] loc ann nodePtrTy (cellPtr id (a + (off : Int))) mo)
         ρ :=
-  wpt_load_cell_at loc ann id a nodeTy off nodePtrTy mo dq bs ρ hk
+  wpt_load_cell_at [] loc ann id a nodeTy off nodePtrTy mo dq bs ρ hk
     (by rw [nodePtrTy_size]; exact hbound)
     (by rw [nodePtrTy_size]; exact hdec) rfl
 
@@ -1704,9 +1704,9 @@ theorem wpt_store_node_field {Ψ : SpikeVal → EnvStack → IProp GF}
       (∀ fp, cellOwn M.tagDefs id (.own 1) (SpikeCell.mk a nodeTy
           (spliceBytes off (CerbMem.memValueToBytes M.tagDefs [] mv).2 bs)) -∗
         Ψ (SpikeVal.annot [DA_pos [] fp] Vunit) ρ)) ⊢
-      wpt M p Ls Θ k Ψ (storeExpr loc ann nodePtrTy (cellPtr id (a + (off : Int)))
+      wpt M p Ls Θ k Ψ (storeExpr [] loc ann nodePtrTy (cellPtr id (a + (off : Int)))
         cv mo) ρ :=
-  wpt_store_cell_at loc ann id a nodeTy off nodePtrTy cv mo bs ρ hk hmv
+  wpt_store_cell_at [] loc ann id a nodeTy off nodePtrTy cv mo bs ρ hk hmv
     (by rw [nodePtrTy_size]; exact hbound)
     ⟨hcompat, hfpm, hbytes, by rw [nodePtrTy_size]; exact hlen⟩
     (fun lum fpm => nodeTy_dec_indep lum fpm a _)
@@ -1762,16 +1762,16 @@ theorem lr_body_wpt (revd rest' : List (Int × Int))
     subst hnull
     rw [show lrCost ([] : List (Int × Int)).length = 3 + 3 from rfl]
     iapply wpt_seq_sym
-    rw [show lrMemopE = memopRedex PtrEq
+    rw [show lrMemopE = memopRedex [] PtrEq
       [Pexpr [] () (PEsym lrCurSym), Pexpr [] () (PEval nullVal)] from rfl,
       show (3 : Nat) = 2 + 1 from rfl]
-    iapply wpt_memop_eval PtrEq _ _ _
+    iapply wpt_memop_eval [] PtrEq _ _ _
       lr_memop_operands_nonvalue (lr_cur_eval hf renv _ _) rfl
-    rw [show memopRedex PtrEq [Pexpr [] () (PEval (ptrVal nullNode)),
+    rw [show memopRedex [] PtrEq [Pexpr [] () (PEval (ptrVal nullNode)),
         Pexpr [] () (PEval nullVal)] =
-      memopPtrEqVals (Vobject (OVpointer nullNode))
+      memopPtrEqVals [] (Vobject (OVpointer nullNode))
         (Vobject (OVpointer nullNode)) from rfl]
-    iapply wpt_memop_ptreq nullNode nullNode _ (by omega)
+    iapply wpt_memop_ptreq [] nullNode nullNode _ (by omega)
       (fun σ => eqPtrval_null_null nodeTy nodeTy σ)
     iexists (boolValue true)
     isplit
@@ -1803,16 +1803,16 @@ theorem lr_body_wpt (revd rest' : List (Int × Int))
         show lrCost (vs.length + 1) = 13 + lrCost vs.length from rfl]
       omega]
     iapply wpt_seq_sym
-    rw [show lrMemopE = memopRedex PtrEq
+    rw [show lrMemopE = memopRedex [] PtrEq
       [Pexpr [] () (PEsym lrCurSym), Pexpr [] () (PEval nullVal)] from rfl,
       show (3 : Nat) = 2 + 1 from rfl]
-    iapply wpt_memop_eval PtrEq _ _ _
+    iapply wpt_memop_eval [] PtrEq _ _ _
       lr_memop_operands_nonvalue (lr_cur_eval hf renv _ _) rfl
-    rw [show memopRedex PtrEq [Pexpr [] () (PEval (ptrVal (cellPtr nd.1 aN))),
+    rw [show memopRedex [] PtrEq [Pexpr [] () (PEval (ptrVal (cellPtr nd.1 aN))),
         Pexpr [] () (PEval nullVal)] =
-      memopPtrEqVals (Vobject (OVpointer (cellPtr nd.1 aN)))
+      memopPtrEqVals [] (Vobject (OVpointer (cellPtr nd.1 aN)))
         (Vobject (OVpointer nullNode)) from rfl]
-    iapply wpt_memop_ptreq (cellPtr nd.1 aN) nullNode _ (by omega)
+    iapply wpt_memop_ptreq [] (cellPtr nd.1 aN) nullNode _ (by omega)
       (fun σ => eqPtrval_cell_null nd.1 aN nodeTy σ)
     iexists (boolValue false)
     isplit
@@ -1833,9 +1833,9 @@ theorem lr_body_wpt (revd rest' : List (Int × Int))
       show 9 + lrCost vs.length = 4 + (5 + lrCost vs.length) by omega]
     iapply wpt_seq_spec
     rw [show lrLoadE loc ann mo =
-      loadOpRedex loc ann nodePtrTy (lrShiftPe lrCurSym) mo from rfl,
+      loadOpRedex [] loc ann nodePtrTy (lrShiftPe lrCurSym) mo from rfl,
       show (4 : Nat) = 3 + 1 from rfl]
-    iapply wpt_load_eval loc ann nodePtrTy (lrShiftPe lrCurSym) mo _
+    iapply wpt_load_eval [] loc ann nodePtrTy (lrShiftPe lrCurSym) mo _
       rfl (lr_shift_eval_B hf renv _ _ nd.1 aN)
     rw [show cellPtr nd.1 (aN + 8) = cellPtr nd.1 (aN + ((8 : Nat) : Int))
       from rfl]
@@ -1858,10 +1858,10 @@ theorem lr_body_wpt (revd rest' : List (Int × Int))
         (ptrVal (cellPtr nd.1 aN)) f from rfl]
     rw [show 5 + lrCost vs.length = 4 + (1 + lrCost vs.length) by omega]
     iapply wpt_seq
-    rw [show lrStoreE loc ann mo = storeOpRedex loc ann nodePtrTy
+    rw [show lrStoreE loc ann mo = storeOpRedex [] loc ann nodePtrTy
       (lrShiftPe lrCurSym) (Pexpr [] () (PEsym lrPrevSym)) mo from rfl,
       show (4 : Nat) = 3 + 1 from rfl]
-    iapply wpt_store_eval loc ann nodePtrTy _ _ mo _
+    iapply wpt_store_eval [] loc ann nodePtrTy _ _ mo _
       rfl (lr_shift_eval_N hf renv _ _ _ nd.1 aN)
       (lr_store_value_eval hf renv _ _ _ _)
     rw [show cellPtr nd.1 (aN + 8) = cellPtr nd.1 (aN + ((8 : Nat) : Int))

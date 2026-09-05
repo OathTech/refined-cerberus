@@ -99,7 +99,7 @@ def tlParams2 (ybty : core_base_type) (n₂ : Int) :
 def tlBody2 (loc : CerbLocation.Loc) (ann ra : core_run_annotation) (mo : memory_order)
     (bty : core_base_type) (c : CerbMem.PointerValue) : CoreExpr :=
   Expr [] (Eif tlGuard2
-    (sseqExpr bty (storeExpr loc ann intTy c sixVal mo) (Expr [] (Erun ra tlL2Sym [tlDec2])))
+    (sseqExpr [] bty (storeExpr [] loc ann intTy c sixVal mo) (Expr [] (Erun ra tlL2Sym [tlDec2])))
     (ofVal (.pure Vunit)))
 
 /-- The first loop's body (the registered continuation of `l1`): its exit
@@ -107,7 +107,7 @@ def tlBody2 (loc : CerbLocation.Loc) (ann ra : core_run_annotation) (mo : memory
 def tlBody1 (loc : CerbLocation.Loc) (ann ra : core_run_annotation) (mo : memory_order)
     (bty ybty sbty₂ : core_base_type) (c : CerbMem.PointerValue) (n₂ : Int) : CoreExpr :=
   Expr [] (Eif tlGuard1
-    (sseqExpr bty (storeExpr loc ann intTy c fiveVal mo) (Expr [] (Erun ra tlL1Sym [tlDec1])))
+    (sseqExpr [] bty (storeExpr [] loc ann intTy c fiveVal mo) (Expr [] (Erun ra tlL1Sym [tlDec1])))
     (Expr [] (Esave (tlL2Sym, sbty₂) (tlParams2 ybty n₂) (tlBody2 loc ann ra mo bty c))))
 
 /-- The whole program: the first `save` binding `x := n₁`. -/
@@ -336,7 +336,7 @@ theorem tl_body2_wps (j : Int) (f : Fmap sym value) (rest : List (Fmap sym value
   rw [show tlBody2 loc ann ra mo bty c =
     Expr [] (Eif tlGuard2
       (Expr [] (Esseq (Pattern [] (CaseBase (none, bty)))
-        (storeExpr loc ann intTy c sixVal mo)
+        (storeExpr [] loc ann intTy c sixVal mo)
         (Expr [] (Erun ra tlL2Sym [tlDec2]))))
       (ofVal (.pure Vunit))) from rfl]
   iintro Hc
@@ -345,7 +345,7 @@ theorem tl_body2_wps (j : Int) (f : Fmap sym value) (rest : List (Fmap sym value
     iapply wps_if_true [] tlGuard2 _ _ _
       (by rw [procCtx_extern, tl_guard2_eval hf j rest, decide_eq_true hpos]; rfl)
     iapply wps_seq
-    iapply wps_store loc ann intTy c sixVal mo sixMval bs _ six_encodes (six_storable _)
+    iapply wps_store [] loc ann intTy c sixVal mo sixMval bs _ six_encodes (six_storable _)
     isplitl [Hc]
     · iexact Hc
     iintro %fp Hc
@@ -393,7 +393,7 @@ theorem tl_body1_wps (hn₂ : 0 ≤ n₂) (i : Int) (f : Fmap sym value)
   rw [show tlBody1 loc ann ra mo bty ybty sbty₂ c n₂ =
     Expr [] (Eif tlGuard1
       (Expr [] (Esseq (Pattern [] (CaseBase (none, bty)))
-        (storeExpr loc ann intTy c fiveVal mo)
+        (storeExpr [] loc ann intTy c fiveVal mo)
         (Expr [] (Erun ra tlL1Sym [tlDec1]))))
       (Expr [] (Esave (tlL2Sym, sbty₂) (tlParams2 ybty n₂)
         (tlBody2 loc ann ra mo bty c)))) from rfl]
@@ -404,7 +404,7 @@ theorem tl_body1_wps (hn₂ : 0 ≤ n₂) (i : Int) (f : Fmap sym value)
       (by rw [procCtx_extern, tl_guard1_eval hf i rest, decide_eq_true hpos]; rfl)
     iapply wps_seq
     icases Hcell with (⟨%hieq, Hc⟩ | ⟨%hlt, Hc⟩) <;>
-      (iapply wps_store loc ann intTy c fiveVal mo fiveMval _ _
+      (iapply wps_store [] loc ann intTy c fiveVal mo fiveMval _ _
         five_encodes (five_storable _)
        isplitl [Hc]
        · iexact Hc
@@ -504,7 +504,7 @@ omit hQ in
     projection layer only (`sep_consequence` over `pure_consequence` and
     `pointsToCell_consequence`, under `stateInterp_readout`). -/
 theorem tl_readout_val (w : CoreRVal) :
-    tlPost (GF := GF) c n₁ n₂ bs0 w.w w.ρ ⊢
+    tlPost (GF := GF) c n₁ n₂ bs0 w.sv w.ρ ⊢
       iprop(∀ (σ' : Mem) (ns : Nat) (κs : List Empty) (nt : Nat),
         stateInterp σ' ns κs nt ={⊤, ∅}=∗
           ⌜w.val = Vunit ∧ ∃ i a, c = cellPtr i a ∧
@@ -568,7 +568,7 @@ theorem tl_body2_wpt (j : Int) (f : Fmap sym value) (rest : List (Fmap sym value
   rw [show tlBody2 loc ann ra mo bty c =
     Expr [] (Eif tlGuard2
       (Expr [] (Esseq (Pattern [] (CaseBase (none, bty)))
-        (storeExpr loc ann intTy c sixVal mo)
+        (storeExpr [] loc ann intTy c sixVal mo)
         (Expr [] (Erun ra tlL2Sym [tlDec2]))))
       (ofVal (.pure Vunit))) from rfl]
   iintro Hc
@@ -577,7 +577,7 @@ theorem tl_body2_wpt (j : Int) (f : Fmap sym value) (rest : List (Fmap sym value
     iapply wpt_if_true [] tlGuard2 _ _ _
       (by rw [procCtx_extern, tl_guard2_eval hf j rest, decide_eq_true hpos]; rfl)
     iapply wpt_seq
-    iapply wpt_store loc ann intTy c sixVal mo sixMval bs _ (Nat.le_refl 3)
+    iapply wpt_store [] loc ann intTy c sixVal mo sixMval bs _ (Nat.le_refl 3)
       six_encodes (six_storable _)
     isplitl [Hc]
     · iexact Hc
@@ -626,7 +626,7 @@ theorem tl_body1_wpt (hn₂ : 0 ≤ n₂) (i : Int) (f : Fmap sym value)
   rw [show tlBody1 loc ann ra mo bty ybty sbty₂ c n₂ =
     Expr [] (Eif tlGuard1
       (Expr [] (Esseq (Pattern [] (CaseBase (none, bty)))
-        (storeExpr loc ann intTy c fiveVal mo)
+        (storeExpr [] loc ann intTy c fiveVal mo)
         (Expr [] (Erun ra tlL1Sym [tlDec1]))))
       (Expr [] (Esave (tlL2Sym, sbty₂) (tlParams2 ybty n₂)
         (tlBody2 loc ann ra mo bty c)))) from rfl]
@@ -638,7 +638,7 @@ theorem tl_body1_wpt (hn₂ : 0 ≤ n₂) (i : Int) (f : Fmap sym value)
       (by rw [procCtx_extern, tl_guard1_eval hf i rest, decide_eq_true hpos]; rfl)
     iapply wpt_seq
     icases Hcell with (⟨%hieq, Hc⟩ | ⟨%hlt, Hc⟩) <;>
-      (iapply wpt_store loc ann intTy c fiveVal mo fiveMval _ _ (Nat.le_refl 3)
+      (iapply wpt_store [] loc ann intTy c fiveVal mo fiveMval _ _ (Nat.le_refl 3)
         five_encodes (five_storable _)
        isplitl [Hc]
        · iexact Hc
@@ -857,7 +857,7 @@ theorem two_label_certified (sbty₁ : core_base_type) (idx addr : Int)
       isplit
       · ipureintro; rfl
       · iexact Hpt)
-    (th₀ := procThread tlProcSym prog [fmapEmpty]) rfl).mono ?_
+    (th₀ := procThread tlProcSym prog [fmapEmpty])).mono ?_
   intro v σ' ⟨hv, i, a, heq, hc⟩
   obtain ⟨rfl, rfl⟩ := cellPtr_inj heq
   exact ⟨hv, hc⟩

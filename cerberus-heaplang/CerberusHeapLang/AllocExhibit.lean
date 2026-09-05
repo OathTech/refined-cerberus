@@ -109,26 +109,26 @@ theorem alloc_two_creates_wps {M : MachineCtx} {p : Option sym} {Ls : LabelSpec 
         (fun _ _ => iprop(∃ p₁ p₂ : CerbMem.PointerValue,
           pointsToCell M.tagDefs p₁ (.own 1) intTy (intUndefBytes M.tagDefs) ∗
           pointsToCell M.tagDefs p₂ (.own 1) intTy (intUndefBytes M.tagDefs)))
-        (sseqExpr bty
-          (createExpr loc0 empty_annotation (.IV .Prov_none al₁) intTy pref₁)
-          (createExpr loc0 empty_annotation (.IV .Prov_none al₂) intTy pref₂))
+        (sseqExpr [] bty
+          (createExpr [] loc0 empty_annotation (.IV .Prov_none al₁) intTy pref₁)
+          (createExpr [] loc0 empty_annotation (.IV .Prov_none al₂) intTy pref₂))
         (ev0 :: evs) := by
   iintro Hcap
-  rw [show sseqExpr bty
-      (createExpr loc0 empty_annotation (.IV .Prov_none al₁) intTy pref₁)
-      (createExpr loc0 empty_annotation (.IV .Prov_none al₂) intTy pref₂) =
+  rw [show sseqExpr [] bty
+      (createExpr [] loc0 empty_annotation (.IV .Prov_none al₁) intTy pref₁)
+      (createExpr [] loc0 empty_annotation (.IV .Prov_none al₂) intTy pref₂) =
     Expr [] (Esseq (Pattern [] (CaseBase (none, bty)))
-      (createExpr loc0 empty_annotation (.IV .Prov_none al₁) intTy pref₁)
-      (createExpr loc0 empty_annotation (.IV .Prov_none al₂) intTy pref₂))
+      (createExpr [] loc0 empty_annotation (.IV .Prov_none al₁) intTy pref₁)
+      (createExpr [] loc0 empty_annotation (.IV .Prov_none al₂) intTy pref₂))
     from rfl]
   icases (allocBudget_split _ _).1 $$ Hcap with ⟨Hcap₁, Hcap₂⟩
   iapply wps_seq
-  iapply wps_create loc0 empty_annotation .Prov_none al₁ intTy pref₁ (ev0 :: evs)
+  iapply wps_create [] loc0 empty_annotation .Prov_none al₁ intTy pref₁ (ev0 :: evs)
     intTy_size_pos intTy_nonatomic (fun a => intTy_decIndep a _)
   isplitl [Hcap₁]
   · iexact Hcap₁
   iintro %p₁ ⟨Hpt₁, -⟩
-  iapply wps_create loc0 empty_annotation .Prov_none al₂ intTy pref₂ (ev0 :: evs)
+  iapply wps_create [] loc0 empty_annotation .Prov_none al₂ intTy pref₂ (ev0 :: evs)
     intTy_size_pos intTy_nonatomic (fun a => intTy_decIndep a _)
   isplitl [Hcap₂]
   · iexact Hcap₂
@@ -147,10 +147,10 @@ theorem alloc_create_wpt {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} 
       wpt M p Ls Θ 2
         (fun _ _ => iprop(∃ p : CerbMem.PointerValue,
           pointsToCell M.tagDefs p (.own 1) intTy (intUndefBytes M.tagDefs)))
-        (createExpr loc0 empty_annotation (.IV .Prov_none al) intTy pref)
+        (createExpr [] loc0 empty_annotation (.IV .Prov_none al) intTy pref)
         ρ := by
   iintro Hcap
-  iapply wpt_create loc0 empty_annotation .Prov_none al intTy pref ρ
+  iapply wpt_create [] loc0 empty_annotation .Prov_none al intTy pref ρ
     (Nat.le_refl 2) intTy_size_pos intTy_nonatomic (fun a => intTy_decIndep a _)
   isplitl [Hcap]
   · iexact Hcap
@@ -169,13 +169,13 @@ def pKSym : sym := Symbol "" 513 SD_None
 /-- `lets p = create(al, int) in kill(static int, p)`. -/
 def createKillProg (al : Int) (pref : prefix0) : CoreExpr :=
   Expr [] (Esseq (symPat [] pKSym BTy_unit)
-    (createExpr loc0 empty_annotation (.IV .Prov_none al) intTy pref)
-    (killOpRedex loc0 empty_annotation (Static0 intTy) (Pexpr [] () (PEsym pKSym))))
+    (createExpr [] loc0 empty_annotation (.IV .Prov_none al) intTy pref)
+    (killOpRedex [] loc0 empty_annotation (Static0 intTy) (Pexpr [] () (PEsym pKSym))))
 
-/-- Cone membership: `create` is a `BareHead`; the kill is the static
+/-- Cone membership: `create` is a `Frag` head; the kill is the static
     kill at a symbol operand. -/
 theorem createKillProg_frag (al : Int) (pref : prefix0) : Frag (createKillProg al pref) :=
-  .sseq_sym .create .create
+  .sseq_sym .create
     (.kill_op rfl (.sym [] pKSym)
       (by rw [show peDepth (Pexpr ([] : List annot) () (PEsym pKSym)) = 1 from rfl,
         show lemDefaultFuel = 999999 + 1 from rfl]; omega))
@@ -208,11 +208,11 @@ theorem alloc_create_kill_wps {M : MachineCtx} {p : Option sym} {Ls : LabelSpec 
   iintro Hcap
   rw [show createKillProg al pref =
     Expr [] (Esseq (symPat [] pKSym BTy_unit)
-      (createExpr loc0 empty_annotation (.IV .Prov_none al) intTy pref)
-      (killOpRedex loc0 empty_annotation (Static0 intTy) (Pexpr [] () (PEsym pKSym))))
+      (createExpr [] loc0 empty_annotation (.IV .Prov_none al) intTy pref)
+      (killOpRedex [] loc0 empty_annotation (Static0 intTy) (Pexpr [] () (PEsym pKSym))))
     from rfl]
   iapply wps_seq_sym
-  iapply wps_create loc0 empty_annotation .Prov_none al intTy pref (ev0 :: evs)
+  iapply wps_create [] loc0 empty_annotation .Prov_none al intTy pref (ev0 :: evs)
     intTy_size_pos intTy_nonatomic (fun a => intTy_decIndep a _)
   isplitl [Hcap]
   · iexact Hcap
@@ -222,10 +222,10 @@ theorem alloc_create_kill_wps {M : MachineCtx} {p : Option sym} {Ls : LabelSpec 
   · ipureintro
     rfl
   rw [update_env_sym pKSym BTy_unit]
-  iapply wps_kill_eval loc0 empty_annotation (Static0 intTy) _ _ rfl (pv := p)
+  iapply wps_kill_eval [] loc0 empty_annotation (Static0 intTy) _ _ rfl (pv := p)
     (by rw [evalPexpr_sym_of_resolve _ _ _ (hex _)]
         exact lookup_env_head (createKill_lookup_p hf p) evs)
-  iapply wps_kill loc0 empty_annotation (Static0 intTy) p intTy _ _ rfl
+  iapply wps_kill [] loc0 empty_annotation (Static0 intTy) p intTy _ _ rfl
   isplitl [Hpt]
   · iexact Hpt
   iintro ⟨%id, %a, %hpv, Hd⟩
@@ -246,13 +246,13 @@ def pFSym : sym := Symbol "" 514 SD_None
 /-- `lets p = alloc(al, n) in free(p)`. -/
 def allocFreeProg (al n : Int) (pref : prefix0) : CoreExpr :=
   Expr [] (Esseq (symPat [] pFSym BTy_unit)
-    (allocExpr loc0 empty_annotation (.IV .Prov_none al) (.IV .Prov_none n) pref)
-    (killOpRedex loc0 empty_annotation Dynamic0 (Pexpr [] () (PEsym pFSym))))
+    (allocExpr [] loc0 empty_annotation (.IV .Prov_none al) (.IV .Prov_none n) pref)
+    (killOpRedex [] loc0 empty_annotation Dynamic0 (Pexpr [] () (PEsym pFSym))))
 
-/-- Cone membership: `alloc` is a `BareHead`; the free is the kill at a
+/-- Cone membership: `alloc` is a `Frag` head; the free is the kill at a
     symbol operand (any kind since K3). -/
 theorem allocFreeProg_frag (al n : Int) (pref : prefix0) : Frag (allocFreeProg al n pref) :=
-  .sseq_sym .alloc .alloc
+  .sseq_sym .alloc
     (.kill_op rfl (.sym [] pFSym)
       (by rw [show peDepth (Pexpr ([] : List annot) () (PEsym pFSym)) = 1 from rfl,
         show lemDefaultFuel = 999999 + 1 from rfl]; omega))
@@ -285,11 +285,11 @@ theorem alloc_free_wps {M : MachineCtx} {p : Option sym} {Ls : LabelSpec GF} {Θ
   iintro Hcap
   rw [show allocFreeProg al n pref =
     Expr [] (Esseq (symPat [] pFSym BTy_unit)
-      (allocExpr loc0 empty_annotation (.IV .Prov_none al) (.IV .Prov_none n) pref)
-      (killOpRedex loc0 empty_annotation Dynamic0 (Pexpr [] () (PEsym pFSym))))
+      (allocExpr [] loc0 empty_annotation (.IV .Prov_none al) (.IV .Prov_none n) pref)
+      (killOpRedex [] loc0 empty_annotation Dynamic0 (Pexpr [] () (PEsym pFSym))))
     from rfl]
   iapply wps_seq_sym
-  iapply wps_alloc loc0 empty_annotation .Prov_none .Prov_none al n pref (ev0 :: evs) hcost
+  iapply wps_alloc [] loc0 empty_annotation .Prov_none .Prov_none al n pref (ev0 :: evs) hcost
   isplitl [Hcap]
   · iexact Hcap
   iintro %id %a ⟨Hr, -⟩
@@ -298,10 +298,10 @@ theorem alloc_free_wps {M : MachineCtx} {p : Option sym} {Ls : LabelSpec GF} {Θ
   · ipureintro
     rfl
   rw [update_env_sym pFSym BTy_unit]
-  iapply wps_kill_eval loc0 empty_annotation Dynamic0 _ _ rfl (pv := cellPtr id a)
+  iapply wps_kill_eval [] loc0 empty_annotation Dynamic0 _ _ rfl (pv := cellPtr id a)
     (by rw [evalPexpr_sym_of_resolve _ _ _ (hex _)]
         exact lookup_env_head (allocFree_lookup_p hf _) evs)
-  iapply wps_free loc0 empty_annotation Dynamic0 id a n.toNat _ _ rfl
+  iapply wps_free [] loc0 empty_annotation Dynamic0 id a n.toNat _ _ rfl
   isplitl [Hr]
   · iexact Hr
   iintro Hd
@@ -321,10 +321,10 @@ theorem wps_alloc_lit_sym {M : MachineCtx} {p : Option sym} {Ls : LabelSpec GF} 
     {size : CerbMem.IntegerValue}
     (hn : evalPexpr M.tagDefs M.extern ρ (Pexpr [] () (PEsym n)) =
       some (Vobject (OVinteger size))) :
-    wps M p Ls Θ Ψ (allocExpr loc ann align size pref) ρ ⊢
-      wps M p Ls Θ Ψ (allocOpRedex loc ann (Pexpr [] () (PEval (Vobject (OVinteger align))))
+    wps M p Ls Θ Ψ (allocExpr [] loc ann align size pref) ρ ⊢
+      wps M p Ls Θ Ψ (allocOpRedex [] loc ann (Pexpr [] () (PEval (Vobject (OVinteger align))))
         (Pexpr [] () (PEsym n)) pref) ρ :=
-  wps_alloc_eval loc ann _ _ pref ρ rfl rfl hn
+  wps_alloc_eval [] loc ann _ _ pref ρ rfl rfl hn
 
 /-- The total twin, through the public `wpt_alloc_eval` (one tau). -/
 theorem wpt_alloc_lit_sym {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
@@ -334,10 +334,10 @@ theorem wpt_alloc_lit_sym {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF}
     {size : CerbMem.IntegerValue} {k : Nat}
     (hn : evalPexpr M.tagDefs M.extern ρ (Pexpr [] () (PEsym n)) =
       some (Vobject (OVinteger size))) :
-    wpt M p Ls Θ k Ψ (allocExpr loc ann align size pref) ρ ⊢
-      wpt M p Ls Θ (k + 1) Ψ (allocOpRedex loc ann (Pexpr [] () (PEval (Vobject (OVinteger align))))
+    wpt M p Ls Θ k Ψ (allocExpr [] loc ann align size pref) ρ ⊢
+      wpt M p Ls Θ (k + 1) Ψ (allocOpRedex [] loc ann (Pexpr [] () (PEval (Vobject (OVinteger align))))
         (Pexpr [] () (PEsym n)) pref) ρ :=
-  wpt_alloc_eval loc ann _ _ pref ρ rfl rfl hn
+  wpt_alloc_eval [] loc ann _ _ pref ρ rfl rfl hn
 
 end FreeIris
 

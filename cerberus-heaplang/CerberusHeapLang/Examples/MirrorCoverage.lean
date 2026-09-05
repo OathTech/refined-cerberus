@@ -56,9 +56,9 @@ theorem store_sym_lit_step {M : MachineCtx} {loc : CerbLocation.Loc}
     {mo : memory_order} {ρ : EnvStack} {ctl : Ctl} {σ : Mem} {pv : CerbMem.PointerValue}
     (hx : evalPexpr M.tagDefs M.extern ρ (Pexpr [] () (PEsym x)) =
       some (Vobject (OVpointer pv))) :
-    Step M (storeOpRedex loc ann ty (Pexpr [] () (PEsym x))
+    Step M (storeOpRedex [] loc ann ty (Pexpr [] () (PEsym x))
         (Pexpr [] () (PEval cv)) mo, ρ, ctl, σ)
-      (storeExpr loc ann ty pv cv mo, ρ, ctl, σ) :=
+      (storeExpr [] loc ann ty pv cv mo, ρ, ctl, σ) :=
   Step.store_eval rfl hx rfl
 
 /-- `store(ty, p, y)` — LITERAL pointer, SYMBOL value — steps. -/
@@ -66,9 +66,9 @@ theorem store_lit_sym_step {M : MachineCtx} {loc : CerbLocation.Loc}
     {ann : core_run_annotation} {ty : ctype} {pv : CerbMem.PointerValue}
     {y : sym} {mo : memory_order} {ρ : EnvStack} {ctl : Ctl} {σ : Mem} {cv : value}
     (hy : evalPexpr M.tagDefs M.extern ρ (Pexpr [] () (PEsym y)) = some cv) :
-    Step M (storeOpRedex loc ann ty (Pexpr [] () (PEval (Vobject (OVpointer pv))))
+    Step M (storeOpRedex [] loc ann ty (Pexpr [] () (PEval (Vobject (OVpointer pv))))
         (Pexpr [] () (PEsym y)) mo, ρ, ctl, σ)
-      (storeExpr loc ann ty pv cv mo, ρ, ctl, σ) :=
+      (storeExpr [] loc ann ty pv cv mo, ρ, ctl, σ) :=
   Step.store_eval rfl rfl hy
 
 /-! ## The kill ACTION_EVAL shape (kill/free arc K2): `kill(static ty, x)`
@@ -83,8 +83,8 @@ theorem kill_sym_step {M : MachineCtx} {loc : CerbLocation.Loc}
     {ρ : EnvStack} {ctl : Ctl} {σ : Mem} {pv : CerbMem.PointerValue}
     (hx : evalPexpr M.tagDefs M.extern ρ (Pexpr [] () (PEsym x)) =
       some (Vobject (OVpointer pv))) :
-    Step M (killOpRedex loc ann kind (Pexpr [] () (PEsym x)), ρ, ctl, σ)
-      (killRedex loc ann kind pv, ρ, ctl, σ) :=
+    Step M (killOpRedex [] loc ann kind (Pexpr [] () (PEsym x)), ρ, ctl, σ)
+      (killRedex [] loc ann kind pv, ρ, ctl, σ) :=
   Step.kill_eval rfl hx
 
 /-! ## The alloc ACTION_EVAL shape (kill/free arc K3): `alloc(al, n)` at a
@@ -99,9 +99,9 @@ theorem alloc_lit_sym_step {M : MachineCtx} {loc : CerbLocation.Loc}
     {pref : prefix0} {ρ : EnvStack} {ctl : Ctl} {σ : Mem}
     (hn : evalPexpr M.tagDefs M.extern ρ (Pexpr [] () (PEsym n)) =
       some (Vobject (OVinteger size))) :
-    Step M (allocOpRedex loc ann (Pexpr [] () (PEval (Vobject (OVinteger align))))
+    Step M (allocOpRedex [] loc ann (Pexpr [] () (PEval (Vobject (OVinteger align))))
         (Pexpr [] () (PEsym n)) pref, ρ, ctl, σ)
-      (allocRedex loc ann align size pref, ρ, ctl, σ) :=
+      (allocRedex [] loc ann align size pref, ρ, ctl, σ) :=
   Step.alloc_eval rfl rfl hn
 
 /-! ## The procedure call and return (calls arc C2): the two rounds on a
@@ -135,7 +135,7 @@ def smokeFile (ra : core_run_annotation) : file core_run_annotation :=
     funs := fmapAddBy (fun (s1 : sym) (s2 : sym) => ordCompare s1 s2) smokeF
       (Proc CerbLocation.unknown none BTy_boolean [] smokeFBody)
       (fmapAddBy (fun (s1 : sym) (s2 : sym) => ordCompare s1 s2) smokeMain
-        (Proc CerbLocation.unknown none BTy_boolean [] (callRedex ra smokeF []))
+        (Proc CerbLocation.unknown none BTy_boolean [] (callRedex [] ra smokeF []))
         fmapEmpty),
     extern := fmapEmpty,
     funinfo := fmapEmpty,
@@ -156,11 +156,11 @@ theorem smokeFile_lookup_f (ra : core_run_annotation) :
     frame — exactly `Step.call`'s successor. -/
 theorem smoke_call_round (ra : core_run_annotation) (ev0 : Fmap sym value)
     (evs : List (Fmap sym value)) (ℓ : exec_location) (σ : Mem) :
-    CerberusRound (smokeCtx ra) (callRedex ra smokeF [], ev0 :: evs, ⟨[], some smokeMain, ℓ⟩, σ)
+    CerberusRound (smokeCtx ra) (callRedex [] ra smokeF [], ev0 :: evs, ⟨[], some smokeMain, ℓ, default, default⟩, σ)
       (smokeFBody, procEnv [] [] :: (ev0 :: evs),
-       ⟨[(some smokeMain, CTX)], some smokeF, push_exec_loc smokeF default ℓ⟩, σ) :=
+       ⟨[(some smokeMain, CTX)], some smokeF, push_exec_loc smokeF default ℓ, default, default⟩, σ) :=
   engine_step_matchU (Frag.call (fun _ h => by cases h) (fun _ h => by cases h))
-    (by rw [show esize (callRedex ra smokeF []) = 1 from rfl,
+    (by rw [show esize (callRedex [] ra smokeF []) = 1 from rfl,
       show lemDefaultFuel = 999999 + 1 from rfl]; omega)
     (Step.call rfl rfl (smokeFile_lookup_f ra) rfl)
 
@@ -171,8 +171,8 @@ theorem smoke_call_round (ra : core_run_annotation) (ev0 : Fmap sym value)
 theorem smoke_ret_round (ra : core_run_annotation) (v : value) (ev0 : Fmap sym value)
     (evs : List (Fmap sym value)) (ℓ : exec_location) (σ : Mem) :
     CerberusRound (smokeCtx ra) (ofVal (.pure v), ev0 :: evs,
-        ⟨[(some smokeMain, CTX)], some smokeF, ℓ⟩, σ)
-      (apply_ctx CTX (ofVal (.pure v)), evs, ⟨[], some smokeMain, ℓ⟩, σ) :=
+        ⟨[(some smokeMain, CTX)], some smokeF, ℓ, default, default⟩, σ)
+      (apply_ctx CTX (ofVal (.pure v)), evs, ⟨[], some smokeMain, ℓ, default, default⟩, σ) :=
   engine_step_matchU (frag_ofVal _)
     (by rw [show esize (ofVal (.pure v)) = 1 from rfl,
       show lemDefaultFuel = 999999 + 1 from rfl]; omega)

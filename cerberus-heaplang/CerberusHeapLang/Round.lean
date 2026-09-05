@@ -174,7 +174,13 @@ structure MachineCtx.Embeds (M : MachineCtx) (dst : driver_state) (c : Config) :
   layout : dst.layout_state = c.2.2.2
   file : dst.core_file = M.file
   extern : dst.core_extern = M.extern
-  runState : dst.core_run_state0 = M.runState
+  /-- E1: the run state is tied at the fields the fragment READS — the
+      label registry (the context's) and the two symbol supplies (the
+      live control's `Ctl.sup`; the E5 shape — no E1 rule writes them,
+      and every round preserves them). -/
+  labeled : dst.core_run_state0.labeled = M.runState.labeled
+  sym : dst.core_run_state0.sym_supply = c.2.2.1.sup.sym
+  excl : dst.core_run_state0.excluded_supply = c.2.2.1.sup.excl
 
 /-- Every context and configuration is embedded by some driver state. -/
 theorem MachineCtx.embeds_exists (M : MachineCtx) (c : Config) : ∃ dst, M.Embeds dst c :=
@@ -182,8 +188,9 @@ theorem MachineCtx.embeds_exists (M : MachineCtx) (c : Config) : ∃ dst, M.Embe
       core_state0 := { (default : core_state) with
         thread_states := [(M.tid, (M.parent, M.thread c.1 c.2.1 c.2.2.1))] },
       layout_state := c.2.2.2, core_file := M.file, core_extern := M.extern,
-      core_run_state0 := M.runState },
-   ⟨rfl, rfl, rfl, rfl, rfl⟩⟩
+      core_run_state0 := { M.runState with
+        sym_supply := c.2.2.1.sup.sym, excluded_supply := c.2.2.1.sup.excl } },
+   ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩⟩
 
 /-- THE SHIPPED ROUND (module header): at every embedding driver state,
     the engine's step list is a singleton `s`, `s` is advanceable, and
@@ -200,6 +207,7 @@ def CerberusRound (M : MachineCtx) (c c' : Config) : Prop :=
       can_advance s = true ∧
       ∃ (rs' : core_run_state) (tr : List trace_event) (ctr : Nat),
         rs'.labeled = dst.core_run_state0.labeled ∧
+        rs'.sym_supply = c'.2.2.1.sup.sym ∧ rs'.excluded_supply = c'.2.2.1.sup.excl ∧
         runOne (advance_step M.tagDefs M.tid s) dst =
           (NDactive NOWAKEUP,
            { dst with
@@ -379,7 +387,7 @@ inductive OpenRound (M : MachineCtx) (c : Config) : Prop where
   | eval_uncovered (pe : generic_pexpr Unit sym) :
       (∀ c'', ¬ Step M c c'') →
       pe ∈ operandsOf c.1 → PePure pe →
-      evalClass M.tagDefs M.currentLoc M.extern M.file c.2.1 pe = .uncovered →
+      evalClass M.tagDefs c.2.2.1.curLoc M.extern M.file c.2.1 pe = .uncovered →
       (∀ dst, M.Embeds dst c → ∃ (rsk : runstate_step_kind) (m : core_runM thread_state),
         step_ctx M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid
           (M.parent, M.thread c.1 c.2.1 c.2.2.1) = [Step_with_runstate2 rsk m]) →
@@ -928,8 +936,8 @@ theorem ars_alloc_killed {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
 /-- The denotation is injective on the chain (`Stack_cons2` is a
     constructor). -/
 theorem Ctl.toStack_inj {c c' : Ctl} (h : c.toStack = c'.toStack) : c.κ = c'.κ := by
-  obtain ⟨κ, p, ℓ⟩ := c
-  obtain ⟨κ', p', ℓ'⟩ := c'
+  obtain ⟨κ, p, ℓ, lc, sp⟩ := c
+  obtain ⟨κ', p', ℓ', lc', sp'⟩ := c'
   simp only [Ctl.toStack] at h
   show κ = κ'
   induction κ generalizing κ' with
@@ -945,18 +953,22 @@ theorem Ctl.toStack_inj {c c' : Ctl} (h : c.toStack = c'.toStack) : c.κ = c'.κ
       injection h with h1 h2 h3
       rw [Prod.ext h1 h2, ih κ' h3]
 
-/-- The thread literal is injective in (expression, env, control). -/
+/-- The thread literal is injective in (expression, env, control) up to
+    the control's run-state supplies (E1: `Ctl.sup` is not a thread
+    field — it is tied to the run state by `Embeds`). -/
 theorem MachineCtx.thread_inj {M : MachineCtx} {e e' : CoreExpr} {ρ ρ' : EnvStack}
     {ctl ctl' : Ctl}
-    (h : M.thread e ρ ctl = M.thread e' ρ' ctl') : e = e' ∧ ρ = ρ' ∧ ctl = ctl' := by
+    (h : M.thread e ρ ctl = M.thread e' ρ' ctl') :
+    e = e' ∧ ρ = ρ' ∧ ctl = { ctl' with sup := ctl.sup } := by
   refine ⟨congrArg thread_state.arena h, congrArg thread_state.env h, ?_⟩
   have h1 := congrArg thread_state.stack0 h
   have h2 := congrArg thread_state.current_proc_opt h
   have h3 := congrArg thread_state.exec_loc h
-  obtain ⟨κ, p, ℓ⟩ := ctl
-  obtain ⟨κ', p', ℓ'⟩ := ctl'
-  simp only [MachineCtx.thread] at h1 h2 h3
-  rw [show κ = κ' from Ctl.toStack_inj h1, h2, h3]
+  have h4 := congrArg thread_state.current_loc h
+  obtain ⟨κ, p, ℓ, lc, sp⟩ := ctl
+  obtain ⟨κ', p', ℓ', lc', sp'⟩ := ctl'
+  simp only [MachineCtx.thread] at h1 h2 h3 h4
+  rw [show κ = κ' from Ctl.toStack_inj h1, h2, h3, h4]
 
 /-- THE LOOP-LEVEL READING of a shipped round: one iteration of
     `drive_nonmemory_steps_aux2` at any fuel `fl` and accumulator
@@ -973,7 +985,7 @@ theorem CerberusRound.loop_step {M : MachineCtx} {c c' : Config}
               core_state0 := update_thread_state M.tid (M.thread c'.1 c'.2.1 c'.2.2.1) dst.core_state0,
               layout_state := c'.2.2.2,
               core_run_state0 := rs', trace := tr, dr_step_counter := ctr } := by
-  obtain ⟨s, hsteps, hca, rs', tr, ctr, hlab, hadv⟩ := h dst hemb
+  obtain ⟨s, hsteps, hca, rs', tr, ctr, hlab, -, -, hadv⟩ := h dst hemb
   exact ⟨rs', tr, ctr, hlab, loop_step_of_advance fl acc hemb.thread hsteps hca hadv⟩
 
 /-- THE RUNNER-LEVEL READING: the shipped exhaustive runner
@@ -991,8 +1003,25 @@ theorem CerberusRound.runND {M : MachineCtx} {c c' : Config}
               core_state0 := update_thread_state M.tid (M.thread c'.1 c'.2.1 c'.2.2.1) dst.core_state0,
               layout_state := c'.2.2.2,
               core_run_state0 := rs', trace := tr, dr_step_counter := ctr })] := by
-  obtain ⟨s, hsteps, -, rs', tr, ctr, -, hadv⟩ := h dst hemb
+  obtain ⟨s, hsteps, -, rs', tr, ctr, -, -, -, hadv⟩ := h dst hemb
   exact ⟨s, hsteps, rs', tr, ctr, runND_active hadv⟩
+
+/-- E1 proof device: `loc_split` also normalizing a hypothesis stated at
+    `th.current_loc` (the KILL bridges' classifier premise). -/
+syntax "loc_split_at" ident ident : tactic
+macro_rules
+  | `(tactic| loc_split_at $an:ident $h:ident) =>
+    `(tactic| (rcases get_loc_cases $an with ⟨loc1, hgl, hlib⟩ | ⟨loc1, hgl, hlib⟩ | ⟨hgl, hlib⟩ <;>
+               simp only [locUpdTh, hgl, hlib, Bool.false_eq_true, ↓reduceIte] at $h:ident ⊢))
+
+/-- A value is never a call redex (the `CallOf` disjunct at a value head
+    is vacuous). -/
+theorem Step.CallOf.not_val {M : MachineCtx} {w : SpikeValA} {fr : context → context}
+    {ρ : EnvStack} {ctl : Ctl} {σ : Mem} {out : Config}
+    (h : Step.CallOf M (ofValA w) fr ρ ctl σ out) : False := by
+  obtain ⟨_, _, _, _, _, _, hc, -⟩ := h
+  rw [callRedex?_ofValA] at hc
+  cases hc
 
 /-! ## THE CERTIFICATION: mirror step ⇒ shipped round -/
 
@@ -1006,7 +1035,11 @@ theorem CerberusRound.runND {M : MachineCtx} {c c' : Config}
     map (the driver functions take the reader argument; `loop_step_frag`,
     DriverCollapse.lean, has this theorem's shape at the production
     profile `fmapEmpty` — proved there independently, not derived from
-    this theorem; the module header, "WHAT CONSUMES WHAT"). -/
+    this theorem; the module header, "WHAT CONSUMES WHAT"). E1: the
+    successor thread is the mirror's at the successor control — the
+    general arm's location write is `Ctl.upd` (`locUpdTh_thread`); the
+    run-state supplies are untouched by every round (the `Embeds` ties
+    are carried to the successor control's `sup`). -/
 theorem engine_step_matchU {M : MachineCtx}
     {e e' : CoreExpr} {ev0 : Fmap sym value} {evs : List (Fmap sym value)}
     {ρ' : EnvStack} {ctl ctl' : Ctl} {σ σ' : Mem}
@@ -1014,343 +1047,130 @@ theorem engine_step_matchU {M : MachineCtx}
     (hs : Step M (e, ev0 :: evs, ctl, σ) (e', ρ', ctl', σ')) :
     CerberusRound M (e, ev0 :: evs, ctl, σ) (e', ρ', ctl', σ') := by
   intro dst hemb
-  obtain ⟨hth, hlay, hfile, hext, hrs⟩ := hemb
-  simp only at hth hlay
+  obtain ⟨hth, hlay, hfile, hext, hlabd, hsym, hexc⟩ := hemb
+  simp only at hth hlay hsym hexc
   subst hlay
   cases hv : toVal e with
   | some w =>
     -- a value steps only under a frame: RETURN (bare) or REMOVE-ANNOT (annotated)
-    have he := ofVal_of_toVal hv
-    subst he
-    cases w with
-    | pure v =>
-      rcases hs.ctl_cases with heq | ⟨_, _, _, _, _, _, hc, -⟩ |
-          ⟨v', ev0', evs', p, ctx, κ, q, ℓ, he, hρ, rfl, rfl, rfl, rfl, rfl⟩
-      · exact (Step.pure_val_elim hs heq).elim
-      · simp [ofVal] at hc
-      · obtain rfl : v = v' := by simpa [ofVal] using he
+    obtain ⟨wa, -, rfl⟩ := ofValA_of_toVal hv
+    cases wa with
+    | pure a b v =>
+      rcases hs.ctl_cases with ⟨a', heq⟩ | ⟨_, _, _, _, _, _, hc, -⟩ |
+          ⟨a1', b1', v', ev0', evs', p, ctx, κ, q, ℓ, lc, sp, he, hρ, rfl, rfl, rfl, rfl, rfl⟩
+      · exact (Step.pure_val_elim hs (by rw [heq]; rfl)).elim
+      · rw [callRedex?_ofValA] at hc; cases hc
+      · obtain ⟨rfl, rfl, rfl⟩ : a = a1' ∧ b = b1' ∧ v = v' := by simpa using ofValA_inj he
         injection hρ with h1 h2
         subst h1 h2
         obtain ⟨tsk, hsteps⟩ := step_ctx_ret v M.tagDefs dst.layout_state dst.core_file
           dst.core_extern M.tid M.parent
-          (M.thread (ofVal (.pure v)) (ev0 :: evs) ⟨(p, ctx) :: κ, q, ℓ⟩) rfl rfl rfl
+          (M.thread (ofValA (.pure a b v)) (ev0 :: evs) ⟨(p, ctx) :: κ, q, ℓ, lc, sp⟩) rfl rfl rfl
         obtain ⟨tr, hadv⟩ := advance_tau_tsk M.tagDefs M.tid "end of procedure" tsk _ dst
-        exact ⟨_, hsteps, rfl, dst.core_run_state0, tr, dst.dr_step_counter + 1, rfl, hadv⟩
-    | annot ds v =>
-      rcases hs.ctl_cases with heq | ⟨_, _, _, _, _, _, hc, -⟩ | ⟨v', _, _, _, _, _, _, _, he, -⟩
-      · subst ctl'
-        obtain ⟨rfl, rfl, rfl, -⟩ := Step.annot_val_inv hs rfl
-        refine ⟨_, step_ctx_remove_annot ds v M.tagDefs dst.layout_state dst.core_file
-            dst.core_extern M.tid M.parent (M.thread (ofVal (.annot ds v)) (ev0 :: evs) ctl) rfl,
-          rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, ?_⟩
-        exact advance_tau M.tagDefs M.tid _ _ dst
-      · simp [ofVal, callRedex?, annotRooted] at hc
-      · simp [ofVal] at he
+        exact ⟨_, hsteps, rfl, dst.core_run_state0, tr, dst.dr_step_counter + 1, rfl, hsym, hexc,
+          hadv⟩
+    | annot a a2 b ds v =>
+      rcases hs.ctl_cases with ⟨a', heq⟩ | ⟨_, _, _, _, _, _, hc, -⟩ |
+          ⟨_, _, _, _, _, _, _, _, _, _, _, _, he, -⟩
+      case inr.inl => rw [callRedex?_ofValA] at hc; cases hc
+      case inr.inr => cases ofValA_inj he
+      have hκ' : ctl'.κ = ctl.κ := by rw [heq]; rfl
+      -- REMOVE-ANNOT at a non-empty call stack (`Step.ret_annot`): the
+      -- engine's tau, in place (no location write — the value arm)
+      obtain ⟨rfl, rfl, rfl, rfl, -⟩ := Step.annot_val_inv hs hκ'
+      refine ⟨_, step_ctx_remove_annot ds v M.tagDefs dst.layout_state dst.core_file
+          dst.core_extern M.tid M.parent _ rfl,
+        rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
+      exact advance_tau M.tagDefs M.tid _ _ dst
   | none =>
   have hnv : toVal e = none := hv
   obtain ⟨ctx, r, hd, hfr⟩ := hf.decomp hnv
-  rcases hd.step_factor hs with ⟨r', ρr, σr, hnr, hnc, hr, heq⟩ |
-    ⟨ra, l, pes, rfl, hr⟩ | ⟨ra, f, pes, params, body, vs, rfl, hvs, hfl, hlen, hout⟩
-  · obtain ⟨he', hρ', hctl', hσ'⟩ : e' = apply_ctx ctx r' ∧ ρ' = ρr ∧ ctl' = ctl ∧ σ' = σr := by
-      simpa [Prod.mk.injEq] using heq
-    subst he' hρ' hσ'
-    subst ctl'
+  rcases hd.step_factor hs with ⟨r', ρr, ctlr, σr, hnr, hnc, hr, heq⟩ |
+    ⟨an, ra, l, pes, rfl, hr⟩ | ⟨an, ra, f, pes, params, body, vs, rfl, hvs, hfl, hlen, hout⟩
+  · obtain ⟨he', hρ', hc', hσ'⟩ := Config.mk_inj heq
+    subst he' hρ' hc' hσ'
     have hccall := hd.unseq_ccall_false
     have hrj := hd.redex
     cases hrj with
-    | call ra f pes => exact absurd rfl (hnc ra f pes)
-    | @store loc ann lk ty pv cv mo =>
+    | @call an ra f pes => exact absurd rfl (hnc an ra f pes)
+    | @store an loc ann lk ty pv cv mo =>
       obtain ⟨mv, fp, σ'', hmv, hmem, hout⟩ := hr.store_inv
-      obtain ⟨h1, h2, h3⟩ : r' = Expr [] (Eannot [DA_pos [] fp]
-          (Expr [] (Epure (Pexpr [] () (PEval Vunit))))) ∧
-          ρ' = ev0 :: evs ∧ σ' = σ'' := by
-        simpa [Prod.mk.injEq] using hout
-      subst h1 h2 h3
+      obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
+      subst h1 h2 h3 h4
       have hsteps := step_ctx_store hd hsz M.tagDefs hmv
         dst.layout_state dst.core_file dst.core_extern M.tid M.parent
         (M.thread e (ev0 :: evs) ctl) rfl
-      rw [hccall] at hsteps
+      rw [hccall, MachineCtx.locUpdTh_thread] at hsteps
       refine ⟨_, hsteps, rfl, { dst.core_run_state0 with aid_supply :=
           dst.core_run_state0.aid_supply + 1 },
-        ME_store (requestLoc (M.thread e (ev0 :: evs) ctl) loc) none ty lk pv mv
-          :: dst.trace, dst.dr_step_counter, rfl, ?_⟩
+        ME_store (requestLoc (M.thread e (ev0 :: evs) (ctl.upd an)) loc)
+          none ty lk pv mv :: dst.trace,
+        dst.dr_step_counter, rfl, hsym, hexc, ?_⟩
       exact advance_action (ars_store_active (tid := M.tid)
         (aid := dst.core_run_state0.aid_supply) hmem)
-    | @load loc ann ty pv mo =>
+    | @load an loc ann ty pv mo =>
       obtain ⟨fp, mval, σ'', hmem, hout⟩ := hr.load_inv
-      obtain ⟨h1, h2, h3⟩ : r' = Expr [] (Eannot [DA_pos [] fp]
-          (Expr [] (Epure (Pexpr [] () (PEval
-            (valueFromMemValue mval).2))))) ∧
-          ρ' = ev0 :: evs ∧ σ' = σ'' := by
-        simpa [Prod.mk.injEq] using hout
-      subst h1 h2 h3
+      obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
+      subst h1 h2 h3 h4
       have hsteps := step_ctx_load hd hsz M.tagDefs
         dst.layout_state dst.core_file dst.core_extern M.tid M.parent
         (M.thread e (ev0 :: evs) ctl) rfl
-      rw [hccall] at hsteps
+      rw [hccall, MachineCtx.locUpdTh_thread] at hsteps
       refine ⟨_, hsteps, rfl, { dst.core_run_state0 with aid_supply :=
           dst.core_run_state0.aid_supply + 1 },
-        ME_load (requestLoc (M.thread e (ev0 :: evs) ctl) loc) none ty pv mval
-          :: dst.trace, dst.dr_step_counter, rfl, ?_⟩
+        ME_load (requestLoc (M.thread e (ev0 :: evs) (ctl.upd an)) loc)
+          none ty pv mval :: dst.trace,
+        dst.dr_step_counter, rfl, hsym, hexc, ?_⟩
       exact advance_action (ars_load_active (tid := M.tid)
         (aid := dst.core_run_state0.aid_supply) hmem)
-    | @create loc ann align ty pref =>
+    | @create an loc ann align ty pref =>
       obtain ⟨pv, σ'', hmem, hout⟩ := hr.create_inv
-      obtain ⟨h1, h2, h3⟩ : r' = Expr [] (Epure (Pexpr [] ()
-          (PEval (Vobject (OVpointer pv))))) ∧
-          ρ' = ev0 :: evs ∧ σ' = σ'' := by
-        simpa [Prod.mk.injEq] using hout
-      subst h1 h2 h3
+      obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
+      subst h1 h2 h3 h4
       have hsteps := step_ctx_create hd hsz M.tagDefs
         dst.layout_state dst.core_file dst.core_extern M.tid M.parent
         (M.thread e (ev0 :: evs) ctl) rfl
-      rw [hccall] at hsteps
+      rw [hccall, MachineCtx.locUpdTh_thread] at hsteps
       refine ⟨_, hsteps, rfl, { dst.core_run_state0 with aid_supply :=
           dst.core_run_state0.aid_supply + 1 },
         ME_allocate_object M.tid pref align ty none pv :: dst.trace,
-        dst.dr_step_counter, rfl, ?_⟩
+        dst.dr_step_counter, rfl, hsym, hexc, ?_⟩
       exact advance_action (ars_create_active (tid := M.tid)
         (aid := dst.core_run_state0.aid_supply) hmem)
-    | @kill loc ann kind pv =>
+    | @create_op an loc ann pref pe1 pe2 hnvC =>
+      obtain ⟨hp1, hp2, hd1, hd2⟩ : PePure pe1 ∧ PePure pe2 ∧
+          peDepth pe1 ≤ lemDefaultFuel ∧ peDepth pe2 ≤ lemDefaultFuel := by
+        cases hfr with
+        | create =>
+          rw [valueFromPexprs_pair, valueFromPexpr_val, valueFromPexpr_val] at hnvC
+          cases hnvC
+        | create_op hnvC' hp1 hp2 hd1 hd2 => exact ⟨hp1, hp2, hd1, hd2⟩
+      obtain ⟨al, ty, hv1, hv2, hout⟩ := hr.create_op_inv hnvC
+      obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
+      subst h1 h2 h3 h4
+      obtain ⟨s, m, hsteps, hm⟩ := step_ctx_create_eval_ws hd hsz hnvC hp1 hp2 hd1 hd2
+        M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
+        (M.thread e (ev0 :: evs) ctl) rfl
+        (by rw [hext]; exact hv1) (by rw [hext]; exact hv2)
+      rw [MachineCtx.locUpdTh_thread] at hm
+      refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
+      exact advance_withrs_eval M.tagDefs M.tid s m (hm dst.core_run_state0)
+    | @kill an loc ann kind pv =>
       obtain ⟨σ'', hmem, hout⟩ := hr.kill_inv
-      obtain ⟨h1, h2, h3⟩ : r' = Expr [] (Epure (Pexpr [] () (PEval Vunit))) ∧
-          ρ' = ev0 :: evs ∧ σ' = σ'' := by
-        simpa [Prod.mk.injEq] using hout
-      subst h1 h2 h3
+      obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
+      subst h1 h2 h3 h4
       have hsteps := step_ctx_kill hd hsz M.tagDefs
         dst.layout_state dst.core_file dst.core_extern M.tid M.parent
         (M.thread e (ev0 :: evs) ctl) rfl
-      rw [hccall] at hsteps
+      rw [hccall, MachineCtx.locUpdTh_thread] at hsteps
       refine ⟨_, hsteps, rfl, { dst.core_run_state0 with aid_supply :=
           dst.core_run_state0.aid_supply + 1 },
-        ME_kill (requestLoc (M.thread e (ev0 :: evs) ctl) loc) (is_dynamic kind) pv
-          :: dst.trace, dst.dr_step_counter, rfl, ?_⟩
+        ME_kill (requestLoc (M.thread e (ev0 :: evs) (ctl.upd an)) loc)
+          (is_dynamic kind) pv :: dst.trace,
+        dst.dr_step_counter, rfl, hsym, hexc, ?_⟩
       exact advance_action (ars_kill_active (tid := M.tid)
         (aid := dst.core_run_state0.aid_supply) hmem)
-    | @beta_pure pa bty v e2 =>
-      rcases hr.sseq_inv with ⟨e1', ρ'', σ'', hnj, hnv', hstep, hout⟩ |
-          ⟨_, _, v', _, _, _, he1, _, hout⟩ |
-          ⟨_, _, ds', v', _, _, _, he1, _, hout⟩ |
-          ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩ |
-          ⟨_, _, _, _, _, _, _, hpat, _, _, _⟩ |
-          ⟨_, _, _, _, _, _, _, _, hpat, _, _, _⟩ |
-          ⟨_, _, _, _, _, _, hpat, _, _, _⟩ |
-          hcall
-      · rw [toVal_ofVal] at hnv'; cases hnv'
-      · obtain rfl : v' = v := by
-          have : ofVal (.pure v') = ofVal (.pure v) := he1.symm
-          simpa [ofVal] using this
-        obtain ⟨h1, h2, h3⟩ : r' = e2 ∧ ρ' = ev0 :: evs ∧
-            σ' = dst.layout_state := by
-          simpa [Prod.mk.injEq] using hout
-        subst h1 h2 h3
-        refine ⟨_, step_ctx_beta_pure hd hsz M.tagDefs dst.layout_state
-            dst.core_file dst.core_extern M.tid M.parent _ rfl rfl,
-          rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, ?_⟩
-        exact advance_tau M.tagDefs M.tid _ _ dst
-      · exact absurd he1 (by simp [ofVal])
-      · rw [jumpRedex?_ofVal] at hj; cases hj
-      · exact (specPat_ne_base hpat).elim
-      · exact (specPat_ne_base hpat).elim
-      · exact (symPat_ne_base hpat).elim
-      · exact hcall.ne_same_ctl.elim
-    | @beta_annot pa bty ds v e2 =>
-      rcases hr.sseq_inv with ⟨e1', ρ'', σ'', hnj, hnv', hstep, hout⟩ |
-          ⟨_, _, v', _, _, _, he1, _, hout⟩ |
-          ⟨_, _, ds', v', _, _, _, he1, _, hout⟩ |
-          ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩ |
-          ⟨_, _, _, _, _, _, _, hpat, _, _, _⟩ |
-          ⟨_, _, _, _, _, _, _, _, hpat, _, _, _⟩ |
-          ⟨_, _, _, _, _, _, hpat, _, _, _⟩ |
-          hcall
-      · rw [toVal_ofVal] at hnv'; cases hnv'
-      · exact absurd he1 (by simp [ofVal])
-      · obtain ⟨hds, hv⟩ : ds = ds' ∧ v = v' := by simpa [ofVal] using he1
-        subst hds hv
-        obtain ⟨h1, h2, h3⟩ : r' = Expr [] (Eannot ds e2) ∧
-            ρ' = ev0 :: evs ∧ σ' = dst.layout_state := by
-          simpa [Prod.mk.injEq] using hout
-        subst h1 h2 h3
-        refine ⟨_, step_ctx_beta_annot hd hsz M.tagDefs dst.layout_state
-            dst.core_file dst.core_extern M.tid M.parent _ rfl rfl,
-          rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, ?_⟩
-        exact advance_tau M.tagDefs M.tid _ _ dst
-      · rw [jumpRedex?_ofVal] at hj; cases hj
-      · exact (specPat_ne_base hpat).elim
-      · exact (specPat_ne_base hpat).elim
-      · exact (symPat_ne_base hpat).elim
-      · exact hcall.ne_same_ctl.elim
-    | @wbeta_pure pa bty v e2 =>
-      rcases hr.wseq_inv with ⟨e1', ρ'', σ'', hnj, hnv', hstep, hout⟩ |
-          ⟨_, _, v', _, _, _, he1, _, hout⟩ |
-          ⟨_, _, ds', v', _, _, _, he1, _, hout⟩ |
-          ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩ |
-          hcall
-      · rw [toVal_ofVal] at hnv'; cases hnv'
-      · obtain rfl : v' = v := by
-          have : ofVal (.pure v') = ofVal (.pure v) := he1.symm
-          simpa [ofVal] using this
-        obtain ⟨h1, h2, h3⟩ : r' = e2 ∧ ρ' = ev0 :: evs ∧
-            σ' = dst.layout_state := by
-          simpa [Prod.mk.injEq] using hout
-        subst h1 h2 h3
-        refine ⟨_, step_ctx_wseq_pure hd hsz M.tagDefs dst.layout_state
-            dst.core_file dst.core_extern M.tid M.parent _ rfl rfl,
-          rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, ?_⟩
-        exact advance_tau M.tagDefs M.tid _ _ dst
-      · exact absurd he1 (by simp [ofVal])
-      · rw [jumpRedex?_ofVal] at hj; cases hj
-      · exact hcall.ne_same_ctl.elim
-    | @wbeta_annot pa bty ds v e2 =>
-      rcases hr.wseq_inv with ⟨e1', ρ'', σ'', hnj, hnv', hstep, hout⟩ |
-          ⟨_, _, v', _, _, _, he1, _, hout⟩ |
-          ⟨_, _, ds', v', _, _, _, he1, _, hout⟩ |
-          ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩ |
-          hcall
-      · rw [toVal_ofVal] at hnv'; cases hnv'
-      · exact absurd he1 (by simp [ofVal])
-      · obtain ⟨hds, hv⟩ : ds = ds' ∧ v = v' := by simpa [ofVal] using he1
-        subst hds hv
-        obtain ⟨h1, h2, h3⟩ : r' = Expr [] (Eannot ds e2) ∧
-            ρ' = ev0 :: evs ∧ σ' = dst.layout_state := by
-          simpa [Prod.mk.injEq] using hout
-        subst h1 h2 h3
-        refine ⟨_, step_ctx_wseq_annot hd hsz M.tagDefs dst.layout_state
-            dst.core_file dst.core_extern M.tid M.parent _ rfl rfl,
-          rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, ?_⟩
-        exact advance_tau M.tagDefs M.tid _ _ dst
-      · rw [jumpRedex?_ofVal] at hj; cases hj
-      · exact hcall.ne_same_ctl.elim
-    | @merge ds1 ds2 b hirr =>
-      rcases hr.annot_inv with ⟨hg, hnj, b', ρ'', σ'', hstep, hout⟩ |
-          ⟨a2, ds2', c, hbeq, hout⟩ |
-          ⟨l, pes, params, cont, vs, _, _, hg, hj, _, _, _, _⟩ |
-          ⟨-, hcall⟩ | ⟨v', pc', κ', ha', hb', hκ', hout'⟩
-      · rw [show annotRooted (Expr ([] : List annot) (Eannot ds2 b)) = true
-          from rfl] at hg
-        cases hg
-      · injection hbeq with hb1 hb2
-        injection hb2 with hb3 hb4
-        subst hb1 hb3 hb4
-        obtain ⟨h1, h2, h3⟩ : r' = Expr ([] ++ []) (Eannot (ds1 ++ ds2) b) ∧
-            ρ' = ev0 :: evs ∧ σ' = dst.layout_state := by
-          simpa [Prod.mk.injEq] using hout
-        subst h1 h2 h3
-        refine ⟨_, step_ctx_merge hd hirr hsz M.tagDefs dst.layout_state
-            dst.core_file dst.core_extern M.tid M.parent _ rfl,
-          rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, ?_⟩
-        exact advance_tau M.tagDefs M.tid _ _ dst
-      · rw [show annotRooted (Expr ([] : List annot) (Eannot ds2 b)) = true
-          from rfl] at hg
-        cases hg
-      · exact hcall.ne_same_ctl.elim
-      · cases hb'
-    | save sb ps body =>
-      have hdep : ∀ pe ∈ saveParamPexprs ps, peDepth pe ≤ lemDefaultFuel := by
-        cases hfr with
-        | save _ hdep _ => exact hdep
-      rcases hr.save_inv with ⟨cvals, ev0', evs', hρeq, hvals, hout⟩ |
-          ⟨cvals, hnvS, hvals, hout⟩
-      · obtain ⟨h1, h2, h3⟩ : r' = body ∧
-            ρ' = bindSaveParams ps cvals (ev0 :: evs) ∧
-            σ' = dst.layout_state := by
-          simpa [Prod.mk.injEq] using hout
-        subst h1 h2 h3
-        refine ⟨_, step_ctx_save hd hsz hvals M.tagDefs dst.layout_state
-            dst.core_file dst.core_extern M.tid M.parent _ rfl rfl,
-          rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, ?_⟩
-        exact advance_tau M.tagDefs M.tid _ _ dst
-      · obtain ⟨h1, h2, h3⟩ : r' = saveRedex sb (saveParamsWithValues ps cvals) body ∧
-            ρ' = ev0 :: evs ∧ σ' = dst.layout_state := by
-          simpa [Prod.mk.injEq, saveRedex] using hout
-        subst h1 h2 h3
-        obtain ⟨s, m, hsteps, hm⟩ := step_ctx_save_eval_ws hd hsz hnvS hdep
-          M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
-          (M.thread e (ev0 :: evs) ctl) rfl
-          (by rw [hext]; exact hvals)
-        refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace,
-          dst.dr_step_counter + 1, rfl, ?_⟩
-        exact advance_withrs_eval M.tagDefs M.tid s m (hm dst.core_run_state0)
-    | if_ g e2 e3 =>
-      have hdg : peDepth g ≤ lemDefaultFuel := by
-        cases hfr with
-        | if_ _ hdg _ _ => exact hdg
-      rcases hr.if_inv with ⟨hg, hout⟩ | ⟨hg, hout⟩
-      · obtain ⟨h1, h2, h3⟩ : r' = e2 ∧ ρ' = ev0 :: evs ∧
-            σ' = dst.layout_state := by
-          simpa [Prod.mk.injEq] using hout
-        subst h1 h2 h3
-        obtain ⟨s, m, hsteps, hm⟩ := step_ctx_if_true_ws hd hsz hdg
-          M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
-          (M.thread e (ev0 :: evs) ctl) rfl
-          (by rw [hext]; exact hg)
-        refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace,
-          dst.dr_step_counter + 1, rfl, ?_⟩
-        exact advance_withrs_tau M.tagDefs M.tid s m (hm dst.core_run_state0)
-      · obtain ⟨h1, h2, h3⟩ : r' = e3 ∧ ρ' = ev0 :: evs ∧
-            σ' = dst.layout_state := by
-          simpa [Prod.mk.injEq] using hout
-        subst h1 h2 h3
-        obtain ⟨s, m, hsteps, hm⟩ := step_ctx_if_false_ws hd hsz hdg
-          M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
-          (M.thread e (ev0 :: evs) ctl) rfl
-          (by rw [hext]; exact hg)
-        refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace,
-          dst.dr_step_counter + 1, rfl, ?_⟩
-        exact advance_withrs_tau M.tagDefs M.tid s m (hm dst.core_run_state0)
-    | case_ pe pats =>
-      cases hfr with
-      | case_value hbr hbsz =>
-        obtain ⟨cval', e'', hv, hsel, hout⟩ := hr.case_inv
-        obtain rfl : _ = cval' := Option.some.inj (valueFromPexpr_val _ _ ▸ hv)
-        obtain ⟨h1, h2, h3⟩ : r' = e'' ∧ ρ' = ev0 :: evs ∧
-            σ' = dst.layout_state := by
-          simpa [Prod.mk.injEq] using hout
-        subst h1 h2 h3
-        refine ⟨_, step_ctx_case_value hd hsz hsel M.tagDefs dst.layout_state
-            dst.core_file dst.core_extern M.tid M.parent _ rfl,
-          rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, ?_⟩
-        exact advance_tau M.tagDefs M.tid _ _ dst
-    | run ra l pes =>
-      exact absurd rfl (hnr ra l pes)
-    | @pure_e pe hnv2 =>
-      obtain ⟨pb, x, rfl⟩ : ∃ pb x, pe = Pexpr pb () (PEsym x) := by
-        cases hfr with
-        | val_pure v => rw [valueFromPexpr_val] at hnv2; cases hnv2
-        | pure_sym => exact ⟨_, _, rfl⟩
-      obtain ⟨v, -, hv, hout⟩ := hr.pure_inv hnv2
-      obtain ⟨h1, h2, h3⟩ : r' = Expr [] (Epure (Pexpr [] () (PEval v))) ∧
-          ρ' = ev0 :: evs ∧ σ' = dst.layout_state := by
-        simpa [Prod.mk.injEq] using hout
-      subst h1 h2 h3
-      obtain ⟨s, m, hsteps, hm⟩ := step_ctx_pure_sym_ws hd hsz
-        M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
-        (M.thread e (ev0 :: evs) ctl) rfl
-        (by rw [hext]; exact hv)
-      refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace,
-        dst.dr_step_counter + 1, rfl, ?_⟩
-      exact advance_withrs_eval M.tagDefs M.tid s m (hm dst.core_run_state0)
-    | @load_op loc ann ty pe2 mo hnv2 =>
-      obtain ⟨hp2, hd2⟩ : PePure pe2 ∧ peDepth pe2 ≤ lemDefaultFuel := by
-        cases hfr with
-        | load =>
-          rw [show valueFromPexpr (Pexpr [] () (PEval
-            (Vobject (OVpointer _)))) = some _ from rfl] at hnv2
-          cases hnv2
-        | load_op hnv2' hp2 hd2 => exact ⟨hp2, hd2⟩
-      obtain ⟨pv, hv2, hout⟩ := hr.load_op_inv hnv2
-      obtain ⟨h1, h2, h3⟩ : r' = loadRedex loc ann ty pv mo ∧
-          ρ' = ev0 :: evs ∧ σ' = dst.layout_state := by
-        simpa [Prod.mk.injEq, loadRedex] using hout
-      subst h1 h2 h3
-      obtain ⟨s, m, hsteps, hm⟩ := step_ctx_load_eval_ws hd hsz hnv2 hp2 hd2
-        M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
-        (M.thread e (ev0 :: evs) ctl) rfl
-        (by rw [hext]; exact hv2)
-      refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace,
-        dst.dr_step_counter + 1, rfl, ?_⟩
-      exact advance_withrs_eval M.tagDefs M.tid s m (hm dst.core_run_state0)
-    | @kill_op loc ann kind pe hnvK =>
+    | @kill_op an loc ann kind pe hnvK =>
       obtain ⟨hpK, hdK⟩ : PePure pe ∧ peDepth pe ≤ lemDefaultFuel := by
         cases hfr with
         | kill =>
@@ -1359,35 +1179,30 @@ theorem engine_step_matchU {M : MachineCtx}
           cases hnvK
         | kill_op hnvK' hpK hdK => exact ⟨hpK, hdK⟩
       obtain ⟨pv, hv, hout⟩ := hr.kill_op_inv hnvK
-      obtain ⟨h1, h2, h3⟩ : r' = killRedex loc ann kind pv ∧
-          ρ' = ev0 :: evs ∧ σ' = dst.layout_state := by
-        simpa [Prod.mk.injEq, killRedex] using hout
-      subst h1 h2 h3
+      obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
+      subst h1 h2 h3 h4
       obtain ⟨s, m, hsteps, hm⟩ := step_ctx_kill_eval_ws hd hsz hnvK hpK hdK
         M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
         (M.thread e (ev0 :: evs) ctl) rfl
         (by rw [hext]; exact hv)
-      refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace,
-        dst.dr_step_counter + 1, rfl, ?_⟩
+      rw [MachineCtx.locUpdTh_thread] at hm
+      refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
       exact advance_withrs_eval M.tagDefs M.tid s m (hm dst.core_run_state0)
-    | @alloc loc ann align size pref =>
+    | @alloc an loc ann align size pref =>
       obtain ⟨pv, σ'', hmem, hout⟩ := hr.alloc_inv
-      obtain ⟨h1, h2, h3⟩ : r' = Expr [] (Epure (Pexpr [] ()
-          (PEval (Vobject (OVpointer pv))))) ∧
-          ρ' = ev0 :: evs ∧ σ' = σ'' := by
-        simpa [Prod.mk.injEq] using hout
-      subst h1 h2 h3
+      obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
+      subst h1 h2 h3 h4
       have hsteps := step_ctx_alloc hd hsz M.tagDefs
         dst.layout_state dst.core_file dst.core_extern M.tid M.parent
         (M.thread e (ev0 :: evs) ctl) rfl
-      rw [hccall] at hsteps
+      rw [hccall, MachineCtx.locUpdTh_thread] at hsteps
       refine ⟨_, hsteps, rfl, { dst.core_run_state0 with aid_supply :=
           dst.core_run_state0.aid_supply + 1 },
         ME_allocate_region M.tid pref align size pv :: dst.trace,
-        dst.dr_step_counter, rfl, ?_⟩
+        dst.dr_step_counter, rfl, hsym, hexc, ?_⟩
       exact advance_action (ars_alloc_active (tid := M.tid)
         (aid := dst.core_run_state0.aid_supply) hmem)
-    | @alloc_op loc ann pref pe1 pe2 hnvA =>
+    | @alloc_op an loc ann pref pe1 pe2 hnvA =>
       obtain ⟨hp1, hp2, hd1, hd2⟩ : PePure pe1 ∧ PePure pe2 ∧
           peDepth pe1 ≤ lemDefaultFuel ∧ peDepth pe2 ≤ lemDefaultFuel := by
         cases hfr with
@@ -1396,100 +1211,292 @@ theorem engine_step_matchU {M : MachineCtx}
           cases hnvA
         | alloc_op hnvA' hp1 hp2 hd1 hd2 => exact ⟨hp1, hp2, hd1, hd2⟩
       obtain ⟨al, sz, hv1, hv2, hout⟩ := hr.alloc_op_inv hnvA
-      obtain ⟨h1, h2, h3⟩ : r' = allocRedex loc ann al sz pref ∧
-          ρ' = ev0 :: evs ∧ σ' = dst.layout_state := by
-        simpa [Prod.mk.injEq, allocRedex] using hout
-      subst h1 h2 h3
+      obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
+      subst h1 h2 h3 h4
       obtain ⟨s, m, hsteps, hm⟩ := step_ctx_alloc_eval_ws hd hsz hnvA hp1 hp2 hd1 hd2
         M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
         (M.thread e (ev0 :: evs) ctl) rfl
         (by rw [hext]; exact hv1) (by rw [hext]; exact hv2)
-      refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace,
-        dst.dr_step_counter + 1, rfl, ?_⟩
+      rw [MachineCtx.locUpdTh_thread] at hm
+      refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
       exact advance_withrs_eval M.tagDefs M.tid s m (hm dst.core_run_state0)
-    | @beta_spec pa pb x bty w e2 =>
-      rcases hr.sseq_inv with ⟨e1', ρ'', σ'', hnj, hnv', hstep, hout⟩ |
-          ⟨_, _, v', _, _, hpat, he1, _, hout⟩ |
-          ⟨_, _, ds', v', _, _, hpat, he1, _, hout⟩ |
+    | @beta_pure an pa a1 b1 bty v e2 =>
+      rcases hr.sseq_inv with ⟨e1', ρ'', ctl'', σ'', hnj, hnc', hnv', hstep, hout⟩ |
+          ⟨_, _, a1', b1', v', _, _, _, he1, _, hout⟩ |
+          ⟨_, _, _, _, _, ds', v', _, _, _, he1, _, hout⟩ |
           ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩ |
-          ⟨pa', pb', x', bty', ov', _, _, hpat, he1, _, hout⟩ |
-          ⟨pa', pb', x', bty', ds', ov', _, _, hpat, he1, _, hout⟩ |
-          ⟨pa', x', bty', v', _, _, hpat, he1, _, hout⟩ |
+          ⟨_, _, _, _, _, _, _, _, _, hpat, _, _, _⟩ |
+          ⟨_, _, _, _, _, _, _, _, _, _, _, hpat, _, _, _⟩ |
+          ⟨_, _, _, _, _, _, _, _, hpat, _, _, _⟩ |
+          ⟨_, _, _, _, _, _, _, _, _, _, hpat, _, _, _⟩ |
           hcall
-      · rw [toVal_ofVal] at hnv'; cases hnv'
+      · rw [toVal_ofValA] at hnv'; cases hnv'
+      · obtain ⟨rfl, rfl, rfl⟩ : a1 = a1' ∧ b1 = b1' ∧ v = v' := by
+          simpa using ofValA_inj he1
+        obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
+        subst h1 h2 h3 h4
+        have hsteps := step_ctx_beta_pure hd hsz M.tagDefs dst.layout_state
+          dst.core_file dst.core_extern M.tid M.parent
+          (M.thread e (ev0 :: evs) ctl) rfl rfl
+        rw [MachineCtx.locUpdTh_thread] at hsteps
+        refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
+        exact advance_tau M.tagDefs M.tid _ _ dst
+      · cases ofValA_inj he1
+      · rw [jumpRedex?_ofValA] at hj; cases hj
+      · exact (specPat_ne_base hpat).elim
+      · exact (specPat_ne_base hpat).elim
+      · exact (symPat_ne_base hpat).elim
+      · exact (symPat_ne_base hpat).elim
+      · exact hcall.not_val.elim
+    | @beta_annot an pa a1 a2 b1 bty ds v e2 =>
+      rcases hr.sseq_inv with ⟨e1', ρ'', ctl'', σ'', hnj, hnc', hnv', hstep, hout⟩ |
+          ⟨_, _, _, _, v', _, _, _, he1, _, hout⟩ |
+          ⟨_, _, a1', a2', b1', ds', v', _, _, _, he1, _, hout⟩ |
+          ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩ |
+          ⟨_, _, _, _, _, _, _, _, _, hpat, _, _, _⟩ |
+          ⟨_, _, _, _, _, _, _, _, _, _, _, hpat, _, _, _⟩ |
+          ⟨_, _, _, _, _, _, _, _, hpat, _, _, _⟩ |
+          ⟨_, _, _, _, _, _, _, _, _, _, hpat, _, _, _⟩ |
+          hcall
+      · rw [toVal_ofValA] at hnv'; cases hnv'
+      · cases ofValA_inj he1
+      · obtain ⟨rfl, rfl, rfl, rfl, rfl⟩ : a1 = a1' ∧ a2 = a2' ∧ b1 = b1' ∧ ds = ds' ∧ v = v' := by
+          simpa using ofValA_inj he1
+        obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
+        subst h1 h2 h3 h4
+        have hsteps := step_ctx_beta_annot hd hsz M.tagDefs dst.layout_state
+          dst.core_file dst.core_extern M.tid M.parent
+          (M.thread e (ev0 :: evs) ctl) rfl rfl
+        rw [MachineCtx.locUpdTh_thread] at hsteps
+        refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
+        exact advance_tau M.tagDefs M.tid _ _ dst
+      · rw [jumpRedex?_ofValA] at hj; cases hj
+      · exact (specPat_ne_base hpat).elim
+      · exact (specPat_ne_base hpat).elim
+      · exact (symPat_ne_base hpat).elim
+      · exact (symPat_ne_base hpat).elim
+      · exact hcall.not_val.elim
+    | @wbeta_pure an pa a1 b1 bty v e2 =>
+      rcases hr.wseq_inv with ⟨e1', ρ'', ctl'', σ'', hnj, hnc', hnv', hstep, hout⟩ |
+          ⟨_, _, a1', b1', v', _, _, _, he1, _, hout⟩ |
+          ⟨_, _, _, _, _, ds', v', _, _, _, he1, _, hout⟩ |
+          ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩ |
+          hcall
+      · rw [toVal_ofValA] at hnv'; cases hnv'
+      · obtain ⟨rfl, rfl, rfl⟩ : a1 = a1' ∧ b1 = b1' ∧ v = v' := by
+          simpa using ofValA_inj he1
+        obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
+        subst h1 h2 h3 h4
+        have hsteps := step_ctx_wseq_pure hd hsz M.tagDefs dst.layout_state
+          dst.core_file dst.core_extern M.tid M.parent
+          (M.thread e (ev0 :: evs) ctl) rfl rfl
+        rw [MachineCtx.locUpdTh_thread] at hsteps
+        refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
+        exact advance_tau M.tagDefs M.tid _ _ dst
+      · cases ofValA_inj he1
+      · rw [jumpRedex?_ofValA] at hj; cases hj
+      · exact hcall.not_val.elim
+    | @wbeta_annot an pa a1 a2 b1 bty ds v e2 =>
+      rcases hr.wseq_inv with ⟨e1', ρ'', ctl'', σ'', hnj, hnc', hnv', hstep, hout⟩ |
+          ⟨_, _, _, _, v', _, _, _, he1, _, hout⟩ |
+          ⟨_, _, a1', a2', b1', ds', v', _, _, _, he1, _, hout⟩ |
+          ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩ |
+          hcall
+      · rw [toVal_ofValA] at hnv'; cases hnv'
+      · cases ofValA_inj he1
+      · obtain ⟨rfl, rfl, rfl, rfl, rfl⟩ : a1 = a1' ∧ a2 = a2' ∧ b1 = b1' ∧ ds = ds' ∧ v = v' := by
+          simpa using ofValA_inj he1
+        obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
+        subst h1 h2 h3 h4
+        have hsteps := step_ctx_wseq_annot hd hsz M.tagDefs dst.layout_state
+          dst.core_file dst.core_extern M.tid M.parent
+          (M.thread e (ev0 :: evs) ctl) rfl rfl
+        rw [MachineCtx.locUpdTh_thread] at hsteps
+        refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
+        exact advance_tau M.tagDefs M.tid _ _ dst
+      · rw [jumpRedex?_ofValA] at hj; cases hj
+      · exact hcall.not_val.elim
+    | @merge an a2 ds1 ds2 b hirr =>
+      rcases hr.annot_inv with ⟨hg, hnj, hnc', hnv', b', ρ'', ctl'', σ'', hstep, hout⟩ |
+          ⟨a2', ds2', c, hbeq, hout⟩ |
+          ⟨l, pes, params, cont, vs, _, _, hg, hj, _, _, _, _⟩ |
+          ⟨hg2, -⟩ | ⟨a2', b1', v', pc', κ', hb', hκ', hout'⟩
+      · rw [show annotRooted (Expr a2 (Eannot ds2 b)) = true from rfl] at hg
+        cases hg
+      · injection hbeq with hb1 hb2
+        injection hb2 with hb3 hb4
+        subst hb1 hb3 hb4
+        obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
+        subst h1 h2 h3 h4
+        have hsteps := step_ctx_merge hd hirr hsz M.tagDefs dst.layout_state
+          dst.core_file dst.core_extern M.tid M.parent
+          (M.thread e (ev0 :: evs) ctl) rfl
+        rw [MachineCtx.locUpdTh_thread] at hsteps
+        refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
+        exact advance_tau M.tagDefs M.tid _ _ dst
+      · rw [show annotRooted (Expr a2 (Eannot ds2 b)) = true from rfl] at hg
+        cases hg
+      · rw [show annotRooted (Expr a2 (Eannot ds2 b)) = true from rfl] at hg2
+        cases hg2
+      · cases hb'
+    | @save an sb ps body =>
+      have hdep : ∀ pe ∈ saveParamPexprs ps, peDepth pe ≤ lemDefaultFuel := by
+        cases hfr with
+        | save _ hdep _ => exact hdep
+      rcases hr.save_inv with ⟨cvals, ev0', evs', hρeq, hvals, hout⟩ |
+          ⟨cvals, hnvS, hvals, hout⟩
+      · obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
+        subst h1 h2 h3 h4
+        have hsteps := step_ctx_save hd hsz hvals M.tagDefs dst.layout_state
+          dst.core_file dst.core_extern M.tid M.parent
+          (M.thread e (ev0 :: evs) ctl) rfl rfl
+        rw [MachineCtx.locUpdTh_thread] at hsteps
+        refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
+        exact advance_tau M.tagDefs M.tid _ _ dst
+      · obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
+        subst h1 h2 h3 h4
+        obtain ⟨s, m, hsteps, hm⟩ := step_ctx_save_eval_ws hd hsz hnvS hdep
+          M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
+          (M.thread e (ev0 :: evs) ctl) rfl
+          (by rw [hext]; exact hvals)
+        rw [MachineCtx.locUpdTh_thread] at hm
+        refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
+        exact advance_withrs_eval M.tagDefs M.tid s m (hm dst.core_run_state0)
+    | @if_ an g e2 e3 =>
+      have hdg : peDepth g ≤ lemDefaultFuel := by
+        cases hfr with
+        | if_ _ hdg _ _ => exact hdg
+      rcases hr.if_inv with ⟨hg, hout⟩ | ⟨hg, hout⟩
+      · obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
+        subst h1 h2 h3 h4
+        obtain ⟨s, m, hsteps, hm⟩ := step_ctx_if_true_ws hd hsz hdg
+          M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
+          (M.thread e (ev0 :: evs) ctl) rfl
+          (by rw [hext]; exact hg)
+        rw [MachineCtx.locUpdTh_thread] at hm
+        refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
+        exact advance_withrs_tau M.tagDefs M.tid s m (hm dst.core_run_state0)
+      · obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
+        subst h1 h2 h3 h4
+        obtain ⟨s, m, hsteps, hm⟩ := step_ctx_if_false_ws hd hsz hdg
+          M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
+          (M.thread e (ev0 :: evs) ctl) rfl
+          (by rw [hext]; exact hg)
+        rw [MachineCtx.locUpdTh_thread] at hm
+        refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
+        exact advance_withrs_tau M.tagDefs M.tid s m (hm dst.core_run_state0)
+    | @case_ an pe pats =>
+      cases hfr with
+      | case_value hbr hbsz =>
+        obtain ⟨cval', e'', hv, hsel, hout⟩ := hr.case_inv
+        obtain rfl : _ = cval' := Option.some.inj (valueFromPexpr_val _ _ ▸ hv)
+        obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
+        subst h1 h2 h3 h4
+        have hsteps := step_ctx_case_value hd hsz hsel M.tagDefs dst.layout_state
+          dst.core_file dst.core_extern M.tid M.parent
+          (M.thread e (ev0 :: evs) ctl) rfl
+        rw [MachineCtx.locUpdTh_thread] at hsteps
+        refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
+        exact advance_tau M.tagDefs M.tid _ _ dst
+    | @run an ra l pes =>
+      exact absurd rfl (hnr an ra l pes)
+    | @pure_e an pe hnv2 =>
+      obtain ⟨pb, x, rfl⟩ : ∃ pb x, pe = Pexpr pb () (PEsym x) := by
+        cases hfr with
+        | val_pure v => rw [valueFromPexpr_val] at hnv2; cases hnv2
+        | pure_sym => exact ⟨_, _, rfl⟩
+      obtain ⟨v, -, hv, hout⟩ := hr.pure_inv hnv2
+      obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
+      subst h1 h2 h3 h4
+      obtain ⟨s, m, hsteps, hm⟩ := step_ctx_pure_sym_ws hd hsz
+        M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
+        (M.thread e (ev0 :: evs) ctl) rfl
+        (by rw [hext]; exact hv)
+      rw [MachineCtx.locUpdTh_thread] at hm
+      refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
+      exact advance_withrs_eval M.tagDefs M.tid s m (hm dst.core_run_state0)
+    | @load_op an loc ann ty pe2 mo hnv2 =>
+      obtain ⟨hp2, hd2⟩ : PePure pe2 ∧ peDepth pe2 ≤ lemDefaultFuel := by
+        cases hfr with
+        | load =>
+          rw [show valueFromPexpr (Pexpr [] () (PEval
+            (Vobject (OVpointer _)))) = some _ from rfl] at hnv2
+          cases hnv2
+        | load_op hnv2' hp2 hd2 => exact ⟨hp2, hd2⟩
+      obtain ⟨pv, hv2, hout⟩ := hr.load_op_inv hnv2
+      obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
+      subst h1 h2 h3 h4
+      obtain ⟨s, m, hsteps, hm⟩ := step_ctx_load_eval_ws hd hsz hnv2 hp2 hd2
+        M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
+        (M.thread e (ev0 :: evs) ctl) rfl
+        (by rw [hext]; exact hv2)
+      rw [MachineCtx.locUpdTh_thread] at hm
+      refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
+      exact advance_withrs_eval M.tagDefs M.tid s m (hm dst.core_run_state0)
+    | @beta_spec an pa pb x bty wa e2 =>
+      rcases hr.sseq_inv with ⟨e1', ρ'', ctl'', σ'', hnj, hnc', hnv', hstep, hout⟩ |
+          ⟨_, _, _, _, v', _, _, hpat, he1, _, hout⟩ |
+          ⟨_, _, _, _, _, ds', v', _, _, hpat, he1, _, hout⟩ |
+          ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩ |
+          ⟨pa', pb', x', bty', a1', b1', ov', _, _, hpat, he1, _, hout⟩ |
+          ⟨pa', pb', x', bty', a1', a2', b1', ds', ov', _, _, hpat, he1, _, hout⟩ |
+          ⟨pa', x', bty', a1', b1', v', _, _, hpat, he1, _, hout⟩ |
+          ⟨pa', x', bty', a1', a2', b1', ds', v', _, _, hpat, he1, _, hout⟩ |
+          hcall
+      · rw [toVal_ofValA] at hnv'; cases hnv'
       · exact (specPat_ne_base hpat.symm).elim
       · exact (specPat_ne_base hpat.symm).elim
-      · rw [jumpRedex?_ofVal] at hj; cases hj
+      · rw [jumpRedex?_ofValA] at hj; cases hj
       · obtain ⟨rfl, rfl, rfl, rfl⟩ := specPat_inj hpat
-        obtain rfl : w = .pure (Vloaded (LVspecified ov')) := by
-          cases w with
-          | pure v0 =>
-            obtain rfl : v0 = Vloaded (LVspecified ov') := by
-              simpa [ofVal] using he1
-            rfl
-          | annot ds0 v0 => exact absurd he1 (by simp [ofVal])
-        obtain ⟨h1, h2, h3⟩ : r' = e2 ∧
-            ρ' = update_env (specPat pa pb x bty)
-              (Vloaded (LVspecified ov')) (ev0 :: evs) ∧
-            σ' = dst.layout_state := by
-          simpa [Prod.mk.injEq] using hout
-        subst h1 h2 h3
-        refine ⟨_, step_ctx_beta_spec_pure hd hsz M.tagDefs dst.layout_state
-            dst.core_file dst.core_extern M.tid M.parent _ rfl rfl,
-          rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, ?_⟩
+        obtain rfl := ofValA_inj he1
+        obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
+        subst h1 h2 h3 h4
+        have hsteps := step_ctx_beta_spec_pure hd hsz M.tagDefs dst.layout_state
+          dst.core_file dst.core_extern M.tid M.parent
+          (M.thread e (ev0 :: evs) ctl) rfl rfl
+        rw [MachineCtx.locUpdTh_thread] at hsteps
+        refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
         exact advance_tau M.tagDefs M.tid _ _ dst
       · obtain ⟨rfl, rfl, rfl, rfl⟩ := specPat_inj hpat
-        obtain rfl : w = .annot ds' (Vloaded (LVspecified ov')) := by
-          cases w with
-          | pure v0 => exact absurd he1 (by simp [ofVal])
-          | annot ds0 v0 =>
-            obtain ⟨rfl, rfl⟩ : ds0 = ds' ∧ v0 = Vloaded (LVspecified ov') := by
-              simpa [ofVal] using he1
-            rfl
-        obtain ⟨h1, h2, h3⟩ : r' = Expr [] (Eannot ds' e2) ∧
-            ρ' = update_env (specPat pa pb x bty)
-              (Vloaded (LVspecified ov')) (ev0 :: evs) ∧
-            σ' = dst.layout_state := by
-          simpa [Prod.mk.injEq] using hout
-        subst h1 h2 h3
-        refine ⟨_, step_ctx_beta_spec_annot hd hsz M.tagDefs dst.layout_state
-            dst.core_file dst.core_extern M.tid M.parent _ rfl rfl,
-          rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, ?_⟩
+        obtain rfl := ofValA_inj he1
+        obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
+        subst h1 h2 h3 h4
+        have hsteps := step_ctx_beta_spec_annot hd hsz M.tagDefs dst.layout_state
+          dst.core_file dst.core_extern M.tid M.parent
+          (M.thread e (ev0 :: evs) ctl) rfl rfl
+        rw [MachineCtx.locUpdTh_thread] at hsteps
+        refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
         exact advance_tau M.tagDefs M.tid _ _ dst
       · exact (symPat_ne_spec hpat).elim
-      · exact hcall.ne_same_ctl.elim
-    | @memop mop pes =>
+      · exact (symPat_ne_spec hpat).elim
+      · exact hcall.not_val.elim
+    | @memop an mop pes =>
       cases hfr with
       | memop_vals v1 v2 =>
         obtain ⟨pv1, pv2, b, σ'', rfl, rfl, hmem, hout⟩ := hr.memop_vals_inv
-        obtain ⟨h1, h2, h3⟩ : r' = Expr [] (Epure (Pexpr [] () (PEval (boolValue b)))) ∧
-            ρ' = ev0 :: evs ∧ σ' = σ'' := by
-          simpa [Prod.mk.injEq] using hout
-        subst h1 h2 h3
-        · have hsteps := step_ctx_memop hd hsz rfl rfl M.tagDefs
-            dst.layout_state dst.core_file dst.core_extern M.tid M.parent
-            (M.thread e (ev0 :: evs) ctl) rfl
-          rw [hccall] at hsteps
-          refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace,
-            dst.dr_step_counter, rfl, ?_⟩
-          exact advance_memop (ars_memop_active M.tagDefs (by
-            rw [eqPtrval_loc_irrel _ default pv1 pv2]; exact hmem))
+        obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
+        subst h1 h2 h3 h4
+        have hsteps := step_ctx_memop hd hsz rfl rfl M.tagDefs
+          dst.layout_state dst.core_file dst.core_extern M.tid M.parent
+          (M.thread e (ev0 :: evs) ctl) rfl
+        rw [hccall, MachineCtx.locUpdTh_thread] at hsteps
+        refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter, rfl,
+          hsym, hexc, ?_⟩
+        exact advance_memop (ars_memop_active M.tagDefs (by
+          rw [eqPtrval_loc_irrel _ default pv1 pv2]; exact hmem))
       | memop_op hnvF hp1 hp2 hpd1 hpd2 =>
         obtain ⟨v1, v2, hv1', hv2', hout⟩ := hr.memop_op_inv hnvF
-        obtain ⟨h1, h2, h3⟩ : r' = Expr [] (Ememop PtrEq
-            [Pexpr [] () (PEval v1), Pexpr [] () (PEval v2)]) ∧
-            ρ' = ev0 :: evs ∧ σ' = dst.layout_state := by
-          simpa [Prod.mk.injEq] using hout
-        subst h1 h2 h3
+        obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
+        subst h1 h2 h3 h4
         obtain ⟨s, m, hsteps, hm⟩ := step_ctx_memop_eval_ws hd hsz hnvF
           hpd1 hpd2 M.tagDefs dst.layout_state dst.core_file
           dst.core_extern M.tid M.parent
           (M.thread e (ev0 :: evs) ctl) rfl
           (by rw [hext]; exact hv1') (by rw [hext]; exact hv2')
-        refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace,
-          dst.dr_step_counter + 1, rfl, ?_⟩
+        rw [MachineCtx.locUpdTh_thread] at hm
+        refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
         exact advance_withrs_eval M.tagDefs M.tid s m (hm dst.core_run_state0)
-    | @store_op loc ann ty pe2 pe3 mo hnvR =>
+    | @store_op an loc ann ty pe2 pe3 mo hnvR =>
       obtain ⟨hp2, hp3, hpd2, hpd3⟩ :
           PePure pe2 ∧ PePure pe3 ∧
           peDepth pe2 ≤ lemDefaultFuel ∧ peDepth pe3 ≤ lemDefaultFuel := by
@@ -1500,85 +1507,122 @@ theorem engine_step_matchU {M : MachineCtx}
         | store_op hnv' hp2 hp3 hpd2 hpd3 =>
           exact ⟨hp2, hp3, hpd2, hpd3⟩
       obtain ⟨pv, cv, hv2, hv3, hout⟩ := hr.store_op_inv hnvR
-      obtain ⟨h1, h2, h3⟩ : r' = storeRedex loc ann false ty pv cv mo ∧
-          ρ' = ev0 :: evs ∧ σ' = dst.layout_state := by
-        simpa [Prod.mk.injEq, storeRedex] using hout
-      subst h1 h2 h3
+      obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
+      subst h1 h2 h3 h4
       obtain ⟨s, m, hsteps, hm⟩ := step_ctx_store_eval_ws hd hsz hnvR
         hp2 hp3 hpd2 hpd3 M.tagDefs dst.layout_state dst.core_file
         dst.core_extern M.tid M.parent
         (M.thread e (ev0 :: evs) ctl) rfl
         (by rw [hext]; exact hv2) (by rw [hext]; exact hv3)
-      refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace,
-        dst.dr_step_counter + 1, rfl, ?_⟩
+      rw [MachineCtx.locUpdTh_thread] at hm
+      refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
       exact advance_withrs_eval M.tagDefs M.tid s m (hm dst.core_run_state0)
-    | @beta_sym pa x bty w e2 =>
-      rcases hr.sseq_inv with ⟨e1', ρ'', σ'', hnj, hnv', hstep, hout⟩ |
-          ⟨_, _, v', _, _, hpat, he1, _, hout⟩ |
-          ⟨_, _, ds', v', _, _, hpat, he1, _, hout⟩ |
+    | @beta_sym an pa x bty wa e2 =>
+      rcases hr.sseq_inv with ⟨e1', ρ'', ctl'', σ'', hnj, hnc', hnv', hstep, hout⟩ |
+          ⟨_, _, _, _, v', _, _, hpat, he1, _, hout⟩ |
+          ⟨_, _, _, _, _, ds', v', _, _, hpat, he1, _, hout⟩ |
           ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩ |
-          ⟨pa', pb', x', bty', ov', _, _, hpat, he1, _, hout⟩ |
-          ⟨pa', pb', x', bty', ds', ov', _, _, hpat, he1, _, hout⟩ |
-          ⟨pa', x', bty', v', _, _, hpat, he1, _, hout⟩ |
+          ⟨pa', pb', x', bty', a1', b1', ov', _, _, hpat, he1, _, hout⟩ |
+          ⟨pa', pb', x', bty', a1', a2', b1', ds', ov', _, _, hpat, he1, _, hout⟩ |
+          ⟨pa', x', bty', a1', b1', v', _, _, hpat, he1, _, hout⟩ |
+          ⟨pa', x', bty', a1', a2', b1', ds', v', _, _, hpat, he1, _, hout⟩ |
           hcall
-      · rw [toVal_ofVal] at hnv'; cases hnv'
+      · rw [toVal_ofValA] at hnv'; cases hnv'
       · exact (symPat_ne_base hpat.symm).elim
       · exact (symPat_ne_base hpat.symm).elim
-      · rw [jumpRedex?_ofVal] at hj; cases hj
+      · rw [jumpRedex?_ofValA] at hj; cases hj
       · exact (symPat_ne_spec hpat.symm).elim
       · exact (symPat_ne_spec hpat.symm).elim
       · obtain ⟨rfl, rfl, rfl⟩ := symPat_inj hpat
-        obtain rfl : w = .pure v' := by
-          cases w with
-          | pure v0 =>
-            obtain rfl : v0 = v' := by simpa [ofVal] using he1
-            rfl
-          | annot ds0 v0 => exact absurd he1 (by simp [ofVal])
-        obtain ⟨h1, h2, h3⟩ : r' = e2 ∧
-            ρ' = update_env (symPat pa x bty) v' (ev0 :: evs) ∧
-            σ' = dst.layout_state := by
-          simpa [Prod.mk.injEq] using hout
-        subst h1 h2 h3
-        refine ⟨_, step_ctx_beta_sym_pure hd hsz M.tagDefs dst.layout_state
-            dst.core_file dst.core_extern M.tid M.parent _ rfl rfl,
-          rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, ?_⟩
+        obtain rfl := ofValA_inj he1
+        obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
+        subst h1 h2 h3 h4
+        have hsteps := step_ctx_beta_sym_pure hd hsz M.tagDefs dst.layout_state
+          dst.core_file dst.core_extern M.tid M.parent
+          (M.thread e (ev0 :: evs) ctl) rfl rfl
+        rw [MachineCtx.locUpdTh_thread] at hsteps
+        refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
         exact advance_tau M.tagDefs M.tid _ _ dst
-      · exact hcall.ne_same_ctl.elim
-  · -- the jump disjunct: the context is discarded; the label read
-    -- resolves in the driver's run state, which IS the context's
+      · obtain ⟨rfl, rfl, rfl⟩ := symPat_inj hpat
+        obtain rfl := ofValA_inj he1
+        obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
+        subst h1 h2 h3 h4
+        have hsteps := step_ctx_beta_sym_annot hd hsz M.tagDefs dst.layout_state
+          dst.core_file dst.core_extern M.tid M.parent
+          (M.thread e (ev0 :: evs) ctl) rfl rfl
+        rw [MachineCtx.locUpdTh_thread] at hsteps
+        refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
+        exact advance_tau M.tagDefs M.tid _ _ dst
+      · exact hcall.not_val.elim
+    | @bound_pure an a1 b1 v =>
+      rcases hr.bound_inv with ⟨b', ρ'', ctl'', σ'', hnj, hnc', hnv', hstep, hout⟩ |
+          ⟨a1', b1', v', hb, hout⟩ | ⟨_, _, _, _, _, hb, hout⟩ |
+          ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩ | hcall
+      · rw [toVal_ofValA] at hnv'; cases hnv'
+      · obtain ⟨rfl, rfl, rfl⟩ : a1 = a1' ∧ b1 = b1' ∧ v = v' := by
+          simpa using ofValA_inj hb
+        obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
+        subst h1 h2 h3 h4
+        have hsteps := step_ctx_bound_pure hd hsz M.tagDefs dst.layout_state
+          dst.core_file dst.core_extern M.tid M.parent
+          (M.thread e (ev0 :: evs) ctl) rfl
+        rw [MachineCtx.locUpdTh_thread] at hsteps
+        refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
+        exact advance_tau M.tagDefs M.tid _ _ dst
+      · cases ofValA_inj hb
+      · rw [jumpRedex?_ofValA] at hj; cases hj
+      · exact hcall.not_val.elim
+    | @bound_annot an a1 a2 b1 ds v =>
+      rcases hr.bound_inv with ⟨b', ρ'', ctl'', σ'', hnj, hnc', hnv', hstep, hout⟩ |
+          ⟨_, _, _, hb, hout⟩ | ⟨a1', a2', b1', ds', v', hb, hout⟩ |
+          ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩ | hcall
+      · rw [toVal_ofValA] at hnv'; cases hnv'
+      · cases ofValA_inj hb
+      · obtain ⟨rfl, rfl, rfl, rfl, rfl⟩ : a1 = a1' ∧ a2 = a2' ∧ b1 = b1' ∧ ds = ds' ∧ v = v' := by
+          simpa using ofValA_inj hb
+        obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
+        subst h1 h2 h3 h4
+        have hsteps := step_ctx_bound_annot hd hsz M.tagDefs dst.layout_state
+          dst.core_file dst.core_extern M.tid M.parent
+          (M.thread e (ev0 :: evs) ctl) rfl
+        rw [MachineCtx.locUpdTh_thread] at hsteps
+        refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
+        exact advance_tau M.tagDefs M.tid _ _ dst
+      · rw [jumpRedex?_ofValA] at hj; cases hj
+      · exact hcall.not_val.elim
+  · -- the jump disjunct: the context is discarded, the label read
+    -- resolves in the DRIVER'S run state through the tie hQd
     obtain ⟨params, cont, vs, ev0', evs', hρeq, hl, hvs, hout⟩ :=
       hr.jump_inv (by rfl)
     have hdep : ∀ pe' ∈ pes, peDepth pe' ≤ lemDefaultFuel := by
       cases hfr with
       | run _ hdep => exact hdep
-    obtain ⟨p, hp, hQ⟩ := MachineCtx.labels_lookup_some hl
-    obtain ⟨h1, h2, h4, h3⟩ : e' = cont ∧
-        ρ' = bindArgs params vs (ev0 :: evs) ∧ ctl' = ctl ∧ σ' = dst.layout_state := by
-      simpa [Prod.mk.injEq] using hout
-    subst h1 h2 h3
-    subst ctl'
+    obtain ⟨p, hproc, hQd⟩ := MachineCtx.labels_lookup_some hl
+    obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
+    subst h1 h2 h3 h4
     obtain ⟨s, m, hsteps, hm⟩ := step_ctx_run_ws hd hsz hl hdep
       M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent p
-      (M.thread e (ev0 :: evs) ctl) rfl hp
+      (M.thread e (ev0 :: evs) ctl) rfl hproc
       (by rw [hext]; exact hvs)
-    refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace,
-      dst.dr_step_counter + 1, rfl, ?_⟩
+    rw [MachineCtx.locUpdTh_thread] at hm
+    refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl,
+      hsym, hexc, ?_⟩
     exact advance_withrs_eval M.tagDefs M.tid s m
-      (hm dst.core_run_state0 (by rw [hext, hrs]; exact hQ))
+      (hm dst.core_run_state0 (by unfold LabeledAt; rw [hext, hlabd]; exact hQd))
   · -- THE CALL: `step_ctx_call_ws` + `advance_withrs_eval` (run state verbatim)
     have hdep : ∀ pe' ∈ pes, peDepth pe' ≤ lemDefaultFuel := by
       cases hfr with
       | call _ hdep => exact hdep
-    obtain ⟨h1, h2, h4, h3⟩ : e' = body ∧ ρ' = procEnv params vs :: (ev0 :: evs) ∧
-        ctl' = ⟨(ctl.proc, ctx) :: ctl.κ, some f, push_exec_loc f M.currentLoc ctl.execLoc⟩ ∧
-        σ' = dst.layout_state := by
-      simpa [Prod.mk.injEq] using hout
+    obtain ⟨h1, h2, h4, h3⟩ := Config.mk_inj hout
     subst h1 h2 h4 h3
     obtain ⟨m, hsteps, hm⟩ := step_ctx_call_ws hd hsz hdep M.tagDefs dst.layout_state
       dst.core_file dst.core_extern M.tid M.parent (M.thread e (ev0 :: evs) ctl) rfl
       (by rw [hext]; exact hvs) (by rw [hfile, hext]; exact hfl) hlen
-    refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, ?_⟩
+    rw [MachineCtx.locUpdTh_thread] at hm
+    refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl,
+      hsym, hexc, ?_⟩
     exact advance_withrs_eval M.tagDefs M.tid _ m (hm dst.core_run_state0)
+
 
 /-- MATCH-GIVEN-STEP as a relation inclusion (`engine_step_matchU`
     re-read at a configuration successor). -/
@@ -1606,8 +1650,8 @@ theorem step_iff_cerberusRound {M : MachineCtx} {e : CoreExpr}
     obtain ⟨c₀, hs₀⟩ := hstep
     have hr₀ := Step.toCerberusRound hf hsz hs₀
     obtain ⟨dst, hemb⟩ := M.embeds_exists (e, ev0 :: evs, ctl, σ)
-    obtain ⟨s, hsteps, -, rs', tr, ctr, -, hadv⟩ := hr dst hemb
-    obtain ⟨s₀, hsteps₀, -, rs₀, tr₀, ctr₀, -, hadv₀⟩ := hr₀ dst hemb
+    obtain ⟨s, hsteps, -, rs', tr, ctr, -, hsym, hexc, hadv⟩ := hr dst hemb
+    obtain ⟨s₀, hsteps₀, -, rs₀, tr₀, ctr₀, -, hsym₀, hexc₀, hadv₀⟩ := hr₀ dst hemb
     obtain rfl : s₀ = s := by
       rw [hsteps₀] at hsteps
       exact (List.cons.inj hsteps).1
@@ -1617,27 +1661,39 @@ theorem step_iff_cerberusRound {M : MachineCtx} {e : CoreExpr}
     obtain ⟨e₀, ρ₀, ctl₀, σ₀⟩ := c₀
     have hcs := congrArg (fun d : driver_state => d.core_state0.thread_states) hD
     have hlay := congrArg (fun d : driver_state => d.layout_state) hD
-    simp only at hcs hlay
+    have hrs := congrArg (fun d : driver_state => d.core_run_state0) hD
+    simp only at hcs hlay hrs hsym hexc hsym₀ hexc₀
     rw [update_thread_state_single' M.tid M.parent _ _ _ hemb.thread,
       update_thread_state_single' M.tid M.parent _ _ _ hemb.thread] at hcs
     simp only [List.cons.injEq, Prod.mk.injEq, true_and, and_true] at hcs
-    obtain ⟨rfl, rfl, rfl⟩ := MachineCtx.thread_inj hcs
+    obtain ⟨rfl, rfl, hctl⟩ := MachineCtx.thread_inj hcs
     subst hlay
+    -- the supplies: read off the (equal) successor run states
+    subst hrs
+    obtain ⟨κ, p, ℓ, lc, sp⟩ := ctl'
+    obtain ⟨κ₀, p₀, ℓ₀, lc₀, sp₀⟩ := ctl₀
+    simp only [Ctl.mk.injEq] at hctl
+    obtain ⟨rfl, rfl, rfl, rfl, -⟩ := hctl
+    obtain ⟨sy, ex⟩ := sp
+    obtain ⟨sy₀, ex₀⟩ := sp₀
+    simp only at hsym hexc hsym₀ hexc₀
+    obtain rfl : sy₀ = sy := hsym₀.symm.trans hsym
+    obtain rfl : ex₀ = ex := hexc₀.symm.trans hexc
     exact hs₀
 
 /-! ## The exhaustive per-configuration classification -/
 
 /-- The classification (statement in the module header). -/
 inductive RoundClass (M : MachineCtx) (c : Config) : Prop where
-  | value_done (v : value) :
-      c.1 = ofVal (.pure v) →
+  | value_done (a b : List _root_.annot) (v : value) :
+      c.1 = ofValA (.pure a b v) →
       (∀ dst, M.Embeds dst c →
         step_ctx M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid
           (M.parent, M.thread c.1 c.2.1 c.2.2.1) = [Step_done2 v]) →
       RoundClass M c
-  | value_annot (ds : List dyn_annotation) (v : value) :
-      c.1 = ofVal (.annot ds v) →
-      CerberusRound M c (ofVal (.pure v), c.2.1, c.2.2.1, c.2.2.2) →
+  | value_annot (a a2 b : List _root_.annot) (ds : List dyn_annotation) (v : value) :
+      c.1 = ofValA (.annot a a2 b ds v) →
+      CerberusRound M c (ofValA (.pure a2 b v), c.2.1, c.2.2.1, c.2.2.2) →
       RoundClass M c
   | step (c' : Config) :
       Step M c c' →
@@ -1658,26 +1714,26 @@ inductive RoundClass (M : MachineCtx) (c : Config) : Prop where
     exactly the two selectors of the value arm: the live control's EMPTY
     STACK selects PROGRAM-DONE over RETURN, `SeqWF`'s no-parent selects it
     over THREAD-DONE). -/
-theorem shipped_done {M : MachineCtx} (hwf : M.SeqWF) (v : value) (ρ : EnvStack)
+theorem shipped_done {a1 b1 : List _root_.annot} {M : MachineCtx} (hwf : M.SeqWF) (v : value) (ρ : EnvStack)
     {ctl : Ctl} (hκ : ctl.κ = []) (dst : driver_state) :
     step_ctx M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid
-      (M.parent, M.thread (ofVal (.pure v)) ρ ctl) = [Step_done2 v] := by
+      (M.parent, M.thread (ofValA (.pure a1 b1 v)) ρ ctl) = [Step_done2 v] := by
   rw [hwf.parent]
   exact step_ctx_done v M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid
-    (M.thread (ofVal (.pure v)) ρ ctl) rfl (Ctl.toStack_of_κ_nil hκ)
+    (M.thread (ofValA (.pure a1 b1 v)) ρ ctl) rfl (Ctl.toStack_of_κ_nil hκ)
 
 /-- REMOVE-ANNOT at an annotated value is a shipped round to the bare
     value (env and memory verbatim; no context field read). -/
-theorem shipped_remove_annot (M : MachineCtx) (ds : List dyn_annotation) (v : value)
-    (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
-    CerberusRound M (ofVal (.annot ds v), ρ, ctl, σ) (ofVal (.pure v), ρ, ctl, σ) := by
+theorem shipped_remove_annot (M : MachineCtx) (a a2 b : List _root_.annot)
+    (ds : List dyn_annotation) (v : value) (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
+    CerberusRound M (ofValA (.annot a a2 b ds v), ρ, ctl, σ) (ofValA (.pure a2 b v), ρ, ctl, σ) := by
   intro dst hemb
-  obtain ⟨hth, hlay, -, -, -⟩ := hemb
+  obtain ⟨hth, hlay, -, -, -, hsym, hexc⟩ := hemb
   simp only at hth hlay
   subst hlay
   refine ⟨_, step_ctx_remove_annot ds v M.tagDefs dst.layout_state dst.core_file
-      dst.core_extern M.tid M.parent (M.thread (ofVal (.annot ds v)) ρ ctl) rfl,
-    rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, ?_⟩
+      dst.core_extern M.tid M.parent (M.thread (ofValA (.annot a a2 b ds v)) ρ ctl) rfl,
+    rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
   exact advance_tau M.tagDefs M.tid _ _ dst
 
 /-- The arms are mutually exclusive (the classification is a
@@ -1685,8 +1741,8 @@ theorem shipped_remove_annot (M : MachineCtx) (ds : List dyn_annotation) (v : va
     never a mirror step (value protocol; C2: under a frame it is the
     RETURN redex, `complete_ret`), and `step`/`refused` contradict
     directly. -/
-theorem RoundClass.value_not_step {M : MachineCtx} {c : Config} {w : SpikeVal}
-    (he : c.1 = ofVal w) (hκ : c.2.2.1.κ = []) : ∀ c', ¬ Step M c c' := by
+theorem RoundClass.value_not_step {M : MachineCtx} {c : Config} {w : SpikeValA}
+    (he : c.1 = ofValA w) (hκ : c.2.2.1.κ = []) : ∀ c', ¬ Step M c c' := by
   intro c' hs
   obtain ⟨e, ρ, ctl, σ⟩ := c
   simp only at he hκ
@@ -1705,14 +1761,14 @@ an ILLTYPED report — never a successful round. -/
     `storeM`'s kill (CerbMem.lean:1667 — the `MerrAccess` UB kills
     arrive as `Undef0`, the ill-typed-memory-value/`MerrOther` kills as
     `Other (DErr_memory _)`), at the request's own location. -/
-theorem cerberusRound_refused_store (M : MachineCtx)
+theorem cerberusRound_refused_store {an : List _root_.annot} (M : MachineCtx)
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {lk : Bool}
     {ty : ctype} {pv : CerbMem.PointerValue} {cv : value} {mo : memory_order}
     (ρ : EnvStack) (ctl : Ctl) (σ : Mem)
-    (hstuck : ∀ c', ¬ Step M (storeRedex loc ann lk ty pv cv mo, ρ, ctl, σ) c') :
-    ShippedRefusal M (storeRedex loc ann lk ty pv cv mo, ρ, ctl, σ) := by
-  have hsz : esize (storeRedex loc ann lk ty pv cv mo) ≤ lemDefaultFuel := by
-    rw [show esize (storeRedex loc ann lk ty pv cv mo) = 1 from rfl]
+    (hstuck : ∀ c', ¬ Step M (storeRedex an loc ann lk ty pv cv mo, ρ, ctl, σ) c') :
+    ShippedRefusal M (storeRedex an loc ann lk ty pv cv mo, ρ, ctl, σ) := by
+  have hsz : esize (storeRedex an loc ann lk ty pv cv mo) ≤ lemDefaultFuel := by
+    rw [show esize (storeRedex an loc ann lk ty pv cv mo) = 1 from rfl]
     unfold lemDefaultFuel
     omega
   cases hmv : memValueFromValue M.tagDefs (Ctype [] (unatomic_ ty)) cv with
@@ -1723,14 +1779,14 @@ theorem cerberusRound_refused_store (M : MachineCtx)
             (String.append ") didn't match the lvalue type: "
               (CerbPP.stringFromCore_value cv))))) ?_
     intro dst hemb
-    obtain ⟨-, hlay, -, -, -⟩ := hemb
+    obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
     simp only at hlay
     subst hlay
     exact step_ctx_store_illtyped (Decomp.root Redex.store) hsz M.tagDefs hmv
       dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
   | some mv =>
     have hnone : applyMemM (CerbMem.storeM M.tagDefs
-        (requestLoc (M.thread (storeRedex loc ann lk ty pv cv mo) ρ ctl) loc) ty lk pv mv) σ =
+        (requestLoc (locUpdTh an (M.thread (storeRedex an loc ann lk ty pv cv mo) ρ ctl)) loc) ty lk pv mv) σ =
         none := by
       rw [storeM_loc_irrel loc]
       cases hmem : applyMemM (CerbMem.storeM M.tagDefs loc ty lk pv mv) σ with
@@ -1741,7 +1797,7 @@ theorem cerberusRound_refused_store (M : MachineCtx)
     obtain ⟨r, σ', hk⟩ := applyMemM_none_killed (storeM_layer _ _ _ _ _ _ _) hnone
     apply ShippedRefusal.killed
     intro dst hemb
-    obtain ⟨-, hlay, -, -, -⟩ := hemb
+    obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
     simp only at hlay
     subst hlay
     have hsteps := step_ctx_store (Decomp.root Redex.store) hsz M.tagDefs hmv
@@ -1754,18 +1810,18 @@ theorem cerberusRound_refused_store (M : MachineCtx)
     `MerrAccess` UB kills, `Undef0`; the trap representation and
     outside-lifetime kills likewise per `failReason`), at the request's
     own location. -/
-theorem cerberusRound_refused_load (M : MachineCtx)
+theorem cerberusRound_refused_load {an : List _root_.annot} (M : MachineCtx)
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
     {pv : CerbMem.PointerValue} {mo : memory_order}
     (ρ : EnvStack) (ctl : Ctl) (σ : Mem)
-    (hstuck : ∀ c', ¬ Step M (loadRedex loc ann ty pv mo, ρ, ctl, σ) c') :
-    ShippedRefusal M (loadRedex loc ann ty pv mo, ρ, ctl, σ) := by
-  have hsz : esize (loadRedex loc ann ty pv mo) ≤ lemDefaultFuel := by
-    rw [show esize (loadRedex loc ann ty pv mo) = 1 from rfl]
+    (hstuck : ∀ c', ¬ Step M (loadRedex an loc ann ty pv mo, ρ, ctl, σ) c') :
+    ShippedRefusal M (loadRedex an loc ann ty pv mo, ρ, ctl, σ) := by
+  have hsz : esize (loadRedex an loc ann ty pv mo) ≤ lemDefaultFuel := by
+    rw [show esize (loadRedex an loc ann ty pv mo) = 1 from rfl]
     unfold lemDefaultFuel
     omega
   have hnone : applyMemM (CerbMem.loadM M.tagDefs
-      (requestLoc (M.thread (loadRedex loc ann ty pv mo) ρ ctl) loc) ty pv) σ = none := by
+      (requestLoc (locUpdTh an (M.thread (loadRedex an loc ann ty pv mo) ρ ctl)) loc) ty pv) σ = none := by
     rw [loadM_loc_irrel loc]
     cases hmem : applyMemM (CerbMem.loadM M.tagDefs loc ty pv) σ with
     | none => rfl
@@ -1775,7 +1831,7 @@ theorem cerberusRound_refused_load (M : MachineCtx)
   obtain ⟨r, σ', hk⟩ := applyMemM_none_killed (loadM_layer _ _ _ _ _) hnone
   apply ShippedRefusal.killed
   intro dst hemb
-  obtain ⟨-, hlay, -, -, -⟩ := hemb
+  obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
   simp only at hlay
   subst hlay
   have hsteps := step_ctx_load (Decomp.root Redex.load) hsz M.tagDefs
@@ -1787,14 +1843,14 @@ theorem cerberusRound_refused_load (M : MachineCtx)
     kill (CerbMem.lean:1513, `Other (MerrOther "out of memory")`, lifted
     to `Other (DErr_memory _)`) — the arm the budget's coupling
     inequality excludes (`create_atomic`, K2.5). -/
-theorem cerberusRound_refused_create (M : MachineCtx)
+theorem cerberusRound_refused_create {an : List _root_.annot} (M : MachineCtx)
     {loc : CerbLocation.Loc} {ann : core_run_annotation}
     {align : CerbMem.IntegerValue} {ty : ctype} {pref : prefix0}
     (ρ : EnvStack) (ctl : Ctl) (σ : Mem)
-    (hstuck : ∀ c', ¬ Step M (createRedex loc ann align ty pref, ρ, ctl, σ) c') :
-    ShippedRefusal M (createRedex loc ann align ty pref, ρ, ctl, σ) := by
-  have hsz : esize (createRedex loc ann align ty pref) ≤ lemDefaultFuel := by
-    rw [show esize (createRedex loc ann align ty pref) = 1 from rfl]
+    (hstuck : ∀ c', ¬ Step M (createRedex an loc ann align ty pref, ρ, ctl, σ) c') :
+    ShippedRefusal M (createRedex an loc ann align ty pref, ρ, ctl, σ) := by
+  have hsz : esize (createRedex an loc ann align ty pref) ≤ lemDefaultFuel := by
+    rw [show esize (createRedex an loc ann align ty pref) = 1 from rfl]
     unfold lemDefaultFuel
     omega
   have hnone : applyMemM (CerbMem.allocateObject M.tagDefs 0 pref align ty none none) σ =
@@ -1807,7 +1863,7 @@ theorem cerberusRound_refused_create (M : MachineCtx)
   obtain ⟨r, σ', hk⟩ := applyMemM_none_killed (allocateObject_layer _ _ _ _ _ _ _ _) hnone
   apply ShippedRefusal.killed
   intro dst hemb
-  obtain ⟨-, hlay, -, -, -⟩ := hemb
+  obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
   simp only at hlay
   subst hlay
   have hsteps := step_ctx_create (Decomp.root Redex.create) hsz M.tagDefs
@@ -1819,17 +1875,17 @@ theorem cerberusRound_refused_create (M : MachineCtx)
     `killM`'s kill at the request's own location — one of the three
     reasons of `killM_killed_inv` (UB179a non-matching, UB179b dead,
     the non-UB out-of-bound `Other`), lifted through `liftMem`. -/
-theorem cerberusRound_refused_kill (M : MachineCtx)
+theorem cerberusRound_refused_kill {an : List _root_.annot} (M : MachineCtx)
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {kind : kill_kind}
     {pv : CerbMem.PointerValue} (ρ : EnvStack) (ctl : Ctl) (σ : Mem)
-    (hstuck : ∀ c', ¬ Step M (killRedex loc ann kind pv, ρ, ctl, σ) c') :
-    ShippedRefusal M (killRedex loc ann kind pv, ρ, ctl, σ) := by
-  have hsz : esize (killRedex loc ann kind pv) ≤ lemDefaultFuel := by
-    rw [show esize (killRedex loc ann kind pv) = 1 from rfl]
+    (hstuck : ∀ c', ¬ Step M (killRedex an loc ann kind pv, ρ, ctl, σ) c') :
+    ShippedRefusal M (killRedex an loc ann kind pv, ρ, ctl, σ) := by
+  have hsz : esize (killRedex an loc ann kind pv) ≤ lemDefaultFuel := by
+    rw [show esize (killRedex an loc ann kind pv) = 1 from rfl]
     unfold lemDefaultFuel
     omega
   have hnone : applyMemM (CerbMem.killM
-      (requestLoc (M.thread (killRedex loc ann kind pv) ρ ctl) loc) (is_dynamic kind) pv) σ =
+      (requestLoc (locUpdTh an (M.thread (killRedex an loc ann kind pv) ρ ctl)) loc) (is_dynamic kind) pv) σ =
       none := by
     rw [killM_loc_irrel loc]
     cases hmem : applyMemM (CerbMem.killM loc (is_dynamic kind) pv) σ with
@@ -1840,7 +1896,7 @@ theorem cerberusRound_refused_kill (M : MachineCtx)
   obtain ⟨r, σ', hk⟩ := applyMemM_none_killed (killM_layer _ _ _ _) hnone
   apply ShippedRefusal.killed
   intro dst hemb
-  obtain ⟨-, hlay, -, -, -⟩ := hemb
+  obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
   simp only at hlay
   subst hlay
   have hsteps := step_ctx_kill (Decomp.root Redex.kill) hsz M.tagDefs
@@ -1852,14 +1908,14 @@ theorem cerberusRound_refused_kill (M : MachineCtx)
     out-of-memory kill (CerbMem.lean:1541, `Other (MerrOther "out of
     memory")`, lifted to `Other (DErr_memory _)`) — the arm the budget's
     coupling inequality excludes (`alloc_atomic`). -/
-theorem cerberusRound_refused_alloc (M : MachineCtx)
+theorem cerberusRound_refused_alloc {an : List _root_.annot} (M : MachineCtx)
     {loc : CerbLocation.Loc} {ann : core_run_annotation}
     {align size : CerbMem.IntegerValue} {pref : prefix0}
     (ρ : EnvStack) (ctl : Ctl) (σ : Mem)
-    (hstuck : ∀ c', ¬ Step M (allocRedex loc ann align size pref, ρ, ctl, σ) c') :
-    ShippedRefusal M (allocRedex loc ann align size pref, ρ, ctl, σ) := by
-  have hsz : esize (allocRedex loc ann align size pref) ≤ lemDefaultFuel := by
-    rw [show esize (allocRedex loc ann align size pref) = 1 from rfl]
+    (hstuck : ∀ c', ¬ Step M (allocRedex an loc ann align size pref, ρ, ctl, σ) c') :
+    ShippedRefusal M (allocRedex an loc ann align size pref, ρ, ctl, σ) := by
+  have hsz : esize (allocRedex an loc ann align size pref) ≤ lemDefaultFuel := by
+    rw [show esize (allocRedex an loc ann align size pref) = 1 from rfl]
     unfold lemDefaultFuel
     omega
   have hnone : applyMemM (CerbMem.allocateRegion 0 pref align size) σ = none := by
@@ -1871,7 +1927,7 @@ theorem cerberusRound_refused_alloc (M : MachineCtx)
   obtain ⟨r, σ', hk⟩ := applyMemM_none_killed (allocateRegion_layer _ _ _ _ _) hnone
   apply ShippedRefusal.killed
   intro dst hemb
-  obtain ⟨-, hlay, -, -, -⟩ := hemb
+  obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
   simp only at hlay
   subst hlay
   have hsteps := step_ctx_alloc (Decomp.root Redex.alloc) hsz M.tagDefs
@@ -1882,21 +1938,21 @@ theorem cerberusRound_refused_alloc (M : MachineCtx)
 /-- The refusal classification at a value-scrutinee CASE redex: the
     ILLTYPED no-match report (one_step0's Ecase value arm,
     Core_reduction.lean:353). -/
-theorem cerberusRound_refused_case (M : MachineCtx)
-    {b : List annot} {cval : value} {pats : List (pattern × CoreExpr)}
-    (hsz : esize (caseRedex (Pexpr b () (PEval cval)) pats) ≤ lemDefaultFuel)
+theorem cerberusRound_refused_case {an : List _root_.annot} (M : MachineCtx)
+    {b : List _root_.annot} {cval : value} {pats : List (pattern × CoreExpr)}
+    (hsz : esize (caseRedex an (Pexpr b () (PEval cval)) pats) ≤ lemDefaultFuel)
     (ρ : EnvStack) (ctl : Ctl) (σ : Mem)
-    (hstuck : ∀ c', ¬ Step M (caseRedex (Pexpr b () (PEval cval)) pats, ρ, ctl, σ) c') :
-    ShippedRefusal M (caseRedex (Pexpr b () (PEval cval)) pats, ρ, ctl, σ) := by
+    (hstuck : ∀ c', ¬ Step M (caseRedex an (Pexpr b () (PEval cval)) pats, ρ, ctl, σ) c') :
+    ShippedRefusal M (caseRedex an (Pexpr b () (PEval cval)) pats, ρ, ctl, σ) := by
   have hsel : select_case subst_sym_expr cval pats = none := by
     cases hsel : select_case subst_sym_expr cval pats with
     | none => rfl
     | some e' =>
       exact absurd (Step.case_value (valueFromPexpr_val _ _) hsel) (hstuck _)
   refine .error (String.append "Ecase, mismatched ==> "
-      (CerbPP.stringFromCore_expr (caseRedex (Pexpr b () (PEval cval)) pats))) ?_
+      (CerbPP.stringFromCore_expr (caseRedex an (Pexpr b () (PEval cval)) pats))) ?_
   intro dst hemb
-  obtain ⟨-, hlay, -, -, -⟩ := hemb
+  obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
   simp only at hlay
   subst hlay
   exact step_ctx_case_illtyped (Decomp.root (Redex.case_ _ _)) hsz hsel M.tagDefs
@@ -1910,14 +1966,14 @@ proof devices of this module's classification. They appear in no
 export's statement. -/
 
 /-- LOAD IS TWO-SIDED at the discharge device. -/
-theorem engine_complete_loadU (M : MachineCtx) (aid : Nat)
+theorem engine_complete_loadU {an : List _root_.annot} (M : MachineCtx) (aid : Nat)
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
     {pv : CerbMem.PointerValue} {mo : memory_order}
     (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
-    ∃ o, outcomesU M aid (loadRedex loc ann ty pv mo) ρ ctl σ = [o] ∧
-      EngineMatchU M (loadRedex loc ann ty pv mo) ρ ctl σ o := by
-  have hsz : esize (loadRedex loc ann ty pv mo) ≤ lemDefaultFuel := by
-    rw [show esize (loadRedex loc ann ty pv mo) = 1 from rfl]
+    ∃ o, outcomesU M aid (loadRedex an loc ann ty pv mo) ρ ctl σ = [o] ∧
+      EngineMatchU M (loadRedex an loc ann ty pv mo) ρ ctl σ o := by
+  have hsz : esize (loadRedex an loc ann ty pv mo) ≤ lemDefaultFuel := by
+    rw [show esize (loadRedex an loc ann ty pv mo) = 1 from rfl]
     unfold lemDefaultFuel
     omega
   cases hmem : applyMemM (CerbMem.loadM M.tagDefs loc ty pv) σ with
@@ -1929,13 +1985,14 @@ theorem engine_complete_loadU (M : MachineCtx) (aid : Nat)
       M.file M.extern M.tid M.parent (M.thread _ ρ ctl) rfl]
     simp only [List.map_cons, List.map_nil]
     rw [dischargeStep_load_active hmem]
-    rfl
+    simp only [MachineCtx.locUpdTh_thread]
+    try rfl
   | none =>
     refine ⟨dischargeStep M.tagDefs aid M.runState σ (Step_action_request2
-        "LoadRequest" (requestLoc (M.thread (loadRedex loc ann ty pv mo) ρ ctl) loc) M.tid
+        "LoadRequest" (requestLoc (locUpdTh an (M.thread (loadRedex an loc ann ty pv mo) ρ ctl)) loc) M.tid
         (is_unseq_with_ccall CTX)
         (stExceptUndef_return (LoadRequest2 mo ty pv (fun _ fp mval =>
-          { M.thread (loadRedex loc ann ty pv mo) ρ ctl with
+          { locUpdTh an (M.thread (loadRedex an loc ann ty pv mo) ρ ctl) with
             arena := apply_ctx CTX (Expr [] (Eannot [DA_pos [] fp]
               (Expr [] (Epure (Pexpr [] () (PEval
                 (valueFromMemValue mval).2)))))) })))),
@@ -1950,17 +2007,17 @@ theorem engine_complete_loadU (M : MachineCtx) (aid : Nat)
       cases hmem'
 
 /-- CREATE IS TWO-SIDED at the discharge device. -/
-theorem engine_complete_createU (M : MachineCtx) (aid : Nat)
+theorem engine_complete_createU {an : List _root_.annot} (M : MachineCtx) (aid : Nat)
     {loc : CerbLocation.Loc} {ann : core_run_annotation}
     {align : CerbMem.IntegerValue} {ty : ctype} {pref : prefix0}
     (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
-    ∃ o, outcomesU M aid (createRedex loc ann align ty pref) ρ ctl σ = [o] ∧
-      EngineMatchU M (createRedex loc ann align ty pref) ρ ctl σ o := by
-  have hsz : esize (createRedex loc ann align ty pref) ≤ lemDefaultFuel := by
-    rw [show esize (createRedex loc ann align ty pref) = 1 from rfl]
+    ∃ o, outcomesU M aid (createRedex an loc ann align ty pref) ρ ctl σ = [o] ∧
+      EngineMatchU M (createRedex an loc ann align ty pref) ρ ctl σ o := by
+  have hsz : esize (createRedex an loc ann align ty pref) ≤ lemDefaultFuel := by
+    rw [show esize (createRedex an loc ann align ty pref) = 1 from rfl]
     unfold lemDefaultFuel
     omega
-  have hirr := allocateObject_arg_irrel M.tagDefs 0 0 pref align ty (get_with_address []) none none
+  have hirr := allocateObject_arg_irrel M.tagDefs 0 0 pref align ty (get_with_address an) none none
   cases hmem : applyMemM (CerbMem.allocateObject M.tagDefs 0 pref align ty none none) σ with
   | some r =>
     obtain ⟨pv, σ'⟩ := r
@@ -1970,14 +2027,15 @@ theorem engine_complete_createU (M : MachineCtx) (aid : Nat)
       M.file M.extern M.tid M.parent (M.thread _ ρ ctl) rfl]
     simp only [List.map_cons, List.map_nil]
     rw [dischargeStep_create_active (hirr ▸ hmem)]
-    rfl
+    simp only [MachineCtx.locUpdTh_thread]
+    try rfl
   | none =>
     refine ⟨dischargeStep M.tagDefs aid M.runState σ (Step_action_request2
-        "CreateRequest" (requestLoc (M.thread (createRedex loc ann align ty pref) ρ ctl) loc) M.tid
+        "CreateRequest" (requestLoc (locUpdTh an (M.thread (createRedex an loc ann align ty pref) ρ ctl)) loc) M.tid
         (is_unseq_with_ccall CTX)
         (stExceptUndef_return (CreateRequest2 pref align ty
-          (get_with_address []) none (fun _ pv =>
-          { M.thread (createRedex loc ann align ty pref) ρ ctl with
+          (get_with_address an) none (fun _ pv =>
+          { locUpdTh an (M.thread (createRedex an loc ann align ty pref) ρ ctl) with
             arena := apply_ctx CTX (Expr [] (Epure (Pexpr [] ()
               (PEval (Vobject (OVpointer pv)))))) })))),
       ?_, ?_⟩
@@ -2013,30 +2071,46 @@ shape/panic variants proved here. -/
 
 /-- A step of the redex lifts through the decomposition context (the
     converse of `Decomp.step_factor`'s first disjunct): each `Decomp`
-    frame is a `Step` congruence rule, whose jump guard is discharged
-    by the redex not being a run redex. -/
+    frame is a `Step` congruence rule, whose jump and call guards are
+    discharged by the redex being neither a run nor a call redex (E1: the
+    successor control is the redex step's own). -/
 theorem Decomp.lift_step {M : MachineCtx} {e : CoreExpr} {ctx : context} {r : CoreExpr}
     (hd : Decomp e ctx r)
-    (hnr : ∀ (ra : core_run_annotation) (l : sym) (pes : List (generic_pexpr Unit sym)),
-      r ≠ runRedex ra l pes)
-    {ρ : EnvStack} {ctl : Ctl} {σ : Mem} {r' : CoreExpr} {ρ' : EnvStack} {σ' : Mem}
-    (hs : Step M (r, ρ, ctl, σ) (r', ρ', ctl, σ')) :
-    Step M (e, ρ, ctl, σ) (apply_ctx ctx r', ρ', ctl, σ') := by
+    (hnr : ∀ (an : List _root_.annot) (ra : core_run_annotation) (l : sym)
+      (pes : List (generic_pexpr Unit sym)), r ≠ runRedex an ra l pes)
+    (hnc : ∀ (an : List _root_.annot) (ra : core_run_annotation) (f : sym)
+      (pes : List (generic_pexpr Unit sym)), r ≠ callRedex an ra f pes)
+    {ρ : EnvStack} {ctl : Ctl} {σ : Mem} {r' : CoreExpr} {ρ' : EnvStack} {ctl' : Ctl} {σ' : Mem}
+    (hs : Step M (r, ρ, ctl, σ) (r', ρ', ctl', σ')) :
+    Step M (e, ρ, ctl, σ) (apply_ctx ctx r', ρ', ctl', σ') := by
   have hnj : jumpRedex? r = none := by
     cases hj : jumpRedex? r with
     | none => rfl
     | some lp =>
       obtain ⟨l, pes⟩ := lp
-      obtain ⟨ra, hr⟩ := hd.redex.jumpRedex?_some_inv hj
-      exact absurd hr (hnr ra l pes)
+      obtain ⟨an, ra, hr⟩ := hd.redex.jumpRedex?_some_inv hj
+      exact absurd hr (hnr an ra l pes)
+  have hncall : callRedex? r = none := (Decomp.root hd.redex).callRedex?_none hnc
   induction hd with
   | root _ => exact hs
-  | sseq hd ih => exact Step.sseq_ctx (hd.jumpRedex?_eq.trans hnj) hd.toVal_none (ih hnr hs hnj)
-  | sseq_spec hd ih => exact Step.sseq_ctx (hd.jumpRedex?_eq.trans hnj) hd.toVal_none (ih hnr hs hnj)
-  | sseq_sym hd ih => exact Step.sseq_ctx (hd.jumpRedex?_eq.trans hnj) hd.toVal_none (ih hnr hs hnj)
+  | sseq hd ih =>
+    exact Step.sseq_ctx (hd.jumpRedex?_eq.trans hnj) (hd.callRedex?_none hnc) hd.toVal_none
+      (ih hnr hnc hs hnj hncall)
+  | sseq_spec hd ih =>
+    exact Step.sseq_ctx (hd.jumpRedex?_eq.trans hnj) (hd.callRedex?_none hnc) hd.toVal_none
+      (ih hnr hnc hs hnj hncall)
+  | sseq_sym hd ih =>
+    exact Step.sseq_ctx (hd.jumpRedex?_eq.trans hnj) (hd.callRedex?_none hnc) hd.toVal_none
+      (ih hnr hnc hs hnj hncall)
   | annot hroot _ _ hd ih =>
-    exact Step.annot_ctx (hd.jumpRedex?_eq.trans hnj) hroot (ih hnr hs hnj)
-  | wseq hd ih => exact Step.wseq_ctx (hd.jumpRedex?_eq.trans hnj) hd.toVal_none (ih hnr hs hnj)
+    exact Step.annot_ctx (hd.jumpRedex?_eq.trans hnj) (hd.callRedex?_none hnc) hd.toVal_none
+      hroot (ih hnr hnc hs hnj hncall)
+  | wseq hd ih =>
+    exact Step.wseq_ctx (hd.jumpRedex?_eq.trans hnj) (hd.callRedex?_none hnc) hd.toVal_none
+      (ih hnr hnc hs hnj hncall)
+  | bound hd ih =>
+    exact Step.bound_ctx (hd.jumpRedex?_eq.trans hnj) (hd.callRedex?_none hnc) hd.toVal_none
+      (ih hnr hnc hs hnj hncall)
 
 /-! `get_ctx`'s plain-`Eannot` arm (Core_reduction.lean:375) at a body
 whose head is a sequencing frame or an action: the outer irreducibility
@@ -2060,19 +2134,27 @@ theorem get_ctx_annot_action {a a' : List _root_.annot} {ds : List dyn_annotatio
       List.map (fun q => (Cannot a ds q.1, q.2))
         (get_ctx_lemFuel n (Expr a' (Eaction p))) := rfl
 
+theorem get_ctx_annot_bound {a a' : List _root_.annot} {ds : List dyn_annotation}
+    {b : CoreExpr} (n : Nat) :
+    get_ctx_lemFuel (n+1) (Expr a (Eannot ds (Expr a' (Ebound b)))) =
+      List.map (fun q => (Cannot a ds q.1, q.2))
+        (get_ctx_lemFuel n (Expr a' (Ebound b))) := rfl
+
 /-- Rebuilding a decomposition's hole with an ACTION node keeps the
     frames reducible (the head of every frame is `Esseq`/`Ewseq`/an
     action; an annotation frame's body is never annotation-rooted —
     `Decomp.annot`'s `hroot`). -/
 theorem Decomp.rebuild_not_irreducible {e : CoreExpr} {ctx : context} {r : CoreExpr}
-    (hd : Decomp e ctx r) (p : generic_paction core_run_annotation Unit sym) :
-    is_irreducible (apply_ctx ctx (Expr [] (Eaction p))) = false := by
+    (hd : Decomp e ctx r) (a0 : List _root_.annot)
+    (p : generic_paction core_run_annotation Unit sym) :
+    is_irreducible (apply_ctx ctx (Expr a0 (Eaction p))) = false := by
   induction hd with
   | root _ => rfl
   | sseq _ _ => rfl
   | sseq_spec _ _ => rfl
   | sseq_sym _ _ => rfl
   | wseq _ _ => rfl
+  | bound _ _ => rfl
   | annot hroot _ _ hd _ =>
     cases hd with
     | root _ => rfl
@@ -2080,6 +2162,7 @@ theorem Decomp.rebuild_not_irreducible {e : CoreExpr} {ctx : context} {r : CoreE
     | sseq_spec _ => rfl
     | sseq_sym _ => rfl
     | wseq _ => rfl
+    | bound _ => rfl
     | annot _ _ _ _ => simp [annotRooted, apply_ctx] at hroot
 
 /-- Rebuilding a decomposition's hole with an ACTION node keeps the
@@ -2089,57 +2172,66 @@ theorem Decomp.rebuild_not_irreducible {e : CoreExpr} {ctx : context} {r : CoreE
     load/store ACTION_EVAL round is such a rebuilt arena
     (`step_ctx_load_eval_ws'`/`store_eval_ws'`). -/
 theorem Decomp.get_ctx_rebuild_action {e : CoreExpr} {ctx : context} {r : CoreExpr}
-    (hd : Decomp e ctx r) (p : generic_paction core_run_annotation Unit sym) :
+    (hd : Decomp e ctx r) (a0 : List _root_.annot)
+    (p : generic_paction core_run_annotation Unit sym) :
     ∀ n : Nat, esize e ≤ n →
-      get_ctx_lemFuel n (apply_ctx ctx (Expr [] (Eaction p))) =
-        [(ctx, Expr [] (Eaction p))] := by
+      get_ctx_lemFuel n (apply_ctx ctx (Expr a0 (Eaction p))) =
+        [(ctx, Expr a0 (Eaction p))] := by
   induction hd with
   | @root r0 hr =>
     intro n hn
     obtain ⟨m, rfl⟩ : ∃ m, n = m + 1 :=
       ⟨n - 1, by have := esize_pos r0; omega⟩
     exact get_ctx_action m
-  | @sseq pa bty e1 e2 ctx' r' hd ih =>
+  | @sseq an pa bty e1 e2 ctx' r' hd ih =>
     intro n hn
     rw [esize_sseq] at hn
     obtain ⟨m, rfl⟩ : ∃ m, n = m + 1 := ⟨n - 1, by omega⟩
     show get_ctx_lemFuel (m+1)
-      (Expr [] (Esseq (Pattern pa (CaseBase (none, bty)))
-        (apply_ctx ctx' (Expr [] (Eaction p))) e2)) = _
-    rw [get_ctx_sseq (hd.rebuild_not_irreducible p) m, ih m (by omega)]
+      (Expr an (Esseq (Pattern pa (CaseBase (none, bty)))
+        (apply_ctx ctx' (Expr a0 (Eaction p))) e2)) = _
+    rw [get_ctx_sseq (hd.rebuild_not_irreducible a0 p) m, ih m (by omega)]
     rfl
-  | @sseq_spec pa pb x bty e1 e2 ctx' r' hd ih =>
+  | @sseq_spec an pa pb x bty e1 e2 ctx' r' hd ih =>
     intro n hn
     rw [esize_sseq] at hn
     obtain ⟨m, rfl⟩ : ∃ m, n = m + 1 := ⟨n - 1, by omega⟩
     show get_ctx_lemFuel (m+1)
-      (Expr [] (Esseq (specPat pa pb x bty) (apply_ctx ctx' (Expr [] (Eaction p))) e2)) = _
-    rw [get_ctx_sseq (hd.rebuild_not_irreducible p) m, ih m (by omega)]
+      (Expr an (Esseq (specPat pa pb x bty) (apply_ctx ctx' (Expr a0 (Eaction p))) e2)) = _
+    rw [get_ctx_sseq (hd.rebuild_not_irreducible a0 p) m, ih m (by omega)]
     rfl
-  | @sseq_sym pa x bty e1 e2 ctx' r' hd ih =>
+  | @sseq_sym an pa x bty e1 e2 ctx' r' hd ih =>
     intro n hn
     rw [esize_sseq] at hn
     obtain ⟨m, rfl⟩ : ∃ m, n = m + 1 := ⟨n - 1, by omega⟩
     show get_ctx_lemFuel (m+1)
-      (Expr [] (Esseq (symPat pa x bty) (apply_ctx ctx' (Expr [] (Eaction p))) e2)) = _
-    rw [get_ctx_sseq (hd.rebuild_not_irreducible p) m, ih m (by omega)]
+      (Expr an (Esseq (symPat pa x bty) (apply_ctx ctx' (Expr a0 (Eaction p))) e2)) = _
+    rw [get_ctx_sseq (hd.rebuild_not_irreducible a0 p) m, ih m (by omega)]
     rfl
-  | @wseq pa bty e1 e2 ctx' r' hd ih =>
+  | @wseq an pa bty e1 e2 ctx' r' hd ih =>
     intro n hn
     rw [esize_wseq] at hn
     obtain ⟨m, rfl⟩ : ∃ m, n = m + 1 := ⟨n - 1, by omega⟩
     show get_ctx_lemFuel (m+1)
-      (Expr [] (Ewseq (Pattern pa (CaseBase (none, bty)))
-        (apply_ctx ctx' (Expr [] (Eaction p))) e2)) = _
-    rw [get_ctx_wseq (hd.rebuild_not_irreducible p) m, ih m (by omega)]
+      (Expr an (Ewseq (Pattern pa (CaseBase (none, bty)))
+        (apply_ctx ctx' (Expr a0 (Eaction p))) e2)) = _
+    rw [get_ctx_wseq (hd.rebuild_not_irreducible a0 p) m, ih m (by omega)]
     rfl
-  | @annot ds b ctx' r' hroot hirr hmap hd ih =>
+  | @bound an b ctx' r' hd ih =>
+    intro n hn
+    rw [esize_bound] at hn
+    obtain ⟨m, rfl⟩ : ∃ m, n = m + 1 := ⟨n - 1, by omega⟩
+    show get_ctx_lemFuel (m+1)
+      (Expr an (Ebound (apply_ctx ctx' (Expr a0 (Eaction p))))) = _
+    rw [get_ctx_bound (hd.rebuild_not_irreducible a0 p) m, ih m (by omega)]
+    rfl
+  | @annot an ds b ctx' r' hroot hirr hmap hd ih =>
     intro n hn
     rw [esize_annot] at hn
     obtain ⟨m, rfl⟩ : ∃ m, n = m + 1 := ⟨n - 1, by omega⟩
     have ih' := ih m (by omega)
     show get_ctx_lemFuel (m+1)
-      (Expr [] (Eannot ds (apply_ctx ctx' (Expr [] (Eaction p))))) = _
+      (Expr an (Eannot ds (apply_ctx ctx' (Expr a0 (Eaction p))))) = _
     -- the plain-`Eannot` arm of `get_ctx` (Core_reduction.lean:375): the
     -- body's head is a frame or the action, never an annotation
     cases hd with
@@ -2158,6 +2250,9 @@ theorem Decomp.get_ctx_rebuild_action {e : CoreExpr} {ctx : context} {r : CoreEx
     | wseq _ =>
       dsimp only [apply_ctx] at ih' ⊢
       rw [get_ctx_annot_wseq m, ih']; rfl
+    | bound _ =>
+      dsimp only [apply_ctx] at ih' ⊢
+      rw [get_ctx_annot_bound m, ih']; rfl
     | annot _ _ _ _ => simp [annotRooted, apply_ctx] at hroot
 
 /-- The right unit law of the engine's state-except monad. -/
@@ -2179,10 +2274,10 @@ value-generic; the mirror's rules select the well-typed values) -/
     engine binds through `update_env`, whose mismatch arm is a panic;
     `step_ctx_beta_spec_pure` is the `Vloaded (LVspecified _)`
     instance). -/
-theorem step_ctx_beta_spec_pure' {e : CoreExpr} {ctx : context}
+theorem step_ctx_beta_spec_pure' {an a1 b1 : List _root_.annot} {e : CoreExpr} {ctx : context}
     {pa pb : List _root_.annot} {x : sym} {bty : core_base_type}
     {v : value} {e2 : CoreExpr}
-    (hd : Decomp e ctx (Expr [] (Esseq (specPat pa pb x bty) (ofVal (.pure v)) e2)))
+    (hd : Decomp e ctx (Expr an (Esseq (specPat pa pb x bty) (ofValA (.pure a1 b1 v)) e2)))
     (hsz : esize e ≤ lemDefaultFuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
@@ -2192,29 +2287,29 @@ theorem step_ctx_beta_spec_pure' {e : CoreExpr} {ctx : context}
     (henv : th.env = ev0 :: evs) :
     step_ctx tds σ file ext tid (parent, th) =
       [Step_tau2 "Esseq" TSK_Misc
-        ({ th with
+        ({ locUpdTh an th with
             env := update_env (specPat pa pb x bty) v (ev0 :: evs),
             arena := apply_ctx ctx e2 })] := by
   have hget : get_ctx th.arena =
-      [(ctx, Expr [] (Esseq (specPat pa pb x bty) (ofVal (.pure v)) e2))] := by
+      [(ctx, Expr an (Esseq (specPat pa pb x bty) (ofValA (.pure a1 b1 v)) e2))] := by
     rw [harena]; exact hd.get_ctx_default hsz
   unfold step_ctx
   dsimp only
   rw [hget]
   simp only [List.map_cons, List.map_nil]
   cases ctx <;>
-    (simp only [one_step0, ofVal, is_irreducible_sseq, Bool.false_eq_true,
+    (simp only [one_step0, ofValA, is_irreducible_sseq, Bool.false_eq_true,
        if_false, valueFromPexpr]
-     simp only [get_loc]
-     dsimp only [update_env]
+     loc_split an) <;>
+    (dsimp only [update_env]
      rw [henv]
      try rfl)
 
 /-- LETS-ANNOT at the Specified-binder pattern, ANY bound value. -/
-theorem step_ctx_beta_spec_annot' {e : CoreExpr} {ctx : context}
+theorem step_ctx_beta_spec_annot' {an a1 a2 b1 : List _root_.annot} {e : CoreExpr} {ctx : context}
     {pa pb : List _root_.annot} {x : sym} {bty : core_base_type}
     {ds : List dyn_annotation} {v : value} {e2 : CoreExpr}
-    (hd : Decomp e ctx (Expr [] (Esseq (specPat pa pb x bty) (ofVal (.annot ds v)) e2)))
+    (hd : Decomp e ctx (Expr an (Esseq (specPat pa pb x bty) (ofValA (.annot a1 a2 b1 ds v)) e2)))
     (hsz : esize e ≤ lemDefaultFuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
@@ -2224,54 +2319,21 @@ theorem step_ctx_beta_spec_annot' {e : CoreExpr} {ctx : context}
     (henv : th.env = ev0 :: evs) :
     step_ctx tds σ file ext tid (parent, th) =
       [Step_tau2 "Esseq Eannot" TSK_Misc
-        ({ th with
+        ({ locUpdTh an th with
             env := update_env (specPat pa pb x bty) v (ev0 :: evs),
             arena := apply_ctx ctx (Expr [] (Eannot ds e2)) })] := by
   have hget : get_ctx th.arena =
-      [(ctx, Expr [] (Esseq (specPat pa pb x bty) (ofVal (.annot ds v)) e2))] := by
+      [(ctx, Expr an (Esseq (specPat pa pb x bty) (ofValA (.annot a1 a2 b1 ds v)) e2))] := by
     rw [harena]; exact hd.get_ctx_default hsz
   unfold step_ctx
   dsimp only
   rw [hget]
   simp only [List.map_cons, List.map_nil]
   cases ctx <;>
-    (simp only [one_step0, ofVal, is_irreducible_sseq, Bool.false_eq_true,
+    (simp only [one_step0, ofValA, is_irreducible_sseq, Bool.false_eq_true,
        if_false, valueFromPexpr]
-     simp only [get_loc]
-     dsimp only [update_env]
-     rw [henv]
-     try rfl)
-
-/-- LETS-ANNOT at the plain-symbol binder (the shape `Step` does not
-    mirror — Step.lean's recorded divergence): the engine's tau. -/
-theorem step_ctx_beta_sym_annot {e : CoreExpr} {ctx : context}
-    {pa : List _root_.annot} {x : sym} {bty : core_base_type}
-    {ds : List dyn_annotation} {v : value} {e2 : CoreExpr}
-    (hd : Decomp e ctx (Expr [] (Esseq (symPat pa x bty) (ofVal (.annot ds v)) e2)))
-    (hsz : esize e ≤ lemDefaultFuel)
-    (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
-    (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
-    (tid : Nat) (parent : Option Nat) (th : thread_state)
-    (harena : th.arena = e)
-    {ev0 : Fmap sym value} {evs : List (Fmap sym value)}
-    (henv : th.env = ev0 :: evs) :
-    step_ctx tds σ file ext tid (parent, th) =
-      [Step_tau2 "Esseq Eannot" TSK_Misc
-        ({ th with
-            env := update_env (symPat pa x bty) v (ev0 :: evs),
-            arena := apply_ctx ctx (Expr [] (Eannot ds e2)) })] := by
-  have hget : get_ctx th.arena =
-      [(ctx, Expr [] (Esseq (symPat pa x bty) (ofVal (.annot ds v)) e2))] := by
-    rw [harena]; exact hd.get_ctx_default hsz
-  unfold step_ctx
-  dsimp only
-  rw [hget]
-  simp only [List.map_cons, List.map_nil]
-  cases ctx <;>
-    (simp only [one_step0, ofVal, is_irreducible_sseq, Bool.false_eq_true,
-       if_false, valueFromPexpr]
-     simp only [get_loc]
-     dsimp only [update_env]
+     loc_split an) <;>
+    (dsimp only [update_env]
      rw [henv]
      try rfl)
 
@@ -2297,15 +2359,20 @@ theorem update_env_aux_spec_mismatch (pa pb : List _root_.annot) (x : sym)
 
 /-- STORE: ILLTYPED when the value does not encode at the lvalue type;
     otherwise `storeM`'s verdict — active (the mirror step) or killed. -/
-theorem complete_store {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_store {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {lk : Bool}
     {ty : ctype} {pv : CerbMem.PointerValue} {cv : value} {mo : memory_order}
-    (hd : Decomp e ctx (storeRedex loc ann lk ty pv cv mo))
+    (hd : Decomp e ctx (storeRedex an loc ann lk ty pv cv mo))
     (hsz : esize e ≤ lemDefaultFuel) (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
     RoundComplete M (e, ρ, ctl, σ) := by
-  have hnr : ∀ (ra : core_run_annotation) (l : sym) (pes : List (generic_pexpr Unit sym)),
-      storeRedex loc ann lk ty pv cv mo ≠ runRedex ra l pes := by
-    intro ra l pes h; cases h
+  have hnr : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (l : sym)
+      (pes : List (generic_pexpr Unit sym)),
+      storeRedex an loc ann lk ty pv cv mo ≠ runRedex an' ra l pes := by
+    intro an' ra l pes h; cases h
+  have hnc : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (f : sym)
+      (pes : List (generic_pexpr Unit sym)),
+      storeRedex an loc ann lk ty pv cv mo ≠ callRedex an' ra f pes := by
+    intro an' ra f pes h; cases h
   cases hmv : memValueFromValue M.tagDefs (Ctype [] (unatomic_ ty)) cv with
   | none =>
     refine .inr (.inl (.error (String.append (CerbLocation.stringFromLocation loc)
@@ -2314,7 +2381,7 @@ theorem complete_store {M : MachineCtx} {e : CoreExpr} {ctx : context}
             (String.append ") didn't match the lvalue type: "
               (CerbPP.stringFromCore_value cv))))) ?_))
     intro dst hemb
-    obtain ⟨-, hlay, -, -, -⟩ := hemb
+    obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
     simp only at hlay
     subst hlay
     exact step_ctx_store_illtyped hd hsz M.tagDefs hmv
@@ -2323,16 +2390,16 @@ theorem complete_store {M : MachineCtx} {e : CoreExpr} {ctx : context}
     cases hmem : applyMemM (CerbMem.storeM M.tagDefs loc ty lk pv mv) σ with
     | some fpσ =>
       obtain ⟨fp, σ'⟩ := fpσ
-      exact .inl ⟨_, hd.lift_step hnr (Step.store_canonical hmv hmem)⟩
+      exact .inl ⟨_, hd.lift_step hnr hnc (Step.store_canonical hmv hmem)⟩
     | none =>
       have hnone : applyMemM (CerbMem.storeM M.tagDefs
-          (requestLoc (M.thread e ρ ctl) loc) ty lk pv mv) σ = none := by
+          (requestLoc (locUpdTh an (M.thread e ρ ctl)) loc) ty lk pv mv) σ = none := by
         rw [storeM_loc_irrel loc]; exact hmem
       obtain ⟨r, σ', hk⟩ := applyMemM_none_killed (storeM_layer _ _ _ _ _ _ _) hnone
       refine .inr (.inl ?_)
       apply ShippedRefusal.killed
       intro dst hemb
-      obtain ⟨-, hlay, -, -, -⟩ := hemb
+      obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
       have hsteps := step_ctx_store hd hsz M.tagDefs hmv
@@ -2341,28 +2408,33 @@ theorem complete_store {M : MachineCtx} {e : CoreExpr} {ctx : context}
       exact ⟨_, _, hsteps, rfl, advance_action_killed (ars_store_killed hk)⟩
 
 /-- LOAD: `loadM`'s verdict — active (the mirror step) or killed. -/
-theorem complete_load {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_load {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
     {pv : CerbMem.PointerValue} {mo : memory_order}
-    (hd : Decomp e ctx (loadRedex loc ann ty pv mo))
+    (hd : Decomp e ctx (loadRedex an loc ann ty pv mo))
     (hsz : esize e ≤ lemDefaultFuel) (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
     RoundComplete M (e, ρ, ctl, σ) := by
-  have hnr : ∀ (ra : core_run_annotation) (l : sym) (pes : List (generic_pexpr Unit sym)),
-      loadRedex loc ann ty pv mo ≠ runRedex ra l pes := by
-    intro ra l pes h; cases h
+  have hnr : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (l : sym)
+      (pes : List (generic_pexpr Unit sym)),
+      loadRedex an loc ann ty pv mo ≠ runRedex an' ra l pes := by
+    intro an' ra l pes h; cases h
+  have hnc : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (f : sym)
+      (pes : List (generic_pexpr Unit sym)),
+      loadRedex an loc ann ty pv mo ≠ callRedex an' ra f pes := by
+    intro an' ra f pes h; cases h
   cases hmem : applyMemM (CerbMem.loadM M.tagDefs loc ty pv) σ with
   | some r =>
     obtain ⟨⟨fp, mval⟩, σ'⟩ := r
-    exact .inl ⟨_, hd.lift_step hnr (Step.load_canonical hmem)⟩
+    exact .inl ⟨_, hd.lift_step hnr hnc (Step.load_canonical hmem)⟩
   | none =>
     have hnone : applyMemM (CerbMem.loadM M.tagDefs
-        (requestLoc (M.thread e ρ ctl) loc) ty pv) σ = none := by
+        (requestLoc (locUpdTh an (M.thread e ρ ctl)) loc) ty pv) σ = none := by
       rw [loadM_loc_irrel loc]; exact hmem
     obtain ⟨r, σ', hk⟩ := applyMemM_none_killed (loadM_layer _ _ _ _ _) hnone
     refine .inr (.inl ?_)
     apply ShippedRefusal.killed
     intro dst hemb
-    obtain ⟨-, hlay, -, -, -⟩ := hemb
+    obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
     simp only at hlay
     subst hlay
     have hsteps := step_ctx_load hd hsz M.tagDefs
@@ -2372,25 +2444,30 @@ theorem complete_load {M : MachineCtx} {e : CoreExpr} {ctx : context}
 
 /-- CREATE: `allocateObject`'s verdict — active (the mirror step) or
     the out-of-memory kill. -/
-theorem complete_create {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_create {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation}
     {align : CerbMem.IntegerValue} {ty : ctype} {pref : prefix0}
-    (hd : Decomp e ctx (createRedex loc ann align ty pref))
+    (hd : Decomp e ctx (createRedex an loc ann align ty pref))
     (hsz : esize e ≤ lemDefaultFuel) (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
     RoundComplete M (e, ρ, ctl, σ) := by
-  have hnr : ∀ (ra : core_run_annotation) (l : sym) (pes : List (generic_pexpr Unit sym)),
-      createRedex loc ann align ty pref ≠ runRedex ra l pes := by
-    intro ra l pes h; cases h
+  have hnr : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (l : sym)
+      (pes : List (generic_pexpr Unit sym)),
+      createRedex an loc ann align ty pref ≠ runRedex an' ra l pes := by
+    intro an' ra l pes h; cases h
+  have hnc : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (f : sym)
+      (pes : List (generic_pexpr Unit sym)),
+      createRedex an loc ann align ty pref ≠ callRedex an' ra f pes := by
+    intro an' ra f pes h; cases h
   cases hmem : applyMemM (CerbMem.allocateObject M.tagDefs 0 pref align ty none none) σ with
   | some r =>
     obtain ⟨pv, σ'⟩ := r
-    exact .inl ⟨_, hd.lift_step hnr (Step.create_canonical hmem)⟩
+    exact .inl ⟨_, hd.lift_step hnr hnc (Step.create_canonical hmem)⟩
   | none =>
     obtain ⟨r, σ', hk⟩ := applyMemM_none_killed (allocateObject_layer _ _ _ _ _ _ _ _) hmem
     refine .inr (.inl ?_)
     apply ShippedRefusal.killed
     intro dst hemb
-    obtain ⟨-, hlay, -, -, -⟩ := hemb
+    obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
     simp only at hlay
     subst hlay
     have hsteps := step_ctx_create hd hsz M.tagDefs
@@ -2405,28 +2482,33 @@ theorem complete_create {M : MachineCtx} {e : CoreExpr} {ctx : context}
     path, other provenance; UB179b dead; the non-UB out-of-bound
     `Other`). Stated at any `kind`: the static restriction is
     `Frag.kill`'s, not the engine's. -/
-theorem complete_kill {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_kill {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {kind : kill_kind}
     {pv : CerbMem.PointerValue}
-    (hd : Decomp e ctx (killRedex loc ann kind pv))
+    (hd : Decomp e ctx (killRedex an loc ann kind pv))
     (hsz : esize e ≤ lemDefaultFuel) (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
     RoundComplete M (e, ρ, ctl, σ) := by
-  have hnr : ∀ (ra : core_run_annotation) (l : sym) (pes : List (generic_pexpr Unit sym)),
-      killRedex loc ann kind pv ≠ runRedex ra l pes := by
-    intro ra l pes h; cases h
+  have hnr : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (l : sym)
+      (pes : List (generic_pexpr Unit sym)),
+      killRedex an loc ann kind pv ≠ runRedex an' ra l pes := by
+    intro an' ra l pes h; cases h
+  have hnc : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (f : sym)
+      (pes : List (generic_pexpr Unit sym)),
+      killRedex an loc ann kind pv ≠ callRedex an' ra f pes := by
+    intro an' ra f pes h; cases h
   cases hmem : applyMemM (CerbMem.killM loc (is_dynamic kind) pv) σ with
   | some uσ =>
     obtain ⟨⟨⟩, σ'⟩ := uσ
-    exact .inl ⟨_, hd.lift_step hnr (Step.kill_canonical hmem)⟩
+    exact .inl ⟨_, hd.lift_step hnr hnc (Step.kill_canonical hmem)⟩
   | none =>
     have hnone : applyMemM (CerbMem.killM
-        (requestLoc (M.thread e ρ ctl) loc) (is_dynamic kind) pv) σ = none := by
+        (requestLoc (locUpdTh an (M.thread e ρ ctl)) loc) (is_dynamic kind) pv) σ = none := by
       rw [killM_loc_irrel loc]; exact hmem
     obtain ⟨r, σ', hk⟩ := applyMemM_none_killed (killM_layer _ _ _ _) hnone
     refine .inr (.inl ?_)
     apply ShippedRefusal.killed
     intro dst hemb
-    obtain ⟨-, hlay, -, -, -⟩ := hemb
+    obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
     simp only at hlay
     subst hlay
     have hsteps := step_ctx_kill hd hsz M.tagDefs
@@ -2437,25 +2519,30 @@ theorem complete_kill {M : MachineCtx} {e : CoreExpr} {ctx : context}
 /-- ALLOC (kill/free arc K3): `allocateRegion`'s verdict — active (the
     mirror step) or the out-of-memory kill, its ONLY refusal
     (`allocateRegion_killed_inv`). -/
-theorem complete_alloc {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_alloc {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation}
     {align size : CerbMem.IntegerValue} {pref : prefix0}
-    (hd : Decomp e ctx (allocRedex loc ann align size pref))
+    (hd : Decomp e ctx (allocRedex an loc ann align size pref))
     (hsz : esize e ≤ lemDefaultFuel) (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
     RoundComplete M (e, ρ, ctl, σ) := by
-  have hnr : ∀ (ra : core_run_annotation) (l : sym) (pes : List (generic_pexpr Unit sym)),
-      allocRedex loc ann align size pref ≠ runRedex ra l pes := by
-    intro ra l pes h; cases h
+  have hnr : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (l : sym)
+      (pes : List (generic_pexpr Unit sym)),
+      allocRedex an loc ann align size pref ≠ runRedex an' ra l pes := by
+    intro an' ra l pes h; cases h
+  have hnc : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (f : sym)
+      (pes : List (generic_pexpr Unit sym)),
+      allocRedex an loc ann align size pref ≠ callRedex an' ra f pes := by
+    intro an' ra f pes h; cases h
   cases hmem : applyMemM (CerbMem.allocateRegion 0 pref align size) σ with
   | some r =>
     obtain ⟨pv, σ'⟩ := r
-    exact .inl ⟨_, hd.lift_step hnr (Step.alloc_canonical hmem)⟩
+    exact .inl ⟨_, hd.lift_step hnr hnc (Step.alloc_canonical hmem)⟩
   | none =>
     obtain ⟨r, σ', hk⟩ := applyMemM_none_killed (allocateRegion_layer _ _ _ _ _) hmem
     refine .inr (.inl ?_)
     apply ShippedRefusal.killed
     intro dst hemb
-    obtain ⟨-, hlay, -, -, -⟩ := hemb
+    obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
     simp only at hlay
     subst hlay
     have hsteps := step_ctx_alloc hd hsz M.tagDefs
@@ -2464,63 +2551,63 @@ theorem complete_alloc {M : MachineCtx} {e : CoreExpr} {ctx : context}
     exact ⟨_, _, hsteps, rfl, advance_action_killed (ars_alloc_killed hk)⟩
 
 /-- LETS-PURE at the wildcard pattern: always a mirror step (cons env). -/
-theorem complete_beta_pure {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_beta_pure {an a1 b1 : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {pa : List _root_.annot} {bty : core_base_type} {v : value} {e2 : CoreExpr}
-    (hd : Decomp e ctx (Expr [] (Esseq (Pattern pa (CaseBase (none, bty))) (ofVal (.pure v)) e2)))
+    (hd : Decomp e ctx (Expr an (Esseq (Pattern pa (CaseBase (none, bty))) (ofValA (.pure a1 b1 v)) e2)))
     (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (ctl : Ctl) (σ : Mem) :
     RoundComplete M (e, ev0 :: evs, ctl, σ) :=
-  .inl ⟨_, hd.lift_step (fun _ _ _ h => by cases h) Step.sseq_pure⟩
+  .inl ⟨_, hd.lift_step (fun _ _ _ _ h => by cases h) (fun _ _ _ _ h => by cases h) Step.sseq_pure⟩
 
 /-- LETS-ANNOT at the wildcard pattern: always a mirror step. -/
-theorem complete_beta_annot {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_beta_annot {an a1 a2 b1 : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {pa : List _root_.annot} {bty : core_base_type} {ds : List dyn_annotation}
     {v : value} {e2 : CoreExpr}
-    (hd : Decomp e ctx (Expr [] (Esseq (Pattern pa (CaseBase (none, bty))) (ofVal (.annot ds v)) e2)))
+    (hd : Decomp e ctx (Expr an (Esseq (Pattern pa (CaseBase (none, bty))) (ofValA (.annot a1 a2 b1 ds v)) e2)))
     (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (ctl : Ctl) (σ : Mem) :
     RoundComplete M (e, ev0 :: evs, ctl, σ) :=
-  .inl ⟨_, hd.lift_step (fun _ _ _ h => by cases h) Step.sseq_annot⟩
+  .inl ⟨_, hd.lift_step (fun _ _ _ _ h => by cases h) (fun _ _ _ _ h => by cases h) Step.sseq_annot⟩
 
 /-- LETW-PURE at the wildcard pattern: always a mirror step. -/
-theorem complete_wbeta_pure {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_wbeta_pure {an a1 b1 : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {pa : List _root_.annot} {bty : core_base_type} {v : value} {e2 : CoreExpr}
-    (hd : Decomp e ctx (Expr [] (Ewseq (Pattern pa (CaseBase (none, bty))) (ofVal (.pure v)) e2)))
+    (hd : Decomp e ctx (Expr an (Ewseq (Pattern pa (CaseBase (none, bty))) (ofValA (.pure a1 b1 v)) e2)))
     (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (ctl : Ctl) (σ : Mem) :
     RoundComplete M (e, ev0 :: evs, ctl, σ) :=
-  .inl ⟨_, hd.lift_step (fun _ _ _ h => by cases h) Step.wseq_pure⟩
+  .inl ⟨_, hd.lift_step (fun _ _ _ _ h => by cases h) (fun _ _ _ _ h => by cases h) Step.wseq_pure⟩
 
 /-- LETW-ANNOT at the wildcard pattern: always a mirror step. -/
-theorem complete_wbeta_annot {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_wbeta_annot {an a1 a2 b1 : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {pa : List _root_.annot} {bty : core_base_type} {ds : List dyn_annotation}
     {v : value} {e2 : CoreExpr}
-    (hd : Decomp e ctx (Expr [] (Ewseq (Pattern pa (CaseBase (none, bty))) (ofVal (.annot ds v)) e2)))
+    (hd : Decomp e ctx (Expr an (Ewseq (Pattern pa (CaseBase (none, bty))) (ofValA (.annot a1 a2 b1 ds v)) e2)))
     (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (ctl : Ctl) (σ : Mem) :
     RoundComplete M (e, ev0 :: evs, ctl, σ) :=
-  .inl ⟨_, hd.lift_step (fun _ _ _ h => by cases h) Step.wseq_annot⟩
+  .inl ⟨_, hd.lift_step (fun _ _ _ _ h => by cases h) (fun _ _ _ _ h => by cases h) Step.wseq_annot⟩
 
 /-- ANNOTS merge: always a mirror step. -/
-theorem complete_merge {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_merge {an a2 : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {ds1 ds2 : List dyn_annotation} {b : CoreExpr}
-    (hd : Decomp e ctx (Expr [] (Eannot ds1 (Expr [] (Eannot ds2 b)))))
+    (hd : Decomp e ctx (Expr an (Eannot ds1 (Expr a2 (Eannot ds2 b)))))
     (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
     RoundComplete M (e, ρ, ctl, σ) :=
-  .inl ⟨_, hd.lift_step (fun _ _ _ h => by cases h) Step.annot_merge⟩
+  .inl ⟨_, hd.lift_step (fun _ _ _ _ h => by cases h) (fun _ _ _ _ h => by cases h) Step.annot_merge⟩
 
 /-- CASE at a value scrutinee: the selected branch (the mirror step) or
     the ILLTYPED no-match report. -/
-theorem complete_case {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_case {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {b : List _root_.annot} {cval : value} {pats : List (pattern × CoreExpr)}
-    (hd : Decomp e ctx (caseRedex (Pexpr b () (PEval cval)) pats))
+    (hd : Decomp e ctx (caseRedex an (Pexpr b () (PEval cval)) pats))
     (hsz : esize e ≤ lemDefaultFuel) (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
     RoundComplete M (e, ρ, ctl, σ) := by
   cases hsel : select_case subst_sym_expr cval pats with
   | some e' =>
-    exact .inl ⟨_, hd.lift_step (fun _ _ _ h => by cases h)
+    exact .inl ⟨_, hd.lift_step (fun _ _ _ _ h => by cases h) (fun _ _ _ _ h => by cases h)
       (Step.case_value (valueFromPexpr_val _ _) hsel)⟩
   | none =>
     refine .inr (.inl (.error (String.append "Ecase, mismatched ==> "
-      (CerbPP.stringFromCore_expr (caseRedex (Pexpr b () (PEval cval)) pats))) ?_))
+      (CerbPP.stringFromCore_expr (caseRedex an (Pexpr b () (PEval cval)) pats))) ?_))
     intro dst hemb
-    obtain ⟨-, hlay, -, -, -⟩ := hemb
+    obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
     simp only at hlay
     subst hlay
     exact step_ctx_case_illtyped hd hsz hsel M.tagDefs
@@ -2529,41 +2616,46 @@ theorem complete_case {M : MachineCtx} {e : CoreExpr} {ctx : context}
 /-- LETS at the Specified binder, any bound value: a `Specified` payload
     (bare or annotated) is the mirror step; any other value is the
     binding PANIC (`update_env_aux`'s mismatch arm). -/
-theorem complete_beta_spec {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_beta_spec {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {pa pb : List _root_.annot} {x : sym} {bty : core_base_type}
-    {w : SpikeVal} {e2 : CoreExpr}
-    (hd : Decomp e ctx (Expr [] (Esseq (specPat pa pb x bty) (ofVal w) e2)))
+    {wa : SpikeValA} {e2 : CoreExpr}
+    (hd : Decomp e ctx (Expr an (Esseq (specPat pa pb x bty) (ofValA wa) e2)))
     (hsz : esize e ≤ lemDefaultFuel)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (ctl : Ctl) (σ : Mem) :
     RoundComplete M (e, ev0 :: evs, ctl, σ) := by
-  have hnr : ∀ (ra : core_run_annotation) (l : sym) (pes : List (generic_pexpr Unit sym)),
-      Expr [] (Esseq (specPat pa pb x bty) (ofVal w) e2) ≠ runRedex ra l pes := by
-    intro ra l pes h; cases h
-  cases w with
-  | pure v =>
+  have hnr : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (l : sym)
+      (pes : List (generic_pexpr Unit sym)),
+      Expr an (Esseq (specPat pa pb x bty) (ofValA wa) e2) ≠ runRedex an' ra l pes := by
+    intro an' ra l pes h; cases h
+  have hnc : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (f : sym)
+      (pes : List (generic_pexpr Unit sym)),
+      Expr an (Esseq (specPat pa pb x bty) (ofValA wa) e2) ≠ callRedex an' ra f pes := by
+    intro an' ra f pes h; cases h
+  cases wa with
+  | pure a1 b1 v =>
     by_cases hspec : ∃ ov, v = Vloaded (LVspecified ov)
     · obtain ⟨ov, rfl⟩ := hspec
-      exact .inl ⟨_, hd.lift_step hnr Step.sseq_spec_pure⟩
+      exact .inl ⟨_, hd.lift_step hnr hnc Step.sseq_spec_pure⟩
     · obtain ⟨msg, hmsg⟩ := update_env_aux_spec_mismatch pa pb x bty v ev0
         (fun ov h => hspec ⟨ov, h⟩)
       refine .inr (.inl (.panic_env msg ?_))
       intro dst hemb
-      obtain ⟨-, hlay, -, -, -⟩ := hemb
+      obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
       refine ⟨_, _, evs, step_ctx_beta_spec_pure' hd hsz M.tagDefs dst.layout_state
         dst.core_file dst.core_extern M.tid M.parent (M.thread _ (ev0 :: evs) ctl) rfl rfl, ?_⟩
       show update_env (specPat pa pb x bty) v (ev0 :: evs) = _
       rw [update_env_cons, hmsg]
-  | annot ds v =>
+  | annot a1 a2 b1 ds v =>
     by_cases hspec : ∃ ov, v = Vloaded (LVspecified ov)
     · obtain ⟨ov, rfl⟩ := hspec
-      exact .inl ⟨_, hd.lift_step hnr Step.sseq_spec_annot⟩
+      exact .inl ⟨_, hd.lift_step hnr hnc Step.sseq_spec_annot⟩
     · obtain ⟨msg, hmsg⟩ := update_env_aux_spec_mismatch pa pb x bty v ev0
         (fun ov h => hspec ⟨ov, h⟩)
       refine .inr (.inl (.panic_env msg ?_))
       intro dst hemb
-      obtain ⟨-, hlay, -, -, -⟩ := hemb
+      obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
       refine ⟨_, _, evs, step_ctx_beta_spec_annot' hd hsz M.tagDefs dst.layout_state
@@ -2571,22 +2663,44 @@ theorem complete_beta_spec {M : MachineCtx} {e : CoreExpr} {ctx : context}
       show update_env (specPat pa pb x bty) v (ev0 :: evs) = _
       rw [update_env_cons, hmsg]
 
-/-- LETS at the plain-symbol binder: the fragment admits only
-    `BareHead` heads there (`Frag.sseq_sym`), so the value reaching the
-    binder is BARE and the beta always steps. The engine's LETS-ANNOT
-    beta at this binder (`step_ctx_beta_sym_annot`) is unreachable in
-    `Frag` (`BareHead.not_annot`) — the fragment-closure disposition of
-    the former gap (a). -/
-theorem complete_beta_sym {M : MachineCtx} {e : CoreExpr} {ctx : context}
+/-- LETS at the plain-symbol binder, ANY value (E1): both betas are
+    mirror steps (`Step.sseq_sym_pure`, `Step.sseq_sym_annot`) — the
+    pre-E1 `BareHead` restriction and its OUT-OF-SCOPE row are retired. -/
+theorem complete_beta_sym {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {pa : List _root_.annot} {x : sym} {bty : core_base_type}
-    {v : value} {e2 : CoreExpr}
-    (hd : Decomp e ctx (Expr [] (Esseq (symPat pa x bty) (ofVal (.pure v)) e2)))
+    {wa : SpikeValA} {e2 : CoreExpr}
+    (hd : Decomp e ctx (Expr an (Esseq (symPat pa x bty) (ofValA wa) e2)))
     (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (ctl : Ctl) (σ : Mem) :
     RoundComplete M (e, ev0 :: evs, ctl, σ) := by
-  have hnr : ∀ (ra : core_run_annotation) (l : sym) (pes : List (generic_pexpr Unit sym)),
-      Expr [] (Esseq (symPat pa x bty) (ofVal (.pure v)) e2) ≠ runRedex ra l pes := by
-    intro ra l pes h; cases h
-  exact .inl ⟨_, hd.lift_step hnr Step.sseq_sym_pure⟩
+  have hnr : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (l : sym)
+      (pes : List (generic_pexpr Unit sym)),
+      Expr an (Esseq (symPat pa x bty) (ofValA wa) e2) ≠ runRedex an' ra l pes := by
+    intro an' ra l pes h; cases h
+  have hnc : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (f : sym)
+      (pes : List (generic_pexpr Unit sym)),
+      Expr an (Esseq (symPat pa x bty) (ofValA wa) e2) ≠ callRedex an' ra f pes := by
+    intro an' ra f pes h; cases h
+  cases wa with
+  | pure a1 b1 v => exact .inl ⟨_, hd.lift_step hnr hnc Step.sseq_sym_pure⟩
+  | annot a1 a2 b1 ds v => exact .inl ⟨_, hd.lift_step hnr hnc Step.sseq_sym_annot⟩
+
+/-- E1: REMOVE-BOUND at a bare value — always a mirror step. -/
+theorem complete_bound_pure {an a1 b1 : List _root_.annot} {M : MachineCtx} {e : CoreExpr}
+    {ctx : context} {v : value}
+    (hd : Decomp e ctx (Expr an (Ebound (ofValA (.pure a1 b1 v)))))
+    (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
+    RoundComplete M (e, ρ, ctl, σ) :=
+  .inl ⟨_, hd.lift_step (fun _ _ _ _ h => by cases h) (fun _ _ _ _ h => by cases h)
+    Step.bound_pure⟩
+
+/-- E1: REMOVE-BOUND at an annotated value — always a mirror step. -/
+theorem complete_bound_annot {an a1 a2 b1 : List _root_.annot} {M : MachineCtx} {e : CoreExpr}
+    {ctx : context} {ds : List dyn_annotation} {v : value}
+    (hd : Decomp e ctx (Expr an (Ebound (ofValA (.annot a1 a2 b1 ds v)))))
+    (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
+    RoundComplete M (e, ρ, ctl, σ) :=
+  .inl ⟨_, hd.lift_step (fun _ _ _ _ h => by cases h) (fun _ _ _ _ h => by cases h)
+    Step.bound_annot⟩
 
 /-! ### The operand-evaluation rows: shape lemmas (the engine's step is
 the with-runstate evaluation step whatever the operand evaluates to)
@@ -2594,9 +2708,9 @@ and the panic variants -/
 
 /-- Eif: the engine's step at any guard is ONE `RSK_tau _ TSK_Misc`
     with-runstate step (shape only). -/
-theorem step_ctx_if_shape {e : CoreExpr} {ctx : context}
+theorem step_ctx_if_shape {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {g : generic_pexpr Unit sym} {e2 e3 : CoreExpr}
-    (hd : Decomp e ctx (ifRedex g e2 e3))
+    (hd : Decomp e ctx (ifRedex an g e2 e3))
     (hsz : esize e ≤ lemDefaultFuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
@@ -2605,7 +2719,7 @@ theorem step_ctx_if_shape {e : CoreExpr} {ctx : context}
     ∃ (s : String) (m : core_runM thread_state),
       step_ctx tds σ file ext tid (parent, th) =
         [Step_with_runstate2 (RSK_tau s TSK_Misc) m] := by
-  have hget : get_ctx th.arena = [(ctx, ifRedex g e2 e3)] := by
+  have hget : get_ctx th.arena = [(ctx, ifRedex an g e2 e3)] := by
     rw [harena]; exact hd.get_ctx_default hsz
   unfold step_ctx
   dsimp only
@@ -2614,9 +2728,8 @@ theorem step_ctx_if_shape {e : CoreExpr} {ctx : context}
   unfold ifRedex
   cases ctx <;>
     (dsimp only [one_step0]
-     rw [show is_irreducible (Expr ([] : List annot) (Eif g e2 e3)) = false
+     rw [show is_irreducible (Expr an (Eif g e2 e3)) = false
        from rfl]
-     dsimp only [get_loc]
      exact ⟨_, _, rfl⟩)
 
 /-- Eif at a guard that evaluates to a NON-BOOLEAN value: the redex's
@@ -2624,9 +2737,9 @@ theorem step_ctx_if_shape {e : CoreExpr} {ctx : context}
     Core_reduction.lean:353: "TODO(use the core_runM) ILLTYPED, the
     first operand of an Eif didn't evaluated to a boolean"), under
     step_ctx's TAU_WITH_RUNSTATE wrapper. -/
-theorem step_ctx_if_panic {e : CoreExpr} {ctx : context}
+theorem step_ctx_if_panic {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {g : generic_pexpr Unit sym} {e2 e3 : CoreExpr} {v : value}
-    (hd : Decomp e ctx (ifRedex g e2 e3))
+    (hd : Decomp e ctx (ifRedex an g e2 e3))
     (hsz : esize e ≤ lemDefaultFuel)
     (hdg : peDepth g ≤ lemDefaultFuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
@@ -2647,7 +2760,7 @@ theorem step_ctx_if_panic {e : CoreExpr} {ctx : context}
         [Step_with_runstate2 (RSK_tau s TSK_Misc) m] ∧
       m = stExceptUndef_bind step_m k ∧
       ∀ rs, step_m rs = @failwithI _ inst msg rs := by
-  have hget : get_ctx th.arena = [(ctx, ifRedex g e2 e3)] := by
+  have hget : get_ctx th.arena = [(ctx, ifRedex an g e2 e3)] := by
     rw [harena]; exact hd.get_ctx_default hsz
   unfold step_ctx
   dsimp only
@@ -2656,9 +2769,8 @@ theorem step_ctx_if_panic {e : CoreExpr} {ctx : context}
   unfold ifRedex
   cases ctx <;>
     (dsimp only [one_step0]
-     rw [show is_irreducible (Expr ([] : List annot) (Eif g e2 e3)) = false
+     rw [show is_irreducible (Expr an (Eif g e2 e3)) = false
        from rfl]
-     dsimp only [get_loc]
      exact ⟨_, _, _, _, _, _, rfl, rfl, fun rs => by
        rw [stExceptUndef_bind_apply, full_eval_bridge hg hdg σ file,
          stExceptUndef_return_apply]
@@ -2669,9 +2781,9 @@ theorem step_ctx_if_panic {e : CoreExpr} {ctx : context}
 
 /-- Erun: the engine's step at a current procedure is ONE `RSK_eval`
     with-runstate step (shape only). -/
-theorem step_ctx_run_shape {e : CoreExpr} {ctx : context}
+theorem step_ctx_run_shape {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {ra : core_run_annotation} {l : sym} {pes : List (generic_pexpr Unit sym)}
-    (hd : Decomp e ctx (runRedex ra l pes))
+    (hd : Decomp e ctx (runRedex an ra l pes))
     (hsz : esize e ≤ lemDefaultFuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
@@ -2680,7 +2792,7 @@ theorem step_ctx_run_shape {e : CoreExpr} {ctx : context}
     ∃ (s : String) (m : core_runM thread_state),
       step_ctx tds σ file ext tid (parent, th) =
         [Step_with_runstate2 (RSK_eval s) m] := by
-  have hget : get_ctx th.arena = [(ctx, runRedex ra l pes)] := by
+  have hget : get_ctx th.arena = [(ctx, runRedex an ra l pes)] := by
     rw [harena]; exact hd.get_ctx_default hsz
   unfold step_ctx
   dsimp only
@@ -2688,16 +2800,15 @@ theorem step_ctx_run_shape {e : CoreExpr} {ctx : context}
   simp only [List.map_cons, List.map_nil]
   unfold runRedex
   cases ctx <;>
-    (dsimp only [get_loc]
-     exact ⟨_, _, rfl⟩)
+    (exact ⟨_, _, rfl⟩)
 
 /-- Erun at a label the run state's two-level `labeled` table does not
     resolve (at the extern-resolved current procedure): the step's monad
     IS the engine's panic "Erun couldn't resolve label" (step_ctx's Erun
     arm, Core_reduction.lean:484). -/
-theorem step_ctx_run_unresolved {e : CoreExpr} {ctx : context}
+theorem step_ctx_run_unresolved {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {ra : core_run_annotation} {l : sym} {pes : List (generic_pexpr Unit sym)}
-    (hd : Decomp e ctx (runRedex ra l pes))
+    (hd : Decomp e ctx (runRedex an ra l pes))
     (hsz : esize e ≤ lemDefaultFuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
@@ -2716,30 +2827,30 @@ theorem step_ctx_run_unresolved {e : CoreExpr} {ctx : context}
       step_ctx tds σ file ext tid (parent, th) =
         [Step_with_runstate2 (RSK_eval s) m] ∧
       m rs = @failwithI _ inst msg rs := by
-  have hget : get_ctx th.arena = [(ctx, runRedex ra l pes)] := by
+  have hget : get_ctx th.arena = [(ctx, runRedex an ra l pes)] := by
     rw [harena]; exact hd.get_ctx_default hsz
   unfold step_ctx
   dsimp only
   rw [hget]
   simp only [List.map_cons, List.map_nil]
   unfold runRedex
-  cases ctx <;>
-    (dsimp only [get_loc]
+  cases ctx <;> (loc_split an) <;>
+    (try dsimp only
      rw [hproc]
      exact ⟨_, _, _, _, rfl, by
        rw [stExceptUndef_bind_apply, runSE_read_apply]
-       dsimp only []
+       try dsimp only []
        cases hres : fmapLookupBy (fun (sym1 : sym) (sym2 : sym) =>
            Lem_Basic_classes.ordCompare sym1 sym2) p ext with
        | none =>
          rw [show resolveExtern ext p = p by
            unfold resolveExtern; rw [hres]] at hnone
-         dsimp only []
+         try dsimp only []
          rw [hnone]
        | some y =>
          rw [show resolveExtern ext p = y by
            unfold resolveExtern; rw [hres]] at hnone
-         dsimp only []
+         try dsimp only []
          rw [hnone]⟩)
 
 /-- Erun at a thread WITHOUT a current procedure: the step's monad is
@@ -2748,9 +2859,9 @@ theorem step_ctx_run_unresolved {e : CoreExpr} {ctx : context}
     Core_reduction.lean:484 — `current_proc := failwithI …`, then the
     extern-resolved lookup at that key), bound to the arm's
     continuation. -/
-theorem step_ctx_run_noproc {e : CoreExpr} {ctx : context}
+theorem step_ctx_run_noproc {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {ra : core_run_annotation} {l : sym} {pes : List (generic_pexpr Unit sym)}
-    (hd : Decomp e ctx (runRedex ra l pes))
+    (hd : Decomp e ctx (runRedex an ra l pes))
     (hsz : esize e ≤ lemDefaultFuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
@@ -2772,26 +2883,26 @@ theorem step_ctx_run_noproc {e : CoreExpr} {ctx : context}
                 (fmapLookupBy (fun (s1 : sym) (s2 : sym) =>
                   Lem_Basic_classes.ordCompare s1 s2) l))))
             k)] := by
-  have hget : get_ctx th.arena = [(ctx, runRedex ra l pes)] := by
+  have hget : get_ctx th.arena = [(ctx, runRedex an ra l pes)] := by
     rw [harena]; exact hd.get_ctx_default hsz
   unfold step_ctx
   dsimp only
   rw [hget]
   simp only [List.map_cons, List.map_nil]
   unfold runRedex
-  cases ctx <;>
-    (dsimp only [get_loc]
+  cases ctx <;> (loc_split an) <;>
+    (try dsimp only
      rw [hproc]
      exact ⟨_, _, _, rfl⟩)
 
 /-- Esave with non-value initializers: the engine's step is ONE
     `RSK_eval` with-runstate step (shape only). -/
-theorem step_ctx_save_eval_shape {e : CoreExpr} {ctx : context}
+theorem step_ctx_save_eval_shape {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {sb : sym × core_base_type}
     {ps : List (sym × ((core_base_type ×
       Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym))}
     {body : CoreExpr}
-    (hd : Decomp e ctx (saveRedex sb ps body))
+    (hd : Decomp e ctx (saveRedex an sb ps body))
     (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexprs (saveParamPexprs ps) = none)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
@@ -2801,7 +2912,7 @@ theorem step_ctx_save_eval_shape {e : CoreExpr} {ctx : context}
     ∃ (s : String) (m : core_runM thread_state),
       step_ctx tds σ file ext tid (parent, th) =
         [Step_with_runstate2 (RSK_eval s) m] := by
-  have hget : get_ctx th.arena = [(ctx, saveRedex sb ps body)] := by
+  have hget : get_ctx th.arena = [(ctx, saveRedex an sb ps body)] := by
     rw [harena]; exact hd.get_ctx_default hsz
   have hnv' : valueFromPexprs
       (List.map (fun p => match p with | (_, (_, z)) => z) ps) = none := by
@@ -2816,17 +2927,16 @@ theorem step_ctx_save_eval_shape {e : CoreExpr} {ctx : context}
   unfold saveRedex
   cases ctx <;>
     (dsimp only [one_step0]
-     rw [show is_irreducible (Expr [] (Esave sb ps body)) = false from rfl]
-     dsimp only [get_loc]
+     rw [show is_irreducible (Expr an (Esave sb ps body)) = false from rfl]
      rw [hnv']
      simp only [Bool.false_eq_true, if_false]
      exact ⟨_, _, rfl⟩)
 
 /-- PURE at a symbol: the engine's step is ONE `RSK_eval` with-runstate
     step (shape only). -/
-theorem step_ctx_pure_sym_shape {e : CoreExpr} {ctx : context}
+theorem step_ctx_pure_sym_shape {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {pb : List _root_.annot} {x : sym}
-    (hd : Decomp e ctx (pureRedex (Pexpr pb () (PEsym x))))
+    (hd : Decomp e ctx (pureRedex an (Pexpr pb () (PEsym x))))
     (hsz : esize e ≤ lemDefaultFuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
@@ -2836,7 +2946,7 @@ theorem step_ctx_pure_sym_shape {e : CoreExpr} {ctx : context}
       step_ctx tds σ file ext tid (parent, th) =
         [Step_with_runstate2 (RSK_eval s) m] := by
   have hget : get_ctx th.arena =
-      [(ctx, pureRedex (Pexpr pb () (PEsym x)))] := by
+      [(ctx, pureRedex an (Pexpr pb () (PEsym x)))] := by
     rw [harena]; exact hd.get_ctx_default hsz
   unfold step_ctx
   dsimp only
@@ -2846,16 +2956,15 @@ theorem step_ctx_pure_sym_shape {e : CoreExpr} {ctx : context}
   cases ctx <;>
     (dsimp only [one_step0, is_irreducible, valueFromPexpr]
      simp only [Bool.false_eq_true, if_false]
-     dsimp only [get_loc]
      exact ⟨_, _, rfl⟩)
 
 /-- Load ACTION_EVAL at ANY evaluated pointer-operand value: the raw
     with-runstate singleton rebuilding the action with the value
     (`step_ctx_load_eval_ws` is the pointer instance). -/
-theorem step_ctx_load_eval_ws' {e : CoreExpr} {ctx : context}
+theorem step_ctx_load_eval_ws' {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
     {pe2 : generic_pexpr Unit sym} {mo : memory_order} {v : value}
-    (hd : Decomp e ctx (loadOpRedex loc ann ty pe2 mo))
+    (hd : Decomp e ctx (loadOpRedex an loc ann ty pe2 mo))
     (hsz : esize e ≤ lemDefaultFuel)
     (hnv2 : valueFromPexpr pe2 = none)
     (hp2 : PePure pe2)
@@ -2868,34 +2977,33 @@ theorem step_ctx_load_eval_ws' {e : CoreExpr} {ctx : context}
     ∃ (s : String) (m : core_runM thread_state),
       step_ctx tds σ file ext tid (parent, th) =
         [Step_with_runstate2 (RSK_eval s) m] ∧
-      ∀ rs, m rs = Result (Defined { th with
-        arena := apply_ctx ctx (Expr [] (Eaction (Paction polarity.Pos (Action loc ann
+      ∀ rs, m rs = Result (Defined { locUpdTh an th with
+        arena := apply_ctx ctx (Expr an (Eaction (Paction polarity.Pos (Action loc ann
           (Load0 (Pexpr [] () (PEval (Vctype ty))) (Pexpr [] () (PEval v)) mo))))) }, rs) := by
-  have hget : get_ctx th.arena = [(ctx, loadOpRedex loc ann ty pe2 mo)] := by
+  have hget : get_ctx th.arena = [(ctx, loadOpRedex an loc ann ty pe2 mo)] := by
     rw [harena]; exact hd.get_ctx_default hsz
   unfold step_ctx
   dsimp only
   rw [hget]
   simp only [List.map_cons, List.map_nil]
   unfold loadOpRedex
-  cases ctx <;>
-    (dsimp only [get_loc]
-     dsimp only [step_action]
-     rw [act_valueFromPexpr_none hp2 hnv2]
+  cases ctx <;> dsimp only [step_action]
+  all_goals (
+    (rw [act_valueFromPexpr_none hp2 hnv2]
      dsimp only [act_valueFromPexpr, valueFromPexpr]
      refine ⟨_, _, rfl, fun rs => ?_⟩
      rw [full_eval_bridge (v := Vctype ty) rfl (peDepth_val_le _ _) σ file,
-       full_eval_bridge hv2 hd2 σ file]
+     full_eval_bridge hv2 hd2 σ file]
      dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
-       return1, except_return]
+     return1, except_return]
      rfl)
-
+  )
 /-- Load ACTION_EVAL: the engine's step is ONE `RSK_eval` with-runstate
     step whatever the operand evaluates to (shape only). -/
-theorem step_ctx_load_eval_shape {e : CoreExpr} {ctx : context}
+theorem step_ctx_load_eval_shape {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
     {pe2 : generic_pexpr Unit sym} {mo : memory_order}
-    (hd : Decomp e ctx (loadOpRedex loc ann ty pe2 mo))
+    (hd : Decomp e ctx (loadOpRedex an loc ann ty pe2 mo))
     (hsz : esize e ≤ lemDefaultFuel)
     (hnv2 : valueFromPexpr pe2 = none)
     (hp2 : PePure pe2)
@@ -2906,28 +3014,27 @@ theorem step_ctx_load_eval_shape {e : CoreExpr} {ctx : context}
     ∃ (s : String) (m : core_runM thread_state),
       step_ctx tds σ file ext tid (parent, th) =
         [Step_with_runstate2 (RSK_eval s) m] := by
-  have hget : get_ctx th.arena = [(ctx, loadOpRedex loc ann ty pe2 mo)] := by
+  have hget : get_ctx th.arena = [(ctx, loadOpRedex an loc ann ty pe2 mo)] := by
     rw [harena]; exact hd.get_ctx_default hsz
   unfold step_ctx
   dsimp only
   rw [hget]
   simp only [List.map_cons, List.map_nil]
   unfold loadOpRedex
-  cases ctx <;>
-    (dsimp only [get_loc]
-     dsimp only [step_action]
-     rw [act_valueFromPexpr_none hp2 hnv2]
+  cases ctx <;> dsimp only [step_action]
+  all_goals (
+    (rw [act_valueFromPexpr_none hp2 hnv2]
      dsimp only [act_valueFromPexpr, valueFromPexpr]
      exact ⟨_, _, rfl⟩)
-
+  )
 /-- Kill ACTION_EVAL at ANY evaluated operand value (kill/free arc K2;
     `step_ctx_kill_eval_ws`, DriverCollapse.lean, is the pointer
     instance): the engine rebuilds `Kill kind (mk_value_pe cval)` for
     any `cval` — the pointer test is the next round's. -/
-theorem step_ctx_kill_eval_ws' {e : CoreExpr} {ctx : context}
+theorem step_ctx_kill_eval_ws' {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {kind : kill_kind}
     {pe : generic_pexpr Unit sym} {v : value}
-    (hd : Decomp e ctx (killOpRedex loc ann kind pe))
+    (hd : Decomp e ctx (killOpRedex an loc ann kind pe))
     (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexpr pe = none)
     (hp : PePure pe)
@@ -2940,33 +3047,32 @@ theorem step_ctx_kill_eval_ws' {e : CoreExpr} {ctx : context}
     ∃ (s : String) (m : core_runM thread_state),
       step_ctx tds σ file ext tid (parent, th) =
         [Step_with_runstate2 (RSK_eval s) m] ∧
-      ∀ rs, m rs = Result (Defined { th with
-        arena := apply_ctx ctx (Expr [] (Eaction (Paction polarity.Pos (Action loc ann
+      ∀ rs, m rs = Result (Defined { locUpdTh an th with
+        arena := apply_ctx ctx (Expr an (Eaction (Paction polarity.Pos (Action loc ann
           (Kill kind (Pexpr [] () (PEval v))))))) }, rs) := by
-  have hget : get_ctx th.arena = [(ctx, killOpRedex loc ann kind pe)] := by
+  have hget : get_ctx th.arena = [(ctx, killOpRedex an loc ann kind pe)] := by
     rw [harena]; exact hd.get_ctx_default hsz
   unfold step_ctx
   dsimp only
   rw [hget]
   simp only [List.map_cons, List.map_nil]
   unfold killOpRedex
-  cases ctx <;>
-    (dsimp only [get_loc]
-     dsimp only [step_action]
-     rw [act_valueFromPexpr_none hp hnv]
+  cases ctx <;> dsimp only [step_action]
+  all_goals (
+    (rw [act_valueFromPexpr_none hp hnv]
      dsimp only [act_valueFromPexpr, valueFromPexpr]
      refine ⟨_, _, rfl, fun rs => ?_⟩
      rw [full_eval_bridge hv hdp σ file]
      dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
-       return1, except_return]
+     return1, except_return]
      rfl)
-
+  )
 /-- Kill ACTION_EVAL: the engine's step is ONE `RSK_eval` with-runstate
     step whatever the operand evaluates to (shape only). -/
-theorem step_ctx_kill_eval_shape {e : CoreExpr} {ctx : context}
+theorem step_ctx_kill_eval_shape {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {kind : kill_kind}
     {pe : generic_pexpr Unit sym}
-    (hd : Decomp e ctx (killOpRedex loc ann kind pe))
+    (hd : Decomp e ctx (killOpRedex an loc ann kind pe))
     (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexpr pe = none)
     (hp : PePure pe)
@@ -2977,7 +3083,7 @@ theorem step_ctx_kill_eval_shape {e : CoreExpr} {ctx : context}
     ∃ (s : String) (m : core_runM thread_state),
       step_ctx tds σ file ext tid (parent, th) =
         [Step_with_runstate2 (RSK_eval s) m] := by
-  have hget : get_ctx th.arena = [(ctx, killOpRedex loc ann kind pe)] := by
+  have hget : get_ctx th.arena = [(ctx, killOpRedex an loc ann kind pe)] := by
     rw [harena]; exact hd.get_ctx_default hsz
   unfold step_ctx
   dsimp only
@@ -2985,19 +3091,18 @@ theorem step_ctx_kill_eval_shape {e : CoreExpr} {ctx : context}
   simp only [List.map_cons, List.map_nil]
   unfold killOpRedex
   cases ctx <;>
-    (dsimp only [get_loc]
-     dsimp only [step_action]
+    (dsimp only [step_action]
      rw [act_valueFromPexpr_none hp hnv]
      dsimp only [act_valueFromPexpr, valueFromPexpr]
      exact ⟨_, _, rfl⟩)
 
 /-- Store ACTION_EVAL at ANY evaluated pointer-operand value
     (`step_ctx_store_eval_ws` is the pointer instance). -/
-theorem step_ctx_store_eval_ws' {e : CoreExpr} {ctx : context}
+theorem step_ctx_store_eval_ws' {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
     {pe2 pe3 : generic_pexpr Unit sym} {mo : memory_order}
     {v : value} {cv : value}
-    (hd : Decomp e ctx (storeOpRedex loc ann ty pe2 pe3 mo))
+    (hd : Decomp e ctx (storeOpRedex an loc ann ty pe2 pe3 mo))
     (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexprs [pe2, pe3] = none)
     (hp2 : PePure pe2) (hp3 : PePure pe3)
@@ -3012,80 +3117,83 @@ theorem step_ctx_store_eval_ws' {e : CoreExpr} {ctx : context}
     ∃ (s : String) (m : core_runM thread_state),
       step_ctx tds σ file ext tid (parent, th) =
         [Step_with_runstate2 (RSK_eval s) m] ∧
-      ∀ rs, m rs = Result (Defined { th with
-        arena := apply_ctx ctx (Expr [] (Eaction (Paction polarity.Pos (Action loc ann
+      ∀ rs, m rs = Result (Defined { locUpdTh an th with
+        arena := apply_ctx ctx (Expr an (Eaction (Paction polarity.Pos (Action loc ann
           (Store0 false (Pexpr [] () (PEval (Vctype ty))) (Pexpr [] () (PEval v))
             (Pexpr [] () (PEval cv)) mo))))) }, rs) := by
   have hget : get_ctx th.arena =
-      [(ctx, storeOpRedex loc ann ty pe2 pe3 mo)] := by
+      [(ctx, storeOpRedex an loc ann ty pe2 pe3 mo)] := by
     rw [harena]; exact hd.get_ctx_default hsz
   unfold step_ctx
   dsimp only
   rw [hget]
   simp only [List.map_cons, List.map_nil]
   unfold storeOpRedex
-  rw [valueFromPexprs_pair] at hnv
-  cases hp2 with
-  | val a2 v0 =>
-    obtain rfl := Option.some.inj ((evalPexpr_val _ _ _ _ _).symm.trans hv2)
-    cases hp3 <;>
-      try (rw [valueFromPexpr_val, valueFromPexpr_val] at hnv; cases hnv)
-    all_goals
-      rcases v0 with ov | lv | _ | _ | _ | _ | ⟨_, _⟩ | _ <;> (try (cases ov)) <;>
-      cases ctx <;>
-        (dsimp only [get_loc]
-         dsimp only [step_action]
-         dsimp only [act_valueFromPexpr, valueFromPexpr]
+  cases ctx <;> dsimp only [step_action]
+  all_goals (
+    rw [valueFromPexprs_pair] at hnv
+    cases hp2 with
+    | val a2 v0 =>
+      obtain rfl := Option.some.inj ((evalPexpr_val _ _ _ _ _).symm.trans hv2)
+      cases hp3 <;>
+        try (rw [valueFromPexpr_val, valueFromPexpr_val] at hnv; cases hnv)
+      all_goals
+        rcases v0 with ov | lv | _ | _ | _ | _ | ⟨_, _⟩ | _ <;> (try (cases ov)) <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
          refine ⟨_, _, rfl, fun rs => ?_⟩
          rw [full_eval_bridge (v := Vctype ty) rfl (peDepth_val_le _ _) σ file,
-           full_eval_bridge hv2 hd2 σ file,
-           full_eval_bridge hv3 hd3 σ file]
+         full_eval_bridge hv2 hd2 σ file,
+         full_eval_bridge hv3 hd3 σ file]
          dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
-           return1, except_return]
+         return1, except_return]
          rfl)
-  | sym a2 x2 =>
-    cases hp3 <;> cases ctx <;>
-      (dsimp only [get_loc]
-       dsimp only [step_action]
-       dsimp only [act_valueFromPexpr, valueFromPexpr]
-       refine ⟨_, _, rfl, fun rs => ?_⟩
-       rw [full_eval_bridge (v := Vctype ty) rfl (peDepth_val_le _ _) σ file,
+    | sym a2 x2 =>
+      cases hp3 <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
+         refine ⟨_, _, rfl, fun rs => ?_⟩
+         rw [full_eval_bridge (v := Vctype ty) rfl (peDepth_val_le _ _) σ file,
          full_eval_bridge hv2 hd2 σ file,
          full_eval_bridge hv3 hd3 σ file]
-       dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+         dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
          return1, except_return]
-       rfl)
-  | op a2 op2 hop2 hp21 hp22 =>
-    cases hp3 <;> cases ctx <;>
-      (dsimp only [get_loc]
-       dsimp only [step_action]
-       dsimp only [act_valueFromPexpr, valueFromPexpr]
-       refine ⟨_, _, rfl, fun rs => ?_⟩
-       rw [full_eval_bridge (v := Vctype ty) rfl (peDepth_val_le _ _) σ file,
+         rfl)
+    | op a2 op2 hop2 hp21 hp22 =>
+      cases hp3 <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
+         refine ⟨_, _, rfl, fun rs => ?_⟩
+         rw [full_eval_bridge (v := Vctype ty) rfl (peDepth_val_le _ _) σ file,
          full_eval_bridge hv2 hd2 σ file,
          full_eval_bridge hv3 hd3 σ file]
-       dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+         dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
          return1, except_return]
-       rfl)
-  | arrayShift a2 ty2 hp21 hp22 =>
-    cases hp3 <;> cases ctx <;>
-      (dsimp only [get_loc]
-       dsimp only [step_action]
-       dsimp only [act_valueFromPexpr, valueFromPexpr]
-       refine ⟨_, _, rfl, fun rs => ?_⟩
-       rw [full_eval_bridge (v := Vctype ty) rfl (peDepth_val_le _ _) σ file,
+         rfl)
+    | arrayShift a2 ty2 hp21 hp22 =>
+      cases hp3 <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
+         refine ⟨_, _, rfl, fun rs => ?_⟩
+         rw [full_eval_bridge (v := Vctype ty) rfl (peDepth_val_le _ _) σ file,
          full_eval_bridge hv2 hd2 σ file,
          full_eval_bridge hv3 hd3 σ file]
-       dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+         dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
          return1, except_return]
-       rfl)
-
+         rfl)
+    | ctorTy a2 c2 hc2 pb2 ty2 =>
+      cases hp3 <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
+         refine ⟨_, _, rfl, fun rs => ?_⟩
+         rw [full_eval_bridge (v := Vctype ty) rfl (peDepth_val_le _ _) σ file,
+         full_eval_bridge hv2 hd2 σ file,
+         full_eval_bridge hv3 hd3 σ file]
+         dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+         return1, except_return]
+         rfl)
+  )
 /-- Store ACTION_EVAL: the engine's step is ONE `RSK_eval` with-runstate
     step whatever the operands evaluate to (shape only). -/
-theorem step_ctx_store_eval_shape {e : CoreExpr} {ctx : context}
+theorem step_ctx_store_eval_shape {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
     {pe2 pe3 : generic_pexpr Unit sym} {mo : memory_order}
-    (hd : Decomp e ctx (storeOpRedex loc ann ty pe2 pe3 mo))
+    (hd : Decomp e ctx (storeOpRedex an loc ann ty pe2 pe3 mo))
     (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexprs [pe2, pe3] = none)
     (hp2 : PePure pe2) (hp3 : PePure pe3)
@@ -3097,53 +3205,50 @@ theorem step_ctx_store_eval_shape {e : CoreExpr} {ctx : context}
       step_ctx tds σ file ext tid (parent, th) =
         [Step_with_runstate2 (RSK_eval s) m] := by
   have hget : get_ctx th.arena =
-      [(ctx, storeOpRedex loc ann ty pe2 pe3 mo)] := by
+      [(ctx, storeOpRedex an loc ann ty pe2 pe3 mo)] := by
     rw [harena]; exact hd.get_ctx_default hsz
   unfold step_ctx
   dsimp only
   rw [hget]
   simp only [List.map_cons, List.map_nil]
   unfold storeOpRedex
-  rw [valueFromPexprs_pair] at hnv
-  cases hp2 with
-  | val a2 v0 =>
-    cases hp3 <;>
-      try (rw [valueFromPexpr_val, valueFromPexpr_val] at hnv; cases hnv)
-    all_goals
-      rcases v0 with ov | lv | _ | _ | _ | _ | ⟨_, _⟩ | _ <;> (try (cases ov)) <;>
-      cases ctx <;>
-        (dsimp only [get_loc]
-         dsimp only [step_action]
-         dsimp only [act_valueFromPexpr, valueFromPexpr]
+  cases ctx <;> dsimp only [step_action]
+  all_goals (
+    rw [valueFromPexprs_pair] at hnv
+    cases hp2 with
+    | val a2 v0 =>
+      cases hp3 <;>
+        try (rw [valueFromPexpr_val, valueFromPexpr_val] at hnv; cases hnv)
+      all_goals
+        rcases v0 with ov | lv | _ | _ | _ | _ | ⟨_, _⟩ | _ <;> (try (cases ov)) <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
          exact ⟨_, _, rfl⟩)
-  | sym a2 x2 =>
-    cases hp3 <;> cases ctx <;>
-      (dsimp only [get_loc]
-       dsimp only [step_action]
-       dsimp only [act_valueFromPexpr, valueFromPexpr]
-       exact ⟨_, _, rfl⟩)
-  | op a2 op2 hop2 hp21 hp22 =>
-    cases hp3 <;> cases ctx <;>
-      (dsimp only [get_loc]
-       dsimp only [step_action]
-       dsimp only [act_valueFromPexpr, valueFromPexpr]
-       exact ⟨_, _, rfl⟩)
-  | arrayShift a2 ty2 hp21 hp22 =>
-    cases hp3 <;> cases ctx <;>
-      (dsimp only [get_loc]
-       dsimp only [step_action]
-       dsimp only [act_valueFromPexpr, valueFromPexpr]
-       exact ⟨_, _, rfl⟩)
-
+    | sym a2 x2 =>
+      cases hp3 <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
+         exact ⟨_, _, rfl⟩)
+    | op a2 op2 hop2 hp21 hp22 =>
+      cases hp3 <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
+         exact ⟨_, _, rfl⟩)
+    | arrayShift a2 ty2 hp21 hp22 =>
+      cases hp3 <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
+         exact ⟨_, _, rfl⟩)
+    | ctorTy a2 c2 hc2 pb2 ty2 =>
+      cases hp3 <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
+         exact ⟨_, _, rfl⟩)
+  )
 /-- Alloc ACTION_EVAL at ANY evaluated operand values (kill/free arc K3;
     `step_ctx_alloc_eval_ws`, DriverCollapse.lean, is the integer
     instance): the engine rebuilds `Alloc0 (mk_value_pe cval1)
     (mk_value_pe cval2) pref` for any pair — the integer test is the next
     round's. -/
-theorem step_ctx_alloc_eval_ws' {e : CoreExpr} {ctx : context}
+theorem step_ctx_alloc_eval_ws' {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation}
     {pe1 pe2 : generic_pexpr Unit sym} {pref : prefix0} {v1 v2 : value}
-    (hd : Decomp e ctx (allocOpRedex loc ann pe1 pe2 pref))
+    (hd : Decomp e ctx (allocOpRedex an loc ann pe1 pe2 pref))
     (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexprs [pe1, pe2] = none)
     (hp1 : PePure pe1) (hp2 : PePure pe2)
@@ -3158,70 +3263,71 @@ theorem step_ctx_alloc_eval_ws' {e : CoreExpr} {ctx : context}
     ∃ (s : String) (m : core_runM thread_state),
       step_ctx tds σ file ext tid (parent, th) =
         [Step_with_runstate2 (RSK_eval s) m] ∧
-      ∀ rs, m rs = Result (Defined { th with
-        arena := apply_ctx ctx (Expr [] (Eaction (Paction polarity.Pos (Action loc ann
+      ∀ rs, m rs = Result (Defined { locUpdTh an th with
+        arena := apply_ctx ctx (Expr an (Eaction (Paction polarity.Pos (Action loc ann
           (Alloc0 (Pexpr [] () (PEval v1)) (Pexpr [] () (PEval v2)) pref))))) }, rs) := by
-  have hget : get_ctx th.arena = [(ctx, allocOpRedex loc ann pe1 pe2 pref)] := by
+  have hget : get_ctx th.arena = [(ctx, allocOpRedex an loc ann pe1 pe2 pref)] := by
     rw [harena]; exact hd.get_ctx_default hsz
   unfold step_ctx
   dsimp only
   rw [hget]
   simp only [List.map_cons, List.map_nil]
   unfold allocOpRedex
-  rw [valueFromPexprs_pair] at hnv
-  cases hp1 with
-  | val a1 v0 =>
-    obtain rfl := Option.some.inj ((evalPexpr_val _ _ _ _ _).symm.trans hv1)
-    cases hp2 <;>
-      try (rw [valueFromPexpr_val, valueFromPexpr_val] at hnv; cases hnv)
-    all_goals
-      rcases v0 with ov | lv | _ | _ | _ | _ | ⟨_, _⟩ | _ <;> (try (cases ov)) <;>
-      cases ctx <;>
-        (dsimp only [get_loc]
-         dsimp only [step_action]
-         dsimp only [act_valueFromPexpr, valueFromPexpr]
+  cases ctx <;> dsimp only [step_action]
+  all_goals (
+    rw [valueFromPexprs_pair] at hnv
+    cases hp1 with
+    | val a1 v0 =>
+      obtain rfl := Option.some.inj ((evalPexpr_val _ _ _ _ _).symm.trans hv1)
+      cases hp2 <;>
+        try (rw [valueFromPexpr_val, valueFromPexpr_val] at hnv; cases hnv)
+      all_goals
+        rcases v0 with ov | lv | _ | _ | _ | _ | ⟨_, _⟩ | _ <;> (try (cases ov)) <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
          refine ⟨_, _, rfl, fun rs => ?_⟩
          rw [full_eval_bridge hv1 hd1 σ file, full_eval_bridge hv2 hd2 σ file]
          dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
-           return1, except_return]
+         return1, except_return]
          rfl)
-  | sym a1 x1 =>
-    cases hp2 <;> cases ctx <;>
-      (dsimp only [get_loc]
-       dsimp only [step_action]
-       dsimp only [act_valueFromPexpr, valueFromPexpr]
-       refine ⟨_, _, rfl, fun rs => ?_⟩
-       rw [full_eval_bridge hv1 hd1 σ file, full_eval_bridge hv2 hd2 σ file]
-       dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+    | sym a1 x1 =>
+      cases hp2 <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
+         refine ⟨_, _, rfl, fun rs => ?_⟩
+         rw [full_eval_bridge hv1 hd1 σ file, full_eval_bridge hv2 hd2 σ file]
+         dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
          return1, except_return]
-       rfl)
-  | op a1 op1 hop1 hp11 hp12 =>
-    cases hp2 <;> cases ctx <;>
-      (dsimp only [get_loc]
-       dsimp only [step_action]
-       dsimp only [act_valueFromPexpr, valueFromPexpr]
-       refine ⟨_, _, rfl, fun rs => ?_⟩
-       rw [full_eval_bridge hv1 hd1 σ file, full_eval_bridge hv2 hd2 σ file]
-       dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+         rfl)
+    | op a1 op1 hop1 hp11 hp12 =>
+      cases hp2 <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
+         refine ⟨_, _, rfl, fun rs => ?_⟩
+         rw [full_eval_bridge hv1 hd1 σ file, full_eval_bridge hv2 hd2 σ file]
+         dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
          return1, except_return]
-       rfl)
-  | arrayShift a1 ty1 hp11 hp12 =>
-    cases hp2 <;> cases ctx <;>
-      (dsimp only [get_loc]
-       dsimp only [step_action]
-       dsimp only [act_valueFromPexpr, valueFromPexpr]
-       refine ⟨_, _, rfl, fun rs => ?_⟩
-       rw [full_eval_bridge hv1 hd1 σ file, full_eval_bridge hv2 hd2 σ file]
-       dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+         rfl)
+    | arrayShift a1 ty1 hp11 hp12 =>
+      cases hp2 <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
+         refine ⟨_, _, rfl, fun rs => ?_⟩
+         rw [full_eval_bridge hv1 hd1 σ file, full_eval_bridge hv2 hd2 σ file]
+         dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
          return1, except_return]
-       rfl)
-
+         rfl)
+    | ctorTy a1 c1 hc1 pb1 ty1 =>
+      cases hp2 <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
+         refine ⟨_, _, rfl, fun rs => ?_⟩
+         rw [full_eval_bridge hv1 hd1 σ file, full_eval_bridge hv2 hd2 σ file]
+         dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+         return1, except_return]
+         rfl)
+  )
 /-- Alloc ACTION_EVAL: the engine's step is ONE `RSK_eval` with-runstate
     step whatever the operands evaluate to (shape only). -/
-theorem step_ctx_alloc_eval_shape {e : CoreExpr} {ctx : context}
+theorem step_ctx_alloc_eval_shape {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation}
     {pe1 pe2 : generic_pexpr Unit sym} {pref : prefix0}
-    (hd : Decomp e ctx (allocOpRedex loc ann pe1 pe2 pref))
+    (hd : Decomp e ctx (allocOpRedex an loc ann pe1 pe2 pref))
     (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexprs [pe1, pe2] = none)
     (hp1 : PePure pe1) (hp2 : PePure pe2)
@@ -3232,49 +3338,46 @@ theorem step_ctx_alloc_eval_shape {e : CoreExpr} {ctx : context}
     ∃ (s : String) (m : core_runM thread_state),
       step_ctx tds σ file ext tid (parent, th) =
         [Step_with_runstate2 (RSK_eval s) m] := by
-  have hget : get_ctx th.arena = [(ctx, allocOpRedex loc ann pe1 pe2 pref)] := by
+  have hget : get_ctx th.arena = [(ctx, allocOpRedex an loc ann pe1 pe2 pref)] := by
     rw [harena]; exact hd.get_ctx_default hsz
   unfold step_ctx
   dsimp only
   rw [hget]
   simp only [List.map_cons, List.map_nil]
   unfold allocOpRedex
-  rw [valueFromPexprs_pair] at hnv
-  cases hp1 with
-  | val a1 v0 =>
-    cases hp2 <;>
-      try (rw [valueFromPexpr_val, valueFromPexpr_val] at hnv; cases hnv)
-    all_goals
-      rcases v0 with ov | lv | _ | _ | _ | _ | ⟨_, _⟩ | _ <;> (try (cases ov)) <;>
-      cases ctx <;>
-        (dsimp only [get_loc]
-         dsimp only [step_action]
-         dsimp only [act_valueFromPexpr, valueFromPexpr]
+  cases ctx <;> dsimp only [step_action]
+  all_goals (
+    rw [valueFromPexprs_pair] at hnv
+    cases hp1 with
+    | val a1 v0 =>
+      cases hp2 <;>
+        try (rw [valueFromPexpr_val, valueFromPexpr_val] at hnv; cases hnv)
+      all_goals
+        rcases v0 with ov | lv | _ | _ | _ | _ | ⟨_, _⟩ | _ <;> (try (cases ov)) <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
          exact ⟨_, _, rfl⟩)
-  | sym a1 x1 =>
-    cases hp2 <;> cases ctx <;>
-      (dsimp only [get_loc]
-       dsimp only [step_action]
-       dsimp only [act_valueFromPexpr, valueFromPexpr]
-       exact ⟨_, _, rfl⟩)
-  | op a1 op1 hop1 hp11 hp12 =>
-    cases hp2 <;> cases ctx <;>
-      (dsimp only [get_loc]
-       dsimp only [step_action]
-       dsimp only [act_valueFromPexpr, valueFromPexpr]
-       exact ⟨_, _, rfl⟩)
-  | arrayShift a1 ty1 hp11 hp12 =>
-    cases hp2 <;> cases ctx <;>
-      (dsimp only [get_loc]
-       dsimp only [step_action]
-       dsimp only [act_valueFromPexpr, valueFromPexpr]
-       exact ⟨_, _, rfl⟩)
-
+    | sym a1 x1 =>
+      cases hp2 <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
+         exact ⟨_, _, rfl⟩)
+    | op a1 op1 hop1 hp11 hp12 =>
+      cases hp2 <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
+         exact ⟨_, _, rfl⟩)
+    | arrayShift a1 ty1 hp11 hp12 =>
+      cases hp2 <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
+         exact ⟨_, _, rfl⟩)
+    | ctorTy a1 c1 hc1 pb1 ty1 =>
+      cases hp2 <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
+         exact ⟨_, _, rfl⟩)
+  )
 /-- Memop-operand EVAL: the engine's step is ONE `RSK_eval` with-runstate
     step whatever the operands evaluate to (shape only). -/
-theorem step_ctx_memop_eval_shape {e : CoreExpr} {ctx : context}
+theorem step_ctx_memop_eval_shape {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {mop : memop} {pe1 pe2 : generic_pexpr Unit sym}
-    (hd : Decomp e ctx (memopRedex mop [pe1, pe2]))
+    (hd : Decomp e ctx (memopRedex an mop [pe1, pe2]))
     (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexprs [pe1, pe2] = none)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
@@ -3284,7 +3387,7 @@ theorem step_ctx_memop_eval_shape {e : CoreExpr} {ctx : context}
     ∃ (s : String) (m : core_runM thread_state),
       step_ctx tds σ file ext tid (parent, th) =
         [Step_with_runstate2 (RSK_eval s) m] := by
-  have hget : get_ctx th.arena = [(ctx, memopRedex mop [pe1, pe2])] := by
+  have hget : get_ctx th.arena = [(ctx, memopRedex an mop [pe1, pe2])] := by
     rw [harena]; exact hd.get_ctx_default hsz
   unfold step_ctx
   dsimp only
@@ -3293,9 +3396,8 @@ theorem step_ctx_memop_eval_shape {e : CoreExpr} {ctx : context}
   unfold memopRedex
   cases ctx <;>
     (dsimp only [one_step0]
-     rw [show is_irreducible (Expr ([] : List annot) (Ememop mop [pe1, pe2]))
+     rw [show is_irreducible (Expr an (Ememop mop [pe1, pe2]))
        = false from rfl]
-     dsimp only [get_loc]
      rw [hnv]
      simp only [Bool.false_eq_true, if_false]
      exact ⟨_, _, rfl⟩)
@@ -3310,7 +3412,7 @@ theorem step_ctx_memop_eval_shape {e : CoreExpr} {ctx : context}
     arena is the SUCCESSOR of a load ACTION_EVAL round
     (`step_ctx_load_eval_ws'`), stated through the original
     decomposition `hd` and its size bound. -/
-theorem step_ctx_load_illtyped' {e : CoreExpr} {ctx : context} {r : CoreExpr}
+theorem step_ctx_load_illtyped' {an : List _root_.annot} {e : CoreExpr} {ctx : context} {r : CoreExpr}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
     {v : value} {mo : memory_order}
     (hd : Decomp e ctx r) (hsz : esize e ≤ lemDefaultFuel)
@@ -3318,22 +3420,21 @@ theorem step_ctx_load_illtyped' {e : CoreExpr} {ctx : context} {r : CoreExpr}
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
-    (harena : th.arena = apply_ctx ctx (Expr [] (Eaction (Paction polarity.Pos
+    (harena : th.arena = apply_ctx ctx (Expr an (Eaction (Paction polarity.Pos
       (Action loc ann (Load0 (Pexpr [] () (PEval (Vctype ty)))
         (Pexpr [] () (PEval v)) mo)))))) :
     step_ctx tds σ file ext tid (parent, th) = [Step_error2 "Load"] := by
-  have hget : get_ctx th.arena = [(ctx, Expr [] (Eaction (Paction polarity.Pos
+  have hget : get_ctx th.arena = [(ctx, Expr an (Eaction (Paction polarity.Pos
       (Action loc ann (Load0 (Pexpr [] () (PEval (Vctype ty)))
         (Pexpr [] () (PEval v)) mo)))))] := by
-    rw [harena]; exact hd.get_ctx_rebuild_action _ lemDefaultFuel hsz
+    rw [harena]; exact hd.get_ctx_rebuild_action an _ lemDefaultFuel hsz
   unfold step_ctx
   dsimp only
   rw [hget]
   simp only [List.map_cons, List.map_nil]
   rcases v with ov | lv | _ | _ | _ | _ | ⟨_, _⟩ | _ <;> (try (cases ov)) <;>
     cases ctx <;>
-      (dsimp only [get_loc]
-       dsimp only [step_action]
+      (dsimp only [step_action]
        dsimp only [act_valueFromPexpr, valueFromPexpr])
   all_goals first
     | rfl
@@ -3341,7 +3442,7 @@ theorem step_ctx_load_illtyped' {e : CoreExpr} {ctx : context} {r : CoreExpr}
 
 /-- The store twin: `[Step_error2 "Store"]` (step_action's Store0 arm,
     `some _, some _, some _ => ACTION_ILLTYPED "Store"`). -/
-theorem step_ctx_store_illtyped' {e : CoreExpr} {ctx : context} {r : CoreExpr}
+theorem step_ctx_store_illtyped' {an : List _root_.annot} {e : CoreExpr} {ctx : context} {r : CoreExpr}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
     {v cv : value} {mo : memory_order}
     (hd : Decomp e ctx r) (hsz : esize e ≤ lemDefaultFuel)
@@ -3349,22 +3450,21 @@ theorem step_ctx_store_illtyped' {e : CoreExpr} {ctx : context} {r : CoreExpr}
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
-    (harena : th.arena = apply_ctx ctx (Expr [] (Eaction (Paction polarity.Pos
+    (harena : th.arena = apply_ctx ctx (Expr an (Eaction (Paction polarity.Pos
       (Action loc ann (Store0 false (Pexpr [] () (PEval (Vctype ty)))
         (Pexpr [] () (PEval v)) (Pexpr [] () (PEval cv)) mo)))))) :
     step_ctx tds σ file ext tid (parent, th) = [Step_error2 "Store"] := by
-  have hget : get_ctx th.arena = [(ctx, Expr [] (Eaction (Paction polarity.Pos
+  have hget : get_ctx th.arena = [(ctx, Expr an (Eaction (Paction polarity.Pos
       (Action loc ann (Store0 false (Pexpr [] () (PEval (Vctype ty)))
         (Pexpr [] () (PEval v)) (Pexpr [] () (PEval cv)) mo)))))] := by
-    rw [harena]; exact hd.get_ctx_rebuild_action _ lemDefaultFuel hsz
+    rw [harena]; exact hd.get_ctx_rebuild_action an _ lemDefaultFuel hsz
   unfold step_ctx
   dsimp only
   rw [hget]
   simp only [List.map_cons, List.map_nil]
   rcases v with ov | lv | _ | _ | _ | _ | ⟨_, _⟩ | _ <;> (try (cases ov)) <;>
     cases ctx <;>
-      (dsimp only [get_loc]
-       dsimp only [step_action]
+      (dsimp only [step_action]
        dsimp only [act_valueFromPexpr, valueFromPexpr])
   all_goals first
     | rfl
@@ -3373,7 +3473,7 @@ theorem step_ctx_store_illtyped' {e : CoreExpr} {ctx : context} {r : CoreExpr}
 /-- The kill twin: `[Step_error2 "Kill"]` (step_action's Kill arm,
     `some _ => ACTION_ILLTYPED "Kill"`, at a non-pointer evaluated
     operand; kill/free arc K2). -/
-theorem step_ctx_kill_illtyped' {e : CoreExpr} {ctx : context} {r : CoreExpr}
+theorem step_ctx_kill_illtyped' {an : List _root_.annot} {e : CoreExpr} {ctx : context} {r : CoreExpr}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {kind : kill_kind}
     {v : value}
     (hd : Decomp e ctx r) (hsz : esize e ≤ lemDefaultFuel)
@@ -3381,20 +3481,19 @@ theorem step_ctx_kill_illtyped' {e : CoreExpr} {ctx : context} {r : CoreExpr}
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
-    (harena : th.arena = apply_ctx ctx (Expr [] (Eaction (Paction polarity.Pos
+    (harena : th.arena = apply_ctx ctx (Expr an (Eaction (Paction polarity.Pos
       (Action loc ann (Kill kind (Pexpr [] () (PEval v)))))))) :
     step_ctx tds σ file ext tid (parent, th) = [Step_error2 "Kill"] := by
-  have hget : get_ctx th.arena = [(ctx, Expr [] (Eaction (Paction polarity.Pos
+  have hget : get_ctx th.arena = [(ctx, Expr an (Eaction (Paction polarity.Pos
       (Action loc ann (Kill kind (Pexpr [] () (PEval v)))))))] := by
-    rw [harena]; exact hd.get_ctx_rebuild_action _ lemDefaultFuel hsz
+    rw [harena]; exact hd.get_ctx_rebuild_action an _ lemDefaultFuel hsz
   unfold step_ctx
   dsimp only
   rw [hget]
   simp only [List.map_cons, List.map_nil]
   rcases v with ov | lv | _ | _ | _ | _ | ⟨_, _⟩ | _ <;> (try (cases ov)) <;>
     cases ctx <;>
-      (dsimp only [get_loc]
-       dsimp only [step_action]
+      (dsimp only [step_action]
        dsimp only [act_valueFromPexpr, valueFromPexpr])
   all_goals first
     | rfl
@@ -3403,7 +3502,7 @@ theorem step_ctx_kill_illtyped' {e : CoreExpr} {ctx : context} {r : CoreExpr}
 /-- The alloc twin (kill/free arc K3): `[Step_error2 "Alloc"]` (step_action's
     Alloc0 arm, `some _, some _ => ACTION_ILLTYPED "Alloc"`) at an evaluated
     operand pair that is NOT two integers. -/
-theorem step_ctx_alloc_illtyped' {e : CoreExpr} {ctx : context} {r : CoreExpr}
+theorem step_ctx_alloc_illtyped' {an : List _root_.annot} {e : CoreExpr} {ctx : context} {r : CoreExpr}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {pref : prefix0}
     {v1 v2 : value}
     (hd : Decomp e ctx r) (hsz : esize e ≤ lemDefaultFuel)
@@ -3411,20 +3510,19 @@ theorem step_ctx_alloc_illtyped' {e : CoreExpr} {ctx : context} {r : CoreExpr}
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
-    (harena : th.arena = apply_ctx ctx (Expr [] (Eaction (Paction polarity.Pos
+    (harena : th.arena = apply_ctx ctx (Expr an (Eaction (Paction polarity.Pos
       (Action loc ann (Alloc0 (Pexpr [] () (PEval v1)) (Pexpr [] () (PEval v2)) pref)))))) :
     step_ctx tds σ file ext tid (parent, th) = [Step_error2 "Alloc"] := by
-  have hget : get_ctx th.arena = [(ctx, Expr [] (Eaction (Paction polarity.Pos
+  have hget : get_ctx th.arena = [(ctx, Expr an (Eaction (Paction polarity.Pos
       (Action loc ann (Alloc0 (Pexpr [] () (PEval v1)) (Pexpr [] () (PEval v2)) pref)))))] := by
-    rw [harena]; exact hd.get_ctx_rebuild_action _ lemDefaultFuel hsz
+    rw [harena]; exact hd.get_ctx_rebuild_action an _ lemDefaultFuel hsz
   unfold step_ctx
   dsimp only
   rw [hget]
   simp only [List.map_cons, List.map_nil]
   rcases v1 with ov1 | lv1 | _ | _ | _ | _ | ⟨_, _⟩ | _ <;> (try (cases ov1)) <;>
     cases ctx <;>
-      (dsimp only [get_loc]
-       dsimp only [step_action]
+      (dsimp only [step_action]
        dsimp only [act_valueFromPexpr, valueFromPexpr])
   all_goals first
     | rfl
@@ -3440,9 +3538,9 @@ classifier `evalClass`/`evalClassList` answers `.kill err`, EvalClass.lean:
 the step's monad raises exactly `err` at every run state) -/
 
 /-- Eif at a guard the engine rejects. -/
-theorem step_ctx_if_kill {e : CoreExpr} {ctx : context}
+theorem step_ctx_if_kill {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {g : generic_pexpr Unit sym} {e2 e3 : CoreExpr} {err : core_run_cause}
-    (hd : Decomp e ctx (ifRedex g e2 e3))
+    (hd : Decomp e ctx (ifRedex an g e2 e3))
     (hsz : esize e ≤ lemDefaultFuel)
     (hpg : PePure g) (hdg : peDepth g ≤ lemDefaultFuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
@@ -3454,7 +3552,7 @@ theorem step_ctx_if_kill {e : CoreExpr} {ctx : context}
       step_ctx tds σ file ext tid (parent, th) =
         [Step_with_runstate2 (RSK_tau s TSK_Misc) m] ∧
       ∀ rs, m rs = Exception err := by
-  have hget : get_ctx th.arena = [(ctx, ifRedex g e2 e3)] := by
+  have hget : get_ctx th.arena = [(ctx, ifRedex an g e2 e3)] := by
     rw [harena]; exact hd.get_ctx_default hsz
   unfold step_ctx
   dsimp only
@@ -3463,9 +3561,8 @@ theorem step_ctx_if_kill {e : CoreExpr} {ctx : context}
   unfold ifRedex
   cases ctx <;>
     (dsimp only [one_step0]
-     rw [show is_irreducible (Expr ([] : List annot) (Eif g e2 e3)) = false
+     rw [show is_irreducible (Expr an (Eif g e2 e3)) = false
        from rfl]
-     dsimp only [get_loc]
      refine ⟨_, _, rfl, fun rs => ?_⟩
      rw [stExceptUndef_bind_apply, stExceptUndef_bind_apply,
        full_eval_bridge_kill hpg hk hdg σ]
@@ -3473,9 +3570,9 @@ theorem step_ctx_if_kill {e : CoreExpr} {ctx : context}
 
 /-- Erun at a registered label whose zipped arguments the engine rejects
     (the fold raises at the first rejected argument). -/
-theorem step_ctx_run_kill {e : CoreExpr} {ctx : context}
+theorem step_ctx_run_kill {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {ra : core_run_annotation} {l : sym} {pes : List (generic_pexpr Unit sym)}
-    (hd : Decomp e ctx (runRedex ra l pes))
+    (hd : Decomp e ctx (runRedex an ra l pes))
     (hsz : esize e ≤ lemDefaultFuel)
     {Q : LabelMap} {params : List (sym × core_base_type)} {cont : CoreExpr}
     (hl : lookupLabel Q l = some (params, cont))
@@ -3492,7 +3589,7 @@ theorem step_ctx_run_kill {e : CoreExpr} {ctx : context}
       step_ctx tds σ file ext tid (parent, th) =
         [Step_with_runstate2 (RSK_eval s) m] ∧
       ∀ rs, LabeledAt rs (resolveExtern ext p) Q → m rs = Exception err := by
-  have hget : get_ctx th.arena = [(ctx, runRedex ra l pes)] := by
+  have hget : get_ctx th.arena = [(ctx, runRedex an ra l pes)] := by
     rw [harena]; exact hd.get_ctx_default hsz
   have hl' : (fmapLookupBy (fun (sym1 : sym) (sym2 : sym) =>
       Lem_Basic_classes.ordCompare sym1 sym2) l Q) = some (params, cont) := hl
@@ -3501,43 +3598,43 @@ theorem step_ctx_run_kill {e : CoreExpr} {ctx : context}
   rw [hget]
   simp only [List.map_cons, List.map_nil]
   unfold runRedex
-  cases ctx <;>
-    (dsimp only [get_loc]
+  cases ctx <;> (loc_split an) <;>
+    (try dsimp only
      rw [hproc]
      refine ⟨_, _, rfl, fun rs hQ => ?_⟩
      replace hQ : (fmapLookupBy (fun (sym1 : sym) (sym2 : sym) =>
        Lem_Basic_classes.ordCompare sym1 sym2) (resolveExtern ext p)
        rs.labeled) = some Q := hQ
      rw [stExceptUndef_bind_apply, runSE_read_apply]
-     dsimp only []
+     try dsimp only []
      cases hres : fmapLookupBy (fun (sym1 : sym) (sym2 : sym) =>
          Lem_Basic_classes.ordCompare sym1 sym2) p ext with
      | none =>
        rw [show resolveExtern ext p = p by
          unfold resolveExtern; rw [hres]] at hQ
-       dsimp only []
+       try dsimp only []
        rw [hQ, bind0_some, hl']
-       dsimp only []
+       try dsimp only []
        rw [stExceptUndef_bind_apply,
          foldM_args_kill _ (fun _ _ _ _ _ => rfl) params pes th.env rs hpes hdep hk]
        rfl
      | some y =>
        rw [show resolveExtern ext p = y by
          unfold resolveExtern; rw [hres]] at hQ
-       dsimp only []
+       try dsimp only []
        rw [hQ, bind0_some, hl']
-       dsimp only []
+       try dsimp only []
        rw [stExceptUndef_bind_apply,
          foldM_args_kill _ (fun _ _ _ _ _ => rfl) params pes th.env rs hpes hdep hk]
        rfl)
 
 /-- Esave whose initializers the engine rejects. -/
-theorem step_ctx_save_eval_kill {e : CoreExpr} {ctx : context}
+theorem step_ctx_save_eval_kill {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {sb : sym × core_base_type}
     {ps : List (sym × ((core_base_type ×
       Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym))}
     {body : CoreExpr} {err : core_run_cause}
-    (hd : Decomp e ctx (saveRedex sb ps body))
+    (hd : Decomp e ctx (saveRedex an sb ps body))
     (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexprs (saveParamPexprs ps) = none)
     (hp : ∀ pe ∈ saveParamPexprs ps, PePure pe)
@@ -3552,7 +3649,7 @@ theorem step_ctx_save_eval_kill {e : CoreExpr} {ctx : context}
       step_ctx tds σ file ext tid (parent, th) =
         [Step_with_runstate2 (RSK_eval s) m] ∧
       ∀ rs, m rs = Exception err := by
-  have hget : get_ctx th.arena = [(ctx, saveRedex sb ps body)] := by
+  have hget : get_ctx th.arena = [(ctx, saveRedex an sb ps body)] := by
     rw [harena]; exact hd.get_ctx_default hsz
   have hnv' : valueFromPexprs
       (List.map (fun p => match p with | (_, (_, z)) => z) ps) = none := by
@@ -3567,8 +3664,7 @@ theorem step_ctx_save_eval_kill {e : CoreExpr} {ctx : context}
   unfold saveRedex
   cases ctx <;>
     (dsimp only [one_step0]
-     rw [show is_irreducible (Expr [] (Esave sb ps body)) = false from rfl]
-     dsimp only [get_loc]
+     rw [show is_irreducible (Expr an (Esave sb ps body)) = false from rfl]
      rw [hnv']
      simp only [Bool.false_eq_true, if_false]
      refine ⟨_, _, rfl, fun rs => ?_⟩
@@ -3586,9 +3682,9 @@ theorem step_ctx_save_eval_kill {e : CoreExpr} {ctx : context}
             rfl))
 
 /-- PURE at a symbol the engine rejects (unbound, naming no procedure). -/
-theorem step_ctx_pure_sym_kill {e : CoreExpr} {ctx : context}
+theorem step_ctx_pure_sym_kill {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {pb : List _root_.annot} {x : sym} {err : core_run_cause}
-    (hd : Decomp e ctx (pureRedex (Pexpr pb () (PEsym x))))
+    (hd : Decomp e ctx (pureRedex an (Pexpr pb () (PEsym x))))
     (hsz : esize e ≤ lemDefaultFuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
@@ -3601,7 +3697,7 @@ theorem step_ctx_pure_sym_kill {e : CoreExpr} {ctx : context}
         [Step_with_runstate2 (RSK_eval s) m] ∧
       ∀ rs, m rs = Exception err := by
   have hget : get_ctx th.arena =
-      [(ctx, pureRedex (Pexpr pb () (PEsym x)))] := by
+      [(ctx, pureRedex an (Pexpr pb () (PEsym x)))] := by
     rw [harena]; exact hd.get_ctx_default hsz
   unfold step_ctx
   dsimp only
@@ -3611,7 +3707,6 @@ theorem step_ctx_pure_sym_kill {e : CoreExpr} {ctx : context}
   cases ctx <;>
     (dsimp only [one_step0, is_irreducible, valueFromPexpr]
      simp only [Bool.false_eq_true, if_false]
-     dsimp only [get_loc]
      refine ⟨_, _, rfl, fun rs => ?_⟩
      rw [full_eval_bridge_kill (.sym pb x) hk (peDepth_sym_le pb x) σ]
      dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
@@ -3619,10 +3714,10 @@ theorem step_ctx_pure_sym_kill {e : CoreExpr} {ctx : context}
      rfl)
 
 /-- Load ACTION_EVAL whose pointer operand the engine rejects. -/
-theorem step_ctx_load_eval_kill {e : CoreExpr} {ctx : context}
+theorem step_ctx_load_eval_kill {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
     {pe2 : generic_pexpr Unit sym} {mo : memory_order} {err : core_run_cause}
-    (hd : Decomp e ctx (loadOpRedex loc ann ty pe2 mo))
+    (hd : Decomp e ctx (loadOpRedex an loc ann ty pe2 mo))
     (hsz : esize e ≤ lemDefaultFuel)
     (hnv2 : valueFromPexpr pe2 = none)
     (hp2 : PePure pe2)
@@ -3636,30 +3731,29 @@ theorem step_ctx_load_eval_kill {e : CoreExpr} {ctx : context}
       step_ctx tds σ file ext tid (parent, th) =
         [Step_with_runstate2 (RSK_eval s) m] ∧
       ∀ rs, m rs = Exception err := by
-  have hget : get_ctx th.arena = [(ctx, loadOpRedex loc ann ty pe2 mo)] := by
+  have hget : get_ctx th.arena = [(ctx, loadOpRedex an loc ann ty pe2 mo)] := by
     rw [harena]; exact hd.get_ctx_default hsz
   unfold step_ctx
   dsimp only
   rw [hget]
   simp only [List.map_cons, List.map_nil]
   unfold loadOpRedex
-  cases ctx <;>
-    (dsimp only [get_loc]
-     dsimp only [step_action]
-     rw [act_valueFromPexpr_none hp2 hnv2]
+  cases ctx <;> dsimp only [step_action]
+  all_goals (
+    (rw [act_valueFromPexpr_none hp2 hnv2]
      dsimp only [act_valueFromPexpr, valueFromPexpr]
      refine ⟨_, _, rfl, fun rs => ?_⟩
      rw [full_eval_bridge (v := Vctype ty) rfl (peDepth_val_le _ _) σ file,
-       full_eval_bridge_kill hp2 hk hd2 σ]
+     full_eval_bridge_kill hp2 hk hd2 σ]
      dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
-       return1, except_return]
+     return1, except_return]
      rfl)
-
+  )
 /-- Kill ACTION_EVAL whose operand the engine rejects (kill/free arc K2). -/
-theorem step_ctx_kill_eval_kill {e : CoreExpr} {ctx : context}
+theorem step_ctx_kill_eval_kill {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {kind : kill_kind}
     {pe : generic_pexpr Unit sym} {err : core_run_cause}
-    (hd : Decomp e ctx (killOpRedex loc ann kind pe))
+    (hd : Decomp e ctx (killOpRedex an loc ann kind pe))
     (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexpr pe = none)
     (hp : PePure pe)
@@ -3673,30 +3767,29 @@ theorem step_ctx_kill_eval_kill {e : CoreExpr} {ctx : context}
       step_ctx tds σ file ext tid (parent, th) =
         [Step_with_runstate2 (RSK_eval s) m] ∧
       ∀ rs, m rs = Exception err := by
-  have hget : get_ctx th.arena = [(ctx, killOpRedex loc ann kind pe)] := by
+  have hget : get_ctx th.arena = [(ctx, killOpRedex an loc ann kind pe)] := by
     rw [harena]; exact hd.get_ctx_default hsz
   unfold step_ctx
   dsimp only
   rw [hget]
   simp only [List.map_cons, List.map_nil]
   unfold killOpRedex
-  cases ctx <;>
-    (dsimp only [get_loc]
-     dsimp only [step_action]
-     rw [act_valueFromPexpr_none hp hnv]
+  cases ctx <;> dsimp only [step_action]
+  all_goals (
+    (rw [act_valueFromPexpr_none hp hnv]
      dsimp only [act_valueFromPexpr, valueFromPexpr]
      refine ⟨_, _, rfl, fun rs => ?_⟩
      rw [full_eval_bridge_kill hp hk hdp σ]
      dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
-       return1, except_return]
+     return1, except_return]
      rfl)
-
+  )
 /-- Store ACTION_EVAL whose POINTER operand the engine rejects (the
     first operand evaluated after the type). -/
-theorem step_ctx_store_eval_kill2 {e : CoreExpr} {ctx : context}
+theorem step_ctx_store_eval_kill2 {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
     {pe2 pe3 : generic_pexpr Unit sym} {mo : memory_order} {err : core_run_cause}
-    (hd : Decomp e ctx (storeOpRedex loc ann ty pe2 pe3 mo))
+    (hd : Decomp e ctx (storeOpRedex an loc ann ty pe2 pe3 mo))
     (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexprs [pe2, pe3] = none)
     (hp2 : PePure pe2) (hp3 : PePure pe3)
@@ -3711,57 +3804,62 @@ theorem step_ctx_store_eval_kill2 {e : CoreExpr} {ctx : context}
         [Step_with_runstate2 (RSK_eval s) m] ∧
       ∀ rs, m rs = Exception err := by
   have hget : get_ctx th.arena =
-      [(ctx, storeOpRedex loc ann ty pe2 pe3 mo)] := by
+      [(ctx, storeOpRedex an loc ann ty pe2 pe3 mo)] := by
     rw [harena]; exact hd.get_ctx_default hsz
   unfold step_ctx
   dsimp only
   rw [hget]
   simp only [List.map_cons, List.map_nil]
   unfold storeOpRedex
-  rw [valueFromPexprs_pair] at hnv
-  cases hp2 with
-  | val a2 v0 => exact absurd hk (by simp [evalClass])
-  | sym a2 x2 =>
-    cases hp3 <;> cases ctx <;>
-      (dsimp only [get_loc]
-       dsimp only [step_action]
-       dsimp only [act_valueFromPexpr, valueFromPexpr]
-       refine ⟨_, _, rfl, fun rs => ?_⟩
-       rw [full_eval_bridge (v := Vctype ty) rfl (peDepth_val_le _ _) σ file,
+  cases ctx <;> dsimp only [step_action]
+  all_goals (
+    rw [valueFromPexprs_pair] at hnv
+    cases hp2 with
+    | val a2 v0 => exact absurd hk (by simp [evalClass])
+    | sym a2 x2 =>
+      cases hp3 <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
+         refine ⟨_, _, rfl, fun rs => ?_⟩
+         rw [full_eval_bridge (v := Vctype ty) rfl (peDepth_val_le _ _) σ file,
          full_eval_bridge_kill (.sym a2 x2) hk hd2 σ]
-       dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+         dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
          return1, except_return]
-       rfl)
-  | op a2 op2 hop2 hp21 hp22 =>
-    cases hp3 <;> cases ctx <;>
-      (dsimp only [get_loc]
-       dsimp only [step_action]
-       dsimp only [act_valueFromPexpr, valueFromPexpr]
-       refine ⟨_, _, rfl, fun rs => ?_⟩
-       rw [full_eval_bridge (v := Vctype ty) rfl (peDepth_val_le _ _) σ file,
+         rfl)
+    | op a2 op2 hop2 hp21 hp22 =>
+      cases hp3 <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
+         refine ⟨_, _, rfl, fun rs => ?_⟩
+         rw [full_eval_bridge (v := Vctype ty) rfl (peDepth_val_le _ _) σ file,
          full_eval_bridge_kill (.op a2 op2 hop2 hp21 hp22) hk hd2 σ]
-       dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+         dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
          return1, except_return]
-       rfl)
-  | arrayShift a2 ty2 hp21 hp22 =>
-    cases hp3 <;> cases ctx <;>
-      (dsimp only [get_loc]
-       dsimp only [step_action]
-       dsimp only [act_valueFromPexpr, valueFromPexpr]
-       refine ⟨_, _, rfl, fun rs => ?_⟩
-       rw [full_eval_bridge (v := Vctype ty) rfl (peDepth_val_le _ _) σ file,
+         rfl)
+    | arrayShift a2 ty2 hp21 hp22 =>
+      cases hp3 <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
+         refine ⟨_, _, rfl, fun rs => ?_⟩
+         rw [full_eval_bridge (v := Vctype ty) rfl (peDepth_val_le _ _) σ file,
          full_eval_bridge_kill (.arrayShift a2 ty2 hp21 hp22) hk hd2 σ]
-       dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+         dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
          return1, except_return]
-       rfl)
-
+         rfl)
+    | ctorTy a2 c2 hc2 pb2 ty2 =>
+      cases hp3 <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
+         refine ⟨_, _, rfl, fun rs => ?_⟩
+         rw [full_eval_bridge (v := Vctype ty) rfl (peDepth_val_le _ _) σ file,
+         full_eval_bridge_kill (.ctorTy a2 c2 hc2 pb2 ty2) hk hd2 σ]
+         dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+         return1, except_return]
+         rfl)
+  )
 /-- Store ACTION_EVAL whose pointer operand evaluates and whose VALUE
     operand the engine rejects. -/
-theorem step_ctx_store_eval_kill3 {e : CoreExpr} {ctx : context}
+theorem step_ctx_store_eval_kill3 {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
     {pe2 pe3 : generic_pexpr Unit sym} {mo : memory_order} {v : value}
     {err : core_run_cause}
-    (hd : Decomp e ctx (storeOpRedex loc ann ty pe2 pe3 mo))
+    (hd : Decomp e ctx (storeOpRedex an loc ann ty pe2 pe3 mo))
     (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexprs [pe2, pe3] = none)
     (hp2 : PePure pe2) (hp3 : PePure pe3)
@@ -3778,102 +3876,109 @@ theorem step_ctx_store_eval_kill3 {e : CoreExpr} {ctx : context}
         [Step_with_runstate2 (RSK_eval s) m] ∧
       ∀ rs, m rs = Exception err := by
   have hget : get_ctx th.arena =
-      [(ctx, storeOpRedex loc ann ty pe2 pe3 mo)] := by
+      [(ctx, storeOpRedex an loc ann ty pe2 pe3 mo)] := by
     rw [harena]; exact hd.get_ctx_default hsz
   unfold step_ctx
   dsimp only
   rw [hget]
   simp only [List.map_cons, List.map_nil]
   unfold storeOpRedex
-  rw [valueFromPexprs_pair] at hnv
-  have hp3' := hp3
-  cases hp2 with
-  | val a2 v0 =>
-    obtain rfl := Option.some.inj ((evalPexpr_val _ _ _ _ _).symm.trans hv2)
-    cases hp3 with
-    | val a3 v3 => rw [valueFromPexpr_val, valueFromPexpr_val] at hnv; cases hnv
-    | sym a3 x3 =>
-      rcases v0 with ov | lv | _ | _ | _ | _ | ⟨_, _⟩ | _ <;> (try (cases ov)) <;>
-      cases ctx <;>
-        (dsimp only [get_loc]
-         dsimp only [step_action]
-         dsimp only [act_valueFromPexpr, valueFromPexpr]
+  cases ctx <;> dsimp only [step_action]
+  all_goals (
+    rw [valueFromPexprs_pair] at hnv
+    have hp3' := hp3
+    cases hp2 with
+    | val a2 v0 =>
+      obtain rfl := Option.some.inj ((evalPexpr_val _ _ _ _ _).symm.trans hv2)
+      cases hp3 with
+      | val a3 v3 => rw [valueFromPexpr_val, valueFromPexpr_val] at hnv; cases hnv
+      | sym a3 x3 =>
+        rcases v0 with ov | lv | _ | _ | _ | _ | ⟨_, _⟩ | _ <;> (try (cases ov)) <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
          refine ⟨_, _, rfl, fun rs => ?_⟩
          rw [full_eval_bridge (v := Vctype ty) rfl (peDepth_val_le _ _) σ file,
-           full_eval_bridge hv2 hd2 σ file,
-           full_eval_bridge_kill (.sym a3 x3) hk hd3 σ]
+         full_eval_bridge hv2 hd2 σ file,
+         full_eval_bridge_kill (.sym a3 x3) hk hd3 σ]
          dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
-           return1, except_return]
+         return1, except_return]
          rfl)
-    | op a3 op3 hop3 hp31 hp32 =>
-      rcases v0 with ov | lv | _ | _ | _ | _ | ⟨_, _⟩ | _ <;> (try (cases ov)) <;>
-      cases ctx <;>
-        (dsimp only [get_loc]
-         dsimp only [step_action]
-         dsimp only [act_valueFromPexpr, valueFromPexpr]
+      | op a3 op3 hop3 hp31 hp32 =>
+        rcases v0 with ov | lv | _ | _ | _ | _ | ⟨_, _⟩ | _ <;> (try (cases ov)) <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
          refine ⟨_, _, rfl, fun rs => ?_⟩
          rw [full_eval_bridge (v := Vctype ty) rfl (peDepth_val_le _ _) σ file,
-           full_eval_bridge hv2 hd2 σ file,
-           full_eval_bridge_kill (.op a3 op3 hop3 hp31 hp32) hk hd3 σ]
+         full_eval_bridge hv2 hd2 σ file,
+         full_eval_bridge_kill (.op a3 op3 hop3 hp31 hp32) hk hd3 σ]
          dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
-           return1, except_return]
+         return1, except_return]
          rfl)
-    | arrayShift a3 ty3 hp31 hp32 =>
-      rcases v0 with ov | lv | _ | _ | _ | _ | ⟨_, _⟩ | _ <;> (try (cases ov)) <;>
-      cases ctx <;>
-        (dsimp only [get_loc]
-         dsimp only [step_action]
-         dsimp only [act_valueFromPexpr, valueFromPexpr]
+      | arrayShift a3 ty3 hp31 hp32 =>
+        rcases v0 with ov | lv | _ | _ | _ | _ | ⟨_, _⟩ | _ <;> (try (cases ov)) <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
          refine ⟨_, _, rfl, fun rs => ?_⟩
          rw [full_eval_bridge (v := Vctype ty) rfl (peDepth_val_le _ _) σ file,
-           full_eval_bridge hv2 hd2 σ file,
-           full_eval_bridge_kill (.arrayShift a3 ty3 hp31 hp32) hk hd3 σ]
+         full_eval_bridge hv2 hd2 σ file,
+         full_eval_bridge_kill (.arrayShift a3 ty3 hp31 hp32) hk hd3 σ]
          dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
-           return1, except_return]
+         return1, except_return]
          rfl)
-  | sym a2 x2 =>
-    cases hp3 <;> cases ctx <;>
-      (dsimp only [get_loc]
-       dsimp only [step_action]
-       dsimp only [act_valueFromPexpr, valueFromPexpr]
-       refine ⟨_, _, rfl, fun rs => ?_⟩
-       rw [full_eval_bridge (v := Vctype ty) rfl (peDepth_val_le _ _) σ file,
+      | ctorTy a3 c3 hc3 pb3 ty3 =>
+        rcases v0 with ov | lv | _ | _ | _ | _ | ⟨_, _⟩ | _ <;> (try (cases ov)) <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
+         refine ⟨_, _, rfl, fun rs => ?_⟩
+         rw [full_eval_bridge (v := Vctype ty) rfl (peDepth_val_le _ _) σ file,
+         full_eval_bridge hv2 hd2 σ file,
+         full_eval_bridge_kill (.ctorTy a3 c3 hc3 pb3 ty3) hk hd3 σ]
+         dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+         return1, except_return]
+         rfl)
+    | sym a2 x2 =>
+      cases hp3 <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
+         refine ⟨_, _, rfl, fun rs => ?_⟩
+         rw [full_eval_bridge (v := Vctype ty) rfl (peDepth_val_le _ _) σ file,
          full_eval_bridge hv2 hd2 σ file,
          full_eval_bridge_kill hp3' hk hd3 σ]
-       dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+         dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
          return1, except_return]
-       rfl)
-  | op a2 op2 hop2 hp21 hp22 =>
-    cases hp3 <;> cases ctx <;>
-      (dsimp only [get_loc]
-       dsimp only [step_action]
-       dsimp only [act_valueFromPexpr, valueFromPexpr]
-       refine ⟨_, _, rfl, fun rs => ?_⟩
-       rw [full_eval_bridge (v := Vctype ty) rfl (peDepth_val_le _ _) σ file,
+         rfl)
+    | op a2 op2 hop2 hp21 hp22 =>
+      cases hp3 <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
+         refine ⟨_, _, rfl, fun rs => ?_⟩
+         rw [full_eval_bridge (v := Vctype ty) rfl (peDepth_val_le _ _) σ file,
          full_eval_bridge hv2 hd2 σ file,
          full_eval_bridge_kill hp3' hk hd3 σ]
-       dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+         dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
          return1, except_return]
-       rfl)
-  | arrayShift a2 ty2 hp21 hp22 =>
-    cases hp3 <;> cases ctx <;>
-      (dsimp only [get_loc]
-       dsimp only [step_action]
-       dsimp only [act_valueFromPexpr, valueFromPexpr]
-       refine ⟨_, _, rfl, fun rs => ?_⟩
-       rw [full_eval_bridge (v := Vctype ty) rfl (peDepth_val_le _ _) σ file,
+         rfl)
+    | arrayShift a2 ty2 hp21 hp22 =>
+      cases hp3 <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
+         refine ⟨_, _, rfl, fun rs => ?_⟩
+         rw [full_eval_bridge (v := Vctype ty) rfl (peDepth_val_le _ _) σ file,
          full_eval_bridge hv2 hd2 σ file,
          full_eval_bridge_kill hp3' hk hd3 σ]
-       dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+         dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
          return1, except_return]
-       rfl)
-
+         rfl)
+    | ctorTy a2 c2 hc2 pb2 ty2 =>
+      cases hp3 <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
+         refine ⟨_, _, rfl, fun rs => ?_⟩
+         rw [full_eval_bridge (v := Vctype ty) rfl (peDepth_val_le _ _) σ file,
+         full_eval_bridge hv2 hd2 σ file,
+         full_eval_bridge_kill hp3' hk hd3 σ]
+         dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+         return1, except_return]
+         rfl)
+  )
 /-- Alloc ACTION_EVAL whose ALIGNMENT operand (the first evaluated) the
     engine rejects (kill/free arc K3). -/
-theorem step_ctx_alloc_eval_kill1 {e : CoreExpr} {ctx : context}
+theorem step_ctx_alloc_eval_kill1 {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation}
     {pe1 pe2 : generic_pexpr Unit sym} {pref : prefix0} {err : core_run_cause}
-    (hd : Decomp e ctx (allocOpRedex loc ann pe1 pe2 pref))
+    (hd : Decomp e ctx (allocOpRedex an loc ann pe1 pe2 pref))
     (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexprs [pe1, pe2] = none)
     (hp1 : PePure pe1) (hp2 : PePure pe2)
@@ -3887,55 +3992,59 @@ theorem step_ctx_alloc_eval_kill1 {e : CoreExpr} {ctx : context}
       step_ctx tds σ file ext tid (parent, th) =
         [Step_with_runstate2 (RSK_eval s) m] ∧
       ∀ rs, m rs = Exception err := by
-  have hget : get_ctx th.arena = [(ctx, allocOpRedex loc ann pe1 pe2 pref)] := by
+  have hget : get_ctx th.arena = [(ctx, allocOpRedex an loc ann pe1 pe2 pref)] := by
     rw [harena]; exact hd.get_ctx_default hsz
   unfold step_ctx
   dsimp only
   rw [hget]
   simp only [List.map_cons, List.map_nil]
   unfold allocOpRedex
-  rw [valueFromPexprs_pair] at hnv
-  have hp1' := hp1
-  cases hp1 with
-  | val a1 v0 => exact absurd hk (by simp [evalClass])
-  | sym a1 x1 =>
-    cases hp2 <;> cases ctx <;>
-      (dsimp only [get_loc]
-       dsimp only [step_action]
-       dsimp only [act_valueFromPexpr, valueFromPexpr]
-       refine ⟨_, _, rfl, fun rs => ?_⟩
-       rw [full_eval_bridge_kill hp1' hk hd1 σ]
-       dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+  cases ctx <;> dsimp only [step_action]
+  all_goals (
+    rw [valueFromPexprs_pair] at hnv
+    have hp1' := hp1
+    cases hp1 with
+    | val a1 v0 => exact absurd hk (by simp [evalClass])
+    | sym a1 x1 =>
+      cases hp2 <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
+         refine ⟨_, _, rfl, fun rs => ?_⟩
+         rw [full_eval_bridge_kill hp1' hk hd1 σ]
+         dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
          return1, except_return]
-       rfl)
-  | op a1 op1 hop1 hp11 hp12 =>
-    cases hp2 <;> cases ctx <;>
-      (dsimp only [get_loc]
-       dsimp only [step_action]
-       dsimp only [act_valueFromPexpr, valueFromPexpr]
-       refine ⟨_, _, rfl, fun rs => ?_⟩
-       rw [full_eval_bridge_kill hp1' hk hd1 σ]
-       dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+         rfl)
+    | op a1 op1 hop1 hp11 hp12 =>
+      cases hp2 <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
+         refine ⟨_, _, rfl, fun rs => ?_⟩
+         rw [full_eval_bridge_kill hp1' hk hd1 σ]
+         dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
          return1, except_return]
-       rfl)
-  | arrayShift a1 ty1 hp11 hp12 =>
-    cases hp2 <;> cases ctx <;>
-      (dsimp only [get_loc]
-       dsimp only [step_action]
-       dsimp only [act_valueFromPexpr, valueFromPexpr]
-       refine ⟨_, _, rfl, fun rs => ?_⟩
-       rw [full_eval_bridge_kill hp1' hk hd1 σ]
-       dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+         rfl)
+    | arrayShift a1 ty1 hp11 hp12 =>
+      cases hp2 <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
+         refine ⟨_, _, rfl, fun rs => ?_⟩
+         rw [full_eval_bridge_kill hp1' hk hd1 σ]
+         dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
          return1, except_return]
-       rfl)
-
+         rfl)
+    | ctorTy a1 c1 hc1 pb1 ty1 =>
+      cases hp2 <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
+         refine ⟨_, _, rfl, fun rs => ?_⟩
+         rw [full_eval_bridge_kill hp1' hk hd1 σ]
+         dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+         return1, except_return]
+         rfl)
+  )
 /-- Alloc ACTION_EVAL whose alignment operand evaluates and whose SIZE
     operand the engine rejects (kill/free arc K3). -/
-theorem step_ctx_alloc_eval_kill2 {e : CoreExpr} {ctx : context}
+theorem step_ctx_alloc_eval_kill2 {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation}
     {pe1 pe2 : generic_pexpr Unit sym} {pref : prefix0} {v1 : value}
     {err : core_run_cause}
-    (hd : Decomp e ctx (allocOpRedex loc ann pe1 pe2 pref))
+    (hd : Decomp e ctx (allocOpRedex an loc ann pe1 pe2 pref))
     (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexprs [pe1, pe2] = none)
     (hp1 : PePure pe1) (hp2 : PePure pe2)
@@ -3951,89 +4060,92 @@ theorem step_ctx_alloc_eval_kill2 {e : CoreExpr} {ctx : context}
       step_ctx tds σ file ext tid (parent, th) =
         [Step_with_runstate2 (RSK_eval s) m] ∧
       ∀ rs, m rs = Exception err := by
-  have hget : get_ctx th.arena = [(ctx, allocOpRedex loc ann pe1 pe2 pref)] := by
+  have hget : get_ctx th.arena = [(ctx, allocOpRedex an loc ann pe1 pe2 pref)] := by
     rw [harena]; exact hd.get_ctx_default hsz
   unfold step_ctx
   dsimp only
   rw [hget]
   simp only [List.map_cons, List.map_nil]
   unfold allocOpRedex
-  rw [valueFromPexprs_pair] at hnv
-  have hp2' := hp2
-  cases hp1 with
-  | val a1 v0 =>
-    obtain rfl := Option.some.inj ((evalPexpr_val _ _ _ _ _).symm.trans hv1)
-    cases hp2 with
-    | val a2 v2 => exact absurd hk (by simp [evalClass])
-    | sym a2 x2 =>
-      rcases v0 with ov | lv | _ | _ | _ | _ | ⟨_, _⟩ | _ <;> (try (cases ov)) <;>
-      cases ctx <;>
-        (dsimp only [get_loc]
-         dsimp only [step_action]
-         dsimp only [act_valueFromPexpr, valueFromPexpr]
+  cases ctx <;> dsimp only [step_action]
+  all_goals (
+    rw [valueFromPexprs_pair] at hnv
+    have hp2' := hp2
+    cases hp1 with
+    | val a1 v0 =>
+      obtain rfl := Option.some.inj ((evalPexpr_val _ _ _ _ _).symm.trans hv1)
+      cases hp2 with
+      | val a2 v2 => exact absurd hk (by simp [evalClass])
+      | sym a2 x2 =>
+        rcases v0 with ov | lv | _ | _ | _ | _ | ⟨_, _⟩ | _ <;> (try (cases ov)) <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
          refine ⟨_, _, rfl, fun rs => ?_⟩
          rw [full_eval_bridge hv1 hd1 σ file, full_eval_bridge_kill hp2' hk hd2 σ]
          dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
-           return1, except_return]
+         return1, except_return]
          rfl)
-    | op a2 op2 hop2 hp21 hp22 =>
-      rcases v0 with ov | lv | _ | _ | _ | _ | ⟨_, _⟩ | _ <;> (try (cases ov)) <;>
-      cases ctx <;>
-        (dsimp only [get_loc]
-         dsimp only [step_action]
-         dsimp only [act_valueFromPexpr, valueFromPexpr]
+      | op a2 op2 hop2 hp21 hp22 =>
+        rcases v0 with ov | lv | _ | _ | _ | _ | ⟨_, _⟩ | _ <;> (try (cases ov)) <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
          refine ⟨_, _, rfl, fun rs => ?_⟩
          rw [full_eval_bridge hv1 hd1 σ file, full_eval_bridge_kill hp2' hk hd2 σ]
          dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
-           return1, except_return]
+         return1, except_return]
          rfl)
-    | arrayShift a2 ty2 hp21 hp22 =>
-      rcases v0 with ov | lv | _ | _ | _ | _ | ⟨_, _⟩ | _ <;> (try (cases ov)) <;>
-      cases ctx <;>
-        (dsimp only [get_loc]
-         dsimp only [step_action]
-         dsimp only [act_valueFromPexpr, valueFromPexpr]
+      | arrayShift a2 ty2 hp21 hp22 =>
+        rcases v0 with ov | lv | _ | _ | _ | _ | ⟨_, _⟩ | _ <;> (try (cases ov)) <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
          refine ⟨_, _, rfl, fun rs => ?_⟩
          rw [full_eval_bridge hv1 hd1 σ file, full_eval_bridge_kill hp2' hk hd2 σ]
          dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
-           return1, except_return]
+         return1, except_return]
          rfl)
-  | sym a1 x1 =>
-    cases hp2 <;> cases ctx <;>
-      (dsimp only [get_loc]
-       dsimp only [step_action]
-       dsimp only [act_valueFromPexpr, valueFromPexpr]
-       refine ⟨_, _, rfl, fun rs => ?_⟩
-       rw [full_eval_bridge hv1 hd1 σ file, full_eval_bridge_kill hp2' hk hd2 σ]
-       dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+      | ctorTy a2 c2 hc2 pb2 ty2 =>
+        rcases v0 with ov | lv | _ | _ | _ | _ | ⟨_, _⟩ | _ <;> (try (cases ov)) <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
+         refine ⟨_, _, rfl, fun rs => ?_⟩
+         rw [full_eval_bridge hv1 hd1 σ file, full_eval_bridge_kill hp2' hk hd2 σ]
+         dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
          return1, except_return]
-       rfl)
-  | op a1 op1 hop1 hp11 hp12 =>
-    cases hp2 <;> cases ctx <;>
-      (dsimp only [get_loc]
-       dsimp only [step_action]
-       dsimp only [act_valueFromPexpr, valueFromPexpr]
-       refine ⟨_, _, rfl, fun rs => ?_⟩
-       rw [full_eval_bridge hv1 hd1 σ file, full_eval_bridge_kill hp2' hk hd2 σ]
-       dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+         rfl)
+    | sym a1 x1 =>
+      cases hp2 <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
+         refine ⟨_, _, rfl, fun rs => ?_⟩
+         rw [full_eval_bridge hv1 hd1 σ file, full_eval_bridge_kill hp2' hk hd2 σ]
+         dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
          return1, except_return]
-       rfl)
-  | arrayShift a1 ty1 hp11 hp12 =>
-    cases hp2 <;> cases ctx <;>
-      (dsimp only [get_loc]
-       dsimp only [step_action]
-       dsimp only [act_valueFromPexpr, valueFromPexpr]
-       refine ⟨_, _, rfl, fun rs => ?_⟩
-       rw [full_eval_bridge hv1 hd1 σ file, full_eval_bridge_kill hp2' hk hd2 σ]
-       dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+         rfl)
+    | op a1 op1 hop1 hp11 hp12 =>
+      cases hp2 <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
+         refine ⟨_, _, rfl, fun rs => ?_⟩
+         rw [full_eval_bridge hv1 hd1 σ file, full_eval_bridge_kill hp2' hk hd2 σ]
+         dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
          return1, except_return]
-       rfl)
-
+         rfl)
+    | arrayShift a1 ty1 hp11 hp12 =>
+      cases hp2 <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
+         refine ⟨_, _, rfl, fun rs => ?_⟩
+         rw [full_eval_bridge hv1 hd1 σ file, full_eval_bridge_kill hp2' hk hd2 σ]
+         dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+         return1, except_return]
+         rfl)
+    | ctorTy a1 c1 hc1 pb1 ty1 =>
+      cases hp2 <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
+         refine ⟨_, _, rfl, fun rs => ?_⟩
+         rw [full_eval_bridge hv1 hd1 σ file, full_eval_bridge_kill hp2' hk hd2 σ]
+         dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+         return1, except_return]
+         rfl)
+  )
 /-- Memop-operand EVAL whose operand list the engine rejects (the map
     raises at the first rejected operand). -/
-theorem step_ctx_memop_eval_kill {e : CoreExpr} {ctx : context}
+theorem step_ctx_memop_eval_kill {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {mop : memop} {pe1 pe2 : generic_pexpr Unit sym} {err : core_run_cause}
-    (hd : Decomp e ctx (memopRedex mop [pe1, pe2]))
+    (hd : Decomp e ctx (memopRedex an mop [pe1, pe2]))
     (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexprs [pe1, pe2] = none)
     (hp1 : PePure pe1) (hp2 : PePure pe2)
@@ -4048,7 +4160,7 @@ theorem step_ctx_memop_eval_kill {e : CoreExpr} {ctx : context}
       step_ctx tds σ file ext tid (parent, th) =
         [Step_with_runstate2 (RSK_eval s) m] ∧
       ∀ rs, m rs = Exception err := by
-  have hget : get_ctx th.arena = [(ctx, memopRedex mop [pe1, pe2])] := by
+  have hget : get_ctx th.arena = [(ctx, memopRedex an mop [pe1, pe2])] := by
     rw [harena]; exact hd.get_ctx_default hsz
   have hp : ∀ pe ∈ [pe1, pe2], PePure pe := by
     intro pe hpe
@@ -4065,9 +4177,8 @@ theorem step_ctx_memop_eval_kill {e : CoreExpr} {ctx : context}
   unfold memopRedex
   cases ctx <;>
     (dsimp only [one_step0]
-     rw [show is_irreducible (Expr ([] : List annot) (Ememop mop [pe1, pe2]))
+     rw [show is_irreducible (Expr an (Ememop mop [pe1, pe2]))
        = false from rfl]
-     dsimp only [get_loc]
      rw [hnv]
      simp only [Bool.false_eq_true, if_false]
      refine ⟨_, _, rfl, fun rs => ?_⟩
@@ -4075,9 +4186,349 @@ theorem step_ctx_memop_eval_kill {e : CoreExpr} {ctx : context}
        mapM_eval1_kill (tds := tds) (σ := σ) (file := file)
          _ ?_ [pe1, pe2] hp hdp hk rs] <;>
        first
-         | rfl
          | (intro pe rs'
-            rfl))
+            rfl)
+         | (loc_split an <;> rfl))
+
+/-- Create ACTION_EVAL (E1) at ANY evaluated operand values (kill/free arc K3;
+    `step_ctx_create_eval_ws`, DriverCollapse.lean, is the integer
+    instance): the engine rebuilds `Create (mk_value_pe cval1)
+    (mk_value_pe cval2) pref` for any pair — the integer test is the next
+    round's. -/
+theorem step_ctx_create_eval_ws' {an : List _root_.annot} {e : CoreExpr} {ctx : context}
+    {loc : CerbLocation.Loc} {ann : core_run_annotation}
+    {pe1 pe2 : generic_pexpr Unit sym} {pref : prefix0} {v1 v2 : value}
+    (hd : Decomp e ctx (createOpRedex an loc ann pe1 pe2 pref))
+    (hsz : esize e ≤ lemDefaultFuel)
+    (hnv : valueFromPexprs [pe1, pe2] = none)
+    (hp1 : PePure pe1) (hp2 : PePure pe2)
+    (hd1 : peDepth pe1 ≤ lemDefaultFuel)
+    (hd2 : peDepth pe2 ≤ lemDefaultFuel)
+    (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
+    (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
+    (tid : Nat) (parent : Option Nat) (th : thread_state)
+    (harena : th.arena = e)
+    (hv1 : evalPexpr tds ext th.env pe1 = some v1)
+    (hv2 : evalPexpr tds ext th.env pe2 = some v2) :
+    ∃ (s : String) (m : core_runM thread_state),
+      step_ctx tds σ file ext tid (parent, th) =
+        [Step_with_runstate2 (RSK_eval s) m] ∧
+      ∀ rs, m rs = Result (Defined { locUpdTh an th with
+        arena := apply_ctx ctx (Expr an (Eaction (Paction polarity.Pos (Action loc ann
+          (Create (Pexpr [] () (PEval v1)) (Pexpr [] () (PEval v2)) pref))))) }, rs) := by
+  have hget : get_ctx th.arena = [(ctx, createOpRedex an loc ann pe1 pe2 pref)] := by
+    rw [harena]; exact hd.get_ctx_default hsz
+  unfold step_ctx
+  dsimp only
+  rw [hget]
+  simp only [List.map_cons, List.map_nil]
+  unfold createOpRedex
+  cases ctx <;> dsimp only [step_action]
+  all_goals (
+    rw [valueFromPexprs_pair] at hnv
+    cases hp1 with
+    | val a1 v0 =>
+      obtain rfl := Option.some.inj ((evalPexpr_val _ _ _ _ _).symm.trans hv1)
+      cases hp2 <;>
+        try (rw [valueFromPexpr_val, valueFromPexpr_val] at hnv; cases hnv)
+      all_goals
+        rcases v0 with ov | lv | _ | _ | _ | _ | ⟨_, _⟩ | _ <;> (try (cases ov)) <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
+         refine ⟨_, _, rfl, fun rs => ?_⟩
+         rw [full_eval_bridge hv1 hd1 σ file, full_eval_bridge hv2 hd2 σ file]
+         dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+         return1, except_return]
+         rfl)
+    | sym a1 x1 =>
+      cases hp2 <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
+         refine ⟨_, _, rfl, fun rs => ?_⟩
+         rw [full_eval_bridge hv1 hd1 σ file, full_eval_bridge hv2 hd2 σ file]
+         dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+         return1, except_return]
+         rfl)
+    | op a1 op1 hop1 hp11 hp12 =>
+      cases hp2 <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
+         refine ⟨_, _, rfl, fun rs => ?_⟩
+         rw [full_eval_bridge hv1 hd1 σ file, full_eval_bridge hv2 hd2 σ file]
+         dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+         return1, except_return]
+         rfl)
+    | arrayShift a1 ty1 hp11 hp12 =>
+      cases hp2 <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
+         refine ⟨_, _, rfl, fun rs => ?_⟩
+         rw [full_eval_bridge hv1 hd1 σ file, full_eval_bridge hv2 hd2 σ file]
+         dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+         return1, except_return]
+         rfl)
+    | ctorTy a1 c1 hc1 pb1 ty1 =>
+      cases hp2 <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
+         refine ⟨_, _, rfl, fun rs => ?_⟩
+         rw [full_eval_bridge hv1 hd1 σ file, full_eval_bridge hv2 hd2 σ file]
+         dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+         return1, except_return]
+         rfl)
+  )
+/-- Create ACTION_EVAL (E1): the engine's step is ONE `RSK_eval` with-runstate
+    step whatever the operands evaluate to (shape only). -/
+theorem step_ctx_create_eval_shape {an : List _root_.annot} {e : CoreExpr} {ctx : context}
+    {loc : CerbLocation.Loc} {ann : core_run_annotation}
+    {pe1 pe2 : generic_pexpr Unit sym} {pref : prefix0}
+    (hd : Decomp e ctx (createOpRedex an loc ann pe1 pe2 pref))
+    (hsz : esize e ≤ lemDefaultFuel)
+    (hnv : valueFromPexprs [pe1, pe2] = none)
+    (hp1 : PePure pe1) (hp2 : PePure pe2)
+    (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
+    (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
+    (tid : Nat) (parent : Option Nat) (th : thread_state)
+    (harena : th.arena = e) :
+    ∃ (s : String) (m : core_runM thread_state),
+      step_ctx tds σ file ext tid (parent, th) =
+        [Step_with_runstate2 (RSK_eval s) m] := by
+  have hget : get_ctx th.arena = [(ctx, createOpRedex an loc ann pe1 pe2 pref)] := by
+    rw [harena]; exact hd.get_ctx_default hsz
+  unfold step_ctx
+  dsimp only
+  rw [hget]
+  simp only [List.map_cons, List.map_nil]
+  unfold createOpRedex
+  cases ctx <;> dsimp only [step_action]
+  all_goals (
+    rw [valueFromPexprs_pair] at hnv
+    cases hp1 with
+    | val a1 v0 =>
+      cases hp2 <;>
+        try (rw [valueFromPexpr_val, valueFromPexpr_val] at hnv; cases hnv)
+      all_goals
+        rcases v0 with ov | lv | _ | _ | _ | _ | ⟨_, _⟩ | _ <;> (try (cases ov)) <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
+         exact ⟨_, _, rfl⟩)
+    | sym a1 x1 =>
+      cases hp2 <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
+         exact ⟨_, _, rfl⟩)
+    | op a1 op1 hop1 hp11 hp12 =>
+      cases hp2 <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
+         exact ⟨_, _, rfl⟩)
+    | arrayShift a1 ty1 hp11 hp12 =>
+      cases hp2 <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
+         exact ⟨_, _, rfl⟩)
+    | ctorTy a1 c1 hc1 pb1 ty1 =>
+      cases hp2 <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
+         exact ⟨_, _, rfl⟩)
+  )
+/-- The create twin (E1): `[Step_error2 "Create"]` (step_action's
+    Create arm, `some _, some _ => ACTION_ILLTYPED "Create"`) at an evaluated
+    operand pair that is NOT an integer and a ctype. -/
+theorem step_ctx_create_illtyped' {an : List _root_.annot} {e : CoreExpr} {ctx : context} {r : CoreExpr}
+    {loc : CerbLocation.Loc} {ann : core_run_annotation} {pref : prefix0}
+    {v1 v2 : value}
+    (hd : Decomp e ctx r) (hsz : esize e ≤ lemDefaultFuel)
+    (hv : ∀ i1 ty, ¬ (v1 = Vobject (OVinteger i1) ∧ v2 = Vctype ty))
+    (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
+    (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
+    (tid : Nat) (parent : Option Nat) (th : thread_state)
+    (harena : th.arena = apply_ctx ctx (Expr an (Eaction (Paction polarity.Pos
+      (Action loc ann (Create (Pexpr [] () (PEval v1)) (Pexpr [] () (PEval v2)) pref)))))) :
+    step_ctx tds σ file ext tid (parent, th) = [Step_error2 "Create"] := by
+  have hget : get_ctx th.arena = [(ctx, Expr an (Eaction (Paction polarity.Pos
+      (Action loc ann (Create (Pexpr [] () (PEval v1)) (Pexpr [] () (PEval v2)) pref)))))] := by
+    rw [harena]; exact hd.get_ctx_rebuild_action an _ lemDefaultFuel hsz
+  unfold step_ctx
+  dsimp only
+  rw [hget]
+  simp only [List.map_cons, List.map_nil]
+  rcases v1 with ov1 | lv1 | _ | _ | _ | _ | ⟨_, _⟩ | _ <;> (try (cases ov1)) <;>
+    cases ctx <;>
+      (dsimp only [step_action]
+       dsimp only [act_valueFromPexpr, valueFromPexpr])
+  all_goals first
+    | rfl
+    | (rcases v2 with ov2 | lv2 | _ | _ | _ | _ | ⟨_, _⟩ | _ <;> (try (cases ov2)) <;>
+        (try dsimp only) <;>
+        first
+          | rfl
+          | exact absurd ⟨rfl, rfl⟩ (hv _ _))
+
+/-! ### The operand-evaluation rows: the KILL equations (an operand the
+mirror evaluator does not evaluate and the engine REJECTS — the
+classifier `evalClass`/`evalClassList` answers `.kill err`, EvalClass.lean:
+the step's monad raises exactly `err` at every run state) -/
+
+/-- Create ACTION_EVAL (E1) whose ALIGNMENT operand (the first evaluated) the
+    engine rejects (kill/free arc K3). -/
+theorem step_ctx_create_eval_kill1 {an : List _root_.annot} {e : CoreExpr} {ctx : context}
+    {loc : CerbLocation.Loc} {ann : core_run_annotation}
+    {pe1 pe2 : generic_pexpr Unit sym} {pref : prefix0} {err : core_run_cause}
+    (hd : Decomp e ctx (createOpRedex an loc ann pe1 pe2 pref))
+    (hsz : esize e ≤ lemDefaultFuel)
+    (hnv : valueFromPexprs [pe1, pe2] = none)
+    (hp1 : PePure pe1) (hp2 : PePure pe2)
+    (hd1 : peDepth pe1 ≤ lemDefaultFuel)
+    (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
+    (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
+    (tid : Nat) (parent : Option Nat) (th : thread_state)
+    (harena : th.arena = e)
+    (hk : evalClass tds th.current_loc ext file th.env pe1 = .kill err) :
+    ∃ (s : String) (m : core_runM thread_state),
+      step_ctx tds σ file ext tid (parent, th) =
+        [Step_with_runstate2 (RSK_eval s) m] ∧
+      ∀ rs, m rs = Exception err := by
+  have hget : get_ctx th.arena = [(ctx, createOpRedex an loc ann pe1 pe2 pref)] := by
+    rw [harena]; exact hd.get_ctx_default hsz
+  unfold step_ctx
+  dsimp only
+  rw [hget]
+  simp only [List.map_cons, List.map_nil]
+  unfold createOpRedex
+  cases ctx <;> dsimp only [step_action]
+  all_goals (
+    rw [valueFromPexprs_pair] at hnv
+    have hp1' := hp1
+    cases hp1 with
+    | val a1 v0 => exact absurd hk (by simp [evalClass])
+    | sym a1 x1 =>
+      cases hp2 <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
+         refine ⟨_, _, rfl, fun rs => ?_⟩
+         rw [full_eval_bridge_kill hp1' hk hd1 σ]
+         dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+         return1, except_return]
+         rfl)
+    | op a1 op1 hop1 hp11 hp12 =>
+      cases hp2 <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
+         refine ⟨_, _, rfl, fun rs => ?_⟩
+         rw [full_eval_bridge_kill hp1' hk hd1 σ]
+         dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+         return1, except_return]
+         rfl)
+    | arrayShift a1 ty1 hp11 hp12 =>
+      cases hp2 <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
+         refine ⟨_, _, rfl, fun rs => ?_⟩
+         rw [full_eval_bridge_kill hp1' hk hd1 σ]
+         dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+         return1, except_return]
+         rfl)
+    | ctorTy a1 c1 hc1 pb1 ty1 =>
+      cases hp2 <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
+         refine ⟨_, _, rfl, fun rs => ?_⟩
+         rw [full_eval_bridge_kill hp1' hk hd1 σ]
+         dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+         return1, except_return]
+         rfl)
+  )
+/-- Create ACTION_EVAL (E1) whose alignment operand evaluates and whose SIZE
+    operand the engine rejects (kill/free arc K3). -/
+theorem step_ctx_create_eval_kill2 {an : List _root_.annot} {e : CoreExpr} {ctx : context}
+    {loc : CerbLocation.Loc} {ann : core_run_annotation}
+    {pe1 pe2 : generic_pexpr Unit sym} {pref : prefix0} {v1 : value}
+    {err : core_run_cause}
+    (hd : Decomp e ctx (createOpRedex an loc ann pe1 pe2 pref))
+    (hsz : esize e ≤ lemDefaultFuel)
+    (hnv : valueFromPexprs [pe1, pe2] = none)
+    (hp1 : PePure pe1) (hp2 : PePure pe2)
+    (hd1 : peDepth pe1 ≤ lemDefaultFuel)
+    (hd2 : peDepth pe2 ≤ lemDefaultFuel)
+    (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
+    (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
+    (tid : Nat) (parent : Option Nat) (th : thread_state)
+    (harena : th.arena = e)
+    (hv1 : evalPexpr tds ext th.env pe1 = some v1)
+    (hk : evalClass tds th.current_loc ext file th.env pe2 = .kill err) :
+    ∃ (s : String) (m : core_runM thread_state),
+      step_ctx tds σ file ext tid (parent, th) =
+        [Step_with_runstate2 (RSK_eval s) m] ∧
+      ∀ rs, m rs = Exception err := by
+  have hget : get_ctx th.arena = [(ctx, createOpRedex an loc ann pe1 pe2 pref)] := by
+    rw [harena]; exact hd.get_ctx_default hsz
+  unfold step_ctx
+  dsimp only
+  rw [hget]
+  simp only [List.map_cons, List.map_nil]
+  unfold createOpRedex
+  cases ctx <;> dsimp only [step_action]
+  all_goals (
+    rw [valueFromPexprs_pair] at hnv
+    have hp2' := hp2
+    cases hp1 with
+    | val a1 v0 =>
+      obtain rfl := Option.some.inj ((evalPexpr_val _ _ _ _ _).symm.trans hv1)
+      cases hp2 with
+      | val a2 v2 => exact absurd hk (by simp [evalClass])
+      | sym a2 x2 =>
+        rcases v0 with ov | lv | _ | _ | _ | _ | ⟨_, _⟩ | _ <;> (try (cases ov)) <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
+         refine ⟨_, _, rfl, fun rs => ?_⟩
+         rw [full_eval_bridge hv1 hd1 σ file, full_eval_bridge_kill hp2' hk hd2 σ]
+         dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+         return1, except_return]
+         rfl)
+      | op a2 op2 hop2 hp21 hp22 =>
+        rcases v0 with ov | lv | _ | _ | _ | _ | ⟨_, _⟩ | _ <;> (try (cases ov)) <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
+         refine ⟨_, _, rfl, fun rs => ?_⟩
+         rw [full_eval_bridge hv1 hd1 σ file, full_eval_bridge_kill hp2' hk hd2 σ]
+         dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+         return1, except_return]
+         rfl)
+      | arrayShift a2 ty2 hp21 hp22 =>
+        rcases v0 with ov | lv | _ | _ | _ | _ | ⟨_, _⟩ | _ <;> (try (cases ov)) <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
+         refine ⟨_, _, rfl, fun rs => ?_⟩
+         rw [full_eval_bridge hv1 hd1 σ file, full_eval_bridge_kill hp2' hk hd2 σ]
+         dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+         return1, except_return]
+         rfl)
+      | ctorTy a2 c2 hc2 pb2 ty2 =>
+        rcases v0 with ov | lv | _ | _ | _ | _ | ⟨_, _⟩ | _ <;> (try (cases ov)) <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
+         refine ⟨_, _, rfl, fun rs => ?_⟩
+         rw [full_eval_bridge hv1 hd1 σ file, full_eval_bridge_kill hp2' hk hd2 σ]
+         dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+         return1, except_return]
+         rfl)
+    | sym a1 x1 =>
+      cases hp2 <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
+         refine ⟨_, _, rfl, fun rs => ?_⟩
+         rw [full_eval_bridge hv1 hd1 σ file, full_eval_bridge_kill hp2' hk hd2 σ]
+         dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+         return1, except_return]
+         rfl)
+    | op a1 op1 hop1 hp11 hp12 =>
+      cases hp2 <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
+         refine ⟨_, _, rfl, fun rs => ?_⟩
+         rw [full_eval_bridge hv1 hd1 σ file, full_eval_bridge_kill hp2' hk hd2 σ]
+         dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+         return1, except_return]
+         rfl)
+    | arrayShift a1 ty1 hp11 hp12 =>
+      cases hp2 <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
+         refine ⟨_, _, rfl, fun rs => ?_⟩
+         rw [full_eval_bridge hv1 hd1 σ file, full_eval_bridge_kill hp2' hk hd2 σ]
+         dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+         return1, except_return]
+         rfl)
+    | ctorTy a1 c1 hc1 pb1 ty1 =>
+      cases hp2 <;>
+        (dsimp only [act_valueFromPexpr, valueFromPexpr]
+         refine ⟨_, _, rfl, fun rs => ?_⟩
+         rw [full_eval_bridge hv1 hd1 σ file, full_eval_bridge_kill hp2' hk hd2 σ]
+         dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+         return1, except_return]
+         rfl)
+  )
 
 /-! ### The operand-evaluation rows, classified -/
 
@@ -4086,39 +4537,44 @@ theorem step_ctx_memop_eval_kill {e : CoreExpr} {ctx : context}
     (DErr_core_run err)`; a guard the classifier leaves uncovered (an
     accepted-but-unmirrored leaf; the whole guard's outcome not
     characterized) is the residual `eval_uncovered`. -/
-theorem complete_if {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_if {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {g : generic_pexpr Unit sym} {e2 e3 : CoreExpr}
-    (hd : Decomp e ctx (ifRedex g e2 e3))
+    (hd : Decomp e ctx (ifRedex an g e2 e3))
     (hsz : esize e ≤ lemDefaultFuel) (hpg : PePure g) (hdg : peDepth g ≤ lemDefaultFuel)
     (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
     RoundComplete M (e, ρ, ctl, σ) := by
-  have hnr : ∀ (ra : core_run_annotation) (l : sym) (pes : List (generic_pexpr Unit sym)),
-      ifRedex g e2 e3 ≠ runRedex ra l pes := by
-    intro ra l pes h; cases h
+  have hnr : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (l : sym)
+      (pes : List (generic_pexpr Unit sym)),
+      ifRedex an g e2 e3 ≠ runRedex an' ra l pes := by
+    intro an' ra l pes h; cases h
+  have hnc : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (f : sym)
+      (pes : List (generic_pexpr Unit sym)),
+      ifRedex an g e2 e3 ≠ callRedex an' ra f pes := by
+    intro an' ra f pes h; cases h
   cases hg : evalPexpr M.tagDefs M.extern ρ g with
   | none =>
     have hstuck : ∀ c'', ¬ Step M (e, ρ, ctl, σ) c'' := by
       intro c'' hs
-      rcases hd.step_factor hs with ⟨r', ρr, σr, -, -, hr, -⟩ | ⟨ra, l, pes, heq, -⟩ |
-          ⟨_, _, _, _, _, _, hceq, -⟩
+      rcases hd.step_factor hs with ⟨r', ρr, ctlr, σr, -, -, hr, -⟩ | ⟨an', ra, l, pes, heq, -⟩ |
+          ⟨_, _, _, _, _, _, _, hceq, -⟩
       · rcases hr.if_inv with ⟨hg', -⟩ | ⟨hg', -⟩ <;> (rw [hg] at hg'; cases hg')
-      · exact absurd heq (hnr ra l pes)
+      · exact absurd heq (hnr an' ra l pes)
       · cases hceq
     have hshape : ∀ dst, M.Embeds dst (e, ρ, ctl, σ) →
         ∃ (rsk : runstate_step_kind) (m : core_runM thread_state),
         step_ctx M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid
           (M.parent, M.thread e ρ ctl) = [Step_with_runstate2 rsk m] := by
       intro dst hemb
-      obtain ⟨-, hlay, -, -, -⟩ := hemb
+      obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
       obtain ⟨s, m, hsteps⟩ := step_ctx_if_shape hd hsz M.tagDefs dst.layout_state
         dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
       exact ⟨_, _, hsteps⟩
-    rcases evalClass_of_none M.currentLoc M.file hg with ⟨err, hk⟩ | hu
+    rcases evalClass_of_none ctl.curLoc M.file hg with ⟨err, hk⟩ | hu
     · refine .inr (.inl (.killed (Other (DErr_core_run err)) ?_))
       intro dst hemb
-      obtain ⟨-, hlay, hfile, hext, -⟩ := hemb
+      obtain ⟨-, hlay, hfile, hext, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
       obtain ⟨s, m, hsteps, hm⟩ := step_ctx_if_kill hd hsz hpg hdg M.tagDefs
@@ -4131,13 +4587,13 @@ theorem complete_if {M : MachineCtx} {e : CoreExpr} {ctx : context}
   | some v =>
     by_cases hvt : v = Vtrue
     · subst hvt
-      exact .inl ⟨_, hd.lift_step hnr (Step.if_true hg)⟩
+      exact .inl ⟨_, hd.lift_step hnr hnc (Step.if_true hg)⟩
     · by_cases hvf : v = Vfalse
       · subst hvf
-        exact .inl ⟨_, hd.lift_step hnr (Step.if_false hg)⟩
+        exact .inl ⟨_, hd.lift_step hnr hnc (Step.if_false hg)⟩
       · refine .inr (.inl (.panic ?_))
         intro dst hemb
-        obtain ⟨-, hlay, -, hext, -⟩ := hemb
+        obtain ⟨-, hlay, -, hext, -, -, -⟩ := hemb
         simp only at hlay
         subst hlay
         obtain ⟨s, m, inst, step_m, k, msg, hsteps, hm, hpan⟩ :=
@@ -4154,9 +4610,9 @@ theorem complete_if {M : MachineCtx} {e : CoreExpr} {ctx : context}
     leaf; the whole argument's outcome not characterized) is the residual
     `eval_uncovered`; every zipped argument evaluating but a SURPLUS
     argument not is the residual `run_surplus`. -/
-theorem complete_run {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_run {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {ra : core_run_annotation} {l : sym} {pes : List (generic_pexpr Unit sym)}
-    (hd : Decomp e ctx (runRedex ra l pes))
+    (hd : Decomp e ctx (runRedex an ra l pes))
     (hsz : esize e ≤ lemDefaultFuel)
     (hpes : ∀ pe ∈ pes, PePure pe)
     (hdep : ∀ pe ∈ pes, peDepth pe ≤ lemDefaultFuel)
@@ -4180,27 +4636,27 @@ theorem complete_run {M : MachineCtx} {e : CoreExpr} {ctx : context}
           step_ctx M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid
             (M.parent, M.thread e (ev0 :: evs) ctl) = [Step_with_runstate2 rsk m] := by
         intro dst hemb
-        obtain ⟨-, hlay, -, -, -⟩ := hemb
+        obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
         simp only at hlay
         subst hlay
         obtain ⟨s, m, hsteps⟩ := step_ctx_run_shape hd hsz M.tagDefs dst.layout_state
           dst.core_file dst.core_extern M.tid M.parent (M.thread _ _ ctl) rfl
         exact ⟨_, _, hsteps⟩
-      cases hcl : evalClassList M.tagDefs M.currentLoc M.extern M.file (ev0 :: evs)
+      cases hcl : evalClassList M.tagDefs ctl.curLoc M.extern M.file (ev0 :: evs)
           (zipArgs params pes) with
       | kill err =>
         obtain ⟨p', hp', hQ⟩ := MachineCtx.labels_lookup_some hl
         obtain rfl : p = p' := Option.some.inj (hproc.symm.trans hp')
         refine .inr (.inl (.killed (Other (DErr_core_run err)) ?_))
         intro dst hemb
-        obtain ⟨-, hlay, hfile, hext, hrs⟩ := hemb
+        obtain ⟨-, hlay, hfile, hext, hlabd, -, -⟩ := hemb
         simp only at hlay
         subst hlay
         obtain ⟨s, m, hsteps, hm⟩ := step_ctx_run_kill hd hsz hl hpes hdep M.tagDefs
           dst.layout_state dst.core_file dst.core_extern M.tid M.parent p
           (M.thread _ _ ctl) rfl hproc (by rw [hext, hfile]; exact hcl)
         exact ⟨_, dst, hsteps, rfl, advance_withrs_killed_eval M.tagDefs M.tid s m
-          (hm dst.core_run_state0 (by rw [hext, hrs]; exact hQ))⟩
+          (hm dst.core_run_state0 (by unfold LabeledAt; rw [hext, hlabd]; exact hQ))⟩
       | uncovered pe =>
         obtain ⟨hmem, hu⟩ := evalClassList_uncovered hcl
         have hmem' : pe ∈ pes := zipArgs_sub hmem
@@ -4212,7 +4668,7 @@ theorem complete_run {M : MachineCtx} {e : CoreExpr} {ctx : context}
   | none =>
     refine .inr (.inl (.panic ?_))
     intro dst hemb
-    obtain ⟨-, hlay, -, hext, hrs⟩ := hemb
+    obtain ⟨-, hlay, -, hext, hlabd, -, -⟩ := hemb
     simp only at hlay
     subst hlay
     have hnone : Lem_Maybe.bind0
@@ -4220,7 +4676,7 @@ theorem complete_run {M : MachineCtx} {e : CoreExpr} {ctx : context}
           (resolveExtern dst.core_extern p) dst.core_run_state0.labeled)
         (fmapLookupBy (fun (s1 : sym) (s2 : sym) => Lem_Basic_classes.ordCompare s1 s2) l)
         = none := by
-      rw [hext, hrs]
+      rw [hext, hlabd]
       have hlab := MachineCtx.labelsAt_eq_of_proc (M := M) hproc
       cases hQ : fmapLookupBy (fun (s1 : sym) (s2 : sym) =>
           Lem_Basic_classes.ordCompare s1 s2) (M.resolveProc p) M.runState.labeled with
@@ -4243,50 +4699,55 @@ theorem complete_run {M : MachineCtx} {e : CoreExpr} {ctx : context}
     KILL `Other (DErr_core_run err)`; an initializer the classifier leaves
     uncovered (an accepted-but-unmirrored leaf; the whole initializer's
     outcome not characterized) is the residual `eval_uncovered`. -/
-theorem complete_save {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_save {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {sb : sym × core_base_type}
     {ps : List (sym × ((core_base_type ×
       Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym))}
     {body : CoreExpr}
-    (hd : Decomp e ctx (saveRedex sb ps body))
+    (hd : Decomp e ctx (saveRedex an sb ps body))
     (hsz : esize e ≤ lemDefaultFuel)
     (hp : ∀ pe ∈ saveParamPexprs ps, PePure pe)
     (hdep : ∀ pe ∈ saveParamPexprs ps, peDepth pe ≤ lemDefaultFuel)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (ctl : Ctl) (σ : Mem) :
     RoundComplete M (e, ev0 :: evs, ctl, σ) := by
-  have hnr : ∀ (ra : core_run_annotation) (l : sym) (pes : List (generic_pexpr Unit sym)),
-      saveRedex sb ps body ≠ runRedex ra l pes := by
-    intro ra l pes h; cases h
+  have hnr : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (l : sym)
+      (pes : List (generic_pexpr Unit sym)),
+      saveRedex an sb ps body ≠ runRedex an' ra l pes := by
+    intro an' ra l pes h; cases h
+  have hnc : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (f : sym)
+      (pes : List (generic_pexpr Unit sym)),
+      saveRedex an sb ps body ≠ callRedex an' ra f pes := by
+    intro an' ra f pes h; cases h
   cases hvals : valueFromPexprs (saveParamPexprs ps) with
-  | some cvals => exact .inl ⟨_, hd.lift_step hnr (Step.save hvals)⟩
+  | some cvals => exact .inl ⟨_, hd.lift_step hnr hnc (Step.save hvals)⟩
   | none =>
     cases hev : evalPexprs M.tagDefs M.extern (ev0 :: evs) (saveParamPexprs ps) with
-    | some cvals => exact .inl ⟨_, hd.lift_step hnr (Step.save_eval hvals hev)⟩
+    | some cvals => exact .inl ⟨_, hd.lift_step hnr hnc (Step.save_eval hvals hev)⟩
     | none =>
       have hstuck : ∀ c'', ¬ Step M (e, ev0 :: evs, ctl, σ) c'' := by
         intro c'' hs
-        rcases hd.step_factor hs with ⟨r', ρr, σr, -, -, hr, -⟩ | ⟨ra, l, pes, heq, -⟩ |
-            ⟨_, _, _, _, _, _, hceq, -⟩
+        rcases hd.step_factor hs with ⟨r', ρr, ctlr, σr, -, -, hr, -⟩ | ⟨an', ra, l, pes, heq, -⟩ |
+            ⟨_, _, _, _, _, _, _, hceq, -⟩
         · rcases hr.save_inv with ⟨_, _, _, -, hvals', -⟩ | ⟨_, -, hev', -⟩
           · rw [hvals] at hvals'; cases hvals'
           · rw [hev] at hev'; cases hev'
-        · exact absurd heq (hnr ra l pes)
+        · exact absurd heq (hnr an' ra l pes)
         · cases hceq
       have hshape : ∀ dst, M.Embeds dst (e, ev0 :: evs, ctl, σ) →
           ∃ (rsk : runstate_step_kind) (m : core_runM thread_state),
           step_ctx M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid
             (M.parent, M.thread e (ev0 :: evs) ctl) = [Step_with_runstate2 rsk m] := by
         intro dst hemb
-        obtain ⟨-, hlay, -, -, -⟩ := hemb
+        obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
         simp only at hlay
         subst hlay
         obtain ⟨s, m, hsteps⟩ := step_ctx_save_eval_shape hd hsz hvals M.tagDefs
           dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ _ ctl) rfl
         exact ⟨_, _, hsteps⟩
-      rcases evalClassList_of_none M.currentLoc M.file hev with ⟨err, hk⟩ | ⟨pe, hu⟩
+      rcases evalClassList_of_none ctl.curLoc M.file hev with ⟨err, hk⟩ | ⟨pe, hu⟩
       · refine .inr (.inl (.killed (Other (DErr_core_run err)) ?_))
         intro dst hemb
-        obtain ⟨-, hlay, hfile, hext, -⟩ := hemb
+        obtain ⟨-, hlay, hfile, hext, -, -, -⟩ := hemb
         simp only at hlay
         subst hlay
         obtain ⟨s, m, hsteps, hm⟩ := step_ctx_save_eval_kill hd hsz hvals hp hdep M.tagDefs
@@ -4303,40 +4764,45 @@ theorem complete_save {M : MachineCtx} {e : CoreExpr} {ctx : context}
     (Unresolved_symbol loc x))` (Core_eval.lean:145); an unbound one
     naming a `Proc` of the file is the residual `eval_uncovered` (the
     engine evaluates it to the null function pointer). -/
-theorem complete_pure_sym {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_pure_sym {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {pb : List _root_.annot} {x : sym}
-    (hd : Decomp e ctx (pureRedex (Pexpr pb () (PEsym x))))
+    (hd : Decomp e ctx (pureRedex an (Pexpr pb () (PEsym x))))
     (hsz : esize e ≤ lemDefaultFuel) (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
     RoundComplete M (e, ρ, ctl, σ) := by
-  have hnr : ∀ (ra : core_run_annotation) (l : sym) (pes : List (generic_pexpr Unit sym)),
-      pureRedex (Pexpr pb () (PEsym x)) ≠ runRedex ra l pes := by
-    intro ra l pes h; cases h
+  have hnr : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (l : sym)
+      (pes : List (generic_pexpr Unit sym)),
+      pureRedex an (Pexpr pb () (PEsym x)) ≠ runRedex an' ra l pes := by
+    intro an' ra l pes h; cases h
+  have hnc : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (f : sym)
+      (pes : List (generic_pexpr Unit sym)),
+      pureRedex an (Pexpr pb () (PEsym x)) ≠ callRedex an' ra f pes := by
+    intro an' ra f pes h; cases h
   cases hv : evalPexpr M.tagDefs M.extern ρ (Pexpr pb () (PEsym x)) with
-  | some v => exact .inl ⟨_, hd.lift_step hnr (Step.pure_eval rfl hv)⟩
+  | some v => exact .inl ⟨_, hd.lift_step hnr hnc (Step.pure_eval rfl hv)⟩
   | none =>
     have hstuck : ∀ c'', ¬ Step M (e, ρ, ctl, σ) c'' := by
       intro c'' hs
-      rcases hd.step_factor hs with ⟨r', ρr, σr, -, -, hr, -⟩ | ⟨ra, l, pes, heq, -⟩ |
-          ⟨_, _, _, _, _, _, hceq, -⟩
+      rcases hd.step_factor hs with ⟨r', ρr, ctlr, σr, -, -, hr, -⟩ | ⟨an', ra, l, pes, heq, -⟩ |
+          ⟨_, _, _, _, _, _, _, hceq, -⟩
       · obtain ⟨v, -, hv', -⟩ := hr.pure_inv rfl
         rw [hv] at hv'; cases hv'
-      · exact absurd heq (hnr ra l pes)
+      · exact absurd heq (hnr an' ra l pes)
       · cases hceq
     have hshape : ∀ dst, M.Embeds dst (e, ρ, ctl, σ) →
         ∃ (rsk : runstate_step_kind) (m : core_runM thread_state),
         step_ctx M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid
           (M.parent, M.thread e ρ ctl) = [Step_with_runstate2 rsk m] := by
       intro dst hemb
-      obtain ⟨-, hlay, -, -, -⟩ := hemb
+      obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
       obtain ⟨s, m, hsteps⟩ := step_ctx_pure_sym_shape hd hsz M.tagDefs
         dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
       exact ⟨_, _, hsteps⟩
-    rcases evalClass_of_none M.currentLoc M.file hv with ⟨err, hk⟩ | hu
+    rcases evalClass_of_none ctl.curLoc M.file hv with ⟨err, hk⟩ | hu
     · refine .inr (.inl (.killed (Other (DErr_core_run err)) ?_))
       intro dst hemb
-      obtain ⟨-, hlay, hfile, hext, -⟩ := hemb
+      obtain ⟨-, hlay, hfile, hext, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
       obtain ⟨s, m, hsteps, hm⟩ := step_ctx_pure_sym_kill hd hsz M.tagDefs
@@ -4355,43 +4821,48 @@ theorem complete_pure_sym {M : MachineCtx} {e : CoreExpr} {ctx : context}
     an operand the classifier leaves uncovered (an accepted-but-unmirrored
     leaf; the whole operand's outcome not characterized) is the residual
     `eval_uncovered`. -/
-theorem complete_load_op {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_load_op {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
     {pe2 : generic_pexpr Unit sym} {mo : memory_order}
-    (hd : Decomp e ctx (loadOpRedex loc ann ty pe2 mo))
+    (hd : Decomp e ctx (loadOpRedex an loc ann ty pe2 mo))
     (hsz : esize e ≤ lemDefaultFuel)
     (hnv2 : valueFromPexpr pe2 = none) (hp2 : PePure pe2)
     (hd2 : peDepth pe2 ≤ lemDefaultFuel)
     (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
     RoundComplete M (e, ρ, ctl, σ) := by
-  have hnr : ∀ (ra : core_run_annotation) (l : sym) (pes : List (generic_pexpr Unit sym)),
-      loadOpRedex loc ann ty pe2 mo ≠ runRedex ra l pes := by
-    intro ra l pes h; cases h
+  have hnr : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (l : sym)
+      (pes : List (generic_pexpr Unit sym)),
+      loadOpRedex an loc ann ty pe2 mo ≠ runRedex an' ra l pes := by
+    intro an' ra l pes h; cases h
+  have hnc : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (f : sym)
+      (pes : List (generic_pexpr Unit sym)),
+      loadOpRedex an loc ann ty pe2 mo ≠ callRedex an' ra f pes := by
+    intro an' ra f pes h; cases h
   cases hv2 : evalPexpr M.tagDefs M.extern ρ pe2 with
   | none =>
     have hstuck : ∀ c'', ¬ Step M (e, ρ, ctl, σ) c'' := by
       intro c'' hs
-      rcases hd.step_factor hs with ⟨r', ρr, σr, -, -, hr, -⟩ | ⟨ra, l, pes, heq, -⟩ |
-          ⟨_, _, _, _, _, _, hceq, -⟩
+      rcases hd.step_factor hs with ⟨r', ρr, ctlr, σr, -, -, hr, -⟩ | ⟨an', ra, l, pes, heq, -⟩ |
+          ⟨_, _, _, _, _, _, _, hceq, -⟩
       · obtain ⟨pv, hv2', -⟩ := hr.load_op_inv hnv2
         rw [hv2] at hv2'; cases hv2'
-      · exact absurd heq (hnr ra l pes)
+      · exact absurd heq (hnr an' ra l pes)
       · cases hceq
     have hshape : ∀ dst, M.Embeds dst (e, ρ, ctl, σ) →
         ∃ (rsk : runstate_step_kind) (m : core_runM thread_state),
         step_ctx M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid
           (M.parent, M.thread e ρ ctl) = [Step_with_runstate2 rsk m] := by
       intro dst hemb
-      obtain ⟨-, hlay, -, -, -⟩ := hemb
+      obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
       obtain ⟨s, m, hsteps⟩ := step_ctx_load_eval_shape hd hsz hnv2 hp2 M.tagDefs
         dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
       exact ⟨_, _, hsteps⟩
-    rcases evalClass_of_none M.currentLoc M.file hv2 with ⟨err, hk⟩ | hu
+    rcases evalClass_of_none ctl.curLoc M.file hv2 with ⟨err, hk⟩ | hu
     · refine .inr (.inl (.killed (Other (DErr_core_run err)) ?_))
       intro dst hemb
-      obtain ⟨-, hlay, hfile, hext, -⟩ := hemb
+      obtain ⟨-, hlay, hfile, hext, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
       obtain ⟨s, m, hsteps, hm⟩ := step_ctx_load_eval_kill hd hsz hnv2 hp2 hd2 M.tagDefs
@@ -4404,30 +4875,31 @@ theorem complete_load_op {M : MachineCtx} {e : CoreExpr} {ctx : context}
   | some v =>
     by_cases hptr : ∃ pv, v = Vobject (OVpointer pv)
     · obtain ⟨pv, rfl⟩ := hptr
-      exact .inl ⟨_, hd.lift_step hnr (Step.load_eval hnv2 hv2)⟩
+      exact .inl ⟨_, hd.lift_step hnr hnc (Step.load_eval hnv2 hv2)⟩
     · -- ILLTYPED AT DISTANCE ONE: the evaluation round succeeds into the
       -- ill-typed load, whose next step list is `[Step_error2 "Load"]`
       have hv' : ∀ pv, v ≠ Vobject (OVpointer pv) := fun pv h => hptr ⟨pv, h⟩
       refine .inr (.inl (.error_next
-        (apply_ctx ctx (Expr [] (Eaction (Paction polarity.Pos (Action loc ann
-          (Load0 (Pexpr [] () (PEval (Vctype ty))) (Pexpr [] () (PEval v)) mo))))), ρ, ctl, σ)
+        (apply_ctx ctx (Expr an (Eaction (Paction polarity.Pos (Action loc ann
+          (Load0 (Pexpr [] () (PEval (Vctype ty))) (Pexpr [] () (PEval v)) mo))))), ρ, ctl.upd an, σ)
         "Load" ?_ ?_))
       · intro dst hemb
-        obtain ⟨-, hlay, -, hext, -⟩ := hemb
-        simp only at hlay
+        obtain ⟨-, hlay, -, hext, -, hsym, hexc⟩ := hemb
+        simp only at hlay hsym hexc
         subst hlay
         obtain ⟨s, m, hsteps, hm⟩ := step_ctx_load_eval_ws' hd hsz hnv2 hp2 hd2
           M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
           (M.thread _ ρ ctl) rfl (by rw [hext]; exact hv2)
+        rw [MachineCtx.locUpdTh_thread] at hm
         refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace,
-          dst.dr_step_counter + 1, rfl, ?_⟩
+          dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
         exact advance_withrs_eval M.tagDefs M.tid s m (hm dst.core_run_state0)
       · intro dst hemb
-        obtain ⟨-, hlay, -, -, -⟩ := hemb
+        obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
         simp only at hlay
         subst hlay
         exact step_ctx_load_illtyped' hd hsz hv' M.tagDefs dst.layout_state
-          dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
+          dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ (ctl.upd an)) rfl
 
 /-- Kill-operand EVAL (kill/free arc K2): a pointer-evaluating operand
     is the mirror step; a non-pointer value is ILLTYPED AT DISTANCE ONE
@@ -4435,43 +4907,48 @@ theorem complete_load_op {M : MachineCtx} {e : CoreExpr} {ctx : context}
     the classifier rejects is the KILL `Other (DErr_core_run err)`; an
     operand the classifier leaves uncovered is the residual
     `eval_uncovered`. Stated at any `kind`. -/
-theorem complete_kill_op {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_kill_op {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {kind : kill_kind}
     {pe : generic_pexpr Unit sym}
-    (hd : Decomp e ctx (killOpRedex loc ann kind pe))
+    (hd : Decomp e ctx (killOpRedex an loc ann kind pe))
     (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexpr pe = none) (hp : PePure pe)
     (hdp : peDepth pe ≤ lemDefaultFuel)
     (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
     RoundComplete M (e, ρ, ctl, σ) := by
-  have hnr : ∀ (ra : core_run_annotation) (l : sym) (pes : List (generic_pexpr Unit sym)),
-      killOpRedex loc ann kind pe ≠ runRedex ra l pes := by
-    intro ra l pes h; cases h
+  have hnr : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (l : sym)
+      (pes : List (generic_pexpr Unit sym)),
+      killOpRedex an loc ann kind pe ≠ runRedex an' ra l pes := by
+    intro an' ra l pes h; cases h
+  have hnc : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (f : sym)
+      (pes : List (generic_pexpr Unit sym)),
+      killOpRedex an loc ann kind pe ≠ callRedex an' ra f pes := by
+    intro an' ra f pes h; cases h
   cases hv : evalPexpr M.tagDefs M.extern ρ pe with
   | none =>
     have hstuck : ∀ c'', ¬ Step M (e, ρ, ctl, σ) c'' := by
       intro c'' hs
-      rcases hd.step_factor hs with ⟨r', ρr, σr, -, -, hr, -⟩ | ⟨ra, l, pes, heq, -⟩ |
-          ⟨_, _, _, _, _, _, hceq, -⟩
+      rcases hd.step_factor hs with ⟨r', ρr, ctlr, σr, -, -, hr, -⟩ | ⟨an', ra, l, pes, heq, -⟩ |
+          ⟨_, _, _, _, _, _, _, hceq, -⟩
       · obtain ⟨pv, hv', -⟩ := hr.kill_op_inv hnv
         rw [hv] at hv'; cases hv'
-      · exact absurd heq (hnr ra l pes)
+      · exact absurd heq (hnr an' ra l pes)
       · cases hceq
     have hshape : ∀ dst, M.Embeds dst (e, ρ, ctl, σ) →
         ∃ (rsk : runstate_step_kind) (m : core_runM thread_state),
         step_ctx M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid
           (M.parent, M.thread e ρ ctl) = [Step_with_runstate2 rsk m] := by
       intro dst hemb
-      obtain ⟨-, hlay, -, -, -⟩ := hemb
+      obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
       obtain ⟨s, m, hsteps⟩ := step_ctx_kill_eval_shape hd hsz hnv hp M.tagDefs
         dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
       exact ⟨_, _, hsteps⟩
-    rcases evalClass_of_none M.currentLoc M.file hv with ⟨err, hk⟩ | hu
+    rcases evalClass_of_none ctl.curLoc M.file hv with ⟨err, hk⟩ | hu
     · refine .inr (.inl (.killed (Other (DErr_core_run err)) ?_))
       intro dst hemb
-      obtain ⟨-, hlay, hfile, hext, -⟩ := hemb
+      obtain ⟨-, hlay, hfile, hext, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
       obtain ⟨s, m, hsteps, hm⟩ := step_ctx_kill_eval_kill hd hsz hnv hp hdp M.tagDefs
@@ -4484,30 +4961,31 @@ theorem complete_kill_op {M : MachineCtx} {e : CoreExpr} {ctx : context}
   | some v =>
     by_cases hptr : ∃ pv, v = Vobject (OVpointer pv)
     · obtain ⟨pv, rfl⟩ := hptr
-      exact .inl ⟨_, hd.lift_step hnr (Step.kill_eval hnv hv)⟩
+      exact .inl ⟨_, hd.lift_step hnr hnc (Step.kill_eval hnv hv)⟩
     · -- ILLTYPED AT DISTANCE ONE: the evaluation round succeeds into the
       -- ill-typed kill, whose next step list is `[Step_error2 "Kill"]`
       have hv' : ∀ pv, v ≠ Vobject (OVpointer pv) := fun pv h => hptr ⟨pv, h⟩
       refine .inr (.inl (.error_next
-        (apply_ctx ctx (Expr [] (Eaction (Paction polarity.Pos (Action loc ann
-          (Kill kind (Pexpr [] () (PEval v))))))), ρ, ctl, σ)
+        (apply_ctx ctx (Expr an (Eaction (Paction polarity.Pos (Action loc ann
+          (Kill kind (Pexpr [] () (PEval v))))))), ρ, ctl.upd an, σ)
         "Kill" ?_ ?_))
       · intro dst hemb
-        obtain ⟨-, hlay, -, hext, -⟩ := hemb
-        simp only at hlay
+        obtain ⟨-, hlay, -, hext, -, hsym, hexc⟩ := hemb
+        simp only at hlay hsym hexc
         subst hlay
         obtain ⟨s, m, hsteps, hm⟩ := step_ctx_kill_eval_ws' hd hsz hnv hp hdp
           M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
           (M.thread _ ρ ctl) rfl (by rw [hext]; exact hv)
+        rw [MachineCtx.locUpdTh_thread] at hm
         refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace,
-          dst.dr_step_counter + 1, rfl, ?_⟩
+          dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
         exact advance_withrs_eval M.tagDefs M.tid s m (hm dst.core_run_state0)
       · intro dst hemb
-        obtain ⟨-, hlay, -, -, -⟩ := hemb
+        obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
         simp only at hlay
         subst hlay
         exact step_ctx_kill_illtyped' hd hsz hv' M.tagDefs dst.layout_state
-          dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
+          dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ (ctl.upd an)) rfl
 
 /-- Alloc-operand EVAL (kill/free arc K3): two integer-evaluating
     operands are the mirror step; an evaluable pair that is NOT two
@@ -4516,25 +4994,30 @@ theorem complete_kill_op {M : MachineCtx} {e : CoreExpr} {ctx : context}
     before size, the engine's order) the classifier rejects is the KILL
     `Other (DErr_core_run err)`; the first operand the classifier leaves
     uncovered is the residual `eval_uncovered`. -/
-theorem complete_alloc_op {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_alloc_op {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation}
     {pe1 pe2 : generic_pexpr Unit sym} {pref : prefix0}
-    (hd : Decomp e ctx (allocOpRedex loc ann pe1 pe2 pref))
+    (hd : Decomp e ctx (allocOpRedex an loc ann pe1 pe2 pref))
     (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexprs [pe1, pe2] = none)
     (hp1 : PePure pe1) (hp2 : PePure pe2)
     (hd1 : peDepth pe1 ≤ lemDefaultFuel) (hd2 : peDepth pe2 ≤ lemDefaultFuel)
     (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
     RoundComplete M (e, ρ, ctl, σ) := by
-  have hnr : ∀ (ra : core_run_annotation) (l : sym) (pes : List (generic_pexpr Unit sym)),
-      allocOpRedex loc ann pe1 pe2 pref ≠ runRedex ra l pes := by
-    intro ra l pes h; cases h
+  have hnr : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (l : sym)
+      (pes : List (generic_pexpr Unit sym)),
+      allocOpRedex an loc ann pe1 pe2 pref ≠ runRedex an' ra l pes := by
+    intro an' ra l pes h; cases h
+  have hnc : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (f : sym)
+      (pes : List (generic_pexpr Unit sym)),
+      allocOpRedex an loc ann pe1 pe2 pref ≠ callRedex an' ra f pes := by
+    intro an' ra f pes h; cases h
   have hshape : ∀ dst, M.Embeds dst (e, ρ, ctl, σ) →
       ∃ (rsk : runstate_step_kind) (m : core_runM thread_state),
       step_ctx M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid
         (M.parent, M.thread e ρ ctl) = [Step_with_runstate2 rsk m] := by
     intro dst hemb
-    obtain ⟨-, hlay, -, -, -⟩ := hemb
+    obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
     simp only at hlay
     subst hlay
     obtain ⟨s, m, hsteps⟩ := step_ctx_alloc_eval_shape hd hsz hnv hp1 hp2 M.tagDefs
@@ -4544,16 +5027,16 @@ theorem complete_alloc_op {M : MachineCtx} {e : CoreExpr} {ctx : context}
   | none =>
     have hstuck : ∀ c'', ¬ Step M (e, ρ, ctl, σ) c'' := by
       intro c'' hs
-      rcases hd.step_factor hs with ⟨r', ρr, σr, -, -, hr, -⟩ | ⟨ra, l, pes, heq, -⟩ |
-          ⟨_, _, _, _, _, _, hceq, -⟩
+      rcases hd.step_factor hs with ⟨r', ρr, ctlr, σr, -, -, hr, -⟩ | ⟨an', ra, l, pes, heq, -⟩ |
+          ⟨_, _, _, _, _, _, _, hceq, -⟩
       · obtain ⟨al, sz, hv1', -, -⟩ := hr.alloc_op_inv hnv
         rw [hv1] at hv1'; cases hv1'
-      · exact absurd heq (hnr ra l pes)
+      · exact absurd heq (hnr an' ra l pes)
       · cases hceq
-    rcases evalClass_of_none M.currentLoc M.file hv1 with ⟨err, hk⟩ | hu
+    rcases evalClass_of_none ctl.curLoc M.file hv1 with ⟨err, hk⟩ | hu
     · refine .inr (.inl (.killed (Other (DErr_core_run err)) ?_))
       intro dst hemb
-      obtain ⟨-, hlay, hfile, hext, -⟩ := hemb
+      obtain ⟨-, hlay, hfile, hext, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
       obtain ⟨s, m, hsteps, hm⟩ := step_ctx_alloc_eval_kill1 hd hsz hnv hp1 hp2 hd1
@@ -4568,16 +5051,16 @@ theorem complete_alloc_op {M : MachineCtx} {e : CoreExpr} {ctx : context}
     | none =>
       have hstuck : ∀ c'', ¬ Step M (e, ρ, ctl, σ) c'' := by
         intro c'' hs
-        rcases hd.step_factor hs with ⟨r', ρr, σr, -, -, hr, -⟩ | ⟨ra, l, pes, heq, -⟩ |
-            ⟨_, _, _, _, _, _, hceq, -⟩
+        rcases hd.step_factor hs with ⟨r', ρr, ctlr, σr, -, -, hr, -⟩ | ⟨an', ra, l, pes, heq, -⟩ |
+            ⟨_, _, _, _, _, _, _, hceq, -⟩
         · obtain ⟨al, sz, -, hv2', -⟩ := hr.alloc_op_inv hnv
           rw [hv2] at hv2'; cases hv2'
-        · exact absurd heq (hnr ra l pes)
+        · exact absurd heq (hnr an' ra l pes)
         · cases hceq
-      rcases evalClass_of_none M.currentLoc M.file hv2 with ⟨err, hk⟩ | hu
+      rcases evalClass_of_none ctl.curLoc M.file hv2 with ⟨err, hk⟩ | hu
       · refine .inr (.inl (.killed (Other (DErr_core_run err)) ?_))
         intro dst hemb
-        obtain ⟨-, hlay, hfile, hext, -⟩ := hemb
+        obtain ⟨-, hlay, hfile, hext, -, -, -⟩ := hemb
         simp only at hlay
         subst hlay
         obtain ⟨s, m, hsteps, hm⟩ := step_ctx_alloc_eval_kill2 hd hsz hnv hp1 hp2 hd1 hd2
@@ -4591,30 +5074,144 @@ theorem complete_alloc_op {M : MachineCtx} {e : CoreExpr} {ctx : context}
     | some v2 =>
       by_cases hint : ∃ i1 i2, v1 = Vobject (OVinteger i1) ∧ v2 = Vobject (OVinteger i2)
       · obtain ⟨i1, i2, rfl, rfl⟩ := hint
-        exact .inl ⟨_, hd.lift_step hnr (Step.alloc_eval hnv hv1 hv2)⟩
+        exact .inl ⟨_, hd.lift_step hnr hnc (Step.alloc_eval hnv hv1 hv2)⟩
       · -- ILLTYPED AT DISTANCE ONE (the alloc twin)
         have hv' : ∀ i1 i2, ¬ (v1 = Vobject (OVinteger i1) ∧ v2 = Vobject (OVinteger i2)) :=
           fun i1 i2 h => hint ⟨i1, i2, h⟩
         refine .inr (.inl (.error_next
-          (apply_ctx ctx (Expr [] (Eaction (Paction polarity.Pos (Action loc ann
-            (Alloc0 (Pexpr [] () (PEval v1)) (Pexpr [] () (PEval v2)) pref))))), ρ, ctl, σ)
+          (apply_ctx ctx (Expr an (Eaction (Paction polarity.Pos (Action loc ann
+            (Alloc0 (Pexpr [] () (PEval v1)) (Pexpr [] () (PEval v2)) pref))))), ρ, ctl.upd an, σ)
           "Alloc" ?_ ?_))
         · intro dst hemb
-          obtain ⟨-, hlay, -, hext, -⟩ := hemb
-          simp only at hlay
+          obtain ⟨-, hlay, -, hext, -, hsym, hexc⟩ := hemb
+          simp only at hlay hsym hexc
           subst hlay
           obtain ⟨s, m, hsteps, hm⟩ := step_ctx_alloc_eval_ws' hd hsz hnv hp1 hp2 hd1 hd2
             M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
             (M.thread _ ρ ctl) rfl (by rw [hext]; exact hv1) (by rw [hext]; exact hv2)
+          rw [MachineCtx.locUpdTh_thread] at hm
           refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace,
-            dst.dr_step_counter + 1, rfl, ?_⟩
+            dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
           exact advance_withrs_eval M.tagDefs M.tid s m (hm dst.core_run_state0)
         · intro dst hemb
-          obtain ⟨-, hlay, -, -, -⟩ := hemb
+          obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
           simp only at hlay
           subst hlay
           exact step_ctx_alloc_illtyped' hd hsz hv' M.tagDefs dst.layout_state
-            dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
+            dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ (ctl.upd an)) rfl
+
+/-- Alloc-operand EVAL (kill/free arc K3): two integer-evaluating
+    operands are the mirror step; an evaluable pair that is NOT two
+    integers is ILLTYPED AT DISTANCE ONE (the rebuilt action's `some _,
+    some _ => ACTION_ILLTYPED "Create"`); the first operand (alignment
+    before size, the engine's order) the classifier rejects is the KILL
+    `Other (DErr_core_run err)`; the first operand the classifier leaves
+    uncovered is the residual `eval_uncovered`. -/
+theorem complete_create_op {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
+    {loc : CerbLocation.Loc} {ann : core_run_annotation}
+    {pe1 pe2 : generic_pexpr Unit sym} {pref : prefix0}
+    (hd : Decomp e ctx (createOpRedex an loc ann pe1 pe2 pref))
+    (hsz : esize e ≤ lemDefaultFuel)
+    (hnv : valueFromPexprs [pe1, pe2] = none)
+    (hp1 : PePure pe1) (hp2 : PePure pe2)
+    (hd1 : peDepth pe1 ≤ lemDefaultFuel) (hd2 : peDepth pe2 ≤ lemDefaultFuel)
+    (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
+    RoundComplete M (e, ρ, ctl, σ) := by
+  have hnr : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (l : sym)
+      (pes : List (generic_pexpr Unit sym)),
+      createOpRedex an loc ann pe1 pe2 pref ≠ runRedex an' ra l pes := by
+    intro an' ra l pes h; cases h
+  have hnc : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (f : sym)
+      (pes : List (generic_pexpr Unit sym)),
+      createOpRedex an loc ann pe1 pe2 pref ≠ callRedex an' ra f pes := by
+    intro an' ra f pes h; cases h
+  have hshape : ∀ dst, M.Embeds dst (e, ρ, ctl, σ) →
+      ∃ (rsk : runstate_step_kind) (m : core_runM thread_state),
+      step_ctx M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid
+        (M.parent, M.thread e ρ ctl) = [Step_with_runstate2 rsk m] := by
+    intro dst hemb
+    obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
+    simp only at hlay
+    subst hlay
+    obtain ⟨s, m, hsteps⟩ := step_ctx_create_eval_shape hd hsz hnv hp1 hp2 M.tagDefs
+      dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
+    exact ⟨_, _, hsteps⟩
+  cases hv1 : evalPexpr M.tagDefs M.extern ρ pe1 with
+  | none =>
+    have hstuck : ∀ c'', ¬ Step M (e, ρ, ctl, σ) c'' := by
+      intro c'' hs
+      rcases hd.step_factor hs with ⟨r', ρr, ctlr, σr, -, -, hr, -⟩ | ⟨an', ra, l, pes, heq, -⟩ |
+          ⟨_, _, _, _, _, _, _, hceq, -⟩
+      · obtain ⟨al, sz, hv1', -, -⟩ := hr.create_op_inv hnv
+        rw [hv1] at hv1'; cases hv1'
+      · exact absurd heq (hnr an' ra l pes)
+      · cases hceq
+    rcases evalClass_of_none ctl.curLoc M.file hv1 with ⟨err, hk⟩ | hu
+    · refine .inr (.inl (.killed (Other (DErr_core_run err)) ?_))
+      intro dst hemb
+      obtain ⟨-, hlay, hfile, hext, -, -, -⟩ := hemb
+      simp only at hlay
+      subst hlay
+      obtain ⟨s, m, hsteps, hm⟩ := step_ctx_create_eval_kill1 hd hsz hnv hp1 hp2 hd1
+        M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
+        (M.thread _ ρ ctl) rfl (by rw [hext, hfile]; exact hk)
+      exact ⟨_, dst, hsteps, rfl, advance_withrs_killed_eval M.tagDefs M.tid s m
+        (hm dst.core_run_state0)⟩
+    · exact .inr (.inr (.eval_uncovered pe1 hstuck
+        (by rw [hd.operandsOf_eq]; exact List.mem_cons_self ..) hp1 hu hshape))
+  | some v1 =>
+    cases hv2 : evalPexpr M.tagDefs M.extern ρ pe2 with
+    | none =>
+      have hstuck : ∀ c'', ¬ Step M (e, ρ, ctl, σ) c'' := by
+        intro c'' hs
+        rcases hd.step_factor hs with ⟨r', ρr, ctlr, σr, -, -, hr, -⟩ | ⟨an', ra, l, pes, heq, -⟩ |
+            ⟨_, _, _, _, _, _, _, hceq, -⟩
+        · obtain ⟨al, sz, -, hv2', -⟩ := hr.create_op_inv hnv
+          rw [hv2] at hv2'; cases hv2'
+        · exact absurd heq (hnr an' ra l pes)
+        · cases hceq
+      rcases evalClass_of_none ctl.curLoc M.file hv2 with ⟨err, hk⟩ | hu
+      · refine .inr (.inl (.killed (Other (DErr_core_run err)) ?_))
+        intro dst hemb
+        obtain ⟨-, hlay, hfile, hext, -, -, -⟩ := hemb
+        simp only at hlay
+        subst hlay
+        obtain ⟨s, m, hsteps, hm⟩ := step_ctx_create_eval_kill2 hd hsz hnv hp1 hp2 hd1 hd2
+          M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
+          (M.thread _ ρ ctl) rfl (by rw [hext]; exact hv1) (by rw [hext, hfile]; exact hk)
+        exact ⟨_, dst, hsteps, rfl, advance_withrs_killed_eval M.tagDefs M.tid s m
+          (hm dst.core_run_state0)⟩
+      · exact .inr (.inr (.eval_uncovered pe2 hstuck
+          (by rw [hd.operandsOf_eq]; exact List.mem_cons_of_mem _ (List.mem_singleton.mpr rfl))
+          hp2 hu hshape))
+    | some v2 =>
+      by_cases hint : ∃ i1 ty, v1 = Vobject (OVinteger i1) ∧ v2 = Vctype ty
+      · obtain ⟨i1, ty, rfl, rfl⟩ := hint
+        exact .inl ⟨_, hd.lift_step hnr hnc (Step.create_eval hnv hv1 hv2)⟩
+      · -- ILLTYPED AT DISTANCE ONE (the create twin)
+        have hv' : ∀ i1 ty, ¬ (v1 = Vobject (OVinteger i1) ∧ v2 = Vctype ty) :=
+          fun i1 ty h => hint ⟨i1, ty, h⟩
+        refine .inr (.inl (.error_next
+          (apply_ctx ctx (Expr an (Eaction (Paction polarity.Pos (Action loc ann
+            (Create (Pexpr [] () (PEval v1)) (Pexpr [] () (PEval v2)) pref))))), ρ, ctl.upd an, σ)
+          "Create" ?_ ?_))
+        · intro dst hemb
+          obtain ⟨-, hlay, -, hext, -, hsym, hexc⟩ := hemb
+          simp only at hlay hsym hexc
+          subst hlay
+          obtain ⟨s, m, hsteps, hm⟩ := step_ctx_create_eval_ws' hd hsz hnv hp1 hp2 hd1 hd2
+            M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
+            (M.thread _ ρ ctl) rfl (by rw [hext]; exact hv1) (by rw [hext]; exact hv2)
+          rw [MachineCtx.locUpdTh_thread] at hm
+          refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace,
+            dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
+          exact advance_withrs_eval M.tagDefs M.tid s m (hm dst.core_run_state0)
+        · intro dst hemb
+          obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
+          simp only at hlay
+          subst hlay
+          exact step_ctx_create_illtyped' hd hsz hv' M.tagDefs dst.layout_state
+            dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ (ctl.upd an)) rfl
 
 /-- Memop-operand EVAL (any memop): evaluable operands are the mirror
     step; the first operand (in the engine's left-to-right order) the
@@ -4622,24 +5219,29 @@ theorem complete_alloc_op {M : MachineCtx} {e : CoreExpr} {ctx : context}
     operand the classifier leaves uncovered (an accepted-but-unmirrored
     leaf; the whole operand's outcome not characterized) is the residual
     `eval_uncovered`. -/
-theorem complete_memop_op {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_memop_op {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {mop : memop} {pe1 pe2 : generic_pexpr Unit sym}
-    (hd : Decomp e ctx (memopRedex mop [pe1, pe2]))
+    (hd : Decomp e ctx (memopRedex an mop [pe1, pe2]))
     (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexprs [pe1, pe2] = none)
     (hp1 : PePure pe1) (hp2 : PePure pe2)
     (hd1 : peDepth pe1 ≤ lemDefaultFuel) (hd2 : peDepth pe2 ≤ lemDefaultFuel)
     (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
     RoundComplete M (e, ρ, ctl, σ) := by
-  have hnr : ∀ (ra : core_run_annotation) (l : sym) (pes : List (generic_pexpr Unit sym)),
-      memopRedex mop [pe1, pe2] ≠ runRedex ra l pes := by
-    intro ra l pes h; cases h
+  have hnr : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (l : sym)
+      (pes : List (generic_pexpr Unit sym)),
+      memopRedex an mop [pe1, pe2] ≠ runRedex an' ra l pes := by
+    intro an' ra l pes h; cases h
+  have hnc : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (f : sym)
+      (pes : List (generic_pexpr Unit sym)),
+      memopRedex an mop [pe1, pe2] ≠ callRedex an' ra f pes := by
+    intro an' ra f pes h; cases h
   have hshape : ∀ dst, M.Embeds dst (e, ρ, ctl, σ) →
       ∃ (rsk : runstate_step_kind) (m : core_runM thread_state),
       step_ctx M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid
         (M.parent, M.thread e ρ ctl) = [Step_with_runstate2 rsk m] := by
     intro dst hemb
-    obtain ⟨-, hlay, -, -, -⟩ := hemb
+    obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
     simp only at hlay
     subst hlay
     obtain ⟨s, m, hsteps⟩ := step_ctx_memop_eval_shape hd hsz hnv M.tagDefs
@@ -4647,12 +5249,12 @@ theorem complete_memop_op {M : MachineCtx} {e : CoreExpr} {ctx : context}
     exact ⟨_, _, hsteps⟩
   -- the KILL at a classified operand list
   have hkill : ∀ {err : core_run_cause},
-      evalClassList M.tagDefs M.currentLoc M.extern M.file ρ [pe1, pe2] = .kill err →
+      evalClassList M.tagDefs ctl.curLoc M.extern M.file ρ [pe1, pe2] = .kill err →
       RoundComplete M (e, ρ, ctl, σ) := by
     intro err hcl
     refine .inr (.inl (.killed (Other (DErr_core_run err)) ?_))
     intro dst hemb
-    obtain ⟨-, hlay, hfile, hext, -⟩ := hemb
+    obtain ⟨-, hlay, hfile, hext, -, -, -⟩ := hemb
     simp only at hlay
     subst hlay
     obtain ⟨s, m, hsteps, hm⟩ := step_ctx_memop_eval_kill hd hsz hnv hp1 hp2 hd1 hd2
@@ -4664,49 +5266,49 @@ theorem complete_memop_op {M : MachineCtx} {e : CoreExpr} {ctx : context}
   | none =>
     have hstuck : ∀ c'', ¬ Step M (e, ρ, ctl, σ) c'' := by
       intro c'' hs
-      rcases hd.step_factor hs with ⟨r', ρr, σr, -, -, hr, -⟩ | ⟨ra, l, pes, heq, -⟩ |
-          ⟨_, _, _, _, _, _, hceq, -⟩
+      rcases hd.step_factor hs with ⟨r', ρr, ctlr, σr, -, -, hr, -⟩ | ⟨an', ra, l, pes, heq, -⟩ |
+          ⟨_, _, _, _, _, _, _, hceq, -⟩
       · obtain ⟨v1, v2, hv1', -, -⟩ := hr.memop_op_inv hnv
         rw [hv1] at hv1'; cases hv1'
-      · exact absurd heq (hnr ra l pes)
+      · exact absurd heq (hnr an' ra l pes)
       · cases hceq
-    rcases evalClass_of_none M.currentLoc M.file hv1 with ⟨err, hk⟩ | hu
+    rcases evalClass_of_none ctl.curLoc M.file hv1 with ⟨err, hk⟩ | hu
     · exact hkill (by unfold evalClassList; rw [hk])
     · exact .inr (.inr (.eval_uncovered pe1 hstuck
         (by rw [hd.operandsOf_eq]; exact List.mem_cons_self ..) hp1 hu hshape))
   | some v1 =>
-    have hc1 : evalClass M.tagDefs M.currentLoc M.extern M.file ρ pe1 = .val v1 :=
+    have hc1 : evalClass M.tagDefs ctl.curLoc M.extern M.file ρ pe1 = .val v1 :=
       (evalClass_val_iff _ _ _ _ _ _ _).mpr hv1
     cases hv2 : evalPexpr M.tagDefs M.extern ρ pe2 with
     | none =>
       have hstuck : ∀ c'', ¬ Step M (e, ρ, ctl, σ) c'' := by
         intro c'' hs
-        rcases hd.step_factor hs with ⟨r', ρr, σr, -, -, hr, -⟩ | ⟨ra, l, pes, heq, -⟩ |
-            ⟨_, _, _, _, _, _, hceq, -⟩
+        rcases hd.step_factor hs with ⟨r', ρr, ctlr, σr, -, -, hr, -⟩ | ⟨an', ra, l, pes, heq, -⟩ |
+            ⟨_, _, _, _, _, _, _, hceq, -⟩
         · obtain ⟨v1', v2, -, hv2', -⟩ := hr.memop_op_inv hnv
           rw [hv2] at hv2'; cases hv2'
-        · exact absurd heq (hnr ra l pes)
+        · exact absurd heq (hnr an' ra l pes)
         · cases hceq
-      rcases evalClass_of_none M.currentLoc M.file hv2 with ⟨err, hk⟩ | hu
+      rcases evalClass_of_none ctl.curLoc M.file hv2 with ⟨err, hk⟩ | hu
       · exact hkill (by
-          show (match evalClass M.tagDefs M.currentLoc M.extern M.file ρ pe1 with
+          show (match evalClass M.tagDefs ctl.curLoc M.extern M.file ρ pe1 with
             | .kill err => EvalListOut.kill err
             | .uncovered => EvalListOut.uncovered pe1
             | .val v =>
-              match evalClassList M.tagDefs M.currentLoc M.extern M.file ρ [pe2] with
+              match evalClassList M.tagDefs ctl.curLoc M.extern M.file ρ [pe2] with
               | .vals vs => EvalListOut.vals (v :: vs)
               | .kill err => EvalListOut.kill err
               | .uncovered pe' => EvalListOut.uncovered pe') = EvalListOut.kill err
           rw [hc1]
-          show (match evalClassList M.tagDefs M.currentLoc M.extern M.file ρ [pe2] with
+          show (match evalClassList M.tagDefs ctl.curLoc M.extern M.file ρ [pe2] with
             | .vals vs => EvalListOut.vals (v1 :: vs)
             | .kill err => EvalListOut.kill err
             | .uncovered pe' => EvalListOut.uncovered pe') = EvalListOut.kill err
-          show (match (match evalClass M.tagDefs M.currentLoc M.extern M.file ρ pe2 with
+          show (match (match evalClass M.tagDefs ctl.curLoc M.extern M.file ρ pe2 with
             | .kill err => EvalListOut.kill err
             | .uncovered => EvalListOut.uncovered pe2
             | .val v =>
-              match evalClassList M.tagDefs M.currentLoc M.extern M.file ρ [] with
+              match evalClassList M.tagDefs ctl.curLoc M.extern M.file ρ [] with
               | .vals vs => EvalListOut.vals (v :: vs)
               | .kill err => EvalListOut.kill err
               | .uncovered pe' => EvalListOut.uncovered pe') with
@@ -4717,7 +5319,7 @@ theorem complete_memop_op {M : MachineCtx} {e : CoreExpr} {ctx : context}
       · exact .inr (.inr (.eval_uncovered pe2 hstuck
           (by rw [hd.operandsOf_eq]; exact List.mem_cons_of_mem _ (List.mem_singleton.mpr rfl))
           hp2 hu hshape))
-    | some v2 => exact .inl ⟨_, hd.lift_step hnr (Step.memop_eval hnv hv1 hv2)⟩
+    | some v2 => exact .inl ⟨_, hd.lift_step hnr hnc (Step.memop_eval hnv hv1 hv2)⟩
 
 /-- Store ACTION_EVAL: a pointer-valued pointer operand with an
     evaluable value operand is the mirror step; a non-pointer pointer
@@ -4727,25 +5329,30 @@ theorem complete_memop_op {M : MachineCtx} {e : CoreExpr} {ctx : context}
     `Other (DErr_core_run err)`; the first operand the classifier leaves
     uncovered (an accepted-but-unmirrored leaf; the whole operand's
     outcome not characterized) is the residual `eval_uncovered`. -/
-theorem complete_store_op {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_store_op {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
     {pe2 pe3 : generic_pexpr Unit sym} {mo : memory_order}
-    (hd : Decomp e ctx (storeOpRedex loc ann ty pe2 pe3 mo))
+    (hd : Decomp e ctx (storeOpRedex an loc ann ty pe2 pe3 mo))
     (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexprs [pe2, pe3] = none)
     (hp2 : PePure pe2) (hp3 : PePure pe3)
     (hd2 : peDepth pe2 ≤ lemDefaultFuel) (hd3 : peDepth pe3 ≤ lemDefaultFuel)
     (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
     RoundComplete M (e, ρ, ctl, σ) := by
-  have hnr : ∀ (ra : core_run_annotation) (l : sym) (pes : List (generic_pexpr Unit sym)),
-      storeOpRedex loc ann ty pe2 pe3 mo ≠ runRedex ra l pes := by
-    intro ra l pes h; cases h
+  have hnr : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (l : sym)
+      (pes : List (generic_pexpr Unit sym)),
+      storeOpRedex an loc ann ty pe2 pe3 mo ≠ runRedex an' ra l pes := by
+    intro an' ra l pes h; cases h
+  have hnc : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (f : sym)
+      (pes : List (generic_pexpr Unit sym)),
+      storeOpRedex an loc ann ty pe2 pe3 mo ≠ callRedex an' ra f pes := by
+    intro an' ra f pes h; cases h
   have hshape : ∀ dst, M.Embeds dst (e, ρ, ctl, σ) →
       ∃ (rsk : runstate_step_kind) (m : core_runM thread_state),
       step_ctx M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid
         (M.parent, M.thread e ρ ctl) = [Step_with_runstate2 rsk m] := by
     intro dst hemb
-    obtain ⟨-, hlay, -, -, -⟩ := hemb
+    obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
     simp only at hlay
     subst hlay
     obtain ⟨s, m, hsteps⟩ := step_ctx_store_eval_shape hd hsz hnv hp2 hp3 M.tagDefs
@@ -4755,16 +5362,16 @@ theorem complete_store_op {M : MachineCtx} {e : CoreExpr} {ctx : context}
   | none =>
     have hstuck : ∀ c'', ¬ Step M (e, ρ, ctl, σ) c'' := by
       intro c'' hs
-      rcases hd.step_factor hs with ⟨r', ρr, σr, -, -, hr, -⟩ | ⟨ra, l, pes, heq, -⟩ |
-          ⟨_, _, _, _, _, _, hceq, -⟩
+      rcases hd.step_factor hs with ⟨r', ρr, ctlr, σr, -, -, hr, -⟩ | ⟨an', ra, l, pes, heq, -⟩ |
+          ⟨_, _, _, _, _, _, _, hceq, -⟩
       · obtain ⟨pv, cv', hv2', -, -⟩ := hr.store_op_inv hnv
         rw [hv2] at hv2'; cases hv2'
-      · exact absurd heq (hnr ra l pes)
+      · exact absurd heq (hnr an' ra l pes)
       · cases hceq
-    rcases evalClass_of_none M.currentLoc M.file hv2 with ⟨err, hk⟩ | hu
+    rcases evalClass_of_none ctl.curLoc M.file hv2 with ⟨err, hk⟩ | hu
     · refine .inr (.inl (.killed (Other (DErr_core_run err)) ?_))
       intro dst hemb
-      obtain ⟨-, hlay, hfile, hext, -⟩ := hemb
+      obtain ⟨-, hlay, hfile, hext, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
       obtain ⟨s, m, hsteps, hm⟩ := step_ctx_store_eval_kill2 hd hsz hnv hp2 hp3 hd2
@@ -4779,16 +5386,16 @@ theorem complete_store_op {M : MachineCtx} {e : CoreExpr} {ctx : context}
     | none =>
       have hstuck : ∀ c'', ¬ Step M (e, ρ, ctl, σ) c'' := by
         intro c'' hs
-        rcases hd.step_factor hs with ⟨r', ρr, σr, -, -, hr, -⟩ | ⟨ra, l, pes, heq, -⟩ |
-            ⟨_, _, _, _, _, _, hceq, -⟩
+        rcases hd.step_factor hs with ⟨r', ρr, ctlr, σr, -, -, hr, -⟩ | ⟨an', ra, l, pes, heq, -⟩ |
+            ⟨_, _, _, _, _, _, _, hceq, -⟩
         · obtain ⟨pv, cv', -, hv3', -⟩ := hr.store_op_inv hnv
           rw [hv3] at hv3'; cases hv3'
-        · exact absurd heq (hnr ra l pes)
+        · exact absurd heq (hnr an' ra l pes)
         · cases hceq
-      rcases evalClass_of_none M.currentLoc M.file hv3 with ⟨err, hk⟩ | hu
+      rcases evalClass_of_none ctl.curLoc M.file hv3 with ⟨err, hk⟩ | hu
       · refine .inr (.inl (.killed (Other (DErr_core_run err)) ?_))
         intro dst hemb
-        obtain ⟨-, hlay, hfile, hext, -⟩ := hemb
+        obtain ⟨-, hlay, hfile, hext, -, -, -⟩ := hemb
         simp only at hlay
         subst hlay
         obtain ⟨s, m, hsteps, hm⟩ := step_ctx_store_eval_kill3 hd hsz hnv hp2 hp3 hd2 hd3
@@ -4802,30 +5409,31 @@ theorem complete_store_op {M : MachineCtx} {e : CoreExpr} {ctx : context}
     | some cv =>
       by_cases hptr : ∃ pv, v = Vobject (OVpointer pv)
       · obtain ⟨pv, rfl⟩ := hptr
-        exact .inl ⟨_, hd.lift_step hnr (Step.store_eval hnv hv2 hv3)⟩
+        exact .inl ⟨_, hd.lift_step hnr hnc (Step.store_eval hnv hv2 hv3)⟩
       · -- ILLTYPED AT DISTANCE ONE (the store twin)
         have hv' : ∀ pv, v ≠ Vobject (OVpointer pv) := fun pv h => hptr ⟨pv, h⟩
         refine .inr (.inl (.error_next
-          (apply_ctx ctx (Expr [] (Eaction (Paction polarity.Pos (Action loc ann
+          (apply_ctx ctx (Expr an (Eaction (Paction polarity.Pos (Action loc ann
             (Store0 false (Pexpr [] () (PEval (Vctype ty))) (Pexpr [] () (PEval v))
-              (Pexpr [] () (PEval cv)) mo))))), ρ, ctl, σ)
+              (Pexpr [] () (PEval cv)) mo))))), ρ, ctl.upd an, σ)
           "Store" ?_ ?_))
         · intro dst hemb
-          obtain ⟨-, hlay, -, hext, -⟩ := hemb
-          simp only at hlay
+          obtain ⟨-, hlay, -, hext, -, hsym, hexc⟩ := hemb
+          simp only at hlay hsym hexc
           subst hlay
           obtain ⟨s, m, hsteps, hm⟩ := step_ctx_store_eval_ws' hd hsz hnv hp2 hp3 hd2 hd3
             M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
             (M.thread _ ρ ctl) rfl (by rw [hext]; exact hv2) (by rw [hext]; exact hv3)
+          rw [MachineCtx.locUpdTh_thread] at hm
           refine ⟨_, hsteps, rfl, dst.core_run_state0, dst.trace,
-            dst.dr_step_counter + 1, rfl, ?_⟩
+            dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
           exact advance_withrs_eval M.tagDefs M.tid s m (hm dst.core_run_state0)
         · intro dst hemb
-          obtain ⟨-, hlay, -, -, -⟩ := hemb
+          obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
           simp only at hlay
           subst hlay
           exact step_ctx_store_illtyped' hd hsz hv' M.tagDefs dst.layout_state
-            dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
+            dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ (ctl.upd an)) rfl
 
 /-! ### The memop row: the pointer-equality fork and the driver's
 INVALID-memop panic -/
@@ -5090,24 +5698,29 @@ theorem perform_memop_ptreq_panic (tds : Fmap sym (CerbLocation.Loc × tag_defin
     deterministic `eqPtrval` are the mirror step; the
     differing-provenance fork is FORK; non-pointer operands are the
     driver's memop PANIC. -/
-theorem complete_memop_vals {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_memop_vals {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {v1 v2 : value}
-    (hd : Decomp e ctx (memopPtrEqVals v1 v2))
+    (hd : Decomp e ctx (memopPtrEqVals an v1 v2))
     (hsz : esize e ≤ lemDefaultFuel) (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
     RoundComplete M (e, ρ, ctl, σ) := by
-  have hnr : ∀ (ra : core_run_annotation) (l : sym) (pes : List (generic_pexpr Unit sym)),
-      memopPtrEqVals v1 v2 ≠ runRedex ra l pes := by
-    intro ra l pes h; cases h
+  have hnr : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (l : sym)
+      (pes : List (generic_pexpr Unit sym)),
+      memopPtrEqVals an v1 v2 ≠ runRedex an' ra l pes := by
+    intro an' ra l pes h; cases h
+  have hnc : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (f : sym)
+      (pes : List (generic_pexpr Unit sym)),
+      memopPtrEqVals an v1 v2 ≠ callRedex an' ra f pes := by
+    intro an' ra f pes h; cases h
   by_cases hptrs : ∃ pv1 pv2, v1 = Vobject (OVpointer pv1) ∧ v2 = Vobject (OVpointer pv2)
   · obtain ⟨pv1, pv2, rfl, rfl⟩ := hptrs
     rcases eqPtrval_layer default pv1 pv2 σ with ⟨b, hb⟩ | ⟨a1, a2, hnd⟩
     · have hmem : applyMemM (CerbMem.eqPtrval default pv1 pv2) σ = some (b, σ) := by
         rw [applyMemM_eq_ndProj, hb]; rfl
-      exact .inl ⟨_, hd.lift_step hnr
+      exact .inl ⟨_, hd.lift_step hnr hnc
         (Step.memop_ptreq (valueFromPexpr_val _ _) (valueFromPexpr_val _ _) hmem)⟩
     · refine .inr (.inl (.fork ?_))
       intro dst hemb
-      obtain ⟨-, hlay, -, -, -⟩ := hemb
+      obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
       have hsteps := step_ctx_memop hd hsz rfl rfl M.tagDefs dst.layout_state
@@ -5115,12 +5728,13 @@ theorem complete_memop_vals {M : MachineCtx} {e : CoreExpr} {ctx : context}
       rw [hd.unseq_ccall_false] at hsteps
       refine ⟨_, hsteps, rfl, ?_⟩
       exact memop_fork (by rw [eqPtrval_loc_irrel _ default]; exact hnd)
-  · obtain ⟨msg, g, hpm⟩ := perform_memop_ptreq_panic M.tagDefs M.currentLoc M.tid
-      (fun cval => { M.thread e ρ ctl with
+  · obtain ⟨msg, g, hpm⟩ := perform_memop_ptreq_panic M.tagDefs
+      (locUpdTh an (M.thread e ρ ctl)).current_loc M.tid
+      (fun cval => { locUpdTh an (M.thread e ρ ctl) with
         arena := apply_ctx ctx (Expr [] (Epure (Pexpr [] () (PEval cval)))) }) v1 v2 hptrs
     refine .inr (.inl (.panic_memop msg ?_))
     intro dst hemb
-    obtain ⟨-, hlay, -, -, -⟩ := hemb
+    obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
     simp only at hlay
     subst hlay
     have hsteps := step_ctx_memop hd hsz rfl rfl M.tagDefs dst.layout_state
@@ -5131,15 +5745,15 @@ theorem complete_memop_vals {M : MachineCtx} {e : CoreExpr} {ctx : context}
 /-- Erun at a context WITHOUT a current procedure: the engine's PANIC
     in the label lookup's key (`ShippedRefusal.panic_noproc`; the
     mirror's label map is empty, fail-closed). -/
-theorem complete_run_noproc {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_run_noproc {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {ra : core_run_annotation} {l : sym} {pes : List (generic_pexpr Unit sym)}
-    (hd : Decomp e ctx (runRedex ra l pes))
+    (hd : Decomp e ctx (runRedex an ra l pes))
     (hsz : esize e ≤ lemDefaultFuel)
     {ctl : Ctl} (hproc : ctl.proc = none) (ρ : EnvStack) (σ : Mem) :
     RoundComplete M (e, ρ, ctl, σ) := by
   refine .inr (.inl (.panic_noproc "Core_reduction ==> Erun outside of a proc" hproc ?_))
   intro dst hemb
-  obtain ⟨-, hlay, -, -, -⟩ := hemb
+  obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
   simp only at hlay
   subst hlay
   obtain ⟨s, inst, k, hsteps⟩ := step_ctx_run_noproc hd hsz M.tagDefs dst.layout_state
@@ -5222,9 +5836,9 @@ theorem mapM_full_eval_kill {th : thread_state}
 /-- The PCALL round whose ARGUMENTS the classifier rejects: the monad
     RAISES the classified error before `call_proc` is reached (the
     engine's evaluation order — arguments first). -/
-theorem step_ctx_call_kill_args {e : CoreExpr} {ctx : context}
+theorem step_ctx_call_kill_args {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {ra : core_run_annotation} {f : sym} {pes : List (generic_pexpr Unit sym)}
-    (hd : Decomp e ctx (callRedex ra f pes))
+    (hd : Decomp e ctx (callRedex an ra f pes))
     (hsz : esize e ≤ lemDefaultFuel)
     (hpes : ∀ pe ∈ pes, PePure pe)
     (hdep : ∀ pe ∈ pes, peDepth pe ≤ lemDefaultFuel)
@@ -5237,7 +5851,7 @@ theorem step_ctx_call_kill_args {e : CoreExpr} {ctx : context}
       step_ctx tds σ file ext tid (parent, th) =
         [Step_with_runstate2 (RSK_eval "Eproc") m] ∧
       ∀ rs, m rs = Exception err := by
-  have hget : get_ctx th.arena = [(ctx, callRedex ra f pes)] := by
+  have hget : get_ctx th.arena = [(ctx, callRedex an ra f pes)] := by
     rw [harena]; exact hd.get_ctx_default hsz
   unfold step_ctx
   dsimp only
@@ -5245,8 +5859,7 @@ theorem step_ctx_call_kill_args {e : CoreExpr} {ctx : context}
   simp only [List.map_cons, List.map_nil]
   unfold callRedex
   cases ctx <;>
-    (dsimp only [get_loc]
-     refine ⟨_, rfl, fun rs => ?_⟩
+    (refine ⟨_, rfl, fun rs => ?_⟩
      rw [stExceptUndef_bind_apply,
        mapM_full_eval_kill _ (fun _ _ => rfl) pes hpes hdep hk rs]
      rfl)
@@ -5260,9 +5873,9 @@ theorem step_ctx_call_kill_args {e : CoreExpr} {ctx : context}
     — or the argument residual `eval_uncovered`. The engine evaluates the
     arguments BEFORE `call_proc`, so an argument kill takes precedence
     over an unknown procedure; the classification follows that order. -/
-theorem complete_call {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_call {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {ra : core_run_annotation} {f : sym} {pes : List (generic_pexpr Unit sym)}
-    (hd : Decomp e ctx (callRedex ra f pes))
+    (hd : Decomp e ctx (callRedex an ra f pes))
     (hsz : esize e ≤ lemDefaultFuel)
     (hpes : ∀ pe ∈ pes, PePure pe)
     (hdep : ∀ pe ∈ pes, peDepth pe ≤ lemDefaultFuel)
@@ -5285,7 +5898,7 @@ theorem complete_call {M : MachineCtx} {e : CoreExpr} {ctx : context}
                   (String.append "expecting: "
                     (Lem_String_extra.stringFromNat params.length))))))))) ?_))
         intro dst hemb
-        obtain ⟨-, hlay, hfile, hext, -⟩ := hemb
+        obtain ⟨-, hlay, hfile, hext, -, -, -⟩ := hemb
         simp only at hlay
         subst hlay
         obtain ⟨m, hsteps, hm⟩ := step_ctx_call_arity hd hsz hdep M.tagDefs dst.layout_state
@@ -5298,7 +5911,7 @@ theorem complete_call {M : MachineCtx} {e : CoreExpr} {ctx : context}
       refine .inr (.inl (.killed (Other (DErr_core_run (Illformed_program
         (String.append "calling an unknown procedure: " (show_symbol f))))) ?_))
       intro dst hemb
-      obtain ⟨-, hlay, hfile, hext, -⟩ := hemb
+      obtain ⟨-, hlay, hfile, hext, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
       obtain ⟨m, hsteps, hm⟩ := step_ctx_call_unknown hd hsz hdep M.tagDefs dst.layout_state
@@ -5317,17 +5930,17 @@ theorem complete_call {M : MachineCtx} {e : CoreExpr} {ctx : context}
         step_ctx M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid
           (M.parent, M.thread e ρ ctl) = [Step_with_runstate2 rsk m] := by
       intro dst hemb
-      obtain ⟨-, hlay, -, -, -⟩ := hemb
+      obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
       obtain ⟨m, hsteps⟩ := step_ctx_call_shape hd hsz M.tagDefs dst.layout_state
         dst.core_file dst.core_extern M.tid M.parent (M.thread _ _ ctl) rfl
       exact ⟨_, _, hsteps⟩
-    cases hcl : evalClassList M.tagDefs M.currentLoc M.extern M.file ρ pes with
+    cases hcl : evalClassList M.tagDefs ctl.curLoc M.extern M.file ρ pes with
     | kill err =>
       refine .inr (.inl (.killed (Other (DErr_core_run err)) ?_))
       intro dst hemb
-      obtain ⟨-, hlay, hfile, hext, -⟩ := hemb
+      obtain ⟨-, hlay, hfile, hext, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
       obtain ⟨m, hsteps, hm⟩ := step_ctx_call_kill_args hd hsz hpes hdep M.tagDefs
@@ -5348,14 +5961,15 @@ theorem complete_call {M : MachineCtx} {e : CoreExpr} {ctx : context}
     channel but the empty-env panic, excluded by the cons-shaped env),
     REMOVE-ANNOT at an annotated one (`Step.ret_annot`). At the empty
     stack a value is the terminal (`cerberusRound_classify`'s value arms). -/
-theorem complete_ret {M : MachineCtx} (w : SpikeVal) (ev0 : Fmap sym value)
+theorem complete_ret {M : MachineCtx} (w : SpikeValA) (ev0 : Fmap sym value)
     (evs : List (Fmap sym value)) (pc : Option sym × context)
-    (κ : List (Option sym × context)) (q : Option sym) (ℓ : exec_location) (σ : Mem) :
-    RoundComplete M (ofVal w, ev0 :: evs, ⟨pc :: κ, q, ℓ⟩, σ) := by
+    (κ : List (Option sym × context)) (q : Option sym) (ℓ : exec_location)
+    (lc : CerbLocation.Loc) (sp : RunSup) (σ : Mem) :
+    RoundComplete M (ofValA w, ev0 :: evs, ⟨pc :: κ, q, ℓ, lc, sp⟩, σ) := by
   obtain ⟨p, ctx⟩ := pc
   cases w with
-  | pure v => exact .inl ⟨_, Step.ret⟩
-  | annot ds v => exact .inl ⟨_, Step.ret_annot⟩
+  | pure a b v => exact .inl ⟨_, Step.ret⟩
+  | annot a a2 b ds v => exact .inl ⟨_, Step.ret_annot⟩
 
 /-! ### THE ASSEMBLED COMPLETENESS THEOREM -/
 
@@ -5377,7 +5991,7 @@ theorem frag_round_complete {M : MachineCtx}
   | load => exact complete_load hd hsz _ _ _
   | create => exact complete_create hd hsz _ _ _
   | kill => exact complete_kill hd hsz _ _ _
-  | @kill_op loc ann kind pe hnvK =>
+  | @kill_op an loc ann kind pe hnvK =>
     obtain ⟨hpK, hdK⟩ : PePure pe ∧ peDepth pe ≤ lemDefaultFuel := by
       cases hfr with
       | kill =>
@@ -5387,7 +6001,18 @@ theorem frag_round_complete {M : MachineCtx}
       | kill_op hnvK' hpK hdK => exact ⟨hpK, hdK⟩
     exact complete_kill_op hd hsz hnvK hpK hdK _ _ _
   | alloc => exact complete_alloc hd hsz _ _ _
-  | @alloc_op loc ann pref pe1 pe2 hnvA =>
+  | @create_op an loc ann pref pe1 pe2 hnvC =>
+    obtain ⟨hp1, hp2, hd1, hd2⟩ : PePure pe1 ∧ PePure pe2 ∧
+        peDepth pe1 ≤ lemDefaultFuel ∧ peDepth pe2 ≤ lemDefaultFuel := by
+      cases hfr with
+      | create =>
+        rw [valueFromPexprs_pair, valueFromPexpr_val, valueFromPexpr_val] at hnvC
+        cases hnvC
+      | create_op hnvC' hp1 hp2 hd1 hd2 => exact ⟨hp1, hp2, hd1, hd2⟩
+    exact complete_create_op hd hsz hnvC hp1 hp2 hd1 hd2 _ _ _
+  | bound_pure => exact complete_bound_pure hd _ _ _
+  | bound_annot => exact complete_bound_annot hd _ _ _
+  | @alloc_op an loc ann pref pe1 pe2 hnvA =>
     obtain ⟨hp1, hp2, hd1, hd2⟩ : PePure pe1 ∧ PePure pe2 ∧
         peDepth pe1 ≤ lemDefaultFuel ∧ peDepth pe2 ≤ lemDefaultFuel := by
       cases hfr with
@@ -5421,13 +6046,13 @@ theorem frag_round_complete {M : MachineCtx}
     cases hp : ctl.proc with
     | none => exact complete_run_noproc hd hsz hp _ _
     | some p => exact complete_run hd hsz hpes hdep hp _ _ _
-  | @pure_e pe hnv2 =>
+  | @pure_e an pe hnv2 =>
     obtain ⟨pb, x, rfl⟩ : ∃ pb x, pe = Pexpr pb () (PEsym x) := by
       cases hfr with
       | val_pure v => rw [valueFromPexpr_val] at hnv2; cases hnv2
       | pure_sym => exact ⟨_, _, rfl⟩
     exact complete_pure_sym hd hsz _ _ _
-  | @load_op loc ann ty pe2 mo hnv2 =>
+  | @load_op an loc ann ty pe2 mo hnv2 =>
     obtain ⟨hp2, hd2⟩ : PePure pe2 ∧ peDepth pe2 ≤ lemDefaultFuel := by
       cases hfr with
       | load =>
@@ -5437,12 +6062,12 @@ theorem frag_round_complete {M : MachineCtx}
       | load_op hnv2' hp2 hd2 => exact ⟨hp2, hd2⟩
     exact complete_load_op hd hsz hnv2 hp2 hd2 _ _ _
   | beta_spec => exact complete_beta_spec hd hsz _ _ _ _
-  | @memop mop pes =>
+  | @memop an mop pes =>
     cases hfr with
     | memop_vals v1 v2 => exact complete_memop_vals hd hsz _ _ _
     | memop_op hnvF hp1 hp2 hpd1 hpd2 =>
       exact complete_memop_op hd hsz hnvF hp1 hp2 hpd1 hpd2 _ _ _
-  | @store_op loc ann ty pe2 pe3 mo hnvR =>
+  | @store_op an loc ann ty pe2 pe3 mo hnvR =>
     obtain ⟨hp2, hp3, hpd2, hpd3⟩ :
         PePure pe2 ∧ PePure pe3 ∧
         peDepth pe2 ≤ lemDefaultFuel ∧ peDepth pe3 ≤ lemDefaultFuel := by
@@ -5452,12 +6077,7 @@ theorem frag_round_complete {M : MachineCtx}
         cases hnvR
       | store_op hnv' hp2 hp3 hpd2 hpd3 => exact ⟨hp2, hp3, hpd2, hpd3⟩
     exact complete_store_op hd hsz hnvR hp2 hp3 hpd2 hpd3 _ _ _
-  | @beta_sym pa x bty w e2 =>
-    cases hfr with
-    | sseq_sym hb _ _ =>
-      cases w with
-      | pure v => exact complete_beta_sym hd _ _ _ _
-      | annot ds v => exact hb.not_annot.elim
+  | beta_sym => exact complete_beta_sym hd _ _ _ _
   | wbeta_pure => exact complete_wbeta_pure hd _ _ _ _
   | wbeta_annot => exact complete_wbeta_annot hd _ _ _ _
   | call ra f pes =>
@@ -5479,18 +6099,18 @@ theorem cerberusRound_classify {M : MachineCtx} (hwf : M.SeqWF) {ctl : Ctl} (hκ
     RoundClass M (e, ev0 :: evs, ctl, σ) := by
   cases hv : toVal e with
   | some w =>
-    have he : ofVal w = e := ofVal_of_toVal hv
-    cases w with
-    | pure v =>
-      refine .value_done v he.symm ?_
+    obtain ⟨wa, -, he⟩ := ofValA_of_toVal hv
+    cases wa with
+    | pure a b v =>
+      refine .value_done a b v he.symm ?_
       intro dst _
       rw [← he]
       exact shipped_done hwf v (ev0 :: evs) hκ dst
-    | annot ds v =>
-      refine .value_annot ds v he.symm ?_
-      show CerberusRound M (e, ev0 :: evs, ctl, σ) (ofVal (.pure v), ev0 :: evs, ctl, σ)
+    | annot a a2 b ds v =>
+      refine .value_annot a a2 b ds v he.symm ?_
+      show CerberusRound M (e, ev0 :: evs, ctl, σ) (ofValA (.pure a2 b v), ev0 :: evs, ctl, σ)
       rw [← he]
-      exact shipped_remove_annot M ds v (ev0 :: evs) ctl σ
+      exact shipped_remove_annot M a a2 b ds v (ev0 :: evs) ctl σ
   | none =>
     by_cases hstep : ∃ c', Step M (e, ev0 :: evs, ctl, σ) c'
     · obtain ⟨c', hs⟩ := hstep

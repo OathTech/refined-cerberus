@@ -140,7 +140,7 @@ theorem wseq_certified {GF : BundledGFunctors} [SpikeGpreS GF] (v1 v2 : value) (
         (Iris.Std.LawfulPartialMap.get?_empty (M := SpikeHeapF) _))
         (Option.some_ne_none c1)))
     (fun v' _ => v' = v2)
-    ?_ (th₀ := spikeThread (wseqProg v1 v2)) rfl
+    ?_ (th₀ := spikeThread (wseqProg v1 v2))
   intro inst
   exact (BigSepM.bigSepM_empty).1.trans (wseq_wp_readout v1 v2)
 

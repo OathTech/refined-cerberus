@@ -90,7 +90,7 @@ theorem fib_certified_production (sup : Nat) (ra : core_run_annotation) (n : Int
   have hQprod := fib_labeledAt_production sup ra n sbty ibty abty bbty
   have h := prod_run_eqJ sup (fibProg ra n sbty ibty abty bbty) hQprod
     (fun v _ => v = ivVal (fibSpec n.toNat)) (2 * n.toNat + 4)
-    (wpt_driver_done (GF := SpikeGF)
+    (wpt_driver_done (GF := SpikeGF) (ctl := prodCtl)
       (M₀ := procCtx ((initial_core_run_state sup
         (collect_labeled_continuations_NEW
           (prodFile (fibProg ra n sbty ibty abty bbty)))).1))
@@ -170,7 +170,7 @@ def ctrBody (ra : core_run_annotation) (mo : memory_order)
     (bty : core_base_type) : CoreExpr :=
   Expr [] (Eif ctrGuardPe
     (Expr [] (Esseq (Pattern [] (CaseBase (none, bty)))
-      (storeOpRedex loc0 empty_annotation intTy
+      (storeOpRedex [] loc0 empty_annotation intTy
         (Pexpr [] () (PEsym ctrCSym)) (Pexpr [] () (PEval sevenVal)) mo)
       (Expr [] (Erun ra ctrLoopSym
         [ctrDecPe, Pexpr [] () (PEsym ctrCSym)]))))
@@ -191,7 +191,7 @@ def ctrParams (xbty cbty : core_base_type) (n : Int) :
 def counterProdProg (ra : core_run_annotation) (mo : memory_order)
     (bty xbty cbty sbty : core_base_type) (n : Int) : CoreExpr :=
   Expr [] (Esseq (symPat [] ctrPSym bty)
-    (createExpr loc0 empty_annotation (.IV .Prov_none 4) intTy
+    (createExpr [] loc0 empty_annotation (.IV .Prov_none 4) intTy
       (PrefOther "spike-x"))
     (Expr [] (Esave (ctrLoopSym, sbty) (ctrParams xbty cbty n)
       (ctrBody ra mo bty))))
@@ -403,7 +403,7 @@ theorem ctr_body_wpt (i : Int) (pptr : CerbMem.PointerValue)
   rw [show ctrBody ra mo bty =
     Expr [] (Eif ctrGuardPe
       (Expr [] (Esseq (Pattern [] (CaseBase (none, bty)))
-        (storeOpRedex loc0 empty_annotation intTy
+        (storeOpRedex [] loc0 empty_annotation intTy
           (Pexpr [] () (PEsym ctrCSym)) (Pexpr [] () (PEval sevenVal)) mo)
         (Expr [] (Erun ra ctrLoopSym
           [ctrDecPe, Pexpr [] () (PEsym ctrCSym)]))))
@@ -420,12 +420,12 @@ theorem ctr_body_wpt (i : Int) (pptr : CerbMem.PointerValue)
       (by rw [procCtx_extern, ctr_guard_eval hf rest i (ptrVal pptr),
         decide_eq_true hpos]; rfl)
     iapply wpt_seq
-    iapply wpt_store_eval loc0 empty_annotation intTy _ _ mo _ rfl
+    iapply wpt_store_eval [] loc0 empty_annotation intTy _ _ mo _ rfl
       (pv := pptr) (cv := sevenVal)
       (by rw [procCtx_extern]
           exact ctr_store_ptr_eval hf rest (ivVal i) (ptrVal pptr))
       rfl
-    iapply wpt_store loc0 empty_annotation intTy pptr sevenVal mo
+    iapply wpt_store [] loc0 empty_annotation intTy pptr sevenVal mo
       sevenMval bs _ (Nat.le_refl 3) seven_encodes (seven_storable _)
     isplitl [Hpt]
     · iexact Hpt
@@ -505,12 +505,12 @@ theorem ctrProd_wpt (sbty : core_base_type) (hn : 0 ≤ n)
   iintro Hcap
   rw [show counterProdProg ra mo bty xbty cbty sbty n =
     Expr [] (Esseq (symPat [] ctrPSym bty)
-      (createExpr loc0 empty_annotation (.IV .Prov_none 4) intTy
+      (createExpr [] loc0 empty_annotation (.IV .Prov_none 4) intTy
         (PrefOther "spike-x"))
       (Expr [] (Esave (ctrLoopSym, sbty) (ctrParams xbty cbty n)
         (ctrBody ra mo bty)))) from rfl]
   iapply wpt_seq_sym
-  iapply wpt_create loc0 empty_annotation .Prov_none 4 intTy
+  iapply wpt_create [] loc0 empty_annotation .Prov_none 4 intTy
     (PrefOther "spike-x") (ev0 :: evs) (Nat.le_refl 2) intTy_size_pos intTy_nonatomic
     (fun a => intTy_decIndep a _)
   isplitl [Hcap]
@@ -571,7 +571,7 @@ theorem ctrParams_depth (xbty cbty : core_base_type) (n : Int) :
 theorem counterProdProg_frag (ra : core_run_annotation) (mo : memory_order)
     (bty xbty cbty sbty : core_base_type) (n : Int) :
     Frag (counterProdProg ra mo bty xbty cbty sbty n) :=
-  .sseq_sym .create (.create)
+  .sseq_sym .create
     (.save (PePure.all_of_isPePure rfl) (ctrParams_depth xbty cbty n) (ctrBody_frag ra mo bty))
 
 theorem ctrBody_pot (ra : core_run_annotation) (mo : memory_order)
@@ -651,7 +651,7 @@ theorem counter_loop_certified_production (sup : Nat) (ra : core_run_annotation)
   obtain ⟨dres, dst', heq, hψ, hbl, hout, herr⟩ :=
     prod_run_eqJ sup (counterProdProg ra mo bty xbty cbty sbty n) hQprod
       (ψC n) (2 + (ctrCost n.toNat + saveEntryCost (ctrParams xbty cbty n)))
-      (wpt_driver_done_alloc (GF := SpikeGF)
+      (wpt_driver_done_alloc (GF := SpikeGF) (ctl := prodCtl)
         (M₀ := procCtx ((initial_core_run_state sup
           (collect_labeled_continuations_NEW
             (prodFile (counterProdProg ra mo bty xbty cbty sbty n)))).1))
@@ -738,22 +738,22 @@ theorem nodeTy_decIndep_undef (a : Int) : decIndep fmapEmpty a nodeTy nodeUndefB
 def lrProdPrefix (ra : core_run_annotation) (mo : memory_order)
     (bty : core_base_type) (k : CoreExpr) : CoreExpr :=
   Expr [] (Esseq (symPat [] lrN1Sym bty)
-    (createExpr loc0 empty_annotation (.IV .Prov_none 8) nodeTy
+    (createExpr [] loc0 empty_annotation (.IV .Prov_none 8) nodeTy
       (PrefOther "lr-n1"))
     (Expr [] (Esseq (symPat [] lrN2Sym bty)
-      (createExpr loc0 empty_annotation (.IV .Prov_none 8) nodeTy
+      (createExpr [] loc0 empty_annotation (.IV .Prov_none 8) nodeTy
         (PrefOther "lr-n2"))
       (Expr [] (Esseq (Pattern [] (CaseBase (none, bty)))
-        (storeOpRedex loc0 empty_annotation longTy
+        (storeOpRedex [] loc0 empty_annotation longTy
           (Pexpr [] () (PEsym lrN1Sym)) (Pexpr [] () (PEval (longVal 1))) mo)
         (Expr [] (Esseq (Pattern [] (CaseBase (none, bty)))
-          (storeOpRedex loc0 empty_annotation nodePtrTy
+          (storeOpRedex [] loc0 empty_annotation nodePtrTy
             (lrShiftPe lrN1Sym) (Pexpr [] () (PEsym lrN2Sym)) mo)
           (Expr [] (Esseq (Pattern [] (CaseBase (none, bty)))
-            (storeOpRedex loc0 empty_annotation longTy
+            (storeOpRedex [] loc0 empty_annotation longTy
               (Pexpr [] () (PEsym lrN2Sym)) (Pexpr [] () (PEval (longVal 2))) mo)
             (Expr [] (Esseq (Pattern [] (CaseBase (none, bty)))
-              (storeOpRedex loc0 empty_annotation nodePtrTy
+              (storeOpRedex [] loc0 empty_annotation nodePtrTy
                 (lrShiftPe lrN2Sym) (Pexpr [] () (PEval nullVal)) mo)
               k)))))))))))
 
@@ -1050,29 +1050,29 @@ theorem lrProd_wpt (bty sbty : core_base_type)
   iintro Hcap
   rw [show lrProdProg ra mo bty sbty pbty cbty bbty nbty ubty =
     Expr [] (Esseq (symPat [] lrN1Sym bty)
-      (createExpr loc0 empty_annotation (.IV .Prov_none 8) nodeTy
+      (createExpr [] loc0 empty_annotation (.IV .Prov_none 8) nodeTy
         (PrefOther "lr-n1"))
       (Expr [] (Esseq (symPat [] lrN2Sym bty)
-        (createExpr loc0 empty_annotation (.IV .Prov_none 8) nodeTy
+        (createExpr [] loc0 empty_annotation (.IV .Prov_none 8) nodeTy
           (PrefOther "lr-n2"))
         (Expr [] (Esseq (Pattern [] (CaseBase (none, bty)))
-          (storeOpRedex loc0 empty_annotation longTy
+          (storeOpRedex [] loc0 empty_annotation longTy
             (Pexpr [] () (PEsym lrN1Sym)) (Pexpr [] () (PEval (longVal 1))) mo)
           (Expr [] (Esseq (Pattern [] (CaseBase (none, bty)))
-            (storeOpRedex loc0 empty_annotation nodePtrTy
+            (storeOpRedex [] loc0 empty_annotation nodePtrTy
               (lrShiftPe lrN1Sym) (Pexpr [] () (PEsym lrN2Sym)) mo)
             (Expr [] (Esseq (Pattern [] (CaseBase (none, bty)))
-              (storeOpRedex loc0 empty_annotation longTy
+              (storeOpRedex [] loc0 empty_annotation longTy
                 (Pexpr [] () (PEsym lrN2Sym)) (Pexpr [] () (PEval (longVal 2))) mo)
               (Expr [] (Esseq (Pattern [] (CaseBase (none, bty)))
-                (storeOpRedex loc0 empty_annotation nodePtrTy
+                (storeOpRedex [] loc0 empty_annotation nodePtrTy
                   (lrShiftPe lrN2Sym) (Pexpr [] () (PEval nullVal)) mo)
                 (Expr [] (Esave (lrLoopSym, sbty) (lrProdParams pbty cbty)
                   (lrBody loc0 empty_annotation ra mo bbty nbty ubty))))))))))))))
     from rfl]
   iapply wpt_seq_sym
   icases (allocBudget_split _ _).1 $$ Hcap with ⟨Hcap, Hcap₂⟩
-  iapply wpt_create loc0 empty_annotation .Prov_none 8 nodeTy
+  iapply wpt_create [] loc0 empty_annotation .Prov_none 8 nodeTy
     (PrefOther "lr-n1") (ev0 :: evs) (Nat.le_refl 2)
     nodeTy_size_pos nodeTy_nonatomic nodeTy_decIndep_undef
   isplitl [Hcap]
@@ -1084,7 +1084,7 @@ theorem lrProd_wpt (bty sbty : core_base_type)
     rfl
   rw [update_env_sym lrN1Sym bty]
   iapply wpt_seq_sym
-  iapply wpt_create loc0 empty_annotation .Prov_none 8 nodeTy
+  iapply wpt_create [] loc0 empty_annotation .Prov_none 8 nodeTy
     (PrefOther "lr-n2") _ (Nat.le_refl 2)
     nodeTy_size_pos nodeTy_nonatomic nodeTy_decIndep_undef
   isplitl [Hcap₂]
@@ -1109,17 +1109,17 @@ theorem lrProd_wpt (bty sbty : core_base_type)
   -- store 1: node 1's value field (offset 0, through the bound
   -- pointer)
   iapply wpt_seq
-  iapply wpt_store_eval loc0 empty_annotation longTy _ _ mo _ rfl
+  iapply wpt_store_eval [] loc0 empty_annotation longTy _ _ mo _ rfl
     (pv := cellPtr i₁ a₁) (cv := longVal 1)
     (by rw [procCtx_extern, evalPexpr_sym_empty]
         exact lookup_env_head (lrPFrame_lookup_n1 hf _ _) evs)
     rfl
-  rw [show (storeExpr loc0 empty_annotation longTy (cellPtr i₁ a₁)
+  rw [show (storeExpr [] loc0 empty_annotation longTy (cellPtr i₁ a₁)
       (longVal 1) mo : CoreExpr) =
-    storeExpr loc0 empty_annotation longTy
+    storeExpr [] loc0 empty_annotation longTy
       (cellPtr i₁ (a₁ + ((0 : Nat) : Int))) (longVal 1) mo from by
     rw [show a₁ + ((0 : Nat) : Int) = a₁ from by omega]]
-  iapply wpt_store_cell_at (mv := longMval 1) loc0 empty_annotation i₁
+  iapply wpt_store_cell_at [] (mv := longMval 1) loc0 empty_annotation i₁
     a₁ nodeTy 0 longTy (longVal 1) mo nodeUndefBytes _ (Nat.le_refl 3) rfl
     (by rw [show CerbMem.sizeofCtype (procCtx rs).tagDefs longTy = 8 from rfl,
       show CerbMem.sizeofCtype (procCtx rs).tagDefs nodeTy = 16 from rfl]; omega)
@@ -1130,7 +1130,7 @@ theorem lrProd_wpt (bty sbty : core_base_type)
   iintro %fp1 Hcell₁
   -- store 2: node 1's next field (offset 8) := node 2
   iapply wpt_seq
-  iapply wpt_store_eval loc0 empty_annotation nodePtrTy _ _ mo _ rfl
+  iapply wpt_store_eval [] loc0 empty_annotation nodePtrTy _ _ mo _ rfl
     (pv := cellPtr i₁ (a₁ + 8)) (cv := ptrVal (cellPtr i₂ a₂))
     (by rw [procCtx_extern]
         exact lrPFrame_shift_n1 hf (ptrVal (cellPtr i₂ a₂)) evs i₁ a₁)
@@ -1150,17 +1150,17 @@ theorem lrProd_wpt (bty sbty : core_base_type)
   iintro %fp2 Hcell₁
   -- store 3: node 2's value field
   iapply wpt_seq
-  iapply wpt_store_eval loc0 empty_annotation longTy _ _ mo _ rfl
+  iapply wpt_store_eval [] loc0 empty_annotation longTy _ _ mo _ rfl
     (pv := cellPtr i₂ a₂) (cv := longVal 2)
     (by rw [procCtx_extern, evalPexpr_sym_empty]
         exact lookup_env_head (lrPFrame_lookup_n2 hf _ _) evs)
     rfl
-  rw [show (storeExpr loc0 empty_annotation longTy (cellPtr i₂ a₂)
+  rw [show (storeExpr [] loc0 empty_annotation longTy (cellPtr i₂ a₂)
       (longVal 2) mo : CoreExpr) =
-    storeExpr loc0 empty_annotation longTy
+    storeExpr [] loc0 empty_annotation longTy
       (cellPtr i₂ (a₂ + ((0 : Nat) : Int))) (longVal 2) mo from by
     rw [show a₂ + ((0 : Nat) : Int) = a₂ from by omega]]
-  iapply wpt_store_cell_at (mv := longMval 2) loc0 empty_annotation i₂
+  iapply wpt_store_cell_at [] (mv := longMval 2) loc0 empty_annotation i₂
     a₂ nodeTy 0 longTy (longVal 2) mo nodeUndefBytes _ (Nat.le_refl 3) rfl
     (by rw [show CerbMem.sizeofCtype (procCtx rs).tagDefs longTy = 8 from rfl,
       show CerbMem.sizeofCtype (procCtx rs).tagDefs nodeTy = 16 from rfl]; omega)
@@ -1171,7 +1171,7 @@ theorem lrProd_wpt (bty sbty : core_base_type)
   iintro %fp3 Hcell₂
   -- store 4: node 2's next field := NULL
   iapply wpt_seq
-  iapply wpt_store_eval loc0 empty_annotation nodePtrTy _ _ mo _ rfl
+  iapply wpt_store_eval [] loc0 empty_annotation nodePtrTy _ _ mo _ rfl
     (pv := cellPtr i₂ (a₂ + 8)) (cv := nullVal)
     (by rw [procCtx_extern]
         exact lrPFrame_shift_n2 hf (ptrVal (cellPtr i₁ a₁)) evs i₂ a₂)
@@ -1250,8 +1250,8 @@ end LrProdIris
 theorem lrProdPrefix_frag (ra : core_run_annotation) (mo : memory_order)
     (bty : core_base_type) {k : CoreExpr} (hk : Frag k) :
     Frag (lrProdPrefix ra mo bty k) :=
-  .sseq_sym .create (.create)
-    (.sseq_sym .create (.create)
+  .sseq_sym .create
+    (.sseq_sym .create
       (.sseq
         (.store_op rfl (.sym [] lrN1Sym) (.val [] (longVal 1))
           (by rw [show peDepth (Pexpr ([] : List annot) ()
@@ -1457,7 +1457,7 @@ theorem list_reverse_certified_production (sup : Nat) (ra : core_run_annotation)
       hQprod ψL
       (2 + (2 + ((3 + 1) + ((3 + 1) + ((3 + 1) + ((3 + 1) +
         (lrCost 2 + saveEntryCost (lrProdParams pbty cbty))))))))
-      (wpt_driver_done_alloc (GF := SpikeGF)
+      (wpt_driver_done_alloc (GF := SpikeGF) (ctl := prodCtl)
         (M₀ := procCtx ((initial_core_run_state sup
           (collect_labeled_continuations_NEW
             (prodFile (lrProdProg ra mo bty sbty pbty cbty bbty nbty

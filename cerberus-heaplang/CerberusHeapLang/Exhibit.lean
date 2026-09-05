@@ -229,11 +229,11 @@ def loc0 : CerbLocation.Loc := .unknown
 
 /-- Exhibit (a): `lets _ = store(x,7) in load(x)`. -/
 abbrev progA : CoreExpr :=
-  sseqExpr BTy_unit (storeExpr loc0 empty_annotation intTy xPtr sevenVal NA)
-    (loadExpr loc0 empty_annotation intTy xPtr NA)
+  sseqExpr [] BTy_unit (storeExpr [] loc0 empty_annotation intTy xPtr sevenVal NA)
+    (loadExpr [] loc0 empty_annotation intTy xPtr NA)
 
 /-- Exhibit (b): the operator's frame program, `store(x,7)`. -/
-abbrev progB : CoreExpr := storeExpr loc0 empty_annotation intTy xPtr sevenVal NA
+abbrev progB : CoreExpr := storeExpr [] loc0 empty_annotation intTy xPtr sevenVal NA
 
 theorem fragA : Frag progA := Frag.sseq (.store) (.load)
 
@@ -317,7 +317,7 @@ theorem provenB {GF : BundledGFunctors} [SpikeGpreS GF] :
   intro instGS
   refine bigSepA_ptx.trans ?_
   iintro Hx
-  ihave HW := wp_store (s := Stuckness.NotStuck) (E := ⊤) (M := spikeCtx) (ctl := spikeCtl) loc0 empty_annotation
+  ihave HW := wp_store [] (s := Stuckness.NotStuck) (E := ⊤) (M := spikeCtx) (ctl := spikeCtl) loc0 empty_annotation
     intTy xPtr sevenVal NA sevenMval bytesX spikeEnv seven_encodes (seven_storable _) rfl $$ Hx
   iapply spike_wp_wand $$ HW
   iintro %v ⟨%fp, %hv, Hx⟩
@@ -350,16 +350,16 @@ theorem provenA {GF : BundledGFunctors} [SpikeGpreS GF] :
     BI.wand_elim_left)
   rw [show (progA : CoreExpr) =
     Expr [] (Esseq (Pattern [] (CaseBase (none, BTy_unit)))
-      (storeExpr loc0 empty_annotation intTy xPtr sevenVal NA)
-      (loadExpr loc0 empty_annotation intTy xPtr NA)) from rfl]
+      (storeExpr [] loc0 empty_annotation intTy xPtr sevenVal NA)
+      (loadExpr [] loc0 empty_annotation intTy xPtr NA)) from rfl]
   iintro Hx
   iapply wps_seq
-  iapply wps_store loc0 empty_annotation intTy xPtr sevenVal NA sevenMval bytesX
+  iapply wps_store [] loc0 empty_annotation intTy xPtr sevenVal NA sevenMval bytesX
     spikeEnv seven_encodes (seven_storable _)
   isplitl [Hx]
   · iexact Hx
   iintro %fp Hx
-  iapply wps_load loc0 empty_annotation intTy xPtr NA (.own 1)
+  iapply wps_load [] loc0 empty_annotation intTy xPtr NA (.own 1)
     (CerbMem.memValueToBytes fmapEmpty [] sevenMval).2 spikeEnv htrap_seven
   isplitl [Hx]
   · iexact Hx
@@ -412,7 +412,7 @@ theorem exhibitA_engine :
     (by rw [show Iris.Std.PartialMap.union mA ∅ = mA from
         Iris.Std.LawfulPartialMap.union_empty_right]
         exact coh_mA)
-    (spikeThread progA) rfl).mono ?_
+    (spikeThread progA)).mono ?_
   intro v σ' ⟨Q, ⟨hv, _⟩, _, _⟩
   exact hv
 
@@ -486,7 +486,7 @@ theorem exhibitB_engine :
       · exact absurd rfl hne
   refine (exhibitB_semantic (GF := SpikeGF) ∅
     (Iris.Std.LawfulPartialMap.disjoint_empty_right _) σ₀ hcohBu
-    (spikeThread progB) rfl).mono ?_
+    (spikeThread progB)).mono ?_
   intro v σ' hpost
   obtain ⟨Q, ⟨Q₀, ⟨hv, hQ0⟩, hdisj, hQ⟩, _, hsat⟩ := hpost
   subst hQ0 hQ
@@ -563,18 +563,18 @@ theorem progA_wpt {GF : BundledGFunctors} [SpikeGS .hasLC GF]
   iintro Hpt
   rw [show (progA : CoreExpr) =
     Expr [] (Esseq (Pattern [] (CaseBase (none, BTy_unit)))
-      (storeExpr loc0 empty_annotation intTy xPtr sevenVal NA)
-      (loadExpr loc0 empty_annotation intTy xPtr NA)) from rfl,
+      (storeExpr [] loc0 empty_annotation intTy xPtr sevenVal NA)
+      (loadExpr [] loc0 empty_annotation intTy xPtr NA)) from rfl,
     show (6 : Nat) = 3 + 3 from rfl]
   iapply wpt_seq
-  iapply wpt_store loc0 empty_annotation intTy xPtr sevenVal NA
+  iapply wpt_store [] loc0 empty_annotation intTy xPtr sevenVal NA
     sevenMval bytesX _ (Nat.le_refl 3) seven_encodes (seven_storable _)
   isplitl [Hpt]
   · iexact Hpt
   iintro %fp Hpt
   iapply wpt_mono
     (fun u ρ' => readoutPost_annot_absorb (ψX M.tagDefs) [DA_pos [] fp] Vunit u ρ') _ _
-  iapply wpt_load loc0 empty_annotation intTy xPtr NA (.own 1)
+  iapply wpt_load [] loc0 empty_annotation intTy xPtr NA (.own 1)
     (CerbMem.memValueToBytes M.tagDefs [] sevenMval).2 _ (Nat.le_refl 3) htrap_seven
   isplitl [Hpt]
   · iexact Hpt
@@ -611,8 +611,8 @@ discards the delivered value — the update facts are the content. -/
 /-- Exhibit (c): `lets _ = store(x,5) in store(y,6)`, x/y the two
     seeded disjoint cells. -/
 abbrev progC : CoreExpr :=
-  sseqExpr BTy_unit (storeExpr loc0 empty_annotation intTy xPtr fiveVal NA)
-    (storeExpr loc0 empty_annotation intTy yPtr sixVal NA)
+  sseqExpr [] BTy_unit (storeExpr [] loc0 empty_annotation intTy xPtr fiveVal NA)
+    (storeExpr [] loc0 empty_annotation intTy yPtr sixVal NA)
 
 theorem fragC : Frag progC := Frag.sseq (.store) (.store)
 
@@ -739,7 +739,7 @@ theorem exhibitC_engine :
     (by rw [show Iris.Std.PartialMap.union mB ∅ = mB from
         Iris.Std.LawfulPartialMap.union_empty_right]
         exact coh_mB)
-    (spikeThread progC) rfl).mono ?_
+    (spikeThread progC)).mono ?_
   intro v σ' hpost
   obtain ⟨Q, hQ, _, hsat⟩ := hpost
   subst hQ

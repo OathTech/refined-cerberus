@@ -89,14 +89,14 @@ def rlDecPe : generic_pexpr Unit sym :=
 
 /-- `free(p)` at the bound region pointer — `Kill Dynamic0` at the symbol. -/
 def rlFreeE (loc : CerbLocation.Loc) (ann : core_run_annotation) : CoreExpr :=
-  killOpRedex loc ann Dynamic0 (Pexpr [] () (PEsym rlPSym))
+  killOpRedex [] loc ann Dynamic0 (Pexpr [] () (PEsym rlPSym))
 
 /-- The registered loop body. -/
 def rlBody (loc : CerbLocation.Loc) (ann ra : core_run_annotation)
     (al sz : Int) (pref : prefix0) (pbty ubty : core_base_type) : CoreExpr :=
   Expr [] (Eif rlGuardPe
     (Expr [] (Esseq (symPat [] rlPSym pbty)
-      (allocExpr loc ann (.IV .Prov_none al) (.IV .Prov_none sz) pref)
+      (allocExpr [] loc ann (.IV .Prov_none al) (.IV .Prov_none sz) pref)
       (Expr [] (Esseq (Pattern [] (CaseBase (none, ubty)))
         (rlFreeE loc ann)
         (Expr [] (Erun ra rlLoopSym [rlDecPe]))))))
@@ -276,14 +276,14 @@ section RlFrag
 variable (loc : CerbLocation.Loc) (ann ra : core_run_annotation)
   (al sz : Int) (pref : prefix0) (pbty ubty : core_base_type)
 
-/-- The label body is in the certified cone: `alloc` is a `BareHead`
+/-- The label body is in the certified cone: `alloc` is a `Frag` head
     (the bound region pointer), the free is `Frag.kill_op` at the symbol
     (dynamic kind), the guard and the jump argument are `PePure` binops. -/
 theorem rlBody_frag : Frag (rlBody loc ann ra al sz pref pbty ubty) :=
   .if_ (PePure.of_isPePure rfl)
     (by rw [show peDepth rlGuardPe = 2 from rfl,
       show lemDefaultFuel = 999999 + 1 from rfl]; omega)
-    (.sseq_sym .alloc .alloc
+    (.sseq_sym .alloc
       (.sseq
         (.kill_op rfl (.sym [] rlPSym)
           (by rw [show peDepth (Pexpr ([] : List annot) () (PEsym rlPSym)) = 1
@@ -350,7 +350,7 @@ theorem rl_body_wps (i : Int) (f : Fmap sym value)
   rw [show rlBody loc ann ra al sz pref pbty ubty =
     Expr [] (Eif rlGuardPe
       (Expr [] (Esseq (symPat [] rlPSym pbty)
-        (allocExpr loc ann (.IV .Prov_none al) (.IV .Prov_none sz) pref)
+        (allocExpr [] loc ann (.IV .Prov_none al) (.IV .Prov_none sz) pref)
         (Expr [] (Esseq (Pattern [] (CaseBase (none, ubty)))
           (rlFreeE loc ann)
           (Expr [] (Erun ra rlLoopSym [rlDecPe]))))))
@@ -366,7 +366,7 @@ theorem rl_body_wps (i : Int) (f : Fmap sym value)
         rw [this, Nat.add_mul, Nat.one_mul, Nat.add_comm]]
     icases (allocBudget_split _ _).1 $$ Hcap with ⟨Hc, Hrest⟩
     iapply wps_seq_sym
-    iapply wps_alloc loc ann .Prov_none .Prov_none al sz pref _ hcost
+    iapply wps_alloc [] loc ann .Prov_none .Prov_none al sz pref _ hcost
     isplitl [Hc]
     · iexact Hc
     iintro %id %a ⟨Hr, -⟩
@@ -378,11 +378,11 @@ theorem rl_body_wps (i : Int) (f : Fmap sym value)
     rw [show envAdd rlPSym (Vobject (OVpointer (cellPtr id a))) (rlFrame (ivVal i) f) =
       rlFrameP (Vobject (OVpointer (cellPtr id a))) (ivVal i) f from rfl]
     iapply wps_seq
-    rw [show rlFreeE loc ann = killOpRedex loc ann Dynamic0 (Pexpr [] () (PEsym rlPSym))
+    rw [show rlFreeE loc ann = killOpRedex [] loc ann Dynamic0 (Pexpr [] () (PEsym rlPSym))
       from rfl]
-    iapply wps_kill_eval loc ann Dynamic0 _ _ rfl (pv := cellPtr id a)
+    iapply wps_kill_eval [] loc ann Dynamic0 _ _ rfl (pv := cellPtr id a)
       (by rw [procCtx_extern]; exact rl_p_eval hf renv _ _)
-    iapply wps_free_emp loc ann Dynamic0 id a _ _ _ rfl
+    iapply wps_free_emp [] loc ann Dynamic0 id a _ _ _ rfl
     isplitl [Hr]
     · iexact Hr
     iapply wps_run [] ra rlLoopSym [rlDecPe] _ _
@@ -487,7 +487,7 @@ theorem rl_body_wpt (i : Int) (hi : 0 ≤ i) (f : Fmap sym value)
   rw [show rlBody loc ann ra al sz pref pbty ubty =
     Expr [] (Eif rlGuardPe
       (Expr [] (Esseq (symPat [] rlPSym pbty)
-        (allocExpr loc ann (.IV .Prov_none al) (.IV .Prov_none sz) pref)
+        (allocExpr [] loc ann (.IV .Prov_none al) (.IV .Prov_none sz) pref)
         (Expr [] (Esseq (Pattern [] (CaseBase (none, ubty)))
           (rlFreeE loc ann)
           (Expr [] (Erun ra rlLoopSym [rlDecPe]))))))
@@ -504,7 +504,7 @@ theorem rl_body_wpt (i : Int) (hi : 0 ≤ i) (f : Fmap sym value)
         rw [this, Nat.add_mul, Nat.one_mul, Nat.add_comm]]
     icases (allocBudget_split _ _).1 $$ Hcap with ⟨Hc, Hrest⟩
     iapply wpt_seq_sym
-    iapply wpt_alloc loc ann .Prov_none .Prov_none al sz pref _ (Nat.le_refl 2) hcost
+    iapply wpt_alloc [] loc ann .Prov_none .Prov_none al sz pref _ (Nat.le_refl 2) hcost
     isplitl [Hc]
     · iexact Hc
     iintro %id %a ⟨Hr, -⟩
@@ -516,11 +516,11 @@ theorem rl_body_wpt (i : Int) (hi : 0 ≤ i) (f : Fmap sym value)
     rw [show envAdd rlPSym (Vobject (OVpointer (cellPtr id a))) (rlFrame (ivVal i) f) =
       rlFrameP (Vobject (OVpointer (cellPtr id a))) (ivVal i) f from rfl]
     iapply wpt_seq
-    rw [show rlFreeE loc ann = killOpRedex loc ann Dynamic0 (Pexpr [] () (PEsym rlPSym))
+    rw [show rlFreeE loc ann = killOpRedex [] loc ann Dynamic0 (Pexpr [] () (PEsym rlPSym))
       from rfl, show (3 : Nat) = 2 + 1 from rfl]
-    iapply wpt_kill_eval loc ann Dynamic0 _ _ rfl (pv := cellPtr id a)
+    iapply wpt_kill_eval [] loc ann Dynamic0 _ _ rfl (pv := cellPtr id a)
       (by rw [procCtx_extern]; exact rl_p_eval hf renv _ _)
-    iapply wpt_free_emp loc ann Dynamic0 id a _ _ _ (Nat.le_refl 2) rfl
+    iapply wpt_free_emp [] loc ann Dynamic0 id a _ _ _ (Nat.le_refl 2) rfl
     isplitl [Hr]
     · iexact Hr
     iapply wpt_run [] ra rlLoopSym [rlDecPe] _ _ (rlCost (i - 1).toNat)
@@ -652,7 +652,7 @@ theorem region_loop_certified_production (sup : Nat) (hcost : 0 < regionCost al 
   obtain ⟨dres, dst', heq, hψ, hbl, hout, herr⟩ :=
     prod_run_eqJ sup (rlProg loc0 empty_annotation ra al sz pref sbty ibty pbty ubty n)
       hQprod (fun v _ => v = Vunit) (rlCost n.toNat + 1)
-      (wpt_driver_done_alloc (GF := SpikeGF)
+      (wpt_driver_done_alloc (GF := SpikeGF) (ctl := prodCtl)
         (M₀ := procCtx ((initial_core_run_state sup
           (collect_labeled_continuations_NEW
             (prodFile (rlProg loc0 empty_annotation ra al sz pref sbty ibty pbty ubty n)))).1))

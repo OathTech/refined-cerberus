@@ -77,7 +77,7 @@ def loopBody (loc : CerbLocation.Loc) (ann ra : core_run_annotation)
     (mo : memory_order) (bty : core_base_type)
     (c : CerbMem.PointerValue) : CoreExpr :=
   Expr [] (Eif guardPe
-    (sseqExpr bty (storeExpr loc ann intTy c sevenVal mo)
+    (sseqExpr [] bty (storeExpr [] loc ann intTy c sevenVal mo)
       (Expr [] (Erun ra loopSym [decPe])))
     (ofVal (.pure Vunit)))
 
@@ -251,7 +251,7 @@ theorem loop_body_wps (i : Int) (f : Fmap sym value)
         (envAdd xSym (ivVal i) f :: rest) := by
   rw [show (loopBody loc ann ra mo bty c) =
     Expr [] (Eif guardPe
-      (sseqExpr bty (storeExpr loc ann intTy c sevenVal mo)
+      (sseqExpr [] bty (storeExpr [] loc ann intTy c sevenVal mo)
         (Expr [] (Erun ra loopSym [decPe])))
       (ofVal (.pure Vunit))) from rfl]
   by_cases hpos : 0 < i
@@ -259,15 +259,15 @@ theorem loop_body_wps (i : Int) (f : Fmap sym value)
     iintro Hcell
     iapply wps_if_true [] guardPe _ _ _
       (by rw [procCtx_extern, guard_eval hf i rest, decide_eq_true hpos]; rfl)
-    rw [show (sseqExpr bty (storeExpr loc ann intTy c sevenVal mo)
+    rw [show (sseqExpr [] bty (storeExpr [] loc ann intTy c sevenVal mo)
         (Expr [] (Erun ra loopSym [decPe]))) =
       Expr [] (Esseq (Pattern [] (CaseBase (none, bty)))
-        (storeExpr loc ann intTy c sevenVal mo)
+        (storeExpr [] loc ann intTy c sevenVal mo)
         (Expr [] (Erun ra loopSym [decPe]))) from rfl]
     iapply wps_seq
     -- the cell is owned either way; store the image
     icases Hcell with (⟨%hieq, Hc⟩ | ⟨%hlt, Hc⟩) <;>
-      (iapply wps_store loc ann intTy c sevenVal mo sevenMval _ _
+      (iapply wps_store [] loc ann intTy c sevenVal mo sevenMval _ _
         seven_encodes (seven_storable _)
        isplitl [Hc]
        · iexact Hc
@@ -354,7 +354,7 @@ theorem loop_wps (hn : 0 ≤ n) (sbty : core_base_type)
 omit hQ in
 /-- The per-value readout of the loop postcondition. -/
 theorem loop_readout_val (w : CoreRVal) :
-    loopPost (GF := GF) c n bs0 w.w w.ρ ⊢
+    loopPost (GF := GF) c n bs0 w.sv w.ρ ⊢
       iprop(∀ (σ' : Mem) (ns : Nat) (κs : List Empty) (nt : Nat),
         stateInterp σ' ns κs nt ={⊤, ∅}=∗
           ⌜w.val = Vunit ∧ ∃ bs',
@@ -475,7 +475,7 @@ theorem counter_loop_certified
       isplit
       · ipureintro; rfl
       · iexact Hpt)
-    (th₀ := procThread loopProcSym prog [fmapEmpty]) rfl).mono ?_
+    (th₀ := procThread loopProcSym prog [fmapEmpty])).mono ?_
   intro v σ' ⟨hv, bs', hbs, i, a, heq, hc⟩
   obtain ⟨rfl, rfl⟩ := cellPtr_inj heq
   exact ⟨hv, bs', hbs, hc⟩
@@ -537,7 +537,7 @@ theorem counter_loop_certified_irrelevant_binding
       isplit
       · ipureintro; rfl
       · iexact Hpt)
-    (th₀ := procThread loopProcSym prog ρ₀) rfl).mono ?_
+    (th₀ := procThread loopProcSym prog ρ₀)).mono ?_
   intro v σ' ⟨hv, bs', hbs, i, a, heq, hc⟩
   obtain ⟨rfl, rfl⟩ := cellPtr_inj heq
   exact ⟨hv, bs', hbs, hc⟩

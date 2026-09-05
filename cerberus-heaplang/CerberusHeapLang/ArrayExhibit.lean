@@ -124,7 +124,7 @@ def arrExitPe : generic_pexpr Unit sym := Pexpr [] () (PEsym arrAccSym)
     ACTION_EVAL shape). -/
 def arrLoadE (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (mo : memory_order) : CoreExpr :=
-  loadOpRedex loc ann intTy (Pexpr [] () (PEsym arrPSym)) mo
+  loadOpRedex [] loc ann intTy (Pexpr [] () (PEsym arrPSym)) mo
 
 /-- The registered loop body. -/
 def arrBody (loc : CerbLocation.Loc) (ann ra : core_run_annotation)
@@ -447,9 +447,9 @@ theorem wps_arr_elem_load {M' : MachineCtx} {p' : Option sym} {Ls' : LabelSpec G
     iprop(cellOwn M'.tagDefs (GF := GF) id' dq (SpikeCell.mk a' aty' bs') ∗
       (∀ fp, cellOwn M'.tagDefs id' dq (SpikeCell.mk a' aty' bs') -∗
         Ψ (SpikeVal.annot [DA_pos [] fp] ((valueFromMemValue mv).2)) ρ)) ⊢
-      wps M' p' Ls' Θ' Ψ (loadExpr loc' ann' intTy
+      wps M' p' Ls' Θ' Ψ (loadExpr [] loc' ann' intTy
         (cellPtr id' (a' + ((4 * i : Nat) : Int))) mo') ρ :=
-  wps_load_cell_at loc' ann' id' a' aty' (4 * i) intTy mo' dq bs' ρ
+  wps_load_cell_at [] loc' ann' id' a' aty' (4 * i) intTy mo' dq bs' ρ
     hbound hdec htrap
 
 /-- The loop body verifies at any invariant frame. -/
@@ -478,8 +478,8 @@ theorem arr_body_wps (i : Nat) (f : Fmap sym value)
         decide_eq_true (by exact_mod_cast hlt)]; rfl)
     iapply wps_seq_spec [] [] [] arrXSym xbty
     rw [show arrLoadE loc ann mo =
-      loadOpRedex loc ann intTy (Pexpr [] () (PEsym arrPSym)) mo from rfl]
-    iapply wps_load_eval loc ann intTy (Pexpr [] () (PEsym arrPSym)) mo _
+      loadOpRedex [] loc ann intTy (Pexpr [] () (PEsym arrPSym)) mo from rfl]
+    iapply wps_load_eval [] loc ann intTy (Pexpr [] () (PEsym arrPSym)) mo _
       rfl (arr_p_eval hf i _ _ rest)
     iapply wps_arr_elem_load loc ann aty id a i mo (.own 1) bs _
       (by rw [intTy_size]; show 4 * i + 4 ≤ CerbMem.sizeofCtype fmapEmpty aty; omega)
@@ -687,7 +687,7 @@ theorem array_sum_certified
       (by rw [show esize prog = 4 from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega))
     hcoh
     (fun v σ' => v = ivVal vs.sum ∧ CellCoh fmapEmpty σ' id ⟨a, aty, bs⟩)
-    ?_ (th₀ := procThread arrProcSym prog [fmapEmpty]) rfl
+    ?_ (th₀ := procThread arrProcSym prog [fmapEmpty])
   intro inst
   refine .trans ?_ (arr_wp_readout loc ann ra mo ibty accbty pbty xbty
     vs id a aty bs arrProcSym rs

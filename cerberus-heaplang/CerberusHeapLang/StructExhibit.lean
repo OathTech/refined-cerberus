@@ -82,10 +82,10 @@ theorem sixBytes_len {tds : CerbTags.TagDefsMap} : (sixBytes tds).length = 4 := 
     field pointers are interior pointers of the ONE allocation. -/
 def progS (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (mo mo' : memory_order) (bty : core_base_type) (id a : Int) : CoreExpr :=
-  sseqExpr bty
-    (storeExpr loc ann intTy (cellPtr id (a + ((fieldX : Nat) : Int)))
+  sseqExpr [] bty
+    (storeExpr [] loc ann intTy (cellPtr id (a + ((fieldX : Nat) : Int)))
       fiveVal mo)
-    (storeExpr loc ann intTy (cellPtr id (a + ((fieldY : Nat) : Int)))
+    (storeExpr [] loc ann intTy (cellPtr id (a + ((fieldY : Nat) : Int)))
       sixVal mo')
 
 /-- Cone membership: two canonical stores under strong sequencing. -/
@@ -113,9 +113,9 @@ theorem wps_struct_x_store {Ψ : SpikeVal → EnvStack → IProp GF}
       (∀ fp, cellOwn M.tagDefs id (.own 1) (SpikeCell.mk a structTy
           (spliceBytes fieldX (fiveBytes M.tagDefs) bs)) -∗
         Ψ (SpikeVal.annot [DA_pos [] fp] Vunit) ρ)) ⊢
-      wps M p Ls Θ Ψ (storeExpr loc ann intTy
+      wps M p Ls Θ Ψ (storeExpr [] loc ann intTy
         (cellPtr id (a + ((fieldX : Nat) : Int))) fiveVal mo) ρ :=
-  wps_store_cell_at loc ann id a structTy fieldX intTy fiveVal mo bs ρ
+  wps_store_cell_at [] loc ann id a structTy fieldX intTy fiveVal mo bs ρ
     five_encodes (by rw [structTy_size, show CerbMem.sizeofCtype M.tagDefs intTy = 4 from rfl]; decide)
     (five_storable M.tagDefs).toView (structTy_decIndep a _)
 
@@ -128,9 +128,9 @@ theorem wps_struct_y_store {Ψ : SpikeVal → EnvStack → IProp GF}
       (∀ fp, cellOwn M.tagDefs id (.own 1) (SpikeCell.mk a structTy
           (spliceBytes fieldY (sixBytes M.tagDefs) bs)) -∗
         Ψ (SpikeVal.annot [DA_pos [] fp] Vunit) ρ)) ⊢
-      wps M p Ls Θ Ψ (storeExpr loc ann intTy
+      wps M p Ls Θ Ψ (storeExpr [] loc ann intTy
         (cellPtr id (a + ((fieldY : Nat) : Int))) sixVal mo) ρ :=
-  wps_store_cell_at loc ann id a structTy fieldY intTy sixVal mo bs ρ
+  wps_store_cell_at [] loc ann id a structTy fieldY intTy sixVal mo bs ρ
     six_encodes (by rw [structTy_size, show CerbMem.sizeofCtype M.tagDefs intTy = 4 from rfl]; decide)
     (six_storable M.tagDefs).toView (structTy_decIndep a _)
 
@@ -148,9 +148,9 @@ theorem struct_wps (loc : CerbLocation.Loc) (ann : core_run_annotation)
   iintro Hs
   rw [show progS loc ann mo mo' bty id a =
     Expr [] (Esseq (Pattern [] (CaseBase (none, bty)))
-      (storeExpr loc ann intTy (cellPtr id (a + ((fieldX : Nat) : Int)))
+      (storeExpr [] loc ann intTy (cellPtr id (a + ((fieldX : Nat) : Int)))
         fiveVal mo)
-      (storeExpr loc ann intTy (cellPtr id (a + ((fieldY : Nat) : Int)))
+      (storeExpr [] loc ann intTy (cellPtr id (a + ((fieldY : Nat) : Int)))
         sixVal mo')) from rfl]
   iapply wps_seq
   iapply wps_struct_x_store loc ann mo id a bs (ev0 :: evs)
@@ -252,7 +252,7 @@ theorem struct_update_certified {GF : BundledGFunctors} [SpikeGpreS GF]
       refine wp_mono fun w => ?_
       iintro H
       iexact H)
-    (th₀ := spikeThread (progS loc ann mo mo' bty id a)) rfl).mono ?_
+    (th₀ := spikeThread (progS loc ann mo mo' bty id a))).mono ?_
   intro v σ' hcc
   -- read the two field slices back out of the spliced image
   have hlen1 : (spliceBytes fieldX (fiveBytes fmapEmpty) bs).length = 16 := by
@@ -437,17 +437,17 @@ theorem struct_wps_views (loc : CerbLocation.Loc) (ann : core_run_annotation)
   -- `fieldY = 8`, by `rfl`); the images are the serializations.
   rw [show progS loc ann mo mo' bty id a =
     Expr [] (Esseq (Pattern [] (CaseBase (none, bty)))
-      (storeExpr loc ann intTy (cellPtr id (a + ((0 : Nat) : Int)))
+      (storeExpr [] loc ann intTy (cellPtr id (a + ((0 : Nat) : Int)))
         fiveVal mo)
-      (storeExpr loc ann intTy (cellPtr id (a + ((8 : Nat) : Int)))
+      (storeExpr [] loc ann intTy (cellPtr id (a + ((8 : Nat) : Int)))
         sixVal mo')) from rfl]
   iapply wps_seq
-  iapply wps_store_at loc ann id a structTy 0 intTy fiveVal mo (.own (Qp.half 1)) b0
+  iapply wps_store_at [] loc ann id a structTy 0 intTy fiveVal mo (.own (Qp.half 1)) b0
     (ev0 :: evs) five_encodes (five_storable M.tagDefs).toView
   isplitl [Hx]
   · iexact Hx
   iintro %fp Hx
-  iapply wps_store_at loc ann id a structTy 8 intTy sixVal mo'
+  iapply wps_store_at [] loc ann id a structTy 8 intTy sixVal mo'
     (.own (Qp.half (Qp.half (Qp.half 1)))) b2 (ev0 :: evs) six_encodes
     (six_storable M.tagDefs).toView
   isplitl [Hy]
@@ -500,9 +500,9 @@ theorem struct_x_read_frac_wps (loc : CerbLocation.Loc) (ann : core_run_annotati
         (fun w _ => iprop(⌜∃ fp, w = SpikeVal.annot [DA_pos [] fp] fiveVal⌝ ∗
           pointsToView M.tagDefs id a structTy fieldX (.own q) (.own q) intTy
             (fiveBytes M.tagDefs)))
-        (loadExpr loc ann intTy (cellPtr id (a + ((fieldX : Nat) : Int))) mo) ρ := by
+        (loadExpr [] loc ann intTy (cellPtr id (a + ((fieldX : Nat) : Int))) mo) ρ := by
   iintro Hv
-  iapply wps_load_at loc ann id a structTy fieldX intTy mo (.own q) (.own q)
+  iapply wps_load_at [] loc ann id a structTy fieldX intTy mo (.own q) (.own q)
     (fiveBytes M.tagDefs) ρ (fun lum fpm => five_reconstruct lum fpm _) five_loadTrap
   isplitl [Hv]
   · iexact Hv
@@ -522,7 +522,7 @@ theorem struct_x_read_shared_wps (loc : CerbLocation.Loc) (ann : core_run_annota
         (fun w _ => iprop(⌜∃ fp, w = SpikeVal.annot [DA_pos [] fp] fiveVal⌝ ∗
           pointsToView M.tagDefs id a structTy fieldX (.own 1) (.own 1) intTy
             (fiveBytes M.tagDefs)))
-        (loadExpr loc ann intTy (cellPtr id (a + ((fieldX : Nat) : Int))) mo) ρ := by
+        (loadExpr [] loc ann intTy (cellPtr id (a + ((fieldX : Nat) : Int))) mo) ρ := by
   have hsplit : pointsToView M.tagDefs (GF := GF) id a structTy fieldX (.own 1) (.own 1) intTy
         (fiveBytes M.tagDefs) ⊣⊢
       iprop(pointsToView M.tagDefs id a structTy fieldX (.own (Qp.half 1)) (.own (Qp.half 1))
@@ -562,7 +562,7 @@ theorem cell_read_shared_wps (loc : CerbLocation.Loc) (ann : core_run_annotation
         (fun w _ => iprop(⌜∃ fp, w = SpikeVal.annot [DA_pos [] fp]
             (loadedVal M.tagDefs pv intTy bs)⌝ ∗
           pointsToCell M.tagDefs pv (.own 1) intTy bs))
-        (loadExpr loc ann intTy pv mo) ρ := by
+        (loadExpr [] loc ann intTy pv mo) ρ := by
   have hc : iprop(pointsToCell M.tagDefs (GF := GF) pv (.own (Qp.half 1)) intTy bs ∗
         pointsToCell M.tagDefs pv (.own (Qp.half 1)) intTy bs') ⊢
       pointsToCell M.tagDefs pv (.own 1) intTy bs := by
@@ -571,7 +571,7 @@ theorem cell_read_shared_wps (loc : CerbLocation.Loc) (ann : core_run_annotation
     rw [Qp.half_add_half]
     exact BI.sep_elim_right
   iintro ⟨H₁, H₂⟩
-  iapply wps_load loc ann intTy pv mo (.own (Qp.half 1)) bs ρ htrap
+  iapply wps_load [] loc ann intTy pv mo (.own (Qp.half 1)) bs ρ htrap
   isplitl [H₁]
   · iexact H₁
   iintro %fp H₁
@@ -596,10 +596,10 @@ theorem struct_x_read_persist_wps (loc : CerbLocation.Loc) (ann : core_run_annot
           locInBounds M.tagDefs id a structTy fieldX (CerbMem.sizeofCtype M.tagDefs intTy) ∗
           pointsToView M.tagDefs id a structTy fieldX .discard dqb intTy
             (fiveBytes M.tagDefs)))
-        (loadExpr loc ann intTy (cellPtr id (a + ((fieldX : Nat) : Int))) mo) ρ := by
+        (loadExpr [] loc ann intTy (cellPtr id (a + ((fieldX : Nat) : Int))) mo) ρ := by
   iintro Hv
   iapply wps_fupd
-  iapply wps_load_at loc ann id a structTy fieldX intTy mo (.own q) dqb
+  iapply wps_load_at [] loc ann id a structTy fieldX intTy mo (.own q) dqb
     (fiveBytes M.tagDefs) ρ (fun lum fpm => five_reconstruct lum fpm _) five_loadTrap
   isplitl [Hv]
   · iexact Hv
@@ -642,10 +642,10 @@ def progCreateInit (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (aprov : CerbMem.Provenance) (alignN : Int) (pref : prefix0)
     (mo : memory_order) (pbty vbty : core_base_type) : CoreExpr :=
   Expr [] (Esseq (symPat [] structPSym pbty)
-    (createExpr loc ann (.IV aprov alignN) structTy pref)
+    (createExpr [] loc ann (.IV aprov alignN) structTy pref)
     (Expr [] (Esseq (symPat [] structVSym vbty)
       (ofVal (.pure fiveVal))
-      (storeOpRedex loc ann intTy (Pexpr [] () (PEsym structPSym))
+      (storeOpRedex [] loc ann intTy (Pexpr [] () (PEsym structPSym))
         (Pexpr [] () (PEsym structVSym)) mo))))
 
 /-- Cone membership. -/
@@ -654,8 +654,8 @@ theorem progCreateInit_frag (loc : CerbLocation.Loc)
     (alignN : Int) (pref : prefix0) (mo : memory_order)
     (pbty vbty : core_base_type) :
     Frag (progCreateInit loc ann aprov alignN pref mo pbty vbty) :=
-  .sseq_sym .create (.create)
-    (.sseq_sym (.val_pure fiveVal) (frag_ofVal (.pure fiveVal))
+  .sseq_sym .create
+    (.sseq_sym (.val_pure fiveVal)
       (.store_op rfl (.sym [] structPSym) (.sym [] structVSym)
         (by rw [show peDepth (Pexpr ([] : List annot) ()
             (PEsym structPSym)) = 1 from rfl,
@@ -713,13 +713,13 @@ theorem struct_create_store_wps
   iintro Hcap
   rw [show progCreateInit loc ann aprov alignN pref mo pbty vbty =
     Expr [] (Esseq (symPat [] structPSym pbty)
-      (createExpr loc ann (.IV aprov alignN) structTy pref)
+      (createExpr [] loc ann (.IV aprov alignN) structTy pref)
       (Expr [] (Esseq (symPat [] structVSym vbty)
         (ofVal (.pure fiveVal))
-        (storeOpRedex loc ann intTy (Pexpr [] () (PEsym structPSym))
+        (storeOpRedex [] loc ann intTy (Pexpr [] () (PEsym structPSym))
           (Pexpr [] () (PEsym structVSym)) mo)))) from rfl]
   iapply wps_seq_sym
-  iapply wps_create loc ann aprov alignN structTy pref (ev0 :: evs)
+  iapply wps_create [] loc ann aprov alignN structTy pref (ev0 :: evs)
     structTy_size_pos structTy_nonatomic (fun a => structTy_decIndep a _)
   isplitl [Hcap]
   · iexact Hcap
@@ -738,7 +738,7 @@ theorem struct_create_store_wps
   rw [update_env_sym structVSym vbty]
   icases (pointsToCell_cellOwn_iff M.tagDefs _ _ _ _).mp $$ Hpt
     with ⟨%id, %a, %hpv, Hcell⟩
-  iapply wps_store_eval loc ann intTy _ _ mo _ rfl
+  iapply wps_store_eval [] loc ann intTy _ _ mo _ rfl
     (pv := p) (cv := fiveVal)
     (by rw [evalPexpr_sym_of_resolve _ _ _ (hex _)]
         exact lookup_env_head (structFrame_lookup_p hf p) evs)
@@ -812,7 +812,7 @@ theorem struct_create_store_adequacy {GF : BundledGFunctors} [SpikeGpreS GF]
           from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega))
     fmapEmpty [] (∅ : CellMap) (allocCost fmapEmpty structTy 8)
     (fun w => iprop(∃ p : CerbMem.PointerValue,
-      ⌜w.w.val = Vunit⌝ ∗
+      ⌜w.sv.val = Vunit⌝ ∗
       pointsToCell fmapEmpty (GF := GF) p (.own 1) structTy
         (spliceBytes fieldX (fiveBytes fmapEmpty)
           (List.replicate (CerbMem.sizeofCtype fmapEmpty structTy) undefByte))))
@@ -858,7 +858,7 @@ theorem struct_create_store_adequacy_prodMem₀ {GF : BundledGFunctors} [SpikeGp
     (by rw [show Iris.Std.PartialMap.union (∅ : CellMap) (∅ : CellMap) = ∅ from
           Iris.Std.LawfulPartialMap.union_empty_right]
         exact prodMem₀_launchCoh _ struct_budget_fits)
-    (spikeThread (progCreateInit loc ann .Prov_none 8 pref mo pbty vbty)) rfl
+    (spikeThread (progCreateInit loc ann .Prov_none 8 pref mo pbty vbty))
 
 end CreateConsumer
 

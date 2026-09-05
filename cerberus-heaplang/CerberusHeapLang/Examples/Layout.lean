@@ -146,13 +146,13 @@ theorem wps_exhibit_store_frame (x y : CerbMem.PointerValue)
       wps M p Ls Θ
         (fun _ _ => iprop(pointsToCell M.tagDefs x (.own 1) intTy (sevenBytes M.tagDefs) ∗
           pointsToCell M.tagDefs y (.own 1) ty' bs'))
-        (storeExpr loc ann intTy x sevenVal mo) ρ := by
+        (storeExpr [] loc ann intTy x sevenVal mo) ρ := by
   iintro ⟨Hx, Hy⟩
   iapply (wps_frame
     (Ψ := fun _ _ => iprop(pointsToCell M.tagDefs (GF := GF) x (.own 1) intTy (sevenBytes M.tagDefs)))
     (R := pointsToCell M.tagDefs y (.own 1) ty' bs') _ _)
   isplitl [Hx]
-  · iapply wps_store loc ann intTy x sevenVal mo sevenMval bs ρ seven_encodes
+  · iapply wps_store [] loc ann intTy x sevenVal mo sevenMval bs ρ seven_encodes
       (seven_storable _)
     isplitl [Hx]
     · iexact Hx
@@ -179,9 +179,9 @@ example {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
       wps M p Ls Θ
         (fun _ _ => iprop(pointsToCell M.tagDefs x (.own 1) intTy (sevenBytes M.tagDefs) ∗
           pointsToCell M.tagDefs y (.own 1) ty' bs'))
-        (storeExpr loc ann intTy x sevenVal mo) ρ := by
+        (storeExpr [] loc ann intTy x sevenVal mo) ρ := by
   iintro Hx
-  iapply wps_store loc ann intTy x sevenVal mo sevenMval bs ρ seven_encodes
+  iapply wps_store [] loc ann intTy x sevenVal mo sevenMval bs ρ seven_encodes
     (seven_storable _)
   isplitl [Hx]
   · iexact Hx
@@ -228,21 +228,21 @@ theorem wps_exhibit_seq_stores (x y : CerbMem.PointerValue)
       wps M p Ls Θ
         (fun _ _ => iprop(pointsToCell M.tagDefs x (.own 1) intTy (fiveBytes M.tagDefs) ∗
           pointsToCell M.tagDefs y (.own 1) intTy (sixBytes M.tagDefs)))
-        (sseqExpr bty (storeExpr loc ann intTy x fiveVal mo)
-          (storeExpr loc' ann' intTy y sixVal mo')) (ev0 :: evs) := by
+        (sseqExpr [] bty (storeExpr [] loc ann intTy x fiveVal mo)
+          (storeExpr [] loc' ann' intTy y sixVal mo')) (ev0 :: evs) := by
   iintro ⟨Hx, Hy⟩
-  rw [show sseqExpr bty (storeExpr loc ann intTy x fiveVal mo)
-      (storeExpr loc' ann' intTy y sixVal mo') =
+  rw [show sseqExpr [] bty (storeExpr [] loc ann intTy x fiveVal mo)
+      (storeExpr [] loc' ann' intTy y sixVal mo') =
     Expr [] (Esseq (Pattern [] (CaseBase (none, bty)))
-      (storeExpr loc ann intTy x fiveVal mo)
-      (storeExpr loc' ann' intTy y sixVal mo')) from rfl]
+      (storeExpr [] loc ann intTy x fiveVal mo)
+      (storeExpr [] loc' ann' intTy y sixVal mo')) from rfl]
   iapply wps_seq
-  iapply wps_store loc ann intTy x fiveVal mo fiveMval bsx (ev0 :: evs)
+  iapply wps_store [] loc ann intTy x fiveVal mo fiveMval bsx (ev0 :: evs)
     five_encodes (five_storable _)
   isplitl [Hx]
   · iexact Hx
   iintro %fp Hx
-  iapply wps_store loc' ann' intTy y sixVal mo' sixMval bsy (ev0 :: evs)
+  iapply wps_store [] loc' ann' intTy y sixVal mo' sixMval bsy (ev0 :: evs)
     six_encodes (six_storable _)
   isplitl [Hy]
   · iexact Hy

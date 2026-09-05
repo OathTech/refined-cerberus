@@ -62,21 +62,21 @@ instance : Language CoreRt Mem Empty CoreRVal where
   toVal := toValRt
   ofVal := ofValRt
   coe_of_toVal_eq_some {r v} h := by
-    obtain ⟨e, ρ, ⟨κ, pr, ℓ⟩, M⟩ := r
+    obtain ⟨e, ρ, ⟨κ, pr, ℓ, lc, sp⟩, M⟩ := r
     cases κ with
     | cons pc κ => rw [toValRt_mk_cons] at h; cases h
     | nil =>
     rw [toValRt_mk] at h
-    cases he : toVal e with
+    cases he : toValA e with
     | none => rw [he] at h; cases h
     | some w =>
       rw [he] at h
       cases h
-      show ofValRt ⟨w, ρ, pr, ℓ, M⟩ = ⟨e, ρ, ⟨[], pr, ℓ⟩, M⟩
-      rw [ofValRt_mk, ofVal_of_toVal he]
+      show ofValRt ⟨w, ρ, pr, ℓ, M, lc, sp⟩ = ⟨e, ρ, ⟨[], pr, ℓ, lc, sp⟩, M⟩
+      rw [ofValRt_mk, ofValA_of_toValA he]
   toVal_coe v := by
-    obtain ⟨w, ρ, pr, ℓ, M⟩ := v
-    rw [ofValRt_mk, toValRt_mk, toVal_ofVal]
+    obtain ⟨w, ρ, pr, ℓ, M, lc, sp⟩ := v
+    rw [ofValRt_mk, toValRt_mk, toValA_ofValA]
     rfl
   val_stuck {r σ obs r' σ' eₜ} h := Step.toValRt_none h.1
 

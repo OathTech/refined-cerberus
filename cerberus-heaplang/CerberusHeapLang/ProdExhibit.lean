@@ -73,17 +73,17 @@ def pASym : sym := Symbol "" 511 SD_None
     `lets p = create(4, int) in lets _ = store(int, p, 7) in load(int, p)`. -/
 def progAProd : CoreExpr :=
   Expr [] (Esseq (symPat [] pASym BTy_unit)
-    (createExpr loc0 empty_annotation (.IV .Prov_none 4) intTy
+    (createExpr [] loc0 empty_annotation (.IV .Prov_none 4) intTy
       (PrefOther "spike-x"))
     (Expr [] (Esseq (Pattern [] (CaseBase (none, BTy_unit)))
-      (storeOpRedex loc0 empty_annotation intTy
+      (storeOpRedex [] loc0 empty_annotation intTy
         (Pexpr [] () (PEsym pASym)) (Pexpr [] () (PEval sevenVal)) NA)
-      (loadOpRedex loc0 empty_annotation intTy
+      (loadOpRedex [] loc0 empty_annotation intTy
         (Pexpr [] () (PEsym pASym)) NA))))
 
 /-- Cone membership. -/
 theorem progAProd_frag : Frag progAProd :=
-  .sseq_sym .create (.create)
+  .sseq_sym .create
     (.sseq
       (.store_op rfl (.sym [] pASym) (.val [] sevenVal)
         (by rw [show peDepth (Pexpr ([] : List annot) ()
@@ -113,10 +113,10 @@ theorem wps_store_sym_lit [SpikeGS .hasLC GF] {M : MachineCtx} {p : Option sym} 
     {pv : CerbMem.PointerValue}
     (hx : evalPexpr M.tagDefs M.extern ρ (Pexpr [] () (PEsym x)) =
       some (Vobject (OVpointer pv))) :
-    wps M p Ls Θ Ψ (storeExpr loc ann ty pv cv mo) ρ ⊢
-      wps M p Ls Θ Ψ (storeOpRedex loc ann ty (Pexpr [] () (PEsym x))
+    wps M p Ls Θ Ψ (storeExpr [] loc ann ty pv cv mo) ρ ⊢
+      wps M p Ls Θ Ψ (storeOpRedex [] loc ann ty (Pexpr [] () (PEsym x))
         (Pexpr [] () (PEval cv)) mo) ρ :=
-  wps_store_eval loc ann ty _ _ mo ρ rfl hx rfl
+  wps_store_eval [] loc ann ty _ _ mo ρ rfl hx rfl
 
 theorem wpt_store_lit_sym [SpikeGS .hasLC GF] {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
     {Ψ : SpikeVal → EnvStack → IProp GF}
@@ -124,10 +124,10 @@ theorem wpt_store_lit_sym [SpikeGS .hasLC GF] {M : MachineCtx} {p : Option sym} 
     (pv : CerbMem.PointerValue) (y : sym) (mo : memory_order) (ρ : EnvStack)
     {cv : value} {k : Nat}
     (hy : evalPexpr M.tagDefs M.extern ρ (Pexpr [] () (PEsym y)) = some cv) :
-    wpt M p Ls Θ k Ψ (storeExpr loc ann ty pv cv mo) ρ ⊢
-      wpt M p Ls Θ (k + 1) Ψ (storeOpRedex loc ann ty
+    wpt M p Ls Θ k Ψ (storeExpr [] loc ann ty pv cv mo) ρ ⊢
+      wpt M p Ls Θ (k + 1) Ψ (storeOpRedex [] loc ann ty
         (Pexpr [] () (PEval (Vobject (OVpointer pv)))) (Pexpr [] () (PEsym y)) mo) ρ :=
-  wpt_store_eval loc ann ty _ _ mo ρ rfl rfl hy
+  wpt_store_eval [] loc ann ty _ _ mo ρ rfl rfl hy
 
 /-! ## The frame after the bind, and its lookup -/
 
@@ -169,16 +169,16 @@ theorem progAProd_wpt [SpikeGS .hasLC GF]
   iintro Hcap
   rw [show progAProd =
     Expr [] (Esseq (symPat [] pASym BTy_unit)
-      (createExpr loc0 empty_annotation (.IV .Prov_none 4) intTy
+      (createExpr [] loc0 empty_annotation (.IV .Prov_none 4) intTy
         (PrefOther "spike-x"))
       (Expr [] (Esseq (Pattern [] (CaseBase (none, BTy_unit)))
-        (storeOpRedex loc0 empty_annotation intTy
+        (storeOpRedex [] loc0 empty_annotation intTy
           (Pexpr [] () (PEsym pASym)) (Pexpr [] () (PEval sevenVal)) NA)
-        (loadOpRedex loc0 empty_annotation intTy
+        (loadOpRedex [] loc0 empty_annotation intTy
           (Pexpr [] () (PEsym pASym)) NA)))) from rfl,
     show (10 : Nat) = 2 + 8 from rfl]
   iapply wpt_seq_sym
-  iapply wpt_create loc0 empty_annotation .Prov_none 4 intTy
+  iapply wpt_create [] loc0 empty_annotation .Prov_none 4 intTy
     (PrefOther "spike-x") (ev0 :: evs) (Nat.le_refl 2) intTy_size_pos intTy_nonatomic
     (fun a => intTy_decIndep a _)
   isplitl [Hcap]
@@ -191,12 +191,12 @@ theorem progAProd_wpt [SpikeGS .hasLC GF]
   rw [update_env_sym pASym BTy_unit, show (8 : Nat) = 4 + 4 from rfl]
   iapply wpt_seq
   rw [show (4 : Nat) = 3 + 1 from rfl]
-  iapply wpt_store_eval loc0 empty_annotation intTy _ _ NA _ rfl
+  iapply wpt_store_eval [] loc0 empty_annotation intTy _ _ NA _ rfl
     (pv := p) (cv := sevenVal)
     (by rw [evalPexpr_sym_of_resolve _ _ _ (hex _)]
         exact lookup_env_head (prodAFrame_lookup_p hf p) evs)
     rfl
-  iapply wpt_store loc0 empty_annotation intTy p sevenVal NA sevenMval
+  iapply wpt_store [] loc0 empty_annotation intTy p sevenVal NA sevenMval
     (intUndefBytes M.tagDefs) _ (Nat.le_refl 3) seven_encodes (seven_storable _)
   isplitl [Hpt]
   · iexact Hpt
@@ -205,12 +205,12 @@ theorem progAProd_wpt [SpikeGS .hasLC GF]
     (fun u ρ' => readoutPost_annot_absorb (ψA M.tagDefs) [DA_pos [] fp] Vunit u ρ') _ _
   icases (pointsToCell_cellOwn_iff M.tagDefs _ _ _ _).mp $$ Hpt
     with ⟨%id, %a, %hpv, Hcell⟩
-  iapply wpt_load_eval loc0 empty_annotation intTy _ NA _ rfl (pv := p)
+  iapply wpt_load_eval [] loc0 empty_annotation intTy _ NA _ rfl (pv := p)
     (by rw [evalPexpr_sym_of_resolve _ _ _ (hex _)]
         exact lookup_env_head (prodAFrame_lookup_p hf p) evs)
   rw [hpv, show (cellPtr id a) = cellPtr id (a + ((0 : Nat) : Int))
     from congrArg (cellPtr id) (by omega)]
-  iapply wpt_load_cell_at loc0 empty_annotation id a intTy 0 intTy NA
+  iapply wpt_load_cell_at [] loc0 empty_annotation id a intTy 0 intTy NA
     (.own 1) (CerbMem.memValueToBytes M.tagDefs [] sevenMval).2 _
     (mv := sevenMval) (Nat.le_refl 3) (by omega)
     (fun lum fpm => seven_reconstruct lum fpm _) seven_loadTrap
@@ -282,7 +282,7 @@ theorem exhibitA_prod (sup : Nat) (fs : CerbFS.FsState) (args : List String) :
     cases hl
   obtain ⟨dres, dst', heq, hψ, hbl, hout, herr⟩ :=
     prod_run_eqJ sup progAProd hQe (ψA fmapEmpty) 10
-      (wpt_driver_done_alloc (GF := SpikeGF)
+      (wpt_driver_done_alloc (GF := SpikeGF) (ctl := prodCtl)
         (M₀ := procCtx ((initial_core_run_state sup
           (collect_labeled_continuations_NEW (prodFile progAProd))).1))
         rfl rfl (procCtx_labels hQe) rfl rfl rfl rfl

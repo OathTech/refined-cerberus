@@ -76,15 +76,15 @@ def eoDec : generic_pexpr Unit sym :=
 
 /-- `even`'s body: `if n < 1 then pure(1) else odd(n - 1)`. -/
 def eoEvenBody (ra : core_run_annotation) : CoreExpr :=
-  Expr [] (Eif eoGuard (ofVal (.pure (ivVal 1))) (callRedex ra eoOddSym [eoDec]))
+  Expr [] (Eif eoGuard (ofVal (.pure (ivVal 1))) (callRedex [] ra eoOddSym [eoDec]))
 
 /-- `odd`'s body: `if n < 1 then pure(0) else even(n - 1)`. -/
 def eoOddBody (ra : core_run_annotation) : CoreExpr :=
-  Expr [] (Eif eoGuard (ofVal (.pure (ivVal 0))) (callRedex ra eoEvenSym [eoDec]))
+  Expr [] (Eif eoGuard (ofVal (.pure (ivVal 0))) (callRedex [] ra eoEvenSym [eoDec]))
 
 /-- `main`: `even(n)`. -/
 def eoMain (ra : core_run_annotation) (n : Int) : CoreExpr :=
-  callRedex ra eoEvenSym [Pexpr [] () (PEval (ivVal n))]
+  callRedex [] ra eoEvenSym [Pexpr [] () (PEval (ivVal n))]
 
 /-- The declared procedures: `odd`, then `even` (the order fixes the `funs`
     chain: `main` over `odd` over `even`). -/
@@ -380,14 +380,12 @@ theorem eoEvenBody_wps (g : sym) (hodd : symOrd g eoOddSym ≠ .eq) (vs : List v
     isplitl []
     · ipureintro
       exact ⟨n' - 1, rfl, by omega⟩
-    · iintro %ret %hpost
+    · iintro %ret %a1 %hpost
       obtain ⟨m1, hm1, hret⟩ := hpost
       obtain rfl : m1 = n' - 1 := (ivVal_inj (List.cons.inj hm1).1).symm
       rw [if_pos (by decide +kernel)] at hret
       subst hret
-      rw [show Expr [] (Epure (Pexpr [] () (PEval (ivVal ((n' - 1) % 2))))) =
-        ofVal (.pure (ivVal ((n' - 1) % 2))) from rfl]
-      iapply wps_ofVal
+      iapply wps_ofValA
       ipureintro
       refine ⟨n', rfl, ?_⟩
       rw [if_neg hodd]
@@ -425,14 +423,12 @@ theorem eoOddBody_wps (g : sym) (hodd : symOrd g eoOddSym = .eq) (vs : List valu
     isplitl []
     · ipureintro
       exact ⟨n' - 1, rfl, by omega⟩
-    · iintro %ret %hpost
+    · iintro %ret %a1 %hpost
       obtain ⟨m1, hm1, hret⟩ := hpost
       obtain rfl : m1 = n' - 1 := (ivVal_inj (List.cons.inj hm1).1).symm
       rw [if_neg (by decide +kernel)] at hret
       subst hret
-      rw [show Expr [] (Epure (Pexpr [] () (PEval (ivVal (1 - (n' - 1) % 2))))) =
-        ofVal (.pure (ivVal (1 - (n' - 1) % 2))) from rfl]
-      iapply wps_ofVal
+      iapply wps_ofValA
       ipureintro
       refine ⟨n', rfl, ?_⟩
       rw [if_pos hodd]
@@ -475,22 +471,20 @@ theorem eoMain_wps (hn : 0 ≤ n) (ρ : EnvStack) :
   isplitl []
   · ipureintro
     exact ⟨n, rfl, hn⟩
-  · iintro %ret %hpost
+  · iintro %ret %a1 %hpost
     obtain ⟨m, hm, hret⟩ := hpost
     obtain rfl : n = m := ivVal_inj (List.cons.inj hm).1
     rw [if_neg (by decide +kernel)] at hret
     subst hret
-    rw [show Expr [] (Epure (Pexpr [] () (PEval (ivVal (1 - n % 2))))) =
-      ofVal (.pure (ivVal (1 - n % 2))) from rfl]
-    iapply wps_ofVal
+    iapply wps_ofValA
     dsimp only [eoPost]
     ipureintro
     rfl
 
 /-- The base-WP face with the engine readout: `wps_sound` WITH the table at
     the production entry control. -/
-theorem eo_wp_readout (hn : 0 ≤ n) (ℓ : exec_location) :
-    ⊢ WP (⟨eoMain ra n, [fmapEmpty], ⟨[], some mainSym, ℓ⟩, eoCtx ra n nbty sup⟩ : CoreRt)
+theorem eo_wp_readout (hn : 0 ≤ n) (ℓ : exec_location) (lc : CerbLocation.Loc) (sp : RunSup) :
+    ⊢ WP (⟨eoMain ra n, [fmapEmpty], ⟨[], some mainSym, ℓ, lc, sp⟩, eoCtx ra n nbty sup⟩ : CoreRt)
         @ Stuckness.NotStuck; ⊤
         {{ w, iprop(∀ (σ' : Mem) (ns : Nat) (κs : List Empty) (nt : Nat),
           (stateInterp σ' ns κs nt : IProp GF) ={⊤, ∅}=∗
@@ -499,7 +493,7 @@ theorem eo_wp_readout (hn : 0 ≤ n) (ℓ : exec_location) :
   refine (BI.emp_sep.2.trans (BI.sep_mono
     ((BI.emp_sep.2.trans (BI.sep_mono (eoCtx_procSpecs ra n nbty sup)
       (eo_blockSpecs ra n nbty sup))).trans
-      (wps_sound (ctl := ⟨[], some mainSym, ℓ⟩) rfl (eoMain ra n) [fmapEmpty])) .rfl)).trans ?_
+      (wps_sound (ctl := ⟨[], some mainSym, ℓ, lc, sp⟩) rfl (eoMain ra n) [fmapEmpty])) .rfl)).trans ?_
   refine BI.wand_elim_left.trans ?_
   exact wp_mono fun w => stateInterp_readout fun _ _ _ _ _ => pure_consequence _
 
@@ -542,14 +536,12 @@ theorem eoEvenBody_wpt (g : sym) (hodd : symOrd g eoOddSym ≠ .eq) (m : Nat) (v
     isplitl []
     · ipureintro
       exact ⟨n' - 1, rfl, by omega, Nat.le_refl _⟩
-    · iintro %ret %hpost
+    · iintro %ret %a1 %hpost
       obtain ⟨m1, hm1, hret⟩ := hpost
       obtain rfl : m1 = n' - 1 := (ivVal_inj (List.cons.inj hm1).1).symm
       rw [if_pos (by decide +kernel)] at hret
       subst hret
-      rw [show Expr [] (Epure (Pexpr [] () (PEval (ivVal ((n' - 1) % 2))))) =
-        ofVal (.pure (ivVal ((n' - 1) % 2))) from rfl]
-      iapply wpt_ofVal _ _ (Nat.le_refl 1)
+      iapply wpt_ofValA _ _ (Nat.le_refl 1)
       ipureintro
       refine ⟨n', rfl, ?_⟩
       rw [if_neg hodd]
@@ -590,14 +582,12 @@ theorem eoOddBody_wpt (g : sym) (hodd : symOrd g eoOddSym = .eq) (m : Nat) (vs :
     isplitl []
     · ipureintro
       exact ⟨n' - 1, rfl, by omega, Nat.le_refl _⟩
-    · iintro %ret %hpost
+    · iintro %ret %a1 %hpost
       obtain ⟨m1, hm1, hret⟩ := hpost
       obtain rfl : m1 = n' - 1 := (ivVal_inj (List.cons.inj hm1).1).symm
       rw [if_neg (by decide +kernel)] at hret
       subst hret
-      rw [show Expr [] (Epure (Pexpr [] () (PEval (ivVal (1 - (n' - 1) % 2))))) =
-        ofVal (.pure (ivVal (1 - (n' - 1) % 2))) from rfl]
-      iapply wpt_ofVal _ _ (Nat.le_refl 1)
+      iapply wpt_ofValA _ _ (Nat.le_refl 1)
       ipureintro
       refine ⟨n', rfl, ?_⟩
       rw [if_pos hodd]
@@ -640,14 +630,12 @@ theorem eoMain_wpt (hn : 0 ≤ n) (ρ : EnvStack) :
   isplitl []
   · ipureintro
     exact ⟨n, rfl, hn, Nat.le_refl _⟩
-  · iintro %ret %hpost
+  · iintro %ret %a1 %hpost
     obtain ⟨m, hm, hret⟩ := hpost
     obtain rfl : n = m := ivVal_inj (List.cons.inj hm).1
     rw [if_neg (by decide +kernel)] at hret
     subst hret
-    rw [show Expr [] (Epure (Pexpr [] () (PEval (ivVal (1 - n % 2))))) =
-      ofVal (.pure (ivVal (1 - n % 2))) from rfl]
-    iapply wpt_ofVal _ _ (Nat.le_refl 1)
+    iapply wpt_ofValA _ _ (Nat.le_refl 1)
     dsimp only [eoPost]
     ipureintro
     rfl
@@ -702,9 +690,9 @@ theorem even_odd_certified (hn : 0 ≤ n) (fs : CerbFS.FsState) (args : List Str
       (by rw [eoMain_pot, show lemDefaultFuel = 999999 + 1 from rfl]; omega)
       (coh_empty prodMem₀)
       (fun v _ => v = ivVal (1 - n % 2))
-      ?_ (th₀ := prodThread (eoMain ra n)) rfl
+      ?_ (th₀ := prodThread (eoMain ra n))
     intro inst
-    exact (BigSepM.bigSepM_empty).1.trans (eo_wp_readout ra n nbty sup hn _)
+    exact (BigSepM.bigSepM_empty).1.trans (eo_wp_readout ra n nbty sup hn _ _ _)
   obtain ⟨st, dst', heq, hor⟩ := prod_run_safe_procs sup (eoProcs ra nbty) (eoMain ra n)
     (eoCtx_labeledProcs ra n nbty sup) _ hsafe fs args fuel
   exact ⟨st, dst', heq, hor⟩
@@ -736,8 +724,8 @@ theorem even_odd_certified_production (hn : 0 ≤ n)
     (fun v _ => v = ivVal (1 - n % 2)) (3 * n.toNat + 4)
     (wpt_driver_done_procs (GF := SpikeGF) (M₀ := eoCtx ra n nbty sup) rfl rfl
       (eoCtx_fragProcs ra n nbty sup)
-      (th₀ := prodThread (eoMain ra n)) rfl
-      (eoFile_lookup_main ra n nbty) prodCtl.execLoc
+      (th₀ := prodThread (eoMain ra n))
+      (eoFile_lookup_main ra n nbty) prodCtl.execLoc prodCtl.curLoc prodCtl.sup
       eoSpecT eoLsT
       (eoMain ra n) fmapEmpty [] prodMem₀ (∅ : SpikeHeapF SpikeCell) 0
       (eoMain_frag ra n)

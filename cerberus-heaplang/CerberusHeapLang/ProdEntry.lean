@@ -403,7 +403,8 @@ theorem prod_run_eqJ (sup : Nat) (e : CoreExpr) {Q : LabelMap}
     (hQe : LabeledAt ((initial_core_run_state sup
       (collect_labeled_continuations_NEW (prodFile e))).1) mainSym Q)
     (ψ : value → Mem → Prop) (k : Nat)
-    (hdd : DriverDoneAt mainSym Q (prodThread e) e [fmapEmpty] prodMem₀ ψ k)
+    (hdd : DriverDoneAt mainSym Q (prodThread e) e [fmapEmpty] (CerbLocation.other "Driver.drive")
+      prodMem₀ ψ k)
     (hfl : k + 2 ≤ CerbFuel.driverFuel)
     (fs : CerbFS.FsState) (args : List String) :
     ∃ (dres : driver_result) (dst' : driver_state),
@@ -414,17 +415,17 @@ theorem prod_run_eqJ (sup : Nat) (e : CoreExpr) {Q : LabelMap}
       dres.dres_blocked = false ∧
       dres.dres_stdout = "" ∧
       dres.dres_stderr = "" := by
-  obtain ⟨v, σfin, ρfin, rs', tr, ctr, hψ, hloop⟩ :=
+  obtain ⟨v, σfin, ρfin, lcfin, afin, bfin, rs', tr, ctr, hψ, hloop⟩ :=
     hdd (prodEntryState sup e fs) fmapEmpty CerbFuel.driverFuel rfl rfl rfl hQe hfl
   have hdrv2 := driver2_done 99999999 fmapEmpty (prodEntryState sup e fs) _
     (prodThread e)
-    { prodThread e with arena := ofVal (.pure v), env := ρfin }
+    { prodThread e with arena := ofValA (.pure afin bfin v), env := ρfin, current_loc := lcfin }
     v rfl hloop rfl
   have hrun := drive_after_setup sup e fs args _ hdrv2
   refine ⟨_, _, runND_active hrun, ?_, rfl, rfl, rfl⟩
   rw [finalize_done fmapEmpty _ _
-    { { prodThread e with arena := ofVal (.pure v), env := ρfin } with
-        stack0 := Stack_empty, arena := mk_value_e v } v rfl rfl]
+    { { prodThread e with arena := ofValA (.pure afin bfin v), env := ρfin, current_loc := lcfin }
+        with stack0 := Stack_empty, arena := mk_value_e v } v rfl rfl]
   exact hψ
 
 
@@ -564,8 +565,9 @@ theorem prodFileWith_lookup_main (procs : List (sym × List (sym × core_base_ty
 /-- The production ENTRY CONTROL: the control fields of the thread
     `Driver.drive` parks (Driver.lean:530) — empty call stack, current
     procedure `main`, execution location `[(main, "Driver.drive")]`. -/
-def prodCtl : Ctl :=
-  ⟨[], some mainSym, ELoc_normal [(mainSym, CerbLocation.other "Driver.drive")]⟩
+@[reducible] def prodCtl : Ctl :=
+  ⟨[], some mainSym, ELoc_normal [(mainSym, CerbLocation.other "Driver.drive")],
+    CerbLocation.other "Driver.drive", default⟩
 
 /-- The parked thread IS the control-threaded thread at the entry control. -/
 theorem prodThread_eq_ctlThread (e : CoreExpr) :
@@ -573,13 +575,14 @@ theorem prodThread_eq_ctlThread (e : CoreExpr) :
 
 /-- The PRODUCTION CONTEXT at a file and a run state: tagDefs/extern
     empty, thread 0, no parent, the cold-start errno pointer, and
-    `currentLoc := other "Driver.drive"` — the parked thread's
-    `current_loc` (Driver.lean:530), what the PCALL round pushes onto
-    `exec_loc` (Core_reduction.lean:484 col 18133, `push_exec_loc psym
+    (E1) the current location is LIVE on the control — `prodCtl.curLoc =
+    other "Driver.drive"`, the parked thread's `current_loc`
+    (Driver.lean:530), what the PCALL round pushes onto `exec_loc`
+    (Core_reduction.lean:484 col 18133, `push_exec_loc psym
     th_st.current_loc th_st.exec_loc`). Reducible, as `procCtx`. -/
 @[reducible] def prodCtx (f : file core_run_annotation) (rs : core_run_state) : MachineCtx :=
   { tagDefs := fmapEmpty, file := f, extern := fmapEmpty, tid := 0, parent := none,
-    errno := errnoPtr, currentLoc := CerbLocation.other "Driver.drive", runState := rs }
+    errno := errnoPtr, runState := rs }
 
 /-- The production initial run state of a synthetic file: what
     `initial_driver_state` installs (`labeled` = the shipped registration
@@ -730,16 +733,16 @@ theorem prod_run_eqJ_procs (sup : Nat)
       dres.dres_blocked = false ∧
       dres.dres_stdout = "" ∧
       dres.dres_stderr = "" := by
-  obtain ⟨v, σfin, ρfin, pfin, ℓfin, rs', tr, ctr, hψ, hloop⟩ :=
+  obtain ⟨v, σfin, ρfin, pfin, ℓfin, lcfin, spfin, afin, bfin, rs', tr, ctr, hψ, hloop⟩ :=
     hdd (prodEntryStateWith procs sup e fs) fmapEmpty CerbFuel.driverFuel rfl rfl rfl rfl hlab hfl
   have hdrv2 := driver2_done 99999999 fmapEmpty (prodEntryStateWith procs sup e fs) _
     (prodThread e)
-    (ctlThread (prodThread e) (ofVal (.pure v)) ρfin ⟨[], pfin, ℓfin⟩)
+    (ctlThread (prodThread e) (ofValA (.pure afin bfin v)) ρfin ⟨[], pfin, ℓfin, lcfin, spfin⟩)
     v rfl hloop rfl
   have hrun := drive_after_setup_with procs sup e fs args _ hdrv2
   refine ⟨_, _, runND_active hrun, ?_, rfl, rfl, rfl⟩
   rw [finalize_done fmapEmpty _ _
-    { ctlThread (prodThread e) (ofVal (.pure v)) ρfin ⟨[], pfin, ℓfin⟩ with
+    { ctlThread (prodThread e) (ofValA (.pure afin bfin v)) ρfin ⟨[], pfin, ℓfin, lcfin, spfin⟩ with
         stack0 := Stack_empty, arena := mk_value_e v } v rfl rfl]
   exact hψ
 
@@ -794,8 +797,8 @@ theorem prod_run_safe_procs (sup : Nat)
       Or.inl rfl⟩
   | succ fl =>
     rcases hsafe (prodEntryStateWith procs sup e fs) fmapEmpty CerbFuel.driverFuel rfl rfl rfl rfl
-        hlab (CtlTied.entry hlab (prodFileWith_lookup_main procs e) _) with
-      ⟨dstK, hloop⟩ | ⟨v, σfin, ρfin, pfin, ℓfin, rs', tr, ctr, hψ, hloop⟩
+        hlab (CtlTied.entry hlab (prodFileWith_lookup_main procs e) _ _ _) with
+      ⟨dstK, hloop⟩ | ⟨v, σfin, ρfin, pfin, ℓfin, lcfin, spfin, afin, bfin, rs', tr, ctr, hψ, hloop⟩
     · -- the shipped loop EXHAUSTS its budget: `driver2` kills, the pipeline kills
       have hdrv2 := driver2_killed fl fmapEmpty (prodEntryStateWith procs sup e fs) dstK
         (prodThread e) _ rfl hloop
@@ -804,13 +807,13 @@ theorem prod_run_safe_procs (sup : Nat)
     · -- the shipped loop DELIVERS: the total pipeline's route
       have hdrv2 := driver2_done fl fmapEmpty (prodEntryStateWith procs sup e fs) _
         (prodThread e)
-        (ctlThread (prodThread e) (ofVal (.pure v)) ρfin ⟨[], pfin, ℓfin⟩)
+        (ctlThread (prodThread e) (ofValA (.pure afin bfin v)) ρfin ⟨[], pfin, ℓfin, lcfin, spfin⟩)
         v rfl hloop rfl
       have hrun := drive_after_setup_with_lemFuel _ procs sup e fs args _ hdrv2
       refine ⟨_, _, runND_active hrun, Or.inr ⟨_, rfl, ?_, rfl, rfl, rfl⟩⟩
       rw [finalize_done fmapEmpty _ _
-        { ctlThread (prodThread e) (ofVal (.pure v)) ρfin ⟨[], pfin, ℓfin⟩ with
-            stack0 := Stack_empty, arena := mk_value_e v } v rfl rfl]
+        { ctlThread (prodThread e) (ofValA (.pure afin bfin v)) ρfin ⟨[], pfin, ℓfin, lcfin, spfin⟩
+            with stack0 := Stack_empty, arena := mk_value_e v } v rfl rfl]
       exact hψ
 
 end CerberusHeapLang

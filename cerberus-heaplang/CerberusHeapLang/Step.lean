@@ -231,53 +231,175 @@ def mergeInto : SpikeVal → SpikeVal → SpikeVal
 
 end SpikeVal
 
-/-- Canonical expression of a value (the shape `mk_value_e` produces,
-    Core_aux.lean:645, resp. the action continuations' Eannot wrap,
-    Core_reduction.lean:424). -/
-def ofVal : SpikeVal → CoreExpr
-  | .pure v => Expr [] (Epure (Pexpr [] () (PEval v)))
-  | .annot ds v => Expr [] (Eannot ds (Expr [] (Epure (Pexpr [] () (PEval v)))))
+/-- THE VALUE WITH ITS STATIC ANNOTATION LISTS (E1). The engine's two
+    value shapes accept ANY static annotations (`is_irreducible`,
+    Core_reduction.lean:293: `Expr _ (Epure (Pexpr _ _ (PEval _)))` and
+    `Expr _ (Eannot _ (Expr _ (Epure (Pexpr _ _ (PEval _)))))`), and the
+    PURE round KEEPS the node's annotations on the value it produces
+    (`Expr annots (Epure (mk_value_pe cval))`, core_reduction.lem:299;
+    Core_reduction.lean:353), so located values are first-class runtime
+    terms of emitted Core. `SpikeVal` ERASES them (`toVal`, what the
+    judgments' postconditions see); `SpikeValA` carries them, in exact
+    bijection with the value expressions (`ofValA`/`toValA`), and is the
+    iris-lean `Language` value (`CoreRVal.w`) so that `ofValRt`/`toValRt`
+    stay inverse. `outer` is the node's list, `inner` the annotated form's
+    inner node list, `pe` the pexpr's list (`[]` after any engine round —
+    `mk_value_pe`). -/
+inductive SpikeValA : Type where
+  | pure (outer pe : List annot) (v : value)
+  | annot (outer inner pe : List annot) (ds : List dyn_annotation) (v : value)
 
-/-- Partial inverse of `ofVal`: accepts exactly the canonical value
-    shapes (mirror of is_irreducible's value forms restricted to
-    canonical annotation lists — slice notes §D3). The annotation
-    lists are checked by `isEmpty` guards rather than `[]` patterns so
-    the match dispatches on the expression constructors only (and thus
-    reduces on non-value shapes with symbolic annotation lists). -/
-def toVal : CoreExpr → Option SpikeVal
-  | Expr a (Epure (Pexpr b _ (PEval v))) =>
-      if a.isEmpty && b.isEmpty then some (.pure v) else none
-  | Expr a (Eannot ds (Expr a2 (Epure (Pexpr b _ (PEval v))))) =>
-      if a.isEmpty && a2.isEmpty && b.isEmpty then some (.annot ds v) else none
+namespace SpikeValA
+
+/-- The erasure onto the judgments' value type. -/
+def erase : SpikeValA → SpikeVal
+  | .pure _ _ v => .pure v
+  | .annot _ _ _ ds v => .annot ds v
+
+@[simp] theorem erase_pure (a b : List _root_.annot) (v : value) : (pure a b v).erase = .pure v := rfl
+@[simp] theorem erase_annot (a a2 b : List _root_.annot) (ds : List dyn_annotation) (v : value) :
+    (annot a a2 b ds v).erase = .annot ds v := rfl
+
+/-- The underlying Core value. -/
+def val (w : SpikeValA) : value := w.erase.val
+
+@[simp] theorem val_pure (a b : List _root_.annot) (v : value) : (pure a b v).val = v := rfl
+@[simp] theorem val_annot (a a2 b : List _root_.annot) (ds : List dyn_annotation) (v : value) :
+    (annot a a2 b ds v).val = v := rfl
+
+/-- Wrapping a value form in one more `Eannot ds` layer at a node
+    annotated `a`: the bare form BECOMES the annotated form (no round —
+    it is already a value shape), the annotated form is the ANNOTS merge
+    (`Expr (annots ++ annots2) (Eannot (xs1 ++ xs2) e)`,
+    core_reduction.lem:301–304). Erases to `SpikeVal.merge ds`. -/
+def merge (a : List _root_.annot) (ds : List dyn_annotation) : SpikeValA → SpikeValA
+  | .pure a2 b v => .annot a a2 b ds v
+  | .annot a1 a2 b ds' v => .annot (a ++ a1) a2 b (ds ++ ds') v
+
+@[simp] theorem erase_merge (a : List _root_.annot) (ds : List dyn_annotation) (w : SpikeValA) :
+    (merge a ds w).erase = SpikeVal.merge ds w.erase := by
+  cases w <;> rfl
+
+@[simp] theorem val_merge (a : List _root_.annot) (ds : List dyn_annotation) (w : SpikeValA) :
+    (merge a ds w).val = w.val := by
+  cases w <;> rfl
+
+end SpikeValA
+
+/-- The canonical (annotation-free) annotated form of an erased value:
+    the shape `mk_value_e` produces (Core_aux.lean:302,645), resp. the
+    action continuations' Eannot wrap (Core_reduction.lean:424). -/
+def SpikeVal.canon : SpikeVal → SpikeValA
+  | .pure v => .pure [] [] v
+  | .annot ds v => .annot [] [] [] ds v
+
+@[simp] theorem SpikeVal.erase_canon (w : SpikeVal) : w.canon.erase = w := by
+  cases w <;> rfl
+
+@[simp] theorem SpikeVal.canon_pure (v : value) : (SpikeVal.pure v).canon = .pure [] [] v := rfl
+@[simp] theorem SpikeVal.canon_annot (ds : List dyn_annotation) (v : value) :
+    (SpikeVal.annot ds v).canon = .annot [] [] [] ds v := rfl
+
+/-- Expression of a value AT its static annotation lists (the exact
+    injection). -/
+def ofValA : SpikeValA → CoreExpr
+  | .pure a b v => Expr a (Epure (Pexpr b () (PEval v)))
+  | .annot a a2 b ds v => Expr a (Eannot ds (Expr a2 (Epure (Pexpr b () (PEval v)))))
+
+@[simp] theorem ofValA_pure (a b : List annot) (v : value) :
+    ofValA (.pure a b v) = Expr a (Epure (Pexpr b () (PEval v))) := rfl
+
+@[simp] theorem ofValA_annot (a a2 b : List annot) (ds : List dyn_annotation) (v : value) :
+    ofValA (.annot a a2 b ds v) = Expr a (Eannot ds (Expr a2 (Epure (Pexpr b () (PEval v))))) := rfl
+
+/-- Canonical expression of an erased value. -/
+def ofVal (w : SpikeVal) : CoreExpr := ofValA w.canon
+
+@[simp] theorem ofVal_pure (v : value) :
+    ofVal (.pure v) = Expr [] (Epure (Pexpr [] () (PEval v))) := rfl
+
+@[simp] theorem ofVal_annot (ds : List dyn_annotation) (v : value) :
+    ofVal (.annot ds v) = Expr [] (Eannot ds (Expr [] (Epure (Pexpr [] () (PEval v))))) := rfl
+
+@[simp] theorem ofValA_canon (w : SpikeVal) : ofValA w.canon = ofVal w := rfl
+
+/-- The exact value test: `is_irreducible`'s two value shapes
+    (Core_reduction.lean:293) with their annotation lists. Dispatches on
+    expression constructors only, so it reduces on non-value shapes with
+    symbolic annotation lists. -/
+def toValA : CoreExpr → Option SpikeValA
+  | Expr a (Epure (Pexpr b _ (PEval v))) => some (.pure a b v)
+  | Expr a (Eannot ds (Expr a2 (Epure (Pexpr b _ (PEval v))))) => some (.annot a a2 b ds v)
   | _ => none
 
-@[simp] theorem toVal_ofVal (v : SpikeVal) : toVal (ofVal v) = some v := by
-  cases v <;> rfl
+/-- The ERASING value test (the pre-E1 `toVal`, now at any static
+    annotation lists): what `wps.pre`/`twp.pre` read. -/
+def toVal : CoreExpr → Option SpikeVal
+  | Expr _ (Epure (Pexpr _ _ (PEval v))) => some (.pure v)
+  | Expr _ (Eannot ds (Expr _ (Epure (Pexpr _ _ (PEval v))))) => some (.annot ds v)
+  | _ => none
 
-theorem ofVal_of_toVal {e : CoreExpr} {v : SpikeVal}
-    (h : toVal e = some v) : ofVal v = e := by
-  unfold toVal at h
+theorem toVal_eq_toValA (e : CoreExpr) : toVal e = (toValA e).map SpikeValA.erase := by
+  unfold toVal toValA
+  split <;> rfl
+
+@[simp] theorem toValA_ofValA (w : SpikeValA) : toValA (ofValA w) = some w := by
+  cases w <;> rfl
+
+@[simp] theorem toVal_ofValA (w : SpikeValA) : toVal (ofValA w) = some w.erase := by
+  cases w <;> rfl
+
+@[simp] theorem toVal_ofVal (w : SpikeVal) : toVal (ofVal w) = some w := by
+  cases w <;> rfl
+
+@[simp] theorem toValA_ofVal (w : SpikeVal) : toValA (ofVal w) = some w.canon := by
+  cases w <;> rfl
+
+@[simp] theorem toVal_pure_val (a b : List annot) (v : value) :
+    toVal (Expr a (Epure (Pexpr b () (PEval v)))) = some (.pure v) := rfl
+
+@[simp] theorem toVal_annot_val (a a2 b : List annot) (ds : List dyn_annotation) (v : value) :
+    toVal (Expr a (Eannot ds (Expr a2 (Epure (Pexpr b () (PEval v)))))) = some (.annot ds v) := rfl
+
+/-- A value expression IS the injection of its exact value. -/
+theorem ofValA_of_toValA {e : CoreExpr} {w : SpikeValA}
+    (h : toValA e = some w) : ofValA w = e := by
+  unfold toValA at h
   split at h
-  · rename_i a b u w
-    split at h
-    · rename_i hcond
-      obtain ⟨ha, hb⟩ := Bool.and_eq_true_iff.mp hcond
-      have ha' : a = [] := List.isEmpty_iff.mp ha
-      have hb' : b = [] := List.isEmpty_iff.mp hb
-      subst ha' hb'
-      cases h
-      rfl
-    · cases h
-  · rename_i a ds a2 b u w
-    split at h
-    · rename_i hcond
-      obtain ⟨⟨ha', ha2'⟩, hb'⟩ : (a = [] ∧ a2 = []) ∧ b = [] := by
-        simpa [Bool.and_eq_true_iff] using hcond
-      subst ha' ha2' hb'
-      cases h
-      rfl
-    · cases h
+  · cases h; rfl
+  · cases h; rfl
   · cases h
+
+/-- The exact injection is injective. -/
+theorem ofValA_inj {w w' : SpikeValA} (h : ofValA w = ofValA w') : w = w' := by
+  have := congrArg toValA h
+  rw [toValA_ofValA, toValA_ofValA] at this
+  exact Option.some.inj this
+
+/-- The erased value test's witness: a value expression is `ofValA` of
+    some exact value erasing to it (the pre-E1 `ofVal_of_toVal`, up to
+    the annotation lists). -/
+theorem ofValA_of_toVal {e : CoreExpr} {w : SpikeVal}
+    (h : toVal e = some w) : ∃ wa : SpikeValA, wa.erase = w ∧ ofValA wa = e := by
+  rw [toVal_eq_toValA] at h
+  cases hA : toValA e with
+  | none => rw [hA] at h; cases h
+  | some wa =>
+    rw [hA] at h
+    exact ⟨wa, Option.some.inj h, ofValA_of_toValA hA⟩
+
+theorem toValA_none_of_toVal_none {e : CoreExpr} (h : toVal e = none) : toValA e = none := by
+  rw [toVal_eq_toValA] at h
+  exact Option.map_eq_none_iff.mp h
+
+theorem toVal_none_of_toValA_none {e : CoreExpr} (h : toValA e = none) : toVal e = none := by
+  rw [toVal_eq_toValA, h]; rfl
+
+/-- A value expression at the canonical (annotation-free) lists is the
+    canonical injection (the pre-E1 `ofVal_of_toVal`, conditional). -/
+theorem ofVal_of_toVal {e : CoreExpr} {w : SpikeVal}
+    (h : toValA e = some w.canon) : ofVal w = e :=
+  ofValA_of_toValA h
 
 /-- Root-level Eannot test — the guard get_ctx uses to choose between
     the ANNOTS-merge redex and Cannot-descent
@@ -345,6 +467,14 @@ theorem resolveExtern_id_of_empty {ext : Fmap sym sym} (h : ext = fmapEmpty)
     (x : sym) : resolveExtern ext x = x := by
   rw [h]; rfl
 
+/-- THE RUN STATE'S LIVE SUPPLIES (E1, designed for E5 — see `Ctl.sup`):
+    `core_run_state.sym_supply` and `.excluded_supply`, both `Nat`
+    (Core_run_aux.lean:356–357). -/
+structure RunSup where
+  sym : Nat
+  excl : Nat
+  deriving DecidableEq, Inhabited
+
 /-- THE LIVE CONTROL of a thread (calls arc C1): exactly the three
     `thread_state` fields (Core_run_aux.lean:291) the engine writes at
     a procedure call and at a return — step_ctx's PCALL arm
@@ -372,20 +502,106 @@ structure Ctl where
   κ : List (Option sym × context)
   proc : Option sym
   execLoc : exec_location
+  /-- E1 (the emitted-Core dialect arc, `current_loc` LIVE): the thread's
+      `current_loc` (Core_run_aux.lean:298). WRITTEN by step_ctx's general
+      arm at every redex node whose annotations carry a non-library source
+      location (`get_loc e_annots`, core_reduction.lem:1155–1164;
+      Core_reduction.lean:484 `let maybe_loc := get_loc e_annots; let th_st
+      := match maybe_loc with | none => th_st | some loc1 => if
+      isLibraryLocation loc1 then th_st else { th_st with current_loc :=
+      loc1 }`), READ by the PCALL push (`push_exec_loc psym
+      th_st.current_loc …`, :1396), the action requests' library-location
+      fallback (`requestLoc`), the memop request and the evaluator's
+      undef payloads. The value arms (PROGRAM-DONE, RETURN, REMOVE-ANNOT,
+      :1102–:1151) do not write it. `Ctl.upd a` is the mirror's image of
+      that write (`locUpd`). -/
+  curLoc : CerbLocation.Loc
+  /-- E1 (designed in E1's shape for E5, DECISIONS "E0's TEN QUESTIONS
+      RATIFIED" (4)): THE RUN STATE'S LIVE SUPPLIES — `core_run_state`'s
+      `sym_supply` and `excluded_supply` (Core_run_aux.lean:356–357), which
+      the negative-action protocol draws from (`E.fresh_symbol`,
+      `E.fresh_excluded_id`, core_reduction.lem:1298–1301; E5). No E1 rule
+      writes them (every E1 rule threads `ctl.sup` verbatim); they are
+      carried here so that E5 adds RULES, not a configuration re-shape. The
+      driver ties: `MachineCtx.Embeds` (Round.lean) reads them off
+      `dst.core_run_state0`, `CerberusRound`/`loop_step_frag` fix the
+      successor run state's two fields to the successor control's. -/
+  sup : RunSup
+
+/-- The engine's location write at a redex node: `get_loc a` (the FIRST
+    `Aloc`, everything else skipped, Annot.lean:299; annot.lem:101–133),
+    kept unless it is a library location (`CerbLocation.isLibraryLocation`,
+    CerbLocation.lean:180). Verbatim the `let th_st := match maybe_loc …`
+    of step_ctx's general arm (Core_reduction.lean:484). -/
+def locUpd (a : List annot) (l : CerbLocation.Loc) : CerbLocation.Loc :=
+  match get_loc a with
+  | none => l
+  | some loc => if CerbLocation.isLibraryLocation loc = true then l else loc
+
+@[simp] theorem locUpd_nil (l : CerbLocation.Loc) : locUpd [] l = l := rfl
+
+/-- The same write on the engine's thread (the shape the per-rule engine
+    equations in Soundness.lean state their successor thread with). -/
+def locUpdTh (a : List annot) (th : thread_state) : thread_state :=
+  match get_loc a with
+  | none => th
+  | some loc => if CerbLocation.isLibraryLocation loc = true then th
+                else { th with current_loc := loc }
+
+@[simp] theorem locUpdTh_nil (th : thread_state) : locUpdTh [] th = th := rfl
 
 namespace Ctl
+
+/-- The control after a general-arm round at a redex node annotated `a`:
+    only `curLoc` moves (`locUpd`). Every E1 leaf rule's successor control
+    is `ctl.upd a`; the annotation-free spellings give `ctl.upd [] = ctl`
+    definitionally. -/
+def upd (c : Ctl) (a : List annot) : Ctl := { c with curLoc := locUpd a c.curLoc }
+
+@[simp] theorem upd_nil (c : Ctl) : c.upd [] = c := rfl
+@[simp] theorem upd_κ (c : Ctl) (a : List annot) : (c.upd a).κ = c.κ := rfl
+@[simp] theorem upd_proc (c : Ctl) (a : List annot) : (c.upd a).proc = c.proc := rfl
+@[simp] theorem upd_execLoc (c : Ctl) (a : List annot) : (c.upd a).execLoc = c.execLoc := rfl
+@[simp] theorem upd_curLoc (c : Ctl) (a : List annot) : (c.upd a).curLoc = locUpd a c.curLoc := rfl
+@[simp] theorem upd_sup (c : Ctl) (a : List annot) : (c.upd a).sup = c.sup := rfl
+@[simp] theorem upd_mk (κ : List (Option sym × context)) (p : Option sym) (ℓ : exec_location)
+    (lc : CerbLocation.Loc) (sp : RunSup) (a : List annot) :
+    (Ctl.mk κ p ℓ lc sp).upd a = Ctl.mk κ p ℓ (locUpd a lc) sp := rfl
+
+/-- The PCALL control (step_ctx's Eproc arm, Core_reduction.lean:484 col
+    ≈18133; core_reduction.lem:1386–1400): at the redex node annotated `a`
+    the location is written FIRST (the general arm's `th_st`), then the
+    frame `(ctl.proc, ctx)` is pushed, the callee becomes current, and the
+    execution location is pushed at the UPDATED `current_loc`. -/
+def callPush (c : Ctl) (a : List annot) (ctx : context) (f : sym) : Ctl :=
+  ⟨(c.proc, ctx) :: c.κ, some f, push_exec_loc f (locUpd a c.curLoc) c.execLoc,
+   locUpd a c.curLoc, c.sup⟩
+
+@[simp] theorem callPush_κ (c : Ctl) (a : List annot) (ctx : context) (f : sym) :
+    (c.callPush a ctx f).κ = (c.proc, ctx) :: c.κ := rfl
+@[simp] theorem callPush_proc (c : Ctl) (a : List annot) (ctx : context) (f : sym) :
+    (c.callPush a ctx f).proc = some f := rfl
+@[simp] theorem callPush_sup (c : Ctl) (a : List annot) (ctx : context) (f : sym) :
+    (c.callPush a ctx f).sup = c.sup := rfl
 
 /-- The engine's `stack` denoted by the control's `κ`
     (`Stack_cons2 p ctx` per entry, innermost first, over `Stack_empty`). -/
 def toStack (c : Ctl) : _root_.stack core_run_annotation :=
   c.κ.foldr (fun pc sk => Stack_cons2 pc.1 pc.2 sk) Stack_empty
 
-@[simp] theorem toStack_nil (p : Option sym) (ℓ : exec_location) :
-    (Ctl.mk [] p ℓ).toStack = Stack_empty := rfl
+@[simp] theorem toStack_nil (p : Option sym) (ℓ : exec_location) (lc : CerbLocation.Loc)
+    (sp : RunSup) : (Ctl.mk [] p ℓ lc sp).toStack = Stack_empty := rfl
+
+/-- E1: the location write leaves the denoted stack alone. -/
+@[simp] theorem toStack_upd (c : Ctl) (a : List annot) : (c.upd a).toStack = c.toStack := rfl
+
+/-- E1: PCALL pushes the caller's frame onto the denoted stack. -/
+@[simp] theorem toStack_callPush (c : Ctl) (a : List annot) (ctx : context) (f : sym) :
+    (c.callPush a ctx f).toStack = Stack_cons2 c.proc ctx c.toStack := rfl
 
 /-- `κ = []` is exactly `stack0 = Stack_empty`. -/
 theorem toStack_eq_empty_iff (c : Ctl) : c.toStack = Stack_empty ↔ c.κ = [] := by
-  obtain ⟨κ, p, ℓ⟩ := c
+  obtain ⟨κ, p, ℓ, lc, sp⟩ := c
   cases κ with
   | nil => simp [toStack]
   | cons pc κ => simp [toStack]
@@ -409,7 +625,9 @@ structure MachineCtx where
   tid : Nat
   parent : Option Nat
   errno : CerbMem.PointerValue
-  currentLoc : CerbLocation.Loc
+  /-- The run state's IMMUTABLE part: only `labeled` is read by the mirror
+      (`labelsAt`); the two live supplies live in `Ctl.sup` (E1) and the
+      driver ties fix only `labeled` to this field (`MachineCtx.Embeds`). -/
   runState : core_run_state
 
 namespace MachineCtx
@@ -423,7 +641,7 @@ namespace MachineCtx
 def thread (M : MachineCtx) (e : CoreExpr) (ρ : EnvStack) (ctl : Ctl) : thread_state :=
   { arena := e, stack0 := ctl.toStack, errno := M.errno, env := ρ,
     current_proc_opt := ctl.proc, exec_loc := ctl.execLoc,
-    current_loc := M.currentLoc }
+    current_loc := ctl.curLoc }
 
 @[simp] theorem thread_arena (M : MachineCtx) (e : CoreExpr) (ρ : EnvStack) (ctl : Ctl) :
     (M.thread e ρ ctl).arena = e := rfl
@@ -439,6 +657,69 @@ def thread (M : MachineCtx) (e : CoreExpr) (ρ : EnvStack) (ctl : Ctl) : thread_
 
 @[simp] theorem thread_execLoc (M : MachineCtx) (e : CoreExpr) (ρ : EnvStack) (ctl : Ctl) :
     (M.thread e ρ ctl).exec_loc = ctl.execLoc := rfl
+
+@[simp] theorem thread_current_loc (M : MachineCtx) (e : CoreExpr) (ρ : EnvStack) (ctl : Ctl) :
+    (M.thread e ρ ctl).current_loc = ctl.curLoc := rfl
+
+/-- THE LOCATION WRITE, mirror = engine: the engine's general-arm thread at
+    a redex node annotated `a`, with the successor arena and env installed,
+    IS the mirror's thread at the updated control. -/
+theorem thread_upd (M : MachineCtx) (e e' : CoreExpr) (ρ ρ' : EnvStack) (ctl : Ctl)
+    (a : List annot) :
+    { locUpdTh a (M.thread e ρ ctl) with arena := e', env := ρ' } =
+      M.thread e' ρ' (ctl.upd a) := by
+  unfold locUpdTh Ctl.upd locUpd
+  cases get_loc a with
+  | none => rfl
+  | some loc =>
+    dsimp only
+    by_cases h : CerbLocation.isLibraryLocation loc = true
+    · simp only [if_pos h]; rfl
+    · simp only [if_neg h]; rfl
+
+/-- `thread_upd` with the env untouched (the arena-only successors). -/
+theorem thread_upd_arena (M : MachineCtx) (e e' : CoreExpr) (ρ : EnvStack) (ctl : Ctl)
+    (a : List annot) :
+    { locUpdTh a (M.thread e ρ ctl) with arena := e' } = M.thread e' ρ (ctl.upd a) := by
+  unfold locUpdTh Ctl.upd locUpd
+  cases get_loc a with
+  | none => rfl
+  | some loc =>
+    dsimp only
+    by_cases h : CerbLocation.isLibraryLocation loc = true
+    · simp only [if_pos h]; rfl
+    · simp only [if_neg h]; rfl
+
+/-- E1, THE DRIVER-THREAD FORM of the location write: at a thread whose
+    `current_loc` is the control's, `locUpdTh` is the update to the
+    updated control's `curLoc` (the driver lanes' tie `hcl`). -/
+theorem locUpdTh_ctl {th₀ : thread_state} {ctl : Ctl} (hcl : th₀.current_loc = ctl.curLoc)
+    (a : List annot) (e : CoreExpr) (ρ : EnvStack) :
+    locUpdTh a { th₀ with arena := e, env := ρ } =
+      { th₀ with arena := e, env := ρ, current_loc := (ctl.upd a).curLoc } := by
+  unfold locUpdTh Ctl.upd locUpd
+  cases get_loc a with
+  | none => rw [← hcl]
+  | some loc =>
+    dsimp only
+    rcases Bool.eq_false_or_eq_true (CerbLocation.isLibraryLocation loc) with h | h <;>
+      simp only [h, Bool.false_eq_true, ↓reduceIte] <;> (try rw [← hcl]) <;> rfl
+
+/-- The location write at the mirror's own thread literal: the updated
+    thread IS the thread at the updated control (the one rewrite every
+    round equation needs — the successor literals `{ locUpdTh a (M.thread
+    e ρ ctl) with … }` then read `{ M.thread e ρ (ctl.upd a) with … }`,
+    definitionally the mirror's successor thread). -/
+theorem locUpdTh_thread (M : MachineCtx) (e : CoreExpr) (ρ : EnvStack) (ctl : Ctl)
+    (a : List annot) : locUpdTh a (M.thread e ρ ctl) = M.thread e ρ (ctl.upd a) := by
+  unfold locUpdTh Ctl.upd locUpd
+  cases get_loc a with
+  | none => rfl
+  | some loc =>
+    dsimp only
+    by_cases h : CerbLocation.isLibraryLocation loc = true
+    · simp only [if_pos h]
+    · simp only [if_neg h]; rfl
 
 /-- The sequential well-formedness of the CONTEXT the VALUE protocol
     reads (THREAD-DONE vs PROGRAM-DONE selection in step_ctx's value
@@ -520,43 +801,58 @@ structure CoreRt where
   ctl : Ctl
   M : MachineCtx
 
-/-- Values carry the final env, the TERMINAL control's procedure and
-    execution location, and the (unchanged) machine context (exported
-    posts may project all of them away). A terminal has an EMPTY call
-    stack by definition: a value at a non-empty stack is a RETURN
-    redex, not a terminal (step_ctx's value arm at `Stack_cons2`,
-    Core_reduction.lean:484), so `κ` has no slot here — `toValRt`
-    answers `none` at `κ ≠ []`. -/
+/-- Values carry the exact value (E1: `SpikeValA`, the erased value with
+    its static annotation lists), the final env, the TERMINAL control's
+    procedure, execution location, current location and run supplies (E1:
+    the two new `Ctl` fields), and the (unchanged) machine context
+    (exported posts may project all of them away). A terminal has an
+    EMPTY call stack by definition: a value at a non-empty stack is a
+    RETURN redex, not a terminal (step_ctx's value arm at `Stack_cons2`,
+    Core_reduction.lean:484), so `κ` has no slot here — `toValRt` answers
+    `none` at `κ ≠ []`. -/
 structure CoreRVal where
-  w : SpikeVal
+  w : SpikeValA
   ρ : EnvStack
   proc : Option sym
   execLoc : exec_location
   M : MachineCtx
+  curLoc : CerbLocation.Loc
+  sup : RunSup
 
 /-- The terminal control a value sits at (empty stack). -/
-def CoreRVal.ctl (v : CoreRVal) : Ctl := ⟨[], v.proc, v.execLoc⟩
+def CoreRVal.ctl (v : CoreRVal) : Ctl := ⟨[], v.proc, v.execLoc, v.curLoc, v.sup⟩
 
 /-- The delivered engine value of a runtime value (annotations and
     env erased — the D1 readout). -/
 def CoreRVal.val (v : CoreRVal) : value := v.w.val
 
-/-- Annotation-merge on runtime values: componentwise `SpikeVal.merge`
+/-- The erased value of a runtime value (what a postcondition
+    `Ψ : SpikeVal → …` is applied to). -/
+def CoreRVal.sv (v : CoreRVal) : SpikeVal := v.w.erase
+
+@[simp] theorem CoreRVal.val_eq_sv_val (v : CoreRVal) : v.val = v.sv.val := rfl
+
+/-- Annotation-merge on runtime values: componentwise `SpikeValA.merge`
     (the env, control and label map ride — annotation reduction never
     touches them). -/
-def CoreRVal.merge (ds : List dyn_annotation) (v : CoreRVal) : CoreRVal :=
-  ⟨SpikeVal.merge ds v.w, v.ρ, v.proc, v.execLoc, v.M⟩
+def CoreRVal.merge (a : List annot) (ds : List dyn_annotation) (v : CoreRVal) : CoreRVal :=
+  ⟨SpikeValA.merge a ds v.w, v.ρ, v.proc, v.execLoc, v.M, v.curLoc, v.sup⟩
 
-@[simp] theorem CoreRVal.merge_mk (ds : List dyn_annotation) (w : SpikeVal)
-    (ρ : EnvStack) (p : Option sym) (ℓ : exec_location) (M : MachineCtx) :
-    CoreRVal.merge ds ⟨w, ρ, p, ℓ, M⟩ = ⟨SpikeVal.merge ds w, ρ, p, ℓ, M⟩ := rfl
+@[simp] theorem CoreRVal.merge_mk (a : List annot) (ds : List dyn_annotation) (w : SpikeValA)
+    (ρ : EnvStack) (p : Option sym) (ℓ : exec_location) (M : MachineCtx)
+    (lc : CerbLocation.Loc) (sp : RunSup) :
+    CoreRVal.merge a ds ⟨w, ρ, p, ℓ, M, lc, sp⟩ = ⟨SpikeValA.merge a ds w, ρ, p, ℓ, M, lc, sp⟩ := rfl
 
-@[simp] theorem CoreRVal.val_merge (ds : List dyn_annotation) (v : CoreRVal) :
-    (CoreRVal.merge ds v).val = v.val := by
+@[simp] theorem CoreRVal.val_merge (a : List annot) (ds : List dyn_annotation) (v : CoreRVal) :
+    (CoreRVal.merge a ds v).val = v.val := by
   cases v; simp [CoreRVal.merge, CoreRVal.val]
 
-@[simp] theorem CoreRVal.ρ_merge (ds : List dyn_annotation) (v : CoreRVal) :
-    (CoreRVal.merge ds v).ρ = v.ρ := by
+@[simp] theorem CoreRVal.sv_merge (a : List annot) (ds : List dyn_annotation) (v : CoreRVal) :
+    (CoreRVal.merge a ds v).sv = SpikeVal.merge ds v.sv := by
+  cases v; simp [CoreRVal.merge, CoreRVal.sv]
+
+@[simp] theorem CoreRVal.ρ_merge (a : List annot) (ds : List dyn_annotation) (v : CoreRVal) :
+    (CoreRVal.merge a ds v).ρ = v.ρ := by
   cases v; rfl
 
 /-- Componentwise value test (Language-side `toVal`): a value at an
@@ -564,45 +860,48 @@ def CoreRVal.merge (ds : List dyn_annotation) (v : CoreRVal) : CoreRVal :=
     (the RETURN redex — C2's `Step.ret`). -/
 def toValRt (r : CoreRt) : Option CoreRVal :=
   match r.ctl.κ with
-  | [] => (toVal r.e).map fun w => ⟨w, r.ρ, r.ctl.proc, r.ctl.execLoc, r.M⟩
+  | [] => (toValA r.e).map fun w => ⟨w, r.ρ, r.ctl.proc, r.ctl.execLoc, r.M, r.ctl.curLoc, r.ctl.sup⟩
   | _ :: _ => none
 
 /-- Componentwise value injection (Language-side `ofVal`): at the
-    terminal (empty-stack) control. -/
-def ofValRt (v : CoreRVal) : CoreRt := ⟨ofVal v.w, v.ρ, ⟨[], v.proc, v.execLoc⟩, v.M⟩
+    terminal (empty-stack) control, at the value's own annotation lists. -/
+def ofValRt (v : CoreRVal) : CoreRt :=
+  ⟨ofValA v.w, v.ρ, ⟨[], v.proc, v.execLoc, v.curLoc, v.sup⟩, v.M⟩
 
 @[simp] theorem toValRt_mk (e : CoreExpr) (ρ : EnvStack) (p : Option sym)
-    (ℓ : exec_location) (M : MachineCtx) :
-    toValRt ⟨e, ρ, ⟨[], p, ℓ⟩, M⟩ = (toVal e).map fun w => ⟨w, ρ, p, ℓ, M⟩ := rfl
+    (ℓ : exec_location) (lc : CerbLocation.Loc) (sp : RunSup) (M : MachineCtx) :
+    toValRt ⟨e, ρ, ⟨[], p, ℓ, lc, sp⟩, M⟩ =
+      (toValA e).map fun w => ⟨w, ρ, p, ℓ, M, lc, sp⟩ := rfl
 
 @[simp] theorem toValRt_mk_cons (e : CoreExpr) (ρ : EnvStack) (pc : Option sym × context)
     (κ : List (Option sym × context)) (p : Option sym) (ℓ : exec_location)
-    (M : MachineCtx) :
-    toValRt ⟨e, ρ, ⟨pc :: κ, p, ℓ⟩, M⟩ = none := rfl
+    (lc : CerbLocation.Loc) (sp : RunSup) (M : MachineCtx) :
+    toValRt ⟨e, ρ, ⟨pc :: κ, p, ℓ, lc, sp⟩, M⟩ = none := rfl
 
 /-- A non-value expression is a non-value tuple at every control. -/
 theorem toValRt_eq_none_of_toVal_none {r : CoreRt} (h : toVal r.e = none) :
     toValRt r = none := by
-  obtain ⟨e, ρ, ⟨κ, p, ℓ⟩, M⟩ := r
+  obtain ⟨e, ρ, ⟨κ, p, ℓ, lc, sp⟩, M⟩ := r
   cases κ with
-  | nil => rw [toValRt_mk]; simp only at h; rw [h]; rfl
+  | nil => rw [toValRt_mk]; simp only at h; rw [toValA_none_of_toVal_none h]; rfl
   | cons pc κ => rfl
 
 /-- At the terminal control the tuple's value test is the expression's. -/
 theorem toValRt_of_κ_nil {r : CoreRt} (h : r.ctl.κ = []) :
-    toValRt r = (toVal r.e).map fun w => ⟨w, r.ρ, r.ctl.proc, r.ctl.execLoc, r.M⟩ := by
-  obtain ⟨e, ρ, ⟨κ, p, ℓ⟩, M⟩ := r
+    toValRt r = (toValA r.e).map fun w =>
+      ⟨w, r.ρ, r.ctl.proc, r.ctl.execLoc, r.M, r.ctl.curLoc, r.ctl.sup⟩ := by
+  obtain ⟨e, ρ, ⟨κ, p, ℓ, lc, sp⟩, M⟩ := r
   simp only at h
   subst h
   rfl
 
-@[simp] theorem ofValRt_mk (w : SpikeVal) (ρ : EnvStack) (p : Option sym)
-    (ℓ : exec_location) (M : MachineCtx) :
-    ofValRt ⟨w, ρ, p, ℓ, M⟩ = ⟨ofVal w, ρ, ⟨[], p, ℓ⟩, M⟩ := rfl
+@[simp] theorem ofValRt_mk (w : SpikeValA) (ρ : EnvStack) (p : Option sym)
+    (ℓ : exec_location) (M : MachineCtx) (lc : CerbLocation.Loc) (sp : RunSup) :
+    ofValRt ⟨w, ρ, p, ℓ, M, lc, sp⟩ = ⟨ofValA w, ρ, ⟨[], p, ℓ, lc, sp⟩, M⟩ := rfl
 
 @[simp] theorem toValRt_ofValRt (v : CoreRVal) : toValRt (ofValRt v) = some v := by
-  obtain ⟨w, ρ, p, ℓ, M⟩ := v
-  rw [ofValRt_mk, toValRt_mk, toVal_ofVal]
+  obtain ⟨w, ρ, p, ℓ, M, lc, sp⟩ := v
+  rw [ofValRt_mk, toValRt_mk, toValA_ofValA]
   rfl
 
 /-- Evaluated-operand recognition on canonical shapes: the ACTION_EVAL
@@ -628,7 +927,75 @@ def jumpRedex? : CoreExpr → Option (sym × List (generic_pexpr Unit sym))
   | Expr _ (Esseq _ e1 _) => jumpRedex? e1
   | Expr _ (Ewseq _ e1 _) => jumpRedex? e1
   | Expr _ (Eannot _ b) => if annotRooted b then none else jumpRedex? b
+  | Expr _ (Ebound b) => jumpRedex? b
   | _ => none
+
+/-- E1: the `Cbound` frame joins the spine (get_ctx's `Ebound` arm,
+    core_reduction.lem:563–568: descend when the body is reducible —
+    every spine body here is a non-value). -/
+@[simp] theorem jumpRedex?_bound (a : List annot) (b : CoreExpr) :
+    jumpRedex? (Expr a (Ebound b)) = jumpRedex? b := rfl
+
+/-- The static annotation list of a node (E1): what `Ctl.upd` reads at a
+    root redex. -/
+def rootAnnots : CoreExpr → List annot
+  | Expr a _ => a
+
+@[simp] theorem rootAnnots_mk (a : List annot) (e : generic_expr_ core_run_annotation Unit sym) :
+    rootAnnots (Expr a e) = a := rfl
+
+/-- THE REDEX NODE'S ANNOTATIONS (E1): the static annotation list of the
+    node at the end of get_ctx's decomposition path (Esseq-left, Ewseq-left,
+    the guarded `Eannot` descent, the `Ebound` descent — core_reduction.lem:
+    524–575), i.e. of the `Expr e_annots expr_` step_ctx's general arm
+    binds and reads `get_loc` from. Meaningful where the path ends in a
+    reducible node (the `run`/`call` rules); a double-annot root is the
+    ANNOTS-merge redex itself. -/
+def redexAnnots : CoreExpr → List annot
+  | Expr a (Esseq _ e1 _) => if (toVal e1).isSome then a else redexAnnots e1
+  | Expr a (Ewseq _ e1 _) => if (toVal e1).isSome then a else redexAnnots e1
+  | Expr a (Eannot _ b) => if annotRooted b then a else redexAnnots b
+  | Expr a (Ebound b) => if (toVal b).isSome then a else redexAnnots b
+  | Expr a _ => a
+
+@[simp] theorem redexAnnots_run (a : List annot) (ra : core_run_annotation) (l : sym)
+    (pes : List (generic_pexpr Unit sym)) : redexAnnots (Expr a (Erun ra l pes)) = a := rfl
+
+@[simp] theorem redexAnnots_proc (a : List annot) (ra : core_run_annotation) (nm : generic_name sym)
+    (pes : List (generic_pexpr Unit sym)) : redexAnnots (Expr a (Eproc ra nm pes)) = a := rfl
+
+theorem redexAnnots_sseq (a : List annot) (pat : pattern) (e1 e2 : CoreExpr) :
+    redexAnnots (Expr a (Esseq pat e1 e2)) =
+      if (toVal e1).isSome then a else redexAnnots e1 := rfl
+
+theorem redexAnnots_wseq (a : List annot) (pat : pattern) (e1 e2 : CoreExpr) :
+    redexAnnots (Expr a (Ewseq pat e1 e2)) =
+      if (toVal e1).isSome then a else redexAnnots e1 := rfl
+
+theorem redexAnnots_annot (a : List annot) (ds : List dyn_annotation) (b : CoreExpr) :
+    redexAnnots (Expr a (Eannot ds b)) = if annotRooted b then a else redexAnnots b := rfl
+
+theorem redexAnnots_bound (a : List annot) (b : CoreExpr) :
+    redexAnnots (Expr a (Ebound b)) = if (toVal b).isSome then a else redexAnnots b := rfl
+
+@[simp] theorem redexAnnots_sseq_of_nv {e1 : CoreExpr} (a : List annot) (pat : pattern)
+    (e2 : CoreExpr) (h : toVal e1 = none) :
+    redexAnnots (Expr a (Esseq pat e1 e2)) = redexAnnots e1 := by
+  rw [redexAnnots_sseq, h]; rfl
+
+@[simp] theorem redexAnnots_wseq_of_nv {e1 : CoreExpr} (a : List annot) (pat : pattern)
+    (e2 : CoreExpr) (h : toVal e1 = none) :
+    redexAnnots (Expr a (Ewseq pat e1 e2)) = redexAnnots e1 := by
+  rw [redexAnnots_wseq, h]; rfl
+
+@[simp] theorem redexAnnots_annot_of_not_root {b : CoreExpr} (a : List annot)
+    (ds : List dyn_annotation) (h : annotRooted b = false) :
+    redexAnnots (Expr a (Eannot ds b)) = redexAnnots b := by
+  rw [redexAnnots_annot, h]; rfl
+
+@[simp] theorem redexAnnots_bound_of_nv {b : CoreExpr} (a : List annot) (h : toVal b = none) :
+    redexAnnots (Expr a (Ebound b)) = redexAnnots b := by
+  rw [redexAnnots_bound, h]; rfl
 
 @[simp] theorem jumpRedex?_run (a : List annot) (ra : core_run_annotation)
     (l : sym) (pes : List (generic_pexpr Unit sym)) :
@@ -708,7 +1075,23 @@ def callRedex? : CoreExpr → Option (context × sym × List (generic_pexpr Unit
       (callRedex? e1).map fun q => (Cwseq a pat q.1 e2, q.2)
   | Expr a (Eannot ds b) =>
       if annotRooted b then none else (callRedex? b).map fun q => (Cannot a ds q.1, q.2)
+  | Expr a (Ebound b) => (callRedex? b).map fun q => (Cbound a q.1, q.2)
   | _ => none
+
+/-- E1: the `Cbound` frame (get_ctx's `Ebound` arm, core_reduction.lem:
+    563–568; `apply_ctx (Cbound annot ctx') e = Expr annot (Ebound …)`,
+    :618–619). -/
+@[simp] theorem callRedex?_bound (a : List annot) (b : CoreExpr) :
+    callRedex? (Expr a (Ebound b)) = (callRedex? b).map fun q => (Cbound a q.1, q.2) := rfl
+
+theorem callRedex?_body_none_of_bound {a : List annot} {b : CoreExpr}
+    (h : callRedex? (Expr a (Ebound b)) = none) : callRedex? b = none := by
+  rw [callRedex?_bound] at h
+  exact Option.map_eq_none_iff.mp h
+
+theorem callRedex?_bound_none {a : List annot} {b : CoreExpr}
+    (h : callRedex? b = none) : callRedex? (Expr a (Ebound b)) = none := by
+  rw [callRedex?_bound, h]; rfl
 
 @[simp] theorem callRedex?_proc (a : List annot) (ra : core_run_annotation)
     (f : sym) (pes : List (generic_pexpr Unit sym)) :
@@ -836,7 +1219,9 @@ theorem callRedex?_none_of_jumpRedex?_some :
   | Expr a (Eccall _ _ _ _), lp, h => by simp [jumpRedex?] at h
   | Expr a (Eproc _ _ _), lp, h => by simp [jumpRedex?] at h
   | Expr a (Eunseq _), lp, h => by simp [jumpRedex?] at h
-  | Expr a (Ebound _), lp, h => by simp [jumpRedex?] at h
+  | Expr a (Ebound b), lp, h => by
+      rw [jumpRedex?_bound] at h
+      rw [callRedex?_bound, callRedex?_none_of_jumpRedex?_some h]; rfl
   | Expr a (End _), lp, h => by simp [jumpRedex?] at h
   | Expr a (Esave _ _ _), lp, h => by simp [jumpRedex?] at h
   | Expr a (Epar _), lp, h => by simp [jumpRedex?] at h
@@ -917,7 +1302,40 @@ def evalArrayShift (tds : CerbTags.TagDefsMap) (ty : ctype) :
     the PEsym arm); the S1a probe found the old extern-free evaluator
     pinned the whole bridge tower at `extern = fmapEmpty` (design
     record §5.2). The lookup-failure proc-pointer fallback channel
-    (`file1.funs`) is fail-closed absence, as before. -/
+    (`file1.funs`) is fail-closed absence, as before.
+
+    E1: the two TYPE-CONSTANT constructors the C elaborator emits as
+    operands — `Ivalignof(ty)` (every `create`) and `Ivsizeof(ty)`
+    (core.lem:207–208) — evaluated on a literal ctype argument by the
+    engine's own `alignofIval`/`sizeofIval` at the tag environment
+    (`PEctor` arm of `step_eval_pexpr`, core_eval.lem:648–651; the
+    reader-threaded `CerbMem.alignofIval _lemReader_tagDefs ty`,
+    Core_eval.lean:145; `alignofIval`/`sizeofIval` = `integerIval ∘
+    alignofCtype/sizeofCtype`, CerbMem.lean:1299–1300 — fuelled at
+    `lemDefaultFuel`, the standing `≤ lemDefaultFuel` idiom applies to
+    the surrounding evaluator's depth only) — `isTyCtor`/`evalTyCtor`
+    below, the `PEctor c [Vctype ty]` arm of `evalPexpr`. -/
+def isTyCtor : ctor → Bool
+  | .Civalignof => true
+  | .Civsizeof => true
+  | _ => false
+
+/-- The value of a type-constant constructor at a ctype. -/
+def evalTyCtor (tds : CerbTags.TagDefsMap) : ctor → ctype → Option value
+  | .Civalignof, ty => some (Vobject (OVinteger (CerbMem.alignofIval tds ty)))
+  | .Civsizeof, ty => some (Vobject (OVinteger (CerbMem.sizeofIval tds ty)))
+  | _, _ => none
+
+@[simp] theorem evalTyCtor_alignof (tds : CerbTags.TagDefsMap) (ty : ctype) :
+    evalTyCtor tds .Civalignof ty = some (Vobject (OVinteger (CerbMem.alignofIval tds ty))) := rfl
+
+@[simp] theorem evalTyCtor_sizeof (tds : CerbTags.TagDefsMap) (ty : ctype) :
+    evalTyCtor tds .Civsizeof ty = some (Vobject (OVinteger (CerbMem.sizeofIval tds ty))) := rfl
+
+theorem evalTyCtor_isSome {tds : CerbTags.TagDefsMap} {c : ctor} {ty : ctype} {v : value}
+    (h : evalTyCtor tds c ty = some v) : isTyCtor c = true := by
+  cases c <;> first | rfl | (cases h)
+
 def evalPexpr (tds : CerbTags.TagDefsMap) (ext : Fmap sym sym) (ρ : EnvStack) :
     generic_pexpr Unit sym → Option value
   | Pexpr _ _ (PEval v) => some v
@@ -930,7 +1348,13 @@ def evalPexpr (tds : CerbTags.TagDefsMap) (ext : Fmap sym sym) (ρ : EnvStack) :
       let v1 ← evalPexpr tds ext ρ pe1
       let v2 ← evalPexpr tds ext ρ pe2
       evalArrayShift tds ty v1 v2
+  | Pexpr _ _ (PEctor c [Pexpr _ _ (PEval (Vctype ty))]) => evalTyCtor tds c ty
   | _ => none
+
+@[simp] theorem evalPexpr_tyctor (tds : CerbTags.TagDefsMap) (ext : Fmap sym sym) (ρ : EnvStack)
+    (a b : List annot) (c : ctor) (ty : ctype) :
+    evalPexpr tds ext ρ (Pexpr a () (PEctor c [Pexpr b () (PEval (Vctype ty))])) =
+      evalTyCtor tds c ty := rfl
 
 @[simp] theorem evalPexpr_val (tds : CerbTags.TagDefsMap) (ext : Fmap sym sym) (ρ : EnvStack)
     (a : List annot) (v : value) :
@@ -1065,22 +1489,26 @@ theorem procEnv_cons (x : sym) (bty : core_base_type) (params : List (sym × cor
           x v fmapEmpty) params vs := rfl
 
 /-- Canonical spelling of the procedure-call redex: `Eproc` at a Core
-    identifier (`Sym f`), annotation-free node. -/
-def callRedex (ra : core_run_annotation) (f : sym)
+    identifier (`Sym f`) at a node annotated `a` (E1). -/
+def callRedex (a : List annot) (ra : core_run_annotation) (f : sym)
     (pes : List (generic_pexpr Unit sym)) : CoreExpr :=
-  Expr [] (Eproc ra (Sym f) pes)
+  Expr a (Eproc ra (Sym f) pes)
 
-@[simp] theorem callRedex?_callRedex (ra : core_run_annotation) (f : sym)
+@[simp] theorem callRedex?_callRedex (a : List annot) (ra : core_run_annotation) (f : sym)
     (pes : List (generic_pexpr Unit sym)) :
-    callRedex? (callRedex ra f pes) = some (CTX, f, pes) := rfl
+    callRedex? (callRedex a ra f pes) = some (CTX, f, pes) := rfl
 
-@[simp] theorem jumpRedex?_callRedex (ra : core_run_annotation) (f : sym)
+@[simp] theorem jumpRedex?_callRedex (a : List annot) (ra : core_run_annotation) (f : sym)
     (pes : List (generic_pexpr Unit sym)) :
-    jumpRedex? (callRedex ra f pes) = none := rfl
+    jumpRedex? (callRedex a ra f pes) = none := rfl
 
-@[simp] theorem toVal_callRedex (ra : core_run_annotation) (f : sym)
+@[simp] theorem toVal_callRedex (a : List annot) (ra : core_run_annotation) (f : sym)
     (pes : List (generic_pexpr Unit sym)) :
-    toVal (callRedex ra f pes) = none := rfl
+    toVal (callRedex a ra f pes) = none := rfl
+
+@[simp] theorem redexAnnots_callRedex (a : List annot) (ra : core_run_annotation) (f : sym)
+    (pes : List (generic_pexpr Unit sym)) :
+    redexAnnots (callRedex a ra f pes) = a := rfl
 
 /-! ## The plain-symbol binder pattern (list-reverse arc, phase A)
 
@@ -1433,9 +1861,10 @@ theorem killM_loc_irrel (loc loc' : CerbLocation.Loc) {isDyn : Bool}
     step: a non-value with no Step is stuck, and the WP's
     UB-exclusion (R4) is exactly `NotStuck`.
 
-    Mirror map (pin 8fb380c9c, generated/):
+    Mirror map (pin f95ef8d9c, generated/):
     - context decomposition/rebuild: get_ctx/apply_ctx
-      (Core_reduction.lean:373-389) — the `*_ctx` congruence rules;
+      (Core_reduction.lean:381/389; core_reduction.lem:524–625) — the
+      `*_ctx` congruence rules (E1: + `bound_ctx`, the `Cbound` frame);
     - redex reduction: one_step0 (Core_reduction.lean:353) — the
       beta/merge rules;
     - actions: step_ctx's process_action + step_action
@@ -1443,8 +1872,26 @@ theorem killM_loc_irrel (loc loc' : CerbLocation.Loc) {isDyn : Bool}
       the sequential driver discharges against CerbMem.loadM/storeM
       (Driver.lean:273) and feeds `(aid, fp[, mval])` to the
       continuation — the `load`/`store` rules fuse request +
-      discharge + continuation into one step, exactly as the recon's
-      mini-drive executed it (§3.3).
+      discharge + continuation into one step.
+
+    THE LOCATION WRITE (E1). Every rule that is an instance of step_ctx's
+    GENERAL arm (core_reduction.lem:1153–1164: everything but the three
+    value arms PROGRAM-DONE/RETURN/REMOVE-ANNOT) writes the thread's
+    `current_loc` from the REDEX NODE's annotations before anything else:
+    its successor control is `ctl.upd a` (`Ctl.upd`/`locUpd`), `a` the
+    redex node's static annotation list — for the whole-expression rules
+    `run`/`call` the node get_ctx's path ends in, `redexAnnots e`. The
+    congruence rules thread whatever control the framed step produced
+    (a general-arm step; the guards exclude the call and the return, which
+    are stated at the whole expression). `ret`/`ret_annot` (value arms)
+    leave the control's location alone. `ctl.upd [] = ctl` by `rfl`, so
+    the annotation-free spellings read exactly as before E1.
+
+    ANNOTATED VALUES (E1). The value heads of the betas and the REMOVE-*
+    rules are stated at ANY static annotation lists (`ofValA (.pure a1 b1
+    v)`, `ofValA (.annot a1 a2 b1 ds v)`), as
+    the engine's arms are (`Expr pe1_annots (Epure pe1)` with
+    `valueFromPexpr pe1 = Just cval`, core_reduction.lem:385–423).
 
     Note on `loc`: the engine passes `loc' = if isLibraryLocation loc
     then current_loc else loc` to the memory op (step_ctx,
@@ -1464,7 +1911,7 @@ inductive Step (M : MachineCtx) : Config → Config → Prop where
       `Expr [] (Eannot [DA_pos [] fp] (mk_value_e Vunit))` (is_excluded
       = none on the fragment's positive path). storeM: CerbMem.lean:1667.
       The env is unread and returned verbatim (the request path never
-      touches thread env). -/
+      touches thread env). Successor control `ctl.upd a` (E1). -/
   | store {a : List annot} {loc : CerbLocation.Loc} {ann : core_run_annotation}
       {lk : Bool} {pe1 pe2 pe3 : generic_pexpr Unit sym}
       {ty : ctype} {pv : CerbMem.PointerValue} {cv : value}
@@ -1478,14 +1925,13 @@ inductive Step (M : MachineCtx) : Config → Config → Prop where
       Step M (Expr a (Eaction (Paction polarity.Pos (Action loc ann
               (Store0 lk pe1 pe2 pe3 mo)))), ρ, ctl, σ)
            (Expr [] (Eannot [DA_pos [] fp]
-              (Expr [] (Epure (Pexpr [] () (PEval Vunit))))), ρ, ctl, σ')
+              (Expr [] (Epure (Pexpr [] () (PEval Vunit))))), ρ, ctl.upd a, σ')
   /-- Positive strong load, evaluated operands. Mirrors: step_action
       Load0 arm (Core_reduction.lean:424 — request `LoadRequest2`,
       continuation `Expr [] (Eannot [DA_pos [] fp] (mk_value_e
       (valueFromMemValue mval).2))`), driver discharge
       `liftMem (CerbMem.loadM M.tagDefs loc ty pv)` (Driver.lean:273).
-      loadM: CerbMem.lean:1586 (returns the state unchanged on the
-      active path — σ' = σ is derivable, kept in applyMemM shape). -/
+      loadM: CerbMem.lean:1586. -/
   | load {a : List annot} {loc : CerbLocation.Loc} {ann : core_run_annotation}
       {pe1 pe2 : generic_pexpr Unit sym}
       {ty : ctype} {pv : CerbMem.PointerValue} {mo : memory_order}
@@ -1498,24 +1944,20 @@ inductive Step (M : MachineCtx) : Config → Config → Prop where
               (Load0 pe1 pe2 mo)))), ρ, ctl, σ)
            (Expr [] (Eannot [DA_pos [] fp]
               (Expr [] (Epure (Pexpr [] () (PEval
-                (valueFromMemValue mval).2))))), ρ, ctl, σ')
-  /-- Positive strong create (Extension D: cold-start programs create
-      their own cells), evaluated operands. Mirrors: step_action
-      Create arm (Core_reduction.lean:424 — value operands
-      `(Vobject (OVinteger align), Vctype ty)` classify, no ILLTYPED
-      arm for these shapes; request `CreateRequest2 pref align ty
-      (get_with_address e_annots) none` with continuation
-      `mk_value_e (Vobject (OVpointer ptrval))` — a BARE value, no
-      Eannot residue), driver discharge `liftMem ((CerbMem.allocateObject
-      _lemReader_tagDefs)
+                (valueFromMemValue mval).2))))), ρ, ctl.upd a, σ')
+  /-- Positive strong create, evaluated operands. Mirrors: step_action
+      Create arm (Core_reduction.lean:424; core_reduction.lem:642–651 —
+      value operands `(Vobject (OVinteger align), Vctype ty)` classify;
+      request `CreateRequest2 pref align ty (get_with_address e_annots)
+      none` with continuation `mk_value_e (Vobject (OVpointer ptrval))`,
+      a BARE value), driver discharge `liftMem (allocateObject tagDefs
       tid pref align ty req_addr_opt init_opt)` (Driver.lean:273).
-      allocateObject DISCARDS both the thread id and the requested
-      address (CerbMem.lean:1470-1474, `_ : Nat` / `_ : Option Int`),
-      so the rule pins them to `0`/`none`; the certification bridges to
-      the engine's `tid1`/`get_with_address []` by `rfl` (discarded
-      arguments are definitionally interchangeable). Failure (the
-      "out of memory" `Other` kill, CerbMem.lean:1479) is absence of a
-      step, exactly as for store/load. -/
+      allocateObject DISCARDS the thread id and the requested address
+      (CerbMem.lean:1844–1845, `_ : Nat` / `_ : Option Int`), so the rule
+      pins them to `0`/`none`; the certification bridges to the engine's
+      `tid1`/`get_with_address a` by `rfl` (discarded arguments are
+      definitionally interchangeable — E1: at ANY node annotations, so an
+      `ACerb_with_address` attribute changes nothing at this pin). -/
   | create {a : List annot} {loc : CerbLocation.Loc} {ann : core_run_annotation}
       {pe1 pe2 : generic_pexpr Unit sym}
       {align : CerbMem.IntegerValue} {ty : ctype} {pref : prefix0}
@@ -1526,28 +1968,13 @@ inductive Step (M : MachineCtx) : Config → Config → Prop where
         some (pv, σ')) :
       Step M (Expr a (Eaction (Paction polarity.Pos (Action loc ann
               (Create pe1 pe2 pref)))), ρ, ctl, σ)
-           (Expr [] (Epure (Pexpr [] () (PEval (Vobject (OVpointer pv))))), ρ, ctl, σ')
-  /-- Positive strong ALLOC — dynamic allocation, Core's `alloc(al, n)`
-      (`Alloc0`, C's `malloc`; kill/free arc K3), evaluated INTEGER
-      operands. Mirrors: step_action's Alloc0 arm (Core_reduction.lean:424,
-      verbatim modulo whitespace: `| Alloc0 pe1 pe2 pref => match
-      act_valueFromPexpr pe1, act_valueFromPexpr pe2 with | some (Vobject
-      (OVinteger ival1)), some (Vobject (OVinteger ival2)) => ACTION_REQUEST
-      "AllocRequest" loc1 (AllocRequest2 pref ival1 ival2 (fun (aid1 : Nat)
-      (ptrval : CerbMem.PointerValue) => mk_value_e (Vobject (OVpointer
-      ptrval)))) | some _, some _ => ACTION_ILLTYPED "Alloc" | _, _ =>
-      ACTION_EVAL "eval operands of Alloc" …`), driver discharge `liftMem
-      (CerbMem.allocateRegion tid1 pref align_ival size_ival)` with the
-      continuation `mk_th_st' aid1 ptrval` (Driver.lean:273) — the
-      continuation value is `mk_value_e (Vobject (OVpointer ptrval))`, a
-      BARE pointer value, no `Eannot` residue (exactly create's shape).
-      `allocateRegion` DISCARDS the thread id (CerbMem.lean:1533, `_ :
-      Nat`), so the rule pins it to `0`; the certification bridges to the
-      engine's `tid1` by `rfl` (`allocateRegion_arg_irrel`). The region
-      is UNTYPED (`ty := none`, :1544), of size `sizeN.toNat` (ZERO
-      admitted, no `max 1`), its base pushed onto `dynamicAddrs` (:1548).
-      Failure — the "out of memory" `Other` kill at `alignedAddr == 0`
-      (:1541) — is absence of a step, exactly as for create. -/
+           (Expr [] (Epure (Pexpr [] () (PEval (Vobject (OVpointer pv))))), ρ, ctl.upd a, σ')
+  /-- Positive strong ALLOC (`Alloc0`, C's `malloc`; kill/free arc K3),
+      evaluated INTEGER operands. Mirrors step_action's Alloc0 arm
+      (Core_reduction.lean:424), driver discharge `liftMem
+      (CerbMem.allocateRegion tid1 pref align_ival size_ival)`,
+      continuation `mk_value_e (Vobject (OVpointer ptrval))`.
+      `allocateRegion` DISCARDS the thread id (CerbMem.lean:1533). -/
   | alloc {a : List annot} {loc : CerbLocation.Loc} {ann : core_run_annotation}
       {pe1 pe2 : generic_pexpr Unit sym}
       {align size : CerbMem.IntegerValue} {pref : prefix0}
@@ -1557,24 +1984,12 @@ inductive Step (M : MachineCtx) : Config → Config → Prop where
       (hmem : applyMemM (CerbMem.allocateRegion 0 pref align size) σ = some (pv, σ')) :
       Step M (Expr a (Eaction (Paction polarity.Pos (Action loc ann
               (Alloc0 pe1 pe2 pref)))), ρ, ctl, σ)
-           (Expr [] (Epure (Pexpr [] () (PEval (Vobject (OVpointer pv))))), ρ, ctl, σ')
-  /-- Positive strong KILL (kill/free arc K2), evaluated pointer
-      operand. Mirrors: step_action's Kill arm (Core_reduction.lean:424,
-      verbatim modulo whitespace: `| Kill kind1 pe => match
-      act_valueFromPexpr pe with | some (Vobject (OVpointer ptrval)) =>
-      ACTION_REQUEST "KillRequest" loc1 (KillRequest2 (is_dynamic kind1)
-      ptrval (fun (aid1 : Nat) => mk_value_e Vunit)) | some _ =>
-      ACTION_ILLTYPED "Kill" | none => ACTION_EVAL "eval operand of Kill"
-      …`), driver discharge `liftMem (CerbMem.killM loc1 is_dynamic1
-      ptr_val)` (Driver.lean:273), continuation `mk_value_e Vunit` — a
-      BARE unit, no `Eannot` residue (like create, unlike store/load).
-      The `Static0 ty` payload is DISCARDED by the engine: only
-      `is_dynamic kind` reaches the request, so the rule is generic in
-      `kind` (the fragment `Frag.kill` restricts to the static kill;
-      the dynamic kill is K3). killM: CerbMem.lean:1555-1580,
-      deterministic — every failure arm (`Free_non_matching` UB179a,
-      `Free_dead_allocation` UB179b, the non-UB `Free_out_of_bound`) is
-      absence of a step. The env is unread and returned verbatim. -/
+           (Expr [] (Epure (Pexpr [] () (PEval (Vobject (OVpointer pv))))), ρ, ctl.upd a, σ')
+  /-- Positive strong KILL (kill/free arc K2), evaluated pointer operand.
+      Mirrors step_action's Kill arm (Core_reduction.lean:424), driver
+      discharge `liftMem (CerbMem.killM loc1 is_dynamic1 ptr_val)`,
+      continuation `mk_value_e Vunit`. Only `is_dynamic kind` reaches the
+      request. killM: CerbMem.lean:1555–1580. -/
   | kill {a : List annot} {loc : CerbLocation.Loc} {ann : core_run_annotation}
       {kind : kill_kind} {pe : generic_pexpr Unit sym}
       {pv : CerbMem.PointerValue} {ρ : EnvStack} {ctl : Ctl} {σ σ' : Mem}
@@ -1582,115 +1997,81 @@ inductive Step (M : MachineCtx) : Config → Config → Prop where
       (hmem : applyMemM (CerbMem.killM loc (is_dynamic kind) pv) σ = some ((), σ')) :
       Step M (Expr a (Eaction (Paction polarity.Pos (Action loc ann
               (Kill kind pe)))), ρ, ctl, σ)
-           (Expr [] (Epure (Pexpr [] () (PEval Vunit))), ρ, ctl, σ')
-  /-- LETS-PURE at a wildcard pattern:
-      `lets _ = v in E2 --> E2` (one_step0 Esseq bare-value arm,
-      Core_reduction.lean:353 "reduction: LETS-PURE"). The env update
-      `update_env (CaseBase (none,_))` is the identity on a NONEMPTY
-      stack (Core_aux.lean:861-868, first arm) and a failwithI PANIC
-      on an empty one — the cons shape is load-bearing (header note
-      1): no step exists where the engine panics. -/
-  | sseq_pure {a pa : List annot} {bty : core_base_type} {v : value}
+           (Expr [] (Epure (Pexpr [] () (PEval Vunit))), ρ, ctl.upd a, σ')
+  /-- LETS-PURE at a wildcard pattern: `lets _ = v in E2 --> E2`
+      (one_step0's Esseq bare-value arm, Core_reduction.lean:353;
+      core_reduction.lem:407–414 — the head is `Expr pe1_annots (Epure
+      pe1)` with `valueFromPexpr pe1 = Just cval`: ANY static annotations,
+      E1 `ofValA`). `update_env (CaseBase (none,_))` is the identity on a
+      NONEMPTY stack (Core_aux.lean:861-868) and a failwithI PANIC on an
+      empty one — the cons shape is load-bearing (header note 1). -/
+  | sseq_pure {a pa a1 b1 : List annot} {bty : core_base_type} {v : value}
       {e2 : CoreExpr} {ev0 : Fmap sym value} {evs : List (Fmap sym value)}
       {ctl : Ctl} {σ : Mem} :
       Step M (Expr a (Esseq (Pattern pa (CaseBase (none, bty)))
-              (ofVal (.pure v)) e2), ev0 :: evs, ctl, σ)
-           (e2, ev0 :: evs, ctl, σ)
-  /-- LETS-ANNOT at a wildcard pattern:
-      `lets _ = {A}v in E2 --> {A} E2` (one_step0 Esseq Eannot arm,
-      Core_reduction.lean:353 "reduction: LETS-ANNOT" — the engine
-      writes the result node annots as `[]` verbatim). This is the
-      R-i residue entering the continuation. Same env discipline as
-      LETS-PURE. -/
-  | sseq_annot {a pa : List annot} {bty : core_base_type}
+              (ofValA (.pure a1 b1 v)) e2), ev0 :: evs, ctl, σ)
+           (e2, ev0 :: evs, ctl.upd a, σ)
+  /-- LETS-ANNOT at a wildcard pattern: `lets _ = {A}v in E2 --> {A} E2`
+      (one_step0 Esseq Eannot arm, "reduction: LETS-ANNOT",
+      core_reduction.lem:416–423 — the result node is `Expr [] (Eannot xs
+      e2)` verbatim). -/
+  | sseq_annot {a pa a1 a2 b1 : List annot} {bty : core_base_type}
       {ds : List dyn_annotation} {v : value} {e2 : CoreExpr}
       {ev0 : Fmap sym value} {evs : List (Fmap sym value)} {ctl : Ctl} {σ : Mem} :
       Step M (Expr a (Esseq (Pattern pa (CaseBase (none, bty)))
-              (ofVal (.annot ds v)) e2), ev0 :: evs, ctl, σ)
-           (Expr [] (Eannot ds e2), ev0 :: evs, ctl, σ)
-  /-- LETW-PURE at a wildcard pattern (S1b DRIFT TEST — Ewseq joins
-      through the generic route, design record §8 item 8):
-      `letw _ = v in E2 --> E2` (one_step0 Ewseq bare-value arm,
-      Core_reduction.lean:353 "reduction: LETW-PURE"). Same env
-      discipline as LETS-PURE: `update_env` at a wildcard is the
-      identity on a NONEMPTY stack and a failwithI PANIC on an empty
-      one — the cons shape is load-bearing (header note 1). -/
-  | wseq_pure {a pa : List annot} {bty : core_base_type} {v : value}
+              (ofValA (.annot a1 a2 b1 ds v)) e2), ev0 :: evs, ctl, σ)
+           (Expr [] (Eannot ds e2), ev0 :: evs, ctl.upd a, σ)
+  /-- LETW-PURE at a wildcard pattern (one_step0's Ewseq bare-value arm,
+      core_reduction.lem:389–396). -/
+  | wseq_pure {a pa a1 b1 : List annot} {bty : core_base_type} {v : value}
       {e2 : CoreExpr} {ev0 : Fmap sym value} {evs : List (Fmap sym value)}
       {ctl : Ctl} {σ : Mem} :
       Step M (Expr a (Ewseq (Pattern pa (CaseBase (none, bty)))
-              (ofVal (.pure v)) e2), ev0 :: evs, ctl, σ)
-           (e2, ev0 :: evs, ctl, σ)
-  /-- LETW-ANNOT at a wildcard pattern:
-      `letw _ = {A}v in E2 --> {A} E2` (one_step0 Ewseq Eannot arm,
-      Core_reduction.lean:353 "reduction: LETW-ANNOT" — the engine
-      writes the result node annots as `[]` verbatim). Same env
-      discipline as LETW-PURE. -/
-  | wseq_annot {a pa : List annot} {bty : core_base_type}
+              (ofValA (.pure a1 b1 v)) e2), ev0 :: evs, ctl, σ)
+           (e2, ev0 :: evs, ctl.upd a, σ)
+  /-- LETW-ANNOT at a wildcard pattern (core_reduction.lem:397–405). -/
+  | wseq_annot {a pa a1 a2 b1 : List annot} {bty : core_base_type}
       {ds : List dyn_annotation} {v : value} {e2 : CoreExpr}
       {ev0 : Fmap sym value} {evs : List (Fmap sym value)} {ctl : Ctl} {σ : Mem} :
       Step M (Expr a (Ewseq (Pattern pa (CaseBase (none, bty)))
-              (ofVal (.annot ds v)) e2), ev0 :: evs, ctl, σ)
-           (Expr [] (Eannot ds e2), ev0 :: evs, ctl, σ)
-  /-- LETS-PURE at the SPECIFIED-BINDER pattern (S4 binding beta):
-      `lets Specified(x) = Specified(ov) in E2 --> E2` with `x` bound
-      to the payload OBJECT value (one_step0 Esseq bare-value arm,
-      Core_reduction.lean:353 "reduction: LETS-PURE" — the env update
-      is `update_env (specPat …)`, whose `CaseCtor Cspecified` arm
-      recurses into the sym binder with `Vobject oval`,
-      Core_aux.lean:861). A non-`LVspecified` bound value would take
-      update_env_aux's failwithI mismatch arm — mirrored fail-closed
-      as ABSENCE of a step (the WF-shape discipline, header note 1). -/
-  | sseq_spec_pure {a pa pb : List annot} {x : sym} {bty : core_base_type}
+              (ofValA (.annot a1 a2 b1 ds v)) e2), ev0 :: evs, ctl, σ)
+           (Expr [] (Eannot ds e2), ev0 :: evs, ctl.upd a, σ)
+  /-- LETS-PURE at the Specified-binder pattern (S4): `lets Specified(x)
+      = Specified(ov) in E2 --> E2` with `x ↦ Vobject ov`
+      (`update_env_aux`'s `CaseCtor Cspecified [pat']` arm,
+      Core_aux.lean:861). -/
+  | sseq_spec_pure {a pa pb a1 b1 : List annot} {x : sym} {bty : core_base_type}
       {ov : object_value} {e2 : CoreExpr}
       {ev0 : Fmap sym value} {evs : List (Fmap sym value)} {ctl : Ctl} {σ : Mem} :
       Step M (Expr a (Esseq (specPat pa pb x bty)
-              (ofVal (.pure (Vloaded (LVspecified ov)))) e2), ev0 :: evs, ctl, σ)
+              (ofValA (.pure a1 b1 (Vloaded (LVspecified ov)))) e2), ev0 :: evs, ctl, σ)
            (e2, update_env (specPat pa pb x bty) (Vloaded (LVspecified ov))
-              (ev0 :: evs), ctl, σ)
-  /-- LETS-ANNOT at the Specified-binder pattern:
-      `lets Specified(x) = {A}Specified(ov) in E2 --> {A} E2`, same
-      binding discipline (one_step0 Esseq Eannot arm, "reduction:
-      LETS-ANNOT" — the engine binds the BARE value; the annotations
-      flow to the continuation wrapper). -/
-  | sseq_spec_annot {a pa pb : List annot} {x : sym} {bty : core_base_type}
+              (ev0 :: evs), ctl.upd a, σ)
+  /-- LETS-ANNOT at the Specified-binder pattern. -/
+  | sseq_spec_annot {a pa pb a1 a2 b1 : List annot} {x : sym} {bty : core_base_type}
       {ds : List dyn_annotation} {ov : object_value} {e2 : CoreExpr}
       {ev0 : Fmap sym value} {evs : List (Fmap sym value)} {ctl : Ctl} {σ : Mem} :
       Step M (Expr a (Esseq (specPat pa pb x bty)
-              (ofVal (.annot ds (Vloaded (LVspecified ov)))) e2), ev0 :: evs, ctl, σ)
+              (ofValA (.annot a1 a2 b1 ds (Vloaded (LVspecified ov)))) e2), ev0 :: evs, ctl, σ)
            (Expr [] (Eannot ds e2),
             update_env (specPat pa pb x bty) (Vloaded (LVspecified ov))
-              (ev0 :: evs), ctl, σ)
-  /-- PURE at a non-value pexpr (S4): ONE engine step BIG-STEP
-      evaluating the pure expression (one_step0's Epure arm,
-      Core_reduction.lean:353 "reduction: PURE" — `EVAL "Epure"`
-      over `full_eval_pexpr1 pe`, wrapped by step_ctx's EVAL arm
-      into a Step_with_runstate2 whose successor arena carries
-      `Expr annots1 (Epure (mk_value_pe cval))`). The mirror premise
-      is the certified pure evaluator; the PURE-UNDEF channel is
-      excluded because the evaluator RETURNS a value. Env, state,
-      and node annotations verbatim. -/
+              (ev0 :: evs), ctl.upd a, σ)
+  /-- PURE at a non-value pexpr (S4): ONE engine step BIG-STEP evaluating
+      the pure expression (one_step0's Epure arm, "reduction: PURE",
+      core_reduction.lem:288–299 — the successor keeps the node's
+      annotations: `Expr annots (Epure (mk_value_pe cval))`). -/
   | pure_eval {a : List annot} {pe : generic_pexpr Unit sym} {v : value}
       {ρ : EnvStack} {ctl : Ctl} {σ : Mem}
       (hnv : valueFromPexpr pe = none)
       (hv : evalPexpr M.tagDefs M.extern ρ pe = some v) :
       Step M (Expr a (Epure pe), ρ, ctl, σ)
-           (Expr a (Epure (Pexpr [] () (PEval v))), ρ, ctl, σ)
-  /-- ACTION_EVAL for a positive strong load with an unevaluated
-      pointer operand (S4): ONE engine step BIG-STEP evaluating the
-      operands (step_action's Load0 `_, _` arm, Core_reduction.lean:
-      424 — `ACTION_EVAL "eval operands of Load"` over the two
-      `full_eval_pexpr1` calls, wrapped by process_action's
-      ACTION_EVAL arm into Step_with_runstate2; successor
-      `Expr e_annots (wrap_act (Load0 (mk_value_pe cval1)
-      (mk_value_pe cval2) mo))`). The type operand is pinned at its
-      canonical evaluated shape (its re-evaluation is the identity);
-      the pointer operand evaluates through the certified pure
-      evaluator to a POINTER value — the successor is exactly the
-      canonical load redex, so the certified load axiom takes over.
-      The PEconstrained PANIC pre-arm of `act_valueFromPexpr` is
-      excluded by the evaluator premise's grammar (PePure has no
-      PEconstrained). -/
+           (Expr a (Epure (Pexpr [] () (PEval v))), ρ, ctl.upd a, σ)
+  /-- ACTION_EVAL for a positive strong load with an unevaluated pointer
+      operand (S4): step_action's Load0 `_, _` arm (Core_reduction.lean:424,
+      `ACTION_EVAL "eval operands of Load"`), process_action's ACTION_EVAL
+      arm rebuilds `Expr e_annots (wrap_act …)` at the evaluated operands
+      (`mk_value_pe`); the mirror pins the pointer operand's value to a
+      POINTER (a non-pointer is the ILLTYPED-at-distance-one round). -/
   | load_eval {a : List annot} {loc : CerbLocation.Loc}
       {ann : core_run_annotation} {ty : ctype}
       {pe2 : generic_pexpr Unit sym} {pv : CerbMem.PointerValue}
@@ -1702,83 +2083,84 @@ inductive Step (M : MachineCtx) : Config → Config → Prop where
            (Expr a (Eaction (Paction polarity.Pos (Action loc ann
               (Load0 (Pexpr [] () (PEval (Vctype ty)))
                      (Pexpr [] () (PEval (Vobject (OVpointer pv)))) mo)))),
-            ρ, ctl, σ)
+            ρ, ctl.upd a, σ)
   /-- Reduction under the strong-sequencing frame. Mirrors get_ctx's
       Esseq arm (descend into e1 when it is not irreducible —
-      Core_reduction.lean:375) + apply_ctx's Csseq rebuild
-      (Core_reduction.lean:389). No irreducibility guard is needed:
-      no Step rule fires on an irreducible e1 (see
-      `Step.not_irreducible_shape` note below / slice notes §D4).
-      Env-GENERAL: the thread env is global, so a descent step's env
-      update carries through the frame unchanged in shape.
-      S3 GUARD (header note 4): `jumpRedex? e1 = none` — a jump of
-      e1 is NEVER framed; the engine's Erun arm discards the context
-      (no `apply_ctx`), so `K[run …] --> cont`, covered by
-      `Step.run` alone.
-      C2 GUARD (calls arc): `toVal e1 = none` — get_ctx descends into
-      `e1` only when `is_irreducible e1 = false` (Core_reduction.lean:375,
-      `if is_irreducible e1 then [(CTX, expr1)] else …`). Until C2 the
-      guard was derivable (no rule stepped a value); `Step.ret_annot`
-      steps the annotated value `{A}v` at a non-empty call stack
-      WITHOUT changing the control, and the engine never frames that
-      round (at `Esseq pat {A}v e2` the root IS the LETS-ANNOT redex),
-      so the engine's own guard becomes load-bearing. A call of `e1`
-      (`Step.call`) and a return (`Step.ret`) change the control, so
-      they are never instances of the premise. -/
+      core_reduction.lem:557–562) + apply_ctx's Csseq rebuild (:620).
+      GUARDS: `jumpRedex? e1 = none` (a jump of e1 is never framed — the
+      Erun arm discards the context), `callRedex? e1 = none` (E1: a call
+      of e1 is never framed — the PCALL arm CAPTURES the context, stated
+      at the whole expression by `Step.call`), `toVal e1 = none` (get_ctx
+      descends only into a reducible e1). The framed step is therefore a
+      general-arm step and its control write is threaded (`ctl'`). -/
   | sseq_ctx {a : List annot} {pat : pattern} {e1 e1' e2 : CoreExpr}
-      {ρ ρ' : EnvStack} {ctl : Ctl} {σ σ' : Mem}
-      (hnj : jumpRedex? e1 = none) (hnv : toVal e1 = none) :
-      Step M (e1, ρ, ctl, σ) (e1', ρ', ctl, σ') →
-      Step M (Expr a (Esseq pat e1 e2), ρ, ctl, σ) (Expr a (Esseq pat e1' e2), ρ', ctl, σ')
-  /-- Reduction under the weak-sequencing frame (S1b DRIFT TEST).
-      Mirrors get_ctx's Ewseq arm (descend into e1 when it is not
-      irreducible — Core_reduction.lean:375) + apply_ctx's Cwseq
-      rebuild (Core_reduction.lean:389). Same S3 congruence guard
-      as `sseq_ctx`: a jump of e1 is never framed; same C2 guard: a
-      value `e1` is never descended into. -/
+      {ρ ρ' : EnvStack} {ctl ctl' : Ctl} {σ σ' : Mem}
+      (hnj : jumpRedex? e1 = none) (hnc : callRedex? e1 = none) (hnv : toVal e1 = none) :
+      Step M (e1, ρ, ctl, σ) (e1', ρ', ctl', σ') →
+      Step M (Expr a (Esseq pat e1 e2), ρ, ctl, σ) (Expr a (Esseq pat e1' e2), ρ', ctl', σ')
+  /-- Reduction under the weak-sequencing frame (get_ctx's Ewseq arm /
+      Cwseq, core_reduction.lem:549–556, :622). Same guards. -/
   | wseq_ctx {a : List annot} {pat : pattern} {e1 e1' e2 : CoreExpr}
-      {ρ ρ' : EnvStack} {ctl : Ctl} {σ σ' : Mem}
-      (hnj : jumpRedex? e1 = none) (hnv : toVal e1 = none) :
-      Step M (e1, ρ, ctl, σ) (e1', ρ', ctl, σ') →
-      Step M (Expr a (Ewseq pat e1 e2), ρ, ctl, σ) (Expr a (Ewseq pat e1' e2), ρ', ctl, σ')
-  /-- Reduction under a dyn-annotation frame. Mirrors get_ctx's plain
-      `Eannot xs e` arm (Cannot-descent — taken only when e is NOT
-      itself Eannot-rooted, because the double-annot arm precedes it;
-      Core_reduction.lean:375) + apply_ctx's Cannot rebuild
-      (Core_reduction.lean:389). The guard is load-bearing: without
-      it this rule would race the ANNOTS merge, which the engine
-      never does. -/
+      {ρ ρ' : EnvStack} {ctl ctl' : Ctl} {σ σ' : Mem}
+      (hnj : jumpRedex? e1 = none) (hnc : callRedex? e1 = none) (hnv : toVal e1 = none) :
+      Step M (e1, ρ, ctl, σ) (e1', ρ', ctl', σ') →
+      Step M (Expr a (Ewseq pat e1 e2), ρ, ctl, σ) (Expr a (Ewseq pat e1' e2), ρ', ctl', σ')
+  /-- Reduction under a dyn-annotation frame (get_ctx's plain `Eannot xs
+      e` arm / Cannot, core_reduction.lem:583–586 — taken only when e is
+      NOT itself Eannot-rooted, the double-annot arm precedes it, and the
+      whole node is reducible: `toVal b = none` is get_ctx's
+      `is_irreducible` test — `{A}v` is a VALUE, never descended into; E1
+      makes the guard load-bearing because the framed step's control is
+      threaded and a bare value under a frame could otherwise RETURN). -/
   | annot_ctx {a : List annot} {ds : List dyn_annotation} {b b' : CoreExpr}
-      {ρ ρ' : EnvStack} {ctl : Ctl} {σ σ' : Mem}
-      (hnj : jumpRedex? b = none) :
+      {ρ ρ' : EnvStack} {ctl ctl' : Ctl} {σ σ' : Mem}
+      (hnj : jumpRedex? b = none) (hnc : callRedex? b = none) (hnv : toVal b = none) :
       annotRooted b = false →
-      Step M (b, ρ, ctl, σ) (b', ρ', ctl, σ') →
-      Step M (Expr a (Eannot ds b), ρ, ctl, σ) (Expr a (Eannot ds b'), ρ', ctl, σ')
-  /-- ANNOTS merge: `{A_1} {A_2} E --> {A_1 ++ A_2} E` (one_step0
-      Eannot arm, Core_reduction.lean:353 "reduction: ANNOTS";
-      combine_dyn_annotations = (++), :305-306; get_ctx routes every
-      double-annot root here, :375; the double-annot value is
-      explicitly NOT irreducible, :293 first arm). Unconditional on
-      the body, exactly as the engine; env untouched. -/
+      Step M (b, ρ, ctl, σ) (b', ρ', ctl', σ') →
+      Step M (Expr a (Eannot ds b), ρ, ctl, σ) (Expr a (Eannot ds b'), ρ', ctl', σ')
+  /-- E1: reduction under the `bound` frame (get_ctx's `Ebound` arm /
+      `Cbound`, core_reduction.lem:563–568; apply_ctx `Cbound annot ctx'`,
+      :618–619). Same three guards as `sseq_ctx`; `toVal b = none` is
+      get_ctx's `is_irreducible e` test. `is_unseq_with_ccall_aux` RESETS
+      its accumulator at a `Cbound` (:514) — inert on this sequential
+      fragment (no `Cunseq` frame exists yet), recorded for E4. -/
+  | bound_ctx {a : List annot} {b b' : CoreExpr}
+      {ρ ρ' : EnvStack} {ctl ctl' : Ctl} {σ σ' : Mem}
+      (hnj : jumpRedex? b = none) (hnc : callRedex? b = none) (hnv : toVal b = none) :
+      Step M (b, ρ, ctl, σ) (b', ρ', ctl', σ') →
+      Step M (Expr a (Ebound b), ρ, ctl, σ) (Expr a (Ebound b'), ρ', ctl', σ')
+  /-- E1: REMOVE-BOUND at a bare value — `bound(v) --> v` (step_ctx's
+      general arm, core_reduction.lem:1221–1226, Core_reduction.lean:484:
+      `Ebound (expr'@(Expr _ (Epure (Pexpr _ _ (PEval _))))) => Step_tau2
+      "CTX, Ebound(value)" TSK_Misc (wrap_expr expr')` — the value node
+      VERBATIM, any annotations; `wrap_expr` is at the location-updated
+      thread). -/
+  | bound_pure {a a1 b1 : List annot} {v : value}
+      {ρ : EnvStack} {ctl : Ctl} {σ : Mem} :
+      Step M (Expr a (Ebound (ofValA (.pure a1 b1 v))), ρ, ctl, σ)
+           (ofValA (.pure a1 b1 v), ρ, ctl.upd a, σ)
+  /-- E1: REMOVE-BOUND at an annotated value — `bound({A}v) --> v`
+      (core_reduction.lem:1214–1219: `Ebound (Expr _ (Eannot _ (expr'@(Expr
+      _ (Epure (Pexpr _ _ (PEval _)))))))`): the DYNAMIC annotations are
+      DISCARDED and the inner value node is returned verbatim. -/
+  | bound_annot {a a1 a2 b1 : List annot} {ds : List dyn_annotation} {v : value}
+      {ρ : EnvStack} {ctl : Ctl} {σ : Mem} :
+      Step M (Expr a (Ebound (ofValA (.annot a1 a2 b1 ds v))), ρ, ctl, σ)
+           (ofValA (.pure a2 b1 v), ρ, ctl.upd a, σ)
+  /-- ANNOTS merge: `{A_1} {A_2} E --> {A_1 ++ A_2} E` (one_step0 Eannot
+      arm, core_reduction.lem:301–304; combine_dyn_annotations = (++)). -/
   | annot_merge {a1 a2 : List annot} {ds1 ds2 : List dyn_annotation}
       {b : CoreExpr} {ρ : EnvStack} {ctl : Ctl} {σ : Mem} :
       Step M (Expr a1 (Eannot ds1 (Expr a2 (Eannot ds2 b))), ρ, ctl, σ)
-           (Expr (a1 ++ a2) (Eannot (ds1 ++ ds2) b), ρ, ctl, σ)
-  /-- THE GLOBAL JUMP (S3, header note 4). Mirrors step_ctx's Erun
-      arm (Core_reduction.lean:484): the spine hole holds
-      `run l pes`; the label resolves in the CURRENT procedure's
-      registered map (`hl` — the `labeled` read is
-      `state_except_read`, run-state READ-ONLY; the unresolvable-
-      label and no-current-proc failwithI PANIC channels are
-      excluded because the rule fires only on successful resolution,
-      certified at the proc-carrying profile in Soundness.lean); the
-      arguments evaluate against the CURRENT env (`hvs` — the pure
-      evaluator, certified against `full_eval_pexpr'`); the successor
-      REPLACES THE WHOLE EXPRESSION by the registered sseq-extended
-      continuation with the parameters rebound
-      (`{th_st with env := env', arena := cont_expr}` — no
-      `apply_ctx`: the frame spine is DISCARDED). Cons-shaped env:
-      `update_env` panics on an empty stack (Core_aux.lean:868). -/
+           (Expr (a1 ++ a2) (Eannot (ds1 ++ ds2) b), ρ, ctl.upd a1, σ)
+  /-- THE GLOBAL JUMP (S3, header note 4). Mirrors step_ctx's Erun arm
+      (core_reduction.lem:1414–1441): the spine hole holds `run l pes`;
+      the label resolves in the CURRENT procedure's registered map
+      (`hl`); the arguments evaluate against the CURRENT env (`hvs`); the
+      successor REPLACES THE WHOLE EXPRESSION by the registered
+      continuation with the parameters rebound (`{th_st with env :=
+      env', arena := cont_expr}` — no `apply_ctx`), at the thread the
+      general arm located from the `run` node (`redexAnnots e`). -/
   | run {e : CoreExpr} {l : sym} {pes : List (generic_pexpr Unit sym)}
       {params : List (sym × core_base_type)} {cont : CoreExpr}
       {vs : List value} {ev0 : Fmap sym value} {evs : List (Fmap sym value)}
@@ -1787,13 +2169,9 @@ inductive Step (M : MachineCtx) : Config → Config → Prop where
       (hl : lookupLabel (M.labelsAt ctl.proc) l = some (params, cont))
       (hvs : evalPexprs M.tagDefs M.extern (ev0 :: evs) pes = some vs) :
       Step M (e, ev0 :: evs, ctl, σ)
-           (cont, bindArgs params vs (ev0 :: evs), ctl, σ)
-  /-- Esave ENTRY at value-shaped parameter pexprs: one_step0's Esave
-      TAU arm (Core_reduction.lean:353, `match valueFromPexprs (…
-      sym_bTy_pes) with | some cvals => /- reduction: SAVE (tau part)
-      -/ TAU "Esave" (foldl update_env …) e`) — the parameters bind
-      into the env, the arena becomes the save body. Context-preserving
-      (an ordinary redex under the spine). -/
+           (cont, bindArgs params vs (ev0 :: evs), ctl.upd (redexAnnots e), σ)
+  /-- Esave ENTRY at value-shaped parameter pexprs: one_step0's Esave TAU
+      arm (core_reduction.lem:425–436). -/
   | save {a : List annot} {sb : sym × core_base_type}
       {ps : List (sym × ((core_base_type ×
         Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym))}
@@ -1801,22 +2179,10 @@ inductive Step (M : MachineCtx) : Config → Config → Prop where
       {ev0 : Fmap sym value} {evs : List (Fmap sym value)} {ctl : Ctl} {σ : Mem}
       (hvals : valueFromPexprs (saveParamPexprs ps) = some cvals) :
       Step M (Expr a (Esave sb ps body), ev0 :: evs, ctl, σ)
-           (body, bindSaveParams ps cvals (ev0 :: evs), ctl, σ)
-  /-- Esave PARAMETER EVALUATION (QA-1/H-1): one_step0's Esave EVAL
-      arm (Core_reduction.lean:353, `| none => /- reduction: SAVE
-      (eval part) + SAVE-UNDEF -/ EVAL "Esave" (stExceptUndef_bind
-      (stExceptUndef_mapM (fun (sym1, (bTy, pe)) => … eval_pexpr1 pe
-      … (sym1, (bTy, pe'))) sym_bTy_pes) (fun sym_bTy_pes' =>
-      stExceptUndef_return (Expr annots1 (Esave sym_bTy sym_bTy_pes'
-      e))))`): when the initializers are NOT all values, ONE engine
-      step evaluates every initializer (one full evaluator iteration
-      each — `eval_pexpr1`, which on the certified operand grammar
-      delivers the `mk_value_pe` form, exactly as `memop_eval`) and
-      RE-FORMS the Esave node with the evaluated initializers, node
-      annotations preserved; the TAU arm then fires on the successor.
-      The mirror premise is the certified pure evaluator over the
-      whole list (`evalPexprs`); the SAVE-UNDEF channel is excluded
-      because the evaluator RETURNS values. Env and state verbatim. -/
+           (body, bindSaveParams ps cvals (ev0 :: evs), ctl.upd a, σ)
+  /-- Esave PARAMETER EVALUATION (QA-1/H-1): one_step0's Esave EVAL arm
+      (core_reduction.lem:437–445): the initializers are evaluated and the
+      node RE-FORMED, annotations preserved. -/
   | save_eval {a : List annot} {sb : sym × core_base_type}
       {ps : List (sym × ((core_base_type ×
         Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym))}
@@ -1824,77 +2190,51 @@ inductive Step (M : MachineCtx) : Config → Config → Prop where
       (hnv : valueFromPexprs (saveParamPexprs ps) = none)
       (hvals : evalPexprs M.tagDefs M.extern ρ (saveParamPexprs ps) = some cvals) :
       Step M (Expr a (Esave sb ps body), ρ, ctl, σ)
-           (Expr a (Esave sb (saveParamsWithValues ps cvals) body), ρ, ctl, σ)
-  /-- Eif, true branch: ONE engine step with a BIG-STEP guard
-      (one_step0's Eif TAU_WITH_RUNSTATE, Core_reduction.lean:353 —
-      `full_eval_pexpr1 pe1` then dispatch on Vtrue/Vfalse; any other
-      value is a failwithI PANIC, excluded by the premise). The
-      mirror premise is the pure evaluator (header note 5). Env and
-      state untouched. -/
+           (Expr a (Esave sb (saveParamsWithValues ps cvals) body), ρ, ctl.upd a, σ)
+  /-- Eif, true branch: ONE engine step with a BIG-STEP guard (one_step0's
+      Eif TAU_WITH_RUNSTATE, core_reduction.lem:363–375). -/
   | if_true {a : List annot} {g : generic_pexpr Unit sym} {e2 e3 : CoreExpr}
       {ρ : EnvStack} {ctl : Ctl} {σ : Mem}
       (hg : evalPexpr M.tagDefs M.extern ρ g = some Vtrue) :
-      Step M (Expr a (Eif g e2 e3), ρ, ctl, σ) (e2, ρ, ctl, σ)
+      Step M (Expr a (Eif g e2 e3), ρ, ctl, σ) (e2, ρ, ctl.upd a, σ)
   /-- Eif, false branch. -/
   | if_false {a : List annot} {g : generic_pexpr Unit sym} {e2 e3 : CoreExpr}
       {ρ : EnvStack} {ctl : Ctl} {σ : Mem}
       (hg : evalPexpr M.tagDefs M.extern ρ g = some Vfalse) :
-      Step M (Expr a (Eif g e2 e3), ρ, ctl, σ) (e3, ρ, ctl, σ)
+      Step M (Expr a (Eif g e2 e3), ρ, ctl, σ) (e3, ρ, ctl.upd a, σ)
   /-- Ecase at a VALUE scrutinee: TAU into the substituted branch
-      (one_step0's Ecase value arm, Core_reduction.lean:353 —
-      `select_case subst_sym_expr cval pat_es`; no-match ILLTYPED is
-      a refusal = absence of the `hsel` premise; the
-      PEconstrained-scrutinee PANIC arm is excluded by `hv`,
-      `valueFromPexpr (PEconstrained …) = none`). The non-value-
-      scrutinee EVAL arm (small-step `eval_pexpr1`) is not mirrored
-      this slice (header note 5). -/
+      (one_step0's Ecase value arm, core_reduction.lem:325–336). -/
   | case_value {a : List annot} {pe : generic_pexpr Unit sym}
       {pats : List (pattern × CoreExpr)} {cval : value} {e' : CoreExpr}
       {ρ : EnvStack} {ctl : Ctl} {σ : Mem}
       (hv : valueFromPexpr pe = some cval)
       (hsel : select_case subst_sym_expr cval pats = some e') :
-      Step M (Expr a (Ecase pe pats), ρ, ctl, σ) (e', ρ, ctl, σ)
-  /-- LETS-PURE at the plain-symbol binder (list-reverse phase A):
-      `lets x = v in E2 --> E2` with `x` bound to `v` verbatim
-      (one_step0 Esseq bare-value arm, Core_reduction.lean:353
-      "reduction: LETS-PURE"; the env update is `update_env
-      (symPat …)`, whose `CaseBase (some sym1, _)` arm adds the
-      binding, Core_aux.lean:861). RECORDED DIVERGENCE (deliberate,
-      fail-closed sub-relation): the `{A}v` LETS-ANNOT variant at
-      this pattern is NOT mirrored — the only producer of
-      sym-binder-bound values in the fragment is the memop protocol,
-      which delivers BARE values (step_ctx's MEMOP continuation,
-      Core_reduction.lean:484 — `mk_pure_e`, no Eannot residue); the
-      annot variant is a mechanical extension when needed. -/
-  | sseq_sym_pure {a pa : List annot} {x : sym} {bty : core_base_type}
+      Step M (Expr a (Ecase pe pats), ρ, ctl, σ) (e', ρ, ctl.upd a, σ)
+  /-- LETS-PURE at the plain-symbol binder: `lets x = v in E2 --> E2`
+      with `x` bound to `v` verbatim (`update_env (symPat …)`,
+      Core_aux.lean:861). -/
+  | sseq_sym_pure {a pa a1 b1 : List annot} {x : sym} {bty : core_base_type}
       {v : value} {e2 : CoreExpr}
       {ev0 : Fmap sym value} {evs : List (Fmap sym value)} {ctl : Ctl} {σ : Mem} :
-      Step M (Expr a (Esseq (symPat pa x bty) (ofVal (.pure v)) e2), ev0 :: evs, ctl, σ)
-           (e2, update_env (symPat pa x bty) v (ev0 :: evs), ctl, σ)
-  /-- THE POINTER-EQUALITY MEMOP at evaluated operands (list-reverse
-      phase A — the honest null test): ONE engine step. Mirrors:
-      one_step0's Ememop arm at value operands (`valueFromPexprs pes
-      = some cvals` → `MEMOP PtrEq cvals`, Core_reduction.lean:353
-      "reduction: MEMOP"), step_ctx's MEMOP dispatch
-      (Core_reduction.lean:484 — `Step_memop_request2
-      th_st.current_loc PtrEq cvals tid (is_unseq_with_ccall ctx)
-      (fun cval => wrap_expr (mk_pure_e (mk_value_pe cval)))`), the
-      sequential driver's memop discharge (driver21's
-      Step_memop_request2 arm, Driver.lean:377 →
-      `perform_memop_request2`, Driver.lean:288, PtrEq arm:
-      `liftMem (CerbMem.eqPtrval loc ptr_val1 ptr_val2)` then
-      `mk_th_st (if is_eq then Vtrue else Vfalse)`). The successor
-      is a BARE pure value (no Eannot residue, unlike load/store —
-      the memop protocol carries no dyn annotation). `loc`: the
-      engine passes `th_st.current_loc`; `eqPtrval` DISCARDS its loc
-      argument (CerbMem.lean:1731, `_ : CerbLocation.Loc`), so the
-      rule pins `default` (the frozen profiles' current_loc) — any
-      two locs are definitionally the same operation
-      (`eqPtrval` never reads it; certified via the rfl bridge in
-      Soundness.lean). Failure (the killed channel) and the
-      differing-provenance ND fork (`msum`, CerbMem.lean:1753 — a
-      real NDnd, not single-layer) are ABSENCE of a step: `applyMemM`
-      answers `none` there, fail-closed. -/
+      Step M (Expr a (Esseq (symPat pa x bty) (ofValA (.pure a1 b1 v)) e2), ev0 :: evs, ctl, σ)
+           (e2, update_env (symPat pa x bty) v (ev0 :: evs), ctl.upd a, σ)
+  /-- E1: LETS-ANNOT at the plain-symbol binder — `lets x = {A}v in E2 -->
+      {A} E2` with `x ↦ v` (the SAME engine arm as `sseq_annot`,
+      core_reduction.lem:416–423; the emitted dialect reaches it: `let
+      strong a = bound(…)` never does, `bound` drops the annotations, but
+      the pattern-general binders of E2 do). Retires the `BareHead`
+      OUT-OF-SCOPE row. -/
+  | sseq_sym_annot {a pa a1 a2 b1 : List annot} {x : sym} {bty : core_base_type}
+      {ds : List dyn_annotation} {v : value} {e2 : CoreExpr}
+      {ev0 : Fmap sym value} {evs : List (Fmap sym value)} {ctl : Ctl} {σ : Mem} :
+      Step M (Expr a (Esseq (symPat pa x bty) (ofValA (.annot a1 a2 b1 ds v)) e2), ev0 :: evs, ctl, σ)
+           (Expr [] (Eannot ds e2), update_env (symPat pa x bty) v (ev0 :: evs), ctl.upd a, σ)
+  /-- THE POINTER-EQUALITY MEMOP at evaluated operands: ONE engine step
+      (one_step0's Ememop arm at values → `MEMOP PtrEq cvals`; step_ctx's
+      MEMOP dispatch `Step_memop_request2 th_st.current_loc …`,
+      core_reduction.lem:1475–1479; the driver's `perform_memop_request2`
+      PtrEq arm `liftMem (eqPtrval loc …)`). The successor is a BARE pure
+      value. `eqPtrval` DISCARDS its loc argument (CerbMem.lean:1731). -/
   | memop_ptreq {a : List annot} {pe1 pe2 : generic_pexpr Unit sym}
       {pv1 pv2 : CerbMem.PointerValue} {b : Bool}
       {ρ : EnvStack} {ctl : Ctl} {σ σ' : Mem}
@@ -1902,20 +2242,10 @@ inductive Step (M : MachineCtx) : Config → Config → Prop where
       (h2 : valueFromPexpr pe2 = some (Vobject (OVpointer pv2)))
       (hmem : applyMemM (CerbMem.eqPtrval default pv1 pv2) σ = some (b, σ')) :
       Step M (Expr a (Ememop PtrEq [pe1, pe2]), ρ, ctl, σ)
-           (Expr [] (Epure (Pexpr [] () (PEval (boolValue b)))), ρ, ctl, σ')
-  /-- MEMOP-OPERAND EVALUATION (list-reverse phase A): ONE engine
-      step BIG-STEP evaluating both operands of a two-operand memop
-      (one_step0's Ememop arm at a non-value operand list,
-      Core_reduction.lean:353 — `EVAL "Ememop"` over
-      `stExceptUndef_mapM eval_pexpr1 pes`; step_ctx's eval_pexpr1
-      is one full iteration of the evaluator tower — `eval_pexpr20`
-      then the Sum readout, Core_reduction.lean:484/84 — which on
-      the certified operand grammar delivers the fully evaluated
-      `mk_value_pe` form in ONE application, exactly like the
-      already-certified `full_eval_pexpr`). Node annotations are
-      PRESERVED (`Expr annots1 (Ememop memop1 pes')`). The mirror
-      premises are the certified pure evaluator; memop-generic
-      exactly as the engine's arm. -/
+           (Expr [] (Epure (Pexpr [] () (PEval (boolValue b)))), ρ, ctl.upd a, σ')
+  /-- MEMOP-OPERAND EVALUATION: one_step0's Ememop arm at a non-value
+      operand list (core_reduction.lem:310–319), node annotations
+      PRESERVED. -/
   | memop_eval {a : List annot} {mop : memop}
       {pe1 pe2 : generic_pexpr Unit sym} {v1 v2 : value}
       {ρ : EnvStack} {ctl : Ctl} {σ : Mem}
@@ -1924,30 +2254,9 @@ inductive Step (M : MachineCtx) : Config → Config → Prop where
       (hv2 : evalPexpr M.tagDefs M.extern ρ pe2 = some v2) :
       Step M (Expr a (Ememop mop [pe1, pe2]), ρ, ctl, σ)
            (Expr a (Ememop mop
-             [Pexpr [] () (PEval v1), Pexpr [] () (PEval v2)]), ρ, ctl, σ)
-  /-- ACTION_EVAL for a positive strong store whose operands are NOT
-      ALL values (list-reverse phase A; generalized to the engine's
-      own dispatch at QA-1/H-1): ONE engine step BIG-STEP evaluating
-      the operands (step_action's Store0 arm, Core_reduction.lean:424
-      — `match act_valueFromPexpr pe1, act_valueFromPexpr pe2,
-      act_valueFromPexpr pe3 with | some (Vctype ty1), some (Vobject
-      (OVpointer ptrval)), some cval => ACTION_REQUEST … | some _,
-      some _, some _ => ACTION_ILLTYPED "Store" | _, _, _ =>
-      ACTION_EVAL "eval operands of Store"` over the three
-      `full_eval_pexpr1` calls, wrapped by process_action's
-      ACTION_EVAL arm; successor `Expr e_annots (wrap_act (Store0
-      is_locking (mk_value_pe cval1) (mk_value_pe cval2) (mk_value_pe
-      cval3) mo1))`). The arm fires exactly when the operand triple is
-      not all values; the type operand is pinned at its canonical
-      evaluated shape (its re-evaluation is the identity), so the
-      engine's three-operand test is `hnv` on the pointer/value pair
-      — the mixed shapes (`store(int, p, 7)`: symbol pointer, literal
-      value; literal pointer, symbol value) are included. Pointer and
-      value operands evaluate through the certified pure evaluator —
-      the pointer to a POINTER value, so the successor is exactly the
-      canonical store redex. The `Store0 … PEconstrained` failwithI
-      pre-arm (Core_reduction.lean:424) is excluded by the evaluator
-      premise (`evalPexpr (PEconstrained …) = none`). -/
+             [Pexpr [] () (PEval v1), Pexpr [] () (PEval v2)]), ρ, ctl.upd a, σ)
+  /-- ACTION_EVAL for a positive strong store whose operands are NOT ALL
+      values (step_action's Store0 `_, _, _` arm, Core_reduction.lean:424). -/
   | store_eval {a : List annot} {loc : CerbLocation.Loc}
       {ann : core_run_annotation} {lk : Bool} {ty : ctype}
       {pe2 pe3 : generic_pexpr Unit sym} {pv : CerbMem.PointerValue}
@@ -1960,19 +2269,9 @@ inductive Step (M : MachineCtx) : Config → Config → Prop where
            (Expr a (Eaction (Paction polarity.Pos (Action loc ann
               (Store0 lk (Pexpr [] () (PEval (Vctype ty)))
                       (Pexpr [] () (PEval (Vobject (OVpointer pv))))
-                      (Pexpr [] () (PEval cv)) mo)))), ρ, ctl, σ)
-  /-- ACTION_EVAL for a positive strong kill with an unevaluated
-      pointer operand (kill/free arc K2): ONE engine step BIG-STEP
-      evaluating the operand (step_action's Kill `none` arm,
-      Core_reduction.lean:424 — `ACTION_EVAL "eval operand of Kill"`
-      over `full_eval_pexpr1 pe`, wrapped by process_action's
-      ACTION_EVAL arm into Step_with_runstate2; successor `Expr
-      e_annots (wrap_act (Kill kind1 (mk_value_pe cval)))` for ANY
-      `cval`). As `load_eval`/`store_eval`, the mirror pins the
-      evaluated value to a POINTER — the successor is exactly the
-      canonical kill redex; a non-pointer value is the engine's
-      ILLTYPED-at-distance-one round (`ShippedRefusal.error_next`,
-      `complete_kill_op`), classified, not mirrored. -/
+                      (Pexpr [] () (PEval cv)) mo)))), ρ, ctl.upd a, σ)
+  /-- ACTION_EVAL for a positive strong kill with an unevaluated pointer
+      operand (step_action's Kill `none` arm). -/
   | kill_eval {a : List annot} {loc : CerbLocation.Loc}
       {ann : core_run_annotation} {kind : kill_kind}
       {pe : generic_pexpr Unit sym} {pv : CerbMem.PointerValue}
@@ -1982,22 +2281,9 @@ inductive Step (M : MachineCtx) : Config → Config → Prop where
       Step M (Expr a (Eaction (Paction polarity.Pos (Action loc ann
               (Kill kind pe)))), ρ, ctl, σ)
            (Expr a (Eaction (Paction polarity.Pos (Action loc ann
-              (Kill kind (Pexpr [] () (PEval (Vobject (OVpointer pv)))))))), ρ, ctl, σ)
-  /-- ACTION_EVAL for a positive strong alloc whose operands are NOT
-      all values (kill/free arc K3): ONE engine step BIG-STEP
-      evaluating both operands, alignment first (step_action's Alloc0
-      `_, _` arm, Core_reduction.lean:424 — `ACTION_EVAL "eval operands
-      of Alloc" (stExceptUndef_bind (full_eval_pexpr1 pe1) (fun cval1 =>
-      stExceptUndef_bind (full_eval_pexpr1 pe2) (fun cval2 =>
-      stExceptUndef_return (wrap (Alloc0 (mk_value_pe cval1) (mk_value_pe
-      cval2) pref)))))`; an already-evaluated operand re-evaluates to
-      itself). The arm fires exactly when the operand pair is not all
-      values (`hnv`, the engine's `valueFromPexprs` test — mixed shapes
-      included, as `store_eval`). As `load_eval`/`store_eval`/`kill_eval`,
-      the mirror pins the evaluated values to INTEGERS — the successor is
-      exactly the canonical alloc redex; a non-integer value is the
-      engine's ILLTYPED-at-distance-one round (`ShippedRefusal.error_next
-      … "Alloc"`, `complete_alloc_op`), classified, not mirrored. -/
+              (Kill kind (Pexpr [] () (PEval (Vobject (OVpointer pv)))))))), ρ, ctl.upd a, σ)
+  /-- ACTION_EVAL for a positive strong alloc whose operands are NOT all
+      values (step_action's Alloc0 `_, _` arm). -/
   | alloc_eval {a : List annot} {loc : CerbLocation.Loc}
       {ann : core_run_annotation} {pe1 pe2 : generic_pexpr Unit sym}
       {align size : CerbMem.IntegerValue} {pref : prefix0}
@@ -2009,41 +2295,41 @@ inductive Step (M : MachineCtx) : Config → Config → Prop where
               (Alloc0 pe1 pe2 pref)))), ρ, ctl, σ)
            (Expr a (Eaction (Paction polarity.Pos (Action loc ann
               (Alloc0 (Pexpr [] () (PEval (Vobject (OVinteger align))))
-                      (Pexpr [] () (PEval (Vobject (OVinteger size)))) pref)))), ρ, ctl, σ)
+                      (Pexpr [] () (PEval (Vobject (OVinteger size)))) pref)))), ρ, ctl.upd a, σ)
+  /-- E1: ACTION_EVAL for a positive strong create whose operands are NOT
+      all values — the round every emitted `create(Ivalignof(ty), ty)`
+      takes first (step_action's Create `(_, _)` arm, core_reduction.lem:
+      656–661: `ACTION_EVAL "eval operands of Create" (full_eval_pexpr pe1
+      >>= cval1 -> full_eval_pexpr pe2 >>= cval2 -> return (wrap (Create
+      (mk_value_pe cval1) (mk_value_pe cval2) pref)))`, wrapped by
+      process_action's ACTION_EVAL arm into `Expr e_annots (wrap_act
+      act')` in context). The mirror pins the values to an INTEGER and a
+      CTYPE — the successor is exactly the create redex; anything else is
+      the ILLTYPED-at-distance-one round (`ACTION_ILLTYPED "Create"`,
+      :654), classified, not mirrored. -/
+  | create_eval {a : List annot} {loc : CerbLocation.Loc}
+      {ann : core_run_annotation} {pe1 pe2 : generic_pexpr Unit sym}
+      {align : CerbMem.IntegerValue} {ty : ctype} {pref : prefix0}
+      {ρ : EnvStack} {ctl : Ctl} {σ : Mem}
+      (hnv : valueFromPexprs [pe1, pe2] = none)
+      (hv1 : evalPexpr M.tagDefs M.extern ρ pe1 = some (Vobject (OVinteger align)))
+      (hv2 : evalPexpr M.tagDefs M.extern ρ pe2 = some (Vctype ty)) :
+      Step M (Expr a (Eaction (Paction polarity.Pos (Action loc ann
+              (Create pe1 pe2 pref)))), ρ, ctl, σ)
+           (Expr a (Eaction (Paction polarity.Pos (Action loc ann
+              (Create (Pexpr [] () (PEval (Vobject (OVinteger align))))
+                      (Pexpr [] () (PEval (Vctype ty))) pref)))), ρ, ctl.upd a, σ)
   /-- THE PROCEDURE CALL (calls arc C2) — context CAPTURING. Mirrors
-      step_ctx's PCALL arm (Core_reduction.lean:484, col 18133; verbatim
-      modulo whitespace): `| Eproc _ (Sym psym) pes => Step_with_runstate2
-      (RSK_eval "Eproc") (stExceptUndef_bind (stExceptUndef_mapM
-      full_eval_pexpr' pes) (fun cvals => stExceptUndef_bind (runEU
-      (except_bind (call_proc core_extern1 file1 psym cvals)
-      exception_undef_return)) (fun (proc_env, expr1) =>
-      stExceptUndef_return { { { { { th_st with current_proc_opt := some
-      psym } with env := proc_env :: th_st.env } with exec_loc :=
-      push_exec_loc psym th_st.current_loc th_st.exec_loc } with stack0 :=
-      Stack_cons2 th_st.current_proc_opt ctx th_st.stack0 } with arena :=
-      expr1 })))`. ONE round evaluates every argument against the
-      CURRENT env (`full_eval_pexpr'` closed over `th_st`; the mirror
-      premise is the certified pure evaluator over the whole list,
-      `hvs`) AND performs the call: `call_proc`'s lookup (`hf`, the
-      mirror `lookupProc`) and arity check (`hlen`), the fresh parameter
-      frame pushed (`procEnv`), the callee installed as the arena, the
-      current procedure set to the callee, the caller's procedure and
-      the redex's EVALUATION CONTEXT `ctx` pushed on the call stack
-      (`Stack_cons2 th_st.current_proc_opt ctx th_st.stack0` — the
-      control's `κ` grows by `(ctl.proc, ctx)`), the execution location
-      pushed (`push_exec_loc`, Core_run_aux.lean:380, at the thread's
-      `current_loc` = `M.currentLoc`). The rule is stated at the WHOLE
-      expression, like `Step.run`: `callRedex? e = some (ctx, f, pes)`
-      names the redex AND the context get_ctx pairs it with, which is
-      what the engine captures (a call under `Esseq pat [·] e₂` pushes
-      `Csseq [] pat CTX e₂`, so the return re-enters the sequencing
-      frame — `Step.ret`). Memory and run state untouched (the monad is
-      `runEU`-lifted and state-verbatim; `labeled` is installed once at
-      `initial_core_run_state`, never by a call). The two `call_proc`
-      failures are ABSENCE of a step: transparent `Illformed_program`
-      kills, classified in Round.lean (`complete_call`). The
-      implementation-constant call `Eproc _ (Impl _) _` (`Step_fs2`) is
-      outside the fragment (`callRedex?` answers `none`). -/
+      step_ctx's PCALL arm (core_reduction.lem:1384–1400): ONE round
+      evaluates every argument against the CURRENT env (`hvs`) AND
+      performs the call: `call_proc`'s lookup (`hf`) and arity check
+      (`hlen`), the fresh parameter frame pushed (`procEnv`), the callee
+      installed, the current procedure set, the caller's procedure and the
+      redex's EVALUATION CONTEXT `ctx` pushed on the call stack, the
+      execution location pushed at the thread's current location — E1:
+      the location the general arm wrote from the `Eproc` node
+      (`Ctl.callPush ctl (redexAnnots e) ctx f`). Memory and run state
+      untouched (`labeled` installed once, never by a call). -/
   | call {e : CoreExpr} {ctx : context} {f : sym} {pes : List (generic_pexpr Unit sym)}
       {params : List (sym × core_base_type)} {body : CoreExpr} {vs : List value}
       {ρ : EnvStack} {ctl : Ctl} {σ : Mem}
@@ -2052,55 +2338,61 @@ inductive Step (M : MachineCtx) : Config → Config → Prop where
       (hf : lookupProc M.file M.extern f = some (params, body))
       (hlen : params.length = vs.length) :
       Step M (e, ρ, ctl, σ)
-           (body, procEnv params vs :: ρ,
-            ⟨(ctl.proc, ctx) :: ctl.κ, some f, push_exec_loc f M.currentLoc ctl.execLoc⟩, σ)
+           (body, procEnv params vs :: ρ, ctl.callPush (redexAnnots e) ctx f, σ)
   /-- THE RETURN (calls arc C2). Mirrors step_ctx's value arm at a
-      NON-EMPTY call stack (Core_reduction.lean:484, col 2276; verbatim
-      modulo whitespace): `| (CTX, Expr e_annots (Epure (Pexpr _ _ (PEval
-      cval)))) => match th_st.stack0 with … | Stack_cons2 parent_proc_opt
-      caller_ctx sk' => … /- reduction: RETURN -/ Step_tau2 "end of
-      procedure" tsk (match th_st.env with | [] => failwithI "end of proc,
-      found an empty Core_run env" | _ :: env' => { { { { th_st with
-      current_proc_opt := parent_proc_opt } with env := env' } with stack0
-      := sk' } with arena := apply_ctx caller_ctx (Expr e_annots (Epure
-      (mk_value_pe cval))) })`. Core has no return statement: the callee's
+      NON-EMPTY call stack (core_reduction.lem:1115–1145): the callee's
       arena reducing to a BARE value at `Stack_cons2` IS the return. The
       value is plugged into the caller's SAVED context (`apply_ctx
-      caller_ctx`, the context `Step.call` captured), the env stack pops
-      one frame (the callee's `procEnv`), the current procedure is
-      restored from the frame, `exec_loc` is NOT popped; memory and run
-      state untouched (a `Step_tau2`; `tsk` — `TSK_Return` when
-      `file1.funinfo` has the procedure, `TSK_Misc` otherwise — reaches
-      only the driver's trace). At `Stack_empty` the value arm is
-      PROGRAM-DONE (the value protocol, `κ = []`). The empty-env
-      `failwithI` PANIC channel is excluded by the cons-shaped env
-      premise (the WF-shape discipline, header note 1: the callee's frame
-      is on the stack whenever the call stack is non-empty). -/
-  | ret {v : value} {ev0 : Fmap sym value} {evs : List (Fmap sym value)}
+      caller_ctx (Expr e_annots (Epure (mk_value_pe cval)))` — E1: the
+      value node's static annotations RIDE, the pexpr's are reset), the
+      env stack pops one frame, the current procedure is restored,
+      `exec_loc` and (E1) `current_loc` are NOT touched (a value arm — no
+      location write). The empty-env failwithI PANIC channel is excluded
+      by the cons-shaped env premise. -/
+  | ret {a1 b1 : List annot} {v : value} {ev0 : Fmap sym value} {evs : List (Fmap sym value)}
       {p : Option sym} {ctx : context} {κ : List (Option sym × context)}
-      {q : Option sym} {ℓ : exec_location} {σ : Mem} :
-      Step M (Expr [] (Epure (Pexpr [] () (PEval v))), ev0 :: evs, ⟨(p, ctx) :: κ, q, ℓ⟩, σ)
-           (apply_ctx ctx (Expr [] (Epure (Pexpr [] () (PEval v)))), evs, ⟨κ, p, ℓ⟩, σ)
+      {q : Option sym} {ℓ : exec_location} {lc : CerbLocation.Loc} {sp : RunSup} {σ : Mem} :
+      Step M (ofValA (.pure a1 b1 v), ev0 :: evs, ⟨(p, ctx) :: κ, q, ℓ, lc, sp⟩, σ)
+           (apply_ctx ctx (ofValA (.pure a1 [] v)), evs, ⟨κ, p, ℓ, lc, sp⟩, σ)
   /-- REMOVE-ANNOT at a NON-EMPTY call stack (calls arc C2). Mirrors
-      step_ctx's second arm (Core_reduction.lean:484, col ≈2700): `| (CTX,
-      Expr _ (Eannot _ (expr'@(Expr _ (Epure (Pexpr _ _ (PEval _))))))) =>
+      step_ctx's second arm (core_reduction.lem:1146–1151): `(CTX, Expr _
+      (Eannot _ (expr'@(Expr _ (Epure (Pexpr _ _ (PEval _)))))) =>
       Step_tau2 "CTX, Eannot(value)" TSK_Misc { th_st with arena := expr'
-      }` — the one-layer annotation of a value is tau'd off, at ANY stack
-      (the arm precedes the general arm and does not read `stack0`). At
-      `κ = []` the annotated value is a TERMINAL for the mirror (`toValRt`,
-      the D1 value protocol; the shipped round is `shipped_remove_annot`,
-      Round.lean) and no rule fires; at `κ ≠ []` it is NOT a terminal (a
-      value under `Stack_cons2` is on its way to RETURN), so the round
-      must be a mirror step: this one. The control is unchanged; the
-      bare value then takes `Step.ret`. -/
-  | ret_annot {ds : List dyn_annotation} {v : value} {ρ : EnvStack}
+      }` — the inner value node VERBATIM, at ANY annotations (E1), at ANY
+      stack (the arm precedes the general arm; no location write). At
+      `κ = []` the annotated value is a TERMINAL for the mirror. -/
+  | ret_annot {a1 a2 b1 : List annot} {ds : List dyn_annotation} {v : value} {ρ : EnvStack}
       {pc : Option sym × context} {κ : List (Option sym × context)}
-      {q : Option sym} {ℓ : exec_location} {σ : Mem} :
-      Step M (Expr [] (Eannot ds (Expr [] (Epure (Pexpr [] () (PEval v))))), ρ,
-              ⟨pc :: κ, q, ℓ⟩, σ)
-           (Expr [] (Epure (Pexpr [] () (PEval v))), ρ, ⟨pc :: κ, q, ℓ⟩, σ)
+      {q : Option sym} {ℓ : exec_location} {lc : CerbLocation.Loc} {sp : RunSup} {σ : Mem} :
+      Step M (ofValA (.annot a1 a2 b1 ds v), ρ, ⟨pc :: κ, q, ℓ, lc, sp⟩, σ)
+           (ofValA (.pure a2 b1 v), ρ, ⟨pc :: κ, q, ℓ, lc, sp⟩, σ)
 
 /-! ## Basic metatheory of Step (inversions the logic needs) -/
+
+/-! ### Values never sit under a spine search -/
+
+theorem toVal_none_of_jumpRedex?_some {e : CoreExpr} {lp : sym × List (generic_pexpr Unit sym)}
+    (h : jumpRedex? e = some lp) : toVal e = none := by
+  cases hv : toVal e with
+  | none => rfl
+  | some w =>
+    obtain ⟨wa, -, rfl⟩ := ofValA_of_toVal hv
+    cases wa <;> simp [jumpRedex?, annotRooted] at h
+
+theorem toVal_none_of_callRedex?_some {e : CoreExpr}
+    {q : context × sym × List (generic_pexpr Unit sym)}
+    (h : callRedex? e = some q) : toVal e = none := by
+  cases hv : toVal e with
+  | none => rfl
+  | some w =>
+    obtain ⟨wa, -, rfl⟩ := ofValA_of_toVal hv
+    cases wa <;> simp [callRedex?, annotRooted] at h
+
+@[simp] theorem jumpRedex?_ofValA (w : SpikeValA) : jumpRedex? (ofValA w) = none := by
+  cases w <;> simp [jumpRedex?, annotRooted]
+
+@[simp] theorem callRedex?_ofValA (w : SpikeValA) : callRedex? (ofValA w) = none := by
+  cases w <;> simp [callRedex?, annotRooted]
 
 /-! ### Canonical-operand instances of the action rules
 
@@ -2122,7 +2414,7 @@ theorem Step.store_canonical {M : MachineCtx} {a : List annot}
                        (Pexpr [] () (PEval (Vobject (OVpointer pv))))
                        (Pexpr [] () (PEval cv)) mo)))), ρ, ctl, σ)
          (Expr [] (Eannot [DA_pos [] fp]
-            (Expr [] (Epure (Pexpr [] () (PEval Vunit))))), ρ, ctl, σ') :=
+            (Expr [] (Epure (Pexpr [] () (PEval Vunit))))), ρ, ctl.upd a, σ') :=
   Step.store rfl rfl rfl hmv hmem
 
 theorem Step.load_canonical {M : MachineCtx} {a : List annot}
@@ -2136,7 +2428,7 @@ theorem Step.load_canonical {M : MachineCtx} {a : List annot}
                    (Pexpr [] () (PEval (Vobject (OVpointer pv)))) mo)))), ρ, ctl, σ)
          (Expr [] (Eannot [DA_pos [] fp]
             (Expr [] (Epure (Pexpr [] () (PEval
-              (valueFromMemValue mval).2))))), ρ, ctl, σ') :=
+              (valueFromMemValue mval).2))))), ρ, ctl.upd a, σ') :=
   Step.load rfl rfl hmem
 
 theorem Step.create_canonical {M : MachineCtx} {a : List annot}
@@ -2148,7 +2440,7 @@ theorem Step.create_canonical {M : MachineCtx} {a : List annot}
     Step M (Expr a (Eaction (Paction polarity.Pos (Action loc ann
             (Create (Pexpr [] () (PEval (Vobject (OVinteger align))))
                     (Pexpr [] () (PEval (Vctype ty))) pref)))), ρ, ctl, σ)
-         (Expr [] (Epure (Pexpr [] () (PEval (Vobject (OVpointer pv))))), ρ, ctl, σ') :=
+         (Expr [] (Epure (Pexpr [] () (PEval (Vobject (OVpointer pv))))), ρ, ctl.upd a, σ') :=
   Step.create rfl rfl hmem
 
 theorem Step.kill_canonical {M : MachineCtx} {a : List annot}
@@ -2157,7 +2449,7 @@ theorem Step.kill_canonical {M : MachineCtx} {a : List annot}
     (hmem : applyMemM (CerbMem.killM loc (is_dynamic kind) pv) σ = some ((), σ')) :
     Step M (Expr a (Eaction (Paction polarity.Pos (Action loc ann
             (Kill kind (Pexpr [] () (PEval (Vobject (OVpointer pv)))))))), ρ, ctl, σ)
-         (Expr [] (Epure (Pexpr [] () (PEval Vunit))), ρ, ctl, σ') :=
+         (Expr [] (Epure (Pexpr [] () (PEval Vunit))), ρ, ctl.upd a, σ') :=
   Step.kill rfl hmem
 
 theorem Step.alloc_canonical {M : MachineCtx} {a : List annot}
@@ -2168,24 +2460,162 @@ theorem Step.alloc_canonical {M : MachineCtx} {a : List annot}
     Step M (Expr a (Eaction (Paction polarity.Pos (Action loc ann
             (Alloc0 (Pexpr [] () (PEval (Vobject (OVinteger align))))
                     (Pexpr [] () (PEval (Vobject (OVinteger size)))) pref)))), ρ, ctl, σ)
-         (Expr [] (Epure (Pexpr [] () (PEval (Vobject (OVpointer pv))))), ρ, ctl, σ') :=
+         (Expr [] (Epure (Pexpr [] () (PEval (Vobject (OVpointer pv))))), ρ, ctl.upd a, σ') :=
   Step.alloc rfl rfl hmem
 
-/-- S3 RETIREMENT NOTE: phase-1's `Step.env_invariant(')` (no rule
-    writes the env) is RETIRED as pre-declared (phase-1 notes §2
-    item 6) — `Step.run` and `Step.save` rebind the environment. Its
-    survivor: `Step.env_cons` (cons-shapedness is preserved — what
-    the sequencing proofs actually need at this stratum). C2: the
-    call PUSHES a frame and the return POPS one, so the survivor holds
-    at CONTROL-PRESERVING steps (`hctl`); the call/return frame
-    discipline is `Step.ctl_cases`. -/
+/-! ### THE CONTROL ACROSS A STEP (calls arc C2; E1 the location write)
+
+Every step either is a GENERAL-ARM round — the control's `κ`, `proc`,
+`execLoc`, `sup` are threaded and only `curLoc` is written, `ctl' = ctl.upd
+a` at the redex node's annotations `a` — or THE CALL (the control grows by
+the captured frame, the callee becomes the current procedure, the
+execution location is pushed at the written location: `Ctl.callPush`) or
+THE RETURN (the top frame pops, the caller's procedure is restored,
+location and supplies untouched). -/
+
+theorem Step.ctl_cases {M : MachineCtx} {e e' : CoreExpr} {ρ ρ' : EnvStack}
+    {ctl ctl' : Ctl} {σ σ' : Mem}
+    (h : Step M (e, ρ, ctl, σ) (e', ρ', ctl', σ')) :
+    (∃ a, ctl' = ctl.upd a) ∨
+    (∃ ctx f pes params body vs, callRedex? e = some (ctx, f, pes) ∧
+      evalPexprs M.tagDefs M.extern ρ pes = some vs ∧
+      lookupProc M.file M.extern f = some (params, body) ∧ params.length = vs.length ∧
+      e' = body ∧ ρ' = procEnv params vs :: ρ ∧
+      ctl' = ctl.callPush (redexAnnots e) ctx f ∧ σ' = σ) ∨
+    (∃ a1 b1 v ev0 evs p ctx κ q ℓ lc sp, e = ofValA (.pure a1 b1 v) ∧
+      ρ = ev0 :: evs ∧ ctl = ⟨(p, ctx) :: κ, q, ℓ, lc, sp⟩ ∧
+      e' = apply_ctx ctx (ofValA (.pure a1 [] v)) ∧ ρ' = evs ∧
+      ctl' = ⟨κ, p, ℓ, lc, sp⟩ ∧ σ' = σ) := by
+  generalize hcfg : (e, ρ, ctl, σ) = c at h
+  generalize hcfg' : (e', ρ', ctl', σ') = c' at h
+  induction h generalizing e ρ ctl σ e' ρ' ctl' σ' with
+  | store h1 h2 h3 hmv hmem => cases hcfg; cases hcfg'; exact .inl ⟨_, rfl⟩
+  | load h1 h2 hmem => cases hcfg; cases hcfg'; exact .inl ⟨_, rfl⟩
+  | create h1 h2 hmem => cases hcfg; cases hcfg'; exact .inl ⟨_, rfl⟩
+  | alloc h1 h2 hmem => cases hcfg; cases hcfg'; exact .inl ⟨_, rfl⟩
+  | kill h1 hmem => cases hcfg; cases hcfg'; exact .inl ⟨_, rfl⟩
+  | sseq_pure => cases hcfg; cases hcfg'; exact .inl ⟨_, rfl⟩
+  | sseq_annot => cases hcfg; cases hcfg'; exact .inl ⟨_, rfl⟩
+  | wseq_pure => cases hcfg; cases hcfg'; exact .inl ⟨_, rfl⟩
+  | wseq_annot => cases hcfg; cases hcfg'; exact .inl ⟨_, rfl⟩
+  | sseq_spec_pure => cases hcfg; cases hcfg'; exact .inl ⟨_, rfl⟩
+  | sseq_spec_annot => cases hcfg; cases hcfg'; exact .inl ⟨_, rfl⟩
+  | pure_eval hnv hv => cases hcfg; cases hcfg'; exact .inl ⟨_, rfl⟩
+  | load_eval hnv2 hv2 => cases hcfg; cases hcfg'; exact .inl ⟨_, rfl⟩
+  | sseq_ctx hnj hnc hnv hs ih =>
+    cases hcfg; cases hcfg'
+    rcases ih rfl rfl with ⟨a, rfl⟩ | ⟨_, _, _, _, _, _, hc1, -⟩ |
+      ⟨_, _, _, _, _, _, _, _, _, _, _, _, rfl, -⟩
+    · exact .inl ⟨a, rfl⟩
+    · rw [hc1] at hnc; cases hnc
+    · rw [toVal_ofValA] at hnv; cases hnv
+  | wseq_ctx hnj hnc hnv hs ih =>
+    cases hcfg; cases hcfg'
+    rcases ih rfl rfl with ⟨a, rfl⟩ | ⟨_, _, _, _, _, _, hc1, -⟩ |
+      ⟨_, _, _, _, _, _, _, _, _, _, _, _, rfl, -⟩
+    · exact .inl ⟨a, rfl⟩
+    · rw [hc1] at hnc; cases hnc
+    · rw [toVal_ofValA] at hnv; cases hnv
+  | annot_ctx hnj hnc hnv hg hs ih =>
+    cases hcfg; cases hcfg'
+    rcases ih rfl rfl with ⟨a, rfl⟩ | ⟨_, _, _, _, _, _, hc1, -⟩ |
+      ⟨_, _, _, _, _, _, _, _, _, _, _, _, rfl, -⟩
+    · exact .inl ⟨a, rfl⟩
+    · rw [hc1] at hnc; cases hnc
+    · rw [toVal_ofValA] at hnv; cases hnv
+  | bound_ctx hnj hnc hnv hs ih =>
+    cases hcfg; cases hcfg'
+    rcases ih rfl rfl with ⟨a, rfl⟩ | ⟨_, _, _, _, _, _, hc1, -⟩ |
+      ⟨_, _, _, _, _, _, _, _, _, _, _, _, rfl, -⟩
+    · exact .inl ⟨a, rfl⟩
+    · rw [hc1] at hnc; cases hnc
+    · rw [toVal_ofValA] at hnv; cases hnv
+  | bound_pure => cases hcfg; cases hcfg'; exact .inl ⟨_, rfl⟩
+  | bound_annot => cases hcfg; cases hcfg'; exact .inl ⟨_, rfl⟩
+  | annot_merge => cases hcfg; cases hcfg'; exact .inl ⟨_, rfl⟩
+  | run hj hl hvs => cases hcfg; cases hcfg'; exact .inl ⟨_, rfl⟩
+  | save hvals => cases hcfg; cases hcfg'; exact .inl ⟨_, rfl⟩
+  | save_eval hnv hvals => cases hcfg; cases hcfg'; exact .inl ⟨_, rfl⟩
+  | if_true hg => cases hcfg; cases hcfg'; exact .inl ⟨_, rfl⟩
+  | if_false hg => cases hcfg; cases hcfg'; exact .inl ⟨_, rfl⟩
+  | case_value hv hsel => cases hcfg; cases hcfg'; exact .inl ⟨_, rfl⟩
+  | sseq_sym_pure => cases hcfg; cases hcfg'; exact .inl ⟨_, rfl⟩
+  | sseq_sym_annot => cases hcfg; cases hcfg'; exact .inl ⟨_, rfl⟩
+  | memop_ptreq h1 h2 hmem => cases hcfg; cases hcfg'; exact .inl ⟨_, rfl⟩
+  | memop_eval hnv hv1 hv2 => cases hcfg; cases hcfg'; exact .inl ⟨_, rfl⟩
+  | store_eval hnv hv2 hv3 => cases hcfg; cases hcfg'; exact .inl ⟨_, rfl⟩
+  | kill_eval hnv hv => cases hcfg; cases hcfg'; exact .inl ⟨_, rfl⟩
+  | alloc_eval hnv hv1 hv2 => cases hcfg; cases hcfg'; exact .inl ⟨_, rfl⟩
+  | create_eval hnv hv1 hv2 => cases hcfg; cases hcfg'; exact .inl ⟨_, rfl⟩
+  | call hc hvs hf hlen =>
+    cases hcfg; cases hcfg'
+    exact .inr (.inl ⟨_, _, _, _, _, _, hc, hvs, hf, hlen, rfl, rfl, rfl, rfl⟩)
+  | ret =>
+    cases hcfg; cases hcfg'
+    exact .inr (.inr ⟨_, _, _, _, _, _, _, _, _, _, _, _, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩)
+  | ret_annot => cases hcfg; cases hcfg'; exact .inl ⟨[], rfl⟩
+
+/-- The κ/proc/execLoc/sup projections of a general-arm successor. -/
+theorem Step.ctl_upd {M : MachineCtx} {e e' : CoreExpr} {ρ ρ' : EnvStack}
+    {ctl ctl' : Ctl} {σ σ' : Mem}
+    (h : Step M (e, ρ, ctl, σ) (e', ρ', ctl', σ'))
+    (hc : callRedex? e = none) (hv : toVal e = none) : ∃ a, ctl' = ctl.upd a := by
+  rcases h.ctl_cases with heq | ⟨ctx, f, pes, _, _, _, hc', -⟩ |
+      ⟨_, _, _, _, _, _, _, _, _, _, _, _, rfl, -⟩
+  · exact heq
+  · rw [hc'] at hc; cases hc
+  · rw [toVal_ofValA] at hv; cases hv
+
+/-- The control's frame fields are preserved at every configuration that
+    is neither a call redex (in context) nor a value (the pre-E1
+    `Step.ctl_eq`, minus the location). -/
+theorem Step.ctl_eq {M : MachineCtx} {e e' : CoreExpr} {ρ ρ' : EnvStack}
+    {ctl ctl' : Ctl} {σ σ' : Mem}
+    (h : Step M (e, ρ, ctl, σ) (e', ρ', ctl', σ'))
+    (hc : callRedex? e = none) (hv : toVal e = none) :
+    ctl'.κ = ctl.κ ∧ ctl'.proc = ctl.proc ∧ ctl'.execLoc = ctl.execLoc ∧ ctl'.sup = ctl.sup := by
+  obtain ⟨a, rfl⟩ := h.ctl_upd hc hv
+  exact ⟨rfl, rfl, rfl, rfl⟩
+
+theorem Step.ctl_eq' {M : MachineCtx} {c c' : Config} (h : Step M c c')
+    (hc : callRedex? c.1 = none) (hv : toVal c.1 = none) : ∃ a, c'.2.2.1 = c.2.2.1.upd a := by
+  obtain ⟨e, ρ, ctl, σ⟩ := c
+  obtain ⟨e', ρ', ctl', σ'⟩ := c'
+  exact h.ctl_upd hc hv
+
+/-- A general-arm step's successor control IS an update of the source
+    control (`Step.ctl_upd`), restated on the step itself so that
+    congruence rules apply to a step whose successor was produced by
+    the Language interface (where the control component is an opaque
+    projection). -/
+theorem Step.retag {M : MachineCtx} {e e' : CoreExpr} {ρ ρ' : EnvStack}
+    {ctl ctl' : Ctl} {σ σ' : Mem}
+    (h : Step M (e, ρ, ctl, σ) (e', ρ', ctl', σ'))
+    (hc : callRedex? e = none) (hv : toVal e = none) :
+    ∃ a, Step M (e, ρ, ctl, σ) (e', ρ', ctl.upd a, σ') := by
+  obtain ⟨a, rfl⟩ := h.ctl_upd hc hv
+  exact ⟨a, h⟩
+
+/-- A step that keeps the call stack is a general-arm step: `κ` grows at
+    the call and shrinks at the return. -/
+theorem Step.ctl_upd_of_κ {M : MachineCtx} {e e' : CoreExpr} {ρ ρ' : EnvStack}
+    {ctl ctl' : Ctl} {σ σ' : Mem}
+    (h : Step M (e, ρ, ctl, σ) (e', ρ', ctl', σ')) (hκ : ctl'.κ = ctl.κ) :
+    ∃ a, ctl' = ctl.upd a := by
+  rcases h.ctl_cases with heq | ⟨ctx, f, pes, _, _, _, -, -, -, -, -, -, rfl, -⟩ |
+      ⟨_, _, _, _, _, _, _, _, _, _, _, _, -, -, rfl, -, -, rfl, -⟩
+  · exact heq
+  · exact absurd hκ (by simp)
+  · exact absurd hκ (by simp)
+
 theorem Step.env_cons' {M : MachineCtx} {c c' : Config}
-    (h : Step M c c') (hctl : c'.2.2.1 = c.2.2.1) :
+    (h : Step M c c') (hκ : c'.2.2.1.κ = c.2.2.1.κ) :
     ∀ ev0 evs, c.2.1 = ev0 :: evs → ∃ ev0', c'.2.1 = ev0' :: evs := by
   induction h with
   | store h1 h2 h3 hmv hmem => exact fun ev0 evs hin => ⟨ev0, hin⟩
   | load h1 h2 hmem => exact fun ev0 evs hin => ⟨ev0, hin⟩
   | create h1 h2 hmem => exact fun ev0 evs hin => ⟨ev0, hin⟩
+  | alloc h1 h2 hmem => exact fun ev0 evs hin => ⟨ev0, hin⟩
   | kill h1 hmem => exact fun ev0 evs hin => ⟨ev0, hin⟩
   | sseq_pure => exact fun ev0 evs hin => ⟨ev0, hin⟩
   | sseq_annot => exact fun ev0 evs hin => ⟨ev0, hin⟩
@@ -2201,9 +2631,12 @@ theorem Step.env_cons' {M : MachineCtx} {c c' : Config}
     exact ⟨_, update_env_cons ..⟩
   | pure_eval hnv hv => exact fun ev0 evs hin => ⟨ev0, hin⟩
   | load_eval hnv2 hv2 => exact fun ev0 evs hin => ⟨ev0, hin⟩
-  | sseq_ctx hnj hnv hs ih => exact ih hctl
-  | wseq_ctx hnj hnv hs ih => exact ih hctl
-  | annot_ctx hnj hg hs ih => exact ih hctl
+  | sseq_ctx hnj hnc hnv hs ih => exact ih hκ
+  | wseq_ctx hnj hnc hnv hs ih => exact ih hκ
+  | annot_ctx hnj hnc hnv hg hs ih => exact ih hκ
+  | bound_ctx hnj hnc hnv hs ih => exact ih hκ
+  | bound_pure => exact fun ev0 evs hin => ⟨ev0, hin⟩
+  | bound_annot => exact fun ev0 evs hin => ⟨ev0, hin⟩
   | annot_merge => exact fun ev0 evs hin => ⟨ev0, hin⟩
   | run hj hl hvs =>
     intro ev0 evs hin
@@ -2221,95 +2654,32 @@ theorem Step.env_cons' {M : MachineCtx} {c c' : Config}
     intro ev0 evs hin
     obtain ⟨rfl, rfl⟩ := List.cons.inj hin
     exact ⟨_, update_env_cons ..⟩
+  | sseq_sym_annot =>
+    intro ev0 evs hin
+    obtain ⟨rfl, rfl⟩ := List.cons.inj hin
+    exact ⟨_, update_env_cons ..⟩
   | memop_ptreq h1 h2 hmem => exact fun ev0 evs hin => ⟨ev0, hin⟩
   | memop_eval hnv hv1 hv2 => exact fun ev0 evs hin => ⟨ev0, hin⟩
   | store_eval hnv hv2 hv3 => exact fun ev0 evs hin => ⟨ev0, hin⟩
   | kill_eval hnv hv => exact fun ev0 evs hin => ⟨ev0, hin⟩
-  | alloc h1 h2 hmem => exact fun ev0 evs hin => ⟨ev0, hin⟩
   | alloc_eval hnv hv1 hv2 => exact fun ev0 evs hin => ⟨ev0, hin⟩
-  | call hc hvs hf hlen =>
-    exact absurd (congrArg Ctl.κ hctl) (by simp)
-  | ret =>
-    exact absurd (congrArg Ctl.κ hctl) (by simp)
+  | create_eval hnv hv1 hv2 => exact fun ev0 evs hin => ⟨ev0, hin⟩
+  | call hc hvs hf hlen => exact absurd hκ (by simp)
+  | ret => exact absurd hκ (by simp)
   | ret_annot => exact fun ev0 evs hin => ⟨ev0, hin⟩
 
 theorem Step.env_cons {M : MachineCtx} {e : CoreExpr} {ev0 : Fmap sym value}
-    {evs : List (Fmap sym value)} {ctl : Ctl} {σ : Mem}
+    {evs : List (Fmap sym value)} {ctl ctl' : Ctl} {σ : Mem}
     {e' : CoreExpr} {ρ' : EnvStack} {σ' : Mem}
-    (h : Step M (e, ev0 :: evs, ctl, σ) (e', ρ', ctl, σ')) :
+    (h : Step M (e, ev0 :: evs, ctl, σ) (e', ρ', ctl', σ')) (hκ : ctl'.κ = ctl.κ) :
     ∃ ev0', ρ' = ev0' :: evs :=
-  h.env_cons' rfl ev0 evs rfl
-
-/-- THE CONTROL IS WRITTEN BY EXACTLY TWO RULES (calls arc C2): every
-    step either threads the configuration's `Ctl` unchanged, or is THE
-    CALL (the control grows by the captured frame `(ctl.proc, ctx)`, the
-    callee becomes the current procedure, the execution location is
-    pushed) or THE RETURN (the top frame pops, the caller's procedure is
-    restored). C1's `Step.ctl_eq` (every step preserves the control) is
-    now the first disjunct under the two guards `Step.ctl_eq`. -/
-theorem Step.ctl_cases {M : MachineCtx} {e e' : CoreExpr} {ρ ρ' : EnvStack}
-    {ctl ctl' : Ctl} {σ σ' : Mem}
-    (h : Step M (e, ρ, ctl, σ) (e', ρ', ctl', σ')) :
-    ctl' = ctl ∨
-    (∃ ctx f pes params body vs, callRedex? e = some (ctx, f, pes) ∧
-      evalPexprs M.tagDefs M.extern ρ pes = some vs ∧
-      lookupProc M.file M.extern f = some (params, body) ∧ params.length = vs.length ∧
-      e' = body ∧ ρ' = procEnv params vs :: ρ ∧
-      ctl' = ⟨(ctl.proc, ctx) :: ctl.κ, some f, push_exec_loc f M.currentLoc ctl.execLoc⟩ ∧
-      σ' = σ) ∨
-    (∃ v ev0 evs p ctx κ q ℓ, e = Expr [] (Epure (Pexpr [] () (PEval v))) ∧
-      ρ = ev0 :: evs ∧ ctl = ⟨(p, ctx) :: κ, q, ℓ⟩ ∧
-      e' = apply_ctx ctx (Expr [] (Epure (Pexpr [] () (PEval v)))) ∧ ρ' = evs ∧
-      ctl' = ⟨κ, p, ℓ⟩ ∧ σ' = σ) := by
-  cases h
-  all_goals first
-    | exact .inl rfl
-    | exact .inr (.inl ⟨_, _, _, _, _, _, ‹callRedex? _ = some _›,
-        ‹evalPexprs _ _ _ _ = some _›, ‹lookupProc _ _ _ = some _›,
-        ‹List.length _ = List.length _›, rfl, rfl, rfl, rfl⟩)
-    | exact .inr (.inr ⟨_, _, _, _, _, _, _, _, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩)
-
-/-- The control is preserved at every configuration that is neither a
-    call redex (in context) nor a value: the two guards are exactly the
-    sources of `Step.call` and `Step.ret`/`Step.ret_annot`. -/
-theorem Step.ctl_eq {M : MachineCtx} {e e' : CoreExpr} {ρ ρ' : EnvStack}
-    {ctl ctl' : Ctl} {σ σ' : Mem}
-    (h : Step M (e, ρ, ctl, σ) (e', ρ', ctl', σ'))
-    (hc : callRedex? e = none) (hv : toVal e = none) : ctl' = ctl := by
-  rcases h.ctl_cases with heq | ⟨ctx, f, pes, _, _, _, hc', -⟩ |
-      ⟨v, _, _, _, _, _, _, _, rfl, -⟩
-  · exact heq
-  · rw [hc'] at hc; cases hc
-  · rw [show toVal (Expr ([] : List _root_.annot) (Epure (Pexpr [] () (PEval v)))) =
-      some (.pure v) from rfl] at hv
-    cases hv
-
-theorem Step.ctl_eq' {M : MachineCtx} {c c' : Config} (h : Step M c c')
-    (hc : callRedex? c.1 = none) (hv : toVal c.1 = none) : c'.2.2.1 = c.2.2.1 := by
-  obtain ⟨e, ρ, ctl, σ⟩ := c
-  obtain ⟨e', ρ', ctl', σ'⟩ := c'
-  exact h.ctl_eq hc hv
-
-/-- A control-preserving step's successor control IS the source
-    control (`Step.ctl_eq`), restated on the step itself so that
-    congruence rules apply to a step whose successor was produced by
-    the Language interface (where the control component is an opaque
-    projection). -/
-theorem Step.retag {M : MachineCtx} {e e' : CoreExpr} {ρ ρ' : EnvStack}
-    {ctl ctl' : Ctl} {σ σ' : Mem}
-    (h : Step M (e, ρ, ctl, σ) (e', ρ', ctl', σ'))
-    (hc : callRedex? e = none) (hv : toVal e = none) :
-    Step M (e, ρ, ctl, σ) (e', ρ', ctl, σ') := by
-  obtain rfl := h.ctl_eq hc hv
-  exact h
+  h.env_cons' hκ ev0 evs rfl
 
 /-- Inversion at a call redex IN CONTEXT: the step is THE CALL, its
     successor determined by the file lookup, the argument values and the
-    captured context — the successor does not depend on how the redex
-    was reached beyond `ctx`. By induction on the step: a congruence
-    rule cannot frame a call of its sub-expression (the pushed control
-    differs from the threaded one), so the only rule at a configuration
-    with a call redex is `Step.call`. -/
+    captured context. By induction on the step: a congruence rule cannot
+    frame a call of its sub-expression (E1: the guard `hnc`), so the only
+    rule at a configuration with a call redex is `Step.call`. -/
 theorem Step.call_inv' {M : MachineCtx} {c : Config}
     {out : Config} (h : Step M c out) :
     ∀ {ctx : context} {f : sym} {pes : List (generic_pexpr Unit sym)},
@@ -2317,72 +2687,52 @@ theorem Step.call_inv' {M : MachineCtx} {c : Config}
       ∃ params body vs, evalPexprs M.tagDefs M.extern c.2.1 pes = some vs ∧
         lookupProc M.file M.extern f = some (params, body) ∧ params.length = vs.length ∧
         out = (body, procEnv params vs :: c.2.1,
-          ⟨(c.2.2.1.proc, ctx) :: c.2.2.1.κ, some f,
-            push_exec_loc f M.currentLoc c.2.2.1.execLoc⟩, c.2.2.2) := by
-  induction h with
-  | call hc' hvs hf hlen =>
-    intro ctx f pes hc
-    rw [hc'] at hc
+          c.2.2.1.callPush (redexAnnots c.1) ctx f, c.2.2.2) := by
+  cases h with
+  | store h1 h2 h3 hmv hmem => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
+  | load h1 h2 hmem => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
+  | create h1 h2 hmem => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
+  | alloc h1 h2 hmem => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
+  | kill h1 hmem => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
+  | sseq_pure => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
+  | sseq_annot => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
+  | wseq_pure => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
+  | wseq_annot => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
+  | sseq_spec_pure => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
+  | sseq_spec_annot => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
+  | pure_eval hnv hv => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
+  | load_eval hnv2 hv2 => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
+  | sseq_ctx hnj hnc hnv hs => intro ctx f pes hc; rw [callRedex?_sseq, hnc] at hc; cases hc
+  | wseq_ctx hnj hnc hnv hs => intro ctx f pes hc; rw [callRedex?_wseq, hnc] at hc; cases hc
+  | annot_ctx hnj hnc hnv hg hs => intro ctx f pes hc; rw [callRedex?_annot_of_not_root _ _ hg, hnc] at hc; cases hc
+  | bound_ctx hnj hnc hnv hs => intro ctx f pes hc; rw [callRedex?_bound, hnc] at hc; cases hc
+  | bound_pure => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
+  | bound_annot => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
+  | annot_merge => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
+  | run hj hl hvs => intro ctx f pes hc; rw [callRedex?_none_of_jumpRedex?_some hj] at hc; cases hc
+  | save hvals => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
+  | save_eval hnv hvals => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
+  | if_true hg => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
+  | if_false hg => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
+  | case_value hv hsel => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
+  | sseq_sym_pure => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
+  | sseq_sym_annot => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
+  | memop_ptreq h1 h2 hmem => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
+  | memop_eval hnv hv1 hv2 => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
+  | store_eval hnv hv2 hv3 => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
+  | kill_eval hnv hv => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
+  | alloc_eval hnv hv1 hv2 => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
+  | create_eval hnv hv1 hv2 => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
+  | call hc hvs hf hlen =>
+    intro ctx f pes hc0
+    rw [hc] at hc0
     obtain ⟨rfl, rfl, rfl⟩ : _ ∧ _ ∧ _ := by
-      have := Option.some.inj hc
+      have := Option.some.inj hc0
       exact ⟨congrArg Prod.fst this, congrArg (fun q => q.2.1) this,
         congrArg (fun q => q.2.2) this⟩
     exact ⟨_, _, _, hvs, hf, hlen, rfl⟩
-  | ret => intro ctx f pes hc; simp at hc
+  | ret => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
   | ret_annot => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
-  | sseq_ctx hnj hnv hs ih =>
-    intro ctx f pes hc
-    rw [callRedex?_sseq, Option.map_eq_some_iff] at hc
-    obtain ⟨⟨ctx1, f1, pes1⟩, hc1, hq⟩ := hc
-    obtain ⟨rfl, rfl, rfl⟩ : _ ∧ _ ∧ _ := by
-      exact ⟨congrArg Prod.fst hq, congrArg (fun q => q.2.1) hq,
-        congrArg (fun q => q.2.2) hq⟩
-    obtain ⟨_, _, _, -, -, -, hout⟩ := ih hc1
-    exact absurd (congrArg (fun c : Config => c.2.2.1.κ) hout) (by simp)
-  | wseq_ctx hnj hnv hs ih =>
-    intro ctx f pes hc
-    rw [callRedex?_wseq, Option.map_eq_some_iff] at hc
-    obtain ⟨⟨ctx1, f1, pes1⟩, hc1, hq⟩ := hc
-    obtain ⟨rfl, rfl, rfl⟩ : _ ∧ _ ∧ _ := by
-      exact ⟨congrArg Prod.fst hq, congrArg (fun q => q.2.1) hq,
-        congrArg (fun q => q.2.2) hq⟩
-    obtain ⟨_, _, _, -, -, -, hout⟩ := ih hc1
-    exact absurd (congrArg (fun c : Config => c.2.2.1.κ) hout) (by simp)
-  | annot_ctx hnj hg hs ih =>
-    intro ctx f pes hc
-    rw [callRedex?_annot_of_not_root _ _ hg, Option.map_eq_some_iff] at hc
-    obtain ⟨⟨ctx1, f1, pes1⟩, hc1, hq⟩ := hc
-    obtain ⟨rfl, rfl, rfl⟩ : _ ∧ _ ∧ _ := by
-      exact ⟨congrArg Prod.fst hq, congrArg (fun q => q.2.1) hq,
-        congrArg (fun q => q.2.2) hq⟩
-    obtain ⟨_, _, _, -, -, -, hout⟩ := ih hc1
-    exact absurd (congrArg (fun c : Config => c.2.2.1.κ) hout) (by simp)
-  | annot_merge => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
-  | sseq_pure => intro ctx f pes hc; simp at hc
-  | sseq_annot => intro ctx f pes hc; simp at hc
-  | wseq_pure => intro ctx f pes hc; simp at hc
-  | wseq_annot => intro ctx f pes hc; simp at hc
-  | sseq_spec_pure => intro ctx f pes hc; simp at hc
-  | sseq_spec_annot => intro ctx f pes hc; simp at hc
-  | sseq_sym_pure => intro ctx f pes hc; simp at hc
-  | store h1 h2 h3 hmv hmem => intro ctx f pes hc; simp at hc
-  | load h1 h2 hmem => intro ctx f pes hc; simp at hc
-  | create h1 h2 hmem => intro ctx f pes hc; simp at hc
-  | kill h1 hmem => intro ctx f pes hc; simp at hc
-  | alloc h1 h2 hmem => intro ctx f pes hc; simp at hc
-  | pure_eval hnv hv => intro ctx f pes hc; simp at hc
-  | load_eval hnv2 hv2 => intro ctx f pes hc; simp at hc
-  | run hj hl hvs => intro ctx f pes hc; rw [callRedex?_none_of_jumpRedex?_some hj] at hc; cases hc
-  | save hvals => intro ctx f pes hc; simp at hc
-  | save_eval hnv hvals => intro ctx f pes hc; simp at hc
-  | if_true hg => intro ctx f pes hc; simp at hc
-  | if_false hg => intro ctx f pes hc; simp at hc
-  | case_value hv hsel => intro ctx f pes hc; simp at hc
-  | memop_ptreq h1 h2 hmem => intro ctx f pes hc; simp at hc
-  | memop_eval hnv hv1 hv2 => intro ctx f pes hc; simp at hc
-  | store_eval hnv hv2 hv3 => intro ctx f pes hc; simp at hc
-  | kill_eval hnv hv => intro ctx f pes hc; simp at hc
-  | alloc_eval hnv hv1 hv2 => intro ctx f pes hc; simp at hc
 
 theorem Step.call_inv {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack} {ctl : Ctl} {σ : Mem}
     {out : Config} (h : Step M (e, ρ, ctl, σ) out)
@@ -2390,18 +2740,28 @@ theorem Step.call_inv {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack} {ctl : Ctl
     (hc : callRedex? e = some (ctx, f, pes)) :
     ∃ params body vs, evalPexprs M.tagDefs M.extern ρ pes = some vs ∧
       lookupProc M.file M.extern f = some (params, body) ∧ params.length = vs.length ∧
-      out = (body, procEnv params vs :: ρ,
-        ⟨(ctl.proc, ctx) :: ctl.κ, some f, push_exec_loc f M.currentLoc ctl.execLoc⟩, σ) :=
+      out = (body, procEnv params vs :: ρ, ctl.callPush (redexAnnots e) ctx f, σ) :=
   h.call_inv' hc
 
-/-- A call step is never control-preserving (the frame is pushed). -/
-theorem Step.call_ne_same_ctl {M : MachineCtx} {e e' : CoreExpr} {ρ ρ' : EnvStack}
-    {ctl : Ctl} {σ σ' : Mem} {ctx : context} {f : sym}
+/-- A call step never keeps the call stack (the frame is pushed). -/
+theorem Step.call_ne_same_κ {M : MachineCtx} {e e' : CoreExpr} {ρ ρ' : EnvStack}
+    {ctl ctl' : Ctl} {σ σ' : Mem} {ctx : context} {f : sym}
     {pes : List (generic_pexpr Unit sym)}
     (hc : callRedex? e = some (ctx, f, pes))
-    (h : Step M (e, ρ, ctl, σ) (e', ρ', ctl, σ')) : False := by
+    (h : Step M (e, ρ, ctl, σ) (e', ρ', ctl', σ')) (hκ : ctl'.κ = ctl.κ) : False := by
   obtain ⟨_, _, _, -, -, -, hout⟩ := h.call_inv hc
-  exact absurd (congrArg (fun c : Config => c.2.2.1.κ) hout) (by simp)
+  have := congrArg (fun c : Config => c.2.2.1.κ) hout
+  simp at this
+  rw [this] at hκ
+  exact absurd hκ (by simp)
+
+/-- A call step is never a general-arm step. -/
+theorem Step.call_ne_upd {M : MachineCtx} {e e' : CoreExpr} {ρ ρ' : EnvStack}
+    {ctl : Ctl} {σ σ' : Mem} {ctx : context} {f : sym} {a : List annot}
+    {pes : List (generic_pexpr Unit sym)}
+    (hc : callRedex? e = some (ctx, f, pes))
+    (h : Step M (e, ρ, ctl, σ) (e', ρ', ctl.upd a, σ')) : False :=
+  h.call_ne_same_κ hc rfl
 
 /-- Reducibility at a call redex in context whose lookup, arity and
     arguments succeed. -/
@@ -2413,8 +2773,7 @@ theorem Step.call_of_callRedex {M : MachineCtx} {e : CoreExpr} {ctx : context} {
     (hf : lookupProc M.file M.extern f = some (params, body))
     (hlen : params.length = vs.length) :
     Step M (e, ρ, ctl, σ)
-      (body, procEnv params vs :: ρ,
-       ⟨(ctl.proc, ctx) :: ctl.κ, some f, push_exec_loc f M.currentLoc ctl.execLoc⟩, σ) :=
+      (body, procEnv params vs :: ρ, ctl.callPush (redexAnnots e) ctx f, σ) :=
   Step.call hc hvs hf hlen
 
 /-- Values do not step AT THE EMPTY CALL STACK (the Language interface's
@@ -2422,59 +2781,64 @@ theorem Step.call_of_callRedex {M : MachineCtx} {e : CoreExpr} {ctx : context} {
     `Step.ret`/`Step.ret_annot`). Engine analogue: is_irreducible
     short-circuits both get_ctx and one_step0 (Core_reduction.lean:293,
     353,375), and the value arm at `Stack_empty` is PROGRAM-DONE. -/
-theorem Step.val_elim {M : MachineCtx} {w : SpikeVal} {ρ : EnvStack} {ctl : Ctl} {σ : Mem}
+theorem Step.val_elim {M : MachineCtx} {w : SpikeValA} {ρ : EnvStack} {ctl : Ctl} {σ : Mem}
     {out : Config} (hκ : ctl.κ = [])
-    (h : Step M (ofVal w, ρ, ctl, σ) out) : False := by
-  obtain ⟨κ, p, ℓ⟩ := ctl
+    (h : Step M (ofValA w, ρ, ctl, σ) out) : False := by
+  obtain ⟨κ, p, ℓ, lc, sp⟩ := ctl
   simp only at hκ
   subst hκ
   cases w with
-  | pure v =>
+  | pure a b v =>
     cases h with
-    | run hj hl hvs => simp [ofVal] at hj
+    | run hj hl hvs => simp [jumpRedex?] at hj
     | pure_eval hnv hv => rw [valueFromPexpr_val] at hnv; cases hnv
-    | call hc hvs hf hlen => simp [ofVal] at hc
-  | annot ds v =>
+    | call hc hvs hf hlen => simp [callRedex?] at hc
+  | annot a a2 b ds v =>
     cases h with
-    | annot_ctx hnj hg hs =>
-      cases hs with
-      | run hj hl hvs => simp at hj
-      | pure_eval hnv hv => rw [valueFromPexpr_val] at hnv; cases hnv
-    | run hj hl hvs => simp [ofVal, jumpRedex?, annotRooted] at hj
-    | call hc hvs hf hlen => simp [ofVal, callRedex?, annotRooted] at hc
+    | annot_ctx hnj hnc hnv hg hs => rw [toVal_pure_val] at hnv; cases hnv
+    | run hj hl hvs => simp [jumpRedex?, annotRooted] at hj
+    | call hc hvs hf hlen => simp [callRedex?, annotRooted] at hc
 
-/-- A BARE value never takes a control-preserving step (its only rule,
+/-- A BARE value never takes a stack-preserving step (its only rule,
     `Step.ret`, pops the call stack). -/
-theorem Step.pure_val_elim {M : MachineCtx} {v : value} {ρ : EnvStack} {ctl ctl' : Ctl}
-    {σ : Mem} {e' : CoreExpr} {ρ' : EnvStack} {σ' : Mem}
-    (h : Step M (Expr [] (Epure (Pexpr [] () (PEval v))), ρ, ctl, σ) (e', ρ', ctl', σ'))
-    (hctl : ctl' = ctl) : False := by
+theorem Step.pure_val_elim {M : MachineCtx} {a b : List annot} {v : value} {ρ : EnvStack}
+    {ctl ctl' : Ctl} {σ : Mem} {e' : CoreExpr} {ρ' : EnvStack} {σ' : Mem}
+    (h : Step M (ofValA (.pure a b v), ρ, ctl, σ) (e', ρ', ctl', σ'))
+    (hκ : ctl'.κ = ctl.κ) : False := by
   cases h with
-  | run hj hl hvs => simp at hj
+  | run hj hl hvs => simp [jumpRedex?] at hj
   | pure_eval hnv hv => rw [valueFromPexpr_val] at hnv; cases hnv
-  | call hc hvs hf hlen => simp at hc
-  | ret => exact absurd (congrArg Ctl.κ hctl) (by simp)
+  | call hc hvs hf hlen => simp [callRedex?] at hc
+  | ret => exact absurd hκ (by simp)
 
-/-- The ANNOTATED value's only control-preserving step is REMOVE-ANNOT
-    at a non-empty call stack. -/
-theorem Step.annot_val_inv {M : MachineCtx} {ds : List dyn_annotation} {v : value}
-    {ρ : EnvStack} {ctl ctl' : Ctl} {σ : Mem} {e' : CoreExpr} {ρ' : EnvStack} {σ' : Mem}
-    (h : Step M (Expr [] (Eannot ds (Expr [] (Epure (Pexpr [] () (PEval v))))), ρ, ctl, σ)
-      (e', ρ', ctl', σ')) (hctl : ctl' = ctl) :
-    e' = Expr [] (Epure (Pexpr [] () (PEval v))) ∧ ρ' = ρ ∧ σ' = σ ∧
+/-- The ANNOTATED value's only stack-preserving step is REMOVE-ANNOT at a
+    non-empty call stack: the inner value node verbatim, control untouched. -/
+theorem Step.annot_val_inv {M : MachineCtx} {a a2 b : List annot} {ds : List dyn_annotation}
+    {v : value} {ρ : EnvStack} {ctl ctl' : Ctl} {σ : Mem} {e' : CoreExpr} {ρ' : EnvStack}
+    {σ' : Mem}
+    (h : Step M (ofValA (.annot a a2 b ds v), ρ, ctl, σ) (e', ρ', ctl', σ'))
+    (hκ : ctl'.κ = ctl.κ) :
+    e' = ofValA (.pure a2 b v) ∧ ρ' = ρ ∧ σ' = σ ∧ ctl' = ctl ∧
       ∃ pc κ, ctl.κ = pc :: κ := by
   cases h with
-  | annot_ctx hnj hg hs => exact (Step.pure_val_elim hs rfl).elim
+  | annot_ctx hnj hnc hnv hg hs => rw [toVal_pure_val] at hnv; cases hnv
   | run hj hl hvs => simp [jumpRedex?, annotRooted] at hj
   | call hc hvs hf hlen => simp [callRedex?, annotRooted] at hc
-  | ret_annot => exact ⟨rfl, rfl, rfl, _, _, rfl⟩
+  | ret_annot => exact ⟨rfl, rfl, rfl, rfl, _, _, rfl⟩
 
 theorem Step.toVal_none {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack} {ctl : Ctl} {σ : Mem}
     {out : Config} (hκ : ctl.κ = [])
     (h : Step M (e, ρ, ctl, σ) out) : toVal e = none := by
   cases hv : toVal e with
   | none => rfl
-  | some w => exact absurd (ofVal_of_toVal hv ▸ h) (fun h => h.val_elim hκ)
+  | some w =>
+    obtain ⟨wa, -, rfl⟩ := ofValA_of_toVal hv
+    exact (h.val_elim hκ).elim
+
+theorem Step.toValA_none {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack} {ctl : Ctl} {σ : Mem}
+    {out : Config} (hκ : ctl.κ = [])
+    (h : Step M (e, ρ, ctl, σ) out) : toValA e = none :=
+  toValA_none_of_toVal_none (h.toVal_none hκ)
 
 /-- A stepping tuple is not a Language value: at the empty stack because
     values do not step there, at a non-empty stack by `toValRt`'s
@@ -2482,23 +2846,19 @@ theorem Step.toVal_none {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack} {ctl : C
 theorem Step.toValRt_none {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack} {ctl : Ctl} {σ : Mem}
     {out : Config} (h : Step M (e, ρ, ctl, σ) out) :
     toValRt ⟨e, ρ, ctl, M⟩ = none := by
-  obtain ⟨κ, p, ℓ⟩ := ctl
+  obtain ⟨κ, p, ℓ, lc, sp⟩ := ctl
   cases κ with
-  | nil => rw [toValRt_mk, h.toVal_none rfl]; rfl
+  | nil => rw [toValRt_mk, h.toValA_none rfl]; rfl
   | cons pc κ => rfl
 
 /-! ### The environment stack across steps (calls arc C3) -/
 
 /-- `SameTail ρ ρ'`: `ρ'` has the same frames BELOW THE HEAD as `ρ` — a
     cons-shaped `ρ` yields a cons-shaped `ρ'` with the identical tail.
-    This is the shape every control-preserving step preserves
+    This is the shape every stack-preserving step preserves
     (`Step.sameTail`: `update_env` writes the head frame only,
     Core_aux.lean:868; the call and the return are the two frame
-    writers). It is the invariant the CPS collapse (`wps_sound_cps`,
-    Wps.lean) hands to the caller's continuation: a callee entered at
-    `procEnv params vs :: ρ` finishes at some `ev0' :: ρ`, so RETURN pops
-    back to the caller's `ρ` VERBATIM — the caller's environment is
-    restored as a theorem, not an assumption (design note Q5). -/
+    writers). -/
 def SameTail (ρ ρ' : EnvStack) : Prop :=
   ∀ ev0 evs, ρ = ev0 :: evs → ∃ ev0', ρ' = ev0' :: evs
 
@@ -2514,74 +2874,62 @@ theorem SameTail.cons_inv {ev0 : Fmap sym value} {evs ρ' : EnvStack}
     (h : SameTail (ev0 :: evs) ρ') : ∃ ev0', ρ' = ev0' :: evs :=
   h ev0 evs rfl
 
-/-- A control-preserving step keeps the frames below the head
-    (`Step.env_cons'` in `SameTail` form). -/
+/-- A stack-preserving step keeps the frames below the head. -/
 theorem Step.sameTail {M : MachineCtx} {e e' : CoreExpr} {ρ ρ' : EnvStack}
-    {ctl : Ctl} {σ σ' : Mem}
-    (h : Step M (e, ρ, ctl, σ) (e', ρ', ctl, σ')) : SameTail ρ ρ' :=
-  h.env_cons' rfl
+    {ctl ctl' : Ctl} {σ σ' : Mem}
+    (h : Step M (e, ρ, ctl, σ) (e', ρ', ctl', σ')) (hκ : ctl'.κ = ctl.κ) : SameTail ρ ρ' :=
+  h.env_cons' hκ
 
-/-- THE ENVIRONMENT-DEPTH INVARIANT (the C2 range audit's N-1, stated as
-    a lemma): the environment stack is always deeper than the call
-    stack. The call pushes one frame on each (`Step.call`), the return
-    pops one from each (`Step.ret`), and every other step keeps the env
-    cons-shaped with the same tail (`Step.env_cons'`). Along every run
-    from an entry configuration (`κ = []`, `ρ ≠ []`) this is what
-    excludes RETURN's empty-env panic channel (`failwithI "end of proc,
-    found an empty Core_run env"`, Core_reduction.lean:484, col ≈2276):
-    the mirror's `Step.ret` demands a cons-shaped env, and a value under
-    a frame always has one. -/
+/-- THE ENVIRONMENT-DEPTH INVARIANT: the environment stack is always
+    deeper than the call stack. -/
 theorem Step.env_depth {M : MachineCtx} {e e' : CoreExpr} {ρ ρ' : EnvStack}
     {ctl ctl' : Ctl} {σ σ' : Mem}
     (h : Step M (e, ρ, ctl, σ) (e', ρ', ctl', σ'))
     (hlen : ctl.κ.length < ρ.length) : ctl'.κ.length < ρ'.length := by
-  rcases h.ctl_cases with heq |
+  rcases h.ctl_cases with ⟨a, rfl⟩ |
       ⟨ctx, f, pes, params, body, vs, -, -, -, -, rfl, rfl, rfl, rfl⟩ |
-      ⟨v, ev0, evs, p, ctx, κ, q, ℓ, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
-  · subst heq
-    cases ρ with
+      ⟨a1, b1, v, ev0, evs, p, ctx, κ, q, ℓ, lc, sp, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+  · cases ρ with
     | nil => simp at hlen
     | cons ev0 evs =>
       obtain ⟨ev0', rfl⟩ := h.env_cons' rfl ev0 evs rfl
       simpa using hlen
-  · simp only [List.length_cons]
+  · simp only [Ctl.callPush_κ, List.length_cons]
     omega
   · simp only [List.length_cons] at hlen ⊢
     omega
 
 /-- Inversion at a BARE value under a frame: the step is THE RETURN —
-    the env is cons-shaped, the value is plugged into the saved context,
-    one env frame and the top control frame pop, the caller's procedure
-    is restored, `exec_loc` rides. -/
-theorem Step.ret_inv {M : MachineCtx} {v : value} {ρ : EnvStack}
+    the env is cons-shaped, the value is plugged into the saved context
+    (its pexpr annotations reset by `mk_value_pe`), one env frame and the
+    top control frame pop, the caller's procedure is restored, `exec_loc`
+    and the location ride. -/
+theorem Step.ret_inv {M : MachineCtx} {a b : List annot} {v : value} {ρ : EnvStack}
     {pc : Option sym × context} {κ : List (Option sym × context)}
-    {q : Option sym} {ℓ : exec_location} {σ : Mem} {out : Config}
-    (h : Step M (Expr [] (Epure (Pexpr [] () (PEval v))), ρ, ⟨pc :: κ, q, ℓ⟩, σ) out) :
+    {q : Option sym} {ℓ : exec_location} {lc : CerbLocation.Loc} {sp : RunSup} {σ : Mem}
+    {out : Config}
+    (h : Step M (ofValA (.pure a b v), ρ, ⟨pc :: κ, q, ℓ, lc, sp⟩, σ) out) :
     ∃ ev0 evs, ρ = ev0 :: evs ∧
-      out = (apply_ctx pc.2 (Expr [] (Epure (Pexpr [] () (PEval v)))), evs, ⟨κ, pc.1, ℓ⟩, σ) := by
+      out = (apply_ctx pc.2 (ofValA (.pure a [] v)), evs, ⟨κ, pc.1, ℓ, lc, sp⟩, σ) := by
   obtain ⟨e', ρ', ctl', σ'⟩ := out
-  rcases h.ctl_cases with heq | ⟨ctx, f, pes, _, _, _, hc, -⟩ |
-      ⟨v', ev0, evs, p', ctx', κ', q', ℓ', he, hρ, hctl, he', hρ', hctl', hσ⟩
-  · exact (Step.pure_val_elim h heq).elim
-  · simp at hc
-  · cases he
-    cases hctl
-    exact ⟨ev0, evs, hρ, by rw [he', hρ', hctl', hσ]⟩
+  cases h with
+  | run hj hl hvs => simp [jumpRedex?] at hj
+  | pure_eval hnv hv => rw [valueFromPexpr_val] at hnv; cases hnv
+  | call hc hvs hf hlen => simp [callRedex?] at hc
+  | ret => exact ⟨_, _, rfl, rfl⟩
 
 /-- Inversion at an ANNOTATED value under a frame: the step is
-    REMOVE-ANNOT (the control and env untouched). -/
-theorem Step.ret_annot_inv {M : MachineCtx} {ds : List dyn_annotation} {v : value}
-    {ρ : EnvStack} {ctl : Ctl} {σ : Mem} {out : Config}
-    (h : Step M (Expr [] (Eannot ds (Expr [] (Epure (Pexpr [] () (PEval v))))), ρ, ctl, σ) out) :
-    out = (Expr [] (Epure (Pexpr [] () (PEval v))), ρ, ctl, σ) := by
+    REMOVE-ANNOT (the control and env untouched, the inner node verbatim). -/
+theorem Step.ret_annot_inv {M : MachineCtx} {a a2 b : List annot} {ds : List dyn_annotation}
+    {v : value} {ρ : EnvStack} {ctl : Ctl} {σ : Mem} {out : Config}
+    (h : Step M (ofValA (.annot a a2 b ds v), ρ, ctl, σ) out) :
+    out = (ofValA (.pure a2 b v), ρ, ctl, σ) := by
   obtain ⟨e', ρ', ctl', σ'⟩ := out
-  rcases h.ctl_cases with heq | ⟨ctx, f, pes, _, _, _, hc, -⟩ |
-      ⟨v', _, _, _, _, _, _, _, he, -⟩
-  · subst heq
-    obtain ⟨rfl, rfl, rfl, -⟩ := h.annot_val_inv rfl
-    rfl
-  · simp [callRedex?, annotRooted] at hc
-  · cases he
+  cases h with
+  | annot_ctx hnj hnc hnv hg hs => rw [toVal_pure_val] at hnv; cases hnv
+  | run hj hl hvs => simp [jumpRedex?, annotRooted] at hj
+  | call hc hvs hf hlen => simp [callRedex?, annotRooted] at hc
+  | ret_annot => rfl
 
 /-- Inversion at a store redex (canonical operand instance — the
     certified cone's shape): the step is unique and fully determined
@@ -2598,7 +2946,7 @@ theorem Step.store_inv {M : MachineCtx} {a : List annot} {loc : CerbLocation.Loc
       memValueFromValue M.tagDefs (Ctype [] (unatomic_ ty)) cv = some mv ∧
       applyMemM (CerbMem.storeM M.tagDefs loc ty lk pv mv) σ = some (fp, σ') ∧
       out = (Expr [] (Eannot [DA_pos [] fp]
-              (Expr [] (Epure (Pexpr [] () (PEval Vunit))))), ρ, ctl, σ') := by
+              (Expr [] (Epure (Pexpr [] () (PEval Vunit))))), ρ, ctl.upd a, σ') := by
   cases h with
   | run hj hl hvs => simp at hj
   | call hc hvs hf hlen => simp at hc
@@ -2607,10 +2955,9 @@ theorem Step.store_inv {M : MachineCtx} {a : List annot} {loc : CerbLocation.Loc
     cases hnv
   | store h1 h2 h3 hmv hmem =>
     rw [valueFromPexpr_val] at h1 h2 h3
-    injection h1 with h1; injection h1 with h1
-    injection h2 with h2; injection h2 with h2; injection h2 with h2
-    injection h3 with h3
-    subst h1 h2 h3
+    obtain rfl : ty = _ := by simpa using h1
+    obtain rfl : pv = _ := by simpa using h2
+    obtain rfl : cv = _ := by simpa using h3
     exact ⟨_, _, _, hmv, hmem, rfl⟩
 
 /-- Inversion at a load redex (canonical operand instance). -/
@@ -2621,21 +2968,20 @@ theorem Step.load_inv {M : MachineCtx} {a : List annot} {loc : CerbLocation.Loc}
     (h : Step M (Expr a (Eaction (Paction polarity.Pos (Action loc ann
             (Load0 (Pexpr [] () (PEval (Vctype ty)))
                    (Pexpr [] () (PEval (Vobject (OVpointer pv)))) mo)))), ρ, ctl, σ)
-          out) :
+      out) :
     ∃ fp mval σ',
       applyMemM (CerbMem.loadM M.tagDefs loc ty pv) σ = some ((fp, mval), σ') ∧
       out = (Expr [] (Eannot [DA_pos [] fp]
               (Expr [] (Epure (Pexpr [] () (PEval
-                (valueFromMemValue mval).2))))), ρ, ctl, σ') := by
+                (valueFromMemValue mval).2))))), ρ, ctl.upd a, σ') := by
   cases h with
   | run hj hl hvs => simp at hj
   | call hc hvs hf hlen => simp at hc
   | load_eval hnv2 hv2 => rw [valueFromPexpr_val] at hnv2; cases hnv2
   | load h1 h2 hmem =>
     rw [valueFromPexpr_val] at h1 h2
-    injection h1 with h1; injection h1 with h1
-    injection h2 with h2; injection h2 with h2; injection h2 with h2
-    subst h1 h2
+    obtain rfl : ty = _ := by simpa using h1
+    obtain rfl : pv = _ := by simpa using h2
     exact ⟨_, _, _, hmem, rfl⟩
 
 /-- Inversion at a create redex (canonical operand instance). -/
@@ -2647,42 +2993,58 @@ theorem Step.create_inv {M : MachineCtx} {a : List annot} {loc : CerbLocation.Lo
             (Create (Pexpr [] () (PEval (Vobject (OVinteger align))))
                     (Pexpr [] () (PEval (Vctype ty))) pref)))), ρ, ctl, σ) out) :
     ∃ pv σ',
-      applyMemM (CerbMem.allocateObject M.tagDefs 0 pref align ty none none) σ =
-        some (pv, σ') ∧
-      out = (Expr [] (Epure (Pexpr [] () (PEval (Vobject (OVpointer pv))))), ρ, ctl, σ') := by
+      applyMemM (CerbMem.allocateObject M.tagDefs 0 pref align ty none none) σ = some (pv, σ') ∧
+      out = (Expr [] (Epure (Pexpr [] () (PEval (Vobject (OVpointer pv))))), ρ, ctl.upd a, σ') := by
   cases h with
   | run hj hl hvs => simp at hj
   | call hc hvs hf hlen => simp at hc
+  | create_eval hnv hv1 hv2 =>
+    rw [valueFromPexprs_pair, valueFromPexpr_val, valueFromPexpr_val] at hnv
+    cases hnv
   | create h1 h2 hmem =>
     rw [valueFromPexpr_val] at h1 h2
-    injection h1 with h1; injection h1 with h1; injection h1 with h1
-    injection h2 with h2; injection h2 with h2
-    subst h1 h2
+    obtain rfl : align = _ := by simpa using h1
+    obtain rfl : ty = _ := by simpa using h2
     exact ⟨_, _, hmem, rfl⟩
 
-/-- Inversion at a kill redex (canonical operand instance, kill/free
-    arc K2): the step is unique and fully determined by `killM`; the
-    env is returned verbatim. -/
+/-- E1: inversion at a create whose operands are NOT all values: the
+    ACTION_EVAL step (the alloc/store twin). -/
+theorem Step.create_op_inv {M : MachineCtx} {a : List annot}
+    {loc : CerbLocation.Loc} {ann : core_run_annotation}
+    {pe1 pe2 : generic_pexpr Unit sym} {pref : prefix0}
+    {ρ : EnvStack} {ctl : Ctl} {σ : Mem} {out : Config}
+    (hnv : valueFromPexprs [pe1, pe2] = none)
+    (h : Step M (Expr a (Eaction (Paction polarity.Pos (Action loc ann
+            (Create pe1 pe2 pref)))), ρ, ctl, σ) out) :
+    ∃ align ty, evalPexpr M.tagDefs M.extern ρ pe1 = some (Vobject (OVinteger align)) ∧
+      evalPexpr M.tagDefs M.extern ρ pe2 = some (Vctype ty) ∧
+      out = (Expr a (Eaction (Paction polarity.Pos (Action loc ann
+        (Create (Pexpr [] () (PEval (Vobject (OVinteger align))))
+                (Pexpr [] () (PEval (Vctype ty))) pref)))), ρ, ctl.upd a, σ) := by
+  cases h with
+  | run hj hl hvs => simp at hj
+  | call hc hvs hf hlen => simp at hc
+  | create h1 h2 hmem => rw [valueFromPexprs_pair, h1, h2] at hnv; cases hnv
+  | create_eval hnv' hv1 hv2 => exact ⟨_, _, hv1, hv2, rfl⟩
+
+/-- Inversion at a kill redex of either kind (canonical operand instance). -/
 theorem Step.kill_inv {M : MachineCtx} {a : List annot} {loc : CerbLocation.Loc}
     {ann : core_run_annotation} {kind : kill_kind} {pv : CerbMem.PointerValue}
     {ρ : EnvStack} {ctl : Ctl} {σ : Mem} {out : Config}
     (h : Step M (Expr a (Eaction (Paction polarity.Pos (Action loc ann
             (Kill kind (Pexpr [] () (PEval (Vobject (OVpointer pv)))))))), ρ, ctl, σ) out) :
-    ∃ σ',
-      applyMemM (CerbMem.killM loc (is_dynamic kind) pv) σ = some ((), σ') ∧
-      out = (Expr [] (Epure (Pexpr [] () (PEval Vunit))), ρ, ctl, σ') := by
+    ∃ σ', applyMemM (CerbMem.killM loc (is_dynamic kind) pv) σ = some ((), σ') ∧
+      out = (Expr [] (Epure (Pexpr [] () (PEval Vunit))), ρ, ctl.upd a, σ') := by
   cases h with
   | run hj hl hvs => simp at hj
   | call hc hvs hf hlen => simp at hc
   | kill_eval hnv hv => rw [valueFromPexpr_val] at hnv; cases hnv
   | kill h1 hmem =>
     rw [valueFromPexpr_val] at h1
-    injection h1 with h1; injection h1 with h1; injection h1 with h1
-    subst h1
+    obtain rfl : pv = _ := by simpa using h1
     exact ⟨_, hmem, rfl⟩
 
-/-- Inversion at a positive kill whose pointer operand is NOT a value:
-    the ACTION_EVAL step to a POINTER value. -/
+/-- Inversion at a kill whose operand is NOT a value: the ACTION_EVAL step. -/
 theorem Step.kill_op_inv {M : MachineCtx} {a : List annot}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {kind : kill_kind}
     {pe : generic_pexpr Unit sym}
@@ -2692,16 +3054,14 @@ theorem Step.kill_op_inv {M : MachineCtx} {a : List annot}
             (Kill kind pe)))), ρ, ctl, σ) out) :
     ∃ pv, evalPexpr M.tagDefs M.extern ρ pe = some (Vobject (OVpointer pv)) ∧
       out = (Expr a (Eaction (Paction polarity.Pos (Action loc ann
-        (Kill kind (Pexpr [] () (PEval (Vobject (OVpointer pv)))))))), ρ, ctl, σ) := by
+        (Kill kind (Pexpr [] () (PEval (Vobject (OVpointer pv)))))))), ρ, ctl.upd a, σ) := by
   cases h with
   | run hj hl hvs => simp at hj
   | call hc hvs hf hlen => simp at hc
   | kill h1 hmem => rw [hnv] at h1; cases h1
   | kill_eval hnv' hv => exact ⟨_, hv, rfl⟩
 
-/-- Inversion at an alloc redex (canonical operand instance, kill/free
-    arc K3): the step is unique and fully determined by
-    `allocateRegion`; the env is returned verbatim. -/
+/-- Inversion at an alloc redex (canonical operand instance). -/
 theorem Step.alloc_inv {M : MachineCtx} {a : List annot} {loc : CerbLocation.Loc}
     {ann : core_run_annotation} {align size : CerbMem.IntegerValue}
     {pref : prefix0} {ρ : EnvStack} {ctl : Ctl} {σ : Mem}
@@ -2711,7 +3071,7 @@ theorem Step.alloc_inv {M : MachineCtx} {a : List annot} {loc : CerbLocation.Loc
                     (Pexpr [] () (PEval (Vobject (OVinteger size)))) pref)))), ρ, ctl, σ) out) :
     ∃ pv σ',
       applyMemM (CerbMem.allocateRegion 0 pref align size) σ = some (pv, σ') ∧
-      out = (Expr [] (Epure (Pexpr [] () (PEval (Vobject (OVpointer pv))))), ρ, ctl, σ') := by
+      out = (Expr [] (Epure (Pexpr [] () (PEval (Vobject (OVpointer pv))))), ρ, ctl.upd a, σ') := by
   cases h with
   | run hj hl hvs => simp at hj
   | call hc hvs hf hlen => simp at hc
@@ -2720,13 +3080,12 @@ theorem Step.alloc_inv {M : MachineCtx} {a : List annot} {loc : CerbLocation.Loc
     cases hnv
   | alloc h1 h2 hmem =>
     rw [valueFromPexpr_val] at h1 h2
-    injection h1 with h1; injection h1 with h1; injection h1 with h1
-    injection h2 with h2; injection h2 with h2; injection h2 with h2
-    subst h1 h2
+    obtain rfl : align = _ := by simpa using h1
+    obtain rfl : size = _ := by simpa using h2
     exact ⟨_, _, hmem, rfl⟩
 
-/-- Inversion at a positive alloc whose operands are NOT all values:
-    the ACTION_EVAL step to INTEGER values. -/
+/-- Inversion at an alloc whose operands are NOT all values: the
+    ACTION_EVAL step. -/
 theorem Step.alloc_op_inv {M : MachineCtx} {a : List annot}
     {loc : CerbLocation.Loc} {ann : core_run_annotation}
     {pe1 pe2 : generic_pexpr Unit sym} {pref : prefix0}
@@ -2738,70 +3097,73 @@ theorem Step.alloc_op_inv {M : MachineCtx} {a : List annot}
       evalPexpr M.tagDefs M.extern ρ pe2 = some (Vobject (OVinteger size)) ∧
       out = (Expr a (Eaction (Paction polarity.Pos (Action loc ann
         (Alloc0 (Pexpr [] () (PEval (Vobject (OVinteger align))))
-                (Pexpr [] () (PEval (Vobject (OVinteger size)))) pref)))), ρ, ctl, σ) := by
+                (Pexpr [] () (PEval (Vobject (OVinteger size)))) pref)))), ρ, ctl.upd a, σ) := by
   cases h with
   | run hj hl hvs => simp at hj
   | call hc hvs hf hlen => simp at hc
   | alloc h1 h2 hmem => rw [valueFromPexprs_pair, h1, h2] at hnv; cases hnv
   | alloc_eval hnv' hv1 hv2 => exact ⟨_, _, hv1, hv2, rfl⟩
 
-/-! ### THE JUMP-REDEX INVERSION PAIR (probe Toy.lean
-`step_jump_inv`/`step_of_jumpRedex`, now on Core — the semantic
-cash-in of context-independence: at a jump redex EVERY step is THE
-jump and its successor does not depend on the decomposition; the
-congruence guards make this a one-level `cases`). -/
+/-! ### THE JUMP-REDEX INVERSION PAIR -/
 
+/-- Inversion at a configuration whose spine hole is an `Erun`: the step
+    is THE GLOBAL JUMP, its successor determined by the label map, the
+    argument values and the redex node's location (`redexAnnots e`) — by
+    induction on the step: no congruence rule frames a jump (`hnj`). -/
 theorem Step.jump_inv {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack} {ctl : Ctl} {σ : Mem}
-    {out : Config} {l : sym}
-    {pes : List (generic_pexpr Unit sym)}
-    (hj : jumpRedex? e = some (l, pes))
+    {l : sym} {pes : List (generic_pexpr Unit sym)} {out : Config}
+    (hj0 : jumpRedex? e = some (l, pes))
     (h : Step M (e, ρ, ctl, σ) out) :
     ∃ params cont vs ev0 evs, ρ = ev0 :: evs ∧
       lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) ∧
       evalPexprs M.tagDefs M.extern ρ pes = some vs ∧
-      out = (cont, bindArgs params vs ρ, ctl, σ) := by
+      out = (cont, bindArgs params vs ρ, ctl.upd (redexAnnots e), σ) := by
   cases h with
-  | run hj' hl hvs =>
-    obtain ⟨rfl, rfl⟩ : l = _ ∧ pes = _ := by
-      have := hj.symm.trans hj'
-      exact ⟨(Prod.mk.injEq _ _ _ _ ▸ Option.some.inj this).1,
-        (Prod.mk.injEq _ _ _ _ ▸ Option.some.inj this).2⟩
+  | store h1 h2 h3 hmv hmem => simp [jumpRedex?, annotRooted] at hj0
+  | load h1 h2 hmem => simp [jumpRedex?, annotRooted] at hj0
+  | create h1 h2 hmem => simp [jumpRedex?, annotRooted] at hj0
+  | alloc h1 h2 hmem => simp [jumpRedex?, annotRooted] at hj0
+  | kill h1 hmem => simp [jumpRedex?, annotRooted] at hj0
+  | sseq_pure => simp [jumpRedex?, annotRooted] at hj0
+  | sseq_annot => simp [jumpRedex?, annotRooted] at hj0
+  | wseq_pure => simp [jumpRedex?, annotRooted] at hj0
+  | wseq_annot => simp [jumpRedex?, annotRooted] at hj0
+  | sseq_spec_pure => simp [jumpRedex?, annotRooted] at hj0
+  | sseq_spec_annot => simp [jumpRedex?, annotRooted] at hj0
+  | pure_eval hnv hv => simp [jumpRedex?, annotRooted] at hj0
+  | load_eval hnv2 hv2 => simp [jumpRedex?, annotRooted] at hj0
+  | sseq_ctx hnj hnc hnv hs => rw [jumpRedex?_sseq, hnj] at hj0; cases hj0
+  | wseq_ctx hnj hnc hnv hs => rw [jumpRedex?_wseq, hnj] at hj0; cases hj0
+  | annot_ctx hnj hnc hnv hg hs => rw [jumpRedex?_annot_of_not_root _ _ hg, hnj] at hj0; cases hj0
+  | bound_ctx hnj hnc hnv hs => rw [jumpRedex?_bound, hnj] at hj0; cases hj0
+  | bound_pure => simp [jumpRedex?, annotRooted] at hj0
+  | bound_annot => simp [jumpRedex?, annotRooted] at hj0
+  | annot_merge => simp [jumpRedex?, annotRooted] at hj0
+  | run hj hl hvs =>
+    rw [hj] at hj0
+    obtain ⟨rfl, rfl⟩ : _ ∧ _ := by
+      have := Option.some.inj hj0
+      exact ⟨congrArg Prod.fst this, congrArg Prod.snd this⟩
     exact ⟨_, _, _, _, _, rfl, hl, hvs, rfl⟩
-  | store h1 h2 h3 hmv hmem => simp at hj
-  | load h1 h2 hmem => simp at hj
-  | create h1 h2 hmem => simp at hj
-  | kill h1 hmem => simp at hj
-  | kill_eval hnv hv => simp at hj
-  | sseq_pure => rw [jumpRedex?_sseq, jumpRedex?_ofVal] at hj; cases hj
-  | sseq_annot => rw [jumpRedex?_sseq, jumpRedex?_ofVal] at hj; cases hj
-  | wseq_pure => rw [jumpRedex?_wseq, jumpRedex?_ofVal] at hj; cases hj
-  | wseq_annot => rw [jumpRedex?_wseq, jumpRedex?_ofVal] at hj; cases hj
-  | sseq_spec_pure => rw [jumpRedex?_sseq, jumpRedex?_ofVal] at hj; cases hj
-  | sseq_spec_annot => rw [jumpRedex?_sseq, jumpRedex?_ofVal] at hj; cases hj
-  | pure_eval hnv hv => simp at hj
-  | load_eval hnv2 hv2 => simp at hj
-  | sseq_ctx hnj hs => rw [jumpRedex?_sseq, hnj] at hj; cases hj
-  | wseq_ctx hnj hs => rw [jumpRedex?_wseq, hnj] at hj; cases hj
-  | annot_ctx hnj hg hs => rw [jumpRedex?_annot_of_not_root _ _ hg, hnj] at hj; cases hj
-  | annot_merge =>
-    rw [jumpRedex?_annot_of_root _ _ (by rfl)] at hj; cases hj
-  | save hvals => simp [jumpRedex?] at hj
-  | save_eval hnv hvals => simp [jumpRedex?] at hj
-  | if_true hg => simp [jumpRedex?] at hj
-  | if_false hg => simp [jumpRedex?] at hj
-  | case_value hv hsel => simp [jumpRedex?] at hj
-  | sseq_sym_pure => rw [jumpRedex?_sseq, jumpRedex?_ofVal] at hj; cases hj
-  | memop_ptreq h1 h2 hmem => simp at hj
-  | memop_eval hnv hv1 hv2 => simp at hj
-  | store_eval hnv hv2 hv3 => simp at hj
-  | alloc h1 h2 hmem => simp at hj
-  | alloc_eval hnv hv1 hv2 => simp at hj
-  | call hc hvs hf hlen => rw [callRedex?_none_of_jumpRedex?_some hj] at hc; cases hc
-  | ret => simp at hj
-  | ret_annot => simp [jumpRedex?, annotRooted] at hj
+  | save hvals => simp [jumpRedex?, annotRooted] at hj0
+  | save_eval hnv hvals => simp [jumpRedex?, annotRooted] at hj0
+  | if_true hg => simp [jumpRedex?, annotRooted] at hj0
+  | if_false hg => simp [jumpRedex?, annotRooted] at hj0
+  | case_value hv hsel => simp [jumpRedex?, annotRooted] at hj0
+  | sseq_sym_pure => simp [jumpRedex?, annotRooted] at hj0
+  | sseq_sym_annot => simp [jumpRedex?, annotRooted] at hj0
+  | memop_ptreq h1 h2 hmem => simp [jumpRedex?, annotRooted] at hj0
+  | memop_eval hnv hv1 hv2 => simp [jumpRedex?, annotRooted] at hj0
+  | store_eval hnv hv2 hv3 => simp [jumpRedex?, annotRooted] at hj0
+  | kill_eval hnv hv => simp [jumpRedex?, annotRooted] at hj0
+  | alloc_eval hnv hv1 hv2 => simp [jumpRedex?, annotRooted] at hj0
+  | create_eval hnv hv1 hv2 => simp [jumpRedex?, annotRooted] at hj0
+  | call hc hvs hf hlen => rw [callRedex?_none_of_jumpRedex?_some hj0] at hc; cases hc
+  | ret => simp [jumpRedex?, annotRooted] at hj0
+  | ret_annot => simp [jumpRedex?, annotRooted] at hj0
 
-/-- Reducibility at a registered jump redex (the probe's
-    `step_of_jumpRedex`). -/
+/-- Reducibility at a jump redex whose label resolves and whose
+    arguments evaluate. -/
 theorem Step.run_of_jumpRedex {M : MachineCtx} {e : CoreExpr} {l : sym}
     {pes : List (generic_pexpr Unit sym)}
     {params : List (sym × core_base_type)} {cont : CoreExpr} {vs : List value}
@@ -2809,31 +3171,40 @@ theorem Step.run_of_jumpRedex {M : MachineCtx} {e : CoreExpr} {l : sym}
     (hj : jumpRedex? e = some (l, pes))
     (hl : lookupLabel (M.labelsAt ctl.proc) l = some (params, cont))
     (hvs : evalPexprs M.tagDefs M.extern (ev0 :: evs) pes = some vs) :
-    Step M (e, ev0 :: evs, ctl, σ) (cont, bindArgs params vs (ev0 :: evs), ctl, σ) :=
+    Step M (e, ev0 :: evs, ctl, σ)
+      (cont, bindArgs params vs (ev0 :: evs), ctl.upd (redexAnnots e), σ) :=
   Step.run hj hl hvs
 
 /-- A CALL step of `e` seen from a node whose frame is `fr` (calls arc
     C2): the redex `callRedex? e = some (ctx, f, pes)` under the frame,
     the arguments evaluated at the CURRENT env, the callee found with
     the right arity, and the successor at the pushed control — the
-    captured context is the frame applied to the redex's own context
-    (`Csseq a pat · e2` at an `Esseq` node, `Cwseq …`, `Cannot a ds ·`),
-    exactly get_ctx's outside-in construction. One disjunct of each
-    frame inversion below; `fr := id` at the root. -/
+    captured context is the frame applied to the redex's own context,
+    exactly get_ctx's outside-in construction; E1: the location written
+    from the `Eproc` node (`redexAnnots e`, the same node seen from the
+    frame). -/
 def Step.CallOf (M : MachineCtx) (e : CoreExpr) (fr : context → context)
     (ρ : EnvStack) (ctl : Ctl) (σ : Mem) (out : Config) : Prop :=
   ∃ ctx f pes params body vs, callRedex? e = some (ctx, f, pes) ∧
     evalPexprs M.tagDefs M.extern ρ pes = some vs ∧
     lookupProc M.file M.extern f = some (params, body) ∧ params.length = vs.length ∧
-    out = (body, procEnv params vs :: ρ,
-      ⟨(ctl.proc, fr ctx) :: ctl.κ, some f, push_exec_loc f M.currentLoc ctl.execLoc⟩, σ)
+    out = (body, procEnv params vs :: ρ, ctl.callPush (redexAnnots e) (fr ctx) f, σ)
 
-/-- A `CallOf` successor never sits at the source control. -/
-theorem Step.CallOf.ne_same_ctl {M : MachineCtx} {e : CoreExpr} {fr : context → context}
-    {ρ : EnvStack} {ctl : Ctl} {σ : Mem} {e' : CoreExpr} {ρ' : EnvStack} {σ' : Mem}
-    (h : Step.CallOf M e fr ρ ctl σ (e', ρ', ctl, σ')) : False := by
+/-- A `CallOf` successor never keeps the call stack. -/
+theorem Step.CallOf.ne_same_κ {M : MachineCtx} {e : CoreExpr} {fr : context → context}
+    {ρ : EnvStack} {ctl ctl' : Ctl} {σ : Mem} {e' : CoreExpr} {ρ' : EnvStack} {σ' : Mem}
+    (h : Step.CallOf M e fr ρ ctl σ (e', ρ', ctl', σ')) (hκ : ctl'.κ = ctl.κ) : False := by
   obtain ⟨_, _, _, _, _, _, -, -, -, -, hout⟩ := h
-  exact absurd (congrArg (fun c : Config => c.2.2.1.κ) hout) (by simp)
+  have := congrArg (fun c : Config => c.2.2.1.κ) hout
+  simp at this
+  rw [this] at hκ
+  exact absurd hκ (by simp)
+
+theorem Step.CallOf.ne_upd {M : MachineCtx} {e : CoreExpr} {fr : context → context}
+    {ρ : EnvStack} {ctl : Ctl} {σ : Mem} {e' : CoreExpr} {ρ' : EnvStack} {σ' : Mem}
+    {a : List annot}
+    (h : Step.CallOf M e fr ρ ctl σ (e', ρ', ctl.upd a, σ')) : False :=
+  h.ne_same_κ rfl
 
 /-- A `CallOf` witness names a call redex of `e`. -/
 theorem Step.CallOf.callRedex?_some {M : MachineCtx} {e : CoreExpr} {fr : context → context}
@@ -2843,153 +3214,244 @@ theorem Step.CallOf.callRedex?_some {M : MachineCtx} {e : CoreExpr} {fr : contex
   obtain ⟨ctx, f, pes, _, _, _, hc, -⟩ := h
   exact ⟨ctx, f, pes, hc⟩
 
-/-- Inversion at an Esseq node (S3 form): a frame step of a
-    NON-jump-redex, non-value e1, one of the betas, THE GLOBAL JUMP
-    (frame discarded — the successor is e1's own jump successor), or
-    (C2) THE CALL of e1 with the `Csseq` frame CAPTURED. The frame
-    case's `jumpRedex? e1 = none`/`toVal e1 = none` are the congruence
-    guards surfacing; the jump disjunct is the readiness's "factor
-    theorem gains one disjunct" at the Esseq node; the call disjunct is
-    C2's third context discipline. -/
+/-- The call rule seen from a frame: `Step.call` at the framed node IS
+    `CallOf` of the body (the frame's context is the redex's context
+    under the frame; the redex node is the body's). -/
+theorem Step.callOf_of_call_sseq {M : MachineCtx} {a : List annot} {pat : pattern}
+    {e1 e2 : CoreExpr} {ctx : context} {f : sym} {pes : List (generic_pexpr Unit sym)}
+    {params : List (sym × core_base_type)} {body : CoreExpr} {vs : List value}
+    {ρ : EnvStack} {ctl : Ctl} {σ : Mem}
+    (hc : callRedex? (Expr a (Esseq pat e1 e2)) = some (ctx, f, pes))
+    (hvs : evalPexprs M.tagDefs M.extern ρ pes = some vs)
+    (hf : lookupProc M.file M.extern f = some (params, body))
+    (hlen : params.length = vs.length) :
+    Step.CallOf M e1 (fun c => Csseq a pat c e2) ρ ctl σ
+      (body, procEnv params vs :: ρ,
+       ctl.callPush (redexAnnots (Expr a (Esseq pat e1 e2))) ctx f, σ) := by
+  rw [callRedex?_sseq, Option.map_eq_some_iff] at hc
+  obtain ⟨⟨ctx1, f1, pes1⟩, hc1, hq⟩ := hc
+  obtain ⟨rfl, rfl, rfl⟩ : _ ∧ _ ∧ _ := by
+    exact ⟨congrArg Prod.fst hq, congrArg (fun q => q.2.1) hq,
+      congrArg (fun q => q.2.2) hq⟩
+  refine ⟨ctx1, f1, pes1, _, _, _, hc1, hvs, hf, hlen, ?_⟩
+  rw [redexAnnots_sseq_of_nv _ _ _ (toVal_none_of_callRedex?_some hc1)]
+
+/-- Inversion at an Esseq node: a frame step of a non-jump, non-call,
+    non-value e1 (a general-arm step, its control write threaded), one of
+    the betas (at ANY value annotations), THE GLOBAL JUMP (frame
+    discarded), or THE CALL of e1 with the `Csseq` frame CAPTURED. -/
 theorem Step.sseq_inv {M : MachineCtx} {a : List annot} {pat : pattern}
     {e1 e2 : CoreExpr}
     {ρ : EnvStack} {ctl : Ctl} {σ : Mem} {out : Config}
     (h : Step M (Expr a (Esseq pat e1 e2), ρ, ctl, σ) out) :
-    (∃ e1' ρ' σ', jumpRedex? e1 = none ∧ toVal e1 = none ∧
-        Step M (e1, ρ, ctl, σ) (e1', ρ', ctl, σ') ∧
-        out = (Expr a (Esseq pat e1' e2), ρ', ctl, σ')) ∨
-    (∃ pa bty v ev0 evs, pat = Pattern pa (CaseBase (none, bty)) ∧
-        e1 = ofVal (.pure v) ∧ ρ = ev0 :: evs ∧ out = (e2, ρ, ctl, σ)) ∨
-    (∃ pa bty ds v ev0 evs, pat = Pattern pa (CaseBase (none, bty)) ∧
-        e1 = ofVal (.annot ds v) ∧ ρ = ev0 :: evs ∧
-        out = (Expr [] (Eannot ds e2), ρ, ctl, σ)) ∨
+    (∃ e1' ρ' ctl' σ', jumpRedex? e1 = none ∧ callRedex? e1 = none ∧ toVal e1 = none ∧
+        Step M (e1, ρ, ctl, σ) (e1', ρ', ctl', σ') ∧
+        out = (Expr a (Esseq pat e1' e2), ρ', ctl', σ')) ∨
+    (∃ pa bty a1 b1 v ev0 evs, pat = Pattern pa (CaseBase (none, bty)) ∧
+        e1 = ofValA (.pure a1 b1 v) ∧ ρ = ev0 :: evs ∧ out = (e2, ρ, ctl.upd a, σ)) ∨
+    (∃ pa bty a1 a2 b1 ds v ev0 evs, pat = Pattern pa (CaseBase (none, bty)) ∧
+        e1 = ofValA (.annot a1 a2 b1 ds v) ∧ ρ = ev0 :: evs ∧
+        out = (Expr [] (Eannot ds e2), ρ, ctl.upd a, σ)) ∨
     (∃ l pes params cont vs ev0 evs, jumpRedex? e1 = some (l, pes) ∧
         ρ = ev0 :: evs ∧ lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) ∧
         evalPexprs M.tagDefs M.extern ρ pes = some vs ∧
-        out = (cont, bindArgs params vs ρ, ctl, σ)) ∨
-    (∃ pa' pb' x bty' ov ev0 evs, pat = specPat pa' pb' x bty' ∧
-        e1 = ofVal (.pure (Vloaded (LVspecified ov))) ∧ ρ = ev0 :: evs ∧
+        out = (cont, bindArgs params vs ρ, ctl.upd (redexAnnots e1), σ)) ∨
+    (∃ pa' pb' x bty' a1 b1 ov ev0 evs, pat = specPat pa' pb' x bty' ∧
+        e1 = ofValA (.pure a1 b1 (Vloaded (LVspecified ov))) ∧ ρ = ev0 :: evs ∧
         out = (e2, update_env (specPat pa' pb' x bty')
-          (Vloaded (LVspecified ov)) ρ, ctl, σ)) ∨
-    (∃ pa' pb' x bty' ds ov ev0 evs, pat = specPat pa' pb' x bty' ∧
-        e1 = ofVal (.annot ds (Vloaded (LVspecified ov))) ∧ ρ = ev0 :: evs ∧
+          (Vloaded (LVspecified ov)) ρ, ctl.upd a, σ)) ∨
+    (∃ pa' pb' x bty' a1 a2 b1 ds ov ev0 evs, pat = specPat pa' pb' x bty' ∧
+        e1 = ofValA (.annot a1 a2 b1 ds (Vloaded (LVspecified ov))) ∧ ρ = ev0 :: evs ∧
         out = (Expr [] (Eannot ds e2), update_env (specPat pa' pb' x bty')
-          (Vloaded (LVspecified ov)) ρ, ctl, σ)) ∨
-    (∃ pa' x bty' v ev0 evs, pat = symPat pa' x bty' ∧
-        e1 = ofVal (.pure v) ∧ ρ = ev0 :: evs ∧
-        out = (e2, update_env (symPat pa' x bty') v ρ, ctl, σ)) ∨
+          (Vloaded (LVspecified ov)) ρ, ctl.upd a, σ)) ∨
+    (∃ pa' x bty' a1 b1 v ev0 evs, pat = symPat pa' x bty' ∧
+        e1 = ofValA (.pure a1 b1 v) ∧ ρ = ev0 :: evs ∧
+        out = (e2, update_env (symPat pa' x bty') v ρ, ctl.upd a, σ)) ∨
+    (∃ pa' x bty' a1 a2 b1 ds v ev0 evs, pat = symPat pa' x bty' ∧
+        e1 = ofValA (.annot a1 a2 b1 ds v) ∧ ρ = ev0 :: evs ∧
+        out = (Expr [] (Eannot ds e2), update_env (symPat pa' x bty') v ρ, ctl.upd a, σ)) ∨
     Step.CallOf M e1 (fun c => Csseq a pat c e2) ρ ctl σ out := by
   cases h with
-  | sseq_ctx hnj hnv hs => exact .inl ⟨_, _, _, hnj, hnv, hs, rfl⟩
-  | sseq_pure => exact .inr (.inl ⟨_, _, _, _, _, rfl, rfl, rfl, rfl⟩)
-  | sseq_annot => exact .inr (.inr (.inl ⟨_, _, _, _, _, _, rfl, rfl, rfl, rfl⟩))
+  | sseq_ctx hnj hnc hnv hs => exact .inl ⟨_, _, _, _, hnj, hnc, hnv, hs, rfl⟩
+  | sseq_pure => exact .inr (.inl ⟨_, _, _, _, _, _, _, rfl, rfl, rfl, rfl⟩)
+  | sseq_annot => exact .inr (.inr (.inl ⟨_, _, _, _, _, _, _, _, _, rfl, rfl, rfl, rfl⟩))
   | run hj hl hvs =>
     rw [jumpRedex?_sseq] at hj
-    exact .inr (.inr (.inr (.inl ⟨_, _, _, _, _, _, _, hj, rfl, hl, hvs, rfl⟩)))
+    refine .inr (.inr (.inr (.inl ⟨_, _, _, _, _, _, _, hj, rfl, hl, hvs, ?_⟩)))
+    rw [redexAnnots_sseq_of_nv _ _ _ (toVal_none_of_jumpRedex?_some hj)]
   | sseq_spec_pure =>
     exact .inr (.inr (.inr (.inr (.inl
-      ⟨_, _, _, _, _, _, _, rfl, rfl, rfl, rfl⟩))))
+      ⟨_, _, _, _, _, _, _, _, _, rfl, rfl, rfl, rfl⟩))))
   | sseq_spec_annot =>
     exact .inr (.inr (.inr (.inr (.inr (.inl
-      ⟨_, _, _, _, _, _, _, _, rfl, rfl, rfl, rfl⟩)))))
+      ⟨_, _, _, _, _, _, _, _, _, _, _, rfl, rfl, rfl, rfl⟩)))))
   | sseq_sym_pure =>
     exact .inr (.inr (.inr (.inr (.inr (.inr (.inl
-      ⟨_, _, _, _, _, _, rfl, rfl, rfl, rfl⟩))))))
+      ⟨_, _, _, _, _, _, _, _, rfl, rfl, rfl, rfl⟩))))))
+  | sseq_sym_annot =>
+    exact .inr (.inr (.inr (.inr (.inr (.inr (.inr (.inl
+      ⟨_, _, _, _, _, _, _, _, _, _, rfl, rfl, rfl, rfl⟩)))))))
   | call hc hvs hf hlen =>
-    rw [callRedex?_sseq, Option.map_eq_some_iff] at hc
-    obtain ⟨⟨ctx1, f1, pes1⟩, hc1, hq⟩ := hc
-    obtain ⟨rfl, rfl, rfl⟩ : _ ∧ _ ∧ _ := by
-      exact ⟨congrArg Prod.fst hq, congrArg (fun q => q.2.1) hq,
-        congrArg (fun q => q.2.2) hq⟩
-    exact .inr (.inr (.inr (.inr (.inr (.inr (.inr
-      ⟨ctx1, f1, pes1, _, _, _, hc1, hvs, hf, hlen, rfl⟩))))))
+    exact .inr (.inr (.inr (.inr (.inr (.inr (.inr (.inr
+      (Step.callOf_of_call_sseq hc hvs hf hlen))))))))
 
-/-- Inversion at an Ewseq node (S1b DRIFT TEST — the wildcard-only
-    `sseq_inv` shape): a frame step of a non-jump-redex, non-value e1,
-    one of the two wildcard betas, THE GLOBAL JUMP (frame discarded), or
-    (C2) THE CALL of e1 with the `Cwseq` frame captured. Only the
-    wildcard pattern has beta rules (the mirrored Ewseq fragment —
-    spec/sym binder patterns remain outside, README registered
-    divergences). -/
+theorem Step.callOf_of_call_wseq {M : MachineCtx} {a : List annot} {pat : pattern}
+    {e1 e2 : CoreExpr} {ctx : context} {f : sym} {pes : List (generic_pexpr Unit sym)}
+    {params : List (sym × core_base_type)} {body : CoreExpr} {vs : List value}
+    {ρ : EnvStack} {ctl : Ctl} {σ : Mem}
+    (hc : callRedex? (Expr a (Ewseq pat e1 e2)) = some (ctx, f, pes))
+    (hvs : evalPexprs M.tagDefs M.extern ρ pes = some vs)
+    (hf : lookupProc M.file M.extern f = some (params, body))
+    (hlen : params.length = vs.length) :
+    Step.CallOf M e1 (fun c => Cwseq a pat c e2) ρ ctl σ
+      (body, procEnv params vs :: ρ,
+       ctl.callPush (redexAnnots (Expr a (Ewseq pat e1 e2))) ctx f, σ) := by
+  rw [callRedex?_wseq, Option.map_eq_some_iff] at hc
+  obtain ⟨⟨ctx1, f1, pes1⟩, hc1, hq⟩ := hc
+  obtain ⟨rfl, rfl, rfl⟩ : _ ∧ _ ∧ _ := by
+    exact ⟨congrArg Prod.fst hq, congrArg (fun q => q.2.1) hq,
+      congrArg (fun q => q.2.2) hq⟩
+  refine ⟨ctx1, f1, pes1, _, _, _, hc1, hvs, hf, hlen, ?_⟩
+  rw [redexAnnots_wseq_of_nv _ _ _ (toVal_none_of_callRedex?_some hc1)]
+
+/-- Inversion at an Ewseq node (the wildcard-only `sseq_inv` shape). -/
 theorem Step.wseq_inv {M : MachineCtx} {a : List annot} {pat : pattern}
     {e1 e2 : CoreExpr}
     {ρ : EnvStack} {ctl : Ctl} {σ : Mem} {out : Config}
     (h : Step M (Expr a (Ewseq pat e1 e2), ρ, ctl, σ) out) :
-    (∃ e1' ρ' σ', jumpRedex? e1 = none ∧ toVal e1 = none ∧
-        Step M (e1, ρ, ctl, σ) (e1', ρ', ctl, σ') ∧
-        out = (Expr a (Ewseq pat e1' e2), ρ', ctl, σ')) ∨
-    (∃ pa bty v ev0 evs, pat = Pattern pa (CaseBase (none, bty)) ∧
-        e1 = ofVal (.pure v) ∧ ρ = ev0 :: evs ∧ out = (e2, ρ, ctl, σ)) ∨
-    (∃ pa bty ds v ev0 evs, pat = Pattern pa (CaseBase (none, bty)) ∧
-        e1 = ofVal (.annot ds v) ∧ ρ = ev0 :: evs ∧
-        out = (Expr [] (Eannot ds e2), ρ, ctl, σ)) ∨
+    (∃ e1' ρ' ctl' σ', jumpRedex? e1 = none ∧ callRedex? e1 = none ∧ toVal e1 = none ∧
+        Step M (e1, ρ, ctl, σ) (e1', ρ', ctl', σ') ∧
+        out = (Expr a (Ewseq pat e1' e2), ρ', ctl', σ')) ∨
+    (∃ pa bty a1 b1 v ev0 evs, pat = Pattern pa (CaseBase (none, bty)) ∧
+        e1 = ofValA (.pure a1 b1 v) ∧ ρ = ev0 :: evs ∧ out = (e2, ρ, ctl.upd a, σ)) ∨
+    (∃ pa bty a1 a2 b1 ds v ev0 evs, pat = Pattern pa (CaseBase (none, bty)) ∧
+        e1 = ofValA (.annot a1 a2 b1 ds v) ∧ ρ = ev0 :: evs ∧
+        out = (Expr [] (Eannot ds e2), ρ, ctl.upd a, σ)) ∨
     (∃ l pes params cont vs ev0 evs, jumpRedex? e1 = some (l, pes) ∧
         ρ = ev0 :: evs ∧ lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) ∧
         evalPexprs M.tagDefs M.extern ρ pes = some vs ∧
-        out = (cont, bindArgs params vs ρ, ctl, σ)) ∨
+        out = (cont, bindArgs params vs ρ, ctl.upd (redexAnnots e1), σ)) ∨
     Step.CallOf M e1 (fun c => Cwseq a pat c e2) ρ ctl σ out := by
   cases h with
-  | wseq_ctx hnj hnv hs => exact .inl ⟨_, _, _, hnj, hnv, hs, rfl⟩
-  | wseq_pure => exact .inr (.inl ⟨_, _, _, _, _, rfl, rfl, rfl, rfl⟩)
-  | wseq_annot => exact .inr (.inr (.inl ⟨_, _, _, _, _, _, rfl, rfl, rfl, rfl⟩))
+  | wseq_ctx hnj hnc hnv hs => exact .inl ⟨_, _, _, _, hnj, hnc, hnv, hs, rfl⟩
+  | wseq_pure => exact .inr (.inl ⟨_, _, _, _, _, _, _, rfl, rfl, rfl, rfl⟩)
+  | wseq_annot => exact .inr (.inr (.inl ⟨_, _, _, _, _, _, _, _, _, rfl, rfl, rfl, rfl⟩))
   | run hj hl hvs =>
     rw [jumpRedex?_wseq] at hj
-    exact .inr (.inr (.inr (.inl ⟨_, _, _, _, _, _, _, hj, rfl, hl, hvs, rfl⟩)))
+    refine .inr (.inr (.inr (.inl ⟨_, _, _, _, _, _, _, hj, rfl, hl, hvs, ?_⟩)))
+    rw [redexAnnots_wseq_of_nv _ _ _ (toVal_none_of_jumpRedex?_some hj)]
   | call hc hvs hf hlen =>
-    rw [callRedex?_wseq, Option.map_eq_some_iff] at hc
-    obtain ⟨⟨ctx1, f1, pes1⟩, hc1, hq⟩ := hc
-    obtain ⟨rfl, rfl, rfl⟩ : _ ∧ _ ∧ _ := by
-      exact ⟨congrArg Prod.fst hq, congrArg (fun q => q.2.1) hq,
-        congrArg (fun q => q.2.2) hq⟩
-    exact .inr (.inr (.inr (.inr ⟨ctx1, f1, pes1, _, _, _, hc1, hvs, hf, hlen, rfl⟩)))
+    exact .inr (.inr (.inr (.inr (Step.callOf_of_call_wseq hc hvs hf hlen))))
 
-/-- Inversion at an Eannot node (S3 form): Cannot-descent of a
-    non-jump-redex body, the ANNOTS merge, the global jump through the
-    Cannot frame, or (C2) THE CALL of the body with the `Cannot` frame
-    captured, or (C2) REMOVE-ANNOT at a non-empty call stack (the body a
-    bare value, the node annotation-free). -/
+theorem Step.callOf_of_call_annot {M : MachineCtx} {a : List annot} {ds : List dyn_annotation}
+    {b : CoreExpr} {ctx : context} {f : sym} {pes : List (generic_pexpr Unit sym)}
+    {params : List (sym × core_base_type)} {body : CoreExpr} {vs : List value}
+    {ρ : EnvStack} {ctl : Ctl} {σ : Mem} (hg : annotRooted b = false)
+    (hc : callRedex? (Expr a (Eannot ds b)) = some (ctx, f, pes))
+    (hvs : evalPexprs M.tagDefs M.extern ρ pes = some vs)
+    (hf : lookupProc M.file M.extern f = some (params, body))
+    (hlen : params.length = vs.length) :
+    Step.CallOf M b (fun c => Cannot a ds c) ρ ctl σ
+      (body, procEnv params vs :: ρ,
+       ctl.callPush (redexAnnots (Expr a (Eannot ds b))) ctx f, σ) := by
+  rw [callRedex?_annot_of_not_root _ _ hg, Option.map_eq_some_iff] at hc
+  obtain ⟨⟨ctx1, f1, pes1⟩, hc1, hq⟩ := hc
+  obtain ⟨rfl, rfl, rfl⟩ : _ ∧ _ ∧ _ := by
+    exact ⟨congrArg Prod.fst hq, congrArg (fun q => q.2.1) hq,
+      congrArg (fun q => q.2.2) hq⟩
+  refine ⟨ctx1, f1, pes1, _, _, _, hc1, hvs, hf, hlen, ?_⟩
+  rw [redexAnnots_annot_of_not_root _ _ hg]
+
+/-- Inversion at an Eannot node: Cannot-descent of a non-jump, non-call
+    body (its control write threaded), the ANNOTS merge, the global jump
+    through the Cannot frame, THE CALL of the body with the `Cannot` frame
+    captured, or REMOVE-ANNOT at a non-empty call stack (the body a bare
+    value at any annotations). -/
 theorem Step.annot_inv {M : MachineCtx} {a : List annot}
     {ds : List dyn_annotation}
     {b : CoreExpr} {ρ : EnvStack} {ctl : Ctl} {σ : Mem}
     {out : Config}
     (h : Step M (Expr a (Eannot ds b), ρ, ctl, σ) out) :
-    (annotRooted b = false ∧ jumpRedex? b = none ∧
-        ∃ b' ρ' σ', Step M (b, ρ, ctl, σ) (b', ρ', ctl, σ') ∧
-        out = (Expr a (Eannot ds b'), ρ', ctl, σ')) ∨
+    (annotRooted b = false ∧ jumpRedex? b = none ∧ callRedex? b = none ∧ toVal b = none ∧
+        ∃ b' ρ' ctl' σ', Step M (b, ρ, ctl, σ) (b', ρ', ctl', σ') ∧
+        out = (Expr a (Eannot ds b'), ρ', ctl', σ')) ∨
     (∃ a2 ds2 c, b = Expr a2 (Eannot ds2 c) ∧
-        out = (Expr (a ++ a2) (Eannot (ds ++ ds2) c), ρ, ctl, σ)) ∨
+        out = (Expr (a ++ a2) (Eannot (ds ++ ds2) c), ρ, ctl.upd a, σ)) ∨
     (∃ l pes params cont vs ev0 evs, annotRooted b = false ∧
         jumpRedex? b = some (l, pes) ∧
         ρ = ev0 :: evs ∧ lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) ∧
         evalPexprs M.tagDefs M.extern ρ pes = some vs ∧
-        out = (cont, bindArgs params vs ρ, ctl, σ)) ∨
+        out = (cont, bindArgs params vs ρ, ctl.upd (redexAnnots b), σ)) ∨
     (annotRooted b = false ∧ Step.CallOf M b (fun c => Cannot a ds c) ρ ctl σ out) ∨
-    (∃ v pc κ, a = [] ∧ b = Expr [] (Epure (Pexpr [] () (PEval v))) ∧ ctl.κ = pc :: κ ∧
-        out = (Expr [] (Epure (Pexpr [] () (PEval v))), ρ, ctl, σ)) := by
+    (∃ a2 b1 v pc κ, b = ofValA (.pure a2 b1 v) ∧ ctl.κ = pc :: κ ∧
+        out = (ofValA (.pure a2 b1 v), ρ, ctl, σ)) := by
   cases h with
-  | annot_ctx hnj hg hs => exact .inl ⟨hg, hnj, _, _, _, hs, rfl⟩
+  | annot_ctx hnj hnc hnv hg hs => exact .inl ⟨hg, hnj, hnc, hnv, _, _, _, _, hs, rfl⟩
   | annot_merge => exact .inr (.inl ⟨_, _, _, rfl, rfl⟩)
   | run hj hl hvs =>
     by_cases hr : annotRooted b = true
     · rw [jumpRedex?_annot_of_root _ _ hr] at hj; cases hj
     · have hr' : annotRooted b = false := by simpa using hr
       rw [jumpRedex?_annot_of_not_root _ _ hr'] at hj
-      exact .inr (.inr (.inl ⟨_, _, _, _, _, _, _, hr', hj, rfl, hl, hvs, rfl⟩))
+      refine .inr (.inr (.inl ⟨_, _, _, _, _, _, _, hr', hj, rfl, hl, hvs, ?_⟩))
+      rw [redexAnnots_annot_of_not_root _ _ hr']
   | call hc hvs hf hlen =>
     by_cases hr : annotRooted b = true
     · rw [callRedex?_annot_of_root _ _ hr] at hc; cases hc
     · have hr' : annotRooted b = false := by simpa using hr
-      rw [callRedex?_annot_of_not_root _ _ hr', Option.map_eq_some_iff] at hc
-      obtain ⟨⟨ctx1, f1, pes1⟩, hc1, hq⟩ := hc
-      obtain ⟨rfl, rfl, rfl⟩ : _ ∧ _ ∧ _ := by
-        exact ⟨congrArg Prod.fst hq, congrArg (fun q => q.2.1) hq,
-          congrArg (fun q => q.2.2) hq⟩
-      exact .inr (.inr (.inr (.inl ⟨hr', ctx1, f1, pes1, _, _, _, hc1, hvs, hf, hlen, rfl⟩)))
-  | ret_annot => exact .inr (.inr (.inr (.inr ⟨_, _, _, rfl, rfl, rfl, rfl⟩)))
+      exact .inr (.inr (.inr (.inl ⟨hr', Step.callOf_of_call_annot hr' hc hvs hf hlen⟩)))
+  | ret_annot => exact .inr (.inr (.inr (.inr ⟨_, _, _, _, _, rfl, rfl, rfl⟩)))
+
+theorem Step.callOf_of_call_bound {M : MachineCtx} {a : List annot}
+    {b : CoreExpr} {ctx : context} {f : sym} {pes : List (generic_pexpr Unit sym)}
+    {params : List (sym × core_base_type)} {body : CoreExpr} {vs : List value}
+    {ρ : EnvStack} {ctl : Ctl} {σ : Mem}
+    (hc : callRedex? (Expr a (Ebound b)) = some (ctx, f, pes))
+    (hvs : evalPexprs M.tagDefs M.extern ρ pes = some vs)
+    (hf : lookupProc M.file M.extern f = some (params, body))
+    (hlen : params.length = vs.length) :
+    Step.CallOf M b (fun c => Cbound a c) ρ ctl σ
+      (body, procEnv params vs :: ρ,
+       ctl.callPush (redexAnnots (Expr a (Ebound b))) ctx f, σ) := by
+  rw [callRedex?_bound, Option.map_eq_some_iff] at hc
+  obtain ⟨⟨ctx1, f1, pes1⟩, hc1, hq⟩ := hc
+  obtain ⟨rfl, rfl, rfl⟩ : _ ∧ _ ∧ _ := by
+    exact ⟨congrArg Prod.fst hq, congrArg (fun q => q.2.1) hq,
+      congrArg (fun q => q.2.2) hq⟩
+  refine ⟨ctx1, f1, pes1, _, _, _, hc1, hvs, hf, hlen, ?_⟩
+  rw [redexAnnots_bound_of_nv _ (toVal_none_of_callRedex?_some hc1)]
+
+/-- E1: inversion at an Ebound node: Cbound-descent of a non-jump,
+    non-call, non-value body, REMOVE-BOUND at a bare or annotated value,
+    the global jump through the frame, or THE CALL of the body with the
+    `Cbound` frame captured. -/
+theorem Step.bound_inv {M : MachineCtx} {a : List annot} {b : CoreExpr}
+    {ρ : EnvStack} {ctl : Ctl} {σ : Mem} {out : Config}
+    (h : Step M (Expr a (Ebound b), ρ, ctl, σ) out) :
+    (∃ b' ρ' ctl' σ', jumpRedex? b = none ∧ callRedex? b = none ∧ toVal b = none ∧
+        Step M (b, ρ, ctl, σ) (b', ρ', ctl', σ') ∧
+        out = (Expr a (Ebound b'), ρ', ctl', σ')) ∨
+    (∃ a1 b1 v, b = ofValA (.pure a1 b1 v) ∧ out = (ofValA (.pure a1 b1 v), ρ, ctl.upd a, σ)) ∨
+    (∃ a1 a2 b1 ds v, b = ofValA (.annot a1 a2 b1 ds v) ∧
+        out = (ofValA (.pure a2 b1 v), ρ, ctl.upd a, σ)) ∨
+    (∃ l pes params cont vs ev0 evs, jumpRedex? b = some (l, pes) ∧
+        ρ = ev0 :: evs ∧ lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) ∧
+        evalPexprs M.tagDefs M.extern ρ pes = some vs ∧
+        out = (cont, bindArgs params vs ρ, ctl.upd (redexAnnots b), σ)) ∨
+    Step.CallOf M b (fun c => Cbound a c) ρ ctl σ out := by
+  cases h with
+  | bound_ctx hnj hnc hnv hs => exact .inl ⟨_, _, _, _, hnj, hnc, hnv, hs, rfl⟩
+  | bound_pure => exact .inr (.inl ⟨_, _, _, rfl, rfl⟩)
+  | bound_annot => exact .inr (.inr (.inl ⟨_, _, _, _, _, rfl, rfl⟩))
+  | run hj hl hvs =>
+    rw [jumpRedex?_bound] at hj
+    refine .inr (.inr (.inr (.inl ⟨_, _, _, _, _, _, _, hj, rfl, hl, hvs, ?_⟩)))
+    rw [redexAnnots_bound_of_nv _ (toVal_none_of_jumpRedex?_some hj)]
+  | call hc hvs hf hlen =>
+    exact .inr (.inr (.inr (.inr (Step.callOf_of_call_bound hc hvs hf hlen))))
 
 /-- Inversion at an Esave node: either the entry TAU (value-shaped
-    initializers) or the parameter-EVAL step (initializers not all
-    values, re-formed with their values) — the engine's two arms. -/
+    initializers) or the parameter-EVAL step. -/
 theorem Step.save_inv {M : MachineCtx} {a : List annot}
     {sb : sym × core_base_type}
     {ps : List (sym × ((core_base_type ×
@@ -2999,18 +3461,17 @@ theorem Step.save_inv {M : MachineCtx} {a : List annot}
     (h : Step M (Expr a (Esave sb ps body), ρ, ctl, σ) out) :
     (∃ cvals ev0 evs, ρ = ev0 :: evs ∧
       valueFromPexprs (saveParamPexprs ps) = some cvals ∧
-      out = (body, bindSaveParams ps cvals ρ, ctl, σ)) ∨
+      out = (body, bindSaveParams ps cvals ρ, ctl.upd a, σ)) ∨
     (∃ cvals, valueFromPexprs (saveParamPexprs ps) = none ∧
       evalPexprs M.tagDefs M.extern ρ (saveParamPexprs ps) = some cvals ∧
-      out = (Expr a (Esave sb (saveParamsWithValues ps cvals) body), ρ, ctl, σ)) := by
+      out = (Expr a (Esave sb (saveParamsWithValues ps cvals) body), ρ, ctl.upd a, σ)) := by
   cases h with
   | save hvals => exact .inl ⟨_, _, _, rfl, hvals, rfl⟩
   | save_eval hnv hvals => exact .inr ⟨_, hnv, hvals, rfl⟩
   | run hj hl hvs => simp [jumpRedex?] at hj
   | call hc hvs hf hlen => simp at hc
 
-/-- Inversion at an Esave node with VALUE initializers: the entry TAU
-    only (the pre-QA-1 shape, retained as the literal instance). -/
+/-- Inversion at an Esave node with VALUE initializers: the entry TAU. -/
 theorem Step.save_vals_inv {M : MachineCtx} {a : List annot}
     {sb : sym × core_base_type}
     {ps : List (sym × ((core_base_type ×
@@ -3019,7 +3480,7 @@ theorem Step.save_vals_inv {M : MachineCtx} {a : List annot}
     {out : Config}
     (hvals : valueFromPexprs (saveParamPexprs ps) = some cvals)
     (h : Step M (Expr a (Esave sb ps body), ρ, ctl, σ) out) :
-    ∃ ev0 evs, ρ = ev0 :: evs ∧ out = (body, bindSaveParams ps cvals ρ, ctl, σ) := by
+    ∃ ev0 evs, ρ = ev0 :: evs ∧ out = (body, bindSaveParams ps cvals ρ, ctl.upd a, σ) := by
   rcases h.save_inv with ⟨cvals', ev0, evs, hρ, hvals', hout⟩ |
       ⟨_, hnv, _, _⟩
   · obtain rfl : cvals = cvals' := Option.some.inj (hvals.symm.trans hvals')
@@ -3037,19 +3498,18 @@ theorem Step.save_op_inv {M : MachineCtx} {a : List annot}
     (hnv : valueFromPexprs (saveParamPexprs ps) = none)
     (h : Step M (Expr a (Esave sb ps body), ρ, ctl, σ) out) :
     ∃ cvals, evalPexprs M.tagDefs M.extern ρ (saveParamPexprs ps) = some cvals ∧
-      out = (Expr a (Esave sb (saveParamsWithValues ps cvals) body), ρ, ctl, σ) := by
+      out = (Expr a (Esave sb (saveParamsWithValues ps cvals) body), ρ, ctl.upd a, σ) := by
   rcases h.save_inv with ⟨_, _, _, _, hvals, _⟩ | ⟨cvals, _, hvals, hout⟩
   · rw [hnv] at hvals; cases hvals
   · exact ⟨cvals, hvals, hout⟩
 
-/-- Inversion at an Eif node: the guard evaluates to a boolean and
-    the step selects the branch. -/
+/-- Inversion at an Eif node. -/
 theorem Step.if_inv {M : MachineCtx} {a : List annot}
     {g : generic_pexpr Unit sym} {e2 e3 : CoreExpr}
     {ρ : EnvStack} {ctl : Ctl} {σ : Mem} {out : Config}
     (h : Step M (Expr a (Eif g e2 e3), ρ, ctl, σ) out) :
-    (evalPexpr M.tagDefs M.extern ρ g = some Vtrue ∧ out = (e2, ρ, ctl, σ)) ∨
-    (evalPexpr M.tagDefs M.extern ρ g = some Vfalse ∧ out = (e3, ρ, ctl, σ)) := by
+    (evalPexpr M.tagDefs M.extern ρ g = some Vtrue ∧ out = (e2, ρ, ctl.upd a, σ)) ∨
+    (evalPexpr M.tagDefs M.extern ρ g = some Vfalse ∧ out = (e3, ρ, ctl.upd a, σ)) := by
   cases h with
   | if_true hg => exact .inl ⟨hg, rfl⟩
   | if_false hg => exact .inr ⟨hg, rfl⟩
@@ -3063,7 +3523,7 @@ theorem Step.case_inv {M : MachineCtx} {a : List annot}
     (h : Step M (Expr a (Ecase pe pats), ρ, ctl, σ) out) :
     ∃ cval e', valueFromPexpr pe = some cval ∧
       select_case subst_sym_expr cval pats = some e' ∧
-      out = (e', ρ, ctl, σ) := by
+      out = (e', ρ, ctl.upd a, σ) := by
   cases h with
   | case_value hv hsel => exact ⟨_, _, hv, hsel, rfl⟩
   | run hj hl hvs => simp [jumpRedex?] at hj
@@ -3076,7 +3536,7 @@ theorem Step.pure_inv {M : MachineCtx} {a : List annot}
     (hnv : valueFromPexpr pe = none)
     (h : Step M (Expr a (Epure pe), ρ, ctl, σ) out) :
     ∃ v, valueFromPexpr pe = none ∧ evalPexpr M.tagDefs M.extern ρ pe = some v ∧
-      out = (Expr a (Epure (Pexpr [] () (PEval v))), ρ, ctl, σ) := by
+      out = (Expr a (Epure (Pexpr [] () (PEval v))), ρ, ctl.upd a, σ) := by
   cases h with
   | pure_eval hnv hv => exact ⟨_, hnv, hv, rfl⟩
   | run hj hl hvs => simp at hj
@@ -3084,9 +3544,7 @@ theorem Step.pure_inv {M : MachineCtx} {a : List annot}
   | ret => rw [valueFromPexpr_val] at hnv; cases hnv
 
 /-- Inversion at a positive load whose pointer operand is NOT a
-    value (S4): the ACTION_EVAL step. The operand's non-value shape
-    is a side hypothesis (it discharges by `rfl`/`simp` at authored
-    shapes) so the canonical load rule's arms refute. -/
+    value (S4): the ACTION_EVAL step. -/
 theorem Step.load_op_inv {M : MachineCtx} {a : List annot}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
     {pe2 : generic_pexpr Unit sym} {mo : memory_order}
@@ -3097,15 +3555,14 @@ theorem Step.load_op_inv {M : MachineCtx} {a : List annot}
     ∃ pv, evalPexpr M.tagDefs M.extern ρ pe2 = some (Vobject (OVpointer pv)) ∧
       out = (Expr a (Eaction (Paction polarity.Pos (Action loc ann
         (Load0 (Pexpr [] () (PEval (Vctype ty)))
-               (Pexpr [] () (PEval (Vobject (OVpointer pv)))) mo)))), ρ, ctl, σ) := by
+               (Pexpr [] () (PEval (Vobject (OVpointer pv)))) mo)))), ρ, ctl.upd a, σ) := by
   cases h with
   | run hj hl hvs => simp at hj
   | call hc hvs hf hlen => simp at hc
   | load h1 h2 hmem => rw [hnv2] at h2; cases h2
   | load_eval hnv2' hv2 => exact ⟨_, hv2, rfl⟩
 
-/-- Inversion at the pointer-equality memop with VALUE operands: the
-    step is unique and fully determined by the memM computation. -/
+/-- Inversion at the pointer-equality memop with VALUE operands. -/
 theorem Step.memop_ptreq_inv {M : MachineCtx} {a : List annot}
     {pe1 pe2 : generic_pexpr Unit sym} {pv1 pv2 : CerbMem.PointerValue}
     {ρ : EnvStack} {ctl : Ctl} {σ : Mem} {out : Config}
@@ -3113,7 +3570,7 @@ theorem Step.memop_ptreq_inv {M : MachineCtx} {a : List annot}
     (h2 : valueFromPexpr pe2 = some (Vobject (OVpointer pv2)))
     (h : Step M (Expr a (Ememop PtrEq [pe1, pe2]), ρ, ctl, σ) out) :
     ∃ b σ', applyMemM (CerbMem.eqPtrval default pv1 pv2) σ = some (b, σ') ∧
-      out = (Expr [] (Epure (Pexpr [] () (PEval (boolValue b)))), ρ, ctl, σ') := by
+      out = (Expr [] (Epure (Pexpr [] () (PEval (boolValue b)))), ρ, ctl.upd a, σ') := by
   cases h with
   | run hj hl hvs => simp at hj
   | call hc hvs hf hlen => simp at hc
@@ -3128,15 +3585,14 @@ theorem Step.memop_ptreq_inv {M : MachineCtx} {a : List annot}
     cases hnv
 
 /-- Inversion at the pointer-equality memop with VALUE operands, any
-    values (the successor-general form of `memop_ptreq_inv`, for the
-    same-control sweeps): the step is the PtrEq round at two pointers. -/
+    values. -/
 theorem Step.memop_vals_inv {M : MachineCtx} {a : List annot} {v1 v2 : value}
     {ρ : EnvStack} {ctl : Ctl} {σ : Mem} {out : Config}
     (h : Step M (Expr a (Ememop PtrEq [Pexpr [] () (PEval v1), Pexpr [] () (PEval v2)]),
       ρ, ctl, σ) out) :
     ∃ pv1 pv2 b σ', v1 = Vobject (OVpointer pv1) ∧ v2 = Vobject (OVpointer pv2) ∧
       applyMemM (CerbMem.eqPtrval default pv1 pv2) σ = some (b, σ') ∧
-      out = (Expr [] (Epure (Pexpr [] () (PEval (boolValue b)))), ρ, ctl, σ') := by
+      out = (Expr [] (Epure (Pexpr [] () (PEval (boolValue b)))), ρ, ctl.upd a, σ') := by
   cases h with
   | run hj hl hvs => simp at hj
   | call hc hvs hf hlen => simp at hc
@@ -3156,7 +3612,7 @@ theorem Step.memop_op_inv {M : MachineCtx} {a : List annot} {mop : memop}
     (h : Step M (Expr a (Ememop mop [pe1, pe2]), ρ, ctl, σ) out) :
     ∃ v1 v2, evalPexpr M.tagDefs M.extern ρ pe1 = some v1 ∧ evalPexpr M.tagDefs M.extern ρ pe2 = some v2 ∧
       out = (Expr a (Ememop mop
-        [Pexpr [] () (PEval v1), Pexpr [] () (PEval v2)]), ρ, ctl, σ) := by
+        [Pexpr [] () (PEval v1), Pexpr [] () (PEval v2)]), ρ, ctl.upd a, σ) := by
   cases h with
   | run hj hl hvs => simp at hj
   | call hc hvs hf hlen => simp at hc
@@ -3180,7 +3636,7 @@ theorem Step.store_op_inv {M : MachineCtx} {a : List annot}
       out = (Expr a (Eaction (Paction polarity.Pos (Action loc ann
         (Store0 lk (Pexpr [] () (PEval (Vctype ty)))
                 (Pexpr [] () (PEval (Vobject (OVpointer pv))))
-                (Pexpr [] () (PEval cv)) mo)))), ρ, ctl, σ) := by
+                (Pexpr [] () (PEval cv)) mo)))), ρ, ctl.upd a, σ) := by
   cases h with
   | run hj hl hvs => simp at hj
   | call hc hvs hf hlen => simp at hc
@@ -3231,66 +3687,83 @@ theorem toVal_pure_none {a : List annot} {pe : generic_pexpr Unit sym}
     | rfl
     | (rw [valueFromPexpr_val] at hnv; cases hnv)
 
+theorem toValA_pure_none {a : List annot} {pe : generic_pexpr Unit sym}
+    (hnv : valueFromPexpr pe = none) : toValA (Expr a (Epure pe)) = none :=
+  toValA_none_of_toVal_none (toVal_pure_none hnv)
+
+/-! ## Canonical redex spellings (E1: annotation-parametric — the node's
+static annotation list is the FIRST argument; the pre-E1 spellings are the
+`[]` instances) -/
+
 /-- Canonical spelling of the S4 PURE redex (non-value pure
     expression at the root). -/
-def pureRedex (pe : generic_pexpr Unit sym) : CoreExpr :=
-  Expr [] (Epure pe)
+def pureRedex (a : List annot) (pe : generic_pexpr Unit sym) : CoreExpr :=
+  Expr a (Epure pe)
 
 /-- Canonical spelling of the S4 load ACTION_EVAL redex: positive
     strong load, canonical evaluated type operand, UNevaluated
     pointer operand. -/
-def loadOpRedex (loc : CerbLocation.Loc) (ann : core_run_annotation)
+def loadOpRedex (a : List annot) (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (ty : ctype) (pe2 : generic_pexpr Unit sym) (mo : memory_order) : CoreExpr :=
-  Expr [] (Eaction (Paction polarity.Pos (Action loc ann
+  Expr a (Eaction (Paction polarity.Pos (Action loc ann
     (Load0 (Pexpr [] () (PEval (Vctype ty))) pe2 mo))))
 
-/-- Canonical spelling of a memop redex (list-reverse phase A):
-    `[]` node annotations, operands per instance. -/
-def memopRedex (mop : memop) (pes : List (generic_pexpr Unit sym)) : CoreExpr :=
-  Expr [] (Ememop mop pes)
+/-- Canonical spelling of a memop redex: operands per instance. -/
+def memopRedex (a : List annot) (mop : memop) (pes : List (generic_pexpr Unit sym)) : CoreExpr :=
+  Expr a (Ememop mop pes)
 
 /-- The pointer-equality memop at canonical VALUE operands (the
     post-ACTION_EVAL shape the memop axiom fires at). -/
-def memopPtrEqVals (v1 v2 : value) : CoreExpr :=
-  memopRedex PtrEq [Pexpr [] () (PEval v1), Pexpr [] () (PEval v2)]
+def memopPtrEqVals (a : List annot) (v1 v2 : value) : CoreExpr :=
+  memopRedex a PtrEq [Pexpr [] () (PEval v1), Pexpr [] () (PEval v2)]
 
 /-- Canonical spelling of the store ACTION_EVAL redex: positive
     strong non-locking store, canonical evaluated type operand,
     UNevaluated pointer/value operands. -/
-def storeOpRedex (loc : CerbLocation.Loc) (ann : core_run_annotation)
+def storeOpRedex (a : List annot) (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (ty : ctype) (pe2 pe3 : generic_pexpr Unit sym) (mo : memory_order) :
     CoreExpr :=
-  Expr [] (Eaction (Paction polarity.Pos (Action loc ann
+  Expr a (Eaction (Paction polarity.Pos (Action loc ann
     (Store0 false (Pexpr [] () (PEval (Vctype ty))) pe2 pe3 mo))))
 
 /-- Canonical spelling of the kill redex (kill/free arc K2): positive
     strong kill of any kind at the canonical EVALUATED pointer operand
     (`Rules.killExpr` is the same spelling). -/
-def killRedex (loc : CerbLocation.Loc) (ann : core_run_annotation)
+def killRedex (a : List annot) (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (kind : kill_kind) (pv : CerbMem.PointerValue) : CoreExpr :=
-  Expr [] (Eaction (Paction polarity.Pos (Action loc ann
+  Expr a (Eaction (Paction polarity.Pos (Action loc ann
     (Kill kind (Pexpr [] () (PEval (Vobject (OVpointer pv))))))))
 
 /-- Canonical spelling of the kill ACTION_EVAL redex: positive strong
     kill at an UNevaluated pointer operand. -/
-def killOpRedex (loc : CerbLocation.Loc) (ann : core_run_annotation)
+def killOpRedex (a : List annot) (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (kind : kill_kind) (pe : generic_pexpr Unit sym) : CoreExpr :=
-  Expr [] (Eaction (Paction polarity.Pos (Action loc ann (Kill kind pe))))
+  Expr a (Eaction (Paction polarity.Pos (Action loc ann (Kill kind pe))))
 
 /-- Canonical spelling of the alloc redex (kill/free arc K3): positive
     strong dynamic allocation at canonical EVALUATED integer operands
     (`Rules.allocExpr` is the same spelling). -/
-def allocRedex (loc : CerbLocation.Loc) (ann : core_run_annotation)
+def allocRedex (a : List annot) (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (align size : CerbMem.IntegerValue) (pref : prefix0) : CoreExpr :=
-  Expr [] (Eaction (Paction polarity.Pos (Action loc ann
+  Expr a (Eaction (Paction polarity.Pos (Action loc ann
     (Alloc0 (Pexpr [] () (PEval (Vobject (OVinteger align))))
             (Pexpr [] () (PEval (Vobject (OVinteger size)))) pref))))
 
 /-- Canonical spelling of the alloc ACTION_EVAL redex: positive strong
     dynamic allocation at operands that are NOT all values. -/
-def allocOpRedex (loc : CerbLocation.Loc) (ann : core_run_annotation)
+def allocOpRedex (a : List annot) (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (pe1 pe2 : generic_pexpr Unit sym) (pref : prefix0) : CoreExpr :=
-  Expr [] (Eaction (Paction polarity.Pos (Action loc ann (Alloc0 pe1 pe2 pref))))
+  Expr a (Eaction (Paction polarity.Pos (Action loc ann (Alloc0 pe1 pe2 pref))))
+
+/-- E1: canonical spelling of the create ACTION_EVAL redex: positive
+    strong create at operands that are NOT all values (every emitted
+    `create(Ivalignof(ty), ty)`). -/
+def createOpRedex (a : List annot) (loc : CerbLocation.Loc) (ann : core_run_annotation)
+    (pe1 pe2 : generic_pexpr Unit sym) (pref : prefix0) : CoreExpr :=
+  Expr a (Eaction (Paction polarity.Pos (Action loc ann (Create pe1 pe2 pref))))
+
+/-- E1: canonical spelling of the `bound` node. -/
+def boundRedex (a : List annot) (b : CoreExpr) : CoreExpr := Expr a (Ebound b)
 
 /-! ## The frozen profiles as context instances
 
@@ -3328,12 +3801,12 @@ def spikeRunState : core_run_state :=
     no current procedure, default execution location (the `envThread`
     literal's control fields, Soundness.lean). Reducible for the same
     reason as `spikeCtx`. -/
-@[reducible] def spikeCtl : Ctl := ⟨[], none, default⟩
+@[reducible] def spikeCtl : Ctl := ⟨[], none, default, default, default⟩
 
 /-- The entry control of the jump profile: empty call stack, IN
     PROCEDURE `p` (what `Erun` reads the label map at), default
     execution location (the `procThread` literal's control fields). -/
-@[reducible] def procCtl (p : sym) : Ctl := ⟨[], some p, default⟩
+@[reducible] def procCtl (p : sym) : Ctl := ⟨[], some p, default, default, default⟩
 
 @[simp] theorem spikeCtl_κ : spikeCtl.κ = [] := rfl
 @[simp] theorem spikeCtl_proc : spikeCtl.proc = none := rfl
@@ -3354,7 +3827,7 @@ def spikeRunState : core_run_state :=
     rewrite the environment by hand. -/
 @[reducible] def spikeCtx : MachineCtx :=
   { tagDefs := fmapEmpty, file := spikeFile, extern := fmapEmpty,
-    tid := 0, parent := none, errno := default, currentLoc := default,
+    tid := 0, parent := none, errno := default,
     runState := spikeRunState }
 
 /-- The jump profile (parameterized run state) as a context instance

@@ -141,6 +141,13 @@ def evalClass (tds : CerbTags.TagDefsMap) (loc : CerbLocation.Loc) (ext : Fmap s
         | .kill err => .kill err
         | .uncovered => .uncovered
         | .val v2 => shiftOut tds ty v1 v2
+  -- E1: the constructor constants at a literal ctype — the mirror's
+  -- `evalTyCtor` (`Civalignof`/`Civsizeof`); any other constructor is the
+  -- residual.
+  | Pexpr _ _ (PEctor c [Pexpr _ _ (PEval (Vctype ty))]) =>
+      match evalTyCtor tds c ty with
+      | some v => .val v
+      | none => .uncovered
   | _ => .uncovered
 
 /-! ## The `.val` face is the mirror evaluator -/
@@ -300,8 +307,19 @@ theorem evalClass_val_iff (tds : CerbTags.TagDefsMap) (loc : CerbLocation.Loc)
         | some w => rw [← ih1 w, h1] at h1'; cases h1'
       rw [h1']
       constructor <;> intro h <;> cases h
-  | case5 pe hne1 hne2 hne3 hne4 =>
-    rw [evalPexpr_none_of_shape hne1 hne2 hne3 hne4]
+  | case5 a u c pb u' ty =>
+    cases u; cases u'
+    show (match evalTyCtor tds c ty with
+      | some v => EvalOut.val v
+      | none => EvalOut.uncovered) = EvalOut.val v ↔ evalTyCtor tds c ty = some v
+    cases evalTyCtor tds c ty with
+    | none => constructor <;> intro h <;> cases h
+    | some v' =>
+      constructor
+      · intro h; cases h; rfl
+      · intro h; cases h; rfl
+  | case6 pe hne1 hne2 hne3 hne4 hne5 =>
+    rw [evalPexpr_none_of_shape hne1 hne2 hne3 hne4 hne5]
     have : evalClass tds loc ext file ρ pe = .uncovered := by
       unfold evalClass
       split
@@ -309,6 +327,7 @@ theorem evalClass_val_iff (tds : CerbTags.TagDefsMap) (loc : CerbLocation.Loc)
       · exact absurd rfl (hne2 _ _ _)
       · exact absurd rfl (hne3 _ _ _ _ _)
       · exact absurd rfl (hne4 _ _ _ _ _)
+      · exact absurd rfl (hne5 _ _ _ _ _ _)
       · rfl
     rw [this]
     constructor <;> intro h <;> cases h
@@ -359,6 +378,7 @@ theorem peStrip_idem {pe : generic_pexpr Unit _root_.sym} (hp : PePure pe) :
     show Pexpr [] () (PEarray_shift (peStrip (peStrip _)) ty (peStrip (peStrip _))) = _
     rw [ih1, ih2]
     rfl
+  | ctorTy a c hc pb ty => rfl
 
 theorem evalClass_peStrip {tds : CerbTags.TagDefsMap} {loc : CerbLocation.Loc}
     {ext : Fmap sym sym} {file : generic_file Unit core_run_annotation} {ρ : EnvStack}
@@ -389,6 +409,7 @@ theorem evalClass_peStrip {tds : CerbTags.TagDefsMap} {loc : CerbLocation.Loc}
         | .val v2 => shiftOut tds ty v1 v2) = _
     rw [ih1, ih2]
     rfl
+  | ctorTy a c hc pb ty => rfl
 
 /-! ## The exception monad's failure laws -/
 
@@ -425,6 +446,8 @@ theorem step_eval_bridge_kill {tds : Fmap sym (CerbLocation.Loc × tag_definitio
   induction hp generalizing err with
   | val a v =>
     exact absurd hk (by simp [evalClass])
+  | ctorTy a c hc pb ty =>
+    exact absurd hk (by cases h : evalTyCtor tds c ty <;> simp [evalClass, h])
   | sym a x =>
     intro fuel hfuel n cloc mem
     obtain ⟨f, rfl⟩ : ∃ f, fuel = f + 1 :=
@@ -644,6 +667,8 @@ theorem aux2_bridge_kill {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
     rw [show step_eval_pexpr = step_eval_pexpr_lemFuel lemDefaultFuel from rfl,
       hstep]
     rfl
+  | ctorTy a c hc pb ty =>
+    exact absurd hk (by cases h : evalTyCtor tds c ty <;> simp [evalClass, h])
 
 /-- LEVEL 3b: `full_eval_pexpr` (the Eif/Erun/action-operand evaluator)
     RAISES the classified exception at every run state. -/
@@ -1077,7 +1102,9 @@ def operandsOf : CoreExpr → List (generic_pexpr Unit sym)
   | Expr _ (Eaction (Paction _ (Action _ _ (Store0 _ _ pe2 pe3 _)))) => [pe2, pe3]
   | Expr _ (Eaction (Paction _ (Action _ _ (Kill _ pe)))) => [pe]
   | Expr _ (Eaction (Paction _ (Action _ _ (Alloc0 pe1 pe2 _)))) => [pe1, pe2]
+  | Expr _ (Eaction (Paction _ (Action _ _ (Create pe1 pe2 _)))) => [pe1, pe2]
   | Expr _ (Ememop _ pes) => pes
+  | Expr _ (Ebound b) => operandsOf b
   | _ => []
 
 /-- A decomposition's frames are transparent to `operandsOf`. -/
@@ -1090,5 +1117,6 @@ theorem Decomp.operandsOf_eq {e : CoreExpr} {ctx : context} {r : CoreExpr}
   | sseq_sym _ ih => exact ih
   | annot _ _ _ _ ih => exact ih
   | wseq _ ih => exact ih
+  | bound _ ih => exact ih
 
 end CerberusHeapLang

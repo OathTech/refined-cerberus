@@ -474,7 +474,7 @@ theorem fib_certified
       (by rw [show esize prog = 3 from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega))
     (coh_empty σ₀)
     (fun v _ => v = ivVal (fibSpec n.toNat))
-    ?_ (th₀ := procThread fibProcSym prog [fmapEmpty]) rfl
+    ?_ (th₀ := procThread fibProcSym prog [fmapEmpty])
   intro inst
   exact (BigSepM.bigSepM_empty).1.trans
     (fib_wp_readout ra n ibty abty bbty fibProcSym rs

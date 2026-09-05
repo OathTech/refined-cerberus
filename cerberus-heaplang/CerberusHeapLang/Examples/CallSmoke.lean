@@ -71,11 +71,11 @@ def csIncPe : generic_pexpr Unit sym :=
 
 /-- `f`'s body: `save ret(y := x + 1) in pure(y)`. -/
 def csFBody (bty ybty : core_base_type) : CoreExpr :=
-  saveRedex (csL, bty) [(csY, ((ybty, none), csIncPe))] (pureRedex (Pexpr [] () (PEsym csY)))
+  saveRedex [] (csL, bty) [(csY, ((ybty, none), csIncPe))] (pureRedex [] (Pexpr [] () (PEsym csY)))
 
 /-- `main`'s body: `f(3)`. -/
 def csMainBody (ra : core_run_annotation) : CoreExpr :=
-  callRedex ra csF [Pexpr [] () (PEval (csInt 3))]
+  callRedex [] ra csF [Pexpr [] () (PEval (csInt 3))]
 
 /-- The two-procedure file: `main ↦ Proc … [] (f(3))`, `f ↦ Proc … [(x, bty)]
     (save ret(y := x + 1) in pure(y))`; no stdlib, no externs. -/
@@ -305,12 +305,10 @@ theorem csMain_wps (ρ : EnvStack) :
   isplitl []
   · ipureintro
     exact ⟨3, rfl, by decide⟩
-  · iintro %ret %hpost
+  · iintro %ret %a1 %hpost
     obtain ⟨x, hx, rfl⟩ := hpost
     obtain rfl : x = 3 := (csInt_inj (List.cons.inj hx).1).symm
-    rw [show Expr [] (Epure (Pexpr [] () (PEval (csInt (3 + 1))))) =
-      ofVal (.pure (csInt (3 + 1))) from rfl]
-    iapply wps_ofVal
+    iapply wps_ofValA
     dsimp only [csPost]
     ipureintro
     rfl
@@ -319,15 +317,15 @@ theorem csMain_wps (ρ : EnvStack) :
 
 /-- The base-WP face with the engine readout: `wps_sound` at the entry
     control under `procSpecs ∗ blockSpecs`. -/
-theorem cs_wp_readout (ℓ : exec_location) :
-    ⊢ WP (⟨csMainBody ra, [fmapEmpty], ⟨[], some csMain, ℓ⟩, csCtx ra bty ybty⟩ : CoreRt)
+theorem cs_wp_readout (ℓ : exec_location) (lc : CerbLocation.Loc) (sp : RunSup) :
+    ⊢ WP (⟨csMainBody ra, [fmapEmpty], ⟨[], some csMain, ℓ, lc, sp⟩, csCtx ra bty ybty⟩ : CoreRt)
         @ Stuckness.NotStuck; ⊤
         {{ w, iprop(∀ (σ' : Mem) (ns : Nat) (κs : List Empty) (nt : Nat),
           (stateInterp σ' ns κs nt : IProp GF) ={⊤, ∅}=∗ ⌜CoreRVal.val w = csInt 4⌝) }} := by
   refine (csMain_wps ra bty ybty [fmapEmpty]).trans ?_
   refine (BI.emp_sep.2.trans (BI.sep_mono
     ((BI.emp_sep.2.trans (BI.sep_mono (csCtx_procSpecs ra bty ybty) (cs_blockSpecs ra bty ybty))).trans
-      (wps_sound (ctl := ⟨[], some csMain, ℓ⟩) rfl (csMainBody ra) [fmapEmpty])) .rfl)).trans ?_
+      (wps_sound (ctl := ⟨[], some csMain, ℓ, lc, sp⟩) rfl (csMainBody ra) [fmapEmpty])) .rfl)).trans ?_
   refine BI.wand_elim_left.trans ?_
   exact wp_mono fun w => stateInterp_readout fun _ _ _ _ _ => pure_consequence _
 
@@ -349,10 +347,10 @@ theorem csCoh_empty (σ : Mem) : Coh fmapEmpty σ ((∅ : SpikeHeapF SpikeCell))
     instance). -/
 theorem call_smoke_engine (σ₀ : Mem) :
     DriverSafeCtl (csCtx ra bty ybty)
-      ((csCtx ra bty ybty).thread (csMainBody ra) [fmapEmpty] ⟨[], some csMain, default⟩)
-      (csMainBody ra) [fmapEmpty] ⟨[], some csMain, default⟩ σ₀ (fun v _ => v = csInt 4) := by
+      ((csCtx ra bty ybty).thread (csMainBody ra) [fmapEmpty] ⟨[], some csMain, default, default, default⟩)
+      (csMainBody ra) [fmapEmpty] ⟨[], some csMain, default, default, default⟩ σ₀ (fun v _ => v = csInt 4) := by
   refine engine_adequacy (GF := SpikeGF) (M := csCtx ra bty ybty) rfl rfl
-    (ctl := ⟨[], some csMain, default⟩) rfl
+    (ctl := ⟨[], some csMain, default, default, default⟩) rfl
     (fun l params cont hl => by rw [csCtx_lookupLabel] at hl; cases hl)
     (fun l params cont hl => by rw [csCtx_lookupLabel] at hl; cases hl)
     (csCtx_fragProcs ra bty ybty)
@@ -362,10 +360,9 @@ theorem call_smoke_engine (σ₀ : Mem) :
       (by rw [show esize (csMainBody ra) = 1 from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega))
     (csCoh_empty σ₀)
     (fun v _ => v = csInt 4)
-    ?_ (th₀ := (csCtx ra bty ybty).thread (csMainBody ra) [fmapEmpty] ⟨[], some csMain, default⟩)
-    rfl
+    ?_ (th₀ := (csCtx ra bty ybty).thread (csMainBody ra) [fmapEmpty] ⟨[], some csMain, default, default, default⟩)
   intro inst
-  exact (BigSepM.bigSepM_empty).1.trans (cs_wp_readout ra bty ybty default)
+  exact (BigSepM.bigSepM_empty).1.trans (cs_wp_readout ra bty ybty default default default)
 
 /-! ## The total twins (the `wpt` level; the driver-level total lane
 through calls is `wpt_driver_cps`, ProdLoop.lean — calls arc C4) -/
@@ -441,24 +438,22 @@ theorem csMain_wpt (ρ : EnvStack) :
   isplitl []
   · ipureintro
     exact ⟨Nat.le_refl 4, 3, rfl, by decide⟩
-  · iintro %ret %hpost
+  · iintro %ret %a1 %hpost
     obtain ⟨x, hx, rfl⟩ := hpost
     obtain rfl : x = 3 := (csInt_inj (List.cons.inj hx).1).symm
-    rw [show Expr [] (Epure (Pexpr [] () (PEval (csInt (3 + 1))))) =
-      ofVal (.pure (csInt (3 + 1))) from rfl]
-    iapply wpt_ofVal _ _ (Nat.le_refl 1)
+    iapply wpt_ofValA _ _ (Nat.le_refl 1)
     dsimp only [csPost]
     ipureintro
     rfl
 
 /-- The collapse into Iris TWP with the total table (`wpt_sound`). -/
-theorem cs_twp_readout (ℓ : exec_location) :
-    ⊢ WP (⟨csMainBody ra, [fmapEmpty], ⟨[], some csMain, ℓ⟩, csCtx ra bty ybty⟩ : CoreRt)
-        @ Stuckness.NotStuck; ⊤ [{ w, csPost (GF := GF) w.w w.ρ }] := by
+theorem cs_twp_readout (ℓ : exec_location) (lc : CerbLocation.Loc) (sp : RunSup) :
+    ⊢ WP (⟨csMainBody ra, [fmapEmpty], ⟨[], some csMain, ℓ, lc, sp⟩, csCtx ra bty ybty⟩ : CoreRt)
+        @ Stuckness.NotStuck; ⊤ [{ w, csPost (GF := GF) w.sv w.ρ }] := by
   refine (csMain_wpt ra bty ybty [fmapEmpty]).trans ?_
   refine (BI.emp_sep.2.trans (BI.sep_mono
     ((BI.emp_sep.2.trans (BI.sep_mono (csCtx_procSpecsT ra bty ybty) (cs_blockSpecsT ra bty ybty))).trans
-      (wpt_sound (ctl := ⟨[], some csMain, ℓ⟩) rfl 6 (csMainBody ra) [fmapEmpty])) .rfl)).trans ?_
+      (wpt_sound (ctl := ⟨[], some csMain, ℓ, lc, sp⟩) rfl 6 (csMainBody ra) [fmapEmpty])) .rfl)).trans ?_
   exact BI.wand_elim_left
 
 end CerberusHeapLang

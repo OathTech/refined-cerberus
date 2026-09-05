@@ -498,14 +498,14 @@ def trShift2 (s : sym) : generic_pexpr Unit sym :=
 def trRest (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (mo : memory_order) (ybty bbty ubty : core_base_type) : CoreExpr :=
   Expr [] (Esseq (specPat [] [] trYSym ybty)
-    (loadOpRedex loc ann treePtrTy (trShift1 trXSym) mo)
+    (loadOpRedex [] loc ann treePtrTy (trShift1 trXSym) mo)
     (Expr [] (Esseq (specPat [] [] trBSym bbty)
-      (loadOpRedex loc ann treePtrTy (trShift2 trYSym) mo)
+      (loadOpRedex [] loc ann treePtrTy (trShift2 trYSym) mo)
       (Expr [] (Esseq (Pattern [] (CaseBase (none, ubty)))
-        (storeOpRedex loc ann treePtrTy (trShift1 trXSym)
+        (storeOpRedex [] loc ann treePtrTy (trShift1 trXSym)
           (Pexpr [] () (PEsym trBSym)) mo)
         (Expr [] (Esseq (Pattern [] (CaseBase (none, ubty)))
-          (storeOpRedex loc ann treePtrTy (trShift2 trYSym)
+          (storeOpRedex [] loc ann treePtrTy (trShift2 trYSym)
             (Pexpr [] () (PEsym trXSym)) mo)
           (Expr [] (Epure (Pexpr [] () (PEsym trYSym)))))))))))
 
@@ -524,7 +524,7 @@ theorem trProg_frag (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (mo : memory_order) (xbty ybty bbty ubty : core_base_type)
     (px : CerbMem.PointerValue) :
     Frag (trProg loc ann mo xbty ybty bbty ubty px) := by
-  refine .sseq_sym (.val_pure _) (.val_pure _)
+  refine .sseq_sym (.val_pure _)
     (.sseq_spec
       (.load_op rfl
         (.arrayShift [] longTy (.sym _ _) (.val _ _))
@@ -718,9 +718,9 @@ theorem wps_load_tree_field {Ψ : SpikeVal → EnvStack → IProp GF}
     iprop(cellOwn M.tagDefs (GF := GF) id dq (SpikeCell.mk a treeTy bs) ∗
       (∀ fp, cellOwn M.tagDefs id dq (SpikeCell.mk a treeTy bs) -∗
         Ψ (SpikeVal.annot [DA_pos [] fp] ((valueFromMemValue mv).2)) ρ)) ⊢
-      wps M p Ls Θ Ψ (loadExpr loc ann treePtrTy (cellPtr id (a + (off : Int))) mo)
+      wps M p Ls Θ Ψ (loadExpr [] loc ann treePtrTy (cellPtr id (a + (off : Int))) mo)
         ρ :=
-  wps_load_cell_at loc ann id a treeTy off treePtrTy mo dq bs ρ
+  wps_load_cell_at [] loc ann id a treeTy off treePtrTy mo dq bs ρ
     (by rw [treePtrTy_size]; exact hbound)
     (by rw [treePtrTy_size]; exact hdec) rfl
 
@@ -743,9 +743,9 @@ theorem wps_store_tree_field {Ψ : SpikeVal → EnvStack → IProp GF}
       (∀ fp, cellOwn M.tagDefs id (.own 1) (SpikeCell.mk a treeTy
           (spliceBytes off (CerbMem.memValueToBytes M.tagDefs [] mv).2 bs)) -∗
         Ψ (SpikeVal.annot [DA_pos [] fp] Vunit) ρ)) ⊢
-      wps M p Ls Θ Ψ (storeExpr loc ann treePtrTy (cellPtr id (a + (off : Int)))
+      wps M p Ls Θ Ψ (storeExpr [] loc ann treePtrTy (cellPtr id (a + (off : Int)))
         cv mo) ρ :=
-  wps_store_cell_at loc ann id a treeTy off treePtrTy cv mo bs ρ hmv
+  wps_store_cell_at [] loc ann id a treeTy off treePtrTy cv mo bs ρ hmv
     (by rw [treePtrTy_size]; exact hbound)
     ⟨hcompat, hfpm, hbytes, by rw [treePtrTy_size]; exact hlen⟩
     (fun lum fpm => treeTy_dec_indep lum fpm a _)
@@ -769,9 +769,9 @@ theorem wpt_load_tree_field {Ψ : SpikeVal → EnvStack → IProp GF}
     iprop(cellOwn M.tagDefs (GF := GF) id dq (SpikeCell.mk a treeTy bs) ∗
       (∀ fp, cellOwn M.tagDefs id dq (SpikeCell.mk a treeTy bs) -∗
         Ψ (SpikeVal.annot [DA_pos [] fp] ((valueFromMemValue mv).2)) ρ)) ⊢
-      wpt M p Ls Θ k Ψ (loadExpr loc ann treePtrTy (cellPtr id (a + (off : Int))) mo)
+      wpt M p Ls Θ k Ψ (loadExpr [] loc ann treePtrTy (cellPtr id (a + (off : Int))) mo)
         ρ :=
-  wpt_load_cell_at loc ann id a treeTy off treePtrTy mo dq bs ρ hk
+  wpt_load_cell_at [] loc ann id a treeTy off treePtrTy mo dq bs ρ hk
     (by rw [treePtrTy_size]; exact hbound)
     (by rw [treePtrTy_size]; exact hdec) rfl
 
@@ -794,9 +794,9 @@ theorem wpt_store_tree_field {Ψ : SpikeVal → EnvStack → IProp GF}
       (∀ fp, cellOwn M.tagDefs id (.own 1) (SpikeCell.mk a treeTy
           (spliceBytes off (CerbMem.memValueToBytes M.tagDefs [] mv).2 bs)) -∗
         Ψ (SpikeVal.annot [DA_pos [] fp] Vunit) ρ)) ⊢
-      wpt M p Ls Θ k Ψ (storeExpr loc ann treePtrTy (cellPtr id (a + (off : Int)))
+      wpt M p Ls Θ k Ψ (storeExpr [] loc ann treePtrTy (cellPtr id (a + (off : Int)))
         cv mo) ρ :=
-  wpt_store_cell_at loc ann id a treeTy off treePtrTy cv mo bs ρ hk hmv
+  wpt_store_cell_at [] loc ann id a treeTy off treePtrTy cv mo bs ρ hk hmv
     (by rw [treePtrTy_size]; exact hbound)
     ⟨hcompat, hfpm, hbytes, by rw [treePtrTy_size]; exact hlen⟩
     (fun lum fpm => treeTy_dec_indep lum fpm a _)
@@ -904,18 +904,18 @@ theorem tree_rotate_wps
   -- y := x->left
   rw [show trRest loc ann mo ybty bbty ubty =
     Expr [] (Esseq (specPat [] [] trYSym ybty)
-      (loadOpRedex loc ann treePtrTy (trShift1 trXSym) mo)
+      (loadOpRedex [] loc ann treePtrTy (trShift1 trXSym) mo)
       (Expr [] (Esseq (specPat [] [] trBSym bbty)
-        (loadOpRedex loc ann treePtrTy (trShift2 trYSym) mo)
+        (loadOpRedex [] loc ann treePtrTy (trShift2 trYSym) mo)
         (Expr [] (Esseq (Pattern [] (CaseBase (none, ubty)))
-          (storeOpRedex loc ann treePtrTy (trShift1 trXSym)
+          (storeOpRedex [] loc ann treePtrTy (trShift1 trXSym)
             (Pexpr [] () (PEsym trBSym)) mo)
           (Expr [] (Esseq (Pattern [] (CaseBase (none, ubty)))
-            (storeOpRedex loc ann treePtrTy (trShift2 trYSym)
+            (storeOpRedex [] loc ann treePtrTy (trShift2 trYSym)
               (Pexpr [] () (PEsym trXSym)) mo)
             (Expr [] (Epure (Pexpr [] () (PEsym trYSym))))))))))) from rfl]
   iapply wps_seq_spec
-  iapply wps_load_eval loc ann treePtrTy (trShift1 trXSym) mo _
+  iapply wps_load_eval [] loc ann treePtrTy (trShift1 trXSym) mo _
     rfl (tr_shift1_eval_F1 idx aX)
   rw [show cellPtr idx (aX + 8) = cellPtr idx (aX + ((8 : Nat) : Int))
     from rfl]
@@ -936,7 +936,7 @@ theorem tree_rotate_wps
       trF2 (ptrVal (cellPtr idy aY)) (ptrVal (cellPtr idx aX)) from rfl]
   -- b := y->right
   iapply wps_seq_spec
-  iapply wps_load_eval loc ann treePtrTy (trShift2 trYSym) mo _
+  iapply wps_load_eval [] loc ann treePtrTy (trShift2 trYSym) mo _
     rfl (tr_shift2_eval_F2 idy aY _)
   rw [show cellPtr idy (aY + 16) = cellPtr idy (aY + ((16 : Nat) : Int))
     from rfl]
@@ -958,7 +958,7 @@ theorem tree_rotate_wps
         (ptrVal (cellPtr idx aX)) from rfl]
   -- x->left := b
   iapply wps_seq
-  iapply wps_store_eval loc ann treePtrTy _ _ mo _
+  iapply wps_store_eval [] loc ann treePtrTy _ _ mo _
     rfl (tr_shift1_eval_F3 _ _ idx aX)
     (tr_b_eval_F3 _ _ _)
   rw [show cellPtr idx (aX + 8) = cellPtr idx (aX + ((8 : Nat) : Int))
@@ -971,7 +971,7 @@ theorem tree_rotate_wps
   iintro %fp3 HptX
   -- y->right := x
   iapply wps_seq
-  iapply wps_store_eval loc ann treePtrTy _ _ mo _
+  iapply wps_store_eval [] loc ann treePtrTy _ _ mo _
     rfl (tr_shift2_eval_F3 _ _ idy aY)
     (tr_x_eval_F3 _ _ _)
   rw [show cellPtr idy (aY + 16) = cellPtr idy (aY + ((16 : Nat) : Int))
@@ -1104,7 +1104,7 @@ theorem tr_wp_readout [SpikeGS .hasLC GF]
   refine BI.wand_elim_left.trans ?_
   refine wp_mono fun w => ?_
   exact trPost_readout
-    (NodeTree.node idy vy ta (NodeTree.node idx vx tb tc)) R w.w w.ρ
+    (NodeTree.node idy vy ta (NodeTree.node idx vx tb tc)) R w.sv w.ρ
 
 /-- The rotated id list is a PERMUTATION of the original — here in
     the membership form the footprint conjunct consumes. -/
@@ -1183,7 +1183,7 @@ theorem tree_rotate_certified (sbty : core_base_type)
         (BI.sep_mono (seedTree_isTree _ m₀ px hseed) .rfl)).trans ?_
       exact tr_wp_readout loc ann mo xbty ybty bbty ubty
         idx idy vx vy ta tb tc px R)
-    (th₀ := spikeThread prog) rfl).mono ?_
+    (th₀ := spikeThread prog)).mono ?_
   intro v σ' hpost
   obtain ⟨Q, ⟨py, rfl, hQseed⟩, hdisj, hsat⟩ := hpost
   refine ⟨py, Q, rfl, hQseed, fun k => ?_, hdisj, hsat⟩
@@ -1246,20 +1246,20 @@ theorem tree_rotate_wpt
   rw [trBindX]
   rw [show trRest loc ann mo ybty bbty ubty =
     Expr [] (Esseq (specPat [] [] trYSym ybty)
-      (loadOpRedex loc ann treePtrTy (trShift1 trXSym) mo)
+      (loadOpRedex [] loc ann treePtrTy (trShift1 trXSym) mo)
       (Expr [] (Esseq (specPat [] [] trBSym bbty)
-        (loadOpRedex loc ann treePtrTy (trShift2 trYSym) mo)
+        (loadOpRedex [] loc ann treePtrTy (trShift2 trYSym) mo)
         (Expr [] (Esseq (Pattern [] (CaseBase (none, ubty)))
-          (storeOpRedex loc ann treePtrTy (trShift1 trXSym)
+          (storeOpRedex [] loc ann treePtrTy (trShift1 trXSym)
             (Pexpr [] () (PEsym trBSym)) mo)
           (Expr [] (Esseq (Pattern [] (CaseBase (none, ubty)))
-            (storeOpRedex loc ann treePtrTy (trShift2 trYSym)
+            (storeOpRedex [] loc ann treePtrTy (trShift2 trYSym)
               (Pexpr [] () (PEsym trXSym)) mo)
             (Expr [] (Epure (Pexpr [] () (PEsym trYSym))))))))))) from rfl,
     show (18 : Nat) = 4 + 14 from rfl]
   iapply wpt_seq_spec
   rw [show (4 : Nat) = 3 + 1 from rfl]
-  iapply wpt_load_eval loc ann treePtrTy (trShift1 trXSym) mo _
+  iapply wpt_load_eval [] loc ann treePtrTy (trShift1 trXSym) mo _
     rfl (tr_shift1_eval_F1 idx aX)
   rw [show cellPtr idx (aX + 8) = cellPtr idx (aX + ((8 : Nat) : Int))
     from rfl]
@@ -1281,7 +1281,7 @@ theorem tree_rotate_wpt
   rw [show (14 : Nat) = 4 + 10 from rfl]
   iapply wpt_seq_spec
   rw [show (4 : Nat) = 3 + 1 from rfl]
-  iapply wpt_load_eval loc ann treePtrTy (trShift2 trYSym) mo _
+  iapply wpt_load_eval [] loc ann treePtrTy (trShift2 trYSym) mo _
     rfl (tr_shift2_eval_F2 idy aY _)
   rw [show cellPtr idy (aY + 16) = cellPtr idy (aY + ((16 : Nat) : Int))
     from rfl]
@@ -1304,7 +1304,7 @@ theorem tree_rotate_wpt
   rw [show (10 : Nat) = 4 + 6 from rfl]
   iapply wpt_seq
   rw [show (4 : Nat) = 3 + 1 from rfl]
-  iapply wpt_store_eval loc ann treePtrTy _ _ mo _
+  iapply wpt_store_eval [] loc ann treePtrTy _ _ mo _
     rfl (tr_shift1_eval_F3 _ _ idx aX)
     (tr_b_eval_F3 _ _ _)
   rw [show cellPtr idx (aX + 8) = cellPtr idx (aX + ((8 : Nat) : Int))
@@ -1319,7 +1319,7 @@ theorem tree_rotate_wpt
   rw [show (6 : Nat) = 4 + 2 from rfl]
   iapply wpt_seq
   rw [show (4 : Nat) = 3 + 1 from rfl]
-  iapply wpt_store_eval loc ann treePtrTy _ _ mo _
+  iapply wpt_store_eval [] loc ann treePtrTy _ _ mo _
     rfl (tr_shift2_eval_F3 _ _ idy aY)
     (tr_x_eval_F3 _ _ _)
   rw [show cellPtr idy (aY + 16) = cellPtr idy (aY + ((16 : Nat) : Int))

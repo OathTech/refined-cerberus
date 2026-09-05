@@ -157,12 +157,12 @@ theorem twoField_load_x {Ψ : SpikeVal → EnvStack → IProp GF}
     iprop(twoField M.tagDefs (GF := GF) p xb yb ∗
       (∀ fp, twoField M.tagDefs p xb yb -∗
         Ψ (SpikeVal.annot [DA_pos [] fp] ((valueFromMemValue mv).2)) ρ)) ⊢
-      wps M pr Ls Θ Ψ (loadExpr loc ann fieldTy p mo) ρ := by
+      wps M pr Ls Θ Ψ (loadExpr [] loc ann fieldTy p mo) ρ := by
   iintro ⟨H, HΨ⟩
   icases (twoField_iff _ _ _ _).mp $$ H with ⟨%id, %a, %hp, Hx, Hy⟩
-  rw [hp, show loadExpr loc ann fieldTy (cellPtr id a) mo =
-    loadExpr loc ann fieldTy (cellPtr id (a + ((0 : Nat) : Int))) mo by simp]
-  iapply wps_load_at loc ann id a objTy 0 fieldTy mo (.own (Qp.half 1)) (.own 1) xb ρ
+  rw [hp, show loadExpr [] loc ann fieldTy (cellPtr id a) mo =
+    loadExpr [] loc ann fieldTy (cellPtr id (a + ((0 : Nat) : Int))) mo by simp]
+  iapply wps_load_at [] loc ann id a objTy 0 fieldTy mo (.own (Qp.half 1)) (.own 1) xb ρ
     (fun lum fpm => hdec lum fpm _) htrap
   isplitl [Hx]
   · iexact Hx
@@ -188,11 +188,11 @@ theorem twoField_load_y {Ψ : SpikeVal → EnvStack → IProp GF}
     iprop(twoField M.tagDefs (GF := GF) p xb yb ∗
       (∀ fp, twoField M.tagDefs p xb yb -∗
         Ψ (SpikeVal.annot [DA_pos [] fp] ((valueFromMemValue mv).2)) ρ)) ⊢
-      wps M pr Ls Θ Ψ (loadExpr loc ann fieldTy (fieldYPtr M.tagDefs p) mo) ρ := by
+      wps M pr Ls Θ Ψ (loadExpr [] loc ann fieldTy (fieldYPtr M.tagDefs p) mo) ρ := by
   iintro ⟨H, HΨ⟩
   icases (twoField_iff _ _ _ _).mp $$ H with ⟨%id, %a, %hp, Hx, Hy⟩
   rw [hp, fieldYPtr_cellPtr]
-  iapply wps_load_at loc ann id a objTy 8 fieldTy mo (.own (Qp.half 1)) (.own 1) yb ρ
+  iapply wps_load_at [] loc ann id a objTy 8 fieldTy mo (.own (Qp.half 1)) (.own 1) yb ρ
     (fun lum fpm => hdec lum fpm _) htrap
   isplitl [Hy]
   · iexact Hy
@@ -218,12 +218,12 @@ theorem twoField_store_x {Ψ : SpikeVal → EnvStack → IProp GF}
     iprop(twoField M.tagDefs (GF := GF) p xb yb ∗
       (∀ fp, twoField M.tagDefs p (CerbMem.memValueToBytes M.tagDefs [] mv).2 yb -∗
         Ψ (SpikeVal.annot [DA_pos [] fp] Vunit) ρ)) ⊢
-      wps M pr Ls Θ Ψ (storeExpr loc ann fieldTy p cv mo) ρ := by
+      wps M pr Ls Θ Ψ (storeExpr [] loc ann fieldTy p cv mo) ρ := by
   iintro ⟨H, HΨ⟩
   icases (twoField_iff _ _ _ _).mp $$ H with ⟨%id, %a, %hp, Hx, Hy⟩
-  rw [hp, show storeExpr loc ann fieldTy (cellPtr id a) cv mo =
-    storeExpr loc ann fieldTy (cellPtr id (a + ((0 : Nat) : Int))) cv mo by simp]
-  iapply wps_store_at loc ann id a objTy 0 fieldTy cv mo (.own (Qp.half 1)) xb ρ
+  rw [hp, show storeExpr [] loc ann fieldTy (cellPtr id a) cv mo =
+    storeExpr [] loc ann fieldTy (cellPtr id (a + ((0 : Nat) : Int))) cv mo by simp]
+  iapply wps_store_at [] loc ann id a objTy 0 fieldTy cv mo (.own (Qp.half 1)) xb ρ
     hmv hst.toView
   isplitl [Hx]
   · iexact Hx
@@ -248,11 +248,11 @@ theorem twoField_store_y {Ψ : SpikeVal → EnvStack → IProp GF}
     iprop(twoField M.tagDefs (GF := GF) p xb yb ∗
       (∀ fp, twoField M.tagDefs p xb (CerbMem.memValueToBytes M.tagDefs [] mv).2 -∗
         Ψ (SpikeVal.annot [DA_pos [] fp] Vunit) ρ)) ⊢
-      wps M pr Ls Θ Ψ (storeExpr loc ann fieldTy (fieldYPtr M.tagDefs p) cv mo) ρ := by
+      wps M pr Ls Θ Ψ (storeExpr [] loc ann fieldTy (fieldYPtr M.tagDefs p) cv mo) ρ := by
   iintro ⟨H, HΨ⟩
   icases (twoField_iff _ _ _ _).mp $$ H with ⟨%id, %a, %hp, Hx, Hy⟩
   rw [hp, fieldYPtr_cellPtr]
-  iapply wps_store_at loc ann id a objTy 8 fieldTy cv mo (.own (Qp.half 1)) yb ρ
+  iapply wps_store_at [] loc ann id a objTy 8 fieldTy cv mo (.own (Qp.half 1)) yb ρ
     hmv hst.toView
   isplitl [Hy]
   · iexact Hy
@@ -282,9 +282,9 @@ theorem twoField_create {Ψ : SpikeVal → EnvStack → IProp GF}
         (twoField M.tagDefs p undefField undefField ∗
           ⌜0 < addrOf p ∧ addrOf p < 2 ^ 64⌝) -∗
         Ψ (SpikeVal.pure (Vobject (OVpointer p))) ρ)) ⊢
-      wps M pr Ls Θ Ψ (createExpr loc ann (.IV aprov alignN) objTy pref) ρ := by
+      wps M pr Ls Θ Ψ (createExpr [] loc ann (.IV aprov alignN) objTy pref) ρ := by
   iintro ⟨Hcap, HΨ⟩
-  iapply wps_create loc ann aprov alignN objTy pref ρ objTy_size_pos objTy_nonatomic
+  iapply wps_create [] loc ann aprov alignN objTy pref ρ objTy_size_pos objTy_nonatomic
     (fun a => objTy_decIndep a _)
   isplitl [Hcap]
   · iexact Hcap

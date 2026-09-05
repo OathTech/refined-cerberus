@@ -90,16 +90,16 @@ def dlProcSym : sym := Symbol "" 605 SD_None
 
 /-- The null test: `memop(PtrEq, [cur, NULL(node)])`. -/
 def dlMemopE : CoreExpr :=
-  memopRedex PtrEq [Pexpr [] () (PEsym dlCurSym), Pexpr [] () (PEval nullVal)]
+  memopRedex [] PtrEq [Pexpr [] () (PEsym dlCurSym), Pexpr [] () (PEval nullVal)]
 
 /-- `load(node*, array_shift(cur, long, 1))` — n := cur->next. -/
 def dlLoadE (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (mo : memory_order) : CoreExpr :=
-  loadOpRedex loc ann nodePtrTy (lrShiftPe dlCurSym) mo
+  loadOpRedex [] loc ann nodePtrTy (lrShiftPe dlCurSym) mo
 
 /-- `kill(static node, cur)` — THE DISPOSE at the bound symbol. -/
 def dlKillE (loc : CerbLocation.Loc) (ann : core_run_annotation) : CoreExpr :=
-  killOpRedex loc ann (Static0 nodeTy) (Pexpr [] () (PEsym dlCurSym))
+  killOpRedex [] loc ann (Static0 nodeTy) (Pexpr [] () (PEsym dlCurSym))
 
 /-- The exit: the unit value. -/
 def dlExit : CoreExpr := Expr [] (Epure (Pexpr [] () (PEval Vunit)))
@@ -413,15 +413,15 @@ theorem dl_body_wps (done rest' : List (Int × Int))
     icases HC with %hnull
     subst hnull
     iapply wps_seq_sym
-    rw [show dlMemopE = memopRedex PtrEq
+    rw [show dlMemopE = memopRedex [] PtrEq
       [Pexpr [] () (PEsym dlCurSym), Pexpr [] () (PEval nullVal)] from rfl]
-    iapply wps_memop_eval PtrEq _ _ _
+    iapply wps_memop_eval [] PtrEq _ _ _
       dl_memop_operands_nonvalue (dl_cur_eval hf renv _) rfl
-    rw [show memopRedex PtrEq [Pexpr [] () (PEval (ptrVal nullNode)),
+    rw [show memopRedex [] PtrEq [Pexpr [] () (PEval (ptrVal nullNode)),
         Pexpr [] () (PEval nullVal)] =
-      memopPtrEqVals (Vobject (OVpointer nullNode))
+      memopPtrEqVals [] (Vobject (OVpointer nullNode))
         (Vobject (OVpointer nullNode)) from rfl]
-    iapply wps_memop_ptreq nullNode nullNode _
+    iapply wps_memop_ptreq [] nullNode nullNode _
       (fun σ => eqPtrval_null_null nodeTy nodeTy σ)
     iexists (boolValue true)
     isplit
@@ -443,15 +443,15 @@ theorem dl_body_wps (done rest' : List (Int × Int))
     icases HC with ⟨%aN, %q, %bs, %hfacts, Hpt, HT⟩
     obtain ⟨rfl, h0, h1, hlen, hval, hnext⟩ := hfacts
     iapply wps_seq_sym
-    rw [show dlMemopE = memopRedex PtrEq
+    rw [show dlMemopE = memopRedex [] PtrEq
       [Pexpr [] () (PEsym dlCurSym), Pexpr [] () (PEval nullVal)] from rfl]
-    iapply wps_memop_eval PtrEq _ _ _
+    iapply wps_memop_eval [] PtrEq _ _ _
       dl_memop_operands_nonvalue (dl_cur_eval hf renv _) rfl
-    rw [show memopRedex PtrEq [Pexpr [] () (PEval (ptrVal (cellPtr nd.1 aN))),
+    rw [show memopRedex [] PtrEq [Pexpr [] () (PEval (ptrVal (cellPtr nd.1 aN))),
         Pexpr [] () (PEval nullVal)] =
-      memopPtrEqVals (Vobject (OVpointer (cellPtr nd.1 aN)))
+      memopPtrEqVals [] (Vobject (OVpointer (cellPtr nd.1 aN)))
         (Vobject (OVpointer nullNode)) from rfl]
-    iapply wps_memop_ptreq (cellPtr nd.1 aN) nullNode _
+    iapply wps_memop_ptreq [] (cellPtr nd.1 aN) nullNode _
       (fun σ => eqPtrval_cell_null nd.1 aN nodeTy σ)
     iexists (boolValue false)
     isplit
@@ -469,8 +469,8 @@ theorem dl_body_wps (done rest' : List (Int × Int))
       from rfl]
     iapply wps_seq_spec
     rw [show dlLoadE loc ann mo =
-      loadOpRedex loc ann nodePtrTy (lrShiftPe dlCurSym) mo from rfl]
-    iapply wps_load_eval loc ann nodePtrTy (lrShiftPe dlCurSym) mo _
+      loadOpRedex [] loc ann nodePtrTy (lrShiftPe dlCurSym) mo from rfl]
+    iapply wps_load_eval [] loc ann nodePtrTy (lrShiftPe dlCurSym) mo _
       rfl (dl_shift_eval_B hf renv _ nd.1 aN)
     rw [show cellPtr nd.1 (aN + 8) = cellPtr nd.1 (aN + ((8 : Nat) : Int))
       from rfl]
@@ -490,11 +490,11 @@ theorem dl_body_wps (done rest' : List (Int × Int))
         (dlFrameB (boolValue false) (ptrVal (cellPtr nd.1 aN)) f) =
       dlFrameN (ptrVal q) (boolValue false) (ptrVal (cellPtr nd.1 aN)) f from rfl]
     iapply wps_seq
-    rw [show dlKillE loc ann = killOpRedex loc ann (Static0 nodeTy)
+    rw [show dlKillE loc ann = killOpRedex [] loc ann (Static0 nodeTy)
       (Pexpr [] () (PEsym dlCurSym)) from rfl]
-    iapply wps_kill_eval loc ann (Static0 nodeTy) _ _ rfl (pv := cellPtr nd.1 aN)
+    iapply wps_kill_eval [] loc ann (Static0 nodeTy) _ _ rfl (pv := cellPtr nd.1 aN)
       (by rw [procCtx_extern]; exact dl_kill_operand_eval hf renv _ _ _)
-    iapply wps_kill loc ann (Static0 nodeTy) (cellPtr nd.1 aN) nodeTy bs _ rfl
+    iapply wps_kill [] loc ann (Static0 nodeTy) (cellPtr nd.1 aN) nodeTy bs _ rfl
     isplitl [Hpt]
     · iapply (pointsToCell_cellOwn_iff _ _ _ _ _).mpr
       iexists nd.1, aN
@@ -613,14 +613,14 @@ variable (loc : CerbLocation.Loc) (ann ra : core_run_annotation)
 /-- The label body is in the certified cone: the kill is `Frag.kill_op`
     at the bound symbol (either kind since K3; here `Static0 nodeTy`). -/
 theorem dlBody_fragJ : Frag (dlBody loc ann ra mo bbty nbty ubty) := by
-  have hb : BareHead (memopRedex PtrEq
+  have hb : Frag (memopRedex [] PtrEq
       [Pexpr [] () (PEsym dlCurSym), Pexpr [] () (PEval nullVal)]) :=
     .memop_op rfl (.sym _ _) (.val _ _)
       (by rw [show peDepth (Pexpr ([] : List annot) () (PEsym dlCurSym)) = 1
           from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega)
       (by rw [show peDepth (Pexpr ([] : List annot) () (PEval nullVal)) = 1
           from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega)
-  refine .sseq_sym hb hb.frag
+  refine .sseq_sym hb
     (.if_ (PePure.of_isPePure rfl) (by
         rw [show peDepth (Pexpr ([] : List annot) () (PEsym dlBSym)) = 1
           from rfl, show lemDefaultFuel = 999999 + 1 from rfl]
@@ -705,16 +705,16 @@ theorem dl_body_wpt (done rest' : List (Int × Int))
     subst hnull
     rw [show dlCost ([] : List (Int × Int)).length = 3 + (1 + 1) from rfl]
     iapply wpt_seq_sym
-    rw [show dlMemopE = memopRedex PtrEq
+    rw [show dlMemopE = memopRedex [] PtrEq
       [Pexpr [] () (PEsym dlCurSym), Pexpr [] () (PEval nullVal)] from rfl,
       show (3 : Nat) = 2 + 1 from rfl]
-    iapply wpt_memop_eval PtrEq _ _ _
+    iapply wpt_memop_eval [] PtrEq _ _ _
       dl_memop_operands_nonvalue (dl_cur_eval hf renv _) rfl
-    rw [show memopRedex PtrEq [Pexpr [] () (PEval (ptrVal nullNode)),
+    rw [show memopRedex [] PtrEq [Pexpr [] () (PEval (ptrVal nullNode)),
         Pexpr [] () (PEval nullVal)] =
-      memopPtrEqVals (Vobject (OVpointer nullNode))
+      memopPtrEqVals [] (Vobject (OVpointer nullNode))
         (Vobject (OVpointer nullNode)) from rfl]
-    iapply wpt_memop_ptreq nullNode nullNode _ (by omega)
+    iapply wpt_memop_ptreq [] nullNode nullNode _ (by omega)
       (fun σ => eqPtrval_null_null nodeTy nodeTy σ)
     iexists (boolValue true)
     isplit
@@ -736,16 +736,16 @@ theorem dl_body_wpt (done rest' : List (Int × Int))
     obtain ⟨rfl, h0, h1, hlen, hval, hnext⟩ := hfacts
     rw [show (nd :: vs).length = vs.length + 1 from rfl, dlCost_succ]
     iapply wpt_seq_sym
-    rw [show dlMemopE = memopRedex PtrEq
+    rw [show dlMemopE = memopRedex [] PtrEq
       [Pexpr [] () (PEsym dlCurSym), Pexpr [] () (PEval nullVal)] from rfl,
       show (3 : Nat) = 2 + 1 from rfl]
-    iapply wpt_memop_eval PtrEq _ _ _
+    iapply wpt_memop_eval [] PtrEq _ _ _
       dl_memop_operands_nonvalue (dl_cur_eval hf renv _) rfl
-    rw [show memopRedex PtrEq [Pexpr [] () (PEval (ptrVal (cellPtr nd.1 aN))),
+    rw [show memopRedex [] PtrEq [Pexpr [] () (PEval (ptrVal (cellPtr nd.1 aN))),
         Pexpr [] () (PEval nullVal)] =
-      memopPtrEqVals (Vobject (OVpointer (cellPtr nd.1 aN)))
+      memopPtrEqVals [] (Vobject (OVpointer (cellPtr nd.1 aN)))
         (Vobject (OVpointer nullNode)) from rfl]
-    iapply wpt_memop_ptreq (cellPtr nd.1 aN) nullNode _ (by omega)
+    iapply wpt_memop_ptreq [] (cellPtr nd.1 aN) nullNode _ (by omega)
       (fun σ => eqPtrval_cell_null nd.1 aN nodeTy σ)
     iexists (boolValue false)
     isplit
@@ -765,9 +765,9 @@ theorem dl_body_wpt (done rest' : List (Int × Int))
       from rfl]
     iapply wpt_seq_spec
     rw [show dlLoadE loc ann mo =
-      loadOpRedex loc ann nodePtrTy (lrShiftPe dlCurSym) mo from rfl,
+      loadOpRedex [] loc ann nodePtrTy (lrShiftPe dlCurSym) mo from rfl,
       show (4 : Nat) = 3 + 1 from rfl]
-    iapply wpt_load_eval loc ann nodePtrTy (lrShiftPe dlCurSym) mo _
+    iapply wpt_load_eval [] loc ann nodePtrTy (lrShiftPe dlCurSym) mo _
       rfl (dl_shift_eval_B hf renv _ nd.1 aN)
     rw [show cellPtr nd.1 (aN + 8) = cellPtr nd.1 (aN + ((8 : Nat) : Int))
       from rfl]
@@ -788,12 +788,12 @@ theorem dl_body_wpt (done rest' : List (Int × Int))
         (dlFrameB (boolValue false) (ptrVal (cellPtr nd.1 aN)) f) =
       dlFrameN (ptrVal q) (boolValue false) (ptrVal (cellPtr nd.1 aN)) f from rfl]
     iapply wpt_seq
-    rw [show dlKillE loc ann = killOpRedex loc ann (Static0 nodeTy)
+    rw [show dlKillE loc ann = killOpRedex [] loc ann (Static0 nodeTy)
       (Pexpr [] () (PEsym dlCurSym)) from rfl,
       show (3 : Nat) = 2 + 1 from rfl]
-    iapply wpt_kill_eval loc ann (Static0 nodeTy) _ _ rfl (pv := cellPtr nd.1 aN)
+    iapply wpt_kill_eval [] loc ann (Static0 nodeTy) _ _ rfl (pv := cellPtr nd.1 aN)
       (by rw [procCtx_extern]; exact dl_kill_operand_eval hf renv _ _ _)
-    iapply wpt_kill loc ann (Static0 nodeTy) (cellPtr nd.1 aN) nodeTy bs _
+    iapply wpt_kill [] loc ann (Static0 nodeTy) (cellPtr nd.1 aN) nodeTy bs _
       (Nat.le_refl 2) rfl
     isplitl [Hpt]
     · iapply (pointsToCell_cellOwn_iff _ _ _ _ _).mpr
@@ -1104,27 +1104,27 @@ theorem lrProdPrefix_wpt {Ls : LabelSpecT GF} (bty : core_base_type)
   iintro ⟨Hcap, HF⟩
   rw [show lrProdPrefix ra mo bty k =
     Expr [] (Esseq (symPat [] lrN1Sym bty)
-      (createExpr loc0 empty_annotation (.IV .Prov_none 8) nodeTy
+      (createExpr [] loc0 empty_annotation (.IV .Prov_none 8) nodeTy
         (PrefOther "lr-n1"))
       (Expr [] (Esseq (symPat [] lrN2Sym bty)
-        (createExpr loc0 empty_annotation (.IV .Prov_none 8) nodeTy
+        (createExpr [] loc0 empty_annotation (.IV .Prov_none 8) nodeTy
           (PrefOther "lr-n2"))
         (Expr [] (Esseq (Pattern [] (CaseBase (none, bty)))
-          (storeOpRedex loc0 empty_annotation longTy
+          (storeOpRedex [] loc0 empty_annotation longTy
             (Pexpr [] () (PEsym lrN1Sym)) (Pexpr [] () (PEval (longVal 1))) mo)
           (Expr [] (Esseq (Pattern [] (CaseBase (none, bty)))
-            (storeOpRedex loc0 empty_annotation nodePtrTy
+            (storeOpRedex [] loc0 empty_annotation nodePtrTy
               (lrShiftPe lrN1Sym) (Pexpr [] () (PEsym lrN2Sym)) mo)
             (Expr [] (Esseq (Pattern [] (CaseBase (none, bty)))
-              (storeOpRedex loc0 empty_annotation longTy
+              (storeOpRedex [] loc0 empty_annotation longTy
                 (Pexpr [] () (PEsym lrN2Sym)) (Pexpr [] () (PEval (longVal 2))) mo)
               (Expr [] (Esseq (Pattern [] (CaseBase (none, bty)))
-                (storeOpRedex loc0 empty_annotation nodePtrTy
+                (storeOpRedex [] loc0 empty_annotation nodePtrTy
                   (lrShiftPe lrN2Sym) (Pexpr [] () (PEval nullVal)) mo)
                 k))))))))))) from rfl]
   iapply wpt_seq_sym
   icases (allocBudget_split _ _).1 $$ Hcap with ⟨Hcap, Hcap₂⟩
-  iapply wpt_create loc0 empty_annotation .Prov_none 8 nodeTy
+  iapply wpt_create [] loc0 empty_annotation .Prov_none 8 nodeTy
     (PrefOther "lr-n1") (ev0 :: evs) (Nat.le_refl 2)
     nodeTy_size_pos nodeTy_nonatomic nodeTy_decIndep_undef
   isplitl [Hcap]
@@ -1136,7 +1136,7 @@ theorem lrProdPrefix_wpt {Ls : LabelSpecT GF} (bty : core_base_type)
     rfl
   rw [update_env_sym lrN1Sym bty]
   iapply wpt_seq_sym
-  iapply wpt_create loc0 empty_annotation .Prov_none 8 nodeTy
+  iapply wpt_create [] loc0 empty_annotation .Prov_none 8 nodeTy
     (PrefOther "lr-n2") _ (Nat.le_refl 2)
     nodeTy_size_pos nodeTy_nonatomic nodeTy_decIndep_undef
   isplitl [Hcap₂]
@@ -1159,17 +1159,17 @@ theorem lrProdPrefix_wpt {Ls : LabelSpecT GF} (bty : core_base_type)
   rw [addrOf_cellPtr] at hb₁ hb₂
   -- store 1: node 1's value field
   iapply wpt_seq
-  iapply wpt_store_eval loc0 empty_annotation longTy _ _ mo _ rfl
+  iapply wpt_store_eval [] loc0 empty_annotation longTy _ _ mo _ rfl
     (pv := cellPtr i₁ a₁) (cv := longVal 1)
     (by rw [procCtx_extern, evalPexpr_sym_empty]
         exact lookup_env_head (lrPFrame_lookup_n1 hf _ _) evs)
     rfl
-  rw [show (storeExpr loc0 empty_annotation longTy (cellPtr i₁ a₁)
+  rw [show (storeExpr [] loc0 empty_annotation longTy (cellPtr i₁ a₁)
       (longVal 1) mo : CoreExpr) =
-    storeExpr loc0 empty_annotation longTy
+    storeExpr [] loc0 empty_annotation longTy
       (cellPtr i₁ (a₁ + ((0 : Nat) : Int))) (longVal 1) mo from by
     rw [show a₁ + ((0 : Nat) : Int) = a₁ from by omega]]
-  iapply wpt_store_cell_at (mv := longMval 1) loc0 empty_annotation i₁
+  iapply wpt_store_cell_at [] (mv := longMval 1) loc0 empty_annotation i₁
     a₁ nodeTy 0 longTy (longVal 1) mo nodeUndefBytes _ (Nat.le_refl 3) rfl
     (by rw [show CerbMem.sizeofCtype (procCtx rs).tagDefs longTy = 8 from rfl,
       show CerbMem.sizeofCtype (procCtx rs).tagDefs nodeTy = 16 from rfl]; omega)
@@ -1180,7 +1180,7 @@ theorem lrProdPrefix_wpt {Ls : LabelSpecT GF} (bty : core_base_type)
   iintro %fp1 Hcell₁
   -- store 2: node 1's next field := node 2
   iapply wpt_seq
-  iapply wpt_store_eval loc0 empty_annotation nodePtrTy _ _ mo _ rfl
+  iapply wpt_store_eval [] loc0 empty_annotation nodePtrTy _ _ mo _ rfl
     (pv := cellPtr i₁ (a₁ + 8)) (cv := ptrVal (cellPtr i₂ a₂))
     (by rw [procCtx_extern]
         exact lrPFrame_shift_n1 hf (ptrVal (cellPtr i₂ a₂)) evs i₁ a₁)
@@ -1200,17 +1200,17 @@ theorem lrProdPrefix_wpt {Ls : LabelSpecT GF} (bty : core_base_type)
   iintro %fp2 Hcell₁
   -- store 3: node 2's value field
   iapply wpt_seq
-  iapply wpt_store_eval loc0 empty_annotation longTy _ _ mo _ rfl
+  iapply wpt_store_eval [] loc0 empty_annotation longTy _ _ mo _ rfl
     (pv := cellPtr i₂ a₂) (cv := longVal 2)
     (by rw [procCtx_extern, evalPexpr_sym_empty]
         exact lookup_env_head (lrPFrame_lookup_n2 hf _ _) evs)
     rfl
-  rw [show (storeExpr loc0 empty_annotation longTy (cellPtr i₂ a₂)
+  rw [show (storeExpr [] loc0 empty_annotation longTy (cellPtr i₂ a₂)
       (longVal 2) mo : CoreExpr) =
-    storeExpr loc0 empty_annotation longTy
+    storeExpr [] loc0 empty_annotation longTy
       (cellPtr i₂ (a₂ + ((0 : Nat) : Int))) (longVal 2) mo from by
     rw [show a₂ + ((0 : Nat) : Int) = a₂ from by omega]]
-  iapply wpt_store_cell_at (mv := longMval 2) loc0 empty_annotation i₂
+  iapply wpt_store_cell_at [] (mv := longMval 2) loc0 empty_annotation i₂
     a₂ nodeTy 0 longTy (longVal 2) mo nodeUndefBytes _ (Nat.le_refl 3) rfl
     (by rw [show CerbMem.sizeofCtype (procCtx rs).tagDefs longTy = 8 from rfl,
       show CerbMem.sizeofCtype (procCtx rs).tagDefs nodeTy = 16 from rfl]; omega)
@@ -1221,7 +1221,7 @@ theorem lrProdPrefix_wpt {Ls : LabelSpecT GF} (bty : core_base_type)
   iintro %fp3 Hcell₂
   -- store 4: node 2's next field := NULL
   iapply wpt_seq
-  iapply wpt_store_eval loc0 empty_annotation nodePtrTy _ _ mo _ rfl
+  iapply wpt_store_eval [] loc0 empty_annotation nodePtrTy _ _ mo _ rfl
     (pv := cellPtr i₂ (a₂ + 8)) (cv := nullVal)
     (by rw [procCtx_extern]
         exact lrPFrame_shift_n2 hf (ptrVal (cellPtr i₁ a₁)) evs i₂ a₂)
@@ -1503,7 +1503,7 @@ theorem dispose_list_certified_production (sup : Nat) (ra : core_run_annotation)
       hQprod ψD
       (2 + (2 + ((3 + 1) + ((3 + 1) + ((3 + 1) + ((3 + 1) +
         (dlCost 2 + saveEntryCost (dlProdParams cbty))))))))
-      (wpt_driver_done_alloc (GF := SpikeGF)
+      (wpt_driver_done_alloc (GF := SpikeGF) (ctl := prodCtl)
         (M₀ := procCtx ((initial_core_run_state sup
           (collect_labeled_continuations_NEW
             (prodFile (dlProdProg ra mo bty sbty cbty bbty nbty ubty)))).1))

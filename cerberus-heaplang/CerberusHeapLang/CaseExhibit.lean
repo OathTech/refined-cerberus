@@ -57,7 +57,7 @@ def caseBranch : CoreExpr := Expr [] (Epure (Pexpr [] () (PEsym caseXSym)))
 /-- `case v of x => pure(x) end` (the canonical case-redex spelling —
     `Frag.case_value`'s range). -/
 def caseProg (v : value) : CoreExpr :=
-  caseRedex (Pexpr [] () (PEval v))
+  caseRedex [] (Pexpr [] () (PEval v))
     [(symPat [] caseXSym BTy_unit, caseBranch)]
 
 /-- The selection COMPUTES: the binder pattern matches any value and
@@ -177,7 +177,7 @@ theorem case_certified {GF : BundledGFunctors} [SpikeGpreS GF] (v : value) (σ�
         (Iris.Std.LawfulPartialMap.get?_empty (M := SpikeHeapF) _))
         (Option.some_ne_none c1)))
     (fun v' _ => v' = v)
-    ?_ (th₀ := spikeThread (caseProg v)) rfl
+    ?_ (th₀ := spikeThread (caseProg v))
   intro inst
   exact (BigSepM.bigSepM_empty).1.trans (case_wp_readout v)
 

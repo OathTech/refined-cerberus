@@ -217,10 +217,12 @@ def trioExports : List Name := [
   -- action, the no-current-procedure panic shape, the classifier's value
   -- face, the KILL bridge level by level, the eight KILL step equations
   -- and the driver's with-runstate kill
-  -- (`BareHead.not_annot` and `Decomp.get_ctx_rebuild_action` have
-  -- SUB-trio cones — [propext] / [Quot.sound, propext] — so they cannot
-  -- sit in an EXACT-trio pin list; the exhaustive sweep bounds them)
-  ``CerberusHeapLang.BareHead.step,
+  -- (`Decomp.get_ctx_rebuild_action` has a SUB-trio cone —
+  -- [Quot.sound, propext] — so it cannot sit in an EXACT-trio pin list;
+  -- the exhaustive sweep bounds it. `BareHead.step` was pinned here until
+  -- E1 (2026-09-05) retired `BareHead` — the LETS-ANNOT beta is mirrored
+  -- and `Frag.sseq_sym` admits any fragment head — so the pin is REMOVED,
+  -- recorded in cerberus-heaplang/docs/2026-09-04_e1-notes.md.)
   ``CerberusHeapLang.step_ctx_load_illtyped', ``CerberusHeapLang.step_ctx_store_illtyped',
   ``CerberusHeapLang.step_ctx_run_noproc,
   ``CerberusHeapLang.evalClass_val_iff, ``CerberusHeapLang.evalClassList_vals_iff,
@@ -507,7 +509,8 @@ def trioExports : List Name := [
   ``CerberusHeapLang.csCtx_fragProcs,
   -- calls arc C4 (2026-09-03): RECURSIVE FIB ON THE SHIPPED PIPELINE — the
   -- β-generic symbol-map lookup law (EnvLaws; the smoke's law moved), the
-  -- plain-symbol binder's call head (`BareHead.decomp_call_root`), THE
+  -- plain-symbol binder's call head (formerly `BareHead.decomp_call_root`,
+  -- retired at E1 with `BareHead`), THE
   -- TOTAL DRIVER LANE THROUGH CALLS (the live-control delivery fact's
   -- value/annot/step rounds, the CPS driver induction `wpt_driver_cps`, its
   -- launcher `wpt_driver_done_procs`, the whole-file registration tie), the
@@ -520,9 +523,8 @@ def trioExports : List Name := [
   -- by the call rule, the partial closed statement `fib_rec_certified`
   -- (restated over `drive_lemFuel` in the fuel-lane restatement) and THE
   -- EIGHTH ROOT-OF-TRUST STATEMENT `fib_rec_certified_production`.
-  -- (`BareHead.decomp_call_root` — `[propext]` — and `fibRounds_closed` —
-  -- `[propext, Quot.sound]` — have SUB-trio cones: unpinnable here, bounded
-  -- by the sweep.)
+  -- (`fibRounds_closed` — `[propext, Quot.sound]` — has a SUB-trio cone:
+  -- unpinnable here, bounded by the sweep.)
   ``CerberusHeapLang.symAdd_lookup, ``CerberusHeapLang.symAdd_lookup_two,
   ``CerberusHeapLang.procEnv_single,
   ``CerberusHeapLang.LabeledProcs.of_fibers, ``CerberusHeapLang.driverDoneCtl_value,

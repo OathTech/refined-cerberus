@@ -21,7 +21,7 @@ THE PROGRAM (Core):
   proc main () := fib(n₀)
 
 `lets x = fib(…) in …` binds a call's result at the plain-symbol binder
-(`Frag.sseq_sym` with `BareHead.call`, C4: the RETURN plugs a BARE value);
+(`Frag.sseq_sym` at a call head, C4: the RETURN plugs a BARE value);
 `x + y` is computed by the fragment's binder for pure computation, a
 `save` at an evaluated initializer (`Frag.save`, as the C3 smoke) — its
 label `r` is registered in `fib`'s fiber by the shipped registration and
@@ -94,25 +94,25 @@ def frSumPe : generic_pexpr Unit sym :=
 
 /-- `save r(z := x + y) in pure(z)`. -/
 def frSum (sbty zbty : core_base_type) : CoreExpr :=
-  saveRedex (frRSym, sbty) [(frZSym, ((zbty, none), frSumPe))]
-    (pureRedex (Pexpr [] () (PEsym frZSym)))
+  saveRedex [] (frRSym, sbty) [(frZSym, ((zbty, none), frSumPe))]
+    (pureRedex [] (Pexpr [] () (PEsym frZSym)))
 
 /-- `lets y = fib(n - 2) in save …`. -/
 def frInner (ra : core_run_annotation) (ybty sbty zbty : core_base_type) : CoreExpr :=
-  Expr [] (Esseq (symPat [] frYSym ybty) (callRedex ra frSym [frDec2]) (frSum sbty zbty))
+  Expr [] (Esseq (symPat [] frYSym ybty) (callRedex [] ra frSym [frDec2]) (frSum sbty zbty))
 
 /-- `lets x = fib(n - 1) in lets y = …`. -/
 def frOuter (ra : core_run_annotation) (xbty ybty sbty zbty : core_base_type) : CoreExpr :=
-  Expr [] (Esseq (symPat [] frXSym xbty) (callRedex ra frSym [frDec1]) (frInner ra ybty sbty zbty))
+  Expr [] (Esseq (symPat [] frXSym xbty) (callRedex [] ra frSym [frDec1]) (frInner ra ybty sbty zbty))
 
 /-- THE BODY: `if n < 2 then pure(n) else lets x = fib(n - 1) in lets y =
     fib(n - 2) in save r(z := x + y) in pure(z)`. -/
 def frBody (ra : core_run_annotation) (xbty ybty sbty zbty : core_base_type) : CoreExpr :=
-  Expr [] (Eif frGuard (pureRedex (Pexpr [] () (PEsym frNSym))) (frOuter ra xbty ybty sbty zbty))
+  Expr [] (Eif frGuard (pureRedex [] (Pexpr [] () (PEsym frNSym))) (frOuter ra xbty ybty sbty zbty))
 
 /-- `main`: `fib(n)`. -/
 def frMain (ra : core_run_annotation) (n : Int) : CoreExpr :=
-  callRedex ra frSym [Pexpr [] () (PEval (ivVal n))]
+  callRedex [] ra frSym [Pexpr [] () (PEval (ivVal n))]
 
 /-- The declared procedures: `fib` alone. -/
 def frProcs (ra : core_run_annotation) (nbty xbty ybty sbty zbty : core_base_type) :
@@ -121,7 +121,7 @@ def frProcs (ra : core_run_annotation) (nbty xbty ybty sbty zbty : core_base_typ
 
 /-- The registered label map of `fib`'s body: `r ↦ ([(z, zbty)], pure(z))`. -/
 def frQ (zbty : core_base_type) : LabelMap :=
-  symAdd frRSym ([(frZSym, zbty)], pureRedex (Pexpr [] () (PEsym frZSym))) fmapEmpty
+  symAdd frRSym ([(frZSym, zbty)], pureRedex [] (Pexpr [] () (PEsym frZSym))) fmapEmpty
 
 section FrFile
 
@@ -218,7 +218,7 @@ theorem frCtx_labels_main (sup : Nat) :
 
 theorem frQ_lookup_inv {l : sym} {params : List (sym × core_base_type)} {cont : CoreExpr}
     (h : lookupLabel (frQ zbty) l = some (params, cont)) :
-    params = [(frZSym, zbty)] ∧ cont = pureRedex (Pexpr [] () (PEsym frZSym)) := by
+    params = [(frZSym, zbty)] ∧ cont = pureRedex [] (Pexpr [] () (PEsym frZSym)) := by
   unfold lookupLabel frQ at h
   rw [symAdd_lookup symMap_empty] at h
   split at h
@@ -304,14 +304,14 @@ theorem frSum_depth :
     omega
 
 /-- `fib`'s body is in the fragment: the guard, the base case's PURE, the
-    two calls bound at the plain-symbol binder (`BareHead.call`), the `save`
+    two calls bound at the plain-symbol binder (`Frag.call` head), the `save`
     and its PURE exit. -/
 theorem frBody_frag : Frag (frBody ra xbty ybty sbty zbty) :=
   .if_ (PePure.of_isPePure rfl)
     (by rw [show peDepth frGuard = 2 from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega)
     .pure_sym
-    (.sseq_sym (.call frDec1_pure frDec1_depth) (.call frDec1_pure frDec1_depth)
-      (.sseq_sym (.call frDec2_pure frDec2_depth) (.call frDec2_pure frDec2_depth)
+    (.sseq_sym (.call frDec1_pure frDec1_depth)
+      (.sseq_sym (.call frDec2_pure frDec2_depth)
         (.save (frSum_pure zbty) (frSum_depth zbty) .pure_sym)))
 
 theorem frMain_frag : Frag (frMain ra n) :=
@@ -346,7 +346,7 @@ theorem frCtx_fragProcs (sup : Nat) : (frCtx ra n nbty xbty ybty sbty zbty sup).
     · rw [h] at hl
       obtain ⟨-, rfl⟩ := frQ_lookup_inv zbty hl
       exact ⟨.pure_sym, by
-        rw [show pot (pureRedex (Pexpr [] () (PEsym frZSym))) = 2 from rfl,
+        rw [show pot (pureRedex [] (Pexpr [] () (PEsym frZSym))) = 2 from rfl,
           show lemDefaultFuel = 999999 + 1 from rfl]
         omega⟩
     · rw [h, show lookupLabel fmapEmpty l = none from rfl] at hl
@@ -537,7 +537,7 @@ theorem frBody_wps (g : sym) (vs : List value) (ρ : EnvStack) :
       (by show evalPexpr fmapEmpty fmapEmpty _ frGuard = _
           rw [frGuard_eval, decide_eq_false hlt]; rfl)
     unfold frOuter
-    iapply wps_seq_sym [] [] frXSym xbty (callRedex ra frSym [frDec1]) _ (frF0 n') ρ
+    iapply wps_seq_sym [] [] frXSym xbty (callRedex [] ra frSym [frDec1]) _ (frF0 n') ρ
     unfold callRedex
     iapply wps_call_root [] ra frSym [frDec1] (frF0 n' :: ρ) (vs := [ivVal (n' - 1)])
       (frFile_lookup_fib ra n nbty xbty ybty sbty zbty) rfl (frDec1_eval n' ρ)
@@ -545,18 +545,16 @@ theorem frBody_wps (g : sym) (vs : List value) (ρ : EnvStack) :
     isplitl []
     · ipureintro
       exact ⟨n' - 1, rfl, by omega⟩
-    · iintro %ret %hpost
+    · iintro %ret %a1 %hpost
       obtain ⟨m1, hm1, rfl⟩ := hpost
       obtain rfl : m1 = n' - 1 := (ivVal_inj (List.cons.inj hm1).1).symm
-      rw [show Expr [] (Epure (Pexpr [] () (PEval (ivVal (fibSpec (n' - 1).toNat))))) =
-        ofVal (.pure (ivVal (fibSpec (n' - 1).toNat))) from rfl]
-      iapply wps_ofVal
+      iapply wps_ofValA
       iexists (ivVal (fibSpec (n' - 1).toNat))
       isplit
       · ipureintro; rfl
       · rw [update_env_sym]
         unfold frInner
-        iapply wps_seq_sym [] [] frYSym ybty (callRedex ra frSym [frDec2]) _ (frF1 n' _) ρ
+        iapply wps_seq_sym [] [] frYSym ybty (callRedex [] ra frSym [frDec2]) _ (frF1 n' _) ρ
         unfold callRedex
         iapply wps_call_root [] ra frSym [frDec2] (frF1 n' _ :: ρ) (vs := [ivVal (n' - 2)])
           (frFile_lookup_fib ra n nbty xbty ybty sbty zbty) rfl (frDec2_eval n' _ ρ)
@@ -564,12 +562,10 @@ theorem frBody_wps (g : sym) (vs : List value) (ρ : EnvStack) :
         isplitl []
         · ipureintro
           exact ⟨n' - 2, rfl, by omega⟩
-        · iintro %ret %hpost
+        · iintro %ret %a1 %hpost
           obtain ⟨m2, hm2, rfl⟩ := hpost
           obtain rfl : m2 = n' - 2 := (ivVal_inj (List.cons.inj hm2).1).symm
-          rw [show Expr [] (Epure (Pexpr [] () (PEval (ivVal (fibSpec (n' - 2).toNat))))) =
-            ofVal (.pure (ivVal (fibSpec (n' - 2).toNat))) from rfl]
-          iapply wps_ofVal
+          iapply wps_ofValA
           iexists (ivVal (fibSpec (n' - 2).toNat))
           isplit
           · ipureintro; rfl
@@ -622,20 +618,18 @@ theorem frMain_wps (hn : 0 ≤ n) (ρ : EnvStack) :
   isplitl []
   · ipureintro
     exact ⟨n, rfl, hn⟩
-  · iintro %ret %hpost
+  · iintro %ret %a1 %hpost
     obtain ⟨m, hm, rfl⟩ := hpost
     obtain rfl : n = m := ivVal_inj (List.cons.inj hm).1
-    rw [show Expr [] (Epure (Pexpr [] () (PEval (ivVal (fibSpec n.toNat))))) =
-      ofVal (.pure (ivVal (fibSpec n.toNat))) from rfl]
-    iapply wps_ofVal
+    iapply wps_ofValA
     dsimp only [frPost]
     ipureintro
     rfl
 
 /-- The base-WP face with the engine readout: `wps_sound` WITH the table
     at the production entry control. -/
-theorem fr_wp_readout (hn : 0 ≤ n) (ℓ : exec_location) :
-    ⊢ WP (⟨frMain ra n, [fmapEmpty], ⟨[], some mainSym, ℓ⟩,
+theorem fr_wp_readout (hn : 0 ≤ n) (ℓ : exec_location) (lc : CerbLocation.Loc) (sp : RunSup) :
+    ⊢ WP (⟨frMain ra n, [fmapEmpty], ⟨[], some mainSym, ℓ, lc, sp⟩,
           frCtx ra n nbty xbty ybty sbty zbty sup⟩ : CoreRt)
         @ Stuckness.NotStuck; ⊤
         {{ w, iprop(∀ (σ' : Mem) (ns : Nat) (κs : List Empty) (nt : Nat),
@@ -645,7 +639,7 @@ theorem fr_wp_readout (hn : 0 ≤ n) (ℓ : exec_location) :
   refine (BI.emp_sep.2.trans (BI.sep_mono
     ((BI.emp_sep.2.trans (BI.sep_mono (frCtx_procSpecs ra n nbty xbty ybty sbty zbty sup)
       (fr_blockSpecs ra n nbty xbty ybty sbty zbty sup))).trans
-      (wps_sound (ctl := ⟨[], some mainSym, ℓ⟩) rfl (frMain ra n) [fmapEmpty])) .rfl)).trans ?_
+      (wps_sound (ctl := ⟨[], some mainSym, ℓ, lc, sp⟩) rfl (frMain ra n) [fmapEmpty])) .rfl)).trans ?_
   refine BI.wand_elim_left.trans ?_
   exact wp_mono fun w => stateInterp_readout fun _ _ _ _ _ => pure_consequence _
 
@@ -685,7 +679,7 @@ theorem frBody_wpt (g : sym) (m : Nat) (vs : List value) (ρ : EnvStack) :
       (by show evalPexpr fmapEmpty fmapEmpty _ frGuard = _
           rw [frGuard_eval, decide_eq_false hlt]; rfl)
     unfold frOuter
-    iapply wpt_seq_sym [] [] frXSym xbty (callRedex ra frSym [frDec1]) _ (frF0 n') ρ
+    iapply wpt_seq_sym [] [] frXSym xbty (callRedex [] ra frSym [frDec1]) _ (frF0 n') ρ
       (fibRounds (n' - 1).toNat + 2) ((fibRounds (n' - 2).toNat + 2) + 4)
     unfold callRedex
     iapply wpt_call_root [] ra frSym [frDec1] (frF0 n' :: ρ) (vs := [ivVal (n' - 1)])
@@ -695,18 +689,16 @@ theorem frBody_wpt (g : sym) (m : Nat) (vs : List value) (ρ : EnvStack) :
     isplitl []
     · ipureintro
       exact ⟨n' - 1, rfl, by omega, Nat.le_refl _⟩
-    · iintro %ret %hpost
+    · iintro %ret %a1 %hpost
       obtain ⟨m1, hm1, rfl⟩ := hpost
       obtain rfl : m1 = n' - 1 := (ivVal_inj (List.cons.inj hm1).1).symm
-      rw [show Expr [] (Epure (Pexpr [] () (PEval (ivVal (fibSpec (n' - 1).toNat))))) =
-        ofVal (.pure (ivVal (fibSpec (n' - 1).toNat))) from rfl]
-      iapply wpt_ofVal _ _ (Nat.le_refl 1)
+      iapply wpt_ofValA _ _ (Nat.le_refl 1)
       iexists (ivVal (fibSpec (n' - 1).toNat))
       isplit
       · ipureintro; rfl
       · rw [update_env_sym]
         unfold frInner
-        iapply wpt_seq_sym [] [] frYSym ybty (callRedex ra frSym [frDec2]) _ (frF1 n' _) ρ
+        iapply wpt_seq_sym [] [] frYSym ybty (callRedex [] ra frSym [frDec2]) _ (frF1 n' _) ρ
           (fibRounds (n' - 2).toNat + 2) 4
         unfold callRedex
         iapply wpt_call_root [] ra frSym [frDec2] (frF1 n' _ :: ρ) (vs := [ivVal (n' - 2)])
@@ -716,12 +708,10 @@ theorem frBody_wpt (g : sym) (m : Nat) (vs : List value) (ρ : EnvStack) :
         isplitl []
         · ipureintro
           exact ⟨n' - 2, rfl, by omega, Nat.le_refl _⟩
-        · iintro %ret %hpost
+        · iintro %ret %a1 %hpost
           obtain ⟨m2, hm2, rfl⟩ := hpost
           obtain rfl : m2 = n' - 2 := (ivVal_inj (List.cons.inj hm2).1).symm
-          rw [show Expr [] (Epure (Pexpr [] () (PEval (ivVal (fibSpec (n' - 2).toNat))))) =
-            ofVal (.pure (ivVal (fibSpec (n' - 2).toNat))) from rfl]
-          iapply wpt_ofVal _ _ (Nat.le_refl 1)
+          iapply wpt_ofValA _ _ (Nat.le_refl 1)
           iexists (ivVal (fibSpec (n' - 2).toNat))
           isplit
           · ipureintro; rfl
@@ -776,12 +766,10 @@ theorem frMain_wpt (hn : 0 ≤ n) (ρ : EnvStack) :
   isplitl []
   · ipureintro
     exact ⟨n, rfl, hn, Nat.le_refl _⟩
-  · iintro %ret %hpost
+  · iintro %ret %a1 %hpost
     obtain ⟨m, hm, rfl⟩ := hpost
     obtain rfl : n = m := ivVal_inj (List.cons.inj hm).1
-    rw [show Expr [] (Epure (Pexpr [] () (PEval (ivVal (fibSpec n.toNat))))) =
-      ofVal (.pure (ivVal (fibSpec n.toNat))) from rfl]
-    iapply wpt_ofVal _ _ (Nat.le_refl 1)
+    iapply wpt_ofValA _ _ (Nat.le_refl 1)
     dsimp only [frPost]
     ipureintro
     rfl
@@ -843,10 +831,10 @@ theorem fib_rec_certified (hn : 0 ≤ n) (fs : CerbFS.FsState) (args : List Stri
       (by rw [frMain_pot, show lemDefaultFuel = 999999 + 1 from rfl]; omega)
       (coh_empty prodMem₀)
       (fun v _ => v = ivVal (fibSpec n.toNat))
-      ?_ (th₀ := prodThread (frMain ra n)) rfl
+      ?_ (th₀ := prodThread (frMain ra n))
     intro inst
     exact (BigSepM.bigSepM_empty).1.trans
-      (fr_wp_readout ra n nbty xbty ybty sbty zbty sup hn _)
+      (fr_wp_readout ra n nbty xbty ybty sbty zbty sup hn _ _ _)
   obtain ⟨st, dst', heq, hor⟩ := prod_run_safe_procs sup (frProcs ra nbty xbty ybty sbty zbty)
     (frMain ra n) (frCtx_labeledProcs ra n nbty xbty ybty sbty zbty sup) _ hsafe fs args fuel
   exact ⟨st, dst', heq, hor⟩
@@ -882,8 +870,8 @@ theorem fib_rec_certified_production (hn : 0 ≤ n)
     (wpt_driver_done_procs (GF := SpikeGF)
       (M₀ := frCtx ra n nbty xbty ybty sbty zbty sup) rfl rfl
       (frCtx_fragProcs ra n nbty xbty ybty sbty zbty sup)
-      (th₀ := prodThread (frMain ra n)) rfl
-      (frFile_lookup_main ra n nbty xbty ybty sbty zbty) prodCtl.execLoc
+      (th₀ := prodThread (frMain ra n))
+      (frFile_lookup_main ra n nbty xbty ybty sbty zbty) prodCtl.execLoc prodCtl.curLoc prodCtl.sup
       frSpecT frLsT
       (frMain ra n) fmapEmpty [] prodMem₀ (∅ : SpikeHeapF SpikeCell) 0
       (frMain_frag ra n)
