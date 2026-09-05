@@ -2493,3 +2493,79 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   single-thread certificate under `CM_sc`, with a real outer-fuel side
   condition (Q4); STAGED re-pin, our FULL gate + one-token census as the
   fourth evidence form (Q5). For the operator to relay.
+- **2026-09-05 [AGENT] E1 LANDED ON `dialect-e1` (74ec807, three commits on main 04059dc):
+  annotations, `bound`, constructor constants; both live-state changes in
+  final shape.** Record `cerberus-heaplang/docs/2026-09-04_e1-notes.md`;
+  closure successor `docs/2026-09-05_fragment-closure-e1-notes.md`; post
+  snapshot `docs/2026-09-04_e1-signatures-post.txt` (pre = the H1b post).
+  Admitted (engine cites in the record §1): annotations on every node,
+  inert except the general-arm location update (`get_loc` of the first
+  `Aloc`, library filter; operand evaluation on the ORIGINAL thread,
+  successors on the updated one); `Ebound` as the `Cbound` frame + the two
+  REMOVE-BOUND taus; `Ivalignof`/`Ivsizeof` in `PePure` with `Frag.create_op`
+  + `Step.create_eval`; LETS-ANNOT at the plain-symbol binder (the
+  `sseq_sym` OUT-OF-SCOPE row → NO-RULE pending E2's binder rule).
+  Live-state designs ([AGENT], §2): `Ctl = ⟨κ, proc, execLoc, curLoc, sup⟩`
+  with `Ctl.upd` mirroring the location write, `ctlThread` tying
+  `current_loc`, `MachineCtx.currentLoc` deleted, exports lose `hcl`; the
+  supplies `RunSup` on `Ctl.sup`, untouched by every E1 rule, tied in the
+  round — E5 adds writers, not a re-shape. Acceptance: `EmittedAExhibit`
+  (exhibit A in emitted shape) certified through the production lane,
+  statement text = exhibit A's. Speedbump: `scripts/corpus_skeleton.lean`
+  in the FULL gate — transcribed terms vs `docs/corpus-e0` emitted text,
+  plant-tested. Manifest 25 constructors / 52 rows / 0 red / 19 consumers.
+  Pins 402 → 426 (`BareHead.step` unpinned with `BareHead`'s deletion).
+  Census (derived): ADDED 349 / REMOVED 24 / CHANGED 583 = 188 live-state
+  or value-form FORCED + 395 annotation-generalization only (marker scan).
+  [AGENT] decision points (record §7): `BareHead` DELETED rather than
+  generalised; `Frag.esize_step_bound`, `MachineCtx.currentLoc`,
+  `Step.*ne_same_ctl` removed/replaced; design-note premise FALSIFIED —
+  "t1.core parses as `Frag` at E1" (needs E2–E4; E1's t1 check is the
+  skeleton speedbump); four readout theorems generalised over `(lc) (sp)`;
+  `prodCtl` made reducible. Orchestrator FULL gate at 74ec807 (64G cap),
+  verbatim; NOTE the package linter warnings rose 62 → 143 (a hygiene
+  regression for the range audit to classify and fix or register):
+  ```
+  == gate 1: banned proof-method grep (native_decide / bv_decide / ofReduce*) ==
+  ok: no banned proof-method references
+  == gate 2: capped build, cerberus-heaplang (elaborates its axiom audit) ==
+  info: CerberusHeapLang/Audit.lean:627:0: CerberusHeapLang export pins: 426 trio-exact
+  info: CerberusHeapLang/Audit.lean:627:0: CerberusHeapLang axiom sweep: every theorem bounded by the trio (3777 swept, internal details included — count informational, environment-dependent)
+  info: CerberusHeapLang/Audit.lean:627:0: CerberusHeapLang banned-axiom sweep: sorryAx/ofReduceBool/ofReduceNat absent from all cones (5846 constants of every kind swept, internal details included — count informational, environment-dependent)
+  Build completed successfully (460 jobs).
+  ok: cerberus-heaplang build green
+  == speedbump: rule-use and classification manifest (regenerate; red on a red row or drift) ==
+  ok: capability manifest regenerated, no drift
+  == speedbump: corpus skeleton (hand-transcribed emitted Core vs docs/corpus-e0; scripts/corpus_skeleton.lean) ==
+  ok: corpus skeleton — every transcription matches its emitted text, every plant mismatches
+  == speedbump: import direction (semantics → heap → rules → adequacy → clients) ==
+  ok: import direction — 15 core modules, none imports an exhibit/example/production module
+  == speedbump: client boundary (positive clients mention no logic internals; scripts/boundary_check.sh) ==
+  ok:   Exhibit — 0 internals mentions
+  ok:   LoopExhibit — 0 internals mentions
+  ok:   FibExhibit — 0 internals mentions
+  ok:   ArrayExhibit — 0 internals mentions
+  ok:   ListRevExhibit — 0 internals mentions
+  ok:   TreeRotExhibit — 0 internals mentions
+  ok:   CaseExhibit — 0 internals mentions
+  ok:   WseqExhibit — 0 internals mentions
+  ok:   StructExhibit — 0 internals mentions
+  ok:   AllocExhibit — 0 internals mentions
+  ok:   DisposeExhibit — 0 internals mentions
+  ok:   RegionLoopExhibit — 0 internals mentions
+  ok:   MallocListExhibit — 0 internals mentions
+  ok:   FibRecExhibit — 0 internals mentions
+  ok:   TwoLabelExhibit — 0 internals mentions
+  ok:   EvenOddExhibit — 0 internals mentions
+  ok:   EmittedAExhibit — 0 internals mentions
+  ok:   Examples.CallSmoke — 0 internals mentions
+  ok:   Examples.ReadinessSmoke — 0 internals mentions
+  ok:   Examples.Layout — 0 internals mentions
+  ok:   Examples.CorpusE0 — 0 internals mentions
+  BOUNDARY: 21 modules checked, 0 internals mention(s) in total, exit=0
+  ok: client boundary — no unallowlisted internals mention
+  ALL GATES GREEN
+  GATE-EXIT=0
+  ```
+  Range audit 04059dc..HEAD dispatched next on a fixed detached copy; merge
+  ask follows — no merge without an explicit yes to it.
