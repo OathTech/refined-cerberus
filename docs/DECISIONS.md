@@ -2569,3 +2569,111 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   ```
   Range audit 04059dc..HEAD dispatched next on a fixed detached copy; merge
   ask follows — no merge without an explicit yes to it.
+- **2026-09-05 [AGENT] E1 RANGE AUDIT 04059dc..3e75a1e: PASS WITH FIXES REQUIRED, A−;
+  FIXES FOLDED INTO THE E2 STREAM.** Report `cerberus-heaplang/docs/2026-09-05_audit-e1-range.md`
+  (committed 9ea6c93). Logic and mirror exact against the engine at the
+  pin (arm-by-arm reading + an executable probe of the generated
+  `step_ctx`); both live-state ties pinned theorems at every round;
+  `BareHead` deletion sound; census 349/24/583 and the 188 marker-scan
+  reproduced; 25 new pins trio-exact; nine production statements textually
+  unchanged. Fixes (landed 16bcfdc + 192a82f): C-1 BLOCKING shop-window
+  falsehoods in README/CLAIMS/WALKTHROUGH (pre-E1 fragment, `BareHead`,
+  the deleted `hcl` premise) — restated; D-1 ARCHITECTURE's 16 stale
+  sentences; D-3 two docstrings; H-1 the linter regression 62 → 143 → 64
+  (79 new by blame: Step 56 unused simp args, Wps 8, Wpt 8, Potential 4,
+  EmittedAExhibit 2, ProdLoop 1 — all fixed); H-2 unused `(sp : RunSup)`
+  binder dropped from `wpt_driver_aux`; R-1 `EmittedAExhibit` is an E1
+  SYNTHETIC (the elaborator annotates no action node and emits no
+  `bound(store …)`) — docstring reworded; R-3 the `loc_update_*` lemmas
+  are mirror-only, not `engine_step_matchU` instances — reworded; N-1
+  `prodCtl.sup = default` is a placeholder (E5 needs `prodCtl sup` + `hsup`);
+  N-2 the corpus speedbump now FAILS on a corpus file without a
+  transcription row (plant-tested); N-3 `loc_update_lib/_none` pinned.
+  **R-2 — ERRATUM to the E1 landing entry above**: the census split "395
+  annotation-generalization only" was an UPPER BOUND — at least 38 of them
+  carry real shape changes (frame rules `sseq_ctx/wseq_ctx/annot_ctx` gain
+  `hnc : callRedex? = none` and thread `ctl'`; `run`/`call` controls via
+  `redexAnnots`; recursors of extended inductives). D-2 → KOI, this
+  commit.
+- **2026-09-05 [AGENT] E2 LANDED ON `dialect-e1` (192a82f; with the E1 fixes, six
+  commits on 3e75a1e): loaded values, patterns, pure Core.** Record
+  `cerberus-heaplang/docs/2026-09-05_e2-notes.md`; closure successor
+  `docs/2026-09-05_fragment-closure-e2-notes.md`; post snapshot
+  `docs/2026-09-05_e2-signatures-post.txt`. Admitted (engine cites §1):
+  `Specified(e)`/`Unspecified(ty)`/tuples as pure-constructor operands;
+  pure `case` at covered shapes (one-pass mirror `stepPexpr`), `not`, pure
+  `if`; `undef(<<UB>>)` as a FAIL-CLOSED KILL (`EvalFail.undef` →
+  `ShippedRefusal.killed (Undef0 …)`, never a default); the PURE round at
+  any covered operand (`Frag.pure_op`; `pure_sym` becomes a theorem);
+  store of `Unspecified(ty)` proved at the engine's own byte image (no new
+  rule); flat tuple binders `let strong/weak (a, b, …)` (non-tuple head =
+  the engine's PANIC, classified); the weak plain-symbol binder;
+  `Step.case_eval` mirror-only. `conv_loaded_int`: NO-RULE pending E3,
+  kernel-decided uncovered; t1's `main` still fails the FULL `Frag` parse
+  (E3: `conv_loaded_int`/`catch_exceptional_condition`; E4: `unseq`) — as
+  the design predicts. Acceptance: `EmittedBExhibit` (exhibit B in emitted
+  shape; value `Specified(4)`) certified through the production lane.
+  Corpus speedbump extended into pure expressions (t1 stream 56 → 118
+  tokens, three plants). Manifest 28 constructors / 58 rows (35 RULE / 0 /
+  0 / 19 NO-RULE / 4 OUT-OF-SCOPE) / 0 red / 20 consumers; CLAIMS C12.
+  Pins 428 → 508. Census (derived) 3406 → 3853: ADDED 459 / REMOVED 12 /
+  CHANGED 50 = 18 value-currency-forced + 1 (H-2) + 31 recursors/equations;
+  the 22 headline statements incl. all nine production statements
+  unchanged. Package warnings 60. [AGENT] decision points (record §7):
+  `Frag.pure_sym` constructor → theorem; `EvalClass.lean` rewritten as a
+  pass-structured classifier (six visible statements verbatim);
+  `pull_bridge` unpinned (sub-trio); tuple patterns flat only; the
+  `.uncovered` face grew (fail-closed). Orchestrator FULL gate at 192a82f
+  (64G cap), verbatim:
+  ```
+  == gate 1: banned proof-method grep (native_decide / bv_decide / ofReduce*) ==
+  ok: no banned proof-method references
+  == gate 2: capped build, cerberus-heaplang (elaborates its axiom audit) ==
+  info: CerberusHeapLang/Audit.lean:684:0: CerberusHeapLang export pins: 508 trio-exact
+  info: CerberusHeapLang/Audit.lean:684:0: CerberusHeapLang axiom sweep: every theorem bounded by the trio (4305 swept, internal details included — count informational, environment-dependent)
+  info: CerberusHeapLang/Audit.lean:684:0: CerberusHeapLang banned-axiom sweep: sorryAx/ofReduceBool/ofReduceNat absent from all cones (6702 constants of every kind swept, internal details included — count informational, environment-dependent)
+  Build completed successfully (461 jobs).
+  ok: cerberus-heaplang build green
+  == speedbump: rule-use and classification manifest (regenerate; red on a red row or drift) ==
+  ok: capability manifest regenerated, no drift
+  == speedbump: corpus skeleton (hand-transcribed emitted Core vs docs/corpus-e0; scripts/corpus_skeleton.lean) ==
+  ok: corpus skeleton — every transcription matches its emitted text, every plant mismatches
+  == speedbump: import direction (semantics → heap → rules → adequacy → clients) ==
+  ok: import direction — 15 core modules, none imports an exhibit/example/production module
+  == speedbump: client boundary (positive clients mention no logic internals; scripts/boundary_check.sh) ==
+  ok:   Exhibit — 0 internals mentions
+  ok:   LoopExhibit — 0 internals mentions
+  ok:   FibExhibit — 0 internals mentions
+  ok:   ArrayExhibit — 0 internals mentions
+  ok:   ListRevExhibit — 0 internals mentions
+  ok:   TreeRotExhibit — 0 internals mentions
+  ok:   CaseExhibit — 0 internals mentions
+  ok:   WseqExhibit — 0 internals mentions
+  ok:   StructExhibit — 0 internals mentions
+  ok:   AllocExhibit — 0 internals mentions
+  ok:   DisposeExhibit — 0 internals mentions
+  ok:   RegionLoopExhibit — 0 internals mentions
+  ok:   MallocListExhibit — 0 internals mentions
+  ok:   FibRecExhibit — 0 internals mentions
+  ok:   TwoLabelExhibit — 0 internals mentions
+  ok:   EvenOddExhibit — 0 internals mentions
+  ok:   EmittedAExhibit — 0 internals mentions
+  ok:   EmittedBExhibit — 0 internals mentions
+  ok:   Examples.CallSmoke — 0 internals mentions
+  ok:   Examples.ReadinessSmoke — 0 internals mentions
+  ok:   Examples.Layout — 0 internals mentions
+  ok:   Examples.CorpusE0 — 0 internals mentions
+  BOUNDARY: 22 modules checked, 0 internals mention(s) in total, exit=0
+  ok: client boundary — no unallowlisted internals mention
+  ALL GATES GREEN
+  GATE-EXIT=0
+  ```
+  [AGENT] decision, pending the operator: ARCHITECTURE is a core document
+  and E1+E2 are a major revision; rather than a fresh four-review cycle
+  per slice, the shop-window truth is kept per slice by the workers' docs
+  passes (audited each range), and the FRESH FULL REVIEW (new reviewer) is
+  scheduled ONCE at the t1 milestone (after E4). Also landed: two notes
+  for the cerberus-lean team per ratified points 8–9
+  (`docs/2026-09-05_note-cerberus-lean-subst-esize.md`,
+  `…_note-cerberus-lean-conv-int-divergence.md`). Range audit
+  3e75a1e..HEAD dispatched next; ONE merge ask for E1 + fixes + E2 follows.

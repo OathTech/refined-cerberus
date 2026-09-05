@@ -1,6 +1,6 @@
 # Known open items — the register auditors read FIRST
 
-State: candidate `hygiene-h1` head (2026-09-04, ARCHITECTURE at review-6 A−, after the calls arc,
+State: candidate `dialect-e1` head (2026-09-05, after E1 + its audit fixes + E2 of the emitted-Core dialect arc; after the calls arc,
 the fuel-lane restatement F1, the external-audit response AR5, the H1
 hygiene/coverage slices, their range audit, and the ARCHITECTURE rewrite). Maintained by the orchestrator; every entry
 points at the record that owns it. PURPOSE: an auditor should not
@@ -31,8 +31,8 @@ or a ruled disposition. Provenance tags as in `docs/DECISIONS.md`.
 | B4 | `hwf : SeqWF` dropped from the partial lane (strict generalization); `htd`/`hex` (empty tag definitions / extern) ADDED to the partial lane — a narrowing that matches the production driver's `drive fmapEmpty false …`. | F1 notes §6 item 6; F1 audit §4 | Accepted; disclosed in WALKTHROUGH §1.1. |
 | B5 | **Closed shape is the singleton-execution EQUATION**, stronger than the intended "∀ outcome ∈ the run's outcome list" reading (the sequential driver is deterministic). The outcome-list form is the meaning that survives concurrency. | F1 notes §6 item 7; DECISIONS fuel entry (the R/O'H reading) | Doc surfaces to state the outcome-list reading explicitly — folded into the A1 restatement slice. |
 | B6 | **`fib_rec_certified_production`'s `hfuel : fibRounds n + 4` has ONE unit of slack** (shipped loop killed at `+2`, done at `+3`); `fibRounds` itself exact; slack is in `main`'s frozen `wpt` budget. Nothing claims tightness. Same class: `even_odd_certified_production`'s `3·n + 6` (shipped loop active at `3·n + 5`) and `tl_wpt`'s `5·n₁ + 5·n₂ + 5` (shipped loop needs `3·n₁ + 3·n₂ + 4`; the rule constant 3 per store vs one engine round — the ProdLoopExhibit `6n + 8` class) — H1 range audit Note-2. | C4 audit R-3; F1 notes handoffs | Optional `k + 1` mover; not scheduled. |
-| B7 | **Mirror-completeness residuals**: two `OpenRound` arms (`eval_uncovered`, `run_surplus`) characterised, not closed; the `hbsz` premise inside `Frag.case_value` carried, not proved. | ARCHITECTURE §2.2 (the residual) and §6 "The mirror-completeness residual" (the `hbsz` premise); `docs/2026-09-02_fragment-closure-notes.md` | By design (fail-closed boundary). |
-| B8 | **Not in the fragment, by design**: function pointers (`Eccall`, a scheduler path — [USER 2026-09-04]: belongs to the RefinedC arc), concurrency, external C calls. (Mutual recursion and the two-`save`-label program are EXHIBITED since H1b: `EvenOddExhibit`, `TwoLabelExhibit`.) | ARCHITECTURE §6; DECISIONS 2026-09-04 | Scope rulings; not defects. |
+| B7 | **Mirror-completeness residuals**: two `OpenRound` arms (`eval_uncovered`, `run_surplus`) characterised, not closed; the `hbsz` premise inside `Frag.case_value` carried, not proved. E-arc status (2026-09-05): `case` is on the hot path; the `hbsz` premise closes by `rfl`/`decide` for transcribed terms; the general size-preservation lemma is carried locally (`docs/2026-09-05_note-cerberus-lean-subst-esize.md`); the two residual arms unchanged (E1/E2 closure records). | ARCHITECTURE §2.2 (the residual) and §6 "The mirror-completeness residual" (the `hbsz` premise); `docs/2026-09-02_fragment-closure-notes.md` | By design (fail-closed boundary). |
+| B8 | **Not in the fragment, by design**: function pointers (`Eccall`, a scheduler path — [USER 2026-09-04]: belongs to the RefinedC arc), concurrency, external C calls. (Mutual recursion and the two-`save`-label program are EXHIBITED since H1b: `EvenOddExhibit`, `TwoLabelExhibit`.) E-arc status (2026-09-05): the fragment now ADMITS annotations, `bound`, loaded values, tuple binders (E1–E2); emitted programs still fail the full `Frag` parse until E3 (`conv_loaded_int`, `catch_exceptional_condition`) and E4 (`unseq`). | ARCHITECTURE §6; DECISIONS 2026-09-04 | Scope rulings; not defects. |
 | B9 | **Deferred parametric-semantics interfaces**: rules are proved directly against `Step` and the memory state. | ARCHITECTURE §6 "Deferred parametric semantics interfaces"; `docs/2026-09-02_parametric-semantics-spike.md` (DEFERRED banner) | [USER] deferred, "possibly forever". |
 | B10 | **The referent rule's interim clause** ("until it lands the affected exports are labelled PROVISIONAL") remains in `CLAUDE.md` as RULE text; there are ZERO PROVISIONAL labels on any surface after F1. | F1 audit §6 | Not a finding. |
 | B11 | **Mask generalisation (external audit F3)**: `wps`/`wpt` hard-code the top invariant mask (21 + 26 sites); mask-polymorphic composition is not available. Classical sequential SL by ruling. | audit F3; DECISIONS 2026-09-04 ("best possible Reynolds/O'Hearn … fancy logic features aren't needed") | [USER 2026-09-04] MOVED TO THE REFINEDC ARC (with function pointers); not a demo item. |
@@ -48,7 +48,7 @@ or a ruled disposition. Provenance tags as in `docs/DECISIONS.md`.
 | C2 | `LoopOutcome` duplicates `DriverSafeCtl`'s 15-line conclusion verbatim. | F1 audit H-3 | Queued with the A1 restatement (same statements). |
 | C3 | CLOSED at H1a: `spikeCtx_wf`, `procCtx_wf`, `outcomesU_done`, `outcomesU_of_step`, `outcomesU_remove_annot` deleted. | `docs/2026-09-04_h1-notes.md` | Closed. |
 | C4 | Duplication in ProdEntry: `*With` entry forms copy the one-procedure forms though `prodFile e = prodFileWith [] e` is `rfl`; six one-shape `fr*_pure/_depth` lemmas; `frCtx_labels_cases` vs `frCtx_labeledProcs`. Partly done at F1 (`drive_after_setup_with` is now the `driverFuel` instance). | C4 audit H-2; F1 handoffs | Queued. |
-| C5 | Linter warnings in `CerberusHeapLang/*` (unused simp arguments / unused variables; Potential.lean the bulk): 66 at C3 (all pre-C3 by blame) → 62 at the H1 candidate (F1 removed 4 in TotalAdequacy; H1b introduced 2 in EvenOddExhibit, removed again by the H1 range audit's H-1 fix). | C3 audit H-1; H1 range audit H-1; gate log | Queued; low value. |
+| C5 | Linter warnings in `CerberusHeapLang/*`: 66 at C3 → 62 (H1) → 143 after E1 (79 new by blame: unused simp args in the 30-arm inversions) → 64 after the E1 audit's H-1 fix → 60 at E2. | E1 range audit H-1; gate logs | Hold at ≤ 60; each slice fixes what it introduces. |
 | C6 | The manifest generator hard-codes the smoke module list (`clientSmokes`). | C3 audit H-4; C4 (H-4 done for the header) | Cosmetic. |
 | C7 | The cursor ghost heap as a proof device (kill/free record's item). | `docs/2026-09-03_kill-free-arc-record.md`; C4 notes §12 | Untouched; design note only. |
 | C8 | CLOSED at H1a: `progA_wpt` REWRITTEN over the public readout (deleting it turned the manifest red — it was `wpt_store`'s only consumer); the boundary check now runs with ZERO allowances. | `docs/2026-09-04_h1-notes.md` | Closed. |
@@ -63,6 +63,7 @@ or a ruled disposition. Provenance tags as in `docs/DECISIONS.md`.
 ## D. Record errata already applied (append-only register — do not re-report)
 
 - DECISIONS 2026-09-04 external-audit entry: "10 stale seeds" → 6 (worker probe).
+- DECISIONS 2026-09-05 E1 landing entry: census split "395 annotation-only" was an upper bound (≥ 38 real shape changes) — erratum in the E1-audit entry (R-2).
 - KNOWN-OPEN-ITEMS C15 (2026-09-04, from the H1 range audit's Note-1 "402 pins = 400 distinct") was FALSE: 402 distinct, measured; withdrawn the same day.
 - DECISIONS 2026-09-04 AR5 landing entries: gate quotes were trimmed (prefix stripped, lines cut at 200 chars) → re-quoted untrimmed in the AR5 range-audit entry, with the elision rule for all earlier gate quotes stated there (AR5 range audit R-1).
 - DECISIONS "28 commits past the pin" → 34 (F1 audit H-1); "ONE CONTENT
@@ -89,8 +90,8 @@ or a ruled disposition. Provenance tags as in `docs/DECISIONS.md`.
   `.opamroot/` (a sandbox opam root, ~150 MB). Both are ignored as of
   this commit; the RefinedC layer lives on branch `refinedc/dev`.
 - Gates: `scripts/test_unit.sh` (FULL) / `--fast`; every Lean build
-  through `scripts/capped`. Expected FULL tail at the H1 candidate: 402 pins trio-exact, manifest
-  (50 rows; 30 RULE / 0 undemonstrated / 15 NO-RULE / 5 OUT-OF-SCOPE) no
-  drift, import direction ok, `BOUNDARY: 19 modules checked, 0 internals
-  mention(s) in total, exit=0` with NO ALLOWLISTED line, `ALL GATES GREEN`,
-  `GATE-EXIT=0` (DECISIONS 2026-09-04 H1 entry, verbatim).
+  through `scripts/capped`. Expected FULL tail at the E2 candidate: 508 pins trio-exact, manifest
+  (58 rows; 35 RULE / 0 / 0 / 19 NO-RULE / 4 OUT-OF-SCOPE) no drift, the
+  corpus-skeleton speedbump `ok`, import direction ok, `BOUNDARY: 22
+  modules checked, 0 internals mention(s) in total, exit=0`, `ALL GATES
+  GREEN`, `GATE-EXIT=0` (DECISIONS 2026-09-05 E2 entry, verbatim).
