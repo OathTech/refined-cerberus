@@ -43,5 +43,6 @@ import CerberusHeapLang.EvenOddExhibit
 import CerberusHeapLang.EmittedAExhibit
 import CerberusHeapLang.EmittedBExhibit
 import CerberusHeapLang.EmittedCExhibit
+import CerberusHeapLang.CorpusT1Exhibit
 import CerberusHeapLang.OverflowExhibit
 import CerberusHeapLang.Audit

@@ -164,6 +164,9 @@ at the three frames `callRedex?` builds — `rfl` equations for rewriting) -/
 @[simp] theorem toVal_bound_node (a : List annot) (b : CoreExpr) :
     toVal (Expr a (Ebound b)) = none := rfl
 
+@[simp] theorem toVal_unseq_node (a : List annot) (es : List CoreExpr) :
+    toVal (Expr a (Eunseq es)) = none := rfl
+
 @[simp] theorem apply_ctx_bound (a : List annot) (ctx : context) (e : CoreExpr) :
     apply_ctx (Cbound a ctx) e = Expr a (Ebound (apply_ctx ctx e)) := rfl
 
@@ -1900,11 +1903,11 @@ theorem wps_case_value {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot
     canonical cone — a non-canonically-annotated value successor
     would fall outside the mirror's value classification, slice
     notes §D3). -/
-theorem wps_pure {Ψ : SpikeVal → EnvStack → IProp GF}
+theorem wps_pure {Ψ : SpikeVal → EnvStack → IProp GF} {a : List annot}
     (pe : generic_pexpr Unit sym) (ρ : EnvStack) {v : value}
     (hnv : valueFromPexpr pe = none) (hv : evalPexpr M.tagDefs M.extern M.file ρ pe = some v) :
-    Ψ (.pure v) ρ ⊢ wps M p Ls Θ Ψ (Expr ([] : List annot) (Epure pe)) ρ := by
-  rw [(wps_unfold (e := Expr ([] : List annot) (Epure pe))).to_eq]
+    Ψ (.pure v) ρ ⊢ wps M p Ls Θ Ψ (Expr a (Epure pe)) ρ := by
+  rw [(wps_unfold (e := Expr a (Epure pe))).to_eq]
   simp only [wps.pre, toVal_pure_none hnv, jumpRedex?_pure, callRedex?_pure]
   iintro H %κ %ℓ %lc %sp %σ₁ %ns %obs %obs' %nt Hσ
   iapply fupd_mask_intro Std.LawfulSet.empty_subset
@@ -1930,9 +1933,10 @@ theorem wps_pure {Ψ : SpikeVal → EnvStack → IProp GF}
   imodintro
   isplitl [Hσ]
   · iexact Hσ
-  · rw [show Expr ([] : List annot) (Epure (Pexpr [] () (PEval v))) =
-      ofVal (.pure v) from rfl]
-    iapply wps_ofVal (.pure v) ρ
+  · rw [show Expr a (Epure (Pexpr [] () (PEval v))) =
+      ofValA (.pure a [] v) from rfl]
+    iapply wps_ofValA (.pure a [] v) ρ
+    simp only [SpikeValA.erase_pure]
     iexact H
 
 /-- ACTION_EVAL for a load with an unevaluated pointer operand (S4):
@@ -2909,6 +2913,362 @@ theorem wps_wseq_tuple {Ψ : SpikeVal → EnvStack → IProp GF}
     · exact absurd (ofValA_inj he1) (by simp)
     · obtain ⟨_, _, _, h⟩ := hcall.callRedex?_some
       simp at h
+  | none =>
+    cases hjr : jumpRedex? e1 with
+    | some lp =>
+      rw [wps_unfold.to_eq,
+        (wps_unfold (e := Expr a (Ewseq (tuplePat pa ls) e1 e2))).to_eq]
+      simp only [wps.pre, htv, toVal_wseq_node, jumpRedex?_wseq, hjr]
+      iintro H
+      iexact H
+    | none =>
+      cases hcr : callRedex? e1 with
+      | some q =>
+        obtain ⟨ctx, f, pes⟩ := q
+        rw [wps_unfold.to_eq,
+          (wps_unfold (e := Expr a (Ewseq (tuplePat pa ls) e1 e2))).to_eq]
+        simp only [wps.pre, htv, toVal_wseq_node, jumpRedex?_wseq, hjr, callRedex?_wseq, hcr,
+          Option.map_some, apply_ctx_wseq]
+        iintro H
+        imod H with ⟨%params, %body, %vs, %h1, %h2, %h3, Hpre, Hcont⟩
+        imodintro
+        iexists params, body, vs
+        isplit
+        · ipureintro; exact h1
+        isplit
+        · ipureintro; exact h2
+        isplit
+        · ipureintro; exact h3
+        isplitl [Hpre]
+        · iexact Hpre
+        inext
+        iintro %ret %a1 Hpost
+        ihave H' := Hcont $$ %ret %a1 Hpost
+        iapply IH $$ %(apply_ctx ctx (ofValA (.pure a1 [] ret))) %ev0 %evs H'
+      | none =>
+      rw [wps_unfold.to_eq,
+        (wps_unfold (e := Expr a (Ewseq (tuplePat pa ls) e1 e2))).to_eq]
+      simp only [wps.pre, htv, toVal_wseq_node, jumpRedex?_wseq, hjr, callRedex?_wseq, hcr, Option.map_none]
+      iintro H %κ %ℓ %lc %sp %σ₁ %ns %obs %obs' %nt Hσ
+      imod H $$ %κ %ℓ %lc %sp %σ₁ %ns %obs %obs' %nt Hσ with ⟨%hred, H⟩
+      imodintro
+      isplit
+      · ipureintro
+        obtain ⟨obs0, r', σ', eₜ', hps⟩ := hred
+        obtain ⟨hs', hlbl', hnil'⟩ := hps
+        exact ⟨obs0, ⟨Expr a (Ewseq (tuplePat pa ls)
+            r'.e e2), r'.ρ, r'.ctl, M⟩, σ', [],
+          ⟨Step.wseq_ctx hjr hcr htv hs', rfl, rfl⟩⟩
+      inext
+      iintro %r %σ₂ %eₜ %Hstep Hcred
+      obtain ⟨hs, hlbl, rfl⟩ := Hstep
+      rcases hs.wseq_inv with ⟨e1', ρ'', ctl'', σ'', hnj, hnc', hnv', hs', hout⟩ |
+          ⟨_, _, _, _, v, _, _, _, he1, _, _⟩ |
+          ⟨_, _, _, _, _, ds, v, _, _, _, he1, _, _⟩ |
+          ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩ |
+          ⟨_, _, _, _, _, _, _, _, _, he1, _, _⟩ |
+          ⟨_, _, _, _, _, _, _, _, _, _, _, he1, _, _⟩ |
+          ⟨_, _, _, _, _, _, _, _, he1, _, _⟩ |
+          ⟨_, _, _, _, _, _, _, _, _, _, he1, _, _⟩ |
+          hcall
+      · obtain ⟨a', rfl⟩ := Step.ctl_upd hs' hnc' hnv'
+        obtain ⟨ev0', rfl⟩ := Step.env_cons hs' rfl
+        obtain ⟨re, rρ, rctl, rM⟩ := r
+        simp only at hlbl
+        obtain rfl : M = rM := hlbl.symm
+        simp only [Prod.mk.injEq] at hout
+        obtain ⟨hre, hrρ, hrctl, hσ⟩ := hout
+        subst hrctl
+        subst hre hrρ hσ
+        imod H $$ %(⟨e1', ev0' :: evs, (⟨κ, p, ℓ, lc, sp⟩ : Ctl).upd a', M⟩ : CoreRt) %σ₂
+          %([] : List CoreRt) %⟨hs', rfl, rfl⟩ Hcred with ⟨$, H⟩
+        imodintro
+        iapply IH $$ %e1' %ev0' %evs H
+      · rw [he1, toVal_ofValA] at htv; cases htv
+      · rw [he1, toVal_ofValA] at htv; cases htv
+      · rw [hjr] at hj; cases hj
+      · rw [he1, toVal_ofValA] at htv; cases htv
+      · rw [he1, toVal_ofValA] at htv; cases htv
+      · rw [he1, toVal_ofValA] at htv; cases htv
+      · rw [he1, toVal_ofValA] at htv; cases htv
+      · obtain ⟨_, _, _, h⟩ := hcall.callRedex?_some
+        rw [hcr] at h; cases h
+
+/-! ## E4: the `unseq` rules (dialect arc E4, docs/2026-09-05_e4-notes.md)
+
+The sequential driver reduces an `unseq` one component at a time, the LAST
+reducible component first (`Step.unseq_ctx`, the engine's `get_ctx_unseq_aux`
+order, core_reduction.lem:590–601), and at all values completes the node into
+the annotated tuple `{A_1 ++ … ++ A_n}(v_1, …, v_n)` when the components'
+dynamic annotations do not race (`Step.unseq_vals`; a race is the engine's
+UB035 kill, `complete_unseq_vals`, for which no rule exists). The rules are
+therefore SEQUENTIAL COMPOSITION in the engine's order — the Reynolds/O'Hearn
+reading: the components are proved one after another against the resources
+each needs, framing is the judgment's, the post is at the tuple.
+`wps_unseq_focus` peels the focused component (the value it delivers, at ANY
+static annotation lists — the term keeps the value node, so the continuation
+is quantified over the exact value `wa`); `wps_unseq_vals` closes the node. -/
+
+/-- E4: the judgment absorbs a leading update — every clause of `wps.pre`
+    begins with `|={⊤}=>` or a `={⊤,∅}=∗` wand (the classical `fupd_wp`). -/
+theorem fupd_wps {Ψ : SpikeVal → EnvStack → IProp GF} (e : CoreExpr) (ρ : EnvStack) :
+    iprop(|={⊤}=> wps M p Ls Θ Ψ e ρ) ⊢ wps M p Ls Θ Ψ e ρ := by
+  rw [wps_unfold.to_eq]
+  cases htv : toVal e with
+  | some w =>
+    simp only [wps.pre, htv]
+    iintro H
+    imod H with H
+    iexact H
+  | none =>
+    cases hjr : jumpRedex? e with
+    | some lp =>
+      simp only [wps.pre, htv, hjr]
+      iintro H
+      imod H with H
+      iexact H
+    | none =>
+      cases hcr : callRedex? e with
+      | some q =>
+        obtain ⟨ctx, f, pes⟩ := q
+        simp only [wps.pre, htv, hjr, hcr]
+        iintro H
+        imod H with H
+        iexact H
+      | none =>
+        simp only [wps.pre, htv, hjr, hcr]
+        iintro H %κ %ℓ %lc %sp %σ₁ %ns %obs %obs' %nt Hσ
+        imod H with H
+        iapply H $$ %κ %ℓ %lc %sp %σ₁ %ns %obs %obs' %nt Hσ
+
+/-- THE FOCUS RULE (partial): `unseq(es1, e, es2)` with every component of
+    `es2` a value and ccall-free siblings reduces `e` first (the engine's
+    last-reducible-first order); when `e` delivers a value `w`, the node
+    continues as `unseq(es1, wa, es2)` for the EXACT value node `wa` erasing
+    to `w` (the term keeps the value node; the continuation is stated at
+    every such `wa` because the post only sees `w`). -/
+theorem wps_unseq_focus {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
+    (es1 : List CoreExpr) (e : CoreExpr) (es2 : List CoreExpr) (ρ : EnvStack)
+    (hv2 : valsOnly es2 = true) (hcc : ccallFreeList (es1 ++ es2) = true) :
+    wps M p Ls Θ (fun w ρ' => iprop(∀ wa : SpikeValA, ⌜wa.erase = w⌝ -∗
+        wps M p Ls Θ Ψ (Expr a (Eunseq (es1 ++ ofValA wa :: es2))) ρ')) e ρ ⊢
+      wps M p Ls Θ Ψ (Expr a (Eunseq (es1 ++ e :: es2))) ρ := by
+  iloeb as IH generalizing %e %ρ
+  cases htv : toVal e with
+  | some w =>
+    obtain ⟨wa, rfl, rfl⟩ := ofValA_of_toVal htv
+    iintro H
+    ihave H' := wps_value_inv (M := M) (p := p) (Ls := Ls) (Θ := Θ) wa ρ $$ H
+    iapply fupd_wps
+    imod H' with H'
+    imodintro
+    iapply H' $$ %wa %rfl
+  | none =>
+    cases hjr : jumpRedex? e with
+    | some lp =>
+      rw [wps_unfold.to_eq, (wps_unfold (e := Expr a (Eunseq (es1 ++ e :: es2)))).to_eq]
+      simp only [wps.pre, htv, toVal_unseq_node, jumpRedex?_unseq_focus a htv hv2, hjr]
+      iintro H
+      iexact H
+    | none =>
+      cases hcr : callRedex? e with
+      | some q =>
+        obtain ⟨ctx, f, pes⟩ := q
+        rw [wps_unfold.to_eq, (wps_unfold (e := Expr a (Eunseq (es1 ++ e :: es2)))).to_eq]
+        simp only [wps.pre, htv, toVal_unseq_node, jumpRedex?_unseq_focus a htv hv2, hjr,
+          callRedex?_unseq_focus a htv hv2, hcr, Option.map_some, apply_ctx_unseq]
+        iintro H
+        imod H with ⟨%params, %body, %vs, %h1, %h2, %h3, Hpre, Hcont⟩
+        imodintro
+        iexists params, body, vs
+        isplit
+        · ipureintro; exact h1
+        isplit
+        · ipureintro; exact h2
+        isplit
+        · ipureintro; exact h3
+        isplitl [Hpre]
+        · iexact Hpre
+        inext
+        iintro %ret %a1 Hpost
+        ihave H' := Hcont $$ %ret %a1 Hpost
+        iapply IH $$ %(apply_ctx ctx (ofValA (.pure a1 [] ret))) %ρ H'
+      | none =>
+        rw [wps_unfold.to_eq, (wps_unfold (e := Expr a (Eunseq (es1 ++ e :: es2)))).to_eq]
+        simp only [wps.pre, htv, toVal_unseq_node, jumpRedex?_unseq_focus a htv hv2, hjr,
+          callRedex?_unseq_none htv hv2 hcr, hcr]
+        iintro H %κ %ℓ %lc %sp %σ₁ %ns %obs %obs' %nt Hσ
+        imod H $$ %κ %ℓ %lc %sp %σ₁ %ns %obs %obs' %nt Hσ with ⟨%hred, H⟩
+        imodintro
+        isplit
+        · ipureintro
+          obtain ⟨obs0, r', σ', eₜ', hps⟩ := hred
+          obtain ⟨hs', hlbl', hnil'⟩ := hps
+          exact ⟨obs0, ⟨Expr a (Eunseq (es1 ++ r'.e :: es2)), r'.ρ, r'.ctl, M⟩, σ', [],
+            ⟨Step.unseq_ctx hv2 hcc hjr hcr htv hs', rfl, rfl⟩⟩
+        inext
+        iintro %r %σ₂ %eₜ %Hstep Hcred
+        obtain ⟨hs, hlbl, rfl⟩ := Hstep
+        rcases hs.unseq_inv with
+            ⟨es1', e0, es2', e0', ρ'', ctl'', σ'', heq, hv2', -, hnj, hnc', hnv', hs', hout⟩ |
+            ⟨ws, fps, cvals, heq, -, -⟩ |
+            ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩ |
+            ⟨es1', e0, es2', heq, hnv', hv2', hcall⟩
+        · obtain ⟨rfl, rfl, rfl⟩ := focus_unique heq htv hnv' hv2 hv2'
+          obtain ⟨re, rρ, rctl, rM⟩ := r
+          simp only at hlbl
+          obtain rfl : M = rM := hlbl.symm
+          simp only [Prod.mk.injEq] at hout
+          obtain ⟨hre, hrρ, hrctl, hσ⟩ := hout
+          subst hre
+          obtain rfl : ρ'' = rρ := hrρ.symm
+          obtain rfl : ctl'' = rctl := hrctl.symm
+          obtain rfl : σ'' = σ₂ := hσ.symm
+          imod H $$ %(⟨e0', ρ'', ctl'', M⟩ : CoreRt) %σ'' %([] : List CoreRt)
+            %⟨hs', rfl, rfl⟩ Hcred with ⟨$, H⟩
+          imodintro
+          iapply IH $$ %e0' %ρ'' H
+        · have h1 : valsOnly (es1 ++ e :: es2) = true := by
+            rw [heq]; exact valsOnly_map_ofValA ws
+          rw [valsOnly_append_cons_false htv] at h1
+          cases h1
+        · rw [jumpRedex?_unseq_focus a htv hv2, hjr] at hj; cases hj
+        · obtain ⟨rfl, rfl, rfl⟩ := focus_unique heq htv hnv' hv2 hv2'
+          obtain ⟨_, _, _, h⟩ := hcall.callRedex?_some
+          rw [hcr] at h; cases h
+
+/-- THE COMPLETION RULE (partial): `unseq(v_1, …, v_n)` at all-value
+    components whose dynamic annotations do not race (`collectUnseq`, the
+    engine's `one_step_unseq_aux`) is ONE deterministic engine step to the
+    annotated tuple `{fps}(cvals)` — an annotated VALUE, so the post is at
+    `.annot fps (Vtuple cvals)` (E2's tuple binder at an annotated head,
+    `wps_wseq_tuple_annot`, is what consumes it). -/
+theorem wps_unseq_vals {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
+    (ws : List SpikeValA) (ρ : EnvStack) {fps : List dyn_annotation} {cvals : List value}
+    (hcol : collectUnseq ([], []) ws = some (fps, cvals)) :
+    Ψ (.annot fps (Vtuple cvals)) ρ ⊢
+      wps M p Ls Θ Ψ (Expr a (Eunseq (ws.map ofValA))) ρ := by
+  rw [(wps_unfold (e := Expr a (Eunseq (ws.map ofValA)))).to_eq]
+  simp only [wps.pre, toVal_unseq_node, jumpRedex?_unseq_vals, callRedex?_unseq_vals]
+  iintro H %κ %ℓ %lc %sp %σ₁ %ns %obs %obs' %nt Hσ
+  iapply fupd_mask_intro Std.LawfulSet.empty_subset
+  iintro Hclose
+  isplitr
+  · ipureintro
+    exact ⟨[], ⟨_, _, _, _⟩, _, [], ⟨Step.unseq_vals hcol, rfl, rfl⟩⟩
+  inext
+  iintro %r %σ₂ %eₜ %Hstep Hcred
+  obtain ⟨hs, hlbl, rfl⟩ := Hstep
+  rcases hs.unseq_inv with
+      ⟨es1, e0, es2, _, _, _, _, heq, hv2, -, -, -, hnv0, -, -⟩ |
+      ⟨ws', fps', cvals', heq, hcol', hout⟩ |
+      ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩ |
+      ⟨es1, e0, es2, heq, hnv0, hv2, hcall⟩
+  · have h1 : valsOnly (es1 ++ e0 :: es2) = true := by
+      rw [← heq]; exact valsOnly_map_ofValA ws
+    rw [valsOnly_append_cons_false hnv0] at h1
+    cases h1
+  · obtain rfl := map_ofValA_inj heq
+    obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Option.some.inj (hcol.symm.trans hcol'))
+    obtain ⟨re, rρ, rctl, rM⟩ := r
+    simp only at hlbl
+    obtain rfl : M = rM := hlbl.symm
+    simp only [Prod.mk.injEq] at hout
+    obtain ⟨hre, hrρ, hrctl, hσ⟩ := hout
+    subst hrctl hre
+    obtain rfl : ρ = rρ := hrρ.symm
+    obtain rfl : σ₁ = σ₂ := hσ.symm
+    imod Hclose with -
+    imodintro
+    isplitl [Hσ]
+    · iexact Hσ
+    · rw [show Expr a (Eannot fps (Expr [] (Epure (Pexpr [] () (PEval (Vtuple cvals)))))) =
+        ofValA (.annot a [] [] fps (Vtuple cvals)) from rfl]
+      iapply wps_ofValA (.annot a [] [] fps (Vtuple cvals)) ρ
+      simp only [SpikeValA.erase_annot]
+      iexact H
+  · rw [jumpRedex?_unseq_vals] at hj; cases hj
+  · have h1 : valsOnly (es1 ++ e0 :: es2) = true := by
+      rw [← heq]; exact valsOnly_map_ofValA ws
+    rw [valsOnly_append_cons_false hnv0] at h1
+    cases h1
+
+/-- E2's flat TUPLE binder at an ANNOTATED head (LETW-ANNOT at the tuple
+    pattern, `Step.wseq_tuple_annot`, core_reduction.lem:397–405): the
+    corpus's `let weak (a, b) = unseq(…) in e2` — the `unseq` delivers the
+    annotated tuple `{A}(v_1, …)`, the binder binds the components and the
+    dynamic annotations RIDE onto the continuation (`Expr [] (Eannot ds e2)`;
+    `wps_annot` then merges them into `e2`'s value). The rule at a BARE tuple
+    head is `wps_wseq_tuple` (E2); this is its annotated face (E4). -/
+theorem wps_wseq_tuple_annot {Ψ : SpikeVal → EnvStack → IProp GF}
+    (a pa : List annot) (ls : List TupleLeaf)
+    (e1 e2 : CoreExpr)
+    (ev0 : Fmap sym value) (evs : List (Fmap sym value)) :
+    wps M p Ls Θ (fun w ρ' => iprop(∃ (vs : List value) (ds : List dyn_annotation),
+        ⌜w = SpikeVal.annot ds (Vtuple vs)⌝ ∗
+        wps M p Ls Θ Ψ (Expr [] (Eannot ds e2)) (update_env (tuplePat pa ls) (Vtuple vs) ρ')))
+      e1 (ev0 :: evs) ⊢
+      wps M p Ls Θ Ψ (Expr a (Ewseq (tuplePat pa ls) e1 e2))
+        (ev0 :: evs) := by
+  iloeb as IH generalizing %e1 %ev0 %evs
+  cases htv : toVal e1 with
+  | some w =>
+    obtain ⟨wa, rfl, rfl⟩ := ofValA_of_toVal htv
+    rw [wps_unfold.to_eq,
+      (wps_unfold (e := Expr a (Ewseq (tuplePat pa ls)
+        (ofValA wa) e2))).to_eq]
+    simp only [wps.pre, toVal_ofValA, toVal_wseq_node, jumpRedex?_wseq,
+      jumpRedex?_ofValA, callRedex?_wseq, callRedex?_ofValA, Option.map_none]
+    iintro H %κ %ℓ %lc %sp %σ₁ %ns %obs %obs' %nt Hσ
+    imod H with ⟨%vs, %ds, %hval, Hinner⟩
+    obtain ⟨a1, a2, b1, rfl⟩ : ∃ a1 a2 b1, wa = .annot a1 a2 b1 ds (Vtuple vs) := by
+      cases wa with
+      | pure a1 b1 v' => cases hval
+      | annot a1 a2 b1 ds' v' => cases hval; exact ⟨a1, a2, b1, rfl⟩
+    iapply fupd_mask_intro Std.LawfulSet.empty_subset
+    iintro Hclose
+    isplitr
+    · ipureintro
+      exact ⟨[], ⟨_, _, _, _⟩, _, [], ⟨Step.wseq_tuple_annot, rfl, rfl⟩⟩
+    inext
+    iintro %r %σ₂ %eₜ %Hstep Hcred
+    obtain ⟨hs, hlbl, rfl⟩ := Hstep
+    rcases hs.wseq_inv with ⟨e1', ρ'', ctl'', σ'', hnj, hnc', hnv', hs', hout⟩ |
+        ⟨_, _, _, _, v', _, _, hpat, he1, _, hout⟩ |
+        ⟨_, _, _, _, _, _, v', _, _, hpat, he1, _, hout⟩ |
+        ⟨l, pes, params, cont, vs0, _, _, hj, _, _, _, _⟩ |
+        ⟨_, _, _, _, _, _, _, _, hpat, _, _, _⟩ |
+        ⟨_, _, _, _, _, _, _, _, _, _, hpat, _, _, _⟩ |
+        ⟨_, _, _, _, _, _, _, hpat, he1, _, _⟩ |
+        ⟨pa', ls', a1', a2', b1', ds', vs', _, _, hpat, he1, _, hout⟩ |
+        hcall
+    · rw [toVal_ofValA] at hnv'; cases hnv'
+    · exact (tuplePat_ne_base hpat.symm).elim
+    · exact (tuplePat_ne_base hpat.symm).elim
+    · rw [jumpRedex?_ofValA] at hj; cases hj
+    · exact (symPat_ne_tuple hpat.symm).elim
+    · exact (symPat_ne_tuple hpat.symm).elim
+    · exact absurd (ofValA_inj he1) (by simp)
+    · obtain ⟨rfl, rfl⟩ := tuplePat_inj hpat
+      obtain ⟨rfl, rfl, rfl, rfl, rfl⟩ : a1 = a1' ∧ a2 = a2' ∧ b1 = b1' ∧ ds = ds' ∧ vs = vs' := by
+        simpa using ofValA_inj he1
+      obtain ⟨re, rρ, rctl, rM⟩ := r
+      simp only at hlbl
+      obtain rfl : M = rM := hlbl.symm
+      simp only [Prod.mk.injEq] at hout
+      obtain ⟨hre, hrρ, hrctl, hσ⟩ := hout
+      subst hrctl
+      subst hrρ
+      obtain rfl : Expr [] (Eannot ds e2) = re := hre.symm
+      obtain rfl : σ₁ = σ₂ := hσ.symm
+      imod Hclose with -
+      imodintro
+      isplitl [Hσ]
+      · iexact Hσ
+      · iexact Hinner
+    · obtain ⟨_, _, _, h⟩ := hcall.callRedex?_some
+      rw [callRedex?_ofValA] at h
+      cases h
   | none =>
     cases hjr : jumpRedex? e1 with
     | some lp =>

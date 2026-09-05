@@ -979,13 +979,14 @@ theorem wpt_save {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
 
 /-- PURE at a non-value pexpr: one big-step evaluation tau, then the
     bare value's delivery (total cost 2 ≤ k). -/
-theorem wpt_pure {Ψ : SpikeVal → EnvStack → IProp GF}
+theorem wpt_pure {Ψ : SpikeVal → EnvStack → IProp GF} {a : List annot}
     (pe : generic_pexpr Unit sym) (ρ : EnvStack) {v : value} {k : Nat}
     (hk : 2 ≤ k)
     (hnv : valueFromPexpr pe = none) (hv : evalPexpr M.tagDefs M.extern M.file ρ pe = some v) :
-    Ψ (.pure v) ρ ⊢ wpt M p Ls Θ k Ψ (Expr ([] : List annot) (Epure pe)) ρ := by
+    Ψ (.pure v) ρ ⊢ wpt M p Ls Θ k Ψ (Expr a (Epure pe)) ρ := by
   obtain ⟨k', rfl⟩ : ∃ k', k = k' + 1 := ⟨k - 1, by omega⟩
-  refine .trans (wpt_ofVal (M := M) (p := p) (Ls := Ls) (Θ := Θ) (.pure v) ρ (by simp only [deliveryCost_pure]; exact Nat.le_of_succ_le_succ hk)) ?_
+  refine .trans (wpt_ofValA (M := M) (p := p) (Ls := Ls) (Θ := Θ) (.pure a [] v) ρ
+    (by simp only [SpikeValA.erase_pure, deliveryCost_pure]; exact Nat.le_of_succ_le_succ hk)) ?_
   exact wpt_det_step (toVal_pure_none hnv) (jumpRedex?_pure _ _) (callRedex?_pure _ _)
     (fun _ _ _ _ _ => Step.pure_eval hnv hv)
     (fun _ _ _ _ σ out hs => by
@@ -2915,6 +2916,402 @@ theorem wpt_wseq_tuple {Ψ : SpikeVal → EnvStack → IProp GF}
       · exact absurd (ofValA_inj he1) (by simp)
       · obtain ⟨_, _, _, h⟩ := hcall.callRedex?_some
         simp at h
+  | none =>
+    cases hjr : jumpRedex? e1 with
+    | some lp =>
+      obtain ⟨l, pes⟩ := lp
+      exact wpt_jump_frame_wseq a _ e2 _ (Nat.le_add_right k1 k2) htv hjr
+    | none =>
+    cases hcr : callRedex? e1 with
+    | some q =>
+      obtain ⟨ctx, f, pes⟩ := q
+      rw [wpt_call_eq htv hjr hcr,
+        wpt_call_eq (toVal_wseq_node a (tuplePat pa ls) e1 e2)
+          (by rw [jumpRedex?_wseq]; exact hjr)
+          (show callRedex? (Expr a (Ewseq (tuplePat pa ls) e1 e2)) =
+              some (Cwseq a (tuplePat pa ls) ctx e2, f, pes) by
+            rw [callRedex?_wseq, hcr]; rfl)]
+      simp only [apply_ctx_wseq]
+      iintro H
+      imod H with ⟨%params, %body, %vs, %m, %k', %hb, %h1, %h2, %h3, Hpre, Hcont⟩
+      imodintro
+      iexists params, body, vs, m, k' + k2, (by omega)
+      isplit
+      · ipureintro; exact h1
+      isplit
+      · ipureintro; exact h2
+      isplit
+      · ipureintro; exact h3
+      isplitl [Hpre]
+      · iexact Hpre
+      iintro %ret %a1 Hpost
+      ihave H' := Hcont $$ %ret %a1 Hpost
+      iapply IH k' (by omega) (apply_ctx ctx (ofValA (.pure a1 [] ret))) ev0 evs $$ H'
+    | none =>
+      cases k1 with
+      | zero =>
+        rw [wpt_zero_step_eq htv hjr hcr]
+        iintro %h
+        exact h.elim
+      | succ m =>
+        rw [wpt_step_eq m htv hjr hcr,
+          show m + 1 + k2 = (m + k2) + 1 by omega,
+          wpt_step_eq (m + k2)
+            (toVal_wseq_node a (tuplePat pa ls) e1 e2)
+            (by rw [jumpRedex?_wseq, hjr]) (callRedex?_wseq_none hcr)]
+        iintro H %κ %ℓ %lc %sp %σ₁ %ns %obs %nt Hσ
+        imod H $$ %κ %ℓ %lc %sp %σ₁ %ns %obs %nt Hσ with ⟨%hred, H⟩
+        imodintro
+        isplit
+        · ipureintro
+          obtain ⟨obs0, r', σ', eₜ', hps⟩ := hred
+          obtain ⟨hs', hlbl', hnil'⟩ := hps
+          exact ⟨[], ⟨Expr a (Ewseq (tuplePat pa ls)
+              r'.e e2), r'.ρ, r'.ctl, M⟩, σ', [],
+            ⟨Step.wseq_ctx hjr hcr htv hs', rfl, rfl⟩⟩
+        iintro %r %σ₂ %eₜ %Hstep
+        obtain ⟨hs, hlbl, rfl⟩ := Hstep
+        rcases hs.wseq_inv with ⟨e1', ρ'', ctl'', σ'', hnj, hnc', hnv', hs', hout⟩ |
+            ⟨_, _, _, _, v, _, _, _, he1, _, _⟩ |
+            ⟨_, _, _, _, _, ds, v, _, _, _, he1, _, _⟩ |
+            ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩ |
+            ⟨_, _, _, _, _, _, _, _, _, he1, _, _⟩ |
+            ⟨_, _, _, _, _, _, _, _, _, _, _, he1, _, _⟩ |
+            ⟨_, _, _, _, _, _, _, _, he1, _, _⟩ |
+            ⟨_, _, _, _, _, _, _, _, _, _, he1, _, _⟩ |
+            hcall
+        · obtain ⟨a', rfl⟩ := Step.ctl_upd hs' hnc' hnv'
+          obtain ⟨ev0', rfl⟩ := Step.env_cons hs' rfl
+          obtain ⟨re, rρ, rctl, rM⟩ := r
+          simp only at hlbl
+          obtain rfl : M = rM := hlbl.symm
+          simp only [Prod.mk.injEq] at hout
+          obtain ⟨hre, hrρ, hrctl, hσ⟩ := hout
+          subst hrctl
+          subst hre hrρ hσ
+          imod H $$ %(⟨e1', ev0' :: evs, (⟨κ, p, ℓ, lc, sp⟩ : Ctl).upd a', M⟩ : CoreRt) %σ₂ %([] : List CoreRt)
+            %⟨hs', rfl, rfl⟩ with ⟨$, H⟩
+          imodintro
+          iapply IH m (Nat.lt_succ_self m) e1' ev0' evs $$ H
+        · rw [he1, toVal_ofValA] at htv; cases htv
+        · rw [he1, toVal_ofValA] at htv; cases htv
+        · rw [hjr] at hj; cases hj
+        · rw [he1, toVal_ofValA] at htv; cases htv
+        · rw [he1, toVal_ofValA] at htv; cases htv
+        · rw [he1, toVal_ofValA] at htv; cases htv
+        · rw [he1, toVal_ofValA] at htv; cases htv
+        · obtain ⟨_, _, _, h⟩ := hcall.callRedex?_some
+          rw [hcr] at h; cases h
+
+/-! ## E4: the `unseq` rules at the total stratum (the `wps_*` twins; the
+budgets add — the focused component's budget `k1` then the node's `k2`) -/
+
+/-- E4: the total judgment at a NON-value absorbs a leading update, with
+    budget weakening (every non-value clause of `wpt.pre` begins with
+    `|={⊤}=>` or a `={⊤,∅}=∗` wand; at budget 0 the step clause is `False`,
+    which the update context refutes). The value clause is excluded: its
+    pure delivery-cost conjunct sits outside the update. -/
+theorem fupd_wpt_nonval {Ψ : SpikeVal → EnvStack → IProp GF} {e : CoreExpr} (ρ : EnvStack)
+    {k k' : Nat} (htv : toVal e = none) (hkk : k ≤ k') (hk' : 1 ≤ k') :
+    iprop(|={⊤}=> wpt M p Ls Θ k Ψ e ρ) ⊢ wpt M p Ls Θ k' Ψ e ρ := by
+  cases hjr : jumpRedex? e with
+  | some lp =>
+    obtain ⟨l, pes⟩ := lp
+    rw [wpt_jump_eq k htv hjr, wpt_jump_eq k' htv hjr]
+    iintro H
+    imod H with H
+    imod H with ⟨%params, %cont, %vs, %ev0, %evs, %m, %h1, %h2, %h3, %h4, HLs⟩
+    imodintro
+    iexists params, cont, vs, ev0, evs, m
+    isplit
+    · ipureintro; exact h1
+    isplit
+    · ipureintro; exact h2
+    isplit
+    · ipureintro; exact h3
+    isplit
+    · ipureintro; exact Nat.le_trans h4 hkk
+    iexact HLs
+  | none =>
+  cases hcr : callRedex? e with
+  | some q =>
+    obtain ⟨ctx, f, pes⟩ := q
+    rw [wpt_call_eq (k := k) htv hjr hcr, wpt_call_eq (k := k') htv hjr hcr]
+    iintro H
+    imod H with H
+    imod H with ⟨%params, %body, %vs, %m, %k'', %hb, %h1, %h2, %h3, Hpre, Hcont⟩
+    imodintro
+    iexists params, body, vs, m, k'', (by omega)
+    isplit
+    · ipureintro; exact h1
+    isplit
+    · ipureintro; exact h2
+    isplit
+    · ipureintro; exact h3
+    isplitl [Hpre]
+    · iexact Hpre
+    iintro %ret %a1 Hpost
+    iapply Hcont $$ %ret %a1 Hpost
+  | none =>
+    obtain ⟨m', rfl⟩ : ∃ m', k' = m' + 1 := ⟨k' - 1, by omega⟩
+    rw [wpt_step_eq m' htv hjr hcr]
+    cases k with
+    | zero =>
+      rw [wpt_zero_step_eq htv hjr hcr]
+      iintro H %κ %ℓ %lc %sp %σ₁ %ns %obs %nt Hσ
+      imod H with %hF
+      exact hF.elim
+    | succ m =>
+      rw [wpt_step_eq m htv hjr hcr]
+      iintro H %κ %ℓ %lc %sp %σ₁ %ns %obs %nt Hσ
+      imod H with H
+      imod H $$ %κ %ℓ %lc %sp %σ₁ %ns %obs %nt Hσ with ⟨%hred, H⟩
+      imodintro
+      isplit
+      · ipureintro; exact hred
+      iintro %r %σ₂ %eₜ %Hstep
+      imod H $$ %r %σ₂ %eₜ %Hstep with ⟨$, H⟩
+      imodintro
+      iapply wpt_mono_k (Nat.le_of_succ_le_succ hkk) _ _ $$ H
+
+/-- The jump-clause transfer through the `Cunseq` frame at the focus (the
+    `wpt_jump_frame_wseq` twin: the frame is DISCARDED by the jump). -/
+theorem wpt_jump_frame_unseq {Ψ₁ Ψ₂ : SpikeVal → EnvStack → IProp GF}
+    (a : List annot) (es1 : List CoreExpr) {e : CoreExpr} (es2 : List CoreExpr)
+    (ρ : EnvStack) {l : sym} {pes : List (generic_pexpr Unit sym)}
+    {k k' : Nat} (hkk : k ≤ k')
+    (htv : toVal e = none) (hv2 : valsOnly es2 = true) (hjr : jumpRedex? e = some (l, pes)) :
+    wpt M p Ls Θ k Ψ₁ e ρ ⊢
+      wpt M p Ls Θ k' Ψ₂ (Expr a (Eunseq (es1 ++ e :: es2))) ρ := by
+  rw [wpt_jump_eq (Ψ := Ψ₁) k htv hjr,
+    wpt_jump_eq (Ψ := Ψ₂) k' (toVal_unseq_node a _)
+      (by rw [jumpRedex?_unseq_focus a htv hv2]; exact hjr)]
+  iintro H
+  imod H with ⟨%params, %cont, %vs, %ev0, %evs, %m, %h1, %h2, %h3, %h4, HLs⟩
+  imodintro
+  iexists params, cont, vs, ev0, evs, m
+  isplit
+  · ipureintro; exact h1
+  isplit
+  · ipureintro; exact h2
+  isplit
+  · ipureintro; exact h3
+  isplit
+  · ipureintro; exact Nat.le_trans h4 hkk
+  iexact HLs
+
+/-- THE FOCUS RULE (total; the `wps_unseq_focus` twin): the focused
+    component at budget `k1`, the node at `k2` once it delivers. -/
+theorem wpt_unseq_focus {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
+    (es1 : List CoreExpr) (e : CoreExpr) (es2 : List CoreExpr) (ρ : EnvStack)
+    (hv2 : valsOnly es2 = true) (hcc : ccallFreeList (es1 ++ es2) = true) (k1 k2 : Nat) :
+    wpt M p Ls Θ k1 (fun w ρ' => iprop(∀ wa : SpikeValA, ⌜wa.erase = w⌝ -∗
+        wpt M p Ls Θ k2 Ψ (Expr a (Eunseq (es1 ++ ofValA wa :: es2))) ρ')) e ρ ⊢
+      wpt M p Ls Θ (k1 + k2) Ψ (Expr a (Eunseq (es1 ++ e :: es2))) ρ := by
+  induction k1 using Nat.strongRecOn generalizing e ρ with
+  | ind k1 IH =>
+  cases htv : toVal e with
+  | some w =>
+    obtain ⟨wa, rfl, rfl⟩ := ofValA_of_toVal htv
+    rw [wpt_val_eq k1 (toVal_ofValA wa)]
+    iintro ⟨%hc, H⟩
+    have hk1 : 1 ≤ k1 := Nat.le_trans (deliveryCost_pos _) hc
+    iapply fupd_wpt_nonval ρ (toVal_unseq_node a _) (Nat.le_add_left k2 k1) (by omega)
+    imod H with H
+    imodintro
+    iapply H $$ %wa %rfl
+  | none =>
+    cases hjr : jumpRedex? e with
+    | some lp =>
+      obtain ⟨l, pes⟩ := lp
+      exact wpt_jump_frame_unseq a es1 es2 ρ (Nat.le_add_right k1 k2) htv hv2 hjr
+    | none =>
+    cases hcr : callRedex? e with
+    | some q =>
+      obtain ⟨ctx, f, pes⟩ := q
+      rw [wpt_call_eq htv hjr hcr,
+        wpt_call_eq (toVal_unseq_node a _)
+          (by rw [jumpRedex?_unseq_focus a htv hv2]; exact hjr)
+          (show callRedex? (Expr a (Eunseq (es1 ++ e :: es2))) =
+              some (Cunseq a es1 ctx es2, f, pes) by
+            rw [callRedex?_unseq_focus a htv hv2, hcr]; rfl)]
+      simp only [apply_ctx_unseq]
+      iintro H
+      imod H with ⟨%params, %body, %vs, %m, %k', %hb, %h1, %h2, %h3, Hpre, Hcont⟩
+      imodintro
+      iexists params, body, vs, m, k' + k2, (by omega)
+      isplit
+      · ipureintro; exact h1
+      isplit
+      · ipureintro; exact h2
+      isplit
+      · ipureintro; exact h3
+      isplitl [Hpre]
+      · iexact Hpre
+      iintro %ret %a1 Hpost
+      ihave H' := Hcont $$ %ret %a1 Hpost
+      iapply IH k' (by omega) (apply_ctx ctx (ofValA (.pure a1 [] ret))) ρ $$ H'
+    | none =>
+      cases k1 with
+      | zero =>
+        rw [wpt_zero_step_eq htv hjr hcr]
+        iintro %h
+        exact h.elim
+      | succ m =>
+        rw [wpt_step_eq m htv hjr hcr,
+          show m + 1 + k2 = (m + k2) + 1 by omega,
+          wpt_step_eq (m + k2) (toVal_unseq_node a _)
+            (by rw [jumpRedex?_unseq_focus a htv hv2, hjr]) (callRedex?_unseq_none htv hv2 hcr)]
+        iintro H %κ %ℓ %lc %sp %σ₁ %ns %obs %nt Hσ
+        imod H $$ %κ %ℓ %lc %sp %σ₁ %ns %obs %nt Hσ with ⟨%hred, H⟩
+        imodintro
+        isplit
+        · ipureintro
+          obtain ⟨obs0, r', σ', eₜ', hps⟩ := hred
+          obtain ⟨hs', hlbl', hnil'⟩ := hps
+          exact ⟨[], ⟨Expr a (Eunseq (es1 ++ r'.e :: es2)), r'.ρ, r'.ctl, M⟩, σ', [],
+            ⟨Step.unseq_ctx hv2 hcc hjr hcr htv hs', rfl, rfl⟩⟩
+        iintro %r %σ₂ %eₜ %Hstep
+        obtain ⟨hs, hlbl, rfl⟩ := Hstep
+        rcases hs.unseq_inv with
+            ⟨es1', e0, es2', e0', ρ'', ctl'', σ'', heq, hv2', -, hnj, hnc', hnv', hs', hout⟩ |
+            ⟨ws, fps, cvals, heq, -, -⟩ |
+            ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩ |
+            ⟨es1', e0, es2', heq, hnv', hv2', hcall⟩
+        · obtain ⟨rfl, rfl, rfl⟩ := focus_unique heq htv hnv' hv2 hv2'
+          obtain ⟨re, rρ, rctl, rM⟩ := r
+          simp only at hlbl
+          obtain rfl : M = rM := hlbl.symm
+          simp only [Prod.mk.injEq] at hout
+          obtain ⟨hre, hrρ, hrctl, hσ⟩ := hout
+          subst hre
+          obtain rfl : ρ'' = rρ := hrρ.symm
+          obtain rfl : ctl'' = rctl := hrctl.symm
+          obtain rfl : σ'' = σ₂ := hσ.symm
+          imod H $$ %(⟨e0', ρ'', ctl'', M⟩ : CoreRt) %σ'' %([] : List CoreRt)
+            %⟨hs', rfl, rfl⟩ with ⟨$, H⟩
+          imodintro
+          iapply IH m (Nat.lt_succ_self m) e0' ρ'' $$ H
+        · have h1 : valsOnly (es1 ++ e :: es2) = true := by
+            rw [heq]; exact valsOnly_map_ofValA ws
+          rw [valsOnly_append_cons_false htv] at h1
+          cases h1
+        · rw [jumpRedex?_unseq_focus a htv hv2, hjr] at hj; cases hj
+        · obtain ⟨rfl, rfl, rfl⟩ := focus_unique heq htv hnv' hv2 hv2'
+          obtain ⟨_, _, _, h⟩ := hcall.callRedex?_some
+          rw [hcr] at h; cases h
+
+/-- THE COMPLETION RULE (total; the `wps_unseq_vals` twin): one step plus
+    the annotated tuple's delivery cost — `3 ≤ k`. -/
+theorem wpt_unseq_vals {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
+    (ws : List SpikeValA) (ρ : EnvStack) {fps : List dyn_annotation} {cvals : List value}
+    {k : Nat} (hk : 3 ≤ k) (hcol : collectUnseq ([], []) ws = some (fps, cvals)) :
+    Ψ (.annot fps (Vtuple cvals)) ρ ⊢
+      wpt M p Ls Θ k Ψ (Expr a (Eunseq (ws.map ofValA))) ρ := by
+  obtain ⟨k', rfl⟩ : ∃ k', k = k' + 1 := ⟨k - 1, by omega⟩
+  refine .trans (wpt_ofValA (M := M) (p := p) (Ls := Ls) (Θ := Θ)
+    (.annot a [] [] fps (Vtuple cvals)) ρ (k := k')
+    (by simp only [SpikeValA.erase_annot, deliveryCost_annot]; omega)) ?_
+  exact wpt_det_step (toVal_unseq_node a _) (jumpRedex?_unseq_vals a ws) (callRedex?_unseq_vals a ws)
+    (fun _ _ _ _ _ => Step.unseq_vals hcol)
+    (fun _ _ _ _ σ out hs => by
+      rcases hs.unseq_inv with
+          ⟨es1, e0, es2, _, _, _, _, heq, hv2, -, -, -, hnv0, -, -⟩ |
+          ⟨ws', fps', cvals', heq, hcol', hout⟩ |
+          ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩ |
+          ⟨es1, e0, es2, heq, hnv0, hv2, hcall⟩
+      · exfalso
+        have h1 : valsOnly (es1 ++ e0 :: es2) = true := by
+          rw [← heq]; exact valsOnly_map_ofValA ws
+        rw [valsOnly_append_cons_false hnv0] at h1
+        cases h1
+      · obtain rfl := map_ofValA_inj heq
+        obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Option.some.inj (hcol.symm.trans hcol'))
+        exact hout
+      · rw [jumpRedex?_unseq_vals] at hj; cases hj
+      · exfalso
+        have h1 : valsOnly (es1 ++ e0 :: es2) = true := by
+          rw [← heq]; exact valsOnly_map_ofValA ws
+        rw [valsOnly_append_cons_false hnv0] at h1
+        cases h1)
+
+/-- E2's flat TUPLE binder at an ANNOTATED head, total stratum (the
+    `wps_wseq_tuple_annot` twin; the head value's delivery cost prepays the
+    beta). -/
+theorem wpt_wseq_tuple_annot {Ψ : SpikeVal → EnvStack → IProp GF}
+    (a pa : List annot) (ls : List TupleLeaf)
+    (e1 e2 : CoreExpr)
+    (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (k1 k2 : Nat) :
+    wpt M p Ls Θ k1 (fun w ρ' => iprop(∃ (vs : List value) (ds : List dyn_annotation),
+        ⌜w = SpikeVal.annot ds (Vtuple vs)⌝ ∗
+        wpt M p Ls Θ k2 Ψ (Expr [] (Eannot ds e2)) (update_env (tuplePat pa ls) (Vtuple vs) ρ')))
+      e1 (ev0 :: evs) ⊢
+      wpt M p Ls Θ (k1 + k2) Ψ (Expr a (Ewseq (tuplePat pa ls) e1 e2))
+        (ev0 :: evs) := by
+  induction k1 using Nat.strongRecOn generalizing e1 ev0 evs with
+  | ind k1 IH =>
+  cases htv : toVal e1 with
+  | some w =>
+    obtain ⟨wa, rfl, rfl⟩ := ofValA_of_toVal htv
+    rw [wpt_val_eq k1 (toVal_ofValA wa)]
+    cases k1 with
+    | zero =>
+      iintro ⟨%hc, -⟩
+      exact absurd hc (by cases wa <;> simp [deliveryCost])
+    | succ m =>
+      rw [show m + 1 + k2 = (m + k2) + 1 by omega,
+        wpt_step_eq (m + k2)
+          (toVal_wseq_node a (tuplePat pa ls) (ofValA wa) e2)
+          (by rw [jumpRedex?_wseq, jumpRedex?_ofValA]) (by simp)]
+      iintro ⟨%hc, H⟩ %κ %ℓ %lc %sp %σ₁ %ns %obs %nt Hσ
+      imod H with ⟨%vs, %ds, %hval, Hinner⟩
+      obtain ⟨a1, a2, b1, rfl⟩ : ∃ a1 a2 b1, wa = .annot a1 a2 b1 ds (Vtuple vs) := by
+        cases wa with
+        | pure a1 b1 v' => cases hval
+        | annot a1 a2 b1 ds' v' => cases hval; exact ⟨a1, a2, b1, rfl⟩
+      iapply fupd_mask_intro Std.LawfulSet.empty_subset
+      iintro Hclose
+      isplitr
+      · ipureintro
+        exact ⟨[], ⟨_, _, _, _⟩, _, [], ⟨Step.wseq_tuple_annot, rfl, rfl⟩⟩
+      iintro %r %σ₂ %eₜ %Hstep
+      obtain ⟨hs, hlbl, rfl⟩ := Hstep
+      rcases hs.wseq_inv with ⟨e1', ρ'', ctl'', σ'', hnj, hnc', hnv', hs', hout⟩ |
+          ⟨_, _, _, _, v', _, _, hpat, he1, _, hout⟩ |
+          ⟨_, _, _, _, _, _, v', _, _, hpat, he1, _, hout⟩ |
+          ⟨l, pes, params, cont, vs0, _, _, hj, _, _, _, _⟩ |
+          ⟨_, _, _, _, _, _, _, _, hpat, _, _, _⟩ |
+          ⟨_, _, _, _, _, _, _, _, _, _, hpat, _, _, _⟩ |
+          ⟨_, _, _, _, _, _, _, hpat, he1, _, _⟩ |
+          ⟨pa', ls', a1', a2', b1', ds', vs', _, _, hpat, he1, _, hout⟩ |
+          hcall
+      · rw [toVal_ofValA] at hnv'; cases hnv'
+      · exact (tuplePat_ne_base hpat.symm).elim
+      · exact (tuplePat_ne_base hpat.symm).elim
+      · rw [jumpRedex?_ofValA] at hj; cases hj
+      · exact (symPat_ne_tuple hpat.symm).elim
+      · exact (symPat_ne_tuple hpat.symm).elim
+      · exact absurd (ofValA_inj he1) (by simp)
+      · obtain ⟨rfl, rfl⟩ := tuplePat_inj hpat
+        obtain ⟨rfl, rfl, rfl, rfl, rfl⟩ : a1 = a1' ∧ a2 = a2' ∧ b1 = b1' ∧ ds = ds' ∧ vs = vs' := by
+          simpa using ofValA_inj he1
+        obtain ⟨re, rρ, rctl, rM⟩ := r
+        simp only at hlbl
+        obtain rfl : M = rM := hlbl.symm
+        simp only [Prod.mk.injEq] at hout
+        obtain ⟨hre, hrρ, hrctl, hσ⟩ := hout
+        subst hrctl
+        subst hrρ
+        obtain rfl : Expr [] (Eannot ds e2) = re := hre.symm
+        obtain rfl : σ₁ = σ₂ := hσ.symm
+        imod Hclose with -
+        imodintro
+        isplitl [Hσ]
+        · iexact Hσ
+        · iapply wpt_mono_k (Nat.le_add_left k2 m) (Expr [] (Eannot ds e2)) _ $$ Hinner
+      · obtain ⟨_, _, _, h⟩ := hcall.callRedex?_some
+        rw [callRedex?_ofValA] at h
+        cases h
   | none =>
     cases hjr : jumpRedex? e1 with
     | some lp =>
