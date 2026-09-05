@@ -128,21 +128,22 @@ theorem dg_loop_exhausts (ra : core_run_annotation) :
       dst.core_state0.thread_states =
         [(0, (none, procThread dgProcSym (dgBody ra) [fmapEmpty]))] →
       dst.core_extern = fmapEmpty →
+      dst.core_file = spikeFile →
       LabeledAt dst.core_run_state0 dgProcSym (dgQ ra) →
       ∃ dst' : driver_state,
         runOne (drive_nonmemory_steps_aux2_lemFuel fl fmapEmpty acc [0]) dst =
           (NDkilled CerbND.fuelExhaustedKill, dst')
-  | 0, dst, acc, _, _, _ => ⟨dst, loop_zero_exhausts _ _ _ _⟩
-  | fl + 1, dst, acc, hth, hext, hQd => by
+  | 0, dst, acc, _, _, _, _ => ⟨dst, loop_zero_exhausts _ _ _ _⟩
+  | fl + 1, dst, acc, hth, hext, hfile, hQd => by
     obtain ⟨rs', tr, ctr, hlbl, hrun⟩ :=
       loop_step_frag_same (th₀ := procThread dgProcSym (dgBody ra) [fmapEmpty])
-        rfl rfl (procCtx_labels (dgRS_labeledAt ra)) rfl rfl fl acc hth hext hQd (dgBody_frag ra)
+        rfl rfl (procCtx_labels (dgRS_labeledAt ra)) rfl rfl fl acc hth hext hfile hQd (dgBody_frag ra)
         (by rw [show esize (dgBody ra) = 1 from rfl,
           show lemDefaultFuel = 999999 + 1 from rfl]; omega)
         (dg_self_step ra fmapEmpty [] dst.layout_state) rfl
     rw [hrun]
     exact dg_loop_exhausts ra fl _ acc
-      (by rw [update_thread_state_single _ _ _ hth]; rfl) hext
+      (by rw [update_thread_state_single _ _ _ hth]; rfl) hext hfile
       (by show LabeledAt rs' dgProcSym (dgQ ra)
           unfold LabeledAt
           rw [hlbl]
@@ -210,8 +211,8 @@ theorem diverge_total_unprovable {GF : BundledGFunctors} [SpikeGpreS GF]
           thread_states := [(0, (none, procThread dgProcSym (dgBody ra) [fmapEmpty]))] },
         layout_state := σ₀, core_run_state0 := dgRS ra, core_extern := fmapEmpty }
   obtain ⟨v, σf, ρf, lcf, af, bf, rs', tr, ctr, -, hrun⟩ :=
-    hdd dst fmapEmpty (k + 2) rfl rfl rfl (dgRS_labeledAt ra) (Nat.le_refl _)
-  obtain ⟨dst', hkill⟩ := dg_loop_exhausts ra (k + 2) dst fmapEmpty rfl rfl (dgRS_labeledAt ra)
+    hdd dst fmapEmpty (k + 2) rfl rfl rfl rfl (dgRS_labeledAt ra) (Nat.le_refl _)
+  obtain ⟨dst', hkill⟩ := dg_loop_exhausts ra (k + 2) dst fmapEmpty rfl rfl rfl (dgRS_labeledAt ra)
   rw [hrun] at hkill
   cases hkill
 

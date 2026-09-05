@@ -192,13 +192,13 @@ theorem tl_lookup_y {f : Fmap sym value} (hf : SymFrame f) (v : value)
     lookup_env (a := value) tlYSym (envAdd tlYSym v f :: rest) = some v :=
   lookup_env_head (by rw [envAdd_lookup hf symCmpK, if_pos (by decide +kernel)]) rest
 
-theorem tl_guard1_eval {f : Fmap sym value} (hf : SymFrame f) (i : Int)
+theorem tl_guard1_eval {file : generic_file Unit core_run_annotation} {f : Fmap sym value} (hf : SymFrame f) (i : Int)
     (rest : List (Fmap sym value)) :
-    evalPexpr fmapEmpty fmapEmpty (envAdd tlXSym (ivVal i) f :: rest) tlGuard1 =
+    evalPexpr fmapEmpty fmapEmpty file (envAdd tlXSym (ivVal i) f :: rest) tlGuard1 =
       some (boolValue (decide (0 < i))) := by
   unfold tlGuard1
   rw [evalPexpr_op]
-  rw [show evalPexpr fmapEmpty fmapEmpty (envAdd tlXSym (ivVal i) f :: rest)
+  rw [show evalPexpr fmapEmpty fmapEmpty file (envAdd tlXSym (ivVal i) f :: rest)
       (Pexpr [] () (PEsym tlXSym)) = some (ivVal i) from by
       rw [evalPexpr_sym_empty]; exact tl_lookup_x hf (ivVal i) rest]
   rw [evalPexpr_val]
@@ -208,13 +208,13 @@ theorem tl_guard1_eval {f : Fmap sym value} (hf : SymFrame f) (i : Int)
     (CerbMem.integerIval i)).map boolValue = _
   rfl
 
-theorem tl_guard2_eval {f : Fmap sym value} (hf : SymFrame f) (j : Int)
+theorem tl_guard2_eval {file : generic_file Unit core_run_annotation} {f : Fmap sym value} (hf : SymFrame f) (j : Int)
     (rest : List (Fmap sym value)) :
-    evalPexpr fmapEmpty fmapEmpty (envAdd tlYSym (ivVal j) f :: rest) tlGuard2 =
+    evalPexpr fmapEmpty fmapEmpty file (envAdd tlYSym (ivVal j) f :: rest) tlGuard2 =
       some (boolValue (decide (0 < j))) := by
   unfold tlGuard2
   rw [evalPexpr_op]
-  rw [show evalPexpr fmapEmpty fmapEmpty (envAdd tlYSym (ivVal j) f :: rest)
+  rw [show evalPexpr fmapEmpty fmapEmpty file (envAdd tlYSym (ivVal j) f :: rest)
       (Pexpr [] () (PEsym tlYSym)) = some (ivVal j) from by
       rw [evalPexpr_sym_empty]; exact tl_lookup_y hf (ivVal j) rest]
   rw [evalPexpr_val]
@@ -224,32 +224,32 @@ theorem tl_guard2_eval {f : Fmap sym value} (hf : SymFrame f) (j : Int)
     (CerbMem.integerIval j)).map boolValue = _
   rfl
 
-theorem tl_dec1_eval {f : Fmap sym value} (hf : SymFrame f) (i : Int)
+theorem tl_dec1_eval {file : generic_file Unit core_run_annotation} {f : Fmap sym value} (hf : SymFrame f) (i : Int)
     (rest : List (Fmap sym value)) :
-    evalPexprs fmapEmpty fmapEmpty (envAdd tlXSym (ivVal i) f :: rest) [tlDec1] =
+    evalPexprs fmapEmpty fmapEmpty file (envAdd tlXSym (ivVal i) f :: rest) [tlDec1] =
       some [ivVal (i - 1)] := by
   rw [evalPexprs_cons]
-  rw [show evalPexpr fmapEmpty fmapEmpty (envAdd tlXSym (ivVal i) f :: rest) tlDec1 =
+  rw [show evalPexpr fmapEmpty fmapEmpty file (envAdd tlXSym (ivVal i) f :: rest) tlDec1 =
       some (ivVal (i - 1)) from by
     unfold tlDec1
     rw [evalPexpr_op]
-    rw [show evalPexpr fmapEmpty fmapEmpty (envAdd tlXSym (ivVal i) f :: rest)
+    rw [show evalPexpr fmapEmpty fmapEmpty file (envAdd tlXSym (ivVal i) f :: rest)
         (Pexpr [] () (PEsym tlXSym)) = some (ivVal i) from by
         rw [evalPexpr_sym_empty]; exact tl_lookup_x hf (ivVal i) rest]
     rw [evalPexpr_val]
     rfl]
   rfl
 
-theorem tl_dec2_eval {f : Fmap sym value} (hf : SymFrame f) (j : Int)
+theorem tl_dec2_eval {file : generic_file Unit core_run_annotation} {f : Fmap sym value} (hf : SymFrame f) (j : Int)
     (rest : List (Fmap sym value)) :
-    evalPexprs fmapEmpty fmapEmpty (envAdd tlYSym (ivVal j) f :: rest) [tlDec2] =
+    evalPexprs fmapEmpty fmapEmpty file (envAdd tlYSym (ivVal j) f :: rest) [tlDec2] =
       some [ivVal (j - 1)] := by
   rw [evalPexprs_cons]
-  rw [show evalPexpr fmapEmpty fmapEmpty (envAdd tlYSym (ivVal j) f :: rest) tlDec2 =
+  rw [show evalPexpr fmapEmpty fmapEmpty file (envAdd tlYSym (ivVal j) f :: rest) tlDec2 =
       some (ivVal (j - 1)) from by
     unfold tlDec2
     rw [evalPexpr_op]
-    rw [show evalPexpr fmapEmpty fmapEmpty (envAdd tlYSym (ivVal j) f :: rest)
+    rw [show evalPexpr fmapEmpty fmapEmpty file (envAdd tlYSym (ivVal j) f :: rest)
         (Pexpr [] () (PEsym tlYSym)) = some (ivVal j) from by
         rw [evalPexpr_sym_empty]; exact tl_lookup_y hf (ivVal j) rest]
     rw [evalPexpr_val]

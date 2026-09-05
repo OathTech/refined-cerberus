@@ -240,12 +240,12 @@ variable {f : Fmap sym value} (hf : SymFrame f) (i a b : Int)
 
 include hf
 
-theorem fib_guard_eval (n : Int) :
-    evalPexpr fmapEmpty fmapEmpty (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
+theorem fib_guard_eval {file : generic_file Unit core_run_annotation} (n : Int) :
+    evalPexpr fmapEmpty fmapEmpty file (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
         (fibGuard n) = some (boolValue (decide (i < n))) := by
   unfold fibGuard
   rw [evalPexpr_op]
-  rw [show evalPexpr fmapEmpty fmapEmpty (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
+  rw [show evalPexpr fmapEmpty fmapEmpty file (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
       (Pexpr [] () (PEsym fibISym)) = some (ivVal i) from by
     rw [evalPexpr_sym_empty]
     exact lookup_env_head (fibFrame_lookup_i hf _ _ _) rest]
@@ -253,43 +253,43 @@ theorem fib_guard_eval (n : Int) :
   show evalBinop binop.OpLt (ivVal i) (ivVal n) = _
   rfl
 
-theorem fib_args_eval :
-    evalPexprs fmapEmpty fmapEmpty (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
+theorem fib_args_eval {file : generic_file Unit core_run_annotation} :
+    evalPexprs fmapEmpty fmapEmpty file (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
         [fibIncPe, fibBPe, fibABPe] =
       some [ivVal (i + 1), ivVal b, ivVal (a + b)] := by
-  have hi : evalPexpr fmapEmpty fmapEmpty (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
+  have hi : evalPexpr fmapEmpty fmapEmpty file (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
       (Pexpr [] () (PEsym fibISym)) = some (ivVal i) := by
     rw [evalPexpr_sym_empty]
     exact lookup_env_head (fibFrame_lookup_i hf _ _ _) rest
-  have ha : evalPexpr fmapEmpty fmapEmpty (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
+  have ha : evalPexpr fmapEmpty fmapEmpty file (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
       (Pexpr [] () (PEsym fibASym)) = some (ivVal a) := by
     rw [evalPexpr_sym_empty]
     exact lookup_env_head (fibFrame_lookup_a hf _ _ _) rest
-  have hb : evalPexpr fmapEmpty fmapEmpty (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
+  have hb : evalPexpr fmapEmpty fmapEmpty file (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
       (Pexpr [] () (PEsym fibBSym)) = some (ivVal b) := by
     rw [evalPexpr_sym_empty]
     exact lookup_env_head (fibFrame_lookup_b hf _ _ _) rest
   rw [evalPexprs_cons]
-  rw [show evalPexpr fmapEmpty fmapEmpty (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
+  rw [show evalPexpr fmapEmpty fmapEmpty file (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
       fibIncPe = some (ivVal (i + 1)) from by
     unfold fibIncPe
     rw [evalPexpr_op, hi, evalPexpr_val]
     rfl]
   rw [evalPexprs_cons]
-  rw [show evalPexpr fmapEmpty fmapEmpty (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
+  rw [show evalPexpr fmapEmpty fmapEmpty file (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
       fibBPe = some (ivVal b) from hb]
   rw [evalPexprs_cons]
-  rw [show evalPexpr fmapEmpty fmapEmpty (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
+  rw [show evalPexpr fmapEmpty fmapEmpty file (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
       fibABPe = some (ivVal (a + b)) from by
     unfold fibABPe
     rw [evalPexpr_op, ha, hb]
     rfl]
   rfl
 
-theorem fib_exit_eval :
-    evalPexpr fmapEmpty fmapEmpty (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
+theorem fib_exit_eval {file : generic_file Unit core_run_annotation} :
+    evalPexpr fmapEmpty fmapEmpty file (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
         fibExitPe = some (ivVal a) := by
-  show evalPexpr fmapEmpty fmapEmpty _ (Pexpr [] () (PEsym fibASym)) = _
+  show evalPexpr fmapEmpty fmapEmpty file _ (Pexpr [] () (PEsym fibASym)) = _
   rw [evalPexpr_sym_empty]
   exact lookup_env_head (fibFrame_lookup_a hf _ _ _) rest
 
@@ -303,10 +303,10 @@ variable {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
 variable (ra : core_run_annotation) (n : Int)
   (ibty abty bbty : core_base_type)
 -- S1b: the wps judgment is indexed by the MACHINE CONTEXT; the
--- exhibit works at the jump-profile instance `procCtx rs` (entry control
+-- exhibit works at the jump-profile instance `procCtxF F rs` (entry control
 -- `procCtl p`: empty stack, in procedure `p`; calls arc C1) with the
--- label map tied by the honest `LabeledAt` link (`procCtx_labels`).
-variable (p : sym) (rs : core_run_state)
+-- label map tied by the honest `LabeledAt` link (`procCtxF_labels`).
+variable (p : sym) {F : file core_run_annotation} (rs : core_run_state)
   (hQ : LabeledAt rs p (fibQ ra n ibty abty bbty))
 
 /-- The postcondition: the delivered value IS `fib n`. -/
@@ -327,7 +327,7 @@ include hQ
 theorem fib_body_wps (i : Int) (f : Fmap sym value)
     (rest : List (Fmap sym value)) (hf : SymFrame f)
     (h0 : 0 ≤ i) (hin : i ≤ n) :
-    ⊢ wps (GF := GF) (procCtx rs) (some p) (fibLs n) emptyProcSpec (fibPost n)
+    ⊢ wps (GF := GF) (procCtxF F rs) (some p) (fibLs n) emptyProcSpec (fibPost n)
         (fibBody ra n)
         (fibFrame (ivVal i) (ivVal (fibSpec i.toNat))
           (ivVal (fibSpec (i.toNat + 1))) f :: rest) := by
@@ -337,9 +337,9 @@ theorem fib_body_wps (i : Int) (f : Fmap sym value)
   by_cases hlt : i < n
   · -- back edge at (i+1, fib(i+1), fib(i) + fib(i+1))
     iapply wps_if_true [] (fibGuard n) _ _ _
-      (by rw [procCtx_extern, fib_guard_eval hf i _ _ rest n, decide_eq_true hlt]; rfl)
+      (by rw [procCtxF_extern, fib_guard_eval hf i _ _ rest n, decide_eq_true hlt]; rfl)
     iapply wps_run [] ra fibLoopSym [fibIncPe, fibBPe, fibABPe] _ _
-      (by rw [procCtx_labels hQ]
+      (by rw [procCtxF_labels hQ]
           exact fibQ_lookup ra n ibty abty bbty)
       (fib_args_eval hf i _ _ rest)
     iexists (i + 1), (fibFrame (ivVal i) (ivVal (fibSpec i.toNat))
@@ -351,7 +351,7 @@ theorem fib_body_wps (i : Int) (f : Fmap sym value)
   · -- exit: i = n, deliver a = fib n
     have hz : i = n := by omega
     iapply wps_if_false [] (fibGuard n) _ _ _
-      (by rw [procCtx_extern, fib_guard_eval hf i _ _ rest n,
+      (by rw [procCtxF_extern, fib_guard_eval hf i _ _ rest n,
         decide_eq_false hlt]; rfl)
     iapply wps_pure fibExitPe _ rfl (fib_exit_eval hf i _ _ rest)
     ipureintro
@@ -360,10 +360,10 @@ theorem fib_body_wps (i : Int) (f : Fmap sym value)
 
 /-- THE BLOCK SPECIFICATION (per-label invariant rule, no Löb). -/
 theorem fib_blockSpecs :
-    ⊢ blockSpecs (GF := GF) (procCtx rs) (some p) (fibLs n) emptyProcSpec
+    ⊢ blockSpecs (GF := GF) (procCtxF F rs) (some p) (fibLs n) emptyProcSpec
       (fibPost n) := by
   refine blockSpecs_intro fun l params cont vs ev0 evs hl => ?_
-  rw [procCtx_labels hQ] at hl
+  rw [procCtxF_labels hQ] at hl
   obtain ⟨rfl, rfl⟩ := fibQ_inv ra n ibty abty bbty hl
   iintro ⟨%i, %f, %rest, %hpure⟩
   obtain ⟨rfl, h0, hin, hρ, hf⟩ := hpure
@@ -377,7 +377,7 @@ theorem fib_blockSpecs :
 
 /-- The whole program's statement WP from the entry env. -/
 theorem fib_wps (hn : 0 ≤ n) (sbty : core_base_type) :
-    ⊢ wps (GF := GF) (procCtx rs) (some p) (fibLs n) emptyProcSpec (fibPost n)
+    ⊢ wps (GF := GF) (procCtxF F rs) (some p) (fibLs n) emptyProcSpec (fibPost n)
         (fibProg ra n sbty ibty abty bbty) [fmapEmpty] := by
   rw [show fibProg ra n sbty ibty abty bbty =
     Expr [] (Esave (fibLoopSym, sbty) (fibParams ibty abty bbty)
@@ -387,7 +387,7 @@ theorem fib_wps (hn : 0 ≤ n) (sbty : core_base_type) :
     (evalPexprs_cons_val _ _ _ _ _ _ _ (evalPexprs_cons_val _ _ _ _ _ _ _
       (evalPexprs_single_val _ _ _ _ _)))
   rw [bindSave_fib]
-  have h := fib_body_wps (GF := GF) ra n ibty abty bbty p rs hQ 0 fmapEmpty []
+  have h := fib_body_wps (GF := GF) (F := F) ra n ibty abty bbty p rs hQ 0 fmapEmpty []
     symFrame_empty (by omega) hn
   rw [show ((0 : Int)).toNat = 0 from rfl] at h
   exact h
@@ -399,9 +399,9 @@ theorem fib_wp_readout (hn : 0 ≤ n) (sbty : core_base_type) :
         {{ w, iprop(∀ (σ' : Mem) (ns : Nat) (κs : List Empty) (nt : Nat),
           (stateInterp σ' ns κs nt : IProp GF) ={⊤, ∅}=∗
             ⌜CoreRVal.val w = ivVal (fibSpec n.toNat)⌝) }} := by
-  refine (fib_wps ra n ibty abty bbty p rs hQ hn sbty).trans ?_
+  refine (fib_wps (F := spikeFile) ra n ibty abty bbty p rs hQ hn sbty).trans ?_
   refine (BI.emp_sep.2.trans (BI.sep_mono
-    ((fib_blockSpecs ra n ibty abty bbty p rs hQ).trans
+    ((fib_blockSpecs (F := spikeFile) ra n ibty abty bbty p rs hQ).trans
       (wps_sound_empty (ctl := procCtl p) rfl (fibProg ra n sbty ibty abty bbty) [fmapEmpty]))
     .rfl)).trans ?_
   refine BI.wand_elim_left.trans ?_
@@ -499,7 +499,7 @@ section FibTotal
 variable {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
 variable (ra : core_run_annotation) (n : Int)
   (ibty abty bbty : core_base_type)
-variable (p : sym) (rs : core_run_state)
+variable (p : sym) {F : file core_run_annotation} (rs : core_run_state)
   (hQ : LabeledAt rs p (fibQ ra n ibty abty bbty))
 
 /-- The variant-indexed label context: the partial invariant plus
@@ -516,7 +516,7 @@ include hQ
 theorem fib_body_wpt (i : Int) (f : Fmap sym value)
     (rest : List (Fmap sym value)) (hf : SymFrame f)
     (h0 : 0 ≤ i) (hin : i ≤ n) :
-    ⊢ wpt (GF := GF) (procCtx rs) (some p) (fibLsT n) emptyProcSpecT (2 * (n - i).toNat + 3)
+    ⊢ wpt (GF := GF) (procCtxF F rs) (some p) (fibLsT n) emptyProcSpecT (2 * (n - i).toNat + 3)
         (fibPost n) (fibBody ra n)
         (fibFrame (ivVal i) (ivVal (fibSpec i.toNat))
           (ivVal (fibSpec (i.toNat + 1))) f :: rest) := by
@@ -529,11 +529,11 @@ theorem fib_body_wpt (i : Int) (f : Fmap sym value)
     rw [show 2 * (n - i).toNat + 3 = (2 * (n - (i + 1)).toNat + 4) + 1 by
       omega]
     iapply wpt_if_true [] (fibGuard n) _ _ _
-      (by rw [procCtx_extern, fib_guard_eval hf i _ _ rest n,
+      (by rw [procCtxF_extern, fib_guard_eval hf i _ _ rest n,
         decide_eq_true hlt]; rfl)
     iapply wpt_run [] ra fibLoopSym [fibIncPe, fibBPe, fibABPe] _ _
       (2 * (n - (i + 1)).toNat + 3)
-      (by rw [procCtx_labels hQ]
+      (by rw [procCtxF_labels hQ]
           exact fibQ_lookup ra n ibty abty bbty)
       (fib_args_eval hf i _ _ rest)
       (by omega)
@@ -547,7 +547,7 @@ theorem fib_body_wpt (i : Int) (f : Fmap sym value)
     have hz : i = n := by omega
     rw [show 2 * (n - i).toNat + 3 = 2 + 1 by omega]
     iapply wpt_if_false [] (fibGuard n) _ _ _
-      (by rw [procCtx_extern, fib_guard_eval hf i _ _ rest n,
+      (by rw [procCtxF_extern, fib_guard_eval hf i _ _ rest n,
         decide_eq_false hlt]; rfl)
     iapply wpt_pure fibExitPe _ (by omega) rfl (fib_exit_eval hf i _ _ rest)
     ipureintro
@@ -557,9 +557,9 @@ theorem fib_body_wpt (i : Int) (f : Fmap sym value)
 /-- THE TOTAL BLOCK SPECIFICATION: every claimed variant is met (the
     real total rule — replaces the retired variant lemma). -/
 theorem fib_blockSpecsT :
-    ⊢ blockSpecsT (GF := GF) (procCtx rs) (some p) (fibLsT n) emptyProcSpecT (fibPost n) := by
+    ⊢ blockSpecsT (GF := GF) (procCtxF F rs) (some p) (fibLsT n) emptyProcSpecT (fibPost n) := by
   refine blockSpecsT_intro fun l params cont vs ev0 evs m hl => ?_
-  rw [procCtx_labels hQ] at hl
+  rw [procCtxF_labels hQ] at hl
   obtain ⟨rfl, rfl⟩ := fibQ_inv ra n ibty abty bbty hl
   iintro ⟨%i, %f, %rest, %hpure⟩
   obtain ⟨rfl, h0, hin, rfl, hρ, hf⟩ := hpure
@@ -573,7 +573,7 @@ theorem fib_blockSpecsT :
 
 /-- The whole program's total judgment at budget 2·n + 4. -/
 theorem fib_wpt (hn : 0 ≤ n) (sbty : core_base_type) :
-    ⊢ wpt (GF := GF) (procCtx rs) (some p) (fibLsT n) emptyProcSpecT (2 * n.toNat + 4) (fibPost n)
+    ⊢ wpt (GF := GF) (procCtxF F rs) (some p) (fibLsT n) emptyProcSpecT (2 * n.toNat + 4) (fibPost n)
         (fibProg ra n sbty ibty abty bbty) [fmapEmpty] := by
   rw [show fibProg ra n sbty ibty abty bbty =
     Expr [] (Esave (fibLoopSym, sbty) (fibParams ibty abty bbty)
@@ -582,7 +582,7 @@ theorem fib_wpt (hn : 0 ≤ n) (sbty : core_base_type) :
   iapply wpt_save_vals [] (fibLoopSym, sbty) _ _ fmapEmpty []
     (cvals := [ivVal 0, ivVal 0, ivVal 1]) rfl
   rw [bindSave_fib]
-  have h := fib_body_wpt (GF := GF) ra n ibty abty bbty p rs hQ 0 fmapEmpty []
+  have h := fib_body_wpt (GF := GF) (F := F) ra n ibty abty bbty p rs hQ 0 fmapEmpty []
     symFrame_empty (by omega) hn
   rw [show ((0 : Int)).toNat = 0 from rfl,
     show (n - 0).toNat = n.toNat by omega] at h

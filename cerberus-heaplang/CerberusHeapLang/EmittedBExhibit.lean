@@ -192,19 +192,19 @@ theorem progBE2_frag : Frag progBE2 :=
 
 /-! ## The evaluator at the program's operands -/
 
-theorem unspecIntPe_eval {tds : CerbTags.TagDefsMap} (ext : Fmap sym sym) (ρ : EnvStack) :
-    evalPexpr tds ext ρ unspecIntPe = some (Vloaded (LVunspecified intTy)) := by
+theorem unspecIntPe_eval {tds : CerbTags.TagDefsMap} (ext : Fmap sym sym) {file : generic_file Unit core_run_annotation} (ρ : EnvStack) :
+    evalPexpr tds ext file ρ unspecIntPe = some (Vloaded (LVunspecified intTy)) := by
   simp only [unspecIntPe, evalPexpr_tyctor, evalTyCtor_unspecified, isTyCtor]
 
-theorem specIntPe_eval {tds : CerbTags.TagDefsMap} (ext : Fmap sym sym) (ρ : EnvStack) (n : Int) :
-    evalPexpr tds ext ρ (specIntPe n) = some (intVal n) := by
+theorem specIntPe_eval {tds : CerbTags.TagDefsMap} (ext : Fmap sym sym) {file : generic_file Unit core_run_annotation} (ρ : EnvStack) (n : Int) :
+    evalPexpr tds ext file ρ (specIntPe n) = some (intVal n) := by
   rw [specIntPe, evalPexpr_ctor1, evalPexpr_val]
   rfl
 
-theorem tuple_eval {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {ρ : EnvStack}
+theorem tuple_eval {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {file : generic_file Unit core_run_annotation} {ρ : EnvStack}
     {p1 p2 : generic_pexpr Unit sym} {v1 v2 : value}
-    (h1 : evalPexpr tds ext ρ p1 = some v1) (h2 : evalPexpr tds ext ρ p2 = some v2) :
-    evalPexpr tds ext ρ (tuplePe p1 p2) = some (Vtuple [v1, v2]) := by
+    (h1 : evalPexpr tds ext file ρ p1 = some v1) (h2 : evalPexpr tds ext file ρ p2 = some v2) :
+    evalPexpr tds ext file ρ (tuplePe p1 p2) = some (Vtuple [v1, v2]) := by
   rw [tuplePe, evalPexpr_ctor2, h1, h2]
   rfl
 
@@ -220,9 +220,9 @@ theorem specSum_select :
     select_case subst_sym_pexpr (Vtuple [intVal 3, intVal 1]) specSumPats =
       some specSumBranch := rfl
 
-theorem specSumBranch_eval {tds : CerbTags.TagDefsMap} (ext : Fmap sym sym) (ρ : EnvStack) :
-    evalPexpr tds ext ρ (reannot0 specSumBranch) = some (intVal 4) := by
-  show evalPexpr tds ext ρ (Pexpr [] () (PEctor Cspecified [Pexpr [] () (PEop OpAdd
+theorem specSumBranch_eval {tds : CerbTags.TagDefsMap} (ext : Fmap sym sym) {file : generic_file Unit core_run_annotation} (ρ : EnvStack) :
+    evalPexpr tds ext file ρ (reannot0 specSumBranch) = some (intVal 4) := by
+  show evalPexpr tds ext file ρ (Pexpr [] () (PEctor Cspecified [Pexpr [] () (PEop OpAdd
     (Pexpr [] () (PEval (Vobject (OVinteger (CerbMem.integerIval 3)))))
     (Pexpr [] () (PEval (Vobject (OVinteger (CerbMem.integerIval 1))))))])) = _
   rw [evalPexpr_ctor1, evalPexpr_op, evalPexpr_val, evalPexpr_val]
@@ -232,10 +232,10 @@ theorem specSumBranch_eval {tds : CerbTags.TagDefsMap} (ext : Fmap sym sym) (ρ 
     tuple-bound frame, the `Specified` row is selected, the branch
     evaluates to `Specified(4)` (the mirror evaluator's `PEcase` arm —
     `evalPexpr_case`). -/
-theorem casePe_eval {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {ρ : EnvStack}
-    (hb1 : evalPexpr tds ext ρ (psymB b1SymB) = some (intVal 3))
-    (hb2 : evalPexpr tds ext ρ (psymB b2SymB) = some (intVal 1)) :
-    evalPexpr tds ext ρ casePe = some (intVal 4) := by
+theorem casePe_eval {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {file : generic_file Unit core_run_annotation} {ρ : EnvStack}
+    (hb1 : evalPexpr tds ext file ρ (psymB b1SymB) = some (intVal 3))
+    (hb2 : evalPexpr tds ext file ρ (psymB b2SymB) = some (intVal 1)) :
+    evalPexpr tds ext file ρ casePe = some (intVal 4) := by
   rw [casePe, evalPexpr_case, if_pos (show isPePureAlts specSumPats = true from rfl),
     tuple_eval hb1 hb2]
   simp only [Option.bind_eq_bind, Option.bind_some]
@@ -375,7 +375,7 @@ theorem update_env_tuple2 (x1 x2 : sym) (bty : core_base_type) (v1 v2 : value)
 theorem symB_eval {M : MachineCtx} (hex : ∀ x, resolveExtern M.extern x = x)
     {x : sym} {f : Fmap sym value} {v : value} (evs : List (Fmap sym value))
     (hl : fmapLookupBy symCmpK x f = some v) :
-    evalPexpr M.tagDefs M.extern (f :: evs) (psymB x) = some v := by
+    evalPexpr M.tagDefs M.extern M.file (f :: evs) (psymB x) = some v := by
   rw [psymB, evalPexpr_sym_of_resolve _ _ _ (hex _)]
   exact lookup_env_head hl evs
 
@@ -682,18 +682,18 @@ theorem exhibitB_prod_e2 (sup : Nat) (fs : CerbFS.FsState) (args : List String) 
   have hQe := progBE2_labeledAt sup
   have hnolabel : ∀ (l : sym) (params : List (sym × core_base_type))
       (cont : CoreExpr),
-      lookupLabel ((procCtx ((initial_core_run_state sup
+      lookupLabel ((prodCtx (prodFile progBE2) ((initial_core_run_state sup
         (collect_labeled_continuations_NEW (prodFile progBE2))).1)).labelsAt (procCtl mainSym).proc) l =
         some (params, cont) → False := by
     intro l params cont hl
-    rw [procCtx_labels hQe, lookupLabel_empty] at hl
+    rw [prodCtx_labels hQe, lookupLabel_empty] at hl
     cases hl
   obtain ⟨dres, dst', heq, hψ, hbl, hout, herr⟩ :=
     prod_run_eqJ sup progBE2 hQe (ψB fmapEmpty) 30
       (wpt_driver_done_alloc (GF := SpikeGF) (ctl := prodCtl)
-        (M₀ := procCtx ((initial_core_run_state sup
+        (M₀ := prodCtx (prodFile progBE2) ((initial_core_run_state sup
           (collect_labeled_continuations_NEW (prodFile progBE2))).1))
-        rfl rfl (procCtx_labels hQe) rfl rfl rfl rfl
+        rfl rfl (prodCtx_labels hQe) rfl rfl rfl rfl
         (fun l params cont hl => (hnolabel l params cont hl).elim)
         (fun l params cont hl => (hnolabel l params cont hl).elim)
         (fun _ _ _ _ => iprop(False))
@@ -708,7 +708,7 @@ theorem exhibitB_prod_e2 (sup : Nat) (fs : CerbFS.FsState) (args : List String) 
           isplitr [Hcap]
           · iapply blockSpecsT_intro fun l params cont _ _ _ _ hl =>
               (hnolabel l params cont hl).elim
-          · iapply progBE2_wpt (resolveExtern_id_of_empty (procCtx_extern _)) fmapEmpty []
+          · iapply progBE2_wpt (resolveExtern_id_of_empty (prodCtx_extern _ _)) fmapEmpty []
               symFrame_empty $$ Hcap))
       (by rw [show CerbFuel.driverFuel = 99999999 + 1 from rfl]; omega)
       fs args

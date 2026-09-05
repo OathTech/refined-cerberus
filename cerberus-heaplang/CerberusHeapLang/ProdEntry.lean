@@ -403,8 +403,8 @@ theorem prod_run_eqJ (sup : Nat) (e : CoreExpr) {Q : LabelMap}
     (hQe : LabeledAt ((initial_core_run_state sup
       (collect_labeled_continuations_NEW (prodFile e))).1) mainSym Q)
     (ψ : value → Mem → Prop) (k : Nat)
-    (hdd : DriverDoneAt mainSym Q (prodThread e) e [fmapEmpty] (CerbLocation.other "Driver.drive")
-      prodMem₀ ψ k)
+    (hdd : DriverDoneAt mainSym Q (prodFile e) (prodThread e) e [fmapEmpty]
+      (CerbLocation.other "Driver.drive") prodMem₀ ψ k)
     (hfl : k + 2 ≤ CerbFuel.driverFuel)
     (fs : CerbFS.FsState) (args : List String) :
     ∃ (dres : driver_result) (dst' : driver_state),
@@ -416,7 +416,7 @@ theorem prod_run_eqJ (sup : Nat) (e : CoreExpr) {Q : LabelMap}
       dres.dres_stdout = "" ∧
       dres.dres_stderr = "" := by
   obtain ⟨v, σfin, ρfin, lcfin, afin, bfin, rs', tr, ctr, hψ, hloop⟩ :=
-    hdd (prodEntryState sup e fs) fmapEmpty CerbFuel.driverFuel rfl rfl rfl hQe hfl
+    hdd (prodEntryState sup e fs) fmapEmpty CerbFuel.driverFuel rfl rfl rfl rfl hQe hfl
   have hdrv2 := driver2_done 99999999 fmapEmpty (prodEntryState sup e fs) _
     (prodThread e)
     { prodThread e with arena := ofValA (.pure afin bfin v), env := ρfin, current_loc := lcfin }
@@ -583,6 +583,25 @@ theorem prodThread_eq_ctlThread (e : CoreExpr) :
 @[reducible] def prodCtx (f : file core_run_annotation) (rs : core_run_state) : MachineCtx :=
   { tagDefs := fmapEmpty, file := f, extern := fmapEmpty, tid := 0, parent := none,
     errno := errnoPtr, runState := rs }
+
+/-- The production context's label map at a registered procedure
+    (`procCtx_labels`'s twin at `prodCtx`): what `Erun` reads. -/
+theorem prodCtx_labels {f : file core_run_annotation} {p : sym} {rs : core_run_state}
+    {Q : LabelMap}
+    (hQ : fmapLookupBy (fun (s1 : sym) (s2 : sym) =>
+      Lem_Basic_classes.ordCompare s1 s2) p rs.labeled = some Q) :
+    (prodCtx f rs).labelsAt (procCtl p).proc = Q := by
+  rw [MachineCtx.labelsAt_eq_of_proc (M := prodCtx f rs) (c := procCtl p) rfl,
+    MachineCtx.resolveProc_of_extern_empty rfl]
+  show (match fmapLookupBy (fun (s1 : sym) (s2 : sym) =>
+      Lem_Basic_classes.ordCompare s1 s2) p rs.labeled with
+    | some Q => Q
+    | none => fmapEmpty) = Q
+  rw [hQ]
+
+/-- The production context's extern map is empty (`procCtx_extern`'s twin). -/
+theorem prodCtx_extern (f : file core_run_annotation) (rs : core_run_state) :
+    (prodCtx f rs).extern = fmapEmpty := rfl
 
 /-- The production initial run state of a synthetic file: what
     `initial_driver_state` installs (`labeled` = the shipped registration

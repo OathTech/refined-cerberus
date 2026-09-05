@@ -311,12 +311,12 @@ variable {f : Fmap sym value} (hf : SymFrame f)
 
 include hf
 
-theorem arr_guard_eval (n : Int) :
-    evalPexpr fmapEmpty fmapEmpty (arrFrame (ivVal i) (ivVal acc) vp f :: rest)
+theorem arr_guard_eval {file : generic_file Unit core_run_annotation} (n : Int) :
+    evalPexpr fmapEmpty fmapEmpty file (arrFrame (ivVal i) (ivVal acc) vp f :: rest)
         (arrGuard n) = some (boolValue (decide ((i : Int) < n))) := by
   unfold arrGuard
   rw [evalPexpr_op]
-  rw [show evalPexpr fmapEmpty fmapEmpty (arrFrame (ivVal i) (ivVal acc) vp f :: rest)
+  rw [show evalPexpr fmapEmpty fmapEmpty file (arrFrame (ivVal i) (ivVal acc) vp f :: rest)
       (Pexpr [] () (PEsym arrISym)) = some (ivVal i) from by
     rw [evalPexpr_sym_empty]
     exact lookup_env_head (arrFrame_lookup_i hf _ _ _) rest]
@@ -324,55 +324,55 @@ theorem arr_guard_eval (n : Int) :
   show evalBinop binop.OpLt (ivVal i) (ivVal n) = _
   rfl
 
-theorem arr_p_eval :
-    evalPexpr fmapEmpty fmapEmpty (arrFrame (ivVal i) (ivVal acc) vp f :: rest)
+theorem arr_p_eval {file : generic_file Unit core_run_annotation} :
+    evalPexpr fmapEmpty fmapEmpty file (arrFrame (ivVal i) (ivVal acc) vp f :: rest)
         (Pexpr [] () (PEsym arrPSym)) = some vp := by
   rw [evalPexpr_sym_empty]
   exact lookup_env_head (arrFrame_lookup_p hf _ _ _) rest
 
-theorem arr_args_eval (x : Int) (id a : Int) :
-    evalPexprs fmapEmpty fmapEmpty (arrFrameX (ivVal x) (ivVal i) (ivVal acc)
+theorem arr_args_eval {file : generic_file Unit core_run_annotation} (x : Int) (id a : Int) :
+    evalPexprs fmapEmpty fmapEmpty file (arrFrameX (ivVal x) (ivVal i) (ivVal acc)
         (Vobject (OVpointer (cellPtr id a))) f :: rest)
         [arrIncPe, arrAccXPe, arrShiftPe] =
       some [ivVal ((i : Int) + 1), ivVal (acc + x),
         Vobject (OVpointer (cellPtr id (a + 4)))] := by
-  have hi : evalPexpr fmapEmpty fmapEmpty (arrFrameX (ivVal x) (ivVal i) (ivVal acc)
+  have hi : evalPexpr fmapEmpty fmapEmpty file (arrFrameX (ivVal x) (ivVal i) (ivVal acc)
       (Vobject (OVpointer (cellPtr id a))) f :: rest)
       (Pexpr [] () (PEsym arrISym)) = some (ivVal i) := by
     rw [evalPexpr_sym_empty]
     exact lookup_env_head (arrFrameX_lookup_i hf _ _ _ _) rest
-  have hacc : evalPexpr fmapEmpty fmapEmpty (arrFrameX (ivVal x) (ivVal i) (ivVal acc)
+  have hacc : evalPexpr fmapEmpty fmapEmpty file (arrFrameX (ivVal x) (ivVal i) (ivVal acc)
       (Vobject (OVpointer (cellPtr id a))) f :: rest)
       (Pexpr [] () (PEsym arrAccSym)) = some (ivVal acc) := by
     rw [evalPexpr_sym_empty]
     exact lookup_env_head (arrFrameX_lookup_acc hf _ _ _ _) rest
-  have hx : evalPexpr fmapEmpty fmapEmpty (arrFrameX (ivVal x) (ivVal i) (ivVal acc)
+  have hx : evalPexpr fmapEmpty fmapEmpty file (arrFrameX (ivVal x) (ivVal i) (ivVal acc)
       (Vobject (OVpointer (cellPtr id a))) f :: rest)
       (Pexpr [] () (PEsym arrXSym)) = some (ivVal x) := by
     rw [evalPexpr_sym_empty]
     exact lookup_env_head (arrFrameX_lookup_x hf _ _ _ _) rest
-  have hp : evalPexpr fmapEmpty fmapEmpty (arrFrameX (ivVal x) (ivVal i) (ivVal acc)
+  have hp : evalPexpr fmapEmpty fmapEmpty file (arrFrameX (ivVal x) (ivVal i) (ivVal acc)
       (Vobject (OVpointer (cellPtr id a))) f :: rest)
       (Pexpr [] () (PEsym arrPSym)) =
       some (Vobject (OVpointer (cellPtr id a))) := by
     rw [evalPexpr_sym_empty]
     exact lookup_env_head (arrFrameX_lookup_p hf _ _ _ _) rest
   rw [evalPexprs_cons]
-  rw [show evalPexpr fmapEmpty fmapEmpty (arrFrameX (ivVal x) (ivVal i) (ivVal acc)
+  rw [show evalPexpr fmapEmpty fmapEmpty file (arrFrameX (ivVal x) (ivVal i) (ivVal acc)
       (Vobject (OVpointer (cellPtr id a))) f :: rest) arrIncPe =
       some (ivVal ((i : Int) + 1)) from by
     unfold arrIncPe
     rw [evalPexpr_op, hi, evalPexpr_val]
     rfl]
   rw [evalPexprs_cons]
-  rw [show evalPexpr fmapEmpty fmapEmpty (arrFrameX (ivVal x) (ivVal i) (ivVal acc)
+  rw [show evalPexpr fmapEmpty fmapEmpty file (arrFrameX (ivVal x) (ivVal i) (ivVal acc)
       (Vobject (OVpointer (cellPtr id a))) f :: rest) arrAccXPe =
       some (ivVal (acc + x)) from by
     unfold arrAccXPe
     rw [evalPexpr_op, hacc, hx]
     rfl]
   rw [evalPexprs_cons]
-  rw [show evalPexpr fmapEmpty fmapEmpty (arrFrameX (ivVal x) (ivVal i) (ivVal acc)
+  rw [show evalPexpr fmapEmpty fmapEmpty file (arrFrameX (ivVal x) (ivVal i) (ivVal acc)
       (Vobject (OVpointer (cellPtr id a))) f :: rest) arrShiftPe =
       some (Vobject (OVpointer (cellPtr id (a + 4)))) from by
     unfold arrShiftPe
@@ -382,10 +382,10 @@ theorem arr_args_eval (x : Int) (id a : Int) :
     exact evalArrayShift_ptr_one id a]
   rfl
 
-theorem arr_exit_eval :
-    evalPexpr fmapEmpty fmapEmpty (arrFrame (ivVal i) (ivVal acc) vp f :: rest)
+theorem arr_exit_eval {file : generic_file Unit core_run_annotation} :
+    evalPexpr fmapEmpty fmapEmpty file (arrFrame (ivVal i) (ivVal acc) vp f :: rest)
         arrExitPe = some (ivVal acc) := by
-  show evalPexpr fmapEmpty fmapEmpty _ (Pexpr [] () (PEsym arrAccSym)) = _
+  show evalPexpr fmapEmpty fmapEmpty file _ (Pexpr [] () (PEsym arrAccSym)) = _
   rw [evalPexpr_sym_empty]
   exact lookup_env_head (arrFrame_lookup_acc hf _ _ _) rest
 

@@ -129,8 +129,8 @@ theorem progAE1_frag : Frag progAE1 :=
 /-- The alignment operand evaluates to the evaluator's own alignment
     constant (`evalPexpr_tyctor`, `evalTyCtor_alignof`), which for `int`
     is the literal alignment 4 the authored twin wrote. -/
-theorem alignofIntPe_eval {tds : CerbTags.TagDefsMap} (ext : Fmap sym sym) (ρ : EnvStack) :
-    evalPexpr tds ext ρ alignofIntPe =
+theorem alignofIntPe_eval {tds : CerbTags.TagDefsMap} (ext : Fmap sym sym) {file : generic_file Unit core_run_annotation} (ρ : EnvStack) :
+    evalPexpr tds ext file ρ alignofIntPe =
       some (Vobject (OVinteger (CerbMem.alignofIval tds intTy))) := by
   simp only [alignofIntPe, evalPexpr_tyctor, evalTyCtor_alignof, isTyCtor]
 
@@ -307,18 +307,18 @@ theorem exhibitA_prod_e1 (sup : Nat) (fs : CerbFS.FsState) (args : List String) 
   have hQe := progAE1_labeledAt sup
   have hnolabel : ∀ (l : sym) (params : List (sym × core_base_type))
       (cont : CoreExpr),
-      lookupLabel ((procCtx ((initial_core_run_state sup
+      lookupLabel ((prodCtx (prodFile progAE1) ((initial_core_run_state sup
         (collect_labeled_continuations_NEW (prodFile progAE1))).1)).labelsAt (procCtl mainSym).proc) l =
         some (params, cont) → False := by
     intro l params cont hl
-    rw [procCtx_labels hQe, lookupLabel_empty] at hl
+    rw [prodCtx_labels hQe, lookupLabel_empty] at hl
     cases hl
   obtain ⟨dres, dst', heq, hψ, hbl, hout, herr⟩ :=
     prod_run_eqJ sup progAE1 hQe (ψA fmapEmpty) 13
       (wpt_driver_done_alloc (GF := SpikeGF) (ctl := prodCtl)
-        (M₀ := procCtx ((initial_core_run_state sup
+        (M₀ := prodCtx (prodFile progAE1) ((initial_core_run_state sup
           (collect_labeled_continuations_NEW (prodFile progAE1))).1))
-        rfl rfl (procCtx_labels hQe) rfl rfl rfl rfl
+        rfl rfl (prodCtx_labels hQe) rfl rfl rfl rfl
         (fun l params cont hl => (hnolabel l params cont hl).elim)
         (fun l params cont hl => (hnolabel l params cont hl).elim)
         (fun _ _ _ _ => iprop(False))
@@ -335,7 +335,7 @@ theorem exhibitA_prod_e1 (sup : Nat) (fs : CerbFS.FsState) (args : List String) 
           isplitr [Hcap]
           · iapply blockSpecsT_intro fun l params cont _ _ _ _ hl =>
               (hnolabel l params cont hl).elim
-          · iapply progAE1_wpt (resolveExtern_id_of_empty (procCtx_extern _)) fmapEmpty []
+          · iapply progAE1_wpt (resolveExtern_id_of_empty (prodCtx_extern _ _)) fmapEmpty []
               symFrame_empty $$ Hcap))
       (by rw [show CerbFuel.driverFuel = 99999999 + 1 from rfl]; omega)
       fs args

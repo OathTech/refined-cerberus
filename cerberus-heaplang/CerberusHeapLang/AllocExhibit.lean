@@ -319,7 +319,7 @@ theorem wps_alloc_lit_sym {M : MachineCtx} {p : Option sym} {Ls : LabelSpec GF} 
     (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (align : CerbMem.IntegerValue) (n : sym) (pref : prefix0) (ρ : EnvStack)
     {size : CerbMem.IntegerValue}
-    (hn : evalPexpr M.tagDefs M.extern ρ (Pexpr [] () (PEsym n)) =
+    (hn : evalPexpr M.tagDefs M.extern M.file ρ (Pexpr [] () (PEsym n)) =
       some (Vobject (OVinteger size))) :
     wps M p Ls Θ Ψ (allocExpr [] loc ann align size pref) ρ ⊢
       wps M p Ls Θ Ψ (allocOpRedex [] loc ann (Pexpr [] () (PEval (Vobject (OVinteger align))))
@@ -332,7 +332,7 @@ theorem wpt_alloc_lit_sym {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF}
     (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (align : CerbMem.IntegerValue) (n : sym) (pref : prefix0) (ρ : EnvStack)
     {size : CerbMem.IntegerValue} {k : Nat}
-    (hn : evalPexpr M.tagDefs M.extern ρ (Pexpr [] () (PEsym n)) =
+    (hn : evalPexpr M.tagDefs M.extern M.file ρ (Pexpr [] () (PEsym n)) =
       some (Vobject (OVinteger size))) :
     wpt M p Ls Θ k Ψ (allocExpr [] loc ann align size pref) ρ ⊢
       wpt M p Ls Θ (k + 1) Ψ (allocOpRedex [] loc ann (Pexpr [] () (PEval (Vobject (OVinteger align))))

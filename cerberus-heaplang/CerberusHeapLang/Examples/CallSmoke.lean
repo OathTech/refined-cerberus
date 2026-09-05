@@ -229,8 +229,8 @@ theorem csFrame_lookup_x (v : value) :
   rw [procEnv_single, envAdd_lookup symFrame_empty symCmpK, if_pos (by decide +kernel)]
 
 /-- `x + 1` evaluates at the parameter frame. -/
-theorem csIncPe_eval (x : Int) (ρ : EnvStack) :
-    evalPexpr fmapEmpty fmapEmpty (procEnv [(csX, bty)] [csInt x] :: ρ) csIncPe =
+theorem csIncPe_eval {file : generic_file Unit core_run_annotation} (x : Int) (ρ : EnvStack) :
+    evalPexpr fmapEmpty fmapEmpty file (procEnv [(csX, bty)] [csInt x] :: ρ) csIncPe =
       some (csInt (x + 1)) := by
   unfold csIncPe
   rw [evalPexpr_op, evalPexpr_sym_empty, lookup_env_head (csFrame_lookup_x bty _) ρ,

@@ -818,14 +818,15 @@ theorem t1Spec1_frag : Frag t1Spec1 :=
 theorem t1KillX_frag : Frag (killInt xSym) :=
   Frag.kill_op rfl (PePure.sym _ _) (depLe (by decide))
 
-/-- `conv_loaded_int('signed int', a_508)` is a `PEcall`: OUTSIDE the covered
-    operand grammar (NO-RULE, pending E3) — decided by the kernel. -/
-theorem t1_convLoadedInt_uncovered : isPePure (convLoadedInt a508) = false := by decide
+/-- E3: `conv_loaded_int('signed int', a_508)` — a `PEcall` at covered
+    arguments — is IN the covered operand grammar (E2 decided it OUT; the
+    standard-library call is admitted since E3), kernel-decided. -/
+theorem t1_convLoadedInt_covered : isPePure (convLoadedInt a508) = true := by decide
 
-/-- t1's `case` is outside the covered grammar: its first branch is a
-    `catch_exceptional_condition` (E3). The wildcard `undef` arm alone
-    would be covered (`PePure.undef`). -/
-theorem t1_case_uncovered : isPePure t1CasePe = false := by decide
+/-- E3: t1's `case` is in the covered grammar — its first branch's
+    `catch_exceptional_condition_add(__conv_int__(…), __conv_int__(…))` is
+    admitted since E3. -/
+theorem t1_case_covered : isPePure t1CasePe = true := by decide
 
 /-! ## The table -/
 

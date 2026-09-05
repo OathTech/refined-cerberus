@@ -111,7 +111,7 @@ theorem wps_store_sym_lit [SpikeGS .hasLC GF] {M : MachineCtx} {p : Option sym} 
     (loc : CerbLocation.Loc) (ann : core_run_annotation) (ty : ctype)
     (x : sym) (cv : value) (mo : memory_order) (ρ : EnvStack)
     {pv : CerbMem.PointerValue}
-    (hx : evalPexpr M.tagDefs M.extern ρ (Pexpr [] () (PEsym x)) =
+    (hx : evalPexpr M.tagDefs M.extern M.file ρ (Pexpr [] () (PEsym x)) =
       some (Vobject (OVpointer pv))) :
     wps M p Ls Θ Ψ (storeExpr [] loc ann ty pv cv mo) ρ ⊢
       wps M p Ls Θ Ψ (storeOpRedex [] loc ann ty (Pexpr [] () (PEsym x))
@@ -123,7 +123,7 @@ theorem wpt_store_lit_sym [SpikeGS .hasLC GF] {M : MachineCtx} {p : Option sym} 
     (loc : CerbLocation.Loc) (ann : core_run_annotation) (ty : ctype)
     (pv : CerbMem.PointerValue) (y : sym) (mo : memory_order) (ρ : EnvStack)
     {cv : value} {k : Nat}
-    (hy : evalPexpr M.tagDefs M.extern ρ (Pexpr [] () (PEsym y)) = some cv) :
+    (hy : evalPexpr M.tagDefs M.extern M.file ρ (Pexpr [] () (PEsym y)) = some cv) :
     wpt M p Ls Θ k Ψ (storeExpr [] loc ann ty pv cv mo) ρ ⊢
       wpt M p Ls Θ (k + 1) Ψ (storeOpRedex [] loc ann ty
         (Pexpr [] () (PEval (Vobject (OVpointer pv)))) (Pexpr [] () (PEsym y)) mo) ρ :=
@@ -274,18 +274,18 @@ theorem exhibitA_prod (sup : Nat) (fs : CerbFS.FsState) (args : List String) :
   have hQe := progAProd_labeledAt sup
   have hnolabel : ∀ (l : sym) (params : List (sym × core_base_type))
       (cont : CoreExpr),
-      lookupLabel ((procCtx ((initial_core_run_state sup
+      lookupLabel ((prodCtx (prodFile progAProd) ((initial_core_run_state sup
         (collect_labeled_continuations_NEW (prodFile progAProd))).1)).labelsAt (procCtl mainSym).proc) l =
         some (params, cont) → False := by
     intro l params cont hl
-    rw [procCtx_labels hQe, lookupLabel_empty] at hl
+    rw [prodCtx_labels hQe, lookupLabel_empty] at hl
     cases hl
   obtain ⟨dres, dst', heq, hψ, hbl, hout, herr⟩ :=
     prod_run_eqJ sup progAProd hQe (ψA fmapEmpty) 10
       (wpt_driver_done_alloc (GF := SpikeGF) (ctl := prodCtl)
-        (M₀ := procCtx ((initial_core_run_state sup
+        (M₀ := prodCtx (prodFile progAProd) ((initial_core_run_state sup
           (collect_labeled_continuations_NEW (prodFile progAProd))).1))
-        rfl rfl (procCtx_labels hQe) rfl rfl rfl rfl
+        rfl rfl (prodCtx_labels hQe) rfl rfl rfl rfl
         (fun l params cont hl => (hnolabel l params cont hl).elim)
         (fun l params cont hl => (hnolabel l params cont hl).elim)
         (fun _ _ _ _ => iprop(False))
@@ -302,7 +302,7 @@ theorem exhibitA_prod (sup : Nat) (fs : CerbFS.FsState) (args : List String) :
           isplitr [Hcap]
           · iapply blockSpecsT_intro fun l params cont _ _ _ _ hl =>
               (hnolabel l params cont hl).elim
-          · iapply progAProd_wpt (resolveExtern_id_of_empty (procCtx_extern _)) fmapEmpty []
+          · iapply progAProd_wpt (resolveExtern_id_of_empty (prodCtx_extern _ _)) fmapEmpty []
               symFrame_empty $$ Hcap))
       (by rw [show CerbFuel.driverFuel = 99999999 + 1 from rfl]; omega)
       fs args

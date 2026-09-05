@@ -1243,7 +1243,7 @@ theorem Decomp.step_factor {M : MachineCtx} {e : CoreExpr} {ctx : context}
       (pes : List (generic_pexpr Unit sym))
       (params : List (sym × core_base_type)) (body : CoreExpr) (vs : List value),
       r = callRedex an ra f pes ∧
-      evalPexprs M.tagDefs M.extern ρ pes = some vs ∧
+      evalPexprs M.tagDefs M.extern M.file ρ pes = some vs ∧
       lookupProc M.file M.extern f = some (params, body) ∧ params.length = vs.length ∧
       out = (body, procEnv params vs :: ρ, ctl.callPush an ctx f, σ)) := by
   induction h generalizing out with
@@ -2561,6 +2561,34 @@ inductive PePure : generic_pexpr Unit sym → Prop where
       `none` and the classifier `.undef` (EvalClass.lean). -/
   | undef (a : List _root_.annot) (loc : CerbLocation.Loc) (ub : undefined_behaviour) :
       PePure (Pexpr a () (PEundef loc ub))
+  /-- E3: `__conv_int__(ity, e)` — the AST constructor `PEconv_int`
+      (core.lem:243), evaluated by the engine's `mk_conv_int`
+      (core_eval.lem:819–827; :61–81). -/
+  | convInt (a : List _root_.annot) (ity : integerType) {pe : generic_pexpr Unit sym} :
+      PePure pe → PePure (Pexpr a () (PEconv_int ity pe))
+  /-- E3: `wrapI_<op>(ity, e1, e2)` — `PEwrapI` (core.lem:244; core_eval.lem:
+      828–838, `mk_wrapI_op`). -/
+  | wrapI (a : List _root_.annot) (ity : integerType) (op : iop)
+      {pe1 pe2 : generic_pexpr Unit sym} :
+      PePure pe1 → PePure pe2 → PePure (Pexpr a () (PEwrapI ity op pe1 pe2))
+  /-- E3: `catch_exceptional_condition_<op>(ity, e1, e2)` —
+      `PEcatch_exceptional_condition` (core.lem:245; core_eval.lem:839–854:
+      `mk_iop` then the range check; out of range the UB036 undef, a KILL). -/
+  | catchExc (a : List _root_.annot) (ity : integerType) (op : iop)
+      {pe1 pe2 : generic_pexpr Unit sym} :
+      PePure pe1 → PePure pe2 → PePure (Pexpr a () (PEcatch_exceptional_condition ity op pe1 pe2))
+  /-- E3: `is_unsigned(e)` (core_eval.lem:1078–1087; std.core's `conv_int`). -/
+  | isUnsigned (a : List _root_.annot) {pe : generic_pexpr Unit sym} :
+      PePure pe → peDepth pe = 1 → PePure (Pexpr a () (PEis_unsigned pe))
+  /-- E3: the standard-library CALL `f(e1, …, en)` at covered arguments —
+      `PEcall` (core_eval.lem:965–995): at argument values the callee's
+      body with the values substituted, read off the FILE (`callBody`,
+      Step.lean), returned UNEVALUATED; the body is covered exactly when the
+      mirror's guarded pass on it succeeds (`stepPexpr_shape`), within the
+      callee's static inlining budget (`stdBudget`, Step.lean). Any name:
+      the file decides (an unknown callee is the engine's kill, classified). -/
+  | call (a : List _root_.annot) (nm : generic_name sym) {pes : List (generic_pexpr Unit sym)} :
+      (∀ pe ∈ pes, PePure pe) → PePure (Pexpr a () (PEcall nm pes))
 
 theorem peDepth_sym_le (pb : List _root_.annot) (x : sym) :
     peDepth (Pexpr pb () (PEsym x)) ≤ lemDefaultFuel := by
@@ -2666,6 +2694,24 @@ theorem PePure.of_isPePure : ∀ {pe : generic_pexpr Unit _root_.sym}, isPePure 
     exact .if_ a (ih pe1 (by simp only [peDepth_if]; omega) h.1.1)
       (ih pe2 (by simp only [peDepth_if]; omega) h.1.2)
       (ih pe3 (by simp only [peDepth_if]; omega) h.2)
+  case PEconv_int ity pe =>
+    rw [isPePure] at h
+    exact .convInt a ity (ih pe (by simp only [peDepth_conv_int]; omega) h)
+  case PEwrapI ity op pe1 pe2 =>
+    rw [isPePure, Bool.and_eq_true] at h
+    exact .wrapI a ity op (ih pe1 (by simp only [peDepth_wrapI]; omega) h.1)
+      (ih pe2 (by simp only [peDepth_wrapI]; omega) h.2)
+  case PEcatch_exceptional_condition ity op pe1 pe2 =>
+    rw [isPePure, Bool.and_eq_true] at h
+    exact .catchExc a ity op (ih pe1 (by simp only [peDepth_catch]; omega) h.1)
+      (ih pe2 (by simp only [peDepth_catch]; omega) h.2)
+  case PEis_unsigned pe =>
+    rw [isPePure, Bool.and_eq_true, decide_eq_true_eq] at h
+    exact .isUnsigned a (ih pe (by simp only [peDepth_is_unsigned]; omega) h.1) h.2
+  case PEcall nm pes =>
+    rw [isPePure, isPePureList_iff] at h
+    refine .call a nm fun q hq => ih q ?_ (h q hq)
+    simp only [peDepth_call]; have := peDepth_le_list_of_mem hq; omega
   all_goals (simp [isPePure] at h)
 
 theorem isPePure_of_PePure {pe : generic_pexpr Unit _root_.sym} (hp : PePure pe) :
@@ -2684,6 +2730,11 @@ theorem isPePure_of_PePure {pe : generic_pexpr Unit _root_.sym} (hp : PePure pe)
   | not_ a _ ih => rw [isPePure, ih]
   | if_ a _ _ _ ih1 ih2 ih3 => rw [isPePure, ih1, ih2, ih3]; rfl
   | undef a loc ub => rw [isPePure]
+  | convInt a ity _ ih => rw [isPePure, ih]
+  | wrapI a ity op _ _ ih1 ih2 => rw [isPePure, ih1, ih2]; rfl
+  | catchExc a ity op _ _ ih1 ih2 => rw [isPePure, ih1, ih2]; rfl
+  | isUnsigned a _ hd ih => rw [isPePure, ih, decide_eq_true hd]; rfl
+  | call a nm _ ih => rw [isPePure, isPePureList_iff.mpr ih]
 
 theorem PePure.all_of_isPePure {pes : List (generic_pexpr Unit _root_.sym)}
     (h : pes.all isPePure = true) : ∀ pe ∈ pes, PePure pe := by
@@ -2705,35 +2756,35 @@ theorem evalCtor_mirrored {tds : CerbTags.TagDefsMap} {c : ctor} {vs : List valu
 /-! ### The one-pass mirror: guard, lists, values -/
 
 /-- At a covered term the guarded pass is the faithful pass. -/
-theorem stepPexpr_of_PePure {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {ρ : EnvStack}
+theorem stepPexpr_of_PePure {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {file : generic_file Unit core_run_annotation} {ρ : EnvStack}
     {pe : generic_pexpr Unit sym} (hp : PePure pe) :
-    stepPexpr tds ext ρ pe = stepPexprRaw tds ext ρ pe := by
+    stepPexpr tds ext file ρ pe = stepPexprRaw tds ext file ρ pe := by
   unfold stepPexpr; rw [isPePure_of_PePure hp]; rfl
 
 /-- Mirror one-pass success implies the covered shape (the guard). -/
-theorem stepPexpr_shape {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {ρ : EnvStack}
-    {pe r : generic_pexpr Unit sym} (h : stepPexpr tds ext ρ pe = some r) : PePure pe := by
+theorem stepPexpr_shape {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {file : generic_file Unit core_run_annotation} {ρ : EnvStack}
+    {pe r : generic_pexpr Unit sym} (h : stepPexpr tds ext file ρ pe = some r) : PePure pe := by
   unfold stepPexpr at h
   cases hg : isPePure pe with
   | false => rw [hg] at h; cases h
   | true => exact PePure.of_isPePure hg
 
-theorem stepPexprsRaw_cons (tds : CerbTags.TagDefsMap) (ext : Fmap sym sym) (ρ : EnvStack)
+theorem stepPexprsRaw_cons (tds : CerbTags.TagDefsMap) (ext : Fmap sym sym) {file : generic_file Unit core_run_annotation} (ρ : EnvStack)
     (pe : generic_pexpr Unit sym) (pes : List (generic_pexpr Unit sym)) :
-    stepPexprsRaw tds ext ρ (pe :: pes) = (do
-      let r ← stepPexprRaw tds ext ρ pe
-      let rs ← stepPexprsRaw tds ext ρ pes
+    stepPexprsRaw tds ext file ρ (pe :: pes) = (do
+      let r ← stepPexprRaw tds ext file ρ pe
+      let rs ← stepPexprsRaw tds ext file ρ pes
       some (r :: rs)) := by
   rw [stepPexprsRaw]
 
-@[simp] theorem stepPexprsRaw_nil (tds : CerbTags.TagDefsMap) (ext : Fmap sym sym) (ρ : EnvStack) :
-    stepPexprsRaw tds ext ρ [] = some [] := by
+@[simp] theorem stepPexprsRaw_nil (tds : CerbTags.TagDefsMap) (ext : Fmap sym sym) {file : generic_file Unit core_run_annotation} (ρ : EnvStack) :
+    stepPexprsRaw tds ext file ρ [] = some [] := by
   rw [stepPexprsRaw]
 
-theorem stepPexprsRaw_some_iff {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {ρ : EnvStack}
+theorem stepPexprsRaw_some_iff {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {file : generic_file Unit core_run_annotation} {ρ : EnvStack}
     {pes : List (generic_pexpr Unit sym)} {rs : List (generic_pexpr Unit sym)} :
-    stepPexprsRaw tds ext ρ pes = some rs ↔
-      PairAll (fun pe r => stepPexprRaw tds ext ρ pe = some r) pes rs := by
+    stepPexprsRaw tds ext file ρ pes = some rs ↔
+      PairAll (fun pe r => stepPexprRaw tds ext file ρ pe = some r) pes rs := by
   induction pes generalizing rs with
   | nil =>
     rw [stepPexprsRaw_nil]
@@ -2744,10 +2795,10 @@ theorem stepPexprsRaw_some_iff {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} 
     rw [stepPexprsRaw_cons]
     constructor
     · intro h
-      cases hr : stepPexprRaw tds ext ρ pe with
+      cases hr : stepPexprRaw tds ext file ρ pe with
       | none => rw [hr] at h; cases h
       | some r =>
-        cases hrs : stepPexprsRaw tds ext ρ pes with
+        cases hrs : stepPexprsRaw tds ext file ρ pes with
         | none => rw [hr, hrs] at h; cases h
         | some rs' =>
           rw [hr, hrs] at h
@@ -2759,10 +2810,10 @@ theorem stepPexprsRaw_some_iff {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} 
         rw [hr, ih.mpr hrs]
         rfl
 
-theorem evalPexprList_some_iff {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {ρ : EnvStack}
+theorem evalPexprList_some_iff {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {file : generic_file Unit core_run_annotation} {ρ : EnvStack}
     {pes : List (generic_pexpr Unit sym)} {vs : List value} :
-    evalPexprList tds ext ρ pes = some vs ↔
-      PairAll (fun pe v => evalPexpr tds ext ρ pe = some v) pes vs := by
+    evalPexprList tds ext file ρ pes = some vs ↔
+      PairAll (fun pe v => evalPexpr tds ext file ρ pe = some v) pes vs := by
   induction pes generalizing vs with
   | nil =>
     rw [evalPexprList_nil]
@@ -2773,10 +2824,10 @@ theorem evalPexprList_some_iff {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} 
     rw [evalPexprList_cons]
     constructor
     · intro h
-      cases hr : evalPexpr tds ext ρ pe with
+      cases hr : evalPexpr tds ext file ρ pe with
       | none => rw [hr] at h; cases h
       | some v =>
-        cases hrs : evalPexprList tds ext ρ pes with
+        cases hrs : evalPexprList tds ext file ρ pes with
         | none => rw [hr, hrs] at h; cases h
         | some vs' =>
           rw [hr, hrs] at h
@@ -2839,9 +2890,97 @@ theorem isPePure_reannot0 (pe : generic_pexpr Unit sym) :
     isPePure (reannot0 pe) = isPePure pe := by
   rcases pe with ⟨a, u, pe_⟩; cases u; rw [reannot0_mk]; cases pe_ <;> rfl
 
-theorem evalPexpr_reannot0 (tds : CerbTags.TagDefsMap) (ext : Fmap sym sym) (ρ : EnvStack)
+/-- E3: the pull's image is rooted at the reset annotations (every arm of
+    `peStrip` returns `Pexpr [] () _`). -/
+@[simp] theorem reannot0_peStrip (pe : generic_pexpr Unit sym) : reannot0 (peStrip pe) = peStrip pe := by
+  rcases pe with ⟨a, u, pe_⟩; cases u; cases pe_ <;> rfl
+
+/-- E3: the same, as an existential over the root's payload. -/
+theorem peStrip_root_all (pe : generic_pexpr Unit sym) : ∃ pex, peStrip pe = Pexpr [] () pex := by
+  rcases pe with ⟨a, u, pe_⟩; cases u; cases pe_ <;> exact ⟨_, rfl⟩
+
+/-- E3: the pull's image at the reset root is the pull's image. -/
+@[simp] theorem peStrip_reannot0 (pe : generic_pexpr Unit sym) : peStrip (reannot0 pe) = peStrip pe := by
+  rcases pe with ⟨a, u, pe_⟩; cases u; rw [reannot0_mk]; cases pe_ <;> rfl
+
+/-- E3: `peStrip` is annotation renormalization — the depth measure does not
+    see it (stated for EVERY pexpr; the covered-grammar form
+    `peDepth_peStrip` below is its corollary). -/
+theorem peDepth_peStrip_all : ∀ pe : generic_pexpr Unit sym, peDepth (peStrip pe) = peDepth pe := by
+  intro pe
+  induction pe using peDepth_strong_induction with
+  | _ pe ih =>
+  rcases pe with ⟨a, u, pe_⟩
+  cases u
+  cases pe_ <;> (try rfl)
+  case PEop op pe1 pe2 =>
+    show peDepth (Pexpr [] () (PEop op _ _)) = _
+    rw [peDepth_op, peDepth_op, ih pe1 (by simp only [peDepth_op]; omega),
+      ih pe2 (by simp only [peDepth_op]; omega)]
+  case PEarray_shift pe1 ty pe2 =>
+    show peDepth (Pexpr [] () (PEarray_shift _ ty _)) = _
+    rw [peDepth_array_shift, peDepth_array_shift, ih pe1 (by simp only [peDepth_array_shift]; omega),
+      ih pe2 (by simp only [peDepth_array_shift]; omega)]
+  case PEcase pe pats =>
+    show peDepth (Pexpr [] () (PEcase _ _)) = _
+    rw [peDepth_case, peDepth_case, ih pe (by simp only [peDepth_case]; omega)]
+  case PEnot pe =>
+    show peDepth (Pexpr [] () (PEnot _)) = _
+    rw [peDepth_not, peDepth_not, ih pe (by simp only [peDepth_not]; omega)]
+  case PEconv_int ity pe =>
+    show peDepth (Pexpr [] () (PEconv_int ity _)) = _
+    rw [peDepth_conv_int, peDepth_conv_int, ih pe (by simp only [peDepth_conv_int]; omega)]
+  case PEwrapI ity op pe1 pe2 =>
+    show peDepth (Pexpr [] () (PEwrapI ity op _ _)) = _
+    rw [peDepth_wrapI, peDepth_wrapI, ih pe1 (by simp only [peDepth_wrapI]; omega),
+      ih pe2 (by simp only [peDepth_wrapI]; omega)]
+  case PEcatch_exceptional_condition ity op pe1 pe2 =>
+    show peDepth (Pexpr [] () (PEcatch_exceptional_condition ity op _ _)) = _
+    rw [peDepth_catch, peDepth_catch, ih pe1 (by simp only [peDepth_catch]; omega),
+      ih pe2 (by simp only [peDepth_catch]; omega)]
+  case PEis_unsigned pe =>
+    show peDepth (Pexpr [] () (PEis_unsigned _)) = _
+    rw [peDepth_is_unsigned, peDepth_is_unsigned, ih pe (by simp only [peDepth_is_unsigned]; omega)]
+
+/-- E3: grammar membership does not see the pull either (every pexpr). -/
+theorem isPePure_peStrip_all : ∀ pe : generic_pexpr Unit sym, isPePure (peStrip pe) = isPePure pe := by
+  intro pe
+  induction pe using peDepth_strong_induction with
+  | _ pe ih =>
+  rcases pe with ⟨a, u, pe_⟩
+  cases u
+  cases pe_ <;> (try rfl)
+  case PEop op pe1 pe2 =>
+    show isPePure (Pexpr [] () (PEop op _ _)) = _
+    rw [isPePure, isPePure, ih pe1 (by simp only [peDepth_op]; omega), ih pe2 (by simp only [peDepth_op]; omega)]
+  case PEarray_shift pe1 ty pe2 =>
+    show isPePure (Pexpr [] () (PEarray_shift _ ty _)) = _
+    rw [isPePure, isPePure, ih pe1 (by simp only [peDepth_array_shift]; omega),
+      ih pe2 (by simp only [peDepth_array_shift]; omega)]
+  case PEcase pe pats =>
+    show isPePure (Pexpr [] () (PEcase _ _)) = _
+    rw [isPePure, isPePure, ih pe (by simp only [peDepth_case]; omega)]
+  case PEnot pe =>
+    show isPePure (Pexpr [] () (PEnot _)) = _
+    rw [isPePure, isPePure, ih pe (by simp only [peDepth_not]; omega)]
+  case PEconv_int ity pe =>
+    show isPePure (Pexpr [] () (PEconv_int ity _)) = _
+    rw [isPePure, isPePure, ih pe (by simp only [peDepth_conv_int]; omega)]
+  case PEwrapI ity op pe1 pe2 =>
+    show isPePure (Pexpr [] () (PEwrapI ity op _ _)) = _
+    rw [isPePure, isPePure, ih pe1 (by simp only [peDepth_wrapI]; omega),
+      ih pe2 (by simp only [peDepth_wrapI]; omega)]
+  case PEcatch_exceptional_condition ity op pe1 pe2 =>
+    show isPePure (Pexpr [] () (PEcatch_exceptional_condition ity op _ _)) = _
+    rw [isPePure, isPePure, ih pe1 (by simp only [peDepth_catch]; omega),
+      ih pe2 (by simp only [peDepth_catch]; omega)]
+  case PEis_unsigned pe =>
+    show isPePure (Pexpr [] () (PEis_unsigned _)) = _
+    rw [isPePure, isPePure, ih pe (by simp only [peDepth_is_unsigned]; omega), peDepth_peStrip_all]
+
+theorem evalPexpr_reannot0 (tds : CerbTags.TagDefsMap) (ext : Fmap sym sym) {file : generic_file Unit core_run_annotation} (ρ : EnvStack)
     (pe : generic_pexpr Unit sym) :
-    evalPexpr tds ext ρ (reannot0 pe) = evalPexpr tds ext ρ pe := by
+    evalPexpr tds ext file ρ (reannot0 pe) = evalPexpr tds ext file ρ pe := by
   rcases pe with ⟨a, u, pe_⟩
   cases u
   rw [reannot0_mk]
@@ -2856,8 +2995,8 @@ theorem PePure.reannot0 {pe : generic_pexpr Unit _root_.sym} (hp : PePure pe) : 
 
 /-- Every result of the faithful pass carries the engine's reset outer
     annotations (`Pexpr [] () <$>`, Core_eval.lean:142). -/
-theorem stepPexprRaw_annot0 {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {ρ : EnvStack}
-    {pe r : generic_pexpr Unit sym} (h : stepPexprRaw tds ext ρ pe = some r) :
+theorem stepPexprRaw_annot0 {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {file : generic_file Unit core_run_annotation} {ρ : EnvStack}
+    {pe r : generic_pexpr Unit sym} (h : stepPexprRaw tds ext file ρ pe = some r) :
     reannot0 r = r := by
   rcases pe with ⟨a, u, pe_⟩
   cases u
@@ -2870,7 +3009,7 @@ theorem stepPexprRaw_annot0 {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {ρ
     · obtain rfl := Option.some.inj h; rfl
   case PEctor c pes =>
     rw [stepPexprRaw] at h
-    cases hrs : stepPexprsRaw tds ext ρ pes <;> rw [hrs] at h
+    cases hrs : stepPexprsRaw tds ext file ρ pes <;> rw [hrs] at h
     · cases h
     · simp only [Option.bind_eq_bind, Option.bind_some] at h
       cases hvs : valueFromPexprs _ <;> rw [hvs] at h <;> (try dsimp only at h)
@@ -2880,7 +3019,7 @@ theorem stepPexprRaw_annot0 {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {ρ
         · obtain rfl := Option.some.inj h; rfl
   case PEcase pe pats =>
     rw [stepPexprRaw] at h
-    cases hr : stepPexprRaw tds ext ρ pe <;> rw [hr] at h
+    cases hr : stepPexprRaw tds ext file ρ pe <;> rw [hr] at h
     · cases h
     · simp only [Option.bind_eq_bind, Option.bind_some] at h
       cases hv : valueFromPexpr _ <;> rw [hv] at h <;> (try dsimp only at h)
@@ -2891,11 +3030,73 @@ theorem stepPexprRaw_annot0 {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {ρ
           obtain rfl := Option.some.inj h
           rename_i pe''
           rcases pe'' with ⟨_, _, _⟩; rfl
+  case PEconv_int ity pe =>
+    rw [stepPexprRaw] at h
+    cases hr : stepPexprRaw tds ext file ρ pe <;> rw [hr] at h
+    · cases h
+    · simp only [Option.bind_eq_bind, Option.bind_some] at h
+      cases hv : valueFromPexpr _ <;> rw [hv] at h <;> (try dsimp only at h)
+      · obtain rfl := Option.some.inj h; rfl
+      · cases hc : evalConvInt ity _ <;> rw [hc] at h <;> (try dsimp only at h)
+        · cases h
+        · obtain rfl := Option.some.inj h; rfl
+  case PEwrapI ity op pe1 pe2 =>
+    rw [stepPexprRaw] at h
+    cases h1 : stepPexprRaw tds ext file ρ pe1 <;> rw [h1] at h
+    · cases h
+    · cases h2 : stepPexprRaw tds ext file ρ pe2 <;> rw [h2] at h
+      · cases h
+      · simp only [Option.bind_eq_bind, Option.bind_some] at h
+        cases hv1 : valueFromPexpr _ <;> rw [hv1] at h <;>
+          cases hv2 : valueFromPexpr _ <;> rw [hv2] at h <;> (try dsimp only at h)
+        · obtain rfl := Option.some.inj h; rfl
+        · obtain rfl := Option.some.inj h; rfl
+        · obtain rfl := Option.some.inj h; rfl
+        · cases hc : evalWrapI ity op _ _ <;> rw [hc] at h <;> (try dsimp only at h)
+          · cases h
+          · obtain rfl := Option.some.inj h; rfl
+  case PEcatch_exceptional_condition ity op pe1 pe2 =>
+    rw [stepPexprRaw] at h
+    cases h1 : stepPexprRaw tds ext file ρ pe1 <;> rw [h1] at h
+    · cases h
+    · cases h2 : stepPexprRaw tds ext file ρ pe2 <;> rw [h2] at h
+      · cases h
+      · simp only [Option.bind_eq_bind, Option.bind_some] at h
+        cases hv1 : valueFromPexpr _ <;> rw [hv1] at h <;>
+          cases hv2 : valueFromPexpr _ <;> rw [hv2] at h <;> (try dsimp only at h)
+        · obtain rfl := Option.some.inj h; rfl
+        · obtain rfl := Option.some.inj h; rfl
+        · obtain rfl := Option.some.inj h; rfl
+        · cases hc : evalCatch ity op _ _ <;> rw [hc] at h <;> (try dsimp only at h)
+          · cases h
+          · obtain rfl := Option.some.inj h; rfl
+  case PEis_unsigned pe =>
+    rw [stepPexprRaw] at h
+    cases hr : stepPexprRaw tds ext file ρ pe <;> rw [hr] at h
+    · cases h
+    · simp only [Option.bind_eq_bind, Option.bind_some] at h
+      cases hv : valueFromPexpr _ <;> rw [hv] at h <;> (try dsimp only at h)
+      · obtain rfl := Option.some.inj h; rfl
+      · cases hc : evalIsUnsigned _ <;> rw [hc] at h <;> (try dsimp only at h)
+        · cases h
+        · obtain rfl := Option.some.inj h; rfl
+  case PEcall nm pes =>
+    rw [stepPexprRaw] at h
+    cases hrs : stepPexprsRaw tds ext file ρ pes <;> rw [hrs] at h
+    · cases h
+    · simp only [Option.bind_eq_bind, Option.bind_some] at h
+      cases hvs : valueFromPexprs _ <;> rw [hvs] at h <;> (try dsimp only at h)
+      · obtain rfl := Option.some.inj h; rfl
+      · cases hb : callBody file nm _ <;> rw [hb] at h <;> (try dsimp only at h)
+        · cases h
+        · split at h
+          · obtain rfl := Option.some.inj h; exact reannot0_peStrip _
+          · cases h
   case PEarray_shift pe1 ty pe2 =>
     rw [stepPexprRaw] at h
-    cases h1 : stepPexprRaw tds ext ρ pe1 <;> rw [h1] at h
+    cases h1 : stepPexprRaw tds ext file ρ pe1 <;> rw [h1] at h
     · cases h
-    · cases h2 : stepPexprRaw tds ext ρ pe2 <;> rw [h2] at h
+    · cases h2 : stepPexprRaw tds ext file ρ pe2 <;> rw [h2] at h
       · cases h
       · simp only [Option.bind_eq_bind, Option.bind_some] at h
         cases hv1 : valueFromPexpr _ <;> rw [hv1] at h <;> (try dsimp only at h)
@@ -2907,7 +3108,7 @@ theorem stepPexprRaw_annot0 {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {ρ
             · obtain rfl := Option.some.inj h; rfl
   case PEnot pe =>
     rw [stepPexprRaw] at h
-    cases hr : stepPexprRaw tds ext ρ pe <;> rw [hr] at h
+    cases hr : stepPexprRaw tds ext file ρ pe <;> rw [hr] at h
     · cases h
     · simp only [Option.bind_eq_bind, Option.bind_some] at h
       cases hv : valueFromPexpr _ <;> rw [hv] at h <;> (try dsimp only at h)
@@ -2916,9 +3117,9 @@ theorem stepPexprRaw_annot0 {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {ρ
         cases w <;> simp at h <;> (try subst h) <;> rfl
   case PEop op pe1 pe2 =>
     rw [stepPexprRaw] at h
-    cases h1 : stepPexprRaw tds ext ρ pe1 <;> rw [h1] at h
+    cases h1 : stepPexprRaw tds ext file ρ pe1 <;> rw [h1] at h
     · cases h
-    · cases h2 : stepPexprRaw tds ext ρ pe2 <;> rw [h2] at h
+    · cases h2 : stepPexprRaw tds ext file ρ pe2 <;> rw [h2] at h
       · cases h
       · simp only [Option.bind_eq_bind, Option.bind_some] at h
         cases hv1 : valueFromPexpr _ <;> rw [hv1] at h <;> (try dsimp only at h)
@@ -2930,7 +3131,7 @@ theorem stepPexprRaw_annot0 {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {ρ
             · obtain rfl := Option.some.inj h; rfl
   case PEif pe1 pe2 pe3 =>
     rw [stepPexprRaw] at h
-    cases h1 : stepPexprRaw tds ext ρ pe1 <;> rw [h1] at h
+    cases h1 : stepPexprRaw tds ext file ρ pe1 <;> rw [h1] at h
     · cases h
     · simp only [Option.bind_eq_bind, Option.bind_some] at h
       cases hv1 : valueFromPexpr _ <;> rw [hv1] at h <;> (try dsimp only at h)
@@ -2938,13 +3139,13 @@ theorem stepPexprRaw_annot0 {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {ρ
       · rename_i w
         cases w <;> (try (cases h)) <;> (try dsimp only at h)
         all_goals first
-          | (cases h2 : stepPexprRaw tds ext ρ pe2 <;> rw [h2] at h
+          | (cases h2 : stepPexprRaw tds ext file ρ pe2 <;> rw [h2] at h
              · simp only [Option.map_none] at h; cases h
              · simp only [Option.map_some] at h
                obtain rfl := Option.some.inj h
                rename_i r2
                rcases r2 with ⟨_, _, _⟩; rfl)
-          | (cases h3 : stepPexprRaw tds ext ρ pe3 <;> rw [h3] at h
+          | (cases h3 : stepPexprRaw tds ext file ρ pe3 <;> rw [h3] at h
              · simp only [Option.map_none] at h; cases h
              · simp only [Option.map_some] at h
                obtain rfl := Option.some.inj h
@@ -2953,8 +3154,8 @@ theorem stepPexprRaw_annot0 {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {ρ
   all_goals (simp [stepPexprRaw] at h)
 
 /-- A value result of the faithful pass is the canonical value pexpr. -/
-theorem stepPexprRaw_valPe_of_value {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {ρ : EnvStack}
-    {pe r : generic_pexpr Unit sym} {v : value} (h : stepPexprRaw tds ext ρ pe = some r)
+theorem stepPexprRaw_valPe_of_value {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {file : generic_file Unit core_run_annotation} {ρ : EnvStack}
+    {pe r : generic_pexpr Unit sym} {v : value} (h : stepPexprRaw tds ext file ρ pe = some r)
     (hv : valueFromPexpr r = some v) : r = valPe v := by
   obtain ⟨a, rfl⟩ := valueFromPexpr_some_iff.mp hv
   have := stepPexprRaw_annot0 h
@@ -2999,11 +3200,12 @@ theorem peDepthList_pairAll {pes rs : List (generic_pexpr Unit sym)}
       | some vs => rw [hrs] at hnv; cases hnv
 
 /-- The joint pass/value property at one term. -/
-def PassJoint (tds : CerbTags.TagDefsMap) (ext : Fmap sym sym) (ρ : EnvStack)
+def PassJoint (tds : CerbTags.TagDefsMap) (ext : Fmap sym sym)
+    (file : generic_file Unit core_run_annotation) (ρ : EnvStack)
     (pe : generic_pexpr Unit sym) : Prop :=
-  (∀ v, stepPexprRaw tds ext ρ pe = some (valPe v) → evalPexpr tds ext ρ pe = some v) ∧
-  (∀ v, evalPexpr tds ext ρ pe = some v →
-    ∃ r, stepPexprRaw tds ext ρ pe = some r ∧ evalPexpr tds ext ρ r = some v ∧
+  (∀ v, stepPexprRaw tds ext file ρ pe = some (valPe v) → evalPexpr tds ext file ρ pe = some v) ∧
+  (∀ v, evalPexpr tds ext file ρ pe = some v →
+    ∃ r, stepPexprRaw tds ext file ρ pe = some r ∧ evalPexpr tds ext file ρ r = some v ∧
       peDepth r ≤ peDepth pe ∧ (valueFromPexpr r = none → peDepth r < peDepth pe))
 
 
@@ -3017,12 +3219,12 @@ theorem PairAll.mem_left {α β : Type} {R : α → β → Prop} {xs : List α} 
     · exact ih hx'
 
 /-- One-pass values on a list are the big-step values. -/
-theorem pairAll_step_values {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {ρ : EnvStack}
+theorem pairAll_step_values {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {file : generic_file Unit core_run_annotation} {ρ : EnvStack}
     {pes rs : List (generic_pexpr Unit sym)} {vs : List value}
-    (h1 : PairAll (fun pe r => stepPexprRaw tds ext ρ pe = some r) pes rs)
+    (h1 : PairAll (fun pe r => stepPexprRaw tds ext file ρ pe = some r) pes rs)
     (h2 : PairAll (fun r v => valueFromPexpr r = some v) rs vs)
-    (ih : ∀ pe ∈ pes, PassJoint tds ext ρ pe) :
-    PairAll (fun pe v => evalPexpr tds ext ρ pe = some v) pes vs := by
+    (ih : ∀ pe ∈ pes, PassJoint tds ext file ρ pe) :
+    PairAll (fun pe v => evalPexpr tds ext file ρ pe = some v) pes vs := by
   induction h1 generalizing vs with
   | nil => cases h2; exact .nil
   | cons hpr hrest ihl =>
@@ -3034,9 +3236,9 @@ theorem pairAll_step_values {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {ρ
       exact (ih pe List.mem_cons_self).1 _ (by rw [hpr, hr])
 
 /-- Big-step values of one-pass value results are those values. -/
-theorem pairAll_eval_values {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {ρ : EnvStack}
+theorem pairAll_eval_values {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {file : generic_file Unit core_run_annotation} {ρ : EnvStack}
     {rs : List (generic_pexpr Unit sym)} {vs ws : List value}
-    (h2 : PairAll (fun r v => evalPexpr tds ext ρ r = some v) rs vs)
+    (h2 : PairAll (fun r v => evalPexpr tds ext file ρ r = some v) rs vs)
     (h2' : PairAll (fun r v => valueFromPexpr r = some v) rs ws) : ws = vs := by
   induction h2 generalizing ws with
   | nil => cases h2'; rfl
@@ -3050,12 +3252,12 @@ theorem pairAll_eval_values {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {ρ
       rw [ihl hws']
 
 /-- The pass results of a big-step-evaluated list. -/
-theorem pairAll_exists_steps {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {ρ : EnvStack}
+theorem pairAll_exists_steps {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {file : generic_file Unit core_run_annotation} {ρ : EnvStack}
     {pes : List (generic_pexpr Unit sym)} {vs : List value}
-    (hall : PairAll (fun pe v => evalPexpr tds ext ρ pe = some v) pes vs)
-    (ih : ∀ pe ∈ pes, PassJoint tds ext ρ pe) :
-    ∃ rs, PairAll (fun pe r => stepPexprRaw tds ext ρ pe = some r) pes rs ∧
-      PairAll (fun r v => evalPexpr tds ext ρ r = some v) rs vs ∧
+    (hall : PairAll (fun pe v => evalPexpr tds ext file ρ pe = some v) pes vs)
+    (ih : ∀ pe ∈ pes, PassJoint tds ext file ρ pe) :
+    ∃ rs, PairAll (fun pe r => stepPexprRaw tds ext file ρ pe = some r) pes rs ∧
+      PairAll (fun r v => evalPexpr tds ext file ρ r = some v) rs vs ∧
       PairAll (fun pe r => peDepth r ≤ peDepth pe ∧
         (valueFromPexpr r = none → peDepth r < peDepth pe)) pes rs := by
   induction hall with
@@ -3069,14 +3271,14 @@ theorem pairAll_exists_steps {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {�
 /-- The `ctor` arm of the joint pass/value lemma, factored (the `ctorTy`
     constructor is its instance): stated at the induction hypothesis for
     the operands. -/
-theorem joint_ctor {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {ρ : EnvStack}
+theorem joint_ctor {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {file : generic_file Unit core_run_annotation} {ρ : EnvStack}
     {pes : List (generic_pexpr Unit sym)}
-    (ih : ∀ q ∈ pes, PassJoint tds ext ρ q)
+    (ih : ∀ q ∈ pes, PassJoint tds ext file ρ q)
     (a : List _root_.annot) (c : ctor) :
-    PassJoint tds ext ρ (Pexpr a () (PEctor c pes)) := by
+    PassJoint tds ext file ρ (Pexpr a () (PEctor c pes)) := by
   refine ⟨fun v h => ?_, fun v h => ?_⟩
   · rw [stepPexprRaw] at h
-    cases hrs : stepPexprsRaw tds ext ρ pes with
+    cases hrs : stepPexprsRaw tds ext file ρ pes with
     | none => rw [hrs] at h; cases h
     | some rs =>
       rw [hrs] at h
@@ -3097,7 +3299,7 @@ theorem joint_ctor {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {ρ : EnvSta
           simp only [Option.bind_eq_bind, Option.bind_some]
           exact hce
   · rw [evalPexpr_ctor] at h
-    cases hm : evalPexprList tds ext ρ pes with
+    cases hm : evalPexprList tds ext file ρ pes with
     | none => rw [hm] at h; cases h
     | some vs =>
       rw [hm] at h
@@ -3124,9 +3326,130 @@ theorem joint_ctor {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {ρ : EnvSta
         have := peDepth_pos (Pexpr a () (PEctor c pes))
         omega
 
+/-- Mirror big-step success implies the covered shape (the guards on the
+    alternatives of a `case` and both branches of an `if` make this hold
+    for the WHOLE term, unselected branches included). -/
+theorem evalPexpr_shape {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {file : generic_file Unit core_run_annotation} {ρ : EnvStack} :
+    ∀ {pe : generic_pexpr Unit sym} {v : value},
+      evalPexpr tds ext file ρ pe = some v → PePure pe := by
+  intro pe
+  induction pe using peDepth_strong_induction with
+  | _ pe ih =>
+  intro v h
+  rcases pe with ⟨a, u, pe_⟩
+  cases u
+  cases pe_
+  case PEval v' => exact .val a _
+  case PEsym x => exact .sym a _
+  case PEctor c pes =>
+    rw [evalPexpr_ctor] at h
+    cases hm : evalPexprList tds ext file ρ pes with
+    | none => rw [hm] at h; cases h
+    | some vs =>
+      rw [hm] at h
+      simp only [Option.bind_eq_bind, Option.bind_some] at h
+      refine .ctor a c (evalCtor_mirrored h) fun q hq => ?_
+      obtain ⟨w, hw⟩ := (evalPexprList_some_iff.mp hm).mem_left hq
+      exact ih q (by simp only [peDepth_ctor]; have := peDepth_le_list_of_mem hq; omega) hw
+  case PEcase pe pats =>
+    rw [evalPexpr_case] at h
+    cases hg : isPePureAlts pats with
+    | false => rw [hg] at h; cases h
+    | true =>
+      rw [hg] at h
+      simp only at h
+      cases h1 : evalPexpr tds ext file ρ pe with
+      | none => rw [h1] at h; cases h
+      | some cval =>
+        refine .case_ a (ih pe (by simp only [peDepth_case]; omega) h1) ?_
+        exact fun q hq => PePure.of_isPePure (isPePureAlts_iff.mp hg q hq)
+  case PEarray_shift pe1 ty pe2 =>
+    rw [evalPexpr_array_shift] at h
+    cases h1 : evalPexpr tds ext file ρ pe1 with
+    | none => rw [h1] at h; cases h
+    | some v1 =>
+      cases h2 : evalPexpr tds ext file ρ pe2 with
+      | none => rw [h1, h2] at h; cases h
+      | some v2 =>
+        exact .arrayShift a ty (ih pe1 (by simp only [peDepth_array_shift]; omega) h1)
+          (ih pe2 (by simp only [peDepth_array_shift]; omega) h2)
+  case PEnot pe =>
+    rw [evalPexpr_not] at h
+    cases h1 : evalPexpr tds ext file ρ pe with
+    | none => rw [h1] at h; cases h
+    | some w => exact .not_ a (ih pe (by simp only [peDepth_not]; omega) h1)
+  case PEop op pe1 pe2 =>
+    rw [evalPexpr_op] at h
+    cases h1 : evalPexpr tds ext file ρ pe1 with
+    | none => rw [h1] at h; cases h
+    | some v1 =>
+      cases h2 : evalPexpr tds ext file ρ pe2 with
+      | none => rw [h1, h2] at h; cases h
+      | some v2 =>
+        rw [h1, h2] at h
+        exact .op a op (evalBinop_mirrored h) (ih pe1 (by simp only [peDepth_op]; omega) h1)
+          (ih pe2 (by simp only [peDepth_op]; omega) h2)
+  case PEif pe1 pe2 pe3 =>
+    rw [evalPexpr_if] at h
+    cases hg : (isPePure pe2 && isPePure pe3) with
+    | false => rw [hg] at h; cases h
+    | true =>
+      rw [hg] at h
+      simp only at h
+      cases h1 : evalPexpr tds ext file ρ pe1 with
+      | none => rw [h1] at h; cases h
+      | some b =>
+        rw [Bool.and_eq_true] at hg
+        exact .if_ a (ih pe1 (by simp only [peDepth_if]; omega) h1)
+          (PePure.of_isPePure hg.1) (PePure.of_isPePure hg.2)
+  case PEconv_int ity pe =>
+    rw [evalPexpr_conv_int] at h
+    cases h1 : evalPexpr tds ext file ρ pe with
+    | none => rw [h1] at h; cases h
+    | some w => exact .convInt a ity (ih pe (by simp only [peDepth_conv_int]; omega) h1)
+  case PEwrapI ity op pe1 pe2 =>
+    rw [evalPexpr_wrapI] at h
+    cases h1 : evalPexpr tds ext file ρ pe1 with
+    | none => rw [h1] at h; cases h
+    | some v1 =>
+      cases h2 : evalPexpr tds ext file ρ pe2 with
+      | none => rw [h1, h2] at h; cases h
+      | some v2 =>
+        exact .wrapI a ity op (ih pe1 (by simp only [peDepth_wrapI]; omega) h1)
+          (ih pe2 (by simp only [peDepth_wrapI]; omega) h2)
+  case PEcatch_exceptional_condition ity op pe1 pe2 =>
+    rw [evalPexpr_catch] at h
+    cases h1 : evalPexpr tds ext file ρ pe1 with
+    | none => rw [h1] at h; cases h
+    | some v1 =>
+      cases h2 : evalPexpr tds ext file ρ pe2 with
+      | none => rw [h1, h2] at h; cases h
+      | some v2 =>
+        exact .catchExc a ity op (ih pe1 (by simp only [peDepth_catch]; omega) h1)
+          (ih pe2 (by simp only [peDepth_catch]; omega) h2)
+  case PEis_unsigned pe =>
+    rw [evalPexpr_is_unsigned] at h
+    split at h
+    · rename_i hd1
+      cases h1 : evalPexpr tds ext file ρ pe with
+      | none => rw [h1] at h; cases h
+      | some w => exact .isUnsigned a (ih pe (by simp only [peDepth_is_unsigned]; omega) h1) hd1
+    · cases h
+  case PEcall nm pes =>
+    rw [evalPexpr_call] at h
+    cases hm : evalPexprList tds ext file ρ pes with
+    | none => rw [hm] at h; cases h
+    | some vs =>
+      rw [hm] at h
+      simp only [Option.bind_eq_bind, Option.bind_some] at h
+      refine .call a nm fun q hq => ?_
+      obtain ⟨w, hw⟩ := (evalPexprList_some_iff.mp hm).mem_left hq
+      exact ih q (by simp only [peDepth_call]; have := peDepth_le_list_of_mem hq; omega) hw
+  all_goals (rw [evalPexpr.eq_def] at h; simp at h)
+
 /-- The joint statement (module section header). -/
-theorem stepPexprRaw_eval_joint {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {ρ : EnvStack} :
-    ∀ {pe : generic_pexpr Unit sym}, PePure pe → PassJoint tds ext ρ pe := by
+theorem stepPexprRaw_eval_joint {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {file : generic_file Unit core_run_annotation} {ρ : EnvStack} :
+    ∀ {pe : generic_pexpr Unit sym}, PePure pe → PassJoint tds ext file ρ pe := by
   intro pe
   induction pe using peDepth_strong_induction with
   | _ pe ih =>
@@ -3167,10 +3490,10 @@ theorem stepPexprRaw_eval_joint {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym}
     have ih2 := ih pe2 (by simp only [peDepth_op]; omega) hp2
     refine ⟨fun v h => ?_, fun v h => ?_⟩
     · rw [stepPexprRaw] at h
-      cases h1 : stepPexprRaw tds ext ρ pe1 with
+      cases h1 : stepPexprRaw tds ext file ρ pe1 with
       | none => rw [h1] at h; cases h
       | some r1 =>
-        cases h2 : stepPexprRaw tds ext ρ pe2 with
+        cases h2 : stepPexprRaw tds ext file ρ pe2 with
         | none => rw [h1, h2] at h; cases h
         | some r2 =>
           rw [h1, h2] at h
@@ -3193,12 +3516,12 @@ theorem stepPexprRaw_eval_joint {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym}
                 rw [evalPexpr_op, ih1.1 v1 h1, ih2.1 v2 h2]
                 exact hb
     · rw [evalPexpr_op] at h
-      obtain ⟨v1, hv1, v2, hv2, hb⟩ : ∃ v1, evalPexpr tds ext ρ pe1 = some v1 ∧
-          ∃ v2, evalPexpr tds ext ρ pe2 = some v2 ∧ evalBinop op v1 v2 = some v := by
-        cases h1 : evalPexpr tds ext ρ pe1 with
+      obtain ⟨v1, hv1, v2, hv2, hb⟩ : ∃ v1, evalPexpr tds ext file ρ pe1 = some v1 ∧
+          ∃ v2, evalPexpr tds ext file ρ pe2 = some v2 ∧ evalBinop op v1 v2 = some v := by
+        cases h1 : evalPexpr tds ext file ρ pe1 with
         | none => rw [h1] at h; cases h
         | some v1 =>
-          cases h2 : evalPexpr tds ext ρ pe2 with
+          cases h2 : evalPexpr tds ext file ρ pe2 with
           | none => rw [h1, h2] at h; cases h
           | some v2 => rw [h1, h2] at h; exact ⟨v1, rfl, v2, rfl, h⟩
       obtain ⟨r1, hr1, he1, hd1, hs1⟩ := ih1.2 v1 hv1
@@ -3247,10 +3570,10 @@ theorem stepPexprRaw_eval_joint {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym}
     have ih2 := ih pe2 (by simp only [peDepth_array_shift]; omega) hp2
     refine ⟨fun v h => ?_, fun v h => ?_⟩
     · rw [stepPexprRaw] at h
-      cases h1 : stepPexprRaw tds ext ρ pe1 with
+      cases h1 : stepPexprRaw tds ext file ρ pe1 with
       | none => rw [h1] at h; cases h
       | some r1 =>
-        cases h2 : stepPexprRaw tds ext ρ pe2 with
+        cases h2 : stepPexprRaw tds ext file ρ pe2 with
         | none => rw [h1, h2] at h; cases h
         | some r2 =>
           rw [h1, h2] at h
@@ -3273,12 +3596,12 @@ theorem stepPexprRaw_eval_joint {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym}
                 rw [evalPexpr_array_shift, ih1.1 v1 h1, ih2.1 v2 h2]
                 exact hb
     · rw [evalPexpr_array_shift] at h
-      obtain ⟨v1, hv1, v2, hv2, hb⟩ : ∃ v1, evalPexpr tds ext ρ pe1 = some v1 ∧
-          ∃ v2, evalPexpr tds ext ρ pe2 = some v2 ∧ evalArrayShift tds ty v1 v2 = some v := by
-        cases h1 : evalPexpr tds ext ρ pe1 with
+      obtain ⟨v1, hv1, v2, hv2, hb⟩ : ∃ v1, evalPexpr tds ext file ρ pe1 = some v1 ∧
+          ∃ v2, evalPexpr tds ext file ρ pe2 = some v2 ∧ evalArrayShift tds ty v1 v2 = some v := by
+        cases h1 : evalPexpr tds ext file ρ pe1 with
         | none => rw [h1] at h; cases h
         | some v1 =>
-          cases h2 : evalPexpr tds ext ρ pe2 with
+          cases h2 : evalPexpr tds ext file ρ pe2 with
           | none => rw [h1, h2] at h; cases h
           | some v2 => rw [h1, h2] at h; exact ⟨v1, rfl, v2, rfl, h⟩
       obtain ⟨r1, hr1, he1, hd1, hs1⟩ := ih1.2 v1 hv1
@@ -3333,7 +3656,7 @@ theorem stepPexprRaw_eval_joint {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym}
     have hg : isPePureAlts pats = true := isPePureAlts_iff.mpr fun q hq => isPePure_of_PePure (hpats q hq)
     refine ⟨fun v h => ?_, fun v h => ?_⟩
     · rw [stepPexprRaw] at h
-      cases h1 : stepPexprRaw tds ext ρ pe with
+      cases h1 : stepPexprRaw tds ext file ρ pe with
       | none => rw [h1] at h; cases h
       | some r =>
         rw [h1] at h
@@ -3360,7 +3683,7 @@ theorem stepPexprRaw_eval_joint {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym}
       | true =>
         rw [hgg] at h
         simp only at h
-        cases h1 : evalPexpr tds ext ρ pe with
+        cases h1 : evalPexpr tds ext file ρ pe with
         | none => rw [h1] at h; cases h
         | some cval =>
           rw [h1] at h
@@ -3399,7 +3722,7 @@ theorem stepPexprRaw_eval_joint {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym}
     have ihs := ih pe (by simp only [peDepth_not]; omega) hpe
     refine ⟨fun v h => ?_, fun v h => ?_⟩
     · rw [stepPexprRaw] at h
-      cases h1 : stepPexprRaw tds ext ρ pe with
+      cases h1 : stepPexprRaw tds ext file ρ pe with
       | none => rw [h1] at h; cases h
       | some r =>
         rw [h1] at h
@@ -3413,7 +3736,7 @@ theorem stepPexprRaw_eval_joint {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym}
           simp only [Option.bind_eq_bind, Option.bind_some]
           cases w <;> (try (cases h)) <;> (try dsimp only at h) <;> rfl
     · rw [evalPexpr_not] at h
-      cases h1 : evalPexpr tds ext ρ pe with
+      cases h1 : evalPexpr tds ext file ρ pe with
       | none => rw [h1] at h; cases h
       | some w =>
         rw [h1] at h
@@ -3444,7 +3767,7 @@ theorem stepPexprRaw_eval_joint {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym}
       rw [isPePure_of_PePure hp2, isPePure_of_PePure hp3]; rfl
     refine ⟨fun v h => ?_, fun v h => ?_⟩
     · rw [stepPexprRaw] at h
-      cases h1 : stepPexprRaw tds ext ρ pe1 with
+      cases h1 : stepPexprRaw tds ext file ρ pe1 with
       | none => rw [h1] at h; cases h
       | some r1 =>
         rw [h1] at h
@@ -3458,14 +3781,14 @@ theorem stepPexprRaw_eval_joint {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym}
           simp only [Option.bind_eq_bind, Option.bind_some]
           cases b <;> (try (cases h)) <;> (try dsimp only at h)
           all_goals first
-            | (cases h2 : stepPexprRaw tds ext ρ pe2 <;> rw [h2] at h
+            | (cases h2 : stepPexprRaw tds ext file ρ pe2 <;> rw [h2] at h
                · simp only [Option.map_none] at h; cases h
                · simp only [Option.map_some] at h
                  rename_i r2
                  have hr2 : r2 = valPe v := by
                    rw [← stepPexprRaw_annot0 h2]; exact Option.some.inj h
                  exact ih2.1 v (by rw [h2, hr2]))
-            | (cases h3 : stepPexprRaw tds ext ρ pe3 <;> rw [h3] at h
+            | (cases h3 : stepPexprRaw tds ext file ρ pe3 <;> rw [h3] at h
                · simp only [Option.map_none] at h; cases h
                · simp only [Option.map_some] at h
                  rename_i r3
@@ -3473,7 +3796,7 @@ theorem stepPexprRaw_eval_joint {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym}
                    rw [← stepPexprRaw_annot0 h3]; exact Option.some.inj h
                  exact ih3.1 v (by rw [h3, hr3]))
     · rw [evalPexpr_if, if_pos hg] at h
-      cases h1 : evalPexpr tds ext ρ pe1 with
+      cases h1 : evalPexpr tds ext file ρ pe1 with
       | none => rw [h1] at h; cases h
       | some b =>
         rw [h1] at h
@@ -3506,118 +3829,348 @@ theorem stepPexprRaw_eval_joint {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym}
                simp only [Option.map_some]
                refine ⟨_, rfl, by rw [evalPexpr_reannot0]; exact he3, ?_, fun _ => ?_⟩ <;>
                  (simp only [peDepth_if, peDepth_reannot0]; omega))
+  | @convInt a ity pe hpe =>
+    have ihs := ih pe (by simp only [peDepth_conv_int]; omega) hpe
+    refine ⟨fun v h => ?_, fun v h => ?_⟩
+    · rw [stepPexprRaw] at h
+      cases h1 : stepPexprRaw tds ext file ρ pe with
+      | none => rw [h1] at h; cases h
+      | some r =>
+        rw [h1] at h
+        simp only [Option.bind_eq_bind, Option.bind_some] at h
+        cases hv1 : valueFromPexpr r with
+        | none => rw [hv1] at h; exact absurd (Option.some.inj h).symm (by unfold valPe; simp)
+        | some w =>
+          rw [hv1] at h <;> (try dsimp only at h)
+          obtain rfl := stepPexprRaw_valPe_of_value h1 hv1
+          cases hb : evalConvInt ity w with
+          | none => rw [hb] at h; cases h
+          | some w' =>
+            rw [hb] at h <;> (try dsimp only at h)
+            obtain rfl : w' = v := by
+              have := Option.some.inj h; unfold valPe at this; cases this; rfl
+            rw [evalPexpr_conv_int, ihs.1 w h1]
+            simp only [Option.bind_eq_bind, Option.bind_some]
+            exact hb
+    · rw [evalPexpr_conv_int] at h
+      cases h1 : evalPexpr tds ext file ρ pe with
+      | none => rw [h1] at h; cases h
+      | some w =>
+        rw [h1] at h
+        simp only [Option.bind_eq_bind, Option.bind_some] at h
+        obtain ⟨r, hr, he, hd, hs⟩ := ihs.2 w h1
+        rw [stepPexprRaw, hr]
+        simp only [Option.bind_eq_bind, Option.bind_some]
+        cases hw : valueFromPexpr r with
+        | none =>
+          refine ⟨_, rfl, ?_, ?_, fun _ => ?_⟩
+          · rw [evalPexpr_conv_int, he]; simp only [Option.bind_eq_bind, Option.bind_some]; exact h
+          · simp only [peDepth_conv_int]; omega
+          · have := hs hw; simp only [peDepth_conv_int]; omega
+        | some w' =>
+          obtain rfl := stepPexprRaw_valPe_of_value hr hw
+          rw [evalPexpr_valPe] at he
+          obtain rfl := Option.some.inj he
+          have hp' := peDepth_pos pe
+          simp only [h, Option.map_some]
+          refine ⟨_, rfl, by rw [evalPexpr_valPe], ?_, fun hnv => by cases hnv⟩
+          simp only [peDepth_conv_int, peDepth_valPe]; omega
+  | @wrapI a ity op pe1 pe2 hp1 hp2 =>
+    have ih1 := ih pe1 (by simp only [peDepth_wrapI]; omega) hp1
+    have ih2 := ih pe2 (by simp only [peDepth_wrapI]; omega) hp2
+    refine ⟨fun v h => ?_, fun v h => ?_⟩
+    · rw [stepPexprRaw] at h
+      cases h1 : stepPexprRaw tds ext file ρ pe1 with
+      | none => rw [h1] at h; cases h
+      | some r1 =>
+        cases h2 : stepPexprRaw tds ext file ρ pe2 with
+        | none => rw [h1, h2] at h; cases h
+        | some r2 =>
+          rw [h1, h2] at h
+          simp only [Option.bind_eq_bind, Option.bind_some] at h
+          cases hv1 : valueFromPexpr r1 with
+          | none => rw [hv1] at h; exact absurd (Option.some.inj h).symm (by unfold valPe; simp)
+          | some v1 =>
+            cases hv2 : valueFromPexpr r2 with
+            | none => rw [hv1, hv2] at h; exact absurd (Option.some.inj h).symm (by unfold valPe; simp)
+            | some v2 =>
+              rw [hv1, hv2] at h <;> (try dsimp only at h)
+              obtain rfl := stepPexprRaw_valPe_of_value h1 hv1
+              obtain rfl := stepPexprRaw_valPe_of_value h2 hv2
+              cases hb : evalWrapI ity op v1 v2 with
+              | none => rw [hb] at h; cases h
+              | some w =>
+                rw [hb] at h <;> (try dsimp only at h)
+                obtain rfl : w = v := by
+                  have := Option.some.inj h; unfold valPe at this; cases this; rfl
+                rw [evalPexpr_wrapI, ih1.1 v1 h1, ih2.1 v2 h2]
+                exact hb
+    · rw [evalPexpr_wrapI] at h
+      obtain ⟨v1, hv1, v2, hv2, hb⟩ : ∃ v1, evalPexpr tds ext file ρ pe1 = some v1 ∧
+          ∃ v2, evalPexpr tds ext file ρ pe2 = some v2 ∧ evalWrapI ity op v1 v2 = some v := by
+        cases h1 : evalPexpr tds ext file ρ pe1 with
+        | none => rw [h1] at h; cases h
+        | some v1 =>
+          cases h2 : evalPexpr tds ext file ρ pe2 with
+          | none => rw [h1, h2] at h; cases h
+          | some v2 => rw [h1, h2] at h; exact ⟨v1, rfl, v2, rfl, h⟩
+      obtain ⟨r1, hr1, he1, hd1, hs1⟩ := ih1.2 v1 hv1
+      obtain ⟨r2, hr2, he2, hd2, hs2⟩ := ih2.2 v2 hv2
+      rw [stepPexprRaw, hr1, hr2]
+      simp only [Option.bind_eq_bind, Option.bind_some]
+      have hp1' := peDepth_pos pe1
+      have hp2' := peDepth_pos pe2
+      have hr1' := peDepth_pos r1
+      have hr2' := peDepth_pos r2
+      cases hw1 : valueFromPexpr r1 with
+      | none =>
+        have hs1' := hs1 hw1
+        cases hw2 : valueFromPexpr r2 with
+        | none =>
+          have hs2' := hs2 hw2
+          refine ⟨_, rfl, ?_, ?_, fun _ => ?_⟩
+          · rw [evalPexpr_wrapI, he1, he2]; simp only [Option.bind_eq_bind, Option.bind_some]; exact hb
+          · simp only [peDepth_wrapI]; omega
+          · simp only [peDepth_wrapI]; omega
+        | some w2 =>
+          obtain rfl := stepPexprRaw_valPe_of_value hr2 hw2
+          refine ⟨_, rfl, ?_, ?_, fun _ => ?_⟩
+          · rw [evalPexpr_wrapI, he1, he2]; simp only [Option.bind_eq_bind, Option.bind_some]; exact hb
+          · simp only [peDepth_wrapI, peDepth_valPe]; omega
+          · simp only [peDepth_wrapI, peDepth_valPe]; omega
+      | some w1 =>
+        obtain rfl := stepPexprRaw_valPe_of_value hr1 hw1
+        cases hw2 : valueFromPexpr r2 with
+        | none =>
+          have hs2' := hs2 hw2
+          refine ⟨_, rfl, ?_, ?_, fun _ => ?_⟩
+          · rw [evalPexpr_wrapI, he1, he2]; simp only [Option.bind_eq_bind, Option.bind_some]; exact hb
+          · simp only [peDepth_wrapI, peDepth_valPe]; omega
+          · simp only [peDepth_wrapI, peDepth_valPe]; omega
+        | some w2 =>
+          obtain rfl := stepPexprRaw_valPe_of_value hr2 hw2
+          rw [evalPexpr_valPe] at he1 he2
+          obtain rfl := Option.some.inj he1
+          obtain rfl := Option.some.inj he2
+          simp only [hb, Option.map_some]
+          refine ⟨_, rfl, by rw [evalPexpr_valPe], ?_, fun hnv => by cases hnv⟩
+          simp only [peDepth_wrapI, peDepth_valPe]; omega
+  | @catchExc a ity op pe1 pe2 hp1 hp2 =>
+    have ih1 := ih pe1 (by simp only [peDepth_catch]; omega) hp1
+    have ih2 := ih pe2 (by simp only [peDepth_catch]; omega) hp2
+    refine ⟨fun v h => ?_, fun v h => ?_⟩
+    · rw [stepPexprRaw] at h
+      cases h1 : stepPexprRaw tds ext file ρ pe1 with
+      | none => rw [h1] at h; cases h
+      | some r1 =>
+        cases h2 : stepPexprRaw tds ext file ρ pe2 with
+        | none => rw [h1, h2] at h; cases h
+        | some r2 =>
+          rw [h1, h2] at h
+          simp only [Option.bind_eq_bind, Option.bind_some] at h
+          cases hv1 : valueFromPexpr r1 with
+          | none => rw [hv1] at h; exact absurd (Option.some.inj h).symm (by unfold valPe; simp)
+          | some v1 =>
+            cases hv2 : valueFromPexpr r2 with
+            | none => rw [hv1, hv2] at h; exact absurd (Option.some.inj h).symm (by unfold valPe; simp)
+            | some v2 =>
+              rw [hv1, hv2] at h <;> (try dsimp only at h)
+              obtain rfl := stepPexprRaw_valPe_of_value h1 hv1
+              obtain rfl := stepPexprRaw_valPe_of_value h2 hv2
+              cases hb : evalCatch ity op v1 v2 with
+              | none => rw [hb] at h; cases h
+              | some w =>
+                rw [hb] at h <;> (try dsimp only at h)
+                obtain rfl : w = v := by
+                  have := Option.some.inj h; unfold valPe at this; cases this; rfl
+                rw [evalPexpr_catch, ih1.1 v1 h1, ih2.1 v2 h2]
+                exact hb
+    · rw [evalPexpr_catch] at h
+      obtain ⟨v1, hv1, v2, hv2, hb⟩ : ∃ v1, evalPexpr tds ext file ρ pe1 = some v1 ∧
+          ∃ v2, evalPexpr tds ext file ρ pe2 = some v2 ∧ evalCatch ity op v1 v2 = some v := by
+        cases h1 : evalPexpr tds ext file ρ pe1 with
+        | none => rw [h1] at h; cases h
+        | some v1 =>
+          cases h2 : evalPexpr tds ext file ρ pe2 with
+          | none => rw [h1, h2] at h; cases h
+          | some v2 => rw [h1, h2] at h; exact ⟨v1, rfl, v2, rfl, h⟩
+      obtain ⟨r1, hr1, he1, hd1, hs1⟩ := ih1.2 v1 hv1
+      obtain ⟨r2, hr2, he2, hd2, hs2⟩ := ih2.2 v2 hv2
+      rw [stepPexprRaw, hr1, hr2]
+      simp only [Option.bind_eq_bind, Option.bind_some]
+      have hp1' := peDepth_pos pe1
+      have hp2' := peDepth_pos pe2
+      have hr1' := peDepth_pos r1
+      have hr2' := peDepth_pos r2
+      cases hw1 : valueFromPexpr r1 with
+      | none =>
+        have hs1' := hs1 hw1
+        cases hw2 : valueFromPexpr r2 with
+        | none =>
+          have hs2' := hs2 hw2
+          refine ⟨_, rfl, ?_, ?_, fun _ => ?_⟩
+          · rw [evalPexpr_catch, he1, he2]; simp only [Option.bind_eq_bind, Option.bind_some]; exact hb
+          · simp only [peDepth_catch]; omega
+          · simp only [peDepth_catch]; omega
+        | some w2 =>
+          obtain rfl := stepPexprRaw_valPe_of_value hr2 hw2
+          refine ⟨_, rfl, ?_, ?_, fun _ => ?_⟩
+          · rw [evalPexpr_catch, he1, he2]; simp only [Option.bind_eq_bind, Option.bind_some]; exact hb
+          · simp only [peDepth_catch, peDepth_valPe]; omega
+          · simp only [peDepth_catch, peDepth_valPe]; omega
+      | some w1 =>
+        obtain rfl := stepPexprRaw_valPe_of_value hr1 hw1
+        cases hw2 : valueFromPexpr r2 with
+        | none =>
+          have hs2' := hs2 hw2
+          refine ⟨_, rfl, ?_, ?_, fun _ => ?_⟩
+          · rw [evalPexpr_catch, he1, he2]; simp only [Option.bind_eq_bind, Option.bind_some]; exact hb
+          · simp only [peDepth_catch, peDepth_valPe]; omega
+          · simp only [peDepth_catch, peDepth_valPe]; omega
+        | some w2 =>
+          obtain rfl := stepPexprRaw_valPe_of_value hr2 hw2
+          rw [evalPexpr_valPe] at he1 he2
+          obtain rfl := Option.some.inj he1
+          obtain rfl := Option.some.inj he2
+          simp only [hb, Option.map_some]
+          refine ⟨_, rfl, by rw [evalPexpr_valPe], ?_, fun hnv => by cases hnv⟩
+          simp only [peDepth_catch, peDepth_valPe]; omega
+  | @isUnsigned a  pe hpe hd1 =>
+    have ihs := ih pe (by simp only [peDepth_is_unsigned]; omega) hpe
+    refine ⟨fun v h => ?_, fun v h => ?_⟩
+    · rw [stepPexprRaw] at h
+      cases h1 : stepPexprRaw tds ext file ρ pe with
+      | none => rw [h1] at h; cases h
+      | some r =>
+        rw [h1] at h
+        simp only [Option.bind_eq_bind, Option.bind_some] at h
+        cases hv1 : valueFromPexpr r with
+        | none => rw [hv1] at h; exact absurd (Option.some.inj h).symm (by unfold valPe; simp)
+        | some w =>
+          rw [hv1] at h <;> (try dsimp only at h)
+          obtain rfl := stepPexprRaw_valPe_of_value h1 hv1
+          cases hb : evalIsUnsigned w with
+          | none => rw [hb] at h; cases h
+          | some w' =>
+            rw [hb] at h <;> (try dsimp only at h)
+            obtain rfl : w' = v := by
+              have := Option.some.inj h; unfold valPe at this; cases this; rfl
+            rw [evalPexpr_is_unsigned, if_pos hd1, ihs.1 w h1]
+            simp only [Option.bind_eq_bind, Option.bind_some]
+            exact hb
+    · rw [evalPexpr_is_unsigned, if_pos hd1] at h
+      cases h1 : evalPexpr tds ext file ρ pe with
+      | none => rw [h1] at h; cases h
+      | some w =>
+        rw [h1] at h
+        simp only [Option.bind_eq_bind, Option.bind_some] at h
+        obtain ⟨r, hr, he, hd, hs⟩ := ihs.2 w h1
+        rw [stepPexprRaw, hr]
+        simp only [Option.bind_eq_bind, Option.bind_some]
+        cases hw : valueFromPexpr r with
+        | none =>
+          -- a leaf operand's pass reaches its value in one pass
+          exact absurd (hs hw) (by have := peDepth_pos r; omega)
+        | some w' =>
+          obtain rfl := stepPexprRaw_valPe_of_value hr hw
+          rw [evalPexpr_valPe] at he
+          obtain rfl := Option.some.inj he
+          have hp' := peDepth_pos pe
+          simp only [h, Option.map_some]
+          refine ⟨_, rfl, by rw [evalPexpr_valPe], ?_, fun hnv => by cases hnv⟩
+          simp only [peDepth_is_unsigned, peDepth_valPe]; omega
+  | @call a nm pes hps =>
+    have ihl : ∀ q ∈ pes, PassJoint tds ext file ρ q := fun q hq =>
+      ih q (by simp only [peDepth_call]; have := peDepth_le_list_of_mem hq; omega) (hps q hq)
+    refine ⟨fun v h => ?_, fun v h => ?_⟩
+    · rw [stepPexprRaw] at h
+      cases hrs : stepPexprsRaw tds ext file ρ pes with
+      | none => rw [hrs] at h; cases h
+      | some rs =>
+        rw [hrs] at h
+        simp only [Option.bind_eq_bind, Option.bind_some] at h
+        cases hvs : valueFromPexprs rs with
+        | none =>
+          rw [hvs] at h; dsimp only at h
+          exact absurd (Option.some.inj h).symm (by unfold valPe; simp)
+        | some vs =>
+          rw [hvs] at h; dsimp only at h
+          cases hcb : callBody file nm vs with
+          | none => rw [hcb] at h; cases h
+          | some body =>
+            rw [hcb] at h
+            simp only at h
+            split at h
+            · rename_i hguard
+              rw [Bool.and_eq_true, decide_eq_true_eq] at hguard
+              have hbody : peStrip body = valPe v := Option.some.inj h
+              rw [evalPexpr_call, evalPexprList_some_iff.mpr
+                (pairAll_step_values (stepPexprsRaw_some_iff.mp hrs) (valueFromPexprs_some_iff.mp hvs) ihl)]
+              simp only [Option.bind_eq_bind, Option.bind_some]
+              rw [hcb]
+              simp only [Option.bind_some]
+              rw [if_pos hguard.2, hbody, evalPexpr_valPe]
+            · cases h
+    · rw [evalPexpr_call] at h
+      cases hm : evalPexprList tds ext file ρ pes with
+      | none => rw [hm] at h; cases h
+      | some vs =>
+        rw [hm] at h
+        simp only [Option.bind_eq_bind, Option.bind_some] at h
+        cases hcb : callBody file nm vs with
+        | none => rw [hcb] at h; cases h
+        | some body =>
+          rw [hcb] at h
+          simp only [Option.bind_some] at h
+          by_cases hchk : peDepth (peStrip body) ≤ stdBudget nm
+          · rw [if_pos hchk] at h
+            have hbp : isPePure (peStrip body) = true := isPePure_of_PePure (evalPexpr_shape h)
+            obtain ⟨rs, h1, h2, h3⟩ := pairAll_exists_steps (evalPexprList_some_iff.mp hm) ihl
+            rw [stepPexprRaw, stepPexprsRaw_some_iff.mpr h1]
+            simp only [Option.bind_eq_bind, Option.bind_some]
+            have hdl := peDepthList_pairAll h3
+            cases hvs : valueFromPexprs rs with
+            | none =>
+              refine ⟨_, rfl, ?_, ?_, fun _ => ?_⟩
+              · rw [evalPexpr_call, evalPexprList_some_iff.mpr h2]
+                simp only [Option.bind_eq_bind, Option.bind_some]
+                rw [hcb]
+                simp only [Option.bind_some]
+                rw [if_pos hchk]; exact h
+              · simp only [peDepth_call]; omega
+              · have := hdl.2 hvs; simp only [peDepth_call]; omega
+            | some ws =>
+              obtain rfl := pairAll_eval_values h2 (valueFromPexprs_some_iff.mp hvs)
+              dsimp only
+              rw [hcb]
+              simp only [hbp, decide_eq_true hchk, Bool.and_self, if_true]
+              refine ⟨_, rfl, h, ?_, fun _ => ?_⟩
+              · simp only [peDepth_call]; omega
+              · simp only [peDepth_call]; omega
+          · rw [if_neg hchk] at h; cases h
 
 /-- A one-pass VALUE is the big-step value. -/
-theorem stepPexpr_valPe {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {ρ : EnvStack}
-    {pe : generic_pexpr Unit sym} {v : value} (h : stepPexpr tds ext ρ pe = some (valPe v)) :
-    evalPexpr tds ext ρ pe = some v := by
+theorem stepPexpr_valPe {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {file : generic_file Unit core_run_annotation} {ρ : EnvStack}
+    {pe : generic_pexpr Unit sym} {v : value} (h : stepPexpr tds ext file ρ pe = some (valPe v)) :
+    evalPexpr tds ext file ρ pe = some v := by
   have hp := stepPexpr_shape h
   rw [stepPexpr_of_PePure hp] at h
   exact (stepPexprRaw_eval_joint hp).1 v h
 
 /-- A big-step value has a successful first pass, which preserves the value
     and strictly decreases the depth unless it delivers the value. -/
-theorem evalPexpr_step {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {ρ : EnvStack}
-    {pe : generic_pexpr Unit sym} {v : value} (hp : PePure pe) (hv : evalPexpr tds ext ρ pe = some v) :
-    ∃ r, stepPexpr tds ext ρ pe = some r ∧ evalPexpr tds ext ρ r = some v ∧
+theorem evalPexpr_step {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {file : generic_file Unit core_run_annotation} {ρ : EnvStack}
+    {pe : generic_pexpr Unit sym} {v : value} (hp : PePure pe) (hv : evalPexpr tds ext file ρ pe = some v) :
+    ∃ r, stepPexpr tds ext file ρ pe = some r ∧ evalPexpr tds ext file ρ r = some v ∧
       peDepth r ≤ peDepth pe ∧ (valueFromPexpr r = none → peDepth r < peDepth pe) := by
   obtain ⟨r, hr, he, hd, hs⟩ := (stepPexprRaw_eval_joint hp).2 v hv
   exact ⟨r, by rw [stepPexpr_of_PePure hp]; exact hr, he, hd, hs⟩
 
-/-- Mirror big-step success implies the covered shape (the guards on the
-    alternatives of a `case` and both branches of an `if` make this hold
-    for the WHOLE term, unselected branches included). -/
-theorem evalPexpr_shape {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {ρ : EnvStack} :
-    ∀ {pe : generic_pexpr Unit sym} {v : value},
-      evalPexpr tds ext ρ pe = some v → PePure pe := by
-  intro pe
-  induction pe using peDepth_strong_induction with
-  | _ pe ih =>
-  intro v h
-  rcases pe with ⟨a, u, pe_⟩
-  cases u
-  cases pe_
-  case PEval v' => exact .val a _
-  case PEsym x => exact .sym a _
-  case PEctor c pes =>
-    rw [evalPexpr_ctor] at h
-    cases hm : evalPexprList tds ext ρ pes with
-    | none => rw [hm] at h; cases h
-    | some vs =>
-      rw [hm] at h
-      simp only [Option.bind_eq_bind, Option.bind_some] at h
-      refine .ctor a c (evalCtor_mirrored h) fun q hq => ?_
-      obtain ⟨w, hw⟩ := (evalPexprList_some_iff.mp hm).mem_left hq
-      exact ih q (by simp only [peDepth_ctor]; have := peDepth_le_list_of_mem hq; omega) hw
-  case PEcase pe pats =>
-    rw [evalPexpr_case] at h
-    cases hg : isPePureAlts pats with
-    | false => rw [hg] at h; cases h
-    | true =>
-      rw [hg] at h
-      simp only at h
-      cases h1 : evalPexpr tds ext ρ pe with
-      | none => rw [h1] at h; cases h
-      | some cval =>
-        refine .case_ a (ih pe (by simp only [peDepth_case]; omega) h1) ?_
-        exact fun q hq => PePure.of_isPePure (isPePureAlts_iff.mp hg q hq)
-  case PEarray_shift pe1 ty pe2 =>
-    rw [evalPexpr_array_shift] at h
-    cases h1 : evalPexpr tds ext ρ pe1 with
-    | none => rw [h1] at h; cases h
-    | some v1 =>
-      cases h2 : evalPexpr tds ext ρ pe2 with
-      | none => rw [h1, h2] at h; cases h
-      | some v2 =>
-        exact .arrayShift a ty (ih pe1 (by simp only [peDepth_array_shift]; omega) h1)
-          (ih pe2 (by simp only [peDepth_array_shift]; omega) h2)
-  case PEnot pe =>
-    rw [evalPexpr_not] at h
-    cases h1 : evalPexpr tds ext ρ pe with
-    | none => rw [h1] at h; cases h
-    | some w => exact .not_ a (ih pe (by simp only [peDepth_not]; omega) h1)
-  case PEop op pe1 pe2 =>
-    rw [evalPexpr_op] at h
-    cases h1 : evalPexpr tds ext ρ pe1 with
-    | none => rw [h1] at h; cases h
-    | some v1 =>
-      cases h2 : evalPexpr tds ext ρ pe2 with
-      | none => rw [h1, h2] at h; cases h
-      | some v2 =>
-        rw [h1, h2] at h
-        exact .op a op (evalBinop_mirrored h) (ih pe1 (by simp only [peDepth_op]; omega) h1)
-          (ih pe2 (by simp only [peDepth_op]; omega) h2)
-  case PEif pe1 pe2 pe3 =>
-    rw [evalPexpr_if] at h
-    cases hg : (isPePure pe2 && isPePure pe3) with
-    | false => rw [hg] at h; cases h
-    | true =>
-      rw [hg] at h
-      simp only at h
-      cases h1 : evalPexpr tds ext ρ pe1 with
-      | none => rw [h1] at h; cases h
-      | some b =>
-        rw [Bool.and_eq_true] at hg
-        exact .if_ a (ih pe1 (by simp only [peDepth_if]; omega) h1)
-          (PePure.of_isPePure hg.1) (PePure.of_isPePure hg.2)
-  all_goals (rw [evalPexpr.eq_def] at h; simp at h)
 
 /-! ### The constrained pull on the covered grammar -/
 
-/-- The constrained-pull's image on the covered grammar: annotation
-    renormalization only (`pull_constrained` rebuilds every node with `[]`
-    annots and recurses into the operands of `PEop`/`PEarray_shift`/`PEnot`
-    and the scrutinee of `PEcase`; the operands of `PEctor`/`PEif` and the
-    alternatives of `PEcase` are kept VERBATIM by `pull_helper`
-    (core_eval.lem:167–193 — the `Right` accumulator pushes the ORIGINAL
-    `pe`); no `PEconstrained` exists to pull). -/
-def peStrip : generic_pexpr Unit sym → generic_pexpr Unit sym
-  | Pexpr _ _ (PEop op pe1 pe2) => Pexpr [] () (PEop op (peStrip pe1) (peStrip pe2))
-  | Pexpr _ _ (PEarray_shift pe1 ty pe2) =>
-      Pexpr [] () (PEarray_shift (peStrip pe1) ty (peStrip pe2))
-  | Pexpr _ _ (PEcase pe pats) => Pexpr [] () (PEcase (peStrip pe) pats)
-  | Pexpr _ _ (PEnot pe) => Pexpr [] () (PEnot (peStrip pe))
-  | Pexpr _ _ pex => Pexpr [] () pex
+/-! `peStrip` (the constrained-pull's image on the covered grammar) lives in
+Step.lean since E3 (the pass applies it to a call's unfolded body). -/
 
 theorem PePure.strip {pe : generic_pexpr Unit _root_.sym} (hp : PePure pe) :
     PePure (peStrip pe) := by
@@ -3632,84 +4185,96 @@ theorem PePure.strip {pe : generic_pexpr Unit _root_.sym} (hp : PePure pe) :
   | not_ a hpe ih => exact .not_ [] ih
   | if_ a hp1 hp2 hp3 _ _ _ => exact .if_ [] hp1 hp2 hp3
   | undef a loc ub => exact .undef [] loc ub
+  | convInt a ity _ ih => exact .convInt [] ity ih
+  | wrapI a ity op _ _ ih1 ih2 => exact .wrapI [] ity op ih1 ih2
+  | catchExc a ity op _ _ ih1 ih2 => exact .catchExc [] ity op ih1 ih2
+  | isUnsigned a hpe hd ih => exact .isUnsigned [] ih (by rw [peDepth_peStrip_all]; exact hd)
+  | call a nm hps _ => exact .call [] nm hps
 
 theorem isPePure_peStrip {pe : generic_pexpr Unit sym} (hp : PePure pe) :
     isPePure (peStrip pe) = isPePure pe := by
   rw [isPePure_of_PePure hp, isPePure_of_PePure hp.strip]
 
-theorem peDepth_peStrip {pe : generic_pexpr Unit sym} (hp : PePure pe) :
-    peDepth (peStrip pe) = peDepth pe := by
-  induction hp with
-  | val a v => show peDepth (Pexpr [] () (PEval v)) = _; rfl
-  | sym a x => show peDepth (Pexpr [] () (PEsym x)) = _; rfl
-  | op a op hop hp1 hp2 ih1 ih2 =>
-    show peDepth (Pexpr [] () (PEop op _ _)) = _
-    rw [peDepth_op, peDepth_op, ih1, ih2]
-  | arrayShift a ty hp1 hp2 ih1 ih2 =>
-    show peDepth (Pexpr [] () (PEarray_shift _ ty _)) = _
-    rw [peDepth_array_shift, peDepth_array_shift, ih1, ih2]
-  | ctorTy a c hc pb ty => show peDepth (Pexpr [] () (PEctor c _)) = _; rfl
-  | ctor a c hc hps _ => show peDepth (Pexpr [] () (PEctor c _)) = _; rfl
-  | case_ a hpe hpats ih _ =>
-    show peDepth (Pexpr [] () (PEcase _ _)) = _
-    rw [peDepth_case, peDepth_case, ih]
-  | not_ a hpe ih =>
-    show peDepth (Pexpr [] () (PEnot _)) = _
-    rw [peDepth_not, peDepth_not, ih]
-  | if_ a hp1 hp2 hp3 _ _ _ => show peDepth (Pexpr [] () (PEif _ _ _)) = _; rfl
-  | undef a loc ub => show peDepth (Pexpr [] () (PEundef loc ub)) = _; rfl
+theorem peDepth_peStrip {pe : generic_pexpr Unit sym} (_hp : PePure pe) :
+    peDepth (peStrip pe) = peDepth pe := peDepth_peStrip_all pe
 
 /-- The faithful pass is invariant under the pull's renormalization. -/
-theorem stepPexprRaw_peStrip {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {ρ : EnvStack}
+theorem stepPexprRaw_peStrip {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {file : generic_file Unit core_run_annotation} {ρ : EnvStack}
     {pe : generic_pexpr Unit sym} (hp : PePure pe) :
-    stepPexprRaw tds ext ρ (peStrip pe) = stepPexprRaw tds ext ρ pe := by
+    stepPexprRaw tds ext file ρ (peStrip pe) = stepPexprRaw tds ext file ρ pe := by
   induction hp with
-  | val a v => show stepPexprRaw tds ext ρ (Pexpr [] () (PEval v)) = _; rw [stepPexprRaw, stepPexprRaw]
-  | sym a x => show stepPexprRaw tds ext ρ (Pexpr [] () (PEsym x)) = _; rw [stepPexprRaw, stepPexprRaw]
+  | val a v => show stepPexprRaw tds ext file ρ (Pexpr [] () (PEval v)) = _; rw [stepPexprRaw, stepPexprRaw]
+  | sym a x => show stepPexprRaw tds ext file ρ (Pexpr [] () (PEsym x)) = _; rw [stepPexprRaw, stepPexprRaw]
   | op a op hop hp1 hp2 ih1 ih2 =>
-    show stepPexprRaw tds ext ρ (Pexpr [] () (PEop op _ _)) = _
+    show stepPexprRaw tds ext file ρ (Pexpr [] () (PEop op _ _)) = _
     rw [stepPexprRaw, stepPexprRaw, ih1, ih2]
   | arrayShift a ty hp1 hp2 ih1 ih2 =>
-    show stepPexprRaw tds ext ρ (Pexpr [] () (PEarray_shift _ ty _)) = _
+    show stepPexprRaw tds ext file ρ (Pexpr [] () (PEarray_shift _ ty _)) = _
     rw [stepPexprRaw, stepPexprRaw, ih1, ih2]
-  | ctorTy a c hc pb ty => show stepPexprRaw tds ext ρ (Pexpr [] () (PEctor c _)) = _; rw [stepPexprRaw, stepPexprRaw]
-  | ctor a c hc hps _ => show stepPexprRaw tds ext ρ (Pexpr [] () (PEctor c _)) = _; rw [stepPexprRaw, stepPexprRaw]
+  | ctorTy a c hc pb ty => show stepPexprRaw tds ext file ρ (Pexpr [] () (PEctor c _)) = _; rw [stepPexprRaw, stepPexprRaw]
+  | ctor a c hc hps _ => show stepPexprRaw tds ext file ρ (Pexpr [] () (PEctor c _)) = _; rw [stepPexprRaw, stepPexprRaw]
   | case_ a hpe hpats ih _ =>
-    show stepPexprRaw tds ext ρ (Pexpr [] () (PEcase _ _)) = _
+    show stepPexprRaw tds ext file ρ (Pexpr [] () (PEcase _ _)) = _
     rw [stepPexprRaw, stepPexprRaw, ih]
   | not_ a hpe ih =>
-    show stepPexprRaw tds ext ρ (Pexpr [] () (PEnot _)) = _
+    show stepPexprRaw tds ext file ρ (Pexpr [] () (PEnot _)) = _
     rw [stepPexprRaw, stepPexprRaw, ih]
-  | if_ a hp1 hp2 hp3 _ _ _ => show stepPexprRaw tds ext ρ (Pexpr [] () (PEif _ _ _)) = _; rw [stepPexprRaw, stepPexprRaw]
-  | undef a loc ub => show stepPexprRaw tds ext ρ (Pexpr [] () (PEundef loc ub)) = _; simp [stepPexprRaw]
+  | if_ a hp1 hp2 hp3 _ _ _ => show stepPexprRaw tds ext file ρ (Pexpr [] () (PEif _ _ _)) = _; rw [stepPexprRaw, stepPexprRaw]
+  | undef a loc ub => show stepPexprRaw tds ext file ρ (Pexpr [] () (PEundef loc ub)) = _; simp [stepPexprRaw]
+  | convInt a ity hpe ih =>
+    show stepPexprRaw tds ext file ρ (Pexpr [] () (PEconv_int ity _)) = _
+    rw [stepPexprRaw, stepPexprRaw, ih]
+  | wrapI a ity op hp1 hp2 ih1 ih2 =>
+    show stepPexprRaw tds ext file ρ (Pexpr [] () (PEwrapI ity op _ _)) = _
+    rw [stepPexprRaw, stepPexprRaw, ih1, ih2]
+  | catchExc a ity op hp1 hp2 ih1 ih2 =>
+    show stepPexprRaw tds ext file ρ (Pexpr [] () (PEcatch_exceptional_condition ity op _ _)) = _
+    rw [stepPexprRaw, stepPexprRaw, ih1, ih2]
+  | isUnsigned a hpe hd ih =>
+    show stepPexprRaw tds ext file ρ (Pexpr [] () (PEis_unsigned _)) = _
+    rw [stepPexprRaw, stepPexprRaw, ih]
+  | call a nm hps _ => show stepPexprRaw tds ext file ρ (Pexpr [] () (PEcall nm _)) = _; rw [stepPexprRaw, stepPexprRaw]
 
-theorem stepPexpr_peStrip {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {ρ : EnvStack}
+theorem stepPexpr_peStrip {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {file : generic_file Unit core_run_annotation} {ρ : EnvStack}
     {pe : generic_pexpr Unit sym} (hp : PePure pe) :
-    stepPexpr tds ext ρ (peStrip pe) = stepPexpr tds ext ρ pe := by
+    stepPexpr tds ext file ρ (peStrip pe) = stepPexpr tds ext file ρ pe := by
   rw [stepPexpr_of_PePure hp, stepPexpr_of_PePure hp.strip, stepPexprRaw_peStrip hp]
 
-theorem evalPexpr_peStrip {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {ρ : EnvStack}
+theorem evalPexpr_peStrip {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {file : generic_file Unit core_run_annotation} {ρ : EnvStack}
     {pe : generic_pexpr Unit sym} (hp : PePure pe) :
-    evalPexpr tds ext ρ (peStrip pe) = evalPexpr tds ext ρ pe := by
+    evalPexpr tds ext file ρ (peStrip pe) = evalPexpr tds ext file ρ pe := by
   induction hp with
-  | val a v => show evalPexpr tds ext ρ (Pexpr [] () (PEval v)) = _; rw [evalPexpr_val, evalPexpr_val]
-  | sym a x => show evalPexpr tds ext ρ (Pexpr [] () (PEsym x)) = _; rw [evalPexpr_sym, evalPexpr_sym]
+  | val a v => show evalPexpr tds ext file ρ (Pexpr [] () (PEval v)) = _; rw [evalPexpr_val, evalPexpr_val]
+  | sym a x => show evalPexpr tds ext file ρ (Pexpr [] () (PEsym x)) = _; rw [evalPexpr_sym, evalPexpr_sym]
   | op a op hop hp1 hp2 ih1 ih2 =>
-    show evalPexpr tds ext ρ (Pexpr [] () (PEop op _ _)) = _
+    show evalPexpr tds ext file ρ (Pexpr [] () (PEop op _ _)) = _
     rw [evalPexpr_op, evalPexpr_op, ih1, ih2]
   | arrayShift a ty hp1 hp2 ih1 ih2 =>
-    show evalPexpr tds ext ρ (Pexpr [] () (PEarray_shift _ ty _)) = _
+    show evalPexpr tds ext file ρ (Pexpr [] () (PEarray_shift _ ty _)) = _
     rw [evalPexpr_array_shift, evalPexpr_array_shift, ih1, ih2]
-  | ctorTy a c hc pb ty => show evalPexpr tds ext ρ (Pexpr [] () (PEctor c _)) = _; rw [evalPexpr_ctor, evalPexpr_ctor]
-  | ctor a c hc hps _ => show evalPexpr tds ext ρ (Pexpr [] () (PEctor c _)) = _; rw [evalPexpr_ctor, evalPexpr_ctor]
+  | ctorTy a c hc pb ty => show evalPexpr tds ext file ρ (Pexpr [] () (PEctor c _)) = _; rw [evalPexpr_ctor, evalPexpr_ctor]
+  | ctor a c hc hps _ => show evalPexpr tds ext file ρ (Pexpr [] () (PEctor c _)) = _; rw [evalPexpr_ctor, evalPexpr_ctor]
   | case_ a hpe hpats ih _ =>
-    show evalPexpr tds ext ρ (Pexpr [] () (PEcase _ _)) = _
+    show evalPexpr tds ext file ρ (Pexpr [] () (PEcase _ _)) = _
     rw [evalPexpr_case, evalPexpr_case, ih]
   | not_ a hpe ih =>
-    show evalPexpr tds ext ρ (Pexpr [] () (PEnot _)) = _
+    show evalPexpr tds ext file ρ (Pexpr [] () (PEnot _)) = _
     rw [evalPexpr_not, evalPexpr_not, ih]
-  | if_ a hp1 hp2 hp3 _ _ _ => show evalPexpr tds ext ρ (Pexpr [] () (PEif _ _ _)) = _; rw [evalPexpr_if, evalPexpr_if]
-  | undef a loc ub => show evalPexpr tds ext ρ (Pexpr [] () (PEundef loc ub)) = _; rw [evalPexpr_undef, evalPexpr_undef]
+  | if_ a hp1 hp2 hp3 _ _ _ => show evalPexpr tds ext file ρ (Pexpr [] () (PEif _ _ _)) = _; rw [evalPexpr_if, evalPexpr_if]
+  | undef a loc ub => show evalPexpr tds ext file ρ (Pexpr [] () (PEundef loc ub)) = _; rw [evalPexpr_undef, evalPexpr_undef]
+  | convInt a ity hpe ih =>
+    show evalPexpr tds ext file ρ (Pexpr [] () (PEconv_int ity _)) = _
+    rw [evalPexpr_conv_int, evalPexpr_conv_int, ih]
+  | wrapI a ity op hp1 hp2 ih1 ih2 =>
+    show evalPexpr tds ext file ρ (Pexpr [] () (PEwrapI ity op _ _)) = _
+    rw [evalPexpr_wrapI, evalPexpr_wrapI, ih1, ih2]
+  | catchExc a ity op hp1 hp2 ih1 ih2 =>
+    show evalPexpr tds ext file ρ (Pexpr [] () (PEcatch_exceptional_condition ity op _ _)) = _
+    rw [evalPexpr_catch, evalPexpr_catch, ih1, ih2]
+  | isUnsigned a hpe hd ih =>
+    show evalPexpr tds ext file ρ (Pexpr [] () (PEis_unsigned _)) = _
+    rw [evalPexpr_is_unsigned, evalPexpr_is_unsigned, ih, peDepth_peStrip_all]
+  | call a nm hps _ => show evalPexpr tds ext file ρ (Pexpr [] () (PEcall nm _)) = _; rw [evalPexpr_call, evalPexpr_call]
 
 /-- The pull's result on the covered grammar is never `PEconstrained`-rooted
     (the shape `eval_pexpr_aux2`'s `Left` arm tests). -/
@@ -3849,6 +4414,68 @@ theorem pull_bridge {pe : generic_pexpr Unit sym} (hp : PePure pe) :
       rw [ihs (qp, qe) hq f hd' (n+1)]
       exact peStrip_root (hpats (qp, qe) hq)
     cases p1 <;> first | (exfalso; apply hn1; rfl) | (simp only []; rw [hpull])
+  | @convInt a ity pe hpe ih =>
+    intro fuel hfuel n
+    obtain ⟨f, rfl⟩ : ∃ f, fuel = f + 1 := ⟨fuel - 1, by simp at hfuel; omega⟩
+    have hd : peDepth pe ≤ f := by simp at hfuel; omega
+    show Pexpr [] () _ = Pexpr [] () (PEconv_int ity (peStrip pe))
+    dsimp only
+    rw [ih f hd (n+1)]
+    obtain ⟨p1, e1, hn1⟩ := peStrip_root hpe
+    rw [e1]
+    cases p1 <;> first | rfl | (exfalso; apply hn1; rfl)
+  | @wrapI a ity op pe1 pe2 hp1 hp2 ih1 ih2 =>
+    intro fuel hfuel n
+    obtain ⟨f, rfl⟩ : ∃ f, fuel = f + 1 := ⟨fuel - 1, by simp at hfuel; omega⟩
+    have hd1 : peDepth pe1 ≤ f := by simp at hfuel; omega
+    have hd2 : peDepth pe2 ≤ f := by simp at hfuel; omega
+    show Pexpr [] () _ = Pexpr [] () (PEwrapI ity op (peStrip pe1) (peStrip pe2))
+    dsimp only
+    rw [ih1 f hd1 (n+1), ih2 f hd2 (n+1)]
+    obtain ⟨p1, e1, hn1⟩ := peStrip_root hp1
+    obtain ⟨p2, e2, hn2⟩ := peStrip_root hp2
+    rw [e1, e2]
+    cases p1 <;> cases p2 <;> first | rfl | (exfalso; apply hn1; rfl) | (exfalso; apply hn2; rfl)
+  | @catchExc a ity op pe1 pe2 hp1 hp2 ih1 ih2 =>
+    intro fuel hfuel n
+    obtain ⟨f, rfl⟩ : ∃ f, fuel = f + 1 := ⟨fuel - 1, by simp at hfuel; omega⟩
+    have hd1 : peDepth pe1 ≤ f := by simp at hfuel; omega
+    have hd2 : peDepth pe2 ≤ f := by simp at hfuel; omega
+    show Pexpr [] () _ = Pexpr [] () (PEcatch_exceptional_condition ity op (peStrip pe1) (peStrip pe2))
+    dsimp only
+    rw [ih1 f hd1 (n+1), ih2 f hd2 (n+1)]
+    obtain ⟨p1, e1, hn1⟩ := peStrip_root hp1
+    obtain ⟨p2, e2, hn2⟩ := peStrip_root hp2
+    rw [e1, e2]
+    cases p1 <;> cases p2 <;> first | rfl | (exfalso; apply hn1; rfl) | (exfalso; apply hn2; rfl)
+  | @isUnsigned a pe hpe hd1 ih =>
+    intro fuel hfuel n
+    obtain ⟨f, rfl⟩ : ∃ f, fuel = f + 1 := ⟨fuel - 1, by simp at hfuel; omega⟩
+    have hd : peDepth pe ≤ f := by simp at hfuel; omega
+    show Pexpr [] () _ = Pexpr [] () (PEis_unsigned (peStrip pe))
+    dsimp only
+    rw [ih f hd (n+1)]
+    obtain ⟨p1, e1, hn1⟩ := peStrip_root hpe
+    rw [e1]
+    cases p1 <;> first | rfl | (exfalso; apply hn1; rfl)
+  | @call a nm pes hps ih =>
+    intro fuel hfuel n
+    obtain ⟨f, rfl⟩ : ∃ f, fuel = f + 1 := ⟨fuel - 1, by simp at hfuel; omega⟩
+    show Pexpr [] () _ = Pexpr [] () (PEcall nm pes)
+    dsimp only
+    rw [pull_helper_unconstrained]
+    · simp [Function.comp_def]
+    · intro p hp'
+      obtain ⟨pe, hpe⟩ : ∃ pe ∈ pes, p = ((), pe) := by
+        rw [List.mem_map] at hp'
+        obtain ⟨pe, hpe, rfl⟩ := hp'
+        exact ⟨pe, hpe, rfl⟩
+      obtain ⟨hpe, rfl⟩ := hpe
+      have hd : peDepth pe ≤ f := by
+        simp only [peDepth_call] at hfuel; have := peDepth_le_list_of_mem hpe; omega
+      show ∃ pex, pull_constrained_lemFuel f (n + 1) pe = Pexpr [] () pex ∧ _
+      rw [ih pe hpe f hd (n+1)]
+      exact peStrip_root (hps pe hpe)
   | @if_ a pe1 pe2 pe3 hp1 hp2 hp3 ih1 ih2 ih3 =>
     intro fuel hfuel n
     obtain ⟨f, rfl⟩ : ∃ f, fuel = f + 1 := ⟨fuel - 1, by simp at hfuel; omega⟩
@@ -3901,6 +4528,80 @@ theorem exception_undef_mapM_bridge
     rw [List.foldr_cons, ih]
     rfl
 
+/-- E3: the mirror's `callBody` is `call_function`'s success path
+    (core_eval.lem:120–163 / Core_eval.lean:111): where the mirror finds the
+    callee and the arity matches, the engine returns the same substituted
+    body (the `print_debug_pure` wrapper is `()`; the arity test is the
+    engine's `not (length params == length arg_cvals)`). -/
+theorem call_function_of_callBody {file : generic_file Unit core_run_annotation}
+    {nm : generic_name sym} {vs : List value} {body : generic_pexpr Unit sym}
+    (h : callBody file nm vs = some body) :
+    call_function file nm vs = except_return body := by
+  unfold callBody lookupFun at h
+  unfold call_function
+  dsimp only [CerbDebug.print_debug_pure]
+  cases nm with
+  | Sym f =>
+    dsimp only at h ⊢
+    cases hstd : fmapLookupBy (fun (s1 : sym) (s2 : sym) => Lem_Basic_classes.ordCompare s1 s2)
+        f file.stdlib with
+    | some d =>
+      rw [hstd] at h
+      cases d with
+      | Fun bty params body' =>
+        dsimp only at h
+        split at h
+        · rename_i hlen
+          obtain rfl := Option.some.inj h
+          dsimp only [except_bind, except_return]
+          have hb : (@BEq.beq Nat (@Lem_Basic_classes.instBEqOfEq0 Nat Lem_Num.instEq0Nat_1)
+              params.length vs.length) = true := (lemNatBeq_iff _ _).mpr hlen
+          rw [hb]; rfl
+        · cases h
+      | Proc _ _ _ _ _ => cases h
+      | ProcDecl _ _ _ => cases h
+      | BuiltinDecl _ _ _ => cases h
+    | none =>
+      rw [hstd] at h
+      dsimp only at h ⊢
+      cases hfn : fmapLookupBy (fun (s1 : sym) (s2 : sym) => Lem_Basic_classes.ordCompare s1 s2)
+          f file.funs with
+      | some d =>
+        rw [hfn] at h
+        cases d with
+        | Fun bty params body' =>
+          dsimp only at h
+          split at h
+          · rename_i hlen
+            obtain rfl := Option.some.inj h
+            dsimp only [except_bind, except_return]
+            have hb : (@BEq.beq Nat (@Lem_Basic_classes.instBEqOfEq0 Nat Lem_Num.instEq0Nat_1)
+                params.length vs.length) = true := (lemNatBeq_iff _ _).mpr hlen
+            rw [hb]; rfl
+          · cases h
+        | Proc _ _ _ _ _ => cases h
+        | ProcDecl _ _ _ => cases h
+        | BuiltinDecl _ _ _ => cases h
+      | none => rw [hfn] at h; cases h
+  | Impl c =>
+    dsimp only at h ⊢
+    cases himpl : fmapLookupBy implementation_constant_compare c file.impl0 with
+    | some d =>
+      rw [himpl] at h
+      cases d with
+      | IFun bty params body' =>
+        dsimp only at h
+        split at h
+        · rename_i hlen
+          obtain rfl := Option.some.inj h
+          dsimp only [except_bind, except_return]
+          have hb : (@BEq.beq Nat (@Lem_Basic_classes.instBEqOfEq0 Nat Lem_Num.instEq0Nat_1)
+              params.length vs.length) = true := (lemNatBeq_iff _ _).mpr hlen
+          rw [hb]; rfl
+        · cases h
+      | Def _ _ => cases h
+    | none => rw [himpl] at h; cases h
+
 /-- LEVEL 1: `step_eval_pexpr` (Core_eval.lean:142) performs ONE pass, the
     mirror's `stepPexpr` — VALUES where the pass reaches a value, the
     selected/rebuilt pexpr elsewhere. Quantified over the level counter
@@ -3909,27 +4610,26 @@ theorem exception_undef_mapM_bridge
     extern map is QUANTIFIED — the engine's `PEsym` indirection is the
     mirror's `resolveExtern`, matched case by case on the lookup. -/
 theorem step_eval_bridge {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
-    {ext : Fmap sym sym} {ρ : EnvStack}
+    {ext : Fmap sym sym} {file : generic_file Unit core_run_annotation} {ρ : EnvStack}
     {pe r : generic_pexpr Unit sym}
-    (hp : PePure pe) (hs : stepPexpr tds ext ρ pe = some r) :
+    (hp : PePure pe) (hs : stepPexpr tds ext file ρ pe = some r) :
     ∀ (fuel : Nat), peDepth pe ≤ fuel →
     ∀ (n : Nat)
       (loc : CerbLocation.Loc) (cloc : Option CerbLocation.Loc)
-      (mem : Option CerbMem.MemState)
-      (file : generic_file Unit core_run_annotation),
+      (mem : Option CerbMem.MemState),
     step_eval_pexpr_lemFuel fuel tds n loc cloc ext ρ mem file false pe =
       exception_undef_return r := by
   rw [stepPexpr_of_PePure hp] at hs
   induction hp generalizing r with
   | val a v' =>
-    intro fuel hfuel n loc cloc mem file
+    intro fuel hfuel n loc cloc mem
     obtain ⟨f, rfl⟩ : ∃ f, fuel = f + 1 :=
       ⟨fuel - 1, by have := peDepth_pos (Pexpr a () (PEval v')); omega⟩
     rw [stepPexprRaw] at hs
     obtain rfl := Option.some.inj hs
     rfl
   | sym a x =>
-    intro fuel hfuel n loc cloc mem file
+    intro fuel hfuel n loc cloc mem
     obtain ⟨f, rfl⟩ : ∃ f, fuel = f + 1 :=
       ⟨fuel - 1, by have := peDepth_pos (Pexpr a () (PEsym x)); omega⟩
     rw [stepPexprRaw] at hs
@@ -3953,26 +4653,26 @@ theorem step_eval_bridge {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
         rw [hl]
         rfl
   | undef a loc ub =>
-    intro fuel hfuel n loc' cloc mem file
+    intro fuel hfuel n loc' cloc mem
     simp [stepPexprRaw] at hs
   | @op a op hop pe1 pe2 hp1 hp2 ih1 ih2 =>
-    intro fuel hfuel n loc cloc mem file
+    intro fuel hfuel n loc cloc mem
     obtain ⟨f, rfl⟩ : ∃ f, fuel = f + 1 := ⟨fuel - 1, by simp at hfuel; omega⟩
     have hd1 : peDepth pe1 ≤ f := by simp at hfuel; omega
     have hd2 : peDepth pe2 ≤ f := by simp at hfuel; omega
     rw [stepPexprRaw] at hs
-    cases h1 : stepPexprRaw tds ext ρ pe1 with
+    cases h1 : stepPexprRaw tds ext file ρ pe1 with
     | none => rw [h1] at hs; cases hs
     | some r1 =>
-      cases h2 : stepPexprRaw tds ext ρ pe2 with
+      cases h2 : stepPexprRaw tds ext file ρ pe2 with
       | none => rw [h1, h2] at hs; cases hs
       | some r2 =>
         rw [h1, h2] at hs
         simp only [Option.bind_eq_bind, Option.bind_some] at hs
         show exception_undef_fmap (Pexpr [] ()) _ = _
         dsimp only [step_eval_peop]
-        rw [ih1 h1 f hd1 (n+1) loc cloc mem file,
-          ih2 h2 f hd2 (n+1) loc cloc mem file]
+        rw [ih1 h1 f hd1 (n+1) loc cloc mem,
+          ih2 h2 f hd2 (n+1) loc cloc mem]
         dsimp only [exception_undef_bind, exception_undef_return, exception_undef_fmap,
           except_return, return1]
         cases hv1 : valueFromPexpr r1 with
@@ -4021,23 +4721,23 @@ theorem step_eval_bridge {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
                        | (obtain rfl := hb.symm; rfl)))
                 | cases hb
   | @arrayShift a ty pe1 pe2 hp1 hp2 ih1 ih2 =>
-    intro fuel hfuel n loc cloc mem file
+    intro fuel hfuel n loc cloc mem
     obtain ⟨f, rfl⟩ : ∃ f, fuel = f + 1 := ⟨fuel - 1, by simp at hfuel; omega⟩
     have hd1 : peDepth pe1 ≤ f := by simp at hfuel; omega
     have hd2 : peDepth pe2 ≤ f := by simp at hfuel; omega
     rw [stepPexprRaw] at hs
-    cases h1 : stepPexprRaw tds ext ρ pe1 with
+    cases h1 : stepPexprRaw tds ext file ρ pe1 with
     | none => rw [h1] at hs; cases hs
     | some r1 =>
-      cases h2 : stepPexprRaw tds ext ρ pe2 with
+      cases h2 : stepPexprRaw tds ext file ρ pe2 with
       | none => rw [h1, h2] at hs; cases hs
       | some r2 =>
         rw [h1, h2] at hs
         simp only [Option.bind_eq_bind, Option.bind_some] at hs
         show exception_undef_fmap (Pexpr [] ()) _ = _
         dsimp only
-        rw [ih1 h1 f hd1 (n+1) loc cloc mem file,
-          ih2 h2 f hd2 (n+1) loc cloc mem file]
+        rw [ih1 h1 f hd1 (n+1) loc cloc mem,
+          ih2 h2 f hd2 (n+1) loc cloc mem]
         dsimp only [exception_undef_bind, exception_undef_return, exception_undef_fmap,
           except_return, return1]
         cases hv1 : valueFromPexpr r1 with
@@ -4066,7 +4766,7 @@ theorem step_eval_bridge {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
               · cases hb; rfl
               · cases hb
   | ctorTy a c hc pb ty =>
-    intro fuel hfuel n loc cloc mem file
+    intro fuel hfuel n loc cloc mem
     obtain ⟨f, rfl⟩ : ∃ f, fuel = f + 1 :=
       ⟨fuel - 1, by
         have := peDepth_pos (Pexpr a () (PEctor c [Pexpr pb () (PEval (Vctype ty))])); omega⟩
@@ -4077,12 +4777,17 @@ theorem step_eval_bridge {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
       valueFromPexpr_valPe] at hs
     cases c <;> simp only [isTyCtor, Bool.false_eq_true] at hc <;>
       simp only [evalCtor, evalTyCtor, Option.map_some] at hs <;>
-      obtain rfl := Option.some.inj hs <;> rfl
+      first
+      | (obtain rfl := Option.some.inj hs; rfl)
+      | -- E3, `Ivmin`/`Ivmax`: the ctype's head decides `unatomic_` (Ctype.lean:450–456)
+        (rcases ty with ⟨qs, (_ | (_ | _) | _ | _ | _ | _ | ⟨_, (_ | (_ | _) | _ | _ | _ | _ | _ | _ | _ | _)⟩ | _ | _ | _)⟩ <;>
+           simp only [unatomic_, unatomic, proj_ctype_, Option.map_some, Option.map_none] at hs <;>
+           first | (obtain rfl := Option.some.inj hs; rfl) | (cases hs))
   | @ctor a c hc pes hps ih =>
-    intro fuel hfuel n loc cloc mem file
+    intro fuel hfuel n loc cloc mem
     obtain ⟨f, rfl⟩ : ∃ f, fuel = f + 1 := ⟨fuel - 1, by simp at hfuel; omega⟩
     rw [stepPexprRaw] at hs
-    cases hrs : stepPexprsRaw tds ext ρ pes with
+    cases hrs : stepPexprsRaw tds ext file ρ pes with
     | none => rw [hrs] at hs; cases hs
     | some rs =>
       rw [hrs] at hs
@@ -4102,7 +4807,7 @@ theorem step_eval_bridge {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
             (by simp only [peDepth_ctor, peDepthList_cons] at hfuel ⊢; omega))
           exact ih pe List.mem_cons_self hpr f
             (by simp only [peDepth_ctor, peDepthList_cons] at hfuel; omega)
-            (n+1) loc cloc mem file
+            (n+1) loc cloc mem
       show exception_undef_fmap (Pexpr [] ()) _ = _
       dsimp only
       rw [hmap]
@@ -4127,22 +4832,32 @@ theorem step_eval_bridge {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
           · simp only [evalTyCtor] at hce; obtain rfl := Option.some.inj hce; rfl
           · simp only [evalTyCtor] at hce; obtain rfl := Option.some.inj hce; rfl
           · simp only [evalTyCtor] at hce; obtain rfl := Option.some.inj hce; rfl
+          · -- E3, `Ivmin`: the ctype's head decides `unatomic_` (Ctype.lean:450–456)
+            rename_i ty
+            rcases ty with ⟨qs, (_ | (_ | _) | _ | _ | _ | _ | ⟨_, (_ | (_ | _) | _ | _ | _ | _ | _ | _ | _ | _)⟩ | _ | _ | _)⟩ <;>
+              simp only [evalTyCtor, unatomic_, unatomic, proj_ctype_] at hce <;>
+              first | (obtain rfl := Option.some.inj hce; rfl) | (cases hce)
+          · -- E3, `Ivmax`
+            rename_i ty
+            rcases ty with ⟨qs, (_ | (_ | _) | _ | _ | _ | _ | ⟨_, (_ | (_ | _) | _ | _ | _ | _ | _ | _ | _ | _)⟩ | _ | _ | _)⟩ <;>
+              simp only [evalTyCtor, unatomic_, unatomic, proj_ctype_] at hce <;>
+              first | (obtain rfl := Option.some.inj hce; rfl) | (cases hce)
           · obtain rfl := Option.some.inj hce; rfl
           · obtain rfl := Option.some.inj hce; rfl
           · cases hce
   | @case_ a pe pats hpe hpats ih ihs =>
-    intro fuel hfuel n loc cloc mem file
+    intro fuel hfuel n loc cloc mem
     obtain ⟨f, rfl⟩ : ∃ f, fuel = f + 1 := ⟨fuel - 1, by simp at hfuel; omega⟩
     have hd : peDepth pe ≤ f := by simp at hfuel; omega
     rw [stepPexprRaw] at hs
-    cases h1 : stepPexprRaw tds ext ρ pe with
+    cases h1 : stepPexprRaw tds ext file ρ pe with
     | none => rw [h1] at hs; cases hs
     | some r1 =>
       rw [h1] at hs
       simp only [Option.bind_eq_bind, Option.bind_some] at hs
       show exception_undef_fmap (Pexpr [] ()) _ = _
       dsimp only
-      rw [ih h1 f hd (n+1) loc cloc mem file]
+      rw [ih h1 f hd (n+1) loc cloc mem]
       dsimp only [exception_undef_bind, exception_undef_return, exception_undef_fmap,
         except_return, return1]
       cases hv1 : valueFromPexpr r1 with
@@ -4167,12 +4882,250 @@ theorem step_eval_bridge {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
           rw [hsel]
           rcases pe'' with ⟨_, _, _⟩
           rfl
-  | @not_ a pe hpe ih =>
-    intro fuel hfuel n loc cloc mem file
+  | @convInt a ity pe hpe ih =>
+    intro fuel hfuel n loc cloc mem
     obtain ⟨f, rfl⟩ : ∃ f, fuel = f + 1 := ⟨fuel - 1, by simp at hfuel; omega⟩
     have hd : peDepth pe ≤ f := by simp at hfuel; omega
     rw [stepPexprRaw] at hs
-    cases h1 : stepPexprRaw tds ext ρ pe with
+    cases h1 : stepPexprRaw tds ext file ρ pe with
+    | none => rw [h1] at hs; cases hs
+    | some r1 =>
+      rw [h1] at hs
+      simp only [Option.bind_eq_bind, Option.bind_some] at hs
+      show exception_undef_fmap (Pexpr [] ()) _ = _
+      dsimp only
+      rw [ih h1 f hd (n+1) loc cloc mem]
+      dsimp only [exception_undef_bind, exception_undef_return, exception_undef_fmap,
+        except_return, return1]
+      rcases r1 with ⟨a1, u1, p1⟩
+      cases u1
+      cases hv1 : valueFromPexpr (Pexpr a1 () p1) with
+      | none =>
+        rw [hv1] at hs
+        dsimp only at hs
+        obtain rfl := Option.some.inj hs
+        cases p1 <;> first | rfl | (rw [valueFromPexpr_val] at hv1; cases hv1)
+      | some v1 =>
+        obtain ⟨a1', hp1⟩ := valueFromPexpr_some_iff.mp hv1
+        injection hp1 with _ _ hp1'
+        subst hp1'
+        rw [hv1] at hs
+        dsimp only at hs
+        cases hc : evalConvInt ity v1 with
+        | none => rw [hc] at hs; cases hs
+        | some w =>
+          rw [hc] at hs
+          obtain rfl := Option.some.inj hs
+          unfold evalConvInt at hc
+          split at hc
+          · obtain rfl := Option.some.inj hc; rfl
+          · cases hc
+  | @wrapI a ity op pe1 pe2 hp1 hp2 ih1 ih2 =>
+    intro fuel hfuel n loc cloc mem
+    obtain ⟨f, rfl⟩ : ∃ f, fuel = f + 1 := ⟨fuel - 1, by simp at hfuel; omega⟩
+    have hd1 : peDepth pe1 ≤ f := by simp at hfuel; omega
+    have hd2 : peDepth pe2 ≤ f := by simp at hfuel; omega
+    rw [stepPexprRaw] at hs
+    cases h1 : stepPexprRaw tds ext file ρ pe1 with
+    | none => rw [h1] at hs; cases hs
+    | some r1 =>
+      cases h2 : stepPexprRaw tds ext file ρ pe2 with
+      | none => rw [h1, h2] at hs; cases hs
+      | some r2 =>
+        rw [h1, h2] at hs
+        simp only [Option.bind_eq_bind, Option.bind_some] at hs
+        show exception_undef_fmap (Pexpr [] ()) _ = _
+        dsimp only
+        rw [ih1 h1 f hd1 (n+1) loc cloc mem, ih2 h2 f hd2 (n+1) loc cloc mem]
+        dsimp only [exception_undef_bind, exception_undef_return, exception_undef_fmap,
+          except_return, return1]
+        cases hv1 : valueFromPexpr r1 with
+        | none =>
+          rw [hv1] at hs
+          obtain rfl := Option.some.inj hs
+          cases valueFromPexpr r2 <;> rfl
+        | some v1 =>
+          obtain rfl := stepPexprRaw_valPe_of_value h1 hv1
+          cases hv2 : valueFromPexpr r2 with
+          | none =>
+            rw [hv1, hv2] at hs
+            obtain rfl := Option.some.inj hs
+            cases v1 <;> (try (rename_i ov; cases ov)) <;> rfl
+          | some v2 =>
+            obtain rfl := stepPexprRaw_valPe_of_value h2 hv2
+            rw [hv1, hv2] at hs
+            dsimp only at hs
+            cases hb : evalWrapI ity op v1 v2 with
+            | none => rw [hb] at hs; cases hs
+            | some w =>
+              rw [hb] at hs
+              obtain rfl := Option.some.inj hs
+              unfold evalWrapI at hb
+              split at hb
+              · cases hb; rfl
+              · cases hb
+  | @catchExc a ity op pe1 pe2 hp1 hp2 ih1 ih2 =>
+    intro fuel hfuel n loc cloc mem
+    obtain ⟨f, rfl⟩ : ∃ f, fuel = f + 1 := ⟨fuel - 1, by simp at hfuel; omega⟩
+    have hd1 : peDepth pe1 ≤ f := by simp at hfuel; omega
+    have hd2 : peDepth pe2 ≤ f := by simp at hfuel; omega
+    rw [stepPexprRaw] at hs
+    cases h1 : stepPexprRaw tds ext file ρ pe1 with
+    | none => rw [h1] at hs; cases hs
+    | some r1 =>
+      cases h2 : stepPexprRaw tds ext file ρ pe2 with
+      | none => rw [h1, h2] at hs; cases hs
+      | some r2 =>
+        rw [h1, h2] at hs
+        simp only [Option.bind_eq_bind, Option.bind_some] at hs
+        show exception_undef_fmap (Pexpr [] ()) _ = _
+        dsimp only
+        rw [ih1 h1 f hd1 (n+1) loc cloc mem, ih2 h2 f hd2 (n+1) loc cloc mem]
+        dsimp only [exception_undef_bind, exception_undef_return, exception_undef_fmap,
+          except_return, return1]
+        cases hv1 : valueFromPexpr r1 with
+        | none =>
+          rw [hv1] at hs
+          obtain rfl := Option.some.inj hs
+          cases valueFromPexpr r2 <;> rfl
+        | some v1 =>
+          obtain rfl := stepPexprRaw_valPe_of_value h1 hv1
+          cases hv2 : valueFromPexpr r2 with
+          | none =>
+            rw [hv1, hv2] at hs
+            obtain rfl := Option.some.inj hs
+            cases v1 <;> (try (rename_i ov; cases ov)) <;> rfl
+          | some v2 =>
+            obtain rfl := stepPexprRaw_valPe_of_value h2 hv2
+            rw [hv1, hv2] at hs
+            dsimp only at hs
+            cases hb : evalCatch ity op v1 v2 with
+            | none => rw [hb] at hs; cases hs
+            | some w =>
+              rw [hb] at hs
+              obtain rfl := Option.some.inj hs
+              unfold evalCatch at hb
+              split at hb
+              · rename_i i1 i2
+                cases hm : mk_call_catch_exceptional_condition ity op i1 i2 with
+                | none => rw [hm] at hb; cases hb
+                | some iv =>
+                  rw [hm] at hb
+                  simp only [Option.map_some] at hb
+                  obtain rfl := Option.some.inj hb
+                  simp only [hm]
+                  try rfl
+              · cases hb
+  | @isUnsigned a pe hpe hd1 ih =>
+    intro fuel hfuel n loc cloc mem
+    obtain ⟨f, rfl⟩ : ∃ f, fuel = f + 1 := ⟨fuel - 1, by simp at hfuel; omega⟩
+    have hd : peDepth pe ≤ f := by simp at hfuel; omega
+    rw [stepPexprRaw] at hs
+    cases h1 : stepPexprRaw tds ext file ρ pe with
+    | none => rw [h1] at hs; cases hs
+    | some r1 =>
+      rw [h1] at hs
+      simp only [Option.bind_eq_bind, Option.bind_some] at hs
+      show exception_undef_fmap (Pexpr [] ()) _ = _
+      dsimp only
+      rw [ih h1 f hd (n+1) loc cloc mem]
+      dsimp only [exception_undef_bind, exception_undef_return, exception_undef_fmap,
+        except_return, return1]
+      cases hv1 : valueFromPexpr r1 with
+      | none =>
+        rw [hv1] at hs
+        dsimp only at hs
+        obtain rfl := Option.some.inj hs
+        rfl
+      | some v1 =>
+        obtain rfl := stepPexprRaw_valPe_of_value h1 hv1
+        rw [hv1] at hs
+        dsimp only at hs
+        cases hc : evalIsUnsigned v1 with
+        | none => rw [hc] at hs; cases hs
+        | some w =>
+          rw [hc] at hs
+          obtain rfl := Option.some.inj hs
+          unfold evalIsUnsigned at hc
+          split at hc
+          · obtain rfl := Option.some.inj hc; rfl
+          · cases hc
+  | @call a nm pes hps ih =>
+    intro fuel hfuel n loc cloc mem
+    obtain ⟨f, rfl⟩ : ∃ f, fuel = f + 1 := ⟨fuel - 1, by simp at hfuel; omega⟩
+    rw [stepPexprRaw] at hs
+    cases hrs : stepPexprsRaw tds ext file ρ pes with
+    | none => rw [hrs] at hs; cases hs
+    | some rs =>
+      rw [hrs] at hs
+      simp only [Option.bind_eq_bind, Option.bind_some] at hs
+      have hmap : exception_undef_mapM
+          (fun pe => step_eval_pexpr_lemFuel f tds (n + 1) loc cloc ext ρ mem file false pe)
+          pes = exception_undef_return rs := by
+        apply exception_undef_mapM_bridge
+        have h1 := stepPexprsRaw_some_iff.mp hrs
+        clear hrs hs
+        induction h1 with
+        | nil => exact .nil
+        | cons hpr hrest ihl =>
+          rename_i pe r' pes' rs'
+          refine .cons ?_ (ihl (fun q hq => hps q (List.mem_cons_of_mem _ hq))
+            (fun q hq => ih q (List.mem_cons_of_mem _ hq))
+            (by simp only [peDepth_call, peDepthList_cons] at hfuel ⊢; omega))
+          exact ih pe List.mem_cons_self hpr f
+            (by simp only [peDepth_call, peDepthList_cons] at hfuel; omega)
+            (n+1) loc cloc mem
+      show exception_undef_fmap (Pexpr [] ()) _ = _
+      dsimp only
+      rw [hmap]
+      dsimp only [exception_undef_bind, exception_undef_return, exception_undef_fmap,
+        except_return, return1]
+      cases hvs : valueFromPexprs rs with
+      | none =>
+        rw [hvs] at hs
+        dsimp only at hs
+        obtain rfl := Option.some.inj hs
+        rfl
+      | some vs =>
+        rw [hvs] at hs
+        dsimp only at hs
+        cases hcb : callBody file nm vs with
+        | none => rw [hcb] at hs; cases hs
+        | some body =>
+          rw [hcb] at hs
+          simp only at hs
+          split at hs
+          · rename_i hguard
+            rw [Bool.and_eq_true, decide_eq_true_eq] at hguard
+            obtain rfl := Option.some.inj hs
+            have hbp : PePure (peStrip body) := PePure.of_isPePure hguard.1
+            have hbd : peDepth (peStrip body) ≤ lemDefaultFuel := by
+              have := stdBudget_le nm
+              rw [show lemDefaultFuel = 999999 + 1 from rfl]; omega
+            have hbp0 : PePure (reannot0 body) := by
+              apply PePure.of_isPePure
+              rw [isPePure_reannot0, ← isPePure_peStrip_all]; exact hguard.1
+            have hbd0 : peDepth (reannot0 body) ≤ lemDefaultFuel := by
+              rw [peDepth_reannot0, ← peDepth_peStrip_all]; exact hbd
+            dsimp only
+            rw [call_function_of_callBody hcb]
+            rcases body with ⟨ab, ub, pb⟩
+            cases ub
+            rw [reannot0_mk] at hbp0 hbd0
+            dsimp only [except_bind, except_return]
+            have hpull : pull_constrained 0 (Pexpr [] () pb) = peStrip (Pexpr ab () pb) := by
+              rw [← peStrip_reannot0 (Pexpr ab () pb), reannot0_mk]
+              exact pull_bridge hbp0 lemDefaultFuel hbd0 0
+            rw [hpull]
+            obtain ⟨pex, hpex⟩ := peStrip_root_all (Pexpr ab () pb)
+            rw [hpex]
+          · cases hs
+  | @not_ a pe hpe ih =>
+    intro fuel hfuel n loc cloc mem
+    obtain ⟨f, rfl⟩ : ∃ f, fuel = f + 1 := ⟨fuel - 1, by simp at hfuel; omega⟩
+    have hd : peDepth pe ≤ f := by simp at hfuel; omega
+    rw [stepPexprRaw] at hs
+    cases h1 : stepPexprRaw tds ext file ρ pe with
     | none => rw [h1] at hs; cases hs
     | some r1 =>
       rw [h1] at hs
@@ -4182,7 +5135,7 @@ theorem step_eval_bridge {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
       cases up
       show exception_undef_fmap (Pexpr [] ()) _ = _
       dsimp only
-      rw [ih h1 f hd (n+1) loc cloc mem file]
+      rw [ih h1 f hd (n+1) loc cloc mem]
       dsimp only [exception_undef_bind, exception_undef_return, exception_undef_fmap,
         except_return, return1]
       rcases r1 with ⟨a1, u1, p1⟩
@@ -4203,20 +5156,20 @@ theorem step_eval_bridge {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
           | (obtain rfl := Option.some.inj hs; rfl)
           | cases hs
   | @if_ a pe1 pe2 pe3 hp1 hp2 hp3 ih1 ih2 ih3 =>
-    intro fuel hfuel n loc cloc mem file
+    intro fuel hfuel n loc cloc mem
     obtain ⟨f, rfl⟩ : ∃ f, fuel = f + 1 := ⟨fuel - 1, by simp at hfuel; omega⟩
     have hd1 : peDepth pe1 ≤ f := by simp at hfuel; omega
     have hd2 : peDepth pe2 ≤ f := by simp at hfuel; omega
     have hd3 : peDepth pe3 ≤ f := by simp at hfuel; omega
     rw [stepPexprRaw] at hs
-    cases h1 : stepPexprRaw tds ext ρ pe1 with
+    cases h1 : stepPexprRaw tds ext file ρ pe1 with
     | none => rw [h1] at hs; cases hs
     | some r1 =>
       rw [h1] at hs
       simp only [Option.bind_eq_bind, Option.bind_some] at hs
       show exception_undef_fmap (Pexpr [] ()) _ = _
       dsimp only
-      rw [ih1 h1 f hd1 (n+1) loc cloc mem file]
+      rw [ih1 h1 f hd1 (n+1) loc cloc mem]
       dsimp only [exception_undef_bind, exception_undef_return, exception_undef_fmap,
         except_return, return1]
       cases hv1 : valueFromPexpr r1 with
@@ -4229,23 +5182,23 @@ theorem step_eval_bridge {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
         rw [hv1] at hs
         cases w <;> dsimp only at hs <;> (try (cases hs))
         case Vtrue =>
-          cases h2 : stepPexprRaw tds ext ρ pe2 with
+          cases h2 : stepPexprRaw tds ext file ρ pe2 with
           | none => rw [h2] at hs; cases hs
           | some r2 =>
             rw [h2] at hs
             simp only [Option.map_some] at hs
             obtain rfl := Option.some.inj hs
-            rw [ih2 h2 f hd2 (n+1) loc cloc mem file]
+            rw [ih2 h2 f hd2 (n+1) loc cloc mem]
             rcases r2 with ⟨_, _, _⟩
             rfl
         case Vfalse =>
-          cases h3 : stepPexprRaw tds ext ρ pe3 with
+          cases h3 : stepPexprRaw tds ext file ρ pe3 with
           | none => rw [h3] at hs; cases hs
           | some r3 =>
             rw [h3] at hs
             simp only [Option.map_some] at hs
             obtain rfl := Option.some.inj hs
-            rw [ih3 h3 f hd3 (n+1) loc cloc mem file]
+            rw [ih3 h3 f hd3 (n+1) loc cloc mem]
             rcases r3 with ⟨_, _, _⟩
             rfl
 
@@ -4258,24 +5211,23 @@ theorem step_eval_bridge {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
     `peDepth pe ≤ fuel + 1` passes. E2: the pass bound is new (the pre-E2
     grammar evaluated in one pass). -/
 theorem aux2_bridge {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
-    {ext : Fmap sym sym} {ρ : EnvStack}
+    {ext : Fmap sym sym} {file : generic_file Unit core_run_annotation} {ρ : EnvStack}
     {pe : generic_pexpr Unit sym} {v : value}
-    (hp : PePure pe) (hv : evalPexpr tds ext ρ pe = some v)
+    (hp : PePure pe) (hv : evalPexpr tds ext file ρ pe = some v)
     (hd : peDepth pe ≤ lemDefaultFuel) :
     ∀ (fuel : Nat), peDepth pe ≤ fuel + 1 →
     ∀ (loc : CerbLocation.Loc) (cloc : Option CerbLocation.Loc)
-      (mem : Option CerbMem.MemState)
-      (file : generic_file Unit core_run_annotation),
+      (mem : Option CerbMem.MemState),
     eval_pexpr_aux2_lemFuel (fuel + 1) tds loc cloc ext ρ mem file pe =
       exception_undef_return (Sum.inr v) := by
   induction pe using peDepth_strong_induction generalizing v with
   | _ pe ih =>
-  intro fuel hfuel loc cloc mem file
+  intro fuel hfuel loc cloc mem
   obtain ⟨r, hr, he, hdr, hs⟩ := evalPexpr_step hp hv
   have hpull : pull_constrained 0 pe = peStrip pe :=
     pull_bridge hp lemDefaultFuel hd 0
   have hstep := step_eval_bridge hp.strip (by rw [stepPexpr_peStrip hp]; exact hr) lemDefaultFuel
-    (by rw [peDepth_peStrip hp]; exact hd) 0 loc cloc mem file
+    (by rw [peDepth_peStrip hp]; exact hd) 0 loc cloc mem
   unfold eval_pexpr_aux2_lemFuel
   dsimp only [CerbDebug.print_debug_pure]
   rw [hpull]
@@ -4300,7 +5252,7 @@ theorem aux2_bridge {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
       have hlt := hs hvr
       obtain ⟨f', rfl⟩ : ∃ f', fuel = f' + 1 := ⟨fuel - 1, by have := peDepth_pos r; omega⟩
       have hpr : PePure r := evalPexpr_shape he
-      exact ih r hlt hpr he (by omega) f' (by omega) loc cloc mem file
+      exact ih r hlt hpr he (by omega) f' (by omega) loc cloc mem
   cases pex <;> first
     | (exfalso; apply hne; rfl)
     | (exact hnext _ (by rw [show step_eval_pexpr = step_eval_pexpr_lemFuel lemDefaultFuel from rfl]; exact hstep))
@@ -4313,9 +5265,10 @@ theorem aux2_bridge {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
 theorem full_eval_bridge {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
     {b : Type} {ext : Fmap sym sym} {th : thread_state}
     {pe : generic_pexpr Unit sym} {v : value}
-    (hv : evalPexpr tds ext th.env pe = some v)
+    {file : generic_file Unit core_run_annotation}
+    (hv : evalPexpr tds ext file th.env pe = some v)
     (hd : peDepth pe ≤ lemDefaultFuel)
-    (σ : CerbMem.MemState) (file : generic_file Unit core_run_annotation) :
+    (σ : CerbMem.MemState) :
     full_eval_pexpr (b := b) tds th ext σ file pe =
       stExceptUndef_return v := by
   have hp := evalPexpr_shape hv
@@ -4336,7 +5289,7 @@ theorem full_eval_bridge {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
   rw [show (eval_pexpr_aux2 (tds)) = eval_pexpr_aux2_lemFuel (999999 + 1) tds
     from rfl]
   rw [aux2_bridge hp hv hd 999999 (by rw [show lemDefaultFuel = 999999 + 1 from rfl] at hd; exact hd)
-    th.current_loc _ (some σ) file]
+    th.current_loc _ (some σ)]
   rfl
 
 /-! ### The jump-profile frozen context and the per-construct engine
@@ -4502,7 +5455,7 @@ theorem stepDischarge_if_true {an : List _root_.annot} {e : CoreExpr} {ctx : con
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = e)
-    (hg : evalPexpr tds ext th.env g = some Vtrue)
+    (hg : evalPexpr tds ext file th.env g = some Vtrue)
     (aid : Nat) (rs : core_run_state) :
     (step_ctx tds σ file ext tid (parent, th)).map
         (dischargeStep tds aid rs σ) =
@@ -4519,7 +5472,7 @@ theorem stepDischarge_if_true {an : List _root_.annot} {e : CoreExpr} {ctx : con
      rw [show is_irreducible (Expr an (Eif g e2 e3)) = false
        from rfl]
      dsimp only [dischargeStep]
-     rw [full_eval_bridge hg hdg σ file]
+     rw [full_eval_bridge hg hdg σ]
      dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
        return1, except_return]
      rfl)
@@ -4534,7 +5487,7 @@ theorem stepDischarge_if_false {an : List _root_.annot} {e : CoreExpr} {ctx : co
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = e)
-    (hg : evalPexpr tds ext th.env g = some Vfalse)
+    (hg : evalPexpr tds ext file th.env g = some Vfalse)
     (aid : Nat) (rs : core_run_state) :
     (step_ctx tds σ file ext tid (parent, th)).map
         (dischargeStep tds aid rs σ) =
@@ -4551,7 +5504,7 @@ theorem stepDischarge_if_false {an : List _root_.annot} {e : CoreExpr} {ctx : co
      rw [show is_irreducible (Expr an (Eif g e2 e3)) = false
        from rfl]
      dsimp only [dischargeStep]
-     rw [full_eval_bridge hg hdg σ file]
+     rw [full_eval_bridge hg hdg σ]
      dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
        return1, except_return]
      rfl)
@@ -4573,7 +5526,7 @@ theorem stepDischarge_pure_sym {an : List _root_.annot} {e : CoreExpr} {ctx : co
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = e)
-    (hv : evalPexpr tds ext th.env (Pexpr pb () (PEsym x)) = some v)
+    (hv : evalPexpr tds ext file th.env (Pexpr pb () (PEsym x)) = some v)
     (aid : Nat) (rs : core_run_state) :
     (step_ctx tds σ file ext tid (parent, th)).map
         (dischargeStep tds aid rs σ) =
@@ -4590,7 +5543,7 @@ theorem stepDischarge_pure_sym {an : List _root_.annot} {e : CoreExpr} {ctx : co
     (dsimp only [one_step0, is_irreducible, valueFromPexpr]
      simp only [Bool.false_eq_true, if_false]
      dsimp only [dischargeStep]
-     rw [full_eval_bridge hv (peDepth_sym_le pb x) σ file]
+     rw [full_eval_bridge hv (peDepth_sym_le pb x) σ]
      dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
        return1, except_return]
      rfl)
@@ -4604,6 +5557,11 @@ theorem act_valueFromPexpr_none {pe : generic_pexpr Unit sym}
   cases hp with
   | val a v => rw [valueFromPexpr_val] at hnv; cases hnv
   | sym a x => rfl
+  | convInt _ _ _ => rfl
+  | wrapI _ _ _ _ _ => rfl
+  | catchExc _ _ _ _ _ => rfl
+  | isUnsigned _ _ _ => rfl
+  | call _ _ _ => rfl
   | op a op hop hp1 hp2 => rfl
   | arrayShift a ty hp1 hp2 => rfl
   | ctorTy a c hc pb ty => rfl
@@ -4774,7 +5732,7 @@ theorem stepDischarge_load_eval {an : List _root_.annot} {e : CoreExpr} {ctx : c
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = e)
-    (hv2 : evalPexpr tds ext th.env pe2 = some (Vobject (OVpointer pv)))
+    (hv2 : evalPexpr tds ext file th.env pe2 = some (Vobject (OVpointer pv)))
     (aid : Nat) (rs : core_run_state) :
     (step_ctx tds σ file ext tid (parent, th)).map
         (dischargeStep tds aid rs σ) =
@@ -4792,8 +5750,8 @@ theorem stepDischarge_load_eval {an : List _root_.annot} {e : CoreExpr} {ctx : c
      rw [act_valueFromPexpr_none hp2 hnv2]
      dsimp only [act_valueFromPexpr, valueFromPexpr]
      dsimp only [dischargeStep]
-     rw [full_eval_bridge (v := Vctype ty) (evalPexpr_val _ _ _ _ _) (peDepth_val_le _ _) σ file,
-       full_eval_bridge hv2 hd2 σ file]
+     rw [full_eval_bridge (v := Vctype ty) (evalPexpr_val _ _ _ _ _) (peDepth_val_le _ _) σ,
+       full_eval_bridge hv2 hd2 σ]
      dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
        return1, except_return]
      rfl)
@@ -4816,7 +5774,7 @@ theorem stepDischarge_kill_eval {an : List _root_.annot} {e : CoreExpr} {ctx : c
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = e)
-    (hv : evalPexpr tds ext th.env pe = some (Vobject (OVpointer pv)))
+    (hv : evalPexpr tds ext file th.env pe = some (Vobject (OVpointer pv)))
     (aid : Nat) (rs : core_run_state) :
     (step_ctx tds σ file ext tid (parent, th)).map
         (dischargeStep tds aid rs σ) =
@@ -4834,7 +5792,7 @@ theorem stepDischarge_kill_eval {an : List _root_.annot} {e : CoreExpr} {ctx : c
      rw [act_valueFromPexpr_none hp hnv]
      dsimp only [act_valueFromPexpr, valueFromPexpr]
      dsimp only [dischargeStep]
-     rw [full_eval_bridge hv hdp σ file]
+     rw [full_eval_bridge hv hdp σ]
      dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
        return1, except_return]
      rfl)
@@ -4969,7 +5927,7 @@ theorem foldM_args_bridge {th : thread_state}
     ∀ (params : List (sym × core_base_type))
       (pes : List (generic_pexpr Unit sym)) (vs : List value)
       (acc : EnvStack) (rs : core_run_state),
-      evalPexprs tds ext th.env pes = some vs →
+      evalPexprs tds ext file th.env pes = some vs →
       (∀ pe ∈ pes, peDepth pe ≤ lemDefaultFuel) →
       stExceptUndef_foldM f acc (List.zip params pes) rs =
         Result (Defined (bindArgs params vs acc), rs) := by
@@ -4989,12 +5947,12 @@ theorem foldM_args_bridge {th : thread_state}
       rfl
     | cons pe pes =>
       rw [evalPexprs_cons] at hvs
-      obtain ⟨v, hv, vs', hvs', rfl⟩ : ∃ v, evalPexpr tds ext th.env pe = some v ∧
-          ∃ vs', evalPexprs tds ext th.env pes = some vs' ∧ vs = v :: vs' := by
-        cases h1 : evalPexpr tds ext th.env pe with
+      obtain ⟨v, hv, vs', hvs', rfl⟩ : ∃ v, evalPexpr tds ext file th.env pe = some v ∧
+          ∃ vs', evalPexprs tds ext file th.env pes = some vs' ∧ vs = v :: vs' := by
+        cases h1 : evalPexpr tds ext file th.env pe with
         | none => rw [h1] at hvs; cases hvs
         | some v =>
-          cases h2 : evalPexprs tds ext th.env pes with
+          cases h2 : evalPexprs tds ext file th.env pes with
           | none => rw [h1, h2] at hvs; cases hvs
           | some vs' =>
             rw [h1, h2] at hvs
@@ -5004,7 +5962,7 @@ theorem foldM_args_bridge {th : thread_state}
       rw [List.zip_cons_cons, stExceptUndef_foldM_cons,
         stExceptUndef_bind_apply, hf acc p1 p2 pe rs,
         stExceptUndef_bind_apply,
-        full_eval_bridge hv (hdep pe (by simp)) σ file,
+        full_eval_bridge hv (hdep pe (by simp)) σ,
         stExceptUndef_return_apply]
       try dsimp only []
       rw [stExceptUndef_return_apply]
@@ -5040,7 +5998,7 @@ theorem stepDischarge_run {an : List _root_.annot} {e : CoreExpr} {ctx : context
     (tid : Nat) (parent : Option Nat) (p : sym) (th : thread_state)
     (harena : th.arena = e)
     (hproc : th.current_proc_opt = some p)
-    (hvs : evalPexprs tds ext th.env pes = some vs)
+    (hvs : evalPexprs tds ext file th.env pes = some vs)
     (aid : Nat) (rs : core_run_state)
     (hQ : LabeledAt rs (resolveExtern ext p) Q) :
     (step_ctx tds σ file ext tid (parent, th)).map
@@ -5188,9 +6146,10 @@ theorem dischargeStep_memop_active {tds : CerbTags.TagDefsMap} {aid : Nat} {rs :
     on the covered grammar one iteration completes). -/
 theorem eval1_bridge {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
     {ext : Fmap sym sym} {th : thread_state} {pe : generic_pexpr Unit sym}
-    {v : value} (hv : evalPexpr tds ext th.env pe = some v)
+    {v : value} {file : generic_file Unit core_run_annotation}
+    (hv : evalPexpr tds ext file th.env pe = some v)
     (hdp : peDepth pe ≤ lemDefaultFuel)
-    (σ : CerbMem.MemState) (file : generic_file Unit core_run_annotation)
+    (σ : CerbMem.MemState)
     (rs : core_run_state) :
     stExceptUndef_bind
       (E.eval_pexpr20 (a := core_run_state) tds th ext σ file pe)
@@ -5210,7 +6169,7 @@ theorem eval1_bridge {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
   rw [show (eval_pexpr_aux2 (tds)) = eval_pexpr_aux2_lemFuel (999999 + 1) tds
     from rfl]
   rw [aux2_bridge hp hv hdp 999999
-    (by rw [show lemDefaultFuel = 999999 + 1 from rfl] at hdp; exact hdp) th.current_loc _ (some σ) file]
+    (by rw [show lemDefaultFuel = 999999 + 1 from rfl] at hdp; exact hdp) th.current_loc _ (some σ)]
   rfl
 
 /-- Top-level application equation for the plain state-except bind
@@ -5251,17 +6210,17 @@ theorem mapM_eval1_bridge {ext : Fmap sym sym} {th : thread_state}
           | Sum.inl pe' => stExceptUndef_return pe'
           | Sum.inr cval => stExceptUndef_return (mk_value_pe cval)) rs')
     {pe1 pe2 : generic_pexpr Unit sym} {v1 v2 : value}
-    (hv1 : evalPexpr tds ext th.env pe1 = some v1)
+    (hv1 : evalPexpr tds ext file th.env pe1 = some v1)
     (hd1 : peDepth pe1 ≤ lemDefaultFuel)
-    (hv2 : evalPexpr tds ext th.env pe2 = some v2)
+    (hv2 : evalPexpr tds ext file th.env pe2 = some v2)
     (hd2 : peDepth pe2 ≤ lemDefaultFuel)
     (rs : core_run_state) :
     stExceptUndef_mapM f [pe1, pe2] rs =
       Result (Defined [mk_value_pe v1, mk_value_pe v2], rs) := by
   have h1 : f pe1 rs = Result (Defined (mk_value_pe v1), rs) :=
-    (hf pe1 rs).trans (eval1_bridge hv1 hd1 σ file rs)
+    (hf pe1 rs).trans (eval1_bridge hv1 hd1 σ rs)
   have h2 : f pe2 rs = Result (Defined (mk_value_pe v2), rs) :=
-    (hf pe2 rs).trans (eval1_bridge hv2 hd2 σ file rs)
+    (hf pe2 rs).trans (eval1_bridge hv2 hd2 σ rs)
   have hb2 : stExpect_bind (f pe2) (fun y =>
       stExpect_bind (stExpect_return
         ([] : List (t0 (generic_pexpr Unit sym)))) (fun ys =>
@@ -5410,7 +6369,7 @@ theorem mapM_save_bridge {ext : Fmap sym sym} {th : thread_state}
     (ps : List (sym × ((core_base_type ×
       Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym)))
     {cvals : List value}
-    (hv : evalPexprs tds ext th.env (saveParamPexprs ps) = some cvals)
+    (hv : evalPexprs tds ext file th.env (saveParamPexprs ps) = some cvals)
     (hd : ∀ pe ∈ saveParamPexprs ps, peDepth pe ≤ lemDefaultFuel)
     (rs : core_run_state) :
     stExceptUndef_mapM g ps rs =
@@ -5419,18 +6378,18 @@ theorem mapM_save_bridge {ext : Fmap sym sym} {th : thread_state}
       Result ((saveParamsWithValues ps cvals).map Defined, rs) := by
     induction ps generalizing cvals with
     | nil =>
-      have hv' : evalPexprs tds ext th.env [] = some cvals := hv
+      have hv' : evalPexprs tds ext file th.env [] = some cvals := hv
       rw [evalPexprs_nil] at hv'
       obtain rfl : [] = cvals := Option.some.inj hv'
       rfl
     | cons p ps ih =>
-      have hv' : evalPexprs tds ext th.env (p.2.2 :: saveParamPexprs ps) = some cvals := hv
+      have hv' : evalPexprs tds ext file th.env (p.2.2 :: saveParamPexprs ps) = some cvals := hv
       rw [evalPexprs_cons] at hv'
       revert hv'
-      cases hvp : evalPexpr tds ext th.env p.2.2 with
+      cases hvp : evalPexpr tds ext file th.env p.2.2 with
       | none => intro hv'; cases hv'
       | some v =>
-        cases hvs : evalPexprs tds ext th.env (saveParamPexprs ps) with
+        cases hvs : evalPexprs tds ext file th.env (saveParamPexprs ps) with
         | none => intro hv'; cases hv'
         | some vs =>
           intro hv'
@@ -5440,7 +6399,7 @@ theorem mapM_save_bridge {ext : Fmap sym sym} {th : thread_state}
           have hds : ∀ pe ∈ saveParamPexprs ps, peDepth pe ≤ lemDefaultFuel :=
             fun pe hpe => hd pe (List.mem_cons_of_mem _ hpe)
           have h1 : g p rs = Result (Defined (p.1, (p.2.1, mk_value_pe v)), rs) := by
-            rw [hg, stExceptUndef_bind_apply, hf, eval1_bridge hvp hdp σ file rs]
+            rw [hg, stExceptUndef_bind_apply, hf, eval1_bridge hvp hdp σ rs]
             rfl
           show stExpect_bind (g p) (fun x => stExpect_bind (stExpect_mapM g ps)
             (fun xs => stExpect_return (x :: xs))) rs = _
@@ -5469,7 +6428,7 @@ theorem mapM_full_eval_bridge {th : thread_state}
     (hf : ∀ (pe : generic_pexpr Unit sym) (rs' : core_run_state),
       f pe rs' = full_eval_pexpr tds th ext σ file pe rs') :
     ∀ (pes : List (generic_pexpr Unit sym)) {vs : List value},
-      evalPexprs tds ext th.env pes = some vs →
+      evalPexprs tds ext file th.env pes = some vs →
       (∀ pe ∈ pes, peDepth pe ≤ lemDefaultFuel) →
       ∀ rs, stExceptUndef_mapM f pes rs = Result (Defined vs, rs) := by
   intro pes vs hvs hd rs
@@ -5482,10 +6441,10 @@ theorem mapM_full_eval_bridge {th : thread_state}
     | cons pe pes ih =>
       rw [evalPexprs_cons] at hvs
       revert hvs
-      cases hvp : evalPexpr tds ext th.env pe with
+      cases hvp : evalPexpr tds ext file th.env pe with
       | none => intro hvs; cases hvs
       | some v =>
-        cases hvs' : evalPexprs tds ext th.env pes with
+        cases hvs' : evalPexprs tds ext file th.env pes with
         | none => intro hvs; cases hvs
         | some vs' =>
           intro hvs
@@ -5494,7 +6453,7 @@ theorem mapM_full_eval_bridge {th : thread_state}
           have hds : ∀ pe ∈ pes, peDepth pe ≤ lemDefaultFuel :=
             fun pe hpe => hd pe (List.mem_cons_of_mem _ hpe)
           have h1 : f pe rs = Result (Defined v, rs) := by
-            rw [hf, full_eval_bridge hvp hdp σ file]
+            rw [hf, full_eval_bridge hvp hdp σ]
             rfl
           show stExpect_bind (f pe) (fun x => stExpect_bind (stExpect_mapM f pes)
             (fun xs => stExpect_return (x :: xs))) rs = _
@@ -5626,7 +6585,7 @@ theorem step_ctx_call_ws {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = e)
-    {vs : List value} (hvs : evalPexprs tds ext th.env pes = some vs)
+    {vs : List value} (hvs : evalPexprs tds ext file th.env pes = some vs)
     {params : List (sym × core_base_type)} {body : CoreExpr}
     (hf : lookupProc file ext f = some (params, body)) (hlen : params.length = vs.length) :
     ∃ m : core_runM thread_state,
@@ -5690,7 +6649,7 @@ theorem step_ctx_call_unknown {an : List _root_.annot} {e : CoreExpr} {ctx : con
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = e)
-    {vs : List value} (hvs : evalPexprs tds ext th.env pes = some vs)
+    {vs : List value} (hvs : evalPexprs tds ext file th.env pes = some vs)
     (hf : lookupProc file ext f = none) :
     ∃ m : core_runM thread_state,
       step_ctx tds σ file ext tid (parent, th) =
@@ -5724,7 +6683,7 @@ theorem step_ctx_call_arity {an : List _root_.annot} {e : CoreExpr} {ctx : conte
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = e)
-    {vs : List value} (hvs : evalPexprs tds ext th.env pes = some vs)
+    {vs : List value} (hvs : evalPexprs tds ext file th.env pes = some vs)
     {params : List (sym × core_base_type)} {body : CoreExpr}
     (hf : lookupProc file ext f = some (params, body)) (hlen : params.length ≠ vs.length) :
     ∃ m : core_runM thread_state,
@@ -5770,7 +6729,7 @@ theorem stepDischarge_save_eval {an : List _root_.annot} {e : CoreExpr} {ctx : c
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = e)
-    (hv : evalPexprs tds ext th.env (saveParamPexprs ps) = some cvals)
+    (hv : evalPexprs tds ext file th.env (saveParamPexprs ps) = some cvals)
     (aid : Nat) (rs : core_run_state) :
     (step_ctx tds σ file ext tid (parent, th)).map
         (dischargeStep tds aid rs σ) =
@@ -5826,8 +6785,8 @@ theorem stepDischarge_memop_eval {an : List _root_.annot} {e : CoreExpr} {ctx : 
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = e)
-    (hv1 : evalPexpr tds ext th.env pe1 = some v1)
-    (hv2 : evalPexpr tds ext th.env pe2 = some v2)
+    (hv1 : evalPexpr tds ext file th.env pe1 = some v1)
+    (hv2 : evalPexpr tds ext file th.env pe2 = some v2)
     (aid : Nat) (rs : core_run_state) :
     (step_ctx tds σ file ext tid (parent, th)).map
         (dischargeStep tds aid rs σ) =
@@ -5878,8 +6837,8 @@ theorem stepDischarge_store_eval {an : List _root_.annot} {e : CoreExpr} {ctx : 
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = e)
-    (hv2 : evalPexpr tds ext th.env pe2 = some (Vobject (OVpointer pv)))
-    (hv3 : evalPexpr tds ext th.env pe3 = some cv)
+    (hv2 : evalPexpr tds ext file th.env pe2 = some (Vobject (OVpointer pv)))
+    (hv3 : evalPexpr tds ext file th.env pe3 = some cv)
     (aid : Nat) (rs : core_run_state) :
     (step_ctx tds σ file ext tid (parent, th)).map
         (dischargeStep tds aid rs σ) =
@@ -5903,9 +6862,9 @@ theorem stepDischarge_store_eval {an : List _root_.annot} {e : CoreExpr} {ctx : 
        try rw [ha2]
        dsimp only [act_valueFromPexpr, valueFromPexpr]
        dsimp only [dischargeStep]
-       rw [full_eval_bridge (v := Vctype ty) (evalPexpr_val _ _ _ _ _) (peDepth_val_le _ _) σ file,
-         full_eval_bridge hv2 hd2 σ file,
-         full_eval_bridge hv3 hd3 σ file]
+       rw [full_eval_bridge (v := Vctype ty) (evalPexpr_val _ _ _ _ _) (peDepth_val_le _ _) σ,
+         full_eval_bridge hv2 hd2 σ,
+         full_eval_bridge hv3 hd3 σ]
        dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
          return1, except_return]
        rfl)
@@ -5931,8 +6890,8 @@ theorem stepDischarge_alloc_eval {an : List _root_.annot} {e : CoreExpr} {ctx : 
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = e)
-    (hv1 : evalPexpr tds ext th.env pe1 = some (Vobject (OVinteger align)))
-    (hv2 : evalPexpr tds ext th.env pe2 = some (Vobject (OVinteger size)))
+    (hv1 : evalPexpr tds ext file th.env pe1 = some (Vobject (OVinteger align)))
+    (hv2 : evalPexpr tds ext file th.env pe2 = some (Vobject (OVinteger size)))
     (aid : Nat) (rs : core_run_state) :
     (step_ctx tds σ file ext tid (parent, th)).map
         (dischargeStep tds aid rs σ) =
@@ -5957,7 +6916,7 @@ theorem stepDischarge_alloc_eval {an : List _root_.annot} {e : CoreExpr} {ctx : 
        try rw [ha2]
        try dsimp only [act_valueFromPexpr, valueFromPexpr]
        dsimp only [dischargeStep]
-       rw [full_eval_bridge hv1 hd1 σ file, full_eval_bridge hv2 hd2 σ file]
+       rw [full_eval_bridge hv1 hd1 σ, full_eval_bridge hv2 hd2 σ]
        dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
          return1, except_return]
        rfl)
@@ -5984,8 +6943,8 @@ theorem stepDischarge_create_eval {an : List _root_.annot} {e : CoreExpr} {ctx :
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
     (harena : th.arena = e)
-    (hv1 : evalPexpr tds ext th.env pe1 = some (Vobject (OVinteger align)))
-    (hv2 : evalPexpr tds ext th.env pe2 = some (Vctype ty))
+    (hv1 : evalPexpr tds ext file th.env pe1 = some (Vobject (OVinteger align)))
+    (hv2 : evalPexpr tds ext file th.env pe2 = some (Vctype ty))
     (aid : Nat) (rs : core_run_state) :
     (step_ctx tds σ file ext tid (parent, th)).map
         (dischargeStep tds aid rs σ) =
@@ -6010,7 +6969,7 @@ theorem stepDischarge_create_eval {an : List _root_.annot} {e : CoreExpr} {ctx :
        try rw [ha2]
        try dsimp only [act_valueFromPexpr, valueFromPexpr]
        dsimp only [dischargeStep]
-       rw [full_eval_bridge hv1 hd1 σ file, full_eval_bridge hv2 hd2 σ file]
+       rw [full_eval_bridge hv1 hd1 σ, full_eval_bridge hv2 hd2 σ]
        dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
          return1, except_return]
        rfl)

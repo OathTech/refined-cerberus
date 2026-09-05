@@ -63,7 +63,7 @@ mirror) -/
 theorem store_sym_lit_step {M : MachineCtx} {loc : CerbLocation.Loc}
     {ann : core_run_annotation} {ty : ctype} {x : sym} {cv : value}
     {mo : memory_order} {ρ : EnvStack} {ctl : Ctl} {σ : Mem} {pv : CerbMem.PointerValue}
-    (hx : evalPexpr M.tagDefs M.extern ρ (Pexpr [] () (PEsym x)) =
+    (hx : evalPexpr M.tagDefs M.extern M.file ρ (Pexpr [] () (PEsym x)) =
       some (Vobject (OVpointer pv))) :
     Step M (storeOpRedex [] loc ann ty (Pexpr [] () (PEsym x))
         (Pexpr [] () (PEval cv)) mo, ρ, ctl, σ)
@@ -74,7 +74,7 @@ theorem store_sym_lit_step {M : MachineCtx} {loc : CerbLocation.Loc}
 theorem store_lit_sym_step {M : MachineCtx} {loc : CerbLocation.Loc}
     {ann : core_run_annotation} {ty : ctype} {pv : CerbMem.PointerValue}
     {y : sym} {mo : memory_order} {ρ : EnvStack} {ctl : Ctl} {σ : Mem} {cv : value}
-    (hy : evalPexpr M.tagDefs M.extern ρ (Pexpr [] () (PEsym y)) = some cv) :
+    (hy : evalPexpr M.tagDefs M.extern M.file ρ (Pexpr [] () (PEsym y)) = some cv) :
     Step M (storeOpRedex [] loc ann ty (Pexpr [] () (PEval (Vobject (OVpointer pv))))
         (Pexpr [] () (PEsym y)) mo, ρ, ctl, σ)
       (storeExpr [] loc ann ty pv cv mo, ρ, ctl, σ) :=
@@ -90,7 +90,7 @@ successor is the canonical kill redex. -/
 theorem kill_sym_step {M : MachineCtx} {loc : CerbLocation.Loc}
     {ann : core_run_annotation} {kind : kill_kind} {x : sym}
     {ρ : EnvStack} {ctl : Ctl} {σ : Mem} {pv : CerbMem.PointerValue}
-    (hx : evalPexpr M.tagDefs M.extern ρ (Pexpr [] () (PEsym x)) =
+    (hx : evalPexpr M.tagDefs M.extern M.file ρ (Pexpr [] () (PEsym x)) =
       some (Vobject (OVpointer pv))) :
     Step M (killOpRedex [] loc ann kind (Pexpr [] () (PEsym x)), ρ, ctl, σ)
       (killRedex [] loc ann kind pv, ρ, ctl, σ) :=
@@ -106,7 +106,7 @@ step_action's Alloc0 case (the pair is not all values) is covered by
 theorem alloc_lit_sym_step {M : MachineCtx} {loc : CerbLocation.Loc}
     {ann : core_run_annotation} {align size : CerbMem.IntegerValue} {n : sym}
     {pref : prefix0} {ρ : EnvStack} {ctl : Ctl} {σ : Mem}
-    (hn : evalPexpr M.tagDefs M.extern ρ (Pexpr [] () (PEsym n)) =
+    (hn : evalPexpr M.tagDefs M.extern M.file ρ (Pexpr [] () (PEsym n)) =
       some (Vobject (OVinteger size))) :
     Step M (allocOpRedex [] loc ann (Pexpr [] () (PEval (Vobject (OVinteger align))))
         (Pexpr [] () (PEsym n)) pref, ρ, ctl, σ)
@@ -216,7 +216,7 @@ theorem loc_update_none (ctl : Ctl) :
 theorem store_located_step {M : MachineCtx} (l : CerbLocation.Loc) {loc : CerbLocation.Loc}
     {ann : core_run_annotation} {ty : ctype} {x : sym} {cv : value}
     {mo : memory_order} {ρ : EnvStack} {ctl : Ctl} {σ : Mem} {pv : CerbMem.PointerValue}
-    (hx : evalPexpr M.tagDefs M.extern ρ (Pexpr [] () (PEsym x)) =
+    (hx : evalPexpr M.tagDefs M.extern M.file ρ (Pexpr [] () (PEsym x)) =
       some (Vobject (OVpointer pv))) :
     Step M (storeOpRedex [Aloc l, Aexpr] loc ann ty (Pexpr [] () (PEsym x))
         (Pexpr [] () (PEval cv)) mo, ρ, ctl, σ)

@@ -196,6 +196,20 @@ def illtypedPEif (cval : value) : core_run_cause :=
   Illformed_program (String.append "PEif: first operand should be a boolean ==> "
     (CerbPP.stringFromCore_value cval))
 
+/-- `/\` at a non-boolean operand (core_eval.lem:498–499). -/
+def illtypedAnd (loc : CerbLocation.Loc) (v1 v2 : value) : core_run_cause :=
+  Illformed_program (String.append "["
+    (String.append (CerbLocation.stringFromLocation loc)
+      (String.append "] the two operands of /\\ should be booleans ==> "
+        (String.append (CerbPP.stringFromCore_value v1)
+          (String.append " <-> " (CerbPP.stringFromCore_value v2))))))
+
+/-- `\/` at a non-boolean operand (core_eval.lem:512–513). -/
+def illtypedOr (loc : CerbLocation.Loc) : core_run_cause :=
+  Illformed_program (String.append "["
+    (String.append (CerbLocation.stringFromLocation loc)
+      "] the two operands of \\/ should be booleans"))
+
 /-- The binop dispatch's FAILURES classified (step_eval_peop's value
     match, Core_eval.lean:135; consulted only where the mirror's
     `evalBinop` answers `none`): two integers — the engine's success
@@ -210,8 +224,18 @@ def binopOut (loc : CerbLocation.Loc) (op : binop) (pe1 pe2 : generic_pexpr Unit
   | _, Vobject (OVinteger _), Vobject (OVinteger _) => StepFail.uncovered
   | _, Vobject (OVfloating _), Vobject (OVfloating _) => StepFail.uncovered
   | .OpEq, Vctype _, Vctype _ => StepFail.uncovered
-  | .OpAnd, _, _ => StepFail.uncovered
-  | .OpOr, _, _ => StepFail.uncovered
+  -- E3: the connectives — booleans are the mirror's successes; anything
+  -- else is the engine's kill (core_eval.lem:454–514)
+  | .OpAnd, Vtrue, Vtrue => StepFail.uncovered
+  | .OpAnd, Vtrue, Vfalse => StepFail.uncovered
+  | .OpAnd, Vfalse, Vtrue => StepFail.uncovered
+  | .OpAnd, Vfalse, Vfalse => StepFail.uncovered
+  | .OpAnd, v1, v2 => StepFail.kill (illtypedAnd loc v1 v2)
+  | .OpOr, Vtrue, Vtrue => StepFail.uncovered
+  | .OpOr, Vtrue, Vfalse => StepFail.uncovered
+  | .OpOr, Vfalse, Vtrue => StepFail.uncovered
+  | .OpOr, Vfalse, Vfalse => StepFail.uncovered
+  | .OpOr, _, _ => StepFail.kill (illtypedOr loc)
   | op, _, _ => StepFail.kill (illtypedPEop loc op pe1 pe2)
 
 /-- The array-shift dispatch's FAILURE: anything but (pointer, integer)
@@ -230,6 +254,85 @@ def undefOut (loc undef_loc : CerbLocation.Loc) (ub : undefined_behaviour) : Ste
   match ub with
   | .UB088_reached_end_of_function => StepFail.uncovered
   | ub => StepFail.undef (if CerbLocation.isLibraryLocation undef_loc then loc else undef_loc) [ub]
+
+/-! ### E3: the impl arithmetic constructors, `is_unsigned`, the boolean
+connectives and the standard-library call — their failing faces -/
+
+/-- `PEconv_int` at a non-integer value (core_eval.lem:823–824). -/
+def illtypedConvInt : core_run_cause :=
+  Illformed_program "PEconv_int: operand should be an object integer"
+
+/-- `PEwrapI` at non-integer values (core_eval.lem:834–835). -/
+def illtypedWrapI : core_run_cause :=
+  Illformed_program "PEwrapI: operands should be an object integers"
+
+/-- `PEcatch_exceptional_condition` at non-integer values (core_eval.lem:850–851). -/
+def illtypedCatch : core_run_cause :=
+  Illformed_program "PEcatch_exceptional_condition: operands should be an object integers"
+
+/-- `PEis_unsigned` at a non-ctype value (core_eval.lem:1083–1084). -/
+def illtypedIsUnsigned : core_run_cause :=
+  Illformed_program "PEis_unsigned: the operand should be a ctype"
+
+/-- `call_function`'s unknown-callee kills (core_eval.lem:136, :144–145). -/
+def unknownFunction : core_run_cause := Illformed_program "calling an unknown function"
+def unknownImpl (c : implementation_constant) : core_run_cause :=
+  Illformed_program (String.append "calling an unknown impl-function: "
+    (string_of_implementation_constant c))
+
+/-- The `__conv_int__` dispatch's FAILURE: anything but an object integer
+    is the type error. -/
+def convIntOut (ity : integerType) (v : value) : StepFail :=
+  match evalConvInt ity v with
+  | some _ => StepFail.uncovered
+  | none => StepFail.kill illtypedConvInt
+
+/-- The `wrapI_<op>` dispatch's failure. -/
+def wrapIOut (ity : integerType) (op : iop) (v1 v2 : value) : StepFail :=
+  match evalWrapI ity op v1 v2 with
+  | some _ => StepFail.uncovered
+  | none => StepFail.kill illtypedWrapI
+
+/-- The `catch_exceptional_condition_<op>` dispatch's failures: at two object
+    integers the mirror's `none` IS the engine's out-of-range
+    `undef loc [UB036_exceptional_condition]` (core_eval.lem:847–848, at the
+    thread's current location `loc`); at any other value pair the type
+    error. -/
+def catchOut (loc : CerbLocation.Loc) (ity : integerType) (op : iop) (v1 v2 : value) : StepFail :=
+  match evalCatch ity op v1 v2 with
+  | some _ => StepFail.uncovered
+  | none =>
+    match v1, v2 with
+    | Vobject (OVinteger _), Vobject (OVinteger _) =>
+        StepFail.undef loc [UB036_exceptional_condition]
+    | _, _ => StepFail.kill illtypedCatch
+
+/-- The `is_unsigned` dispatch's failure. -/
+def isUnsignedOut (v : value) : StepFail :=
+  match evalIsUnsigned v with
+  | some _ => StepFail.uncovered
+  | none => StepFail.kill illtypedIsUnsigned
+
+/-- The CALL's failure where the mirror finds no body (`callBody = none`,
+    Step.lean): an unknown callee is `call_function`'s `Illformed_program`
+    kill (core_eval.lem:136; :143–145 for an `Impl` name — also at a `Def`
+    constant); a callee found with the wrong arity, or a declaration that
+    is not a `Fun`/`IFun`, is the engine's `failwithI` PANIC (:149–162),
+    not characterized. -/
+def callOut (file : generic_file Unit core_run_annotation) : generic_name sym → StepFail
+  | Sym f =>
+    match fmapLookupBy (fun (s1 : sym) (s2 : sym) => Lem_Basic_classes.ordCompare s1 s2)
+        f file.stdlib with
+    | some _ => StepFail.uncovered
+    | none =>
+      match fmapLookupBy (fun (s1 : sym) (s2 : sym) => Lem_Basic_classes.ordCompare s1 s2)
+          f file.funs with
+      | some _ => StepFail.uncovered
+      | none => StepFail.kill unknownFunction
+  | Impl c =>
+    match fmapLookupBy implementation_constant_compare c file.impl0 with
+    | some (IFun _ _ _) => StepFail.uncovered
+    | _ => StepFail.kill (unknownImpl c)
 
 /-! ### The one pass, classified -/
 
@@ -257,20 +360,20 @@ def stepFail (tds : CerbTags.TagDefsMap) (loc : CerbLocation.Loc) (ext : Fmap sy
         | _ => StepFail.kill (Unresolved_symbol loc (resolveExtern ext x))
   | Pexpr _ _ (PEundef uloc ub) => undefOut loc uloc ub
   | Pexpr _ _ (PEop op pe1 pe2) =>
-      match stepPexprRaw tds ext ρ pe1 with
+      match stepPexprRaw tds ext file ρ pe1 with
       | none => stepFail tds loc ext file ρ pe1
       | some r1 =>
-        match stepPexprRaw tds ext ρ pe2 with
+        match stepPexprRaw tds ext file ρ pe2 with
         | none => stepFail tds loc ext file ρ pe2
         | some r2 =>
           match valueFromPexpr r1, valueFromPexpr r2 with
           | some v1, some v2 => binopOut loc op pe1 pe2 v1 v2
           | _, _ => StepFail.uncovered
   | Pexpr _ _ (PEarray_shift pe1 ty pe2) =>
-      match stepPexprRaw tds ext ρ pe1 with
+      match stepPexprRaw tds ext file ρ pe1 with
       | none => stepFail tds loc ext file ρ pe1
       | some r1 =>
-        match stepPexprRaw tds ext ρ pe2 with
+        match stepPexprRaw tds ext file ρ pe2 with
         | none => stepFail tds loc ext file ρ pe2
         | some r2 =>
           match valueFromPexpr r1, valueFromPexpr r2 with
@@ -278,11 +381,11 @@ def stepFail (tds : CerbTags.TagDefsMap) (loc : CerbLocation.Loc) (ext : Fmap sy
           | _, _ => StepFail.uncovered
   | Pexpr _ _ (PEctor _ pes) => stepFailList tds loc ext file ρ pes
   | Pexpr _ _ (PEcase pe _) =>
-      match stepPexprRaw tds ext ρ pe with
+      match stepPexprRaw tds ext file ρ pe with
       | none => stepFail tds loc ext file ρ pe
       | some _ => StepFail.uncovered
   | Pexpr _ _ (PEnot pe) =>
-      match stepPexprRaw tds ext ρ pe with
+      match stepPexprRaw tds ext file ρ pe with
       | none => stepFail tds loc ext file ρ pe
       | some r =>
         match valueFromPexpr r with
@@ -291,33 +394,78 @@ def stepFail (tds : CerbTags.TagDefsMap) (loc : CerbLocation.Loc) (ext : Fmap sy
         | some _ => StepFail.kill illtypedPEnot
         | none => StepFail.uncovered
   | Pexpr _ _ (PEif pe1 pe2 pe3) =>
-      match stepPexprRaw tds ext ρ pe1 with
+      match stepPexprRaw tds ext file ρ pe1 with
       | none => stepFail tds loc ext file ρ pe1
       | some r1 =>
         match valueFromPexpr r1 with
         | some Vtrue =>
-          match stepPexprRaw tds ext ρ pe2 with
+          match stepPexprRaw tds ext file ρ pe2 with
           | none => stepFail tds loc ext file ρ pe2
           | some _ => StepFail.uncovered
         | some Vfalse =>
-          match stepPexprRaw tds ext ρ pe3 with
+          match stepPexprRaw tds ext file ρ pe3 with
           | none => stepFail tds loc ext file ρ pe3
           | some _ => StepFail.uncovered
         | some cval => StepFail.kill (illtypedPEif cval)
         | none => StepFail.uncovered
+  -- E3
+  | Pexpr _ _ (PEconv_int ity pe) =>
+      match stepPexprRaw tds ext file ρ pe with
+      | none => stepFail tds loc ext file ρ pe
+      | some r =>
+        match valueFromPexpr r with
+        | some v => convIntOut ity v
+        | none => StepFail.uncovered
+  | Pexpr _ _ (PEwrapI ity op pe1 pe2) =>
+      match stepPexprRaw tds ext file ρ pe1 with
+      | none => stepFail tds loc ext file ρ pe1
+      | some r1 =>
+        match stepPexprRaw tds ext file ρ pe2 with
+        | none => stepFail tds loc ext file ρ pe2
+        | some r2 =>
+          match valueFromPexpr r1, valueFromPexpr r2 with
+          | some v1, some v2 => wrapIOut ity op v1 v2
+          | _, _ => StepFail.uncovered
+  | Pexpr _ _ (PEcatch_exceptional_condition ity op pe1 pe2) =>
+      match stepPexprRaw tds ext file ρ pe1 with
+      | none => stepFail tds loc ext file ρ pe1
+      | some r1 =>
+        match stepPexprRaw tds ext file ρ pe2 with
+        | none => stepFail tds loc ext file ρ pe2
+        | some r2 =>
+          match valueFromPexpr r1, valueFromPexpr r2 with
+          | some v1, some v2 => catchOut loc ity op v1 v2
+          | _, _ => StepFail.uncovered
+  | Pexpr _ _ (PEis_unsigned pe) =>
+      match stepPexprRaw tds ext file ρ pe with
+      | none => stepFail tds loc ext file ρ pe
+      | some r =>
+        match valueFromPexpr r with
+        | some v => isUnsignedOut v
+        | none => StepFail.uncovered
+  | Pexpr _ _ (PEcall nm pes) =>
+      match stepPexprsRaw tds ext file ρ pes with
+      | none => stepFailList tds loc ext file ρ pes
+      | some rs =>
+        match valueFromPexprs rs with
+        | none => StepFail.uncovered
+        | some vs =>
+          match callBody file nm vs with
+          | some _ => StepFail.uncovered
+          | none => callOut file nm
   | _ => StepFail.uncovered
 def stepFailList (tds : CerbTags.TagDefsMap) (loc : CerbLocation.Loc) (ext : Fmap sym sym)
     (file : generic_file Unit core_run_annotation) (ρ : EnvStack) :
     List (generic_pexpr Unit sym) → StepFail
   | [] => StepFail.uncovered
   | pe :: pes =>
-      match stepPexprRaw tds ext ρ pe with
+      match stepPexprRaw tds ext file ρ pe with
       | some _ => stepFailList tds loc ext file ρ pes
       | none =>
         match stepFail tds loc ext file ρ pe with
         | .kill e => StepFail.kill e
         | .undef l u =>
-          match stepPexprsRaw tds ext ρ pes with
+          match stepPexprsRaw tds ext file ρ pes with
           | some _ => StepFail.undef l u
           | none => StepFail.uncovered
         | _ => StepFail.uncovered
@@ -328,7 +476,7 @@ end
 def stepClass (tds : CerbTags.TagDefsMap) (loc : CerbLocation.Loc) (ext : Fmap sym sym)
     (file : generic_file Unit core_run_annotation) (ρ : EnvStack)
     (pe : generic_pexpr Unit sym) : StepOut :=
-  match stepPexprRaw tds ext ρ pe with
+  match stepPexprRaw tds ext file ρ pe with
   | some r => StepOut.next r
   | none => (stepFail tds loc ext file ρ pe).lift
 
@@ -365,7 +513,7 @@ def classIter (tds : CerbTags.TagDefsMap) (loc : CerbLocation.Loc) (ext : Fmap s
 def evalClass (tds : CerbTags.TagDefsMap) (loc : CerbLocation.Loc) (ext : Fmap sym sym)
     (file : generic_file Unit core_run_annotation) (ρ : EnvStack)
     (pe : generic_pexpr Unit sym) : EvalOut :=
-  match evalPexpr tds ext ρ pe with
+  match evalPexpr tds ext file ρ pe with
   | some v => EvalOut.val v
   | none => classIter tds loc ext file ρ (peDepth pe) pe
 
@@ -401,9 +549,9 @@ theorem classIter_ne_val (tds : CerbTags.TagDefsMap) (loc : CerbLocation.Loc)
 theorem evalClass_val_iff (tds : CerbTags.TagDefsMap) (loc : CerbLocation.Loc)
     (ext : Fmap sym sym) (file : generic_file Unit core_run_annotation) (ρ : EnvStack)
     (pe : generic_pexpr Unit sym) (v : value) :
-    evalClass tds loc ext file ρ pe = .val v ↔ evalPexpr tds ext ρ pe = some v := by
+    evalClass tds loc ext file ρ pe = .val v ↔ evalPexpr tds ext file ρ pe = some v := by
   unfold evalClass
-  cases h : evalPexpr tds ext ρ pe with
+  cases h : evalPexpr tds ext file ρ pe with
   | some w =>
     constructor
     · intro h'; cases h'; rfl
@@ -418,7 +566,7 @@ theorem evalClass_val_iff (tds : CerbTags.TagDefsMap) (loc : CerbLocation.Loc)
 theorem evalClass_of_none {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {ρ : EnvStack}
     {pe : generic_pexpr Unit sym} (loc : CerbLocation.Loc)
     (file : generic_file Unit core_run_annotation)
-    (h : evalPexpr tds ext ρ pe = none) :
+    (h : evalPexpr tds ext file ρ pe = none) :
     (∃ fl, (evalClass tds loc ext file ρ pe).fail? = some fl) ∨
     evalClass tds loc ext file ρ pe = .uncovered := by
   cases hc : evalClass tds loc ext file ρ pe with
@@ -431,8 +579,8 @@ theorem evalPexpr_none_of_fail {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} 
     {pe : generic_pexpr Unit sym} {loc : CerbLocation.Loc}
     {file : generic_file Unit core_run_annotation} {fl : EvalFail}
     (h : (evalClass tds loc ext file ρ pe).fail? = some fl) :
-    evalPexpr tds ext ρ pe = none := by
-  cases hv : evalPexpr tds ext ρ pe with
+    evalPexpr tds ext file ρ pe = none := by
+  cases hv : evalPexpr tds ext file ρ pe with
   | none => rfl
   | some v => rw [← evalClass_val_iff tds loc ext file ρ pe v] at hv; rw [hv] at h; cases h
 
@@ -440,15 +588,15 @@ theorem evalPexpr_none_of_kill {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} 
     {pe : generic_pexpr Unit sym} {loc : CerbLocation.Loc}
     {file : generic_file Unit core_run_annotation} {err : core_run_cause}
     (h : evalClass tds loc ext file ρ pe = .kill err) :
-    evalPexpr tds ext ρ pe = none :=
+    evalPexpr tds ext file ρ pe = none :=
   evalPexpr_none_of_fail (fl := .kill err) (by rw [h]; rfl)
 
 theorem evalPexpr_none_of_uncovered {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym}
     {ρ : EnvStack} {pe : generic_pexpr Unit sym} {loc : CerbLocation.Loc}
     {file : generic_file Unit core_run_annotation}
     (h : evalClass tds loc ext file ρ pe = .uncovered) :
-    evalPexpr tds ext ρ pe = none := by
-  cases hv : evalPexpr tds ext ρ pe with
+    evalPexpr tds ext file ρ pe = none := by
+  cases hv : evalPexpr tds ext file ρ pe with
   | none => rfl
   | some v => rw [← evalClass_val_iff tds loc ext file ρ pe v, h] at hv; cases hv
 
@@ -480,10 +628,10 @@ theorem stepFail_undef (a : List _root_.annot) (uloc : CerbLocation.Loc)
 
 theorem stepFail_op (a : List _root_.annot) (op : binop) (pe1 pe2 : generic_pexpr Unit sym) :
     stepFail tds loc ext file ρ (Pexpr a () (PEop op pe1 pe2)) =
-      (match stepPexprRaw tds ext ρ pe1 with
+      (match stepPexprRaw tds ext file ρ pe1 with
       | none => stepFail tds loc ext file ρ pe1
       | some r1 =>
-        match stepPexprRaw tds ext ρ pe2 with
+        match stepPexprRaw tds ext file ρ pe2 with
         | none => stepFail tds loc ext file ρ pe2
         | some r2 =>
           match valueFromPexpr r1, valueFromPexpr r2 with
@@ -494,10 +642,10 @@ theorem stepFail_op (a : List _root_.annot) (op : binop) (pe1 pe2 : generic_pexp
 theorem stepFail_array_shift (a : List _root_.annot) (pe1 : generic_pexpr Unit sym)
     (ty : ctype) (pe2 : generic_pexpr Unit sym) :
     stepFail tds loc ext file ρ (Pexpr a () (PEarray_shift pe1 ty pe2)) =
-      (match stepPexprRaw tds ext ρ pe1 with
+      (match stepPexprRaw tds ext file ρ pe1 with
       | none => stepFail tds loc ext file ρ pe1
       | some r1 =>
-        match stepPexprRaw tds ext ρ pe2 with
+        match stepPexprRaw tds ext file ρ pe2 with
         | none => stepFail tds loc ext file ρ pe2
         | some r2 =>
           match valueFromPexpr r1, valueFromPexpr r2 with
@@ -513,14 +661,14 @@ theorem stepFail_ctor (a : List _root_.annot) (c : ctor) (pes : List (generic_pe
 theorem stepFail_case (a : List _root_.annot) (pe : generic_pexpr Unit sym)
     (pats : List (pattern × generic_pexpr Unit sym)) :
     stepFail tds loc ext file ρ (Pexpr a () (PEcase pe pats)) =
-      (match stepPexprRaw tds ext ρ pe with
+      (match stepPexprRaw tds ext file ρ pe with
       | none => stepFail tds loc ext file ρ pe
       | some _ => StepFail.uncovered) := by
   rw [stepFail]
 
 theorem stepFail_not (a : List _root_.annot) (pe : generic_pexpr Unit sym) :
     stepFail tds loc ext file ρ (Pexpr a () (PEnot pe)) =
-      (match stepPexprRaw tds ext ρ pe with
+      (match stepPexprRaw tds ext file ρ pe with
       | none => stepFail tds loc ext file ρ pe
       | some r =>
         match valueFromPexpr r with
@@ -532,20 +680,82 @@ theorem stepFail_not (a : List _root_.annot) (pe : generic_pexpr Unit sym) :
 
 theorem stepFail_if (a : List _root_.annot) (pe1 pe2 pe3 : generic_pexpr Unit sym) :
     stepFail tds loc ext file ρ (Pexpr a () (PEif pe1 pe2 pe3)) =
-      (match stepPexprRaw tds ext ρ pe1 with
+      (match stepPexprRaw tds ext file ρ pe1 with
       | none => stepFail tds loc ext file ρ pe1
       | some r1 =>
         match valueFromPexpr r1 with
         | some Vtrue =>
-          match stepPexprRaw tds ext ρ pe2 with
+          match stepPexprRaw tds ext file ρ pe2 with
           | none => stepFail tds loc ext file ρ pe2
           | some _ => StepFail.uncovered
         | some Vfalse =>
-          match stepPexprRaw tds ext ρ pe3 with
+          match stepPexprRaw tds ext file ρ pe3 with
           | none => stepFail tds loc ext file ρ pe3
           | some _ => StepFail.uncovered
         | some cval => StepFail.kill (illtypedPEif cval)
         | none => StepFail.uncovered) := by
+  rw [stepFail]
+
+theorem stepFail_conv_int (a : List _root_.annot) (ity : integerType) (pe : generic_pexpr Unit sym) :
+    stepFail tds loc ext file ρ (Pexpr a () (PEconv_int ity pe)) =
+      (match stepPexprRaw tds ext file ρ pe with
+      | none => stepFail tds loc ext file ρ pe
+      | some r =>
+        match valueFromPexpr r with
+        | some v => convIntOut ity v
+        | none => StepFail.uncovered) := by
+  rw [stepFail]
+
+theorem stepFail_wrapI (a : List _root_.annot) (ity : integerType) (op : iop)
+    (pe1 pe2 : generic_pexpr Unit sym) :
+    stepFail tds loc ext file ρ (Pexpr a () (PEwrapI ity op pe1 pe2)) =
+      (match stepPexprRaw tds ext file ρ pe1 with
+      | none => stepFail tds loc ext file ρ pe1
+      | some r1 =>
+        match stepPexprRaw tds ext file ρ pe2 with
+        | none => stepFail tds loc ext file ρ pe2
+        | some r2 =>
+          match valueFromPexpr r1, valueFromPexpr r2 with
+          | some v1, some v2 => wrapIOut ity op v1 v2
+          | _, _ => StepFail.uncovered) := by
+  rw [stepFail]
+
+theorem stepFail_catch (a : List _root_.annot) (ity : integerType) (op : iop)
+    (pe1 pe2 : generic_pexpr Unit sym) :
+    stepFail tds loc ext file ρ (Pexpr a () (PEcatch_exceptional_condition ity op pe1 pe2)) =
+      (match stepPexprRaw tds ext file ρ pe1 with
+      | none => stepFail tds loc ext file ρ pe1
+      | some r1 =>
+        match stepPexprRaw tds ext file ρ pe2 with
+        | none => stepFail tds loc ext file ρ pe2
+        | some r2 =>
+          match valueFromPexpr r1, valueFromPexpr r2 with
+          | some v1, some v2 => catchOut loc ity op v1 v2
+          | _, _ => StepFail.uncovered) := by
+  rw [stepFail]
+
+theorem stepFail_is_unsigned (a : List _root_.annot) (pe : generic_pexpr Unit sym) :
+    stepFail tds loc ext file ρ (Pexpr a () (PEis_unsigned pe)) =
+      (match stepPexprRaw tds ext file ρ pe with
+      | none => stepFail tds loc ext file ρ pe
+      | some r =>
+        match valueFromPexpr r with
+        | some v => isUnsignedOut v
+        | none => StepFail.uncovered) := by
+  rw [stepFail]
+
+theorem stepFail_call (a : List _root_.annot) (nm : generic_name sym)
+    (pes : List (generic_pexpr Unit sym)) :
+    stepFail tds loc ext file ρ (Pexpr a () (PEcall nm pes)) =
+      (match stepPexprsRaw tds ext file ρ pes with
+      | none => stepFailList tds loc ext file ρ pes
+      | some rs =>
+        match valueFromPexprs rs with
+        | none => StepFail.uncovered
+        | some vs =>
+          match callBody file nm vs with
+          | some _ => StepFail.uncovered
+          | none => callOut file nm) := by
   rw [stepFail]
 
 theorem stepFailList_nil : stepFailList tds loc ext file ρ [] = StepFail.uncovered := by
@@ -553,13 +763,13 @@ theorem stepFailList_nil : stepFailList tds loc ext file ρ [] = StepFail.uncove
 
 theorem stepFailList_cons (pe : generic_pexpr Unit sym) (pes : List (generic_pexpr Unit sym)) :
     stepFailList tds loc ext file ρ (pe :: pes) =
-      (match stepPexprRaw tds ext ρ pe with
+      (match stepPexprRaw tds ext file ρ pe with
       | some _ => stepFailList tds loc ext file ρ pes
       | none =>
         match stepFail tds loc ext file ρ pe with
         | .kill e => StepFail.kill e
         | .undef l u =>
-          match stepPexprsRaw tds ext ρ pes with
+          match stepPexprsRaw tds ext file ρ pes with
           | some _ => StepFail.undef l u
           | none => StepFail.uncovered
         | _ => StepFail.uncovered) := by
@@ -649,6 +859,39 @@ theorem exception_undef_mapM_cons_defined
 bridge in Soundness.lean: `step_eval_bridge` → `aux2_bridge` →
 `full_eval_bridge`/`eval1_bridge`) -/
 
+/-- E3: where the mirror finds no callee (`callBody = none`) and classifies
+    a KILL, `call_function` raises exactly it (core_eval.lem:124–146: the
+    lookups fail before the arity check). -/
+theorem call_function_exception_of_callOut {file : generic_file Unit core_run_annotation}
+    {nm : generic_name sym} (vs : List value) {err : core_run_cause}
+    (h : callOut file nm = .kill err) :
+    call_function file nm vs = Exception err := by
+  unfold callOut at h
+  unfold call_function
+  dsimp only [CerbDebug.print_debug_pure]
+  cases nm with
+  | Sym f =>
+    dsimp only at h ⊢
+    cases hstd : fmapLookupBy (fun (s1 : sym) (s2 : sym) => Lem_Basic_classes.ordCompare s1 s2)
+        f file.stdlib with
+    | some d => rw [hstd] at h; cases h
+    | none =>
+      rw [hstd] at h
+      dsimp only at h ⊢
+      cases hfn : fmapLookupBy (fun (s1 : sym) (s2 : sym) => Lem_Basic_classes.ordCompare s1 s2)
+          f file.funs with
+      | some d => rw [hfn] at h; cases h
+      | none => rw [hfn] at h; cases h; rfl
+  | Impl c =>
+    dsimp only at h ⊢
+    cases himpl : fmapLookupBy implementation_constant_compare c file.impl0 with
+    | some d =>
+      rw [himpl] at h
+      cases d with
+      | IFun _ _ _ => cases h
+      | Def _ _ => cases h; rfl
+    | none => rw [himpl] at h; cases h; rfl
+
 /-- LEVEL 1, the failing faces: where one pass fails on a covered operand
     and the classification is a raise or an undef, the engine's one-call
     evaluator delivers exactly that outcome. Quantified over the level
@@ -659,7 +902,7 @@ theorem stepFail_bridge {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
     {ext : Fmap sym sym} {ρ : EnvStack} {loc : CerbLocation.Loc}
     {file : generic_file Unit core_run_annotation}
     {pe : generic_pexpr Unit sym}
-    (hp : PePure pe) (hn : stepPexprRaw tds ext ρ pe = none) {fl : EvalFail}
+    (hp : PePure pe) (hn : stepPexprRaw tds ext file ρ pe = none) {fl : EvalFail}
     (hf : (stepFail tds loc ext file ρ pe).fail? = some fl) :
     ∀ (fuel : Nat), peDepth pe ≤ fuel →
     ∀ (n : Nat) (cloc : Option CerbLocation.Loc) (mem : Option CerbMem.MemState),
@@ -668,11 +911,12 @@ theorem stepFail_bridge {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
   induction hp generalizing fl with
   | val a v => rw [stepPexprRaw] at hn; cases hn
   | ctorTy a c hc pb ty =>
-    rw [stepPexprRaw, stepPexprsRaw_cons, stepPexprsRaw_nil, stepPexprRaw] at hn
-    simp only [Option.bind_eq_bind, Option.bind_some, valueFromPexprs_cons, valueFromPexprs_nil,
-      valueFromPexpr_valPe] at hn
-    cases c <;> simp only [isTyCtor, Bool.false_eq_true] at hc <;>
-      simp only [evalCtor, evalTyCtor, Option.map_some] at hn <;> cases hn
+    -- the one operand is a value: the list classifier is `.uncovered`
+    exfalso
+    rw [stepFail_ctor, stepFailList_cons, stepPexprRaw] at hf
+    dsimp only at hf
+    rw [stepFailList_nil] at hf
+    cases hf
   | sym a x =>
     intro fuel hfuel n cloc mem
     obtain ⟨f, rfl⟩ : ∃ f, fuel = f + 1 :=
@@ -733,7 +977,7 @@ theorem stepFail_bridge {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
     rw [stepPexprRaw] at hn
     show exception_undef_fmap (Pexpr [] ()) _ = _
     dsimp only [step_eval_peop]
-    cases h1 : stepPexprRaw tds ext ρ pe1 with
+    cases h1 : stepPexprRaw tds ext file ρ pe1 with
     | none =>
       rw [h1] at hf
       dsimp only at hf
@@ -746,8 +990,8 @@ theorem stepFail_bridge {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
       dsimp only at hf
       simp only [Option.bind_eq_bind, Option.bind_some] at hn
       rw [step_eval_bridge hp1 (by rw [stepPexpr_of_PePure hp1]; exact h1) f hd1 (n+1) loc cloc
-        mem file]
-      cases h2 : stepPexprRaw tds ext ρ pe2 with
+        mem]
+      cases h2 : stepPexprRaw tds ext file ρ pe2 with
       | none =>
         rw [h2] at hf
         dsimp only at hf
@@ -761,7 +1005,7 @@ theorem stepFail_bridge {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
         dsimp only at hf
         simp only [Option.bind_some] at hn
         rw [step_eval_bridge hp2 (by rw [stepPexpr_of_PePure hp2]; exact h2) f hd2 (n+1) loc cloc
-          mem file]
+          mem]
         dsimp only [exception_undef_bind, exception_undef_return, exception_undef_fmap,
           except_return, return1]
         cases hv1 : valueFromPexpr r1 with
@@ -783,8 +1027,8 @@ theorem stepFail_bridge {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
               (dsimp only [binopOut, StepFail.fail?] at hf
                first
                | (cases hf; rfl)
-               | (cases hf)
-               | (split at hf <;> cases hf))
+               | (split at hf <;> cases hf)
+               | (exact absurd hf (by simp)))
   | @arrayShift a ty pe1 pe2 hp1 hp2 ih1 ih2 =>
     intro fuel hfuel n cloc mem
     obtain ⟨f, rfl⟩ : ∃ f, fuel = f + 1 := ⟨fuel - 1, by simp at hfuel; omega⟩
@@ -794,7 +1038,7 @@ theorem stepFail_bridge {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
     rw [stepPexprRaw] at hn
     show exception_undef_fmap (Pexpr [] ()) _ = _
     dsimp only
-    cases h1 : stepPexprRaw tds ext ρ pe1 with
+    cases h1 : stepPexprRaw tds ext file ρ pe1 with
     | none =>
       rw [h1] at hf
       dsimp only at hf
@@ -807,8 +1051,8 @@ theorem stepFail_bridge {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
       dsimp only at hf
       simp only [Option.bind_eq_bind, Option.bind_some] at hn
       rw [step_eval_bridge hp1 (by rw [stepPexpr_of_PePure hp1]; exact h1) f hd1 (n+1) loc cloc
-        mem file]
-      cases h2 : stepPexprRaw tds ext ρ pe2 with
+        mem]
+      cases h2 : stepPexprRaw tds ext file ρ pe2 with
       | none =>
         rw [h2] at hf
         dsimp only at hf
@@ -822,7 +1066,7 @@ theorem stepFail_bridge {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
         dsimp only at hf
         simp only [Option.bind_some] at hn
         rw [step_eval_bridge hp2 (by rw [stepPexpr_of_PePure hp2]; exact h2) f hd2 (n+1) loc cloc
-          mem file]
+          mem]
         dsimp only [exception_undef_bind, exception_undef_return, exception_undef_fmap,
           except_return, return1]
         cases hv1 : valueFromPexpr r1 with
@@ -858,7 +1102,7 @@ theorem stepFail_bridge {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
     have hlist : ∀ (pes' : List (generic_pexpr Unit sym)),
         (∀ q ∈ pes', PePure q) →
         (∀ q ∈ pes', peDepth q ≤ f) →
-        (∀ q ∈ pes', ∀ {fl' : EvalFail}, stepPexprRaw tds ext ρ q = none →
+        (∀ q ∈ pes', ∀ {fl' : EvalFail}, stepPexprRaw tds ext file ρ q = none →
           (stepFail tds loc ext file ρ q).fail? = some fl' →
           step_eval_pexpr_lemFuel f tds (n + 1) loc cloc ext ρ mem file false q =
             fl'.pure (generic_pexpr Unit sym)) →
@@ -874,13 +1118,13 @@ theorem stepFail_bridge {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
         rw [stepFailList_cons] at hf'
         have hpq : PePure q := hps' q List.mem_cons_self
         have hdq : peDepth q ≤ f := hds' q List.mem_cons_self
-        cases hq : stepPexprRaw tds ext ρ q with
+        cases hq : stepPexprRaw tds ext file ρ q with
         | some r =>
           rw [hq] at hf'
           dsimp only at hf'
           exact exception_undef_mapM_cons_defined
             (step_eval_bridge hpq (by rw [stepPexpr_of_PePure hpq]; exact hq) f hdq (n+1) loc cloc
-              mem file)
+              mem)
             (ihl (fun q' hq' => hps' q' (List.mem_cons_of_mem _ hq'))
               (fun q' hq' => hds' q' (List.mem_cons_of_mem _ hq'))
               (fun q' hq' => ihs' q' (List.mem_cons_of_mem _ hq')) hf')
@@ -897,7 +1141,7 @@ theorem stepFail_bridge {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
           | undef l u =>
             rw [hfq] at hf'
             dsimp only at hf'
-            cases hrs : stepPexprsRaw tds ext ρ qs with
+            cases hrs : stepPexprsRaw tds ext file ρ qs with
             | none => rw [hrs] at hf'; cases hf'
             | some rs =>
               rw [hrs] at hf'
@@ -923,7 +1167,7 @@ theorem stepFail_bridge {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
                   (fun q'' hq'' => ihs' q'' (hsub hq'')))
                 have hpq' : PePure q' := hps' q' (List.mem_cons_of_mem _ List.mem_cons_self)
                 exact step_eval_bridge hpq' (by rw [stepPexpr_of_PePure hpq']; exact hpr) f
-                  (hds' q' (List.mem_cons_of_mem _ List.mem_cons_self)) (n+1) loc cloc mem file
+                  (hds' q' (List.mem_cons_of_mem _ List.mem_cons_self)) (n+1) loc cloc mem
           | uncovered => rw [hfq] at hf'; cases hf'
     rw [hlist pes hps (fun q hq => by
         have := peDepth_le_list_of_mem hq; simp only [peDepth_ctor] at hfuel; omega)
@@ -940,7 +1184,7 @@ theorem stepFail_bridge {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
     rw [stepFail_case] at hf
     show exception_undef_fmap (Pexpr [] ()) _ = _
     dsimp only
-    cases h1 : stepPexprRaw tds ext ρ pe with
+    cases h1 : stepPexprRaw tds ext file ρ pe with
     | none =>
       rw [h1] at hf
       dsimp only at hf
@@ -949,6 +1193,362 @@ theorem stepFail_bridge {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
         | rw [exception_undef_bind_fail, exception_undef_fmap_fail]
         | (cases fl <;> rfl)
     | some r1 => rw [h1] at hf; cases hf
+  | @convInt a ity pe hpe ih =>
+    intro fuel hfuel n cloc mem
+    obtain ⟨f, rfl⟩ : ∃ f, fuel = f + 1 := ⟨fuel - 1, by simp at hfuel; omega⟩
+    have hd : peDepth pe ≤ f := by simp at hfuel; omega
+    rw [stepFail_conv_int] at hf
+    rw [stepPexprRaw] at hn
+    show exception_undef_fmap (Pexpr [] ()) _ = _
+    dsimp only
+    cases h1 : stepPexprRaw tds ext file ρ pe with
+    | none =>
+      rw [h1] at hf
+      dsimp only at hf
+      rw [ih h1 hf f hd (n+1) cloc mem]
+      first
+        | rw [exception_undef_bind_fail, exception_undef_fmap_fail]
+        | (cases fl <;> rfl)
+    | some r1 =>
+      rw [h1] at hf hn
+      dsimp only at hf
+      simp only [Option.bind_eq_bind, Option.bind_some] at hn
+      rw [step_eval_bridge hpe (by rw [stepPexpr_of_PePure hpe]; exact h1) f hd (n+1) loc cloc mem]
+      dsimp only [exception_undef_bind, exception_undef_return, exception_undef_fmap,
+        except_return, return1]
+      rcases r1 with ⟨a1, u1, p1⟩
+      cases u1
+      cases hv1 : valueFromPexpr (Pexpr a1 () p1) with
+      | none => rw [hv1] at hf; cases hf
+      | some v1 =>
+        obtain ⟨a1', hp1⟩ := valueFromPexpr_some_iff.mp hv1
+        injection hp1 with _ _ hp1'
+        subst hp1'
+        rw [hv1] at hf hn
+        dsimp only at hf hn
+        unfold convIntOut at hf
+        cases hb : evalConvInt ity v1 with
+        | some w => rw [hb] at hf; cases hf
+        | none =>
+          rw [hb] at hf
+          dsimp only [StepFail.fail?] at hf
+          obtain rfl := Option.some.inj hf
+          rcases v1 with ov1 | lv1 | _ | _ | _ | _ | ⟨_, _⟩ | _ <;> (try (cases ov1)) <;>
+            first
+            | rfl
+            | (cases hb)
+  | @wrapI a ity op pe1 pe2 hp1 hp2 ih1 ih2 =>
+    intro fuel hfuel n cloc mem
+    obtain ⟨f, rfl⟩ : ∃ f, fuel = f + 1 := ⟨fuel - 1, by simp at hfuel; omega⟩
+    have hd1 : peDepth pe1 ≤ f := by simp at hfuel; omega
+    have hd2 : peDepth pe2 ≤ f := by simp at hfuel; omega
+    rw [stepFail_wrapI] at hf
+    rw [stepPexprRaw] at hn
+    show exception_undef_fmap (Pexpr [] ()) _ = _
+    dsimp only
+    cases h1 : stepPexprRaw tds ext file ρ pe1 with
+    | none =>
+      rw [h1] at hf
+      dsimp only at hf
+      rw [ih1 h1 hf f hd1 (n+1) cloc mem]
+      first
+        | rw [exception_undef_bind_fail, exception_undef_fmap_fail]
+        | (cases fl <;> rfl)
+    | some r1 =>
+      rw [h1] at hf hn
+      dsimp only at hf
+      simp only [Option.bind_eq_bind, Option.bind_some] at hn
+      rw [step_eval_bridge hp1 (by rw [stepPexpr_of_PePure hp1]; exact h1) f hd1 (n+1) loc cloc mem]
+      cases h2 : stepPexprRaw tds ext file ρ pe2 with
+      | none =>
+        rw [h2] at hf
+        dsimp only at hf
+        dsimp only [exception_undef_bind, exception_undef_return, except_return, return1]
+        rw [ih2 h2 hf f hd2 (n+1) cloc mem]
+        first
+        | rw [exception_undef_bind_fail, exception_undef_fmap_fail]
+        | (cases fl <;> rfl)
+      | some r2 =>
+        rw [h2] at hf hn
+        dsimp only at hf
+        simp only [Option.bind_some] at hn
+        rw [step_eval_bridge hp2 (by rw [stepPexpr_of_PePure hp2]; exact h2) f hd2 (n+1) loc cloc mem]
+        dsimp only [exception_undef_bind, exception_undef_return, exception_undef_fmap,
+          except_return, return1]
+        cases hv1 : valueFromPexpr r1 with
+        | none => rw [hv1] at hf; cases hf
+        | some v1 =>
+          obtain rfl := stepPexprRaw_valPe_of_value h1 hv1
+          cases hv2 : valueFromPexpr r2 with
+          | none => rw [hv1, hv2] at hf; cases hf
+          | some v2 =>
+            obtain rfl := stepPexprRaw_valPe_of_value h2 hv2
+            rw [hv1, hv2] at hf hn
+            dsimp only at hf hn
+            unfold wrapIOut at hf
+            cases hb : evalWrapI ity op v1 v2 with
+            | some w => rw [hb] at hf; cases hf
+            | none =>
+              rw [hb] at hf
+              dsimp only [StepFail.fail?] at hf
+              obtain rfl := Option.some.inj hf
+              rcases v1 with ov1 | lv1 | _ | _ | _ | _ | ⟨_, _⟩ | _ <;> (try (cases ov1)) <;>
+              rcases v2 with ov2 | lv2 | _ | _ | _ | _ | ⟨_, _⟩ | _ <;> (try (cases ov2)) <;>
+                first
+                | rfl
+                | (cases hb)
+  | @catchExc a ity op pe1 pe2 hp1 hp2 ih1 ih2 =>
+    intro fuel hfuel n cloc mem
+    obtain ⟨f, rfl⟩ : ∃ f, fuel = f + 1 := ⟨fuel - 1, by simp at hfuel; omega⟩
+    have hd1 : peDepth pe1 ≤ f := by simp at hfuel; omega
+    have hd2 : peDepth pe2 ≤ f := by simp at hfuel; omega
+    rw [stepFail_catch] at hf
+    rw [stepPexprRaw] at hn
+    show exception_undef_fmap (Pexpr [] ()) _ = _
+    dsimp only
+    cases h1 : stepPexprRaw tds ext file ρ pe1 with
+    | none =>
+      rw [h1] at hf
+      dsimp only at hf
+      rw [ih1 h1 hf f hd1 (n+1) cloc mem]
+      first
+        | rw [exception_undef_bind_fail, exception_undef_fmap_fail]
+        | (cases fl <;> rfl)
+    | some r1 =>
+      rw [h1] at hf hn
+      dsimp only at hf
+      simp only [Option.bind_eq_bind, Option.bind_some] at hn
+      rw [step_eval_bridge hp1 (by rw [stepPexpr_of_PePure hp1]; exact h1) f hd1 (n+1) loc cloc mem]
+      cases h2 : stepPexprRaw tds ext file ρ pe2 with
+      | none =>
+        rw [h2] at hf
+        dsimp only at hf
+        dsimp only [exception_undef_bind, exception_undef_return, except_return, return1]
+        rw [ih2 h2 hf f hd2 (n+1) cloc mem]
+        first
+        | rw [exception_undef_bind_fail, exception_undef_fmap_fail]
+        | (cases fl <;> rfl)
+      | some r2 =>
+        rw [h2] at hf hn
+        dsimp only at hf
+        simp only [Option.bind_some] at hn
+        rw [step_eval_bridge hp2 (by rw [stepPexpr_of_PePure hp2]; exact h2) f hd2 (n+1) loc cloc mem]
+        dsimp only [exception_undef_bind, exception_undef_return, exception_undef_fmap,
+          except_return, return1]
+        cases hv1 : valueFromPexpr r1 with
+        | none => rw [hv1] at hf; cases hf
+        | some v1 =>
+          obtain rfl := stepPexprRaw_valPe_of_value h1 hv1
+          cases hv2 : valueFromPexpr r2 with
+          | none => rw [hv1, hv2] at hf; cases hf
+          | some v2 =>
+            obtain rfl := stepPexprRaw_valPe_of_value h2 hv2
+            rw [hv1, hv2] at hf hn
+            dsimp only at hf hn
+            unfold catchOut at hf
+            cases hb : evalCatch ity op v1 v2 with
+            | some w => rw [hb] at hf; cases hf
+            | none =>
+              rw [hb] at hf
+              rcases v1 with ov1 | lv1 | _ | _ | _ | _ | ⟨_, _⟩ | _ <;> (try (cases ov1)) <;>
+              rcases v2 with ov2 | lv2 | _ | _ | _ | _ | ⟨_, _⟩ | _ <;> (try (cases ov2)) <;>
+                dsimp only [StepFail.fail?] at hf <;>
+                first
+                | -- two object integers: the mirror's `none` is the engine's UB036 undef
+                  (rename_i i1 i2
+                   obtain rfl := Option.some.inj hf
+                   cases hm : mk_call_catch_exceptional_condition ity op i1 i2 with
+                   | some iv => exfalso; simp [evalCatch, hm] at hb
+                   | none => simp only [hm]; try rfl)
+                | (obtain rfl := Option.some.inj hf; rfl)
+                | (cases hb)
+  | @isUnsigned a pe hpe hd1 ih =>
+    intro fuel hfuel n cloc mem
+    obtain ⟨f, rfl⟩ : ∃ f, fuel = f + 1 := ⟨fuel - 1, by simp at hfuel; omega⟩
+    have hd : peDepth pe ≤ f := by simp at hfuel; omega
+    rw [stepFail_is_unsigned] at hf
+    rw [stepPexprRaw] at hn
+    show exception_undef_fmap (Pexpr [] ()) _ = _
+    dsimp only
+    cases h1 : stepPexprRaw tds ext file ρ pe with
+    | none =>
+      rw [h1] at hf
+      dsimp only at hf
+      rw [ih h1 hf f hd (n+1) cloc mem]
+      first
+        | rw [exception_undef_bind_fail, exception_undef_fmap_fail]
+        | (cases fl <;> rfl)
+    | some r1 =>
+      rw [h1] at hf hn
+      dsimp only at hf
+      simp only [Option.bind_eq_bind, Option.bind_some] at hn
+      rw [step_eval_bridge hpe (by rw [stepPexpr_of_PePure hpe]; exact h1) f hd (n+1) loc cloc mem]
+      dsimp only [exception_undef_bind, exception_undef_return, exception_undef_fmap,
+        except_return, return1]
+      rcases r1 with ⟨a1, u1, p1⟩
+      cases u1
+      cases hv1 : valueFromPexpr (Pexpr a1 () p1) with
+      | none => rw [hv1] at hf; cases hf
+      | some v1 =>
+        obtain ⟨a1', hp1⟩ := valueFromPexpr_some_iff.mp hv1
+        injection hp1 with _ _ hp1'
+        subst hp1'
+        rw [hv1] at hf hn
+        dsimp only at hf hn
+        unfold isUnsignedOut at hf
+        cases hb : evalIsUnsigned v1 with
+        | some w => rw [hb] at hf; cases hf
+        | none =>
+          rw [hb] at hf
+          dsimp only [StepFail.fail?] at hf
+          obtain rfl := Option.some.inj hf
+          rcases v1 with ov1 | lv1 | _ | _ | _ | _ | ⟨_, _⟩ | _ <;> (try (cases ov1)) <;>
+            first
+            | rfl
+            | (cases hb)
+  | @call a nm pes hps ih =>
+    intro fuel hfuel n cloc mem
+    obtain ⟨f, rfl⟩ : ∃ f, fuel = f + 1 := ⟨fuel - 1, by simp at hfuel; omega⟩
+    rw [stepFail_call] at hf
+    rw [stepPexprRaw] at hn
+    show exception_undef_fmap (Pexpr [] ()) _ = _
+    dsimp only
+    -- the argument list: walk to the first failing pass (the `ctor` arm's walk)
+    have hlist : ∀ (pes' : List (generic_pexpr Unit sym)),
+        (∀ q ∈ pes', PePure q) →
+        (∀ q ∈ pes', peDepth q ≤ f) →
+        (∀ q ∈ pes', ∀ {fl' : EvalFail}, stepPexprRaw tds ext file ρ q = none →
+          (stepFail tds loc ext file ρ q).fail? = some fl' →
+          step_eval_pexpr_lemFuel f tds (n + 1) loc cloc ext ρ mem file false q =
+            fl'.pure (generic_pexpr Unit sym)) →
+        ∀ {fl' : EvalFail}, (stepFailList tds loc ext file ρ pes').fail? = some fl' →
+        exception_undef_mapM
+          (fun pe => step_eval_pexpr_lemFuel f tds (n + 1) loc cloc ext ρ mem file false pe)
+          pes' = fl'.pure (List (generic_pexpr Unit sym)) := by
+      intro pes'
+      induction pes' with
+      | nil => intro _ _ _ fl' hf'; rw [stepFailList_nil] at hf'; cases hf'
+      | cons q qs ihl =>
+        intro hps' hds' ihs' fl' hf'
+        rw [stepFailList_cons] at hf'
+        have hpq : PePure q := hps' q List.mem_cons_self
+        have hdq : peDepth q ≤ f := hds' q List.mem_cons_self
+        cases hq : stepPexprRaw tds ext file ρ q with
+        | some r =>
+          rw [hq] at hf'
+          dsimp only at hf'
+          exact exception_undef_mapM_cons_defined
+            (step_eval_bridge hpq (by rw [stepPexpr_of_PePure hpq]; exact hq) f hdq (n+1) loc cloc
+              mem)
+            (ihl (fun q' hq' => hps' q' (List.mem_cons_of_mem _ hq'))
+              (fun q' hq' => hds' q' (List.mem_cons_of_mem _ hq'))
+              (fun q' hq' => ihs' q' (List.mem_cons_of_mem _ hq')) hf')
+        | none =>
+          rw [hq] at hf'
+          dsimp only at hf'
+          cases hfq : stepFail tds loc ext file ρ q with
+          | kill e =>
+            rw [hfq] at hf'
+            dsimp only [StepFail.fail?] at hf'
+            obtain rfl := Option.some.inj hf'
+            exact exception_undef_mapM_cons_exception
+              (ihs' q List.mem_cons_self hq (fl' := .kill e) (by rw [hfq]; rfl))
+          | undef l u =>
+            rw [hfq] at hf'
+            dsimp only at hf'
+            cases hrs : stepPexprsRaw tds ext file ρ qs with
+            | none => rw [hrs] at hf'; cases hf'
+            | some rs =>
+              rw [hrs] at hf'
+              dsimp only [StepFail.fail?] at hf'
+              obtain rfl := Option.some.inj hf'
+              refine exception_undef_mapM_cons_undef (rs := rs)
+                (ihs' q List.mem_cons_self hq (fl' := .undef l u) (by rw [hfq]; rfl)) ?_
+              apply exception_undef_mapM_bridge
+              have hpairs := stepPexprsRaw_some_iff.mp hrs
+              clear hrs hf' hfq hq ihl
+              induction hpairs with
+              | nil => exact .nil
+              | cons hpr hrest ihp =>
+                rename_i q' r' qs' rs'
+                have hsub : ∀ {q'' : generic_pexpr Unit sym}, q'' ∈ q :: qs' → q'' ∈ q :: q' :: qs' := by
+                  intro q'' hq''
+                  rcases List.mem_cons.mp hq'' with rfl | h
+                  · exact List.mem_cons_self
+                  · exact List.mem_cons_of_mem _ (List.mem_cons_of_mem _ h)
+                refine .cons ?_ (ihp
+                  (fun q'' hq'' => hps' q'' (hsub hq''))
+                  (fun q'' hq'' => hds' q'' (hsub hq''))
+                  (fun q'' hq'' => ihs' q'' (hsub hq'')))
+                have hpq' : PePure q' := hps' q' (List.mem_cons_of_mem _ List.mem_cons_self)
+                exact step_eval_bridge hpq' (by rw [stepPexpr_of_PePure hpq']; exact hpr) f
+                  (hds' q' (List.mem_cons_of_mem _ List.mem_cons_self)) (n+1) loc cloc mem
+          | uncovered => rw [hfq] at hf'; cases hf'
+    cases hrs : stepPexprsRaw tds ext file ρ pes with
+    | none =>
+      rw [hrs] at hf
+      dsimp only at hf
+      rw [hlist pes hps (fun q hq => by
+          have := peDepth_le_list_of_mem hq; simp only [peDepth_call] at hfuel; omega)
+        (fun q hq {fl'} hq' hf' => ih q hq hq' hf' f
+          (by have := peDepth_le_list_of_mem hq; simp only [peDepth_call] at hfuel; omega)
+          (n+1) cloc mem) hf]
+      first
+        | rw [exception_undef_bind_fail, exception_undef_fmap_fail]
+        | (cases fl <;> rfl)
+    | some rs =>
+      rw [hrs] at hf hn
+      dsimp only at hf
+      simp only [Option.bind_eq_bind, Option.bind_some] at hn
+      have hmap : exception_undef_mapM
+          (fun pe => step_eval_pexpr_lemFuel f tds (n + 1) loc cloc ext ρ mem file false pe)
+          pes = exception_undef_return rs := by
+        apply exception_undef_mapM_bridge
+        have h1 := stepPexprsRaw_some_iff.mp hrs
+        clear hrs hn hf hlist
+        induction h1 with
+        | nil => exact .nil
+        | cons hpr hrest ihl =>
+          rename_i pe r' pes' rs'
+          refine .cons ?_ (ihl (fun q hq => hps q (List.mem_cons_of_mem _ hq))
+            (fun q hq => ih q (List.mem_cons_of_mem _ hq))
+            (by simp only [peDepth_call, peDepthList_cons] at hfuel ⊢; omega))
+          have hpq : PePure pe := hps pe List.mem_cons_self
+          exact step_eval_bridge hpq (by rw [stepPexpr_of_PePure hpq]; exact hpr) f
+            (by simp only [peDepth_call, peDepthList_cons] at hfuel; omega) (n+1) loc cloc mem
+      rw [hmap]
+      dsimp only [exception_undef_bind, exception_undef_return, exception_undef_fmap,
+        except_return, return1]
+      cases hvs : valueFromPexprs rs with
+      | none => rw [hvs] at hf; cases hf
+      | some vs =>
+        rw [hvs] at hf hn
+        dsimp only at hf hn
+        cases hcb : callBody file nm vs with
+        | some body => rw [hcb] at hf; cases hf
+        | none =>
+          rw [hcb] at hf
+          cases hco : callOut file nm with
+          | kill err =>
+            rw [hco] at hf
+            dsimp only [StepFail.fail?] at hf
+            obtain rfl := Option.some.inj hf
+            dsimp only
+            rw [call_function_exception_of_callOut vs hco]
+            rfl
+          | undef l u =>
+            exfalso
+            unfold callOut at hco
+            cases nm with
+            | Sym f =>
+              dsimp only at hco
+              split at hco
+              · cases hco
+              · split at hco <;> cases hco
+            | Impl c =>
+              dsimp only at hco
+              split at hco <;> cases hco
+          | uncovered => rw [hco] at hf; cases hf
   | @not_ a pe hpe ih =>
     intro fuel hfuel n cloc mem
     obtain ⟨f, rfl⟩ : ∃ f, fuel = f + 1 := ⟨fuel - 1, by simp at hfuel; omega⟩
@@ -958,7 +1558,7 @@ theorem stepFail_bridge {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
     cases up
     show exception_undef_fmap (Pexpr [] ()) _ = _
     dsimp only
-    cases h1 : stepPexprRaw tds ext ρ (Pexpr ap () pp) with
+    cases h1 : stepPexprRaw tds ext file ρ (Pexpr ap () pp) with
     | none =>
       rw [h1] at hf
       dsimp only at hf
@@ -970,7 +1570,7 @@ theorem stepFail_bridge {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
       rw [h1] at hf
       dsimp only at hf
       rw [step_eval_bridge hpe (by rw [stepPexpr_of_PePure hpe]; exact h1) f hd (n+1) loc cloc
-        mem file]
+        mem]
       dsimp only [exception_undef_bind, exception_undef_return, exception_undef_fmap,
         except_return, return1]
       rcases r1 with ⟨a1, u1, p1⟩
@@ -992,7 +1592,7 @@ theorem stepFail_bridge {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
     rw [stepFail_if] at hf
     show exception_undef_fmap (Pexpr [] ()) _ = _
     dsimp only
-    cases h1 : stepPexprRaw tds ext ρ pe1 with
+    cases h1 : stepPexprRaw tds ext file ρ pe1 with
     | none =>
       rw [h1] at hf
       dsimp only at hf
@@ -1004,7 +1604,7 @@ theorem stepFail_bridge {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
       rw [h1] at hf
       dsimp only at hf
       rw [step_eval_bridge hp1 (by rw [stepPexpr_of_PePure hp1]; exact h1) f hd1 (n+1) loc cloc
-        mem file]
+        mem]
       dsimp only [exception_undef_bind, exception_undef_return, exception_undef_fmap,
         except_return, return1]
       cases hv1 : valueFromPexpr r1 with
@@ -1013,7 +1613,7 @@ theorem stepFail_bridge {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
         rw [hv1] at hf
         cases w <;> dsimp only at hf <;> (try (cases hf))
         case Vtrue =>
-          cases h2 : stepPexprRaw tds ext ρ pe2 with
+          cases h2 : stepPexprRaw tds ext file ρ pe2 with
           | none =>
             rw [h2] at hf
             dsimp only at hf
@@ -1023,7 +1623,7 @@ theorem stepFail_bridge {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
               | (cases fl <;> rfl)
           | some _ => rw [h2] at hf; cases hf
         case Vfalse =>
-          cases h3 : stepPexprRaw tds ext ρ pe3 with
+          cases h3 : stepPexprRaw tds ext file ρ pe3 with
           | none =>
             rw [h3] at hf
             dsimp only at hf
@@ -1045,7 +1645,7 @@ theorem stepClass_bridge_fail {tds : Fmap sym (CerbLocation.Loc × tag_definitio
     step_eval_pexpr_lemFuel fuel tds n loc cloc ext ρ mem file false pe =
       fl.pure (generic_pexpr Unit sym) := by
   unfold stepClass at hf
-  cases hn : stepPexprRaw tds ext ρ pe with
+  cases hn : stepPexprRaw tds ext file ρ pe with
   | some r => rw [hn] at hf; cases hf
   | none =>
     rw [hn] at hf
@@ -1138,16 +1738,16 @@ theorem classIter_bridge {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
     | next r =>
       rw [hsc] at hf
       dsimp only at hf
-      have hr : stepPexprRaw tds ext ρ (peStrip pe) = some r := by
+      have hr : stepPexprRaw tds ext file ρ (peStrip pe) = some r := by
         unfold stepClass at hsc
-        cases h : stepPexprRaw tds ext ρ (peStrip pe) with
+        cases h : stepPexprRaw tds ext file ρ (peStrip pe) with
         | some r' => rw [h] at hsc; cases hsc; rfl
         | none =>
           rw [h] at hsc
           dsimp only at hsc
           cases hsf : stepFail tds loc ext file ρ (peStrip pe) <;> rw [hsf] at hsc <;> cases hsc
       rw [← hm, step_eval_bridge hps (by rw [stepPexpr_of_PePure hps]; exact hr)
-        lemDefaultFuel hdps 0 loc cloc mem file]
+        lemDefaultFuel hdps 0 loc cloc mem]
       dsimp only [exception_undef_bind, exception_undef_return, except_return, return1]
       cases hvr : valueFromPexpr r with
       | some _ => rw [hvr] at hf; cases hf
@@ -1182,7 +1782,7 @@ theorem aux2_bridge_fail {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
       fl.pure (Sum (generic_pexpr Unit sym) value) := by
   intro fuel hfuel cloc mem
   unfold evalClass at hf
-  cases hv : evalPexpr tds ext ρ pe with
+  cases hv : evalPexpr tds ext file ρ pe with
   | some v => rw [hv] at hf; cases hf
   | none =>
     rw [hv] at hf
@@ -1395,7 +1995,7 @@ theorem evalClassFold_cons (pe : generic_pexpr Unit sym) (pes : List (generic_pe
         | .uncovered pe' => .uncovered pe') := rfl
 
 theorem evalClassList_vals_iff (pes : List (generic_pexpr Unit sym)) (vs : List value) :
-    evalClassList tds loc ext file ρ pes = .vals vs ↔ evalPexprs tds ext ρ pes = some vs := by
+    evalClassList tds loc ext file ρ pes = .vals vs ↔ evalPexprs tds ext file ρ pes = some vs := by
   induction pes generalizing vs with
   | nil =>
     show EvalListOut.vals [] = EvalListOut.vals vs ↔ some [] = some vs
@@ -1414,22 +2014,22 @@ theorem evalClassList_vals_iff (pes : List (generic_pexpr Unit sym)) (vs : List 
         · intro h; cases h; rfl
         · intro h; cases h; rfl
       | kill err =>
-        have : evalPexprs tds ext ρ pes = none := by
-          cases h' : evalPexprs tds ext ρ pes with
+        have : evalPexprs tds ext file ρ pes = none := by
+          cases h' : evalPexprs tds ext file ρ pes with
           | none => rfl
           | some w => rw [← ih w, hl] at h'; cases h'
         rw [this]
         constructor <;> intro h <;> cases h
       | undef l u =>
-        have : evalPexprs tds ext ρ pes = none := by
-          cases h' : evalPexprs tds ext ρ pes with
+        have : evalPexprs tds ext file ρ pes = none := by
+          cases h' : evalPexprs tds ext file ρ pes with
           | none => rfl
           | some w => rw [← ih w, hl] at h'; cases h'
         rw [this]
         constructor <;> intro h <;> cases h
       | uncovered pe' =>
-        have : evalPexprs tds ext ρ pes = none := by
-          cases h' : evalPexprs tds ext ρ pes with
+        have : evalPexprs tds ext file ρ pes = none := by
+          cases h' : evalPexprs tds ext file ρ pes with
           | none => rfl
           | some w => rw [← ih w, hl] at h'; cases h'
         rw [this]
@@ -1445,7 +2045,7 @@ theorem evalClassList_vals_iff (pes : List (generic_pexpr Unit sym)) (vs : List 
       constructor <;> intro h <;> cases h
 
 theorem evalClassFold_vals_iff (pes : List (generic_pexpr Unit sym)) (vs : List value) :
-    evalClassFold tds loc ext file ρ pes = .vals vs ↔ evalPexprs tds ext ρ pes = some vs := by
+    evalClassFold tds loc ext file ρ pes = .vals vs ↔ evalPexprs tds ext file ρ pes = some vs := by
   induction pes generalizing vs with
   | nil =>
     show EvalListOut.vals [] = EvalListOut.vals vs ↔ some [] = some vs
@@ -1464,22 +2064,22 @@ theorem evalClassFold_vals_iff (pes : List (generic_pexpr Unit sym)) (vs : List 
         · intro h; cases h; rfl
         · intro h; cases h; rfl
       | kill err =>
-        have : evalPexprs tds ext ρ pes = none := by
-          cases h' : evalPexprs tds ext ρ pes with
+        have : evalPexprs tds ext file ρ pes = none := by
+          cases h' : evalPexprs tds ext file ρ pes with
           | none => rfl
           | some w => rw [← ih w, hl] at h'; cases h'
         rw [this]
         constructor <;> intro h <;> cases h
       | undef l u =>
-        have : evalPexprs tds ext ρ pes = none := by
-          cases h' : evalPexprs tds ext ρ pes with
+        have : evalPexprs tds ext file ρ pes = none := by
+          cases h' : evalPexprs tds ext file ρ pes with
           | none => rfl
           | some w => rw [← ih w, hl] at h'; cases h'
         rw [this]
         constructor <;> intro h <;> cases h
       | uncovered pe' =>
-        have : evalPexprs tds ext ρ pes = none := by
-          cases h' : evalPexprs tds ext ρ pes with
+        have : evalPexprs tds ext file ρ pes = none := by
+          cases h' : evalPexprs tds ext file ρ pes with
           | none => rfl
           | some w => rw [← ih w, hl] at h'; cases h'
         rw [this]
@@ -1565,7 +2165,7 @@ theorem evalClassFold_uncovered {tds : CerbTags.TagDefsMap} {loc : CerbLocation.
 theorem evalClassList_of_none {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym}
     {ρ : EnvStack} {pes : List (generic_pexpr Unit sym)} (loc : CerbLocation.Loc)
     (file : generic_file Unit core_run_annotation)
-    (h : evalPexprs tds ext ρ pes = none) :
+    (h : evalPexprs tds ext file ρ pes = none) :
     (∃ fl, (evalClassList tds loc ext file ρ pes).fail? = some fl) ∨
     (∃ pe, evalClassList tds loc ext file ρ pes = .uncovered pe) := by
   cases hc : evalClassList tds loc ext file ρ pes with
@@ -1577,7 +2177,7 @@ theorem evalClassList_of_none {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym}
 theorem evalClassFold_of_none {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym}
     {ρ : EnvStack} {pes : List (generic_pexpr Unit sym)} (loc : CerbLocation.Loc)
     (file : generic_file Unit core_run_annotation)
-    (h : evalPexprs tds ext ρ pes = none) :
+    (h : evalPexprs tds ext file ρ pes = none) :
     (∃ fl, (evalClassFold tds loc ext file ρ pes).fail? = some fl) ∨
     (∃ pe, evalClassFold tds loc ext file ρ pes = .uncovered pe) := by
   cases hc : evalClassFold tds loc ext file ρ pes with
@@ -1613,7 +2213,7 @@ theorem stExpect_mapM_class {X Y : Type}
     (h : X → core_run_state → exceptM (t0 Y × core_run_state) core_run_cause)
     (proj : X → generic_pexpr Unit sym) (wrap : X → value → Y)
     (hval : ∀ (x : X) (rs : core_run_state) (v : value),
-      evalPexpr tds ext th.env (proj x) = some v → h x rs = Result (Defined (wrap x v), rs))
+      evalPexpr tds ext file th.env (proj x) = some v → h x rs = Result (Defined (wrap x v), rs))
     (hfail : ∀ (x : X) (rs : core_run_state) (fl : EvalFail),
       (evalClass tds th.current_loc ext file th.env (proj x)).fail? = some fl →
       h x rs = fl.run Y core_run_state rs)
@@ -1729,7 +2329,7 @@ theorem stExceptUndef_mapM_class_fail {X Y : Type}
     (h : X → core_run_state → exceptM (t0 Y × core_run_state) core_run_cause)
     (proj : X → generic_pexpr Unit sym) (wrap : X → value → Y)
     (hval : ∀ (x : X) (rs : core_run_state) (v : value),
-      evalPexpr tds ext th.env (proj x) = some v → h x rs = Result (Defined (wrap x v), rs))
+      evalPexpr tds ext file th.env (proj x) = some v → h x rs = Result (Defined (wrap x v), rs))
     (hfail : ∀ (x : X) (rs : core_run_state) (fl : EvalFail),
       (evalClass tds th.current_loc ext file th.env (proj x)).fail? = some fl →
       h x rs = fl.run Y core_run_state rs)
@@ -1786,10 +2386,10 @@ theorem mapM_eval1_fail {ext : Fmap sym sym} {th : thread_state}
     rw [List.map_map]
     rfl
   have hval : ∀ (x : X) (rs' : core_run_state) (v : value),
-      evalPexpr tds ext th.env x.val = some v →
+      evalPexpr tds ext file th.env x.val = some v →
       f x.val rs' = Result (Defined (mk_value_pe v), rs') := by
     intro x rs' v hv
-    exact (hf x.val rs').trans (eval1_bridge hv (hd x.val x.property) σ file rs')
+    exact (hf x.val rs').trans (eval1_bridge hv (hd x.val x.property) σ rs')
   have hfail : ∀ (x : X) (rs' : core_run_state) (fl' : EvalFail),
       (evalClass tds th.current_loc ext file th.env x.val).fail? = some fl' →
       f x.val rs' = fl'.run (generic_pexpr Unit sym) core_run_state rs' := by
@@ -1871,12 +2471,12 @@ theorem mapM_save_fail {ext : Fmap sym sym} {th : thread_state}
     rw [List.map_map]
     rfl
   have hval : ∀ (x : X) (rs' : core_run_state) (v : value),
-      evalPexpr tds ext th.env x.val.2.2 = some v →
+      evalPexpr tds ext file th.env x.val.2.2 = some v →
       g x.val rs' = Result (Defined (x.val.1, (x.val.2.1, mk_value_pe v)), rs') := by
     intro x rs' v hv
     have hm : x.val.2.2 ∈ saveParamPexprs ps := by
       unfold saveParamPexprs; exact List.mem_map.mpr ⟨x.val, x.property, rfl⟩
-    rw [hg, stExceptUndef_bind_apply, (hf _ rs').trans (eval1_bridge hv (hd _ hm) σ file rs')]
+    rw [hg, stExceptUndef_bind_apply, (hf _ rs').trans (eval1_bridge hv (hd _ hm) σ rs')]
     rfl
   have hfail : ∀ (x : X) (rs' : core_run_state) (fl' : EvalFail),
       (evalClass tds th.current_loc ext file th.env x.val.2.2).fail? = some fl' →
@@ -2004,7 +2604,7 @@ theorem foldM_args_fail {th : thread_state}
       | val v =>
         rw [hc] at h'
         have hv := (evalClass_val_iff tds th.current_loc ext file th.env pe v).mp hc
-        rw [stExceptUndef_bind_apply, full_eval_bridge hv hde σ file, stExceptUndef_return_apply]
+        rw [stExceptUndef_bind_apply, full_eval_bridge hv hde σ, stExceptUndef_return_apply]
         dsimp only []
         rw [stExceptUndef_return_apply]
         dsimp only []

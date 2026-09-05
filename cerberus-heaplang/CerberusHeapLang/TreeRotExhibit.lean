@@ -630,12 +630,12 @@ theorem trBindB (bbty : core_base_type) (ov : object_value) (vy vx : value) :
 
 /-! ## Evaluation facts at the bound frames -/
 
-theorem tr_shift1_eval_F1 (id aX : Int) :
-    evalPexpr fmapEmpty fmapEmpty (trF1 (ptrVal (cellPtr id aX)) :: [])
+theorem tr_shift1_eval_F1 {file : generic_file Unit core_run_annotation} (id aX : Int) :
+    evalPexpr fmapEmpty fmapEmpty file (trF1 (ptrVal (cellPtr id aX)) :: [])
       (trShift1 trXSym) = some (ptrVal (cellPtr id (aX + 8))) := by
   unfold trShift1
   rw [evalPexpr_array_shift]
-  rw [show evalPexpr fmapEmpty fmapEmpty (trF1 (ptrVal (cellPtr id aX)) :: [])
+  rw [show evalPexpr fmapEmpty fmapEmpty file (trF1 (ptrVal (cellPtr id aX)) :: [])
       (Pexpr [] () (PEsym trXSym)) = some (ptrVal (cellPtr id aX)) from by
     rw [evalPexpr_sym_empty]
     exact lookup_env_head (trF1_lookup_x _) []]
@@ -643,12 +643,12 @@ theorem tr_shift1_eval_F1 (id aX : Int) :
   show evalArrayShift fmapEmpty longTy (Vobject (OVpointer (cellPtr id aX))) (ivVal 1) = _
   exact evalArrayShift_long_one id aX
 
-theorem tr_shift2_eval_F2 (id aY : Int) (vx : value) :
-    evalPexpr fmapEmpty fmapEmpty (trF2 (ptrVal (cellPtr id aY)) vx :: [])
+theorem tr_shift2_eval_F2 {file : generic_file Unit core_run_annotation} (id aY : Int) (vx : value) :
+    evalPexpr fmapEmpty fmapEmpty file (trF2 (ptrVal (cellPtr id aY)) vx :: [])
       (trShift2 trYSym) = some (ptrVal (cellPtr id (aY + 16))) := by
   unfold trShift2
   rw [evalPexpr_array_shift]
-  rw [show evalPexpr fmapEmpty fmapEmpty (trF2 (ptrVal (cellPtr id aY)) vx :: [])
+  rw [show evalPexpr fmapEmpty fmapEmpty file (trF2 (ptrVal (cellPtr id aY)) vx :: [])
       (Pexpr [] () (PEsym trYSym)) = some (ptrVal (cellPtr id aY)) from by
     rw [evalPexpr_sym_empty]
     exact lookup_env_head (trF2_lookup_y _ _) []]
@@ -656,12 +656,12 @@ theorem tr_shift2_eval_F2 (id aY : Int) (vx : value) :
   show evalArrayShift fmapEmpty longTy (Vobject (OVpointer (cellPtr id aY))) (ivVal 2) = _
   exact evalArrayShift_long_two id aY
 
-theorem tr_shift1_eval_F3 (vb vy : value) (id aX : Int) :
-    evalPexpr fmapEmpty fmapEmpty (trF3 vb vy (ptrVal (cellPtr id aX)) :: [])
+theorem tr_shift1_eval_F3 {file : generic_file Unit core_run_annotation} (vb vy : value) (id aX : Int) :
+    evalPexpr fmapEmpty fmapEmpty file (trF3 vb vy (ptrVal (cellPtr id aX)) :: [])
       (trShift1 trXSym) = some (ptrVal (cellPtr id (aX + 8))) := by
   unfold trShift1
   rw [evalPexpr_array_shift]
-  rw [show evalPexpr fmapEmpty fmapEmpty (trF3 vb vy (ptrVal (cellPtr id aX)) :: [])
+  rw [show evalPexpr fmapEmpty fmapEmpty file (trF3 vb vy (ptrVal (cellPtr id aX)) :: [])
       (Pexpr [] () (PEsym trXSym)) = some (ptrVal (cellPtr id aX)) from by
     rw [evalPexpr_sym_empty]
     exact lookup_env_head (trF3_lookup_x _ _ _) []]
@@ -669,12 +669,12 @@ theorem tr_shift1_eval_F3 (vb vy : value) (id aX : Int) :
   show evalArrayShift fmapEmpty longTy (Vobject (OVpointer (cellPtr id aX))) (ivVal 1) = _
   exact evalArrayShift_long_one id aX
 
-theorem tr_shift2_eval_F3 (vb vx : value) (id aY : Int) :
-    evalPexpr fmapEmpty fmapEmpty (trF3 vb (ptrVal (cellPtr id aY)) vx :: [])
+theorem tr_shift2_eval_F3 {file : generic_file Unit core_run_annotation} (vb vx : value) (id aY : Int) :
+    evalPexpr fmapEmpty fmapEmpty file (trF3 vb (ptrVal (cellPtr id aY)) vx :: [])
       (trShift2 trYSym) = some (ptrVal (cellPtr id (aY + 16))) := by
   unfold trShift2
   rw [evalPexpr_array_shift]
-  rw [show evalPexpr fmapEmpty fmapEmpty (trF3 vb (ptrVal (cellPtr id aY)) vx :: [])
+  rw [show evalPexpr fmapEmpty fmapEmpty file (trF3 vb (ptrVal (cellPtr id aY)) vx :: [])
       (Pexpr [] () (PEsym trYSym)) = some (ptrVal (cellPtr id aY)) from by
     rw [evalPexpr_sym_empty]
     exact lookup_env_head (trF3_lookup_y _ _ _) []]
@@ -682,20 +682,20 @@ theorem tr_shift2_eval_F3 (vb vx : value) (id aY : Int) :
   show evalArrayShift fmapEmpty longTy (Vobject (OVpointer (cellPtr id aY))) (ivVal 2) = _
   exact evalArrayShift_long_two id aY
 
-theorem tr_b_eval_F3 (vb vy vx : value) :
-    evalPexpr fmapEmpty fmapEmpty (trF3 vb vy vx :: [])
+theorem tr_b_eval_F3 {file : generic_file Unit core_run_annotation} (vb vy vx : value) :
+    evalPexpr fmapEmpty fmapEmpty file (trF3 vb vy vx :: [])
       (Pexpr [] () (PEsym trBSym)) = some vb := by
   rw [evalPexpr_sym_empty]
   exact lookup_env_head (trF3_lookup_b _ _ _) []
 
-theorem tr_x_eval_F3 (vb vy vx : value) :
-    evalPexpr fmapEmpty fmapEmpty (trF3 vb vy vx :: [])
+theorem tr_x_eval_F3 {file : generic_file Unit core_run_annotation} (vb vy vx : value) :
+    evalPexpr fmapEmpty fmapEmpty file (trF3 vb vy vx :: [])
       (Pexpr [] () (PEsym trXSym)) = some vx := by
   rw [evalPexpr_sym_empty]
   exact lookup_env_head (trF3_lookup_x _ _ _) []
 
-theorem tr_y_eval_F3 (vb vy vx : value) :
-    evalPexpr fmapEmpty fmapEmpty (trF3 vb vy vx :: [])
+theorem tr_y_eval_F3 {file : generic_file Unit core_run_annotation} (vb vy vx : value) :
+    evalPexpr fmapEmpty fmapEmpty file (trF3 vb vy vx :: [])
       (Pexpr [] () (PEsym trYSym)) = some vy := by
   rw [evalPexpr_sym_empty]
   exact lookup_env_head (trF3_lookup_y _ _ _) []

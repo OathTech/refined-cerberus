@@ -156,13 +156,13 @@ theorem lookup_env_x {f : Fmap sym value} (hf : SymFrame f) (v : value)
 
 /-! ## Evaluation facts at any reachable frame -/
 
-theorem guard_eval {f : Fmap sym value} (hf : SymFrame f) (i : Int)
+theorem guard_eval {file : generic_file Unit core_run_annotation} {f : Fmap sym value} (hf : SymFrame f) (i : Int)
     (rest : List (Fmap sym value)) :
-    evalPexpr fmapEmpty fmapEmpty (envAdd xSym (ivVal i) f :: rest) guardPe =
+    evalPexpr fmapEmpty fmapEmpty file (envAdd xSym (ivVal i) f :: rest) guardPe =
       some (boolValue (decide (0 < i))) := by
   unfold guardPe
   rw [evalPexpr_op]
-  rw [show evalPexpr fmapEmpty fmapEmpty (envAdd xSym (ivVal i) f :: rest)
+  rw [show evalPexpr fmapEmpty fmapEmpty file (envAdd xSym (ivVal i) f :: rest)
       (Pexpr [] () (PEsym xSym)) = some (ivVal i) from by
       rw [evalPexpr_sym_empty]; exact lookup_env_x hf (ivVal i) rest]
   rw [evalPexpr_val]
@@ -172,16 +172,16 @@ theorem guard_eval {f : Fmap sym value} (hf : SymFrame f) (i : Int)
     (CerbMem.integerIval i)).map boolValue = _
   rfl
 
-theorem dec_eval {f : Fmap sym value} (hf : SymFrame f) (i : Int)
+theorem dec_eval {file : generic_file Unit core_run_annotation} {f : Fmap sym value} (hf : SymFrame f) (i : Int)
     (rest : List (Fmap sym value)) :
-    evalPexprs fmapEmpty fmapEmpty (envAdd xSym (ivVal i) f :: rest) [decPe] =
+    evalPexprs fmapEmpty fmapEmpty file (envAdd xSym (ivVal i) f :: rest) [decPe] =
       some [ivVal (i - 1)] := by
   rw [evalPexprs_cons]
-  rw [show evalPexpr fmapEmpty fmapEmpty (envAdd xSym (ivVal i) f :: rest) decPe =
+  rw [show evalPexpr fmapEmpty fmapEmpty file (envAdd xSym (ivVal i) f :: rest) decPe =
       some (ivVal (i - 1)) from by
     unfold decPe
     rw [evalPexpr_op]
-    rw [show evalPexpr fmapEmpty fmapEmpty (envAdd xSym (ivVal i) f :: rest)
+    rw [show evalPexpr fmapEmpty fmapEmpty file (envAdd xSym (ivVal i) f :: rest)
         (Pexpr [] () (PEsym xSym)) = some (ivVal i) from by
         rw [evalPexpr_sym_empty]; exact lookup_env_x hf (ivVal i) rest]
     rw [evalPexpr_val]
@@ -216,10 +216,10 @@ variable (loc : CerbLocation.Loc) (ann ra : core_run_annotation)
   (mo : memory_order) (bty xbty : core_base_type)
   (c : CerbMem.PointerValue) (n : Int) (bs0 : List CerbMem.AbsByte)
 -- S1b: the wps judgment is indexed by the MACHINE CONTEXT; the
--- exhibit works at the jump-profile instance `procCtx rs` (entry control
+-- exhibit works at the jump-profile instance `procCtxF F rs` (entry control
 -- `procCtl p`: empty stack, in procedure `p`; calls arc C1) with the
--- label map tied by the honest `LabeledAt` link (`procCtx_labels`).
-variable (p : sym) (rs : core_run_state)
+-- label map tied by the honest `LabeledAt` link (`procCtxF_labels`).
+variable (p : sym) {F : file core_run_annotation} (rs : core_run_state)
   (hQ : LabeledAt rs p (loopQ loc ann ra mo bty xbty c))
 
 /-- The postcondition: unit value; the cell untouched iff the loop
@@ -246,9 +246,9 @@ include hQ
 theorem loop_body_wps (i : Int) (f : Fmap sym value)
     (rest : List (Fmap sym value)) (hf : SymFrame f)
     (h0 : 0 ≤ i) (hin : i ≤ n) :
-    iprop(((⌜i = n⌝ ∗ pointsToCell (procCtx rs).tagDefs (GF := GF) c (.own 1) intTy bs0) ∨
-      (⌜i < n⌝ ∗ pointsToCell (procCtx rs).tagDefs c (.own 1) intTy (sevenBytes (procCtx rs).tagDefs)))) ⊢
-      wps (procCtx rs) (some p) (loopLs c n bs0) emptyProcSpec
+    iprop(((⌜i = n⌝ ∗ pointsToCell (procCtxF F rs).tagDefs (GF := GF) c (.own 1) intTy bs0) ∨
+      (⌜i < n⌝ ∗ pointsToCell (procCtxF F rs).tagDefs c (.own 1) intTy (sevenBytes (procCtxF F rs).tagDefs)))) ⊢
+      wps (procCtxF F rs) (some p) (loopLs c n bs0) emptyProcSpec
         (loopPost c n bs0) (loopBody loc ann ra mo bty c)
         (envAdd xSym (ivVal i) f :: rest) := by
   rw [show (loopBody loc ann ra mo bty c) =
@@ -260,7 +260,7 @@ theorem loop_body_wps (i : Int) (f : Fmap sym value)
   · -- guard TRUE: store then jump at i - 1
     iintro Hcell
     iapply wps_if_true [] guardPe _ _ _
-      (by rw [procCtx_extern, guard_eval hf i rest, decide_eq_true hpos]; rfl)
+      (by rw [procCtxF_extern, guard_eval hf i rest, decide_eq_true hpos]; rfl)
     rw [show (sseqExpr [] bty (storeExpr [] loc ann intTy c sevenVal mo)
         (Expr [] (Erun ra loopSym [decPe]))) =
       Expr [] (Esseq (Pattern [] (CaseBase (none, bty)))
@@ -275,7 +275,7 @@ theorem loop_body_wps (i : Int) (f : Fmap sym value)
        · iexact Hc
        iintro %fp Hc
        iapply wps_run [] ra loopSym [decPe] _ _
-         (by rw [procCtx_labels hQ]
+         (by rw [procCtxF_labels hQ]
              exact loopQ_lookup loc ann ra mo bty xbty c)
          (dec_eval hf i rest)
        iexists (i - 1), (envAdd xSym (ivVal i) f), rest
@@ -285,14 +285,14 @@ theorem loop_body_wps (i : Int) (f : Fmap sym value)
        iright
        isplit
        · ipureintro; omega
-       rw [show (sevenBytes (procCtx rs).tagDefs) = (CerbMem.memValueToBytes (procCtx rs).tagDefs [] sevenMval).2 from rfl]
+       rw [show (sevenBytes (procCtxF F rs).tagDefs) = (CerbMem.memValueToBytes (procCtxF F rs).tagDefs [] sevenMval).2 from rfl]
        iexact Hc)
   · -- guard FALSE: exit with the final cell state
     have hz : i = 0 := by omega
     subst hz
     iintro Hcell
     iapply wps_if_false [] guardPe _ _ _
-      (by rw [procCtx_extern, guard_eval hf 0 rest,
+      (by rw [procCtxF_extern, guard_eval hf 0 rest,
         decide_eq_false hpos]; rfl)
     iapply wps_ofVal (.pure Vunit)
     unfold loopPost
@@ -312,10 +312,10 @@ theorem loop_body_wps (i : Int) (f : Fmap sym value)
     Löb — the back edge discharged against the invariant at `i-1`
     through the jump clause). -/
 theorem loop_blockSpecs :
-    ⊢ blockSpecs (GF := GF) (procCtx rs) (some p)
+    ⊢ blockSpecs (GF := GF) (procCtxF F rs) (some p)
       (loopLs c n bs0) emptyProcSpec (loopPost c n bs0) := by
   refine blockSpecs_intro fun l params cont vs ev0 evs hl => ?_
-  rw [procCtx_labels hQ] at hl
+  rw [procCtxF_labels hQ] at hl
   obtain ⟨rfl, rfl⟩ := loopQ_inv loc ann ra mo bty xbty c hl
   iintro ⟨%i, %f, %rest, %hpure, Hcell⟩
   obtain ⟨rfl, h0, hin, hρ, hf⟩ := hpure
@@ -333,8 +333,8 @@ theorem loop_blockSpecs :
     longer the fixed `[fmapEmpty]`). -/
 theorem loop_wps (hn : 0 ≤ n) (sbty : core_base_type)
     (f : Fmap sym value) (hf : SymFrame f) (rest : List (Fmap sym value)) :
-    pointsToCell (procCtx rs).tagDefs (GF := GF) c (.own 1) intTy bs0 ⊢
-      wps (procCtx rs) (some p) (loopLs c n bs0) emptyProcSpec
+    pointsToCell (procCtxF F rs).tagDefs (GF := GF) c (.own 1) intTy bs0 ⊢
+      wps (procCtxF F rs) (some p) (loopLs c n bs0) emptyProcSpec
         (loopPost c n bs0)
         (loopProg loc ann ra mo bty xbty sbty c n) (f :: rest) := by
   iintro Hc
@@ -387,9 +387,9 @@ theorem loop_wp_readout (hn : 0 ≤ n) (sbty : core_base_type)
             ⌜w.val = Vunit ∧ ∃ bs',
               ((n = 0 ∧ bs' = bs0) ∨ (0 < n ∧ bs' = (sevenBytes (procCtx rs).tagDefs))) ∧
               ∃ i a, c = cellPtr i a ∧ CellCoh (procCtx rs).tagDefs σ' i ⟨a, intTy, bs'⟩⌝) }} := by
-  refine ((loop_wps loc ann ra mo bty xbty c n bs0 p rs hQ hn sbty f hf rest).trans ?_)
+  refine ((loop_wps (F := spikeFile) loc ann ra mo bty xbty c n bs0 p rs hQ hn sbty f hf rest).trans ?_)
   refine (BI.emp_sep.2.trans (BI.sep_mono
-    ((loop_blockSpecs loc ann ra mo bty xbty c n bs0 p rs hQ).trans
+    ((loop_blockSpecs (F := spikeFile) loc ann ra mo bty xbty c n bs0 p rs hQ).trans
       (wps_sound_empty (ctl := procCtl p) rfl (loopProg loc ann ra mo bty xbty sbty c n) (f :: rest)))
     .rfl)).trans ?_
   refine BI.wand_elim_left.trans ?_

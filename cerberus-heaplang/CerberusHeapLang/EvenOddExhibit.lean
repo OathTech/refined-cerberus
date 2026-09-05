@@ -288,19 +288,19 @@ abbrev eoF0 (n : Int) : Fmap sym value := envAdd eoNSym (ivVal n) fmapEmpty
 theorem eoF0_lookup_n (n : Int) : fmapLookupBy symCmpK eoNSym (eoF0 n) = some (ivVal n) := by
   rw [envAdd_lookup symFrame_empty, if_pos (by decide +kernel)]
 
-theorem eoN_eval (n : Int) (ρ : EnvStack) :
-    evalPexpr fmapEmpty fmapEmpty (eoF0 n :: ρ) (Pexpr [] () (PEsym eoNSym)) = some (ivVal n) := by
+theorem eoN_eval {file : generic_file Unit core_run_annotation} (n : Int) (ρ : EnvStack) :
+    evalPexpr fmapEmpty fmapEmpty file (eoF0 n :: ρ) (Pexpr [] () (PEsym eoNSym)) = some (ivVal n) := by
   rw [evalPexpr_sym_empty]
   exact lookup_env_head (eoF0_lookup_n n) ρ
 
-theorem eoGuard_eval (n : Int) (ρ : EnvStack) :
-    evalPexpr fmapEmpty fmapEmpty (eoF0 n :: ρ) eoGuard = some (boolValue (decide (n < 1))) := by
+theorem eoGuard_eval {file : generic_file Unit core_run_annotation} (n : Int) (ρ : EnvStack) :
+    evalPexpr fmapEmpty fmapEmpty file (eoF0 n :: ρ) eoGuard = some (boolValue (decide (n < 1))) := by
   unfold eoGuard
   rw [evalPexpr_op, eoN_eval, evalPexpr_val]
   rfl
 
-theorem eoDec_eval (n : Int) (ρ : EnvStack) :
-    evalPexprs fmapEmpty fmapEmpty (eoF0 n :: ρ) [eoDec] = some [ivVal (n - 1)] := by
+theorem eoDec_eval {file : generic_file Unit core_run_annotation} (n : Int) (ρ : EnvStack) :
+    evalPexprs fmapEmpty fmapEmpty file (eoF0 n :: ρ) [eoDec] = some [ivVal (n - 1)] := by
   rw [evalPexprs_cons]
   unfold eoDec
   rw [evalPexpr_op, eoN_eval, evalPexpr_val]
@@ -361,7 +361,7 @@ theorem eoEvenBody_wps (g : sym) (hodd : symOrd g eoOddSym ≠ .eq) (vs : List v
   by_cases hlt : n' < 1
   · -- THE BASE CASE: n' = 0, the value 1
     iapply wps_if_true [] eoGuard _ _ _
-      (by show evalPexpr fmapEmpty fmapEmpty _ eoGuard = _
+      (by show evalPexpr fmapEmpty fmapEmpty _ _ eoGuard = _
           rw [eoGuard_eval, decide_eq_true hlt]; rfl)
     iapply wps_ofVal (.pure (ivVal 1))
     ipureintro
@@ -371,7 +371,7 @@ theorem eoEvenBody_wps (g : sym) (hodd : symOrd g eoOddSym ≠ .eq) (vs : List v
     rfl
   · -- THE RECURSIVE CASE: odd(n' - 1)
     iapply wps_if_false [] eoGuard _ _ _
-      (by show evalPexpr fmapEmpty fmapEmpty _ eoGuard = _
+      (by show evalPexpr fmapEmpty fmapEmpty _ _ eoGuard = _
           rw [eoGuard_eval, decide_eq_false hlt]; rfl)
     unfold callRedex
     iapply wps_call_root [] ra eoOddSym [eoDec] (eoF0 n' :: ρ) (vs := [ivVal (n' - 1)])
@@ -405,7 +405,7 @@ theorem eoOddBody_wps (g : sym) (hodd : symOrd g eoOddSym = .eq) (vs : List valu
   unfold eoOddBody
   by_cases hlt : n' < 1
   · iapply wps_if_true [] eoGuard _ _ _
-      (by show evalPexpr fmapEmpty fmapEmpty _ eoGuard = _
+      (by show evalPexpr fmapEmpty fmapEmpty _ _ eoGuard = _
           rw [eoGuard_eval, decide_eq_true hlt]; rfl)
     iapply wps_ofVal (.pure (ivVal 0))
     ipureintro
@@ -414,7 +414,7 @@ theorem eoOddBody_wps (g : sym) (hodd : symOrd g eoOddSym = .eq) (vs : List valu
     obtain rfl : n' = 0 := by omega
     rfl
   · iapply wps_if_false [] eoGuard _ _ _
-      (by show evalPexpr fmapEmpty fmapEmpty _ eoGuard = _
+      (by show evalPexpr fmapEmpty fmapEmpty _ _ eoGuard = _
           rw [eoGuard_eval, decide_eq_false hlt]; rfl)
     unfold callRedex
     iapply wps_call_root [] ra eoEvenSym [eoDec] (eoF0 n' :: ρ) (vs := [ivVal (n' - 1)])
@@ -516,7 +516,7 @@ theorem eoEvenBody_wpt (g : sym) (hodd : symOrd g eoOddSym ≠ .eq) (m : Nat) (v
   by_cases hlt : n' < 1
   · rw [show 3 * n'.toNat + 2 = 1 + 1 by omega]
     iapply wpt_if_true [] eoGuard _ _ _
-      (by show evalPexpr fmapEmpty fmapEmpty _ eoGuard = _
+      (by show evalPexpr fmapEmpty fmapEmpty _ _ eoGuard = _
           rw [eoGuard_eval, decide_eq_true hlt]; rfl)
     iapply wpt_ofVal (.pure (ivVal 1)) _ (Nat.le_refl 1)
     ipureintro
@@ -526,7 +526,7 @@ theorem eoEvenBody_wpt (g : sym) (hodd : symOrd g eoOddSym ≠ .eq) (m : Nat) (v
     rfl
   · rw [show 3 * n'.toNat + 2 = ((3 * (n' - 1).toNat + 2) + 2) + 1 by omega]
     iapply wpt_if_false [] eoGuard _ _ _
-      (by show evalPexpr fmapEmpty fmapEmpty _ eoGuard = _
+      (by show evalPexpr fmapEmpty fmapEmpty _ _ eoGuard = _
           rw [eoGuard_eval, decide_eq_false hlt]; rfl)
     unfold callRedex
     iapply wpt_call_root [] ra eoOddSym [eoDec] (eoF0 n' :: ρ) (vs := [ivVal (n' - 1)])
@@ -562,7 +562,7 @@ theorem eoOddBody_wpt (g : sym) (hodd : symOrd g eoOddSym = .eq) (m : Nat) (vs :
   by_cases hlt : n' < 1
   · rw [show 3 * n'.toNat + 2 = 1 + 1 by omega]
     iapply wpt_if_true [] eoGuard _ _ _
-      (by show evalPexpr fmapEmpty fmapEmpty _ eoGuard = _
+      (by show evalPexpr fmapEmpty fmapEmpty _ _ eoGuard = _
           rw [eoGuard_eval, decide_eq_true hlt]; rfl)
     iapply wpt_ofVal (.pure (ivVal 0)) _ (Nat.le_refl 1)
     ipureintro
@@ -572,7 +572,7 @@ theorem eoOddBody_wpt (g : sym) (hodd : symOrd g eoOddSym = .eq) (m : Nat) (vs :
     rfl
   · rw [show 3 * n'.toNat + 2 = ((3 * (n' - 1).toNat + 2) + 2) + 1 by omega]
     iapply wpt_if_false [] eoGuard _ _ _
-      (by show evalPexpr fmapEmpty fmapEmpty _ eoGuard = _
+      (by show evalPexpr fmapEmpty fmapEmpty _ _ eoGuard = _
           rw [eoGuard_eval, decide_eq_false hlt]; rfl)
     unfold callRedex
     iapply wpt_call_root [] ra eoEvenSym [eoDec] (eoF0 n' :: ρ) (vs := [ivVal (n' - 1)])

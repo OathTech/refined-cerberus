@@ -229,12 +229,12 @@ include hf
 
 /-- The guard at the counter `i`: the engine's own `OpGt` on integer
     values, delivering the boolean `0 < i`. -/
-theorem rl_guard_eval (i : Int) :
-    evalPexpr fmapEmpty fmapEmpty (rlFrame (ivVal i) f :: rest) rlGuardPe =
+theorem rl_guard_eval {file : generic_file Unit core_run_annotation} (i : Int) :
+    evalPexpr fmapEmpty fmapEmpty file (rlFrame (ivVal i) f :: rest) rlGuardPe =
       some (boolValue (decide (0 < i))) := by
   unfold rlGuardPe
   rw [evalPexpr_op]
-  rw [show evalPexpr fmapEmpty fmapEmpty (rlFrame (ivVal i) f :: rest)
+  rw [show evalPexpr fmapEmpty fmapEmpty file (rlFrame (ivVal i) f :: rest)
       (Pexpr [] () (PEsym rlISym)) = some (ivVal i) from by
     rw [evalPexpr_sym_empty]
     exact lookup_env_head (rlFrame_lookup_i hf _) rest]
@@ -246,22 +246,22 @@ theorem rl_guard_eval (i : Int) :
   rfl
 
 /-- The free's operand: the bound region pointer. -/
-theorem rl_p_eval (vp vi : value) :
-    evalPexpr fmapEmpty fmapEmpty (rlFrameP vp vi f :: rest)
+theorem rl_p_eval {file : generic_file Unit core_run_annotation} (vp vi : value) :
+    evalPexpr fmapEmpty fmapEmpty file (rlFrameP vp vi f :: rest)
       (Pexpr [] () (PEsym rlPSym)) = some vp := by
   rw [evalPexpr_sym_empty]
   exact lookup_env_head (rlFrameP_lookup_p hf _ _) rest
 
 /-- The back-edge argument `i - 1` at the frame after the pointer is bound. -/
-theorem rl_args_eval (vp : value) (i : Int) :
-    evalPexprs fmapEmpty fmapEmpty (rlFrameP vp (ivVal i) f :: rest) [rlDecPe] =
+theorem rl_args_eval {file : generic_file Unit core_run_annotation} (vp : value) (i : Int) :
+    evalPexprs fmapEmpty fmapEmpty file (rlFrameP vp (ivVal i) f :: rest) [rlDecPe] =
       some [ivVal (i - 1)] := by
   rw [evalPexprs_cons]
-  rw [show evalPexpr fmapEmpty fmapEmpty (rlFrameP vp (ivVal i) f :: rest)
+  rw [show evalPexpr fmapEmpty fmapEmpty file (rlFrameP vp (ivVal i) f :: rest)
       rlDecPe = some (ivVal (i - 1)) from by
     unfold rlDecPe
     rw [evalPexpr_op]
-    rw [show evalPexpr fmapEmpty fmapEmpty (rlFrameP vp (ivVal i) f :: rest)
+    rw [show evalPexpr fmapEmpty fmapEmpty file (rlFrameP vp (ivVal i) f :: rest)
         (Pexpr [] () (PEsym rlISym)) = some (ivVal i) from by
       rw [evalPexpr_sym_empty]
       exact lookup_env_head (rlFrameP_lookup_i hf _ _) rest]
@@ -322,7 +322,7 @@ variable {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
 variable (loc : CerbLocation.Loc) (ann ra : core_run_annotation)
   (al sz : Int) (pref : prefix0) (ibty pbty ubty : core_base_type)
   (hcost : 0 < regionCost al sz)
-variable (p : sym) (rs : core_run_state)
+variable (p : sym) {F : file core_run_annotation} (rs : core_run_state)
   (hQ : LabeledAt rs p (rlQ loc ann ra al sz pref ibty pbty ubty))
 
 /-- The postcondition: the unit value (the budget is spent, nothing else
@@ -347,7 +347,7 @@ include hcost hQ
 theorem rl_body_wps (i : Int) (f : Fmap sym value)
     (renv : List (Fmap sym value)) (hf : SymFrame f) :
     allocBudget (GF := GF) (i.toNat * regionCost al sz) ⊢
-      wps (procCtx rs) (some p) (rlLs al sz) emptyProcSpec rlPost (rlBody loc ann ra al sz pref pbty ubty)
+      wps (procCtxF F rs) (some p) (rlLs al sz) emptyProcSpec rlPost (rlBody loc ann ra al sz pref pbty ubty)
         (rlFrame (ivVal i) f :: renv) := by
   rw [show rlBody loc ann ra al sz pref pbty ubty =
     Expr [] (Eif rlGuardPe
@@ -361,7 +361,7 @@ theorem rl_body_wps (i : Int) (f : Fmap sym value)
   by_cases hpos : 0 < i
   · -- i > 0: one more region
     iapply wps_if_true [] rlGuardPe _ _ _
-      (by rw [procCtx_extern, rl_guard_eval hf renv i, decide_eq_true hpos]; rfl)
+      (by rw [procCtxF_extern, rl_guard_eval hf renv i, decide_eq_true hpos]; rfl)
     rw [show i.toNat * regionCost al sz =
       regionCost al sz + (i - 1).toNat * regionCost al sz from by
         have : i.toNat = (i - 1).toNat + 1 := by omega
@@ -383,12 +383,12 @@ theorem rl_body_wps (i : Int) (f : Fmap sym value)
     rw [show rlFreeE loc ann = killOpRedex [] loc ann Dynamic0 (Pexpr [] () (PEsym rlPSym))
       from rfl]
     iapply wps_kill_eval [] loc ann Dynamic0 _ _ rfl (pv := cellPtr id a)
-      (by rw [procCtx_extern]; exact rl_p_eval hf renv _ _)
+      (by rw [procCtxF_extern]; exact rl_p_eval hf renv _ _)
     iapply wps_free_emp [] loc ann Dynamic0 id a _ _ _ rfl
     isplitl [Hr]
     · iexact Hr
     iapply wps_run [] ra rlLoopSym [rlDecPe] _ _
-      (by rw [procCtx_labels hQ]
+      (by rw [procCtxF_labels hQ]
           exact rlQ_lookup loc ann ra al sz pref ibty pbty ubty)
       (rl_args_eval hf renv _ i)
     iexists (i - 1), (rlFrameP (Vobject (OVpointer (cellPtr id a))) (ivVal i) f), renv
@@ -398,16 +398,16 @@ theorem rl_body_wps (i : Int) (f : Fmap sym value)
     · iexact Hrest
   · -- i = 0: exit with the unit value
     iapply wps_if_false [] rlGuardPe _ _ _
-      (by rw [procCtx_extern, rl_guard_eval hf renv i, decide_eq_false hpos]; rfl)
+      (by rw [procCtxF_extern, rl_guard_eval hf renv i, decide_eq_false hpos]; rfl)
     iapply wps_ofVal (SpikeVal.pure Vunit) _
     ipureintro
     rfl
 
 /-- THE BLOCK SPECIFICATION. -/
 theorem rl_blockSpecs :
-    ⊢ blockSpecs (GF := GF) (procCtx rs) (some p) (rlLs al sz) emptyProcSpec rlPost := by
+    ⊢ blockSpecs (GF := GF) (procCtxF F rs) (some p) (rlLs al sz) emptyProcSpec rlPost := by
   refine blockSpecs_intro fun l params cont args env0 envs hl => ?_
-  rw [procCtx_labels hQ] at hl
+  rw [procCtxF_labels hQ] at hl
   obtain ⟨rfl, rfl⟩ := rlQ_inv loc ann ra al sz pref ibty pbty ubty hl
   iintro ⟨%i, %f, %renv, %hpure, Hcap⟩
   obtain ⟨rfl, -, hρ, hf⟩ := hpure
@@ -424,7 +424,7 @@ theorem rl_blockSpecs :
     sz)} rl(n) {ret unit. emp}`. -/
 theorem rl_wps (sbty : core_base_type) (n : Int) :
     allocBudget (GF := GF) (n.toNat * regionCost al sz) ⊢
-      wps (procCtx rs) (some p) (rlLs al sz) emptyProcSpec rlPost
+      wps (procCtxF F rs) (some p) (rlLs al sz) emptyProcSpec rlPost
         (rlProg loc ann ra al sz pref sbty ibty pbty ubty n) [fmapEmpty] := by
   rw [show rlProg loc ann ra al sz pref sbty ibty pbty ubty n =
     Expr [] (Esave (rlLoopSym, sbty) (rlParams ibty n)
@@ -469,7 +469,7 @@ variable {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
 variable (loc : CerbLocation.Loc) (ann ra : core_run_annotation)
   (al sz : Int) (pref : prefix0) (ibty pbty ubty : core_base_type)
   (hcost : 0 < regionCost al sz)
-variable (p : sym) (rs : core_run_state)
+variable (p : sym) {F : file core_run_annotation} (rs : core_run_state)
   (hQ : LabeledAt rs p (rlQ loc ann ra al sz pref ibty pbty ubty))
 
 /-- The variant-indexed label context: the invariant plus the variant
@@ -484,7 +484,7 @@ include hcost hQ
 theorem rl_body_wpt (i : Int) (hi : 0 ≤ i) (f : Fmap sym value)
     (renv : List (Fmap sym value)) (hf : SymFrame f) :
     allocBudget (GF := GF) (i.toNat * regionCost al sz) ⊢
-      wpt (procCtx rs) (some p) (rlLsT al sz) emptyProcSpecT (rlCost i.toNat) rlPost
+      wpt (procCtxF F rs) (some p) (rlLsT al sz) emptyProcSpecT (rlCost i.toNat) rlPost
         (rlBody loc ann ra al sz pref pbty ubty) (rlFrame (ivVal i) f :: renv) := by
   rw [show rlBody loc ann ra al sz pref pbty ubty =
     Expr [] (Eif rlGuardPe
@@ -499,7 +499,7 @@ theorem rl_body_wpt (i : Int) (hi : 0 ≤ i) (f : Fmap sym value)
   · rw [show rlCost i.toNat = (2 + (3 + (1 + rlCost (i - 1).toNat))) + 1 from by
       unfold rlCost; omega]
     iapply wpt_if_true [] rlGuardPe _ _ _
-      (by rw [procCtx_extern, rl_guard_eval hf renv i, decide_eq_true hpos]; rfl)
+      (by rw [procCtxF_extern, rl_guard_eval hf renv i, decide_eq_true hpos]; rfl)
     rw [show i.toNat * regionCost al sz =
       regionCost al sz + (i - 1).toNat * regionCost al sz from by
         have : i.toNat = (i - 1).toNat + 1 := by omega
@@ -521,12 +521,12 @@ theorem rl_body_wpt (i : Int) (hi : 0 ≤ i) (f : Fmap sym value)
     rw [show rlFreeE loc ann = killOpRedex [] loc ann Dynamic0 (Pexpr [] () (PEsym rlPSym))
       from rfl, show (3 : Nat) = 2 + 1 from rfl]
     iapply wpt_kill_eval [] loc ann Dynamic0 _ _ rfl (pv := cellPtr id a)
-      (by rw [procCtx_extern]; exact rl_p_eval hf renv _ _)
+      (by rw [procCtxF_extern]; exact rl_p_eval hf renv _ _)
     iapply wpt_free_emp [] loc ann Dynamic0 id a _ _ _ (Nat.le_refl 2) rfl
     isplitl [Hr]
     · iexact Hr
     iapply wpt_run [] ra rlLoopSym [rlDecPe] _ _ (rlCost (i - 1).toNat)
-      (by rw [procCtx_labels hQ]
+      (by rw [procCtxF_labels hQ]
           exact rlQ_lookup loc ann ra al sz pref ibty pbty ubty)
       (rl_args_eval hf renv _ i)
       (Nat.le_refl _)
@@ -538,16 +538,16 @@ theorem rl_body_wpt (i : Int) (hi : 0 ≤ i) (f : Fmap sym value)
   · rw [show rlCost i.toNat = 1 + 1 from by
       unfold rlCost; omega]
     iapply wpt_if_false [] rlGuardPe _ _ _
-      (by rw [procCtx_extern, rl_guard_eval hf renv i, decide_eq_false hpos]; rfl)
+      (by rw [procCtxF_extern, rl_guard_eval hf renv i, decide_eq_false hpos]; rfl)
     iapply wpt_ofVal (SpikeVal.pure Vunit) _ (Nat.le_refl 1)
     ipureintro
     rfl
 
 /-- THE TOTAL BLOCK SPECIFICATION. -/
 theorem rl_blockSpecsT :
-    ⊢ blockSpecsT (GF := GF) (procCtx rs) (some p) (rlLsT al sz) emptyProcSpecT rlPost := by
+    ⊢ blockSpecsT (GF := GF) (procCtxF F rs) (some p) (rlLsT al sz) emptyProcSpecT rlPost := by
   refine blockSpecsT_intro fun l params cont args env0 envs m hl => ?_
-  rw [procCtx_labels hQ] at hl
+  rw [procCtxF_labels hQ] at hl
   obtain ⟨rfl, rfl⟩ := rlQ_inv loc ann ra al sz pref ibty pbty ubty hl
   iintro ⟨%i, %f, %renv, %hpure, Hcap⟩
   obtain ⟨rfl, hi, rfl, hρ, hf⟩ := hpure
@@ -563,7 +563,7 @@ theorem rl_blockSpecsT :
 /-- N REGIONS FROM ONE BUDGET (total), at budget `rlCost n.toNat + 1`. -/
 theorem rl_wpt (sbty : core_base_type) (n : Int) (hn : 0 ≤ n) :
     allocBudget (GF := GF) (n.toNat * regionCost al sz) ⊢
-      wpt (procCtx rs) (some p) (rlLsT al sz) emptyProcSpecT (rlCost n.toNat + 1) rlPost
+      wpt (procCtxF F rs) (some p) (rlLsT al sz) emptyProcSpecT (rlCost n.toNat + 1) rlPost
         (rlProg loc ann ra al sz pref sbty ibty pbty ubty n) [fmapEmpty] := by
   rw [show rlProg loc ann ra al sz pref sbty ibty pbty ubty n =
     Expr [] (Esave (rlLoopSym, sbty) (rlParams ibty n)
@@ -577,7 +577,7 @@ theorem rl_wpt (sbty : core_base_type) (n : Int) (hn : 0 ≤ n) :
 
 /-- The block specifications at the engine readout (what the launches consume). -/
 theorem rl_blockSpecsT_readout :
-    ⊢ blockSpecsT (GF := GF) (procCtx rs) (some p) (rlLsT al sz) emptyProcSpecT
+    ⊢ blockSpecsT (GF := GF) (procCtxF F rs) (some p) (rlLsT al sz) emptyProcSpecT
       (readoutPost (fun v _ => v = Vunit)) :=
   (rl_blockSpecsT loc ann ra al sz pref ibty pbty ubty hcost p rs hQ).trans
     (blockSpecsT_mono rlPost_readout)
@@ -585,7 +585,7 @@ theorem rl_blockSpecsT_readout :
 /-- The whole program at the engine readout. -/
 theorem rl_wpt_readout (sbty : core_base_type) (n : Int) (hn : 0 ≤ n) :
     allocBudget (GF := GF) (n.toNat * regionCost al sz) ⊢
-      wpt (procCtx rs) (some p) (rlLsT al sz) emptyProcSpecT (rlCost n.toNat + 1)
+      wpt (procCtxF F rs) (some p) (rlLsT al sz) emptyProcSpecT (rlCost n.toNat + 1)
         (readoutPost (fun v _ => v = Vunit))
         (rlProg loc ann ra al sz pref sbty ibty pbty ubty n) [fmapEmpty] :=
   (rl_wpt loc ann ra al sz pref ibty pbty ubty hcost p rs hQ sbty n hn).trans
@@ -655,16 +655,16 @@ theorem region_loop_certified_production (sup : Nat) (hcost : 0 < regionCost al 
     prod_run_eqJ sup (rlProg loc0 empty_annotation ra al sz pref sbty ibty pbty ubty n)
       hQprod (fun v _ => v = Vunit) (rlCost n.toNat + 1)
       (wpt_driver_done_alloc (GF := SpikeGF) (ctl := prodCtl)
-        (M₀ := procCtx ((initial_core_run_state sup
+        (M₀ := procCtxF (prodFile (rlProg loc0 empty_annotation ra al sz pref sbty ibty pbty ubty n)) ((initial_core_run_state sup
           (collect_labeled_continuations_NEW
             (prodFile (rlProg loc0 empty_annotation ra al sz pref sbty ibty pbty ubty n)))).1))
-        rfl rfl (procCtx_labels hQprod) rfl rfl rfl rfl
+        rfl rfl (procCtxF_labels hQprod) rfl rfl rfl rfl
         (fun l params cont hl => by
-          rw [procCtx_labels hQprod] at hl
+          rw [procCtxF_labels hQprod] at hl
           obtain ⟨-, rfl⟩ := rlQ_inv loc0 empty_annotation ra al sz pref ibty pbty ubty hl
           exact rlBody_frag loc0 empty_annotation ra al sz pref pbty ubty)
         (fun l params cont hl => by
-          rw [procCtx_labels hQprod] at hl
+          rw [procCtxF_labels hQprod] at hl
           obtain ⟨-, rfl⟩ := rlQ_inv loc0 empty_annotation ra al sz pref ibty pbty ubty hl
           rw [rlBody_pot, show lemDefaultFuel = 999999 + 1 from rfl]
           omega)

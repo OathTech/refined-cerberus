@@ -711,33 +711,33 @@ theorem lr_memop_operands_nonvalue :
 
 include hf
 
-theorem lr_cur_eval (vp vc : value) :
-    evalPexpr fmapEmpty fmapEmpty (lrFrame vp vc f :: rest)
+theorem lr_cur_eval {file : generic_file Unit core_run_annotation} (vp vc : value) :
+    evalPexpr fmapEmpty fmapEmpty file (lrFrame vp vc f :: rest)
       (Pexpr [] () (PEsym lrCurSym)) = some vc := by
   rw [evalPexpr_sym_empty]
   exact lookup_env_head (lrFrame_lookup_cur hf _ _) rest
 
-theorem lr_guard_eval (vb vp vc : value) :
-    evalPexpr fmapEmpty fmapEmpty (lrFrameB vb vp vc f :: rest)
+theorem lr_guard_eval {file : generic_file Unit core_run_annotation} (vb vp vc : value) :
+    evalPexpr fmapEmpty fmapEmpty file (lrFrameB vb vp vc f :: rest)
       (Pexpr [] () (PEsym lrBSym)) = some vb := by
   rw [evalPexpr_sym_empty]
   exact lookup_env_head (lrFrameB_lookup_b hf _ _ _) rest
 
-theorem lr_exit_eval (vb vp vc : value) :
-    evalPexpr fmapEmpty fmapEmpty (lrFrameB vb vp vc f :: rest) lrExitPe = some vp := by
-  show evalPexpr fmapEmpty fmapEmpty _ (Pexpr [] () (PEsym lrPrevSym)) = _
+theorem lr_exit_eval {file : generic_file Unit core_run_annotation} (vb vp vc : value) :
+    evalPexpr fmapEmpty fmapEmpty file (lrFrameB vb vp vc f :: rest) lrExitPe = some vp := by
+  show evalPexpr fmapEmpty fmapEmpty file _ (Pexpr [] () (PEsym lrPrevSym)) = _
   rw [evalPexpr_sym_empty]
   exact lookup_env_head (lrFrameB_lookup_prev hf _ _ _) rest
 
 /-- The load's shifted pointer operand: `array_shift(cur, long, 1)`
     at a node pointer — the engine's own arithmetic, +8 within the
     allocation. -/
-theorem lr_shift_eval_B (vb vp : value) (id aN : Int) :
-    evalPexpr fmapEmpty fmapEmpty (lrFrameB vb vp (ptrVal (cellPtr id aN)) f :: rest)
+theorem lr_shift_eval_B {file : generic_file Unit core_run_annotation} (vb vp : value) (id aN : Int) :
+    evalPexpr fmapEmpty fmapEmpty file (lrFrameB vb vp (ptrVal (cellPtr id aN)) f :: rest)
       (lrShiftPe lrCurSym) = some (ptrVal (cellPtr id (aN + 8))) := by
   unfold lrShiftPe
   rw [evalPexpr_array_shift]
-  rw [show evalPexpr fmapEmpty fmapEmpty (lrFrameB vb vp (ptrVal (cellPtr id aN)) f :: rest)
+  rw [show evalPexpr fmapEmpty fmapEmpty file (lrFrameB vb vp (ptrVal (cellPtr id aN)) f :: rest)
       (Pexpr [] () (PEsym lrCurSym)) = some (ptrVal (cellPtr id aN)) from by
     rw [evalPexpr_sym_empty]
     exact lookup_env_head (lrFrameB_lookup_cur hf _ _ _) rest]
@@ -746,12 +746,12 @@ theorem lr_shift_eval_B (vb vp : value) (id aN : Int) :
   exact evalArrayShift_long_one id aN
 
 /-- The store's shifted pointer operand, after n is bound. -/
-theorem lr_shift_eval_N (vn vb vp : value) (id aN : Int) :
-    evalPexpr fmapEmpty fmapEmpty (lrFrameN vn vb vp (ptrVal (cellPtr id aN)) f :: rest)
+theorem lr_shift_eval_N {file : generic_file Unit core_run_annotation} (vn vb vp : value) (id aN : Int) :
+    evalPexpr fmapEmpty fmapEmpty file (lrFrameN vn vb vp (ptrVal (cellPtr id aN)) f :: rest)
       (lrShiftPe lrCurSym) = some (ptrVal (cellPtr id (aN + 8))) := by
   unfold lrShiftPe
   rw [evalPexpr_array_shift]
-  rw [show evalPexpr fmapEmpty fmapEmpty (lrFrameN vn vb vp (ptrVal (cellPtr id aN)) f :: rest)
+  rw [show evalPexpr fmapEmpty fmapEmpty file (lrFrameN vn vb vp (ptrVal (cellPtr id aN)) f :: rest)
       (Pexpr [] () (PEsym lrCurSym)) = some (ptrVal (cellPtr id aN)) from by
     rw [evalPexpr_sym_empty]
     exact lookup_env_head (lrFrameN_lookup_cur hf _ _ _ _) rest]
@@ -759,23 +759,23 @@ theorem lr_shift_eval_N (vn vb vp : value) (id aN : Int) :
   show evalArrayShift fmapEmpty longTy (Vobject (OVpointer (cellPtr id aN))) (ivVal 1) = _
   exact evalArrayShift_long_one id aN
 
-theorem lr_store_value_eval (vn vb vp vc : value) :
-    evalPexpr fmapEmpty fmapEmpty (lrFrameN vn vb vp vc f :: rest)
+theorem lr_store_value_eval {file : generic_file Unit core_run_annotation} (vn vb vp vc : value) :
+    evalPexpr fmapEmpty fmapEmpty file (lrFrameN vn vb vp vc f :: rest)
       (Pexpr [] () (PEsym lrPrevSym)) = some vp := by
   rw [evalPexpr_sym_empty]
   exact lookup_env_head (lrFrameN_lookup_prev hf _ _ _ _) rest
 
-theorem lr_args_eval (vn vb vp vc : value) :
-    evalPexprs fmapEmpty fmapEmpty (lrFrameN vn vb vp vc f :: rest)
+theorem lr_args_eval {file : generic_file Unit core_run_annotation} (vn vb vp vc : value) :
+    evalPexprs fmapEmpty fmapEmpty file (lrFrameN vn vb vp vc f :: rest)
       [Pexpr [] () (PEsym lrCurSym), Pexpr [] () (PEsym lrNSym)] =
       some [vc, vn] := by
   rw [evalPexprs_cons]
-  rw [show evalPexpr fmapEmpty fmapEmpty (lrFrameN vn vb vp vc f :: rest)
+  rw [show evalPexpr fmapEmpty fmapEmpty file (lrFrameN vn vb vp vc f :: rest)
       (Pexpr ([] : List annot) () (PEsym lrCurSym)) = some vc from by
     rw [evalPexpr_sym_empty]
     exact lookup_env_head (lrFrameN_lookup_cur hf _ _ _ _) rest]
   rw [evalPexprs_cons]
-  rw [show evalPexpr fmapEmpty fmapEmpty (lrFrameN vn vb vp vc f :: rest)
+  rw [show evalPexpr fmapEmpty fmapEmpty file (lrFrameN vn vb vp vc f :: rest)
       (Pexpr ([] : List annot) () (PEsym lrNSym)) = some vn from by
     rw [evalPexpr_sym_empty]
     exact lookup_env_head (lrFrameN_lookup_n hf _ _ _ _) rest]
@@ -895,10 +895,10 @@ variable (loc : CerbLocation.Loc) (ann ra : core_run_annotation)
   (mo : memory_order) (pbty cbty bbty nbty ubty : core_base_type)
   (ns : List (Int × Int))
 -- S1b: the wps judgment is indexed by the MACHINE CONTEXT; the
--- exhibit works at the jump-profile instance `procCtx rs` (entry control
+-- exhibit works at the jump-profile instance `procCtxF F rs` (entry control
 -- `procCtl p`: empty stack, in procedure `p`; calls arc C1) with the
--- label map tied by the honest `LabeledAt` link (`procCtx_labels`).
-variable (p : sym) (rs : core_run_state)
+-- label map tied by the honest `LabeledAt` link (`procCtxF_labels`).
+variable (p : sym) {F : file core_run_annotation} (rs : core_run_state)
   (hQ : LabeledAt rs p (lrQ loc ann ra mo pbty cbty bbty nbty ubty))
 
 /-- The postcondition: the delivered value is a pointer satisfying
@@ -933,7 +933,7 @@ theorem lr_body_wps (revd rest' : List (Int × Int))
     (renv : List (Fmap sym value)) (hf : SymFrame f)
     (hxs : ns = revd.reverse ++ rest') :
     iprop(isList (GF := GF) pPrev revd ∗ isList pCur rest') ⊢
-      wps (procCtx rs) (some p) (lrLs ns) emptyProcSpec
+      wps (procCtxF F rs) (some p) (lrLs ns) emptyProcSpec
         (lrPost ns) (lrBody loc ann ra mo bbty nbty ubty)
         (lrFrame (ptrVal pPrev) (ptrVal pCur) f :: renv) := by
   rw [show lrBody loc ann ra mo bbty nbty ubty =
@@ -966,7 +966,7 @@ theorem lr_body_wps (revd rest' : List (Int × Int))
       rfl
     rw [bindSym_lr]
     iapply wps_if_true [] (Pexpr [] () (PEsym lrBSym)) _ _ _
-      (by rw [procCtx_extern, lr_guard_eval hf renv (boolValue true) _ _]; rfl)
+      (by rw [procCtxF_extern, lr_guard_eval hf renv (boolValue true) _ _]; rfl)
     iapply wps_pure lrExitPe _ rfl (lr_exit_eval hf renv _ _ _)
     iexists pPrev
     isplit
@@ -1002,7 +1002,7 @@ theorem lr_body_wps (revd rest' : List (Int × Int))
       rfl
     rw [bindSym_lr]
     iapply wps_if_false [] (Pexpr [] () (PEsym lrBSym)) _ _ _
-      (by rw [procCtx_extern, lr_guard_eval hf renv (boolValue false) _ _]; rfl)
+      (by rw [procCtxF_extern, lr_guard_eval hf renv (boolValue false) _ _]; rfl)
     rw [show lrElse loc ann ra mo nbty ubty =
       Expr [] (Esseq (specPat [] [] lrNSym nbty)
         (lrLoadE loc ann mo)
@@ -1018,7 +1018,7 @@ theorem lr_body_wps (revd rest' : List (Int × Int))
       rfl (lr_shift_eval_B hf renv _ _ nd.1 aN)
     rw [show cellPtr nd.1 (aN + 8) = cellPtr nd.1 (aN + ((8 : Nat) : Int))
       from rfl]
-    iapply wps_load_node_field (M := procCtx rs) (p := some p) (Θ := emptyProcSpec) loc ann nd.1 aN 8 mo (.own 1) bs _
+    iapply wps_load_node_field (M := procCtxF F rs) (p := some p) (Θ := emptyProcSpec) loc ann nd.1 aN 8 mo (.own 1) bs _
       (by rw [nodeTy_size]; omega)
       (fun lum fpm => hnext lum fpm _)
     isplitl [Hpt]
@@ -1050,7 +1050,7 @@ theorem lr_body_wps (revd rest' : List (Int × Int))
     iintro %fp2 Hpt
     iapply wps_run [] ra lrLoopSym
       [Pexpr [] () (PEsym lrCurSym), Pexpr [] () (PEsym lrNSym)] _ _
-      (by rw [procCtx_labels hQ]
+      (by rw [procCtxF_labels hQ]
           exact lrQ_lookup loc ann ra mo pbty cbty bbty nbty ubty)
       (lr_args_eval hf renv _ _ _ _)
     iexists (nd :: revd), vs, (cellPtr nd.1 aN), q,
@@ -1069,7 +1069,7 @@ theorem lr_body_wps (revd rest' : List (Int × Int))
         (by rw [spliceBytes_length _ _ _ (by rw [klen, hlen]; omega)]
             exact hlen)
         (by intro lum fpm ad
-            rw [show ((spliceBytes 8 (CerbMem.memValueToBytes (procCtx rs).tagDefs []
+            rw [show ((spliceBytes 8 (CerbMem.memValueToBytes (procCtxF F rs).tagDefs []
                 (CerbMem.pointerMval nodeTy pPrev)).2 bs).drop 0).take 8 =
               (bs.drop 0).take 8 from
               spliceBytes_value_slice _ bs klen hlen]
@@ -1082,10 +1082,10 @@ theorem lr_body_wps (revd rest' : List (Int × Int))
 
 /-- THE BLOCK SPECIFICATION (per-label invariant rule — no Löb). -/
 theorem lr_blockSpecs :
-    ⊢ blockSpecs (GF := GF) (procCtx rs) (some p)
+    ⊢ blockSpecs (GF := GF) (procCtxF F rs) (some p)
       (lrLs ns) emptyProcSpec (lrPost ns) := by
   refine blockSpecs_intro fun l params cont args env0 envs hl => ?_
-  rw [procCtx_labels hQ] at hl
+  rw [procCtxF_labels hQ] at hl
   obtain ⟨rfl, rfl⟩ := lrQ_inv loc ann ra mo pbty cbty bbty nbty ubty hl
   iintro ⟨%revd, %rest', %pPrev, %pCur, %f, %renv, %hpure, HP, HC⟩
   obtain ⟨rfl, hxs, hρ, hf⟩ := hpure
@@ -1106,7 +1106,7 @@ theorem lr_blockSpecs :
     (`isList head ns`). -/
 theorem lr_wps (sbty : core_base_type) (head : CerbMem.PointerValue) :
     isList (GF := GF) head ns ⊢
-      wps (procCtx rs) (some p) (lrLs ns) emptyProcSpec (lrPost ns)
+      wps (procCtxF F rs) (some p) (lrLs ns) emptyProcSpec (lrPost ns)
         (lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head)
         [fmapEmpty] := by
   rw [show lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head =
@@ -1133,7 +1133,7 @@ framed whole-program judgment are `blockSpecs_frame` /
 
 /-- The block specifications at the framed label context. -/
 theorem lr_blockSpecs_frame (RF : IProp GF) :
-    ⊢ blockSpecs (GF := GF) (procCtx rs) (some p) (frameLs RF (lrLs ns)) emptyProcSpec
+    ⊢ blockSpecs (GF := GF) (procCtxF F rs) (some p) (frameLs RF (lrLs ns)) emptyProcSpec
       (fun w ρ' => iprop(lrPost ns w ρ' ∗ RF)) :=
   (lr_blockSpecs loc ann ra mo pbty cbty bbty nbty ubty ns p rs hQ).trans
     (blockSpecs_frame RF)
@@ -1144,7 +1144,7 @@ theorem lr_blockSpecs_frame (RF : IProp GF) :
 theorem lr_wps_frame (RF : IProp GF) (sbty : core_base_type)
     (head : CerbMem.PointerValue) :
     iprop(isList (GF := GF) head ns ∗ RF) ⊢
-      wps (procCtx rs) (some p) (frameLs RF (lrLs ns)) emptyProcSpec
+      wps (procCtxF F rs) (some p) (frameLs RF (lrLs ns)) emptyProcSpec
         (fun w ρ' => iprop(lrPost ns w ρ' ∗ RF))
         (lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head)
         [fmapEmpty] := by
@@ -1429,10 +1429,10 @@ theorem lr_wp_readout {GF : BundledGFunctors} [SpikeGS .hasLC GF]
             ⌜∃ Q : CellMap, (∃ p' : CerbMem.PointerValue,
                 CoreRVal.val w = ptrVal p' ∧ SeedChain Q p' ns.reverse) ∧
               Q ##ₘ R ∧ Coh (procCtx rs).tagDefs σ' (Iris.Std.PartialMap.union Q R)⌝) }} := by
-  refine (lr_wps_frame loc ann ra mo pbty cbty bbty nbty ubty ns
+  refine (lr_wps_frame (F := spikeFile) loc ann ra mo pbty cbty bbty nbty ubty ns
     p rs hQ (lrCellFrame R) sbty head).trans ?_
   refine (BI.emp_sep.2.trans (BI.sep_mono
-    ((lr_blockSpecs_frame loc ann ra mo pbty cbty bbty nbty ubty ns
+    ((lr_blockSpecs_frame (F := spikeFile) loc ann ra mo pbty cbty bbty nbty ubty ns
       p rs hQ (lrCellFrame R)).trans
       (wps_sound_empty (ctl := procCtl p) rfl (lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head)
         [fmapEmpty]))
@@ -1722,7 +1722,7 @@ variable {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
 variable (loc : CerbLocation.Loc) (ann ra : core_run_annotation)
   (mo : memory_order) (pbty cbty bbty nbty ubty : core_base_type)
   (ns : List (Int × Int))
-variable (p : sym) (rs : core_run_state)
+variable (p : sym) {F : file core_run_annotation} (rs : core_run_state)
   (hQ : LabeledAt rs p (lrQ loc ann ra mo pbty cbty bbty nbty ubty))
 
 /-- The variant-indexed label context: the partial invariant
@@ -1747,7 +1747,7 @@ theorem lr_body_wpt (revd rest' : List (Int × Int))
     (renv : List (Fmap sym value)) (hf : SymFrame f)
     (hxs : ns = revd.reverse ++ rest') :
     iprop(isList (GF := GF) pPrev revd ∗ isList pCur rest') ⊢
-      wpt (procCtx rs) (some p) (lrLsT ns) emptyProcSpecT (lrCost rest'.length)
+      wpt (procCtxF F rs) (some p) (lrLsT ns) emptyProcSpecT (lrCost rest'.length)
         (lrPost ns) (lrBody loc ann ra mo bbty nbty ubty)
         (lrFrame (ptrVal pPrev) (ptrVal pCur) f :: renv) := by
   rw [show lrBody loc ann ra mo bbty nbty ubty =
@@ -1783,7 +1783,7 @@ theorem lr_body_wpt (revd rest' : List (Int × Int))
     rw [bindSym_lr]
     rw [show (2 + 1 : Nat) = 2 + 1 from rfl]
     iapply wpt_if_true [] (Pexpr [] () (PEsym lrBSym)) _ _ _
-      (by rw [procCtx_extern, lr_guard_eval hf renv (boolValue true) _ _]; rfl)
+      (by rw [procCtxF_extern, lr_guard_eval hf renv (boolValue true) _ _]; rfl)
     iapply wpt_pure lrExitPe _ (by omega) rfl (lr_exit_eval hf renv _ _ _)
     iexists pPrev
     isplit
@@ -1824,7 +1824,7 @@ theorem lr_body_wpt (revd rest' : List (Int × Int))
     rw [bindSym_lr]
     rw [show 10 + lrCost vs.length = (9 + lrCost vs.length) + 1 by omega]
     iapply wpt_if_false [] (Pexpr [] () (PEsym lrBSym)) _ _ _
-      (by rw [procCtx_extern, lr_guard_eval hf renv (boolValue false) _ _]; rfl)
+      (by rw [procCtxF_extern, lr_guard_eval hf renv (boolValue false) _ _]; rfl)
     rw [show lrElse loc ann ra mo nbty ubty =
       Expr [] (Esseq (specPat [] [] lrNSym nbty)
         (lrLoadE loc ann mo)
@@ -1842,7 +1842,7 @@ theorem lr_body_wpt (revd rest' : List (Int × Int))
       rfl (lr_shift_eval_B hf renv _ _ nd.1 aN)
     rw [show cellPtr nd.1 (aN + 8) = cellPtr nd.1 (aN + ((8 : Nat) : Int))
       from rfl]
-    iapply wpt_load_node_field (M := procCtx rs) (p := some p) (Θ := emptyProcSpecT) loc ann nd.1 aN 8 mo (.own 1) bs _
+    iapply wpt_load_node_field (M := procCtxF F rs) (p := some p) (Θ := emptyProcSpecT) loc ann nd.1 aN 8 mo (.own 1) bs _
       (by omega)
       (by rw [nodeTy_size]; omega)
       (fun lum fpm => hnext lum fpm _)
@@ -1879,7 +1879,7 @@ theorem lr_body_wpt (revd rest' : List (Int × Int))
     iapply wpt_run [] ra lrLoopSym
       [Pexpr [] () (PEsym lrCurSym), Pexpr [] () (PEsym lrNSym)] _ _
       (lrCost vs.length)
-      (by rw [procCtx_labels hQ]
+      (by rw [procCtxF_labels hQ]
           exact lrQ_lookup loc ann ra mo pbty cbty bbty nbty ubty)
       (lr_args_eval hf renv _ _ _ _)
       (by omega)
@@ -1896,7 +1896,7 @@ theorem lr_body_wpt (revd rest' : List (Int × Int))
         (by rw [spliceBytes_length _ _ _ (by rw [klen, hlen]; omega)]
             exact hlen)
         (by intro lum fpm ad
-            rw [show ((spliceBytes 8 (CerbMem.memValueToBytes (procCtx rs).tagDefs []
+            rw [show ((spliceBytes 8 (CerbMem.memValueToBytes (procCtxF F rs).tagDefs []
                 (CerbMem.pointerMval nodeTy pPrev)).2 bs).drop 0).take 8 =
               (bs.drop 0).take 8 from
               spliceBytes_value_slice _ bs klen hlen]
@@ -1915,7 +1915,7 @@ theorem lr_body_wpt_frame (RF : IProp GF) (revd rest' : List (Int × Int))
     (renv : List (Fmap sym value)) (hf : SymFrame f)
     (hxs : ns = revd.reverse ++ rest') :
     iprop((isList (GF := GF) pPrev revd ∗ isList pCur rest') ∗ RF) ⊢
-      wpt (procCtx rs) (some p) (frameLsT RF (lrLsT ns)) emptyProcSpecT (lrCost rest'.length)
+      wpt (procCtxF F rs) (some p) (frameLsT RF (lrLsT ns)) emptyProcSpecT (lrCost rest'.length)
         (fun w ρ' => iprop(lrPost ns w ρ' ∗ RF)) (lrBody loc ann ra mo bbty nbty ubty)
         (lrFrame (ptrVal pPrev) (ptrVal pCur) f :: renv) :=
   (BI.sep_mono ((lr_body_wpt loc ann ra mo pbty cbty bbty nbty ubty ns p rs hQ
@@ -1924,10 +1924,10 @@ theorem lr_body_wpt_frame (RF : IProp GF) (revd rest' : List (Int × Int))
 
 /-- THE TOTAL BLOCK SPECIFICATION for the reversal loop. -/
 theorem lr_blockSpecsT :
-    ⊢ blockSpecsT (GF := GF) (procCtx rs) (some p)
+    ⊢ blockSpecsT (GF := GF) (procCtxF F rs) (some p)
       (lrLsT ns) emptyProcSpecT (lrPost ns) := by
   refine blockSpecsT_intro fun l params cont args env0 envs m hl => ?_
-  rw [procCtx_labels hQ] at hl
+  rw [procCtxF_labels hQ] at hl
   obtain ⟨rfl, rfl⟩ := lrQ_inv loc ann ra mo pbty cbty bbty nbty ubty hl
   iintro ⟨%revd, %rest', %pPrev, %pCur, %f, %renv, %hpure, HP, HC⟩
   obtain ⟨rfl, hxs, rfl, hρ, hf⟩ := hpure
@@ -1946,7 +1946,7 @@ theorem lr_blockSpecsT :
 /-- The whole program's total judgment at budget `lrCost |ns| + 1`. -/
 theorem lr_wpt (sbty : core_base_type) (head : CerbMem.PointerValue) :
     isList (GF := GF) head ns ⊢
-      wpt (procCtx rs) (some p) (lrLsT ns) emptyProcSpecT (lrCost ns.length + 1) (lrPost ns)
+      wpt (procCtxF F rs) (some p) (lrLsT ns) emptyProcSpecT (lrCost ns.length + 1) (lrPost ns)
         (lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head)
         [fmapEmpty] := by
   rw [show lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head =
@@ -1967,7 +1967,7 @@ theorem lr_wpt (sbty : core_base_type) (head : CerbMem.PointerValue) :
 /-- The total block specifications at the framed label context
     (`blockSpecsT_frame` on the unframed proof). -/
 theorem lr_blockSpecsT_frame (RF : IProp GF) :
-    ⊢ blockSpecsT (GF := GF) (procCtx rs) (some p) (frameLsT RF (lrLsT ns)) emptyProcSpecT
+    ⊢ blockSpecsT (GF := GF) (procCtxF F rs) (some p) (frameLsT RF (lrLsT ns)) emptyProcSpecT
       (fun w ρ' => iprop(lrPost ns w ρ' ∗ RF)) :=
   (lr_blockSpecsT loc ann ra mo pbty cbty bbty nbty ubty ns p rs hQ).trans
     (blockSpecsT_frame RF)
@@ -1978,7 +1978,7 @@ theorem lr_blockSpecsT_frame (RF : IProp GF) :
 theorem lr_wpt_frame (RF : IProp GF) (sbty : core_base_type)
     (head : CerbMem.PointerValue) :
     iprop(isList (GF := GF) head ns ∗ RF) ⊢
-      wpt (procCtx rs) (some p) (frameLsT RF (lrLsT ns)) emptyProcSpecT (lrCost ns.length + 1)
+      wpt (procCtxF F rs) (some p) (frameLsT RF (lrLsT ns)) emptyProcSpecT (lrCost ns.length + 1)
         (fun w ρ' => iprop(lrPost ns w ρ' ∗ RF))
         (lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head)
         [fmapEmpty] := by

@@ -163,7 +163,7 @@ def wpt.pre [SpikeGS hlc GF] (M : MachineCtx) (p : Option sym) (Ls : LabelSpecT 
         (vs : List value) (ev0 : Fmap sym value) (evs : List (Fmap sym value))
         (m : Nat),
         ⌜ρ = ev0 :: evs⌝ ∗ ⌜lookupLabel (M.labelsAt p) lp.1 = some (params, cont)⌝ ∗
-        ⌜evalPexprs M.tagDefs M.extern ρ lp.2 = some vs⌝ ∗
+        ⌜evalPexprs M.tagDefs M.extern M.file ρ lp.2 = some vs⌝ ∗
         ⌜1 + m ≤ k⌝ ∗ Ls lp.1 m vs ρ)
     | none =>
       match callRedex? e with
@@ -172,7 +172,7 @@ def wpt.pre [SpikeGS hlc GF] (M : MachineCtx) (p : Option sym) (Ls : LabelSpecT 
           (vs : List value) (m k' : Nat) (hb : 1 + m + k' ≤ k),
           ⌜lookupProc M.file M.extern f = some (params, body)⌝ ∗
           ⌜params.length = vs.length⌝ ∗
-          ⌜evalPexprs M.tagDefs M.extern ρ pes = some vs⌝ ∗
+          ⌜evalPexprs M.tagDefs M.extern M.file ρ pes = some vs⌝ ∗
           (Θ f m vs).1 ∗
           ∀ (ret : value) (a1 : List annot), (Θ f m vs).2 ret -∗
             F k' (by omega) Ψ (apply_ctx ctx (ofValA (.pure a1 [] ret))) ρ)
@@ -229,7 +229,7 @@ theorem wpt_jump_eq {Ψ : SpikeVal → EnvStack → IProp GF} (k : Nat)
         (vs : List value) (ev0 : Fmap sym value) (evs : List (Fmap sym value))
         (m : Nat),
         ⌜ρ = ev0 :: evs⌝ ∗ ⌜lookupLabel (M.labelsAt p) l = some (params, cont)⌝ ∗
-        ⌜evalPexprs M.tagDefs M.extern ρ pes = some vs⌝ ∗
+        ⌜evalPexprs M.tagDefs M.extern M.file ρ pes = some vs⌝ ∗
         ⌜1 + m ≤ k⌝ ∗ Ls l m vs ρ) := by
   rw [wpt_unfold]; simp only [wpt.pre, htv, hjr]
 
@@ -253,7 +253,7 @@ theorem wpt_call_eq {Ψ : SpikeVal → EnvStack → IProp GF} {k : Nat}
         (vs : List value) (m k' : Nat) (_ : 1 + m + k' ≤ k),
         ⌜lookupProc M.file M.extern f = some (params, body)⌝ ∗
         ⌜params.length = vs.length⌝ ∗
-        ⌜evalPexprs M.tagDefs M.extern ρ pes = some vs⌝ ∗
+        ⌜evalPexprs M.tagDefs M.extern M.file ρ pes = some vs⌝ ∗
         (Θ f m vs).1 ∗
         ∀ (ret : value) (a1 : List annot), (Θ f m vs).2 ret -∗
           wpt M p Ls Θ k' Ψ (apply_ctx ctx (ofValA (.pure a1 [] ret))) ρ) := by
@@ -712,7 +712,7 @@ theorem wpt_run {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
     {vs : List value} (ev0 : Fmap sym value) (evs : List (Fmap sym value))
     (m : Nat) {k : Nat}
     (hl : lookupLabel (M.labelsAt p) l = some (params, cont))
-    (hvs : evalPexprs M.tagDefs M.extern (ev0 :: evs) pes = some vs)
+    (hvs : evalPexprs M.tagDefs M.extern M.file (ev0 :: evs) pes = some vs)
     (hμ : 1 + m ≤ k) :
     Ls l m vs (ev0 :: evs) ⊢
       wpt M p Ls Θ k Ψ (Expr a (Erun ra l pes)) (ev0 :: evs) := by
@@ -744,7 +744,7 @@ theorem wpt_call {Ψ : SpikeVal → EnvStack → IProp GF} {e : CoreExpr} {ctx :
     (hc : callRedex? e = some (ctx, f, pes))
     (hf : lookupProc M.file M.extern f = some (params, body))
     (hlen : params.length = vs.length)
-    (hvs : evalPexprs M.tagDefs M.extern ρ pes = some vs)
+    (hvs : evalPexprs M.tagDefs M.extern M.file ρ pes = some vs)
     (hk : 1 + m + k' ≤ k) :
     iprop((Θ f m vs).1 ∗ (∀ (ret : value) (a1 : List annot), (Θ f m vs).2 ret -∗
         wpt M p Ls Θ k' Ψ (apply_ctx ctx (ofValA (.pure a1 [] ret))) ρ)) ⊢
@@ -772,7 +772,7 @@ theorem wpt_call_root {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
     (ρ : EnvStack) {m k' k : Nat}
     (hf : lookupProc M.file M.extern f = some (params, body))
     (hlen : params.length = vs.length)
-    (hvs : evalPexprs M.tagDefs M.extern ρ pes = some vs)
+    (hvs : evalPexprs M.tagDefs M.extern M.file ρ pes = some vs)
     (hk : 1 + m + k' ≤ k) :
     iprop((Θ f m vs).1 ∗ (∀ (ret : value) (a1 : List annot), (Θ f m vs).2 ret -∗
         wpt M p Ls Θ k' Ψ (ofValA (.pure a1 [] ret)) ρ)) ⊢
@@ -829,7 +829,7 @@ theorem wpt_det_step {Ψ : SpikeVal → EnvStack → IProp GF} {e : CoreExpr}
 theorem wpt_if {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
     (g : generic_pexpr Unit sym) (e2 e3 : CoreExpr) (ρ : EnvStack) (b : Bool)
     {k : Nat} :
-    iprop(⌜evalPexpr M.tagDefs M.extern ρ g = some (boolValue b)⌝ ∗
+    iprop(⌜evalPexpr M.tagDefs M.extern M.file ρ g = some (boolValue b)⌝ ∗
       wpt M p Ls Θ k Ψ (bif b then e2 else e3) ρ) ⊢
       wpt M p Ls Θ (k + 1) Ψ (Expr a (Eif g e2 e3)) ρ := by
   cases b
@@ -854,7 +854,7 @@ theorem wpt_if {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
     corollary, verdict at the meta level). -/
 theorem wpt_if_true {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
     (g : generic_pexpr Unit sym) (e2 e3 : CoreExpr) (ρ : EnvStack) {k : Nat}
-    (hg : evalPexpr M.tagDefs M.extern ρ g = some Vtrue) :
+    (hg : evalPexpr M.tagDefs M.extern M.file ρ g = some Vtrue) :
     wpt M p Ls Θ k Ψ e2 ρ ⊢ wpt M p Ls Θ (k + 1) Ψ (Expr a (Eif g e2 e3)) ρ := by
   iintro H
   iapply wpt_if a g e2 e3 ρ true
@@ -866,7 +866,7 @@ theorem wpt_if_true {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
 /-- Eif, false branch — the `b := false` instance of `wpt_if`. -/
 theorem wpt_if_false {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
     (g : generic_pexpr Unit sym) (e2 e3 : CoreExpr) (ρ : EnvStack) {k : Nat}
-    (hg : evalPexpr M.tagDefs M.extern ρ g = some Vfalse) :
+    (hg : evalPexpr M.tagDefs M.extern M.file ρ g = some Vfalse) :
     wpt M p Ls Θ k Ψ e3 ρ ⊢ wpt M p Ls Θ (k + 1) Ψ (Expr a (Eif g e2 e3)) ρ := by
   iintro H
   iapply wpt_if a g e2 e3 ρ false
@@ -915,7 +915,7 @@ theorem wpt_save_eval {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
       Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym)))
     (body : CoreExpr) {cvals : List value} (ρ : EnvStack) {k : Nat}
     (hnv : valueFromPexprs (saveParamPexprs ps) = none)
-    (hvals : evalPexprs M.tagDefs M.extern ρ (saveParamPexprs ps) = some cvals) :
+    (hvals : evalPexprs M.tagDefs M.extern M.file ρ (saveParamPexprs ps) = some cvals) :
     wpt M p Ls Θ k Ψ (Expr a (Esave sb (saveParamsWithValues ps cvals) body)) ρ ⊢
       wpt M p Ls Θ (k + 1) Ψ (Expr a (Esave sb ps body)) ρ :=
   wpt_det_step rfl rfl rfl (fun _ _ _ _ _ => Step.save_eval hnv hvals)
@@ -961,7 +961,7 @@ theorem wpt_save {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
       Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym)))
     (body : CoreExpr) {cvals : List value}
     (ev0 : Fmap sym value) (evs : List (Fmap sym value)) {k : Nat}
-    (hvals : evalPexprs M.tagDefs M.extern (ev0 :: evs) (saveParamPexprs ps) = some cvals) :
+    (hvals : evalPexprs M.tagDefs M.extern M.file (ev0 :: evs) (saveParamPexprs ps) = some cvals) :
     wpt M p Ls Θ k Ψ body (bindSaveParams ps cvals (ev0 :: evs)) ⊢
       wpt M p Ls Θ (k + saveEntryCost ps) Ψ (Expr a (Esave sb ps body)) (ev0 :: evs) := by
   cases hv : valueFromPexprs (saveParamPexprs ps) with
@@ -982,7 +982,7 @@ theorem wpt_save {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
 theorem wpt_pure {Ψ : SpikeVal → EnvStack → IProp GF}
     (pe : generic_pexpr Unit sym) (ρ : EnvStack) {v : value} {k : Nat}
     (hk : 2 ≤ k)
-    (hnv : valueFromPexpr pe = none) (hv : evalPexpr M.tagDefs M.extern ρ pe = some v) :
+    (hnv : valueFromPexpr pe = none) (hv : evalPexpr M.tagDefs M.extern M.file ρ pe = some v) :
     Ψ (.pure v) ρ ⊢ wpt M p Ls Θ k Ψ (Expr ([] : List annot) (Epure pe)) ρ := by
   obtain ⟨k', rfl⟩ : ∃ k', k = k' + 1 := ⟨k - 1, by omega⟩
   refine .trans (wpt_ofVal (M := M) (p := p) (Ls := Ls) (Θ := Θ) (.pure v) ρ (by simp only [deliveryCost_pure]; exact Nat.le_of_succ_le_succ hk)) ?_
@@ -999,7 +999,7 @@ theorem wpt_load_eval {Ψ : SpikeVal → EnvStack → IProp GF}
     (pe2 : generic_pexpr Unit sym) (mo : memory_order) (ρ : EnvStack)
     {pv : CerbMem.PointerValue} {k : Nat}
     (hnv2 : valueFromPexpr pe2 = none)
-    (hv2 : evalPexpr M.tagDefs M.extern ρ pe2 = some (Vobject (OVpointer pv))) :
+    (hv2 : evalPexpr M.tagDefs M.extern M.file ρ pe2 = some (Vobject (OVpointer pv))) :
     wpt M p Ls Θ k Ψ (loadExpr a loc ann ty pv mo) ρ ⊢
       wpt M p Ls Θ (k + 1) Ψ (loadOpRedex a loc ann ty pe2 mo) ρ :=
   wpt_det_step rfl rfl rfl (fun _ _ _ _ _ => Step.load_eval hnv2 hv2)
@@ -1015,7 +1015,7 @@ theorem wpt_kill_eval {Ψ : SpikeVal → EnvStack → IProp GF}
     (pe : generic_pexpr Unit sym) (ρ : EnvStack)
     {pv : CerbMem.PointerValue} {k : Nat}
     (hnv : valueFromPexpr pe = none)
-    (hv : evalPexpr M.tagDefs M.extern ρ pe = some (Vobject (OVpointer pv))) :
+    (hv : evalPexpr M.tagDefs M.extern M.file ρ pe = some (Vobject (OVpointer pv))) :
     wpt M p Ls Θ k Ψ (killExpr a loc ann kind pv) ρ ⊢
       wpt M p Ls Θ (k + 1) Ψ (killOpRedex a loc ann kind pe) ρ :=
   wpt_det_step rfl rfl rfl (fun _ _ _ _ _ => Step.kill_eval hnv hv)
@@ -1031,8 +1031,8 @@ theorem wpt_store_eval {Ψ : SpikeVal → EnvStack → IProp GF}
     (pe2 pe3 : generic_pexpr Unit sym) (mo : memory_order) (ρ : EnvStack)
     {pv : CerbMem.PointerValue} {cv : value} {k : Nat}
     (hnv : valueFromPexprs [pe2, pe3] = none)
-    (hv2 : evalPexpr M.tagDefs M.extern ρ pe2 = some (Vobject (OVpointer pv)))
-    (hv3 : evalPexpr M.tagDefs M.extern ρ pe3 = some cv) :
+    (hv2 : evalPexpr M.tagDefs M.extern M.file ρ pe2 = some (Vobject (OVpointer pv)))
+    (hv3 : evalPexpr M.tagDefs M.extern M.file ρ pe3 = some cv) :
     wpt M p Ls Θ k Ψ (storeExpr a loc ann ty pv cv mo) ρ ⊢
       wpt M p Ls Θ (k + 1) Ψ (storeOpRedex a loc ann ty pe2 pe3 mo) ρ :=
   wpt_det_step rfl rfl rfl (fun _ _ _ _ _ => Step.store_eval hnv hv2 hv3)
@@ -1049,8 +1049,8 @@ theorem wpt_alloc_eval {Ψ : SpikeVal → EnvStack → IProp GF}
     (pe1 pe2 : generic_pexpr Unit sym) (pref : prefix0) (ρ : EnvStack)
     {align size : CerbMem.IntegerValue} {k : Nat}
     (hnv : valueFromPexprs [pe1, pe2] = none)
-    (hv1 : evalPexpr M.tagDefs M.extern ρ pe1 = some (Vobject (OVinteger align)))
-    (hv2 : evalPexpr M.tagDefs M.extern ρ pe2 = some (Vobject (OVinteger size))) :
+    (hv1 : evalPexpr M.tagDefs M.extern M.file ρ pe1 = some (Vobject (OVinteger align)))
+    (hv2 : evalPexpr M.tagDefs M.extern M.file ρ pe2 = some (Vobject (OVinteger size))) :
     wpt M p Ls Θ k Ψ (allocExpr a loc ann align size pref) ρ ⊢
       wpt M p Ls Θ (k + 1) Ψ (allocOpRedex a loc ann pe1 pe2 pref) ρ :=
   wpt_det_step rfl rfl rfl (fun _ _ _ _ _ => Step.alloc_eval hnv hv1 hv2)
@@ -1068,8 +1068,8 @@ theorem wpt_create_eval {Ψ : SpikeVal → EnvStack → IProp GF}
     (pe1 pe2 : generic_pexpr Unit sym) (pref : prefix0) (ρ : EnvStack)
     {align : CerbMem.IntegerValue} {ty : ctype} {k : Nat}
     (hnv : valueFromPexprs [pe1, pe2] = none)
-    (hv1 : evalPexpr M.tagDefs M.extern ρ pe1 = some (Vobject (OVinteger align)))
-    (hv2 : evalPexpr M.tagDefs M.extern ρ pe2 = some (Vctype ty)) :
+    (hv1 : evalPexpr M.tagDefs M.extern M.file ρ pe1 = some (Vobject (OVinteger align)))
+    (hv2 : evalPexpr M.tagDefs M.extern M.file ρ pe2 = some (Vctype ty)) :
     wpt M p Ls Θ k Ψ (createExpr a loc ann align ty pref) ρ ⊢
       wpt M p Ls Θ (k + 1) Ψ (createOpRedex a loc ann pe1 pe2 pref) ρ :=
   wpt_det_step rfl rfl rfl (fun _ _ _ _ _ => Step.create_eval hnv hv1 hv2)
@@ -1086,8 +1086,8 @@ theorem wpt_memop_eval {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot
     (mop : memop) (pe1 pe2 : generic_pexpr Unit sym)
     {v1 v2 : value} (ρ : EnvStack) {k : Nat}
     (hnv : valueFromPexprs [pe1, pe2] = none)
-    (hv1 : evalPexpr M.tagDefs M.extern ρ pe1 = some v1)
-    (hv2 : evalPexpr M.tagDefs M.extern ρ pe2 = some v2) :
+    (hv1 : evalPexpr M.tagDefs M.extern M.file ρ pe1 = some v1)
+    (hv2 : evalPexpr M.tagDefs M.extern M.file ρ pe2 = some v2) :
     wpt M p Ls Θ k Ψ (memopRedex a mop
       [Pexpr [] () (PEval v1), Pexpr [] () (PEval v2)]) ρ ⊢
       wpt M p Ls Θ (k + 1) Ψ (memopRedex a mop [pe1, pe2]) ρ :=

@@ -382,33 +382,33 @@ theorem frF3_lookup_z (n a b : Int) :
     fmapLookupBy symCmpK frZSym (frF3 n a b) = some (ivVal (a + b)) := by
   rw [envAdd_lookup (((symFrame_empty.add _ _).add _ _).add _ _), if_pos (by decide +kernel)]
 
-theorem frN_eval (n : Int) (ρ : EnvStack) :
-    evalPexpr fmapEmpty fmapEmpty (frF0 n :: ρ) (Pexpr [] () (PEsym frNSym)) = some (ivVal n) := by
+theorem frN_eval {file : generic_file Unit core_run_annotation} (n : Int) (ρ : EnvStack) :
+    evalPexpr fmapEmpty fmapEmpty file (frF0 n :: ρ) (Pexpr [] () (PEsym frNSym)) = some (ivVal n) := by
   rw [evalPexpr_sym_empty]
   exact lookup_env_head (frF0_lookup_n n) ρ
 
-theorem frGuard_eval (n : Int) (ρ : EnvStack) :
-    evalPexpr fmapEmpty fmapEmpty (frF0 n :: ρ) frGuard = some (boolValue (decide (n < 2))) := by
+theorem frGuard_eval {file : generic_file Unit core_run_annotation} (n : Int) (ρ : EnvStack) :
+    evalPexpr fmapEmpty fmapEmpty file (frF0 n :: ρ) frGuard = some (boolValue (decide (n < 2))) := by
   unfold frGuard
   rw [evalPexpr_op, frN_eval, evalPexpr_val]
   rfl
 
-theorem frDec1_eval (n : Int) (ρ : EnvStack) :
-    evalPexprs fmapEmpty fmapEmpty (frF0 n :: ρ) [frDec1] = some [ivVal (n - 1)] := by
+theorem frDec1_eval {file : generic_file Unit core_run_annotation} (n : Int) (ρ : EnvStack) :
+    evalPexprs fmapEmpty fmapEmpty file (frF0 n :: ρ) [frDec1] = some [ivVal (n - 1)] := by
   rw [evalPexprs_cons]
   unfold frDec1
   rw [evalPexpr_op, frN_eval, evalPexpr_val]
   rfl
 
-theorem frDec2_eval (n a : Int) (ρ : EnvStack) :
-    evalPexprs fmapEmpty fmapEmpty (frF1 n a :: ρ) [frDec2] = some [ivVal (n - 2)] := by
+theorem frDec2_eval {file : generic_file Unit core_run_annotation} (n a : Int) (ρ : EnvStack) :
+    evalPexprs fmapEmpty fmapEmpty file (frF1 n a :: ρ) [frDec2] = some [ivVal (n - 2)] := by
   rw [evalPexprs_cons]
   unfold frDec2
   rw [evalPexpr_op, evalPexpr_sym_empty, lookup_env_head (frF1_lookup_n n a) ρ, evalPexpr_val]
   rfl
 
-theorem frSum_eval (zbty : core_base_type) (n a b : Int) (ρ : EnvStack) :
-    evalPexprs fmapEmpty fmapEmpty (frF2 n a b :: ρ)
+theorem frSum_eval {file : generic_file Unit core_run_annotation} (zbty : core_base_type) (n a b : Int) (ρ : EnvStack) :
+    evalPexprs fmapEmpty fmapEmpty file (frF2 n a b :: ρ)
       (saveParamPexprs [(frZSym, ((zbty, none), frSumPe))]) = some [ivVal (a + b)] := by
   rw [show saveParamPexprs [(frZSym, ((zbty, none), frSumPe))] = [frSumPe] from rfl,
     evalPexprs_cons]
@@ -417,8 +417,8 @@ theorem frSum_eval (zbty : core_base_type) (n a b : Int) (ρ : EnvStack) :
     evalPexpr_sym_empty, lookup_env_head (frF2_lookup_y n a b) ρ]
   rfl
 
-theorem frZ_eval (n a b : Int) (ρ : EnvStack) :
-    evalPexpr fmapEmpty fmapEmpty (frF3 n a b :: ρ) (Pexpr [] () (PEsym frZSym)) =
+theorem frZ_eval {file : generic_file Unit core_run_annotation} (n a b : Int) (ρ : EnvStack) :
+    evalPexpr fmapEmpty fmapEmpty file (frF3 n a b :: ρ) (Pexpr [] () (PEsym frZSym)) =
       some (ivVal (a + b)) := by
   rw [evalPexpr_sym_empty]
   exact lookup_env_head (frF3_lookup_z n a b) ρ
@@ -525,7 +525,7 @@ theorem frBody_wps (g : sym) (vs : List value) (ρ : EnvStack) :
   by_cases hlt : n' < 2
   · -- THE BASE CASE
     iapply wps_if_true [] frGuard _ _ _
-      (by show evalPexpr fmapEmpty fmapEmpty _ frGuard = _
+      (by show evalPexpr fmapEmpty fmapEmpty _ _ frGuard = _
           rw [frGuard_eval, decide_eq_true hlt]; rfl)
     unfold pureRedex
     iapply wps_pure (Pexpr [] () (PEsym frNSym)) _ rfl (frN_eval n' ρ)
@@ -534,7 +534,7 @@ theorem frBody_wps (g : sym) (vs : List value) (ρ : EnvStack) :
   · -- THE RECURSIVE CASE
     have h2 : 2 ≤ n' := by omega
     iapply wps_if_false [] frGuard _ _ _
-      (by show evalPexpr fmapEmpty fmapEmpty _ frGuard = _
+      (by show evalPexpr fmapEmpty fmapEmpty _ _ frGuard = _
           rw [frGuard_eval, decide_eq_false hlt]; rfl)
     unfold frOuter
     iapply wps_seq_sym [] [] frXSym xbty (callRedex [] ra frSym [frDec1]) _ (frF0 n') ρ
@@ -665,7 +665,7 @@ theorem frBody_wpt (g : sym) (m : Nat) (vs : List value) (ρ : EnvStack) :
   · -- THE BASE CASE: guard + PURE + delivery = 3
     rw [fibRounds_small hn' hlt, show (3 : Nat) = 2 + 1 from rfl]
     iapply wpt_if_true [] frGuard _ _ _
-      (by show evalPexpr fmapEmpty fmapEmpty _ frGuard = _
+      (by show evalPexpr fmapEmpty fmapEmpty _ _ frGuard = _
           rw [frGuard_eval, decide_eq_true hlt]; rfl)
     unfold pureRedex
     iapply wpt_pure (Pexpr [] () (PEsym frNSym)) _ (Nat.le_refl 2) rfl (frN_eval n' ρ)
@@ -676,7 +676,7 @@ theorem frBody_wpt (g : sym) (m : Nat) (vs : List value) (ρ : EnvStack) :
     rw [fibRounds_rec h2, show fibRounds (n' - 1).toNat + fibRounds (n' - 2).toNat + 9 =
       ((fibRounds (n' - 1).toNat + 2) + ((fibRounds (n' - 2).toNat + 2) + 4)) + 1 by omega]
     iapply wpt_if_false [] frGuard _ _ _
-      (by show evalPexpr fmapEmpty fmapEmpty _ frGuard = _
+      (by show evalPexpr fmapEmpty fmapEmpty _ _ frGuard = _
           rw [frGuard_eval, decide_eq_false hlt]; rfl)
     unfold frOuter
     iapply wpt_seq_sym [] [] frXSym xbty (callRedex [] ra frSym [frDec1]) _ (frF0 n') ρ
