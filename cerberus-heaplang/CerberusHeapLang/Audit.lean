@@ -676,7 +676,12 @@ def trioExports : List Name := [
   ``CerberusHeapLang.Step.case_inv, ``CerberusHeapLang.Step.case_value_inv,
   ``CerberusHeapLang.Step.case_op_inv,
   ``CerberusHeapLang.pure_specified_round, ``CerberusHeapLang.wseq_tuple_pure_round,
-  ``CerberusHeapLang.sseq_tuple_pure_round, ``CerberusHeapLang.wseq_sym_pure_round]
+  ``CerberusHeapLang.sseq_tuple_pure_round, ``CerberusHeapLang.wseq_sym_pure_round,
+  -- E2 range audit R-2 (docs/2026-09-05_audit-e2-range.md): the `Unspecified`
+  -- store's byte image IS the fresh cell's `undefByte`s — stated as a theorem
+  -- (`rfl`), measured trio-exact, pinned. Its companion `unspec_paddingByte`
+  -- (`paddingByte = undefByte`) has NO axioms at all and is therefore unpinned.
+  ``CerberusHeapLang.unspec_bytes]
 
 def sortedNames (ns : Array Name) : Array String :=
   (ns.map (·.toString)).qsort (· < ·)

@@ -11,7 +11,9 @@ fails the run. Scope and blind spots: the module's header
 
 Run (from cerberus-heaplang/):
   ../scripts/capped ~/.elan/bin/lake env lean scripts/corpus_skeleton.lean
-Exit 0 = every row matches and every plant mismatches; 1 otherwise.
+Exit 0 = every row matches and every plant mismatches; non-zero otherwise (the
+failure is raised as an `IO.userError` so every diagnostic printed before it is
+emitted — never `IO.Process.exit`, which inside `#eval` discards them).
 -/
 import CerberusHeapLang.Examples.CorpusE0
 
@@ -120,7 +122,8 @@ def main : IO Unit := do
         IO.eprintln s!"  text: {showToks textToks}"
         IO.eprintln s!"  term: {showToks termToks}"
         match firstDiff termToks textToks with
-        | some (i, a, b) => IO.eprintln s!"  first difference at token {i}: term {a}, text {b}"
+        | some (i, a, b) =>
+          IO.eprintln s!"  first difference at token {i}: term `{a.getD "<end>"}`, text `{b.getD "<end>"}`"
         | none => pure ()
       let (planted, dropped) := dropFirstBound row.term
       let mut plantBound := "no bound to drop"
@@ -151,8 +154,11 @@ def main : IO Unit := do
       IO.println s!"| {row.file} | {row.proc} | {termToks.length} | {if eqMain then "equal" else "DIFFER"} | {plantBound} | {plantStd} | {plantSp} |"
   IO.println ""
   if fail then
-    IO.println "corpus-skeleton: FAIL"
-    IO.Process.exit 1
+    -- `throw`, NOT `IO.Process.exit`: inside `#eval` Lean emits the action's
+    -- captured stdout/stderr only after it returns, so an `exit` would discard
+    -- every diagnostic printed above (E2 range audit H-1). The uncaught error
+    -- makes `lean` exit non-zero, which is what the gate reads.
+    throw (IO.userError "corpus-skeleton: FAIL")
   else
     IO.println s!"corpus-skeleton: ok — {corpusTable.length} row(s) equal, every plant mismatches"
 

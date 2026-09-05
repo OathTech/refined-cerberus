@@ -30,8 +30,8 @@ failing faces of the classifier's one currency `EvalFail`.
 | `Frag.pure_op` — `pure(e)` at a `PePure` non-value operand (E1's `pure_sym` was the `PEsym` instance) | PURE (one_step0's Epure arm "reduction: PURE", core_reduction.lem:288–299: `full_eval_pexpr pe >>= cval -> return (Expr annots (Epure (mk_value_pe cval)))`, a `Step_with_runstate2 (RSK_eval …)` round; `step_ctx_pure_op_raw` is the engine shape) | (i) the mirror evaluator has a value → the mirror step `Step.pure_eval`; (ii) the classifier's `.kill err` face → the KILL `Other (DErr_core_run err)` (`step_ctx_pure_op_fail`); (iii) the classifier's `.undef loc ubs` face → the KILL `Undef0 loc ubs` (same lemma; `EvalFail.reason`); (iv) `.uncovered` → the residual `OpenRound.eval_uncovered` | `complete_pure_op` (`complete_pure_sym` is its `PEsym` corollary) |
 | `Frag.sseq_tuple` at a BARE tuple head (`lets (x1, …) = (v1, …) in e2`) | LETS-PURE (core_reduction.lem:407–414) through `update_env`'s `CaseCtor Ctuple pats', Vtuple cvals` arm (core_aux.lem:2444–2447, a `foldr` over the truncating `zip`) | ALWAYS a mirror step (`Step.sseq_tuple_pure`) | `complete_beta_tuple` |
 | `Frag.sseq_tuple` at an ANNOTATED tuple head | LETS-ANNOT (:416–423) | ALWAYS a mirror step (`Step.sseq_tuple_annot`) | `complete_beta_tuple` |
-| `Frag.sseq_tuple` at a NON-tuple head value | the binder is `update_env_aux`'s `failwithI` PANIC (core_aux.lem:2448–2450, the catch-all) | `ShippedRefusal.panic` (`update_env_aux_tuple_mismatch`) — classified, not mirrored (the fragment admits the shape because the head is any fragment term; the type checker never emits it) | `complete_beta_tuple` |
-| `Frag.wseq_tuple` at a bare / annotated / non-tuple head | LETW-PURE (:389–396) / LETW-ANNOT (:397–405) / the PANIC | as the strong binder: `Step.wseq_tuple_pure` / `Step.wseq_tuple_annot` / `ShippedRefusal.panic` | `complete_wbeta_tuple` |
+| `Frag.sseq_tuple` at a NON-tuple head value | the binder is `update_env_aux`'s `failwithI` PANIC (core_aux.lem:2448–2450, the catch-all) | `ShippedRefusal.panic_env` (`update_env_aux_tuple_mismatch`; the arm's statement: the step is a TAU whose successor thread's environment head is `failwithI msg`) — classified, not mirrored (the fragment admits the shape because the head is any fragment term; the type checker never emits it) | `complete_beta_tuple` |
+| `Frag.wseq_tuple` at a bare / annotated / non-tuple head | LETW-PURE (:389–396) / LETW-ANNOT (:397–405) / the PANIC | as the strong binder: `Step.wseq_tuple_pure` / `Step.wseq_tuple_annot` / `ShippedRefusal.panic_env` | `complete_wbeta_tuple` |
 | `Frag.wseq_sym` at a bare / annotated head value | LETW-PURE / LETW-ANNOT (`update_env_aux`'s `CaseBase (Just sym, _)` arm binds any value) | ALWAYS a mirror step (`Step.wseq_sym_pure` / `Step.wseq_sym_annot`) | `complete_wbeta_sym` |
 | (mirror-only, NOT a `Frag` row) `Ecase` at a covered NON-value scrutinee | EVAL "Ecase" (core_reduction.lem:323–339) | `Step.case_eval` mirrored and certified (`stepDischarge`/`engine_step_matchU`); `Frag` admits only `case_value`, so no `complete_*` row — [AGENT] deferred: the emitted corpus reaches `case` only inside `pure(…)` | — |
 
@@ -58,7 +58,9 @@ failing faces of the classifier's one currency `EvalFail`.
   iterates {pull, `step_eval_pexpr`, value test} and `case` returns the
   selected branch UNEVALUATED, so a branch's value costs one more pass
   than E1's bound allowed (the E1 statement was at `peDepth pe ≤ fuel`,
-  correct for E1's grammar, too tight for `case`).
+  correct for E1's grammar, too tight for `case`). [ERRATUM 2026-09-05,
+  E2 range audit R-1: the parenthetical's history is WRONG — see the
+  erratum appended below.]
 
 ## The narrowing premises after E2 — verbatim
 
@@ -122,3 +124,23 @@ recorded in the EvalClass.lean header and the `Frag.pure_op`
 OUT-OF-SCOPE manifest row. The manifest
 (`docs/CAPABILITY_MANIFEST.md`) records the classification per
 variant: 28 constructors, 58 rows, 0 red.
+
+## Erratum (2026-09-05, E2 range audit R-1) — [AGENT], appended
+
+Two corrections to the text above, left in place and corrected here:
+
+1. The arm that classifies the tuple binder at a NON-tuple head is
+   `ShippedRefusal.panic_env` (Round.lean; the pre-existing arm whose
+   statement is "the step is a TAU whose successor thread's environment
+   head is `failwithI msg`"), not `ShippedRefusal.panic` as the first
+   version of the table said (corrected in place in the two rows).
+2. "the E1 statement was at `peDepth pe ≤ fuel`" is false. E1's
+   `aux2_bridge`/`aux2_bridge_kill` carried NO round-fuel premise at all
+   (any `fuel + 1` sufficed: the E1 grammar evaluated in one pass —
+   `docs/2026-09-04_e1-signatures-post.txt`). E2 ADDED the premise
+   `peDepth pe ≤ fuel + 1`: a forced weakening, correctly listed in the
+   E2 record's census as value-currency-forced (§7.2 there states it
+   correctly: "restated at the round budget"). Measured by the E2 range
+   auditor from the two signature snapshots (`docs/2026-09-05_audit-e2-range.md`
+   §1, R-1).
+

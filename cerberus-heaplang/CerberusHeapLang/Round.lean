@@ -277,8 +277,11 @@ inductive ShippedRefusal (M : MachineCtx) (c : Config) : Prop where
       ShippedRefusal M c
   /-- PANIC (binding): the step is a TAU whose successor thread's
       environment head IS the panic `failwithI msg` — the engine's
-      `update_env_aux` pattern-mismatch arm (Core_aux.lean:861, a
-      `Cspecified` binder meeting a non-`Specified` value). In OCaml the
+      `update_env_aux` pattern-mismatch arm (Core_aux.lean:861, the
+      `CaseCtor ctor pats, _` catch-all): a `Cspecified` binder meeting a
+      non-`Specified` value, or — E2 — a flat TUPLE binder meeting a
+      non-tuple head value (`update_env_aux_tuple_mismatch`,
+      `complete_beta_tuple`/`complete_wbeta_tuple`). In OCaml the
       strict `update_env` raises during the round; Lean's opaque
       `failwithI` defers the same abort to the first read. -/
   | panic_env (msg : String) :

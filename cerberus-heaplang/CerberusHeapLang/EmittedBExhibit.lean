@@ -39,7 +39,8 @@ the round `ShippedRefusal.killed (Undef0 …)` (`complete_pure_op`), never a
 default. The uninitialised store writes the engine's own byte image of
 `MVunspecified int` (`memValueToBytes`: `sizeof int` padding bytes —
 provenance-free, value-free — which is byte-for-byte the fresh cell's
-`undefByte`s; measured, not assumed: `unspec_storable`).
+`undefByte`s: `unspec_bytes`, by `rfl`; `unspec_storable` is the store's
+`StorableAt` obligation and states nothing about the bytes).
 
 What the re-expression exercises that exhibit A does not:
   * `Frag.pure_op` at constructor operands (`Specified(3)`, the tuple, the
@@ -50,7 +51,8 @@ What the re-expression exercises that exhibit A does not:
     tuple pattern — `update_env_tuple2`) and `Frag.wseq_sym`
     (`wps_wseq_sym`/`wpt_wseq_sym`);
   * the store of `Unspecified(int)` through the generic `wps_store` at
-    `cv = Vloaded (LVunspecified int)` (`unspec_encodes`, `unspec_storable`).
+    `cv = Vloaded (LVunspecified int)` (`unspec_encodes`, `unspec_storable`;
+    the image `unspec_bytes`).
 
 A CLIENT of the logic: it reasons through the public rules only; the
 production theorem is reached through the generic
@@ -248,10 +250,23 @@ theorem unspec_encodes :
     memValueFromValue fmapEmpty (Ctype [] (unatomic_ intTy)) (Vloaded (LVunspecified intTy)) =
       some unspecMval := rfl
 
-/-- The uninitialised local's store is storable and its image is the fresh
-    cell's own bytes (`sizeof int` padding bytes = `undefByte`s). -/
+/-- The uninitialised local's store is storable (`StorableAt`'s five
+    fields, Heap.lean: `compat`, `fpm`, `len`, `bytes_fpm`, `stored_dec` —
+    type compatibility, funptrmap inertness, the image's length, table
+    independence of the image and of its decode). It states nothing about
+    WHICH bytes the image holds — that is `unspec_bytes`. -/
 theorem unspec_storable (tds : CerbTags.TagDefsMap) : StorableAt tds intTy unspecMval :=
   ⟨rfl, fun _ => rfl, fun _ => rfl, fun _ => rfl, fun _ _ _ => rfl⟩
+
+/-- The engine's byte image of `MVunspecified int` IS the fresh cell's
+    image: `sizeof int` copies of `undefByte` (`memValueToBytes`'s
+    `MVunspecified` arm replicates `paddingByte`, which is `undefByte`
+    field for field — `unspec_paddingByte`). Stated, not assumed (E2 range
+    audit R-2). -/
+theorem unspec_bytes (tds : CerbTags.TagDefsMap) :
+    (CerbMem.memValueToBytes tds [] unspecMval).2 = intUndefBytes tds := rfl
+
+theorem unspec_paddingByte : CerbMem.paddingByte = undefByte := rfl
 
 theorem four_encodes :
     memValueFromValue fmapEmpty (Ctype [] (unatomic_ intTy)) (intVal 4) = some fourMval := rfl

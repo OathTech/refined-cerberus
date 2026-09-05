@@ -26,9 +26,9 @@ are cited with their `[USER date]`/`[AGENT date]` tag and live in
   the scheduler `driver2`, and the composite
   `CerbND.runND (drive fmapEmpty false file args) (initial_driver_state sup file fs).1`.
 - *`Frag`* — the fragment of Core this package covers, a predicate on
-  Core expressions (`Soundness.lean:4149`).
+  Core expressions (`Soundness.lean:6339`).
 - *the mirror* — `Step`, the hand-written fuel-free small-step relation
-  Iris reasons over (`Step.lean:1456`); a proof device with no semantic
+  Iris reasons over (`Step.lean:2387`); a proof device with no semantic
   authority.
 - *a round* — one iteration of the shipped per-thread loop.
 - *PCALL, RETURN, PROGRAM-DONE* — the engine's own round names
@@ -41,9 +41,9 @@ are cited with their `[USER date]`/`[AGENT date]` tag and live in
   shipped driver (a partial lane and a total lane).
 - *a profile* — the fixed context and entry control an exhibit is
   stated at: `spikeCtx`/`spikeCtl` (no current procedure, the default
-  file; `Step.lean:3355`, `:3331`), `procCtx rs`/`procCtl p` (a run state
-  with registered labels, in procedure `p`; `:3363`, `:3336`), or the
-  production profile `prodCtx`/`prodCtl` (`ProdEntry.lean:580`, `:567`).
+  file; `Step.lean:4526`, `:4502`), `procCtx rs`/`procCtl p` (a run state
+  with registered labels, in procedure `p`; `:4534`, `:4507`), or the
+  production profile `prodCtx`/`prodCtl` (`ProdEntry.lean:583`, `:568`).
 - *seeded* — an exhibit whose initial memory holds pre-existing cells
   (premise `hcoh : Coh …`); the cold start never does, so it has no
   shipped-pipeline form.
@@ -60,7 +60,7 @@ are cited with their `[USER date]`/`[AGENT date]` tag and live in
   module has an axiom set within the trio (§3).
 - *a tie* — a hypothesis of `DriverSafeCtl`/`DriverDoneCtl` fixing a
   field of the driver state from the configuration (`Adequacy.lean:935`–
-  `:940`; `ProdLoop.lean:459`–`:463`). The ties: the thread, the memory,
+  `:940`; `ProdLoop.lean:480`–`:484`). The ties: the thread, the memory,
   the extern table, the file, the registration predicate `LabeledProcs`
   and, in the partial fact only, the control's `CtlTied`; the thread tie
   carries the live source location since E1 (`ctlThread`), and the
@@ -84,8 +84,8 @@ definition here and the engine is a defect here ([USER 2026-08-29],
 CLAUDE.md "TRUST ARCHITECTURE"). The engine is trusted as a policy
 decision, not proved (§3).
 
-**The fragment.** `Frag e` (`Soundness.lean:6317`) has 28 constructors
-(`:6318`–`:6339`; dialect arc E2), by kind. The value `val_pure`. Memory:
+**The fragment.** `Frag e` (`Soundness.lean:6339`) has 28 constructors
+(`:6340`–`:6543`; dialect arc E2), by kind. The value `val_pure`. Memory:
 `store`/`load`/`create`/`kill`/`alloc` at evaluated operands, and the
 `_op` forms of `store`/`load`/`kill`/`alloc`/`create` (the last E1) at
 operands in the covered pure grammar `PePure`. `PePure` (`:2516`) is
@@ -102,7 +102,7 @@ memop: `memop_vals`/`memop_op`. The procedure call: `call`. Two facts a
 reader must know first:
 
 - *It is annotated, and the source location is live state* (E1;
-  `Soundness.lean:6257`–`:6316`, the `Frag` header): every node carries
+  `Soundness.lean:6257`–`:6338`, the `Frag` header): every node carries
   its static annotation list. The engine's `step_ctx` reads a source
   location off a located redex and rewrites the thread's `current_loc`;
   that field is the control's `curLoc` (`Ctl`, Step.lean), written by
@@ -111,7 +111,10 @@ reader must know first:
   constructs are admitted (E1: annotations, `bound`, `Ivalignof`; E2: the
   loaded-value currency, the tuple/weak binders); t1's `main` is still
   outside for `conv_loaded_int` and `catch_exceptional_condition` (E3)
-  and `unseq` (E4) (`Examples/CorpusE0.lean`, kernel-decided).
+  and `unseq` (E4): the two operands are kernel-decided outside `PePure`
+  (`Examples/CorpusE0.lean`, `t1_convLoadedInt_uncovered`/`t1_case_uncovered`
+  by `decide`), so `main` is outside `Frag` by the grammar — `¬ Frag t1Main`
+  itself is not a stated theorem.
 - *It is declared as exactly what the mirror covers* ([USER 2026-09-02],
   DECISIONS "THE BOUNDARY IS FAIL-CLOSED"): a shape without a mirror
   rule is outside `Frag`. Inside `Frag` the completeness theorem (§2.2)
@@ -121,11 +124,11 @@ reader must know first:
   `Impl` call are outside (KOI B8; §6).
 
 **Configurations and the mirror.** A configuration is
-`Config := CoreExpr × EnvStack × Ctl × Mem` (`Step.lean:400`): the
+`Config := CoreExpr × EnvStack × Ctl × Mem` (`Step.lean:629`): the
 expression, the environment stack, the thread's live control and the
 engine's memory state. The two hand-written records:
 
-- `Ctl := ⟨κ, proc, execLoc, curLoc, sup⟩` (`Step.lean:505`–`:560`) —
+- `Ctl := ⟨κ, proc, execLoc, curLoc, sup⟩` (`Step.lean:514`–`:542`) —
   call stack, current procedure, execution location (the three
   `thread_state` fields the engine's PCALL and RETURN rounds write),
   the current source location (E1: written by every general-arm round)
@@ -136,17 +139,17 @@ engine's memory state. The two hand-written records:
   `runState` (of which only `labeled` is read; the live supplies are
   `Ctl.sup`).
 
-In the mirror `Step M` (`:1456`), `Step.call` (`:2047`) pushes
+In the mirror `Step M` (`:2387`), `Step.call` (`:2879`) pushes
 `(ctl.proc, ctx)`, the context computed by the syntactic search
-`callRedex?` (`:703`), and `Step.ret`/`Step.ret_annot` (`:2079`, `:2096`)
+`callRedex?` (`:1083`), and `Step.ret`/`Step.ret_annot` (`:2898`, `:2910`)
 pop it. Every other rule threads `κ`/`proc`/`execLoc` unchanged and
-writes the location, `ctl.upd a` (`Step.ctl_cases`, `:3013`). `Step` is
+writes the location, `ctl.upd a` (`Step.ctl_cases`, `:3022`). `Step` is
 the `primStep` of the iris-lean
 `Language` instance (`Lang.lean:58`).
 
-**The two judgments.** `wps M p Ls Θ Ψ e ρ` (`Wps.lean:301`) is the
+**The two judgments.** `wps M p Ls Θ Ψ e ρ` (`Wps.lean:316`) is the
 partial judgment: a guarded fixpoint over iris-lean's WP whose
-pre-functional `wps.pre` (`:217`) has four clauses. Value. Jump redex:
+pre-functional `wps.pre` (`:228`) has four clauses. Value. Jump redex:
 the label specification `Ls : LabelSpec` (`:113`) at the target's
 arguments. Call redex: the procedure specification table `Θ : ProcSpec`
 (`:129`) — the callee's precondition now, the caller's continuation at
@@ -159,8 +162,8 @@ continuation. Both judgments are stated at the top invariant mask `⊤`
 (19 code sites in `Wps.lean`, 26 in `Wpt.lean`, docstring mentions
 excluded; DERIVED by grep). The raw-WP layer of
 `Rules.lean` is mask-generic — `AtomicStep` (`:194`), `wp_of_atomic`
-(`:210`), `wp_store` (`:1584`), `wp_load` (`:1614`), `spike_wp_wand`
-(`:1676`) — the two statement judgments are not. This is classical
+(`:210`), `wp_store` (`:1589`), `wp_load` (`:1620`), `spike_wp_wand`
+(`:1682`) — the two statement judgments are not. This is classical
 sequential separation logic: no invariants, no mask-polymorphic
 composition. Masks are Iris's device for sharing; their generalisation
 belongs to the RefinedC arc, not to this demo ([USER 2026-09-04]: "The
@@ -180,13 +183,13 @@ engine's thread-level execution (§4, the ruled reading).
 
 The small axioms are proved once as atomic step specifications
 `AtomicStep` (`Rules.lean:194`) against `Step` and the engine's real
-memory operations. Objects: `store_atomic` (`:264`), `load_atomic`
-(`:365`), `create_atomic` (`:991`), `kill_atomic` (`:1204`). Typed
-sub-range: `loadAt_atomic`/`storeAt_atomic` (`:557`/`:648`). Dynamic
-regions: `alloc_atomic`/`free_atomic` (`:1316`/`:1502`), and typed access
-`regionLoadAt_atomic`/`regionStoreAt_atomic` (`:767`/`:863`). They are
-lifted by `wp_of_atomic` (`:210`), `wps_of_atomic` (`Wps.lean:345`) and
-`wpt_of_atomic` (`Wpt.lean:664`); every memory rule of either judgment
+memory operations. Objects: `store_atomic` (`:269`), `load_atomic`
+(`:370`), `create_atomic` (`:996`), `kill_atomic` (`:1209`). Typed
+sub-range: `loadAt_atomic`/`storeAt_atomic` (`:562`/`:653`). Dynamic
+regions: `alloc_atomic`/`free_atomic` (`:1321`/`:1507`), and typed access
+`regionLoadAt_atomic`/`regionStoreAt_atomic` (`:772`/`:868`). They are
+lifted by `wp_of_atomic` (`:210`), `wps_of_atomic` (`Wps.lean:371`) and
+`wpt_of_atomic` (`Wpt.lean:677`); every memory rule of either judgment
 is a corollary (the list: API.lean, "Statement judgment"). The region
 access rules hold at any type at any in-bounds offset because the
 engine's check at an untyped allocation is type-blind. That check is the
@@ -201,46 +204,46 @@ tokens: `deadObj`/`deadRegion` (`:3783`/`:3793`). Allocation capacity:
 the ∗-splittable `allocBudget` (`:2464`; split law `:2475`).
 
 Structural rules, by kind. Frame across back edges and calls:
-`wps_frame_labels`/`wpt_frame_labels` (`Wps.lean:701`, `Wpt.lean:563`).
-Loops: `blockSpecs_intro`/`blockSpecsT_intro` (`Wps.lean:3195`,
-`Wpt.lean:2975`). Procedures: `procSpecs_intro`/`procSpecsT_intro`
-(`Wps.lean:3287`, `Wpt.lean:3032`) — every declared body verified once
+`wps_frame_labels`/`wpt_frame_labels` (`Wps.lean:722`, `Wpt.lean:565`).
+Loops: `blockSpecs_intro`/`blockSpecsT_intro` (`Wps.lean:3917`,
+`Wpt.lean:3708`). Procedures: `procSpecs_intro`/`procSpecsT_intro`
+(`Wps.lean:4009`, `Wpt.lean:3765`) — every declared body verified once
 assuming the table, Hoare's rule for recursive procedures, no Löb in the
-introduction. Calls: `wps_call`/`wps_call_root` (`Wps.lean:417`/`:473`),
-`wpt_call`/`wpt_call_root` (`Wpt.lean:726`/`:758`). There is no raw-WP
+introduction. Calls: `wps_call`/`wps_call_root` (`Wps.lean:444`/`:494`),
+`wpt_call`/`wpt_call_root` (`Wpt.lean:740`/`:769`). There is no raw-WP
 sequencing rule: at a populated label map it is false, because a jump
 discards the sequencing context (`Rules.lean:35`–`:44`).
 
-The collapses. `wps_sound_cps` (`Wps.lean:3440`) is the one Löb
+The collapses. `wps_sound_cps` (`Wps.lean:4164`) is the one Löb
 induction, in continuation-passing form over the ambient control; its
 call case runs the callee under `procSpecs` and returns into the
-caller's continuation (`wp_ret`/`wp_ret_annot`, `:3326`/`:3367`).
-`wps_sound`/`wps_sound_empty` (`:3637`/`:3657`) are its entry-control
-faces into iris-lean's WP. `wpt_sound_cps` (`Wpt.lean:3173`, strong
+caller's continuation (`wp_ret`/`wp_ret_annot`, `:4049`/`:4091`).
+`wps_sound`/`wps_sound_empty` (`:4359`/`:4380`) are its entry-control
+faces into iris-lean's WP. `wpt_sound_cps` (`Wpt.lean:3903`, strong
 induction on the budget) with `wpt_sound`/`wpt_sound_empty`
-(`:3382`/`:3400`) collapse into iris-lean's total WP. Their consumers,
+(`:4114`/`:4133`) collapse into iris-lean's total WP. Their consumers,
 exactly (non-comment occurrences in every package module outside the
 defining module and `Audit.lean`'s pin list):
 
 | Collapse | Consumed by (the Iris-level readouts) |
 |---|---|
-| `wps_sound` | `Examples/CallSmoke.lean:330`, `FibRecExhibit.lean:648`, `EvenOddExhibit.lean:502` |
-| `wps_sound_empty` | Exhibit (`:349`, `:701`), StructExhibit (`:199`, `:830`), CaseExhibit (`:143`), LoopExhibit (`:391`), FibExhibit (`:402`), ArrayExhibit (`:592`), WseqExhibit (`:107`), ListRevExhibit (`:1434`), TwoLabelExhibit (`:531`) |
-| `wpt_sound` | the pinned export `cs_twp_readout` (`Examples/CallSmoke.lean:455`, at `:461`) |
+| `wps_sound` | `Examples/CallSmoke.lean:329`, `FibRecExhibit.lean:642`, `EvenOddExhibit.lean:496` |
+| `wps_sound_empty` | Exhibit (`:349`, `:701`), StructExhibit (`:199`, `:830`), CaseExhibit (`:143`), LoopExhibit (`:393`), FibExhibit (`:405`), ArrayExhibit (`:595`), WseqExhibit (`:107`), ListRevExhibit (`:1437`), TwoLabelExhibit (`:535`) |
+| `wpt_sound` | the pinned export `cs_twp_readout` (`Examples/CallSmoke.lean:451`, at `:457`) |
 
 No shipped-driver statement consumes any of them: the driver lanes
 (§2.4) run their own inductions.
 
 ### 2.2 The mirror's certification and completeness
 
-`CerberusRound M c c'` (`Round.lean:195`) is one round in the driver's
+`CerberusRound M c c'` (`Round.lean:202`) is one round in the driver's
 own vocabulary. At every driver state embedding the context and the
 configuration `c`: the engine's step list is a singleton, it is
 advanceable, and the shipped `advance_step` on it is one active
 transition to the state embedding `c'`. Active means `NDactive
 NOWAKEUP`: no other thread is woken. It is stated at the
 loop body, with no fuel dependency (loop-level reading
-`CerberusRound.loop_step`, `:965`). The certification is
+`CerberusRound.loop_step`, `:1034`). The certification is
 
 ```lean
 theorem engine_step_matchU {M : MachineCtx}
@@ -248,42 +251,51 @@ theorem engine_step_matchU {M : MachineCtx}
     {ρ' : EnvStack} {ctl ctl' : Ctl} {σ σ' : Mem}
     (hf : Frag e) (hsz : esize e ≤ lemDefaultFuel)
     (hs : Step M (e, ev0 :: evs, ctl, σ) (e', ρ', ctl', σ')) :
-    CerberusRound M (e, ev0 :: evs, ctl, σ) (e', ρ', ctl', σ') := by      -- Round.lean:1010
+    CerberusRound M (e, ev0 :: evs, ctl, σ) (e', ρ', ctl', σ') := by      -- Round.lean:1100
 ```
 
 — on `Frag`, at a cons-shaped environment, at any control and successor
 control, with the static size bound, and no well-formedness premise;
-`step_iff_cerberusRound` (`:1598`) is two-sided under the hypothesis
+`step_iff_cerberusRound` (`:1845`) is two-sided under the hypothesis
 that a mirror step exists.
 
 Completeness is the other direction, per constructor.
-`frag_round_complete` (`:5369`): at every non-value `Frag` configuration
+`frag_round_complete` (`:6165`): at every non-value `Frag` configuration
 the mirror steps, or the round is a classified refusal, or the
-configuration is in the residual. The refusals (`ShippedRefusal`, `:214`)
+configuration is in the residual. The refusals (`ShippedRefusal`, `:222`)
 are stated in the engine's vocabulary. `error`: the step list is
 `[Step_error2 msg]`. `killed`: `advance_step` returns `NDkilled r`.
 `fork`: `CerbND.runND` delivers at least two executions. The `panic`
 family: the engine's own `failwithI`, LemLib's kernel-opaque failure
 (not the `panic!` arms of §3). `error_next`: a success round into
-an ill-typed next round. The residual (`OpenRound`, `:357`) has two arms.
-`eval_uncovered`: an operand containing a leaf the engine's evaluator
-accepts where the mirror evaluator does not (a `Proc`-named unbound
-symbol, a binop at two floats, `OpEq` at two ctypes). The classifier
-`evalClass` answers `.uncovered` at the first such leaf and claims
-nothing about the whole operand. `run_surplus`: a jump with more
+an ill-typed next round. The residual (`OpenRound`, `:368`) has two arms.
+`eval_uncovered`: an operand whose outcome the classifier `evalClass`
+does not decide. Its members: a leaf the engine's evaluator accepts
+where the mirror evaluator does not (a `Proc`-named unbound symbol, a
+binop at two floats, `OpEq` at two ctypes), and — since E2 — shapes the
+engine does NOT accept but whose refusal the classifier does not
+certify: a `case` matching no pattern (the engine's opaque `failwithI`
+PANIC), `undef(<<UB088>>)` (its location is the call-location
+parameter), a constructor dispatch failure (an engine KILL), a
+constructor operand list whose first failing operand is an undef
+followed by another failure (the engine's Exception-first
+`except_sequence`), and a `case` whose selected branch the mirror's
+depth guard rejects. The classifier answers `.uncovered` and claims
+nothing about the whole operand (`EvalClass.lean`'s header lists the
+members; `docs/2026-09-05_fragment-closure-e2-notes.md`). `run_surplus`: a jump with more
 arguments than parameters whose surplus does not evaluate. One lemma per
 redex root carries the classification (`complete_store` … `complete_ret`,
-`:2300`–`:5351`). `cerberusRound_classify` (`:5476`; premises `SeqWF`,
+`:2628`–`:6146`). `cerberusRound_classify` (`:6281`; premises `SeqWF`,
 `ctl.κ = []`) sorts every well-sized `Frag` configuration into
-`value_done`/`value_annot`/`step`/`refused`/`open_` (`RoundClass`, `:1631`).
+`value_done`/`value_annot`/`step`/`refused`/`open_` (`RoundClass`, `:1890`).
 Every operand the classifier rejects is a proved engine kill; operands
 it leaves uncovered are not characterised, so the residual is a
 superset of the engine-accepted shapes (KOI B7).
 
 Two engine-round bridges exist by design (KOI B12). `engine_step_matchU`
 certifies the mirror; the adequacy lanes consume the production-profile
-round `loop_step_frag`/`loop_step_frag'` (`DriverCollapse.lean:2118`/
-`:2024`), proved independently per redex (`Round.lean:141`–`:153`). No
+round `loop_step_frag`/`loop_step_frag'` (`DriverCollapse.lean:2333`/
+`:2237`), proved independently per redex (`Round.lean:141`–`:153`). No
 adequacy export consumes `CerberusRound`, `engine_step_matchU`,
 `cerberusRound_classify` or `frag_round_complete`. The hand-written
 discharge `dischargeStep`/`outcomesU` (Soundness.lean) is a proof device
@@ -312,67 +324,67 @@ iterate the shipped round `loop_step_frag`/`loop_step_frag'`.
 
 **The partial lane** (`Adequacy.lean`). `spike_step_adequacy` (`:568`;
 `_alloc` `:667`) is iris-lean's `wp_strong_adequacy_gen` with the ghost
-state constructed. `engine_adequacy` (`:1278`; `_alloc` `:1344`) turns it
+state constructed. `engine_adequacy` (`:1291`; `_alloc` `:1357`) turns it
 into the engine fact `DriverSafeCtl M th₀ e ρ ctl σ ψ` (`:932`, read in
 §4: exhaustion or PROGRAM-DONE with the readout, at EVERY fuel, no other
 outcome). Its ties are `LabeledProcs` for the callees
-(`DriverCollapse.lean:2178`) and `CtlTied` for the procedures already on
-the control (`:2205`). The mirror suffices because `NotStuck` supplies a
+(`DriverCollapse.lean:2396`) and `CtlTied` for the procedures already on
+the control (`:2423`). The mirror suffices because `NotStuck` supplies a
 mirror step at every reachable configuration and `loop_step_frag'` makes
-it the loop's unique next iteration: `drive_safe_aux` (`:1079`), an
+it the loop's unique next iteration: `drive_safe_aux` (`:1088`), an
 unpinned fuel induction under the control invariant `ControlOk` (`:800`).
 Its premise `MachineCtx.FragProcs` (`:767`: every declared procedure body
 in `Frag` with its static bound) lets it follow the engine into a callee
 and back. Fuel 0 is the exhaustion kill (`loop_zero_exhausts`,
-`DriverCollapse.lean:2246`). Fuel 1 at a delivered value is the
+`DriverCollapse.lean:2466`). Fuel 1 at a delivered value is the
 exhaustion of the drain iteration, the loop's last pass over the
-emptied thread list (`loop_step_done_exhaust`, `:2257`); fuel ≥ 2 there
+emptied thread list (`loop_step_done_exhaust`, `:2477`); fuel ≥ 2 there
 is PROGRAM-DONE (`loop_step_done`, `:392`).
 
-**The total lane** (`ProdLoop.lean`). `wpt_driver_cps` (`:609`) is the
+**The total lane** (`ProdLoop.lean`). `wpt_driver_cps` (`:638`) is the
 budget induction in continuation-passing form over the ambient control,
 the driver-level twin of `wpt_sound_cps`. It concludes the pure delivery
-fact `DriverDoneCtl M₀ th₀ e ρ ctl σ ψ k` (`:456`). That fact: from any
+fact `DriverDoneCtl M₀ th₀ e ρ ctl σ ψ k` (`:477`). That fact: from any
 driver state holding the configuration at `ctlThread th₀ e ρ ctl`, with
 the file tie and the whole-file registration tie, the loop returns
 PROGRAM-DONE for a value satisfying `ψ` within `k + 2` iterations. The
 call case applies the hypothesis to the callee at the pushed control
 with the continuation budget added; every round is `loop_step_frag`
-(`driverDoneCtl_step`, `:537`). The launcher is `wpt_driver_done_procs`
+(`driverDoneCtl_step`, `:563`). The launcher is `wpt_driver_done_procs`
 (`:839`; a populated table, the entry control `⟨[], some p, ℓ, lc, sp⟩`
 of a declared procedure).
 It is the route of `fib_rec_certified_production` (`main` calls `fib`,
 which calls itself twice) and `even_odd_certified_production`
 (`even`/`odd` call each other under a symbol-dependent table; three
 procedures). The single-procedure lane `DriverDoneAt`/
-`wpt_driver_aux`/`wpt_driver_done(_alloc)` (`:56`/`:175`/`:290`/`:358`), at
+`wpt_driver_aux`/`wpt_driver_done(_alloc)` (`:58`/`:181`/`:309`/`:377`), at
 the empty table, is the route of the seven one-procedure statements.
 
-**The projection** (`Adequacy.lean`). `project_triple_pure` (`:1605`)
+**The projection** (`Adequacy.lean`). `project_triple_pure` (`:1618`)
 takes an Iris triple to the Iris-free `MemTriple M ctl ρ e P ψ`
-(`:1518`). Input: a triple whose precondition is footprint ownership and
+(`:1531`). Input: a triple whose precondition is footprint ownership and
 whose framed post pure-entails `ψ R w.val σ'` under the coupling
 invariant. Output: memory splits as `P ⊎ R`, and from any driver state
 holding the configuration the shipped loop at every fuel exhausts or
-delivers `(v, σ')` with `ψ R v σ'`. `project_triple_pure_alloc` (`:1743`)
+delivers `(v, σ')` with `ψ R v σ'`. `project_triple_pure_alloc` (`:1756`)
 is the allocating twin (`allocBudget B` in the precondition;
-`MemTriple_alloc`, `:1669`, under `LaunchCoh … B`, `:422`). The one
+`MemTriple_alloc`, `:1682`, under `LaunchCoh … B`, `:422`). The one
 Iris-shaped hypothesis `hpost` names `CohG`/`metaInterp`/`byteInterp` —
 the documented exception (API.lean header). It is discharged only
-through the public `*_consequence` lemmas (`:1909`–`:2007`), which
+through the public `*_consequence` lemmas (`:1922`–`:2020`), which
 deliver the pure memory view `CellCoh` (`Heap.lean:358`), `Sat`
-(`Adequacy.lean:1415`) and `DeadAt` (`:1900`). A positive exhibit names
+(`Adequacy.lean:1428`) and `DeadAt` (`:1913`). A positive exhibit names
 none of the internals (§5, the boundary check).
 
 **The closed forms over the shipped pipeline** (`ProdEntry.lean`). The
 authored program is wrapped as a synthetic file — one procedure by
 `prodFile` (`:125`), `main` plus declared procedures by `prodFileWith`
-(`:544`; `prodFile e = prodFileWith [] e` is `rfl`, `:549`). The total
-pipeline theorem `prod_run_eqJ_procs` (`:716`; one-procedure form
+(`:545`; `prodFile e = prodFileWith [] e` is `rfl`, `:550`). The total
+pipeline theorem `prod_run_eqJ_procs` (`:719`; one-procedure form
 `prod_run_eqJ`, `:402`) turns a `DriverDoneCtl` at the production
 profile into the shipped composite's result. Its bound:
 `k + 2 ≤ CerbFuel.driverFuel`. The partial pipeline theorem
-`prod_run_safe_procs` (`:768`) turns a `DriverSafeCtl` there into a fact
+`prod_run_safe_procs` (`:771`) turns a `DriverSafeCtl` there into a fact
 at every `fuel` about
 `CerbND.runND (CerbND.drive_lemFuel fuel fmapEmpty false (prodFileWith procs e) args) (initial_driver_state …).1`.
 That is exactly one execution: `nd_status.Killed dst'
@@ -396,12 +408,12 @@ exports for this purpose (`CerbFuel.driverFuel = 100000000`, generated
 | `exhibitA_prod` | `ProdExhibit.lean:264` | none |
 | `fib_certified_production` | `ProdLoopExhibit.lean:75` | `hn : 0 ≤ n`, `hfuel : 2 * n.toNat + 6 ≤ CerbFuel.driverFuel` |
 | `counter_loop_certified_production` | `ProdLoopExhibit.lean:620` | `hn`, `hfuel : 6 * n.toNat + 8 ≤ CerbFuel.driverFuel` |
-| `list_reverse_certified_production` | `ProdLoopExhibit.lean:1435` | none |
+| `list_reverse_certified_production` | `ProdLoopExhibit.lean:1439` | none |
 | `dispose_list_certified_production` | `DisposeExhibit.lean:1479` | none |
 | `region_loop_certified_production` | `RegionLoopExhibit.lean:633` | `hcost : 0 < regionCost al sz`, `hn`, `hB : n.toNat * regionCost al sz ≤ headroom prodMem₀.lastAddress`, `hfuel : 7 * n.toNat + 5 ≤ CerbFuel.driverFuel` |
-| `malloc_list_certified_production` | `MallocListExhibit.lean:1654` | `hn`, `hB : n.toNat * (15 + max al.toNat 1) ≤ 281474976710647`, `hfuel : 25 * n.toNat + 9 ≤ CerbFuel.driverFuel` |
-| `fib_rec_certified_production` | `FibRecExhibit.lean:865` | `hn`, `hfuel : fibRounds n.toNat + 4 ≤ CerbFuel.driverFuel` |
-| `even_odd_certified_production` | `EvenOddExhibit.lean:722` | `hn`, `hfuel : 3 * n.toNat + 6 ≤ CerbFuel.driverFuel` |
+| `malloc_list_certified_production` | `MallocListExhibit.lean:1658` | `hn`, `hB : n.toNat * (15 + max al.toNat 1) ≤ 281474976710647`, `hfuel : 25 * n.toNat + 9 ≤ CerbFuel.driverFuel` |
+| `fib_rec_certified_production` | `FibRecExhibit.lean:854` | `hn`, `hfuel : fibRounds n.toNat + 4 ≤ CerbFuel.driverFuel` |
+| `even_odd_certified_production` | `EvenOddExhibit.lean:710` | `hn`, `hfuel : 3 * n.toNat + 6 ≤ CerbFuel.driverFuel` |
 
 Package definitions in these statements, exactly — beyond the authored
 program and its wrapper (`prodFile`/`prodFileWith`), read off the nine
@@ -412,16 +424,16 @@ statement texts:
 | `exhibitA_prod` | `sevenVal`, `sevenBytes`, `intTy` (`Examples/Layout.lean:57`, `:65`, `:50`); the readout `CellCoh` (`Heap.lean:358`) | — |
 | `fib_certified_production` | `ivVal` (`LoopExhibit.lean:63`), `fibSpec` (`FibExhibit.lean:60`) | — |
 | `counter_loop_certified_production` | `intUndefBytes` (`AllocExhibit.lean:88`), `sevenBytes`, `intTy`, `CellCoh` | — |
-| `list_reverse_certified_production` | `ptrVal` (`ListRevExhibit.lean:466`), `SeedChain` (`:1210`), the footprint type `CellMap` (`Adequacy.lean:1407`), the readout `Sat` (`:1415`) | — |
+| `list_reverse_certified_production` | `ptrVal` (`ListRevExhibit.lean:466`), `SeedChain` (`:1213`), the footprint type `CellMap` (`Adequacy.lean:1420`), the readout `Sat` (`:1428`) | — |
 | `dispose_list_certified_production` | engine fields only | — |
 | `region_loop_certified_production` | engine fields only | `regionCost`, `headroom`, `prodMem₀` (`Heap.lean:2322`, `:2267`, `ProdEntry.lean:212`); at zero cost the statement would be vacuous, which `hcost` excludes |
-| `malloc_list_certified_production` | engine fields only | none — the budget premise is in engine vocabulary, bridged inside the proof (`ml_budget_bridge`, `:1626`) |
+| `malloc_list_certified_production` | engine fields only | none — the budget premise is in engine vocabulary, bridged inside the proof (`ml_budget_bridge`, `:1630`) |
 | `fib_rec_certified_production` | `ivVal`, `fibSpec` | `fibRounds` (`FibRecExhibit.lean:450`: `fibRounds 0 = fibRounds 1 = 3`, `fibRounds (n+2) = fibRounds (n+1) + fibRounds n + 9`; closed form `fibRounds n + 9 = 12 · fibSpec (n+1)`, `:470`) |
 | `even_odd_certified_production` | `ivVal` | — |
 
 Beside them, two closed PARTIAL forms consume `prod_run_safe_procs`:
-`fib_rec_certified` (`FibRecExhibit.lean:814`) and `even_odd_certified`
-(`EvenOddExhibit.lean:674`) — every `n ≥ 0`, at every `drive_lemFuel`
+`fib_rec_certified` (`FibRecExhibit.lean:803`) and `even_odd_certified`
+(`EvenOddExhibit.lean:662`) — every `n ≥ 0`, at every `drive_lemFuel`
 fuel, no budget bound.
 
 ### 2.6 The memory invariant
@@ -444,8 +456,8 @@ theorem: `MemWF.loadM` (`:1817`), `MemWF.storeM` (either locking mode,
 
 ## 3. What is trusted
 
-**The trust base.** (i) The Lean kernel and the trio (`Audit.lean:159`–
-`:160`). (ii) iris-lean, as DEFINITIONS: the WP, the BI connectives and
+**The trust base.** (i) The Lean kernel and the trio (`Audit.lean:162`–
+`:163`). (ii) iris-lean, as DEFINITIONS: the WP, the BI connectives and
 the ghost theory appear only inside kernel-checked proof terms and
 contribute no axiom; the closed statements' texts are Iris-free. (iii)
 The pinned cerberus-lean semantics (`f95ef8d9c`) as the semantics of
@@ -472,23 +484,23 @@ model's boundary, `CerbFS.lean:47`; `CerbTags.lean:34`;
 `CerbMem.lean:1127`–`:1132`). A theorem about `drive` is therefore about
 the Lean definition, which on a state reaching such an arm continues
 where the OCaml faults. The rules' premises keep proved programs away
-from them (`create_atomic`'s `hsz : 0 < sizeofCtype …`, `Rules.lean:995`;
+from them (`create_atomic`'s `hsz : 0 < sizeofCtype …`, `Rules.lean:1000`;
 the NO-RULE `create` rows, §6). No theorem states that an export's run
 reaches none, and the sweep cannot see one (a term, not an axiom).
 Owner: cerberus-lean's typed-failure-outcomes pass (KOI A5). This is
 distinct from §2.2's `panic` family: LemLib's `failwithI`/
 `fuelExhaustedWith` are `opaque`
-(`.lake/packages/LemLib/lean-lib/LemLib.lean:160`–`:187`), so the kernel
+(`.lake/packages/LemLib/lean-lib/LemLib.lean:173`, `:187`), so the kernel
 has no equation for them and a theorem holds at every value they take.
 
 **What the build checks** (`Audit.lean`, the last import of the library
 root, elaborated by every `lake build`). Every pinned export exists, is
-a theorem, and has axiom set EXACTLY the trio (`:686`–`:697`; 508 pins at
-this revision, `docs/2026-09-05_e2-notes.md` §10, the gate at the E2
-head). Every theorem of every `CerberusHeapLang.*` module, internal
-details included, is bounded by the trio (`:698`–`:716`). `sorryAx`/
-`ofReduceBool`/`ofReduceNat` reach no constant of any kind (`:718`–
-`:732`). Precision: "exactly the trio" is the pinned exports' property;
+a theorem, and has axiom set EXACTLY the trio (`:691`–`:702`; 509 pins at
+this revision, `docs/2026-09-05_e2-notes.md` "E2 audit fixes", the gate
+at the E2 audit-fixes head). Every theorem of every `CerberusHeapLang.*`
+module, internal details included, is bounded by the trio (`:703`–`:722`).
+`sorryAx`/`ofReduceBool`/`ofReduceNat` reach no constant of any kind
+(`:723`–`:737`). Precision: "exactly the trio" is the pinned exports' property;
 every other theorem's cone is bounded by the trio, by the sweep. The
 public-named lemmas with SUB-trio cones are therefore unpinned, as
 `Audit.lean`'s comments record them (among them `fibRounds_closed`,
@@ -500,7 +512,8 @@ Quot.sound]`; the four `∈`/`contains` bridge lemmas `mem_contains_int`,
 `callRedex?_none_of_jumpRedex?_some`; and, since E2, the evaluator
 bridge `pull_bridge`). The `BareHead` lemmas are gone with `BareHead`
 (E1).
-`regionCost_eq` and `runND_killed` have no axioms (`:384`, `:552`–`:553`). Kernel-only proof methods: no `native_decide`, `bv_decide`
+`regionCost_eq`, `runND_killed` and, since the E2 audit fixes,
+`unspec_paddingByte` have no axioms (`:389`, `:557`–`:558`). Kernel-only proof methods: no `native_decide`, `bv_decide`
 or `ofReduce*` anywhere (gate 1, `../scripts/test_unit.sh:28`).
 
 **The declared boundary is empty** ("There is no declared boundary
@@ -590,23 +603,24 @@ per-thread loop and not the composite. The thread-level fact is the
 meaning of the triple (below), and its ∀ `fl` is real run-length content.
 
 **The premises every generic adequacy theorem carries** (`engine_adequacy`,
-`Adequacy.lean:1278`–`:1296`; `project_triple_pure`, `:1605`–`:1613`;
-`wpt_driver_cps`, `ProdLoop.lean:609`–`:620`; `wpt_driver_done_procs`,
-`:799`–`:809`), and what each means:
+`Adequacy.lean:1291`–`:1303`; `project_triple_pure`, `:1618`–`:1630`;
+`wpt_driver_cps`, `ProdLoop.lean:638`–`:651`; `wpt_driver_done_procs`,
+`:839`–`:852`), and what each means:
 
 - `htd : M.tagDefs = fmapEmpty`, `hex : M.extern = fmapEmpty` — no
   struct/union tag definitions and no extern indirection in any proved
   configuration; this matches the production driver's
   `drive fmapEmpty false …` (KOI B4).
 - `hκ : ctl.κ = []` — the entry control has an empty call stack (the
-  value arm selects PROGRAM-DONE over RETURN, `Round.lean:1661`).
+  value arm selects PROGRAM-DONE over RETURN, `shipped_done`,
+  `Round.lean:1920`).
 - `hfrag : Frag e`, `hQf`, `hPf : M.FragProcs` — the program, every
   registered label body and every declared procedure body are in the
   fragment (`Adequacy.lean:767`).
 - `hpot : pot e ≤ lemDefaultFuel`, `hQpot`, `FragProcs.potBound` — THE
   STATIC FUEL PREMISE. `pot` (`Potential.lean:43`) is a step-monotone
   size potential on terms; it dominates §2.2's round-level measure
-  `esize` (`Frag.esize_le_pot : esize e ≤ pot e`, `:100`), so this premise
+  `esize` (`Frag.esize_le_pot : esize e ≤ pot e`, `:117`), so this premise
   discharges the certification's `hsz`. The engine's pure-expression
   evaluator and context search are fuelled at LemLib's constant
   `lemDefaultFuel = 1000000` (`.lake/packages/LemLib/lean-lib/LemLib.lean:56`).
@@ -622,7 +636,7 @@ meaning of the triple (below), and its ∀ `fl` is real run-length content.
 - `hcoh`/`hl : LaunchCoh …` — the seeded footprint, or, for allocating
   programs, the footprint plus the global memory well-formedness
   invariant `MemWF` (§2.6) and the budget fit `B ≤ headroom σ.lastAddress`
-  (`Adequacy.lean:422`–`:432`).
+  (`Adequacy.lean:422`–`:430`).
 - `hwp` — the Iris derivation: the footprint's ownership entails the WP
   (or `procSpecsT ∗ blockSpecsT ∗ wpt …`) at the top mask.
 
@@ -689,10 +703,10 @@ them read.
   the two Lean instruments fail on a package module absent from the
   list; all three instruments fail on a classified module absent from
   the build or a class outside the vocabulary.
-- **The import-direction check** (`test_unit.sh:65`): no module of class
+- **The import-direction check** (`test_unit.sh:76`): no module of class
   `core` imports an exhibit, example or production module.
 - **The client-boundary check** (`../scripts/boundary_check.sh`,
-  `test_unit.sh:88`). After stripping comments, a `positive-client`/
+  `test_unit.sh:99`). After stripping comments, a `positive-client`/
   `declared-smoke`/`example-support` module must not mention a logic
   internal. The internals: the coupling invariant and state
   interpretation (`CohG`, …); the judgment unfoldings (`wps.pre`, …);
@@ -708,7 +722,7 @@ them read.
   such in its header). Per headline claim: exported theorems, kind,
   demonstrating exhibits, supported variants (manifest rows), known
   exclusions (KOI pointers), freshness check. The generator checks that
-  every declaration a claim row names exists (11 rows, 90 names).
+  every declaration a claim row names exists (12 rows, 104 names).
 - **The parametric inventory** (`scripts/parametric_inventory.lean`) is
   ON DEMAND, not in the gate — [AGENT 2026-09-04] (DECISIONS "AR5-MANIFEST
   LANDED and COMBINED"): the boundary check is its cheap gate twin, and a proof-term
@@ -724,10 +738,13 @@ Each item points at its register entry; none is hidden in a proof.
   Four OUT-OF-SCOPE variants lie inside the fragment's constructors but
   outside the mirror (manifest OUT-OF-SCOPE rows): a jump with a
   non-evaluating surplus argument; `pure(e)` at a covered operand the
-  engine evaluates but the mirror evaluator does not (a `Proc`-named
-  unbound symbol, two floats, `OpEq` at two ctypes, a `case` whose
-  selected branch the depth guard rejects — the characterized residual
-  `OpenRound.eval_uncovered`); `PtrEq` at two concrete pointers of
+  classifier does not decide — a leaf the engine evaluates but the
+  mirror evaluator does not (a `Proc`-named unbound symbol, two floats,
+  `OpEq` at two ctypes), or an E2 shape the engine refuses but the
+  classifier does not certify (a `case` matching no pattern, `UB088`, a
+  constructor dispatch failure, an undef-then-raise constructor operand
+  list, a branch the depth guard rejects) — the characterized residual
+  `OpenRound.eval_uncovered` (§2.2); `PtrEq` at two concrete pointers of
   differing provenance (the engine forks); the `Impl` call. (The pre-E1
   fifth — an annotated value at the plain-symbol binder, kept out by
   `BareHead` — is mirrored since E1 and a NO-RULE row.)
@@ -758,10 +775,10 @@ Each item points at its register entry; none is hidden in a proof.
 - **Empty tag definitions and extern** in every proved configuration
   (§4; KOI B4).
 - **The mirror-completeness residual.** `OpenRound`'s two arms are
-  characterised, not closed (§2.2; movers at `Round.lean:357`–`:400` and
+  characterised, not closed (§2.2; movers at `Round.lean:368`–`:414` and
   in `EvalClass.lean`'s header). `Frag.case_value` carries `hbsz`, not a
   theorem but a membership premise: the selected branch's `esize` is
-  bounded by the case node's (`Soundness.lean:4296`). The client
+  bounded by the case node's (`Soundness.lean:6522`). The client
   discharges it per program — `rfl` for authored programs
   (`caseProg_select`, `CaseExhibit.lean:68`) (KOI B7).
 - **Statement-shape limitations.** Seeded exhibits have no cold-start
@@ -770,7 +787,7 @@ Each item points at its register entry; none is hidden in a proof.
   parks `main` in (it parks it at `current_proc_opt := some main_sym`,
   generated `Driver.lean:530`). This is admitted because the round needs
   the current procedure only at a jump (`loop_step_frag'`'s `hjmp`,
-  `DriverCollapse.lean:2035`; `CtlTied.noproc`, `:2213`) (KOI B2). Six
+  `DriverCollapse.lean:2248`; `CtlTied.noproc`, `:2431`) (KOI B2). Six
   any-memory total equations have no twins, and tree rotation has no
   shipped-pipeline statement (KOI B1). The round-count bounds of
   `fib_rec_certified_production`, `even_odd_certified_production` and

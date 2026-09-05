@@ -428,9 +428,10 @@ def CtlTied (M₀ : MachineCtx) (lab : Fmap sym LabelMap) (ctl : Ctl) : Prop :=
 ```
 
 `ctlThread` is the driver's own `thread_state` holding the
-configuration: the arena, the env and the three control fields the
-engine's PCALL/RETURN arms write (`stack0`, `current_proc_opt`,
-`exec_loc`), over `th₀`'s `errno` and `current_loc`. `LabeledProcs` ties
+configuration: the arena, the env and the FOUR control fields the rounds
+write — `stack0`, `current_proc_opt`, `exec_loc` (the engine's
+PCALL/RETURN arms) and, since E1, `current_loc := ctl.curLoc` (the general
+arm's location write) — over `th₀`'s `errno` only (`DriverCollapse.lean:2379`). `LabeledProcs` ties
 the driver's run state to the context at every DECLARED procedure (what
 `call_proc` reads), `CtlTied` at the current procedure and every
 procedure saved on the call stack (what the jump reads,
@@ -1539,11 +1540,16 @@ integer) pair (`Illformed_program`), certified against the engine's
 evaluator tower level by level exactly as the success bridge is.
 `OpenRound` is the RESIDUAL, two arms each recording that the mirror is
 stuck and carrying a mirror-side witness: `eval_uncovered` (an operand
-in the covered grammar CONTAINING A LEAF the engine accepts where the
+the classifier does not decide: a LEAF the engine accepts where the
 mirror evaluator does not evaluate — a symbol unbound in the environment
 but naming a `Proc` of the file, a mirrored binop at two floats, `OpEq`
-at two ctypes; `evalClass` answers `.uncovered` at the FIRST such leaf
-and carries no engine claim, so the whole operand's outcome is NOT
+at two ctypes — or, since E2, a shape the engine refuses but the
+classifier does not certify — a `case` matching no pattern (the engine's
+opaque `failwithI` PANIC), `UB088` (its location is the call-location
+parameter), a constructor dispatch failure (an engine KILL), an
+undef-then-raise constructor operand list (Exception-first), a branch
+the depth guard rejects; `evalClass` answers `.uncovered` at the FIRST
+such leaf or shape and carries no engine claim, so the whole operand's outcome is NOT
 characterized — the engine may succeed, kill on a later type error
 (`f + 1` with `f` a `Proc`-named unbound symbol is `PePure`, classified
 `.uncovered`, and killed as `Illformed_program … ill-typed PEop`;
@@ -1823,11 +1829,15 @@ the `#print axioms` recipe are in the README, "How to build and verify".
   (`prodFile`: one procedure; `prodFileWith`: `main` plus declared
   procedures).
 - **The residual of mirror completeness** (`OpenRound`, §5;
-  `2026-09-02_fragment-closure-notes.md`): an operand in the covered
-  grammar containing a LEAF the engine accepts where the mirror
-  evaluator does not evaluate (a procedure-named symbol, a mirrored
-  binop at two floats, `OpEq` at two ctypes) — the classifier answers
-  `.uncovered` at the first such leaf and carries no engine claim, so
+  `2026-09-02_fragment-closure-notes.md`,
+  `2026-09-05_fragment-closure-e2-notes.md`): an operand the classifier
+  does not decide — a LEAF the engine accepts where the mirror evaluator
+  does not evaluate (a procedure-named symbol, a mirrored binop at two
+  floats, `OpEq` at two ctypes) or, since E2, a shape the engine refuses
+  but the classifier does not certify (a `case` matching no pattern,
+  `UB088`, a constructor dispatch failure, an undef-then-raise
+  constructor operand list, a branch the depth guard rejects) — the
+  classifier answers `.uncovered` and carries no engine claim, so
   the whole operand's outcome is NOT characterized (it may succeed,
   kill, or panic; every operand the classifier REJECTS is a proved
   engine KILL, operands it leaves UNCOVERED are not characterized, the
