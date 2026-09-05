@@ -7,7 +7,10 @@ oracle's emitted text `docs/corpus-e0/<file>` (repository root); and the
 four PLANTS of every row (first `bound` dropped; every `Astd` stripped;
 E2: the first `pure(Specified(…))` unwrapped; E4: the first `save`
 initialiser's `Specified(…)` unwrapped) must NOT match — a plant that
-matches means the instrument is vacuous and fails the run. Scope and blind spots: the module's header
+matches means the instrument is vacuous and fails the run. E5 also plants
+singleton tuples around expression-level case/if scrutinees and a case pattern;
+each position must be exercised by at least one row and every applied plant
+must mismatch. Scope and blind spots: the module's header
 (CerberusHeapLang/Examples/CorpusE0.lean).
 
 Run (from cerberus-heaplang/):
@@ -95,7 +98,7 @@ def coverageSweep (quiet : Bool) (rows : List Row) (pending : List (String × St
 
 def main : IO Unit := do
   let mut fail := false
-  IO.println "# Corpus skeleton check (E1 skeleton; E2 pure expressions; E3 std.core fragment; E4 save initialisers)"
+  IO.println "# Corpus skeleton check (E1 skeleton; E2 pure expressions; E3 std.core fragment; E4 save initialisers; E5 branch operands)"
   IO.println ""
   -- the coverage sweep, and its plant: the ledger with t1's row removed
   -- (and not made pending) MUST fail
@@ -114,8 +117,12 @@ def main : IO Unit := do
   else
     IO.println "coverage sweep: every corpus file rowed or pending; plant (t1 row dropped) fails (expected)"
   IO.println ""
-  IO.println "| file | proc | tokens | term = text | plant: bound dropped | plant: Astd stripped | plant: Specified unwrapped | plant: save initialiser unwrapped |"
-  IO.println "|---|---|---|---|---|---|---|---|"
+  let operandPlants : List (String × (CoreExpr → CoreExpr × Bool)) :=
+    [("case scrutinee", wrapFirstCaseScrutinee), ("if condition", wrapFirstIfScrutinee),
+     ("case pattern", wrapFirstCasePattern)]
+  let mut exercisedOperands : List String := []
+  IO.println "| file | proc | tokens | term = text | plant: bound dropped | plant: Astd stripped | plant: Specified unwrapped | plant: save initialiser unwrapped | E5 operand plants |"
+  IO.println "|---|---|---|---|---|---|---|---|---|"
   for row in corpusTable do
     match ← rowStreams row with
     | none => fail := true
@@ -168,7 +175,22 @@ def main : IO Unit := do
         if bad then
           IO.eprintln s!"FAIL: {row.file}: plant `save initialiser unwrapped` STILL MATCHES — vacuous instrument"
           fail := true
-      IO.println s!"| {row.file} | {row.proc} | {termToks.length} | {if eqMain then "equal" else "DIFFER"} | {plantBound} | {plantStd} | {plantSp} | {plantSv} |"
+      let mut operandVerdicts : List String := []
+      for (name, plant) in operandPlants do
+        let (planted, found) := plant row.term
+        if found then
+          exercisedOperands := name :: exercisedOperands
+          let (msg, bad) := plantVerdict textToks planted
+          operandVerdicts := operandVerdicts ++ [s!"{name}: {msg}"]
+          if bad then
+            IO.eprintln s!"FAIL: {row.file}: plant `{name}` STILL MATCHES — vacuous instrument"
+            fail := true
+        else operandVerdicts := operandVerdicts ++ [s!"{name}: n/a"]
+      IO.println s!"| {row.file} | {row.proc} | {termToks.length} | {if eqMain then "equal" else "DIFFER"} | {plantBound} | {plantStd} | {plantSp} | {plantSv} | {"; ".intercalate operandVerdicts} |"
+  for (name, _) in operandPlants do
+    unless exercisedOperands.contains name do
+      IO.eprintln s!"FAIL: no corpus row exercises the E5 `{name}` plant"
+      fail := true
   IO.println ""
   -- E3: the transcribed standard library against the pinned std.core SOURCE
   -- (the semantics workspace's runtime/libcore/std.core — the file the shipped

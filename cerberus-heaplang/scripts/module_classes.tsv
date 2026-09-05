@@ -32,6 +32,7 @@ CerberusHeapLang.Rules	core	-	atomic specifications and the raw-WP lifting
 CerberusHeapLang.Wps	core	-	the partial judgment and its rules
 CerberusHeapLang.Wpt	core	-	the total judgment and its rules
 CerberusHeapLang.Soundness	core	-	Frag, Decomp, the step match
+CerberusHeapLang.Substitution	core	-	covered pure-expression substitution and branch fragment preservation
 CerberusHeapLang.EvalClass	core	-	the evaluator outcome classification
 CerberusHeapLang.Potential	core	-	the static fuel bound
 CerberusHeapLang.Round	core	-	the shipped round, certification, completeness
@@ -68,6 +69,7 @@ CerberusHeapLang.Examples.CallSmoke	declared-smoke	-	the C3 call/procedure smoke
 CerberusHeapLang.Examples.ReadinessSmoke	declared-smoke	-	the API-only two-field predicate smoke
 CerberusHeapLang.Examples.Layout	example-support	-	layout constants and canned shapes
 CerberusHeapLang.Examples.CorpusE0	example-support	-	the corpus transcriptions (E1: t1; E4: t1's main is in Frag, t1Main_frag) and the annotation/bound/pure-expression/save-initialiser skeleton instrument (scripts/corpus_skeleton.lean)
+CerberusHeapLang.Examples.CorpusE5	example-support	-	E5 corpus fragment witnesses, including every selected branch after arbitrary pattern substitution
 CerberusHeapLang.Examples.MirrorCoverage	semantic-test	-	mirror-level coverage witnesses against `Step`; engine-round instances
 CerberusHeapLang.ProdExhibit	production-wrapper	-	exhibit A at the production entry
 CerberusHeapLang.ProdLoopExhibit	production-wrapper	-	the production loop theorems

@@ -11,7 +11,7 @@ Three things live here — data, an instrument, and membership witnesses:
    (docs/corpus-e0/<name>.annot.core at the repository root) the
    procedure it names and the hand-transcribed `CoreExpr` of that
    procedure's body. E1 transcribes t1 (`t1Main`); E2 names its
-   sub-terms (`t1LoadX`, `t1Spec3`, …). Later slices add rows.
+   sub-terms (`t1LoadX`, `t1Spec3`, …). E5 adds t5_ifelse (`t5Main`).
 
 2. THE SKELETON CHECK (`scripts/corpus_skeleton.lean` runs it): the
    SKELETON of a term — the preorder token stream of its expression
@@ -47,13 +47,13 @@ Three things live here — data, an instrument, and membership witnesses:
    its type are leaves the tokenizer skips to the `(`), so t1's `main` has
    NO opaque position left.
 
-   WHAT THE SKELETON DOES NOT CHECK (E4 scope): symbols, literals, ctypes,
-   binder types and memory orders are LEAVES (not compared); the
-   `if`/`case` scrutinees at the EXPRESSION level, `let` (Elet), `memop`,
-   `pcall`/`ccall` arguments are still OPAQUE (checked annotation-free
-   only) — the remaining opaque positions of the OTHER corpus programs
-   (t2/t3/t9/t10: `ccall` arguments, E6; t4/t5/t6: expression-level
-   `if`/`case` scrutinees, E5); the association of a `;`
+   SINCE E5 expression-level `if`/`case` scrutinees and case patterns are
+   READ too. Tuple-wrapping plants exercise each new operand position.
+
+   WHAT THE SKELETON DOES NOT CHECK: symbols, literals, ctypes, binder
+   types and memory orders are LEAVES (not compared); `let` (Elet),
+   `memop`, `pcall`/`ccall` arguments remain OPAQUE (checked annotation-free
+   only). The association of a `;`
    chain is not observable in the text (no parentheses are printed) and is
    not compared. FAIL-CLOSED where the instrument is blind: a pure
    expression node carrying a printed annotation (the printer's
@@ -307,12 +307,13 @@ partial def skeleton : CoreExpr → Except String (List String)
       let neg := match pol with | polarity.Pos => [] | polarity.Neg0 => ["neg"]
       pure (hd ++ neg ++ [actionKeyword act] ++ (← actionSkeleton act))
     | Ecase pe alts => do
-      checkClean [pe]
-      let bodies ← alts.mapM fun x => skeleton x.2
-      pure (hd ++ ["case"] ++ bodies.flatten ++ ["endcase"])
+      let branches ← alts.mapM fun (pat, body) => do
+        pure (["alt"] ++ (← patSkeleton pat) ++ (← skeleton body))
+      pure (hd ++ ["case"] ++ (← pexprSkeleton pe) ++ branches.flatten ++ ["endcase"])
     | Elet _ pe e2 => do checkClean [pe]; pure (hd ++ ["let"] ++ (← skeleton e2))
     | Eif pe e2 e3 => do
-      checkClean [pe]; pure (hd ++ ["if"] ++ (← skeleton e2) ++ (← skeleton e3))
+      pure (hd ++ ["if"] ++ (← pexprSkeleton pe) ++ ["then"] ++
+        (← skeleton e2) ++ ["else"] ++ (← skeleton e3))
     | Eccall _ pty pf pes => do checkClean (pty :: pf :: pes); pure (hd ++ ["ccall"])
     | Eproc _ _ pes => do checkClean pes; pure (hd ++ ["pcall"])
     | Eunseq es => do
@@ -571,6 +572,37 @@ partial def spanQuoted (q : Char) : List Char → List Char → List Char × Lis
   | [], acc => (acc.reverse, [])
   | c :: rest, acc => if c == q then ((c :: acc).reverse, rest) else spanQuoted q rest (c :: acc)
 
+/-- E5: retain the expression or pattern before a delimiter keyword.
+    Parentheses nest, quoted types are copied whole, and annotation markers
+    in operands are refused. Identifiers are consumed whole so a suffix
+    such as `then` in `otherthen` cannot be mistaken for a delimiter. -/
+partial def cutUntilKw (cs : List Char) (kw : String) (acc : List Char := [])
+    (depth : Nat := 0) : Except String (List Char × List Char) :=
+  match cs with
+  | [] => throw s!"keyword `{kw}` not found in an operand"
+  | c :: rest =>
+    if startsWith cs "{-#" then throw s!"an annotation marker inside the operand before `{kw}`"
+    else if depth == 0 && atKeyword cs kw then pure (acc.reverse, cs.drop kw.length)
+    else if isQuote c then
+      let (lit, r) := spanQuoted c rest []
+      cutUntilKw r kw (lit.reverse ++ c :: acc) depth
+    else if c == '(' then cutUntilKw rest kw (c :: acc) (depth + 1)
+    else if c == ')' then
+      if depth == 0 then throw s!"unmatched `)` before `{kw}`"
+      else cutUntilKw rest kw (c :: acc) (depth - 1)
+    else if isIdentChar c then
+      let (ident, r) := takeIdent cs
+      cutUntilKw r kw (ident.toList.reverse ++ acc) depth
+    else cutUntilKw rest kw (c :: acc) depth
+
+/-- Tokenize a complete operand cut from an expression-level `if` or
+    `case`. Appending a closing parenthesis uses the same operand scanner
+    as actions and save initialisers; leftover text is an error. -/
+def scanOperand (cs : List Char) (toks : Array String) : Except String (Array String) := do
+  let (ts, rest) ← pexScan (cs ++ [')']) 1 toks
+  unless rest.isEmpty do throw "unconsumed text in an expression operand"
+  pure ts
+
 /-- E4: the text of one save initialiser's pure expression — up to (not
     consuming) the `,` or `)` at depth 0 that ends the item; quoted
     literals (ctypes with parentheses) are copied whole; a marker is an
@@ -637,7 +669,9 @@ partial def scan (cs : List Char) (toks : Array String) (frames : List Frame) :
         | .caseF => throw "`)` closes a `case` (expected `end`)"
     else if c == '|' then
       match frames with
-      | .caseF :: _ => do scan (← skipUntilKw rest "=>") toks frames
+      | .caseF :: _ => do
+        let (pat, r) ← cutUntilKw rest "=>"
+        scan r (← scanOperand pat (toks.push "alt")) frames
       | _ => throw "`|` outside a case"
     else if Bool.or c.isAlpha (c == '_') then
       let (ident, rest') := takeIdent cs
@@ -681,13 +715,18 @@ partial def scan (cs : List Char) (toks : Array String) (frames : List Frame) :
         let (_, r) := takeIdent (skipWs rest')
         let (toks', r') ← pexRegion (← expectParen r ident) (toks.push "run")
         scan r' toks' frames
-      | "if" => do scan (← skipUntilKw rest' "then") (toks.push "if") frames
-      | "case" => do scan (← skipUntilKw rest' "of") (toks.push "case") (.caseF :: frames)
+      | "if" => do
+        let (cond, r) ← cutUntilKw rest' "then"
+        scan r ((← scanOperand cond (toks.push "if")).push "then") frames
+      | "case" => do
+        let (scrutinee, r) ← cutUntilKw rest' "of"
+        scan r (← scanOperand scrutinee (toks.push "case")) (.caseF :: frames)
       | "end" =>
         match frames with
         | .caseF :: fs => scan rest' (toks.push "endcase") fs
         | _ => throw "`end` outside a case"
-      | "then" | "else" | "in" | "of" => scan rest' toks frames
+      | "else" => scan rest' (toks.push "else") frames
+      | "in" | "of" => scan rest' toks frames
       | _ =>
         if pexKeywords.contains ident then do
           let (toks', r') ← pexRegion (← expectParen rest' ident) (toks.push ident)
@@ -739,6 +778,68 @@ def tokenizeFun (text : String) (name : String) : Except String (List String) :=
   pure toks.toList
 
 /-! ## The plants (negative fixtures: each MUST break the check) -/
+
+/-- Apply a local rewrite to the first expression node where it applies,
+    in preorder. Used by the E5 operand plants. -/
+partial def rewriteFirstExpr (rewrite : CoreExpr → Option CoreExpr) (e : CoreExpr) :
+    CoreExpr × Bool :=
+  match rewrite e with
+  | some e' => (e', true)
+  | none =>
+    let .Expr an body := e
+    let pair (mk : CoreExpr → CoreExpr → generic_expr_ core_run_annotation Unit sym) (e1 e2 : CoreExpr) :=
+      let (e1', found) := rewriteFirstExpr rewrite e1
+      if found then (Expr an (mk e1' e2), true)
+      else let (e2', found') := rewriteFirstExpr rewrite e2; (Expr an (mk e1 e2'), found')
+    let rec many : List CoreExpr → List CoreExpr × Bool
+      | [] => ([], false)
+      | x :: xs =>
+        let (x', found) := rewriteFirstExpr rewrite x
+        if found then (x' :: xs, true)
+        else let (xs', found') := many xs; (x :: xs', found')
+    match body with
+    | Esseq pat e1 e2 => pair (Esseq pat) e1 e2
+    | Ewseq pat e1 e2 => pair (Ewseq pat) e1 e2
+    | Eif pe e1 e2 => pair (Eif pe) e1 e2
+    | Ebound b => let (b', d) := rewriteFirstExpr rewrite b; (Expr an (Ebound b'), d)
+    | Eannot ds b => let (b', d) := rewriteFirstExpr rewrite b; (Expr an (Eannot ds b'), d)
+    | Elet pat pe b => let (b', d) := rewriteFirstExpr rewrite b; (Expr an (Elet pat pe b'), d)
+    | Esave sb inits b => let (b', d) := rewriteFirstExpr rewrite b; (Expr an (Esave sb inits b'), d)
+    | Eunseq es => let (es', d) := many es; (Expr an (Eunseq es'), d)
+    | End es => let (es', d) := many es; (Expr an (End es'), d)
+    | Epar es => let (es', d) := many es; (Expr an (Epar es'), d)
+    | Ecase pe alts =>
+      let rec branches : List (generic_pattern sym × CoreExpr) →
+          List (generic_pattern sym × CoreExpr) × Bool
+        | [] => ([], false)
+        | (pat, b) :: rest =>
+          let (b', d) := rewriteFirstExpr rewrite b
+          if d then ((pat, b') :: rest, true)
+          else let (rest', d') := branches rest; ((pat, b) :: rest', d')
+      let (alts', d) := branches alts
+      (Expr an (Ecase pe alts'), d)
+    | _ => (e, false)
+
+/-- Change the first expression-level case scrutinee by making it a
+    singleton tuple, a constructor difference the E4 check ignored. -/
+def wrapFirstCaseScrutinee : CoreExpr → CoreExpr × Bool :=
+  rewriteFirstExpr fun e => match e with
+    | Expr an (Ecase pe alts) => some (Expr an (Ecase (Pexpr [] () (PEctor Ctuple [pe])) alts))
+    | _ => none
+
+/-- Change the first expression-level if condition in the same way. -/
+def wrapFirstIfScrutinee : CoreExpr → CoreExpr × Bool :=
+  rewriteFirstExpr fun e => match e with
+    | Expr an (Eif pe e1 e2) => some (Expr an (Eif (Pexpr [] () (PEctor Ctuple [pe])) e1 e2))
+    | _ => none
+
+/-- Change the first expression-level case's first pattern, retaining
+    the branch body. This exercises the other position E5 adds. -/
+def wrapFirstCasePattern : CoreExpr → CoreExpr × Bool :=
+  rewriteFirstExpr fun e => match e with
+    | Expr an (Ecase pe ((pat, b) :: alts)) =>
+      some (Expr an (Ecase pe ((Pattern [] (CaseCtor Ctuple [pat]), b) :: alts)))
+    | _ => none
 
 /-- Drop the first `bound` node (preorder). -/
 partial def dropFirstBound : CoreExpr → CoreExpr × Bool
@@ -1164,6 +1265,124 @@ theorem t1_uncovered_none : uncoveredKinds t1Main = [] := by decide
 
 /-! ## The table -/
 
+/-! ## t5 — an emitted conditional with the C assignment protocol
+
+Transcribed from `docs/corpus-e0/t5_ifelse.annot.core`. Symbols and source
+positions follow that emission. In particular, printed `conv_int` is a
+standard-library call, whereas `__conv_int__` is the Core conversion node.
+The helpers name repeated source shapes; they do not simplify the program.
+-/
+
+def t5File : String := "refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t5_ifelse.c"
+def t5Pos (c : Nat) : CerbLocation.Pos := ⟨t5File, 1, c⟩
+def t5Reg (c1 c2 : Nat) : CerbLocation.Loc := .region (t5Pos c1) (t5Pos c2) .noCursor
+def t5RegP (c1 c2 cp : Nat) : CerbLocation.Loc :=
+  .region (t5Pos c1) (t5Pos c2) (.pointCursor (t5Pos cp))
+def t5RegR : CerbLocation.Loc :=
+  .region (t5Pos 0) (t5Pos 84) (.regionCursor (t5Pos 4) (t5Pos 8))
+def t5rSym : sym := Symbol "" 506 (SD_ObjectAddress "r")
+def t5a (n : Nat) : sym := sId n "a"
+def t5ConvInt (n : Nat) : generic_pexpr Unit sym :=
+  Pexpr [] () (PEcall (Sym convIntSym) [intCty, psym (t5a n)])
+def t5Unspec : generic_pexpr Unit sym := Pexpr [] () (PEctor Cunspecified [intCty])
+def t5Pure (pe : generic_pexpr Unit sym) : CoreExpr := Expr [] (Epure pe)
+def t5Unit : CoreExpr := t5Pure (Pexpr [] () (PEval Vunit))
+def t5Tuple (n m : Nat) : generic_pexpr Unit sym :=
+  Pexpr [] () (PEctor Ctuple [psym (t5a n), psym (t5a m)])
+def t5TuplePat (n m : Nat) : generic_pattern sym :=
+  Pattern [] (CaseCtor Ctuple
+    [Pattern [] (CaseBase (some (t5a n), lint)), Pattern [] (CaseBase (some (t5a m), lint))])
+def t5SpecPat (n : Nat) : generic_pattern sym :=
+  Pattern [] (CaseCtor Cspecified [Pattern [] (CaseBase (some (t5a n), BTy_object OTy_integer))])
+def t5SpecTuplePat (n m : Nat) : generic_pattern sym :=
+  Pattern [] (CaseCtor Ctuple [t5SpecPat n, t5SpecPat m])
+def t5AnyTuplePat : generic_pattern sym := Pattern [] (CaseBase (none, BTy_tuple [lint, lint]))
+
+def t5Load (x : sym) (n c1 c2 : Nat) : CoreExpr :=
+  letW [Aloc (t5Reg c1 c2), Aexpr] (t5a n) ptrTy
+    (Expr [Aloc (t5Reg c1 c2), Aexpr] (Epure (psym x)))
+    (act (t5Reg c1 c2) (Load0 intCty (psym (t5a n)) NA))
+
+/-- The source comparison `x > 2`, including its specified/unspecified
+    branch and the standard-library conversions (emission lines 21–48). -/
+def t5Gt : CoreExpr :=
+  Expr [Astd "§6.5.8", Aloc (t5RegP 39 44 41), Aexpr]
+    (Ewseq (t5TuplePat 518 519)
+      (Expr [] (Eunseq [t5Load xSym 517 39 40,
+        Expr [Aloc (t5Reg 43 44), Aexpr] (Epure (specInt 2))]))
+      (Expr [] (Ecase (t5Tuple 518 519)
+        [(t5SpecTuplePat 520 521,
+          Expr [Astd "§6.5.8#6"] (Epure (Pexpr [] () (PEif
+            (Pexpr [] () (PEop OpGt (t5ConvInt 520) (t5ConvInt 521))) (specInt 1) (specInt 0))))),
+         (t5AnyTuplePat, t5Pure t5Unspec)])))
+
+/-- The elaborator tests the C truth value by comparing with zero and
+    then decoding the resulting loaded integer (emission lines 17–71). -/
+def t5Cond : CoreExpr :=
+  bnd (Expr [Aloc (t5RegP 39 44 41), Aexpr]
+    (Ewseq (t5TuplePat 512 513)
+      (Expr [] (Eunseq [t5Gt,
+        Expr [Aloc (t5RegP 39 44 41), Aexpr] (Epure (specInt 0))]))
+      (t5Pure (Pexpr [] () (PEcase (t5Tuple 512 513)
+        [(t5SpecTuplePat 514 515, Pexpr [] () (PEif
+          (Pexpr [] () (PEop OpEq (t5ConvInt 514) (t5ConvInt 515))) (specInt 1) (specInt 0))),
+         (t5AnyTuplePat, t5Unspec)])))))
+
+def t5Bool : CoreExpr :=
+  Expr [] (Ecase (psym (t5a 510))
+    [(t5SpecPat 511, t5Pure (Pexpr [] () (PEif
+        (Pexpr [] () (PEnot (Pexpr [] () (PEop OpEq (psym (t5a 511))
+          (Pexpr [] () (PEval (Vobject (OVinteger (CerbMem.integerIval 1)))))))))
+        (Pexpr [] () (PEval Vtrue)) (Pexpr [] () (PEval Vfalse))))),
+     (Pattern [] (CaseCtor Cunspecified [Pattern [] (CaseBase (none, BTy_ctype))]),
+      Expr [] (End [t5Pure (Pexpr [] () (PEval Vtrue)), t5Pure (Pexpr [] () (PEval Vfalse))]))])
+
+/-- A source block `{ r = v; }`, retaining both statement sequences and
+    the negative store under `bound` (emission lines 73–113). -/
+def t5AssignBlock (start n m : Nat) (v : Int) : CoreExpr :=
+  Expr [Aloc (t5Reg (start - 2) (start + 8)), Astmt]
+    (Esseq wc
+      (Expr [Aloc (t5Reg start (start + 6)), Astmt]
+        (Esseq (Pattern [] (CaseBase (none, lint)))
+          (bnd (Expr [Astd "§6.5.16#3, sentence 4", Aloc (t5RegP start (start + 5) (start + 2)), Aexpr]
+            (Ewseq (Pattern [] (CaseCtor Ctuple
+                [Pattern [] (CaseBase (some (t5a n), ptrTy)), Pattern [] (CaseBase (some (t5a m), lint))]))
+              (Expr [Astd "§6.5.16#3, sentence 5"]
+                (Eunseq [Expr [Aloc (t5Reg start (start + 1)), Aexpr] (Epure (psym t5rSym)),
+                  Expr [Aloc (t5Reg (start + 4) (start + 5)), Aexpr] (Epure (specInt v))]))
+              (Expr [] (Ewseq wc
+                (Expr [Astd "§6.5.16.1#2, store"]
+                  (Eaction (Paction polarity.Neg0 (Action (t5RegP start (start + 5) (start + 2))
+                    empty_annotation (Store0 false intCty (psym (t5a n)) (convLoadedInt (t5a m)) NA)))))
+                (t5Pure (convLoadedInt (t5a m)))))))) t5Unit)) t5Unit)
+
+def t5Kill (x : sym) : CoreExpr := act (t5Reg 0 84) (Kill (Static0 intTy) (psym x))
+
+/-- The complete emitted `main`, including the dead cleanup suffix and
+    the `save` return label. This is a transcription, not yet a certified
+    program; the corpus speedbump checks its constructor skeleton. -/
+def t5Main : CoreExpr :=
+  letS [Aloc (t5Reg 15 84), Astmt] xSym ptrTy (createInt (t5Reg 15 84) xSym)
+  (letS [Astmt] t5rSym ptrTy (createInt (t5Reg 15 84) t5rSym)
+  (letS [Aloc (t5Reg 17 27), Astmt] (t5a 508) lint
+    (bnd (Expr [Aloc (t5Reg 25 26), Aexpr] (Epure (specInt 3))))
+  (seqE (act (t5Reg 17 27) (Store0 false intCty (psym xSym) (convLoadedInt (t5a 508)) NA))
+  (seqE (Expr [Astd "§6.2.4#6", Aloc (t5Reg 28 34), Astmt]
+    (Eaction (Paction polarity.Pos (Action (t5Reg 28 34) empty_annotation
+      (Store0 false intCty (psym t5rSym) t5Unspec NA)))))
+  (seqE (letS [Aloc (t5Reg 35 72), Astmt] (t5a 510) lint t5Cond
+    (letS [] (t5a 509) BTy_boolean t5Bool
+      (Expr [] (Eif (psym (t5a 509)) (t5AssignBlock 48 523 524 1) (t5AssignBlock 64 525 526 0)))))
+  (letS [Aloc (t5Reg 73 82), Astmt] (t5a 528) lint (bnd (t5Load t5rSym 527 80 81))
+  (seqE (t5Kill xSym)
+  (seqE (t5Kill t5rSym)
+  (seqE (Expr [] (Erun empty_annotation retSym [convLoadedInt (t5a 528)]))
+  (seqE (t5Kill xSym)
+  (seqE (t5Kill t5rSym)
+  (seqE t5Unit
+    (Expr [Aloc t5RegR, Astmt] (Esave (retSym, lint)
+      [(t5a 529, ((lint, none), specInt 0))] (t5Pure (psym (t5a 529)))))))))))))))))
+
 /-- One corpus row: the `.annot.core` file (under docs/corpus-e0/ at the
     repository root), the procedure, the transcription. -/
 structure Row where
@@ -1171,7 +1390,8 @@ structure Row where
   proc : String
   term : CoreExpr
 
-def corpusTable : List Row := [⟨"t1.annot.core", "main", t1Main⟩]
+def corpusTable : List Row :=
+  [⟨"t1.annot.core", "main", t1Main⟩, ⟨"t5_ifelse.annot.core", "main", t5Main⟩]
 
 /-- THE COVERAGE LEDGER of the corpus (E1 range audit N-2,
     docs/2026-09-05_audit-e1-range.md: the check was table-driven, so a
@@ -1187,7 +1407,6 @@ def pendingCorpus : List (String × String) :=
   [("t2.annot.core", "E6 (`Eccall`; the helper call in a `for` loop)"),
    ("t3_ptrarg.annot.core", "E6 (`Eccall`, `PtrValidForDeref`)"),
    ("t4_while.annot.core", "E5 (negative actions; `while`)"),
-   ("t5_ifelse.annot.core", "E5 (negative actions; `if`/`else`)"),
    ("t6_switch.annot.core", "E5 (negative actions; `switch`)"),
    ("t7_struct.annot.core", "outside E — KOI B4 (`tagDefs`)"),
    ("t8_array.annot.core", "E6 (arrays; `PtrValidForDeref`)"),

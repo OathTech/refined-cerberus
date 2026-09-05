@@ -6,6 +6,7 @@ import CerberusHeapLang.Rules
 import CerberusHeapLang.Wps
 import CerberusHeapLang.Wpt
 import CerberusHeapLang.Soundness
+import CerberusHeapLang.Substitution
 import CerberusHeapLang.StdCore
 import CerberusHeapLang.IntRules
 import CerberusHeapLang.Round
@@ -17,6 +18,7 @@ import CerberusHeapLang.Examples.Layout
 import CerberusHeapLang.Examples.ReadinessSmoke
 import CerberusHeapLang.Examples.MirrorCoverage
 import CerberusHeapLang.Examples.CorpusE0
+import CerberusHeapLang.Examples.CorpusE5
 import CerberusHeapLang.Examples.CallSmoke
 import CerberusHeapLang.Exhibit
 import CerberusHeapLang.DriverCollapse

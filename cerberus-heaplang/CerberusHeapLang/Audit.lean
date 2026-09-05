@@ -232,6 +232,7 @@ import CerberusHeapLang.EmittedCExhibit
 import CerberusHeapLang.CorpusT1Exhibit
 import CerberusHeapLang.OverflowExhibit
 import CerberusHeapLang.Examples.CorpusE0
+import CerberusHeapLang.Examples.CorpusE5
 import CerberusHeapLang.Examples.ReadinessSmoke
 import CerberusHeapLang.Examples.MirrorCoverage
 import CerberusHeapLang.Examples.CallSmoke
@@ -881,7 +882,16 @@ def trioExports : List Name := [
   ``CerberusHeapLang.Step.nd_root_elim, ``CerberusHeapLang.Step.negFree_preserved,
   ``CerberusHeapLang.Step.neg_root_elim, ``CerberusHeapLang.Step.pot_le,
   ``CerberusHeapLang.subst_alts_shape, ``CerberusHeapLang.substFold_cons,
-  ``CerberusHeapLang.substFold_nil, ``CerberusHeapLang.wps_bound_aux]
+  ``CerberusHeapLang.substFold_nil, ``CerberusHeapLang.wps_bound_aux,
+  -- E5 resume, t5 fragment checkpoint: all 14 new named theorems measured;
+  -- these 12 are trio-exact. peDepthList_map_eq / peDepthAlts_map_eq use
+  -- propext only and remain covered by the exhaustive bounded sweep.
+  ``CerberusHeapLang.PePure.subst_lemFuel, ``CerberusHeapLang.PePure.subst,
+  ``CerberusHeapLang.Frag.of_pePure, ``CerberusHeapLang.subst_sym_expr_pure,
+  ``CerberusHeapLang.substFold_pure, ``CerberusHeapLang.Frag.substFold_pure,
+  ``CerberusHeapLang.CorpusE0.t5Load_frag, ``CerberusHeapLang.CorpusE0.t5Gt_frag,
+  ``CerberusHeapLang.CorpusE0.t5Cond_frag, ``CerberusHeapLang.CorpusE0.t5Bool_frag,
+  ``CerberusHeapLang.CorpusE0.t5AssignBlock_frag, ``CerberusHeapLang.CorpusE0.t5Main_frag]
 
 def sortedNames (ns : Array Name) : Array String :=
   (ns.map (·.toString)).qsort (· < ·)
