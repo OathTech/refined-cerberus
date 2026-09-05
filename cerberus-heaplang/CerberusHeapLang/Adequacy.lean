@@ -842,6 +842,15 @@ theorem Decomp.frag_plug_call' {e : CoreExpr} {ctx : context} {r : CoreExpr}
   | bound hd ih =>
     cases hf with
     | bound hfb => exact .bound (ih hr hfb)
+  | sseq_tuple hd ih =>
+    obtain ⟨hf1, hf2⟩ := hf.sseq_inv_any
+    exact .sseq_tuple (ih hr hf1) hf2
+  | wseq_tuple hd ih =>
+    obtain ⟨hf1, hf2⟩ := hf.wseq_inv_any
+    exact .wseq_tuple (ih hr hf1) hf2
+  | wseq_sym hd ih =>
+    obtain ⟨hf1, hf2⟩ := hf.wseq_inv_any
+    exact .wseq_sym (ih hr hf1) hf2
 
 theorem Decomp.frag_plug_call {e : CoreExpr} {ctx : context} {an : List _root_.annot}
     {ra : core_run_annotation} {f : sym} {pes : List (generic_pexpr Unit sym)}
@@ -868,6 +877,9 @@ theorem Decomp.pot_plug_call_le' {e : CoreExpr} {ctx : context} {r : CoreExpr}
   | annot _ _ _ hd ih => have := ih hr; simp only [apply_ctx, pot_annot]; omega
   | wseq hd ih => have := ih hr; simp only [apply_ctx, pot_wseq]; omega
   | bound hd ih => have := ih hr; simp only [apply_ctx, pot_bound]; omega
+  | sseq_tuple hd ih => have := ih hr; simp only [apply_ctx, pot_sseq]; omega
+  | wseq_tuple hd ih => have := ih hr; simp only [apply_ctx, pot_wseq]; omega
+  | wseq_sym hd ih => have := ih hr; simp only [apply_ctx, pot_wseq]; omega
 
 theorem Decomp.pot_plug_call_le {e : CoreExpr} {ctx : context} {an : List _root_.annot}
     {ra : core_run_annotation} {f : sym} {pes : List (generic_pexpr Unit sym)}

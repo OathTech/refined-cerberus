@@ -2083,5 +2083,8 @@ theorem Decomp.operandsOf_eq {e : CoreExpr} {ctx : context} {r : CoreExpr}
   | annot _ _ _ _ ih => exact ih
   | wseq _ ih => exact ih
   | bound _ ih => exact ih
+  | sseq_tuple _ ih => exact ih
+  | wseq_tuple _ ih => exact ih
+  | wseq_sym _ ih => exact ih
 
 end CerberusHeapLang

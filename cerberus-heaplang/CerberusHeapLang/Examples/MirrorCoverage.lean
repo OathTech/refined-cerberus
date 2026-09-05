@@ -288,4 +288,78 @@ theorem sseq_sym_annot_round {M : MachineCtx} (a pa a1 a2 b1 : List annot) (x : 
       show lemDefaultFuel = 999999 + 1 from rfl]; omega)
     Step.sseq_sym_annot
 
+/-! ## E2: the loaded-value dialect's rounds at a generic machine context
+(`engine_step_matchU` instances — the shipped driver's round IS the mirror
+step at the new rows: the PURE round at a constructor operand, the two
+tuple betas and the weak plain-symbol beta). -/
+
+/-- THE PURE ROUND at a CONSTRUCTOR operand: `pure(Specified(iv))`
+    evaluates (`PEctor Cspecified`, core_eval.lem:667–668) to the loaded
+    value `Specified(iv)`; the round rewrites the redex to the canonical
+    value injection and updates the location. -/
+theorem pure_specified_round {M : MachineCtx} (a : List annot) (iv : CerbMem.IntegerValue)
+    (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (ctl : Ctl) (σ : Mem) :
+    CerberusRound M
+      (pureRedex a (Pexpr [] () (PEctor Cspecified [Pexpr [] () (PEval (Vobject (OVinteger iv)))])),
+        ev0 :: evs, ctl, σ)
+      (Expr a (Epure (Pexpr [] () (PEval (Vloaded (LVspecified (OVinteger iv)))))),
+        ev0 :: evs, ctl.upd a, σ) :=
+  engine_step_matchU
+    (Frag.pure_op rfl (PePure.of_isPePure rfl)
+      (by rw [show peDepth (Pexpr ([] : List annot) ()
+          (PEctor Cspecified [Pexpr [] () (PEval (Vobject (OVinteger iv)))])) = 2 from rfl,
+        show lemDefaultFuel = 999999 + 1 from rfl]; omega))
+    (by rw [show esize (pureRedex a (Pexpr [] ()
+        (PEctor Cspecified [Pexpr [] () (PEval (Vobject (OVinteger iv)))]))) = 1 from rfl,
+      show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+    (Step.pure_eval rfl (by rw [evalPexpr_ctor1, evalPexpr_val]; rfl))
+
+/-- LETW-PURE AT A FLAT TUPLE BINDER (core_reduction.lem:389–396): the
+    round binds the tuple's components through `update_env` at the tuple
+    pattern (`update_env_aux`'s `Ctuple` arm, Core_aux.lean:861). -/
+theorem wseq_tuple_pure_round {M : MachineCtx} (a pa a1 b1 : List annot)
+    (ls : List TupleLeaf) (vs : List value)
+    (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (ctl : Ctl) (σ : Mem) :
+    CerberusRound M
+      (Expr a (Ewseq (tuplePat pa ls) (ofValA (.pure a1 b1 (Vtuple vs)))
+        (ofValA (.pure [] [] Vunit))), ev0 :: evs, ctl, σ)
+      (ofValA (.pure [] [] Vunit), update_env (tuplePat pa ls) (Vtuple vs) (ev0 :: evs),
+        ctl.upd a, σ) :=
+  engine_step_matchU (Frag.wseq_tuple (frag_ofValA _) (frag_ofValA _))
+    (by rw [show esize (Expr a (Ewseq (tuplePat pa ls) (ofValA (SpikeValA.pure a1 b1 (Vtuple vs)))
+        (ofValA (SpikeValA.pure [] [] Vunit)))) = 2 from rfl,
+      show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+    Step.wseq_tuple_pure
+
+/-- LETS-PURE AT A FLAT TUPLE BINDER (core_reduction.lem:407–415). -/
+theorem sseq_tuple_pure_round {M : MachineCtx} (a pa a1 b1 : List annot)
+    (ls : List TupleLeaf) (vs : List value)
+    (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (ctl : Ctl) (σ : Mem) :
+    CerberusRound M
+      (Expr a (Esseq (tuplePat pa ls) (ofValA (.pure a1 b1 (Vtuple vs)))
+        (ofValA (.pure [] [] Vunit))), ev0 :: evs, ctl, σ)
+      (ofValA (.pure [] [] Vunit), update_env (tuplePat pa ls) (Vtuple vs) (ev0 :: evs),
+        ctl.upd a, σ) :=
+  engine_step_matchU (Frag.sseq_tuple (frag_ofValA _) (frag_ofValA _))
+    (by rw [show esize (Expr a (Esseq (tuplePat pa ls) (ofValA (SpikeValA.pure a1 b1 (Vtuple vs)))
+        (ofValA (SpikeValA.pure [] [] Vunit)))) = 2 from rfl,
+      show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+    Step.sseq_tuple_pure
+
+/-- LETW-PURE AT THE PLAIN-SYMBOL BINDER — the corpus's `let weak a = pure(x)
+    in load(…)` (core_reduction.lem:389–396). -/
+theorem wseq_sym_pure_round {M : MachineCtx} (a pa a1 b1 : List annot) (x : sym)
+    (bty : core_base_type) (v : value)
+    (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (ctl : Ctl) (σ : Mem) :
+    CerberusRound M
+      (Expr a (Ewseq (symPat pa x bty) (ofValA (.pure a1 b1 v))
+        (ofValA (.pure [] [] Vunit))), ev0 :: evs, ctl, σ)
+      (ofValA (.pure [] [] Vunit), update_env (symPat pa x bty) v (ev0 :: evs),
+        ctl.upd a, σ) :=
+  engine_step_matchU (Frag.wseq_sym (frag_ofValA _) (frag_ofValA _))
+    (by rw [show esize (Expr a (Ewseq (symPat pa x bty) (ofValA (SpikeValA.pure a1 b1 v))
+        (ofValA (SpikeValA.pure [] [] Vunit)))) = 2 from rfl,
+      show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+    Step.wseq_sym_pure
+
 end CerberusHeapLang

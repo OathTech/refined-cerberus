@@ -83,6 +83,13 @@ def pot : CoreExpr → Nat
 @[simp] theorem pot_pure_sym {a pb : List annot} {x : sym} :
     pot (Expr a (Epure (Pexpr pb () (PEsym x)))) = 2 := rfl
 
+/-- E2: a pure node at a NON-value operand costs 2 (the redex leaf). -/
+theorem pot_pure_of_nv {a : List annot} {pe : generic_pexpr Unit sym}
+    (hnv : valueFromPexpr pe = none) : pot (Expr a (Epure pe)) = 2 := by
+  rcases pe with ⟨b, u, p⟩
+  cases u
+  cases p <;> first | rfl | (rw [valueFromPexpr_val] at hnv; cases hnv)
+
 @[simp] theorem pot_action {a : List annot}
     {p : generic_paction core_run_annotation Unit sym} :
     pot (Expr a (Eaction p)) = 2 := rfl
@@ -136,9 +143,12 @@ theorem Frag.esize_le_pot {e : CoreExpr} (hf : Frag e) : esize e ≤ pot e := by
     omega
   | run hpes hdep => simp [esize, pot, runRedex]
   | sseq_spec hf1 hf2 ih1 ih2 => simp only [esize_sseq, pot_sseq]; omega
-  | pure_sym => simp [esize, pot, pureRedex]
+  | pure_op hnv hp hdp => rw [pureRedex, pot_pure_of_nv hnv, esize_pure]; omega
   | load_op hnv2 hp2 hd2 => simp [esize, pot, loadOpRedex]
   | sseq_sym hf1 hf2 ih1 ih2 => simp only [esize_sseq, pot_sseq]; omega
+  | sseq_tuple hf1 hf2 ih1 ih2 => simp only [esize_sseq, pot_sseq]; omega
+  | wseq_tuple hf1 hf2 ih1 ih2 => simp only [esize_wseq, pot_wseq]; omega
+  | wseq_sym hf1 hf2 ih1 ih2 => simp only [esize_wseq, pot_wseq]; omega
   | memop_vals v1 v2 => simp [esize, pot, memopPtrEqVals, memopRedex]
   | memop_op hnv hp1 hp2 hd1 hd2 => simp [esize, pot, memopRedex]
   | store_op hnv hp2 hp3 hd2 hd3 => simp [esize, pot, storeOpRedex]
@@ -181,9 +191,12 @@ theorem Frag.pot_le_two {e : CoreExpr} (hf : Frag e) : pot e ≤ 2 * esize e := 
     omega
   | run hpes hdep => simp [esize, pot, runRedex]
   | sseq_spec hf1 hf2 ih1 ih2 => simp only [esize_sseq, pot_sseq]; omega
-  | pure_sym => simp [esize, pot, pureRedex]
+  | pure_op hnv hp hdp => rw [pureRedex, pot_pure_of_nv hnv, esize_pure]; omega
   | load_op hnv2 hp2 hd2 => simp [esize, pot, loadOpRedex]
   | sseq_sym hf1 hf2 ih1 ih2 => simp only [esize_sseq, pot_sseq]; omega
+  | sseq_tuple hf1 hf2 ih1 ih2 => simp only [esize_sseq, pot_sseq]; omega
+  | wseq_tuple hf1 hf2 ih1 ih2 => simp only [esize_wseq, pot_wseq]; omega
+  | wseq_sym hf1 hf2 ih1 ih2 => simp only [esize_wseq, pot_wseq]; omega
   | memop_vals v1 v2 => simp [esize, pot, memopPtrEqVals, memopRedex]
   | memop_op hnv hp1 hp2 hd1 hd2 => simp [esize, pot, memopRedex]
   | store_op hnv hp2 hp3 hd2 hd3 => simp [esize, pot, storeOpRedex]
@@ -452,12 +465,13 @@ theorem Frag.pot_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
     · exact (specPat_ne_tuple hpatT1).elim
     · exact (specPat_ne_tuple hpatT2).elim
     · exact (hcall.ne_same_κ hκ).elim
-  | pure_sym =>
-    obtain ⟨v, -, -, hout⟩ := hs.pure_inv rfl
+  | pure_op hnv hp hdp =>
+    obtain ⟨v, -, -, hout⟩ := hs.pure_inv hnv
     obtain ⟨h1, -, -, -⟩ := Config.mk_inj hout
     subst h1
     left
-    simp [pot, pureRedex]
+    rw [pot_pure_val, pureRedex, pot_pure_of_nv hnv]
+    omega
   | load_op hnv2 hp2 hd2 =>
     obtain ⟨pv, -, hout⟩ := hs.load_op_inv hnv2
     obtain ⟨h1, -, -, -⟩ := Config.mk_inj hout
@@ -503,6 +517,118 @@ theorem Frag.pot_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
       omega
     · exact (symPat_ne_tuple hpatT1).elim
     · exact (symPat_ne_tuple hpatT2).elim
+    · exact (hcall.ne_same_κ hκ).elim
+  | sseq_tuple hf1 hf2 ih1 ih2 =>
+    rcases hs.sseq_inv with ⟨e1', ρ'', ctl'', σ'', hnj, hnc', hnv', hstep, hout⟩ |
+        ⟨_, _, _, _, v, _, _, hpat, _, _, hout⟩ |
+        ⟨_, _, _, _, _, ds', v, _, _, hpat, _, _, hout⟩ |
+        ⟨l, pes, params, cont, vs, _, _, hj, _, hl, _, hout⟩ |
+        ⟨_, _, _, _, _, _, _, _, _, hpat, _, _, hout⟩ |
+        ⟨_, _, _, _, _, _, _, _, _, _, _, hpat, _, _, hout⟩ |
+        ⟨_, _, _, _, _, _, _, _, hpat, _, _, hout⟩ |
+        ⟨_, _, _, _, _, _, _, _, _, _, hpat, _, _, hout⟩ |
+        ⟨_, _, _, _, _, _, _, _, he1, _, hout⟩ |
+        ⟨_, _, _, _, _, _, _, _, _, _, he1, _, hout⟩ |
+        hcall
+    · obtain ⟨h1, -, h3, -⟩ := Config.mk_inj hout
+      subst h1 h3
+      rcases ih1 hstep hκ with hle | ⟨l, pes, params, cont, hj1, hl, rfl⟩
+      · left
+        simp only [pot_sseq]
+        omega
+      · rw [hnj] at hj1
+        cases hj1
+    · exact (tuplePat_ne_base hpat.symm).elim
+    · exact (tuplePat_ne_base hpat.symm).elim
+    · obtain ⟨h1, -, -, -⟩ := Config.mk_inj hout
+      exact .inr ⟨l, pes, params, cont, by rw [jumpRedex?_sseq, hj], hl, h1⟩
+    · exact (specPat_ne_tuple hpat.symm).elim
+    · exact (specPat_ne_tuple hpat.symm).elim
+    · exact (symPat_ne_tuple hpat.symm).elim
+    · exact (symPat_ne_tuple hpat.symm).elim
+    · obtain ⟨h1, -, -, -⟩ := Config.mk_inj hout
+      subst h1
+      left
+      simp only [pot_sseq]
+      omega
+    · obtain ⟨h1, -, -, -⟩ := Config.mk_inj hout
+      subst h1
+      rw [he1]
+      left
+      simp only [pot_sseq, pot_annot, ofValA, pot_pure_val]
+      omega
+    · exact (hcall.ne_same_κ hκ).elim
+  | wseq_tuple hf1 hf2 ih1 ih2 =>
+    rcases hs.wseq_inv with ⟨e1', ρ'', ctl'', σ'', hnj, hnc', hnv', hstep, hout⟩ |
+        ⟨_, _, _, _, v, _, _, hpat, _, _, hout⟩ |
+        ⟨_, _, _, _, _, ds', v, _, _, hpat, _, _, hout⟩ |
+        ⟨l, pes, params, cont, vs, _, _, hj, _, hl, _, hout⟩ |
+        ⟨_, _, _, _, _, _, _, _, hpat, _, _, hout⟩ |
+        ⟨_, _, _, _, _, _, _, _, _, _, hpat, _, _, hout⟩ |
+        ⟨_, _, _, _, _, _, _, _, he1, _, hout⟩ |
+        ⟨_, _, _, _, _, _, _, _, _, _, he1, _, hout⟩ |
+        hcall
+    · obtain ⟨h1, -, h3, -⟩ := Config.mk_inj hout
+      subst h1 h3
+      rcases ih1 hstep hκ with hle | ⟨l, pes, params, cont, hj1, hl, rfl⟩
+      · left
+        simp only [pot_wseq]
+        omega
+      · rw [hnj] at hj1
+        cases hj1
+    · exact (tuplePat_ne_base hpat.symm).elim
+    · exact (tuplePat_ne_base hpat.symm).elim
+    · obtain ⟨h1, -, -, -⟩ := Config.mk_inj hout
+      exact .inr ⟨l, pes, params, cont, by rw [jumpRedex?_wseq, hj], hl, h1⟩
+    · exact (symPat_ne_tuple hpat.symm).elim
+    · exact (symPat_ne_tuple hpat.symm).elim
+    · obtain ⟨h1, -, -, -⟩ := Config.mk_inj hout
+      subst h1
+      left
+      simp only [pot_wseq]
+      omega
+    · obtain ⟨h1, -, -, -⟩ := Config.mk_inj hout
+      subst h1
+      rw [he1]
+      left
+      simp only [pot_wseq, pot_annot, ofValA, pot_pure_val]
+      omega
+    · exact (hcall.ne_same_κ hκ).elim
+  | wseq_sym hf1 hf2 ih1 ih2 =>
+    rcases hs.wseq_inv with ⟨e1', ρ'', ctl'', σ'', hnj, hnc', hnv', hstep, hout⟩ |
+        ⟨_, _, _, _, v, _, _, hpat, _, _, hout⟩ |
+        ⟨_, _, _, _, _, ds', v, _, _, hpat, _, _, hout⟩ |
+        ⟨l, pes, params, cont, vs, _, _, hj, _, hl, _, hout⟩ |
+        ⟨_, _, _, _, _, _, _, _, _, he1, _, hout⟩ |
+        ⟨_, _, _, _, _, _, _, _, _, _, _, he1, _, hout⟩ |
+        ⟨_, _, _, _, _, _, _, hpat, _, _, _⟩ |
+        ⟨_, _, _, _, _, _, _, _, _, hpat, _, _, _⟩ |
+        hcall
+    · obtain ⟨h1, -, h3, -⟩ := Config.mk_inj hout
+      subst h1 h3
+      rcases ih1 hstep hκ with hle | ⟨l, pes, params, cont, hj1, hl, rfl⟩
+      · left
+        simp only [pot_wseq]
+        omega
+      · rw [hnj] at hj1
+        cases hj1
+    · exact (symPat_ne_base hpat.symm).elim
+    · exact (symPat_ne_base hpat.symm).elim
+    · obtain ⟨h1, -, -, -⟩ := Config.mk_inj hout
+      exact .inr ⟨l, pes, params, cont, by rw [jumpRedex?_wseq, hj], hl, h1⟩
+    · obtain ⟨h1, -, -, -⟩ := Config.mk_inj hout
+      subst h1
+      left
+      simp only [pot_wseq]
+      omega
+    · obtain ⟨h1, -, -, -⟩ := Config.mk_inj hout
+      subst h1
+      rw [he1]
+      left
+      simp only [pot_wseq, pot_annot, ofValA, pot_pure_val]
+      omega
+    · exact (symPat_ne_tuple hpat).elim
+    · exact (symPat_ne_tuple hpat).elim
     · exact (hcall.ne_same_κ hκ).elim
   | memop_vals v1 v2 =>
     obtain ⟨pv1, pv2, b, σ'', -, -, -, hout⟩ := hs.memop_vals_inv

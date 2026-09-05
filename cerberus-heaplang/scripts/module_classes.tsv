@@ -59,6 +59,7 @@ CerberusHeapLang.FibRecExhibit	positive-client	-	recursive fib through the speci
 CerberusHeapLang.TwoLabelExhibit	positive-client	-	two save labels in one procedure body (two sequential loops over one cell)
 CerberusHeapLang.EvenOddExhibit	positive-client	-	mutual recursion (even/odd) through the symbol-dependent specification table
 CerberusHeapLang.EmittedAExhibit	positive-client	-	exhibit A in the emitted-Core shape (E1: annotations, bound, Ivalignof) at both strata and the production entry
+CerberusHeapLang.EmittedBExhibit	positive-client	-	exhibit B in the emitted-Core shape (E2: loaded values, the Unspecified store, pure case at a tuple, the tuple and weak-symbol binders) at both strata and the production entry
 CerberusHeapLang.Examples.CallSmoke	declared-smoke	-	the C3 call/procedure smoke (kept as a consumer beside FibRecExhibit)
 CerberusHeapLang.Examples.ReadinessSmoke	declared-smoke	-	the API-only two-field predicate smoke
 CerberusHeapLang.Examples.Layout	example-support	-	layout constants and canned shapes

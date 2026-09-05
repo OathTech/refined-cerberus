@@ -147,6 +147,7 @@ import CerberusHeapLang.FibRecExhibit
 import CerberusHeapLang.TwoLabelExhibit
 import CerberusHeapLang.EvenOddExhibit
 import CerberusHeapLang.EmittedAExhibit
+import CerberusHeapLang.EmittedBExhibit
 import CerberusHeapLang.Examples.CorpusE0
 import CerberusHeapLang.Examples.ReadinessSmoke
 import CerberusHeapLang.Examples.MirrorCoverage
@@ -622,7 +623,60 @@ def trioExports : List Name := [
   -- location witnesses, measured trio-exact by the auditor, pinned with the first
   ``CerberusHeapLang.loc_update_lib, ``CerberusHeapLang.loc_update_none,
   ``CerberusHeapLang.bound_annot_round, ``CerberusHeapLang.bound_pure_round,
-  ``CerberusHeapLang.create_alignof_round, ``CerberusHeapLang.sseq_sym_annot_round]
+  ``CerberusHeapLang.create_alignof_round, ``CerberusHeapLang.sseq_sym_annot_round,
+  -- E2 (2026-09-05, cerberus-heaplang/docs/2026-09-05_e2-notes.md): the
+  -- loaded-value dialect — the acceptance exhibit at both strata and the
+  -- production entry, the tuple/weak-symbol binder rules, the new
+  -- completeness rows, the pattern-generic beta and raw pure-op engine
+  -- equations, the success and FAILURE bridges of the pass-iterating
+  -- evaluator/classifier, the list bridges, the failure twins of the kill
+  -- equations, the driver-level failure kills, the tuple mismatch panic,
+  -- the `step_action` ACTION_EVAL equations, the evaluator equations at
+  -- the new constructors, the case inversions and the engine-round
+  -- witnesses; each measured trio-exact by the build
+  ``CerberusHeapLang.progBE2_frag, ``CerberusHeapLang.progBE2_wps,
+  ``CerberusHeapLang.progBE2_wpt, ``CerberusHeapLang.exhibitB_prod_e2,
+  ``CerberusHeapLang.wps_seq_tuple, ``CerberusHeapLang.wpt_seq_tuple,
+  ``CerberusHeapLang.wps_wseq_tuple, ``CerberusHeapLang.wpt_wseq_tuple,
+  ``CerberusHeapLang.wps_wseq_sym, ``CerberusHeapLang.wpt_wseq_sym,
+  ``CerberusHeapLang.complete_pure_op, ``CerberusHeapLang.complete_beta_tuple,
+  ``CerberusHeapLang.complete_wbeta_tuple, ``CerberusHeapLang.complete_wbeta_sym,
+  ``CerberusHeapLang.step_ctx_pure_op_raw, ``CerberusHeapLang.step_ctx_sseq_val_pure,
+  ``CerberusHeapLang.step_ctx_sseq_val_annot, ``CerberusHeapLang.step_ctx_wseq_val_pure,
+  ``CerberusHeapLang.step_ctx_wseq_val_annot,
+  ``CerberusHeapLang.step_eval_bridge, ``CerberusHeapLang.aux2_bridge,
+  ``CerberusHeapLang.full_eval_bridge, ``CerberusHeapLang.eval1_bridge,
+  ``CerberusHeapLang.evalPexpr_step,
+  ``CerberusHeapLang.stepPexprRaw_eval_joint, ``CerberusHeapLang.evalPexpr_shape,
+  ``CerberusHeapLang.stepFail_bridge, ``CerberusHeapLang.step_eval_bridge_undef,
+  ``CerberusHeapLang.classIter_bridge, ``CerberusHeapLang.aux2_bridge_fail,
+  ``CerberusHeapLang.full_eval_bridge_fail, ``CerberusHeapLang.full_eval_bridge_undef,
+  ``CerberusHeapLang.eval1_bridge_fail, ``CerberusHeapLang.evalClass_of_none,
+  ``CerberusHeapLang.evalClassFold_vals_iff, ``CerberusHeapLang.stExpect_mapM_class,
+  ``CerberusHeapLang.mapM_eval1_fail, ``CerberusHeapLang.mapM_save_fail,
+  ``CerberusHeapLang.foldM_args_fail, ``CerberusHeapLang.mapM_full_eval_fail,
+  ``CerberusHeapLang.mapM_eval1_kill, ``CerberusHeapLang.mapM_save_kill,
+  ``CerberusHeapLang.foldM_args_kill,
+  ``CerberusHeapLang.step_ctx_if_fail, ``CerberusHeapLang.step_ctx_run_fail,
+  ``CerberusHeapLang.step_ctx_save_eval_fail, ``CerberusHeapLang.step_ctx_pure_op_fail,
+  ``CerberusHeapLang.step_ctx_load_eval_fail, ``CerberusHeapLang.step_ctx_kill_eval_fail,
+  ``CerberusHeapLang.step_ctx_store_eval_fail2, ``CerberusHeapLang.step_ctx_store_eval_fail3,
+  ``CerberusHeapLang.step_ctx_alloc_eval_fail1, ``CerberusHeapLang.step_ctx_alloc_eval_fail2,
+  ``CerberusHeapLang.step_ctx_create_eval_fail1, ``CerberusHeapLang.step_ctx_create_eval_fail2,
+  ``CerberusHeapLang.step_ctx_memop_eval_fail, ``CerberusHeapLang.step_ctx_call_fail_args,
+  ``CerberusHeapLang.advance_withrs_failed_eval, ``CerberusHeapLang.advance_withrs_failed_tau,
+  ``CerberusHeapLang.runOne_liftCore_run_fail,
+  ``CerberusHeapLang.update_env_aux_tuple_mismatch, ``CerberusHeapLang.Frag.pure_sym,
+  ``CerberusHeapLang.Frag.sseq_inv_any, ``CerberusHeapLang.Frag.wseq_inv_any,
+  ``CerberusHeapLang.step_action_store_eval, ``CerberusHeapLang.step_action_load_eval,
+  ``CerberusHeapLang.step_action_create_eval, ``CerberusHeapLang.step_action_alloc_eval,
+  ``CerberusHeapLang.step_action_kill_eval,
+  ``CerberusHeapLang.evalPexpr_case, ``CerberusHeapLang.evalPexpr_ctor,
+  ``CerberusHeapLang.evalPexpr_not, ``CerberusHeapLang.evalPexpr_if,
+  ``CerberusHeapLang.Step.case_inv, ``CerberusHeapLang.Step.case_value_inv,
+  ``CerberusHeapLang.Step.case_op_inv,
+  ``CerberusHeapLang.pure_specified_round, ``CerberusHeapLang.wseq_tuple_pure_round,
+  ``CerberusHeapLang.sseq_tuple_pure_round, ``CerberusHeapLang.wseq_sym_pure_round]
 
 def sortedNames (ns : Array Name) : Array String :=
   (ns.map (·.toString)).qsort (· < ·)

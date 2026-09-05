@@ -39,4 +39,5 @@ import CerberusHeapLang.FibRecExhibit
 import CerberusHeapLang.TwoLabelExhibit
 import CerberusHeapLang.EvenOddExhibit
 import CerberusHeapLang.EmittedAExhibit
+import CerberusHeapLang.EmittedBExhibit
 import CerberusHeapLang.Audit

@@ -97,6 +97,7 @@ def recA3 := "docs/KNOWN-OPEN-ITEMS.md A3 (`dynamic_addrs`), K3 notes §6"
 def recClosure := "fragment closure 2026-09-02 (docs/2026-09-02_fragment-closure-notes.md); ARCHITECTURE §7 Goal 2"
 def recAr5 := "found at ar5-manifest 2026-09-04 by reading the engine arms; [AGENT] classified, docs/2026-09-04_ar5-manifest-notes.md §2"
 def recE1 := "dialect arc E1 2026-09-05 (docs/2026-09-04_e1-notes.md)"
+def recE2 := "dialect arc E2 2026-09-05 (docs/2026-09-05_e2-notes.md)"
 
 /-- THE VARIANT TABLE. Read the engine arms cited before editing. -/
 def variants : List Variant := [
@@ -228,12 +229,13 @@ def variants : List Variant := [
   { ctor := `CerberusHeapLang.Frag.sseq_spec,
     shape := "`lets Specified(x) = e1 in e2` — the head delivers `Specified(ov)` (bare or annotated)",
     cls := .rule (N "wps_seq_spec") (N "wpt_seq_spec") },
-  { ctor := `CerberusHeapLang.Frag.pure_sym,
-    shape := "`pure(x)` at a symbol BOUND in the environment (the PURE round through the certified evaluator)",
+  -- E2: pure at any covered non-value operand (subsumes E1's `pure_sym`)
+  { ctor := `CerberusHeapLang.Frag.pure_op,
+    shape := "`pure(e)` at a `PePure` non-value operand the mirror evaluator EVALUATES — a bound symbol, a mirrored binop/array-shift/ctor at evaluating operands (`Specified(e)`, `(e1, e2)`, `Ivalignof(ty)`, `Unspecified(ty)`), `case … end` selecting a branch that evaluates, `not`/`if` at boolean operands (the PURE round through the certified evaluator)",
     cls := .rule (N "wps_pure") (N "wpt_pure") },
-  { ctor := `CerberusHeapLang.Frag.pure_sym,
-    shape := "`pure(x)` at a symbol UNBOUND in the environment but naming a `Proc` of the file (the engine evaluates it to the null function pointer)",
-    cls := .outOfScope s!"the mirror evaluator answers `none`; the characterized residual `OpenRound.eval_uncovered` (`evalClass` `.uncovered` at the leaf); {recClosure}" },
+  { ctor := `CerberusHeapLang.Frag.pure_op,
+    shape := "`pure(e)` at a `PePure` operand the engine evaluates but the mirror does NOT: a symbol UNBOUND in the environment but naming a `Proc` of the file (the null function pointer), a mirrored binop at two floats or `OpEq` at two ctypes, a comparison at symbolic integers (`PEconstrained`), a `case` whose selected branch the depth guard rejects",
+    cls := .outOfScope s!"the mirror evaluator answers `none`; the characterized residual `OpenRound.eval_uncovered` (`evalClass` `.uncovered`, EvalClass.lean); {recE2}" },
   { ctor := `CerberusHeapLang.Frag.load_op,
     shape := "`Load0` at a `PePure` pointer operand evaluating to a POINTER (the ACTION_EVAL round)",
     cls := .rule (N "wps_load_eval") (N "wpt_load_eval") },
@@ -243,6 +245,25 @@ def variants : List Variant := [
   { ctor := `CerberusHeapLang.Frag.sseq_sym,
     shape := "`lets x = e1 in e2` whose head delivers an ANNOTATED value `{A}v` (the engine's LETS-ANNOT at the symbol binder: `x ↦ v`, `{A}` re-wrapped around `e2`)",
     cls := .noRule s!"admitted by the fragment and MIRRORED since E1 (`Step.sseq_sym_annot`, classified by `complete_beta_sym`; the pre-E1 `BareHead` exclusion and its OUT-OF-SCOPE row are retired) but `wps_seq_sym`/`wpt_seq_sym` are stated at a BARE head value (`⌜w = SpikeVal.pure v⌝`); binder rules over annotated heads are E2's (patterns bind annotated heads); {recE1}" },
+  -- E2: the tuple binders and the weak symbol binder
+  { ctor := `CerberusHeapLang.Frag.sseq_tuple,
+    shape := "`let strong (a, b, …) = e1 in e2` at any fragment head delivering a BARE tuple value (LETS-PURE at the flat tuple binder; `update_env`'s `Ctuple` arm zips leaves against components)",
+    cls := .rule (N "wps_seq_tuple") (N "wpt_seq_tuple") },
+  { ctor := `CerberusHeapLang.Frag.sseq_tuple,
+    shape := "`let strong (a, b, …) = e1 in e2` whose head delivers an ANNOTATED tuple `{A}(v1, …)` (LETS-ANNOT at the tuple binder)",
+    cls := .noRule s!"admitted by the fragment and MIRRORED (`Step.sseq_tuple_annot`, classified by `complete_beta_tuple`); no emitted shape of E2 reaches it — E4's `unseq` delivers annotated tuples at the WEAK binder; {recE2}" },
+  { ctor := `CerberusHeapLang.Frag.wseq_tuple,
+    shape := "`let weak (a, b, …) = e1 in e2` at any fragment head delivering a BARE tuple value (LETW-PURE at the flat tuple binder)",
+    cls := .rule (N "wps_wseq_tuple") (N "wpt_wseq_tuple") },
+  { ctor := `CerberusHeapLang.Frag.wseq_tuple,
+    shape := "`let weak (a, b, …) = e1 in e2` whose head delivers an ANNOTATED tuple (LETW-ANNOT at the tuple binder — the shape every corpus `let weak (a, b) = unseq(…)` reaches once E4 delivers the unseq's annotated tuple)",
+    cls := .noRule s!"admitted by the fragment and MIRRORED (`Step.wseq_tuple_annot`, classified by `complete_wbeta_tuple`); the rule's annotated-head face is E4's, with `unseq` as the operand; {recE2}" },
+  { ctor := `CerberusHeapLang.Frag.wseq_sym,
+    shape := "`let weak x = e1 in e2` at any fragment head delivering a BARE value (LETW-PURE at the plain-symbol binder — the corpus's `let weak a_515: pointer = pure(x) in load(…)`)",
+    cls := .rule (N "wps_wseq_sym") (N "wpt_wseq_sym") },
+  { ctor := `CerberusHeapLang.Frag.wseq_sym,
+    shape := "`let weak x = e1 in e2` whose head delivers an ANNOTATED value (LETW-ANNOT at the symbol binder)",
+    cls := .noRule s!"admitted by the fragment and MIRRORED (`Step.wseq_sym_annot`, classified by `complete_wbeta_sym`); no emitted shape of E2 reaches it; {recE2}" },
   -- E1: the bound frame
   { ctor := `CerberusHeapLang.Frag.bound,
     shape := "`bound(e)` — reduction under the `Cbound` frame, then REMOVE-BOUND at the delivered value of either shape (the dynamic annotations of an annotated value are DROPPED)",
