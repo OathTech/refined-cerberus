@@ -924,7 +924,19 @@ def trioExports : List Name := [
   ``CerberusHeapLang.wpt_t5Cond, ``CerberusHeapLang.wpt_t5Gt,
   ``CerberusHeapLang.wpt_t5If, ``CerberusHeapLang.wpt_t5Load,
   ``CerberusHeapLang.wpt_t5Return, ``CerberusHeapLang.wpt_unseq_pure_right,
-  ``subst_sym_pexpr_lemFuel.eq_def]
+  ``subst_sym_pexpr_lemFuel.eq_def,
+  -- E5 t6 whole-term membership checkpoint: all eleven measured trio-exact.
+  ``CerberusHeapLang.CorpusE0.t6Load_frag,
+  ``CerberusHeapLang.CorpusE0.t6AssignStmt_frag,
+  ``CerberusHeapLang.CorpusE0.t6Run_frag,
+  ``CerberusHeapLang.CorpusE0.t6Save_frag,
+  ``CerberusHeapLang.CorpusE0.t6Cases_frag,
+  ``CerberusHeapLang.CorpusE0.t6Dispatch_frag,
+  ``CerberusHeapLang.CorpusE0.t6SpecifiedBranch_frag,
+  ``CerberusHeapLang.CorpusE0.t6Switch_select,
+  ``CerberusHeapLang.CorpusE0.t6Switch_frag,
+  ``CerberusHeapLang.CorpusE0.t6Return_frag,
+  ``CerberusHeapLang.CorpusE0.t6Main_frag]
 
 def sortedNames (ns : Array Name) : Array String :=
   (ns.map (·.toString)).qsort (· < ·)

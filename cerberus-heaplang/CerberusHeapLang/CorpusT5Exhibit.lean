@@ -348,7 +348,7 @@ theorem t5fr529_lookup {f : Fmap sym value} (hf : SymFrame f) (v : value) :
 def t5LsT (GF : BundledGFunctors) [SpikeGS .hasLC GF] : LabelSpecT GF := fun l m vs ρ =>
   iprop(⌜symOrd l CorpusE0.retSym = .eq ∧ m = 2 ∧ vs = [lint 1] ∧ ∃ f rest, ρ = f :: rest ∧ SymFrame f⌝)
 
-/-- The post: the delivered value is `Specified(4)`. -/
+/-- The post: the delivered value is `Specified(1)`. -/
 def ψT5 : value → Mem → Prop := fun v _ => v = lint 1
 
 theorem t5LsT_readout [SpikeGS .hasLC GF] :

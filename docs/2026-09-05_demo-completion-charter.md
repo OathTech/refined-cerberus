@@ -160,9 +160,9 @@ merge, version tagging and push retain their separate release decisions.
 
 ## Execution sequence and checkpoints
 
-| Milestone | Work and exit evidence | Initial status |
+| Milestone | Work and exit evidence | Current status |
 |---|---|---|
-| M1 — finish E5 | t6_switch and t4_while public proofs and production results; assignment protocol and whole-term membership; range review from `8eeaf92` through the completed E5 candidate, including supply normalization. | t5 checkpoint complete; E5 open. |
+| M1 — finish E5 | t6_switch and t4_while public proofs and production results; assignment protocol and whole-term membership; range review from `8eeaf92` through the completed E5 candidate, including supply normalization. | t5 execution complete; t6 whole-term membership complete ([record](../cerberus-heaplang/docs/2026-09-05_e5-t6-notes.md)); t6 execution, t4 and E5 review open. |
 | M2 — dependency and fuel update | Fresh scout against landed upstream work; deliberate compatible re-pin; repair and restate affected proofs, fuel claims and failure classifications; full regression evidence. Record actual breakage instead of inheriting the old scout's estimate. | Open; perform before extending scheduler adequacy. |
 | M3 — E6 | Complete `seq_rmw` for t2 and the queued operand/dereference/`Elet` requirements where needed; prove emitted `Eccall` scheduler rounds and adequacy; certify t2, t3, t10 and t8. Preserve authored-call regression coverage. | Open. |
 | M4 — E7 | Cover t9's alternative scheduler paths, including deferred actions; prove the result for every outcome and non-emptiness with the stated fuel conditions. Account for all executions rather than selecting one successful branch. | Open; follows E6. |

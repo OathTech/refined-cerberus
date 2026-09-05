@@ -11,7 +11,8 @@ Three things live here — data, an instrument, and membership witnesses:
    (docs/corpus-e0/<name>.annot.core at the repository root) the
    procedure it names and the hand-transcribed `CoreExpr` of that
    procedure's body. E1 transcribes t1 (`t1Main`); E2 names its
-   sub-terms (`t1LoadX`, `t1Spec3`, …). E5 adds t5_ifelse (`t5Main`).
+   sub-terms (`t1LoadX`, `t1Spec3`, …). E5 adds t5_ifelse (`t5Main`)
+   and t6_switch (`t6Main`).
 
 2. THE SKELETON CHECK (`scripts/corpus_skeleton.lean` runs it): the
    SKELETON of a term — the preorder token stream of its expression
@@ -1395,6 +1396,119 @@ def t5Main : CoreExpr :=
       (Store0 false intCty (psym t5rSym) t5Unspec NA)))))
   (seqE t5IfStmt t5Return)))))
 
+/-! ## t6 — the emitted switch and its procedure-scoped labels -/
+
+def t6File : String := "refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t6_switch.c"
+def t6Pos (c : Nat) : CerbLocation.Pos := ⟨t6File, 1, c⟩
+def t6Reg (c1 c2 : Nat) : CerbLocation.Loc := .region (t6Pos c1) (t6Pos c2) .noCursor
+def t6RegP (c1 c2 cp : Nat) : CerbLocation.Loc :=
+  .region (t6Pos c1) (t6Pos c2) (.pointCursor (t6Pos cp))
+def t6RegR : CerbLocation.Loc :=
+  .region (t6Pos 0) (t6Pos 135) (.regionCursor (t6Pos 4) (t6Pos 8))
+def t6xSym : sym := Symbol "" 509 (SD_ObjectAddress "x")
+def t6rSym : sym := Symbol "" 510 (SD_ObjectAddress "r")
+def t6RetSym : sym := sId 511 "ret"
+def t6BreakSym : sym := sId 513 "break"
+def t6Case1Sym : sym := sId 521 "case"
+def t6Case2Sym : sym := sId 520 "case"
+def t6DefaultSym : sym := sId 522 "default"
+def t6a (n : Nat) : sym := sId n "a"
+
+def t6Load (x : sym) (n c1 c2 : Nat) : CoreExpr :=
+  letW [Aloc (t6Reg c1 c2), Aexpr] (t6a n) ptrTy
+    (Expr [Aloc (t6Reg c1 c2), Aexpr] (Epure (psym x)))
+    (act (t6Reg c1 c2) (Load0 intCty (psym (t6a n)) NA))
+
+/-- The assignment statement, including its statement discard. All three
+    switch arms keep the original negative-store protocol. -/
+def t6AssignStmt (start n m : Nat) (v : Int) : CoreExpr :=
+  Expr [Aloc (t6Reg start (start + 7)), Astmt]
+    (Esseq (Pattern [] (CaseBase (none, lint)))
+      (bnd (Expr [Astd "§6.5.16#3, sentence 4", Aloc (t6RegP start (start + 6) (start + 2)), Aexpr]
+        (Ewseq (Pattern [] (CaseCtor Ctuple
+            [Pattern [] (CaseBase (some (t6a n), ptrTy)), Pattern [] (CaseBase (some (t6a m), lint))]))
+          (Expr [Astd "§6.5.16#3, sentence 5"]
+            (Eunseq [Expr [Aloc (t6Reg start (start + 1)), Aexpr] (Epure (psym t6rSym)),
+              Expr [Aloc (t6Reg (start + 4) (start + 6)), Aexpr] (Epure (specInt v))]))
+          (Expr [] (Ewseq wc
+            (Expr [Astd "§6.5.16.1#2, store"]
+              (Eaction (Paction polarity.Neg0 (Action (t6RegP start (start + 6) (start + 2))
+                empty_annotation (Store0 false intCty (psym (t6a n)) (convLoadedInt (t6a m)) NA)))))
+            (t5Pure (convLoadedInt (t6a m)))))))) t5Unit)
+
+def t6PtrInits : List (sym × ((core_base_type × Option (ctype × pass_by_value_or_pointer)) ×
+    generic_pexpr Unit sym)) :=
+  [(t6xSym, ((ptrTy, none), psym t6xSym)), (t6rSym, ((ptrTy, none), psym t6rSym))]
+
+def t6Run (an : List annot) (l : sym) : CoreExpr :=
+  Expr an (Erun empty_annotation l [psym t6xSym, psym t6rSym])
+
+def t6Save (an : List annot) (l : sym) (body : CoreExpr) : CoreExpr :=
+  Expr an (Esave (l, BTy_unit) t6PtrInits body)
+
+def t6Cases : CoreExpr :=
+  Expr [Aloc (t6Reg 50 123), Astmt] (Esseq wc
+    (seqE (t6Save [Aloc (t6Reg 52 67), Astmt] t6Case1Sym (t6AssignStmt 60 523 524 10))
+    (seqE (t6Run [Aloc (t6Reg 68 74), Astmt] t6BreakSym)
+    (seqE (t6Save [Aloc (t6Reg 75 90), Astmt] t6Case2Sym (t6AssignStmt 83 525 526 20))
+    (seqE (t6Run [Aloc (t6Reg 91 97), Astmt] t6BreakSym)
+    (seqE (t6Save [Aloc (t6Reg 98 114), Astmt] t6DefaultSym (t6AssignStmt 107 527 528 30))
+    (seqE (t6Run [Aloc (t6Reg 115 121), Astmt] t6BreakSym) t5Unit)))))) t5Unit)
+
+def t6Dispatch : CoreExpr :=
+  seqE (Expr [] (Eif (Pexpr [] () (PEop OpEq (psym (t6a 519)) (Pexpr [] () (PEval (Vobject (OVinteger (CerbMem.integerIval 1)))))))
+    (t6Run [] t6Case1Sym) t5Unit))
+  (seqE (Expr [] (Eif (Pexpr [] () (PEop OpEq (psym (t6a 519)) (Pexpr [] () (PEval (Vobject (OVinteger (CerbMem.integerIval 2)))))))
+    (t6Run [] t6Case2Sym) t5Unit))
+  (seqE (t6Run [] t6DefaultSym)
+    (Expr [Aloc (t6Reg 39 123), Astmt] (Esseq wc
+      (t6Run [Aloc (t6Reg 39 123), Astmt] t6BreakSym) t6Cases))))
+
+def t6SpecifiedBranch (pe : generic_pexpr Unit sym) : CoreExpr :=
+  letS [] (t6a 519) (BTy_object OTy_integer)
+    (t5Pure (Pexpr [] () (PEcall (Sym convIntSym) [intCty, pe]))) t6Dispatch
+
+def t6SwitchPats : List (pattern × CoreExpr) :=
+  [(Pattern [] (CaseCtor Cspecified [Pattern [] (CaseBase (some (t6a 518), BTy_object OTy_integer))]),
+    t6SpecifiedBranch (psym (t6a 518))),
+   (Pattern [] (CaseCtor Cunspecified [Pattern [] (CaseBase (none, BTy_ctype))]),
+    t5Pure (Pexpr [] () (PEundef (t6Reg 39 123) UB036_exceptional_condition)))]
+
+def t6Switch : CoreExpr :=
+  letS [Aloc (t6Reg 39 123), Astmt] (t6a 517) lint (bnd (t6Load t6xSym 516 47 48))
+    (Expr [] (Ecase (psym (t6a 517)) t6SwitchPats))
+
+def t6Kill (x : sym) : CoreExpr := act (t6Reg 0 135) (Kill (Static0 intTy) (psym x))
+
+def t6Return : CoreExpr :=
+  letS [Aloc (t6Reg 124 133), Astmt] (t6a 530) lint (bnd (t6Load t6rSym 529 131 132))
+  (seqE (t6Kill t6xSym)
+  (seqE (t6Kill t6rSym)
+  (seqE (Expr [] (Erun empty_annotation t6RetSym [convLoadedInt (t6a 530)]))
+  (seqE (t6Kill t6xSym)
+  (seqE (t6Kill t6rSym)
+  (seqE t5Unit
+    (Expr [Aloc t6RegR, Astmt] (Esave (t6RetSym, lint)
+      [(t6a 531, ((lint, none), specInt 0))] (t5Pure (psym (t6a 531)))))))))))
+
+def t6AfterSwitch : CoreExpr :=
+  seqE (t6Save [Aloc (t6Reg 39 123), Astmt] t6BreakSym
+    (Expr [Aloc (t6Reg 39 123), Astmt] (Epure (Pexpr [] () (PEval Vunit)))))
+    (seqE t5Unit t6Return)
+
+/-- The full switch program, preserving unreachable cases and cleanup.
+    The file/library bridge is separate from this body transcription. -/
+def t6Main : CoreExpr :=
+  letS [Aloc (t6Reg 15 135), Astmt] t6xSym ptrTy (createInt (t6Reg 15 135) t6xSym)
+  (letS [Astmt] t6rSym ptrTy (createInt (t6Reg 15 135) t6rSym)
+  (letS [Aloc (t6Reg 17 27), Astmt] (t6a 514) lint
+    (bnd (Expr [Aloc (t6Reg 25 26), Aexpr] (Epure (specInt 2))))
+  (seqE (act (t6Reg 17 27) (Store0 false intCty (psym t6xSym) (convLoadedInt (t6a 514)) NA))
+  (letS [Aloc (t6Reg 28 38), Astmt] (t6a 515) lint
+    (bnd (Expr [Aloc (t6Reg 36 37), Aexpr] (Epure (specInt 0))))
+  (seqE (act (t6Reg 28 38) (Store0 false intCty (psym t6rSym) (convLoadedInt (t6a 515)) NA))
+    (Expr [Aloc (t6Reg 39 123), Astmt] (Esseq wc t6Switch t6AfterSwitch)))))))
+
 /-- One corpus row: the `.annot.core` file (under docs/corpus-e0/ at the
     repository root), the procedure, the transcription. -/
 structure Row where
@@ -1403,7 +1517,8 @@ structure Row where
   term : CoreExpr
 
 def corpusTable : List Row :=
-  [⟨"t1.annot.core", "main", t1Main⟩, ⟨"t5_ifelse.annot.core", "main", t5Main⟩]
+  [⟨"t1.annot.core", "main", t1Main⟩, ⟨"t5_ifelse.annot.core", "main", t5Main⟩,
+   ⟨"t6_switch.annot.core", "main", t6Main⟩]
 
 /-- THE COVERAGE LEDGER of the corpus (E1 range audit N-2,
     docs/2026-09-05_audit-e1-range.md: the check was table-driven, so a
@@ -1419,7 +1534,6 @@ def pendingCorpus : List (String × String) :=
   [("t2.annot.core", "E6 (`Eccall`; the helper call in a `for` loop)"),
    ("t3_ptrarg.annot.core", "E6 (`Eccall`, `PtrValidForDeref`)"),
    ("t4_while.annot.core", "E5 (negative actions; `while`)"),
-   ("t6_switch.annot.core", "E5 (negative actions; `switch`)"),
    ("t7_struct.annot.core", "outside E — KOI B4 (`tagDefs`)"),
    ("t8_array.annot.core", "E6 (arrays; `PtrValidForDeref`)"),
    ("t9_fact.annot.core", "E7 (the outcome-list closed form)"),
