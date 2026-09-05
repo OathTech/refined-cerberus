@@ -1,6 +1,6 @@
 # Known open items — the register auditors read FIRST
 
-State: candidate `dialect-e1` head (2026-09-05, after E1 + its audit fixes + E2 of the emitted-Core dialect arc; after the calls arc,
+State: candidate `dialect-e1` head (2026-09-05, after E1–E4 of the emitted-Core dialect arc with their audit fixes — the t1 milestone; after the calls arc,
 the fuel-lane restatement F1, the external-audit response AR5, the H1
 hygiene/coverage slices, their range audit, and the ARCHITECTURE rewrite). Maintained by the orchestrator; every entry
 points at the record that owns it. PURPOSE: an auditor should not
@@ -20,6 +20,7 @@ or a ruled disposition. Provenance tags as in `docs/DECISIONS.md`.
 | A4 | **LemLib `Pmap`**: no lookup-after-insert law shipped (our `SymMap`/`symAdd_lookup*` must be re-proved at the re-pin); `Pmap.join` is well-founded recursion, so closed engine maps do not reduce (17 declarations stall at cerberus-lean `de2fbf1`). | `docs/2026-09-03_repin-scout-2.md` (record copied to main from branch `repin-scout2`) §4 (a), (a′), §8; request note above §1–2 | Requested from lem-lean; local interim law allowed. Re-pin slice pending the next cerberus-lean pin. |
 | A5 | **`panic!` arms in the hand-written semantics** (61 code arms at the pin, 40 in `CerbMem.lean`; mirrors of OCaml `assert false`/`failwith`, read by the kernel as the return type's `Inhabited` default — the Lean run continues where the OCaml aborts; disclosed in ARCHITECTURE §3). At the PIN `f95ef8d9c`, `killM`'s dead-static-kill arm is a kill; on the cerberus-lean MAINLINE it is a `panic!` (the next pin brings it). No theorem states that an export's run reaches no such arm; the rules' premises keep proved programs away from them. cerberus-lean's typed-failure-outcomes pass removes the `Inhabited` semantics. | ARCHITECTURE §3 "The `panic!` arms"; scout §8 (γ); cerberus-lean Z1 manifest §2 | Re-check `MemWF.killM` and the arm count at the re-pin. |
 | A6 | **Re-pin drift**: main's pin is cerberus-lean `f95ef8d9c`; mainline is ≥ 34 commits ahead (`de2fbf1`), with the LemLib representation change (A4), `killM` re-mirroring (one exported text change: `killM_killed_inv`), fold/zip non-reduction (13 declarations). Everything else on the manifests measured zero for this package. | scout record §4–§6 (plan, 2.5–4 worker-days) | Re-pin waits for the NEXT cerberus-lean pin ([USER]: "it'll likely have moved again"). |
+| A7 | **The certified file is a transcribed THREE-function std.core fragment with `impl0 = ∅`** (`prodFileLib stdlibE3`): true of that file; on the pipeline's full file an out-of-range `conv_loaded_int` WRAPS through the impl function where ours KILLS (measured, E3 audit D-6). The pipeline's whole `core_file` as the statement's object is the named target (design §C.9 option (a)), not done. | E3 audit D-6; E3 record; design note §C.9 | Grow `stdlibE3` per slice; the option-(a) form when the elaborator can sit in the statement. |
 
 ## B. Statement-shape and coverage limitations, disclosed by design
 
@@ -39,6 +40,9 @@ or a ruled disposition. Provenance tags as in `docs/DECISIONS.md`.
 | B12 | **Two engine-round bridges** (`engine_step_matchU` for the mirror's certification; `loop_step_frag` for both adequacy lanes) — a documented design (ARCHITECTURE §2.2), duplication/drift risk noted by the external audit. | audit "Note"; ARCHITECTURE §2.2 | By design; consolidation not scheduled. |
 | B13 | ~~Three total rules proved but undemonstrated~~ CLOSED at H1 (`wpt_load` via the rewritten `progA_wpt`; `wpt_case_value`/`wpt_wseq` via `caseProg_wpt`/`wseqProg_wpt`); manifest 30 RULE / 0 undemonstrated. | `docs/2026-09-04_h1-notes.md` | Closed. |
 | B14 | **NO-RULE variants classified by [AGENT]** from the engine's admitted cases (union-member-pointer store/load/kill, read-only-cell load face, zero-size/atomic/non-inert `create` types, whole-object load/store at an atomic-typed allocation, `SD_Id`-named-function-vs-concrete `PtrEq`). | manifest rows; AR5-manifest record §1–§2; AR5 range audit §2.2, C-3, C-4 | CONFIRMED by the AR5 range auditor (seven exactly, one sharpened, two added by the audit). Any further variant found is a new row, not a new finding class. |
+| B15 | **No storability lemma for a SYMBOLIC `int` image** (heap layer): E3's positive exhibit is at the literal 3; the family `progCE3 n` is proved at every other layer. | E3 record §5 item 1 | A `Heap.lean` lemma; then restate the exhibit at `n`. |
+| B16 | **Whole-run negative results are measurements, not theorems**: `overflow_driver2_killed(_frame)` is the driver's KILL ROUND at every positive fuel; the run from the initial state was checked by compiled `#eval` (kernel reduction of the prefix measured not to reduce). A driver-kill adequacy lemma (dual of `wpt_driver_done_alloc`) would make it structural. | E3 record §5 item 2; E3 audit D-7 | The dual lemma; hygiene-level priority. |
+| B17 | `is_unsigned` mirrored at a leaf only — the engine rebuilds the node at core_eval.lem:1086 (an upstream-tray candidate, not filed); `PElet` withdrawn from `PePure` (pull/strip non-commutation); `-`/`*`/`/`/`%`/shifts/`wrapI` mirrored but NO-RULE. | E3 record §5 | Rules as the corpus needs them; file the tray note. |
 
 ## C. Hygiene queue (no trust or correctness content)
 
@@ -59,11 +63,14 @@ or a ruled disposition. Provenance tags as in `docs/DECISIONS.md`.
 | C13 | CLOSED at H1a (TSV header: "rule use only through imported clients"). | `docs/2026-09-04_h1-notes.md` | Closed. |
 | C14 | THIRTEEN consumerless lemmas in Soundness.lean since H1a deleted `outcomesU_of_step`: the ten `stepDischarge_*` plus `dischargeStep_kill_active`/`dischargeStep_alloc_active`/`dischargeStep_memop_active` (in-degree 0 at HEAD, measured by the H1 range audit — the worker's count of ten was corrected there, R-1); DriverCollapse documents the `stepDischarge_*` as its twins. | H1 record + `docs/2026-09-04_audit-h1-range.md` R-1 | Delete or re-home; hygiene. |
 | C15 | ~~duplicate pin entries~~ WITHDRAWN: the H1 range audit's Note-1 was wrong — `trioExports` has 402 entries, 402 distinct (orchestrator measurement at d80b639; `loop_step_frag`/`loop_step_frag'` and `loop_step_frag_same`/`loop_step_frag_same'` are primed twins, not duplicates; reviewer 6's aside). | ARCHITECTURE review 6 | Closed as a non-item. |
-| C16 | The manifest's hand-maintained `Frag.pure_op` OUT-OF-SCOPE row text lists only E1 shapes + the depth guard; E2 admitted more. | E2 audit fixes, flagged | E3 updates the row with its slice. |
+| C16 | ~~`Frag.pure_op` OUT-OF-SCOPE row text stale~~ Half-closed: E3 added its own members, not E2's four; E4's row pass to be checked by the E4 range audit. | E3 audit D-4 | Complete at the next manifest pass. |
+| C17 | Zero-consumer declarations after E3/E4 (16, listed in the E4 record §10): incl. pinned `prod_run_eqJ_lib`/`prod_run_safe_lib`, `Step.unseq_inv`, `Step.ccallFree_preserved`, `t1_blockSpecs`; plus the triplicated `depLe*` lemmas, `symC_eval`/`symK_eval` twins, three copies of the labels proof, inlined duplicate proofs in the overflow lemmas. | E3 audit H-1; E4 record §10 | Dedupe/delete in a hygiene slice. |
+| C18 | ARCHITECTURE's `Round.lean:`/`Step.lean:` line cites outside §2.2 were not re-measured after E4 (only §2.2's seven were) — a scripted cite audit is owed before the fresh full review. | E4 record §12 | Part of the t1-milestone ARCHITECTURE review prep. |
 
 ## D. Record errata already applied (append-only register — do not re-report)
 
 - DECISIONS 2026-09-04 external-audit entry: "10 stale seeds" → 6 (worker probe).
+- E3 landing entry / E3 record called the transcribed file the design's "option (a)"; it is option (b) (E3 audit R-2, 2026-09-05). The E3 post snapshot was regenerated at the right head (R-1).
 - E2 record (first version) attributed the byte-image fact to `unspec_storable` → stated as `unspec_bytes` (E2 audit R-2); the E2 closure note's E1-fuel-premise history was wrong (erratum appended there, R-1); the upstream note `…subst-esize.md` and KOI B7 said a size-preservation lemma is carried — none exists (R-3; both corrected 2026-09-05).
 - DECISIONS 2026-09-05 E1 landing entry: census split "395 annotation-only" was an upper bound (≥ 38 real shape changes) — erratum in the E1-audit entry (R-2).
 - KNOWN-OPEN-ITEMS C15 (2026-09-04, from the H1 range audit's Note-1 "402 pins = 400 distinct") was FALSE: 402 distinct, measured; withdrawn the same day.
@@ -92,8 +99,8 @@ or a ruled disposition. Provenance tags as in `docs/DECISIONS.md`.
   `.opamroot/` (a sandbox opam root, ~150 MB). Both are ignored as of
   this commit; the RefinedC layer lives on branch `refinedc/dev`.
 - Gates: `scripts/test_unit.sh` (FULL) / `--fast`; every Lean build
-  through `scripts/capped`. Expected FULL tail at the E2 candidate: 509 pins trio-exact, manifest
-  (58 rows; 35 RULE / 0 / 0 / 19 NO-RULE / 4 OUT-OF-SCOPE) no drift, the
-  corpus-skeleton speedbump `ok` (it fails LOUDLY since the E2 audit's H-1: row + first difference before the gate's FAIL line), import direction ok, `BOUNDARY: 22
-  modules checked, 0 internals mention(s) in total, exit=0`, `ALL GATES
-  GREEN`, `GATE-EXIT=0` (DECISIONS 2026-09-05 E2 entry, verbatim).
+  through `scripts/capped`. Expected FULL tail at the E4 candidate: 650 pins trio-exact, manifest
+  (70 rows) no drift, the corpus-skeleton speedbump `ok` (fails loudly), import
+  direction ok (17 core modules), `BOUNDARY: 24 modules checked, 0 internals
+  mention(s) in total, exit=0`, `ALL GATES GREEN`, `GATE-EXIT=0` (DECISIONS
+  2026-09-05 E4 entry, verbatim).

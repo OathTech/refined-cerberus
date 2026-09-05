@@ -2812,3 +2812,88 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   Range audit f9c3c2e..HEAD dispatched next on a fixed detached copy; E4
   (`unseq`, the last slice before the t1 milestone) dispatched in parallel
   on this branch; E3's merge ask follows its audit.
+- **2026-09-05 [AGENT] E3 RANGE AUDIT f9c3c2e..825b5e6: PASS WITH FIXES REQUIRED, A− —
+  FIXES FOLDED INTO THE E4 STREAM (1878398 report; 77884f4 R-1; ddc2f35 the
+  rest).** Report `cerberus-heaplang/docs/2026-09-05_audit-e3-range.md`. No
+  T-/C- finding: the impl arithmetic arms exact against `core_eval.lem`,
+  `INT_MAX`/`INT_MIN` = ±2^31 by `rfl`, the std.core transcription = the
+  pinned source lines 5–6/25–55/61–67, oracle `--exec` gives UB036 on
+  `INT_MAX+1` and exit 4 on `3+1` = the composite's `killed undef … [UB036]`
+  and `Specified(4)`, 589 pins distinct and trio-exact, the five rebase
+  resolutions correct except the moved cites. Fixes: R-1 the committed E3
+  post snapshot was the PRE-rebase tree's (regenerated); D-1 `Audit.lean`
+  cites moved by E3's appended lines; D-2 ARCHITECTURE/CLAIMS named the
+  DELETED `t1_*_uncovered` theorems as current — and the CLAIMS name check
+  read the theorem column only (FAIL-OPEN: passed green on deleted names) →
+  now every declaration-shaped span of every cell, plant-tested, and it
+  caught a further stale `FragProcs`; D-3 the `eval_uncovered`
+  characterisation on five surfaces; D-5; D-6 the certified file is a
+  THREE-function std.core fragment with `impl0 = ∅` (measured: an
+  out-of-range `conv_loaded_int` KILLS on this file where the pipeline's
+  file would wrap) and `EmittedCExhibit` is a SYNTHETIC — now stated;
+  D-7 the negative result holds at every POSITIVE fuel (fuel 0 is the
+  sentinel); R-2 the transcribed file is the design's option (b), not (a)
+  — ERRATUM to the E3 landing entry above; R-3 an arity-mismatch call is
+  `.uncovered`, not `panic` (record fixed, code was right); R-4/R-5 record
+  and cite fixes. D-4 → KOI this commit. H-1 hygiene → KOI C17.
+- **2026-09-05 [AGENT] E4 LANDED — THE t1 MILESTONE (`dialect-e1` d80c598; 26 commits on
+  main 04059dc).** Record `cerberus-heaplang/docs/2026-09-05_e4-notes.md`;
+  closure successor `docs/2026-09-05_fragment-closure-e4-notes.md`; post
+  snapshot `docs/2026-09-05_e4-signatures-post.txt`. `Eunseq` mirrored
+  exactly as the sequential driver runs it: the LAST reducible component
+  steps under the `Cunseq` frame (`get_ctx_unseq_aux` prepends,
+  core_reduction.lem:544–548/:590–601; `find_can_advance` takes the head,
+  driver.lem:1049–1058), completion into the annotated tuple
+  (`collectUnseq` = `one_step_unseq_aux`, bridged), a race → UB035 kill,
+  siblings `ccallFree`. The round certification moved from "the step list
+  is `[s]`" to the HEAD form `s :: post` (the design's `pre` is `[]` by
+  theorem) — 138 statements changed by that form. Rule faces
+  `wps/wpt_unseq_focus`, `wps/wpt_unseq_vals`, the annotated-tuple weak
+  binder; `wps_pure`/`wpt_pure` generalised to annotated pure nodes.
+  **THE MILESTONE**: `t1_certified_production` (CorpusT1Exhibit.lean) — the
+  shipped pipeline on `prodFileLib stdlibE3 [] t1Main`, `t1Main` transcribed
+  VERBATIM from the elaborator's `t1.core` (annotations, `bound`, `unseq`,
+  loaded values, the wrappers, the std.core call), is exactly one Active
+  execution delivering `lint 4`; `t1Main_frag : Frag t1Main` kernel-decided,
+  `uncoveredKinds t1Main = []` by `decide`; the corpus speedbump's t1 row
+  covers the WHOLE of `main` (121 tokens, no opaque position); oracle
+  cross-check verbatim: `--exec --batch t1.c` → `Defined {value:
+  "Specified(4)", stdout: "", stderr: "", blocked: "false"}`, `--exec` exit
+  4. The TENTH closed shipped-driver statement and the FIRST over an
+  EMITTED program. Census (derived) 4164 → 4362: ADDED 200 / REMOVED 2 /
+  CHANGED 162 = 138 head-form-forced + 2 (`wps/wpt_pure`) + 22 recursors.
+  Pins 588 → 650 trio-exact; 93 sub-trio facts unpinned (listed). Manifest
+  70 rows / 0 red / 22 consumers; CLAIMS 14 rows, 287 spans checked.
+  Warnings 60. [AGENT] decision points (record §5): head form `s :: post`;
+  `ccallFree` coarser than `has_ccall` (fail-closed); `Frag.unseq` needs
+  `es ≠ []`; `wpt_unseq_vals` at `3 ≤ k`; no partial-lane `t1_engine`
+  (`t1_blockSpecs` consumerless); H-1 hygiene not done. Remaining opaque
+  speedbump positions: `ccall` args (E6), expression-level `if`/`case`
+  scrutinees (E5). Orchestrator FULL gate at d80c598 (64G cap), verbatim
+  (per-module boundary lines elided; record):
+  ```
+  == gate 1: banned proof-method grep (native_decide / bv_decide / ofReduce*) ==
+  ok: no banned proof-method references
+  == gate 2: capped build, cerberus-heaplang (elaborates its axiom audit) ==
+  info: CerberusHeapLang/Audit.lean:818:0: CerberusHeapLang export pins: 650 trio-exact
+  info: CerberusHeapLang/Audit.lean:818:0: CerberusHeapLang axiom sweep: every theorem bounded by the trio (5055 swept, internal details included — count informational, environment-dependent)
+  info: CerberusHeapLang/Audit.lean:818:0: CerberusHeapLang banned-axiom sweep: sorryAx/ofReduceBool/ofReduceNat absent from all cones (7812 constants of every kind swept, internal details included — count informational, environment-dependent)
+  Build completed successfully (466 jobs).
+  ok: cerberus-heaplang build green
+  == speedbump: rule-use and classification manifest (regenerate; red on a red row or drift) ==
+  ok: capability manifest regenerated, no drift
+  == speedbump: corpus skeleton (hand-transcribed emitted Core vs docs/corpus-e0; scripts/corpus_skeleton.lean) ==
+  ok: corpus skeleton — every transcription matches its emitted text, every plant mismatches
+  == speedbump: import direction (semantics → heap → rules → adequacy → clients) ==
+  ok: import direction — 17 core modules, none imports an exhibit/example/production module
+  == speedbump: client boundary (positive clients mention no logic internals; scripts/boundary_check.sh) ==
+  BOUNDARY: 24 modules checked, 0 internals mention(s) in total, exit=0
+  ok: client boundary — no unallowlisted internals mention
+  ALL GATES GREEN
+  GATE-EXIT=0
+  ```
+  Range audit 825b5e6..HEAD (E3 fixes + E4) dispatched next; then ONE merge
+  ask for the whole E1–E4 stack (superseding the pending f9c3c2e ask, which
+  was never answered). The t1 milestone triggers, per the rulings: the
+  fresh full ARCHITECTURE review (new reviewer) and the velocity
+  reassessment before E5–E7.
