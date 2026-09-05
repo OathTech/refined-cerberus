@@ -312,6 +312,36 @@ theorem symAdd_lookup {β : Type} {m : Fmap sym β} (h : SymMap m)
     · rw [if_neg (fun h => hc (hswap.mp h)), if_neg hc]
       rfl
 
+/-- The engine collector's label-map insertion uses its own BEq instance.
+    Like environment insertion, it retains the captured symbol order. -/
+theorem SymMap.addLabel {β : Type} {m : Fmap sym β} (h : SymMap m)
+    (k : sym) (v : β) : SymMap (fmapAddBy symCmpL k v m) := by
+  rcases h with rfl | ⟨bk, bs, n, rfl⟩
+  · exact .inr ⟨_, _, _, rfl⟩
+  · exact .inr ⟨_, _, _, rfl⟩
+
+/-- Lookup after the collector's label-map insertion. The bucket head
+    determines lookup even though this insertion's BEq differs from the
+    environment-update spelling used by `symAdd`. -/
+theorem labelAdd_lookup {β : Type} {m : Fmap sym β} (h : SymMap m)
+    (cmp' : sym → sym → LemOrdering) (l k : sym) (v : β) :
+    fmapLookupBy cmp' l (fmapAddBy symCmpL k v m) =
+      (if symOrd l k = .eq then some v else fmapLookupBy cmp' l m) := by
+  rcases h with rfl | ⟨bk, bs, n, rfl⟩
+  · rw [show fmapLookupBy cmp' l (Fmap.empty : Fmap sym β) = none from rfl]
+    exact fmapLookupBy_addBy_empty symCmpL cmp' k v l
+  · unfold fmapAddBy fmapLookupBy
+    dsimp only
+    rw [Std.TreeMap.get?_eq_getElem?, Std.TreeMap.get?_eq_getElem?,
+      Std.TreeMap.getElem?_insert]
+    have hswap : (symOrd k l = .eq) ↔ (symOrd l k = .eq) := by
+      rw [Std.OrientedCmp.eq_swap (cmp := symOrd) (a := k) (b := l)]
+      cases symOrd l k <;> simp [Ordering.swap]
+    by_cases hc : symOrd l k = .eq
+    · rw [if_pos (hswap.mpr hc), if_pos hc]
+    · rw [if_neg (fun h => hc (hswap.mp h)), if_neg hc]
+      rfl
+
 /-- The two-entry instance (a file's `main`-plus-one procedure map, a
     two-label map): the smoke's former local `csAdd_lookup_two`, here
     once (H-2). -/

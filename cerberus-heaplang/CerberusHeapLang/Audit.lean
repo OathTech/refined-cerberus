@@ -232,6 +232,7 @@ import CerberusHeapLang.EmittedBExhibit
 import CerberusHeapLang.EmittedCExhibit
 import CerberusHeapLang.CorpusT1Exhibit
 import CerberusHeapLang.CorpusT5Exhibit
+import CerberusHeapLang.CorpusT6Exhibit
 import CerberusHeapLang.OverflowExhibit
 import CerberusHeapLang.Examples.CorpusE0
 import CerberusHeapLang.Examples.CorpusE5
@@ -936,7 +937,36 @@ def trioExports : List Name := [
   ``CerberusHeapLang.CorpusE0.t6Switch_select,
   ``CerberusHeapLang.CorpusE0.t6Switch_frag,
   ``CerberusHeapLang.CorpusE0.t6Return_frag,
-  ``CerberusHeapLang.CorpusE0.t6Main_frag]
+  ``CerberusHeapLang.CorpusE0.t6Main_frag,
+  -- t6 execution: 28 of 30 new theorems are measured trio-exact.
+  ``CerberusHeapLang.wpt_t6Load,
+  ``CerberusHeapLang.t6Q_case1,
+  ``CerberusHeapLang.t6Q_case2,
+  ``CerberusHeapLang.t6Q_default,
+  ``CerberusHeapLang.t6Q_break,
+  ``CerberusHeapLang.t6Q_ret,
+  ``CerberusHeapLang.wpt_t6AssignStmt,
+  ``CerberusHeapLang.t6Q_eq,
+  ``CerberusHeapLang.t6Q_lookup,
+  ``CerberusHeapLang.t6Q_cont,
+  ``CerberusHeapLang.t6RetParams_bindArgs,
+  ``CerberusHeapLang.t6PtrParams_bindArgs,
+  ``CerberusHeapLang.wpt_t6Return,
+  ``CerberusHeapLang.wpt_t6Break,
+  ``CerberusHeapLang.wpt_t6Case2,
+  ``CerberusHeapLang.t6_blockSpecsT,
+  ``CerberusHeapLang.wpt_t6Switch,
+  ``CerberusHeapLang.t6_wpt,
+  ``CerberusHeapLang.t6DefaultTail_frag,
+  ``CerberusHeapLang.t6Case2Tail_frag,
+  ``CerberusHeapLang.t6CaseContext_frag,
+  ``CerberusHeapLang.t6Q_frag,
+  ``CerberusHeapLang.t6Q_pot,
+  ``CerberusHeapLang.collect_new_t6Main,
+  ``CerberusHeapLang.t6Main_labeledAt,
+  ``CerberusHeapLang.t6_certified_production,
+  ``CerberusHeapLang.SymMap.addLabel,
+  ``CerberusHeapLang.labelAdd_lookup]
 
 def sortedNames (ns : Array Name) : Array String :=
   (ns.map (·.toString)).qsort (· < ·)

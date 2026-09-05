@@ -133,8 +133,11 @@ unsequenced node: `unseq` (E4). Two facts a reader must know first:
   negative-assignment and excluded-store rules at both strata, and uses
   their total faces to certify t5_ifelse at budget 88, returning
   Specified(1) through the shipped driver (`CorpusT5Exhibit`). Its initial
-  symbol supply is explicitly at least 600; t6/t4 and E5's full range
-  audit remain pending. The `bound` rules
+  symbol supply is explicitly at least 600. The same protocol now
+  certifies t6_switch at budget 78, returning Specified(20), through
+  its five engine-registered label continuations (`CorpusT6Exhibit`).
+  Both use the three-function library fragment described in §2.5.
+  t4 and E5's full range audit remain pending. The `bound` rules
   `wps_bound`/`wpt_bound` now REQUIRE a negative-free body within the fuel
   (`negFree`, `pot`), the congruence being unsound otherwise
   (`docs/2026-09-05_e5-notes.md` §3).
@@ -428,7 +431,7 @@ CerbND.fuelExhaustedKill`, or `nd_status.Active dres` with the
 postcondition. The shipped `drive` is the instance at
 `fuel := CerbFuel.driverFuel` (`CerbND.lean:467`, `rfl`).
 
-### 2.5 The eleven closed shipped-driver statements
+### 2.5 The twelve closed shipped-driver statements
 
 Each has the execution function
 `CerbND.runND (_root_.drive fmapEmpty false F args) ((initial_driver_state sup F fs).1)`,
@@ -437,7 +440,7 @@ with a pure readout on `dres`/`dst'`. None carries a termination
 hypothesis. Where the certified round count depends on an input, the
 in-budget bound is an explicit premise against the name the semantics
 exports for this purpose (`CerbFuel.driverFuel = 100000000`, generated
-`CerbFuel.lean:71`). All eleven are pinned trio-exact (§3). The tenth,
+`CerbFuel.lean:71`). All twelve are pinned trio-exact (§3). The tenth,
 `t1_certified_production` (E4), is the first over an EMITTED program:
 `../docs/corpus-e0/t1.c`'s `main` as the Cerberus C front end emits it,
 transcribed verbatim (`Examples/CorpusE0.lean:960`, tied to
@@ -452,8 +455,8 @@ functions and no `Impl` constant. The consequence, measured (E3 audit
 D-6): `conv_loaded_int('signed int', Specified(INT_MAX+1))` classifies
 `.kill` on this file where the pipeline's file WRAPS through the impl
 function (KOI A7; the whole `core_file` as the statement's object is the
-named target, not done). The count "ten" follows the README and CLAIMS:
-the nine pre-dialect statements, t1 and t5; the dialect arc's three closed
+named target, not done). The count twelve follows the README and CLAIMS:
+the nine pre-dialect statements, t1, t5 and t6; the dialect arc's three closed
 statements over its synthetic exhibits — `exhibitA_prod_e1`
 (`EmittedAExhibit.lean:297`), `exhibitB_prod_e2` (`EmittedBExhibit.lean:672`),
 `exhibitC_prod_e3` (`EmittedCExhibit.lean:731`) — have the same execution
@@ -473,10 +476,11 @@ table rather than counted here.
 | `even_odd_certified_production` | `EvenOddExhibit.lean:710` | `hn`, `hfuel : 3 * n.toNat + 6 ≤ CerbFuel.driverFuel` |
 | `t1_certified_production` | `CorpusT1Exhibit.lean:832` | none (the file is `prodFileLib stdlibE3 [] t1Main`, above) |
 | `t5_certified_production` | `CorpusT5Exhibit.lean` | initial symbol supply at least 600; same library-fragment file boundary as t1 |
+| `t6_certified_production` | `CorpusT6Exhibit.lean` | initial symbol supply at least 600; same library-fragment file boundary as t1 |
 
 Package definitions in these statements, exactly — beyond the authored
 program and its wrapper (`prodFile`/`prodFileWith`/`prodFileLib`), read
-off the ten statement texts:
+off the twelve statement texts:
 
 | Statement | In the conclusion | In a premise |
 |---|---|---|
@@ -491,6 +495,7 @@ off the ten statement texts:
 | `even_odd_certified_production` | `ivVal` | — |
 | `t1_certified_production` | `lint` (`IntRules.lean:69`: the loaded `Specified` integer value); `stdlibE3` (`StdCore.lean:153`) and `t1Main` (`Examples/CorpusE0.lean:1061`) inside the file object | — |
 | `t5_certified_production` | `lint`, `stdlibE3` and `CorpusE0.t5Main` inside the file object | — |
+| `t6_certified_production` | `lint`, `stdlibE3` and `CorpusE0.t6Main` inside the file object | — |
 
 Beside them, two closed PARTIAL forms consume `prod_run_safe_procs`:
 `fib_rec_certified` (`FibRecExhibit.lean:803`) and `even_odd_certified`
@@ -556,12 +561,15 @@ has no equation for them and a theorem holds at every value they take.
 
 **What the build checks** (`Audit.lean`, the last import of the library
 root, elaborated by every `lake build`). Every pinned export exists, is
-a theorem, and has axiom set EXACTLY the trio (`:826`–`:837`; 779 pins at
+a theorem, and has axiom set EXACTLY the trio (`:826`–`:837`; 818 pins at
 this revision: 650 at the E4 head, `docs/2026-09-05_e4-notes.md` §8, plus
 the two MirrorCoverage `unseq` rounds the E4 range audit's R-1 measured
 trio-exact and unpinned, `docs/2026-09-05_audit-e4-range.md`, plus E5
 slice 1's 60 and the second slice/t5's 67
-(`docs/2026-09-05_e5b-axioms.txt`; 19 sub-trio additions remain unpinned). Every theorem of every `CerberusHeapLang.*`
+(`docs/2026-09-05_e5b-axioms.txt`; 19 sub-trio additions remain unpinned),
+plus t6's 11 fragment and 28 execution/label-map pins
+(`docs/2026-09-05_e5-t6-notes.md`; two execution additions use fewer axioms).
+Every theorem of every `CerberusHeapLang.*`
 module, internal details included, is bounded by the trio (`:838`–`:857`).
 `sorryAx`/`ofReduceBool`/`ofReduceNat` reach no constant of any kind
 (`:858`–`:874`). Precision: "exactly the trio" is the pinned exports' property;

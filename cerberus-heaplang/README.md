@@ -229,8 +229,17 @@ output streams. It requires an initial symbol supply of at least 600 to
 protect source bindings from the fresh symbol created by assignment.
 The theorem uses the same `prodFileLib stdlibE3` file boundary as t1.
 Expression-level case/if operands and case patterns are now checked by
-the skeleton instrument. E5 is still in progress: t6, t4 and the full
-range audit remain (`docs/2026-09-05_e5-resume.md`).
+the skeleton instrument.
+
+The emitted switch `t6_switch.c` is also certified: `t6_wpt` composes a
+budget of 78 and `t6_certified_production` establishes one Active
+`Specified(20)`, unblocked with empty output streams. Its five registered
+label continuations are checked against the engine collector; the logic
+proof follows case 2 through assignment, break and return. It has the same
+initial-supply bound and library-fragment boundary as t5. Whole-term
+membership includes the other cases and dead cleanup. E5 is still in
+progress: t4 and the full range audit remain
+(`docs/2026-09-05_e5-t6-notes.md`).
 
 **In the fragment, mirrored and classified, but covered by NO rule
 (kill/free arc K3; raised by the K2 range audit, decided).** (i) The STATIC
@@ -333,12 +342,13 @@ E4, `t1_certified_production` (CorpusT1Exhibit.lean: the emitted t1's
 `main` on the library-carrying synthetic file `prodFileLib stdlibE3`,
 "Scope, exactly" above), and E5's `t5_certified_production`
 (CorpusT5Exhibit.lean: the emitted conditional on the same library fragment,
-with the explicit bound `600 ≤ sup`). Their
+with the explicit bound `600 ≤ sup`), plus `t6_certified_production`
+(CorpusT6Exhibit.lean: the emitted switch, with the same boundary). Their
 execution function is the shipped `CerbND.runND (drive fmapEmpty false
 file args) (initial_driver_state sup file fs).1`, the composite the
 cerberus-lean executable runs, applied to the authored program wrapped
 by `prodFile` (the synthetic one-procedure file) or, for recursive fib,
-`prodFileWith` (`main` plus the declared `fib`) or, for t1 and t5,
+`prodFileWith` (`main` plus the declared `fib`) or, for t1, t5 and t6,
 `prodFileLib stdlibE3` (`main` plus the three-function std.core
 fragment, KOI A7); no package-defined
 driver, discharge or scheduler appears in their statements, and they
@@ -359,14 +369,14 @@ the cold-start cursor's headroom; bridge `ml_budget_bridge`); and, since
 2026-09-04 (H1b), `even_odd_certified_production` (EvenOddExhibit.lean:
 MUTUAL RECURSION, `even`/`odd` calling each other on the synthetic
 THREE-procedure file, `hfuel : 3 * n.toNat + 6 ≤ CerbFuel.driverFuel`). These
-eleven are THE root-of-trust exports of this package — the closed
+twelve are THE root-of-trust exports of this package — the closed
 shipped-driver statements. They are reached through `prod_run_eqJ` or,
 through calls, `prod_run_eqJ_procs`, or, on the library-carrying file,
 `prod_run_eqJ_lib1` (ProdEntry.lean), which are generic
 collapse machinery rather than closed statements: their delivery premise
 `DriverDoneAt`, resp. the live-control `DriverDoneCtl` (ProdLoop.lean),
 and their registration tie `LabeledAt`, resp. the whole-file
-`LabeledProcs`, are package-defined, and the eleven statements discharge
+`LabeledProcs`, are package-defined, and the twelve statements discharge
 them.
 
 **The partial lane, over the same driver.** Every generic
@@ -707,7 +717,7 @@ theorems:
 | Divergence / limitation | Discharge / mover | Home |
 |---|---|---|
 | Fuel: the engine's `get_ctx` is fuel-bounded (`lemDefaultFuel = 10^6`) with an opaque exhaustion leaf, so the projection theorems carry the static premises `pot e ≤ lemDefaultFuel` and `pot cont ≤ lemDefaultFuel` per registered body (never a bound on the run length); total production statements carry `k + 2 ≤ CerbFuel.driverFuel` (the shipped driver's budget, 10^8 since the fuel arc) for the certified step count; the shipped driver's OWN fuel arm is the kernel-transparent kill `CerbND.fuelExhaustedKill` (pin `f95ef8d9c`), which the partial lane states as the admitted outcome beside delivery — at every fuel of the loop (`DriverSafeCtl`) and, in the closed form, of `CerbND.drive_lemFuel` (`prod_run_safe_procs`); measured: that outer fuel bounds `driver2`'s rounds only, the loop's budget being the fixed `10^8` inside the wrapper | a fuel-irrelevance theorem for `get_ctx`; a second upstream mirror fuelling the loop as well (recorded as available in `../docs/2026-09-02_review-of-cerberus-lean-fuel-arc-design.md` §7) if a loop-fuel-parametric CLOSED statement is ever wanted | `Soundness.lean` header ("FUEL HONESTY"), `Potential.lean`, `Adequacy.lean`; `../docs/2026-09-02_request-cerberus-lean-fuel-exhaustion-outcome.md`, `docs/2026-09-03_f1-notes.md` |
-| Emitted-Core coverage now includes t1 and t5: complete fragment witnesses and shipped-driver theorems. t5 adds expression-case evaluation and negative assignment with an explicit fresh-symbol floor; Ecase components under unseq are supported when ccall-free. t6/t4, C calls, scheduler forks and the remaining E6/E7 cases are pending. The plain-symbol binder rules still require bare heads; the annotated-tuple binder is ruled. | Remaining dialect work and the architecture review (`../docs/2026-09-04_emitted-core-dialect-design.md`, `docs/2026-09-05_e5-resume.md`) | Scope above; claim matrix C14/C15; generated capability manifest |
+| Emitted-Core coverage now includes t1, t5 and t6: complete fragment witnesses and shipped-driver theorems. t5 adds expression-case evaluation and negative assignment with an explicit fresh-symbol floor; Ecase components under unseq are supported when ccall-free. t4, C calls, scheduler forks and the remaining E6/E7 cases are pending. The plain-symbol binder rules still require bare heads; the annotated-tuple binder is ruled. | Remaining dialect work and the architecture review (`../docs/2026-09-04_emitted-core-dialect-design.md`, `docs/2026-09-05_e5-resume.md`) | Scope above; claim matrix C14–C16; generated capability manifest |
 | Synthetic Core entry: authored Core wrapped by `prodFile`, not C through the frontend; the loop programs' label maps are nevertheless computed by the shipped registration (`*_labeledAt_production`, `LabeledAt`) | a C-frontend entry | `ProdEntry.lean` |
 | The judgments are indexed by the current PROCEDURE `p : Option sym`, not the full control, and their step clauses quantify over the call stack and execution location `(κ, ℓ)` (calls arc C3) — forcing fact: RETURN does not restore `exec_loc` (PCALL pushes `push_exec_loc`, RETURN writes `current_proc_opt`/`env`/`stack0`/`arena` only), so the caller's continuation after a return runs at a control differing from the call-time one in `execLoc`; the pre-C3 judgment at `ctl` is the instance `p := ctl.proc, κ := ctl.κ, ℓ := ctl.execLoc` at the empty table | by design (every C1/C2 rule was control-general, the C1 range audit) | `Wps.lean`, `Wpt.lean`; docs/2026-09-03_c3-notes.md |
 | The single-procedure driver lane (`wpt_driver_aux`/`_done(_alloc)`) is stated at the EMPTY table `emptyProcSpecT`, where the call clause is unsatisfiable (`wpt_empty_call_false`); the total lane THROUGH CALLS is the CPS lane `wpt_driver_cps`/`wpt_driver_done_procs` over the live-control delivery fact `DriverDoneCtl` (calls arc C4), consumed by `prod_run_eqJ_procs` — so the nine production statements are reached by two routes, the seven earlier ones at the empty table and recursive fib and even/odd through calls; the partial lane is at the live control throughout (`DriverSafeCtl`, `engine_adequacy`) | the single-procedure driver lane stays as the earlier statements' route (its restatement over the general lane was declined at C4: the file tie is not available at its context profile, `procCtx`); the former total `driveU` lane was deleted in the fuel-lane restatement | `ProdLoop.lean`, `ProdEntry.lean` |
