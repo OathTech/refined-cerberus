@@ -114,6 +114,7 @@ def recE1 := "dialect arc E1 2026-09-05 (docs/2026-09-04_e1-notes.md)"
 def recE2 := "dialect arc E2 2026-09-05 (docs/2026-09-05_e2-notes.md)"
 def recE3 := "dialect arc E3 2026-09-05 (docs/2026-09-05_e3-notes.md)"
 def recE4 := "dialect arc E4 2026-09-05 (docs/2026-09-05_e4-notes.md)"
+def recE5 := "dialect arc E5 2026-09-05 (docs/2026-09-05_e5-notes.md)"
 
 /-- THE VARIANT TABLE. Read the engine arms cited before editing. -/
 def variants : List Variant := [
@@ -321,9 +322,28 @@ def variants : List Variant := [
   { ctor := `CerberusHeapLang.Frag.unseq,
     shape := "`unseq(…, run l(…), …)` / `unseq(…, pcall f(…), …)` — a jump or a call reaching the root THROUGH the `Cunseq` frame (the spine searches `jumpRedex?`/`callRedex?` descend into the last reducible component; `Step.run`/`Step.call` at the plugged context)",
     cls := .noRule s!"admitted by the fragment and MIRRORED (`Step.unseq_inv`'s run/call disjuncts; `wpt_jump_frame_unseq` carries the jump frame); no exhibit reaches a jump or a call under the frame yet, so no rule face is demonstrated (the corpus's calls are `Eccall`s — E6; its `run`s sit at the procedure spine); {recE4}" },
+  -- E5: the negative-action protocol, the excluded store, the case EVAL round, nd
+  { ctor := `CerberusHeapLang.Frag.neg_store,
+    shape := "`neg(store(ty, p, v))` at canonical operands under a `bound` with no strong sequence between (`break_at_bound_and_sseq` = `BOUND_NO_SSEQ`): the engine's NEGATIVE-ACTION round draws an exclusion id and a fresh symbol from the run state and rewrites `bound(ctxA[neg(act)])` into `bound(let weak (_, s) = unseq(Eexcluded n act, ctxA'[pure(Unit)]) in pure(s))` (core_reduction.lem:1290–1338)",
+    cls := .noRule s!"MIRRORED (`Step.neg_bound`; the run state's two supplies are WRITERS on `Ctl.sup`, `Ctl.draw`) and CLASSIFIED (`complete_neg_act`: `NO_BOUND` is the engine's panic `ShippedRefusal.panic_step`, `BOUND_WITH_SSEQ` the registered residual `OpenRound.neg_sseq`); the rule faces `wps_neg_bound`/`wpt_neg_bound` (the fresh symbol's non-collision from the WP-level supply bound) are E5's second slice; {recE5}" },
+  { ctor := `CerberusHeapLang.Frag.neg_store_op,
+    shape := "`neg(store(ty, p, v))` at `PePure` operands not all values — the same round (the rewrite fires before any operand evaluates; the operands evaluate inside the excluded node)",
+    cls := .noRule s!"MIRRORED and CLASSIFIED as `Frag.neg_store` (`Step.neg_bound` is operand-agnostic); rule face pending with it; {recE5}" },
+  { ctor := `CerberusHeapLang.Frag.excluded_store,
+    shape := "`Eexcluded n (store(ty, p, v))` at canonical operands — `process_action (Just n)` (core_reduction.lem:1345–1346, :694–711): the same `StoreRequest2` as the positive store, its continuation the NEGATIVE dynamic annotation `{DA_neg n [] fp}pure(Unit)`",
+    cls := .noRule s!"MIRRORED (`Step.excluded_store`) and CLASSIFIED (`complete_excluded_store`: ILLTYPED / killed / the step); the rule face `wps_excluded_store`/`wpt_excluded_store` is E5's second slice; {recE5}" },
+  { ctor := `CerberusHeapLang.Frag.excluded_store_op,
+    shape := "`Eexcluded n (store(ty, p, v))` at `PePure` operands not all values (the ACTION_EVAL round under `Eexcluded n`; the node is rebuilt at the evaluated operands, core_reduction.lem:721–727)",
+    cls := .noRule s!"MIRRORED (`Step.excluded_store_eval`) and CLASSIFIED (`complete_excluded_store_op`: the step / ILLTYPED at distance one / the classified kill / `eval_uncovered`); rule face pending with `Frag.excluded_store`; {recE5}" },
+  { ctor := `CerberusHeapLang.Frag.case_op,
+    shape := "`case pe of …` at a `PePure` NON-value scrutinee (one_step0's `Ecase` EVAL round: the scrutinee evaluates, the node is rebuilt at the value; the corpus's `case (a_512, a_513) of` tuple scrutinee)",
+    cls := .noRule s!"MIRRORED (`Step.case_eval`) and CLASSIFIED (`complete_case_op`: the step / the classified kill / `eval_uncovered`); the rule face `wps_case_eval`/`wpt_case_eval` is E5's second slice (until then a case at a non-value scrutinee has no WP rule — fail-closed); {recE5}" },
+  { ctor := `CerberusHeapLang.Frag.nd,
+    shape := "`nd(e_1, …, e_n)` with at least two alternatives — one_step0's `End es => ND es` (core_reduction.lem:447–449) becomes the scheduler FORK `Step_nd2` (:1473–1474; `advance_step`'s `ND.pick`, driver.lem:1039–1046)",
+    cls := .outOfScope s!"the mirror has NO rule for a fork (fail-closed: the choice is the driver's, and `CerbND.runND` explores every alternative — `ShippedRefusal.fork` via `complete_nd`/`nd_fork`, `pick` on a list of two or more); the corpus reaches `nd` only in the `Unspecified` arm of an `if` condition's case, which no certified run takes; {recE5}" },
   -- E1: the bound frame
   { ctor := `CerberusHeapLang.Frag.bound,
-    shape := "`bound(e)` — reduction under the `Cbound` frame, then REMOVE-BOUND at the delivered value of either shape (the dynamic annotations of an annotated value are DROPPED)",
+    shape := "`bound(e)` — reduction under the `Cbound` frame, then REMOVE-BOUND at the delivered value of either shape (the dynamic annotations of an annotated value are DROPPED); E5: the rule faces are stated for a NEGATIVE-FREE body within the fuel (`negFree e = true`, `pot e ≤ lemDefaultFuel`, both `rfl` on emitted programs) — the `bound` frame itself performs the negative-action round, so a body reaching one is `Frag.neg_store`'s row",
     cls := .rule (N "wps_bound") (N "wpt_bound"),
     also := [N "wpt_jump_frame_bound"] },
   -- E1: create at ctor-constant operands

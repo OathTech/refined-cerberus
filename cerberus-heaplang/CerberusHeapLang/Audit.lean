@@ -160,6 +160,38 @@ new constructors (`valsOnly_*`, `ccallFree*`, `isValE_*`, `is_irreducible_*`,
 `t1Main_pot`, `t1_four_loadTrap`, `t1CasePe_eq`, `createInt_eq`, `killInt_eq`,
 `act_store_eq`, `act_load_eq`).
 
+DIALECT ARC E5, slice 1 of 2 (2026-09-05, cerberus-heaplang/docs/2026-09-05_e5-notes.md):
+the NEGATIVE-ACTION PROTOCOL mirrored (`Step.neg_bound` — the engine's Neg arm
+at `BOUND_NO_SSEQ`: exclusion id and fresh symbol drawn from the run state,
+`negRewrite`; `Step.excluded_store`/`excluded_store_eval`; `Step.case_eval`),
+the run state's two supplies as WRITERS on `Ctl.sup` (`Ctl.draw`, the tie
+threaded through `loop_step_frag*`, `DriverSafeCtl`/`DriverDoneCtl`/
+`DriverDoneAt`, `prodCtl sup`), the classification re-established at every
+new root (`complete_neg_act`/`_excluded_store(_op)`/`_case_op`/`_nd`), `pot`
+made additive, and `wps_bound`/`wpt_bound` restated for negative-free bodies
+within the fuel (`negFree`, `Step.negFree_preserved`, `Step.pot_le`,
+`esize_le_pot`). 60 pins added (list end): 652 → 712. No corpus program
+certifies yet (the neg-round rule faces are slice 2). Left UNPINNED with
+sub-trio cones (measured, e5-notes §8): the `rfl`/`simp`/`decide` facts at the
+new constructors and searches — `negRedex?_*`/`negRedexU?_*` (every simp
+lemma, the frame `_none` lemmas, `negRedex?_apply_ctx_eq`, the exclusivity
+lemmas `*_none_of_negRedex?_some`, `negRedex?_none_of_negFree`),
+`callRedex?_apply_ctx_eq`/`callRedexU?_apply_ctx_eq`, `Decomp.negRedex?_*`,
+`Redex.negRedex?_some_inv`, `Decomp.get_ctx_rebuild_excluded`,
+`Decomp.rebuild_not_irreducible_excl`, `get_ctx_excluded`/`get_ctx_nd`/
+`get_ctx_annot_excluded`, the `break_*_frame` lemmas, `Ctl.draw_*`/
+`Ctl.toStack_draw`, `negFree*`/`negFreeList_*`/`negFreeAlts_*` (all but the
+three `_subst*` and `Step.negFree_preserved`), `ccallFreeAlts_*`/
+`ccallFree_apply_ctx_*`/`ccallFree_negRewrite`/`*_map_aux`/`*_of_all`,
+`esize_le_pot`/`esizeList_le_potList`/`esizeAlts_le_potAlts(_of)`,
+`esize_le_esizeAlts_of_mem`, `potAlts_*`/`pot_le_potAlts_of_mem`/
+`potAlts_map_subst_le`/`potList_map_le`, `pot_apply_ctx_plug`/`_excl`,
+`pot_negRewrite_le`, `pot_pure_le_two`, `pot_neg`/`pot_excluded`/`pot_let`/
+`pot_nd`/`pot_action_pos`, `negRewrite_eq`, `has_ccall_lemFuel_succ_case`/
+`_let`/`_nd`, `and_true_intro`, `toVal_none_of_negRedex?_some`,
+`jumpRedex?_excluded`/`callRedex?_excluded`, and the equation lemmas
+`*.eq_def` the `unfold`s generated.
+
 P3.5 ([USER 2026-09-02], docs/2026-09-02_p3.5-notes.md): the 65
 `#guard_msgs in #print axioms` blocks + prose collapsed to the export
 list below (62 names at P3.5, the same exact assertion each; the list
@@ -816,7 +848,40 @@ def trioExports : List Name := [
   ``CerberusHeapLang.t1frY_sf, ``CerberusHeapLang.t1sym_eval,
   -- E4 range audit R-1 (2026-09-05, docs/2026-09-05_audit-e4-range.md §3.6): the two
   -- MirrorCoverage `unseq` rounds, measured trio-exact and missed by the E4 pass (650 → 652)
-  ``CerberusHeapLang.unseq_focus_round, ``CerberusHeapLang.unseq_vals_round]
+  ``CerberusHeapLang.unseq_focus_round, ``CerberusHeapLang.unseq_vals_round,
+  -- dialect arc E5 (1/2) (2026-09-05, cerberus-heaplang/docs/2026-09-05_e5-notes.md §8): every
+  -- new theorem measured trio-exact by `collectAxioms` over the 184 new theorems (60 exactly the
+  -- trio, 124 sub-trio — listed unpinned in the E5 paragraph above), exhaustively (R-1 convention)
+  ``CerberusHeapLang.advance_withrs_tau_rs, ``CerberusHeapLang.case_hbsz_of_branches,
+  ``CerberusHeapLang.ccallFree_subst, ``CerberusHeapLang.ccallFree_subst_fold,
+  ``CerberusHeapLang.ccallFree_subst_lemFuel, ``CerberusHeapLang.complete_case_op,
+  ``CerberusHeapLang.complete_excluded_store, ``CerberusHeapLang.complete_excluded_store_op,
+  ``CerberusHeapLang.complete_nd, ``CerberusHeapLang.complete_neg_act,
+  ``CerberusHeapLang.Decomp.lift_neg, ``CerberusHeapLang.Decomp.lift_neg',
+  ``CerberusHeapLang.esize_subst, ``CerberusHeapLang.esize_subst_fold,
+  ``CerberusHeapLang.esize_subst_lemFuel, ``CerberusHeapLang.eval1_bridge_gen,
+  ``CerberusHeapLang.Frag.annot_inv, ``CerberusHeapLang.Frag.bound_inv,
+  ``CerberusHeapLang.Frag.ccallFree, ``CerberusHeapLang.Frag.excluded_of_neg,
+  ``CerberusHeapLang.Frag.negRewrite_frag, ``CerberusHeapLang.Frag.of_negRedex,
+  ``CerberusHeapLang.Frag.replug, ``CerberusHeapLang.Frag.unseq_inv,
+  ``CerberusHeapLang.loop_step_withrs_tau_rs, ``CerberusHeapLang.nd_fork,
+  ``CerberusHeapLang.negFree_subst, ``CerberusHeapLang.negFree_subst_fold,
+  ``CerberusHeapLang.negFree_subst_lemFuel, ``CerberusHeapLang.pot_subst,
+  ``CerberusHeapLang.pot_subst_fold, ``CerberusHeapLang.pot_subst_lemFuel,
+  ``CerberusHeapLang.runOne_pick_cons2, ``CerberusHeapLang.select_case_some,
+  ``CerberusHeapLang.Step.ctl_frame_of_κ, ``CerberusHeapLang.step_ctx_case_eval_fail,
+  ``CerberusHeapLang.step_ctx_case_eval_shape, ``CerberusHeapLang.step_ctx_case_eval_ws,
+  ``CerberusHeapLang.step_ctx_excluded_store, ``CerberusHeapLang.step_ctx_excluded_store_eval_fail2,
+  ``CerberusHeapLang.step_ctx_excluded_store_eval_fail3, ``CerberusHeapLang.step_ctx_excluded_store_eval_shape,
+  ``CerberusHeapLang.step_ctx_excluded_store_eval_ws, ``CerberusHeapLang.step_ctx_excluded_store_eval_ws',
+  ``CerberusHeapLang.step_ctx_excluded_store_illtyped, ``CerberusHeapLang.step_ctx_excluded_store_illtyped',
+  ``CerberusHeapLang.step_ctx_nd, ``CerberusHeapLang.step_ctx_neg,
+  ``CerberusHeapLang.step_ctx_neg_nobound, ``CerberusHeapLang.Step.excluded_store_canonical,
+  ``CerberusHeapLang.Step.excluded_store_inv, ``CerberusHeapLang.Step.excluded_store_op_inv,
+  ``CerberusHeapLang.Step.nd_root_elim, ``CerberusHeapLang.Step.negFree_preserved,
+  ``CerberusHeapLang.Step.neg_root_elim, ``CerberusHeapLang.Step.pot_le,
+  ``CerberusHeapLang.subst_alts_shape, ``CerberusHeapLang.substFold_cons,
+  ``CerberusHeapLang.substFold_nil, ``CerberusHeapLang.wps_bound_aux]
 
 def sortedNames (ns : Array Name) : Array String :=
   (ns.map (·.toString)).qsort (· < ·)
