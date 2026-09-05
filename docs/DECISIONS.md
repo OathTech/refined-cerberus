@@ -2897,3 +2897,64 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   was never answered). The t1 milestone triggers, per the rulings: the
   fresh full ARCHITECTURE review (new reviewer) and the velocity
   reassessment before E5–E7.
+- **2026-09-05 [AGENT] E4 RANGE AUDIT 825b5e6..7af24b2: PASS WITH FIXES REQUIRED, A− —
+  FIXES LANDED (4115c04 report; 88eef81 Lean + instruments; 828c1d6 docs +
+  `scripts/cite_check.sh`; 8d11c40 notes). MERGE CANDIDATE = this commit (the
+  whole E1–E4 stack), PENDING THE OPERATOR'S SIGN-OFF.** Report
+  `cerberus-heaplang/docs/2026-09-05_audit-e4-range.md`. No T-/C- finding:
+  the engine's `get_ctx` order (last reducible first) verified by executing
+  2-/3-component and nested `unseq`; the shipped loop reduces the last
+  component first (round-by-round arenas); race probes through the shipped
+  composite → `Undef0 … UB035` for `unseq(store,store)`/`(store,load)`,
+  active for `(load,load)`; oracle t1.c `Defined {value: "Specified(4)"}`/
+  exit 4 and a racy C program → `UB035_unsequenced_race`; census 200/2/162
+  reproduced, twelve headline statements SAME; 650 pins distinct; both
+  CLAIMS plants red; all E3 fixes applied except one README residue. Fixes:
+  R-1 two trio-exact rounds (`unseq_focus_round`, `unseq_vals_round`) were
+  UNPINNED against the record's convention → pinned, 650 → 652; ERRATUM to
+  the E4 landing entry above: of the 155 added theorems 64 are trio-exact
+  and 91 sub-trio (not 62/93). D-1 ARCHITECTURE two slices stale (nine →
+  TEN closed statements; 28 → 29 constructors; §5/§6 counts; the two
+  `unseq` NO-RULE rows; KOI A7 stated) — every number re-derived from the
+  tree. D-2 THE CITE AUDIT (KOI C18): 273 cites, 128 exact before; 90 stale
+  declaration cites (67 by > 5 lines) in systematic per-file blocks; now
+  `cerberus-heaplang/scripts/cite_check.sh` (speedbump, not gated) — after:
+  283 cites, 221 exact, every non-exact line hand-checked; rerun it as the
+  last step of any docs commit touching a cited `.lean`. D-3 README:578's
+  stale characterisation (the E3 fix missed this occurrence) — the short
+  form now identical on three surfaces. N-2 CLAIMS C14: the skeleton
+  compares constructor skeletons with opaque leaves; a dead `save`-
+  initialiser literal is unchecked by design (the theorem and the oracle
+  would not see it either). N-3 the `Frag.pure_op` OUT-OF-SCOPE row now
+  complete (KOI C16 closed). N-4 retired names in CLAIMS backticked with a
+  marker the name check understands (generator `retiredNames`; plants both
+  ways). H-1: the MAGIC LITERAL `999999` (= `lemDefaultFuel - 1`) at nine
+  proof sites → the named expression (our own fuel ruling); the 42-site
+  head-form proof scaffold NOT factored ([AGENT]: not proof-safe within the
+  hour) → KOI C17. N-1 → KOI B6 (t1 budget 48 vs the shipped loop done at
+  42: 8 units slack; docstring says upper bound). Orchestrator FULL gate at
+  8d11c40 (64G cap), verbatim (per-module boundary lines elided; record):
+  ```
+  == gate 1: banned proof-method grep (native_decide / bv_decide / ofReduce*) ==
+  ok: no banned proof-method references
+  == gate 2: capped build, cerberus-heaplang (elaborates its axiom audit) ==
+  info: CerberusHeapLang/Audit.lean:824:0: CerberusHeapLang export pins: 652 trio-exact
+  info: CerberusHeapLang/Audit.lean:824:0: CerberusHeapLang axiom sweep: every theorem bounded by the trio (5055 swept, internal details included — count informational, environment-dependent)
+  info: CerberusHeapLang/Audit.lean:824:0: CerberusHeapLang banned-axiom sweep: sorryAx/ofReduceBool/ofReduceNat absent from all cones (7812 constants of every kind swept, internal details included — count informational, environment-dependent)
+  Build completed successfully (466 jobs).
+  ok: cerberus-heaplang build green
+  == speedbump: rule-use and classification manifest (regenerate; red on a red row or drift) ==
+  ok: capability manifest regenerated, no drift
+  == speedbump: corpus skeleton (hand-transcribed emitted Core vs docs/corpus-e0; scripts/corpus_skeleton.lean) ==
+  ok: corpus skeleton — every transcription matches its emitted text, every plant mismatches
+  == speedbump: import direction (semantics → heap → rules → adequacy → clients) ==
+  ok: import direction — 17 core modules, none imports an exhibit/example/production module
+  == speedbump: client boundary (positive clients mention no logic internals; scripts/boundary_check.sh) ==
+  BOUNDARY: 24 modules checked, 0 internals mention(s) in total, exit=0
+  ok: client boundary — no unallowlisted internals mention
+  ALL GATES GREEN
+  GATE-EXIT=0
+  ```
+  The E1–E4 stack is complete and audited slice by slice (four range
+  audits: A−, A−, A−, A−; no T-/C- finding in any). The pending f9c3c2e
+  ask is SUPERSEDED by the ask on this commit.
