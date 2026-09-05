@@ -146,7 +146,11 @@ DESIGN NOTES (each mirrors a specific engine behaviour):
    EVAL arm (small-step scrutinee via `eval_pexpr1`) is not mirrored
    (README, "Deliberately not here").
 
-Design history: the dated records under docs/.
+Design history: the dated records under docs/. E1 (the emitted-Core
+dialect arc's first slice — annotations live on every node with the
+location update on the control, `Ebound`, `Ivalignof`/`Ivsizeof`, the
+run-state supplies on the control, `BareHead` retired):
+docs/2026-09-04_e1-notes.md.
 -/
 import Core_aux
 import Core_run_aux
