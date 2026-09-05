@@ -233,6 +233,7 @@ import CerberusHeapLang.EmittedCExhibit
 import CerberusHeapLang.CorpusT1Exhibit
 import CerberusHeapLang.CorpusT5Exhibit
 import CerberusHeapLang.CorpusT6Exhibit
+import CerberusHeapLang.CorpusT4Exhibit
 import CerberusHeapLang.OverflowExhibit
 import CerberusHeapLang.Examples.CorpusE0
 import CerberusHeapLang.Examples.CorpusE5
@@ -984,7 +985,22 @@ def trioExports : List Name := [
   ``CerberusHeapLang.CorpusE0.t4Body_frag,
   ``CerberusHeapLang.CorpusE0.t4While_frag,
   ``CerberusHeapLang.CorpusE0.t4Return_frag,
-  ``CerberusHeapLang.CorpusE0.t4Main_frag]
+  ``CerberusHeapLang.CorpusE0.t4Main_frag,
+  -- t4 continuation/shared-load checkpoint: fourteen trio-exact, t4Main_pot propext-only.
+  ``CerberusHeapLang.wpt_emittedIntLoad,
+  ``CerberusHeapLang.wpt_t4Load,
+  ``CerberusHeapLang.t4Q_while,
+  ``CerberusHeapLang.t4Q_continue,
+  ``CerberusHeapLang.t4Q_break,
+  ``CerberusHeapLang.t4Q_ret,
+  ``CerberusHeapLang.t4Q_eq,
+  ``CerberusHeapLang.t4Q_lookup,
+  ``CerberusHeapLang.t4Q_cont,
+  ``CerberusHeapLang.t4LoopContext_frag,
+  ``CerberusHeapLang.t4Q_frag,
+  ``CerberusHeapLang.t4Q_pot,
+  ``CerberusHeapLang.collect_new_t4Main,
+  ``CerberusHeapLang.t4Main_labeledAt]
 
 def sortedNames (ns : Array Name) : Array String :=
   (ns.map (·.toString)).qsort (· < ·)

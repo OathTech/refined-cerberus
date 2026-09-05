@@ -48,5 +48,6 @@ import CerberusHeapLang.EmittedCExhibit
 import CerberusHeapLang.CorpusT1Exhibit
 import CerberusHeapLang.CorpusT5Exhibit
 import CerberusHeapLang.CorpusT6Exhibit
+import CerberusHeapLang.CorpusT4Exhibit
 import CerberusHeapLang.OverflowExhibit
 import CerberusHeapLang.Audit

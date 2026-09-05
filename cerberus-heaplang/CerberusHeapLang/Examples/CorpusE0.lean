@@ -1299,10 +1299,15 @@ def t5SpecTuplePat (n m : Nat) : generic_pattern sym :=
   Pattern [] (CaseCtor Ctuple [t5SpecPat n, t5SpecPat m])
 def t5AnyTuplePat : generic_pattern sym := Pattern [] (CaseBase (none, BTy_tuple [lint, lint]))
 
+/-- The emitted load's temporary pointer binding; parameterized only by
+    source location and symbols, preserving all annotations and nodes. -/
+def emittedIntLoad (loc : CerbLocation.Loc) (x tmp : sym) : CoreExpr :=
+  letW [Aloc loc, Aexpr] tmp ptrTy
+    (Expr [Aloc loc, Aexpr] (Epure (psym x)))
+    (act loc (Load0 intCty (psym tmp) NA))
+
 def t5Load (x : sym) (n c1 c2 : Nat) : CoreExpr :=
-  letW [Aloc (t5Reg c1 c2), Aexpr] (t5a n) ptrTy
-    (Expr [Aloc (t5Reg c1 c2), Aexpr] (Epure (psym x)))
-    (act (t5Reg c1 c2) (Load0 intCty (psym (t5a n)) NA))
+  emittedIntLoad (t5Reg c1 c2) x (t5a n)
 
 def t5GtPats : List (pattern × CoreExpr) :=
   [(t5SpecTuplePat 520 521,
@@ -1415,9 +1420,7 @@ def t6DefaultSym : sym := sId 522 "default"
 def t6a (n : Nat) : sym := sId n "a"
 
 def t6Load (x : sym) (n c1 c2 : Nat) : CoreExpr :=
-  letW [Aloc (t6Reg c1 c2), Aexpr] (t6a n) ptrTy
-    (Expr [Aloc (t6Reg c1 c2), Aexpr] (Epure (psym x)))
-    (act (t6Reg c1 c2) (Load0 intCty (psym (t6a n)) NA))
+  emittedIntLoad (t6Reg c1 c2) x (t6a n)
 
 /-- The assignment statement, including its statement discard. All three
     switch arms keep the original negative-store protocol. -/
@@ -1531,9 +1534,7 @@ def t4BreakSym : sym := sId 512 "break"
 def t4WhileSym : sym := sId 515 "while"
 
 def t4Load (x : sym) (n c1 c2 : Nat) : CoreExpr :=
-  letW [Aloc (t4Reg c1 c2), Aexpr] (t5a n) ptrTy
-    (Expr [Aloc (t4Reg c1 c2), Aexpr] (Epure (psym x)))
-    (act (t4Reg c1 c2) (Load0 intCty (psym (t5a n)) NA))
+  emittedIntLoad (t4Reg c1 c2) x (t5a n)
 
 def t4LtPats (p q : Nat) : List (pattern × CoreExpr) :=
   [(t5SpecTuplePat p q,
@@ -1644,9 +1645,11 @@ def t4Body : CoreExpr :=
       t5Unit)))
     (Expr [] (Erun empty_annotation t4WhileSym [psym t4iSym, psym t4sSym]))
 
-def t4While : CoreExpr := t4Save t4WhileSym
-  (letS [] (t5a 517) lint t4Cond (letS [] (t5a 516) BTy_boolean t4Bool
-    (Expr [] (Eif (psym (t5a 516)) t4Body t5Unit))))
+def t4LoopTest : CoreExpr :=
+  letS [] (t5a 517) lint t4Cond (letS [] (t5a 516) BTy_boolean t4Bool
+    (Expr [] (Eif (psym (t5a 516)) t4Body t5Unit)))
+
+def t4While : CoreExpr := t4Save t4WhileSym t4LoopTest
 
 def t4Kill (x : sym) : CoreExpr := act (t4Reg 0 99) (Kill (Static0 intTy) (psym x))
 

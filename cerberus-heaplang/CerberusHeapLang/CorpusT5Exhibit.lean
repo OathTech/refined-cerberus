@@ -12,7 +12,7 @@ functions; it is not the complete frontend file and full std.core library.
 The condition, assignment and return have separate public-rule derivations.
 Every syntactic branch has a Frag witness in Examples/CorpusE5.lean.
 -/
-import CerberusHeapLang.CorpusT1Exhibit
+import CerberusHeapLang.Examples.EmittedInt
 import CerberusHeapLang.Examples.CorpusE5
 
 set_option autoImplicit false
@@ -110,26 +110,8 @@ theorem wpt_t5Load [SpikeGS .hasLC GF]
     iprop(pointsToCell M.tagDefs (GF := GF) pv (.own 1) intTy bs ∗
       (∀ fp, pointsToCell M.tagDefs pv (.own 1) intTy bs -∗
         Ψ (.annot [DA_pos [] fp] v) (envAdd (t5a tmp) (Vobject (OVpointer pv)) f :: rest))) ⊢
-      wpt M p Ls Θ 6 Ψ (t5Load x tmp c1 c2) (f :: rest) := by
-  iintro ⟨Hpt, HΨ⟩
-  unfold t5Load letW
-  rw [show (Pattern [] (CaseBase (some (t5a tmp), ptrTy)) : pattern) =
-    symPat [] (t5a tmp) ptrTy from rfl]
-  iapply wpt_wseq_sym _ _ _ _ _ _ _ _ 2 4
-  iapply wpt_pure (psym x) _ (Nat.le_refl 2) rfl (t1sym_eval hex rest hl)
-  iexists (Vobject (OVpointer pv))
-  isplit
-  · ipureintro; rfl
-  rw [update_env_sym, act_load_eq]
-  rw [show (4 : Nat) = 3 + 1 from rfl]
-  iapply wpt_load_eval _ _ _ _ _ _ _ rfl (pv := pv)
-    (t1sym_eval hex rest (by rw [envAdd_lookup hf, if_pos (symOrd_self _)]))
-  iapply wpt_load _ _ _ _ pv _ (.own 1) bs _ (Nat.le_refl 3) htrap
-  isplitl [Hpt]
-  · iexact Hpt
-  iintro %fp Hpt
-  rw [hload]
-  iapply HΨ $$ Hpt
+      wpt M p Ls Θ 6 Ψ (t5Load x tmp c1 c2) (f :: rest) :=
+  wpt_emittedIntLoad hex (t5Reg c1 c2) x (t5a tmp) f rest hf pv bs v hl hload htrap
 
 
 abbrev t5frGt (px : CerbMem.PointerValue) (f : Fmap sym value) :=
