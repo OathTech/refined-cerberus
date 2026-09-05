@@ -62,7 +62,10 @@ are cited with their `[USER date]`/`[AGENT date]` tag and live in
   field of the driver state from the configuration (`Adequacy.lean:935`–
   `:940`; `ProdLoop.lean:459`–`:463`). The ties: the thread, the memory,
   the extern table, the file, the registration predicate `LabeledProcs`
-  and, in the partial fact only, the control's `CtlTied`.
+  and, in the partial fact only, the control's `CtlTied`; the thread tie
+  carries the live source location since E1 (`ctlThread`), and the
+  run-state supplies are tied to the control inside `MachineCtx.Embeds`
+  (Round.lean; E5's writers will need a driver-lane `hsup`).
 - *a readout* — the pure conclusion about a delivered result, `ψ v σ'` on
   the value and the final memory; by extension an exhibit lemma that
   reads it off an Iris conclusion (`*_readout`).
@@ -81,26 +84,34 @@ definition here and the engine is a defect here ([USER 2026-08-29],
 CLAUDE.md "TRUST ARCHITECTURE"). The engine is trusted as a policy
 decision, not proved (§3).
 
-**The fragment.** `Frag e` (`Soundness.lean:4149`) has 23 constructors
-(`:4150`–`:4314`), by kind. The value `val_pure`. Memory: `store`/
-`load`/`create`/`kill`/`alloc` at evaluated operands, and the `_op`
-forms of `store`/`load`/`kill`/`alloc` at operands in the covered pure
-grammar `PePure`. `PePure` (`:2007`) is values, symbols, the eight
-mirrored binops and array shifts. Sequencing: `sseq`, `sseq_spec`,
-`sseq_sym`, `wseq`. Control: `annot`, the labels `save`/`run`, `if_`,
-`case_value`, `pure_sym`. The `PtrEq` memop: `memop_vals`/`memop_op`. The
-procedure call: `call`. The plain-symbol binder's head is restricted to
-the bare-value producers `BareHead` (`:3981`: a literal, `create`,
-`alloc`, the `PtrEq` memop, a call). Two facts a reader must know first:
+**The fragment.** `Frag e` (`Soundness.lean:6317`) has 28 constructors
+(`:6318`–`:6339`; dialect arc E2), by kind. The value `val_pure`. Memory:
+`store`/`load`/`create`/`kill`/`alloc` at evaluated operands, and the
+`_op` forms of `store`/`load`/`kill`/`alloc`/`create` (the last E1) at
+operands in the covered pure grammar `PePure`. `PePure` (`:2516`) is
+values, symbols, the eight mirrored binops, array shifts, the constructor
+constants `Ivalignof`/`Ivsizeof`/`Unspecified` at a literal ctype (E1/E2)
+and — E2 — the mirrored constructors `Specified(e)`/tuples at covered
+operands, `case` at a covered scrutinee and covered branch bodies, `not`,
+the pure `if`, `undef(UB)`. Sequencing: `sseq`, `sseq_spec`, `sseq_sym`,
+`sseq_tuple`, `wseq`, `wseq_sym`, `wseq_tuple` — the plain-symbol and
+flat-tuple binders at ANY fragment head (E1/E2). Control: `annot`,
+`bound` (E1), the labels `save`/`run`, `if_`, `case_value`, `pure_op`
+(the pure round at any covered non-value operand, E2). The `PtrEq`
+memop: `memop_vals`/`memop_op`. The procedure call: `call`. Two facts a
+reader must know first:
 
-- *It is annotation-free* (`Soundness.lean:4129`–`:4147`): every node is
-  `Expr []`, so located Core — in particular every Core program the
-  Cerberus C front end elaborates — is outside `Frag`. The reason: the
-  engine's `step_ctx` reads a source location off a located redex and
-  rewrites the thread's `current_loc`. This package keeps that field
-  immutable in `MachineCtx.currentLoc`, so a located node would falsify
-  the certification (§2.2). The programs proved here are authored
-  Core. (The mover, named there: make `current_loc` live state.)
+- *It is annotated, and the source location is live state* (E1;
+  `Soundness.lean:6257`–`:6316`, the `Frag` header): every node carries
+  its static annotation list. The engine's `step_ctx` reads a source
+  location off a located redex and rewrites the thread's `current_loc`;
+  that field is the control's `curLoc` (`Ctl`, Step.lean), written by
+  every general-arm round (`ctl.upd a`). Located Core — the Cerberus C
+  front end's output — is inside the fragment's reach as far as its
+  constructs are admitted (E1: annotations, `bound`, `Ivalignof`; E2: the
+  loaded-value currency, the tuple/weak binders); t1's `main` is still
+  outside for `conv_loaded_int` and `catch_exceptional_condition` (E3)
+  and `unseq` (E4) (`Examples/CorpusE0.lean`, kernel-decided).
 - *It is declared as exactly what the mirror covers* ([USER 2026-09-02],
   DECISIONS "THE BOUNDARY IS FAIL-CLOSED"): a shape without a mirror
   rule is outside `Frag`. Inside `Frag` the completeness theorem (§2.2)
@@ -114,18 +125,23 @@ the bare-value producers `BareHead` (`:3981`: a literal, `create`,
 expression, the environment stack, the thread's live control and the
 engine's memory state. The two hand-written records:
 
-- `Ctl := ⟨κ, proc, execLoc⟩` (`:371`–`:374`) — call stack, current
-  procedure, execution location: the three `thread_state` fields the
-  engine's PCALL and RETURN rounds write.
-- `MachineCtx` (`:405`–`:413`), the immutable context; its eight fields
-  are `tagDefs`, `file`, `extern`, `tid`, `parent`, `errno`,
-  `currentLoc` and `runState`.
+- `Ctl := ⟨κ, proc, execLoc, curLoc, sup⟩` (`Step.lean:505`–`:560`) —
+  call stack, current procedure, execution location (the three
+  `thread_state` fields the engine's PCALL and RETURN rounds write),
+  the current source location (E1: written by every general-arm round)
+  and the run state's two supplies `RunSup` (`:486`; E1: carried, no
+  writer yet — E5's negative actions draw from them).
+- `MachineCtx` (`:634`–`:644`), the immutable context; its seven fields
+  are `tagDefs`, `file`, `extern`, `tid`, `parent`, `errno` and
+  `runState` (of which only `labeled` is read; the live supplies are
+  `Ctl.sup`).
 
 In the mirror `Step M` (`:1456`), `Step.call` (`:2047`) pushes
 `(ctl.proc, ctx)`, the context computed by the syntactic search
 `callRedex?` (`:703`), and `Step.ret`/`Step.ret_annot` (`:2079`, `:2096`)
-pop it. Every other rule threads the control unchanged
-(`Step.ctl_cases`, `:2250`). `Step` is the `primStep` of the iris-lean
+pop it. Every other rule threads `κ`/`proc`/`execLoc` unchanged and
+writes the location, `ctl.upd a` (`Step.ctl_cases`, `:3013`). `Step` is
+the `primStep` of the iris-lean
 `Language` instance (`Lang.lean:58`).
 
 **The two judgments.** `wps M p Ls Θ Ψ e ρ` (`Wps.lean:301`) is the
@@ -323,8 +339,8 @@ PROGRAM-DONE for a value satisfying `ψ` within `k + 2` iterations. The
 call case applies the hypothesis to the callee at the pushed control
 with the continuation budget added; every round is `loop_step_frag`
 (`driverDoneCtl_step`, `:537`). The launcher is `wpt_driver_done_procs`
-(`:799`; a populated table, the entry control `⟨[], some p, ℓ⟩` of a
-declared procedure).
+(`:839`; a populated table, the entry control `⟨[], some p, ℓ, lc, sp⟩`
+of a declared procedure).
 It is the route of `fib_rec_certified_production` (`main` calls `fib`,
 which calls itself twice) and `even_odd_certified_production`
 (`even`/`odd` call each other under a symbol-dependent table; three
@@ -467,23 +483,23 @@ has no equation for them and a theorem holds at every value they take.
 
 **What the build checks** (`Audit.lean`, the last import of the library
 root, elaborated by every `lake build`). Every pinned export exists, is
-a theorem, and has axiom set EXACTLY the trio (`:615`–`:616`; 402 pins at
-this revision, `docs/2026-09-04_h1-notes.md` §8, the gate at `29d9195`).
-Every theorem of every `CerberusHeapLang.*` module, internal details
-included, is bounded by the trio (`:617`–`:636`). `sorryAx`/
-`ofReduceBool`/`ofReduceNat` reach no constant of any kind (`:637`–
-`:653`). Precision: "exactly the trio" is the pinned exports' property;
+a theorem, and has axiom set EXACTLY the trio (`:686`–`:697`; 508 pins at
+this revision, `docs/2026-09-05_e2-notes.md` §10, the gate at the E2
+head). Every theorem of every `CerberusHeapLang.*` module, internal
+details included, is bounded by the trio (`:698`–`:716`). `sorryAx`/
+`ofReduceBool`/`ofReduceNat` reach no constant of any kind (`:718`–
+`:732`). Precision: "exactly the trio" is the pinned exports' property;
 every other theorem's cone is bounded by the trio, by the sweep. The
 public-named lemmas with SUB-trio cones are therefore unpinned, as
-`Audit.lean`'s comments record them — seventeen names. `fibRounds_closed`,
-`regionCost_pos` and the `freshBase_*` bounds have `[propext, Quot.sound]`
-(`:354`–`:356`, `:380`–`:384`, `:523`–`:525`); so do the four `∈`/`contains`
-bridge lemmas `mem_contains_int`, `contains_cons_int`, `contains_cons_ne_int`,
-`int_beq_eq_true` (`:334`–`:339`). `BareHead.decomp_call_root` and
-`BareHead.not_annot` have `[propext]` (`:523`, `:220`–`:222`);
-`Decomp.get_ctx_rebuild_action` has `[Quot.sound, propext]` (`:220`–`:222`);
-`Decomp.callRedex?_inv`, `callRedex?_some`, `pot_plug_call_le` and
-`callRedex?_none_of_jumpRedex?_some` are sub-trio (`:463`–`:465`).
+`Audit.lean`'s comments record them (among them `fibRounds_closed`,
+`regionCost_pos` and the `freshBase_*` bounds with `[propext,
+Quot.sound]`; the four `∈`/`contains` bridge lemmas `mem_contains_int`,
+`contains_cons_int`, `contains_cons_ne_int`, `int_beq_eq_true`;
+`Decomp.get_ctx_rebuild_action` with `[Quot.sound, propext]`;
+`Decomp.callRedex?_inv`, `callRedex?_some`, `pot_plug_call_le`,
+`callRedex?_none_of_jumpRedex?_some`; and, since E2, the evaluator
+bridge `pull_bridge`). The `BareHead` lemmas are gone with `BareHead`
+(E1).
 `regionCost_eq` and `runND_killed` have no axioms (`:384`, `:552`–`:553`). Kernel-only proof methods: no `native_decide`, `bv_decide`
 or `ofReduce*` anywhere (gate 1, `../scripts/test_unit.sh:28`).
 
@@ -603,9 +619,6 @@ meaning of the triple (below), and its ∀ `fl` is real run-length content.
   THE CERBERUS-LEAN SEMANTICS"). When it lands, the consumer restatement
   makes these premises and the production `hfuel`s fuel-parametric
   (`../docs/2026-09-04_review-of-fuel-parameter-design.md` §5).
-- `hcl : th₀.current_loc = M.currentLoc` — the thread's location field
-  equals the context's (the annotation-free fragment never rewrites it,
-  §1).
 - `hcoh`/`hl : LaunchCoh …` — the seeded footprint, or, for allocating
   programs, the footprint plus the global memory well-formedness
   invariant `MemWF` (§2.6) and the budget fit `B ≤ headroom σ.lastAddress`
@@ -656,8 +669,9 @@ them read.
   table read off `Frag`, `Step` and the engine's memory-operation arms.
   Each row is classified RULE, RULE-TOTAL-UNDEMONSTRATED, PARTIAL-ONLY,
   NO-RULE or OUT-OF-SCOPE. At this revision (the manifest's tail line):
-  23 constructors, 50 rows — 30 RULE, 0 RULE-TOTAL-UNDEMONSTRATED, 0
-  PARTIAL-ONLY, 15 NO-RULE, 5 OUT-OF-SCOPE, 0 red, 18 consumer modules.
+  28 constructors, 58 rows — 35 RULE, 0 RULE-TOTAL-UNDEMONSTRATED, 0
+  PARTIAL-ONLY, 19 NO-RULE, 4 OUT-OF-SCOPE, 0 red, 20 consumer modules
+  (dialect arc E2).
   What green establishes is stated exactly by the generated, gate-diffed
   header (`docs/CAPABILITY_MANIFEST.md:8`–`:26`, "WHAT GREEN ESTABLISHES,
   EXACTLY"). Not established:
@@ -667,8 +681,9 @@ them read.
 - **One module classification** (`scripts/module_classes.tsv`, pure data,
   reprinted at the head of the manifest; ten classes, the vocabulary in
   its header, `engine-mirror-test` reserved with no member). The
-  manifest's consumer set is `positive-client` ∪ `declared-smoke` (18
-  modules: the sixteen program exhibits, `Examples.CallSmoke`,
+  manifest's consumer set is `positive-client` ∪ `declared-smoke` (20
+  modules: the eighteen program exhibits — `EmittedAExhibit` and
+  `EmittedBExhibit` among them — `Examples.CallSmoke`,
   `Examples.ReadinessSmoke`). The production wrappers and the negative
   test are not consumers. Fail-hard behaviour (TSV header lines 8–11):
   the two Lean instruments fail on a package module absent from the
@@ -685,9 +700,9 @@ them read.
   driver definitions (`step_ctx`, `driver2`, …). The full pattern is
   `boundary_check.sh:46`. Text-based: it catches honest drift.
   Per-module allowances live in the TSV with their reason; there are
-  ZERO at this revision (`BOUNDARY: 19 modules checked, 0 internals
-  mention(s) in total, exit=0`, `docs/2026-09-04_h1-notes.md` §8, the
-  gate at `29d9195`). A
+  ZERO at this revision (`BOUNDARY: 22 modules checked, 0 internals
+  mention(s) in total, exit=0`, `docs/2026-09-05_e2-notes.md` §10, the
+  gate at the E2 head). A
   malformed TSV row is red.
 - **The claim matrix** (`docs/CLAIMS.md`, hand-written prose stated as
   such in its header). Per headline claim: exported theorems, kind,
@@ -706,14 +721,17 @@ them read.
 Each item points at its register entry; none is hidden in a proof.
 
 - **The fragment boundary** is §1's (KOI B8; CLAIMS "Not claimed").
-  Five OUT-OF-SCOPE variants lie inside the fragment's constructors but
-  outside the mirror — or, for the annotated head at the symbol binder,
-  outside `Frag` itself by `BareHead` (manifest OUT-OF-SCOPE rows): a jump with a
-  non-evaluating surplus argument; `pure(x)` at a `Proc`-named unbound
-  symbol; an annotated value at the plain-symbol binder. The other two:
-  `PtrEq` at two concrete pointers of differing provenance (the engine
-  forks); the `Impl` call.
-- **The fifteen NO-RULE variants** — admitted by the fragment and the
+  Four OUT-OF-SCOPE variants lie inside the fragment's constructors but
+  outside the mirror (manifest OUT-OF-SCOPE rows): a jump with a
+  non-evaluating surplus argument; `pure(e)` at a covered operand the
+  engine evaluates but the mirror evaluator does not (a `Proc`-named
+  unbound symbol, two floats, `OpEq` at two ctypes, a `case` whose
+  selected branch the depth guard rejects — the characterized residual
+  `OpenRound.eval_uncovered`); `PtrEq` at two concrete pointers of
+  differing provenance (the engine forks); the `Impl` call. (The pre-E1
+  fifth — an annotated value at the plain-symbol binder, kept out by
+  `BareHead` — is mirrored since E1 and a NO-RULE row.)
+- **The nineteen NO-RULE variants** — admitted by the fragment and the
   engine, covered by no rule, so a program exercising them is outside
   the logic (manifest NO-RULE rows; KOI B14, A3). By constructor:
 
@@ -725,6 +743,7 @@ Each item points at its register entry; none is hidden in a proof.
   | `kill` (4) | the static kill of a live region; `free(NULL)`; `free` of a created object whose base sits in `dynamicAddrs` (the upstream `dynamic_addrs` collision, KOI A3); a kill of either kind through a union-member pointer |
   | `alloc` (1) | the zero-cost `alloc` (`n ≤ 0 ∧ al ≤ 1`) |
   | `memop_vals` (1) | `PtrEq` at an `SD_Id`-named function pointer against a concrete pointer (the one arm reading `funptrmap`) |
+  | `sseq_sym`, `sseq_tuple`, `wseq_sym`, `wseq_tuple` (4) | the binder at an ANNOTATED head value `{A}v` (the engine's LETS-/LETW-ANNOT; mirrored since E1/E2, `Step.*_annot`; no binder rule — every emitted binder's head is a `bound`, which drops the dynamic annotations, and E4's `unseq` is what would deliver an annotated tuple) |
 
 - **Masks.** Both judgments are fixed at `⊤`; the generalisation is a
   RefinedC-arc item ([USER 2026-09-04]; §1; KOI B11).
@@ -779,7 +798,9 @@ well-formed allocator model"), with their status at this revision:
 - **Goal 2 — mirror completeness for the fragment: CLOSED fail-closed on
   the declared fragment**, by `frag_round_complete`/`cerberusRound_classify`
   (§2.2); the residuals and the carried `hbsz` are §6's item (KOI B7).
-  Record: `docs/2026-09-02_fragment-closure-notes.md`.
+  Records: `docs/2026-09-02_fragment-closure-notes.md`, re-established
+  after each dialect slice in `docs/2026-09-05_fragment-closure-e1-notes.md`
+  and `docs/2026-09-05_fragment-closure-e2-notes.md`.
 - **Goal 3 — a global memory well-formedness invariant: CLOSED**, by
   `MemWF`, its cold-start instance and its preservation theorems for
   every memory operation of the fragment (§2.6). Record:

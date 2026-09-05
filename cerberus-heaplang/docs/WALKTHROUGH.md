@@ -43,9 +43,12 @@ def MemTriple (M : MachineCtx) (ctl : Ctl) (ρ : EnvStack) (e : CoreExpr) (P : C
     (post : CellMap → value → Mem → Prop) : Prop :=
   ∀ (R : CellMap), P ##ₘ R →
   ∀ (σ : Mem), Sat M.tagDefs σ (Iris.Std.PartialMap.union P R) →
-  ∀ (th₀ : thread_state), th₀.current_loc = M.currentLoc →
+  ∀ (th₀ : thread_state),
     DriverSafeCtl M th₀ e ρ ctl σ (fun v σ' => post R v σ')
 ```
+
+(The pre-E1 premise `th₀.current_loc = M.currentLoc` is gone: the source
+location is live state on the control since dialect arc E1.)
 
 `σ : Mem` is a real engine memory state (`CerbMem.MemState`); `Sat
 M.tagDefs σ (P ∪ R)` is `s |= P` with the frame built in — `P` the
@@ -83,8 +86,10 @@ per-thread loop (Driver.lean:346; the shipped `drive_nonmemory_steps_aux2`
 is its instance at `CerbFuel.driverFuel`), `runOne` its one-layer
 application to a driver state; `dst` is ANY driver state whose singleton
 thread is `ctlThread th₀ e ρ ctl` — the driver's own `thread_state`
-holding `(e, ρ)` at the control `ctl` over the immutables of some `th₀`
-whose `current_loc` is the context's — at layout state `σ`, with the
+holding `(e, ρ)` at the control `ctl` — call stack, procedure, execution
+location and, since E1, the source location `curLoc` and the run-state
+supplies — over the immutables of some `th₀` (its `errno`) — at layout
+state `σ`, with the
 context's file and the two registration ties (§1.3). The conclusion, at
 EVERY fuel `fl`: the loop either EXHAUSTS — its value is the kill
 `CerbND.fuelExhaustedKill`, the cerberus-lean fuel arc's out-of-fuel arm
@@ -1470,10 +1475,12 @@ theorem engine_step_matchU {M : MachineCtx}
 ```
 
 Note the successor thread `M.thread e' ρ' ctl'`: the engine's successor
-carries `M`'s immutable fields, `current_loc` included — which is why
-the fragment is annotation-free (§7) — and the successor CONTROL: the
-call round pushes the frame, the return round pops it, every other
-round threads it (`Step.ctl_cases`; calls arc C2).
+carries `M`'s immutable fields and the successor CONTROL: the call round
+pushes the frame, the return round pops it, every other round threads
+the stack part (`Step.ctl_cases`; calls arc C2) and — since dialect arc
+E1 — writes the live source location `curLoc` from the redex node's first
+non-library `Aloc` (`ctl.upd a`, the engine's `get_loc` write in
+`step_ctx`'s general arm), which is how located Core is admitted (§7).
 `cerberusRound_classify` (plus `hwf : M.SeqWF` and the empty-stack
 control `hκ : ctl.κ = []`) sorts every `Frag` configuration into `value_done` (a
 bare value; the engine's step list is PROGRAM-DONE, `[Step_done2 v]`),
@@ -1779,25 +1786,34 @@ the `#print axioms` recipe are in the README, "How to build and verify".
   remains is the exhibit (found by the K5 range audit; the law's
   comparator question measured at C4: the lookup reads the bucket head
   and the add comparator enters only as the captured `symOrd`).
-- **Located Core.** Every node of a fragment program carries the empty
-  static annotation list (`Expr []` in every `Frag` constructor and every
-  redex spelling). The engine's `step_ctx` rewrites the thread's
-  `current_loc` from a located annotation (`get_loc e_annots` in its
-  general arm), and this package keeps `current_loc` in the immutable
-  `MachineCtx` — so located Core, in particular all Core produced by the
-  C elaborator, is outside `Frag`. Making `current_loc` live state is the
-  mover (README, "Scope, exactly").
+- **The elaborator's Core, whole.** Located Core is admitted since E1
+  (annotations at every node, `bound`, `Ivalignof`, the source location
+  as live state on the control) and E2 adds the loaded-value currency,
+  the `Unspecified` store, pure `case` at a tuple of loaded values, the
+  flat-tuple and weak plain-symbol binders (`EmittedAExhibit`,
+  `EmittedBExhibit`, both certified on the shipped pipeline;
+  `Examples/CorpusE0.lean` ties t1's transcription to the oracle's text
+  and witnesses its E2 sub-terms in `Frag`). What still keeps t1's `main`
+  out of `Frag`: `conv_loaded_int` and `catch_exceptional_condition`
+  (`PEcall`/`PEcatch_exceptional_condition`, E3), `unseq` (E4), negative
+  actions (E5), `Eccall` (E6) — the dialect arc's remaining slices
+  (`../docs/2026-09-04_emitted-core-dialect-design.md`; README, "Scope,
+  exactly").
 - **`Eunseq`.** Core's unsequenced composition is a semantic gap for a
   sequential logic.
 - **The memop family beyond `PtrEq`**, and `PtrEq`'s
   differing-provenance nondeterministic fork: absences of a mirror step.
-- **`Ecase` with a non-value scrutinee, `Ewseq` at binder patterns, pure
-  exits beyond `PEsym`, the symbol-binder beta at annotated values**:
-  mechanical per-construct extensions, each needing a `dischargeStep`
-  arm, a `Step` rule and a rule at each judgment. Not a gap: the pure
-  and annotation rules are stated at the empty annotation list `Expr []`
-  — the mirror's values live there, and the annotation-generic forms are
-  false.
+- **`Ecase` with a non-value scrutinee in `Frag` (its EVAL round is
+  mirrored since E2, `Step.case_eval`, but `Frag` admits the
+  value-scrutinee form only), binder patterns beyond the wildcard,
+  `Specified`, plain-symbol and flat-tuple binders, binder RULES at
+  annotated heads (mirrored since E1/E2, NO-RULE)**: mechanical
+  per-construct extensions, each needing a `Step` rule, its
+  certification and classification arms, and a rule at each judgment.
+  Not a gap: the pure and annotation rules are stated at the canonical
+  value shapes `mk_value_e`/`mk_value_pe` produce (the node's annotations
+  kept, the inner list empty) — the annotation-generic forms of a VALUE
+  are false.
 - **Fuel parametricity.** The engine's `get_ctx` fuel is real (the
   interpreter bails past `10^6`), so the projection theorems carry the
   static `pot` premises and the production statements carry `k + 2 ≤

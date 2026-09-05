@@ -40,19 +40,26 @@ K2), and `free(p)`, the dynamic kill pairing with `alloc(al, n)`
 (`Alloc0`, C's `malloc`; kill/free arc K3) — at evaluated operands and
 at the operand-evaluation form the engine dispatches when "the operands
 are not all values", the `PtrEq` memop, strong sequencing `Esseq` at the
-wildcard, `Specified`-binder and plain-symbol-binder patterns (the
-plain-symbol binder's head restricted to the bare-value producers
-`BareHead` — a literal, `create`, `alloc`, the `PtrEq` memop and, since
-calls arc C4, a procedure call `lets x = f(args) in …` (the RETURN plugs a
-BARE value) — so the value it binds is never annotated; fragment closure,
-2026-09-02), weak
-sequencing `Ewseq` at the wildcard, `Esave` at `PePure` initializers
-within the evaluator's fuel, `Eif` at a `PePure` guard, the
+wildcard, `Specified`-binder, plain-symbol-binder and (dialect arc E2)
+flat-TUPLE-binder patterns — the plain-symbol binder at ANY fragment head
+since E1 (the pre-E1 `BareHead` restriction, which kept annotated values
+away from that binder, is retired: the LETS-ANNOT beta is mirrored), a
+tuple binder's head delivering a tuple (any other value is the engine's
+binding panic, classified) — weak sequencing `Ewseq` at the wildcard and
+(E2) at the plain-symbol and flat-tuple binders, `Esave` at `PePure`
+initializers within the evaluator's fuel, `Eif` at a `PePure` guard, the
 context-discarding jump `Erun` at `PePure` arguments, value-scrutinee
-`Ecase`, `PEsym`-shaped pure exits, the covered operand grammar
-`PePure` — `PEval`/`PEsym`/the eight mirrored `PEop` binops
-(`Add`/`Sub`/`Mul`/`Eq`/`Lt`/`Le`/`Gt`/`Ge`)/`PEarray_shift` — the
-run-time annotation residue, and (calls arc C2, 2026-09-03) THE
+`Ecase` (the non-value scrutinee's EVAL round is mirrored since E2,
+`Step.case_eval`, not admitted by `Frag`), the PURE round `pure(e)` at
+ANY covered non-value operand (E2; E1's pure exits were `PEsym`-shaped),
+the covered operand grammar `PePure` — `PEval`/`PEsym`/the eight mirrored
+`PEop` binops (`Add`/`Sub`/`Mul`/`Eq`/`Lt`/`Le`/`Gt`/`Ge`)/`PEarray_shift`,
+the constructor constants `Ivalignof(ty)`/`Ivsizeof(ty)` (E1), and (E2)
+THE LOADED-VALUE CURRENCY `Unspecified(ty)`, `Specified(e)` and tuples at
+covered operands, pure `case` at a covered scrutinee and covered branch
+bodies, `not`, the pure `if`, `undef(<<UB…>>)` (a fail-closed KILL) — the
+run-time annotation residue, the elaborator's located nodes and `bound`
+(E1), and (calls arc C2, 2026-09-03) THE
 PROCEDURE CALL `Eproc () (Sym f) pes` at `PePure` arguments AND THE
 RETURN — a value at a non-empty call stack — AT THE MIRROR LEVEL ONLY:
 `Step.call` (the engine's PCALL round: every argument evaluated, the
@@ -117,9 +124,11 @@ engine, no rule, with the deciding record — the locking store, the static
 kill of a region, `free(NULL)`, the zero-cost `alloc`, the union-member
 pointer, the read-only-cell load at the statement level, the zero-size/
 atomic/non-inert `create` types, the colliding `free`, the function-vs-
-concrete `PtrEq`) or OUT-OF-SCOPE (excluded by the fragment/mirror
-boundary): 23 constructors, 50 rows, 30 RULE, 0 RULE-TOTAL-UNDEMONSTRATED,
-15 NO-RULE, 5 OUT-OF-SCOPE at this writing. Green means exactly what the
+concrete `PtrEq`, the four binders at an ANNOTATED head value — mirrored
+since E1/E2, no binder rule) or OUT-OF-SCOPE (excluded by the
+fragment/mirror boundary): 28 constructors, 58 rows, 35 RULE, 0
+RULE-TOTAL-UNDEMONSTRATED, 19 NO-RULE, 4 OUT-OF-SCOPE at this writing
+(dialect arc E2, 2026-09-05). Green means exactly what the
 manifest header says — every constructor classified, every named theorem a
 theorem, every RULE consumed in both judgments — and NOT that the variant
 table is exhaustive over the engine's success shapes or that a NO-RULE
@@ -154,25 +163,34 @@ the mirror's exact domain by the fragment-closure ruling ([USER
 what lets mirror completeness classify every operand the mirror does
 not evaluate (below).
 
-**Every node of a fragment program carries the empty static annotation
-list.** Each `Frag` constructor, and each redex spelling it ranges over
-(`storeRedex`, `loadRedex`, `createRedex`, `killRedex`, `killOpRedex`,
-`allocRedex`, `allocOpRedex`, `loadOpRedex`, `storeOpRedex`,
-`memopRedex`, `pureRedex`, `saveRedex`, `ifRedex`,
-`runRedex`, `caseRedex`, and the `Esseq`/`Ewseq`/`Eannot` constructors),
-is stated at `Expr []`. The forcing fact: in the general arm of the
-engine's `step_ctx` (generated `Core_reduction.lean`, the
-`Expr e_annots expr_` match), `get_loc e_annots` reads a source
-location from the redex node's annotations and, unless it is a library
-location, rewrites the thread's `current_loc`; this package keeps
-`currentLoc` in the immutable `MachineCtx` (Step.lean), and
-`engine_step_matchU` equates the engine's successor thread with
-`M.thread e' ρ' ctl`, whose `current_loc` is `M.currentLoc`. A located node
-would falsify that equation. Located Core — in particular every Core
-program the C elaborator produces — is therefore outside `Frag`; the
-programs proved here are authored Core with empty annotation lists.
-The mover is to make `current_loc` live state, part of the runtime
-tuple as the environment is.
+**Every node of a fragment program carries its static annotation list,
+and the source location is live state (dialect arc E1, 2026-09-04).**
+Each `Frag` constructor, and each redex spelling it ranges over
+(`storeRedex`, `loadRedex`, `createRedex`, `createOpRedex`, `killRedex`,
+`killOpRedex`, `allocRedex`, `allocOpRedex`, `loadOpRedex`,
+`storeOpRedex`, `memopRedex`, `pureRedex`, `saveRedex`, `ifRedex`,
+`runRedex`, `caseRedex`, and the `Esseq`/`Ewseq`/`Eannot`/`Ebound`
+constructors), is stated at `Expr an` for any `an : List annot`. The
+forcing fact: in the general arm of the engine's `step_ctx` (generated
+`Core_reduction.lean`, the `Expr e_annots expr_` match), `get_loc
+e_annots` reads a source location from the redex node's annotations and,
+unless it is a library location, rewrites the thread's `current_loc`.
+That field is the live control's `curLoc` (`Ctl`, Step.lean), written by
+every general-arm round as `ctl.upd an`, and `engine_step_matchU` equates
+the engine's successor thread with `M.thread e' ρ' ctl'` at the updated
+control. Located Core — every Core program the C elaborator produces — is
+therefore inside the fragment's reach as far as its constructs are
+admitted: E1 admitted the annotations, `bound` and `Ivalignof`
+(`EmittedAExhibit`), E2 the loaded-value currency, the `Unspecified`
+store, pure `case` at a tuple and the tuple/weak binders
+(`EmittedBExhibit`), both certified on the shipped pipeline through the
+generic route; the corpus skeleton speedbump (`Examples/CorpusE0.lean`,
+`scripts/corpus_skeleton.lean`) ties the hand transcription of the
+oracle's emitted t1 to its text token for token, pure expressions
+included (E2). What still keeps t1's `main` out of `Frag`:
+`conv_loaded_int` (a `PEcall`) and the `catch_exceptional_condition`
+branch of its `case` (E3), `unseq` (E4) — decided by the kernel
+(`t1_convLoadedInt_uncovered`, `t1_case_uncovered`).
 
 **In the fragment, mirrored and classified, but covered by NO rule
 (kill/free arc K3; raised by the K2 range audit, decided).** (i) The STATIC
@@ -636,7 +654,7 @@ theorems:
 | Divergence / limitation | Discharge / mover | Home |
 |---|---|---|
 | Fuel: the engine's `get_ctx` is fuel-bounded (`lemDefaultFuel = 10^6`) with an opaque exhaustion leaf, so the projection theorems carry the static premises `pot e ≤ lemDefaultFuel` and `pot cont ≤ lemDefaultFuel` per registered body (never a bound on the run length); total production statements carry `k + 2 ≤ CerbFuel.driverFuel` (the shipped driver's budget, 10^8 since the fuel arc) for the certified step count; the shipped driver's OWN fuel arm is the kernel-transparent kill `CerbND.fuelExhaustedKill` (pin `f95ef8d9c`), which the partial lane states as the admitted outcome beside delivery — at every fuel of the loop (`DriverSafeCtl`) and, in the closed form, of `CerbND.drive_lemFuel` (`prod_run_safe_procs`); measured: that outer fuel bounds `driver2`'s rounds only, the loop's budget being the fixed `10^8` inside the wrapper | a fuel-irrelevance theorem for `get_ctx`; a second upstream mirror fuelling the loop as well (recorded as available in `../docs/2026-09-02_review-of-cerberus-lean-fuel-arc-design.md` §7) if a loop-fuel-parametric CLOSED statement is ever wanted | `Soundness.lean` header ("FUEL HONESTY"), `Potential.lean`, `Adequacy.lean`; `../docs/2026-09-02_request-cerberus-lean-fuel-exhaustion-outcome.md`, `docs/2026-09-03_f1-notes.md` |
-| The fragment is annotation-free (`Expr []` at every node); located Core is outside `Frag` | make `current_loc` live state | "Scope, exactly"; `Soundness.lean` `Frag` header |
+| The elaborator's Core is admitted as far as E1–E2 reach (annotations with the live location, `bound`, `Ivalignof`; the loaded-value currency, the `Unspecified` store, pure `case`, the tuple and weak binders) and NOT yet whole: `conv_loaded_int`/`catch_exceptional_condition` (`PEcall`/`PEcatch_exceptional_condition`, E3), `unseq` (E4), negative actions (E5), `Eccall` (E6) — t1's `main` is outside `Frag` (`Examples/CorpusE0.lean`: `t1_convLoadedInt_uncovered`, `t1_case_uncovered`); the binder rules are stated at BARE heads (annotated heads mirrored, NO-RULE) | the dialect arc's remaining slices E3–E6 (`../docs/2026-09-04_emitted-core-dialect-design.md`) | "Scope, exactly"; `Soundness.lean` `Frag` header; `docs/2026-09-04_e1-notes.md`, `docs/2026-09-05_e2-notes.md` |
 | Synthetic Core entry: authored Core wrapped by `prodFile`, not C through the frontend; the loop programs' label maps are nevertheless computed by the shipped registration (`*_labeledAt_production`, `LabeledAt`) | a C-frontend entry | `ProdEntry.lean` |
 | The judgments are indexed by the current PROCEDURE `p : Option sym`, not the full control, and their step clauses quantify over the call stack and execution location `(κ, ℓ)` (calls arc C3) — forcing fact: RETURN does not restore `exec_loc` (PCALL pushes `push_exec_loc`, RETURN writes `current_proc_opt`/`env`/`stack0`/`arena` only), so the caller's continuation after a return runs at a control differing from the call-time one in `execLoc`; the pre-C3 judgment at `ctl` is the instance `p := ctl.proc, κ := ctl.κ, ℓ := ctl.execLoc` at the empty table | by design (every C1/C2 rule was control-general, the C1 range audit) | `Wps.lean`, `Wpt.lean`; docs/2026-09-03_c3-notes.md |
 | The single-procedure driver lane (`wpt_driver_aux`/`_done(_alloc)`) is stated at the EMPTY table `emptyProcSpecT`, where the call clause is unsatisfiable (`wpt_empty_call_false`); the total lane THROUGH CALLS is the CPS lane `wpt_driver_cps`/`wpt_driver_done_procs` over the live-control delivery fact `DriverDoneCtl` (calls arc C4), consumed by `prod_run_eqJ_procs` — so the nine production statements are reached by two routes, the seven earlier ones at the empty table and recursive fib and even/odd through calls; the partial lane is at the live control throughout (`DriverSafeCtl`, `engine_adequacy`) | the single-procedure driver lane stays as the earlier statements' route (its restatement over the general lane was declined at C4: the file tie is not available at its context profile, `procCtx`); the former total `driveU` lane was deleted in the fuel-lane restatement | `ProdLoop.lean`, `ProdEntry.lean` |
@@ -645,7 +663,7 @@ theorems:
 | Well-formedness by shape: `MachineCtx.SeqWF` (startup thread), the empty-stack entry control (`ctl.κ = []`, the PROGRAM-DONE selector) and cons-shaped environment stacks — the engine's panic channels excluded by shape, never absorbed; the RETURN's empty-env panic is excluded the same way (a frame is on the env stack whenever the call stack is non-empty). Action locations carry no premise: the certification equations state the request at the engine's own `requestLoc th loc`, and `storeM_loc_irrel`/`loadM_loc_irrel` (the memory operations use the location only in the kill payload) transport the mirror's premise to it | by design | `Step.lean`, `Soundness.lean` |
 | The tag-definition environment is an explicit parameter of the heap predicates (`pointsToCell tds …`, `M.tagDefs`); the demos state footprints at `fmapEmpty` | by design: a program-wide constant of the language instance | `Heap.lean` header |
 | Memory orders accepted arbitrarily (`Step.store`/`wp_store` at any `memory_order`) | mirror-true: the sequential driver drops `mo` (`action_request_sequential2`) | `Step.lean` |
-| Mirror completeness holds on the DECLARED FRAGMENT up to a two-arm RESIDUAL (`OpenRound`, Round.lean; `frag_round_complete`; fragment closure 2026-09-02): `eval_uncovered` — an operand in the covered grammar CONTAINING A LEAF the engine's evaluator accepts where the mirror evaluator does not evaluate (a symbol unbound in the environment but naming a `Proc` of the file; one of the eight mirrored binops at two floating-point operands; `OpEq` at two ctypes — environment/file-dependent, the offending operand carried as witness, `evalClass … = .uncovered`); the classifier answers `.uncovered` at the FIRST such leaf and carries NO engine claim about the whole operand, so the arm's whole-operand outcome is NOT characterized — the engine may succeed, KILL on a later type error (`f + 1` with `f` a `Proc`-named unbound symbol is `PePure`, classified `.uncovered`, killed by the engine as `Illformed_program … ill-typed PEop` — 2026-09-03 audit, by execution) or PANIC (a float guard under `Eif`): every operand the classifier REJECTS is a proved engine KILL, operands it leaves UNCOVERED are not characterized, the residual is a SUPERSET of the engine-accepted shapes; and `run_surplus` — a jump with more arguments than the registered label's parameters whose zipped arguments evaluate and whose surplus does not (label-map-dependent). Everywhere else a mirror-stuck fragment configuration is an engine refusal in the engine's vocabulary (`ShippedRefusal`: ILLTYPED `[Step_error2 msg]`; ILLTYPED AT DISTANCE ONE — a successful round into the ill-typed load/store the engine reports on next; KILL `NDkilled r` from the shipped `advance_step`, memory kills through `liftMem` and pure-evaluator kills `Other (DErr_core_run err)` through `liftCore_run`; FORK ≥ 2 `CerbND.runND` executions; PANIC the engine's own `failwithI`, incl. the no-current-procedure lookup key). The former gaps (a) LETS-ANNOT at the symbol binder and (c) the operand grammar were closed by NARROWING `Frag` (`BareHead`, `PePure` everywhere) — fail-closed, per the ruling | the residual is not removable by a syntactic narrowing; the mover for `eval_uncovered`'s characterization is `evalClass` computing the engine's value at the three leaf shapes (reserving `.uncovered` for the leaf itself, the downstream rejections under the KILL bridge); a complete mirror evaluator (`M.file` threaded into `evalPexpr`, the float/ctype arms) would move `eval_uncovered` into `Step`; a prefix-evaluating `Step.run` would move `run_surplus` | `Round.lean` (`OpenRound`), `EvalClass.lean`; `ARCHITECTURE.md` §2, §7; `docs/2026-09-02_fragment-closure-notes.md` |
+| Mirror completeness holds on the DECLARED FRAGMENT up to a two-arm RESIDUAL (`OpenRound`, Round.lean; `frag_round_complete`; fragment closure 2026-09-02): `eval_uncovered` — an operand in the covered grammar CONTAINING A LEAF the engine's evaluator accepts where the mirror evaluator does not evaluate (a symbol unbound in the environment but naming a `Proc` of the file; one of the eight mirrored binops at two floating-point operands; `OpEq` at two ctypes — environment/file-dependent, the offending operand carried as witness, `evalClass … = .uncovered`); the classifier answers `.uncovered` at the FIRST such leaf and carries NO engine claim about the whole operand, so the arm's whole-operand outcome is NOT characterized — the engine may succeed, KILL on a later type error (`f + 1` with `f` a `Proc`-named unbound symbol is `PePure`, classified `.uncovered`, killed by the engine as `Illformed_program … ill-typed PEop` — 2026-09-03 audit, by execution) or PANIC (a float guard under `Eif`): every operand the classifier REJECTS is a proved engine KILL, operands it leaves UNCOVERED are not characterized, the residual is a SUPERSET of the engine-accepted shapes; and `run_surplus` — a jump with more arguments than the registered label's parameters whose zipped arguments evaluate and whose surplus does not (label-map-dependent). Everywhere else a mirror-stuck fragment configuration is an engine refusal in the engine's vocabulary (`ShippedRefusal`: ILLTYPED `[Step_error2 msg]`; ILLTYPED AT DISTANCE ONE — a successful round into the ill-typed load/store the engine reports on next; KILL `NDkilled r` from the shipped `advance_step`, memory kills through `liftMem` and pure-evaluator kills `Other (DErr_core_run err)` through `liftCore_run`; FORK ≥ 2 `CerbND.runND` executions; PANIC the engine's own `failwithI`, incl. the no-current-procedure lookup key). The former gap (c) the operand grammar was closed by NARROWING `Frag` (`PePure` everywhere) — fail-closed, per the ruling; gap (a) LETS-ANNOT at the symbol binder, first narrowed by `BareHead`, is MIRRORED since E1 (`BareHead` retired); E2 gives the classifier its second failing face, `.undef` — the `undef(<<UB…>>)` operand is the shipped driver's `Undef0` KILL, proved, never a default — and iterates the engine's passes (`classIter`) so a `case` whose selected branch fails is classified in the pass that fails | the residual is not removable by a syntactic narrowing; the mover for `eval_uncovered`'s characterization is `evalClass` computing the engine's value at the three leaf shapes (reserving `.uncovered` for the leaf itself, the downstream rejections under the KILL bridge); a complete mirror evaluator (`M.file` threaded into `evalPexpr`, the float/ctype arms) would move `eval_uncovered` into `Step`; a prefix-evaluating `Step.run` would move `run_surplus` | `Round.lean` (`OpenRound`), `EvalClass.lean`; `ARCHITECTURE.md` §2, §7; `docs/2026-09-02_fragment-closure-notes.md` |
 | The global memory well-formedness invariant `MemWF` (Heap.lean) is in the state interpretation (`CohG.wf`) and the launch premise (`LaunchCoh.wf`): allocation-id discipline, live/dead consistency, pairwise range disjointness of ALL live allocations, cursor bounds, and the dynamic-address facts — each an engine fact cited in the section header; fresh = disjoint from EVERY live allocation of the state (`create_fresh_global`), not only from the tracked footprint; the cold-start state satisfies it (`prodMem₀_memWF`); `loadM`/`storeM`/`allocateObject`/`killM` preserve it (`MemWF.loadM`/`MemWF.storeM`/`MemWF.allocateObject`/`MemWF.killM`). Two honest qualifications: (i) it is carried under cursor PRESENCE — the cursor-free launches (`MetaByteOf.cohG`, from `Coh` alone) have no `MemWF` premise, so non-allocating programs owe nothing and the non-allocating exports' texts are unchanged; (ii) the dynamic-address component is what the engine maintains (`dyn_lo`, `dyn_disj`), NOT "every dynamic address is a live base" — `killM` never removes an address from `dynamicAddrs` (CerbMem.lean:1576-1578) | CLOSED at K3: `MemWF.allocateRegion` is proved and pinned — every memory operation of the fragment (`loadM`/`storeM`/`allocateObject`/`allocateRegion`/`killM`) has its preservation theorem; K3 also added the engine invariant `la_pos : 0 < lastAddress` (both cursor writers guard `alignedAddr ≠ 0`; raised by the K2.5 range audit; a field added on orchestrator direction, recorded [AGENT] in DECISIONS), which is what prices a zero-size region correctly | `Heap.lean` (section "The global memory well-formedness invariant"), `Adequacy.lean` (`LaunchCoh` section); walkthrough §4 |
 | Arrays are one allocation, not a ∗ of per-element cells: the engine bounds-checks against the pointer's provenance allocation and `arrayShiftPtrval` preserves provenance | forcing fact about Cerberus; per-element structure lives in the invariant + decode premises | `ArrayExhibit.lean` |
 | Allocation metadata at a fraction as the exclusivity anchor AND the liveness token: the cell carries `alive` (RefinedC's `al_alive` and `freeable` collapsed into one cell — Cerberus erases the record on kill, so persistent-past-death metadata has no referent); the STATIC kill rule flips it (K2: `kill_atomic`/`wps_kill`/`wpt_kill` consume `pointsToCell … (.own 1)` and hand back at most `deadObj`; `wps_kill_emp`/`wpt_kill_emp` are the textbook `{p ↦ -} kill(p) {emp}`); the byte fragments are dropped, sound because `killM` leaves the bytemap alone and addresses are never reused (`CohG.kill`) | LANDED at K3: the dynamic kill `free_atomic`/`wps_free`/`wpt_free` over `regionOwn … (.own 1)` is the same ghost update, handing back at most `deadRegion`; the dynamic check `killM` makes (:1573) is passed through the cell's `dynamic` flag (`killM_success_dynamic`), never through `dynamicAddrs` | `Heap.lean` header, "THE THREE ALLOCATION FACTS"; Rules.lean `kill_atomic` |
@@ -653,7 +671,7 @@ theorems:
 | Read-only allocations ARE describable (K1): `MetaCell.readonly` is coupled to `Allocation.isReadonly`; `readonlyCell tds pv dq ty bs` is the read-only points-to, with `load_atomic_readonly` (loads) and NO store rule — the engine kills a store to a read-only allocation with `MerrWriteOnReadOnly kind` (`storeM_readonly_kills`, CerbMem.lean:1724-1725), stated as a fact, not absorbed. Honest qualification: no rule of this fragment MINTS a `readonlyCell` — `create` is `allocateObject … none none` (writable, :1490-1492) and the launch footprint pins `.IsWritable` | a `create_readonly`/string-literal rule (spec addition) when those constructs join the fragment | `Heap.lean` (section "The K1 bundles"), `Rules.lean` (`load_atomic_readonly`) |
 | Typed access THROUGH A REGION POINTER is type-blind in the engine (K5): at an untyped allocation `loadM`/`storeM` check the dead list, the record, bounds against the record's SIZE and writability; `isAtomicMemberAccess` is `false` at `alloc.ty = none` (CerbMem.lean:1619); no effective-type or alignment check exists. So the region access rules `regionLoadAt_atomic`/`regionStoreAt_atomic` are stated at ANY accessed type at ANY in-bounds offset over the TYPED REGION VIEW (the object view with `regionCell` for `objCell`), proved through the same seams `loadM_live`/`storeM_live` as the object rules, and a region is carved into typed fields by `typedRegionView_split`/`_join` — `malloc`'d memory as C has it | forcing fact about Cerberus (the concrete memory model tracks no effective types); RefinedC's `ty_own` at a `malloc`'d block is likewise layout-free | Heap.lean "The typed region view"; Rules.lean "THE REGION ACCESS RULES"; MallocListExhibit.lean |
 | The `Frag.case_value` premise `hbsz` (the selected branch's `esize` is bounded by the case node's) is carried, not proved. The equation whose proof would discharge it is `esize (subst_sym_expr x v e) = esize e` (with its mutual twin for `esizeAlts`): `esize` inspects only expression constructors and `subst_sym_expr` substitutes only into pure expressions. The obstacle: the engine's `subst_sym_expr` is `subst_sym_expr_lemFuel lemDefaultFuel`, a fuel-indexed recursion over the whole generated Core AST, so the proof is a fuel-indexed induction over that mutual recursion (`generic_expr`/`generic_pexpr`/patterns) — measured, not attempted. `rfl` for authored programs | that induction | `Soundness.lean` (`Frag.case_value`), `CaseExhibit.lean` header |
-| The canonical-annotation value protocol: the pure and annotation rules are stated at `Expr []` because that is where the mirror's values live; the annotation-generic forms are false | by design | `Step.lean` header |
+| The canonical-annotation value protocol: the mirror's values are the canonical nodes `mk_value_e`/`mk_value_pe` produce (the node's outer annotation list kept, the inner list empty — `SpikeValA` carries both, E1); the pure and annotation rules are stated at those shapes; annotation-generic forms of a VALUE are false | by design | `Step.lean` header |
 
 **One reference relation.** The mirror's only reference is the shipped
 round `CerberusRound M` (Round.lean): one iteration of the shipped

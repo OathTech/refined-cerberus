@@ -140,4 +140,4 @@ MODULES: 44 classified, 20 consumer modules (AllocExhibit, ArrayExhibit, CaseExh
 | `Frag.call` | `Eproc _ (Impl _) _` — the implementation-constant call (`Step_fs2`) | OUT-OF-SCOPE | — | — | `callRedex?` answers `none` (`Step.call` docstring); not a `Frag.call` redex; calls arc C2 (docs/2026-09-03_c2-notes.md) |
 
 MANIFEST: 28 constructors, 58 variant rows (35 RULE, 0 RULE-TOTAL-UNDEMONSTRATED, 0 PARTIAL-ONLY, 19 NO-RULE, 4 OUT-OF-SCOPE), 0 red, 20 consumer modules
-CLAIMS: 11 claim rows, 90 declaration names checked
+CLAIMS: 12 claim rows, 104 declaration names checked
