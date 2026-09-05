@@ -4971,4 +4971,52 @@ theorem wpt_neg_bound {Ψ : SpikeVal → EnvStack → IProp GF}
   simp only [SpikeVal.merge, SpikeVal.val]
   iapply HΨ $$ %(fresh_given_int k') %⟨k', rfl, hk'⟩ Hpt'
 
+/-- An unsequenced pair whose right operand is pure. The driver's
+    right-first order evaluates that operand without changing the frame.
+    Its empty footprint cannot race with the left operand. -/
+theorem wpt_unseq_pure_right
+    {Ψ : SpikeVal → EnvStack → IProp GF}
+    (a ap : List annot) (e : CoreExpr) (pe : generic_pexpr Unit sym)
+    (ρ : EnvStack) (k : Nat) (v : value)
+    (hcc : ccallFree e = true) (hnv : valueFromPexpr pe = none)
+    (hv : evalPexpr M.tagDefs M.extern M.file ρ pe = some v) :
+    wpt M p Ls Θ k (fun w ρ' => Ψ (w.mergeInto (.annot [] (Vtuple [w.val, v]))) ρ') e ρ ⊢
+      wpt M p Ls Θ (2 + (k + 3)) Ψ (Expr a (Eunseq [e, Expr ap (Epure pe)])) ρ := by
+  iintro H
+  rw [show ([e, Expr ap (Epure pe)] : List CoreExpr) = [e] ++ Expr ap (Epure pe) :: [] from rfl]
+  iapply wpt_unseq_focus a [e] (Expr ap (Epure pe)) [] ρ
+    rfl (by simpa only [List.append_nil, ccallFreeList, Bool.and_true] using hcc) 2 (k + 3)
+  iapply wpt_pure pe ρ (Nat.le_refl 2) hnv hv
+  iintro %wa %hwa
+  cases wa with
+  | annot _ _ _ _ _ => cases hwa
+  | pure aa ab av =>
+  have hav : av = v := SpikeVal.pure.inj hwa
+  subst av
+  rw [show ([e] ++ ofValA (.pure aa ab v) :: [] : List CoreExpr) =
+    [] ++ e :: [ofValA (.pure aa ab v)] from rfl]
+  iapply wpt_unseq_focus a [] e [ofValA (.pure aa ab v)] ρ
+    (by rw [valsOnly_cons, isValE_ofValA, valsOnly_nil])
+    (by simp only [List.nil_append, ccallFreeList, ccallFree_ofValA]) k 3
+  iapply wpt_mono (Ψ₁ := fun w ρ' => Ψ (w.mergeInto (.annot [] (Vtuple [w.val, v]))) ρ') ?_ k e ρ $$ H
+  intro w ρ'
+  iintro HΨ %wb %hwb
+  cases wb with
+  | pure ba bb bv =>
+    cases hwb
+    rw [show ([] ++ ofValA (.pure ba bb bv) :: [ofValA (.pure aa ab v)] : List CoreExpr) =
+      [SpikeValA.pure ba bb bv, .pure aa ab v].map ofValA from rfl]
+    iapply wpt_unseq_vals a _ ρ' (fps := []) (cvals := [bv, v]) (Nat.le_refl 3) rfl
+    simp only [SpikeValA.erase_pure, SpikeVal.mergeInto, SpikeVal.val]
+    iexact HΨ
+  | annot ba bb bc ds bv =>
+    cases hwb
+    rw [show ([] ++ ofValA (.annot ba bb bc ds bv) :: [ofValA (.pure aa ab v)] : List CoreExpr) =
+      [SpikeValA.annot ba bb bc ds bv, .pure aa ab v].map ofValA from rfl]
+    iapply wpt_unseq_vals a _ ρ' (fps := ds) (cvals := [bv, v]) (Nat.le_refl 3)
+      (by simp only [collectUnseq, do_race_nil_right, Bool.false_eq_true, ↓reduceIte,
+        combine_dyn_annotations, List.append_nil, List.reverse_cons, List.reverse_nil, List.nil_append, List.cons_append])
+    simp only [SpikeValA.erase_annot, SpikeVal.val, SpikeVal.mergeInto, SpikeVal.merge, List.append_nil]
+    iexact HΨ
+
 end CerberusHeapLang

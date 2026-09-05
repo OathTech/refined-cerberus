@@ -24,17 +24,17 @@ theorem t5Gt_frag : Frag t5Gt := by
       exact Frag.of_pePure _ (specInt_pePure 2) (depLe (by decide))
   · refine .case_op rfl (PePure.of_isPePure rfl) (depLe (by decide)) ?_ ?_ ?_
     · intro q hq
-      simp only [List.mem_cons, List.not_mem_nil, or_false] at hq
+      simp only [t5GtPats, List.mem_cons, List.not_mem_nil, or_false] at hq
       rcases hq with rfl | rfl <;>
         exact Frag.of_pePure _ (PePure.of_isPePure rfl) (depLe40 (by decide))
     · intro v e' hsel
       obtain ⟨pat, br, binds, hmem, _, rfl⟩ := select_case_some hsel
-      simp only [List.mem_cons, List.not_mem_nil, or_false, Prod.mk.injEq] at hmem
+      simp only [t5GtPats, List.mem_cons, List.not_mem_nil, or_false, Prod.mk.injEq] at hmem
       rcases hmem with ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ <;>
         exact Frag.substFold_pure binds _ _ (PePure.of_isPePure rfl) (depLe40 (by decide))
     · apply case_hbsz_of_branches
       intro q hq
-      simp only [List.mem_cons, List.not_mem_nil, or_false] at hq
+      simp only [t5GtPats, List.mem_cons, List.not_mem_nil, or_false] at hq
       rcases hq with rfl | rfl <;> exact Nat.le_of_ble_eq_true rfl
 
 theorem t5Cond_frag : Frag t5Cond := by
@@ -51,7 +51,7 @@ theorem t5Cond_frag : Frag t5Cond := by
 theorem t5Bool_frag : Frag t5Bool := by
   refine .case_op rfl (PePure.of_isPePure rfl) (depLe (by decide)) ?_ ?_ ?_
   · intro q hq
-    simp only [List.mem_cons, List.not_mem_nil, or_false] at hq
+    simp only [t5BoolPats, List.mem_cons, List.not_mem_nil, or_false] at hq
     rcases hq with rfl | rfl
     · exact Frag.of_pePure _ (PePure.of_isPePure rfl) (depLe (by decide))
     · refine .nd (by decide) ?_
@@ -60,7 +60,7 @@ theorem t5Bool_frag : Frag t5Bool := by
       rcases he with rfl | rfl <;> exact .val_pure _
   · intro v e' hsel
     obtain ⟨pat, br, binds, hmem, _, rfl⟩ := select_case_some hsel
-    simp only [List.mem_cons, List.not_mem_nil, or_false, Prod.mk.injEq] at hmem
+    simp only [t5BoolPats, List.mem_cons, List.not_mem_nil, or_false, Prod.mk.injEq] at hmem
     rcases hmem with ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩
     · exact Frag.substFold_pure binds _ _ (PePure.of_isPePure rfl) (depLe (by decide))
     · have he (bs : List (sym × value)) : substFold (Expr [] (End [t5Pure (Pexpr [] () (PEval Vtrue)),
@@ -80,7 +80,7 @@ theorem t5Bool_frag : Frag t5Bool := by
       rcases he with rfl | rfl <;> exact .val_pure _
   · apply case_hbsz_of_branches
     intro q hq
-    simp only [List.mem_cons, List.not_mem_nil, or_false] at hq
+    simp only [t5BoolPats, List.mem_cons, List.not_mem_nil, or_false] at hq
     rcases hq with rfl | rfl <;> exact Nat.le_of_ble_eq_true rfl
 
 theorem t5AssignBlock_frag (start n m : Nat) (v : Int) : Frag (t5AssignBlock start n m v) := by

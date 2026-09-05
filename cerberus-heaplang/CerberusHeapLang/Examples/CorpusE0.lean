@@ -1303,6 +1303,25 @@ def t5Load (x : sym) (n c1 c2 : Nat) : CoreExpr :=
     (Expr [Aloc (t5Reg c1 c2), Aexpr] (Epure (psym x)))
     (act (t5Reg c1 c2) (Load0 intCty (psym (t5a n)) NA))
 
+def t5GtPats : List (pattern × CoreExpr) :=
+  [(t5SpecTuplePat 520 521,
+    Expr [Astd "§6.5.8#6"] (Epure (Pexpr [] () (PEif
+      (Pexpr [] () (PEop OpGt (t5ConvInt 520) (t5ConvInt 521))) (specInt 1) (specInt 0))))),
+   (t5AnyTuplePat, t5Pure t5Unspec)]
+
+def t5CondPats : List (pattern × generic_pexpr Unit sym) :=
+  [(t5SpecTuplePat 514 515, Pexpr [] () (PEif
+    (Pexpr [] () (PEop OpEq (t5ConvInt 514) (t5ConvInt 515))) (specInt 1) (specInt 0))),
+   (t5AnyTuplePat, t5Unspec)]
+
+def t5BoolPats : List (pattern × CoreExpr) :=
+  [(t5SpecPat 511, t5Pure (Pexpr [] () (PEif
+      (Pexpr [] () (PEnot (Pexpr [] () (PEop OpEq (psym (t5a 511))
+        (Pexpr [] () (PEval (Vobject (OVinteger (CerbMem.integerIval 1)))))))))
+      (Pexpr [] () (PEval Vtrue)) (Pexpr [] () (PEval Vfalse))))),
+   (Pattern [] (CaseCtor Cunspecified [Pattern [] (CaseBase (none, BTy_ctype))]),
+    Expr [] (End [t5Pure (Pexpr [] () (PEval Vtrue)), t5Pure (Pexpr [] () (PEval Vfalse))]))]
+
 /-- The source comparison `x > 2`, including its specified/unspecified
     branch and the standard-library conversions (emission lines 21–48). -/
 def t5Gt : CoreExpr :=
@@ -1310,11 +1329,7 @@ def t5Gt : CoreExpr :=
     (Ewseq (t5TuplePat 518 519)
       (Expr [] (Eunseq [t5Load xSym 517 39 40,
         Expr [Aloc (t5Reg 43 44), Aexpr] (Epure (specInt 2))]))
-      (Expr [] (Ecase (t5Tuple 518 519)
-        [(t5SpecTuplePat 520 521,
-          Expr [Astd "§6.5.8#6"] (Epure (Pexpr [] () (PEif
-            (Pexpr [] () (PEop OpGt (t5ConvInt 520) (t5ConvInt 521))) (specInt 1) (specInt 0))))),
-         (t5AnyTuplePat, t5Pure t5Unspec)])))
+      (Expr [] (Ecase (t5Tuple 518 519) t5GtPats)))
 
 /-- The elaborator tests the C truth value by comparing with zero and
     then decoding the resulting loaded integer (emission lines 17–71). -/
@@ -1323,19 +1338,9 @@ def t5Cond : CoreExpr :=
     (Ewseq (t5TuplePat 512 513)
       (Expr [] (Eunseq [t5Gt,
         Expr [Aloc (t5RegP 39 44 41), Aexpr] (Epure (specInt 0))]))
-      (t5Pure (Pexpr [] () (PEcase (t5Tuple 512 513)
-        [(t5SpecTuplePat 514 515, Pexpr [] () (PEif
-          (Pexpr [] () (PEop OpEq (t5ConvInt 514) (t5ConvInt 515))) (specInt 1) (specInt 0))),
-         (t5AnyTuplePat, t5Unspec)])))))
+      (t5Pure (Pexpr [] () (PEcase (t5Tuple 512 513) t5CondPats)))))
 
-def t5Bool : CoreExpr :=
-  Expr [] (Ecase (psym (t5a 510))
-    [(t5SpecPat 511, t5Pure (Pexpr [] () (PEif
-        (Pexpr [] () (PEnot (Pexpr [] () (PEop OpEq (psym (t5a 511))
-          (Pexpr [] () (PEval (Vobject (OVinteger (CerbMem.integerIval 1)))))))))
-        (Pexpr [] () (PEval Vtrue)) (Pexpr [] () (PEval Vfalse))))),
-     (Pattern [] (CaseCtor Cunspecified [Pattern [] (CaseBase (none, BTy_ctype))]),
-      Expr [] (End [t5Pure (Pexpr [] () (PEval Vtrue)), t5Pure (Pexpr [] () (PEval Vfalse))]))])
+def t5Bool : CoreExpr := Expr [] (Ecase (psym (t5a 510)) t5BoolPats)
 
 /-- A source block `{ r = v; }`, retaining both statement sequences and
     the negative store under `bound` (emission lines 73–113). -/
@@ -1358,9 +1363,27 @@ def t5AssignBlock (start n m : Nat) (v : Int) : CoreExpr :=
 
 def t5Kill (x : sym) : CoreExpr := act (t5Reg 0 84) (Kill (Static0 intTy) (psym x))
 
+/-- The return statement and its emitted cleanup/return-label suffix. -/
+def t5Return : CoreExpr :=
+  letS [Aloc (t5Reg 73 82), Astmt] (t5a 528) lint (bnd (t5Load t5rSym 527 80 81))
+  (seqE (t5Kill xSym)
+  (seqE (t5Kill t5rSym)
+  (seqE (Expr [] (Erun empty_annotation retSym [convLoadedInt (t5a 528)]))
+  (seqE (t5Kill xSym)
+  (seqE (t5Kill t5rSym)
+  (seqE t5Unit
+    (Expr [Aloc t5RegR, Astmt] (Esave (retSym, lint)
+      [(t5a 529, ((lint, none), specInt 0))] (t5Pure (psym (t5a 529)))))))))))
+
+/-- The complete emitted conditional statement. -/
+def t5IfStmt : CoreExpr :=
+  letS [Aloc (t5Reg 35 72), Astmt] (t5a 510) lint t5Cond
+    (letS [] (t5a 509) BTy_boolean t5Bool
+      (Expr [] (Eif (psym (t5a 509)) (t5AssignBlock 48 523 524 1) (t5AssignBlock 64 525 526 0))))
+
 /-- The complete emitted `main`, including the dead cleanup suffix and
-    the `save` return label. This is a transcription, not yet a certified
-    program; the corpus speedbump checks its constructor skeleton. -/
+    the `save` return label. The corpus speedbump checks its constructor
+    skeleton; the execution theorem is a separate logic proof. -/
 def t5Main : CoreExpr :=
   letS [Aloc (t5Reg 15 84), Astmt] xSym ptrTy (createInt (t5Reg 15 84) xSym)
   (letS [Astmt] t5rSym ptrTy (createInt (t5Reg 15 84) t5rSym)
@@ -1370,18 +1393,7 @@ def t5Main : CoreExpr :=
   (seqE (Expr [Astd "§6.2.4#6", Aloc (t5Reg 28 34), Astmt]
     (Eaction (Paction polarity.Pos (Action (t5Reg 28 34) empty_annotation
       (Store0 false intCty (psym t5rSym) t5Unspec NA)))))
-  (seqE (letS [Aloc (t5Reg 35 72), Astmt] (t5a 510) lint t5Cond
-    (letS [] (t5a 509) BTy_boolean t5Bool
-      (Expr [] (Eif (psym (t5a 509)) (t5AssignBlock 48 523 524 1) (t5AssignBlock 64 525 526 0)))))
-  (letS [Aloc (t5Reg 73 82), Astmt] (t5a 528) lint (bnd (t5Load t5rSym 527 80 81))
-  (seqE (t5Kill xSym)
-  (seqE (t5Kill t5rSym)
-  (seqE (Expr [] (Erun empty_annotation retSym [convLoadedInt (t5a 528)]))
-  (seqE (t5Kill xSym)
-  (seqE (t5Kill t5rSym)
-  (seqE t5Unit
-    (Expr [Aloc t5RegR, Astmt] (Esave (retSym, lint)
-      [(t5a 529, ((lint, none), specInt 0))] (t5Pure (psym (t5a 529)))))))))))))))))
+  (seqE t5IfStmt t5Return)))))
 
 /-- One corpus row: the `.annot.core` file (under docs/corpus-e0/ at the
     repository root), the procedure, the transcription. -/

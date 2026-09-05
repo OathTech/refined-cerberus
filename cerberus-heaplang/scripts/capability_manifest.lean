@@ -23,6 +23,10 @@ the engine-SUCCESS shapes of every `Frag` constructor (read off `Frag`,
                     (stated with the mover: the exhibit that would consume
                     it); the row turns red when a consumer appears (then
                     reclassify as RULE) — [AGENT 2026-09-04], record §3
+  RULE-PARTIAL-UNDEMONSTRATED p t
+                    the symmetric case: the total rule is consumed; the
+                    partial rule exists but has no consumer yet. A new
+                    partial consumer makes the row red until reclassified.
   PARTIAL-ONLY p    a partial rule, no total rule exists (reason stated)
   NO-RULE           admitted by the fragment and the engine, covered by no
                     rule — reason and the record that decided it
@@ -87,6 +91,7 @@ namespace CapabilityManifest
 inductive Class where
   | rule (p t : Name)
   | ruleTotalUndemonstrated (p t : Name) (mover : String)
+  | rulePartialUndemonstrated (p t : Name) (mover : String)
   | partialOnly (p : Name) (why : String)
   | noRule (why : String)
   | outOfScope (why : String)
@@ -310,9 +315,9 @@ def variants : List Variant := [
     cls := .noRule s!"admitted by the fragment and MIRRORED (`Step.wseq_sym_annot`, classified by `complete_wbeta_sym`); no emitted shape of E2 reaches it; {recE2}" },
   -- E4: unseq
   { ctor := `CerberusHeapLang.Frag.unseq,
-    shape := "`unseq(e_1, …, e_n)` with a REDUCIBLE component: the sequential driver reduces the LAST reducible component (`get_ctx_unseq_aux` prepends each reducible component's contexts, core_reduction.lem:544–548/:590–601; the loop takes the head) under the `Cunseq` frame — every sibling ccall-free (`ccallFreeList`: no `Eccall`, and no `Ecase`/`Elet`/`End` component, so `is_unseq_with_ccall` is `false`, :501–519)",
+    shape := "`unseq(e_1, …, e_n)` with a REDUCIBLE component: the sequential driver reduces the LAST reducible component (`get_ctx_unseq_aux` prepends each reducible component's contexts, core_reduction.lem:544–548/:590–601; the loop takes the head) under the `Cunseq` frame — every sibling ccall-free (`ccallFreeList`: no `Eccall`, and every nested `case`/`let`/`nd` branch ccall-free, so `is_unseq_with_ccall` is `false`, :501–519)",
     cls := .rule (N "wps_unseq_focus") (N "wpt_unseq_focus"),
-    also := [N "wpt_jump_frame_unseq"] },
+    also := [N "wpt_jump_frame_unseq", N "wpt_unseq_pure_right"] },
   { ctor := `CerberusHeapLang.Frag.unseq,
     shape := "`unseq(v_1, …, v_n)` — every component a value: UNSEQ-PURE/UNSEQ-ANNOT completion into the annotated tuple `{A_1 ++ … ++ A_n}(v_1, …, v_n)` (`one_step_unseq_aux`, core_reduction.lem:375–386; the race-free case)",
     cls := .rule (N "wps_unseq_vals") (N "wpt_unseq_vals") },
@@ -325,19 +330,27 @@ def variants : List Variant := [
   -- E5: the negative-action protocol, the excluded store, the case EVAL round, nd
   { ctor := `CerberusHeapLang.Frag.neg_store,
     shape := "`neg(store(ty, p, v))` at canonical operands under a `bound` with no strong sequence between (`break_at_bound_and_sseq` = `BOUND_NO_SSEQ`): the engine's NEGATIVE-ACTION round draws an exclusion id and a fresh symbol from the run state and rewrites `bound(ctxA[neg(act)])` into `bound(let weak (_, s) = unseq(Eexcluded n act, ctxA'[pure(Unit)]) in pure(s))` (core_reduction.lem:1290–1338)",
-    cls := .noRule s!"MIRRORED (`Step.neg_bound`; the run state's two supplies are WRITERS on `Ctl.sup`, `Ctl.draw`) and CLASSIFIED (`complete_neg_act`: `NO_BOUND` is the engine's panic `ShippedRefusal.panic_step`, `BOUND_WITH_SSEQ` the registered residual `OpenRound.neg_sseq`); the rule faces `wps_neg_bound`/`wpt_neg_bound` (the fresh symbol's non-collision from the WP-level supply bound) are E5's second slice; {recE5}" },
+    cls := .rulePartialUndemonstrated (N "wps_neg_round") (N "wpt_neg_round")
+      "t5 consumes the total rules; a partial corpus derivation remains (docs/2026-09-05_e5-resume.md)",
+    also := [N "wps_neg_bound", N "wpt_neg_bound", N "wps_bound_wseq_tuple", N "wpt_bound_wseq_tuple"] },
   { ctor := `CerberusHeapLang.Frag.neg_store_op,
     shape := "`neg(store(ty, p, v))` at `PePure` operands not all values — the same round (the rewrite fires before any operand evaluates; the operands evaluate inside the excluded node)",
-    cls := .noRule s!"MIRRORED and CLASSIFIED as `Frag.neg_store` (`Step.neg_bound` is operand-agnostic); rule face pending with it; {recE5}" },
+    cls := .rulePartialUndemonstrated (N "wps_neg_round") (N "wpt_neg_round")
+      "t5 consumes the total rules; a partial corpus derivation remains (docs/2026-09-05_e5-resume.md)",
+    also := [N "wps_neg_bound", N "wpt_neg_bound"] },
   { ctor := `CerberusHeapLang.Frag.excluded_store,
     shape := "`Eexcluded n (store(ty, p, v))` at canonical operands — `process_action (Just n)` (core_reduction.lem:1345–1346, :694–711): the same `StoreRequest2` as the positive store, its continuation the NEGATIVE dynamic annotation `{DA_neg n [] fp}pure(Unit)`",
-    cls := .noRule s!"MIRRORED (`Step.excluded_store`) and CLASSIFIED (`complete_excluded_store`: ILLTYPED / killed / the step); the rule face `wps_excluded_store`/`wpt_excluded_store` is E5's second slice; {recE5}" },
+    cls := .rulePartialUndemonstrated (N "wps_excluded_store") (N "wpt_excluded_store")
+      "t5 consumes the total rules; a partial corpus derivation remains (docs/2026-09-05_e5-resume.md)",
+    also := [N "excluded_store_atomic"] },
   { ctor := `CerberusHeapLang.Frag.excluded_store_op,
     shape := "`Eexcluded n (store(ty, p, v))` at `PePure` operands not all values (the ACTION_EVAL round under `Eexcluded n`; the node is rebuilt at the evaluated operands, core_reduction.lem:721–727)",
-    cls := .noRule s!"MIRRORED (`Step.excluded_store_eval`) and CLASSIFIED (`complete_excluded_store_op`: the step / ILLTYPED at distance one / the classified kill / `eval_uncovered`); rule face pending with `Frag.excluded_store`; {recE5}" },
+    cls := .rulePartialUndemonstrated (N "wps_excluded_store_eval") (N "wpt_excluded_store_eval")
+      "t5 consumes the total rules; a partial corpus derivation remains (docs/2026-09-05_e5-resume.md)" },
   { ctor := `CerberusHeapLang.Frag.case_op,
     shape := "`case pe of …` at a `PePure` NON-value scrutinee (one_step0's `Ecase` EVAL round: the scrutinee evaluates, the node is rebuilt at the value; the corpus's `case (a_512, a_513) of` tuple scrutinee)",
-    cls := .noRule s!"MIRRORED (`Step.case_eval`) and CLASSIFIED (`complete_case_op`: the step / the classified kill / `eval_uncovered`); the rule face `wps_case_eval`/`wpt_case_eval` is E5's second slice (until then a case at a non-value scrutinee has no WP rule — fail-closed); {recE5}" },
+    cls := .rulePartialUndemonstrated (N "wps_case_eval") (N "wpt_case_eval")
+      "t5 consumes the total rules; a partial corpus derivation remains (docs/2026-09-05_e5-resume.md)" },
   { ctor := `CerberusHeapLang.Frag.nd,
     shape := "`nd(e_1, …, e_n)` with at least two alternatives — one_step0's `End es => ND es` (core_reduction.lem:447–449) becomes the scheduler FORK `Step_nd2` (:1473–1474; `advance_step`'s `ND.pick`, driver.lem:1039–1046)",
     cls := .outOfScope s!"the mirror has NO rule for a fork (fail-closed: the choice is the driver's, and `CerbND.runND` explores every alternative — `ShippedRefusal.fork` via `complete_nd`/`nd_fork`, `pick` on a list of two or more); the corpus reaches `nd` only in the `Unspecified` arm of an `if` condition's case, which no certified run takes; {recE5}" },
@@ -588,6 +601,7 @@ def claimRowProblems (env : Environment) (id : String) (spans : Array (Nat × St
 def classLabel : Class → String
   | .rule .. => "RULE"
   | .ruleTotalUndemonstrated .. => "RULE-TOTAL-UNDEMONSTRATED"
+  | .rulePartialUndemonstrated .. => "RULE-PARTIAL-UNDEMONSTRATED"
   | .partialOnly .. => "PARTIAL-ONLY"
   | .noRule .. => "NO-RULE"
   | .outOfScope .. => "OUT-OF-SCOPE"
@@ -680,7 +694,7 @@ def classLabel : Class → String
       | none => parts := parts.push s!"`{short n}` **RED: missing**"; ok := false
     return (if parts.isEmpty then "" else " Also: " ++ ", ".intercalate parts.toList ++ ".", ok)
   let mut lines : Array String := #[]
-  let mut nRule := 0; let mut nRuleU := 0; let mut nPartial := 0; let mut nNoRule := 0; let mut nOut := 0
+  let mut nRule := 0; let mut nRuleU := 0; let mut nRuleP := 0; let mut nPartial := 0; let mut nNoRule := 0; let mut nOut := 0
   for v in variants do
     let (also, okA) := alsoCell v.also
     if !okA then red := red + 1
@@ -705,6 +719,19 @@ def classLabel : Class → String
         | none => (s!"`{short t}` — **RED: not in the environment**", false)
       if !okT then red := red + 1
       lines := lines.push s!"| `{short v.ctor}` | {v.shape} | RULE-TOTAL-UNDEMONSTRATED | {cp} | {ct} | mover: {mover}{also} |"
+    | .rulePartialUndemonstrated p t mover =>
+      nRuleP := nRuleP + 1
+      let (ct, okT) := ruleCell t
+      if !okT then red := red + 1
+      let (cp, okP) : String × Bool := match env.find? p with
+        | some (.thmInfo _) =>
+          let us := usersOf p
+          if us.isEmpty then (s!"`{short p}` — exists, proved, consumed by NO consumer module", true)
+          else (s!"`{short p}` — **RED: now consumed by {", ".intercalate us} — reclassify the row as RULE**", false)
+        | some _ => (s!"`{short p}` — **RED: exists but is not a theorem**", false)
+        | none => (s!"`{short p}` — **RED: not in the environment**", false)
+      if !okP then red := red + 1
+      lines := lines.push s!"| `{short v.ctor}` | {v.shape} | RULE-PARTIAL-UNDEMONSTRATED | {cp} | {ct} | mover: {mover}{also} |"
     | .partialOnly p why =>
       nPartial := nPartial + 1
       let (cp, okP) := ruleCell p
@@ -795,7 +822,10 @@ def classLabel : Class → String
   IO.println "RULE row's partial AND total rule, and every PARTIAL-ONLY row's rule, lies in"
   IO.println "the proof-term dependency cone of at least one CONSUMER module — the modules"
   IO.println "classified `positive-client` or `declared-smoke` in `scripts/module_classes.tsv`"
-  IO.println "— listed in the row. (4) The module classification is complete and exact"
+  IO.println "— listed in the row. An UNDEMONSTRATED row instead checks that its named"
+  IO.println "side has no consumer and the other side does; both rules must exist."
+  IO.println "A new consumer on the missing side requires reclassification to RULE."
+  IO.println "(4) The module classification is complete and exact"
   IO.println "(every package module classified; every classified module present; classes in"
   IO.println "the vocabulary). (5) Every declaration the claim matrix `docs/CLAIMS.md` names"
   IO.println "exists, and every declaration-shaped backticked span of every cell of a claim row"
@@ -826,7 +856,7 @@ def classLabel : Class → String
   IO.println "|---|---|---|---|---|---|"
   for l in lines do IO.println l
   IO.println ""
-  IO.println s!"MANIFEST: {fragInfo.ctors.length} constructors, {variants.length} variant rows ({nRule} RULE, {nRuleU} RULE-TOTAL-UNDEMONSTRATED, {nPartial} PARTIAL-ONLY, {nNoRule} NO-RULE, {nOut} OUT-OF-SCOPE), {red} red, {consumers.size} consumer modules"
+  IO.println s!"MANIFEST: {fragInfo.ctors.length} constructors, {variants.length} variant rows ({nRule} RULE, {nRuleU} RULE-TOTAL-UNDEMONSTRATED, {nRuleP} RULE-PARTIAL-UNDEMONSTRATED, {nPartial} PARTIAL-ONLY, {nNoRule} NO-RULE, {nOut} OUT-OF-SCOPE), {red} red, {consumers.size} consumer modules"
   IO.println s!"CLAIMS: {claims.size} claim rows, {nClaimNames} declaration names checked in the theorem cell, {nAllSpans} declaration-shaped spans checked across every cell ({claimVocabulary.length} vocabulary words, {retiredNames.length} retired names); plants (deleted name in a prose cell; retired name without its marker) red as expected"
   if !problems.isEmpty then
     IO.println ""

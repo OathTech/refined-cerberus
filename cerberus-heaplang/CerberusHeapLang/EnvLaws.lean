@@ -419,6 +419,16 @@ theorem update_env_sym (x : sym) (bty : core_base_type) (v : value)
   show update_env_aux (mk_sym_pat x bty) v ev0 :: evs = _
   rw [update_env_aux_sym]
 
+/-- A two-leaf tuple binder with independently typed leaves. -/
+theorem update_env_tuple2_mixed (x y : sym) (tx ty : core_base_type) (vx vy : value)
+    (f : Fmap sym value) (rest : List (Fmap sym value)) :
+    update_env (tuplePat [] [([], some x, tx), ([], some y, ty)]) (Vtuple [vx, vy]) (f :: rest) =
+      envAdd x vx (envAdd y vy f) :: rest := by
+  rw [update_env_cons]
+  show update_env_aux_lemFuel lemDefaultFuel _ _ _ :: rest = _
+  rw [show lemDefaultFuel = 999999 + 1 from rfl]
+  rfl
+
 /-- E5 (slice 2): `update_env` at the negative-action rewrite's binder
     `let weak (_: unit, s: unit) = …` (`negRewrite`'s `mk_tuple_pat
     [mk_empty_pat BTy_unit, mk_sym_pat s BTy_unit]`) at the completed

@@ -65,6 +65,7 @@ CerberusHeapLang.EmittedAExhibit	positive-client	-	exhibit A in the emitted-Core
 CerberusHeapLang.EmittedBExhibit	positive-client	-	exhibit B in the emitted-Core shape (E2: loaded values, the Unspecified store, pure case at a tuple, the tuple and weak-symbol binders) at both strata and the production entry
 CerberusHeapLang.EmittedCExhibit	positive-client	-	x + 1 in the emitted-Core shape (E3: conv_loaded_int, __conv_int__, catch_exceptional_condition_add; t1 minus the unseq) at both strata and the production entry over the library-carrying file
 CerberusHeapLang.CorpusT1Exhibit	positive-client	-	THE MILESTONE (E4): docs/corpus-e0/t1.c's main transcribed VERBATIM (CorpusE0.t1Main — unseq, the annotated tuple binder, conv_loaded_int, the emitted +) at both strata and the production entry over the library-carrying file
+CerberusHeapLang.CorpusT5Exhibit	positive-client	-	t5_ifelse emitted main, public total rules and the shipped driver; explicit fresh-symbol floor
 CerberusHeapLang.Examples.CallSmoke	declared-smoke	-	the C3 call/procedure smoke (kept as a consumer beside FibRecExhibit)
 CerberusHeapLang.Examples.ReadinessSmoke	declared-smoke	-	the API-only two-field predicate smoke
 CerberusHeapLang.Examples.Layout	example-support	-	layout constants and canned shapes

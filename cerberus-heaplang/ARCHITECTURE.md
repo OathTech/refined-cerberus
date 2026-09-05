@@ -28,7 +28,7 @@ are cited with their `[USER date]`/`[AGENT date]` tag and live in
 - *`Frag`* — the fragment of Core this package covers, a predicate on
   Core expressions (`Soundness.lean:8069`).
 - *the mirror* — `Step`, the hand-written fuel-free small-step relation
-  Iris reasons over (`Step.lean:3780`); a proof device with no semantic
+  Iris reasons over (`Step.lean:3841`); a proof device with no semantic
   authority.
 - *a round* — one iteration of the shipped per-thread loop.
 - *PCALL, RETURN, PROGRAM-DONE* — the engine's own round names
@@ -65,7 +65,7 @@ are cited with their `[USER date]`/`[AGENT date]` tag and live in
   and, in the partial fact only, the control's `CtlTied`; the thread tie
   carries the live source location since E1 (`ctlThread`), and the
   run-state supplies are tied to the control inside `MachineCtx.Embeds`
-  (Round.lean; E5's writers will need a driver-lane `hsup`).
+  (Round.lean; E5's t5 production theorem carries `600 ≤ sup`).
 - *a readout* — the pure conclusion about a delivered result, `ψ v σ'` on
   the value and the final memory; by extension an exhibit lemma that
   reads it off an Iris conclusion (`*_readout`).
@@ -129,8 +129,12 @@ unsequenced node: `unseq` (E4). Two facts a reader must know first:
   `Ctl.sup`, tied to the driver's run state at every round), the excluded
   store `Eexcluded n (store …)` (`Step.excluded_store`/`_eval`), `case` at a
   non-value scrutinee, and `nd` (classified as the scheduler FORK, no
-  rule) are mirrored and classified; no rule face for them yet and no
-  corpus program certifies over them at this head — the `bound` rules
+  rule) are mirrored and classified. E5's next checkpoint proves the
+  negative-assignment and excluded-store rules at both strata, and uses
+  their total faces to certify t5_ifelse at budget 88, returning
+  Specified(1) through the shipped driver (`CorpusT5Exhibit`). Its initial
+  symbol supply is explicitly at least 600; t6/t4 and E5's full range
+  audit remain pending. The `bound` rules
   `wps_bound`/`wpt_bound` now REQUIRE a negative-free body within the fuel
   (`negFree`, `pot`), the congruence being unsound otherwise
   (`docs/2026-09-05_e5-notes.md` §3).
@@ -143,7 +147,7 @@ unsequenced node: `unseq` (E4). Two facts a reader must know first:
   `Impl` call are outside (KOI B8; §6).
 
 **Configurations and the mirror.** A configuration is
-`Config := CoreExpr × EnvStack × Ctl × Mem` (`Step.lean:920`): the
+`Config := CoreExpr × EnvStack × Ctl × Mem` (`Step.lean:923`): the
 expression, the environment stack, the thread's live control and the
 engine's memory state. The two hand-written records:
 
@@ -151,16 +155,19 @@ engine's memory state. The two hand-written records:
   call stack, current procedure, execution location (the three
   `thread_state` fields the engine's PCALL and RETURN rounds write),
   the current source location (E1: written by every general-arm round)
-  and the run state's two supplies `RunSup` (`:672`; E1: carried, no
-  writer yet — E5's negative actions draw from them).
+  and the run state's two supplies `RunSup` (`:672`; E5's negative
+  actions draw from both).
 - `MachineCtx` (`:820`–`:830`), the immutable context; its seven fields
   are `tagDefs`, `file`, `extern`, `tid`, `parent`, `errno` and
-  `runState` (of which only `labeled` is read; the live supplies are
-  `Ctl.sup`).
+  `runState` (the mirror reads its labels; the judgments also read
+  `runState.sym_supply` as the lower bound on fresh symbols. The live
+  supplies are `Ctl.sup`). Seeded `procCtx` normalizes both supplies to
+  zero; production contexts retain the explicit initial supply. This
+  seeded-profile definition change remains an E5 range-audit item.
 
-In the mirror `Step M` (`:3780`), `Step.call` (`:4382`) pushes
+In the mirror `Step M` (`:3841`), `Step.call` (`:4443`) pushes
 `(ctl.proc, ctx)`, the context computed by the syntactic search
-`callRedex?` (`:1405`), and `Step.ret`/`Step.ret_annot` (`:4401`, `:4413`)
+`callRedex?` (`:1418`), and `Step.ret`/`Step.ret_annot` (`:4462`, `:4474`)
 pop it. Every other rule threads `κ`/`proc`/`execLoc` unchanged and
 writes the location, `ctl.upd a` (`Step.ctl_cases`, `:3769`). `Step` is
 the `primStep` of the iris-lean
@@ -173,16 +180,16 @@ the label specification `Ls : LabelSpec` (`:113`) at the target's
 arguments. Call redex: the procedure specification table `Θ : ProcSpec`
 (`:129`) — the callee's precondition now, the caller's continuation at
 every return meeting the postcondition a step later. Step.
-`wpt M p Ls Θ k Ψ e ρ` (`Wpt.lean:200`) is the total judgment, by
+`wpt M p Ls Θ k Ψ e ρ` (`Wpt.lean:202`) is the total judgment, by
 well-founded recursion on a step budget `k`. A jump must decrease the
 budget, `⌜1 + m ≤ k⌝` (`:167`). A call splits it, `1 + m + k' ≤ k`
 (`:172`): the call round, the callee including its return, the
 continuation. Both judgments are stated at the top invariant mask `⊤`
 (19 code sites in `Wps.lean`, 26 in `Wpt.lean`, docstring mentions
 excluded; DERIVED by grep). The raw-WP layer of
-`Rules.lean` is mask-generic — `AtomicStep` (`:196`), `wp_of_atomic`
-(`:212`), `wp_store` (`:1589`), `wp_load` (`:1620`), `spike_wp_wand`
-(`:1682`) — the two statement judgments are not. This is classical
+`Rules.lean` is mask-generic — `AtomicStep` (`:208`), `wp_of_atomic`
+(`:224`), `wp_store` (`:1706`), `wp_load` (`:1737`), `spike_wp_wand`
+(`:1799`) — the two statement judgments are not. This is classical
 sequential separation logic: no invariants, no mask-polymorphic
 composition. Masks are Iris's device for sharing; their generalisation
 belongs to the RefinedC arc, not to this demo ([USER 2026-09-04]: "The
@@ -201,14 +208,14 @@ engine's thread-level execution (§4, the ruled reading).
 ### 2.1 The rules
 
 The small axioms are proved once as atomic step specifications
-`AtomicStep` (`Rules.lean:196`) against `Step` and the engine's real
+`AtomicStep` (`Rules.lean:208`) against `Step` and the engine's real
 memory operations. Objects: `store_atomic` (`:269`), `load_atomic`
-(`:370`), `create_atomic` (`:996`), `kill_atomic` (`:1209`). Typed
-sub-range: `loadAt_atomic`/`storeAt_atomic` (`:562`/`:653`). Dynamic
-regions: `alloc_atomic`/`free_atomic` (`:1321`/`:1507`), and typed access
-`regionLoadAt_atomic`/`regionStoreAt_atomic` (`:772`/`:868`). They are
-lifted by `wp_of_atomic` (`:212`), `wps_of_atomic` (`Wps.lean:374`) and
-`wpt_of_atomic` (`Wpt.lean:677`); every memory rule of either judgment
+(`:487`), `create_atomic` (`:1113`), `kill_atomic` (`:1326`). Typed
+sub-range: `loadAt_atomic`/`storeAt_atomic` (`:679`/`:770`). Dynamic
+regions: `alloc_atomic`/`free_atomic` (`:1438`/`:1624`), and typed access
+`regionLoadAt_atomic`/`regionStoreAt_atomic` (`:889`/`:985`). They are
+lifted by `wp_of_atomic` (`:224`), `wps_of_atomic` (`Wps.lean:377`) and
+`wpt_of_atomic` (`Wpt.lean:679`); every memory rule of either judgment
 is a corollary (the list: API.lean, "Statement judgment"). The region
 access rules hold at any type at any in-bounds offset because the
 engine's check at an untyped allocation is type-blind. That check is the
@@ -223,24 +230,24 @@ tokens: `deadObj`/`deadRegion` (`:3783`/`:3793`). Allocation capacity:
 the ∗-splittable `allocBudget` (`:2464`; split law `:2475`).
 
 Structural rules, by kind. Frame across back edges and calls:
-`wps_frame_labels`/`wpt_frame_labels` (`Wps.lean:725`, `Wpt.lean:565`).
-Loops: `blockSpecs_intro`/`blockSpecsT_intro` (`Wps.lean:4313`,
-`Wpt.lean:4111`). Procedures: `procSpecs_intro`/`procSpecsT_intro`
-(`Wps.lean:4405`, `Wpt.lean:4168`) — every declared body verified once
+`wps_frame_labels`/`wpt_frame_labels` (`Wps.lean:728`, `Wpt.lean:567`).
+Loops: `blockSpecs_intro`/`blockSpecsT_intro` (`Wps.lean:4315`,
+`Wpt.lean:4113`). Procedures: `procSpecs_intro`/`procSpecsT_intro`
+(`Wps.lean:4407`, `Wpt.lean:4170`) — every declared body verified once
 assuming the table, Hoare's rule for recursive procedures, no Löb in the
-introduction. Calls: `wps_call`/`wps_call_root` (`Wps.lean:447`/`:497`),
-`wpt_call`/`wpt_call_root` (`Wpt.lean:740`/`:769`). There is no raw-WP
+introduction. Calls: `wps_call`/`wps_call_root` (`Wps.lean:450`/`:500`),
+`wpt_call`/`wpt_call_root` (`Wpt.lean:742`/`:771`). There is no raw-WP
 sequencing rule: at a populated label map it is false, because a jump
 discards the sequencing context (`Rules.lean:35`–`:44`).
 
-The collapses. `wps_sound_cps` (`Wps.lean:4560`) is the one Löb
+The collapses. `wps_sound_cps` (`Wps.lean:4562`) is the one Löb
 induction, in continuation-passing form over the ambient control; its
 call case runs the callee under `procSpecs` and returns into the
 caller's continuation (`wp_ret`/`wp_ret_annot`, `:4409`/`:4451`).
-`wps_sound`/`wps_sound_empty` (`:4750`/`:4771`) are its entry-control
-faces into iris-lean's WP. `wpt_sound_cps` (`Wpt.lean:4306`, strong
+`wps_sound`/`wps_sound_empty` (`:4755`/`:4777`) are its entry-control
+faces into iris-lean's WP. `wpt_sound_cps` (`Wpt.lean:4308`, strong
 induction on the budget) with `wpt_sound`/`wpt_sound_empty`
-(`:4511`/`:4530`) collapse into iris-lean's total WP. Their consumers,
+(`:4516`/`:4536`) collapse into iris-lean's total WP. Their consumers,
 exactly (non-comment occurrences in every package module outside the
 defining module and `Audit.lean`'s pin list):
 
@@ -380,7 +387,7 @@ PROGRAM-DONE for a value satisfying `ψ` within `k + 2` iterations. The
 call case applies the hypothesis to the callee at the pushed control
 with the continuation budget added; every round is `loop_step_frag`
 (`driverDoneCtl_step`, `:567`). The launcher is `wpt_driver_done_procs`
-(`:850`; a populated table, the entry control `⟨[], some p, ℓ, lc, sp⟩`
+(`:853`; a populated table, the entry control `⟨[], some p, ℓ, lc, sp⟩`
 of a declared procedure).
 It is the route of `fib_rec_certified_production` (`main` calls `fib`,
 which calls itself twice) and `even_odd_certified_production`
@@ -421,7 +428,7 @@ CerbND.fuelExhaustedKill`, or `nd_status.Active dres` with the
 postcondition. The shipped `drive` is the instance at
 `fuel := CerbFuel.driverFuel` (`CerbND.lean:467`, `rfl`).
 
-### 2.5 The ten closed shipped-driver statements
+### 2.5 The eleven closed shipped-driver statements
 
 Each has the execution function
 `CerbND.runND (_root_.drive fmapEmpty false F args) ((initial_driver_state sup F fs).1)`,
@@ -430,7 +437,7 @@ with a pure readout on `dres`/`dst'`. None carries a termination
 hypothesis. Where the certified round count depends on an input, the
 in-budget bound is an explicit premise against the name the semantics
 exports for this purpose (`CerbFuel.driverFuel = 100000000`, generated
-`CerbFuel.lean:71`). All ten are pinned trio-exact (§3). The tenth,
+`CerbFuel.lean:71`). All eleven are pinned trio-exact (§3). The tenth,
 `t1_certified_production` (E4), is the first over an EMITTED program:
 `../docs/corpus-e0/t1.c`'s `main` as the Cerberus C front end emits it,
 transcribed verbatim (`Examples/CorpusE0.lean:960`, tied to
@@ -446,7 +453,7 @@ D-6): `conv_loaded_int('signed int', Specified(INT_MAX+1))` classifies
 `.kill` on this file where the pipeline's file WRAPS through the impl
 function (KOI A7; the whole `core_file` as the statement's object is the
 named target, not done). The count "ten" follows the README and CLAIMS:
-the nine pre-dialect statements and t1; the dialect arc's three closed
+the nine pre-dialect statements, t1 and t5; the dialect arc's three closed
 statements over its synthetic exhibits — `exhibitA_prod_e1`
 (`EmittedAExhibit.lean:297`), `exhibitB_prod_e2` (`EmittedBExhibit.lean:672`),
 `exhibitC_prod_e3` (`EmittedCExhibit.lean:731`) — have the same execution
@@ -465,6 +472,7 @@ table rather than counted here.
 | `fib_rec_certified_production` | `FibRecExhibit.lean:852` | `hn`, `hfuel : fibRounds n.toNat + 4 ≤ CerbFuel.driverFuel` |
 | `even_odd_certified_production` | `EvenOddExhibit.lean:710` | `hn`, `hfuel : 3 * n.toNat + 6 ≤ CerbFuel.driverFuel` |
 | `t1_certified_production` | `CorpusT1Exhibit.lean:832` | none (the file is `prodFileLib stdlibE3 [] t1Main`, above) |
+| `t5_certified_production` | `CorpusT5Exhibit.lean` | initial symbol supply at least 600; same library-fragment file boundary as t1 |
 
 Package definitions in these statements, exactly — beyond the authored
 program and its wrapper (`prodFile`/`prodFileWith`/`prodFileLib`), read
@@ -481,7 +489,8 @@ off the ten statement texts:
 | `malloc_list_certified_production` | engine fields only | none — the budget premise is in engine vocabulary, bridged inside the proof (`ml_budget_bridge`, `MallocListExhibit.lean:1630`) |
 | `fib_rec_certified_production` | `ivVal`, `fibSpec` | `fibRounds` (`FibRecExhibit.lean:450`: `fibRounds 0 = fibRounds 1 = 3`, `fibRounds (n+2) = fibRounds (n+1) + fibRounds n + 9`; closed form `fibRounds n + 9 = 12 · fibSpec (n+1)`, `:470`) |
 | `even_odd_certified_production` | `ivVal` | — |
-| `t1_certified_production` | `lint` (`IntRules.lean:69`: the loaded `Specified` integer value); `stdlibE3` (`StdCore.lean:153`) and `t1Main` (`Examples/CorpusE0.lean:960`) inside the file object | — |
+| `t1_certified_production` | `lint` (`IntRules.lean:69`: the loaded `Specified` integer value); `stdlibE3` (`StdCore.lean:153`) and `t1Main` (`Examples/CorpusE0.lean:1061`) inside the file object | — |
+| `t5_certified_production` | `lint`, `stdlibE3` and `CorpusE0.t5Main` inside the file object | — |
 
 Beside them, two closed PARTIAL forms consume `prod_run_safe_procs`:
 `fib_rec_certified` (`FibRecExhibit.lean:803`) and `even_odd_certified`
@@ -547,11 +556,12 @@ has no equation for them and a theorem holds at every value they take.
 
 **What the build checks** (`Audit.lean`, the last import of the library
 root, elaborated by every `lake build`). Every pinned export exists, is
-a theorem, and has axiom set EXACTLY the trio (`:826`–`:837`; 712 pins at
+a theorem, and has axiom set EXACTLY the trio (`:826`–`:837`; 779 pins at
 this revision: 650 at the E4 head, `docs/2026-09-05_e4-notes.md` §8, plus
 the two MirrorCoverage `unseq` rounds the E4 range audit's R-1 measured
 trio-exact and unpinned, `docs/2026-09-05_audit-e4-range.md`, plus E5
-slice 1's 60, `docs/2026-09-05_e5-notes.md` §8). Every theorem of every `CerberusHeapLang.*`
+slice 1's 60 and the second slice/t5's 67
+(`docs/2026-09-05_e5b-axioms.txt`; 19 sub-trio additions remain unpinned). Every theorem of every `CerberusHeapLang.*`
 module, internal details included, is bounded by the trio (`:838`–`:857`).
 `sorryAx`/`ofReduceBool`/`ofReduceNat` reach no constant of any kind
 (`:858`–`:874`). Precision: "exactly the trio" is the pinned exports' property;
@@ -746,12 +756,13 @@ them read.
   regenerated and diffed at `test_unit.sh:47`). Its rows are the
   engine-SUCCESS variants of every `Frag` constructor, a hand-maintained
   table read off `Frag`, `Step` and the engine's memory-operation arms.
-  Each row is classified RULE, RULE-TOTAL-UNDEMONSTRATED, PARTIAL-ONLY,
-  NO-RULE or OUT-OF-SCOPE. At this revision (the manifest's tail line):
-  35 constructors, 76 rows — 40 RULE, 0 RULE-TOTAL-UNDEMONSTRATED, 0
-  PARTIAL-ONLY, 30 NO-RULE, 6 OUT-OF-SCOPE, 0 red, 22 consumer modules
-  (dialect arc E5 slice 1: five MIRRORED-and-CLASSIFIED rows awaiting
-  their rule faces, and `nd` OUT-OF-SCOPE).
+  Each row distinguishes rules consumed at both strata, a proved rule
+  with one stratum still undemonstrated, partial-only support, no rule,
+  or an out-of-scope shape. The generated report's tail is the current
+  census. E5's five new rule rows are RULE-PARTIAL-UNDEMONSTRATED:
+  t5 consumes the total faces; no partial corpus derivation consumes
+  their twins yet. The report checks both facts and requires a row
+  update when the missing consumer appears.
   What green establishes is stated exactly by the generated, gate-diffed
   header (`docs/CAPABILITY_MANIFEST.md:8`–`:26`, "WHAT GREEN ESTABLISHES,
   EXACTLY"). Not established:
@@ -836,7 +847,6 @@ Each item points at its register entry; none is hidden in a proof.
   | `sseq_sym`, `sseq_tuple`, `wseq_sym` (3) | the binder at an ANNOTATED head value `{A}v` (the engine's LETS-/LETW-ANNOT; mirrored since E1/E2, `Step.*_annot`; no binder rule — every emitted binder's head is a `bound`, which drops the dynamic annotations; the fourth such row, `wseq_tuple` at an annotated tuple, is RULE since E4: `wps_wseq_tuple_annot`, the shape every corpus `let weak (a, b) = unseq(…)` reaches) |
   | `pure_op` (5, E3) | the emitted arithmetic and std.core leaves the mirror computes but no rule states: `catch_exceptional_condition_sub/_mul` (the `+` rule's shape, pending an exhibit), `_div/_rem_t/_shl/_shr` (the memory model's own divisor-zero/shift arms), `wrapI_<op>` (unsigned; the corpus is `int`), standalone `__conv_int__` (its non-representable arm is the impl-defined wrap `mk_conv_int` computes), standalone `conv_int`/`is_representable_integer` and their bodies' leaves (`Ivmin`/`Ivmax`, ctype `=`, `/\\`, `\\/`, `is_unsigned` at a leaf — reached inside the RULED `conv_loaded_int` unfolding). The `Impl`-name `PEcall` is the OUT-OF-SCOPE row above, not counted here |
   | `unseq` (2, E4) | the race: `unseq(v_1, …, v_n)` whose components' dynamic annotations RACE (`do_race`) — the engine's UB035 kill, mirrored as the classification `complete_unseq_vals` (`.killed`); no rule delivers a value there and `wpt_unseq_vals` requires `collectUnseq … = some _`; and a jump or a call reaching the root THROUGH the `Cunseq` frame (`run l(…)`/`pcall f(…)` as the focused component — mirrored, `Step.unseq_inv`'s run/call disjuncts, `wpt_jump_frame_unseq` carries the jump frame; no exhibit reaches one, so no rule face is demonstrated; E6/E7's consumer) |
-  | `neg_store`, `neg_store_op`, `excluded_store`, `excluded_store_op`, `case_op` (5, E5 slice 1) | the negative-action round (`neg(store …)` under a `bound`, `Step.neg_bound`), the excluded store's two rounds (`Step.excluded_store`/`_eval`) and the `case` EVAL round at a non-value scrutinee (`Step.case_eval`) — each MIRRORED and CLASSIFIED (`complete_neg_act`, `complete_excluded_store(_op)`, `complete_case_op`), no rule face yet (E5 slice 2: `wps_neg_bound`, `wps_excluded_store(_eval)`, `wps_case_eval`); `nd` is the sixth OUT-OF-SCOPE row (the scheduler fork, `ShippedRefusal.fork`) |
 
 - **Masks.** Both judgments are fixed at `⊤`; the generalisation is a
   RefinedC-arc item ([USER 2026-09-04]; §1; KOI B11).

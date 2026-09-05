@@ -477,4 +477,69 @@ theorem unseq_vals_round {M : MachineCtx} (a a1 b1 a2 a2' b2 : List annot)
         show lemDefaultFuel = 999999 + 1 from rfl]; omega)
     (@Step.unseq_vals M a [.pure a1 b1 v1, .annot a2 a2' b2 [DA_pos [] fp] v2] _ _ _ _ _ rfl)
 
+/-! ## E5: negative-action, excluded-store and case-evaluation rounds -/
+
+/-- The negative-action round draws both supplies and rewrites the bound. -/
+theorem neg_bound_round {M : MachineCtx} (an a : List annot) (loc : CerbLocation.Loc)
+    (ann : core_run_annotation) (ty : ctype) (pv : CerbMem.PointerValue) (cv : value)
+    (mo : memory_order) (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (ctl : Ctl) (σ : Mem) :
+    let act := Action loc ann (Store0 false (Pexpr [] () (PEval (Vctype ty)))
+      (Pexpr [] () (PEval (Vobject (OVpointer pv)))) (Pexpr [] () (PEval cv)) mo)
+    CerberusRound M (Expr an (Ebound (negActRedex a act)), ev0 :: evs, ctl, σ)
+      (Expr an (Ebound (negRewrite ctl.sup.excl (fresh_given_int ctl.sup.sym) CTX act)),
+        ev0 :: evs, (ctl.upd a).draw, σ) := by
+  dsimp only
+  exact engine_step_matchU (.bound .neg_store) (Nat.le_of_ble_eq_true rfl) (.neg_bound rfl rfl)
+
+/-- Discharging the excluded store retains its negative dynamic annotation. -/
+theorem excluded_store_round {M : MachineCtx} (a : List annot) (n : Nat) (loc : CerbLocation.Loc)
+    (ann : core_run_annotation) (ty : ctype) (pv : CerbMem.PointerValue) (cv : value)
+    (mo : memory_order) (mv : CerbMem.MemValue) (fp : CerbMem.Footprint)
+    (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (ctl : Ctl) (σ σ' : Mem)
+    (hmv : memValueFromValue M.tagDefs (Ctype [] (unatomic_ ty)) cv = some mv)
+    (hmem : applyMemM (CerbMem.storeM M.tagDefs loc ty false pv mv) σ = some (fp, σ')) :
+    CerberusRound M (excludedStoreRedex a n loc ann false ty pv cv mo, ev0 :: evs, ctl, σ)
+      (Expr [] (Eannot [DA_neg n [] fp] (Expr [] (Epure (Pexpr [] () (PEval Vunit))))),
+        ev0 :: evs, ctl.upd a, σ') :=
+  engine_step_matchU .excluded_store (Nat.le_of_ble_eq_true rfl)
+    (.excluded_store rfl rfl rfl hmv hmem)
+
+/-- The excluded store evaluates a symbolic pointer before discharge. -/
+theorem excluded_store_eval_round {M : MachineCtx} (a : List annot) (n : Nat) (loc : CerbLocation.Loc)
+    (ann : core_run_annotation) (ty : ctype) (x : sym) (pv : CerbMem.PointerValue) (cv : value)
+    (mo : memory_order) (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (ctl : Ctl) (σ : Mem)
+    (hx : evalPexpr M.tagDefs M.extern M.file (ev0 :: evs) (stdSym x) = some (Vobject (OVpointer pv))) :
+    CerberusRound M
+      (excludedStoreOpRedex a n loc ann ty (stdSym x) (Pexpr [] () (PEval cv)) mo, ev0 :: evs, ctl, σ)
+      (excludedStoreRedex a n loc ann false ty pv cv mo, ev0 :: evs, ctl.upd a, σ) :=
+  engine_step_matchU (.excluded_store_op rfl (.sym [] x) (.val [] cv)
+      (Nat.le_of_ble_eq_true rfl) (Nat.le_of_ble_eq_true rfl))
+    (Nat.le_of_ble_eq_true rfl) (.excluded_store_eval rfl hx (evalPexpr_val ..))
+
+/-- A non-value case scrutinee is evaluated in its own engine round. -/
+theorem case_eval_round {M : MachineCtx} (a : List annot) (x : sym) (v r : value)
+    (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (ctl : Ctl) (σ : Mem)
+    (hx : evalPexpr M.tagDefs M.extern M.file (ev0 :: evs) (stdSym x) = some v) :
+    let pats : List (pattern × CoreExpr) :=
+      [(Pattern [] (CaseBase (none, BTy_unit)), Expr [] (Epure (Pexpr [] () (PEval r))))]
+    CerberusRound M (Expr a (Ecase (stdSym x) pats), ev0 :: evs, ctl, σ)
+      (Expr a (Ecase (Pexpr [] () (PEval v)) pats), ev0 :: evs, ctl.upd a, σ) := by
+  dsimp only
+  refine engine_step_matchU (.case_op rfl (.sym [] x) (Nat.le_of_ble_eq_true rfl) ?_ ?_ ?_)
+    (Nat.le_of_ble_eq_true rfl) (.case_eval rfl hx)
+  · intro q hq
+    obtain rfl := List.mem_singleton.mp hq
+    exact .val_pure _
+  · intro cv e' hsel
+    have hs : select_case subst_sym_expr cv
+        [(Pattern [] (CaseBase (none, BTy_unit)), Expr [] (Epure (Pexpr [] () (PEval r))))] =
+          some (Expr [] (Epure (Pexpr [] () (PEval r))) : CoreExpr) := rfl
+    rw [hs] at hsel
+    cases hsel
+    exact .val_pure _
+  · apply case_hbsz_of_branches
+    intro q hq
+    obtain rfl := List.mem_singleton.mp hq
+    exact Nat.le_of_ble_eq_true rfl
+
 end CerberusHeapLang

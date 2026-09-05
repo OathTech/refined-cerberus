@@ -54,7 +54,8 @@ The production entry is now the pure, supply-threaded
 `initial_driver_state (sup : Nat) file fs : driver_state × Nat`
 (Driver.lean:446; `initial_core_run_state`, Core_run_aux.lean:406,
 seeds `sym_supply` from `sup`), and the production-entry theorems
-quantify over the supply — the fragment never reads it. The nine
+quantify over the supply; E5 assignment clients additionally expose a
+lower bound on that initial supply. The nine
 former boundary exports sit in `trioExports` like everything else.
 Re-pinned 2026-09-03 to cerberus-lean `f95ef8d9c317fa6b50cf6691216a8c37b1d3eabf`
 (the fuel arc: the drive cone's fuel exhaustion is the kernel-transparent
@@ -230,6 +231,7 @@ import CerberusHeapLang.EmittedAExhibit
 import CerberusHeapLang.EmittedBExhibit
 import CerberusHeapLang.EmittedCExhibit
 import CerberusHeapLang.CorpusT1Exhibit
+import CerberusHeapLang.CorpusT5Exhibit
 import CerberusHeapLang.OverflowExhibit
 import CerberusHeapLang.Examples.CorpusE0
 import CerberusHeapLang.Examples.CorpusE5
@@ -891,7 +893,38 @@ def trioExports : List Name := [
   ``CerberusHeapLang.substFold_pure, ``CerberusHeapLang.Frag.substFold_pure,
   ``CerberusHeapLang.CorpusE0.t5Load_frag, ``CerberusHeapLang.CorpusE0.t5Gt_frag,
   ``CerberusHeapLang.CorpusE0.t5Cond_frag, ``CerberusHeapLang.CorpusE0.t5Bool_frag,
-  ``CerberusHeapLang.CorpusE0.t5AssignBlock_frag, ``CerberusHeapLang.CorpusE0.t5Main_frag]
+  ``CerberusHeapLang.CorpusE0.t5AssignBlock_frag, ``CerberusHeapLang.CorpusE0.t5Main_frag,
+  -- E5 second slice and t5: snapshot-difference measurement of every new
+  -- non-internal theorem (86 total: 67 trio-exact, 19 sub-trio). Twelve
+  -- were pinned at the fragment checkpoint; these are the remaining 55.
+  ``CerberusHeapLang.Step.sup_sym_le, ``CerberusHeapLang.case_eval_round,
+  ``CerberusHeapLang.collect_new_t5Main, ``CerberusHeapLang.excluded_store_atomic,
+  ``CerberusHeapLang.excluded_store_eval_round, ``CerberusHeapLang.excluded_store_round,
+  ``CerberusHeapLang.neg_bound_round, ``CerberusHeapLang.procCtxF_runState_labeled,
+  ``CerberusHeapLang.procCtxF_sym_supply, ``CerberusHeapLang.procCtx_runState_labeled,
+  ``CerberusHeapLang.procCtx_sym_supply, ``CerberusHeapLang.symOrd_ne_eq_of_num_ne,
+  ``CerberusHeapLang.symOrd_self, ``CerberusHeapLang.t5BoolBranch_eval,
+  ``CerberusHeapLang.t5Bool_select, ``CerberusHeapLang.t5CmpBranch_eval,
+  ``CerberusHeapLang.t5CondPe_eval, ``CerberusHeapLang.t5Cond_select,
+  ``CerberusHeapLang.t5Gt_select, ``CerberusHeapLang.t5Int_encodes,
+  ``CerberusHeapLang.t5Int_storable, ``CerberusHeapLang.t5LsT_readout,
+  ``CerberusHeapLang.t5Main_labeledAt, ``CerberusHeapLang.t5RetQ_bindArgs,
+  ``CerberusHeapLang.t5RetQ_inv, ``CerberusHeapLang.t5RetQ_lookup,
+  ``CerberusHeapLang.t5Tuple_eval, ``CerberusHeapLang.t5_blockSpecsT,
+  ``CerberusHeapLang.t5_certified_production, ``CerberusHeapLang.t5_wpt,
+  ``CerberusHeapLang.t5fr529_lookup, ``CerberusHeapLang.update_env_tuple2_mixed,
+  ``CerberusHeapLang.update_env_tuple_wild_sym, ``CerberusHeapLang.wps_bound_wseq_tuple,
+  ``CerberusHeapLang.wps_bound_wseq_tuple_aux, ``CerberusHeapLang.wps_case_eval,
+  ``CerberusHeapLang.wps_excluded_store, ``CerberusHeapLang.wps_excluded_store_eval,
+  ``CerberusHeapLang.wps_neg_bound, ``CerberusHeapLang.wps_neg_round,
+  ``CerberusHeapLang.wpt_bound_wseq_tuple, ``CerberusHeapLang.wpt_case_eval,
+  ``CerberusHeapLang.wpt_excluded_store, ``CerberusHeapLang.wpt_excluded_store_eval,
+  ``CerberusHeapLang.wpt_neg_bound, ``CerberusHeapLang.wpt_neg_round,
+  ``CerberusHeapLang.wpt_t5AssignBlock, ``CerberusHeapLang.wpt_t5Bool,
+  ``CerberusHeapLang.wpt_t5Cond, ``CerberusHeapLang.wpt_t5Gt,
+  ``CerberusHeapLang.wpt_t5If, ``CerberusHeapLang.wpt_t5Load,
+  ``CerberusHeapLang.wpt_t5Return, ``CerberusHeapLang.wpt_unseq_pure_right,
+  ``subst_sym_pexpr_lemFuel.eq_def]
 
 def sortedNames (ns : Array Name) : Array String :=
   (ns.map (·.toString)).qsort (· < ·)

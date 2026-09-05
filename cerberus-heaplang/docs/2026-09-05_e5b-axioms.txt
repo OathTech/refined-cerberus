@@ -1,0 +1,90 @@
+Snapshot basis: 2026-09-05_e5-signatures-post.txt (E5 first slice).
+Measured after t5 and E5 round integration; PIN means added by this checkpoint, PINNED means already pinned by the fragment checkpoint.
+
+PINNED CerberusHeapLang.CorpusE0.t5AssignBlock_frag
+PINNED CerberusHeapLang.CorpusE0.t5Bool_frag
+PINNED CerberusHeapLang.CorpusE0.t5Cond_frag
+PINNED CerberusHeapLang.CorpusE0.t5Gt_frag
+PINNED CerberusHeapLang.CorpusE0.t5Load_frag
+PINNED CerberusHeapLang.CorpusE0.t5Main_frag
+PINNED CerberusHeapLang.Frag.of_pePure
+PINNED CerberusHeapLang.Frag.substFold_pure
+PINNED CerberusHeapLang.PePure.subst
+PINNED CerberusHeapLang.PePure.subst_lemFuel
+PIN CerberusHeapLang.Step.sup_sym_le
+SUB CerberusHeapLang.add_exclusion_CTX: #[]
+SUB CerberusHeapLang.add_exclusion_annot: #[]
+SUB CerberusHeapLang.add_exclusion_sseq: #[]
+SUB CerberusHeapLang.add_exclusion_wseq: #[]
+SUB CerberusHeapLang.break_at_sseq_negAssign: #[]
+PIN CerberusHeapLang.case_eval_round
+SUB CerberusHeapLang.ccallFreeList.eq_def: #[propext]
+SUB CerberusHeapLang.collectUnseq.eq_def: #[propext]
+PIN CerberusHeapLang.collect_new_t5Main
+SUB CerberusHeapLang.do_race_addExcl_neg: #[Quot.sound, propext]
+SUB CerberusHeapLang.do_race_nil_right: #[propext]
+SUB CerberusHeapLang.excludedStoreExpr_eq: #[]
+PIN CerberusHeapLang.excluded_store_atomic
+PIN CerberusHeapLang.excluded_store_eval_round
+PIN CerberusHeapLang.excluded_store_round
+SUB CerberusHeapLang.lem_elem_self: #[propext]
+SUB CerberusHeapLang.lem_nat_beq_self: #[propext]
+SUB CerberusHeapLang.negRedex?_negAssignBody: #[propext]
+PIN CerberusHeapLang.neg_bound_round
+SUB CerberusHeapLang.peDepthAlts_map_eq: #[propext]
+SUB CerberusHeapLang.peDepthList_map_eq: #[propext]
+PIN CerberusHeapLang.procCtxF_runState_labeled
+PIN CerberusHeapLang.procCtxF_sym_supply
+PIN CerberusHeapLang.procCtx_runState_labeled
+PIN CerberusHeapLang.procCtx_sym_supply
+PINNED CerberusHeapLang.substFold_pure
+PINNED CerberusHeapLang.subst_sym_expr_pure
+PIN CerberusHeapLang.symOrd_ne_eq_of_num_ne
+PIN CerberusHeapLang.symOrd_self
+PIN CerberusHeapLang.t5BoolBranch_eval
+PIN CerberusHeapLang.t5Bool_select
+PIN CerberusHeapLang.t5CmpBranch_eval
+PIN CerberusHeapLang.t5CondPe_eval
+PIN CerberusHeapLang.t5Cond_select
+PIN CerberusHeapLang.t5Gt_select
+PIN CerberusHeapLang.t5Int_encodes
+PIN CerberusHeapLang.t5Int_storable
+SUB CerberusHeapLang.t5Kill_eq: #[]
+PIN CerberusHeapLang.t5LsT_readout
+PIN CerberusHeapLang.t5Main_labeledAt
+SUB CerberusHeapLang.t5Main_pot: #[propext]
+PIN CerberusHeapLang.t5RetQ_bindArgs
+PIN CerberusHeapLang.t5RetQ_inv
+PIN CerberusHeapLang.t5RetQ_lookup
+SUB CerberusHeapLang.t5Store_eq: #[]
+PIN CerberusHeapLang.t5Tuple_eval
+PIN CerberusHeapLang.t5_blockSpecsT
+PIN CerberusHeapLang.t5_certified_production
+PIN CerberusHeapLang.t5_wpt
+PIN CerberusHeapLang.t5fr529_lookup
+PIN CerberusHeapLang.update_env_tuple2_mixed
+PIN CerberusHeapLang.update_env_tuple_wild_sym
+PIN CerberusHeapLang.wps_bound_wseq_tuple
+PIN CerberusHeapLang.wps_bound_wseq_tuple_aux
+PIN CerberusHeapLang.wps_case_eval
+PIN CerberusHeapLang.wps_excluded_store
+PIN CerberusHeapLang.wps_excluded_store_eval
+PIN CerberusHeapLang.wps_neg_bound
+PIN CerberusHeapLang.wps_neg_round
+PIN CerberusHeapLang.wpt_bound_wseq_tuple
+PIN CerberusHeapLang.wpt_case_eval
+PIN CerberusHeapLang.wpt_excluded_store
+PIN CerberusHeapLang.wpt_excluded_store_eval
+PIN CerberusHeapLang.wpt_neg_bound
+PIN CerberusHeapLang.wpt_neg_round
+PIN CerberusHeapLang.wpt_t5AssignBlock
+PIN CerberusHeapLang.wpt_t5Bool
+PIN CerberusHeapLang.wpt_t5Cond
+PIN CerberusHeapLang.wpt_t5Gt
+PIN CerberusHeapLang.wpt_t5If
+PIN CerberusHeapLang.wpt_t5Load
+PIN CerberusHeapLang.wpt_t5Return
+PIN CerberusHeapLang.wpt_unseq_pure_right
+SUB listMemberBy.eq_def: #[]
+PIN subst_sym_pexpr_lemFuel.eq_def
+MEASURED 86; TRIO 67; SUB-TRIO 19
