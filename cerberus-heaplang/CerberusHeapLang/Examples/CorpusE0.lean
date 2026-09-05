@@ -12,7 +12,7 @@ Three things live here — data, an instrument, and membership witnesses:
    procedure it names and the hand-transcribed `CoreExpr` of that
    procedure's body. E1 transcribes t1 (`t1Main`); E2 names its
    sub-terms (`t1LoadX`, `t1Spec3`, …). E5 adds t5_ifelse (`t5Main`)
-   and t6_switch (`t6Main`).
+   and t6_switch (`t6Main`), then t4_while (`t4Main`).
 
 2. THE SKELETON CHECK (`scripts/corpus_skeleton.lean` runs it): the
    SKELETON of a term — the preorder token stream of its expression
@@ -1509,6 +1509,176 @@ def t6Main : CoreExpr :=
   (seqE (act (t6Reg 28 38) (Store0 false intCty (psym t6rSym) (convLoadedInt (t6a 515)) NA))
     (Expr [Aloc (t6Reg 39 123), Astmt] (Esseq wc t6Switch t6AfterSwitch)))))))
 
+/-! ## t4 — the emitted while loop, including short-circuit evaluation
+
+The nested truth conversions below are present in the raw emission. In
+particular, the right comparison remains inside the nonzero branch of
+the conjunction; neither it nor the negative stores are sequentialised.
+-/
+
+def t4File : String := "refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t4_while.c"
+def t4Pos (c : Nat) : CerbLocation.Pos := ⟨t4File, 1, c⟩
+def t4Reg (c1 c2 : Nat) : CerbLocation.Loc := .region (t4Pos c1) (t4Pos c2) .noCursor
+def t4RegP (c1 c2 cp : Nat) : CerbLocation.Loc :=
+  .region (t4Pos c1) (t4Pos c2) (.pointCursor (t4Pos cp))
+def t4RegR : CerbLocation.Loc :=
+  .region (t4Pos 0) (t4Pos 99) (.regionCursor (t4Pos 4) (t4Pos 8))
+def t4iSym : sym := Symbol "" 508 (SD_ObjectAddress "i")
+def t4sSym : sym := Symbol "" 509 (SD_ObjectAddress "s")
+def t4RetSym : sym := sId 510 "ret"
+def t4ContinueSym : sym := sId 511 "continue"
+def t4BreakSym : sym := sId 512 "break"
+def t4WhileSym : sym := sId 515 "while"
+
+def t4Load (x : sym) (n c1 c2 : Nat) : CoreExpr :=
+  letW [Aloc (t4Reg c1 c2), Aexpr] (t5a n) ptrTy
+    (Expr [Aloc (t4Reg c1 c2), Aexpr] (Epure (psym x)))
+    (act (t4Reg c1 c2) (Load0 intCty (psym (t5a n)) NA))
+
+def t4LtPats (p q : Nat) : List (pattern × CoreExpr) :=
+  [(t5SpecTuplePat p q,
+    Expr [Astd "§6.5.8#6"] (Epure (Pexpr [] () (PEif
+      (Pexpr [] () (PEop OpLt (t5ConvInt p) (t5ConvInt q))) (specInt 1) (specInt 0))))),
+   (t5AnyTuplePat, t5Pure t5Unspec)]
+
+def t4Lt (x : sym) (tmp n m p q start : Nat) (k : Int) : CoreExpr :=
+  Expr [Astd "§6.5.8", Aloc (t4RegP start (start + 5) (start + 2)), Aexpr]
+    (Ewseq (t5TuplePat n m)
+      (Expr [] (Eunseq [t4Load x tmp start (start + 1),
+        Expr [Aloc (t4Reg (start + 4) (start + 5)), Aexpr] (Epure (specInt k))]))
+      (Expr [] (Ecase (t5Tuple n m) (t4LtPats p q))))
+
+def t4TruthPats (p q : Nat) (negate : Bool) : List (pattern × generic_pexpr Unit sym) :=
+  let test := Pexpr [] () (PEop OpEq (t5ConvInt p) (t5ConvInt q))
+  [(t5SpecTuplePat p q, Pexpr [] () (PEif
+      (if negate then Pexpr [] () (PEnot test) else test) (specInt 1) (specInt 0))),
+   (t5AnyTuplePat, t5Unspec)]
+
+/-- One emitted loaded-integer truth conversion, with its unsequenced
+    operand pair and specified/unspecified pure case. -/
+def t4Truth (loc : CerbLocation.Loc) (n m p q : Nat) (negate : Bool) (e : CoreExpr) : CoreExpr :=
+  Expr [Aloc loc, Aexpr] (Ewseq (t5TuplePat n m)
+    (Expr [] (Eunseq [e, Expr [Aloc loc, Aexpr] (Epure (specInt 0))]))
+    (t5Pure (Pexpr [] () (PEcase (t5Tuple n m) (t4TruthPats p q negate)))))
+
+def t4Left : CoreExpr :=
+  t4Truth (t4RegP 46 51 48) 524 525 526 527 false
+    (t4Truth (t4RegP 46 51 48) 529 530 531 532 false
+      (t4Lt t4iSym 534 535 536 537 538 46 5))
+
+def t4Right : CoreExpr :=
+  t4Truth (t4RegP 55 60 57) 543 544 545 546 true
+    (t4Lt t4sSym 548 549 550 551 552 55 7)
+
+def t4AndSpecified (pe : generic_pexpr Unit sym) : CoreExpr :=
+  Expr [] (Eif (Pexpr [] () (PEop OpEq pe
+    (Pexpr [] () (PEval (Vobject (OVinteger (CerbMem.integerIval 0)))))))
+    (letS [] (t5a 542) lint
+      (Expr [Aloc .unknown, Aexpr] (Epure (specInt 0))) (t5Pure (convLoadedInt (t5a 542))))
+    (letS [] (t5a 554) lint t4Right (t5Pure (convLoadedInt (t5a 554)))))
+
+def t4AndPats : List (pattern × CoreExpr) :=
+  [(t5SpecPat 541, t4AndSpecified (psym (t5a 541))),
+   (Pattern [] (CaseCtor Cunspecified [Pattern [] (CaseBase (none, BTy_ctype))]),
+    t5Pure (Pexpr [] () (PEundef (t4RegP 46 60 52) (UB_CERB004_unspecified UB_unspec_conditional))))]
+
+def t4And : CoreExpr :=
+  letS [Astd "6.5.13#3", Astd "6.5.13#4", Aloc (t4RegP 46 60 52), Aexpr]
+    (t5a 540) lint t4Left (Expr [] (Ecase (psym (t5a 540)) t4AndPats))
+
+def t4Cond : CoreExpr := bnd (t4Truth (t4RegP 46 60 52) 519 520 521 522 false t4And)
+
+def t4BoolPats : List (pattern × CoreExpr) :=
+  [(t5SpecPat 518, t5Pure (Pexpr [] () (PEif
+      (Pexpr [] () (PEnot (Pexpr [] () (PEop OpEq (psym (t5a 518))
+        (Pexpr [] () (PEval (Vobject (OVinteger (CerbMem.integerIval 1)))))))))
+      (Pexpr [] () (PEval Vtrue)) (Pexpr [] () (PEval Vfalse))))),
+   (Pattern [] (CaseCtor Cunspecified [Pattern [] (CaseBase (none, BTy_ctype))]),
+    Expr [] (End [t5Pure (Pexpr [] () (PEval Vtrue)), t5Pure (Pexpr [] () (PEval Vfalse))]))]
+
+def t4Bool : CoreExpr := Expr [] (Ecase (psym (t5a 517)) t4BoolPats)
+
+def t4AddPats (loc : CerbLocation.Loc) (p q : Nat) : List (pattern × generic_pexpr Unit sym) :=
+  [(t5SpecTuplePat p q, Pexpr [] () (PEctor Cspecified
+      [Pexpr [] () (PEcatch_exceptional_condition (.Signed .Int_) IOpAdd
+        (convInt (t5a p)) (convInt (t5a q)))])),
+   (t5AnyTuplePat, Pexpr [] () (PEundef loc UB036_exceptional_condition))]
+
+def t4Add (loc : CerbLocation.Loc) (n m p q : Nat) (e1 e2 : CoreExpr) : CoreExpr :=
+  Expr [Astd "§6.5.6", Aloc loc, Aexpr] (Ewseq (t5TuplePat n m)
+    (Expr [] (Eunseq [e1, e2]))
+    (t5Pure (Pexpr [] () (PEcase (t5Tuple n m) (t4AddPats loc p q)))))
+
+def t4AddSI : CoreExpr := t4Add (t4RegP 68 73 70) 556 557 558 559
+  (t4Load t4sSym 561 68 69) (t4Load t4iSym 562 72 73)
+def t4AddI1 : CoreExpr := t4Add (t4RegP 79 84 81) 565 566 567 568
+  (t4Load t4iSym 570 79 80) (Expr [Aloc (t4Reg 83 84), Aexpr] (Epure (specInt 1)))
+
+def t4Assign (x : sym) (start n m : Nat) (rhs : CoreExpr) : CoreExpr :=
+  Expr [Aloc (t4Reg start (start + 10)), Astmt]
+    (Esseq (Pattern [] (CaseBase (none, lint)))
+      (bnd (Expr [Astd "§6.5.16#3, sentence 4", Aloc (t4RegP start (start + 9) (start + 2)), Aexpr]
+        (Ewseq (Pattern [] (CaseCtor Ctuple
+            [Pattern [] (CaseBase (some (t5a n), ptrTy)), Pattern [] (CaseBase (some (t5a m), lint))]))
+          (Expr [Astd "§6.5.16#3, sentence 5"]
+            (Eunseq [Expr [Aloc (t4Reg start (start + 1)), Aexpr] (Epure (psym x)), rhs]))
+          (Expr [] (Ewseq wc
+            (Expr [Astd "§6.5.16.1#2, store"]
+              (Eaction (Paction polarity.Neg0 (Action (t4RegP start (start + 9) (start + 2))
+                empty_annotation (Store0 false intCty (psym (t5a n)) (convLoadedInt (t5a m)) NA)))))
+            (t5Pure (convLoadedInt (t5a m)))))))) t5Unit)
+
+def t4PtrInits : List SaveInit :=
+  [(t4iSym, ((ptrTy, none), psym t4iSym)), (t4sSym, ((ptrTy, none), psym t4sSym))]
+
+def t4Save (l : sym) (body : CoreExpr) : CoreExpr :=
+  Expr [Aloc (t4Reg 39 87), Astmt] (Esave (l, BTy_unit) t4PtrInits body)
+
+def t4Body : CoreExpr :=
+  seqE (Expr [Aloc (t4Reg 39 87), Astmt] (Esseq wc
+    (Expr [Aloc (t4Reg 62 87), Astmt] (Esseq wc
+      (t4Assign t4sSym 64 555 563 t4AddSI)
+      (seqE (t4Assign t4iSym 75 564 571 t4AddI1) t5Unit)))
+    (seqE (t4Save t4ContinueSym
+      (Expr [Aloc (t4Reg 39 87), Astmt] (Epure (Pexpr [] () (PEval Vunit)))))
+      t5Unit)))
+    (Expr [] (Erun empty_annotation t4WhileSym [psym t4iSym, psym t4sSym]))
+
+def t4While : CoreExpr := t4Save t4WhileSym
+  (letS [] (t5a 517) lint t4Cond (letS [] (t5a 516) BTy_boolean t4Bool
+    (Expr [] (Eif (psym (t5a 516)) t4Body t5Unit))))
+
+def t4Kill (x : sym) : CoreExpr := act (t4Reg 0 99) (Kill (Static0 intTy) (psym x))
+
+def t4Return : CoreExpr :=
+  letS [Aloc (t4Reg 88 97), Astmt] (t5a 573) lint (bnd (t4Load t4sSym 572 95 96))
+  (seqE (t4Kill t4iSym)
+  (seqE (t4Kill t4sSym)
+  (seqE (Expr [] (Erun empty_annotation t4RetSym [convLoadedInt (t5a 573)]))
+  (seqE (t4Kill t4iSym)
+  (seqE (t4Kill t4sSym)
+  (seqE t5Unit
+    (Expr [Aloc t4RegR, Astmt] (Esave (t4RetSym, lint)
+      [(t5a 574, ((lint, none), specInt 0))] (t5Pure (psym (t5a 574)))))))))))
+
+def t4AfterWhile : CoreExpr :=
+  seqE (t4Save t4BreakSym (Expr [Aloc (t4Reg 39 87), Astmt] (Epure (Pexpr [] () (PEval Vunit)))))
+    t5Unit
+
+/-- Full raw emitted main: both short-circuit arms, all labels, assignment
+    actions and dead cleanup remain. The file connection is a separate
+    charter criterion; skeleton agreement checks only the stated shape. -/
+def t4Main : CoreExpr :=
+  letS [Aloc (t4Reg 15 99), Astmt] t4iSym ptrTy (createInt (t4Reg 15 99) t4iSym)
+  (letS [Astmt] t4sSym ptrTy (createInt (t4Reg 15 99) t4sSym)
+  (letS [Aloc (t4Reg 17 27), Astmt] (t5a 513) lint
+    (bnd (Expr [Aloc (t4Reg 25 26), Aexpr] (Epure (specInt 0))))
+  (seqE (act (t4Reg 17 27) (Store0 false intCty (psym t4iSym) (convLoadedInt (t5a 513)) NA))
+  (letS [Aloc (t4Reg 28 38), Astmt] (t5a 514) lint
+    (bnd (Expr [Aloc (t4Reg 36 37), Aexpr] (Epure (specInt 0))))
+  (seqE (act (t4Reg 28 38) (Store0 false intCty (psym t4sSym) (convLoadedInt (t5a 514)) NA))
+    (seqE (Expr [Aloc (t4Reg 39 87), Astmt] (Esseq wc t4While t4AfterWhile)) t4Return))))))
+
 /-- One corpus row: the `.annot.core` file (under docs/corpus-e0/ at the
     repository root), the procedure, the transcription. -/
 structure Row where
@@ -1518,7 +1688,7 @@ structure Row where
 
 def corpusTable : List Row :=
   [⟨"t1.annot.core", "main", t1Main⟩, ⟨"t5_ifelse.annot.core", "main", t5Main⟩,
-   ⟨"t6_switch.annot.core", "main", t6Main⟩]
+   ⟨"t6_switch.annot.core", "main", t6Main⟩, ⟨"t4_while.annot.core", "main", t4Main⟩]
 
 /-- THE COVERAGE LEDGER of the corpus (E1 range audit N-2,
     docs/2026-09-05_audit-e1-range.md: the check was table-driven, so a
@@ -1533,7 +1703,6 @@ def corpusTable : List Row :=
 def pendingCorpus : List (String × String) :=
   [("t2.annot.core", "E6 (`Eccall`; the helper call in a `for` loop)"),
    ("t3_ptrarg.annot.core", "E6 (`Eccall`, `PtrValidForDeref`)"),
-   ("t4_while.annot.core", "E5 (negative actions; `while`)"),
    ("t7_struct.annot.core", "outside E — KOI B4 (`tagDefs`)"),
    ("t8_array.annot.core", "E6 (arrays; `PtrValidForDeref`)"),
    ("t9_fact.annot.core", "E7 (the outcome-list closed form)"),

@@ -2,7 +2,9 @@
 
 State: main has E1–E4; branch `dialect-e5` is resumed with user authorization.
 The t5 and t6 checkpoints have whole-term fragment witnesses, total derivations
-and shipped-driver theorems. E5 acceptance remains open (t4, range review and the
+and shipped-driver theorems. t4 has whole-term membership; its execution proof
+is next (`cerberus-heaplang/docs/2026-09-05_e5-t4-notes.md`). E5 acceptance
+remains open (t4 execution, range review and the
 listed debts). Current execution goal: docs/2026-09-05_demo-completion-charter.md.
 Maintained by the orchestrator; every entry
 points at the record that owns it. PURPOSE: an auditor should not

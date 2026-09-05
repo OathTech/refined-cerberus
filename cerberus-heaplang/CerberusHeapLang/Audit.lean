@@ -966,7 +966,25 @@ def trioExports : List Name := [
   ``CerberusHeapLang.t6Main_labeledAt,
   ``CerberusHeapLang.t6_certified_production,
   ``CerberusHeapLang.SymMap.addLabel,
-  ``CerberusHeapLang.labelAdd_lookup]
+  ``CerberusHeapLang.labelAdd_lookup,
+  -- t4 whole-term membership: seventeen new theorems, individually measured trio-exact.
+  ``CerberusHeapLang.CorpusE0.t4Load_frag,
+  ``CerberusHeapLang.CorpusE0.t4Lt_frag,
+  ``CerberusHeapLang.CorpusE0.t4Truth_frag,
+  ``CerberusHeapLang.CorpusE0.t4Left_frag,
+  ``CerberusHeapLang.CorpusE0.t4Right_frag,
+  ``CerberusHeapLang.CorpusE0.t4AndSpecified_frag,
+  ``CerberusHeapLang.CorpusE0.t4And_select,
+  ``CerberusHeapLang.CorpusE0.t4And_frag,
+  ``CerberusHeapLang.CorpusE0.t4Cond_frag,
+  ``CerberusHeapLang.CorpusE0.t4Bool_frag,
+  ``CerberusHeapLang.CorpusE0.t4Add_frag,
+  ``CerberusHeapLang.CorpusE0.t4Assign_frag,
+  ``CerberusHeapLang.CorpusE0.t4Save_frag,
+  ``CerberusHeapLang.CorpusE0.t4Body_frag,
+  ``CerberusHeapLang.CorpusE0.t4While_frag,
+  ``CerberusHeapLang.CorpusE0.t4Return_frag,
+  ``CerberusHeapLang.CorpusE0.t4Main_frag]
 
 def sortedNames (ns : Array Name) : Array String :=
   (ns.map (·.toString)).qsort (· < ·)
