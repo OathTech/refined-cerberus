@@ -21,6 +21,10 @@ open CerberusHeapLang CerberusHeapLang.CorpusE0
 
 def corpusDir : System.FilePath := "../docs/corpus-e0"
 
+/-- E3: the pinned std.core SOURCE (the semantics workspace the package
+    builds against; Main.lean:748 parses this file). -/
+def stdCorePath : System.FilePath := "../.cerberus-ws/runtime/libcore/std.core"
+
 def showToks (ts : List String) : String := " ".intercalate ts
 
 def firstDiff (a b : List String) : Option (Nat × Option String × Option String) :=
@@ -90,7 +94,7 @@ def coverageSweep (quiet : Bool) (rows : List Row) (pending : List (String × St
 
 def main : IO Unit := do
   let mut fail := false
-  IO.println "# Corpus skeleton check (E1 skeleton; E2 pure expressions)"
+  IO.println "# Corpus skeleton check (E1 skeleton; E2 pure expressions; E3 std.core fragment)"
   IO.println ""
   -- the coverage sweep, and its plant: the ledger with t1's row removed
   -- (and not made pending) MUST fail
@@ -152,6 +156,61 @@ def main : IO Unit := do
           IO.eprintln s!"FAIL: {row.file}: plant `Specified unwrapped` STILL MATCHES — vacuous instrument"
           fail := true
       IO.println s!"| {row.file} | {row.proc} | {termToks.length} | {if eqMain then "equal" else "DIFFER"} | {plantBound} | {plantStd} | {plantSp} |"
+  IO.println ""
+  -- E3: the transcribed standard library against the pinned std.core SOURCE
+  -- (the semantics workspace's runtime/libcore/std.core — the file the shipped
+  -- pipeline parses). Every `stdTable` row's body skeleton equals the token
+  -- stream of its `fun` body; every applicable plant mismatches; a row with no
+  -- applicable plant is red (an unplanted instrument).
+  IO.println "# E3: transcribed std.core fragment vs the pinned std.core source"
+  IO.println ""
+  let stdText? ← try
+      let t ← IO.FS.readFile stdCorePath
+      pure (some t)
+    catch e =>
+      IO.eprintln s!"FAIL: cannot read {stdCorePath}: {e}"
+      pure none
+  match stdText? with
+  | none => fail := true
+  | some stdText =>
+    IO.println "| fun | tokens | term = source | plants (applicable: verdict) |"
+    IO.println "|---|---|---|---|"
+    for row in stdTable do
+      match tokenizeFun stdText row.name, pexprSkeleton row.body with
+      | .ok textToks, .ok termToks =>
+        let eq := textToks == termToks
+        if !eq then
+          fail := true
+          IO.eprintln s!"FAIL: std.core/{row.name}: skeleton ≠ source"
+          IO.eprintln s!"  source: {showToks textToks}"
+          IO.eprintln s!"  term:   {showToks termToks}"
+          match firstDiff termToks textToks with
+          | some (i, a, b) => IO.eprintln s!"  first difference at token {i}: term {a}, source {b}"
+          | none => pure ()
+        let mut applicable := 0
+        let mut verdicts : List String := []
+        for (pname, plant) in stdPlants do
+          let (planted, applied) := plant row.body
+          if applied then
+            applicable := applicable + 1
+            match pexprSkeleton planted with
+            | .ok ts =>
+              if ts == textToks then
+                fail := true
+                IO.eprintln s!"FAIL: std.core/{row.name}: plant `{pname}` STILL MATCHES — vacuous instrument"
+                verdicts := verdicts ++ [s!"{pname}: MATCHES"]
+              else verdicts := verdicts ++ [s!"{pname}: mismatch (expected)"]
+            | .error e => verdicts := verdicts ++ [s!"{pname}: error ({e})"]
+        if applicable == 0 then
+          fail := true
+          IO.eprintln s!"FAIL: std.core/{row.name}: no plant applies — an unplanted row"
+        IO.println s!"| {row.name} | {termToks.length} | {if eq then "equal" else "DIFFER"} | {"; ".intercalate verdicts} |"
+      | .error e, _ =>
+        fail := true
+        IO.eprintln s!"FAIL: std.core/{row.name}: tokenizer: {e}"
+      | _, .error e =>
+        fail := true
+        IO.eprintln s!"FAIL: std.core/{row.name}: skeleton: {e}"
   IO.println ""
   if fail then
     -- `throw`, NOT `IO.Process.exit`: inside `#eval` Lean emits the action's

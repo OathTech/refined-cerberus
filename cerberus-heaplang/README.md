@@ -57,7 +57,14 @@ the covered operand grammar `PePure` — `PEval`/`PEsym`/the eight mirrored
 the constructor constants `Ivalignof(ty)`/`Ivsizeof(ty)` (E1), and (E2)
 THE LOADED-VALUE CURRENCY `Unspecified(ty)`, `Specified(e)` and tuples at
 covered operands, pure `case` at a covered scrutinee and covered branch
-bodies, `not`, the pure `if`, `undef(<<UB…>>)` (a fail-closed KILL) — the
+bodies, `not`, the pure `if`, `undef(<<UB…>>)` (a fail-closed KILL), and (E3)
+THE C INTEGER ARITHMETIC the elaborator emits — `__conv_int__`,
+`catch_exceptional_condition_<op>`, `wrapI_<op>` through the engine's own
+`mk_conv_int`/`mk_call_catch_exceptional_condition`/`mk_wrapI_op`,
+`Ivmin`/`Ivmax`, ctype equality, `/\\`, `\\/`, `is_unsigned` at a leaf — and
+STANDARD-LIBRARY CALLS (`PEcall` at a `Sym` of the file's `stdlib`,
+unfolded through the FILE OBJECT under a static per-callee budget:
+`conv_loaded_int → conv_int → is_representable_integer`) — the
 run-time annotation residue, the elaborator's located nodes and `bound`
 (E1), and (calls arc C2, 2026-09-03) THE
 PROCEDURE CALL `Eproc () (Sym f) pes` at `PePure` arguments AND THE
@@ -183,17 +190,20 @@ therefore inside the fragment's reach as far as its constructs are
 admitted: E1 admitted the annotations, `bound` and `Ivalignof`
 (`EmittedAExhibit`), E2 the loaded-value currency, the `Unspecified`
 store, pure `case` at a tuple and the tuple/weak binders
-(`EmittedBExhibit`), both certified on the shipped pipeline through the
-generic route; the corpus skeleton speedbump (`Examples/CorpusE0.lean`,
+(`EmittedBExhibit`), E3 the C `int` arithmetic (`__conv_int__`,
+`catch_exceptional_condition_add`) and the standard-library calls
+unfolded through the file object's `stdlib` (`EmittedCExhibit`: `x + 1`
+on the library-carrying file `prodFileLib stdlibE3`; the overflowing
+value's UB036 kill over the genuine driver's round, `OverflowExhibit`),
+all certified on the shipped pipeline through the generic route; the
+corpus skeleton speedbump (`Examples/CorpusE0.lean`,
 `scripts/corpus_skeleton.lean`) ties the hand transcription of the
 oracle's emitted t1 to its text token for token, pure expressions
-included (E2). What still keeps t1's `main` out of `Frag`:
-`conv_loaded_int` (a `PEcall`) and the `catch_exceptional_condition`
-branch of its `case` (E3), `unseq` (E4). What the kernel decides is the
-two operands' non-membership in `PePure` (`t1_convLoadedInt_uncovered`,
-`t1_case_uncovered`: `isPePure … = false` by `decide`); `main`'s exclusion
-from `Frag` follows by the grammar (`store_op`/`run`/`pure_op` admit
-`PePure` operands only) and is not itself a stated theorem.
+included (E2), and (E3) the transcribed std.core fragment `stdlibE3` to
+the pinned std.core SOURCE. What still keeps t1's `main` out of `Frag`
+is EXACTLY its `unseq` (E4): `t1MainWith_frag` (a `Frag` at any fragment
+in the `unseq`'s position), `t1_unseq_not_frag`, and the kernel-decided
+walk `t1_uncovered_exactly_unseq`.
 
 **In the fragment, mirrored and classified, but covered by NO rule
 (kill/free arc K3; raised by the K2 range audit, decided).** (i) The STATIC
@@ -660,7 +670,7 @@ theorems:
 | Divergence / limitation | Discharge / mover | Home |
 |---|---|---|
 | Fuel: the engine's `get_ctx` is fuel-bounded (`lemDefaultFuel = 10^6`) with an opaque exhaustion leaf, so the projection theorems carry the static premises `pot e ≤ lemDefaultFuel` and `pot cont ≤ lemDefaultFuel` per registered body (never a bound on the run length); total production statements carry `k + 2 ≤ CerbFuel.driverFuel` (the shipped driver's budget, 10^8 since the fuel arc) for the certified step count; the shipped driver's OWN fuel arm is the kernel-transparent kill `CerbND.fuelExhaustedKill` (pin `f95ef8d9c`), which the partial lane states as the admitted outcome beside delivery — at every fuel of the loop (`DriverSafeCtl`) and, in the closed form, of `CerbND.drive_lemFuel` (`prod_run_safe_procs`); measured: that outer fuel bounds `driver2`'s rounds only, the loop's budget being the fixed `10^8` inside the wrapper | a fuel-irrelevance theorem for `get_ctx`; a second upstream mirror fuelling the loop as well (recorded as available in `../docs/2026-09-02_review-of-cerberus-lean-fuel-arc-design.md` §7) if a loop-fuel-parametric CLOSED statement is ever wanted | `Soundness.lean` header ("FUEL HONESTY"), `Potential.lean`, `Adequacy.lean`; `../docs/2026-09-02_request-cerberus-lean-fuel-exhaustion-outcome.md`, `docs/2026-09-03_f1-notes.md` |
-| The elaborator's Core is admitted as far as E1–E2 reach (annotations with the live location, `bound`, `Ivalignof`; the loaded-value currency, the `Unspecified` store, pure `case`, the tuple and weak binders) and NOT yet whole: `conv_loaded_int`/`catch_exceptional_condition` (`PEcall`/`PEcatch_exceptional_condition`, E3), `unseq` (E4), negative actions (E5), `Eccall` (E6) — t1's `main` is outside `Frag` (`Examples/CorpusE0.lean`: `t1_convLoadedInt_uncovered`, `t1_case_uncovered`); the binder rules are stated at BARE heads (annotated heads mirrored, NO-RULE) | the dialect arc's remaining slices E3–E6 (`../docs/2026-09-04_emitted-core-dialect-design.md`) | "Scope, exactly"; `Soundness.lean` `Frag` header; `docs/2026-09-04_e1-notes.md`, `docs/2026-09-05_e2-notes.md` |
+| The elaborator's Core is admitted as far as E1–E2 reach (annotations with the live location, `bound`, `Ivalignof`; the loaded-value currency, the `Unspecified` store, pure `case`, the tuple and weak binders) and NOT yet whole: `conv_loaded_int`/`catch_exceptional_condition` (`PEcall`/`PEcatch_exceptional_condition`, E3), `unseq` (E4), negative actions (E5), `Eccall` (E6) — t1's `main` is outside `Frag` (`Examples/CorpusE0.lean`: `t1_convLoadedInt_uncovered`, `t1_case_uncovered`); the binder rules are stated at BARE heads (annotated heads mirrored, NO-RULE). E3 (2026-09-05): `conv_loaded_int`/`catch_exceptional_condition_add`/`__conv_int__` ARE admitted, mirrored through the file object and ruled (`wps_c_add`/`wpt_c_add`, `wps_conv_loaded_int`/`wpt_conv_loaded_int`; `EmittedCExhibit`, `OverflowExhibit`); the E2 exclusions flipped to `t1_convLoadedInt_covered`/`t1_case_covered`; t1's `main` is a `Frag` modulo its `unseq` (`t1MainWith_frag`, `t1_unseq_not_frag`, `t1_uncovered_exactly_unseq`) | the dialect arc's remaining slices E3–E6 (`../docs/2026-09-04_emitted-core-dialect-design.md`) | "Scope, exactly"; `Soundness.lean` `Frag` header; `docs/2026-09-04_e1-notes.md`, `docs/2026-09-05_e2-notes.md` |
 | Synthetic Core entry: authored Core wrapped by `prodFile`, not C through the frontend; the loop programs' label maps are nevertheless computed by the shipped registration (`*_labeledAt_production`, `LabeledAt`) | a C-frontend entry | `ProdEntry.lean` |
 | The judgments are indexed by the current PROCEDURE `p : Option sym`, not the full control, and their step clauses quantify over the call stack and execution location `(κ, ℓ)` (calls arc C3) — forcing fact: RETURN does not restore `exec_loc` (PCALL pushes `push_exec_loc`, RETURN writes `current_proc_opt`/`env`/`stack0`/`arena` only), so the caller's continuation after a return runs at a control differing from the call-time one in `execLoc`; the pre-C3 judgment at `ctl` is the instance `p := ctl.proc, κ := ctl.κ, ℓ := ctl.execLoc` at the empty table | by design (every C1/C2 rule was control-general, the C1 range audit) | `Wps.lean`, `Wpt.lean`; docs/2026-09-03_c3-notes.md |
 | The single-procedure driver lane (`wpt_driver_aux`/`_done(_alloc)`) is stated at the EMPTY table `emptyProcSpecT`, where the call clause is unsatisfiable (`wpt_empty_call_false`); the total lane THROUGH CALLS is the CPS lane `wpt_driver_cps`/`wpt_driver_done_procs` over the live-control delivery fact `DriverDoneCtl` (calls arc C4), consumed by `prod_run_eqJ_procs` — so the nine production statements are reached by two routes, the seven earlier ones at the empty table and recursive fib and even/odd through calls; the partial lane is at the live control throughout (`DriverSafeCtl`, `engine_adequacy`) | the single-procedure driver lane stays as the earlier statements' route (its restatement over the general lane was declined at C4: the file tie is not available at its context profile, `procCtx`); the former total `driveU` lane was deleted in the fuel-lane restatement | `ProdLoop.lean`, `ProdEntry.lean` |

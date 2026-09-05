@@ -49,6 +49,7 @@ exception is stated in that module's header.
 -/
 import CerberusHeapLang.Rules
 import CerberusHeapLang.Round
+import CerberusHeapLang.IntRules
 
 set_option autoImplicit false
 
@@ -361,5 +362,65 @@ theorem wseq_sym_pure_round {M : MachineCtx} (a pa a1 b1 : List annot) (x : sym)
         (ofValA (SpikeValA.pure [] [] Vunit)))) = 2 from rfl,
       show lemDefaultFuel = 999999 + 1 from rfl]; omega)
     Step.wseq_sym_pure
+
+/-! ## E3: the emitted integer arithmetic's rounds (`engine_step_matchU`
+instances: the shipped driver's round IS the mirror step at the PURE round
+of the emitted `+` and at the store ACTION_EVAL round whose value operand
+is the standard-library call `conv_loaded_int`). -/
+
+/-- THE PURE ROUND AT THE EMITTED `+`: `pure(case (a, b) of | (Specified(a'),
+    Specified(b')) => Specified(catch_exceptional_condition_add('signed int',
+    __conv_int__('signed int', a'), __conv_int__('signed int', b'))) | _ =>
+    undef(<<UB036>>) end)` at `a ↦ Specified(n1)`, `b ↦ Specified(n2)` in
+    `int`'s range with an in-range sum — the engine's `select_case` (the
+    `PEcase` arm), `mk_conv_int` (core_eval.lem:61, the `PEconv_int` arm
+    :819–826) and `mk_call_catch_exceptional_condition` (:99–105, the arm
+    :839–853) — rewrites the redex to `pure(Specified(n1 + n2))`. -/
+theorem cAdd_pure_round {M : MachineCtx} (a b a' b' : sym) (loc : CerbLocation.Loc) {n1 n2 : Int}
+    (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (ctl : Ctl) (σ : Mem)
+    (hv1 : evalPexpr M.tagDefs M.extern M.file (ev0 :: evs) (stdSym a) = some (lint n1))
+    (hv2 : evalPexpr M.tagDefs M.extern M.file (ev0 :: evs) (stdSym b) = some (lint n2))
+    (hsel : select_case subst_sym_pexpr (Vtuple [lint n1, lint n2]) (cAddPats a' b' loc) =
+      some (cAddBranch n1 n2))
+    (h1 : -2147483648 ≤ n1) (h1' : n1 ≤ 2147483647)
+    (h2 : -2147483648 ≤ n2) (h2' : n2 ≤ 2147483647)
+    (hs : -2147483648 ≤ n1 + n2) (hs' : n1 + n2 ≤ 2147483647) :
+    CerberusRound M
+      (pureRedex [] (cAddPe a b a' b' loc), ev0 :: evs, ctl, σ)
+      (Expr [] (Epure (Pexpr [] () (PEval (lint (n1 + n2))))), ev0 :: evs, ctl.upd [], σ) :=
+  engine_step_matchU
+    (Frag.pure_op rfl (PePure.of_isPePure rfl)
+      (by rw [peDepth_cAddPe, show lemDefaultFuel = 999999 + 1 from rfl]; omega))
+    (by rw [show esize (pureRedex [] (cAddPe a b a' b' loc)) = 1 from rfl,
+      show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+    (Step.pure_eval rfl (evalPexpr_cAdd hv1 hv2 hsel h1 h1' h2 h2' hs hs'))
+
+/-- THE STORE ACTION_EVAL ROUND AT A STANDARD-LIBRARY CALL: `store('signed
+    int', x, conv_loaded_int('signed int', y))` at `x ↦ p`, `y ↦ Specified(n)`
+    in range, on a file whose `stdlib` is the transcribed fragment — the
+    engine's `call_function` on the file's stdlib (core_eval.lem:120–163)
+    unfolds `conv_loaded_int → conv_int → is_representable_integer` and
+    the round rewrites the operands to the values `p` and `Specified(n)`. -/
+theorem store_conv_loaded_int_round {M : MachineCtx} (hstd : StdE3 M.file)
+    (a : List annot) (loc : CerbLocation.Loc) (ann : core_run_annotation) (mo : memory_order)
+    (x y : sym) {pv : CerbMem.PointerValue} {n : Int}
+    (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (ctl : Ctl) (σ : Mem)
+    (hx : evalPexpr M.tagDefs M.extern M.file (ev0 :: evs) (stdSym x) = some (Vobject (OVpointer pv)))
+    (hy : evalPexpr M.tagDefs M.extern M.file (ev0 :: evs) (stdSym y) = some (lint n))
+    (h1 : -2147483648 ≤ n) (h2 : n ≤ 2147483647) :
+    CerberusRound M
+      (storeOpRedex a loc ann sintTy (stdSym x)
+        (Pexpr [] () (PEcall (Sym convLoadedIntSym) [sintTyPe, stdSym y])) mo, ev0 :: evs, ctl, σ)
+      (storeExpr a loc ann sintTy pv (lint n) mo, ev0 :: evs, ctl.upd a, σ) :=
+  engine_step_matchU
+    (Frag.store_op rfl (PePure.of_isPePure rfl) (PePure.of_isPePure rfl)
+      (by rw [show peDepth (stdSym x) = 1 from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+      (by rw [show peDepth (Pexpr [] () (PEcall (Sym convLoadedIntSym) [sintTyPe, stdSym y])) = 26
+          from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega))
+    (by rw [show esize (storeOpRedex a loc ann sintTy (stdSym x)
+        (Pexpr [] () (PEcall (Sym convLoadedIntSym) [sintTyPe, stdSym y])) mo) = 1 from rfl,
+      show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+    (Step.store_eval rfl hx
+      (evalPexpr_convLoadedInt_spec [] hstd (by rw [sintTyPe, evalPexpr_val]) hy h1 h2))
 
 end CerberusHeapLang

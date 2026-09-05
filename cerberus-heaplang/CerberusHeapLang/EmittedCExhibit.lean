@@ -334,6 +334,193 @@ theorem frR_lookup_r {f : Fmap sym value} (hf : SymFrame f) (v : value) :
     fmapLookupBy symCmpK rSymC (envAdd rSymC v f) = some v := by
   rw [envAdd_lookup hf symCmpK, if_pos (by decide +kernel)]
 
+/-! ## THE PARTIAL JUDGMENT: the label specification and the whole program -/
+
+/-- The partial-lane label specification of `ret`: entered with the
+    delivered value `Specified(4)` at a symbol-keyed frame. -/
+def cLs (GF : BundledGFunctors) [SpikeGS .hasLC GF] : LabelSpec GF := fun l vs ρ =>
+  iprop(⌜symOrd l retSymC = .eq ∧ vs = [lint 4] ∧ ∃ f rest, ρ = f :: rest ∧ SymFrame f⌝)
+
+/-- The partial post: the delivered value is BARE `Specified(4)` (the cell
+    was killed before the jump, so no heap resource is delivered). -/
+def ψCE3s (GF : BundledGFunctors) [SpikeGS .hasLC GF] : SpikeVal → EnvStack → IProp GF :=
+  fun w _ => iprop(⌜w = SpikeVal.pure (lint 4)⌝)
+
+/-- The partial block specification of `ret`: its body `pure(r)` delivers
+    the bound value. -/
+theorem progCE3_blockSpecs [SpikeGS .hasLC GF]
+    {M : MachineCtx} {p : Option sym} (hex : ∀ x, resolveExtern M.extern x = x)
+    (hQ : M.labelsAt p = retQ) :
+    ⊢ blockSpecs (GF := GF) M p (cLs GF) emptyProcSpec (ψCE3s GF) := by
+  refine blockSpecs_intro fun l params cont vs ev0 evs hl => ?_
+  rw [hQ] at hl
+  obtain ⟨rfl, rfl⟩ := retQ_inv hl
+  dsimp only [cLs]
+  iintro %hpure
+  obtain ⟨-, rfl, f, rest, hρ, hf⟩ := hpure
+  cases hρ
+  rw [retQ_bindArgs]
+  iapply wps_pure _ _ rfl (symC_eval hex _ (frR_lookup_r hf (lint 4)))
+  dsimp only [ψCE3s]
+  ipureintro
+  rfl
+
+/-- THE WHOLE PROGRAM at `n = 3`, PARTIAL judgment (the same derivation
+    as `progCE3_wpt` without the budget arithmetic; the `+` by `wps_c_add`). -/
+theorem progCE3_wps [SpikeGS .hasLC GF]
+    {M : MachineCtx} {p : Option sym} (hstd : StdE3 M.file)
+    (hex : ∀ x, resolveExtern M.extern x = x) (hQ : M.labelsAt p = retQ)
+    (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (hf : SymFrame ev0) :
+    iprop(allocBudget (GF := GF) (allocCost M.tagDefs intTy 4)) ⊢
+      wps M p (cLs GF) emptyProcSpec (ψCE3s GF) (progCE3 3) (ev0 :: evs) := by
+  iintro Hcap
+  unfold progCE3
+  -- x := create(Ivalignof(int), int)
+  iapply wps_seq_sym
+  iapply wps_create_eval _ _ empty_annotation alignofIntPe intTyPe (PrefSource (ecLoc 1 15 1 54) [xSymC])
+    (ev0 :: evs) (align := CerbMem.alignofIval M.tagDefs intTy) (ty := intTy) rfl
+    (alignofIntPe_eval _ _) (evalPexpr_val _ _ _ _ _)
+  rw [alignofIval_intTy]
+  iapply wps_create _ _ empty_annotation .Prov_none 4 intTy (PrefSource (ecLoc 1 15 1 54) [xSymC])
+    (ev0 :: evs) intTy_size_pos intTy_nonatomic (fun a => intTy_decIndep a _)
+  isplitl [Hcap]
+  · iexact Hcap
+  iintro %px ⟨Hpt, -⟩
+  iexists (Vobject (OVpointer px))
+  isplit
+  · ipureintro
+    rfl
+  rw [update_env_sym xSymC ptrC]
+  -- a1 := bound(pure(Specified(3)))
+  iapply wps_seq_sym
+  iapply wps_bound
+  iapply wps_pure _ _ rfl (lintPe_eval _ 3)
+  simp only [SpikeVal.val]
+  iexists (lint 3)
+  isplit
+  · ipureintro
+    rfl
+  rw [update_env_sym a1SymC lintC]
+  -- store(int, x, conv_loaded_int(int, a1)) ; …
+  iapply wps_seq
+  iapply wps_store_eval _ _ empty_annotation intTy _ _ NA _ rfl
+    (pv := px) (cv := lint 3)
+    (symC_eval hex evs (frA1C_lookup_x hf px))
+    (convLoadedIntC_eval hstd (symC_eval hex evs (frA1C_lookup_a1 hf px)) (by decide) (by decide))
+  iapply wps_store _ _ empty_annotation intTy px (lint 3) NA threeMval
+    (List.replicate (CerbMem.sizeofCtype M.tagDefs intTy) undefByte) _
+    three_encodes (three_storable _)
+  isplitl [Hpt]
+  · iexact Hpt
+  iintro %fp1 Hpt
+  simp only [SpikeVal.mergeInto]
+  -- a2 := bound(let weak p = pure(x) in load(int, p))
+  iapply wps_seq_sym
+  iapply wps_bound
+  iapply wps_wseq_sym
+  iapply wps_pure _ _ rfl (symC_eval hex evs (frA1C_lookup_x hf px))
+  iexists (Vobject (OVpointer px))
+  isplit
+  · ipureintro
+    rfl
+  rw [update_env_sym pSymC ptrC]
+  icases (pointsToCell_cellOwn_iff M.tagDefs _ _ _ _).mp $$ Hpt
+    with ⟨%id, %a, %hpv, Hcell⟩
+  iapply wps_load_eval _ _ empty_annotation intTy _ NA _ rfl (pv := px)
+    (symC_eval hex evs (frPC_lookup_p hf px))
+  rw [hpv, show (cellPtr id a) = cellPtr id (a + ((0 : Nat) : Int))
+    from congrArg (cellPtr id) (by omega)]
+  iapply wps_load_cell_at _ _ empty_annotation id a intTy 0 intTy NA
+    (.own 1) (threeBytes M.tagDefs) _ (mv := threeMval) (by omega)
+    (fun lum fpm => three_reconstruct lum fpm _) three_loadTrap
+  isplitl [Hcell]
+  · iexact Hcell
+  iintro %fp2 Hcell
+  simp only [SpikeVal.val]
+  rw [three_fromMemValue,
+    show cellPtr id (a + ((0 : Nat) : Int)) = cellPtr id a from congrArg (cellPtr id) (by omega), ← hpv]
+  iexists (lint 3)
+  isplit
+  · ipureintro
+    rfl
+  rw [update_env_sym a2SymC lintC]
+  -- a3 := bound(let weak (b1, b2) = pure((a2, Specified(1))) in pure(x + y))
+  iapply wps_seq_sym
+  iapply wps_bound
+  iapply wps_wseq_tuple
+  iapply wps_pure _ _ rfl
+    (by rw [evalPexpr_ctor2, symC_eval hex evs (frA2C_lookup_a2 hf px), lintPe_eval _ 1]; rfl)
+  iexists [lint 3, lint 1]
+  isplit
+  · ipureintro
+    rfl
+  rw [show tuplePat [] [leafC b1SymC, leafC b2SymC] =
+    tuplePat [] [([], some b1SymC, lintC), ([], some b2SymC, lintC)] from rfl,
+    update_env_tuple2 b1SymC b2SymC lintC]
+  -- THE C `+`: the E3 rule at the frame (partial stratum)
+  iapply wps_c_add b1SymC b2SymC v1SymC v2SymC ecAddLoc _
+    (symC_eval hex evs (frBC_lookup_b1 hf px)) (symC_eval hex evs (frBC_lookup_b2 hf px))
+    cAdd_select_31 (by decide) (by decide) (by decide) (by decide) (by decide) (by decide)
+  simp only [SpikeVal.val]
+  iexists (lint 4)
+  isplit
+  · ipureintro
+    rfl
+  rw [update_env_sym a3SymC lintC]
+  -- kill(int, x) ; run ret(conv_loaded_int(int, a3)) ; …
+  iapply wps_seq
+  iapply wps_kill_eval _ _ empty_annotation (Static0 intTy) _ _ rfl (pv := px)
+    (symC_eval hex evs (frA3C_lookup_x hf px))
+  rw [hpv]
+  iapply wps_kill_emp _ _ empty_annotation (Static0 intTy) (cellPtr id a) intTy
+    (threeBytes M.tagDefs) _ rfl
+  isplitl [Hcell]
+  · iapply (pointsToCell_cellOwn_iff M.tagDefs _ _ _ _).mpr
+    iexists id, a
+    isplit
+    · ipureintro
+      rfl
+    · iexact Hcell
+  simp only [SpikeVal.mergeInto]
+  rw [← hpv]
+  iapply wps_seq
+  iapply wps_run [] empty_annotation retSymC [convLoadedIntC a3SymC] _ _
+    (by rw [hQ]; exact retQ_lookup)
+    (by rw [evalPexprs_cons, convLoadedIntC_eval hstd (symC_eval hex evs (frA3C_lookup_a3 hf px))
+          (by decide) (by decide), evalPexprs_nil]; rfl)
+  dsimp only [cLs]
+  ipureintro
+  exact ⟨by decide +kernel, rfl, _, _, rfl, (frBC_symFrame hf px).add _ _⟩
+
+/-! ## The `conv_loaded_int` PURE node at both strata (the rules
+`wps_conv_loaded_int`/`wpt_conv_loaded_int` as a client uses them: the
+elaborator emits `pure(conv_loaded_int(ty, a))` where a C conversion is a
+full expression of its own — e.g. `return (int)x;` — a node the exhibit's
+program does not contain; these two lemmas are the structurally-forcing
+consumers at a frame binding `a ↦ Specified(n)`). -/
+
+theorem convLoadedInt_pure_wps [SpikeGS .hasLC GF]
+    {M : MachineCtx} {p : Option sym} {Ls : LabelSpec GF} {Θ : ProcSpec GF}
+    {Ψ : SpikeVal → EnvStack → IProp GF} (hstd : StdE3 M.file)
+    (hex : ∀ x, resolveExtern M.extern x = x) {a : sym} {n : Int}
+    (f : Fmap sym value) (evs : List (Fmap sym value))
+    (hl : fmapLookupBy symCmpK a f = some (lint n))
+    (h1 : -2147483648 ≤ n) (h2 : n ≤ 2147483647) :
+    Ψ (.pure (lint n)) (f :: evs) ⊢
+      wps M p Ls Θ Ψ (Expr [] (Epure (convLoadedIntC a))) (f :: evs) :=
+  wps_conv_loaded_int _ _ _ hstd (sintTyPeC_eval _) (symC_eval hex evs hl) h1 h2
+
+theorem convLoadedInt_pure_wpt [SpikeGS .hasLC GF]
+    {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
+    {Ψ : SpikeVal → EnvStack → IProp GF} (hstd : StdE3 M.file)
+    (hex : ∀ x, resolveExtern M.extern x = x) {a : sym} {n : Int} {k : Nat} (hk : 2 ≤ k)
+    (f : Fmap sym value) (evs : List (Fmap sym value))
+    (hl : fmapLookupBy symCmpK a f = some (lint n))
+    (h1 : -2147483648 ≤ n) (h2 : n ≤ 2147483647) :
+    Ψ (.pure (lint n)) (f :: evs) ⊢
+      wpt M p Ls Θ k Ψ (Expr [] (Epure (convLoadedIntC a))) (f :: evs) :=
+  wpt_conv_loaded_int _ _ _ hk hstd (sintTyPeC_eval _) (symC_eval hex evs hl) h1 h2
+
 /-! ## THE TOTAL JUDGMENT: the label specification and the whole program -/
 
 /-- The label specification of `ret`: entered with the delivered value

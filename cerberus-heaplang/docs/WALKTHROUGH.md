@@ -1799,9 +1799,18 @@ the `#print axioms` recipe are in the README, "How to build and verify".
   flat-tuple and weak plain-symbol binders (`EmittedAExhibit`,
   `EmittedBExhibit`, both certified on the shipped pipeline;
   `Examples/CorpusE0.lean` ties t1's transcription to the oracle's text
-  and witnesses its E2 sub-terms in `Frag`). What still keeps t1's `main`
-  out of `Frag`: `conv_loaded_int` and `catch_exceptional_condition`
-  (`PEcall`/`PEcatch_exceptional_condition`, E3), `unseq` (E4), negative
+  and witnesses its E2 sub-terms in `Frag`). E3 (2026-09-05) adds the C
+  `int` arithmetic (`__conv_int__`, `catch_exceptional_condition_add`
+  through the engine's `mk_conv_int`/`mk_call_catch_exceptional_condition`)
+  and the standard-library calls unfolded through the FILE OBJECT
+  (`conv_loaded_int → conv_int → is_representable_integer`; the mirror
+  evaluator reads `M.file`'s `stdlib`), the first C integer rules
+  `wps_c_add`/`wpt_c_add` and `wps_conv_loaded_int`/`wpt_conv_loaded_int`,
+  `EmittedCExhibit` (`x + 1` certified on the library-carrying file
+  `prodFileLib stdlibE3`) and `OverflowExhibit` (the UB036 kill at
+  `INT_MAX` over the genuine driver's round). What still keeps t1's `main`
+  out of `Frag` is its `unseq` alone (`CorpusE0.t1MainWith_frag`,
+  `t1_unseq_not_frag`, `t1_uncovered_exactly_unseq`; E4), then negative
   actions (E5), `Eccall` (E6) — the dialect arc's remaining slices
   (`../docs/2026-09-04_emitted-core-dialect-design.md`; README, "Scope,
   exactly").

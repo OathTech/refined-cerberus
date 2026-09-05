@@ -98,6 +98,7 @@ def recClosure := "fragment closure 2026-09-02 (docs/2026-09-02_fragment-closure
 def recAr5 := "found at ar5-manifest 2026-09-04 by reading the engine arms; [AGENT] classified, docs/2026-09-04_ar5-manifest-notes.md §2"
 def recE1 := "dialect arc E1 2026-09-05 (docs/2026-09-04_e1-notes.md)"
 def recE2 := "dialect arc E2 2026-09-05 (docs/2026-09-05_e2-notes.md)"
+def recE3 := "dialect arc E3 2026-09-05 (docs/2026-09-05_e3-notes.md)"
 
 /-- THE VARIANT TABLE. Read the engine arms cited before editing. -/
 def variants : List Variant := [
@@ -234,8 +235,35 @@ def variants : List Variant := [
     shape := "`pure(e)` at a `PePure` non-value operand the mirror evaluator EVALUATES — a bound symbol, a mirrored binop/array-shift/ctor at evaluating operands (`Specified(e)`, `(e1, e2)`, `Ivalignof(ty)`, `Unspecified(ty)`), `case … end` selecting a branch that evaluates, `not`/`if` at boolean operands (the PURE round through the certified evaluator)",
     cls := .rule (N "wps_pure") (N "wpt_pure") },
   { ctor := `CerberusHeapLang.Frag.pure_op,
-    shape := "`pure(e)` at a `PePure` operand the engine evaluates but the mirror does NOT: a symbol UNBOUND in the environment but naming a `Proc` of the file (the null function pointer), a mirrored binop at two floats or `OpEq` at two ctypes, a comparison at symbolic integers (`PEconstrained`), a `case` whose selected branch the depth guard rejects",
-    cls := .outOfScope s!"the mirror evaluator answers `none`; the characterized residual `OpenRound.eval_uncovered` (`evalClass` `.uncovered`, EvalClass.lean); {recE2}" },
+    shape := "`pure(e)` at a `PePure` operand the engine evaluates but the mirror does NOT: a symbol UNBOUND in the environment but naming a `Proc` of the file (the null function pointer), a mirrored binop at two floats (`OpEq` at two ctypes is MIRRORED since E3), a comparison at symbolic integers (`PEconstrained`), a `case` whose selected branch the depth guard rejects, a std.core call whose body exceeds its static budget `stdBudget`",
+    cls := .outOfScope s!"the mirror evaluator answers `none`; the characterized residual `OpenRound.eval_uncovered` (`evalClass` `.uncovered`, EvalClass.lean); {recE2}; the ctype-equality leaf and the budget arm: {recE3}" },
+  -- E3: the emitted integer arithmetic and the standard-library calls
+  { ctor := `CerberusHeapLang.Frag.pure_op,
+    shape := "THE EMITTED C `+`: `pure(case (a, b) of | (Specified(a'), Specified(b')) => Specified(catch_exceptional_condition_add('signed int', __conv_int__('signed int', a'), __conv_int__('signed int', b'))) | _ => undef(<<UB036>>) end)` at `a ↦ Specified(n1)`, `b ↦ Specified(n2)` in `int`'s range with an IN-RANGE sum (the engine's `select_case`, `mk_conv_int`, `mk_call_catch_exceptional_condition`; the out-of-range sum is the `.undef` KILL, `evalClass_cAdd_overflow`, exhibited by OverflowExhibit)",
+    cls := .rule (N "wps_c_add") (N "wpt_c_add"),
+    also := [N "evalPexpr_cAdd", N "evalPexpr_cAdd_overflow", N "evalClass_cAdd_overflow"] },
+  { ctor := `CerberusHeapLang.Frag.pure_op,
+    shape := "`pure(conv_loaded_int('signed int', e))` at `e ↦ Specified(n)` in range, on a file whose `stdlib` is the transcribed fragment `stdlibE3` (`StdE3 M.file`): the std.core unfolding `conv_loaded_int → conv_int → is_representable_integer` through the FILE OBJECT (`call_function` on `file.stdlib`, core_eval.lem:120–163; the mirror's `callBody` under the static budget)",
+    cls := .rule (N "wps_conv_loaded_int") (N "wpt_conv_loaded_int"),
+    also := [N "evalPexpr_convLoadedInt_spec", N "evalPexpr_convLoadedInt_unspec"] },
+  { ctor := `CerberusHeapLang.Frag.pure_op,
+    shape := "`catch_exceptional_condition_sub/_mul('signed int', e1, e2)` at in-range integer operands with an in-range result (mirrored: `evalCatch` is the generated `mk_call_catch_exceptional_condition`; engine facts `mk_iop_sub_ival`/`mk_iop_mul_ival`)",
+    cls := .noRule s!"E3 ruled the demo's `+` only; the `-`/`*` rules are the same shape (`wps_pure` at `evalPexpr_catch_*`) and pending an exhibit that reaches them; {recE3} §7" },
+  { ctor := `CerberusHeapLang.Frag.pure_op,
+    shape := "`catch_exceptional_condition_div/_rem_t/_shl/_shr('signed int', e1, e2)` (mirrored through the same generated `mk_iop`: `CerbMem.opIval IntDiv/IntRem_t/…`; the divisor-zero and shift-amount arms are the memory model's own)",
+    cls := .noRule s!"no engine fact stated in E3 for these arms — the C elaborator guards `/` and `%` with an explicit zero check before this node; pending; {recE3} §7" },
+  { ctor := `CerberusHeapLang.Frag.pure_op,
+    shape := "`wrapI_<op>('unsigned …', e1, e2)` — the wrap-around arithmetic the elaborator emits for UNSIGNED types (mirrored: `evalWrapI` is the generated `mk_wrapI_op`, core_eval.lem:828–833)",
+    cls := .noRule s!"no exhibit of E3 reaches it (the corpus is `int`); the mirror is total on it; {recE3} §7" },
+  { ctor := `CerberusHeapLang.Frag.pure_op,
+    shape := "`__conv_int__('signed int', e)` standalone at an integer (mirrored: `evalConvInt` is the generated `mk_conv_int`; representable → identity, `mk_conv_int_int_in_range`; NON-representable → whatever `mk_conv_int` computes, the impl-defined wrap)",
+    cls := .noRule s!"the elaborator emits `__conv_int__` only under `catch_exceptional_condition`, where `wps_c_add` covers it; no standalone rule; the non-representable arm is not ruled; {recE3} §7" },
+  { ctor := `CerberusHeapLang.Frag.pure_op,
+    shape := "`conv_int('signed int', e)` / `is_representable_integer(e, 'signed int')` as STANDALONE std.core calls at in-range integers on a `StdE3` file (evaluator lemmas `evalPexpr_convInt_call_int`, `evalPexpr_isRepr_int`), and the leaves their bodies reach: `Ivmin(ty)`/`Ivmax(ty)`, `ty1 = ty2` at ctypes, `/\\`, `\\/`, `is_unsigned(ty)` at a LEAF operand (`peDepth = 1` — the engine rebuilds a non-value `is_unsigned` operand as `PEis_scalar`, core_eval.lem:1086)",
+    cls := .noRule s!"mirrored (E3: `evalCtor` Civmin/Civmax, `evalBinop` OpEq at ctypes and OpAnd/OpOr, `evalIsUnsigned`, `callBody`); reached inside `conv_loaded_int`'s unfolding, which IS ruled; no standalone rule; {recE3} §7" },
+  { ctor := `CerberusHeapLang.Frag.pure_op,
+    shape := "a `PEcall` at an `Impl` name — `<Integer.conv_nonrepresentable_signed_integer>(ty, n)`, reached by `conv_int` at a NON-representable signed value — or at a `Sym` the file's `stdlib`/`funs` do not name (`wrapI`, `params_length`, `params_nth`, …)",
+    cls := .outOfScope s!"the mirror unfolds a call only through the file's own maps (`callBody` = `call_function`'s success path); every file this package builds has an EMPTY `impl` map and the fragment `stdlibE3` names three functions, so these calls are the engine's `Illformed_program` KILL (`callOut`, classified `.kill`, never a default); the gcc impl body and the remaining std.core functions are not transcribed; {recE3} §7" },
   { ctor := `CerberusHeapLang.Frag.load_op,
     shape := "`Load0` at a `PePure` pointer operand evaluating to a POINTER (the ACTION_EVAL round)",
     cls := .rule (N "wps_load_eval") (N "wpt_load_eval") },

@@ -39,6 +39,8 @@ CerberusHeapLang.Adequacy	core	-	the partial lane and the projections
 CerberusHeapLang.TotalAdequacy	core	-	the total lane's readout vocabulary
 CerberusHeapLang.DriverCollapse	core	-	the shipped round at a live control
 CerberusHeapLang.API	core	-	the public surface as one import
+CerberusHeapLang.StdCore	core	-	the transcribed std.core fragment (E3): is_representable_integer / conv_int / conv_loaded_int as a file's stdlib, checked against the pinned std.core source by scripts/corpus_skeleton.lean
+CerberusHeapLang.IntRules	core	-	the C integer rules (E3): __conv_int__ and catch_exceptional_condition_add through the engine's mk_* functions and the std.core unfolding; wps_c_add/wpt_c_add, wps_conv_loaded_int/wpt_conv_loaded_int
 CerberusHeapLang.ProdLoop	production-core	-	the total judgment drives the shipped loop
 CerberusHeapLang.ProdEntry	production-core	-	the cold start and the pipeline theorems
 CerberusHeapLang.Audit	audit	-	exact export pins and the banned-axiom sweep
@@ -60,6 +62,7 @@ CerberusHeapLang.TwoLabelExhibit	positive-client	-	two save labels in one proced
 CerberusHeapLang.EvenOddExhibit	positive-client	-	mutual recursion (even/odd) through the symbol-dependent specification table
 CerberusHeapLang.EmittedAExhibit	positive-client	-	exhibit A in the emitted-Core shape (E1: annotations, bound, Ivalignof) at both strata and the production entry
 CerberusHeapLang.EmittedBExhibit	positive-client	-	exhibit B in the emitted-Core shape (E2: loaded values, the Unspecified store, pure case at a tuple, the tuple and weak-symbol binders) at both strata and the production entry
+CerberusHeapLang.EmittedCExhibit	positive-client	-	x + 1 in the emitted-Core shape (E3: conv_loaded_int, __conv_int__, catch_exceptional_condition_add; t1 minus the unseq) at both strata and the production entry over the library-carrying file
 CerberusHeapLang.Examples.CallSmoke	declared-smoke	-	the C3 call/procedure smoke (kept as a consumer beside FibRecExhibit)
 CerberusHeapLang.Examples.ReadinessSmoke	declared-smoke	-	the API-only two-field predicate smoke
 CerberusHeapLang.Examples.Layout	example-support	-	layout constants and canned shapes
@@ -68,3 +71,4 @@ CerberusHeapLang.Examples.MirrorCoverage	semantic-test	-	mirror-level coverage w
 CerberusHeapLang.ProdExhibit	production-wrapper	-	exhibit A at the production entry
 CerberusHeapLang.ProdLoopExhibit	production-wrapper	-	the production loop theorems
 CerberusHeapLang.DivergeExhibit	negative-test	-	the total lane's unprovability result
+CerberusHeapLang.OverflowExhibit	negative-test	-	the UB036 kill of x + 1 at INT_MAX over the genuine driver's round (E3)

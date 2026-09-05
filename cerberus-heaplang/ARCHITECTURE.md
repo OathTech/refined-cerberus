@@ -109,12 +109,17 @@ reader must know first:
   every general-arm round (`ctl.upd a`). Located Core — the Cerberus C
   front end's output — is inside the fragment's reach as far as its
   constructs are admitted (E1: annotations, `bound`, `Ivalignof`; E2: the
-  loaded-value currency, the tuple/weak binders); t1's `main` is still
-  outside for `conv_loaded_int` and `catch_exceptional_condition` (E3)
-  and `unseq` (E4): the two operands are kernel-decided outside `PePure`
-  (`Examples/CorpusE0.lean`, `t1_convLoadedInt_uncovered`/`t1_case_uncovered`
-  by `decide`), so `main` is outside `Frag` by the grammar — `¬ Frag t1Main`
-  itself is not a stated theorem.
+  loaded-value currency, the tuple/weak binders; E3: the C `int`
+  arithmetic `__conv_int__`/`catch_exceptional_condition_<op>`/`wrapI_<op>`
+  through the engine's generated `mk_*` functions, `Ivmin`/`Ivmax`, ctype
+  equality, `/\\`/`\\/`, `is_unsigned` at a leaf, and the standard-library
+  `PEcall` unfolded through the FILE OBJECT — `evalPexpr` reads `M.file`'s
+  `stdlib` exactly as `call_function` does, under a static per-callee
+  inlining budget `stdBudget` keyed by the callee's printed name; `PePure`
+  gains `convInt`/`wrapI`/`catchExc`/`isUnsigned`/`call`); t1's `main` is
+  in the cone MODULO ITS `unseq` (E4): `CorpusE0.t1MainWith_frag`,
+  `t1_unseq_not_frag`, and the kernel-decided walk
+  `t1_uncovered_exactly_unseq` (`Examples/CorpusE0.lean`).
 - *It is declared as exactly what the mirror covers* ([USER 2026-09-02],
   DECISIONS "THE BOUNDARY IS FAIL-CLOSED"): a shape without a mirror
   rule is outside `Frag`. Inside `Frag` the completeness theorem (§2.2)
@@ -511,7 +516,10 @@ Quot.sound]`; the four `∈`/`contains` bridge lemmas `mem_contains_int`,
 `Decomp.callRedex?_inv`, `callRedex?_some`, `pot_plug_call_le`,
 `callRedex?_none_of_jumpRedex?_some`; and, since E2, the evaluator
 bridge `pull_bridge`). The `BareHead` lemmas are gone with `BareHead`
-(E1).
+(E1). E3 adds 80 pins (589 at the combined head: E3's 80 plus the E2 audit's
+`unspec_bytes`; `docs/2026-09-05_e3-notes.md` §9) and leaves unpinned, with sub-trio cones, the `rfl`/`decide` facts of
+StdCore/IntRules and CorpusE0's kernel-decided walk (listed in
+`Audit.lean`'s E3 paragraph).
 `regionCost_eq`, `runND_killed` and, since the E2 audit fixes,
 `unspec_paddingByte` have no axioms (`:389`, `:557`–`:558`). Kernel-only proof methods: no `native_decide`, `bv_decide`
 or `ofReduce*` anywhere (gate 1, `../scripts/test_unit.sh:28`).
@@ -761,6 +769,7 @@ Each item points at its register entry; none is hidden in a proof.
   | `alloc` (1) | the zero-cost `alloc` (`n ≤ 0 ∧ al ≤ 1`) |
   | `memop_vals` (1) | `PtrEq` at an `SD_Id`-named function pointer against a concrete pointer (the one arm reading `funptrmap`) |
   | `sseq_sym`, `sseq_tuple`, `wseq_sym`, `wseq_tuple` (4) | the binder at an ANNOTATED head value `{A}v` (the engine's LETS-/LETW-ANNOT; mirrored since E1/E2, `Step.*_annot`; no binder rule — every emitted binder's head is a `bound`, which drops the dynamic annotations, and E4's `unseq` is what would deliver an annotated tuple) |
+  | `pure_op` (6, E3) | the emitted arithmetic and std.core leaves the mirror computes but no rule states: `catch_exceptional_condition_sub/_mul` (the `+` rule's shape, pending an exhibit), `_div/_rem_t/_shl/_shr` (the memory model's own divisor-zero/shift arms), `wrapI_<op>` (unsigned; the corpus is `int`), standalone `__conv_int__` (its non-representable arm is the impl-defined wrap `mk_conv_int` computes), standalone `conv_int`/`is_representable_integer` and their bodies' leaves (`Ivmin`/`Ivmax`, ctype `=`, `/\\`, `\\/`, `is_unsigned` at a leaf — reached inside the RULED `conv_loaded_int` unfolding); and the OUT-OF-SCOPE `Impl`-name call (`<Integer.conv_nonrepresentable_signed_integer>`; every file this package builds has an empty `impl` map, so the call is the engine's KILL) |
 
 - **Masks.** Both judgments are fixed at `⊤`; the generalisation is a
   RefinedC-arc item ([USER 2026-09-04]; §1; KOI B11).

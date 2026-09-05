@@ -6,13 +6,13 @@ CerberusHeapLang.OverflowExhibit — THE NEGATIVE EXHIBIT OF E3: `x + 1` at
 emitted shape; `exhibitC_prod_e3` certifies the run at `n = 3`. At
 `n = 2147483647` the C `+` overflows: the elaborator's
 `catch_exceptional_condition_add('signed int', __conv_int__(…), …)` is
-the engine's `mk_call_catch_exceptional_condition` (core_eval.lem:1173–
-1199) — the sum is out of `int`'s range, so the node is `undef
-[UB036_exceptional_condition]` at the thread's current location (the
-`undef` payload of `mk_call_catch_exceptional_condition` is raised at the
-evaluator's `loc` argument, core_eval.lem:1199, which `one_step0` passes as
-the thread's `current_loc`, core_run.lem — NOT the `undef` arm's own
-location `ecAddLoc`, which the `case` never reaches).
+the engine's `mk_call_catch_exceptional_condition` (core_eval.lem:99–105:
+`mk_iop` then the range check, `Nothing` out of range) — the sum is out
+of `int`'s range, so the evaluator's `PEcatch_exceptional_condition` arm
+(core_eval.lem:839–853) raises `undef loc [UB036_exceptional_condition]`
+at ITS `loc` argument, the thread's `current_loc` (what `one_step0` passes
+in) — NOT the `undef` arm's own location `ecAddLoc`, which the `case`
+never reaches.
 
 WHAT IS PROVED (kernel-only, over the shipped engine):
 * `overflow_evalClass` — the classifier's verdict at the `+` node with

@@ -249,6 +249,9 @@ partial def pexprSkeleton : generic_pexpr Unit sym → Except String (List Strin
       pure ("case" :: sp ++ sa.flatten ++ ["endcase"])
     | PEcall (Sym (Symbol _ _ (SD_Id name))) ps => do
       pure (name :: (← ps.mapM pexprSkeleton).flatten)
+    | PEcall (Impl c) ps => do
+      pure (s!"impl:{string_of_implementation_constant c}" ::
+        (← ps.mapM pexprSkeleton).flatten)
     | PEcall _ _ => throw "a PEcall at a name the printer does not spell as an identifier"
     | PEconv_int _ p => do pure ("__conv_int__" :: "leaf" :: (← pexprSkeleton p))
     | PEcatch_exceptional_condition _ op p1 p2 => do
@@ -263,6 +266,13 @@ partial def pexprSkeleton : generic_pexpr Unit sym → Except String (List Strin
         "else" :: (← pexprSkeleton p3))
     | PEarray_shift p1 _ p2 => do
       pure ("array_shift" :: (← pexprSkeleton p1) ++ "leaf" :: (← pexprSkeleton p2))
+    -- E3 (std.core bodies): `is_unsigned(pe)` prints as a call-shaped keyword
+    -- (pp_core.ml `pp_pexpr` PEis_unsigned arm); an implementation constant
+    -- prints as `<Name>` (pp_core.ml `pp_impl`, `Implementation.
+    -- string_of_implementation_constant`), and a call at one is that token
+    -- followed by its arguments.
+    | PEis_unsigned p => do pure ("is_unsigned" :: (← pexprSkeleton p))
+    | PEimpl c => pure [s!"impl:{string_of_implementation_constant c}"]
     | _ => throw "a pure-expression form outside the skeleton's vocabulary (fail-closed; \
       extend `pexprSkeleton` deliberately, with the pp_core.ml cite)"
 
@@ -435,6 +445,30 @@ partial def skipOps : List Char → List Char
   | c :: rest => if isOpChar c then skipOps rest else c :: rest
   | [] => []
 
+/-- E3: the name inside `<…>` (identifier characters and `.`). -/
+partial def takeImpl (cs : List Char) (acc : String := "") : String × List Char :=
+  match cs with
+  | c :: rest => if Bool.or (isIdentChar c) (c == '.') then takeImpl rest (acc.push c) else (acc, cs)
+  | [] => (acc, [])
+
+/-- E3: strip std.core SOURCE comments (`-- …` to end of line; `{- … -}`
+    blocks, non-nesting in std.core) before tokenizing a `fun` body. The
+    printed corpus texts carry none (the printer emits `{-# … #-}` markers,
+    which are NOT comments and are left alone here). -/
+partial def stripComments (cs : List Char) (acc : List Char := []) : List Char :=
+  match cs with
+  | [] => acc.reverse
+  | c :: rest =>
+    if startsWith cs "{-#" then stripComments (cs.drop 3) ('#' :: '-' :: '{' :: acc)
+    else if startsWith cs "{-" then
+      let rec skipBlock : List Char → List Char
+        | [] => []
+        | d :: r => if startsWith (d :: r) "-}" then r.drop 1 else skipBlock r
+      stripComments (skipBlock (cs.drop 2)) acc
+    else if startsWith cs "--" then
+      stripComments (cs.dropWhile (· != '\n')) acc
+    else stripComments rest (c :: acc)
+
 /-- E2: THE PURE-EXPRESSION TOKENIZER over the text inside an opened `(`
     (`pure(`, an action's or a `run`'s argument list; depth 1 at entry,
     `depth` counts the OPEN parentheses inside the region): returns the
@@ -464,6 +498,16 @@ partial def pexScan (cs : List Char) (depth : Nat) (toks : Array String) :
     else if Bool.and (c == '-') (match rest with | d :: _ => d.isDigit | [] => false) then
       pexScan (skipNumber rest) depth (toks.push "leaf")
     else if startsWith cs "=>" then pexScan (cs.drop 2) depth toks
+    else if Bool.and (c == '<') (match rest with | d :: _ => d.isAlpha | [] => false) then do
+      -- E3: an implementation constant `<Name>` (std.core source; the printer's `pp_impl`)
+      let (name, rest') := takeImpl rest
+      match rest' with
+      | '>' :: r =>
+        -- a call at the constant: `<Name>(args)` — the arguments inline, as at an identifier
+        match skipWs r with
+        | '(' :: r' => pexScan r' (depth + 1) (toks.push s!"impl:{name}")
+        | _ => pexScan r depth (toks.push s!"impl:{name}")
+      | _ => throw "unterminated `<…>` implementation constant"
     else if c == '|' then pexScan rest depth (toks.push "alt")
     else if isOpChar c then pexScan (skipOps rest) depth (toks.push "op")
     else if Bool.or c.isAlpha (c == '_') then
@@ -589,6 +633,33 @@ def tokenizeProc (text : String) (name : String) : Except String (List String) :
   let body ← find cs
   let body ← skipUntilKw body ":="
   let toks ← scan body #[] []
+  pure toks.toList
+
+/-- E3: locate `fun <name>` in std.core SOURCE text and tokenize its body
+    (after `:=`, up to the next top-level `fun`/`proc`/`glob` or the end)
+    as ONE pure-expression region: comments stripped, the body wrapped in
+    a parenthesis pair and read by `pexScan` (a std.core function body is
+    a pure expression; the E2 tokenizer's vocabulary plus E3's
+    `<impl>` constants). -/
+def tokenizeFun (text : String) (name : String) : Except String (List String) := do
+  let cs := stripComments text.toList
+  let rec find (cs : List Char) : Except String (List Char) :=
+    match cs with
+    | [] => throw s!"`fun {name}` not found"
+    | _ :: rest =>
+      if atKeyword cs "fun" && atKeyword (skipWs (cs.drop 3)) name then pure (cs.drop 3)
+      else find rest
+  let body ← find cs
+  let body ← skipUntilKw body ":="
+  -- the body ends at the next top-level definition keyword (or the end)
+  let rec cut (cs : List Char) (acc : List Char) : List Char :=
+    match cs with
+    | [] => acc.reverse
+    | c :: rest =>
+      if Bool.or (Bool.or (atKeyword cs "fun") (atKeyword cs "proc")) (atKeyword cs "glob") then acc.reverse
+      else cut rest (c :: acc)
+  let bodyText := cut body []
+  let (toks, _) ← pexScan (bodyText ++ [')']) 1 #[]
   pure toks.toList
 
 /-! ## The plants (negative fixtures: each MUST break the check) -/
@@ -974,5 +1045,99 @@ def pendingCorpus : List (String × String) :=
    ("t8_array.annot.core", "E6 (arrays; `PtrValidForDeref`)"),
    ("t9_fact.annot.core", "E7 (the outcome-list closed form)"),
    ("t10_evenodd.annot.core", "E6 (`Eccall`; mutual recursion)")]
+
+/-! ## E3: THE TRANSCRIBED STANDARD LIBRARY vs the pinned std.core SOURCE -/
+
+/-- One std.core row: the function's name and its transcribed body
+    (StdCore.lean). The check reads the pinned SOURCE `runtime/libcore/
+    std.core` (what the shipped pipeline parses, Main.lean:748): the oracle
+    cannot print std.core (`--pp=core` on it aborts in the Core parser,
+    docs/2026-09-05_e3-notes.md §3, measured). -/
+structure StdRow where
+  name : String
+  body : generic_pexpr Unit sym
+
+def stdTable : List StdRow :=
+  [⟨"is_representable_integer", isReprBody⟩,
+   ⟨"conv_int", convIntBody⟩,
+   ⟨"conv_loaded_int", convLoadedIntBody⟩]
+
+/-- The plants of a std row (each MUST break the comparison where it
+    applies; a row NO plant applies to is a FAIL — an unplanted row):
+    `Ivmin`/`Ivmax` swapped everywhere; the first `if`'s branches swapped;
+    the first `case`'s alternatives reversed. -/
+partial def swapIvMinMax : generic_pexpr Unit sym → generic_pexpr Unit sym × Bool
+  | Pexpr an u pe =>
+    match pe with
+    | PEctor Civmin ps => (Pexpr an u (PEctor Civmax ps), true)
+    | PEctor Civmax ps => (Pexpr an u (PEctor Civmin ps), true)
+    | PEctor c ps =>
+      let rs := ps.map swapIvMinMax
+      (Pexpr an u (PEctor c (rs.map (·.1))), rs.any (·.2))
+    | PEop op p1 p2 =>
+      let (q1, d1) := swapIvMinMax p1
+      let (q2, d2) := swapIvMinMax p2
+      (Pexpr an u (PEop op q1 q2), Bool.or d1 d2)
+    | PEif p1 p2 p3 =>
+      let (q1, d1) := swapIvMinMax p1
+      let (q2, d2) := swapIvMinMax p2
+      let (q3, d3) := swapIvMinMax p3
+      (Pexpr an u (PEif q1 q2 q3), Bool.or (Bool.or d1 d2) d3)
+    | PEcall f ps =>
+      let rs := ps.map swapIvMinMax
+      (Pexpr an u (PEcall f (rs.map (·.1))), rs.any (·.2))
+    | PEcase p alts =>
+      let (q, d) := swapIvMinMax p
+      let rs := alts.map fun x => let (b, db) := swapIvMinMax x.2; ((x.1, b), db)
+      (Pexpr an u (PEcase q (rs.map (·.1))), Bool.or d (rs.any (·.2)))
+    | _ => (Pexpr an u pe, false)
+
+partial def swapFirstIf : generic_pexpr Unit sym → generic_pexpr Unit sym × Bool
+  | Pexpr an u pe =>
+    match pe with
+    | PEif p1 p2 p3 => (Pexpr an u (PEif p1 p3 p2), true)
+    | PEctor c ps =>
+      let rec go : List (generic_pexpr Unit sym) → List (generic_pexpr Unit sym) × Bool
+        | [] => ([], false)
+        | q :: qs => let (q', d) := swapFirstIf q; if d then (q' :: qs, true) else
+            let (qs', d') := go qs; (q :: qs', d')
+      let (ps', d) := go ps
+      (Pexpr an u (PEctor c ps'), d)
+    | PEcase p alts =>
+      let (q, d) := swapFirstIf p
+      if d then (Pexpr an u (PEcase q alts), true) else
+      let rec goA : List (pattern × generic_pexpr Unit sym) →
+          List (pattern × generic_pexpr Unit sym) × Bool
+        | [] => ([], false)
+        | (pt, b) :: rest => let (b', d) := swapFirstIf b; if d then ((pt, b') :: rest, true) else
+            let (rest', d') := goA rest; ((pt, b) :: rest', d')
+      let (alts', d') := goA alts
+      (Pexpr an u (PEcase p alts'), d')
+    | _ => (Pexpr an u pe, false)
+
+partial def reverseFirstCase : generic_pexpr Unit sym → generic_pexpr Unit sym × Bool
+  | Pexpr an u pe =>
+    match pe with
+    | PEcase p alts => (Pexpr an u (PEcase p alts.reverse), true)
+    | PEif p1 p2 p3 =>
+      let (q1, d1) := reverseFirstCase p1
+      if d1 then (Pexpr an u (PEif q1 p2 p3), true) else
+      let (q2, d2) := reverseFirstCase p2
+      if d2 then (Pexpr an u (PEif p1 q2 p3), true) else
+      let (q3, d3) := reverseFirstCase p3
+      (Pexpr an u (PEif p1 p2 q3), d3)
+    | PEctor c ps =>
+      let rec go : List (generic_pexpr Unit sym) → List (generic_pexpr Unit sym) × Bool
+        | [] => ([], false)
+        | q :: qs => let (q', d) := reverseFirstCase q; if d then (q' :: qs, true) else
+            let (qs', d') := go qs; (q :: qs', d')
+      let (ps', d) := go ps
+      (Pexpr an u (PEctor c ps'), d)
+    | _ => (Pexpr an u pe, false)
+
+def stdPlants : List (String × (generic_pexpr Unit sym → generic_pexpr Unit sym × Bool)) :=
+  [("Ivmin/Ivmax swapped", swapIvMinMax),
+   ("first if's branches swapped", swapFirstIf),
+   ("first case's alternatives reversed", reverseFirstCase)]
 
 end CerberusHeapLang.CorpusE0

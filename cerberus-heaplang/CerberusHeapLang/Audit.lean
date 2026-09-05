@@ -112,6 +112,26 @@ every renamed pin) and its closed form over `CerbND.drive_lemFuel`
 (`prod_run_safe_procs`, `fib_rec_certified`); `call_smoke_driveU` →
 `call_smoke_engine`; 14 pins added (list end). 372 → 373.
 
+DIALECT ARC E3 (2026-09-05, cerberus-heaplang/docs/2026-09-05_e3-notes.md):
+the impl arithmetic constructors, the std.core unfolding through the FILE
+OBJECT (`evalPexpr` reads `M.file`; `stdlibE3`, the transcribed fragment,
+checked against the pinned std.core source by the corpus speedbump), the
+first C integer rules (`wps_c_add`/`wpt_c_add`, `wps_conv_loaded_int`/
+`wpt_conv_loaded_int`), exhibit C (`exhibitC_prod_e3`: `x + 1` in the
+emitted shape on the library-carrying file `prodFileLib`), the negative
+exhibit (`overflow_driver2_killed`: the UB036 kill at INT_MAX over the
+genuine driver's round) and t1's `main` in the cone modulo its `unseq`
+(`CorpusE0.t1MainWith_frag`, `CorpusE0.t1_unseq_not_frag`). 80 pins
+added (list end): 508 → 588. Left UNPINNED with sub-trio cones (the
+2026-09-02 convention): the `rfl`/`decide` facts `peDepth_*Body`,
+`stdBudget_*`, `isPePure_*Body`, `int_min_eq`/`int_max_eq`, `mk_iop_*_ival`,
+`mk_call_catch_add_in_range`/`_overflow`, `evalCatch_add_*`, `peDepth_cAddPe`,
+`progCE3_atAdd_decomp`, `CorpusE0.t1Main_eq_with` (no axioms),
+`CorpusE0.t1_convLoadedInt_covered`, `CorpusE0.t1_case_covered`,
+`CorpusE0.t1_uncovered_exactly_unseq`, `isPePure_peStrip`, `peDepth_peStrip`,
+`peStrip_root`, `stdBudget_le`, `get_ctx_call` (`[propext]` or
+`[Quot.sound, propext]`; measured, e3-notes §9).
+
 P3.5 ([USER 2026-09-02], docs/2026-09-02_p3.5-notes.md): the 65
 `#guard_msgs in #print axioms` blocks + prose collapsed to the export
 list below (62 names at P3.5, the same exact assertion each; the list
@@ -148,6 +168,8 @@ import CerberusHeapLang.TwoLabelExhibit
 import CerberusHeapLang.EvenOddExhibit
 import CerberusHeapLang.EmittedAExhibit
 import CerberusHeapLang.EmittedBExhibit
+import CerberusHeapLang.EmittedCExhibit
+import CerberusHeapLang.OverflowExhibit
 import CerberusHeapLang.Examples.CorpusE0
 import CerberusHeapLang.Examples.ReadinessSmoke
 import CerberusHeapLang.Examples.MirrorCoverage
@@ -681,7 +703,50 @@ def trioExports : List Name := [
   -- store's byte image IS the fresh cell's `undefByte`s — stated as a theorem
   -- (`rfl`), measured trio-exact, pinned. Its companion `unspec_paddingByte`
   -- (`paddingByte = undefByte`) has NO axioms at all and is therefore unpinned.
-  ``CerberusHeapLang.unspec_bytes]
+  ``CerberusHeapLang.unspec_bytes,
+  -- dialect arc E3 (2026-09-05, cerberus-heaplang/docs/2026-09-05_e3-notes.md §9)
+  ``CerberusHeapLang.stdlibE3_symMap, ``CerberusHeapLang.stdlibE3_lookup_isRepr,
+  ``CerberusHeapLang.stdlibE3_lookup_convInt, ``CerberusHeapLang.stdlibE3_lookup_convLoadedInt,
+  ``CerberusHeapLang.lookupFun_isRepr, ``CerberusHeapLang.lookupFun_convInt,
+  ``CerberusHeapLang.lookupFun_convLoadedInt, ``CerberusHeapLang.mk_conv_int_int_in_range,
+  ``CerberusHeapLang.evalConvInt_int, ``CerberusHeapLang.callBody_isRepr,
+  ``CerberusHeapLang.callBody_convInt, ``CerberusHeapLang.callBody_convLoadedInt,
+  ``CerberusHeapLang.evalPexpr_conv_int_int, ``CerberusHeapLang.evalPexpr_catch_add_int,
+  ``CerberusHeapLang.evalCtor_ivmin_int, ``CerberusHeapLang.evalCtor_ivmax_int,
+  ``CerberusHeapLang.evalPexpr_isRepr_int, ``CerberusHeapLang.evalPexpr_convInt_call_int,
+  ``CerberusHeapLang.evalPexpr_convLoadedInt_spec,
+  ``CerberusHeapLang.evalPexpr_convLoadedInt_unspec, ``CerberusHeapLang.evalPexpr_cAdd,
+  ``CerberusHeapLang.stepFail_cAddBranch_overflow, ``CerberusHeapLang.evalPexpr_cAdd_overflow,
+  ``CerberusHeapLang.evalClass_cAdd_overflow, ``CerberusHeapLang.wps_c_add,
+  ``CerberusHeapLang.wpt_c_add, ``CerberusHeapLang.wps_conv_loaded_int,
+  ``CerberusHeapLang.wpt_conv_loaded_int, ``CerberusHeapLang.progCE3_frag,
+  ``CerberusHeapLang.progCE3_blockSpecs, ``CerberusHeapLang.progCE3_wps,
+  ``CerberusHeapLang.convLoadedInt_pure_wps, ``CerberusHeapLang.convLoadedInt_pure_wpt,
+  ``CerberusHeapLang.progCE3_blockSpecsT, ``CerberusHeapLang.progCE3_wpt,
+  ``CerberusHeapLang.collect_new_progCE3, ``CerberusHeapLang.progCE3_labeledAt,
+  ``CerberusHeapLang.stdlibE3_no_main, ``CerberusHeapLang.exhibitC_prod_e3,
+  ``CerberusHeapLang.three_encodes, ``CerberusHeapLang.three_storable,
+  ``CerberusHeapLang.cAdd_select_31, ``CerberusHeapLang.convLoadedIntC_eval,
+  ``CerberusHeapLang.cAdd_select_max1, ``CerberusHeapLang.overflow_evalClass,
+  ``CerberusHeapLang.overflow_step_ctx, ``CerberusHeapLang.overflow_driver2_killed,
+  ``CerberusHeapLang.overflow_driver2_killed_frame, ``CerberusHeapLang.prodCtx_labels,
+  ``CerberusHeapLang.prodCtx_extern, ``CerberusHeapLang.prodFileWith_eq_lib,
+  ``CerberusHeapLang.prodFileLib_stdlib, ``CerberusHeapLang.prodFileLib_lookup_main,
+  ``CerberusHeapLang.prodRSLib_labeled, ``CerberusHeapLang.drive_after_setup_lib_lemFuel,
+  ``CerberusHeapLang.drive_after_setup_lib_killed, ``CerberusHeapLang.drive_after_setup_lib,
+  ``CerberusHeapLang.prod_run_eqJ_lib, ``CerberusHeapLang.prod_run_eqJ_lib1,
+  ``CerberusHeapLang.prod_run_safe_lib, ``CerberusHeapLang.CorpusE0.t1MainWith_frag,
+  ``CerberusHeapLang.CorpusE0.t1_unseq_not_frag, ``CerberusHeapLang.cAdd_pure_round,
+  ``CerberusHeapLang.store_conv_loaded_int_round,
+  ``CerberusHeapLang.loop_step_withrs_eval_killed,
+  ``CerberusHeapLang.call_function_exception_of_callOut,
+  ``CerberusHeapLang.call_function_of_callBody, ``CerberusHeapLang.evalPexpr_call,
+  ``CerberusHeapLang.evalPexpr_catch, ``CerberusHeapLang.evalPexpr_conv_int,
+  ``CerberusHeapLang.evalPexpr_is_unsigned, ``CerberusHeapLang.evalPexpr_wrapI,
+  ``CerberusHeapLang.evalPexpr_peStrip, ``CerberusHeapLang.procCtxF_labels,
+  ``CerberusHeapLang.stepFail_call, ``CerberusHeapLang.stepFail_catch,
+  ``CerberusHeapLang.stepFail_conv_int, ``CerberusHeapLang.stepFail_is_unsigned,
+  ``CerberusHeapLang.stepFail_wrapI, ``CerberusHeapLang.stepPexprRaw_peStrip]
 
 def sortedNames (ns : Array Name) : Array String :=
   (ns.map (·.toString)).qsort (· < ·)
