@@ -14,6 +14,7 @@ import CerberusHeapLang.API
 import CerberusHeapLang.Examples.Layout
 import CerberusHeapLang.Examples.ReadinessSmoke
 import CerberusHeapLang.Examples.MirrorCoverage
+import CerberusHeapLang.Examples.CorpusE0
 import CerberusHeapLang.Examples.CallSmoke
 import CerberusHeapLang.Exhibit
 import CerberusHeapLang.DriverCollapse
@@ -37,4 +38,5 @@ import CerberusHeapLang.MallocListExhibit
 import CerberusHeapLang.FibRecExhibit
 import CerberusHeapLang.TwoLabelExhibit
 import CerberusHeapLang.EvenOddExhibit
+import CerberusHeapLang.EmittedAExhibit
 import CerberusHeapLang.Audit

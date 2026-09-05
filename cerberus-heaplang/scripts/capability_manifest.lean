@@ -96,6 +96,7 @@ def recK3N2 := "K3 range audit N-2; docs/2026-09-03_k3-notes.md §4(c)/§6"
 def recA3 := "docs/KNOWN-OPEN-ITEMS.md A3 (`dynamic_addrs`), K3 notes §6"
 def recClosure := "fragment closure 2026-09-02 (docs/2026-09-02_fragment-closure-notes.md); ARCHITECTURE §7 Goal 2"
 def recAr5 := "found at ar5-manifest 2026-09-04 by reading the engine arms; [AGENT] classified, docs/2026-09-04_ar5-manifest-notes.md §2"
+def recE1 := "dialect arc E1 2026-09-05 (docs/2026-09-04_e1-notes.md)"
 
 /-- THE VARIANT TABLE. Read the engine arms cited before editing. -/
 def variants : List Variant := [
@@ -237,11 +238,20 @@ def variants : List Variant := [
     shape := "`Load0` at a `PePure` pointer operand evaluating to a POINTER (the ACTION_EVAL round)",
     cls := .rule (N "wps_load_eval") (N "wpt_load_eval") },
   { ctor := `CerberusHeapLang.Frag.sseq_sym,
-    shape := "`lets x = e1 in e2` at a `BareHead` head delivering a BARE value (LETS-PURE; the head grammar admits a call since C4)",
+    shape := "`lets x = e1 in e2` at any fragment head delivering a BARE value (LETS-PURE; a call head since C4, any head since E1)",
     cls := .rule (N "wps_seq_sym") (N "wpt_seq_sym") },
   { ctor := `CerberusHeapLang.Frag.sseq_sym,
-    shape := "`lets x = e1 in e2` whose head delivers an ANNOTATED value `{A}v` (the engine's LETS-ANNOT at the symbol binder)",
-    cls := .outOfScope s!"excluded by the fragment: `Frag.sseq_sym` carries `hb : BareHead e1`, and every `BareHead` delivers a bare value (`BareHead.not_annot`); the mirror has no LETS-ANNOT rule at this binder (`Step.sseq_sym_pure` docstring); {recClosure}" },
+    shape := "`lets x = e1 in e2` whose head delivers an ANNOTATED value `{A}v` (the engine's LETS-ANNOT at the symbol binder: `x ↦ v`, `{A}` re-wrapped around `e2`)",
+    cls := .noRule s!"admitted by the fragment and MIRRORED since E1 (`Step.sseq_sym_annot`, classified by `complete_beta_sym`; the pre-E1 `BareHead` exclusion and its OUT-OF-SCOPE row are retired) but `wps_seq_sym`/`wpt_seq_sym` are stated at a BARE head value (`⌜w = SpikeVal.pure v⌝`); binder rules over annotated heads are E2's (patterns bind annotated heads); {recE1}" },
+  -- E1: the bound frame
+  { ctor := `CerberusHeapLang.Frag.bound,
+    shape := "`bound(e)` — reduction under the `Cbound` frame, then REMOVE-BOUND at the delivered value of either shape (the dynamic annotations of an annotated value are DROPPED)",
+    cls := .rule (N "wps_bound") (N "wpt_bound"),
+    also := [N "wpt_jump_frame_bound"] },
+  -- E1: create at ctor-constant operands
+  { ctor := `CerberusHeapLang.Frag.create_op,
+    shape := "`Create` at `PePure` operands (not all values) evaluating to an INTEGER alignment and a CTYPE — the emitted `create(Ivalignof(ty), ty)` (the ACTION_EVAL round; the successor is the canonical create redex, whose variants above apply)",
+    cls := .rule (N "wps_create_eval") (N "wpt_create_eval") },
   -- memop
   { ctor := `CerberusHeapLang.Frag.memop_vals,
     shape := "`PtrEq` at two POINTER values with a STATE-INDEPENDENT verdict: null/any, function/function, function (non-`SD_Id`-named)/concrete, same-provenance concrete pair (CerbMem `eqPtrval`)",

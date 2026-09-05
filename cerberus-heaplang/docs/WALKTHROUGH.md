@@ -1523,8 +1523,8 @@ non-`Specified` value; `complete_load_op`/`_store_op`: ILLTYPED at
 distance one, or the evaluator's kill; `complete_save`/`_pure_sym`/
 `_memop_op`: the evaluator's kill; `complete_memop_vals`: the fork and
 the driver's INVALID-memop panic; the betas at the wildcard pattern, at
-the plain-symbol binder — whose head is a bare-value producer,
-`BareHead` — and the merge always step). The evaluator's kills are the
+the plain-symbol binder — at either delivered value shape since E1, the
+pre-E1 `BareHead` restriction retired — and the merge always step). The evaluator's kills are the
 classifier `evalClass` (EvalClass.lean) answering `.kill err`: an
 unbound symbol naming no procedure (`Unresolved_symbol`), a binop at
 operands of mismatched kinds, an array shift at a non-(pointer,
@@ -1737,7 +1737,7 @@ the `#print axioms` recipe are in the README, "How to build and verify".
   partial lane at the shipped loop (`call_smoke_engine`; `FragProcs`
   discharged at two procedures); C4
   (2026-09-03) closed the arc: the plain-symbol binder binds a call's
-  result (`BareHead.call`), the PRODUCTION lane goes through calls (the
+  result (formerly `BareHead.call`; E1 retired `BareHead`), the PRODUCTION lane goes through calls (the
   CPS driver induction `wpt_driver_cps` over the live-control delivery
   fact `DriverDoneCtl`, every PCALL/RETURN round the driver's own
   `loop_step_frag`; the `exec_loc`/`current_loc` tie at the production

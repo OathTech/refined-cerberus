@@ -1063,6 +1063,25 @@ theorem wpt_alloc_eval {Ψ : SpikeVal → EnvStack → IProp GF}
         simpa using Option.some.inj (hv2.symm.trans hv2')
       simpa [allocExpr, allocOpRedex] using hout)
 
+/-- ACTION_EVAL for a create's operands (one tau; E1). -/
+theorem wpt_create_eval {Ψ : SpikeVal → EnvStack → IProp GF}
+    (a : List annot) (loc : CerbLocation.Loc) (ann : core_run_annotation)
+    (pe1 pe2 : generic_pexpr Unit sym) (pref : prefix0) (ρ : EnvStack)
+    {align : CerbMem.IntegerValue} {ty : ctype} {k : Nat}
+    (hnv : valueFromPexprs [pe1, pe2] = none)
+    (hv1 : evalPexpr M.tagDefs M.extern ρ pe1 = some (Vobject (OVinteger align)))
+    (hv2 : evalPexpr M.tagDefs M.extern ρ pe2 = some (Vctype ty)) :
+    wpt M p Ls Θ k Ψ (createExpr a loc ann align ty pref) ρ ⊢
+      wpt M p Ls Θ (k + 1) Ψ (createOpRedex a loc ann pe1 pe2 pref) ρ :=
+  wpt_det_step rfl rfl rfl (fun _ _ _ _ _ => Step.create_eval hnv hv1 hv2)
+    (fun _ _ _ _ σ out hs => by
+      obtain ⟨al', ty', hv1', hv2', hout⟩ := hs.create_op_inv hnv
+      obtain rfl : align = al' := by
+        simpa using Option.some.inj (hv1.symm.trans hv1')
+      obtain rfl : ty = ty' := by
+        simpa using Option.some.inj (hv2.symm.trans hv2')
+      simpa [createExpr, createOpRedex] using hout)
+
 /-- Memop-operand evaluation (one tau). -/
 theorem wpt_memop_eval {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
     (mop : memop) (pe1 pe2 : generic_pexpr Unit sym)
@@ -1483,6 +1502,177 @@ theorem wpt_annot (a : List annot) (ds : List dyn_annotation) (e : CoreExpr) (ρ
           · obtain ⟨_, _, _, h⟩ := hcall.callRedex?_some
             rw [hcr] at h; cases h
           · rw [hb] at hv; simp at hv
+
+/-! ## The `bound` frame at the total stratum (E1; mirror of `wps_bound`:
+Löb replaced by strong induction on the budget — the frame is lockstep,
+and REMOVE-BOUND costs exactly one unit) -/
+
+/-- The jump-clause transfer through an Ebound frame with budget
+    weakening. -/
+theorem wpt_jump_frame_bound {Ψ₁ Ψ₂ : SpikeVal → EnvStack → IProp GF}
+    (a : List annot) {b : CoreExpr}
+    (ρ : EnvStack) {l : sym} {pes : List (generic_pexpr Unit sym)}
+    {k k' : Nat} (hkk : k ≤ k')
+    (htv : toVal b = none) (hjr : jumpRedex? b = some (l, pes)) :
+    wpt M p Ls Θ k Ψ₁ b ρ ⊢
+      wpt M p Ls Θ k' Ψ₂ (Expr a (Ebound b)) ρ := by
+  rw [wpt_jump_eq (Ψ := Ψ₁) k htv hjr,
+    wpt_jump_eq (Ψ := Ψ₂) k' (toVal_bound_node a b)
+      (by rw [jumpRedex?_bound]; exact hjr)]
+  iintro H
+  imod H with ⟨%params, %cont, %vs, %ev0, %evs, %m, %h1, %h2, %h3, %h4, HLs⟩
+  imodintro
+  iexists params, cont, vs, ev0, evs, m
+  isplit
+  · ipureintro; exact h1
+  isplit
+  · ipureintro; exact h2
+  isplit
+  · ipureintro; exact h3
+  isplit
+  · ipureintro; exact Nat.le_trans h4 hkk
+  iexact HLs
+
+/-- `wpt` through the `bound` frame: one budget unit for REMOVE-BOUND;
+    the value is delivered BARE (`.pure w.val`, the dynamic annotations
+    dropped). -/
+theorem wpt_bound {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot) (b : CoreExpr)
+    (ρ : EnvStack) {k : Nat} :
+    wpt M p Ls Θ k (fun w ρ' => Ψ (SpikeVal.pure w.val) ρ') b ρ ⊢
+      wpt M p Ls Θ (k + 1) Ψ (Expr a (Ebound b)) ρ := by
+  induction k using Nat.strongRecOn generalizing b ρ with
+  | ind k IH =>
+  cases htv : toVal b with
+  | some w =>
+    obtain ⟨wa, rfl, rfl⟩ := ofValA_of_toVal htv
+    rw [wpt_val_eq k (toVal_ofValA wa),
+      wpt_step_eq k (toVal_bound_node a (ofValA wa))
+        (by rw [jumpRedex?_bound, jumpRedex?_ofValA])
+        (by rw [callRedex?_bound, callRedex?_ofValA]; rfl)]
+    iintro ⟨%hc, H⟩ %κ %ℓ %lc %sp %σ₁ %ns %obs %nt Hσ
+    have hk : 1 ≤ k := by cases wa <;> simp [deliveryCost] at hc <;> omega
+    iapply fupd_mask_intro Std.LawfulSet.empty_subset
+    iintro Hclose
+    isplitr
+    · ipureintro
+      cases wa with
+      | pure a1 b1 v => exact ⟨[], ⟨_, _, _, _⟩, _, [], ⟨Step.bound_pure, rfl, rfl⟩⟩
+      | annot a1 a2 b1 ds v => exact ⟨[], ⟨_, _, _, _⟩, _, [], ⟨Step.bound_annot, rfl, rfl⟩⟩
+    iintro %r %σ₂ %eₜ %Hstep
+    obtain ⟨hs, hlbl, rfl⟩ := Hstep
+    rcases hs.bound_inv with ⟨_, _, _, _, _, _, hnv', _, _⟩ |
+        ⟨a1, b1, v, hb, hout⟩ | ⟨a1, a2, b1, ds, v, hb, hout⟩ |
+        ⟨_, _, _, _, _, _, _, hj, _, _, _, _⟩ | hcall
+    · rw [toVal_ofValA] at hnv'; cases hnv'
+    · obtain rfl := ofValA_inj hb
+      obtain ⟨re, rρ, rctl, rM⟩ := r
+      simp only at hlbl
+      obtain rfl : M = rM := hlbl.symm
+      simp only [Prod.mk.injEq] at hout
+      obtain ⟨hre, hrρ, hrctl, hσ⟩ := hout
+      subst hrctl hre
+      obtain rfl : ρ = rρ := hrρ.symm
+      obtain rfl : σ₁ = σ₂ := hσ.symm
+      imod Hclose with -
+      imod H with H
+      imodintro
+      isplitl [Hσ]
+      · iexact Hσ
+      · iapply wpt_ofValA (.pure a1 b1 v) ρ (by simpa [deliveryCost] using hk)
+        simp only [SpikeValA.erase_pure, SpikeVal.val]
+        iexact H
+    · obtain rfl := ofValA_inj hb
+      obtain ⟨re, rρ, rctl, rM⟩ := r
+      simp only at hlbl
+      obtain rfl : M = rM := hlbl.symm
+      simp only [Prod.mk.injEq] at hout
+      obtain ⟨hre, hrρ, hrctl, hσ⟩ := hout
+      subst hrctl hre
+      obtain rfl : ρ = rρ := hrρ.symm
+      obtain rfl : σ₁ = σ₂ := hσ.symm
+      imod Hclose with -
+      imod H with H
+      imodintro
+      isplitl [Hσ]
+      · iexact Hσ
+      · iapply wpt_ofValA (.pure a2 b1 v) ρ (by simpa [deliveryCost] using hk)
+        simp only [SpikeValA.erase_pure, SpikeValA.erase_annot, SpikeVal.val]
+        iexact H
+    · rw [jumpRedex?_ofValA] at hj; cases hj
+    · obtain ⟨_, _, _, h⟩ := hcall.callRedex?_some
+      rw [callRedex?_ofValA] at h; cases h
+  | none =>
+    cases hjr : jumpRedex? b with
+    | some lp =>
+      obtain ⟨l, pes⟩ := lp
+      exact wpt_jump_frame_bound a ρ (Nat.le_succ k) htv hjr
+    | none =>
+    cases hcr : callRedex? b with
+    | some q =>
+      obtain ⟨ctx, f, pes⟩ := q
+      rw [wpt_call_eq htv hjr hcr,
+        wpt_call_eq (toVal_bound_node a b)
+          (by rw [jumpRedex?_bound]; exact hjr)
+          (show callRedex? (Expr a (Ebound b)) = some (Cbound a ctx, f, pes) by
+            rw [callRedex?_bound, hcr]; rfl)]
+      simp only [apply_ctx_bound]
+      iintro H
+      imod H with ⟨%params, %body, %vs, %m, %k', %hb, %h1, %h2, %h3, Hpre, Hcont⟩
+      imodintro
+      iexists params, body, vs, m, k' + 1, (by omega)
+      isplit
+      · ipureintro; exact h1
+      isplit
+      · ipureintro; exact h2
+      isplit
+      · ipureintro; exact h3
+      isplitl [Hpre]
+      · iexact Hpre
+      iintro %ret %a1 Hpost
+      ihave H' := Hcont $$ %ret %a1 Hpost
+      iapply IH k' (by omega) (apply_ctx ctx (ofValA (.pure a1 [] ret))) ρ $$ H'
+    | none =>
+      cases k with
+      | zero =>
+        rw [wpt_zero_step_eq htv hjr hcr]
+        iintro %h
+        exact h.elim
+      | succ m =>
+        rw [wpt_step_eq m htv hjr hcr,
+          wpt_step_eq (m + 1) (toVal_bound_node a b)
+            (by rw [jumpRedex?_bound, hjr]) (callRedex?_bound_none hcr)]
+        iintro H %κ %ℓ %lc %sp %σ₁ %ns %obs %nt Hσ
+        imod H $$ %κ %ℓ %lc %sp %σ₁ %ns %obs %nt Hσ with ⟨%hred, H⟩
+        imodintro
+        isplit
+        · ipureintro
+          obtain ⟨obs0, r', σ', eₜ', hps⟩ := hred
+          obtain ⟨hs', hlbl', hnil'⟩ := hps
+          exact ⟨[], ⟨Expr a (Ebound r'.e), r'.ρ, r'.ctl, M⟩, σ', [],
+            ⟨Step.bound_ctx hjr hcr htv hs', rfl, rfl⟩⟩
+        iintro %r %σ₂ %eₜ %Hstep
+        obtain ⟨hs, hlbl, rfl⟩ := Hstep
+        rcases hs.bound_inv with ⟨b', ρ'', ctl'', σ'', hnj, hnc', hnv', hs', hout⟩ |
+            ⟨_, _, _, hb, _⟩ | ⟨_, _, _, _, _, hb, _⟩ |
+            ⟨_, _, _, _, _, _, _, hj, _, _, _, _⟩ | hcall
+        · obtain ⟨re, rρ, rctl, rM⟩ := r
+          simp only at hlbl
+          obtain rfl : M = rM := hlbl.symm
+          simp only [Prod.mk.injEq] at hout
+          obtain ⟨hre, hrρ, hrctl, hσ⟩ := hout
+          subst hre
+          obtain rfl : ρ'' = rρ := hrρ.symm
+          obtain rfl : ctl'' = rctl := hrctl.symm
+          obtain rfl : σ'' = σ₂ := hσ.symm
+          imod H $$ %(⟨b', ρ'', ctl'', M⟩ : CoreRt) %σ'' %([] : List CoreRt)
+            %⟨hs', rfl, rfl⟩ with ⟨$, H⟩
+          imodintro
+          iapply IH m (Nat.lt_succ_self m) b' ρ'' $$ H
+        · rw [hb, toVal_ofValA] at htv; cases htv
+        · rw [hb, toVal_ofValA] at htv; cases htv
+        · rw [hjr] at hj; cases hj
+        · obtain ⟨_, _, _, h⟩ := hcall.callRedex?_some
+          rw [hcr] at h; cases h
 
 /-! ## THE TOTAL SEQUENCING RULES (budgets compose additively; the
 bound value's delivery cost prepays the beta and — for annot

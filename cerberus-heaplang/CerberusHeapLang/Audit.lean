@@ -146,6 +146,8 @@ import CerberusHeapLang.MallocListExhibit
 import CerberusHeapLang.FibRecExhibit
 import CerberusHeapLang.TwoLabelExhibit
 import CerberusHeapLang.EvenOddExhibit
+import CerberusHeapLang.EmittedAExhibit
+import CerberusHeapLang.Examples.CorpusE0
 import CerberusHeapLang.Examples.ReadinessSmoke
 import CerberusHeapLang.Examples.MirrorCoverage
 import CerberusHeapLang.Examples.CallSmoke
@@ -597,7 +599,27 @@ def trioExports : List Name := [
   ``CerberusHeapLang.eo_wp_readout, ``CerberusHeapLang.even_odd_certified,
   ``CerberusHeapLang.eoEvenBody_wpt, ``CerberusHeapLang.eoOddBody_wpt,
   ``CerberusHeapLang.eoCtx_procSpecsT, ``CerberusHeapLang.eoMain_wpt,
-  ``CerberusHeapLang.even_odd_certified_production]
+  ``CerberusHeapLang.even_odd_certified_production,
+  -- dialect arc E1 (2026-09-05, docs/2026-09-04_e1-notes.md): annotations
+  -- live on every node (the location update on the control), the `bound`
+  -- frame and REMOVE-BOUND, the create ACTION_EVAL at `Ivalignof`, the
+  -- LETS-ANNOT beta at the plain-symbol binder; the rules at both strata;
+  -- the completeness rows; the acceptance exhibit (exhibit A in the emitted
+  -- shape, both strata and the production entry) and the mirror witnesses
+  ``CerberusHeapLang.wps_bound, ``CerberusHeapLang.wpt_bound,
+  ``CerberusHeapLang.wpt_jump_frame_bound,
+  ``CerberusHeapLang.wps_create_eval, ``CerberusHeapLang.wpt_create_eval,
+  ``CerberusHeapLang.step_ctx_bound_pure, ``CerberusHeapLang.step_ctx_bound_annot,
+  ``CerberusHeapLang.stepDischarge_create_eval, ``CerberusHeapLang.step_ctx_beta_sym_annot,
+  ``CerberusHeapLang.complete_bound_pure, ``CerberusHeapLang.complete_bound_annot,
+  ``CerberusHeapLang.complete_create_op,
+  ``CerberusHeapLang.MachineCtx.locUpdTh_thread,
+  ``CerberusHeapLang.Step.bound_inv, ``CerberusHeapLang.Step.create_op_inv,
+  ``CerberusHeapLang.progAE1_frag, ``CerberusHeapLang.progAE1_wps,
+  ``CerberusHeapLang.progAE1_wpt, ``CerberusHeapLang.exhibitA_prod_e1,
+  ``CerberusHeapLang.loc_update_nonlib, ``CerberusHeapLang.store_located_step,
+  ``CerberusHeapLang.bound_annot_round, ``CerberusHeapLang.bound_pure_round,
+  ``CerberusHeapLang.create_alignof_round, ``CerberusHeapLang.sseq_sym_annot_round]
 
 def sortedNames (ns : Array Name) : Array String :=
   (ns.map (·.toString)).qsort (· < ·)

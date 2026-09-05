@@ -161,6 +161,12 @@ at the three frames `callRedex?` builds — `rfl` equations for rewriting) -/
 @[simp] theorem toVal_sseq_node (a : List annot) (pat : pattern)
     (e1 e2 : CoreExpr) : toVal (Expr a (Esseq pat e1 e2)) = none := rfl
 
+@[simp] theorem toVal_bound_node (a : List annot) (b : CoreExpr) :
+    toVal (Expr a (Ebound b)) = none := rfl
+
+@[simp] theorem apply_ctx_bound (a : List annot) (ctx : context) (e : CoreExpr) :
+    apply_ctx (Cbound a ctx) e = Expr a (Ebound (apply_ctx ctx e)) := rfl
+
 @[simp] theorem toVal_wseq_node (a : List annot) (pat : pattern)
     (e1 e2 : CoreExpr) : toVal (Expr a (Ewseq pat e1 e2)) = none := rfl
 
@@ -1153,6 +1159,150 @@ theorem wps_annot (a : List annot) (ds : List dyn_annotation) (e : CoreExpr) (ρ
             rw [hcr] at h; cases h
           · rw [hb] at hv; simp at hv
 
+/-! ## The `bound` frame (E1)
+
+The emitted Core wraps every full expression in `bound(...)`
+(`Ebound`). On the sequential fragment the frame is INERT: every
+sub-step passes through `Cbound` (`Step.bound_ctx`, get_ctx's Ebound arm
+core_reduction.lem:563–568), jumps and calls pass through it unchanged
+(`jumpRedex?_bound`/`callRedex?_bound`, the captured context grows a
+`Cbound` frame), and REMOVE-BOUND (step_ctx's general arm,
+core_reduction.lem:1214–1226) delivers the value BARE — the DYNAMIC
+ANNOTATIONS of an annotated value are DISCARDED. So the inner
+postcondition sees the value at `.pure w.val`. -/
+
+/-- `wps` through the `bound` frame. -/
+theorem wps_bound {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot) (b : CoreExpr)
+    (ρ : EnvStack) :
+    wps M p Ls Θ (fun w ρ' => Ψ (SpikeVal.pure w.val) ρ') b ρ ⊢
+      wps M p Ls Θ Ψ (Expr a (Ebound b)) ρ := by
+  iloeb as IH generalizing %b %ρ
+  cases htv : toVal b with
+  | some w =>
+    obtain ⟨wa, rfl, rfl⟩ := ofValA_of_toVal htv
+    rw [wps_unfold.to_eq, (wps_unfold (e := Expr a (Ebound (ofValA wa)))).to_eq]
+    simp only [wps.pre, toVal_ofValA, toVal_bound_node, jumpRedex?_bound, jumpRedex?_ofValA,
+      callRedex?_bound, callRedex?_ofValA, Option.map_none]
+    iintro H %κ %ℓ %lc %sp %σ₁ %ns %obs %obs' %nt Hσ
+    iapply fupd_mask_intro Std.LawfulSet.empty_subset
+    iintro Hclose
+    isplitr
+    · ipureintro
+      cases wa with
+      | pure a1 b1 v => exact ⟨[], ⟨_, _, _, _⟩, _, [], ⟨Step.bound_pure, rfl, rfl⟩⟩
+      | annot a1 a2 b1 ds v => exact ⟨[], ⟨_, _, _, _⟩, _, [], ⟨Step.bound_annot, rfl, rfl⟩⟩
+    inext
+    iintro %r %σ₂ %eₜ %Hstep Hcred
+    obtain ⟨hs, hlbl, rfl⟩ := Hstep
+    rcases hs.bound_inv with ⟨_, _, _, _, _, _, hnv', _, _⟩ |
+        ⟨a1, b1, v, hb, hout⟩ | ⟨a1, a2, b1, ds, v, hb, hout⟩ |
+        ⟨_, _, _, _, _, _, _, hj, _, _, _, _⟩ | hcall
+    · rw [toVal_ofValA] at hnv'; cases hnv'
+    · obtain rfl := ofValA_inj hb
+      obtain ⟨re, rρ, rctl, rM⟩ := r
+      simp only at hlbl
+      obtain rfl : M = rM := hlbl.symm
+      simp only [Prod.mk.injEq] at hout
+      obtain ⟨hre, hrρ, hrctl, hσ⟩ := hout
+      subst hrctl hre
+      obtain rfl : ρ = rρ := hrρ.symm
+      obtain rfl : σ₁ = σ₂ := hσ.symm
+      imod Hclose with -
+      imod H with H
+      imodintro
+      isplitl [Hσ]
+      · iexact Hσ
+      · iapply wps_ofValA (.pure a1 b1 v) ρ
+        simp only [SpikeValA.erase_pure, SpikeVal.val]
+        iexact H
+    · obtain rfl := ofValA_inj hb
+      obtain ⟨re, rρ, rctl, rM⟩ := r
+      simp only at hlbl
+      obtain rfl : M = rM := hlbl.symm
+      simp only [Prod.mk.injEq] at hout
+      obtain ⟨hre, hrρ, hrctl, hσ⟩ := hout
+      subst hrctl hre
+      obtain rfl : ρ = rρ := hrρ.symm
+      obtain rfl : σ₁ = σ₂ := hσ.symm
+      imod Hclose with -
+      imod H with H
+      imodintro
+      isplitl [Hσ]
+      · iexact Hσ
+      · iapply wps_ofValA (.pure a2 b1 v) ρ
+        simp only [SpikeValA.erase_pure, SpikeValA.erase_annot, SpikeVal.val]
+        iexact H
+    · rw [jumpRedex?_ofValA] at hj; cases hj
+    · obtain ⟨_, _, _, h⟩ := hcall.callRedex?_some
+      rw [callRedex?_ofValA] at h; cases h
+  | none =>
+    cases hjr : jumpRedex? b with
+    | some lp =>
+      rw [wps_unfold.to_eq, (wps_unfold (e := Expr a (Ebound b))).to_eq]
+      simp only [wps.pre, htv, toVal_bound_node, jumpRedex?_bound, hjr]
+      iintro H
+      iexact H
+    | none =>
+      cases hcr : callRedex? b with
+      | some q =>
+        obtain ⟨ctx, f, pes⟩ := q
+        rw [wps_unfold.to_eq, (wps_unfold (e := Expr a (Ebound b))).to_eq]
+        simp only [wps.pre, htv, toVal_bound_node, jumpRedex?_bound, hjr, callRedex?_bound, hcr,
+          Option.map_some, apply_ctx_bound]
+        iintro H
+        imod H with ⟨%params, %body, %vs, %h1, %h2, %h3, Hpre, Hcont⟩
+        imodintro
+        iexists params, body, vs
+        isplit
+        · ipureintro; exact h1
+        isplit
+        · ipureintro; exact h2
+        isplit
+        · ipureintro; exact h3
+        isplitl [Hpre]
+        · iexact Hpre
+        inext
+        iintro %ret %a1 Hpost
+        ihave H' := Hcont $$ %ret %a1 Hpost
+        iapply IH $$ %(apply_ctx ctx (ofValA (.pure a1 [] ret))) %ρ H'
+      | none =>
+        rw [wps_unfold.to_eq, (wps_unfold (e := Expr a (Ebound b))).to_eq]
+        simp only [wps.pre, htv, toVal_bound_node, jumpRedex?_bound, hjr, callRedex?_bound, hcr,
+          Option.map_none]
+        iintro H %κ %ℓ %lc %sp %σ₁ %ns %obs %obs' %nt Hσ
+        imod H $$ %κ %ℓ %lc %sp %σ₁ %ns %obs %obs' %nt Hσ with ⟨%hred, H⟩
+        imodintro
+        isplit
+        · ipureintro
+          obtain ⟨obs0, r', σ', eₜ', hps⟩ := hred
+          obtain ⟨hs', hlbl', hnil'⟩ := hps
+          exact ⟨obs0, ⟨Expr a (Ebound r'.e), r'.ρ, r'.ctl, M⟩, σ', [],
+            ⟨Step.bound_ctx hjr hcr htv hs', rfl, rfl⟩⟩
+        inext
+        iintro %r %σ₂ %eₜ %Hstep Hcred
+        obtain ⟨hs, hlbl, rfl⟩ := Hstep
+        rcases hs.bound_inv with ⟨b', ρ'', ctl'', σ'', hnj, hnc', hnv', hs', hout⟩ |
+            ⟨_, _, _, hb, _⟩ | ⟨_, _, _, _, _, hb, _⟩ |
+            ⟨_, _, _, _, _, _, _, hj, _, _, _, _⟩ | hcall
+        · obtain ⟨re, rρ, rctl, rM⟩ := r
+          simp only at hlbl
+          obtain rfl : M = rM := hlbl.symm
+          simp only [Prod.mk.injEq] at hout
+          obtain ⟨hre, hrρ, hrctl, hσ⟩ := hout
+          subst hre
+          obtain rfl : ρ'' = rρ := hrρ.symm
+          obtain rfl : ctl'' = rctl := hrctl.symm
+          obtain rfl : σ'' = σ₂ := hσ.symm
+          imod H $$ %(⟨b', ρ'', ctl'', M⟩ : CoreRt) %σ'' %([] : List CoreRt) %⟨hs', rfl, rfl⟩ Hcred
+            with ⟨$, H⟩
+          imodintro
+          iapply IH $$ %b' %ρ'' H
+        · rw [hb, toVal_ofValA] at htv; cases htv
+        · rw [hb, toVal_ofValA] at htv; cases htv
+        · rw [hjr] at hj; cases hj
+        · obtain ⟨_, _, _, h⟩ := hcall.callRedex?_some
+          rw [hcr] at h; cases h
+
 /-! ## THE SEQUENCING RULE (the jump-aware statement shape — probe
 `wps_seq`; the phase-1 proof is the value-beta / annot-beta / step
 three-way, S3 adds the jump-clause transfer as the fourth case) -/
@@ -1871,6 +2021,52 @@ theorem wps_alloc_eval {Ψ : SpikeVal → EnvStack → IProp GF}
   obtain rfl : align = al' := by
     simpa using Option.some.inj (hv1.symm.trans hv1')
   obtain rfl : size = sz' := by
+    simpa using Option.some.inj (hv2.symm.trans hv2')
+  obtain ⟨re, rρ, rctl, rM⟩ := r
+  simp only at hlbl
+  obtain rfl : M = rM := hlbl.symm
+  simp only [Prod.mk.injEq] at hout
+  obtain ⟨hre, hrρ, hrctl, hσ⟩ := hout
+  subst hrctl
+  subst hre
+  obtain rfl : ρ = rρ := hrρ.symm
+  obtain rfl : σ₁ = σ₂ := hσ.symm
+  imod Hclose with -
+  imodintro
+  isplitl [Hσ]
+  · iexact Hσ
+  · iexact H
+
+/-- ACTION_EVAL for a create's operands (E1; the `wps_alloc_eval` twin):
+    a `create(pe1, pe2)` whose operands evaluate to an integer alignment and
+    a ctype — the emitted shape is `create(Ivalignof(ty), ty)`, evaluated by
+    `evalPexpr_tyctor`/`evalTyCtor_alignof` — is verified by verifying the
+    create at those values. -/
+theorem wps_create_eval {Ψ : SpikeVal → EnvStack → IProp GF}
+    (a : List annot) (loc : CerbLocation.Loc) (ann : core_run_annotation)
+    (pe1 pe2 : generic_pexpr Unit sym) (pref : prefix0) (ρ : EnvStack)
+    {align : CerbMem.IntegerValue} {ty : ctype}
+    (hnv : valueFromPexprs [pe1, pe2] = none)
+    (hv1 : evalPexpr M.tagDefs M.extern ρ pe1 = some (Vobject (OVinteger align)))
+    (hv2 : evalPexpr M.tagDefs M.extern ρ pe2 = some (Vctype ty)) :
+    wps M p Ls Θ Ψ (createExpr a loc ann align ty pref) ρ ⊢
+      wps M p Ls Θ Ψ (createOpRedex a loc ann pe1 pe2 pref) ρ := by
+  rw [(wps_unfold (e := createOpRedex a loc ann pe1 pe2 pref)).to_eq]
+  simp only [wps.pre, createOpRedex, createExpr, toVal_action_node, jumpRedex?_action,
+    callRedex?_action]
+  iintro H %κ %ℓ %lc %sp %σ₁ %ns %obs %obs' %nt Hσ
+  iapply fupd_mask_intro Std.LawfulSet.empty_subset
+  iintro Hclose
+  isplitr
+  · ipureintro
+    exact ⟨[], ⟨_, _, _, _⟩, _, [], ⟨Step.create_eval hnv hv1 hv2, rfl, rfl⟩⟩
+  inext
+  iintro %r %σ₂ %eₜ %Hstep Hcred
+  obtain ⟨hs, hlbl, rfl⟩ := Hstep
+  obtain ⟨al', ty', hv1', hv2', hout⟩ := hs.create_op_inv hnv
+  obtain rfl : align = al' := by
+    simpa using Option.some.inj (hv1.symm.trans hv1')
+  obtain rfl : ty = ty' := by
     simpa using Option.some.inj (hv2.symm.trans hv2')
   obtain ⟨re, rρ, rctl, rM⟩ := r
   simp only at hlbl

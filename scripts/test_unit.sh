@@ -62,6 +62,17 @@ if [[ $fast -eq 0 ]]; then
   fi
   rm -f "$tmp"
 
+  echo "== speedbump: corpus skeleton (hand-transcribed emitted Core vs docs/corpus-e0; scripts/corpus_skeleton.lean) =="
+  # E1 ([USER 2026-09-04] E0 question 3): every transcription's annotation/bound
+  # skeleton equals the token stream of the oracle's emitted text; every plant
+  # (a bound dropped / the Astd annotations stripped) mismatches.
+  if (cd cerberus-heaplang && ../scripts/capped "$HOME/.elan/bin/lake" env lean scripts/corpus_skeleton.lean); then
+    echo "ok: corpus skeleton — every transcription matches its emitted text, every plant mismatches"
+  else
+    echo "FAIL (speedbump): corpus skeleton red (a transcription drifted from the emitted text, the tokenizer" \
+      "hit a blind spot, or a plant matched — a vacuous instrument)" >&2; fail=1
+  fi
+
   echo "== speedbump: import direction (semantics → heap → rules → adequacy → clients) =="
   # No core module may import an exhibit, example-support or production module.
   # The core set is the class `core` of the one module classification (a

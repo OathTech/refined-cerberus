@@ -21,7 +21,13 @@ calls `f`, `f` returns a constant — as `engine_step_matchU` instances
 the call IS `Step.call`'s successor (the callee installed, the frame
 pushed, the caller's control captured) and at the callee's value IS
 `Step.ret`'s (the value plugged into the captured context, the frame
-popped). NOT a client of a rule — there is no call rule yet (C3). The engine's ACTION_EVAL arm for `store` fires
+popped). NOT a client of a rule — there is no call rule yet (C3). Plus
+(dialect arc E1, 2026-09-05) the live-location witnesses
+(`loc_update_nonlib`/`_lib`/`_none`, `store_located_step`), the
+REMOVE-BOUND rounds (`bound_annot_round`, `bound_pure_round`), the create
+ACTION_EVAL round at `Ivalignof` (`create_alignof_round`) and the
+LETS-ANNOT round at the plain-symbol binder (`sseq_sym_annot_round`), all
+`engine_step_matchU` instances at a generic machine context. The engine's ACTION_EVAL arm for `store` fires
 whenever the operand triple is NOT all values; the mirror's
 `Step.store_eval` covers every such shape, and these two witnesses
 pin the two mixed ones (symbol pointer / literal value, literal
@@ -177,5 +183,105 @@ theorem smoke_ret_round (ra : core_run_annotation) (v : value) (ev0 : Fmap sym v
     (by rw [show esize (ofVal (.pure v)) = 1 from rfl,
       show lemDefaultFuel = 999999 + 1 from rfl]; omega)
     Step.ret
+
+/-! ## E1 witnesses (dialect arc, docs/2026-09-04_e1-notes.md): the live
+location, REMOVE-BOUND, the create ACTION_EVAL at `Ivalignof`, LETS-ANNOT
+at the plain-symbol binder -/
+
+/-- THE LOCATION UPDATE (Core_reduction.lean:484 `get_loc`): a general-arm
+    round at a node whose first `Aloc` is a NON-library location moves the
+    control's `curLoc` to it. -/
+theorem loc_update_nonlib (ctl : Ctl) (l : CerbLocation.Loc)
+    (hl : CerbLocation.isLibraryLocation l = false) (rest : List annot) :
+    (ctl.upd (Aloc l :: rest)).curLoc = l := by
+  simp only [Ctl.upd_curLoc, locUpd, get_loc, hl, Bool.false_eq_true, ↓reduceIte]
+
+/-- … a LIBRARY location leaves it (`is_library_location`, the engine's
+    filter of libcore/include/impls positions). -/
+theorem loc_update_lib (ctl : Ctl) (l : CerbLocation.Loc)
+    (hl : CerbLocation.isLibraryLocation l = true) (rest : List annot) :
+    (ctl.upd (Aloc l :: rest)).curLoc = ctl.curLoc := by
+  simp only [Ctl.upd_curLoc, locUpd, get_loc, hl, ↓reduceIte]
+
+/-- … and a node without an `Aloc` (the `Astd`/`Astmt`/`Aexpr` residue) is
+    inert on the location. -/
+theorem loc_update_none (ctl : Ctl) :
+    (ctl.upd [Astd "§6.5#2", Astmt, Aexpr]).curLoc = ctl.curLoc := rfl
+
+/-- A LOCATED `store` ACTION_EVAL round: the successor control is the
+    location-updated one (`Step.store_eval` at a non-empty list). -/
+theorem store_located_step {M : MachineCtx} (l : CerbLocation.Loc) {loc : CerbLocation.Loc}
+    {ann : core_run_annotation} {ty : ctype} {x : sym} {cv : value}
+    {mo : memory_order} {ρ : EnvStack} {ctl : Ctl} {σ : Mem} {pv : CerbMem.PointerValue}
+    (hx : evalPexpr M.tagDefs M.extern ρ (Pexpr [] () (PEsym x)) =
+      some (Vobject (OVpointer pv))) :
+    Step M (storeOpRedex [Aloc l, Aexpr] loc ann ty (Pexpr [] () (PEsym x))
+        (Pexpr [] () (PEval cv)) mo, ρ, ctl, σ)
+      (storeExpr [Aloc l, Aexpr] loc ann ty pv cv mo, ρ, ctl.upd [Aloc l, Aexpr], σ) :=
+  Step.store_eval rfl hx rfl
+
+/-- REMOVE-BOUND at an ANNOTATED value: the shipped driver's round at
+    `bound({A}v)` delivers `v` BARE — the dynamic annotations are dropped
+    (core_reduction.lem:1214–1219) — and updates the location. -/
+theorem bound_annot_round {M : MachineCtx} (a a1 a2 b1 : List annot)
+    (ds : List dyn_annotation) (v : value) (ev0 : Fmap sym value)
+    (evs : List (Fmap sym value)) (ctl : Ctl) (σ : Mem) :
+    CerberusRound M (Expr a (Ebound (ofValA (.annot a1 a2 b1 ds v))), ev0 :: evs, ctl, σ)
+      (ofValA (.pure a2 b1 v), ev0 :: evs, ctl.upd a, σ) :=
+  engine_step_matchU (Frag.bound (frag_ofValA _))
+    (by rw [esize_bound, show esize (ofValA (SpikeValA.annot a1 a2 b1 ds v)) = 2 from rfl,
+      show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+    Step.bound_annot
+
+/-- REMOVE-BOUND at a BARE value (core_reduction.lem:1221–1226). -/
+theorem bound_pure_round {M : MachineCtx} (a a1 b1 : List annot) (v : value)
+    (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (ctl : Ctl) (σ : Mem) :
+    CerberusRound M (Expr a (Ebound (ofValA (.pure a1 b1 v))), ev0 :: evs, ctl, σ)
+      (ofValA (.pure a1 b1 v), ev0 :: evs, ctl.upd a, σ) :=
+  engine_step_matchU (Frag.bound (frag_ofValA _))
+    (by rw [esize_bound, show esize (ofValA (SpikeValA.pure a1 b1 v)) = 1 from rfl,
+      show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+    Step.bound_pure
+
+/-- THE CREATE ACTION_EVAL ROUND at the emitted operands
+    `create(Ivalignof(ty), ty)` (core_reduction.lem:657–661): the round
+    rewrites the redex to the canonical create at the evaluator's own
+    alignment constant `alignofIval M.tagDefs ty`. -/
+theorem create_alignof_round {M : MachineCtx} (a : List annot) (loc : CerbLocation.Loc)
+    (ann : core_run_annotation) (ty : ctype) (pref : prefix0)
+    (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (ctl : Ctl) (σ : Mem) :
+    CerberusRound M
+      (createOpRedex a loc ann (Pexpr [] () (PEctor Civalignof [Pexpr [] () (PEval (Vctype ty))]))
+        (Pexpr [] () (PEval (Vctype ty))) pref, ev0 :: evs, ctl, σ)
+      (createRedex a loc ann (CerbMem.alignofIval M.tagDefs ty) ty pref, ev0 :: evs, ctl.upd a, σ) :=
+  engine_step_matchU
+    (Frag.create_op rfl (.ctorTy [] Civalignof rfl [] ty) (.val [] (Vctype ty))
+      (by rw [show peDepth (Pexpr ([] : List annot) ()
+          (PEctor Civalignof [Pexpr [] () (PEval (Vctype ty))])) = 2 from rfl,
+        show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+      (peDepth_val_le _ _))
+    (by rw [show esize (createOpRedex a loc ann
+        (Pexpr [] () (PEctor Civalignof [Pexpr [] () (PEval (Vctype ty))]))
+        (Pexpr [] () (PEval (Vctype ty))) pref) = 1 from rfl,
+      show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+    (Step.create_eval rfl (by rw [evalPexpr_tyctor, evalTyCtor_alignof]) rfl)
+
+/-- LETS-ANNOT AT THE PLAIN-SYMBOL BINDER (core_reduction.lem's second
+    LETS beta): the round binds the BARE value and re-wraps the dynamic
+    annotations around the continuation — mirrored since E1
+    (`Step.sseq_sym_annot`; the pre-E1 `BareHead` exclusion is retired). -/
+theorem sseq_sym_annot_round {M : MachineCtx} (a pa a1 a2 b1 : List annot) (x : sym)
+    (bty : core_base_type) (ds : List dyn_annotation) (v : value)
+    (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (ctl : Ctl) (σ : Mem) :
+    CerberusRound M
+      (Expr a (Esseq (symPat pa x bty) (ofValA (.annot a1 a2 b1 ds v))
+        (ofValA (.pure [] [] Vunit))), ev0 :: evs, ctl, σ)
+      (Expr [] (Eannot ds (ofValA (.pure [] [] Vunit))),
+        update_env (symPat pa x bty) v (ev0 :: evs), ctl.upd a, σ) :=
+  engine_step_matchU (Frag.sseq_sym (frag_ofValA _) (frag_ofValA _))
+    (by rw [show esize (Expr a (Esseq (symPat pa x bty) (ofValA (SpikeValA.annot a1 a2 b1 ds v))
+        (ofValA (SpikeValA.pure [] [] Vunit)))) = 3 from rfl,
+      show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+    Step.sseq_sym_annot
 
 end CerberusHeapLang
