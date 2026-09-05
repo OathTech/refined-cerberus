@@ -1797,7 +1797,7 @@ theorem wpt_seq {Ψ : SpikeVal → EnvStack → IProp GF}
       · exact (symPat_ne_base hpat).elim
       · exact (symPat_ne_base hpat).elim
       · obtain ⟨_, _, _, h⟩ := hcall.callRedex?_some
-        simp [callRedex?, annotRooted] at h
+        simp at h
   | none =>
     cases hjr : jumpRedex? e1 with
     | some lp =>
@@ -1993,7 +1993,7 @@ theorem wpt_wseq {Ψ : SpikeVal → EnvStack → IProp GF}
           iapply wpt_annot [] ds e2 (ev0 :: evs) $$ H
       · rw [jumpRedex?_ofValA] at hj; cases hj
       · obtain ⟨_, _, _, h⟩ := hcall.callRedex?_some
-        simp [callRedex?, annotRooted] at h
+        simp at h
   | none =>
     cases hjr : jumpRedex? e1 with
     | some lp =>
@@ -2149,7 +2149,7 @@ theorem wpt_seq_spec {Ψ : SpikeVal → EnvStack → IProp GF}
         · exact (symPat_ne_spec hpat).elim
         · exact (symPat_ne_spec hpat).elim
         · obtain ⟨_, _, _, h⟩ := hcall.callRedex?_some
-          simp [callRedex?, annotRooted] at h
+          simp at h
       | annot a1 a2 b1 ds v =>
         obtain rfl : v = Vloaded (LVspecified ov) := hval
         have hm : 1 ≤ m := by
@@ -2359,7 +2359,7 @@ theorem wpt_seq_sym {Ψ : SpikeVal → EnvStack → IProp GF}
         · iapply wpt_mono_k (Nat.le_add_left k2 m) e2 _ $$ Hinner
       · exact absurd (ofValA_inj he1) (by simp)
       · obtain ⟨_, _, _, h⟩ := hcall.callRedex?_some
-        simp [callRedex?, annotRooted] at h
+        simp at h
   | none =>
     cases hjr : jumpRedex? e1 with
     | some lp =>

@@ -1269,8 +1269,8 @@ private theorem drive_safe_aux {M₀ : MachineCtx} (htd : M₀.tagDefs = fmapEmp
     adequacy, every closed-program export is an instance): a proved WP
     at the configuration plus the seeded memory implies `DriverSafeCtl`:
     from any driver state holding the configuration at the entry control
-    over `th₀`'s immutables (with the context's `current_loc`), the
-    shipped loop at EVERY fuel exhausts or delivers a value satisfying
+    over `th₀`'s immutables (the location LIVE on the control, `ctl.curLoc`,
+    since E1), the shipped loop at EVERY fuel exhausts or delivers a value satisfying
     the readout. The fuel premises are the static `pot` bounds (program
     and every registered label body); the context's tag definitions and
     extern map are empty (the production driver's, `drive fmapEmpty
@@ -1444,8 +1444,8 @@ theorem Sat.union_left {tds : CerbTags.TagDefsMap} {σ : Mem} {Q R : CellMap}
     ENVIRONMENT (alloc arc P4.3, R-09), engine vocabulary only: for
     every memory that splits as P ⊎ R — footprint P satisfied, rest R
     ARBITRARY — and every driver state holding `(e, ρ)` at the control
-    over any thread immutables with the context's `current_loc`, the
-    shipped loop at EVERY fuel exhausts or delivers a value `v` with a
+    over any thread immutables (the location live on the control since
+    E1), the shipped loop at EVERY fuel exhausts or delivers a value `v` with a
     post-footprint `Q`, `post v Q`, THE SAME `R` returned verbatim
     (`Sat σ' (Q ∪ R)`) — it never kills otherwise and never derails.
     Partial correctness: exhaustion is unconstrained and the fuel is

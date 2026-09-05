@@ -618,6 +618,9 @@ def trioExports : List Name := [
   ``CerberusHeapLang.progAE1_frag, ``CerberusHeapLang.progAE1_wps,
   ``CerberusHeapLang.progAE1_wpt, ``CerberusHeapLang.exhibitA_prod_e1,
   ``CerberusHeapLang.loc_update_nonlib, ``CerberusHeapLang.store_located_step,
+  -- E1 range audit N-3 (docs/2026-09-05_audit-e1-range.md): the two sibling
+  -- location witnesses, measured trio-exact by the auditor, pinned with the first
+  ``CerberusHeapLang.loc_update_lib, ``CerberusHeapLang.loc_update_none,
   ``CerberusHeapLang.bound_annot_round, ``CerberusHeapLang.bound_pure_round,
   ``CerberusHeapLang.create_alignof_round, ``CerberusHeapLang.sseq_sym_annot_round]
 

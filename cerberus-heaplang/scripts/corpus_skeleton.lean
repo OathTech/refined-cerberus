@@ -56,9 +56,56 @@ def plantVerdict (textToks : List String) (planted : CoreExpr) : String × Bool 
   | .ok ts => if ts == textToks then ("MATCHES", true) else ("mismatch (expected)", false)
   | .error e => (s!"error ({e})", false)
 
+/-- THE COVERAGE SWEEP (E1 range audit N-2): every `*.annot.core` file of
+    the corpus directory is a table row or a `pendingCorpus` entry; a file
+    that is neither is a FAIL (a silently unchecked program), and so is a
+    pending entry or a row whose file does not exist (a stale ledger). -/
+def coverageSweep (quiet : Bool) (rows : List Row) (pending : List (String × String)) :
+    IO (Bool × List String) := do
+  let entries ← System.FilePath.readDir corpusDir
+  let files := (entries.map fun e => e.fileName).filter fun f => f.endsWith ".annot.core"
+  let files := files.qsort (· < ·)
+  let mut fail := false
+  let mut report : List String := []
+  for f in files do
+    if rows.any (·.file == f) then
+      report := report ++ [s!"| {f} | transcribed |"]
+    else match pending.find? (·.1 == f) with
+      | some (_, why) => report := report ++ [s!"| {f} | pending — {why} |"]
+      | none =>
+        unless quiet do
+          IO.eprintln s!"FAIL: corpus file {f} has no transcription row and no pending entry (fail-closed)"
+        fail := true
+  for r in rows do
+    unless files.contains r.file do
+      unless quiet do IO.eprintln s!"FAIL: table row {r.file} names no corpus file"
+      fail := true
+  for (f, _) in pending do
+    unless files.contains f do
+      unless quiet do IO.eprintln s!"FAIL: pending entry {f} names no corpus file"
+      fail := true
+  pure (fail, report)
+
 def main : IO Unit := do
   let mut fail := false
   IO.println "# Corpus skeleton check (E1)"
+  IO.println ""
+  -- the coverage sweep, and its plant: the ledger with t1's row removed
+  -- (and not made pending) MUST fail
+  let (sweepFail, report) ← coverageSweep false corpusTable pendingCorpus
+  IO.println "| corpus file | status |"
+  IO.println "|---|---|"
+  for line in report do IO.println line
+  IO.println ""
+  if sweepFail then
+    IO.eprintln "FAIL: corpus coverage sweep — an unchecked corpus file or a stale ledger entry"
+    fail := true
+  let (plantFail, _) ← coverageSweep true (corpusTable.filter (·.file != "t1.annot.core")) pendingCorpus
+  if !plantFail then
+    IO.eprintln "FAIL: coverage-sweep plant (t1's row dropped) STILL PASSES — vacuous sweep"
+    fail := true
+  else
+    IO.println "coverage sweep: every corpus file rowed or pending; plant (t1 row dropped) fails (expected)"
   IO.println ""
   IO.println "| file | proc | tokens | term = text | plant: bound dropped | plant: Astd stripped |"
   IO.println "|---|---|---|---|---|---|"

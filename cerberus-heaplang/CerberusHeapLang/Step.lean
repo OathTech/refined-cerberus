@@ -2693,40 +2693,40 @@ theorem Step.call_inv' {M : MachineCtx} {c : Config}
         out = (body, procEnv params vs :: c.2.1,
           c.2.2.1.callPush (redexAnnots c.1) ctx f, c.2.2.2) := by
   cases h with
-  | store h1 h2 h3 hmv hmem => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
-  | load h1 h2 hmem => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
-  | create h1 h2 hmem => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
-  | alloc h1 h2 hmem => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
-  | kill h1 hmem => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
-  | sseq_pure => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
-  | sseq_annot => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
-  | wseq_pure => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
-  | wseq_annot => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
-  | sseq_spec_pure => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
-  | sseq_spec_annot => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
-  | pure_eval hnv hv => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
-  | load_eval hnv2 hv2 => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
+  | store h1 h2 h3 hmv hmem => intro ctx f pes hc; simp [callRedex?] at hc
+  | load h1 h2 hmem => intro ctx f pes hc; simp [callRedex?] at hc
+  | create h1 h2 hmem => intro ctx f pes hc; simp [callRedex?] at hc
+  | alloc h1 h2 hmem => intro ctx f pes hc; simp [callRedex?] at hc
+  | kill h1 hmem => intro ctx f pes hc; simp [callRedex?] at hc
+  | sseq_pure => intro ctx f pes hc; simp [callRedex?] at hc
+  | sseq_annot => intro ctx f pes hc; simp [callRedex?] at hc
+  | wseq_pure => intro ctx f pes hc; simp [callRedex?] at hc
+  | wseq_annot => intro ctx f pes hc; simp [callRedex?] at hc
+  | sseq_spec_pure => intro ctx f pes hc; simp [callRedex?] at hc
+  | sseq_spec_annot => intro ctx f pes hc; simp [callRedex?] at hc
+  | pure_eval hnv hv => intro ctx f pes hc; simp [callRedex?] at hc
+  | load_eval hnv2 hv2 => intro ctx f pes hc; simp [callRedex?] at hc
   | sseq_ctx hnj hnc hnv hs => intro ctx f pes hc; rw [callRedex?_sseq, hnc] at hc; cases hc
   | wseq_ctx hnj hnc hnv hs => intro ctx f pes hc; rw [callRedex?_wseq, hnc] at hc; cases hc
   | annot_ctx hnj hnc hnv hg hs => intro ctx f pes hc; rw [callRedex?_annot_of_not_root _ _ hg, hnc] at hc; cases hc
   | bound_ctx hnj hnc hnv hs => intro ctx f pes hc; rw [callRedex?_bound, hnc] at hc; cases hc
-  | bound_pure => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
-  | bound_annot => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
+  | bound_pure => intro ctx f pes hc; simp [callRedex?] at hc
+  | bound_annot => intro ctx f pes hc; simp [callRedex?] at hc
   | annot_merge => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
   | run hj hl hvs => intro ctx f pes hc; rw [callRedex?_none_of_jumpRedex?_some hj] at hc; cases hc
-  | save hvals => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
-  | save_eval hnv hvals => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
-  | if_true hg => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
-  | if_false hg => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
-  | case_value hv hsel => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
-  | sseq_sym_pure => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
-  | sseq_sym_annot => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
-  | memop_ptreq h1 h2 hmem => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
-  | memop_eval hnv hv1 hv2 => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
-  | store_eval hnv hv2 hv3 => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
-  | kill_eval hnv hv => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
-  | alloc_eval hnv hv1 hv2 => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
-  | create_eval hnv hv1 hv2 => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
+  | save hvals => intro ctx f pes hc; simp [callRedex?] at hc
+  | save_eval hnv hvals => intro ctx f pes hc; simp [callRedex?] at hc
+  | if_true hg => intro ctx f pes hc; simp [callRedex?] at hc
+  | if_false hg => intro ctx f pes hc; simp [callRedex?] at hc
+  | case_value hv hsel => intro ctx f pes hc; simp [callRedex?] at hc
+  | sseq_sym_pure => intro ctx f pes hc; simp [callRedex?] at hc
+  | sseq_sym_annot => intro ctx f pes hc; simp [callRedex?] at hc
+  | memop_ptreq h1 h2 hmem => intro ctx f pes hc; simp [callRedex?] at hc
+  | memop_eval hnv hv1 hv2 => intro ctx f pes hc; simp [callRedex?] at hc
+  | store_eval hnv hv2 hv3 => intro ctx f pes hc; simp [callRedex?] at hc
+  | kill_eval hnv hv => intro ctx f pes hc; simp [callRedex?] at hc
+  | alloc_eval hnv hv1 hv2 => intro ctx f pes hc; simp [callRedex?] at hc
+  | create_eval hnv hv1 hv2 => intro ctx f pes hc; simp [callRedex?] at hc
   | call hc hvs hf hlen =>
     intro ctx f pes hc0
     rw [hc] at hc0
@@ -2735,8 +2735,8 @@ theorem Step.call_inv' {M : MachineCtx} {c : Config}
       exact ⟨congrArg Prod.fst this, congrArg (fun q => q.2.1) this,
         congrArg (fun q => q.2.2) this⟩
     exact ⟨_, _, _, hvs, hf, hlen, rfl⟩
-  | ret => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
-  | ret_annot => intro ctx f pes hc; simp [callRedex?, annotRooted] at hc
+  | ret => intro ctx f pes hc; simp at hc
+  | ret_annot => intro ctx f pes hc; simp [callRedex?] at hc
 
 theorem Step.call_inv {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack} {ctl : Ctl} {σ : Mem}
     {out : Config} (h : Step M (e, ρ, ctl, σ) out)
@@ -2794,14 +2794,14 @@ theorem Step.val_elim {M : MachineCtx} {w : SpikeValA} {ρ : EnvStack} {ctl : Ct
   cases w with
   | pure a b v =>
     cases h with
-    | run hj hl hvs => simp [jumpRedex?] at hj
+    | run hj hl hvs => simp at hj
     | pure_eval hnv hv => rw [valueFromPexpr_val] at hnv; cases hnv
-    | call hc hvs hf hlen => simp [callRedex?] at hc
+    | call hc hvs hf hlen => simp at hc
   | annot a a2 b ds v =>
     cases h with
     | annot_ctx hnj hnc hnv hg hs => rw [toVal_pure_val] at hnv; cases hnv
     | run hj hl hvs => simp [jumpRedex?, annotRooted] at hj
-    | call hc hvs hf hlen => simp [callRedex?, annotRooted] at hc
+    | call hc hvs hf hlen => simp [callRedex?] at hc
 
 /-- A BARE value never takes a stack-preserving step (its only rule,
     `Step.ret`, pops the call stack). -/
@@ -2810,9 +2810,9 @@ theorem Step.pure_val_elim {M : MachineCtx} {a b : List annot} {v : value} {ρ :
     (h : Step M (ofValA (.pure a b v), ρ, ctl, σ) (e', ρ', ctl', σ'))
     (hκ : ctl'.κ = ctl.κ) : False := by
   cases h with
-  | run hj hl hvs => simp [jumpRedex?] at hj
+  | run hj hl hvs => simp at hj
   | pure_eval hnv hv => rw [valueFromPexpr_val] at hnv; cases hnv
-  | call hc hvs hf hlen => simp [callRedex?] at hc
+  | call hc hvs hf hlen => simp at hc
   | ret => exact absurd hκ (by simp)
 
 /-- The ANNOTATED value's only stack-preserving step is REMOVE-ANNOT at a
@@ -2827,7 +2827,7 @@ theorem Step.annot_val_inv {M : MachineCtx} {a a2 b : List annot} {ds : List dyn
   cases h with
   | annot_ctx hnj hnc hnv hg hs => rw [toVal_pure_val] at hnv; cases hnv
   | run hj hl hvs => simp [jumpRedex?, annotRooted] at hj
-  | call hc hvs hf hlen => simp [callRedex?, annotRooted] at hc
+  | call hc hvs hf hlen => simp [callRedex?] at hc
   | ret_annot => exact ⟨rfl, rfl, rfl, rfl, _, _, rfl⟩
 
 theorem Step.toVal_none {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack} {ctl : Ctl} {σ : Mem}
@@ -2917,9 +2917,9 @@ theorem Step.ret_inv {M : MachineCtx} {a b : List annot} {v : value} {ρ : EnvSt
       out = (apply_ctx pc.2 (ofValA (.pure a [] v)), evs, ⟨κ, pc.1, ℓ, lc, sp⟩, σ) := by
   obtain ⟨e', ρ', ctl', σ'⟩ := out
   cases h with
-  | run hj hl hvs => simp [jumpRedex?] at hj
+  | run hj hl hvs => simp at hj
   | pure_eval hnv hv => rw [valueFromPexpr_val] at hnv; cases hnv
-  | call hc hvs hf hlen => simp [callRedex?] at hc
+  | call hc hvs hf hlen => simp at hc
   | ret => exact ⟨_, _, rfl, rfl⟩
 
 /-- Inversion at an ANNOTATED value under a frame: the step is
@@ -2932,7 +2932,7 @@ theorem Step.ret_annot_inv {M : MachineCtx} {a a2 b : List annot} {ds : List dyn
   cases h with
   | annot_ctx hnj hnc hnv hg hs => rw [toVal_pure_val] at hnv; cases hnv
   | run hj hl hvs => simp [jumpRedex?, annotRooted] at hj
-  | call hc hvs hf hlen => simp [callRedex?, annotRooted] at hc
+  | call hc hvs hf hlen => simp [callRedex?] at hc
   | ret_annot => rfl
 
 /-- Inversion at a store redex (canonical operand instance — the
@@ -3123,25 +3123,25 @@ theorem Step.jump_inv {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack} {ctl : Ctl
       evalPexprs M.tagDefs M.extern ρ pes = some vs ∧
       out = (cont, bindArgs params vs ρ, ctl.upd (redexAnnots e), σ) := by
   cases h with
-  | store h1 h2 h3 hmv hmem => simp [jumpRedex?, annotRooted] at hj0
-  | load h1 h2 hmem => simp [jumpRedex?, annotRooted] at hj0
-  | create h1 h2 hmem => simp [jumpRedex?, annotRooted] at hj0
-  | alloc h1 h2 hmem => simp [jumpRedex?, annotRooted] at hj0
-  | kill h1 hmem => simp [jumpRedex?, annotRooted] at hj0
-  | sseq_pure => simp [jumpRedex?, annotRooted] at hj0
-  | sseq_annot => simp [jumpRedex?, annotRooted] at hj0
-  | wseq_pure => simp [jumpRedex?, annotRooted] at hj0
-  | wseq_annot => simp [jumpRedex?, annotRooted] at hj0
-  | sseq_spec_pure => simp [jumpRedex?, annotRooted] at hj0
-  | sseq_spec_annot => simp [jumpRedex?, annotRooted] at hj0
-  | pure_eval hnv hv => simp [jumpRedex?, annotRooted] at hj0
-  | load_eval hnv2 hv2 => simp [jumpRedex?, annotRooted] at hj0
+  | store h1 h2 h3 hmv hmem => simp [jumpRedex?] at hj0
+  | load h1 h2 hmem => simp [jumpRedex?] at hj0
+  | create h1 h2 hmem => simp [jumpRedex?] at hj0
+  | alloc h1 h2 hmem => simp [jumpRedex?] at hj0
+  | kill h1 hmem => simp [jumpRedex?] at hj0
+  | sseq_pure => simp [jumpRedex?] at hj0
+  | sseq_annot => simp [jumpRedex?] at hj0
+  | wseq_pure => simp [jumpRedex?] at hj0
+  | wseq_annot => simp [jumpRedex?] at hj0
+  | sseq_spec_pure => simp [jumpRedex?] at hj0
+  | sseq_spec_annot => simp [jumpRedex?] at hj0
+  | pure_eval hnv hv => simp [jumpRedex?] at hj0
+  | load_eval hnv2 hv2 => simp [jumpRedex?] at hj0
   | sseq_ctx hnj hnc hnv hs => rw [jumpRedex?_sseq, hnj] at hj0; cases hj0
   | wseq_ctx hnj hnc hnv hs => rw [jumpRedex?_wseq, hnj] at hj0; cases hj0
   | annot_ctx hnj hnc hnv hg hs => rw [jumpRedex?_annot_of_not_root _ _ hg, hnj] at hj0; cases hj0
   | bound_ctx hnj hnc hnv hs => rw [jumpRedex?_bound, hnj] at hj0; cases hj0
-  | bound_pure => simp [jumpRedex?, annotRooted] at hj0
-  | bound_annot => simp [jumpRedex?, annotRooted] at hj0
+  | bound_pure => simp [jumpRedex?] at hj0
+  | bound_annot => simp [jumpRedex?] at hj0
   | annot_merge => simp [jumpRedex?, annotRooted] at hj0
   | run hj hl hvs =>
     rw [hj] at hj0
@@ -3149,22 +3149,22 @@ theorem Step.jump_inv {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack} {ctl : Ctl
       have := Option.some.inj hj0
       exact ⟨congrArg Prod.fst this, congrArg Prod.snd this⟩
     exact ⟨_, _, _, _, _, rfl, hl, hvs, rfl⟩
-  | save hvals => simp [jumpRedex?, annotRooted] at hj0
-  | save_eval hnv hvals => simp [jumpRedex?, annotRooted] at hj0
-  | if_true hg => simp [jumpRedex?, annotRooted] at hj0
-  | if_false hg => simp [jumpRedex?, annotRooted] at hj0
-  | case_value hv hsel => simp [jumpRedex?, annotRooted] at hj0
-  | sseq_sym_pure => simp [jumpRedex?, annotRooted] at hj0
-  | sseq_sym_annot => simp [jumpRedex?, annotRooted] at hj0
-  | memop_ptreq h1 h2 hmem => simp [jumpRedex?, annotRooted] at hj0
-  | memop_eval hnv hv1 hv2 => simp [jumpRedex?, annotRooted] at hj0
-  | store_eval hnv hv2 hv3 => simp [jumpRedex?, annotRooted] at hj0
-  | kill_eval hnv hv => simp [jumpRedex?, annotRooted] at hj0
-  | alloc_eval hnv hv1 hv2 => simp [jumpRedex?, annotRooted] at hj0
-  | create_eval hnv hv1 hv2 => simp [jumpRedex?, annotRooted] at hj0
+  | save hvals => simp [jumpRedex?] at hj0
+  | save_eval hnv hvals => simp [jumpRedex?] at hj0
+  | if_true hg => simp [jumpRedex?] at hj0
+  | if_false hg => simp [jumpRedex?] at hj0
+  | case_value hv hsel => simp [jumpRedex?] at hj0
+  | sseq_sym_pure => simp [jumpRedex?] at hj0
+  | sseq_sym_annot => simp [jumpRedex?] at hj0
+  | memop_ptreq h1 h2 hmem => simp [jumpRedex?] at hj0
+  | memop_eval hnv hv1 hv2 => simp [jumpRedex?] at hj0
+  | store_eval hnv hv2 hv3 => simp [jumpRedex?] at hj0
+  | kill_eval hnv hv => simp [jumpRedex?] at hj0
+  | alloc_eval hnv hv1 hv2 => simp [jumpRedex?] at hj0
+  | create_eval hnv hv1 hv2 => simp [jumpRedex?] at hj0
   | call hc hvs hf hlen => rw [callRedex?_none_of_jumpRedex?_some hj0] at hc; cases hc
-  | ret => simp [jumpRedex?, annotRooted] at hj0
-  | ret_annot => simp [jumpRedex?, annotRooted] at hj0
+  | ret => simp at hj0
+  | ret_annot => simp [jumpRedex?] at hj0
 
 /-- Reducibility at a jump redex whose label resolves and whose
     arguments evaluate. -/

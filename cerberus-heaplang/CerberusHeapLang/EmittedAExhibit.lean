@@ -10,12 +10,23 @@ statement and expression node carries annotations (`Aloc`/`Astmt`/
 `Aexpr`; `Astd` "§6.5#2" on the `bound`s), every full expression is
 wrapped in `bound(...)`, and the alignment of a `create` is the type
 constant `Ivalignof(ty)`. E1 admits exactly these three features; this
-module re-expresses exhibit A (`progAProd`, ProdExhibit.lean) in that
-shape AS FAR AS E1 ALLOWS — the loaded-value protocol (`Specified`,
-`conv_loaded_int`), `unseq`, the negative-action protocol and `Eccall`
-are E2–E6 — and certifies it through the PUBLIC rules at both strata and
-through the production lane (`exhibitA_prod_e1`, the shipped pipeline on
-the synthetic file).
+module re-expresses exhibit A (`progAProd`, ProdExhibit.lean) as an E1
+SYNTHETIC in the dialect's features — annotations on every node
+(action nodes INCLUDED), `bound` around the two actions, `Ivalignof` —
+with the placements CHOSEN to exercise the location update at every
+round, not the elaborator's own: the corpus (docs/corpus-e0/*.annot.core)
+leaves `create`/`store`/`load`/`kill` action nodes without `Expr`
+annotations (their `loc` is in the `Action loc` field; the one exception
+is t5's object-lifetime store, `Astd` + `Aloc`) and never emits
+`bound(store …)`/`bound(load …)` (a `bound` wraps a full expression whose
+body is a `pure`/`let weak …`; a declaration's store is unbound; an
+assignment's store is `neg(store …)`, E5's protocol) — the E1 range audit,
+docs/2026-09-05_audit-e1-range.md §7/R-1. The elaborator's own placements
+are t1Main's (Examples/CorpusE0.lean). The loaded-value protocol
+(`Specified`, `conv_loaded_int`), `unseq`, the negative-action protocol
+and `Eccall` are E2–E6. The program is certified through the PUBLIC rules
+at both strata and through the production lane (`exhibitA_prod_e1`, the
+shipped pipeline on the synthetic file).
 
 What the re-expression exercises that the authored twin does not:
   * the live LOCATION: every node's `Aloc` is a non-library location, so
@@ -80,9 +91,12 @@ def intTyPe : generic_pexpr Unit sym := Pexpr [] () (PEval (Vctype intTy))
     {-# §6.5#2 #-}
     bound(load('signed int', p))
     ```
-    (annotation lists as the elaborator attaches them: `Aloc` + `Astmt` on
-    statement nodes, `Aloc` + `Aexpr` on expression nodes, `Astd` on the
-    `bound`s; positions are the exhibit's own pseudo-source). -/
+    (annotation lists in the elaborator's VOCABULARY — `Aloc` + `Astmt` on
+    the statement node, `Aloc` + `Aexpr` on the expression nodes, `Astd` on
+    the `bound`s — at placements chosen for the exercise, action nodes
+    included (the elaborator leaves action nodes unannotated and never
+    wraps a bare action in `bound`: header, R-1); positions are the
+    exhibit's own pseudo-source). -/
 def progAE1 : CoreExpr :=
   Expr [Aloc (eaLoc 1 17 1 61), Astmt] (Esseq (symPat [] pASym BTy_unit)
     (createOpRedex [Aloc (eaLoc 1 26 1 61), Aexpr] (eaLoc 1 26 1 61) empty_annotation
@@ -164,7 +178,7 @@ theorem progAE1_wps [SpikeGS .hasLC GF]
   isplitl [Hpt]
   · iexact Hpt
   iintro %fp Hpt
-  simp only [SpikeVal.val, SpikeVal.mergeInto]
+  simp only [SpikeVal.mergeInto]
   iapply wps_bound
   icases (pointsToCell_cellOwn_iff M.tagDefs _ _ _ _).mp $$ Hpt
     with ⟨%id, %a, %hpv, Hcell⟩
@@ -232,7 +246,7 @@ theorem progAE1_wpt [SpikeGS .hasLC GF]
   isplitl [Hpt]
   · iexact Hpt
   iintro %fp Hpt
-  simp only [SpikeVal.val, SpikeVal.mergeInto]
+  simp only [SpikeVal.mergeInto]
   -- the earlier numeral rewrites already shaped this budget as `3 + 1 + 1`
   iapply wpt_bound
   icases (pointsToCell_cellOwn_iff M.tagDefs _ _ _ _).mp $$ Hpt

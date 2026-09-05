@@ -22,12 +22,15 @@ the call IS `Step.call`'s successor (the callee installed, the frame
 pushed, the caller's control captured) and at the callee's value IS
 `Step.ret`'s (the value plugged into the captured context, the frame
 popped). NOT a client of a rule — there is no call rule yet (C3). Plus
-(dialect arc E1, 2026-09-05) the live-location witnesses
-(`loc_update_nonlib`/`_lib`/`_none`, `store_located_step`), the
-REMOVE-BOUND rounds (`bound_annot_round`, `bound_pure_round`), the create
-ACTION_EVAL round at `Ivalignof` (`create_alignof_round`) and the
-LETS-ANNOT round at the plain-symbol binder (`sseq_sym_annot_round`), all
-`engine_step_matchU` instances at a generic machine context. The engine's ACTION_EVAL arm for `store` fires
+(dialect arc E1, 2026-09-05) the live-location witnesses at the MIRROR
+level — `loc_update_nonlib`/`_lib`/`_none` are lemmas about `Ctl.upd`
+alone and `store_located_step` is a `Step` witness; none touches the
+engine — and the ENGINE-round witnesses, `engine_step_matchU` instances at
+a generic machine context: the REMOVE-BOUND rounds (`bound_annot_round`,
+`bound_pure_round`), the create ACTION_EVAL round at `Ivalignof`
+(`create_alignof_round`) and the LETS-ANNOT round at the plain-symbol
+binder (`sseq_sym_annot_round`) (the E1 range audit's R-3,
+docs/2026-09-05_audit-e1-range.md). The engine's ACTION_EVAL arm for `store` fires
 whenever the operand triple is NOT all values; the mirror's
 `Step.store_eval` covers every such shape, and these two witnesses
 pin the two mixed ones (symbol pointer / literal value, literal

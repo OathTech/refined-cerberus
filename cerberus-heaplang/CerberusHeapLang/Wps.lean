@@ -1389,7 +1389,7 @@ theorem wps_seq {Ψ : SpikeVal → EnvStack → IProp GF}
     · exact (symPat_ne_base hpat).elim
     · exact (symPat_ne_base hpat).elim
     · obtain ⟨_, _, _, h⟩ := hcall.callRedex?_some
-      simp [callRedex?, annotRooted] at h
+      simp at h
   | none =>
     cases hjr : jumpRedex? e1 with
     | some lp =>
@@ -1562,7 +1562,7 @@ theorem wps_wseq {Ψ : SpikeVal → EnvStack → IProp GF}
         iapply wps_annot [] ds e2 (ev0 :: evs) $$ H
     · rw [jumpRedex?_ofValA] at hj; cases hj
     · obtain ⟨_, _, _, h⟩ := hcall.callRedex?_some
-      simp [callRedex?, annotRooted] at h
+      simp at h
   | none =>
     cases hjr : jumpRedex? e1 with
     | some lp =>
@@ -2163,7 +2163,7 @@ theorem wps_seq_spec {Ψ : SpikeVal → EnvStack → IProp GF}
       · exact (symPat_ne_spec hpat).elim
       · exact (symPat_ne_spec hpat).elim
       · obtain ⟨_, _, _, h⟩ := hcall.callRedex?_some
-        simp [callRedex?, annotRooted] at h
+        simp at h
     | annot a1 a2 b1 ds v =>
       obtain rfl : v = Vloaded (LVspecified ov) := hval
       isplitr
@@ -2369,7 +2369,7 @@ theorem wps_seq_sym {Ψ : SpikeVal → EnvStack → IProp GF}
       · iexact Hinner
     · exact absurd (ofValA_inj he1) (by simp)
     · obtain ⟨_, _, _, h⟩ := hcall.callRedex?_some
-      simp [callRedex?, annotRooted] at h
+      simp at h
   | none =>
     cases hjr : jumpRedex? e1 with
     | some lp =>

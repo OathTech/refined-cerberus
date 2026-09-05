@@ -418,6 +418,11 @@ annotation/bound skeleton — the pure-expression contents (`Specified`,
 `conv_loaded_int`, the `case`) are transcribed on a best reading of the
 printed text and are NOT yet checked by the instrument). -/
 
+/-- The source path the oracle printed into t1's `Aloc`s — VERBATIM from
+    the E0 worktree's emission (docs/corpus-e0/t1.annot.core); an
+    environment artefact whose text is immaterial: it is a non-library
+    path (so the location update fires) and the skeleton compares `loc`
+    PRESENCE only (E1 range audit §12). -/
 def t1File : String := "refined-cerberus/worktrees/dialect-e0/docs/corpus-e0/t1.c"
 def t1Pos (l c : Nat) : CerbLocation.Pos := ⟨t1File, l, c⟩
 def t1Reg (c1 c2 : Nat) : CerbLocation.Loc := .region (t1Pos 1 c1) (t1Pos 1 c2) .noCursor
@@ -517,5 +522,26 @@ structure Row where
   term : CoreExpr
 
 def corpusTable : List Row := [⟨"t1.annot.core", "main", t1Main⟩]
+
+/-- THE COVERAGE LEDGER of the corpus (E1 range audit N-2,
+    docs/2026-09-05_audit-e1-range.md: the check was table-driven, so a
+    corpus file without a row was silently unchecked). Every
+    `docs/corpus-e0/*.annot.core` file must be either a `corpusTable` row
+    or listed here with the slice that owes its transcription; the script
+    sweeps the directory and FAILS on a file that is neither (fail-closed).
+    The `.annot.core` form is the one the tokenizer can read (it carries
+    the printed `{-# … #-}` markers); the `.core` twin is the same program
+    without them, and the `.seq.core`/`.seqrw.core` forms are the
+    informational sequentialised emissions (E0 §D Q1: not the referent). -/
+def pendingCorpus : List (String × String) :=
+  [("t2.annot.core", "E6 (`Eccall`; the helper call in a `for` loop)"),
+   ("t3_ptrarg.annot.core", "E6 (`Eccall`, `PtrValidForDeref`)"),
+   ("t4_while.annot.core", "E5 (negative actions; `while`)"),
+   ("t5_ifelse.annot.core", "E5 (negative actions; `if`/`else`)"),
+   ("t6_switch.annot.core", "E5 (negative actions; `switch`)"),
+   ("t7_struct.annot.core", "outside E — KOI B4 (`tagDefs`)"),
+   ("t8_array.annot.core", "E6 (arrays; `PtrValidForDeref`)"),
+   ("t9_fact.annot.core", "E7 (the outcome-list closed form)"),
+   ("t10_evenodd.annot.core", "E6 (`Eccall`; mutual recursion)")]
 
 end CerberusHeapLang.CorpusE0
