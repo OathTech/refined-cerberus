@@ -468,13 +468,11 @@ theorem fib_certified
     (fun l params cont hl => by
       rw [hlbl] at hl
       obtain ⟨-, rfl⟩ := fibQ_inv ra n ibty abty bbty hl
-      exact Nat.le_trans (fibBody_fragJ ra n).pot_le_two
-        (by rw [show esize (fibBody ra n) = 2 from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega))
+      exact Nat.le_of_ble_eq_true rfl)
     (procCtx_fragProcs _)
     prog fmapEmpty [] σ₀ (∅ : SpikeHeapF SpikeCell)
     (.save (saveParams_pure_of_vals rfl) (saveParams_depth_of_vals rfl) (fibBody_fragJ ra n))
-    (Nat.le_trans (Frag.pot_le_two (e := prog) (.save (saveParams_pure_of_vals rfl) (saveParams_depth_of_vals rfl) (fibBody_fragJ ra n)))
-      (by rw [show esize prog = 3 from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega))
+    (Nat.le_of_ble_eq_true rfl)
     (coh_empty σ₀)
     (fun v _ => v = ivVal (fibSpec n.toNat))
     ?_ (th₀ := procThread fibProcSym prog [fmapEmpty])
@@ -603,9 +601,9 @@ variable (ra : core_run_annotation)
   (ibty abty bbty : core_base_type)
 
 theorem fibProg_pot (sbty : core_base_type) (n : Int) :
-    pot (fibProg ra n sbty ibty abty bbty) = 4 := rfl
+    pot (fibProg ra n sbty ibty abty bbty) = 6 := rfl
 
-theorem fibBody_pot (n : Int) : pot (fibBody ra n) = 3 := rfl
+theorem fibBody_pot (n : Int) : pot (fibBody ra n) = 5 := rfl
 
 end FibTotalExport
 

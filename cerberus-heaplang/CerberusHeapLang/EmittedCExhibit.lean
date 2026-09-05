@@ -393,7 +393,7 @@ theorem progCE3_wps [SpikeGS .hasLC GF]
   rw [update_env_sym xSymC ptrC]
   -- a1 := bound(pure(Specified(3)))
   iapply wps_seq_sym
-  iapply wps_bound
+  iapply wps_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
   iapply wps_pure _ _ rfl (lintPe_eval _ 3)
   simp only [SpikeVal.val]
   iexists (lint 3)
@@ -416,7 +416,7 @@ theorem progCE3_wps [SpikeGS .hasLC GF]
   simp only [SpikeVal.mergeInto]
   -- a2 := bound(let weak p = pure(x) in load(int, p))
   iapply wps_seq_sym
-  iapply wps_bound
+  iapply wps_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
   iapply wps_wseq_sym
   iapply wps_pure _ _ rfl (symC_eval hex evs (frA1C_lookup_x hf px))
   iexists (Vobject (OVpointer px))
@@ -446,7 +446,7 @@ theorem progCE3_wps [SpikeGS .hasLC GF]
   rw [update_env_sym a2SymC lintC]
   -- a3 := bound(let weak (b1, b2) = pure((a2, Specified(1))) in pure(x + y))
   iapply wps_seq_sym
-  iapply wps_bound
+  iapply wps_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
   iapply wps_wseq_tuple
   iapply wps_pure _ _ rfl
     (by rw [evalPexpr_ctor2, symC_eval hex evs (frA2C_lookup_a2 hf px), lintPe_eval _ 1]; rfl)
@@ -591,7 +591,7 @@ theorem progCE3_wpt [SpikeGS .hasLC GF]
   -- a1 := bound(pure(Specified(3)))
   iapply wpt_seq_sym _ _ _ _ _ _ _ _ 3 22
   rw [show (3 : Nat) = 2 + 1 from rfl]
-  iapply wpt_bound
+  iapply wpt_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
   iapply wpt_pure _ _ (Nat.le_refl 2) rfl (lintPe_eval _ 3)
   simp only [SpikeVal.val]
   iexists (lint 3)
@@ -616,7 +616,7 @@ theorem progCE3_wpt [SpikeGS .hasLC GF]
   -- a2 := bound(let weak p = pure(x) in load(int, p))
   iapply wpt_seq_sym _ _ _ _ _ _ _ _ 7 11
   rw [show (7 : Nat) = 6 + 1 from rfl]
-  iapply wpt_bound
+  iapply wpt_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
   iapply wpt_wseq_sym _ _ _ _ _ _ _ _ 2 4
   iapply wpt_pure _ _ (Nat.le_refl 2) rfl (symC_eval hex evs (frA1C_lookup_x hf px))
   iexists (Vobject (OVpointer px))
@@ -648,7 +648,7 @@ theorem progCE3_wpt [SpikeGS .hasLC GF]
   -- a3 := bound(let weak (b1, b2) = pure((a2, Specified(1))) in pure(x + y))
   iapply wpt_seq_sym _ _ _ _ _ _ _ _ 5 6
   rw [show (5 : Nat) = 4 + 1 from rfl]
-  iapply wpt_bound
+  iapply wpt_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
   iapply wpt_wseq_tuple _ _ _ _ _ _ _ 2 2
   iapply wpt_pure _ _ (Nat.le_refl 2) rfl
     (by rw [evalPexpr_ctor2, symC_eval hex evs (frA2C_lookup_a2 hf px), lintPe_eval _ 1]; rfl)
@@ -741,7 +741,7 @@ theorem exhibitC_prod_e3 (sup : Nat) (fs : CerbFS.FsState) (args : List String) 
   have hlbl := prodCtx_labels (f := prodFileLib stdlibE3 [] (progCE3 3)) hQe
   obtain ⟨dres, dst', heq, hψ, hbl, hout, herr⟩ :=
     prod_run_eqJ_lib1 sup stdlibE3 (progCE3 3) hQe ψCE3 28
-      (wpt_driver_done_alloc (GF := SpikeGF) (ctl := prodCtl)
+      (wpt_driver_done_alloc (GF := SpikeGF) (ctl := prodCtl sup)
         (M₀ := prodCtx (prodFileLib stdlibE3 [] (progCE3 3)) (prodRSLib stdlibE3 [] sup (progCE3 3)))
         rfl rfl hlbl rfl rfl rfl rfl
         (fun l params cont hl => by
@@ -751,9 +751,7 @@ theorem exhibitC_prod_e3 (sup : Nat) (fs : CerbFS.FsState) (args : List String) 
         (fun l params cont hl => by
           rw [hlbl] at hl
           obtain ⟨-, rfl⟩ := retQ_inv hl
-          rw [show pot (Expr [] (Epure (psymC rSymC))) = 2 from rfl,
-            show lemDefaultFuel = 999999 + 1 from rfl]
-          omega)
+          exact Nat.le_of_ble_eq_true rfl)
         (cLsT SpikeGF)
         (progCE3 3) fmapEmpty [] prodMem₀ (∅ : SpikeHeapF SpikeCell)
         (allocCost fmapEmpty intTy 4) (progCE3_frag 3)

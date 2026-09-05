@@ -239,9 +239,7 @@ theorem struct_update_certified {GF : BundledGFunctors} [SpikeGpreS GF]
     (progS loc ann mo mo' bty id a) fmapEmpty [] σ₀
     (Iris.Std.PartialMap.singleton id (SpikeCell.mk a structTy bs))
     (progS_frag loc ann mo mo' bty id a)
-    (Nat.le_trans (progS_frag loc ann mo mo' bty id a).pot_le_two
-      (by rw [show esize (progS loc ann mo mo' bty id a) = 2 from rfl,
-        show lemDefaultFuel = 999999 + 1 from rfl]; omega))
+    (Nat.le_of_ble_eq_true rfl)
     hcoh
     (fun _ σ' => CellCoh fmapEmpty σ' id ⟨a, structTy,
       spliceBytes fieldY (sixBytes fmapEmpty) (spliceBytes fieldX (fiveBytes fmapEmpty) bs)⟩)
@@ -807,9 +805,7 @@ theorem struct_create_store_adequacy {GF : BundledGFunctors} [SpikeGpreS GF]
   refine project_triple_pure_alloc (GF := GF) (M := spikeCtx) rfl rfl (ctl := spikeCtl) rfl
     spikeCtx_labels_frag spikeCtx_labels_pot spikeCtx_fragProcs
     (progCreateInit_frag loc ann .Prov_none 8 pref mo pbty vbty)
-    (Nat.le_trans (progCreateInit_frag loc ann .Prov_none 8 pref mo pbty vbty).pot_le_two
-      (by rw [show esize (progCreateInit loc ann .Prov_none 8 pref mo pbty vbty) = 3
-          from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega))
+    (Nat.le_of_ble_eq_true rfl)
     fmapEmpty [] (∅ : CellMap) (allocCost fmapEmpty structTy 8)
     (fun w => iprop(∃ p : CerbMem.PointerValue,
       ⌜w.sv.val = Vunit⌝ ∗

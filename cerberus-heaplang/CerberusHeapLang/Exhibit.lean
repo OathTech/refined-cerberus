@@ -383,8 +383,7 @@ theorem exhibitA_semantic {GF : BundledGFunctors} [SpikeGpreS GF] :
     SemTriple spikeCtx spikeCtl spikeEnv progA mA (fun v Q => v = sevenVal ∧ Q = mA7) :=
   semantic_triple_sound (GF := GF) rfl rfl (ctl := spikeCtl) rfl spikeCtx_labels_frag spikeCtx_labels_pot spikeCtx_fragProcs
     fragA
-    (Nat.le_trans fragA.pot_le_two
-      (by rw [show esize progA = 2 from rfl]; unfold lemDefaultFuel; omega))
+    (Nat.le_of_ble_eq_true rfl)
     fmapEmpty [] provenA
 
 /-- EXHIBIT (b), the operator's FRAME EXHIBIT at the semantic level:
@@ -397,8 +396,7 @@ theorem exhibitB_semantic {GF : BundledGFunctors} [SpikeGpreS GF] :
         Q = Iris.Std.PartialMap.union Q₀ mF) :=
   semantic_frame (GF := GF) rfl rfl (ctl := spikeCtl) rfl spikeCtx_labels_frag spikeCtx_labels_pot spikeCtx_fragProcs
     fragB
-    (Nat.le_trans fragB.pot_le_two
-      (by rw [show esize progB = 1 from rfl]; unfold lemDefaultFuel; omega))
+    (Nat.le_of_ble_eq_true rfl)
     fmapEmpty [] mF mA_disj_mF provenB
 
 /-- Exhibit (a) at the seeded engine instance (rest := ∅): from any
@@ -721,8 +719,7 @@ theorem exhibitC_semantic {GF : BundledGFunctors} [SpikeGpreS GF] :
     SemTriple spikeCtx spikeCtl spikeEnv progC mB (fun _ Q => Q = mC) :=
   semantic_triple_sound (GF := GF) rfl rfl (ctl := spikeCtl) rfl spikeCtx_labels_frag spikeCtx_labels_pot spikeCtx_fragProcs
     fragC
-    (Nat.le_trans fragC.pot_le_two
-      (by rw [show esize progC = 2 from rfl]; unfold lemDefaultFuel; omega))
+    (Nat.le_of_ble_eq_true rfl)
     fmapEmpty [] provenC
 
 /-- Exhibit (c) at the seeded engine instance (rest := ∅): after the

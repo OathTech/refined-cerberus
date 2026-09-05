@@ -951,6 +951,8 @@ def DriverSafeCtl (M₀ : MachineCtx) (th₀ : thread_state) (e : CoreExpr) (ρ 
     dst.core_file = M₀.file →
     LabeledProcs M₀ dst.core_run_state0.labeled →
     CtlTied M₀ dst.core_run_state0.labeled ctl →
+    dst.core_run_state0.sym_supply = ctl.sup.sym ∧
+      dst.core_run_state0.excluded_supply = ctl.sup.excl →
     (∃ dst' : driver_state,
       runOne (drive_nonmemory_steps_aux2_lemFuel fl fmapEmpty acc [0]) dst =
         (NDkilled CerbND.fuelExhaustedKill, dst')) ∨
@@ -972,8 +974,8 @@ theorem DriverSafeCtl.mono {M₀ : MachineCtx} {th₀ : thread_state} {e : CoreE
     {ρ : EnvStack} {ctl : Ctl} {σ : Mem} {ψ ψ' : value → Mem → Prop}
     (hmono : ∀ v σ', ψ v σ' → ψ' v σ') (h : DriverSafeCtl M₀ th₀ e ρ ctl σ ψ) :
     DriverSafeCtl M₀ th₀ e ρ ctl σ ψ' := by
-  intro dst acc fl h1 h2 h3 h4 h5 h6
-  rcases h dst acc fl h1 h2 h3 h4 h5 h6 with hk |
+  intro dst acc fl h1 h2 h3 h4 h5 h6 h7
+  rcases h dst acc fl h1 h2 h3 h4 h5 h6 h7 with hk |
     ⟨v, σf, ρf, pf, ℓf, lcf, spf, af, bf, rs', tr, ctr, hψ, hrun⟩
   · exact Or.inl hk
   · exact Or.inr ⟨v, σf, ρf, pf, ℓf, lcf, spf, af, bf, rs', tr, ctr, hmono v σf hψ, hrun⟩
@@ -1116,14 +1118,16 @@ private theorem drive_safe_aux {M₀ : MachineCtx} (htd : M₀.tagDefs = fmapEmp
       dst.core_extern = fmapEmpty → dst.core_file = M₀.file →
       LabeledProcs M₀ dst.core_run_state0.labeled →
       CtlTied M₀ dst.core_run_state0.labeled ctl →
+      dst.core_run_state0.sym_supply = ctl.sup.sym ∧
+        dst.core_run_state0.excluded_supply = ctl.sup.excl →
       LoopOutcome th₀ ψ dst acc fl := by
   intro fl
   induction fl with
   | zero =>
-    intro e ρ ctl dst acc _ _ _ _ _ _ _ _ _ _
+    intro e ρ ctl dst acc _ _ _ _ _ _ _ _ _ _ _
     exact Or.inl ⟨dst, loop_zero_exhausts _ _ _ _⟩
   | succ f ih =>
-    intro e ρ ctl dst acc hreach hf hpot hok hlen hth hext hfile hlab htied
+    intro e ρ ctl dst acc hreach hf hpot hok hlen hth hext hfile hlab htied hsup
     obtain ⟨κ, pr, ℓ, lc, sp⟩ := ctl
     have hjmp : ∀ l params cont,
         lookupLabel (M₀.labelsAt (Ctl.mk κ pr ℓ lc sp).proc) l = some (params, cont) →
@@ -1158,9 +1162,10 @@ private theorem drive_safe_aux {M₀ : MachineCtx} (htd : M₀.tagDefs = fmapEmp
         obtain ⟨hlabC, hplug⟩ := hκ (p, ctx) (List.mem_cons_self ..)
         cases wa with
         | pure a1 b1 v =>
-          rcases hs.ctl_cases with ⟨a', heq⟩ | ⟨_, _, _, _, _, _, hc, -⟩ |
+          rcases hs.ctl_cases with ⟨a', heq⟩ | ⟨a', heq⟩ | ⟨_, _, _, _, _, _, hc, -⟩ |
               ⟨a1', b1', v', ev0, evs, p', ctx', κ', q', ℓ', lc', sp', he, hρ, hctl,
                 rfl, rfl, rfl, rfl⟩
+          · exact (Step.pure_val_elim hs (by rw [heq]; rfl)).elim
           · exact (Step.pure_val_elim hs (by rw [heq]; rfl)).elim
           · rw [callRedex?_ofValA] at hc; cases hc
           · obtain ⟨rfl, rfl, rfl⟩ : a1 = a1' ∧ b1 = b1' ∧ v = v' := by
@@ -1168,15 +1173,15 @@ private theorem drive_safe_aux {M₀ : MachineCtx} (htd : M₀.tagDefs = fmapEmp
             cases hctl
             subst hρ
             -- THE RETURN round
-            obtain ⟨rs', tr, ctr, hlbl, hrun⟩ :=
+            obtain ⟨rs', tr, ctr, hlbl, hsup', hrun⟩ :=
               loop_step_frag' (th₀ := ctlThread th₀ (ofValA (.pure a1 b1 v)) (ev0 :: rρ')
                   ⟨(p, ctx) :: κ, pr, ℓ, lc, sp⟩)
-                htd hex rfl rfl rfl rfl f acc hth hext hfile hjmp (.val_pure v)
+                htd hex rfl rfl rfl rfl f acc hth hext hfile hjmp hsup (.val_pure v)
                 (esize_ofValA_le (.pure a1 b1 v)) hs
             refine loopOutcome_step hrun (ih _ rρ' ⟨κ, p, ℓ, lc, sp⟩ _ acc (hreach.tail ⟨hs, rfl⟩)
               (hplug a1 v).1 (hplug a1 v).2
               ⟨hlabC, fun pc' hpc' => hκ pc' (List.mem_cons_of_mem _ hpc')⟩
-              (hs.env_depth hlen) ?_ hext hfile ?_ ?_)
+              (hs.env_depth hlen) ?_ hext hfile ?_ ?_ ?_)
             · rw [update_thread_state_single _ _ _ hth]
               rfl
             · show LabeledProcs M₀ rs'.labeled
@@ -1186,8 +1191,9 @@ private theorem drive_safe_aux {M₀ : MachineCtx} (htd : M₀.tagDefs = fmapEmp
               rw [hlbl]
               exact ⟨fun q hq => htied.2 (p, ctx) (List.mem_cons_self ..) q hq,
                 fun pc' hpc' => htied.2 pc' (List.mem_cons_of_mem _ hpc')⟩
+            · exact hsup'
         | annot a1 a2 b1 ds v =>
-          rcases hs.ctl_cases with ⟨a', heq⟩ | ⟨_, _, _, _, _, _, hc, -⟩ |
+          rcases hs.ctl_cases with ⟨a', heq⟩ | ⟨a', heq⟩ | ⟨_, _, _, _, _, _, hc, -⟩ |
               ⟨_, _, _, _, _, _, _, _, _, _, _, _, he, -⟩
           · -- REMOVE-ANNOT under a frame (`Step.ret_annot`), in place
             obtain ⟨rfl, rfl, rfl, rfl, -⟩ := Step.annot_val_inv hs (by rw [heq]; rfl)
@@ -1195,17 +1201,17 @@ private theorem drive_safe_aux {M₀ : MachineCtx} (htd : M₀.tagDefs = fmapEmp
               cases rρ' with
               | nil => simp at hlen
               | cons ev0 evs => exact ⟨ev0, evs, rfl⟩
-            obtain ⟨rs', tr, ctr, hlbl, hrun⟩ :=
+            obtain ⟨rs', tr, ctr, hlbl, hsup', hrun⟩ :=
               loop_step_frag' (th₀ := ctlThread th₀ (ofValA (.annot a1 a2 b1 ds v)) (ev0 :: evs)
                   ⟨(p, ctx) :: κ, pr, ℓ, lc, sp⟩)
-                htd hex rfl rfl rfl rfl f acc hth hext hfile hjmp (.annot (.val_pure v))
+                htd hex rfl rfl rfl rfl f acc hth hext hfile hjmp hsup (.annot (.val_pure v))
                 (esize_ofValA_le (.annot a1 a2 b1 ds v)) hs
             refine loopOutcome_step hrun (ih _ (ev0 :: evs) ⟨(p, ctx) :: κ, pr, ℓ, lc, sp⟩ _ acc
               (hreach.tail ⟨hs, rfl⟩) (.val_pure v)
               (by show pot (ofValA (.pure a2 b1 v)) ≤ lemDefaultFuel
                   have hpot' : pot (ofValA (.annot a1 a2 b1 ds v)) ≤ lemDefaultFuel := hpot
                   rw [pot_ofValA_pure]; rw [pot_ofValA_annot] at hpot'; omega)
-              ⟨hlabP, hκ⟩ hlen ?_ hext hfile ?_ ?_)
+              ⟨hlabP, hκ⟩ hlen ?_ hext hfile ?_ ?_ ?_)
             · rw [update_thread_state_single _ _ _ hth]
               rfl
             · show LabeledProcs M₀ rs'.labeled
@@ -1214,6 +1220,12 @@ private theorem drive_safe_aux {M₀ : MachineCtx} (htd : M₀.tagDefs = fmapEmp
             · show CtlTied M₀ rs'.labeled ⟨(p, ctx) :: κ, pr, ℓ, lc, sp⟩
               rw [hlbl]
               exact htied
+            · exact hsup'
+          · -- E5: an annotated value under a frame never draws the supplies
+            obtain ⟨-, -, -, hc, -⟩ := Step.annot_val_inv hs (by rw [heq]; rfl)
+            rw [heq] at hc
+            have hc' := congrArg (fun c : Ctl => c.sup.sym) hc
+            simp [Ctl.draw, Ctl.upd] at hc'
           · rw [callRedex?_ofValA] at hc; cases hc
           · cases ofValA_inj he
     | none =>
@@ -1231,24 +1243,24 @@ private theorem drive_safe_aux {M₀ : MachineCtx} (htd : M₀.tagDefs = fmapEmp
         | nil => simp at hlen
         | cons ev0 evs => exact ⟨ev0, evs, rfl⟩
       have hsz : esize e ≤ lemDefaultFuel := Nat.le_trans hf.esize_le_pot hpot
-      rcases hs.ctl_cases with ⟨a', heq⟩ |
+      rcases hs.ctl_cases with ⟨a', heq⟩ | ⟨a', heq⟩ |
           ⟨ctx, fsym, pes, params, body, vs, hc, hvs, hfl, hlen', rfl, rfl, rfl, rfl⟩ |
           ⟨_, _, v, _, _, _, _, _, _, _, _, _, he, -⟩
       · -- control-preserving (the jump included)
         subst heq
-        obtain ⟨rs', tr, ctr, hlbl, hrun⟩ :=
+        obtain ⟨rs', tr, ctr, hlbl, hsup', hrun⟩ :=
           loop_step_frag' (th₀ := ctlThread th₀ e (ev0 :: evs) ⟨κ, pr, ℓ, lc, sp⟩)
-            htd hex rfl rfl rfl rfl f acc hth hext hfile hjmp hf hsz hs
+            htd hex rfl rfl rfl rfl f acc hth hext hfile hjmp hsup hf hsz hs
         obtain ⟨ev0', rfl⟩ := Step.env_cons hs rfl
         have hpot' : pot re' ≤ lemDefaultFuel := by
-          rcases hf.pot_step_bound hs rfl with hle | ⟨l, pes, params, cont, -, hl, hec⟩
+          rcases hf.pot_step_bound hsz hs rfl with hle | ⟨l, pes, params, cont, -, hl, hec⟩
           · exact Nat.le_trans hle hpot
           · rw [hec]
             exact (hlabP l params cont hl).2
         refine loopOutcome_step hrun (ih re' (ev0' :: evs) ((⟨κ, pr, ℓ, lc, sp⟩ : Ctl).upd a') _ acc
           (hreach.tail ⟨hs, rfl⟩)
-          (hf.step (fun l params cont hl => (hlabP l params cont hl).1) hs rfl) hpot'
-          ⟨hlabP, hκ⟩ hlen ?_ hext hfile ?_ ?_)
+          (hf.step (fun l params cont hl => (hlabP l params cont hl).1) hsz hs rfl) hpot'
+          ⟨hlabP, hκ⟩ hlen ?_ hext hfile ?_ ?_ ?_)
         · rw [update_thread_state_single _ _ _ hth]
           rfl
         · show LabeledProcs M₀ rs'.labeled
@@ -1257,15 +1269,40 @@ private theorem drive_safe_aux {M₀ : MachineCtx} (htd : M₀.tagDefs = fmapEmp
         · show CtlTied M₀ rs'.labeled ((⟨κ, pr, ℓ, lc, sp⟩ : Ctl).upd a')
           rw [hlbl]
           exact htied
+        · exact hsup'
+      · -- E5: the negative-action round — control-preserving, the supplies drawn
+        subst heq
+        obtain ⟨rs', tr, ctr, hlbl, hsup', hrun⟩ :=
+          loop_step_frag' (th₀ := ctlThread th₀ e (ev0 :: evs) ⟨κ, pr, ℓ, lc, sp⟩)
+            htd hex rfl rfl rfl rfl f acc hth hext hfile hjmp hsup hf hsz hs
+        obtain ⟨ev0', rfl⟩ := Step.env_cons hs rfl
+        have hpot' : pot re' ≤ lemDefaultFuel := by
+          rcases hf.pot_step_bound hsz hs rfl with hle | ⟨l, pes, params, cont, -, hl, hec⟩
+          · exact Nat.le_trans hle hpot
+          · rw [hec]
+            exact (hlabP l params cont hl).2
+        refine loopOutcome_step hrun (ih re' (ev0' :: evs) (((⟨κ, pr, ℓ, lc, sp⟩ : Ctl).upd a').draw) _ acc
+          (hreach.tail ⟨hs, rfl⟩)
+          (hf.step (fun l params cont hl => (hlabP l params cont hl).1) hsz hs rfl) hpot'
+          ⟨hlabP, hκ⟩ hlen ?_ hext hfile ?_ ?_ ?_)
+        · rw [update_thread_state_single _ _ _ hth]
+          rfl
+        · show LabeledProcs M₀ rs'.labeled
+          rw [hlbl]
+          exact hlab
+        · show CtlTied M₀ rs'.labeled (((⟨κ, pr, ℓ, lc, sp⟩ : Ctl).upd a').draw)
+          rw [hlbl]
+          exact htied
+        · exact hsup'
       · -- THE CALL: the redex in context, the callee in the cone by `FragProcs`
         obtain ⟨ctx', r, hd, hfr⟩ := hf.decomp hv
         obtain ⟨rfl, an, ra, rfl⟩ := hd.callRedex?_inv hc
-        obtain ⟨rs', tr, ctr, hlbl, hrun⟩ :=
+        obtain ⟨rs', tr, ctr, hlbl, hsup', hrun⟩ :=
           loop_step_frag' (th₀ := ctlThread th₀ e (ev0 :: evs) ⟨κ, pr, ℓ, lc, sp⟩)
-            htd hex rfl rfl rfl rfl f acc hth hext hfile hjmp hf hsz hs
+            htd hex rfl rfl rfl rfl f acc hth hext hfile hjmp hsup hf hsz hs
         refine loopOutcome_step hrun (ih re' (procEnv params vs :: ev0 :: evs) _ _ acc
           (hreach.tail ⟨hs, rfl⟩) (hPf.body fsym params re' hfl)
-          (hPf.potBound fsym params re' hfl) ⟨?_, ?_⟩ (hs.env_depth hlen) ?_ hext hfile ?_ ?_)
+          (hPf.potBound fsym params re' hfl) ⟨?_, ?_⟩ (hs.env_depth hlen) ?_ hext hfile ?_ ?_ ?_)
         · exact hPf.labels fsym params re' hfl
         · intro pc hpc
           rcases List.mem_cons.mp hpc with rfl | hpc'
@@ -1286,6 +1323,7 @@ private theorem drive_safe_aux {M₀ : MachineCtx} (htd : M₀.tagDefs = fmapEmp
           · rcases List.mem_cons.mp hpc with rfl | hpc'
             · exact htied.1 q hq
             · exact htied.2 pc hpc' q hq
+        · exact hsup'
       · rw [he] at hv
         rw [toVal_ofValA] at hv
         cases hv
@@ -1335,13 +1373,13 @@ theorem engine_adequacy {GF : BundledGFunctors} [SpikeGpreS GF]
       ψ w.val σ := by
     intro w σ hr
     exact (hadeq [ofValRt w] σ (Reach.toPool hr)).2 w [] rfl
-  intro dst acc fl hth hσ hext hfile hlab htied
+  intro dst acc fl hth hσ hext hfile hlab htied hsup
   subst hσ
   exact drive_safe_aux htd hex hPf e₀ (ev00 :: evs0) ctl dst.layout_state ψ hNS hRES
     fl e₀ (ev00 :: evs0) ctl dst acc .refl hfrag hpot
     ⟨fun l params cont hl => ⟨hQf l params cont hl, hQpot l params cont hl⟩,
       fun pc hpc => by rw [hκ] at hpc; cases hpc⟩
-    (by rw [hκ]; simp) hth hext hfile hlab htied
+    (by rw [hκ]; simp) hth hext hfile hlab htied hsup
 
 /-- The spike context has no registered labels (its run state's
     `labeled` is empty), so the label-cone hypotheses are vacuous. -/
@@ -1404,13 +1442,13 @@ theorem engine_adequacy_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
       ψ w.val σ := by
     intro w σ hr
     exact (hadeq [ofValRt w] σ (Reach.toPool hr)).2 w [] rfl
-  intro dst acc fl hth hσ hext hfile hlab htied
+  intro dst acc fl hth hσ hext hfile hlab htied hsup
   subst hσ
   exact drive_safe_aux htd hex hPf e₀ (ev00 :: evs0) ctl dst.layout_state ψ hNS hRES
     fl e₀ (ev00 :: evs0) ctl dst acc .refl hfrag hpot
     ⟨fun l params cont hl => ⟨hQf l params cont hl, hQpot l params cont hl⟩,
       fun pc hpc => by rw [hκ] at hpc; cases hpc⟩
-    (by rw [hκ]; simp) hth hext hfile hlab htied
+    (by rw [hκ]; simp) hth hext hfile hlab htied hsup
 
 /-! ## THE EXPORTED FACE: semantic triples over engine configurations
 ([USER 2026-08-30], the final-form instruction)

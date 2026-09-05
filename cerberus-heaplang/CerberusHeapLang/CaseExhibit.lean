@@ -74,11 +74,16 @@ theorem caseProg_select (v : value) :
     (see the header note on why they are premises, not a closure
     lemma). -/
 theorem caseProg_frag (v : value) : Frag (caseProg v) := by
-  refine .case_value (fun e' hsel => ?_) (fun e' hsel => ?_) <;>
-    rw [caseProg_select] at hsel
-  · obtain rfl : ofVal (.pure v) = e' := Option.some.inj hsel
+  refine .case_value (fun q hq => ?_) (fun e' hsel => ?_) (fun e' hsel => ?_)
+  · -- E5: every alternative's body is in the cone (`pure(x)`, a symbol read)
+    rw [List.mem_singleton] at hq
+    subst hq
+    exact .pure_op rfl (.sym [] caseXSym) (peDepth_sym_le [] caseXSym)
+  · rw [caseProg_select] at hsel
+    obtain rfl : ofVal (.pure v) = e' := Option.some.inj hsel
     exact frag_ofVal _
-  · obtain rfl : ofVal (.pure v) = e' := Option.some.inj hsel
+  · rw [caseProg_select] at hsel
+    obtain rfl : ofVal (.pure v) = e' := Option.some.inj hsel
     exact Nat.le_succ 1
 
 /-! ## The WP lane -/
@@ -166,9 +171,7 @@ theorem case_certified {GF : BundledGFunctors} [SpikeGpreS GF] (v : value) (σ�
     (fun l params cont hl => (spikeCtx_labels_none l hl).elim)
     spikeCtx_fragProcs
     (caseProg v) fmapEmpty [] σ₀ ∅ (caseProg_frag v)
-    (Nat.le_trans (caseProg_frag v).pot_le_two
-      (by rw [show esize (caseProg v) = 2 from rfl,
-        show lemDefaultFuel = 999999 + 1 from rfl]; omega))
+    (Nat.le_of_ble_eq_true rfl)
     (Coh.mk
       (fun _ c hget => absurd (hget.symm.trans
         (Iris.Std.LawfulPartialMap.get?_empty (M := SpikeHeapF) _))

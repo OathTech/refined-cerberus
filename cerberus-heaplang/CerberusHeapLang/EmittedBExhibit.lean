@@ -411,7 +411,7 @@ theorem progBE2_wps [SpikeGS .hasLC GF]
   rw [update_env_sym ySymB ptrB]
   -- bound(store(int, y, Unspecified(int))) ; …
   iapply wps_seq
-  iapply wps_bound
+  iapply wps_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
   iapply wps_store_eval _ _ empty_annotation intTy _ _ NA _ rfl
     (pv := py) (cv := Vloaded (LVunspecified intTy))
     (symB_eval hex evs (frY_lookup_y hf py)) (unspecIntPe_eval _ _)
@@ -423,7 +423,7 @@ theorem progBE2_wps [SpikeGS .hasLC GF]
   simp only [SpikeVal.mergeInto]
   -- a1 := bound(pure(Specified(3)))
   iapply wps_seq_sym
-  iapply wps_bound
+  iapply wps_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
   iapply wps_pure _ _ rfl (specIntPe_eval _ _ 3)
   simp only [SpikeVal.val]
   iexists (intVal 3)
@@ -433,7 +433,7 @@ theorem progBE2_wps [SpikeGS .hasLC GF]
   rw [update_env_sym a1SymB lintB]
   -- a2 := bound(let weak (b1, b2) = pure((a1, Specified(1))) in pure(case …))
   iapply wps_seq_sym
-  iapply wps_bound
+  iapply wps_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
   iapply wps_wseq_tuple
   iapply wps_pure _ _ rfl (tuple_eval (symB_eval hex evs (frA1_lookup_a1 hf py))
     (specIntPe_eval _ _ 1))
@@ -454,7 +454,7 @@ theorem progBE2_wps [SpikeGS .hasLC GF]
   rw [update_env_sym a2SymB lintB]
   -- bound(store(int, y, a2)) ; …
   iapply wps_seq
-  iapply wps_bound
+  iapply wps_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
   iapply wps_store_eval _ _ empty_annotation intTy _ _ NA _ rfl
     (pv := py) (cv := intVal 4)
     (symB_eval hex evs (frA2_lookup_y hf py)) (symB_eval hex evs (frA2_lookup_a2 hf py))
@@ -476,7 +476,7 @@ theorem progBE2_wps [SpikeGS .hasLC GF]
     tuplePat [] [([], some c1SymB, lintB), ([], some c2SymB, lintB)] from rfl,
     update_env_tuple2 c1SymB c2SymB lintB]
   -- bound(let weak p = pure(y) in load(int, p))
-  iapply wps_bound
+  iapply wps_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
   iapply wps_wseq_sym
   iapply wps_pure _ _ rfl (symB_eval hex evs (frC_lookup_y hf py))
   iexists (Vobject (OVpointer py))
@@ -541,7 +541,7 @@ theorem progBE2_wpt [SpikeGS .hasLC GF]
   -- bound(store(int, y, Unspecified(int))) ; …
   iapply wpt_seq
   rw [show (5 : Nat) = 4 + 1 from rfl]
-  iapply wpt_bound
+  iapply wpt_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
   rw [show (4 : Nat) = 3 + 1 from rfl]
   iapply wpt_store_eval _ _ empty_annotation intTy _ _ NA _ rfl
     (pv := py) (cv := Vloaded (LVunspecified intTy))
@@ -556,7 +556,7 @@ theorem progBE2_wpt [SpikeGS .hasLC GF]
   rw [show (22 : Nat) = 3 + 19 from rfl]
   iapply wpt_seq_sym
   rw [show (3 : Nat) = 2 + 1 from rfl]
-  iapply wpt_bound
+  iapply wpt_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
   iapply wpt_pure _ _ (Nat.le_refl 2) rfl (specIntPe_eval _ _ 3)
   simp only [SpikeVal.val]
   iexists (intVal 3)
@@ -568,7 +568,7 @@ theorem progBE2_wpt [SpikeGS .hasLC GF]
   rw [show (19 : Nat) = 5 + 14 from rfl]
   iapply wpt_seq_sym
   rw [show (5 : Nat) = 4 + 1 from rfl]
-  iapply wpt_bound
+  iapply wpt_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
   rw [show (4 : Nat) = 2 + 2 from rfl]
   iapply wpt_wseq_tuple
   iapply wpt_pure _ _ (Nat.le_refl 2) rfl (tuple_eval (symB_eval hex evs (frA1_lookup_a1 hf py))
@@ -592,7 +592,7 @@ theorem progBE2_wpt [SpikeGS .hasLC GF]
   rw [show (14 : Nat) = 5 + 9 from rfl]
   iapply wpt_seq
   rw [show (5 : Nat) = 4 + 1 from rfl]
-  iapply wpt_bound
+  iapply wpt_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
   rw [show (4 : Nat) = 3 + 1 from rfl]
   iapply wpt_store_eval _ _ empty_annotation intTy _ _ NA _ rfl
     (pv := py) (cv := intVal 4)
@@ -617,7 +617,7 @@ theorem progBE2_wpt [SpikeGS .hasLC GF]
     update_env_tuple2 c1SymB c2SymB lintB]
   -- bound(let weak p = pure(y) in load(int, p))
   rw [show (7 : Nat) = 6 + 1 from rfl]
-  iapply wpt_bound
+  iapply wpt_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
   rw [show (6 : Nat) = 2 + 4 from rfl]
   iapply wpt_wseq_sym
   iapply wpt_pure _ _ (Nat.le_refl 2) rfl (symB_eval hex evs (frC_lookup_y hf py))
@@ -690,7 +690,7 @@ theorem exhibitB_prod_e2 (sup : Nat) (fs : CerbFS.FsState) (args : List String) 
     cases hl
   obtain ⟨dres, dst', heq, hψ, hbl, hout, herr⟩ :=
     prod_run_eqJ sup progBE2 hQe (ψB fmapEmpty) 30
-      (wpt_driver_done_alloc (GF := SpikeGF) (ctl := prodCtl)
+      (wpt_driver_done_alloc (GF := SpikeGF) (ctl := prodCtl sup)
         (M₀ := prodCtx (prodFile progBE2) ((initial_core_run_state sup
           (collect_labeled_continuations_NEW (prodFile progBE2))).1))
         rfl rfl (prodCtx_labels hQe) rfl rfl rfl rfl

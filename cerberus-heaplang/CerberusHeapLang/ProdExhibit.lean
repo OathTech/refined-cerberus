@@ -282,7 +282,7 @@ theorem exhibitA_prod (sup : Nat) (fs : CerbFS.FsState) (args : List String) :
     cases hl
   obtain ⟨dres, dst', heq, hψ, hbl, hout, herr⟩ :=
     prod_run_eqJ sup progAProd hQe (ψA fmapEmpty) 10
-      (wpt_driver_done_alloc (GF := SpikeGF) (ctl := prodCtl)
+      (wpt_driver_done_alloc (GF := SpikeGF) (ctl := prodCtl sup)
         (M₀ := prodCtx (prodFile progAProd) ((initial_core_run_state sup
           (collect_labeled_continuations_NEW (prodFile progAProd))).1))
         rfl rfl (prodCtx_labels hQe) rfl rfl rfl rfl
@@ -291,9 +291,7 @@ theorem exhibitA_prod (sup : Nat) (fs : CerbFS.FsState) (args : List String) :
         (fun _ _ _ _ => iprop(False))
         progAProd fmapEmpty [] prodMem₀ (∅ : SpikeHeapF SpikeCell)
         (allocCost fmapEmpty intTy 4) progAProd_frag
-        (by rw [show pot progAProd = 4 from rfl,
-            show lemDefaultFuel = 999999 + 1 from rfl]
-            omega)
+        (by exact Nat.le_of_ble_eq_true rfl)
         (prodMem₀_launchCoh _ prod_one_int_budget_fits)
         (ψA fmapEmpty) 10
         (by

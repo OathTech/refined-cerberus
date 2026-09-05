@@ -130,14 +130,16 @@ theorem dg_loop_exhausts (ra : core_run_annotation) :
       dst.core_extern = fmapEmpty →
       dst.core_file = spikeFile →
       LabeledAt dst.core_run_state0 dgProcSym (dgQ ra) →
+      dst.core_run_state0.sym_supply = (procCtl dgProcSym).sup.sym ∧
+        dst.core_run_state0.excluded_supply = (procCtl dgProcSym).sup.excl →
       ∃ dst' : driver_state,
         runOne (drive_nonmemory_steps_aux2_lemFuel fl fmapEmpty acc [0]) dst =
           (NDkilled CerbND.fuelExhaustedKill, dst')
-  | 0, dst, acc, _, _, _, _ => ⟨dst, loop_zero_exhausts _ _ _ _⟩
-  | fl + 1, dst, acc, hth, hext, hfile, hQd => by
-    obtain ⟨rs', tr, ctr, hlbl, hrun⟩ :=
+  | 0, dst, acc, _, _, _, _, _ => ⟨dst, loop_zero_exhausts _ _ _ _⟩
+  | fl + 1, dst, acc, hth, hext, hfile, hQd, hsup => by
+    obtain ⟨rs', tr, ctr, hlbl, hsup', hrun⟩ :=
       loop_step_frag_same (th₀ := procThread dgProcSym (dgBody ra) [fmapEmpty])
-        rfl rfl (procCtx_labels (dgRS_labeledAt ra)) rfl rfl fl acc hth hext hfile hQd (dgBody_frag ra)
+        rfl rfl (procCtx_labels (dgRS_labeledAt ra)) rfl rfl fl acc hth hext hfile hQd hsup (dgBody_frag ra)
         (by rw [show esize (dgBody ra) = 1 from rfl,
           show lemDefaultFuel = 999999 + 1 from rfl]; omega)
         (dg_self_step ra fmapEmpty [] dst.layout_state) rfl
@@ -148,6 +150,7 @@ theorem dg_loop_exhausts (ra : core_run_annotation) :
           unfold LabeledAt
           rw [hlbl]
           exact hQd)
+      hsup'
 
 /-- Any postcondition weakens to the trivial engine readout. -/
 theorem dg_post_to_readout {GF : BundledGFunctors} [SpikeGS .hasLC GF]
@@ -192,12 +195,9 @@ theorem diverge_total_unprovable {GF : BundledGFunctors} [SpikeGpreS GF]
       (fun l params cont hl => by
         rw [hlbl] at hl
         obtain ⟨-, rfl⟩ := dgQ_inv ra hl
-        rw [show pot (dgBody ra) = 2 from rfl,
-          show lemDefaultFuel = 999999 + 1 from rfl]
-        omega)
+        exact Nat.le_of_ble_eq_true rfl)
       Ls (dgBody ra) fmapEmpty [] σ₀ m₀ (dgBody_frag ra)
-      (by rw [show pot (dgBody ra) = 2 from rfl,
-        show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+      (by exact Nat.le_of_ble_eq_true rfl)
       hcoh (fun _ _ => True) k
       (by
         intro inst
@@ -211,8 +211,8 @@ theorem diverge_total_unprovable {GF : BundledGFunctors} [SpikeGpreS GF]
           thread_states := [(0, (none, procThread dgProcSym (dgBody ra) [fmapEmpty]))] },
         layout_state := σ₀, core_run_state0 := dgRS ra, core_extern := fmapEmpty }
   obtain ⟨v, σf, ρf, lcf, af, bf, rs', tr, ctr, -, hrun⟩ :=
-    hdd dst fmapEmpty (k + 2) rfl rfl rfl rfl (dgRS_labeledAt ra) (Nat.le_refl _)
-  obtain ⟨dst', hkill⟩ := dg_loop_exhausts ra (k + 2) dst fmapEmpty rfl rfl rfl (dgRS_labeledAt ra)
+    hdd dst fmapEmpty (k + 2) rfl rfl rfl rfl (dgRS_labeledAt ra) ⟨rfl, rfl⟩ (Nat.le_refl _)
+  obtain ⟨dst', hkill⟩ := dg_loop_exhausts ra (k + 2) dst fmapEmpty rfl rfl rfl (dgRS_labeledAt ra) ⟨rfl, rfl⟩
   rw [hrun] at hkill
   cases hkill
 

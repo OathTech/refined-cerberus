@@ -326,7 +326,7 @@ theorem frMain_frag : Frag (frMain ra n) :=
         show lemDefaultFuel = 999999 + 1 from rfl]
       omega)
 
-theorem frBody_pot : pot (frBody ra xbty ybty sbty zbty) = 6 := rfl
+theorem frBody_pot : pot (frBody ra xbty ybty sbty zbty) = 12 := rfl
 theorem frMain_pot : pot (frMain ra n) = 2 := rfl
 
 /-- THE PROCEDURE WELL-FORMEDNESS PREMISE at the production context: both
@@ -346,9 +346,7 @@ theorem frCtx_fragProcs (sup : Nat) : (frCtx ra n nbty xbty ybty sbty zbty sup).
     · rw [h] at hl
       obtain ⟨-, rfl⟩ := frQ_lookup_inv zbty hl
       exact ⟨.pure_sym, by
-        rw [show pot (pureRedex [] (Pexpr [] () (PEsym frZSym))) = 2 from rfl,
-          show lemDefaultFuel = 999999 + 1 from rfl]
-        omega⟩
+        exact Nat.le_of_ble_eq_true rfl⟩
     · rw [h, show lookupLabel fmapEmpty l = none from rfl] at hl
       cases hl
 
@@ -815,15 +813,15 @@ theorem fib_rec_certified (hn : 0 ≤ n) (fs : CerbFS.FsState) (args : List Stri
          dres.dres_stdout = "" ∧
          dres.dres_stderr = "") := by
   have hsafe : DriverSafeCtl (frCtx ra n nbty xbty ybty sbty zbty sup) (prodThread (frMain ra n))
-      (frMain ra n) [fmapEmpty] prodCtl prodMem₀ (fun v _ => v = ivVal (fibSpec n.toNat)) := by
+      (frMain ra n) [fmapEmpty] (prodCtl sup) prodMem₀ (fun v _ => v = ivVal (fibSpec n.toNat)) := by
     refine engine_adequacy (GF := SpikeGF) (M := frCtx ra n nbty xbty ybty sbty zbty sup) rfl rfl
-      (ctl := prodCtl) rfl
+      (ctl := prodCtl sup) rfl
       (fun l params cont hl => by
-        rw [show prodCtl.proc = some mainSym from rfl, frCtx_labels_main,
+        rw [show (prodCtl sup).proc = some mainSym from rfl, frCtx_labels_main,
           show lookupLabel fmapEmpty l = none from rfl] at hl
         cases hl)
       (fun l params cont hl => by
-        rw [show prodCtl.proc = some mainSym from rfl, frCtx_labels_main,
+        rw [show (prodCtl sup).proc = some mainSym from rfl, frCtx_labels_main,
           show lookupLabel fmapEmpty l = none from rfl] at hl
         cases hl)
       (frCtx_fragProcs ra n nbty xbty ybty sbty zbty sup)
@@ -872,7 +870,7 @@ theorem fib_rec_certified_production (hn : 0 ≤ n)
       (M₀ := frCtx ra n nbty xbty ybty sbty zbty sup) rfl rfl
       (frCtx_fragProcs ra n nbty xbty ybty sbty zbty sup)
       (th₀ := prodThread (frMain ra n))
-      (frFile_lookup_main ra n nbty xbty ybty sbty zbty) prodCtl.execLoc prodCtl.curLoc prodCtl.sup
+      (frFile_lookup_main ra n nbty xbty ybty sbty zbty) (prodCtl sup).execLoc (prodCtl sup).curLoc (prodCtl sup).sup
       frSpecT frLsT
       (frMain ra n) fmapEmpty [] prodMem₀ (∅ : SpikeHeapF SpikeCell) 0
       (frMain_frag ra n)

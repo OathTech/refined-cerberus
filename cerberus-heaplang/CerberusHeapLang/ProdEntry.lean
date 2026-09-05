@@ -404,7 +404,7 @@ theorem prod_run_eqJ (sup : Nat) (e : CoreExpr) {Q : LabelMap}
       (collect_labeled_continuations_NEW (prodFile e))).1) mainSym Q)
     (ψ : value → Mem → Prop) (k : Nat)
     (hdd : DriverDoneAt mainSym Q (prodFile e) (prodThread e) e [fmapEmpty]
-      (CerbLocation.other "Driver.drive") prodMem₀ ψ k)
+      (CerbLocation.other "Driver.drive") ⟨sup, 0⟩ prodMem₀ ψ k)
     (hfl : k + 2 ≤ CerbFuel.driverFuel)
     (fs : CerbFS.FsState) (args : List String) :
     ∃ (dres : driver_result) (dst' : driver_state),
@@ -416,7 +416,7 @@ theorem prod_run_eqJ (sup : Nat) (e : CoreExpr) {Q : LabelMap}
       dres.dres_stdout = "" ∧
       dres.dres_stderr = "" := by
   obtain ⟨v, σfin, ρfin, lcfin, afin, bfin, rs', tr, ctr, hψ, hloop⟩ :=
-    hdd (prodEntryState sup e fs) fmapEmpty CerbFuel.driverFuel rfl rfl rfl rfl hQe hfl
+    hdd (prodEntryState sup e fs) fmapEmpty CerbFuel.driverFuel rfl rfl rfl rfl hQe ⟨rfl, rfl⟩ hfl
   have hdrv2 := driver2_done 99999999 fmapEmpty (prodEntryState sup e fs) _
     (prodThread e)
     { prodThread e with arena := ofValA (.pure afin bfin v), env := ρfin, current_loc := lcfin }
@@ -565,13 +565,13 @@ theorem prodFileWith_lookup_main (procs : List (sym × List (sym × core_base_ty
 /-- The production ENTRY CONTROL: the control fields of the thread
     `Driver.drive` parks (Driver.lean:530) — empty call stack, current
     procedure `main`, execution location `[(main, "Driver.drive")]`. -/
-@[reducible] def prodCtl : Ctl :=
+@[reducible] def prodCtl (sup : Nat) : Ctl :=
   ⟨[], some mainSym, ELoc_normal [(mainSym, CerbLocation.other "Driver.drive")],
-    CerbLocation.other "Driver.drive", default⟩
+    CerbLocation.other "Driver.drive", ⟨sup, 0⟩⟩
 
 /-- The parked thread IS the control-threaded thread at the entry control. -/
-theorem prodThread_eq_ctlThread (e : CoreExpr) :
-    ctlThread (prodThread e) e [fmapEmpty] prodCtl = prodThread e := rfl
+theorem prodThread_eq_ctlThread (sup : Nat) (e : CoreExpr) :
+    ctlThread (prodThread e) e [fmapEmpty] (prodCtl sup) = prodThread e := rfl
 
 /-- The PRODUCTION CONTEXT at a file and a run state: tagDefs/extern
     empty, thread 0, no parent, the cold-start errno pointer, and
@@ -741,7 +741,7 @@ theorem prod_run_eqJ_procs (sup : Nat)
       (prodRS procs sup e).labeled)
     (ψ : value → Mem → Prop) (k : Nat)
     (hdd : DriverDoneCtl (prodCtx (prodFileWith procs e) (prodRS procs sup e)) (prodThread e) e
-      [fmapEmpty] prodCtl prodMem₀ ψ k)
+      [fmapEmpty] (prodCtl sup) prodMem₀ ψ k)
     (hfl : k + 2 ≤ CerbFuel.driverFuel)
     (fs : CerbFS.FsState) (args : List String) :
     ∃ (dres : driver_result) (dst' : driver_state),
@@ -753,7 +753,7 @@ theorem prod_run_eqJ_procs (sup : Nat)
       dres.dres_stdout = "" ∧
       dres.dres_stderr = "" := by
   obtain ⟨v, σfin, ρfin, pfin, ℓfin, lcfin, spfin, afin, bfin, rs', tr, ctr, hψ, hloop⟩ :=
-    hdd (prodEntryStateWith procs sup e fs) fmapEmpty CerbFuel.driverFuel rfl rfl rfl rfl hlab hfl
+    hdd (prodEntryStateWith procs sup e fs) fmapEmpty CerbFuel.driverFuel rfl rfl rfl rfl hlab ⟨rfl, rfl⟩ hfl
   have hdrv2 := driver2_done 99999999 fmapEmpty (prodEntryStateWith procs sup e fs) _
     (prodThread e)
     (ctlThread (prodThread e) (ofValA (.pure afin bfin v)) ρfin ⟨[], pfin, ℓfin, lcfin, spfin⟩)
@@ -793,7 +793,7 @@ theorem prod_run_safe_procs (sup : Nat)
       (prodRS procs sup e).labeled)
     (ψ : value → Mem → Prop)
     (hsafe : DriverSafeCtl (prodCtx (prodFileWith procs e) (prodRS procs sup e)) (prodThread e) e
-      [fmapEmpty] prodCtl prodMem₀ ψ)
+      [fmapEmpty] (prodCtl sup) prodMem₀ ψ)
     (fs : CerbFS.FsState) (args : List String) (fuel : Nat) :
     ∃ (st : nd_status driver_result driver_error driver_state) (dst' : driver_state),
       CerbND.runND (CerbND.drive_lemFuel fuel fmapEmpty false (prodFileWith procs e) args)
@@ -816,7 +816,7 @@ theorem prod_run_safe_procs (sup : Nat)
       Or.inl rfl⟩
   | succ fl =>
     rcases hsafe (prodEntryStateWith procs sup e fs) fmapEmpty CerbFuel.driverFuel rfl rfl rfl rfl
-        hlab (CtlTied.entry hlab (prodFileWith_lookup_main procs e) _ _ _) with
+        hlab (CtlTied.entry hlab (prodFileWith_lookup_main procs e) _ _ _) ⟨rfl, rfl⟩ with
       ⟨dstK, hloop⟩ | ⟨v, σfin, ρfin, pfin, ℓfin, lcfin, spfin, afin, bfin, rs', tr, ctr, hψ, hloop⟩
     · -- the shipped loop EXHAUSTS its budget: `driver2` kills, the pipeline kills
       have hdrv2 := driver2_killed fl fmapEmpty (prodEntryStateWith procs sup e fs) dstK
@@ -1012,7 +1012,7 @@ theorem prod_run_eqJ_lib (sup : Nat) (lib : generic_fun_map Unit core_run_annota
       (prodRSLib lib procs sup e).labeled)
     (ψ : value → Mem → Prop) (k : Nat)
     (hdd : DriverDoneCtl (prodCtx (prodFileLib lib procs e) (prodRSLib lib procs sup e)) (prodThread e) e
-      [fmapEmpty] prodCtl prodMem₀ ψ k)
+      [fmapEmpty] (prodCtl sup) prodMem₀ ψ k)
     (hfl : k + 2 ≤ CerbFuel.driverFuel)
     (fs : CerbFS.FsState) (args : List String) :
     ∃ (dres : driver_result) (dst' : driver_state),
@@ -1024,7 +1024,7 @@ theorem prod_run_eqJ_lib (sup : Nat) (lib : generic_fun_map Unit core_run_annota
       dres.dres_stdout = "" ∧
       dres.dres_stderr = "" := by
   obtain ⟨v, σfin, ρfin, pfin, ℓfin, lcfin, spfin, afin, bfin, rs', tr, ctr, hψ, hloop⟩ :=
-    hdd (prodEntryStateLib lib procs sup e fs) fmapEmpty CerbFuel.driverFuel rfl rfl rfl rfl hlab hfl
+    hdd (prodEntryStateLib lib procs sup e fs) fmapEmpty CerbFuel.driverFuel rfl rfl rfl rfl hlab ⟨rfl, rfl⟩ hfl
   have hdrv2 := driver2_done 99999999 fmapEmpty (prodEntryStateLib lib procs sup e fs) _
     (prodThread e)
     (ctlThread (prodThread e) (ofValA (.pure afin bfin v)) ρfin ⟨[], pfin, ℓfin, lcfin, spfin⟩)
@@ -1044,7 +1044,7 @@ theorem prod_run_eqJ_lib1 (sup : Nat) (lib : generic_fun_map Unit core_run_annot
     (hQe : LabeledAt (prodRSLib lib [] sup e) mainSym Q)
     (ψ : value → Mem → Prop) (k : Nat)
     (hdd : DriverDoneAt mainSym Q (prodFileLib lib [] e) (prodThread e) e [fmapEmpty]
-      (CerbLocation.other "Driver.drive") prodMem₀ ψ k)
+      (CerbLocation.other "Driver.drive") ⟨sup, 0⟩ prodMem₀ ψ k)
     (hfl : k + 2 ≤ CerbFuel.driverFuel)
     (fs : CerbFS.FsState) (args : List String) :
     ∃ (dres : driver_result) (dst' : driver_state),
@@ -1056,7 +1056,7 @@ theorem prod_run_eqJ_lib1 (sup : Nat) (lib : generic_fun_map Unit core_run_annot
       dres.dres_stdout = "" ∧
       dres.dres_stderr = "" := by
   obtain ⟨v, σfin, ρfin, lcfin, afin, bfin, rs', tr, ctr, hψ, hloop⟩ :=
-    hdd (prodEntryStateLib lib [] sup e fs) fmapEmpty CerbFuel.driverFuel rfl rfl rfl rfl hQe hfl
+    hdd (prodEntryStateLib lib [] sup e fs) fmapEmpty CerbFuel.driverFuel rfl rfl rfl rfl hQe ⟨rfl, rfl⟩ hfl
   have hdrv2 := driver2_done 99999999 fmapEmpty (prodEntryStateLib lib [] sup e fs) _
     (prodThread e)
     { prodThread e with arena := ofValA (.pure afin bfin v), env := ρfin, current_loc := lcfin }
@@ -1078,7 +1078,7 @@ theorem prod_run_safe_lib (sup : Nat) (lib : generic_fun_map Unit core_run_annot
       (prodRSLib lib procs sup e).labeled)
     (ψ : value → Mem → Prop)
     (hsafe : DriverSafeCtl (prodCtx (prodFileLib lib procs e) (prodRSLib lib procs sup e)) (prodThread e) e
-      [fmapEmpty] prodCtl prodMem₀ ψ)
+      [fmapEmpty] (prodCtl sup) prodMem₀ ψ)
     (fs : CerbFS.FsState) (args : List String) (fuel : Nat) :
     ∃ (st : nd_status driver_result driver_error driver_state) (dst' : driver_state),
       CerbND.runND (CerbND.drive_lemFuel fuel fmapEmpty false (prodFileLib lib procs e) args)
@@ -1100,7 +1100,7 @@ theorem prod_run_safe_lib (sup : Nat) (lib : generic_fun_map Unit core_run_annot
       Or.inl rfl⟩
   | succ fl =>
     rcases hsafe (prodEntryStateLib lib procs sup e fs) fmapEmpty CerbFuel.driverFuel rfl rfl rfl rfl
-        hlab (CtlTied.entry hlab (prodFileLib_lookup_main lib hmain procs e) _ _ _) with
+        hlab (CtlTied.entry hlab (prodFileLib_lookup_main lib hmain procs e) _ _ _) ⟨rfl, rfl⟩ with
       ⟨dstK, hloop⟩ | ⟨v, σfin, ρfin, pfin, ℓfin, lcfin, spfin, afin, bfin, rs', tr, ctr, hψ, hloop⟩
     · have hdrv2 := driver2_killed fl fmapEmpty (prodEntryStateLib lib procs sup e fs) dstK
         (prodThread e) _ rfl hloop

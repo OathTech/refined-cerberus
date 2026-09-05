@@ -90,7 +90,7 @@ theorem fib_certified_production (sup : Nat) (ra : core_run_annotation) (n : Int
   have hQprod := fib_labeledAt_production sup ra n sbty ibty abty bbty
   have h := prod_run_eqJ sup (fibProg ra n sbty ibty abty bbty) hQprod
     (fun v _ => v = ivVal (fibSpec n.toNat)) (2 * n.toNat + 4)
-    (wpt_driver_done (GF := SpikeGF) (ctl := prodCtl)
+    (wpt_driver_done (GF := SpikeGF) (ctl := prodCtl sup)
       (M₀ := procCtxF (prodFile (fibProg ra n sbty ibty abty bbty)) ((initial_core_run_state sup
         (collect_labeled_continuations_NEW
           (prodFile (fibProg ra n sbty ibty abty bbty)))).1))
@@ -577,11 +577,11 @@ theorem counterProdProg_frag (ra : core_run_annotation) (mo : memory_order)
     (.save (PePure.all_of_isPePure rfl) (ctrParams_depth xbty cbty n) (ctrBody_frag ra mo bty))
 
 theorem ctrBody_pot (ra : core_run_annotation) (mo : memory_order)
-    (bty : core_base_type) : pot (ctrBody ra mo bty) = 4 := rfl
+    (bty : core_base_type) : pot (ctrBody ra mo bty) = 7 := rfl
 
 theorem counterProdProg_pot (ra : core_run_annotation) (mo : memory_order)
     (bty xbty cbty sbty : core_base_type) (n : Int) :
-    pot (counterProdProg ra mo bty xbty cbty sbty n) = 6 := rfl
+    pot (counterProdProg ra mo bty xbty cbty sbty n) = 11 := rfl
 
 /-- The shipped registration computes the counter's label map (the
     save is the registration site and the entry). -/
@@ -653,7 +653,7 @@ theorem counter_loop_certified_production (sup : Nat) (ra : core_run_annotation)
   obtain ⟨dres, dst', heq, hψ, hbl, hout, herr⟩ :=
     prod_run_eqJ sup (counterProdProg ra mo bty xbty cbty sbty n) hQprod
       (ψC n) (2 + (ctrCost n.toNat + saveEntryCost (ctrParams xbty cbty n)))
-      (wpt_driver_done_alloc (GF := SpikeGF) (ctl := prodCtl)
+      (wpt_driver_done_alloc (GF := SpikeGF) (ctl := prodCtl sup)
         (M₀ := procCtxF (prodFile (counterProdProg ra mo bty xbty cbty sbty n)) ((initial_core_run_state sup
           (collect_labeled_continuations_NEW
             (prodFile (counterProdProg ra mo bty xbty cbty sbty n)))).1))
@@ -1295,17 +1295,16 @@ theorem lrProdProg_frag (ra : core_run_annotation) (mo : memory_order)
 
 theorem lrProdPrefix_pot (ra : core_run_annotation) (mo : memory_order)
     (bty : core_base_type) (k : CoreExpr) :
-    pot (lrProdPrefix ra mo bty k) = 1 + max 2 (1 + max 2 (1 + max 2 (1 + max 2
-      (1 + max 2 (1 + max 2 (pot k)))))) := by
+    pot (lrProdPrefix ra mo bty k) = 18 + pot k := by
   unfold lrProdPrefix createExpr storeOpRedex
   simp [pot]
+  omega
 
 theorem lrProdProg_pot (ra : core_run_annotation) (mo : memory_order)
     (bty sbty pbty cbty bbty nbty ubty : core_base_type) :
-    pot (lrProdProg ra mo bty sbty pbty cbty bbty nbty ubty) = 13 := by
+    pot (lrProdProg ra mo bty sbty pbty cbty bbty nbty ubty) = 33 := by
   unfold lrProdProg
   rw [lrProdPrefix_pot, pot_save, lrBody_pot]
-  omega
 
 /-! The registration computation, COMPOSITIONALLY (a whole-program
 `rfl` hits kernel-whnf term duplication on the ten-node prefix spine
@@ -1461,7 +1460,7 @@ theorem list_reverse_certified_production (sup : Nat) (ra : core_run_annotation)
       hQprod ψL
       (2 + (2 + ((3 + 1) + ((3 + 1) + ((3 + 1) + ((3 + 1) +
         (lrCost 2 + saveEntryCost (lrProdParams pbty cbty))))))))
-      (wpt_driver_done_alloc (GF := SpikeGF) (ctl := prodCtl)
+      (wpt_driver_done_alloc (GF := SpikeGF) (ctl := prodCtl sup)
         (M₀ := procCtxF (prodFile (lrProdProg ra mo bty sbty pbty cbty bbty nbty
               ubty)) ((initial_core_run_state sup
           (collect_labeled_continuations_NEW

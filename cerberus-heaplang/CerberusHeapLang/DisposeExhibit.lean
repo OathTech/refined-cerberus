@@ -644,10 +644,10 @@ theorem dlBody_fragJ : Frag (dlBody loc ann ra mo bbty nbty ubty) := by
               show lemDefaultFuel = 999999 + 1 from rfl]
             omega)))))
 
-theorem dlBody_pot : pot (dlBody loc ann ra mo bbty nbty ubty) = 6 := rfl
+theorem dlBody_pot : pot (dlBody loc ann ra mo bbty nbty ubty) = 13 := rfl
 
 theorem dlProg_pot (sbty cbty : core_base_type) (head : CerbMem.PointerValue) :
-    pot (dlProg loc ann ra mo sbty cbty bbty nbty ubty head) = 7 := rfl
+    pot (dlProg loc ann ra mo sbty cbty bbty nbty ubty head) = 14 := rfl
 
 end DlFrag
 
@@ -1400,10 +1400,9 @@ theorem dlProdProg_frag (ra : core_run_annotation) (mo : memory_order)
 
 theorem dlProdProg_pot (ra : core_run_annotation) (mo : memory_order)
     (bty sbty cbty bbty nbty ubty : core_base_type) :
-    pot (dlProdProg ra mo bty sbty cbty bbty nbty ubty) = 13 := by
+    pot (dlProdProg ra mo bty sbty cbty bbty nbty ubty) = 32 := by
   unfold dlProdProg
   rw [lrProdPrefix_pot, pot_save, dlBody_pot]
-  omega
 
 /-- The dispose loop's save with the production initializer registers its
     body, at cushioned variable fuel (the `col_lrProdSave` twin). -/
@@ -1504,7 +1503,7 @@ theorem dispose_list_certified_production (sup : Nat) (ra : core_run_annotation)
       hQprod ψD
       (2 + (2 + ((3 + 1) + ((3 + 1) + ((3 + 1) + ((3 + 1) +
         (dlCost 2 + saveEntryCost (dlProdParams cbty))))))))
-      (wpt_driver_done_alloc (GF := SpikeGF) (ctl := prodCtl)
+      (wpt_driver_done_alloc (GF := SpikeGF) (ctl := prodCtl sup)
         (M₀ := procCtxF (prodFile (dlProdProg ra mo bty sbty cbty bbty nbty ubty)) ((initial_core_run_state sup
           (collect_labeled_continuations_NEW
             (prodFile (dlProdProg ra mo bty sbty cbty bbty nbty ubty)))).1))

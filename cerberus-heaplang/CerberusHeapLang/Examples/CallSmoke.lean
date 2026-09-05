@@ -195,10 +195,8 @@ theorem csCtx_fragProcs (ra : core_run_annotation) (bty ybty : core_base_type) :
     · exact csFBody_frag bty ybty
   potBound f params body hf := by
     rcases csFile_lookup_inv ra bty ybty hf with ⟨-, rfl⟩ | ⟨-, rfl⟩
-    · exact Nat.le_trans (Frag.pot_le_two (csMainBody_frag ra))
-        (by rw [show esize (csMainBody ra) = 1 from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega)
-    · exact Nat.le_trans (Frag.pot_le_two (csFBody_frag bty ybty))
-        (by rw [show esize (csFBody bty ybty) = 2 from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+    · exact Nat.le_of_ble_eq_true rfl
+    · exact Nat.le_of_ble_eq_true rfl
   labels f params body _ l params' cont hl := by
     rw [csCtx_lookupLabel] at hl
     cases hl
@@ -357,8 +355,7 @@ theorem call_smoke_engine (σ₀ : Mem) :
     (csCtx_fragProcs ra bty ybty)
     (csMainBody ra) fmapEmpty [] σ₀ (∅ : SpikeHeapF SpikeCell)
     (csMainBody_frag ra)
-    (Nat.le_trans (Frag.pot_le_two (csMainBody_frag ra))
-      (by rw [show esize (csMainBody ra) = 1 from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega))
+    (Nat.le_of_ble_eq_true rfl)
     (csCoh_empty σ₀)
     (fun v _ => v = csInt 4)
     ?_ (th₀ := (csCtx ra bty ybty).thread (csMainBody ra) [fmapEmpty] ⟨[], some csMain, default, default, default⟩)

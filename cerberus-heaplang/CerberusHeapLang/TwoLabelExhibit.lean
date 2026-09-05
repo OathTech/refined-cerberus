@@ -834,17 +834,13 @@ theorem two_label_certified (sbty₁ : core_base_type) (idx addr : Int)
     (fun l params cont hl => by
       rw [hlbl] at hl
       rcases tlQ_inv loc ann ra mo bty xbty ybty sbty₂ _ n₂ hl with ⟨-, -, rfl⟩ | ⟨-, -, rfl⟩
-      · exact Nat.le_trans (tlBody2_frag loc ann ra mo bty _).pot_le_two
-          (by rw [tlBody2_esize, show lemDefaultFuel = 999999 + 1 from rfl]; omega)
-      · exact Nat.le_trans (tlBody1_frag loc ann ra mo bty ybty sbty₂ _ n₂).pot_le_two
-          (by rw [tlBody1_esize, show lemDefaultFuel = 999999 + 1 from rfl]; omega))
+      · exact Nat.le_of_ble_eq_true rfl
+      · exact Nat.le_of_ble_eq_true rfl)
     (procCtx_fragProcs _)
     prog fmapEmpty [] σ₀ _
     (.save (saveParams_pure_of_vals rfl) (saveParams_depth_of_vals rfl)
       (tlBody1_frag loc ann ra mo bty ybty sbty₂ _ n₂))
-    (Nat.le_trans (Frag.pot_le_two (e := prog) (.save (saveParams_pure_of_vals rfl)
-        (saveParams_depth_of_vals rfl) (tlBody1_frag loc ann ra mo bty ybty sbty₂ _ n₂)))
-      (by rw [show esize prog = 6 from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega))
+    (Nat.le_of_ble_eq_true rfl)
     hcoh
     (fun v σ' => v = Vunit ∧ ∃ i a, cellPtr idx addr = cellPtr i a ∧
       CellCoh fmapEmpty σ' i ⟨a, intTy, tlFinal n₁ n₂ bs0⟩)

@@ -451,15 +451,11 @@ theorem counter_loop_certified
     (fun l params cont hl => by
       rw [hlbl] at hl
       obtain ⟨-, rfl⟩ := loopQ_inv loc ann ra mo bty xbty _ hl
-      exact Nat.le_trans (loopBody_fragJ loc ann ra mo bty _).pot_le_two
-        (by rw [show esize (loopBody loc ann ra mo bty (cellPtr idx addr)) = 3 from rfl,
-          show lemDefaultFuel = 999999 + 1 from rfl]; omega))
+      exact Nat.le_of_ble_eq_true rfl)
     (procCtx_fragProcs _)
     prog fmapEmpty [] σ₀ _
     (.save (saveParams_pure_of_vals rfl) (saveParams_depth_of_vals rfl) (loopBody_fragJ loc ann ra mo bty _))
-    (Nat.le_trans (Frag.pot_le_two (e := prog) (.save (saveParams_pure_of_vals rfl) (saveParams_depth_of_vals rfl)
-        (loopBody_fragJ loc ann ra mo bty _)))
-      (by rw [show esize prog = 4 from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega))
+    (Nat.le_of_ble_eq_true rfl)
     hcoh
     (fun v σ' => v = Vunit ∧ ∃ bs',
       ((n = 0 ∧ bs' = bs0) ∨ (0 < n ∧ bs' = (sevenBytes fmapEmpty))) ∧
@@ -513,15 +509,11 @@ theorem counter_loop_certified_irrelevant_binding
     (fun l params cont hl => by
       rw [hlbl] at hl
       obtain ⟨-, rfl⟩ := loopQ_inv loc ann ra mo bty xbty _ hl
-      exact Nat.le_trans (loopBody_fragJ loc ann ra mo bty _).pot_le_two
-        (by rw [show esize (loopBody loc ann ra mo bty (cellPtr idx addr)) = 3 from rfl,
-          show lemDefaultFuel = 999999 + 1 from rfl]; omega))
+      exact Nat.le_of_ble_eq_true rfl)
     (procCtx_fragProcs _)
     prog (envAdd ySym junk fmapEmpty) [] σ₀ _
     (.save (saveParams_pure_of_vals rfl) (saveParams_depth_of_vals rfl) (loopBody_fragJ loc ann ra mo bty _))
-    (Nat.le_trans (Frag.pot_le_two (e := prog) (.save (saveParams_pure_of_vals rfl) (saveParams_depth_of_vals rfl)
-        (loopBody_fragJ loc ann ra mo bty _)))
-      (by rw [show esize prog = 4 from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega))
+    (Nat.le_of_ble_eq_true rfl)
     hcoh
     (fun v σ' => v = Vunit ∧ ∃ bs',
       ((n = 0 ∧ bs' = bs0) ∨ (0 < n ∧ bs' = (sevenBytes fmapEmpty))) ∧

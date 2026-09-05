@@ -129,9 +129,7 @@ theorem wseq_certified {GF : BundledGFunctors} [SpikeGpreS GF] (v1 v2 : value) (
     (fun l params cont hl => (spikeCtx_labels_none l hl).elim)
     spikeCtx_fragProcs
     (wseqProg v1 v2) fmapEmpty [] σ₀ ∅ (wseqProg_frag v1 v2)
-    (Nat.le_trans (wseqProg_frag v1 v2).pot_le_two
-      (by rw [show esize (wseqProg v1 v2) = 2 from rfl,
-        show lemDefaultFuel = 999999 + 1 from rfl]; omega))
+    (Nat.le_of_ble_eq_true rfl)
     (Coh.mk
       (fun _ c hget => absurd (hget.symm.trans
         (Iris.Std.LawfulPartialMap.get?_empty (M := SpikeHeapF) _))

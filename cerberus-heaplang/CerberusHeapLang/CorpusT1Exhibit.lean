@@ -328,7 +328,7 @@ theorem t1_wps [SpikeGS .hasLC GF]
   rw [show (Pattern [] (CaseBase (some a508, CorpusE0.lint)) : pattern) = symPat [] a508 CorpusE0.lint from rfl]
   iapply wps_seq_sym
   unfold t1Spec3 bnd
-  iapply wps_bound
+  iapply wps_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
   iapply wps_pure (specInt 3) _ rfl (specInt_eval _ 3)
   simp only [SpikeVal.val]
   iexists (lint 3)
@@ -353,7 +353,7 @@ theorem t1_wps [SpikeGS .hasLC GF]
   -- a_509 := bound(let weak (a_510, a_511) = unseq(let weak a_515 = pure(x) in load(int, a_515),
   --                                                 pure(Specified(1))) in pure(case …))
   iapply wps_seq_sym
-  iapply wps_bound
+  iapply wps_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
   rw [show (Pattern [] (CaseCtor Ctuple [Pattern [] (CaseBase (some a510, CorpusE0.lint)),
       Pattern [] (CaseBase (some a511, CorpusE0.lint))]) : pattern) =
     tuplePat [] [([], some a510, CorpusE0.lint), ([], some a511, CorpusE0.lint)] from rfl]
@@ -442,7 +442,7 @@ theorem t1_wps [SpikeGS .hasLC GF]
   rw [show (Pattern [] (CaseBase (some a517, CorpusE0.lint)) : pattern) = symPat [] a517 CorpusE0.lint from rfl]
   -- a_517 := bound(let weak a_516 = pure(y) in load(int, a_516))
   iapply wps_seq_sym
-  iapply wps_bound
+  iapply wps_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
   unfold t1LoadY letW
   rw [act_load_eq]
   rw [show (Pattern [] (CaseBase (some a516, ptrTy)) : pattern) = symPat [] a516 ptrTy from rfl]
@@ -608,7 +608,7 @@ theorem t1_wpt [SpikeGS .hasLC GF]
   iapply wpt_seq_sym _ _ _ _ _ _ _ _ 3 39
   rw [show (3 : Nat) = 2 + 1 from rfl]
   unfold t1Spec3 bnd
-  iapply wpt_bound
+  iapply wpt_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
   iapply wpt_pure (specInt 3) _ (Nat.le_refl 2) rfl (specInt_eval _ 3)
   simp only [SpikeVal.val]
   iexists (lint 3)
@@ -637,7 +637,7 @@ theorem t1_wpt [SpikeGS .hasLC GF]
   -- annotation wrapper 1 + the `+` round 2
   iapply wpt_seq_sym _ _ _ _ _ _ _ _ 15 20
   rw [show (15 : Nat) = 14 + 1 from rfl]
-  iapply wpt_bound
+  iapply wpt_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
   rw [show (Pattern [] (CaseCtor Ctuple [Pattern [] (CaseBase (some a510, CorpusE0.lint)),
       Pattern [] (CaseBase (some a511, CorpusE0.lint))]) : pattern) =
     tuplePat [] [([], some a510, CorpusE0.lint), ([], some a511, CorpusE0.lint)] from rfl]
@@ -726,7 +726,7 @@ theorem t1_wpt [SpikeGS .hasLC GF]
   -- a_517 := bound(let weak a_516 = pure(y) in load(int, a_516))
   iapply wpt_seq_sym _ _ _ _ _ _ _ _ 7 9
   rw [show (7 : Nat) = 6 + 1 from rfl]
-  iapply wpt_bound
+  iapply wpt_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
   unfold t1LoadY letW
   rw [act_load_eq]
   rw [show (Pattern [] (CaseBase (some a516, ptrTy)) : pattern) = symPat [] a516 ptrTy from rfl]
@@ -842,7 +842,7 @@ theorem t1_certified_production (sup : Nat) (fs : CerbFS.FsState) (args : List S
   have hlbl := prodCtx_labels (f := prodFileLib stdlibE3 [] t1Main) hQe
   obtain ⟨dres, dst', heq, hψ, hbl, hout, herr⟩ :=
     prod_run_eqJ_lib1 sup stdlibE3 t1Main hQe ψT1 48
-      (wpt_driver_done_alloc (GF := SpikeGF) (ctl := prodCtl)
+      (wpt_driver_done_alloc (GF := SpikeGF) (ctl := prodCtl sup)
         (M₀ := prodCtx (prodFileLib stdlibE3 [] t1Main) (prodRSLib stdlibE3 [] sup t1Main))
         rfl rfl hlbl rfl rfl rfl rfl
         (fun l params cont hl => by
@@ -852,9 +852,7 @@ theorem t1_certified_production (sup : Nat) (fs : CerbFS.FsState) (args : List S
         (fun l params cont hl => by
           rw [hlbl] at hl
           obtain ⟨-, rfl⟩ := t1RetQ_inv hl
-          rw [show pot (Expr [] (Epure (psym a518))) = 2 from rfl,
-            show lemDefaultFuel = 999999 + 1 from rfl]
-          omega)
+          exact Nat.le_of_ble_eq_true rfl)
         (t1LsT SpikeGF)
         t1Main fmapEmpty [] prodMem₀ (∅ : SpikeHeapF SpikeCell)
         (allocCost fmapEmpty intTy 4 + allocCost fmapEmpty intTy 4) t1Main_frag

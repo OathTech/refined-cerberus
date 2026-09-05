@@ -2679,6 +2679,7 @@ def operandsOf : CoreExpr → List (generic_pexpr Unit sym)
   | Expr _ (Ememop _ pes) => pes
   | Expr _ (Ebound b) => operandsOf b
   | Expr _ (Eunseq es) => operandsOfU es
+  | Expr _ (Eexcluded _ (Action _ _ (Store0 _ _ pe2 pe3 _))) => [pe2, pe3]
   | _ => []
 /-- E4: the focused (last reducible) component's operands under the
     `Cunseq` frame (`jumpRedexU?`'s spine); `[]` at all values. -/

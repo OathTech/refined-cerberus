@@ -679,15 +679,11 @@ theorem array_sum_certified
       rw [hlbl] at hl
       obtain ⟨-, rfl⟩ := arrQ_inv loc ann ra mo ibty accbty pbty xbty
         vs.length hl
-      exact Nat.le_trans (arrBody_fragJ loc ann ra mo xbty vs.length).pot_le_two
-        (by rw [show esize (arrBody loc ann ra mo xbty vs.length) = 3 from rfl,
-          show lemDefaultFuel = 999999 + 1 from rfl]; omega))
+      exact Nat.le_of_ble_eq_true rfl)
     (procCtx_fragProcs _)
     prog fmapEmpty [] σ₀ _
     (.save (saveParams_pure_of_vals rfl) (saveParams_depth_of_vals rfl) (arrBody_fragJ loc ann ra mo xbty vs.length))
-    (Nat.le_trans (Frag.pot_le_two (e := prog) (.save (saveParams_pure_of_vals rfl) (saveParams_depth_of_vals rfl)
-        (arrBody_fragJ loc ann ra mo xbty vs.length)))
-      (by rw [show esize prog = 4 from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega))
+    (Nat.le_of_ble_eq_true rfl)
     hcoh
     (fun v σ' => v = ivVal vs.sum ∧ CellCoh fmapEmpty σ' id ⟨a, aty, bs⟩)
     ?_ (th₀ := procThread arrProcSym prog [fmapEmpty])

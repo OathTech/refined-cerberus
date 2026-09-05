@@ -1175,7 +1175,7 @@ theorem tree_rotate_certified (sbty : core_base_type)
     spikeCtx_labels_frag spikeCtx_labels_pot spikeCtx_fragProcs
     prog fmapEmpty [] σ₀ (union m₀ R)
     (trProg_frag loc ann mo xbty ybty bbty ubty px)
-    (by rw [show pot prog = 7 from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+    (by exact Nat.le_of_ble_eq_true rfl)
     hcoh
     (fun v σ' => ∃ Q : CellMap, (∃ p' : CerbMem.PointerValue,
         v = ptrVal p' ∧
@@ -1413,9 +1413,7 @@ variable (loc : CerbLocation.Loc) (ann : core_run_annotation)
 
 theorem trProg_pot (px : CerbMem.PointerValue) :
     pot (trProg loc ann mo xbty ybty bbty ubty px) ≤ lemDefaultFuel := by
-  rw [show pot (trProg loc ann mo xbty ybty bbty ubty px) = 7 from rfl,
-    show lemDefaultFuel = 999999 + 1 from rfl]
-  omega
+  exact Nat.le_of_ble_eq_true rfl
 
 end TrTotalExport
 

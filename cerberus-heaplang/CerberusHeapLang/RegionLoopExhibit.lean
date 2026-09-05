@@ -299,10 +299,10 @@ theorem rlBody_frag : Frag (rlBody loc ann ra al sz pref pbty ubty) :=
           omega))))
     (frag_ofVal (.pure Vunit))
 
-theorem rlBody_pot : pot (rlBody loc ann ra al sz pref pbty ubty) = 5 := rfl
+theorem rlBody_pot : pot (rlBody loc ann ra al sz pref pbty ubty) = 10 := rfl
 
 theorem rlProg_pot (sbty ibty : core_base_type) (n : Int) :
-    pot (rlProg loc ann ra al sz pref sbty ibty pbty ubty n) = 6 := rfl
+    pot (rlProg loc ann ra al sz pref sbty ibty pbty ubty n) = 11 := rfl
 
 theorem rlParams_depth (ibty : core_base_type) (n : Int) :
     ∀ pe ∈ saveParamPexprs (rlParams ibty n), peDepth pe ≤ lemDefaultFuel := by
@@ -654,7 +654,7 @@ theorem region_loop_certified_production (sup : Nat) (hcost : 0 < regionCost al 
   obtain ⟨dres, dst', heq, hψ, hbl, hout, herr⟩ :=
     prod_run_eqJ sup (rlProg loc0 empty_annotation ra al sz pref sbty ibty pbty ubty n)
       hQprod (fun v _ => v = Vunit) (rlCost n.toNat + 1)
-      (wpt_driver_done_alloc (GF := SpikeGF) (ctl := prodCtl)
+      (wpt_driver_done_alloc (GF := SpikeGF) (ctl := prodCtl sup)
         (M₀ := procCtxF (prodFile (rlProg loc0 empty_annotation ra al sz pref sbty ibty pbty ubty n)) ((initial_core_run_state sup
           (collect_labeled_continuations_NEW
             (prodFile (rlProg loc0 empty_annotation ra al sz pref sbty ibty pbty ubty n)))).1))

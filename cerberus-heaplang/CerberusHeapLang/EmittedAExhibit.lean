@@ -167,7 +167,7 @@ theorem progAE1_wps [SpikeGS .hasLC GF]
     rfl
   rw [update_env_sym pASym BTy_unit]
   iapply wps_seq
-  iapply wps_bound
+  iapply wps_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
   iapply wps_store_eval _ _ empty_annotation intTy _ _ NA _ rfl
     (pv := p) (cv := sevenVal)
     (by rw [evalPexpr_sym_of_resolve _ _ _ (hex _)]
@@ -179,7 +179,7 @@ theorem progAE1_wps [SpikeGS .hasLC GF]
   · iexact Hpt
   iintro %fp Hpt
   simp only [SpikeVal.mergeInto]
-  iapply wps_bound
+  iapply wps_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
   icases (pointsToCell_cellOwn_iff M.tagDefs _ _ _ _).mp $$ Hpt
     with ⟨%id, %a, %hpv, Hcell⟩
   iapply wps_load_eval _ _ empty_annotation intTy _ NA _ rfl (pv := p)
@@ -234,7 +234,7 @@ theorem progAE1_wpt [SpikeGS .hasLC GF]
   rw [update_env_sym pASym BTy_unit, show (10 : Nat) = 5 + 5 from rfl]
   iapply wpt_seq
   rw [show (5 : Nat) = 4 + 1 from rfl]
-  iapply wpt_bound
+  iapply wpt_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
   rw [show (4 : Nat) = 3 + 1 from rfl]
   iapply wpt_store_eval _ _ empty_annotation intTy _ _ NA _ rfl
     (pv := p) (cv := sevenVal)
@@ -248,7 +248,7 @@ theorem progAE1_wpt [SpikeGS .hasLC GF]
   iintro %fp Hpt
   simp only [SpikeVal.mergeInto]
   -- the earlier numeral rewrites already shaped this budget as `3 + 1 + 1`
-  iapply wpt_bound
+  iapply wpt_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
   icases (pointsToCell_cellOwn_iff M.tagDefs _ _ _ _).mp $$ Hpt
     with ⟨%id, %a, %hpv, Hcell⟩
   iapply wpt_load_eval _ _ empty_annotation intTy _ NA _ rfl (pv := p)
@@ -315,7 +315,7 @@ theorem exhibitA_prod_e1 (sup : Nat) (fs : CerbFS.FsState) (args : List String) 
     cases hl
   obtain ⟨dres, dst', heq, hψ, hbl, hout, herr⟩ :=
     prod_run_eqJ sup progAE1 hQe (ψA fmapEmpty) 13
-      (wpt_driver_done_alloc (GF := SpikeGF) (ctl := prodCtl)
+      (wpt_driver_done_alloc (GF := SpikeGF) (ctl := prodCtl sup)
         (M₀ := prodCtx (prodFile progAE1) ((initial_core_run_state sup
           (collect_labeled_continuations_NEW (prodFile progAE1))).1))
         rfl rfl (prodCtx_labels hQe) rfl rfl rfl rfl
@@ -324,9 +324,7 @@ theorem exhibitA_prod_e1 (sup : Nat) (fs : CerbFS.FsState) (args : List String) 
         (fun _ _ _ _ => iprop(False))
         progAE1 fmapEmpty [] prodMem₀ (∅ : SpikeHeapF SpikeCell)
         (allocCost fmapEmpty intTy 4) progAE1_frag
-        (by rw [show pot progAE1 = 5 from rfl,
-            show lemDefaultFuel = 999999 + 1 from rfl]
-            omega)
+        (by exact Nat.le_of_ble_eq_true rfl)
         (prodMem₀_launchCoh _ prod_one_int_budget_fits)
         (ψA fmapEmpty) 13
         (by

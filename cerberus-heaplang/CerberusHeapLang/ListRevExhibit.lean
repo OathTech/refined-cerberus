@@ -1495,15 +1495,11 @@ theorem list_reverse_certified
     (fun l params cont hl => by
       rw [hlbl] at hl
       obtain ⟨-, rfl⟩ := lrQ_inv loc ann ra mo pbty cbty bbty nbty ubty hl
-      exact Nat.le_trans (lrBody_fragJ loc ann ra mo bbty nbty ubty).pot_le_two
-        (by rw [show esize (lrBody loc ann ra mo bbty nbty ubty) = 5 from rfl,
-          show lemDefaultFuel = 999999 + 1 from rfl]; omega))
+      exact Nat.le_of_ble_eq_true rfl)
     (procCtx_fragProcs _)
     prog fmapEmpty [] σ₀ (Iris.Std.PartialMap.union m₀ R)
     (.save (saveParams_pure_of_vals rfl) (saveParams_depth_of_vals rfl) (lrBody_fragJ loc ann ra mo bbty nbty ubty))
-    (Nat.le_trans (Frag.pot_le_two (e := prog) (.save (saveParams_pure_of_vals rfl) (saveParams_depth_of_vals rfl)
-        (lrBody_fragJ loc ann ra mo bbty nbty ubty)))
-      (by rw [show esize prog = 6 from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega))
+    (Nat.le_of_ble_eq_true rfl)
     hcoh
     (fun v σ' => ∃ Q : CellMap, (∃ p' : CerbMem.PointerValue,
         v = ptrVal p' ∧ SeedChain Q p' ns.reverse) ∧ Q ##ₘ R ∧
@@ -1996,9 +1992,9 @@ variable (loc : CerbLocation.Loc) (ann ra : core_run_annotation)
   (mo : memory_order) (pbty cbty bbty nbty ubty : core_base_type)
 
 theorem lrProg_pot (sbty : core_base_type) (head : CerbMem.PointerValue) :
-    pot (lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head) = 7 := rfl
+    pot (lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head) = 15 := rfl
 
-theorem lrBody_pot : pot (lrBody loc ann ra mo bbty nbty ubty) = 6 := rfl
+theorem lrBody_pot : pot (lrBody loc ann ra mo bbty nbty ubty) = 14 := rfl
 
 end LrTotalExport
 

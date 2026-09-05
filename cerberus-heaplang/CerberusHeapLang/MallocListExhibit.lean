@@ -817,10 +817,10 @@ theorem mlBody_frag : Frag (mlBody loc ann ra mo al pref qbty bbty nbty ubty) :=
                   show lemDefaultFuel = 999999 + 1 from rfl]
                 omega))))))
 
-theorem mlBody_pot : pot (mlBody loc ann ra mo al pref qbty bbty nbty ubty) = 7 := rfl
+theorem mlBody_pot : pot (mlBody loc ann ra mo al pref qbty bbty nbty ubty) = 25 := rfl
 
 theorem mlProg_pot (sbty ibty pbty : core_base_type) (n : Int) :
-    pot (mlProg loc ann ra mo al pref sbty ibty pbty qbty bbty nbty ubty n) = 8 := rfl
+    pot (mlProg loc ann ra mo al pref sbty ibty pbty qbty bbty nbty ubty n) = 26 := rfl
 
 theorem mlParams_depth (ibty pbty : core_base_type) (n : Int) :
     ∀ pe ∈ saveParamPexprs (mlParams ibty pbty n), peDepth pe ≤ lemDefaultFuel := by
@@ -1682,7 +1682,7 @@ theorem malloc_list_certified_production (sup : Nat) (n : Int) (hn : 0 ≤ n)
     prod_run_eqJ sup (mlProg loc0 empty_annotation ra mo al pref sbty ibty pbty qbty bbty
         nbty ubty n)
       hQprod (ψML n) (mlCost n.toNat 0 + 1)
-      (wpt_driver_done_alloc (GF := SpikeGF) (ctl := prodCtl)
+      (wpt_driver_done_alloc (GF := SpikeGF) (ctl := prodCtl sup)
         (M₀ := procCtxF (prodFile (mlProg loc0 empty_annotation ra mo al pref sbty ibty pbty qbty bbty
               nbty ubty n)) ((initial_core_run_state sup
           (collect_labeled_continuations_NEW

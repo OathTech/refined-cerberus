@@ -257,8 +257,8 @@ theorem eoMain_frag : Frag (eoMain ra n) :=
         show lemDefaultFuel = 999999 + 1 from rfl]
       omega)
 
-theorem eoEvenBody_pot : pot (eoEvenBody ra) = 3 := rfl
-theorem eoOddBody_pot : pot (eoOddBody ra) = 3 := rfl
+theorem eoEvenBody_pot : pot (eoEvenBody ra) = 4 := rfl
+theorem eoOddBody_pot : pot (eoOddBody ra) = 4 := rfl
 theorem eoMain_pot : pot (eoMain ra n) = 2 := rfl
 
 /-- THE PROCEDURE WELL-FORMEDNESS PREMISE at the production context: the
@@ -673,15 +673,15 @@ theorem even_odd_certified (hn : 0 ≤ n) (fs : CerbFS.FsState) (args : List Str
          dres.dres_stdout = "" ∧
          dres.dres_stderr = "") := by
   have hsafe : DriverSafeCtl (eoCtx ra n nbty sup) (prodThread (eoMain ra n))
-      (eoMain ra n) [fmapEmpty] prodCtl prodMem₀ (fun v _ => v = ivVal (1 - n % 2)) := by
+      (eoMain ra n) [fmapEmpty] (prodCtl sup) prodMem₀ (fun v _ => v = ivVal (1 - n % 2)) := by
     refine engine_adequacy (GF := SpikeGF) (M := eoCtx ra n nbty sup) rfl rfl
-      (ctl := prodCtl) rfl
+      (ctl := prodCtl sup) rfl
       (fun l params cont hl => by
-        rw [show prodCtl.proc = some mainSym from rfl, eoCtx_labels,
+        rw [show (prodCtl sup).proc = some mainSym from rfl, eoCtx_labels,
           show lookupLabel fmapEmpty l = none from rfl] at hl
         cases hl)
       (fun l params cont hl => by
-        rw [show prodCtl.proc = some mainSym from rfl, eoCtx_labels,
+        rw [show (prodCtl sup).proc = some mainSym from rfl, eoCtx_labels,
           show lookupLabel fmapEmpty l = none from rfl] at hl
         cases hl)
       (eoCtx_fragProcs ra n nbty sup)
@@ -725,7 +725,7 @@ theorem even_odd_certified_production (hn : 0 ≤ n)
     (wpt_driver_done_procs (GF := SpikeGF) (M₀ := eoCtx ra n nbty sup) rfl rfl
       (eoCtx_fragProcs ra n nbty sup)
       (th₀ := prodThread (eoMain ra n))
-      (eoFile_lookup_main ra n nbty) prodCtl.execLoc prodCtl.curLoc prodCtl.sup
+      (eoFile_lookup_main ra n nbty) (prodCtl sup).execLoc (prodCtl sup).curLoc (prodCtl sup).sup
       eoSpecT eoLsT
       (eoMain ra n) fmapEmpty [] prodMem₀ (∅ : SpikeHeapF SpikeCell) 0
       (eoMain_frag ra n)
