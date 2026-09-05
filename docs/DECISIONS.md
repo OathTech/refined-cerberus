@@ -2677,3 +2677,70 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   (`docs/2026-09-05_note-cerberus-lean-subst-esize.md`,
   `…_note-cerberus-lean-conv-int-divergence.md`). Range audit
   3e75a1e..HEAD dispatched next; ONE merge ask for E1 + fixes + E2 follows.
+- **2026-09-05 [USER] CONDITIONAL MERGE APPROVAL AND THE ARCHITECTURE-REVIEW SCHEDULE**
+  (verbatim): "if the audit lands clean, you can go ahead with the merge";
+  "agree re the architecture review". [AGENT] reading, stated to the
+  operator before the audit landed: "clean" = PASS with no required fixes
+  merges on that sign-off; PASS WITH FIXES REQUIRED is not clean — fixes,
+  re-gate, a FRESH ask. The audit landed PASS WITH FIXES REQUIRED (below), so
+  this approval was NOT consumed; the fresh ask follows this entry. RATIFIED:
+  ARCHITECTURE's fresh full review (new reviewer) happens ONCE at the t1
+  milestone (after E4); per-slice shop-window truth is kept by the workers'
+  docs passes and checked by each range audit.
+- **2026-09-05 [AGENT] E2 RANGE AUDIT 3e75a1e..b5ed995: PASS WITH FIXES REQUIRED, A− —
+  FIXES LANDED ON `e2-fixes` (804f9d4 report, 908dabd fixes, 6d296af notes);
+  MERGE CANDIDATE = this commit, PENDING A FRESH SIGN-OFF.** Report
+  `cerberus-heaplang/docs/2026-09-05_audit-e2-range.md`. No T- finding: the
+  loaded-value evaluator, the one-pass mirror, the `undef` KILL face (an
+  executable run of a UB036 program through the shipped composite gives
+  `Killed Undef0 loc=… [UB036]` = the mirror's classification; at a library
+  location both give the parked thread's location, confirming
+  original-thread evaluation), the tuple binders and the `Unspecified`
+  store are exact against the generated engine at the pin; census
+  3406/3853/459/12/50 and the 18+1+31 partition reproduced; 82/82 new pins
+  trio-exact; the 22 headline statements unchanged; all ten E1 fixes
+  genuinely applied. Fixes: H-1 (the one code defect) `corpus_skeleton.lean`
+  called `IO.Process.exit 1` inside `#eval`, discarding every diagnostic —
+  now `throw (IO.userError …)`; re-planted: the no-row plant and a drifted
+  `Specified → Unspecified` transcription both print their row and first
+  difference before the gate's FAIL line (verbatim in the E2 record §12);
+  D-1 ARCHITECTURE: 71 cite replacements after a scripted check of 273
+  cites, the `eval_uncovered` characterisation completed with E2's members;
+  D-2 WALKTHROUGH's `ctlThread` sentence and README/WALKTHROUGH residual
+  bullets; D-3 `panic_env` docstring; R-1 `panic` → `panic_env` and the
+  closure note's FALSE E1-fuel history (E1's `aux2_bridge` had no round-fuel
+  premise; E2 ADDED `≤ fuel + 1`) — in-place erratum marker + dated erratum;
+  R-2 the byte-image fact STATED as `EmittedBExhibit.unspec_bytes` (`rfl`,
+  trio-exact, pinned: 508 → 509); R-3 the upstream note's "we will prove it"
+  was FALSE — the `hbsz` premise is discharged per program by `rfl`/`decide`;
+  no general size-preservation lemma exists or is planned for E3–E4; note
+  rewritten with a dated erratum; KOI B7 corrected in this commit. N-1/N-2
+  not acted (movers; the cloned `complete_*beta_tuple` blocks differ in
+  ctor + engine equation — a shared home is a later dedupe); N-3/N-4 done.
+  Flagged, orchestrator's call: the manifest's `Frag.pure_op` OUT-OF-SCOPE
+  row text still lists only E1 shapes + the depth guard → KOI C16 (E3
+  updates the row). Orchestrator FULL gate at 6d296af (40G cap; the
+  candidate's content — this DECISIONS/KOI append is the only later change),
+  verbatim (the 22 per-module `ok:   … — 0 internals mentions` lines
+  elided here; unabridged in the E2 record §12):
+  ```
+  == gate 1: banned proof-method grep (native_decide / bv_decide / ofReduce*) ==
+  ok: no banned proof-method references
+  == gate 2: capped build, cerberus-heaplang (elaborates its axiom audit) ==
+  info: CerberusHeapLang/Audit.lean:689:0: CerberusHeapLang export pins: 509 trio-exact
+  info: CerberusHeapLang/Audit.lean:689:0: CerberusHeapLang axiom sweep: every theorem bounded by the trio (4307 swept, internal details included — count informational, environment-dependent)
+  info: CerberusHeapLang/Audit.lean:689:0: CerberusHeapLang banned-axiom sweep: sorryAx/ofReduceBool/ofReduceNat absent from all cones (6704 constants of every kind swept, internal details included — count informational, environment-dependent)
+  Build completed successfully (461 jobs).
+  ok: cerberus-heaplang build green
+  == speedbump: rule-use and classification manifest (regenerate; red on a red row or drift) ==
+  ok: capability manifest regenerated, no drift
+  == speedbump: corpus skeleton (hand-transcribed emitted Core vs docs/corpus-e0; scripts/corpus_skeleton.lean) ==
+  ok: corpus skeleton — every transcription matches its emitted text, every plant mismatches
+  == speedbump: import direction (semantics → heap → rules → adequacy → clients) ==
+  ok: import direction — 15 core modules, none imports an exhibit/example/production module
+  == speedbump: client boundary (positive clients mention no logic internals; scripts/boundary_check.sh) ==
+  BOUNDARY: 22 modules checked, 0 internals mention(s) in total, exit=0
+  ok: client boundary — no unallowlisted internals mention
+  ALL GATES GREEN
+  GATE-EXIT=0
+  ```
