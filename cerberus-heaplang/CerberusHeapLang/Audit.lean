@@ -132,6 +132,31 @@ added (list end): 508 → 588. Left UNPINNED with sub-trio cones (the
 `peStrip_root`, `stdBudget_le`, `get_ctx_call` (`[propext]` or
 `[Quot.sound, propext]`; measured, e3-notes §9).
 
+DIALECT ARC E4 (2026-09-05, cerberus-heaplang/docs/2026-09-05_e4-notes.md):
+`Eunseq` mirrored (`Step.unseq_ctx`/`Step.unseq_vals`, `Frag.unseq`), the
+certification restated in HEAD form (the engine's step list at a reducible
+`unseq` has one entry per reducible component; the shipped loop takes the
+head), the rule faces `wps_unseq_focus`/`wps_unseq_vals` (+ `wpt_`) and the
+annotated tuple binder `wps_wseq_tuple_annot`/`wpt_wseq_tuple_annot`, and
+THE MILESTONE: t1's `main` transcribed verbatim is in `Frag`
+(`CorpusE0.t1Main_frag`) and certified end to end over the shipped driver
+(`t1_certified_production`, CorpusT1Exhibit.lean). 1 pin REMOVED
+(`CorpusE0.t1_unseq_not_frag` — false since `Frag.unseq`), 62 added (list
+end): 588 → 650. Left UNPINNED with sub-trio cones (measured, e4-notes §8):
+the `rfl`/`decide`/`simp` facts of Step/Soundness/Potential/EvalClass at the
+new constructors (`valsOnly_*`, `ccallFree*`, `isValE_*`, `is_irreducible_*`,
+`esizeList_*`, `potList_*`, `pot_unseq`, `esize_unseq`, `focus_exists`/
+`focus_unique`, `map_ofValA_inj`, `jumpRedex?_unseq*`, `callRedex?_unseq*`,
+`redexAnnots_unseq*`, `*U?_focus`/`_vals`, `callRedexU?_none_of_jumpRedexU?_some`,
+`apply_ctx_unseq`, `has_ccall_lemFuel_succ_*`, `ccallFree_has_ccall`,
+`ccallFreeList_has_ccall`, `get_ctx_unseq_*`, `get_ctx_annot_unseq`,
+`one_step_unseq_aux_collect`, `cons_of_head?`, `Decomp.ccallFree_plug`,
+`Decomp.esize_le`, `Decomp.get_ctx_single`, `all_irreducible_eq_valsOnly`,
+`length_le_esizeList`, `esize_le_esizeList_of_mem`, `toVal_unseq_node`,
+`toVal_none_of_isValE_false`, `operandsOfU_focus`, `CorpusE0.t1_uncovered_none`,
+`t1Main_pot`, `t1_four_loadTrap`, `t1CasePe_eq`, `createInt_eq`, `killInt_eq`,
+`act_store_eq`, `act_load_eq`).
+
 P3.5 ([USER 2026-09-02], docs/2026-09-02_p3.5-notes.md): the 65
 `#guard_msgs in #print axioms` blocks + prose collapsed to the export
 list below (62 names at P3.5, the same exact assertion each; the list
@@ -169,6 +194,7 @@ import CerberusHeapLang.EvenOddExhibit
 import CerberusHeapLang.EmittedAExhibit
 import CerberusHeapLang.EmittedBExhibit
 import CerberusHeapLang.EmittedCExhibit
+import CerberusHeapLang.CorpusT1Exhibit
 import CerberusHeapLang.OverflowExhibit
 import CerberusHeapLang.Examples.CorpusE0
 import CerberusHeapLang.Examples.ReadinessSmoke
@@ -746,7 +772,45 @@ def trioExports : List Name := [
   ``CerberusHeapLang.evalPexpr_peStrip, ``CerberusHeapLang.procCtxF_labels,
   ``CerberusHeapLang.stepFail_call, ``CerberusHeapLang.stepFail_catch,
   ``CerberusHeapLang.stepFail_conv_int, ``CerberusHeapLang.stepFail_is_unsigned,
-  ``CerberusHeapLang.stepFail_wrapI, ``CerberusHeapLang.stepPexprRaw_peStrip]
+  ``CerberusHeapLang.stepFail_wrapI, ``CerberusHeapLang.stepPexprRaw_peStrip,
+  -- dialect arc E4 (2026-09-05, cerberus-heaplang/docs/2026-09-05_e4-notes.md
+  -- §8): the unseq mirror's inversions and preservation, the head-form
+  -- step-list facts, the completion classification, the unseq rule faces
+  -- and the annotated tuple binder, t1's membership, and the acceptance
+  -- exhibit (CorpusT1Exhibit) down to its frame lemmas — every new theorem
+  -- measured trio-exact by the build is pinned (E3 left its exhibit's frame
+  -- lemmas unpinned; E4 pins exhaustively, [AGENT], e4-notes §8)
+  ``CerberusHeapLang.Step.unseq_inv, ``CerberusHeapLang.Step.callOf_of_call_unseq,
+  ``CerberusHeapLang.Step.ccallFree_preserved, ``CerberusHeapLang.step_ctx_length,
+  ``CerberusHeapLang.step_ctx_singleton_of_root, ``CerberusHeapLang.step_ctx_unseq_vals,
+  ``CerberusHeapLang.step_ctx_unseq_race, ``CerberusHeapLang.complete_unseq_vals,
+  ``CerberusHeapLang.fupd_wps, ``CerberusHeapLang.fupd_wpt_nonval,
+  ``CerberusHeapLang.wpt_jump_frame_unseq, ``CerberusHeapLang.wps_unseq_focus,
+  ``CerberusHeapLang.wpt_unseq_focus, ``CerberusHeapLang.wps_unseq_vals,
+  ``CerberusHeapLang.wpt_unseq_vals, ``CerberusHeapLang.wps_wseq_tuple_annot,
+  ``CerberusHeapLang.wpt_wseq_tuple_annot, ``CerberusHeapLang.CorpusE0.t1_unseq_frag,
+  ``CerberusHeapLang.CorpusE0.t1Main_frag, ``CerberusHeapLang.collect_new_t1Main,
+  ``CerberusHeapLang.prod_two_int_budget_fits, ``CerberusHeapLang.specInt_eval,
+  ``CerberusHeapLang.t1ConvLoadedInt_eval, ``CerberusHeapLang.t1LsT_readout,
+  ``CerberusHeapLang.t1Main_labeledAt, ``CerberusHeapLang.t1RetQ_bindArgs,
+  ``CerberusHeapLang.t1RetQ_inv, ``CerberusHeapLang.t1RetQ_lookup,
+  ``CerberusHeapLang.t1_blockSpecs, ``CerberusHeapLang.t1_blockSpecsT,
+  ``CerberusHeapLang.t1_cAdd_select_31, ``CerberusHeapLang.t1_certified_production,
+  ``CerberusHeapLang.t1_four_encodes, ``CerberusHeapLang.t1_four_fromMemValue,
+  ``CerberusHeapLang.t1_four_reconstruct, ``CerberusHeapLang.t1_four_storable,
+  ``CerberusHeapLang.t1_wps, ``CerberusHeapLang.t1_wpt,
+  ``CerberusHeapLang.t1fr508_lookup_a508, ``CerberusHeapLang.t1fr508_lookup_x,
+  ``CerberusHeapLang.t1fr508_sf, ``CerberusHeapLang.t1fr509_lookup_a509,
+  ``CerberusHeapLang.t1fr509_lookup_y, ``CerberusHeapLang.t1fr509_sf,
+  ``CerberusHeapLang.t1fr515_lookup_a515, ``CerberusHeapLang.t1fr515_sf,
+  ``CerberusHeapLang.t1fr516_lookup_a516, ``CerberusHeapLang.t1fr516_sf,
+  ``CerberusHeapLang.t1fr517_lookup_a517, ``CerberusHeapLang.t1fr517_lookup_x,
+  ``CerberusHeapLang.t1fr517_lookup_y, ``CerberusHeapLang.t1fr517_sf,
+  ``CerberusHeapLang.t1fr518_lookup, ``CerberusHeapLang.t1frB_lookup_a510,
+  ``CerberusHeapLang.t1frB_lookup_a511, ``CerberusHeapLang.t1frB_sf,
+  ``CerberusHeapLang.t1frX_lookup_x, ``CerberusHeapLang.t1frX_sf,
+  ``CerberusHeapLang.t1frY_lookup_x, ``CerberusHeapLang.t1frY_lookup_y,
+  ``CerberusHeapLang.t1frY_sf, ``CerberusHeapLang.t1sym_eval]
 
 def sortedNames (ns : Array Name) : Array String :=
   (ns.map (·.toString)).qsort (· < ·)

@@ -423,4 +423,58 @@ theorem store_conv_loaded_int_round {M : MachineCtx} (hstd : StdE3 M.file)
     (Step.store_eval rfl hx
       (evalPexpr_convLoadedInt_spec [] hstd (by rw [sintTyPe, evalPexpr_val]) hy h1 h2))
 
+/-! ## E4: the `unseq` rounds (`engine_step_matchU` instances — the shipped
+driver's round IS the mirror step at the two `unseq` rows: the FOCUS round
+(the last reducible component steps under the `Cunseq` frame) and the
+COMPLETION round (every component a value: the annotated tuple). -/
+
+/-- THE FOCUS ROUND: `unseq(pure(x), v)` — the second component is a value,
+    the first is the pure redex at a symbol; `get_ctx_unseq_aux`
+    (core_reduction.lem:544–548, :590–601) puts the first component's
+    context at the HEAD of the step list (the only reducible component)
+    and the round rewrites it in place: `unseq(pure(v_x), v)` with the
+    location updated from the component's annotations (`ctl.upd a1`; the
+    frame's own annotations `a` are not consulted — `apply_ctx`'s `Cunseq`
+    arm re-wraps them unchanged). -/
+theorem unseq_focus_round {M : MachineCtx} (a a1 a2 b2 : List annot) (x : sym) (v w : value)
+    (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (ctl : Ctl) (σ : Mem)
+    (hx : evalPexpr M.tagDefs M.extern M.file (ev0 :: evs) (stdSym x) = some v) :
+    CerberusRound M
+      (Expr a (Eunseq [pureRedex a1 (stdSym x), ofValA (.pure a2 b2 w)]), ev0 :: evs, ctl, σ)
+      (Expr a (Eunseq [Expr a1 (Epure (Pexpr [] () (PEval v))), ofValA (.pure a2 b2 w)]),
+        ev0 :: evs, ctl.upd a1, σ) :=
+  engine_step_matchU
+    (Frag.unseq (by simp) rfl (fun e he => by
+      simp only [List.mem_cons, List.not_mem_nil, or_false] at he
+      rcases he with rfl | rfl
+      · exact Frag.pure_op rfl (PePure.of_isPePure rfl)
+          (by rw [show peDepth (stdSym x) = 1 from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+      · exact frag_ofValA _))
+    (by simp only [esize_unseq, esizeList_cons, esizeList_nil, pureRedex, esize_pure, ofValA,
+        show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+    (@Step.unseq_ctx M a [] _ _ [ofValA (.pure a2 b2 w)] _ _ _ _ _ _ rfl rfl rfl rfl rfl
+      (Step.pure_eval rfl hx))
+
+/-- THE COMPLETION ROUND: `unseq(v_1, {A}v_2)` at two values, the second
+    annotated (a store's `DA_pos` footprint, say) — `one_step0`'s `Eunseq`
+    arm (core_reduction.lem:375–386): no race between `[]` and `A`, so the
+    node completes into the annotated tuple `{A}(v_1, v_2)` — the
+    successor is `Eannot A (pure((v_1, v_2)))` with the location updated
+    from the node's annotations. -/
+theorem unseq_vals_round {M : MachineCtx} (a a1 b1 a2 a2' b2 : List annot)
+    (fp : CerbMem.Footprint) (v1 v2 : value)
+    (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (ctl : Ctl) (σ : Mem) :
+    CerberusRound M
+      (Expr a (Eunseq [ofValA (.pure a1 b1 v1), ofValA (.annot a2 a2' b2 [DA_pos [] fp] v2)]),
+        ev0 :: evs, ctl, σ)
+      (Expr a (Eannot [DA_pos [] fp] (Expr [] (Epure (Pexpr [] () (PEval (Vtuple [v1, v2])))))),
+        ev0 :: evs, ctl.upd a, σ) :=
+  engine_step_matchU
+    (Frag.unseq (by simp) rfl (fun e he => by
+      simp only [List.mem_cons, List.not_mem_nil, or_false] at he
+      rcases he with rfl | rfl <;> exact frag_ofValA _))
+    (by simp only [esize_unseq, esizeList_cons, esizeList_nil, ofValA, esize_pure, esize_annot,
+        show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+    (@Step.unseq_vals M a [.pure a1 b1 v1, .annot a2 a2' b2 [DA_pos [] fp] v2] _ _ _ _ _ rfl)
+
 end CerberusHeapLang

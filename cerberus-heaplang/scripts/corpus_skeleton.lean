@@ -4,9 +4,10 @@ dialect arc (E1; [USER 2026-09-04] E0 question 3). For every row of
 `CerberusHeapLang.CorpusE0.corpusTable` the annotation/bound skeleton of
 the hand-transcribed term must equal the token stream tokenized off the
 oracle's emitted text `docs/corpus-e0/<file>` (repository root); and the
-three PLANTS of every row (first `bound` dropped; every `Astd` stripped;
-E2: the first `pure(Specified(…))` unwrapped) must NOT match — a plant that matches means the instrument is vacuous and
-fails the run. Scope and blind spots: the module's header
+four PLANTS of every row (first `bound` dropped; every `Astd` stripped;
+E2: the first `pure(Specified(…))` unwrapped; E4: the first `save`
+initialiser's `Specified(…)` unwrapped) must NOT match — a plant that
+matches means the instrument is vacuous and fails the run. Scope and blind spots: the module's header
 (CerberusHeapLang/Examples/CorpusE0.lean).
 
 Run (from cerberus-heaplang/):
@@ -94,7 +95,7 @@ def coverageSweep (quiet : Bool) (rows : List Row) (pending : List (String × St
 
 def main : IO Unit := do
   let mut fail := false
-  IO.println "# Corpus skeleton check (E1 skeleton; E2 pure expressions; E3 std.core fragment)"
+  IO.println "# Corpus skeleton check (E1 skeleton; E2 pure expressions; E3 std.core fragment; E4 save initialisers)"
   IO.println ""
   -- the coverage sweep, and its plant: the ledger with t1's row removed
   -- (and not made pending) MUST fail
@@ -113,8 +114,8 @@ def main : IO Unit := do
   else
     IO.println "coverage sweep: every corpus file rowed or pending; plant (t1 row dropped) fails (expected)"
   IO.println ""
-  IO.println "| file | proc | tokens | term = text | plant: bound dropped | plant: Astd stripped | plant: Specified unwrapped |"
-  IO.println "|---|---|---|---|---|---|---|"
+  IO.println "| file | proc | tokens | term = text | plant: bound dropped | plant: Astd stripped | plant: Specified unwrapped | plant: save initialiser unwrapped |"
+  IO.println "|---|---|---|---|---|---|---|---|"
   for row in corpusTable do
     match ← rowStreams row with
     | none => fail := true
@@ -155,7 +156,19 @@ def main : IO Unit := do
         if bad then
           IO.eprintln s!"FAIL: {row.file}: plant `Specified unwrapped` STILL MATCHES — vacuous instrument"
           fail := true
-      IO.println s!"| {row.file} | {row.proc} | {termToks.length} | {if eqMain then "equal" else "DIFFER"} | {plantBound} | {plantStd} | {plantSp} |"
+      -- E4: the save initialiser's `Specified` (a position the E2 plant never reached)
+      let (plantedSv, foundSv) := unwrapFirstSaveInit row.term
+      let mut plantSv := "no save initialiser Specified to unwrap"
+      if !foundSv then
+        IO.eprintln s!"FAIL: {row.file}: plant `save initialiser unwrapped` — the term has no `save … (x:= Specified(…))`"
+        fail := true
+      else
+        let (msg, bad) := plantVerdict textToks plantedSv
+        plantSv := msg
+        if bad then
+          IO.eprintln s!"FAIL: {row.file}: plant `save initialiser unwrapped` STILL MATCHES — vacuous instrument"
+          fail := true
+      IO.println s!"| {row.file} | {row.proc} | {termToks.length} | {if eqMain then "equal" else "DIFFER"} | {plantBound} | {plantStd} | {plantSp} | {plantSv} |"
   IO.println ""
   -- E3: the transcribed standard library against the pinned std.core SOURCE
   -- (the semantics workspace's runtime/libcore/std.core — the file the shipped
@@ -219,6 +232,6 @@ def main : IO Unit := do
     -- makes `lean` exit non-zero, which is what the gate reads.
     throw (IO.userError "corpus-skeleton: FAIL")
   else
-    IO.println s!"corpus-skeleton: ok — {corpusTable.length} row(s) equal, every plant mismatches"
+    IO.println s!"corpus-skeleton: ok — {corpusTable.length} corpus row(s) and {stdTable.length} std.core row(s) equal, every plant mismatches"
 
 #eval main

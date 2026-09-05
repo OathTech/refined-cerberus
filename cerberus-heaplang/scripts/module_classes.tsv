@@ -63,10 +63,11 @@ CerberusHeapLang.EvenOddExhibit	positive-client	-	mutual recursion (even/odd) th
 CerberusHeapLang.EmittedAExhibit	positive-client	-	exhibit A in the emitted-Core shape (E1: annotations, bound, Ivalignof) at both strata and the production entry
 CerberusHeapLang.EmittedBExhibit	positive-client	-	exhibit B in the emitted-Core shape (E2: loaded values, the Unspecified store, pure case at a tuple, the tuple and weak-symbol binders) at both strata and the production entry
 CerberusHeapLang.EmittedCExhibit	positive-client	-	x + 1 in the emitted-Core shape (E3: conv_loaded_int, __conv_int__, catch_exceptional_condition_add; t1 minus the unseq) at both strata and the production entry over the library-carrying file
+CerberusHeapLang.CorpusT1Exhibit	positive-client	-	THE MILESTONE (E4): docs/corpus-e0/t1.c's main transcribed VERBATIM (CorpusE0.t1Main — unseq, the annotated tuple binder, conv_loaded_int, the emitted +) at both strata and the production entry over the library-carrying file
 CerberusHeapLang.Examples.CallSmoke	declared-smoke	-	the C3 call/procedure smoke (kept as a consumer beside FibRecExhibit)
 CerberusHeapLang.Examples.ReadinessSmoke	declared-smoke	-	the API-only two-field predicate smoke
 CerberusHeapLang.Examples.Layout	example-support	-	layout constants and canned shapes
-CerberusHeapLang.Examples.CorpusE0	example-support	-	the corpus transcriptions (E1: t1) and the annotation/bound skeleton instrument (scripts/corpus_skeleton.lean)
+CerberusHeapLang.Examples.CorpusE0	example-support	-	the corpus transcriptions (E1: t1; E4: t1's main is in Frag, t1Main_frag) and the annotation/bound/pure-expression/save-initialiser skeleton instrument (scripts/corpus_skeleton.lean)
 CerberusHeapLang.Examples.MirrorCoverage	semantic-test	-	mirror-level coverage witnesses against `Step`; engine-round instances
 CerberusHeapLang.ProdExhibit	production-wrapper	-	exhibit A at the production entry
 CerberusHeapLang.ProdLoopExhibit	production-wrapper	-	the production loop theorems

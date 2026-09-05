@@ -41,11 +41,19 @@ Three things live here — data, an instrument, and membership witnesses:
    `array_shift(p, ty, n)`, `not(e)`, the infix `PEop`, `__conv_int__(ty,
    e)`, `catch_exceptional_condition_<op>(ty, e1, e2)`).
 
-   WHAT THE SKELETON DOES NOT CHECK (E2 scope): symbols, literals, ctypes,
-   binder types and memory orders are LEAVES (not compared); the pure
-   expressions of `save` initialisers, `if`/`case` scrutinees at the
-   EXPRESSION level, `let` (Elet), `memop`, `pcall`/`ccall` arguments are
-   still OPAQUE (checked annotation-free only); the association of a `;`
+   SINCE E4 the `save` initialisers are READ too (pp_core.ml:652–658:
+   `save l: bTy (x_1: bTy_1:= pe_1, …) in body` — each initialiser is a
+   binder `leaf` followed by its pure expression's skeleton; the label and
+   its type are leaves the tokenizer skips to the `(`), so t1's `main` has
+   NO opaque position left.
+
+   WHAT THE SKELETON DOES NOT CHECK (E4 scope): symbols, literals, ctypes,
+   binder types and memory orders are LEAVES (not compared); the
+   `if`/`case` scrutinees at the EXPRESSION level, `let` (Elet), `memop`,
+   `pcall`/`ccall` arguments are still OPAQUE (checked annotation-free
+   only) — the remaining opaque positions of the OTHER corpus programs
+   (t2/t3/t9/t10: `ccall` arguments, E6; t4/t5/t6: expression-level
+   `if`/`case` scrutinees, E5); the association of a `;`
    chain is not observable in the text (no parentheses are printed) and is
    not compared. FAIL-CLOSED where the instrument is blind: a pure
    expression node carrying a printed annotation (the printer's
@@ -70,9 +78,10 @@ Three things live here — data, an instrument, and membership witnesses:
    branch — E3 — and `unseq` — E4).
 
 Plants (the vacuity check the script runs on every row): dropping the
-first `bound` of a transcription, every `Astd`, or (E2) the first
-`Specified(…)` constructor under a `pure`, MUST make the check fail; a
-plant that passes fails the script.
+first `bound` of a transcription, every `Astd`, (E2) the first
+`Specified(…)` constructor under a `pure`, or (E4) the first `save`
+initialiser's `Specified(…)`, MUST make the check fail; a plant that
+passes fails the script.
 -/
 import CerberusHeapLang.Soundness
 import CerberusHeapLang.StdCore
@@ -318,8 +327,9 @@ partial def skeleton : CoreExpr → Except String (List String)
       let ts ← es.mapM skeleton
       pure (hd ++ ["nd"] ++ ts.flatten ++ ["endnd"])
     | Esave _ inits body => do
-      checkClean (inits.map fun x => x.2.2)
-      pure (hd ++ ["save"] ++ (← skeleton body))
+      -- E4: pp_core.ml:652–658 — each initialiser prints `x: bTy:= pe`
+      let its ← inits.mapM fun x => pexprSkeleton x.2.2
+      pure (hd ++ ["save"] ++ (its.map ("leaf" :: ·)).flatten ++ (← skeleton body))
     | Erun _ _ pes => do pure (hd ++ ["run"] ++ (← pexprsSkeleton pes))
     | Epar es => do
       let ts ← es.mapM skeleton
@@ -542,6 +552,64 @@ def pexKeywords : List String :=
     checks them annotation-free only): `memop`, `pcall`, `ccall`, `wait`. -/
 def leafKeywords : List String := ["memop", "pcall", "ccall", "wait"]
 
+/-- E4: skip a printed base type after a save initialiser's `:` — at depth 0
+    up to (not consuming) `:=`; parentheses nest. -/
+partial def skipTypeToAssign (cs : List Char) (depth : Nat := 0) : Except String (List Char) :=
+  match cs with
+  | [] => throw "unterminated type in a save initialiser"
+  | c :: rest =>
+    if Bool.and (depth == 0) (startsWith cs ":=") then pure cs
+    else if c == '(' then skipTypeToAssign rest (depth + 1)
+    else if c == ')' then
+      if depth == 0 then throw "`)` before `:=` in a save initialiser"
+      else skipTypeToAssign rest (depth - 1)
+    else skipTypeToAssign rest depth
+
+/-- E4: the characters of a quoted literal up to and including its closing
+    quote, and the rest. -/
+partial def spanQuoted (q : Char) : List Char → List Char → List Char × List Char
+  | [], acc => (acc.reverse, [])
+  | c :: rest, acc => if c == q then ((c :: acc).reverse, rest) else spanQuoted q rest (c :: acc)
+
+/-- E4: the text of one save initialiser's pure expression — up to (not
+    consuming) the `,` or `)` at depth 0 that ends the item; quoted
+    literals (ctypes with parentheses) are copied whole; a marker is an
+    error (the pure-expression skeleton compares no annotation). -/
+partial def cutInit (cs : List Char) (acc : List Char) (depth : Nat := 0) :
+    Except String (List Char × List Char) :=
+  match cs with
+  | [] => throw "unterminated save initialiser"
+  | c :: rest =>
+    if startsWith cs "{-#" then throw "an annotation marker inside a save initialiser"
+    else if Bool.and (depth == 0) (Bool.or (c == ',') (c == ')')) then pure (acc.reverse, cs)
+    else if isQuote c then
+      let (lit, r) := spanQuoted c rest []
+      cutInit r (lit.reverse ++ (c :: acc)) depth
+    else if c == '(' then cutInit rest (c :: acc) (depth + 1)
+    else if c == ')' then cutInit rest (c :: acc) (depth - 1)
+    else cutInit rest (c :: acc) depth
+
+/-- E4: the initialiser list of a `save` after its `(` (pp_core.ml:654–656:
+    `x: bTy:= pe` items, comma-separated, closed by `)`): each item yields
+    `leaf` (the binder; its type skipped to `:=`) then its pure
+    expression's tokens (`pexScan` over the item's text). Returns the rest
+    after the `)`. -/
+partial def saveInits (cs : List Char) (toks : Array String) :
+    Except String (Array String × List Char) :=
+  match skipWs cs with
+  | ')' :: rest => pure (toks, rest)
+  | ',' :: rest => saveInits rest toks
+  | cs' =>
+    let (ident, r) := takeIdent cs'
+    if ident.isEmpty then throw "expected a binder in a save initialiser list"
+    else match skipWs r with
+    | ':' :: r' => do
+      let r'' ← skipTypeToAssign r'
+      let (initText, rest) ← cutInit (r''.drop 2) []
+      let (toks', _) ← pexScan (initText ++ [')']) 1 (toks.push "leaf")
+      saveInits rest toks'
+    | _ => throw "expected `:` after a save initialiser's binder"
+
 /-- THE TOKENIZER over the body of one procedure (the text after `:=`;
     stops at the next top-level `proc`/`fun`/`glob` or at the end). -/
 partial def scan (cs : List Char) (toks : Array String) (frames : List Frame) :
@@ -600,7 +668,15 @@ partial def scan (cs : List Char) (toks : Array String) (frames : List Frame) :
           | '[' :: r => skipBalanced r
           | _ => throw "expected `[` after `excluded`"
         scan (← skipBalanced (← expectParen r ident)) (toks.push "excluded") frames
-      | "save" => do scan (← skipUntilKw rest' "in") (toks.push "save") frames
+      | "save" => do
+        -- E4 (pp_core.ml:652–658): `save l: bTy (x_1: bTy_1:= pe_1, …) in` —
+        -- the label and its type are skipped to the `(`; the initialisers
+        -- are read (`saveInits`); then `in`
+        let r ← skipUntilChar rest' '('
+        let (toks', r') ← saveInits r (toks.push "save")
+        let r'' := skipWs r'
+        if atKeyword r'' "in" then scan (r''.drop 2) toks' frames
+        else throw "expected `in` after a save's initialiser list"
       | "run" => do
         let (_, r) := takeIdent (skipWs rest')
         let (toks', r') ← pexRegion (← expectParen r ident) (toks.push "run")
@@ -724,6 +800,49 @@ partial def unwrapFirstSpecified : CoreExpr → CoreExpr × Bool
       if d then (Expr an (Eif pe e2' e3), true)
       else let (e3', d3) := unwrapFirstSpecified e3; (Expr an (Eif pe e2 e3'), d3)
     | Elet pat pe b => let (b', d) := unwrapFirstSpecified b; (Expr an (Elet pat pe b'), d)
+    | _ => (Expr an e, false)
+
+/-- A `save` initialiser (Core.lean:1231 `Esave`). -/
+abbrev SaveInit : Type :=
+  sym × ((core_base_type × Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym)
+
+/-- E4 plant: unwrap the first `save` initialiser `x:= Specified(e)` met in
+    preorder into `x:= e` (the token `Specified` disappears from the
+    initialiser's skeleton — a position the E2 plant never reached). -/
+partial def unwrapFirstSaveInit : CoreExpr → CoreExpr × Bool
+  | Expr an e =>
+    match e with
+    | Esave sb inits b =>
+      let rec go : List SaveInit → List SaveInit × Bool
+        | [] => ([], false)
+        | (x, (t, Pexpr _ _ (PEctor Cspecified [p]))) :: xs => ((x, (t, p)) :: xs, true)
+        | i :: xs => let (xs', d) := go xs; (i :: xs', d)
+      let (inits', d) := go inits
+      if d then (Expr an (Esave sb inits' b), true)
+      else let (b', d') := unwrapFirstSaveInit b; (Expr an (Esave sb inits b'), d')
+    | Esseq pat e1 e2 =>
+      let (e1', d) := unwrapFirstSaveInit e1
+      if d then (Expr an (Esseq pat e1' e2), true)
+      else let (e2', d2) := unwrapFirstSaveInit e2; (Expr an (Esseq pat e1 e2'), d2)
+    | Ewseq pat e1 e2 =>
+      let (e1', d) := unwrapFirstSaveInit e1
+      if d then (Expr an (Ewseq pat e1' e2), true)
+      else let (e2', d2) := unwrapFirstSaveInit e2; (Expr an (Ewseq pat e1 e2'), d2)
+    | Eunseq es =>
+      let rec goL : List CoreExpr → List CoreExpr × Bool
+        | [] => ([], false)
+        | x :: xs =>
+          let (x', d) := unwrapFirstSaveInit x
+          if d then (x' :: xs, true) else let (xs', d') := goL xs; (x :: xs', d')
+      let (es', d) := goL es
+      (Expr an (Eunseq es'), d)
+    | Ebound b => let (b', d) := unwrapFirstSaveInit b; (Expr an (Ebound b'), d)
+    | Eannot ds b => let (b', d) := unwrapFirstSaveInit b; (Expr an (Eannot ds b'), d)
+    | Eif pe e2 e3 =>
+      let (e2', d) := unwrapFirstSaveInit e2
+      if d then (Expr an (Eif pe e2' e3), true)
+      else let (e3', d3) := unwrapFirstSaveInit e3; (Expr an (Eif pe e2 e3'), d3)
+    | Elet pat pe b => let (b', d) := unwrapFirstSaveInit b; (Expr an (Elet pat pe b'), d)
     | _ => (Expr an e, false)
 
 /-- Strip every `Astd` annotation from every expression node. -/

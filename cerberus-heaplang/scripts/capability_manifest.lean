@@ -46,9 +46,19 @@ WHAT THE GENERATOR CHECKS (red = nonzero exit):
 5. the module classification is complete and exact: every package module
    is classified, every classified module is in the environment, every
    class is in the vocabulary;
-6. the claim matrix docs/CLAIMS.md names only existing declarations (the
+6. the claim matrix docs/CLAIMS.md names only existing declarations: the
    backticked names in the second cell, `Exported theorem(s)`, of every
-   table row whose first cell begins `C<digits>`).
+   table row whose first cell begins `C<digits>` are theorems, definitions
+   or inductives of the environment; and (E3 range audit D-2,
+   docs/2026-09-05_audit-e3-range.md — a prose cell had named two DELETED
+   theorems as the current state) EVERY declaration-shaped backticked span
+   of EVERY cell of such a row (identifier characters, `.`, `'`, `?`, `!`)
+   is a constant of the environment (under `CerberusHeapLang.`, at the root,
+   or under `CerbND.`) or a word of `claimVocabulary` (Core/std.core
+   keywords, hypothesis names and other prose tokens, listed in this file;
+   a listed word no row uses is red — stale vocabulary). The check is
+   PLANTED: a synthetic row naming a deleted theorem in a prose cell must
+   come out red, or the run is red.
 
 WHAT GREEN DOES NOT ESTABLISH: that the variant list is exhaustive over the
 engine's success shapes (it is a reviewed reading of the engine, not a
@@ -99,6 +109,7 @@ def recAr5 := "found at ar5-manifest 2026-09-04 by reading the engine arms; [AGE
 def recE1 := "dialect arc E1 2026-09-05 (docs/2026-09-04_e1-notes.md)"
 def recE2 := "dialect arc E2 2026-09-05 (docs/2026-09-05_e2-notes.md)"
 def recE3 := "dialect arc E3 2026-09-05 (docs/2026-09-05_e3-notes.md)"
+def recE4 := "dialect arc E4 2026-09-05 (docs/2026-09-05_e4-notes.md)"
 
 /-- THE VARIANT TABLE. Read the engine arms cited before editing. -/
 def variants : List Variant := [
@@ -284,14 +295,28 @@ def variants : List Variant := [
     shape := "`let weak (a, b, …) = e1 in e2` at any fragment head delivering a BARE tuple value (LETW-PURE at the flat tuple binder)",
     cls := .rule (N "wps_wseq_tuple") (N "wpt_wseq_tuple") },
   { ctor := `CerberusHeapLang.Frag.wseq_tuple,
-    shape := "`let weak (a, b, …) = e1 in e2` whose head delivers an ANNOTATED tuple (LETW-ANNOT at the tuple binder — the shape every corpus `let weak (a, b) = unseq(…)` reaches once E4 delivers the unseq's annotated tuple)",
-    cls := .noRule s!"admitted by the fragment and MIRRORED (`Step.wseq_tuple_annot`, classified by `complete_wbeta_tuple`); the rule's annotated-head face is E4's, with `unseq` as the operand; {recE2}" },
+    shape := "`let weak (a, b, …) = e1 in e2` whose head delivers an ANNOTATED tuple (LETW-ANNOT at the tuple binder — the shape every corpus `let weak (a, b) = unseq(…)` reaches: the unseq's annotated tuple; E4)",
+    cls := .rule (N "wps_wseq_tuple_annot") (N "wpt_wseq_tuple_annot") },
   { ctor := `CerberusHeapLang.Frag.wseq_sym,
     shape := "`let weak x = e1 in e2` at any fragment head delivering a BARE value (LETW-PURE at the plain-symbol binder — the corpus's `let weak a_515: pointer = pure(x) in load(…)`)",
     cls := .rule (N "wps_wseq_sym") (N "wpt_wseq_sym") },
   { ctor := `CerberusHeapLang.Frag.wseq_sym,
     shape := "`let weak x = e1 in e2` whose head delivers an ANNOTATED value (LETW-ANNOT at the symbol binder)",
     cls := .noRule s!"admitted by the fragment and MIRRORED (`Step.wseq_sym_annot`, classified by `complete_wbeta_sym`); no emitted shape of E2 reaches it; {recE2}" },
+  -- E4: unseq
+  { ctor := `CerberusHeapLang.Frag.unseq,
+    shape := "`unseq(e_1, …, e_n)` with a REDUCIBLE component: the sequential driver reduces the LAST reducible component (`get_ctx_unseq_aux` prepends each reducible component's contexts, core_reduction.lem:544–548/:590–601; the loop takes the head) under the `Cunseq` frame — every sibling ccall-free (`ccallFreeList`: no `Eccall`, and no `Ecase`/`Elet`/`End` component, so `is_unseq_with_ccall` is `false`, :501–519)",
+    cls := .rule (N "wps_unseq_focus") (N "wpt_unseq_focus"),
+    also := [N "wpt_jump_frame_unseq"] },
+  { ctor := `CerberusHeapLang.Frag.unseq,
+    shape := "`unseq(v_1, …, v_n)` — every component a value: UNSEQ-PURE/UNSEQ-ANNOT completion into the annotated tuple `{A_1 ++ … ++ A_n}(v_1, …, v_n)` (`one_step_unseq_aux`, core_reduction.lem:375–386; the race-free case)",
+    cls := .rule (N "wps_unseq_vals") (N "wpt_unseq_vals") },
+  { ctor := `CerberusHeapLang.Frag.unseq,
+    shape := "`unseq(v_1, …, v_n)` whose components' dynamic annotations RACE (`do_race`): the UB035_unsequenced_race kill",
+    cls := .noRule s!"the engine kills the thread (`Step_with_runstate2 (RSK_eval \"unsequenced race\") (stExceptUndef_undef …)`), mirrored as the classification `complete_unseq_vals` (`.killed`); no rule delivers a value there and the total lane refuses (`wpt_unseq_vals` requires `collectUnseq … = some _`); {recE4}" },
+  { ctor := `CerberusHeapLang.Frag.unseq,
+    shape := "`unseq(…, run l(…), …)` / `unseq(…, pcall f(…), …)` — a jump or a call reaching the root THROUGH the `Cunseq` frame (the spine searches `jumpRedex?`/`callRedex?` descend into the last reducible component; `Step.run`/`Step.call` at the plugged context)",
+    cls := .noRule s!"admitted by the fragment and MIRRORED (`Step.unseq_inv`'s run/call disjuncts; `wpt_jump_frame_unseq` carries the jump frame); no exhibit reaches a jump or a call under the frame yet, so no rule face is demonstrated (the corpus's calls are `Eccall`s — E6; its `run`s sit at the procedure spine); {recE4}" },
   -- E1: the bound frame
   { ctor := `CerberusHeapLang.Frag.bound,
     shape := "`bound(e)` — reduction under the `Cbound` frame, then REMOVE-BOUND at the delivered value of either shape (the dynamic annotations of an annotated value are DROPPED)",
@@ -455,6 +480,64 @@ def claimNames (txt : String) : Array (String × Array String) := Id.run do
     out := out.push (id, names)
   return out
 
+/-- E3 range audit D-2: the backticked spans of EVERY cell (the claim cell
+    included) of every `| C<digits> |` row, with the cell index. -/
+def claimSpansAll (txt : String) : Array (String × Array (Nat × String)) := Id.run do
+  let mut out : Array (String × Array (Nat × String)) := #[]
+  for line in txt.splitOn "\n" do
+    let cells := (line.splitOn "|").map trim
+    if cells.length < 3 then continue
+    let idCell := cells[1]!
+    let id := (idCell.takeWhile Char.isAlphanum).toString
+    unless id.startsWith "C" && (id.drop 1).all Char.isDigit && id.length > 1 do continue
+    let mut spans : Array (Nat × String) := #[]
+    for (cell, k) in cells.zipIdx do
+      let pieces := cell.splitOn "`"
+      for (p, i) in pieces.zipIdx do
+        if i % 2 == 1 then spans := spans.push (k, p)
+    out := out.push (id, spans)
+  return out
+
+/-- A span that could be a declaration name: an identifier head, then
+    identifier characters, `.`, `'`, `?`, `!` or a subscript digit. -/
+def isDeclShaped (s : String) : Bool :=
+  match s.toList with
+  | [] => false
+  | c :: cs =>
+    -- (`||` is Iris's disjointness notation in this environment: spelled out)
+    Bool.and (Bool.or c.isAlpha (c == '_'))
+      (cs.all fun d => [d.isAlphanum, d == '_', d == '.', d == '\'', d == '?', d == '!',
+        Bool.and (decide (d.val ≥ 0x2080)) (decide (d.val ≤ 0x2089))].any id)
+
+/-- The prose tokens of docs/CLAIMS.md that are declaration-shaped but are
+    NOT declarations of this package: Core and std.core keywords and
+    function names, the engine's names outside `CerberusHeapLang`/`CerbND`,
+    hypothesis names quoted from statements, the banned proof methods.
+    Extend deliberately (a stale entry — one no row uses — is red). -/
+def claimVocabulary : List String :=
+  ["Cunseq", "Ecase", "Eccall", "Elet", "End", "Impl", "Ivalignof", "PElet", "Specified", "Unspecified", "__conv_int__",
+   "alloc", "bound", "bv_decide", "case", "catch_exceptional_condition",
+   "catch_exceptional_condition_add", "conv_int", "conv_loaded_int", "create", "driver2",
+   "dynamic_addrs", "eval_uncovered", "free", "hbsz", "hex", "hfuel", "hpost", "htd", "int",
+   "is_representable_integer", "kill", "killM", "load", "main", "mk_call_catch_exceptional_condition",
+   "mk_conv_int", "native_decide", "panic!", "run", "run_surplus", "stdlib", "store", "unseq",
+   "wrapI"]
+
+/-- A declaration-shaped span resolves if it is a constant of the environment
+    under `CerberusHeapLang.`, at the root, or under `CerbND.`. -/
+def resolvesAnywhere (env : Environment) (s : String) : Bool :=
+  [N s, s.toName, (`CerbND).append s.toName].any env.contains
+
+/-- The D-2 problems of one claim row: every declaration-shaped span of
+    every cell that neither resolves nor is vocabulary. -/
+def claimRowProblems (env : Environment) (id : String) (spans : Array (Nat × String)) :
+    Array String := Id.run do
+  let mut out : Array String := #[]
+  for (k, sp) in spans do
+    if Bool.and (isDeclShaped sp) (Bool.and (!resolvesAnywhere env sp) (!claimVocabulary.contains sp)) then
+      out := out.push s!"docs/CLAIMS.md {id} (cell {k}): `{sp}` is declaration-shaped but is neither a constant of the environment (`CerberusHeapLang.`/root/`CerbND.`) nor a `claimVocabulary` word"
+  return out
+
 /-! ## The report -/
 
 def classLabel : Class → String
@@ -610,6 +693,29 @@ def classLabel : Class → String
       | none =>
         problems := problems.push s!"docs/CLAIMS.md {id}: `{s}` is not in the environment"
         red := red + 1
+  -- ---- D-2: every declaration-shaped span of every cell (planted)
+  let allSpans := claimSpansAll claimsTxt
+  let mut nAllSpans := 0
+  let mut usedVocab : Array String := #[]
+  for (id, spans) in allSpans do
+    for (_, sp) in spans do
+      if isDeclShaped sp then
+        nAllSpans := nAllSpans + 1
+        if Bool.and (claimVocabulary.contains sp) (!usedVocab.contains sp) then usedVocab := usedVocab.push sp
+    for pr in claimRowProblems env id spans do
+      problems := problems.push pr
+      red := red + 1
+  for w in claimVocabulary do
+    unless usedVocab.contains w do
+      problems := problems.push s!"docs/CLAIMS.md: `claimVocabulary` word `{w}` is used by no claim row — stale vocabulary (remove it)"
+      red := red + 1
+  -- the plant: a row naming a deleted theorem in its PROSE cell must be red
+  let plantRow := "| C0 — plant: the E2 exclusion `t1_case_uncovered` (deleted at E3) named as current state | `engine_step_matchU` | semantic | — | — | — | — |"
+  let plantSpans := claimSpansAll plantRow
+  let plantProblems := plantSpans.foldl (fun acc (id, spans) => acc ++ claimRowProblems env id spans) #[]
+  if plantProblems.isEmpty then
+    problems := problems.push "docs/CLAIMS.md name check PLANT: a row naming the deleted `t1_case_uncovered` in its prose cell came out clean — the D-2 check is vacuous"
+    red := red + 1
   -- ---- print
   IO.println "# The rule-use and classification manifest"
   IO.println ""
@@ -629,7 +735,9 @@ def classLabel : Class → String
   IO.println "— listed in the row. (4) The module classification is complete and exact"
   IO.println "(every package module classified; every classified module present; classes in"
   IO.println "the vocabulary). (5) Every declaration the claim matrix `docs/CLAIMS.md` names"
-  IO.println "exists. GREEN DOES NOT ESTABLISH that the variant table is exhaustive over the"
+  IO.println "exists, and every declaration-shaped backticked span of every cell of a claim row"
+  IO.println "is a constant of the environment or a listed vocabulary word (planted)."
+  IO.println "GREEN DOES NOT ESTABLISH that the variant table is exhaustive over the"
   IO.println "engine's success shapes (it is a reviewed reading, not a theorem), that a rule is"
   IO.println "the strongest statement of its variant, or that a consumer's dependency on a rule"
   IO.println "is the load-bearing step of its headline proof rather than incidental. A"
@@ -656,7 +764,7 @@ def classLabel : Class → String
   for l in lines do IO.println l
   IO.println ""
   IO.println s!"MANIFEST: {fragInfo.ctors.length} constructors, {variants.length} variant rows ({nRule} RULE, {nRuleU} RULE-TOTAL-UNDEMONSTRATED, {nPartial} PARTIAL-ONLY, {nNoRule} NO-RULE, {nOut} OUT-OF-SCOPE), {red} red, {consumers.size} consumer modules"
-  IO.println s!"CLAIMS: {claims.size} claim rows, {nClaimNames} declaration names checked"
+  IO.println s!"CLAIMS: {claims.size} claim rows, {nClaimNames} declaration names checked in the theorem cell, {nAllSpans} declaration-shaped spans checked across every cell ({claimVocabulary.length} vocabulary words); plant (deleted name in a prose cell) red as expected"
   if !problems.isEmpty then
     IO.println ""
     IO.println "## PROBLEMS"
