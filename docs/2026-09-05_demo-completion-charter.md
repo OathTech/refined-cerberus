@@ -1,10 +1,13 @@
 # Demo completion charter — 2026-09-05
 
-Status: **DRAFT for adoption by the user's explicit goal command**.
-The two goals and continuation through E5 and beyond are already
-user-authorized. The completion criteria and execution plan below are
-[AGENT] proposals implementing that scope; this document does not start
-a goal, grant merge/push permission, or claim any milestone complete.
+Status: **ACTIVE — adopted by the user's explicit goal on 2026-09-05**.
+The user has authorized execution of this charter in full through a
+reviewed, fully validated, merge-ready candidate. The goal is active;
+adoption grants no merge/push permission and completes no milestone.
+The user also permits an early-exit request for false technical
+assumptions, an unresolved strategic question or unexpected circumstances;
+such an exit is not a claim of completion. See the adoption record in
+DECISIONS.md.
 
 ## Objective and scope
 

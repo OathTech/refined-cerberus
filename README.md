@@ -13,9 +13,9 @@ its [README](cerberus-heaplang/README.md) and
 The package's dated records (slice notes, independent audits, external
 reviews) are under `cerberus-heaplang/docs/`.
 
-The proposed near-term stop-state and execution plan are in the
+The adopted near-term stop-state and execution plan are in the
 [demo completion charter](docs/2026-09-05_demo-completion-charter.md)
-(draft for adoption by an explicit user goal).
+(active under the user's explicit goal).
 
 What is here besides the package: `docs/DECISIONS.md` (the append-only
 register of rulings, with [USER]/[AGENT] provenance), `docs/AUDIT-BRIEF.md`
