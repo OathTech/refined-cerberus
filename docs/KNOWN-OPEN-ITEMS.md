@@ -1,6 +1,6 @@
 # Known open items — the register auditors read FIRST
 
-State: candidate `dialect-e1` head (2026-09-05, after E1–E4 of the emitted-Core dialect arc with all four range audits' fixes — the t1 milestone; after the calls arc,
+State: main 8eeaf92 (E1–E4 merged, the t1 milestone) + branch `dialect-e5` PARKED at f63f22d (2026-09-05: E5 slice 1 landed and gated, slice 2 half-done, gated, UNAUDITED — see the DECISIONS park entry and `e5-notes.md` §S2.9 to resume; after the calls arc,
 the fuel-lane restatement F1, the external-audit response AR5, the H1
 hygiene/coverage slices, their range audit, and the ARCHITECTURE rewrite). Maintained by the orchestrator; every entry
 points at the record that owns it. PURPOSE: an auditor should not
@@ -66,6 +66,7 @@ or a ruled disposition. Provenance tags as in `docs/DECISIONS.md`.
 | C16 | ~~`Frag.pure_op` OUT-OF-SCOPE row text stale~~ CLOSED at the E4 audit fixes (88eef81): the row lists the E1/E3 leaves and E2's four refusal members; manifest regenerated (E4 range audit N-3). | — | Closed. |
 | C17 | Zero-consumer declarations after E3/E4 (16, listed in the E4 record §10): incl. pinned `prod_run_eqJ_lib`/`prod_run_safe_lib`, `Step.unseq_inv`, `Step.ccallFree_preserved`, `t1_blockSpecs`; plus the triplicated `depLe*` lemmas, `symC_eval`/`symK_eval` twins, three copies of the labels proof, inlined duplicate proofs in the overflow lemmas. | E3 audit H-1; E4 record §10 Plus the 42-site head-form proof scaffold (Round 30 / DriverCollapse 10 / Soundness 2) left for the hygiene slice (E4 audit H-1; factoring judged not proof-safe within the hour); the magic fuel literal `999999` at nine proof sites is GONE (88eef81). | Dedupe/delete in a hygiene slice. |
 | C18 | ~~cite audit owed~~ DONE at the E4 audit fixes (828c1d6): `cerberus-heaplang/scripts/cite_check.sh` (speedbump candidate, not in the gate) — BEFORE 273 cites / 128 EXACT / 90 stale declaration cites (67 by >5 lines); AFTER 283 / 221 EXACT with every non-EXACT line hand-checked (E4 record §13). | E4 audit D-2 | Rerun it as the LAST step of any docs commit that touches a cited `.lean` file; consider adding to the gate as a drift speedbump. |
+| C19 | E5 park debts (branch `dialect-e5`, f63f22d): slice-2 theorems measured trio-exact but UNPINNED (exhaustive-pins convention temporarily unmet); five stale NO-RULE manifest rows; MirrorCoverage witnesses for the slice-2 rounds; API.lean's stale `Frag.pot_le_two` cell; no census snapshot for slice 2; no range audit yet for E5. | DECISIONS E5 park entry; `e5-notes.md` §S2.7/§S2.9 | The resumer's list; audit 8eeaf92..HEAD at slice end. |
 
 ## D. Record errata already applied (append-only register — do not re-report)
 
