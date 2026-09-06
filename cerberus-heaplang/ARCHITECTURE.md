@@ -190,9 +190,9 @@ budget, `⌜1 + m ≤ k⌝` (`:167`). A call splits it, `1 + m + k' ≤ k`
 continuation. Both judgments are stated at the top invariant mask `⊤`
 (19 code sites in `Wps.lean`, 26 in `Wpt.lean`, docstring mentions
 excluded; DERIVED by grep). The raw-WP layer of
-`Rules.lean` is mask-generic — `AtomicStep` (`:208`), `wp_of_atomic`
-(`:224`), `wp_store` (`:1706`), `wp_load` (`:1737`), `spike_wp_wand`
-(`:1799`) — the two statement judgments are not. This is classical
+`Rules.lean` is mask-generic — `AtomicStep` (`:220`), `wp_of_atomic`
+(`:236`), `wp_store` (`:1719`), `wp_load` (`:1750`), `spike_wp_wand`
+(`:1812`) — the two statement judgments are not. This is classical
 sequential separation logic: no invariants, no mask-polymorphic
 composition. Masks are Iris's device for sharing; their generalisation
 belongs to the RefinedC arc, not to this demo ([USER 2026-09-04]: "The
@@ -211,13 +211,13 @@ engine's thread-level execution (§4, the ruled reading).
 ### 2.1 The rules
 
 The small axioms are proved once as atomic step specifications
-`AtomicStep` (`Rules.lean:208`) against `Step` and the engine's real
-memory operations. Objects: `store_atomic` (`:269`), `load_atomic`
-(`:487`), `create_atomic` (`:1113`), `kill_atomic` (`:1326`). Typed
-sub-range: `loadAt_atomic`/`storeAt_atomic` (`:679`/`:770`). Dynamic
-regions: `alloc_atomic`/`free_atomic` (`:1438`/`:1624`), and typed access
-`regionLoadAt_atomic`/`regionStoreAt_atomic` (`:889`/`:985`). They are
-lifted by `wp_of_atomic` (`:224`), `wps_of_atomic` (`Wps.lean:377`) and
+`AtomicStep` (`Rules.lean:220`) against `Step` and the engine's real
+memory operations. Objects: `store_atomic` (`:293`), `load_atomic`
+(`:500`), `create_atomic` (`:1126`), `kill_atomic` (`:1339`). Typed
+sub-range: `loadAt_atomic`/`storeAt_atomic` (`:692`/`:783`). Dynamic
+regions: `alloc_atomic`/`free_atomic` (`:1451`/`:1637`), and typed access
+`regionLoadAt_atomic`/`regionStoreAt_atomic` (`:902`/`:998`). They are
+lifted by `wp_of_atomic` (`:236`), `wps_of_atomic` (`Wps.lean:377`) and
 `wpt_of_atomic` (`Wpt.lean:679`); every memory rule of either judgment
 is a corollary (the list: API.lean, "Statement judgment"). The region
 access rules hold at any type at any in-bounds offset because the
@@ -767,10 +767,11 @@ them read.
   Each row distinguishes rules consumed at both strata, a proved rule
   with one stratum still undemonstrated, partial-only support, no rule,
   or an out-of-scope shape. The generated report's tail is the current
-  census. E5's six new rule rows are RULE-PARTIAL-UNDEMONSTRATED:
+  census. E5's seven new rule rows are RULE-PARTIAL-UNDEMONSTRATED:
   t5 and t4 consume the total faces; no partial corpus derivation consumes
-  their twins yet. The report checks both facts and requires a row
-  update when the missing consumer appears.
+  their twins yet. These include the exact whole-cell read-footprint
+  face used by t4's unsequenced addition. The report checks both facts
+  and requires a row update when the missing consumer appears.
   What green establishes is stated exactly by the generated, gate-diffed
   header (`docs/CAPABILITY_MANIFEST.md:8`–`:26`, "WHAT GREEN ESTABLISHES,
   EXACTLY"). Not established:

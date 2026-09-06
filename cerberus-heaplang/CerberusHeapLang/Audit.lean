@@ -1016,7 +1016,15 @@ def trioExports : List Name := [
   ``CerberusHeapLang.wpt_t4Cond,
   ``CerberusHeapLang.t4Bool_select,
   ``CerberusHeapLang.t4BoolBranch_eval,
-  ``CerberusHeapLang.wpt_t4Bool]
+  ``CerberusHeapLang.wpt_t4Bool,
+  -- t4 additions and exact load footprints: seven individually measured trio-exact.
+  ``CerberusHeapLang.wpt_t4Add,
+  ``CerberusHeapLang.wpt_t4AddSI,
+  ``CerberusHeapLang.wpt_t4AddI1,
+  ``CerberusHeapLang.wpt_emittedIntLoad_footprint,
+  ``CerberusHeapLang.do_race_loadFootprint,
+  ``CerberusHeapLang.wps_load_footprint,
+  ``CerberusHeapLang.wpt_load_footprint]
 
 def sortedNames (ns : Array Name) : Array String :=
   (ns.map (·.toString)).qsort (· < ·)

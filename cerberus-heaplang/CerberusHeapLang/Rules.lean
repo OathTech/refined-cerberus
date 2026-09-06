@@ -105,6 +105,18 @@ def loadedVal (tds : CerbTags.TagDefsMap) (pv : CerbMem.PointerValue) (ty : ctyp
     (bs : List CerbMem.AbsByte) : value :=
   (valueFromMemValue (decodeCell tds ⟨addrOf pv, ty, bs⟩)).2
 
+/-- The footprint returned by a successful whole-cell load: a read of
+    the lvalue type's extent at the pointer's concrete address. -/
+def loadFootprint (tds : CerbTags.TagDefsMap) (pv : CerbMem.PointerValue) (ty : ctype) :
+    CerbMem.Footprint := .FP .R (addrOf pv) (CerbMem.sizeofCtype tds ty)
+
+/-- Two successful reads never race, including reads of the same range.
+    This is the concrete memory model's read/read clause. -/
+theorem do_race_loadFootprint (tds : CerbTags.TagDefsMap)
+    (p1 p2 : CerbMem.PointerValue) (ty1 ty2 : ctype) :
+    do_race [DA_pos [] (loadFootprint tds p1 ty1)]
+      [DA_pos [] (loadFootprint tds p2 ty2)] = false := rfl
+
 variable {hlc : HasLC} {GF : BundledGFunctors}
 
 theorem stateInterp_iff [SpikeGS hlc GF] (σ : Mem) (ns : Nat) (κs : List Empty)
@@ -481,7 +493,8 @@ theorem excluded_store_atomic [SpikeGS hlc GF] {M : MachineCtx} {ctl : Ctl}
 /-- LOAD (whole cell, any fraction, UB-excluding) as an atomic step:
     ONE application of the real `CerbMem.loadM` (`loadM_success`);
     the delivered value is the annotated engine decode
-    `{DA_pos [] fp} (loadedVal …)`. `htrap` excludes the `_Bool`
+    `{DA_pos [] (loadFootprint …)} (loadedVal …)`, preserving the
+    exact read extent for unsequenced race checks. `htrap` excludes the `_Bool`
     trap-representation kill arm (CerbMem.lean:1598-1604) — the one
     loadM failure the points-to alone cannot rule out. -/
 theorem load_atomic [SpikeGS hlc GF] {M : MachineCtx} {ctl : Ctl}
@@ -491,8 +504,9 @@ theorem load_atomic [SpikeGS hlc GF] {M : MachineCtx} {ctl : Ctl}
     (htrap : cellLoadTrap M.tagDefs ⟨addrOf pv, ty, bs⟩ = false) :
     AtomicStep M ctl (loadExpr a loc ann ty pv mo) ρ 2
       (pointsToCell M.tagDefs (GF := GF) pv dq ty bs)
-      (fun w => iprop(∃ fp,
-        ⌜w = SpikeVal.annot [DA_pos [] fp] (loadedVal M.tagDefs pv ty bs)⌝ ∗
+      (fun w => iprop(
+        ⌜w = SpikeVal.annot [DA_pos [] (loadFootprint M.tagDefs pv ty)]
+          (loadedVal M.tagDefs pv ty bs)⌝ ∗
         pointsToCell M.tagDefs pv dq ty bs)) := by
   intro E₁ E₂ hE σ₁ ns obs nt
   iintro ⟨Hpt, Hσ⟩
@@ -557,7 +571,6 @@ theorem load_atomic [SpikeGS hlc GF] {M : MachineCtx} {ctl : Ctl}
     isplit
     · ipureintro
       exact ⟨rfl, rfl, Nat.le_refl 2⟩
-    iexists (CerbMem.Footprint.FP .R addr (CerbMem.sizeofCtype M.tagDefs ty))
     isplit
     · ipureintro; rfl
     iapply (pointsToCell_iff M.tagDefs _ _ _ _).mpr
@@ -1748,9 +1761,9 @@ theorem wp_load [SpikeGS hlc GF] {s : Stuckness} {E : CoPset} {M : MachineCtx} {
   iapply wp_of_atomic (load_atomic a loc ann ty pv mo dq bs ρ htrap) rfl hκ
   isplitl [Hpt]
   · iexact Hpt
-  · iintro %w ⟨%fp, %hw, Hpt'⟩
+  · iintro %w ⟨%hw, Hpt'⟩
     subst hw
-    iexists fp
+    iexists (loadFootprint M.tagDefs pv ty)
     isplit
     · ipureintro; rfl
     · iexact Hpt'

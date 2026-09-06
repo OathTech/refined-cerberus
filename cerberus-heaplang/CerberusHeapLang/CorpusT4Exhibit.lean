@@ -1,9 +1,10 @@
 /-
 The emitted t4_while execution proof, in progress. The controlling
-expression has a public total proof, including short-circuit evaluation
-and its nested truth conversions. Four continuations are checked against
-the engine collector, with fragment and potential obligations. The loop
-body, total loop derivation and production result remain to be completed.
+expression and both addition RHSs have public total proofs, including
+short-circuit evaluation, nested truth conversions and the two-load race
+check. Four continuations are checked against the engine collector, with
+fragment and potential obligations. The assignments, total loop derivation
+and production result remain to be completed.
 -/
 import CerberusHeapLang.CorpusT5Exhibit
 
@@ -537,5 +538,166 @@ theorem t4Main_labeledAt (sup : Nat) :
   rw [prodRSLib_labeled, collect_new_t4Main, fmapLookupBy_addBy_empty, if_pos (by decide +kernel)]
 
 theorem t4Main_pot : pot t4Main ≤ lemDefaultFuel := Nat.le_of_ble_eq_true rfl
+
+abbrev t4frAdd (n m : Nat) (v1 v2 : Int) (f : Fmap sym value) :=
+  envAdd (t5a n) (lint v1) (envAdd (t5a m) (lint v2) f)
+
+/-- The emitted addition tail, independently of how its operands produce
+    their tuple. Both operands and the sum must fit signed `int`. -/
+theorem wpt_t4Add [SpikeGS .hasLC GF]
+    {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
+    {Ψ : SpikeVal → EnvStack → IProp GF}
+    (hex : ∀ x, resolveExtern M.extern x = x)
+    (loc : CerbLocation.Loc) (n m a b : Nat) (v1 v2 : Int) (hnm : m ≠ n)
+    (h1 : -2147483648 ≤ v1) (h1' : v1 ≤ 2147483647)
+    (h2 : -2147483648 ≤ v2) (h2' : v2 ≤ 2147483647)
+    (hs : -2147483648 ≤ v1 + v2) (hs' : v1 + v2 ≤ 2147483647)
+    (hsel : select_case subst_sym_pexpr (Vtuple [lint v1, lint v2])
+      (cAddPats (t5a a) (t5a b) loc) = some (cAddBranch v1 v2))
+    (e1 e2 : CoreExpr) (f : Fmap sym value) (rest : List (Fmap sym value)) (k : Nat) :
+    wpt M p Ls Θ k (fun w ρ' => iprop(∃ (f' : Fmap sym value) (ds : List dyn_annotation),
+      ⌜w = .annot ds (Vtuple [lint v1, lint v2]) ∧ ρ' = f' :: rest ∧ SymFrame f'⌝ ∗
+      Ψ (.annot ds (lint (v1 + v2))) (t4frAdd n m v1 v2 f' :: rest)))
+      (Expr [] (Eunseq [e1, e2])) (f :: rest) ⊢
+    wpt M p Ls Θ (k + 3) Ψ (CorpusE0.t4Add loc n m a b e1 e2) (f :: rest) := by
+  iintro H
+  unfold CorpusE0.t4Add
+  rw [show t5TuplePat n m = tuplePat [] [([], some (t5a n), CorpusE0.lint),
+    ([], some (t5a m), CorpusE0.lint)] from rfl]
+  iapply wpt_wseq_tuple_annot _ _ _ _ _ _ _ k 3
+  iapply wpt_mono ?_ k _ (f :: rest) $$ H
+  intro w ρ'
+  iintro ⟨%f', %ds, %hw, HΨ⟩
+  obtain ⟨rfl, rfl, hf'⟩ := hw
+  iexists [lint v1, lint v2], ds
+  isplit
+  · ipureintro; rfl
+  rw [update_env_tuple2]
+  iapply wpt_annot (k := 2)
+  rw [show t5Pure (Pexpr [] () (PEcase (t5Tuple n m) (CorpusE0.t4AddPats loc a b))) =
+    Expr [] (Epure (cAddPe (t5a n) (t5a m) (t5a a) (t5a b) loc)) from rfl]
+  iapply wpt_c_add (t5a n) (t5a m) (t5a a) (t5a b) loc _ (Nat.le_refl 2)
+    (t1sym_eval hex rest (by rw [envAdd_lookup (hf'.add _ _), if_pos (symOrd_self _)]))
+    (t1sym_eval hex rest (by rw [envAdd_lookup (hf'.add _ _), if_neg (t4a_ne hnm),
+      envAdd_lookup hf', if_pos (symOrd_self _)])) hsel h1 h1' h2 h2' hs hs'
+  simp only [SpikeVal.merge]
+  iexact HΨ
+
+abbrev t4frAddSI (pi ps : CerbMem.PointerValue) (i s : Int) (f : Fmap sym value) :=
+  t4frAdd 556 557 s i
+    (envAdd (t5a 561) (Vobject (OVpointer ps)) (envAdd (t5a 562) (Vobject (OVpointer pi)) f))
+
+/-- The actual two-load RHS `s + i`. The driver reads `i` first and
+    retains both read footprints; no sequencing replacement is used. -/
+theorem wpt_t4AddSI [SpikeGS .hasLC GF]
+    {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
+    {Ψ : SpikeVal → EnvStack → IProp GF}
+    (hex : ∀ x, resolveExtern M.extern x = x)
+    (i s : Int) (hi : -2147483648 ≤ i) (hi' : i ≤ 2147483647)
+    (hs : -2147483648 ≤ s) (hs' : s ≤ 2147483647)
+    (hsum : -2147483648 ≤ s + i) (hsum' : s + i ≤ 2147483647)
+    (f : Fmap sym value) (rest : List (Fmap sym value))
+    (pi ps : CerbMem.PointerValue) (bi bs : List CerbMem.AbsByte)
+    (hf : t4SourceFrame pi ps f)
+    (hloadI : loadedVal M.tagDefs pi intTy bi = lint i)
+    (htrapI : cellLoadTrap M.tagDefs ⟨addrOf pi, intTy, bi⟩ = false)
+    (hloadS : loadedVal M.tagDefs ps intTy bs = lint s)
+    (htrapS : cellLoadTrap M.tagDefs ⟨addrOf ps, intTy, bs⟩ = false) :
+    iprop(pointsToCell M.tagDefs (GF := GF) pi (.own 1) intTy bi ∗
+      pointsToCell M.tagDefs ps (.own 1) intTy bs ∗
+      (pointsToCell M.tagDefs pi (.own 1) intTy bi -∗
+        pointsToCell M.tagDefs ps (.own 1) intTy bs -∗
+        Ψ (.annot [DA_pos [] (loadFootprint M.tagDefs pi intTy),
+          DA_pos [] (loadFootprint M.tagDefs ps intTy)] (lint (s + i)))
+          (t4frAddSI pi ps i s f :: rest))) ⊢
+      wpt M p Ls Θ 18 Ψ CorpusE0.t4AddSI (f :: rest) := by
+  have hframe := hf.1
+  iintro ⟨Hi, Hs, HΨ⟩
+  unfold CorpusE0.t4AddSI
+  iapply wpt_t4Add hex _ _ _ _ _ s i (by decide +kernel) hs hs' hi hi' hsum hsum' rfl _ _ f rest 15
+  rw [show ([t4Load t4sSym 561 68 69, t4Load t4iSym 562 72 73] : List CoreExpr) =
+    [t4Load t4sSym 561 68 69] ++ t4Load t4iSym 562 72 73 :: [] from rfl]
+  iapply wpt_unseq_focus [] [_] _ [] (f :: rest) rfl rfl 6 9
+  rw [show t4Load t4iSym 562 72 73 =
+    CorpusE0.emittedIntLoad (t4Reg 72 73) t4iSym (t5a 562) from rfl]
+  iapply wpt_emittedIntLoad_footprint hex (t4Reg 72 73) t4iSym (t5a 562) f rest hframe pi bi
+    (lint i) hf.2.1 hloadI htrapI
+  isplitl [Hi]
+  · iexact Hi
+  iintro Hi %wa %hwa
+  obtain ⟨a1, a2, b1, rfl⟩ : ∃ a1 a2 b1,
+      wa = .annot a1 a2 b1 [DA_pos [] (loadFootprint M.tagDefs pi intTy)] (lint i) := by
+    cases wa with
+    | pure _ _ _ => cases hwa
+    | annot _ _ _ _ _ => cases hwa; exact ⟨_, _, _, rfl⟩
+  rw [show ([t4Load t4sSym 561 68 69] ++ ofValA (.annot a1 a2 b1
+      [DA_pos [] (loadFootprint M.tagDefs pi intTy)] (lint i)) :: [] : List CoreExpr) =
+    [] ++ t4Load t4sSym 561 68 69 :: [ofValA (.annot a1 a2 b1
+      [DA_pos [] (loadFootprint M.tagDefs pi intTy)] (lint i))] from rfl]
+  iapply wpt_unseq_focus [] [] _ [_] _
+    (by rw [valsOnly_cons, isValE_ofValA, valsOnly_nil])
+    (by simp only [List.nil_append, ccallFreeList, ccallFree_ofValA]) 6 3
+  unfold t4Load
+  iapply wpt_emittedIntLoad_footprint hex (t4Reg 68 69) t4sSym (t5a 561)
+    (envAdd (t5a 562) (Vobject (OVpointer pi)) f) rest (hframe.add _ _) ps bs (lint s)
+    (t4SourceFrame.add 562 _ (by decide +kernel) hf).2.2 hloadS htrapS
+  isplitl [Hs]
+  · iexact Hs
+  iintro Hs %wb %hwb
+  obtain ⟨c1, c2, d1, rfl⟩ : ∃ c1 c2 d1,
+      wb = .annot c1 c2 d1 [DA_pos [] (loadFootprint M.tagDefs ps intTy)] (lint s) := by
+    cases wb with
+    | pure _ _ _ => cases hwb
+    | annot _ _ _ _ _ => cases hwb; exact ⟨_, _, _, rfl⟩
+  rw [show ([] ++ ofValA (.annot c1 c2 d1 [DA_pos [] (loadFootprint M.tagDefs ps intTy)] (lint s)) ::
+      [ofValA (.annot a1 a2 b1 [DA_pos [] (loadFootprint M.tagDefs pi intTy)] (lint i))] : List CoreExpr) =
+    [SpikeValA.annot c1 c2 d1 [DA_pos [] (loadFootprint M.tagDefs ps intTy)] (lint s),
+      .annot a1 a2 b1 [DA_pos [] (loadFootprint M.tagDefs pi intTy)] (lint i)].map ofValA from rfl]
+  iapply wpt_unseq_vals [] _ _ (Nat.le_refl 3)
+    (fps := [DA_pos [] (loadFootprint M.tagDefs pi intTy), DA_pos [] (loadFootprint M.tagDefs ps intTy)])
+    (cvals := [lint s, lint i])
+    (by simp only [collectUnseq, do_race_nil_right, do_race_loadFootprint,
+      combine_dyn_annotations, Bool.false_eq_true, ↓reduceIte, List.append_nil,
+      List.reverse_cons, List.reverse_nil, List.nil_append, List.singleton_append])
+  iexists (envAdd (t5a 561) (Vobject (OVpointer ps)) (envAdd (t5a 562) (Vobject (OVpointer pi)) f)), _
+  isplit
+  · ipureintro; exact ⟨rfl, rfl, by t4_frame⟩
+  iapply HΨ $$ Hi Hs
+
+abbrev t4frAddI1 (pi : CerbMem.PointerValue) (i : Int) (f : Fmap sym value) :=
+  t4frAdd 565 566 i 1 (envAdd (t5a 570) (Vobject (OVpointer pi)) f)
+
+/-- The emitted `i + 1`, with one read and a pure right operand. -/
+theorem wpt_t4AddI1 [SpikeGS .hasLC GF]
+    {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
+    {Ψ : SpikeVal → EnvStack → IProp GF}
+    (hex : ∀ x, resolveExtern M.extern x = x)
+    (i : Int) (hi : -2147483648 ≤ i) (hi' : i + 1 ≤ 2147483647)
+    (f : Fmap sym value) (rest : List (Fmap sym value)) (hf : SymFrame f)
+    (pi : CerbMem.PointerValue) (bi : List CerbMem.AbsByte)
+    (hl : fmapLookupBy symCmpK t4iSym f = some (Vobject (OVpointer pi)))
+    (hload : loadedVal M.tagDefs pi intTy bi = lint i)
+    (htrap : cellLoadTrap M.tagDefs ⟨addrOf pi, intTy, bi⟩ = false) :
+    iprop(pointsToCell M.tagDefs (GF := GF) pi (.own 1) intTy bi ∗
+      (pointsToCell M.tagDefs pi (.own 1) intTy bi -∗
+        Ψ (.annot [DA_pos [] (loadFootprint M.tagDefs pi intTy)] (lint (i + 1)))
+          (t4frAddI1 pi i f :: rest))) ⊢
+      wpt M p Ls Θ 14 Ψ CorpusE0.t4AddI1 (f :: rest) := by
+  iintro ⟨Hi, HΨ⟩
+  unfold CorpusE0.t4AddI1
+  iapply wpt_t4Add hex _ _ _ _ _ i 1 (by decide +kernel) hi (by omega)
+    (by decide +kernel) (by decide +kernel) (by omega) hi' rfl _ _ f rest 11
+  iapply wpt_unseq_pure_right _ _ _ (specInt 1) _ 6 (lint 1) rfl rfl (specInt_eval _ 1)
+  unfold t4Load
+  iapply wpt_emittedIntLoad_footprint hex (t4Reg 79 80) t4iSym (t5a 570) f rest hf pi bi
+    (lint i) hl hload htrap
+  isplitl [Hi]
+  · iexact Hi
+  iintro Hi
+  simp only [SpikeVal.mergeInto, SpikeVal.merge, SpikeVal.val, List.append_nil]
+  iexists (envAdd (t5a 570) (Vobject (OVpointer pi)) f), _
+  isplit
+  · ipureintro; exact ⟨rfl, rfl, hf.add _ _⟩
+  iapply HΨ $$ Hi
 
 end CerberusHeapLang

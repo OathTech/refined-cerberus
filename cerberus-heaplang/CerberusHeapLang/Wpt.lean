@@ -3849,7 +3849,7 @@ theorem wpt_load {Ψ : SpikeVal → EnvStack → IProp GF}
   iapply wpt_of_atomic (fun _ _ _ _ => load_atomic a loc ann ty pv mo dq bs ρ htrap) rfl rfl rfl hk
   isplitl [Hpt]
   · iexact Hpt
-  · iintro %w ⟨%fp, %hw, Hpt'⟩
+  · iintro %w ⟨%hw, Hpt'⟩
     subst hw
     iapply HΨ $$ Hpt'
 
@@ -5188,5 +5188,25 @@ theorem wpt_seq_sym_annot {Ψ : SpikeVal → EnvStack → IProp GF}
         · exact (symPat_ne_tuple hpatT2).elim
         · obtain ⟨_, _, _, h⟩ := hcall.callRedex?_some
           rw [hcr] at h; cases h
+
+/-- Whole-cell load retaining the exact read footprint. This strengthens
+    `wpt_load` for clients that must discharge unsequenced race checks. -/
+theorem wpt_load_footprint {Ψ : SpikeVal → EnvStack → IProp GF}
+    (a : List annot) (loc : CerbLocation.Loc) (ann : core_run_annotation) (ty : ctype)
+    (pv : CerbMem.PointerValue) (mo : memory_order) (dq : DFrac)
+    (bs : List CerbMem.AbsByte) (ρ : EnvStack) {k : Nat} (hk : 3 ≤ k)
+    (htrap : cellLoadTrap M.tagDefs ⟨addrOf pv, ty, bs⟩ = false) :
+    iprop(pointsToCell M.tagDefs (GF := GF) pv dq ty bs ∗
+      (pointsToCell M.tagDefs pv dq ty bs -∗
+        Ψ (.annot [DA_pos [] (loadFootprint M.tagDefs pv ty)]
+          (loadedVal M.tagDefs pv ty bs)) ρ)) ⊢
+      wpt M p Ls Θ k Ψ (loadExpr a loc ann ty pv mo) ρ := by
+  iintro ⟨Hpt, HΨ⟩
+  iapply wpt_of_atomic (fun _ _ _ _ => load_atomic a loc ann ty pv mo dq bs ρ htrap) rfl rfl rfl hk
+  isplitl [Hpt]
+  · iexact Hpt
+  iintro %w ⟨%hw, Hpt⟩
+  subst hw
+  iapply HΨ $$ Hpt
 
 end CerberusHeapLang

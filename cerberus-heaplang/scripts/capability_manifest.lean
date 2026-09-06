@@ -155,6 +155,11 @@ def variants : List Variant := [
     cls := .rule (N "wps_load") (N "wpt_load"),
     also := [N "wps_load_plain", N "wpt_load_plain", N "load_atomic"] },
   { ctor := `CerberusHeapLang.Frag.load,
+    shape := "`Load0` at a whole cell, retaining its exact READ footprint for unsequenced race checks",
+    cls := .rulePartialUndemonstrated (N "wps_load_footprint") (N "wpt_load_footprint")
+      "t4's two-load addition consumes the total face; the partial face joins the E5 API/coverage disposition (docs/2026-09-06_e5-t4-addition.md)",
+    also := [N "load_atomic", N "do_race_loadFootprint"] },
+  { ctor := `CerberusHeapLang.Frag.load,
     shape := "`Load0` at a typed SUB-RANGE of an object (`pointsToView`)",
     cls := .rule (N "wps_load_at") (N "wpt_load_at"),
     also := [N "wps_load_cell_at", N "wpt_load_cell_at", N "loadAt_atomic"] },
