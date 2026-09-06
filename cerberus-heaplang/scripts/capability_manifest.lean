@@ -293,7 +293,8 @@ def variants : List Variant := [
     cls := .rule (N "wps_seq_sym") (N "wpt_seq_sym") },
   { ctor := `CerberusHeapLang.Frag.sseq_sym,
     shape := "`lets x = e1 in e2` whose head delivers an ANNOTATED value `{A}v` (the engine's LETS-ANNOT at the symbol binder: `x ↦ v`, `{A}` re-wrapped around `e2`)",
-    cls := .noRule s!"admitted by the fragment and MIRRORED since E1 (`Step.sseq_sym_annot`, classified by `complete_beta_sym`; the pre-E1 `BareHead` exclusion and its OUT-OF-SCOPE row are retired) but `wps_seq_sym`/`wpt_seq_sym` are stated at a BARE head value (`⌜w = SpikeVal.pure v⌝`); binder rules over annotated heads are E2's (patterns bind annotated heads); {recE1}" },
+    cls := .rulePartialUndemonstrated (N "wps_seq_sym_annot") (N "wpt_seq_sym_annot")
+      "t4's short-circuit condition consumes the total face; the partial face joins the E5 API/coverage disposition (docs/2026-09-06_e5-t4-condition.md)" },
   -- E2: the tuple binders and the weak symbol binder
   { ctor := `CerberusHeapLang.Frag.sseq_tuple,
     shape := "`let strong (a, b, …) = e1 in e2` at any fragment head delivering a BARE tuple value (LETS-PURE at the flat tuple binder; `update_env`'s `Ctuple` arm zips leaves against components)",

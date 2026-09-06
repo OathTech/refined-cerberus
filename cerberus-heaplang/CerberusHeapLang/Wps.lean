@@ -5389,4 +5389,164 @@ theorem wps_neg_bound {Ψ : SpikeVal → EnvStack → IProp GF}
   simp only [SpikeVal.merge, SpikeVal.val]
   iapply HΨ $$ %(fresh_given_int k) %⟨k, rfl, hk⟩ Hpt'
 
+/-- Strong symbol binding when the head delivers an annotated value.
+    Bind the underlying value and retain its dynamic annotations around
+    the continuation, exactly as the engine's LETS-ANNOT step does. -/
+theorem wps_seq_sym_annot {Ψ : SpikeVal → EnvStack → IProp GF}
+    (a pa : List annot) (x : sym) (bty : core_base_type)
+    (e1 e2 : CoreExpr)
+    (ev0 : Fmap sym value) (evs : List (Fmap sym value)) :
+    wps M p Ls Θ (fun w ρ' => iprop(∃ (v : value) (ds : List dyn_annotation),
+        ⌜w = SpikeVal.annot ds v⌝ ∗
+        wps M p Ls Θ Ψ (Expr [] (Eannot ds e2)) (update_env (symPat pa x bty) v ρ')))
+      e1 (ev0 :: evs) ⊢
+      wps M p Ls Θ Ψ (Expr a (Esseq (symPat pa x bty) e1 e2))
+        (ev0 :: evs) := by
+  iloeb as IH generalizing %e1 %ev0 %evs
+  cases htv : toVal e1 with
+  | some w =>
+    obtain ⟨wa, rfl, rfl⟩ := ofValA_of_toVal htv
+    rw [wps_unfold.to_eq,
+      (wps_unfold (e := Expr a (Esseq (symPat pa x bty)
+        (ofValA wa) e2))).to_eq]
+    simp only [wps.pre, toVal_ofValA, toVal_sseq_node, jumpRedex?_sseq,
+      jumpRedex?_ofValA, callRedex?_sseq, callRedex?_ofValA, Option.map_none]
+    iintro H %κ %ℓ %lc %sp %σ₁ %ns %obs %obs' %nt %hsb Hσ
+    imod H with ⟨%v, %ds, %hval, Hinner⟩
+    obtain ⟨a1, a2, b1, rfl⟩ : ∃ a1 a2 b1, wa = .annot a1 a2 b1 ds v := by
+      cases wa with
+      | pure a1 b1 v' => cases hval
+      | annot a1 a2 b1 ds' v' => cases hval; exact ⟨a1, a2, b1, rfl⟩
+    iapply fupd_mask_intro Std.LawfulSet.empty_subset
+    iintro Hclose
+    isplitr
+    · ipureintro
+      exact ⟨[], ⟨_, _, _, _⟩, _, [], ⟨Step.sseq_sym_annot, rfl, rfl⟩⟩
+    inext
+    iintro %r %σ₂ %eₜ %Hstep Hcred
+    obtain ⟨hs, hlbl, rfl⟩ := Hstep
+    rcases hs.sseq_inv with ⟨e1', ρ'', ctl'', σ'', hnj, hnc', hnv', hs', hout⟩ |
+        ⟨_, _, _, _, v', _, _, hpat, he1, _, hout⟩ |
+        ⟨_, _, _, _, _, _, v', _, _, hpat, he1, _, hout⟩ |
+        ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩ |
+        ⟨_, _, _, _, _, _, _, _, _, hpat, _, _, _⟩ |
+        ⟨_, _, _, _, _, _, _, _, _, _, _, hpat, _, _, _⟩ |
+        ⟨pa', x', bty', a1', b1', v', _, _, hpat, he1, _, hout⟩ |
+        ⟨pa', x', bty', a1', a2', b1', ds', v', _, _, hpat, he1, _, hout⟩ |
+        ⟨_, _, _, _, _, _, _, hpatT1, _, _, _⟩ |
+        ⟨_, _, _, _, _, _, _, _, _, hpatT2, _, _, _⟩ |
+        hcall
+    · rw [toVal_ofValA] at hnv'; cases hnv'
+    · exact (symPat_ne_base hpat.symm).elim
+    · exact (symPat_ne_base hpat.symm).elim
+    · rw [jumpRedex?_ofValA] at hj; cases hj
+    · exact (symPat_ne_spec hpat.symm).elim
+    · exact (symPat_ne_spec hpat.symm).elim
+    · exact absurd (ofValA_inj he1) (by simp)
+    · obtain ⟨rfl, rfl, rfl⟩ := symPat_inj hpat
+      obtain ⟨rfl, rfl, rfl, rfl, rfl⟩ : a1 = a1' ∧ a2 = a2' ∧ b1 = b1' ∧ ds = ds' ∧ v = v' := by
+        simpa using ofValA_inj he1
+      obtain ⟨re, rρ, rctl, rM⟩ := r
+      simp only at hlbl
+      obtain rfl : M = rM := hlbl.symm
+      simp only [Prod.mk.injEq] at hout
+      obtain ⟨hre, hrρ, hrctl, hσ⟩ := hout
+      subst hrctl
+      subst hrρ
+      obtain rfl : Expr [] (Eannot ds e2) = re := hre.symm
+      obtain rfl : σ₁ = σ₂ := hσ.symm
+      imod Hclose with -
+      imodintro
+      isplitl [Hσ]
+      · iexact Hσ
+      · iexact Hinner
+    · exact (symPat_ne_tuple hpatT1).elim
+    · exact (symPat_ne_tuple hpatT2).elim
+    · obtain ⟨_, _, _, h⟩ := hcall.callRedex?_some
+      rw [callRedex?_ofValA] at h
+      cases h
+  | none =>
+    cases hjr : jumpRedex? e1 with
+    | some lp =>
+      rw [wps_unfold.to_eq,
+        (wps_unfold (e := Expr a (Esseq (symPat pa x bty) e1 e2))).to_eq]
+      simp only [wps.pre, htv, toVal_sseq_node, jumpRedex?_sseq, hjr]
+      iintro H
+      iexact H
+    | none =>
+      cases hcr : callRedex? e1 with
+      | some q =>
+        obtain ⟨ctx, f, pes⟩ := q
+        rw [wps_unfold.to_eq,
+          (wps_unfold (e := Expr a (Esseq (symPat pa x bty) e1 e2))).to_eq]
+        simp only [wps.pre, htv, toVal_sseq_node, jumpRedex?_sseq, hjr, callRedex?_sseq, hcr,
+          Option.map_some, apply_ctx_sseq]
+        iintro H
+        imod H with ⟨%params, %body, %vs, %h1, %h2, %h3, Hpre, Hcont⟩
+        imodintro
+        iexists params, body, vs
+        isplit
+        · ipureintro; exact h1
+        isplit
+        · ipureintro; exact h2
+        isplit
+        · ipureintro; exact h3
+        isplitl [Hpre]
+        · iexact Hpre
+        inext
+        iintro %ret %a1 Hpost
+        ihave H' := Hcont $$ %ret %a1 Hpost
+        iapply IH $$ %(apply_ctx ctx (ofValA (.pure a1 [] ret))) %ev0 %evs H'
+      | none =>
+      rw [wps_unfold.to_eq,
+        (wps_unfold (e := Expr a (Esseq (symPat pa x bty) e1 e2))).to_eq]
+      simp only [wps.pre, htv, toVal_sseq_node, jumpRedex?_sseq, hjr, callRedex?_sseq, hcr, Option.map_none]
+      iintro H %κ %ℓ %lc %sp %σ₁ %ns %obs %obs' %nt %hsb Hσ
+      imod H $$ %κ %ℓ %lc %sp %σ₁ %ns %obs %obs' %nt %hsb Hσ with ⟨%hred, H⟩
+      imodintro
+      isplit
+      · ipureintro
+        obtain ⟨obs0, r', σ', eₜ', hps⟩ := hred
+        obtain ⟨hs', hlbl', hnil'⟩ := hps
+        exact ⟨obs0, ⟨Expr a (Esseq (symPat pa x bty)
+            r'.e e2), r'.ρ, r'.ctl, M⟩, σ', [],
+          ⟨Step.sseq_ctx hjr hcr htv hs', rfl, rfl⟩⟩
+      inext
+      iintro %r %σ₂ %eₜ %Hstep Hcred
+      obtain ⟨hs, hlbl, rfl⟩ := Hstep
+      rcases hs.sseq_inv with ⟨e1', ρ'', ctl'', σ'', hnj, hnc', hnv', hs', hout⟩ |
+          ⟨_, _, _, _, v, _, _, _, he1, _, _⟩ |
+          ⟨_, _, _, _, _, ds, v, _, _, _, he1, _, _⟩ |
+          ⟨l, pes, params, cont, vs, _, _, hj, _, _, _, _⟩ |
+          ⟨_, _, _, _, _, _, _, _, _, _, he1, _, _⟩ |
+          ⟨_, _, _, _, _, _, _, _, _, _, _, _, he1, _, _⟩ |
+          ⟨_, _, _, _, _, _, _, _, _, he1, _, _⟩ |
+          ⟨_, _, _, _, _, _, _, _, _, _, _, he1, _, _⟩ |
+          ⟨_, _, _, _, _, _, _, hpatT1, _, _, _⟩ |
+          ⟨_, _, _, _, _, _, _, _, _, hpatT2, _, _, _⟩ |
+          hcall
+      · obtain ⟨ev0', rfl⟩ := Step.env_cons hs' (Step.ctl_eq hs' hnc' hnv').1
+        obtain ⟨re, rρ, rctl, rM⟩ := r
+        simp only at hlbl
+        obtain rfl : M = rM := hlbl.symm
+        simp only [Prod.mk.injEq] at hout
+        obtain ⟨hre, hrρ, hrctl, hσ⟩ := hout
+        subst hrctl
+        subst hre hrρ hσ
+        imod H $$ %(⟨e1', ev0' :: evs, rctl, M⟩ : CoreRt) %σ₂
+          %([] : List CoreRt) %⟨hs', rfl, rfl⟩ Hcred with ⟨$, H⟩
+        imodintro
+        iapply IH $$ %e1' %ev0' %evs H
+      · rw [he1, toVal_ofValA] at htv; cases htv
+      · rw [he1, toVal_ofValA] at htv; cases htv
+      · rw [hjr] at hj; cases hj
+      · rw [he1, toVal_ofValA] at htv; cases htv
+      · rw [he1, toVal_ofValA] at htv; cases htv
+      · rw [he1, toVal_ofValA] at htv; cases htv
+      · rw [he1, toVal_ofValA] at htv; cases htv
+      · exact (symPat_ne_tuple hpatT1).elim
+      · exact (symPat_ne_tuple hpatT2).elim
+      · obtain ⟨_, _, _, h⟩ := hcall.callRedex?_some
+        rw [hcr] at h; cases h
+
 end CerberusHeapLang

@@ -78,4 +78,4 @@ CerberusHeapLang.ProdLoopExhibit	production-wrapper	-	the production loop theore
 CerberusHeapLang.DivergeExhibit	negative-test	-	the total lane's unprovability result
 CerberusHeapLang.OverflowExhibit	negative-test	-	the UB036 kill of x + 1 at INT_MAX over the genuine driver's round (E3)
 CerberusHeapLang.Examples.EmittedInt	example-support	-	Shared public-rule derivations for emitted integer expressions; location and symbol parameters preserve each client AST
-CerberusHeapLang.CorpusT4Exhibit	positive-client	-	t4_while execution proof in progress: shared public load rule and four engine-registered continuations; no production result yet
+CerberusHeapLang.CorpusT4Exhibit	positive-client	-	t4_while execution proof in progress: short-circuit condition through public total rules and four engine-registered continuations; no loop or production result yet

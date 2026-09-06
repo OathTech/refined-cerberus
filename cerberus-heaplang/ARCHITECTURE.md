@@ -767,8 +767,8 @@ them read.
   Each row distinguishes rules consumed at both strata, a proved rule
   with one stratum still undemonstrated, partial-only support, no rule,
   or an out-of-scope shape. The generated report's tail is the current
-  census. E5's five new rule rows are RULE-PARTIAL-UNDEMONSTRATED:
-  t5 consumes the total faces; no partial corpus derivation consumes
+  census. E5's six new rule rows are RULE-PARTIAL-UNDEMONSTRATED:
+  t5 and t4 consume the total faces; no partial corpus derivation consumes
   their twins yet. The report checks both facts and requires a row
   update when the missing consumer appears.
   What green establishes is stated exactly by the generated, gate-diffed
@@ -839,8 +839,8 @@ Each item points at its register entry; none is hidden in a proof.
   concrete pointers of differing provenance (the engine forks); the `Impl`
   procedure call `Eproc _ (Impl _) _`. (The pre-E1
   fifth — an annotated value at the plain-symbol binder, kept out by
-  `BareHead` — is mirrored since E1 and a NO-RULE row.)
-- **The twenty-five NO-RULE variants** — admitted by the fragment and the
+  `BareHead` — is mirrored since E1 and ruled since t4's E5 condition.)
+- **The twenty-four NO-RULE variants** — admitted by the fragment and the
   engine, covered by no rule, so a program exercising them is outside
   the logic (manifest NO-RULE rows; KOI B14, A3). By constructor:
 
@@ -852,7 +852,7 @@ Each item points at its register entry; none is hidden in a proof.
   | `kill` (4) | the static kill of a live region; `free(NULL)`; `free` of a created object whose base sits in `dynamicAddrs` (the upstream `dynamic_addrs` collision, KOI A3); a kill of either kind through a union-member pointer |
   | `alloc` (1) | the zero-cost `alloc` (`n ≤ 0 ∧ al ≤ 1`) |
   | `memop_vals` (1) | `PtrEq` at an `SD_Id`-named function pointer against a concrete pointer (the one arm reading `funptrmap`) |
-  | `sseq_sym`, `sseq_tuple`, `wseq_sym` (3) | the binder at an ANNOTATED head value `{A}v` (the engine's LETS-/LETW-ANNOT; mirrored since E1/E2, `Step.*_annot`; no binder rule — every emitted binder's head is a `bound`, which drops the dynamic annotations; the fourth such row, `wseq_tuple` at an annotated tuple, is RULE since E4: `wps_wseq_tuple_annot`, the shape every corpus `let weak (a, b) = unseq(…)` reaches) |
+  | `sseq_tuple`, `wseq_sym` (2) | the binder at an ANNOTATED head value `{A}v` (LETS-/LETW-ANNOT; mirrored since E1/E2, no statement rule). `sseq_sym` is ruled at both strata since t4's short-circuit condition, with a total client; `wseq_tuple` at an annotated tuple is RULE since E4, the shape reached by emitted `let weak (a, b) = unseq(…)`. |
   | `pure_op` (5, E3) | the emitted arithmetic and std.core leaves the mirror computes but no rule states: `catch_exceptional_condition_sub/_mul` (the `+` rule's shape, pending an exhibit), `_div/_rem_t/_shl/_shr` (the memory model's own divisor-zero/shift arms), `wrapI_<op>` (unsigned; the corpus is `int`), standalone `__conv_int__` (its non-representable arm is the impl-defined wrap `mk_conv_int` computes), standalone `conv_int`/`is_representable_integer` and their bodies' leaves (`Ivmin`/`Ivmax`, ctype `=`, `/\\`, `\\/`, `is_unsigned` at a leaf — reached inside the RULED `conv_loaded_int` unfolding). The `Impl`-name `PEcall` is the OUT-OF-SCOPE row above, not counted here |
   | `unseq` (2, E4) | the race: `unseq(v_1, …, v_n)` whose components' dynamic annotations RACE (`do_race`) — the engine's UB035 kill, mirrored as the classification `complete_unseq_vals` (`.killed`); no rule delivers a value there and `wpt_unseq_vals` requires `collectUnseq … = some _`; and a jump or a call reaching the root THROUGH the `Cunseq` frame (`run l(…)`/`pcall f(…)` as the focused component — mirrored, `Step.unseq_inv`'s run/call disjuncts, `wpt_jump_frame_unseq` carries the jump frame; no exhibit reaches one, so no rule face is demonstrated; E6/E7's consumer) |
 

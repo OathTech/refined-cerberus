@@ -1000,7 +1000,23 @@ def trioExports : List Name := [
   ``CerberusHeapLang.t4Q_frag,
   ``CerberusHeapLang.t4Q_pot,
   ``CerberusHeapLang.collect_new_t4Main,
-  ``CerberusHeapLang.t4Main_labeledAt]
+  ``CerberusHeapLang.t4Main_labeledAt,
+  -- t4 controlling expression and LETS-ANNOT rules: all fifteen measured trio-exact.
+  ``CerberusHeapLang.wps_seq_sym_annot,
+  ``CerberusHeapLang.wpt_seq_sym_annot,
+  ``CerberusHeapLang.t4a_ne,
+  ``CerberusHeapLang.t4Lt_eval,
+  ``CerberusHeapLang.wpt_t4Lt,
+  ``CerberusHeapLang.t4TruthBranch_eval,
+  ``CerberusHeapLang.wpt_t4Truth,
+  ``CerberusHeapLang.wpt_t4Left,
+  ``CerberusHeapLang.wpt_t4Right,
+  ``CerberusHeapLang.t4SourceFrame.add,
+  ``CerberusHeapLang.wpt_t4And,
+  ``CerberusHeapLang.wpt_t4Cond,
+  ``CerberusHeapLang.t4Bool_select,
+  ``CerberusHeapLang.t4BoolBranch_eval,
+  ``CerberusHeapLang.wpt_t4Bool]
 
 def sortedNames (ns : Array Name) : Array String :=
   (ns.map (·.toString)).qsort (· < ·)
