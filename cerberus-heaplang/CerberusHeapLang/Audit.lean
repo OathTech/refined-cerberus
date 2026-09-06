@@ -1039,7 +1039,21 @@ def trioExports : List Name := [
   ``CerberusHeapLang.wpt_unseq_pure_left,
   ``CerberusHeapLang.emittedInt_encodes,
   ``CerberusHeapLang.emittedInt_storable,
-  ``CerberusHeapLang.wpt_emittedIntStore]
+  ``CerberusHeapLang.wpt_emittedIntStore,
+  -- t4 loop/production: eleven individually measured trio-exact.
+  -- Sub-trio (swept): t4Index_cases, t4Sum_le, t4Guard, t4Budget_succ
+  -- use propext/Quot.sound; t4Sum_succ and t4Kill_eq are axiom-free.
+  ``CerberusHeapLang.t4Index_loaded,
+  ``CerberusHeapLang.t4Sum_loaded,
+  ``CerberusHeapLang.t4RetParams_bindArgs,
+  ``CerberusHeapLang.wpt_t4Return,
+  ``CerberusHeapLang.wpt_t4LoopTest,
+  ``CerberusHeapLang.wpt_t4LoopStep,
+  ``CerberusHeapLang.wpt_t4WhileCont,
+  ``CerberusHeapLang.t4_blockSpecsT,
+  ``CerberusHeapLang.wpt_t4WhileEntry,
+  ``CerberusHeapLang.t4_wpt,
+  ``CerberusHeapLang.t4_certified_production]
 
 def sortedNames (ns : Array Name) : Array String :=
   (ns.map (·.toString)).qsort (· < ·)

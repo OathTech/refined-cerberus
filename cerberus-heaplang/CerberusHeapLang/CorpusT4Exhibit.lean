@@ -1,12 +1,11 @@
 /-
-The emitted t4_while execution proof, in progress. The controlling
-expression and both addition RHSs have public total proofs, including
-short-circuit evaluation, nested truth conversions and the two-load race
-check. Four continuations are checked against the engine collector, with
-fragment and potential obligations. Both assignments and the complete
-body through its back edge have public total proofs, conditional on the
-next label precondition. The decreasing loop invariant, exit/return proof
-and production result remain to be completed.
+The emitted t4_while public total proof and shipped-driver result. The
+invariant owns i = n and s = sum(0..n-1), with n <= 5 and a decreasing
+label budget. The proof retains short-circuit evaluation, both assignments,
+all four registered continuations and the emitted cleanup. The whole main
+has budget 915 and returns Specified(10). The production theorem requires
+initial symbol supply at least 600 and uses the checked three-function
+std.core fragment; the full emitted-file connection remains KOI A7.
 -/
 import CerberusHeapLang.CorpusT5Exhibit
 
@@ -984,4 +983,478 @@ theorem wpt_t4Body [SpikeGS .hasLC GF]
     (t4PtrArgs_eval hex pi ps _ rest hfinal) (Nat.le_refl (1 + m))
   iapply Hnext $$ %_ %hfinal Hi Hs
 
+/-- The loop's mathematical sum, with the same recurrence as its body. -/
+def t4Sum : Nat → Nat
+  | 0 => 0
+  | n + 1 => t4Sum n + n
+
+theorem t4Sum_succ (n : Nat) : (t4Sum (n + 1) : Int) = (t4Sum n : Int) + (n : Int) :=
+  Int.natCast_add _ _
+
+theorem t4Index_cases {n : Nat} (hn : n ≤ 5) :
+    n = 0 ∨ n = 1 ∨ n = 2 ∨ n = 3 ∨ n = 4 ∨ n = 5 := by omega
+
+theorem t4Sum_le {n : Nat} (hn : n ≤ 5) : t4Sum n ≤ 10 := by
+  rcases t4Index_cases hn with rfl | rfl | rfl | rfl | rfl | rfl <;> decide +kernel
+
+/-- The actual C conjunction agrees with n<5 on the invariant. -/
+theorem t4Guard {n : Nat} (hn : n ≤ 5) :
+    (decide ((n : Int) < 5) && decide ((t4Sum n : Int) < 7)) = decide (n < 5) := by
+  rcases t4Index_cases hn with rfl | rfl | rfl | rfl | rfl | rfl <;> rfl
+
+/-- Byte readouts for the six invariant states. Only finite scalar byte
+    encodings are reduced here, never the program's execution. -/
+theorem t4Index_loaded (tds : CerbTags.TagDefsMap) (pv : CerbMem.PointerValue)
+    {n : Nat} (hn : n ≤ 5) :
+    loadedVal tds pv intTy (emittedIntBytes tds n) = lint n := by
+  rcases t4Index_cases hn with rfl | rfl | rfl | rfl | rfl | rfl <;> rfl
+
+theorem t4Sum_loaded (tds : CerbTags.TagDefsMap) (pv : CerbMem.PointerValue)
+    {n : Nat} (hn : n ≤ 5) :
+    loadedVal tds pv intTy (emittedIntBytes tds (t4Sum n)) = lint (t4Sum n) := by
+  rcases t4Index_cases hn with rfl | rfl | rfl | rfl | rfl | rfl <;> rfl
+
+/-- 159 per back edge; 98 for the final condition, saves, cleanup and return. -/
+def t4Budget (n : Nat) : Nat := 159 * (5 - n) + 98
+
+theorem t4Budget_succ {n : Nat} (hn : n < 5) :
+    t4Budget n = 159 + t4Budget (n + 1) := by unfold t4Budget; omega
+
+/-- The loop arguments carry the owned cells and ordinary frame validity.
+    The registered continuation rebinds both source pointers on entry. -/
+def t4Cells (GF : BundledGFunctors) [SpikeGS .hasLC GF]
+    (tds : CerbTags.TagDefsMap) (n : Nat) (vs : List value) (ρ : EnvStack) : IProp GF :=
+  iprop(∃ (pi ps : CerbMem.PointerValue) (f : Fmap sym value) (rest : List (Fmap sym value)),
+    ⌜vs = [Vobject (OVpointer pi), Vobject (OVpointer ps)] ∧ ρ = f :: rest ∧ SymFrame f ∧ n ≤ 5⌝ ∗
+    pointsToCell tds pi (.own 1) intTy (emittedIntBytes tds n) ∗
+    pointsToCell tds ps (.own 1) intTy (emittedIntBytes tds (t4Sum n)))
+
+def t4LsT (GF : BundledGFunctors) [SpikeGS .hasLC GF]
+    (tds : CerbTags.TagDefsMap) : LabelSpecT GF := fun l m vs ρ =>
+  iprop(⌜l = t4RetSym ∧ m = 2 ∧ vs = [lint 10] ∧ ∃ f rest, ρ = f :: rest ∧ SymFrame f⌝ ∨
+    ∃ n, ⌜l = t4WhileSym ∧ m = t4Budget n⌝ ∗ t4Cells GF tds n vs ρ)
+
+def ψT4 : value → Mem → Prop := fun v _ => v = lint 10
+
+theorem t4RetParams_bindArgs (v : value) (f : Fmap sym value) (rest : List (Fmap sym value)) :
+    bindArgs t4RetParams [v] (f :: rest) = envAdd (t5a 574) v f :: rest := by
+  show update_env (mk_sym_pat (t5a 574) CorpusE0.lint) v (f :: rest) = _
+  rw [update_env_cons, update_env_aux_sym]
+
+theorem t4Kill_eq (x : sym) : CorpusE0.t4Kill x =
+    killOpRedex [] (t4Reg 0 99) empty_annotation (Static0 intTy) (psym x) := rfl
+
+/-- Read the final sum, dispose of both cells and jump to the real return
+    continuation. The emitted dead cleanup remains after that jump. -/
+theorem wpt_t4Return [SpikeGS .hasLC GF]
+    {M : MachineCtx} {p : Option sym} {Ψ : SpikeVal → EnvStack → IProp GF}
+    (hstd : StdE3 M.file) (hex : ∀ x, resolveExtern M.extern x = x)
+    (hQ : M.labelsAt p = t4Q)
+    (f : Fmap sym value) (rest : List (Fmap sym value))
+    (pi ps : CerbMem.PointerValue) (hf : t4SourceFrame pi ps f) :
+    iprop(pointsToCell M.tagDefs (GF := GF) pi (.own 1) intTy (emittedIntBytes M.tagDefs 5) ∗
+      pointsToCell M.tagDefs ps (.own 1) intTy (emittedIntBytes M.tagDefs 10)) ⊢
+      wpt M p (t4LsT GF M.tagDefs) emptyProcSpecT 16 Ψ t4Return (f :: rest) := by
+  have hframe := hf.1
+  have hi := hf.2.1
+  have hs := hf.2.2
+  iintro ⟨Hi, Hs⟩
+  simp only [t4Return, letS, seqE, wc, CorpusE0.bnd, t4Kill_eq]
+  rw [show (Pattern [] (CaseBase (some (t5a 573), CorpusE0.lint)) : pattern) =
+    symPat [] (t5a 573) CorpusE0.lint from rfl]
+  iapply wpt_seq_sym _ _ _ _ _ _ _ _ 7 9
+  rw [show (7 : Nat) = 6 + 1 from rfl]
+  iapply wpt_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
+  iapply wpt_t4Load hex t4sSym 572 95 96 f rest hframe ps (emittedIntBytes M.tagDefs 10) (lint 10) hs rfl rfl
+  isplitl [Hs]
+  · iexact Hs
+  iintro %fp Hs
+  simp only [SpikeVal.val]
+  iexists (lint 10)
+  isplit
+  · ipureintro; rfl
+  rw [update_env_sym]
+  iapply wpt_seq _ _ _ _ _ _ _ 3 6
+  rw [show (3 : Nat) = 2 + 1 from rfl]
+  iapply wpt_kill_eval _ _ _ _ _ _ rfl (pv := pi) (t1sym_eval hex rest (by t4_lookup))
+  iapply wpt_kill_emp _ _ _ (Static0 intTy) pi intTy (emittedIntBytes M.tagDefs 5) _ (Nat.le_refl 2) rfl
+  isplitl [Hi]
+  · iexact Hi
+  simp only [SpikeVal.mergeInto]
+  iapply wpt_seq _ _ _ _ _ _ _ 3 3
+  rw [show (3 : Nat) = 2 + 1 from rfl]
+  iapply wpt_kill_eval _ _ _ _ _ _ rfl (pv := ps) (t1sym_eval hex rest (by t4_lookup))
+  iapply wpt_kill_emp _ _ _ (Static0 intTy) ps intTy (emittedIntBytes M.tagDefs 10) _ (Nat.le_refl 2) rfl
+  isplitl [Hs]
+  · iexact Hs
+  simp only [SpikeVal.mergeInto]
+  iapply wpt_seq _ _ _ _ _ _ _ 3 0
+  iapply wpt_run [] empty_annotation t4RetSym [CorpusE0.convLoadedInt (t5a 573)] _ _ 2
+    (by rw [hQ]; exact t4Q_ret)
+    (by rw [evalPexprs_cons, t1ConvLoadedInt_eval hstd (t1sym_eval hex rest (by t4_lookup))
+      (by decide) (by decide), evalPexprs_nil]; rfl) (Nat.le_refl 3)
+  dsimp only [t4LsT]
+  ileft
+  ipureintro
+  exact ⟨rfl, rfl, rfl, _, _, rfl, by t4_frame⟩
+
+/-- The loop test selects the actual body or final unit on the invariant,
+    with 77 units before the selected branch. -/
+theorem wpt_t4LoopTest [SpikeGS .hasLC GF]
+    {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
+    {Ψ : SpikeVal → EnvStack → IProp GF}
+    (hstd : StdE3 M.file) (hex : ∀ x, resolveExtern M.extern x = x)
+    (n : Nat) (hn : n ≤ 5) (k : Nat)
+    (f : Fmap sym value) (rest : List (Fmap sym value))
+    (pi ps : CerbMem.PointerValue) (hf : t4SourceFrame pi ps f) :
+    iprop(pointsToCell M.tagDefs (GF := GF) pi (.own 1) intTy (emittedIntBytes M.tagDefs n) ∗
+      pointsToCell M.tagDefs ps (.own 1) intTy (emittedIntBytes M.tagDefs (t4Sum n)) ∗
+      (∀ f', ⌜t4SourceFrame pi ps f'⌝ -∗
+        pointsToCell M.tagDefs pi (.own 1) intTy (emittedIntBytes M.tagDefs n) -∗
+        pointsToCell M.tagDefs ps (.own 1) intTy (emittedIntBytes M.tagDefs (t4Sum n)) -∗
+        wpt M p Ls Θ k Ψ (if n < 5 then CorpusE0.t4Body else t5Unit) (f' :: rest))) ⊢
+      wpt M p Ls Θ (77 + k) Ψ t4LoopTest (f :: rest) := by
+  have hsum := t4Sum_le hn
+  iintro ⟨Hi, Hs, Hnext⟩
+  unfold t4LoopTest letS
+  rw [show (Pattern [] (CaseBase (some (t5a 517), CorpusE0.lint)) : pattern) =
+    symPat [] (t5a 517) CorpusE0.lint from rfl, show 77 + k = 72 + (5 + k) by omega]
+  iapply wpt_seq_sym _ _ _ _ _ _ _ _ 72 (5 + k)
+  iapply wpt_t4Cond hstd hex n (t4Sum n) (by omega) (by omega) (by omega) (by omega)
+    f rest pi ps _ _ hf (t4Index_loaded _ _ hn) rfl (t4Sum_loaded _ _ hn) rfl
+  isplitl [Hi]
+  · iexact Hi
+  isplitl [Hs]
+  · iexact Hs
+  iintro %f1 %hf1 Hi Hs
+  rw [t4Guard hn]
+  iexists (lint (t4Bit (!decide (n < 5))))
+  isplit
+  · ipureintro; rfl
+  rw [update_env_sym]
+  rw [show (Pattern [] (CaseBase (some (t5a 516), BTy_boolean)) : pattern) =
+    symPat [] (t5a 516) BTy_boolean from rfl, show 5 + k = 4 + (k + 1) by omega]
+  iapply wpt_seq_sym _ _ _ _ _ _ _ _ 4 (k + 1)
+  iapply wpt_t4Bool _ (decide (n < 5)) (t1sym_eval hex rest (by
+    rw [envAdd_lookup hf1.1, if_pos (symOrd_self _)]))
+  iexists (boolValue (decide (n < 5)))
+  isplit
+  · ipureintro; rfl
+  rw [update_env_sym]
+  iapply wpt_if _ _ _ _ _ (decide (n < 5))
+  isplit
+  · ipureintro
+    exact t1sym_eval hex rest (by rw [envAdd_lookup (hf1.1.add _ _), if_pos (symOrd_self _)])
+  rw [show (bif decide (n < 5) then CorpusE0.t4Body else t5Unit) =
+    (if n < 5 then CorpusE0.t4Body else t5Unit) by by_cases h : n < 5 <;> simp [h]]
+  have hfinal : t4SourceFrame pi ps (envAdd (t5a 516) (boolValue (decide (n < 5)))
+      (envAdd (t5a 517) (lint (t4Bit (!decide (n < 5)))) f1)) := by t4_source
+  iapply Hnext $$ %_ %hfinal Hi Hs
+
+/-- A continuing iteration establishes the next while-label invariant,
+    using the strictly smaller budget for n+1. -/
+theorem wpt_t4LoopStep [SpikeGS .hasLC GF]
+    {M : MachineCtx} {p : Option sym} {Ψ : SpikeVal → EnvStack → IProp GF}
+    (hstd : StdE3 M.file) (hex : ∀ x, resolveExtern M.extern x = x)
+    (hQ : M.labelsAt p = t4Q) (hsup : 600 ≤ M.runState.sym_supply)
+    (n : Nat) (hlt : n < 5)
+    (f : Fmap sym value) (rest : List (Fmap sym value))
+    (pi ps : CerbMem.PointerValue) (hf : t4SourceFrame pi ps f) :
+    iprop(pointsToCell M.tagDefs (GF := GF) pi (.own 1) intTy (emittedIntBytes M.tagDefs n) ∗
+      pointsToCell M.tagDefs ps (.own 1) intTy (emittedIntBytes M.tagDefs (t4Sum n))) ⊢
+      wpt M p (t4LsT GF M.tagDefs) emptyProcSpecT (t4Budget n) Ψ t4LoopTest (f :: rest) := by
+  have hn : n ≤ 5 := by omega
+  have hsum := t4Sum_le hn
+  iintro ⟨Hi, Hs⟩
+  rw [t4Budget_succ hlt, show 159 + t4Budget (n + 1) = 77 + (82 + t4Budget (n + 1)) by omega]
+  iapply wpt_t4LoopTest hstd hex n hn (82 + t4Budget (n + 1)) f rest pi ps hf
+  isplitl [Hi]
+  · iexact Hi
+  isplitl [Hs]
+  · iexact Hs
+  iintro %f1 %hf1 Hi Hs
+  rw [if_pos hlt]
+  iapply wpt_t4Body hstd hex hQ hsup n (t4Sum n) (by omega) (by omega) (by omega) (by omega)
+    (by omega) (by omega) f1 rest pi ps _ _ hf1 (t4Index_loaded _ _ hn) rfl
+    (t4Sum_loaded _ _ hn) rfl (t4Budget (n + 1))
+  isplitl [Hi]
+  · iexact Hi
+  isplitl [Hs]
+  · iexact Hs
+  iintro %f2 %hf2 Hi Hs
+  dsimp only [t4LsT]
+  iright
+  iexists (n + 1)
+  isplit
+  · ipureintro; exact ⟨rfl, rfl⟩
+  dsimp only [t4Cells]
+  iexists pi, ps, f2, rest
+  isplit
+  · ipureintro; exact ⟨rfl, rfl, hf2.1, by omega⟩
+  rw [show ((n + 1 : Nat) : Int) = (n : Int) + 1 by omega, t4Sum_succ]
+  isplitl [Hi]
+  · iexact Hi
+  iexact Hs
+
+/-- The registered while continuation satisfies the invariant budget.
+    A true test advances n and spends 159; the n=5 path costs 98. -/
+theorem wpt_t4WhileCont [SpikeGS .hasLC GF]
+    {M : MachineCtx} {p : Option sym} {Ψ : SpikeVal → EnvStack → IProp GF}
+    (hstd : StdE3 M.file) (hex : ∀ x, resolveExtern M.extern x = x)
+    (hQ : M.labelsAt p = t4Q) (hsup : 600 ≤ M.runState.sym_supply)
+    (n : Nat) (hn : n ≤ 5)
+    (f : Fmap sym value) (rest : List (Fmap sym value))
+    (pi ps : CerbMem.PointerValue) (hf : t4SourceFrame pi ps f) :
+    iprop(pointsToCell M.tagDefs (GF := GF) pi (.own 1) intTy (emittedIntBytes M.tagDefs n) ∗
+      pointsToCell M.tagDefs ps (.own 1) intTy (emittedIntBytes M.tagDefs (t4Sum n))) ⊢
+      wpt M p (t4LsT GF M.tagDefs) emptyProcSpecT (t4Budget n) Ψ t4WhileCont (f :: rest) := by
+  iintro ⟨Hi, Hs⟩
+  by_cases hlt : n < 5
+  · unfold t4WhileCont t4LoopContext seqE wc
+    rw [show t4Budget n = t4Budget n + 0 from rfl]
+    iapply wpt_seq _ _ _ _ _ _ _ (t4Budget n) 0
+    iapply wpt_seq _ _ _ _ _ _ _ (t4Budget n) 0
+    iapply wpt_t4LoopStep hstd hex hQ hsup n hlt f rest pi ps hf
+    isplitl [Hi]
+    · iexact Hi
+    iexact Hs
+  · have hn5 : n = 5 := by omega
+    subst n
+    rw [show t4Budget 5 = 98 from rfl]
+    unfold t4WhileCont t4LoopContext seqE wc
+    iapply wpt_seq _ _ _ _ _ _ _ 82 16
+    iapply wpt_seq _ _ _ _ _ _ _ 78 4
+    iapply wpt_t4LoopTest hstd hex 5 (by decide +kernel) 1 f rest pi ps hf
+    isplitl [Hi]
+    · iexact Hi
+    isplitl [Hs]
+    · iexact Hs
+    iintro %f1 %hf1 Hi Hs
+    rw [if_neg (by decide +kernel), show (t4Sum 5 : Int) = 10 from rfl]
+    unfold t5Unit t5Pure
+    rw [← ofValA_pure [] [] Vunit]
+    iapply wpt_ofValA (.pure [] [] Vunit) _ (Nat.le_refl 1)
+    simp only [SpikeValA.erase_pure, SpikeVal.mergeInto]
+    unfold t4AfterWhile seqE wc
+    iapply wpt_seq _ _ _ _ _ _ _ 3 1
+    iapply wpt_t4Save hex t4BreakSym _ 1 pi ps f1 rest hf1
+    rw [← ofValA_pure [Aloc (t4Reg 39 87), Astmt] [] Vunit]
+    iapply wpt_ofValA (.pure [Aloc (t4Reg 39 87), Astmt] [] Vunit) _ (Nat.le_refl 1)
+    simp only [SpikeValA.erase_pure, SpikeVal.mergeInto]
+    unfold t5Unit t5Pure
+    rw [← ofValA_pure [] [] Vunit]
+    iapply wpt_ofValA (.pure [] [] Vunit) _ (Nat.le_refl 1)
+    simp only [SpikeValA.erase_pure]
+    iapply wpt_t4Return hstd hex hQ (t4frPtrs pi ps f1) rest pi ps (t4SourceFrame.params pi ps f1 hf1.1)
+    isplitl [Hi]
+    · iexact Hi
+    iexact Hs
+
+/-- The two reachable jump entries are while and return. The other
+    registered continuations remain in the whole-term fragment proof;
+    their saves execute on the normal path, but no run targets them. -/
+theorem t4_blockSpecsT [SpikeGS .hasLC GF]
+    {M : MachineCtx} {p : Option sym}
+    (hstd : StdE3 M.file) (hex : ∀ x, resolveExtern M.extern x = x)
+    (hQ : M.labelsAt p = t4Q) (hsup : 600 ≤ M.runState.sym_supply) :
+    ⊢ blockSpecsT (GF := GF) M p (t4LsT GF M.tagDefs) emptyProcSpecT (readoutPost ψT4) := by
+  refine blockSpecsT_intro fun l params cont vs f rest m hl => ?_
+  dsimp only [t4LsT]
+  iintro HL
+  icases HL with (Hr | Hw)
+  · icases Hr with %hpure
+    obtain ⟨rfl, rfl, rfl, f', rest', hρ, hf⟩ := hpure
+    obtain ⟨rfl, rfl⟩ := List.cons.inj hρ
+    rw [hQ, t4Q_ret] at hl
+    obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Option.some.inj hl)
+    rw [t4RetParams_bindArgs]
+    unfold t4RetCont t5Pure
+    iapply wpt_pure (psym (t5a 574)) _ (Nat.le_refl 2) rfl (t1sym_eval hex rest (by t4_lookup))
+    iintro %σ' %ns %κs %nt -
+    iapply fupd_mask_intro_discard Std.LawfulSet.empty_subset
+    ipureintro
+    rfl
+  · icases Hw with ⟨%n, %hpure, Hcells⟩
+    obtain ⟨rfl, rfl⟩ := hpure
+    rw [hQ, t4Q_while] at hl
+    obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Option.some.inj hl)
+    dsimp only [t4Cells]
+    icases Hcells with ⟨%pi, %ps, %f', %rest', %hargs, Hi, Hs⟩
+    obtain ⟨rfl, hρ, hf, hn⟩ := hargs
+    obtain ⟨rfl, rfl⟩ := List.cons.inj hρ
+    rw [t4PtrParams_bindArgs]
+    iapply wpt_t4WhileCont hstd hex hQ hsup n hn (t4frPtrs pi ps f) rest pi ps
+      (t4SourceFrame.params pi ps f hf)
+    isplitl [Hi]
+    · iexact Hi
+    iexact Hs
+
+/-- Entry executes the emitted while save before its first continuing
+    iteration; the registered continuation handles subsequent iterations. -/
+theorem wpt_t4WhileEntry [SpikeGS .hasLC GF]
+    {M : MachineCtx} {p : Option sym} {Ψ : SpikeVal → EnvStack → IProp GF}
+    (hstd : StdE3 M.file) (hex : ∀ x, resolveExtern M.extern x = x)
+    (hQ : M.labelsAt p = t4Q) (hsup : 600 ≤ M.runState.sym_supply)
+    (f : Fmap sym value) (rest : List (Fmap sym value))
+    (pi ps : CerbMem.PointerValue) (hf : t4SourceFrame pi ps f) :
+    iprop(pointsToCell M.tagDefs (GF := GF) pi (.own 1) intTy (emittedIntBytes M.tagDefs 0) ∗
+      pointsToCell M.tagDefs ps (.own 1) intTy (emittedIntBytes M.tagDefs 0)) ⊢
+      wpt M p (t4LsT GF M.tagDefs) emptyProcSpecT 895 Ψ (t4LoopContext t4While) (f :: rest) := by
+  iintro ⟨Hi, Hs⟩
+  unfold t4LoopContext seqE wc t4While
+  iapply wpt_seq _ _ _ _ _ _ _ 895 0
+  iapply wpt_seq _ _ _ _ _ _ _ 895 0
+  iapply wpt_t4Save hex t4WhileSym _ 893 pi ps f rest hf
+  rw [← show t4Budget 0 = 893 from rfl]
+  iapply wpt_t4LoopStep hstd hex hQ hsup 0 (by decide +kernel) (t4frPtrs pi ps f) rest pi ps
+    (t4SourceFrame.params pi ps f hf.1)
+  isplitl [Hi]
+  · iexact Hi
+  rw [show (t4Sum 0 : Int) = 0 from rfl]
+  iexact Hs
+
+/-- The emitted main: 20 units for two allocations and initialization,
+    then 895 for the while entry and its label path. -/
+theorem t4_wpt [SpikeGS .hasLC GF]
+    {M : MachineCtx} {p : Option sym} (hstd : StdE3 M.file)
+    (hex : ∀ x, resolveExtern M.extern x = x) (hQ : M.labelsAt p = t4Q) (hsup : 600 ≤ M.runState.sym_supply)
+    (f : Fmap sym value) (rest : List (Fmap sym value)) (hf : SymFrame f) :
+    iprop(allocBudget (GF := GF) (allocCost M.tagDefs intTy 4 + allocCost M.tagDefs intTy 4)) ⊢
+      wpt M p (t4LsT GF M.tagDefs) emptyProcSpecT 915 (readoutPost ψT4) t4Main (f :: rest) := by
+  iintro Hcap
+  icases (allocBudget_split _ _).1 $$ Hcap with ⟨HcapI, HcapS⟩
+  simp only [t4Main, letS, seqE, wc, CorpusE0.bnd, createInt_eq, act_store_eq]
+  rw [show (Pattern [] (CaseBase (some t4iSym, ptrTy)) : pattern) =
+    symPat [] t4iSym ptrTy from rfl]
+  iapply wpt_seq_sym _ _ _ _ _ _ _ _ 3 912
+  rw [show (3 : Nat) = 2 + 1 from rfl]
+  iapply wpt_create_eval _ _ empty_annotation (Pexpr [] () (PEctor Civalignof [CorpusE0.intCty])) CorpusE0.intCty
+    (PrefSource (t4Reg 15 99) [t4iSym]) _
+    (align := CerbMem.alignofIval M.tagDefs intTy) (ty := intTy) rfl
+    (alignofIntPe_eval _ _) (evalPexpr_val _ _ _ _ _)
+  rw [alignofIval_intTy]
+  iapply wpt_create _ _ empty_annotation .Prov_none 4 intTy (PrefSource (t4Reg 15 99) [t4iSym])
+    _ (Nat.le_refl 2) intTy_size_pos intTy_nonatomic (fun a => intTy_decIndep a _)
+  isplitl [HcapI]
+  · iexact HcapI
+  iintro %pi ⟨Hi, -⟩
+  iexists (Vobject (OVpointer pi))
+  isplit
+  · ipureintro; rfl
+  rw [update_env_sym]
+  rw [show (Pattern [] (CaseBase (some t4sSym, ptrTy)) : pattern) = symPat [] t4sSym ptrTy from rfl]
+  iapply wpt_seq_sym _ _ _ _ _ _ _ _ 3 909
+  rw [show (3 : Nat) = 2 + 1 from rfl]
+  iapply wpt_create_eval _ _ empty_annotation (Pexpr [] () (PEctor Civalignof [CorpusE0.intCty])) CorpusE0.intCty
+    (PrefSource (t4Reg 15 99) [t4sSym]) _
+    (align := CerbMem.alignofIval M.tagDefs intTy) (ty := intTy) rfl
+    (alignofIntPe_eval _ _) (evalPexpr_val _ _ _ _ _)
+  rw [alignofIval_intTy]
+  iapply wpt_create _ _ empty_annotation .Prov_none 4 intTy (PrefSource (t4Reg 15 99) [t4sSym])
+    _ (Nat.le_refl 2) intTy_size_pos intTy_nonatomic (fun a => intTy_decIndep a _)
+  isplitl [HcapS]
+  · iexact HcapS
+  iintro %ps ⟨Hs, -⟩
+  iexists (Vobject (OVpointer ps))
+  isplit
+  · ipureintro; rfl
+  rw [update_env_sym]
+  rw [show (Pattern [] (CaseBase (some (t5a 513), CorpusE0.lint)) : pattern) =
+    symPat [] (t5a 513) CorpusE0.lint from rfl]
+  iapply wpt_seq_sym _ _ _ _ _ _ _ _ 3 906
+  rw [show (3 : Nat) = 2 + 1 from rfl]
+  iapply wpt_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
+  iapply wpt_pure (specInt 0) _ (Nat.le_refl 2) rfl (specInt_eval _ 0)
+  simp only [SpikeVal.val]
+  iexists (lint 0)
+  isplit
+  · ipureintro; rfl
+  rw [update_env_sym]
+  iapply wpt_seq _ _ _ _ _ _ _ 4 902
+  rw [show (4 : Nat) = 3 + 1 from rfl]
+  iapply wpt_store_eval _ _ _ intTy (psym t4iSym) (CorpusE0.convLoadedInt (t5a 513)) NA _
+    rfl (pv := pi) (cv := lint 0) (t1sym_eval hex rest (by t4_lookup))
+    (t1ConvLoadedInt_eval hstd (t1sym_eval hex rest (by t4_lookup)) (by decide) (by decide))
+  iapply wpt_store _ _ _ intTy pi (lint 0) NA (emittedIntMval 0) _ _ (Nat.le_refl 3)
+    (emittedInt_encodes _ 0) (emittedInt_storable _ 0)
+  isplitl [Hi]
+  · iexact Hi
+  iintro %fpI Hi
+  simp only [SpikeVal.mergeInto]
+  rw [show (Pattern [] (CaseBase (some (t5a 514), CorpusE0.lint)) : pattern) =
+    symPat [] (t5a 514) CorpusE0.lint from rfl]
+  iapply wpt_seq_sym _ _ _ _ _ _ _ _ 3 899
+  rw [show (3 : Nat) = 2 + 1 from rfl]
+  iapply wpt_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
+  iapply wpt_pure (specInt 0) _ (Nat.le_refl 2) rfl (specInt_eval _ 0)
+  iexists (lint 0)
+  isplit
+  · ipureintro; rfl
+  rw [update_env_sym]
+  iapply wpt_seq _ _ _ _ _ _ _ 4 895
+  rw [show (4 : Nat) = 3 + 1 from rfl]
+  iapply wpt_store_eval _ _ _ intTy (psym t4sSym) (CorpusE0.convLoadedInt (t5a 514)) NA _
+    rfl (pv := ps) (cv := lint 0) (t1sym_eval hex rest (by t4_lookup))
+    (t1ConvLoadedInt_eval hstd (t1sym_eval hex rest (by t4_lookup)) (by decide) (by decide))
+  iapply wpt_store _ _ _ intTy ps (lint 0) NA (emittedIntMval 0) _ _ (Nat.le_refl 3)
+    (emittedInt_encodes _ 0) (emittedInt_storable _ 0)
+  isplitl [Hs]
+  · iexact Hs
+  iintro %fpS Hs
+  simp only [SpikeVal.mergeInto]
+  rw [show (Expr [] (Esseq (Pattern [] (CaseBase (none, BTy_unit)))
+    (Expr [Aloc (t4Reg 39 87), Astmt] (Esseq (Pattern [] (CaseBase (none, BTy_unit))) t4While t4AfterWhile))
+    t4Return) : CoreExpr) = t4LoopContext t4While from rfl]
+  have hsrc : t4SourceFrame pi ps
+      (envAdd (t5a 514) (lint 0) (envAdd (t5a 513) (lint 0)
+        (envAdd t4sSym (Vobject (OVpointer ps)) (envAdd t4iSym (Vobject (OVpointer pi)) f)))) := by
+    apply t4SourceFrame.add _ _ (by decide +kernel)
+    apply t4SourceFrame.add _ _ (by decide +kernel)
+    exact t4SourceFrame.params pi ps f hf
+  iapply wpt_t4WhileEntry hstd hex hQ hsup _ rest pi ps hsrc
+  isplitl [Hi]
+  · iexact Hi
+  iexact Hs
+
+/-- The shipped driver returns Specified(10) on the transcribed while loop
+    and the current checked three-function std.core fragment. The initial
+    supply bound protects source bindings during the negative assignment. -/
+theorem t4_certified_production (sup : Nat) (hsup : 600 ≤ sup)
+    (fs : CerbFS.FsState) (args : List String) :
+    ∃ (dres : driver_result) (dst' : driver_state),
+      CerbND.runND (_root_.drive fmapEmpty false (prodFileLib stdlibE3 [] t4Main) args)
+          ((initial_driver_state sup (prodFileLib stdlibE3 [] t4Main) fs).1) =
+        [(nd_status.Active dres, ([] : List String), dst')] ∧
+      dres.dres_core_value = lint 10 ∧
+      dres.dres_blocked = false ∧
+      dres.dres_stdout = "" ∧
+      dres.dres_stderr = "" := by
+  have hQe := t4Main_labeledAt sup
+  have hlbl := prodCtx_labels (f := prodFileLib stdlibE3 [] t4Main) hQe
+  obtain ⟨dres, dst', heq, hψ, hbl, hout, herr⟩ :=
+    prod_run_eqJ_lib1 sup stdlibE3 t4Main hQe ψT4 915
+      (wpt_driver_done_alloc (GF := SpikeGF) (ctl := prodCtl sup)
+        (M₀ := prodCtx (prodFileLib stdlibE3 [] t4Main) (prodRSLib stdlibE3 [] sup t4Main))
+        rfl rfl hlbl rfl rfl rfl rfl (Nat.le_refl _)
+        (fun l params cont hl => t4Q_frag (by rw [← hlbl]; exact hl))
+        (fun l params cont hl => t4Q_pot (by rw [← hlbl]; exact hl))
+        (t4LsT SpikeGF fmapEmpty)
+        t4Main fmapEmpty [] prodMem₀ (∅ : SpikeHeapF SpikeCell)
+        (allocCost fmapEmpty intTy 4 + allocCost fmapEmpty intTy 4) CorpusE0.t4Main_frag
+        t4Main_pot
+        (prodMem₀_launchCoh _ prod_two_int_budget_fits)
+        ψT4 915
+        (by
+          intro inst
+          iintro ⟨-, Hcap⟩
+          isplitr [Hcap]
+          · iapply t4_blockSpecsT
+              (M := prodCtx (prodFileLib stdlibE3 [] t4Main) (prodRSLib stdlibE3 [] sup t4Main))
+              rfl (resolveExtern_id_of_empty (prodCtx_extern _ _)) hlbl hsup
+          · iapply t4_wpt (M := prodCtx (prodFileLib stdlibE3 [] t4Main) (prodRSLib stdlibE3 [] sup t4Main))
+              rfl (resolveExtern_id_of_empty (prodCtx_extern _ _)) hlbl hsup fmapEmpty []
+              symFrame_empty $$ Hcap))
+      (by rw [show CerbFuel.driverFuel = 99999999 + 1 from rfl]; omega)
+      fs args
+  exact ⟨dres, dst', heq, hψ, hbl, hout, herr⟩
 end CerberusHeapLang
