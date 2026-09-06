@@ -24,9 +24,8 @@ frees):
 
 C's `for (i = n; i > 0; i--) { q = malloc(16); q->v = i; q->next = p;
 p = q; } while (p) { nx = p->next; free(p); p = nx; }`, the two loops
-merged into one Core label (a single `save` is the whole program's label
-map; the two-label form needs a two-entry label-map lookup law this tree
-does not have — EnvLaws has the singleton `fmapLookupBy_addBy_empty`).
+merged into one Core label; a single `save` registers the whole program's
+label map.
 
 THE NODE is a 16-byte REGION (`alloc(al, 16)`: untyped, dynamic), read
 and written at ListRevExhibit's node layout — `long` value at offset 0,
@@ -99,7 +98,9 @@ ENGINE vocabulary `hB : n.toNat * (15 + max al.toNat 1) ≤
 281474976710647` (`= regionCost al 16` per node, `= headroom
 prodMem₀.lastAddress`; the K4 audit's M-1: no package cost/headroom/
 cold-start definition in the statement) and `hfuel : 25 * n.toNat + 9 ≤
-CerbFuel.driverFuel` (the shipped driver's budget, 10^8).
+LemFuel.fuel` at the same caller instance, with positive alignment.
+The generic public derivations also state the signed-long counter bound;
+the production allocation budget implies it.
 -/
 import CerberusHeapLang.DisposeExhibit
 
@@ -386,7 +387,7 @@ theorem ml_memop_operands_nonvalue :
 include hf
 
 /-- The guard at the counter `i`: the engine's own `OpGt`, the boolean `0 < i`. -/
-theorem ml_guard_eval {file : generic_file Unit core_run_annotation} (vp : value) (i : Int) :
+theorem ml_guard_eval [LemFuel] {file : generic_file Unit core_run_annotation} (vp : value) (i : Int) :
     evalPexpr fmapEmpty fmapEmpty file (mlFrame (ivVal i) vp f :: rest) mlGuardPe =
       some (boolValue (decide (0 < i))) := by
   unfold mlGuardPe
@@ -403,25 +404,25 @@ theorem ml_guard_eval {file : generic_file Unit core_run_annotation} (vp : value
   rfl
 
 /-- The memop's head operand `p`. -/
-theorem ml_p_eval {file : generic_file Unit core_run_annotation} (vi vp : value) :
+theorem ml_p_eval [LemFuel] {file : generic_file Unit core_run_annotation} (vi vp : value) :
     evalPexpr fmapEmpty fmapEmpty file (mlFrame vi vp f :: rest)
       (Pexpr [] () (PEsym mlPSym)) = some vp := by
   rw [evalPexpr_sym_empty]
   exact lookup_env_head (mlFrame_lookup_p hf _ _) rest
 
-theorem ml_q_eval {file : generic_file Unit core_run_annotation} (vq vi vp : value) :
+theorem ml_q_eval [LemFuel] {file : generic_file Unit core_run_annotation} (vq vi vp : value) :
     evalPexpr fmapEmpty fmapEmpty file (mlFrameQ vq vi vp f :: rest)
       (Pexpr [] () (PEsym mlQSym)) = some vq := by
   rw [evalPexpr_sym_empty]
   exact lookup_env_head (mlFrameQ_lookup_q hf _ _ _) rest
 
-theorem ml_i_eval_Q {file : generic_file Unit core_run_annotation} (vq vi vp : value) :
+theorem ml_i_eval_Q [LemFuel] {file : generic_file Unit core_run_annotation} (vq vi vp : value) :
     evalPexpr fmapEmpty fmapEmpty file (mlFrameQ vq vi vp f :: rest)
       (Pexpr [] () (PEsym mlISym)) = some vi := by
   rw [evalPexpr_sym_empty]
   exact lookup_env_head (mlFrameQ_lookup_i hf _ _ _) rest
 
-theorem ml_p_eval_Q {file : generic_file Unit core_run_annotation} (vq vi vp : value) :
+theorem ml_p_eval_Q [LemFuel] {file : generic_file Unit core_run_annotation} (vq vi vp : value) :
     evalPexpr fmapEmpty fmapEmpty file (mlFrameQ vq vi vp f :: rest)
       (Pexpr [] () (PEsym mlPSym)) = some vp := by
   rw [evalPexpr_sym_empty]
@@ -429,7 +430,7 @@ theorem ml_p_eval_Q {file : generic_file Unit core_run_annotation} (vq vi vp : v
 
 /-- The link store's address: `array_shift(q, long, 1)` at the fresh
     node pointer — +8 within the region (the engine's own arithmetic). -/
-theorem ml_shift_q_eval {file : generic_file Unit core_run_annotation} (vi vp : value) (id a : Int) :
+theorem ml_shift_q_eval [LemFuel] {file : generic_file Unit core_run_annotation} (vi vp : value) (id a : Int) :
     evalPexpr fmapEmpty fmapEmpty file (mlFrameQ (ptrVal (cellPtr id a)) vi vp f :: rest)
       (lrShiftPe mlQSym) = some (ptrVal (cellPtr id (a + 8))) := by
   unfold lrShiftPe
@@ -443,7 +444,7 @@ theorem ml_shift_q_eval {file : generic_file Unit core_run_annotation} (vi vp : 
   exact evalArrayShift_long_one id a
 
 /-- The build back-edge arguments `(i - 1, q)`. -/
-theorem ml_args_build_eval {file : generic_file Unit core_run_annotation} (vq : value) (i : Int) (vp : value) :
+theorem ml_args_build_eval [LemFuel] {file : generic_file Unit core_run_annotation} (vq : value) (i : Int) (vp : value) :
     evalPexprs fmapEmpty fmapEmpty file (mlFrameQ vq (ivVal i) vp f :: rest)
       [mlDecPe, Pexpr [] () (PEsym mlQSym)] = some [ivVal (i - 1), vq] := by
   rw [evalPexprs_cons]
@@ -464,14 +465,14 @@ theorem ml_args_build_eval {file : generic_file Unit core_run_annotation} (vq : 
     exact lookup_env_head (mlFrameQ_lookup_q hf _ _ _) rest]
   rfl
 
-theorem ml_b_eval {file : generic_file Unit core_run_annotation} (vb vi vp : value) :
+theorem ml_b_eval [LemFuel] {file : generic_file Unit core_run_annotation} (vb vi vp : value) :
     evalPexpr fmapEmpty fmapEmpty file (mlFrameB vb vi vp f :: rest)
       (Pexpr [] () (PEsym mlBSym)) = some vb := by
   rw [evalPexpr_sym_empty]
   exact lookup_env_head (mlFrameB_lookup_b hf _ _ _) rest
 
 /-- The walk's load address: `array_shift(p, long, 1)` at the head. -/
-theorem ml_shift_p_eval_B {file : generic_file Unit core_run_annotation} (vb vi : value) (id aN : Int) :
+theorem ml_shift_p_eval_B [LemFuel] {file : generic_file Unit core_run_annotation} (vb vi : value) (id aN : Int) :
     evalPexpr fmapEmpty fmapEmpty file (mlFrameB vb vi (ptrVal (cellPtr id aN)) f :: rest)
       (lrShiftPe mlPSym) = some (ptrVal (cellPtr id (aN + 8))) := by
   unfold lrShiftPe
@@ -485,14 +486,14 @@ theorem ml_shift_p_eval_B {file : generic_file Unit core_run_annotation} (vb vi 
   exact evalArrayShift_long_one id aN
 
 /-- The free's operand `p`, after nx is bound. -/
-theorem ml_p_eval_N {file : generic_file Unit core_run_annotation} (vn vb vi vp : value) :
+theorem ml_p_eval_N [LemFuel] {file : generic_file Unit core_run_annotation} (vn vb vi vp : value) :
     evalPexpr fmapEmpty fmapEmpty file (mlFrameN vn vb vi vp f :: rest)
       (Pexpr [] () (PEsym mlPSym)) = some vp := by
   rw [evalPexpr_sym_empty]
   exact lookup_env_head (mlFrameN_lookup_p hf _ _ _ _) rest
 
 /-- The free back-edge arguments `(0, nx)`. -/
-theorem ml_args_free_eval {file : generic_file Unit core_run_annotation} (vn vb vi vp : value) :
+theorem ml_args_free_eval [LemFuel] {file : generic_file Unit core_run_annotation} (vn vb vi vp : value) :
     evalPexprs fmapEmpty fmapEmpty file (mlFrameN vn vb vi vp f :: rest)
       [Pexpr [] () (PEval (ivVal 0)), Pexpr [] () (PEsym mlNSym)] =
       some [ivVal 0, vn] := by
@@ -509,7 +510,7 @@ end MlEval
 the link at `node*`) -/
 
 /-- The counter, a Core integer value, encodes at `long`. -/
-theorem longMval_encodes (v : Int) :
+theorem longMval_encodes [LemFuel] (v : Int) :
     memValueFromValue fmapEmpty (Ctype [] (unatomic_ longTy)) (ivVal v) =
       some (longMval v) := rfl
 
@@ -523,17 +524,18 @@ theorem longMval_bytes_fpm (v : Int) (fpm : CerbMem.Funptrmap) :
     (CerbMem.memValueToBytes fmapEmpty fpm (longMval v)).2 =
       (CerbMem.memValueToBytes fmapEmpty [] (longMval v)).2 := rfl
 
-/-- The serialized `long` image is 8 bytes at ANY value (`intToBytes`
-    at `sizeof long = 8`, CerbMem.lean:590-599). -/
-theorem longMval_img_length (v : Int) :
+/-- Signed-long serialization has eight bytes within its 64-bit range. -/
+theorem longMval_img_length (v : Int) (hlo : -9223372036854775808 ≤ v)
+    (hhi : v ≤ 9223372036854775807) :
     ((CerbMem.memValueToBytes fmapEmpty [] (longMval v)).2).length = 8 := by
-  show ((CerbMem.intToBytes v 8).map
+  show ((CerbMem.intToBytes true v 8).map
     (fun b => ({ prov := .Prov_none, copyOffset := none, value := b } : CerbMem.AbsByte))).length = 8
-  rw [List.length_map, intToBytes_length]
+  rw [List.length_map, intToBytes_length true v 8 hlo hhi (by decide)]
 
-theorem longMval_storable (v : Int) : StorableView fmapEmpty longTy (longMval v) :=
+theorem longMval_storable (v : Int) (hlo : -9223372036854775808 ≤ v)
+    (hhi : v ≤ 9223372036854775807) : StorableView fmapEmpty longTy (longMval v) :=
   ⟨longMval_compat v, longMval_fpm v, longMval_bytes_fpm v,
-    by rw [longTy_size]; exact longMval_img_length v⟩
+    by rw [longTy_size]; exact longMval_img_length v hlo hhi⟩
 
 /-- The next-pointer values the build stores: the null, or a node pointer
     at a machine-WF address (what `isRegionList` pins for every head). -/
@@ -542,11 +544,11 @@ def NodePtrWF (p : CerbMem.PointerValue) : Prop :=
 
 theorem nodePtr_storable {p : CerbMem.PointerValue} (h : NodePtrWF p) :
     StorableView fmapEmpty nodePtrTy (CerbMem.pointerMval nodeTy p) := by
-  rcases h with rfl | ⟨id, a, rfl, -, -⟩
+  rcases h with rfl | ⟨id, a, rfl, h0, h1⟩
   · exact ⟨node_ptr_compat _, node_ptr_fpm_null, node_ptr_bytes_null,
       by rw [node_ptr_img_null, nodePtrTy_size]; exact ptrImg_null_length⟩
   · exact ⟨node_ptr_compat _, node_ptr_fpm_cell id a, node_ptr_bytes_cell id a,
-      by rw [node_ptr_img_cell, nodePtrTy_size]; exact ptrImg_cell_length id a⟩
+      by rw [node_ptr_img_cell, nodePtrTy_size]; exact ptrImg_cell_length id a (by omega) h1⟩
 
 theorem nodePtr_img_length {p : CerbMem.PointerValue} (h : NodePtrWF p) :
     ((CerbMem.memValueToBytes fmapEmpty [] (CerbMem.pointerMval nodeTy p)).2).length = 8 := by
@@ -577,24 +579,27 @@ abbrev mlBuilt (i : Int) (p : CerbMem.PointerValue) : List CerbMem.AbsByte :=
   spliceBytes 8 (CerbMem.memValueToBytes fmapEmpty [] (CerbMem.pointerMval nodeTy p)).2
     (spliceBytes 0 (CerbMem.memValueToBytes fmapEmpty [] (longMval i)).2 regionUndef16)
 
-theorem mlBuilt_inner_len (i : Int) :
+theorem mlBuilt_inner_len (i : Int) (hlo : -9223372036854775808 ≤ i)
+    (hhi : i ≤ 9223372036854775807) :
     (spliceBytes 0 (CerbMem.memValueToBytes fmapEmpty [] (longMval i)).2
       regionUndef16).length = 16 := by
-  rw [spliceBytes_length _ _ _ (by rw [longMval_img_length]; decide)]
+  rw [spliceBytes_length _ _ _ (by rw [longMval_img_length i hlo hhi]; decide)]
   rfl
 
-theorem mlBuilt_len (i : Int) {p : CerbMem.PointerValue} (h : NodePtrWF p) :
+theorem mlBuilt_len (i : Int) (hlo : -9223372036854775808 ≤ i)
+    (hhi : i ≤ 9223372036854775807) {p : CerbMem.PointerValue} (h : NodePtrWF p) :
     (mlBuilt i p).length = 16 := by
-  rw [spliceBytes_length _ _ _ (by rw [nodePtr_img_length h, mlBuilt_inner_len]; decide)]
-  exact mlBuilt_inner_len i
+  rw [spliceBytes_length _ _ _ (by rw [nodePtr_img_length h, mlBuilt_inner_len i hlo hhi]; decide)]
+  exact mlBuilt_inner_len i hlo hhi
 
 /-- The built node's next field decodes to the stored link. -/
-theorem mlBuilt_nextDec (i : Int) {p : CerbMem.PointerValue} (h : NodePtrWF p) :
+theorem mlBuilt_nextDec (i : Int) (hlo : -9223372036854775808 ≤ i)
+    (hhi : i ≤ 9223372036854775807) {p : CerbMem.PointerValue} (h : NodePtrWF p) :
     nodeNextDec fmapEmpty (mlBuilt i p) p := by
   intro lum fpm ad
   rw [show ((mlBuilt i p).drop 8).take 8 =
       (CerbMem.memValueToBytes fmapEmpty [] (CerbMem.pointerMval nodeTy p)).2 from
-    spliceBytes_next_slice _ _ (nodePtr_img_length h) (mlBuilt_inner_len i)]
+    spliceBytes_next_slice _ _ (nodePtr_img_length h) (mlBuilt_inner_len i hlo hhi)]
   exact nodePtr_reconstruct h lum fpm ad
 
 /-! ## THE PREDICATES: `isRegionList p ids` and `deadRegions ids` -/
@@ -759,62 +764,56 @@ variable (loc : CerbLocation.Loc) (ann ra : core_run_annotation)
     (a `Frag` head) then two `store_op`s at `PePure` operands and a `run`;
     the free phase is the `PtrEq` memop head, the `if`, a `load_op`, a
     `kill_op` (dynamic kind) and a `run`. -/
-theorem mlBody_frag : Frag (mlBody loc ann ra mo al pref qbty bbty nbty ubty) := by
+theorem mlBody_frag [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) : Frag (mlBody loc ann ra mo al pref qbty bbty nbty ubty) := by
   have hb : Frag (memopRedex [] PtrEq
       [Pexpr [] () (PEsym mlPSym), Pexpr [] () (PEval nullVal)]) :=
     .memop_op rfl (.sym _ _) (.val _ _)
       (by rw [show peDepth (Pexpr ([] : List annot) () (PEsym mlPSym)) = 1
-          from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+          from rfl]; omega)
       (by rw [show peDepth (Pexpr ([] : List annot) () (PEval nullVal)) = 1
-          from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+          from rfl]; omega)
   refine .if_ (PePure.of_isPePure rfl)
-    (by rw [show peDepth mlGuardPe = 2 from rfl,
-      show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+    (by rw [show peDepth mlGuardPe = 2 from rfl]; omega)
     (.sseq_sym .alloc
       (.sseq
         (.store_op rfl (.sym [] mlQSym) (.sym [] mlISym)
           (by rw [show peDepth (Pexpr ([] : List annot) () (PEsym mlQSym)) = 1
-              from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+              from rfl]; omega)
           (by rw [show peDepth (Pexpr ([] : List annot) () (PEsym mlISym)) = 1
-              from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega))
+              from rfl]; omega))
         (.sseq
           (.store_op rfl (.arrayShift [] longTy (.sym _ _) (.val _ _)) (.sym [] mlPSym)
-            (by rw [show peDepth (lrShiftPe mlQSym) = 2 from rfl,
-                show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+            (by rw [show peDepth (lrShiftPe mlQSym) = 2 from rfl]; omega)
             (by rw [show peDepth (Pexpr ([] : List annot) () (PEsym mlPSym)) = 1
-                from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega))
+                from rfl]; omega))
           (.run (PePure.all_of_isPePure rfl) (by
             intro pe hpe
             simp only [List.mem_cons, List.not_mem_nil, or_false] at hpe
             rcases hpe with rfl | rfl
-            · rw [show peDepth mlDecPe = 2 from rfl,
-                show lemDefaultFuel = 999999 + 1 from rfl]
+            · rw [show peDepth mlDecPe = 2 from rfl]
               omega
-            · rw [show peDepth (Pexpr ([] : List annot) () (PEsym mlQSym)) = 1 from rfl,
-                show lemDefaultFuel = 999999 + 1 from rfl]
+            · rw [show peDepth (Pexpr ([] : List annot) () (PEsym mlQSym)) = 1 from rfl]
               omega)))))
     (.sseq_sym hb
       (.if_ (PePure.of_isPePure rfl) (by
           rw [show peDepth (Pexpr ([] : List annot) () (PEsym mlBSym)) = 1
-            from rfl, show lemDefaultFuel = 999999 + 1 from rfl]
+            from rfl]
           omega)
         (.val_pure Vunit)
         (.sseq_spec
           (.load_op rfl
             (.arrayShift [] longTy (.sym _ _) (.val _ _))
-            (by rw [show peDepth (lrShiftPe mlPSym) = 2 from rfl,
-              show lemDefaultFuel = 999999 + 1 from rfl]; omega))
+            (by rw [show peDepth (lrShiftPe mlPSym) = 2 from rfl]; omega))
           (.sseq
             (.kill_op rfl (.sym [] mlPSym)
               (by rw [show peDepth (Pexpr ([] : List annot) () (PEsym mlPSym)) = 1
-                  from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega))
+                  from rfl]; omega))
             (.run (PePure.all_of_isPePure rfl) (by
               intro pe hpe
               simp only [List.mem_cons, List.not_mem_nil, or_false] at hpe
               rcases hpe with rfl | rfl
-              · exact peDepth_val_le _ _
-              · rw [show peDepth (Pexpr ([] : List annot) () (PEsym mlNSym)) = 1 from rfl,
-                  show lemDefaultFuel = 999999 + 1 from rfl]
+              · exact peDepth_val_le (hfuel := by omega) _ _
+              · rw [show peDepth (Pexpr ([] : List annot) () (PEsym mlNSym)) = 1 from rfl]
                 omega))))))
 
 theorem mlBody_pot : pot (mlBody loc ann ra mo al pref qbty bbty nbty ubty) = 25 := rfl
@@ -823,13 +822,13 @@ theorem mlProg_pot (sbty ibty pbty : core_base_type) (n : Int) :
     pot (mlProg loc ann ra mo al pref sbty ibty pbty qbty bbty nbty ubty n) = 26 := rfl
 
 theorem mlParams_depth (ibty pbty : core_base_type) (n : Int) :
-    ∀ pe ∈ saveParamPexprs (mlParams ibty pbty n), peDepth pe ≤ lemDefaultFuel := by
+    ∀ pe ∈ saveParamPexprs (mlParams ibty pbty n), peDepth pe = 1 := by
   intro pe hpe
   simp only [mlParams, saveParamPexprs, List.map_cons, List.map_nil,
     List.mem_cons, List.not_mem_nil, or_false] at hpe
   rcases hpe with rfl | rfl
-  · exact peDepth_val_le _ _
-  · exact peDepth_val_le _ _
+  · rfl
+  · rfl
 
 end MlFrag
 
@@ -873,7 +872,8 @@ include hQ
     decides; at a node, `wps_load_regionOwn_at` reads the next field,
     `wps_free` returns the region (its `deadRegion` kept), the jump
     continues with the tail. -/
-theorem ml_body_wps (i : Int) (pc : CerbMem.PointerValue) (ids done : List Int)
+theorem ml_body_wps [LemFuel] (hfuel : 0 < LemFuel.fuel) (halign : 0 < al)
+    (hmax : n.toNat ≤ 9223372036854775807) (i : Int) (pc : CerbMem.PointerValue) (ids done : List Int)
     (f : Fmap sym value) (renv : List (Fmap sym value)) (hf : SymFrame f)
     (hi : 0 ≤ i) (hcnt : i.toNat + ids.length + done.length = n.toNat)
     (hnd : (ids ++ done).Nodup) :
@@ -882,6 +882,8 @@ theorem ml_body_wps (i : Int) (pc : CerbMem.PointerValue) (ids done : List Int)
       wps (procCtxF F rs) (some p) (mlLs al n) emptyProcSpec (mlPost n)
         (mlBody loc ann ra mo al pref qbty bbty nbty ubty)
         (mlFrame (ivVal i) (ptrVal pc) f :: renv) := by
+  have hlonglo : -9223372036854775808 ≤ i := by omega
+  have hlonghi : i ≤ 9223372036854775807 := by omega
   rw [show mlBody loc ann ra mo al pref qbty bbty nbty ubty =
     Expr [] (Eif mlGuardPe (mlBuild loc ann ra mo al pref qbty ubty)
       (mlFree loc ann ra mo bbty nbty ubty)) from rfl]
@@ -905,7 +907,7 @@ theorem ml_body_wps (i : Int) (pc : CerbMem.PointerValue) (ids done : List Int)
     iapply wps_seq_sym
     rw [show mlAllocE loc ann al pref =
       allocExpr [] loc ann (.IV .Prov_none al) (.IV .Prov_none 16) pref from rfl]
-    iapply wps_alloc [] loc ann .Prov_none .Prov_none al 16 pref _
+    iapply wps_alloc (hfuel := hfuel) (halign := halign) (hsize := by decide) [] loc ann .Prov_none .Prov_none al 16 pref _
       (regionCost_pos al 16 (by decide))
     isplitl [Hc]
     · iexact Hc
@@ -953,7 +955,7 @@ theorem ml_body_wps (i : Int) (pc : CerbMem.PointerValue) (ids done : List Int)
     iapply wps_store_regionOwn_at [] (mv := longMval i) loc ann id a 16 0 longTy (ivVal i) mo _ _
       (longMval_encodes i)
       (by rw [show CerbMem.sizeofCtype (procCtxF F rs).tagDefs longTy = 8 from rfl]; omega)
-      (longMval_storable i)
+      (longMval_storable i hlonglo hlonghi)
     isplitl [Hr16]
     · iexact Hr16
     iintro %fp1 Hr
@@ -991,7 +993,7 @@ theorem ml_body_wps (i : Int) (pc : CerbMem.PointerValue) (ids done : List Int)
     · iexact Hrest
     isplitl [Hr HL]
     · iapply isRegionList_cons_intro id a pc (mlBuilt i pc) ids hb.1 ha1
-        (mlBuilt_len i hwf) (mlBuilt_nextDec i hwf)
+        (mlBuilt_len i hlonglo hlonghi hwf) (mlBuilt_nextDec i hlonglo hlonghi hwf)
       isplitl [Hr]
       · iexact Hr
       · iexact HL
@@ -1123,7 +1125,8 @@ theorem ml_body_wps (i : Int) (pc : CerbMem.PointerValue) (ids done : List Int)
         · iexact HD
 
 /-- THE BLOCK SPECIFICATION. -/
-theorem ml_blockSpecs :
+theorem ml_blockSpecs [LemFuel] (hfuel : 0 < LemFuel.fuel) (halign : 0 < al)
+    (hmax : n.toNat ≤ 9223372036854775807) :
     ⊢ blockSpecs (GF := GF) (procCtxF F rs) (some p) (mlLs al n) emptyProcSpec (mlPost n) := by
   refine blockSpecs_intro fun l params cont args env0 envs hl => ?_
   rw [procCtxF_labels hQ] at hl
@@ -1136,7 +1139,7 @@ theorem ml_blockSpecs :
     simp at h1 h2
     exact ⟨h1.symm, h2.symm⟩
   rw [bindArgs_ml]
-  iapply ml_body_wps loc ann ra mo al pref ibty pbty qbty bbty nbty ubty n p rs hQ
+  iapply ml_body_wps (hfuel := by omega) (halign := halign) (hmax := hmax) loc ann ra mo al pref ibty pbty qbty bbty nbty ubty n p rs hQ
     i pc ids done f renv hf hi hcnt hnd
   isplitl [Hcap]
   · iexact Hcap
@@ -1147,7 +1150,8 @@ theorem ml_blockSpecs :
 /-- THE MALLOC'D LIST (partial): `{allocBudget (n · regionCost al 16)}
     ml(n, NULL) {ret unit. ∃ ids, |ids| = n ∧ ids.Nodup ∗ deadRegions ids}`
     — `n` DISTINCT nodes allocated, written, linked, walked and freed. -/
-theorem ml_wps (sbty : core_base_type) (hn : 0 ≤ n) :
+theorem ml_wps [LemFuel] (hfuel : 0 < LemFuel.fuel) (halign : 0 < al)
+    (hmax : n.toNat ≤ 9223372036854775807) (sbty : core_base_type) (hn : 0 ≤ n) :
     allocBudget (GF := GF) (n.toNat * regionCost al 16) ⊢
       wps (procCtxF F rs) (some p) (mlLs al n) emptyProcSpec (mlPost n)
         (mlProg loc ann ra mo al pref sbty ibty pbty qbty bbty nbty ubty n) [fmapEmpty] := by
@@ -1158,7 +1162,7 @@ theorem ml_wps (sbty : core_base_type) (hn : 0 ≤ n) :
   iapply wps_save [] (mlLoopSym, sbty) _ _ fmapEmpty [] (cvals := [ivVal n, nullVal]) (evalPexprs_cons_val _ _ _ _ _ _ _ (evalPexprs_single_val _ _ _ _ _))
   rw [bindSave_ml]
   rw [show (nullVal : value) = ptrVal nullNode from rfl]
-  iapply ml_body_wps loc ann ra mo al pref ibty pbty qbty bbty nbty ubty n p rs hQ n
+  iapply ml_body_wps (hfuel := by omega) (halign := halign) (hmax := hmax) loc ann ra mo al pref ibty pbty qbty bbty nbty ubty n p rs hQ n
     nullNode [] [] fmapEmpty [] symFrame_empty hn (by simp) (by simp)
   isplitl [Hcap]
   · iexact Hcap
@@ -1187,7 +1191,7 @@ variable {GF : BundledGFunctors} [SpikeGS .hasLC GF]
     2026-09-04 this module carried its own `deadRegions_dead` over the
     coupling invariant and the metadata interpretation — the
     Reynolds/O'Hearn audit's Finding 2.) -/
-theorem mlPost_readout (n : Int) (w : SpikeVal) (ρ' : EnvStack) :
+theorem mlPost_readout [LemFuel] (n : Int) (w : SpikeVal) (ρ' : EnvStack) :
     mlPost (hlc := .hasLC) (GF := GF) n w ρ' ⊢
       readoutPost (fun v σ' => v = Vunit ∧
         ∃ ids : List Int, ids.length = n.toNat ∧ ids.Nodup ∧
@@ -1247,7 +1251,8 @@ abbrev mlLsT : LabelSpecT GF := fun _ m args ρ =>
 
 include hQ
 
-theorem ml_body_wpt (i : Int) (pc : CerbMem.PointerValue) (ids done : List Int)
+theorem ml_body_wpt [LemFuel] (hfuel : 0 < LemFuel.fuel) (halign : 0 < al)
+    (hmax : n.toNat ≤ 9223372036854775807) (i : Int) (pc : CerbMem.PointerValue) (ids done : List Int)
     (f : Fmap sym value) (renv : List (Fmap sym value)) (hf : SymFrame f)
     (hi : 0 ≤ i) (hcnt : i.toNat + ids.length + done.length = n.toNat)
     (hnd : (ids ++ done).Nodup) :
@@ -1256,6 +1261,8 @@ theorem ml_body_wpt (i : Int) (pc : CerbMem.PointerValue) (ids done : List Int)
       wpt (procCtxF F rs) (some p) (mlLsT al n) emptyProcSpecT (mlCost i.toNat ids.length) (mlPost n)
         (mlBody loc ann ra mo al pref qbty bbty nbty ubty)
         (mlFrame (ivVal i) (ptrVal pc) f :: renv) := by
+  have hlonglo : -9223372036854775808 ≤ i := by omega
+  have hlonghi : i ≤ 9223372036854775807 := by omega
   rw [show mlBody loc ann ra mo al pref qbty bbty nbty ubty =
     Expr [] (Eif mlGuardPe (mlBuild loc ann ra mo al pref qbty ubty)
       (mlFree loc ann ra mo bbty nbty ubty)) from rfl]
@@ -1284,7 +1291,7 @@ theorem ml_body_wpt (i : Int) (pc : CerbMem.PointerValue) (ids done : List Int)
     iapply wpt_seq_sym
     rw [show mlAllocE loc ann al pref =
       allocExpr [] loc ann (.IV .Prov_none al) (.IV .Prov_none 16) pref from rfl]
-    iapply wpt_alloc [] loc ann .Prov_none .Prov_none al 16 pref _ (Nat.le_refl 2)
+    iapply wpt_alloc (hfuel := hfuel) (halign := halign) (hsize := by decide) [] loc ann .Prov_none .Prov_none al 16 pref _ (Nat.le_refl 2)
       (regionCost_pos al 16 (by decide))
     isplitl [Hc]
     · iexact Hc
@@ -1332,7 +1339,7 @@ theorem ml_body_wpt (i : Int) (pc : CerbMem.PointerValue) (ids done : List Int)
     iapply wpt_store_regionOwn_at [] (mv := longMval i) loc ann id a 16 0 longTy (ivVal i) mo _ _
       (Nat.le_refl 3) (longMval_encodes i)
       (by rw [show CerbMem.sizeofCtype (procCtxF F rs).tagDefs longTy = 8 from rfl]; omega)
-      (longMval_storable i)
+      (longMval_storable i hlonglo hlonghi)
     isplitl [Hr16]
     · iexact Hr16
     iintro %fp1 Hr
@@ -1372,7 +1379,7 @@ theorem ml_body_wpt (i : Int) (pc : CerbMem.PointerValue) (ids done : List Int)
     · iexact Hrest
     isplitl [Hr HL]
     · iapply isRegionList_cons_intro id a pc (mlBuilt i pc) ids hb.1 ha1
-        (mlBuilt_len i hwf) (mlBuilt_nextDec i hwf)
+        (mlBuilt_len i hlonglo hlonghi hwf) (mlBuilt_nextDec i hlonglo hlonghi hwf)
       isplitl [Hr]
       · iexact Hr
       · iexact HL
@@ -1512,7 +1519,8 @@ theorem ml_body_wpt (i : Int) (pc : CerbMem.PointerValue) (ids done : List Int)
         · iexact HD
 
 /-- THE TOTAL BLOCK SPECIFICATION. -/
-theorem ml_blockSpecsT :
+theorem ml_blockSpecsT [LemFuel] (hfuel : 0 < LemFuel.fuel) (halign : 0 < al)
+    (hmax : n.toNat ≤ 9223372036854775807) :
     ⊢ blockSpecsT (GF := GF) (procCtxF F rs) (some p) (mlLsT al n) emptyProcSpecT (mlPost n) := by
   refine blockSpecsT_intro fun l params cont args env0 envs m hl => ?_
   rw [procCtxF_labels hQ] at hl
@@ -1525,7 +1533,7 @@ theorem ml_blockSpecsT :
     simp at h1 h2
     exact ⟨h1.symm, h2.symm⟩
   rw [bindArgs_ml]
-  iapply ml_body_wpt loc ann ra mo al pref ibty pbty qbty bbty nbty ubty n p rs hQ
+  iapply ml_body_wpt (hfuel := by omega) (halign := halign) (hmax := hmax) loc ann ra mo al pref ibty pbty qbty bbty nbty ubty n p rs hQ
     i pc ids done f renv hf hi hcnt hnd
   isplitl [Hcap]
   · iexact Hcap
@@ -1534,7 +1542,8 @@ theorem ml_blockSpecsT :
   · iexact HD
 
 /-- THE MALLOC'D LIST (total), at budget `mlCost n.toNat 0 + 1 = 25·n + 7`. -/
-theorem ml_wpt (sbty : core_base_type) (hn : 0 ≤ n) :
+theorem ml_wpt [LemFuel] (hfuel : 0 < LemFuel.fuel) (halign : 0 < al)
+    (hmax : n.toNat ≤ 9223372036854775807) (sbty : core_base_type) (hn : 0 ≤ n) :
     allocBudget (GF := GF) (n.toNat * regionCost al 16) ⊢
       wpt (procCtxF F rs) (some p) (mlLsT al n) emptyProcSpecT (mlCost n.toNat 0 + 1) (mlPost n)
         (mlProg loc ann ra mo al pref sbty ibty pbty qbty bbty nbty ubty n) [fmapEmpty] := by
@@ -1546,7 +1555,7 @@ theorem ml_wpt (sbty : core_base_type) (hn : 0 ≤ n) :
   rw [bindSave_ml]
   rw [show (nullVal : value) = ptrVal nullNode from rfl]
   rw [show mlCost n.toNat 0 = mlCost n.toNat ([] : List Int).length from rfl]
-  iapply ml_body_wpt loc ann ra mo al pref ibty pbty qbty bbty nbty ubty n p rs hQ n
+  iapply ml_body_wpt (hfuel := by omega) (halign := halign) (hmax := hmax) loc ann ra mo al pref ibty pbty qbty bbty nbty ubty n p rs hQ n
     nullNode [] [] fmapEmpty [] symFrame_empty hn (by simp) (by simp)
   isplitl [Hcap]
   · iexact Hcap
@@ -1575,17 +1584,19 @@ abbrev ψML : value → Mem → Prop := fun v σ' =>
   v = Vunit ∧ ∃ ids : List Int, ids.length = n.toNat ∧ ids.Nodup ∧ ∀ id ∈ ids, DeadAt σ' id
 
 /-- The block specifications at the engine readout (what the launches consume). -/
-theorem ml_blockSpecsT_readout :
+theorem ml_blockSpecsT_readout [LemFuel] (hfuel : 0 < LemFuel.fuel) (halign : 0 < al)
+    (hmax : n.toNat ≤ 9223372036854775807) :
     ⊢ blockSpecsT (GF := GF) (procCtxF F rs) (some p) (mlLsT al n) emptyProcSpecT (readoutPost (ψML n)) :=
-  (ml_blockSpecsT loc ann ra mo al pref ibty pbty qbty bbty nbty ubty n p rs hQ).trans
+  (ml_blockSpecsT (hfuel := by omega) (halign := halign) (hmax := hmax) loc ann ra mo al pref ibty pbty qbty bbty nbty ubty n p rs hQ).trans
     (blockSpecsT_mono (mlPost_readout n))
 
 /-- The whole program at the engine readout. -/
-theorem ml_wpt_readout (sbty : core_base_type) (hn : 0 ≤ n) :
+theorem ml_wpt_readout [LemFuel] (hfuel : 0 < LemFuel.fuel) (halign : 0 < al)
+    (hmax : n.toNat ≤ 9223372036854775807) (sbty : core_base_type) (hn : 0 ≤ n) :
     allocBudget (GF := GF) (n.toNat * regionCost al 16) ⊢
       wpt (procCtxF F rs) (some p) (mlLsT al n) emptyProcSpecT (mlCost n.toNat 0 + 1) (readoutPost (ψML n))
         (mlProg loc ann ra mo al pref sbty ibty pbty qbty bbty nbty ubty n) [fmapEmpty] :=
-  (ml_wpt loc ann ra mo al pref ibty pbty qbty bbty nbty ubty n p rs hQ sbty hn).trans
+  (ml_wpt (hfuel := by omega) (halign := halign) (hmax := hmax) loc ann ra mo al pref ibty pbty qbty bbty nbty ubty n p rs hQ sbty hn).trans
     (wpt_mono (mlPost_readout n) _ _ _)
 
 end MlTotalLC
@@ -1598,6 +1609,21 @@ variable (loc : CerbLocation.Loc) (ann ra : core_run_annotation)
 
 /-! ### Registration and the production statement -/
 
+/-- The program's structural measure, separate from collector reduction. -/
+theorem mlProg_size (n : Int) :
+    generic_expr.lemSize (mlProg loc ann ra mo al pref sbty ibty pbty qbty bbty nbty ubty n) = 36 := by
+  simp only [mlProg, mlBody, mlBuild, mlFree, mlAllocE, allocExpr,
+    mlStoreValE, mlStoreNextE, storeOpRedex, mlMemopE, memopRedex,
+    mlLoadE, loadOpRedex, mlFreeE, killOpRedex,
+    generic_expr.lemSize, generic_expr_.lemSize] <;> rfl
+
+/-- The single save registers the loop; its body contains no further saves. -/
+theorem col_mlProg (k : Nat) (n : Int) :
+    collect_saves_aux_lemFuel (k + 7) empty_saves
+      (mlProg loc ann ra mo al pref sbty ibty pbty qbty bbty nbty ubty n) =
+      { tmp_acc := mlQ loc ann ra mo al pref ibty pbty qbty bbty nbty ubty,
+        closed_acc := fmapEmpty } := rfl
+
 /-- The shipped registration computes the loop's label map (the save is
     the registration site and the entry). -/
 theorem collect_new_ml (n : Int) :
@@ -1605,7 +1631,14 @@ theorem collect_new_ml (n : Int) :
         (prodFile (mlProg loc0 empty_annotation ra mo al pref sbty ibty pbty qbty bbty nbty
           ubty n)) =
       fmapAddBy (fun (s1 s2 : sym) => ordCompare s1 s2) mainSym
-        (mlQ loc0 empty_annotation ra mo al pref ibty pbty qbty bbty nbty ubty) fmapEmpty := rfl
+        (mlQ loc0 empty_annotation ra mo al pref ibty pbty qbty bbty nbty ubty) fmapEmpty := by
+  rw [collect_labeled_prodFile]
+  unfold collect_saves collect_saves_aux
+  rw [mlProg_size]
+  have hcol := col_mlProg loc0 empty_annotation ra mo al pref sbty ibty pbty qbty bbty nbty ubty 29 n
+  unfold empty_saves at hcol
+  rw [hcol]
+  rfl
 
 theorem ml_labeledAt (sup : Nat) (n : Int) :
     LabeledAt ((initial_core_run_state sup (collect_labeled_continuations_NEW
@@ -1638,6 +1671,17 @@ theorem ml_budget_bridge (n : Int)
   rw [h1]
   exact hB
 
+/-- The production allocation budget already bounds every stored counter
+    within the signed-long range. This adds no production size premise. -/
+theorem ml_counter_bound (n : Int)
+    (hB : n.toNat * (15 + max al.toNat 1) ≤ 281474976710647) :
+    n.toNat ≤ 9223372036854775807 := by
+  calc
+    n.toNat = n.toNat * 1 := (Nat.mul_one _).symm
+    _ ≤ n.toNat * (15 + max al.toNat 1) := Nat.mul_le_mul_left _ (by omega)
+    _ ≤ 281474976710647 := hB
+    _ ≤ 9223372036854775807 := by decide
+
 /-- THE MALLOC'D LIST, PRODUCTION FORM: running the SHIPPED pipeline
     cold on the self-contained file is EXACTLY ONE Active execution
     delivering `Vunit` whose final memory has `n.toNat` DISTINCT
@@ -1652,12 +1696,13 @@ theorem ml_budget_bridge (n : Int)
     cursor descent, `281474976710647 = headroom` of the cold-start
     cursor; the bridge to the package's `regionCost`/`headroom` is
     `ml_budget_bridge`), and the in-fuel bound on the certified step count
-    (`hfuel`). Cold start, shipped registration, termination from the
+    (`hfuel`), with positive alignment. The existing allocation budget
+    implies the stored counter's signed-long range. Cold start, shipped registration, termination from the
     total judgment; the pipeline arrows are `wpt_driver_done_alloc` →
     `prod_run_eqJ`. -/
-theorem malloc_list_certified_production (sup : Nat) (n : Int) (hn : 0 ≤ n)
+theorem malloc_list_certified_production [LemFuel] (halign : 0 < al) (sup : Nat) (n : Int) (hn : 0 ≤ n)
     (hB : n.toNat * (15 + max al.toNat 1) ≤ 281474976710647)
-    (hfuel : 25 * n.toNat + 9 ≤ CerbFuel.driverFuel)
+    (hfuel : 25 * n.toNat + 9 ≤ LemFuel.fuel)
     (fs : CerbFS.FsState) (args : List String) :
     ∃ (dres : driver_result) (dst' : driver_state),
       CerbND.runND
@@ -1677,12 +1722,13 @@ theorem malloc_list_certified_production (sup : Nat) (n : Int) (hn : 0 ≤ n)
       dres.dres_blocked = false ∧
       dres.dres_stdout = "" ∧
       dres.dres_stderr = "" := by
+  have hmax := ml_counter_bound al n hB
   have hQprod := ml_labeledAt ra mo al pref sbty ibty pbty qbty bbty nbty ubty sup n
   obtain ⟨dres, dst', heq, hψ, hbl, hout, herr⟩ :=
     prod_run_eqJ sup (mlProg loc0 empty_annotation ra mo al pref sbty ibty pbty qbty bbty
         nbty ubty n)
       hQprod (ψML n) (mlCost n.toNat 0 + 1)
-      (wpt_driver_done_alloc (GF := SpikeGF) (ctl := prodCtl sup)
+      (wpt_driver_done_alloc (hfuel := by omega) (GF := SpikeGF) (ctl := prodCtl sup)
         (M₀ := procCtxF (prodFile (mlProg loc0 empty_annotation ra mo al pref sbty ibty pbty qbty bbty
               nbty ubty n)) ((initial_core_run_state sup
           (collect_labeled_continuations_NEW
@@ -1693,19 +1739,12 @@ theorem malloc_list_certified_production (sup : Nat) (n : Int) (hn : 0 ≤ n)
           rw [procCtxF_labels hQprod] at hl
           obtain ⟨-, rfl⟩ := mlQ_inv loc0 empty_annotation ra mo al pref ibty pbty qbty bbty
             nbty ubty hl
-          exact mlBody_frag loc0 empty_annotation ra mo al pref qbty bbty nbty ubty)
-        (fun l params cont hl => by
-          rw [procCtxF_labels hQprod] at hl
-          obtain ⟨-, rfl⟩ := mlQ_inv loc0 empty_annotation ra mo al pref ibty pbty qbty bbty
-            nbty ubty hl
-          rw [mlBody_pot, show lemDefaultFuel = 999999 + 1 from rfl]
-          omega)
+          exact mlBody_frag (hfuel := by omega) loc0 empty_annotation ra mo al pref qbty bbty nbty ubty)
         (mlLsT al n)
         (mlProg loc0 empty_annotation ra mo al pref sbty ibty pbty qbty bbty nbty ubty n)
         fmapEmpty [] prodMem₀ (∅ : SpikeHeapF SpikeCell) (n.toNat * regionCost al 16)
-        (.save (saveParams_pure_of_vals rfl) (saveParams_depth_of_vals rfl)
-          (mlBody_frag loc0 empty_annotation ra mo al pref qbty bbty nbty ubty))
-        (by rw [mlProg_pot, show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+        (.save (saveParams_pure_of_vals rfl) (fun pe hp => by rw [mlParams_depth ibty pbty n pe hp]; omega)
+          (mlBody_frag (hfuel := by omega) loc0 empty_annotation ra mo al pref qbty bbty nbty ubty))
         (prodMem₀_launchCoh _ (ml_budget_bridge al n hB))
         (ψML n)
         (mlCost n.toNat 0 + 1)
@@ -1713,9 +1752,9 @@ theorem malloc_list_certified_production (sup : Nat) (n : Int) (hn : 0 ≤ n)
           intro inst
           iintro ⟨-, Hcap⟩
           isplitr [Hcap]
-          · iapply ml_blockSpecsT_readout loc0 empty_annotation ra mo al pref ibty pbty qbty
+          · iapply ml_blockSpecsT_readout (hfuel := by omega) (halign := halign) (hmax := hmax) loc0 empty_annotation ra mo al pref ibty pbty qbty
               bbty nbty ubty n mainSym _ hQprod
-          · iapply ml_wpt_readout loc0 empty_annotation ra mo al pref ibty pbty qbty bbty
+          · iapply ml_wpt_readout (hfuel := by omega) (halign := halign) (hmax := hmax) loc0 empty_annotation ra mo al pref ibty pbty qbty bbty
               nbty ubty n mainSym _ hQprod sbty hn $$ Hcap))
       (by unfold mlCost; omega)
       fs args

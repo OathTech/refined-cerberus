@@ -3,10 +3,10 @@ The emitted t5_ifelse main: a total-correctness proof through public rules.
 
 The transcription is CorpusE0.t5Main. Its constructor skeleton is checked
 against docs/corpus-e0/t5_ifelse.annot.core; the checker leaves symbol and
-literal identity to transcription review. t5_wpt derives a budget of 88
-and exposes the initial fresh-symbol floor. t5_certified_production proves
-that the shipped driver returns Specified(1) on prodFileLib stdlibE3 []
-t5Main. This file contains the transcribed main and three checked std.core
+literal identity to transcription review; full-file identity remains A7.
+t5_wpt derives a budget of 88 and exposes the initial fresh-symbol floor. t5_certified_production proves
+that at ambient fuel at least ninety the shipped driver returns Specified(1)
+on prodFileLib stdlibE3 [] t5Main. This file contains the transcribed main and three checked std.core
 functions; it is not the complete frontend file and full std.core library.
 
 The condition, assignment and return have separate public-rule derivations.
@@ -49,7 +49,7 @@ def t5BoolBranch : generic_pexpr Unit sym :=
 theorem t5Bool_select : select_case subst_sym_expr (lint 0) t5BoolPats =
     some (t5Pure t5BoolBranch) := rfl
 
-theorem t5BoolBranch_eval {M : MachineCtx} (ρ : EnvStack) :
+theorem t5BoolBranch_eval [LemFuel] {M : MachineCtx} (ρ : EnvStack) :
     evalPexpr M.tagDefs M.extern M.file ρ t5BoolBranch = some Vtrue := by
   rw [t5BoolBranch, evalPexpr_if,
     if_pos (show (isPePure (Pexpr [] () (PEval Vtrue)) &&
@@ -60,7 +60,7 @@ theorem t5BoolBranch_eval {M : MachineCtx} (ρ : EnvStack) :
   simp only [Option.bind_some]
   rw [evalPexpr_val]
 
-theorem t5CondPe_eval {M : MachineCtx} (hstd : StdE3 M.file) {ρ : EnvStack}
+theorem t5CondPe_eval [LemFuel] {M : MachineCtx} (hstd : StdE3 M.file) {ρ : EnvStack}
     (hv : evalPexpr M.tagDefs M.extern M.file ρ (t5Tuple 512 513) =
       some (Vtuple [lint 1, lint 0])) :
     evalPexpr M.tagDefs M.extern M.file ρ
@@ -73,7 +73,7 @@ theorem t5CondPe_eval {M : MachineCtx} (hstd : StdE3 M.file) {ρ : EnvStack}
 
 /-- A whole integer load with the emitted temporary binder, using the
     public whole-cell rule and preserving the caller's postcondition. -/
-theorem wpt_t5Load [SpikeGS .hasLC GF]
+theorem wpt_t5Load [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
     {Ψ : SpikeVal → EnvStack → IProp GF}
     (hex : ∀ x, resolveExtern M.extern x = x)
@@ -95,7 +95,7 @@ abbrev t5frGt (px : CerbMem.PointerValue) (f : Fmap sym value) :=
 
 /-- The emitted comparison reads x=3 and returns Specified(1), retaining
     the load footprint until the surrounding full-expression bound. -/
-theorem wpt_t5Gt [SpikeGS .hasLC GF]
+theorem wpt_t5Gt [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
     {Ψ : SpikeVal → EnvStack → IProp GF}
     (hstd : StdE3 M.file) (hex : ∀ x, resolveExtern M.extern x = x)
@@ -140,7 +140,7 @@ theorem wpt_t5Gt [SpikeGS .hasLC GF]
 abbrev t5frCond (px : CerbMem.PointerValue) (f : Fmap sym value) :=
   envAdd (t5a 512) (lint 1) (envAdd (t5a 513) (lint 0) (t5frGt px f))
 
-theorem wpt_t5Cond [SpikeGS .hasLC GF]
+theorem wpt_t5Cond [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
     {Ψ : SpikeVal → EnvStack → IProp GF}
     (hstd : StdE3 M.file) (hex : ∀ x, resolveExtern M.extern x = x)
@@ -154,7 +154,7 @@ theorem wpt_t5Cond [SpikeGS .hasLC GF]
   iintro ⟨Hpt, HΨ⟩
   unfold t5Cond bnd
   rw [show (25 : Nat) = 24 + 1 from rfl]
-  iapply wpt_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
+  iapply wpt_bound _ _ _ rfl
   rw [show t5TuplePat 512 513 =
     tuplePat [] [([], some (t5a 512), CorpusE0.lint), ([], some (t5a 513), CorpusE0.lint)] from rfl]
   iapply wpt_wseq_tuple_annot _ _ _ _ _ _ _ 21 3
@@ -180,7 +180,7 @@ theorem wpt_t5Cond [SpikeGS .hasLC GF]
   simp only [SpikeVal.merge]
   iapply HΨ $$ Hpt
 
-theorem wpt_t5AssignBlock [SpikeGS .hasLC GF]
+theorem wpt_t5AssignBlock [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
     {Ψ : SpikeVal → EnvStack → IProp GF}
     (hstd : StdE3 M.file) (hex : ∀ x, resolveExtern M.extern x = x)
@@ -202,7 +202,7 @@ theorem wpt_t5AssignBlock [SpikeGS .hasLC GF]
   rw [show (Pattern [] (CaseCtor Ctuple
     [Pattern [] (CaseBase (some (t5a n), ptrTy)), Pattern [] (CaseBase (some (t5a m), CorpusE0.lint))]) : pattern) =
     tuplePat [] [([], some (t5a n), ptrTy), ([], some (t5a m), CorpusE0.lint)] from rfl]
-  iapply wpt_bound_wseq_tuple _ _ _ _ _ _ _ _ 7 16 rfl (Nat.le_of_ble_eq_true rfl)
+  iapply wpt_bound_wseq_tuple _ _ _ _ _ _ _ _ 7 16 rfl
   iapply wpt_unseq_pure_right _ _ _ (specInt v) _ 2 (lint v) rfl rfl (specInt_eval _ v)
   iapply wpt_pure (psym t5rSym) _ (Nat.le_refl 2) rfl (t1sym_eval hex rest hr)
   simp only [SpikeVal.mergeInto, SpikeVal.val]
@@ -233,7 +233,7 @@ theorem wpt_t5AssignBlock [SpikeGS .hasLC GF]
   iapply HΨ $$ %s %hs Hpt
 
 
-theorem wpt_t5Bool [SpikeGS .hasLC GF]
+theorem wpt_t5Bool [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
     {Ψ : SpikeVal → EnvStack → IProp GF} (ρ : EnvStack)
     (hv : evalPexpr M.tagDefs M.extern M.file ρ (psym (t5a 510)) = some (lint 0)) :
@@ -281,7 +281,7 @@ def t5LsT (GF : BundledGFunctors) [SpikeGS .hasLC GF] : LabelSpecT GF := fun l m
 /-- The post: the delivered value is `Specified(1)`. -/
 def ψT5 : value → Mem → Prop := fun v _ => v = lint 1
 
-theorem t5LsT_readout [SpikeGS .hasLC GF] :
+theorem t5LsT_readout [LemFuel] [SpikeGS .hasLC GF] :
     ∀ w ρ', iprop(⌜w = SpikeVal.pure (lint 1)⌝) ⊢ readoutPost (GF := GF) ψT5 w ρ' := by
   intro w ρ'
   iintro %hw
@@ -291,7 +291,7 @@ theorem t5LsT_readout [SpikeGS .hasLC GF] :
   subst hw
   rfl
 
-theorem t5_blockSpecsT [SpikeGS .hasLC GF]
+theorem t5_blockSpecsT [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} (hex : ∀ x, resolveExtern M.extern x = x)
     (hQ : M.labelsAt p = t5RetQ) :
     ⊢ blockSpecsT (GF := GF) M p (t5LsT GF) emptyProcSpecT (readoutPost ψT5) := by
@@ -321,7 +321,7 @@ local macro "t5_lookup" : tactic => `(tactic|
 theorem t5Kill_eq (x : sym) : CorpusE0.t5Kill x =
     killOpRedex [] (t5Reg 0 84) empty_annotation (Static0 intTy) (psym x) := rfl
 
-theorem wpt_t5Return [SpikeGS .hasLC GF]
+theorem wpt_t5Return [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} {Ψ : SpikeVal → EnvStack → IProp GF}
     (hstd : StdE3 M.file) (hex : ∀ x, resolveExtern M.extern x = x)
     (hQ : M.labelsAt p = t5RetQ)
@@ -338,7 +338,7 @@ theorem wpt_t5Return [SpikeGS .hasLC GF]
     symPat [] (t5a 528) CorpusE0.lint from rfl]
   iapply wpt_seq_sym _ _ _ _ _ _ _ _ 7 9
   rw [show (7 : Nat) = 6 + 1 from rfl]
-  iapply wpt_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
+  iapply wpt_bound _ _ _ rfl
   iapply wpt_t5Load hex t5rSym 527 80 81 f rest hf pr (emittedIntBytes M.tagDefs 1) (lint 1) hr rfl rfl
   isplitl [Hr]
   · iexact Hr
@@ -374,7 +374,7 @@ theorem wpt_t5Return [SpikeGS .hasLC GF]
 abbrev t5frIf (px pr : CerbMem.PointerValue) (f : Fmap sym value) :=
   t5frAssign 523 524 1 pr (envAdd (t5a 509) Vtrue (envAdd (t5a 510) (lint 0) (t5frCond px f)))
 
-theorem wpt_t5If [SpikeGS .hasLC GF]
+theorem wpt_t5If [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
     {Ψ : SpikeVal → EnvStack → IProp GF}
     (hstd : StdE3 M.file) (hex : ∀ x, resolveExtern M.extern x = x)
@@ -426,7 +426,7 @@ theorem t5Store_eq (a : List annot) (loc : CerbLocation.Loc) (pe2 pe3 : generic_
 /-- The complete emitted conditional program. The fresh-symbol floor is
     explicit; its purpose is to protect source bindings after assignment.
     The total budget is 17 (initialization) + 55 (conditional) + 16 (return). -/
-theorem t5_wpt [SpikeGS .hasLC GF]
+theorem t5_wpt [LemFuel] (hfuel : 0 < LemFuel.fuel) [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} (hstd : StdE3 M.file)
     (hex : ∀ x, resolveExtern M.extern x = x) (hQ : M.labelsAt p = t5RetQ)
     (hsup : 600 ≤ M.runState.sym_supply)
@@ -445,7 +445,7 @@ theorem t5_wpt [SpikeGS .hasLC GF]
     (align := CerbMem.alignofIval M.tagDefs intTy) (ty := intTy) rfl
     (alignofIntPe_eval _ _) (evalPexpr_val _ _ _ _ _)
   rw [alignofIval_intTy]
-  iapply wpt_create _ _ empty_annotation .Prov_none 4 intTy (PrefSource (t5Reg 15 84) [CorpusE0.xSym])
+  iapply wpt_create (hfuel := hfuel) (halign := by decide) (haddr := rfl) _ _ empty_annotation .Prov_none 4 intTy (PrefSource (t5Reg 15 84) [CorpusE0.xSym])
     _ (Nat.le_refl 2) intTy_size_pos intTy_nonatomic (fun a => intTy_decIndep a _)
   isplitl [HcapX]
   · iexact HcapX
@@ -462,7 +462,7 @@ theorem t5_wpt [SpikeGS .hasLC GF]
     (align := CerbMem.alignofIval M.tagDefs intTy) (ty := intTy) rfl
     (alignofIntPe_eval _ _) (evalPexpr_val _ _ _ _ _)
   rw [alignofIval_intTy]
-  iapply wpt_create _ _ empty_annotation .Prov_none 4 intTy (PrefSource (t5Reg 15 84) [t5rSym])
+  iapply wpt_create (hfuel := hfuel) (halign := by decide) (haddr := rfl) _ _ empty_annotation .Prov_none 4 intTy (PrefSource (t5Reg 15 84) [t5rSym])
     _ (Nat.le_refl 2) intTy_size_pos intTy_nonatomic (fun a => intTy_decIndep a _)
   isplitl [HcapR]
   · iexact HcapR
@@ -475,7 +475,7 @@ theorem t5_wpt [SpikeGS .hasLC GF]
     symPat [] (t5a 508) CorpusE0.lint from rfl]
   iapply wpt_seq_sym _ _ _ _ _ _ _ _ 3 79
   rw [show (3 : Nat) = 2 + 1 from rfl]
-  iapply wpt_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
+  iapply wpt_bound _ _ _ rfl
   iapply wpt_pure (specInt 3) _ (Nat.le_refl 2) rfl (specInt_eval _ 3)
   simp only [SpikeVal.val]
   iexists (lint 3)
@@ -533,11 +533,6 @@ theorem t5Main_labeledAt (sup : Nat) :
   unfold LabeledAt
   rw [prodRSLib_labeled, collect_new_t5Main, fmapLookupBy_addBy_empty, if_pos (by decide +kernel)]
 
-/-- The potential bound of t5's `main` (kernel-decided; the static fuel
-    bound every round of the run needs). -/
-theorem t5Main_pot : pot CorpusE0.t5Main ≤ lemDefaultFuel := by
-  rw [show lemDefaultFuel = 999999 + 1 from rfl]; decide
-
 /-- The shipped driver on the one-procedure file wrapping the transcribed
     t5 main and the checked three-function std.core fragment returns
     Specified(1). The premise `600 ≤ sup` is a SUFFICIENT floor (above every
@@ -547,8 +542,12 @@ theorem t5Main_pot : pot CorpusE0.t5Main ≤ lemDefaultFuel := by
     `sup = 0` (measured, docs/2026-09-07_l1-landing-notes.md) — and not
     vacuous: at `sup = 505` (x's symbol number) the composite is KILLED, an
     `Undef0` kill after LemLib's `can_advance: Step_error2 ==> Kill` panic
-    (measured; the E5 full-range audit's D-2, re-run at the fixes). -/
-theorem t5_certified_production (sup : Nat) (hsup : 600 ≤ sup) (fs : CerbFS.FsState) (args : List String) :
+    (measured; the E5 full-range audit's D-2, re-run at the fixes). The same
+    caller fuel instance must provide at least ninety units (cost 88 plus two
+    driver iterations). This wrapper certificate leaves the full-file/library
+    connection A7 open. -/
+theorem t5_certified_production [LemFuel] (hfuel : 90 ≤ LemFuel.fuel)
+    (sup : Nat) (hsup : 600 ≤ sup) (fs : CerbFS.FsState) (args : List String) :
     ∃ (dres : driver_result) (dst' : driver_state),
       CerbND.runND (_root_.drive fmapEmpty false (prodFileLib stdlibE3 [] CorpusE0.t5Main) args)
           ((initial_driver_state sup (prodFileLib stdlibE3 [] CorpusE0.t5Main) fs).1) =
@@ -561,21 +560,16 @@ theorem t5_certified_production (sup : Nat) (hsup : 600 ≤ sup) (fs : CerbFS.Fs
   have hlbl := prodCtx_labels (f := prodFileLib stdlibE3 [] CorpusE0.t5Main) hQe
   obtain ⟨dres, dst', heq, hψ, hbl, hout, herr⟩ :=
     prod_run_eqJ_lib1 sup stdlibE3 CorpusE0.t5Main hQe ψT5 88
-      (wpt_driver_done_alloc (GF := SpikeGF) (ctl := prodCtl sup)
+      (wpt_driver_done_alloc (hfuel := by omega) (GF := SpikeGF) (ctl := prodCtl sup)
         (M₀ := prodCtx (prodFileLib stdlibE3 [] CorpusE0.t5Main) (prodRSLib stdlibE3 [] sup CorpusE0.t5Main))
         rfl rfl hlbl rfl rfl rfl rfl (Nat.le_refl _)
         (fun l params cont hl => by
           rw [hlbl] at hl
           obtain ⟨-, rfl⟩ := t5RetQ_inv hl
-          exact .pure_op rfl (.sym [] (t5a 529)) (CorpusE0.depLe (by decide)))
-        (fun l params cont hl => by
-          rw [hlbl] at hl
-          obtain ⟨-, rfl⟩ := t5RetQ_inv hl
-          exact Nat.le_of_ble_eq_true rfl)
+          exact .pure_op rfl (.sym [] (t5a 529)) (CorpusE0.depLe (by omega) (by decide)))
         (t5LsT SpikeGF)
         CorpusE0.t5Main fmapEmpty [] prodMem₀ (∅ : SpikeHeapF SpikeCell)
-        (allocCost fmapEmpty intTy 4 + allocCost fmapEmpty intTy 4) CorpusE0.t5Main_frag
-        t5Main_pot
+        (allocCost fmapEmpty intTy 4 + allocCost fmapEmpty intTy 4) (CorpusE0.t5Main_frag (by omega))
         (prodMem₀_launchCoh _ prod_two_int_budget_fits)
         ψT5 88
         (by
@@ -583,10 +577,10 @@ theorem t5_certified_production (sup : Nat) (hsup : 600 ≤ sup) (fs : CerbFS.Fs
           iintro ⟨-, Hcap⟩
           isplitr [Hcap]
           · iapply t5_blockSpecsT (resolveExtern_id_of_empty (prodCtx_extern _ _)) hlbl
-          · iapply t5_wpt (M := prodCtx (prodFileLib stdlibE3 [] CorpusE0.t5Main) (prodRSLib stdlibE3 [] sup CorpusE0.t5Main))
+          · iapply t5_wpt (hfuel := by omega) (M := prodCtx (prodFileLib stdlibE3 [] CorpusE0.t5Main) (prodRSLib stdlibE3 [] sup CorpusE0.t5Main))
               rfl (resolveExtern_id_of_empty (prodCtx_extern _ _)) hlbl hsup fmapEmpty []
               symFrame_empty $$ Hcap))
-      (by rw [show CerbFuel.driverFuel = 99999999 + 1 from rfl]; omega)
+      hfuel
       fs args
   exact ⟨dres, dst', heq, hψ, hbl, hout, herr⟩
 

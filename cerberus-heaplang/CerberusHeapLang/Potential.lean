@@ -1,37 +1,31 @@
 /-
-CerberusHeapLang.Potential — the step-monotone size potential `pot`
-on fragment terms: the STATIC fuel bound both adequacy theorems carry.
+CerberusHeapLang.Potential — the additive size potential pot.
 
-The engine's `get_ctx` is fuel-bounded (budget `lemDefaultFuel`,
-Soundness.lean header "FUEL HONESTY") and its exhaustion leaf is
-opaque, so every per-step engine equation — the shipped round
-`loop_step_frag` both driver lanes consume, the certification
-`engine_step_matchU` — carries `esize e ≤ lemDefaultFuel` for the CURRENT term. The generic
-growth bound `Frag.esize_step_bound` (≤ +1 per step) would couple a
-drive statement's fuel premise to the run length. This module installs
-the classical remedy: a potential/ranking function on terms — value
-leaves 1, redex leaves 2 (a leaf's rewrite into its annotated value is
-prepaid), the NEGATIVE action leaf 10 (E5: its rewrite at the enclosing
-`bound` adds a binder, a two-component `unseq`, the excluded action and a
-symbol read around the re-plugged `pure(Unit)`), compounds ADDITIVE (E5:
-the sum of the children plus one — the classical size; E4's `max` form
-could not absorb a rewrite that nests the continuation deeper), case
-nodes the sum of their branches plus two — such that
+This module was installed against the engine's former `get_ctx` fuel
+ceiling (pin `f95ef8d9c`: a fixed `lemDefaultFuel` budget with an opaque
+exhaustion leaf, so every per-step engine equation carried
+`esize e ≤ lemDefaultFuel` for the CURRENT term, and the generic growth
+bound `Frag.esize_step_bound`, ≤ +1 per step, would have coupled a drive
+statement's fuel premise to the run length). The classical remedy is a
+potential/ranking function on terms — value leaves 1, redex leaves 2 (a
+leaf's rewrite into its annotated value is prepaid), the NEGATIVE action
+leaf 10 (E5: its rewrite at the enclosing `bound` adds a binder, a
+two-component `unseq`, the excluded action and a symbol read around the
+re-plugged `pure(Unit)`), compounds ADDITIVE (E5: the sum of the children
+plus one — the classical size; E4's `max` form could not absorb a rewrite
+that nests the continuation deeper), case nodes the sum of their branches
+plus two — such that
 
-  * `Frag.esize_le_pot`   : `esize e ≤ pot e`, and
-  * `Frag.pot_step_bound` : along a fragment step `pot` never
-    increases, except at a jump, where it resets to the registered
-    body's own potential.
-
-So the two STATIC premises `pot e₀ ≤ lemDefaultFuel` and
-`pot cont ≤ lemDefaultFuel` (per registered label body) bound `esize`
-at every reachable term, independent of the run length. Both the
-partial fuel induction (Adequacy.lean, `drive_safe_aux`) and the total
-budget inductions (ProdLoop.lean, `wpt_driver_aux`/`wpt_driver_cps`)
-consume exactly these; the exhibits discharge them by computing `pot` on
-the closed program term (`t1Main_pot`'s pattern). E5 RETIRED
-`Frag.pot_le_two` (`pot e ≤ 2 * esize e`): false for the additive
-potential (a chain of `n` sequenced leaves has `esize` ≈ n and `pot` ≈ 3n).
+At the current pin (`89f7e6885`, the fuel-parameter arc) `get_ctx` is
+MEASURED — fuel-free, its recursion bounded by the engine's own structural
+measure (`Core_reduction.lean`, `get_ctx := get_ctx_lemFuel (lemSize …)`)
+— so no export carries a `pot`/`esize` ceiling any more; the potential
+stays as the package's size library (it bounds `esize`, is preserved by
+substitution at the engine's structural wrapper, and is non-increasing on
+the fragment's steps except at a jump to a registered continuation). The
+one fuel that still reaches the fragment's execution path is the pure
+evaluator's pass count, bounded by the OPERAND depth `evalDepth`
+(Fragment.lean), a hypothesis on the exports, not a field of `Frag` (R2).
 -/
 import CerberusHeapLang.Soundness
 
@@ -305,7 +299,7 @@ theorem esizeAlts_le_potAlts : ∀ pats : List (pattern × CoreExpr), esizeAlts 
       exact Nat.max_le.mpr ⟨Nat.le_trans h1 (Nat.le_add_right _ _), Nat.le_trans h2 (Nat.le_add_left _ _)⟩
 end
 
-theorem Frag.esize_le_pot {e : CoreExpr} (hf : Frag e) : esize e ≤ pot e := by
+theorem Frag.esize_le_pot [LemFuel] {e : CoreExpr} (hf : Frag e) : esize e ≤ pot e := by
   induction hf with
   | call hpes hdep => simp [esize, pot, callRedex]
   | val_pure v => simp [esize, pot]
@@ -357,7 +351,7 @@ theorem Frag.esize_le_pot {e : CoreExpr} (hf : Frag e) : esize e ≤ pot e := by
     have := esizeList_le_potList_of ih
     omega
   | neg_store_op _ _ _ _ _ => simp [esize, pot, negStoreRedex, negActRedex]
-  | neg_store => simp [esize, pot, negActRedex]
+  | neg_store _ => simp [esize, pot, negActRedex]
   | excluded_store => simp [esize, pot, excludedStoreRedex]
   | excluded_store_op _ _ _ _ _ => simp [esize, pot, excludedStoreOpRedex]
   | case_op _ _ _ hall hbr hbsz ih _ =>
@@ -511,19 +505,18 @@ theorem pot_subst_lemFuel :
     | Ewait _ => exact Nat.le_refl _
     | Eexcluded _ _ => exact Nat.le_refl _
 
-theorem pot_subst {e : CoreExpr} (x : sym) (v : value) (h : esize e ≤ lemDefaultFuel) :
+theorem pot_subst {e : CoreExpr} (x : sym) (v : value) :
     pot (subst_sym_expr x v e) ≤ pot e :=
-  pot_subst_lemFuel lemDefaultFuel e x v h
+  pot_subst_lemFuel (generic_expr.lemSize e) e x v (esize_le_lemSize e)
 
-theorem pot_subst_fold {br : CoreExpr} (binds : List (sym × value))
-    (h : esize br ≤ lemDefaultFuel) :
+theorem pot_subst_fold {br : CoreExpr} (binds : List (sym × value)) :
     pot (substFold br binds) ≤ pot br := by
   induction binds with
   | nil => exact Nat.le_refl _
   | cons p rest ih =>
     obtain ⟨s0, cv⟩ := p
     rw [substFold_cons]
-    exact Nat.le_trans (pot_subst s0 cv (by rw [esize_subst_fold rest h]; exact h)) ih
+    exact Nat.le_trans (pot_subst s0 cv) ih
 
 /-- The potential is additive in the plugged term: replacing the hole's
     content changes the total by exactly the difference (the frames' own
@@ -563,14 +556,13 @@ theorem pot_negRewrite_le (n : Nat) (s0 : sym) (ctxA : context) (act : CoreActio
   omega
 
 /-- THE POTENTIAL IS STEP-MONOTONE on the cone (jumps reset to the
-    registered continuation — the second disjunct). This is what makes
-    the drive-fuel simulation's per-step `esize ≤ lemDefaultFuel`
-    obligations STATIC — no fuel accumulation over the run length. E1:
+    registered continuation — the second disjunct). No ambient syntax-size
+    bound is required. E1:
     stated at a kept call stack (`hκ` — the control-preserving rounds;
     CALL and RETURN leave the expression's own cone). -/
-theorem Frag.pot_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
+theorem Frag.pot_step_bound [LemFuel] {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
     {ctl ctl' : Ctl} {σ : Mem} {e' : CoreExpr} {ρ' : EnvStack} {σ' : Mem}
-    (hf : Frag e) (hsz : esize e ≤ lemDefaultFuel)
+    (hf : Frag e)
     (hs : Step M (e, ρ, ctl, σ) (e', ρ', ctl', σ')) (hκ : ctl'.κ = ctl.κ) :
     pot e' ≤ pot e ∨
     ∃ l pes params cont, jumpRedex? e = some (l, pes) ∧
@@ -579,7 +571,7 @@ theorem Frag.pot_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
   | call hpes hdep => exact (Step.call_ne_same_κ (callRedex?_callRedex _ _ _ _) hs hκ).elim
   | val_pure v => exact (Step.pure_val_elim hs hκ).elim
   | neg_store_op _ _ _ _ _ => exact (Step.neg_root_elim hs).elim
-  | neg_store => exact (Step.neg_root_elim hs).elim
+  | neg_store _ => exact (Step.neg_root_elim hs).elim
   | excluded_store =>
     obtain ⟨mv, fp, σ'', hmv, hmem, hout⟩ := hs.excluded_store_inv
     obtain ⟨h1, -, -, -⟩ := Config.mk_inj hout
@@ -650,7 +642,7 @@ theorem Frag.pot_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
         hcall
     · obtain ⟨h1, -, h3, -⟩ := Config.mk_inj hout
       subst h1 h3
-      rcases ih1 (by first | (rw [esize_sseq] at hsz; omega) | (rw [esize_wseq] at hsz; omega)) hstep hκ with hle | ⟨l, pes, params, cont, hj1, hl, rfl⟩
+      rcases ih1 hstep hκ with hle | ⟨l, pes, params, cont, hj1, hl, rfl⟩
       · left
         simp only [pot_sseq]
         omega
@@ -687,7 +679,7 @@ theorem Frag.pot_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
         hcall
     · obtain ⟨h1, -, h3, -⟩ := Config.mk_inj hout
       subst h1 h3
-      rcases ih1 (by first | (rw [esize_sseq] at hsz; omega) | (rw [esize_wseq] at hsz; omega)) hstep hκ with hle | ⟨l, pes, params, cont, hj1, hl, rfl⟩
+      rcases ih1 hstep hκ with hle | ⟨l, pes, params, cont, hj1, hl, rfl⟩
       · left
         simp only [pot_wseq]
         omega
@@ -718,7 +710,7 @@ theorem Frag.pot_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
         ⟨-, hcall⟩ | ⟨a2, b1, v', pc', κ', hb', -, hout'⟩
     · obtain ⟨h1, -, h3, -⟩ := Config.mk_inj hout
       subst h1 h3
-      rcases ihb (by first | (rw [esize_annot] at hsz; omega) | (rw [esize_bound] at hsz; omega)) hstep hκ with hle | ⟨l, pes, params, cont, hj1, hl, rfl⟩
+      rcases ihb hstep hκ with hle | ⟨l, pes, params, cont, hj1, hl, rfl⟩
       · left
         simp only [pot_annot]
         omega
@@ -746,7 +738,7 @@ theorem Frag.pot_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
         hcall | ⟨ctxA0, a0, act0, hn0, hss0, hout0⟩
     · obtain ⟨h1, -, h3, -⟩ := Config.mk_inj hout
       subst h1 h3
-      rcases ihb (by first | (rw [esize_annot] at hsz; omega) | (rw [esize_bound] at hsz; omega)) hstep hκ with hle | ⟨l, pes, params, cont, hj1, hl, rfl⟩
+      rcases ihb hstep hκ with hle | ⟨l, pes, params, cont, hj1, hl, rfl⟩
       · left
         simp only [pot_bound]
         omega
@@ -824,7 +816,7 @@ theorem Frag.pot_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
         hcall
     · obtain ⟨h1, -, h3, -⟩ := Config.mk_inj hout
       subst h1 h3
-      rcases ih1 (by first | (rw [esize_sseq] at hsz; omega) | (rw [esize_wseq] at hsz; omega)) hstep hκ with hle | ⟨l, pes, params, cont, hj1, hl, rfl⟩
+      rcases ih1 hstep hκ with hle | ⟨l, pes, params, cont, hj1, hl, rfl⟩
       · left
         simp only [pot_sseq]
         omega
@@ -877,7 +869,7 @@ theorem Frag.pot_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
         hcall
     · obtain ⟨h1, -, h3, -⟩ := Config.mk_inj hout
       subst h1 h3
-      rcases ih1 (by first | (rw [esize_sseq] at hsz; omega) | (rw [esize_wseq] at hsz; omega)) hstep hκ with hle | ⟨l, pes, params, cont, hj1, hl, rfl⟩
+      rcases ih1 hstep hκ with hle | ⟨l, pes, params, cont, hj1, hl, rfl⟩
       · left
         simp only [pot_sseq]
         omega
@@ -917,7 +909,7 @@ theorem Frag.pot_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
         hcall
     · obtain ⟨h1, -, h3, -⟩ := Config.mk_inj hout
       subst h1 h3
-      rcases ih1 (by first | (rw [esize_sseq] at hsz; omega) | (rw [esize_wseq] at hsz; omega)) hstep hκ with hle | ⟨l, pes, params, cont, hj1, hl, rfl⟩
+      rcases ih1 hstep hκ with hle | ⟨l, pes, params, cont, hj1, hl, rfl⟩
       · left
         simp only [pot_sseq]
         omega
@@ -955,7 +947,7 @@ theorem Frag.pot_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
         hcall
     · obtain ⟨h1, -, h3, -⟩ := Config.mk_inj hout
       subst h1 h3
-      rcases ih1 (by first | (rw [esize_sseq] at hsz; omega) | (rw [esize_wseq] at hsz; omega)) hstep hκ with hle | ⟨l, pes, params, cont, hj1, hl, rfl⟩
+      rcases ih1 hstep hκ with hle | ⟨l, pes, params, cont, hj1, hl, rfl⟩
       · left
         simp only [pot_wseq]
         omega
@@ -991,7 +983,7 @@ theorem Frag.pot_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
         hcall
     · obtain ⟨h1, -, h3, -⟩ := Config.mk_inj hout
       subst h1 h3
-      rcases ih1 (by first | (rw [esize_sseq] at hsz; omega) | (rw [esize_wseq] at hsz; omega)) hstep hκ with hle | ⟨l, pes, params, cont, hj1, hl, rfl⟩
+      rcases ih1 hstep hκ with hle | ⟨l, pes, params, cont, hj1, hl, rfl⟩
       · left
         simp only [pot_wseq]
         omega
@@ -1039,10 +1031,7 @@ theorem Frag.pot_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
     subst h1
     left
     obtain ⟨pat, br, binds, hmem, -, rfl⟩ := select_case_some hsel
-    rw [show esize (caseRedex an (Pexpr b () (PEval cval)) pats) = 1 + esizeAlts pats from rfl] at hsz
-    have hbsz' := esize_le_esizeAlts_of_mem hmem
-    simp only at hbsz'
-    have h1 := pot_subst_fold binds (br := br) (by omega)
+    have h1 := pot_subst_fold binds (br := br)
     have h2 := pot_le_potAlts_of_mem hmem
     simp only at h2
     rw [show pot (caseRedex an (Pexpr b () (PEval cval)) pats) = 2 + potAlts pats from rfl]
@@ -1055,7 +1044,7 @@ theorem Frag.pot_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
         ⟨es1, e0, es2, rfl, hnv', hv2, hcall⟩
     · obtain ⟨h1, -, h3, -⟩ := Config.mk_inj hout
       subst h1 h3
-      rcases ih e0 (by simp) (by have := esize_le_esizeList_of_mem (x := e0) (es := es1 ++ e0 :: es2) (List.mem_append_right _ (List.mem_cons_self ..)); rw [esize_unseq] at hsz; omega) hstep hκ with hle | ⟨l, pes, params, cont, hj1, hl, rfl⟩
+      rcases ih e0 (by simp)  hstep hκ with hle | ⟨l, pes, params, cont, hj1, hl, rfl⟩
       · left
         simp only [pot_unseq]
         have := potList_append_cons_le es1 es2 hle
@@ -1078,11 +1067,11 @@ theorem Frag.pot_step_bound {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
 /-! ## E5: the potential is step-monotone on NEGATIVE-FREE terms without the
 fragment premise (the size invariant of `wps_bound`/`wpt_bound`'s Löb
 induction: the body's every stack-preserving non-jump round keeps `pot`
-non-increasing, so `esize ≤ pot ≤ lemDefaultFuel` is preserved). -/
+non-increasing). No ambient syntax-size ceiling is required. -/
 
-theorem Step.pot_le {M : MachineCtx} {e e' : CoreExpr} {ρ ρ' : EnvStack}
+theorem Step.pot_le [LemFuel] {M : MachineCtx} {e e' : CoreExpr} {ρ ρ' : EnvStack}
     {ctl ctl' : Ctl} {σ σ' : Mem}
-    (h : Step M (e, ρ, ctl, σ) (e', ρ', ctl', σ')) (hsz : esize e ≤ lemDefaultFuel) :
+    (h : Step M (e, ρ, ctl, σ) (e', ρ', ctl', σ')) :
     jumpRedex? e = none → callRedex? e = none → toVal e = none →
     negFree e = true → pot e' ≤ pot e := by
   generalize hcfg : (e, ρ, ctl, σ) = c at h
@@ -1090,35 +1079,28 @@ theorem Step.pot_le {M : MachineCtx} {e e' : CoreExpr} {ρ ρ' : EnvStack}
   induction h generalizing e ρ ctl σ e' ρ' ctl' σ' with
   | sseq_ctx hnj hnc hnv hs ih =>
     cases hcfg; cases hcfg'; intro _ _ _ hnf
-    rw [esize_sseq] at hsz
     simp only [negFree, Bool.and_eq_true] at hnf
-    have := ih (by omega) rfl rfl hnj hnc hnv hnf.1
+    have := ih rfl rfl hnj hnc hnv hnf.1
     simp only [pot_sseq]; omega
   | wseq_ctx hnj hnc hnv hs ih =>
     cases hcfg; cases hcfg'; intro _ _ _ hnf
-    rw [esize_wseq] at hsz
     simp only [negFree, Bool.and_eq_true] at hnf
-    have := ih (by omega) rfl rfl hnj hnc hnv hnf.1
+    have := ih rfl rfl hnj hnc hnv hnf.1
     simp only [pot_wseq]; omega
   | annot_ctx hnj hnc hnv hg hs ih =>
     cases hcfg; cases hcfg'; intro _ _ _ hnf
-    rw [esize_annot] at hsz
     simp only [negFree] at hnf
-    have := ih (by omega) rfl rfl hnj hnc hnv hnf
+    have := ih rfl rfl hnj hnc hnv hnf
     simp only [pot_annot]; omega
   | bound_ctx hnj hnc hnn hnv hs ih =>
     cases hcfg; cases hcfg'; intro _ _ _ hnf
-    rw [esize_bound] at hsz
     simp only [negFree] at hnf
-    have := ih (by omega) rfl rfl hnj hnc hnv hnf
+    have := ih rfl rfl hnj hnc hnv hnf
     simp only [pot_bound]; omega
   | @unseq_ctx a0 es1 e0 e0' es2 ρ0 ρ0' ctl0 ctl0' σ0 σ0' hv2 hcc0 hnj hnc hnv hs ih =>
     cases hcfg; cases hcfg'; intro _ _ _ hnf
-    rw [esize_unseq, esizeList_append, esizeList_cons] at hsz
-    have hsz' := esize_le_esizeList_of_mem (x := e0) (es := es1 ++ e0 :: es2)
-      (List.mem_append_right _ (List.mem_cons_self ..))
     simp only [negFree, negFreeList_append, negFreeList_cons, Bool.and_eq_true] at hnf
-    have := ih (by omega) rfl rfl hnj hnc hnv hnf.2.1
+    have := ih rfl rfl hnj hnc hnv hnf.2.1
     simp only [pot_unseq, potList_append, potList_cons]; omega
   | @neg_bound an b ctxA a act ρ0 ctl0 σ0 hn hss =>
     cases hcfg; cases hcfg'; intro _ _ _ hnf
@@ -1140,11 +1122,9 @@ theorem Step.pot_le {M : MachineCtx} {e e' : CoreExpr} {ρ ρ' : EnvStack}
   | case_value hv hsel =>
     cases hcfg; cases hcfg'; intro _ _ _ _
     obtain ⟨pat, br, binds, hmem, -, rfl⟩ := select_case_some hsel
-    rw [show esize (Expr _ (Ecase _ _)) = 1 + esizeAlts _ from rfl] at hsz
-    have hle := esize_le_esizeAlts_of_mem hmem
     have hp := pot_le_potAlts_of_mem hmem
-    simp only at hle hp
-    have hsub := pot_subst_fold binds (br := br) (by omega)
+    simp only at hp
+    have hsub := pot_subst_fold binds (br := br)
     simp only [pot_case]; omega
   | _ =>
     cases hcfg; cases hcfg'; intro _ _ _ _

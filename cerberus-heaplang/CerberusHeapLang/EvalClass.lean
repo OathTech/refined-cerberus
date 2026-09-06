@@ -3,11 +3,16 @@ CerberusHeapLang.EvalClass — THE ENGINE'S PURE-EVALUATOR OUTCOME ON THE
 COVERED OPERAND GRAMMAR, CLASSIFIED.
 
 The mirror evaluator `evalPexpr` (Step.lean) is partial and fail-closed:
-on the covered grammar `PePure` it answers `some v` exactly where the
-engine's evaluator tower (`step_eval_pexpr` → `eval_pexpr_aux2` →
-`full_eval_pexpr`, Core_eval.lean:135-158 / Core_reduction.lean:84-100)
-returns `v` (the SUCCESS bridge, Soundness.lean). This module names what
-the engine does where the mirror answers `none`:
+on the covered grammar `PePure`, an answer `some v` certifies the same
+engine value under the success bridge's pass-depth premise
+(Soundness.lean). The converse is not claimed: `.uncovered` below can
+include engine successes. The evaluator tower is `step_eval_pexpr` →
+`eval_pexpr_aux2` → `full_eval_pexpr`. This module certifies classified
+failures where the mirror answers `none`, again with explicit pass-depth
+premises for the repeated evaluator. The engine's measured single-pass
+wrapper needs no ambient structural-size bound. All effectful bridges
+retain the caller's `[LemFuel]`; no fixed default instance is installed.
+Insufficient-budget executions are not classified by these theorems:
 
 - `EvalOut.kill err` — the engine RAISES `err : core_run_cause`
   (`exception_undef_fail`): an unbound symbol that names no procedure
@@ -247,7 +252,7 @@ def binopOut (loc : CerbLocation.Loc) (op : binop) (pe1 pe2 : generic_pexpr Unit
 
 /-- The array-shift dispatch's FAILURE: anything but (pointer, integer)
     is the type error. -/
-def shiftOut (tds : CerbTags.TagDefsMap) (ty : ctype) (v1 v2 : value) : StepFail :=
+def shiftOut [LemFuel] (tds : CerbTags.TagDefsMap) (ty : ctype) (v1 v2 : value) : StepFail :=
   match evalArrayShift tds ty v1 v2 with
   | some _ => StepFail.uncovered
   | none => StepFail.kill (illtypedArrayShift v1 ty v2)
@@ -354,7 +359,7 @@ fails decides when it RAISES (the fold stops) or when it is an UNDEF and
 every later operand's pass succeeds (the collected undef is the list's);
 otherwise not characterized. -/
 mutual
-def stepFail (tds : CerbTags.TagDefsMap) (loc : CerbLocation.Loc) (ext : Fmap sym sym)
+def stepFail [LemFuel] (tds : CerbTags.TagDefsMap) (loc : CerbLocation.Loc) (ext : Fmap sym sym)
     (file : generic_file Unit core_run_annotation) (ρ : EnvStack) :
     generic_pexpr Unit sym → StepFail
   | Pexpr _ _ (PEsym x) =>
@@ -461,7 +466,7 @@ def stepFail (tds : CerbTags.TagDefsMap) (loc : CerbLocation.Loc) (ext : Fmap sy
           | some _ => StepFail.uncovered
           | none => callOut file nm
   | _ => StepFail.uncovered
-def stepFailList (tds : CerbTags.TagDefsMap) (loc : CerbLocation.Loc) (ext : Fmap sym sym)
+def stepFailList [LemFuel] (tds : CerbTags.TagDefsMap) (loc : CerbLocation.Loc) (ext : Fmap sym sym)
     (file : generic_file Unit core_run_annotation) (ρ : EnvStack) :
     List (generic_pexpr Unit sym) → StepFail
   | [] => StepFail.uncovered
@@ -480,7 +485,7 @@ end
 
 /-- ONE PASS classified: the mirror's pass where it succeeds, the failure
     classification otherwise. -/
-def stepClass (tds : CerbTags.TagDefsMap) (loc : CerbLocation.Loc) (ext : Fmap sym sym)
+def stepClass [LemFuel] (tds : CerbTags.TagDefsMap) (loc : CerbLocation.Loc) (ext : Fmap sym sym)
     (file : generic_file Unit core_run_annotation) (ρ : EnvStack)
     (pe : generic_pexpr Unit sym) : StepOut :=
   match stepPexprRaw tds ext file ρ pe with
@@ -496,7 +501,7 @@ def stepClass (tds : CerbTags.TagDefsMap) (loc : CerbLocation.Loc) (ext : Fmap s
     consults `classIter` only where the mirror evaluator answers `none`,
     and then no pass reaches a value that the mirror missed except past
     the `case` depth guard (`evalPexpr_case`). -/
-def classIter (tds : CerbTags.TagDefsMap) (loc : CerbLocation.Loc) (ext : Fmap sym sym)
+def classIter [LemFuel] (tds : CerbTags.TagDefsMap) (loc : CerbLocation.Loc) (ext : Fmap sym sym)
     (file : generic_file Unit core_run_annotation) (ρ : EnvStack) :
     Nat → generic_pexpr Unit sym → EvalOut
   | 0, _ => EvalOut.uncovered
@@ -517,7 +522,7 @@ def classIter (tds : CerbTags.TagDefsMap) (loc : CerbLocation.Loc) (ext : Fmap s
     thread's current location (the engine's `loc1`), the extern map, the
     file (its `funs` decide the procedure-pointer arm) and the
     environment stack. -/
-def evalClass (tds : CerbTags.TagDefsMap) (loc : CerbLocation.Loc) (ext : Fmap sym sym)
+def evalClass [LemFuel] (tds : CerbTags.TagDefsMap) (loc : CerbLocation.Loc) (ext : Fmap sym sym)
     (file : generic_file Unit core_run_annotation) (ρ : EnvStack)
     (pe : generic_pexpr Unit sym) : EvalOut :=
   match evalPexpr tds ext file ρ pe with
@@ -526,7 +531,7 @@ def evalClass (tds : CerbTags.TagDefsMap) (loc : CerbLocation.Loc) (ext : Fmap s
 
 /-! ## The `.val` face is the mirror evaluator -/
 
-theorem classIter_ne_val (tds : CerbTags.TagDefsMap) (loc : CerbLocation.Loc)
+theorem classIter_ne_val [LemFuel] (tds : CerbTags.TagDefsMap) (loc : CerbLocation.Loc)
     (ext : Fmap sym sym) (file : generic_file Unit core_run_annotation) (ρ : EnvStack) :
     ∀ (n : Nat) (pe : generic_pexpr Unit sym) (v : value),
       classIter tds loc ext file ρ n pe ≠ EvalOut.val v := by
@@ -553,7 +558,7 @@ theorem classIter_ne_val (tds : CerbTags.TagDefsMap) (loc : CerbLocation.Loc)
 
 /-- `evalClass` answers `.val v` exactly where the mirror evaluator
     answers `some v` (at every location and file). -/
-theorem evalClass_val_iff (tds : CerbTags.TagDefsMap) (loc : CerbLocation.Loc)
+theorem evalClass_val_iff [LemFuel] (tds : CerbTags.TagDefsMap) (loc : CerbLocation.Loc)
     (ext : Fmap sym sym) (file : generic_file Unit core_run_annotation) (ρ : EnvStack)
     (pe : generic_pexpr Unit sym) (v : value) :
     evalClass tds loc ext file ρ pe = .val v ↔ evalPexpr tds ext file ρ pe = some v := by
@@ -570,7 +575,7 @@ theorem evalClass_val_iff (tds : CerbTags.TagDefsMap) (loc : CerbLocation.Loc)
 
 /-- Where the mirror answers `none`, the classifier answers a kill, an
     undef, or the residual. -/
-theorem evalClass_of_none {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {ρ : EnvStack}
+theorem evalClass_of_none [LemFuel] {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {ρ : EnvStack}
     {pe : generic_pexpr Unit sym} (loc : CerbLocation.Loc)
     (file : generic_file Unit core_run_annotation)
     (h : evalPexpr tds ext file ρ pe = none) :
@@ -582,7 +587,7 @@ theorem evalClass_of_none {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {ρ :
   | undef l u => exact .inl ⟨_, rfl⟩
   | uncovered => exact .inr rfl
 
-theorem evalPexpr_none_of_fail {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {ρ : EnvStack}
+theorem evalPexpr_none_of_fail [LemFuel] {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {ρ : EnvStack}
     {pe : generic_pexpr Unit sym} {loc : CerbLocation.Loc}
     {file : generic_file Unit core_run_annotation} {fl : EvalFail}
     (h : (evalClass tds loc ext file ρ pe).fail? = some fl) :
@@ -591,14 +596,14 @@ theorem evalPexpr_none_of_fail {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} 
   | none => rfl
   | some v => rw [← evalClass_val_iff tds loc ext file ρ pe v] at hv; rw [hv] at h; cases h
 
-theorem evalPexpr_none_of_kill {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {ρ : EnvStack}
+theorem evalPexpr_none_of_kill [LemFuel] {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym} {ρ : EnvStack}
     {pe : generic_pexpr Unit sym} {loc : CerbLocation.Loc}
     {file : generic_file Unit core_run_annotation} {err : core_run_cause}
     (h : evalClass tds loc ext file ρ pe = .kill err) :
     evalPexpr tds ext file ρ pe = none :=
   evalPexpr_none_of_fail (fl := .kill err) (by rw [h]; rfl)
 
-theorem evalPexpr_none_of_uncovered {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym}
+theorem evalPexpr_none_of_uncovered [LemFuel] {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym}
     {ρ : EnvStack} {pe : generic_pexpr Unit sym} {loc : CerbLocation.Loc}
     {file : generic_file Unit core_run_annotation}
     (h : evalClass tds loc ext file ρ pe = .uncovered) :
@@ -613,11 +618,11 @@ section StepFailEqns
 variable (tds : CerbTags.TagDefsMap) (loc : CerbLocation.Loc) (ext : Fmap sym sym)
   (file : generic_file Unit core_run_annotation) (ρ : EnvStack)
 
-theorem stepFail_val (a : List _root_.annot) (v : value) :
+theorem stepFail_val [LemFuel] (a : List _root_.annot) (v : value) :
     stepFail tds loc ext file ρ (Pexpr a () (PEval v)) = StepFail.uncovered := by
   rw [stepFail.eq_def]
 
-theorem stepFail_sym (a : List _root_.annot) (x : sym) :
+theorem stepFail_sym [LemFuel] (a : List _root_.annot) (x : sym) :
     stepFail tds loc ext file ρ (Pexpr a () (PEsym x)) =
       (match lookup_env (resolveExtern ext x) ρ with
       | some _ => StepFail.uncovered
@@ -628,12 +633,12 @@ theorem stepFail_sym (a : List _root_.annot) (x : sym) :
         | _ => StepFail.kill (Unresolved_symbol loc (resolveExtern ext x))) := by
   rw [stepFail]
 
-theorem stepFail_undef (a : List _root_.annot) (uloc : CerbLocation.Loc)
+theorem stepFail_undef [LemFuel] (a : List _root_.annot) (uloc : CerbLocation.Loc)
     (ub : undefined_behaviour) :
     stepFail tds loc ext file ρ (Pexpr a () (PEundef uloc ub)) = undefOut loc uloc ub := by
   rw [stepFail]
 
-theorem stepFail_op (a : List _root_.annot) (op : binop) (pe1 pe2 : generic_pexpr Unit sym) :
+theorem stepFail_op [LemFuel] (a : List _root_.annot) (op : binop) (pe1 pe2 : generic_pexpr Unit sym) :
     stepFail tds loc ext file ρ (Pexpr a () (PEop op pe1 pe2)) =
       (match stepPexprRaw tds ext file ρ pe1 with
       | none => stepFail tds loc ext file ρ pe1
@@ -646,7 +651,7 @@ theorem stepFail_op (a : List _root_.annot) (op : binop) (pe1 pe2 : generic_pexp
           | _, _ => StepFail.uncovered) := by
   rw [stepFail]
 
-theorem stepFail_array_shift (a : List _root_.annot) (pe1 : generic_pexpr Unit sym)
+theorem stepFail_array_shift [LemFuel] (a : List _root_.annot) (pe1 : generic_pexpr Unit sym)
     (ty : ctype) (pe2 : generic_pexpr Unit sym) :
     stepFail tds loc ext file ρ (Pexpr a () (PEarray_shift pe1 ty pe2)) =
       (match stepPexprRaw tds ext file ρ pe1 with
@@ -660,12 +665,12 @@ theorem stepFail_array_shift (a : List _root_.annot) (pe1 : generic_pexpr Unit s
           | _, _ => StepFail.uncovered) := by
   rw [stepFail]
 
-theorem stepFail_ctor (a : List _root_.annot) (c : ctor) (pes : List (generic_pexpr Unit sym)) :
+theorem stepFail_ctor [LemFuel] (a : List _root_.annot) (c : ctor) (pes : List (generic_pexpr Unit sym)) :
     stepFail tds loc ext file ρ (Pexpr a () (PEctor c pes)) =
       stepFailList tds loc ext file ρ pes := by
   rw [stepFail]
 
-theorem stepFail_case (a : List _root_.annot) (pe : generic_pexpr Unit sym)
+theorem stepFail_case [LemFuel] (a : List _root_.annot) (pe : generic_pexpr Unit sym)
     (pats : List (pattern × generic_pexpr Unit sym)) :
     stepFail tds loc ext file ρ (Pexpr a () (PEcase pe pats)) =
       (match stepPexprRaw tds ext file ρ pe with
@@ -673,7 +678,7 @@ theorem stepFail_case (a : List _root_.annot) (pe : generic_pexpr Unit sym)
       | some _ => StepFail.uncovered) := by
   rw [stepFail]
 
-theorem stepFail_not (a : List _root_.annot) (pe : generic_pexpr Unit sym) :
+theorem stepFail_not [LemFuel] (a : List _root_.annot) (pe : generic_pexpr Unit sym) :
     stepFail tds loc ext file ρ (Pexpr a () (PEnot pe)) =
       (match stepPexprRaw tds ext file ρ pe with
       | none => stepFail tds loc ext file ρ pe
@@ -685,7 +690,7 @@ theorem stepFail_not (a : List _root_.annot) (pe : generic_pexpr Unit sym) :
         | none => StepFail.uncovered) := by
   rw [stepFail]
 
-theorem stepFail_if (a : List _root_.annot) (pe1 pe2 pe3 : generic_pexpr Unit sym) :
+theorem stepFail_if [LemFuel] (a : List _root_.annot) (pe1 pe2 pe3 : generic_pexpr Unit sym) :
     stepFail tds loc ext file ρ (Pexpr a () (PEif pe1 pe2 pe3)) =
       (match stepPexprRaw tds ext file ρ pe1 with
       | none => stepFail tds loc ext file ρ pe1
@@ -703,7 +708,7 @@ theorem stepFail_if (a : List _root_.annot) (pe1 pe2 pe3 : generic_pexpr Unit sy
         | none => StepFail.uncovered) := by
   rw [stepFail]
 
-theorem stepFail_conv_int (a : List _root_.annot) (ity : integerType) (pe : generic_pexpr Unit sym) :
+theorem stepFail_conv_int [LemFuel] (a : List _root_.annot) (ity : integerType) (pe : generic_pexpr Unit sym) :
     stepFail tds loc ext file ρ (Pexpr a () (PEconv_int ity pe)) =
       (match stepPexprRaw tds ext file ρ pe with
       | none => stepFail tds loc ext file ρ pe
@@ -713,7 +718,7 @@ theorem stepFail_conv_int (a : List _root_.annot) (ity : integerType) (pe : gene
         | none => StepFail.uncovered) := by
   rw [stepFail]
 
-theorem stepFail_wrapI (a : List _root_.annot) (ity : integerType) (op : iop)
+theorem stepFail_wrapI [LemFuel] (a : List _root_.annot) (ity : integerType) (op : iop)
     (pe1 pe2 : generic_pexpr Unit sym) :
     stepFail tds loc ext file ρ (Pexpr a () (PEwrapI ity op pe1 pe2)) =
       (match stepPexprRaw tds ext file ρ pe1 with
@@ -727,7 +732,7 @@ theorem stepFail_wrapI (a : List _root_.annot) (ity : integerType) (op : iop)
           | _, _ => StepFail.uncovered) := by
   rw [stepFail]
 
-theorem stepFail_catch (a : List _root_.annot) (ity : integerType) (op : iop)
+theorem stepFail_catch [LemFuel] (a : List _root_.annot) (ity : integerType) (op : iop)
     (pe1 pe2 : generic_pexpr Unit sym) :
     stepFail tds loc ext file ρ (Pexpr a () (PEcatch_exceptional_condition ity op pe1 pe2)) =
       (match stepPexprRaw tds ext file ρ pe1 with
@@ -741,7 +746,7 @@ theorem stepFail_catch (a : List _root_.annot) (ity : integerType) (op : iop)
           | _, _ => StepFail.uncovered) := by
   rw [stepFail]
 
-theorem stepFail_is_unsigned (a : List _root_.annot) (pe : generic_pexpr Unit sym) :
+theorem stepFail_is_unsigned [LemFuel] (a : List _root_.annot) (pe : generic_pexpr Unit sym) :
     stepFail tds loc ext file ρ (Pexpr a () (PEis_unsigned pe)) =
       (match stepPexprRaw tds ext file ρ pe with
       | none => stepFail tds loc ext file ρ pe
@@ -751,7 +756,7 @@ theorem stepFail_is_unsigned (a : List _root_.annot) (pe : generic_pexpr Unit sy
         | none => StepFail.uncovered) := by
   rw [stepFail]
 
-theorem stepFail_call (a : List _root_.annot) (nm : generic_name sym)
+theorem stepFail_call [LemFuel] (a : List _root_.annot) (nm : generic_name sym)
     (pes : List (generic_pexpr Unit sym)) :
     stepFail tds loc ext file ρ (Pexpr a () (PEcall nm pes)) =
       (match stepPexprsRaw tds ext file ρ pes with
@@ -765,10 +770,10 @@ theorem stepFail_call (a : List _root_.annot) (nm : generic_name sym)
           | none => callOut file nm) := by
   rw [stepFail]
 
-theorem stepFailList_nil : stepFailList tds loc ext file ρ [] = StepFail.uncovered := by
+theorem stepFailList_nil [LemFuel] : stepFailList tds loc ext file ρ [] = StepFail.uncovered := by
   rw [stepFailList]
 
-theorem stepFailList_cons (pe : generic_pexpr Unit sym) (pes : List (generic_pexpr Unit sym)) :
+theorem stepFailList_cons [LemFuel] (pe : generic_pexpr Unit sym) (pes : List (generic_pexpr Unit sym)) :
     stepFailList tds loc ext file ρ (pe :: pes) =
       (match stepPexprRaw tds ext file ρ pe with
       | some _ => stepFailList tds loc ext file ρ pes
@@ -798,7 +803,8 @@ theorem exception_undef_fmap_exception {a b c : Type} (f : a → b) (err : c) :
 theorem except_sequence_cons {a b : Type} (m : exceptM a b) (ms : List (exceptM a b)) :
     except_sequence (m :: ms) =
       except_bind m (fun x => except_bind (except_sequence ms)
-        (fun xs => except_return (x :: xs))) := rfl
+        (fun xs => except_return (x :: xs))) := by
+  simp only [except_sequence, LemLibTheorems.lemListFoldr_eq, List.foldr_cons]
 
 theorem exception_undef_mapM_eq {a b c : Type} (f : c → exceptM (t0 a) b) (xs : List c) :
     exception_undef_mapM f xs =
@@ -829,7 +835,10 @@ theorem exception_undef_mapM_cons_undef
   rw [exception_undef_mapM_eq] at hrest
   cases hseq : except_sequence (List.map self pes) with
   | Exception e => rw [hseq] at hrest; cases hrest
-  | Result xs => rfl
+  | Result xs =>
+    change (Result (mapM1 (fun x => x) (Undef l u :: xs)) : exceptM _ core_run_cause) = _
+    simp only [mapM1, sequence0, LemLibTheorems.lemListFoldr_eq, List.map_cons, List.foldr_cons]
+    rfl
 
 /-- The constructor operand map at a head whose pass SUCCEEDS: the
     tail's raise or undef is the list's (a `Defined` head is transparent
@@ -859,6 +868,7 @@ theorem exception_undef_mapM_cons_defined
           Result (Undef l u) := hrest
         injection h'
       unfold mapM1 sequence0 at hxs ⊢
+      simp only [LemLibTheorems.lemListFoldr_eq] at hxs ⊢
       rw [List.map_cons, List.foldr_cons, hxs]
       rfl
 
@@ -905,7 +915,7 @@ theorem call_function_exception_of_callOut {file : generic_file Unit core_run_an
     counter, the call location, the memory state; the current location
     `loc` and the file are READ (the `Unresolved_symbol` payload, the
     undef's location, and the procedure-pointer arm). -/
-theorem stepFail_bridge {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
+theorem stepFail_bridge [LemFuel] {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
     {ext : Fmap sym sym} {ρ : EnvStack} {loc : CerbLocation.Loc}
     {file : generic_file Unit core_run_annotation}
     {pe : generic_pexpr Unit sym}
@@ -1642,7 +1652,7 @@ theorem stepFail_bridge {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
         all_goals rfl
 
 /-- LEVEL 1, the failing faces at the classified pass. -/
-theorem stepClass_bridge_fail {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
+theorem stepClass_bridge_fail [LemFuel] {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
     {ext : Fmap sym sym} {ρ : EnvStack} {loc : CerbLocation.Loc}
     {file : generic_file Unit core_run_annotation}
     {pe : generic_pexpr Unit sym} {fl : EvalFail}
@@ -1662,7 +1672,7 @@ theorem stepClass_bridge_fail {tds : Fmap sym (CerbLocation.Loc × tag_definitio
 
 /-- LEVEL 1, the kill face (E1's statement at E2's one-pass classifier:
     the classified pass RAISES exactly `err`). -/
-theorem step_eval_bridge_kill {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
+theorem step_eval_bridge_kill [LemFuel] {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
     {ext : Fmap sym sym} {ρ : EnvStack} {loc : CerbLocation.Loc}
     {file : generic_file Unit core_run_annotation}
     {pe : generic_pexpr Unit sym} {err : core_run_cause}
@@ -1675,7 +1685,7 @@ theorem step_eval_bridge_kill {tds : Fmap sym (CerbLocation.Loc × tag_definitio
 
 /-- LEVEL 1, the undef face: the classified pass is the engine's
     `Undef`. -/
-theorem step_eval_bridge_undef {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
+theorem step_eval_bridge_undef [LemFuel] {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
     {ext : Fmap sym sym} {ρ : EnvStack} {loc : CerbLocation.Loc}
     {file : generic_file Unit core_run_annotation}
     {pe : generic_pexpr Unit sym} {l : CerbLocation.Loc} {u : List undefined_behaviour}
@@ -1686,14 +1696,31 @@ theorem step_eval_bridge_undef {tds : Fmap sym (CerbLocation.Loc × tag_definiti
       Result (Undef l u) :=
   stepClass_bridge_fail (fl := .undef l u) hp (by rw [hk]; rfl)
 
+/-- The classified failing pass through the measured production wrapper.
+    The wrapper supplies its structural bound; ambient fuel is retained
+    for any callees that still use it. -/
+theorem stepClass_bridge_fail_measured [LemFuel]
+    {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
+    {ext : Fmap sym sym} {ρ : EnvStack} {loc : CerbLocation.Loc}
+    {file : generic_file Unit core_run_annotation}
+    {pe : generic_pexpr Unit sym} {fl : EvalFail}
+    (hp : PePure pe) (hf : (stepClass tds loc ext file ρ pe).fail? = some fl)
+    (n : Nat) (cloc : Option CerbLocation.Loc) (mem : Option CerbMem.MemState) :
+    step_eval_pexpr tds n loc cloc ext ρ mem file false pe =
+      fl.pure (generic_pexpr Unit sym) := by
+  let fuel := max (generic_pexpr.lemSize pe) (peDepth pe)
+  rw [← Core_eval_lemMeasureProofs.step_eval_pexpr_measure_sufficient tds n loc cloc
+    ext ρ mem file false pe fuel (Nat.le_max_left _ _)]
+  exact stepClass_bridge_fail hp hf fuel (Nat.le_max_right _ _) n cloc mem
+
 /-- LEVEL 3a, the iteration: where `classIter` (at `k` rounds) classifies
-    a failure, `eval_pexpr_aux2` (at least `k` rounds of fuel; each
-    interior evaluator at the default budget) delivers it. -/
-theorem classIter_bridge {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
+    a failure, `eval_pexpr_aux2` (at least `k` rounds of fuel) delivers
+    it. Each interior traversal supplies its own structural measure. -/
+theorem classIter_bridge [LemFuel] {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
     {ext : Fmap sym sym} {ρ : EnvStack} {loc : CerbLocation.Loc}
     {file : generic_file Unit core_run_annotation} :
     ∀ (k : Nat) {pe : generic_pexpr Unit sym}, PePure pe →
-      peDepth pe ≤ lemDefaultFuel → ∀ {fl : EvalFail},
+      ∀ {fl : EvalFail},
       (classIter tds loc ext file ρ k pe).fail? = some fl →
       ∀ (fuel : Nat), k ≤ fuel + 1 →
     ∀ (cloc : Option CerbLocation.Loc) (mem : Option CerbMem.MemState),
@@ -1701,22 +1728,21 @@ theorem classIter_bridge {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
       fl.pure (Sum (generic_pexpr Unit sym) value) := by
   intro k
   induction k with
-  | zero => intro pe hp hd fl hf; cases hf
+  | zero => intro pe hp fl hf; cases hf
   | succ k ih =>
-    intro pe hp hd fl hf fuel hfuel cloc mem
+    intro pe hp fl hf fuel hfuel cloc mem
     unfold classIter at hf
     have hpull : pull_constrained 0 pe = peStrip pe :=
-      pull_bridge hp lemDefaultFuel hd 0
+      pull_bridge_default hp 0
     unfold eval_pexpr_aux2_lemFuel
     dsimp only [CerbDebug.print_debug_pure]
     rw [hpull]
     obtain ⟨pex, hpex, hne⟩ := peStrip_root hp
     have hps : PePure (peStrip pe) := hp.strip
-    have hdps : peDepth (peStrip pe) ≤ lemDefaultFuel := by rw [peDepth_peStrip hp]; exact hd
     -- the round: the pass's outcome `m` under the engine's continuation
     -- (the value test, then the next round)
     suffices hround : ∀ (m : exceptM (t0 (generic_pexpr Unit sym)) core_run_cause),
-        step_eval_pexpr_lemFuel lemDefaultFuel tds 0 loc cloc ext ρ mem file false (peStrip pe)
+        step_eval_pexpr tds 0 loc cloc ext ρ mem file false (peStrip pe)
           = m →
         exception_undef_bind m (fun pe' => match valueFromPexpr pe' with
           | some cval => exception_undef_return (Sum.inr cval)
@@ -1725,21 +1751,22 @@ theorem classIter_bridge {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
       rw [hpex] at hround ⊢
       cases pex <;> first
         | (exfalso; apply hne; rfl)
-        | (exact hround _ (by
-            rw [show step_eval_pexpr = step_eval_pexpr_lemFuel lemDefaultFuel from rfl]))
+        | (exact hround _ rfl)
     intro m hm
     cases hsc : stepClass tds loc ext file ρ (peStrip pe) with
     | kill err =>
       rw [hsc] at hf
       dsimp only [EvalOut.fail?] at hf
       obtain rfl := Option.some.inj hf
-      rw [← hm, step_eval_bridge_kill hps hsc lemDefaultFuel hdps 0 cloc mem]
+      rw [← hm, stepClass_bridge_fail_measured (fl := .kill err)
+        hps (by rw [hsc]; rfl) 0 cloc mem]
       rfl
     | undef l u =>
       rw [hsc] at hf
       dsimp only [EvalOut.fail?] at hf
       obtain rfl := Option.some.inj hf
-      rw [← hm, step_eval_bridge_undef hps hsc lemDefaultFuel hdps 0 cloc mem]
+      rw [← hm, stepClass_bridge_fail_measured (fl := .undef l u)
+        hps (by rw [hsc]; rfl) 0 cloc mem]
       rfl
     | uncovered => rw [hsc] at hf; cases hf
     | next r =>
@@ -1753,8 +1780,8 @@ theorem classIter_bridge {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
           rw [h] at hsc
           dsimp only at hsc
           cases hsf : stepFail tds loc ext file ρ (peStrip pe) <;> rw [hsf] at hsc <;> cases hsc
-      rw [← hm, step_eval_bridge hps (by rw [stepPexpr_of_PePure hps]; exact hr)
-        lemDefaultFuel hdps 0 loc cloc mem]
+      rw [← hm, step_eval_bridge_default hps (by rw [stepPexpr_of_PePure hps]; exact hr)
+        0 loc cloc mem]
       dsimp only [exception_undef_bind, exception_undef_return, except_return, return1]
       cases hvr : valueFromPexpr r with
       | some _ => rw [hvr] at hf; cases hf
@@ -1771,18 +1798,18 @@ theorem classIter_bridge {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
             rcases k with _ | k
             · cases hf
             · omega
-          exact ih hpr' (by omega) hf f' (by omega) cloc mem
+          exact ih hpr' hf f' (by omega) cloc mem
         · cases hf
 
 /-- LEVEL 3a: `eval_pexpr_aux2` delivers the classified failure, at any
     fuel of at least `peDepth pe` rounds (the engine's own budgets, as
     for the success bridge `aux2_bridge`). -/
-theorem aux2_bridge_fail {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
+theorem aux2_bridge_fail [LemFuel] {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
     {ext : Fmap sym sym} {ρ : EnvStack} {loc : CerbLocation.Loc}
     {file : generic_file Unit core_run_annotation}
     {pe : generic_pexpr Unit sym} {fl : EvalFail}
     (hp : PePure pe) (hf : (evalClass tds loc ext file ρ pe).fail? = some fl)
-    (hd : peDepth pe ≤ lemDefaultFuel) :
+    :
     ∀ (fuel : Nat), peDepth pe ≤ fuel + 1 →
     ∀ (cloc : Option CerbLocation.Loc) (mem : Option CerbMem.MemState),
     eval_pexpr_aux2_lemFuel (fuel + 1) tds loc cloc ext ρ mem file pe =
@@ -1793,34 +1820,35 @@ theorem aux2_bridge_fail {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
   | some v => rw [hv] at hf; cases hf
   | none =>
     rw [hv] at hf
-    exact classIter_bridge (peDepth pe) hp hd hf fuel hfuel cloc mem
+    exact classIter_bridge (peDepth pe) hp hf fuel hfuel cloc mem
 
 /-- LEVEL 3a, the kill face (E1's `aux2_bridge_kill`, with E2's round
     budget). -/
-theorem aux2_bridge_kill {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
+theorem aux2_bridge_kill [LemFuel] {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
     {ext : Fmap sym sym} {ρ : EnvStack} {loc : CerbLocation.Loc}
     {file : generic_file Unit core_run_annotation}
     {pe : generic_pexpr Unit sym} {err : core_run_cause}
-    (hp : PePure pe) (hk : evalClass tds loc ext file ρ pe = .kill err)
-    (hd : peDepth pe ≤ lemDefaultFuel) :
+    (hp : PePure pe) (hk : evalClass tds loc ext file ρ pe = .kill err) :
     ∀ (fuel : Nat), peDepth pe ≤ fuel + 1 →
     ∀ (cloc : Option CerbLocation.Loc) (mem : Option CerbMem.MemState),
     eval_pexpr_aux2_lemFuel (fuel + 1) tds loc cloc ext ρ mem file pe = Exception err :=
-  aux2_bridge_fail (fl := .kill err) hp (by rw [hk]; rfl) hd
+  aux2_bridge_fail (fl := .kill err) hp (by rw [hk]; rfl)
 
 /-- LEVEL 3b: `full_eval_pexpr` (the Eif/Erun/action-operand evaluator)
     delivers the classified failure at every run state. -/
-theorem full_eval_bridge_fail {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
+theorem full_eval_bridge_fail [LemFuel] {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
     {b : Type} {ext : Fmap sym sym} {th : thread_state}
     {file : generic_file Unit core_run_annotation}
     {pe : generic_pexpr Unit sym} {fl : EvalFail}
     (hp : PePure pe)
     (hf : (evalClass tds th.current_loc ext file th.env pe).fail? = some fl)
-    (hd : peDepth pe ≤ lemDefaultFuel) (σ : CerbMem.MemState) :
+    (hd : peDepth pe ≤ LemFuel.fuel) (σ : CerbMem.MemState) :
     full_eval_pexpr (b := b) tds th ext σ file pe = fl.run value b := by
+  obtain ⟨fuel, hF⟩ : ∃ fuel, LemFuel.fuel = fuel + 1 :=
+    ⟨LemFuel.fuel - 1, by have := peDepth_pos pe; omega⟩
   rw [show (full_eval_pexpr (b := b) tds th ext σ file pe) =
-    full_eval_pexpr_lemFuel (b := b) (999999 + 1) tds th ext σ file pe
-    from rfl]
+    full_eval_pexpr_lemFuel (b := b) (fuel + 1) tds th ext σ file pe
+    from by simp only [full_eval_pexpr, hF]]
   show stExceptUndef_bind _ _ = _
   funext st
   rw [stExceptUndef_bind_apply]
@@ -1831,50 +1859,51 @@ theorem full_eval_bridge_fail {tds : Fmap sym (CerbLocation.Loc × tag_definitio
         | ELoc_normal [] => none
         | ELoc_normal ((_, loc1) :: _) => some loc1)
       ext th.env (some σ) file pe) from rfl]
-  rw [show (eval_pexpr_aux2 (tds)) = eval_pexpr_aux2_lemFuel (999999 + 1) tds
-    from rfl]
-  rw [aux2_bridge_fail hp hf hd 999999
-    (by rw [show lemDefaultFuel = 999999 + 1 from rfl] at hd; exact hd) _ (some σ)]
+  rw [show (eval_pexpr_aux2 (tds)) = eval_pexpr_aux2_lemFuel (fuel + 1) tds
+    from by simp only [eval_pexpr_aux2, hF]]
+  rw [aux2_bridge_fail hp hf fuel (by rw [hF] at hd; exact hd) _ (some σ)]
   rw [runEU_fail]
   cases fl <;> rfl
 
 /-- LEVEL 3b, the kill face (E1's statement, verbatim). -/
-theorem full_eval_bridge_kill {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
+theorem full_eval_bridge_kill [LemFuel] {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
     {b : Type} {ext : Fmap sym sym} {th : thread_state}
     {file : generic_file Unit core_run_annotation}
     {pe : generic_pexpr Unit sym} {err : core_run_cause}
     (hp : PePure pe)
     (hk : evalClass tds th.current_loc ext file th.env pe = .kill err)
-    (hd : peDepth pe ≤ lemDefaultFuel) (σ : CerbMem.MemState) :
+    (hd : peDepth pe ≤ LemFuel.fuel) (σ : CerbMem.MemState) :
     full_eval_pexpr (b := b) tds th ext σ file pe = fun _ => Exception err :=
   full_eval_bridge_fail (fl := .kill err) hp (by rw [hk]; rfl) hd σ
 
 /-- LEVEL 3b, the undef face: the evaluator's `Undef`, state untouched. -/
-theorem full_eval_bridge_undef {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
+theorem full_eval_bridge_undef [LemFuel] {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
     {b : Type} {ext : Fmap sym sym} {th : thread_state}
     {file : generic_file Unit core_run_annotation}
     {pe : generic_pexpr Unit sym} {l : CerbLocation.Loc} {u : List undefined_behaviour}
     (hp : PePure pe)
     (hk : evalClass tds th.current_loc ext file th.env pe = .undef l u)
-    (hd : peDepth pe ≤ lemDefaultFuel) (σ : CerbMem.MemState) :
+    (hd : peDepth pe ≤ LemFuel.fuel) (σ : CerbMem.MemState) :
     full_eval_pexpr (b := b) tds th ext σ file pe = fun st => Result (Undef l u, st) :=
   full_eval_bridge_fail (fl := .undef l u) hp (by rw [hk]; rfl) hd σ
 
 /-- The one-iteration evaluator under its `Sum` readout (step_ctx's
     `eval_pexpr1`, Core_reduction.lean:484 — the Ememop/Esave operand
     evaluator) delivers the classified failure. -/
-theorem eval1_bridge_fail {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
+theorem eval1_bridge_fail [LemFuel] {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
     {ext : Fmap sym sym} {th : thread_state}
     {file : generic_file Unit core_run_annotation}
     {pe : generic_pexpr Unit sym} {fl : EvalFail}
     (hp : PePure pe)
     (hf : (evalClass tds th.current_loc ext file th.env pe).fail? = some fl)
-    (hd : peDepth pe ≤ lemDefaultFuel) (σ : CerbMem.MemState)
+    (hd : peDepth pe ≤ LemFuel.fuel) (σ : CerbMem.MemState)
     (k : Sum (generic_pexpr Unit sym) value → core_run_state →
       exceptM ((t0 (generic_pexpr Unit sym) × core_run_state)) core_run_cause)
     (rs : core_run_state) :
     stExceptUndef_bind (E.eval_pexpr20 (a := core_run_state) tds th ext σ file pe) k rs =
       fl.run (generic_pexpr Unit sym) core_run_state rs := by
+  obtain ⟨fuel, hF⟩ : ∃ fuel, LemFuel.fuel = fuel + 1 :=
+    ⟨LemFuel.fuel - 1, by have := peDepth_pos pe; omega⟩
   rw [stExceptUndef_bind_apply]
   rw [show E.eval_pexpr20 (a := core_run_state) tds th ext σ file pe =
     runEU ((eval_pexpr_aux2 tds) th.current_loc
@@ -1883,21 +1912,20 @@ theorem eval1_bridge_fail {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
         | ELoc_normal [] => none
         | ELoc_normal ((_, loc1) :: _) => some loc1)
       ext th.env (some σ) file pe) from rfl]
-  rw [show (eval_pexpr_aux2 (tds)) = eval_pexpr_aux2_lemFuel (999999 + 1) tds
-    from rfl]
-  rw [aux2_bridge_fail hp hf hd 999999
-    (by rw [show lemDefaultFuel = 999999 + 1 from rfl] at hd; exact hd) _ (some σ)]
+  rw [show (eval_pexpr_aux2 (tds)) = eval_pexpr_aux2_lemFuel (fuel + 1) tds
+    from by simp only [eval_pexpr_aux2, hF]]
+  rw [aux2_bridge_fail hp hf fuel (by rw [hF] at hd; exact hd) _ (some σ)]
   rw [runEU_fail]
   cases fl <;> rfl
 
 /-- ... the kill face (E1's statement, verbatim). -/
-theorem eval1_bridge_kill {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
+theorem eval1_bridge_kill [LemFuel] {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
     {ext : Fmap sym sym} {th : thread_state}
     {file : generic_file Unit core_run_annotation}
     {pe : generic_pexpr Unit sym} {err : core_run_cause}
     (hp : PePure pe)
     (hk : evalClass tds th.current_loc ext file th.env pe = .kill err)
-    (hd : peDepth pe ≤ lemDefaultFuel) (σ : CerbMem.MemState)
+    (hd : peDepth pe ≤ LemFuel.fuel) (σ : CerbMem.MemState)
     (k : Sum (generic_pexpr Unit sym) value → core_run_state →
       exceptM ((t0 (generic_pexpr Unit sym) × core_run_state)) core_run_cause)
     (rs : core_run_state) :
@@ -1927,7 +1955,7 @@ def EvalListOut.fail? : EvalListOut → Option EvalFail
     uncovered operand is the list's; otherwise the first undef; otherwise
     the first uncovered operand (which hides the rest); otherwise the
     values. -/
-def evalClassList (tds : CerbTags.TagDefsMap) (loc : CerbLocation.Loc) (ext : Fmap sym sym)
+def evalClassList [LemFuel] (tds : CerbTags.TagDefsMap) (loc : CerbLocation.Loc) (ext : Fmap sym sym)
     (file : generic_file Unit core_run_annotation) (ρ : EnvStack) :
     List (generic_pexpr Unit sym) → EvalListOut
   | [] => .vals []
@@ -1950,7 +1978,7 @@ def evalClassList (tds : CerbTags.TagDefsMap) (loc : CerbLocation.Loc) (ext : Fm
 
 /-- The FOLD-shaped list (`stExceptUndef_foldM`: Erun arguments; the
     first failing operand stops the fold). -/
-def evalClassFold (tds : CerbTags.TagDefsMap) (loc : CerbLocation.Loc) (ext : Fmap sym sym)
+def evalClassFold [LemFuel] (tds : CerbTags.TagDefsMap) (loc : CerbLocation.Loc) (ext : Fmap sym sym)
     (file : generic_file Unit core_run_annotation) (ρ : EnvStack) :
     List (generic_pexpr Unit sym) → EvalListOut
   | [] => .vals []
@@ -1970,7 +1998,7 @@ section ListFacts
 variable (tds : CerbTags.TagDefsMap) (loc : CerbLocation.Loc)
     (ext : Fmap sym sym) (file : generic_file Unit core_run_annotation) (ρ : EnvStack)
 
-theorem evalClassList_cons (pe : generic_pexpr Unit sym) (pes : List (generic_pexpr Unit sym)) :
+theorem evalClassList_cons [LemFuel] (pe : generic_pexpr Unit sym) (pes : List (generic_pexpr Unit sym)) :
     evalClassList tds loc ext file ρ (pe :: pes) =
       (match evalClass tds loc ext file ρ pe with
       | .kill err => .kill err
@@ -1988,7 +2016,7 @@ theorem evalClassList_cons (pe : generic_pexpr Unit sym) (pes : List (generic_pe
         | .undef _ _ => .undef l u
         | .uncovered pe' => .uncovered pe') := rfl
 
-theorem evalClassFold_cons (pe : generic_pexpr Unit sym) (pes : List (generic_pexpr Unit sym)) :
+theorem evalClassFold_cons [LemFuel] (pe : generic_pexpr Unit sym) (pes : List (generic_pexpr Unit sym)) :
     evalClassFold tds loc ext file ρ (pe :: pes) =
       (match evalClass tds loc ext file ρ pe with
       | .kill err => .kill err
@@ -2001,7 +2029,7 @@ theorem evalClassFold_cons (pe : generic_pexpr Unit sym) (pes : List (generic_pe
         | .undef l u => .undef l u
         | .uncovered pe' => .uncovered pe') := rfl
 
-theorem evalClassList_vals_iff (pes : List (generic_pexpr Unit sym)) (vs : List value) :
+theorem evalClassList_vals_iff [LemFuel] (pes : List (generic_pexpr Unit sym)) (vs : List value) :
     evalClassList tds loc ext file ρ pes = .vals vs ↔ evalPexprs tds ext file ρ pes = some vs := by
   induction pes generalizing vs with
   | nil =>
@@ -2051,7 +2079,7 @@ theorem evalClassList_vals_iff (pes : List (generic_pexpr Unit sym)) (vs : List 
       rw [evalPexpr_none_of_uncovered hc]
       constructor <;> intro h <;> cases h
 
-theorem evalClassFold_vals_iff (pes : List (generic_pexpr Unit sym)) (vs : List value) :
+theorem evalClassFold_vals_iff [LemFuel] (pes : List (generic_pexpr Unit sym)) (vs : List value) :
     evalClassFold tds loc ext file ρ pes = .vals vs ↔ evalPexprs tds ext file ρ pes = some vs := by
   induction pes generalizing vs with
   | nil =>
@@ -2103,7 +2131,7 @@ theorem evalClassFold_vals_iff (pes : List (generic_pexpr Unit sym)) (vs : List 
 
 end ListFacts
 
-theorem evalClassList_uncovered {tds : CerbTags.TagDefsMap} {loc : CerbLocation.Loc}
+theorem evalClassList_uncovered [LemFuel] {tds : CerbTags.TagDefsMap} {loc : CerbLocation.Loc}
     {ext : Fmap sym sym} {file : generic_file Unit core_run_annotation} {ρ : EnvStack}
     {pes : List (generic_pexpr Unit sym)} {pe : generic_pexpr Unit sym}
     (h : evalClassList tds loc ext file ρ pes = .uncovered pe) :
@@ -2141,7 +2169,7 @@ theorem evalClassList_uncovered {tds : CerbTags.TagDefsMap} {loc : CerbLocation.
       cases h
       exact ⟨List.mem_cons_self, hc⟩
 
-theorem evalClassFold_uncovered {tds : CerbTags.TagDefsMap} {loc : CerbLocation.Loc}
+theorem evalClassFold_uncovered [LemFuel] {tds : CerbTags.TagDefsMap} {loc : CerbLocation.Loc}
     {ext : Fmap sym sym} {file : generic_file Unit core_run_annotation} {ρ : EnvStack}
     {pes : List (generic_pexpr Unit sym)} {pe : generic_pexpr Unit sym}
     (h : evalClassFold tds loc ext file ρ pes = .uncovered pe) :
@@ -2169,7 +2197,7 @@ theorem evalClassFold_uncovered {tds : CerbTags.TagDefsMap} {loc : CerbLocation.
       cases h
       exact ⟨List.mem_cons_self, hc⟩
 
-theorem evalClassList_of_none {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym}
+theorem evalClassList_of_none [LemFuel] {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym}
     {ρ : EnvStack} {pes : List (generic_pexpr Unit sym)} (loc : CerbLocation.Loc)
     (file : generic_file Unit core_run_annotation)
     (h : evalPexprs tds ext file ρ pes = none) :
@@ -2181,7 +2209,7 @@ theorem evalClassList_of_none {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym}
   | undef l u => exact .inl ⟨_, rfl⟩
   | uncovered pe => exact .inr ⟨pe, rfl⟩
 
-theorem evalClassFold_of_none {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym}
+theorem evalClassFold_of_none [LemFuel] {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym}
     {ρ : EnvStack} {pes : List (generic_pexpr Unit sym)} (loc : CerbLocation.Loc)
     (file : generic_file Unit core_run_annotation)
     (h : evalPexprs tds ext file ρ pes = none) :
@@ -2200,21 +2228,19 @@ with the state untouched, a classified failure delivers it. -/
 
 /-- `sequence0` at a list whose head is `Defined`: the tail decides. -/
 theorem sequence0_cons_defined {α : Type} (y : α) (us : List (t0 α)) :
-    sequence0 (Defined y :: us) = bind2 (sequence0 us) (fun ys => return1 (y :: ys)) := rfl
+    sequence0 (Defined y :: us) = bind2 (sequence0 us) (fun ys => return1 (y :: ys)) := by
+  simp only [sequence0, LemLibTheorems.lemListFoldr_eq, List.foldr_cons]
+  rfl
 
 theorem sequence0_cons_undef {α : Type} (l : CerbLocation.Loc) (u : List undefined_behaviour)
     (us : List (t0 α)) :
-    sequence0 (Undef l u :: us) = Undef l u := rfl
-
-theorem stExpect_mapM_cons {a b msg s : Type} (f : a → s → exceptM ((b × s)) msg)
-    (x : a) (xs : List a) :
-    stExpect_mapM f (x :: xs) =
-      stExpect_bind (f x) (fun y => stExpect_bind (stExpect_mapM f xs)
-        (fun ys => stExpect_return (y :: ys))) := rfl
+    sequence0 (Undef l u :: us) = Undef l u := by
+  simp only [sequence0, LemLibTheorems.lemListFoldr_eq, List.foldr_cons]
+  rfl
 
 /-- THE MAP-SHAPED LIST BRIDGE: the three faces of `evalClassList` on the
     inner `stExpect_mapM`. -/
-theorem stExpect_mapM_class {X Y : Type}
+theorem stExpect_mapM_class [LemFuel] {X Y : Type}
     {tds : Fmap sym (CerbLocation.Loc × tag_definition)} {ext : Fmap sym sym}
     {th : thread_state} {file : generic_file Unit core_run_annotation}
     (h : X → core_run_state → exceptM (t0 Y × core_run_state) core_run_cause)
@@ -2308,8 +2334,7 @@ theorem stExpect_mapM_class {X Y : Type}
           refine ⟨Undef l u :: us, ?_, ?_⟩
           · rw [hus]; rfl
           · unfold mapM1
-            rw [List.map_id']
-            rfl
+            rw [List.map_id', sequence0_cons_undef]
         | kill e => rw [hl] at h'; cases h'
         | undef l'' u'' =>
           rw [hl] at h'; cases h'
@@ -2317,8 +2342,7 @@ theorem stExpect_mapM_class {X Y : Type}
           refine ⟨Undef l u :: us, ?_, ?_⟩
           · rw [hus]; rfl
           · unfold mapM1
-            rw [List.map_id']
-            rfl
+            rw [List.map_id', sequence0_cons_undef]
         | uncovered _ => rw [hl] at h'; cases h'
       · rw [evalClassList_cons, hc] at h'
         dsimp only at h'
@@ -2330,7 +2354,7 @@ theorem stExpect_mapM_class {X Y : Type}
 
 /-- `stExceptUndef_mapM` delivers the classified failure of the
     MAP-shaped list. -/
-theorem stExceptUndef_mapM_class_fail {X Y : Type}
+theorem stExceptUndef_mapM_class_fail [LemFuel] {X Y : Type}
     {tds : Fmap sym (CerbLocation.Loc × tag_definition)} {ext : Fmap sym sym}
     {th : thread_state} {file : generic_file Unit core_run_annotation}
     (h : X → core_run_state → exceptM (t0 Y × core_run_state) core_run_cause)
@@ -2366,7 +2390,7 @@ theorem stExceptUndef_mapM_class_fail {X Y : Type}
     one-iteration evaluator) delivers the first classified failure. The
     per-operand body is abstract with a pointwise characterization
     (`mapM_eval1_bridge`'s pattern). -/
-theorem mapM_eval1_fail {ext : Fmap sym sym} {th : thread_state}
+theorem mapM_eval1_fail [LemFuel] {ext : Fmap sym sym} {th : thread_state}
     {tds : Fmap sym (CerbLocation.Loc × tag_definition)} {σ : Mem}
     {file : generic_file Unit core_run_annotation}
     (f : generic_pexpr Unit sym → core_run_state →
@@ -2378,7 +2402,7 @@ theorem mapM_eval1_fail {ext : Fmap sym sym} {th : thread_state}
           | Sum.inl pe' => stExceptUndef_return pe'
           | Sum.inr cval => stExceptUndef_return (mk_value_pe cval)) rs')
     (pes : List (generic_pexpr Unit sym)) {fl : EvalFail}
-    (hp : ∀ pe ∈ pes, PePure pe) (hd : ∀ pe ∈ pes, peDepth pe ≤ lemDefaultFuel)
+    (hp : ∀ pe ∈ pes, PePure pe) (hd : ∀ pe ∈ pes, peDepth pe ≤ LemFuel.fuel)
     (h : (evalClassList tds th.current_loc ext file th.env pes).fail? = some fl)
     (rs : core_run_state) :
     stExceptUndef_mapM f pes rs = fl.run (List (generic_pexpr Unit sym)) core_run_state rs := by
@@ -2411,7 +2435,7 @@ theorem mapM_eval1_fail {ext : Fmap sym sym} {th : thread_state}
     (fun _ v => mk_value_pe v) hval hfail pes.attach hcls rs
 
 /-- ... the kill face (E1's statement, verbatim). -/
-theorem mapM_eval1_kill {ext : Fmap sym sym} {th : thread_state}
+theorem mapM_eval1_kill [LemFuel] {ext : Fmap sym sym} {th : thread_state}
     {tds : Fmap sym (CerbLocation.Loc × tag_definition)} {σ : Mem}
     {file : generic_file Unit core_run_annotation}
     (f : generic_pexpr Unit sym → core_run_state →
@@ -2423,7 +2447,7 @@ theorem mapM_eval1_kill {ext : Fmap sym sym} {th : thread_state}
           | Sum.inl pe' => stExceptUndef_return pe'
           | Sum.inr cval => stExceptUndef_return (mk_value_pe cval)) rs')
     (pes : List (generic_pexpr Unit sym)) {err : core_run_cause}
-    (hp : ∀ pe ∈ pes, PePure pe) (hd : ∀ pe ∈ pes, peDepth pe ≤ lemDefaultFuel)
+    (hp : ∀ pe ∈ pes, PePure pe) (hd : ∀ pe ∈ pes, peDepth pe ≤ LemFuel.fuel)
     (h : evalClassList tds th.current_loc ext file th.env pes = .kill err)
     (rs : core_run_state) :
     stExceptUndef_mapM f pes rs = Exception err :=
@@ -2431,7 +2455,7 @@ theorem mapM_eval1_kill {ext : Fmap sym sym} {th : thread_state}
 
 /-- The Esave parameter map (`mapM_save_bridge`'s shape) delivers the
     first classified failure among the initializers. -/
-theorem mapM_save_fail {ext : Fmap sym sym} {th : thread_state}
+theorem mapM_save_fail [LemFuel] {ext : Fmap sym sym} {th : thread_state}
     {tds : Fmap sym (CerbLocation.Loc × tag_definition)} {σ : Mem}
     {file : generic_file Unit core_run_annotation}
     (f : generic_pexpr Unit sym → core_run_state →
@@ -2456,7 +2480,7 @@ theorem mapM_save_fail {ext : Fmap sym sym} {th : thread_state}
       Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym)))
     {fl : EvalFail}
     (hp : ∀ pe ∈ saveParamPexprs ps, PePure pe)
-    (hd : ∀ pe ∈ saveParamPexprs ps, peDepth pe ≤ lemDefaultFuel)
+    (hd : ∀ pe ∈ saveParamPexprs ps, peDepth pe ≤ LemFuel.fuel)
     (h : (evalClassList tds th.current_loc ext file th.env (saveParamPexprs ps)).fail? = some fl)
     (rs : core_run_state) :
     stExceptUndef_mapM g ps rs =
@@ -2504,7 +2528,7 @@ theorem mapM_save_fail {ext : Fmap sym sym} {th : thread_state}
     (fun x v => (x.val.1, (x.val.2.1, mk_value_pe v))) hval hfail ps.attach hcls rs
 
 /-- ... the kill face (E1's statement, verbatim). -/
-theorem mapM_save_kill {ext : Fmap sym sym} {th : thread_state}
+theorem mapM_save_kill [LemFuel] {ext : Fmap sym sym} {th : thread_state}
     {tds : Fmap sym (CerbLocation.Loc × tag_definition)} {σ : Mem}
     {file : generic_file Unit core_run_annotation}
     (f : generic_pexpr Unit sym → core_run_state →
@@ -2529,7 +2553,7 @@ theorem mapM_save_kill {ext : Fmap sym sym} {th : thread_state}
       Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym)))
     {err : core_run_cause}
     (hp : ∀ pe ∈ saveParamPexprs ps, PePure pe)
-    (hd : ∀ pe ∈ saveParamPexprs ps, peDepth pe ≤ lemDefaultFuel)
+    (hd : ∀ pe ∈ saveParamPexprs ps, peDepth pe ≤ LemFuel.fuel)
     (h : evalClassList tds th.current_loc ext file th.env (saveParamPexprs ps) = .kill err)
     (rs : core_run_state) :
     stExceptUndef_mapM g ps rs = Exception err :=
@@ -2552,7 +2576,7 @@ theorem zipArgs_sub {params : List (sym × core_base_type)}
 /-- The Erun argument fold (`foldM_args_bridge`'s shape; FOLD-shaped:
     the first failing argument stops it) delivers the classified failure
     of the zipped arguments. -/
-theorem foldM_args_fail {th : thread_state}
+theorem foldM_args_fail [LemFuel] {th : thread_state}
     {tds : Fmap sym (CerbLocation.Loc × tag_definition)} {σ : Mem}
     {file : generic_file Unit core_run_annotation} {ext : Fmap sym sym}
     (f : EnvStack → (sym × core_base_type) × generic_pexpr Unit sym →
@@ -2566,7 +2590,7 @@ theorem foldM_args_fail {th : thread_state}
     ∀ (params : List (sym × core_base_type))
       (pes : List (generic_pexpr Unit sym)) {fl : EvalFail}
       (acc : EnvStack) (rs : core_run_state),
-      (∀ pe ∈ pes, PePure pe) → (∀ pe ∈ pes, peDepth pe ≤ lemDefaultFuel) →
+      (∀ pe ∈ pes, PePure pe) → (∀ pe ∈ pes, peDepth pe ≤ LemFuel.fuel) →
       (evalClassFold tds th.current_loc ext file th.env (zipArgs params pes)).fail? = some fl →
       stExceptUndef_foldM f acc (List.zip params pes) rs = fl.run EnvStack core_run_state rs := by
   intro params
@@ -2588,7 +2612,7 @@ theorem foldM_args_fail {th : thread_state}
           | .undef l u => EvalListOut.undef l u
           | .uncovered pe' => EvalListOut.uncovered pe').fail? = some fl := h
       have hpe : PePure pe := hp pe List.mem_cons_self
-      have hde : peDepth pe ≤ lemDefaultFuel := hd pe List.mem_cons_self
+      have hde : peDepth pe ≤ LemFuel.fuel := hd pe List.mem_cons_self
       obtain ⟨p1, p2⟩ := p
       rw [List.zip_cons_cons, stExceptUndef_foldM_cons, stExceptUndef_bind_apply,
         hf acc p1 p2 pe rs]
@@ -2630,7 +2654,7 @@ theorem foldM_args_fail {th : thread_state}
 /-- ... the kill face (E1's `foldM_args_kill`, at E2's FOLD-shaped list
     classifier — forced: the MAP-shaped classifier raises past a
     collected undef where the fold stops at it). -/
-theorem foldM_args_kill {th : thread_state}
+theorem foldM_args_kill [LemFuel] {th : thread_state}
     {tds : Fmap sym (CerbLocation.Loc × tag_definition)} {σ : Mem}
     {file : generic_file Unit core_run_annotation} {ext : Fmap sym sym}
     (f : EnvStack → (sym × core_base_type) × generic_pexpr Unit sym →
@@ -2644,7 +2668,7 @@ theorem foldM_args_kill {th : thread_state}
     ∀ (params : List (sym × core_base_type))
       (pes : List (generic_pexpr Unit sym)) {err : core_run_cause}
       (acc : EnvStack) (rs : core_run_state),
-      (∀ pe ∈ pes, PePure pe) → (∀ pe ∈ pes, peDepth pe ≤ lemDefaultFuel) →
+      (∀ pe ∈ pes, PePure pe) → (∀ pe ∈ pes, peDepth pe ≤ LemFuel.fuel) →
       evalClassFold tds th.current_loc ext file th.env (zipArgs params pes) = .kill err →
       stExceptUndef_foldM f acc (List.zip params pes) rs = Exception err :=
   fun params pes {err} acc rs hp hd h =>

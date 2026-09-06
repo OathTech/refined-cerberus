@@ -43,6 +43,7 @@ CerberusHeapLang.API	core	-	the public surface as one import
 CerberusHeapLang.StdCore	core	-	the transcribed std.core fragment (E3): is_representable_integer / conv_int / conv_loaded_int as a file's stdlib, checked against the pinned std.core source by scripts/corpus_skeleton.lean
 CerberusHeapLang.IntRules	core	-	the C integer rules (E3): __conv_int__ and catch_exceptional_condition_add through the engine's mk_* functions and the std.core unfolding; wps_c_add/wpt_c_add, wps_conv_loaded_int/wpt_conv_loaded_int
 CerberusHeapLang.ProdLoop	production-core	-	the total judgment drives the shipped loop
+CerberusHeapLang.ProdMemory	production-core	-	Cold-start errno allocation/zeroing equations, memory well-formedness and real-byte launch freshness
 CerberusHeapLang.ProdEntry	production-core	-	the cold start and the pipeline theorems
 CerberusHeapLang.Audit	audit	-	exact export pins and the banned-axiom sweep
 CerberusHeapLang.Exhibit	positive-client	-	straight-line store/load exhibits (A/B/C)
@@ -72,6 +73,7 @@ CerberusHeapLang.Examples.ReadinessSmoke	declared-smoke	-	the API-only two-field
 CerberusHeapLang.Examples.Layout	example-support	-	layout constants and canned shapes
 CerberusHeapLang.Examples.CorpusE0	example-support	-	the corpus transcriptions (E1: t1; E4: t1's main is in Frag, t1Main_frag) and the annotation/bound/pure-expression/save-initialiser skeleton instrument (scripts/corpus_skeleton.lean)
 CerberusHeapLang.Examples.CorpusE5	example-support	-	E5 corpus fragment witnesses, including every selected branch after arbitrary pattern substitution
+CerberusHeapLang.Examples.SeededMemory	semantic-test	-	Concrete authored memory fixture with positive/zero-fuel engine-allocation equations; no program correctness proof
 CerberusHeapLang.Examples.MirrorCoverage	semantic-test	-	mirror-level coverage witnesses against `Step`; engine-round instances
 CerberusHeapLang.ProdExhibit	production-wrapper	-	exhibit A at the production entry
 CerberusHeapLang.ProdLoopExhibit	production-wrapper	-	the production loop theorems

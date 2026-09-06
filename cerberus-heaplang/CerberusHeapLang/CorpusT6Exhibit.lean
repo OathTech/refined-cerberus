@@ -3,7 +3,8 @@ The emitted t6_switch main, using public total-correctness rules.
 The full term's membership is in Examples/CorpusE5. t6_wpt has budget 78;
 t6_certified_production concludes exactly one Active Specified(20),
 unblocked with empty stdout/stderr, when the initial symbol supply is at
-least 600. The current file/library boundary is the same one as t1 and t5
+least 600 and the caller's ambient fuel is at least eighty. The file/library
+boundary is the same one as t1 and t5
 (KOI A7): the transcribed main and a checked three-function std.core
 fragment with an empty implementation map, not the full frontend file.
 
@@ -27,7 +28,7 @@ open CorpusE0 (t6a t6Load t6Reg t6RegP t6xSym t6rSym t6RetSym t6BreakSym
 
 variable {GF : BundledGFunctors}
 
-theorem wpt_t6Load [SpikeGS .hasLC GF]
+theorem wpt_t6Load [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
     {Ψ : SpikeVal → EnvStack → IProp GF}
     (hex : ∀ x, resolveExtern M.extern x = x)
@@ -80,16 +81,154 @@ def t6RetCont : CoreExpr := t5Pure (psym (t6a 531))
 /-- The actual engine collector is the authority for this label map. -/
 def t6Q : LabelMap := collect_saves t6Main
 
-theorem t6Q_case1 : lookupLabel t6Q t6Case1Sym = some (t6PtrParams, t6Case1Cont) := rfl
-theorem t6Q_case2 : lookupLabel t6Q t6Case2Sym = some (t6PtrParams, t6Case2Cont) := rfl
-theorem t6Q_default : lookupLabel t6Q t6DefaultSym = some (t6PtrParams, t6DefaultCont) := rfl
-theorem t6Q_break : lookupLabel t6Q t6BreakSym = some (t6PtrParams, t6BreakCont) := rfl
-theorem t6Q_ret : lookupLabel t6Q t6RetSym = some (t6RetParams, t6RetCont) := rfl
+/-! Collector workers below use sufficient structural traversal budgets.
+These are pure registration facts, independent of ambient LemFuel. Each
+stage retains its accumulated map, including the shipped map tree shape. -/
+
+/-- The default tail registers one continuation. -/
+theorem t6DefaultTail_collect (n : Nat) :
+    collect_saves_aux_lemFuel (n + 4) empty_saves t6DefaultTail =
+      { tmp_acc := fmapAddBy symCmpL t6DefaultSym
+          (t6PtrParams, seqE (t6AssignStmt 107 527 528 30)
+            (seqE (t6Run [Aloc (t6Reg 115 121), Astmt] t6BreakSym) t5Unit)) fmapEmpty,
+        closed_acc := fmapEmpty } := rfl
+
+/-- The case-2 tail adds its continuation before the default suffix. -/
+theorem t6Case2Tail_collect (n : Nat) :
+    collect_saves_aux_lemFuel (n + 6) empty_saves t6Case2Tail =
+      { tmp_acc := fmapAddBy symCmpL t6DefaultSym
+          (t6PtrParams, seqE (t6AssignStmt 107 527 528 30)
+            (seqE (t6Run [Aloc (t6Reg 115 121), Astmt] t6BreakSym) t5Unit))
+          (fmapAddBy symCmpL t6Case2Sym
+            (t6PtrParams, seqE (t6AssignStmt 83 525 526 20)
+              (seqE (t6Run [Aloc (t6Reg 91 97), Astmt] t6BreakSym) t6DefaultTail)) fmapEmpty),
+        closed_acc := fmapEmpty } := by
+  unfold t6Case2Tail seqE
+  rw [show n + 6 = (n + 5) + 1 by omega, collect_saves_aux_sseq]
+  rw [show n + 5 = (n + 4) + 1 by omega, collect_saves_aux_sseq]
+  rw [t6DefaultTail_collect n]
+  rfl
+
+/-- The three switch cases retain their own sequence suffixes. -/
+theorem t6Cases_collect (n : Nat) :
+    collect_saves_aux_lemFuel (n + 12) empty_saves t6Cases =
+      { tmp_acc := fmapAddBy symCmpL t6DefaultSym (t6PtrParams,
+            Expr [Aloc (t6Reg 50 123), Astmt] (Esseq wc
+              (seqE (t6AssignStmt 107 527 528 30)
+                (seqE (t6Run [Aloc (t6Reg 115 121), Astmt] t6BreakSym) t5Unit)) t5Unit))
+          (fmapAddBy symCmpL t6Case1Sym (t6PtrParams,
+            Expr [Aloc (t6Reg 50 123), Astmt] (Esseq wc
+              (seqE (t6AssignStmt 60 523 524 10)
+                (seqE (t6Run [Aloc (t6Reg 68 74), Astmt] t6BreakSym) t6Case2Tail)) t5Unit))
+          (fmapAddBy symCmpL t6Case2Sym (t6PtrParams,
+            Expr [Aloc (t6Reg 50 123), Astmt] (Esseq wc
+              (seqE (t6AssignStmt 83 525 526 20)
+                (seqE (t6Run [Aloc (t6Reg 91 97), Astmt] t6BreakSym) t6DefaultTail)) t5Unit))
+          (fmapEmpty))),
+        closed_acc := fmapEmpty } := by
+  change collect_saves_aux_lemFuel (n + 12) empty_saves
+    (Expr [Aloc (t6Reg 50 123), Astmt] (Esseq wc
+      (seqE (t6Save [Aloc (t6Reg 52 67), Astmt] t6Case1Sym (t6AssignStmt 60 523 524 10))
+        (seqE (t6Run [Aloc (t6Reg 68 74), Astmt] t6BreakSym) t6Case2Tail)) t5Unit)) = _
+  unfold seqE
+  rw [show n + 12 = (n + 11) + 1 by omega, collect_saves_aux_sseq]
+  rw [show n + 11 = (n + 10) + 1 by omega, collect_saves_aux_sseq]
+  rw [show n + 10 = (n + 9) + 1 by omega, collect_saves_aux_sseq]
+  have hsave : collect_saves_aux_lemFuel (n + 10) empty_saves
+      (t6Save [Aloc (t6Reg 52 67), Astmt] t6Case1Sym (t6AssignStmt 60 523 524 10)) =
+      { tmp_acc := fmapAddBy symCmpL t6Case1Sym
+          (t6PtrParams, t6AssignStmt 60 523 524 10) fmapEmpty,
+        closed_acc := fmapEmpty } := rfl
+  have hrun : collect_saves_aux_lemFuel (n + 9) empty_saves
+      (t6Run [Aloc (t6Reg 68 74), Astmt] t6BreakSym) = empty_saves := rfl
+  have hpure : collect_saves_aux_lemFuel (n + 11) empty_saves t5Unit = empty_saves := rfl
+  rw [hsave, hrun, hpure, show n + 9 = (n + 3) + 6 by omega,
+    t6Case2Tail_collect (n + 3)]
+  rfl
+
+/-- Dispatch's tests and jumps add no registrations before the cases. -/
+theorem t6Dispatch_collect (n : Nat) :
+    collect_saves_aux_lemFuel (n + 16) empty_saves t6Dispatch =
+      collect_saves_aux_lemFuel (n + 12) empty_saves t6Cases := by
+  unfold t6Dispatch seqE
+  rw [show n + 16 = (n + 15) + 1 by omega, collect_saves_aux_sseq]
+  rw [show n + 15 = (n + 14) + 1 by omega, collect_saves_aux_sseq]
+  rw [show n + 14 = (n + 13) + 1 by omega, collect_saves_aux_sseq]
+  rw [show n + 13 = (n + 12) + 1 by omega, collect_saves_aux_sseq]
+  rw [t6Cases_collect n]
+  rfl
+
+/-- The switch's load and case discrimination preserve its registrations. -/
+theorem t6Switch_collect (n : Nat) :
+    collect_saves_aux_lemFuel (n + 24) empty_saves CorpusE0.t6Switch =
+      collect_saves_aux_lemFuel (n + 17) empty_saves t6Cases := by
+  change union_saves empty_saves (union_saves empty_saves
+    (union_saves empty_saves (union_saves empty_saves
+      (collect_saves_aux_lemFuel (n + 21) empty_saves t6Dispatch)))) = _
+  rw [t6Dispatch_collect (n + 5)]
+  rw [t6Cases_collect (n + 5)]
+  rfl
+
+/-- Break and return registrations in the suffix. -/
+theorem t6AfterSwitch_collect (n : Nat) :
+    collect_saves_aux_lemFuel (n + 16) empty_saves t6AfterSwitch =
+      { tmp_acc := fmapAddBy symCmpL t6RetSym (t6RetParams, t6RetCont)
+          (fmapAddBy symCmpL t6BreakSym (t6PtrParams, t6BreakCont) fmapEmpty),
+        closed_acc := fmapEmpty } := by
+  rfl
+
+/-- The structural measure is computed separately from registration to
+    keep the collector proof from expanding the whole term's size. -/
+theorem t6Main_size : generic_expr.lemSize t6Main = 218 := by
+  simp only [t6Main, CorpusE0.t6Switch, CorpusE0.t6SwitchPats, t6SpecifiedBranch,
+    t6Dispatch, t6Cases, t6AssignStmt, t6Run, t6Save, t6AfterSwitch,
+    t6Return, t6Load, CorpusE0.t6Kill, CorpusE0.emittedIntLoad,
+    t5Pure, t5Unit, letS, letW, seqE, act, bnd, createInt,
+    generic_expr.lemSize, generic_expr_.lemSize,
+    generic_expr_.lemSize_aux1, generic_expr_.lemSize_aux2]
+
+/-- The concrete map tree produced by the shipped collector on this pin. -/
+theorem t6Q_eq : t6Q =
+    fmapAddBy symCmpL t6Case1Sym (t6PtrParams, t6Case1Cont)
+          (fmapAddBy symCmpL t6RetSym (t6RetParams, t6RetCont)
+          (fmapAddBy symCmpL t6DefaultSym (t6PtrParams, t6DefaultCont)
+          (fmapAddBy symCmpL t6BreakSym (t6PtrParams, t6BreakCont)
+          (fmapAddBy symCmpL t6Case2Sym (t6PtrParams, t6Case2Cont)
+          (fmapEmpty))))) := by
+  unfold t6Q collect_saves collect_saves_aux
+  rw [t6Main_size]
+  unfold t6Main letS seqE
+  rw [show (218 : Nat) = 217 + 1 from rfl, collect_saves_aux_sseq]
+  rw [show (217 : Nat) = 216 + 1 from rfl, collect_saves_aux_sseq]
+  rw [show (216 : Nat) = 215 + 1 from rfl, collect_saves_aux_sseq]
+  rw [show (215 : Nat) = 214 + 1 from rfl, collect_saves_aux_sseq]
+  rw [show (214 : Nat) = 213 + 1 from rfl, collect_saves_aux_sseq]
+  rw [show (213 : Nat) = 212 + 1 from rfl, collect_saves_aux_sseq]
+  rw [show (212 : Nat) = 211 + 1 from rfl, collect_saves_aux_sseq]
+  rw [t6Switch_collect 187, t6Cases_collect 192, t6AfterSwitch_collect 195]
+  rfl
+
+
+theorem t6Q_case1 : lookupLabel t6Q t6Case1Sym = some (t6PtrParams, t6Case1Cont) := by
+  rw [t6Q_eq]
+  rfl
+theorem t6Q_case2 : lookupLabel t6Q t6Case2Sym = some (t6PtrParams, t6Case2Cont) := by
+  rw [t6Q_eq]
+  rfl
+theorem t6Q_default : lookupLabel t6Q t6DefaultSym = some (t6PtrParams, t6DefaultCont) := by
+  rw [t6Q_eq]
+  rfl
+theorem t6Q_break : lookupLabel t6Q t6BreakSym = some (t6PtrParams, t6BreakCont) := by
+  rw [t6Q_eq]
+  rfl
+theorem t6Q_ret : lookupLabel t6Q t6RetSym = some (t6RetParams, t6RetCont) := by
+  rw [t6Q_eq]
+  rfl
 
 abbrev t6frAssign (n m : Nat) (v : Int) (pr : CerbMem.PointerValue) (f : Fmap sym value) :=
   envAdd (t6a n) (Vobject (OVpointer pr)) (envAdd (t6a m) (lint v) f)
 
-theorem wpt_t6AssignStmt [SpikeGS .hasLC GF]
+theorem wpt_t6AssignStmt [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
     {Ψ : SpikeVal → EnvStack → IProp GF}
     (hstd : StdE3 M.file) (hex : ∀ x, resolveExtern M.extern x = x)
@@ -110,7 +249,7 @@ theorem wpt_t6AssignStmt [SpikeGS .hasLC GF]
   rw [show (Pattern [] (CaseCtor Ctuple
     [Pattern [] (CaseBase (some (t6a n), ptrTy)), Pattern [] (CaseBase (some (t6a m), CorpusE0.lint))]) : pattern) =
     tuplePat [] [([], some (t6a n), ptrTy), ([], some (t6a m), CorpusE0.lint)] from rfl]
-  iapply wpt_bound_wseq_tuple _ _ _ _ _ _ _ _ 7 16 rfl (Nat.le_of_ble_eq_true rfl)
+  iapply wpt_bound_wseq_tuple _ _ _ _ _ _ _ _ 7 16 rfl
   iapply wpt_unseq_pure_right _ _ _ (specInt v) _ 2 (lint v) rfl rfl (specInt_eval _ v)
   iapply wpt_pure (psym t6rSym) _ (Nat.le_refl 2) rfl (t1sym_eval hex rest hr)
   simp only [SpikeVal.mergeInto, SpikeVal.val]
@@ -138,19 +277,12 @@ theorem wpt_t6AssignStmt [SpikeGS .hasLC GF]
   simp only [SpikeValA.erase_pure]
   iapply HΨ $$ %s %hs Hpt
 
-theorem t6Q_eq : t6Q =
-    fmapAddBy symCmpL t6Case1Sym (t6PtrParams, t6Case1Cont)
-    (fmapAddBy symCmpL t6Case2Sym (t6PtrParams, t6Case2Cont)
-    (fmapAddBy symCmpL t6DefaultSym (t6PtrParams, t6DefaultCont)
-    (fmapAddBy symCmpL t6BreakSym (t6PtrParams, t6BreakCont)
-    (fmapAddBy symCmpL t6RetSym (t6RetParams, t6RetCont) fmapEmpty)))) := rfl
-
 theorem t6Q_lookup (l : sym) : lookupLabel t6Q l =
     if symOrd l t6Case1Sym = .eq then some (t6PtrParams, t6Case1Cont)
-    else if symOrd l t6Case2Sym = .eq then some (t6PtrParams, t6Case2Cont)
+    else if symOrd l t6RetSym = .eq then some (t6RetParams, t6RetCont)
     else if symOrd l t6DefaultSym = .eq then some (t6PtrParams, t6DefaultCont)
     else if symOrd l t6BreakSym = .eq then some (t6PtrParams, t6BreakCont)
-    else if symOrd l t6RetSym = .eq then some (t6RetParams, t6RetCont)
+    else if symOrd l t6Case2Sym = .eq then some (t6PtrParams, t6Case2Cont)
     else none := by
   rw [t6Q_eq]
   unfold lookupLabel
@@ -216,7 +348,7 @@ local macro "t6_lookup" : tactic => `(tactic|
 theorem t6Kill_eq (x : sym) : CorpusE0.t6Kill x =
     killOpRedex [] (t6Reg 0 135) empty_annotation (Static0 intTy) (psym x) := rfl
 
-theorem wpt_t6Return [SpikeGS .hasLC GF]
+theorem wpt_t6Return [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} {Ψ : SpikeVal → EnvStack → IProp GF}
     (hstd : StdE3 M.file) (hex : ∀ x, resolveExtern M.extern x = x)
     (hQ : M.labelsAt p = t6Q)
@@ -233,7 +365,7 @@ theorem wpt_t6Return [SpikeGS .hasLC GF]
     symPat [] (t6a 530) CorpusE0.lint from rfl]
   iapply wpt_seq_sym _ _ _ _ _ _ _ _ 7 9
   rw [show (7 : Nat) = 6 + 1 from rfl]
-  iapply wpt_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
+  iapply wpt_bound _ _ _ rfl
   iapply wpt_t6Load hex t6rSym 529 131 132 f rest hf pr (emittedIntBytes M.tagDefs 20) (lint 20) hr rfl rfl
   isplitl [Hr]
   · iexact Hr
@@ -267,7 +399,7 @@ theorem wpt_t6Return [SpikeGS .hasLC GF]
   ipureintro
   exact ⟨rfl, rfl, rfl, _, _, rfl, by t6_frame⟩
 
-theorem wpt_t6Break [SpikeGS .hasLC GF]
+theorem wpt_t6Break [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} {Ψ : SpikeVal → EnvStack → IProp GF}
     (hstd : StdE3 M.file) (hex : ∀ x, resolveExtern M.extern x = x)
     (hQ : M.labelsAt p = t6Q)
@@ -291,7 +423,7 @@ theorem wpt_t6Break [SpikeGS .hasLC GF]
   simp only [SpikeValA.erase_pure, SpikeVal.mergeInto]
   iapply wpt_t6Return hstd hex hQ f rest hf px pr hx hr $$ H
 
-theorem wpt_t6Case2 [SpikeGS .hasLC GF]
+theorem wpt_t6Case2 [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} {Ψ : SpikeVal → EnvStack → IProp GF}
     (hstd : StdE3 M.file) (hex : ∀ x, resolveExtern M.extern x = x)
     (hQ : M.labelsAt p = t6Q) (hsup : 600 ≤ M.runState.sym_supply)
@@ -341,7 +473,7 @@ theorem wpt_t6Case2 [SpikeGS .hasLC GF]
   · iexact Hx
   iexact Hr
 
-theorem t6_blockSpecsT [SpikeGS .hasLC GF]
+theorem t6_blockSpecsT [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym}
     (hstd : StdE3 M.file) (hex : ∀ x, resolveExtern M.extern x = x)
     (hQ : M.labelsAt p = t6Q) (hsup : 600 ≤ M.runState.sym_supply) :
@@ -393,7 +525,7 @@ theorem t6_blockSpecsT [SpikeGS .hasLC GF]
       · iexact Hx
       iexact Hr
 
-theorem wpt_t6Switch [SpikeGS .hasLC GF]
+theorem wpt_t6Switch [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} {Ψ : SpikeVal → EnvStack → IProp GF}
     (hstd : StdE3 M.file) (hex : ∀ x, resolveExtern M.extern x = x)
     (hQ : M.labelsAt p = t6Q)
@@ -410,7 +542,7 @@ theorem wpt_t6Switch [SpikeGS .hasLC GF]
     symPat [] (t6a 517) CorpusE0.lint from rfl]
   iapply wpt_seq_sym _ _ _ _ _ _ _ _ 7 51
   rw [show (7 : Nat) = 6 + 1 from rfl]
-  iapply wpt_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
+  iapply wpt_bound _ _ _ rfl
   iapply wpt_t6Load hex t6xSym 516 47 48 f rest hf px (emittedIntBytes M.tagDefs 2) (lint 2) hx rfl rfl
   isplitl [Hx]
   · iexact Hx
@@ -469,7 +601,7 @@ theorem wpt_t6Switch [SpikeGS .hasLC GF]
   iexact Hr
 
 /-- Total proof of the emitted main: 20 units for initialization and 58 for the switch and its label path. -/
-theorem t6_wpt [SpikeGS .hasLC GF]
+theorem t6_wpt [LemFuel] (hfuel : 0 < LemFuel.fuel) [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} (hstd : StdE3 M.file)
     (hex : ∀ x, resolveExtern M.extern x = x) (hQ : M.labelsAt p = t6Q)
     (f : Fmap sym value) (rest : List (Fmap sym value)) (hf : SymFrame f) :
@@ -487,7 +619,7 @@ theorem t6_wpt [SpikeGS .hasLC GF]
     (align := CerbMem.alignofIval M.tagDefs intTy) (ty := intTy) rfl
     (alignofIntPe_eval _ _) (evalPexpr_val _ _ _ _ _)
   rw [alignofIval_intTy]
-  iapply wpt_create _ _ empty_annotation .Prov_none 4 intTy (PrefSource (t6Reg 15 135) [t6xSym])
+  iapply wpt_create (hfuel := hfuel) (halign := by decide) (haddr := rfl) _ _ empty_annotation .Prov_none 4 intTy (PrefSource (t6Reg 15 135) [t6xSym])
     _ (Nat.le_refl 2) intTy_size_pos intTy_nonatomic (fun a => intTy_decIndep a _)
   isplitl [HcapX]
   · iexact HcapX
@@ -504,7 +636,7 @@ theorem t6_wpt [SpikeGS .hasLC GF]
     (align := CerbMem.alignofIval M.tagDefs intTy) (ty := intTy) rfl
     (alignofIntPe_eval _ _) (evalPexpr_val _ _ _ _ _)
   rw [alignofIval_intTy]
-  iapply wpt_create _ _ empty_annotation .Prov_none 4 intTy (PrefSource (t6Reg 15 135) [t6rSym])
+  iapply wpt_create (hfuel := hfuel) (halign := by decide) (haddr := rfl) _ _ empty_annotation .Prov_none 4 intTy (PrefSource (t6Reg 15 135) [t6rSym])
     _ (Nat.le_refl 2) intTy_size_pos intTy_nonatomic (fun a => intTy_decIndep a _)
   isplitl [HcapR]
   · iexact HcapR
@@ -517,7 +649,7 @@ theorem t6_wpt [SpikeGS .hasLC GF]
     symPat [] (t6a 514) CorpusE0.lint from rfl]
   iapply wpt_seq_sym _ _ _ _ _ _ _ _ 3 69
   rw [show (3 : Nat) = 2 + 1 from rfl]
-  iapply wpt_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
+  iapply wpt_bound _ _ _ rfl
   iapply wpt_pure (specInt 2) _ (Nat.le_refl 2) rfl (specInt_eval _ 2)
   simp only [SpikeVal.val]
   iexists (lint 2)
@@ -530,7 +662,7 @@ theorem t6_wpt [SpikeGS .hasLC GF]
     rfl (pv := px) (cv := lint 2) (t1sym_eval hex rest (by t6_lookup))
     (t1ConvLoadedInt_eval hstd (t1sym_eval hex rest (by t6_lookup)) (by decide) (by decide))
   iapply wpt_store _ _ _ intTy px (lint 2) NA (emittedIntMval 2) _ _ (Nat.le_refl 3)
-    (emittedInt_encodes _ 2) (emittedInt_storable _ 2)
+    (emittedInt_encodes _ 2) (emittedInt_storable _ 2 (by decide) (by decide))
   isplitl [Hx]
   · iexact Hx
   iintro %fpX Hx
@@ -539,7 +671,7 @@ theorem t6_wpt [SpikeGS .hasLC GF]
     symPat [] (t6a 515) CorpusE0.lint from rfl]
   iapply wpt_seq_sym _ _ _ _ _ _ _ _ 3 62
   rw [show (3 : Nat) = 2 + 1 from rfl]
-  iapply wpt_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
+  iapply wpt_bound _ _ _ rfl
   iapply wpt_pure (specInt 0) _ (Nat.le_refl 2) rfl (specInt_eval _ 0)
   iexists (lint 0)
   isplit
@@ -551,7 +683,7 @@ theorem t6_wpt [SpikeGS .hasLC GF]
     rfl (pv := pr) (cv := lint 0) (t1sym_eval hex rest (by t6_lookup))
     (t1ConvLoadedInt_eval hstd (t1sym_eval hex rest (by t6_lookup)) (by decide) (by decide))
   iapply wpt_store _ _ _ intTy pr (lint 0) NA (emittedIntMval 0) _ _ (Nat.le_refl 3)
-    (emittedInt_encodes _ 0) (emittedInt_storable _ 0)
+    (emittedInt_encodes _ 0) (emittedInt_storable _ 0 (by decide) (by decide))
   isplitl [Hr]
   · iexact Hr
   iintro %fpR Hr
@@ -565,38 +697,32 @@ theorem t6_wpt [SpikeGS .hasLC GF]
   · iexact Hx
   iexact Hr
 
-theorem t6DefaultTail_frag : Frag t6DefaultTail :=
-  .sseq (CorpusE0.t6Save_frag _ _ _ (CorpusE0.t6AssignStmt_frag _ _ _ _))
-    (.sseq (CorpusE0.t6Run_frag _ _) (.val_pure _))
+theorem t6DefaultTail_frag [LemFuel] (hfuel : 40 ≤ LemFuel.fuel) : Frag t6DefaultTail :=
+  .sseq (CorpusE0.t6Save_frag (hfuel := by omega) _ _ _ (CorpusE0.t6AssignStmt_frag (hfuel := by omega) _ _ _ _))
+    (.sseq (CorpusE0.t6Run_frag (hfuel := by omega) _ _) (.val_pure _))
 
-theorem t6Case2Tail_frag : Frag t6Case2Tail :=
-  .sseq (CorpusE0.t6Save_frag _ _ _ (CorpusE0.t6AssignStmt_frag _ _ _ _))
-    (.sseq (CorpusE0.t6Run_frag _ _) t6DefaultTail_frag)
+theorem t6Case2Tail_frag [LemFuel] (hfuel : 40 ≤ LemFuel.fuel) : Frag t6Case2Tail :=
+  .sseq (CorpusE0.t6Save_frag (hfuel := by omega) _ _ _ (CorpusE0.t6AssignStmt_frag (hfuel := by omega) _ _ _ _))
+    (.sseq (CorpusE0.t6Run_frag (hfuel := by omega) _ _) (t6DefaultTail_frag (hfuel := by omega)))
 
-theorem t6CaseContext_frag (body : CoreExpr) (hb : Frag body) : Frag (t6CaseContext body) :=
+theorem t6CaseContext_frag [LemFuel] (hfuel : 40 ≤ LemFuel.fuel) (body : CoreExpr) (hb : Frag body) : Frag (t6CaseContext body) :=
   .sseq (.sseq hb (.val_pure _))
-    (.sseq (CorpusE0.t6Save_frag _ _ _ (.val_pure _))
-      (.sseq (.val_pure _) CorpusE0.t6Return_frag))
+    (.sseq (CorpusE0.t6Save_frag (hfuel := by omega) _ _ _ (.val_pure _))
+      (.sseq (.val_pure _) (CorpusE0.t6Return_frag (hfuel := by omega))))
 
-theorem t6Q_frag {l : sym} {params : List (sym × core_base_type)} {cont : CoreExpr}
+theorem t6Q_frag [LemFuel] (hfuel : 40 ≤ LemFuel.fuel) {l : sym} {params : List (sym × core_base_type)} {cont : CoreExpr}
     (h : lookupLabel t6Q l = some (params, cont)) : Frag cont := by
   have hc := t6Q_cont h
   simp only [List.mem_cons, List.not_mem_nil, or_false] at hc
   rcases hc with rfl | rfl | rfl | rfl | rfl
-  · exact t6CaseContext_frag _ (.sseq (CorpusE0.t6AssignStmt_frag _ _ _ _)
-      (.sseq (CorpusE0.t6Run_frag _ _) t6Case2Tail_frag))
-  · exact t6CaseContext_frag _ (.sseq (CorpusE0.t6AssignStmt_frag _ _ _ _)
-      (.sseq (CorpusE0.t6Run_frag _ _) t6DefaultTail_frag))
-  · exact t6CaseContext_frag _ (.sseq (CorpusE0.t6AssignStmt_frag _ _ _ _)
-      (.sseq (CorpusE0.t6Run_frag _ _) (.val_pure _)))
-  · exact .sseq (.val_pure _) (.sseq (.val_pure _) CorpusE0.t6Return_frag)
-  · exact Frag.of_pePure _ (.sym _ _) (peDepth_sym_le _ _)
-
-theorem t6Q_pot {l : sym} {params : List (sym × core_base_type)} {cont : CoreExpr}
-    (h : lookupLabel t6Q l = some (params, cont)) : pot cont ≤ lemDefaultFuel := by
-  have hc := t6Q_cont h
-  simp only [List.mem_cons, List.not_mem_nil, or_false] at hc
-  rcases hc with rfl | rfl | rfl | rfl | rfl <;> exact Nat.le_of_ble_eq_true rfl
+  · exact t6CaseContext_frag (hfuel := by omega) _ (.sseq (CorpusE0.t6AssignStmt_frag (hfuel := by omega) _ _ _ _)
+      (.sseq (CorpusE0.t6Run_frag (hfuel := by omega) _ _) (t6Case2Tail_frag (hfuel := by omega))))
+  · exact t6CaseContext_frag (hfuel := by omega) _ (.sseq (CorpusE0.t6AssignStmt_frag (hfuel := by omega) _ _ _ _)
+      (.sseq (CorpusE0.t6Run_frag (hfuel := by omega) _ _) (t6DefaultTail_frag (hfuel := by omega))))
+  · exact t6CaseContext_frag (hfuel := by omega) _ (.sseq (CorpusE0.t6AssignStmt_frag (hfuel := by omega) _ _ _ _)
+      (.sseq (CorpusE0.t6Run_frag (hfuel := by omega) _ _) (.val_pure _)))
+  · exact .sseq (.val_pure _) (.sseq (.val_pure _) (CorpusE0.t6Return_frag (hfuel := by omega)))
+  · exact Frag.of_pePure _ (.sym _ _) (peDepth_sym_le (hfuel := by omega) _ _)
 
 theorem collect_new_t6Main :
     collect_labeled_continuations_NEW (prodFileLib stdlibE3 [] t6Main) =
@@ -607,8 +733,6 @@ theorem t6Main_labeledAt (sup : Nat) :
   unfold LabeledAt
   rw [prodRSLib_labeled, collect_new_t6Main, fmapLookupBy_addBy_empty, if_pos (by decide +kernel)]
 
-theorem t6Main_pot : pot t6Main ≤ lemDefaultFuel := Nat.le_of_ble_eq_true rfl
-
 /-- The shipped driver returns Specified(20) on the transcribed switch
     and the current checked three-function std.core fragment. The premise
     `600 ≤ sup` is a SUFFICIENT floor (it keeps the fresh symbol the negative
@@ -617,8 +741,11 @@ theorem t6Main_pot : pot t6Main ≤ lemDefaultFuel := Nat.le_of_ble_eq_true rfl
     docs/2026-09-07_l1-landing-notes.md) — and not vacuous: at `sup = 509`
     (x's symbol number) the composite is KILLED, an `Undef0` kill after
     LemLib's `can_advance: Step_error2 ==> Kill` panic (measured; the E5
-    full-range audit's D-2, re-run at the fixes). -/
-theorem t6_certified_production (sup : Nat) (hsup : 600 ≤ sup)
+    full-range audit's D-2, re-run at the fixes). The same caller instance
+    supplies at least eighty units (cost 78 plus two driver iterations). The
+    full-file/library connection remains A7. -/
+theorem t6_certified_production [LemFuel] (hfuel : 80 ≤ LemFuel.fuel)
+    (sup : Nat) (hsup : 600 ≤ sup)
     (fs : CerbFS.FsState) (args : List String) :
     ∃ (dres : driver_result) (dst' : driver_state),
       CerbND.runND (_root_.drive fmapEmpty false (prodFileLib stdlibE3 [] t6Main) args)
@@ -632,15 +759,13 @@ theorem t6_certified_production (sup : Nat) (hsup : 600 ≤ sup)
   have hlbl := prodCtx_labels (f := prodFileLib stdlibE3 [] t6Main) hQe
   obtain ⟨dres, dst', heq, hψ, hbl, hout, herr⟩ :=
     prod_run_eqJ_lib1 sup stdlibE3 t6Main hQe ψT6 78
-      (wpt_driver_done_alloc (GF := SpikeGF) (ctl := prodCtl sup)
+      (wpt_driver_done_alloc (hfuel := by omega) (GF := SpikeGF) (ctl := prodCtl sup)
         (M₀ := prodCtx (prodFileLib stdlibE3 [] t6Main) (prodRSLib stdlibE3 [] sup t6Main))
         rfl rfl hlbl rfl rfl rfl rfl (Nat.le_refl _)
-        (fun l params cont hl => t6Q_frag (by rw [← hlbl]; exact hl))
-        (fun l params cont hl => t6Q_pot (by rw [← hlbl]; exact hl))
+        (fun l params cont hl => t6Q_frag (hfuel := by omega) (by rw [← hlbl]; exact hl))
         (t6LsT SpikeGF fmapEmpty)
         t6Main fmapEmpty [] prodMem₀ (∅ : SpikeHeapF SpikeCell)
-        (allocCost fmapEmpty intTy 4 + allocCost fmapEmpty intTy 4) CorpusE0.t6Main_frag
-        t6Main_pot
+        (allocCost fmapEmpty intTy 4 + allocCost fmapEmpty intTy 4) (CorpusE0.t6Main_frag (by omega))
         (prodMem₀_launchCoh _ prod_two_int_budget_fits)
         ψT6 78
         (by
@@ -650,10 +775,10 @@ theorem t6_certified_production (sup : Nat) (hsup : 600 ≤ sup)
           · iapply t6_blockSpecsT
               (M := prodCtx (prodFileLib stdlibE3 [] t6Main) (prodRSLib stdlibE3 [] sup t6Main))
               rfl (resolveExtern_id_of_empty (prodCtx_extern _ _)) hlbl hsup
-          · iapply t6_wpt (M := prodCtx (prodFileLib stdlibE3 [] t6Main) (prodRSLib stdlibE3 [] sup t6Main))
+          · iapply t6_wpt (hfuel := by omega) (M := prodCtx (prodFileLib stdlibE3 [] t6Main) (prodRSLib stdlibE3 [] sup t6Main))
               rfl (resolveExtern_id_of_empty (prodCtx_extern _ _)) hlbl fmapEmpty []
               symFrame_empty $$ Hcap))
-      (by rw [show CerbFuel.driverFuel = 99999999 + 1 from rfl]; omega)
+      hfuel
       fs args
   exact ⟨dres, dst', heq, hψ, hbl, hout, herr⟩
 

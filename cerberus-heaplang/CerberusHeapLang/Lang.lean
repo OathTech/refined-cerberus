@@ -1,7 +1,7 @@
 /-
 CerberusHeapLang.Lang — the iris-lean `Language` instance over the
-fragment's Step. This is how the package inherits iris-lean's full
-mask/fupd WP without touching iris-lean itself; HeapLang's
+fragment's Step, at the ambient quantified `[LemFuel]`. This is how the
+package inherits iris-lean's full mask/fupd WP without touching iris-lean itself; HeapLang's
 instantiation is the template (Iris/HeapLang/Instances.lean +
 PrimitiveLaws.lean:59-90).
 
@@ -55,7 +55,7 @@ theorem List.empty_eq_nil (l : List Empty) : l = [] := by
   | nil => rfl
   | cons e _ => exact e.elim
 
-instance : Language CoreRt Mem Empty CoreRVal where
+instance [LemFuel] : Language CoreRt Mem Empty CoreRVal where
   primStep := fun p _obs q =>
     Step p.1.M (p.1.e, p.1.ρ, p.1.ctl, p.2) (q.1.e, q.1.ρ, q.1.ctl, q.2.1) ∧
       q.1.M = p.1.M ∧ q.2.2 = []
@@ -80,7 +80,7 @@ instance : Language CoreRt Mem Empty CoreRVal where
     rfl
   val_stuck {r σ obs r' σ' eₜ} h := Step.toValRt_none h.1
 
-@[simp] theorem primStep_eq (r : CoreRt) (σ : Mem) (obs : List Empty)
+@[simp] theorem primStep_eq [LemFuel] (r : CoreRt) (σ : Mem) (obs : List Empty)
     (r' : CoreRt) (σ' : Mem) (efs : List CoreRt) :
     (PrimStep.primStep (r, σ) obs (r', σ', efs) : Prop) ↔
       (Step r.M (r.e, r.ρ, r.ctl, σ) (r'.e, r'.ρ, r'.ctl, σ') ∧ r'.M = r.M ∧ efs = []) :=
@@ -88,7 +88,7 @@ instance : Language CoreRt Mem Empty CoreRVal where
 
 /-- Values-side sanity: `toVal` on the Language instance is the
     componentwise `toValRt`. -/
-theorem language_toVal_eq (r : CoreRt) :
+theorem language_toVal_eq [LemFuel] (r : CoreRt) :
     ToVal.toVal (Val := CoreRVal) r = toValRt r := rfl
 
 /-! Deliberately ABSENT: a `Language.Context` instance for the
@@ -109,7 +109,7 @@ variable {hlc : HasLC} {GF : BundledGFunctors}
     (PrimitiveLaws.lean:82-88): no per-step later credits beyond the
     base one, trivial fork postcondition (nothing forks), and a
     step-count-insensitive state interpretation. -/
-instance instIrisGS [SpikeGS hlc GF] : IrisGS_gen hlc CoreRt GF where
+instance instIrisGS [LemFuel] [SpikeGS hlc GF] : IrisGS_gen hlc CoreRt GF where
   invGS := SpikeGS.invGS
   numLatersPerStep _ := 0
   forkPost _ := iprop(True)

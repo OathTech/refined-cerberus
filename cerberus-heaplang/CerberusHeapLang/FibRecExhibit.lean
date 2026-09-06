@@ -1,18 +1,8 @@
 /-
-CerberusHeapLang.FibRecExhibit — RECURSIVE FIB (calls arc C4): a
-procedure calling itself, verified through the SPECIFICATION TABLE
-(Hoare's rule for recursive procedures: the body assumes the table,
-`procSpecs_intro`/`procSpecsT_intro` — no Löb in the client), driven
-through the SHIPPED PIPELINE from the cold start in both lanes: the
-PARTIAL `fib_rec_certified` (every `n ≥ 0`, no budget bound: at every
-fuel the run is the exhaustion kill or Active with `fib n` —
-`prod_run_safe_procs`, the fuel-lane restatement's closed form) and, THE
-FLAGSHIP, the TOTAL `fib_rec_certified_production` (the certified round
-count in the shipped budget): the eighth root-of-trust statement, the
-first over a MULTI-PROCEDURE file, the first whose run makes the
-driver's PCALL and RETURN rounds.
+CerberusHeapLang.FibRecExhibit — recursive Fibonacci through a
+procedure specification table, with partial and total production results.
 
-THE PROGRAM (Core):
+The authored Core program uses direct `Eproc` calls:
 
   proc fib (n : integer) : eff integer :=
     if n < 2 then pure(n)
@@ -20,31 +10,37 @@ THE PROGRAM (Core):
          save r(z := x + y) in pure(z)
   proc main () := fib(n₀)
 
-`lets x = fib(…) in …` binds a call's result at the plain-symbol binder
-(`Frag.sseq_sym` at a call head, C4: the RETURN plugs a BARE value);
-`x + y` is computed by the fragment's binder for pure computation, a
-`save` at an evaluated initializer (`Frag.save`, as the C3 smoke) — its
-label `r` is registered in `fib`'s fiber by the shipped registration and
-never jumped to. THE SPECIFICATION, as the table entry at every symbol:
-`{⌜0 ≤ n⌝} fib(n) {ret. ⌜ret = fib n⌝}` (`frSpec`); the total table
-`frSpecT` adds the callee's budget `fibRounds n ≤ m`, with
+Hoare's recursive-procedure rule verifies the body under its table entry
+`{0 ≤ n} fib(n) {ret = fib n}`. The total table additionally bounds the
+callee's cost by `fibRounds n`. The client uses `procSpecs_intro` and
+`procSpecsT_intro`; recursion is handled by those public rules. The save
+label is registered in fib's own fiber and never jumped to. Main's arity
+excludes it from the one-argument specification-table precondition.
+
+The derived recurrence is
 
   fibRounds 0 = fibRounds 1 = 3
-  fibRounds (n+2) = fibRounds (n+1) + fibRounds n + 9
+  fibRounds (n + 2) = fibRounds (n + 1) + fibRounds n + 9.
 
-— per activation: the guard round (1); at the base case PURE + delivery
-(2); at the recursive case the two calls (each 1 + callee + 1, the bare
-returned value's delivery paying the binder's beta), the SAVE (2: its
-EVAL and TAU rounds) and PURE + delivery (2) — nine rounds beside the
-callees. `main` costs `fibRounds n + 2` (call + callee + the delivery of
-the returned value at the empty stack), and the production statement's
-in-budget bound is `fibRounds n.toNat + 4 ≤ CerbFuel.driverFuel`
-(`prod_run_eqJ_procs`'s `k + 2`); `fibRounds n + 9 = 12 · fib (n + 1)`
-(`fibRounds_closed`), so `n ≤ 33` is in the shipped budget `10^8`.
+The nine additional steps account for the guard, two call/return-value
+pairs, the save's evaluation/entry, and pure evaluation/delivery. Main's
+cost is `fibRounds n + 2`. The pure closed-form theorem relates this cost
+to mathematical Fibonacci numbers; it does not install a fixed budget.
 
-`main` is unreachable under the table (arity 0 against a one-argument
-precondition), exactly as in the smoke. Every statement here is
-trio-exact and pinned in Audit.lean.
+`fib_rec_certified` covers every nonnegative input and every caller-provided
+LemFuel instance. The shipped `runND (drive …)` returns exactly one
+outcome: designated fuel exhaustion or an active Fibonacci result with
+no blocking and empty stdout/stderr. It uses fragment-start adequacy
+when ambient fuel is at least two and the proved production setup
+exhaustion at zero and one.
+
+`fib_rec_certified_production` proves a singleton active result under
+`fibRounds n.toNat + 4 ≤ LemFuel.fuel`. The same instance governs rules,
+adequacy, setup, driver loops, finalization and result enumeration.
+The theorem starts at the shipped initial state of the constructed
+two-procedure file. This authored Eproc regression does not establish
+adequacy for raw emitted Eccall scheduling or the full emitted-file
+connection; those remain later demo-charter obligations.
 -/
 import CerberusHeapLang.API
 import CerberusHeapLang.FibExhibit
@@ -177,7 +173,24 @@ theorem frFile_lookup_inv {g : sym} {params : List (sym × core_base_type)} {bod
 /-! ### The shipped registration, computed -/
 
 /-- `collect_saves` on `fib`'s body finds the one `save`. -/
-theorem collect_saves_frBody : collect_saves (frBody ra xbty ybty sbty zbty) = frQ zbty := rfl
+theorem collect_saves_frBody : collect_saves (frBody ra xbty ybty sbty zbty) = frQ zbty := by
+  have haux : collect_saves_aux empty_saves (frBody ra xbty ybty sbty zbty) =
+      { tmp_acc := frQ zbty, closed_acc := fmapEmpty } := by
+    unfold collect_saves_aux
+    rw [show generic_expr.lemSize (frBody ra xbty ybty sbty zbty) = 16 from rfl]
+    unfold frBody pureRedex
+    rw [show (16 : Nat) = 15 + 1 from rfl, collect_saves_aux_if]
+    rw [show (15 : Nat) = 14 + 1 from rfl, collect_saves_aux_pure]
+    unfold frOuter
+    rw [collect_saves_aux_sseq]
+    rw [show (14 : Nat) = 13 + 1 from rfl, collect_saves_aux_call]
+    unfold frInner
+    rw [collect_saves_aux_sseq]
+    rw [show (13 : Nat) = 12 + 1 from rfl, collect_saves_aux_call]
+    rfl
+  exact (congrArg (fun st : collect_saves_state core_run_annotation =>
+    fmapUnionBy (fun (s1 s2 : sym) => ordCompare s1 s2) st.tmp_acc st.closed_acc)
+    haux).trans (by rfl)
 
 /-- `collect_saves` on `main`'s body finds nothing. -/
 theorem collect_saves_frMain : collect_saves (frMain ra n) = fmapEmpty := rfl
@@ -186,7 +199,10 @@ theorem collect_saves_frMain : collect_saves (frMain ra n) = fmapEmpty := rfl
     newest-insert-first, so `fib`'s fiber is the outer entry). -/
 theorem collect_new_fr :
     collect_labeled_continuations_NEW (frFile ra n nbty xbty ybty sbty zbty) =
-      symAdd frSym (frQ zbty) (symAdd mainSym fmapEmpty fmapEmpty) := rfl
+      symAdd frSym (frQ zbty) (symAdd mainSym fmapEmpty fmapEmpty) := by
+  change symAdd frSym (collect_saves (frBody ra xbty ybty sbty zbty))
+    (symAdd mainSym (collect_saves (frMain ra n)) fmapEmpty) = _
+  rw [collect_saves_frBody, collect_saves_frMain]
 
 /-- The production initial run state of the file. -/
 abbrev frRS (sup : Nat) : core_run_state :=
@@ -270,22 +286,20 @@ theorem frDec1_pure : ∀ pe ∈ [frDec1], PePure pe := fun pe hpe => by
   subst hpe
   exact PePure.of_isPePure rfl
 
-theorem frDec1_depth : ∀ pe ∈ [frDec1], peDepth pe ≤ lemDefaultFuel := fun pe hpe => by
+theorem frDec1_depth : ∀ pe ∈ [frDec1], peDepth pe = 2 := fun pe hpe => by
   simp only [List.mem_cons, List.not_mem_nil, or_false] at hpe
   subst hpe
-  rw [show peDepth frDec1 = 2 from rfl, show lemDefaultFuel = 999999 + 1 from rfl]
-  omega
+  rfl
 
 theorem frDec2_pure : ∀ pe ∈ [frDec2], PePure pe := fun pe hpe => by
   simp only [List.mem_cons, List.not_mem_nil, or_false] at hpe
   subst hpe
   exact PePure.of_isPePure rfl
 
-theorem frDec2_depth : ∀ pe ∈ [frDec2], peDepth pe ≤ lemDefaultFuel := fun pe hpe => by
+theorem frDec2_depth : ∀ pe ∈ [frDec2], peDepth pe = 2 := fun pe hpe => by
   simp only [List.mem_cons, List.not_mem_nil, or_false] at hpe
   subst hpe
-  rw [show peDepth frDec2 = 2 from rfl, show lemDefaultFuel = 999999 + 1 from rfl]
-  omega
+  rfl
 
 theorem frSum_pure : ∀ pe ∈ saveParamPexprs [(frZSym, ((zbty, none), frSumPe))], PePure pe :=
   fun pe hpe => by
@@ -295,26 +309,27 @@ theorem frSum_pure : ∀ pe ∈ saveParamPexprs [(frZSym, ((zbty, none), frSumPe
     exact PePure.of_isPePure rfl
 
 theorem frSum_depth :
-    ∀ pe ∈ saveParamPexprs [(frZSym, ((zbty, none), frSumPe))], peDepth pe ≤ lemDefaultFuel :=
+    ∀ pe ∈ saveParamPexprs [(frZSym, ((zbty, none), frSumPe))], peDepth pe = 2 :=
   fun pe hpe => by
     simp only [saveParamPexprs, List.map_cons, List.map_nil, List.mem_cons,
       List.not_mem_nil, or_false] at hpe
     subst hpe
-    rw [show peDepth frSumPe = 2 from rfl, show lemDefaultFuel = 999999 + 1 from rfl]
-    omega
+    rfl
 
 /-- `fib`'s body is in the fragment: the guard, the base case's PURE, the
     two calls bound at the plain-symbol binder (`Frag.call` head), the `save`
     and its PURE exit. -/
-theorem frBody_frag : Frag (frBody ra xbty ybty sbty zbty) :=
+theorem frBody_frag [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) :
+    Frag (frBody ra xbty ybty sbty zbty) :=
   .if_ (PePure.of_isPePure rfl)
-    (by rw [show peDepth frGuard = 2 from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega)
-    .pure_sym
-    (.sseq_sym (.call frDec1_pure frDec1_depth)
-      (.sseq_sym (.call frDec2_pure frDec2_depth)
-        (.save (frSum_pure zbty) (frSum_depth zbty) .pure_sym)))
+    (by rw [show peDepth frGuard = 2 from rfl]; exact hfuel)
+    (.pure_sym (by omega))
+    (.sseq_sym (.call frDec1_pure (fun pe hp => by rw [frDec1_depth pe hp]; exact hfuel))
+      (.sseq_sym (.call frDec2_pure (fun pe hp => by rw [frDec2_depth pe hp]; exact hfuel))
+        (.save (frSum_pure zbty) (fun pe hp => by rw [frSum_depth zbty pe hp]; exact hfuel)
+          (.pure_sym (by omega)))))
 
-theorem frMain_frag : Frag (frMain ra n) :=
+theorem frMain_frag [LemFuel] (hfuel : 0 < LemFuel.fuel) : Frag (frMain ra n) :=
   .call (fun pe hpe => by
       simp only [List.mem_cons, List.not_mem_nil, or_false] at hpe
       subst hpe
@@ -322,31 +337,25 @@ theorem frMain_frag : Frag (frMain ra n) :=
     (fun pe hpe => by
       simp only [List.mem_cons, List.not_mem_nil, or_false] at hpe
       subst hpe
-      rw [show peDepth (Pexpr [] () (PEval (ivVal n))) = 1 from rfl,
-        show lemDefaultFuel = 999999 + 1 from rfl]
+      rw [show peDepth (Pexpr [] () (PEval (ivVal n))) = 1 from rfl]
       omega)
 
 theorem frBody_pot : pot (frBody ra xbty ybty sbty zbty) = 12 := rfl
 theorem frMain_pot : pot (frMain ra n) = 2 := rfl
 
 /-- THE PROCEDURE WELL-FORMEDNESS PREMISE at the production context: both
-    bodies in the cone within the potential bound; `fib`'s one label body
+    bodies in the cone at the caller's ambient fuel of at least two; `fib`'s one label body
     (`pure(z)`) too; `main`'s fiber empty. -/
-theorem frCtx_fragProcs (sup : Nat) : (frCtx ra n nbty xbty ybty sbty zbty sup).FragProcs where
+theorem frCtx_fragProcs [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) (sup : Nat) : (frCtx ra n nbty xbty ybty sbty zbty sup).FragProcs where
   body g params body hg := by
     rcases frFile_lookup_inv ra n nbty xbty ybty sbty zbty hg with ⟨-, -, rfl⟩ | ⟨-, -, rfl⟩
-    · exact frMain_frag ra n
-    · exact frBody_frag ra xbty ybty sbty zbty
-  potBound g params body hg := by
-    rcases frFile_lookup_inv ra n nbty xbty ybty sbty zbty hg with ⟨-, -, rfl⟩ | ⟨-, -, rfl⟩
-    · rw [frMain_pot, show lemDefaultFuel = 999999 + 1 from rfl]; omega
-    · rw [frBody_pot, show lemDefaultFuel = 999999 + 1 from rfl]; omega
+    · exact frMain_frag (hfuel := by omega) ra n
+    · exact frBody_frag (hfuel := hfuel) ra xbty ybty sbty zbty
   labels g params body _ l params' cont hl := by
     rcases frCtx_labels_cases ra n nbty xbty ybty sbty zbty sup g with h | h
     · rw [h] at hl
       obtain ⟨-, rfl⟩ := frQ_lookup_inv zbty hl
-      exact ⟨.pure_sym, by
-        exact Nat.le_of_ble_eq_true rfl⟩
+      exact .pure_sym (by omega)
     · rw [h, show lookupLabel fmapEmpty l = none from rfl] at hl
       cases hl
 
@@ -380,32 +389,32 @@ theorem frF3_lookup_z (n a b : Int) :
     fmapLookupBy symCmpK frZSym (frF3 n a b) = some (ivVal (a + b)) := by
   rw [envAdd_lookup (((symFrame_empty.add _ _).add _ _).add _ _), if_pos (by decide +kernel)]
 
-theorem frN_eval {file : generic_file Unit core_run_annotation} (n : Int) (ρ : EnvStack) :
+theorem frN_eval [LemFuel] {file : generic_file Unit core_run_annotation} (n : Int) (ρ : EnvStack) :
     evalPexpr fmapEmpty fmapEmpty file (frF0 n :: ρ) (Pexpr [] () (PEsym frNSym)) = some (ivVal n) := by
   rw [evalPexpr_sym_empty]
   exact lookup_env_head (frF0_lookup_n n) ρ
 
-theorem frGuard_eval {file : generic_file Unit core_run_annotation} (n : Int) (ρ : EnvStack) :
+theorem frGuard_eval [LemFuel] {file : generic_file Unit core_run_annotation} (n : Int) (ρ : EnvStack) :
     evalPexpr fmapEmpty fmapEmpty file (frF0 n :: ρ) frGuard = some (boolValue (decide (n < 2))) := by
   unfold frGuard
   rw [evalPexpr_op, frN_eval, evalPexpr_val]
   rfl
 
-theorem frDec1_eval {file : generic_file Unit core_run_annotation} (n : Int) (ρ : EnvStack) :
+theorem frDec1_eval [LemFuel] {file : generic_file Unit core_run_annotation} (n : Int) (ρ : EnvStack) :
     evalPexprs fmapEmpty fmapEmpty file (frF0 n :: ρ) [frDec1] = some [ivVal (n - 1)] := by
   rw [evalPexprs_cons]
   unfold frDec1
   rw [evalPexpr_op, frN_eval, evalPexpr_val]
   rfl
 
-theorem frDec2_eval {file : generic_file Unit core_run_annotation} (n a : Int) (ρ : EnvStack) :
+theorem frDec2_eval [LemFuel] {file : generic_file Unit core_run_annotation} (n a : Int) (ρ : EnvStack) :
     evalPexprs fmapEmpty fmapEmpty file (frF1 n a :: ρ) [frDec2] = some [ivVal (n - 2)] := by
   rw [evalPexprs_cons]
   unfold frDec2
   rw [evalPexpr_op, evalPexpr_sym_empty, lookup_env_head (frF1_lookup_n n a) ρ, evalPexpr_val]
   rfl
 
-theorem frSum_eval {file : generic_file Unit core_run_annotation} (zbty : core_base_type) (n a b : Int) (ρ : EnvStack) :
+theorem frSum_eval [LemFuel] {file : generic_file Unit core_run_annotation} (zbty : core_base_type) (n a b : Int) (ρ : EnvStack) :
     evalPexprs fmapEmpty fmapEmpty file (frF2 n a b :: ρ)
       (saveParamPexprs [(frZSym, ((zbty, none), frSumPe))]) = some [ivVal (a + b)] := by
   rw [show saveParamPexprs [(frZSym, ((zbty, none), frSumPe))] = [frSumPe] from rfl,
@@ -415,7 +424,7 @@ theorem frSum_eval {file : generic_file Unit core_run_annotation} (zbty : core_b
     evalPexpr_sym_empty, lookup_env_head (frF2_lookup_y n a b) ρ]
   rfl
 
-theorem frZ_eval {file : generic_file Unit core_run_annotation} (n a b : Int) (ρ : EnvStack) :
+theorem frZ_eval [LemFuel] {file : generic_file Unit core_run_annotation} (n a b : Int) (ρ : EnvStack) :
     evalPexpr fmapEmpty fmapEmpty file (frF3 n a b :: ρ) (Pexpr [] () (PEsym frZSym)) =
       some (ivVal (a + b)) := by
   rw [evalPexpr_sym_empty]
@@ -462,9 +471,8 @@ theorem fibRounds_rec {n : Int} (h2 : 2 ≤ n) :
   obtain ⟨k, hk⟩ : ∃ k : Nat, n.toNat = k + 2 := ⟨n.toNat - 2, by omega⟩
   rw [hk, show (n - 1).toNat = k + 1 by omega, show (n - 2).toNat = k by omega, fibRounds_add_two]
 
-/-- THE CLOSED FORM (derived; what the in-budget hypothesis is measured
-    against): `fibRounds n + 9 = 12 · fib (n + 1)`, so `fibRounds 33 =
-    68434635 ≤ 10^8 − 4 < fibRounds 34`. -/
+/-- The derived closed form for the recursive program cost:
+    `fibRounds n + 9 = 12 * fib (n + 1)`. -/
 theorem fibRounds_closed (n : Nat) : (fibRounds n : Int) + 9 = 12 * fibSpec (n + 1) := by
   induction n using Nat.strongRecOn with
   | ind n IH =>
@@ -510,7 +518,7 @@ def frPost : SpikeVal → EnvStack → IProp GF := fun w _ => iprop(⌜w.val = i
     ASSUMED for the recursive activations — no Löb here), each result
     bound at the plain-symbol binder (`wps_seq_sym`), the `save` of the
     sum (`wps_save`), the PURE exit reading `z`. -/
-theorem frBody_wps (g : sym) (vs : List value) (ρ : EnvStack) :
+theorem frBody_wps [LemFuel] (g : sym) (vs : List value) (ρ : EnvStack) :
     (frSpec (GF := GF) g vs).1 ⊢
       wps (GF := GF) (frCtx ra n nbty xbty ybty sbty zbty sup) (some g) frLs frSpec
         (fun w _ => (frSpec g vs).2 w.val) (frBody ra xbty ybty sbty zbty)
@@ -580,7 +588,7 @@ theorem frBody_wps (g : sym) (vs : List value) (ρ : EnvStack) :
 
 /-- THE PROCEDURE SPECIFICATIONS HOLD (partial): `fib`'s body once;
     `main` is unreachable under the table (arity). -/
-theorem frCtx_procSpecs : ⊢ procSpecs (GF := GF) (frCtx ra n nbty xbty ybty sbty zbty sup) frSpec := by
+theorem frCtx_procSpecs [LemFuel] : ⊢ procSpecs (GF := GF) (frCtx ra n nbty xbty ybty sbty zbty sup) frSpec := by
   refine procSpecs_intro (fun _ _ => frLs) ?_ ?_
   · intro f params body vs hf hlen
     refine blockSpecs_intro fun l params' cont vs' ev0 evs hl => ?_
@@ -597,7 +605,7 @@ theorem frCtx_procSpecs : ⊢ procSpecs (GF := GF) (frCtx ra n nbty xbty ybty sb
     · exact frBody_wps ra n nbty xbty ybty sbty zbty sup f vs ρ
 
 /-- `main`'s (empty) block specifications. -/
-theorem fr_blockSpecs :
+theorem fr_blockSpecs [LemFuel] :
     ⊢ blockSpecs (GF := GF) (frCtx ra n nbty xbty ybty sbty zbty sup) (some mainSym) frLs frSpec
       (frPost n) := by
   refine blockSpecs_intro fun l params cont vs ev0 evs hl => ?_
@@ -606,7 +614,7 @@ theorem fr_blockSpecs :
   exact hF.elim
 
 /-- `main` under the table: the call rule alone. -/
-theorem frMain_wps (hn : 0 ≤ n) (ρ : EnvStack) :
+theorem frMain_wps [LemFuel] (hn : 0 ≤ n) (ρ : EnvStack) :
     ⊢ wps (GF := GF) (frCtx ra n nbty xbty ybty sbty zbty sup) (some mainSym) frLs frSpec
       (frPost n) (frMain ra n) ρ := by
   unfold frMain callRedex
@@ -626,7 +634,7 @@ theorem frMain_wps (hn : 0 ≤ n) (ρ : EnvStack) :
 
 /-- The base-WP face with the engine readout: `wps_sound` WITH the table
     at the production entry control. -/
-theorem fr_wp_readout (hn : 0 ≤ n) (ℓ : exec_location) (lc : CerbLocation.Loc) (sp : RunSup)
+theorem fr_wp_readout [LemFuel] (hn : 0 ≤ n) (ℓ : exec_location) (lc : CerbLocation.Loc) (sp : RunSup)
     (hsb : sup ≤ sp.sym) :
     ⊢ WP (⟨frMain ra n, [fmapEmpty], ⟨[], some mainSym, ℓ, lc, sp⟩,
           frCtx ra n nbty xbty ybty sbty zbty sup⟩ : CoreRt)
@@ -649,7 +657,7 @@ theorem fr_wp_readout (hn : 0 ≤ n) (ℓ : exec_location) (lc : CerbLocation.Lo
     each call (`wpt_call_root`: `1 + callee + 1`, the returned value's
     delivery paying the binder's beta), the `save`'s `saveEntryCost = 2`,
     PURE + delivery `2`. -/
-theorem frBody_wpt (g : sym) (m : Nat) (vs : List value) (ρ : EnvStack) :
+theorem frBody_wpt [LemFuel] (g : sym) (m : Nat) (vs : List value) (ρ : EnvStack) :
     (frSpecT (GF := GF) g m vs).1 ⊢
       wpt (GF := GF) (frCtx ra n nbty xbty ybty sbty zbty sup) (some g) frLsT frSpecT m
         (fun w _ => (frSpecT g m vs).2 w.val) (frBody ra xbty ybty sbty zbty)
@@ -727,7 +735,7 @@ theorem frBody_wpt (g : sym) (m : Nat) (vs : List value) (ρ : EnvStack) :
             ipureintro
             exact ⟨n', rfl, fibSpec_rec h2⟩
 
-theorem frCtx_procSpecsT :
+theorem frCtx_procSpecsT [LemFuel] :
     ⊢ procSpecsT (GF := GF) (frCtx ra n nbty xbty ybty sbty zbty sup) frSpecT := by
   refine procSpecsT_intro (fun _ _ _ => frLsT) ?_ ?_
   · intro f params body m vs hf hlen
@@ -744,7 +752,7 @@ theorem frCtx_procSpecsT :
       cases hlen
     · exact frBody_wpt ra n nbty xbty ybty sbty zbty sup f m vs ρ
 
-theorem fr_blockSpecsT :
+theorem fr_blockSpecsT [LemFuel] :
     ⊢ blockSpecsT (GF := GF) (frCtx ra n nbty xbty ybty sbty zbty sup) (some mainSym) frLsT frSpecT
       (frPost n) := by
   refine blockSpecsT_intro fun l params cont vs ev0 evs m hl => ?_
@@ -754,7 +762,7 @@ theorem fr_blockSpecsT :
 
 /-- `main` within budget `fibRounds n + 2`: the call round, the callee's
     `fibRounds n`, the delivery of the returned value. -/
-theorem frMain_wpt (hn : 0 ≤ n) (ρ : EnvStack) :
+theorem frMain_wpt [LemFuel] (hn : 0 ≤ n) (ρ : EnvStack) :
     ⊢ wpt (GF := GF) (frCtx ra n nbty xbty ybty sbty zbty sup) (some mainSym) frLsT frSpecT
       (fibRounds n.toNat + 2) (frPost n) (frMain ra n) ρ := by
   unfold frMain callRedex
@@ -775,7 +783,7 @@ theorem frMain_wpt (hn : 0 ≤ n) (ρ : EnvStack) :
     rfl
 
 /-- The postcondition entails the engine readout. -/
-theorem frPost_to_readout :
+theorem frPost_to_readout [LemFuel] :
     ∀ w ρ', frPost (GF := GF) n w ρ' ⊢
       readoutPost (fun v _ => v = ivVal (fibSpec n.toNat)) w ρ' :=
   fun _ _ => stateInterp_readout fun _ _ _ _ _ => pure_consequence _
@@ -789,20 +797,15 @@ section FrEngine
 variable (sup : Nat) (ra : core_run_annotation) (n : Int)
   (nbty xbty ybty sbty zbty : core_base_type)
 
-/-- RECURSIVE FIB, PARTIAL FORM ON THE SHIPPED PIPELINE (the fuel-lane
-    restatement's closed statement): for EVERY `n ≥ 0` — no budget bound
-    — and every `fuel`, the production pipeline `CerbND.drive_lemFuel fuel`
-    (the shipped `drive` at `fuel := CerbFuel.driverFuel`,
-    `CerbND.drive_wrapper_defeq`) cold on the synthetic TWO-PROCEDURE file
-    is EXACTLY ONE execution, and it is either the fuel-exhaustion kill
-    `CerbND.fuelExhaustedKill` or an Active execution delivering `fib n`.
-    Every other outcome — a kill of any other reason, an ILLTYPED refusal,
-    a second execution — is excluded. `engine_adequacy` with `FragProcs` at
-    the production context, then `prod_run_safe_procs`. -/
-theorem fib_rec_certified (hn : 0 ≤ n) (fs : CerbFS.FsState) (args : List String) (fuel : Nat) :
+/-- Recursive Fibonacci on the shipped pipeline at every nonnegative input
+    and every ambient fuel value. The constructed two-procedure file has
+    exactly one outcome: fuel exhaustion, or an active Fibonacci result
+    with no blocking and empty stdout/stderr. This partial theorem imposes
+    no sufficient-budget hypothesis and makes no termination claim. -/
+theorem fib_rec_certified [LemFuel] (hn : 0 ≤ n) (fs : CerbFS.FsState) (args : List String) :
     ∃ (st : nd_status driver_result driver_error driver_state) (dst' : driver_state),
       CerbND.runND
-          (CerbND.drive_lemFuel fuel fmapEmpty false
+          (_root_.drive fmapEmpty false
             (prodFileWith (frProcs ra nbty xbty ybty sbty zbty) (frMain ra n)) args)
           ((initial_driver_state sup
             (prodFileWith (frProcs ra nbty xbty ybty sbty zbty) (frMain ra n)) fs).1) =
@@ -813,22 +816,18 @@ theorem fib_rec_certified (hn : 0 ≤ n) (fs : CerbFS.FsState) (args : List Stri
          dres.dres_blocked = false ∧
          dres.dres_stdout = "" ∧
          dres.dres_stderr = "") := by
-  have hsafe : DriverSafeCtl (frCtx ra n nbty xbty ybty sbty zbty sup) (prodThread (frMain ra n))
+  have hsafe : 2 ≤ LemFuel.fuel → DriverSafeCtl (frCtx ra n nbty xbty ybty sbty zbty sup) (prodThread (frMain ra n))
       (frMain ra n) [fmapEmpty] (prodCtl sup) prodMem₀ (fun v _ => v = ivVal (fibSpec n.toNat)) := by
-    refine engine_adequacy (GF := SpikeGF) (M := frCtx ra n nbty xbty ybty sbty zbty sup) rfl rfl
+    intro hfuel
+    refine engine_adequacy (hfuel := hfuel) (GF := SpikeGF) (M := frCtx ra n nbty xbty ybty sbty zbty sup) rfl rfl
       (ctl := prodCtl sup) rfl
       (fun l params cont hl => by
         rw [show (prodCtl sup).proc = some mainSym from rfl, frCtx_labels_main,
           show lookupLabel fmapEmpty l = none from rfl] at hl
         cases hl)
-      (fun l params cont hl => by
-        rw [show (prodCtl sup).proc = some mainSym from rfl, frCtx_labels_main,
-          show lookupLabel fmapEmpty l = none from rfl] at hl
-        cases hl)
-      (frCtx_fragProcs ra n nbty xbty ybty sbty zbty sup)
+      (frCtx_fragProcs (hfuel := by omega) ra n nbty xbty ybty sbty zbty sup)
       (frMain ra n) fmapEmpty [] prodMem₀ (∅ : SpikeHeapF SpikeCell)
-      (frMain_frag ra n)
-      (by rw [frMain_pot, show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+      (frMain_frag (hfuel := by omega) ra n)
       (coh_empty prodMem₀)
       (fun v _ => v = ivVal (fibSpec n.toNat))
       ?_ (th₀ := prodThread (frMain ra n))
@@ -836,22 +835,16 @@ theorem fib_rec_certified (hn : 0 ≤ n) (fs : CerbFS.FsState) (args : List Stri
     exact (BigSepM.bigSepM_empty).1.trans
       (fr_wp_readout ra n nbty xbty ybty sbty zbty sup hn _ _ _ (Nat.le_refl _))
   obtain ⟨st, dst', heq, hor⟩ := prod_run_safe_procs sup (frProcs ra nbty xbty ybty sbty zbty)
-    (frMain ra n) (frCtx_labeledProcs ra n nbty xbty ybty sbty zbty sup) _ hsafe fs args fuel
+    (frMain ra n) (frCtx_labeledProcs ra n nbty xbty ybty sbty zbty sup) _ hsafe fs args
   exact ⟨st, dst', heq, hor⟩
 
-/-- RECURSIVE FIB, PRODUCTION FORM — THE FLAGSHIP OF THE CALLS ARC: running
-    the SHIPPED pipeline cold on the synthetic TWO-PROCEDURE file (`main`
-    calling `fib`, `fib` calling itself twice per activation) is EXACTLY
-    ONE Active execution delivering `fib n`, for every `n ≥ 0` whose
-    certified round count fits the shipped driver's own budget
-    (`fibRounds n + 4 ≤ CerbFuel.driverFuel = 10^8`, i.e. `n ≤ 33`). The
-    label map the driver reads is what the shipped registration computes
-    on both procedures; every PCALL and RETURN round of the run is the
-    driver's own (`loop_step_frag`); termination from the total judgment
-    (`fibRounds`); no package drive in the statement — the execution
-    function is the shipped runner. -/
-theorem fib_rec_certified_production (hn : 0 ≤ n)
-    (hfuel : fibRounds n.toNat + 4 ≤ CerbFuel.driverFuel)
+/-- Recursive Fibonacci on the shipped pipeline with sufficient ambient
+    fuel. The public total proof and actual procedure registration give
+    exactly one active result, including the driver's call/return protocol.
+    The certified program cost plus two loop iterations must fit the same
+    LemFuel instance used throughout the statement. -/
+theorem fib_rec_certified_production [LemFuel] (hn : 0 ≤ n)
+    (hfuel : fibRounds n.toNat + 4 ≤ LemFuel.fuel)
     (fs : CerbFS.FsState) (args : List String) :
     ∃ (dres : driver_result) (dst' : driver_state),
       CerbND.runND
@@ -867,15 +860,14 @@ theorem fib_rec_certified_production (hn : 0 ≤ n)
   have h := prod_run_eqJ_procs sup (frProcs ra nbty xbty ybty sbty zbty) (frMain ra n)
     (frCtx_labeledProcs ra n nbty xbty ybty sbty zbty sup)
     (fun v _ => v = ivVal (fibSpec n.toNat)) (fibRounds n.toNat + 2)
-    (wpt_driver_done_procs (GF := SpikeGF)
+    (wpt_driver_done_procs (hfuel := by omega) (GF := SpikeGF)
       (M₀ := frCtx ra n nbty xbty ybty sbty zbty sup) rfl rfl
-      (frCtx_fragProcs ra n nbty xbty ybty sbty zbty sup)
+      (frCtx_fragProcs (hfuel := by omega) ra n nbty xbty ybty sbty zbty sup)
       (th₀ := prodThread (frMain ra n))
       (frFile_lookup_main ra n nbty xbty ybty sbty zbty) (prodCtl sup).execLoc (prodCtl sup).curLoc (prodCtl sup).sup
       (Nat.le_refl _) frSpecT frLsT
       (frMain ra n) fmapEmpty [] prodMem₀ (∅ : SpikeHeapF SpikeCell) 0
-      (frMain_frag ra n)
-      (by rw [frMain_pot, show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+      (frMain_frag (hfuel := by omega) ra n)
       (prodMem₀_launchCoh 0 (Nat.zero_le _))
       (fun v _ => v = ivVal (fibSpec n.toNat)) (fibRounds n.toNat + 2)
       (by

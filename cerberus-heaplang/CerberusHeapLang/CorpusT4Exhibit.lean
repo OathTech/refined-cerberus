@@ -4,8 +4,8 @@ invariant owns i = n and s = sum(0..n-1), with n <= 5 and a decreasing
 label budget. The proof retains short-circuit evaluation, both assignments,
 all four registered continuations and the emitted cleanup. The whole main
 has budget 915 and returns Specified(10). The production theorem requires
-initial symbol supply at least 600 and uses the checked three-function
-std.core fragment; the full emitted-file connection remains KOI A7.
+initial symbol supply at least 600, ambient fuel at least 917, and the
+checked three-function std.core fragment; the full emitted-file connection remains KOI A7.
 -/
 import CerberusHeapLang.Examples.EmittedInt
 import CerberusHeapLang.Examples.CorpusE5
@@ -23,7 +23,7 @@ open CorpusE0 (t4Load t4Reg t4iSym t4sSym t4RetSym t4ContinueSym t4BreakSym t4Wh
 
 variable {GF : BundledGFunctors}
 
-theorem wpt_t4Load [SpikeGS .hasLC GF]
+theorem wpt_t4Load [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
     {Ψ : SpikeVal → EnvStack → IProp GF}
     (hex : ∀ x, resolveExtern M.extern x = x)
@@ -53,7 +53,7 @@ abbrev t4frLt (tmp n m : Nat) (pv : CerbMem.PointerValue) (v k : Int) (f : Fmap 
 /-- A loaded integer comparison, with the load footprint retained for
     its surrounding full expression. The selection premise checks the
     emitted pattern's two binders independently of the integer values. -/
-theorem wpt_t4Lt [SpikeGS .hasLC GF]
+theorem wpt_t4Lt [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
     {Ψ : SpikeVal → EnvStack → IProp GF}
     (hstd : StdE3 M.file) (hex : ∀ x, resolveExtern M.extern x = x)
@@ -109,7 +109,7 @@ def t4TruthBranch (negate b : Bool) : generic_pexpr Unit sym :=
     (Pexpr [] () (PEcall (Sym convIntSym) [CorpusE0.intCty, ointPe 0])))
   Pexpr [] () (PEif (if negate then Pexpr [] () (PEnot eq0) else eq0) (specInt 1) (specInt 0))
 
-theorem t4TruthBranch_eval {M : MachineCtx} (hstd : StdE3 M.file) (ρ : EnvStack)
+theorem t4TruthBranch_eval [LemFuel] {M : MachineCtx} (hstd : StdE3 M.file) (ρ : EnvStack)
     (negate b : Bool) :
     evalPexpr M.tagDefs M.extern M.file ρ (t4TruthBranch negate b) =
       some (lint (t4Bit (if negate then b else !b))) := by
@@ -138,7 +138,7 @@ theorem t4TruthBranch_eval {M : MachineCtx} (hstd : StdE3 M.file) (ρ : EnvStack
 
 /-- One nested truth conversion. The head may change the environment;
     its post supplies the resulting frame and footprint to the caller. -/
-theorem wpt_t4Truth [SpikeGS .hasLC GF]
+theorem wpt_t4Truth [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
     {Ψ : SpikeVal → EnvStack → IProp GF}
     (hstd : StdE3 M.file) (hex : ∀ x, resolveExtern M.extern x = x)
@@ -202,7 +202,7 @@ local macro "t4_lookup" : tactic => `(tactic|
     | rw [envAdd_lookup (by t4_frame), if_pos (by decide +kernel)]
     | rw [envAdd_lookup (by t4_frame), if_neg (by decide +kernel)]) <;> assumption)
 
-theorem wpt_t4Left [SpikeGS .hasLC GF]
+theorem wpt_t4Left [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
     {Ψ : SpikeVal → EnvStack → IProp GF}
     (hstd : StdE3 M.file) (hex : ∀ x, resolveExtern M.extern x = x)
@@ -236,7 +236,7 @@ theorem wpt_t4Left [SpikeGS .hasLC GF]
   simp only [Bool.not_not, Bool.false_eq_true, ↓reduceIte, t4frLeft, t4frTruth]
   iapply HΨ $$ %fp Hpt
 
-theorem wpt_t4Right [SpikeGS .hasLC GF]
+theorem wpt_t4Right [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
     {Ψ : SpikeVal → EnvStack → IProp GF}
     (hstd : StdE3 M.file) (hex : ∀ x, resolveExtern M.extern x = x)
@@ -282,7 +282,7 @@ theorem t4SourceFrame.add {pi ps : CerbMem.PointerValue} {f : Fmap sym value}
 local macro "t4_source" : tactic => `(tactic|
   repeat first | assumption | apply t4SourceFrame.add _ _ (by decide +kernel))
 
-theorem wpt_t4And [SpikeGS .hasLC GF]
+theorem wpt_t4And [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
     {Ψ : SpikeVal → EnvStack → IProp GF}
     (hstd : StdE3 M.file) (hex : ∀ x, resolveExtern M.extern x = x)
@@ -373,7 +373,7 @@ theorem wpt_t4And [SpikeGS .hasLC GF]
 
 /-- The full controlling expression ends its annotation scope at bound.
     Its result is the emitted equality-to-zero test of the conjunction. -/
-theorem wpt_t4Cond [SpikeGS .hasLC GF]
+theorem wpt_t4Cond [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
     {Ψ : SpikeVal → EnvStack → IProp GF}
     (hstd : StdE3 M.file) (hex : ∀ x, resolveExtern M.extern x = x)
@@ -395,7 +395,7 @@ theorem wpt_t4Cond [SpikeGS .hasLC GF]
   iintro ⟨Hi, Hs, HΨ⟩
   unfold CorpusE0.t4Cond CorpusE0.bnd
   rw [show (72 : Nat) = 71 + 1 from rfl]
-  iapply wpt_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
+  iapply wpt_bound _ _ _ rfl
   iapply wpt_t4Truth hstd hex _ 519 520 521 522 false (decide (i < 5) && decide (s < 7))
     (by decide) _ rfl (by cases decide (i < 5) && decide (s < 7) <;> rfl) f rest 63
   iapply wpt_t4And hstd hex i s hi1 hi2 hs1 hs2 f rest pi ps bi bs hf hli hti hls hts
@@ -419,7 +419,7 @@ theorem t4Bool_select (b : Bool) :
     select_case subst_sym_expr (lint (t4Bit (!b))) CorpusE0.t4BoolPats =
       some (t5Pure (t4BoolBranch b)) := by cases b <;> rfl
 
-theorem t4BoolBranch_eval {M : MachineCtx} (ρ : EnvStack) (b : Bool) :
+theorem t4BoolBranch_eval [LemFuel] {M : MachineCtx} (ρ : EnvStack) (b : Bool) :
     evalPexpr M.tagDefs M.extern M.file ρ (t4BoolBranch b) = some (boolValue b) := by
   rw [t4BoolBranch, evalPexpr_if,
     if_pos (show (isPePure (Pexpr [] () (PEval Vtrue)) &&
@@ -438,7 +438,7 @@ theorem t4BoolBranch_eval {M : MachineCtx} (ρ : EnvStack) (b : Bool) :
     rw [evalPexpr_val]
     rfl
 
-theorem wpt_t4Bool [SpikeGS .hasLC GF]
+theorem wpt_t4Bool [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
     {Ψ : SpikeVal → EnvStack → IProp GF} (ρ : EnvStack) (b : Bool)
     (hv : evalPexpr M.tagDefs M.extern M.file ρ (psym (t5a 517)) = some (lint (t4Bit (!b)))) :
@@ -474,17 +474,18 @@ theorem t4Q_continue : lookupLabel t4Q t4ContinueSym = some (t4PtrParams, t4Cont
 theorem t4Q_break : lookupLabel t4Q t4BreakSym = some (t4PtrParams, t4BreakCont) := rfl
 theorem t4Q_ret : lookupLabel t4Q t4RetSym = some (t4RetParams, t4RetCont) := rfl
 
+/-- The exact tree built by the shipped collector on this pin. -/
 theorem t4Q_eq : t4Q =
-    fmapAddBy symCmpL t4BreakSym (t4PtrParams, t4BreakCont)
-    (fmapAddBy symCmpL t4ContinueSym (t4PtrParams, t4ContinueCont)
+    fmapAddBy symCmpL t4ContinueSym (t4PtrParams, t4ContinueCont)
     (fmapAddBy symCmpL t4WhileSym (t4PtrParams, t4WhileCont)
-    (fmapAddBy symCmpL t4RetSym (t4RetParams, t4RetCont) fmapEmpty))) := rfl
+    (fmapAddBy symCmpL t4RetSym (t4RetParams, t4RetCont)
+    (fmapAddBy symCmpL t4BreakSym (t4PtrParams, t4BreakCont) fmapEmpty))) := rfl
 
 theorem t4Q_lookup (l : sym) : lookupLabel t4Q l =
-    if symOrd l t4BreakSym = .eq then some (t4PtrParams, t4BreakCont)
-    else if symOrd l t4ContinueSym = .eq then some (t4PtrParams, t4ContinueCont)
+    if symOrd l t4ContinueSym = .eq then some (t4PtrParams, t4ContinueCont)
     else if symOrd l t4WhileSym = .eq then some (t4PtrParams, t4WhileCont)
     else if symOrd l t4RetSym = .eq then some (t4RetParams, t4RetCont)
+    else if symOrd l t4BreakSym = .eq then some (t4PtrParams, t4BreakCont)
     else none := by
   rw [t4Q_eq]
   unfold lookupLabel
@@ -507,31 +508,25 @@ theorem t4Q_cont {l : sym} {params : List (sym × core_base_type)} {cont : CoreE
         · cases h; simp
         · cases h
 
-theorem t4LoopContext_frag (body : CoreExpr) (hb : Frag body) : Frag (t4LoopContext body) :=
-  .sseq (.sseq hb (.sseq (CorpusE0.t4Save_frag _ _ (.val_pure _)) (.val_pure _))) CorpusE0.t4Return_frag
+theorem t4LoopContext_frag [LemFuel] (hfuel : 40 ≤ LemFuel.fuel) (body : CoreExpr) (hb : Frag body) : Frag (t4LoopContext body) :=
+  .sseq (.sseq hb (.sseq (CorpusE0.t4Save_frag (hfuel := by omega) _ _ (.val_pure _)) (.val_pure _))) (CorpusE0.t4Return_frag (hfuel := by omega))
 
-theorem t4Q_frag {l : sym} {params : List (sym × core_base_type)} {cont : CoreExpr}
+theorem t4Q_frag [LemFuel] (hfuel : 40 ≤ LemFuel.fuel) {l : sym} {params : List (sym × core_base_type)} {cont : CoreExpr}
     (h : lookupLabel t4Q l = some (params, cont)) : Frag cont := by
   have hc := t4Q_cont h
   simp only [List.mem_cons, List.not_mem_nil, or_false] at hc
   rcases hc with rfl | rfl | rfl | rfl
-  · refine t4LoopContext_frag _ (.sseq (.sseq (.val_pure _) (.val_pure _)) (.run ?_ ?_))
+  · refine t4LoopContext_frag (hfuel := by omega) _ (.sseq (.sseq (.val_pure _) (.val_pure _)) (.run ?_ ?_))
     · intro pe hpe
       simp only [List.mem_cons, List.not_mem_nil, or_false] at hpe
       rcases hpe with rfl | rfl <;> exact .sym _ _
     · intro pe hpe
       simp only [List.mem_cons, List.not_mem_nil, or_false] at hpe
-      rcases hpe with rfl | rfl <;> exact peDepth_sym_le _ _
-  · exact t4LoopContext_frag _ (.sseq_sym CorpusE0.t4Cond_frag (.sseq_sym CorpusE0.t4Bool_frag
-      (.if_ (.sym _ _) (peDepth_sym_le _ _) CorpusE0.t4Body_frag (.val_pure _))))
-  · exact .sseq (.sseq (.val_pure _) (.val_pure _)) CorpusE0.t4Return_frag
-  · exact Frag.of_pePure _ (.sym _ _) (peDepth_sym_le _ _)
-
-theorem t4Q_pot {l : sym} {params : List (sym × core_base_type)} {cont : CoreExpr}
-    (h : lookupLabel t4Q l = some (params, cont)) : pot cont ≤ lemDefaultFuel := by
-  have hc := t4Q_cont h
-  simp only [List.mem_cons, List.not_mem_nil, or_false] at hc
-  rcases hc with rfl | rfl | rfl | rfl <;> exact Nat.le_of_ble_eq_true rfl
+      rcases hpe with rfl | rfl <;> exact peDepth_sym_le (hfuel := by omega) _ _
+  · exact t4LoopContext_frag (hfuel := by omega) _ (.sseq_sym (CorpusE0.t4Cond_frag (hfuel := by omega)) (.sseq_sym (CorpusE0.t4Bool_frag (hfuel := by omega))
+      (.if_ (.sym _ _) (peDepth_sym_le (hfuel := by omega) _ _) (CorpusE0.t4Body_frag (hfuel := by omega)) (.val_pure _))))
+  · exact .sseq (.sseq (.val_pure _) (.val_pure _)) (CorpusE0.t4Return_frag (hfuel := by omega))
+  · exact Frag.of_pePure _ (.sym _ _) (peDepth_sym_le (hfuel := by omega) _ _)
 
 theorem collect_new_t4Main :
     collect_labeled_continuations_NEW (prodFileLib stdlibE3 [] t4Main) =
@@ -542,14 +537,12 @@ theorem t4Main_labeledAt (sup : Nat) :
   unfold LabeledAt
   rw [prodRSLib_labeled, collect_new_t4Main, fmapLookupBy_addBy_empty, if_pos (by decide +kernel)]
 
-theorem t4Main_pot : pot t4Main ≤ lemDefaultFuel := Nat.le_of_ble_eq_true rfl
-
 abbrev t4frAdd (n m : Nat) (v1 v2 : Int) (f : Fmap sym value) :=
   envAdd (t5a n) (lint v1) (envAdd (t5a m) (lint v2) f)
 
 /-- The emitted addition tail, independently of how its operands produce
     their tuple. Both operands and the sum must fit signed `int`. -/
-theorem wpt_t4Add [SpikeGS .hasLC GF]
+theorem wpt_t4Add [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
     {Ψ : SpikeVal → EnvStack → IProp GF}
     (hex : ∀ x, resolveExtern M.extern x = x)
@@ -594,7 +587,7 @@ abbrev t4frAddSI (pi ps : CerbMem.PointerValue) (i s : Int) (f : Fmap sym value)
 
 /-- The actual two-load RHS `s + i`. The driver reads `i` first and
     retains both read footprints; no sequencing replacement is used. -/
-theorem wpt_t4AddSI [SpikeGS .hasLC GF]
+theorem wpt_t4AddSI [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
     {Ψ : SpikeVal → EnvStack → IProp GF}
     (hex : ∀ x, resolveExtern M.extern x = x)
@@ -673,7 +666,7 @@ abbrev t4frAddI1 (pi : CerbMem.PointerValue) (i : Int) (f : Fmap sym value) :=
   t4frAdd 565 566 i 1 (envAdd (t5a 570) (Vobject (OVpointer pi)) f)
 
 /-- The emitted `i + 1`, with one read and a pure right operand. -/
-theorem wpt_t4AddI1 [SpikeGS .hasLC GF]
+theorem wpt_t4AddI1 [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
     {Ψ : SpikeVal → EnvStack → IProp GF}
     (hex : ∀ x, resolveExtern M.extern x = x)
@@ -718,13 +711,13 @@ theorem t4SourceFrame.fresh {pi ps : CerbMem.PointerValue} {f : Fmap sym value}
 /-- An emitted integer assignment with an annotated, effectful RHS.
     Evaluate its pointer operand in the RHS's resulting frame, bind the
     tuple, perform the negative store, and discard the statement value. -/
-theorem wpt_t4Assign [SpikeGS .hasLC GF]
+theorem wpt_t4Assign [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
     {Ψ : SpikeVal → EnvStack → IProp GF}
     (hstd : StdE3 M.file) (hex : ∀ x, resolveExtern M.extern x = x)
     (x : sym) (start n m : Nat) (v : Int) (hnm : m ≠ n)
     (hv1 : -2147483648 ≤ v) (hv2 : v ≤ 2147483647)
-    (rhs : CoreExpr) (hnf : negFree rhs = true) (hpot : pot rhs + 6 ≤ lemDefaultFuel)
+    (rhs : CoreExpr) (hnf : negFree rhs = true)
     (f : Fmap sym value) (rest : List (Fmap sym value)) (k : Nat)
     (pv : CerbMem.PointerValue) (bs : List CerbMem.AbsByte) :
     wpt M p Ls Θ k (fun w ρ' => iprop(∃ (f' : Fmap sym value) (ds : List dyn_annotation),
@@ -746,7 +739,6 @@ theorem wpt_t4Assign [SpikeGS .hasLC GF]
     show k + 21 = (k + 5) + 16 by omega]
   iapply wpt_bound_wseq_tuple _ _ _ _ _ _ _ _ (k + 5) 16
     (by simpa only [negFree, negFreeList, Bool.true_and, Bool.and_true] using hnf)
-    (by change 2 + (1 + 2 + (1 + pot rhs + 0)) ≤ lemDefaultFuel; omega)
   iapply wpt_unseq_pure_left _ _ (psym x) rhs (f :: rest) k rfl
   iapply wpt_mono ?_ k rhs (f :: rest) $$ H
   intro w ρ'
@@ -780,7 +772,7 @@ theorem wpt_t4Assign [SpikeGS .hasLC GF]
   iapply HΨ $$ %s %hs Hpt
 
 /-- The emitted `s = s + i`, preserving i's cell and both source pointers. -/
-theorem wpt_t4AssignS [SpikeGS .hasLC GF]
+theorem wpt_t4AssignS [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
     {Ψ : SpikeVal → EnvStack → IProp GF}
     (hstd : StdE3 M.file) (hex : ∀ x, resolveExtern M.extern x = x)
@@ -804,7 +796,7 @@ theorem wpt_t4AssignS [SpikeGS .hasLC GF]
       wpt M p Ls Θ 40 Ψ (CorpusE0.t4Assign t4sSym 64 555 563 CorpusE0.t4AddSI) (f :: rest) := by
   iintro ⟨Hi, Hs, HΨ⟩
   iapply wpt_t4Assign hstd hex t4sSym 64 555 563 (s + i) (by decide +kernel) hsum hsum'
-    CorpusE0.t4AddSI rfl (Nat.le_of_ble_eq_true rfl) f rest 18 ps bs
+    CorpusE0.t4AddSI rfl f rest 18 ps bs
   iapply wpt_t4AddSI hex i s hi hi' hs hs' hsum hsum' f rest pi ps bi bs hf hloadI htrapI hloadS htrapS
   isplitl [Hi]
   · iexact Hi
@@ -829,7 +821,7 @@ theorem wpt_t4AssignS [SpikeGS .hasLC GF]
   iapply HΨ $$ %_ %hfinal Hi Hs
 
 /-- The emitted `i = i + 1`, preserving s's cell and both source pointers. -/
-theorem wpt_t4AssignI [SpikeGS .hasLC GF]
+theorem wpt_t4AssignI [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
     {Ψ : SpikeVal → EnvStack → IProp GF}
     (hstd : StdE3 M.file) (hex : ∀ x, resolveExtern M.extern x = x)
@@ -849,7 +841,7 @@ theorem wpt_t4AssignI [SpikeGS .hasLC GF]
       wpt M p Ls Θ 36 Ψ (CorpusE0.t4Assign t4iSym 75 564 571 CorpusE0.t4AddI1) (f :: rest) := by
   iintro ⟨Hi, Hs, HΨ⟩
   iapply wpt_t4Assign hstd hex t4iSym 75 564 571 (i + 1) (by decide +kernel) (by omega) hi'
-    CorpusE0.t4AddI1 rfl (Nat.le_of_ble_eq_true rfl) f rest 14 pi bi
+    CorpusE0.t4AddI1 rfl f rest 14 pi bi
   iapply wpt_t4AddI1 hex i hi hi' f rest hf.1 pi bi hf.2.1 hloadI htrapI
   isplitl [Hi]
   · iexact Hi
@@ -898,7 +890,7 @@ theorem t4PtrInits_bindSaveParams (pi ps : CerbMem.PointerValue)
     (update_env (mk_sym_pat t4iSym ptrTy) (Vobject (OVpointer pi)) (f :: rest)) = _
   rw [update_env_cons, update_env_aux_sym, update_env_cons, update_env_aux_sym]
 
-theorem t4PtrArgs_eval {M : MachineCtx} (hex : ∀ x, resolveExtern M.extern x = x)
+theorem t4PtrArgs_eval [LemFuel] {M : MachineCtx} (hex : ∀ x, resolveExtern M.extern x = x)
     (pi ps : CerbMem.PointerValue) (f : Fmap sym value) (rest : List (Fmap sym value))
     (hf : t4SourceFrame pi ps f) :
     evalPexprs M.tagDefs M.extern M.file (f :: rest) [psym t4iSym, psym t4sSym] =
@@ -909,7 +901,7 @@ theorem t4PtrArgs_eval {M : MachineCtx} (hex : ∀ x, resolveExtern M.extern x =
 
 /-- Entry at any of t4's pointer-parameter saves, retaining the actual
     rebinding and the two-step initializer cost. -/
-theorem wpt_t4Save [SpikeGS .hasLC GF]
+theorem wpt_t4Save [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
     {Ψ : SpikeVal → EnvStack → IProp GF}
     (hex : ∀ x, resolveExtern M.extern x = x)
@@ -928,7 +920,7 @@ theorem wpt_t4Save [SpikeGS .hasLC GF]
 /-- One whole emitted loop body, including both assignments, the continue
     save and the jump to the registered while continuation. The caller
     supplies its next label precondition at budget m; the body costs 82+m. -/
-theorem wpt_t4Body [SpikeGS .hasLC GF]
+theorem wpt_t4Body [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
     {Ψ : SpikeVal → EnvStack → IProp GF}
     (hstd : StdE3 M.file) (hex : ∀ x, resolveExtern M.extern x = x)
@@ -1050,7 +1042,7 @@ theorem t4Kill_eq (x : sym) : CorpusE0.t4Kill x =
 
 /-- Read the final sum, dispose of both cells and jump to the real return
     continuation. The emitted dead cleanup remains after that jump. -/
-theorem wpt_t4Return [SpikeGS .hasLC GF]
+theorem wpt_t4Return [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} {Ψ : SpikeVal → EnvStack → IProp GF}
     (hstd : StdE3 M.file) (hex : ∀ x, resolveExtern M.extern x = x)
     (hQ : M.labelsAt p = t4Q)
@@ -1068,7 +1060,7 @@ theorem wpt_t4Return [SpikeGS .hasLC GF]
     symPat [] (t5a 573) CorpusE0.lint from rfl]
   iapply wpt_seq_sym _ _ _ _ _ _ _ _ 7 9
   rw [show (7 : Nat) = 6 + 1 from rfl]
-  iapply wpt_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
+  iapply wpt_bound _ _ _ rfl
   iapply wpt_t4Load hex t4sSym 572 95 96 f rest hframe ps (emittedIntBytes M.tagDefs 10) (lint 10) hs rfl rfl
   isplitl [Hs]
   · iexact Hs
@@ -1104,7 +1096,7 @@ theorem wpt_t4Return [SpikeGS .hasLC GF]
 
 /-- The loop test selects the actual body or final unit on the invariant,
     with 77 units before the selected branch. -/
-theorem wpt_t4LoopTest [SpikeGS .hasLC GF]
+theorem wpt_t4LoopTest [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
     {Ψ : SpikeVal → EnvStack → IProp GF}
     (hstd : StdE3 M.file) (hex : ∀ x, resolveExtern M.extern x = x)
@@ -1157,7 +1149,7 @@ theorem wpt_t4LoopTest [SpikeGS .hasLC GF]
 
 /-- A continuing iteration establishes the next while-label invariant,
     using the strictly smaller budget for n+1. -/
-theorem wpt_t4LoopStep [SpikeGS .hasLC GF]
+theorem wpt_t4LoopStep [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} {Ψ : SpikeVal → EnvStack → IProp GF}
     (hstd : StdE3 M.file) (hex : ∀ x, resolveExtern M.extern x = x)
     (hQ : M.labelsAt p = t4Q) (hsup : 600 ≤ M.runState.sym_supply)
@@ -1202,7 +1194,7 @@ theorem wpt_t4LoopStep [SpikeGS .hasLC GF]
 
 /-- The registered while continuation satisfies the invariant budget.
     A true test advances n and spends 159; the n=5 path costs 98. -/
-theorem wpt_t4WhileCont [SpikeGS .hasLC GF]
+theorem wpt_t4WhileCont [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} {Ψ : SpikeVal → EnvStack → IProp GF}
     (hstd : StdE3 M.file) (hex : ∀ x, resolveExtern M.extern x = x)
     (hQ : M.labelsAt p = t4Q) (hsup : 600 ≤ M.runState.sym_supply)
@@ -1257,7 +1249,7 @@ theorem wpt_t4WhileCont [SpikeGS .hasLC GF]
 /-- The two reachable jump entries are while and return. The other
     registered continuations remain in the whole-term fragment proof;
     their saves execute on the normal path, but no run targets them. -/
-theorem t4_blockSpecsT [SpikeGS .hasLC GF]
+theorem t4_blockSpecsT [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym}
     (hstd : StdE3 M.file) (hex : ∀ x, resolveExtern M.extern x = x)
     (hQ : M.labelsAt p = t4Q) (hsup : 600 ≤ M.runState.sym_supply) :
@@ -1295,7 +1287,7 @@ theorem t4_blockSpecsT [SpikeGS .hasLC GF]
 
 /-- Entry executes the emitted while save before its first continuing
     iteration; the registered continuation handles subsequent iterations. -/
-theorem wpt_t4WhileEntry [SpikeGS .hasLC GF]
+theorem wpt_t4WhileEntry [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} {Ψ : SpikeVal → EnvStack → IProp GF}
     (hstd : StdE3 M.file) (hex : ∀ x, resolveExtern M.extern x = x)
     (hQ : M.labelsAt p = t4Q) (hsup : 600 ≤ M.runState.sym_supply)
@@ -1319,7 +1311,7 @@ theorem wpt_t4WhileEntry [SpikeGS .hasLC GF]
 
 /-- The emitted main: 20 units for two allocations and initialization,
     then 895 for the while entry and its label path. -/
-theorem t4_wpt [SpikeGS .hasLC GF]
+theorem t4_wpt [LemFuel] (hfuel : 0 < LemFuel.fuel) [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} (hstd : StdE3 M.file)
     (hex : ∀ x, resolveExtern M.extern x = x) (hQ : M.labelsAt p = t4Q) (hsup : 600 ≤ M.runState.sym_supply)
     (f : Fmap sym value) (rest : List (Fmap sym value)) (hf : SymFrame f) :
@@ -1337,7 +1329,7 @@ theorem t4_wpt [SpikeGS .hasLC GF]
     (align := CerbMem.alignofIval M.tagDefs intTy) (ty := intTy) rfl
     (alignofIntPe_eval _ _) (evalPexpr_val _ _ _ _ _)
   rw [alignofIval_intTy]
-  iapply wpt_create _ _ empty_annotation .Prov_none 4 intTy (PrefSource (t4Reg 15 99) [t4iSym])
+  iapply wpt_create (hfuel := hfuel) (halign := by decide) (haddr := rfl) _ _ empty_annotation .Prov_none 4 intTy (PrefSource (t4Reg 15 99) [t4iSym])
     _ (Nat.le_refl 2) intTy_size_pos intTy_nonatomic (fun a => intTy_decIndep a _)
   isplitl [HcapI]
   · iexact HcapI
@@ -1354,7 +1346,7 @@ theorem t4_wpt [SpikeGS .hasLC GF]
     (align := CerbMem.alignofIval M.tagDefs intTy) (ty := intTy) rfl
     (alignofIntPe_eval _ _) (evalPexpr_val _ _ _ _ _)
   rw [alignofIval_intTy]
-  iapply wpt_create _ _ empty_annotation .Prov_none 4 intTy (PrefSource (t4Reg 15 99) [t4sSym])
+  iapply wpt_create (hfuel := hfuel) (halign := by decide) (haddr := rfl) _ _ empty_annotation .Prov_none 4 intTy (PrefSource (t4Reg 15 99) [t4sSym])
     _ (Nat.le_refl 2) intTy_size_pos intTy_nonatomic (fun a => intTy_decIndep a _)
   isplitl [HcapS]
   · iexact HcapS
@@ -1367,7 +1359,7 @@ theorem t4_wpt [SpikeGS .hasLC GF]
     symPat [] (t5a 513) CorpusE0.lint from rfl]
   iapply wpt_seq_sym _ _ _ _ _ _ _ _ 3 906
   rw [show (3 : Nat) = 2 + 1 from rfl]
-  iapply wpt_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
+  iapply wpt_bound _ _ _ rfl
   iapply wpt_pure (specInt 0) _ (Nat.le_refl 2) rfl (specInt_eval _ 0)
   simp only [SpikeVal.val]
   iexists (lint 0)
@@ -1380,7 +1372,7 @@ theorem t4_wpt [SpikeGS .hasLC GF]
     rfl (pv := pi) (cv := lint 0) (t1sym_eval hex rest (by t4_lookup))
     (t1ConvLoadedInt_eval hstd (t1sym_eval hex rest (by t4_lookup)) (by decide) (by decide))
   iapply wpt_store _ _ _ intTy pi (lint 0) NA (emittedIntMval 0) _ _ (Nat.le_refl 3)
-    (emittedInt_encodes _ 0) (emittedInt_storable _ 0)
+    (emittedInt_encodes _ 0) (emittedInt_storable _ 0 (by decide) (by decide))
   isplitl [Hi]
   · iexact Hi
   iintro %fpI Hi
@@ -1389,7 +1381,7 @@ theorem t4_wpt [SpikeGS .hasLC GF]
     symPat [] (t5a 514) CorpusE0.lint from rfl]
   iapply wpt_seq_sym _ _ _ _ _ _ _ _ 3 899
   rw [show (3 : Nat) = 2 + 1 from rfl]
-  iapply wpt_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
+  iapply wpt_bound _ _ _ rfl
   iapply wpt_pure (specInt 0) _ (Nat.le_refl 2) rfl (specInt_eval _ 0)
   iexists (lint 0)
   isplit
@@ -1401,7 +1393,7 @@ theorem t4_wpt [SpikeGS .hasLC GF]
     rfl (pv := ps) (cv := lint 0) (t1sym_eval hex rest (by t4_lookup))
     (t1ConvLoadedInt_eval hstd (t1sym_eval hex rest (by t4_lookup)) (by decide) (by decide))
   iapply wpt_store _ _ _ intTy ps (lint 0) NA (emittedIntMval 0) _ _ (Nat.le_refl 3)
-    (emittedInt_encodes _ 0) (emittedInt_storable _ 0)
+    (emittedInt_encodes _ 0) (emittedInt_storable _ 0 (by decide) (by decide))
   isplitl [Hs]
   · iexact Hs
   iintro %fpS Hs
@@ -1428,8 +1420,11 @@ theorem t4_wpt [SpikeGS .hasLC GF]
     docs/2026-09-07_l1-landing-notes.md) — and not vacuous: at `sup = 508`
     (i's symbol number) the composite is KILLED, an `Undef0` kill after
     LemLib's `can_advance: Step_error2 ==> Load` panic (measured; the E5
-    full-range audit's D-2, re-run at the fixes). -/
-theorem t4_certified_production (sup : Nat) (hsup : 600 ≤ sup)
+    full-range audit's D-2, re-run at the fixes). The same caller instance
+    supplies at least 917 units (cost 915 plus two driver iterations). The
+    full-file/library connection remains A7. -/
+theorem t4_certified_production [LemFuel] (hfuel : 917 ≤ LemFuel.fuel)
+    (sup : Nat) (hsup : 600 ≤ sup)
     (fs : CerbFS.FsState) (args : List String) :
     ∃ (dres : driver_result) (dst' : driver_state),
       CerbND.runND (_root_.drive fmapEmpty false (prodFileLib stdlibE3 [] t4Main) args)
@@ -1443,15 +1438,13 @@ theorem t4_certified_production (sup : Nat) (hsup : 600 ≤ sup)
   have hlbl := prodCtx_labels (f := prodFileLib stdlibE3 [] t4Main) hQe
   obtain ⟨dres, dst', heq, hψ, hbl, hout, herr⟩ :=
     prod_run_eqJ_lib1 sup stdlibE3 t4Main hQe ψT4 915
-      (wpt_driver_done_alloc (GF := SpikeGF) (ctl := prodCtl sup)
+      (wpt_driver_done_alloc (hfuel := by omega) (GF := SpikeGF) (ctl := prodCtl sup)
         (M₀ := prodCtx (prodFileLib stdlibE3 [] t4Main) (prodRSLib stdlibE3 [] sup t4Main))
         rfl rfl hlbl rfl rfl rfl rfl (Nat.le_refl _)
-        (fun l params cont hl => t4Q_frag (by rw [← hlbl]; exact hl))
-        (fun l params cont hl => t4Q_pot (by rw [← hlbl]; exact hl))
+        (fun l params cont hl => t4Q_frag (hfuel := by omega) (by rw [← hlbl]; exact hl))
         (t4LsT SpikeGF fmapEmpty)
         t4Main fmapEmpty [] prodMem₀ (∅ : SpikeHeapF SpikeCell)
-        (allocCost fmapEmpty intTy 4 + allocCost fmapEmpty intTy 4) CorpusE0.t4Main_frag
-        t4Main_pot
+        (allocCost fmapEmpty intTy 4 + allocCost fmapEmpty intTy 4) (CorpusE0.t4Main_frag (by omega))
         (prodMem₀_launchCoh _ prod_two_int_budget_fits)
         ψT4 915
         (by
@@ -1461,10 +1454,10 @@ theorem t4_certified_production (sup : Nat) (hsup : 600 ≤ sup)
           · iapply t4_blockSpecsT
               (M := prodCtx (prodFileLib stdlibE3 [] t4Main) (prodRSLib stdlibE3 [] sup t4Main))
               rfl (resolveExtern_id_of_empty (prodCtx_extern _ _)) hlbl hsup
-          · iapply t4_wpt (M := prodCtx (prodFileLib stdlibE3 [] t4Main) (prodRSLib stdlibE3 [] sup t4Main))
+          · iapply t4_wpt (hfuel := by omega) (M := prodCtx (prodFileLib stdlibE3 [] t4Main) (prodRSLib stdlibE3 [] sup t4Main))
               rfl (resolveExtern_id_of_empty (prodCtx_extern _ _)) hlbl hsup fmapEmpty []
               symFrame_empty $$ Hcap))
-      (by rw [show CerbFuel.driverFuel = 99999999 + 1 from rfl]; omega)
+      hfuel
       fs args
   exact ⟨dres, dst', heq, hψ, hbl, hout, herr⟩
 end CerberusHeapLang

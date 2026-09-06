@@ -4,10 +4,13 @@ Substitution preserves the covered pure-expression grammar and its depth.
 E5 case branches use the engine's `subst_sym_expr` after pattern matching.
 These lemmas discharge their fragment obligations uniformly for every list
 of matched bindings, including the engine's truncated tuple matches.
-The result is proved against the genuine fuel-indexed substitution, under
-its depth bound; no evaluator or substitute semantics is introduced.
+The worker proof uses a depth bound. The shipped substitution wrapper
+supplies a sufficient structural measure, so grammar/depth preservation
+needs no ambient-fuel premise. Fragment membership retains the evaluator
+pass bound, since a substituted branch may still require evaluation.
 -/
 import CerberusHeapLang.Soundness
+import Core_aux_lemMeasureProofs
 
 set_option autoImplicit false
 namespace CerberusHeapLang
@@ -127,14 +130,17 @@ theorem PePure.subst_lemFuel (fuel : Nat) (pe : generic_pexpr Unit _root_.sym) (
         rw [peDepthList_map_eq _ pes (fun q hq => (hs q hq).2)]
 
 theorem PePure.subst {pe : generic_pexpr Unit _root_.sym} (hp : PePure pe)
-    (x : _root_.sym) (v : value) (hf : peDepth pe ≤ lemDefaultFuel) :
-    PePure (subst_sym_pexpr x v pe) ∧ peDepth (subst_sym_pexpr x v pe) = peDepth pe :=
-  hp.subst_lemFuel lemDefaultFuel pe x v hf
+    (x : _root_.sym) (v : value) :
+    PePure (subst_sym_pexpr x v pe) ∧ peDepth (subst_sym_pexpr x v pe) = peDepth pe := by
+  let fuel := max (generic_pexpr.lemSize pe) (peDepth pe)
+  rw [← Core_aux_lemMeasureProofs.subst_sym_pexpr_measure_sufficient x v pe fuel
+    (Nat.le_max_left _ _)]
+  exact hp.subst_lemFuel fuel pe x v (Nat.le_max_right _ _)
 
 /-- A covered pure operand is a fragment expression whether it is already
     a value or still needs the evaluator. -/
-theorem Frag.of_pePure {pe : generic_pexpr Unit sym} (an : List _root_.annot)
-    (hp : PePure pe) (hf : peDepth pe ≤ lemDefaultFuel) : Frag (Expr an (Epure pe)) := by
+theorem Frag.of_pePure [LemFuel] {pe : generic_pexpr Unit sym} (an : List _root_.annot)
+    (hp : PePure pe) (hf : peDepth pe ≤ LemFuel.fuel) : Frag (Expr an (Epure pe)) := by
   cases hv : valueFromPexpr pe with
   | none => exact .pure_op hv hp hf
   | some v =>
@@ -148,7 +154,7 @@ theorem subst_sym_expr_pure (x : sym) (v : value) (an : List _root_.annot)
 /-- Arbitrary matched bindings preserve a pure branch's grammar and depth.
     This is independent of which value or pattern produced the bindings. -/
 theorem substFold_pure (binds : List (sym × value)) (an : List _root_.annot)
-    (pe : generic_pexpr Unit sym) (hp : PePure pe) (hf : peDepth pe ≤ lemDefaultFuel) :
+    (pe : generic_pexpr Unit sym) (hp : PePure pe) :
     ∃ pe', substFold (Expr an (Epure pe)) binds = Expr an (Epure pe') ∧
       PePure pe' ∧ peDepth pe' = peDepth pe := by
   induction binds with
@@ -156,14 +162,14 @@ theorem substFold_pure (binds : List (sym × value)) (an : List _root_.annot)
   | cons pair rest ih =>
     rcases pair with ⟨x, v⟩
     obtain ⟨p, he, hp', hd⟩ := ih
-    obtain ⟨hs, hsd⟩ := hp'.subst x v (by rw [hd]; exact hf)
+    obtain ⟨hs, hsd⟩ := hp'.subst x v
     exact ⟨subst_sym_pexpr x v p, by rw [substFold_cons, he, subst_sym_expr_pure],
       hs, hsd.trans hd⟩
 
-theorem Frag.substFold_pure (binds : List (sym × value)) (an : List _root_.annot)
-    (pe : generic_pexpr Unit sym) (hp : PePure pe) (hf : peDepth pe ≤ lemDefaultFuel) :
+theorem Frag.substFold_pure [LemFuel] (binds : List (sym × value)) (an : List _root_.annot)
+    (pe : generic_pexpr Unit sym) (hp : PePure pe) (hf : peDepth pe ≤ LemFuel.fuel) :
     Frag (substFold (Expr an (Epure pe)) binds) := by
-  obtain ⟨p, he, hp', hd⟩ := CerberusHeapLang.substFold_pure binds an pe hp hf
+  obtain ⟨p, he, hp', hd⟩ := CerberusHeapLang.substFold_pure binds an pe hp
   rw [he]
   exact .of_pePure an hp' (by rw [hd]; exact hf)
 

@@ -40,15 +40,20 @@ byte-level pointer-image algebra is REUSED from the list exhibit
 `spliceBytes_slice_below/self/above` at this layout's offsets —
 including the ABOVE case the two-field list node never exercised.
 
-THE EXPORTS (the flagship shape, mirrored): `tree_rotate_certified`
-(partial) and `tree_rotate_certified_total` (unconditional `.done`
-at the derived straight-line budget 19) state: from a seeded tree
-footprint `m₀` next to an ARBITRARY disjoint frame `R`, the engine
-delivers the left child's pointer heading a final footprint `Q` with
-`SeedTree Q py (rotated tree)` — the SAME allocations (the literal
-footprint-equality conjunct; the rotated tree's id list is a
-permutation of the original's), each node its own value — with `R`
-returned VERBATIM. SpikeGF-concrete: no ghost-functor binder.
+The engine export `tree_rotate_certified` is partial correctness with
+ambient fuel at least two and every independent loop iteration counter.
+From a seeded tree footprint `m₀` next to any disjoint frame `R`, the run
+exhausts or delivers the left child's pointer heading a final footprint
+`Q` with `SeedTree Q py (rotated tree)`. The same allocations and each
+node's own value are preserved, and `R` is returned verbatim. The literal
+footprint-equality conjunct states that the node set is unchanged.
+
+The public total proof `tree_rotate_wpt` retains the derived cost of 19,
+with its framed form `tree_rotate_wpt_frame`. The earlier total equation
+over a package-owned engine loop was removed; a shipped-pipeline total
+result still requires a self-contained tree-building program or the
+planned re-contexting work (KNOWN-OPEN-ITEMS B1). The current partial
+engine theorem has no ghost-functor binder.
 -/
 import CerberusHeapLang.ListRevExhibit
 
@@ -72,7 +77,10 @@ def treePtrTy : ctype := Ctype [] (.Pointer no_qualifiers treeTy)
     CerbMem.lean:843). -/
 def nullTree : CerbMem.PointerValue := CerbMem.nullPtrval treeTy
 
-theorem treeTy_size {tds : CerbTags.TagDefsMap} : CerbMem.sizeofCtype tds treeTy = 24 := rfl
+theorem treeTy_size {tds : CerbTags.TagDefsMap} : CerbMem.sizeofCtype tds treeTy = 24 := by
+  unfold treeTy longTy
+  rw [sizeofCtype_array_integer]
+  rfl
 theorem treePtrTy_size {tds : CerbTags.TagDefsMap} : CerbMem.sizeofCtype tds treePtrTy = 8 := rfl
 
 theorem treeTy_nonatomic : atomicTy treeTy = false := rfl
@@ -82,18 +90,19 @@ theorem treeTy_nonatomic : atomicTy treeTy = false := rfl
 theorem treeTy_dec_indep {tds : CerbTags.TagDefsMap} (lum : List (Int × identifier))
     (fpm : CerbMem.Funptrmap) (addr : Int) (bs : List CerbMem.AbsByte) :
     CerbMem.reconstructValue tds lum fpm addr treeTy bs =
-      CerbMem.reconstructValue tds [] [] addr treeTy bs := rfl
+      CerbMem.reconstructValue tds [] [] addr treeTy bs := by
+  exact decIndep_array_integer tds addr [] [] (.Signed .Long) 3 bs lum fpm
 
 /-- Two long-element shifts of a fragment pointer (the engine's own
     arithmetic — the right-child field). -/
-theorem arrayShift_cellPtr_long_two {tds : CerbTags.TagDefsMap} (id p : Int) :
+theorem arrayShift_cellPtr_long_two [LemFuel] {tds : CerbTags.TagDefsMap} (id p : Int) :
     CerbMem.arrayShiftPtrval tds (cellPtr id p) longTy (CerbMem.integerIval 2) =
       cellPtr id (p + 16) := by
   rw [cellPtr_arrayShift tds id p longTy 2 (fun _ h => by unfold longTy at h; cases h),
     longTy_size]
   exact congrArg (cellPtr id) (by omega)
 
-theorem evalArrayShift_long_two (id a : Int) :
+theorem evalArrayShift_long_two [LemFuel] (id a : Int) :
     evalArrayShift fmapEmpty longTy (Vobject (OVpointer (cellPtr id a))) (ivVal 2) =
       some (Vobject (OVpointer (cellPtr id (a + 16)))) := by
   show some (Vobject (OVpointer (CerbMem.arrayShiftPtrval fmapEmpty (cellPtr id a)
@@ -113,10 +122,10 @@ theorem trPtrImg_cell (id a : Int) :
 
 theorem trPtrImg_null : trPtrImg nullTree = ptrImg nullNode := rfl
 
-theorem trPtrImg_cell_length (id a : Int) :
+theorem trPtrImg_cell_length (id a : Int) (h0 : 0 ≤ a) (h1 : a < 2 ^ 64) :
     (trPtrImg (cellPtr id a)).length = 8 := by
   rw [trPtrImg_cell]
-  exact ptrImg_cell_length id a
+  exact ptrImg_cell_length id a h0 h1
 
 theorem trPtrImg_null_length : (trPtrImg nullTree).length = 8 := rfl
 
@@ -136,11 +145,9 @@ theorem reconstruct_trImg_cell {tds : CerbTags.TagDefsMap} (id a : Int) (h0 : 0 
     CerbMem.reconstructValue tds lum fpm addr treePtrTy (trPtrImg (cellPtr id a)) =
       .MVpointer treeTy (cellPtr id a) := by
   have hb := bytesToInt_ptrImg_cell id a (by omega) h1
-  have hsp := splitBytesProv_ptrImg_cell_fst id a (by omega)
+  have hsp := splitBytesProv_ptrImg_cell_fst id a (by omega) h1
   rw [trPtrImg_cell]
-  rw [show CerbMem.reconstructValue =
-    CerbMem.reconstructValue_lemFuel lemDefaultFuel from rfl,
-    show lemDefaultFuel = 999999 + 1 from rfl]
+  unfold CerbMem.reconstructValue CerbTagsWf.envBound
   unfold CerbMem.reconstructValue_lemFuel treePtrTy treeTy
   dsimp only
   rw [hb]
@@ -188,7 +195,7 @@ theorem treePtrDec_img_null (bs : List CerbMem.AbsByte) (off : Nat)
 
 /-! ## Storable facts for stored child pointers -/
 
-theorem tree_ptr_encodes (pv : CerbMem.PointerValue) :
+theorem tree_ptr_encodes [LemFuel] (pv : CerbMem.PointerValue) :
     memValueFromValue fmapEmpty (Ctype [] (unatomic_ treePtrTy)) (ptrVal pv) =
       some (CerbMem.pointerMval treeTy pv) := rfl
 
@@ -222,7 +229,7 @@ theorem tree_store_kit {tds : CerbTags.TagDefsMap} (pv : CerbMem.PointerValue)
   · refine ⟨?_, fun _ => rfl, fun _ => rfl,
       fun bs' off himg => treePtrDec_img_cell id aN h0 h1 bs' off himg⟩
     rw [tree_ptr_img]
-    exact trPtrImg_cell_length id aN
+    exact trPtrImg_cell_length id aN (by omega) h1
 
 /-! ## THE PREDICATE: `isTree p t` (structural recursion on the
 identity-indexed tree — allocation id + value per node, TWO
@@ -520,7 +527,7 @@ def trProg (loc : CerbLocation.Loc) (ann : core_run_annotation)
 /-- Cone membership: sym-binder over a value, two Specified-binder
     loads, two wildcard stores, PEsym exit — all through the one
     unified cone. ZERO new constructors. -/
-theorem trProg_frag (loc : CerbLocation.Loc) (ann : core_run_annotation)
+theorem trProg_frag [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (mo : memory_order) (xbty ybty bbty ubty : core_base_type)
     (px : CerbMem.PointerValue) :
     Frag (trProg loc ann mo xbty ybty bbty ubty px) := by
@@ -528,30 +535,24 @@ theorem trProg_frag (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (.sseq_spec
       (.load_op rfl
         (.arrayShift [] longTy (.sym _ _) (.val _ _))
-        (by rw [show peDepth (trShift1 trXSym) = 2 from rfl,
-          show lemDefaultFuel = 999999 + 1 from rfl]; omega))
+        (by rw [show peDepth (trShift1 trXSym) = 2 from rfl]; omega))
       (.sseq_spec
         (.load_op rfl
           (.arrayShift [] longTy (.sym _ _) (.val _ _))
-          (by rw [show peDepth (trShift2 trYSym) = 2 from rfl,
-            show lemDefaultFuel = 999999 + 1 from rfl]; omega))
+          (by rw [show peDepth (trShift2 trYSym) = 2 from rfl]; omega))
         (.sseq
           (.store_op rfl
             (.arrayShift [] longTy (.sym _ _) (.val _ _)) (.sym _ _)
-            (by rw [show peDepth (trShift1 trXSym) = 2 from rfl,
-              show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+            (by rw [show peDepth (trShift1 trXSym) = 2 from rfl]; omega)
             (by rw [show peDepth (Pexpr ([] : List annot) ()
-                (PEsym trBSym)) = 1 from rfl,
-              show lemDefaultFuel = 999999 + 1 from rfl]; omega))
+                (PEsym trBSym)) = 1 from rfl]; omega))
           (.sseq
             (.store_op rfl
               (.arrayShift [] longTy (.sym _ _) (.val _ _)) (.sym _ _)
-              (by rw [show peDepth (trShift2 trYSym) = 2 from rfl,
-                show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+              (by rw [show peDepth (trShift2 trYSym) = 2 from rfl]; omega)
               (by rw [show peDepth (Pexpr ([] : List annot) ()
-                  (PEsym trXSym)) = 1 from rfl,
-                show lemDefaultFuel = 999999 + 1 from rfl]; omega))
-            .pure_sym))))
+                  (PEsym trXSym)) = 1 from rfl]; omega))
+            (.pure_sym (by omega))))))
 
 /-! ## Frames and lookups -/
 
@@ -630,7 +631,7 @@ theorem trBindB (bbty : core_base_type) (ov : object_value) (vy vx : value) :
 
 /-! ## Evaluation facts at the bound frames -/
 
-theorem tr_shift1_eval_F1 {file : generic_file Unit core_run_annotation} (id aX : Int) :
+theorem tr_shift1_eval_F1 [LemFuel] {file : generic_file Unit core_run_annotation} (id aX : Int) :
     evalPexpr fmapEmpty fmapEmpty file (trF1 (ptrVal (cellPtr id aX)) :: [])
       (trShift1 trXSym) = some (ptrVal (cellPtr id (aX + 8))) := by
   unfold trShift1
@@ -643,7 +644,7 @@ theorem tr_shift1_eval_F1 {file : generic_file Unit core_run_annotation} (id aX 
   show evalArrayShift fmapEmpty longTy (Vobject (OVpointer (cellPtr id aX))) (ivVal 1) = _
   exact evalArrayShift_long_one id aX
 
-theorem tr_shift2_eval_F2 {file : generic_file Unit core_run_annotation} (id aY : Int) (vx : value) :
+theorem tr_shift2_eval_F2 [LemFuel] {file : generic_file Unit core_run_annotation} (id aY : Int) (vx : value) :
     evalPexpr fmapEmpty fmapEmpty file (trF2 (ptrVal (cellPtr id aY)) vx :: [])
       (trShift2 trYSym) = some (ptrVal (cellPtr id (aY + 16))) := by
   unfold trShift2
@@ -656,7 +657,7 @@ theorem tr_shift2_eval_F2 {file : generic_file Unit core_run_annotation} (id aY 
   show evalArrayShift fmapEmpty longTy (Vobject (OVpointer (cellPtr id aY))) (ivVal 2) = _
   exact evalArrayShift_long_two id aY
 
-theorem tr_shift1_eval_F3 {file : generic_file Unit core_run_annotation} (vb vy : value) (id aX : Int) :
+theorem tr_shift1_eval_F3 [LemFuel] {file : generic_file Unit core_run_annotation} (vb vy : value) (id aX : Int) :
     evalPexpr fmapEmpty fmapEmpty file (trF3 vb vy (ptrVal (cellPtr id aX)) :: [])
       (trShift1 trXSym) = some (ptrVal (cellPtr id (aX + 8))) := by
   unfold trShift1
@@ -669,7 +670,7 @@ theorem tr_shift1_eval_F3 {file : generic_file Unit core_run_annotation} (vb vy 
   show evalArrayShift fmapEmpty longTy (Vobject (OVpointer (cellPtr id aX))) (ivVal 1) = _
   exact evalArrayShift_long_one id aX
 
-theorem tr_shift2_eval_F3 {file : generic_file Unit core_run_annotation} (vb vx : value) (id aY : Int) :
+theorem tr_shift2_eval_F3 [LemFuel] {file : generic_file Unit core_run_annotation} (vb vx : value) (id aY : Int) :
     evalPexpr fmapEmpty fmapEmpty file (trF3 vb (ptrVal (cellPtr id aY)) vx :: [])
       (trShift2 trYSym) = some (ptrVal (cellPtr id (aY + 16))) := by
   unfold trShift2
@@ -682,19 +683,19 @@ theorem tr_shift2_eval_F3 {file : generic_file Unit core_run_annotation} (vb vx 
   show evalArrayShift fmapEmpty longTy (Vobject (OVpointer (cellPtr id aY))) (ivVal 2) = _
   exact evalArrayShift_long_two id aY
 
-theorem tr_b_eval_F3 {file : generic_file Unit core_run_annotation} (vb vy vx : value) :
+theorem tr_b_eval_F3 [LemFuel] {file : generic_file Unit core_run_annotation} (vb vy vx : value) :
     evalPexpr fmapEmpty fmapEmpty file (trF3 vb vy vx :: [])
       (Pexpr [] () (PEsym trBSym)) = some vb := by
   rw [evalPexpr_sym_empty]
   exact lookup_env_head (trF3_lookup_b _ _ _) []
 
-theorem tr_x_eval_F3 {file : generic_file Unit core_run_annotation} (vb vy vx : value) :
+theorem tr_x_eval_F3 [LemFuel] {file : generic_file Unit core_run_annotation} (vb vy vx : value) :
     evalPexpr fmapEmpty fmapEmpty file (trF3 vb vy vx :: [])
       (Pexpr [] () (PEsym trXSym)) = some vx := by
   rw [evalPexpr_sym_empty]
   exact lookup_env_head (trF3_lookup_x _ _ _) []
 
-theorem tr_y_eval_F3 {file : generic_file Unit core_run_annotation} (vb vy vx : value) :
+theorem tr_y_eval_F3 [LemFuel] {file : generic_file Unit core_run_annotation} (vb vy vx : value) :
     evalPexpr fmapEmpty fmapEmpty file (trF3 vb vy vx :: [])
       (Pexpr [] () (PEsym trYSym)) = some vy := by
   rw [evalPexpr_sym_empty]
@@ -711,7 +712,7 @@ variable {M : MachineCtx} {p : Option sym} {Ls : LabelSpec GF} {Θ : ProcSpec GF
 
 /-- TREE `tree*`-FIELD LOAD — `wps_load_cell_at` at view type
     `treePtrTy`. -/
-theorem wps_load_tree_field {Ψ : SpikeVal → EnvStack → IProp GF}
+theorem wps_load_tree_field [LemFuel] {Ψ : SpikeVal → EnvStack → IProp GF}
     (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (id a : Int) (off : Nat) (mo : memory_order)
     (dq : DFrac) (bs : List CerbMem.AbsByte) (ρ : EnvStack)
@@ -730,7 +731,7 @@ theorem wps_load_tree_field {Ψ : SpikeVal → EnvStack → IProp GF}
 
 /-- TREE `tree*`-FIELD STORE — `wps_store_cell_at` at view type
     `treePtrTy`; whole-cell inertness is `treeTy_dec_indep`. -/
-theorem wps_store_tree_field {Ψ : SpikeVal → EnvStack → IProp GF}
+theorem wps_store_tree_field [LemFuel] {Ψ : SpikeVal → EnvStack → IProp GF}
     (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (id a : Int) (off : Nat) (cv : value) (mo : memory_order)
     (bs : List CerbMem.AbsByte) (ρ : EnvStack) {mv : CerbMem.MemValue}
@@ -762,7 +763,7 @@ variable {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
 variable {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
 
 /-- Total form of the tree-field load (cost 3 ≤ k). -/
-theorem wpt_load_tree_field {Ψ : SpikeVal → EnvStack → IProp GF}
+theorem wpt_load_tree_field [LemFuel] {Ψ : SpikeVal → EnvStack → IProp GF}
     (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (id a : Int) (off : Nat) (mo : memory_order)
     (dq : DFrac) (bs : List CerbMem.AbsByte) (ρ : EnvStack)
@@ -780,7 +781,7 @@ theorem wpt_load_tree_field {Ψ : SpikeVal → EnvStack → IProp GF}
     (by rw [treePtrTy_size]; exact hdec) rfl
 
 /-- Total form of the tree-field store (cost 3 ≤ k). -/
-theorem wpt_store_tree_field {Ψ : SpikeVal → EnvStack → IProp GF}
+theorem wpt_store_tree_field [LemFuel] {Ψ : SpikeVal → EnvStack → IProp GF}
     (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (id a : Int) (off : Nat) (cv : value) (mo : memory_order)
     (bs : List CerbMem.AbsByte) (ρ : EnvStack) {mv : CerbMem.MemValue}
@@ -868,7 +869,7 @@ abbrev trPost (t' : NodeTree) :
     `{ isTree px (node x vx (node y vy a b) c) }
        rotate-right
      { ret py. isTree py (node y vy a (node x vx b c)) }`. -/
-theorem tree_rotate_wps
+theorem tree_rotate_wps [LemFuel]
     (idx idy vx vy : Int) (ta tb tc : NodeTree)
     (px : CerbMem.PointerValue) :
     isTree (GF := GF) px (.node idx vx (.node idy vy ta tb) tc) ⊢
@@ -1043,7 +1044,7 @@ theorem tree_rotate_wps
 
 /-- Vacuous block specifications (straight-line profile) — at ANY
     postcondition. -/
-theorem tr_blockSpecs (Ψ : SpikeVal → EnvStack → IProp GF) :
+theorem tr_blockSpecs [LemFuel] (Ψ : SpikeVal → EnvStack → IProp GF) :
     ⊢ blockSpecs (GF := GF) spikeCtx none (fun _ _ _ => iprop(False)) emptyProcSpec Ψ :=
   blockSpecs_intro fun l _ _ _ _ _ hl => (spikeCtx_labels_none l hl).elim
 
@@ -1061,7 +1062,7 @@ variable (loc : CerbLocation.Loc) (ann : core_run_annotation)
 
 /-- The rotation readout — through the core `cells_readout` (no
     state-interpretation opening in this module). -/
-theorem trPost_readout [SpikeGS .hasLC GF] (t' : NodeTree) (R : CellMap) :
+theorem trPost_readout [LemFuel] [SpikeGS .hasLC GF] (t' : NodeTree) (R : CellMap) :
     ∀ (w : SpikeVal) (ρ' : EnvStack),
     iprop(trPost (hlc := .hasLC) (GF := GF) t' w ρ' ∗ lrCellFrame R) ⊢
       readoutPost (fun v σ' => ∃ Q : CellMap,
@@ -1085,7 +1086,7 @@ theorem trPost_readout [SpikeGS .hasLC GF] (t' : NodeTree) (R : CellMap) :
     consumes) — through THE WHOLE-LOOP FRAME RULE `wps_sound_frame`
     (alloc arc P4.2): the unframed rotation proof plus the cell frame
     collapse to the base WP with the frame in the postcondition. -/
-theorem tr_wp_readout [SpikeGS .hasLC GF]
+theorem tr_wp_readout [LemFuel] [SpikeGS .hasLC GF]
     (idx idy vx vy : Int) (ta tb tc : NodeTree)
     (px : CerbMem.PointerValue) (R : CellMap) :
     iprop(isTree (hlc := .hasLC) (GF := GF) px
@@ -1148,14 +1149,15 @@ theorem trProg_esize (px : CerbMem.PointerValue) :
     right rotation, from ANY memory satisfying the seeded tree
     `m₀` next to an ARBITRARY disjoint frame footprint `R`:
     from any driver state holding the straight-line thread: the shipped
-    loop at every fuel exhausts or delivers, never kills otherwise,
+    loop, with ambient fuel at least two and every explicit iteration
+    counter, exhausts or delivers, never kills otherwise,
     never derails, and any delivered value is the
     left child's pointer heading a final footprint `Q` seeded as
     the ROTATED tree — the SAME allocations (footprint equality
     stated on the maps; the rotated id list is a permutation of the
     original), each node its own value — with `R` returned VERBATIM.
     ZERO core-logic edits were made for this module. -/
-theorem tree_rotate_certified (sbty : core_base_type)
+theorem tree_rotate_certified [LemFuel] (hfuel : 2 ≤ LemFuel.fuel)
     (idx idy vx vy : Int) (ta tb tc : NodeTree)
     (px : CerbMem.PointerValue)
     (m₀ : CellMap)
@@ -1171,11 +1173,10 @@ theorem tree_rotate_certified (sbty : core_base_type)
         Q ##ₘ R ∧
         Sat fmapEmpty σ' (union Q R)) := by
   intro prog
-  refine (engine_adequacy (GF := SpikeGF) (M := spikeCtx) rfl rfl (ctl := spikeCtl) rfl
-    spikeCtx_labels_frag spikeCtx_labels_pot spikeCtx_fragProcs
+  refine (engine_adequacy (hfuel := hfuel) (GF := SpikeGF) (M := spikeCtx) rfl rfl (ctl := spikeCtl) rfl
+    spikeCtx_labels_frag spikeCtx_fragProcs
     prog fmapEmpty [] σ₀ (union m₀ R)
-    (trProg_frag loc ann mo xbty ybty bbty ubty px)
-    (by exact Nat.le_of_ble_eq_true rfl)
+    (trProg_frag (hfuel := hfuel) loc ann mo xbty ybty bbty ubty px)
     hcoh
     (fun v σ' => ∃ Q : CellMap, (∃ p' : CerbMem.PointerValue,
         v = ptrVal p' ∧
@@ -1210,7 +1211,7 @@ variable (loc : CerbLocation.Loc) (ann : core_run_annotation)
 
 /-- The rotation meets the constant budget 19 (UNFRAMED; the frame by
     `tree_rotate_wpt_frame`). -/
-theorem tree_rotate_wpt
+theorem tree_rotate_wpt [LemFuel]
     (idx idy vx vy : Int) (ta tb tc : NodeTree)
     (px : CerbMem.PointerValue) :
     isTree (GF := GF) px (.node idx vx (.node idy vy ta tb) tc) ⊢
@@ -1390,7 +1391,7 @@ theorem tree_rotate_wpt
 
 /-- The framed total judgment, by the generic `wpt_frame` (value
     channel; straight-line). -/
-theorem tree_rotate_wpt_frame (RF : IProp GF)
+theorem tree_rotate_wpt_frame [LemFuel] (RF : IProp GF)
     (idx idy vx vy : Int) (ta tb tc : NodeTree)
     (px : CerbMem.PointerValue) :
     iprop(isTree (GF := GF) px
@@ -1412,8 +1413,7 @@ variable (loc : CerbLocation.Loc) (ann : core_run_annotation)
   (mo : memory_order) (xbty ybty bbty ubty : core_base_type)
 
 theorem trProg_pot (px : CerbMem.PointerValue) :
-    pot (trProg loc ann mo xbty ybty bbty ubty px) ≤ lemDefaultFuel := by
-  exact Nat.le_of_ble_eq_true rfl
+    pot (trProg loc ann mo xbty ybty bbty ubty px) = 16 := rfl
 
 end TrTotalExport
 

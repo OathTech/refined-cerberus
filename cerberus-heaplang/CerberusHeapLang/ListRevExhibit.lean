@@ -34,7 +34,7 @@ copy offsets (repr, CerbMem.lean:581-585 / impl_mem.ml:1165-1167)
 and a pointer-typed load of those bytes reconstructs exactly
 `PV Prov_none (PVnull pointee)` (abst's `some 0` arm,
 CerbMem.lean:688-692 / impl_mem.ml:1005-1019) — the round trip is a
-theorem here (`nodeNextDec_null_img`). The null TEST is the engine's
+theorem here (`nodeNextDec_ptrImg_null`). The null TEST is the engine's
 own `PtrEq` memop (Step.lean `Step.memop_ptreq`; the eqPtrval null
 arms, Heap.lean).
 
@@ -65,7 +65,8 @@ THE FLAGSHIP (Phase 4 statement — audit F-06's exit criterion
 verbatim: "the public theorem literally states same-footprint,
 in-place reversal plus termination and frame preservation"):
 `list_reverse_certified` (partial, over the shipped driver's loop at
-every fuel) and `list_reverse_certified_production`
+ambient fuel at least two and every explicit loop counter) and
+`list_reverse_certified_production`
 (ProdLoopExhibit.lean: the shipped pipeline delivers at the DERIVED
 bound `13·|ns| + 7`). The partial flagship is stated with the `SemTriple`
 rest-quantifier shape at the proc-carrying context:
@@ -113,7 +114,10 @@ def nodePtrTy : ctype := Ctype [] (.Pointer no_qualifiers nodeTy)
 def nullNode : CerbMem.PointerValue := CerbMem.nullPtrval nodeTy
 
 theorem longTy_size {tds : CerbTags.TagDefsMap} : CerbMem.sizeofCtype tds longTy = 8 := rfl
-theorem nodeTy_size {tds : CerbTags.TagDefsMap} : CerbMem.sizeofCtype tds nodeTy = 16 := rfl
+theorem nodeTy_size {tds : CerbTags.TagDefsMap} : CerbMem.sizeofCtype tds nodeTy = 16 := by
+  unfold nodeTy longTy
+  rw [sizeofCtype_array_integer]
+  rfl
 
 /-- The node type has positive size (the public create rules' `hsz`). -/
 theorem nodeTy_size_pos {tds : CerbTags.TagDefsMap} : 0 < CerbMem.sizeofCtype tds nodeTy := by
@@ -124,14 +128,14 @@ theorem nodePtrTy_size {tds : CerbTags.TagDefsMap} : CerbMem.sizeofCtype tds nod
 /-- One long-element shift of a fragment pointer — the ENGINE's own
     arithmetic (`arrayShiftPtrval` at the concrete shape: provenance
     PRESERVED, address advanced by `sizeof(long) = 8`). -/
-theorem arrayShift_cellPtr_long {tds : CerbTags.TagDefsMap} (id p : Int) :
+theorem arrayShift_cellPtr_long [LemFuel] {tds : CerbTags.TagDefsMap} (id p : Int) :
     CerbMem.arrayShiftPtrval tds (cellPtr id p) longTy (CerbMem.integerIval 1) =
       cellPtr id (p + 8) := by
   rw [cellPtr_arrayShift tds id p longTy 1 (fun _ h => by unfold longTy at h; cases h),
     longTy_size]
   exact congrArg (cellPtr id) (by omega)
 
-theorem evalArrayShift_long_one (id a : Int) :
+theorem evalArrayShift_long_one [LemFuel] (id a : Int) :
     evalArrayShift fmapEmpty longTy (Vobject (OVpointer (cellPtr id a))) (ivVal 1) =
       some (Vobject (OVpointer (cellPtr id (a + 8)))) := by
   show some (Vobject (OVpointer (CerbMem.arrayShiftPtrval fmapEmpty (cellPtr id a)
@@ -152,14 +156,16 @@ def ptrImg (pv : CerbMem.PointerValue) : List CerbMem.AbsByte :=
 
 theorem ptrImg_cell (id a : Int) :
     ptrImg (cellPtr id a) =
-      ((CerbMem.intToBytes a 8).zip
-        (List.range (CerbMem.intToBytes a 8).length)).map
+      ((CerbMem.intToBytes false a 8).zip
+        (List.range (CerbMem.intToBytes false a 8).length)).map
         (fun (v, i) =>
           { prov := .Prov_some id, copyOffset := some (i : Int), value := v }) := rfl
 
-theorem ptrImg_cell_length (id a : Int) : (ptrImg (cellPtr id a)).length = 8 := by
+/-- Unsigned pointer serialization has eight bytes for a 64-bit address. -/
+theorem ptrImg_cell_length (id a : Int) (h0 : 0 ≤ a) (h1 : a < 2 ^ 64) : (ptrImg (cellPtr id a)).length = 8 := by
   rw [ptrImg_cell]
-  simp [intToBytes_length]
+  simp only [List.length_map, List.length_zip, List.length_range,
+    intToBytes_length false a 8 h0 (by change a ≤ 2 ^ 64 - 1; omega) (by decide), Nat.min_self]
 
 theorem ptrImg_null_length : (ptrImg nullNode).length = 8 := rfl
 
@@ -173,8 +179,8 @@ instances of the generic `wps_load_cell_at`/`wps_store_cell_at`. -/
 /-! ## Decode round trips (the engine's own abst,
 CerbMem.lean:677-708) -/
 
-/-- The serialized concrete-pointer image, spelled byte by byte. -/
-theorem ptrImg_cell_explicit (id a : Int) (h0 : 0 ≤ a) :
+/-- The serialized in-range concrete-pointer image, spelled byte by byte. -/
+theorem ptrImg_cell_explicit (id a : Int) (h0 : 0 ≤ a) (h1 : a < 2 ^ 64) :
     ptrImg (cellPtr id a) =
       [⟨.Prov_some id, some 0, some ((a >>> ((0 * 8 : Nat))).toNat % 256).toUInt8⟩,
        ⟨.Prov_some id, some 1, some ((a >>> ((1 * 8 : Nat))).toNat % 256).toUInt8⟩,
@@ -184,14 +190,14 @@ theorem ptrImg_cell_explicit (id a : Int) (h0 : 0 ≤ a) :
        ⟨.Prov_some id, some 5, some ((a >>> ((5 * 8 : Nat))).toNat % 256).toUInt8⟩,
        ⟨.Prov_some id, some 6, some ((a >>> ((6 * 8 : Nat))).toNat % 256).toUInt8⟩,
        ⟨.Prov_some id, some 7, some ((a >>> ((7 * 8 : Nat))).toNat % 256).toUInt8⟩] := by
-  rw [ptrImg_cell, intToBytes_nonneg a 8 h0]
+  rw [ptrImg_cell, intToBytes_nonneg a 8 h0 (by change a ≤ 2 ^ 64 - 1; omega) (by decide)]
   simp only [List.length_map, List.length_range]
   simp [List.range_succ]
 
 /-- The 8-byte little-endian round trip on machine addresses. -/
 theorem bytesToInt_ptrImg_cell (id a : Int) (h0 : 0 ≤ a) (h1 : a < 2 ^ 64) :
     CerbMem.bytesToInt (ptrImg (cellPtr id a)) false = some a := by
-  rw [ptrImg_cell_explicit id a h0, bytesToInt_of_all_some _ (by rfl)]
+  rw [ptrImg_cell_explicit id a h0 h1, bytesToInt_of_all_some _ (by rfl) (by simp) (by change 8 ≤ 16; decide)]
   simp only [bytesToInt_go_cons, bytesToInt_go_nil]
   congr 1
   obtain ⟨A, rfl⟩ : ∃ A : Nat, a = (A : Int) := ⟨a.toNat, by omega⟩
@@ -239,10 +245,10 @@ theorem reconstruct_ptrImg_null {tds : CerbTags.TagDefsMap} (lum : List (Int × 
 /-- The first-component of the pointer-load provenance policy at the
     stored concrete-pointer image: the bytes' SHARED provenance
     (splitBytesProv, CerbMem.lean:517). -/
-theorem splitBytesProv_ptrImg_cell_fst (id a : Int) (h0 : 0 ≤ a) :
+theorem splitBytesProv_ptrImg_cell_fst (id a : Int) (h0 : 0 ≤ a) (h1 : a < 2 ^ 64) :
     (CerbMem.splitBytesProv (ptrImg (cellPtr id a))).1 =
       .Prov_some id := by
-  rw [ptrImg_cell_explicit id a h0]
+  rw [ptrImg_cell_explicit id a h0 h1]
   unfold CerbMem.splitBytesProv
   simp [provenance_beq_refl]
 
@@ -257,10 +263,8 @@ theorem reconstruct_ptrImg_cell {tds : CerbTags.TagDefsMap} (id a : Int) (h0 : 0
     CerbMem.reconstructValue tds lum fpm addr nodePtrTy (ptrImg (cellPtr id a)) =
       .MVpointer nodeTy (cellPtr id a) := by
   have hb := bytesToInt_ptrImg_cell id a (by omega) h1
-  have hsp := splitBytesProv_ptrImg_cell_fst id a (by omega)
-  rw [show CerbMem.reconstructValue =
-    CerbMem.reconstructValue_lemFuel lemDefaultFuel from rfl,
-    show lemDefaultFuel = 999999 + 1 from rfl]
+  have hsp := splitBytesProv_ptrImg_cell_fst id a (by omega) h1
+  unfold CerbMem.reconstructValue CerbTagsWf.envBound
   unfold CerbMem.reconstructValue_lemFuel nodePtrTy nodeTy
   dsimp only
   rw [hb]
@@ -302,7 +306,8 @@ theorem spliceBytes_next_slice (img bs : List CerbMem.AbsByte)
 theorem nodeTy_dec_indep {tds : CerbTags.TagDefsMap} (lum : List (Int × identifier))
     (fpm : CerbMem.Funptrmap) (addr : Int) (bs : List CerbMem.AbsByte) :
     CerbMem.reconstructValue tds lum fpm addr nodeTy bs =
-      CerbMem.reconstructValue tds [] [] addr nodeTy bs := rfl
+      CerbMem.reconstructValue tds [] [] addr nodeTy bs := by
+  exact decIndep_array_integer tds addr [] [] (.Signed .Long) 2 bs lum fpm
 
 /-! ## The node-field access rules — CLIENT INSTANCES of the generic
 typed-subrange rules (F-04: no WP/WPS lifting proof lives in this
@@ -317,7 +322,7 @@ variable {M : MachineCtx} {p : Option sym} {Ls : LabelSpec GF} {Θ : ProcSpec GF
 /-- NODE `node*`-FIELD LOAD — `wps_load_cell_at` at view type
     `nodePtrTy` (the old example-local lifting rule, re-derived as a
     one-line client). -/
-theorem wps_load_node_field {Ψ : SpikeVal → EnvStack → IProp GF}
+theorem wps_load_node_field [LemFuel] {Ψ : SpikeVal → EnvStack → IProp GF}
     (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (id a : Int) (off : Nat) (mo : memory_order)
     (dq : DFrac) (bs : List CerbMem.AbsByte) (ρ : EnvStack)
@@ -338,7 +343,7 @@ theorem wps_load_node_field {Ψ : SpikeVal → EnvStack → IProp GF}
     `nodePtrTy`; the spliced image's whole-cell inertness is
     `nodeTy_dec_indep` (any bytes), so the client owes only the
     serialization facts of the stored pointer. -/
-theorem wps_store_node_field {Ψ : SpikeVal → EnvStack → IProp GF}
+theorem wps_store_node_field [LemFuel] {Ψ : SpikeVal → EnvStack → IProp GF}
     (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (id a : Int) (off : Nat) (cv : value) (mo : memory_order)
     (bs : List CerbMem.AbsByte) (ρ : EnvStack) {mv : CerbMem.MemValue}
@@ -711,19 +716,19 @@ theorem lr_memop_operands_nonvalue :
 
 include hf
 
-theorem lr_cur_eval {file : generic_file Unit core_run_annotation} (vp vc : value) :
+theorem lr_cur_eval [LemFuel] {file : generic_file Unit core_run_annotation} (vp vc : value) :
     evalPexpr fmapEmpty fmapEmpty file (lrFrame vp vc f :: rest)
       (Pexpr [] () (PEsym lrCurSym)) = some vc := by
   rw [evalPexpr_sym_empty]
   exact lookup_env_head (lrFrame_lookup_cur hf _ _) rest
 
-theorem lr_guard_eval {file : generic_file Unit core_run_annotation} (vb vp vc : value) :
+theorem lr_guard_eval [LemFuel] {file : generic_file Unit core_run_annotation} (vb vp vc : value) :
     evalPexpr fmapEmpty fmapEmpty file (lrFrameB vb vp vc f :: rest)
       (Pexpr [] () (PEsym lrBSym)) = some vb := by
   rw [evalPexpr_sym_empty]
   exact lookup_env_head (lrFrameB_lookup_b hf _ _ _) rest
 
-theorem lr_exit_eval {file : generic_file Unit core_run_annotation} (vb vp vc : value) :
+theorem lr_exit_eval [LemFuel] {file : generic_file Unit core_run_annotation} (vb vp vc : value) :
     evalPexpr fmapEmpty fmapEmpty file (lrFrameB vb vp vc f :: rest) lrExitPe = some vp := by
   show evalPexpr fmapEmpty fmapEmpty file _ (Pexpr [] () (PEsym lrPrevSym)) = _
   rw [evalPexpr_sym_empty]
@@ -732,7 +737,7 @@ theorem lr_exit_eval {file : generic_file Unit core_run_annotation} (vb vp vc : 
 /-- The load's shifted pointer operand: `array_shift(cur, long, 1)`
     at a node pointer — the engine's own arithmetic, +8 within the
     allocation. -/
-theorem lr_shift_eval_B {file : generic_file Unit core_run_annotation} (vb vp : value) (id aN : Int) :
+theorem lr_shift_eval_B [LemFuel] {file : generic_file Unit core_run_annotation} (vb vp : value) (id aN : Int) :
     evalPexpr fmapEmpty fmapEmpty file (lrFrameB vb vp (ptrVal (cellPtr id aN)) f :: rest)
       (lrShiftPe lrCurSym) = some (ptrVal (cellPtr id (aN + 8))) := by
   unfold lrShiftPe
@@ -746,7 +751,7 @@ theorem lr_shift_eval_B {file : generic_file Unit core_run_annotation} (vb vp : 
   exact evalArrayShift_long_one id aN
 
 /-- The store's shifted pointer operand, after n is bound. -/
-theorem lr_shift_eval_N {file : generic_file Unit core_run_annotation} (vn vb vp : value) (id aN : Int) :
+theorem lr_shift_eval_N [LemFuel] {file : generic_file Unit core_run_annotation} (vn vb vp : value) (id aN : Int) :
     evalPexpr fmapEmpty fmapEmpty file (lrFrameN vn vb vp (ptrVal (cellPtr id aN)) f :: rest)
       (lrShiftPe lrCurSym) = some (ptrVal (cellPtr id (aN + 8))) := by
   unfold lrShiftPe
@@ -759,13 +764,13 @@ theorem lr_shift_eval_N {file : generic_file Unit core_run_annotation} (vn vb vp
   show evalArrayShift fmapEmpty longTy (Vobject (OVpointer (cellPtr id aN))) (ivVal 1) = _
   exact evalArrayShift_long_one id aN
 
-theorem lr_store_value_eval {file : generic_file Unit core_run_annotation} (vn vb vp vc : value) :
+theorem lr_store_value_eval [LemFuel] {file : generic_file Unit core_run_annotation} (vn vb vp vc : value) :
     evalPexpr fmapEmpty fmapEmpty file (lrFrameN vn vb vp vc f :: rest)
       (Pexpr [] () (PEsym lrPrevSym)) = some vp := by
   rw [evalPexpr_sym_empty]
   exact lookup_env_head (lrFrameN_lookup_prev hf _ _ _ _) rest
 
-theorem lr_args_eval {file : generic_file Unit core_run_annotation} (vn vb vp vc : value) :
+theorem lr_args_eval [LemFuel] {file : generic_file Unit core_run_annotation} (vn vb vp vc : value) :
     evalPexprs fmapEmpty fmapEmpty file (lrFrameN vn vb vp vc f :: rest)
       [Pexpr [] () (PEsym lrCurSym), Pexpr [] () (PEsym lrNSym)] =
       some [vc, vn] := by
@@ -785,7 +790,7 @@ end LrEval
 
 /-! ## Storable facts for the stored next values -/
 
-theorem node_ptr_encodes (pv : CerbMem.PointerValue) :
+theorem node_ptr_encodes [LemFuel] (pv : CerbMem.PointerValue) :
     memValueFromValue fmapEmpty (Ctype [] (unatomic_ nodePtrTy)) (ptrVal pv) =
       some (CerbMem.pointerMval nodeTy pv) := rfl
 
@@ -864,7 +869,8 @@ theorem isList_shape {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
     · iexact HT
 
 /-- The store kit: everything the interior store axiom needs about
-    the stored next value, at the two shapes a list head can have. -/
+    the stored next value, at the two shapes a list head can have. The
+    list predicate supplies the address bounds needed by serialization. -/
 theorem node_store_kit {tds : CerbTags.TagDefsMap} (pPrev : CerbMem.PointerValue)
     (hshape : pPrev = nullNode ∨ ∃ id aN : Int, pPrev = cellPtr id aN ∧
       0 < aN ∧ aN < 2 ^ 64) :
@@ -884,7 +890,7 @@ theorem node_store_kit {tds : CerbTags.TagDefsMap} (pPrev : CerbMem.PointerValue
   · refine ⟨?_, fun _ => rfl, fun _ => rfl,
       fun bs' himg => nodeNextDec_ptrImg_cell id aN h0 h1 bs' himg⟩
     rw [node_ptr_img_cell]
-    exact ptrImg_cell_length id aN
+    exact ptrImg_cell_length id aN (by omega) h1
 
 /-! ## THE INVARIANT AND THE TEXTBOOK PROOF -/
 
@@ -928,7 +934,7 @@ include hQ
 /-- The loop body verifies at any invariant frame — the TEXTBOOK
     derivation: each construct by its small axiom or rule, glued by
     the sequencing rules; the frame is carried by ∗ alone. -/
-theorem lr_body_wps (revd rest' : List (Int × Int))
+theorem lr_body_wps [LemFuel] (revd rest' : List (Int × Int))
     (pPrev pCur : CerbMem.PointerValue) (f : Fmap sym value)
     (renv : List (Fmap sym value)) (hf : SymFrame f)
     (hxs : ns = revd.reverse ++ rest') :
@@ -1081,7 +1087,7 @@ theorem lr_body_wps (revd rest' : List (Int × Int))
     · iexact HT
 
 /-- THE BLOCK SPECIFICATION (per-label invariant rule — no Löb). -/
-theorem lr_blockSpecs :
+theorem lr_blockSpecs [LemFuel] :
     ⊢ blockSpecs (GF := GF) (procCtxF F rs) (some p)
       (lrLs ns) emptyProcSpec (lrPost ns) := by
   refine blockSpecs_intro fun l params cont args env0 envs hl => ?_
@@ -1104,7 +1110,7 @@ theorem lr_blockSpecs :
 /-- The whole program's statement WP from the entry env: prev = NULL
     (`isList nullNode []` — the empty reversed part), cur = head
     (`isList head ns`). -/
-theorem lr_wps (sbty : core_base_type) (head : CerbMem.PointerValue) :
+theorem lr_wps [LemFuel] (sbty : core_base_type) (head : CerbMem.PointerValue) :
     isList (GF := GF) head ns ⊢
       wps (procCtxF F rs) (some p) (lrLs ns) emptyProcSpec (lrPost ns)
         (lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head)
@@ -1132,7 +1138,7 @@ framed whole-program judgment are `blockSpecs_frame` /
 `RF` is not threaded through any label predicate by hand. -/
 
 /-- The block specifications at the framed label context. -/
-theorem lr_blockSpecs_frame (RF : IProp GF) :
+theorem lr_blockSpecs_frame [LemFuel] (RF : IProp GF) :
     ⊢ blockSpecs (GF := GF) (procCtxF F rs) (some p) (frameLs RF (lrLs ns)) emptyProcSpec
       (fun w ρ' => iprop(lrPost ns w ρ' ∗ RF)) :=
   (lr_blockSpecs loc ann ra mo pbty cbty bbty nbty ubty ns p rs hQ).trans
@@ -1141,7 +1147,7 @@ theorem lr_blockSpecs_frame (RF : IProp GF) :
 /-- `{ isList head ns ∗ RF } reverse { ret p'. isList p' ns.reverse ∗ RF }`
     at the statement layer — the frame carried across every back edge
     by the framed label context. -/
-theorem lr_wps_frame (RF : IProp GF) (sbty : core_base_type)
+theorem lr_wps_frame [LemFuel] (RF : IProp GF) (sbty : core_base_type)
     (head : CerbMem.PointerValue) :
     iprop(isList (GF := GF) head ns ∗ RF) ⊢
       wps (procCtxF F rs) (some p) (frameLs RF (lrLs ns)) emptyProcSpec
@@ -1164,40 +1170,36 @@ variable (loc : CerbLocation.Loc) (ann ra : core_run_annotation)
   (mo : memory_order) (pbty cbty bbty nbty ubty : core_base_type)
 
 /-- The label body is in the certified cone. -/
-theorem lrBody_fragJ :
+theorem lrBody_fragJ [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) :
     Frag (lrBody loc ann ra mo bbty nbty ubty) := by
   have hb : Frag (memopRedex [] PtrEq
       [Pexpr [] () (PEsym lrCurSym), Pexpr [] () (PEval nullVal)]) :=
     .memop_op rfl (.sym _ _) (.val _ _)
       (by rw [show peDepth (Pexpr ([] : List annot) () (PEsym lrCurSym)) = 1
-          from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+          from rfl]; omega)
       (by rw [show peDepth (Pexpr ([] : List annot) () (PEval nullVal)) = 1
-          from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+          from rfl]; omega)
   refine .sseq_sym hb
     (.if_ (PePure.of_isPePure rfl) (by
         rw [show peDepth (Pexpr ([] : List annot) () (PEsym lrBSym)) = 1
-          from rfl, show lemDefaultFuel = 999999 + 1 from rfl]
+          from rfl]
         omega)
-      .pure_sym
+      (.pure_sym (by omega))
       (.sseq_spec
         (.load_op rfl
           (.arrayShift [] longTy (.sym _ _) (.val _ _))
-          (by rw [show peDepth (lrShiftPe lrCurSym) = 2 from rfl,
-            show lemDefaultFuel = 999999 + 1 from rfl]; omega))
+          (by rw [show peDepth (lrShiftPe lrCurSym) = 2 from rfl]; omega))
         (.sseq
           (.store_op rfl
             (.arrayShift [] longTy (.sym _ _) (.val _ _)) (.sym _ _)
-            (by rw [show peDepth (lrShiftPe lrCurSym) = 2 from rfl,
-              show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+            (by rw [show peDepth (lrShiftPe lrCurSym) = 2 from rfl]; omega)
             (by rw [show peDepth (Pexpr ([] : List annot) ()
-                (PEsym lrPrevSym)) = 1 from rfl,
-              show lemDefaultFuel = 999999 + 1 from rfl]; omega))
+                (PEsym lrPrevSym)) = 1 from rfl]; omega))
           (.run (PePure.all_of_isPePure rfl) (by
             intro pe hpe
             simp only [List.mem_cons, List.not_mem_nil, or_false] at hpe
             rcases hpe with rfl | rfl <;>
-              (rw [show lemDefaultFuel = 999999 + 1 from rfl]
-               first
+              (first
                 | (rw [show peDepth (Pexpr ([] : List annot) ()
                     (PEsym lrCurSym)) = 1 from rfl]; omega)
                 | (rw [show peDepth (Pexpr ([] : List annot) ()
@@ -1392,7 +1394,7 @@ abbrev lrCellFrame {GF : BundledGFunctors} [SpikeGS .hasLC GF]
     chain (same ids, own values), disjointness from and preservation
     of the frame `R`. Both lanes (partial WP and total judgment)
     consume this one lemma. -/
-theorem lrPost_readout {GF : BundledGFunctors} [SpikeGS .hasLC GF]
+theorem lrPost_readout [LemFuel] {GF : BundledGFunctors} [SpikeGS .hasLC GF]
     (ns : List (Int × Int)) (R : CellMap) :
     ∀ (w : SpikeVal) (ρ' : EnvStack),
     iprop(lrPost (hlc := .hasLC) (GF := GF) ns w ρ' ∗ lrCellFrame R) ⊢
@@ -1416,7 +1418,7 @@ theorem lrPost_readout {GF : BundledGFunctors} [SpikeGS .hasLC GF]
 
 /-- The base-WP face with the engine readout (the launch shape
     `engine_adequacy` consumes). -/
-theorem lr_wp_readout {GF : BundledGFunctors} [SpikeGS .hasLC GF]
+theorem lr_wp_readout [LemFuel] {GF : BundledGFunctors} [SpikeGS .hasLC GF]
     (ns : List (Int × Int)) (p : sym) (rs : core_run_state)
     (hQ : LabeledAt rs p (lrQ loc ann ra mo pbty cbty bbty nbty ubty))
     (sbty : core_base_type) (head : CerbMem.PointerValue) (R : CellMap) :
@@ -1461,12 +1463,12 @@ theorem lr_wp_readout {GF : BundledGFunctors} [SpikeGS .hasLC GF]
       SET on the actual maps (nothing allocated, nothing leaked);
     - THE FRAME `R` IS RETURNED VERBATIM: `Sat σ' (Q ∪ R)` — every
       allocation outside the chain is untouched.
-    Partial correctness at EVERY fuel of the shipped driver's per-thread
-    loop, from any driver state holding the proc-carrying thread
+    Partial correctness with ambient fuel at least two and every explicit
+    iteration counter of the shipped driver's per-thread loop, from any driver state holding the proc-carrying thread
     (`DriverSafeCtl`: exhaustion or delivery, nothing else); the TOTAL
     form is `list_reverse_certified_production` (ProdLoopExhibit.lean).
     SpikeGF-concrete: no ghost-functor binder in the statement. -/
-theorem list_reverse_certified
+theorem list_reverse_certified [LemFuel] (hfuel : 2 ≤ LemFuel.fuel)
     (sbty : core_base_type) (ns : List (Int × Int))
     (head : CerbMem.PointerValue)
     (m₀ : CellMap) (hseed : SeedChain m₀ head ns)
@@ -1486,20 +1488,15 @@ theorem list_reverse_certified
   intro prog rs
   have hlbl : (procCtx rs).labelsAt (procCtl lrProcSym).proc = _ :=
     procCtx_labels (lrRS_labeledAt loc ann ra mo pbty cbty bbty nbty ubty)
-  refine (engine_adequacy (GF := SpikeGF)
+  refine (engine_adequacy (hfuel := hfuel) (GF := SpikeGF)
     (M := procCtx rs) rfl rfl (ctl := procCtl lrProcSym) rfl
     (fun l params cont hl => by
       rw [hlbl] at hl
       obtain ⟨-, rfl⟩ := lrQ_inv loc ann ra mo pbty cbty bbty nbty ubty hl
-      exact lrBody_fragJ loc ann ra mo bbty nbty ubty)
-    (fun l params cont hl => by
-      rw [hlbl] at hl
-      obtain ⟨-, rfl⟩ := lrQ_inv loc ann ra mo pbty cbty bbty nbty ubty hl
-      exact Nat.le_of_ble_eq_true rfl)
+      exact lrBody_fragJ (hfuel := hfuel) loc ann ra mo bbty nbty ubty)
     (procCtx_fragProcs _)
     prog fmapEmpty [] σ₀ (Iris.Std.PartialMap.union m₀ R)
-    (.save (saveParams_pure_of_vals rfl) (saveParams_depth_of_vals rfl) (lrBody_fragJ loc ann ra mo bbty nbty ubty))
-    (Nat.le_of_ble_eq_true rfl)
+    (.save (saveParams_pure_of_vals rfl) (fun pe hp => by rw [saveParams_depth_of_vals rfl pe hp]; omega) (lrBody_fragJ (hfuel := hfuel) loc ann ra mo bbty nbty ubty))
     hcoh
     (fun v σ' => ∃ Q : CellMap, (∃ p' : CerbMem.PointerValue,
         v = ptrVal p' ∧ SeedChain Q p' ns.reverse) ∧ Q ##ₘ R ∧
@@ -1598,7 +1595,7 @@ theorem demo_seed : SeedChain demoM demoHead demoNs := by
     allocations relinked as [(3,3), (2,2), (1,1)], the frame is
     returned verbatim, and the demoted `ChainAt` readout of the
     final memory is included (via `seedChain_chainAt`). -/
-theorem list_reverse_demo (sbty : core_base_type)
+theorem list_reverse_demo [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) (sbty : core_base_type)
     (R : CellMap) (hR : demoM ##ₘ R)
     (σ₀ : Mem) (hcoh : Sat fmapEmpty σ₀ (Iris.Std.PartialMap.union demoM R)) :
     let prog := lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty demoHead
@@ -1614,7 +1611,7 @@ theorem list_reverse_demo (sbty : core_base_type)
           Sat fmapEmpty σ' (Iris.Std.PartialMap.union Q R) ∧
           ChainAt σ' p' [(3, 3), (2, 2), (1, 1)]) := by
   intro prog rs
-  refine (list_reverse_certified loc ann ra mo pbty cbty bbty nbty ubty
+  refine (list_reverse_certified (hfuel := hfuel) loc ann ra mo pbty cbty bbty nbty ubty
     sbty demoNs demoHead demoM demo_seed R hR σ₀ hcoh).mono ?_
   intro v σ' hpost
   obtain ⟨p', Q, hval, hQSeed, hfoot, hdisj, hsat⟩ := hpost
@@ -1666,7 +1663,7 @@ variable {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT 
 
 /-- NODE `node*`-FIELD LOAD, total form — `wpt_load_cell_at` at view
     type `nodePtrTy` (client instance, cost 3 ≤ k). -/
-theorem wpt_load_node_field {Ψ : SpikeVal → EnvStack → IProp GF}
+theorem wpt_load_node_field [LemFuel] {Ψ : SpikeVal → EnvStack → IProp GF}
     (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (id a : Int) (off : Nat) (mo : memory_order)
     (dq : DFrac) (bs : List CerbMem.AbsByte) (ρ : EnvStack)
@@ -1685,7 +1682,7 @@ theorem wpt_load_node_field {Ψ : SpikeVal → EnvStack → IProp GF}
 
 /-- NODE `node*`-FIELD STORE, total form — `wpt_store_cell_at` at
     view type `nodePtrTy` (client instance, cost 3 ≤ k). -/
-theorem wpt_store_node_field {Ψ : SpikeVal → EnvStack → IProp GF}
+theorem wpt_store_node_field [LemFuel] {Ψ : SpikeVal → EnvStack → IProp GF}
     (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (id a : Int) (off : Nat) (cv : value) (mo : memory_order)
     (bs : List CerbMem.AbsByte) (ρ : EnvStack) {mv : CerbMem.MemValue}
@@ -1738,7 +1735,7 @@ include hQ
 /-- The loop body meets its variant budget at any invariant frame —
     the same textbook derivation as `lr_body_wps`, at the total
     stratum with the budget arithmetic. -/
-theorem lr_body_wpt (revd rest' : List (Int × Int))
+theorem lr_body_wpt [LemFuel] (revd rest' : List (Int × Int))
     (pPrev pCur : CerbMem.PointerValue) (f : Fmap sym value)
     (renv : List (Fmap sym value)) (hf : SymFrame f)
     (hxs : ns = revd.reverse ++ rest') :
@@ -1906,7 +1903,7 @@ theorem lr_body_wpt (revd rest' : List (Int × Int))
 /-- The body at the FRAMED label context (`wpt_frame_labels` on the
     unframed body — what a consumer that wraps the label context, like
     the production reversal, instantiates). -/
-theorem lr_body_wpt_frame (RF : IProp GF) (revd rest' : List (Int × Int))
+theorem lr_body_wpt_frame [LemFuel] (RF : IProp GF) (revd rest' : List (Int × Int))
     (pPrev pCur : CerbMem.PointerValue) (f : Fmap sym value)
     (renv : List (Fmap sym value)) (hf : SymFrame f)
     (hxs : ns = revd.reverse ++ rest') :
@@ -1919,7 +1916,7 @@ theorem lr_body_wpt_frame (RF : IProp GF) (revd rest' : List (Int × Int))
     BI.wand_elim_left
 
 /-- THE TOTAL BLOCK SPECIFICATION for the reversal loop. -/
-theorem lr_blockSpecsT :
+theorem lr_blockSpecsT [LemFuel] :
     ⊢ blockSpecsT (GF := GF) (procCtxF F rs) (some p)
       (lrLsT ns) emptyProcSpecT (lrPost ns) := by
   refine blockSpecsT_intro fun l params cont args env0 envs m hl => ?_
@@ -1940,7 +1937,7 @@ theorem lr_blockSpecsT :
   · iexact HC
 
 /-- The whole program's total judgment at budget `lrCost |ns| + 1`. -/
-theorem lr_wpt (sbty : core_base_type) (head : CerbMem.PointerValue) :
+theorem lr_wpt [LemFuel] (sbty : core_base_type) (head : CerbMem.PointerValue) :
     isList (GF := GF) head ns ⊢
       wpt (procCtxF F rs) (some p) (lrLsT ns) emptyProcSpecT (lrCost ns.length + 1) (lrPost ns)
         (lrProg loc ann ra mo sbty pbty cbty bbty nbty ubty head)
@@ -1962,7 +1959,7 @@ theorem lr_wpt (sbty : core_base_type) (head : CerbMem.PointerValue) :
 
 /-- The total block specifications at the framed label context
     (`blockSpecsT_frame` on the unframed proof). -/
-theorem lr_blockSpecsT_frame (RF : IProp GF) :
+theorem lr_blockSpecsT_frame [LemFuel] (RF : IProp GF) :
     ⊢ blockSpecsT (GF := GF) (procCtxF F rs) (some p) (frameLsT RF (lrLsT ns)) emptyProcSpecT
       (fun w ρ' => iprop(lrPost ns w ρ' ∗ RF)) :=
   (lr_blockSpecsT loc ann ra mo pbty cbty bbty nbty ubty ns p rs hQ).trans
@@ -1971,7 +1968,7 @@ theorem lr_blockSpecsT_frame (RF : IProp GF) :
 /-- The framed total judgment (`wpt_frame_labels` on the unframed
     proof): the frame rides through every back edge, the budget is
     untouched. -/
-theorem lr_wpt_frame (RF : IProp GF) (sbty : core_base_type)
+theorem lr_wpt_frame [LemFuel] (RF : IProp GF) (sbty : core_base_type)
     (head : CerbMem.PointerValue) :
     iprop(isList (GF := GF) head ns ∗ RF) ⊢
       wpt (procCtxF F rs) (some p) (frameLsT RF (lrLsT ns)) emptyProcSpecT (lrCost ns.length + 1)

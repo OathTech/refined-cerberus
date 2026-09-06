@@ -10,8 +10,8 @@ LETW-PURE TAU (one_step0 Ewseq bare-value arm, Core_reduction.lean:
 353) and whose delivered value is the CONTINUATION's value. The
 theorem chain is the WP LANE end to end: `wps_wseq` (the drift
 rule) → `wps_sound` → `engine_adequacy` — concluding, engine
-vocabulary only (`DriverSafeCtl`): the shipped loop at every fuel
-exhausts or delivers, never kills otherwise, never derails, and any
+vocabulary only (`DriverSafeCtl`): the shipped loop at every iteration counter
+exhausts or delivers under the stated ambient-fuel bound, never kills otherwise, never derails, and any
 delivered value IS v2. The TOTAL twin `wseqProg_wpt` (H1b, 2026-09-04)
 is the drift rule at the total judgment, budget 1 + 1, with the engine
 readout as its postcondition — the consumer of `wpt_wseq`
@@ -43,7 +43,7 @@ def wseqProg (v1 v2 : value) : CoreExpr :=
     (ofVal (.pure v1)) (ofVal (.pure v2)))
 
 /-- Cone membership through the generic constructors alone. -/
-theorem wseqProg_frag (v1 v2 : value) : Frag (wseqProg v1 v2) :=
+theorem wseqProg_frag [LemFuel] (v1 v2 : value) : Frag (wseqProg v1 v2) :=
   .wseq (frag_ofVal (.pure v1)) (frag_ofVal (.pure v2))
 
 /-! ## The WP lane -/
@@ -60,7 +60,7 @@ def wseqLs : LabelSpec GF := fun _ _ _ => iprop(True)
     application of the drift rule `wps_wseq`, then the value channel
     twice (the bound value is discarded by the wildcard —
     `SpikeVal.mergeInto (.pure v1)` is the identity). -/
-theorem wseqProg_wps (M : MachineCtx) (p : Option sym) (Ls : LabelSpec GF) (Θ : ProcSpec GF) (v1 v2 : value)
+theorem wseqProg_wps [LemFuel] (M : MachineCtx) (p : Option sym) (Ls : LabelSpec GF) (Θ : ProcSpec GF) (v1 v2 : value)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value)) :
     ⊢ wps (GF := GF) M p Ls Θ (fun w _ => iprop(⌜w.val = v2⌝))
         (wseqProg v1 v2) (ev0 :: evs) := by
@@ -76,7 +76,7 @@ theorem wseqProg_wps (M : MachineCtx) (p : Option sym) (Ls : LabelSpec GF) (Θ :
     `wpt_ofVal`), at any machine context, label specification and table;
     the postcondition is the engine readout `readoutPost`, through the
     public `stateInterp_readout`/`pure_consequence` alone. -/
-theorem wseqProg_wpt (M : MachineCtx) (p : Option sym) (Ls : LabelSpecT GF) (Θ : ProcSpecT GF)
+theorem wseqProg_wpt [LemFuel] (M : MachineCtx) (p : Option sym) (Ls : LabelSpecT GF) (Θ : ProcSpecT GF)
     (v1 v2 : value) (ev0 : Fmap sym value) (evs : List (Fmap sym value)) :
     ⊢ wpt (GF := GF) M p Ls Θ 2 (readoutPost (fun v' _ => v' = v2))
         (wseqProg v1 v2) (ev0 :: evs) := by
@@ -90,14 +90,14 @@ theorem wseqProg_wpt (M : MachineCtx) (p : Option sym) (Ls : LabelSpecT GF) (Θ 
   exact BI.pure_intro rfl
 
 /-- Vacuous block specifications at the spike profile. -/
-theorem wseq_blockSpecs (v2 : value) :
+theorem wseq_blockSpecs [LemFuel] (v2 : value) :
     ⊢ blockSpecs (GF := GF) spikeCtx none wseqLs emptyProcSpec
       (fun w _ => iprop(⌜w.val = v2⌝)) :=
   blockSpecs_intro fun l _ _ _ _ _ hl => (spikeCtx_labels_none l hl).elim
 
 /-- The base-WP face with the engine readout at the spike profile
     (the `case_wp_readout` collapse shape). -/
-theorem wseq_wp_readout (v1 v2 : value) :
+theorem wseq_wp_readout [LemFuel] (v1 v2 : value) :
     ⊢ WP (⟨wseqProg v1 v2, spikeEnv, spikeCtl, spikeCtx⟩ : CoreRt) @ Stuckness.NotStuck; ⊤
         {{ w, iprop(∀ (σ' : Mem) (ns : Nat) (κs : List Empty) (nt : Nat),
           (stateInterp σ' ns κs nt : IProp GF) ={⊤, ∅}=∗
@@ -115,21 +115,19 @@ end WseqIris
 
 /-- THE ADEQUACY-LEVEL DRIFT-TEST REGRESSION (the manifest's Ewseq
     consumer cell): driving THE ENGINE on `letw _ = pure(v1) in
-    pure(v2)`, from ANY memory state: the shipped loop at every fuel
-    exhausts or delivers, never kills otherwise, never gets stuck, and
+    pure(v2)`, from ANY memory state: the shipped loop at every iteration
+    counter exhausts or delivers, with ambient fuel at least two, never kills otherwise, never gets stuck, and
     any delivered value IS v2 — the value fact flows from the proved WP
-    through `engine_adequacy`, not by evaluation. Step 1 of any such run
-    is the engine's LETW-PURE TAU (`Step.wseq_pure` is the only rule
+    through `engine_adequacy`, not by evaluation. The program's first
+    reduction is the engine's LETW-PURE TAU (`Step.wseq_pure` is the only rule
     that fires). -/
-theorem wseq_certified {GF : BundledGFunctors} [SpikeGpreS GF] (v1 v2 : value) (σ₀ : Mem) :
+theorem wseq_certified [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) {GF : BundledGFunctors} [SpikeGpreS GF] (v1 v2 : value) (σ₀ : Mem) :
     DriverSafeCtl spikeCtx (spikeThread (wseqProg v1 v2)) (wseqProg v1 v2) spikeEnv spikeCtl σ₀
       (fun v' _ => v' = v2) := by
-  refine engine_adequacy (GF := GF) (M := spikeCtx) rfl rfl (ctl := spikeCtl) rfl
-    (fun l params cont hl => (spikeCtx_labels_none l hl).elim)
+  refine engine_adequacy (hfuel := hfuel) (GF := GF) (M := spikeCtx) rfl rfl (ctl := spikeCtl) rfl
     (fun l params cont hl => (spikeCtx_labels_none l hl).elim)
     spikeCtx_fragProcs
     (wseqProg v1 v2) fmapEmpty [] σ₀ ∅ (wseqProg_frag v1 v2)
-    (Nat.le_of_ble_eq_true rfl)
     (Coh.mk
       (fun _ c hget => absurd (hget.symm.trans
         (Iris.Std.LawfulPartialMap.get?_empty (M := SpikeHeapF) _))

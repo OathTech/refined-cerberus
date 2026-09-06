@@ -51,10 +51,10 @@ invariant `deadNodes done ∗ isList cur rest`, `ns = done ++ rest`, the
 variant the remaining chain's length; frame theorems by the generic
 statement frame rules. Engine-facing: `dispose_list_certified_production`
 (the shipped pipeline; the former `dispose_list_certified_total` over the
-package loop `driveU` was deleted with the loop, 2026-09-03): the run
-DELIVERS `Vunit`, EVERY node's id is in `deadAllocations` with its record
-erased (`killM`'s effect, CerbMem.lean:1576-1578), and the frame is
-returned verbatim (`Sat σ' R`). PRODUCTION: `dispose_list_certified_production`
+package loop `driveU` was deleted with the loop, 2026-09-03). The public
+readout `dlPost_readout` records every owned node's dead/erased status and
+preserves the arbitrary cell frame. The production theorem below consumes
+that readout at the empty frame. PRODUCTION: `dispose_list_certified_production`
 — the shipped pipeline (`runND ∘ drive ∘ initial_driver_state`) on the
 self-contained file that BUILDS a two-node list with `create`s (the
 list-reverse production's prefix `lrProdPrefix`, verbatim) and then
@@ -62,6 +62,13 @@ disposes it, is EXACTLY ONE Active execution delivering `Vunit` whose
 final memory has two DISTINCT allocation ids dead with their records
 erased (the proof witnesses them as the two created nodes; the statement
 itself names no node — the K4 range audit's M-2).
+
+The production equation uses the caller's LemFuel instance and requires
+at least 53 units: the two-node program's total cost 51 plus two shipped
+driver iterations. Public generic dispose derivations keep their original
+costs; fragment membership requires ambient fuel at least two. Created
+pointer bounds feed the existing machine-address conditions of the list
+predicate. This authored regression does not discharge emitted-file A7.
 
 WHAT IS AND IS NOT READ OFF (honest): the logic's resources speak for
 the nodes it owned — `deadObj` per node — so the readout is per-id
@@ -284,13 +291,13 @@ theorem dl_memop_operands_nonvalue :
 
 include hf
 
-theorem dl_cur_eval {file : generic_file Unit core_run_annotation} (vc : value) :
+theorem dl_cur_eval [LemFuel] {file : generic_file Unit core_run_annotation} (vc : value) :
     evalPexpr fmapEmpty fmapEmpty file (dlFrame vc f :: rest)
       (Pexpr [] () (PEsym dlCurSym)) = some vc := by
   rw [evalPexpr_sym_empty]
   exact lookup_env_head (dlFrame_lookup_cur hf _) rest
 
-theorem dl_guard_eval {file : generic_file Unit core_run_annotation} (vb vc : value) :
+theorem dl_guard_eval [LemFuel] {file : generic_file Unit core_run_annotation} (vb vc : value) :
     evalPexpr fmapEmpty fmapEmpty file (dlFrameB vb vc f :: rest)
       (Pexpr [] () (PEsym dlBSym)) = some vb := by
   rw [evalPexpr_sym_empty]
@@ -298,7 +305,7 @@ theorem dl_guard_eval {file : generic_file Unit core_run_annotation} (vb vc : va
 
 /-- The load's shifted operand: `array_shift(cur, long, 1)` at a node
     pointer — +8 within the allocation (the engine's own arithmetic). -/
-theorem dl_shift_eval_B {file : generic_file Unit core_run_annotation} (vb : value) (id aN : Int) :
+theorem dl_shift_eval_B [LemFuel] {file : generic_file Unit core_run_annotation} (vb : value) (id aN : Int) :
     evalPexpr fmapEmpty fmapEmpty file (dlFrameB vb (ptrVal (cellPtr id aN)) f :: rest)
       (lrShiftPe dlCurSym) = some (ptrVal (cellPtr id (aN + 8))) := by
   unfold lrShiftPe
@@ -312,13 +319,13 @@ theorem dl_shift_eval_B {file : generic_file Unit core_run_annotation} (vb : val
   exact evalArrayShift_long_one id aN
 
 /-- The kill's operand: `cur`, after n is bound. -/
-theorem dl_kill_operand_eval {file : generic_file Unit core_run_annotation} (vn vb vc : value) :
+theorem dl_kill_operand_eval [LemFuel] {file : generic_file Unit core_run_annotation} (vn vb vc : value) :
     evalPexpr fmapEmpty fmapEmpty file (dlFrameN vn vb vc f :: rest)
       (Pexpr [] () (PEsym dlCurSym)) = some vc := by
   rw [evalPexpr_sym_empty]
   exact lookup_env_head (dlFrameN_lookup_cur hf _ _ _) rest
 
-theorem dl_args_eval {file : generic_file Unit core_run_annotation} (vn vb vc : value) :
+theorem dl_args_eval [LemFuel] {file : generic_file Unit core_run_annotation} (vn vb vc : value) :
     evalPexprs fmapEmpty fmapEmpty file (dlFrameN vn vb vc f :: rest)
       [Pexpr [] () (PEsym dlNSym)] = some [vn] := by
   rw [evalPexprs_cons]
@@ -394,7 +401,7 @@ include hQ
 /-- The loop body verifies at any invariant frame — each construct by
     its rule; THE DISPOSE is `wps_kill` at the node's cell reassembled
     as a points-to (`pointsToCell_cellOwn_iff`). -/
-theorem dl_body_wps (done rest' : List (Int × Int))
+theorem dl_body_wps [LemFuel] (done rest' : List (Int × Int))
     (pCur : CerbMem.PointerValue) (f : Fmap sym value)
     (renv : List (Fmap sym value)) (hf : SymFrame f)
     (hxs : ns = done ++ rest') :
@@ -531,7 +538,7 @@ theorem dl_body_wps (done rest' : List (Int × Int))
     · iexact HT
 
 /-- THE BLOCK SPECIFICATION (per-label invariant rule). -/
-theorem dl_blockSpecs :
+theorem dl_blockSpecs [LemFuel] :
     ⊢ blockSpecs (GF := GF) (procCtxF F rs) (some p) (dlLs ns) emptyProcSpec (dlPost ns) := by
   refine blockSpecs_intro fun l params cont args env0 envs hl => ?_
   rw [procCtxF_labels hQ] at hl
@@ -553,7 +560,7 @@ theorem dl_blockSpecs :
 /-- DISPOSE A LIST, the statement judgment: `{isList head ns} dispose(head)
     {ret unit. deadNodes ns}` — from the whole list alone, the program
     delivers unit and the persistent dead cell of every node. -/
-theorem dl_wps (sbty : core_base_type) (head : CerbMem.PointerValue) :
+theorem dl_wps [LemFuel] (sbty : core_base_type) (head : CerbMem.PointerValue) :
     isList (GF := GF) head ns ⊢
       wps (procCtxF F rs) (some p) (dlLs ns) emptyProcSpec (dlPost ns)
         (dlProg loc ann ra mo sbty cbty bbty nbty ubty head) [fmapEmpty] := by
@@ -572,7 +579,7 @@ theorem dl_wps (sbty : core_base_type) (head : CerbMem.PointerValue) :
 
 /-- THE TEXTBOOK FACE: `{isList head ns} dispose(head) {emp}` — the dead
     knowledge dropped (affinity). -/
-theorem dl_wps_emp (sbty : core_base_type) (head : CerbMem.PointerValue) :
+theorem dl_wps_emp [LemFuel] (sbty : core_base_type) (head : CerbMem.PointerValue) :
     isList (GF := GF) head ns ⊢
       wps (procCtxF F rs) (some p) (dlLs ns) emptyProcSpec (fun w _ => iprop(⌜w = SpikeVal.pure Vunit⌝))
         (dlProg loc ann ra mo sbty cbty bbty nbty ubty head) [fmapEmpty] := by
@@ -584,7 +591,7 @@ theorem dl_wps_emp (sbty : core_base_type) (head : CerbMem.PointerValue) :
   exact hw
 
 /-- The block specifications at the framed label context. -/
-theorem dl_blockSpecs_frame (RF : IProp GF) :
+theorem dl_blockSpecs_frame [LemFuel] (RF : IProp GF) :
     ⊢ blockSpecs (GF := GF) (procCtxF F rs) (some p) (frameLs RF (dlLs ns)) emptyProcSpec
       (fun w ρ' => iprop(dlPost ns w ρ' ∗ RF)) :=
   (dl_blockSpecs loc ann ra mo cbty bbty nbty ubty ns p rs hQ).trans
@@ -592,7 +599,7 @@ theorem dl_blockSpecs_frame (RF : IProp GF) :
 
 /-- `{isList head ns ∗ RF} dispose(head) {unit ∗ deadNodes ns ∗ RF}` — the
     frame carried across every back edge by the framed label context. -/
-theorem dl_wps_frame (RF : IProp GF) (sbty : core_base_type)
+theorem dl_wps_frame [LemFuel] (RF : IProp GF) (sbty : core_base_type)
     (head : CerbMem.PointerValue) :
     iprop(isList (GF := GF) head ns ∗ RF) ⊢
       wps (procCtxF F rs) (some p) (frameLs RF (dlLs ns)) emptyProcSpec
@@ -613,35 +620,33 @@ variable (loc : CerbLocation.Loc) (ann ra : core_run_annotation)
 
 /-- The label body is in the certified cone: the kill is `Frag.kill_op`
     at the bound symbol (either kind since K3; here `Static0 nodeTy`). -/
-theorem dlBody_fragJ : Frag (dlBody loc ann ra mo bbty nbty ubty) := by
+theorem dlBody_fragJ [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) : Frag (dlBody loc ann ra mo bbty nbty ubty) := by
   have hb : Frag (memopRedex [] PtrEq
       [Pexpr [] () (PEsym dlCurSym), Pexpr [] () (PEval nullVal)]) :=
     .memop_op rfl (.sym _ _) (.val _ _)
       (by rw [show peDepth (Pexpr ([] : List annot) () (PEsym dlCurSym)) = 1
-          from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+          from rfl]; omega)
       (by rw [show peDepth (Pexpr ([] : List annot) () (PEval nullVal)) = 1
-          from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+          from rfl]; omega)
   refine .sseq_sym hb
     (.if_ (PePure.of_isPePure rfl) (by
         rw [show peDepth (Pexpr ([] : List annot) () (PEsym dlBSym)) = 1
-          from rfl, show lemDefaultFuel = 999999 + 1 from rfl]
+          from rfl]
         omega)
       (.val_pure Vunit)
       (.sseq_spec
         (.load_op rfl
           (.arrayShift [] longTy (.sym _ _) (.val _ _))
-          (by rw [show peDepth (lrShiftPe dlCurSym) = 2 from rfl,
-            show lemDefaultFuel = 999999 + 1 from rfl]; omega))
+          (by rw [show peDepth (lrShiftPe dlCurSym) = 2 from rfl]; omega))
         (.sseq
           (.kill_op rfl (.sym [] dlCurSym)
             (by rw [show peDepth (Pexpr ([] : List annot) () (PEsym dlCurSym)) = 1
-                from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega))
+                from rfl]; omega))
           (.run (PePure.all_of_isPePure rfl) (by
             intro pe hpe
             simp only [List.mem_cons, List.not_mem_nil, or_false] at hpe
             subst hpe
-            rw [show peDepth (Pexpr ([] : List annot) () (PEsym dlNSym)) = 1 from rfl,
-              show lemDefaultFuel = 999999 + 1 from rfl]
+            rw [show peDepth (Pexpr ([] : List annot) () (PEsym dlNSym)) = 1 from rfl]
             omega)))))
 
 theorem dlBody_pot : pot (dlBody loc ann ra mo bbty nbty ubty) = 13 := rfl
@@ -686,7 +691,7 @@ include hQ
 
 /-- The loop body meets its variant budget at any invariant frame — the
     same derivation as `dl_body_wps`, at the total stratum. -/
-theorem dl_body_wpt (done rest' : List (Int × Int))
+theorem dl_body_wpt [LemFuel] (done rest' : List (Int × Int))
     (pCur : CerbMem.PointerValue) (f : Fmap sym value)
     (renv : List (Fmap sym value)) (hf : SymFrame f)
     (hxs : ns = done ++ rest') :
@@ -833,7 +838,7 @@ theorem dl_body_wpt (done rest' : List (Int × Int))
 
 /-- The body at the FRAMED label context (what the production statement
     instantiates). -/
-theorem dl_body_wpt_frame (RF : IProp GF) (done rest' : List (Int × Int))
+theorem dl_body_wpt_frame [LemFuel] (RF : IProp GF) (done rest' : List (Int × Int))
     (pCur : CerbMem.PointerValue) (f : Fmap sym value)
     (renv : List (Fmap sym value)) (hf : SymFrame f)
     (hxs : ns = done ++ rest') :
@@ -846,7 +851,7 @@ theorem dl_body_wpt_frame (RF : IProp GF) (done rest' : List (Int × Int))
     BI.wand_elim_left
 
 /-- THE TOTAL BLOCK SPECIFICATION for the dispose loop. -/
-theorem dl_blockSpecsT :
+theorem dl_blockSpecsT [LemFuel] :
     ⊢ blockSpecsT (GF := GF) (procCtxF F rs) (some p) (dlLsT ns) emptyProcSpecT (dlPost ns) := by
   refine blockSpecsT_intro fun l params cont args env0 envs m hl => ?_
   rw [procCtxF_labels hQ] at hl
@@ -868,7 +873,7 @@ theorem dl_blockSpecsT :
 /-- DISPOSE A LIST, the total judgment at budget `dlCost |ns| + 1`:
     `{isList head ns} dispose(head) {ret unit. deadNodes ns}` with
     termination. -/
-theorem dl_wpt (sbty : core_base_type) (head : CerbMem.PointerValue) :
+theorem dl_wpt [LemFuel] (sbty : core_base_type) (head : CerbMem.PointerValue) :
     isList (GF := GF) head ns ⊢
       wpt (procCtxF F rs) (some p) (dlLsT ns) emptyProcSpecT (dlCost ns.length + 1) (dlPost ns)
         (dlProg loc ann ra mo sbty cbty bbty nbty ubty head) [fmapEmpty] := by
@@ -886,7 +891,7 @@ theorem dl_wpt (sbty : core_base_type) (head : CerbMem.PointerValue) :
   · iexact HL
 
 /-- The total block specifications at the framed label context. -/
-theorem dl_blockSpecsT_frame (RF : IProp GF) :
+theorem dl_blockSpecsT_frame [LemFuel] (RF : IProp GF) :
     ⊢ blockSpecsT (GF := GF) (procCtxF F rs) (some p) (frameLsT RF (dlLsT ns)) emptyProcSpecT
       (fun w ρ' => iprop(dlPost ns w ρ' ∗ RF)) :=
   (dl_blockSpecsT loc ann ra mo cbty bbty nbty ubty ns p rs hQ).trans
@@ -894,7 +899,7 @@ theorem dl_blockSpecsT_frame (RF : IProp GF) :
 
 /-- The framed total judgment: the frame rides through every back edge,
     the budget is untouched. -/
-theorem dl_wpt_frame (RF : IProp GF) (sbty : core_base_type)
+theorem dl_wpt_frame [LemFuel] (RF : IProp GF) (sbty : core_base_type)
     (head : CerbMem.PointerValue) :
     iprop(isList (GF := GF) head ns ∗ RF) ⊢
       wpt (procCtxF F rs) (some p) (frameLsT RF (dlLsT ns)) emptyProcSpecT (dlCost ns.length + 1)
@@ -938,7 +943,7 @@ variable {GF : BundledGFunctors} [SpikeGS .hasLC GF]
     coupling invariant and the metadata interpretation —
     `deadObj_dead_keep`, `deadNodes_dead` — the Reynolds/O'Hearn audit's
     Finding 2; they are the public lemmas now.) -/
-theorem dlPost_readout (ns : List (Int × Int)) (R : CellMap) :
+theorem dlPost_readout [LemFuel] (ns : List (Int × Int)) (R : CellMap) :
     ∀ (w : SpikeVal) (ρ' : EnvStack),
     iprop(dlPost (hlc := .hasLC) (GF := GF) ns w ρ' ∗ lrCellFrame R) ⊢
       readoutPost (fun v σ' => v = Vunit ∧ (∀ nd ∈ ns, DeadAt σ' nd.1) ∧
@@ -1015,7 +1020,7 @@ include hf
 
 /-- The save's initializer evaluates at the entry env to the
     program-bound head pointer. -/
-theorem lrPFrame_save_params_dl {file : generic_file Unit core_run_annotation} (cbty : core_base_type) :
+theorem lrPFrame_save_params_dl [LemFuel] {file : generic_file Unit core_run_annotation} (cbty : core_base_type) :
     evalPexprs fmapEmpty fmapEmpty file (lrPFrame v1 v2 f :: rest)
         (saveParamPexprs (dlProdParams cbty)) = some [v1] := by
   show evalPexprs fmapEmpty fmapEmpty file (lrPFrame v1 v2 f :: rest)
@@ -1037,12 +1042,12 @@ theorem bindSaveParams_dlProd (cbty : core_base_type) (v1 : value)
   rfl
 
 theorem dlProdParams_depth (cbty : core_base_type) :
-    ∀ pe ∈ saveParamPexprs (dlProdParams cbty), peDepth pe ≤ lemDefaultFuel := by
+    ∀ pe ∈ saveParamPexprs (dlProdParams cbty), peDepth pe = 1 := by
   intro pe hpe
   simp only [dlProdParams, saveParamPexprs, List.map_cons, List.map_nil,
     List.mem_cons, List.not_mem_nil, or_false] at hpe
   subst hpe
-  exact peDepth_sym_le _ _
+  rfl
 
 /-! ### Distinctness of the built nodes (read off the list predicate) -/
 
@@ -1088,7 +1093,7 @@ variable (ra : core_run_annotation) (mo : memory_order)
     `RF`, to any continuation `k` verified at the prefix frame; the
     prefix costs 20 (2 + 2 + 4·4). The list-reverse production's
     `lrProd_wpt` is this derivation at its own continuation. -/
-theorem lrProdPrefix_wpt {Ls : LabelSpecT GF} (bty : core_base_type)
+theorem lrProdPrefix_wpt [LemFuel] (hfuel : 0 < LemFuel.fuel) {Ls : LabelSpecT GF} (bty : core_base_type)
     (k : CoreExpr) (kk : Nat) (ψ : value → Mem → Prop) (RF : IProp GF)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (hf : SymFrame ev0)
     (hk : ∀ (i₁ a₁ i₂ a₂ : Int), 0 < a₁ ∧ a₁ < 2 ^ 64 → 0 < a₂ ∧ a₂ < 2 ^ 64 →
@@ -1125,7 +1130,7 @@ theorem lrProdPrefix_wpt {Ls : LabelSpecT GF} (bty : core_base_type)
                 k))))))))))) from rfl]
   iapply wpt_seq_sym
   icases (allocBudget_split _ _).1 $$ Hcap with ⟨Hcap, Hcap₂⟩
-  iapply wpt_create [] loc0 empty_annotation .Prov_none 8 nodeTy
+  iapply wpt_create (hfuel := hfuel) (halign := by decide) (haddr := rfl) [] loc0 empty_annotation .Prov_none 8 nodeTy
     (PrefOther "lr-n1") (ev0 :: evs) (Nat.le_refl 2)
     nodeTy_size_pos nodeTy_nonatomic nodeTy_decIndep_undef
   isplitl [Hcap]
@@ -1137,7 +1142,7 @@ theorem lrProdPrefix_wpt {Ls : LabelSpecT GF} (bty : core_base_type)
     rfl
   rw [update_env_sym lrN1Sym bty]
   iapply wpt_seq_sym
-  iapply wpt_create [] loc0 empty_annotation .Prov_none 8 nodeTy
+  iapply wpt_create (hfuel := hfuel) (halign := by decide) (haddr := rfl) [] loc0 empty_annotation .Prov_none 8 nodeTy
     (PrefOther "lr-n2") _ (Nat.le_refl 2)
     nodeTy_size_pos nodeTy_nonatomic nodeTy_decIndep_undef
   isplitl [Hcap₂]
@@ -1193,7 +1198,7 @@ theorem lrProdPrefix_wpt {Ls : LabelSpecT GF} (bty : core_base_type)
     (ptrVal (cellPtr i₂ a₂)) mo _ _ (Nat.le_refl 3)
     (node_ptr_encodes (cellPtr i₂ a₂))
     (by rw [show CerbMem.sizeofCtype (procCtxF F rs).tagDefs nodeTy = 16 from rfl]; omega)
-    (by rw [node_ptr_img_cell]; exact ptrImg_cell_length i₂ a₂)
+    (by rw [node_ptr_img_cell]; exact ptrImg_cell_length i₂ a₂ (by omega) hb₂.2)
     (node_ptr_compat (cellPtr i₂ a₂)) (node_ptr_fpm_cell i₂ a₂)
     (node_ptr_bytes_cell i₂ a₂)
   isplitl [Hcell₁]
@@ -1250,7 +1255,7 @@ theorem lrProdPrefix_wpt {Ls : LabelSpecT GF} (bty : core_base_type)
   · -- isList (node 1) [(i₁,1),(i₂,2)]: the built chain, with the
     -- node-WF bounds from the PUBLIC create rule's export
     iapply isList_cons_intro i₁ a₁ (cellPtr i₂ a₂) (lrBuilt1 i₂ a₂) 1
-      [(i₂, 2)] hb₁.1 hb₁.2 (lrBuilt1_len i₂ a₂) (lrBuilt1_valDec i₂ a₂)
+      [(i₂, 2)] hb₁.1 hb₁.2 (lrBuilt1_len i₂ a₂ (by omega) hb₂.2) (lrBuilt1_valDec i₂ a₂ (by omega) hb₂.2)
       (lrBuilt1_nextDec i₂ a₂ hb₂.1 hb₂.2)
     isplitl [Hcell₁]
     · iexact Hcell₁
@@ -1276,7 +1281,7 @@ abbrev dlProdLsT : LabelSpecT GF := fun l m vs ρ =>
       l m vs ρ)
 
 /-- The dispose postcondition at the two-node list reads out as `ψD`. -/
-theorem dlProd_readout (i₁ i₂ : Int) (hne : i₁ ≠ i₂) (w : SpikeVal) (ρ' : EnvStack) :
+theorem dlProd_readout [LemFuel] (i₁ i₂ : Int) (hne : i₁ ≠ i₂) (w : SpikeVal) (ρ' : EnvStack) :
     iprop(dlPost (hlc := .hasLC) (GF := GF) [((i₁ : Int), (1 : Int)), (i₂, 2)] w ρ' ∗
         lrCellFrame (∅ : CellMap)) ⊢
       readoutPost ψD w ρ' :=
@@ -1291,7 +1296,7 @@ include hQ
 
 /-- THE TOTAL BLOCK SPECIFICATION for the production dispose loop: the
     generic body theorem consumed verbatim at the unpacked ids. -/
-theorem dlProd_blockSpecsT :
+theorem dlProd_blockSpecsT [LemFuel] :
     ⊢ blockSpecsT (GF := GF) (procCtxF F rs) (some p) dlProdLsT emptyProcSpecT (readoutPost ψD) := by
   refine blockSpecsT_intro fun l params cont vs ev0 evs m hl => ?_
   rw [procCtxF_labels hQ] at hl
@@ -1329,7 +1334,7 @@ theorem dlProd_blockSpecsT :
 /-- THE WHOLE PRODUCTION PROGRAM at the total judgment: the build prefix
     (generic lemma) continued by the dispose loop entered through its
     `save` with the live head. -/
-theorem dlProd_wpt (bty sbty : core_base_type)
+theorem dlProd_wpt [LemFuel] (hfuel : 0 < LemFuel.fuel) (bty sbty : core_base_type)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (hf : SymFrame ev0) :
     iprop(allocBudget (GF := GF)
         (allocCost (procCtxF F rs).tagDefs nodeTy 8 +
@@ -1345,7 +1350,7 @@ theorem dlProd_wpt (bty sbty : core_base_type)
     lrProdPrefix ra mo bty
       (Expr [] (Esave (dlLoopSym, sbty) (dlProdParams cbty)
         (dlBody loc0 empty_annotation ra mo bbty nbty ubty))) from rfl]
-  iapply lrProdPrefix_wpt ra mo p rs bty _ _ ψD (BIBase.emp : IProp GF) ev0 evs hf
+  iapply lrProdPrefix_wpt (hfuel := hfuel) ra mo p rs bty _ _ ψD (BIBase.emp : IProp GF) ev0 evs hf
     (fun i₁ a₁ i₂ a₂ hb₁ hb₂ => by
       iintro ⟨HL, -⟩
       ihave HL2 := isList_two_ne (cellPtr i₁ a₁) i₁ 1 i₂ 2 $$ HL
@@ -1391,12 +1396,12 @@ end DlProdIris
 
 /-! ### Registration, cone membership, potentials -/
 
-theorem dlProdProg_frag (ra : core_run_annotation) (mo : memory_order)
+theorem dlProdProg_frag [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) (ra : core_run_annotation) (mo : memory_order)
     (bty sbty cbty bbty nbty ubty : core_base_type) :
     Frag (dlProdProg ra mo bty sbty cbty bbty nbty ubty) :=
-  lrProdPrefix_frag ra mo bty
-    (.save (PePure.all_of_isPePure rfl) (dlProdParams_depth cbty)
-      (dlBody_fragJ loc0 empty_annotation ra mo bbty nbty ubty))
+  lrProdPrefix_frag (hfuel := hfuel) ra mo bty
+    (.save (PePure.all_of_isPePure rfl) (fun pe hp => by rw [dlProdParams_depth cbty pe hp]; omega)
+      (dlBody_fragJ (hfuel := by omega) loc0 empty_annotation ra mo bbty nbty ubty))
 
 theorem dlProdProg_pot (ra : core_run_annotation) (mo : memory_order)
     (bty sbty cbty bbty nbty ubty : core_base_type) :
@@ -1414,6 +1419,14 @@ theorem col_dlProdSave (m : Nat) (ra : core_run_annotation)
       { tmp_acc := dlQ loc0 empty_annotation ra mo cbty bbty nbty ubty,
         closed_acc := fmapEmpty } := rfl
 
+/-- The shipped structural measure counts the full build/dispose term. -/
+theorem dlProdProg_size (ra : core_run_annotation) (mo : memory_order)
+    (bty sbty cbty bbty nbty ubty : core_base_type) :
+    generic_expr.lemSize (dlProdProg ra mo bty sbty cbty bbty nbty ubty) = 44 := by
+  simp only [dlProdProg, lrProdPrefix, createExpr, storeOpRedex, dlBody,
+    dlMemopE, memopRedex, dlElse, dlLoadE, loadOpRedex, dlKillE, killOpRedex,
+    dlExit, generic_expr.lemSize, generic_expr_.lemSize]
+
 /-- The shipped registration computes the dispose loop's label map
     (the six prefix layers peeled one arm at a time, as `collect_new_lrProd`). -/
 theorem collect_new_dlProd (ra : core_run_annotation) (mo : memory_order)
@@ -1423,28 +1436,26 @@ theorem collect_new_dlProd (ra : core_run_annotation) (mo : memory_order)
       fmapAddBy (fun (s1 s2 : sym) => ordCompare s1 s2) mainSym
         (dlQ loc0 empty_annotation ra mo cbty bbty nbty ubty)
         fmapEmpty := by
-  rw [show collect_labeled_continuations_NEW
-      (prodFile (dlProdProg ra mo bty sbty cbty bbty nbty ubty)) =
-    fmapAddBy (fun (s1 s2 : sym) => ordCompare s1 s2) mainSym
-      (collect_saves (dlProdProg ra mo bty sbty cbty bbty nbty ubty))
-      fmapEmpty from rfl]
+  rw [collect_labeled_prodFile]
   rw [show collect_saves (dlProdProg ra mo bty sbty cbty bbty nbty ubty) =
       dlQ loc0 empty_annotation ra mo cbty bbty nbty ubty from by
-    unfold collect_saves collect_saves_aux dlProdProg lrProdPrefix createExpr
-      storeOpRedex
-    rw [show lemDefaultFuel = 999999 + 1 from rfl, col_aux_sseq]
-    rw [show (999999 : Nat) = 999998 + 1 from rfl, col_aux_action,
+    unfold collect_saves collect_saves_aux
+    rw [dlProdProg_size]
+    unfold dlProdProg lrProdPrefix createExpr storeOpRedex
+    rw [show (44 : Nat) = 43 + 1 from rfl, col_aux_sseq]
+    rw [show (43 : Nat) = 42 + 1 from rfl, col_aux_action,
       col_aux_sseq]
-    rw [show (999998 : Nat) = 999997 + 1 from rfl, col_aux_action,
+    rw [show (42 : Nat) = 41 + 1 from rfl, col_aux_action,
       col_aux_sseq]
-    rw [show (999997 : Nat) = 999996 + 1 from rfl, col_aux_action,
+    rw [show (41 : Nat) = 40 + 1 from rfl, col_aux_action,
       col_aux_sseq]
-    rw [show (999996 : Nat) = 999995 + 1 from rfl, col_aux_action,
+    rw [show (40 : Nat) = 39 + 1 from rfl, col_aux_action,
       col_aux_sseq]
-    rw [show (999995 : Nat) = 999994 + 1 from rfl, col_aux_action,
+    rw [show (39 : Nat) = 38 + 1 from rfl, col_aux_action,
       col_aux_sseq]
-    rw [show (999994 : Nat) = 999993 + 1 from rfl, col_aux_action]
-    rw [show (999993 : Nat) = 999984 + 9 from rfl, col_dlProdSave]
+    rw [show (38 : Nat) = 37 + 1 from rfl, col_aux_action]
+    rw [show (37 : Nat) = 28 + 9 from rfl, col_dlProdSave]
+    simp only [col_map_empty, dlQ, col_union_empty_single]
     rfl]
 
 theorem dlProd_labeledAt (sup : Nat) (ra : core_run_annotation) (mo : memory_order)
@@ -1476,7 +1487,7 @@ theorem dlProd_labeledAt (sup : Nat) (ra : core_run_annotation) (mo : memory_ord
     range audit's M-2). Cold start, shipped
     registration, termination from the total judgment; the pipeline arrows
     are `wpt_driver_done_alloc` → `prod_run_eqJ`. -/
-theorem dispose_list_certified_production (sup : Nat) (ra : core_run_annotation)
+theorem dispose_list_certified_production [LemFuel] (hfuel : 53 ≤ LemFuel.fuel) (sup : Nat) (ra : core_run_annotation)
     (mo : memory_order) (bty sbty cbty bbty nbty ubty : core_base_type)
     (fs : CerbFS.FsState) (args : List String) :
     ∃ (dres : driver_result) (dst' : driver_state),
@@ -1503,7 +1514,7 @@ theorem dispose_list_certified_production (sup : Nat) (ra : core_run_annotation)
       hQprod ψD
       (2 + (2 + ((3 + 1) + ((3 + 1) + ((3 + 1) + ((3 + 1) +
         (dlCost 2 + saveEntryCost (dlProdParams cbty))))))))
-      (wpt_driver_done_alloc (GF := SpikeGF) (ctl := prodCtl sup)
+      (wpt_driver_done_alloc (hfuel := by omega) (GF := SpikeGF) (ctl := prodCtl sup)
         (M₀ := procCtxF (prodFile (dlProdProg ra mo bty sbty cbty bbty nbty ubty)) ((initial_core_run_state sup
           (collect_labeled_continuations_NEW
             (prodFile (dlProdProg ra mo bty sbty cbty bbty nbty ubty)))).1))
@@ -1511,20 +1522,12 @@ theorem dispose_list_certified_production (sup : Nat) (ra : core_run_annotation)
         (fun l params cont hl => by
           rw [procCtxF_labels hQprod] at hl
           obtain ⟨-, rfl⟩ := dlQ_inv loc0 empty_annotation ra mo cbty bbty nbty ubty hl
-          exact dlBody_fragJ loc0 empty_annotation ra mo bbty nbty ubty)
-        (fun l params cont hl => by
-          rw [procCtxF_labels hQprod] at hl
-          obtain ⟨-, rfl⟩ := dlQ_inv loc0 empty_annotation ra mo cbty bbty nbty ubty hl
-          rw [dlBody_pot, show lemDefaultFuel = 999999 + 1 from rfl]
-          omega)
+          exact dlBody_fragJ (hfuel := by omega) loc0 empty_annotation ra mo bbty nbty ubty)
         dlProdLsT
         (dlProdProg ra mo bty sbty cbty bbty nbty ubty) fmapEmpty []
         prodMem₀ (∅ : SpikeHeapF SpikeCell)
         (allocCost fmapEmpty nodeTy 8 + allocCost fmapEmpty nodeTy 8)
-        (dlProdProg_frag ra mo bty sbty cbty bbty nbty ubty)
-        (by rw [dlProdProg_pot ra mo bty sbty cbty bbty nbty ubty,
-            show lemDefaultFuel = 999999 + 1 from rfl]
-            omega)
+        (dlProdProg_frag (hfuel := by omega) ra mo bty sbty cbty bbty nbty ubty)
         (prodMem₀_launchCoh _ lr_two_node_budget_fits)
         ψD
         (2 + (2 + ((3 + 1) + ((3 + 1) + ((3 + 1) + ((3 + 1) +
@@ -1534,11 +1537,10 @@ theorem dispose_list_certified_production (sup : Nat) (ra : core_run_annotation)
           iintro ⟨-, Hcap⟩
           isplitr [Hcap]
           · iapply dlProd_blockSpecsT ra mo mainSym _ cbty bbty nbty ubty hQprod
-          · iapply dlProd_wpt ra mo mainSym _ cbty bbty nbty ubty hQprod bty sbty
+          · iapply dlProd_wpt (hfuel := by omega) ra mo mainSym _ cbty bbty nbty ubty hQprod bty sbty
               fmapEmpty [] symFrame_empty $$ Hcap))
       (by rw [show dlCost 2 = 29 from rfl,
-          show saveEntryCost (dlProdParams cbty) = 2 from rfl,
-          show CerbFuel.driverFuel = 99999999 + 1 from rfl]
+          show saveEntryCost (dlProdParams cbty) = 2 from rfl]
           omega)
       fs args
   refine ⟨dres, dst', heq, hψ.1, ?_, hbl, hout, herr⟩

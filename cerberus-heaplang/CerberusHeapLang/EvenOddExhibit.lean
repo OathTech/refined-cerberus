@@ -33,17 +33,18 @@ EMPTY fibers (no `save` anywhere), so every derived label map is `fmapEmpty`.
 
 WHAT IS EXPORTED: partial — `eoOddBody_wps`/`eoEvenBody_wps`,
 `eoCtx_procSpecs`, `eoMain_wps`, `eo_wp_readout`, and THE CLOSED PARTIAL
-FORM `even_odd_certified` (every `n ≥ 0`, every `drive_lemFuel` fuel:
+FORM `even_odd_certified` (every `n ≥ 0`, every caller-provided LemFuel:
 exhaustion or `Active` delivering `1 - n % 2`); total — the `_wpt` twins,
 `eoCtx_procSpecsT`, `eoMain_wpt`, and THE PRODUCTION STATEMENT
 `even_odd_certified_production` (the shipped pipeline cold on the
 three-procedure file, EXACTLY ONE Active execution delivering `1 - n % 2`,
-in-budget bound `3 * n + 6 ≤ CerbFuel.driverFuel`) — the ninth closed
+in-budget bound `3 * n + 6 ≤ LemFuel.fuel`) — the ninth closed
 shipped-driver statement, the first over a THREE-procedure file and the first
 whose PCALL/RETURN rounds alternate between two procedures. Both fall out of
 the existing N-procedure entry (`prodFileWith`, `prod_run_eqJ_procs`,
-`prod_run_safe_procs`) with no new machinery; every statement here is
-trio-exact and pinned in Audit.lean.
+`prod_run_safe_procs`) at the same caller instance throughout. These authored Eproc calls are
+regressions; raw emitted Eccall scheduling and the full emitted-file
+connection remain separate demo-charter obligations.
 -/
 import CerberusHeapLang.API
 import CerberusHeapLang.FibRecExhibit
@@ -166,13 +167,16 @@ theorem collect_saves_eoEven : collect_saves (eoEvenBody ra) = fmapEmpty := rfl
 theorem collect_saves_eoOdd : collect_saves (eoOddBody ra) = fmapEmpty := rfl
 theorem collect_saves_eoMain : collect_saves (eoMain ra n) = fmapEmpty := rfl
 
-/-- THE REGISTRATION on the three-procedure file, COMPUTED (measured, not
-    assumed: of the six insertion orders exactly this one is `rfl` — `main`
-    innermost, then `odd`, `even` outermost; every fiber empty). -/
+/-- The shipped registration visits the bindings in ascending symbol order:
+    main, even, odd. Inserting each fiber gives odd outside even outside
+    main. Every fiber is empty. -/
 theorem collect_new_eo :
     collect_labeled_continuations_NEW (eoFile ra n nbty) =
-      symAdd eoEvenSym fmapEmpty (symAdd eoOddSym fmapEmpty (symAdd mainSym fmapEmpty fmapEmpty)) :=
-  rfl
+      symAdd eoOddSym fmapEmpty (symAdd eoEvenSym fmapEmpty (symAdd mainSym fmapEmpty fmapEmpty)) := by
+  change symAdd eoOddSym (collect_saves (eoOddBody ra))
+    (symAdd eoEvenSym (collect_saves (eoEvenBody ra))
+      (symAdd mainSym (collect_saves (eoMain ra n)) fmapEmpty)) = _
+  rw [collect_saves_eoOdd, collect_saves_eoEven, collect_saves_eoMain]
 
 /-- The production initial run state of the file. -/
 abbrev eoRS (sup : Nat) : core_run_state := prodRS (eoProcs ra nbty) sup (eoMain ra n)
@@ -191,10 +195,10 @@ theorem eoCtx_labels (sup : Nat) (g : sym) :
     | none => fmapEmpty) = fmapEmpty
   rw [prodRS_labeled, collect_new_eo, symAdd_lookup ((symMap_empty.add _ _).add _ _),
     symAdd_lookup_two]
-  by_cases h2 : symOrd g eoEvenSym = .eq
+  by_cases h2 : symOrd g eoOddSym = .eq
   · rw [if_pos h2]
   · rw [if_neg h2]
-    by_cases h1 : symOrd g eoOddSym = .eq
+    by_cases h1 : symOrd g eoEvenSym = .eq
     · rw [if_pos h1]
     · rw [if_neg h1]
       by_cases h0 : symOrd g mainSym = .eq
@@ -208,19 +212,19 @@ theorem eoCtx_labeledProcs (sup : Nat) :
   show ∃ Q, fmapLookupBy _ g (eoRS ra n nbty sup).labeled = some Q
   rw [prodRS_labeled, collect_new_eo, symAdd_lookup ((symMap_empty.add _ _).add _ _),
     symAdd_lookup_two]
-  by_cases h2 : symOrd g eoEvenSym = .eq
+  by_cases h2 : symOrd g eoOddSym = .eq
   · rw [if_pos h2]
     exact ⟨_, rfl⟩
   · rw [if_neg h2]
-    by_cases h1 : symOrd g eoOddSym = .eq
+    by_cases h1 : symOrd g eoEvenSym = .eq
     · rw [if_pos h1]
       exact ⟨_, rfl⟩
     · rw [if_neg h1]
       rcases eoFile_lookup_inv ra n nbty hg with ⟨h0, -, -⟩ | ⟨h1', -, -⟩ | ⟨-, h2', -, -⟩
       · rw [if_pos h0]
         exact ⟨_, rfl⟩
-      · exact (h1 h1').elim
-      · exact (h2 h2').elim
+      · exact (h2 h1').elim
+      · exact (h1 h2').elim
 
 /-! ### The fragment membership and the procedure well-formedness premise -/
 
@@ -229,23 +233,22 @@ theorem eoDec_pure : ∀ pe ∈ [eoDec], PePure pe := fun pe hpe => by
   subst hpe
   exact PePure.of_isPePure rfl
 
-theorem eoDec_depth : ∀ pe ∈ [eoDec], peDepth pe ≤ lemDefaultFuel := fun pe hpe => by
+theorem eoDec_depth : ∀ pe ∈ [eoDec], peDepth pe = 2 := fun pe hpe => by
   simp only [List.mem_cons, List.not_mem_nil, or_false] at hpe
   subst hpe
-  rw [show peDepth eoDec = 2 from rfl, show lemDefaultFuel = 999999 + 1 from rfl]
-  omega
+  rfl
 
-theorem eoEvenBody_frag : Frag (eoEvenBody ra) :=
+theorem eoEvenBody_frag [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) : Frag (eoEvenBody ra) :=
   .if_ (PePure.of_isPePure rfl)
-    (by rw [show peDepth eoGuard = 2 from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega)
-    (.val_pure _) (.call eoDec_pure eoDec_depth)
+    (by rw [show peDepth eoGuard = 2 from rfl]; exact hfuel)
+    (.val_pure _) (.call eoDec_pure (fun pe hp => by rw [eoDec_depth pe hp]; exact hfuel))
 
-theorem eoOddBody_frag : Frag (eoOddBody ra) :=
+theorem eoOddBody_frag [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) : Frag (eoOddBody ra) :=
   .if_ (PePure.of_isPePure rfl)
-    (by rw [show peDepth eoGuard = 2 from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega)
-    (.val_pure _) (.call eoDec_pure eoDec_depth)
+    (by rw [show peDepth eoGuard = 2 from rfl]; exact hfuel)
+    (.val_pure _) (.call eoDec_pure (fun pe hp => by rw [eoDec_depth pe hp]; exact hfuel))
 
-theorem eoMain_frag : Frag (eoMain ra n) :=
+theorem eoMain_frag [LemFuel] (hfuel : 0 < LemFuel.fuel) : Frag (eoMain ra n) :=
   .call (fun pe hpe => by
       simp only [List.mem_cons, List.not_mem_nil, or_false] at hpe
       subst hpe
@@ -253,8 +256,7 @@ theorem eoMain_frag : Frag (eoMain ra n) :=
     (fun pe hpe => by
       simp only [List.mem_cons, List.not_mem_nil, or_false] at hpe
       subst hpe
-      rw [show peDepth (Pexpr [] () (PEval (ivVal n))) = 1 from rfl,
-        show lemDefaultFuel = 999999 + 1 from rfl]
+      rw [show peDepth (Pexpr [] () (PEval (ivVal n))) = 1 from rfl]
       omega)
 
 theorem eoEvenBody_pot : pot (eoEvenBody ra) = 4 := rfl
@@ -262,18 +264,13 @@ theorem eoOddBody_pot : pot (eoOddBody ra) = 4 := rfl
 theorem eoMain_pot : pot (eoMain ra n) = 2 := rfl
 
 /-- THE PROCEDURE WELL-FORMEDNESS PREMISE at the production context: the
-    three bodies in the cone within the potential bound; every fiber empty. -/
-theorem eoCtx_fragProcs (sup : Nat) : (eoCtx ra n nbty sup).FragProcs where
+    three bodies in the cone with ambient fuel at least two; every fiber empty. -/
+theorem eoCtx_fragProcs [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) (sup : Nat) : (eoCtx ra n nbty sup).FragProcs where
   body g params body hg := by
     rcases eoFile_lookup_inv ra n nbty hg with ⟨-, -, rfl⟩ | ⟨-, -, rfl⟩ | ⟨-, -, -, rfl⟩
-    · exact eoMain_frag ra n
-    · exact eoOddBody_frag ra
-    · exact eoEvenBody_frag ra
-  potBound g params body hg := by
-    rcases eoFile_lookup_inv ra n nbty hg with ⟨-, -, rfl⟩ | ⟨-, -, rfl⟩ | ⟨-, -, -, rfl⟩
-    · rw [eoMain_pot, show lemDefaultFuel = 999999 + 1 from rfl]; omega
-    · rw [eoOddBody_pot, show lemDefaultFuel = 999999 + 1 from rfl]; omega
-    · rw [eoEvenBody_pot, show lemDefaultFuel = 999999 + 1 from rfl]; omega
+    · exact eoMain_frag (hfuel := by omega) ra n
+    · exact eoOddBody_frag (hfuel := hfuel) ra
+    · exact eoEvenBody_frag (hfuel := hfuel) ra
   labels g params body _ l params' cont hl := by
     rw [eoCtx_labels, show lookupLabel fmapEmpty l = none from rfl] at hl
     cases hl
@@ -288,18 +285,18 @@ abbrev eoF0 (n : Int) : Fmap sym value := envAdd eoNSym (ivVal n) fmapEmpty
 theorem eoF0_lookup_n (n : Int) : fmapLookupBy symCmpK eoNSym (eoF0 n) = some (ivVal n) := by
   rw [envAdd_lookup symFrame_empty, if_pos (by decide +kernel)]
 
-theorem eoN_eval {file : generic_file Unit core_run_annotation} (n : Int) (ρ : EnvStack) :
+theorem eoN_eval [LemFuel] {file : generic_file Unit core_run_annotation} (n : Int) (ρ : EnvStack) :
     evalPexpr fmapEmpty fmapEmpty file (eoF0 n :: ρ) (Pexpr [] () (PEsym eoNSym)) = some (ivVal n) := by
   rw [evalPexpr_sym_empty]
   exact lookup_env_head (eoF0_lookup_n n) ρ
 
-theorem eoGuard_eval {file : generic_file Unit core_run_annotation} (n : Int) (ρ : EnvStack) :
+theorem eoGuard_eval [LemFuel] {file : generic_file Unit core_run_annotation} (n : Int) (ρ : EnvStack) :
     evalPexpr fmapEmpty fmapEmpty file (eoF0 n :: ρ) eoGuard = some (boolValue (decide (n < 1))) := by
   unfold eoGuard
   rw [evalPexpr_op, eoN_eval, evalPexpr_val]
   rfl
 
-theorem eoDec_eval {file : generic_file Unit core_run_annotation} (n : Int) (ρ : EnvStack) :
+theorem eoDec_eval [LemFuel] {file : generic_file Unit core_run_annotation} (n : Int) (ρ : EnvStack) :
     evalPexprs fmapEmpty fmapEmpty file (eoF0 n :: ρ) [eoDec] = some [ivVal (n - 1)] := by
   rw [evalPexprs_cons]
   unfold eoDec
@@ -348,7 +345,7 @@ def eoPost : SpikeVal → EnvStack → IProp GF := fun w _ => iprop(⌜w.val = i
     the guard; at the base case the value `1`; otherwise the call `odd(n-1)`
     at the ROOT against the table (Hoare's rule: the table is ASSUMED for
     `odd`'s activation — the mutual knot is tied by `procSpecs_intro`). -/
-theorem eoEvenBody_wps (g : sym) (hodd : symOrd g eoOddSym ≠ .eq) (vs : List value)
+theorem eoEvenBody_wps [LemFuel] (g : sym) (hodd : symOrd g eoOddSym ≠ .eq) (vs : List value)
     (ρ : EnvStack) :
     (eoSpec (GF := GF) g vs).1 ⊢
       wps (GF := GF) (eoCtx ra n nbty sup) (some g) eoLs eoSpec
@@ -393,7 +390,7 @@ theorem eoEvenBody_wps (g : sym) (hodd : symOrd g eoOddSym ≠ .eq) (vs : List v
 
 /-- THE BODY OF `odd` UNDER THE TABLE (partial), at a symbol the table reads
     as `odd`: the base value `0`; otherwise `even(n - 1)`. -/
-theorem eoOddBody_wps (g : sym) (hodd : symOrd g eoOddSym = .eq) (vs : List value)
+theorem eoOddBody_wps [LemFuel] (g : sym) (hodd : symOrd g eoOddSym = .eq) (vs : List value)
     (ρ : EnvStack) :
     (eoSpec (GF := GF) g vs).1 ⊢
       wps (GF := GF) (eoCtx ra n nbty sup) (some g) eoLs eoSpec
@@ -436,7 +433,7 @@ theorem eoOddBody_wps (g : sym) (hodd : symOrd g eoOddSym = .eq) (vs : List valu
 
 /-- THE PROCEDURE SPECIFICATIONS HOLD (partial): each body once, under the
     table for BOTH; `main` is unreachable under the table (arity). -/
-theorem eoCtx_procSpecs : ⊢ procSpecs (GF := GF) (eoCtx ra n nbty sup) eoSpec := by
+theorem eoCtx_procSpecs [LemFuel] : ⊢ procSpecs (GF := GF) (eoCtx ra n nbty sup) eoSpec := by
   refine procSpecs_intro (fun _ _ => eoLs) ?_ ?_
   · intro f params body vs hf hlen
     refine blockSpecs_intro fun l params' cont vs' ev0 evs hl => ?_
@@ -454,7 +451,7 @@ theorem eoCtx_procSpecs : ⊢ procSpecs (GF := GF) (eoCtx ra n nbty sup) eoSpec 
     · exact eoEvenBody_wps ra n nbty sup f hnodd vs ρ
 
 /-- `main`'s (empty) block specifications. -/
-theorem eo_blockSpecs :
+theorem eo_blockSpecs [LemFuel] :
     ⊢ blockSpecs (GF := GF) (eoCtx ra n nbty sup) (some mainSym) eoLs eoSpec (eoPost n) := by
   refine blockSpecs_intro fun l params cont vs ev0 evs hl => ?_
   dsimp only [eoLs]
@@ -462,7 +459,7 @@ theorem eo_blockSpecs :
   exact hF.elim
 
 /-- `main` under the table: the call rule alone. -/
-theorem eoMain_wps (hn : 0 ≤ n) (ρ : EnvStack) :
+theorem eoMain_wps [LemFuel] (hn : 0 ≤ n) (ρ : EnvStack) :
     ⊢ wps (GF := GF) (eoCtx ra n nbty sup) (some mainSym) eoLs eoSpec (eoPost n) (eoMain ra n) ρ := by
   unfold eoMain callRedex
   iapply wps_call_root [] ra eoEvenSym [Pexpr [] () (PEval (ivVal n))] ρ (vs := [ivVal n])
@@ -483,7 +480,7 @@ theorem eoMain_wps (hn : 0 ≤ n) (ρ : EnvStack) :
 
 /-- The base-WP face with the engine readout: `wps_sound` WITH the table at
     the production entry control. -/
-theorem eo_wp_readout (hn : 0 ≤ n) (ℓ : exec_location) (lc : CerbLocation.Loc) (sp : RunSup)
+theorem eo_wp_readout [LemFuel] (hn : 0 ≤ n) (ℓ : exec_location) (lc : CerbLocation.Loc) (sp : RunSup)
     (hsb : sup ≤ sp.sym) :
     ⊢ WP (⟨eoMain ra n, [fmapEmpty], ⟨[], some mainSym, ℓ, lc, sp⟩, eoCtx ra n nbty sup⟩ : CoreRt)
         @ Stuckness.NotStuck; ⊤
@@ -503,7 +500,7 @@ theorem eo_wp_readout (hn : 0 ≤ n) (ℓ : exec_location) (lc : CerbLocation.Lo
 /-- THE BODY OF `even` WITHIN ITS BUDGET `3 * n + 2`: the guard, then either
     the value's delivery (base: `1 + 1`) or the call round, the callee's
     `3 * (n - 1) + 2` and the returned value's delivery. -/
-theorem eoEvenBody_wpt (g : sym) (hodd : symOrd g eoOddSym ≠ .eq) (m : Nat) (vs : List value)
+theorem eoEvenBody_wpt [LemFuel] (g : sym) (hodd : symOrd g eoOddSym ≠ .eq) (m : Nat) (vs : List value)
     (ρ : EnvStack) :
     (eoSpecT (GF := GF) g m vs).1 ⊢
       wpt (GF := GF) (eoCtx ra n nbty sup) (some g) eoLsT eoSpecT m
@@ -549,7 +546,7 @@ theorem eoEvenBody_wpt (g : sym) (hodd : symOrd g eoOddSym ≠ .eq) (m : Nat) (v
       exact eo_parity_even
 
 /-- THE BODY OF `odd` WITHIN ITS BUDGET `3 * n + 2`. -/
-theorem eoOddBody_wpt (g : sym) (hodd : symOrd g eoOddSym = .eq) (m : Nat) (vs : List value)
+theorem eoOddBody_wpt [LemFuel] (g : sym) (hodd : symOrd g eoOddSym = .eq) (m : Nat) (vs : List value)
     (ρ : EnvStack) :
     (eoSpecT (GF := GF) g m vs).1 ⊢
       wpt (GF := GF) (eoCtx ra n nbty sup) (some g) eoLsT eoSpecT m
@@ -594,7 +591,7 @@ theorem eoOddBody_wpt (g : sym) (hodd : symOrd g eoOddSym = .eq) (m : Nat) (vs :
       rw [if_pos hodd]
       exact eo_parity_odd
 
-theorem eoCtx_procSpecsT : ⊢ procSpecsT (GF := GF) (eoCtx ra n nbty sup) eoSpecT := by
+theorem eoCtx_procSpecsT [LemFuel] : ⊢ procSpecsT (GF := GF) (eoCtx ra n nbty sup) eoSpecT := by
   refine procSpecsT_intro (fun _ _ _ => eoLsT) ?_ ?_
   · intro f params body m vs hf hlen
     refine blockSpecsT_intro fun l params' cont vs' ev0 evs m' hl => ?_
@@ -611,7 +608,7 @@ theorem eoCtx_procSpecsT : ⊢ procSpecsT (GF := GF) (eoCtx ra n nbty sup) eoSpe
     · exact eoOddBody_wpt ra n nbty sup f hodd m vs ρ
     · exact eoEvenBody_wpt ra n nbty sup f hnodd m vs ρ
 
-theorem eo_blockSpecsT :
+theorem eo_blockSpecsT [LemFuel] :
     ⊢ blockSpecsT (GF := GF) (eoCtx ra n nbty sup) (some mainSym) eoLsT eoSpecT (eoPost n) := by
   refine blockSpecsT_intro fun l params cont vs ev0 evs m hl => ?_
   dsimp only [eoLsT]
@@ -620,7 +617,7 @@ theorem eo_blockSpecsT :
 
 /-- `main` within budget `3 * n + 4`: the call round, the callee's
     `3 * n + 2`, the delivery of the returned value. -/
-theorem eoMain_wpt (hn : 0 ≤ n) (ρ : EnvStack) :
+theorem eoMain_wpt [LemFuel] (hn : 0 ≤ n) (ρ : EnvStack) :
     ⊢ wpt (GF := GF) (eoCtx ra n nbty sup) (some mainSym) eoLsT eoSpecT (3 * n.toNat + 4)
       (eoPost n) (eoMain ra n) ρ := by
   unfold eoMain callRedex
@@ -642,7 +639,7 @@ theorem eoMain_wpt (hn : 0 ≤ n) (ρ : EnvStack) :
     rfl
 
 /-- The postcondition entails the engine readout. -/
-theorem eoPost_to_readout :
+theorem eoPost_to_readout [LemFuel] :
     ∀ w ρ', eoPost (GF := GF) n w ρ' ⊢ readoutPost (fun v _ => v = ivVal (1 - n % 2)) w ρ' :=
   fun _ _ => stateInterp_readout fun _ _ _ _ _ => pure_consequence _
 
@@ -655,15 +652,15 @@ section EoEngine
 variable (sup : Nat) (ra : core_run_annotation) (n : Int) (nbty : core_base_type)
 
 /-- MUTUAL RECURSION, PARTIAL FORM ON THE SHIPPED PIPELINE: for EVERY `n ≥ 0`
-    and every `fuel`, the production pipeline `CerbND.drive_lemFuel fuel` cold
+    and every caller-provided LemFuel, the shipped production pipeline cold
     on the synthetic THREE-procedure file is EXACTLY ONE execution, either
     the fuel-exhaustion kill or an Active execution delivering `1 - n % 2`.
     `engine_adequacy` with `FragProcs` at the production context, then
     `prod_run_safe_procs`. -/
-theorem even_odd_certified (hn : 0 ≤ n) (fs : CerbFS.FsState) (args : List String) (fuel : Nat) :
+theorem even_odd_certified [LemFuel] (hn : 0 ≤ n) (fs : CerbFS.FsState) (args : List String) :
     ∃ (st : nd_status driver_result driver_error driver_state) (dst' : driver_state),
       CerbND.runND
-          (CerbND.drive_lemFuel fuel fmapEmpty false
+          (_root_.drive fmapEmpty false
             (prodFileWith (eoProcs ra nbty) (eoMain ra n)) args)
           ((initial_driver_state sup (prodFileWith (eoProcs ra nbty) (eoMain ra n)) fs).1) =
         [(st, ([] : List String), dst')] ∧
@@ -673,29 +670,25 @@ theorem even_odd_certified (hn : 0 ≤ n) (fs : CerbFS.FsState) (args : List Str
          dres.dres_blocked = false ∧
          dres.dres_stdout = "" ∧
          dres.dres_stderr = "") := by
-  have hsafe : DriverSafeCtl (eoCtx ra n nbty sup) (prodThread (eoMain ra n))
+  have hsafe : 2 ≤ LemFuel.fuel → DriverSafeCtl (eoCtx ra n nbty sup) (prodThread (eoMain ra n))
       (eoMain ra n) [fmapEmpty] (prodCtl sup) prodMem₀ (fun v _ => v = ivVal (1 - n % 2)) := by
-    refine engine_adequacy (GF := SpikeGF) (M := eoCtx ra n nbty sup) rfl rfl
+    intro hfuel
+    refine engine_adequacy (hfuel := hfuel) (GF := SpikeGF) (M := eoCtx ra n nbty sup) rfl rfl
       (ctl := prodCtl sup) rfl
       (fun l params cont hl => by
         rw [show (prodCtl sup).proc = some mainSym from rfl, eoCtx_labels,
           show lookupLabel fmapEmpty l = none from rfl] at hl
         cases hl)
-      (fun l params cont hl => by
-        rw [show (prodCtl sup).proc = some mainSym from rfl, eoCtx_labels,
-          show lookupLabel fmapEmpty l = none from rfl] at hl
-        cases hl)
-      (eoCtx_fragProcs ra n nbty sup)
+      (eoCtx_fragProcs (hfuel := by omega) ra n nbty sup)
       (eoMain ra n) fmapEmpty [] prodMem₀ (∅ : SpikeHeapF SpikeCell)
-      (eoMain_frag ra n)
-      (by rw [eoMain_pot, show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+      (eoMain_frag (hfuel := by omega) ra n)
       (coh_empty prodMem₀)
       (fun v _ => v = ivVal (1 - n % 2))
       ?_ (th₀ := prodThread (eoMain ra n))
     intro inst
     exact (BigSepM.bigSepM_empty).1.trans (eo_wp_readout ra n nbty sup hn _ _ _ (Nat.le_refl _))
   obtain ⟨st, dst', heq, hor⟩ := prod_run_safe_procs sup (eoProcs ra nbty) (eoMain ra n)
-    (eoCtx_labeledProcs ra n nbty sup) _ hsafe fs args fuel
+    (eoCtx_labeledProcs ra n nbty sup) _ hsafe fs args
   exact ⟨st, dst', heq, hor⟩
 
 /-- MUTUAL RECURSION, PRODUCTION FORM — THE NINTH CLOSED SHIPPED-DRIVER
@@ -703,13 +696,13 @@ theorem even_odd_certified (hn : 0 ≤ n) (fs : CerbFS.FsState) (args : List Str
     THREE-procedure file (`main` calling `even`, `even` and `odd` calling each
     other down to 0) is EXACTLY ONE Active execution delivering `1 - n % 2`
     (1 iff `n` is even), for every `n ≥ 0` whose certified round count fits
-    the shipped driver's own budget (`3 * n + 6 ≤ CerbFuel.driverFuel`). The
+    the caller's ambient budget (`3 * n + 6 ≤ LemFuel.fuel`). The
     label map the driver reads is what the shipped registration computes on
     the three procedures (three empty fibers); every PCALL and RETURN round
     of the run is the driver's own (`loop_step_frag`), alternating between
     the two procedures; termination from the total judgment. -/
-theorem even_odd_certified_production (hn : 0 ≤ n)
-    (hfuel : 3 * n.toNat + 6 ≤ CerbFuel.driverFuel)
+theorem even_odd_certified_production [LemFuel] (hn : 0 ≤ n)
+    (hfuel : 3 * n.toNat + 6 ≤ LemFuel.fuel)
     (fs : CerbFS.FsState) (args : List String) :
     ∃ (dres : driver_result) (dst' : driver_state),
       CerbND.runND
@@ -723,14 +716,13 @@ theorem even_odd_certified_production (hn : 0 ≤ n)
   have h := prod_run_eqJ_procs sup (eoProcs ra nbty) (eoMain ra n)
     (eoCtx_labeledProcs ra n nbty sup)
     (fun v _ => v = ivVal (1 - n % 2)) (3 * n.toNat + 4)
-    (wpt_driver_done_procs (GF := SpikeGF) (M₀ := eoCtx ra n nbty sup) rfl rfl
-      (eoCtx_fragProcs ra n nbty sup)
+    (wpt_driver_done_procs (hfuel := by omega) (GF := SpikeGF) (M₀ := eoCtx ra n nbty sup) rfl rfl
+      (eoCtx_fragProcs (hfuel := by omega) ra n nbty sup)
       (th₀ := prodThread (eoMain ra n))
       (eoFile_lookup_main ra n nbty) (prodCtl sup).execLoc (prodCtl sup).curLoc (prodCtl sup).sup
       (Nat.le_refl _) eoSpecT eoLsT
       (eoMain ra n) fmapEmpty [] prodMem₀ (∅ : SpikeHeapF SpikeCell) 0
-      (eoMain_frag ra n)
-      (by rw [eoMain_pot, show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+      (eoMain_frag (hfuel := by omega) ra n)
       (prodMem₀_launchCoh 0 (Nat.zero_le _))
       (fun v _ => v = ivVal (1 - n % 2)) (3 * n.toNat + 4)
       (by

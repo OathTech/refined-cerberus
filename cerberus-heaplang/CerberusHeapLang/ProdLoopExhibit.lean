@@ -14,8 +14,12 @@ function in every public statement here is the shipped runner: no
 package `drive`/`driveJ` appears in any statement (the drive-lane
 theorems remain as lemmas in their exhibit modules).
 
-Every theorem here is trio-exact, pinned in Audit.lean (the former
-`runEffectful` boundary was retired at the 2026-09-02 re-pin).
+The three production equations retain the caller's LemFuel instance.
+Their sufficient bounds are `2 * n.toNat + 6` for iterative Fibonacci,
+`6 * n.toNat + 8` for the counter, and 56 for building and reversing the
+two-node list. Pure program, memory-image and registration data are
+independent of ambient fuel. These constructed files remain authored
+regressions; the full emitted-file connection is a separate obligation.
 
 THE PIPELINE THEOREM (`prod_run_eqJ`, ProdEntry): `drive_after_setup`
 (the cold-start prefix: spawn, main lookup, errno block, park) + a
@@ -67,14 +71,13 @@ computation"). -/
     loop program is EXACTLY ONE Active execution delivering
     `fib n` — a back-edge loop through the production scheduler, the
     label map computed by the shipped registration, termination from
-    the total statement judgment (no step-count hypothesis; the one
-    bound is the shipped driver's own fuel budget, `CerbFuel.driverFuel
-    = 10^8`).
+    the total statement judgment, with the derived program cost plus
+    two driver iterations bounded by the caller's ambient fuel.
     No package drive/driveJ in the statement: the execution function
     is the shipped runner. -/
-theorem fib_certified_production (sup : Nat) (ra : core_run_annotation) (n : Int)
+theorem fib_certified_production [LemFuel] (sup : Nat) (ra : core_run_annotation) (n : Int)
     (sbty ibty abty bbty : core_base_type) (hn : 0 ≤ n)
-    (hfuel : 2 * n.toNat + 6 ≤ CerbFuel.driverFuel)
+    (hfuel : 2 * n.toNat + 6 ≤ LemFuel.fuel)
     (fs : CerbFS.FsState) (args : List String) :
     ∃ (dres : driver_result) (dst' : driver_state),
       CerbND.runND
@@ -90,7 +93,7 @@ theorem fib_certified_production (sup : Nat) (ra : core_run_annotation) (n : Int
   have hQprod := fib_labeledAt_production sup ra n sbty ibty abty bbty
   have h := prod_run_eqJ sup (fibProg ra n sbty ibty abty bbty) hQprod
     (fun v _ => v = ivVal (fibSpec n.toNat)) (2 * n.toNat + 4)
-    (wpt_driver_done (GF := SpikeGF) (ctl := prodCtl sup)
+    (wpt_driver_done (hfuel := by omega) (GF := SpikeGF) (ctl := prodCtl sup)
       (M₀ := procCtxF (prodFile (fibProg ra n sbty ibty abty bbty)) ((initial_core_run_state sup
         (collect_labeled_continuations_NEW
           (prodFile (fibProg ra n sbty ibty abty bbty)))).1))
@@ -98,17 +101,11 @@ theorem fib_certified_production (sup : Nat) (ra : core_run_annotation) (n : Int
       (fun l params cont hl => by
         rw [procCtxF_labels hQprod] at hl
         obtain ⟨-, rfl⟩ := fibQ_inv ra n ibty abty bbty hl
-        exact fibBody_fragJ ra n)
-      (fun l params cont hl => by
-        rw [procCtxF_labels hQprod] at hl
-        obtain ⟨-, rfl⟩ := fibQ_inv ra n ibty abty bbty hl
-        rw [fibBody_pot, show lemDefaultFuel = 999999 + 1 from rfl]
-        omega)
+        exact fibBody_fragJ (hfuel := by omega) ra n)
       (fibLsT n)
       (fibProg ra n sbty ibty abty bbty) fmapEmpty []
       prodMem₀ (∅ : SpikeHeapF SpikeCell)
-      (.save (saveParams_pure_of_vals rfl) (saveParams_depth_of_vals rfl) (fibBody_fragJ ra n))
-      (by rw [fibProg_pot, show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+      (.save (saveParams_pure_of_vals rfl) (fun pe hp => by rw [saveParams_depth_of_vals rfl pe hp]; omega) (fibBody_fragJ (hfuel := by omega) ra n))
       (coh_empty prodMem₀)
       (fun v _ => v = ivVal (fibSpec n.toNat)) (2 * n.toNat + 4)
       (by
@@ -279,7 +276,7 @@ variable {f : Fmap sym value} (hf : SymFrame f)
 
 include hf
 
-theorem ctr_guard_eval {file : generic_file Unit core_run_annotation} (i : Int) (vc : value) :
+theorem ctr_guard_eval [LemFuel] {file : generic_file Unit core_run_annotation} (i : Int) (vc : value) :
     evalPexpr fmapEmpty fmapEmpty file (ctrFrame (ivVal i) vc f :: rest) ctrGuardPe =
       some (boolValue (decide (0 < i))) := by
   unfold ctrGuardPe
@@ -295,13 +292,13 @@ theorem ctr_guard_eval {file : generic_file Unit core_run_annotation} (i : Int) 
     (CerbMem.integerIval i)).map boolValue = _
   rfl
 
-theorem ctr_store_ptr_eval {file : generic_file Unit core_run_annotation} (vx vc : value) :
+theorem ctr_store_ptr_eval [LemFuel] {file : generic_file Unit core_run_annotation} (vx vc : value) :
     evalPexpr fmapEmpty fmapEmpty file (ctrFrame vx vc f :: rest)
         (Pexpr [] () (PEsym ctrCSym)) = some vc := by
   rw [evalPexpr_sym_empty]
   exact lookup_env_head (ctrFrame_lookup_c hf _ _) rest
 
-theorem ctr_backedge_args_eval {file : generic_file Unit core_run_annotation} (i : Int) (vc : value) :
+theorem ctr_backedge_args_eval [LemFuel] {file : generic_file Unit core_run_annotation} (i : Int) (vc : value) :
     evalPexprs fmapEmpty fmapEmpty file (ctrFrame (ivVal i) vc f :: rest)
         [ctrDecPe, Pexpr [] () (PEsym ctrCSym)] =
       some [ivVal (i - 1), vc] := by
@@ -325,7 +322,7 @@ theorem ctr_backedge_args_eval {file : generic_file Unit core_run_annotation} (i
 
 /-- The save's initializers evaluate at the entry env: the literal
     count and the program-bound pointer. -/
-theorem ctr_save_params_eval {file : generic_file Unit core_run_annotation} (xbty cbty : core_base_type) (n : Int) (vp : value) :
+theorem ctr_save_params_eval [LemFuel] {file : generic_file Unit core_run_annotation} (xbty cbty : core_base_type) (n : Int) (vp : value) :
     evalPexprs fmapEmpty fmapEmpty file (envAdd ctrPSym vp f :: rest)
         (saveParamPexprs (ctrParams xbty cbty n)) =
       some [ivVal n, vp] := by
@@ -393,7 +390,7 @@ variable (p : sym) {F : file core_run_annotation} (rs : core_run_state)
 include hQ
 
 /-- The loop body meets its variant budget at any invariant frame. -/
-theorem ctr_body_wpt (i : Int) (pptr : CerbMem.PointerValue)
+theorem ctr_body_wpt [LemFuel] (i : Int) (pptr : CerbMem.PointerValue)
     (bs : List CerbMem.AbsByte) (f : Fmap sym value)
     (rest : List (Fmap sym value)) (hf : SymFrame f)
     (h0 : 0 ≤ i) (hin : i ≤ n)
@@ -474,7 +471,7 @@ theorem ctr_body_wpt (i : Int) (pptr : CerbMem.PointerValue)
     · exact .inr ⟨hlt, rfl⟩
 
 /-- THE TOTAL BLOCK SPECIFICATION for the production counter loop. -/
-theorem ctr_blockSpecsT :
+theorem ctr_blockSpecsT [LemFuel] :
     ⊢ blockSpecsT (GF := GF) (procCtxF F rs) (some p) (ctrLsT n) emptyProcSpecT
       (readoutPost (ψC n)) := by
   refine blockSpecsT_intro fun l params cont vs ev0 evs m hl => ?_
@@ -496,7 +493,7 @@ theorem ctr_blockSpecsT :
     `wpt_create`, entry through the loop's `save` with its live
     initializers (`wpt_save` — EVAL then TAU, `saveEntryCost = 2`),
     then the body at its variant budget. -/
-theorem ctrProd_wpt (sbty : core_base_type) (hn : 0 ≤ n)
+theorem ctrProd_wpt [LemFuel] (hfuel : 0 < LemFuel.fuel) (sbty : core_base_type) (hn : 0 ≤ n)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value))
     (hf : SymFrame ev0) :
     iprop(allocBudget (GF := GF) (allocCost (procCtxF F rs).tagDefs intTy 4)) ⊢
@@ -512,7 +509,7 @@ theorem ctrProd_wpt (sbty : core_base_type) (hn : 0 ≤ n)
       (Expr [] (Esave (ctrLoopSym, sbty) (ctrParams xbty cbty n)
         (ctrBody ra mo bty)))) from rfl]
   iapply wpt_seq_sym
-  iapply wpt_create [] loc0 empty_annotation .Prov_none 4 intTy
+  iapply wpt_create (hfuel := hfuel) (halign := by decide) (haddr := rfl) [] loc0 empty_annotation .Prov_none 4 intTy
     (PrefOther "spike-x") (ev0 :: evs) (Nat.le_refl 2) intTy_size_pos intTy_nonatomic
     (fun a => intTy_decIndep a _)
   isplitl [Hcap]
@@ -537,44 +534,40 @@ end CtrIris
 
 /-! ### Registration, cone membership, potentials -/
 
-theorem ctrBody_frag (ra : core_run_annotation) (mo : memory_order)
+theorem ctrBody_frag [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) (ra : core_run_annotation) (mo : memory_order)
     (bty : core_base_type) : Frag (ctrBody ra mo bty) :=
   .if_ (PePure.of_isPePure rfl)
-    (by rw [show peDepth ctrGuardPe = 2 from rfl,
-      show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+    (by rw [show peDepth ctrGuardPe = 2 from rfl]; omega)
     (.sseq
       (.store_op rfl (.sym [] ctrCSym) (.val [] sevenVal)
         (by rw [show peDepth (Pexpr ([] : List annot) ()
-            (PEsym ctrCSym)) = 1 from rfl,
-          show lemDefaultFuel = 999999 + 1 from rfl]; omega)
-        (peDepth_val_le _ _))
+            (PEsym ctrCSym)) = 1 from rfl]; omega)
+        (peDepth_val_le _ _ (by omega)))
       (.run (PePure.all_of_isPePure rfl) (by
         intro pe hpe
         simp only [List.mem_cons, List.not_mem_nil, or_false] at hpe
         rcases hpe with rfl | rfl <;>
-          (rw [show lemDefaultFuel = 999999 + 1 from rfl]
-           first
+          (first
             | (rw [show peDepth ctrDecPe = 2 from rfl]; omega)
             | (rw [show peDepth (Pexpr ([] : List annot) ()
                 (PEsym ctrCSym)) = 1 from rfl]; omega)))))
     (frag_ofVal (.pure Vunit))
 
-/-- The save's initializers are within the evaluator's fuel (a literal
-    and a symbol, depth 1 each). -/
+/-- The save's initializers are a literal and a symbol, both depth one. -/
 theorem ctrParams_depth (xbty cbty : core_base_type) (n : Int) :
-    ∀ pe ∈ saveParamPexprs (ctrParams xbty cbty n), peDepth pe ≤ lemDefaultFuel := by
+    ∀ pe ∈ saveParamPexprs (ctrParams xbty cbty n), peDepth pe = 1 := by
   intro pe hpe
   simp only [ctrParams, saveParamPexprs, List.map_cons, List.map_nil,
     List.mem_cons, List.not_mem_nil, or_false] at hpe
   rcases hpe with rfl | rfl
-  · exact peDepth_val_le _ _
-  · exact peDepth_sym_le _ _
+  · rfl
+  · rfl
 
-theorem counterProdProg_frag (ra : core_run_annotation) (mo : memory_order)
+theorem counterProdProg_frag [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) (ra : core_run_annotation) (mo : memory_order)
     (bty xbty cbty sbty : core_base_type) (n : Int) :
     Frag (counterProdProg ra mo bty xbty cbty sbty n) :=
   .sseq_sym .create
-    (.save (PePure.all_of_isPePure rfl) (ctrParams_depth xbty cbty n) (ctrBody_frag ra mo bty))
+    (.save (PePure.all_of_isPePure rfl) (fun pe hp => by rw [ctrParams_depth xbty cbty n pe hp]; omega) (ctrBody_frag (hfuel := by omega) ra mo bty))
 
 theorem ctrBody_pot (ra : core_run_annotation) (mo : memory_order)
     (bty : core_base_type) : pot (ctrBody ra mo bty) = 7 := rfl
@@ -583,6 +576,63 @@ theorem counterProdProg_pot (ra : core_run_annotation) (mo : memory_order)
     (bty xbty cbty sbty : core_base_type) (n : Int) :
     pot (counterProdProg ra mo bty xbty cbty sbty n) = 11 := rfl
 
+theorem col_aux_action {A : Type} (n : Nat) (st : collect_saves_state A)
+    (a : List annot) (p : generic_paction A Unit sym) :
+    collect_saves_aux_lemFuel (n + 1) st (Expr a (Eaction p)) = st := rfl
+
+theorem col_aux_run {A : Type} (n : Nat) (st : collect_saves_state A)
+    (a : List annot) (ra : A) (l : sym)
+    (pes : List (generic_pexpr Unit sym)) :
+    collect_saves_aux_lemFuel (n + 1) st (Expr a (Erun ra l pes)) = st := rfl
+
+theorem col_aux_pure {A : Type} (n : Nat) (st : collect_saves_state A)
+    (a : List annot) (pe : generic_pexpr Unit sym) :
+    collect_saves_aux_lemFuel (n + 1) st (Expr a (Epure pe)) = st := rfl
+
+theorem col_aux_ofVal_pure (n : Nat)
+    (st : collect_saves_state core_run_annotation) (v : value) :
+    collect_saves_aux_lemFuel (n + 1) st (ofVal (.pure v)) = st := rfl
+
+theorem col_aux_sseq {A : Type} (n : Nat) (st : collect_saves_state A)
+    (a : List annot) (pat : pattern) (e1 e2 : generic_expr A Unit sym) :
+    collect_saves_aux_lemFuel (n + 1) st (Expr a (Esseq pat e1 e2)) =
+      union_saves st (union_saves
+        { collect_saves_aux_lemFuel n empty_saves e1 with
+            tmp_acc := fmapMap (fun p => match p with
+              | (syms, e) => (syms, Expr a (Esseq pat e e2)))
+              (collect_saves_aux_lemFuel n empty_saves e1).tmp_acc }
+        (collect_saves_aux_lemFuel n empty_saves e2)) := rfl
+
+/-- Mapping the open continuations of an empty collector leaves it empty. -/
+theorem col_map_empty (f : (List (sym × core_base_type) × CoreExpr) →
+    (List (sym × core_base_type) × CoreExpr)) :
+    { (empty_saves : collect_saves_state core_run_annotation) with
+      tmp_acc := fmapMap f empty_saves.tmp_acc } = empty_saves := rfl
+
+/-- An empty prefix contributes nothing to one registered continuation. -/
+theorem col_union_empty_single (l : sym) (params : List (sym × core_base_type))
+    (body : CoreExpr) :
+    union_saves empty_saves
+      { tmp_acc := fmapAddBy symCmpL l (params, body) fmapEmpty,
+        closed_acc := fmapEmpty } =
+      { tmp_acc := fmapAddBy symCmpL l (params, body) fmapEmpty,
+        closed_acc := fmapEmpty } := rfl
+
+/-- The counter save has one registration; its body contains no saves. -/
+theorem col_ctrProdSave (m : Nat) (ra : core_run_annotation) (mo : memory_order)
+    (bty xbty cbty sbty : core_base_type) (n : Int) :
+    collect_saves_aux_lemFuel (m + 5) empty_saves
+      (Expr [] (Esave (ctrLoopSym, sbty) (ctrParams xbty cbty n)
+        (ctrBody ra mo bty))) =
+      { tmp_acc := ctrQ ra mo bty xbty cbty, closed_acc := fmapEmpty } := rfl
+
+/-- Registration's structural measure ignores annotations and operands. -/
+theorem counterProdProg_size (ra : core_run_annotation) (mo : memory_order)
+    (bty xbty cbty sbty : core_base_type) (n : Int) :
+    generic_expr.lemSize (counterProdProg ra mo bty xbty cbty sbty n) = 16 := by
+  simp only [counterProdProg, ctrBody, createExpr, storeOpRedex, ofVal_pure,
+    generic_expr.lemSize, generic_expr_.lemSize]
+
 /-- The shipped registration computes the counter's label map (the
     save is the registration site and the entry). -/
 theorem collect_new_ctrProd (ra : core_run_annotation) (mo : memory_order)
@@ -590,7 +640,17 @@ theorem collect_new_ctrProd (ra : core_run_annotation) (mo : memory_order)
     collect_labeled_continuations_NEW
         (prodFile (counterProdProg ra mo bty xbty cbty sbty n)) =
       fmapAddBy (fun (s1 s2 : sym) => ordCompare s1 s2) mainSym
-        (ctrQ ra mo bty xbty cbty) fmapEmpty := rfl
+        (ctrQ ra mo bty xbty cbty) fmapEmpty := by
+  rw [collect_labeled_prodFile]
+  apply congrArg (fun labels : LabelMap =>
+    fmapAddBy (fun (s1 s2 : sym) => ordCompare s1 s2) mainSym labels fmapEmpty)
+  unfold collect_saves collect_saves_aux
+  rw [counterProdProg_size]
+  unfold counterProdProg createExpr
+  rw [show (16 : Nat) = 15 + 1 from rfl, col_aux_sseq]
+  rw [show (15 : Nat) = 14 + 1 from rfl, col_aux_action]
+  rw [show (14 + 1 : Nat) = 10 + 5 from rfl, col_ctrProdSave]
+  rfl
 
 theorem ctrProd_labeledAt (sup : Nat) (ra : core_run_annotation) (mo : memory_order)
     (bty xbty cbty sbty : core_base_type) (n : Int) :
@@ -619,10 +679,10 @@ theorem ctrProd_labeledAt (sup : Nat) (ra : core_run_annotation) (mo : memory_or
     termination from the total judgment; the create crosses the
     PUBLIC `wpt_create`; the pipeline arrows are the generic
     `wpt_driver_done_alloc` → `prod_run_eqJ`. -/
-theorem counter_loop_certified_production (sup : Nat) (ra : core_run_annotation)
+theorem counter_loop_certified_production [LemFuel] (sup : Nat) (ra : core_run_annotation)
     (mo : memory_order) (bty xbty cbty sbty : core_base_type)
     (n : Int) (hn : 0 ≤ n)
-    (hfuel : 6 * n.toNat + 8 ≤ CerbFuel.driverFuel)
+    (hfuel : 6 * n.toNat + 8 ≤ LemFuel.fuel)
     (fs : CerbFS.FsState) (args : List String) :
     ∃ (dres : driver_result) (dst' : driver_state),
       CerbND.runND
@@ -649,28 +709,19 @@ theorem counter_loop_certified_production (sup : Nat) (ra : core_run_annotation)
     intro l params cont hl
     rw [procCtxF_labels hQprod] at hl
     obtain ⟨-, rfl⟩ := ctrQ_inv ra mo bty xbty cbty hl
-    exact ctrBody_frag ra mo bty
+    exact ctrBody_frag (hfuel := by omega) ra mo bty
   obtain ⟨dres, dst', heq, hψ, hbl, hout, herr⟩ :=
     prod_run_eqJ sup (counterProdProg ra mo bty xbty cbty sbty n) hQprod
       (ψC n) (2 + (ctrCost n.toNat + saveEntryCost (ctrParams xbty cbty n)))
-      (wpt_driver_done_alloc (GF := SpikeGF) (ctl := prodCtl sup)
+      (wpt_driver_done_alloc (hfuel := by omega) (GF := SpikeGF) (ctl := prodCtl sup)
         (M₀ := procCtxF (prodFile (counterProdProg ra mo bty xbty cbty sbty n)) ((initial_core_run_state sup
           (collect_labeled_continuations_NEW
             (prodFile (counterProdProg ra mo bty xbty cbty sbty n)))).1))
         rfl rfl (procCtxF_labels hQprod) rfl rfl rfl rfl (Nat.zero_le _) hQf
-        (fun l params cont hl => by
-          rw [procCtxF_labels hQprod] at hl
-          obtain ⟨-, rfl⟩ := ctrQ_inv ra mo bty xbty cbty hl
-          rw [ctrBody_pot ra mo bty,
-            show lemDefaultFuel = 999999 + 1 from rfl]
-          omega)
         (ctrLsT n)
         (counterProdProg ra mo bty xbty cbty sbty n) fmapEmpty []
         prodMem₀ (∅ : SpikeHeapF SpikeCell) (allocCost fmapEmpty intTy 4)
-        (counterProdProg_frag ra mo bty xbty cbty sbty n)
-        (by rw [counterProdProg_pot ra mo bty xbty cbty sbty n,
-            show lemDefaultFuel = 999999 + 1 from rfl]
-            omega)
+        (counterProdProg_frag (hfuel := by omega) ra mo bty xbty cbty sbty n)
         (prodMem₀_launchCoh _ prod_one_int_budget_fits)
         (ψC n) (2 + (ctrCost n.toNat + saveEntryCost (ctrParams xbty cbty n)))
         (by
@@ -678,7 +729,7 @@ theorem counter_loop_certified_production (sup : Nat) (ra : core_run_annotation)
           iintro ⟨-, Hcap⟩
           isplitr [Hcap]
           · iapply ctr_blockSpecsT ra mo bty xbty cbty n mainSym _ hQprod
-          · iapply ctrProd_wpt ra mo bty xbty cbty n mainSym _ hQprod sbty
+          · iapply ctrProd_wpt (hfuel := by omega) ra mo bty xbty cbty n mainSym _ hQprod sbty
               hn fmapEmpty [] symFrame_empty $$ Hcap))
       (by rw [ctrCost_eq, show saveEntryCost (ctrParams xbty cbty n) = 2 from rfl]
           omega)
@@ -737,7 +788,7 @@ theorem nodeTy_decIndep_undef (a : Int) : decIndep fmapEmpty a nodeTy nodeUndefB
     stored directly (`store(long, n1, 1)`; `store(node*,
     array_shift(n1, long, 1), n2)`; `store(long, n2, 2)`;
     `store(node*, array_shift(n2, long, 1), NULL)`), then `k`. -/
-def lrProdPrefix (ra : core_run_annotation) (mo : memory_order)
+def lrProdPrefix (_ra : core_run_annotation) (mo : memory_order)
     (bty : core_base_type) (k : CoreExpr) : CoreExpr :=
   Expr [] (Esseq (symPat [] lrN1Sym bty)
     (createExpr [] loc0 empty_annotation (.IV .Prov_none 8) nodeTy
@@ -807,7 +858,7 @@ theorem lrPFrame_lookup_n2 :
     if_pos (by decide +kernel)]
 
 /-- The shifted next-field operands at the bound node pointers. -/
-theorem lrPFrame_shift_n1 {file : generic_file Unit core_run_annotation} (i a : Int) :
+theorem lrPFrame_shift_n1 [LemFuel] {file : generic_file Unit core_run_annotation} (i a : Int) :
     evalPexpr fmapEmpty fmapEmpty file
         (lrPFrame (ptrVal (cellPtr i a)) v2 f :: rest)
         (lrShiftPe lrN1Sym) = some (ptrVal (cellPtr i (a + 8))) := by
@@ -821,7 +872,7 @@ theorem lrPFrame_shift_n1 {file : generic_file Unit core_run_annotation} (i a : 
   show evalArrayShift fmapEmpty longTy (Vobject (OVpointer (cellPtr i a))) (ivVal 1) = _
   exact evalArrayShift_long_one i a
 
-theorem lrPFrame_shift_n2 {file : generic_file Unit core_run_annotation} (i a : Int) :
+theorem lrPFrame_shift_n2 [LemFuel] {file : generic_file Unit core_run_annotation} (i a : Int) :
     evalPexpr fmapEmpty fmapEmpty file
         (lrPFrame v1 (ptrVal (cellPtr i a)) f :: rest)
         (lrShiftPe lrN2Sym) = some (ptrVal (cellPtr i (a + 8))) := by
@@ -837,7 +888,7 @@ theorem lrPFrame_shift_n2 {file : generic_file Unit core_run_annotation} (i a : 
 
 /-- The save's initializers evaluate at the entry env: the NULL literal
     and the program-bound head pointer. -/
-theorem lrPFrame_save_params {file : generic_file Unit core_run_annotation} (pbty cbty : core_base_type) :
+theorem lrPFrame_save_params [LemFuel] {file : generic_file Unit core_run_annotation} (pbty cbty : core_base_type) :
     evalPexprs fmapEmpty fmapEmpty file (lrPFrame v1 v2 f :: rest)
         (saveParamPexprs (lrProdParams pbty cbty)) =
       some [ptrVal nullNode, v1] := by
@@ -867,13 +918,13 @@ theorem bindSaveParams_lrProd (pbty cbty : core_base_type)
 
 /-- The save's initializers are within the evaluator's fuel. -/
 theorem lrProdParams_depth (pbty cbty : core_base_type) :
-    ∀ pe ∈ saveParamPexprs (lrProdParams pbty cbty), peDepth pe ≤ lemDefaultFuel := by
+    ∀ pe ∈ saveParamPexprs (lrProdParams pbty cbty), peDepth pe = 1 := by
   intro pe hpe
   simp only [lrProdParams, saveParamPexprs, List.map_cons, List.map_nil,
     List.mem_cons, List.not_mem_nil, or_false] at hpe
   rcases hpe with rfl | rfl
-  · exact peDepth_val_le _ _
-  · exact peDepth_sym_le _ _
+  · rfl
+  · rfl
 
 /-! ### Byte-image facts for the built nodes (all concrete splices
 over the fresh replicate image; addresses abstract) -/
@@ -904,9 +955,9 @@ theorem lrBuilt2_inner_len :
   rw [spliceBytes_length _ _ _ (by decide)]
   decide
 
-theorem lrBuilt1_len (i₂ a₂ : Int) : (lrBuilt1 i₂ a₂).length = 16 := by
+theorem lrBuilt1_len (i₂ a₂ : Int) (h0 : 0 ≤ a₂) (h1 : a₂ < 2 ^ 64) : (lrBuilt1 i₂ a₂).length = 16 := by
   rw [spliceBytes_length _ _ _ (by
-    rw [node_ptr_img_cell, ptrImg_cell_length, lrBuilt1_inner_len]
+    rw [node_ptr_img_cell, ptrImg_cell_length i₂ a₂ h0 h1, lrBuilt1_inner_len]
     omega)]
   exact lrBuilt1_inner_len
 
@@ -916,13 +967,13 @@ theorem lrBuilt2_len : lrBuilt2.length = 16 := by
     omega)]
   exact lrBuilt2_inner_len
 
-theorem lrBuilt1_valDec (i₂ a₂ : Int) : nodeValDec fmapEmpty (lrBuilt1 i₂ a₂) 1 := by
+theorem lrBuilt1_valDec (i₂ a₂ : Int) (h0 : 0 ≤ a₂) (h1 : a₂ < 2 ^ 64) : nodeValDec fmapEmpty (lrBuilt1 i₂ a₂) 1 := by
   intro lum fpm ad
   rw [show ((lrBuilt1 i₂ a₂).drop 0).take 8 =
       ((spliceBytes 0 (CerbMem.memValueToBytes fmapEmpty [] (longMval 1)).2
         nodeUndefBytes).drop 0).take 8 from
     spliceBytes_value_slice _ _
-      (by rw [node_ptr_img_cell]; exact ptrImg_cell_length i₂ a₂)
+      (by rw [node_ptr_img_cell]; exact ptrImg_cell_length i₂ a₂ (by omega) h1)
       lrBuilt1_inner_len]
   rfl
 
@@ -943,7 +994,7 @@ theorem lrBuilt1_nextDec (i₂ a₂ : Int) (h0 : 0 < a₂) (h1 : a₂ < 2 ^ 64) 
       (CerbMem.memValueToBytes fmapEmpty []
         (CerbMem.pointerMval nodeTy (cellPtr i₂ a₂))).2 from
     spliceBytes_next_slice _ _
-      (by rw [node_ptr_img_cell]; exact ptrImg_cell_length i₂ a₂)
+      (by rw [node_ptr_img_cell]; exact ptrImg_cell_length i₂ a₂ (by omega) h1)
       lrBuilt1_inner_len]
   exact node_ptr_img_cell i₂ a₂
 
@@ -996,7 +1047,7 @@ include hQ
     generic per-body theorem `lr_body_wpt` consumed VERBATIM at the
     unpacked ids, transported into the wrapped label spec by
     `wpt_mono_Ls` and into the production readout by `wpt_mono`. -/
-theorem lrProd_blockSpecsT :
+theorem lrProd_blockSpecsT [LemFuel] :
     ⊢ blockSpecsT (GF := GF) (procCtxF F rs) (some p) lrProdLsT emptyProcSpecT
       (readoutPost ψL) := by
   refine blockSpecsT_intro fun l params cont vs ev0 evs m hl => ?_
@@ -1040,7 +1091,7 @@ theorem lrProd_blockSpecsT :
     field stores through the generic typed-subrange rules at the
     BOUND pointers, the flagship loop entered by the registered jump
     with the built chain. -/
-theorem lrProd_wpt (bty sbty : core_base_type)
+theorem lrProd_wpt [LemFuel] (hfuel : 0 < LemFuel.fuel) (bty sbty : core_base_type)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value))
     (hf : SymFrame ev0) :
     iprop(allocBudget (GF := GF)
@@ -1076,7 +1127,7 @@ theorem lrProd_wpt (bty sbty : core_base_type)
     from rfl]
   iapply wpt_seq_sym
   icases (allocBudget_split _ _).1 $$ Hcap with ⟨Hcap, Hcap₂⟩
-  iapply wpt_create [] loc0 empty_annotation .Prov_none 8 nodeTy
+  iapply wpt_create (hfuel := hfuel) (halign := by decide) (haddr := rfl) [] loc0 empty_annotation .Prov_none 8 nodeTy
     (PrefOther "lr-n1") (ev0 :: evs) (Nat.le_refl 2)
     nodeTy_size_pos nodeTy_nonatomic nodeTy_decIndep_undef
   isplitl [Hcap]
@@ -1088,7 +1139,7 @@ theorem lrProd_wpt (bty sbty : core_base_type)
     rfl
   rw [update_env_sym lrN1Sym bty]
   iapply wpt_seq_sym
-  iapply wpt_create [] loc0 empty_annotation .Prov_none 8 nodeTy
+  iapply wpt_create (hfuel := hfuel) (halign := by decide) (haddr := rfl) [] loc0 empty_annotation .Prov_none 8 nodeTy
     (PrefOther "lr-n2") _ (Nat.le_refl 2)
     nodeTy_size_pos nodeTy_nonatomic nodeTy_decIndep_undef
   isplitl [Hcap₂]
@@ -1146,7 +1197,7 @@ theorem lrProd_wpt (bty sbty : core_base_type)
     (ptrVal (cellPtr i₂ a₂)) mo _ _ (Nat.le_refl 3)
     (node_ptr_encodes (cellPtr i₂ a₂))
     (by rw [show CerbMem.sizeofCtype (procCtxF F rs).tagDefs nodeTy = 16 from rfl]; omega)
-    (by rw [node_ptr_img_cell]; exact ptrImg_cell_length i₂ a₂)
+    (by rw [node_ptr_img_cell]; exact ptrImg_cell_length i₂ a₂ (by omega) hb₂.2)
     (node_ptr_compat (cellPtr i₂ a₂)) (node_ptr_fpm_cell i₂ a₂)
     (node_ptr_bytes_cell i₂ a₂)
   isplitl [Hcell₁]
@@ -1231,7 +1282,7 @@ theorem lrProd_wpt (bty sbty : core_base_type)
     · -- isList (node 1) [(i₁,1),(i₂,2)]: the built chain, with the
       -- node-WF bounds from the PUBLIC create rule's export
       iapply isList_cons_intro i₁ a₁ (cellPtr i₂ a₂) (lrBuilt1 i₂ a₂) 1
-        [(i₂, 2)] hb₁.1 hb₁.2 (lrBuilt1_len i₂ a₂) (lrBuilt1_valDec i₂ a₂)
+        [(i₂, 2)] hb₁.1 hb₁.2 (lrBuilt1_len i₂ a₂ (by omega) hb₂.2) (lrBuilt1_valDec i₂ a₂ (by omega) hb₂.2)
         (lrBuilt1_nextDec i₂ a₂ hb₂.1 hb₂.2)
       isplitl [Hcell₁]
       · iexact Hcell₁
@@ -1251,7 +1302,7 @@ end LrProdIris
 
 /-! ### Registration, cone membership, potentials, the plan -/
 
-theorem lrProdPrefix_frag (ra : core_run_annotation) (mo : memory_order)
+theorem lrProdPrefix_frag [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) (ra : core_run_annotation) (mo : memory_order)
     (bty : core_base_type) {k : CoreExpr} (hk : Frag k) :
     Frag (lrProdPrefix ra mo bty k) :=
   .sseq_sym .create
@@ -1259,39 +1310,34 @@ theorem lrProdPrefix_frag (ra : core_run_annotation) (mo : memory_order)
       (.sseq
         (.store_op rfl (.sym [] lrN1Sym) (.val [] (longVal 1))
           (by rw [show peDepth (Pexpr ([] : List annot) ()
-              (PEsym lrN1Sym)) = 1 from rfl,
-            show lemDefaultFuel = 999999 + 1 from rfl]; omega)
-          (peDepth_val_le _ _))
+              (PEsym lrN1Sym)) = 1 from rfl]; omega)
+          (peDepth_val_le _ _ (by omega)))
         (.sseq
           (.store_op rfl
             (.arrayShift [] longTy (.sym [] lrN1Sym) (.val [] (ivVal 1)))
             (.sym [] lrN2Sym)
-            (by rw [show peDepth (lrShiftPe lrN1Sym) = 2 from rfl,
-              show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+            (by rw [show peDepth (lrShiftPe lrN1Sym) = 2 from rfl]; omega)
             (by rw [show peDepth (Pexpr ([] : List annot) ()
-                (PEsym lrN2Sym)) = 1 from rfl,
-              show lemDefaultFuel = 999999 + 1 from rfl]; omega))
+                (PEsym lrN2Sym)) = 1 from rfl]; omega))
           (.sseq
             (.store_op rfl (.sym [] lrN2Sym) (.val [] (longVal 2))
               (by rw [show peDepth (Pexpr ([] : List annot) ()
-                  (PEsym lrN2Sym)) = 1 from rfl,
-                show lemDefaultFuel = 999999 + 1 from rfl]; omega)
-              (peDepth_val_le _ _))
+                  (PEsym lrN2Sym)) = 1 from rfl]; omega)
+              (peDepth_val_le _ _ (by omega)))
             (.sseq
               (.store_op rfl
                 (.arrayShift [] longTy (.sym [] lrN2Sym) (.val [] (ivVal 1)))
                 (.val [] nullVal)
-                (by rw [show peDepth (lrShiftPe lrN2Sym) = 2 from rfl,
-                  show lemDefaultFuel = 999999 + 1 from rfl]; omega)
-                (peDepth_val_le _ _))
+                (by rw [show peDepth (lrShiftPe lrN2Sym) = 2 from rfl]; omega)
+                (peDepth_val_le _ _ (by omega)))
               hk)))))
 
-theorem lrProdProg_frag (ra : core_run_annotation) (mo : memory_order)
+theorem lrProdProg_frag [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) (ra : core_run_annotation) (mo : memory_order)
     (bty sbty pbty cbty bbty nbty ubty : core_base_type) :
     Frag (lrProdProg ra mo bty sbty pbty cbty bbty nbty ubty) :=
-  lrProdPrefix_frag ra mo bty
-    (.save (PePure.all_of_isPePure rfl) (lrProdParams_depth pbty cbty)
-      (lrBody_fragJ loc0 empty_annotation ra mo bbty nbty ubty))
+  lrProdPrefix_frag (hfuel := by omega) ra mo bty
+    (.save (PePure.all_of_isPePure rfl) (fun pe hp => by rw [lrProdParams_depth pbty cbty pe hp]; omega)
+      (lrBody_fragJ (hfuel := by omega) loc0 empty_annotation ra mo bbty nbty ubty))
 
 theorem lrProdPrefix_pot (ra : core_run_annotation) (mo : memory_order)
     (bty : core_base_type) (k : CoreExpr) :
@@ -1307,36 +1353,9 @@ theorem lrProdProg_pot (ra : core_run_annotation) (mo : memory_order)
   rw [lrProdPrefix_pot, pot_save, lrBody_pot]
 
 /-! The registration computation, COMPOSITIONALLY (a whole-program
-`rfl` hits kernel-whnf term duplication on the ten-node prefix spine
-— the fuel-peeled per-arm equations rewrite layer by layer with
-sharing; the save's own registration is one bounded-fuel `rfl`). -/
-
-theorem col_aux_action {A : Type} (n : Nat) (st : collect_saves_state A)
-    (a : List annot) (p : generic_paction A Unit sym) :
-    collect_saves_aux_lemFuel (n + 1) st (Expr a (Eaction p)) = st := rfl
-
-theorem col_aux_run {A : Type} (n : Nat) (st : collect_saves_state A)
-    (a : List annot) (ra : A) (l : sym)
-    (pes : List (generic_pexpr Unit sym)) :
-    collect_saves_aux_lemFuel (n + 1) st (Expr a (Erun ra l pes)) = st := rfl
-
-theorem col_aux_pure {A : Type} (n : Nat) (st : collect_saves_state A)
-    (a : List annot) (pe : generic_pexpr Unit sym) :
-    collect_saves_aux_lemFuel (n + 1) st (Expr a (Epure pe)) = st := rfl
-
-theorem col_aux_ofVal_pure (n : Nat)
-    (st : collect_saves_state core_run_annotation) (v : value) :
-    collect_saves_aux_lemFuel (n + 1) st (ofVal (.pure v)) = st := rfl
-
-theorem col_aux_sseq {A : Type} (n : Nat) (st : collect_saves_state A)
-    (a : List annot) (pat : pattern) (e1 e2 : generic_expr A Unit sym) :
-    collect_saves_aux_lemFuel (n + 1) st (Expr a (Esseq pat e1 e2)) =
-      union_saves st (union_saves
-        { collect_saves_aux_lemFuel n empty_saves e1 with
-            tmp_acc := fmapMap (fun p => match p with
-              | (syms, e) => (syms, Expr a (Esseq pat e e2)))
-              (collect_saves_aux_lemFuel n empty_saves e1).tmp_acc }
-        (collect_saves_aux_lemFuel n empty_saves e2)) := rfl
+`rfl` hits kernel-whnf term duplication on the six-layer build prefix
+— the worker constructor equations rewrite layer by layer with
+sharing at the shipped structural measure). -/
 
 /-- The flagship loop program's saves, at cushioned variable fuel
     (the save registers its body; nothing else in the cone
@@ -1360,6 +1379,15 @@ theorem col_lrProdSave (m : Nat) (ra : core_run_annotation)
       { tmp_acc := lrQ loc0 empty_annotation ra mo pbty cbty bbty nbty ubty,
         closed_acc := fmapEmpty } := rfl
 
+/-- The list prefix's structural measure, proved independently of the
+    collector so registration can retain the shared program subterms. -/
+theorem lrProdProg_size (ra : core_run_annotation) (mo : memory_order)
+    (bty sbty pbty cbty bbty nbty ubty : core_base_type) :
+    generic_expr.lemSize (lrProdProg ra mo bty sbty pbty cbty bbty nbty ubty) = 44 := by
+  simp only [lrProdProg, lrProdPrefix, createExpr, storeOpRedex, lrBody,
+    lrMemopE, memopRedex, lrElse, lrLoadE, loadOpRedex, lrStoreE,
+    generic_expr.lemSize, generic_expr_.lemSize]
+
 /-- The shipped registration computes the flagship's label map (the
     save is the registration site and the entry): the six prefix layers
     peeled one arm at a time (each store registers nothing), the save's
@@ -1372,29 +1400,27 @@ theorem collect_new_lrProd (ra : core_run_annotation) (mo : memory_order)
       fmapAddBy (fun (s1 s2 : sym) => ordCompare s1 s2) mainSym
         (lrQ loc0 empty_annotation ra mo pbty cbty bbty nbty ubty)
         fmapEmpty := by
-  rw [show collect_labeled_continuations_NEW
-      (prodFile (lrProdProg ra mo bty sbty pbty cbty bbty nbty ubty)) =
-    fmapAddBy (fun (s1 s2 : sym) => ordCompare s1 s2) mainSym
-      (collect_saves (lrProdProg ra mo bty sbty pbty cbty bbty nbty ubty))
-      fmapEmpty from rfl]
+  rw [collect_labeled_prodFile]
   rw [show collect_saves (lrProdProg ra mo bty sbty pbty cbty bbty nbty
       ubty) = lrQ loc0 empty_annotation ra mo pbty cbty bbty nbty ubty
       from by
-    unfold collect_saves collect_saves_aux lrProdProg lrProdPrefix createExpr
-      storeOpRedex
-    rw [show lemDefaultFuel = 999999 + 1 from rfl, col_aux_sseq]
-    rw [show (999999 : Nat) = 999998 + 1 from rfl, col_aux_action,
+    unfold collect_saves collect_saves_aux
+    rw [lrProdProg_size]
+    unfold lrProdProg lrProdPrefix createExpr storeOpRedex
+    rw [show (44 : Nat) = 43 + 1 from rfl, col_aux_sseq]
+    rw [show (43 : Nat) = 42 + 1 from rfl, col_aux_action,
       col_aux_sseq]
-    rw [show (999998 : Nat) = 999997 + 1 from rfl, col_aux_action,
+    rw [show (42 : Nat) = 41 + 1 from rfl, col_aux_action,
       col_aux_sseq]
-    rw [show (999997 : Nat) = 999996 + 1 from rfl, col_aux_action,
+    rw [show (41 : Nat) = 40 + 1 from rfl, col_aux_action,
       col_aux_sseq]
-    rw [show (999996 : Nat) = 999995 + 1 from rfl, col_aux_action,
+    rw [show (40 : Nat) = 39 + 1 from rfl, col_aux_action,
       col_aux_sseq]
-    rw [show (999995 : Nat) = 999994 + 1 from rfl, col_aux_action,
+    rw [show (39 : Nat) = 38 + 1 from rfl, col_aux_action,
       col_aux_sseq]
-    rw [show (999994 : Nat) = 999993 + 1 from rfl, col_aux_action]
-    rw [show (999993 : Nat) = 999984 + 9 from rfl, col_lrProdSave]
+    rw [show (38 : Nat) = 37 + 1 from rfl, col_aux_action]
+    rw [show (37 : Nat) = 28 + 9 from rfl, col_lrProdSave]
+    simp only [col_map_empty, lrQ, col_union_empty_single]
     rfl]
 
 theorem lrProd_labeledAt (sup : Nat) (ra : core_run_annotation) (mo : memory_order)
@@ -1435,7 +1461,7 @@ theorem lr_two_node_budget_fits :
     judgment; the creates cross the PUBLIC `wpt_create`; the generic
     list logic is consumed verbatim; the pipeline arrows are
     `wpt_driver_done_alloc` → `prod_run_eqJ`. -/
-theorem list_reverse_certified_production (sup : Nat) (ra : core_run_annotation)
+theorem list_reverse_certified_production [LemFuel] (hfuel : 56 ≤ LemFuel.fuel) (sup : Nat) (ra : core_run_annotation)
     (mo : memory_order) (bty sbty pbty cbty bbty nbty ubty : core_base_type)
     (fs : CerbFS.FsState) (args : List String) :
     ∃ (dres : driver_result) (dst' : driver_state),
@@ -1460,7 +1486,7 @@ theorem list_reverse_certified_production (sup : Nat) (ra : core_run_annotation)
       hQprod ψL
       (2 + (2 + ((3 + 1) + ((3 + 1) + ((3 + 1) + ((3 + 1) +
         (lrCost 2 + saveEntryCost (lrProdParams pbty cbty))))))))
-      (wpt_driver_done_alloc (GF := SpikeGF) (ctl := prodCtl sup)
+      (wpt_driver_done_alloc (hfuel := by omega) (GF := SpikeGF) (ctl := prodCtl sup)
         (M₀ := procCtxF (prodFile (lrProdProg ra mo bty sbty pbty cbty bbty nbty
               ubty)) ((initial_core_run_state sup
           (collect_labeled_continuations_NEW
@@ -1471,21 +1497,12 @@ theorem list_reverse_certified_production (sup : Nat) (ra : core_run_annotation)
           rw [procCtxF_labels hQprod] at hl
           obtain ⟨-, rfl⟩ := lrQ_inv loc0 empty_annotation ra mo pbty cbty
             bbty nbty ubty hl
-          exact lrBody_fragJ loc0 empty_annotation ra mo bbty nbty ubty)
-        (fun l params cont hl => by
-          rw [procCtxF_labels hQprod] at hl
-          obtain ⟨-, rfl⟩ := lrQ_inv loc0 empty_annotation ra mo pbty cbty
-            bbty nbty ubty hl
-          rw [lrBody_pot, show lemDefaultFuel = 999999 + 1 from rfl]
-          omega)
+          exact lrBody_fragJ (hfuel := by omega) loc0 empty_annotation ra mo bbty nbty ubty)
         lrProdLsT
         (lrProdProg ra mo bty sbty pbty cbty bbty nbty ubty) fmapEmpty []
         prodMem₀ (∅ : SpikeHeapF SpikeCell)
         (allocCost fmapEmpty nodeTy 8 + allocCost fmapEmpty nodeTy 8)
-        (lrProdProg_frag ra mo bty sbty pbty cbty bbty nbty ubty)
-        (by rw [lrProdProg_pot ra mo bty sbty pbty cbty bbty nbty ubty,
-            show lemDefaultFuel = 999999 + 1 from rfl]
-            omega)
+        (lrProdProg_frag (hfuel := by omega) ra mo bty sbty pbty cbty bbty nbty ubty)
         (prodMem₀_launchCoh _ lr_two_node_budget_fits)
         ψL
         (2 + (2 + ((3 + 1) + ((3 + 1) + ((3 + 1) + ((3 + 1) +
@@ -1496,11 +1513,10 @@ theorem list_reverse_certified_production (sup : Nat) (ra : core_run_annotation)
           isplitr [Hcap]
           · iapply lrProd_blockSpecsT ra mo pbty cbty bbty nbty ubty
               mainSym _ hQprod
-          · iapply lrProd_wpt ra mo pbty cbty bbty nbty ubty mainSym _
+          · iapply lrProd_wpt (hfuel := by omega) ra mo pbty cbty bbty nbty ubty mainSym _
               hQprod bty sbty fmapEmpty [] symFrame_empty $$ Hcap))
       (by rw [show lrCost 2 = 32 from rfl,
-          show saveEntryCost (lrProdParams pbty cbty) = 2 from rfl,
-          show CerbFuel.driverFuel = 99999999 + 1 from rfl]
+          show saveEntryCost (lrProdParams pbty cbty) = 2 from rfl]
           omega)
       fs args
   refine ⟨dres, dst', heq, ?_, hbl, hout, herr⟩

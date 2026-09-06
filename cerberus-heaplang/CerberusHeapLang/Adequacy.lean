@@ -1,129 +1,60 @@
 /-
-CerberusHeapLang.Adequacy — adequacy: where proofs in the derived
-logic become facts about the engine's execution — over the SHIPPED
-driver's own per-thread loop, at every fuel.
+CerberusHeapLang.Adequacy — partial correctness over the shipped driver's
+per-thread loop, derived from the Reynolds/O'Hearn logic through Iris.
 
-Four layers:
-1. `spike_step_adequacy` — the Iris adequacy instance: the bundled
-   ghost state `SpikeGS` is CONSTRUCTED here (`genHeap_init` over the
-   initial cell map, `spikeCells_alloc`), and iris-lean's
-   `wp_strong_adequacy_gen` yields NotStuck + postcondition readout
-   for every Step-reachable configuration. HeapLang's heap_adequacy
-   (Iris/HeapLang/PrimitiveLaws.lean:131) is the template; the strong
-   variant is needed because the fragment's postconditions read out
-   the FINAL MEMORY STATE (through the state interpretation), not
-   just the value. `spike_step_adequacy_alloc` is the allocation-aware
-   twin: `launchResources` under `LaunchCoh … B` also mints the
-   allocator cursor and grants the ∗-splittable budget `allocBudget B`
-   (K2.5; the ordered plan `allocCap` is retired).
-2. `DriverSafeCtl` — THE PARTIAL DELIVERY FACT over the production
-   driver's per-thread loop `drive_nonmemory_steps_aux2_lemFuel`
-   (Driver.lean:346; the shipped `drive_nonmemory_steps_aux2` is its
-   instance at `CerbFuel.driverFuel`,
-   `CerbND.drive_nonmemory_steps_aux2_wrapper_defeq`): from any driver
-   state holding the configuration at a live control, the loop at
-   EVERY fuel either EXHAUSTS — its value is the kernel-transparent
-   kill `CerbND.fuelExhaustedKill` (the cerberus-lean fuel arc, pin
-   `f95ef8d9c`; `CerbND.drive_nonmemory_steps_aux2_lemFuel_zero`,
-   `rfl`) — or returns PROGRAM-DONE for a value satisfying the readout
-   at the final memory. The total lane's `DriverDoneCtl` (ProdLoop.lean)
-   is the same fact with delivery within `k + 2` iterations; the two
-   lanes share the thread shape `ctlThread` and the registration ties
-   `LabeledProcs`/`CtlTied` (DriverCollapse.lean).
-3. `engine_adequacy` (+ `_alloc`) — THE ENGINE-ONLY STATEMENT: a
-   proved WP plus a seeded MemState satisfying the precondition
-   footprint implies `DriverSafeCtl` — the shipped loop never kills for
-   any other reason (no UB, no error kill, no ILLTYPED refusal, no
-   off-protocol step) and any value it delivers satisfies the
-   postcondition readout. The CONCLUSION quantifies over engine objects
-   only (the driver state, the step accumulator, the fuel, the loop's
-   `runOne` value); Step / WP / Iris vocabulary appears only in the
-   hypotheses. Proof: `spike_step_adequacy` gives NotStuck + readout at
-   every mirror-reachable configuration, and `drive_safe_aux` is the
-   induction on the fuel — ONE shipped round (`loop_step_frag'`,
-   DriverCollapse.lean) per unit, at the mirror step NotStuck supplies,
-   through PCALL and RETURN under the control invariant `ControlOk`, the
-   env-depth invariant and the registration ties (the partial twin of
-   the total lane's CPS induction `wpt_driver_cps`).
-4. `project_triple_pure` — THE HEADLINE PROJECTION: ANY Iris triple
-   with a concrete-map precondition and an ARBITRARY Iris
-   postcondition `Q` whose (framed) post pure-entails `ψ R w.val σ'`
-   under the coupling projects to the BORING triple `MemTriple M ctl ρ e
-   P ψ` — memory splits as P ⊎ R, the shipped loop at any fuel from any
-   driver state holding the configuration exhausts or delivers, and
-   every delivered `(v, σ')` satisfies the PURE `ψ R v σ'` — with no
-   Iris vocabulary in the conclusion. The pure-consequence lemmas
-   (`*_consequence`) discharge its one Iris-shaped hypothesis for the
-   points-to shapes. Properties are STATED in Iris; no rule is restated
-   and no second assertion language exists. Beneath it,
-   `project_triple` is the strongest-post form (post = "every pure
-   consequence of `Q ∗ frame` at σ'"), from which the pure one is
-   derived; `semantic_triple_sound` is `project_triple` at the
-   cells-shaped post (`SemTriple_iff_Mem`). The precondition is
-   footprint cells ONLY; the ALLOCATING twins `project_triple_pure_alloc`
-   / `project_triple_alloc` take footprint cells ∗ `allocBudget B` and
-   conclude `MemTriple_alloc` (the same triple launched under
-   `LaunchCoh` with the budget `B`; `MemTriple_alloc_of_MemTriple`
-   records the direction that holds between the two);
-   `struct_create_store_adequacy` is an instance.
+`spike_step_adequacy` constructs the ghost state from a footprint and
+applies Iris adequacy to obtain NotStuck and the postcondition at every
+mirror-reachable configuration. Its allocating twin launches the cursor
+and a splittable `allocBudget B` through `LaunchCoh`. Allocation-aware
+launch coherence includes footprint coherence, global `MemWF`, the
+budget fitting below the real cursor, and `UnallocatedBytes`: real bytes
+below that cursor read as unspecified. The cursor-free launch needs no
+such freshness claim. A production launcher must prove these premises
+for its actual initial memory.
 
-THE REFERENT IS THE GENUINE DRIVER ([USER 2026-09-02], DECISIONS.md:
-the driver in every export is the genuine Cerberus one; no hand-written
-loop appears in any statement of this module). Until the fuel-lane
-restatement (2026-09-03, cerberus-heaplang/docs/2026-09-03_f1-notes.md)
-the partial lane was stated over a package loop (`driveU`, iterating the
-engine's `step_ctx` with a hand-written discharge) and carried an interim
-label on every surface, because the shipped driver's out-of-fuel arm was LemLib's
-kernel-opaque `fuelExhaustedWith` and no statement over all fuels could
-classify its outcomes (the request:
-../docs/2026-09-02_request-cerberus-lean-fuel-exhaustion-outcome.md,
-repository root). The cerberus-lean fuel arc lifted the obstacle (the arm
-is the transparent `CerbND.fuelExhaustedKill`; the fuel-parametric
-`CerbND.drive_lemFuel` is pinned to `drive` by
-`CerbND.drive_wrapper_defeq`), the package loop is deleted, and every
-statement here is over the shipped loop. The CLOSED forms over
-`CerbND.runND ∘ CerbND.drive_lemFuel fuel ∘ initial_driver_state` — at
-every `fuel`, the shipped `drive` being the instance at
-`CerbFuel.driverFuel` — are ProdEntry.lean's `prod_run_safe_procs` and
-the exhibits that consume it (`fib_rec_certified`).
+`DriverSafeCtl` states the outcome over the engine's own
+`drive_nonmemory_steps_aux2_lemFuel`. At any explicit iteration counter
+`fl`, a single thread at the tied control either exhausts with
+`CerbND.fuelExhaustedKill` or delivers PROGRAM-DONE at an empty call
+stack, with its value and final memory satisfying the readout. Exhaustion
+carries no postcondition; no other kill is admitted. The predicate does
+not assert termination. The definition retains the caller's `[LemFuel]`
+for the engine operations nested inside each loop iteration.
 
-TWO TRUST CLAIMS (the README's "The trust story"): (1) the
-CLOSED-PROGRAM exports have Iris-free statements — cerberus-lean's
-semantics (the shipped driver's loop, or the shipped pipeline) as the
-referents plus the pure readout predicates (`Sat`/`CellCoh`,
-`readBytesFrom`); iris-lean appears only INSIDE kernel-checked proof
-terms and contributes no axiom (Audit.lean pins every export's cone to
-the classical trio), so it is CHECKED, not trusted. (2) the REUSABLE
-rules and `project_triple`'s hypotheses are stated in Iris assertions,
-whose must-read set — `pointsToCell`/`cellOwn`, `CohG`, iris-lean's WP
-and BI connectives — is the one sense in which iris-lean is "in the
-trust base": definitions to read, not axioms to accept. The projection
-makes claim (1) uniform: any property STATED in Iris lands as an
-engine fact whose statement is Iris-free except for the
-pure-consequence obligation the consequence lemmas discharge.
+`engine_adequacy` and its allocating twin prove this predicate when
+`2 ≤ LemFuel.fuel`, with `Frag` premises for the program, labels and
+callable procedures. The lower bound allows the ND bind and memory
+lifting layers to preserve an active round. Operand pass bounds remain
+inside `Frag`. The loop iteration counter is independently quantified
+over all naturals, including zero. Structural traversals supply their
+own measures; the former global `pot ≤ lemDefaultFuel` premises are
+removed. `DriverSafeCtl.zero` directly classifies ambient budget zero for every
+program. Ambient budget one remains open here. This distinction from
+coverage of every loop iteration counter must be preserved in any
+closed export claiming all ambient budgets.
 
-Certification direction used (Soundness.lean header): match-given-
-step. Each round of the fuel induction is the shipped round
-`loop_step_frag'` at the mirror step NotStuck supplies (the driver's own
-per-thread loop body, unfolded — DriverCollapse.lean); Step-matched
-behaviours stay in the WP-covered cone, refusals contradict NotStuck,
-and the value protocol composes the REMOVE-ANNOT tau with PROGRAM-DONE
-(annotations erased by `SpikeVal.val` in the readout). The
-shipped-round certification `engine_step_matchU` (Round.lean) is not
-consumed here.
+`drive_safe_aux` composes `loop_step_frag'` (DriverCollapse.lean) at the
+mirror step that NotStuck supplies. `ControlOk` preserves fragment
+membership through calls and returns; environment depth, label
+registration and the two symbol supplies remain tied to the driver.
+This proof consumes the match-given-step bridge, not Round.lean's
+independent completeness classification. No private driver substitutes
+for the engine in an exported conclusion.
 
-FUEL HONESTY, STATIC FORM: the engine's get_ctx budget enters every
-statement as the two STATIC premises `pot e₀ ≤ lemDefaultFuel` and,
-per registered label body, `pot cont ≤ lemDefaultFuel`
-(Potential.lean: `pot` never increases along a fragment step and
-resets to the registered body at a jump, and it bounds `esize`), so
-the loop fuel `fl` is quantified UNBOUNDED — a partial-correctness
-statement says something about every run, however long (the shipped
-`drive` runs the loop at `CerbFuel.driverFuel = 10^8`). The boring
-triples `MemTriple`/`MemTriple_alloc`/`SemTriple` carry NO fuel
-premise: the static bounds are hypotheses of the projection theorems,
-`rfl`-closed for authored programs. Termination is NOT claimed
-(partial correctness): exhaustion carries no obligation.
+`project_triple_pure` turns an Iris pre/postcondition proof and a pure
+consequence of its postcondition into `MemTriple`, with explicit memory
+framing and an engine-only conclusion. `project_triple` keeps every pure
+consequence; `semantic_triple_sound` specializes it to cell-map
+postconditions. The allocating variants use `LaunchCoh` and grant an
+allocation budget. The projection theorems retain the same ambient
+bound and fragment premises as engine adequacy.
+
+The closed-program statements are about engine objects and pure
+readouts. Iris definitions in reusable hypotheses must be understood,
+while their proof terms are checked by Lean rather than assumed as
+axioms. The repository's exhaustive in-build audit is the acceptance
+check for the declared axiom boundary; a targeted module build alone
+does not establish that the entire package has passed it.
 -/
 import CerberusHeapLang.Rules
 import CerberusHeapLang.Soundness
@@ -133,6 +64,8 @@ import CerberusHeapLang.DriverCollapse
 set_option autoImplicit false
 
 namespace CerberusHeapLang
+
+variable [LemFuel]
 
 open Iris Iris.BI Iris.ProgramLogic Iris.ProgramLogic.Language.Notation FromMathlib
 open Lem_Basic_classes Lem_Maybe Lem_List
@@ -180,6 +113,7 @@ structure MetaByteOf (tds : CerbTags.TagDefsMap) (m : SpikeHeapF SpikeCell) (mm 
     get? mb (c.addr + (j : Int)) = c.bytes[j]?
 
 open Iris.Std.PartialMap in
+omit [LemFuel] in
 /-- A footprint's ghost images couple to any state the footprint
     satisfies (cursor-free). -/
 theorem MetaByteOf.cohG {tds : CerbTags.TagDefsMap} {σ : Mem} {m : SpikeHeapF SpikeCell}
@@ -188,7 +122,7 @@ theorem MetaByteOf.cohG {tds : CerbTags.TagDefsMap} {σ : Mem} {m : SpikeHeapF S
     CohG σ mm mb (∅ : SpikeHeapF AllocCursor) := by
   have hnone : ∀ k : Int, get? (∅ : SpikeHeapF AllocCursor) k = none :=
     fun k => Iris.Std.LawfulPartialMap.get?_empty k
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · intro id mc hget
     obtain ⟨c, hc, rfl⟩ := h.meta_sub id mc hget
     exact (hcoh.cells id c hc).toMetaCoh
@@ -217,8 +151,11 @@ theorem MetaByteOf.cohG {tds : CerbTags.TagDefsMap} {σ : Mem} {m : SpikeHeapF S
     exact absurd (hnone 0) hne
   · intro hne
     exact absurd (hnone 0) hne
+  · intro hne
+    exact absurd (hnone 0) hne
 
 open Iris.Std.PartialMap in
+omit [LemFuel] in
 /-- THE LAUNCH ALLOCATION: from empty meta/byte heaps, allocate every
     footprint cell (metadata entry + byte range), delivering the
     per-cell whole-allocation ownership. -/
@@ -428,17 +365,20 @@ structure LaunchCoh (tds : CerbTags.TagDefsMap) (σ : Mem) (m : SpikeHeapF Spike
   /-- the budget coupling inequality (K2.5): the granted capacity is at
       most the cursor's headroom -/
   budget : B ≤ headroom σ.lastAddress
+  /-- Real bytes below the allocation cursor are unspecified. -/
+  unallocated : UnallocatedBytes σ
 
 open Iris.Std.PartialMap in
+omit [LemFuel] in
 /-- Launch coherence at the EMPTY footprint: the invariant + the budget
     (cold-start programs allocate everything themselves). -/
 theorem LaunchCoh.empty (tds : CerbTags.TagDefsMap) (σ : Mem) (B : Nat)
     (hwf : MemWF σ)
-    (hB : B ≤ headroom σ.lastAddress) :
+    (hB : B ≤ headroom σ.lastAddress) (hbytes : UnallocatedBytes σ) :
     LaunchCoh tds σ (∅ : SpikeHeapF SpikeCell) B := by
   have hnone : ∀ i : Int, get? (∅ : SpikeHeapF SpikeCell) i = none :=
     fun i => Iris.Std.LawfulPartialMap.get?_empty i
-  refine ⟨⟨?_, ?_⟩, hwf, hB⟩
+  refine ⟨⟨?_, ?_⟩, hwf, hB, hbytes⟩
   · intro i c hg
     rw [hnone i] at hg
     cases hg
@@ -447,6 +387,7 @@ theorem LaunchCoh.empty (tds : CerbTags.TagDefsMap) (σ : Mem) (B : Nat)
     cases h1
 
 open Iris.Std.PartialMap in
+omit [LemFuel] in
 /-- The launched coupling: a launch-coherent footprint's ghost
     images couple to σ WITH the cursor cell present at key 0 — the
     conditional facts of `CohG` (`wf`, `cur_byte_lo`) are NON-VACUOUS
@@ -463,7 +404,7 @@ theorem LaunchCoh.cohG {tds : CerbTags.TagDefsMap} {σ : Mem} {m : SpikeHeapF Sp
         ⟨σ.lastAddress, σ.nextAllocId⟩) := by
   have base := hmbo.cohG h.coh
   refine ⟨base.metas, base.metas_disj, base.bytes,
-    ?_, ?_, fun _ => h.wf, ?_, ?_⟩
+    ?_, ?_, fun _ => h.wf, ?_, ?_, fun _ => h.unallocated⟩
   · -- cursor_key
     intro k c hget
     by_cases hk : k = 0
@@ -495,6 +436,7 @@ theorem LaunchCoh.cohG {tds : CerbTags.TagDefsMap} {σ : Mem} {m : SpikeHeapF Sp
     rw [hbase] at hlo
     exact hlo
 
+omit [LemFuel] in
 /-- The launched cursor key is NONEMPTY (merge-row-3 must-prove,
     stated once): key 0 of the launched cursor map holds the real
     allocator fields, so the `get? mk 0 ≠ none` hypothesis of
@@ -508,6 +450,7 @@ theorem launchCursor_key_nonempty (σ : Mem) :
   Iris.Std.get?_insert_eq rfl
 
 open Iris.Std.PartialMap in
+omit [LemFuel] in
 /-- THE SHARED ALLOCATION-AWARE LAUNCH (charter P1.3, the one
     helper; K2.5: the budget): from the three empty ghost heaps and
     the empty budget authority, allocate every footprint cell AND the
@@ -751,8 +694,8 @@ of the adequacy exports, and the drive through a call and a return
 
 `Frag` is a predicate on the EXPRESSION; the callee's body lives in the
 FILE (`lookupProc M.file M.extern f`). So the fact that every procedure
-a run may enter is a fragment term within the potential bound — the
-twin of `hQf`/`hQpot` for the label bodies — cannot be a `Frag`
+a run may enter is a fragment term — the twin of `hQf` for the label
+bodies — cannot be a `Frag`
 premise: it is a premise on the machine context, carried by every
 adequacy export whose proof drives THROUGH calls (the partial lane: its
 NotStuck oracle is the raw Iris WP, which does not exclude a call redex,
@@ -762,16 +705,14 @@ procedure (`M.labelsAt (some f)`), so the premise carries them per
 procedure as well. -/
 
 /-- Every procedure the file declares (extern-resolved, stdlib first —
-    `lookupProc`) has a fragment body within the potential bound, and
-    fragment label bodies within the bound at its own label fiber. -/
+    `lookupProc`) has a fragment body and fragment label bodies at its own label fiber. -/
 structure MachineCtx.FragProcs (M : MachineCtx) : Prop where
   body : ∀ f params body, lookupProc M.file M.extern f = some (params, body) → Frag body
-  potBound : ∀ f params body, lookupProc M.file M.extern f = some (params, body) →
-    pot body ≤ lemDefaultFuel
   labels : ∀ f params body, lookupProc M.file M.extern f = some (params, body) →
     ∀ l params' cont, lookupLabel (M.labelsAt (some f)) l = some (params', cont) →
-      Frag cont ∧ pot cont ≤ lemDefaultFuel
+      Frag cont
 
+omit [LemFuel] in
 /-- The default file declares no procedure. -/
 theorem lookupProc_spikeFile (ext : Fmap sym sym) (f : sym) :
     lookupProc spikeFile ext f = none := rfl
@@ -780,31 +721,28 @@ theorem lookupProc_spikeFile (ext : Fmap sym sym) (f : sym) :
     premise is vacuous there (what every current export client passes). -/
 theorem spikeCtx_fragProcs : spikeCtx.FragProcs :=
   ⟨fun f _ _ h => (by rw [lookupProc_spikeFile] at h; cases h),
-   fun f _ _ h => (by rw [lookupProc_spikeFile] at h; cases h),
    fun f _ _ h => (by rw [lookupProc_spikeFile] at h; cases h)⟩
 
 theorem procCtx_fragProcs (rs : core_run_state) : (procCtx rs).FragProcs :=
   ⟨fun f _ _ h => (by rw [lookupProc_spikeFile] at h; cases h),
-   fun f _ _ h => (by rw [lookupProc_spikeFile] at h; cases h),
    fun f _ _ h => (by rw [lookupProc_spikeFile] at h; cases h)⟩
 
 /-- The control invariant of a run (proof device of the fuel induction
     `drive_safe_aux`; its companion, the env-depth invariant `ctl.κ.length
     < ρ.length`, is `Step.env_depth` — the C2 range audit's N-1, stated
     as a lemma and consumed at the call and return rounds): the current
-    procedure's label bodies are fragment terms within the bound, and
+    procedure's label bodies are fragment terms, and
     every saved frame on the call stack (caller's procedure, caller's
-    context) has fragment label bodies and yields a fragment term within
-    the bound when a value is plugged into it (what RETURN produces). At
+    context) has fragment label bodies and yields a fragment term
+    when a value is plugged into it (what RETURN produces). At
     the entry control (`κ = []`) it is the label-cone premise alone. -/
 def ControlOk (M : MachineCtx) (ctl : Ctl) : Prop :=
   (∀ l params cont, lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
-    Frag cont ∧ pot cont ≤ lemDefaultFuel) ∧
+    Frag cont) ∧
   ∀ pc ∈ ctl.κ,
     (∀ l params cont, lookupLabel (M.labelsAt pc.1) l = some (params, cont) →
-      Frag cont ∧ pot cont ≤ lemDefaultFuel) ∧
-    ∀ (a : List _root_.annot) (v : value), Frag (apply_ctx pc.2 (ofValA (.pure a [] v))) ∧
-      pot (apply_ctx pc.2 (ofValA (.pure a [] v))) ≤ lemDefaultFuel
+      Frag cont) ∧
+    ∀ (a : List _root_.annot) (v : value), Frag (apply_ctx pc.2 (ofValA (.pure a [] v)))
 
 /-- Plugging the RETURNED value node (`ofValA (.pure a [] v)` — the
     callee's node annotations over a fresh pexpr, `Step.ret`) into the
@@ -868,6 +806,7 @@ theorem Decomp.frag_plug_call {e : CoreExpr} {ctx : context} {an : List _root_.a
     Frag (apply_ctx ctx (ofValA (.pure a [] v))) :=
   hd.frag_plug_call' rfl hf a v
 
+omit [LemFuel] in
 /-- … and its potential does not exceed the caller's term's. -/
 theorem Decomp.pot_plug_call_le' {e : CoreExpr} {ctx : context} {r : CoreExpr}
     (hd : Decomp e ctx r) {an : List _root_.annot} {ra : core_run_annotation} {f : sym}
@@ -894,6 +833,7 @@ theorem Decomp.pot_plug_call_le' {e : CoreExpr} {ctx : context} {r : CoreExpr}
     simp only [apply_ctx, pot_unseq]
     omega
 
+omit [LemFuel] in
 theorem Decomp.pot_plug_call_le {e : CoreExpr} {ctx : context} {an : List _root_.annot}
     {ra : core_run_annotation} {f : sym} {pes : List (generic_pexpr Unit sym)}
     (hd : Decomp e ctx (callRedex an ra f pes)) (a : List _root_.annot) (v : value) :
@@ -905,30 +845,30 @@ restatement, 2026-09-03)
 
 The partial-correctness facts are stated over the production driver's own
 per-thread loop `drive_nonmemory_steps_aux2_lemFuel` (Driver.lean:346), at
-EVERY fuel, exactly as the total lane's `DriverDoneCtl` (ProdLoop.lean) is:
+every loop iteration counter, with the caller's ambient fuel instance:
 from any driver state holding the configuration at a live control. Where
 the total lane concludes delivery within `k + 2` iterations, the partial
 lane concludes that at every iteration count the loop either EXHAUSTS —
 its out-of-fuel value is the kernel-transparent kill
 `CerbND.fuelExhaustedKill` (the cerberus-lean fuel arc;
-`CerbND.drive_nonmemory_steps_aux2_lemFuel_zero`, `rfl`) — or DELIVERS a
+the generated worker's zero equation) — or DELIVERS a
 value satisfying the readout. Each round is the shipped round
 `loop_step_frag'` (DriverCollapse.lean) at the mirror step NotStuck
 supplies; the control invariant `ControlOk`, the env-depth invariant and
 the registration ties `LabeledProcs`/`CtlTied` are carried through PCALL
 and RETURN as in the total lane's CPS induction. -/
 
-/-- The two value shapes are small fragment terms within the fuel. -/
-theorem esize_ofValA_le (w : SpikeValA) : esize (ofValA w) ≤ lemDefaultFuel := by
-  refine Nat.le_trans (frag_ofValA w).esize_le_pot ?_
-  cases w <;> simp only [pot_ofValA_pure, pot_ofValA_annot] <;>
-    (rw [show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+omit [LemFuel] in
+/-- Value forms have a fixed structural size, independent of fuel. -/
+theorem esize_ofValA_le (w : SpikeValA) : esize (ofValA w) ≤ 3 := by
+  cases w <;> simp [ofValA, esize]
 
-theorem esize_ofVal_le (w : SpikeVal) : esize (ofVal w) ≤ lemDefaultFuel :=
+omit [LemFuel] in
+theorem esize_ofVal_le (w : SpikeVal) : esize (ofVal w) ≤ 3 :=
   esize_ofValA_le w.canon
 
 /-- THE DRIVER-SAFETY FACT AT A LIVE CONTROL — partial correctness over
-    the shipped driver's per-thread loop, AT EVERY FUEL: from any driver
+    the shipped driver's per-thread loop, at every loop iteration counter: from any driver
     state whose singleton thread holds `(e, ρ)` at the control `ctl` over
     `th₀`'s immutables, at layout state `σ`, with empty extern, the
     context's file, the whole-file registration tie for the callees
@@ -969,6 +909,20 @@ def DriverSafeCtl (M₀ : MachineCtx) (th₀ : thread_state) (e : CoreExpr) (ρ 
             layout_state := σfin,
             core_run_state0 := rs', trace := tr, dr_step_counter := ctr })
 
+/-- At ambient fuel zero the shipped loop kills before evaluating the
+    thread, at every loop counter and for every program and readout. -/
+theorem DriverSafeCtl.zero (hzero : LemFuel.fuel = 0)
+    (M₀ : MachineCtx) (th₀ : thread_state) (e : CoreExpr) (ρ : EnvStack)
+    (ctl : Ctl) (σ : Mem) (ψ : value → Mem → Prop) :
+    DriverSafeCtl M₀ th₀ e ρ ctl σ ψ := by
+  intro dst acc fl _ _ _ _ _ _ _
+  refine Or.inl ⟨dst, ?_⟩
+  cases fl with
+  | zero => rfl
+  | succ fl =>
+    unfold drive_nonmemory_steps_aux2_lemFuel
+    exact runOne_bind_zero hzero _ _ _
+
 /-- Monotonicity in the readout. -/
 theorem DriverSafeCtl.mono {M₀ : MachineCtx} {th₀ : thread_state} {e : CoreExpr}
     {ρ : EnvStack} {ctl : Ctl} {σ : Mem} {ψ ψ' : value → Mem → Prop}
@@ -1003,7 +957,7 @@ private def LoopOutcome (th₀ : thread_state) (ψ : value → Mem → Prop) (ds
 /-- A bare value at the EMPTY call stack: at fuel 0 and 1 the loop
     exhausts (`loop_zero_exhausts`, `loop_step_done_exhaust`); from fuel 2
     it delivers PROGRAM-DONE (`loop_step_done`). -/
-private theorem loopOutcome_value (th₀ : thread_state) (ψ : value → Mem → Prop)
+private theorem loopOutcome_value (hfuel : 0 < LemFuel.fuel) (th₀ : thread_state) (ψ : value → Mem → Prop)
     {dst : driver_state} (acc : Fmap thread_id (List core_step2)) (fl : Nat)
     (a b : List _root_.annot) (v : value) (ρ : EnvStack) (p : Option sym) (ℓ : exec_location)
     (lc : CerbLocation.Loc) (sp : RunSup)
@@ -1014,16 +968,16 @@ private theorem loopOutcome_value (th₀ : thread_state) (ψ : value → Mem →
     (ctlThread th₀ (ofValA (.pure a b v)) ρ ⟨[], p, ℓ, lc, sp⟩) rfl rfl
   match fl with
   | 0 => exact Or.inl ⟨dst, loop_zero_exhausts _ _ _ _⟩
-  | 1 => exact Or.inl ⟨dst, loop_step_done_exhaust fmapEmpty acc hth hsteps⟩
+  | 1 => exact Or.inl ⟨dst, loop_step_done_exhaust (hfuel := by omega) fmapEmpty acc hth hsteps⟩
   | f + 2 =>
     refine Or.inr ⟨v, dst.layout_state, ρ, p, ℓ, lc, sp, a, b, dst.core_run_state0, dst.trace,
       dst.dr_step_counter, hψ, ?_⟩
-    rw [loop_step_done f fmapEmpty acc hth hsteps]
+    rw [loop_step_done (hfuel := by omega) f fmapEmpty acc hth hsteps]
     rw [← hth]
 
 /-- An annotated value at the EMPTY call stack: the REMOVE-ANNOT tau,
     then the bare value's outcomes. -/
-private theorem loopOutcome_annot (th₀ : thread_state) (ψ : value → Mem → Prop)
+private theorem loopOutcome_annot (hfuel : 0 < LemFuel.fuel) (th₀ : thread_state) (ψ : value → Mem → Prop)
     {dst : driver_state} (acc : Fmap thread_id (List core_step2)) (fl : Nat)
     (a a2 b : List _root_.annot) (ds : List dyn_annotation) (v : value) (ρ : EnvStack)
     (p : Option sym) (ℓ : exec_location) (lc : CerbLocation.Loc) (sp : RunSup)
@@ -1033,7 +987,7 @@ private theorem loopOutcome_annot (th₀ : thread_state) (ψ : value → Mem →
   match fl with
   | 0 => exact Or.inl ⟨dst, loop_zero_exhausts _ _ _ _⟩
   | f + 1 =>
-    have hrun := loop_step_tau f fmapEmpty acc hth
+    have hrun := loop_step_tau (hfuel := by omega) f fmapEmpty acc hth
       (step_ctx_remove_annot ds v fmapEmpty dst.layout_state dst.core_file
         dst.core_extern 0 none (ctlThread th₀ (ofValA (.annot a a2 b ds v)) ρ ⟨[], p, ℓ, lc, sp⟩) rfl)
     have hth' : (update_thread_state 0
@@ -1043,7 +997,7 @@ private theorem loopOutcome_annot (th₀ : thread_state) (ψ : value → Mem →
         [(0, (none, ctlThread th₀ (ofValA (.pure a2 b v)) ρ ⟨[], p, ℓ, lc, sp⟩))] := by
       rw [update_thread_state_single _ _ _ hth]
       rfl
-    have h := loopOutcome_value th₀ ψ
+    have h := loopOutcome_value (hfuel := by omega) th₀ ψ
       (dst := { { dst with dr_step_counter := dst.dr_step_counter + 1 }
           with core_state0 := (update_thread_state 0
             { ctlThread th₀ (ofValA (.annot a a2 b ds v)) ρ ⟨[], p, ℓ, lc, sp⟩ with
@@ -1090,7 +1044,8 @@ private theorem loopOutcome_step {th₀ : thread_state} {ψ : value → Mem → 
 /-- THE FUEL INDUCTION (the partial lane's engine): at every mirror-
     reachable configuration whose control satisfies `ControlOk`, whose
     env stack is deeper than the call stack, held by a driver state tied
-    to the context, every fuel's outcome is admissible. Fuel 0 is the
+    to the context, every loop counter's outcome is admissible when the ambient budget is
+    at least two. Counter 0 is the
     exhaustion kill; at `f + 1` the round is the shipped round
     `loop_step_frag'` at the mirror step NotStuck supplies — a value at
     the empty stack is a Language value (the readout, then PROGRAM-DONE
@@ -1100,7 +1055,7 @@ private theorem loopOutcome_step {th₀ : thread_state} {ψ : value → Mem → 
     pushing a frame that satisfies the invariant by the plug lemmas and
     tied by `LabeledProcs`; every other step is control-preserving — and
     the induction hypothesis applies at `f` to the successor. -/
-private theorem drive_safe_aux {M₀ : MachineCtx} (htd : M₀.tagDefs = fmapEmpty)
+private theorem drive_safe_aux (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCtx} (htd : M₀.tagDefs = fmapEmpty)
     (hex : M₀.extern = fmapEmpty) (hPf : M₀.FragProcs)
     {th₀ : thread_state}
     (e₀ : CoreExpr) (ρ₀ : EnvStack) (ctl₀ : Ctl) (σ₀ : Mem)
@@ -1113,7 +1068,7 @@ private theorem drive_safe_aux {M₀ : MachineCtx} (htd : M₀.tagDefs = fmapEmp
     ∀ (fl : Nat) (e : CoreExpr) (ρ : EnvStack) (ctl : Ctl) (dst : driver_state)
       (acc : Fmap thread_id (List core_step2)),
       Reach ((⟨e₀, ρ₀, ctl₀, M₀⟩ : CoreRt), σ₀) ((⟨e, ρ, ctl, M₀⟩ : CoreRt), dst.layout_state) →
-      Frag e → pot e ≤ lemDefaultFuel → ControlOk M₀ ctl → ctl.κ.length < ρ.length →
+      Frag e → ControlOk M₀ ctl → ctl.κ.length < ρ.length →
       dst.core_state0.thread_states = [(0, (none, ctlThread th₀ e ρ ctl))] →
       dst.core_extern = fmapEmpty → dst.core_file = M₀.file →
       LabeledProcs M₀ dst.core_run_state0.labeled →
@@ -1124,10 +1079,10 @@ private theorem drive_safe_aux {M₀ : MachineCtx} (htd : M₀.tagDefs = fmapEmp
   intro fl
   induction fl with
   | zero =>
-    intro e ρ ctl dst acc _ _ _ _ _ _ _ _ _ _ _
+    intro e ρ ctl dst acc _ _ _ _ _ _ _ _ _ _
     exact Or.inl ⟨dst, loop_zero_exhausts _ _ _ _⟩
   | succ f ih =>
-    intro e ρ ctl dst acc hreach hf hpot hok hlen hth hext hfile hlab htied hsup
+    intro e ρ ctl dst acc hreach hf hok hlen hth hext hfile hlab htied hsup
     obtain ⟨κ, pr, ℓ, lc, sp⟩ := ctl
     have hjmp : ∀ l params cont,
         lookupLabel (M₀.labelsAt (Ctl.mk κ pr ℓ lc sp).proc) l = some (params, cont) →
@@ -1143,10 +1098,10 @@ private theorem drive_safe_aux {M₀ : MachineCtx} (htd : M₀.tagDefs = fmapEmp
       | nil =>
         cases wa with
         | pure a b v =>
-          exact loopOutcome_value th₀ ψ acc (f + 1) a b v ρ pr ℓ lc sp hth
+          exact loopOutcome_value (hfuel := by omega) th₀ ψ acc (f + 1) a b v ρ pr ℓ lc sp hth
             (hRES ⟨.pure a b v, ρ, pr, ℓ, M₀, lc, sp⟩ dst.layout_state hreach)
         | annot a a2 b ds v =>
-          exact loopOutcome_annot th₀ ψ acc (f + 1) a a2 b ds v ρ pr ℓ lc sp hth
+          exact loopOutcome_annot (hfuel := by omega) th₀ ψ acc (f + 1) a a2 b ds v ρ pr ℓ lc sp hth
             (hRES ⟨.annot a a2 b ds v, ρ, pr, ℓ, M₀, lc, sp⟩ dst.layout_state hreach)
       | cons pc κ =>
         obtain ⟨p, ctx⟩ := pc
@@ -1174,12 +1129,12 @@ private theorem drive_safe_aux {M₀ : MachineCtx} (htd : M₀.tagDefs = fmapEmp
             subst hρ
             -- THE RETURN round
             obtain ⟨rs', tr, ctr, hlbl, hsup', hrun⟩ :=
-              loop_step_frag' (th₀ := ctlThread th₀ (ofValA (.pure a1 b1 v)) (ev0 :: rρ')
+              loop_step_frag' (hfuel := by omega) (th₀ := ctlThread th₀ (ofValA (.pure a1 b1 v)) (ev0 :: rρ')
                   ⟨(p, ctx) :: κ, pr, ℓ, lc, sp⟩)
                 htd hex rfl rfl rfl rfl f acc hth hext hfile hjmp hsup (.val_pure v)
-                (esize_ofValA_le (.pure a1 b1 v)) hs
+                hs
             refine loopOutcome_step hrun (ih _ rρ' ⟨κ, p, ℓ, lc, sp⟩ _ acc (hreach.tail ⟨hs, rfl⟩)
-              (hplug a1 v).1 (hplug a1 v).2
+              (hplug a1 v)
               ⟨hlabC, fun pc' hpc' => hκ pc' (List.mem_cons_of_mem _ hpc')⟩
               (hs.env_depth hlen) ?_ hext hfile ?_ ?_ ?_)
             · rw [update_thread_state_single _ _ _ hth]
@@ -1202,15 +1157,12 @@ private theorem drive_safe_aux {M₀ : MachineCtx} (htd : M₀.tagDefs = fmapEmp
               | nil => simp at hlen
               | cons ev0 evs => exact ⟨ev0, evs, rfl⟩
             obtain ⟨rs', tr, ctr, hlbl, hsup', hrun⟩ :=
-              loop_step_frag' (th₀ := ctlThread th₀ (ofValA (.annot a1 a2 b1 ds v)) (ev0 :: evs)
+              loop_step_frag' (hfuel := by omega) (th₀ := ctlThread th₀ (ofValA (.annot a1 a2 b1 ds v)) (ev0 :: evs)
                   ⟨(p, ctx) :: κ, pr, ℓ, lc, sp⟩)
                 htd hex rfl rfl rfl rfl f acc hth hext hfile hjmp hsup (.annot (.val_pure v))
-                (esize_ofValA_le (.annot a1 a2 b1 ds v)) hs
+                hs
             refine loopOutcome_step hrun (ih _ (ev0 :: evs) ⟨(p, ctx) :: κ, pr, ℓ, lc, sp⟩ _ acc
               (hreach.tail ⟨hs, rfl⟩) (.val_pure v)
-              (by show pot (ofValA (.pure a2 b1 v)) ≤ lemDefaultFuel
-                  have hpot' : pot (ofValA (.annot a1 a2 b1 ds v)) ≤ lemDefaultFuel := hpot
-                  rw [pot_ofValA_pure]; rw [pot_ofValA_annot] at hpot'; omega)
               ⟨hlabP, hκ⟩ hlen ?_ hext hfile ?_ ?_ ?_)
             · rw [update_thread_state_single _ _ _ hth]
               rfl
@@ -1242,24 +1194,18 @@ private theorem drive_safe_aux {M₀ : MachineCtx} (htd : M₀.tagDefs = fmapEmp
         cases ρ with
         | nil => simp at hlen
         | cons ev0 evs => exact ⟨ev0, evs, rfl⟩
-      have hsz : esize e ≤ lemDefaultFuel := Nat.le_trans hf.esize_le_pot hpot
       rcases hs.ctl_cases with ⟨a', heq⟩ | ⟨a', heq⟩ |
           ⟨ctx, fsym, pes, params, body, vs, hc, hvs, hfl, hlen', rfl, rfl, rfl, rfl⟩ |
           ⟨_, _, v, _, _, _, _, _, _, _, _, _, he, -⟩
       · -- control-preserving (the jump included)
         subst heq
         obtain ⟨rs', tr, ctr, hlbl, hsup', hrun⟩ :=
-          loop_step_frag' (th₀ := ctlThread th₀ e (ev0 :: evs) ⟨κ, pr, ℓ, lc, sp⟩)
-            htd hex rfl rfl rfl rfl f acc hth hext hfile hjmp hsup hf hsz hs
+          loop_step_frag' (hfuel := by omega) (th₀ := ctlThread th₀ e (ev0 :: evs) ⟨κ, pr, ℓ, lc, sp⟩)
+            htd hex rfl rfl rfl rfl f acc hth hext hfile hjmp hsup hf hs
         obtain ⟨ev0', rfl⟩ := Step.env_cons hs rfl
-        have hpot' : pot re' ≤ lemDefaultFuel := by
-          rcases hf.pot_step_bound hsz hs rfl with hle | ⟨l, pes, params, cont, -, hl, hec⟩
-          · exact Nat.le_trans hle hpot
-          · rw [hec]
-            exact (hlabP l params cont hl).2
         refine loopOutcome_step hrun (ih re' (ev0' :: evs) ((⟨κ, pr, ℓ, lc, sp⟩ : Ctl).upd a') _ acc
           (hreach.tail ⟨hs, rfl⟩)
-          (hf.step (fun l params cont hl => (hlabP l params cont hl).1) hsz hs rfl) hpot'
+          (hf.step (fun l params cont hl => hlabP l params cont hl) hs rfl)
           ⟨hlabP, hκ⟩ hlen ?_ hext hfile ?_ ?_ ?_)
         · rw [update_thread_state_single _ _ _ hth]
           rfl
@@ -1273,17 +1219,12 @@ private theorem drive_safe_aux {M₀ : MachineCtx} (htd : M₀.tagDefs = fmapEmp
       · -- E5: the negative-action round — control-preserving, the supplies drawn
         subst heq
         obtain ⟨rs', tr, ctr, hlbl, hsup', hrun⟩ :=
-          loop_step_frag' (th₀ := ctlThread th₀ e (ev0 :: evs) ⟨κ, pr, ℓ, lc, sp⟩)
-            htd hex rfl rfl rfl rfl f acc hth hext hfile hjmp hsup hf hsz hs
+          loop_step_frag' (hfuel := by omega) (th₀ := ctlThread th₀ e (ev0 :: evs) ⟨κ, pr, ℓ, lc, sp⟩)
+            htd hex rfl rfl rfl rfl f acc hth hext hfile hjmp hsup hf hs
         obtain ⟨ev0', rfl⟩ := Step.env_cons hs rfl
-        have hpot' : pot re' ≤ lemDefaultFuel := by
-          rcases hf.pot_step_bound hsz hs rfl with hle | ⟨l, pes, params, cont, -, hl, hec⟩
-          · exact Nat.le_trans hle hpot
-          · rw [hec]
-            exact (hlabP l params cont hl).2
         refine loopOutcome_step hrun (ih re' (ev0' :: evs) (((⟨κ, pr, ℓ, lc, sp⟩ : Ctl).upd a').draw) _ acc
           (hreach.tail ⟨hs, rfl⟩)
-          (hf.step (fun l params cont hl => (hlabP l params cont hl).1) hsz hs rfl) hpot'
+          (hf.step (fun l params cont hl => hlabP l params cont hl) hs rfl)
           ⟨hlabP, hκ⟩ hlen ?_ hext hfile ?_ ?_ ?_)
         · rw [update_thread_state_single _ _ _ hth]
           rfl
@@ -1298,16 +1239,15 @@ private theorem drive_safe_aux {M₀ : MachineCtx} (htd : M₀.tagDefs = fmapEmp
         obtain ⟨ctx', r, hd, hfr⟩ := hf.decomp hv
         obtain ⟨rfl, an, ra, rfl⟩ := hd.callRedex?_inv hc
         obtain ⟨rs', tr, ctr, hlbl, hsup', hrun⟩ :=
-          loop_step_frag' (th₀ := ctlThread th₀ e (ev0 :: evs) ⟨κ, pr, ℓ, lc, sp⟩)
-            htd hex rfl rfl rfl rfl f acc hth hext hfile hjmp hsup hf hsz hs
+          loop_step_frag' (hfuel := by omega) (th₀ := ctlThread th₀ e (ev0 :: evs) ⟨κ, pr, ℓ, lc, sp⟩)
+            htd hex rfl rfl rfl rfl f acc hth hext hfile hjmp hsup hf hs
         refine loopOutcome_step hrun (ih re' (procEnv params vs :: ev0 :: evs) _ _ acc
           (hreach.tail ⟨hs, rfl⟩) (hPf.body fsym params re' hfl)
-          (hPf.potBound fsym params re' hfl) ⟨?_, ?_⟩ (hs.env_depth hlen) ?_ hext hfile ?_ ?_ ?_)
+          ⟨?_, ?_⟩ (hs.env_depth hlen) ?_ hext hfile ?_ ?_ ?_)
         · exact hPf.labels fsym params re' hfl
         · intro pc hpc
           rcases List.mem_cons.mp hpc with rfl | hpc'
-          · exact ⟨hlabP, fun a v => ⟨hd.frag_plug_call hf a v,
-              Nat.le_trans (hd.pot_plug_call_le a v) hpot⟩⟩
+          · exact ⟨hlabP, fun a v => hd.frag_plug_call hf a v⟩
           · exact hκ pc hpc'
         · rw [update_thread_state_single _ _ _ hth]
           rfl
@@ -1333,23 +1273,20 @@ private theorem drive_safe_aux {M₀ : MachineCtx} (htd : M₀.tagDefs = fmapEmp
     at the configuration plus the seeded memory implies `DriverSafeCtl`:
     from any driver state holding the configuration at the entry control
     over `th₀`'s immutables (the location LIVE on the control, `ctl.curLoc`,
-    since E1), the shipped loop at EVERY fuel exhausts or delivers a value satisfying
-    the readout. The fuel premises are the static `pot` bounds (program
-    and every registered label body); the context's tag definitions and
+    since E1), the shipped loop at every loop iteration counter exhausts or delivers a value satisfying
+    the readout. The ambient budget is at least two; the context's tag definitions and
     extern map are empty (the production driver's, `drive fmapEmpty
     false …`); `FragProcs` puts every declared procedure body in the
     cone (the run may call them). -/
-theorem engine_adequacy {GF : BundledGFunctors} [SpikeGpreS GF]
+theorem engine_adequacy (hfuel : 2 ≤ LemFuel.fuel) {GF : BundledGFunctors} [SpikeGpreS GF]
     {M : MachineCtx} (htd : M.tagDefs = fmapEmpty) (hex : M.extern = fmapEmpty)
     {ctl : Ctl} (hκ : ctl.κ = [])
     (hQf : ∀ l params cont, lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
       Frag cont)
-    (hQpot : ∀ l params cont, lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
-      pot cont ≤ lemDefaultFuel)
     (hPf : M.FragProcs)
     (e₀ : CoreExpr) (ev00 : Fmap sym value) (evs0 : List (Fmap sym value))
     (σ₀ : Mem) (m₀ : SpikeHeapF SpikeCell)
-    (hfrag : Frag e₀) (hpot : pot e₀ ≤ lemDefaultFuel) (hcoh : Coh M.tagDefs σ₀ m₀)
+    (hfrag : Frag e₀) (hcoh : Coh M.tagDefs σ₀ m₀)
     (ψ : value → Mem → Prop)
     (hwp : ∀ [SpikeGS .hasLC GF],
       iprop(([∗map] i ↦ c ∈ m₀, cellOwn M.tagDefs (hlc := .hasLC) (GF := GF) i (.own 1) c)) ⊢
@@ -1375,12 +1312,13 @@ theorem engine_adequacy {GF : BundledGFunctors} [SpikeGpreS GF]
     exact (hadeq [ofValRt w] σ (Reach.toPool hr)).2 w [] rfl
   intro dst acc fl hth hσ hext hfile hlab htied hsup
   subst hσ
-  exact drive_safe_aux htd hex hPf e₀ (ev00 :: evs0) ctl dst.layout_state ψ hNS hRES
-    fl e₀ (ev00 :: evs0) ctl dst acc .refl hfrag hpot
-    ⟨fun l params cont hl => ⟨hQf l params cont hl, hQpot l params cont hl⟩,
+  exact drive_safe_aux (hfuel := by omega) htd hex hPf e₀ (ev00 :: evs0) ctl dst.layout_state ψ hNS hRES
+    fl e₀ (ev00 :: evs0) ctl dst acc .refl hfrag
+    ⟨hQf,
       fun pc hpc => by rw [hκ] at hpc; cases hpc⟩
     (by rw [hκ]; simp) hth hext hfile hlab htied hsup
 
+omit [LemFuel] in
 /-- The spike context has no registered labels (its run state's
     `labeled` is empty), so the label-cone hypotheses are vacuous. -/
 theorem spikeCtx_labels_none (l : sym)
@@ -1389,33 +1327,31 @@ theorem spikeCtx_labels_none (l : sym)
   rw [spikeCtx_labels, lookupLabel_empty] at h
   cases h
 
-/-- The straight-line profile registers no labels: the label-cone and
-    label-budget premises of the adequacy/projection theorems are
-    vacuous there (the two spellings every `spikeCtx` client passes). -/
+/-- The straight-line profile registers no labels, so its label-fragment
+    premise is vacuous. -/
 theorem spikeCtx_labels_frag (l : sym) (params : List (sym × core_base_type))
     (cont : CoreExpr) (hl : lookupLabel (spikeCtx.labelsAt spikeCtl.proc) l = some (params, cont)) :
     Frag cont := (spikeCtx_labels_none l hl).elim
 
-theorem spikeCtx_labels_pot (l : sym) (params : List (sym × core_base_type))
+omit [LemFuel] in
+theorem spikeCtx_labels_pot (bound : Nat) (l : sym) (params : List (sym × core_base_type))
     (cont : CoreExpr) (hl : lookupLabel (spikeCtx.labelsAt spikeCtl.proc) l = some (params, cont)) :
-    pot cont ≤ lemDefaultFuel := (spikeCtx_labels_none l hl).elim
+    pot cont ≤ bound := (spikeCtx_labels_none l hl).elim
 
 /-- ALLOCATION-AWARE engine adequacy at any machine context (alloc arc
     P2 — the partial lane's engine face for allocating clients): as
     `engine_adequacy`, but launched through `launchResources` — the
     client's WP proof receives the footprint cells AND the budget
     `allocBudget B` (via `spike_step_adequacy_alloc`). -/
-theorem engine_adequacy_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
+theorem engine_adequacy_alloc (hfuel : 2 ≤ LemFuel.fuel) {GF : BundledGFunctors} [SpikeGpreS GF]
     {M : MachineCtx} (htd : M.tagDefs = fmapEmpty) (hex : M.extern = fmapEmpty)
     {ctl : Ctl} (hκ : ctl.κ = [])
     (hQf : ∀ l params cont, lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
       Frag cont)
-    (hQpot : ∀ l params cont, lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
-      pot cont ≤ lemDefaultFuel)
     (hPf : M.FragProcs)
     (e₀ : CoreExpr) (ev00 : Fmap sym value) (evs0 : List (Fmap sym value))
     (σ₀ : Mem) (m₀ : SpikeHeapF SpikeCell) (B : Nat)
-    (hfrag : Frag e₀) (hpot : pot e₀ ≤ lemDefaultFuel)
+    (hfrag : Frag e₀)
     (hl : LaunchCoh M.tagDefs σ₀ m₀ B)
     (ψ : value → Mem → Prop)
     (hwp : ∀ [SpikeGS .hasLC GF],
@@ -1444,9 +1380,9 @@ theorem engine_adequacy_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
     exact (hadeq [ofValRt w] σ (Reach.toPool hr)).2 w [] rfl
   intro dst acc fl hth hσ hext hfile hlab htied hsup
   subst hσ
-  exact drive_safe_aux htd hex hPf e₀ (ev00 :: evs0) ctl dst.layout_state ψ hNS hRES
-    fl e₀ (ev00 :: evs0) ctl dst acc .refl hfrag hpot
-    ⟨fun l params cont hl => ⟨hQf l params cont hl, hQpot l params cont hl⟩,
+  exact drive_safe_aux (hfuel := by omega) htd hex hPf e₀ (ev00 :: evs0) ctl dst.layout_state ψ hNS hRES
+    fl e₀ (ev00 :: evs0) ctl dst acc .refl hfrag
+    ⟨hQf,
       fun pc hpc => by rw [hκ] at hpc; cases hpc⟩
     (by rw [hκ]; simp) hth hext hfile hlab htied hsup
 
@@ -1478,6 +1414,7 @@ abbrev CellMap := SpikeHeapF SpikeCell
     function-pointer tables) is arbitrary. -/
 abbrev Sat (tds : CerbTags.TagDefsMap) (σ : Mem) (m : CellMap) : Prop := Coh tds σ m
 
+omit [LemFuel] in
 /-- Satisfaction is closed under shrinking the footprint (substitute
     into larger/more constraining contexts, satisfaction side). -/
 theorem Sat.mono {tds : CerbTags.TagDefsMap} {σ : Mem} {m m' : CellMap} (h : Sat tds σ m) (hsub : m' ⊆ m) :
@@ -1485,6 +1422,7 @@ theorem Sat.mono {tds : CerbTags.TagDefsMap} {σ : Mem} {m m' : CellMap} (h : Sa
   ⟨fun i c hg => h.cells i c (hsub i c hg),
    fun i j c1 c2 hne h1 h2 => h.disj i j c1 c2 hne (hsub _ _ h1) (hsub _ _ h2)⟩
 
+omit [LemFuel] in
 /-- Satisfaction of a (left-biased) union restricts to its left
     component: `get?` on the union answers the left map's entry
     verbatim wherever the left map is defined. -/
@@ -1508,13 +1446,12 @@ theorem Sat.union_left {tds : CerbTags.TagDefsMap} {σ : Mem} {Q R : CellMap}
     every memory that splits as P ⊎ R — footprint P satisfied, rest R
     ARBITRARY — and every driver state holding `(e, ρ)` at the control
     over any thread immutables (the location live on the control since
-    E1), the shipped loop at EVERY fuel exhausts or delivers a value `v` with a
+    E1), the shipped loop at every loop iteration counter exhausts or delivers a value `v` with a
     post-footprint `Q`, `post v Q`, THE SAME `R` returned verbatim
     (`Sat σ' (Q ∪ R)`) — it never kills otherwise and never derails.
-    Partial correctness: exhaustion is unconstrained and the fuel is
-    UNBOUNDED — the triple carries no fuel premise (the engine's static
-    get_ctx budget, `pot`, is a hypothesis of the projection theorems
-    that produce triples; header, FUEL HONESTY). -/
+    Partial correctness: exhaustion is unconstrained and the loop
+    iteration counter is unbounded. The triple retains `[LemFuel]`;
+    its projection theorem supplies the ambient lower bound. -/
 def SemTriple (M : MachineCtx) (ctl : Ctl) (ρ : EnvStack) (e : CoreExpr) (P : CellMap)
     (post : value → CellMap → Prop) : Prop :=
   ∀ (R : CellMap), P ##ₘ R →
@@ -1562,10 +1499,10 @@ pure-consequence obligation, in which `Q`, `CohG`,
 (definitions to read). Beneath it `project_triple` keeps that
 obligation inside the post (strongest-post form). The proof is
 `engine_adequacy` + `stateInterp_readout` (the ONE open/close of the
-state interpretation) + `spike_wp_wand`. The static fuel hypotheses
-(`pot` bounds on the program and every registered body) are the
-projection theorems' — the boring triples carry none (FUEL HONESTY,
-static form). -/
+state interpretation) + `spike_wp_wand`. The projection theorem
+requires `2 ≤ LemFuel.fuel` and fragment membership; the resulting
+triple retains that fuel instance and covers every loop iteration
+counter. -/
 
 /-- THE BORING TRIPLE WITH A MEMORY POSTCONDITION, at any machine
     context and entry environment: `SemTriple` with the postcondition
@@ -1573,12 +1510,12 @@ static form). -/
     the frame is part of the definition, not a separate rule): for every
     memory that splits as P ⊎ R — footprint P satisfied, rest R
     ARBITRARY — and every driver state holding the configuration, the
-    shipped loop at EVERY fuel exhausts or delivers, never kills
+    shipped loop at every loop iteration counter exhausts or delivers, never kills
     otherwise and never derails, and any delivered `(v, σ')` satisfies
     `post R v σ'`. `SemTriple` is its instance at the cells-shaped post
-    (`SemTriple_iff_Mem`, definitional). Partial correctness; the fuel is
-    UNBOUNDED and the triple carries no fuel premise (the static `pot`
-    bounds are the projection theorems' hypotheses). -/
+    (`SemTriple_iff_Mem`, definitional). Partial correctness at the
+    retained `[LemFuel]` instance and every loop iteration counter;
+    the projection theorem supplies the ambient lower bound. -/
 def MemTriple (M : MachineCtx) (ctl : Ctl) (ρ : EnvStack) (e : CoreExpr) (P : CellMap)
     (post : CellMap → value → Mem → Prop) : Prop :=
   ∀ (R : CellMap), P ##ₘ R →
@@ -1596,6 +1533,7 @@ theorem SemTriple_iff_Mem (M : MachineCtx) (ctl : Ctl) (ρ : EnvStack) (e : Core
         Sat M.tagDefs σ' (Iris.Std.PartialMap.union Q R)) :=
   Iff.rfl
 
+omit [LemFuel] in
 /-- Interior: an assertion entails the pure fact "every ψ it
     pure-entails holds" (the pure-implication law, classical). -/
 theorem consequences_intro {GF : BundledGFunctors} {Φ : IProp GF} {H : Prop → Prop}
@@ -1613,18 +1551,16 @@ theorem consequences_intro {GF : BundledGFunctors} {Φ : IProp GF} {H : Prop →
     the boring triple whose postcondition is every pure consequence
     of `Q w ∗ frame-cells` at the final memory, for every `w` erasing
     to the delivered value. `engine_adequacy` + `stateInterp_readout`
-    + `spike_wp_wand`; the fragment and static fuel hypotheses are
+    + `spike_wp_wand`; the fragment premises and ambient fuel bound are
     `engine_adequacy`'s, unchanged. The headline `project_triple_pure`
     below is derived from this. -/
-theorem project_triple {GF : BundledGFunctors} [SpikeGpreS GF]
+theorem project_triple (hfuel : 2 ≤ LemFuel.fuel) {GF : BundledGFunctors} [SpikeGpreS GF]
     {M : MachineCtx} (htd : M.tagDefs = fmapEmpty) (hex : M.extern = fmapEmpty)
     {ctl : Ctl} (hκ : ctl.κ = [])
     (hQf : ∀ l params cont, lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
       Frag cont)
-    (hQpot : ∀ l params cont, lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
-      pot cont ≤ lemDefaultFuel)
     (hPf : M.FragProcs)
-    {e : CoreExpr} (hfrag : Frag e) (hpot : pot e ≤ lemDefaultFuel)
+    {e : CoreExpr} (hfrag : Frag e)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value))
     (P : CellMap) (Q : ∀ [SpikeGS .hasLC GF], CoreRVal → IProp GF)
     (hwp : ∀ [SpikeGS .hasLC GF],
@@ -1637,8 +1573,8 @@ theorem project_triple {GF : BundledGFunctors} [SpikeGpreS GF]
         iprop(Q w ∗ ([∗map] i ↦ c ∈ R, cellOwn M.tagDefs (hlc := .hasLC) (GF := GF) i (.own 1) c) ∗
           metaInterp mm ∗ byteInterp mb) ⊢ (⌜ψ⌝ : IProp GF)) → ψ) := by
   intro R hdisj σ hsat th₀
-  refine engine_adequacy (GF := GF) htd hex hκ hQf hQpot hPf e ev0 evs σ
-    (Iris.Std.PartialMap.union P R) hfrag hpot hsat _ ?_ th₀
+  refine engine_adequacy (hfuel := by omega) (GF := GF) htd hex hκ hQf hPf e ev0 evs σ
+    (Iris.Std.PartialMap.union P R) hfrag hsat _ ?_ th₀
   intro instGS
   refine .trans (BigSepM.bigSepM_union hdisj).1 ?_
   iintro ⟨HP, HR⟩
@@ -1666,15 +1602,13 @@ theorem project_triple {GF : BundledGFunctors} [SpikeGpreS GF]
     `ψ R v σ'`. The one Iris-shaped hypothesis `hpost` is discharged for
     the points-to shapes by the `*_consequence` lemmas below. Derived
     from the strongest-post form `project_triple`. -/
-theorem project_triple_pure {GF : BundledGFunctors} [SpikeGpreS GF]
+theorem project_triple_pure (hfuel : 2 ≤ LemFuel.fuel) {GF : BundledGFunctors} [SpikeGpreS GF]
     {M : MachineCtx} (htd : M.tagDefs = fmapEmpty) (hex : M.extern = fmapEmpty)
     {ctl : Ctl} (hκ : ctl.κ = [])
     (hQf : ∀ l params cont, lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
       Frag cont)
-    (hQpot : ∀ l params cont, lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
-      pot cont ≤ lemDefaultFuel)
     (hPf : M.FragProcs)
-    {e : CoreExpr} (hfrag : Frag e) (hpot : pot e ≤ lemDefaultFuel)
+    {e : CoreExpr} (hfrag : Frag e)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value))
     (P : CellMap) (Q : ∀ [SpikeGS .hasLC GF], CoreRVal → IProp GF)
     (ψ : CellMap → value → Mem → Prop)
@@ -1688,7 +1622,7 @@ theorem project_triple_pure {GF : BundledGFunctors} [SpikeGpreS GF]
         metaInterp mm ∗ byteInterp mb) ⊢ (⌜ψ R w.val σ'⌝ : IProp GF)) :
     MemTriple M ctl (ev0 :: evs) e P ψ := by
   intro R hdisj σ hsat th₀
-  refine (project_triple (GF := GF) htd hex hκ hQf hQpot hPf hfrag hpot ev0 evs P Q hwp
+  refine (project_triple (hfuel := by omega) (GF := GF) htd hex hκ hQf hPf hfrag ev0 evs P Q hwp
     R hdisj σ hsat th₀).mono ?_
   intro v σ' hall
   refine hall (ψ R v σ') ?_
@@ -1711,7 +1645,8 @@ place of `Sat M.tagDefs σ (P ∪ R)`. The two genuinely differ:
 well-formedness invariant `MemWF σ` (K0: allocation-id discipline,
 live/dead consistency, range disjointness of ALL live allocations,
 cursor bounds, the dynamic-address facts) PLUS the budget coupling
-inequality `B ≤ headroom lastAddress` (K2.5) — none of which
+inequality `B ≤ headroom lastAddress` (K2.5) and `UnallocatedBytes σ`
+for real-byte freshness — none of which
 follows from `Sat` (a memory can carry the footprint and still have
 its allocator cursor sitting on top of those cells). The frame stays
 built into the definition (`R`
@@ -1726,10 +1661,10 @@ stronger launch premise. -/
     `LaunchCoh M.tagDefs σ (P ∪ R) B` (footprint satisfied AND the
     allocator healthy with the budget `B` below the engine's own
     cursor's headroom). Frame built in (`R` arbitrary, returned to the
-    post); partial correctness over the shipped loop at every fuel from
-    any driver state holding the configuration, as in `MemTriple`.
-    Freshness under `LaunchCoh` is GLOBAL (`MemWF`,
-    `create_fresh_global`; the `LaunchCoh` section header). -/
+    post); partial correctness at every loop iteration counter from
+    any driver state holding the configuration, retaining the ambient
+    fuel instance as in `MemTriple`. `LaunchCoh` supplies global
+    allocation and real-byte freshness (`MemWF`, `UnallocatedBytes`). -/
 def MemTriple_alloc (M : MachineCtx) (ctl : Ctl) (ρ : EnvStack) (e : CoreExpr) (P : CellMap)
     (B : Nat) (post : CellMap → value → Mem → Prop) : Prop :=
   ∀ (R : CellMap), P ##ₘ R →
@@ -1755,19 +1690,17 @@ theorem MemTriple_alloc_of_MemTriple {M : MachineCtx} {ctl : Ctl} {ρ : EnvStack
     consequence of `Q w ∗ frame-cells` at the final memory — the
     same post as `project_triple`'s. Proof: `engine_adequacy_alloc`
     (the `launchResources` launch under `LaunchCoh`) +
-    `stateInterp_readout` + `spike_wp_wand`; the fragment and static
-    fuel hypotheses are `engine_adequacy_alloc`'s, unchanged.
+    `stateInterp_readout` + `spike_wp_wand`; the fragment premises and
+    ambient lower bound are `engine_adequacy_alloc`'s, unchanged.
     Strongest-post form; `project_triple_pure_alloc` below is the
     boring headline derived from it. -/
-theorem project_triple_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
+theorem project_triple_alloc (hfuel : 2 ≤ LemFuel.fuel) {GF : BundledGFunctors} [SpikeGpreS GF]
     {M : MachineCtx} (htd : M.tagDefs = fmapEmpty) (hex : M.extern = fmapEmpty)
     {ctl : Ctl} (hκ : ctl.κ = [])
     (hQf : ∀ l params cont, lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
       Frag cont)
-    (hQpot : ∀ l params cont, lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
-      pot cont ≤ lemDefaultFuel)
     (hPf : M.FragProcs)
-    {e : CoreExpr} (hfrag : Frag e) (hpot : pot e ≤ lemDefaultFuel)
+    {e : CoreExpr} (hfrag : Frag e)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value))
     (P : CellMap) (B : Nat) (Q : ∀ [SpikeGS .hasLC GF], CoreRVal → IProp GF)
     (hwp : ∀ [SpikeGS .hasLC GF],
@@ -1781,8 +1714,8 @@ theorem project_triple_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
         iprop(Q w ∗ ([∗map] i ↦ c ∈ R, cellOwn M.tagDefs (hlc := .hasLC) (GF := GF) i (.own 1) c) ∗
           metaInterp mm ∗ byteInterp mb) ⊢ (⌜ψ⌝ : IProp GF)) → ψ) := by
   intro R hdisj σ hl th₀
-  refine engine_adequacy_alloc (GF := GF) htd hex hκ hQf hQpot hPf e ev0 evs σ
-    (Iris.Std.PartialMap.union P R) B hfrag hpot hl _ ?_ th₀
+  refine engine_adequacy_alloc (hfuel := by omega) (GF := GF) htd hex hκ hQf hPf e ev0 evs σ
+    (Iris.Std.PartialMap.union P R) B hfrag hl _ ?_ th₀
   intro instGS
   refine .trans (BI.sep_mono (BigSepM.bigSepM_union hdisj).1 .rfl) ?_
   iintro ⟨⟨HP, HR⟩, HC⟩
@@ -1804,15 +1737,13 @@ theorem project_triple_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
     whose framed post pure-entails `ψ R w.val σ'` projects to
     `MemTriple_alloc M ctl ρ e P B ψ` — engine vocabulary only in the
     conclusion. Derived from `project_triple_alloc`. -/
-theorem project_triple_pure_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
+theorem project_triple_pure_alloc (hfuel : 2 ≤ LemFuel.fuel) {GF : BundledGFunctors} [SpikeGpreS GF]
     {M : MachineCtx} (htd : M.tagDefs = fmapEmpty) (hex : M.extern = fmapEmpty)
     {ctl : Ctl} (hκ : ctl.κ = [])
     (hQf : ∀ l params cont, lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
       Frag cont)
-    (hQpot : ∀ l params cont, lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
-      pot cont ≤ lemDefaultFuel)
     (hPf : M.FragProcs)
-    {e : CoreExpr} (hfrag : Frag e) (hpot : pot e ≤ lemDefaultFuel)
+    {e : CoreExpr} (hfrag : Frag e)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value))
     (P : CellMap) (B : Nat) (Q : ∀ [SpikeGS .hasLC GF], CoreRVal → IProp GF)
     (ψ : CellMap → value → Mem → Prop)
@@ -1827,7 +1758,7 @@ theorem project_triple_pure_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
         metaInterp mm ∗ byteInterp mb) ⊢ (⌜ψ R w.val σ'⌝ : IProp GF)) :
     MemTriple_alloc M ctl (ev0 :: evs) e P B ψ := by
   intro R hdisj σ hl th₀
-  refine (project_triple_alloc (GF := GF) htd hex hκ hQf hQpot hPf hfrag hpot ev0 evs P B Q hwp
+  refine (project_triple_alloc (hfuel := by omega) (GF := GF) htd hex hκ hQf hPf hfrag ev0 evs P B Q hwp
     R hdisj σ hl th₀).mono ?_
   intro v σ' hall
   refine hall (ψ R v σ') ?_
@@ -1837,6 +1768,7 @@ theorem project_triple_pure_alloc {GF : BundledGFunctors} [SpikeGpreS GF]
 
 /-! interior extraction lemmas -/
 
+omit [LemFuel] in
 /-- genHeap_valid, big-footprint form (mirrors gen_heap's
     ghost_map_lookup_big). -/
 theorem genHeap_valid_big {GF : BundledGFunctors}
@@ -1850,6 +1782,7 @@ theorem genHeap_valid_big {GF : BundledGFunctors}
   iapply ghost_map_lookup_big m0 $$ Hσ [Hm]
   iexact Hm
 
+omit [LemFuel] in
 /-- Full ownership of two footprints forces their key-disjointness
     (two full cells at one key are invalid). -/
 theorem bigSepM_own_disjoint (tds : CerbTags.TagDefsMap) {GF : BundledGFunctors} [SpikeGS .hasLC GF]
@@ -1883,6 +1816,7 @@ theorem bigSepM_own_disjoint (tds : CerbTags.TagDefsMap) {GF : BundledGFunctors}
     exact absurd rfl hne
 
 open Iris.Std.PartialMap in
+omit [LemFuel] in
 /-- Per-footprint extraction: whole-cell ownership of every cell of a
     footprint, against the coupling, yields footprint satisfaction —
     per-cell facts by `cellOwn_cellCoh`, pairwise disjointness through
@@ -1922,6 +1856,7 @@ theorem cellsOwn_facts (tds : CerbTags.TagDefsMap) {GF : BundledGFunctors} [Spik
       exact hrest j c' hg
 
 open Iris.Std.PartialMap in
+omit [LemFuel] in
 theorem cellsOwn_extract (tds : CerbTags.TagDefsMap) {GF : BundledGFunctors} [SpikeGS .hasLC GF]
     {σ : Mem} {mm : SpikeHeapF MetaCell} {mb : SpikeHeapF CerbMem.AbsByte}
     {mk : SpikeHeapF AllocCursor} (hG : CohG σ mm mb mk)
@@ -1969,11 +1904,13 @@ section Consequences
 variable {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
 variable {mm : SpikeHeapF MetaCell} {mb : SpikeHeapF CerbMem.AbsByte}
 
+omit [LemFuel] in
 /-- A pure conjunct is its own consequence. -/
 theorem pure_consequence (φ : Prop) :
     iprop(⌜φ⌝ ∗ metaInterp (GF := GF) mm ∗ byteInterp mb) ⊢ (⌜φ⌝ : IProp GF) :=
   BI.sep_elim_left
 
+omit [LemFuel] in
 /-- `∗`: pure conclusions are duplicable, so each conjunct reads out
     against the whole interpretation. -/
 theorem sep_consequence {Φ₁ Φ₂ : IProp GF} {ψ₁ ψ₂ : Prop}
@@ -1984,6 +1921,7 @@ theorem sep_consequence {Φ₁ Φ₂ : IProp GF} {ψ₁ ψ₂ : Prop}
   · exact (BI.sep_mono_left BI.sep_elim_left).trans h₁
   · exact (BI.sep_mono_left BI.sep_elim_right).trans h₂
 
+omit [LemFuel] in
 /-- `∨`. -/
 theorem or_consequence {Φ₁ Φ₂ : IProp GF} {ψ₁ ψ₂ : Prop}
     (h₁ : iprop(Φ₁ ∗ metaInterp mm ∗ byteInterp mb) ⊢ (⌜ψ₁⌝ : IProp GF))
@@ -1991,12 +1929,14 @@ theorem or_consequence {Φ₁ Φ₂ : IProp GF} {ψ₁ ψ₂ : Prop}
     iprop((Φ₁ ∨ Φ₂) ∗ metaInterp mm ∗ byteInterp mb) ⊢ (⌜ψ₁ ∨ ψ₂⌝ : IProp GF) :=
   BI.sep_or_right.1.trans ((BI.or_mono h₁ h₂).trans BI.pure_or.1)
 
+omit [LemFuel] in
 /-- `∃`. -/
 theorem exists_consequence {α : Type _} {Φ : α → IProp GF} {ψ : α → Prop}
     (h : ∀ a, iprop(Φ a ∗ metaInterp mm ∗ byteInterp mb) ⊢ (⌜ψ a⌝ : IProp GF)) :
     iprop((∃ a, Φ a) ∗ metaInterp mm ∗ byteInterp mb) ⊢ (⌜∃ a, ψ a⌝ : IProp GF) :=
   BI.sep_exists_right.1.trans ((BI.exists_mono h).trans BI.pure_exists.1)
 
+omit [LemFuel] in
 /-- `[∗list]`: THE FOLD OVER A FINITE COLLECTION — a per-element
     consequence reads out for every element of a big separating
     conjunction (pure conclusions are duplicable: `sep_consequence`
@@ -2017,6 +1957,7 @@ theorem bigSepL_consequence {α : Type _} {Φ : α → IProp GF} {ψ : α → Pr
 variable {σ : Mem} {mk : SpikeHeapF AllocCursor} (hG : CohG σ mm mb mk)
 include hG
 
+omit [LemFuel] in
 /-- Whole-cell ownership at ANY fraction: the cell's engine-facing
     backing facts hold of σ (`cellOwn_cellCoh`, Heap.lean). -/
 theorem cellOwn_consequence (tds : CerbTags.TagDefsMap) (i : Int) (dq : DFrac) (c : SpikeCell) :
@@ -2025,6 +1966,7 @@ theorem cellOwn_consequence (tds : CerbTags.TagDefsMap) (i : Int) (dq : DFrac) (
   (BI.sep_comm.1.trans BI.sep_assoc.1).trans
     ((cellOwn_cellCoh tds hG i dq c).trans (BI.pure_mono And.left))
 
+omit [LemFuel] in
 /-- Points-to: the pointer is the cell's `cellPtr`, and the cell's
     backing facts hold of σ. -/
 theorem pointsToCell_consequence (tds : CerbTags.TagDefsMap) (pv : CerbMem.PointerValue)
@@ -2035,6 +1977,7 @@ theorem pointsToCell_consequence (tds : CerbTags.TagDefsMap) (pv : CerbMem.Point
   exact exists_consequence fun i => exists_consequence fun a =>
     sep_consequence (pure_consequence _) (cellOwn_consequence hG tds i dq _)
 
+omit [LemFuel] in
 /-- A dead object token: its id is dead in σ — `deadObj_dead` (Heap.lean)
     in the consequence shape (the byte interpretation is not consulted). -/
 theorem deadObj_consequence (tds : CerbTags.TagDefsMap) (id a : Int) (ty : ctype) :
@@ -2042,6 +1985,7 @@ theorem deadObj_consequence (tds : CerbTags.TagDefsMap) (id a : Int) (ty : ctype
       (⌜DeadAt σ id⌝ : IProp GF) :=
   ((BI.sep_mono_right BI.sep_elim_left).trans BI.sep_comm.1).trans (deadObj_dead tds hG id a ty)
 
+omit [LemFuel] in
 /-- A dead region token: the same, through `deadRegion_dead`. -/
 theorem deadRegion_consequence (id a : Int) (n : Nat) :
     iprop(deadRegion (GF := GF) id a n ∗ metaInterp mm ∗ byteInterp mb) ⊢
@@ -2057,6 +2001,7 @@ variable {σ : Mem} {mm : SpikeHeapF MetaCell} {mb : SpikeHeapF CerbMem.AbsByte}
   {mk : SpikeHeapF AllocCursor} (hG : CohG σ mm mb mk)
 include hG
 
+omit [LemFuel] in
 /-- A footprint of whole cells: satisfaction (`cellsOwn_extract`
     reordered to the consequence shape). -/
 theorem cellsOwn_consequence (tds : CerbTags.TagDefsMap) (Q : CellMap) :
@@ -2064,6 +2009,7 @@ theorem cellsOwn_consequence (tds : CerbTags.TagDefsMap) (Q : CellMap) :
         metaInterp mm ∗ byteInterp mb) ⊢ (⌜Coh tds σ Q⌝ : IProp GF) :=
   (BI.sep_comm.1.trans BI.sep_assoc.1).trans (cellsOwn_extract tds hG Q)
 
+omit [LemFuel] in
 /-- The cells-shaped postcondition WITH a frame: the post-footprint is
     disjoint from the frame and their union is satisfied (the
     `SemTriple` conclusion; the cross-disjointness comes from the
@@ -2156,15 +2102,13 @@ theorem cells_readout (tds : CerbTags.TagDefsMap) {GF : BundledGFunctors} [Spike
     cons-shaped entry environment. (`project_triple` at the cells-shaped
     post — `SemTriple_iff_Mem` — with the obligation discharged by
     `cells_consequence`.) -/
-theorem semantic_triple_sound {GF : BundledGFunctors} [SpikeGpreS GF]
+theorem semantic_triple_sound (hfuel : 2 ≤ LemFuel.fuel) {GF : BundledGFunctors} [SpikeGpreS GF]
     {M : MachineCtx} (htd : M.tagDefs = fmapEmpty) (hex : M.extern = fmapEmpty)
     {ctl : Ctl} (hκ : ctl.κ = [])
     (hQf : ∀ l params cont, lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
       Frag cont)
-    (hQpot : ∀ l params cont, lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
-      pot cont ≤ lemDefaultFuel)
     (hPf : M.FragProcs)
-    {e : CoreExpr} (hfrag : Frag e) (hpot : pot e ≤ lemDefaultFuel)
+    {e : CoreExpr} (hfrag : Frag e)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value))
     {P : CellMap} {post : value → CellMap → Prop}
     (hwp : ProvenTriple GF M ctl (ev0 :: evs) e P post) :
@@ -2173,7 +2117,7 @@ theorem semantic_triple_sound {GF : BundledGFunctors} [SpikeGpreS GF]
   -- by `cells_consequence`
   rw [SemTriple_iff_Mem]
   intro R hdisj σ hsat th₀
-  refine (project_triple (GF := GF) htd hex hκ hQf hQpot hPf hfrag hpot ev0 evs P
+  refine (project_triple (hfuel := by omega) (GF := GF) htd hex hκ hQf hPf hfrag ev0 evs P
     (fun w => iprop(∃ Q : CellMap, ⌜post (CoreRVal.val w) Q⌝ ∗
       ([∗map] i ↦ c ∈ Q, cellOwn M.tagDefs (hlc := .hasLC) (GF := GF) i (.own 1) c)))
     hwp R hdisj σ hsat th₀).mono ?_
@@ -2186,15 +2130,13 @@ theorem semantic_triple_sound {GF : BundledGFunctors} [SpikeGpreS GF]
 /-- THE FRAME RULE at the semantic level, at any machine context: a
     proved footprint triple substitutes into any larger context —
     ⦃P ∗ F⦄ e ⦃post ∗ F⦄, the frame F verbatim. -/
-theorem semantic_frame {GF : BundledGFunctors} [SpikeGpreS GF]
+theorem semantic_frame (hfuel : 2 ≤ LemFuel.fuel) {GF : BundledGFunctors} [SpikeGpreS GF]
     {M : MachineCtx} (htd : M.tagDefs = fmapEmpty) (hex : M.extern = fmapEmpty)
     {ctl : Ctl} (hκ : ctl.κ = [])
     (hQf : ∀ l params cont, lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
       Frag cont)
-    (hQpot : ∀ l params cont, lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
-      pot cont ≤ lemDefaultFuel)
     (hPf : M.FragProcs)
-    {e : CoreExpr} (hfrag : Frag e) (hpot : pot e ≤ lemDefaultFuel)
+    {e : CoreExpr} (hfrag : Frag e)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value))
     {P : CellMap} (F : CellMap)
     {post : value → CellMap → Prop} (hPF : P ##ₘ F)
@@ -2202,7 +2144,7 @@ theorem semantic_frame {GF : BundledGFunctors} [SpikeGpreS GF]
     SemTriple M ctl (ev0 :: evs) e (Iris.Std.PartialMap.union P F)
       (fun v Q => ∃ Q₀ : CellMap, post v Q₀ ∧ Q₀ ##ₘ F ∧
         Q = Iris.Std.PartialMap.union Q₀ F) := by
-  refine semantic_triple_sound (GF := GF) htd hex hκ hQf hQpot hPf hfrag hpot ev0 evs ?_
+  refine semantic_triple_sound (hfuel := by omega) (GF := GF) htd hex hκ hQf hPf hfrag ev0 evs ?_
   intro instGS
   refine .trans (BigSepM.bigSepM_union hPF).1 ?_
   iintro ⟨HP, HF⟩

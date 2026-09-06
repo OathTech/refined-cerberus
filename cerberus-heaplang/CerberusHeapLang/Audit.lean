@@ -6,10 +6,11 @@ build + this sweep + the banned-methods grep; everything else is a
 speedbump).
 
 Three checks, in order:
-1. EXACT PINS over the public exports (`trioExports`): each export
-   must exist, be a theorem, and its transitive axiom set must EQUAL
-   the classical trio. Growth OR shrinkage is a build failure until
-   the list is re-baselined in the same commit with the reason.
+1. EXACT PINS over the public exports (`trioExports`, `axiomFreeExports`):
+   each export must exist, be a theorem, and its transitive axiom set
+   must EQUAL its declared set (the classical trio or empty). Growth OR
+   shrinkage is a build failure until the list is re-baselined in the
+   same commit with the reason.
 2. THE EXHAUSTIVE SWEEP: every theorem of every `CerberusHeapLang.*`
    module (module-of-origin, so top-level names cannot dodge),
    INTERNAL DETAILS INCLUDED (private names, proof and match
@@ -158,7 +159,7 @@ new constructors (`valsOnly_*`, `ccallFree*`, `isValE_*`, `is_irreducible_*`,
 `Decomp.esize_le`, `Decomp.get_ctx_single`, `all_irreducible_eq_valsOnly`,
 `length_le_esizeList`, `esize_le_esizeList_of_mem`, `toVal_unseq_node`,
 `toVal_none_of_isValE_false`, `operandsOfU_focus`, `CorpusE0.t1_uncovered_none`,
-`t1Main_pot`, `t1_four_loadTrap`, `t1CasePe_eq`, `createInt_eq`, `killInt_eq`,
+`t1_four_loadTrap`, `t1CasePe_eq`, `createInt_eq`, `killInt_eq`,
 `act_store_eq`, `act_load_eq`).
 
 DIALECT ARC E5, slice 1 of 2 (2026-09-05, cerberus-heaplang/docs/2026-09-05_e5-notes.md):
@@ -328,6 +329,9 @@ def trioExports : List Name := [
   -- trio-exact since the 2026-09-02 retirement re-pin — header)
   ``CerberusHeapLang.exhibitA_prod, ``CerberusHeapLang.fib_labeledAt_production,
   ``CerberusHeapLang.prod_run_eqJ,
+  -- M2 [AGENT 2026-09-06]: the complete errno memory computation now
+  -- composes with the real drive prefix at the caller's ambient budget.
+  ``CerberusHeapLang.errno_init_eq,
   ``CerberusHeapLang.fib_certified_production,
   ``CerberusHeapLang.counter_loop_certified_production,
   ``CerberusHeapLang.list_reverse_certified_production,
@@ -622,7 +626,9 @@ def trioExports : List Name := [
   ``CerberusHeapLang.driverDoneCtl_annot, ``CerberusHeapLang.driverDoneCtl_step,
   ``CerberusHeapLang.wpt_driver_cps, ``CerberusHeapLang.wpt_driver_done_procs,
   ``CerberusHeapLang.prodFile_eq_with, ``CerberusHeapLang.prodFileWith_lookup_main,
-  ``CerberusHeapLang.prodThread_eq_ctlThread, ``CerberusHeapLang.drive_after_setup_with,
+  -- M2 re-pin [AGENT 2026-09-06]: prodThread_eq_ctlThread moves to
+  -- axiomFreeExports. Setup keeps the caller's LemFuel.
+  ``CerberusHeapLang.drive_after_setup_with,
   ``CerberusHeapLang.prod_run_eqJ_procs,
   ``CerberusHeapLang.frFile_lookup_fib, ``CerberusHeapLang.frFile_lookup_inv,
   ``CerberusHeapLang.collect_new_fr,
@@ -641,7 +647,7 @@ def trioExports : List Name := [
   -- killed pipeline arms, the partial adequacy `engine_adequacy(_alloc)`
   -- into `DriverSafeCtl` with its monotonicity, the fuel-generic setup
   -- collapses and THE CLOSED PARTIAL PIPELINE `prod_run_safe_procs` over
-  -- `CerbND.drive_lemFuel fuel`, and the negative test's engine fact
+  -- `drive` at the caller's LemFuel (M2, 2026-09-06), and the negative test's engine fact
   -- `dg_loop_exhausts`. (`runND_killed` has NO axioms — measured — so it
   -- cannot sit in an EXACT-trio pin list; the exhaustive sweep bounds it.
   -- The restated exhibits keep their pins above under their names.)
@@ -651,7 +657,7 @@ def trioExports : List Name := [
   ``CerberusHeapLang.loop_zero_exhausts, ``CerberusHeapLang.loop_step_done_exhaust,
   ``CerberusHeapLang.driver2_killed,
   ``CerberusHeapLang.engine_adequacy_alloc, ``CerberusHeapLang.DriverSafeCtl.mono,
-  ``CerberusHeapLang.drive_after_setup_with_lemFuel,
+  ``CerberusHeapLang.drive_after_setup_with_one,
   ``CerberusHeapLang.drive_after_setup_with_killed,
   ``CerberusHeapLang.prod_run_safe_procs,
   ``CerberusHeapLang.dg_loop_exhausts,
@@ -796,9 +802,10 @@ def trioExports : List Name := [
   ``CerberusHeapLang.cAdd_select_max1, ``CerberusHeapLang.overflow_evalClass,
   ``CerberusHeapLang.overflow_step_ctx, ``CerberusHeapLang.overflow_driver2_killed,
   ``CerberusHeapLang.overflow_driver2_killed_frame, ``CerberusHeapLang.prodCtx_labels,
-  ``CerberusHeapLang.prodCtx_extern, ``CerberusHeapLang.prodFileWith_eq_lib,
+  -- M2 re-pin [AGENT 2026-09-06]: prodCtx_extern moves to axiomFreeExports.
+  ``CerberusHeapLang.prodFileWith_eq_lib,
   ``CerberusHeapLang.prodFileLib_stdlib, ``CerberusHeapLang.prodFileLib_lookup_main,
-  ``CerberusHeapLang.prodRSLib_labeled, ``CerberusHeapLang.drive_after_setup_lib_lemFuel,
+  ``CerberusHeapLang.prodRSLib_labeled, ``CerberusHeapLang.drive_after_setup_lib_one,
   ``CerberusHeapLang.drive_after_setup_lib_killed, ``CerberusHeapLang.drive_after_setup_lib,
   ``CerberusHeapLang.prod_run_eqJ_lib, ``CerberusHeapLang.prod_run_eqJ_lib1,
   ``CerberusHeapLang.prod_run_safe_lib, ``CerberusHeapLang.CorpusE0.t1MainWith_frag,
@@ -902,9 +909,8 @@ def trioExports : List Name := [
   ``CerberusHeapLang.Step.sup_sym_le, ``CerberusHeapLang.case_eval_round,
   ``CerberusHeapLang.collect_new_t5Main, ``CerberusHeapLang.excluded_store_atomic,
   ``CerberusHeapLang.excluded_store_eval_round, ``CerberusHeapLang.excluded_store_round,
-  ``CerberusHeapLang.neg_bound_round, ``CerberusHeapLang.procCtxF_runState_labeled,
-  ``CerberusHeapLang.procCtxF_sym_supply, ``CerberusHeapLang.procCtx_runState_labeled,
-  ``CerberusHeapLang.procCtx_sym_supply, ``CerberusHeapLang.symOrd_ne_eq_of_num_ne,
+  -- M2: the four context-field projections move to axiomFreeExports.
+  ``CerberusHeapLang.neg_bound_round, ``CerberusHeapLang.symOrd_ne_eq_of_num_ne,
   ``CerberusHeapLang.symOrd_self, ``CerberusHeapLang.t5BoolBranch_eval,
   ``CerberusHeapLang.t5Bool_select, ``CerberusHeapLang.t5CmpBranch_eval,
   ``CerberusHeapLang.t5CondPe_eval, ``CerberusHeapLang.t5Cond_select,
@@ -967,7 +973,6 @@ def trioExports : List Name := [
   ``CerberusHeapLang.t6Case2Tail_frag,
   ``CerberusHeapLang.t6CaseContext_frag,
   ``CerberusHeapLang.t6Q_frag,
-  ``CerberusHeapLang.t6Q_pot,
   ``CerberusHeapLang.collect_new_t6Main,
   ``CerberusHeapLang.t6Main_labeledAt,
   ``CerberusHeapLang.t6_certified_production,
@@ -1003,7 +1008,6 @@ def trioExports : List Name := [
   ``CerberusHeapLang.t4Q_cont,
   ``CerberusHeapLang.t4LoopContext_frag,
   ``CerberusHeapLang.t4Q_frag,
-  ``CerberusHeapLang.t4Q_pot,
   ``CerberusHeapLang.collect_new_t4Main,
   ``CerberusHeapLang.t4Main_labeledAt,
   -- t4 controlling expression and LETS-ANNOT rules: all fifteen measured trio-exact.
@@ -1060,6 +1064,21 @@ def trioExports : List Name := [
   ``CerberusHeapLang.t4_wpt,
   ``CerberusHeapLang.t4_certified_production]
 
+/-- M2 re-pin [AGENT 2026-09-06]: these six previously trio-exact
+    exports now have empty cones. The context projections are unchanged
+    reflexivity proofs; the production context/thread equations also
+    reduce without axioms on the new dependencies. Keep theorem-existence
+    and exact-cone assertions rather than manufacturing dependencies.
+    The exhaustive trio bound and all-constant banned sweep are unchanged. -/
+def axiomFreeExports : List Name := [
+  ``CerberusHeapLang.procCtxF_runState_labeled,
+  ``CerberusHeapLang.procCtxF_sym_supply,
+  ``CerberusHeapLang.procCtx_runState_labeled,
+  ``CerberusHeapLang.procCtx_sym_supply,
+  ``CerberusHeapLang.prodThread_eq_ctlThread,
+  ``CerberusHeapLang.prodCtx_extern
+]
+
 def sortedNames (ns : Array Name) : Array String :=
   (ns.map (·.toString)).qsort (· < ·)
 
@@ -1076,7 +1095,9 @@ def sortedNames (ns : Array Name) : Array String :=
       throwError "CerberusHeapLang export pin FAILED: {n} depends on axioms {axs}, \
         expected EXACTLY {exp}"
   for n in trioExports do pin allowedAxioms n
-  logInfo s!"CerberusHeapLang export pins: {trioExports.length} trio-exact"
+  for n in axiomFreeExports do pin [] n
+  logInfo s!"CerberusHeapLang export pins: {trioExports.length} trio-exact, \
+    {axiomFreeExports.length} axiom-free-exact"
   -- 2. THE EXHAUSTIVE SWEEP (theorems, bounded by the trio, every module).
   let mods := env.header.moduleNames
   let isOurs : Array Bool := mods.map (fun m => m.getRoot == `CerberusHeapLang)

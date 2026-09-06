@@ -23,8 +23,7 @@ WHAT IS EXERCISED, once each: `ProcSpec`/`emptyProcSpec`,
 precondition, then the continuation at the returned value),
 `wps_sound` (the collapse WITH the table), and `engine_adequacy` with
 `MachineCtx.FragProcs` discharged at a two-procedure file (the premise's
-first non-vacuous instance: both bodies in `Frag` within the potential
-bound, both label fibers empty). The total twins at the `wpt` level:
+first non-vacuous instance: both bodies in `Frag`, both label fibers empty). The total twins at the `wpt` level:
 `procSpecsT_intro`, `wpt_call_root`, `wpt_sound` (the callee at budget
 `4`: SAVE-EVAL, SAVE, PURE, the RETURN — its delivery cost; the caller
 at `1 + 4 + 1`). The PRODUCTION lane (the shipped driver) through a call
@@ -38,6 +37,8 @@ import CerberusHeapLang.API
 set_option autoImplicit false
 
 namespace CerberusHeapLang
+
+variable [LemFuel]
 
 open Iris Iris.BI Iris.ProgramLogic Iris.ProgramLogic.Language.Notation
 open scoped Iris.Std.PartialMap
@@ -60,6 +61,7 @@ def csL : sym := Symbol "" 4 SD_None
     exhibits' `ivVal`). -/
 def csInt (i : Int) : value := Vobject (OVinteger (CerbMem.integerIval i))
 
+omit [LemFuel] in
 theorem csInt_inj {i j : Int} (h : csInt i = csInt j) : i = j := by
   unfold csInt CerbMem.integerIval at h
   cases h
@@ -104,6 +106,7 @@ def csFile (ra : core_run_annotation) (bty ybty : core_base_type) :
 through the β-generic `symAdd_lookup_two` (EnvLaws; C4 moved the smoke's
 former local law there — the C3 range audit's H-2). -/
 
+omit [LemFuel] in
 /-- `call_proc`'s lookup finds `f` (computed). -/
 theorem csFile_lookup_f (ra : core_run_annotation) (bty ybty : core_base_type) :
     lookupProc (csFile ra bty ybty) fmapEmpty csF = some ([(csX, bty)], csFBody bty ybty) := by
@@ -116,6 +119,7 @@ theorem csFile_lookup_f (ra : core_run_annotation) (bty ybty : core_base_type) :
       from rfl, symAdd_lookup_two]
   rw [if_neg (by decide +kernel), if_pos (by decide +kernel)]
 
+omit [LemFuel] in
 /-- Every procedure the file declares is `main` or `f` — read off the
     two-entry map (the keys compare `.eq` only with themselves modulo the
     symbol description, which the bodies do not depend on). -/
@@ -142,6 +146,7 @@ theorem csFile_lookup_inv (ra : core_run_annotation) (bty ybty : core_base_type)
     · rw [if_neg h2] at h
       cases h
 
+omit [LemFuel] in
 /-- The label fibers are empty at every procedure (the frozen run
     state registers nothing). -/
 theorem csCtx_labels (ra : core_run_annotation) (bty ybty : core_base_type) (g : Option sym) :
@@ -150,15 +155,17 @@ theorem csCtx_labels (ra : core_run_annotation) (bty ybty : core_base_type) (g :
   | none => rfl
   | some g => rfl
 
+omit [LemFuel] in
 theorem csCtx_lookupLabel (ra : core_run_annotation) (bty ybty : core_base_type) (g : Option sym)
     (l : sym) : lookupLabel ((csCtx ra bty ybty).labelsAt g) l = none := by
   rw [csCtx_labels]; rfl
 
 /-! ## The fragment membership (the adequacy premise, at two procedures) -/
 
+omit [LemFuel] in
 theorem csIncPe_pure : PePure csIncPe := PePure.of_isPePure rfl
 
-theorem csFBody_frag (bty ybty : core_base_type) : Frag (csFBody bty ybty) :=
+theorem csFBody_frag (hfuel : 2 ≤ LemFuel.fuel) (bty ybty : core_base_type) : Frag (csFBody bty ybty) :=
   .save (fun pe hpe => by
       simp only [saveParamPexprs, List.map_cons, List.map_nil, List.mem_cons,
         List.not_mem_nil, or_false] at hpe
@@ -168,11 +175,11 @@ theorem csFBody_frag (bty ybty : core_base_type) : Frag (csFBody bty ybty) :=
       simp only [saveParamPexprs, List.map_cons, List.map_nil, List.mem_cons,
         List.not_mem_nil, or_false] at hpe
       subst hpe
-      rw [show peDepth csIncPe = 2 from rfl, show lemDefaultFuel = 999999 + 1 from rfl]
+      rw [show peDepth csIncPe = 2 from rfl]
       omega)
-    .pure_sym
+    (.pure_sym (by omega))
 
-theorem csMainBody_frag (ra : core_run_annotation) : Frag (csMainBody ra) :=
+theorem csMainBody_frag (hfuel : 0 < LemFuel.fuel) (ra : core_run_annotation) : Frag (csMainBody ra) :=
   .call (fun pe hpe => by
       simp only [List.mem_cons, List.not_mem_nil, or_false] at hpe
       subst hpe
@@ -180,23 +187,18 @@ theorem csMainBody_frag (ra : core_run_annotation) : Frag (csMainBody ra) :=
     (fun pe hpe => by
       simp only [List.mem_cons, List.not_mem_nil, or_false] at hpe
       subst hpe
-      rw [show peDepth (Pexpr [] () (PEval (csInt 3))) = 1 from rfl,
-        show lemDefaultFuel = 999999 + 1 from rfl]
+      rw [show peDepth (Pexpr [] () (PEval (csInt 3))) = 1 from rfl]
       omega)
 
 /-- THE PROCEDURE WELL-FORMEDNESS PREMISE of the partial lane at a
-    two-procedure file: both bodies in the certified cone within the
-    potential bound; both label fibers empty. -/
-theorem csCtx_fragProcs (ra : core_run_annotation) (bty ybty : core_base_type) :
+    two-procedure file: both bodies in the certified fragment, with
+    sufficient operand fuel; both label fibers empty. -/
+theorem csCtx_fragProcs (hfuel : 2 ≤ LemFuel.fuel) (ra : core_run_annotation) (bty ybty : core_base_type) :
     (csCtx ra bty ybty).FragProcs where
   body f params body hf := by
     rcases csFile_lookup_inv ra bty ybty hf with ⟨-, rfl⟩ | ⟨-, rfl⟩
-    · exact csMainBody_frag ra
-    · exact csFBody_frag bty ybty
-  potBound f params body hf := by
-    rcases csFile_lookup_inv ra bty ybty hf with ⟨-, rfl⟩ | ⟨-, rfl⟩
-    · exact Nat.le_of_ble_eq_true rfl
-    · exact Nat.le_of_ble_eq_true rfl
+    · exact csMainBody_frag (hfuel := by omega) ra
+    · exact csFBody_frag (hfuel := by omega) bty ybty
   labels f params body _ l params' cont hl := by
     rw [csCtx_lookupLabel] at hl
     cases hl
@@ -222,6 +224,7 @@ def csPost : SpikeVal → EnvStack → IProp GF := fun w _ => iprop(⌜w.val = c
 
 /-! ## The callee's body: one proof at every caller tail -/
 
+omit [LemFuel] in
 theorem csFrame_lookup_x (v : value) :
     fmapLookupBy symCmpK csX (procEnv [(csX, bty)] [v]) = some v := by
   rw [procEnv_single, envAdd_lookup symFrame_empty symCmpK, if_pos (by decide +kernel)]
@@ -328,6 +331,7 @@ theorem cs_wp_readout (ℓ : exec_location) (lc : CerbLocation.Loc) (sp : RunSup
   refine BI.wand_elim_left.trans ?_
   exact wp_mono fun w => stateInterp_readout fun _ _ _ _ _ => pure_consequence _
 
+omit [LemFuel] in
 /-- The empty seeded footprint is coherent with any memory (the
     exhibits' `coh_empty`, restated here — Examples import the API only). -/
 theorem csCoh_empty (σ : Mem) : Coh fmapEmpty σ ((∅ : SpikeHeapF SpikeCell)) := by
@@ -340,22 +344,21 @@ theorem csCoh_empty (σ : Mem) : Coh fmapEmpty σ ((∅ : SpikeHeapF SpikeCell))
 /-- THE PARTIAL LANE THROUGH A CALL at the shipped driver's loop: from
     any driver state holding `main`'s thread at the two-procedure file
     (the file tie `dst.core_file = csFile …`, the registration ties), the
-    shipped per-thread loop at every fuel exhausts or delivers `4` — the
+    shipped per-thread loop at every iteration budget exhausts or
+    delivers `4`, with ambient fuel at least two — the
     PCALL and RETURN rounds are the driver's own — `engine_adequacy` with
     `FragProcs` discharged at both procedures (the first non-vacuous
     instance). -/
-theorem call_smoke_engine (σ₀ : Mem) :
+theorem call_smoke_engine (hfuel : 2 ≤ LemFuel.fuel) (σ₀ : Mem) :
     DriverSafeCtl (csCtx ra bty ybty)
       ((csCtx ra bty ybty).thread (csMainBody ra) [fmapEmpty] ⟨[], some csMain, default, default, default⟩)
       (csMainBody ra) [fmapEmpty] ⟨[], some csMain, default, default, default⟩ σ₀ (fun v _ => v = csInt 4) := by
-  refine engine_adequacy (GF := SpikeGF) (M := csCtx ra bty ybty) rfl rfl
+  refine engine_adequacy (hfuel := by omega) (GF := SpikeGF) (M := csCtx ra bty ybty) rfl rfl
     (ctl := ⟨[], some csMain, default, default, default⟩) rfl
     (fun l params cont hl => by rw [csCtx_lookupLabel] at hl; cases hl)
-    (fun l params cont hl => by rw [csCtx_lookupLabel] at hl; cases hl)
-    (csCtx_fragProcs ra bty ybty)
+    (csCtx_fragProcs (hfuel := by omega) ra bty ybty)
     (csMainBody ra) fmapEmpty [] σ₀ (∅ : SpikeHeapF SpikeCell)
-    (csMainBody_frag ra)
-    (Nat.le_of_ble_eq_true rfl)
+    (csMainBody_frag (hfuel := by omega) ra)
     (csCoh_empty σ₀)
     (fun v _ => v = csInt 4)
     ?_ (th₀ := (csCtx ra bty ybty).thread (csMainBody ra) [fmapEmpty] ⟨[], some csMain, default, default, default⟩)

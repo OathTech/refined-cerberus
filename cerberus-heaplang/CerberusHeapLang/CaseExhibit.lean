@@ -9,7 +9,8 @@ chain: `wps_case_value` (the logic rule) → `wps_sound` (the Löb-tied
 collapse, block specifications vacuous at `spikeCtx`) →
 `engine_adequacy` — concluding, in engine vocabulary only
 (`DriverSafeCtl`): from any driver state holding the case program, the
-shipped driver's per-thread loop at every fuel exhausts or delivers,
+shipped driver's per-thread loop at every iteration counter exhausts or
+delivers, under the stated ambient-fuel bound,
 never kills otherwise, never derails, and any delivered value IS the
 scrutinee (`case_certified`). The TOTAL twin `caseProg_wpt` (H1b,
 2026-09-04) is the same derivation at the total judgment, budget 2, with
@@ -17,25 +18,15 @@ the engine readout as its postcondition — the consumer of
 `wpt_case_value` (KNOWN-OPEN-ITEMS B13); like every seeded/no-procedure
 exhibit it has no shipped-loop total form (B1's deferred class).
 
-ON THE BRANCH PREMISES. `Frag.case_value` carries branch closure as
-EXPLICIT per-branch premises (`hbr`: the selected branch is in `Frag`;
-`hbsz`: its `esize` is bounded by the case node's), not via a generic
-`Frag e → Frag (subst_sym_expr x v e)` closure lemma — that statement
-is FALSE on this fragment: several constructor premises are
-value-shape-sensitive (`valueFromPexpr pe = none` on the
-operand-evaluation shapes), and substitution can turn a not-yet-value
-operand (`PEsym x`) into a value (`PEval v`) whose redex spelling
-leaves the constructor's range. `hbsz` is carried rather than proved:
-the equation that would discharge it is `esize (subst_sym_expr x v e)
-= esize e` (with its mutual twin for `esizeAlts`) — true because
-`esize` inspects only expression constructors and `subst_sym_expr`
-substitutes only into pure expressions — and the obstacle is that the
-engine's `subst_sym_expr` is `subst_sym_expr_lemFuel lemDefaultFuel`,
-a fuel-indexed recursion over the whole generated Core AST, so the
-proof is a fuel-indexed induction over that mutual recursion (README,
-"Registered divergences and limitations"). Here both premises are
-discharged by computing the substituted branch (`caseProg_select` is
-`rfl`).
+ON THE BRANCH PREMISES. `Frag.case_value` retains explicit membership
+for every original and selected branch. This exhibit's original branch
+is a symbol read, so its membership requires positive ambient fuel;
+selection substitutes the value and yields a value injection. Arbitrary
+substitution does not preserve every syntactic fragment constructor.
+The structural size premise is separate: the measured substitution
+wrapper preserves expression size, and the general branch-size theorem
+is available. This one-branch example discharges both selected-branch
+premises directly through `caseProg_select`.
 -/
 import CerberusHeapLang.API
 
@@ -70,15 +61,14 @@ theorem caseProg_select (v : value) :
       [(symPat [] caseXSym BTy_unit, caseBranch)] =
       some (ofVal (.pure v)) := rfl
 
-/-- Cone membership: the branch premises discharged by computation
-    (see the header note on why they are premises, not a closure
-    lemma). -/
-theorem caseProg_frag (v : value) : Frag (caseProg v) := by
+/-- Membership retains the original symbol-read branch and discharges
+    selected-branch closure by the substitution equation. -/
+theorem caseProg_frag [LemFuel] (hfuel : 0 < LemFuel.fuel) (v : value) : Frag (caseProg v) := by
   refine .case_value (fun q hq => ?_) (fun e' hsel => ?_) (fun e' hsel => ?_)
   · -- E5: every alternative's body is in the cone (`pure(x)`, a symbol read)
     rw [List.mem_singleton] at hq
     subst hq
-    exact .pure_op rfl (.sym [] caseXSym) (peDepth_sym_le [] caseXSym)
+    exact .pure_op rfl (.sym [] caseXSym) (peDepth_sym_le [] caseXSym hfuel)
   · rw [caseProg_select] at hsel
     obtain rfl : ofVal (.pure v) = e' := Option.some.inj hsel
     exact frag_ofVal _
@@ -100,7 +90,7 @@ def caseLs : LabelSpec GF := fun _ _ _ => iprop(True)
     specification: one application of the case rule, then the value
     channel. The postcondition: the delivered value is the
     scrutinee. -/
-theorem caseProg_wps (M : MachineCtx) (p : Option sym) (Ls : LabelSpec GF) (Θ : ProcSpec GF) (v : value)
+theorem caseProg_wps [LemFuel] (M : MachineCtx) (p : Option sym) (Ls : LabelSpec GF) (Θ : ProcSpec GF) (v : value)
     (ρ : EnvStack) :
     ⊢ wps (GF := GF) M p Ls Θ (fun w _ => iprop(⌜w.val = v⌝)) (caseProg v) ρ := by
   refine .trans ?_ (wps_case_value [] (Pexpr [] () (PEval v))
@@ -117,7 +107,7 @@ theorem caseProg_wps (M : MachineCtx) (p : Option sym) (Ls : LabelSpec GF) (Θ :
     postcondition is the engine readout `readoutPost` (the total lane's
     shape), obtained through the public `stateInterp_readout`/
     `pure_consequence` alone. -/
-theorem caseProg_wpt (M : MachineCtx) (p : Option sym) (Ls : LabelSpecT GF) (Θ : ProcSpecT GF)
+theorem caseProg_wpt [LemFuel] (M : MachineCtx) (p : Option sym) (Ls : LabelSpecT GF) (Θ : ProcSpecT GF)
     (v : value) (ρ : EnvStack) :
     ⊢ wpt (GF := GF) M p Ls Θ 2 (readoutPost (fun v' _ => v' = v)) (caseProg v) ρ := by
   refine .trans ?_ (wpt_mono (Ψ₁ := fun w _ => iprop(⌜w.val = v⌝))
@@ -130,7 +120,7 @@ theorem caseProg_wpt (M : MachineCtx) (p : Option sym) (Ls : LabelSpecT GF) (Θ 
 
 /-- Vacuous block specifications at the spike profile (no labels are
     registered — the lookup premise is unsatisfiable). -/
-theorem case_blockSpecs (v : value) :
+theorem case_blockSpecs [LemFuel] (v : value) :
     ⊢ blockSpecs (GF := GF) spikeCtx none caseLs emptyProcSpec
       (fun w _ => iprop(⌜w.val = v⌝)) :=
   blockSpecs_intro fun l _ _ _ _ _ hl => (spikeCtx_labels_none l hl).elim
@@ -138,7 +128,7 @@ theorem case_blockSpecs (v : value) :
 /-- The base-WP face with the engine readout, at the spike profile
     (the `fib_wp_readout` collapse shape: block specifications +
     `wps_sound`, then the pure readout under the mask change). -/
-theorem case_wp_readout (v : value) :
+theorem case_wp_readout [LemFuel] (v : value) :
     ⊢ WP (⟨caseProg v, spikeEnv, spikeCtl, spikeCtx⟩ : CoreRt) @ Stuckness.NotStuck; ⊤
         {{ w, iprop(∀ (σ' : Mem) (ns : Nat) (κs : List Empty) (nt : Nat),
           (stateInterp σ' ns κs nt : IProp GF) ={⊤, ∅}=∗
@@ -158,20 +148,19 @@ end CaseIris
     cell; F-01 acceptance): driving THE ENGINE ({step_ctx →
     sequential discharge} at the straight-line launch profile) on
     `case v of x => pure(x) end`, from ANY memory state: the shipped
-    loop at every fuel exhausts or delivers, never kills otherwise,
+    loop at every iteration counter exhausts or delivers, with ambient fuel
+    at least two, never kills otherwise,
     never gets stuck, and any delivered value IS the scrutinee — the
     value fact flows from the proved WP through `engine_adequacy`, not
-    by evaluation. Step 1 of any such run is the engine's Ecase
+    by evaluation. The program's first reduction is the engine's Ecase
     substitution TAU (`Step.case_value` is the only rule that fires). -/
-theorem case_certified {GF : BundledGFunctors} [SpikeGpreS GF] (v : value) (σ₀ : Mem) :
+theorem case_certified [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) {GF : BundledGFunctors} [SpikeGpreS GF] (v : value) (σ₀ : Mem) :
     DriverSafeCtl spikeCtx (spikeThread (caseProg v)) (caseProg v) spikeEnv spikeCtl σ₀
       (fun v' _ => v' = v) := by
-  refine engine_adequacy (GF := GF) (M := spikeCtx) rfl rfl (ctl := spikeCtl) rfl
-    (fun l params cont hl => (spikeCtx_labels_none l hl).elim)
+  refine engine_adequacy (hfuel := hfuel) (GF := GF) (M := spikeCtx) rfl rfl (ctl := spikeCtl) rfl
     (fun l params cont hl => (spikeCtx_labels_none l hl).elim)
     spikeCtx_fragProcs
-    (caseProg v) fmapEmpty [] σ₀ ∅ (caseProg_frag v)
-    (Nat.le_of_ble_eq_true rfl)
+    (caseProg v) fmapEmpty [] σ₀ ∅ (caseProg_frag (by omega) v)
     (Coh.mk
       (fun _ c hget => absurd (hget.symm.trans
         (Iris.Std.LawfulPartialMap.get?_empty (M := SpikeHeapF) _))

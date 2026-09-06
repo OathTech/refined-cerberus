@@ -49,6 +49,9 @@ variable {hlc : HasLC} {GF : BundledGFunctors}
 /-- signed int (the recon's probe type). -/
 def intTy : ctype := Ctype [] (.Basic (.Integer (.Signed .Int_)))
 
+/-- The scalar signed-int layout shared by the authored clients. -/
+theorem intTy_size {tds : CerbTags.TagDefsMap} : CerbMem.sizeofCtype tds intTy = 4 := rfl
+
 -- Phase 2 (F-04): the int-specific interior load engine seam
 -- (`loadM_interior_int`) is RETIRED — the generic typed-subrange seam
 -- `loadM_at` (Heap.lean) covers every accessed type and offset.
@@ -65,7 +68,7 @@ def sevenMval : CerbMem.MemValue :=
 def sevenBytes (tds : CerbTags.TagDefsMap) : List CerbMem.AbsByte :=
   (CerbMem.memValueToBytes tds [] sevenMval).2
 
-theorem seven_encodes :
+theorem seven_encodes [LemFuel] :
     memValueFromValue fmapEmpty (Ctype [] (unatomic_ intTy)) sevenVal =
       some sevenMval := rfl
 
@@ -96,7 +99,7 @@ def fiveMval : CerbMem.MemValue :=
 def fiveBytes (tds : CerbTags.TagDefsMap) : List CerbMem.AbsByte :=
   (CerbMem.memValueToBytes tds [] fiveMval).2
 
-theorem five_encodes :
+theorem five_encodes [LemFuel] :
     memValueFromValue fmapEmpty (Ctype [] (unatomic_ intTy)) fiveVal =
       some fiveMval := rfl
 
@@ -113,7 +116,7 @@ def sixMval : CerbMem.MemValue :=
 def sixBytes (tds : CerbTags.TagDefsMap) : List CerbMem.AbsByte :=
   (CerbMem.memValueToBytes tds [] sixMval).2
 
-theorem six_encodes :
+theorem six_encodes [LemFuel] :
     memValueFromValue fmapEmpty (Ctype [] (unatomic_ intTy)) sixVal =
       some sixMval := rfl
 
@@ -125,7 +128,7 @@ theorem six_storable (tds : CerbTags.TagDefsMap) : StorableAt tds intTy sixMval 
 
 section WpsExhibits
 
-variable [SpikeGS hlc GF]
+variable [LemFuel] [SpikeGS hlc GF]
 variable {M : MachineCtx} {p : Option sym} {Ls : LabelSpec GF} {Θ : ProcSpec GF}
 
 /-! The corpus's two exhibit shapes at the label-context judgment, for
@@ -163,8 +166,10 @@ theorem wps_exhibit_store_frame (x y : CerbMem.PointerValue)
 
 /-! ## The anti-frame sanity check (negative test — locality is real)
 
-A failing example cannot be committed compiling, so the test is
-recorded as its verbatim transcript (re-runnable). Claiming y's cell
+The historical negative test is recorded below as its verbatim transcript.
+At the current pin, rerunning it requires a `[LemFuel]` parameter, as for
+`wps_exhibit_store_frame`; this transcript is not a new-pin measurement.
+Claiming y's cell
 in the postcondition WITHOUT owning it in the precondition leaves the
 derivation stuck on exactly the missing cell, with an EMPTY spatial
 context after the x-cell is consumed:

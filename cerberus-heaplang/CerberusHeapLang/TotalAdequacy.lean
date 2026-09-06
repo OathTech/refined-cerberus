@@ -17,12 +17,14 @@ ProdLoop.lean: `wpt_driver_aux` → `wpt_driver_done`/`wpt_driver_done_alloc`
 realizing the budget as `k + 2` iterations of the shipped driver's own
 per-thread loop and consumed by ProdEntry.lean's `prod_run_eqJ`/
 `prod_run_eqJ_procs` into the root-of-trust statements over
-`runND ∘ drive ∘ initial_driver_state`. FUEL HONESTY WITHOUT
-ACCUMULATION: each round's `esize e ≤ lemDefaultFuel` obligation is
-turned by the static potential `pot` (Potential.lean) into the two
-run-length-independent hypotheses `pot e₀ ≤ lemDefaultFuel` and `pot cont
-≤ lemDefaultFuel` per registered body — the same two the partial
-statements carry.
+`runND ∘ drive ∘ initial_driver_state`. The readout here retains the
+caller's `[LemFuel]` through `stateInterp`. Value-annotation identities
+remain fuel-free. Structural traversals carry their own measured bounds.
+ProdLoop's total theorems require at least two ambient fuel units and
+`k + 2` explicit loop iterations, alongside the fragment's operand-pass
+premises, without the old global potential ceilings. Production cold
+start and the final scheduler remain ProdEntry's obligations. This
+vocabulary module alone proves no total execution result.
 
 HISTORY (fuel-lane restatement, 2026-09-03; record
 docs/2026-09-03_f1-notes.md): until then this module carried the total
@@ -43,7 +45,7 @@ open Iris Iris.BI Iris.ProgramLogic Iris.ProgramLogic.Language.Notation FromMath
 
 /-- The engine-readout postcondition shape both launch theorems
     consume (the total analog of the partial lane's readout wand). -/
-abbrev readoutPost {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
+abbrev readoutPost [LemFuel] {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
     (ψ : value → Mem → Prop) : SpikeVal → EnvStack → IProp GF := fun w _ =>
   iprop(∀ (σ' : Mem) (ns : Nat) (κs : List Empty) (nt : Nat),
     stateInterp σ' ns κs nt ={⊤,∅}=∗ ⌜ψ w.val σ'⌝)
@@ -58,7 +60,7 @@ theorem val_mergeInto_annot (ds : List dyn_annotation) (v : value)
     (SpikeVal.mergeInto (.annot ds v) u).val = u.val := by
   cases u <;> rfl
 
-theorem readoutPost_mergeInto_annot {GF : BundledGFunctors}
+theorem readoutPost_mergeInto_annot [LemFuel] {GF : BundledGFunctors}
     [SpikeGS .hasLC GF] (ψ : value → Mem → Prop)
     (ds : List dyn_annotation) (v : value) :
     (fun (u : SpikeVal) (ρ' : EnvStack) =>
@@ -72,7 +74,7 @@ theorem readoutPost_mergeInto_annot {GF : BundledGFunctors}
     store's annotation-merge is absorbed (element-wise face of
     `readoutPost_mergeInto_annot`, robust against the abbrev's
     unfolding under unification). -/
-theorem readoutPost_annot_absorb {GF : BundledGFunctors} [SpikeGS .hasLC GF]
+theorem readoutPost_annot_absorb [LemFuel] {GF : BundledGFunctors} [SpikeGS .hasLC GF]
     (ψ : value → Mem → Prop) (ds : List dyn_annotation) (v : value)
     (u : SpikeVal) (ρ' : EnvStack) :
     readoutPost (GF := GF) ψ u ρ' ⊢
@@ -80,7 +82,7 @@ theorem readoutPost_annot_absorb {GF : BundledGFunctors} [SpikeGS .hasLC GF]
   rw [congrFun (congrFun (readoutPost_mergeInto_annot ψ ds v) u) ρ']
 
 /-- Monotonicity of the readout in the pure postcondition. -/
-theorem readoutPost_mono {hlc : HasLC} {GF : BundledGFunctors}
+theorem readoutPost_mono [LemFuel] {hlc : HasLC} {GF : BundledGFunctors}
     [SpikeGS hlc GF] {ψ ψ' : value → Mem → Prop}
     (h : ∀ v σ, ψ v σ → ψ' v σ) (w : SpikeVal) (ρ' : EnvStack) :
     readoutPost (GF := GF) ψ w ρ' ⊢ readoutPost ψ' w ρ' := by

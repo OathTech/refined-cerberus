@@ -40,6 +40,12 @@ per-element structure lives in the index-partitioned invariant and
 the per-element decode premises (`hdec`). The heap-side footprint is
 still delivered through the big-sep machinery ([∗map] over the seeded
 cell map).
+
+The engine partial-correctness result retains the caller's LemFuel and
+requires ambient fuel at least two. It covers every independent loop
+iteration counter, permitting fuel exhaustion and constraining every
+delivered value and final memory. Pure program, layout and invariant
+data are independent of fuel.
 -/
 import CerberusHeapLang.API
 import CerberusHeapLang.Examples.Layout
@@ -54,12 +60,10 @@ open Lem_Basic_classes Lem_Map
 
 /-! ## Facts about the int layout and pointer arithmetic -/
 
-theorem intTy_size {tds : CerbTags.TagDefsMap} : CerbMem.sizeofCtype tds intTy = 4 := rfl
-
 /-- One int-element shift of a fragment pointer — the ENGINE's own
     arithmetic (`arrayShiftPtrval` at concrete provenance/address
     shape: provenance PRESERVED, address advanced by |int|). -/
-theorem arrayShift_cellPtr {tds : CerbTags.TagDefsMap} (id p : Int) :
+theorem arrayShift_cellPtr [LemFuel] {tds : CerbTags.TagDefsMap} (id p : Int) :
     CerbMem.arrayShiftPtrval tds (cellPtr id p) intTy (CerbMem.integerIval 1) =
       cellPtr id (p + 4) := by
   rw [cellPtr_arrayShift tds id p intTy 1 (fun _ h => by unfold intTy at h; cases h),
@@ -67,7 +71,7 @@ theorem arrayShift_cellPtr {tds : CerbTags.TagDefsMap} (id p : Int) :
   exact congrArg (cellPtr id) (by omega)
 
 /-- The mirror evaluator's shift at the concrete shapes. -/
-theorem evalArrayShift_ptr_one (id a : Int) :
+theorem evalArrayShift_ptr_one [LemFuel] (id a : Int) :
     evalArrayShift fmapEmpty intTy (Vobject (OVpointer (cellPtr id a))) (ivVal 1) =
       some (Vobject (OVpointer (cellPtr id (a + 4)))) := by
   show some (Vobject (OVpointer (CerbMem.arrayShiftPtrval fmapEmpty (cellPtr id a)
@@ -311,7 +315,7 @@ variable {f : Fmap sym value} (hf : SymFrame f)
 
 include hf
 
-theorem arr_guard_eval {file : generic_file Unit core_run_annotation} (n : Int) :
+theorem arr_guard_eval [LemFuel] {file : generic_file Unit core_run_annotation} (n : Int) :
     evalPexpr fmapEmpty fmapEmpty file (arrFrame (ivVal i) (ivVal acc) vp f :: rest)
         (arrGuard n) = some (boolValue (decide ((i : Int) < n))) := by
   unfold arrGuard
@@ -324,13 +328,13 @@ theorem arr_guard_eval {file : generic_file Unit core_run_annotation} (n : Int) 
   show evalBinop binop.OpLt (ivVal i) (ivVal n) = _
   rfl
 
-theorem arr_p_eval {file : generic_file Unit core_run_annotation} :
+theorem arr_p_eval [LemFuel] {file : generic_file Unit core_run_annotation} :
     evalPexpr fmapEmpty fmapEmpty file (arrFrame (ivVal i) (ivVal acc) vp f :: rest)
         (Pexpr [] () (PEsym arrPSym)) = some vp := by
   rw [evalPexpr_sym_empty]
   exact lookup_env_head (arrFrame_lookup_p hf _ _ _) rest
 
-theorem arr_args_eval {file : generic_file Unit core_run_annotation} (x : Int) (id a : Int) :
+theorem arr_args_eval [LemFuel] {file : generic_file Unit core_run_annotation} (x : Int) (id a : Int) :
     evalPexprs fmapEmpty fmapEmpty file (arrFrameX (ivVal x) (ivVal i) (ivVal acc)
         (Vobject (OVpointer (cellPtr id a))) f :: rest)
         [arrIncPe, arrAccXPe, arrShiftPe] =
@@ -382,7 +386,7 @@ theorem arr_args_eval {file : generic_file Unit core_run_annotation} (x : Int) (
     exact evalArrayShift_ptr_one id a]
   rfl
 
-theorem arr_exit_eval {file : generic_file Unit core_run_annotation} :
+theorem arr_exit_eval [LemFuel] {file : generic_file Unit core_run_annotation} :
     evalPexpr fmapEmpty fmapEmpty file (arrFrame (ivVal i) (ivVal acc) vp f :: rest)
         arrExitPe = some (ivVal acc) := by
   show evalPexpr fmapEmpty fmapEmpty file _ (Pexpr [] () (PEsym arrAccSym)) = _
@@ -435,7 +439,7 @@ omit hQ hsz hdec in
     offset `4 * i`): an ordinary CLIENT lemma, not a logic extension
     (F-04). The trap premise is `rfl` (int is not _Bool); the decode
     premise is the exhibit's per-element seeded-image fact. -/
-theorem wps_arr_elem_load {M' : MachineCtx} {p' : Option sym} {Ls' : LabelSpec GF} {Θ' : ProcSpec GF}
+theorem wps_arr_elem_load [LemFuel] {M' : MachineCtx} {p' : Option sym} {Ls' : LabelSpec GF} {Θ' : ProcSpec GF}
     {Ψ : SpikeVal → EnvStack → IProp GF}
     (loc' : CerbLocation.Loc) (ann' : core_run_annotation)
     (aty' : ctype) (id' a' : Int) (i : Nat) (mo' : memory_order)
@@ -454,7 +458,7 @@ theorem wps_arr_elem_load {M' : MachineCtx} {p' : Option sym} {Ls' : LabelSpec G
     hbound hdec htrap
 
 /-- The loop body verifies at any invariant frame. -/
-theorem arr_body_wps (i : Nat) (f : Fmap sym value)
+theorem arr_body_wps [LemFuel] (i : Nat) (f : Fmap sym value)
     (rest : List (Fmap sym value)) (hf : SymFrame f)
     (hin : i ≤ vs.length) :
     iprop(cellOwn (procCtx rs).tagDefs (GF := GF) id (.own 1) (SpikeCell.mk a aty bs)) ⊢
@@ -530,7 +534,7 @@ theorem arr_body_wps (i : Nat) (f : Fmap sym value)
     · iexact Hpt
 
 /-- THE BLOCK SPECIFICATION. -/
-theorem arr_blockSpecs :
+theorem arr_blockSpecs [LemFuel] :
     ⊢ blockSpecs (GF := GF)
       (procCtx rs) (some p)
       (arrLs vs id a aty bs) emptyProcSpec (arrPost vs id a aty bs) := by
@@ -550,7 +554,7 @@ theorem arr_blockSpecs :
     p rs hQ hsz ety hdec i f rest hf hin $$ Hpt
 
 /-- The whole program's statement WP from the entry env. -/
-theorem arr_wps (sbty : core_base_type) :
+theorem arr_wps [LemFuel] (sbty : core_base_type) :
     iprop(cellOwn (procCtx rs).tagDefs (GF := GF) id (.own 1) (SpikeCell.mk a aty bs)) ⊢
       wps (procCtx rs) (some p)
         (arrLs vs id a aty bs) emptyProcSpec (arrPost vs id a aty bs)
@@ -577,7 +581,7 @@ theorem arr_wps (sbty : core_base_type) :
 
 /-- The base-WP face with the engine readout (value + the preserved
     array cell in the final memory). -/
-theorem arr_wp_readout (sbty : core_base_type) :
+theorem arr_wp_readout [LemFuel] (sbty : core_base_type) :
     iprop(cellOwn (procCtx rs).tagDefs (GF := GF) id (.own 1) (SpikeCell.mk a aty bs)) ⊢
       WP (⟨arrProg loc ann ra mo sbty ibty accbty pbty xbty
             (cellPtr id a) vs.length, [fmapEmpty],
@@ -605,27 +609,23 @@ theorem arr_wp_readout (sbty : core_base_type) :
 
 omit hQ hsz hdec in
 /-- The label bodies are in the certified cone. -/
-theorem arrBody_fragJ
+theorem arrBody_fragJ [LemFuel] (hfuel : 2 ≤ LemFuel.fuel)
     (n : Int) : Frag (arrBody loc ann ra mo xbty n) := by
   refine .if_ (PePure.of_isPePure rfl) (by
-      rw [show peDepth (arrGuard n) = 2 from rfl,
-        show lemDefaultFuel = 999999 + 1 from rfl]
-      omega)
+      rw [show peDepth (arrGuard n) = 2 from rfl]
+      exact hfuel)
     (.sseq_spec (.load_op rfl (.sym _ _) (by
-        rw [show peDepth (Pexpr ([] : List annot) ()
-          (PEsym arrPSym)) = 1 from rfl,
-          show lemDefaultFuel = 999999 + 1 from rfl]
+        rw [show peDepth (Pexpr ([] : List annot) () (PEsym arrPSym)) = 1 from rfl]
         omega))
       (.run (PePure.all_of_isPePure rfl) ?_))
-    .pure_sym
+    (.pure_sym (by omega))
   intro pe hpe
   simp only [List.mem_cons, List.not_mem_nil, or_false] at hpe
   rcases hpe with rfl | rfl | rfl <;>
-    (rw [show lemDefaultFuel = 999999 + 1 from rfl]
-     first
-      | (rw [show peDepth arrIncPe = 2 from rfl]; omega)
-      | (rw [show peDepth arrAccXPe = 2 from rfl]; omega)
-      | (rw [show peDepth arrShiftPe = 2 from rfl]; omega))
+    first
+      | (rw [show peDepth arrIncPe = 2 from rfl]; exact hfuel)
+      | (rw [show peDepth arrAccXPe = 2 from rfl]; exact hfuel)
+      | (rw [show peDepth arrShiftPe = 2 from rfl]; exact hfuel)
 
 end ArrIris
 
@@ -641,12 +641,13 @@ variable (loc : CerbLocation.Loc) (ann ra : core_run_annotation)
     array-walk loop — real pointer arithmetic, interior loads of the
     seeded array allocation, the Specified-binder unwrap — from any
     memory carrying the seeded array cell, from any driver state holding
-    the proc-carrying thread: the shipped loop at every fuel exhausts or
+    the proc-carrying thread: with ambient fuel at least two, the shipped
+    loop at every explicit iteration counter exhausts or
     delivers, never kills otherwise, never derails, and any delivered
     value IS `vs.sum`, with the ARRAY PRESERVED in the final memory
-    (`CellCoh` at the original bytes). Partial correctness at every
-    fuel. -/
-theorem array_sum_certified
+    (`CellCoh` at the original bytes). This is partial correctness;
+    no termination claim is made. -/
+theorem array_sum_certified [LemFuel] (hfuel : 2 ≤ LemFuel.fuel)
     (sbty : core_base_type) (vs : List Int) (id a : Int)
     (aty : ctype) (bs : List CerbMem.AbsByte)
     (hsz : vs.length * 4 ≤ CerbMem.sizeofCtype fmapEmpty aty)
@@ -668,22 +669,16 @@ theorem array_sum_certified
   intro prog rs
   have hlbl : (procCtx rs).labelsAt (procCtl arrProcSym).proc = _ :=
     procCtx_labels (arrRS_labeledAt loc ann ra mo ibty accbty pbty xbty vs.length)
-  refine engine_adequacy (GF := SpikeGF)
+  refine engine_adequacy (hfuel := hfuel) (GF := SpikeGF)
     (M := procCtx rs) rfl rfl (ctl := procCtl arrProcSym) rfl
     (fun l params cont hl => by
       rw [hlbl] at hl
       obtain ⟨-, rfl⟩ := arrQ_inv loc ann ra mo ibty accbty pbty xbty
         vs.length hl
-      exact arrBody_fragJ loc ann ra mo xbty vs.length)
-    (fun l params cont hl => by
-      rw [hlbl] at hl
-      obtain ⟨-, rfl⟩ := arrQ_inv loc ann ra mo ibty accbty pbty xbty
-        vs.length hl
-      exact Nat.le_of_ble_eq_true rfl)
+      exact arrBody_fragJ (hfuel := hfuel) loc ann ra mo xbty vs.length)
     (procCtx_fragProcs _)
     prog fmapEmpty [] σ₀ _
-    (.save (saveParams_pure_of_vals rfl) (saveParams_depth_of_vals rfl) (arrBody_fragJ loc ann ra mo xbty vs.length))
-    (Nat.le_of_ble_eq_true rfl)
+    (.save (saveParams_pure_of_vals rfl) (fun pe hp => by rw [saveParams_depth_of_vals rfl pe hp]; omega) (arrBody_fragJ (hfuel := hfuel) loc ann ra mo xbty vs.length))
     hcoh
     (fun v σ' => v = ivVal vs.sum ∧ CellCoh fmapEmpty σ' id ⟨a, aty, bs⟩)
     ?_ (th₀ := procThread arrProcSym prog [fmapEmpty])

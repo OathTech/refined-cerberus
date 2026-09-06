@@ -23,13 +23,14 @@ THE PROGRAM (authored Core, all metadata quantified):
   engine adequacy at the proc-carrying context (`engine_adequacy`):
   the CONCLUSION quantifies over engine objects only — `DriverSafeCtl`
   (Adequacy.lean): from any driver state holding the proc-carrying
-  thread, the SHIPPED driver's per-thread loop at every fuel either
+  thread, the SHIPPED driver's per-thread loop at every iteration counter either
   exhausts (the kill `CerbND.fuelExhaustedKill`) or delivers `Vunit`
   with the cell's final bytes pinned by the data-dependent post (`n = 0`
   → untouched; `0 < n` → the stored image); it never kills otherwise
-  and never derails. Partial correctness at EVERY fuel: the statement
-  carries no fuel hypothesis (the static `pot` bounds are discharged
-  inside the proof); the total form is `counter_loop_certified_production`,
+  and never derails. Partial correctness covers every explicit loop
+  counter under ambient fuel at least two: the guard and decrement each
+  need two evaluator passes. Structural traversal budgets are measured
+  by the engine. The total form is `counter_loop_certified_production`,
   ProdLoopExhibit.lean.
 
 THE ENVIRONMENT: the per-label invariant carries the reachable-frame
@@ -156,7 +157,7 @@ theorem lookup_env_x {f : Fmap sym value} (hf : SymFrame f) (v : value)
 
 /-! ## Evaluation facts at any reachable frame -/
 
-theorem guard_eval {file : generic_file Unit core_run_annotation} {f : Fmap sym value} (hf : SymFrame f) (i : Int)
+theorem guard_eval [LemFuel] {file : generic_file Unit core_run_annotation} {f : Fmap sym value} (hf : SymFrame f) (i : Int)
     (rest : List (Fmap sym value)) :
     evalPexpr fmapEmpty fmapEmpty file (envAdd xSym (ivVal i) f :: rest) guardPe =
       some (boolValue (decide (0 < i))) := by
@@ -172,7 +173,7 @@ theorem guard_eval {file : generic_file Unit core_run_annotation} {f : Fmap sym 
     (CerbMem.integerIval i)).map boolValue = _
   rfl
 
-theorem dec_eval {file : generic_file Unit core_run_annotation} {f : Fmap sym value} (hf : SymFrame f) (i : Int)
+theorem dec_eval [LemFuel] {file : generic_file Unit core_run_annotation} {f : Fmap sym value} (hf : SymFrame f) (i : Int)
     (rest : List (Fmap sym value)) :
     evalPexprs fmapEmpty fmapEmpty file (envAdd xSym (ivVal i) f :: rest) [decPe] =
       some [ivVal (i - 1)] := by
@@ -243,7 +244,7 @@ include hQ
 
 /-- The loop body verifies at any reachable counter frame (the shared
     lemma behind both the block spec and the entry). -/
-theorem loop_body_wps (i : Int) (f : Fmap sym value)
+theorem loop_body_wps [LemFuel] (i : Int) (f : Fmap sym value)
     (rest : List (Fmap sym value)) (hf : SymFrame f)
     (h0 : 0 ≤ i) (hin : i ≤ n) :
     iprop(((⌜i = n⌝ ∗ pointsToCell (procCtxF F rs).tagDefs (GF := GF) c (.own 1) intTy bs0) ∨
@@ -311,7 +312,7 @@ theorem loop_body_wps (i : Int) (f : Fmap sym value)
 /-- THE BLOCK SPECIFICATION, by the per-label invariant rule (NO
     Löb — the back edge discharged against the invariant at `i-1`
     through the jump clause). -/
-theorem loop_blockSpecs :
+theorem loop_blockSpecs [LemFuel] :
     ⊢ blockSpecs (GF := GF) (procCtxF F rs) (some p)
       (loopLs c n bs0) emptyProcSpec (loopPost c n bs0) := by
   refine blockSpecs_intro fun l params cont vs ev0 evs hl => ?_
@@ -331,7 +332,7 @@ theorem loop_blockSpecs :
 /-- The whole program's statement WP from ANY reachable entry frame
     `f` over any tail (alloc arc P4.3: the entry environment is no
     longer the fixed `[fmapEmpty]`). -/
-theorem loop_wps (hn : 0 ≤ n) (sbty : core_base_type)
+theorem loop_wps [LemFuel] (hn : 0 ≤ n) (sbty : core_base_type)
     (f : Fmap sym value) (hf : SymFrame f) (rest : List (Fmap sym value)) :
     pointsToCell (procCtxF F rs).tagDefs (GF := GF) c (.own 1) intTy bs0 ⊢
       wps (procCtxF F rs) (some p) (loopLs c n bs0) emptyProcSpec
@@ -355,7 +356,7 @@ theorem loop_wps (hn : 0 ≤ n) (sbty : core_base_type)
 
 omit hQ in
 /-- The per-value readout of the loop postcondition. -/
-theorem loop_readout_val (w : CoreRVal) :
+theorem loop_readout_val [LemFuel] (w : CoreRVal) :
     loopPost (GF := GF) c n bs0 w.sv w.ρ ⊢
       iprop(∀ (σ' : Mem) (ns : Nat) (κs : List Empty) (nt : Nat),
         stateInterp σ' ns κs nt ={⊤, ∅}=∗
@@ -377,7 +378,7 @@ theorem loop_readout_val (w : CoreRVal) :
 
 /-- The base-WP face with the engine readout (what `engine_adequacy`
     consumes), from any reachable entry frame over any tail. -/
-theorem loop_wp_readout (hn : 0 ≤ n) (sbty : core_base_type)
+theorem loop_wp_readout [LemFuel] (hn : 0 ≤ n) (sbty : core_base_type)
     (f : Fmap sym value) (hf : SymFrame f) (rest : List (Fmap sym value)) :
     pointsToCell (procCtx rs).tagDefs (GF := GF) c (.own 1) intTy bs0 ⊢
       WP (⟨loopProg loc ann ra mo bty xbty sbty c n, f :: rest,
@@ -407,26 +408,27 @@ variable (loc : CerbLocation.Loc) (ann ra : core_run_annotation)
   (c : CerbMem.PointerValue)
 
 /-- The body is in the certified extended cone. -/
-theorem loopBody_fragJ :
+theorem loopBody_fragJ [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) :
     Frag (loopBody loc ann ra mo bty c) := by
-  refine .if_ (PePure.of_isPePure rfl) (by decide +kernel)
+  refine .if_ (PePure.of_isPePure rfl) (by change 2 ≤ LemFuel.fuel; exact hfuel)
     (.sseq (.store) (.run (PePure.all_of_isPePure rfl) ?_))
     (.val_pure Vunit)
   intro pe hpe
   simp at hpe
   subst hpe
-  exact (by decide +kernel : peDepth decPe ≤ lemDefaultFuel)
+  exact (hfuel : peDepth decPe ≤ LemFuel.fuel)
 
 /-- THE EXHIBIT: driving the REAL engine ({step_ctx → sequential
     discharge} at the proc-carrying thread, the label map tied
     through `core_run_state.labeled`) on the authored counter loop,
     from ANY memory whose seeded cell footprint is satisfied: the
-    engine never kills (no UB), never derails, and any delivered
+    engine only kills for fuel exhaustion, never derails, and any delivered
     value is `Vunit` with the cell's final bytes decided by the
     loop's data: untouched for `n = 0`, the stored image for
-    `0 < n`. Partial correctness at EVERY drive length (the engine's
-    static get_ctx budget is discharged inside the proof). -/
-theorem counter_loop_certified
+    `0 < n`. Partial correctness at every loop iteration counter under
+    the stated sufficient ambient budget; structural traversal bounds
+    come from the engine's measured wrappers. -/
+theorem counter_loop_certified [LemFuel] (hfuel : 2 ≤ LemFuel.fuel)
     (sbty : core_base_type) (idx addr : Int) (bs0 : List CerbMem.AbsByte)
     (n : Int) (hn : 0 ≤ n)
     (σ₀ : Mem)
@@ -442,20 +444,15 @@ theorem counter_loop_certified
   intro prog rs
   have hlbl : (procCtx rs).labelsAt (procCtl loopProcSym).proc = _ :=
     procCtx_labels (loopRS_labeledAt loc ann ra mo bty xbty (cellPtr idx addr))
-  refine (engine_adequacy (GF := SpikeGF)
+  refine (engine_adequacy (hfuel := hfuel) (GF := SpikeGF)
     (M := procCtx rs) rfl rfl (ctl := procCtl loopProcSym) rfl
     (fun l params cont hl => by
       rw [hlbl] at hl
       obtain ⟨-, rfl⟩ := loopQ_inv loc ann ra mo bty xbty _ hl
-      exact loopBody_fragJ loc ann ra mo bty _)
-    (fun l params cont hl => by
-      rw [hlbl] at hl
-      obtain ⟨-, rfl⟩ := loopQ_inv loc ann ra mo bty xbty _ hl
-      exact Nat.le_of_ble_eq_true rfl)
+      exact loopBody_fragJ (hfuel := hfuel) loc ann ra mo bty _)
     (procCtx_fragProcs _)
     prog fmapEmpty [] σ₀ _
-    (.save (saveParams_pure_of_vals rfl) (saveParams_depth_of_vals rfl) (loopBody_fragJ loc ann ra mo bty _))
-    (Nat.le_of_ble_eq_true rfl)
+    (.save (saveParams_pure_of_vals rfl) (fun pe hp => by rw [saveParams_depth_of_vals rfl pe hp]; omega) (loopBody_fragJ (hfuel := hfuel) loc ann ra mo bty _))
     hcoh
     (fun v σ' => v = Vunit ∧ ∃ bs',
       ((n = 0 ∧ bs' = bs0) ∨ (0 < n ∧ bs' = (sevenBytes fmapEmpty))) ∧
@@ -483,7 +480,7 @@ theorem counter_loop_certified
     frame carrying an unrelated binding `y ↦ junk` — the engine's own
     `update_env`/`lookup_env` on a frame that no exact-shape pin could
     describe. -/
-theorem counter_loop_certified_irrelevant_binding
+theorem counter_loop_certified_irrelevant_binding [LemFuel] (hfuel : 2 ≤ LemFuel.fuel)
     (sbty : core_base_type) (idx addr : Int) (bs0 : List CerbMem.AbsByte)
     (n : Int) (hn : 0 ≤ n) (junk : value)
     (σ₀ : Mem)
@@ -500,20 +497,15 @@ theorem counter_loop_certified_irrelevant_binding
   intro prog rs ρ₀
   have hlbl : (procCtx rs).labelsAt (procCtl loopProcSym).proc = _ :=
     procCtx_labels (loopRS_labeledAt loc ann ra mo bty xbty (cellPtr idx addr))
-  refine (engine_adequacy (GF := SpikeGF)
+  refine (engine_adequacy (hfuel := hfuel) (GF := SpikeGF)
     (M := procCtx rs) rfl rfl (ctl := procCtl loopProcSym) rfl
     (fun l params cont hl => by
       rw [hlbl] at hl
       obtain ⟨-, rfl⟩ := loopQ_inv loc ann ra mo bty xbty _ hl
-      exact loopBody_fragJ loc ann ra mo bty _)
-    (fun l params cont hl => by
-      rw [hlbl] at hl
-      obtain ⟨-, rfl⟩ := loopQ_inv loc ann ra mo bty xbty _ hl
-      exact Nat.le_of_ble_eq_true rfl)
+      exact loopBody_fragJ (hfuel := hfuel) loc ann ra mo bty _)
     (procCtx_fragProcs _)
     prog (envAdd ySym junk fmapEmpty) [] σ₀ _
-    (.save (saveParams_pure_of_vals rfl) (saveParams_depth_of_vals rfl) (loopBody_fragJ loc ann ra mo bty _))
-    (Nat.le_of_ble_eq_true rfl)
+    (.save (saveParams_pure_of_vals rfl) (fun pe hp => by rw [saveParams_depth_of_vals rfl pe hp]; omega) (loopBody_fragJ (hfuel := hfuel) loc ann ra mo bty _))
     hcoh
     (fun v σ' => v = Vunit ∧ ∃ bs',
       ((n = 0 ∧ bs' = bs0) ∨ (0 < n ∧ bs' = (sevenBytes fmapEmpty))) ∧

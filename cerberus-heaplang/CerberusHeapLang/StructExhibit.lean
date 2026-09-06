@@ -27,7 +27,8 @@ budget `allocBudget (allocCost structTy align)` (no cursor vocabulary; the
 program BINDS the fresh pointer with `lets p = create(...)` and
 stores through the bound symbol), and the adequacy theorem launches
 it against the real engine — the shipped driver's per-thread loop at
-every fuel, from the production cold-start memory in the instance —
+every explicit iteration counter under ambient fuel at least two, from
+the production cold-start memory in the instance —
 through `project_triple_pure_alloc`/`launchResources`: the partial-lane
 allocation consumer of the R-01 closure test.
 -/
@@ -48,7 +49,10 @@ open Iris Iris.BI Iris.ProgramLogic
     padding). -/
 def structTy : ctype := Ctype [] (.Array0 intTy (some 4))
 
-theorem structTy_size {tds : CerbTags.TagDefsMap} : CerbMem.sizeofCtype tds structTy = 16 := rfl
+theorem structTy_size {tds : CerbTags.TagDefsMap} : CerbMem.sizeofCtype tds structTy = 16 := by
+  unfold structTy intTy
+  rw [sizeofCtype_array_integer]
+  rfl
 
 /-- The struct type has positive size (the public create rules' `hsz`). -/
 theorem structTy_size_pos {tds : CerbTags.TagDefsMap} : 0 < CerbMem.sizeofCtype tds structTy := by
@@ -63,7 +67,8 @@ theorem structTy_nonatomic : atomicTy structTy = false := rfl
 theorem structTy_dec_indep {tds : CerbTags.TagDefsMap} (lum : List (Int × identifier))
     (fpm : CerbMem.Funptrmap) (addr : Int) (bs : List CerbMem.AbsByte) :
     CerbMem.reconstructValue tds lum fpm addr structTy bs =
-      CerbMem.reconstructValue tds [] [] addr structTy bs := rfl
+      CerbMem.reconstructValue tds [] [] addr structTy bs :=
+  decIndep_array_integer tds addr [] [] (.Signed .Int_) 4 bs lum fpm
 
 theorem structTy_decIndep {tds : CerbTags.TagDefsMap} (a : Int) (bs : List CerbMem.AbsByte) :
     decIndep tds a structTy bs :=
@@ -89,7 +94,7 @@ def progS (loc : CerbLocation.Loc) (ann : core_run_annotation)
       sixVal mo')
 
 /-- Cone membership: two canonical stores under strong sequencing. -/
-theorem progS_frag (loc : CerbLocation.Loc) (ann : core_run_annotation)
+theorem progS_frag [LemFuel] (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (mo mo' : memory_order) (bty : core_base_type) (id a : Int) :
     Frag (progS loc ann mo mo' bty id a) :=
   Frag.sseq (.store) (.store)
@@ -105,7 +110,7 @@ variable {M : MachineCtx} {p : Option sym} {Ls : LabelSpec GF} {Θ : ProcSpec GF
 /-- FIELD-X STORE: `wps_store_cell_at` at offset 0, view type `int`,
     stored value 5. A client lemma — every premise is a closed
     layout/serialization fact. -/
-theorem wps_struct_x_store {Ψ : SpikeVal → EnvStack → IProp GF}
+theorem wps_struct_x_store [LemFuel] {Ψ : SpikeVal → EnvStack → IProp GF}
     (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (mo : memory_order) (id a : Int) (bs : List CerbMem.AbsByte)
     (ρ : EnvStack) :
@@ -120,7 +125,7 @@ theorem wps_struct_x_store {Ψ : SpikeVal → EnvStack → IProp GF}
     (five_storable M.tagDefs).toView (structTy_decIndep a _)
 
 /-- FIELD-Y STORE: the same generic rule at offset 8, stored value 6. -/
-theorem wps_struct_y_store {Ψ : SpikeVal → EnvStack → IProp GF}
+theorem wps_struct_y_store [LemFuel] {Ψ : SpikeVal → EnvStack → IProp GF}
     (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (mo : memory_order) (id a : Int) (bs : List CerbMem.AbsByte)
     (ρ : EnvStack) :
@@ -136,7 +141,7 @@ theorem wps_struct_y_store {Ψ : SpikeVal → EnvStack → IProp GF}
 
 /-- The whole program at the statement layer: both fields updated,
     the allocation's image doubly spliced. -/
-theorem struct_wps (loc : CerbLocation.Loc) (ann : core_run_annotation)
+theorem struct_wps [LemFuel] (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (mo mo' : memory_order) (bty : core_base_type) (id a : Int)
     (bs : List CerbMem.AbsByte) (ev0 : Fmap sym value)
     (evs : List (Fmap sym value)) :
@@ -166,7 +171,7 @@ theorem struct_wps (loc : CerbLocation.Loc) (ann : core_run_annotation)
 
 /-- Vacuous block specifications (no labels at the straight-line
     profile). -/
-theorem struct_blockSpecs (id a : Int) (bs : List CerbMem.AbsByte) :
+theorem struct_blockSpecs [LemFuel] (id a : Int) (bs : List CerbMem.AbsByte) :
     ⊢ blockSpecs (GF := GF) spikeCtx none (fun _ _ _ => iprop(False)) emptyProcSpec
       (fun _ _ => iprop(cellOwn spikeCtx.tagDefs (hlc := hlc) id (.own 1) (SpikeCell.mk a structTy
         (spliceBytes fieldY (sixBytes spikeCtx.tagDefs) (spliceBytes fieldX (fiveBytes spikeCtx.tagDefs) bs))))) :=
@@ -180,14 +185,14 @@ variable {GF : BundledGFunctors} [SpikeGS .hasLC GF]
 
 /-- The base-WP face with the engine readout: the final memory holds
     the doubly-spliced image at the allocation. -/
-theorem struct_wp_readout (loc : CerbLocation.Loc)
+theorem struct_wp_readout [LemFuel] (loc : CerbLocation.Loc)
     (ann : core_run_annotation) (mo mo' : memory_order)
     (bty : core_base_type) (id a : Int) (bs : List CerbMem.AbsByte) :
     iprop(cellOwn spikeCtx.tagDefs (hlc := .hasLC) (GF := GF) id (.own 1)
         (SpikeCell.mk a structTy bs)) ⊢
       WP (⟨progS loc ann mo mo' bty id a, spikeEnv, spikeCtl, spikeCtx⟩ : CoreRt)
         @ Stuckness.NotStuck; ⊤
-        {{ w, iprop(∀ (σ' : Mem) (ns : Nat) (κs : List Empty) (nt : Nat),
+        {{ _w, iprop(∀ (σ' : Mem) (ns : Nat) (κs : List Empty) (nt : Nat),
           (stateInterp σ' ns κs nt : IProp GF) ={⊤, ∅}=∗
             ⌜CellCoh spikeCtx.tagDefs σ' id ⟨a, structTy,
               spliceBytes fieldY (sixBytes spikeCtx.tagDefs)
@@ -213,13 +218,14 @@ end StructReadout
 open Iris.Std.PartialMap in
 /-- STRUCT UPDATE, END TO END: driving the REAL engine on the
     two-field update, from any memory carrying the seeded struct
-    cell: never killed, never derailed, and any completed run's
+    cell: with ambient fuel at least two, every explicit loop counter
+    exhausts or delivers; any delivered run's
     final memory reads back BOTH fields updated — 5's image at the x
     field, 6's image at the y field (interior typed stores through
     ONE allocation; the padding gap and the rest of the frame ride
     untouched inside the spliced image). ZERO core-logic edits were
     made for this module (audit Phase-2 acceptance test 2). -/
-theorem struct_update_certified {GF : BundledGFunctors} [SpikeGpreS GF]
+theorem struct_update_certified [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) {GF : BundledGFunctors} [SpikeGpreS GF]
     (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (mo mo' : memory_order) (bty : core_base_type)
     (id a : Int) (bs : List CerbMem.AbsByte)
@@ -234,12 +240,11 @@ theorem struct_update_certified {GF : BundledGFunctors} [SpikeGpreS GF]
     have h := (hcoh.cells id _ (Iris.Std.LawfulPartialMap.get?_singleton_eq rfl)).len
     rw [structTy_size] at h
     exact h
-  refine (engine_adequacy (GF := GF) (M := spikeCtx) rfl rfl (ctl := spikeCtl) rfl
-    spikeCtx_labels_frag spikeCtx_labels_pot spikeCtx_fragProcs
+  refine (engine_adequacy (hfuel := hfuel) (GF := GF) (M := spikeCtx) rfl rfl (ctl := spikeCtl) rfl
+    spikeCtx_labels_frag spikeCtx_fragProcs
     (progS loc ann mo mo' bty id a) fmapEmpty [] σ₀
     (Iris.Std.PartialMap.singleton id (SpikeCell.mk a structTy bs))
     (progS_frag loc ann mo mo' bty id a)
-    (Nat.le_of_ble_eq_true rfl)
     hcoh
     (fun _ σ' => CellCoh fmapEmpty σ' id ⟨a, structTy,
       spliceBytes fieldY (sixBytes fmapEmpty) (spliceBytes fieldX (fiveBytes fmapEmpty) bs)⟩)
@@ -326,8 +331,14 @@ variable {M : MachineCtx} {p : Option sym} {Ls : LabelSpec GF} {Θ : ProcSpec GF
 def int3Ty : ctype := Ctype [] (.Array0 intTy (some 3))
 def int2Ty : ctype := Ctype [] (.Array0 intTy (some 2))
 
-theorem int3Ty_size {tds : CerbTags.TagDefsMap} : CerbMem.sizeofCtype tds int3Ty = 12 := rfl
-theorem int2Ty_size {tds : CerbTags.TagDefsMap} : CerbMem.sizeofCtype tds int2Ty = 8 := rfl
+theorem int3Ty_size {tds : CerbTags.TagDefsMap} : CerbMem.sizeofCtype tds int3Ty = 12 := by
+  unfold int3Ty intTy
+  rw [sizeofCtype_array_integer]
+  rfl
+theorem int2Ty_size {tds : CerbTags.TagDefsMap} : CerbMem.sizeofCtype tds int2Ty = 8 := by
+  unfold int2Ty intTy
+  rw [sizeofCtype_array_integer]
+  rfl
 theorem intTy_size' {tds : CerbTags.TagDefsMap} : CerbMem.sizeofCtype tds intTy = 4 := rfl
 
 /-- The five image decodes back to `fiveMval` at any address and any
@@ -341,7 +352,7 @@ theorem five_fromMemValue : (valueFromMemValue fiveMval).2 = fiveVal := rfl
 theorem five_loadTrap : loadTrapV intTy fiveMval = false := rfl
 
 /-- THE VIEW CLIENT: split → update through the field views → join. -/
-theorem struct_wps_views (loc : CerbLocation.Loc) (ann : core_run_annotation)
+theorem struct_wps_views [LemFuel] (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (mo mo' : memory_order) (bty : core_base_type) (id a : Int)
     (b0 b1 b2 b3 : List CerbMem.AbsByte)
     (h0 : b0.length = 4) (h1 : b1.length = 4) (h2 : b2.length = 4)
@@ -465,7 +476,7 @@ theorem struct_wps_views (loc : CerbLocation.Loc) (ann : core_run_annotation)
 
 /-- The view client at the whole-cell bundle: `cellOwn_view` in and
     out (the image's decode inertness is the layout's `rfl` fact). -/
-theorem struct_wps_views_cell (loc : CerbLocation.Loc) (ann : core_run_annotation)
+theorem struct_wps_views_cell [LemFuel] (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (mo mo' : memory_order) (bty : core_base_type) (id a : Int)
     (b0 b1 b2 b3 : List CerbMem.AbsByte)
     (h0 : b0.length = 4) (h1 : b1.length = 4) (h2 : b2.length = 4)
@@ -490,7 +501,7 @@ theorem struct_wps_views_cell (loc : CerbLocation.Loc) (ann : core_run_annotatio
 /-- FRACTIONAL READ: the x field (holding 5) read through its view at
     ANY fraction `q` — the load delivers 5 and the view comes back at
     the same fraction. -/
-theorem struct_x_read_frac_wps (loc : CerbLocation.Loc) (ann : core_run_annotation)
+theorem struct_x_read_frac_wps [LemFuel] (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (mo : memory_order) (id a : Int) (q : Qp) (ρ : EnvStack) :
     pointsToView M.tagDefs (GF := GF) id a structTy fieldX (.own q) (.own q) intTy
         (fiveBytes M.tagDefs) ⊢
@@ -512,7 +523,7 @@ theorem struct_x_read_frac_wps (loc : CerbLocation.Loc) (ann : core_run_annotati
 
 /-- THE SHARED READER: the full x-field view splits into two halves,
     one half is lent to the read, and the halves rejoin. -/
-theorem struct_x_read_shared_wps (loc : CerbLocation.Loc) (ann : core_run_annotation)
+theorem struct_x_read_shared_wps [LemFuel] (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (mo : memory_order) (id a : Int) (ρ : EnvStack) :
     pointsToView M.tagDefs (GF := GF) id a structTy fieldX (.own 1) (.own 1) intTy
         (fiveBytes M.tagDefs) ⊢
@@ -550,7 +561,7 @@ theorem struct_x_read_shared_wps (loc : CerbLocation.Loc) (ann : core_run_annota
     account of the contents (`bs`, `bs'`); the load goes through the
     first; recombining forces the accounts to agree and returns full
     ownership. -/
-theorem cell_read_shared_wps (loc : CerbLocation.Loc) (ann : core_run_annotation)
+theorem cell_read_shared_wps [LemFuel] (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (pv : CerbMem.PointerValue) (mo : memory_order)
     (bs bs' : List CerbMem.AbsByte) (ρ : EnvStack)
     (htrap : cellLoadTrap M.tagDefs ⟨addrOf pv, intTy, bs⟩ = false) :
@@ -585,7 +596,7 @@ theorem cell_read_shared_wps (loc : CerbLocation.Loc) (ann : core_run_annotation
     fraction is traded for persistent allocation knowledge, and the
     in-bounds fact is handed out next to the (persistent-metadata)
     view. -/
-theorem struct_x_read_persist_wps (loc : CerbLocation.Loc) (ann : core_run_annotation)
+theorem struct_x_read_persist_wps [LemFuel] (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (mo : memory_order) (id a : Int) (q : Qp) (dqb : DFrac) (ρ : EnvStack) :
     pointsToView M.tagDefs (GF := GF) id a structTy fieldX (.own q) dqb intTy
         (fiveBytes M.tagDefs) ⊢
@@ -647,7 +658,7 @@ def progCreateInit (loc : CerbLocation.Loc) (ann : core_run_annotation)
         (Pexpr [] () (PEsym structVSym)) mo))))
 
 /-- Cone membership. -/
-theorem progCreateInit_frag (loc : CerbLocation.Loc)
+theorem progCreateInit_frag [LemFuel] (hfuel : 0 < LemFuel.fuel) (loc : CerbLocation.Loc)
     (ann : core_run_annotation) (aprov : CerbMem.Provenance)
     (alignN : Int) (pref : prefix0) (mo : memory_order)
     (pbty vbty : core_base_type) :
@@ -656,11 +667,9 @@ theorem progCreateInit_frag (loc : CerbLocation.Loc)
     (.sseq_sym (.val_pure fiveVal)
       (.store_op rfl (.sym [] structPSym) (.sym [] structVSym)
         (by rw [show peDepth (Pexpr ([] : List annot) ()
-            (PEsym structPSym)) = 1 from rfl,
-          show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+            (PEsym structPSym)) = 1 from rfl]; omega)
         (by rw [show peDepth (Pexpr ([] : List annot) ()
-            (PEsym structVSym)) = 1 from rfl,
-          show lemDefaultFuel = 999999 + 1 from rfl]; omega)))
+            (PEsym structVSym)) = 1 from rfl]; omega)))
 
 section CreateIris
 
@@ -687,15 +696,15 @@ theorem structFrame_lookup_v {f : Fmap sym value} (hf : SymFrame f)
   rw [envAdd_lookup (hf.add _ _) symCmpK, if_pos (by decide +kernel)]
 
 /-- ALLOCATE-THEN-INITIALIZE, THE PUBLIC-RULE CLIENT (charter P2 item
-    1): from the allocation budget `allocBudget (allocCost structTy
-    align)` ALONE, the whole program verifies — the create through the
+    1): with positive ambient fuel and alignment, from the allocation
+    budget `allocBudget (allocCost structTy align)`, the whole program verifies — the create through the
     PUBLIC `wps_create` (existential pointer, no cursor vocabulary), the
     x-field store through the generic typed-subrange rule at the
     program-bound pointer. The postcondition returns the initialized
     fresh struct (existential pointer); the budget is spent. -/
-theorem struct_create_store_wps
+theorem struct_create_store_wps [LemFuel] (hfuel : 0 < LemFuel.fuel)
     (loc : CerbLocation.Loc) (ann : core_run_annotation)
-    (aprov : CerbMem.Provenance) (alignN : Int) (pref : prefix0)
+    (aprov : CerbMem.Provenance) (alignN : Int) (halign : 0 < alignN) (pref : prefix0)
     (mo : memory_order) (pbty vbty : core_base_type)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value))
     (hf : SymFrame ev0) (hex : ∀ x, resolveExtern M.extern x = x) :
@@ -717,7 +726,8 @@ theorem struct_create_store_wps
         (storeOpRedex [] loc ann intTy (Pexpr [] () (PEsym structPSym))
           (Pexpr [] () (PEsym structVSym)) mo)))) from rfl]
   iapply wps_seq_sym
-  iapply wps_create [] loc ann aprov alignN structTy pref (ev0 :: evs)
+  iapply wps_create (hfuel := hfuel) (halign := halign) (haddr := rfl)
+    [] loc ann aprov alignN structTy pref (ev0 :: evs)
     structTy_size_pos structTy_nonatomic (fun a => structTy_decIndep a _)
   isplitl [Hcap]
   · iexact Hcap
@@ -784,14 +794,15 @@ theorem struct_budget_fits :
     `MemTriple_alloc spikeCtx spikeCtl spikeEnv prog ∅ (allocCost structTy 8) ψ`:
     for every memory launch-coherent with the budget (any frame `R`)
     and every driver state holding the program there, the shipped
-    driver's per-thread loop at every fuel exhausts or delivers, never
+    driver's per-thread loop, with ambient fuel at least two and every
+    explicit iteration counter, exhausts or delivers, never
     kills otherwise, never derails, and any delivered value is unit
     with the final memory holding the initialized fresh struct
     (existential allocation id/address: the logic binds the pointer,
     the engine picks it). Verified ONLY through the public `wps_create`
     + the generic store rule; the pure-consequence obligation is
     discharged by the `*_consequence` lemmas. -/
-theorem struct_create_store_adequacy {GF : BundledGFunctors} [SpikeGpreS GF]
+theorem struct_create_store_adequacy [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) {GF : BundledGFunctors} [SpikeGpreS GF]
     (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (pref : prefix0) (mo : memory_order) (pbty vbty : core_base_type) :
     MemTriple_alloc spikeCtx spikeCtl spikeEnv
@@ -802,10 +813,9 @@ theorem struct_create_store_adequacy {GF : BundledGFunctors} [SpikeGpreS GF]
           (List.replicate (CerbMem.sizeofCtype fmapEmpty structTy) undefByte)⟩) := by
   -- the allocating projection at the spike profile: footprint ∅, budget
   -- `allocCost structTy 8`, the Iris post = `struct_create_store_wps`'s post
-  refine project_triple_pure_alloc (GF := GF) (M := spikeCtx) rfl rfl (ctl := spikeCtl) rfl
-    spikeCtx_labels_frag spikeCtx_labels_pot spikeCtx_fragProcs
-    (progCreateInit_frag loc ann .Prov_none 8 pref mo pbty vbty)
-    (Nat.le_of_ble_eq_true rfl)
+  refine project_triple_pure_alloc (hfuel := hfuel) (GF := GF) (M := spikeCtx) rfl rfl (ctl := spikeCtl) rfl
+    spikeCtx_labels_frag spikeCtx_fragProcs
+    (progCreateInit_frag (hfuel := by omega) loc ann .Prov_none 8 pref mo pbty vbty)
     fmapEmpty [] (∅ : CellMap) (allocCost fmapEmpty structTy 8)
     (fun w => iprop(∃ p : CerbMem.PointerValue,
       ⌜w.sv.val = Vunit⌝ ∗
@@ -816,7 +826,7 @@ theorem struct_create_store_adequacy {GF : BundledGFunctors} [SpikeGpreS GF]
   · -- the Iris triple: `struct_create_store_wps` collapsed by `wps_sound`
     intro inst
     iintro ⟨-, Hcap⟩
-    ihave HW := struct_create_store_wps (M := spikeCtx) (p := none) (Θ := emptyProcSpec)
+    ihave HW := struct_create_store_wps (hfuel := by omega) (halign := by decide) (M := spikeCtx) (p := none) (Θ := emptyProcSpec)
       (Ls := fun _ _ _ => iprop(False)) loc ann .Prov_none 8 pref mo
       pbty vbty fmapEmpty [] symFrame_empty (resolveExtern_id_of_empty rfl) $$ Hcap
     ihave HWP : _ $$ [HW]
@@ -839,9 +849,10 @@ theorem struct_create_store_adequacy {GF : BundledGFunctors} [SpikeGpreS GF]
     `prodMem₀` (frame ∅): the launch premise `LaunchCoh` is dischargeable
     at a real engine memory — `prodMem₀_launchCoh` with the budget within
     the actual cursor's headroom (`struct_budget_fits`). From any driver
-    state holding the program at `prodMem₀`, the shipped loop at every
-    fuel exhausts or delivers the initialized fresh struct. -/
-theorem struct_create_store_adequacy_prodMem₀ {GF : BundledGFunctors} [SpikeGpreS GF]
+    state holding the program at `prodMem₀`, with ambient fuel at least
+    two, the shipped loop at every explicit iteration counter exhausts
+    or delivers the initialized fresh struct. -/
+theorem struct_create_store_adequacy_prodMem₀ [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) {GF : BundledGFunctors} [SpikeGpreS GF]
     (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (pref : prefix0) (mo : memory_order) (pbty vbty : core_base_type) :
     DriverSafeCtl spikeCtx (spikeThread (progCreateInit loc ann .Prov_none 8 pref mo pbty vbty))
@@ -849,7 +860,7 @@ theorem struct_create_store_adequacy_prodMem₀ {GF : BundledGFunctors} [SpikeGp
       (fun v σ' => v = Vunit ∧ ∃ i a : Int, CellCoh fmapEmpty σ' i ⟨a, structTy,
         spliceBytes fieldX (fiveBytes fmapEmpty)
           (List.replicate (CerbMem.sizeofCtype fmapEmpty structTy) undefByte)⟩) :=
-  struct_create_store_adequacy (GF := GF) loc ann pref mo pbty vbty
+  struct_create_store_adequacy (hfuel := hfuel) (GF := GF) loc ann pref mo pbty vbty
     (∅ : CellMap) (Iris.Std.LawfulPartialMap.disjoint_empty_right _) prodMem₀
     (by rw [show Iris.Std.PartialMap.union (∅ : CellMap) (∅ : CellMap) = ∅ from
           Iris.Std.LawfulPartialMap.union_empty_right]

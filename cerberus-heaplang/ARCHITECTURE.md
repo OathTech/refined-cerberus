@@ -1,5 +1,12 @@
 # cerberus-heaplang — the architecture, normatively
 
+**M2 re-pin checkpoint [AGENT 2026-09-06].** The integrated source passes
+the full gate at the new quantified-fuel pin. Fuel prose, old pin/line
+references and quoted signatures in this document still need reconciliation.
+Use the [current contract and validation record](../docs/2026-09-06_repin-t4-malloclist-and-full-gate.md)
+and [claim matrix](docs/CLAIMS.md) for the repaired contracts.
+This documentation task remains open under the active charter.
+
 What this package is, what it proves, what it trusts, and how to read
 one of its theorems. Every claim is about the tree at this revision and
 carries a `file:line` cite into `CerberusHeapLang/*.lean`, the pinned

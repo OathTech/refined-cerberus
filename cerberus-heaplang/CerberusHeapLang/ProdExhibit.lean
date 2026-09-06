@@ -1,7 +1,7 @@
 /-
 CerberusHeapLang.ProdExhibit — exhibit A re-exported at the
-PRODUCTION ENTRY: the unconditional demonstration that the whole
-export chain reaches the shipped pipeline.
+PRODUCTION ENTRY: the whole public-rule proof reaches the shipped
+pipeline at the caller's ambient fuel of at least twelve.
 
 The program is fully self-contained — it creates its own cell with
 the engine's `create`, BINDS the fresh pointer (alloc arc P2: the
@@ -20,7 +20,7 @@ v)`, because the mirrored arm then required two non-value operands.)
 
 THE THEOREM (`exhibitA_prod`): `runND` of the SHIPPED driver on the
 synthetic one-procedure file wrapping this program, from
-`initial_driver_state`, is EXACTLY ONE Active execution; its
+`initial_driver_state`, with `12 ≤ LemFuel.fuel`, is exactly one active execution; its
 driver_result value is `Specified(7)` and the final memory holds 7's
 byte image at the program's own fresh cell (existential allocation
 id/address — the logic binds the pointer, the engine picks it).
@@ -82,18 +82,16 @@ def progAProd : CoreExpr :=
         (Pexpr [] () (PEsym pASym)) NA))))
 
 /-- Cone membership. -/
-theorem progAProd_frag : Frag progAProd :=
+theorem progAProd_frag [LemFuel] (hfuel : 0 < LemFuel.fuel) : Frag progAProd :=
   .sseq_sym .create
     (.sseq
       (.store_op rfl (.sym [] pASym) (.val [] sevenVal)
         (by rw [show peDepth (Pexpr ([] : List annot) ()
-            (PEsym pASym)) = 1 from rfl,
-          show lemDefaultFuel = 999999 + 1 from rfl]; omega)
-        (peDepth_val_le _ _))
+            (PEsym pASym)) = 1 from rfl]; omega)
+        (peDepth_val_le _ _ hfuel))
       (.load_op rfl (.sym [] pASym)
         (by rw [show peDepth (Pexpr ([] : List annot) ()
-            (PEsym pASym)) = 1 from rfl,
-          show lemDefaultFuel = 999999 + 1 from rfl]; omega)))
+            (PEsym pASym)) = 1 from rfl]; omega)))
 
 /-! ## The mixed operand shapes of `store` (QA-1/H-1) — at the rules
 
@@ -106,7 +104,7 @@ shapes (`store_sym_lit_step`, `store_lit_sym_step`) live in
 `Examples/MirrorCoverage.lean`, which is not a client: -/
 
 /-- The rule at the symbol-pointer/literal-value shape (both strata). -/
-theorem wps_store_sym_lit [SpikeGS .hasLC GF] {M : MachineCtx} {p : Option sym} {Ls : LabelSpec GF} {Θ : ProcSpec GF}
+theorem wps_store_sym_lit [LemFuel] [SpikeGS .hasLC GF] {M : MachineCtx} {p : Option sym} {Ls : LabelSpec GF} {Θ : ProcSpec GF}
     {Ψ : SpikeVal → EnvStack → IProp GF}
     (loc : CerbLocation.Loc) (ann : core_run_annotation) (ty : ctype)
     (x : sym) (cv : value) (mo : memory_order) (ρ : EnvStack)
@@ -118,7 +116,7 @@ theorem wps_store_sym_lit [SpikeGS .hasLC GF] {M : MachineCtx} {p : Option sym} 
         (Pexpr [] () (PEval cv)) mo) ρ :=
   wps_store_eval [] loc ann ty _ _ mo ρ rfl hx (evalPexpr_val _ _ _ _ _)
 
-theorem wpt_store_lit_sym [SpikeGS .hasLC GF] {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
+theorem wpt_store_lit_sym [LemFuel] [SpikeGS .hasLC GF] {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
     {Ψ : SpikeVal → EnvStack → IProp GF}
     (loc : CerbLocation.Loc) (ann : core_run_annotation) (ty : ctype)
     (pv : CerbMem.PointerValue) (y : sym) (mo : memory_order) (ρ : EnvStack)
@@ -156,10 +154,11 @@ def ψA (tds : CerbTags.TagDefsMap) : value → Mem → Prop := fun v σ' =>
 
 /-- THE WHOLE PROGRAM AT THE TOTAL JUDGMENT, budget 10 (derived:
     create 2 + store-operand eval 1 + store 3 + load-operand eval 1 +
-    load 3): from `allocBudget (allocCost intTy 4)` ALONE — the create through
+    load 3): with positive ambient fuel, from
+    `allocBudget (allocCost intTy 4)` — the create through
     the PUBLIC `wpt_create`, the store/load through the generic heap
     rules at the PROGRAM-BOUND pointer. -/
-theorem progAProd_wpt [SpikeGS .hasLC GF]
+theorem progAProd_wpt [LemFuel] (hfuel : 0 < LemFuel.fuel) [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
     (hex : ∀ x, resolveExtern M.extern x = x)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value))
@@ -178,7 +177,7 @@ theorem progAProd_wpt [SpikeGS .hasLC GF]
           (Pexpr [] () (PEsym pASym)) NA)))) from rfl,
     show (10 : Nat) = 2 + 8 from rfl]
   iapply wpt_seq_sym
-  iapply wpt_create [] loc0 empty_annotation .Prov_none 4 intTy
+  iapply wpt_create (hfuel := hfuel) (halign := by decide) (haddr := rfl) [] loc0 empty_annotation .Prov_none 4 intTy
     (PrefOther "spike-x") (ev0 :: evs) (Nat.le_refl 2) intTy_size_pos intTy_nonatomic
     (fun a => intTy_decIndep a _)
   isplitl [Hcap]
@@ -254,14 +253,14 @@ theorem progAProd_labeledAt (sup : Nat) :
 
 /-- EXHIBIT A, PRODUCTION-ENTRY FORM: the shipped pipeline on the
     synthetic one-procedure file wrapping the self-contained program
-    is EXACTLY ONE Active execution; its result value is
+    with ambient fuel at least twelve is exactly one active execution; its result value is
     `Specified(7)` and the final memory holds 7's byte image at the
     program's own fresh cell (existential allocation id/address).
     Whole chain: `progAProd_wpt` (PUBLIC `wpt_create` + generic heap
     rules) → `wpt_driver_done_alloc` (allocation-aware launch from
-    the cold-start memory with the one-request plan) →
+    the cold-start memory with the allocation budget) →
     `prod_run_eqJ` (generic driver collapse). -/
-theorem exhibitA_prod (sup : Nat) (fs : CerbFS.FsState) (args : List String) :
+theorem exhibitA_prod [LemFuel] (hfuel : 12 ≤ LemFuel.fuel) (sup : Nat) (fs : CerbFS.FsState) (args : List String) :
     ∃ (dres : driver_result) (dst' : driver_state),
       CerbND.runND (_root_.drive fmapEmpty false (prodFile progAProd) args)
           ((initial_driver_state sup (prodFile progAProd) fs).1) =
@@ -282,16 +281,14 @@ theorem exhibitA_prod (sup : Nat) (fs : CerbFS.FsState) (args : List String) :
     cases hl
   obtain ⟨dres, dst', heq, hψ, hbl, hout, herr⟩ :=
     prod_run_eqJ sup progAProd hQe (ψA fmapEmpty) 10
-      (wpt_driver_done_alloc (GF := SpikeGF) (ctl := prodCtl sup)
+      (wpt_driver_done_alloc (hfuel := by omega) (GF := SpikeGF) (ctl := prodCtl sup)
         (M₀ := prodCtx (prodFile progAProd) ((initial_core_run_state sup
           (collect_labeled_continuations_NEW (prodFile progAProd))).1))
         rfl rfl (prodCtx_labels hQe) rfl rfl rfl rfl (Nat.le_refl _)
         (fun l params cont hl => (hnolabel l params cont hl).elim)
-        (fun l params cont hl => (hnolabel l params cont hl).elim)
         (fun _ _ _ _ => iprop(False))
         progAProd fmapEmpty [] prodMem₀ (∅ : SpikeHeapF SpikeCell)
-        (allocCost fmapEmpty intTy 4) progAProd_frag
-        (by exact Nat.le_of_ble_eq_true rfl)
+        (allocCost fmapEmpty intTy 4) (progAProd_frag (by omega))
         (prodMem₀_launchCoh _ prod_one_int_budget_fits)
         (ψA fmapEmpty) 10
         (by
@@ -300,9 +297,9 @@ theorem exhibitA_prod (sup : Nat) (fs : CerbFS.FsState) (args : List String) :
           isplitr [Hcap]
           · iapply blockSpecsT_intro fun l params cont _ _ _ _ hl =>
               (hnolabel l params cont hl).elim
-          · iapply progAProd_wpt (resolveExtern_id_of_empty (prodCtx_extern _ _)) fmapEmpty []
+          · iapply progAProd_wpt (hfuel := by omega) (resolveExtern_id_of_empty (prodCtx_extern _ _)) fmapEmpty []
               symFrame_empty $$ Hcap))
-      (by rw [show CerbFuel.driverFuel = 99999999 + 1 from rfl]; omega)
+      hfuel
       fs args
   exact ⟨dres, dst', heq, hψ.1, hψ.2, hbl, hout, herr⟩
 

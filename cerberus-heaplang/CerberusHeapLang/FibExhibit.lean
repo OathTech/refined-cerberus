@@ -24,8 +24,9 @@ annotation quantified):
   (`fibSpec` — the Lean-side specification function), collapsed by
   `wps_sound`, EXPORTED through `engine_adequacy` (`fib_certified`): from
   any driver state holding the proc-carrying thread, the SHIPPED
-  driver's per-thread loop at every fuel either exhausts or delivers
-  `fib n`, never kills otherwise and never derails — at ANY initial
+  driver's per-thread loop at every iteration counter either exhausts or
+  delivers `fib n`, with ambient fuel at least two. It never kills
+  otherwise and never derails — at ANY initial
   memory (the program touches no state; the seeded footprint is empty).
 - THE TOTAL LANE: the total statement judgment (`fib_body_wpt`/
   `fib_blockSpecsT`/`fib_wpt`, with the variant-indexed invariant
@@ -240,7 +241,7 @@ variable {f : Fmap sym value} (hf : SymFrame f) (i a b : Int)
 
 include hf
 
-theorem fib_guard_eval {file : generic_file Unit core_run_annotation} (n : Int) :
+theorem fib_guard_eval [LemFuel] {file : generic_file Unit core_run_annotation} (n : Int) :
     evalPexpr fmapEmpty fmapEmpty file (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
         (fibGuard n) = some (boolValue (decide (i < n))) := by
   unfold fibGuard
@@ -253,7 +254,7 @@ theorem fib_guard_eval {file : generic_file Unit core_run_annotation} (n : Int) 
   show evalBinop binop.OpLt (ivVal i) (ivVal n) = _
   rfl
 
-theorem fib_args_eval {file : generic_file Unit core_run_annotation} :
+theorem fib_args_eval [LemFuel] {file : generic_file Unit core_run_annotation} :
     evalPexprs fmapEmpty fmapEmpty file (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
         [fibIncPe, fibBPe, fibABPe] =
       some [ivVal (i + 1), ivVal b, ivVal (a + b)] := by
@@ -286,7 +287,7 @@ theorem fib_args_eval {file : generic_file Unit core_run_annotation} :
     rfl]
   rfl
 
-theorem fib_exit_eval {file : generic_file Unit core_run_annotation} :
+theorem fib_exit_eval [LemFuel] {file : generic_file Unit core_run_annotation} :
     evalPexpr fmapEmpty fmapEmpty file (fibFrame (ivVal i) (ivVal a) (ivVal b) f :: rest)
         fibExitPe = some (ivVal a) := by
   show evalPexpr fmapEmpty fmapEmpty file _ (Pexpr [] () (PEsym fibASym)) = _
@@ -324,7 +325,7 @@ abbrev fibLs : LabelSpec GF := fun _ vs ρ =>
 include hQ
 
 /-- The loop body verifies at any invariant frame. -/
-theorem fib_body_wps (i : Int) (f : Fmap sym value)
+theorem fib_body_wps [LemFuel] (i : Int) (f : Fmap sym value)
     (rest : List (Fmap sym value)) (hf : SymFrame f)
     (h0 : 0 ≤ i) (hin : i ≤ n) :
     ⊢ wps (GF := GF) (procCtxF F rs) (some p) (fibLs n) emptyProcSpec (fibPost n)
@@ -359,7 +360,7 @@ theorem fib_body_wps (i : Int) (f : Fmap sym value)
     rw [hz]
 
 /-- THE BLOCK SPECIFICATION (per-label invariant rule, no Löb). -/
-theorem fib_blockSpecs :
+theorem fib_blockSpecs [LemFuel] :
     ⊢ blockSpecs (GF := GF) (procCtxF F rs) (some p) (fibLs n) emptyProcSpec
       (fibPost n) := by
   refine blockSpecs_intro fun l params cont vs ev0 evs hl => ?_
@@ -376,7 +377,7 @@ theorem fib_blockSpecs :
   exact fib_body_wps ra n ibty abty bbty p rs hQ i f rest hf h0 hin
 
 /-- The whole program's statement WP from the entry env. -/
-theorem fib_wps (hn : 0 ≤ n) (sbty : core_base_type) :
+theorem fib_wps [LemFuel] (hn : 0 ≤ n) (sbty : core_base_type) :
     ⊢ wps (GF := GF) (procCtxF F rs) (some p) (fibLs n) emptyProcSpec (fibPost n)
         (fibProg ra n sbty ibty abty bbty) [fmapEmpty] := by
   rw [show fibProg ra n sbty ibty abty bbty =
@@ -393,7 +394,7 @@ theorem fib_wps (hn : 0 ≤ n) (sbty : core_base_type) :
   exact h
 
 /-- The base-WP face with the engine readout. -/
-theorem fib_wp_readout (hn : 0 ≤ n) (sbty : core_base_type) :
+theorem fib_wp_readout [LemFuel] (hn : 0 ≤ n) (sbty : core_base_type) :
     ⊢ WP (⟨fibProg ra n sbty ibty abty bbty, [fmapEmpty],
           procCtl p, procCtx rs⟩ : CoreRt) @ Stuckness.NotStuck; ⊤
         {{ w, iprop(∀ (σ' : Mem) (ns : Nat) (κs : List Empty) (nt : Nat),
@@ -409,19 +410,17 @@ theorem fib_wp_readout (hn : 0 ≤ n) (sbty : core_base_type) :
 
 omit hQ in
 /-- The label bodies are in the certified cone. -/
-theorem fibBody_fragJ : Frag (fibBody ra n) := by
+theorem fibBody_fragJ [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) : Frag (fibBody ra n) := by
   refine .if_ (PePure.of_isPePure rfl) (by
-    rw [show peDepth (fibGuard n) = 2 from rfl,
-      show lemDefaultFuel = 999999 + 1 from rfl]
-    omega) (.run (PePure.all_of_isPePure rfl) ?_) .pure_sym
+    change 2 ≤ LemFuel.fuel
+    exact hfuel) (.run (PePure.all_of_isPePure rfl) ?_) (.pure_sym (by omega))
   intro pe hpe
   simp only [List.mem_cons, List.not_mem_nil, or_false] at hpe
   rcases hpe with rfl | rfl | rfl <;>
-    (rw [show lemDefaultFuel = 999999 + 1 from rfl]
-     first
-      | (rw [show peDepth fibIncPe = 2 from rfl]; omega)
+    first
+      | (rw [show peDepth fibIncPe = 2 from rfl]; exact hfuel)
       | (rw [show peDepth fibBPe = 1 from rfl]; omega)
-      | (rw [show peDepth fibABPe = 2 from rfl]; omega))
+      | (rw [show peDepth fibABPe = 2 from rfl]; exact hfuel)
 
 omit p rs hQ in
 /-- The empty seeded footprint is coherent with ANY memory. -/
@@ -446,11 +445,13 @@ variable (ra : core_run_annotation)
 /-- FIB, END TO END: driving the REAL engine ({step_ctx →
     sequential discharge} at the proc-carrying thread, labels tied
     through `core_run_state.labeled`) on the authored two-accumulator
-    fib loop, from ANY initial memory: the engine never kills, never
-    derails, and any delivered value IS `fib n` (the Lean-side
-    `fibSpec`). Partial correctness at EVERY drive length (the total
-    equation below is the termination-accounting export). -/
-theorem fib_certified
+    fib loop, from ANY initial memory: the engine only kills for fuel
+    exhaustion, never derails, and any delivered value IS `fib n` (the Lean-side
+    `fibSpec`). Partial correctness covers every iteration counter under
+    the stated sufficient ambient budget. The total rule derivation
+    below retains its variant and step accounting; production composition
+    is exported from ProdLoopExhibit. -/
+theorem fib_certified [LemFuel] (hfuel : 2 ≤ LemFuel.fuel)
     (sbty : core_base_type) (n : Int) (hn : 0 ≤ n) (σ₀ : Mem) :
     let prog := fibProg ra n sbty ibty abty bbty
     let rs := fibRS ra n ibty abty bbty
@@ -459,20 +460,15 @@ theorem fib_certified
   intro prog rs
   have hlbl : (procCtx rs).labelsAt (procCtl fibProcSym).proc = _ :=
     procCtx_labels (fibRS_labeledAt ra n ibty abty bbty)
-  refine engine_adequacy (GF := SpikeGF)
+  refine engine_adequacy (hfuel := hfuel) (GF := SpikeGF)
     (M := procCtx rs) rfl rfl (ctl := procCtl fibProcSym) rfl
     (fun l params cont hl => by
       rw [hlbl] at hl
       obtain ⟨-, rfl⟩ := fibQ_inv ra n ibty abty bbty hl
-      exact fibBody_fragJ ra n)
-    (fun l params cont hl => by
-      rw [hlbl] at hl
-      obtain ⟨-, rfl⟩ := fibQ_inv ra n ibty abty bbty hl
-      exact Nat.le_of_ble_eq_true rfl)
+      exact fibBody_fragJ (hfuel := hfuel) ra n)
     (procCtx_fragProcs _)
     prog fmapEmpty [] σ₀ (∅ : SpikeHeapF SpikeCell)
-    (.save (saveParams_pure_of_vals rfl) (saveParams_depth_of_vals rfl) (fibBody_fragJ ra n))
-    (Nat.le_of_ble_eq_true rfl)
+    (.save (saveParams_pure_of_vals rfl) (fun pe hp => by rw [saveParams_depth_of_vals rfl pe hp]; omega) (fibBody_fragJ (hfuel := hfuel) ra n))
     (coh_empty σ₀)
     (fun v _ => v = ivVal (fibSpec n.toNat))
     ?_ (th₀ := procThread fibProcSym prog [fmapEmpty])
@@ -511,7 +507,7 @@ abbrev fibLsT : LabelSpecT GF := fun _ m vs ρ =>
 include hQ
 
 /-- The loop body meets its variant budget at any invariant frame. -/
-theorem fib_body_wpt (i : Int) (f : Fmap sym value)
+theorem fib_body_wpt [LemFuel] (i : Int) (f : Fmap sym value)
     (rest : List (Fmap sym value)) (hf : SymFrame f)
     (h0 : 0 ≤ i) (hin : i ≤ n) :
     ⊢ wpt (GF := GF) (procCtxF F rs) (some p) (fibLsT n) emptyProcSpecT (2 * (n - i).toNat + 3)
@@ -554,7 +550,7 @@ theorem fib_body_wpt (i : Int) (f : Fmap sym value)
 
 /-- THE TOTAL BLOCK SPECIFICATION: every claimed variant is met (the
     real total rule — replaces the retired variant lemma). -/
-theorem fib_blockSpecsT :
+theorem fib_blockSpecsT [LemFuel] :
     ⊢ blockSpecsT (GF := GF) (procCtxF F rs) (some p) (fibLsT n) emptyProcSpecT (fibPost n) := by
   refine blockSpecsT_intro fun l params cont vs ev0 evs m hl => ?_
   rw [procCtxF_labels hQ] at hl
@@ -570,7 +566,7 @@ theorem fib_blockSpecsT :
   exact fib_body_wpt ra n ibty abty bbty p rs hQ i f rest hf h0 hin
 
 /-- The whole program's total judgment at budget 2·n + 4. -/
-theorem fib_wpt (hn : 0 ≤ n) (sbty : core_base_type) :
+theorem fib_wpt [LemFuel] (hn : 0 ≤ n) (sbty : core_base_type) :
     ⊢ wpt (GF := GF) (procCtxF F rs) (some p) (fibLsT n) emptyProcSpecT (2 * n.toNat + 4) (fibPost n)
         (fibProg ra n sbty ibty abty bbty) [fmapEmpty] := by
   rw [show fibProg ra n sbty ibty abty bbty =
@@ -588,7 +584,7 @@ theorem fib_wpt (hn : 0 ≤ n) (sbty : core_base_type) :
 
 omit hQ in
 /-- The postcondition entails the engine readout. -/
-theorem fibPost_to_readout :
+theorem fibPost_to_readout [LemFuel] :
     ∀ w ρ', fibPost (GF := GF) n w ρ' ⊢
       readoutPost (fun v _ => v = ivVal (fibSpec n.toNat)) w ρ' :=
   fun _ _ => stateInterp_readout fun _ _ _ _ _ => pure_consequence _

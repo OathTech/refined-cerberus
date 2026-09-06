@@ -365,7 +365,7 @@ def variants : List Variant := [
     cls := .outOfScope s!"the mirror has NO rule for a fork (fail-closed: the choice is the driver's, and `CerbND.runND` explores every alternative — `ShippedRefusal.fork` via `complete_nd`/`nd_fork`, `pick` on a list of two or more); the corpus reaches `nd` only in the `Unspecified` arm of an `if` condition's case, which no certified run takes; {recE5}" },
   -- E1: the bound frame
   { ctor := `CerberusHeapLang.Frag.bound,
-    shape := "`bound(e)` — reduction under the `Cbound` frame, then REMOVE-BOUND at the delivered value of either shape (the dynamic annotations of an annotated value are DROPPED); E5: the rule faces are stated for a NEGATIVE-FREE body within the fuel (`negFree e = true`, `pot e ≤ lemDefaultFuel`, both `rfl` on emitted programs) — the `bound` frame itself performs the negative-action round, so a body reaching one is `Frag.neg_store`'s row",
+    shape := "`bound(e)` — reduction under the `Cbound` frame, then REMOVE-BOUND at the delivered value of either shape (the dynamic annotations of an annotated value are DROPPED); E5: the rule faces are stated for a NEGATIVE-FREE body (`negFree e = true`); M2 removes the obsolete structural fuel ceiling — the `bound` frame itself performs the negative-action round, so a body reaching one is `Frag.neg_store`'s row",
     cls := .rule (N "wps_bound") (N "wpt_bound"),
     also := [N "wpt_jump_frame_bound"] },
   -- E1: create at ctor-constant operands
@@ -567,9 +567,9 @@ def isDeclShaped (s : String) : Bool :=
 def claimVocabulary : List String :=
   ["Cunseq", "Ecase", "Eccall", "Elet", "End", "Impl", "Ivalignof", "PElet", "Specified", "Unspecified", "__conv_int__",
    "alloc", "bound", "bv_decide", "case", "catch_exceptional_condition",
-   "catch_exceptional_condition_add", "conv_int", "conv_loaded_int", "create", "driver2",
+   "catch_exceptional_condition_add", "conv_int", "conv_loaded_int", "create",
    "dynamic_addrs", "eval_uncovered", "free", "hbsz", "hex", "hfuel", "hpost", "htd", "int",
-   "is_representable_integer", "kill", "killM", "load", "main", "mk_call_catch_exceptional_condition",
+   "is_representable_integer", "kill", "load", "main", "mk_call_catch_exceptional_condition",
    "mk_conv_int", "native_decide", "panic!", "run", "run_surplus", "stdlib", "store", "unseq",
    "wrapI"]
 

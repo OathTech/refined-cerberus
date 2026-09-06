@@ -87,7 +87,7 @@ namespace CerberusHeapLang
 
 open Iris Iris.ProgramLogic Iris.ProgramLogic.Language.Notation
 
-variable {hlc : HasLC} {GF : BundledGFunctors}
+variable [LemFuel] {hlc : HasLC} {GF : BundledGFunctors}
 
 /-- Variant-indexed per-label preconditions (the total stratum's
     label context): `Ls l m vs ρ` — the label `l`'s precondition at
@@ -112,6 +112,7 @@ abbrev ProcSpecT (GF : BundledGFunctors) : Type :=
 def emptyProcSpecT {GF : BundledGFunctors} : ProcSpecT GF :=
   fun _ _ _ => (iprop(⌜False⌝), fun _ => iprop(⌜True⌝))
 
+omit [LemFuel] in
 @[simp] theorem emptyProcSpecT_fst {GF : BundledGFunctors} (f : sym) (m : Nat)
     (vs : List value) : (emptyProcSpecT (GF := GF) f m vs).1 = iprop(⌜False⌝) := rfl
 
@@ -937,6 +938,7 @@ def saveEntryCost
   | some _ => 1
   | none => 2
 
+omit [LemFuel] in
 theorem saveEntryCost_of_vals
     {ps : List (sym × ((core_base_type ×
       Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym))}
@@ -944,6 +946,7 @@ theorem saveEntryCost_of_vals
     saveEntryCost ps = 1 := by
   unfold saveEntryCost; rw [h]
 
+omit [LemFuel] in
 theorem saveEntryCost_of_eval
     {ps : List (sym × ((core_base_type ×
       Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym))}
@@ -1539,10 +1542,10 @@ theorem wpt_jump_frame_bound {Ψ₁ Ψ₂ : SpikeVal → EnvStack → IProp GF}
     the value is delivered BARE (`.pure w.val`, the dynamic annotations
     dropped). -/
 theorem wpt_bound {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot) (b : CoreExpr)
-    (ρ : EnvStack) (hnf : negFree b = true) (hpot : pot b ≤ lemDefaultFuel) {k : Nat} :
+    (ρ : EnvStack) (hnf : negFree b = true) {k : Nat} :
     wpt M p Ls Θ k (fun w ρ' => Ψ (SpikeVal.pure w.val) ρ') b ρ ⊢
       wpt M p Ls Θ (k + 1) Ψ (Expr a (Ebound b)) ρ := by
-  induction k using Nat.strongRecOn generalizing b ρ hnf hpot with
+  induction k using Nat.strongRecOn generalizing b ρ hnf with
   | ind k IH =>
   cases htv : toVal b with
   | some w =>
@@ -1636,13 +1639,7 @@ theorem wpt_bound {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot) (b 
       obtain ⟨an, ra, hb⟩ := callRedex?_apply_ctx_eq hcr
       have hnf' : negFree (apply_ctx ctx (ofValA (.pure a1 [] ret))) = true := by
         rw [hb] at hnf; exact negFree_apply_ctx_of hnf (negFree_ofValA _)
-      have hpot' : pot (apply_ctx ctx (ofValA (.pure a1 [] ret))) ≤ lemDefaultFuel := by
-        have hplug := pot_apply_ctx_plug ctx (Expr an (Eproc ra (Sym f) pes))
-          (ofValA (.pure a1 [] ret))
-        rw [← hb] at hplug
-        rw [show pot (Expr an (Eproc ra (Sym f) pes)) = 2 from rfl, pot_ofValA_pure] at hplug
-        omega
-      iapply IH k' (by omega) (apply_ctx ctx (ofValA (.pure a1 [] ret))) ρ hnf' hpot' $$ H'
+      iapply IH k' (by omega) (apply_ctx ctx (ofValA (.pure a1 [] ret))) ρ hnf' $$ H'
     | none =>
       cases k with
       | zero =>
@@ -1655,7 +1652,6 @@ theorem wpt_bound {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot) (b 
             (by rw [jumpRedex?_bound, hjr]) (callRedex?_bound_none hcr)]
         iintro H %κ %ℓ %lc %sp %σ₁ %ns %obs %nt %hsb Hσ
         have hnn : negRedex? b = none := negRedex?_none_of_negFree hnf
-        have hsz : esize b ≤ lemDefaultFuel := Nat.le_trans (esize_le_pot b) hpot
         imod H $$ %κ %ℓ %lc %sp %σ₁ %ns %obs %nt %hsb Hσ with ⟨%hred, H⟩
         imodintro
         isplit
@@ -1681,8 +1677,7 @@ theorem wpt_bound {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot) (b 
           imod H $$ %(⟨b', ρ'', ctl'', M⟩ : CoreRt) %σ'' %([] : List CoreRt)
             %⟨hs', rfl, rfl⟩ with ⟨$, H⟩
           imodintro
-          iapply IH m (Nat.lt_succ_self m) b' ρ'' (Step.negFree_preserved hs' hsz hnj hnc' hnv' hnf)
-            (Nat.le_trans (Step.pot_le hs' hsz hnj hnc' hnv' hnf) hpot) $$ H
+          iapply IH m (Nat.lt_succ_self m) b' ρ'' (Step.negFree_preserved hs' hnj hnc' hnv' hnf) $$ H
         · rw [hb, toVal_ofValA] at htv; cases htv
         · rw [hb, toVal_ofValA] at htv; cases htv
         · rw [hjr] at hj; cases hj
@@ -3889,11 +3884,14 @@ theorem wpt_kill_emp {Ψ : SpikeVal → EnvStack → IProp GF}
 
 /-- THE PUBLIC TOTAL ALLOCATION RULE for DYNAMIC storage (kill/free arc
     K3): `alloc_atomic` lifted at the derived cost bound `2 ≤ k` (one
-    alloc step + the bare pointer's delivery, as `wpt_create`). -/
+    alloc step + the bare pointer's delivery, as `wpt_create`). The
+    allocator also requires positive ambient fuel, positive alignment
+    and a nonnegative size. -/
 theorem wpt_alloc {Ψ : SpikeVal → EnvStack → IProp GF}
     (an : List annot) (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (aprov sprov : CerbMem.Provenance) (alignN sizeN : Int)
     (pref : prefix0) (ρ : EnvStack) {k : Nat} (hk : 2 ≤ k)
+    (hfuel : 0 < LemFuel.fuel) (halign : 0 < alignN) (hsize : 0 ≤ sizeN)
     (hcost : 0 < regionCost alignN sizeN) :
     iprop(allocBudget (GF := GF) (regionCost alignN sizeN) ∗
       (∀ (id a : Int),
@@ -3902,7 +3900,8 @@ theorem wpt_alloc {Ψ : SpikeVal → EnvStack → IProp GF}
         Ψ (SpikeVal.pure (Vobject (OVpointer (cellPtr id a)))) ρ)) ⊢
       wpt M p Ls Θ k Ψ (allocExpr an loc ann (.IV aprov alignN) (.IV sprov sizeN) pref) ρ := by
   iintro ⟨Hb, HΨ⟩
-  iapply wpt_of_atomic (fun _ _ _ _ => alloc_atomic an loc ann aprov sprov alignN sizeN pref ρ hcost)
+  iapply wpt_of_atomic (fun _ _ _ _ => alloc_atomic an loc ann aprov sprov alignN sizeN pref ρ
+    hfuel halign hsize hcost)
     rfl rfl rfl hk
   isplitl [Hb]
   · iexact Hb
@@ -4030,6 +4029,8 @@ theorem wpt_create {Ψ : SpikeVal → EnvStack → IProp GF}
     (a : List annot) (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (aprov : CerbMem.Provenance) (alignN : Int) (ty : ctype)
     (pref : prefix0) (ρ : EnvStack) {k : Nat} (hk : 2 ≤ k)
+    (hfuel : 0 < LemFuel.fuel) (halign : 0 < alignN)
+    (haddr : get_with_address a = none)
     (hsz : 0 < CerbMem.sizeofCtype M.tagDefs ty) (hatom : atomicTy ty = false)
     (hinert : ∀ a : Int, decIndep M.tagDefs a ty
       (List.replicate (CerbMem.sizeofCtype M.tagDefs ty) undefByte)) :
@@ -4041,7 +4042,8 @@ theorem wpt_create {Ψ : SpikeVal → EnvStack → IProp GF}
         Ψ (SpikeVal.pure (Vobject (OVpointer p))) ρ)) ⊢
       wpt M p Ls Θ k Ψ (createExpr a loc ann (.IV aprov alignN) ty pref) ρ := by
   iintro ⟨Hb, HΨ⟩
-  iapply wpt_of_atomic (fun _ _ _ _ => create_atomic a loc ann aprov alignN ty pref ρ hsz hatom hinert)
+  iapply wpt_of_atomic (fun _ _ _ _ => create_atomic a loc ann aprov alignN ty pref ρ
+    hfuel halign haddr hsz hatom hinert)
     rfl rfl rfl hk
   isplitl [Hb]
   · iexact Hb
@@ -4060,6 +4062,8 @@ theorem wpt_create_of_plan {Ψ : SpikeVal → EnvStack → IProp GF}
     (a : List annot) (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (aprov : CerbMem.Provenance) (req : AllocReq) (rest : List AllocReq)
     (pref : prefix0) (ρ : EnvStack) {k : Nat} (hk : 2 ≤ k)
+    (hfuel : 0 < LemFuel.fuel) (halign : 0 < req.align)
+    (haddr : get_with_address a = none)
     (hsz : 0 < CerbMem.sizeofCtype M.tagDefs req.ty) (hatom : atomicTy req.ty = false)
     (hinert : ∀ a : Int, decIndep M.tagDefs a req.ty
       (List.replicate (CerbMem.sizeofCtype M.tagDefs req.ty) undefByte)) :
@@ -4075,7 +4079,7 @@ theorem wpt_create_of_plan {Ψ : SpikeVal → EnvStack → IProp GF}
   iintro ⟨Hb, HΨ⟩
   icases (allocBudget_split (allocCost M.tagDefs req.ty req.align)
     (planCost M.tagDefs rest)).1 $$ Hb with ⟨Hb, Hrest⟩
-  iapply wpt_create a loc ann aprov req.align req.ty pref ρ hk hsz hatom hinert
+  iapply wpt_create a loc ann aprov req.align req.ty pref ρ hk hfuel halign haddr hsz hatom hinert
   isplitl [Hb]
   · iexact Hb
   iintro %p ⟨Hpt, %hb⟩
@@ -4652,13 +4656,13 @@ theorem wpt_neg_round {Ψ : SpikeVal → EnvStack → IProp GF} (an : List annot
     delivered `bound({A} K)` runs at `k2`. -/
 theorem wpt_bound_wseq_tuple {Ψ : SpikeVal → EnvStack → IProp GF} (an a pa : List annot)
     (ls : List TupleLeaf) (e1 e2 : CoreExpr) (ev0 : Fmap sym value) (evs : List (Fmap sym value))
-    (k1 k2 : Nat) (hnf : negFree e1 = true) (hpot : pot e1 ≤ lemDefaultFuel) :
+    (k1 k2 : Nat) (hnf : negFree e1 = true) :
     wpt M p Ls Θ k1 (fun w ρ' => iprop(∃ (vs : List value) (ds : List dyn_annotation),
         ⌜w = SpikeVal.annot ds (Vtuple vs)⌝ ∗
         wpt M p Ls Θ k2 Ψ (Expr an (Ebound (Expr [] (Eannot ds e2))))
           (update_env (tuplePat pa ls) (Vtuple vs) ρ'))) e1 (ev0 :: evs) ⊢
       wpt M p Ls Θ (k1 + k2) Ψ (Expr an (Ebound (Expr a (Ewseq (tuplePat pa ls) e1 e2)))) (ev0 :: evs) := by
-  induction k1 using Nat.strongRecOn generalizing e1 ev0 evs hnf hpot with
+  induction k1 using Nat.strongRecOn generalizing e1 ev0 evs hnf with
   | ind k1 IH =>
   cases htv : toVal e1 with
   | some w =>
@@ -4773,13 +4777,7 @@ theorem wpt_bound_wseq_tuple {Ψ : SpikeVal → EnvStack → IProp GF} (an a pa 
       obtain ⟨an', ra, hb'⟩ := callRedex?_apply_ctx_eq hcr
       have hnf' : negFree (apply_ctx ctx (ofValA (.pure a1 [] ret))) = true := by
         rw [hb'] at hnf; exact negFree_apply_ctx_of hnf (negFree_ofValA _)
-      have hpot' : pot (apply_ctx ctx (ofValA (.pure a1 [] ret))) ≤ lemDefaultFuel := by
-        have hplug := pot_apply_ctx_plug ctx (Expr an' (Eproc ra (Sym f) pes))
-          (ofValA (.pure a1 [] ret))
-        rw [← hb'] at hplug
-        rw [show pot (Expr an' (Eproc ra (Sym f) pes)) = 2 from rfl, pot_ofValA_pure] at hplug
-        omega
-      iapply IH k' (by omega) (apply_ctx ctx (ofValA (.pure a1 [] ret))) ev0 evs hnf' hpot' $$ H'
+      iapply IH k' (by omega) (apply_ctx ctx (ofValA (.pure a1 [] ret))) ev0 evs hnf' $$ H'
     | none =>
       cases k1 with
       | zero =>
@@ -4787,7 +4785,6 @@ theorem wpt_bound_wseq_tuple {Ψ : SpikeVal → EnvStack → IProp GF} (an a pa 
         iintro %h
         exact h.elim
       | succ m =>
-        have hsz : esize e1 ≤ lemDefaultFuel := Nat.le_trans (esize_le_pot e1) hpot
         have hjr' : jumpRedex? (Expr a (Ewseq (tuplePat pa ls) e1 e2)) = none := by
           rw [jumpRedex?_wseq, hjr]
         have hcr' : callRedex? (Expr a (Ewseq (tuplePat pa ls) e1 e2)) = none :=
@@ -4835,8 +4832,7 @@ theorem wpt_bound_wseq_tuple {Ψ : SpikeVal → EnvStack → IProp GF} (an a pa 
               %⟨hs'', rfl, rfl⟩ with ⟨$, H⟩
             imodintro
             iapply IH m (Nat.lt_succ_self m) e1' ev0' evs
-              (Step.negFree_preserved hs'' hsz hjr hcr htv hnf)
-              (Nat.le_trans (Step.pot_le hs'' hsz hjr hcr htv hnf) hpot) $$ H
+              (Step.negFree_preserved hs'' hjr hcr htv hnf) $$ H
           · rw [he1, toVal_ofValA] at htv; cases htv
           · rw [he1, toVal_ofValA] at htv; cases htv
           · rw [hjr] at hj; cases hj
@@ -4892,14 +4888,9 @@ theorem wpt_neg_bound {Ψ : SpikeVal → EnvStack → IProp GF}
   rw [negRewrite_eq]
   simp only [add_exclusion_annot, add_exclusion_wseq, add_exclusion_CTX, apply_ctx_annot,
     apply_ctx_wseq, apply_ctx_CTX]
-  -- 2. REMOVE-BOUND at the end: the rewritten body is negative-free and within the fuel
+  -- 2. REMOVE-BOUND at the end: the rewritten body is negative-free
   rw [show (15 : Nat) = 14 + 1 from rfl]
-  iapply wpt_bound an _ _ rfl (by
-    simp only [pot_wseq, pot_unseq, potList_cons, potList_nil, pot_excluded, pot_annot,
-      pot_pure_val, pot_pure_sym]
-    have := pot_pure_le_two (a := a3) per
-    rw [show lemDefaultFuel = 999999 + 1 from rfl]
-    omega)
+  iapply wpt_bound an _ _ rfl
   -- 3. the `(_, s)` binder over the unseq: 11 for the unseq, 3 for the tail
   rw [show (Pattern [] (CaseCtor Ctuple [Pattern [] (CaseBase (none, BTy_unit)),
       Pattern [] (CaseBase (some (fresh_given_int k'), BTy_unit))]) : pattern) =

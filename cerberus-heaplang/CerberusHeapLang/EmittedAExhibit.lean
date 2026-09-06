@@ -26,7 +26,7 @@ are t1Main's (Examples/CorpusE0.lean). The loaded-value protocol
 (`Specified`, `conv_loaded_int`), `unseq`, the negative-action protocol
 and `Eccall` are E2–E6. The program is certified through the PUBLIC rules
 at both strata and through the production lane (`exhibitA_prod_e1`, the
-shipped pipeline on the synthetic file).
+shipped pipeline on the synthetic file, with ambient fuel at least fifteen).
 
 What the re-expression exercises that the authored twin does not:
   * the live LOCATION: every node's `Aloc` is a non-library location, so
@@ -111,36 +111,33 @@ def progAE1 : CoreExpr :=
 
 /-- Cone membership: the plain-symbol binder at a `create_op` head, then
     the wildcard binder over two `bound` frames. -/
-theorem progAE1_frag : Frag progAE1 :=
+theorem progAE1_frag [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) : Frag progAE1 :=
   .sseq_sym
     (.create_op rfl (.ctorTy [] Civalignof rfl [] intTy) (.val [] (Vctype intTy))
-      (by rw [show peDepth alignofIntPe = 2 from rfl,
-        show lemDefaultFuel = 999999 + 1 from rfl]; omega)
-      (peDepth_val_le _ _))
+      (by rw [show peDepth alignofIntPe = 2 from rfl]; omega)
+      (peDepth_val_le _ _ (by omega)))
     (.sseq
       (.bound (.store_op rfl (.sym [] pASym) (.val [] sevenVal)
-        (by rw [show peDepth (Pexpr ([] : List annot) () (PEsym pASym)) = 1 from rfl,
-          show lemDefaultFuel = 999999 + 1 from rfl]; omega)
-        (peDepth_val_le _ _)))
+        (by rw [show peDepth (Pexpr ([] : List annot) () (PEsym pASym)) = 1 from rfl]; omega)
+        (peDepth_val_le _ _ (by omega))))
       (.bound (.load_op rfl (.sym [] pASym)
-        (by rw [show peDepth (Pexpr ([] : List annot) () (PEsym pASym)) = 1 from rfl,
-          show lemDefaultFuel = 999999 + 1 from rfl]; omega))))
+        (by rw [show peDepth (Pexpr ([] : List annot) () (PEsym pASym)) = 1 from rfl]; omega))))
 
 /-- The alignment operand evaluates to the evaluator's own alignment
     constant (`evalPexpr_tyctor`, `evalTyCtor_alignof`), which for `int`
     is the literal alignment 4 the authored twin wrote. -/
-theorem alignofIntPe_eval {tds : CerbTags.TagDefsMap} (ext : Fmap sym sym) {file : generic_file Unit core_run_annotation} (ρ : EnvStack) :
+theorem alignofIntPe_eval [LemFuel] {tds : CerbTags.TagDefsMap} (ext : Fmap sym sym) {file : generic_file Unit core_run_annotation} (ρ : EnvStack) :
     evalPexpr tds ext file ρ alignofIntPe =
       some (Vobject (OVinteger (CerbMem.alignofIval tds intTy))) := by
   simp only [alignofIntPe, evalPexpr_tyctor, evalTyCtor_alignof, isTyCtor]
 
-theorem alignofIval_intTy {tds : CerbTags.TagDefsMap} :
+theorem alignofIval_intTy [LemFuel] {tds : CerbTags.TagDefsMap} :
     CerbMem.alignofIval tds intTy = .IV .Prov_none 4 := rfl
 
 /-! ## THE PARTIAL JUDGMENT: the value is BARE `Specified(7)` (the `bound`
 dropped the load's dynamic annotation) and the cell holds 7 -/
 
-theorem progAE1_wps [SpikeGS .hasLC GF]
+theorem progAE1_wps [LemFuel] (hfuel : 0 < LemFuel.fuel) [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} {Ls : LabelSpec GF} {Θ : ProcSpec GF}
     (hex : ∀ x, resolveExtern M.extern x = x)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (hf : SymFrame ev0) :
@@ -156,7 +153,7 @@ theorem progAE1_wps [SpikeGS .hasLC GF]
     (ev0 :: evs) (align := CerbMem.alignofIval M.tagDefs intTy) (ty := intTy) rfl
     (alignofIntPe_eval _ _) (evalPexpr_val _ _ _ _ _)
   rw [alignofIval_intTy]
-  iapply wps_create _ _ empty_annotation .Prov_none 4 intTy (PrefOther "spike-x") (ev0 :: evs)
+  iapply wps_create (hfuel := hfuel) (halign := by decide) (haddr := rfl) _ _ empty_annotation .Prov_none 4 intTy (PrefOther "spike-x") (ev0 :: evs)
     intTy_size_pos intTy_nonatomic (fun a => intTy_decIndep a _)
   isplitl [Hcap]
   · iexact Hcap
@@ -167,7 +164,7 @@ theorem progAE1_wps [SpikeGS .hasLC GF]
     rfl
   rw [update_env_sym pASym BTy_unit]
   iapply wps_seq
-  iapply wps_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
+  iapply wps_bound _ _ _ rfl
   iapply wps_store_eval _ _ empty_annotation intTy _ _ NA _ rfl
     (pv := p) (cv := sevenVal)
     (by rw [evalPexpr_sym_of_resolve _ _ _ (hex _)]
@@ -179,7 +176,7 @@ theorem progAE1_wps [SpikeGS .hasLC GF]
   · iexact Hpt
   iintro %fp Hpt
   simp only [SpikeVal.mergeInto]
-  iapply wps_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
+  iapply wps_bound _ _ _ rfl
   icases (pointsToCell_cellOwn_iff M.tagDefs _ _ _ _).mp $$ Hpt
     with ⟨%id, %a, %hpv, Hcell⟩
   iapply wps_load_eval _ _ empty_annotation intTy _ NA _ rfl (pv := p)
@@ -205,7 +202,7 @@ theorem progAE1_wps [SpikeGS .hasLC GF]
 create 2 + bound 1 + store-operand eval 1 + store 3 + bound 1 +
 load-operand eval 1 + load 3) -/
 
-theorem progAE1_wpt [SpikeGS .hasLC GF]
+theorem progAE1_wpt [LemFuel] (hfuel : 0 < LemFuel.fuel) [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
     (hex : ∀ x, resolveExtern M.extern x = x)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value))
@@ -221,7 +218,7 @@ theorem progAE1_wpt [SpikeGS .hasLC GF]
     (ev0 :: evs) (align := CerbMem.alignofIval M.tagDefs intTy) (ty := intTy) rfl
     (alignofIntPe_eval _ _) (evalPexpr_val _ _ _ _ _)
   rw [alignofIval_intTy]
-  iapply wpt_create _ _ empty_annotation .Prov_none 4 intTy
+  iapply wpt_create (hfuel := hfuel) (halign := by decide) (haddr := rfl) _ _ empty_annotation .Prov_none 4 intTy
     (PrefOther "spike-x") (ev0 :: evs) (Nat.le_refl 2) intTy_size_pos intTy_nonatomic
     (fun a => intTy_decIndep a _)
   isplitl [Hcap]
@@ -234,7 +231,7 @@ theorem progAE1_wpt [SpikeGS .hasLC GF]
   rw [update_env_sym pASym BTy_unit, show (10 : Nat) = 5 + 5 from rfl]
   iapply wpt_seq
   rw [show (5 : Nat) = 4 + 1 from rfl]
-  iapply wpt_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
+  iapply wpt_bound _ _ _ rfl
   rw [show (4 : Nat) = 3 + 1 from rfl]
   iapply wpt_store_eval _ _ empty_annotation intTy _ _ NA _ rfl
     (pv := p) (cv := sevenVal)
@@ -248,7 +245,7 @@ theorem progAE1_wpt [SpikeGS .hasLC GF]
   iintro %fp Hpt
   simp only [SpikeVal.mergeInto]
   -- the earlier numeral rewrites already shaped this budget as `3 + 1 + 1`
-  iapply wpt_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
+  iapply wpt_bound _ _ _ rfl
   icases (pointsToCell_cellOwn_iff M.tagDefs _ _ _ _).mp $$ Hpt
     with ⟨%id, %a, %hpv, Hcell⟩
   iapply wpt_load_eval _ _ empty_annotation intTy _ NA _ rfl (pv := p)
@@ -288,13 +285,13 @@ theorem progAE1_labeledAt (sup : Nat) :
   rw [if_pos (by decide +kernel)]
 
 /-- EXHIBIT A IN THE EMITTED SHAPE, PRODUCTION-ENTRY FORM: the shipped
-    pipeline on the synthetic one-procedure file wrapping `progAE1` is
-    EXACTLY ONE Active execution; its result value is `Specified(7)` and
+    pipeline on the synthetic one-procedure file wrapping `progAE1`,
+    with ambient fuel at least fifteen, is exactly one active execution; its result value is `Specified(7)` and
     the final memory holds 7's byte image at the program's own fresh cell.
-    The statement is exhibit A's (`exhibitA_prod`) verbatim but for the
-    program; the chain is `progAE1_wpt` → `wpt_driver_done_alloc` →
+    The value/memory postcondition matches exhibit A's (`exhibitA_prod`),
+    while the public program cost is thirteen and the ambient bound fifteen; the chain is `progAE1_wpt` → `wpt_driver_done_alloc` →
     `prod_run_eqJ`. -/
-theorem exhibitA_prod_e1 (sup : Nat) (fs : CerbFS.FsState) (args : List String) :
+theorem exhibitA_prod_e1 [LemFuel] (hfuel : 15 ≤ LemFuel.fuel) (sup : Nat) (fs : CerbFS.FsState) (args : List String) :
     ∃ (dres : driver_result) (dst' : driver_state),
       CerbND.runND (_root_.drive fmapEmpty false (prodFile progAE1) args)
           ((initial_driver_state sup (prodFile progAE1) fs).1) =
@@ -315,16 +312,14 @@ theorem exhibitA_prod_e1 (sup : Nat) (fs : CerbFS.FsState) (args : List String) 
     cases hl
   obtain ⟨dres, dst', heq, hψ, hbl, hout, herr⟩ :=
     prod_run_eqJ sup progAE1 hQe (ψA fmapEmpty) 13
-      (wpt_driver_done_alloc (GF := SpikeGF) (ctl := prodCtl sup)
+      (wpt_driver_done_alloc (hfuel := by omega) (GF := SpikeGF) (ctl := prodCtl sup)
         (M₀ := prodCtx (prodFile progAE1) ((initial_core_run_state sup
           (collect_labeled_continuations_NEW (prodFile progAE1))).1))
         rfl rfl (prodCtx_labels hQe) rfl rfl rfl rfl (Nat.le_refl _)
         (fun l params cont hl => (hnolabel l params cont hl).elim)
-        (fun l params cont hl => (hnolabel l params cont hl).elim)
         (fun _ _ _ _ => iprop(False))
         progAE1 fmapEmpty [] prodMem₀ (∅ : SpikeHeapF SpikeCell)
-        (allocCost fmapEmpty intTy 4) progAE1_frag
-        (by exact Nat.le_of_ble_eq_true rfl)
+        (allocCost fmapEmpty intTy 4) (progAE1_frag (by omega))
         (prodMem₀_launchCoh _ prod_one_int_budget_fits)
         (ψA fmapEmpty) 13
         (by
@@ -333,9 +328,9 @@ theorem exhibitA_prod_e1 (sup : Nat) (fs : CerbFS.FsState) (args : List String) 
           isplitr [Hcap]
           · iapply blockSpecsT_intro fun l params cont _ _ _ _ hl =>
               (hnolabel l params cont hl).elim
-          · iapply progAE1_wpt (resolveExtern_id_of_empty (prodCtx_extern _ _)) fmapEmpty []
+          · iapply progAE1_wpt (hfuel := by omega) (resolveExtern_id_of_empty (prodCtx_extern _ _)) fmapEmpty []
               symFrame_empty $$ Hcap))
-      (by rw [show CerbFuel.driverFuel = 99999999 + 1 from rfl]; omega)
+      hfuel
       fs args
   exact ⟨dres, dst', heq, hψ.1, hψ.2, hbl, hout, herr⟩
 

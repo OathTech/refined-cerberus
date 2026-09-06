@@ -29,7 +29,7 @@ variable {GF : BundledGFunctors}
 /-! ## Evaluator and redex lemmas shared by the emitted-corpus clients
 (relocated from CorpusT1Exhibit / CorpusT5Exhibit; statements unchanged) -/
 
-theorem specInt_eval {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym}
+theorem specInt_eval [LemFuel] {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym}
     {file : generic_file Unit core_run_annotation} (ρ : EnvStack) (n : Int) :
     evalPexpr tds ext file ρ (specInt n) = some (lint n) := by
   rw [specInt, evalPexpr_ctor1, evalPexpr_val]
@@ -38,7 +38,7 @@ theorem specInt_eval {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym}
 /-- `conv_loaded_int('signed int', a)` at a bound in-range `Specified(n)` (the
     E3 evaluator lemma at t1's operand spelling — `intCty` is `sintTy`'s
     literal). -/
-theorem t1ConvLoadedInt_eval {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym}
+theorem t1ConvLoadedInt_eval [LemFuel] {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym}
     {file : generic_file Unit core_run_annotation} (hstd : StdE3 file) {ρ : EnvStack}
     {a : sym} {n : Int} (hv : evalPexpr tds ext file ρ (psym a) = some (lint n))
     (h1 : -2147483648 ≤ n) (h2 : n ≤ 2147483647) :
@@ -47,7 +47,7 @@ theorem t1ConvLoadedInt_eval {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym}
 
 /-- The symbol operand at a frame whose lookup is known (the `symC_eval` of
     EmittedCExhibit.lean at t1's spelling `psym`). -/
-theorem t1sym_eval {M : MachineCtx} (hex : ∀ x, resolveExtern M.extern x = x)
+theorem t1sym_eval [LemFuel] {M : MachineCtx} (hex : ∀ x, resolveExtern M.extern x = x)
     {x : sym} {f : Fmap sym value} {v : value} (evs : List (Fmap sym value))
     (hl : fmapLookupBy symCmpK x f = some v) :
     evalPexpr M.tagDefs M.extern M.file (f :: evs) (psym x) = some v := by
@@ -79,7 +79,7 @@ def t5CmpBranch (op : binop) (x y : Int) : generic_pexpr Unit sym :=
       (Pexpr [] () (PEcall (Sym convIntSym) [intCty, ointPe y]))))
     (specInt 1) (specInt 0))
 
-theorem t5CmpBranch_eval {M : MachineCtx} (hstd : StdE3 M.file) (ρ : EnvStack)
+theorem t5CmpBranch_eval [LemFuel] {M : MachineCtx} (hstd : StdE3 M.file) (ρ : EnvStack)
     (op : binop) (x y : Int) (b : Bool)
     (hx1 : -2147483648 ≤ x) (hx2 : x ≤ 2147483647)
     (hy1 : -2147483648 ≤ y) (hy2 : y ≤ 2147483647)
@@ -97,7 +97,7 @@ theorem t5CmpBranch_eval {M : MachineCtx} (hstd : StdE3 M.file) (ρ : EnvStack)
   cases b <;> simp only [Bool.false_eq_true, ↓reduceIte, Option.bind_some] <;>
     exact specInt_eval ρ _
 
-theorem t5Tuple_eval {M : MachineCtx} {ρ : EnvStack} (n m : Nat) (v w : value)
+theorem t5Tuple_eval [LemFuel] {M : MachineCtx} {ρ : EnvStack} (n m : Nat) (v w : value)
     (hn : evalPexpr M.tagDefs M.extern M.file ρ (psym (t5a n)) = some v)
     (hm : evalPexpr M.tagDefs M.extern M.file ρ (psym (t5a m)) = some w) :
     evalPexpr M.tagDefs M.extern M.file ρ (t5Tuple n m) = some (Vtuple [v, w]) := by
@@ -114,7 +114,7 @@ abbrev t5frAssign (n m : Nat) (v : Int) (pr : CerbMem.PointerValue) (f : Fmap sy
 /-- Read a whole integer cell through the emitted temporary pointer
     binder. The caller retains ownership and receives the exact read footprint.
     The location and both source symbols are unrestricted parameters. -/
-theorem wpt_emittedIntLoad_footprint [SpikeGS .hasLC GF]
+theorem wpt_emittedIntLoad_footprint [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
     {Ψ : SpikeVal → EnvStack → IProp GF}
     (hex : ∀ x, resolveExtern M.extern x = x)
@@ -149,7 +149,7 @@ theorem wpt_emittedIntLoad_footprint [SpikeGS .hasLC GF]
 /-- Read a whole integer cell through the emitted temporary pointer
     binder. The caller retains ownership and receives the load footprint.
     The location and both source symbols are unrestricted parameters. -/
-theorem wpt_emittedIntLoad [SpikeGS .hasLC GF]
+theorem wpt_emittedIntLoad [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
     {Ψ : SpikeVal → EnvStack → IProp GF}
     (hex : ∀ x, resolveExtern M.extern x = x)
@@ -176,17 +176,30 @@ def emittedIntMval (n : Int) : CerbMem.MemValue :=
 abbrev emittedIntBytes (tds : CerbTags.TagDefsMap) (n : Int) : List CerbMem.AbsByte :=
   (CerbMem.memValueToBytes tds [] (emittedIntMval n)).2
 
-theorem emittedInt_encodes (tds : CerbTags.TagDefsMap) (n : Int) :
+theorem emittedInt_encodes [LemFuel] (tds : CerbTags.TagDefsMap) (n : Int) :
     memValueFromValue tds (Ctype [] (unatomic_ intTy)) (lint n) = some (emittedIntMval n) := rfl
 
-theorem emittedInt_storable (tds : CerbTags.TagDefsMap) (n : Int) :
-    StorableAt tds intTy (emittedIntMval n) :=
-  ⟨rfl, fun _ => rfl, fun _ => rfl, fun _ => rfl, fun _ _ _ => rfl⟩
+/-- The shipped serializer produces a four-byte signed-int image when
+    the value lies in the C int range. These are the same bounds the
+    emitted conversion rule requires. -/
+theorem emittedInt_storable (tds : CerbTags.TagDefsMap) (n : Int)
+    (hlo : -2147483648 ≤ n) (hhi : n ≤ 2147483647) :
+    StorableAt tds intTy (emittedIntMval n) := by
+  refine {
+    compat := rfl
+    fpm := fun _ => rfl
+    len := ?_
+    bytes_fpm := fun _ => rfl
+    stored_dec := fun _ _ _ => rfl }
+  intro fpm
+  change ((CerbMem.intToBytes true n 4).map
+    (fun b => ({ prov := .Prov_none, copyOffset := none, value := b } : CerbMem.AbsByte))).length = 4
+  rw [List.length_map, intToBytes_length true n 4 hlo hhi (by decide)]
 
 /-- The common integer-store protocol after an emitted assignment's
     mixed tuple binder. It preserves the RHS annotations until the
     enclosing bound removes them and exposes the fresh return binding. -/
-theorem wpt_emittedIntStore [SpikeGS .hasLC GF]
+theorem wpt_emittedIntStore [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
     {Ψ : SpikeVal → EnvStack → IProp GF}
     (hstd : StdE3 M.file) (hex : ∀ x, resolveExtern M.extern x = x)
@@ -215,6 +228,6 @@ theorem wpt_emittedIntStore [SpikeGS .hasLC GF]
     loc empty_annotation intTy (psym n) (CorpusE0.convLoadedInt m) (CorpusE0.convLoadedInt m) NA
     (envAdd n (Vobject (OVpointer pv)) (envAdd m (lint v) f)) rest ((hf.add _ _).add _ _)
     (emittedIntMval v) bs (Nat.le_refl 16) hex rfl hlp hlv rfl hlv
-    (emittedInt_encodes _ v) (emittedInt_storable _ v)
+    (emittedInt_encodes _ v) (emittedInt_storable _ v hv1 hv2)
 
 end CerberusHeapLang

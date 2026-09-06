@@ -1,63 +1,38 @@
 /-
-CerberusHeapLang.RegionLoopExhibit — N REGIONS FROM ONE LINEAR BUDGET:
-the allocation budget as a LOOP INVARIANT, spent one `alloc` per
-iteration through the split law and returned by `free` (kill/free arc
-K4, the second exhibit).
+CerberusHeapLang.RegionLoopExhibit — allocating and freeing regions
+from one finite allocation budget.
 
-THE PROGRAM (authored Core — `n` times: allocate a region, free it):
+The authored program repeats this body while its counter is positive:
 
-    save rl: (i : int := n) in
+    save rl: (i := n) in
       if i > 0 then
         lets p = alloc(al, sz) in
         lets _ = free(p) in
         run rl(i - 1)
       else unit
 
-WHY THIS SHAPE, HONESTLY. The K4 charter's second exhibit was a
-MALLOC'D LINKED LIST — `alloc` `n` region nodes, LINK them by stores
-through region views, walk and `free` each. It is NOT statable through
-the public rules of this tree: K3 delivered `alloc` (`regionOwn`, untyped
-bytes) and `free`, but NO load or store rule over `regionOwn`/`regionView`
-exists — every typed access rule (`store_atomic`, `storeAt_atomic`,
-`wps_store_cell_at`, …) is stated over the OBJECT bundles (`pointsToCell`/
-`cellOwn`/`pointsToView`, metadata `ty := some ty`, `dynamic := false`),
-and a coercion `regionOwn ↔ pointsToCell` is unsupported by the coupling
-BY DESIGN (`MetaCoh` pins a region's `ty := none` and `dynamic := true`
-to the engine's own record, K1). The memM seams (`loadM_live`/
-`storeM_live`, Heap.lean) ARE stated at any metadata cell, so region
-access rules are a rule-addition follow-up, not a coupling redesign;
-this is recorded as the arc's finding (the K4 record) and the gap is
-NOT worked around here. What IS statable is the budget's first real
-loop client: `n` allocations from ONE budget `n * regionCost al sz`,
-split per iteration by `allocBudget_split` (K2.5 — the ∗-splittable
-capacity the professor asked for), each region freed by `free`
-(`wps_free_emp`/`wpt_free_emp`, the textbook `{p ↦ region} free(p)
-{emp}`), termination at a budget linear in `n`.
+The partial invariant owns `allocBudget (i.toNat * regionCost al sz)`.
+Each iteration splits off one region's cost, allocates through `wps_alloc`,
+and disposes through `wps_free_emp`; the remaining budget accompanies the
+back edge. Freeing the region does not replenish the allocation budget.
+The total invariant also fixes the variant to `rlCost i.toNat =
+7 * i.toNat + 2`, yielding a whole-program budget of `7 * n.toNat + 3`
+for nonnegative n. All derivations use public rules; there are no direct
+mirror-step or per-step driver proofs in this client.
 
-THE RULES CONSUMED (all public, API.lean): `wps_alloc`/`wpt_alloc`
-(K3), `wps_kill_eval`/`wpt_kill_eval` at `Dynamic0` (the operand form),
-`wps_free_emp`/`wpt_free_emp` (K3), `allocBudget_split` (K2.5),
-`wps_if_true`/`wps_if_false` at the `PEop OpGt` guard, `wps_seq_sym`
-(the bound region pointer), `wps_seq` (the free's unit), `wps_run` at
-the `PEop OpSub` argument, `wps_ofVal`, `wps_save_vals`, the
-label-context rules; total twins. No `Step.*`, no per-step drive
-equations.
+The rules retain the caller's LemFuel and require positive ambient fuel,
+positive alignment and nonnegative region size. Guard/back-edge fragment
+membership has pass depth two. The pure program, invariant, registration
+and budget data are independent of fuel.
 
-THE STATEMENTS. `rl_wps`: `allocBudget (n.toNat * regionCost al sz) ⊢
-wps … (fun w _ => ⌜w = .pure Vunit⌝) (rlProg … n) [fmapEmpty]` (partial;
-the invariant `allocBudget (i.toNat * regionCost al sz)` at loop counter
-`i ≥ 0`); `rl_wpt` at the DERIVED budget `rlCost n.toNat + 1 = 7·n.toNat
-+ 3` (7 per iteration: guard 1 + alloc 2 + free 3 + jump 1; exit 2:
-guard 1 + unit delivery 1; entry 1). (The former
-`region_loop_certified_total` over the package loop `driveU` was deleted
-with the loop, fuel-lane restatement 2026-09-03; its content is the
-production statement below.)
-PRODUCTION: `region_loop_certified_production` — the shipped pipeline on
-the self-contained file is EXACTLY ONE Active execution delivering
-`Vunit`, under the budget-fits-the-cold-start premise `n.toNat *
-regionCost al sz ≤ headroom prodMem₀.lastAddress` (the boundary
-evaluation of the concrete budget, as the fib/counter productions carry
-their `hfuel`).
+`region_loop_certified_production` composes the total proof with the
+actual errno initialization, shipped label registration and driver on
+the constructed parameterless-main file. It requires the allocation
+budget to fit the production memory's headroom and
+`7 * n.toNat + 5 ≤ LemFuel.fuel` for the same ambient instance throughout.
+Its conclusion is exactly one active outcome returning unit, with no
+blocking and empty stdout/stderr. This authored regression does not
+identify its file with a full emitted pipeline file.
 -/
 import CerberusHeapLang.API
 import CerberusHeapLang.Exhibit
@@ -229,7 +204,7 @@ include hf
 
 /-- The guard at the counter `i`: the engine's own `OpGt` on integer
     values, delivering the boolean `0 < i`. -/
-theorem rl_guard_eval {file : generic_file Unit core_run_annotation} (i : Int) :
+theorem rl_guard_eval [LemFuel] {file : generic_file Unit core_run_annotation} (i : Int) :
     evalPexpr fmapEmpty fmapEmpty file (rlFrame (ivVal i) f :: rest) rlGuardPe =
       some (boolValue (decide (0 < i))) := by
   unfold rlGuardPe
@@ -246,14 +221,14 @@ theorem rl_guard_eval {file : generic_file Unit core_run_annotation} (i : Int) :
   rfl
 
 /-- The free's operand: the bound region pointer. -/
-theorem rl_p_eval {file : generic_file Unit core_run_annotation} (vp vi : value) :
+theorem rl_p_eval [LemFuel] {file : generic_file Unit core_run_annotation} (vp vi : value) :
     evalPexpr fmapEmpty fmapEmpty file (rlFrameP vp vi f :: rest)
       (Pexpr [] () (PEsym rlPSym)) = some vp := by
   rw [evalPexpr_sym_empty]
   exact lookup_env_head (rlFrameP_lookup_p hf _ _) rest
 
 /-- The back-edge argument `i - 1` at the frame after the pointer is bound. -/
-theorem rl_args_eval {file : generic_file Unit core_run_annotation} (vp : value) (i : Int) :
+theorem rl_args_eval [LemFuel] {file : generic_file Unit core_run_annotation} (vp : value) (i : Int) :
     evalPexprs fmapEmpty fmapEmpty file (rlFrameP vp (ivVal i) f :: rest) [rlDecPe] =
       some [ivVal (i - 1)] := by
   rw [evalPexprs_cons]
@@ -281,21 +256,19 @@ variable (loc : CerbLocation.Loc) (ann ra : core_run_annotation)
 /-- The label body is in the certified cone: `alloc` is a `Frag` head
     (the bound region pointer), the free is `Frag.kill_op` at the symbol
     (dynamic kind), the guard and the jump argument are `PePure` binops. -/
-theorem rlBody_frag : Frag (rlBody loc ann ra al sz pref pbty ubty) :=
+theorem rlBody_frag [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) : Frag (rlBody loc ann ra al sz pref pbty ubty) :=
   .if_ (PePure.of_isPePure rfl)
-    (by rw [show peDepth rlGuardPe = 2 from rfl,
-      show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+    (by rw [show peDepth rlGuardPe = 2 from rfl]; omega)
     (.sseq_sym .alloc
       (.sseq
         (.kill_op rfl (.sym [] rlPSym)
           (by rw [show peDepth (Pexpr ([] : List annot) () (PEsym rlPSym)) = 1
-              from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega))
+              from rfl]; omega))
         (.run (PePure.all_of_isPePure rfl) (by
           intro pe hpe
           simp only [List.mem_cons, List.not_mem_nil, or_false] at hpe
           subst hpe
-          rw [show peDepth rlDecPe = 2 from rfl,
-            show lemDefaultFuel = 999999 + 1 from rfl]
+          rw [show peDepth rlDecPe = 2 from rfl]
           omega))))
     (frag_ofVal (.pure Vunit))
 
@@ -305,12 +278,12 @@ theorem rlProg_pot (sbty ibty : core_base_type) (n : Int) :
     pot (rlProg loc ann ra al sz pref sbty ibty pbty ubty n) = 11 := rfl
 
 theorem rlParams_depth (ibty : core_base_type) (n : Int) :
-    ∀ pe ∈ saveParamPexprs (rlParams ibty n), peDepth pe ≤ lemDefaultFuel := by
+    ∀ pe ∈ saveParamPexprs (rlParams ibty n), peDepth pe = 1 := by
   intro pe hpe
   simp only [rlParams, saveParamPexprs, List.map_cons, List.map_nil,
     List.mem_cons, List.not_mem_nil, or_false] at hpe
   subst hpe
-  exact peDepth_val_le _ _
+  rfl
 
 end RlFrag
 
@@ -344,7 +317,8 @@ include hcost hQ
     iteration's `regionCost` and the rest, `wps_alloc` spends the head,
     `wps_free_emp` returns the region, the jump re-establishes the
     invariant at `i - 1`. -/
-theorem rl_body_wps (i : Int) (f : Fmap sym value)
+theorem rl_body_wps [LemFuel] (hfuel : 0 < LemFuel.fuel)
+    (halign : 0 < al) (hsize : 0 ≤ sz) (i : Int) (f : Fmap sym value)
     (renv : List (Fmap sym value)) (hf : SymFrame f) :
     allocBudget (GF := GF) (i.toNat * regionCost al sz) ⊢
       wps (procCtxF F rs) (some p) (rlLs al sz) emptyProcSpec rlPost (rlBody loc ann ra al sz pref pbty ubty)
@@ -368,7 +342,7 @@ theorem rl_body_wps (i : Int) (f : Fmap sym value)
         rw [this, Nat.add_mul, Nat.one_mul, Nat.add_comm]]
     icases (allocBudget_split _ _).1 $$ Hcap with ⟨Hc, Hrest⟩
     iapply wps_seq_sym
-    iapply wps_alloc [] loc ann .Prov_none .Prov_none al sz pref _ hcost
+    iapply wps_alloc (hfuel := hfuel) (halign := halign) (hsize := hsize) [] loc ann .Prov_none .Prov_none al sz pref _ hcost
     isplitl [Hc]
     · iexact Hc
     iintro %id %a ⟨Hr, -⟩
@@ -404,7 +378,8 @@ theorem rl_body_wps (i : Int) (f : Fmap sym value)
     rfl
 
 /-- THE BLOCK SPECIFICATION. -/
-theorem rl_blockSpecs :
+theorem rl_blockSpecs [LemFuel] (hfuel : 0 < LemFuel.fuel)
+    (halign : 0 < al) (hsize : 0 ≤ sz) :
     ⊢ blockSpecs (GF := GF) (procCtxF F rs) (some p) (rlLs al sz) emptyProcSpec rlPost := by
   refine blockSpecs_intro fun l params cont args env0 envs hl => ?_
   rw [procCtxF_labels hQ] at hl
@@ -417,12 +392,13 @@ theorem rl_blockSpecs :
     simp at h1 h2
     exact ⟨h1.symm, h2.symm⟩
   rw [bindArgs_rl]
-  iapply rl_body_wps loc ann ra al sz pref ibty pbty ubty hcost p rs hQ i f renv hf
+  iapply rl_body_wps (hfuel := hfuel) (halign := halign) (hsize := hsize) loc ann ra al sz pref ibty pbty ubty hcost p rs hQ i f renv hf
   iexact Hcap
 
 /-- N REGIONS FROM ONE BUDGET (partial): `{allocBudget (n · regionCost al
     sz)} rl(n) {ret unit. emp}`. -/
-theorem rl_wps (sbty : core_base_type) (n : Int) :
+theorem rl_wps [LemFuel] (hfuel : 0 < LemFuel.fuel)
+    (halign : 0 < al) (hsize : 0 ≤ sz) (sbty : core_base_type) (n : Int) :
     allocBudget (GF := GF) (n.toNat * regionCost al sz) ⊢
       wps (procCtxF F rs) (some p) (rlLs al sz) emptyProcSpec rlPost
         (rlProg loc ann ra al sz pref sbty ibty pbty ubty n) [fmapEmpty] := by
@@ -432,7 +408,7 @@ theorem rl_wps (sbty : core_base_type) (n : Int) :
   iintro Hcap
   iapply wps_save [] (rlLoopSym, sbty) _ _ fmapEmpty [] (cvals := [ivVal n]) (evalPexprs_single_val _ _ _ _ _)
   rw [bindSave_rl]
-  iapply rl_body_wps loc ann ra al sz pref ibty pbty ubty hcost p rs hQ n
+  iapply rl_body_wps (hfuel := hfuel) (halign := halign) (hsize := hsize) loc ann ra al sz pref ibty pbty ubty hcost p rs hQ n
     fmapEmpty [] symFrame_empty
   iexact Hcap
 
@@ -445,7 +421,7 @@ section RlReadout
 variable {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
 
 /-- The unit post reads out as the engine fact `v = Vunit`. -/
-theorem rlPost_readout (w : SpikeVal) (ρ' : EnvStack) :
+theorem rlPost_readout [LemFuel] (w : SpikeVal) (ρ' : EnvStack) :
     rlPost (GF := GF) w ρ' ⊢ readoutPost (fun v _ => v = Vunit) w ρ' := by
   iintro %hw
   subst hw
@@ -481,7 +457,8 @@ abbrev rlLsT : LabelSpecT GF := fun _ m args ρ =>
 
 include hcost hQ
 
-theorem rl_body_wpt (i : Int) (hi : 0 ≤ i) (f : Fmap sym value)
+theorem rl_body_wpt [LemFuel] (hfuel : 0 < LemFuel.fuel)
+    (halign : 0 < al) (hsize : 0 ≤ sz) (i : Int) (hi : 0 ≤ i) (f : Fmap sym value)
     (renv : List (Fmap sym value)) (hf : SymFrame f) :
     allocBudget (GF := GF) (i.toNat * regionCost al sz) ⊢
       wpt (procCtxF F rs) (some p) (rlLsT al sz) emptyProcSpecT (rlCost i.toNat) rlPost
@@ -506,7 +483,7 @@ theorem rl_body_wpt (i : Int) (hi : 0 ≤ i) (f : Fmap sym value)
         rw [this, Nat.add_mul, Nat.one_mul, Nat.add_comm]]
     icases (allocBudget_split _ _).1 $$ Hcap with ⟨Hc, Hrest⟩
     iapply wpt_seq_sym
-    iapply wpt_alloc [] loc ann .Prov_none .Prov_none al sz pref _ (Nat.le_refl 2) hcost
+    iapply wpt_alloc (hfuel := hfuel) (halign := halign) (hsize := hsize) [] loc ann .Prov_none .Prov_none al sz pref _ (Nat.le_refl 2) hcost
     isplitl [Hc]
     · iexact Hc
     iintro %id %a ⟨Hr, -⟩
@@ -544,7 +521,8 @@ theorem rl_body_wpt (i : Int) (hi : 0 ≤ i) (f : Fmap sym value)
     rfl
 
 /-- THE TOTAL BLOCK SPECIFICATION. -/
-theorem rl_blockSpecsT :
+theorem rl_blockSpecsT [LemFuel] (hfuel : 0 < LemFuel.fuel)
+    (halign : 0 < al) (hsize : 0 ≤ sz) :
     ⊢ blockSpecsT (GF := GF) (procCtxF F rs) (some p) (rlLsT al sz) emptyProcSpecT rlPost := by
   refine blockSpecsT_intro fun l params cont args env0 envs m hl => ?_
   rw [procCtxF_labels hQ] at hl
@@ -557,11 +535,12 @@ theorem rl_blockSpecsT :
     simp at h1 h2
     exact ⟨h1.symm, h2.symm⟩
   rw [bindArgs_rl]
-  iapply rl_body_wpt loc ann ra al sz pref ibty pbty ubty hcost p rs hQ i hi f renv hf
+  iapply rl_body_wpt (hfuel := hfuel) (halign := halign) (hsize := hsize) loc ann ra al sz pref ibty pbty ubty hcost p rs hQ i hi f renv hf
   iexact Hcap
 
 /-- N REGIONS FROM ONE BUDGET (total), at budget `rlCost n.toNat + 1`. -/
-theorem rl_wpt (sbty : core_base_type) (n : Int) (hn : 0 ≤ n) :
+theorem rl_wpt [LemFuel] (hfuel : 0 < LemFuel.fuel)
+    (halign : 0 < al) (hsize : 0 ≤ sz) (sbty : core_base_type) (n : Int) (hn : 0 ≤ n) :
     allocBudget (GF := GF) (n.toNat * regionCost al sz) ⊢
       wpt (procCtxF F rs) (some p) (rlLsT al sz) emptyProcSpecT (rlCost n.toNat + 1) rlPost
         (rlProg loc ann ra al sz pref sbty ibty pbty ubty n) [fmapEmpty] := by
@@ -571,24 +550,26 @@ theorem rl_wpt (sbty : core_base_type) (n : Int) (hn : 0 ≤ n) :
   iintro Hcap
   iapply wpt_save_vals [] (rlLoopSym, sbty) _ _ fmapEmpty [] (cvals := [ivVal n]) rfl
   rw [bindSave_rl]
-  iapply rl_body_wpt loc ann ra al sz pref ibty pbty ubty hcost p rs hQ n hn
+  iapply rl_body_wpt (hfuel := hfuel) (halign := halign) (hsize := hsize) loc ann ra al sz pref ibty pbty ubty hcost p rs hQ n hn
     fmapEmpty [] symFrame_empty
   iexact Hcap
 
 /-- The block specifications at the engine readout (what the launches consume). -/
-theorem rl_blockSpecsT_readout :
+theorem rl_blockSpecsT_readout [LemFuel] (hfuel : 0 < LemFuel.fuel)
+    (halign : 0 < al) (hsize : 0 ≤ sz) :
     ⊢ blockSpecsT (GF := GF) (procCtxF F rs) (some p) (rlLsT al sz) emptyProcSpecT
       (readoutPost (fun v _ => v = Vunit)) :=
-  (rl_blockSpecsT loc ann ra al sz pref ibty pbty ubty hcost p rs hQ).trans
+  (rl_blockSpecsT (hfuel := hfuel) (halign := halign) (hsize := hsize) loc ann ra al sz pref ibty pbty ubty hcost p rs hQ).trans
     (blockSpecsT_mono rlPost_readout)
 
 /-- The whole program at the engine readout. -/
-theorem rl_wpt_readout (sbty : core_base_type) (n : Int) (hn : 0 ≤ n) :
+theorem rl_wpt_readout [LemFuel] (hfuel : 0 < LemFuel.fuel)
+    (halign : 0 < al) (hsize : 0 ≤ sz) (sbty : core_base_type) (n : Int) (hn : 0 ≤ n) :
     allocBudget (GF := GF) (n.toNat * regionCost al sz) ⊢
       wpt (procCtxF F rs) (some p) (rlLsT al sz) emptyProcSpecT (rlCost n.toNat + 1)
         (readoutPost (fun v _ => v = Vunit))
         (rlProg loc ann ra al sz pref sbty ibty pbty ubty n) [fmapEmpty] :=
-  (rl_wpt loc ann ra al sz pref ibty pbty ubty hcost p rs hQ sbty n hn).trans
+  (rl_wpt (hfuel := hfuel) (halign := halign) (hsize := hsize) loc ann ra al sz pref ibty pbty ubty hcost p rs hQ sbty n hn).trans
     (wpt_mono rlPost_readout _ _ _)
 
 end RlTotal
@@ -606,7 +587,11 @@ theorem collect_new_rl (n : Int) :
     collect_labeled_continuations_NEW
         (prodFile (rlProg loc0 empty_annotation ra al sz pref sbty ibty pbty ubty n)) =
       fmapAddBy (fun (s1 s2 : sym) => ordCompare s1 s2) mainSym
-        (rlQ loc0 empty_annotation ra al sz pref ibty pbty ubty) fmapEmpty := rfl
+        (rlQ loc0 empty_annotation ra al sz pref ibty pbty ubty) fmapEmpty := by
+  rw [collect_labeled_prodFile]
+  apply congrArg (fun labels : LabelMap =>
+    fmapAddBy (fun (s1 s2 : sym) => ordCompare s1 s2) mainSym labels fmapEmpty)
+  rfl
 
 theorem rl_labeledAt (sup : Nat) (n : Int) :
     LabeledAt ((initial_core_run_state sup (collect_labeled_continuations_NEW
@@ -632,10 +617,11 @@ theorem rl_labeledAt (sup : Nat) (n : Int) :
     certified step count. Cold start, shipped registration, termination
     from the total judgment; the pipeline arrows are `wpt_driver_done_alloc`
     → `prod_run_eqJ`. -/
-theorem region_loop_certified_production (sup : Nat) (hcost : 0 < regionCost al sz)
+theorem region_loop_certified_production [LemFuel] (sup : Nat)
+    (halign : 0 < al) (hsize : 0 ≤ sz) (hcost : 0 < regionCost al sz)
     (n : Int) (hn : 0 ≤ n)
     (hB : n.toNat * regionCost al sz ≤ headroom prodMem₀.lastAddress)
-    (hfuel : 7 * n.toNat + 5 ≤ CerbFuel.driverFuel)
+    (hfuel : 7 * n.toNat + 5 ≤ LemFuel.fuel)
     (fs : CerbFS.FsState) (args : List String) :
     ∃ (dres : driver_result) (dst' : driver_state),
       CerbND.runND
@@ -654,7 +640,7 @@ theorem region_loop_certified_production (sup : Nat) (hcost : 0 < regionCost al 
   obtain ⟨dres, dst', heq, hψ, hbl, hout, herr⟩ :=
     prod_run_eqJ sup (rlProg loc0 empty_annotation ra al sz pref sbty ibty pbty ubty n)
       hQprod (fun v _ => v = Vunit) (rlCost n.toNat + 1)
-      (wpt_driver_done_alloc (GF := SpikeGF) (ctl := prodCtl sup)
+      (wpt_driver_done_alloc (hfuel := by omega) (GF := SpikeGF) (ctl := prodCtl sup)
         (M₀ := procCtxF (prodFile (rlProg loc0 empty_annotation ra al sz pref sbty ibty pbty ubty n)) ((initial_core_run_state sup
           (collect_labeled_continuations_NEW
             (prodFile (rlProg loc0 empty_annotation ra al sz pref sbty ibty pbty ubty n)))).1))
@@ -662,18 +648,12 @@ theorem region_loop_certified_production (sup : Nat) (hcost : 0 < regionCost al 
         (fun l params cont hl => by
           rw [procCtxF_labels hQprod] at hl
           obtain ⟨-, rfl⟩ := rlQ_inv loc0 empty_annotation ra al sz pref ibty pbty ubty hl
-          exact rlBody_frag loc0 empty_annotation ra al sz pref pbty ubty)
-        (fun l params cont hl => by
-          rw [procCtxF_labels hQprod] at hl
-          obtain ⟨-, rfl⟩ := rlQ_inv loc0 empty_annotation ra al sz pref ibty pbty ubty hl
-          rw [rlBody_pot, show lemDefaultFuel = 999999 + 1 from rfl]
-          omega)
+          exact rlBody_frag (hfuel := by omega) loc0 empty_annotation ra al sz pref pbty ubty)
         (rlLsT al sz)
         (rlProg loc0 empty_annotation ra al sz pref sbty ibty pbty ubty n) fmapEmpty []
         prodMem₀ (∅ : SpikeHeapF SpikeCell) (n.toNat * regionCost al sz)
-        (.save (saveParams_pure_of_vals rfl) (saveParams_depth_of_vals rfl)
-          (rlBody_frag loc0 empty_annotation ra al sz pref pbty ubty))
-        (by rw [rlProg_pot, show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+        (.save (saveParams_pure_of_vals rfl) (fun pe hp => by rw [saveParams_depth_of_vals rfl pe hp]; omega)
+          (rlBody_frag (hfuel := by omega) loc0 empty_annotation ra al sz pref pbty ubty))
         (prodMem₀_launchCoh _ hB)
         (fun v _ => v = Vunit)
         (rlCost n.toNat + 1)
@@ -681,9 +661,9 @@ theorem region_loop_certified_production (sup : Nat) (hcost : 0 < regionCost al 
           intro inst
           iintro ⟨-, Hcap⟩
           isplitr [Hcap]
-          · iapply rl_blockSpecsT_readout loc0 empty_annotation ra al sz pref ibty pbty ubty
+          · iapply rl_blockSpecsT_readout (hfuel := by omega) (halign := halign) (hsize := hsize) loc0 empty_annotation ra al sz pref ibty pbty ubty
               hcost mainSym _ hQprod
-          · iapply rl_wpt_readout loc0 empty_annotation ra al sz pref ibty pbty ubty hcost
+          · iapply rl_wpt_readout (hfuel := by omega) (halign := halign) (hsize := hsize) loc0 empty_annotation ra al sz pref ibty pbty ubty hcost
               mainSym _ hQprod sbty n hn $$ Hcap))
       (by unfold rlCost; omega)
       fs args

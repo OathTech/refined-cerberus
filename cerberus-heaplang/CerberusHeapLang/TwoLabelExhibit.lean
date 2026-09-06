@@ -31,7 +31,9 @@ counted loops over ONE cell, the second entered from the first's exit —
 - PARTIAL: `tl_body2_wps`/`tl_body1_wps` (the two bodies at any reachable
   frame), `tl_blockSpecs` (both labels, by `blockSpecs_intro` — no Löb),
   `tl_wps`, `tl_wp_readout`, and THE ENGINE FACT `two_label_certified`
-  (`DriverSafeCtl` at `procCtx …`, exactly the counter loop's shape).
+  (`DriverSafeCtl` at `procCtx …`, exactly the counter loop's shape):
+  every loop iteration counter, under ambient fuel at least two for
+  the guards and decrements. Structural traversal bounds are measured.
 - TOTAL: `tl_body2_wpt`/`tl_body1_wpt`, `tl_blockSpecsT`, `tl_wpt`
   (budget `5 * n₁.toNat + 5 * n₂.toNat + 5`: per iteration guard 1 +
   store 3 + jump 1; the first loop's exit guard 1 + the second `save`'s
@@ -192,7 +194,7 @@ theorem tl_lookup_y {f : Fmap sym value} (hf : SymFrame f) (v : value)
     lookup_env (a := value) tlYSym (envAdd tlYSym v f :: rest) = some v :=
   lookup_env_head (by rw [envAdd_lookup hf symCmpK, if_pos (by decide +kernel)]) rest
 
-theorem tl_guard1_eval {file : generic_file Unit core_run_annotation} {f : Fmap sym value} (hf : SymFrame f) (i : Int)
+theorem tl_guard1_eval [LemFuel] {file : generic_file Unit core_run_annotation} {f : Fmap sym value} (hf : SymFrame f) (i : Int)
     (rest : List (Fmap sym value)) :
     evalPexpr fmapEmpty fmapEmpty file (envAdd tlXSym (ivVal i) f :: rest) tlGuard1 =
       some (boolValue (decide (0 < i))) := by
@@ -208,7 +210,7 @@ theorem tl_guard1_eval {file : generic_file Unit core_run_annotation} {f : Fmap 
     (CerbMem.integerIval i)).map boolValue = _
   rfl
 
-theorem tl_guard2_eval {file : generic_file Unit core_run_annotation} {f : Fmap sym value} (hf : SymFrame f) (j : Int)
+theorem tl_guard2_eval [LemFuel] {file : generic_file Unit core_run_annotation} {f : Fmap sym value} (hf : SymFrame f) (j : Int)
     (rest : List (Fmap sym value)) :
     evalPexpr fmapEmpty fmapEmpty file (envAdd tlYSym (ivVal j) f :: rest) tlGuard2 =
       some (boolValue (decide (0 < j))) := by
@@ -224,7 +226,7 @@ theorem tl_guard2_eval {file : generic_file Unit core_run_annotation} {f : Fmap 
     (CerbMem.integerIval j)).map boolValue = _
   rfl
 
-theorem tl_dec1_eval {file : generic_file Unit core_run_annotation} {f : Fmap sym value} (hf : SymFrame f) (i : Int)
+theorem tl_dec1_eval [LemFuel] {file : generic_file Unit core_run_annotation} {f : Fmap sym value} (hf : SymFrame f) (i : Int)
     (rest : List (Fmap sym value)) :
     evalPexprs fmapEmpty fmapEmpty file (envAdd tlXSym (ivVal i) f :: rest) [tlDec1] =
       some [ivVal (i - 1)] := by
@@ -240,7 +242,7 @@ theorem tl_dec1_eval {file : generic_file Unit core_run_annotation} {f : Fmap sy
     rfl]
   rfl
 
-theorem tl_dec2_eval {file : generic_file Unit core_run_annotation} {f : Fmap sym value} (hf : SymFrame f) (j : Int)
+theorem tl_dec2_eval [LemFuel] {file : generic_file Unit core_run_annotation} {f : Fmap sym value} (hf : SymFrame f) (j : Int)
     (rest : List (Fmap sym value)) :
     evalPexprs fmapEmpty fmapEmpty file (envAdd tlYSym (ivVal j) f :: rest) [tlDec2] =
       some [ivVal (j - 1)] := by
@@ -330,7 +332,7 @@ variable (p : sym) (rs : core_run_state)
 include hQ
 
 /-- The second loop's body at any reachable counter frame. -/
-theorem tl_body2_wps (j : Int) (f : Fmap sym value) (rest : List (Fmap sym value))
+theorem tl_body2_wps [LemFuel] (j : Int) (f : Fmap sym value) (rest : List (Fmap sym value))
     (hf : SymFrame f) (h0 : 0 ≤ j) (hin : j ≤ n₂) (bs : List CerbMem.AbsByte)
     (hbs : (j = n₂ ∧ bs = (if 0 < n₁ then fiveBytes fmapEmpty else bs0)) ∨
       (j < n₂ ∧ bs = sixBytes fmapEmpty)) :
@@ -387,7 +389,7 @@ theorem tl_body2_wps (j : Int) (f : Fmap sym value) (rest : List (Fmap sym value
 
 /-- The first loop's body at any reachable counter frame; its exit enters
     the second loop (`wps_save`, then `tl_body2_wps` at `j = n₂`). -/
-theorem tl_body1_wps (hn₂ : 0 ≤ n₂) (i : Int) (f : Fmap sym value)
+theorem tl_body1_wps [LemFuel] (hn₂ : 0 ≤ n₂) (i : Int) (f : Fmap sym value)
     (rest : List (Fmap sym value)) (hf : SymFrame f) (h0 : 0 ≤ i) (hin : i ≤ n₁) :
     iprop(((⌜i = n₁⌝ ∗ pointsToCell (procCtx rs).tagDefs (GF := GF) c (.own 1) intTy bs0) ∨
       (⌜i < n₁⌝ ∗ pointsToCell (procCtx rs).tagDefs c (.own 1) intTy
@@ -450,7 +452,7 @@ theorem tl_body1_wps (hn₂ : 0 ≤ n₂) (i : Int) (f : Fmap sym value)
     each label's back edge is discharged against ITS invariant at the
     smaller counter, the comparator verdict of the lookup selecting the
     invariant). -/
-theorem tl_blockSpecs (hn₂ : 0 ≤ n₂) :
+theorem tl_blockSpecs [LemFuel] (hn₂ : 0 ≤ n₂) :
     ⊢ blockSpecs (GF := GF) (procCtx rs) (some p) (tlLs c n₁ n₂ bs0) emptyProcSpec
       (tlPost c n₁ n₂ bs0) := by
   refine blockSpecs_intro fun l params cont vs ev0 evs hl => ?_
@@ -485,7 +487,7 @@ theorem tl_blockSpecs (hn₂ : 0 ≤ n₂) :
       h0 hin $$ Hcell
 
 /-- The whole program's statement WP from any reachable entry frame. -/
-theorem tl_wps (hn₁ : 0 ≤ n₁) (hn₂ : 0 ≤ n₂) (sbty₁ : core_base_type)
+theorem tl_wps [LemFuel] (hn₁ : 0 ≤ n₁) (hn₂ : 0 ≤ n₂) (sbty₁ : core_base_type)
     (f : Fmap sym value) (hf : SymFrame f) (rest : List (Fmap sym value)) :
     pointsToCell (procCtx rs).tagDefs (GF := GF) c (.own 1) intTy bs0 ⊢
       wps (procCtx rs) (some p) (tlLs c n₁ n₂ bs0) emptyProcSpec (tlPost c n₁ n₂ bs0)
@@ -507,7 +509,7 @@ omit hQ in
 /-- The per-value readout of the postcondition, through the public
     projection layer only (`sep_consequence` over `pure_consequence` and
     `pointsToCell_consequence`, under `stateInterp_readout`). -/
-theorem tl_readout_val (w : CoreRVal) :
+theorem tl_readout_val [LemFuel] (w : CoreRVal) :
     tlPost (GF := GF) c n₁ n₂ bs0 w.sv w.ρ ⊢
       iprop(∀ (σ' : Mem) (ns : Nat) (κs : List Empty) (nt : Nat),
         stateInterp σ' ns κs nt ={⊤, ∅}=∗
@@ -519,7 +521,7 @@ theorem tl_readout_val (w : CoreRVal) :
 
 /-- The base-WP face with the engine readout (what `engine_adequacy`
     consumes), from any reachable entry frame. -/
-theorem tl_wp_readout (hn₁ : 0 ≤ n₁) (hn₂ : 0 ≤ n₂) (sbty₁ : core_base_type)
+theorem tl_wp_readout [LemFuel] (hn₁ : 0 ≤ n₁) (hn₂ : 0 ≤ n₂) (sbty₁ : core_base_type)
     (f : Fmap sym value) (hf : SymFrame f) (rest : List (Fmap sym value)) :
     pointsToCell (procCtx rs).tagDefs (GF := GF) c (.own 1) intTy bs0 ⊢
       WP (⟨tlProg loc ann ra mo bty xbty ybty sbty₁ sbty₂ c n₁ n₂, f :: rest,
@@ -562,7 +564,7 @@ abbrev tlLsT : LabelSpecT GF := fun l m vs ρ =>
   if symOrd l tlL2Sym = .eq then tlInv2T c n₁ n₂ bs0 m vs ρ else tlInv1T c n₁ n₂ bs0 m vs ρ
 
 /-- The second loop's body within its budget. -/
-theorem tl_body2_wpt (j : Int) (f : Fmap sym value) (rest : List (Fmap sym value))
+theorem tl_body2_wpt [LemFuel] (j : Int) (f : Fmap sym value) (rest : List (Fmap sym value))
     (hf : SymFrame f) (h0 : 0 ≤ j) (hin : j ≤ n₂) (bs : List CerbMem.AbsByte)
     (hbs : (j = n₂ ∧ bs = (if 0 < n₁ then fiveBytes fmapEmpty else bs0)) ∨
       (j < n₂ ∧ bs = sixBytes fmapEmpty)) :
@@ -619,7 +621,7 @@ theorem tl_body2_wpt (j : Int) (f : Fmap sym value) (rest : List (Fmap sym value
       iexact Hc
 
 /-- The first loop's body within its budget. -/
-theorem tl_body1_wpt (hn₂ : 0 ≤ n₂) (i : Int) (f : Fmap sym value)
+theorem tl_body1_wpt [LemFuel] (hn₂ : 0 ≤ n₂) (i : Int) (f : Fmap sym value)
     (rest : List (Fmap sym value)) (hf : SymFrame f) (h0 : 0 ≤ i) (hin : i ≤ n₁) :
     iprop(((⌜i = n₁⌝ ∗ pointsToCell (procCtx rs).tagDefs (GF := GF) c (.own 1) intTy bs0) ∨
       (⌜i < n₁⌝ ∗ pointsToCell (procCtx rs).tagDefs c (.own 1) intTy
@@ -683,7 +685,7 @@ theorem tl_body1_wpt (hn₂ : 0 ≤ n₂) (i : Int) (f : Fmap sym value)
         (.inl ⟨rfl, (if_pos hlt).symm⟩) $$ Hc
 
 /-- THE TOTAL BLOCK SPECIFICATION for both labels. -/
-theorem tl_blockSpecsT (hn₂ : 0 ≤ n₂) :
+theorem tl_blockSpecsT [LemFuel] (hn₂ : 0 ≤ n₂) :
     ⊢ blockSpecsT (GF := GF) (procCtx rs) (some p) (tlLsT c n₁ n₂ bs0) emptyProcSpecT
       (tlPost c n₁ n₂ bs0) := by
   refine blockSpecsT_intro fun l params cont vs ev0 evs m hl => ?_
@@ -720,7 +722,7 @@ theorem tl_blockSpecsT (hn₂ : 0 ≤ n₂) :
 /-- THE WHOLE PROGRAM at the total judgment: budget `5 * n₁ + 5 * n₂ + 5`
     (the outer `save`'s entry, `saveEntryCost = 1` at a value initializer,
     then the first loop's budget at `i = n₁`). -/
-theorem tl_wpt (hn₁ : 0 ≤ n₁) (hn₂ : 0 ≤ n₂) (sbty₁ : core_base_type)
+theorem tl_wpt [LemFuel] (hn₁ : 0 ≤ n₁) (hn₂ : 0 ≤ n₂) (sbty₁ : core_base_type)
     (f : Fmap sym value) (hf : SymFrame f) (rest : List (Fmap sym value)) :
     pointsToCell (procCtx rs).tagDefs (GF := GF) c (.own 1) intTy bs0 ⊢
       wpt (procCtx rs) (some p) (tlLsT c n₁ n₂ bs0) emptyProcSpecT
@@ -744,7 +746,7 @@ theorem tl_wpt (hn₁ : 0 ≤ n₁) (hn₂ : 0 ≤ n₂) (sbty₁ : core_base_ty
 
 omit hQ in
 /-- The postcondition entails the engine readout (the total lane's shape). -/
-theorem tlPost_to_readout :
+theorem tlPost_to_readout [LemFuel] :
     ∀ w ρ', tlPost (GF := GF) c n₁ n₂ bs0 w ρ' ⊢
       readoutPost (fun v σ' => v = Vunit ∧ ∃ i a, c = cellPtr i a ∧
         CellCoh fmapEmpty σ' i ⟨a, intTy, tlFinal n₁ n₂ bs0⟩) w ρ' :=
@@ -755,7 +757,7 @@ theorem tlPost_to_readout :
 /-- The total derivation at the engine readout — the shape the driver lane
     consumes (`wpt_driver_done`'s `hwp`), left as the loop-level fact
     (KNOWN-OPEN-ITEMS B1: no shipped-loop total form for seeded exhibits). -/
-theorem tl_wpt_readout (hn₁ : 0 ≤ n₁) (hn₂ : 0 ≤ n₂) (sbty₁ : core_base_type)
+theorem tl_wpt_readout [LemFuel] (hn₁ : 0 ≤ n₁) (hn₂ : 0 ≤ n₂) (sbty₁ : core_base_type)
     (f : Fmap sym value) (hf : SymFrame f) (rest : List (Fmap sym value)) :
     pointsToCell (procCtx rs).tagDefs (GF := GF) c (.own 1) intTy bs0 ⊢
       wpt (procCtx rs) (some p) (tlLsT c n₁ n₂ bs0) emptyProcSpecT
@@ -777,26 +779,26 @@ variable (loc : CerbLocation.Loc) (ann ra : core_run_annotation) (mo : memory_or
   (bty xbty ybty sbty₂ : core_base_type) (c : CerbMem.PointerValue) (n₂ : Int)
 
 /-- The second loop's body is in the certified cone. -/
-theorem tlBody2_frag : Frag (tlBody2 loc ann ra mo bty c) := by
-  refine .if_ (PePure.of_isPePure rfl) (by decide +kernel)
+theorem tlBody2_frag [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) : Frag (tlBody2 loc ann ra mo bty c) := by
+  refine .if_ (PePure.of_isPePure rfl) (by change 2 ≤ LemFuel.fuel; exact hfuel)
     (.sseq (.store) (.run (PePure.all_of_isPePure rfl) ?_))
     (.val_pure Vunit)
   intro pe hpe
   simp at hpe
   subst hpe
-  exact (by decide +kernel : peDepth tlDec2 ≤ lemDefaultFuel)
+  exact (hfuel : peDepth tlDec2 ≤ LemFuel.fuel)
 
 /-- The first loop's body is in the cone: the second loop's `save` is its
     exit branch (`Frag.save` at value initializers). -/
-theorem tlBody1_frag : Frag (tlBody1 loc ann ra mo bty ybty sbty₂ c n₂) := by
-  refine .if_ (PePure.of_isPePure rfl) (by decide +kernel)
+theorem tlBody1_frag [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) : Frag (tlBody1 loc ann ra mo bty ybty sbty₂ c n₂) := by
+  refine .if_ (PePure.of_isPePure rfl) (by change 2 ≤ LemFuel.fuel; exact hfuel)
     (.sseq (.store) (.run (PePure.all_of_isPePure rfl) ?_))
-    (.save (saveParams_pure_of_vals rfl) (saveParams_depth_of_vals rfl)
-      (tlBody2_frag loc ann ra mo bty c))
+    (.save (saveParams_pure_of_vals rfl) (fun pe hp => by rw [saveParams_depth_of_vals rfl pe hp]; omega)
+      (tlBody2_frag (hfuel := hfuel) loc ann ra mo bty c))
   intro pe hpe
   simp at hpe
   subst hpe
-  exact (by decide +kernel : peDepth tlDec1 ≤ lemDefaultFuel)
+  exact (hfuel : peDepth tlDec1 ≤ LemFuel.fuel)
 
 theorem tlBody2_esize : esize (tlBody2 loc ann ra mo bty c) = 3 := rfl
 theorem tlBody1_esize : esize (tlBody1 loc ann ra mo bty ybty sbty₂ c n₂) = 5 := rfl
@@ -805,11 +807,12 @@ theorem tlBody1_esize : esize (tlBody1 loc ann ra mo bty ybty sbty₂ c n₂) = 
     from any driver state holding the proc-carrying thread (the TWO-ENTRY
     label map tied through `core_run_state.labeled`) on the two-loop
     program, from ANY memory whose seeded cell footprint is satisfied: at
-    every fuel the loop exhausts or delivers `Vunit` with the cell's final
-    bytes decided by BOTH loops' data — 6's image if the second loop ran,
+    every iteration counter the loop exhausts or delivers `Vunit`, under
+    ambient fuel at least two, with the cell's final bytes decided by
+    BOTH loops' data — 6's image if the second loop ran,
     else 5's if the first did, else untouched; it never kills otherwise
     and never derails. -/
-theorem two_label_certified (sbty₁ : core_base_type) (idx addr : Int)
+theorem two_label_certified [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) (sbty₁ : core_base_type) (idx addr : Int)
     (bs0 : List CerbMem.AbsByte) (n₁ n₂ : Int) (hn₁ : 0 ≤ n₁) (hn₂ : 0 ≤ n₂)
     (σ₀ : Mem)
     (hcoh : Coh fmapEmpty σ₀ ((Iris.Std.PartialMap.singleton idx
@@ -824,23 +827,17 @@ theorem two_label_certified (sbty₁ : core_base_type) (idx addr : Int)
   intro prog rs
   have hlbl : (procCtx rs).labelsAt (procCtl tlProcSym).proc = _ :=
     procCtx_labels (tlRS_labeledAt loc ann ra mo bty xbty ybty sbty₂ (cellPtr idx addr) n₂)
-  refine (engine_adequacy (GF := SpikeGF)
+  refine (engine_adequacy (hfuel := hfuel) (GF := SpikeGF)
     (M := procCtx rs) rfl rfl (ctl := procCtl tlProcSym) rfl
     (fun l params cont hl => by
       rw [hlbl] at hl
       rcases tlQ_inv loc ann ra mo bty xbty ybty sbty₂ _ n₂ hl with ⟨-, -, rfl⟩ | ⟨-, -, rfl⟩
-      · exact tlBody2_frag loc ann ra mo bty _
-      · exact tlBody1_frag loc ann ra mo bty ybty sbty₂ _ n₂)
-    (fun l params cont hl => by
-      rw [hlbl] at hl
-      rcases tlQ_inv loc ann ra mo bty xbty ybty sbty₂ _ n₂ hl with ⟨-, -, rfl⟩ | ⟨-, -, rfl⟩
-      · exact Nat.le_of_ble_eq_true rfl
-      · exact Nat.le_of_ble_eq_true rfl)
+      · exact tlBody2_frag (hfuel := hfuel) loc ann ra mo bty _
+      · exact tlBody1_frag (hfuel := hfuel) loc ann ra mo bty ybty sbty₂ _ n₂)
     (procCtx_fragProcs _)
     prog fmapEmpty [] σ₀ _
-    (.save (saveParams_pure_of_vals rfl) (saveParams_depth_of_vals rfl)
-      (tlBody1_frag loc ann ra mo bty ybty sbty₂ _ n₂))
-    (Nat.le_of_ble_eq_true rfl)
+    (.save (saveParams_pure_of_vals rfl) (fun pe hp => by rw [saveParams_depth_of_vals rfl pe hp]; omega)
+      (tlBody1_frag (hfuel := hfuel) loc ann ra mo bty ybty sbty₂ _ n₂))
     hcoh
     (fun v σ' => v = Vunit ∧ ∃ i a, cellPtr idx addr = cellPtr i a ∧
       CellCoh fmapEmpty σ' i ⟨a, intTy, tlFinal n₁ n₂ bs0⟩)

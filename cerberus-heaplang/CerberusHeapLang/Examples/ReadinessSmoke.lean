@@ -50,6 +50,8 @@ set_option autoImplicit false
 
 namespace CerberusHeapLang.ReadinessSmoke
 
+variable [LemFuel]
+
 open Iris Iris.BI Iris.ProgramLogic
 
 /-! ## The layout: one `long[2]` allocation, two 8-byte fields -/
@@ -60,21 +62,30 @@ def fieldTy : ctype := Ctype [] (.Basic (.Integer (.Signed .Long)))
 /-- The object type: two fields in ONE allocation. -/
 def objTy : ctype := Ctype [] (.Array0 fieldTy (some 2))
 
+omit [LemFuel] in
 theorem fieldTy_size {tds : CerbTags.TagDefsMap} : CerbMem.sizeofCtype tds fieldTy = 8 := rfl
-theorem objTy_size {tds : CerbTags.TagDefsMap} : CerbMem.sizeofCtype tds objTy = 16 := rfl
+omit [LemFuel] in
+theorem objTy_size {tds : CerbTags.TagDefsMap} : CerbMem.sizeofCtype tds objTy = 16 := by
+  unfold objTy fieldTy
+  rw [sizeofCtype_array_integer]
+  rfl
 
+omit [LemFuel] in
 /-- The object type has positive size (the public create rules' `hsz`). -/
 theorem objTy_size_pos {tds : CerbTags.TagDefsMap} : 0 < CerbMem.sizeofCtype tds objTy := by
   rw [objTy_size]
   decide
+omit [LemFuel] in
 theorem objTy_nonatomic : atomicTy objTy = false := rfl
 
+omit [LemFuel] in
 /-- The long-array decode consults no side table (the layout's
     inertness fact `wps_create` asks for). -/
 theorem objTy_decIndep {tds : CerbTags.TagDefsMap} (a : Int) (bs : List CerbMem.AbsByte) :
     decIndep tds a objTy bs :=
-  fun _ _ => rfl
+  decIndep_array_integer tds a [] [] (.Signed .Long) 2 bs
 
+omit [LemFuel] in
 theorem fieldTy_ne_void : ∀ q, fieldTy ≠ Ctype q .Void0 :=
   fun _ h => by unfold fieldTy at h; cases h
 
@@ -107,6 +118,7 @@ def twoField (tds : CerbTags.TagDefsMap) (p : CerbMem.PointerValue)
     pointsToView tds id a objTy 0 (.own (Qp.half 1)) (.own 1) fieldTy xb ∗
     pointsToView tds id a objTy 8 (.own (Qp.half 1)) (.own 1) fieldTy yb)
 
+omit [LemFuel] in
 theorem twoField_iff (tds : CerbTags.TagDefsMap) (p : CerbMem.PointerValue)
     (xb yb : List CerbMem.AbsByte) :
     twoField tds (GF := GF) p xb yb ⊣⊢
@@ -114,6 +126,7 @@ theorem twoField_iff (tds : CerbTags.TagDefsMap) (p : CerbMem.PointerValue)
         pointsToView tds id a objTy 0 (.own (Qp.half 1)) (.own 1) fieldTy xb ∗
         pointsToView tds id a objTy 8 (.own (Qp.half 1)) (.own 1) fieldTy yb) := .rfl
 
+omit [LemFuel] in
 /-- A fresh whole-object bundle IS an uninitialized two-field object:
     bundle → maximal view (`cellOwn_view`) → one split at half
     fractions. -/
@@ -122,7 +135,7 @@ theorem twoField_of_cell (tds : CerbTags.TagDefsMap) (p : CerbMem.PointerValue) 
         (List.replicate (CerbMem.sizeofCtype tds objTy) undefByte) ⊢
       twoField tds p undefField undefField := by
   rw [show List.replicate (CerbMem.sizeofCtype tds objTy) undefByte =
-    undefField ++ undefField from rfl]
+    undefField ++ undefField by rw [objTy_size]; rfl]
   iintro Hpt
   icases (pointsToCell_cellOwn_iff tds p (.own 1) objTy _).mp $$ Hpt
     with ⟨%id, %a, %hp, Hcell⟩
@@ -272,10 +285,11 @@ theorem twoField_store_y {Ψ : SpikeVal → EnvStack → IProp GF}
     :: rest)`), `create` delivers a fresh uninitialized two-field object
     (both fields unspecified) and the address bounds — the PUBLIC
     `wps_create` followed by `twoField_of_cell`. A client holding more
-    budget splits it first (`allocBudget_split`). -/
-theorem twoField_create {Ψ : SpikeVal → EnvStack → IProp GF}
+    budget splits it first (`allocBudget_split`). Positive ambient
+    fuel and alignment are explicit premises of the public create rule. -/
+theorem twoField_create (hfuel : 0 < LemFuel.fuel) {Ψ : SpikeVal → EnvStack → IProp GF}
     (loc : CerbLocation.Loc) (ann : core_run_annotation)
-    (aprov : CerbMem.Provenance) (alignN : Int)
+    (aprov : CerbMem.Provenance) (alignN : Int) (halign : 0 < alignN)
     (pref : prefix0) (ρ : EnvStack) :
     iprop(allocBudget (GF := GF) (allocCost M.tagDefs objTy alignN) ∗
       (∀ p : CerbMem.PointerValue,
@@ -284,7 +298,7 @@ theorem twoField_create {Ψ : SpikeVal → EnvStack → IProp GF}
         Ψ (SpikeVal.pure (Vobject (OVpointer p))) ρ)) ⊢
       wps M pr Ls Θ Ψ (createExpr [] loc ann (.IV aprov alignN) objTy pref) ρ := by
   iintro ⟨Hcap, HΨ⟩
-  iapply wps_create [] loc ann aprov alignN objTy pref ρ objTy_size_pos objTy_nonatomic
+  iapply wps_create [] loc ann aprov alignN objTy pref ρ hfuel halign rfl objTy_size_pos objTy_nonatomic
     (fun a => objTy_decIndep a _)
   isplitl [Hcap]
   · iexact Hcap

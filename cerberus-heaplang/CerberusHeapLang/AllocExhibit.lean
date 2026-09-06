@@ -50,8 +50,11 @@ loop in the fuel-lane restatement (2026-09-03): their content — create,
 create-then-kill, alloc-then-free from the cold start — is carried by
 those production statements.
 
-Every create premise here is a closed layout fact of `intTy` (4-byte
-scalar int; decode-inertness is `rfl` at every address). NO
+The allocation consumers require positive ambient fuel and positive
+alignment; region allocation also requires a nonnegative size. Creates
+carry no requested-address annotation. The type premises are closed
+layout facts of `intTy` (4-byte scalar int; decode-inertness is `rfl` at
+every address). Pure program and layout data are independent of fuel. NO
 operational proof terms: no `Step.*`, no per-step drive equations in
 any proof body of this module.
 -/
@@ -67,8 +70,6 @@ namespace CerberusHeapLang
 open Iris Iris.BI Iris.ProgramLogic
 
 /-! ## intTy layout facts (closed, rfl) -/
-
-theorem intTy_size {tds : CerbTags.TagDefsMap} : CerbMem.sizeofCtype tds intTy = 4 := rfl
 
 theorem intTy_nonatomic : atomicTy intTy = false := rfl
 
@@ -100,8 +101,8 @@ variable {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
     The budget is SPLIT across ∗ (`allocBudget_split`) and each create
     spends its own share — the classical additive capacity; the former
     plan `[⟨al₁,int⟩, ⟨al₂,int⟩]` had to be consumed head-first. -/
-theorem alloc_two_creates_wps {M : MachineCtx} {p : Option sym} {Ls : LabelSpec GF} {Θ : ProcSpec GF}
-    (al₁ al₂ : Int) (pref₁ pref₂ : prefix0) (bty : core_base_type)
+theorem alloc_two_creates_wps [LemFuel] (hfuel : 0 < LemFuel.fuel) {M : MachineCtx} {p : Option sym} {Ls : LabelSpec GF} {Θ : ProcSpec GF}
+    (al₁ al₂ : Int) (hal₁ : 0 < al₁) (hal₂ : 0 < al₂) (pref₁ pref₂ : prefix0) (bty : core_base_type)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value)) :
     iprop(allocBudget (GF := GF)
         (allocCost M.tagDefs intTy al₁ + allocCost M.tagDefs intTy al₂)) ⊢
@@ -123,12 +124,14 @@ theorem alloc_two_creates_wps {M : MachineCtx} {p : Option sym} {Ls : LabelSpec 
     from rfl]
   icases (allocBudget_split _ _).1 $$ Hcap with ⟨Hcap₁, Hcap₂⟩
   iapply wps_seq
-  iapply wps_create [] loc0 empty_annotation .Prov_none al₁ intTy pref₁ (ev0 :: evs)
+  iapply wps_create (hfuel := hfuel) (halign := hal₁) (haddr := rfl)
+    [] loc0 empty_annotation .Prov_none al₁ intTy pref₁ (ev0 :: evs)
     intTy_size_pos intTy_nonatomic (fun a => intTy_decIndep a _)
   isplitl [Hcap₁]
   · iexact Hcap₁
   iintro %p₁ ⟨Hpt₁, -⟩
-  iapply wps_create [] loc0 empty_annotation .Prov_none al₂ intTy pref₂ (ev0 :: evs)
+  iapply wps_create (hfuel := hfuel) (halign := hal₂) (haddr := rfl)
+    [] loc0 empty_annotation .Prov_none al₂ intTy pref₂ (ev0 :: evs)
     intTy_size_pos intTy_nonatomic (fun a => intTy_decIndep a _)
   isplitl [Hcap₂]
   · iexact Hcap₂
@@ -141,8 +144,8 @@ theorem alloc_two_creates_wps {M : MachineCtx} {p : Option sym} {Ls : LabelSpec 
 /-- Total-judgment local consumer at the minimal step budget: one create
     from the allocation budget `allocCost int al`, at `k = 2` exactly (1
     create step + 1 pure-value delivery — `wpt_create`'s cost bound). -/
-theorem alloc_create_wpt {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
-    (al : Int) (pref : prefix0) (ρ : EnvStack) :
+theorem alloc_create_wpt [LemFuel] (hfuel : 0 < LemFuel.fuel) {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
+    (al : Int) (halign : 0 < al) (pref : prefix0) (ρ : EnvStack) :
     iprop(allocBudget (GF := GF) (allocCost M.tagDefs intTy al)) ⊢
       wpt M p Ls Θ 2
         (fun _ _ => iprop(∃ p : CerbMem.PointerValue,
@@ -150,7 +153,8 @@ theorem alloc_create_wpt {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} 
         (createExpr [] loc0 empty_annotation (.IV .Prov_none al) intTy pref)
         ρ := by
   iintro Hcap
-  iapply wpt_create [] loc0 empty_annotation .Prov_none al intTy pref ρ
+  iapply wpt_create (hfuel := hfuel) (halign := halign) (haddr := rfl)
+    [] loc0 empty_annotation .Prov_none al intTy pref ρ
     (Nat.le_refl 2) intTy_size_pos intTy_nonatomic (fun a => intTy_decIndep a _)
   isplitl [Hcap]
   · iexact Hcap
@@ -174,11 +178,10 @@ def createKillProg (al : Int) (pref : prefix0) : CoreExpr :=
 
 /-- Cone membership: `create` is a `Frag` head; the kill is the static
     kill at a symbol operand. -/
-theorem createKillProg_frag (al : Int) (pref : prefix0) : Frag (createKillProg al pref) :=
+theorem createKillProg_frag [LemFuel] (hfuel : 0 < LemFuel.fuel) (al : Int) (pref : prefix0) : Frag (createKillProg al pref) :=
   .sseq_sym .create
     (.kill_op rfl (.sym [] pKSym)
-      (by rw [show peDepth (Pexpr ([] : List annot) () (PEsym pKSym)) = 1 from rfl,
-        show lemDefaultFuel = 999999 + 1 from rfl]; omega))
+      (by rw [show peDepth (Pexpr ([] : List annot) () (PEsym pKSym)) = 1 from rfl]; omega))
 
 /-- The head frame after `p` is bound looks `p` up. -/
 theorem createKill_lookup_p {f : Fmap sym value} (hf : SymFrame f)
@@ -196,9 +199,9 @@ variable {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
     the unit value and the persistent DEAD cell of the disposed object
     (at some id and base); the budget is spent — `wps_create`, then
     `wps_kill_eval` at the bound symbol, then `wps_kill`. -/
-theorem alloc_create_kill_wps {M : MachineCtx} {p : Option sym} {Ls : LabelSpec GF} {Θ : ProcSpec GF}
+theorem alloc_create_kill_wps [LemFuel] (hfuel : 0 < LemFuel.fuel) {M : MachineCtx} {p : Option sym} {Ls : LabelSpec GF} {Θ : ProcSpec GF}
     (hex : ∀ x, resolveExtern M.extern x = x)
-    (al : Int) (pref : prefix0)
+    (al : Int) (halign : 0 < al) (pref : prefix0)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (hf : SymFrame ev0) :
     iprop(allocBudget (GF := GF) (allocCost M.tagDefs intTy al)) ⊢
       wps M p Ls Θ
@@ -212,7 +215,8 @@ theorem alloc_create_kill_wps {M : MachineCtx} {p : Option sym} {Ls : LabelSpec 
       (killOpRedex [] loc0 empty_annotation (Static0 intTy) (Pexpr [] () (PEsym pKSym))))
     from rfl]
   iapply wps_seq_sym
-  iapply wps_create [] loc0 empty_annotation .Prov_none al intTy pref (ev0 :: evs)
+  iapply wps_create (hfuel := hfuel) (halign := halign) (haddr := rfl)
+    [] loc0 empty_annotation .Prov_none al intTy pref (ev0 :: evs)
     intTy_size_pos intTy_nonatomic (fun a => intTy_decIndep a _)
   isplitl [Hcap]
   · iexact Hcap
@@ -251,11 +255,10 @@ def allocFreeProg (al n : Int) (pref : prefix0) : CoreExpr :=
 
 /-- Cone membership: `alloc` is a `Frag` head; the free is the kill at a
     symbol operand (any kind since K3). -/
-theorem allocFreeProg_frag (al n : Int) (pref : prefix0) : Frag (allocFreeProg al n pref) :=
+theorem allocFreeProg_frag [LemFuel] (hfuel : 0 < LemFuel.fuel) (al n : Int) (pref : prefix0) : Frag (allocFreeProg al n pref) :=
   .sseq_sym .alloc
     (.kill_op rfl (.sym [] pFSym)
-      (by rw [show peDepth (Pexpr ([] : List annot) () (PEsym pFSym)) = 1 from rfl,
-        show lemDefaultFuel = 999999 + 1 from rfl]; omega))
+      (by rw [show peDepth (Pexpr ([] : List annot) () (PEsym pFSym)) = 1 from rfl]; omega))
 
 /-- The head frame after `p` is bound looks `p` up. -/
 theorem allocFree_lookup_p {f : Fmap sym value} (hf : SymFrame f)
@@ -273,9 +276,10 @@ variable {hlc : HasLC} {GF : BundledGFunctors} [SpikeGS hlc GF]
     the unit value and the persistent DEAD region of the freed allocation
     (at some id and base); the budget is spent — `wps_alloc`, then
     `wps_kill_eval` at the bound symbol (dynamic kind), then `wps_free`. -/
-theorem alloc_free_wps {M : MachineCtx} {p : Option sym} {Ls : LabelSpec GF} {Θ : ProcSpec GF}
+theorem alloc_free_wps [LemFuel] (hfuel : 0 < LemFuel.fuel) {M : MachineCtx} {p : Option sym} {Ls : LabelSpec GF} {Θ : ProcSpec GF}
     (hex : ∀ x, resolveExtern M.extern x = x)
-    (al n : Int) (pref : prefix0) (hcost : 0 < regionCost al n)
+    (al n : Int) (halign : 0 < al) (hsize : 0 ≤ n)
+    (pref : prefix0) (hcost : 0 < regionCost al n)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (hf : SymFrame ev0) :
     iprop(allocBudget (GF := GF) (regionCost al n)) ⊢
       wps M p Ls Θ
@@ -289,7 +293,8 @@ theorem alloc_free_wps {M : MachineCtx} {p : Option sym} {Ls : LabelSpec GF} {Θ
       (killOpRedex [] loc0 empty_annotation Dynamic0 (Pexpr [] () (PEsym pFSym))))
     from rfl]
   iapply wps_seq_sym
-  iapply wps_alloc [] loc0 empty_annotation .Prov_none .Prov_none al n pref (ev0 :: evs) hcost
+  iapply wps_alloc (hfuel := hfuel) (halign := halign) (hsize := hsize)
+    [] loc0 empty_annotation .Prov_none .Prov_none al n pref (ev0 :: evs) hcost
   isplitl [Hcap]
   · iexact Hcap
   iintro %id %a ⟨Hr, -⟩
@@ -314,7 +319,7 @@ theorem alloc_free_wps {M : MachineCtx} {p : Option sym} {Ls : LabelSpec GF} {Θ
 /-- `alloc(al, n)` at a LITERAL alignment and a SYMBOL size — the
     operand-evaluation form's client instance (the `wps_store_sym_lit`
     shape): verified through the public `wps_alloc_eval`. -/
-theorem wps_alloc_lit_sym {M : MachineCtx} {p : Option sym} {Ls : LabelSpec GF} {Θ : ProcSpec GF}
+theorem wps_alloc_lit_sym [LemFuel] {M : MachineCtx} {p : Option sym} {Ls : LabelSpec GF} {Θ : ProcSpec GF}
     {Ψ : SpikeVal → EnvStack → IProp GF}
     (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (align : CerbMem.IntegerValue) (n : sym) (pref : prefix0) (ρ : EnvStack)
@@ -327,7 +332,7 @@ theorem wps_alloc_lit_sym {M : MachineCtx} {p : Option sym} {Ls : LabelSpec GF} 
   wps_alloc_eval [] loc ann _ _ pref ρ rfl (evalPexpr_val _ _ _ _ _) hn
 
 /-- The total twin, through the public `wpt_alloc_eval` (one tau). -/
-theorem wpt_alloc_lit_sym {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
+theorem wpt_alloc_lit_sym [LemFuel] {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
     {Ψ : SpikeVal → EnvStack → IProp GF}
     (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (align : CerbMem.IntegerValue) (n : sym) (pref : prefix0) (ρ : EnvStack)

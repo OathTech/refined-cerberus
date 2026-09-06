@@ -202,7 +202,7 @@ variable {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym}
   {file : generic_file Unit core_run_annotation} {ρ : EnvStack}
 
 /-- `__conv_int__('signed int', e)` at a representable operand: the operand. -/
-theorem evalPexpr_conv_int_int (a : List annot) {pe : generic_pexpr Unit sym} {n : Int}
+theorem evalPexpr_conv_int_int [LemFuel] (a : List annot) {pe : generic_pexpr Unit sym} {n : Int}
     (hv : evalPexpr tds ext file ρ pe = some (oint n))
     (h1 : -2147483648 ≤ n) (h2 : n ≤ 2147483647) :
     evalPexpr tds ext file ρ (Pexpr a () (PEconv_int (.Signed .Int_) pe)) = some (oint n) := by
@@ -212,7 +212,7 @@ theorem evalPexpr_conv_int_int (a : List annot) {pe : generic_pexpr Unit sym} {n
 
 /-- `catch_exceptional_condition_add('signed int', e1, e2)` at an in-range
     sum: the sum. -/
-theorem evalPexpr_catch_add_int (a : List annot) {pe1 pe2 : generic_pexpr Unit sym} {n1 n2 : Int}
+theorem evalPexpr_catch_add_int [LemFuel] (a : List annot) {pe1 pe2 : generic_pexpr Unit sym} {n1 n2 : Int}
     (hv1 : evalPexpr tds ext file ρ pe1 = some (oint n1))
     (hv2 : evalPexpr tds ext file ρ pe2 = some (oint n2))
     (h1 : -2147483648 ≤ n1 + n2) (h2 : n1 + n2 ≤ 2147483647) :
@@ -229,15 +229,15 @@ theorem boolValue_decide_true {P : Prop} [Decidable P] (h : P) : boolValue (deci
 
 /-- `Ivmin('signed int')`/`Ivmax('signed int')` (`evalTyCtor` at the pinned
     impl's `int`). -/
-theorem evalCtor_ivmin_int :
+theorem evalCtor_ivmin_int [LemFuel] :
     evalCtor tds Civmin [Vctype sintTy] =
       some (Vobject (OVinteger (CerbMem.minIval (.Signed .Int_)))) := rfl
-theorem evalCtor_ivmax_int :
+theorem evalCtor_ivmax_int [LemFuel] :
     evalCtor tds Civmax [Vctype sintTy] =
       some (Vobject (OVinteger (CerbMem.maxIval (.Signed .Int_)))) := rfl
 
 /-- The instantiated `is_representable_integer` body at a representable `n`. -/
-theorem evalPexpr_isReprInst (n : Int) (h1 : -2147483648 ≤ n) (h2 : n ≤ 2147483647) :
+theorem evalPexpr_isReprInst [LemFuel] (n : Int) (h1 : -2147483648 ≤ n) (h2 : n ≤ 2147483647) :
     evalPexpr tds ext file ρ (isReprInst n) = some Vtrue := by
   unfold isReprInst
   rw [evalPexpr_op, evalPexpr_op, evalPexpr_op, evalPexpr_ctor1, evalPexpr_ctor1, ointPe, sintTyPe,
@@ -254,7 +254,7 @@ theorem evalPexpr_isReprInst (n : Int) (h1 : -2147483648 ≤ n) (h2 : n ≤ 2147
 
 /-- `is_representable_integer(n, 'signed int')` at a representable `n` is
     `True` (std.core:5–6 through `callBody`). -/
-theorem evalPexpr_isRepr_int (a : List annot) (hstd : StdE3 file)
+theorem evalPexpr_isRepr_int [LemFuel] (a : List annot) (hstd : StdE3 file)
     {pe1 pe2 : generic_pexpr Unit sym} {n : Int}
     (hv1 : evalPexpr tds ext file ρ pe1 = some (oint n))
     (hv2 : evalPexpr tds ext file ρ pe2 = some (Vctype sintTy))
@@ -268,7 +268,7 @@ theorem evalPexpr_isRepr_int (a : List annot) (hstd : StdE3 file)
   exact evalPexpr_isReprInst n h1 h2
 
 /-- The instantiated `conv_int` body at a representable `n`. -/
-theorem evalPexpr_convIntInst (hstd : StdE3 file) (n : Int)
+theorem evalPexpr_convIntInst [LemFuel] (hstd : StdE3 file) (n : Int)
     (h1 : -2147483648 ≤ n) (h2 : n ≤ 2147483647) :
     evalPexpr tds ext file ρ (convIntInst n) = some (oint n) := by
   unfold convIntInst
@@ -286,7 +286,7 @@ theorem evalPexpr_convIntInst (hstd : StdE3 file) (n : Int)
 
 /-- `conv_int('signed int', n)` at a representable `n` is `n` (std.core:25–55:
     the `_Bool` test fails, `is_representable_integer` holds). -/
-theorem evalPexpr_convInt_call_int (a : List annot) (hstd : StdE3 file)
+theorem evalPexpr_convInt_call_int [LemFuel] (a : List annot) (hstd : StdE3 file)
     {pe1 pe2 : generic_pexpr Unit sym} {n : Int}
     (hv1 : evalPexpr tds ext file ρ pe1 = some (Vctype sintTy))
     (hv2 : evalPexpr tds ext file ρ pe2 = some (oint n))
@@ -303,7 +303,7 @@ theorem evalPexpr_convInt_call_int (a : List annot) (hstd : StdE3 file)
     is `Specified(n)` (std.core:61–67: the `Specified` alternative,
     `conv_int`). The operand is any covered expression evaluating to the
     loaded integer (t1's is a bound symbol). -/
-theorem evalPexpr_convLoadedInt_spec (a : List annot) (hstd : StdE3 file)
+theorem evalPexpr_convLoadedInt_spec [LemFuel] (a : List annot) (hstd : StdE3 file)
     {pe1 pe2 : generic_pexpr Unit sym} {n : Int}
     (hv1 : evalPexpr tds ext file ρ pe1 = some (Vctype sintTy))
     (hv2 : evalPexpr tds ext file ρ pe2 = some (lint n))
@@ -335,7 +335,7 @@ theorem evalPexpr_convLoadedInt_spec (a : List annot) (hstd : StdE3 file)
 /-- `conv_loaded_int(ty, Unspecified(ty'))` is `Unspecified(ty)` (std.core:
     65–66: the `Unspecified` alternative, no conversion) — at ANY ctype
     operand `ty` and any unspecified operand. -/
-theorem evalPexpr_convLoadedInt_unspec (a : List annot) (hstd : StdE3 file)
+theorem evalPexpr_convLoadedInt_unspec [LemFuel] (a : List annot) (hstd : StdE3 file)
     {pe1 pe2 : generic_pexpr Unit sym} {ty ty' : ctype}
     (hv1 : evalPexpr tds ext file ρ pe1 = some (Vctype ty))
     (hv2 : evalPexpr tds ext file ρ pe2 = some (Vloaded (LVunspecified ty'))) :
@@ -402,7 +402,7 @@ variable {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym}
   {file : generic_file Unit core_run_annotation} {ρ : EnvStack}
 
 /-- The selected branch at an in-range sum: `Specified(n1 + n2)`. -/
-theorem evalPexpr_cAddBranch (n1 n2 : Int)
+theorem evalPexpr_cAddBranch [LemFuel] (n1 n2 : Int)
     (h1 : -2147483648 ≤ n1) (h1' : n1 ≤ 2147483647)
     (h2 : -2147483648 ≤ n2) (h2' : n2 ≤ 2147483647)
     (hs : -2147483648 ≤ n1 + n2) (hs' : n1 + n2 ≤ 2147483647) :
@@ -414,7 +414,7 @@ theorem evalPexpr_cAddBranch (n1 n2 : Int)
 
 /-- THE EMITTED `+` (mirror evaluator): at operands bound to representable
     `int`s whose sum is representable, `Specified(n1 + n2)`. -/
-theorem evalPexpr_cAdd {a b a' b' : sym} {loc : CerbLocation.Loc} {n1 n2 : Int}
+theorem evalPexpr_cAdd [LemFuel] {a b a' b' : sym} {loc : CerbLocation.Loc} {n1 n2 : Int}
     (hv1 : evalPexpr tds ext file ρ (stdSym a) = some (lint n1))
     (hv2 : evalPexpr tds ext file ρ (stdSym b) = some (lint n2))
     (hsel : select_case subst_sym_pexpr (Vtuple [lint n1, lint n2]) (cAddPats a' b' loc) =
@@ -439,7 +439,7 @@ theorem evalPexpr_cAdd {a b a' b' : sym} {loc : CerbLocation.Loc} {n1 n2 : Int}
 
 /-- The first pass on the emitted `+`: the scrutinee tuple evaluates and
     the `Specified` row is selected, UNEVALUATED. -/
-theorem stepPexprRaw_cAdd {a b a' b' : sym} {loc : CerbLocation.Loc} {n1 n2 : Int}
+theorem stepPexprRaw_cAdd [LemFuel] {a b a' b' : sym} {loc : CerbLocation.Loc} {n1 n2 : Int}
     (hv1 : evalPexpr tds ext file ρ (stdSym a) = some (lint n1))
     (hv2 : evalPexpr tds ext file ρ (stdSym b) = some (lint n2))
     (hsel : select_case subst_sym_pexpr (Vtuple [lint n1, lint n2]) (cAddPats a' b' loc) =
@@ -458,7 +458,7 @@ theorem stepPexprRaw_cAdd {a b a' b' : sym} {loc : CerbLocation.Loc} {n1 n2 : In
 
 /-- The second pass, at an OVERFLOWING sum: the two conversions reach
     their values and the range check fails — the mirror's `none`. -/
-theorem stepPexprRaw_cAddBranch_overflow (n1 n2 : Int)
+theorem stepPexprRaw_cAddBranch_overflow [LemFuel] (n1 n2 : Int)
     (h1 : -2147483648 ≤ n1) (h1' : n1 ≤ 2147483647)
     (h2 : -2147483648 ≤ n2) (h2' : n2 ≤ 2147483647)
     (hov : n1 + n2 < -2147483648 ∨ 2147483647 < n1 + n2) :
@@ -475,7 +475,7 @@ theorem stepPexprRaw_cAddBranch_overflow (n1 n2 : Int)
 /-- … and the classifier names the reason: the engine's
     `undef loc [UB036_exceptional_condition]` at the thread's current
     location (core_eval.lem:847–848; `catchOut`). -/
-theorem stepFail_cAddBranch_overflow (loc : CerbLocation.Loc) (n1 n2 : Int)
+theorem stepFail_cAddBranch_overflow [LemFuel] (loc : CerbLocation.Loc) (n1 n2 : Int)
     (h1 : -2147483648 ≤ n1) (h1' : n1 ≤ 2147483647)
     (h2 : -2147483648 ≤ n2) (h2' : n2 ≤ 2147483647)
     (hov : n1 + n2 < -2147483648 ∨ 2147483647 < n1 + n2) :
@@ -512,7 +512,7 @@ theorem stepFail_cAddBranch_overflow (loc : CerbLocation.Loc) (n1 n2 : Int)
     UB036 undef — through `complete_pure_op` (Round.lean) the shipped round
     is the kill `Undef0 loc [UB036_exceptional_condition]`; the mirror has
     no step (`evalPexpr_cAdd_overflow`). -/
-theorem evalPexpr_cAdd_overflow {a b a' b' : sym} {loc : CerbLocation.Loc} {n1 n2 : Int}
+theorem evalPexpr_cAdd_overflow [LemFuel] {a b a' b' : sym} {loc : CerbLocation.Loc} {n1 n2 : Int}
     (hv1 : evalPexpr tds ext file ρ (stdSym a) = some (lint n1))
     (hv2 : evalPexpr tds ext file ρ (stdSym b) = some (lint n2))
     (hsel : select_case subst_sym_pexpr (Vtuple [lint n1, lint n2]) (cAddPats a' b' loc) =
@@ -538,7 +538,7 @@ theorem evalPexpr_cAdd_overflow {a b a' b' : sym} {loc : CerbLocation.Loc} {n1 n
   rw [evalCatch_add_overflow n1 n2 hov]
   rfl
 
-theorem evalClass_cAdd_overflow (loc : CerbLocation.Loc) {a b a' b' : sym}
+theorem evalClass_cAdd_overflow [LemFuel] (loc : CerbLocation.Loc) {a b a' b' : sym}
     {uloc : CerbLocation.Loc} {n1 n2 : Int}
     (hv1 : evalPexpr tds ext file ρ (stdSym a) = some (lint n1))
     (hv2 : evalPexpr tds ext file ρ (stdSym b) = some (lint n2))
@@ -583,7 +583,7 @@ variable {M : MachineCtx} {p : Option sym}
     premises — the two operands are bound to representable `int`s whose
     sum is representable — and the postcondition at `Specified(n1 + n2)`;
     the UB036 kill is EXCLUDED by the range obligation). -/
-theorem wps_c_add {Ls : LabelSpec GF} {Θ : ProcSpec GF} {Ψ : SpikeVal → EnvStack → IProp GF}
+theorem wps_c_add [LemFuel] {Ls : LabelSpec GF} {Θ : ProcSpec GF} {Ψ : SpikeVal → EnvStack → IProp GF}
     (a b a' b' : sym) (loc : CerbLocation.Loc) (ρ : EnvStack) {n1 n2 : Int}
     (hv1 : evalPexpr M.tagDefs M.extern M.file ρ (stdSym a) = some (lint n1))
     (hv2 : evalPexpr M.tagDefs M.extern M.file ρ (stdSym b) = some (lint n2))
@@ -598,7 +598,7 @@ theorem wps_c_add {Ls : LabelSpec GF} {Θ : ProcSpec GF} {Ψ : SpikeVal → EnvS
 
 /-- THE C `+` ON `int`, total stratum (one evaluation tau then the
     delivery, `2 ≤ k`). -/
-theorem wpt_c_add {Ls : LabelSpecT GF} {Θ : ProcSpecT GF} {Ψ : SpikeVal → EnvStack → IProp GF}
+theorem wpt_c_add [LemFuel] {Ls : LabelSpecT GF} {Θ : ProcSpecT GF} {Ψ : SpikeVal → EnvStack → IProp GF}
     (a b a' b' : sym) (loc : CerbLocation.Loc) (ρ : EnvStack) {n1 n2 : Int} {k : Nat}
     (hk : 2 ≤ k)
     (hv1 : evalPexpr M.tagDefs M.extern M.file ρ (stdSym a) = some (lint n1))
@@ -614,7 +614,7 @@ theorem wpt_c_add {Ls : LabelSpecT GF} {Θ : ProcSpecT GF} {Ψ : SpikeVal → En
 
 /-- THE C CONVERSION `conv_loaded_int('signed int', e)` at a representable
     loaded `int`, partial stratum: the value is unchanged. -/
-theorem wps_conv_loaded_int {Ls : LabelSpec GF} {Θ : ProcSpec GF} {Ψ : SpikeVal → EnvStack → IProp GF}
+theorem wps_conv_loaded_int [LemFuel] {Ls : LabelSpec GF} {Θ : ProcSpec GF} {Ψ : SpikeVal → EnvStack → IProp GF}
     (pe1 pe2 : generic_pexpr Unit sym) (ρ : EnvStack) {n : Int}
     (hstd : StdE3 M.file)
     (hv1 : evalPexpr M.tagDefs M.extern M.file ρ pe1 = some (Vctype sintTy))
@@ -625,7 +625,7 @@ theorem wps_conv_loaded_int {Ls : LabelSpec GF} {Θ : ProcSpec GF} {Ψ : SpikeVa
   wps_pure _ _ rfl (evalPexpr_convLoadedInt_spec [] hstd hv1 hv2 h1 h2)
 
 /-- … total stratum. -/
-theorem wpt_conv_loaded_int {Ls : LabelSpecT GF} {Θ : ProcSpecT GF} {Ψ : SpikeVal → EnvStack → IProp GF}
+theorem wpt_conv_loaded_int [LemFuel] {Ls : LabelSpecT GF} {Θ : ProcSpecT GF} {Ψ : SpikeVal → EnvStack → IProp GF}
     (pe1 pe2 : generic_pexpr Unit sym) (ρ : EnvStack) {n : Int} {k : Nat} (hk : 2 ≤ k)
     (hstd : StdE3 M.file)
     (hv1 : evalPexpr M.tagDefs M.extern M.file ρ pe1 = some (Vctype sintTy))

@@ -182,7 +182,7 @@ at the three frames `callRedex?` builds — `rfl` equations for rewriting) -/
     (pes : List (generic_pexpr Unit sym)) :
     toVal (Expr a (Ememop mop pes)) = none := rfl
 
-variable {hlc : HasLC} {GF : BundledGFunctors}
+variable [LemFuel] {hlc : HasLC} {GF : BundledGFunctors}
 
 /-! ## The statement WP -/
 
@@ -1177,11 +1177,11 @@ core_reduction.lem:1214–1226) delivers the value BARE — the DYNAMIC
 ANNOTATIONS of an annotated value are DISCARDED. So the inner
 postcondition sees the value at `.pure w.val`. -/
 
-/-- (proof device) `wps_bound` with its two static premises carried inside
+/-- (proof device) `wps_bound` with negative-freedom carried inside
     the entailment for the Löb induction. -/
 theorem wps_bound_aux {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot) (b : CoreExpr)
     (ρ : EnvStack) :
-    iprop(⌜negFree b = true ∧ pot b ≤ lemDefaultFuel⌝ ∗
+    iprop(⌜negFree b = true⌝ ∗
       wps M p Ls Θ (fun w ρ' => Ψ (SpikeVal.pure w.val) ρ') b ρ) ⊢
       wps M p Ls Θ Ψ (Expr a (Ebound b)) ρ := by
   iloeb as IH generalizing %b %ρ
@@ -1258,8 +1258,7 @@ theorem wps_bound_aux {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
         rw [wps_unfold.to_eq, (wps_unfold (e := Expr a (Ebound b))).to_eq]
         simp only [wps.pre, htv, toVal_bound_node, jumpRedex?_bound, hjr, callRedex?_bound, hcr,
           Option.map_some, apply_ctx_bound]
-        iintro ⟨%hst, H⟩
-        obtain ⟨hnf, hpot⟩ := hst
+        iintro ⟨%hnf, H⟩
         imod H with ⟨%params, %body, %vs, %h1, %h2, %h3, Hpre, Hcont⟩
         imodintro
         iexists params, body, vs
@@ -1277,25 +1276,17 @@ theorem wps_bound_aux {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
         obtain ⟨an, ra, hb⟩ := callRedex?_apply_ctx_eq hcr
         have hnf' : negFree (apply_ctx ctx (ofValA (.pure a1 [] ret))) = true := by
           rw [hb] at hnf; exact negFree_apply_ctx_of hnf (negFree_ofValA _)
-        have hpot' : pot (apply_ctx ctx (ofValA (.pure a1 [] ret))) ≤ lemDefaultFuel := by
-          have hplug := pot_apply_ctx_plug ctx (Expr an (Eproc ra (Sym f) pes))
-            (ofValA (.pure a1 [] ret))
-          rw [← hb] at hplug
-          rw [show pot (Expr an (Eproc ra (Sym f) pes)) = 2 from rfl, pot_ofValA_pure] at hplug
-          omega
         iapply IH $$ %(apply_ctx ctx (ofValA (.pure a1 [] ret))) %ρ
         isplitr
         · ipureintro
-          exact ⟨hnf', hpot'⟩
+          exact hnf'
         · iexact H'
       | none =>
         rw [wps_unfold.to_eq, (wps_unfold (e := Expr a (Ebound b))).to_eq]
         simp only [wps.pre, htv, toVal_bound_node, jumpRedex?_bound, hjr, callRedex?_bound, hcr,
           Option.map_none]
-        iintro ⟨%hst, H⟩ %κ %ℓ %lc %sp %σ₁ %ns %obs %obs' %nt %hsb Hσ
-        obtain ⟨hnf, hpot⟩ := hst
+        iintro ⟨%hnf, H⟩ %κ %ℓ %lc %sp %σ₁ %ns %obs %obs' %nt %hsb Hσ
         have hnn : negRedex? b = none := negRedex?_none_of_negFree hnf
-        have hsz : esize b ≤ lemDefaultFuel := Nat.le_trans (esize_le_pot b) hpot
         imod H $$ %κ %ℓ %lc %sp %σ₁ %ns %obs %obs' %nt %hsb Hσ with ⟨%hred, H⟩
         imodintro
         isplit
@@ -1325,8 +1316,7 @@ theorem wps_bound_aux {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
           iapply IH $$ %b' %ρ''
           isplitr
           · ipureintro
-            exact ⟨Step.negFree_preserved hs' hsz hnj hnc' hnv' hnf,
-              Nat.le_trans (Step.pot_le hs' hsz hnj hnc' hnv' hnf) hpot⟩
+            exact Step.negFree_preserved hs' hnj hnc' hnv' hnf
           · iexact H
         · rw [hb, toVal_ofValA] at htv; cases htv
         · rw [hb, toVal_ofValA] at htv; cases htv
@@ -1335,21 +1325,20 @@ theorem wps_bound_aux {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
           rw [hcr] at h; cases h
         · rw [hnn] at hn; cases hn
 
-/-- `wps` through the `bound` frame (E1) for a NEGATIVE-FREE body within the
-    engine's fuel (E5): the `bound` frame performs the negative-action round
-    itself (`Step.neg_bound`), so the congruence is sound exactly for bodies
-    that never reach one — `negFree`, preserved by every round of the body
-    (`Step.negFree_preserved`) with the size invariant `pot` (`Step.pot_le`,
-    `esize_le_pot`). Both premises are decided by `rfl` on emitted programs. -/
+/-- `wps` through the `bound` frame for a negative-free body: the frame
+    performs negative-action rounds itself (`Step.neg_bound`), while
+    `negFree` excludes them from the body and is preserved at each step
+    (`Step.negFree_preserved`). Structural traversals use their own
+    measures, so this rule needs no expression-size or fuel bound. -/
 theorem wps_bound {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot) (b : CoreExpr)
-    (ρ : EnvStack) (hnf : negFree b = true) (hpot : pot b ≤ lemDefaultFuel) :
+    (ρ : EnvStack) (hnf : negFree b = true) :
     wps M p Ls Θ (fun w ρ' => Ψ (SpikeVal.pure w.val) ρ') b ρ ⊢
       wps M p Ls Θ Ψ (Expr a (Ebound b)) ρ := by
   iintro H
   iapply wps_bound_aux a b ρ
   isplitr
   · ipureintro
-    exact ⟨hnf, hpot⟩
+    exact hnf
   · iexact H
 
 /-! ## THE SEQUENCING RULE (the jump-aware statement shape — probe
@@ -3626,12 +3615,14 @@ theorem wps_kill_emp {Ψ : SpikeVal → EnvStack → IProp GF}
     `alloc(alignN, sizeN)`; the continuation binds the fresh region
     pointer `cellPtr id a` with the whole REGION at full ownership
     (`regionOwn`, untyped, unspecified bytes) and its machine-address
-    bounds. `hcost`: a positive cost — every positive size
-    (`regionCost_pos`), or size 0 at alignment ≥ 2; see `alloc_atomic`. -/
+    bounds. Positive fuel and alignment and a nonnegative size are
+    required. `hcost` requires positive cost: every positive size
+    (`regionCost_pos`), or size zero at alignment ≥ 2; see `alloc_atomic`. -/
 theorem wps_alloc {Ψ : SpikeVal → EnvStack → IProp GF}
     (an : List annot) (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (aprov sprov : CerbMem.Provenance) (alignN sizeN : Int)
     (pref : prefix0) (ρ : EnvStack)
+    (hfuel : 0 < LemFuel.fuel) (halign : 0 < alignN) (hsize : 0 ≤ sizeN)
     (hcost : 0 < regionCost alignN sizeN) :
     iprop(allocBudget (GF := GF) (regionCost alignN sizeN) ∗
       (∀ (id a : Int),
@@ -3640,7 +3631,8 @@ theorem wps_alloc {Ψ : SpikeVal → EnvStack → IProp GF}
         Ψ (SpikeVal.pure (Vobject (OVpointer (cellPtr id a)))) ρ)) ⊢
       wps M p Ls Θ Ψ (allocExpr an loc ann (.IV aprov alignN) (.IV sprov sizeN) pref) ρ := by
   iintro ⟨Hb, HΨ⟩
-  iapply wps_of_atomic (fun _ _ _ _ => alloc_atomic an loc ann aprov sprov alignN sizeN pref ρ hcost) rfl rfl rfl
+  iapply wps_of_atomic (fun _ _ _ _ => alloc_atomic an loc ann aprov sprov alignN sizeN pref ρ
+    hfuel halign hsize hcost) rfl rfl rfl
   isplitl [Hb]
   · iexact Hb
   · iintro %w ⟨%id, %a, %hw, Hr, %hb⟩
@@ -4200,9 +4192,9 @@ open Iris.Std.PartialMap
     CONTINUATION-BOUND (its allocation id and address occur nowhere in
     the precondition), delivered with full whole-cell ownership at
     unspecified bytes and its pure machine-address bounds `0 < addrOf p
-    < 2^64` (alloc arc P2). Side premises: `hsz` pins a real object
-    type (the engine's `max 1` padding away — formerly carried inside
-    the plan), `hatom` a non-atomic one; `hinert` is the unspecified
+    < 2^64` (alloc arc P2). Side premises require positive memory-bind
+    fuel and alignment, no requested-address annotation, a positive-size
+    object type (`hsz`) and non-atomicity (`hatom`). `hinert` is the unspecified
     image's decode-inertness AT EVERY ADDRESS (rfl for scalar and
     integer-array types). The no-OOM guard is NOT a premise: it rides
     inside the budget (the coupling inequality, `create_atomic`). The
@@ -4212,6 +4204,8 @@ theorem wps_create {Ψ : SpikeVal → EnvStack → IProp GF}
     (a : List annot) (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (aprov : CerbMem.Provenance) (alignN : Int) (ty : ctype)
     (pref : prefix0) (ρ : EnvStack)
+    (hfuel : 0 < LemFuel.fuel) (halign : 0 < alignN)
+    (haddr : get_with_address a = none)
     (hsz : 0 < CerbMem.sizeofCtype M.tagDefs ty) (hatom : atomicTy ty = false)
     (hinert : ∀ a : Int, decIndep M.tagDefs a ty
       (List.replicate (CerbMem.sizeofCtype M.tagDefs ty) undefByte)) :
@@ -4223,7 +4217,8 @@ theorem wps_create {Ψ : SpikeVal → EnvStack → IProp GF}
         Ψ (SpikeVal.pure (Vobject (OVpointer p))) ρ)) ⊢
       wps M p Ls Θ Ψ (createExpr a loc ann (.IV aprov alignN) ty pref) ρ := by
   iintro ⟨Hb, HΨ⟩
-  iapply wps_of_atomic (fun _ _ _ _ => create_atomic a loc ann aprov alignN ty pref ρ hsz hatom hinert) rfl rfl rfl
+  iapply wps_of_atomic (fun _ _ _ _ => create_atomic a loc ann aprov alignN ty pref ρ
+    hfuel halign haddr hsz hatom hinert) rfl rfl rfl
   isplitl [Hb]
   · iexact Hb
   · iintro %w ⟨%p, %hw, Hpt, %hb⟩
@@ -4244,6 +4239,8 @@ theorem wps_create_of_plan {Ψ : SpikeVal → EnvStack → IProp GF}
     (a : List annot) (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (aprov : CerbMem.Provenance) (req : AllocReq) (rest : List AllocReq)
     (pref : prefix0) (ρ : EnvStack)
+    (hfuel : 0 < LemFuel.fuel) (halign : 0 < req.align)
+    (haddr : get_with_address a = none)
     (hsz : 0 < CerbMem.sizeofCtype M.tagDefs req.ty) (hatom : atomicTy req.ty = false)
     (hinert : ∀ a : Int, decIndep M.tagDefs a req.ty
       (List.replicate (CerbMem.sizeofCtype M.tagDefs req.ty) undefByte)) :
@@ -4259,7 +4256,7 @@ theorem wps_create_of_plan {Ψ : SpikeVal → EnvStack → IProp GF}
   iintro ⟨Hb, HΨ⟩
   icases (allocBudget_split (allocCost M.tagDefs req.ty req.align)
     (planCost M.tagDefs rest)).1 $$ Hb with ⟨Hb, Hrest⟩
-  iapply wps_create a loc ann aprov req.align req.ty pref ρ hsz hatom hinert
+  iapply wps_create a loc ann aprov req.align req.ty pref ρ hfuel halign haddr hsz hatom hinert
   isplitl [Hb]
   · iexact Hb
   iintro %p ⟨Hpt, %hb⟩
@@ -4866,6 +4863,7 @@ theorem wps_case_eval {Ψ : SpikeVal → EnvStack → IProp GF} (a : List annot)
   · iexact Hσ
   · iexact H
 
+omit [LemFuel] in
 /-- `excludedStoreExpr` (Rules.lean) IS the completeness side's redex
     spelling at the non-locking store. -/
 theorem excludedStoreExpr_eq (a : List annot) (n : Nat) (loc : CerbLocation.Loc)
@@ -4997,14 +4995,13 @@ theorem wps_neg_round {Ψ : SpikeVal → EnvStack → IProp GF} (an : List annot
     · iexact Hσ
     · iapply H $$ %(sp.excl) %(sp.sym) %hsb
 
-/-- E5 (slice 2, proof device): `wps_bound_wseq_tuple` with its two static
-    premises inside the entailment — the Löb induction runs over the HEAD
-    `e1` of the weak tuple binder under the `bound`, so the premises must
-    be re-established at every successor (`Step.negFree_preserved`,
-    `Step.pot_le`). -/
+/-- E5 (slice 2, proof device): `wps_bound_wseq_tuple` with negative-freedom
+    inside the entailment. The Löb induction runs over the head `e1` of
+    the weak tuple binder, preserving this premise at every successor
+    through `Step.negFree_preserved`. -/
 theorem wps_bound_wseq_tuple_aux {Ψ : SpikeVal → EnvStack → IProp GF} (an a pa : List annot)
     (ls : List TupleLeaf) (e1 e2 : CoreExpr) (ev0 : Fmap sym value) (evs : List (Fmap sym value)) :
-    iprop(⌜negFree e1 = true ∧ pot e1 ≤ lemDefaultFuel⌝ ∗
+    iprop(⌜negFree e1 = true⌝ ∗
       wps M p Ls Θ (fun w ρ' => iprop(∃ (vs : List value) (ds : List dyn_annotation),
         ⌜w = SpikeVal.annot ds (Vtuple vs)⌝ ∗
         wps M p Ls Θ Ψ (Expr an (Ebound (Expr [] (Eannot ds e2))))
@@ -5104,8 +5101,7 @@ theorem wps_bound_wseq_tuple_aux {Ψ : SpikeVal → EnvStack → IProp GF} (an a
           (wps_unfold (e := Expr an (Ebound (Expr a (Ewseq (tuplePat pa ls) e1 e2))))).to_eq]
         simp only [wps.pre, htv, toVal_bound_node, jumpRedex?_bound, jumpRedex?_wseq, hjr,
           callRedex?_bound, callRedex?_wseq, hcr, Option.map_some, apply_ctx_bound, apply_ctx_wseq]
-        iintro ⟨%hst, H⟩
-        obtain ⟨hnf, hpot⟩ := hst
+        iintro ⟨%hnf, H⟩
         imod H with ⟨%params, %body, %vs, %h1, %h2, %h3, Hpre, Hcont⟩
         imodintro
         iexists params, body, vs
@@ -5123,25 +5119,17 @@ theorem wps_bound_wseq_tuple_aux {Ψ : SpikeVal → EnvStack → IProp GF} (an a
         obtain ⟨an', ra, hb⟩ := callRedex?_apply_ctx_eq hcr
         have hnf' : negFree (apply_ctx ctx (ofValA (.pure a1 [] ret))) = true := by
           rw [hb] at hnf; exact negFree_apply_ctx_of hnf (negFree_ofValA _)
-        have hpot' : pot (apply_ctx ctx (ofValA (.pure a1 [] ret))) ≤ lemDefaultFuel := by
-          have hplug := pot_apply_ctx_plug ctx (Expr an' (Eproc ra (Sym f) pes))
-            (ofValA (.pure a1 [] ret))
-          rw [← hb] at hplug
-          rw [show pot (Expr an' (Eproc ra (Sym f) pes)) = 2 from rfl, pot_ofValA_pure] at hplug
-          omega
         iapply IH $$ %(apply_ctx ctx (ofValA (.pure a1 [] ret))) %ev0 %evs
         isplitr
         · ipureintro
-          exact ⟨hnf', hpot'⟩
+          exact hnf'
         · iexact H'
       | none =>
         rw [wps_unfold.to_eq,
           (wps_unfold (e := Expr an (Ebound (Expr a (Ewseq (tuplePat pa ls) e1 e2))))).to_eq]
         simp only [wps.pre, htv, toVal_bound_node, jumpRedex?_bound, jumpRedex?_wseq, hjr,
           callRedex?_bound, callRedex?_wseq, hcr, Option.map_none]
-        iintro ⟨%hst, H⟩ %κ %ℓ %lc %sp %σ₁ %ns %obs %obs' %nt %hsb Hσ
-        obtain ⟨hnf, hpot⟩ := hst
-        have hsz : esize e1 ≤ lemDefaultFuel := Nat.le_trans (esize_le_pot e1) hpot
+        iintro ⟨%hnf, H⟩ %κ %ℓ %lc %sp %σ₁ %ns %obs %obs' %nt %hsb Hσ
         have hjr' : jumpRedex? (Expr a (Ewseq (tuplePat pa ls) e1 e2)) = none := by
           rw [jumpRedex?_wseq, hjr]
         have hcr' : callRedex? (Expr a (Ewseq (tuplePat pa ls) e1 e2)) = none :=
@@ -5187,8 +5175,7 @@ theorem wps_bound_wseq_tuple_aux {Ψ : SpikeVal → EnvStack → IProp GF} (an a
             iapply IH $$ %e1' %ev0' %evs
             isplitr
             · ipureintro
-              exact ⟨Step.negFree_preserved hs'' hsz hjr hcr htv hnf,
-                Nat.le_trans (Step.pot_le hs'' hsz hjr hcr htv hnf) hpot⟩
+              exact Step.negFree_preserved hs'' hjr hcr htv hnf
             · iexact H
           · rw [he1, toVal_ofValA] at htv; cases htv
           · rw [he1, toVal_ofValA] at htv; cases htv
@@ -5210,7 +5197,7 @@ theorem wps_bound_wseq_tuple_aux {Ψ : SpikeVal → EnvStack → IProp GF} (an a
 
 /-- E5 (slice 2): `bound` THROUGH THE HEAD of a weak flat-tuple binder — the
     emitted assignment statement's opening rounds, `bound(let weak (p, v) =
-    E in K)`: while the head `E` reduces (negative-free, within the fuel) the
+    E in K)`: while the head `E` reduces (negative-free) the
     `bound` frame is a congruence (`Step.bound_ctx` ∘ `Step.wseq_ctx`); at the
     head's annotated tuple the binder fires under the frame
     (`Step.wseq_tuple_annot`), delivering `bound({A} K)` at the extended
@@ -5219,7 +5206,7 @@ theorem wps_bound_wseq_tuple_aux {Ψ : SpikeVal → EnvStack → IProp GF} (an a
     `wps_neg_round`). -/
 theorem wps_bound_wseq_tuple {Ψ : SpikeVal → EnvStack → IProp GF} (an a pa : List annot)
     (ls : List TupleLeaf) (e1 e2 : CoreExpr) (ev0 : Fmap sym value) (evs : List (Fmap sym value))
-    (hnf : negFree e1 = true) (hpot : pot e1 ≤ lemDefaultFuel) :
+    (hnf : negFree e1 = true) :
     wps M p Ls Θ (fun w ρ' => iprop(∃ (vs : List value) (ds : List dyn_annotation),
         ⌜w = SpikeVal.annot ds (Vtuple vs)⌝ ∗
         wps M p Ls Θ Ψ (Expr an (Ebound (Expr [] (Eannot ds e2))))
@@ -5229,7 +5216,7 @@ theorem wps_bound_wseq_tuple {Ψ : SpikeVal → EnvStack → IProp GF} (an a pa 
   iapply wps_bound_wseq_tuple_aux an a pa ls e1 e2 ev0 evs
   isplitr
   · ipureintro
-    exact ⟨hnf, hpot⟩
+    exact hnf
   · iexact H
 
 /-! ## E5 (slice 2): THE ASSIGNMENT STATEMENT — the negative-action protocol
@@ -5249,6 +5236,7 @@ def negAssignBody (a0 a1 a2 a3 pa : List annot) (ds : List dyn_annotation)
       (Store0 false (Pexpr [] () (PEval (Vctype ty))) pe2 pe3 mo)))))
     (Expr a3 (Epure per)))))
 
+omit [LemFuel] in
 /-- The negative-action spine search at the assignment body: the redex is
     the negative store, its inner context the annotation frame over the
     wildcard weak binder (`Cannot a0 ds (Cwseq a1 _ CTX (pure per))`) — no
@@ -5260,6 +5248,7 @@ theorem negRedex?_negAssignBody (a0 a1 a2 a3 pa : List annot) (ds : List dyn_ann
       some (Cannot a0 ds (Cwseq a1 (Pattern pa (CaseBase (none, bty))) CTX (Expr a3 (Epure per))),
         a2, Action loc ann (Store0 false (Pexpr [] () (PEval (Vctype ty))) pe2 pe3 mo)) := rfl
 
+omit [LemFuel] in
 theorem break_at_sseq_negAssign (a0 a1 pa : List annot) (ds : List dyn_annotation)
     (bty : core_base_type) (e2 : CoreExpr) :
     break_at_sseq (Cannot a0 ds (Cwseq a1 (Pattern pa (CaseBase (none, bty))) CTX e2)) = none := rfl
@@ -5316,13 +5305,8 @@ theorem wps_neg_bound {Ψ : SpikeVal → EnvStack → IProp GF}
   rw [negRewrite_eq]
   simp only [add_exclusion_annot, add_exclusion_wseq, add_exclusion_CTX, apply_ctx_annot,
     apply_ctx_wseq, apply_ctx_CTX]
-  -- 2. the rewritten body is negative-free and within the fuel: `bound` is a congruence
-  iapply wps_bound an _ _ rfl (by
-    simp only [pot_wseq, pot_unseq, potList_cons, potList_nil, pot_excluded, pot_annot,
-      pot_pure_val, pot_pure_sym]
-    have := pot_pure_le_two (a := a3) per
-    rw [show lemDefaultFuel = 999999 + 1 from rfl]
-    omega)
+  -- 2. the rewritten body is negative-free: `bound` is a congruence
+  iapply wps_bound an _ _ rfl
   -- 3. the `(_, s)` binder over the unseq
   rw [show (Pattern [] (CaseCtor Ctuple [Pattern [] (CaseBase (none, BTy_unit)),
       Pattern [] (CaseBase (some (fresh_given_int k), BTy_unit))]) : pattern) =

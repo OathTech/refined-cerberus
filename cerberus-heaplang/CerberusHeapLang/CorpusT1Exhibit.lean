@@ -5,18 +5,23 @@ END (dialect arc E4, THE FIRST MILESTONE; docs/2026-09-05_e4-notes.md §3).
 `docs/corpus-e0/t1.c` is `int main(void) { int x = 3; int y = x + 1; return
 y; }`. Its `main`, as the pinned pipeline elaborates it (docs/corpus-e0/t1.core,
 every annotation, `bound`, `unseq`, `Specified`, the std.core calls), is the
-hand-transcribed `CorpusE0.t1Main` (Examples/CorpusE0.lean; the corpus skeleton
-speedbump checks the transcription against the emitted text, scripts/
-corpus_skeleton.lean). This module is a CLIENT of the logic on that term:
+hand-transcribed `CorpusE0.t1Main` (Examples/CorpusE0.lean). The corpus
+skeleton speedbump compares constructor shape with the retained emitted
+text; it does not establish full-term or full-file identity. This module
+is a client of the logic on that term:
 `t1_wps` (partial), `t1_wpt` (total, budget 48) and
 
   `t1_certified_production`: the shipped pipeline `drive` on the library-
   carrying one-procedure file `prodFileLib stdlibE3 [] t1Main` is EXACTLY
   ONE Active execution delivering `Specified(4)`
 
-— the TENTH closed shipped-driver statement and the first over an EMITTED
-program (E1–E3's `EmittedAExhibit`/`B`/`C` are synthetics in the dialect's
-features). The chain is the generic route `t1_wpt → wpt_driver_done_alloc →
+with `50 ≤ LemFuel.fuel` at the caller's single instance (public total
+cost 48 plus two driver iterations). This revalidates the retained emitted
+`main` transcription on the current pin. The constructed file still uses
+the three-function library fragment and an empty implementation map;
+closing its connection to the actual pipeline file remains A7. E1–E3's
+`EmittedAExhibit`/`B`/`C` remain synthetics in the dialect's features. The
+chain is the generic route `t1_wpt → wpt_driver_done_alloc →
 prod_run_eqJ_lib1`. The `unseq` — the read of `x` beside `Specified(1)` — is
 E4's: `wps_unseq_focus`/`wpt_unseq_focus` (the sequential driver's
 last-reducible-first order: `pure(Specified(1))` first, then the load) and
@@ -82,7 +87,7 @@ def t1FourMval : CerbMem.MemValue :=
 abbrev fourBytesT1 (tds : CerbTags.TagDefsMap) : List CerbMem.AbsByte :=
   (CerbMem.memValueToBytes tds [] t1FourMval).2
 
-theorem t1_four_encodes :
+theorem t1_four_encodes [LemFuel] :
     memValueFromValue fmapEmpty (Ctype [] (unatomic_ intTy)) (lint 4) = some t1FourMval := rfl
 
 theorem t1_four_storable (tds : CerbTags.TagDefsMap) : StorableAt tds intTy t1FourMval :=
@@ -234,7 +239,7 @@ def t1Ls (GF : BundledGFunctors) [SpikeGS .hasLC GF] : LabelSpec GF := fun l vs 
 def ψT1s (GF : BundledGFunctors) [SpikeGS .hasLC GF] : SpikeVal → EnvStack → IProp GF :=
   fun w _ => iprop(⌜w = SpikeVal.pure (lint 4)⌝)
 
-theorem t1_blockSpecs [SpikeGS .hasLC GF]
+theorem t1_blockSpecs [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} (hex : ∀ x, resolveExtern M.extern x = x)
     (hQ : M.labelsAt p = t1RetQ) :
     ⊢ blockSpecs (GF := GF) M p (t1Ls GF) emptyProcSpec (ψT1s GF) := by
@@ -252,7 +257,7 @@ theorem t1_blockSpecs [SpikeGS .hasLC GF]
   rfl
 
 /-- THE WHOLE PROGRAM, PARTIAL judgment. -/
-theorem t1_wps [SpikeGS .hasLC GF]
+theorem t1_wps [LemFuel] (hfuel : 0 < LemFuel.fuel) [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} (hstd : StdE3 M.file)
     (hex : ∀ x, resolveExtern M.extern x = x) (hQ : M.labelsAt p = t1RetQ)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (hf : SymFrame ev0) :
@@ -268,7 +273,7 @@ theorem t1_wps [SpikeGS .hasLC GF]
     (ev0 :: evs) (align := CerbMem.alignofIval M.tagDefs intTy) (ty := intTy) rfl
     (alignofIntPe_eval _ _) (evalPexpr_val _ _ _ _ _)
   rw [alignofIval_intTy]
-  iapply wps_create _ _ empty_annotation .Prov_none 4 intTy (PrefSource (t1Reg 15 54) [CorpusE0.xSym])
+  iapply wps_create (hfuel := hfuel) (halign := by decide) (haddr := rfl) _ _ empty_annotation .Prov_none 4 intTy (PrefSource (t1Reg 15 54) [CorpusE0.xSym])
     (ev0 :: evs) intTy_size_pos intTy_nonatomic (fun a => intTy_decIndep a _)
   isplitl [HcapX]
   · iexact HcapX
@@ -285,7 +290,7 @@ theorem t1_wps [SpikeGS .hasLC GF]
     _ (align := CerbMem.alignofIval M.tagDefs intTy) (ty := intTy) rfl
     (alignofIntPe_eval _ _) (evalPexpr_val _ _ _ _ _)
   rw [alignofIval_intTy]
-  iapply wps_create _ _ empty_annotation .Prov_none 4 intTy (PrefSource (t1Reg 15 54) [CorpusE0.ySym])
+  iapply wps_create (hfuel := hfuel) (halign := by decide) (haddr := rfl) _ _ empty_annotation .Prov_none 4 intTy (PrefSource (t1Reg 15 54) [CorpusE0.ySym])
     _ intTy_size_pos intTy_nonatomic (fun a => intTy_decIndep a _)
   isplitl [HcapY]
   · iexact HcapY
@@ -299,7 +304,7 @@ theorem t1_wps [SpikeGS .hasLC GF]
   rw [show (Pattern [] (CaseBase (some a508, CorpusE0.lint)) : pattern) = symPat [] a508 CorpusE0.lint from rfl]
   iapply wps_seq_sym
   unfold t1Spec3 bnd
-  iapply wps_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
+  iapply wps_bound _ _ _ rfl
   iapply wps_pure (specInt 3) _ rfl (specInt_eval _ 3)
   simp only [SpikeVal.val]
   iexists (lint 3)
@@ -324,7 +329,7 @@ theorem t1_wps [SpikeGS .hasLC GF]
   -- a_509 := bound(let weak (a_510, a_511) = unseq(let weak a_515 = pure(x) in load(int, a_515),
   --                                                 pure(Specified(1))) in pure(case …))
   iapply wps_seq_sym
-  iapply wps_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
+  iapply wps_bound _ _ _ rfl
   rw [show (Pattern [] (CaseCtor Ctuple [Pattern [] (CaseBase (some a510, CorpusE0.lint)),
       Pattern [] (CaseBase (some a511, CorpusE0.lint))]) : pattern) =
     tuplePat [] [([], some a510, CorpusE0.lint), ([], some a511, CorpusE0.lint)] from rfl]
@@ -413,7 +418,7 @@ theorem t1_wps [SpikeGS .hasLC GF]
   rw [show (Pattern [] (CaseBase (some a517, CorpusE0.lint)) : pattern) = symPat [] a517 CorpusE0.lint from rfl]
   -- a_517 := bound(let weak a_516 = pure(y) in load(int, a_516))
   iapply wps_seq_sym
-  iapply wps_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
+  iapply wps_bound _ _ _ rfl
   unfold t1LoadY letW
   rw [act_load_eq]
   rw [show (Pattern [] (CaseBase (some a516, ptrTy)) : pattern) = symPat [] a516 ptrTy from rfl]
@@ -492,7 +497,7 @@ def t1LsT (GF : BundledGFunctors) [SpikeGS .hasLC GF] : LabelSpecT GF := fun l m
 /-- The post: the delivered value is `Specified(4)`. -/
 def ψT1 : value → Mem → Prop := fun v _ => v = lint 4
 
-theorem t1LsT_readout [SpikeGS .hasLC GF] :
+theorem t1LsT_readout [LemFuel] [SpikeGS .hasLC GF] :
     ∀ w ρ', iprop(⌜w = SpikeVal.pure (lint 4)⌝) ⊢ readoutPost (GF := GF) ψT1 w ρ' := by
   intro w ρ'
   iintro %hw
@@ -502,7 +507,7 @@ theorem t1LsT_readout [SpikeGS .hasLC GF] :
   subst hw
   rfl
 
-theorem t1_blockSpecsT [SpikeGS .hasLC GF]
+theorem t1_blockSpecsT [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} (hex : ∀ x, resolveExtern M.extern x = x)
     (hQ : M.labelsAt p = t1RetQ) :
     ⊢ blockSpecsT (GF := GF) M p (t1LsT GF) emptyProcSpecT (readoutPost ψT1) := by
@@ -525,11 +530,12 @@ theorem t1_blockSpecsT [SpikeGS .hasLC GF]
     BOUND assembled rule by rule (the E4 record §6 (ii) tabulates it: each
     rule's constant covers its round and the delivered value's cost), not
     the exact round count: the shipped inner loop delivers the value after
-    40 rounds and reports PROGRAM-DONE at fuel 42 (measured — the E4 range
-    audit N-1, docs/2026-09-05_audit-e4-range.md §3.4), so the `k + 2` of
+    40 rounds and reports PROGRAM-DONE at fuel 42 (historical measurement
+    on the E4 pin, not remeasured here — the E4 range audit N-1,
+    docs/2026-09-05_audit-e4-range.md §3.4), so the `k + 2` of
     `wpt_driver_done_alloc` carries 8 units of slack; nothing claims
     tightness (KOI B6). -/
-theorem t1_wpt [SpikeGS .hasLC GF]
+theorem t1_wpt [LemFuel] (hfuel : 0 < LemFuel.fuel) [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} (hstd : StdE3 M.file)
     (hex : ∀ x, resolveExtern M.extern x = x) (hQ : M.labelsAt p = t1RetQ)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (hf : SymFrame ev0) :
@@ -546,7 +552,7 @@ theorem t1_wpt [SpikeGS .hasLC GF]
     (ev0 :: evs) (align := CerbMem.alignofIval M.tagDefs intTy) (ty := intTy) rfl
     (alignofIntPe_eval _ _) (evalPexpr_val _ _ _ _ _)
   rw [alignofIval_intTy]
-  iapply wpt_create _ _ empty_annotation .Prov_none 4 intTy (PrefSource (t1Reg 15 54) [CorpusE0.xSym])
+  iapply wpt_create (hfuel := hfuel) (halign := by decide) (haddr := rfl) _ _ empty_annotation .Prov_none 4 intTy (PrefSource (t1Reg 15 54) [CorpusE0.xSym])
     (ev0 :: evs) (Nat.le_refl 2) intTy_size_pos intTy_nonatomic (fun a => intTy_decIndep a _)
   isplitl [HcapX]
   · iexact HcapX
@@ -564,7 +570,7 @@ theorem t1_wpt [SpikeGS .hasLC GF]
     _ (align := CerbMem.alignofIval M.tagDefs intTy) (ty := intTy) rfl
     (alignofIntPe_eval _ _) (evalPexpr_val _ _ _ _ _)
   rw [alignofIval_intTy]
-  iapply wpt_create _ _ empty_annotation .Prov_none 4 intTy (PrefSource (t1Reg 15 54) [CorpusE0.ySym])
+  iapply wpt_create (hfuel := hfuel) (halign := by decide) (haddr := rfl) _ _ empty_annotation .Prov_none 4 intTy (PrefSource (t1Reg 15 54) [CorpusE0.ySym])
     _ (Nat.le_refl 2) intTy_size_pos intTy_nonatomic (fun a => intTy_decIndep a _)
   isplitl [HcapY]
   · iexact HcapY
@@ -579,7 +585,7 @@ theorem t1_wpt [SpikeGS .hasLC GF]
   iapply wpt_seq_sym _ _ _ _ _ _ _ _ 3 39
   rw [show (3 : Nat) = 2 + 1 from rfl]
   unfold t1Spec3 bnd
-  iapply wpt_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
+  iapply wpt_bound _ _ _ rfl
   iapply wpt_pure (specInt 3) _ (Nat.le_refl 2) rfl (specInt_eval _ 3)
   simp only [SpikeVal.val]
   iexists (lint 3)
@@ -608,7 +614,7 @@ theorem t1_wpt [SpikeGS .hasLC GF]
   -- annotation wrapper 1 + the `+` round 2
   iapply wpt_seq_sym _ _ _ _ _ _ _ _ 15 20
   rw [show (15 : Nat) = 14 + 1 from rfl]
-  iapply wpt_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
+  iapply wpt_bound _ _ _ rfl
   rw [show (Pattern [] (CaseCtor Ctuple [Pattern [] (CaseBase (some a510, CorpusE0.lint)),
       Pattern [] (CaseBase (some a511, CorpusE0.lint))]) : pattern) =
     tuplePat [] [([], some a510, CorpusE0.lint), ([], some a511, CorpusE0.lint)] from rfl]
@@ -697,7 +703,7 @@ theorem t1_wpt [SpikeGS .hasLC GF]
   -- a_517 := bound(let weak a_516 = pure(y) in load(int, a_516))
   iapply wpt_seq_sym _ _ _ _ _ _ _ _ 7 9
   rw [show (7 : Nat) = 6 + 1 from rfl]
-  iapply wpt_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
+  iapply wpt_bound _ _ _ rfl
   unfold t1LoadY letW
   rw [act_load_eq]
   rw [show (Pattern [] (CaseBase (some a516, ptrTy)) : pattern) = symPat [] a516 ptrTy from rfl]
@@ -786,11 +792,6 @@ theorem t1Main_labeledAt (sup : Nat) :
   unfold LabeledAt
   rw [prodRSLib_labeled, collect_new_t1Main, fmapLookupBy_addBy_empty, if_pos (by decide +kernel)]
 
-/-- The potential bound of t1's `main` (kernel-decided; the static fuel
-    bound every round of the run needs). -/
-theorem t1Main_pot : pot t1Main ≤ lemDefaultFuel := by
-  rw [show lemDefaultFuel = 999999 + 1 from rfl]; decide
-
 /-- THE FIRST CORPUS PROGRAM, CERTIFIED END TO END (E4 acceptance (ii), THE
     MILESTONE): the shipped pipeline on the library-carrying one-procedure
     file wrapping `docs/corpus-e0/t1.c`'s emitted `main` — transcribed
@@ -798,9 +799,11 @@ theorem t1Main_pot : pot t1Main ≤ lemDefaultFuel := by
     value is `Specified(4)` (`int x = 3; int y = x + 1; return y;`). The
     statement is `exhibitC_prod_e3`'s but for the program (the emitted one)
     and the budget; the chain is `t1_wpt → wpt_driver_done_alloc →
-    prod_run_eqJ_lib1`. The oracle's `--exec` on t1.c agrees (`Specified(4)`,
-    exit code 4; the E4 record §5, verbatim). -/
-theorem t1_certified_production (sup : Nat) (fs : CerbFS.FsState) (args : List String) :
+    prod_run_eqJ_lib1`, at the caller's ambient fuel of at least 50. The
+    historical oracle `--exec` measurement on t1.c returned `Specified(4)`,
+    exit code 4 (the E4 record §5); it is not a new-pin oracle measurement.
+    The full-file/library connection remains A7. -/
+theorem t1_certified_production [LemFuel] (hfuel : 50 ≤ LemFuel.fuel) (sup : Nat) (fs : CerbFS.FsState) (args : List String) :
     ∃ (dres : driver_result) (dst' : driver_state),
       CerbND.runND (_root_.drive fmapEmpty false (prodFileLib stdlibE3 [] t1Main) args)
           ((initial_driver_state sup (prodFileLib stdlibE3 [] t1Main) fs).1) =
@@ -813,21 +816,16 @@ theorem t1_certified_production (sup : Nat) (fs : CerbFS.FsState) (args : List S
   have hlbl := prodCtx_labels (f := prodFileLib stdlibE3 [] t1Main) hQe
   obtain ⟨dres, dst', heq, hψ, hbl, hout, herr⟩ :=
     prod_run_eqJ_lib1 sup stdlibE3 t1Main hQe ψT1 48
-      (wpt_driver_done_alloc (GF := SpikeGF) (ctl := prodCtl sup)
+      (wpt_driver_done_alloc (hfuel := by omega) (GF := SpikeGF) (ctl := prodCtl sup)
         (M₀ := prodCtx (prodFileLib stdlibE3 [] t1Main) (prodRSLib stdlibE3 [] sup t1Main))
         rfl rfl hlbl rfl rfl rfl rfl (Nat.le_refl _)
         (fun l params cont hl => by
           rw [hlbl] at hl
           obtain ⟨-, rfl⟩ := t1RetQ_inv hl
-          exact .pure_op rfl (.sym [] a518) (CorpusE0.depLe (by decide)))
-        (fun l params cont hl => by
-          rw [hlbl] at hl
-          obtain ⟨-, rfl⟩ := t1RetQ_inv hl
-          exact Nat.le_of_ble_eq_true rfl)
+          exact .pure_op rfl (.sym [] a518) (CorpusE0.depLe (by omega) (by decide)))
         (t1LsT SpikeGF)
         t1Main fmapEmpty [] prodMem₀ (∅ : SpikeHeapF SpikeCell)
-        (allocCost fmapEmpty intTy 4 + allocCost fmapEmpty intTy 4) t1Main_frag
-        t1Main_pot
+        (allocCost fmapEmpty intTy 4 + allocCost fmapEmpty intTy 4) (t1Main_frag (by omega))
         (prodMem₀_launchCoh _ prod_two_int_budget_fits)
         ψT1 48
         (by
@@ -835,10 +833,10 @@ theorem t1_certified_production (sup : Nat) (fs : CerbFS.FsState) (args : List S
           iintro ⟨-, Hcap⟩
           isplitr [Hcap]
           · iapply t1_blockSpecsT (resolveExtern_id_of_empty (prodCtx_extern _ _)) hlbl
-          · iapply t1_wpt (M := prodCtx (prodFileLib stdlibE3 [] t1Main) (prodRSLib stdlibE3 [] sup t1Main))
+          · iapply t1_wpt (hfuel := by omega) (M := prodCtx (prodFileLib stdlibE3 [] t1Main) (prodRSLib stdlibE3 [] sup t1Main))
               rfl (resolveExtern_id_of_empty (prodCtx_extern _ _)) hlbl fmapEmpty []
               symFrame_empty $$ Hcap))
-      (by rw [show CerbFuel.driverFuel = 99999999 + 1 from rfl]; omega)
+      hfuel
       fs args
   exact ⟨dres, dst', heq, hψ, hbl, hout, herr⟩
 

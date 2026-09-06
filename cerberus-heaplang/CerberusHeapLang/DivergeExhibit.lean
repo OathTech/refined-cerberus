@@ -11,12 +11,14 @@ THE PROGRAM: the self-jump loop
 whose registered body is its own back edge. Its configuration steps
 to ITSELF (`dg_self_step` — the context-discarding jump with no
 arguments and no state effect), so THE SHIPPED DRIVER'S per-thread loop
-on it EXHAUSTS at EVERY fuel (`dg_loop_exhausts`: each round is the
+on it EXHAUSTS at every explicit loop counter, provided ambient
+`LemFuel.fuel ≥ 2` (`dg_loop_exhausts`: each round is the
 self-step, the shipped round `loop_step_frag_same`, and the out-of-fuel
 arm is the kill `CerbND.fuelExhaustedKill`) — it never delivers.
 
 THE UNPROVABILITY, engine form (`diverge_total_unprovable`): a total
-derivation for this loop — from ANY footprint's cell ownership (any
+derivation for this loop at the same ambient fuel of at least two —
+from ANY footprint's cell ownership (any
 `m₀` coherent with any memory), at ANY ghost functor list, ANY label
 context, ANY postcondition, ANY budget `k` — is FALSE, not merely
 unprovable: through the total driver lane (`wpt_driver_done`, ProdLoop)
@@ -91,7 +93,7 @@ theorem dgRS_labeledAt (ra : core_run_annotation) :
 
 /-- THE SELF-STEP: the loop configuration steps to itself (jump,
     empty argument list, empty parameter binding, state verbatim). -/
-theorem dg_self_step (ra : core_run_annotation) (ev0 : Fmap sym value)
+theorem dg_self_step [LemFuel] (ra : core_run_annotation) (ev0 : Fmap sym value)
     (evs : List (Fmap sym value)) (σ : Mem) :
     Step (procCtx (dgRS ra))
       (dgBody ra, ev0 :: evs, procCtl dgProcSym, σ) (dgBody ra, ev0 :: evs, procCtl dgProcSym, σ) :=
@@ -101,7 +103,7 @@ theorem dg_self_step (ra : core_run_annotation) (ev0 : Fmap sym value)
 
 /-- The registered body is in the fragment (a jump redex with no
     arguments). -/
-theorem dgBody_frag (ra : core_run_annotation) : Frag (dgBody ra) :=
+theorem dgBody_frag [LemFuel] (ra : core_run_annotation) : Frag (dgBody ra) :=
   Frag.run (fun _ h => nomatch h) (fun _ h => nomatch h)
 
 /-- The label map registers exactly the self-jump body. -/
@@ -119,11 +121,12 @@ theorem dgQ_inv (ra : core_run_annotation) {l : sym}
 /-- THE SHIPPED LOOP NEVER DELIVERS: from any driver state holding the
     proc-carrying thread at the self-jump body, with the label tie at the
     current procedure, the production driver's per-thread loop EXHAUSTS
-    at EVERY fuel — each round is the self-step (the shipped round
+    at every explicit iteration counter, with ambient fuel at least two
+    — each round is the self-step (the shipped round
     `loop_step_frag_same` on `dg_self_step`), so the run never reaches
     PROGRAM-DONE and the out-of-fuel kill `CerbND.fuelExhaustedKill` is
     the loop's only value. -/
-theorem dg_loop_exhausts (ra : core_run_annotation) :
+theorem dg_loop_exhausts [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) (ra : core_run_annotation) :
     ∀ (fl : Nat) (dst : driver_state) (acc : Fmap thread_id (List core_step2)),
       dst.core_state0.thread_states =
         [(0, (none, procThread dgProcSym (dgBody ra) [fmapEmpty]))] →
@@ -138,13 +141,11 @@ theorem dg_loop_exhausts (ra : core_run_annotation) :
   | 0, dst, acc, _, _, _, _, _ => ⟨dst, loop_zero_exhausts _ _ _ _⟩
   | fl + 1, dst, acc, hth, hext, hfile, hQd, hsup => by
     obtain ⟨rs', tr, ctr, hlbl, hsup', hrun⟩ :=
-      loop_step_frag_same (th₀ := procThread dgProcSym (dgBody ra) [fmapEmpty])
+      loop_step_frag_same (hfuel := hfuel) (th₀ := procThread dgProcSym (dgBody ra) [fmapEmpty])
         rfl rfl (procCtx_labels (dgRS_labeledAt ra)) rfl rfl fl acc hth hext hfile hQd hsup (dgBody_frag ra)
-        (by rw [show esize (dgBody ra) = 1 from rfl,
-          show lemDefaultFuel = 999999 + 1 from rfl]; omega)
         (dg_self_step ra fmapEmpty [] dst.layout_state) rfl
     rw [hrun]
-    exact dg_loop_exhausts ra fl _ acc
+    exact dg_loop_exhausts hfuel ra fl _ acc
       (by rw [update_thread_state_single _ _ _ hth]; rfl) hext hfile
       (by show LabeledAt rs' dgProcSym (dgQ ra)
           unfold LabeledAt
@@ -153,7 +154,7 @@ theorem dg_loop_exhausts (ra : core_run_annotation) :
       hsup'
 
 /-- Any postcondition weakens to the trivial engine readout. -/
-theorem dg_post_to_readout {GF : BundledGFunctors} [SpikeGS .hasLC GF]
+theorem dg_post_to_readout [LemFuel] {GF : BundledGFunctors} [SpikeGS .hasLC GF]
     (Ψ : SpikeVal → EnvStack → IProp GF) :
     ∀ w ρ', Ψ w ρ' ⊢ readoutPost (fun _ _ => True) w ρ' := by
   intro w ρ'
@@ -164,7 +165,7 @@ theorem dg_post_to_readout {GF : BundledGFunctors} [SpikeGS .hasLC GF]
   trivial
 
 /-- THE NEGATIVE THEOREM: a total derivation for the self-jump loop
-    is FALSE — from the cell ownership of any footprint `m₀` coherent
+    at ambient fuel at least two is FALSE — from the cell ownership of any footprint `m₀` coherent
     with any memory `σ₀`, at any ghost functor list, label context,
     postcondition, and budget (header note: the stuck obligation of a
     direct attempt is the jump clause's mandatory decrease
@@ -173,7 +174,7 @@ theorem dg_post_to_readout {GF : BundledGFunctors} [SpikeGS .hasLC GF]
     driver lane would make the shipped loop deliver PROGRAM-DONE within
     `k + 2` iterations from a driver state holding the thread; the loop
     exhausts instead (`dg_loop_exhausts`). -/
-theorem diverge_total_unprovable {GF : BundledGFunctors} [SpikeGpreS GF]
+theorem diverge_total_unprovable [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) {GF : BundledGFunctors} [SpikeGpreS GF]
     (ra : core_run_annotation) (σ₀ : Mem) (m₀ : SpikeHeapF SpikeCell)
     (hcoh : Coh fmapEmpty σ₀ m₀)
     (Ls : ∀ [SpikeGS .hasLC GF], LabelSpecT GF)
@@ -186,18 +187,13 @@ theorem diverge_total_unprovable {GF : BundledGFunctors} [SpikeGpreS GF]
     False := by
   have hlbl := procCtx_labels (dgRS_labeledAt ra)
   have hdd :=
-    wpt_driver_done (GF := GF) (M₀ := procCtx (dgRS ra)) (ctl := procCtl dgProcSym) rfl rfl hlbl
+    wpt_driver_done (hfuel := hfuel) (GF := GF) (M₀ := procCtx (dgRS ra)) (ctl := procCtl dgProcSym) rfl rfl hlbl
       rfl (th₀ := procThread dgProcSym (dgBody ra) [fmapEmpty]) rfl rfl rfl (Nat.zero_le _)
       (fun l params cont hl => by
         rw [hlbl] at hl
         obtain ⟨-, rfl⟩ := dgQ_inv ra hl
         exact dgBody_frag ra)
-      (fun l params cont hl => by
-        rw [hlbl] at hl
-        obtain ⟨-, rfl⟩ := dgQ_inv ra hl
-        exact Nat.le_of_ble_eq_true rfl)
       Ls (dgBody ra) fmapEmpty [] σ₀ m₀ (dgBody_frag ra)
-      (by exact Nat.le_of_ble_eq_true rfl)
       hcoh (fun _ _ => True) k
       (by
         intro inst
@@ -212,7 +208,7 @@ theorem diverge_total_unprovable {GF : BundledGFunctors} [SpikeGpreS GF]
         layout_state := σ₀, core_run_state0 := dgRS ra, core_extern := fmapEmpty }
   obtain ⟨v, σf, ρf, lcf, af, bf, rs', tr, ctr, -, hrun⟩ :=
     hdd dst fmapEmpty (k + 2) rfl rfl rfl rfl (dgRS_labeledAt ra) ⟨rfl, rfl⟩ (Nat.le_refl _)
-  obtain ⟨dst', hkill⟩ := dg_loop_exhausts ra (k + 2) dst fmapEmpty rfl rfl rfl (dgRS_labeledAt ra) ⟨rfl, rfl⟩
+  obtain ⟨dst', hkill⟩ := dg_loop_exhausts hfuel ra (k + 2) dst fmapEmpty rfl rfl rfl (dgRS_labeledAt ra) ⟨rfl, rfl⟩
   rw [hrun] at hkill
   cases hkill
 

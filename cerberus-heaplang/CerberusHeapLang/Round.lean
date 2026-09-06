@@ -8,7 +8,7 @@ live configuration `c` (`MachineCtx.Embeds` — the single thread
 `M.tid` holding `M.thread c.1 c.2.1 c.2.2.1`, the memory `c.2.2.2`, the file,
 extern map and run state of `M`), the engine's step list read by the
 loop body (`step_ctx`, Core_reduction.lean:484 — exactly the `nd_read`
-of `drive_nonmemory_steps_aux2`, Driver.lean:346) is a singleton `s`,
+of `drive_nonmemory_steps_aux2`, Driver.lean:346) heads with `s` (with any remaining choices retained),
 `s` is advanceable (`can_advance`, Driver.lean:310 — the loop's
 `find_can_advance` selects it), and the shipped `advance_step`
 (Driver.lean:336) on it is ONE ACTIVE, WAKEUP-FREE transition to the
@@ -21,13 +21,26 @@ runOne (drive_nonmemory_steps_aux2_lemFuel fl …) dst'` — the shape
 proved there INDEPENDENTLY, by its own per-redex case analysis, not
 derived from this round (see "WHAT CONSUMES WHAT" below).
 
-NO FUEL DEPENDENCY. The round is stated at the loop BODY: the step
-list, `find_can_advance` and `advance_step` are not fuelled (`nd_bind`
-spends one layer of its own fresh budget per bind —
-`runOne_bind_active`, DriverCollapse.lean — never accumulating). The
-loop-level corollary holds for EVERY `fl`: the continuation at `fl` is
-the same shipped function on both sides, and no fuel-zero arm is ever
-evaluated by the statement.
+FUEL. Every engine-dependent statement retains the caller's
+`[LemFuel]`. Structural traversals supply their own measures; operand
+pass bounds remain in `Frag`. Advancing a given mirror step requires
+at least two ambient units, while the full classification requires four
+as a sufficient bound for lifted memory forks. The plain scheduler
+choice needs two. Each `nd_bind` starts its own ambient worker; the
+budget is not accumulated across consecutive binds. The loop-level
+corollary has a separate explicit iteration counter and holds for every
+`fl` under positive ambient fuel.
+
+KERNEL/RUNTIME BOUNDARY (KOI A5). These are the shipped Lean definitions.
+Their hand-written `panic!` arms reduce to inhabited defaults in the
+kernel; they do not describe a runtime success where execution aborts.
+For example, requested-address allocation is a kernel kill at default
+memory; zero-alignment allocator and static dead-allocation kill have
+kernel-active defaults. The layer and refusal theorems classify those
+Lean outcomes. Public memory-rule premises exclude these panic paths
+from certified memory operations. This module does not prove a general
+absence-of-panic theorem or eliminate A5. The `failwithI` refusal family
+below is a different, opaque boundary.
 
 THE REFERENT DISCIPLINE ([USER 2026-09-02], CLAUDE.md "The referent
 of every export is the genuine semantics"). Before this slice the round
@@ -51,7 +64,7 @@ on `loop_step_frag`; the `outcomesU` step-match `outcomesU_of_step` was
 deleted 2026-09-04, consumerless — KNOWN-OPEN-ITEMS C3).
 
 WHAT IS PROVED — the classification (`cerberusRound_classify`): for
-every well-sized `Frag` configuration at a sequentially well-formed
+every `Frag` configuration at ambient fuel at least four and a sequentially well-formed
 context with a cons-shaped environment stack, EXACTLY ONE of
 
 - `value_done`   — a bare value; the engine's step list is PROGRAM-DONE
@@ -71,10 +84,11 @@ context with a cons-shaped environment stack, EXACTLY ONE of
                    the shipped round is a classified refusal
                    (`ShippedRefusal`);
 - `open_`        — the mirror is STUCK at a non-value configuration of
-                   the RESIDUAL (`OpenRound`, two arms; below).
+                   the RESIDUAL (`OpenRound`, including negative actions across strong sequences; below).
 
 MIRROR COMPLETENESS (`frag_round_complete`, the second half of this
-module): at every non-value `Frag` configuration the mirror steps, or
+module): at every non-value `Frag` configuration, with at least four
+ambient fuel units, the mirror steps, or
 the shipped round is a `ShippedRefusal`, or the configuration is in the
 residual `OpenRound` — one lemma per redex root (`complete_store` …
 `complete_memop_vals`), dispatched by `Frag.decomp`, the redex's step
@@ -134,8 +148,9 @@ a syntactic narrowing of `Frag`. `cerberusRound_refused_store`/`_load`/
 `_create`/`_case` are the root-redex refusal instances kept from
 commit 1 of the mirror-completeness slice (DECISIONS.md, "MIRROR
 COMPLETENESS — GO"); `cerberusRound_refused_kill` (kill/free arc K2)
-is the same instance at the kill redex, its three engine reasons
-enumerated by `killM_killed_inv`.
+is the same instance at the kill redex, its seven possible engine kill
+reasons enumerated by `killM_killed_inv`. E5 also records the unmirrored
+negative-action `BOUND_WITH_SSEQ` protocol as `OpenRound.neg_sseq`.
 
 THE MIRROR'S ONLY REFERENCE is this round: no other relational
 semantics is referenced or bridged, and none is needed for the root of
@@ -158,10 +173,13 @@ import CerberusHeapLang.Heap
 import CerberusHeapLang.DriverCollapse
 import CerberusHeapLang.EnvLaws
 import CerberusHeapLang.EvalClass
+import Core_reduction_lemMeasureProofs
 
 set_option autoImplicit false
 
 namespace CerberusHeapLang
+
+variable [LemFuel]
 
 open Lem_Basic_classes Lem_Maybe Lem_List
 
@@ -185,6 +203,7 @@ structure MachineCtx.Embeds (M : MachineCtx) (dst : driver_state) (c : Config) :
   sym : dst.core_run_state0.sym_supply = c.2.2.1.sup.sym
   excl : dst.core_run_state0.excluded_supply = c.2.2.1.sup.excl
 
+omit [LemFuel] in
 /-- Every context and configuration is embedded by some driver state. -/
 theorem MachineCtx.embeds_exists (M : MachineCtx) (c : Config) : ∃ dst, M.Embeds dst c :=
   ⟨{ (default : driver_state) with
@@ -461,6 +480,7 @@ abbrev RoundComplete (M : MachineCtx) (c : Config) : Prop :=
 /-! ## Driver plumbing at a general thread id (the `0` instances live
 in DriverCollapse.lean) -/
 
+omit [LemFuel] in
 /-- The driver's thread-id equality test (the `instBEqOfEq0 → Eq0 →
     SetType-of-Ord → defaultCompare` chain, `lemNatBeq_iff`,
     EnvLaws.lean) is reflexive. -/
@@ -468,12 +488,14 @@ theorem lemNatBeq_self (n : Nat) :
     (@BEq.beq Nat (@instBEqOfEq0 Nat Lem_Num.instEq0Nat_1) n n) = true :=
   (lemNatBeq_iff n n).mpr rfl
 
+omit [LemFuel] in
 /-- `lookupBy` (LemLib List.lean:256) at the singleton thread
     association list. -/
 theorem lookupBy_single {β : Type} (k : Nat) (v : β) :
     lookupBy (fun (x y : Nat) => x == y) k [(k, v)] = some v := by
   simp only [lookupBy, find, lemNatBeq_self, if_true, Option.map]
 
+omit [LemFuel] in
 /-- `update_thread_state` (Core_run.lean:99, via assoc_adjust
     Utils.lean:186) at the singleton thread list, any thread id. -/
 theorem update_thread_state_single' (tid : Nat) (parent : Option Nat)
@@ -491,7 +513,7 @@ theorem update_thread_state_single' (tid : Nat) (parent : Option Nat)
 /-- ONE LOOP ITERATION from its three parts: a singleton advanceable
     step list whose shipped advance is active and wakeup-free continues
     the loop on the same thread list at the successor state. -/
-theorem loop_step_of_advance {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
+theorem loop_step_of_advance (hfuel : 0 < LemFuel.fuel) {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
     {tid : Nat} {parent : Option Nat} {th : thread_state} {s : core_step2}
     {dst dst' : driver_state} (fl : Nat) (acc : Fmap thread_id (List core_step2))
     (hth : dst.core_state0.thread_states = [(tid, (parent, th))])
@@ -503,7 +525,7 @@ theorem loop_step_of_advance {tds : Fmap sym (CerbLocation.Loc × tag_definition
     runOne (drive_nonmemory_steps_aux2_lemFuel (Nat.succ fl) tds acc [tid]) dst =
       runOne (drive_nonmemory_steps_aux2_lemFuel fl tds acc [tid]) dst' := by
   conv => lhs; unfold drive_nonmemory_steps_aux2_lemFuel
-  refine (runOne_bind_active (z := s :: post) (s' := dst) ?_).trans ?_
+  refine (runOne_bind_active (hfuel := by omega) (z := s :: post) (s' := dst) ?_).trans ?_
   · rw [runOne_read]
     refine congrArg (fun x => (NDactive x, dst)) ?_
     show (let th_info := match lookupBy (fun x y => x == y) tid
@@ -515,12 +537,12 @@ theorem loop_step_of_advance {tds : Fmap sym (CerbLocation.Loc × tag_definition
     exact hsteps
   · dsimp only [find_can_advance]
     rw [hca, if_pos rfl]
-    refine (runOne_bind_active (z := NOWAKEUP) (s' := dst') hadv).trans ?_
+    refine (runOne_bind_active (hfuel := by omega) (z := NOWAKEUP) (s' := dst') hadv).trans ?_
     rfl
 
 /-- `advance_step`'s tau arm (Driver.lean:336): thread updated,
     `dr_step_counter` ticked, no wakeup. -/
-theorem advance_tau (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (tid : Nat)
+theorem advance_tau (hfuel : 0 < LemFuel.fuel) (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (tid : Nat)
     (s : String) (th' : thread_state) (dst : driver_state) :
     runOne (advance_step tds tid (Step_tau2 s TSK_Misc th')) dst =
       (NDactive NOWAKEUP,
@@ -528,15 +550,15 @@ theorem advance_tau (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (tid :
            with core_state0 := update_thread_state tid th' dst.core_state0 }) := by
   unfold advance_step
   dsimp only
-  refine (runOne_bind_active (z := ()) (s' := dst) (by rfl)).trans ?_
-  refine (runOne_bind_active (z := ()) (by rfl)).trans ?_
+  refine (runOne_bind_active (hfuel := by omega) (z := ()) (s' := dst) (by rfl)).trans ?_
+  refine (runOne_bind_active (hfuel := by omega) (z := ()) (by rfl)).trans ?_
   rfl
 
 /-- `advance_step`'s tau arm at ANY task kind (calls arc C2 — the RETURN
     round): the `TSK_Return` kind pushes `ME_function_return` on the
     trace (Driver.lean:336), the other kinds do not; the trace is
     existential. -/
-theorem advance_tau_tsk (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (tid : Nat)
+theorem advance_tau_tsk (hfuel : 0 < LemFuel.fuel) (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (tid : Nat)
     (s : String) (tsk : core_tau_step_kind) (th' : thread_state) (dst : driver_state) :
     ∃ tr : List trace_event,
       runOne (advance_step tds tid (Step_tau2 s tsk th')) dst =
@@ -548,26 +570,26 @@ theorem advance_tau_tsk (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (t
   cases tsk with
   | TSK_Return sym1 mval_opt =>
     refine ⟨ME_function_return sym1 mval_opt :: dst.trace, ?_⟩
-    refine (runOne_bind_active (z := ())
+    refine (runOne_bind_active (hfuel := by omega) (z := ())
       (s' := { dst with trace := ME_function_return sym1 mval_opt :: dst.trace })
       (by rfl)).trans ?_
-    refine (runOne_bind_active (z := ()) (by rfl)).trans ?_
+    refine (runOne_bind_active (hfuel := by omega) (z := ()) (by rfl)).trans ?_
     rfl
   | TSK_Ccall sym1 mvals =>
     refine ⟨dst.trace, ?_⟩
-    refine (runOne_bind_active (z := ()) (s' := dst) (by rfl)).trans ?_
-    refine (runOne_bind_active (z := ()) (by rfl)).trans ?_
+    refine (runOne_bind_active (hfuel := by omega) (z := ()) (s' := dst) (by rfl)).trans ?_
+    refine (runOne_bind_active (hfuel := by omega) (z := ()) (by rfl)).trans ?_
     rfl
   | TSK_Misc =>
     refine ⟨dst.trace, ?_⟩
-    refine (runOne_bind_active (z := ()) (s' := dst) (by rfl)).trans ?_
-    refine (runOne_bind_active (z := ()) (by rfl)).trans ?_
+    refine (runOne_bind_active (hfuel := by omega) (z := ()) (s' := dst) (by rfl)).trans ?_
+    refine (runOne_bind_active (hfuel := by omega) (z := ()) (by rfl)).trans ?_
     rfl
 
 /-- `advance_step`'s with-runstate arm, EVAL kind: `liftCore_run`
     writes the monad's run state back (verbatim here, `hm`), the thread
     is updated, the counter ticked. -/
-theorem advance_withrs_eval (tds : Fmap sym (CerbLocation.Loc × tag_definition))
+theorem advance_withrs_eval (hfuel : 0 < LemFuel.fuel) (tds : Fmap sym (CerbLocation.Loc × tag_definition))
     (tid : Nat) (s : String) (m : core_runM thread_state)
     {th' : thread_state} {dst : driver_state}
     (hm : m dst.core_run_state0 = Result (Defined th', dst.core_run_state0)) :
@@ -577,14 +599,14 @@ theorem advance_withrs_eval (tds : Fmap sym (CerbLocation.Loc × tag_definition)
            with core_state0 := update_thread_state tid th' dst.core_state0 }) := by
   unfold advance_step
   dsimp only
-  refine (runOne_bind_active (z := ()) (s' := dst) (by rfl)).trans ?_
-  refine (runOne_bind_active (z := th') (s' := dst)
-    (runOne_liftCore_run_of_eq hm)).trans ?_
-  refine (runOne_bind_active (z := ()) (by rfl)).trans ?_
+  refine (runOne_bind_active (hfuel := by omega) (z := ()) (s' := dst) (by rfl)).trans ?_
+  refine (runOne_bind_active (hfuel := by omega) (z := th') (s' := dst)
+    (runOne_liftCore_run_of_eq (hfuel := by omega) hm)).trans ?_
+  refine (runOne_bind_active (hfuel := by omega) (z := ()) (by rfl)).trans ?_
   rfl
 
 /-- `advance_step`'s with-runstate arm, TAU kind (`TSK_Misc`). -/
-theorem advance_withrs_tau (tds : Fmap sym (CerbLocation.Loc × tag_definition))
+theorem advance_withrs_tau (hfuel : 0 < LemFuel.fuel) (tds : Fmap sym (CerbLocation.Loc × tag_definition))
     (tid : Nat) (s : String) (m : core_runM thread_state)
     {th' : thread_state} {dst : driver_state}
     (hm : m dst.core_run_state0 = Result (Defined th', dst.core_run_state0)) :
@@ -594,15 +616,15 @@ theorem advance_withrs_tau (tds : Fmap sym (CerbLocation.Loc × tag_definition))
            with core_state0 := update_thread_state tid th' dst.core_state0 }) := by
   unfold advance_step
   dsimp only
-  refine (runOne_bind_active (z := ()) (s' := dst) (by rfl)).trans ?_
-  refine (runOne_bind_active (z := th') (s' := dst)
-    (runOne_liftCore_run_of_eq hm)).trans ?_
-  refine (runOne_bind_active (z := ()) (by rfl)).trans ?_
+  refine (runOne_bind_active (hfuel := by omega) (z := ()) (s' := dst) (by rfl)).trans ?_
+  refine (runOne_bind_active (hfuel := by omega) (z := th') (s' := dst)
+    (runOne_liftCore_run_of_eq (hfuel := by omega) hm)).trans ?_
+  refine (runOne_bind_active (hfuel := by omega) (z := ()) (by rfl)).trans ?_
   rfl
 
 /-- E5: `advance_step`'s with-runstate arm, TAU kind, RUN STATE WRITTEN
     (the negative-action round draws the supplies). -/
-theorem advance_withrs_tau_rs (tds : Fmap sym (CerbLocation.Loc × tag_definition))
+theorem advance_withrs_tau_rs (hfuel : 0 < LemFuel.fuel) (tds : Fmap sym (CerbLocation.Loc × tag_definition))
     (tid : Nat) (s : String) (m : core_runM thread_state)
     {th' : thread_state} {rs' : core_run_state} {dst : driver_state}
     (hm : m dst.core_run_state0 = Result (Defined th', rs')) :
@@ -612,33 +634,33 @@ theorem advance_withrs_tau_rs (tds : Fmap sym (CerbLocation.Loc × tag_definitio
            with core_state0 := update_thread_state tid th' dst.core_state0 }) := by
   unfold advance_step
   dsimp only
-  refine (runOne_bind_active (z := ()) (s' := dst) (by rfl)).trans ?_
-  refine (runOne_bind_active (z := th') (s' := { dst with core_run_state0 := rs' }) ?_).trans ?_
+  refine (runOne_bind_active (hfuel := by omega) (z := ()) (s' := dst) (by rfl)).trans ?_
+  refine (runOne_bind_active (hfuel := by omega) (z := th') (s' := { dst with core_run_state0 := rs' }) ?_).trans ?_
   · unfold liftCore_run
-    refine (runOne_bind_active (z := dst) (by rfl)).trans ?_
+    refine (runOne_bind_active (hfuel := by omega) (z := dst) (by rfl)).trans ?_
     rw [show stExceptUndef_run m dst.core_run_state0 = Result (Defined th', rs') from hm]
-    refine (runOne_bind_active (z := ()) (s' := { dst with core_run_state0 := rs' })
+    refine (runOne_bind_active (hfuel := by omega) (z := ()) (s' := { dst with core_run_state0 := rs' })
       (by rfl)).trans ?_
     rfl
-  refine (runOne_bind_active (z := ()) (by rfl)).trans ?_
+  refine (runOne_bind_active (hfuel := by omega) (z := ()) (by rfl)).trans ?_
   rfl
 
 /-- `liftCore_run` (Driver.lean:245) of a with-runstate monad that
     RAISES: the exception becomes the driver's kill `Other (DErr_core_run
     err)`, the state untouched. -/
-theorem runOne_liftCore_run_exception {a : Type}
+theorem runOne_liftCore_run_exception (hfuel : 0 < LemFuel.fuel) {a : Type}
     {m : core_run_state → exceptM ((t0 a) × core_run_state) core_run_cause}
     {dst : driver_state} {err : core_run_cause}
     (hm : m dst.core_run_state0 = Exception err) :
     runOne (liftCore_run m) dst = (NDkilled (Other (DErr_core_run err)), dst) := by
   unfold liftCore_run
-  refine (runOne_bind_active (z := dst) (by rfl)).trans ?_
+  refine (runOne_bind_active (hfuel := by omega) (z := dst) (by rfl)).trans ?_
   rw [show stExceptUndef_run m dst.core_run_state0 = Exception err from hm]
   rfl
 
 /-- `advance_step`'s with-runstate arm, EVAL kind, KILLED: the monad
     raises, the driver kills. -/
-theorem advance_withrs_killed_eval (tds : Fmap sym (CerbLocation.Loc × tag_definition))
+theorem advance_withrs_killed_eval (hfuel : 0 < LemFuel.fuel) (tds : Fmap sym (CerbLocation.Loc × tag_definition))
     (tid : Nat) (s : String) (m : core_runM thread_state)
     {dst : driver_state} {err : core_run_cause}
     (hm : m dst.core_run_state0 = Exception err) :
@@ -646,11 +668,11 @@ theorem advance_withrs_killed_eval (tds : Fmap sym (CerbLocation.Loc × tag_defi
       (NDkilled (Other (DErr_core_run err)), dst) := by
   unfold advance_step
   dsimp only
-  refine (runOne_bind_active (z := ()) (s' := dst) (by rfl)).trans ?_
-  exact runOne_bind_killed (runOne_liftCore_run_exception hm)
+  refine (runOne_bind_active (hfuel := by omega) (z := ()) (s' := dst) (by rfl)).trans ?_
+  exact runOne_bind_killed (hfuel := by omega) (runOne_liftCore_run_exception (hfuel := by omega) hm)
 
 /-- `advance_step`'s with-runstate arm, TAU kind (`TSK_Misc`), KILLED. -/
-theorem advance_withrs_killed_tau (tds : Fmap sym (CerbLocation.Loc × tag_definition))
+theorem advance_withrs_killed_tau (hfuel : 0 < LemFuel.fuel) (tds : Fmap sym (CerbLocation.Loc × tag_definition))
     (tid : Nat) (s : String) (m : core_runM thread_state)
     {dst : driver_state} {err : core_run_cause}
     (hm : m dst.core_run_state0 = Exception err) :
@@ -658,8 +680,8 @@ theorem advance_withrs_killed_tau (tds : Fmap sym (CerbLocation.Loc × tag_defin
       (NDkilled (Other (DErr_core_run err)), dst) := by
   unfold advance_step
   dsimp only
-  refine (runOne_bind_active (z := ()) (s' := dst) (by rfl)).trans ?_
-  exact runOne_bind_killed (runOne_liftCore_run_exception hm)
+  refine (runOne_bind_active (hfuel := by omega) (z := ()) (s' := dst) (by rfl)).trans ?_
+  exact runOne_bind_killed (hfuel := by omega) (runOne_liftCore_run_exception (hfuel := by omega) hm)
 
 /-- E2: the shipped driver's kill reason for a classified failure
     (`liftCore_run`, Driver.lean:245): a raise is `Other (DErr_core_run
@@ -670,56 +692,56 @@ def EvalFail.reason : EvalFail → kill_reason driver_error
 
 /-- `liftCore_run` (Driver.lean:245) of a with-runstate monad that FAILS
     (raises or undefs): the driver kills with the failure's reason. -/
-theorem runOne_liftCore_run_fail {a : Type}
+theorem runOne_liftCore_run_fail (hfuel : 0 < LemFuel.fuel) {a : Type}
     {m : core_run_state → exceptM ((t0 a) × core_run_state) core_run_cause}
     {dst : driver_state} {fl : EvalFail}
     (hm : m dst.core_run_state0 = fl.run a core_run_state dst.core_run_state0) :
     ∃ dst', runOne (liftCore_run m) dst = (NDkilled fl.reason, dst') := by
   cases fl with
-  | kill err => exact ⟨dst, runOne_liftCore_run_exception hm⟩
+  | kill err => exact ⟨dst, runOne_liftCore_run_exception (hfuel := by omega) hm⟩
   | undef l u =>
     refine ⟨{ dst with core_run_state0 := dst.core_run_state0 }, ?_⟩
     unfold liftCore_run
-    refine (runOne_bind_active (z := dst) (by rfl)).trans ?_
+    refine (runOne_bind_active (hfuel := by omega) (z := dst) (by rfl)).trans ?_
     rw [show stExceptUndef_run m dst.core_run_state0 =
       Result (Undef l u, dst.core_run_state0) from hm]
-    refine (runOne_bind_active (z := ()) (by rfl)).trans ?_
+    refine (runOne_bind_active (hfuel := by omega) (z := ()) (by rfl)).trans ?_
     rfl
 
 /-- `advance_step`'s with-runstate arm, EVAL kind, FAILED: the monad
     raises or undefs, the driver kills with the failure's reason. -/
-theorem advance_withrs_failed_eval (tds : Fmap sym (CerbLocation.Loc × tag_definition))
+theorem advance_withrs_failed_eval (hfuel : 0 < LemFuel.fuel) (tds : Fmap sym (CerbLocation.Loc × tag_definition))
     (tid : Nat) (s : String) (m : core_runM thread_state)
     {dst : driver_state} {fl : EvalFail}
     (hm : m dst.core_run_state0 = fl.run thread_state core_run_state dst.core_run_state0) :
     ∃ dst', runOne (advance_step tds tid (Step_with_runstate2 (RSK_eval s) m)) dst =
       (NDkilled fl.reason, dst') := by
-  obtain ⟨dst', h⟩ := runOne_liftCore_run_fail hm
+  obtain ⟨dst', h⟩ := runOne_liftCore_run_fail (hfuel := by omega) hm
   refine ⟨dst', ?_⟩
   unfold advance_step
   dsimp only
-  refine (runOne_bind_active (z := ()) (s' := dst) (by rfl)).trans ?_
-  exact runOne_bind_killed h
+  refine (runOne_bind_active (hfuel := by omega) (z := ()) (s' := dst) (by rfl)).trans ?_
+  exact runOne_bind_killed (hfuel := by omega) h
 
 /-- `advance_step`'s with-runstate arm, TAU kind (`TSK_Misc`), FAILED. -/
-theorem advance_withrs_failed_tau (tds : Fmap sym (CerbLocation.Loc × tag_definition))
+theorem advance_withrs_failed_tau (hfuel : 0 < LemFuel.fuel) (tds : Fmap sym (CerbLocation.Loc × tag_definition))
     (tid : Nat) (s : String) (m : core_runM thread_state)
     {dst : driver_state} {fl : EvalFail}
     (hm : m dst.core_run_state0 = fl.run thread_state core_run_state dst.core_run_state0) :
     ∃ dst', runOne (advance_step tds tid (Step_with_runstate2 (RSK_tau s TSK_Misc) m)) dst =
       (NDkilled fl.reason, dst') := by
-  obtain ⟨dst', h⟩ := runOne_liftCore_run_fail hm
+  obtain ⟨dst', h⟩ := runOne_liftCore_run_fail (hfuel := by omega) hm
   refine ⟨dst', ?_⟩
   unfold advance_step
   dsimp only
-  refine (runOne_bind_active (z := ()) (s' := dst) (by rfl)).trans ?_
-  exact runOne_bind_killed h
+  refine (runOne_bind_active (hfuel := by omega) (z := ()) (s' := dst) (by rfl)).trans ?_
+  exact runOne_bind_killed (hfuel := by omega) h
 
 /-- `advance_step`'s action arm (sequential: the request is drawn from
     the request monad, the action id from `fresh_action_id'`, and
     `action_request_sequential2` discharges it — Driver.lean:273-285);
     the discharge outcome is the hypothesis. -/
-theorem advance_action {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
+theorem advance_action (hfuel : 0 < LemFuel.fuel) {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
     {tid : Nat} {s : String} {loc : CerbLocation.Loc}
     {req : action_request2 thread_state} {dst dst' : driver_state}
     (hars : runOne (action_request_sequential2 tds loc tid
@@ -731,22 +753,22 @@ theorem advance_action {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
         (stExceptUndef_return req))) dst = (NDactive NOWAKEUP, dst') := by
   unfold advance_step
   dsimp only
-  refine (runOne_bind_active (z := ()) (s' := dst') ?_).trans (by rfl)
-  refine (runOne_bind_active (z := req) (s' := dst)
-    (runOne_liftCore_run_return req dst)).trans ?_
+  refine (runOne_bind_active (hfuel := by omega) (z := ()) (s' := dst') ?_).trans (by rfl)
+  refine (runOne_bind_active (hfuel := by omega) (z := req) (s' := dst)
+    (runOne_liftCore_run_return (hfuel := by omega) req dst)).trans ?_
   unfold perform_action_request2
   dsimp only
-  refine (runOne_bind_active
+  refine (runOne_bind_active (hfuel := by omega)
     (z := dst.core_run_state0.aid_supply)
     (s' := { dst with core_run_state0 :=
         { dst.core_run_state0 with aid_supply :=
             dst.core_run_state0.aid_supply + 1 } })
-    (runOne_liftCore_run_aid dst)).trans ?_
+    (runOne_liftCore_run_aid (hfuel := by omega) dst)).trans ?_
   exact hars
 
 /-- The action arm, KILLED discharge: the kill propagates through the
     remaining bind (`runOne_bind_killed`). -/
-theorem advance_action_killed {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
+theorem advance_action_killed (hfuel : 0 < LemFuel.fuel) {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
     {tid : Nat} {s : String} {loc : CerbLocation.Loc}
     {req : action_request2 thread_state} {dst dst' : driver_state}
     {r : kill_reason driver_error}
@@ -759,22 +781,22 @@ theorem advance_action_killed {tds : Fmap sym (CerbLocation.Loc × tag_definitio
         (stExceptUndef_return req))) dst = (NDkilled r, dst') := by
   unfold advance_step
   dsimp only
-  refine runOne_bind_killed (r := r) (s' := dst') ?_
-  refine (runOne_bind_active (z := req) (s' := dst)
-    (runOne_liftCore_run_return req dst)).trans ?_
+  refine runOne_bind_killed (hfuel := by omega) (r := r) (s' := dst') ?_
+  refine (runOne_bind_active (hfuel := by omega) (z := req) (s' := dst)
+    (runOne_liftCore_run_return (hfuel := by omega) req dst)).trans ?_
   unfold perform_action_request2
   dsimp only
-  refine (runOne_bind_active
+  refine (runOne_bind_active (hfuel := by omega)
     (z := dst.core_run_state0.aid_supply)
     (s' := { dst with core_run_state0 :=
         { dst.core_run_state0 with aid_supply :=
             dst.core_run_state0.aid_supply + 1 } })
-    (runOne_liftCore_run_aid dst)).trans ?_
+    (runOne_liftCore_run_aid (hfuel := by omega) dst)).trans ?_
   exact hars
 
 /-- `advance_step`'s memop arm (sequential: `perform_memop_request2`,
     Driver.lean:288; no aid draw, no counter tick). -/
-theorem advance_memop {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
+theorem advance_memop (hfuel : 0 < LemFuel.fuel) {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
     {tid : Nat} {loc : CerbLocation.Loc} {mop : memop} {cvals : List value}
     {k : value → thread_state} {dst dst' : driver_state}
     (hars : runOne (perform_memop_request2 tds loc mop cvals tid k) dst =
@@ -783,7 +805,7 @@ theorem advance_memop {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
       (NDactive NOWAKEUP, dst') := by
   unfold advance_step
   dsimp only
-  refine (runOne_bind_active (z := ()) (s' := dst') ?_).trans (by rfl)
+  refine (runOne_bind_active (hfuel := by omega) (z := ()) (s' := dst') ?_).trans (by rfl)
   rw [if_neg (fun h => Bool.noConfusion h)]
   exact hars
 
@@ -820,8 +842,23 @@ theorem loadM_layer (tds : CerbTags.TagDefsMap) (loc : CerbLocation.Loc) (ty : c
       | exact Or.inr ⟨_, _, rfl⟩
       | split)
 
-/-- `allocateObject`'s one-layer result is active or killed (the
-    out-of-memory kill, CerbMem.lean:1513). -/
+omit [LemFuel] in
+/-- The allocator's one-layer kernel result. At zero alignment the
+    engine's `panic!` reduces to its inhabited active/default pair;
+    this equation makes no claim about runtime behavior (KOI A5). -/
+theorem allocator_layer (sz align : Int) (σ : Mem) :
+    (∃ p σ', runOne (CerbMem.allocator sz align) σ = (NDactive p, σ')) ∨
+    (∃ r σ', runOne (CerbMem.allocator sz align) σ = (NDkilled r, σ')) := by
+  unfold CerbMem.allocator runOne
+  dsimp only
+  repeat' (first
+    | exact Or.inl ⟨_, _, rfl⟩
+    | exact Or.inr ⟨_, _, rfl⟩
+    | split)
+
+/-- `allocateObject`'s one-layer kernel result, at any ambient fuel.
+    A requested address reaches `panic!`, whose kernel default is a
+    killed computation at default memory; runtime panic is KOI A5. -/
 theorem allocateObject_layer (tds : CerbTags.TagDefsMap) (tid : Nat) (pref : prefix0)
     (align : CerbMem.IntegerValue) (ty : ctype) (reqAddr : Option Int)
     (initOpt : Option CerbMem.MemValue) (σ : Mem) :
@@ -829,14 +866,18 @@ theorem allocateObject_layer (tds : CerbTags.TagDefsMap) (tid : Nat) (pref : pre
       (NDactive pv, σ')) ∨
     (∃ r σ', runOne (CerbMem.allocateObject tds tid pref align ty reqAddr initOpt) σ =
       (NDkilled r, σ')) := by
-  unfold CerbMem.allocateObject runOne
-  rcases align with ⟨_, alignN⟩
-  dsimp only
-  repeat' (first
-    | exact Or.inl ⟨_, _, rfl⟩
-    | exact Or.inr ⟨_, _, rfl⟩
-    | split)
+  rcases align with ⟨prov, alignN⟩
+  cases reqAddr with
+  | some addr => exact .inr ⟨_, _, rfl⟩
+  | none =>
+    by_cases hzero : LemFuel.fuel = 0
+    · exact .inr ⟨_, _, runOne_bind_zero hzero _ _ _⟩
+    · rcases allocator_layer (CerbMem.sizeofCtype tds ty) alignN σ with
+        ⟨p, σ', h⟩ | ⟨r, σ', h⟩
+      · exact .inl ⟨_, _, (runOne_bind_active (hfuel := by omega) h).trans rfl⟩
+      · exact .inr ⟨_, _, runOne_bind_killed (hfuel := by omega) h⟩
 
+omit [LemFuel] in
 /-- `killM`'s one-layer result is active or killed (kill/free arc K2;
     CerbMem.lean:1555-1580 — deterministic, no `msum`). -/
 theorem killM_layer (loc : CerbLocation.Loc) (isDyn : Bool) (pv : CerbMem.PointerValue)
@@ -852,74 +893,92 @@ theorem killM_layer (loc : CerbLocation.Loc) (isDyn : Bool) (pv : CerbMem.Pointe
       | exact Or.inr ⟨_, _, rfl⟩
       | split)
 
-/-- `allocateRegion`'s one-layer result is active or killed (the
-    out-of-memory kill, CerbMem.lean:1541; kill/free arc K3). -/
+/-- `allocateRegion`'s one-layer kernel result, including ambient
+    exhaustion. The allocator's zero-alignment panic is KOI A5. -/
 theorem allocateRegion_layer (tid : Nat) (pref : prefix0)
     (align size : CerbMem.IntegerValue) (σ : Mem) :
     (∃ pv σ', runOne (CerbMem.allocateRegion tid pref align size) σ = (NDactive pv, σ')) ∨
     (∃ r σ', runOne (CerbMem.allocateRegion tid pref align size) σ = (NDkilled r, σ')) := by
-  unfold CerbMem.allocateRegion runOne
-  rcases align with ⟨_, alignN⟩
-  rcases size with ⟨_, sizeN⟩
-  dsimp only
-  repeat' (first
-    | exact Or.inl ⟨_, _, rfl⟩
-    | exact Or.inr ⟨_, _, rfl⟩
-    | split)
+  rcases align with ⟨prov, alignN⟩
+  rcases size with ⟨prov', sizeN⟩
+  by_cases hzero : LemFuel.fuel = 0
+  · exact .inr ⟨_, _, runOne_bind_zero hzero _ _ _⟩
+  · rcases allocator_layer sizeN alignN σ with ⟨p, σ', h⟩ | ⟨r, σ', h⟩
+    · exact .inl ⟨_, _, (runOne_bind_active (hfuel := by omega) h).trans rfl⟩
+    · exact .inr ⟨_, _, runOne_bind_killed (hfuel := by omega) h⟩
 
-/-- THE ALLOC REFUSAL ROW (kill/free arc K3): `allocateRegion`'s ONLY
-    killed outcome is the out-of-memory kill `Other (MerrOther "out of
-    memory")` at `alignedAddr == 0` (CerbMem.lean:1541 — no `failReason`,
-    no UB class: a plain `Other`), and it leaves the state untouched. -/
-theorem allocateRegion_killed_inv (tid : Nat) (pref : prefix0)
+omit [LemFuel] in
+/-- Every allocator kill is the engine's out-of-memory error and
+    preserves state. Zero alignment is a kernel-active panic default,
+    excluded by the killed premise; it is not a runtime success. -/
+theorem allocator_killed_inv (sz align : Int) (σ : Mem)
+    {r : kill_reason mem_error} {σ' : Mem}
+    (h : runOne (CerbMem.allocator sz align) σ = (NDkilled r, σ')) :
+    σ' = σ ∧ r = kill_reason.Other
+      (MerrOther "Concrete.allocator: failed (out of memory)") := by
+  unfold CerbMem.allocator runOne at h
+  dsimp only at h
+  repeat' split at h
+  all_goals
+    obtain ⟨h1, h2⟩ := Prod.mk.inj h
+    cases h1
+    all_goals exact ⟨h2.symm, rfl⟩
+
+/-- At positive ambient fuel a region allocation's only killed outcome
+    is the allocator's out-of-memory error, with unchanged memory. -/
+theorem allocateRegion_killed_inv (hfuel : 0 < LemFuel.fuel) (tid : Nat) (pref : prefix0)
     (align size : CerbMem.IntegerValue) (σ : Mem) {r : kill_reason mem_error} {σ' : Mem}
     (h : runOne (CerbMem.allocateRegion tid pref align size) σ = (NDkilled r, σ')) :
-    σ' = σ ∧ r = kill_reason.Other (MerrOther "out of memory") := by
-  unfold CerbMem.allocateRegion runOne at h
-  rcases align with ⟨_, alignN⟩
-  rcases size with ⟨_, sizeN⟩
-  dsimp only at h
-  split at h
-  · obtain ⟨h1, h2⟩ := Prod.mk.inj h
+    σ' = σ ∧ r = kill_reason.Other
+      (MerrOther "Concrete.allocator: failed (out of memory)") := by
+  rcases align with ⟨prov, alignN⟩
+  rcases size with ⟨prov', sizeN⟩
+  rcases allocator_layer sizeN alignN σ with ⟨p, σa, ha⟩ | ⟨ra, σa, ha⟩
+  · obtain ⟨pv, σb, heq⟩ : ∃ pv σb,
+        runOne (CerbMem.allocateRegion tid pref (.IV prov alignN) (.IV prov' sizeN)) σ =
+          (NDactive pv, σb) :=
+      ⟨_, _, (runOne_bind_active (hfuel := hfuel) ha).trans rfl⟩
+    rw [heq] at h
+    cases (Prod.mk.inj h).1
+  · have heq : runOne (CerbMem.allocateRegion tid pref (.IV prov alignN) (.IV prov' sizeN)) σ =
+        (NDkilled ra, σa) := runOne_bind_killed (hfuel := hfuel) ha
+    rw [heq] at h
+    obtain ⟨h1, h2⟩ := Prod.mk.inj h
     cases h1
-    exact ⟨h2.symm, rfl⟩
-  · cases (Prod.mk.inj h).1
+    subst h2
+    exact allocator_killed_inv sizeN alignN σ ha
 
-/-- THE KILL REFUSAL ROWS (kill/free arc K2): every killed outcome of
-    `killM` leaves the state untouched and carries one of exactly three
-    engine reasons, at the request's own location — `failReason`
-    (CerbMem.lean:1439) through `undefinedFromMem_error`
-    (Mem_common.lean:392): `Free_non_matching ↦ UB179a` (a null pointer
-    on the static path, a function pointer, no record at the id, a
-    non-dynamic origin on the dynamic path, a `Prov_none`/`Prov_device`/
-    `Prov_symbolic` pointer), `Free_dead_allocation ↦ UB179b` (a dead
-    id), and the NON-UB `Free_out_of_bound ↦ Other` (a pointer not at
-    the allocation's base). -/
+omit [LemFuel] in
+/-- Every actual kill preserves memory and has one of these seven
+    engine reasons. Null and device pointers succeed with the pinned
+    switches; static dead-allocation panic has an active kernel default
+    (KOI A5), so it does not satisfy the killed premise. -/
 theorem killM_killed_inv (loc : CerbLocation.Loc) (isDyn : Bool) (pv : CerbMem.PointerValue)
     (σ : Mem) {r : kill_reason mem_error} {σ' : Mem}
     (h : runOne (CerbMem.killM loc isDyn pv) σ = (NDkilled r, σ')) :
     σ' = σ ∧
     (r = Undef0 loc [UB179a_non_matching_allocation_free] ∨
      r = Undef0 loc [UB179b_dead_allocation_free] ∨
-     r = kill_reason.Other (MerrUndefinedFree Free_out_of_bound)) := by
+     r = Undef0 loc [UB009_outside_lifetime] ∨
+     r = kill_reason.Other (MerrUndefinedFree Free_out_of_bound) ∨
+     r = kill_reason.Other (MerrOther "attempted to kill with a function pointer") ∨
+     r = kill_reason.Other (MerrOther "attempted to kill with a pointer lacking a provenance") ∨
+     r = kill_reason.Other (MerrOther "killM: Prov_symbolic in concrete model")) := by
   unfold CerbMem.killM runOne at h
   dsimp only at h
+  simp only [CerbGlobal.has_switch_eq, Bool.false_eq_true, if_false] at h
   rcases pv with ⟨prov, base⟩
   cases prov <;> cases base <;> dsimp only at h <;>
     repeat' split at h
-  -- the active arms are closed by constructor clash; each killed arm
-  -- substitutes its reason and is one of the three rows by `rfl`
   all_goals
     obtain ⟨h1, h2⟩ := Prod.mk.inj h
     cases h1
-    all_goals exact ⟨h2.symm, by first
-      | exact .inl rfl
-      | exact .inr (.inl rfl)
-      | exact .inr (.inr rfl)⟩
+    all_goals exact ⟨h2.symm, by simp [CerbMem.failReason, undefinedFromMem_error]⟩
 
 /-! `applyMemM_eq_ndProj` (`applyMemM` is the active projection of the
 one-layer result) lives in Heap.lean since K1. -/
 
+omit [LemFuel] in
 /-- A one-layer memory operation that `applyMemM` refuses is KILLED. -/
 theorem applyMemM_none_killed {α : Type} {m : CerbMem.memM α} {σ : Mem}
     (hlayer : (∃ z σ', runOne m σ = (NDactive z, σ')) ∨
@@ -933,7 +992,7 @@ theorem applyMemM_none_killed {α : Type} {m : CerbMem.memM α} {σ : Mem}
 /-- `liftMem` (Driver.lean:218) of a KILLED one-layer memM computation:
     the kill is lifted by `liftAction`'s `DErr_memory` injection on the
     `Other` arm (Nondeterminism.lean:306), the memory written back. -/
-theorem runOne_liftMem_killed {a : Type}
+theorem runOne_liftMem_killed (hfuel : 2 ≤ LemFuel.fuel) {a : Type}
     {m : ndM a String mem_error (mem_constraint CerbMem.IntegerValue) CerbMem.MemState}
     {dst : driver_state} {r : kill_reason mem_error} {σ' : CerbMem.MemState}
     (h : runOne m dst.layout_state = (NDkilled r, σ')) :
@@ -945,18 +1004,19 @@ theorem runOne_liftMem_killed {a : Type}
        { dst with layout_state := σ' }) := by
   rcases m with ⟨g⟩
   dsimp only [runOne] at h
-  show runOne (liftND_lemFuel lemDefaultFuel _ _ _ _ (ND g)) dst = _
-  rw [show lemDefaultFuel = Nat.succ 999999 from rfl]
+  obtain ⟨fuel, hF⟩ : ∃ fuel, LemFuel.fuel = fuel + 2 :=
+    ⟨LemFuel.fuel - 2, by omega⟩
+  show runOne (liftND_lemFuel LemFuel.fuel _ _ _ _ (ND g)) dst = _
+  rw [hF]
   unfold liftND_lemFuel
   dsimp only [runOne]
   rw [h]
-  rw [show (999999 : Nat) = Nat.succ 999998 from rfl]
   unfold liftAction_lemFuel
   cases r <;> rfl
 
 /-- StoreRequest2 discharge, KILLED (Driver.lean:273): the kill is the
     lifted `storeM` kill at the request's own location. -/
-theorem ars_store_killed {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
+theorem ars_store_killed (hfuel : 2 ≤ LemFuel.fuel) {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
     {loc : CerbLocation.Loc} {mo : memory_order}
     {ty : ctype} {lk : Bool} {pv : CerbMem.PointerValue} {mv : CerbMem.MemValue}
     {k : Nat → CerbMem.Footprint → thread_state} {tid aid : Nat}
@@ -971,10 +1031,10 @@ theorem ars_store_killed {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
        { dst with layout_state := σ' }) := by
   unfold action_request_sequential2
   dsimp only
-  exact runOne_bind_killed (runOne_liftMem_killed h)
+  exact runOne_bind_killed (hfuel := by omega) (runOne_liftMem_killed (hfuel := by omega) h)
 
 /-- LoadRequest2 discharge, KILLED. -/
-theorem ars_load_killed {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
+theorem ars_load_killed (hfuel : 2 ≤ LemFuel.fuel) {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
     {loc : CerbLocation.Loc} {mo : memory_order}
     {ty : ctype} {pv : CerbMem.PointerValue}
     {k : Nat → CerbMem.Footprint → CerbMem.MemValue → thread_state}
@@ -989,11 +1049,11 @@ theorem ars_load_killed {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
        { dst with layout_state := σ' }) := by
   unfold action_request_sequential2
   dsimp only
-  exact runOne_bind_killed (runOne_liftMem_killed h)
+  exact runOne_bind_killed (hfuel := by omega) (runOne_liftMem_killed (hfuel := by omega) h)
 
-/-- CreateRequest2 discharge, KILLED (the out-of-memory kill;
+/-- CreateRequest2 discharge, KILLED (including allocator exhaustion;
     `allocateObject` discards the thread id, CerbMem.lean:1504). -/
-theorem ars_create_killed {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
+theorem ars_create_killed (hfuel : 2 ≤ LemFuel.fuel) {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
     {loc : CerbLocation.Loc} {pref : prefix0}
     {align : CerbMem.IntegerValue} {ty : ctype} {reqAddr : Option Int}
     {initOpt : Option CerbMem.MemValue}
@@ -1010,12 +1070,12 @@ theorem ars_create_killed {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
        { dst with layout_state := σ' }) := by
   unfold action_request_sequential2
   dsimp only
-  exact runOne_bind_killed (runOne_liftMem_killed h)
+  exact runOne_bind_killed (hfuel := by omega) (runOne_liftMem_killed (hfuel := by omega) h)
 
 /-- KillRequest2 discharge, KILLED (kill/free arc K2; Driver.lean:273):
     the kill is the lifted `killM` kill at the request's own location
     (the reasons: `killM_killed_inv`). -/
-theorem ars_kill_killed {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
+theorem ars_kill_killed (hfuel : 2 ≤ LemFuel.fuel) {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
     {loc : CerbLocation.Loc} {isDyn : Bool} {pv : CerbMem.PointerValue}
     {k : Nat → thread_state} {tid aid : Nat} {dst : driver_state}
     {r : kill_reason mem_error} {σ' : Mem}
@@ -1028,12 +1088,12 @@ theorem ars_kill_killed {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
        { dst with layout_state := σ' }) := by
   unfold action_request_sequential2
   dsimp only
-  exact runOne_bind_killed (runOne_liftMem_killed h)
+  exact runOne_bind_killed (hfuel := by omega) (runOne_liftMem_killed (hfuel := by omega) h)
 
 /-- AllocRequest2 discharge, KILLED (kill/free arc K3; Driver.lean:273):
-    the out-of-memory kill, lifted (`allocateRegion` discards the thread
+    the actual memory kill, lifted (`allocateRegion` discards the thread
     id, CerbMem.lean:1533). -/
-theorem ars_alloc_killed {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
+theorem ars_alloc_killed (hfuel : 2 ≤ LemFuel.fuel) {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
     {loc : CerbLocation.Loc} {pref : prefix0}
     {align size : CerbMem.IntegerValue}
     {k : Nat → CerbMem.PointerValue → thread_state}
@@ -1049,10 +1109,11 @@ theorem ars_alloc_killed {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
        { dst with layout_state := σ' }) := by
   unfold action_request_sequential2
   dsimp only
-  exact runOne_bind_killed (runOne_liftMem_killed h)
+  exact runOne_bind_killed (hfuel := by omega) (runOne_liftMem_killed (hfuel := by omega) h)
 
 /-! ## The round's derived readings -/
 
+omit [LemFuel] in
 /-- The denotation is injective on the chain (`Stack_cons2` is a
     constructor). -/
 theorem Ctl.toStack_inj {c c' : Ctl} (h : c.toStack = c'.toStack) : c.κ = c'.κ := by
@@ -1073,6 +1134,7 @@ theorem Ctl.toStack_inj {c c' : Ctl} (h : c.toStack = c'.toStack) : c.κ = c'.κ
       injection h with h1 h2 h3
       rw [Prod.ext h1 h2, ih κ' h3]
 
+omit [LemFuel] in
 /-- The thread literal is injective in (expression, env, control) up to
     the control's run-state supplies (E1: `Ctl.sup` is not a thread
     field — it is tied to the run state by `Embeds`). -/
@@ -1094,7 +1156,7 @@ theorem MachineCtx.thread_inj {M : MachineCtx} {e e' : CoreExpr} {ρ ρ' : EnvSt
     `drive_nonmemory_steps_aux2` at any fuel `fl` and accumulator
     continues at the successor state — the `loop_step_frag` shape,
     at the context's own tagDefs and thread id. -/
-theorem CerberusRound.loop_step {M : MachineCtx} {c c' : Config}
+theorem CerberusRound.loop_step (hfuel : 0 < LemFuel.fuel) {M : MachineCtx} {c c' : Config}
     (h : CerberusRound M c c') {dst : driver_state} (hemb : M.Embeds dst c)
     (fl : Nat) (acc : Fmap thread_id (List core_step2)) :
     ∃ (rs' : core_run_state) (tr : List trace_event) (ctr : Nat),
@@ -1106,12 +1168,12 @@ theorem CerberusRound.loop_step {M : MachineCtx} {c c' : Config}
               layout_state := c'.2.2.2,
               core_run_state0 := rs', trace := tr, dr_step_counter := ctr } := by
   obtain ⟨s, post, hsteps, hca, rs', tr, ctr, hlab, -, -, hadv⟩ := h dst hemb
-  exact ⟨rs', tr, ctr, hlab, loop_step_of_advance fl acc hemb.thread hsteps hca hadv⟩
+  exact ⟨rs', tr, ctr, hlab, loop_step_of_advance (hfuel := by omega) fl acc hemb.thread hsteps hca hadv⟩
 
 /-- THE RUNNER-LEVEL READING: the shipped exhaustive runner
     (`CerbND.runND`, CerbND.lean:136) on the advance delivers exactly
     one `Active` execution. -/
-theorem CerberusRound.runND {M : MachineCtx} {c c' : Config}
+theorem CerberusRound.runND (hfuel : 0 < LemFuel.fuel) {M : MachineCtx} {c c' : Config}
     (h : CerberusRound M c c') {dst : driver_state} (hemb : M.Embeds dst c) :
     ∃ (s : core_step2) (post : List core_step2),
       step_ctx M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid
@@ -1124,7 +1186,7 @@ theorem CerberusRound.runND {M : MachineCtx} {c c' : Config}
               layout_state := c'.2.2.2,
               core_run_state0 := rs', trace := tr, dr_step_counter := ctr })] := by
   obtain ⟨s, post, hsteps, -, rs', tr, ctr, -, -, -, hadv⟩ := h dst hemb
-  exact ⟨s, post, hsteps, rs', tr, ctr, runND_active hadv⟩
+  exact ⟨s, post, hsteps, rs', tr, ctr, runND_active (hfuel := by omega) hadv⟩
 
 /-- E1 proof device: `loc_split` also normalizing a hypothesis stated at
     `th.current_loc` (the KILL bridges' classifier premise). -/
@@ -1146,8 +1208,8 @@ theorem Step.CallOf.not_val {M : MachineCtx} {w : SpikeValA} {fr : context → c
 /-! ## THE CERTIFICATION: mirror step ⇒ shipped round -/
 
 /-- THE UNIFIED STEP-MATCH OVER THE SHIPPED DRIVER: wherever the mirror
-    steps at a `Frag` configuration (cons-shaped environment, `esize e ≤
-    lemDefaultFuel`), the shipped driver's round at every embedding
+    steps at a `Frag` configuration with a cons-shaped environment and
+    at least two ambient fuel units, the shipped driver's round at every embedding
     state is exactly that step — one case per redex root, each
     discharged by the engine equation of the redex (`step_ctx_*`,
     Soundness.lean / DriverCollapse.lean) and the matching
@@ -1158,13 +1220,12 @@ theorem Step.CallOf.not_val {M : MachineCtx} {w : SpikeValA} {fr : context → c
     this theorem; the module header, "WHAT CONSUMES WHAT"). E1: the
     successor thread is the mirror's at the successor control — the
     general arm's location write is `Ctl.upd` (`locUpdTh_thread`); the
-    run-state supplies are untouched by every round (the `Embeds` ties
+    run-state supplies track the successor control (the `Embeds` ties
     are carried to the successor control's `sup`). -/
-theorem engine_step_matchU {M : MachineCtx}
+theorem engine_step_matchU (hfuel : 2 ≤ LemFuel.fuel) {M : MachineCtx}
     {e e' : CoreExpr} {ev0 : Fmap sym value} {evs : List (Fmap sym value)}
     {ρ' : EnvStack} {ctl ctl' : Ctl} {σ σ' : Mem}
-    (hf : Frag e) (hsz : esize e ≤ lemDefaultFuel)
-    (hs : Step M (e, ev0 :: evs, ctl, σ) (e', ρ', ctl', σ')) :
+    (hf : Frag e) (hs : Step M (e, ev0 :: evs, ctl, σ) (e', ρ', ctl', σ')) :
     CerberusRound M (e, ev0 :: evs, ctl, σ) (e', ρ', ctl', σ') := by
   intro dst hemb
   obtain ⟨hth, hlay, hfile, hext, hlabd, hsym, hexc⟩ := hemb
@@ -1187,7 +1248,7 @@ theorem engine_step_matchU {M : MachineCtx}
         obtain ⟨tsk, hsteps⟩ := step_ctx_ret v M.tagDefs dst.layout_state dst.core_file
           dst.core_extern M.tid M.parent
           (M.thread (ofValA (.pure a b v)) (ev0 :: evs) ⟨(p, ctx) :: κ, q, ℓ, lc, sp⟩) rfl rfl rfl
-        obtain ⟨tr, hadv⟩ := advance_tau_tsk M.tagDefs M.tid "end of procedure" tsk _ dst
+        obtain ⟨tr, hadv⟩ := advance_tau_tsk (hfuel := by omega) M.tagDefs M.tid "end of procedure" tsk _ dst
         exact ⟨_, _, hsteps, rfl, dst.core_run_state0, tr, dst.dr_step_counter + 1, rfl, hsym, hexc,
           hadv⟩
     | annot a a2 b ds v =>
@@ -1201,7 +1262,7 @@ theorem engine_step_matchU {M : MachineCtx}
         refine ⟨_, _, step_ctx_remove_annot ds v M.tagDefs dst.layout_state dst.core_file
             dst.core_extern M.tid M.parent _ rfl,
           rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
-        exact advance_tau M.tagDefs M.tid _ _ dst
+        exact advance_tau (hfuel := by omega) M.tagDefs M.tid _ _ dst
       have hκ' : ctl'.κ = ctl.κ := by rw [heq]; rfl
       -- REMOVE-ANNOT at a non-empty call stack (`Step.ret_annot`): the
       -- engine's tau, in place (no location write — the value arm)
@@ -1209,7 +1270,7 @@ theorem engine_step_matchU {M : MachineCtx}
       refine ⟨_, _, step_ctx_remove_annot ds v M.tagDefs dst.layout_state dst.core_file
           dst.core_extern M.tid M.parent _ rfl,
         rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
-      exact advance_tau M.tagDefs M.tid _ _ dst
+      exact advance_tau (hfuel := by omega) M.tagDefs M.tid _ _ dst
   | none =>
   have hnv : toVal e = none := hv
   obtain ⟨ctx, r, hd, hfr⟩ := hf.decomp hnv
@@ -1218,7 +1279,7 @@ theorem engine_step_matchU {M : MachineCtx}
     ⟨aN, actN, ctxB, ctxA, rfl, hbr, heqN⟩
   · obtain ⟨he', hρ', hc', hσ'⟩ := Config.mk_inj heq
     subst he' hρ' hc' hσ'
-    have hccall := hd.unseq_ccall_false hsz
+    have hccall := hd.unseq_ccall_false
     have hrj := hd.redex
     cases hrj with
     | @call an ra f pes => exact absurd rfl (hnc an ra f pes)
@@ -1228,7 +1289,7 @@ theorem engine_step_matchU {M : MachineCtx}
       obtain ⟨mv, fp, σ'', hmv, hmem, hout⟩ := hr.excluded_store_inv
       obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
       subst h1 h2 h3 h4
-      obtain ⟨post, hsteps⟩ := step_ctx_excluded_store hd hsz M.tagDefs hmv
+      obtain ⟨post, hsteps⟩ := step_ctx_excluded_store hd M.tagDefs hmv
         dst.layout_state dst.core_file dst.core_extern M.tid M.parent
         (M.thread e (ev0 :: evs) ctl) rfl
       rw [hccall, MachineCtx.locUpdTh_thread] at hsteps
@@ -1237,11 +1298,11 @@ theorem engine_step_matchU {M : MachineCtx}
         ME_store (requestLoc (M.thread e (ev0 :: evs) (ctl.upd an)) loc)
           none ty lk pv mv :: dst.trace,
         dst.dr_step_counter, rfl, hsym, hexc, ?_⟩
-      exact advance_action (ars_store_active (tid := M.tid)
+      exact advance_action (hfuel := by omega) (ars_store_active (hfuel := by omega) (tid := M.tid)
         (aid := dst.core_run_state0.aid_supply) hmem)
     | @excluded_store_op an n loc ann ty pe2 pe3 mo hnvE =>
       obtain ⟨hp2, hp3, hd2, hd3⟩ : PePure pe2 ∧ PePure pe3 ∧
-          peDepth pe2 ≤ lemDefaultFuel ∧ peDepth pe3 ≤ lemDefaultFuel := by
+          peDepth pe2 ≤ LemFuel.fuel ∧ peDepth pe3 ≤ LemFuel.fuel := by
         cases hfr with
         | excluded_store =>
           rw [valueFromPexprs_pair, valueFromPexpr_val, valueFromPexpr_val] at hnvE
@@ -1250,19 +1311,19 @@ theorem engine_step_matchU {M : MachineCtx}
       obtain ⟨pv, cv, hv2, hv3, hout⟩ := hr.excluded_store_op_inv hnvE
       obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
       subst h1 h2 h3 h4
-      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_excluded_store_eval_ws hd hsz hnvE hp2 hp3 hd2 hd3
+      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_excluded_store_eval_ws hd hnvE hp2 hp3 hd2 hd3
         M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
         (M.thread e (ev0 :: evs) ctl) rfl
         (by rw [hext, hfile]; exact hv2) (by rw [hext, hfile]; exact hv3)
       rw [MachineCtx.locUpdTh_thread] at hm
       refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl,
         hsym, hexc, ?_⟩
-      exact advance_withrs_eval M.tagDefs M.tid s m (hm dst.core_run_state0)
+      exact advance_withrs_eval (hfuel := by omega) M.tagDefs M.tid s m (hm dst.core_run_state0)
     | @store an loc ann lk ty pv cv mo =>
       obtain ⟨mv, fp, σ'', hmv, hmem, hout⟩ := hr.store_inv
       obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
       subst h1 h2 h3 h4
-      obtain ⟨post, hsteps⟩ := step_ctx_store hd hsz M.tagDefs hmv
+      obtain ⟨post, hsteps⟩ := step_ctx_store hd M.tagDefs hmv
         dst.layout_state dst.core_file dst.core_extern M.tid M.parent
         (M.thread e (ev0 :: evs) ctl) rfl
       rw [hccall, MachineCtx.locUpdTh_thread] at hsteps
@@ -1271,13 +1332,13 @@ theorem engine_step_matchU {M : MachineCtx}
         ME_store (requestLoc (M.thread e (ev0 :: evs) (ctl.upd an)) loc)
           none ty lk pv mv :: dst.trace,
         dst.dr_step_counter, rfl, hsym, hexc, ?_⟩
-      exact advance_action (ars_store_active (tid := M.tid)
+      exact advance_action (hfuel := by omega) (ars_store_active (hfuel := by omega) (tid := M.tid)
         (aid := dst.core_run_state0.aid_supply) hmem)
     | @load an loc ann ty pv mo =>
       obtain ⟨fp, mval, σ'', hmem, hout⟩ := hr.load_inv
       obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
       subst h1 h2 h3 h4
-      obtain ⟨post, hsteps⟩ := step_ctx_load hd hsz M.tagDefs
+      obtain ⟨post, hsteps⟩ := step_ctx_load hd M.tagDefs
         dst.layout_state dst.core_file dst.core_extern M.tid M.parent
         (M.thread e (ev0 :: evs) ctl) rfl
       rw [hccall, MachineCtx.locUpdTh_thread] at hsteps
@@ -1286,13 +1347,13 @@ theorem engine_step_matchU {M : MachineCtx}
         ME_load (requestLoc (M.thread e (ev0 :: evs) (ctl.upd an)) loc)
           none ty pv mval :: dst.trace,
         dst.dr_step_counter, rfl, hsym, hexc, ?_⟩
-      exact advance_action (ars_load_active (tid := M.tid)
+      exact advance_action (hfuel := by omega) (ars_load_active (hfuel := by omega) (tid := M.tid)
         (aid := dst.core_run_state0.aid_supply) hmem)
     | @create an loc ann align ty pref =>
       obtain ⟨pv, σ'', hmem, hout⟩ := hr.create_inv
       obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
       subst h1 h2 h3 h4
-      obtain ⟨post, hsteps⟩ := step_ctx_create hd hsz M.tagDefs
+      obtain ⟨post, hsteps⟩ := step_ctx_create hd M.tagDefs
         dst.layout_state dst.core_file dst.core_extern M.tid M.parent
         (M.thread e (ev0 :: evs) ctl) rfl
       rw [hccall, MachineCtx.locUpdTh_thread] at hsteps
@@ -1300,11 +1361,11 @@ theorem engine_step_matchU {M : MachineCtx}
           dst.core_run_state0.aid_supply + 1 },
         ME_allocate_object M.tid pref align ty none pv :: dst.trace,
         dst.dr_step_counter, rfl, hsym, hexc, ?_⟩
-      exact advance_action (ars_create_active (tid := M.tid)
+      exact advance_action (hfuel := by omega) (ars_create_active (hfuel := by omega) (tid := M.tid)
         (aid := dst.core_run_state0.aid_supply) hmem)
     | @create_op an loc ann pref pe1 pe2 hnvC =>
       obtain ⟨hp1, hp2, hd1, hd2⟩ : PePure pe1 ∧ PePure pe2 ∧
-          peDepth pe1 ≤ lemDefaultFuel ∧ peDepth pe2 ≤ lemDefaultFuel := by
+          peDepth pe1 ≤ LemFuel.fuel ∧ peDepth pe2 ≤ LemFuel.fuel := by
         cases hfr with
         | create =>
           rw [valueFromPexprs_pair, valueFromPexpr_val, valueFromPexpr_val] at hnvC
@@ -1313,18 +1374,18 @@ theorem engine_step_matchU {M : MachineCtx}
       obtain ⟨al, ty, hv1, hv2, hout⟩ := hr.create_op_inv hnvC
       obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
       subst h1 h2 h3 h4
-      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_create_eval_ws hd hsz hnvC hp1 hp2 hd1 hd2
+      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_create_eval_ws hd hnvC hp1 hp2 hd1 hd2
         M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
         (M.thread e (ev0 :: evs) ctl) rfl
         (by rw [hext, hfile]; exact hv1) (by rw [hext, hfile]; exact hv2)
       rw [MachineCtx.locUpdTh_thread] at hm
       refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
-      exact advance_withrs_eval M.tagDefs M.tid s m (hm dst.core_run_state0)
+      exact advance_withrs_eval (hfuel := by omega) M.tagDefs M.tid s m (hm dst.core_run_state0)
     | @kill an loc ann kind pv =>
       obtain ⟨σ'', hmem, hout⟩ := hr.kill_inv
       obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
       subst h1 h2 h3 h4
-      obtain ⟨post, hsteps⟩ := step_ctx_kill hd hsz M.tagDefs
+      obtain ⟨post, hsteps⟩ := step_ctx_kill hd M.tagDefs
         dst.layout_state dst.core_file dst.core_extern M.tid M.parent
         (M.thread e (ev0 :: evs) ctl) rfl
       rw [hccall, MachineCtx.locUpdTh_thread] at hsteps
@@ -1333,10 +1394,10 @@ theorem engine_step_matchU {M : MachineCtx}
         ME_kill (requestLoc (M.thread e (ev0 :: evs) (ctl.upd an)) loc)
           (is_dynamic kind) pv :: dst.trace,
         dst.dr_step_counter, rfl, hsym, hexc, ?_⟩
-      exact advance_action (ars_kill_active (tid := M.tid)
+      exact advance_action (hfuel := by omega) (ars_kill_active (hfuel := by omega) (tid := M.tid)
         (aid := dst.core_run_state0.aid_supply) hmem)
     | @kill_op an loc ann kind pe hnvK =>
-      obtain ⟨hpK, hdK⟩ : PePure pe ∧ peDepth pe ≤ lemDefaultFuel := by
+      obtain ⟨hpK, hdK⟩ : PePure pe ∧ peDepth pe ≤ LemFuel.fuel := by
         cases hfr with
         | kill =>
           rw [show valueFromPexpr (Pexpr [] () (PEval
@@ -1346,18 +1407,18 @@ theorem engine_step_matchU {M : MachineCtx}
       obtain ⟨pv, hv, hout⟩ := hr.kill_op_inv hnvK
       obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
       subst h1 h2 h3 h4
-      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_kill_eval_ws hd hsz hnvK hpK hdK
+      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_kill_eval_ws hd hnvK hpK hdK
         M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
         (M.thread e (ev0 :: evs) ctl) rfl
         (by rw [hext, hfile]; exact hv)
       rw [MachineCtx.locUpdTh_thread] at hm
       refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
-      exact advance_withrs_eval M.tagDefs M.tid s m (hm dst.core_run_state0)
+      exact advance_withrs_eval (hfuel := by omega) M.tagDefs M.tid s m (hm dst.core_run_state0)
     | @alloc an loc ann align size pref =>
       obtain ⟨pv, σ'', hmem, hout⟩ := hr.alloc_inv
       obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
       subst h1 h2 h3 h4
-      obtain ⟨post, hsteps⟩ := step_ctx_alloc hd hsz M.tagDefs
+      obtain ⟨post, hsteps⟩ := step_ctx_alloc hd M.tagDefs
         dst.layout_state dst.core_file dst.core_extern M.tid M.parent
         (M.thread e (ev0 :: evs) ctl) rfl
       rw [hccall, MachineCtx.locUpdTh_thread] at hsteps
@@ -1365,11 +1426,11 @@ theorem engine_step_matchU {M : MachineCtx}
           dst.core_run_state0.aid_supply + 1 },
         ME_allocate_region M.tid pref align size pv :: dst.trace,
         dst.dr_step_counter, rfl, hsym, hexc, ?_⟩
-      exact advance_action (ars_alloc_active (tid := M.tid)
+      exact advance_action (hfuel := by omega) (ars_alloc_active (hfuel := by omega) (tid := M.tid)
         (aid := dst.core_run_state0.aid_supply) hmem)
     | @alloc_op an loc ann pref pe1 pe2 hnvA =>
       obtain ⟨hp1, hp2, hd1, hd2⟩ : PePure pe1 ∧ PePure pe2 ∧
-          peDepth pe1 ≤ lemDefaultFuel ∧ peDepth pe2 ≤ lemDefaultFuel := by
+          peDepth pe1 ≤ LemFuel.fuel ∧ peDepth pe2 ≤ LemFuel.fuel := by
         cases hfr with
         | alloc =>
           rw [valueFromPexprs_pair, valueFromPexpr_val, valueFromPexpr_val] at hnvA
@@ -1378,13 +1439,13 @@ theorem engine_step_matchU {M : MachineCtx}
       obtain ⟨al, sz, hv1, hv2, hout⟩ := hr.alloc_op_inv hnvA
       obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
       subst h1 h2 h3 h4
-      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_alloc_eval_ws hd hsz hnvA hp1 hp2 hd1 hd2
+      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_alloc_eval_ws hd hnvA hp1 hp2 hd1 hd2
         M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
         (M.thread e (ev0 :: evs) ctl) rfl
         (by rw [hext, hfile]; exact hv1) (by rw [hext, hfile]; exact hv2)
       rw [MachineCtx.locUpdTh_thread] at hm
       refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
-      exact advance_withrs_eval M.tagDefs M.tid s m (hm dst.core_run_state0)
+      exact advance_withrs_eval (hfuel := by omega) M.tagDefs M.tid s m (hm dst.core_run_state0)
     | @beta_pure an pa a1 b1 bty v e2 =>
       rcases hr.sseq_inv with ⟨e1', ρ'', ctl'', σ'', hnj, hnc', hnv', hstep, hout⟩ |
           ⟨_, _, a1', b1', v', _, _, _, he1, _, hout⟩ |
@@ -1402,12 +1463,12 @@ theorem engine_step_matchU {M : MachineCtx}
           simpa using ofValA_inj he1
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        obtain ⟨post, hsteps⟩ := step_ctx_beta_pure hd hsz M.tagDefs dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_beta_pure hd M.tagDefs dst.layout_state
           dst.core_file dst.core_extern M.tid M.parent
           (M.thread e (ev0 :: evs) ctl) rfl rfl
         rw [MachineCtx.locUpdTh_thread] at hsteps
         refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
-        exact advance_tau M.tagDefs M.tid _ _ dst
+        exact advance_tau (hfuel := by omega) M.tagDefs M.tid _ _ dst
       · cases ofValA_inj he1
       · rw [jumpRedex?_ofValA] at hj; cases hj
       · exact (specPat_ne_base hpat).elim
@@ -1435,12 +1496,12 @@ theorem engine_step_matchU {M : MachineCtx}
           simpa using ofValA_inj he1
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        obtain ⟨post, hsteps⟩ := step_ctx_beta_annot hd hsz M.tagDefs dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_beta_annot hd M.tagDefs dst.layout_state
           dst.core_file dst.core_extern M.tid M.parent
           (M.thread e (ev0 :: evs) ctl) rfl rfl
         rw [MachineCtx.locUpdTh_thread] at hsteps
         refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
-        exact advance_tau M.tagDefs M.tid _ _ dst
+        exact advance_tau (hfuel := by omega) M.tagDefs M.tid _ _ dst
       · rw [jumpRedex?_ofValA] at hj; cases hj
       · exact (specPat_ne_base hpat).elim
       · exact (specPat_ne_base hpat).elim
@@ -1464,12 +1525,12 @@ theorem engine_step_matchU {M : MachineCtx}
           simpa using ofValA_inj he1
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        obtain ⟨post, hsteps⟩ := step_ctx_wseq_pure hd hsz M.tagDefs dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_wseq_pure hd M.tagDefs dst.layout_state
           dst.core_file dst.core_extern M.tid M.parent
           (M.thread e (ev0 :: evs) ctl) rfl rfl
         rw [MachineCtx.locUpdTh_thread] at hsteps
         refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
-        exact advance_tau M.tagDefs M.tid _ _ dst
+        exact advance_tau (hfuel := by omega) M.tagDefs M.tid _ _ dst
       · cases ofValA_inj he1
       · rw [jumpRedex?_ofValA] at hj; cases hj
       · exact (symPat_ne_base hpatS1).elim
@@ -1493,12 +1554,12 @@ theorem engine_step_matchU {M : MachineCtx}
           simpa using ofValA_inj he1
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        obtain ⟨post, hsteps⟩ := step_ctx_wseq_annot hd hsz M.tagDefs dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_wseq_annot hd M.tagDefs dst.layout_state
           dst.core_file dst.core_extern M.tid M.parent
           (M.thread e (ev0 :: evs) ctl) rfl rfl
         rw [MachineCtx.locUpdTh_thread] at hsteps
         refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
-        exact advance_tau M.tagDefs M.tid _ _ dst
+        exact advance_tau (hfuel := by omega) M.tagDefs M.tid _ _ dst
       · rw [jumpRedex?_ofValA] at hj; cases hj
       · exact (symPat_ne_base hpatS1).elim
       · exact (symPat_ne_base hpatS2).elim
@@ -1517,106 +1578,106 @@ theorem engine_step_matchU {M : MachineCtx}
         subst hb1 hb3 hb4
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        obtain ⟨post, hsteps⟩ := step_ctx_merge hd hirr hsz M.tagDefs dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_merge hd hirr M.tagDefs dst.layout_state
           dst.core_file dst.core_extern M.tid M.parent
           (M.thread e (ev0 :: evs) ctl) rfl
         rw [MachineCtx.locUpdTh_thread] at hsteps
         refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
-        exact advance_tau M.tagDefs M.tid _ _ dst
+        exact advance_tau (hfuel := by omega) M.tagDefs M.tid _ _ dst
       · rw [show annotRooted (Expr a2 (Eannot ds2 b)) = true from rfl] at hg
         cases hg
       · rw [show annotRooted (Expr a2 (Eannot ds2 b)) = true from rfl] at hg2
         cases hg2
       · cases hb'
     | @save an sb ps body =>
-      have hdep : ∀ pe ∈ saveParamPexprs ps, peDepth pe ≤ lemDefaultFuel := by
+      have hdep : ∀ pe ∈ saveParamPexprs ps, peDepth pe ≤ LemFuel.fuel := by
         cases hfr with
         | save _ hdep _ => exact hdep
       rcases hr.save_inv with ⟨cvals, ev0', evs', hρeq, hvals, hout⟩ |
           ⟨cvals, hnvS, hvals, hout⟩
       · obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        obtain ⟨post, hsteps⟩ := step_ctx_save hd hsz hvals M.tagDefs dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_save hd hvals M.tagDefs dst.layout_state
           dst.core_file dst.core_extern M.tid M.parent
           (M.thread e (ev0 :: evs) ctl) rfl rfl
         rw [MachineCtx.locUpdTh_thread] at hsteps
         refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
-        exact advance_tau M.tagDefs M.tid _ _ dst
+        exact advance_tau (hfuel := by omega) M.tagDefs M.tid _ _ dst
       · obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_save_eval_ws hd hsz hnvS hdep
+        obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_save_eval_ws hd hnvS hdep
           M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
           (M.thread e (ev0 :: evs) ctl) rfl
           (by rw [hext, hfile]; exact hvals)
         rw [MachineCtx.locUpdTh_thread] at hm
         refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
-        exact advance_withrs_eval M.tagDefs M.tid s m (hm dst.core_run_state0)
+        exact advance_withrs_eval (hfuel := by omega) M.tagDefs M.tid s m (hm dst.core_run_state0)
     | @if_ an g e2 e3 =>
-      have hdg : peDepth g ≤ lemDefaultFuel := by
+      have hdg : peDepth g ≤ LemFuel.fuel := by
         cases hfr with
         | if_ _ hdg _ _ => exact hdg
       rcases hr.if_inv with ⟨hg, hout⟩ | ⟨hg, hout⟩
       · obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_if_true_ws hd hsz hdg
+        obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_if_true_ws hd hdg
           M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
           (M.thread e (ev0 :: evs) ctl) rfl
           (by rw [hext, hfile]; exact hg)
         rw [MachineCtx.locUpdTh_thread] at hm
         refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
-        exact advance_withrs_tau M.tagDefs M.tid s m (hm dst.core_run_state0)
+        exact advance_withrs_tau (hfuel := by omega) M.tagDefs M.tid s m (hm dst.core_run_state0)
       · obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_if_false_ws hd hsz hdg
+        obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_if_false_ws hd hdg
           M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
           (M.thread e (ev0 :: evs) ctl) rfl
           (by rw [hext, hfile]; exact hg)
         rw [MachineCtx.locUpdTh_thread] at hm
         refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
-        exact advance_withrs_tau M.tagDefs M.tid s m (hm dst.core_run_state0)
+        exact advance_withrs_tau (hfuel := by omega) M.tagDefs M.tid s m (hm dst.core_run_state0)
     | @case_ an pe pats =>
       cases hfr with
       | case_value hall hbr hbsz =>
         obtain ⟨e'', hsel, hout⟩ := hr.case_value_inv (valueFromPexpr_val _ _)
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        obtain ⟨post, hsteps⟩ := step_ctx_case_value hd hsz hsel M.tagDefs dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_case_value hd hsel M.tagDefs dst.layout_state
           dst.core_file dst.core_extern M.tid M.parent
           (M.thread e (ev0 :: evs) ctl) rfl
         rw [MachineCtx.locUpdTh_thread] at hsteps
         refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
-        exact advance_tau M.tagDefs M.tid _ _ dst
+        exact advance_tau (hfuel := by omega) M.tagDefs M.tid _ _ dst
       | case_op hnvc hp hdp hall hbr hbsz =>
         rcases hr.case_inv with ⟨cval, e'', hv, -, -⟩ | ⟨cval, -, hv, hout⟩
         · rw [hv] at hnvc; cases hnvc
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_case_eval_ws hd hsz hnvc hp hdp
+        obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_case_eval_ws hd hnvc hp hdp
           M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
           (M.thread e (ev0 :: evs) ctl) rfl (by rw [hext, hfile]; exact hv)
         rw [MachineCtx.locUpdTh_thread] at hm
         refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl,
           hsym, hexc, ?_⟩
-        exact advance_withrs_eval M.tagDefs M.tid s m (hm dst.core_run_state0)
+        exact advance_withrs_eval (hfuel := by omega) M.tagDefs M.tid s m (hm dst.core_run_state0)
     | @run an ra l pes =>
       exact absurd rfl (hnr an ra l pes)
     | @pure_e an pe hnv2 =>
-      obtain ⟨hpp, hdp⟩ : PePure pe ∧ peDepth pe ≤ lemDefaultFuel := by
+      obtain ⟨hpp, hdp⟩ : PePure pe ∧ peDepth pe ≤ LemFuel.fuel := by
         cases hfr with
         | val_pure v => rw [valueFromPexpr_val] at hnv2; cases hnv2
         | pure_op hnv' hpp hdp => exact ⟨hpp, hdp⟩
       obtain ⟨v, -, hv, hout⟩ := hr.pure_inv hnv2
       obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
       subst h1 h2 h3 h4
-      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_pure_op_ws hd hsz hnv2 hdp
+      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_pure_op_ws hd hnv2 hdp
         M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
         (M.thread e (ev0 :: evs) ctl) rfl
         (by rw [hext, hfile]; exact hv)
       rw [MachineCtx.locUpdTh_thread] at hm
       refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
-      exact advance_withrs_eval M.tagDefs M.tid s m (hm dst.core_run_state0)
+      exact advance_withrs_eval (hfuel := by omega) M.tagDefs M.tid s m (hm dst.core_run_state0)
     | @load_op an loc ann ty pe2 mo hnv2 =>
-      obtain ⟨hp2, hd2⟩ : PePure pe2 ∧ peDepth pe2 ≤ lemDefaultFuel := by
+      obtain ⟨hp2, hd2⟩ : PePure pe2 ∧ peDepth pe2 ≤ LemFuel.fuel := by
         cases hfr with
         | load =>
           rw [show valueFromPexpr (Pexpr [] () (PEval
@@ -1626,13 +1687,13 @@ theorem engine_step_matchU {M : MachineCtx}
       obtain ⟨pv, hv2, hout⟩ := hr.load_op_inv hnv2
       obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
       subst h1 h2 h3 h4
-      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_load_eval_ws hd hsz hnv2 hp2 hd2
+      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_load_eval_ws hd hnv2 hp2 hd2
         M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
         (M.thread e (ev0 :: evs) ctl) rfl
         (by rw [hext, hfile]; exact hv2)
       rw [MachineCtx.locUpdTh_thread] at hm
       refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
-      exact advance_withrs_eval M.tagDefs M.tid s m (hm dst.core_run_state0)
+      exact advance_withrs_eval (hfuel := by omega) M.tagDefs M.tid s m (hm dst.core_run_state0)
     | @beta_spec an pa pb x bty wa e2 =>
       rcases hr.sseq_inv with ⟨e1', ρ'', ctl'', σ'', hnj, hnc', hnv', hstep, hout⟩ |
           ⟨_, _, _, _, v', _, _, hpat, he1, _, hout⟩ |
@@ -1653,22 +1714,22 @@ theorem engine_step_matchU {M : MachineCtx}
         obtain rfl := ofValA_inj he1
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        obtain ⟨post, hsteps⟩ := step_ctx_beta_spec_pure hd hsz M.tagDefs dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_beta_spec_pure hd M.tagDefs dst.layout_state
           dst.core_file dst.core_extern M.tid M.parent
           (M.thread e (ev0 :: evs) ctl) rfl rfl
         rw [MachineCtx.locUpdTh_thread] at hsteps
         refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
-        exact advance_tau M.tagDefs M.tid _ _ dst
+        exact advance_tau (hfuel := by omega) M.tagDefs M.tid _ _ dst
       · obtain ⟨rfl, rfl, rfl, rfl⟩ := specPat_inj hpat
         obtain rfl := ofValA_inj he1
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        obtain ⟨post, hsteps⟩ := step_ctx_beta_spec_annot hd hsz M.tagDefs dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_beta_spec_annot hd M.tagDefs dst.layout_state
           dst.core_file dst.core_extern M.tid M.parent
           (M.thread e (ev0 :: evs) ctl) rfl rfl
         rw [MachineCtx.locUpdTh_thread] at hsteps
         refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
-        exact advance_tau M.tagDefs M.tid _ _ dst
+        exact advance_tau (hfuel := by omega) M.tagDefs M.tid _ _ dst
       · exact (symPat_ne_spec hpat).elim
       · exact (symPat_ne_spec hpat).elim
       · exact (specPat_ne_tuple hpatT1).elim
@@ -1680,30 +1741,30 @@ theorem engine_step_matchU {M : MachineCtx}
         obtain ⟨pv1, pv2, b, σ'', rfl, rfl, hmem, hout⟩ := hr.memop_vals_inv
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        obtain ⟨post, hsteps⟩ := step_ctx_memop hd hsz rfl rfl M.tagDefs
+        obtain ⟨post, hsteps⟩ := step_ctx_memop hd rfl rfl M.tagDefs
           dst.layout_state dst.core_file dst.core_extern M.tid M.parent
           (M.thread e (ev0 :: evs) ctl) rfl
         rw [hccall, MachineCtx.locUpdTh_thread] at hsteps
         refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter, rfl,
           hsym, hexc, ?_⟩
-        exact advance_memop (ars_memop_active M.tagDefs (by
+        exact advance_memop (hfuel := by omega) (ars_memop_active (hfuel := by omega) M.tagDefs (by
           rw [eqPtrval_loc_irrel _ default pv1 pv2]; exact hmem))
       | memop_op hnvF hp1 hp2 hpd1 hpd2 =>
         obtain ⟨v1, v2, hv1', hv2', hout⟩ := hr.memop_op_inv hnvF
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_memop_eval_ws hd hsz hnvF
+        obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_memop_eval_ws hd hnvF
           hpd1 hpd2 M.tagDefs dst.layout_state dst.core_file
           dst.core_extern M.tid M.parent
           (M.thread e (ev0 :: evs) ctl) rfl
           (by rw [hext, hfile]; exact hv1') (by rw [hext, hfile]; exact hv2')
         rw [MachineCtx.locUpdTh_thread] at hm
         refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
-        exact advance_withrs_eval M.tagDefs M.tid s m (hm dst.core_run_state0)
+        exact advance_withrs_eval (hfuel := by omega) M.tagDefs M.tid s m (hm dst.core_run_state0)
     | @store_op an loc ann ty pe2 pe3 mo hnvR =>
       obtain ⟨hp2, hp3, hpd2, hpd3⟩ :
           PePure pe2 ∧ PePure pe3 ∧
-          peDepth pe2 ≤ lemDefaultFuel ∧ peDepth pe3 ≤ lemDefaultFuel := by
+          peDepth pe2 ≤ LemFuel.fuel ∧ peDepth pe3 ≤ LemFuel.fuel := by
         cases hfr with
         | store =>
           rw [valueFromPexprs_pair, valueFromPexpr_val, valueFromPexpr_val] at hnvR
@@ -1713,14 +1774,14 @@ theorem engine_step_matchU {M : MachineCtx}
       obtain ⟨pv, cv, hv2, hv3, hout⟩ := hr.store_op_inv hnvR
       obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
       subst h1 h2 h3 h4
-      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_store_eval_ws hd hsz hnvR
+      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_store_eval_ws hd hnvR
         hp2 hp3 hpd2 hpd3 M.tagDefs dst.layout_state dst.core_file
         dst.core_extern M.tid M.parent
         (M.thread e (ev0 :: evs) ctl) rfl
         (by rw [hext, hfile]; exact hv2) (by rw [hext, hfile]; exact hv3)
       rw [MachineCtx.locUpdTh_thread] at hm
       refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
-      exact advance_withrs_eval M.tagDefs M.tid s m (hm dst.core_run_state0)
+      exact advance_withrs_eval (hfuel := by omega) M.tagDefs M.tid s m (hm dst.core_run_state0)
     | @beta_sym an pa x bty wa e2 =>
       rcases hr.sseq_inv with ⟨e1', ρ'', ctl'', σ'', hnj, hnc', hnv', hstep, hout⟩ |
           ⟨_, _, _, _, v', _, _, hpat, he1, _, hout⟩ |
@@ -1743,22 +1804,22 @@ theorem engine_step_matchU {M : MachineCtx}
         obtain rfl := ofValA_inj he1
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        obtain ⟨post, hsteps⟩ := step_ctx_beta_sym_pure hd hsz M.tagDefs dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_beta_sym_pure hd M.tagDefs dst.layout_state
           dst.core_file dst.core_extern M.tid M.parent
           (M.thread e (ev0 :: evs) ctl) rfl rfl
         rw [MachineCtx.locUpdTh_thread] at hsteps
         refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
-        exact advance_tau M.tagDefs M.tid _ _ dst
+        exact advance_tau (hfuel := by omega) M.tagDefs M.tid _ _ dst
       · obtain ⟨rfl, rfl, rfl⟩ := symPat_inj hpat
         obtain rfl := ofValA_inj he1
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        obtain ⟨post, hsteps⟩ := step_ctx_beta_sym_annot hd hsz M.tagDefs dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_beta_sym_annot hd M.tagDefs dst.layout_state
           dst.core_file dst.core_extern M.tid M.parent
           (M.thread e (ev0 :: evs) ctl) rfl rfl
         rw [MachineCtx.locUpdTh_thread] at hsteps
         refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
-        exact advance_tau M.tagDefs M.tid _ _ dst
+        exact advance_tau (hfuel := by omega) M.tagDefs M.tid _ _ dst
       · exact (symPat_ne_tuple hpatT1).elim
       · exact (symPat_ne_tuple hpatT2).elim
       · exact hcall.not_val.elim
@@ -1786,22 +1847,22 @@ theorem engine_step_matchU {M : MachineCtx}
         obtain rfl := ofValA_inj he1
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        obtain ⟨post, hsteps⟩ := step_ctx_sseq_val_pure hd hsz M.tagDefs dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_sseq_val_pure hd M.tagDefs dst.layout_state
           dst.core_file dst.core_extern M.tid M.parent
           (M.thread e (ev0 :: evs) ctl) rfl rfl
         rw [MachineCtx.locUpdTh_thread] at hsteps
         refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
-        exact advance_tau M.tagDefs M.tid _ _ dst
+        exact advance_tau (hfuel := by omega) M.tagDefs M.tid _ _ dst
       · obtain ⟨rfl, rfl⟩ := tuplePat_inj hpat
         obtain rfl := ofValA_inj he1
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        obtain ⟨post, hsteps⟩ := step_ctx_sseq_val_annot hd hsz M.tagDefs dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_sseq_val_annot hd M.tagDefs dst.layout_state
           dst.core_file dst.core_extern M.tid M.parent
           (M.thread e (ev0 :: evs) ctl) rfl rfl
         rw [MachineCtx.locUpdTh_thread] at hsteps
         refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
-        exact advance_tau M.tagDefs M.tid _ _ dst
+        exact advance_tau (hfuel := by omega) M.tagDefs M.tid _ _ dst
       · exact hcall.not_val.elim
     | @wbeta_tuple an pa ls wa e2 =>
       rcases hr.wseq_inv with ⟨e1', ρ'', ctl'', σ'', hnj, hnc', hnv', hstep, hout⟩ |
@@ -1823,22 +1884,22 @@ theorem engine_step_matchU {M : MachineCtx}
         obtain rfl := ofValA_inj he1
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        obtain ⟨post, hsteps⟩ := step_ctx_wseq_val_pure hd hsz M.tagDefs dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_wseq_val_pure hd M.tagDefs dst.layout_state
           dst.core_file dst.core_extern M.tid M.parent
           (M.thread e (ev0 :: evs) ctl) rfl rfl
         rw [MachineCtx.locUpdTh_thread] at hsteps
         refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
-        exact advance_tau M.tagDefs M.tid _ _ dst
+        exact advance_tau (hfuel := by omega) M.tagDefs M.tid _ _ dst
       · obtain ⟨rfl, rfl⟩ := tuplePat_inj hpat
         obtain rfl := ofValA_inj he1
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        obtain ⟨post, hsteps⟩ := step_ctx_wseq_val_annot hd hsz M.tagDefs dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_wseq_val_annot hd M.tagDefs dst.layout_state
           dst.core_file dst.core_extern M.tid M.parent
           (M.thread e (ev0 :: evs) ctl) rfl rfl
         rw [MachineCtx.locUpdTh_thread] at hsteps
         refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
-        exact advance_tau M.tagDefs M.tid _ _ dst
+        exact advance_tau (hfuel := by omega) M.tagDefs M.tid _ _ dst
       · exact hcall.not_val.elim
     | @wbeta_sym an pa x bty wa e2 =>
       rcases hr.wseq_inv with ⟨e1', ρ'', ctl'', σ'', hnj, hnc', hnv', hstep, hout⟩ |
@@ -1858,22 +1919,22 @@ theorem engine_step_matchU {M : MachineCtx}
         obtain rfl := ofValA_inj he1
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        obtain ⟨post, hsteps⟩ := step_ctx_wseq_val_pure hd hsz M.tagDefs dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_wseq_val_pure hd M.tagDefs dst.layout_state
           dst.core_file dst.core_extern M.tid M.parent
           (M.thread e (ev0 :: evs) ctl) rfl rfl
         rw [MachineCtx.locUpdTh_thread] at hsteps
         refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
-        exact advance_tau M.tagDefs M.tid _ _ dst
+        exact advance_tau (hfuel := by omega) M.tagDefs M.tid _ _ dst
       · obtain ⟨rfl, rfl, rfl⟩ := symPat_inj hpat
         obtain rfl := ofValA_inj he1
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        obtain ⟨post, hsteps⟩ := step_ctx_wseq_val_annot hd hsz M.tagDefs dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_wseq_val_annot hd M.tagDefs dst.layout_state
           dst.core_file dst.core_extern M.tid M.parent
           (M.thread e (ev0 :: evs) ctl) rfl rfl
         rw [MachineCtx.locUpdTh_thread] at hsteps
         refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
-        exact advance_tau M.tagDefs M.tid _ _ dst
+        exact advance_tau (hfuel := by omega) M.tagDefs M.tid _ _ dst
       · exact (symPat_ne_tuple hpat).elim
       · exact (symPat_ne_tuple hpat).elim
       · exact hcall.not_val.elim
@@ -1890,12 +1951,12 @@ theorem engine_step_matchU {M : MachineCtx}
       · obtain rfl := map_ofValA_inj heq
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        obtain ⟨post, hsteps⟩ := step_ctx_unseq_vals hd hsz hcol M.tagDefs dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_unseq_vals hd hcol M.tagDefs dst.layout_state
           dst.core_file dst.core_extern M.tid M.parent
           (M.thread e (ev0 :: evs) ctl) rfl
         rw [MachineCtx.locUpdTh_thread] at hsteps
         refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
-        exact advance_tau M.tagDefs M.tid _ _ dst
+        exact advance_tau (hfuel := by omega) M.tagDefs M.tid _ _ dst
       · rw [jumpRedex?_unseq_vals] at hj; cases hj
       · have h1 : valsOnly (es1 ++ e0 :: es2) = true := by
           rw [← heq]; exact valsOnly_map_ofValA ws
@@ -1911,12 +1972,12 @@ theorem engine_step_matchU {M : MachineCtx}
           simpa using ofValA_inj hb
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        obtain ⟨post, hsteps⟩ := step_ctx_bound_pure hd hsz M.tagDefs dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_bound_pure hd M.tagDefs dst.layout_state
           dst.core_file dst.core_extern M.tid M.parent
           (M.thread e (ev0 :: evs) ctl) rfl
         rw [MachineCtx.locUpdTh_thread] at hsteps
         refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
-        exact advance_tau M.tagDefs M.tid _ _ dst
+        exact advance_tau (hfuel := by omega) M.tagDefs M.tid _ _ dst
       · cases ofValA_inj hb
       · rw [jumpRedex?_ofValA] at hj; cases hj
       · exact hcall.not_val.elim
@@ -1932,12 +1993,12 @@ theorem engine_step_matchU {M : MachineCtx}
           simpa using ofValA_inj hb
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        obtain ⟨post, hsteps⟩ := step_ctx_bound_annot hd hsz M.tagDefs dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_bound_annot hd M.tagDefs dst.layout_state
           dst.core_file dst.core_extern M.tid M.parent
           (M.thread e (ev0 :: evs) ctl) rfl
         rw [MachineCtx.locUpdTh_thread] at hsteps
         refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
-        exact advance_tau M.tagDefs M.tid _ _ dst
+        exact advance_tau (hfuel := by omega) M.tagDefs M.tid _ _ dst
       · rw [jumpRedex?_ofValA] at hj; cases hj
       · exact hcall.not_val.elim
       · rw [negRedex?_ofValA] at hn0; cases hn0
@@ -1945,34 +2006,34 @@ theorem engine_step_matchU {M : MachineCtx}
     -- resolves in the DRIVER'S run state through the tie hQd
     obtain ⟨params, cont, vs, ev0', evs', hρeq, hl, hvs, hout⟩ :=
       hr.jump_inv (by rfl)
-    have hdep : ∀ pe' ∈ pes, peDepth pe' ≤ lemDefaultFuel := by
+    have hdep : ∀ pe' ∈ pes, peDepth pe' ≤ LemFuel.fuel := by
       cases hfr with
       | run _ hdep => exact hdep
     obtain ⟨p, hproc, hQd⟩ := MachineCtx.labels_lookup_some hl
     obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
     subst h1 h2 h3 h4
-    obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_run_ws hd hsz hl hdep
+    obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_run_ws hd hl hdep
       M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent p
       (M.thread e (ev0 :: evs) ctl) rfl hproc
       (by rw [hext, hfile]; exact hvs)
     rw [MachineCtx.locUpdTh_thread] at hm
     refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl,
       hsym, hexc, ?_⟩
-    exact advance_withrs_eval M.tagDefs M.tid s m
+    exact advance_withrs_eval (hfuel := by omega) M.tagDefs M.tid s m
       (hm dst.core_run_state0 (by unfold LabeledAt; rw [hext, hlabd]; exact hQd))
-  · -- THE CALL: `step_ctx_call_ws` + `advance_withrs_eval` (run state verbatim)
-    have hdep : ∀ pe' ∈ pes, peDepth pe' ≤ lemDefaultFuel := by
+  · -- THE CALL: `step_ctx_call_ws` + `advance_withrs_eval (hfuel := by omega)` (run state verbatim)
+    have hdep : ∀ pe' ∈ pes, peDepth pe' ≤ LemFuel.fuel := by
       cases hfr with
       | call _ hdep => exact hdep
     obtain ⟨h1, h2, h4, h3⟩ := Config.mk_inj hout
     subst h1 h2 h4 h3
-    obtain ⟨m, post, hsteps, hm⟩ := step_ctx_call_ws hd hsz hdep M.tagDefs dst.layout_state
+    obtain ⟨m, post, hsteps, hm⟩ := step_ctx_call_ws hd hdep M.tagDefs dst.layout_state
       dst.core_file dst.core_extern M.tid M.parent (M.thread e (ev0 :: evs) ctl) rfl
       (by rw [hext, hfile]; exact hvs) (by rw [hfile, hext]; exact hfl) hlen
     rw [MachineCtx.locUpdTh_thread] at hm
     refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl,
       hsym, hexc, ?_⟩
-    exact advance_withrs_eval M.tagDefs M.tid _ m (hm dst.core_run_state0)
+    exact advance_withrs_eval (hfuel := by omega) M.tagDefs M.tid _ m (hm dst.core_run_state0)
   · -- E5: THE NEGATIVE-ACTION ROUND — the rewrite at the outermost bound, both
     -- supplies drawn from the run state the control ties
     obtain ⟨he', hρ', hc', hσ'⟩ := Config.mk_inj heqN
@@ -1983,7 +2044,7 @@ theorem engine_step_matchU {M : MachineCtx}
       cases hfr with
       | neg_store_op _ _ _ _ _ => exact ⟨_, _, _, _, _, _, _, rfl⟩
       | neg_store => exact ⟨_, _, _, _, _, _, _, rfl⟩
-    obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_neg hd hsz hbr M.tagDefs dst.layout_state
+    obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_neg hd hbr M.tagDefs dst.layout_state
       dst.core_file dst.core_extern M.tid M.parent (M.thread e (ev0 :: evs) ctl) rfl
     rw [MachineCtx.locUpdTh_thread] at hm
     refine ⟨_, _, hsteps, rfl,
@@ -1993,36 +2054,34 @@ theorem engine_step_matchU {M : MachineCtx}
       dst.trace, dst.dr_step_counter + 1, rfl, ?_, ?_, ?_⟩
     · simp only [Ctl.draw_sup, Ctl.upd_sup]; rw [hsym]
     · simp only [Ctl.draw_sup, Ctl.upd_sup]; rw [hexc]
-    · rw [advance_withrs_tau_rs M.tagDefs M.tid s m (hm dst.core_run_state0), hsym, hexc]
+    · rw [advance_withrs_tau_rs (hfuel := by omega) M.tagDefs M.tid s m (hm dst.core_run_state0), hsym, hexc]
       rcases dst with ⟨cf, ce, cs, crs, ls, cc, fs, tr0, sa, bl, ctr0⟩
       rfl
 
 
 /-- MATCH-GIVEN-STEP as a relation inclusion (`engine_step_matchU`
     re-read at a configuration successor). -/
-theorem Step.toCerberusRound {M : MachineCtx} {e : CoreExpr}
+theorem Step.toCerberusRound (hfuel : 2 ≤ LemFuel.fuel) {M : MachineCtx} {e : CoreExpr}
     {ev0 : Fmap sym value} {evs : List (Fmap sym value)} {ctl : Ctl} {σ : Mem} {c' : Config}
-    (hf : Frag e) (hsz : esize e ≤ lemDefaultFuel)
-    (hs : Step M (e, ev0 :: evs, ctl, σ) c') :
+    (hf : Frag e) (hs : Step M (e, ev0 :: evs, ctl, σ) c') :
     CerberusRound M (e, ev0 :: evs, ctl, σ) c' := by
   obtain ⟨e', ρ', ctl', σ'⟩ := c'
-  exact engine_step_matchU hf hsz hs
+  exact engine_step_matchU (hfuel := by omega) hf hs
 
 /-- THE TWO-SIDED ARM, GIVEN A MIRROR STEP: wherever the mirror steps
     at all, `Step` and the shipped round coincide (both directions), for
     every successor. The hypothesis `hstep` is load-bearing: at an
     annotated value the shipped round is the REMOVE-ANNOT tau while the
     mirror does not step (the value protocol) — see the classification. -/
-theorem step_iff_cerberusRound {M : MachineCtx} {e : CoreExpr}
+theorem step_iff_cerberusRound (hfuel : 2 ≤ LemFuel.fuel) {M : MachineCtx} {e : CoreExpr}
     {ev0 : Fmap sym value} {evs : List (Fmap sym value)} {ctl : Ctl} {σ : Mem}
-    (hf : Frag e) (hsz : esize e ≤ lemDefaultFuel)
-    (hstep : ∃ c', Step M (e, ev0 :: evs, ctl, σ) c') (c' : Config) :
+    (hf : Frag e) (hstep : ∃ c', Step M (e, ev0 :: evs, ctl, σ) c') (c' : Config) :
     Step M (e, ev0 :: evs, ctl, σ) c' ↔ CerberusRound M (e, ev0 :: evs, ctl, σ) c' := by
   constructor
-  · exact Step.toCerberusRound hf hsz
+  · exact Step.toCerberusRound (hfuel := by omega) hf
   · intro hr
     obtain ⟨c₀, hs₀⟩ := hstep
-    have hr₀ := Step.toCerberusRound hf hsz hs₀
+    have hr₀ := Step.toCerberusRound (hfuel := by omega) hf hs₀
     obtain ⟨dst, hemb⟩ := M.embeds_exists (e, ev0 :: evs, ctl, σ)
     obtain ⟨s, post, hsteps, -, rs', tr, ctr, -, hsym, hexc, hadv⟩ := hr dst hemb
     obtain ⟨s₀, post₀, hsteps₀, -, rs₀, tr₀, ctr₀, -, hsym₀, hexc₀, hadv₀⟩ := hr₀ dst hemb
@@ -2098,7 +2157,7 @@ theorem shipped_done {a1 b1 : List _root_.annot} {M : MachineCtx} (hwf : M.SeqWF
 
 /-- REMOVE-ANNOT at an annotated value is a shipped round to the bare
     value (env and memory verbatim; no context field read). -/
-theorem shipped_remove_annot (M : MachineCtx) (a a2 b : List _root_.annot)
+theorem shipped_remove_annot (hfuel : 0 < LemFuel.fuel) (M : MachineCtx) (a a2 b : List _root_.annot)
     (ds : List dyn_annotation) (v : value) (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
     CerberusRound M (ofValA (.annot a a2 b ds v), ρ, ctl, σ) (ofValA (.pure a2 b v), ρ, ctl, σ) := by
   intro dst hemb
@@ -2108,7 +2167,7 @@ theorem shipped_remove_annot (M : MachineCtx) (a a2 b : List _root_.annot)
   refine ⟨_, _, step_ctx_remove_annot ds v M.tagDefs dst.layout_state dst.core_file
       dst.core_extern M.tid M.parent (M.thread (ofValA (.annot a a2 b ds v)) ρ ctl) rfl,
     rfl, dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
-  exact advance_tau M.tagDefs M.tid _ _ dst
+  exact advance_tau (hfuel := by omega) M.tagDefs M.tid _ _ dst
 
 /-- The arms are mutually exclusive (the classification is a
     partition, not merely a cover): a value at the EMPTY call stack is
@@ -2135,16 +2194,12 @@ an ILLTYPED report — never a successful round. -/
     `storeM`'s kill (CerbMem.lean:1667 — the `MerrAccess` UB kills
     arrive as `Undef0`, the ill-typed-memory-value/`MerrOther` kills as
     `Other (DErr_memory _)`), at the request's own location. -/
-theorem cerberusRound_refused_store {an : List _root_.annot} (M : MachineCtx)
+theorem cerberusRound_refused_store (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} (M : MachineCtx)
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {lk : Bool}
     {ty : ctype} {pv : CerbMem.PointerValue} {cv : value} {mo : memory_order}
     (ρ : EnvStack) (ctl : Ctl) (σ : Mem)
     (hstuck : ∀ c', ¬ Step M (storeRedex an loc ann lk ty pv cv mo, ρ, ctl, σ) c') :
     ShippedRefusal M (storeRedex an loc ann lk ty pv cv mo, ρ, ctl, σ) := by
-  have hsz : esize (storeRedex an loc ann lk ty pv cv mo) ≤ lemDefaultFuel := by
-    rw [show esize (storeRedex an loc ann lk ty pv cv mo) = 1 from rfl]
-    unfold lemDefaultFuel
-    omega
   cases hmv : memValueFromValue M.tagDefs (Ctype [] (unatomic_ ty)) cv with
   | none =>
     refine .error (String.append (CerbLocation.stringFromLocation loc)
@@ -2156,7 +2211,7 @@ theorem cerberusRound_refused_store {an : List _root_.annot} (M : MachineCtx)
     obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
     simp only at hlay
     subst hlay
-    exact step_ctx_store_illtyped (Decomp.root Redex.store) hsz M.tagDefs hmv
+    exact step_ctx_store_illtyped (Decomp.root Redex.store) M.tagDefs hmv
       dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
   | some mv =>
     have hnone : applyMemM (CerbMem.storeM M.tagDefs
@@ -2174,26 +2229,22 @@ theorem cerberusRound_refused_store {an : List _root_.annot} (M : MachineCtx)
     obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
     simp only at hlay
     subst hlay
-    obtain ⟨post, hsteps⟩ := step_ctx_store (Decomp.root Redex.store) hsz M.tagDefs hmv
+    obtain ⟨post, hsteps⟩ := step_ctx_store (Decomp.root Redex.store) M.tagDefs hmv
       dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
     rw [show is_unseq_with_ccall CTX = false from rfl] at hsteps
-    exact ⟨_, _, _, hsteps, rfl, advance_action_killed (ars_store_killed hk)⟩
+    exact ⟨_, _, _, hsteps, rfl, advance_action_killed (hfuel := by omega) (ars_store_killed (hfuel := by omega) hk)⟩
 
 /-- The refusal classification at a LOAD redex: `loadM`'s kill
     (CerbMem.lean:1621 — null/function/out-of-bounds/dead pointers are
     `MerrAccess` UB kills, `Undef0`; the trap representation and
     outside-lifetime kills likewise per `failReason`), at the request's
     own location. -/
-theorem cerberusRound_refused_load {an : List _root_.annot} (M : MachineCtx)
+theorem cerberusRound_refused_load (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} (M : MachineCtx)
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
     {pv : CerbMem.PointerValue} {mo : memory_order}
     (ρ : EnvStack) (ctl : Ctl) (σ : Mem)
     (hstuck : ∀ c', ¬ Step M (loadRedex an loc ann ty pv mo, ρ, ctl, σ) c') :
     ShippedRefusal M (loadRedex an loc ann ty pv mo, ρ, ctl, σ) := by
-  have hsz : esize (loadRedex an loc ann ty pv mo) ≤ lemDefaultFuel := by
-    rw [show esize (loadRedex an loc ann ty pv mo) = 1 from rfl]
-    unfold lemDefaultFuel
-    omega
   have hnone : applyMemM (CerbMem.loadM M.tagDefs
       (requestLoc (locUpdTh an (M.thread (loadRedex an loc ann ty pv mo) ρ ctl)) loc) ty pv) σ = none := by
     rw [loadM_loc_irrel loc]
@@ -2208,28 +2259,23 @@ theorem cerberusRound_refused_load {an : List _root_.annot} (M : MachineCtx)
   obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
   simp only at hlay
   subst hlay
-  obtain ⟨post, hsteps⟩ := step_ctx_load (Decomp.root Redex.load) hsz M.tagDefs
+  obtain ⟨post, hsteps⟩ := step_ctx_load (Decomp.root Redex.load) M.tagDefs
     dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
   rw [show is_unseq_with_ccall CTX = false from rfl] at hsteps
-  exact ⟨_, _, _, hsteps, rfl, advance_action_killed (ars_load_killed hk)⟩
+  exact ⟨_, _, _, hsteps, rfl, advance_action_killed (hfuel := by omega) (ars_load_killed (hfuel := by omega) hk)⟩
 
-/-- The refusal classification at a CREATE redex: the out-of-memory
-    kill (CerbMem.lean:1513, `Other (MerrOther "out of memory")`, lifted
-    to `Other (DErr_memory _)`) — the arm the budget's coupling
-    inequality excludes (`create_atomic`, K2.5). -/
-theorem cerberusRound_refused_create {an : List _root_.annot} (M : MachineCtx)
+/-- A stuck CREATE redex has a killed kernel outcome. This includes
+    the allocator's out-of-memory error and the requested-address panic
+    default; runtime behavior retains the KOI A5 boundary. -/
+theorem cerberusRound_refused_create (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} (M : MachineCtx)
     {loc : CerbLocation.Loc} {ann : core_run_annotation}
     {align : CerbMem.IntegerValue} {ty : ctype} {pref : prefix0}
     (ρ : EnvStack) (ctl : Ctl) (σ : Mem)
     (hstuck : ∀ c', ¬ Step M (createRedex an loc ann align ty pref, ρ, ctl, σ) c') :
     ShippedRefusal M (createRedex an loc ann align ty pref, ρ, ctl, σ) := by
-  have hsz : esize (createRedex an loc ann align ty pref) ≤ lemDefaultFuel := by
-    rw [show esize (createRedex an loc ann align ty pref) = 1 from rfl]
-    unfold lemDefaultFuel
-    omega
-  have hnone : applyMemM (CerbMem.allocateObject M.tagDefs 0 pref align ty none none) σ =
+  have hnone : applyMemM (CerbMem.allocateObject M.tagDefs 0 pref align ty (get_with_address an) none) σ =
       none := by
-    cases hmem : applyMemM (CerbMem.allocateObject M.tagDefs 0 pref align ty none none) σ with
+    cases hmem : applyMemM (CerbMem.allocateObject M.tagDefs 0 pref align ty (get_with_address an) none) σ with
     | none => rfl
     | some r =>
       obtain ⟨pv, σ'⟩ := r
@@ -2240,24 +2286,19 @@ theorem cerberusRound_refused_create {an : List _root_.annot} (M : MachineCtx)
   obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
   simp only at hlay
   subst hlay
-  obtain ⟨post, hsteps⟩ := step_ctx_create (Decomp.root Redex.create) hsz M.tagDefs
+  obtain ⟨post, hsteps⟩ := step_ctx_create (Decomp.root Redex.create) M.tagDefs
     dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
   rw [show is_unseq_with_ccall CTX = false from rfl] at hsteps
-  exact ⟨_, _, _, hsteps, rfl, advance_action_killed (ars_create_killed hk)⟩
+  exact ⟨_, _, _, hsteps, rfl, advance_action_killed (hfuel := by omega) (ars_create_killed (hfuel := by omega) hk)⟩
 
-/-- The refusal classification at a KILL redex (kill/free arc K2):
-    `killM`'s kill at the request's own location — one of the three
-    reasons of `killM_killed_inv` (UB179a non-matching, UB179b dead,
-    the non-UB out-of-bound `Other`), lifted through `liftMem`. -/
-theorem cerberusRound_refused_kill {an : List _root_.annot} (M : MachineCtx)
+/-- A stuck KILL redex has one of the seven memory-kill reasons
+    classified by `killM_killed_inv`, at the request's location and
+    lifted through the driver's `liftMem`. -/
+theorem cerberusRound_refused_kill (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} (M : MachineCtx)
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {kind : kill_kind}
     {pv : CerbMem.PointerValue} (ρ : EnvStack) (ctl : Ctl) (σ : Mem)
     (hstuck : ∀ c', ¬ Step M (killRedex an loc ann kind pv, ρ, ctl, σ) c') :
     ShippedRefusal M (killRedex an loc ann kind pv, ρ, ctl, σ) := by
-  have hsz : esize (killRedex an loc ann kind pv) ≤ lemDefaultFuel := by
-    rw [show esize (killRedex an loc ann kind pv) = 1 from rfl]
-    unfold lemDefaultFuel
-    omega
   have hnone : applyMemM (CerbMem.killM
       (requestLoc (locUpdTh an (M.thread (killRedex an loc ann kind pv) ρ ctl)) loc) (is_dynamic kind) pv) σ =
       none := by
@@ -2273,25 +2314,20 @@ theorem cerberusRound_refused_kill {an : List _root_.annot} (M : MachineCtx)
   obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
   simp only at hlay
   subst hlay
-  obtain ⟨post, hsteps⟩ := step_ctx_kill (Decomp.root Redex.kill) hsz M.tagDefs
+  obtain ⟨post, hsteps⟩ := step_ctx_kill (Decomp.root Redex.kill) M.tagDefs
     dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
   rw [show is_unseq_with_ccall CTX = false from rfl] at hsteps
-  exact ⟨_, _, _, hsteps, rfl, advance_action_killed (ars_kill_killed hk)⟩
+  exact ⟨_, _, _, hsteps, rfl, advance_action_killed (hfuel := by omega) (ars_kill_killed (hfuel := by omega) hk)⟩
 
-/-- The refusal classification at an ALLOC redex (kill/free arc K3): the
-    out-of-memory kill (CerbMem.lean:1541, `Other (MerrOther "out of
-    memory")`, lifted to `Other (DErr_memory _)`) — the arm the budget's
-    coupling inequality excludes (`alloc_atomic`). -/
-theorem cerberusRound_refused_alloc {an : List _root_.annot} (M : MachineCtx)
+/-- A stuck ALLOC redex at sufficient ambient fuel reaches the
+    allocator's out-of-memory kill, lifted through `liftMem`. The
+    allocation rule's coupling inequality excludes this outcome. -/
+theorem cerberusRound_refused_alloc (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} (M : MachineCtx)
     {loc : CerbLocation.Loc} {ann : core_run_annotation}
     {align size : CerbMem.IntegerValue} {pref : prefix0}
     (ρ : EnvStack) (ctl : Ctl) (σ : Mem)
     (hstuck : ∀ c', ¬ Step M (allocRedex an loc ann align size pref, ρ, ctl, σ) c') :
     ShippedRefusal M (allocRedex an loc ann align size pref, ρ, ctl, σ) := by
-  have hsz : esize (allocRedex an loc ann align size pref) ≤ lemDefaultFuel := by
-    rw [show esize (allocRedex an loc ann align size pref) = 1 from rfl]
-    unfold lemDefaultFuel
-    omega
   have hnone : applyMemM (CerbMem.allocateRegion 0 pref align size) σ = none := by
     cases hmem : applyMemM (CerbMem.allocateRegion 0 pref align size) σ with
     | none => rfl
@@ -2304,17 +2340,16 @@ theorem cerberusRound_refused_alloc {an : List _root_.annot} (M : MachineCtx)
   obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
   simp only at hlay
   subst hlay
-  obtain ⟨post, hsteps⟩ := step_ctx_alloc (Decomp.root Redex.alloc) hsz M.tagDefs
+  obtain ⟨post, hsteps⟩ := step_ctx_alloc (Decomp.root Redex.alloc) M.tagDefs
     dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
   rw [show is_unseq_with_ccall CTX = false from rfl] at hsteps
-  exact ⟨_, _, _, hsteps, rfl, advance_action_killed (ars_alloc_killed hk)⟩
+  exact ⟨_, _, _, hsteps, rfl, advance_action_killed (hfuel := by omega) (ars_alloc_killed (hfuel := by omega) hk)⟩
 
 /-- The refusal classification at a value-scrutinee CASE redex: the
     ILLTYPED no-match report (one_step0's Ecase value arm,
     Core_reduction.lean:353). -/
 theorem cerberusRound_refused_case {an : List _root_.annot} (M : MachineCtx)
     {b : List _root_.annot} {cval : value} {pats : List (pattern × CoreExpr)}
-    (hsz : esize (caseRedex an (Pexpr b () (PEval cval)) pats) ≤ lemDefaultFuel)
     (ρ : EnvStack) (ctl : Ctl) (σ : Mem)
     (hstuck : ∀ c', ¬ Step M (caseRedex an (Pexpr b () (PEval cval)) pats, ρ, ctl, σ) c') :
     ShippedRefusal M (caseRedex an (Pexpr b () (PEval cval)) pats, ρ, ctl, σ) := by
@@ -2329,7 +2364,7 @@ theorem cerberusRound_refused_case {an : List _root_.annot} (M : MachineCtx)
   obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
   simp only at hlay
   subst hlay
-  exact step_ctx_case_illtyped (Decomp.root (Redex.case_ _ _)) hsz hsel M.tagDefs
+  exact step_ctx_case_illtyped (Decomp.root (Redex.case_ _ _)) hsel M.tagDefs
     dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
 
 /-! ## The discharge-device readings (PROOF DEVICES — `outcomesU`)
@@ -2346,20 +2381,16 @@ theorem engine_complete_loadU {an : List _root_.annot} (M : MachineCtx) (aid : N
     (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
     ∃ o, outcomesU M aid (loadRedex an loc ann ty pv mo) ρ ctl σ = [o] ∧
       EngineMatchU M (loadRedex an loc ann ty pv mo) ρ ctl σ o := by
-  have hsz : esize (loadRedex an loc ann ty pv mo) ≤ lemDefaultFuel := by
-    rw [show esize (loadRedex an loc ann ty pv mo) = 1 from rfl]
-    unfold lemDefaultFuel
-    omega
   cases hmem : applyMemM (CerbMem.loadM M.tagDefs loc ty pv) σ with
   | some r =>
     obtain ⟨⟨fp, mval⟩, σ'⟩ := r
     refine ⟨_, ?_, .step (Step.load_canonical hmem)⟩
     unfold outcomesU engineStepsU loadRedex
-    obtain ⟨post, hs⟩ := step_ctx_load (Decomp.root (Redex.load)) hsz M.tagDefs σ
+    obtain ⟨post, hs⟩ := step_ctx_load (Decomp.root (Redex.load)) M.tagDefs σ
       M.file M.extern M.tid M.parent (M.thread _ ρ ctl) rfl
     rw [step_ctx_singleton_of_root (by
       show (get_ctx (loadRedex an loc ann ty pv mo)).length = 1
-      unfold loadRedex; exact congrArg List.length (get_ctx_action (lemDefaultFuel - 1))) hs]
+      unfold loadRedex; exact congrArg List.length (get_ctx_action _)) hs]
     simp only [List.map_cons, List.map_nil]
     rw [dischargeStep_load_active hmem]
     simp only [MachineCtx.locUpdTh_thread]
@@ -2375,11 +2406,11 @@ theorem engine_complete_loadU {an : List _root_.annot} (M : MachineCtx) (aid : N
                 (valueFromMemValue mval).2)))))) })))),
       ?_, ?_⟩
     · unfold outcomesU engineStepsU loadRedex
-      obtain ⟨post, hs⟩ := step_ctx_load (Decomp.root (Redex.load)) hsz M.tagDefs σ
+      obtain ⟨post, hs⟩ := step_ctx_load (Decomp.root (Redex.load)) M.tagDefs σ
         M.file M.extern M.tid M.parent (M.thread _ ρ ctl) rfl
       rw [step_ctx_singleton_of_root (by
         show (get_ctx (loadRedex an loc ann ty pv mo)).length = 1
-        unfold loadRedex; exact congrArg List.length (get_ctx_action (lemDefaultFuel - 1))) hs]
+        unfold loadRedex; exact congrArg List.length (get_ctx_action _)) hs]
       rfl
     · refine .refused (dischargeStep_load_refusal hmem) (fun out hstep => ?_) rfl
       obtain ⟨fp', mval', σ'', hmem', -⟩ := hstep.load_inv
@@ -2393,23 +2424,18 @@ theorem engine_complete_createU {an : List _root_.annot} (M : MachineCtx) (aid :
     (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
     ∃ o, outcomesU M aid (createRedex an loc ann align ty pref) ρ ctl σ = [o] ∧
       EngineMatchU M (createRedex an loc ann align ty pref) ρ ctl σ o := by
-  have hsz : esize (createRedex an loc ann align ty pref) ≤ lemDefaultFuel := by
-    rw [show esize (createRedex an loc ann align ty pref) = 1 from rfl]
-    unfold lemDefaultFuel
-    omega
-  have hirr := allocateObject_arg_irrel M.tagDefs 0 0 pref align ty (get_with_address an) none none
-  cases hmem : applyMemM (CerbMem.allocateObject M.tagDefs 0 pref align ty none none) σ with
+  cases hmem : applyMemM (CerbMem.allocateObject M.tagDefs 0 pref align ty (get_with_address an) none) σ with
   | some r =>
     obtain ⟨pv, σ'⟩ := r
     refine ⟨_, ?_, .step (Step.create_canonical hmem)⟩
     unfold outcomesU engineStepsU createRedex
-    obtain ⟨post, hs⟩ := step_ctx_create (Decomp.root (Redex.create)) hsz M.tagDefs σ
+    obtain ⟨post, hs⟩ := step_ctx_create (Decomp.root (Redex.create)) M.tagDefs σ
       M.file M.extern M.tid M.parent (M.thread _ ρ ctl) rfl
     rw [step_ctx_singleton_of_root (by
       show (get_ctx (createRedex an loc ann align ty pref)).length = 1
-      unfold createRedex; exact congrArg List.length (get_ctx_action (lemDefaultFuel - 1))) hs]
+      unfold createRedex; exact congrArg List.length (get_ctx_action _)) hs]
     simp only [List.map_cons, List.map_nil]
-    rw [dischargeStep_create_active (hirr ▸ hmem)]
+    rw [dischargeStep_create_active hmem]
     simp only [MachineCtx.locUpdTh_thread]
     try rfl
   | none =>
@@ -2423,13 +2449,13 @@ theorem engine_complete_createU {an : List _root_.annot} (M : MachineCtx) (aid :
               (PEval (Vobject (OVpointer pv)))))) })))),
       ?_, ?_⟩
     · unfold outcomesU engineStepsU createRedex
-      obtain ⟨post, hs⟩ := step_ctx_create (Decomp.root (Redex.create)) hsz M.tagDefs σ
+      obtain ⟨post, hs⟩ := step_ctx_create (Decomp.root (Redex.create)) M.tagDefs σ
         M.file M.extern M.tid M.parent (M.thread _ ρ ctl) rfl
       rw [step_ctx_singleton_of_root (by
         show (get_ctx (createRedex an loc ann align ty pref)).length = 1
-        unfold createRedex; exact congrArg List.length (get_ctx_action (lemDefaultFuel - 1))) hs]
+        unfold createRedex; exact congrArg List.length (get_ctx_action _)) hs]
       rfl
-    · refine .refused (dischargeStep_create_refusal (hirr ▸ hmem)) (fun out hstep => ?_) rfl
+    · refine .refused (dischargeStep_create_refusal hmem) (fun out hstep => ?_) rfl
       obtain ⟨pv', σ'', hmem', -⟩ := hstep.create_inv
       rw [hmem] at hmem'
       cases hmem'
@@ -2441,8 +2467,8 @@ theorem EngineMatchU.refusal_of_stuck {M : MachineCtx} {e : CoreExpr} {ρ : EnvS
     o.isRefusal := by
   cases hm with
   | step hs => exact (hstuck _ hs).elim
-  | removeAnnot he => subst he; simp [toVal, ofVal] at hnv
-  | done he => subst he; simp [toVal, ofVal] at hnv
+  | removeAnnot he => subst he; simp [toVal] at hnv
+  | done he => subst he; simp [toVal] at hnv
   | refused hr _ _ => exact hr
 
 /-! ## MIRROR COMPLETENESS, PER CONSTRUCTOR (commit 2 of the slice)
@@ -2670,6 +2696,7 @@ theorem Decomp.lift_neg {M : MachineCtx} {e : CoreExpr} {ctx : context}
        ρ, (ctl.upd a).draw, σ) :=
   hd.lift_neg' rfl hbr ρ ctl σ
 
+omit [LemFuel] in
 theorem get_ctx_annot_unseq {a a' : List _root_.annot} {ds : List dyn_annotation}
     {es : List CoreExpr} (n : Nat) :
     get_ctx_lemFuel (n+1) (Expr a (Eannot ds (Expr a' (Eunseq es)))) =
@@ -2680,30 +2707,35 @@ theorem get_ctx_annot_unseq {a a' : List _root_.annot} {ds : List dyn_annotation
 whose head is a sequencing frame or an action: the outer irreducibility
 test and the double-annotation arm both decide by the head constructor. -/
 
+omit [LemFuel] in
 theorem get_ctx_annot_sseq {a a' : List _root_.annot} {ds : List dyn_annotation}
     {pat : pattern} {e1 e2 : CoreExpr} (n : Nat) :
     get_ctx_lemFuel (n+1) (Expr a (Eannot ds (Expr a' (Esseq pat e1 e2)))) =
       List.map (fun q => (Cannot a ds q.1, q.2))
         (get_ctx_lemFuel n (Expr a' (Esseq pat e1 e2))) := rfl
 
+omit [LemFuel] in
 theorem get_ctx_annot_wseq {a a' : List _root_.annot} {ds : List dyn_annotation}
     {pat : pattern} {e1 e2 : CoreExpr} (n : Nat) :
     get_ctx_lemFuel (n+1) (Expr a (Eannot ds (Expr a' (Ewseq pat e1 e2)))) =
       List.map (fun q => (Cannot a ds q.1, q.2))
         (get_ctx_lemFuel n (Expr a' (Ewseq pat e1 e2))) := rfl
 
+omit [LemFuel] in
 theorem get_ctx_annot_action {a a' : List _root_.annot} {ds : List dyn_annotation}
     {p : generic_paction core_run_annotation Unit sym} (n : Nat) :
     get_ctx_lemFuel (n+1) (Expr a (Eannot ds (Expr a' (Eaction p)))) =
       List.map (fun q => (Cannot a ds q.1, q.2))
         (get_ctx_lemFuel n (Expr a' (Eaction p))) := rfl
 
+omit [LemFuel] in
 theorem get_ctx_annot_bound {a a' : List _root_.annot} {ds : List dyn_annotation}
     {b : CoreExpr} (n : Nat) :
     get_ctx_lemFuel (n+1) (Expr a (Eannot ds (Expr a' (Ebound b)))) =
       List.map (fun q => (Cannot a ds q.1, q.2))
         (get_ctx_lemFuel n (Expr a' (Ebound b))) := rfl
 
+omit [LemFuel] in
 /-- Rebuilding a decomposition's hole with an ACTION node keeps the
     frames reducible (the head of every frame is `Esseq`/`Ewseq`/an
     action; an annotation frame's body is never annotation-rooted —
@@ -2735,8 +2767,9 @@ theorem Decomp.rebuild_not_irreducible {e : CoreExpr} {ctx : context} {r : CoreE
     | wseq_tuple _ => rfl
     | wseq_sym _ => rfl
     | unseq _ _ _ => rfl
-    | annot _ _ _ _ => simp [annotRooted, apply_ctx] at hroot
+    | annot _ _ _ _ => simp [annotRooted] at hroot
 
+omit [LemFuel] in
 /-- Rebuilding a decomposition's hole with an ACTION node keeps the
     decomposition: the engine's `get_ctx` at the rebuilt arena HEADS with
     `(ctx, action)` (E4 head form; the singleton at every frame but a
@@ -2889,8 +2922,9 @@ theorem Decomp.get_ctx_rebuild_action {e : CoreExpr} {ctx : context} {r : CoreEx
     | unseq _ _ _ =>
       dsimp only [apply_ctx] at ih' ⊢
       rw [get_ctx_annot_unseq m, ih']; exact ⟨_, rfl⟩
-    | annot _ _ _ _ => simp [annotRooted, apply_ctx] at hroot
+    | annot _ _ _ _ => simp [annotRooted] at hroot
 
+omit [LemFuel] in
 /-- E5: the excluded-action twin of `rebuild_not_irreducible` (an
     `Eexcluded` node is never a value). -/
 theorem Decomp.rebuild_not_irreducible_excl {e : CoreExpr} {ctx : context} {r : CoreExpr}
@@ -2920,14 +2954,16 @@ theorem Decomp.rebuild_not_irreducible_excl {e : CoreExpr} {ctx : context} {r : 
     | wseq_tuple _ => rfl
     | wseq_sym _ => rfl
     | unseq _ _ _ => rfl
-    | annot _ _ _ _ => simp [annotRooted, apply_ctx] at hroot
+    | annot _ _ _ _ => simp [annotRooted] at hroot
 
+omit [LemFuel] in
 theorem get_ctx_annot_excluded {a a' : List _root_.annot} {ds : List dyn_annotation}
     {k : Nat} {act : CoreAction} (n : Nat) :
     get_ctx_lemFuel (n+1) (Expr a (Eannot ds (Expr a' (Eexcluded k act)))) =
       List.map (fun q => (Cannot a ds q.1, q.2))
         (get_ctx_lemFuel n (Expr a' (Eexcluded k act))) := rfl
 
+omit [LemFuel] in
 /-- E5: `get_ctx_rebuild_action` for a rebuilt EXCLUDED node `Eexcluded n act`
     (the excluded store's ACTION_EVAL successor, `step_ctx_excluded_store_eval_ws'`;
     get_ctx roots at `Eexcluded`, core_reduction.lem:588). -/
@@ -3076,8 +3112,37 @@ theorem Decomp.get_ctx_rebuild_excluded {e : CoreExpr} {ctx : context} {r : Core
     | unseq _ _ _ =>
       dsimp only [apply_ctx] at ih' ⊢
       rw [get_ctx_annot_unseq m, ih']; exact ⟨_, rfl⟩
-    | annot _ _ _ _ => simp [annotRooted, apply_ctx] at hroot
+    | annot _ _ _ _ => simp [annotRooted] at hroot
 
+omit [LemFuel] in
+/-- The action rebuild at the engine's measured wrapper. -/
+theorem Decomp.get_ctx_rebuild_action_default {e : CoreExpr} {ctx : context} {r : CoreExpr}
+    (hd : Decomp e ctx r) (a0 : List _root_.annot)
+    (p : generic_paction core_run_annotation Unit sym) :
+    ∃ rest, get_ctx (apply_ctx ctx (Expr a0 (Eaction p))) =
+      (ctx, Expr a0 (Eaction p)) :: rest := by
+  let arena := apply_ctx ctx (Expr a0 (Eaction p))
+  let n := max (generic_expr.lemSize arena + 1) (esize e)
+  obtain ⟨rest, h⟩ := hd.get_ctx_rebuild_action a0 p n (Nat.le_max_right _ _)
+  rw [Core_reduction_lemMeasureProofs.get_ctx_measure_sufficient arena n
+    (Nat.le_max_left _ _)] at h
+  exact ⟨rest, h⟩
+
+omit [LemFuel] in
+/-- The excluded-action rebuild at the engine's measured wrapper. -/
+theorem Decomp.get_ctx_rebuild_excluded_default {e : CoreExpr} {ctx : context} {r : CoreExpr}
+    (hd : Decomp e ctx r) (a0 : List _root_.annot) (nact : Nat)
+    (act : CoreAction) :
+    ∃ rest, get_ctx (apply_ctx ctx (Expr a0 (Eexcluded nact act))) =
+      (ctx, Expr a0 (Eexcluded nact act)) :: rest := by
+  let arena := apply_ctx ctx (Expr a0 (Eexcluded nact act))
+  let n := max (generic_expr.lemSize arena + 1) (esize e)
+  obtain ⟨rest, h⟩ := hd.get_ctx_rebuild_excluded a0 nact act n (Nat.le_max_right _ _)
+  rw [Core_reduction_lemMeasureProofs.get_ctx_measure_sufficient arena n
+    (Nat.le_max_left _ _)] at h
+  exact ⟨rest, h⟩
+
+omit [LemFuel] in
 /-- The right unit law of the engine's state-except monad. -/
 theorem stExceptUndef_bind_return_right {a b c : Type}
     (m : c → exceptM (t0 a × b) core_run_cause) :
@@ -3101,7 +3166,6 @@ theorem step_ctx_beta_spec_pure' {an a1 b1 : List _root_.annot} {e : CoreExpr} {
     {pa pb : List _root_.annot} {x : sym} {bty : core_base_type}
     {v : value} {e2 : CoreExpr}
     (hd : Decomp e ctx (Expr an (Esseq (specPat pa pb x bty) (ofValA (.pure a1 b1 v)) e2)))
-    (hsz : esize e ≤ lemDefaultFuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -3115,7 +3179,7 @@ theorem step_ctx_beta_spec_pure' {an a1 b1 : List _root_.annot} {e : CoreExpr} {
             arena := apply_ctx ctx e2 }) :: post := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena =
       (ctx, Expr an (Esseq (specPat pa pb x bty) (ofValA (.pure a1 b1 v)) e2)) :: rest := by
-    rw [harena]; exact hd.get_ctx_default hsz
+    rw [harena]; exact hd.get_ctx_default
   unfold step_ctx
   dsimp only
   rw [hget]
@@ -3134,7 +3198,6 @@ theorem step_ctx_beta_spec_annot' {an a1 a2 b1 : List _root_.annot} {e : CoreExp
     {pa pb : List _root_.annot} {x : sym} {bty : core_base_type}
     {ds : List dyn_annotation} {v : value} {e2 : CoreExpr}
     (hd : Decomp e ctx (Expr an (Esseq (specPat pa pb x bty) (ofValA (.annot a1 a2 b1 ds v)) e2)))
-    (hsz : esize e ≤ lemDefaultFuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -3148,7 +3211,7 @@ theorem step_ctx_beta_spec_annot' {an a1 a2 b1 : List _root_.annot} {e : CoreExp
             arena := apply_ctx ctx (Expr [] (Eannot ds e2)) }) :: post := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena =
       (ctx, Expr an (Esseq (specPat pa pb x bty) (ofValA (.annot a1 a2 b1 ds v)) e2)) :: rest := by
-    rw [harena]; exact hd.get_ctx_default hsz
+    rw [harena]; exact hd.get_ctx_default
   unfold step_ctx
   dsimp only
   rw [hget]
@@ -3162,6 +3225,7 @@ theorem step_ctx_beta_spec_annot' {an a1 a2 b1 : List _root_.annot} {e : CoreExp
      rw [henv]
      try rfl)
 
+omit [LemFuel] in
 /-- `update_env_aux` (Core_aux.lean:861) at the Specified binder and a
     value that is NOT `Vloaded (LVspecified _)`: the pattern-mismatch
     PANIC. -/
@@ -3169,10 +3233,10 @@ theorem update_env_aux_spec_mismatch (pa pb : List _root_.annot) (x : sym)
     (bty : core_base_type) (v : value) (ev0 : Fmap sym value)
     (hv : ∀ ov, v ≠ Vloaded (LVspecified ov)) :
     ∃ msg, update_env_aux (specPat pa pb x bty) v ev0 = (failwithI msg : Fmap sym value) := by
-  unfold update_env_aux
-  rw [show lemDefaultFuel = Nat.succ 999999 from rfl]
+  unfold update_env_aux specPat
+  dsimp only [generic_pattern.lemSize, generic_pattern_.lemSize]
+  simp only [Nat.add_comm 1]
   unfold update_env_aux_lemFuel
-  unfold specPat
   cases v with
   | Vloaded lv =>
     cases lv with
@@ -3180,6 +3244,7 @@ theorem update_env_aux_spec_mismatch (pa pb : List _root_.annot) (x : sym)
     | LVunspecified ty => exact ⟨_, rfl⟩
   | _ => exact ⟨_, rfl⟩
 
+omit [LemFuel] in
 /-- E2: `update_env_aux` at a flat TUPLE binder and a non-tuple value —
     the mismatch PANIC (Core_aux.lean:861, the `CaseCtor ctor1 pats, _`
     arm). -/
@@ -3187,10 +3252,10 @@ theorem update_env_aux_tuple_mismatch (pa : List _root_.annot) (ls : List TupleL
     (v : value) (ev0 : Fmap sym value)
     (hv : ∀ vs, v ≠ Vtuple vs) :
     ∃ msg, update_env_aux (tuplePat pa ls) v ev0 = (failwithI msg : Fmap sym value) := by
-  unfold update_env_aux
-  rw [show lemDefaultFuel = Nat.succ 999999 from rfl]
+  unfold update_env_aux tuplePat
+  dsimp only [generic_pattern.lemSize, generic_pattern_.lemSize]
+  simp only [Nat.add_comm 1]
   unfold update_env_aux_lemFuel
-  unfold tuplePat
   cases v with
   | Vtuple vs => exact absurd rfl (hv vs)
   | _ => exact ⟨_, rfl⟩
@@ -3199,11 +3264,11 @@ theorem update_env_aux_tuple_mismatch (pa : List _root_.annot) (ls : List TupleL
 
 /-- STORE: ILLTYPED when the value does not encode at the lvalue type;
     otherwise `storeM`'s verdict — active (the mirror step) or killed. -/
-theorem complete_store {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_store (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {lk : Bool}
     {ty : ctype} {pv : CerbMem.PointerValue} {cv : value} {mo : memory_order}
     (hd : Decomp e ctx (storeRedex an loc ann lk ty pv cv mo))
-    (hsz : esize e ≤ lemDefaultFuel) (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
+    (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
     RoundComplete M (e, ρ, ctl, σ) := by
   have hnr : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (l : sym)
       (pes : List (generic_pexpr Unit sym)),
@@ -3224,7 +3289,7 @@ theorem complete_store {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} 
     obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
     simp only at hlay
     subst hlay
-    exact step_ctx_store_illtyped hd hsz M.tagDefs hmv
+    exact step_ctx_store_illtyped hd M.tagDefs hmv
       dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
   | some mv =>
     cases hmem : applyMemM (CerbMem.storeM M.tagDefs loc ty lk pv mv) σ with
@@ -3242,17 +3307,17 @@ theorem complete_store {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} 
       obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
-      obtain ⟨post, hsteps⟩ := step_ctx_store hd hsz M.tagDefs hmv
+      obtain ⟨post, hsteps⟩ := step_ctx_store hd M.tagDefs hmv
         dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
-      rw [hd.unseq_ccall_false hsz] at hsteps
-      exact ⟨_, _, _, hsteps, rfl, advance_action_killed (ars_store_killed hk)⟩
+      rw [hd.unseq_ccall_false] at hsteps
+      exact ⟨_, _, _, hsteps, rfl, advance_action_killed (hfuel := by omega) (ars_store_killed (hfuel := by omega) hk)⟩
 
 /-- LOAD: `loadM`'s verdict — active (the mirror step) or killed. -/
-theorem complete_load {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_load (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
     {pv : CerbMem.PointerValue} {mo : memory_order}
     (hd : Decomp e ctx (loadRedex an loc ann ty pv mo))
-    (hsz : esize e ≤ lemDefaultFuel) (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
+    (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
     RoundComplete M (e, ρ, ctl, σ) := by
   have hnr : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (l : sym)
       (pes : List (generic_pexpr Unit sym)),
@@ -3277,18 +3342,19 @@ theorem complete_load {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {
     obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
     simp only at hlay
     subst hlay
-    obtain ⟨post, hsteps⟩ := step_ctx_load hd hsz M.tagDefs
+    obtain ⟨post, hsteps⟩ := step_ctx_load hd M.tagDefs
       dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
-    rw [hd.unseq_ccall_false hsz] at hsteps
-    exact ⟨_, _, _, hsteps, rfl, advance_action_killed (ars_load_killed hk)⟩
+    rw [hd.unseq_ccall_false] at hsteps
+    exact ⟨_, _, _, hsteps, rfl, advance_action_killed (hfuel := by omega) (ars_load_killed (hfuel := by omega) hk)⟩
 
-/-- CREATE: `allocateObject`'s verdict — active (the mirror step) or
-    the out-of-memory kill. -/
-theorem complete_create {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
+/-- CREATE: `allocateObject`'s kernel verdict — active (the mirror
+    step) or killed, including the requested-address panic default.
+    The kernel/runtime distinction is the module header's KOI A5. -/
+theorem complete_create (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation}
     {align : CerbMem.IntegerValue} {ty : ctype} {pref : prefix0}
     (hd : Decomp e ctx (createRedex an loc ann align ty pref))
-    (hsz : esize e ≤ lemDefaultFuel) (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
+    (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
     RoundComplete M (e, ρ, ctl, σ) := by
   have hnr : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (l : sym)
       (pes : List (generic_pexpr Unit sym)),
@@ -3298,7 +3364,7 @@ theorem complete_create {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr}
       (pes : List (generic_pexpr Unit sym)),
       createRedex an loc ann align ty pref ≠ callRedex an' ra f pes := by
     intro an' ra f pes h; cases h
-  cases hmem : applyMemM (CerbMem.allocateObject M.tagDefs 0 pref align ty none none) σ with
+  cases hmem : applyMemM (CerbMem.allocateObject M.tagDefs 0 pref align ty (get_with_address an) none) σ with
   | some r =>
     obtain ⟨pv, σ'⟩ := r
     exact .inl ⟨_, hd.lift_step hnr hnc (Step.create_canonical hmem)⟩
@@ -3310,23 +3376,20 @@ theorem complete_create {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr}
     obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
     simp only at hlay
     subst hlay
-    obtain ⟨post, hsteps⟩ := step_ctx_create hd hsz M.tagDefs
+    obtain ⟨post, hsteps⟩ := step_ctx_create hd M.tagDefs
       dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
-    rw [hd.unseq_ccall_false hsz] at hsteps
-    exact ⟨_, _, _, hsteps, rfl, advance_action_killed (ars_create_killed hk)⟩
+    rw [hd.unseq_ccall_false] at hsteps
+    exact ⟨_, _, _, hsteps, rfl, advance_action_killed (hfuel := by omega) (ars_create_killed (hfuel := by omega) hk)⟩
 
-/-- KILL (kill/free arc K2): `killM`'s verdict at the request's own
-    location — active (the mirror step) or one of the three kills of
-    `killM_killed_inv` (UB179a non-matching: null on the static path,
-    function pointer, no record, non-dynamic origin on the dynamic
-    path, other provenance; UB179b dead; the non-UB out-of-bound
-    `Other`). Stated at any `kind`: the static restriction is
-    `Frag.kill`'s, not the engine's. -/
-theorem complete_kill {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
+/-- KILL: the kernel verdict at the request's own location — active
+    (the mirror step, including the static-dead panic default under A5)
+    or one of the seven reasons in `killM_killed_inv`. Stated at any
+    `kind`; `Frag.kill` retains the static restriction. -/
+theorem complete_kill (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {kind : kill_kind}
     {pv : CerbMem.PointerValue}
     (hd : Decomp e ctx (killRedex an loc ann kind pv))
-    (hsz : esize e ≤ lemDefaultFuel) (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
+    (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
     RoundComplete M (e, ρ, ctl, σ) := by
   have hnr : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (l : sym)
       (pes : List (generic_pexpr Unit sym)),
@@ -3351,19 +3414,19 @@ theorem complete_kill {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {
     obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
     simp only at hlay
     subst hlay
-    obtain ⟨post, hsteps⟩ := step_ctx_kill hd hsz M.tagDefs
+    obtain ⟨post, hsteps⟩ := step_ctx_kill hd M.tagDefs
       dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
-    rw [hd.unseq_ccall_false hsz] at hsteps
-    exact ⟨_, _, _, hsteps, rfl, advance_action_killed (ars_kill_killed hk)⟩
+    rw [hd.unseq_ccall_false] at hsteps
+    exact ⟨_, _, _, hsteps, rfl, advance_action_killed (hfuel := by omega) (ars_kill_killed (hfuel := by omega) hk)⟩
 
-/-- ALLOC (kill/free arc K3): `allocateRegion`'s verdict — active (the
-    mirror step) or the out-of-memory kill, its ONLY refusal
-    (`allocateRegion_killed_inv`). -/
-theorem complete_alloc {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
+/-- ALLOC: at positive ambient fuel the kernel verdict is active
+    (the mirror step) or the allocator's out-of-memory kill. The
+    zero-alignment panic is covered only by its kernel default (A5). -/
+theorem complete_alloc (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation}
     {align size : CerbMem.IntegerValue} {pref : prefix0}
     (hd : Decomp e ctx (allocRedex an loc ann align size pref))
-    (hsz : esize e ≤ lemDefaultFuel) (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
+    (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
     RoundComplete M (e, ρ, ctl, σ) := by
   have hnr : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (l : sym)
       (pes : List (generic_pexpr Unit sym)),
@@ -3385,10 +3448,10 @@ theorem complete_alloc {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} 
     obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
     simp only at hlay
     subst hlay
-    obtain ⟨post, hsteps⟩ := step_ctx_alloc hd hsz M.tagDefs
+    obtain ⟨post, hsteps⟩ := step_ctx_alloc hd M.tagDefs
       dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
-    rw [hd.unseq_ccall_false hsz] at hsteps
-    exact ⟨_, _, _, hsteps, rfl, advance_action_killed (ars_alloc_killed hk)⟩
+    rw [hd.unseq_ccall_false] at hsteps
+    exact ⟨_, _, _, hsteps, rfl, advance_action_killed (hfuel := by omega) (ars_alloc_killed (hfuel := by omega) hk)⟩
 
 /-- LETS-PURE at the wildcard pattern: always a mirror step (cons env). -/
 theorem complete_beta_pure {an a1 b1 : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
@@ -3437,7 +3500,7 @@ theorem complete_merge {an a2 : List _root_.annot} {M : MachineCtx} {e : CoreExp
 theorem complete_case {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {b : List _root_.annot} {cval : value} {pats : List (pattern × CoreExpr)}
     (hd : Decomp e ctx (caseRedex an (Pexpr b () (PEval cval)) pats))
-    (hsz : esize e ≤ lemDefaultFuel) (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
+    (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
     RoundComplete M (e, ρ, ctl, σ) := by
   cases hsel : select_case subst_sym_expr cval pats with
   | some e' =>
@@ -3450,7 +3513,7 @@ theorem complete_case {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {
     obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
     simp only at hlay
     subst hlay
-    exact step_ctx_case_illtyped hd hsz hsel M.tagDefs
+    exact step_ctx_case_illtyped hd hsel M.tagDefs
       dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
 
 /-- LETS at the Specified binder, any bound value: a `Specified` payload
@@ -3460,7 +3523,6 @@ theorem complete_beta_spec {an : List _root_.annot} {M : MachineCtx} {e : CoreEx
     {pa pb : List _root_.annot} {x : sym} {bty : core_base_type}
     {wa : SpikeValA} {e2 : CoreExpr}
     (hd : Decomp e ctx (Expr an (Esseq (specPat pa pb x bty) (ofValA wa) e2)))
-    (hsz : esize e ≤ lemDefaultFuel)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (ctl : Ctl) (σ : Mem) :
     RoundComplete M (e, ev0 :: evs, ctl, σ) := by
   have hnr : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (l : sym)
@@ -3483,7 +3545,7 @@ theorem complete_beta_spec {an : List _root_.annot} {M : MachineCtx} {e : CoreEx
       obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
-      obtain ⟨post, hsteps⟩ := step_ctx_beta_spec_pure' hd hsz M.tagDefs dst.layout_state
+      obtain ⟨post, hsteps⟩ := step_ctx_beta_spec_pure' hd M.tagDefs dst.layout_state
         dst.core_file dst.core_extern M.tid M.parent (M.thread _ (ev0 :: evs) ctl) rfl rfl
       refine ⟨_, _, evs, post, hsteps, ?_⟩
       show update_env (specPat pa pb x bty) v (ev0 :: evs) = _
@@ -3499,7 +3561,7 @@ theorem complete_beta_spec {an : List _root_.annot} {M : MachineCtx} {e : CoreEx
       obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
-      obtain ⟨post, hsteps⟩ := step_ctx_beta_spec_annot' hd hsz M.tagDefs dst.layout_state
+      obtain ⟨post, hsteps⟩ := step_ctx_beta_spec_annot' hd M.tagDefs dst.layout_state
         dst.core_file dst.core_extern M.tid M.parent (M.thread _ (ev0 :: evs) ctl) rfl rfl
       refine ⟨_, _, evs, post, hsteps, ?_⟩
       show update_env (specPat pa pb x bty) v (ev0 :: evs) = _
@@ -3532,7 +3594,6 @@ theorem complete_beta_sym {an : List _root_.annot} {M : MachineCtx} {e : CoreExp
 theorem complete_beta_tuple {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {pa : List _root_.annot} {ls : List TupleLeaf} {wa : SpikeValA} {e2 : CoreExpr}
     (hd : Decomp e ctx (Expr an (Esseq (tuplePat pa ls) (ofValA wa) e2)))
-    (hsz : esize e ≤ lemDefaultFuel)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (ctl : Ctl) (σ : Mem) :
     RoundComplete M (e, ev0 :: evs, ctl, σ) := by
   have hnr : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (l : sym)
@@ -3555,7 +3616,7 @@ theorem complete_beta_tuple {an : List _root_.annot} {M : MachineCtx} {e : CoreE
       obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
-      obtain ⟨post, hsteps⟩ := step_ctx_sseq_val_pure hd hsz M.tagDefs dst.layout_state
+      obtain ⟨post, hsteps⟩ := step_ctx_sseq_val_pure hd M.tagDefs dst.layout_state
         dst.core_file dst.core_extern M.tid M.parent (M.thread _ (ev0 :: evs) ctl) rfl rfl
       refine ⟨_, _, evs, post, hsteps, ?_⟩
       show update_env (tuplePat pa ls) v (ev0 :: evs) = _
@@ -3571,7 +3632,7 @@ theorem complete_beta_tuple {an : List _root_.annot} {M : MachineCtx} {e : CoreE
       obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
-      obtain ⟨post, hsteps⟩ := step_ctx_sseq_val_annot hd hsz M.tagDefs dst.layout_state
+      obtain ⟨post, hsteps⟩ := step_ctx_sseq_val_annot hd M.tagDefs dst.layout_state
         dst.core_file dst.core_extern M.tid M.parent (M.thread _ (ev0 :: evs) ctl) rfl rfl
       refine ⟨_, _, evs, post, hsteps, ?_⟩
       show update_env (tuplePat pa ls) v (ev0 :: evs) = _
@@ -3583,7 +3644,6 @@ theorem complete_beta_tuple {an : List _root_.annot} {M : MachineCtx} {e : CoreE
 theorem complete_wbeta_tuple {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {pa : List _root_.annot} {ls : List TupleLeaf} {wa : SpikeValA} {e2 : CoreExpr}
     (hd : Decomp e ctx (Expr an (Ewseq (tuplePat pa ls) (ofValA wa) e2)))
-    (hsz : esize e ≤ lemDefaultFuel)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (ctl : Ctl) (σ : Mem) :
     RoundComplete M (e, ev0 :: evs, ctl, σ) := by
   have hnr : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (l : sym)
@@ -3606,7 +3666,7 @@ theorem complete_wbeta_tuple {an : List _root_.annot} {M : MachineCtx} {e : Core
       obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
-      obtain ⟨post, hsteps⟩ := step_ctx_wseq_val_pure hd hsz M.tagDefs dst.layout_state
+      obtain ⟨post, hsteps⟩ := step_ctx_wseq_val_pure hd M.tagDefs dst.layout_state
         dst.core_file dst.core_extern M.tid M.parent (M.thread _ (ev0 :: evs) ctl) rfl rfl
       refine ⟨_, _, evs, post, hsteps, ?_⟩
       show update_env (tuplePat pa ls) v (ev0 :: evs) = _
@@ -3622,7 +3682,7 @@ theorem complete_wbeta_tuple {an : List _root_.annot} {M : MachineCtx} {e : Core
       obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
-      obtain ⟨post, hsteps⟩ := step_ctx_wseq_val_annot hd hsz M.tagDefs dst.layout_state
+      obtain ⟨post, hsteps⟩ := step_ctx_wseq_val_annot hd M.tagDefs dst.layout_state
         dst.core_file dst.core_extern M.tid M.parent (M.thread _ (ev0 :: evs) ctl) rfl rfl
       refine ⟨_, _, evs, post, hsteps, ?_⟩
       show update_env (tuplePat pa ls) v (ev0 :: evs) = _
@@ -3675,7 +3735,6 @@ and the panic variants -/
 theorem step_ctx_if_shape {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {g : generic_pexpr Unit sym} {e2 e3 : CoreExpr}
     (hd : Decomp e ctx (ifRedex an g e2 e3))
-    (hsz : esize e ≤ lemDefaultFuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -3684,7 +3743,7 @@ theorem step_ctx_if_shape {an : List _root_.annot} {e : CoreExpr} {ctx : context
       step_ctx tds σ file ext tid (parent, th) =
         Step_with_runstate2 (RSK_tau s TSK_Misc) m :: post := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, ifRedex an g e2 e3) :: rest := by
-    rw [harena]; exact hd.get_ctx_default hsz
+    rw [harena]; exact hd.get_ctx_default
   have key : ∃ (s : String) (m : core_runM thread_state),
       (step_ctx tds σ file ext tid (parent, th)).head? =
         some (Step_with_runstate2 (RSK_tau s TSK_Misc) m) := by
@@ -3710,8 +3769,7 @@ theorem step_ctx_if_shape {an : List _root_.annot} {e : CoreExpr} {ctx : context
 theorem step_ctx_if_panic {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {g : generic_pexpr Unit sym} {e2 e3 : CoreExpr} {v : value}
     (hd : Decomp e ctx (ifRedex an g e2 e3))
-    (hsz : esize e ≤ lemDefaultFuel)
-    (hdg : peDepth g ≤ lemDefaultFuel)
+    (hdg : peDepth g ≤ LemFuel.fuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -3731,7 +3789,7 @@ theorem step_ctx_if_panic {an : List _root_.annot} {e : CoreExpr} {ctx : context
       m = stExceptUndef_bind step_m k ∧
       ∀ rs, step_m rs = @failwithI _ inst msg rs := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, ifRedex an g e2 e3) :: rest := by
-    rw [harena]; exact hd.get_ctx_default hsz
+    rw [harena]; exact hd.get_ctx_default
   have key : ∃ (s : String) (m : core_runM thread_state)
       (inst : Inhabited (core_run_state →
         exceptM (t0 (List (Fmap sym value) × CoreExpr) × core_run_state) core_run_cause))
@@ -3769,7 +3827,6 @@ theorem step_ctx_if_panic {an : List _root_.annot} {e : CoreExpr} {ctx : context
 theorem step_ctx_run_shape {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {ra : core_run_annotation} {l : sym} {pes : List (generic_pexpr Unit sym)}
     (hd : Decomp e ctx (runRedex an ra l pes))
-    (hsz : esize e ≤ lemDefaultFuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -3778,7 +3835,7 @@ theorem step_ctx_run_shape {an : List _root_.annot} {e : CoreExpr} {ctx : contex
       step_ctx tds σ file ext tid (parent, th) =
         Step_with_runstate2 (RSK_eval s) m :: post := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, runRedex an ra l pes) :: rest := by
-    rw [harena]; exact hd.get_ctx_default hsz
+    rw [harena]; exact hd.get_ctx_default
   have key : ∃ (s : String) (m : core_runM thread_state),
       (step_ctx tds σ file ext tid (parent, th)).head? =
         some (Step_with_runstate2 (RSK_eval s) m) := by
@@ -3800,7 +3857,6 @@ theorem step_ctx_run_shape {an : List _root_.annot} {e : CoreExpr} {ctx : contex
 theorem step_ctx_run_unresolved {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {ra : core_run_annotation} {l : sym} {pes : List (generic_pexpr Unit sym)}
     (hd : Decomp e ctx (runRedex an ra l pes))
-    (hsz : esize e ≤ lemDefaultFuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (p : sym) (th : thread_state)
@@ -3819,7 +3875,7 @@ theorem step_ctx_run_unresolved {an : List _root_.annot} {e : CoreExpr} {ctx : c
         Step_with_runstate2 (RSK_eval s) m :: post ∧
       m rs = @failwithI _ inst msg rs := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, runRedex an ra l pes) :: rest := by
-    rw [harena]; exact hd.get_ctx_default hsz
+    rw [harena]; exact hd.get_ctx_default
   have key : ∃ (s : String) (m : core_runM thread_state)
       (inst : Inhabited (core_run_state →
         exceptM (t0 thread_state × core_run_state) core_run_cause)) (msg : String),
@@ -3862,7 +3918,6 @@ theorem step_ctx_run_unresolved {an : List _root_.annot} {e : CoreExpr} {ctx : c
 theorem step_ctx_run_noproc {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {ra : core_run_annotation} {l : sym} {pes : List (generic_pexpr Unit sym)}
     (hd : Decomp e ctx (runRedex an ra l pes))
-    (hsz : esize e ≤ lemDefaultFuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -3884,7 +3939,7 @@ theorem step_ctx_run_noproc {an : List _root_.annot} {e : CoreExpr} {ctx : conte
                   Lem_Basic_classes.ordCompare s1 s2) l))))
             k) :: post := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, runRedex an ra l pes) :: rest := by
-    rw [harena]; exact hd.get_ctx_default hsz
+    rw [harena]; exact hd.get_ctx_default
   have key : ∃ (s : String) (inst : Inhabited sym)
       (k : Option (List (sym × core_base_type) × CoreExpr) → core_run_state →
         exceptM (t0 thread_state × core_run_state) core_run_cause),
@@ -3921,7 +3976,6 @@ theorem step_ctx_save_eval_shape {an : List _root_.annot} {e : CoreExpr} {ctx : 
       Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym))}
     {body : CoreExpr}
     (hd : Decomp e ctx (saveRedex an sb ps body))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexprs (saveParamPexprs ps) = none)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
@@ -3931,7 +3985,7 @@ theorem step_ctx_save_eval_shape {an : List _root_.annot} {e : CoreExpr} {ctx : 
       step_ctx tds σ file ext tid (parent, th) =
         Step_with_runstate2 (RSK_eval s) m :: post := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, saveRedex an sb ps body) :: rest := by
-    rw [harena]; exact hd.get_ctx_default hsz
+    rw [harena]; exact hd.get_ctx_default
   have key : ∃ (s : String) (m : core_runM thread_state),
       (step_ctx tds σ file ext tid (parent, th)).head? =
         some (Step_with_runstate2 (RSK_eval s) m) := by
@@ -3961,7 +4015,6 @@ theorem step_ctx_save_eval_shape {an : List _root_.annot} {e : CoreExpr} {ctx : 
 theorem step_ctx_pure_op_shape {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {pe : generic_pexpr Unit sym}
     (hd : Decomp e ctx (pureRedex an pe))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexpr pe = none)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
@@ -3970,14 +4023,13 @@ theorem step_ctx_pure_op_shape {an : List _root_.annot} {e : CoreExpr} {ctx : co
     ∃ (s : String) (m : core_runM thread_state) (post : List core_step2),
       step_ctx tds σ file ext tid (parent, th) =
         Step_with_runstate2 (RSK_eval s) m :: post := by
-  obtain ⟨s, m, post, hsteps, -⟩ := step_ctx_pure_op_raw hd hsz hnv tds σ file ext tid parent th harena
+  obtain ⟨s, m, post, hsteps, -⟩ := step_ctx_pure_op_raw hd hnv tds σ file ext tid parent th harena
   exact ⟨s, m, post, hsteps⟩
 
 /-- The plain-symbol instance (E1's statement). -/
 theorem step_ctx_pure_sym_shape {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {pb : List _root_.annot} {x : sym}
     (hd : Decomp e ctx (pureRedex an (Pexpr pb () (PEsym x))))
-    (hsz : esize e ≤ lemDefaultFuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -3985,19 +4037,18 @@ theorem step_ctx_pure_sym_shape {an : List _root_.annot} {e : CoreExpr} {ctx : c
     ∃ (s : String) (m : core_runM thread_state) (post : List core_step2),
       step_ctx tds σ file ext tid (parent, th) =
         Step_with_runstate2 (RSK_eval s) m :: post :=
-  step_ctx_pure_op_shape hd hsz rfl tds σ file ext tid parent th harena
+  step_ctx_pure_op_shape hd rfl tds σ file ext tid parent th harena
 
 /-- Load ACTION_EVAL at ANY evaluated pointer-operand value: the raw
     with-runstate singleton rebuilding the action with the value
     (`step_ctx_load_eval_ws` is the pointer instance). -/
-theorem step_ctx_load_eval_ws' {an : List _root_.annot} {e : CoreExpr} {ctx : context}
+theorem step_ctx_load_eval_ws' (hfuel : 0 < LemFuel.fuel) {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
     {pe2 : generic_pexpr Unit sym} {mo : memory_order} {v : value}
     (hd : Decomp e ctx (loadOpRedex an loc ann ty pe2 mo))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hnv2 : valueFromPexpr pe2 = none)
     (hp2 : PePure pe2)
-    (hd2 : peDepth pe2 ≤ lemDefaultFuel)
+    (hd2 : peDepth pe2 ≤ LemFuel.fuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -4010,7 +4061,7 @@ theorem step_ctx_load_eval_ws' {an : List _root_.annot} {e : CoreExpr} {ctx : co
         arena := apply_ctx ctx (Expr an (Eaction (Paction polarity.Pos (Action loc ann
           (Load0 (Pexpr [] () (PEval (Vctype ty))) (Pexpr [] () (PEval v)) mo))))) }, rs) := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, loadOpRedex an loc ann ty pe2 mo) :: rest := by
-    rw [harena]; exact hd.get_ctx_default hsz
+    rw [harena]; exact hd.get_ctx_default
   have key : ∃ (s : String) (m : core_runM thread_state),
       (step_ctx tds σ file ext tid (parent, th)).head? =
         some (Step_with_runstate2 (RSK_eval s) m) ∧
@@ -4027,7 +4078,7 @@ theorem step_ctx_load_eval_ws' {an : List _root_.annot} {e : CoreExpr} {ctx : co
       (rw [act_valueFromPexpr_none hp2 hnv2]
        dsimp only [act_valueFromPexpr, valueFromPexpr]
        refine ⟨_, _, rfl, fun rs => ?_⟩
-       rw [full_eval_bridge (v := Vctype ty) (evalPexpr_val _ _ _ _ _) (peDepth_val_le _ _) σ,
+       rw [full_eval_bridge (v := Vctype ty) (evalPexpr_val _ _ _ _ _) (peDepth_val_le (hfuel := by omega) _ _) σ,
        full_eval_bridge hv2 hd2 σ]
        dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
        return1, except_return]
@@ -4043,7 +4094,6 @@ theorem step_ctx_load_eval_shape {an : List _root_.annot} {e : CoreExpr} {ctx : 
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
     {pe2 : generic_pexpr Unit sym} {mo : memory_order}
     (hd : Decomp e ctx (loadOpRedex an loc ann ty pe2 mo))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hnv2 : valueFromPexpr pe2 = none)
     (hp2 : PePure pe2)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
@@ -4054,7 +4104,7 @@ theorem step_ctx_load_eval_shape {an : List _root_.annot} {e : CoreExpr} {ctx : 
       step_ctx tds σ file ext tid (parent, th) =
         Step_with_runstate2 (RSK_eval s) m :: post := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, loadOpRedex an loc ann ty pe2 mo) :: rest := by
-    rw [harena]; exact hd.get_ctx_default hsz
+    rw [harena]; exact hd.get_ctx_default
   have key : ∃ (s : String) (m : core_runM thread_state),
       (step_ctx tds σ file ext tid (parent, th)).head? =
         some (Step_with_runstate2 (RSK_eval s) m) := by
@@ -4081,10 +4131,9 @@ theorem step_ctx_kill_eval_ws' {an : List _root_.annot} {e : CoreExpr} {ctx : co
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {kind : kill_kind}
     {pe : generic_pexpr Unit sym} {v : value}
     (hd : Decomp e ctx (killOpRedex an loc ann kind pe))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexpr pe = none)
     (hp : PePure pe)
-    (hdp : peDepth pe ≤ lemDefaultFuel)
+    (hdp : peDepth pe ≤ LemFuel.fuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -4097,7 +4146,7 @@ theorem step_ctx_kill_eval_ws' {an : List _root_.annot} {e : CoreExpr} {ctx : co
         arena := apply_ctx ctx (Expr an (Eaction (Paction polarity.Pos (Action loc ann
           (Kill kind (Pexpr [] () (PEval v))))))) }, rs) := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, killOpRedex an loc ann kind pe) :: rest := by
-    rw [harena]; exact hd.get_ctx_default hsz
+    rw [harena]; exact hd.get_ctx_default
   have key : ∃ (s : String) (m : core_runM thread_state),
       (step_ctx tds σ file ext tid (parent, th)).head? =
         some (Step_with_runstate2 (RSK_eval s) m) ∧
@@ -4129,7 +4178,6 @@ theorem step_ctx_kill_eval_shape {an : List _root_.annot} {e : CoreExpr} {ctx : 
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {kind : kill_kind}
     {pe : generic_pexpr Unit sym}
     (hd : Decomp e ctx (killOpRedex an loc ann kind pe))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexpr pe = none)
     (hp : PePure pe)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
@@ -4140,7 +4188,7 @@ theorem step_ctx_kill_eval_shape {an : List _root_.annot} {e : CoreExpr} {ctx : 
       step_ctx tds σ file ext tid (parent, th) =
         Step_with_runstate2 (RSK_eval s) m :: post := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, killOpRedex an loc ann kind pe) :: rest := by
-    rw [harena]; exact hd.get_ctx_default hsz
+    rw [harena]; exact hd.get_ctx_default
   have key : ∃ (s : String) (m : core_runM thread_state),
       (step_ctx tds σ file ext tid (parent, th)).head? =
         some (Step_with_runstate2 (RSK_eval s) m) := by
@@ -4159,16 +4207,15 @@ theorem step_ctx_kill_eval_shape {an : List _root_.annot} {e : CoreExpr} {ctx : 
 
 /-- Store ACTION_EVAL at ANY evaluated pointer-operand value
     (`step_ctx_store_eval_ws` is the pointer instance). -/
-theorem step_ctx_store_eval_ws' {an : List _root_.annot} {e : CoreExpr} {ctx : context}
+theorem step_ctx_store_eval_ws' (hfuel : 0 < LemFuel.fuel) {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
     {pe2 pe3 : generic_pexpr Unit sym} {mo : memory_order}
     {v : value} {cv : value}
     (hd : Decomp e ctx (storeOpRedex an loc ann ty pe2 pe3 mo))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexprs [pe2, pe3] = none)
     (hp2 : PePure pe2) (hp3 : PePure pe3)
-    (hd2 : peDepth pe2 ≤ lemDefaultFuel)
-    (hd3 : peDepth pe3 ≤ lemDefaultFuel)
+    (hd2 : peDepth pe2 ≤ LemFuel.fuel)
+    (hd3 : peDepth pe3 ≤ LemFuel.fuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -4183,7 +4230,7 @@ theorem step_ctx_store_eval_ws' {an : List _root_.annot} {e : CoreExpr} {ctx : c
           (Store0 false (Pexpr [] () (PEval (Vctype ty))) (Pexpr [] () (PEval v))
             (Pexpr [] () (PEval cv)) mo))))) }, rs) := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, storeOpRedex an loc ann ty pe2 pe3 mo) :: rest := by
-    rw [harena]; exact hd.get_ctx_default hsz
+    rw [harena]; exact hd.get_ctx_default
   have key : ∃ (s : String) (m : core_runM thread_state),
       (step_ctx tds σ file ext tid (parent, th)).head? =
         some (Step_with_runstate2 (RSK_eval s) m) ∧
@@ -4200,7 +4247,7 @@ theorem step_ctx_store_eval_ws' {an : List _root_.annot} {e : CoreExpr} {ctx : c
       (dsimp only
        rw [step_action_store_eval (.inr (act_none_of_pair hp2 hp3 hnv)) hp3.not_constrained]
        refine ⟨_, _, rfl, fun rs => ?_⟩
-       rw [full_eval_bridge (v := Vctype ty) (evalPexpr_val _ _ _ _ _) (peDepth_val_le _ _) σ,
+       rw [full_eval_bridge (v := Vctype ty) (evalPexpr_val _ _ _ _ _) (peDepth_val_le (hfuel := by omega) _ _) σ,
          full_eval_bridge hv2 hd2 σ, full_eval_bridge hv3 hd3 σ]
        dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
          return1, except_return]
@@ -4213,16 +4260,15 @@ theorem step_ctx_store_eval_ws' {an : List _root_.annot} {e : CoreExpr} {ctx : c
     values (the positive store's `step_ctx_store_eval_ws'` under the
     `Eexcluded n` wrapper; `process_action`'s ACTION_EVAL arm rebuilds
     `Expr e_annots (Eexcluded n act')`). -/
-theorem step_ctx_excluded_store_eval_ws' {an : List _root_.annot} {e : CoreExpr} {ctx : context}
+theorem step_ctx_excluded_store_eval_ws' (hfuel : 0 < LemFuel.fuel) {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {n : Nat} {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
     {pe2 pe3 : generic_pexpr Unit sym} {mo : memory_order}
     {v : value} {cv : value}
     (hd : Decomp e ctx (excludedStoreOpRedex an n loc ann ty pe2 pe3 mo))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexprs [pe2, pe3] = none)
     (hp2 : PePure pe2) (hp3 : PePure pe3)
-    (hd2 : peDepth pe2 ≤ lemDefaultFuel)
-    (hd3 : peDepth pe3 ≤ lemDefaultFuel)
+    (hd2 : peDepth pe2 ≤ LemFuel.fuel)
+    (hd3 : peDepth pe3 ≤ LemFuel.fuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -4237,7 +4283,7 @@ theorem step_ctx_excluded_store_eval_ws' {an : List _root_.annot} {e : CoreExpr}
           (Store0 false (Pexpr [] () (PEval (Vctype ty))) (Pexpr [] () (PEval v))
             (Pexpr [] () (PEval cv)) mo)))) }, rs) := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, excludedStoreOpRedex an n loc ann ty pe2 pe3 mo) :: rest := by
-    rw [harena]; exact hd.get_ctx_default hsz
+    rw [harena]; exact hd.get_ctx_default
   have key : ∃ (s : String) (m : core_runM thread_state),
       (step_ctx tds σ file ext tid (parent, th)).head? =
         some (Step_with_runstate2 (RSK_eval s) m) ∧
@@ -4254,7 +4300,7 @@ theorem step_ctx_excluded_store_eval_ws' {an : List _root_.annot} {e : CoreExpr}
       (dsimp only
        rw [step_action_store_eval (.inr (act_none_of_pair hp2 hp3 hnv)) hp3.not_constrained]
        refine ⟨_, _, rfl, fun rs => ?_⟩
-       rw [full_eval_bridge (v := Vctype ty) (evalPexpr_val _ _ _ _ _) (peDepth_val_le _ _) σ,
+       rw [full_eval_bridge (v := Vctype ty) (evalPexpr_val _ _ _ _ _) (peDepth_val_le (hfuel := by omega) _ _) σ,
          full_eval_bridge hv2 hd2 σ, full_eval_bridge hv3 hd3 σ]
        dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
          return1, except_return]
@@ -4269,7 +4315,6 @@ theorem step_ctx_excluded_store_eval_shape {an : List _root_.annot} {e : CoreExp
     {n : Nat} {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
     {pe2 pe3 : generic_pexpr Unit sym} {mo : memory_order}
     (hd : Decomp e ctx (excludedStoreOpRedex an n loc ann ty pe2 pe3 mo))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexprs [pe2, pe3] = none)
     (hp2 : PePure pe2) (hp3 : PePure pe3)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
@@ -4280,7 +4325,7 @@ theorem step_ctx_excluded_store_eval_shape {an : List _root_.annot} {e : CoreExp
       step_ctx tds σ file ext tid (parent, th) =
         Step_with_runstate2 (RSK_eval s) m :: post := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, excludedStoreOpRedex an n loc ann ty pe2 pe3 mo) :: rest := by
-    rw [harena]; exact hd.get_ctx_default hsz
+    rw [harena]; exact hd.get_ctx_default
   have key : ∃ (s : String) (m : core_runM thread_state),
       (step_ctx tds σ file ext tid (parent, th)).head? =
         some (Step_with_runstate2 (RSK_eval s) m) := by
@@ -4298,14 +4343,13 @@ theorem step_ctx_excluded_store_eval_shape {an : List _root_.annot} {e : CoreExp
   exact ⟨s, m, post, hpost⟩
 
 /-- E5: the excluded store's ACTION_EVAL whose POINTER operand the engine rejects. -/
-theorem step_ctx_excluded_store_eval_fail2 {an : List _root_.annot} {e : CoreExpr} {ctx : context}
+theorem step_ctx_excluded_store_eval_fail2 (hfuel : 0 < LemFuel.fuel) {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {n : Nat} {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
     {pe2 pe3 : generic_pexpr Unit sym} {mo : memory_order} {fl : EvalFail}
     (hd : Decomp e ctx (excludedStoreOpRedex an n loc ann ty pe2 pe3 mo))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexprs [pe2, pe3] = none)
     (hp2 : PePure pe2) (hp3 : PePure pe3)
-    (hd2 : peDepth pe2 ≤ lemDefaultFuel)
+    (hd2 : peDepth pe2 ≤ LemFuel.fuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -4316,7 +4360,7 @@ theorem step_ctx_excluded_store_eval_fail2 {an : List _root_.annot} {e : CoreExp
         Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, m rs = fl.run thread_state core_run_state rs := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, excludedStoreOpRedex an n loc ann ty pe2 pe3 mo) :: rest := by
-    rw [harena]; exact hd.get_ctx_default hsz
+    rw [harena]; exact hd.get_ctx_default
   have key : ∃ (s : String) (m : core_runM thread_state),
       (step_ctx tds σ file ext tid (parent, th)).head? =
         some (Step_with_runstate2 (RSK_eval s) m) ∧
@@ -4330,7 +4374,7 @@ theorem step_ctx_excluded_store_eval_fail2 {an : List _root_.annot} {e : CoreExp
       (dsimp only
        rw [step_action_store_eval (.inr (act_none_of_pair hp2 hp3 hnv)) hp3.not_constrained]
        refine ⟨_, _, rfl, fun rs => ?_⟩
-       rw [full_eval_bridge (v := Vctype ty) (evalPexpr_val _ _ _ _ _) (peDepth_val_le _ _) σ,
+       rw [full_eval_bridge (v := Vctype ty) (evalPexpr_val _ _ _ _ _) (peDepth_val_le (hfuel := by omega) _ _) σ,
          full_eval_bridge_fail hp2 hf hd2 σ]
        cases fl <;>
          (dsimp only [EvalFail.run, stExceptUndef_bind, stExceptUndef_return, stExpect_return,
@@ -4342,15 +4386,14 @@ theorem step_ctx_excluded_store_eval_fail2 {an : List _root_.annot} {e : CoreExp
 
 /-- E5: the excluded store's ACTION_EVAL whose pointer operand evaluates and
     whose VALUE operand the engine rejects. -/
-theorem step_ctx_excluded_store_eval_fail3 {an : List _root_.annot} {e : CoreExpr} {ctx : context}
+theorem step_ctx_excluded_store_eval_fail3 (hfuel : 0 < LemFuel.fuel) {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {n : Nat} {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
     {pe2 pe3 : generic_pexpr Unit sym} {mo : memory_order} {v : value}
     {fl : EvalFail}
     (hd : Decomp e ctx (excludedStoreOpRedex an n loc ann ty pe2 pe3 mo))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexprs [pe2, pe3] = none)
     (hp2 : PePure pe2) (hp3 : PePure pe3)
-    (hd2 : peDepth pe2 ≤ lemDefaultFuel) (hd3 : peDepth pe3 ≤ lemDefaultFuel)
+    (hd2 : peDepth pe2 ≤ LemFuel.fuel) (hd3 : peDepth pe3 ≤ LemFuel.fuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -4362,7 +4405,7 @@ theorem step_ctx_excluded_store_eval_fail3 {an : List _root_.annot} {e : CoreExp
         Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, m rs = fl.run thread_state core_run_state rs := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, excludedStoreOpRedex an n loc ann ty pe2 pe3 mo) :: rest := by
-    rw [harena]; exact hd.get_ctx_default hsz
+    rw [harena]; exact hd.get_ctx_default
   have key : ∃ (s : String) (m : core_runM thread_state),
       (step_ctx tds σ file ext tid (parent, th)).head? =
         some (Step_with_runstate2 (RSK_eval s) m) ∧
@@ -4376,7 +4419,7 @@ theorem step_ctx_excluded_store_eval_fail3 {an : List _root_.annot} {e : CoreExp
       (dsimp only
        rw [step_action_store_eval (.inr (act_none_of_pair hp2 hp3 hnv)) hp3.not_constrained]
        refine ⟨_, _, rfl, fun rs => ?_⟩
-       rw [full_eval_bridge (v := Vctype ty) (evalPexpr_val _ _ _ _ _) (peDepth_val_le _ _) σ,
+       rw [full_eval_bridge (v := Vctype ty) (evalPexpr_val _ _ _ _ _) (peDepth_val_le (hfuel := by omega) _ _) σ,
          full_eval_bridge hv2 hd2 σ, full_eval_bridge_fail hp3 hf hd3 σ]
        cases fl <;>
          (dsimp only [EvalFail.run, stExceptUndef_bind, stExceptUndef_return, stExpect_return,
@@ -4390,7 +4433,6 @@ theorem step_ctx_excluded_store_eval_fail3 {an : List _root_.annot} {e : CoreExp
 theorem step_ctx_case_eval_shape {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {pe : generic_pexpr Unit sym} {pats : List (pattern × CoreExpr)}
     (hd : Decomp e ctx (caseRedex an pe pats))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexpr pe = none) (hp : PePure pe)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
@@ -4400,7 +4442,7 @@ theorem step_ctx_case_eval_shape {an : List _root_.annot} {e : CoreExpr} {ctx : 
       step_ctx tds σ file ext tid (parent, th) =
         Step_with_runstate2 (RSK_eval s) m :: post := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, caseRedex an pe pats) :: rest := by
-    rw [harena]; exact hd.get_ctx_default hsz
+    rw [harena]; exact hd.get_ctx_default
   have key : ∃ (s : String) (m : core_runM thread_state),
       (step_ctx tds σ file ext tid (parent, th)).head? =
         some (Step_with_runstate2 (RSK_eval s) m) := by
@@ -4425,8 +4467,7 @@ theorem step_ctx_case_eval_shape {an : List _root_.annot} {e : CoreExpr} {ctx : 
 theorem step_ctx_case_eval_fail {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {pe : generic_pexpr Unit sym} {pats : List (pattern × CoreExpr)} {fl : EvalFail}
     (hd : Decomp e ctx (caseRedex an pe pats))
-    (hsz : esize e ≤ lemDefaultFuel)
-    (hnv : valueFromPexpr pe = none) (hp : PePure pe) (hdp : peDepth pe ≤ lemDefaultFuel)
+    (hnv : valueFromPexpr pe = none) (hp : PePure pe) (hdp : peDepth pe ≤ LemFuel.fuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -4437,7 +4478,7 @@ theorem step_ctx_case_eval_fail {an : List _root_.annot} {e : CoreExpr} {ctx : c
         Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, m rs = fl.run thread_state core_run_state rs := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, caseRedex an pe pats) :: rest := by
-    rw [harena]; exact hd.get_ctx_default hsz
+    rw [harena]; exact hd.get_ctx_default
   have key : ∃ (s : String) (m : core_runM thread_state),
       (step_ctx tds σ file ext tid (parent, th)).head? =
         some (Step_with_runstate2 (RSK_eval s) m) ∧
@@ -4469,8 +4510,7 @@ theorem step_ctx_excluded_store_illtyped' {an : List _root_.annot} {e : CoreExpr
     {r : CoreExpr} {n : Nat}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
     {v cv : value} {mo : memory_order}
-    (hd : Decomp e ctx r) (hsz : esize e ≤ lemDefaultFuel)
-    (hv : ∀ pv, v ≠ Vobject (OVpointer pv))
+    (hd : Decomp e ctx r) (hv : ∀ pv, v ≠ Vobject (OVpointer pv))
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -4481,7 +4521,7 @@ theorem step_ctx_excluded_store_illtyped' {an : List _root_.annot} {e : CoreExpr
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, Expr an (Eexcluded n
       (Action loc ann (Store0 false (Pexpr [] () (PEval (Vctype ty)))
         (Pexpr [] () (PEval v)) (Pexpr [] () (PEval cv)) mo)))) :: rest := by
-    rw [harena]; exact hd.get_ctx_rebuild_excluded an _ _ lemDefaultFuel hsz
+    rw [harena]; exact hd.get_ctx_rebuild_excluded_default an _ _
   unfold step_ctx
   dsimp only
   rw [hget]
@@ -4502,7 +4542,6 @@ theorem step_ctx_neg_nobound {a : List _root_.annot} {e : CoreExpr} {ctx : conte
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {lk : Bool}
     {pe1 pe2 pe3 : generic_pexpr Unit sym} {mo : memory_order}
     (hd : Decomp e ctx (negActRedex a (Action loc ann (Store0 lk pe1 pe2 pe3 mo))))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hbr : break_at_bound_and_sseq ctx = NO_BOUND)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
@@ -4513,7 +4552,7 @@ theorem step_ctx_neg_nobound {a : List _root_.annot} {e : CoreExpr} {ctx : conte
         @failwithI core_step2 inst "TODO: NO_BOUND (Neg)" :: post := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena =
       (ctx, negActRedex a (Action loc ann (Store0 lk pe1 pe2 pe3 mo))) :: rest := by
-    rw [harena]; exact hd.get_ctx_default hsz
+    rw [harena]; exact hd.get_ctx_default
   have key : ∃ (inst : Inhabited core_step2),
       (step_ctx tds σ file ext tid (parent, th)).head? =
         some (@failwithI core_step2 inst "TODO: NO_BOUND (Neg)") := by
@@ -4536,7 +4575,6 @@ theorem step_ctx_store_eval_shape {an : List _root_.annot} {e : CoreExpr} {ctx :
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
     {pe2 pe3 : generic_pexpr Unit sym} {mo : memory_order}
     (hd : Decomp e ctx (storeOpRedex an loc ann ty pe2 pe3 mo))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexprs [pe2, pe3] = none)
     (hp2 : PePure pe2) (hp3 : PePure pe3)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
@@ -4547,7 +4585,7 @@ theorem step_ctx_store_eval_shape {an : List _root_.annot} {e : CoreExpr} {ctx :
       step_ctx tds σ file ext tid (parent, th) =
         Step_with_runstate2 (RSK_eval s) m :: post := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, storeOpRedex an loc ann ty pe2 pe3 mo) :: rest := by
-    rw [harena]; exact hd.get_ctx_default hsz
+    rw [harena]; exact hd.get_ctx_default
   have key : ∃ (s : String) (m : core_runM thread_state),
       (step_ctx tds σ file ext tid (parent, th)).head? =
         some (Step_with_runstate2 (RSK_eval s) m) := by
@@ -4573,11 +4611,10 @@ theorem step_ctx_alloc_eval_ws' {an : List _root_.annot} {e : CoreExpr} {ctx : c
     {loc : CerbLocation.Loc} {ann : core_run_annotation}
     {pe1 pe2 : generic_pexpr Unit sym} {pref : prefix0} {v1 v2 : value}
     (hd : Decomp e ctx (allocOpRedex an loc ann pe1 pe2 pref))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexprs [pe1, pe2] = none)
     (hp1 : PePure pe1) (hp2 : PePure pe2)
-    (hd1 : peDepth pe1 ≤ lemDefaultFuel)
-    (hd2 : peDepth pe2 ≤ lemDefaultFuel)
+    (hd1 : peDepth pe1 ≤ LemFuel.fuel)
+    (hd2 : peDepth pe2 ≤ LemFuel.fuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -4591,7 +4628,7 @@ theorem step_ctx_alloc_eval_ws' {an : List _root_.annot} {e : CoreExpr} {ctx : c
         arena := apply_ctx ctx (Expr an (Eaction (Paction polarity.Pos (Action loc ann
           (Alloc0 (Pexpr [] () (PEval v1)) (Pexpr [] () (PEval v2)) pref))))) }, rs) := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, allocOpRedex an loc ann pe1 pe2 pref) :: rest := by
-    rw [harena]; exact hd.get_ctx_default hsz
+    rw [harena]; exact hd.get_ctx_default
   have key : ∃ (s : String) (m : core_runM thread_state),
       (step_ctx tds σ file ext tid (parent, th)).head? =
         some (Step_with_runstate2 (RSK_eval s) m) ∧
@@ -4621,7 +4658,6 @@ theorem step_ctx_alloc_eval_shape {an : List _root_.annot} {e : CoreExpr} {ctx :
     {loc : CerbLocation.Loc} {ann : core_run_annotation}
     {pe1 pe2 : generic_pexpr Unit sym} {pref : prefix0}
     (hd : Decomp e ctx (allocOpRedex an loc ann pe1 pe2 pref))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexprs [pe1, pe2] = none)
     (hp1 : PePure pe1) (hp2 : PePure pe2)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
@@ -4632,7 +4668,7 @@ theorem step_ctx_alloc_eval_shape {an : List _root_.annot} {e : CoreExpr} {ctx :
       step_ctx tds σ file ext tid (parent, th) =
         Step_with_runstate2 (RSK_eval s) m :: post := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, allocOpRedex an loc ann pe1 pe2 pref) :: rest := by
-    rw [harena]; exact hd.get_ctx_default hsz
+    rw [harena]; exact hd.get_ctx_default
   have key : ∃ (s : String) (m : core_runM thread_state),
       (step_ctx tds σ file ext tid (parent, th)).head? =
         some (Step_with_runstate2 (RSK_eval s) m) := by
@@ -4654,7 +4690,6 @@ theorem step_ctx_alloc_eval_shape {an : List _root_.annot} {e : CoreExpr} {ctx :
 theorem step_ctx_memop_eval_shape {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {mop : memop} {pe1 pe2 : generic_pexpr Unit sym}
     (hd : Decomp e ctx (memopRedex an mop [pe1, pe2]))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexprs [pe1, pe2] = none)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
@@ -4664,7 +4699,7 @@ theorem step_ctx_memop_eval_shape {an : List _root_.annot} {e : CoreExpr} {ctx :
       step_ctx tds σ file ext tid (parent, th) =
         Step_with_runstate2 (RSK_eval s) m :: post := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, memopRedex an mop [pe1, pe2]) :: rest := by
-    rw [harena]; exact hd.get_ctx_default hsz
+    rw [harena]; exact hd.get_ctx_default
   have key : ∃ (s : String) (m : core_runM thread_state),
       (step_ctx tds σ file ext tid (parent, th)).head? =
         some (Step_with_runstate2 (RSK_eval s) m) := by
@@ -4697,8 +4732,7 @@ theorem step_ctx_memop_eval_shape {an : List _root_.annot} {e : CoreExpr} {ctx :
 theorem step_ctx_load_illtyped' {an : List _root_.annot} {e : CoreExpr} {ctx : context} {r : CoreExpr}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
     {v : value} {mo : memory_order}
-    (hd : Decomp e ctx r) (hsz : esize e ≤ lemDefaultFuel)
-    (hv : ∀ pv, v ≠ Vobject (OVpointer pv))
+    (hd : Decomp e ctx r) (hv : ∀ pv, v ≠ Vobject (OVpointer pv))
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -4709,7 +4743,7 @@ theorem step_ctx_load_illtyped' {an : List _root_.annot} {e : CoreExpr} {ctx : c
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, Expr an (Eaction (Paction polarity.Pos
       (Action loc ann (Load0 (Pexpr [] () (PEval (Vctype ty)))
         (Pexpr [] () (PEval v)) mo))))) :: rest := by
-    rw [harena]; exact hd.get_ctx_rebuild_action an _ lemDefaultFuel hsz
+    rw [harena]; exact hd.get_ctx_rebuild_action_default an _
   unfold step_ctx
   dsimp only
   rw [hget]
@@ -4728,8 +4762,7 @@ theorem step_ctx_load_illtyped' {an : List _root_.annot} {e : CoreExpr} {ctx : c
 theorem step_ctx_store_illtyped' {an : List _root_.annot} {e : CoreExpr} {ctx : context} {r : CoreExpr}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
     {v cv : value} {mo : memory_order}
-    (hd : Decomp e ctx r) (hsz : esize e ≤ lemDefaultFuel)
-    (hv : ∀ pv, v ≠ Vobject (OVpointer pv))
+    (hd : Decomp e ctx r) (hv : ∀ pv, v ≠ Vobject (OVpointer pv))
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -4740,7 +4773,7 @@ theorem step_ctx_store_illtyped' {an : List _root_.annot} {e : CoreExpr} {ctx : 
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, Expr an (Eaction (Paction polarity.Pos
       (Action loc ann (Store0 false (Pexpr [] () (PEval (Vctype ty)))
         (Pexpr [] () (PEval v)) (Pexpr [] () (PEval cv)) mo))))) :: rest := by
-    rw [harena]; exact hd.get_ctx_rebuild_action an _ lemDefaultFuel hsz
+    rw [harena]; exact hd.get_ctx_rebuild_action_default an _
   unfold step_ctx
   dsimp only
   rw [hget]
@@ -4760,8 +4793,7 @@ theorem step_ctx_store_illtyped' {an : List _root_.annot} {e : CoreExpr} {ctx : 
 theorem step_ctx_kill_illtyped' {an : List _root_.annot} {e : CoreExpr} {ctx : context} {r : CoreExpr}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {kind : kill_kind}
     {v : value}
-    (hd : Decomp e ctx r) (hsz : esize e ≤ lemDefaultFuel)
-    (hv : ∀ pv, v ≠ Vobject (OVpointer pv))
+    (hd : Decomp e ctx r) (hv : ∀ pv, v ≠ Vobject (OVpointer pv))
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -4770,7 +4802,7 @@ theorem step_ctx_kill_illtyped' {an : List _root_.annot} {e : CoreExpr} {ctx : c
     ∃ post, step_ctx tds σ file ext tid (parent, th) = Step_error2 "Kill" :: post := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, Expr an (Eaction (Paction polarity.Pos
       (Action loc ann (Kill kind (Pexpr [] () (PEval v))))))) :: rest := by
-    rw [harena]; exact hd.get_ctx_rebuild_action an _ lemDefaultFuel hsz
+    rw [harena]; exact hd.get_ctx_rebuild_action_default an _
   unfold step_ctx
   dsimp only
   rw [hget]
@@ -4790,8 +4822,7 @@ theorem step_ctx_kill_illtyped' {an : List _root_.annot} {e : CoreExpr} {ctx : c
 theorem step_ctx_alloc_illtyped' {an : List _root_.annot} {e : CoreExpr} {ctx : context} {r : CoreExpr}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {pref : prefix0}
     {v1 v2 : value}
-    (hd : Decomp e ctx r) (hsz : esize e ≤ lemDefaultFuel)
-    (hv : ∀ i1 i2, ¬ (v1 = Vobject (OVinteger i1) ∧ v2 = Vobject (OVinteger i2)))
+    (hd : Decomp e ctx r) (hv : ∀ i1 i2, ¬ (v1 = Vobject (OVinteger i1) ∧ v2 = Vobject (OVinteger i2)))
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -4800,7 +4831,7 @@ theorem step_ctx_alloc_illtyped' {an : List _root_.annot} {e : CoreExpr} {ctx : 
     ∃ post, step_ctx tds σ file ext tid (parent, th) = Step_error2 "Alloc" :: post := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, Expr an (Eaction (Paction polarity.Pos
       (Action loc ann (Alloc0 (Pexpr [] () (PEval v1)) (Pexpr [] () (PEval v2)) pref))))) :: rest := by
-    rw [harena]; exact hd.get_ctx_rebuild_action an _ lemDefaultFuel hsz
+    rw [harena]; exact hd.get_ctx_rebuild_action_default an _
   unfold step_ctx
   dsimp only
   rw [hget]
@@ -4827,8 +4858,7 @@ the step's monad raises exactly `err` at every run state) -/
 theorem step_ctx_if_fail {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {g : generic_pexpr Unit sym} {e2 e3 : CoreExpr} {fl : EvalFail}
     (hd : Decomp e ctx (ifRedex an g e2 e3))
-    (hsz : esize e ≤ lemDefaultFuel)
-    (hpg : PePure g) (hdg : peDepth g ≤ lemDefaultFuel)
+    (hpg : PePure g) (hdg : peDepth g ≤ LemFuel.fuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -4839,7 +4869,7 @@ theorem step_ctx_if_fail {an : List _root_.annot} {e : CoreExpr} {ctx : context}
         Step_with_runstate2 (RSK_tau s TSK_Misc) m :: post ∧
       ∀ rs, m rs = fl.run thread_state core_run_state rs := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, ifRedex an g e2 e3) :: rest := by
-    rw [harena]; exact hd.get_ctx_default hsz
+    rw [harena]; exact hd.get_ctx_default
   have key : ∃ (s : String) (m : core_runM thread_state),
       (step_ctx tds σ file ext tid (parent, th)).head? =
         some (Step_with_runstate2 (RSK_tau s TSK_Misc) m) ∧
@@ -4865,8 +4895,7 @@ theorem step_ctx_if_fail {an : List _root_.annot} {e : CoreExpr} {ctx : context}
 theorem step_ctx_if_kill {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {g : generic_pexpr Unit sym} {e2 e3 : CoreExpr} {err : core_run_cause}
     (hd : Decomp e ctx (ifRedex an g e2 e3))
-    (hsz : esize e ≤ lemDefaultFuel)
-    (hpg : PePure g) (hdg : peDepth g ≤ lemDefaultFuel)
+    (hpg : PePure g) (hdg : peDepth g ≤ LemFuel.fuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -4876,18 +4905,17 @@ theorem step_ctx_if_kill {an : List _root_.annot} {e : CoreExpr} {ctx : context}
       step_ctx tds σ file ext tid (parent, th) =
         Step_with_runstate2 (RSK_tau s TSK_Misc) m :: post ∧
       ∀ rs, m rs = Exception err :=
-  step_ctx_if_fail hd hsz hpg hdg tds σ file ext tid parent th harena (fl := .kill err) (by rw [hk]; rfl)
+  step_ctx_if_fail hd hpg hdg tds σ file ext tid parent th harena (fl := .kill err) (by rw [hk]; rfl)
 
 /-- Erun at a registered label whose zipped arguments the engine rejects
     (the fold raises at the first rejected argument). -/
 theorem step_ctx_run_fail {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {ra : core_run_annotation} {l : sym} {pes : List (generic_pexpr Unit sym)}
     (hd : Decomp e ctx (runRedex an ra l pes))
-    (hsz : esize e ≤ lemDefaultFuel)
     {Q : LabelMap} {params : List (sym × core_base_type)} {cont : CoreExpr}
     (hl : lookupLabel Q l = some (params, cont))
     (hpes : ∀ pe ∈ pes, PePure pe)
-    (hdep : ∀ pe ∈ pes, peDepth pe ≤ lemDefaultFuel)
+    (hdep : ∀ pe ∈ pes, peDepth pe ≤ LemFuel.fuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (p : sym) (th : thread_state)
@@ -4899,7 +4927,7 @@ theorem step_ctx_run_fail {an : List _root_.annot} {e : CoreExpr} {ctx : context
         Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, LabeledAt rs (resolveExtern ext p) Q → m rs = fl.run thread_state core_run_state rs := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, runRedex an ra l pes) :: rest := by
-    rw [harena]; exact hd.get_ctx_default hsz
+    rw [harena]; exact hd.get_ctx_default
   have key : ∃ (s : String) (m : core_runM thread_state),
       (step_ctx tds σ file ext tid (parent, th)).head? =
         some (Step_with_runstate2 (RSK_eval s) m) ∧
@@ -4928,7 +4956,7 @@ theorem step_ctx_run_fail {an : List _root_.annot} {e : CoreExpr} {ctx : context
          try dsimp only []
          rw [hQ, bind0_some, hl']
          try dsimp only []
-         rw [stExceptUndef_bind_apply,
+         rw [stExceptUndef_bind_apply, LemLibTheorems.lemListZip_eq,
            foldM_args_fail _ (fun _ _ _ _ _ => rfl) params pes th.env rs hpes hdep hf]
          cases fl <;> rfl
        | some y =>
@@ -4937,7 +4965,7 @@ theorem step_ctx_run_fail {an : List _root_.annot} {e : CoreExpr} {ctx : context
          try dsimp only []
          rw [hQ, bind0_some, hl']
          try dsimp only []
-         rw [stExceptUndef_bind_apply,
+         rw [stExceptUndef_bind_apply, LemLibTheorems.lemListZip_eq,
            foldM_args_fail _ (fun _ _ _ _ _ => rfl) params pes th.env rs hpes hdep hf]
          cases fl <;> rfl)
   obtain ⟨s, m, hh, hrest⟩ := key
@@ -4948,11 +4976,10 @@ theorem step_ctx_run_fail {an : List _root_.annot} {e : CoreExpr} {ctx : context
 theorem step_ctx_run_kill {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {ra : core_run_annotation} {l : sym} {pes : List (generic_pexpr Unit sym)}
     (hd : Decomp e ctx (runRedex an ra l pes))
-    (hsz : esize e ≤ lemDefaultFuel)
     {Q : LabelMap} {params : List (sym × core_base_type)} {cont : CoreExpr}
     (hl : lookupLabel Q l = some (params, cont))
     (hpes : ∀ pe ∈ pes, PePure pe)
-    (hdep : ∀ pe ∈ pes, peDepth pe ≤ lemDefaultFuel)
+    (hdep : ∀ pe ∈ pes, peDepth pe ≤ LemFuel.fuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (p : sym) (th : thread_state)
@@ -4964,7 +4991,7 @@ theorem step_ctx_run_kill {an : List _root_.annot} {e : CoreExpr} {ctx : context
       step_ctx tds σ file ext tid (parent, th) =
         Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, LabeledAt rs (resolveExtern ext p) Q → m rs = Exception err :=
-  step_ctx_run_fail hd hsz hl hpes hdep tds σ file ext tid parent p th harena hproc (fl := .kill err) (by rw [hk]; rfl)
+  step_ctx_run_fail hd hl hpes hdep tds σ file ext tid parent p th harena hproc (fl := .kill err) (by rw [hk]; rfl)
 
 /-- Esave whose initializers the engine rejects. -/
 theorem step_ctx_save_eval_fail {an : List _root_.annot} {e : CoreExpr} {ctx : context}
@@ -4973,10 +5000,9 @@ theorem step_ctx_save_eval_fail {an : List _root_.annot} {e : CoreExpr} {ctx : c
       Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym))}
     {body : CoreExpr} {fl : EvalFail}
     (hd : Decomp e ctx (saveRedex an sb ps body))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexprs (saveParamPexprs ps) = none)
     (hp : ∀ pe ∈ saveParamPexprs ps, PePure pe)
-    (hdep : ∀ pe ∈ saveParamPexprs ps, peDepth pe ≤ lemDefaultFuel)
+    (hdep : ∀ pe ∈ saveParamPexprs ps, peDepth pe ≤ LemFuel.fuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -4987,7 +5013,7 @@ theorem step_ctx_save_eval_fail {an : List _root_.annot} {e : CoreExpr} {ctx : c
         Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, m rs = fl.run thread_state core_run_state rs := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, saveRedex an sb ps body) :: rest := by
-    rw [harena]; exact hd.get_ctx_default hsz
+    rw [harena]; exact hd.get_ctx_default
   have key : ∃ (s : String) (m : core_runM thread_state),
       (step_ctx tds σ file ext tid (parent, th)).head? =
         some (Step_with_runstate2 (RSK_eval s) m) ∧
@@ -5032,10 +5058,9 @@ theorem step_ctx_save_eval_kill {an : List _root_.annot} {e : CoreExpr} {ctx : c
       Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym))}
     {body : CoreExpr} {err : core_run_cause}
     (hd : Decomp e ctx (saveRedex an sb ps body))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexprs (saveParamPexprs ps) = none)
     (hp : ∀ pe ∈ saveParamPexprs ps, PePure pe)
-    (hdep : ∀ pe ∈ saveParamPexprs ps, peDepth pe ≤ lemDefaultFuel)
+    (hdep : ∀ pe ∈ saveParamPexprs ps, peDepth pe ≤ LemFuel.fuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -5046,7 +5071,7 @@ theorem step_ctx_save_eval_kill {an : List _root_.annot} {e : CoreExpr} {ctx : c
       step_ctx tds σ file ext tid (parent, th) =
         Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, m rs = Exception err :=
-  step_ctx_save_eval_fail hd hsz hnv hp hdep tds σ file ext tid parent th harena (fl := .kill err) (by rw [hk]; rfl)
+  step_ctx_save_eval_fail hd hnv hp hdep tds σ file ext tid parent th harena (fl := .kill err) (by rw [hk]; rfl)
 
 /-- E2: PURE at any covered non-value operand the classifier FAILS
     (raise or undef): one `RSK_eval` step whose monad delivers the
@@ -5054,8 +5079,7 @@ theorem step_ctx_save_eval_kill {an : List _root_.annot} {e : CoreExpr} {ctx : c
 theorem step_ctx_pure_op_fail {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {pe : generic_pexpr Unit sym} {fl : EvalFail}
     (hd : Decomp e ctx (pureRedex an pe))
-    (hsz : esize e ≤ lemDefaultFuel)
-    (hnv : valueFromPexpr pe = none) (hp : PePure pe) (hdp : peDepth pe ≤ lemDefaultFuel)
+    (hnv : valueFromPexpr pe = none) (hp : PePure pe) (hdp : peDepth pe ≤ LemFuel.fuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -5065,17 +5089,16 @@ theorem step_ctx_pure_op_fail {an : List _root_.annot} {e : CoreExpr} {ctx : con
       step_ctx tds σ file ext tid (parent, th) =
         Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, m rs = fl.run thread_state core_run_state rs := by
-  obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_pure_op_raw hd hsz hnv tds σ file ext tid parent th harena
+  obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_pure_op_raw hd hnv tds σ file ext tid parent th harena
   refine ⟨s, m, post, hsteps, fun rs => ?_⟩
   rw [hm rs]
   exact stExceptUndef_bind_fail_apply _
     (stExceptUndef_bind_fail_apply _ (by rw [full_eval_bridge_fail hp hf hdp σ]))
 
 /-- The plain-symbol instance. -/
-theorem step_ctx_pure_sym_fail {an : List _root_.annot} {e : CoreExpr} {ctx : context}
+theorem step_ctx_pure_sym_fail (hfuel : 0 < LemFuel.fuel) {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {pb : List _root_.annot} {x : sym} {fl : EvalFail}
     (hd : Decomp e ctx (pureRedex an (Pexpr pb () (PEsym x))))
-    (hsz : esize e ≤ lemDefaultFuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -5085,14 +5108,13 @@ theorem step_ctx_pure_sym_fail {an : List _root_.annot} {e : CoreExpr} {ctx : co
       step_ctx tds σ file ext tid (parent, th) =
         Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, m rs = fl.run thread_state core_run_state rs :=
-  step_ctx_pure_op_fail hd hsz rfl (.sym pb x) (peDepth_sym_le pb x) tds σ file ext tid parent th
+  step_ctx_pure_op_fail hd rfl (.sym pb x) (peDepth_sym_le (hfuel := by omega) pb x) tds σ file ext tid parent th
     harena hf
 
 /-- … the kill face (E1's statement). -/
-theorem step_ctx_pure_sym_kill {an : List _root_.annot} {e : CoreExpr} {ctx : context}
+theorem step_ctx_pure_sym_kill (hfuel : 0 < LemFuel.fuel) {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {pb : List _root_.annot} {x : sym} {err : core_run_cause}
     (hd : Decomp e ctx (pureRedex an (Pexpr pb () (PEsym x))))
-    (hsz : esize e ≤ lemDefaultFuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -5103,17 +5125,16 @@ theorem step_ctx_pure_sym_kill {an : List _root_.annot} {e : CoreExpr} {ctx : co
       step_ctx tds σ file ext tid (parent, th) =
         Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, m rs = Exception err :=
-  step_ctx_pure_sym_fail hd hsz tds σ file ext tid parent th harena (fl := .kill err) (by rw [hk]; rfl)
+  step_ctx_pure_sym_fail (hfuel := by omega) hd tds σ file ext tid parent th harena (fl := .kill err) (by rw [hk]; rfl)
 
 /-- Load ACTION_EVAL whose pointer operand the engine rejects. -/
-theorem step_ctx_load_eval_fail {an : List _root_.annot} {e : CoreExpr} {ctx : context}
+theorem step_ctx_load_eval_fail (hfuel : 0 < LemFuel.fuel) {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
     {pe2 : generic_pexpr Unit sym} {mo : memory_order} {fl : EvalFail}
     (hd : Decomp e ctx (loadOpRedex an loc ann ty pe2 mo))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hnv2 : valueFromPexpr pe2 = none)
     (hp2 : PePure pe2)
-    (hd2 : peDepth pe2 ≤ lemDefaultFuel)
+    (hd2 : peDepth pe2 ≤ LemFuel.fuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -5124,7 +5145,7 @@ theorem step_ctx_load_eval_fail {an : List _root_.annot} {e : CoreExpr} {ctx : c
         Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, m rs = fl.run thread_state core_run_state rs := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, loadOpRedex an loc ann ty pe2 mo) :: rest := by
-    rw [harena]; exact hd.get_ctx_default hsz
+    rw [harena]; exact hd.get_ctx_default
   have key : ∃ (s : String) (m : core_runM thread_state),
       (step_ctx tds σ file ext tid (parent, th)).head? =
         some (Step_with_runstate2 (RSK_eval s) m) ∧
@@ -5138,7 +5159,7 @@ theorem step_ctx_load_eval_fail {an : List _root_.annot} {e : CoreExpr} {ctx : c
       (dsimp only
        rw [step_action_load_eval (.inr (act_valueFromPexpr_none hp2 hnv2))]
        refine ⟨_, _, rfl, fun rs => ?_⟩
-       rw [full_eval_bridge (v := Vctype ty) (evalPexpr_val _ _ _ _ _) (peDepth_val_le _ _) σ,
+       rw [full_eval_bridge (v := Vctype ty) (evalPexpr_val _ _ _ _ _) (peDepth_val_le (hfuel := by omega) _ _) σ,
          full_eval_bridge_fail hp2 hf hd2 σ]
        cases fl <;>
          (dsimp only [EvalFail.run, stExceptUndef_bind, stExceptUndef_return, stExpect_return,
@@ -5149,14 +5170,13 @@ theorem step_ctx_load_eval_fail {an : List _root_.annot} {e : CoreExpr} {ctx : c
   exact ⟨s, m, post, hpost, hrest⟩
 
 /-- … the kill face (E1's statement). -/
-theorem step_ctx_load_eval_kill {an : List _root_.annot} {e : CoreExpr} {ctx : context}
+theorem step_ctx_load_eval_kill (hfuel : 0 < LemFuel.fuel) {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
     {pe2 : generic_pexpr Unit sym} {mo : memory_order} {err : core_run_cause}
     (hd : Decomp e ctx (loadOpRedex an loc ann ty pe2 mo))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hnv2 : valueFromPexpr pe2 = none)
     (hp2 : PePure pe2)
-    (hd2 : peDepth pe2 ≤ lemDefaultFuel)
+    (hd2 : peDepth pe2 ≤ LemFuel.fuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -5166,17 +5186,16 @@ theorem step_ctx_load_eval_kill {an : List _root_.annot} {e : CoreExpr} {ctx : c
       step_ctx tds σ file ext tid (parent, th) =
         Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, m rs = Exception err :=
-  step_ctx_load_eval_fail hd hsz hnv2 hp2 hd2 tds σ file ext tid parent th harena (fl := .kill err) (by rw [hk]; rfl)
+  step_ctx_load_eval_fail (hfuel := by omega) hd hnv2 hp2 hd2 tds σ file ext tid parent th harena (fl := .kill err) (by rw [hk]; rfl)
 
 /-- Kill ACTION_EVAL whose operand the engine rejects (kill/free arc K2). -/
 theorem step_ctx_kill_eval_fail {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {kind : kill_kind}
     {pe : generic_pexpr Unit sym} {fl : EvalFail}
     (hd : Decomp e ctx (killOpRedex an loc ann kind pe))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexpr pe = none)
     (hp : PePure pe)
-    (hdp : peDepth pe ≤ lemDefaultFuel)
+    (hdp : peDepth pe ≤ LemFuel.fuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -5187,7 +5206,7 @@ theorem step_ctx_kill_eval_fail {an : List _root_.annot} {e : CoreExpr} {ctx : c
         Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, m rs = fl.run thread_state core_run_state rs := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, killOpRedex an loc ann kind pe) :: rest := by
-    rw [harena]; exact hd.get_ctx_default hsz
+    rw [harena]; exact hd.get_ctx_default
   have key : ∃ (s : String) (m : core_runM thread_state),
       (step_ctx tds σ file ext tid (parent, th)).head? =
         some (Step_with_runstate2 (RSK_eval s) m) ∧
@@ -5215,10 +5234,9 @@ theorem step_ctx_kill_eval_kill {an : List _root_.annot} {e : CoreExpr} {ctx : c
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {kind : kill_kind}
     {pe : generic_pexpr Unit sym} {err : core_run_cause}
     (hd : Decomp e ctx (killOpRedex an loc ann kind pe))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexpr pe = none)
     (hp : PePure pe)
-    (hdp : peDepth pe ≤ lemDefaultFuel)
+    (hdp : peDepth pe ≤ LemFuel.fuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -5228,18 +5246,17 @@ theorem step_ctx_kill_eval_kill {an : List _root_.annot} {e : CoreExpr} {ctx : c
       step_ctx tds σ file ext tid (parent, th) =
         Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, m rs = Exception err :=
-  step_ctx_kill_eval_fail hd hsz hnv hp hdp tds σ file ext tid parent th harena (fl := .kill err) (by rw [hk]; rfl)
+  step_ctx_kill_eval_fail hd hnv hp hdp tds σ file ext tid parent th harena (fl := .kill err) (by rw [hk]; rfl)
 
 /-- Store ACTION_EVAL whose POINTER operand the engine rejects (the
     first operand evaluated after the type). -/
-theorem step_ctx_store_eval_fail2 {an : List _root_.annot} {e : CoreExpr} {ctx : context}
+theorem step_ctx_store_eval_fail2 (hfuel : 0 < LemFuel.fuel) {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
     {pe2 pe3 : generic_pexpr Unit sym} {mo : memory_order} {fl : EvalFail}
     (hd : Decomp e ctx (storeOpRedex an loc ann ty pe2 pe3 mo))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexprs [pe2, pe3] = none)
     (hp2 : PePure pe2) (hp3 : PePure pe3)
-    (hd2 : peDepth pe2 ≤ lemDefaultFuel)
+    (hd2 : peDepth pe2 ≤ LemFuel.fuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -5250,7 +5267,7 @@ theorem step_ctx_store_eval_fail2 {an : List _root_.annot} {e : CoreExpr} {ctx :
         Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, m rs = fl.run thread_state core_run_state rs := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, storeOpRedex an loc ann ty pe2 pe3 mo) :: rest := by
-    rw [harena]; exact hd.get_ctx_default hsz
+    rw [harena]; exact hd.get_ctx_default
   have key : ∃ (s : String) (m : core_runM thread_state),
       (step_ctx tds σ file ext tid (parent, th)).head? =
         some (Step_with_runstate2 (RSK_eval s) m) ∧
@@ -5264,7 +5281,7 @@ theorem step_ctx_store_eval_fail2 {an : List _root_.annot} {e : CoreExpr} {ctx :
       (dsimp only
        rw [step_action_store_eval (.inr (act_none_of_pair hp2 hp3 hnv)) hp3.not_constrained]
        refine ⟨_, _, rfl, fun rs => ?_⟩
-       rw [full_eval_bridge (v := Vctype ty) (evalPexpr_val _ _ _ _ _) (peDepth_val_le _ _) σ,
+       rw [full_eval_bridge (v := Vctype ty) (evalPexpr_val _ _ _ _ _) (peDepth_val_le (hfuel := by omega) _ _) σ,
          full_eval_bridge_fail hp2 hf hd2 σ]
        cases fl <;>
          (dsimp only [EvalFail.run, stExceptUndef_bind, stExceptUndef_return, stExpect_return,
@@ -5275,14 +5292,13 @@ theorem step_ctx_store_eval_fail2 {an : List _root_.annot} {e : CoreExpr} {ctx :
   exact ⟨s, m, post, hpost, hrest⟩
 
 /-- … the kill face (E1's statement). -/
-theorem step_ctx_store_eval_kill2 {an : List _root_.annot} {e : CoreExpr} {ctx : context}
+theorem step_ctx_store_eval_kill2 (hfuel : 0 < LemFuel.fuel) {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
     {pe2 pe3 : generic_pexpr Unit sym} {mo : memory_order} {err : core_run_cause}
     (hd : Decomp e ctx (storeOpRedex an loc ann ty pe2 pe3 mo))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexprs [pe2, pe3] = none)
     (hp2 : PePure pe2) (hp3 : PePure pe3)
-    (hd2 : peDepth pe2 ≤ lemDefaultFuel)
+    (hd2 : peDepth pe2 ≤ LemFuel.fuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -5292,20 +5308,19 @@ theorem step_ctx_store_eval_kill2 {an : List _root_.annot} {e : CoreExpr} {ctx :
       step_ctx tds σ file ext tid (parent, th) =
         Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, m rs = Exception err :=
-  step_ctx_store_eval_fail2 hd hsz hnv hp2 hp3 hd2 tds σ file ext tid parent th harena (fl := .kill err) (by rw [hk]; rfl)
+  step_ctx_store_eval_fail2 (hfuel := by omega) hd hnv hp2 hp3 hd2 tds σ file ext tid parent th harena (fl := .kill err) (by rw [hk]; rfl)
 
 /-- Store ACTION_EVAL whose pointer operand evaluates and whose VALUE
     operand the engine rejects. -/
-theorem step_ctx_store_eval_fail3 {an : List _root_.annot} {e : CoreExpr} {ctx : context}
+theorem step_ctx_store_eval_fail3 (hfuel : 0 < LemFuel.fuel) {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
     {pe2 pe3 : generic_pexpr Unit sym} {mo : memory_order} {v : value}
     {fl : EvalFail}
     (hd : Decomp e ctx (storeOpRedex an loc ann ty pe2 pe3 mo))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexprs [pe2, pe3] = none)
     (hp2 : PePure pe2) (hp3 : PePure pe3)
-    (hd2 : peDepth pe2 ≤ lemDefaultFuel)
-    (hd3 : peDepth pe3 ≤ lemDefaultFuel)
+    (hd2 : peDepth pe2 ≤ LemFuel.fuel)
+    (hd3 : peDepth pe3 ≤ LemFuel.fuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -5317,7 +5332,7 @@ theorem step_ctx_store_eval_fail3 {an : List _root_.annot} {e : CoreExpr} {ctx :
         Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, m rs = fl.run thread_state core_run_state rs := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, storeOpRedex an loc ann ty pe2 pe3 mo) :: rest := by
-    rw [harena]; exact hd.get_ctx_default hsz
+    rw [harena]; exact hd.get_ctx_default
   have key : ∃ (s : String) (m : core_runM thread_state),
       (step_ctx tds σ file ext tid (parent, th)).head? =
         some (Step_with_runstate2 (RSK_eval s) m) ∧
@@ -5331,7 +5346,7 @@ theorem step_ctx_store_eval_fail3 {an : List _root_.annot} {e : CoreExpr} {ctx :
       (dsimp only
        rw [step_action_store_eval (.inr (act_none_of_pair hp2 hp3 hnv)) hp3.not_constrained]
        refine ⟨_, _, rfl, fun rs => ?_⟩
-       rw [full_eval_bridge (v := Vctype ty) (evalPexpr_val _ _ _ _ _) (peDepth_val_le _ _) σ,
+       rw [full_eval_bridge (v := Vctype ty) (evalPexpr_val _ _ _ _ _) (peDepth_val_le (hfuel := by omega) _ _) σ,
          full_eval_bridge hv2 hd2 σ, full_eval_bridge_fail hp3 hf hd3 σ]
        cases fl <;>
          (dsimp only [EvalFail.run, stExceptUndef_bind, stExceptUndef_return, stExpect_return,
@@ -5342,16 +5357,15 @@ theorem step_ctx_store_eval_fail3 {an : List _root_.annot} {e : CoreExpr} {ctx :
   exact ⟨s, m, post, hpost, hrest⟩
 
 /-- … the kill face (E1's statement). -/
-theorem step_ctx_store_eval_kill3 {an : List _root_.annot} {e : CoreExpr} {ctx : context}
+theorem step_ctx_store_eval_kill3 (hfuel : 0 < LemFuel.fuel) {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
     {pe2 pe3 : generic_pexpr Unit sym} {mo : memory_order} {v : value}
     {err : core_run_cause}
     (hd : Decomp e ctx (storeOpRedex an loc ann ty pe2 pe3 mo))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexprs [pe2, pe3] = none)
     (hp2 : PePure pe2) (hp3 : PePure pe3)
-    (hd2 : peDepth pe2 ≤ lemDefaultFuel)
-    (hd3 : peDepth pe3 ≤ lemDefaultFuel)
+    (hd2 : peDepth pe2 ≤ LemFuel.fuel)
+    (hd3 : peDepth pe3 ≤ LemFuel.fuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -5362,7 +5376,7 @@ theorem step_ctx_store_eval_kill3 {an : List _root_.annot} {e : CoreExpr} {ctx :
       step_ctx tds σ file ext tid (parent, th) =
         Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, m rs = Exception err :=
-  step_ctx_store_eval_fail3 hd hsz hnv hp2 hp3 hd2 hd3 tds σ file ext tid parent th harena hv2 (fl := .kill err) (by rw [hk]; rfl)
+  step_ctx_store_eval_fail3 (hfuel := by omega) hd hnv hp2 hp3 hd2 hd3 tds σ file ext tid parent th harena hv2 (fl := .kill err) (by rw [hk]; rfl)
 
 /-- Alloc ACTION_EVAL whose ALIGNMENT operand (the first evaluated) the
     engine rejects (kill/free arc K3). -/
@@ -5370,10 +5384,9 @@ theorem step_ctx_alloc_eval_fail1 {an : List _root_.annot} {e : CoreExpr} {ctx :
     {loc : CerbLocation.Loc} {ann : core_run_annotation}
     {pe1 pe2 : generic_pexpr Unit sym} {pref : prefix0} {fl : EvalFail}
     (hd : Decomp e ctx (allocOpRedex an loc ann pe1 pe2 pref))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexprs [pe1, pe2] = none)
     (hp1 : PePure pe1) (hp2 : PePure pe2)
-    (hd1 : peDepth pe1 ≤ lemDefaultFuel)
+    (hd1 : peDepth pe1 ≤ LemFuel.fuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -5384,7 +5397,7 @@ theorem step_ctx_alloc_eval_fail1 {an : List _root_.annot} {e : CoreExpr} {ctx :
         Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, m rs = fl.run thread_state core_run_state rs := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, allocOpRedex an loc ann pe1 pe2 pref) :: rest := by
-    rw [harena]; exact hd.get_ctx_default hsz
+    rw [harena]; exact hd.get_ctx_default
   have key : ∃ (s : String) (m : core_runM thread_state),
       (step_ctx tds σ file ext tid (parent, th)).head? =
         some (Step_with_runstate2 (RSK_eval s) m) ∧
@@ -5412,10 +5425,9 @@ theorem step_ctx_alloc_eval_kill1 {an : List _root_.annot} {e : CoreExpr} {ctx :
     {loc : CerbLocation.Loc} {ann : core_run_annotation}
     {pe1 pe2 : generic_pexpr Unit sym} {pref : prefix0} {err : core_run_cause}
     (hd : Decomp e ctx (allocOpRedex an loc ann pe1 pe2 pref))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexprs [pe1, pe2] = none)
     (hp1 : PePure pe1) (hp2 : PePure pe2)
-    (hd1 : peDepth pe1 ≤ lemDefaultFuel)
+    (hd1 : peDepth pe1 ≤ LemFuel.fuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -5425,7 +5437,7 @@ theorem step_ctx_alloc_eval_kill1 {an : List _root_.annot} {e : CoreExpr} {ctx :
       step_ctx tds σ file ext tid (parent, th) =
         Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, m rs = Exception err :=
-  step_ctx_alloc_eval_fail1 hd hsz hnv hp1 hp2 hd1 tds σ file ext tid parent th harena (fl := .kill err) (by rw [hk]; rfl)
+  step_ctx_alloc_eval_fail1 hd hnv hp1 hp2 hd1 tds σ file ext tid parent th harena (fl := .kill err) (by rw [hk]; rfl)
 
 /-- Alloc ACTION_EVAL whose alignment operand evaluates and whose SIZE
     operand the engine rejects (kill/free arc K3). -/
@@ -5434,11 +5446,10 @@ theorem step_ctx_alloc_eval_fail2 {an : List _root_.annot} {e : CoreExpr} {ctx :
     {pe1 pe2 : generic_pexpr Unit sym} {pref : prefix0} {v1 : value}
     {fl : EvalFail}
     (hd : Decomp e ctx (allocOpRedex an loc ann pe1 pe2 pref))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexprs [pe1, pe2] = none)
     (hp1 : PePure pe1) (hp2 : PePure pe2)
-    (hd1 : peDepth pe1 ≤ lemDefaultFuel)
-    (hd2 : peDepth pe2 ≤ lemDefaultFuel)
+    (hd1 : peDepth pe1 ≤ LemFuel.fuel)
+    (hd2 : peDepth pe2 ≤ LemFuel.fuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -5450,7 +5461,7 @@ theorem step_ctx_alloc_eval_fail2 {an : List _root_.annot} {e : CoreExpr} {ctx :
         Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, m rs = fl.run thread_state core_run_state rs := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, allocOpRedex an loc ann pe1 pe2 pref) :: rest := by
-    rw [harena]; exact hd.get_ctx_default hsz
+    rw [harena]; exact hd.get_ctx_default
   have key : ∃ (s : String) (m : core_runM thread_state),
       (step_ctx tds σ file ext tid (parent, th)).head? =
         some (Step_with_runstate2 (RSK_eval s) m) ∧
@@ -5479,11 +5490,10 @@ theorem step_ctx_alloc_eval_kill2 {an : List _root_.annot} {e : CoreExpr} {ctx :
     {pe1 pe2 : generic_pexpr Unit sym} {pref : prefix0} {v1 : value}
     {err : core_run_cause}
     (hd : Decomp e ctx (allocOpRedex an loc ann pe1 pe2 pref))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexprs [pe1, pe2] = none)
     (hp1 : PePure pe1) (hp2 : PePure pe2)
-    (hd1 : peDepth pe1 ≤ lemDefaultFuel)
-    (hd2 : peDepth pe2 ≤ lemDefaultFuel)
+    (hd1 : peDepth pe1 ≤ LemFuel.fuel)
+    (hd2 : peDepth pe2 ≤ LemFuel.fuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -5494,18 +5504,17 @@ theorem step_ctx_alloc_eval_kill2 {an : List _root_.annot} {e : CoreExpr} {ctx :
       step_ctx tds σ file ext tid (parent, th) =
         Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, m rs = Exception err :=
-  step_ctx_alloc_eval_fail2 hd hsz hnv hp1 hp2 hd1 hd2 tds σ file ext tid parent th harena hv1 (fl := .kill err) (by rw [hk]; rfl)
+  step_ctx_alloc_eval_fail2 hd hnv hp1 hp2 hd1 hd2 tds σ file ext tid parent th harena hv1 (fl := .kill err) (by rw [hk]; rfl)
 
 /-- Memop-operand EVAL whose operand list the engine rejects (the map
     raises at the first rejected operand). -/
 theorem step_ctx_memop_eval_fail {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {mop : memop} {pe1 pe2 : generic_pexpr Unit sym} {fl : EvalFail}
     (hd : Decomp e ctx (memopRedex an mop [pe1, pe2]))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexprs [pe1, pe2] = none)
     (hp1 : PePure pe1) (hp2 : PePure pe2)
-    (hd1 : peDepth pe1 ≤ lemDefaultFuel)
-    (hd2 : peDepth pe2 ≤ lemDefaultFuel)
+    (hd1 : peDepth pe1 ≤ LemFuel.fuel)
+    (hd2 : peDepth pe2 ≤ LemFuel.fuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -5516,7 +5525,7 @@ theorem step_ctx_memop_eval_fail {an : List _root_.annot} {e : CoreExpr} {ctx : 
         Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, m rs = fl.run thread_state core_run_state rs := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, memopRedex an mop [pe1, pe2]) :: rest := by
-    rw [harena]; exact hd.get_ctx_default hsz
+    rw [harena]; exact hd.get_ctx_default
   have key : ∃ (s : String) (m : core_runM thread_state),
       (step_ctx tds σ file ext tid (parent, th)).head? =
         some (Step_with_runstate2 (RSK_eval s) m) ∧
@@ -5525,7 +5534,7 @@ theorem step_ctx_memop_eval_fail {an : List _root_.annot} {e : CoreExpr} {ctx : 
       intro pe hpe
       simp only [List.mem_cons, List.not_mem_nil, or_false] at hpe
       rcases hpe with rfl | rfl <;> assumption
-    have hdp : ∀ pe ∈ [pe1, pe2], peDepth pe ≤ lemDefaultFuel := by
+    have hdp : ∀ pe ∈ [pe1, pe2], peDepth pe ≤ LemFuel.fuel := by
       intro pe hpe
       simp only [List.mem_cons, List.not_mem_nil, or_false] at hpe
       rcases hpe with rfl | rfl <;> assumption
@@ -5556,11 +5565,10 @@ theorem step_ctx_memop_eval_fail {an : List _root_.annot} {e : CoreExpr} {ctx : 
 theorem step_ctx_memop_eval_kill {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {mop : memop} {pe1 pe2 : generic_pexpr Unit sym} {err : core_run_cause}
     (hd : Decomp e ctx (memopRedex an mop [pe1, pe2]))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexprs [pe1, pe2] = none)
     (hp1 : PePure pe1) (hp2 : PePure pe2)
-    (hd1 : peDepth pe1 ≤ lemDefaultFuel)
-    (hd2 : peDepth pe2 ≤ lemDefaultFuel)
+    (hd1 : peDepth pe1 ≤ LemFuel.fuel)
+    (hd2 : peDepth pe2 ≤ LemFuel.fuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -5570,7 +5578,7 @@ theorem step_ctx_memop_eval_kill {an : List _root_.annot} {e : CoreExpr} {ctx : 
       step_ctx tds σ file ext tid (parent, th) =
         Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, m rs = Exception err :=
-  step_ctx_memop_eval_fail hd hsz hnv hp1 hp2 hd1 hd2 tds σ file ext tid parent th harena (fl := .kill err) (by rw [hk]; rfl)
+  step_ctx_memop_eval_fail hd hnv hp1 hp2 hd1 hd2 tds σ file ext tid parent th harena (fl := .kill err) (by rw [hk]; rfl)
 
 /-- Create ACTION_EVAL (E1) at ANY evaluated operand values (kill/free arc K3;
     `step_ctx_create_eval_ws`, DriverCollapse.lean, is the integer
@@ -5581,11 +5589,10 @@ theorem step_ctx_create_eval_ws' {an : List _root_.annot} {e : CoreExpr} {ctx : 
     {loc : CerbLocation.Loc} {ann : core_run_annotation}
     {pe1 pe2 : generic_pexpr Unit sym} {pref : prefix0} {v1 v2 : value}
     (hd : Decomp e ctx (createOpRedex an loc ann pe1 pe2 pref))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexprs [pe1, pe2] = none)
     (hp1 : PePure pe1) (hp2 : PePure pe2)
-    (hd1 : peDepth pe1 ≤ lemDefaultFuel)
-    (hd2 : peDepth pe2 ≤ lemDefaultFuel)
+    (hd1 : peDepth pe1 ≤ LemFuel.fuel)
+    (hd2 : peDepth pe2 ≤ LemFuel.fuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -5599,7 +5606,7 @@ theorem step_ctx_create_eval_ws' {an : List _root_.annot} {e : CoreExpr} {ctx : 
         arena := apply_ctx ctx (Expr an (Eaction (Paction polarity.Pos (Action loc ann
           (Create (Pexpr [] () (PEval v1)) (Pexpr [] () (PEval v2)) pref))))) }, rs) := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, createOpRedex an loc ann pe1 pe2 pref) :: rest := by
-    rw [harena]; exact hd.get_ctx_default hsz
+    rw [harena]; exact hd.get_ctx_default
   have key : ∃ (s : String) (m : core_runM thread_state),
       (step_ctx tds σ file ext tid (parent, th)).head? =
         some (Step_with_runstate2 (RSK_eval s) m) ∧
@@ -5629,7 +5636,6 @@ theorem step_ctx_create_eval_shape {an : List _root_.annot} {e : CoreExpr} {ctx 
     {loc : CerbLocation.Loc} {ann : core_run_annotation}
     {pe1 pe2 : generic_pexpr Unit sym} {pref : prefix0}
     (hd : Decomp e ctx (createOpRedex an loc ann pe1 pe2 pref))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexprs [pe1, pe2] = none)
     (hp1 : PePure pe1) (hp2 : PePure pe2)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
@@ -5640,7 +5646,7 @@ theorem step_ctx_create_eval_shape {an : List _root_.annot} {e : CoreExpr} {ctx 
       step_ctx tds σ file ext tid (parent, th) =
         Step_with_runstate2 (RSK_eval s) m :: post := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, createOpRedex an loc ann pe1 pe2 pref) :: rest := by
-    rw [harena]; exact hd.get_ctx_default hsz
+    rw [harena]; exact hd.get_ctx_default
   have key : ∃ (s : String) (m : core_runM thread_state),
       (step_ctx tds σ file ext tid (parent, th)).head? =
         some (Step_with_runstate2 (RSK_eval s) m) := by
@@ -5663,8 +5669,7 @@ theorem step_ctx_create_eval_shape {an : List _root_.annot} {e : CoreExpr} {ctx 
 theorem step_ctx_create_illtyped' {an : List _root_.annot} {e : CoreExpr} {ctx : context} {r : CoreExpr}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {pref : prefix0}
     {v1 v2 : value}
-    (hd : Decomp e ctx r) (hsz : esize e ≤ lemDefaultFuel)
-    (hv : ∀ i1 ty, ¬ (v1 = Vobject (OVinteger i1) ∧ v2 = Vctype ty))
+    (hd : Decomp e ctx r) (hv : ∀ i1 ty, ¬ (v1 = Vobject (OVinteger i1) ∧ v2 = Vctype ty))
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -5673,7 +5678,7 @@ theorem step_ctx_create_illtyped' {an : List _root_.annot} {e : CoreExpr} {ctx :
     ∃ post, step_ctx tds σ file ext tid (parent, th) = Step_error2 "Create" :: post := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, Expr an (Eaction (Paction polarity.Pos
       (Action loc ann (Create (Pexpr [] () (PEval v1)) (Pexpr [] () (PEval v2)) pref))))) :: rest := by
-    rw [harena]; exact hd.get_ctx_rebuild_action an _ lemDefaultFuel hsz
+    rw [harena]; exact hd.get_ctx_rebuild_action_default an _
   unfold step_ctx
   dsimp only
   rw [hget]
@@ -5702,10 +5707,9 @@ theorem step_ctx_create_eval_fail1 {an : List _root_.annot} {e : CoreExpr} {ctx 
     {loc : CerbLocation.Loc} {ann : core_run_annotation}
     {pe1 pe2 : generic_pexpr Unit sym} {pref : prefix0} {fl : EvalFail}
     (hd : Decomp e ctx (createOpRedex an loc ann pe1 pe2 pref))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexprs [pe1, pe2] = none)
     (hp1 : PePure pe1) (hp2 : PePure pe2)
-    (hd1 : peDepth pe1 ≤ lemDefaultFuel)
+    (hd1 : peDepth pe1 ≤ LemFuel.fuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -5716,7 +5720,7 @@ theorem step_ctx_create_eval_fail1 {an : List _root_.annot} {e : CoreExpr} {ctx 
         Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, m rs = fl.run thread_state core_run_state rs := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, createOpRedex an loc ann pe1 pe2 pref) :: rest := by
-    rw [harena]; exact hd.get_ctx_default hsz
+    rw [harena]; exact hd.get_ctx_default
   have key : ∃ (s : String) (m : core_runM thread_state),
       (step_ctx tds σ file ext tid (parent, th)).head? =
         some (Step_with_runstate2 (RSK_eval s) m) ∧
@@ -5744,10 +5748,9 @@ theorem step_ctx_create_eval_kill1 {an : List _root_.annot} {e : CoreExpr} {ctx 
     {loc : CerbLocation.Loc} {ann : core_run_annotation}
     {pe1 pe2 : generic_pexpr Unit sym} {pref : prefix0} {err : core_run_cause}
     (hd : Decomp e ctx (createOpRedex an loc ann pe1 pe2 pref))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexprs [pe1, pe2] = none)
     (hp1 : PePure pe1) (hp2 : PePure pe2)
-    (hd1 : peDepth pe1 ≤ lemDefaultFuel)
+    (hd1 : peDepth pe1 ≤ LemFuel.fuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -5757,7 +5760,7 @@ theorem step_ctx_create_eval_kill1 {an : List _root_.annot} {e : CoreExpr} {ctx 
       step_ctx tds σ file ext tid (parent, th) =
         Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, m rs = Exception err :=
-  step_ctx_create_eval_fail1 hd hsz hnv hp1 hp2 hd1 tds σ file ext tid parent th harena (fl := .kill err) (by rw [hk]; rfl)
+  step_ctx_create_eval_fail1 hd hnv hp1 hp2 hd1 tds σ file ext tid parent th harena (fl := .kill err) (by rw [hk]; rfl)
 
 /-- Create ACTION_EVAL (E1) whose alignment operand evaluates and whose SIZE
     operand the engine rejects (kill/free arc K3). -/
@@ -5766,11 +5769,10 @@ theorem step_ctx_create_eval_fail2 {an : List _root_.annot} {e : CoreExpr} {ctx 
     {pe1 pe2 : generic_pexpr Unit sym} {pref : prefix0} {v1 : value}
     {fl : EvalFail}
     (hd : Decomp e ctx (createOpRedex an loc ann pe1 pe2 pref))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexprs [pe1, pe2] = none)
     (hp1 : PePure pe1) (hp2 : PePure pe2)
-    (hd1 : peDepth pe1 ≤ lemDefaultFuel)
-    (hd2 : peDepth pe2 ≤ lemDefaultFuel)
+    (hd1 : peDepth pe1 ≤ LemFuel.fuel)
+    (hd2 : peDepth pe2 ≤ LemFuel.fuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -5782,7 +5784,7 @@ theorem step_ctx_create_eval_fail2 {an : List _root_.annot} {e : CoreExpr} {ctx 
         Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, m rs = fl.run thread_state core_run_state rs := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, createOpRedex an loc ann pe1 pe2 pref) :: rest := by
-    rw [harena]; exact hd.get_ctx_default hsz
+    rw [harena]; exact hd.get_ctx_default
   have key : ∃ (s : String) (m : core_runM thread_state),
       (step_ctx tds σ file ext tid (parent, th)).head? =
         some (Step_with_runstate2 (RSK_eval s) m) ∧
@@ -5811,11 +5813,10 @@ theorem step_ctx_create_eval_kill2 {an : List _root_.annot} {e : CoreExpr} {ctx 
     {pe1 pe2 : generic_pexpr Unit sym} {pref : prefix0} {v1 : value}
     {err : core_run_cause}
     (hd : Decomp e ctx (createOpRedex an loc ann pe1 pe2 pref))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexprs [pe1, pe2] = none)
     (hp1 : PePure pe1) (hp2 : PePure pe2)
-    (hd1 : peDepth pe1 ≤ lemDefaultFuel)
-    (hd2 : peDepth pe2 ≤ lemDefaultFuel)
+    (hd1 : peDepth pe1 ≤ LemFuel.fuel)
+    (hd2 : peDepth pe2 ≤ LemFuel.fuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -5826,7 +5827,7 @@ theorem step_ctx_create_eval_kill2 {an : List _root_.annot} {e : CoreExpr} {ctx 
       step_ctx tds σ file ext tid (parent, th) =
         Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, m rs = Exception err :=
-  step_ctx_create_eval_fail2 hd hsz hnv hp1 hp2 hd1 hd2 tds σ file ext tid parent th harena hv1 (fl := .kill err) (by rw [hk]; rfl)
+  step_ctx_create_eval_fail2 hd hnv hp1 hp2 hd1 hd2 tds σ file ext tid parent th harena hv1 (fl := .kill err) (by rw [hk]; rfl)
 
 /-! ### The operand-evaluation rows, classified -/
 
@@ -5835,10 +5836,10 @@ theorem step_ctx_create_eval_kill2 {an : List _root_.annot} {e : CoreExpr} {ctx 
     (DErr_core_run err)`; a guard the classifier leaves uncovered (an
     accepted-but-unmirrored leaf; the whole guard's outcome not
     characterized) is the residual `eval_uncovered`. -/
-theorem complete_if {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_if (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {g : generic_pexpr Unit sym} {e2 e3 : CoreExpr}
     (hd : Decomp e ctx (ifRedex an g e2 e3))
-    (hsz : esize e ≤ lemDefaultFuel) (hpg : PePure g) (hdg : peDepth g ≤ lemDefaultFuel)
+    (hpg : PePure g) (hdg : peDepth g ≤ LemFuel.fuel)
     (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
     RoundComplete M (e, ρ, ctl, σ) := by
   have hnr : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (l : sym)
@@ -5867,7 +5868,7 @@ theorem complete_if {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ct
       obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
-      obtain ⟨s, m, post, hsteps⟩ := step_ctx_if_shape hd hsz M.tagDefs dst.layout_state
+      obtain ⟨s, m, post, hsteps⟩ := step_ctx_if_shape hd M.tagDefs dst.layout_state
         dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
       exact ⟨_, _, _, hsteps⟩
     rcases evalClass_of_none ctl.curLoc M.file hg with ⟨fl, hf⟩ | hu
@@ -5876,10 +5877,10 @@ theorem complete_if {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ct
       obtain ⟨-, hlay, hfile, hext, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
-      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_if_fail hd hsz hpg hdg M.tagDefs
+      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_if_fail hd hpg hdg M.tagDefs
         dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
         (by rw [hext, hfile]; exact hf)
-      obtain ⟨dst', hadv⟩ := advance_withrs_failed_tau M.tagDefs M.tid s m
+      obtain ⟨dst', hadv⟩ := advance_withrs_failed_tau (hfuel := by omega) M.tagDefs M.tid s m
         (hm dst.core_run_state0)
       exact ⟨_, _, dst', hsteps, rfl, hadv⟩
     · exact .inr (.inr (.eval_uncovered g hstuck
@@ -5897,7 +5898,7 @@ theorem complete_if {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ct
         simp only at hlay
         subst hlay
         obtain ⟨s, m, inst, step_m, k, msg, post, hsteps, hm, hpan⟩ :=
-          step_ctx_if_panic hd hsz hdg M.tagDefs dst.layout_state dst.core_file
+          step_ctx_if_panic hd hdg M.tagDefs dst.layout_state dst.core_file
             dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
             (by rw [hext, hfile]; exact hg) hvt hvf
         exact ⟨_, _, _, inst, step_m, k, msg, _, hsteps, hm, hpan dst.core_run_state0⟩
@@ -5910,12 +5911,11 @@ theorem complete_if {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ct
     leaf; the whole argument's outcome not characterized) is the residual
     `eval_uncovered`; every zipped argument evaluating but a SURPLUS
     argument not is the residual `run_surplus`. -/
-theorem complete_run {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_run (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {ra : core_run_annotation} {l : sym} {pes : List (generic_pexpr Unit sym)}
     (hd : Decomp e ctx (runRedex an ra l pes))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hpes : ∀ pe ∈ pes, PePure pe)
-    (hdep : ∀ pe ∈ pes, peDepth pe ≤ lemDefaultFuel)
+    (hdep : ∀ pe ∈ pes, peDepth pe ≤ LemFuel.fuel)
     {ctl : Ctl} {p : sym} (hproc : ctl.proc = some p)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (σ : Mem) :
     RoundComplete M (e, ev0 :: evs, ctl, σ) := by
@@ -5939,7 +5939,7 @@ theorem complete_run {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {c
         obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
         simp only at hlay
         subst hlay
-        obtain ⟨s, m, post, hsteps⟩ := step_ctx_run_shape hd hsz M.tagDefs dst.layout_state
+        obtain ⟨s, m, post, hsteps⟩ := step_ctx_run_shape hd M.tagDefs dst.layout_state
           dst.core_file dst.core_extern M.tid M.parent (M.thread _ _ ctl) rfl
         exact ⟨_, _, _, hsteps⟩
       have hfail : ∀ (fl : EvalFail),
@@ -5954,10 +5954,10 @@ theorem complete_run {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {c
         obtain ⟨-, hlay, hfile, hext, hlabd, -, -⟩ := hemb
         simp only at hlay
         subst hlay
-        obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_run_fail hd hsz hl hpes hdep M.tagDefs
+        obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_run_fail hd hl hpes hdep M.tagDefs
           dst.layout_state dst.core_file dst.core_extern M.tid M.parent p
           (M.thread _ _ ctl) rfl hproc (by rw [hext, hfile]; exact hf)
-        obtain ⟨dst', hadv⟩ := advance_withrs_failed_eval M.tagDefs M.tid s m
+        obtain ⟨dst', hadv⟩ := advance_withrs_failed_eval (hfuel := by omega) M.tagDefs M.tid s m
           (hm dst.core_run_state0 (by unfold LabeledAt; rw [hext, hlabd]; exact hQ))
         exact ⟨_, _, dst', hsteps, rfl, hadv⟩
       cases hcl : evalClassFold M.tagDefs ctl.curLoc M.extern M.file (ev0 :: evs)
@@ -5995,7 +5995,7 @@ theorem complete_run {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {c
         rw [show resolveExtern M.extern p = M.resolveProc p from rfl, hQ, bind0_some]
         rw [show (M.labelsAt ctl.proc) = Q from hlab] at hl
         exact hl
-    obtain ⟨s, m, inst, msg, post, hsteps, hpan⟩ := step_ctx_run_unresolved hd hsz M.tagDefs
+    obtain ⟨s, m, inst, msg, post, hsteps, hpan⟩ := step_ctx_run_unresolved hd M.tagDefs
       dst.layout_state dst.core_file dst.core_extern M.tid M.parent p (M.thread _ _ ctl) rfl
       hproc dst.core_run_state0 hnone
     exact ⟨_, _, _, inst, m, (fun z => stExceptUndef_return z), msg, _, hsteps,
@@ -6006,15 +6006,14 @@ theorem complete_run {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {c
     KILL `Other (DErr_core_run err)`; an initializer the classifier leaves
     uncovered (an accepted-but-unmirrored leaf; the whole initializer's
     outcome not characterized) is the residual `eval_uncovered`. -/
-theorem complete_save {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_save (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {sb : sym × core_base_type}
     {ps : List (sym × ((core_base_type ×
       Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym))}
     {body : CoreExpr}
     (hd : Decomp e ctx (saveRedex an sb ps body))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hp : ∀ pe ∈ saveParamPexprs ps, PePure pe)
-    (hdep : ∀ pe ∈ saveParamPexprs ps, peDepth pe ≤ lemDefaultFuel)
+    (hdep : ∀ pe ∈ saveParamPexprs ps, peDepth pe ≤ LemFuel.fuel)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (ctl : Ctl) (σ : Mem) :
     RoundComplete M (e, ev0 :: evs, ctl, σ) := by
   have hnr : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (l : sym)
@@ -6049,7 +6048,7 @@ theorem complete_save {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {
         obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
         simp only at hlay
         subst hlay
-        obtain ⟨s, m, post, hsteps⟩ := step_ctx_save_eval_shape hd hsz hvals M.tagDefs
+        obtain ⟨s, m, post, hsteps⟩ := step_ctx_save_eval_shape hd hvals M.tagDefs
           dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ _ ctl) rfl
         exact ⟨_, _, _, hsteps⟩
       rcases evalClassList_of_none ctl.curLoc M.file hev with ⟨fl, hf⟩ | ⟨pe, hu⟩
@@ -6058,10 +6057,10 @@ theorem complete_save {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {
         obtain ⟨-, hlay, hfile, hext, -, -, -⟩ := hemb
         simp only at hlay
         subst hlay
-        obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_save_eval_fail hd hsz hvals hp hdep M.tagDefs
+        obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_save_eval_fail hd hvals hp hdep M.tagDefs
           dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ _ ctl) rfl
           (by rw [hext, hfile]; exact hf)
-        obtain ⟨dst', hadv⟩ := advance_withrs_failed_eval M.tagDefs M.tid s m
+        obtain ⟨dst', hadv⟩ := advance_withrs_failed_eval (hfuel := by omega) M.tagDefs M.tid s m
           (hm dst.core_run_state0)
         exact ⟨_, _, dst', hsteps, rfl, hadv⟩
       · obtain ⟨hmem, hu'⟩ := evalClassList_uncovered hu
@@ -6072,11 +6071,10 @@ theorem complete_save {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {
     operand evaluates; a KILL (raise — `Other (DErr_core_run err)` — or
     undef — `Undef0 loc ubs`) where the classifier fails it; the residual
     `eval_uncovered` where the classifier leaves it uncovered. -/
-theorem complete_pure_op {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_pure_op (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {pe : generic_pexpr Unit sym}
     (hd : Decomp e ctx (pureRedex an pe))
-    (hsz : esize e ≤ lemDefaultFuel)
-    (hnv : valueFromPexpr pe = none) (hp : PePure pe) (hdp : peDepth pe ≤ lemDefaultFuel)
+    (hnv : valueFromPexpr pe = none) (hp : PePure pe) (hdp : peDepth pe ≤ LemFuel.fuel)
     (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
     RoundComplete M (e, ρ, ctl, σ) := by
   have hnr : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (l : sym)
@@ -6107,7 +6105,7 @@ theorem complete_pure_op {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr
       obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
-      obtain ⟨s, m, post, hsteps⟩ := step_ctx_pure_op_shape hd hsz hnv M.tagDefs
+      obtain ⟨s, m, post, hsteps⟩ := step_ctx_pure_op_shape hd hnv M.tagDefs
         dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
       exact ⟨_, _, _, hsteps⟩
     rcases evalClass_of_none ctl.curLoc M.file hv with ⟨fl, hf⟩ | hu
@@ -6116,22 +6114,22 @@ theorem complete_pure_op {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr
       obtain ⟨-, hlay, hfile, hext, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
-      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_pure_op_fail hd hsz hnv hp hdp M.tagDefs
+      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_pure_op_fail hd hnv hp hdp M.tagDefs
         dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
         (by rw [hext, hfile]; exact hf)
-      obtain ⟨dst', hadv⟩ := advance_withrs_failed_eval M.tagDefs M.tid s m
+      obtain ⟨dst', hadv⟩ := advance_withrs_failed_eval (hfuel := by omega) M.tagDefs M.tid s m
         (hm dst.core_run_state0)
       exact ⟨_, _, dst', hsteps, rfl, hadv⟩
     · exact .inr (.inr (.eval_uncovered pe hstuck
         (by rw [hd.operandsOf_eq]; exact List.mem_singleton.mpr rfl) hp hu hshape))
 
 /-- The plain-symbol instance (E1's statement). -/
-theorem complete_pure_sym {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_pure_sym (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {pb : List _root_.annot} {x : sym}
     (hd : Decomp e ctx (pureRedex an (Pexpr pb () (PEsym x))))
-    (hsz : esize e ≤ lemDefaultFuel) (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
+    (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
     RoundComplete M (e, ρ, ctl, σ) :=
-  complete_pure_op hd hsz rfl (.sym pb x) (peDepth_sym_le pb x) ρ ctl σ
+  complete_pure_op (hfuel := by omega) hd rfl (.sym pb x) (peDepth_sym_le (hfuel := by omega) pb x) ρ ctl σ
 
 /-- Load ACTION_EVAL: a pointer-valued operand is the mirror step; a
     non-pointer value is ILLTYPED AT DISTANCE ONE (the engine's
@@ -6141,13 +6139,12 @@ theorem complete_pure_sym {an : List _root_.annot} {M : MachineCtx} {e : CoreExp
     an operand the classifier leaves uncovered (an accepted-but-unmirrored
     leaf; the whole operand's outcome not characterized) is the residual
     `eval_uncovered`. -/
-theorem complete_load_op {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_load_op (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
     {pe2 : generic_pexpr Unit sym} {mo : memory_order}
     (hd : Decomp e ctx (loadOpRedex an loc ann ty pe2 mo))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hnv2 : valueFromPexpr pe2 = none) (hp2 : PePure pe2)
-    (hd2 : peDepth pe2 ≤ lemDefaultFuel)
+    (hd2 : peDepth pe2 ≤ LemFuel.fuel)
     (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
     RoundComplete M (e, ρ, ctl, σ) := by
   have hnr : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (l : sym)
@@ -6177,7 +6174,7 @@ theorem complete_load_op {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr
       obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
-      obtain ⟨s, m, post, hsteps⟩ := step_ctx_load_eval_shape hd hsz hnv2 hp2 M.tagDefs
+      obtain ⟨s, m, post, hsteps⟩ := step_ctx_load_eval_shape hd hnv2 hp2 M.tagDefs
         dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
       exact ⟨_, _, _, hsteps⟩
     rcases evalClass_of_none ctl.curLoc M.file hv2 with ⟨fl, hf⟩ | hu
@@ -6186,10 +6183,10 @@ theorem complete_load_op {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr
       obtain ⟨-, hlay, hfile, hext, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
-      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_load_eval_fail hd hsz hnv2 hp2 hd2 M.tagDefs
+      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_load_eval_fail (hfuel := by omega) hd hnv2 hp2 hd2 M.tagDefs
         dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
         (by rw [hext, hfile]; exact hf)
-      obtain ⟨dst', hadv⟩ := advance_withrs_failed_eval M.tagDefs M.tid s m
+      obtain ⟨dst', hadv⟩ := advance_withrs_failed_eval (hfuel := by omega) M.tagDefs M.tid s m
         (hm dst.core_run_state0)
       exact ⟨_, _, dst', hsteps, rfl, hadv⟩
     · exact .inr (.inr (.eval_uncovered pe2 hstuck
@@ -6209,18 +6206,18 @@ theorem complete_load_op {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr
         obtain ⟨-, hlay, hfile, hext, -, hsym, hexc⟩ := hemb
         simp only at hlay hsym hexc
         subst hlay
-        obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_load_eval_ws' hd hsz hnv2 hp2 hd2
+        obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_load_eval_ws' (hfuel := by omega) hd hnv2 hp2 hd2
           M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
           (M.thread _ ρ ctl) rfl (by rw [hext, hfile]; exact hv2)
         rw [MachineCtx.locUpdTh_thread] at hm
         refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace,
           dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
-        exact advance_withrs_eval M.tagDefs M.tid s m (hm dst.core_run_state0)
+        exact advance_withrs_eval (hfuel := by omega) M.tagDefs M.tid s m (hm dst.core_run_state0)
       · intro dst hemb
         obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
         simp only at hlay
         subst hlay
-        exact step_ctx_load_illtyped' hd hsz hv' M.tagDefs dst.layout_state
+        exact step_ctx_load_illtyped' hd hv' M.tagDefs dst.layout_state
           dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ (ctl.upd an)) rfl
 
 /-- Kill-operand EVAL (kill/free arc K2): a pointer-evaluating operand
@@ -6229,13 +6226,12 @@ theorem complete_load_op {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr
     the classifier rejects is the KILL `Other (DErr_core_run err)`; an
     operand the classifier leaves uncovered is the residual
     `eval_uncovered`. Stated at any `kind`. -/
-theorem complete_kill_op {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_kill_op (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {kind : kill_kind}
     {pe : generic_pexpr Unit sym}
     (hd : Decomp e ctx (killOpRedex an loc ann kind pe))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexpr pe = none) (hp : PePure pe)
-    (hdp : peDepth pe ≤ lemDefaultFuel)
+    (hdp : peDepth pe ≤ LemFuel.fuel)
     (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
     RoundComplete M (e, ρ, ctl, σ) := by
   have hnr : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (l : sym)
@@ -6265,7 +6261,7 @@ theorem complete_kill_op {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr
       obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
-      obtain ⟨s, m, post, hsteps⟩ := step_ctx_kill_eval_shape hd hsz hnv hp M.tagDefs
+      obtain ⟨s, m, post, hsteps⟩ := step_ctx_kill_eval_shape hd hnv hp M.tagDefs
         dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
       exact ⟨_, _, _, hsteps⟩
     rcases evalClass_of_none ctl.curLoc M.file hv with ⟨fl, hf⟩ | hu
@@ -6274,10 +6270,10 @@ theorem complete_kill_op {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr
       obtain ⟨-, hlay, hfile, hext, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
-      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_kill_eval_fail hd hsz hnv hp hdp M.tagDefs
+      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_kill_eval_fail hd hnv hp hdp M.tagDefs
         dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
         (by rw [hext, hfile]; exact hf)
-      obtain ⟨dst', hadv⟩ := advance_withrs_failed_eval M.tagDefs M.tid s m
+      obtain ⟨dst', hadv⟩ := advance_withrs_failed_eval (hfuel := by omega) M.tagDefs M.tid s m
         (hm dst.core_run_state0)
       exact ⟨_, _, dst', hsteps, rfl, hadv⟩
     · exact .inr (.inr (.eval_uncovered pe hstuck
@@ -6297,18 +6293,18 @@ theorem complete_kill_op {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr
         obtain ⟨-, hlay, hfile, hext, -, hsym, hexc⟩ := hemb
         simp only at hlay hsym hexc
         subst hlay
-        obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_kill_eval_ws' hd hsz hnv hp hdp
+        obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_kill_eval_ws' hd hnv hp hdp
           M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
           (M.thread _ ρ ctl) rfl (by rw [hext, hfile]; exact hv)
         rw [MachineCtx.locUpdTh_thread] at hm
         refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace,
           dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
-        exact advance_withrs_eval M.tagDefs M.tid s m (hm dst.core_run_state0)
+        exact advance_withrs_eval (hfuel := by omega) M.tagDefs M.tid s m (hm dst.core_run_state0)
       · intro dst hemb
         obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
         simp only at hlay
         subst hlay
-        exact step_ctx_kill_illtyped' hd hsz hv' M.tagDefs dst.layout_state
+        exact step_ctx_kill_illtyped' hd hv' M.tagDefs dst.layout_state
           dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ (ctl.upd an)) rfl
 
 /-- Alloc-operand EVAL (kill/free arc K3): two integer-evaluating
@@ -6318,14 +6314,13 @@ theorem complete_kill_op {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr
     before size, the engine's order) the classifier rejects is the KILL
     `Other (DErr_core_run err)`; the first operand the classifier leaves
     uncovered is the residual `eval_uncovered`. -/
-theorem complete_alloc_op {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_alloc_op (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation}
     {pe1 pe2 : generic_pexpr Unit sym} {pref : prefix0}
     (hd : Decomp e ctx (allocOpRedex an loc ann pe1 pe2 pref))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexprs [pe1, pe2] = none)
     (hp1 : PePure pe1) (hp2 : PePure pe2)
-    (hd1 : peDepth pe1 ≤ lemDefaultFuel) (hd2 : peDepth pe2 ≤ lemDefaultFuel)
+    (hd1 : peDepth pe1 ≤ LemFuel.fuel) (hd2 : peDepth pe2 ≤ LemFuel.fuel)
     (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
     RoundComplete M (e, ρ, ctl, σ) := by
   have hnr : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (l : sym)
@@ -6344,7 +6339,7 @@ theorem complete_alloc_op {an : List _root_.annot} {M : MachineCtx} {e : CoreExp
     obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
     simp only at hlay
     subst hlay
-    obtain ⟨s, m, post, hsteps⟩ := step_ctx_alloc_eval_shape hd hsz hnv hp1 hp2 M.tagDefs
+    obtain ⟨s, m, post, hsteps⟩ := step_ctx_alloc_eval_shape hd hnv hp1 hp2 M.tagDefs
       dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
     exact ⟨_, _, _, hsteps⟩
   cases hv1 : evalPexpr M.tagDefs M.extern M.file ρ pe1 with
@@ -6364,10 +6359,10 @@ theorem complete_alloc_op {an : List _root_.annot} {M : MachineCtx} {e : CoreExp
       obtain ⟨-, hlay, hfile, hext, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
-      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_alloc_eval_fail1 hd hsz hnv hp1 hp2 hd1
+      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_alloc_eval_fail1 hd hnv hp1 hp2 hd1
         M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
         (M.thread _ ρ ctl) rfl (by rw [hext, hfile]; exact hf)
-      obtain ⟨dst', hadv⟩ := advance_withrs_failed_eval M.tagDefs M.tid s m
+      obtain ⟨dst', hadv⟩ := advance_withrs_failed_eval (hfuel := by omega) M.tagDefs M.tid s m
         (hm dst.core_run_state0)
       exact ⟨_, _, dst', hsteps, rfl, hadv⟩
     · exact .inr (.inr (.eval_uncovered pe1 hstuck
@@ -6390,10 +6385,10 @@ theorem complete_alloc_op {an : List _root_.annot} {M : MachineCtx} {e : CoreExp
         obtain ⟨-, hlay, hfile, hext, -, -, -⟩ := hemb
         simp only at hlay
         subst hlay
-        obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_alloc_eval_fail2 hd hsz hnv hp1 hp2 hd1 hd2
+        obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_alloc_eval_fail2 hd hnv hp1 hp2 hd1 hd2
           M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
           (M.thread _ ρ ctl) rfl (by rw [hext, hfile]; exact hv1) (by rw [hext, hfile]; exact hf)
-        obtain ⟨dst', hadv⟩ := advance_withrs_failed_eval M.tagDefs M.tid s m
+        obtain ⟨dst', hadv⟩ := advance_withrs_failed_eval (hfuel := by omega) M.tagDefs M.tid s m
           (hm dst.core_run_state0)
         exact ⟨_, _, dst', hsteps, rfl, hadv⟩
       · exact .inr (.inr (.eval_uncovered pe2 hstuck
@@ -6414,18 +6409,18 @@ theorem complete_alloc_op {an : List _root_.annot} {M : MachineCtx} {e : CoreExp
           obtain ⟨-, hlay, hfile, hext, -, hsym, hexc⟩ := hemb
           simp only at hlay hsym hexc
           subst hlay
-          obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_alloc_eval_ws' hd hsz hnv hp1 hp2 hd1 hd2
+          obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_alloc_eval_ws' hd hnv hp1 hp2 hd1 hd2
             M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
             (M.thread _ ρ ctl) rfl (by rw [hext, hfile]; exact hv1) (by rw [hext, hfile]; exact hv2)
           rw [MachineCtx.locUpdTh_thread] at hm
           refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace,
             dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
-          exact advance_withrs_eval M.tagDefs M.tid s m (hm dst.core_run_state0)
+          exact advance_withrs_eval (hfuel := by omega) M.tagDefs M.tid s m (hm dst.core_run_state0)
         · intro dst hemb
           obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
           simp only at hlay
           subst hlay
-          exact step_ctx_alloc_illtyped' hd hsz hv' M.tagDefs dst.layout_state
+          exact step_ctx_alloc_illtyped' hd hv' M.tagDefs dst.layout_state
             dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ (ctl.upd an)) rfl
 
 /-- Alloc-operand EVAL (kill/free arc K3): two integer-evaluating
@@ -6435,14 +6430,13 @@ theorem complete_alloc_op {an : List _root_.annot} {M : MachineCtx} {e : CoreExp
     before size, the engine's order) the classifier rejects is the KILL
     `Other (DErr_core_run err)`; the first operand the classifier leaves
     uncovered is the residual `eval_uncovered`. -/
-theorem complete_create_op {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_create_op (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation}
     {pe1 pe2 : generic_pexpr Unit sym} {pref : prefix0}
     (hd : Decomp e ctx (createOpRedex an loc ann pe1 pe2 pref))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexprs [pe1, pe2] = none)
     (hp1 : PePure pe1) (hp2 : PePure pe2)
-    (hd1 : peDepth pe1 ≤ lemDefaultFuel) (hd2 : peDepth pe2 ≤ lemDefaultFuel)
+    (hd1 : peDepth pe1 ≤ LemFuel.fuel) (hd2 : peDepth pe2 ≤ LemFuel.fuel)
     (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
     RoundComplete M (e, ρ, ctl, σ) := by
   have hnr : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (l : sym)
@@ -6461,7 +6455,7 @@ theorem complete_create_op {an : List _root_.annot} {M : MachineCtx} {e : CoreEx
     obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
     simp only at hlay
     subst hlay
-    obtain ⟨s, m, post, hsteps⟩ := step_ctx_create_eval_shape hd hsz hnv hp1 hp2 M.tagDefs
+    obtain ⟨s, m, post, hsteps⟩ := step_ctx_create_eval_shape hd hnv hp1 hp2 M.tagDefs
       dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
     exact ⟨_, _, _, hsteps⟩
   cases hv1 : evalPexpr M.tagDefs M.extern M.file ρ pe1 with
@@ -6481,10 +6475,10 @@ theorem complete_create_op {an : List _root_.annot} {M : MachineCtx} {e : CoreEx
       obtain ⟨-, hlay, hfile, hext, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
-      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_create_eval_fail1 hd hsz hnv hp1 hp2 hd1
+      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_create_eval_fail1 hd hnv hp1 hp2 hd1
         M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
         (M.thread _ ρ ctl) rfl (by rw [hext, hfile]; exact hf)
-      obtain ⟨dst', hadv⟩ := advance_withrs_failed_eval M.tagDefs M.tid s m
+      obtain ⟨dst', hadv⟩ := advance_withrs_failed_eval (hfuel := by omega) M.tagDefs M.tid s m
         (hm dst.core_run_state0)
       exact ⟨_, _, dst', hsteps, rfl, hadv⟩
     · exact .inr (.inr (.eval_uncovered pe1 hstuck
@@ -6507,10 +6501,10 @@ theorem complete_create_op {an : List _root_.annot} {M : MachineCtx} {e : CoreEx
         obtain ⟨-, hlay, hfile, hext, -, -, -⟩ := hemb
         simp only at hlay
         subst hlay
-        obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_create_eval_fail2 hd hsz hnv hp1 hp2 hd1 hd2
+        obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_create_eval_fail2 hd hnv hp1 hp2 hd1 hd2
           M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
           (M.thread _ ρ ctl) rfl (by rw [hext, hfile]; exact hv1) (by rw [hext, hfile]; exact hf)
-        obtain ⟨dst', hadv⟩ := advance_withrs_failed_eval M.tagDefs M.tid s m
+        obtain ⟨dst', hadv⟩ := advance_withrs_failed_eval (hfuel := by omega) M.tagDefs M.tid s m
           (hm dst.core_run_state0)
         exact ⟨_, _, dst', hsteps, rfl, hadv⟩
       · exact .inr (.inr (.eval_uncovered pe2 hstuck
@@ -6531,18 +6525,18 @@ theorem complete_create_op {an : List _root_.annot} {M : MachineCtx} {e : CoreEx
           obtain ⟨-, hlay, hfile, hext, -, hsym, hexc⟩ := hemb
           simp only at hlay hsym hexc
           subst hlay
-          obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_create_eval_ws' hd hsz hnv hp1 hp2 hd1 hd2
+          obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_create_eval_ws' hd hnv hp1 hp2 hd1 hd2
             M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
             (M.thread _ ρ ctl) rfl (by rw [hext, hfile]; exact hv1) (by rw [hext, hfile]; exact hv2)
           rw [MachineCtx.locUpdTh_thread] at hm
           refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace,
             dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
-          exact advance_withrs_eval M.tagDefs M.tid s m (hm dst.core_run_state0)
+          exact advance_withrs_eval (hfuel := by omega) M.tagDefs M.tid s m (hm dst.core_run_state0)
         · intro dst hemb
           obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
           simp only at hlay
           subst hlay
-          exact step_ctx_create_illtyped' hd hsz hv' M.tagDefs dst.layout_state
+          exact step_ctx_create_illtyped' hd hv' M.tagDefs dst.layout_state
             dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ (ctl.upd an)) rfl
 
 /-- Memop-operand EVAL (any memop): evaluable operands are the mirror
@@ -6551,13 +6545,12 @@ theorem complete_create_op {an : List _root_.annot} {M : MachineCtx} {e : CoreEx
     operand the classifier leaves uncovered (an accepted-but-unmirrored
     leaf; the whole operand's outcome not characterized) is the residual
     `eval_uncovered`. -/
-theorem complete_memop_op {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_memop_op (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {mop : memop} {pe1 pe2 : generic_pexpr Unit sym}
     (hd : Decomp e ctx (memopRedex an mop [pe1, pe2]))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexprs [pe1, pe2] = none)
     (hp1 : PePure pe1) (hp2 : PePure pe2)
-    (hd1 : peDepth pe1 ≤ lemDefaultFuel) (hd2 : peDepth pe2 ≤ lemDefaultFuel)
+    (hd1 : peDepth pe1 ≤ LemFuel.fuel) (hd2 : peDepth pe2 ≤ LemFuel.fuel)
     (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
     RoundComplete M (e, ρ, ctl, σ) := by
   have hnr : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (l : sym)
@@ -6576,7 +6569,7 @@ theorem complete_memop_op {an : List _root_.annot} {M : MachineCtx} {e : CoreExp
     obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
     simp only at hlay
     subst hlay
-    obtain ⟨s, m, post, hsteps⟩ := step_ctx_memop_eval_shape hd hsz hnv M.tagDefs
+    obtain ⟨s, m, post, hsteps⟩ := step_ctx_memop_eval_shape hd hnv M.tagDefs
       dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
     exact ⟨_, _, _, hsteps⟩
   -- the FAILURE at a classified operand list (MAP-shaped: the engine's
@@ -6590,10 +6583,10 @@ theorem complete_memop_op {an : List _root_.annot} {M : MachineCtx} {e : CoreExp
     obtain ⟨-, hlay, hfile, hext, -, -, -⟩ := hemb
     simp only at hlay
     subst hlay
-    obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_memop_eval_fail hd hsz hnv hp1 hp2 hd1 hd2
+    obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_memop_eval_fail hd hnv hp1 hp2 hd1 hd2
       M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
       (M.thread _ ρ ctl) rfl (by rw [hext, hfile]; exact hf)
-    obtain ⟨dst', hadv⟩ := advance_withrs_failed_eval M.tagDefs M.tid s m (hm dst.core_run_state0)
+    obtain ⟨dst', hadv⟩ := advance_withrs_failed_eval (hfuel := by omega) M.tagDefs M.tid s m (hm dst.core_run_state0)
     exact ⟨_, _, dst', hsteps, rfl, hadv⟩
   -- an operand list the mirror does not evaluate: the classifier decides
   have hrest : (∀ c'', ¬ Step M (e, ρ, ctl, σ) c'') →
@@ -6648,14 +6641,13 @@ theorem complete_memop_op {an : List _root_.annot} {M : MachineCtx} {e : CoreExp
     `Other (DErr_core_run err)`; the first operand the classifier leaves
     uncovered (an accepted-but-unmirrored leaf; the whole operand's
     outcome not characterized) is the residual `eval_uncovered`. -/
-theorem complete_store_op {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_store_op (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
     {pe2 pe3 : generic_pexpr Unit sym} {mo : memory_order}
     (hd : Decomp e ctx (storeOpRedex an loc ann ty pe2 pe3 mo))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexprs [pe2, pe3] = none)
     (hp2 : PePure pe2) (hp3 : PePure pe3)
-    (hd2 : peDepth pe2 ≤ lemDefaultFuel) (hd3 : peDepth pe3 ≤ lemDefaultFuel)
+    (hd2 : peDepth pe2 ≤ LemFuel.fuel) (hd3 : peDepth pe3 ≤ LemFuel.fuel)
     (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
     RoundComplete M (e, ρ, ctl, σ) := by
   have hnr : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (l : sym)
@@ -6674,7 +6666,7 @@ theorem complete_store_op {an : List _root_.annot} {M : MachineCtx} {e : CoreExp
     obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
     simp only at hlay
     subst hlay
-    obtain ⟨s, m, post, hsteps⟩ := step_ctx_store_eval_shape hd hsz hnv hp2 hp3 M.tagDefs
+    obtain ⟨s, m, post, hsteps⟩ := step_ctx_store_eval_shape hd hnv hp2 hp3 M.tagDefs
       dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
     exact ⟨_, _, _, hsteps⟩
   cases hv2 : evalPexpr M.tagDefs M.extern M.file ρ pe2 with
@@ -6694,10 +6686,10 @@ theorem complete_store_op {an : List _root_.annot} {M : MachineCtx} {e : CoreExp
       obtain ⟨-, hlay, hfile, hext, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
-      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_store_eval_fail2 hd hsz hnv hp2 hp3 hd2
+      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_store_eval_fail2 (hfuel := by omega) hd hnv hp2 hp3 hd2
         M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
         (M.thread _ ρ ctl) rfl (by rw [hext, hfile]; exact hf)
-      obtain ⟨dst', hadv⟩ := advance_withrs_failed_eval M.tagDefs M.tid s m
+      obtain ⟨dst', hadv⟩ := advance_withrs_failed_eval (hfuel := by omega) M.tagDefs M.tid s m
         (hm dst.core_run_state0)
       exact ⟨_, _, dst', hsteps, rfl, hadv⟩
     · exact .inr (.inr (.eval_uncovered pe2 hstuck
@@ -6720,10 +6712,10 @@ theorem complete_store_op {an : List _root_.annot} {M : MachineCtx} {e : CoreExp
         obtain ⟨-, hlay, hfile, hext, -, -, -⟩ := hemb
         simp only at hlay
         subst hlay
-        obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_store_eval_fail3 hd hsz hnv hp2 hp3 hd2 hd3
+        obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_store_eval_fail3 (hfuel := by omega) hd hnv hp2 hp3 hd2 hd3
           M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
           (M.thread _ ρ ctl) rfl (by rw [hext, hfile]; exact hv2) (by rw [hext, hfile]; exact hf)
-        obtain ⟨dst', hadv⟩ := advance_withrs_failed_eval M.tagDefs M.tid s m
+        obtain ⟨dst', hadv⟩ := advance_withrs_failed_eval (hfuel := by omega) M.tagDefs M.tid s m
           (hm dst.core_run_state0)
         exact ⟨_, _, dst', hsteps, rfl, hadv⟩
       · exact .inr (.inr (.eval_uncovered pe3 hstuck
@@ -6744,23 +6736,24 @@ theorem complete_store_op {an : List _root_.annot} {M : MachineCtx} {e : CoreExp
           obtain ⟨-, hlay, hfile, hext, -, hsym, hexc⟩ := hemb
           simp only at hlay hsym hexc
           subst hlay
-          obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_store_eval_ws' hd hsz hnv hp2 hp3 hd2 hd3
+          obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_store_eval_ws' (hfuel := by omega) hd hnv hp2 hp3 hd2 hd3
             M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
             (M.thread _ ρ ctl) rfl (by rw [hext, hfile]; exact hv2) (by rw [hext, hfile]; exact hv3)
           rw [MachineCtx.locUpdTh_thread] at hm
           refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace,
             dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
-          exact advance_withrs_eval M.tagDefs M.tid s m (hm dst.core_run_state0)
+          exact advance_withrs_eval (hfuel := by omega) M.tagDefs M.tid s m (hm dst.core_run_state0)
         · intro dst hemb
           obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
           simp only at hlay
           subst hlay
-          exact step_ctx_store_illtyped' hd hsz hv' M.tagDefs dst.layout_state
+          exact step_ctx_store_illtyped' hd hv' M.tagDefs dst.layout_state
             dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ (ctl.upd an)) rfl
 
 /-! ### The memop row: the pointer-equality fork and the driver's
 INVALID-memop panic -/
 
+omit [LemFuel] in
 /-- `eqPtrval`'s one-layer result is active, or the differing-provenance
     `msum` fork (CerbMem.lean:1766): a nondeterministic node with the two
     branches "using provenance" (false) and "ignoring provenance"
@@ -6778,6 +6771,7 @@ theorem eqPtrval_layer (l : CerbLocation.Loc) (pv1 pv2 : CerbMem.PointerValue) (
     | split
     | dsimp only)
 
+omit [LemFuel] in
 /-- `nd_bind_lemFuel` at a successor fuel, active left operand. -/
 theorem runOne_bindF_active {a b cs err info st : Type} (n : Nat)
     {m : ndM a info err cs st} {f : a → ndM b info err cs st} {s s' : st} {z : a}
@@ -6792,33 +6786,34 @@ theorem runOne_bindF_active {a b cs err info st : Type} (n : Nat)
   rcases hf : f z with ⟨g'⟩
   rfl
 
-/-- `nd_bind` (fuel `CerbFuel.driverFuel = 10^8`, the drive-cone budget
-    since the fuel arc; `CerbND.nd_bind_wrapper_defeq`), forking left
-    operand: the fork survives with the same arity, every branch carrying
-    the continuation at the decremented fuel (Nondeterminism.lean:188). -/
-theorem runOne_bind_nd {a b cs err info st : Type}
+/-- A bind at positive ambient fuel preserves the left operand's
+    fork and its arity. Each branch carries the continuation at the
+    caller's fuel minus one. -/
+theorem runOne_bind_nd (hfuel : 0 < LemFuel.fuel) {a b cs err info st : Type}
     {m : ndM a info err cs st} (f : a → ndM b info err cs st) {s s' : st}
     {i : info} {bs : List (info × ndM a info err cs st)}
     (h : runOne m s = (NDnd i bs, s')) :
     ∃ bs' : List (info × ndM b info err cs st),
       runOne (nd_bind m f) s = (NDnd i bs', s') ∧
       bs'.length = bs.length ∧
-      ∀ p' ∈ bs', ∃ p ∈ bs, p'.2 = nd_bind_lemFuel 99999999 p.2 f := by
+      ∀ p' ∈ bs', ∃ p ∈ bs, p'.2 = nd_bind_lemFuel (LemFuel.fuel - 1) p.2 f := by
   rcases m with ⟨g⟩
   dsimp only [runOne] at h
   have hb : runOne (nd_bind (ND g) f) s =
-      (NDnd i (bs.map (fun p => (p.1, nd_bind_lemFuel 99999999 p.2 f))), s') := by
-    show runOne (nd_bind_lemFuel CerbFuel.driverFuel (ND g) f) s = _
-    rw [show CerbFuel.driverFuel = Nat.succ 99999999 from rfl]
+      (NDnd i (bs.map (fun p => (p.1, nd_bind_lemFuel (LemFuel.fuel - 1) p.2 f))), s') := by
+    show runOne (nd_bind_lemFuel LemFuel.fuel (ND g) f) s = _
+    rw [show LemFuel.fuel = Nat.succ (LemFuel.fuel - 1) by omega]
     conv => lhs; unfold nd_bind_lemFuel
     dsimp only [runOne]
     rw [h]
+    rfl
   refine ⟨_, hb, by simp, ?_⟩
   intro p' hp'
   rw [List.mem_map] at hp'
   obtain ⟨p, hp, rfl⟩ := hp'
   exact ⟨p, hp, rfl⟩
 
+omit [LemFuel] in
 /-- `liftND_lemFuel` at a double-successor fuel, active operand. -/
 theorem runOne_liftNDF_active {a cs err1 err2 info1 info2 st1 st2 : Type} (n : Nat)
     (get2 : st2 → st1) (put1 : st2 → st1 → st2) (li : info1 → info2) (le : err1 → err2)
@@ -6834,6 +6829,7 @@ theorem runOne_liftNDF_active {a cs err1 err2 info1 info2 st1 st2 : Type} (n : N
   unfold liftAction_lemFuel
   rfl
 
+omit [LemFuel] in
 /-- `liftND_lemFuel` at a double-successor fuel, forking operand: the
     fork survives with the same arity, every branch lifted at the
     decremented fuel, the info mapped (Nondeterminism.lean:306). -/
@@ -6870,6 +6866,7 @@ theorem runOne_liftNDF_nd {a cs err1 err2 info1 info2 st1 st2 : Type} (n : Nat)
   obtain ⟨p, hp, rfl⟩ := hp'
   exact ⟨p, hp, hF2 p⟩
 
+omit [LemFuel] in
 /-- The shipped exhaustive runner (CerbND.lean:89) at an active
     one-layer result: one execution. -/
 theorem runNDFuel_active {a info err cs st : Type} [Inhabited a] [Inhabited st] (n : Nat)
@@ -6882,6 +6879,7 @@ theorem runNDFuel_active {a info err cs st : Type} [Inhabited a] [Inhabited st] 
   dsimp only
   rw [h]
 
+omit [LemFuel] in
 /-- The shipped exhaustive runner at a forking one-layer result: every
     branch is explored, results prepended (CerbND.lean:89, mirroring
     smt2.ml:75-82). -/
@@ -6897,6 +6895,7 @@ theorem runNDFuel_nd {a info err cs st : Type} [Inhabited a] [Inhabited st] (n :
   dsimp only
   rw [h]
 
+omit [LemFuel] in
 /-- A left fold of singleton-producing appends has the list's length. -/
 theorem foldl_append_singletons_length {α β : Type} (g : α → List β) (bs : List α)
     (init : List β) (hg : ∀ p ∈ bs, (g p).length = 1) :
@@ -6909,6 +6908,7 @@ theorem foldl_append_singletons_length {α β : Type} (g : α → List β) (bs :
       List.length_append, hg p (List.mem_cons_self ..)]
     omega
 
+omit [LemFuel] in
 /-- Activity through a bind at a successor fuel. -/
 theorem bind_branch_active {a b cs err info st : Type} (n : Nat)
     {m : ndM a info err cs st} {f : a → ndM b info err cs st} {s : st}
@@ -6923,7 +6923,7 @@ theorem bind_branch_active {a b cs err info st : Type} (n : Nat)
     advance of the memop step is explored by `CerbND.runND` into TWO
     executions (both active: the "using provenance" and the "ignoring
     provenance" answers, each installed by the memop continuation). -/
-theorem memop_fork {tds : Fmap sym (CerbLocation.Loc × tag_definition)} {tid : Nat}
+theorem memop_fork (hfuel : 4 ≤ LemFuel.fuel) {tds : Fmap sym (CerbLocation.Loc × tag_definition)} {tid : Nat}
     {loc : CerbLocation.Loc} {pv1 pv2 : CerbMem.PointerValue} {k : value → thread_state}
     {dst : driver_state} {a1 a2 : Int}
     (hnd : runOne (CerbMem.eqPtrval loc pv1 pv2) dst.layout_state =
@@ -6932,25 +6932,27 @@ theorem memop_fork {tds : Fmap sym (CerbLocation.Loc × tag_definition)} {tid : 
          ("ignoring provenance", CerbMem.memReturn (a1 == a2))], dst.layout_state)) :
     2 ≤ (CerbND.runND (advance_step tds tid (Step_memop_request2 loc PtrEq
       [Vobject (OVpointer pv1), Vobject (OVpointer pv2)] tid false k)) dst).length := by
-  -- the lifted fork (liftMem = liftND at lemDefaultFuel = succ (succ 999998))
-  obtain ⟨bs1, h1, hlen1, hmem1⟩ := runOne_liftNDF_nd 999998
+  obtain ⟨fuel, hF⟩ : ∃ fuel, LemFuel.fuel = fuel + 4 :=
+    ⟨LemFuel.fuel - 4, by omega⟩
+  -- The lifted fork leaves two ambient units for every memory branch.
+  obtain ⟨bs1, h1, hlen1, hmem1⟩ := runOne_liftNDF_nd (fuel + 2)
     (fun (d : driver_state) => d.layout_state)
     (fun (d : driver_state) (m : CerbMem.MemState) => { d with layout_state := m })
     (fun (s : String) => SK_misc ["memory", s]) DErr_memory hnd
   have h1' : runOne (liftMem (CerbMem.eqPtrval loc pv1 pv2)) dst =
       (NDnd (SK_misc ["memory", "pointer equality"]) bs1,
-       { dst with layout_state := dst.layout_state }) := h1
+       { dst with layout_state := dst.layout_state }) := by simpa only [liftMem, liftND, hF] using h1
   -- the debug print, then the lifted memory operation
   have hA : runOne (nd_bind (print_debug 2 [DB_driver] (fun (u : Unit) => match u with | () => "PtrEq"))
       (fun (_ : Unit) => liftMem (CerbMem.eqPtrval loc pv1 pv2))) dst =
       (NDnd (SK_misc ["memory", "pointer equality"]) bs1,
        { dst with layout_state := dst.layout_state }) :=
-    (runOne_bind_active (z := ()) (s' := dst) (by rfl)).trans h1'
+    (runOne_bind_active (hfuel := by omega) (z := ()) (s' := dst) (by rfl)).trans h1'
   -- the boolean-to-value continuation
-  obtain ⟨bs2, hB, hlen2, hmem2⟩ := runOne_bind_nd
+  obtain ⟨bs2, hB, hlen2, hmem2⟩ := runOne_bind_nd (hfuel := by omega)
     (fun (is_eq : Bool) => nd_return (k (if is_eq then Vtrue else Vfalse))) hA
   -- the thread install
-  obtain ⟨bs3, hC, hlen3, hmem3⟩ := runOne_bind_nd
+  obtain ⟨bs3, hC, hlen3, hmem3⟩ := runOne_bind_nd (hfuel := by omega)
     (fun (th_st' : thread_state) => nd_update (fun (dr_st : driver_state) =>
       update_core_state (update_thread_state tid th_st' dr_st.core_state0) dr_st)) hB
   have hP : runOne (perform_memop_request2 tds loc PtrEq
@@ -6961,7 +6963,7 @@ theorem memop_fork {tds : Fmap sym (CerbLocation.Loc × tag_definition)} {tid : 
     dsimp only
     exact hC
   -- the advance (no wakeup continuation)
-  obtain ⟨bs4, hD, hlen4, hmem4⟩ := runOne_bind_nd
+  obtain ⟨bs4, hD, hlen4, hmem4⟩ := runOne_bind_nd (hfuel := by omega)
     (fun (u : Unit) => match u with | () => nd_return NOWAKEUP) hP
   have hD' : runOne (advance_step tds tid (Step_memop_request2 loc PtrEq
       [Vobject (OVpointer pv1), Vobject (OVpointer pv2)] tid false k)) dst =
@@ -6979,25 +6981,25 @@ theorem memop_fork {tds : Fmap sym (CerbLocation.Loc × tag_definition)} {tid : 
     obtain ⟨p2, hp2, hp3e⟩ := hmem3 p3 hp3
     obtain ⟨p1, hp1, hp2e⟩ := hmem2 p2 hp2
     obtain ⟨p0, hp0, hp1e⟩ := hmem1 p1 hp1
-    rw [hp4e, hp3e, hp2e, hp1e]
-    refine bind_branch_active 99999998 (bind_branch_active 99999998 (bind_branch_active 99999998 ?_
+    rw [hp4e, hp3e, hp2e, hp1e, hF]
+    refine bind_branch_active (fuel + 2) (bind_branch_active (fuel + 2) (bind_branch_active (fuel + 2) ?_
       (fun z s' => ⟨_, _, rfl⟩)) (fun z s' => ⟨_, _, rfl⟩))
       (fun z s' => by cases z; exact ⟨_, _, rfl⟩)
     -- the lifted memory branch: one of the two `memReturn`s
-    simp only [List.mem_cons, List.mem_singleton, List.not_mem_nil, or_false] at hp0
+    simp only [List.mem_cons, List.not_mem_nil, or_false] at hp0
     rcases hp0 with rfl | rfl <;>
-      exact ⟨_, _, runOne_liftNDF_active 999996 _ _ _ _ rfl⟩
+      exact ⟨_, _, runOne_liftNDF_active fuel _ _ _ _ rfl⟩
   -- the runner explores both branches
-  show 2 ≤ (CerbND.runNDFuel CerbFuel.driverFuel _ dst).length
-  rw [show CerbFuel.driverFuel = Nat.succ 99999999 from rfl, runNDFuel_nd 99999999 hD',
-    foldl_append_singletons_length (fun p => CerbND.runNDFuel 99999999 p.2
+  show 2 ≤ (CerbND.runNDFuel LemFuel.fuel _ dst).length
+  rw [hF, runNDFuel_nd (fuel + 3) hD',
+    foldl_append_singletons_length (fun p => CerbND.runNDFuel (fuel + 3) p.2
       { dst with layout_state := dst.layout_state }) bs4 [] ?_]
   · simp only [List.length_nil, Nat.zero_add]
     rw [hlen4, hlen3, hlen2, hlen1]
     simp
   · intro p hp
     obtain ⟨z, s'', hz⟩ := hact p hp
-    rw [runNDFuel_active 99999998 hz]
+    rw [runNDFuel_active (fuel + 2) hz]
     rfl
 
 /-- The driver's memop discharge at `PtrEq` operands that are NOT both
@@ -7021,10 +7023,10 @@ theorem perform_memop_ptreq_panic (tds : Fmap sym (CerbLocation.Loc × tag_defin
     deterministic `eqPtrval` are the mirror step; the
     differing-provenance fork is FORK; non-pointer operands are the
     driver's memop PANIC. -/
-theorem complete_memop_vals {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_memop_vals (hfuel : 4 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {v1 v2 : value}
     (hd : Decomp e ctx (memopPtrEqVals an v1 v2))
-    (hsz : esize e ≤ lemDefaultFuel) (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
+    (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
     RoundComplete M (e, ρ, ctl, σ) := by
   have hnr : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (l : sym)
       (pes : List (generic_pexpr Unit sym)),
@@ -7046,11 +7048,11 @@ theorem complete_memop_vals {an : List _root_.annot} {M : MachineCtx} {e : CoreE
       obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
-      obtain ⟨post, hsteps⟩ := step_ctx_memop hd hsz rfl rfl M.tagDefs dst.layout_state
+      obtain ⟨post, hsteps⟩ := step_ctx_memop hd rfl rfl M.tagDefs dst.layout_state
         dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
-      rw [hd.unseq_ccall_false hsz] at hsteps
+      rw [hd.unseq_ccall_false] at hsteps
       refine ⟨_, _, hsteps, rfl, ?_⟩
-      exact memop_fork (by rw [eqPtrval_loc_irrel _ default]; exact hnd)
+      exact memop_fork (hfuel := by omega) (by rw [eqPtrval_loc_irrel _ default]; exact hnd)
   · obtain ⟨msg, g, hpm⟩ := perform_memop_ptreq_panic M.tagDefs
       (locUpdTh an (M.thread e ρ ctl)).current_loc M.tid
       (fun cval => { locUpdTh an (M.thread e ρ ctl) with
@@ -7060,9 +7062,9 @@ theorem complete_memop_vals {an : List _root_.annot} {M : MachineCtx} {e : CoreE
     obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
     simp only at hlay
     subst hlay
-    obtain ⟨post, hsteps⟩ := step_ctx_memop hd hsz rfl rfl M.tagDefs dst.layout_state
+    obtain ⟨post, hsteps⟩ := step_ctx_memop hd rfl rfl M.tagDefs dst.layout_state
       dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
-    rw [hd.unseq_ccall_false hsz] at hsteps
+    rw [hd.unseq_ccall_false] at hsteps
     exact ⟨_, _, _, _, _, g, _, hsteps, hpm⟩
 
 /-- Erun at a context WITHOUT a current procedure: the engine's PANIC
@@ -7071,7 +7073,6 @@ theorem complete_memop_vals {an : List _root_.annot} {M : MachineCtx} {e : CoreE
 theorem complete_run_noproc {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {ra : core_run_annotation} {l : sym} {pes : List (generic_pexpr Unit sym)}
     (hd : Decomp e ctx (runRedex an ra l pes))
-    (hsz : esize e ≤ lemDefaultFuel)
     {ctl : Ctl} (hproc : ctl.proc = none) (ρ : EnvStack) (σ : Mem) :
     RoundComplete M (e, ρ, ctl, σ) := by
   refine .inr (.inl (.panic_noproc "Core_reduction ==> Erun outside of a proc" hproc ?_))
@@ -7079,7 +7080,7 @@ theorem complete_run_noproc {an : List _root_.annot} {M : MachineCtx} {e : CoreE
   obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
   simp only at hlay
   subst hlay
-  obtain ⟨s, inst, k, post, hsteps⟩ := step_ctx_run_noproc hd hsz M.tagDefs dst.layout_state
+  obtain ⟨s, inst, k, post, hsteps⟩ := step_ctx_run_noproc hd M.tagDefs dst.layout_state
     dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl hproc
   exact ⟨s, l, inst, k, post, hsteps⟩
 
@@ -7096,7 +7097,7 @@ theorem mapM_full_eval_fail {th : thread_state}
     (hf : ∀ (pe : generic_pexpr Unit sym) (rs' : core_run_state),
       f pe rs' = full_eval_pexpr tds th ext σ file pe rs')
     (pes : List (generic_pexpr Unit sym)) {fl : EvalFail}
-    (hp : ∀ pe ∈ pes, PePure pe) (hd : ∀ pe ∈ pes, peDepth pe ≤ lemDefaultFuel)
+    (hp : ∀ pe ∈ pes, PePure pe) (hd : ∀ pe ∈ pes, peDepth pe ≤ LemFuel.fuel)
     (h : (evalClassList tds th.current_loc ext file th.env pes).fail? = some fl)
     (rs : core_run_state) :
     stExceptUndef_mapM f pes rs = fl.run (List value) core_run_state rs := by
@@ -7134,7 +7135,7 @@ theorem mapM_full_eval_kill {th : thread_state}
     (hf : ∀ (pe : generic_pexpr Unit sym) (rs' : core_run_state),
       f pe rs' = full_eval_pexpr tds th ext σ file pe rs')
     (pes : List (generic_pexpr Unit sym)) {err : core_run_cause}
-    (hp : ∀ pe ∈ pes, PePure pe) (hd : ∀ pe ∈ pes, peDepth pe ≤ lemDefaultFuel)
+    (hp : ∀ pe ∈ pes, PePure pe) (hd : ∀ pe ∈ pes, peDepth pe ≤ LemFuel.fuel)
     (h : evalClassList tds th.current_loc ext file th.env pes = .kill err)
     (rs : core_run_state) :
     stExceptUndef_mapM f pes rs = Exception err :=
@@ -7146,9 +7147,8 @@ theorem mapM_full_eval_kill {th : thread_state}
 theorem step_ctx_call_fail_args {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {ra : core_run_annotation} {f : sym} {pes : List (generic_pexpr Unit sym)}
     (hd : Decomp e ctx (callRedex an ra f pes))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hpes : ∀ pe ∈ pes, PePure pe)
-    (hdep : ∀ pe ∈ pes, peDepth pe ≤ lemDefaultFuel)
+    (hdep : ∀ pe ∈ pes, peDepth pe ≤ LemFuel.fuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -7159,7 +7159,7 @@ theorem step_ctx_call_fail_args {an : List _root_.annot} {e : CoreExpr} {ctx : c
         Step_with_runstate2 (RSK_eval "Eproc") m :: post ∧
       ∀ rs, m rs = fl.run thread_state core_run_state rs := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, callRedex an ra f pes) :: rest := by
-    rw [harena]; exact hd.get_ctx_default hsz
+    rw [harena]; exact hd.get_ctx_default
   have key : ∃ m : core_runM thread_state,
       (step_ctx tds σ file ext tid (parent, th)).head? =
         some (Step_with_runstate2 (RSK_eval "Eproc") m) ∧
@@ -7182,9 +7182,8 @@ theorem step_ctx_call_fail_args {an : List _root_.annot} {e : CoreExpr} {ctx : c
 theorem step_ctx_call_kill_args {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {ra : core_run_annotation} {f : sym} {pes : List (generic_pexpr Unit sym)}
     (hd : Decomp e ctx (callRedex an ra f pes))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hpes : ∀ pe ∈ pes, PePure pe)
-    (hdep : ∀ pe ∈ pes, peDepth pe ≤ lemDefaultFuel)
+    (hdep : ∀ pe ∈ pes, peDepth pe ≤ LemFuel.fuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -7194,7 +7193,7 @@ theorem step_ctx_call_kill_args {an : List _root_.annot} {e : CoreExpr} {ctx : c
       step_ctx tds σ file ext tid (parent, th) =
         Step_with_runstate2 (RSK_eval "Eproc") m :: post ∧
       ∀ rs, m rs = Exception err :=
-  step_ctx_call_fail_args hd hsz hpes hdep tds σ file ext tid parent th harena (fl := .kill err) (by rw [hk]; rfl)
+  step_ctx_call_fail_args hd hpes hdep tds σ file ext tid parent th harena (fl := .kill err) (by rw [hk]; rfl)
 
 /-- THE CALL, classified (the per-constructor completeness obligation at
     `Eproc`): the mirror steps iff the arguments evaluate (mirror
@@ -7205,12 +7204,11 @@ theorem step_ctx_call_kill_args {an : List _root_.annot} {e : CoreExpr} {ctx : c
     — or the argument residual `eval_uncovered`. The engine evaluates the
     arguments BEFORE `call_proc`, so an argument kill takes precedence
     over an unknown procedure; the classification follows that order. -/
-theorem complete_call {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_call (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {ra : core_run_annotation} {f : sym} {pes : List (generic_pexpr Unit sym)}
     (hd : Decomp e ctx (callRedex an ra f pes))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hpes : ∀ pe ∈ pes, PePure pe)
-    (hdep : ∀ pe ∈ pes, peDepth pe ≤ lemDefaultFuel)
+    (hdep : ∀ pe ∈ pes, peDepth pe ≤ LemFuel.fuel)
     (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
     RoundComplete M (e, ρ, ctl, σ) := by
   have hc : callRedex? e = some (ctx, f, pes) := hd.callRedex?_some
@@ -7233,11 +7231,11 @@ theorem complete_call {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {
         obtain ⟨-, hlay, hfile, hext, -, -, -⟩ := hemb
         simp only at hlay
         subst hlay
-        obtain ⟨m, post, hsteps, hm⟩ := step_ctx_call_arity hd hsz hdep M.tagDefs dst.layout_state
+        obtain ⟨m, post, hsteps, hm⟩ := step_ctx_call_arity hd hdep M.tagDefs dst.layout_state
           dst.core_file dst.core_extern M.tid M.parent (M.thread e ρ ctl) rfl
           (by rw [hext, hfile]; exact hvs) (by rw [hfile, hext]; exact hf) hlen
         exact ⟨_, _, dst, hsteps, rfl,
-          advance_withrs_killed_eval M.tagDefs M.tid _ m (hm dst.core_run_state0)⟩
+          advance_withrs_killed_eval (hfuel := by omega) M.tagDefs M.tid _ m (hm dst.core_run_state0)⟩
     | none =>
       -- UNKNOWN PROCEDURE: `call_proc`'s kill, verbatim
       refine .inr (.inl (.killed (Other (DErr_core_run (Illformed_program
@@ -7246,11 +7244,11 @@ theorem complete_call {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {
       obtain ⟨-, hlay, hfile, hext, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
-      obtain ⟨m, post, hsteps, hm⟩ := step_ctx_call_unknown hd hsz hdep M.tagDefs dst.layout_state
+      obtain ⟨m, post, hsteps, hm⟩ := step_ctx_call_unknown hd hdep M.tagDefs dst.layout_state
         dst.core_file dst.core_extern M.tid M.parent (M.thread e ρ ctl) rfl
         (by rw [hext, hfile]; exact hvs) (by rw [hfile, hext]; exact hf)
       exact ⟨_, _, dst, hsteps, rfl,
-        advance_withrs_killed_eval M.tagDefs M.tid _ m (hm dst.core_run_state0)⟩
+        advance_withrs_killed_eval (hfuel := by omega) M.tagDefs M.tid _ m (hm dst.core_run_state0)⟩
   | none =>
     have hstuck : ∀ c'', ¬ Step M (e, ρ, ctl, σ) c'' := by
       intro c'' hs
@@ -7265,7 +7263,7 @@ theorem complete_call {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {
       obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
-      obtain ⟨m, post, hsteps⟩ := step_ctx_call_shape hd hsz M.tagDefs dst.layout_state
+      obtain ⟨m, post, hsteps⟩ := step_ctx_call_shape hd M.tagDefs dst.layout_state
         dst.core_file dst.core_extern M.tid M.parent (M.thread _ _ ctl) rfl
       exact ⟨_, _, _, hsteps⟩
     have hfail : ∀ (fl : EvalFail),
@@ -7277,10 +7275,10 @@ theorem complete_call {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {
       obtain ⟨-, hlay, hfile, hext, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
-      obtain ⟨m, post, hsteps, hm⟩ := step_ctx_call_fail_args hd hsz hpes hdep M.tagDefs
+      obtain ⟨m, post, hsteps, hm⟩ := step_ctx_call_fail_args hd hpes hdep M.tagDefs
         dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ _ ctl) rfl
         (by rw [hext, hfile]; exact hf)
-      obtain ⟨dst', hadv⟩ := advance_withrs_failed_eval M.tagDefs M.tid _ m (hm dst.core_run_state0)
+      obtain ⟨dst', hadv⟩ := advance_withrs_failed_eval (hfuel := by omega) M.tagDefs M.tid _ m (hm dst.core_run_state0)
       exact ⟨_, _, dst', hsteps, rfl, hadv⟩
     cases hcl : evalClassList M.tagDefs ctl.curLoc M.extern M.file ρ pes with
     | kill err => exact hfail _ (by rw [hcl]; rfl)
@@ -7314,10 +7312,10 @@ theorem complete_ret {M : MachineCtx} (w : SpikeValA) (ev0 : Fmap sym value)
     they do (`do_race`, core_reduction.lem:215–242; the with-runstate EVAL
     step's undef at the location-updated thread's `current_loc`,
     :1480–1484, killed by `advance_step`'s `liftCore_run` protocol). -/
-theorem complete_unseq_vals {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_unseq_vals (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {ws : List SpikeValA}
     (hd : Decomp e ctx (Expr an (Eunseq (ws.map ofValA))))
-    (hsz : esize e ≤ lemDefaultFuel) (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
+    (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
     RoundComplete M (e, ρ, ctl, σ) := by
   have hnr : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (l : sym)
       (pes : List (generic_pexpr Unit sym)),
@@ -7338,9 +7336,9 @@ theorem complete_unseq_vals {an : List _root_.annot} {M : MachineCtx} {e : CoreE
     obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
     simp only at hlay
     subst hlay
-    obtain ⟨post, hsteps⟩ := step_ctx_unseq_race hd hsz hcol M.tagDefs dst.layout_state
+    obtain ⟨post, hsteps⟩ := step_ctx_unseq_race hd hcol M.tagDefs dst.layout_state
       dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
-    obtain ⟨dst', hadv⟩ := advance_withrs_failed_eval M.tagDefs M.tid "unsequenced race" _
+    obtain ⟨dst', hadv⟩ := advance_withrs_failed_eval (hfuel := by omega) M.tagDefs M.tid "unsequenced race" _
       (dst := dst) (fl := .undef (locUpdTh an (M.thread e ρ ctl)).current_loc [UB035_unsequenced_race])
       rfl
     exact ⟨_, post, dst', hsteps, rfl, hadv⟩
@@ -7363,12 +7361,12 @@ theorem Step.excluded_store_canonical {M : MachineCtx} {a : List _root_.annot} {
     (the mirror step `Step.excluded_store`) or killed — the positive
     store's classification under `Eexcluded n` (`process_action (Just n)`,
     core_reduction.lem:694–711). -/
-theorem complete_excluded_store {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr}
+theorem complete_excluded_store (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr}
     {ctx : context} {n : Nat}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {lk : Bool}
     {ty : ctype} {pv : CerbMem.PointerValue} {cv : value} {mo : memory_order}
     (hd : Decomp e ctx (excludedStoreRedex an n loc ann lk ty pv cv mo))
-    (hsz : esize e ≤ lemDefaultFuel) (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
+    (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
     RoundComplete M (e, ρ, ctl, σ) := by
   have hnr : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (l : sym)
       (pes : List (generic_pexpr Unit sym)),
@@ -7389,7 +7387,7 @@ theorem complete_excluded_store {an : List _root_.annot} {M : MachineCtx} {e : C
     obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
     simp only at hlay
     subst hlay
-    exact step_ctx_excluded_store_illtyped hd hsz M.tagDefs hmv
+    exact step_ctx_excluded_store_illtyped hd M.tagDefs hmv
       dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
   | some mv =>
     cases hmem : applyMemM (CerbMem.storeM M.tagDefs loc ty lk pv mv) σ with
@@ -7407,10 +7405,10 @@ theorem complete_excluded_store {an : List _root_.annot} {M : MachineCtx} {e : C
       obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
-      obtain ⟨post, hsteps⟩ := step_ctx_excluded_store hd hsz M.tagDefs hmv
+      obtain ⟨post, hsteps⟩ := step_ctx_excluded_store hd M.tagDefs hmv
         dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
-      rw [hd.unseq_ccall_false hsz] at hsteps
-      exact ⟨_, _, _, hsteps, rfl, advance_action_killed (ars_store_killed hk)⟩
+      rw [hd.unseq_ccall_false] at hsteps
+      exact ⟨_, _, _, hsteps, rfl, advance_action_killed (hfuel := by omega) (ars_store_killed (hfuel := by omega) hk)⟩
 
 /-- E5 EXCLUDED store ACTION_EVAL (`process_action (Just n)`'s Store0
     `_, _, _` arm): the positive store's ACTION_EVAL classification under
@@ -7418,14 +7416,13 @@ theorem complete_excluded_store {an : List _root_.annot} {M : MachineCtx} {e : C
     an evaluable value; ILLTYPED AT DISTANCE ONE at a non-pointer pointer
     operand; the first rejected operand the KILL; the first uncovered
     operand the residual `eval_uncovered`. -/
-theorem complete_excluded_store_op {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_excluded_store_op (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {n : Nat} {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
     {pe2 pe3 : generic_pexpr Unit sym} {mo : memory_order}
     (hd : Decomp e ctx (excludedStoreOpRedex an n loc ann ty pe2 pe3 mo))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexprs [pe2, pe3] = none)
     (hp2 : PePure pe2) (hp3 : PePure pe3)
-    (hd2 : peDepth pe2 ≤ lemDefaultFuel) (hd3 : peDepth pe3 ≤ lemDefaultFuel)
+    (hd2 : peDepth pe2 ≤ LemFuel.fuel) (hd3 : peDepth pe3 ≤ LemFuel.fuel)
     (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
     RoundComplete M (e, ρ, ctl, σ) := by
   have hnr : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (l : sym)
@@ -7444,7 +7441,7 @@ theorem complete_excluded_store_op {an : List _root_.annot} {M : MachineCtx} {e 
     obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
     simp only at hlay
     subst hlay
-    obtain ⟨s, m, post, hsteps⟩ := step_ctx_excluded_store_eval_shape hd hsz hnv hp2 hp3 M.tagDefs
+    obtain ⟨s, m, post, hsteps⟩ := step_ctx_excluded_store_eval_shape hd hnv hp2 hp3 M.tagDefs
       dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
     exact ⟨_, _, _, hsteps⟩
   cases hv2 : evalPexpr M.tagDefs M.extern M.file ρ pe2 with
@@ -7464,10 +7461,10 @@ theorem complete_excluded_store_op {an : List _root_.annot} {M : MachineCtx} {e 
       obtain ⟨-, hlay, hfile, hext, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
-      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_excluded_store_eval_fail2 hd hsz hnv hp2 hp3 hd2
+      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_excluded_store_eval_fail2 (hfuel := by omega) hd hnv hp2 hp3 hd2
         M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
         (M.thread _ ρ ctl) rfl (by rw [hext, hfile]; exact hf)
-      obtain ⟨dst', hadv⟩ := advance_withrs_failed_eval M.tagDefs M.tid s m
+      obtain ⟨dst', hadv⟩ := advance_withrs_failed_eval (hfuel := by omega) M.tagDefs M.tid s m
         (hm dst.core_run_state0)
       exact ⟨_, _, dst', hsteps, rfl, hadv⟩
     · exact .inr (.inr (.eval_uncovered pe2 hstuck
@@ -7490,10 +7487,10 @@ theorem complete_excluded_store_op {an : List _root_.annot} {M : MachineCtx} {e 
         obtain ⟨-, hlay, hfile, hext, -, -, -⟩ := hemb
         simp only at hlay
         subst hlay
-        obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_excluded_store_eval_fail3 hd hsz hnv hp2 hp3 hd2 hd3
+        obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_excluded_store_eval_fail3 (hfuel := by omega) hd hnv hp2 hp3 hd2 hd3
           M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
           (M.thread _ ρ ctl) rfl (by rw [hext, hfile]; exact hv2) (by rw [hext, hfile]; exact hf)
-        obtain ⟨dst', hadv⟩ := advance_withrs_failed_eval M.tagDefs M.tid s m
+        obtain ⟨dst', hadv⟩ := advance_withrs_failed_eval (hfuel := by omega) M.tagDefs M.tid s m
           (hm dst.core_run_state0)
         exact ⟨_, _, dst', hsteps, rfl, hadv⟩
       · exact .inr (.inr (.eval_uncovered pe3 hstuck
@@ -7514,18 +7511,18 @@ theorem complete_excluded_store_op {an : List _root_.annot} {M : MachineCtx} {e 
           obtain ⟨-, hlay, hfile, hext, -, hsym, hexc⟩ := hemb
           simp only at hlay hsym hexc
           subst hlay
-          obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_excluded_store_eval_ws' hd hsz hnv hp2 hp3 hd2 hd3
+          obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_excluded_store_eval_ws' (hfuel := by omega) hd hnv hp2 hp3 hd2 hd3
             M.tagDefs dst.layout_state dst.core_file dst.core_extern M.tid M.parent
             (M.thread _ ρ ctl) rfl (by rw [hext, hfile]; exact hv2) (by rw [hext, hfile]; exact hv3)
           rw [MachineCtx.locUpdTh_thread] at hm
           refine ⟨_, _, hsteps, rfl, dst.core_run_state0, dst.trace,
             dst.dr_step_counter + 1, rfl, hsym, hexc, ?_⟩
-          exact advance_withrs_eval M.tagDefs M.tid s m (hm dst.core_run_state0)
+          exact advance_withrs_eval (hfuel := by omega) M.tagDefs M.tid s m (hm dst.core_run_state0)
         · intro dst hemb
           obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
           simp only at hlay
           subst hlay
-          exact step_ctx_excluded_store_illtyped' hd hsz hv' M.tagDefs dst.layout_state
+          exact step_ctx_excluded_store_illtyped' hd hv' M.tagDefs dst.layout_state
             dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ (ctl.upd an)) rfl
 
 /-- E5 CASE at a covered non-value scrutinee: the mirror step where the
@@ -7533,11 +7530,10 @@ theorem complete_excluded_store_op {an : List _root_.annot} {M : MachineCtx} {e 
     a KILL where the classifier fails it; the residual `eval_uncovered`
     where the classifier leaves it uncovered (the scrutinee is
     `operandsOf`'s `Ecase` operand). -/
-theorem complete_case_op {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_case_op (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {pe : generic_pexpr Unit sym} {pats : List (pattern × CoreExpr)}
     (hd : Decomp e ctx (caseRedex an pe pats))
-    (hsz : esize e ≤ lemDefaultFuel)
-    (hnv : valueFromPexpr pe = none) (hp : PePure pe) (hdp : peDepth pe ≤ lemDefaultFuel)
+    (hnv : valueFromPexpr pe = none) (hp : PePure pe) (hdp : peDepth pe ≤ LemFuel.fuel)
     (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
     RoundComplete M (e, ρ, ctl, σ) := by
   have hnr : ∀ (an' : List _root_.annot) (ra : core_run_annotation) (l : sym)
@@ -7569,7 +7565,7 @@ theorem complete_case_op {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr
       obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
-      obtain ⟨s, m, post, hsteps⟩ := step_ctx_case_eval_shape hd hsz hnv hp M.tagDefs
+      obtain ⟨s, m, post, hsteps⟩ := step_ctx_case_eval_shape hd hnv hp M.tagDefs
         dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
       exact ⟨_, _, _, hsteps⟩
     rcases evalClass_of_none ctl.curLoc M.file hv with ⟨fl, hf⟩ | hu
@@ -7578,10 +7574,10 @@ theorem complete_case_op {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr
       obtain ⟨-, hlay, hfile, hext, -, -, -⟩ := hemb
       simp only at hlay
       subst hlay
-      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_case_eval_fail hd hsz hnv hp hdp M.tagDefs
+      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_case_eval_fail hd hnv hp hdp M.tagDefs
         dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
         (by rw [hext, hfile]; exact hf)
-      obtain ⟨dst', hadv⟩ := advance_withrs_failed_eval M.tagDefs M.tid s m
+      obtain ⟨dst', hadv⟩ := advance_withrs_failed_eval (hfuel := by omega) M.tagDefs M.tid s m
         (hm dst.core_run_state0)
       exact ⟨_, _, dst', hsteps, rfl, hadv⟩
     · exact .inr (.inr (.eval_uncovered pe hstuck
@@ -7598,7 +7594,7 @@ theorem complete_neg_act {a : List _root_.annot} {M : MachineCtx} {e : CoreExpr}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {lk : Bool}
     {pe1 pe2 pe3 : generic_pexpr Unit sym} {mo : memory_order}
     (hd : Decomp e ctx (negActRedex a (Action loc ann (Store0 lk pe1 pe2 pe3 mo))))
-    (hsz : esize e ≤ lemDefaultFuel) (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
+    (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
     RoundComplete M (e, ρ, ctl, σ) := by
   cases hbr : break_at_bound_and_sseq ctx with
   | NO_BOUND =>
@@ -7607,7 +7603,7 @@ theorem complete_neg_act {a : List _root_.annot} {M : MachineCtx} {e : CoreExpr}
     obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
     simp only at hlay
     subst hlay
-    exact step_ctx_neg_nobound hd hsz hbr M.tagDefs
+    exact step_ctx_neg_nobound hd hbr M.tagDefs
       dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
   | BOUND_NO_SSEQ ctxB ctxA => exact .inl ⟨_, hd.lift_neg hbr ρ ctl σ⟩
   | BOUND_WITH_SSEQ ctxB ctxA sp ctxC e2 =>
@@ -7620,6 +7616,7 @@ theorem complete_neg_act {a : List _root_.annot} {M : MachineCtx} {e : CoreExpr}
     · cases hceq
     · rw [hbr] at hbr'; cases hbr'
 
+omit [LemFuel] in
 /-- `pick` (Nondeterminism.lean:277) on a list of at least two: the
     scheduler's fork node, one `nd_return` branch per alternative. -/
 theorem runOne_pick_cons2 {a : Type} (i : step_kind) (x y : a) (zs : List a)
@@ -7631,14 +7628,16 @@ theorem runOne_pick_cons2 {a : Type} (i : step_kind) (x y : a) (zs : List a)
     alternatives (driver.lem:1039–1046, `ND.pick`) is explored by
     `CerbND.runND` into `ths.length` executions, each a `pick` branch
     installing its alternative. -/
-theorem nd_fork {tds : Fmap sym (CerbLocation.Loc × tag_definition)} {tid : Nat}
+theorem nd_fork (hfuel : 2 ≤ LemFuel.fuel) {tds : Fmap sym (CerbLocation.Loc × tag_definition)} {tid : Nat}
     {ths : List thread_state} {dst : driver_state} (h2 : 2 ≤ ths.length) :
     2 ≤ (CerbND.runND (advance_step tds tid (Step_nd2 ths)) dst).length := by
+  obtain ⟨fuel, hF⟩ : ∃ fuel, LemFuel.fuel = fuel + 2 :=
+    ⟨LemFuel.fuel - 2, by omega⟩
   obtain ⟨x, y, zs, rfl⟩ : ∃ x y zs, ths = x :: y :: zs := by
     match ths, h2 with
     | x :: y :: zs, _ => exact ⟨x, y, zs, rfl⟩
   -- the scheduler's pick, then the thread install per branch
-  obtain ⟨bs, hB, hlen, hmem⟩ := runOne_bind_nd
+  obtain ⟨bs, hB, hlen, hmem⟩ := runOne_bind_nd (hfuel := by omega)
     (fun (th_st' : thread_state) => nd_bind
       (nd_update (fun (dr_st : driver_state) =>
         { { dr_st with dr_step_counter := dr_st.dr_step_counter + 1 }
@@ -7654,181 +7653,181 @@ theorem nd_fork {tds : Fmap sym (CerbLocation.Loc × tag_definition)} {tid : Nat
   have hact : ∀ p ∈ bs, ∃ z s'', runOne p.2 dst = (NDactive z, s'') := by
     intro p hp
     obtain ⟨p0, hp0, hpe⟩ := hmem p hp
-    rw [hpe]
-    refine bind_branch_active 99999998 ?_ (fun z s' => ?_)
+    rw [hpe, hF]
+    refine bind_branch_active fuel ?_ (fun z s' => ?_)
     · simp only [List.mem_cons, List.mem_map] at hp0
       rcases hp0 with rfl | ⟨w, -, rfl⟩ <;> exact ⟨_, _, rfl⟩
-    · exact ⟨_, _, (runOne_bind_active (z := ()) (by rfl)).trans rfl⟩
+    · exact ⟨_, _, (runOne_bind_active (hfuel := by omega) (z := ()) (by rfl)).trans rfl⟩
   -- the runner explores every branch
-  show 2 ≤ (CerbND.runNDFuel CerbFuel.driverFuel _ dst).length
-  rw [show CerbFuel.driverFuel = Nat.succ 99999999 from rfl, runNDFuel_nd 99999999 hD,
-    foldl_append_singletons_length (fun p => CerbND.runNDFuel 99999999 p.2 dst) bs [] ?_]
+  show 2 ≤ (CerbND.runNDFuel LemFuel.fuel _ dst).length
+  rw [hF, runNDFuel_nd (fuel + 1) hD,
+    foldl_append_singletons_length (fun p => CerbND.runNDFuel (fuel + 1) p.2 dst) bs [] ?_]
   · simp only [List.length_nil, Nat.zero_add]
     rw [hlen]
     simp
   · intro p hp
     obtain ⟨z, s'', hz⟩ := hact p hp
-    rw [runNDFuel_active 99999998 hz]
+    rw [runNDFuel_active fuel hz]
     rfl
 
 /-- E5 `nd(…)` at two or more alternatives: the scheduler FORK
     (`Step_nd2`, `ShippedRefusal.fork`) — the mirror has no rule for it
     (fail-closed: the alternatives are fragment terms, the choice is the
     driver's). -/
-theorem complete_nd {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_nd (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {es : List CoreExpr}
-    (hd : Decomp e ctx (ndRedex an es)) (hsz : esize e ≤ lemDefaultFuel)
-    (h2 : 2 ≤ es.length) (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
+    (hd : Decomp e ctx (ndRedex an es)) (h2 : 2 ≤ es.length) (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
     RoundComplete M (e, ρ, ctl, σ) := by
   refine .inr (.inl (.fork ?_))
   intro dst hemb
   obtain ⟨-, hlay, -, -, -, -, -⟩ := hemb
   simp only at hlay
   subst hlay
-  obtain ⟨post, hsteps⟩ := step_ctx_nd hd hsz M.tagDefs
+  obtain ⟨post, hsteps⟩ := step_ctx_nd hd M.tagDefs
     dst.layout_state dst.core_file dst.core_extern M.tid M.parent (M.thread _ ρ ctl) rfl
-  exact ⟨_, post, hsteps, rfl, nd_fork (by rw [List.length_map]; exact h2)⟩
+  exact ⟨_, post, hsteps, rfl, nd_fork (hfuel := by omega) (by rw [List.length_map]; exact h2)⟩
 
 /-! ### THE ASSEMBLED COMPLETENESS THEOREM -/
 
 /-- MIRROR COMPLETENESS ON THE FRAGMENT: at every non-value `Frag`
-    configuration (cons-shaped environment, `esize e ≤ lemDefaultFuel`),
+    configuration with a cons-shaped environment and at least four
+    ambient fuel units,
     the mirror steps, or the shipped round is a classified refusal
     (`ShippedRefusal`: ILLTYPED / KILL / FORK / PANIC), or the
     configuration is one of the registered gaps (`OpenRound`). One
     lemma per redex root of the fragment (`complete_*`), dispatched by
     the decomposition `Frag.decomp`. -/
-theorem frag_round_complete {M : MachineCtx}
+theorem frag_round_complete (hfuel : 4 ≤ LemFuel.fuel) {M : MachineCtx}
     {e : CoreExpr} {ev0 : Fmap sym value} {evs : List (Fmap sym value)} {ctl : Ctl} {σ : Mem}
-    (hf : Frag e) (hsz : esize e ≤ lemDefaultFuel) (hnv : toVal e = none) :
+    (hf : Frag e) (hnv : toVal e = none) :
     RoundComplete M (e, ev0 :: evs, ctl, σ) := by
   obtain ⟨ctx, r, hd, hfr⟩ := hf.decomp hnv
   have hrj := hd.redex
   cases hrj with
-  | store => exact complete_store hd hsz _ _ _
-  | load => exact complete_load hd hsz _ _ _
-  | create => exact complete_create hd hsz _ _ _
-  | kill => exact complete_kill hd hsz _ _ _
+  | store => exact complete_store (hfuel := by omega) hd _ _ _
+  | load => exact complete_load (hfuel := by omega) hd _ _ _
+  | create => exact complete_create (hfuel := by omega) hd _ _ _
+  | kill => exact complete_kill (hfuel := by omega) hd _ _ _
   | @kill_op an loc ann kind pe hnvK =>
-    obtain ⟨hpK, hdK⟩ : PePure pe ∧ peDepth pe ≤ lemDefaultFuel := by
+    obtain ⟨hpK, hdK⟩ : PePure pe ∧ peDepth pe ≤ LemFuel.fuel := by
       cases hfr with
       | kill =>
         rw [show valueFromPexpr (Pexpr [] () (PEval
           (Vobject (OVpointer _)))) = some _ from rfl] at hnvK
         cases hnvK
       | kill_op hnvK' hpK hdK => exact ⟨hpK, hdK⟩
-    exact complete_kill_op hd hsz hnvK hpK hdK _ _ _
-  | alloc => exact complete_alloc hd hsz _ _ _
+    exact complete_kill_op (hfuel := by omega) hd hnvK hpK hdK _ _ _
+  | alloc => exact complete_alloc (hfuel := by omega) hd _ _ _
   | @create_op an loc ann pref pe1 pe2 hnvC =>
     obtain ⟨hp1, hp2, hd1, hd2⟩ : PePure pe1 ∧ PePure pe2 ∧
-        peDepth pe1 ≤ lemDefaultFuel ∧ peDepth pe2 ≤ lemDefaultFuel := by
+        peDepth pe1 ≤ LemFuel.fuel ∧ peDepth pe2 ≤ LemFuel.fuel := by
       cases hfr with
       | create =>
         rw [valueFromPexprs_pair, valueFromPexpr_val, valueFromPexpr_val] at hnvC
         cases hnvC
       | create_op hnvC' hp1 hp2 hd1 hd2 => exact ⟨hp1, hp2, hd1, hd2⟩
-    exact complete_create_op hd hsz hnvC hp1 hp2 hd1 hd2 _ _ _
+    exact complete_create_op (hfuel := by omega) hd hnvC hp1 hp2 hd1 hd2 _ _ _
   | bound_pure => exact complete_bound_pure hd _ _ _
   | bound_annot => exact complete_bound_annot hd _ _ _
-  | unseq_vals => exact complete_unseq_vals hd hsz _ _ _
+  | unseq_vals => exact complete_unseq_vals (hfuel := by omega) hd _ _ _
   | @alloc_op an loc ann pref pe1 pe2 hnvA =>
     obtain ⟨hp1, hp2, hd1, hd2⟩ : PePure pe1 ∧ PePure pe2 ∧
-        peDepth pe1 ≤ lemDefaultFuel ∧ peDepth pe2 ≤ lemDefaultFuel := by
+        peDepth pe1 ≤ LemFuel.fuel ∧ peDepth pe2 ≤ LemFuel.fuel := by
       cases hfr with
       | alloc =>
         rw [valueFromPexprs_pair, valueFromPexpr_val, valueFromPexpr_val] at hnvA
         cases hnvA
       | alloc_op hnvA' hp1 hp2 hd1 hd2 => exact ⟨hp1, hp2, hd1, hd2⟩
-    exact complete_alloc_op hd hsz hnvA hp1 hp2 hd1 hd2 _ _ _
+    exact complete_alloc_op (hfuel := by omega) hd hnvA hp1 hp2 hd1 hd2 _ _ _
   | beta_pure => exact complete_beta_pure hd _ _ _ _
   | beta_annot => exact complete_beta_annot hd _ _ _ _
   | merge hirr => exact complete_merge hd _ _ _
   | save sb ps body =>
     obtain ⟨hp, hdep⟩ : (∀ pe ∈ saveParamPexprs ps, PePure pe) ∧
-        (∀ pe ∈ saveParamPexprs ps, peDepth pe ≤ lemDefaultFuel) := by
+        (∀ pe ∈ saveParamPexprs ps, peDepth pe ≤ LemFuel.fuel) := by
       cases hfr with
       | save hp hdep _ => exact ⟨hp, hdep⟩
-    exact complete_save hd hsz hp hdep _ _ _ _
+    exact complete_save (hfuel := by omega) hd hp hdep _ _ _ _
   | if_ g e2 e3 =>
-    obtain ⟨hpg, hdg⟩ : PePure g ∧ peDepth g ≤ lemDefaultFuel := by
+    obtain ⟨hpg, hdg⟩ : PePure g ∧ peDepth g ≤ LemFuel.fuel := by
       cases hfr with
       | if_ hpg hdg _ _ => exact ⟨hpg, hdg⟩
-    exact complete_if hd hsz hpg hdg _ _ _
+    exact complete_if (hfuel := by omega) hd hpg hdg _ _ _
   | case_ pe pats =>
     cases hfr with
-    | case_value hall hbr hbsz => exact complete_case hd hsz _ _ _
-    | case_op hnvc hp hdp hall hbr hbsz => exact complete_case_op hd hsz hnvc hp hdp _ _ _
+    | case_value hall hbr hbsz => exact complete_case hd _ _ _
+    | case_op hnvc hp hdp hall hbr hbsz => exact complete_case_op (hfuel := by omega) hd hnvc hp hdp _ _ _
   | run ra l pes =>
     obtain ⟨hpes, hdep⟩ : (∀ pe ∈ pes, PePure pe) ∧
-        (∀ pe ∈ pes, peDepth pe ≤ lemDefaultFuel) := by
+        (∀ pe ∈ pes, peDepth pe ≤ LemFuel.fuel) := by
       cases hfr with
       | run hpes hdep => exact ⟨hpes, hdep⟩
     cases hp : ctl.proc with
-    | none => exact complete_run_noproc hd hsz hp _ _
-    | some p => exact complete_run hd hsz hpes hdep hp _ _ _
+    | none => exact complete_run_noproc hd hp _ _
+    | some p => exact complete_run (hfuel := by omega) hd hpes hdep hp _ _ _
   | @pure_e an pe hnv2 =>
-    obtain ⟨hpp, hdp⟩ : PePure pe ∧ peDepth pe ≤ lemDefaultFuel := by
+    obtain ⟨hpp, hdp⟩ : PePure pe ∧ peDepth pe ≤ LemFuel.fuel := by
       cases hfr with
       | val_pure v => rw [valueFromPexpr_val] at hnv2; cases hnv2
       | pure_op hnv' hpp hdp => exact ⟨hpp, hdp⟩
-    exact complete_pure_op hd hsz hnv2 hpp hdp _ _ _
+    exact complete_pure_op (hfuel := by omega) hd hnv2 hpp hdp _ _ _
   | @load_op an loc ann ty pe2 mo hnv2 =>
-    obtain ⟨hp2, hd2⟩ : PePure pe2 ∧ peDepth pe2 ≤ lemDefaultFuel := by
+    obtain ⟨hp2, hd2⟩ : PePure pe2 ∧ peDepth pe2 ≤ LemFuel.fuel := by
       cases hfr with
       | load =>
         rw [show valueFromPexpr (Pexpr [] () (PEval
           (Vobject (OVpointer _)))) = some _ from rfl] at hnv2
         cases hnv2
       | load_op hnv2' hp2 hd2 => exact ⟨hp2, hd2⟩
-    exact complete_load_op hd hsz hnv2 hp2 hd2 _ _ _
-  | beta_spec => exact complete_beta_spec hd hsz _ _ _ _
+    exact complete_load_op (hfuel := by omega) hd hnv2 hp2 hd2 _ _ _
+  | beta_spec => exact complete_beta_spec hd _ _ _ _
   | @memop an mop pes =>
     cases hfr with
-    | memop_vals v1 v2 => exact complete_memop_vals hd hsz _ _ _
+    | memop_vals v1 v2 => exact complete_memop_vals (hfuel := by omega) hd _ _ _
     | memop_op hnvF hp1 hp2 hpd1 hpd2 =>
-      exact complete_memop_op hd hsz hnvF hp1 hp2 hpd1 hpd2 _ _ _
+      exact complete_memop_op (hfuel := by omega) hd hnvF hp1 hp2 hpd1 hpd2 _ _ _
   | @store_op an loc ann ty pe2 pe3 mo hnvR =>
     obtain ⟨hp2, hp3, hpd2, hpd3⟩ :
         PePure pe2 ∧ PePure pe3 ∧
-        peDepth pe2 ≤ lemDefaultFuel ∧ peDepth pe3 ≤ lemDefaultFuel := by
+        peDepth pe2 ≤ LemFuel.fuel ∧ peDepth pe3 ≤ LemFuel.fuel := by
       cases hfr with
       | store =>
         rw [valueFromPexprs_pair, valueFromPexpr_val, valueFromPexpr_val] at hnvR
         cases hnvR
       | store_op hnv' hp2 hp3 hpd2 hpd3 => exact ⟨hp2, hp3, hpd2, hpd3⟩
-    exact complete_store_op hd hsz hnvR hp2 hp3 hpd2 hpd3 _ _ _
+    exact complete_store_op (hfuel := by omega) hd hnvR hp2 hp3 hpd2 hpd3 _ _ _
   | beta_sym => exact complete_beta_sym hd _ _ _ _
   | wbeta_pure => exact complete_wbeta_pure hd _ _ _ _
   | wbeta_annot => exact complete_wbeta_annot hd _ _ _ _
-  | beta_tuple => exact complete_beta_tuple hd hsz _ _ _ _
-  | wbeta_tuple => exact complete_wbeta_tuple hd hsz _ _ _ _
+  | beta_tuple => exact complete_beta_tuple hd _ _ _ _
+  | wbeta_tuple => exact complete_wbeta_tuple hd _ _ _ _
   | wbeta_sym => exact complete_wbeta_sym hd _ _ _ _
   | call ra f pes =>
     obtain ⟨hpes, hdep⟩ : (∀ pe ∈ pes, PePure pe) ∧
-        (∀ pe ∈ pes, peDepth pe ≤ lemDefaultFuel) := by
+        (∀ pe ∈ pes, peDepth pe ≤ LemFuel.fuel) := by
       cases hfr with
       | call hpes hdep => exact ⟨hpes, hdep⟩
-    exact complete_call hd hsz hpes hdep _ _ _
+    exact complete_call (hfuel := by omega) hd hpes hdep _ _ _
   | neg_act act =>
     cases hfr with
-    | neg_store_op _ _ _ _ _ => exact complete_neg_act hd hsz _ _ _
-    | neg_store => exact complete_neg_act hd hsz _ _ _
-  | excluded_store => exact complete_excluded_store hd hsz _ _ _
+    | neg_store_op _ _ _ _ _ => exact complete_neg_act hd _ _ _
+    | neg_store => exact complete_neg_act hd _ _ _
+  | excluded_store => exact complete_excluded_store (hfuel := by omega) hd _ _ _
   | @excluded_store_op an n loc ann ty pe2 pe3 mo hnvR =>
     obtain ⟨hp2, hp3, hpd2, hpd3⟩ :
         PePure pe2 ∧ PePure pe3 ∧
-        peDepth pe2 ≤ lemDefaultFuel ∧ peDepth pe3 ≤ lemDefaultFuel := by
+        peDepth pe2 ≤ LemFuel.fuel ∧ peDepth pe3 ≤ LemFuel.fuel := by
       cases hfr with
       | excluded_store =>
         rw [valueFromPexprs_pair, valueFromPexpr_val, valueFromPexpr_val] at hnvR
         cases hnvR
       | excluded_store_op hnv' hp2 hp3 hpd2 hpd3 => exact ⟨hp2, hp3, hpd2, hpd3⟩
-    exact complete_excluded_store_op hd hsz hnvR hp2 hp3 hpd2 hpd3 _ _ _
+    exact complete_excluded_store_op (hfuel := by omega) hd hnvR hp2 hp3 hpd2 hpd3 _ _ _
   | nd es =>
     have h2 : 2 ≤ es.length := by
       cases hfr with
       | nd h2 _ => exact h2
-    exact complete_nd hd hsz h2 _ _ _
+    exact complete_nd (hfuel := by omega) hd h2 _ _ _
 
 /-- THE CLASSIFICATION THEOREM (the exhaustive sum form): every
     well-sized `Frag` configuration at a sequentially well-formed
@@ -7836,9 +7835,9 @@ theorem frag_round_complete {M : MachineCtx}
     `RoundClass` arm; the `step` arm is two-sided given its mirror
     step; the `refused` arm carries the shipped driver's refusal
     (`frag_round_complete`); the `open_` arm names a registered gap. -/
-theorem cerberusRound_classify {M : MachineCtx} (hwf : M.SeqWF) {ctl : Ctl} (hκ : ctl.κ = [])
+theorem cerberusRound_classify (hfuel : 4 ≤ LemFuel.fuel) {M : MachineCtx} (hwf : M.SeqWF) {ctl : Ctl} (hκ : ctl.κ = [])
     {e : CoreExpr} {ev0 : Fmap sym value} {evs : List (Fmap sym value)} {σ : Mem}
-    (hf : Frag e) (hsz : esize e ≤ lemDefaultFuel) :
+    (hf : Frag e) :
     RoundClass M (e, ev0 :: evs, ctl, σ) := by
   cases hv : toVal e with
   | some w =>
@@ -7853,12 +7852,12 @@ theorem cerberusRound_classify {M : MachineCtx} (hwf : M.SeqWF) {ctl : Ctl} (hκ
       refine .value_annot a a2 b ds v he.symm ?_
       show CerberusRound M (e, ev0 :: evs, ctl, σ) (ofValA (.pure a2 b v), ev0 :: evs, ctl, σ)
       rw [← he]
-      exact shipped_remove_annot M a a2 b ds v (ev0 :: evs) ctl σ
+      exact shipped_remove_annot (hfuel := by omega) M a a2 b ds v (ev0 :: evs) ctl σ
   | none =>
     by_cases hstep : ∃ c', Step M (e, ev0 :: evs, ctl, σ) c'
     · obtain ⟨c', hs⟩ := hstep
-      exact .step c' hs (step_iff_cerberusRound hf hsz ⟨c', hs⟩)
-    · rcases frag_round_complete (M := M) (ev0 := ev0) (evs := evs) (σ := σ) hf hsz hv with
+      exact .step c' hs (step_iff_cerberusRound (hfuel := by omega) hf ⟨c', hs⟩)
+    · rcases frag_round_complete (hfuel := by omega) (M := M) (ev0 := ev0) (evs := evs) (σ := σ) hf hv with
           ⟨c', hs⟩ | hr | ho
       · exact absurd ⟨c', hs⟩ hstep
       · exact .refused hv (fun c' hs => hstep ⟨c', hs⟩) hr
@@ -7873,7 +7872,7 @@ theorem cerberusRound_classify {M : MachineCtx} (hwf : M.SeqWF) {ctl : Ctl} (hκ
     `fl0.reason` (`advance_withrs_failed_eval`) and the loop's bind
     propagates the kill (Driver.lean `drive_nonmemory_steps_aux2`). The
     final driver state is existential (driver bookkeeping). -/
-theorem loop_step_withrs_eval_killed (fl : Nat) (tds : Fmap sym (CerbLocation.Loc × tag_definition))
+theorem loop_step_withrs_eval_killed (hfuel : 0 < LemFuel.fuel) (fl : Nat) (tds : Fmap sym (CerbLocation.Loc × tag_definition))
     (acc : Fmap thread_id (List core_step2)) {dst : driver_state} {th : thread_state}
     {s : String} {m : core_runM thread_state} {fl0 : EvalFail}
     (hth : dst.core_state0.thread_states = [(0, (none, th))])
@@ -7883,10 +7882,10 @@ theorem loop_step_withrs_eval_killed (fl : Nat) (tds : Fmap sym (CerbLocation.Lo
     (hm : m dst.core_run_state0 = fl0.run thread_state core_run_state dst.core_run_state0) :
     ∃ dst', runOne (drive_nonmemory_steps_aux2_lemFuel (Nat.succ fl) tds acc [0]) dst =
       (NDkilled fl0.reason, dst') := by
-  obtain ⟨dst', hadv⟩ := advance_withrs_failed_eval tds 0 s m hm
+  obtain ⟨dst', hadv⟩ := advance_withrs_failed_eval (hfuel := by omega) tds 0 s m hm
   refine ⟨dst', ?_⟩
   conv => lhs; unfold drive_nonmemory_steps_aux2_lemFuel
-  refine (runOne_bind_active (z := Step_with_runstate2 (RSK_eval s) m :: post)
+  refine (runOne_bind_active (hfuel := by omega) (z := Step_with_runstate2 (RSK_eval s) m :: post)
     (s' := dst) ?_).trans ?_
   · rw [runOne_read]
     refine congrArg (fun x => (NDactive x, dst)) ?_
@@ -7899,6 +7898,6 @@ theorem loop_step_withrs_eval_killed (fl : Nat) (tds : Fmap sym (CerbLocation.Lo
     exact hsteps
   · dsimp only [find_can_advance, can_advance]
     rw [if_pos rfl]
-    exact runOne_bind_killed hadv
+    exact runOne_bind_killed (hfuel := by omega) hadv
 
 end CerberusHeapLang

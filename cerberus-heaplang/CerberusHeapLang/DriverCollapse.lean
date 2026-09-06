@@ -63,35 +63,32 @@ driver's OWN round functions.
 
 - `driver2_done`: the whole `driver2` computation from a PROGRAM-DONE
   thread is the singleton `Active` execution, for both values of the
-  opaque `current_execution_mode` test (`cases` on it) — the one
+  `current_execution_mode` test (`cases` on it) — the one
   configuration read on a proved path.
 
-FUEL: the driver functions run at their production budgets. Since the
-cerberus-lean fuel arc (pin `f95ef8d9c`, 2026-09-03) the DRIVE CONE —
-`driver2`, `drive_nonmemory_steps_aux2`, `print_eval_conv_aux`, `hack`,
-`nd_bind`, `CerbND.ndDefaultFuel` — runs at `CerbFuel.driverFuel = 10^8`
-(the wrapper `rfl`s `CerbND.driver2_wrapper_defeq`,
-`CerbND.nd_bind_wrapper_defeq`, `CerbND.runND_eq`, … pin the generated
-wrappers to that constant); `liftND`/`liftAction`, the memory workers
-and the evaluator stay at `lemDefaultFuel = 10^6`. `nd_bind`/`liftND`
-budgets are spent per LAYER of one bind and never accumulate across the
-run; `drive_nonmemory_steps_aux2`'s budget is spent once per loop
-iteration, so statements carry `n + 2 ≤ CerbFuel.driverFuel` (n drive
-steps + the done-recording and drain iterations); `driver2`'s budget
-is spent once per non-advanceable step (exactly one: Step_done2);
-get_ctx budgets are the inherited `esize` side conditions
-(Soundness.lean FUEL HONESTY). At insufficient fuel the ND-typed
-workers' value is the kernel-TRANSPARENT kill
-`CerbND.fuelExhaustedKill` (`CerbND.driver2_lemFuel_zero` etc.); the
-production-entry theorems here are TOTAL statements at a certified
-step count and so carry the in-budget hypothesis (README, "Registered
-divergences and limitations"); the partial lane (Adequacy.lean,
-`DriverSafeCtl`) states the kill arm as an admissible outcome at every
-fuel, and the exhaustion rounds below (`loop_zero_exhausts`,
-`loop_step_done_exhaust`, `driver2_killed`, `runND_killed`) are its
-driver arms. Budget numerals are unfolded ONLY through the `_succ`
-lemmas below (never a `show`-forced numeral defeq: 10^8 vs 10^6 hits
-the recursion-depth limit — the 2026-09-03 re-pin's error class).
+FUEL: the generated wrappers quantify over `[LemFuel]`. Each wrapper
+starts its own worker at `LemFuel.fuel`; the budget is not a cumulative
+counter shared between different calls. These theorems retain that same
+instance and state the bounds needed by the actual path. An active bind
+needs positive fuel; lifting an active memory action needs at least two
+units, one for `liftND` and one for `liftAction`. The loop worker's
+explicit counter is spent per iteration. Recording PROGRAM-DONE and
+then draining the thread list require two further iterations. The
+single PROGRAM-DONE `driver2` round and the final value readout each
+need positive ambient fuel.
+
+The engine supplies structural bounds for traversals such as `get_ctx`;
+the former global expression-size ceilings are unnecessary. Repeated
+operand evaluation still needs the pass-depth premises of Soundness.
+At ambient zero an ND bind kills without running its left computation.
+At ambient one `liftMem` writes back the memory computation's state
+before its action lift exhausts. The equations below preserve this
+distinction. The loop worker at zero kills without changing the state;
+propagating that kill through a bind or `runND` requires positive ambient
+fuel. These are individual shipped equations, not a classification of
+every insufficient-budget program execution. The production total and
+partial lanes must discharge their respective budget and outcome
+obligations when they compose these helpers.
 -/
 import CerberusHeapLang.Soundness
 import Driver
@@ -103,6 +100,39 @@ namespace CerberusHeapLang
 
 open Lem_Basic_classes Lem_Maybe Lem_List
 
+variable [LemFuel]
+
+/-! The ambient budget also governs the ND combinators. At zero a
+bind does not run its left computation; at one, lifting memory runs
+the computation and writes back its state before the action lift
+exhausts. These are distinct shipped state equations. -/
+
+theorem runOne_bind_zero {a b cs err info st : Type}
+    (hzero : LemFuel.fuel = 0) (m : ndM a info err cs st)
+    (f : a → ndM b info err cs st) (s : st) :
+    runOne (nd_bind m f) s = (NDkilled CerbND.fuelExhaustedKill, s) := by
+  rw [nd_bind, hzero]
+  rfl
+
+theorem runOne_liftMem_zero {a : Type} (hzero : LemFuel.fuel = 0)
+    (m : CerbMem.memM a) (dst : driver_state) :
+    runOne (liftMem m) dst = (NDkilled CerbND.fuelExhaustedKill, dst) := by
+  unfold liftMem liftND
+  rw [hzero]
+  rfl
+
+theorem runOne_liftMem_one {a : Type} (hone : LemFuel.fuel = 1)
+    (m : CerbMem.memM a) (dst : driver_state) :
+    runOne (liftMem m) dst =
+      (NDkilled CerbND.fuelExhaustedKill,
+        { dst with layout_state := (runOne m dst.layout_state).2 }) := by
+  rcases m with ⟨g⟩
+  unfold liftMem liftND
+  rw [hone]
+  dsimp only [runOne, liftND_lemFuel]
+  cases g dst.layout_state
+  rfl
+
 /-! ## The runOne layer (the ND collapse): one-layer application of
 an ndM tree -/
 
@@ -111,34 +141,35 @@ an ndM tree -/
 `ndProj` since K1 (the heap layer states the engine's KILLED store arm
 with it, `storeM_readonly_kills`). -/
 
-private theorem lemDefaultFuel_succ : lemDefaultFuel = Nat.succ 999999 := rfl
-/-- The drive-cone budget as a successor (the exemplar's `budget_succ`
-    idiom, cerberus-lean `test/Unit/FuelExemplar.lean`). -/
-private theorem driverFuel_succ : CerbFuel.driverFuel = Nat.succ 99999999 := rfl
-
+omit [LemFuel] in
 @[simp] theorem runOne_return {a b c d st : Type} (x : a) (s : st) :
     runOne (nd_return x : ndM a c b d st) s = (NDactive x, s) := rfl
 
+omit [LemFuel] in
 @[simp] theorem runOne_get {a b c : Type} {st : Type} (s : st) :
     runOne (nd_get : ndM st c b a st) s = (NDactive s, s) := rfl
 
+omit [LemFuel] in
 @[simp] theorem runOne_update {a b c st : Type} (f : st → st) (s : st) :
     runOne (nd_update f : ndM Unit c b a st) s = (NDactive (), f s) := rfl
 
+omit [LemFuel] in
 @[simp] theorem runOne_read {a b c st r : Type} (f : st → r) (s : st) :
     runOne (nd_read f : ndM r c b a st) s = (NDactive (f s), s) := rfl
 
 /-- Sequencing preserves one-layer activity: nd_bind
     (Nondeterminism.lean:188-192) spends one layer of its own fresh
     fuel budget and composes the two state functions. -/
-theorem runOne_bind_active {a b cs err info st : Type}
+theorem runOne_bind_active (hfuel : 0 < LemFuel.fuel) {a b cs err info st : Type}
     {m : ndM a info err cs st} {f : a → ndM b info err cs st} {s s' : st} {z : a}
     (h : runOne m s = (NDactive z, s')) :
     runOne (nd_bind m f) s = runOne (f z) s' := by
+  obtain ⟨fuel, hF⟩ : ∃ fuel, LemFuel.fuel = fuel + 1 :=
+    ⟨LemFuel.fuel - 1, by omega⟩
   rcases m with ⟨g⟩
   dsimp only [runOne] at h
-  show runOne (nd_bind_lemFuel CerbFuel.driverFuel (ND g) f) s = _
-  rw [driverFuel_succ]
+  show runOne (nd_bind_lemFuel LemFuel.fuel (ND g) f) s = _
+  rw [hF]
   unfold nd_bind_lemFuel
   dsimp only [runOne]
   rw [h]
@@ -147,15 +178,17 @@ theorem runOne_bind_active {a b cs err info st : Type}
   rfl
 
 /-- A kill on the left of a bind kills the bind. -/
-theorem runOne_bind_killed {a b cs err info st : Type}
+theorem runOne_bind_killed (hfuel : 0 < LemFuel.fuel) {a b cs err info st : Type}
     {m : ndM a info err cs st} {f : a → ndM b info err cs st} {s s' : st}
     {r : kill_reason err}
     (h : runOne m s = (NDkilled r, s')) :
     runOne (nd_bind m f) s = (NDkilled r, s') := by
+  obtain ⟨fuel, hF⟩ : ∃ fuel, LemFuel.fuel = fuel + 1 :=
+    ⟨LemFuel.fuel - 1, by omega⟩
   rcases m with ⟨g⟩
   dsimp only [runOne] at h
-  show runOne (nd_bind_lemFuel CerbFuel.driverFuel (ND g) f) s = _
-  rw [driverFuel_succ]
+  show runOne (nd_bind_lemFuel LemFuel.fuel (ND g) f) s = _
+  rw [hF]
   unfold nd_bind_lemFuel
   dsimp only [runOne]
   rw [h]
@@ -163,22 +196,24 @@ theorem runOne_bind_killed {a b cs err info st : Type}
 /-- `liftMem` (Driver.lean:218-223, via liftND
     Nondeterminism.lean:306) of an active one-layer memM computation:
     runs on `layout_state`, writes it back, one layer. -/
-theorem runOne_liftMem_active {a : Type}
+theorem runOne_liftMem_active (hfuel : 2 ≤ LemFuel.fuel) {a : Type}
     {m : ndM a String mem_error (mem_constraint CerbMem.IntegerValue) CerbMem.MemState}
     {dst : driver_state} {z : a} {σ' : CerbMem.MemState}
     (h : runOne m dst.layout_state = (NDactive z, σ')) :
     runOne (liftMem m) dst = (NDactive z, { dst with layout_state := σ' }) := by
+  obtain ⟨fuel, hF⟩ : ∃ fuel, LemFuel.fuel = fuel + 2 :=
+    ⟨LemFuel.fuel - 2, by omega⟩
   rcases m with ⟨g⟩
   dsimp only [runOne] at h
-  show runOne (liftND_lemFuel lemDefaultFuel _ _ _ _ (ND g)) dst = _
-  rw [lemDefaultFuel_succ]
+  show runOne (liftND_lemFuel LemFuel.fuel _ _ _ _ (ND g)) dst = _
+  rw [hF]
   unfold liftND_lemFuel
   dsimp only [runOne]
   rw [h]
-  rw [show (999999 : Nat) = Nat.succ 999998 from rfl]
   unfold liftAction_lemFuel
   rfl
 
+omit [LemFuel] in
 /-- The applyMemM bridge: the spike's one-layer memM verdict is the
     runOne verdict. -/
 theorem runOne_of_applyMemM {α : Type} {m : CerbMem.memM α} {σ σ' : Mem} {z : α}
@@ -200,10 +235,10 @@ theorem runOne_of_applyMemM {α : Type} {m : CerbMem.memM α} {σ σ' : Mem} {z 
 /-- liftCore_run (Driver.lean:245-248) of a returned request: the run
     state comes back VERBATIM (the fragment's request monads are
     stExceptUndef_return — D14's core_run_state row). -/
-theorem runOne_liftCore_run_return {a : Type} (z : a) (dst : driver_state) :
+theorem runOne_liftCore_run_return (hfuel : 0 < LemFuel.fuel) {a : Type} (z : a) (dst : driver_state) :
     runOne (liftCore_run (stExceptUndef_return z)) dst = (NDactive z, dst) := by
-  refine (runOne_bind_active (z := dst) rfl).trans ?_
-  refine (runOne_bind_active (z := ())
+  refine (runOne_bind_active (hfuel := by omega) (z := dst) rfl).trans ?_
+  refine (runOne_bind_active (hfuel := by omega) (z := ())
     (s' := { dst with core_run_state0 := dst.core_run_state0 }) (by rfl)).trans ?_
   rfl
 
@@ -211,14 +246,14 @@ theorem runOne_liftCore_run_return {a : Type} (z : a) (dst : driver_state) :
     Core_run.lean:116): returns the current aid_supply and ticks it —
     the ONE run-state component the production driver moves per action
     (D14). -/
-theorem runOne_liftCore_run_aid (dst : driver_state) :
+theorem runOne_liftCore_run_aid (hfuel : 0 < LemFuel.fuel) (dst : driver_state) :
     runOne (liftCore_run (runS fresh_action_id')) dst =
       (NDactive dst.core_run_state0.aid_supply,
        { dst with core_run_state0 :=
           { dst.core_run_state0 with aid_supply :=
               dst.core_run_state0.aid_supply + 1 } }) := by
-  refine (runOne_bind_active (z := dst) rfl).trans ?_
-  refine (runOne_bind_active (z := ()) (by rfl)).trans ?_
+  refine (runOne_bind_active (hfuel := by omega) (z := dst) rfl).trans ?_
+  refine (runOne_bind_active (hfuel := by omega) (z := ()) (by rfl)).trans ?_
   rfl
 
 /-! ## runND collapse (D2, the runner level) -/
@@ -228,20 +263,23 @@ theorem runOne_liftCore_run_aid (dst : driver_state) :
     branch-free collapse at the runner level: no NDnd/NDstep node
     exists to fork on, so the exhaustive runner's list is the
     singleton. -/
-theorem runND_active {a info err cs st : Type} [Inhabited a] [Inhabited st]
+theorem runND_active (hfuel : 0 < LemFuel.fuel) {a info err cs st : Type} [Inhabited a] [Inhabited st]
     {m : ndM a info err cs st} {s s' : st} {z : a}
     (h : runOne m s = (NDactive z, s')) :
     CerbND.runND m s = [(nd_status.Active z, ([] : List String), s')] := by
+  obtain ⟨fuel, hF⟩ : ∃ fuel, LemFuel.fuel = fuel + 1 :=
+    ⟨LemFuel.fuel - 1, by omega⟩
   rcases m with ⟨g⟩
   dsimp only [runOne] at h
-  show CerbND.runNDFuel CerbFuel.driverFuel (ND g) s = _
-  rw [driverFuel_succ]
+  show CerbND.runNDFuel LemFuel.fuel (ND g) s = _
+  rw [hF]
   unfold CerbND.runNDFuel
   dsimp only
   rw [h]
 
 /-! ## Thread-map helpers (the single-threaded shape) -/
 
+omit [LemFuel] in
 /-- `update_thread_state` (Core_run.lean:99, via assoc_adjust
     Utils.lean:186) at the singleton thread list. -/
 theorem update_thread_state_single (th th' : thread_state) (cs : core_state)
@@ -252,6 +290,7 @@ theorem update_thread_state_single (th th' : thread_state) (cs : core_state)
   rw [hth]
   simp [assoc_adjust]
 
+omit [LemFuel] in
 /-- `prepare_exit` (Driver.lean:372) at the singleton parent-less
     thread: park the delivered value, empty the stack. -/
 theorem prepare_exit_single (cs : core_state) (th : thread_state) (v : value)
@@ -278,7 +317,7 @@ variable (fl : Nat) (tds : Fmap sym (CerbLocation.Loc × tag_definition))
     the fragment produces) is advanced in place (advance_step,
     Driver.lean:336): thread updated, dr_step_counter ticked, loop
     continues on the same thread list. -/
-theorem loop_step_tau {dst : driver_state} {th th' : thread_state} {s : String}
+theorem loop_step_tau (hfuel : 0 < LemFuel.fuel) {dst : driver_state} {th th' : thread_state} {s : String}
     (hth : dst.core_state0.thread_states = [(0, (none, th))])
     {post : List core_step2}
     (hsteps : step_ctx tds dst.layout_state dst.core_file dst.core_extern 0
@@ -288,7 +327,7 @@ theorem loop_step_tau {dst : driver_state} {th th' : thread_state} {s : String}
         { { dst with dr_step_counter := dst.dr_step_counter + 1 }
             with core_state0 := update_thread_state 0 th' dst.core_state0 } := by
   conv => lhs; unfold drive_nonmemory_steps_aux2_lemFuel
-  refine (runOne_bind_active (z := Step_tau2 s TSK_Misc th' :: post)
+  refine (runOne_bind_active (hfuel := by omega) (z := Step_tau2 s TSK_Misc th' :: post)
     (s' := dst) ?_).trans ?_
   · rw [runOne_read]
     refine congrArg (fun x => (NDactive x, dst)) ?_
@@ -303,18 +342,18 @@ theorem loop_step_tau {dst : driver_state} {th th' : thread_state} {s : String}
     rw [if_pos rfl]
     unfold advance_step
     dsimp only
-    refine (runOne_bind_active (z := NOWAKEUP)
+    refine (runOne_bind_active (hfuel := by omega) (z := NOWAKEUP)
       (s' := { { dst with dr_step_counter := dst.dr_step_counter + 1 }
           with core_state0 := update_thread_state 0 th' dst.core_state0 }) ?_).trans ?_
-    · refine (runOne_bind_active (z := ()) (s' := dst) (by rfl)).trans ?_
-      refine (runOne_bind_active (z := ()) (by rfl)).trans ?_
+    · refine (runOne_bind_active (hfuel := by omega) (z := ()) (s' := dst) (by rfl)).trans ?_
+      refine (runOne_bind_active (hfuel := by omega) (z := ()) (by rfl)).trans ?_
       rfl
     · rfl
 
 /-- One loop iteration from a singleton advanceable step whose shipped
     advance is active and wakeup-free (the thread-0 instance of Round.lean's
     `loop_step_of_advance`, stated here for the RETURN round). -/
-theorem loop_step_of_advance0 {dst dst' : driver_state} {th : thread_state} {s0 : core_step2}
+theorem loop_step_of_advance0 (hfuel : 0 < LemFuel.fuel) {dst dst' : driver_state} {th : thread_state} {s0 : core_step2}
     (hth : dst.core_state0.thread_states = [(0, (none, th))])
     {post : List core_step2}
     (hsteps : step_ctx tds dst.layout_state dst.core_file dst.core_extern 0 (none, th) = s0 :: post)
@@ -323,7 +362,7 @@ theorem loop_step_of_advance0 {dst dst' : driver_state} {th : thread_state} {s0 
     runOne (drive_nonmemory_steps_aux2_lemFuel (Nat.succ fl) tds acc [0]) dst =
       runOne (drive_nonmemory_steps_aux2_lemFuel fl tds acc [0]) dst' := by
   conv => lhs; unfold drive_nonmemory_steps_aux2_lemFuel
-  refine (runOne_bind_active (z := s0 :: post) (s' := dst) ?_).trans ?_
+  refine (runOne_bind_active (hfuel := by omega) (z := s0 :: post) (s' := dst) ?_).trans ?_
   · rw [runOne_read]
     refine congrArg (fun x => (NDactive x, dst)) ?_
     show (let th_info := match lookupBy (fun x y => x == y) 0
@@ -335,13 +374,13 @@ theorem loop_step_of_advance0 {dst dst' : driver_state} {th : thread_state} {s0 
     exact hsteps
   · dsimp only [find_can_advance]
     rw [hca, if_pos rfl]
-    refine (runOne_bind_active (z := NOWAKEUP) (s' := dst') hadv).trans ?_
+    refine (runOne_bind_active (hfuel := by omega) (z := NOWAKEUP) (s' := dst') hadv).trans ?_
     rfl
 
 /-- `advance_step`'s tau arm at ANY task kind (Driver.lean:336): the
     `TSK_Return` kind pushes `ME_function_return` on the trace, the others
     leave it — the trace is existential; thread updated, counter ticked. -/
-theorem advance_tau_tsk0 (s : String) (tsk : core_tau_step_kind) (th' : thread_state)
+theorem advance_tau_tsk0 (hfuel : 0 < LemFuel.fuel) (s : String) (tsk : core_tau_step_kind) (th' : thread_state)
     (dst : driver_state) :
     ∃ tr : List trace_event,
       runOne (advance_step tds 0 (Step_tau2 s tsk th')) dst =
@@ -353,20 +392,20 @@ theorem advance_tau_tsk0 (s : String) (tsk : core_tau_step_kind) (th' : thread_s
   cases tsk with
   | TSK_Return sym1 mval_opt =>
     refine ⟨ME_function_return sym1 mval_opt :: dst.trace, ?_⟩
-    refine (runOne_bind_active (z := ())
+    refine (runOne_bind_active (hfuel := by omega) (z := ())
       (s' := { dst with trace := ME_function_return sym1 mval_opt :: dst.trace })
       (by rfl)).trans ?_
-    refine (runOne_bind_active (z := ()) (by rfl)).trans ?_
+    refine (runOne_bind_active (hfuel := by omega) (z := ()) (by rfl)).trans ?_
     rfl
   | TSK_Ccall sym1 mvals =>
     refine ⟨dst.trace, ?_⟩
-    refine (runOne_bind_active (z := ()) (s' := dst) (by rfl)).trans ?_
-    refine (runOne_bind_active (z := ()) (by rfl)).trans ?_
+    refine (runOne_bind_active (hfuel := by omega) (z := ()) (s' := dst) (by rfl)).trans ?_
+    refine (runOne_bind_active (hfuel := by omega) (z := ()) (by rfl)).trans ?_
     rfl
   | TSK_Misc =>
     refine ⟨dst.trace, ?_⟩
-    refine (runOne_bind_active (z := ()) (s' := dst) (by rfl)).trans ?_
-    refine (runOne_bind_active (z := ()) (by rfl)).trans ?_
+    refine (runOne_bind_active (hfuel := by omega) (z := ()) (s' := dst) (by rfl)).trans ?_
+    refine (runOne_bind_active (hfuel := by omega) (z := ()) (by rfl)).trans ?_
     rfl
 
 /-- Tau round at ANY task kind (calls arc C2 — the RETURN round's
@@ -374,7 +413,7 @@ theorem advance_tau_tsk0 (s : String) (tsk : core_tau_step_kind) (th' : thread_s
     `file.funinfo` names the procedure): as `loop_step_tau`, plus the
     trace push `advance_step` makes for `TSK_Return` (Driver.lean:336;
     existential — the trace is driver bookkeeping). -/
-theorem loop_step_tau_tsk {dst : driver_state} {th th' : thread_state} {s : String}
+theorem loop_step_tau_tsk (hfuel : 0 < LemFuel.fuel) {dst : driver_state} {th th' : thread_state} {s : String}
     {tsk : core_tau_step_kind}
     (hth : dst.core_state0.thread_states = [(0, (none, th))])
     {post : List core_step2}
@@ -385,14 +424,14 @@ theorem loop_step_tau_tsk {dst : driver_state} {th th' : thread_state} {s : Stri
         runOne (drive_nonmemory_steps_aux2_lemFuel fl tds acc [0])
           { { { dst with trace := tr } with dr_step_counter := dst.dr_step_counter + 1 }
               with core_state0 := update_thread_state 0 th' dst.core_state0 } := by
-  obtain ⟨tr, hadv⟩ := advance_tau_tsk0 tds s tsk th' dst
-  exact ⟨tr, loop_step_of_advance0 fl tds acc hth hsteps rfl hadv⟩
+  obtain ⟨tr, hadv⟩ := advance_tau_tsk0 (hfuel := by omega) tds s tsk th' dst
+  exact ⟨tr, loop_step_of_advance0 (hfuel := by omega) fl tds acc hth hsteps rfl hadv⟩
 
 /-- Done round (two loop iterations): PROGRAM-DONE is not advanceable
     (can_advance, Driver.lean:310), so the singleton is recorded in
     the step map and the drained list returns it — the state
     untouched. -/
-theorem loop_step_done {dst : driver_state} {th : thread_state} {v : value}
+theorem loop_step_done (hfuel : 0 < LemFuel.fuel) {dst : driver_state} {th : thread_state} {v : value}
     (hth : dst.core_state0.thread_states = [(0, (none, th))])
     (hsteps : step_ctx tds dst.layout_state dst.core_file dst.core_extern 0
       (none, th) = [Step_done2 v]) :
@@ -400,7 +439,7 @@ theorem loop_step_done {dst : driver_state} {th : thread_state} {v : value}
         tds acc [0]) dst =
       (NDactive (fmapAddBy defaultCompare 0 [Step_done2 v] acc), dst) := by
   conv => lhs; unfold drive_nonmemory_steps_aux2_lemFuel
-  refine (runOne_bind_active (z := [Step_done2 v]) (s' := dst) ?_).trans ?_
+  refine (runOne_bind_active (hfuel := by omega) (z := [Step_done2 v]) (s' := dst) ?_).trans ?_
   · rw [runOne_read]
     refine congrArg (fun x => (NDactive x, dst)) ?_
     show (let th_info := match lookupBy (fun x y => x == y) 0
@@ -419,7 +458,7 @@ theorem loop_step_done {dst : driver_state} {th : thread_state} {v : value}
     perform_action_request2, Driver.lean:277-285), and the request is
     discharged sequentially. The discharge outcome is a hypothesis
     (`hars`) so the store/load/create instances below plug in. -/
-theorem loop_step_action {dst dst' : driver_state} {th : thread_state}
+theorem loop_step_action (hfuel : 0 < LemFuel.fuel) {dst dst' : driver_state} {th : thread_state}
     {s : String} {loc : CerbLocation.Loc}
     {req : action_request2 thread_state}
     (hth : dst.core_state0.thread_states = [(0, (none, th))])
@@ -435,7 +474,7 @@ theorem loop_step_action {dst dst' : driver_state} {th : thread_state}
     runOne (drive_nonmemory_steps_aux2_lemFuel (Nat.succ fl) tds acc [0]) dst =
       runOne (drive_nonmemory_steps_aux2_lemFuel fl tds acc [0]) dst' := by
   conv => lhs; unfold drive_nonmemory_steps_aux2_lemFuel
-  refine (runOne_bind_active
+  refine (runOne_bind_active (hfuel := by omega)
     (z := Step_action_request2 s loc 0 false (stExceptUndef_return req) :: post)
     (s' := dst) ?_).trans ?_
   · rw [runOne_read]
@@ -451,18 +490,18 @@ theorem loop_step_action {dst dst' : driver_state} {th : thread_state}
     rw [if_pos (show (!false) = true from rfl)]
     unfold advance_step
     dsimp only
-    refine (runOne_bind_active (z := NOWAKEUP) (s' := dst') ?_).trans ?_
-    · refine (runOne_bind_active (z := ()) (s' := dst') ?_).trans (by rfl)
-      refine (runOne_bind_active (z := req) (s' := dst)
-        (runOne_liftCore_run_return req dst)).trans ?_
+    refine (runOne_bind_active (hfuel := by omega) (z := NOWAKEUP) (s' := dst') ?_).trans ?_
+    · refine (runOne_bind_active (hfuel := by omega) (z := ()) (s' := dst') ?_).trans (by rfl)
+      refine (runOne_bind_active (hfuel := by omega) (z := req) (s' := dst)
+        (runOne_liftCore_run_return (hfuel := by omega) req dst)).trans ?_
       unfold perform_action_request2
       dsimp only
-      refine (runOne_bind_active
+      refine (runOne_bind_active (hfuel := by omega)
         (z := dst.core_run_state0.aid_supply)
         (s' := { dst with core_run_state0 :=
             { dst.core_run_state0 with aid_supply :=
                 dst.core_run_state0.aid_supply + 1 } })
-        (runOne_liftCore_run_aid dst)).trans ?_
+        (runOne_liftCore_run_aid (hfuel := by omega) dst)).trans ?_
       exact hars
     · rfl
 
@@ -479,7 +518,7 @@ equations are deliberately unproved-as-unneeded. -/
     `memReturn none` (CerbMem.lean:2064 — trace-only), the trace gets
     its ME_store event, the thread its continuation. No
     dr_step_counter tick on the action path (Driver.lean:273). -/
-theorem ars_store_active {tds : Fmap sym (CerbLocation.Loc × tag_definition)} {loc loc₀ : CerbLocation.Loc} {mo : memory_order}
+theorem ars_store_active (hfuel : 2 ≤ LemFuel.fuel) {tds : Fmap sym (CerbLocation.Loc × tag_definition)} {loc loc₀ : CerbLocation.Loc} {mo : memory_order}
     {ty : ctype} {lk : Bool} {pv : CerbMem.PointerValue} {mv : CerbMem.MemValue}
     {k : Nat → CerbMem.Footprint → thread_state} {tid aid : Nat}
     {dst : driver_state} {fp : CerbMem.Footprint} {σ' : Mem}
@@ -494,15 +533,15 @@ theorem ars_store_active {tds : Fmap sym (CerbLocation.Loc × tag_definition)} {
   replace happ := (storeM_loc_irrel loc₀ loc).trans happ
   unfold action_request_sequential2
   dsimp only
-  refine (runOne_bind_active (z := fp) (s' := { dst with layout_state := σ' })
-    (runOne_liftMem_active (runOne_of_applyMemM happ))).trans ?_
-  refine (runOne_bind_active (z := (none : Option String))
+  refine (runOne_bind_active (hfuel := by omega) (z := fp) (s' := { dst with layout_state := σ' })
+    (runOne_liftMem_active (hfuel := by omega) (runOne_of_applyMemM happ))).trans ?_
+  refine (runOne_bind_active (hfuel := by omega) (z := (none : Option String))
     (s' := { dst with layout_state := σ' })
-    (runOne_liftMem_active (by rfl))).trans ?_
+    (runOne_liftMem_active (hfuel := by omega) (by rfl))).trans ?_
   rfl
 
 /-- LoadRequest2 discharge, active. -/
-theorem ars_load_active {tds : Fmap sym (CerbLocation.Loc × tag_definition)} {loc loc₀ : CerbLocation.Loc} {mo : memory_order}
+theorem ars_load_active (hfuel : 2 ≤ LemFuel.fuel) {tds : Fmap sym (CerbLocation.Loc × tag_definition)} {loc loc₀ : CerbLocation.Loc} {mo : memory_order}
     {ty : ctype} {pv : CerbMem.PointerValue}
     {k : Nat → CerbMem.Footprint → CerbMem.MemValue → thread_state}
     {tid aid : Nat} {dst : driver_state} {fp : CerbMem.Footprint}
@@ -518,19 +557,19 @@ theorem ars_load_active {tds : Fmap sym (CerbLocation.Loc × tag_definition)} {l
   replace happ := (loadM_loc_irrel loc₀ loc).trans happ
   unfold action_request_sequential2
   dsimp only
-  refine (runOne_bind_active (z := (fp, mval))
+  refine (runOne_bind_active (hfuel := by omega) (z := (fp, mval))
     (s' := { dst with layout_state := σ' })
-    (runOne_liftMem_active (runOne_of_applyMemM happ))).trans ?_
+    (runOne_liftMem_active (hfuel := by omega) (runOne_of_applyMemM happ))).trans ?_
   dsimp only
-  refine (runOne_bind_active (z := (none : Option String))
+  refine (runOne_bind_active (hfuel := by omega) (z := (none : Option String))
     (s' := { dst with layout_state := σ' })
-    (runOne_liftMem_active (by rfl))).trans ?_
+    (runOne_liftMem_active (hfuel := by omega) (by rfl))).trans ?_
   rfl
 
 /-- CreateRequest2 discharge, active. allocateObject discards the
     thread id (CerbMem.lean:1470), so the hypothesis is stated at 0
     and bridges to the driver's `tid1` definitionally. -/
-theorem ars_create_active {tds : Fmap sym (CerbLocation.Loc × tag_definition)} {loc : CerbLocation.Loc} {pref : prefix0}
+theorem ars_create_active (hfuel : 2 ≤ LemFuel.fuel) {tds : Fmap sym (CerbLocation.Loc × tag_definition)} {loc : CerbLocation.Loc} {pref : prefix0}
     {align : CerbMem.IntegerValue} {ty : ctype} {reqAddr : Option Int}
     {initOpt : Option CerbMem.MemValue}
     {k : Nat → CerbMem.PointerValue → thread_state}
@@ -545,8 +584,8 @@ theorem ars_create_active {tds : Fmap sym (CerbLocation.Loc × tag_definition)} 
         core_state0 := update_thread_state tid (k aid pv) dst.core_state0 }) := by
   unfold action_request_sequential2
   dsimp only
-  refine (runOne_bind_active (z := pv) (s' := { dst with layout_state := σ' })
-    (runOne_liftMem_active (runOne_of_applyMemM happ))).trans ?_
+  refine (runOne_bind_active (hfuel := by omega) (z := pv) (s' := { dst with layout_state := σ' })
+    (runOne_liftMem_active (hfuel := by omega) (runOne_of_applyMemM happ))).trans ?_
   rfl
 
 /-- KillRequest2 discharge, active (kill/free arc K2; Driver.lean:273,
@@ -558,7 +597,7 @@ theorem ars_create_active {tds : Fmap sym (CerbLocation.Loc × tag_definition)} 
     request's location (`killM_loc_irrel` transports the mirror's
     premise), the trace gets its `ME_kill` event, the thread its
     continuation at the drawn aid. -/
-theorem ars_kill_active {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
+theorem ars_kill_active (hfuel : 2 ≤ LemFuel.fuel) {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
     {loc loc₀ : CerbLocation.Loc} {isDyn : Bool} {pv : CerbMem.PointerValue}
     {k : Nat → thread_state} {tid aid : Nat} {dst : driver_state} {σ' : Mem}
     (happ : applyMemM (CerbMem.killM loc₀ isDyn pv) dst.layout_state = some ((), σ')) :
@@ -570,8 +609,8 @@ theorem ars_kill_active {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
   replace happ := (killM_loc_irrel loc₀ loc).trans happ
   unfold action_request_sequential2
   dsimp only
-  refine (runOne_bind_active (z := ()) (s' := { dst with layout_state := σ' })
-    (runOne_liftMem_active (runOne_of_applyMemM happ))).trans ?_
+  refine (runOne_bind_active (hfuel := by omega) (z := ()) (s' := { dst with layout_state := σ' })
+    (runOne_liftMem_active (hfuel := by omega) (runOne_of_applyMemM happ))).trans ?_
   rfl
 
 /-- AllocRequest2 discharge, active (kill/free arc K3; Driver.lean:273,
@@ -584,7 +623,7 @@ theorem ars_kill_active {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
     so the hypothesis is stated at 0 and bridges to the driver's `tid1`
     definitionally; the trace gets its `ME_allocate_region` event, the
     thread its continuation at the drawn aid and the minted pointer. -/
-theorem ars_alloc_active {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
+theorem ars_alloc_active (hfuel : 2 ≤ LemFuel.fuel) {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
     {loc : CerbLocation.Loc} {pref : prefix0}
     {align size : CerbMem.IntegerValue}
     {k : Nat → CerbMem.PointerValue → thread_state}
@@ -599,8 +638,8 @@ theorem ars_alloc_active {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
         core_state0 := update_thread_state tid (k aid pv) dst.core_state0 }) := by
   unfold action_request_sequential2
   dsimp only
-  refine (runOne_bind_active (z := pv) (s' := { dst with layout_state := σ' })
-    (runOne_liftMem_active (runOne_of_applyMemM happ))).trans ?_
+  refine (runOne_bind_active (hfuel := by omega) (z := pv) (s' := { dst with layout_state := σ' })
+    (runOne_liftMem_active (hfuel := by omega) (runOne_of_applyMemM happ))).trans ?_
   rfl
 
 /-! ## D3: the finalize/hack readout -/
@@ -611,17 +650,24 @@ theorem ars_alloc_active {tds : Fmap sym (CerbLocation.Loc × tag_definition)}
     (Core_aux.lean:472) reads it off — one fuel layer, no recursion,
     context-independent (no argument other than the pexpr is read on
     this path). -/
-theorem hack_value (tds : Fmap sym (CerbLocation.Loc × tag_definition))
+theorem hack_value (hfuel : 0 < LemFuel.fuel) (tds : Fmap sym (CerbLocation.Loc × tag_definition))
     (ext : Fmap sym sym) (env : List (Fmap sym value)) (σ : Mem)
     (f : file core_run_annotation) (assoc : Fmap sym object_value) (v : value) :
-    hack tds ext env σ f assoc (Pexpr [] () (PEval v)) = v := rfl
+    hack tds ext env σ f assoc (Pexpr [] () (PEval v)) = v := by
+  obtain ⟨fuel, hF⟩ : ∃ fuel, LemFuel.fuel = fuel + 1 :=
+    ⟨LemFuel.fuel - 1, by omega⟩
+  unfold hack
+  rw [hF]
+  unfold hack_lemFuel
+  rw [step_eval_bridge_default (.val [] v) (by rfl)]
+  rfl
 
 /-- `finalize` (Driver.lean:423) at the PROGRAM-DONE parked state:
     the single thread's arena is `mk_value_e v` (prepare_exit), which
     `to_pure` (Core_aux.lean:570, Epure arm) strips and `hack` reads
     back — the readout is exactly `v`, with the io streams folded out
     of the untouched core_state io. -/
-theorem finalize_done (tds : Fmap sym (CerbLocation.Loc × tag_definition))
+theorem finalize_done (hfuel : 0 < LemFuel.fuel) (tds : Fmap sym (CerbLocation.Loc × tag_definition))
     (s : String) (dst : driver_state) (th : thread_state) (v : value)
     (hth : dst.core_state0.thread_states = [(0, (none, th))])
     (harena : th.arena = mk_value_e v) :
@@ -638,18 +684,26 @@ theorem finalize_done (tds : Fmap sym (CerbLocation.Loc × tag_definition))
   rw [hth]
   dsimp only
   rw [harena]
-  rfl
+  have hpure : to_pure (mk_value_e v : CoreExpr) = some (mk_value_pe v) := by
+    obtain ⟨fuel, hF⟩ : ∃ fuel, LemFuel.fuel = fuel + 1 :=
+      ⟨LemFuel.fuel - 1, by omega⟩
+    unfold to_pure
+    rw [hF]
+    rfl
+  rw [hpure]
+  dsimp only
+  simp only [mk_value_pe]
+  rw [hack_value (hfuel := hfuel)]
+  simp only [LemLibTheorems.lemListFoldr_eq]
 
 /-! ## The driver2 round (D1's outer layer): at the PROGRAM-DONE step
 map, one driver2 unfold routes through process_core_step2's Step_done2
 arm (prepare_exit) and STOPS (no driver21 recursion — Driver.lean:377).
-Both scheduler branches (the opaque execution-mode read,
-CerbGlobal.current_execution_mode — an `opaque` constant, so the round
-equation is proved by CASES on the mode test) take the same
-singleton-pick path. -/
+Both scheduler branches selected by `CerbGlobal.current_execution_mode`
+take the same singleton-pick path; the proof cases on the mode test. -/
 
 /-- process_core_step2 at Step_done2. -/
-theorem process_done (tds : Fmap sym (CerbLocation.Loc × tag_definition))
+theorem process_done (hfuel : 0 < LemFuel.fuel) (tds : Fmap sym (CerbLocation.Loc × tag_definition))
     (cont : Bool → ndM Unit step_kind driver_error
       (mem_constraint CerbMem.IntegerValue) driver_state)
     (v : value) (dst : driver_state) (th : thread_state)
@@ -660,23 +714,23 @@ theorem process_done (tds : Fmap sym (CerbLocation.Loc × tag_definition))
             [(0, (none, { th with stack0 := Stack_empty, arena := mk_value_e v }))] } }) := by
   unfold process_core_step2
   dsimp only
-  refine (runOne_bind_active (z := ()) (s' := dst) (by rfl)).trans ?_
+  refine (runOne_bind_active (hfuel := by omega) (z := ()) (s' := dst) (by rfl)).trans ?_
   rw [runOne_update]
   rw [prepare_exit_single dst.core_state0 th v hth]
 
 /-! ## The outer driver2 round: PROGRAM-DONE routed through
 process_core_step2/prepare_exit. The execution-mode read
-(CerbGlobal.current_execution_mode — an `opaque` constant) selects
+(`CerbGlobal.current_execution_mode`) selects
 between the random-mode `bindExhaustive` branch and the exhaustive
 branch (Driver.lean:384); on a SINGLETON non-blocked step list both
 reduce to the same `pick`-the-one-step path, so the round equation is
-proved by cases on the opaque mode test. -/
+proved by cases on the mode test. -/
 
-theorem driver2_done (fl : Nat)
+theorem driver2_done (hfuel : 0 < LemFuel.fuel) (fl : Nat)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition))
     (dst dstF : driver_state) (th thF : thread_state) (v : value)
     (hth : dst.core_state0.thread_states = [(0, (none, th))])
-    (hloop : runOne (drive_nonmemory_steps_aux2_lemFuel CerbFuel.driverFuel tds
+    (hloop : runOne (drive_nonmemory_steps_aux2_lemFuel LemFuel.fuel tds
         fmapEmpty [0]) dst =
       (NDactive (fmapAddBy defaultCompare 0 [Step_done2 v] fmapEmpty), dstF))
     (hthF : dstF.core_state0.thread_states = [(0, (none, thF))]) :
@@ -685,30 +739,30 @@ theorem driver2_done (fl : Nat)
         { dstF.core_state0 with thread_states :=
             [(0, (none, { thF with stack0 := Stack_empty, arena := mk_value_e v }))] } }) := by
   conv => lhs; unfold driver2_lemFuel
-  refine (runOne_bind_active (z := [((0 : Nat), some (Step_done2 v))])
+  refine (runOne_bind_active (hfuel := by omega) (z := [((0 : Nat), some (Step_done2 v))])
     (s' := dstF) ?_).trans ?_
   · -- new_drive_core_threads: the whole fragment run happens inside
     -- the per-thread loop; the returned map is the PROGRAM-DONE
     -- singleton, picked deterministically.
     unfold new_drive_core_threads
-    refine (runOne_bind_active (z := dst) (by rfl)).trans ?_
+    refine (runOne_bind_active (hfuel := by omega) (z := dst) (by rfl)).trans ?_
     dsimp only
     rw [hth]
     dsimp only [List.map]
-    refine (runOne_bind_active
+    refine (runOne_bind_active (hfuel := by omega)
       (z := fmapAddBy defaultCompare 0 [Step_done2 v] fmapEmpty)
       (s' := dstF) hloop).trans ?_
     rw [show fmapElements (fmapAddBy defaultCompare (0 : Nat) [Step_done2 v]
       fmapEmpty) = [((0 : Nat), [Step_done2 v])] from rfl]
     unfold nd_mapM
     dsimp only [List.map, List.foldr]
-    refine (runOne_bind_active (z := ((0 : Nat), some (Step_done2 v)))
+    refine (runOne_bind_active (hfuel := by omega) (z := ((0 : Nat), some (Step_done2 v)))
       (s' := dstF) ?_).trans ?_
-    · refine (runOne_bind_active (z := Step_done2 v) (s' := dstF)
+    · refine (runOne_bind_active (hfuel := by omega) (z := Step_done2 v) (s' := dstF)
         (by rfl)).trans (by rfl)
-    · refine (runOne_bind_active
+    · refine (runOne_bind_active (hfuel := by omega)
         (z := ([] : List (Nat × Option core_step2))) (by rfl)).trans (by rfl)
-  · refine (runOne_bind_active (z := dstF) (by rfl)).trans ?_
+  · refine (runOne_bind_active (hfuel := by omega) (z := dstF) (by rfl)).trans ?_
     dsimp only
     cases hmode : maybeEqualBy (fun x y => x == y)
         (CerbGlobal.current_execution_mode ())
@@ -716,17 +770,17 @@ theorem driver2_done (fl : Nat)
     | true =>
       rw [if_pos rfl]
       unfold bindExhaustive
-      refine (runOne_bind_active (z := ((0 : Nat), some (Step_done2 v)))
+      refine (runOne_bind_active (hfuel := by omega) (z := ((0 : Nat), some (Step_done2 v)))
         (s' := dstF) (by rfl)).trans ?_
       dsimp only
-      exact process_done tds _ v dstF thF hthF
+      exact process_done (hfuel := by omega) tds _ v dstF thF hthF
     | false =>
       rw [if_neg (fun h => Bool.noConfusion h)]
-      refine (runOne_bind_active (z := ()) (s' := dstF) (by rfl)).trans ?_
-      refine (runOne_bind_active (z := ((0 : Nat), some (Step_done2 v)))
+      refine (runOne_bind_active (hfuel := by omega) (z := ()) (s' := dstF) (by rfl)).trans ?_
+      refine (runOne_bind_active (hfuel := by omega) (z := ((0 : Nat), some (Step_done2 v)))
         (s' := dstF) (by rfl)).trans ?_
       dsimp only
-      exact process_done tds _ v dstF thF hthF
+      exact process_done (hfuel := by omega) tds _ v dstF thF hthF
 
 /-! ## Phase 5 — THE LOOP PRODUCTION COLLAPSE, part 1: the
 with-runstate and memop rounds (the two step kinds the loop fragment
@@ -755,16 +809,16 @@ across a production round. -/
 /-- `liftCore_run` (Driver.lean:245) of a with-runstate monad that
     returns the current run state verbatim: the write-back is the
     identity and the successor is delivered — one active layer. -/
-theorem runOne_liftCore_run_of_eq {a : Type}
+theorem runOne_liftCore_run_of_eq (hfuel : 0 < LemFuel.fuel) {a : Type}
     {m : core_run_state → exceptM ((t0 a) × core_run_state) core_run_cause}
     {dst : driver_state} {z : a}
     (hm : m dst.core_run_state0 = Result (Defined z, dst.core_run_state0)) :
     runOne (liftCore_run m) dst = (NDactive z, dst) := by
   unfold liftCore_run
-  refine (runOne_bind_active (z := dst) (by rfl)).trans ?_
+  refine (runOne_bind_active (hfuel := by omega) (z := dst) (by rfl)).trans ?_
   rw [show stExceptUndef_run m dst.core_run_state0 =
     Result (Defined z, dst.core_run_state0) from hm]
-  refine (runOne_bind_active (z := ())
+  refine (runOne_bind_active (hfuel := by omega) (z := ())
     (s' := { dst with core_run_state0 := dst.core_run_state0 })
     (by rfl)).trans ?_
   rfl
@@ -780,7 +834,7 @@ variable (fl : Nat) (tds : Fmap sym (CerbLocation.Loc × tag_definition))
     (hypothesis `hm`, discharged by the raw singleton lemmas below),
     dr_step_counter ticked, loop continues. The `RSK_eval` kind makes
     `advance_step`'s TSK_Return trace arm a no-op. -/
-theorem loop_step_withrs_eval {dst : driver_state} {th th' : thread_state}
+theorem loop_step_withrs_eval (hfuel : 0 < LemFuel.fuel) {dst : driver_state} {th th' : thread_state}
     {s : String} {m : core_runM thread_state}
     (hth : dst.core_state0.thread_states = [(0, (none, th))])
     {post : List core_step2}
@@ -792,7 +846,7 @@ theorem loop_step_withrs_eval {dst : driver_state} {th th' : thread_state}
         { { dst with dr_step_counter := dst.dr_step_counter + 1 }
             with core_state0 := update_thread_state 0 th' dst.core_state0 } := by
   conv => lhs; unfold drive_nonmemory_steps_aux2_lemFuel
-  refine (runOne_bind_active (z := Step_with_runstate2 (RSK_eval s) m :: post)
+  refine (runOne_bind_active (hfuel := by omega) (z := Step_with_runstate2 (RSK_eval s) m :: post)
     (s' := dst) ?_).trans ?_
   · rw [runOne_read]
     refine congrArg (fun x => (NDactive x, dst)) ?_
@@ -807,19 +861,19 @@ theorem loop_step_withrs_eval {dst : driver_state} {th th' : thread_state}
     rw [if_pos rfl]
     unfold advance_step
     dsimp only
-    refine (runOne_bind_active (z := NOWAKEUP)
+    refine (runOne_bind_active (hfuel := by omega) (z := NOWAKEUP)
       (s' := { { dst with dr_step_counter := dst.dr_step_counter + 1 }
           with core_state0 := update_thread_state 0 th' dst.core_state0 }) ?_).trans ?_
-    · refine (runOne_bind_active (z := ()) (s' := dst) (by rfl)).trans ?_
-      refine (runOne_bind_active (z := th') (s' := dst)
-        (runOne_liftCore_run_of_eq hm)).trans ?_
-      refine (runOne_bind_active (z := ()) (by rfl)).trans ?_
+    · refine (runOne_bind_active (hfuel := by omega) (z := ()) (s' := dst) (by rfl)).trans ?_
+      refine (runOne_bind_active (hfuel := by omega) (z := th') (s' := dst)
+        (runOne_liftCore_run_of_eq (hfuel := by omega) hm)).trans ?_
+      refine (runOne_bind_active (hfuel := by omega) (z := ()) (by rfl)).trans ?_
       rfl
     · rfl
 
 /-- With-runstate round, TAU kind (`RSK_tau _ TSK_Misc` — Eif):
     identical round shape (the TSK_Misc kind skips the trace arm). -/
-theorem loop_step_withrs_tau {dst : driver_state} {th th' : thread_state}
+theorem loop_step_withrs_tau (hfuel : 0 < LemFuel.fuel) {dst : driver_state} {th th' : thread_state}
     {s : String} {m : core_runM thread_state}
     (hth : dst.core_state0.thread_states = [(0, (none, th))])
     {post : List core_step2}
@@ -831,7 +885,7 @@ theorem loop_step_withrs_tau {dst : driver_state} {th th' : thread_state}
         { { dst with dr_step_counter := dst.dr_step_counter + 1 }
             with core_state0 := update_thread_state 0 th' dst.core_state0 } := by
   conv => lhs; unfold drive_nonmemory_steps_aux2_lemFuel
-  refine (runOne_bind_active (z := Step_with_runstate2 (RSK_tau s TSK_Misc) m :: post)
+  refine (runOne_bind_active (hfuel := by omega) (z := Step_with_runstate2 (RSK_tau s TSK_Misc) m :: post)
     (s' := dst) ?_).trans ?_
   · rw [runOne_read]
     refine congrArg (fun x => (NDactive x, dst)) ?_
@@ -846,13 +900,13 @@ theorem loop_step_withrs_tau {dst : driver_state} {th th' : thread_state}
     rw [if_pos rfl]
     unfold advance_step
     dsimp only
-    refine (runOne_bind_active (z := NOWAKEUP)
+    refine (runOne_bind_active (hfuel := by omega) (z := NOWAKEUP)
       (s' := { { dst with dr_step_counter := dst.dr_step_counter + 1 }
           with core_state0 := update_thread_state 0 th' dst.core_state0 }) ?_).trans ?_
-    · refine (runOne_bind_active (z := ()) (s' := dst) (by rfl)).trans ?_
-      refine (runOne_bind_active (z := th') (s' := dst)
-        (runOne_liftCore_run_of_eq hm)).trans ?_
-      refine (runOne_bind_active (z := ()) (by rfl)).trans ?_
+    · refine (runOne_bind_active (hfuel := by omega) (z := ()) (s' := dst) (by rfl)).trans ?_
+      refine (runOne_bind_active (hfuel := by omega) (z := th') (s' := dst)
+        (runOne_liftCore_run_of_eq (hfuel := by omega) hm)).trans ?_
+      refine (runOne_bind_active (hfuel := by omega) (z := ()) (by rfl)).trans ?_
       rfl
     · rfl
 
@@ -860,7 +914,7 @@ theorem loop_step_withrs_tau {dst : driver_state} {th th' : thread_state}
     (perform_memop_request2 — hypothesis `hars` so the PtrEq instance
     below plugs in); no aid draw, no counter tick (Driver.lean:336's
     memop arm). -/
-theorem loop_step_memop {dst dst' : driver_state} {th : thread_state}
+theorem loop_step_memop (hfuel : 0 < LemFuel.fuel) {dst dst' : driver_state} {th : thread_state}
     {loc : CerbLocation.Loc} {mop : memop} {cvals : List value}
     {k : value → thread_state}
     (hth : dst.core_state0.thread_states = [(0, (none, th))])
@@ -872,7 +926,7 @@ theorem loop_step_memop {dst dst' : driver_state} {th : thread_state}
     runOne (drive_nonmemory_steps_aux2_lemFuel (Nat.succ fl) tds acc [0]) dst =
       runOne (drive_nonmemory_steps_aux2_lemFuel fl tds acc [0]) dst' := by
   conv => lhs; unfold drive_nonmemory_steps_aux2_lemFuel
-  refine (runOne_bind_active
+  refine (runOne_bind_active (hfuel := by omega)
     (z := Step_memop_request2 loc mop cvals 0 false k :: post)
     (s' := dst) ?_).trans ?_
   · rw [runOne_read]
@@ -888,8 +942,8 @@ theorem loop_step_memop {dst dst' : driver_state} {th : thread_state}
     rw [if_pos (show (!false) = true from rfl)]
     unfold advance_step
     dsimp only
-    refine (runOne_bind_active (z := NOWAKEUP) (s' := dst') ?_).trans ?_
-    · refine (runOne_bind_active (z := ()) (s' := dst') ?_).trans (by rfl)
+    refine (runOne_bind_active (hfuel := by omega) (z := NOWAKEUP) (s' := dst') ?_).trans ?_
+    · refine (runOne_bind_active (hfuel := by omega) (z := ()) (s' := dst') ?_).trans (by rfl)
       rw [if_neg (fun h => Bool.noConfusion h)]
       exact hars
     · rfl
@@ -900,7 +954,7 @@ end LoopIterationJ
     (perform_memop_request2's PtrEq arm, Driver.lean:288): liftMem
     eqPtrval, the continuation installed via update_core_state; no
     trace event. -/
-theorem ars_memop_active
+theorem ars_memop_active (hfuel : 2 ≤ LemFuel.fuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition))
     {loc : CerbLocation.Loc} {tid : Nat}
     {pv1 pv2 : CerbMem.PointerValue} {k : value → thread_state}
@@ -915,12 +969,12 @@ theorem ars_memop_active
           dst.core_state0 }) := by
   unfold perform_memop_request2
   dsimp only
-  refine (runOne_bind_active (z := k (if b then Vtrue else Vfalse))
+  refine (runOne_bind_active (hfuel := by omega) (z := k (if b then Vtrue else Vfalse))
     (s' := { dst with layout_state := σ' }) ?_).trans ?_
-  · refine (runOne_bind_active (z := b) (s' := { dst with layout_state := σ' })
+  · refine (runOne_bind_active (hfuel := by omega) (z := b) (s' := { dst with layout_state := σ' })
       ?_).trans (by rfl)
-    refine (runOne_bind_active (z := ()) (s' := dst) (by rfl)).trans ?_
-    exact runOne_liftMem_active (runOne_of_applyMemM happ)
+    refine (runOne_bind_active (hfuel := by omega) (z := ()) (s' := dst) (by rfl)).trans ?_
+    exact runOne_liftMem_active (hfuel := by omega) (runOne_of_applyMemM happ)
   · rw [runOne_update]
     rfl
 
@@ -933,8 +987,7 @@ composite `stepDischarge_*` scripts re-run with the payload kept). -/
 theorem step_ctx_if_true_ws {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {g : generic_pexpr Unit sym} {e2 e3 : CoreExpr}
     (hd : Decomp e ctx (ifRedex an g e2 e3))
-    (hsz : esize e ≤ lemDefaultFuel)
-    (hdg : peDepth g ≤ lemDefaultFuel)
+    (hdg : peDepth g ≤ LemFuel.fuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -946,7 +999,7 @@ theorem step_ctx_if_true_ws {an : List _root_.annot} {e : CoreExpr} {ctx : conte
       ∀ rs, m rs =
         Result (Defined { locUpdTh an th with arena := apply_ctx ctx e2 }, rs) := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, ifRedex an g e2 e3) :: rest := by
-    rw [harena]; exact hd.get_ctx_default hsz
+    rw [harena]; exact hd.get_ctx_default
   have key : ∃ (s : String) (m : core_runM thread_state),
       (step_ctx tds σ file ext tid (parent, th)).head? =
         some (Step_with_runstate2 (RSK_tau s TSK_Misc) m) ∧
@@ -974,8 +1027,7 @@ theorem step_ctx_if_true_ws {an : List _root_.annot} {e : CoreExpr} {ctx : conte
 theorem step_ctx_if_false_ws {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {g : generic_pexpr Unit sym} {e2 e3 : CoreExpr}
     (hd : Decomp e ctx (ifRedex an g e2 e3))
-    (hsz : esize e ≤ lemDefaultFuel)
-    (hdg : peDepth g ≤ lemDefaultFuel)
+    (hdg : peDepth g ≤ LemFuel.fuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -987,7 +1039,7 @@ theorem step_ctx_if_false_ws {an : List _root_.annot} {e : CoreExpr} {ctx : cont
       ∀ rs, m rs =
         Result (Defined { locUpdTh an th with arena := apply_ctx ctx e3 }, rs) := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, ifRedex an g e2 e3) :: rest := by
-    rw [harena]; exact hd.get_ctx_default hsz
+    rw [harena]; exact hd.get_ctx_default
   have key : ∃ (s : String) (m : core_runM thread_state),
       (step_ctx tds σ file ext tid (parent, th)).head? =
         some (Step_with_runstate2 (RSK_tau s TSK_Misc) m) ∧
@@ -1018,8 +1070,7 @@ theorem step_ctx_if_false_ws {an : List _root_.annot} {e : CoreExpr} {ctx : cont
 theorem step_ctx_pure_op_ws {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {pe : generic_pexpr Unit sym} {v : value}
     (hd : Decomp e ctx (pureRedex an pe))
-    (hsz : esize e ≤ lemDefaultFuel)
-    (hnv : valueFromPexpr pe = none) (hdp : peDepth pe ≤ lemDefaultFuel)
+    (hnv : valueFromPexpr pe = none) (hdp : peDepth pe ≤ LemFuel.fuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -1030,16 +1081,15 @@ theorem step_ctx_pure_op_ws {an : List _root_.annot} {e : CoreExpr} {ctx : conte
         Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, m rs = Result (Defined { locUpdTh an th with arena :=
         (apply_ctx ctx (Expr an (Epure (Pexpr [] () (PEval v))))) }, rs) := by
-  obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_pure_op_raw hd hsz hnv tds σ file ext tid parent th harena
+  obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_pure_op_raw hd hnv tds σ file ext tid parent th harena
   refine ⟨s, m, post, hsteps, fun rs => ?_⟩
   rw [hm rs, full_eval_bridge hv hdp σ]
   rfl
 
 /-- The plain-symbol instance (E1's statement). -/
-theorem step_ctx_pure_sym_ws {an : List _root_.annot} {e : CoreExpr} {ctx : context}
+theorem step_ctx_pure_sym_ws (hfuel : 0 < LemFuel.fuel) {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {pb : List _root_.annot} {x : sym} {v : value}
     (hd : Decomp e ctx (pureRedex an (Pexpr pb () (PEsym x))))
-    (hsz : esize e ≤ lemDefaultFuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -1050,7 +1100,7 @@ theorem step_ctx_pure_sym_ws {an : List _root_.annot} {e : CoreExpr} {ctx : cont
         Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, m rs = Result (Defined { locUpdTh an th with arena :=
         (apply_ctx ctx (Expr an (Epure (Pexpr [] () (PEval v))))) }, rs) :=
-  step_ctx_pure_op_ws hd hsz rfl (peDepth_sym_le pb x) tds σ file ext tid parent th harena hv
+  step_ctx_pure_op_ws hd rfl (peDepth_sym_le pb x hfuel) tds σ file ext tid parent th harena hv
 
 /-- THE JUMP, raw: one `RSK_eval` step whose monad reads the run
     state's `labeled` fiber (READ-ONLY — `state_except_read`) and
@@ -1060,11 +1110,10 @@ theorem step_ctx_run_ws {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {ra : core_run_annotation} {l : sym}
     {pes : List (generic_pexpr Unit sym)}
     (hd : Decomp e ctx (runRedex an ra l pes))
-    (hsz : esize e ≤ lemDefaultFuel)
     {Q : LabelMap} {params : List (sym × core_base_type)} {cont : CoreExpr}
     {vs : List value}
     (hl : lookupLabel Q l = some (params, cont))
-    (hdep : ∀ pe ∈ pes, peDepth pe ≤ lemDefaultFuel)
+    (hdep : ∀ pe ∈ pes, peDepth pe ≤ LemFuel.fuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (p : sym) (th : thread_state)
@@ -1078,7 +1127,7 @@ theorem step_ctx_run_ws {an : List _root_.annot} {e : CoreExpr} {ctx : context}
         m rs = Result (Defined { locUpdTh an th with
           env := (bindArgs params vs th.env), arena := cont }, rs) := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, runRedex an ra l pes) :: rest := by
-    rw [harena]; exact hd.get_ctx_default hsz
+    rw [harena]; exact hd.get_ctx_default
   have key : ∃ (s : String) (m : core_runM thread_state),
       (step_ctx tds σ file ext tid (parent, th)).head? =
         some (Step_with_runstate2 (RSK_eval s) m) ∧
@@ -1109,7 +1158,7 @@ theorem step_ctx_run_ws {an : List _root_.annot} {e : CoreExpr} {ctx : context}
          dsimp only []
          rw [hQ, bind0_some, hl']
          dsimp only []
-         rw [stExceptUndef_bind_apply,
+         rw [stExceptUndef_bind_apply, LemLibTheorems.lemListZip_eq,
            foldM_args_bridge _ (fun _ _ _ _ _ => rfl) params pes vs th.env rs
              hvs hdep]
          dsimp only []
@@ -1120,7 +1169,7 @@ theorem step_ctx_run_ws {an : List _root_.annot} {e : CoreExpr} {ctx : context}
          dsimp only []
          rw [hQ, bind0_some, hl']
          dsimp only []
-         rw [stExceptUndef_bind_apply,
+         rw [stExceptUndef_bind_apply, LemLibTheorems.lemListZip_eq,
            foldM_args_bridge _ (fun _ _ _ _ _ => rfl) params pes vs th.env rs
              hvs hdep]
          dsimp only []
@@ -1136,10 +1185,9 @@ theorem step_ctx_load_eval_ws {an : List _root_.annot} {e : CoreExpr} {ctx : con
     {pe2 : generic_pexpr Unit sym} {mo : memory_order}
     {pv : CerbMem.PointerValue}
     (hd : Decomp e ctx (loadOpRedex an loc ann ty pe2 mo))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hnv2 : valueFromPexpr pe2 = none)
     (hp2 : PePure pe2)
-    (hd2 : peDepth pe2 ≤ lemDefaultFuel)
+    (hd2 : peDepth pe2 ≤ LemFuel.fuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -1150,8 +1198,9 @@ theorem step_ctx_load_eval_ws {an : List _root_.annot} {e : CoreExpr} {ctx : con
         Step_with_runstate2 (RSK_eval s) m :: post ∧
       ∀ rs, m rs = Result (Defined { locUpdTh an th with
         arena := apply_ctx ctx (loadRedex an loc ann ty pv mo) }, rs) := by
+  have hfuel : 0 < LemFuel.fuel := Nat.lt_of_lt_of_le (peDepth_pos pe2) hd2
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, loadOpRedex an loc ann ty pe2 mo) :: rest := by
-    rw [harena]; exact hd.get_ctx_default hsz
+    rw [harena]; exact hd.get_ctx_default
   have key : ∃ (s : String) (m : core_runM thread_state),
       (step_ctx tds σ file ext tid (parent, th)).head? =
         some (Step_with_runstate2 (RSK_eval s) m) ∧
@@ -1167,7 +1216,7 @@ theorem step_ctx_load_eval_ws {an : List _root_.annot} {e : CoreExpr} {ctx : con
        rw [act_valueFromPexpr_none hp2 hnv2]
        dsimp only [act_valueFromPexpr, valueFromPexpr]
        refine ⟨_, _, rfl, fun rs => ?_⟩
-       rw [full_eval_bridge (v := Vctype ty) (evalPexpr_val _ _ _ _ _) (peDepth_val_le _ _) σ,
+       rw [full_eval_bridge (v := Vctype ty) (evalPexpr_val _ _ _ _ _) (peDepth_val_le _ _ hfuel) σ,
          full_eval_bridge hv2 hd2 σ]
        dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
          return1, except_return]
@@ -1182,10 +1231,9 @@ theorem step_ctx_kill_eval_ws {an : List _root_.annot} {e : CoreExpr} {ctx : con
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {kind : kill_kind}
     {pe : generic_pexpr Unit sym} {pv : CerbMem.PointerValue}
     (hd : Decomp e ctx (killOpRedex an loc ann kind pe))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexpr pe = none)
     (hp : PePure pe)
-    (hdp : peDepth pe ≤ lemDefaultFuel)
+    (hdp : peDepth pe ≤ LemFuel.fuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -1197,7 +1245,7 @@ theorem step_ctx_kill_eval_ws {an : List _root_.annot} {e : CoreExpr} {ctx : con
       ∀ rs, m rs = Result (Defined { locUpdTh an th with
         arena := apply_ctx ctx (killRedex an loc ann kind pv) }, rs) := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, killOpRedex an loc ann kind pe) :: rest := by
-    rw [harena]; exact hd.get_ctx_default hsz
+    rw [harena]; exact hd.get_ctx_default
   have key : ∃ (s : String) (m : core_runM thread_state),
       (step_ctx tds σ file ext tid (parent, th)).head? =
         some (Step_with_runstate2 (RSK_eval s) m) ∧
@@ -1228,11 +1276,10 @@ theorem step_ctx_store_eval_ws {an : List _root_.annot} {e : CoreExpr} {ctx : co
     {pe2 pe3 : generic_pexpr Unit sym} {mo : memory_order}
     {pv : CerbMem.PointerValue} {cv : value}
     (hd : Decomp e ctx (storeOpRedex an loc ann ty pe2 pe3 mo))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexprs [pe2, pe3] = none)
     (hp2 : PePure pe2) (hp3 : PePure pe3)
-    (hd2 : peDepth pe2 ≤ lemDefaultFuel)
-    (hd3 : peDepth pe3 ≤ lemDefaultFuel)
+    (hd2 : peDepth pe2 ≤ LemFuel.fuel)
+    (hd3 : peDepth pe3 ≤ LemFuel.fuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -1245,9 +1292,10 @@ theorem step_ctx_store_eval_ws {an : List _root_.annot} {e : CoreExpr} {ctx : co
       ∀ rs, m rs = Result (Defined { locUpdTh an th with
         arena := apply_ctx ctx (storeRedex an loc ann false ty pv cv mo) },
         rs) := by
+  have hfuel : 0 < LemFuel.fuel := Nat.lt_of_lt_of_le (peDepth_pos pe2) hd2
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena =
       (ctx, storeOpRedex an loc ann ty pe2 pe3 mo) :: rest := by
-    rw [harena]; exact hd.get_ctx_default hsz
+    rw [harena]; exact hd.get_ctx_default
   have key : ∃ (s : String) (m : core_runM thread_state),
       (step_ctx tds σ file ext tid (parent, th)).head? =
         some (Step_with_runstate2 (RSK_eval s) m) ∧
@@ -1270,7 +1318,7 @@ theorem step_ctx_store_eval_ws {an : List _root_.annot} {e : CoreExpr} {ctx : co
          try rw [ha2]
          dsimp only [act_valueFromPexpr, valueFromPexpr]
          refine ⟨_, _, rfl, fun rs => ?_⟩
-         rw [full_eval_bridge (v := Vctype ty) (evalPexpr_val _ _ _ _ _) (peDepth_val_le _ _) σ,
+         rw [full_eval_bridge (v := Vctype ty) (evalPexpr_val _ _ _ _ _) (peDepth_val_le _ _ hfuel) σ,
            full_eval_bridge hv2 hd2 σ,
            full_eval_bridge hv3 hd3 σ]
          dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
@@ -1287,11 +1335,10 @@ theorem step_ctx_alloc_eval_ws {an : List _root_.annot} {e : CoreExpr} {ctx : co
     {pe1 pe2 : generic_pexpr Unit sym} {pref : prefix0}
     {align size : CerbMem.IntegerValue}
     (hd : Decomp e ctx (allocOpRedex an loc ann pe1 pe2 pref))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexprs [pe1, pe2] = none)
     (hp1 : PePure pe1) (hp2 : PePure pe2)
-    (hd1 : peDepth pe1 ≤ lemDefaultFuel)
-    (hd2 : peDepth pe2 ≤ lemDefaultFuel)
+    (hd1 : peDepth pe1 ≤ LemFuel.fuel)
+    (hd2 : peDepth pe2 ≤ LemFuel.fuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -1304,7 +1351,7 @@ theorem step_ctx_alloc_eval_ws {an : List _root_.annot} {e : CoreExpr} {ctx : co
       ∀ rs, m rs = Result (Defined { locUpdTh an th with
         arena := apply_ctx ctx (allocRedex an loc ann align size pref) }, rs) := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, allocOpRedex an loc ann pe1 pe2 pref) :: rest := by
-    rw [harena]; exact hd.get_ctx_default hsz
+    rw [harena]; exact hd.get_ctx_default
   have key : ∃ (s : String) (m : core_runM thread_state),
       (step_ctx tds σ file ext tid (parent, th)).head? =
         some (Step_with_runstate2 (RSK_eval s) m) ∧
@@ -1344,11 +1391,10 @@ theorem step_ctx_create_eval_ws {an : List _root_.annot} {e : CoreExpr} {ctx : c
     {pe1 pe2 : generic_pexpr Unit sym} {pref : prefix0}
     {align : CerbMem.IntegerValue} {ty : ctype}
     (hd : Decomp e ctx (createOpRedex an loc ann pe1 pe2 pref))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexprs [pe1, pe2] = none)
     (hp1 : PePure pe1) (hp2 : PePure pe2)
-    (hd1 : peDepth pe1 ≤ lemDefaultFuel)
-    (hd2 : peDepth pe2 ≤ lemDefaultFuel)
+    (hd1 : peDepth pe1 ≤ LemFuel.fuel)
+    (hd2 : peDepth pe2 ≤ LemFuel.fuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -1361,7 +1407,7 @@ theorem step_ctx_create_eval_ws {an : List _root_.annot} {e : CoreExpr} {ctx : c
       ∀ rs, m rs = Result (Defined { locUpdTh an th with
         arena := apply_ctx ctx (createRedex an loc ann align ty pref) }, rs) := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, createOpRedex an loc ann pe1 pe2 pref) :: rest := by
-    rw [harena]; exact hd.get_ctx_default hsz
+    rw [harena]; exact hd.get_ctx_default
   have key : ∃ (s : String) (m : core_runM thread_state),
       (step_ctx tds σ file ext tid (parent, th)).head? =
         some (Step_with_runstate2 (RSK_eval s) m) ∧
@@ -1402,9 +1448,8 @@ theorem step_ctx_save_eval_ws {an : List _root_.annot} {e : CoreExpr} {ctx : con
       Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym))}
     {body : CoreExpr} {cvals : List value}
     (hd : Decomp e ctx (saveRedex an sb ps body))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexprs (saveParamPexprs ps) = none)
-    (hdep : ∀ pe ∈ saveParamPexprs ps, peDepth pe ≤ lemDefaultFuel)
+    (hdep : ∀ pe ∈ saveParamPexprs ps, peDepth pe ≤ LemFuel.fuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -1417,7 +1462,7 @@ theorem step_ctx_save_eval_ws {an : List _root_.annot} {e : CoreExpr} {ctx : con
         arena := apply_ctx ctx (saveRedex an sb (saveParamsWithValues ps cvals) body) },
         rs) := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, saveRedex an sb ps body) :: rest := by
-    rw [harena]; exact hd.get_ctx_default hsz
+    rw [harena]; exact hd.get_ctx_default
   have key : ∃ (s : String) (m : core_runM thread_state),
       (step_ctx tds σ file ext tid (parent, th)).head? =
         some (Step_with_runstate2 (RSK_eval s) m) ∧
@@ -1462,10 +1507,9 @@ theorem step_ctx_save_eval_ws {an : List _root_.annot} {e : CoreExpr} {ctx : con
 theorem step_ctx_memop_eval_ws {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {mop : memop} {pe1 pe2 : generic_pexpr Unit sym} {v1 v2 : value}
     (hd : Decomp e ctx (memopRedex an mop [pe1, pe2]))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexprs [pe1, pe2] = none)
-    (hd1 : peDepth pe1 ≤ lemDefaultFuel)
-    (hd2 : peDepth pe2 ≤ lemDefaultFuel)
+    (hd1 : peDepth pe1 ≤ LemFuel.fuel)
+    (hd2 : peDepth pe2 ≤ LemFuel.fuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -1479,7 +1523,7 @@ theorem step_ctx_memop_eval_ws {an : List _root_.annot} {e : CoreExpr} {ctx : co
         arena := apply_ctx ctx (Expr an (Ememop mop
           [Pexpr [] () (PEval v1), Pexpr [] () (PEval v2)])) }, rs) := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, memopRedex an mop [pe1, pe2]) :: rest := by
-    rw [harena]; exact hd.get_ctx_default hsz
+    rw [harena]; exact hd.get_ctx_default
   have key : ∃ (s : String) (m : core_runM thread_state),
       (step_ctx tds σ file ext tid (parent, th)).head? =
         some (Step_with_runstate2 (RSK_eval s) m) ∧
@@ -1518,7 +1562,7 @@ variable (fl : Nat) (tds : Fmap sym (CerbLocation.Loc × tag_definition))
     negative-action round draws the two supplies (`hm` delivers the
     successor run state `rs'`); `advance_step`'s with-runstate arm installs
     the thread and the returned run state (driver.lem:944–958). -/
-theorem loop_step_withrs_tau_rs {dst : driver_state} {th th' : thread_state}
+theorem loop_step_withrs_tau_rs (hfuel : 0 < LemFuel.fuel) {dst : driver_state} {th th' : thread_state}
     {s : String} {m : core_runM thread_state} {rs' : core_run_state}
     (hth : dst.core_state0.thread_states = [(0, (none, th))])
     {post : List core_step2}
@@ -1530,7 +1574,7 @@ theorem loop_step_withrs_tau_rs {dst : driver_state} {th th' : thread_state}
         { { dst with dr_step_counter := dst.dr_step_counter + 1, core_run_state0 := rs' }
             with core_state0 := update_thread_state 0 th' dst.core_state0 } := by
   conv => lhs; unfold drive_nonmemory_steps_aux2_lemFuel
-  refine (runOne_bind_active (z := Step_with_runstate2 (RSK_tau s TSK_Misc) m :: post)
+  refine (runOne_bind_active (hfuel := by omega) (z := Step_with_runstate2 (RSK_tau s TSK_Misc) m :: post)
     (s' := dst) ?_).trans ?_
   · rw [runOne_read]
     refine congrArg (fun x => (NDactive x, dst)) ?_
@@ -1545,19 +1589,19 @@ theorem loop_step_withrs_tau_rs {dst : driver_state} {th th' : thread_state}
     rw [if_pos rfl]
     unfold advance_step
     dsimp only
-    refine (runOne_bind_active (z := NOWAKEUP)
+    refine (runOne_bind_active (hfuel := by omega) (z := NOWAKEUP)
       (s' := { { dst with dr_step_counter := dst.dr_step_counter + 1, core_run_state0 := rs' }
           with core_state0 := update_thread_state 0 th' dst.core_state0 }) ?_).trans ?_
-    · refine (runOne_bind_active (z := ()) (s' := dst) (by rfl)).trans ?_
-      refine (runOne_bind_active (z := th') (s' := { dst with core_run_state0 := rs' })
+    · refine (runOne_bind_active (hfuel := by omega) (z := ()) (s' := dst) (by rfl)).trans ?_
+      refine (runOne_bind_active (hfuel := by omega) (z := th') (s' := { dst with core_run_state0 := rs' })
         ?_).trans ?_
       · unfold liftCore_run
-        refine (runOne_bind_active (z := dst) (by rfl)).trans ?_
+        refine (runOne_bind_active (hfuel := by omega) (z := dst) (by rfl)).trans ?_
         rw [show stExceptUndef_run m dst.core_run_state0 = Result (Defined th', rs') from hm]
-        refine (runOne_bind_active (z := ()) (s' := { dst with core_run_state0 := rs' })
+        refine (runOne_bind_active (hfuel := by omega) (z := ()) (s' := { dst with core_run_state0 := rs' })
           (by rfl)).trans ?_
         rfl
-      refine (runOne_bind_active (z := ()) (by rfl)).trans ?_
+      refine (runOne_bind_active (hfuel := by omega) (z := ()) (by rfl)).trans ?_
       rfl
     · rfl
 
@@ -1571,11 +1615,10 @@ theorem step_ctx_excluded_store_eval_ws {an : List _root_.annot} {e : CoreExpr} 
     {pe2 pe3 : generic_pexpr Unit sym} {mo : memory_order}
     {pv : CerbMem.PointerValue} {cv : value}
     (hd : Decomp e ctx (excludedStoreOpRedex an n loc ann ty pe2 pe3 mo))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexprs [pe2, pe3] = none)
     (hp2 : PePure pe2) (hp3 : PePure pe3)
-    (hd2 : peDepth pe2 ≤ lemDefaultFuel)
-    (hd3 : peDepth pe3 ≤ lemDefaultFuel)
+    (hd2 : peDepth pe2 ≤ LemFuel.fuel)
+    (hd3 : peDepth pe3 ≤ LemFuel.fuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -1588,9 +1631,10 @@ theorem step_ctx_excluded_store_eval_ws {an : List _root_.annot} {e : CoreExpr} 
       ∀ rs, m rs = Result (Defined { locUpdTh an th with
         arena := apply_ctx ctx (excludedStoreRedex an n loc ann false ty pv cv mo) },
         rs) := by
+  have hfuel : 0 < LemFuel.fuel := Nat.lt_of_lt_of_le (peDepth_pos pe2) hd2
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena =
       (ctx, excludedStoreOpRedex an n loc ann ty pe2 pe3 mo) :: rest := by
-    rw [harena]; exact hd.get_ctx_default hsz
+    rw [harena]; exact hd.get_ctx_default
   have key : ∃ (s : String) (m : core_runM thread_state),
       (step_ctx tds σ file ext tid (parent, th)).head? =
         some (Step_with_runstate2 (RSK_eval s) m) ∧
@@ -1613,7 +1657,7 @@ theorem step_ctx_excluded_store_eval_ws {an : List _root_.annot} {e : CoreExpr} 
          try rw [ha2]
          dsimp only [act_valueFromPexpr, valueFromPexpr]
          refine ⟨_, _, rfl, fun rs => ?_⟩
-         rw [full_eval_bridge (v := Vctype ty) (evalPexpr_val _ _ _ _ _) (peDepth_val_le _ _) σ,
+         rw [full_eval_bridge (v := Vctype ty) (evalPexpr_val _ _ _ _ _) (peDepth_val_le _ _ hfuel) σ,
            full_eval_bridge hv2 hd2 σ,
            full_eval_bridge hv3 hd3 σ]
          dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
@@ -1630,9 +1674,8 @@ theorem step_ctx_excluded_store_eval_ws {an : List _root_.annot} {e : CoreExpr} 
 theorem step_ctx_case_eval_ws {an : List _root_.annot} {e : CoreExpr} {ctx : context}
     {pe : generic_pexpr Unit sym} {pats : List (pattern × CoreExpr)} {cval : value}
     (hd : Decomp e ctx (caseRedex an pe pats))
-    (hsz : esize e ≤ lemDefaultFuel)
     (hnv : valueFromPexpr pe = none) (hp : PePure pe)
-    (hdp : peDepth pe ≤ lemDefaultFuel)
+    (hdp : peDepth pe ≤ LemFuel.fuel)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
     (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
     (tid : Nat) (parent : Option Nat) (th : thread_state)
@@ -1644,7 +1687,7 @@ theorem step_ctx_case_eval_ws {an : List _root_.annot} {e : CoreExpr} {ctx : con
       ∀ rs, m rs = Result (Defined { locUpdTh an th with
         arena := apply_ctx ctx (caseRedex an (Pexpr [] () (PEval cval)) pats) }, rs) := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, caseRedex an pe pats) :: rest := by
-    rw [harena]; exact hd.get_ctx_default hsz
+    rw [harena]; exact hd.get_ctx_default
   have key : ∃ (s : String) (m : core_runM thread_state),
       (step_ctx tds σ file ext tid (parent, th)).head? =
         some (Step_with_runstate2 (RSK_eval s) m) ∧
@@ -1687,7 +1730,7 @@ E1: the driver thread's `current_loc` is TIED to the control's `curLoc`
 the general arm's location write (`locUpdTh`, Core_reduction.lean:484)
 is the mirror's `Ctl.upd` (`locUpdTh_ctl`). The control-preserving
 rounds are those keeping the call stack (`hκ`). -/
-theorem loop_step_frag_same' {M₀ : MachineCtx} {ctl ctl' : Ctl}
+theorem loop_step_frag_same' (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCtx} {ctl ctl' : Ctl}
     (htd : M₀.tagDefs = fmapEmpty) (hex : M₀.extern = fmapEmpty)
     {th₀ : thread_state} (hcl : th₀.current_loc = ctl.curLoc)
     (fl : Nat) (acc : Fmap thread_id (List core_step2))
@@ -1701,7 +1744,7 @@ theorem loop_step_frag_same' {M₀ : MachineCtx} {ctl ctl' : Ctl}
         LabeledAt dst.core_run_state0 p (M₀.labelsAt ctl.proc))
     (hsup : dst.core_run_state0.sym_supply = ctl.sup.sym ∧
       dst.core_run_state0.excluded_supply = ctl.sup.excl)
-    (hf : Frag e) (hsz : esize e ≤ lemDefaultFuel)
+    (hf : Frag e)
     (hs : Step M₀ (e, ev0 :: evs, ctl, dst.layout_state) (e', ρ', ctl', σ'))
     (hκ : ctl'.κ = ctl.κ) :
     ∃ (rs' : core_run_state) (tr : List trace_event) (ctr : Nat),
@@ -1727,7 +1770,7 @@ theorem loop_step_frag_same' {M₀ : MachineCtx} {ctl ctl' : Ctl}
       obtain ⟨rfl, rfl, rfl, rfl, -⟩ := Step.annot_val_inv hs hκ
       refine ⟨dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsup, ?_⟩
       rw [← hcl]
-      exact loop_step_tau fl fmapEmpty acc hth
+      exact loop_step_tau (hfuel := by omega) fl fmapEmpty acc hth
         (step_ctx_remove_annot ds v fmapEmpty dst.layout_state dst.core_file
           dst.core_extern 0 none
           { th₀ with arena := ofValA (.annot a a2 b ds v), env := ev0 :: evs } rfl)
@@ -1739,7 +1782,7 @@ theorem loop_step_frag_same' {M₀ : MachineCtx} {ctl ctl' : Ctl}
     ⟨aN, actN, ctxB, ctxA, rfl, hbr, heqN⟩
   · obtain ⟨he', hρ', hc', hσ'⟩ := Config.mk_inj heq
     subst he' hρ' hc' hσ'
-    have hccall := hd.unseq_ccall_false hsz
+    have hccall := hd.unseq_ccall_false
     have hrj := hd.redex
     cases hrj with
     | @call an ra f pes => exact absurd rfl (hnc an ra f pes)
@@ -1750,7 +1793,7 @@ theorem loop_step_frag_same' {M₀ : MachineCtx} {ctl ctl' : Ctl}
       rw [htd] at hmv hmem
       obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
       subst h1 h2 h3 h4
-      obtain ⟨post, hsteps⟩ := step_ctx_excluded_store hd hsz fmapEmpty hmv
+      obtain ⟨post, hsteps⟩ := step_ctx_excluded_store hd fmapEmpty hmv
         dst.layout_state dst.core_file dst.core_extern 0 none
         { th₀ with arena := e, env := ev0 :: evs } rfl
       rw [hccall, MachineCtx.locUpdTh_ctl hcl] at hsteps
@@ -1759,12 +1802,12 @@ theorem loop_step_frag_same' {M₀ : MachineCtx} {ctl ctl' : Ctl}
         ME_store (requestLoc { th₀ with arena := e, env := ev0 :: evs, current_loc := (ctl.upd an).curLoc } loc)
           none ty lk pv mv :: dst.trace,
         dst.dr_step_counter, rfl, hsup, ?_⟩
-      exact loop_step_action fl fmapEmpty acc hth hsteps
-        (ars_store_active (tid := 0)
+      exact loop_step_action (hfuel := by omega) fl fmapEmpty acc hth hsteps
+        (ars_store_active (hfuel := by omega) (tid := 0)
           (aid := dst.core_run_state0.aid_supply) hmem)
     | @excluded_store_op an n loc ann ty pe2 pe3 mo hnvE =>
       obtain ⟨hp2, hp3, hd2, hd3⟩ : PePure pe2 ∧ PePure pe3 ∧
-          peDepth pe2 ≤ lemDefaultFuel ∧ peDepth pe3 ≤ lemDefaultFuel := by
+          peDepth pe2 ≤ LemFuel.fuel ∧ peDepth pe3 ≤ LemFuel.fuel := by
         cases hfr with
         | excluded_store =>
           rw [valueFromPexprs_pair, valueFromPexpr_val, valueFromPexpr_val] at hnvE
@@ -1774,20 +1817,20 @@ theorem loop_step_frag_same' {M₀ : MachineCtx} {ctl ctl' : Ctl}
       obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
       subst h1 h2 h3 h4
       rw [htd, hex] at hv2 hv3
-      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_excluded_store_eval_ws hd hsz hnvE hp2 hp3 hd2 hd3
+      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_excluded_store_eval_ws hd hnvE hp2 hp3 hd2 hd3
         fmapEmpty dst.layout_state dst.core_file dst.core_extern 0 none
         { th₀ with arena := e, env := ev0 :: evs } rfl
         (by rw [hext, hfile]; exact hv2) (by rw [hext, hfile]; exact hv3)
       rw [MachineCtx.locUpdTh_ctl hcl] at hm
       refine ⟨dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsup, ?_⟩
-      exact loop_step_withrs_eval fl fmapEmpty acc hth hsteps
+      exact loop_step_withrs_eval (hfuel := by omega) fl fmapEmpty acc hth hsteps
         (hm dst.core_run_state0)
     | @store an loc ann lk ty pv cv mo =>
       obtain ⟨mv, fp, σ'', hmv, hmem, hout⟩ := hr.store_inv
       rw [htd] at hmv hmem
       obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
       subst h1 h2 h3 h4
-      obtain ⟨post, hsteps⟩ := step_ctx_store hd hsz fmapEmpty hmv
+      obtain ⟨post, hsteps⟩ := step_ctx_store hd fmapEmpty hmv
         dst.layout_state dst.core_file dst.core_extern 0 none
         { th₀ with arena := e, env := ev0 :: evs } rfl
       rw [hccall, MachineCtx.locUpdTh_ctl hcl] at hsteps
@@ -1796,15 +1839,15 @@ theorem loop_step_frag_same' {M₀ : MachineCtx} {ctl ctl' : Ctl}
         ME_store (requestLoc { th₀ with arena := e, env := ev0 :: evs, current_loc := (ctl.upd an).curLoc } loc)
           none ty lk pv mv :: dst.trace,
         dst.dr_step_counter, rfl, hsup, ?_⟩
-      exact loop_step_action fl fmapEmpty acc hth hsteps
-        (ars_store_active (tid := 0)
+      exact loop_step_action (hfuel := by omega) fl fmapEmpty acc hth hsteps
+        (ars_store_active (hfuel := by omega) (tid := 0)
           (aid := dst.core_run_state0.aid_supply) hmem)
     | @load an loc ann ty pv mo =>
       obtain ⟨fp, mval, σ'', hmem, hout⟩ := hr.load_inv
       rw [htd] at hmem
       obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
       subst h1 h2 h3 h4
-      obtain ⟨post, hsteps⟩ := step_ctx_load hd hsz fmapEmpty
+      obtain ⟨post, hsteps⟩ := step_ctx_load hd fmapEmpty
         dst.layout_state dst.core_file dst.core_extern 0 none
         { th₀ with arena := e, env := ev0 :: evs } rfl
       rw [hccall, MachineCtx.locUpdTh_ctl hcl] at hsteps
@@ -1813,15 +1856,15 @@ theorem loop_step_frag_same' {M₀ : MachineCtx} {ctl ctl' : Ctl}
         ME_load (requestLoc { th₀ with arena := e, env := ev0 :: evs, current_loc := (ctl.upd an).curLoc } loc)
           none ty pv mval :: dst.trace,
         dst.dr_step_counter, rfl, hsup, ?_⟩
-      exact loop_step_action fl fmapEmpty acc hth hsteps
-        (ars_load_active (tid := 0)
+      exact loop_step_action (hfuel := by omega) fl fmapEmpty acc hth hsteps
+        (ars_load_active (hfuel := by omega) (tid := 0)
           (aid := dst.core_run_state0.aid_supply) hmem)
     | @create an loc ann align ty pref =>
       obtain ⟨pv, σ'', hmem, hout⟩ := hr.create_inv
       rw [htd] at hmem
       obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
       subst h1 h2 h3 h4
-      obtain ⟨post, hsteps⟩ := step_ctx_create hd hsz fmapEmpty
+      obtain ⟨post, hsteps⟩ := step_ctx_create hd fmapEmpty
         dst.layout_state dst.core_file dst.core_extern 0 none
         { th₀ with arena := e, env := ev0 :: evs } rfl
       rw [hccall, MachineCtx.locUpdTh_ctl hcl] at hsteps
@@ -1829,12 +1872,12 @@ theorem loop_step_frag_same' {M₀ : MachineCtx} {ctl ctl' : Ctl}
           dst.core_run_state0.aid_supply + 1 },
         ME_allocate_object 0 pref align ty none pv :: dst.trace,
         dst.dr_step_counter, rfl, hsup, ?_⟩
-      exact loop_step_action fl fmapEmpty acc hth hsteps
-        (ars_create_active (tid := 0)
+      exact loop_step_action (hfuel := by omega) fl fmapEmpty acc hth hsteps
+        (ars_create_active (hfuel := by omega) (tid := 0)
           (aid := dst.core_run_state0.aid_supply) hmem)
     | @create_op an loc ann pref pe1 pe2 hnvC =>
       obtain ⟨hp1, hp2, hd1, hd2⟩ : PePure pe1 ∧ PePure pe2 ∧
-          peDepth pe1 ≤ lemDefaultFuel ∧ peDepth pe2 ≤ lemDefaultFuel := by
+          peDepth pe1 ≤ LemFuel.fuel ∧ peDepth pe2 ≤ LemFuel.fuel := by
         cases hfr with
         | create =>
           rw [valueFromPexprs_pair, valueFromPexpr_val, valueFromPexpr_val] at hnvC
@@ -1844,20 +1887,20 @@ theorem loop_step_frag_same' {M₀ : MachineCtx} {ctl ctl' : Ctl}
       obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
       subst h1 h2 h3 h4
       rw [htd, hex] at hv1 hv2
-      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_create_eval_ws hd hsz hnvC hp1 hp2 hd1 hd2
+      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_create_eval_ws hd hnvC hp1 hp2 hd1 hd2
         fmapEmpty dst.layout_state dst.core_file dst.core_extern 0 none
         { th₀ with arena := e, env := ev0 :: evs } rfl
         (by rw [hext, hfile]; exact hv1) (by rw [hext, hfile]; exact hv2)
       rw [MachineCtx.locUpdTh_ctl hcl] at hm
       refine ⟨dst.core_run_state0, dst.trace, dst.dr_step_counter + 1,
         rfl, hsup, ?_⟩
-      exact loop_step_withrs_eval fl fmapEmpty acc hth hsteps
+      exact loop_step_withrs_eval (hfuel := by omega) fl fmapEmpty acc hth hsteps
         (hm dst.core_run_state0)
     | @kill an loc ann kind pv =>
       obtain ⟨σ'', hmem, hout⟩ := hr.kill_inv
       obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
       subst h1 h2 h3 h4
-      obtain ⟨post, hsteps⟩ := step_ctx_kill hd hsz fmapEmpty
+      obtain ⟨post, hsteps⟩ := step_ctx_kill hd fmapEmpty
         dst.layout_state dst.core_file dst.core_extern 0 none
         { th₀ with arena := e, env := ev0 :: evs } rfl
       rw [hccall, MachineCtx.locUpdTh_ctl hcl] at hsteps
@@ -1866,11 +1909,11 @@ theorem loop_step_frag_same' {M₀ : MachineCtx} {ctl ctl' : Ctl}
         ME_kill (requestLoc { th₀ with arena := e, env := ev0 :: evs, current_loc := (ctl.upd an).curLoc } loc)
           (is_dynamic kind) pv :: dst.trace,
         dst.dr_step_counter, rfl, hsup, ?_⟩
-      exact loop_step_action fl fmapEmpty acc hth hsteps
-        (ars_kill_active (tid := 0)
+      exact loop_step_action (hfuel := by omega) fl fmapEmpty acc hth hsteps
+        (ars_kill_active (hfuel := by omega) (tid := 0)
           (aid := dst.core_run_state0.aid_supply) hmem)
     | @kill_op an loc ann kind pe hnvK =>
-      obtain ⟨hpK, hdK⟩ : PePure pe ∧ peDepth pe ≤ lemDefaultFuel := by
+      obtain ⟨hpK, hdK⟩ : PePure pe ∧ peDepth pe ≤ LemFuel.fuel := by
         cases hfr with
         | kill =>
           rw [show valueFromPexpr (Pexpr [] () (PEval
@@ -1881,20 +1924,20 @@ theorem loop_step_frag_same' {M₀ : MachineCtx} {ctl ctl' : Ctl}
       obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
       subst h1 h2 h3 h4
       rw [htd, hex] at hv
-      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_kill_eval_ws hd hsz hnvK hpK hdK
+      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_kill_eval_ws hd hnvK hpK hdK
         fmapEmpty dst.layout_state dst.core_file dst.core_extern 0 none
         { th₀ with arena := e, env := ev0 :: evs } rfl
         (by rw [hext, hfile]; exact hv)
       rw [MachineCtx.locUpdTh_ctl hcl] at hm
       refine ⟨dst.core_run_state0, dst.trace, dst.dr_step_counter + 1,
         rfl, hsup, ?_⟩
-      exact loop_step_withrs_eval fl fmapEmpty acc hth hsteps
+      exact loop_step_withrs_eval (hfuel := by omega) fl fmapEmpty acc hth hsteps
         (hm dst.core_run_state0)
     | @alloc an loc ann align size pref =>
       obtain ⟨pv, σ'', hmem, hout⟩ := hr.alloc_inv
       obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
       subst h1 h2 h3 h4
-      obtain ⟨post, hsteps⟩ := step_ctx_alloc hd hsz fmapEmpty
+      obtain ⟨post, hsteps⟩ := step_ctx_alloc hd fmapEmpty
         dst.layout_state dst.core_file dst.core_extern 0 none
         { th₀ with arena := e, env := ev0 :: evs } rfl
       rw [hccall, MachineCtx.locUpdTh_ctl hcl] at hsteps
@@ -1902,12 +1945,12 @@ theorem loop_step_frag_same' {M₀ : MachineCtx} {ctl ctl' : Ctl}
           dst.core_run_state0.aid_supply + 1 },
         ME_allocate_region 0 pref align size pv :: dst.trace,
         dst.dr_step_counter, rfl, hsup, ?_⟩
-      exact loop_step_action fl fmapEmpty acc hth hsteps
-        (ars_alloc_active (tid := 0)
+      exact loop_step_action (hfuel := by omega) fl fmapEmpty acc hth hsteps
+        (ars_alloc_active (hfuel := by omega) (tid := 0)
           (aid := dst.core_run_state0.aid_supply) hmem)
     | @alloc_op an loc ann pref pe1 pe2 hnvA =>
       obtain ⟨hp1, hp2, hd1, hd2⟩ : PePure pe1 ∧ PePure pe2 ∧
-          peDepth pe1 ≤ lemDefaultFuel ∧ peDepth pe2 ≤ lemDefaultFuel := by
+          peDepth pe1 ≤ LemFuel.fuel ∧ peDepth pe2 ≤ LemFuel.fuel := by
         cases hfr with
         | alloc =>
           rw [valueFromPexprs_pair, valueFromPexpr_val, valueFromPexpr_val] at hnvA
@@ -1917,14 +1960,14 @@ theorem loop_step_frag_same' {M₀ : MachineCtx} {ctl ctl' : Ctl}
       obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
       subst h1 h2 h3 h4
       rw [htd, hex] at hv1 hv2
-      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_alloc_eval_ws hd hsz hnvA hp1 hp2 hd1 hd2
+      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_alloc_eval_ws hd hnvA hp1 hp2 hd1 hd2
         fmapEmpty dst.layout_state dst.core_file dst.core_extern 0 none
         { th₀ with arena := e, env := ev0 :: evs } rfl
         (by rw [hext, hfile]; exact hv1) (by rw [hext, hfile]; exact hv2)
       rw [MachineCtx.locUpdTh_ctl hcl] at hm
       refine ⟨dst.core_run_state0, dst.trace, dst.dr_step_counter + 1,
         rfl, hsup, ?_⟩
-      exact loop_step_withrs_eval fl fmapEmpty acc hth hsteps
+      exact loop_step_withrs_eval (hfuel := by omega) fl fmapEmpty acc hth hsteps
         (hm dst.core_run_state0)
     | @beta_pure an pa a1 b1 bty v e2 =>
       rcases hr.sseq_inv with ⟨e1', ρ'', ctl'', σ'', hnj, hnc', hnv', hstep, hout⟩ |
@@ -1943,12 +1986,12 @@ theorem loop_step_frag_same' {M₀ : MachineCtx} {ctl ctl' : Ctl}
           simpa using ofValA_inj he1
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        obtain ⟨post, hsteps⟩ := step_ctx_beta_pure hd hsz fmapEmpty dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_beta_pure hd fmapEmpty dst.layout_state
           dst.core_file dst.core_extern 0 none
           { th₀ with arena := e, env := ev0 :: evs } rfl rfl
         rw [MachineCtx.locUpdTh_ctl hcl] at hsteps
         refine ⟨dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsup, ?_⟩
-        exact loop_step_tau fl fmapEmpty acc hth hsteps
+        exact loop_step_tau (hfuel := by omega) fl fmapEmpty acc hth hsteps
       · cases ofValA_inj he1
       · rw [jumpRedex?_ofValA] at hj; cases hj
       · exact (specPat_ne_base hpat).elim
@@ -1976,12 +2019,12 @@ theorem loop_step_frag_same' {M₀ : MachineCtx} {ctl ctl' : Ctl}
           simpa using ofValA_inj he1
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        obtain ⟨post, hsteps⟩ := step_ctx_beta_annot hd hsz fmapEmpty dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_beta_annot hd fmapEmpty dst.layout_state
           dst.core_file dst.core_extern 0 none
           { th₀ with arena := e, env := ev0 :: evs } rfl rfl
         rw [MachineCtx.locUpdTh_ctl hcl] at hsteps
         refine ⟨dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsup, ?_⟩
-        exact loop_step_tau fl fmapEmpty acc hth hsteps
+        exact loop_step_tau (hfuel := by omega) fl fmapEmpty acc hth hsteps
       · rw [jumpRedex?_ofValA] at hj; cases hj
       · exact (specPat_ne_base hpat).elim
       · exact (specPat_ne_base hpat).elim
@@ -2005,12 +2048,12 @@ theorem loop_step_frag_same' {M₀ : MachineCtx} {ctl ctl' : Ctl}
           simpa using ofValA_inj he1
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        obtain ⟨post, hsteps⟩ := step_ctx_wseq_pure hd hsz fmapEmpty dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_wseq_pure hd fmapEmpty dst.layout_state
           dst.core_file dst.core_extern 0 none
           { th₀ with arena := e, env := ev0 :: evs } rfl rfl
         rw [MachineCtx.locUpdTh_ctl hcl] at hsteps
         refine ⟨dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsup, ?_⟩
-        exact loop_step_tau fl fmapEmpty acc hth hsteps
+        exact loop_step_tau (hfuel := by omega) fl fmapEmpty acc hth hsteps
       · cases ofValA_inj he1
       · rw [jumpRedex?_ofValA] at hj; cases hj
       · exact (symPat_ne_base hpatS1).elim
@@ -2034,12 +2077,12 @@ theorem loop_step_frag_same' {M₀ : MachineCtx} {ctl ctl' : Ctl}
           simpa using ofValA_inj he1
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        obtain ⟨post, hsteps⟩ := step_ctx_wseq_annot hd hsz fmapEmpty dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_wseq_annot hd fmapEmpty dst.layout_state
           dst.core_file dst.core_extern 0 none
           { th₀ with arena := e, env := ev0 :: evs } rfl rfl
         rw [MachineCtx.locUpdTh_ctl hcl] at hsteps
         refine ⟨dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsup, ?_⟩
-        exact loop_step_tau fl fmapEmpty acc hth hsteps
+        exact loop_step_tau (hfuel := by omega) fl fmapEmpty acc hth hsteps
       · rw [jumpRedex?_ofValA] at hj; cases hj
       · exact (symPat_ne_base hpatS1).elim
       · exact (symPat_ne_base hpatS2).elim
@@ -2058,67 +2101,67 @@ theorem loop_step_frag_same' {M₀ : MachineCtx} {ctl ctl' : Ctl}
         subst hb1 hb3 hb4
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        obtain ⟨post, hsteps⟩ := step_ctx_merge hd hirr hsz fmapEmpty dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_merge hd hirr fmapEmpty dst.layout_state
           dst.core_file dst.core_extern 0 none
           { th₀ with arena := e, env := ev0 :: evs } rfl
         rw [MachineCtx.locUpdTh_ctl hcl] at hsteps
         refine ⟨dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsup, ?_⟩
-        exact loop_step_tau fl fmapEmpty acc hth hsteps
+        exact loop_step_tau (hfuel := by omega) fl fmapEmpty acc hth hsteps
       · rw [show annotRooted (Expr a2 (Eannot ds2 b)) = true from rfl] at hg
         cases hg
       · exact (hcall.ne_same_κ hκ).elim
       · cases hb'
     | @save an sb ps body =>
-      have hdep : ∀ pe ∈ saveParamPexprs ps, peDepth pe ≤ lemDefaultFuel := by
+      have hdep : ∀ pe ∈ saveParamPexprs ps, peDepth pe ≤ LemFuel.fuel := by
         cases hfr with
         | save _ hdep _ => exact hdep
       rcases hr.save_inv with ⟨cvals, ev0', evs', hρeq, hvals, hout⟩ |
           ⟨cvals, hnvS, hvals, hout⟩
       · obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        obtain ⟨post, hsteps⟩ := step_ctx_save hd hsz hvals fmapEmpty dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_save hd hvals fmapEmpty dst.layout_state
           dst.core_file dst.core_extern 0 none
           { th₀ with arena := e, env := ev0 :: evs } rfl rfl
         rw [MachineCtx.locUpdTh_ctl hcl] at hsteps
         refine ⟨dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsup, ?_⟩
-        exact loop_step_tau fl fmapEmpty acc hth hsteps
+        exact loop_step_tau (hfuel := by omega) fl fmapEmpty acc hth hsteps
       · obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
         rw [htd, hex] at hvals
-        obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_save_eval_ws hd hsz hnvS hdep
+        obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_save_eval_ws hd hnvS hdep
           fmapEmpty dst.layout_state dst.core_file dst.core_extern 0 none
           { th₀ with arena := e, env := ev0 :: evs } rfl
           (by rw [hext, hfile]; exact hvals)
         rw [MachineCtx.locUpdTh_ctl hcl] at hm
         refine ⟨dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsup, ?_⟩
-        exact loop_step_withrs_eval fl fmapEmpty acc hth hsteps
+        exact loop_step_withrs_eval (hfuel := by omega) fl fmapEmpty acc hth hsteps
           (hm dst.core_run_state0)
     | @if_ an g e2 e3 =>
-      have hdg : peDepth g ≤ lemDefaultFuel := by
+      have hdg : peDepth g ≤ LemFuel.fuel := by
         cases hfr with
         | if_ _ hdg _ _ => exact hdg
       rcases hr.if_inv with ⟨hg, hout⟩ | ⟨hg, hout⟩
       · obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
         rw [htd, hex] at hg
-        obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_if_true_ws hd hsz hdg
+        obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_if_true_ws hd hdg
           fmapEmpty dst.layout_state dst.core_file dst.core_extern 0 none
           { th₀ with arena := e, env := ev0 :: evs } rfl
           (by rw [hext, hfile]; exact hg)
         rw [MachineCtx.locUpdTh_ctl hcl] at hm
         refine ⟨dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsup, ?_⟩
-        exact loop_step_withrs_tau fl fmapEmpty acc hth hsteps
+        exact loop_step_withrs_tau (hfuel := by omega) fl fmapEmpty acc hth hsteps
           (hm dst.core_run_state0)
       · obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
         rw [htd, hex] at hg
-        obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_if_false_ws hd hsz hdg
+        obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_if_false_ws hd hdg
           fmapEmpty dst.layout_state dst.core_file dst.core_extern 0 none
           { th₀ with arena := e, env := ev0 :: evs } rfl
           (by rw [hext, hfile]; exact hg)
         rw [MachineCtx.locUpdTh_ctl hcl] at hm
         refine ⟨dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsup, ?_⟩
-        exact loop_step_withrs_tau fl fmapEmpty acc hth hsteps
+        exact loop_step_withrs_tau (hfuel := by omega) fl fmapEmpty acc hth hsteps
           (hm dst.core_run_state0)
     | @case_ an pe pats =>
       cases hfr with
@@ -2126,30 +2169,30 @@ theorem loop_step_frag_same' {M₀ : MachineCtx} {ctl ctl' : Ctl}
         obtain ⟨e'', hsel, hout⟩ := hr.case_value_inv (valueFromPexpr_val _ _)
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        obtain ⟨post, hsteps⟩ := step_ctx_case_value hd hsz hsel fmapEmpty dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_case_value hd hsel fmapEmpty dst.layout_state
           dst.core_file dst.core_extern 0 none
           { th₀ with arena := e, env := ev0 :: evs } rfl
         rw [MachineCtx.locUpdTh_ctl hcl] at hsteps
         refine ⟨dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsup, ?_⟩
-        exact loop_step_tau fl fmapEmpty acc hth hsteps
+        exact loop_step_tau (hfuel := by omega) fl fmapEmpty acc hth hsteps
       | case_op hnvc hp hdp hall hbr hbsz =>
         rcases hr.case_inv with ⟨cval, e'', hv, -, -⟩ | ⟨cval, -, hv, hout⟩
         · rw [hv] at hnvc; cases hnvc
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
         rw [htd, hex] at hv
-        obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_case_eval_ws hd hsz hnvc hp hdp
+        obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_case_eval_ws hd hnvc hp hdp
           fmapEmpty dst.layout_state dst.core_file dst.core_extern 0 none
           { th₀ with arena := e, env := ev0 :: evs } rfl
           (by rw [hext, hfile]; exact hv)
         rw [MachineCtx.locUpdTh_ctl hcl] at hm
         refine ⟨dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsup, ?_⟩
-        exact loop_step_withrs_eval fl fmapEmpty acc hth hsteps
+        exact loop_step_withrs_eval (hfuel := by omega) fl fmapEmpty acc hth hsteps
           (hm dst.core_run_state0)
     | @run an ra l pes =>
       exact absurd rfl (hnr an ra l pes)
     | @pure_e an pe hnv2 =>
-      obtain ⟨hpp, hdp⟩ : PePure pe ∧ peDepth pe ≤ lemDefaultFuel := by
+      obtain ⟨hpp, hdp⟩ : PePure pe ∧ peDepth pe ≤ LemFuel.fuel := by
         cases hfr with
         | val_pure v => rw [valueFromPexpr_val] at hnv2; cases hnv2
         | pure_op hnv' hpp hdp => exact ⟨hpp, hdp⟩
@@ -2157,16 +2200,16 @@ theorem loop_step_frag_same' {M₀ : MachineCtx} {ctl ctl' : Ctl}
       obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
       subst h1 h2 h3 h4
       rw [htd, hex] at hv
-      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_pure_op_ws hd hsz hnv2 hdp
+      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_pure_op_ws hd hnv2 hdp
         fmapEmpty dst.layout_state dst.core_file dst.core_extern 0 none
         { th₀ with arena := e, env := ev0 :: evs } rfl
         (by rw [hext, hfile]; exact hv)
       rw [MachineCtx.locUpdTh_ctl hcl] at hm
       refine ⟨dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsup, ?_⟩
-      exact loop_step_withrs_eval fl fmapEmpty acc hth hsteps
+      exact loop_step_withrs_eval (hfuel := by omega) fl fmapEmpty acc hth hsteps
         (hm dst.core_run_state0)
     | @load_op an loc ann ty pe2 mo hnv2 =>
-      obtain ⟨hp2, hd2⟩ : PePure pe2 ∧ peDepth pe2 ≤ lemDefaultFuel := by
+      obtain ⟨hp2, hd2⟩ : PePure pe2 ∧ peDepth pe2 ≤ LemFuel.fuel := by
         cases hfr with
         | load =>
           rw [show valueFromPexpr (Pexpr [] () (PEval
@@ -2177,13 +2220,13 @@ theorem loop_step_frag_same' {M₀ : MachineCtx} {ctl ctl' : Ctl}
       obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
       subst h1 h2 h3 h4
       rw [htd, hex] at hv2
-      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_load_eval_ws hd hsz hnv2 hp2 hd2
+      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_load_eval_ws hd hnv2 hp2 hd2
         fmapEmpty dst.layout_state dst.core_file dst.core_extern 0 none
         { th₀ with arena := e, env := ev0 :: evs } rfl
         (by rw [hext, hfile]; exact hv2)
       rw [MachineCtx.locUpdTh_ctl hcl] at hm
       refine ⟨dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsup, ?_⟩
-      exact loop_step_withrs_eval fl fmapEmpty acc hth hsteps
+      exact loop_step_withrs_eval (hfuel := by omega) fl fmapEmpty acc hth hsteps
         (hm dst.core_run_state0)
     | @beta_spec an pa pb x bty wa e2 =>
       rcases hr.sseq_inv with ⟨e1', ρ'', ctl'', σ'', hnj, hnc', hnv', hstep, hout⟩ |
@@ -2205,22 +2248,22 @@ theorem loop_step_frag_same' {M₀ : MachineCtx} {ctl ctl' : Ctl}
         obtain rfl := ofValA_inj he1
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        obtain ⟨post, hsteps⟩ := step_ctx_beta_spec_pure hd hsz fmapEmpty dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_beta_spec_pure hd fmapEmpty dst.layout_state
           dst.core_file dst.core_extern 0 none
           { th₀ with arena := e, env := ev0 :: evs } rfl rfl
         rw [MachineCtx.locUpdTh_ctl hcl] at hsteps
         refine ⟨dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsup, ?_⟩
-        exact loop_step_tau fl fmapEmpty acc hth hsteps
+        exact loop_step_tau (hfuel := by omega) fl fmapEmpty acc hth hsteps
       · obtain ⟨rfl, rfl, rfl, rfl⟩ := specPat_inj hpat
         obtain rfl := ofValA_inj he1
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        obtain ⟨post, hsteps⟩ := step_ctx_beta_spec_annot hd hsz fmapEmpty dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_beta_spec_annot hd fmapEmpty dst.layout_state
           dst.core_file dst.core_extern 0 none
           { th₀ with arena := e, env := ev0 :: evs } rfl rfl
         rw [MachineCtx.locUpdTh_ctl hcl] at hsteps
         refine ⟨dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsup, ?_⟩
-        exact loop_step_tau fl fmapEmpty acc hth hsteps
+        exact loop_step_tau (hfuel := by omega) fl fmapEmpty acc hth hsteps
       · exact (symPat_ne_spec hpat).elim
       · exact (symPat_ne_spec hpat).elim
       · exact (specPat_ne_tuple hpatT1).elim
@@ -2232,32 +2275,32 @@ theorem loop_step_frag_same' {M₀ : MachineCtx} {ctl ctl' : Ctl}
         obtain ⟨pv1, pv2, b, σ'', rfl, rfl, hmem, hout⟩ := hr.memop_vals_inv
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        obtain ⟨post, hsteps⟩ := step_ctx_memop hd hsz rfl rfl fmapEmpty
+        obtain ⟨post, hsteps⟩ := step_ctx_memop hd rfl rfl fmapEmpty
           dst.layout_state dst.core_file dst.core_extern 0 none
           { th₀ with arena := e, env := ev0 :: evs } rfl
         rw [hccall, MachineCtx.locUpdTh_ctl hcl] at hsteps
         refine ⟨dst.core_run_state0, dst.trace, dst.dr_step_counter, rfl, hsup, ?_⟩
-        exact loop_step_memop fl fmapEmpty acc hth hsteps
-          (ars_memop_active fmapEmpty (by
+        exact loop_step_memop (hfuel := by omega) fl fmapEmpty acc hth hsteps
+          (ars_memop_active (hfuel := by omega) fmapEmpty (by
             rw [eqPtrval_loc_irrel _ default pv1 pv2]; exact hmem))
       | memop_op hnvF hp1 hp2 hpd1 hpd2 =>
         obtain ⟨v1, v2, hv1', hv2', hout⟩ := hr.memop_op_inv hnvF
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
         rw [htd, hex] at hv1' hv2'
-        obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_memop_eval_ws hd hsz hnvF
+        obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_memop_eval_ws hd hnvF
           hpd1 hpd2 fmapEmpty dst.layout_state dst.core_file
           dst.core_extern 0 none
           { th₀ with arena := e, env := ev0 :: evs } rfl
           (by rw [hext, hfile]; exact hv1') (by rw [hext, hfile]; exact hv2')
         rw [MachineCtx.locUpdTh_ctl hcl] at hm
         refine ⟨dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsup, ?_⟩
-        exact loop_step_withrs_eval fl fmapEmpty acc hth hsteps
+        exact loop_step_withrs_eval (hfuel := by omega) fl fmapEmpty acc hth hsteps
           (hm dst.core_run_state0)
     | @store_op an loc ann ty pe2 pe3 mo hnvR =>
       obtain ⟨hp2, hp3, hpd2, hpd3⟩ :
           PePure pe2 ∧ PePure pe3 ∧
-          peDepth pe2 ≤ lemDefaultFuel ∧ peDepth pe3 ≤ lemDefaultFuel := by
+          peDepth pe2 ≤ LemFuel.fuel ∧ peDepth pe3 ≤ LemFuel.fuel := by
         cases hfr with
         | store =>
           rw [valueFromPexprs_pair, valueFromPexpr_val, valueFromPexpr_val] at hnvR
@@ -2268,14 +2311,14 @@ theorem loop_step_frag_same' {M₀ : MachineCtx} {ctl ctl' : Ctl}
       obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
       subst h1 h2 h3 h4
       rw [htd, hex] at hv2 hv3
-      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_store_eval_ws hd hsz hnvR
+      obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_store_eval_ws hd hnvR
         hp2 hp3 hpd2 hpd3 fmapEmpty dst.layout_state dst.core_file
         dst.core_extern 0 none
         { th₀ with arena := e, env := ev0 :: evs } rfl
         (by rw [hext, hfile]; exact hv2) (by rw [hext, hfile]; exact hv3)
       rw [MachineCtx.locUpdTh_ctl hcl] at hm
       refine ⟨dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsup, ?_⟩
-      exact loop_step_withrs_eval fl fmapEmpty acc hth hsteps
+      exact loop_step_withrs_eval (hfuel := by omega) fl fmapEmpty acc hth hsteps
         (hm dst.core_run_state0)
     | @beta_sym an pa x bty wa e2 =>
       rcases hr.sseq_inv with ⟨e1', ρ'', ctl'', σ'', hnj, hnc', hnv', hstep, hout⟩ |
@@ -2299,22 +2342,22 @@ theorem loop_step_frag_same' {M₀ : MachineCtx} {ctl ctl' : Ctl}
         obtain rfl := ofValA_inj he1
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        obtain ⟨post, hsteps⟩ := step_ctx_beta_sym_pure hd hsz fmapEmpty dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_beta_sym_pure hd fmapEmpty dst.layout_state
           dst.core_file dst.core_extern 0 none
           { th₀ with arena := e, env := ev0 :: evs } rfl rfl
         rw [MachineCtx.locUpdTh_ctl hcl] at hsteps
         refine ⟨dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsup, ?_⟩
-        exact loop_step_tau fl fmapEmpty acc hth hsteps
+        exact loop_step_tau (hfuel := by omega) fl fmapEmpty acc hth hsteps
       · obtain ⟨rfl, rfl, rfl⟩ := symPat_inj hpat
         obtain rfl := ofValA_inj he1
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        obtain ⟨post, hsteps⟩ := step_ctx_beta_sym_annot hd hsz fmapEmpty dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_beta_sym_annot hd fmapEmpty dst.layout_state
           dst.core_file dst.core_extern 0 none
           { th₀ with arena := e, env := ev0 :: evs } rfl rfl
         rw [MachineCtx.locUpdTh_ctl hcl] at hsteps
         refine ⟨dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsup, ?_⟩
-        exact loop_step_tau fl fmapEmpty acc hth hsteps
+        exact loop_step_tau (hfuel := by omega) fl fmapEmpty acc hth hsteps
       · exact (symPat_ne_tuple hpatT1).elim
       · exact (symPat_ne_tuple hpatT2).elim
       · exact (hcall.ne_same_κ hκ).elim
@@ -2342,22 +2385,22 @@ theorem loop_step_frag_same' {M₀ : MachineCtx} {ctl ctl' : Ctl}
         obtain rfl := ofValA_inj he1
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        obtain ⟨post, hsteps⟩ := step_ctx_sseq_val_pure hd hsz fmapEmpty dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_sseq_val_pure hd fmapEmpty dst.layout_state
           dst.core_file dst.core_extern 0 none
           { th₀ with arena := e, env := ev0 :: evs } rfl rfl
         rw [MachineCtx.locUpdTh_ctl hcl] at hsteps
         refine ⟨dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsup, ?_⟩
-        exact loop_step_tau fl fmapEmpty acc hth hsteps
+        exact loop_step_tau (hfuel := by omega) fl fmapEmpty acc hth hsteps
       · obtain ⟨rfl, rfl⟩ := tuplePat_inj hpat
         obtain rfl := ofValA_inj he1
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        obtain ⟨post, hsteps⟩ := step_ctx_sseq_val_annot hd hsz fmapEmpty dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_sseq_val_annot hd fmapEmpty dst.layout_state
           dst.core_file dst.core_extern 0 none
           { th₀ with arena := e, env := ev0 :: evs } rfl rfl
         rw [MachineCtx.locUpdTh_ctl hcl] at hsteps
         refine ⟨dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsup, ?_⟩
-        exact loop_step_tau fl fmapEmpty acc hth hsteps
+        exact loop_step_tau (hfuel := by omega) fl fmapEmpty acc hth hsteps
       · exact (hcall.ne_same_κ hκ).elim
     | @wbeta_tuple an pa ls wa e2 =>
       rcases hr.wseq_inv with ⟨e1', ρ'', ctl'', σ'', hnj, hnc', hnv', hstep, hout⟩ |
@@ -2379,22 +2422,22 @@ theorem loop_step_frag_same' {M₀ : MachineCtx} {ctl ctl' : Ctl}
         obtain rfl := ofValA_inj he1
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        obtain ⟨post, hsteps⟩ := step_ctx_wseq_val_pure hd hsz fmapEmpty dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_wseq_val_pure hd fmapEmpty dst.layout_state
           dst.core_file dst.core_extern 0 none
           { th₀ with arena := e, env := ev0 :: evs } rfl rfl
         rw [MachineCtx.locUpdTh_ctl hcl] at hsteps
         refine ⟨dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsup, ?_⟩
-        exact loop_step_tau fl fmapEmpty acc hth hsteps
+        exact loop_step_tau (hfuel := by omega) fl fmapEmpty acc hth hsteps
       · obtain ⟨rfl, rfl⟩ := tuplePat_inj hpat
         obtain rfl := ofValA_inj he1
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        obtain ⟨post, hsteps⟩ := step_ctx_wseq_val_annot hd hsz fmapEmpty dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_wseq_val_annot hd fmapEmpty dst.layout_state
           dst.core_file dst.core_extern 0 none
           { th₀ with arena := e, env := ev0 :: evs } rfl rfl
         rw [MachineCtx.locUpdTh_ctl hcl] at hsteps
         refine ⟨dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsup, ?_⟩
-        exact loop_step_tau fl fmapEmpty acc hth hsteps
+        exact loop_step_tau (hfuel := by omega) fl fmapEmpty acc hth hsteps
       · exact (hcall.ne_same_κ hκ).elim
     | @wbeta_sym an pa x bty wa e2 =>
       rcases hr.wseq_inv with ⟨e1', ρ'', ctl'', σ'', hnj, hnc', hnv', hstep, hout⟩ |
@@ -2414,22 +2457,22 @@ theorem loop_step_frag_same' {M₀ : MachineCtx} {ctl ctl' : Ctl}
         obtain rfl := ofValA_inj he1
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        obtain ⟨post, hsteps⟩ := step_ctx_wseq_val_pure hd hsz fmapEmpty dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_wseq_val_pure hd fmapEmpty dst.layout_state
           dst.core_file dst.core_extern 0 none
           { th₀ with arena := e, env := ev0 :: evs } rfl rfl
         rw [MachineCtx.locUpdTh_ctl hcl] at hsteps
         refine ⟨dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsup, ?_⟩
-        exact loop_step_tau fl fmapEmpty acc hth hsteps
+        exact loop_step_tau (hfuel := by omega) fl fmapEmpty acc hth hsteps
       · obtain ⟨rfl, rfl, rfl⟩ := symPat_inj hpat
         obtain rfl := ofValA_inj he1
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        obtain ⟨post, hsteps⟩ := step_ctx_wseq_val_annot hd hsz fmapEmpty dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_wseq_val_annot hd fmapEmpty dst.layout_state
           dst.core_file dst.core_extern 0 none
           { th₀ with arena := e, env := ev0 :: evs } rfl rfl
         rw [MachineCtx.locUpdTh_ctl hcl] at hsteps
         refine ⟨dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsup, ?_⟩
-        exact loop_step_tau fl fmapEmpty acc hth hsteps
+        exact loop_step_tau (hfuel := by omega) fl fmapEmpty acc hth hsteps
       · exact (symPat_ne_tuple hpat).elim
       · exact (symPat_ne_tuple hpat).elim
       · exact (hcall.ne_same_κ hκ).elim
@@ -2446,12 +2489,12 @@ theorem loop_step_frag_same' {M₀ : MachineCtx} {ctl ctl' : Ctl}
       · obtain rfl := map_ofValA_inj heq
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        obtain ⟨post, hsteps⟩ := step_ctx_unseq_vals hd hsz hcol fmapEmpty dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_unseq_vals hd hcol fmapEmpty dst.layout_state
           dst.core_file dst.core_extern 0 none
           { th₀ with arena := e, env := ev0 :: evs } rfl
         rw [MachineCtx.locUpdTh_ctl hcl] at hsteps
         refine ⟨dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsup, ?_⟩
-        exact loop_step_tau fl fmapEmpty acc hth hsteps
+        exact loop_step_tau (hfuel := by omega) fl fmapEmpty acc hth hsteps
       · rw [jumpRedex?_unseq_vals] at hj; cases hj
       · have h1 : valsOnly (es1 ++ e0 :: es2) = true := by
           rw [← heq]; exact valsOnly_map_ofValA ws
@@ -2467,12 +2510,12 @@ theorem loop_step_frag_same' {M₀ : MachineCtx} {ctl ctl' : Ctl}
           simpa using ofValA_inj hb
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        obtain ⟨post, hsteps⟩ := step_ctx_bound_pure hd hsz fmapEmpty dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_bound_pure hd fmapEmpty dst.layout_state
           dst.core_file dst.core_extern 0 none
           { th₀ with arena := e, env := ev0 :: evs } rfl
         rw [MachineCtx.locUpdTh_ctl hcl] at hsteps
         refine ⟨dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsup, ?_⟩
-        exact loop_step_tau fl fmapEmpty acc hth hsteps
+        exact loop_step_tau (hfuel := by omega) fl fmapEmpty acc hth hsteps
       · cases ofValA_inj hb
       · rw [jumpRedex?_ofValA] at hj; cases hj
       · exact (hcall.ne_same_κ hκ).elim
@@ -2488,12 +2531,12 @@ theorem loop_step_frag_same' {M₀ : MachineCtx} {ctl ctl' : Ctl}
           simpa using ofValA_inj hb
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        obtain ⟨post, hsteps⟩ := step_ctx_bound_annot hd hsz fmapEmpty dst.layout_state
+        obtain ⟨post, hsteps⟩ := step_ctx_bound_annot hd fmapEmpty dst.layout_state
           dst.core_file dst.core_extern 0 none
           { th₀ with arena := e, env := ev0 :: evs } rfl
         rw [MachineCtx.locUpdTh_ctl hcl] at hsteps
         refine ⟨dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsup, ?_⟩
-        exact loop_step_tau fl fmapEmpty acc hth hsteps
+        exact loop_step_tau (hfuel := by omega) fl fmapEmpty acc hth hsteps
       · rw [jumpRedex?_ofValA] at hj; cases hj
       · exact (hcall.ne_same_κ hκ).elim
       · rw [negRedex?_ofValA] at hn0; cases hn0
@@ -2501,20 +2544,20 @@ theorem loop_step_frag_same' {M₀ : MachineCtx} {ctl ctl' : Ctl}
     -- resolves in the DRIVER'S run state through the tie hQd
     obtain ⟨params, cont, vs, ev0', evs', hρeq, hl, hvs, hout⟩ :=
       hr.jump_inv (by rfl)
-    have hdep : ∀ pe' ∈ pes, peDepth pe' ≤ lemDefaultFuel := by
+    have hdep : ∀ pe' ∈ pes, peDepth pe' ≤ LemFuel.fuel := by
       cases hfr with
       | run _ hdep => exact hdep
     obtain ⟨p, hproc, hQd⟩ := hjmp l params cont hl
     rw [htd, hex] at hvs
     obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
     subst h1 h2 h3 h4
-    obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_run_ws hd hsz hl hdep
+    obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_run_ws hd hl hdep
       fmapEmpty dst.layout_state dst.core_file dst.core_extern 0 none p
       { th₀ with arena := e, env := ev0 :: evs } rfl hproc
       (by rw [hext, hfile]; exact hvs)
     rw [MachineCtx.locUpdTh_ctl hcl] at hm
     refine ⟨dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsup, ?_⟩
-    exact loop_step_withrs_eval fl fmapEmpty acc hth hsteps
+    exact loop_step_withrs_eval (hfuel := by omega) fl fmapEmpty acc hth hsteps
       (hm dst.core_run_state0
         (by rw [hext, resolveExtern_empty]; exact hQd))
   · obtain ⟨-, -, h3, -⟩ := Config.mk_inj hcout
@@ -2530,7 +2573,7 @@ theorem loop_step_frag_same' {M₀ : MachineCtx} {ctl ctl' : Ctl}
       cases hfr with
       | neg_store_op _ _ _ _ _ => exact ⟨_, _, _, _, _, _, _, rfl⟩
       | neg_store => exact ⟨_, _, _, _, _, _, _, rfl⟩
-    obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_neg hd hsz hbr fmapEmpty dst.layout_state
+    obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_neg hd hbr fmapEmpty dst.layout_state
       dst.core_file dst.core_extern 0 none { th₀ with arena := e, env := ev0 :: evs } rfl
     rw [MachineCtx.locUpdTh_ctl hcl] at hm
     refine ⟨{ dst.core_run_state0 with
@@ -2539,7 +2582,7 @@ theorem loop_step_frag_same' {M₀ : MachineCtx} {ctl ctl' : Ctl}
       dst.trace, dst.dr_step_counter + 1, rfl, ?_, ?_⟩
     · simp only [Ctl.draw_sup, Ctl.upd_sup]
       exact ⟨by rw [hsup.1], by rw [hsup.2]⟩
-    · rw [loop_step_withrs_tau_rs fl fmapEmpty acc hth hsteps (hm dst.core_run_state0),
+    · rw [loop_step_withrs_tau_rs (hfuel := by omega) fl fmapEmpty acc hth hsteps (hm dst.core_run_state0),
         hsup.1, hsup.2]
       rcases dst with ⟨cf, ce, cs, crs, ls, cc, fs, tr0, sa, bl, ctr0⟩
       rfl
@@ -2548,7 +2591,7 @@ theorem loop_step_frag_same' {M₀ : MachineCtx} {ctl ctl' : Ctl}
     arc C2 statement): `loop_step_frag_same'` with the jump tie supplied
     by the thread's `current_proc_opt` and the run-state tie `hQd` at the
     context's derived label map `hlb`. -/
-theorem loop_step_frag_same {M₀ : MachineCtx} {ctl ctl' : Ctl}
+theorem loop_step_frag_same (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCtx} {ctl ctl' : Ctl}
     (htd : M₀.tagDefs = fmapEmpty) (hex : M₀.extern = fmapEmpty)
     {Q : LabelMap} (hlb : M₀.labelsAt ctl.proc = Q)
     {p : sym} {th₀ : thread_state} (hproc : th₀.current_proc_opt = some p)
@@ -2562,7 +2605,7 @@ theorem loop_step_frag_same {M₀ : MachineCtx} {ctl ctl' : Ctl}
     (hQd : LabeledAt dst.core_run_state0 p Q)
     (hsup : dst.core_run_state0.sym_supply = ctl.sup.sym ∧
       dst.core_run_state0.excluded_supply = ctl.sup.excl)
-    (hf : Frag e) (hsz : esize e ≤ lemDefaultFuel)
+    (hf : Frag e)
     (hs : Step M₀ (e, ev0 :: evs, ctl, dst.layout_state) (e', ρ', ctl', σ'))
     (hκ : ctl'.κ = ctl.κ) :
     ∃ (rs' : core_run_state) (tr : List trace_event) (ctr : Nat),
@@ -2577,8 +2620,8 @@ theorem loop_step_frag_same {M₀ : MachineCtx} {ctl ctl' : Ctl}
               layout_state := σ',
               core_run_state0 := rs', trace := tr,
               dr_step_counter := ctr } :=
-  loop_step_frag_same' htd hex hcl fl acc hth hext hfile
-    (fun _ _ _ _ => ⟨p, hproc, by rw [hlb]; exact hQd⟩) hsup hf hsz hs hκ
+  loop_step_frag_same' (hfuel := by omega) htd hex hcl fl acc hth hext hfile
+    (fun _ _ _ _ => ⟨p, hproc, by rw [hlb]; exact hQd⟩) hsup hf hs hκ
 
 /-- THE DRIVER STEP-MATCH AT THE LIVE CONTROL (calls arc C2 — the C1
     range audit's M-1 obligation: the mirror's control TIED to the
@@ -2595,7 +2638,7 @@ theorem loop_step_frag_same {M₀ : MachineCtx} {ctl ctl' : Ctl}
     `loop_step_frag_same'`; the CALL round is `step_ctx_call_ws` +
     `loop_step_withrs_eval` (run state verbatim); the RETURN round is
     `step_ctx_ret` + `loop_step_tau_tsk` (trace existential). -/
-theorem loop_step_frag' {M₀ : MachineCtx} {ctl ctl' : Ctl}
+theorem loop_step_frag' (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCtx} {ctl ctl' : Ctl}
     (htd : M₀.tagDefs = fmapEmpty) (hex : M₀.extern = fmapEmpty)
     {th₀ : thread_state}
     (hstack : th₀.stack0 = ctl.toStack) (hproc : th₀.current_proc_opt = ctl.proc)
@@ -2611,7 +2654,7 @@ theorem loop_step_frag' {M₀ : MachineCtx} {ctl ctl' : Ctl}
         LabeledAt dst.core_run_state0 p (M₀.labelsAt ctl.proc))
     (hsup : dst.core_run_state0.sym_supply = ctl.sup.sym ∧
       dst.core_run_state0.excluded_supply = ctl.sup.excl)
-    (hf : Frag e) (hsz : esize e ≤ lemDefaultFuel)
+    (hf : Frag e)
     (hs : Step M₀ (e, ev0 :: evs, ctl, dst.layout_state) (e', ρ', ctl', σ')) :
     ∃ (rs' : core_run_state) (tr : List trace_event) (ctr : Nat),
       rs'.labeled = dst.core_run_state0.labeled ∧
@@ -2637,12 +2680,12 @@ theorem loop_step_frag' {M₀ : MachineCtx} {ctl ctl' : Ctl}
   · -- control-preserving: the successor's control fields are th₀'s own,
     -- the location the updated control's
     obtain ⟨rs', tr, ctr, hlab, hsup', hrun⟩ :=
-      loop_step_frag_same' htd hex hcl fl acc hth hext hfile hjmp hsup hf hsz hs rfl
+      loop_step_frag_same' (hfuel := by omega) htd hex hcl fl acc hth hext hfile hjmp hsup hf hs rfl
     refine ⟨rs', tr, ctr, hlab, hsup', ?_⟩
     rw [hrun, Ctl.toStack_upd, Ctl.upd_proc, Ctl.upd_execLoc, ← hstack, ← hproc, ← hel]
   · -- E5: the supply draw — the same thread shape, the run state's supplies advanced
     obtain ⟨rs', tr, ctr, hlab, hsup', hrun⟩ :=
-      loop_step_frag_same' htd hex hcl fl acc hth hext hfile hjmp hsup hf hsz hs rfl
+      loop_step_frag_same' (hfuel := by omega) htd hex hcl fl acc hth hext hfile hjmp hsup hf hs rfl
     refine ⟨rs', tr, ctr, hlab, hsup', ?_⟩
     rw [hrun, Ctl.toStack_draw, Ctl.draw_proc, Ctl.draw_execLoc, Ctl.toStack_upd, Ctl.upd_proc,
       Ctl.upd_execLoc, ← hstack, ← hproc, ← hel]
@@ -2656,16 +2699,16 @@ theorem loop_step_frag' {M₀ : MachineCtx} {ctl ctl' : Ctl}
         cases hc
     obtain ⟨ctx', r, hd, hfr⟩ := hf.decomp hnv
     obtain ⟨rfl, an, ra, rfl⟩ := hd.callRedex?_inv hc
-    have hdep : ∀ pe ∈ pes, peDepth pe ≤ lemDefaultFuel := by
+    have hdep : ∀ pe ∈ pes, peDepth pe ≤ LemFuel.fuel := by
       cases hfr with
       | call _ hdep => exact hdep
     rw [htd, hex] at hvs
-    obtain ⟨m, post, hsteps, hm⟩ := step_ctx_call_ws hd hsz hdep fmapEmpty dst.layout_state
+    obtain ⟨m, post, hsteps, hm⟩ := step_ctx_call_ws hd hdep fmapEmpty dst.layout_state
       dst.core_file dst.core_extern 0 none { th₀ with arena := e, env := ev0 :: evs } rfl
       (by rw [hext, hfile]; exact hvs) (by rw [hfile, hext, ← hex]; exact hfl) hlen
     rw [MachineCtx.locUpdTh_ctl hcl] at hm
     refine ⟨dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsup, ?_⟩
-    rw [loop_step_withrs_eval fl fmapEmpty acc hth hsteps (hm dst.core_run_state0),
+    rw [loop_step_withrs_eval (hfuel := by omega) fl fmapEmpty acc hth hsteps (hm dst.core_run_state0),
       hd.redexAnnots_eq, redexAnnots_callRedex]
     show _ = runOne (drive_nonmemory_steps_aux2_lemFuel fl fmapEmpty acc [0]) _
     rw [show ({ th₀ with arena := e, env := ev0 :: evs } : thread_state).current_proc_opt =
@@ -2686,7 +2729,7 @@ theorem loop_step_frag' {M₀ : MachineCtx} {ctl ctl' : Ctl}
       dst.core_extern 0 none
       { th₀ with arena := ofValA (.pure a1 b1 v), env := ev0 :: evs }
       rfl hstack rfl
-    obtain ⟨tr, hrun⟩ := loop_step_tau_tsk fl fmapEmpty acc hth hsteps
+    obtain ⟨tr, hrun⟩ := loop_step_tau_tsk (hfuel := by omega) fl fmapEmpty acc hth hsteps
     refine ⟨dst.core_run_state0, tr, dst.dr_step_counter + 1, rfl, hsup, ?_⟩
     rw [hrun]
     show _ = runOne (drive_nonmemory_steps_aux2_lemFuel fl fmapEmpty acc [0]) _
@@ -2700,7 +2743,7 @@ theorem loop_step_frag' {M₀ : MachineCtx} {ctl ctl' : Ctl}
 /-- The live-control round at a KNOWN, TIED current procedure (the calls
     arc C2 statement; pinned): `loop_step_frag'` with the jump tie
     supplied by `hp`/`hproc`/`hlb`/`hQd`. -/
-theorem loop_step_frag {M₀ : MachineCtx} {ctl ctl' : Ctl}
+theorem loop_step_frag (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCtx} {ctl ctl' : Ctl}
     (htd : M₀.tagDefs = fmapEmpty) (hex : M₀.extern = fmapEmpty)
     {Q : LabelMap} (hlb : M₀.labelsAt ctl.proc = Q)
     {p : sym} (hp : ctl.proc = some p) {th₀ : thread_state}
@@ -2715,7 +2758,7 @@ theorem loop_step_frag {M₀ : MachineCtx} {ctl ctl' : Ctl}
     (hQd : LabeledAt dst.core_run_state0 p Q)
     (hsup : dst.core_run_state0.sym_supply = ctl.sup.sym ∧
       dst.core_run_state0.excluded_supply = ctl.sup.excl)
-    (hf : Frag e) (hsz : esize e ≤ lemDefaultFuel)
+    (hf : Frag e)
     (hs : Step M₀ (e, ev0 :: evs, ctl, dst.layout_state) (e', ρ', ctl', σ')) :
     ∃ (rs' : core_run_state) (tr : List trace_event) (ctr : Nat),
       rs'.labeled = dst.core_run_state0.labeled ∧
@@ -2735,8 +2778,8 @@ theorem loop_step_frag {M₀ : MachineCtx} {ctl ctl' : Ctl}
               layout_state := σ',
               core_run_state0 := rs', trace := tr,
               dr_step_counter := ctr } :=
-  loop_step_frag' htd hex hstack hproc hel hcl fl acc hth hext hfile
-    (fun _ _ _ _ => ⟨p, by rw [hproc, hp], by rw [hlb]; exact hQd⟩) hsup hf hsz hs
+  loop_step_frag' (hfuel := by omega) htd hex hstack hproc hel hcl fl acc hth hext hfile
+    (fun _ _ _ _ => ⟨p, by rw [hproc, hp], by rw [hlb]; exact hQd⟩) hsup hf hs
 
 /-! ## The live-control vocabulary of BOTH driver lanes (moved here from
 ProdLoop.lean in the fuel-lane restatement, 2026-09-03: the partial lane
@@ -2758,6 +2801,7 @@ def ctlThread (th₀ : thread_state) (e : CoreExpr) (ρ : EnvStack) (ctl : Ctl) 
     exec_loc := ctl.execLoc
     current_loc := ctl.curLoc }
 
+omit [LemFuel] in
 @[simp] theorem ctlThread_current_loc (th₀ : thread_state) (e : CoreExpr) (ρ : EnvStack)
     (ctl : Ctl) : (ctlThread th₀ e ρ ctl).current_loc = ctl.curLoc := rfl
 
@@ -2771,6 +2815,7 @@ def LabeledProcs (M₀ : MachineCtx) (lab : Fmap sym LabelMap) : Prop :=
     fmapLookupBy (fun (s1 : sym) (s2 : sym) => Lem_Basic_classes.ordCompare s1 s2) f lab =
       some (M₀.labelsAt (some f))
 
+omit [LemFuel] in
 /-- The tie holds at the context's OWN run state as soon as every
     declared procedure has SOME fiber there (the registration installs
     one per `Proc` of the file): the derived fiber is that fiber. -/
@@ -2801,11 +2846,13 @@ def CtlTied (M₀ : MachineCtx) (lab : Fmap sym LabelMap) (ctl : Ctl) : Prop :=
     fmapLookupBy (fun (s1 : sym) (s2 : sym) => Lem_Basic_classes.ordCompare s1 s2) p lab =
       some (M₀.labelsAt (some p))
 
+omit [LemFuel] in
 theorem CtlTied.noproc (M₀ : MachineCtx) (lab : Fmap sym LabelMap) (ℓ : exec_location)
     (lc : CerbLocation.Loc) (sp : RunSup) :
     CtlTied M₀ lab ⟨[], none, ℓ, lc, sp⟩ :=
   ⟨fun _ h => (by cases h), fun _ h => (by cases h)⟩
 
+omit [LemFuel] in
 theorem CtlTied.entry {M₀ : MachineCtx} {lab : Fmap sym LabelMap} (hlab : LabeledProcs M₀ lab)
     {p : sym} {params : List (sym × core_base_type)} {body : CoreExpr}
     (hq : lookupProc M₀.file M₀.extern p = some (params, body)) (ℓ : exec_location)
@@ -2813,6 +2860,7 @@ theorem CtlTied.entry {M₀ : MachineCtx} {lab : Fmap sym LabelMap} (hlab : Labe
     CtlTied M₀ lab ⟨[], some p, ℓ, lc, sp⟩ :=
   ⟨fun q hq' => (by cases hq'; exact hlab p params body hq), fun _ h => (by cases h)⟩
 
+omit [LemFuel] in
 /-- A successful label lookup at the control's current procedure names a
     procedure the run state ties: the jump round's tie (`hjmp`) from the
     control's tie. -/
@@ -2831,23 +2879,21 @@ theorem CtlTied.jump {M₀ : MachineCtx} {lab : Fmap sym LabelMap} {ctl : Ctl}
 /-! ## The exhaustion rounds and the killed pipeline (the partial lane's
 driver arms, fuel-lane restatement 2026-09-03). The shipped loop's
 out-of-fuel value is the kernel-transparent kill `CerbND.fuelExhaustedKill`
-(`CerbND.drive_nonmemory_steps_aux2_lemFuel_zero`, the cerberus-lean fuel
-arc); an exhausted loop kills `driver2` through the ND bind's killed arm,
+(the generated worker's zero equation); with positive ambient fuel, an
+exhausted loop kills `driver2` through the ND bind's killed arm,
 and a one-layer killed tree is the singleton killed execution of `runND`. -/
 
 /-- The loop at fuel 0: the exhaustion kill, the state untouched. -/
 theorem loop_zero_exhausts (tds : Fmap sym (CerbLocation.Loc × tag_definition))
     (acc : Fmap thread_id (List core_step2)) (xs : List Nat) (dst : driver_state) :
     runOne (drive_nonmemory_steps_aux2_lemFuel 0 tds acc xs) dst =
-      (NDkilled CerbND.fuelExhaustedKill, dst) := by
-  rw [CerbND.drive_nonmemory_steps_aux2_lemFuel_zero]
-  rfl
+      (NDkilled CerbND.fuelExhaustedKill, dst) := rfl
 
 /-- Done round at fuel EXACTLY ONE: PROGRAM-DONE is not advanceable, the
     singleton is recorded, and the drain iteration on the empty thread
     list has no fuel — the exhaustion kill (the reason the total lane's
     delivery needs `k + 2` iterations). -/
-theorem loop_step_done_exhaust (tds : Fmap sym (CerbLocation.Loc × tag_definition))
+theorem loop_step_done_exhaust (hfuel : 0 < LemFuel.fuel) (tds : Fmap sym (CerbLocation.Loc × tag_definition))
     (acc : Fmap thread_id (List core_step2))
     {dst : driver_state} {th : thread_state} {v : value}
     (hth : dst.core_state0.thread_states = [(0, (none, th))])
@@ -2856,7 +2902,7 @@ theorem loop_step_done_exhaust (tds : Fmap sym (CerbLocation.Loc × tag_definiti
     runOne (drive_nonmemory_steps_aux2_lemFuel (Nat.succ 0) tds acc [0]) dst =
       (NDkilled CerbND.fuelExhaustedKill, dst) := by
   conv => lhs; unfold drive_nonmemory_steps_aux2_lemFuel
-  refine (runOne_bind_active (z := [Step_done2 v]) (s' := dst) ?_).trans ?_
+  refine (runOne_bind_active (hfuel := by omega) (z := [Step_done2 v]) (s' := dst) ?_).trans ?_
   · rw [runOne_read]
     refine congrArg (fun x => (NDactive x, dst)) ?_
     show (let th_info := match lookupBy (fun x y => x == y) 0
@@ -2872,14 +2918,16 @@ theorem loop_step_done_exhaust (tds : Fmap sym (CerbLocation.Loc × tag_definiti
 /-- `runND` (CerbND.lean) of a computation whose one-layer application
     is KILLED: exactly one execution, the killed one (the runner's
     `NDkilled` arm; the killed-side twin of `runND_active`). -/
-theorem runND_killed {a info err cs st : Type}
+theorem runND_killed (hfuel : 0 < LemFuel.fuel) {a info err cs st : Type}
     {m : ndM a info err cs st} {s s' : st} {r : kill_reason err}
     (h : runOne m s = (NDkilled r, s')) :
     CerbND.runND m s = [(nd_status.Killed s' r, ([] : List String), s')] := by
+  obtain ⟨fuel, hF⟩ : ∃ fuel, LemFuel.fuel = fuel + 1 :=
+    ⟨LemFuel.fuel - 1, by omega⟩
   rcases m with ⟨g⟩
   dsimp only [runOne] at h
-  show CerbND.runNDFuel CerbFuel.driverFuel (ND g) s = _
-  rw [driverFuel_succ]
+  show CerbND.runNDFuel LemFuel.fuel (ND g) s = _
+  rw [hF]
   unfold CerbND.runNDFuel
   dsimp only
   rw [h]
@@ -2889,20 +2937,20 @@ theorem runND_killed {a info err cs st : Type}
     runs the loop on the singleton thread list and the ND bind's killed
     arm propagates the kill — the round is the kill, the state the
     loop's. -/
-theorem driver2_killed (fl : Nat)
+theorem driver2_killed (hfuel : 0 < LemFuel.fuel) (fl : Nat)
     (tds : Fmap sym (CerbLocation.Loc × tag_definition))
     (dst dstK : driver_state) (th : thread_state) (r : kill_reason driver_error)
     (hth : dst.core_state0.thread_states = [(0, (none, th))])
-    (hloop : runOne (drive_nonmemory_steps_aux2_lemFuel CerbFuel.driverFuel tds
+    (hloop : runOne (drive_nonmemory_steps_aux2_lemFuel LemFuel.fuel tds
         fmapEmpty [0]) dst = (NDkilled r, dstK)) :
     runOne (driver2_lemFuel (Nat.succ fl) tds false) dst = (NDkilled r, dstK) := by
   conv => lhs; unfold driver2_lemFuel
-  refine runOne_bind_killed ?_
+  refine runOne_bind_killed (hfuel := by omega) ?_
   unfold new_drive_core_threads
-  refine (runOne_bind_active (z := dst) (by rfl)).trans ?_
+  refine (runOne_bind_active (hfuel := by omega) (z := dst) (by rfl)).trans ?_
   dsimp only
   rw [hth]
   dsimp only [List.map]
-  exact runOne_bind_killed hloop
+  exact runOne_bind_killed (hfuel := by omega) hloop
 
 end CerberusHeapLang

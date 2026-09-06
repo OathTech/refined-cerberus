@@ -11,8 +11,8 @@ the public rules only, never through `Step` (API.lean, "Below the
 line"). Consequently this module imports the semantics layer, not the
 API, and no exhibit imports it.
 
-Contents (moved here verbatim from ProdExhibit.lean, 2026-09-02
-detailed audit L-2 — statements unchanged): the two MIXED operand
+Contents (originally moved from ProdExhibit.lean, 2026-09-02
+detailed audit L-2): the two MIXED operand
 shapes of `store`; plus (kill/free arc K2) the kill at a symbol
 operand, `kill_sym_step`; plus (calls arc C2) THE PROCEDURE CALL AND
 RETURN ROUNDS at the mirror level on a two-procedure file — `main`
@@ -21,7 +21,7 @@ calls `f`, `f` returns a constant — as `engine_step_matchU` instances
 the call IS `Step.call`'s successor (the callee installed, the frame
 pushed, the caller's control captured) and at the callee's value IS
 `Step.ret`'s (the value plugged into the captured context, the frame
-popped). NOT a client of a rule — there is no call rule yet (C3). Plus
+popped). Public call-rule clients live in Examples/CallSmoke.lean. Plus
 (dialect arc E1, 2026-09-05) the live-location witnesses at the MIRROR
 level — `loc_update_nonlib`/`_lib`/`_none` are lemmas about `Ctl.upd`
 alone and `store_located_step` is a `Step` witness; none touches the
@@ -40,6 +40,11 @@ rule-level instances at the same shapes (`wps_store_sym_lit`,
 the public `wps_store_eval`/`wpt_store_eval`, which is what a client
 does.
 
+The round witnesses quantify the caller's `LemFuel`. Most require at least
+two ambient units; the emitted addition and library conversion retain
+their sufficient operand-pass bounds of eight and twenty-six respectively.
+Structural traversal budgets come from the engine's measured wrappers.
+
 The other permitted direct use of `Step` outside the semantics layer
 is the NEGATIVE test `DivergeExhibit.lean` (`dg_self_step`, by
 `Step.run`): a negative test shows a derivation is impossible by
@@ -54,6 +59,8 @@ import CerberusHeapLang.IntRules
 set_option autoImplicit false
 
 namespace CerberusHeapLang
+
+variable [LemFuel]
 
 open Lem_Basic_classes Lem_Maybe Lem_List
 
@@ -156,6 +163,7 @@ def smokeFile (ra : core_run_annotation) : file core_run_annotation :=
 @[reducible] def smokeCtx (ra : core_run_annotation) : MachineCtx :=
   { spikeCtx with file := smokeFile ra }
 
+omit [LemFuel] in
 /-- `call_proc`'s lookup finds `f` (computed). -/
 theorem smokeFile_lookup_f (ra : core_run_annotation) :
     lookupProc (smokeFile ra) fmapEmpty smokeF = some ([], smokeFBody) := rfl
@@ -164,34 +172,31 @@ theorem smokeFile_lookup_f (ra : core_run_annotation) :
     the shipped driver's round installs `f`'s body at the pushed control
     `⟨[(some main, CTX)], some f, push_exec_loc f …⟩` with the fresh empty
     frame — exactly `Step.call`'s successor. -/
-theorem smoke_call_round (ra : core_run_annotation) (ev0 : Fmap sym value)
+theorem smoke_call_round (hfuel : 2 ≤ LemFuel.fuel) (ra : core_run_annotation) (ev0 : Fmap sym value)
     (evs : List (Fmap sym value)) (ℓ : exec_location) (σ : Mem) :
     CerberusRound (smokeCtx ra) (callRedex [] ra smokeF [], ev0 :: evs, ⟨[], some smokeMain, ℓ, default, default⟩, σ)
       (smokeFBody, procEnv [] [] :: (ev0 :: evs),
        ⟨[(some smokeMain, CTX)], some smokeF, push_exec_loc smokeF default ℓ, default, default⟩, σ) :=
-  engine_step_matchU (Frag.call (fun _ h => by cases h) (fun _ h => by cases h))
-    (by rw [show esize (callRedex [] ra smokeF []) = 1 from rfl,
-      show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+  engine_step_matchU (hfuel := by omega) (Frag.call (fun _ h => by cases h) (fun _ h => by cases h))
     (Step.call rfl rfl (smokeFile_lookup_f ra) rfl)
 
 /-- THE RETURN ROUND: at `f`'s value under the captured frame, the shipped
     driver's round pops the frame, restores `main`, drops `f`'s env frame
     and plugs the value into the captured context — exactly `Step.ret`'s
     successor. -/
-theorem smoke_ret_round (ra : core_run_annotation) (v : value) (ev0 : Fmap sym value)
+theorem smoke_ret_round (hfuel : 2 ≤ LemFuel.fuel) (ra : core_run_annotation) (v : value) (ev0 : Fmap sym value)
     (evs : List (Fmap sym value)) (ℓ : exec_location) (σ : Mem) :
     CerberusRound (smokeCtx ra) (ofVal (.pure v), ev0 :: evs,
         ⟨[(some smokeMain, CTX)], some smokeF, ℓ, default, default⟩, σ)
       (apply_ctx CTX (ofVal (.pure v)), evs, ⟨[], some smokeMain, ℓ, default, default⟩, σ) :=
-  engine_step_matchU (frag_ofVal _)
-    (by rw [show esize (ofVal (.pure v)) = 1 from rfl,
-      show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+  engine_step_matchU (hfuel := by omega) (frag_ofVal _)
     Step.ret
 
 /-! ## E1 witnesses (dialect arc, docs/2026-09-04_e1-notes.md): the live
 location, REMOVE-BOUND, the create ACTION_EVAL at `Ivalignof`, LETS-ANNOT
 at the plain-symbol binder -/
 
+omit [LemFuel] in
 /-- THE LOCATION UPDATE (Core_reduction.lean:484 `get_loc`): a general-arm
     round at a node whose first `Aloc` is a NON-library location moves the
     control's `curLoc` to it. -/
@@ -200,6 +205,7 @@ theorem loc_update_nonlib (ctl : Ctl) (l : CerbLocation.Loc)
     (ctl.upd (Aloc l :: rest)).curLoc = l := by
   simp only [Ctl.upd_curLoc, locUpd, get_loc, hl, Bool.false_eq_true, ↓reduceIte]
 
+omit [LemFuel] in
 /-- … a LIBRARY location leaves it (`is_library_location`, the engine's
     filter of libcore/include/impls positions). -/
 theorem loc_update_lib (ctl : Ctl) (l : CerbLocation.Loc)
@@ -207,6 +213,7 @@ theorem loc_update_lib (ctl : Ctl) (l : CerbLocation.Loc)
     (ctl.upd (Aloc l :: rest)).curLoc = ctl.curLoc := by
   simp only [Ctl.upd_curLoc, locUpd, get_loc, hl, ↓reduceIte]
 
+omit [LemFuel] in
 /-- … and a node without an `Aloc` (the `Astd`/`Astmt`/`Aexpr` residue) is
     inert on the location. -/
 theorem loc_update_none (ctl : Ctl) :
@@ -227,47 +234,38 @@ theorem store_located_step {M : MachineCtx} (l : CerbLocation.Loc) {loc : CerbLo
 /-- REMOVE-BOUND at an ANNOTATED value: the shipped driver's round at
     `bound({A}v)` delivers `v` BARE — the dynamic annotations are dropped
     (core_reduction.lem:1214–1219) — and updates the location. -/
-theorem bound_annot_round {M : MachineCtx} (a a1 a2 b1 : List annot)
+theorem bound_annot_round (hfuel : 2 ≤ LemFuel.fuel) {M : MachineCtx} (a a1 a2 b1 : List annot)
     (ds : List dyn_annotation) (v : value) (ev0 : Fmap sym value)
     (evs : List (Fmap sym value)) (ctl : Ctl) (σ : Mem) :
     CerberusRound M (Expr a (Ebound (ofValA (.annot a1 a2 b1 ds v))), ev0 :: evs, ctl, σ)
       (ofValA (.pure a2 b1 v), ev0 :: evs, ctl.upd a, σ) :=
-  engine_step_matchU (Frag.bound (frag_ofValA _))
-    (by rw [esize_bound, show esize (ofValA (SpikeValA.annot a1 a2 b1 ds v)) = 2 from rfl,
-      show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+  engine_step_matchU (hfuel := by omega) (Frag.bound (frag_ofValA _))
     Step.bound_annot
 
 /-- REMOVE-BOUND at a BARE value (core_reduction.lem:1221–1226). -/
-theorem bound_pure_round {M : MachineCtx} (a a1 b1 : List annot) (v : value)
+theorem bound_pure_round (hfuel : 2 ≤ LemFuel.fuel) {M : MachineCtx} (a a1 b1 : List annot) (v : value)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (ctl : Ctl) (σ : Mem) :
     CerberusRound M (Expr a (Ebound (ofValA (.pure a1 b1 v))), ev0 :: evs, ctl, σ)
       (ofValA (.pure a1 b1 v), ev0 :: evs, ctl.upd a, σ) :=
-  engine_step_matchU (Frag.bound (frag_ofValA _))
-    (by rw [esize_bound, show esize (ofValA (SpikeValA.pure a1 b1 v)) = 1 from rfl,
-      show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+  engine_step_matchU (hfuel := by omega) (Frag.bound (frag_ofValA _))
     Step.bound_pure
 
 /-- THE CREATE ACTION_EVAL ROUND at the emitted operands
     `create(Ivalignof(ty), ty)` (core_reduction.lem:657–661): the round
     rewrites the redex to the canonical create at the evaluator's own
     alignment constant `alignofIval M.tagDefs ty`. -/
-theorem create_alignof_round {M : MachineCtx} (a : List annot) (loc : CerbLocation.Loc)
+theorem create_alignof_round (hfuel : 2 ≤ LemFuel.fuel) {M : MachineCtx} (a : List annot) (loc : CerbLocation.Loc)
     (ann : core_run_annotation) (ty : ctype) (pref : prefix0)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (ctl : Ctl) (σ : Mem) :
     CerberusRound M
       (createOpRedex a loc ann (Pexpr [] () (PEctor Civalignof [Pexpr [] () (PEval (Vctype ty))]))
         (Pexpr [] () (PEval (Vctype ty))) pref, ev0 :: evs, ctl, σ)
       (createRedex a loc ann (CerbMem.alignofIval M.tagDefs ty) ty pref, ev0 :: evs, ctl.upd a, σ) :=
-  engine_step_matchU
+  engine_step_matchU (hfuel := by omega)
     (Frag.create_op rfl (.ctorTy [] Civalignof rfl [] ty) (.val [] (Vctype ty))
       (by rw [show peDepth (Pexpr ([] : List annot) ()
-          (PEctor Civalignof [Pexpr [] () (PEval (Vctype ty))])) = 2 from rfl,
-        show lemDefaultFuel = 999999 + 1 from rfl]; omega)
-      (peDepth_val_le _ _))
-    (by rw [show esize (createOpRedex a loc ann
-        (Pexpr [] () (PEctor Civalignof [Pexpr [] () (PEval (Vctype ty))]))
-        (Pexpr [] () (PEval (Vctype ty))) pref) = 1 from rfl,
-      show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+          (PEctor Civalignof [Pexpr [] () (PEval (Vctype ty))])) = 2 from rfl]; omega)
+      (peDepth_val_le _ _ (by omega)))
     (Step.create_eval rfl (by rw [evalPexpr_tyctor _ _ _ _ _ _ _ rfl, evalTyCtor_alignof])
       (evalPexpr_val _ _ _ _ _))
 
@@ -275,7 +273,7 @@ theorem create_alignof_round {M : MachineCtx} (a : List annot) (loc : CerbLocati
     LETS beta): the round binds the BARE value and re-wraps the dynamic
     annotations around the continuation — mirrored since E1
     (`Step.sseq_sym_annot`; the pre-E1 `BareHead` exclusion is retired). -/
-theorem sseq_sym_annot_round {M : MachineCtx} (a pa a1 a2 b1 : List annot) (x : sym)
+theorem sseq_sym_annot_round (hfuel : 2 ≤ LemFuel.fuel) {M : MachineCtx} (a pa a1 a2 b1 : List annot) (x : sym)
     (bty : core_base_type) (ds : List dyn_annotation) (v : value)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (ctl : Ctl) (σ : Mem) :
     CerberusRound M
@@ -283,10 +281,7 @@ theorem sseq_sym_annot_round {M : MachineCtx} (a pa a1 a2 b1 : List annot) (x : 
         (ofValA (.pure [] [] Vunit))), ev0 :: evs, ctl, σ)
       (Expr [] (Eannot ds (ofValA (.pure [] [] Vunit))),
         update_env (symPat pa x bty) v (ev0 :: evs), ctl.upd a, σ) :=
-  engine_step_matchU (Frag.sseq_sym (frag_ofValA _) (frag_ofValA _))
-    (by rw [show esize (Expr a (Esseq (symPat pa x bty) (ofValA (SpikeValA.annot a1 a2 b1 ds v))
-        (ofValA (SpikeValA.pure [] [] Vunit)))) = 3 from rfl,
-      show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+  engine_step_matchU (hfuel := by omega) (Frag.sseq_sym (frag_ofValA _) (frag_ofValA _))
     Step.sseq_sym_annot
 
 /-! ## E2: the loaded-value dialect's rounds at a generic machine context
@@ -298,27 +293,23 @@ tuple betas and the weak plain-symbol beta). -/
     evaluates (`PEctor Cspecified`, core_eval.lem:667–668) to the loaded
     value `Specified(iv)`; the round rewrites the redex to the canonical
     value injection and updates the location. -/
-theorem pure_specified_round {M : MachineCtx} (a : List annot) (iv : CerbMem.IntegerValue)
+theorem pure_specified_round (hfuel : 2 ≤ LemFuel.fuel) {M : MachineCtx} (a : List annot) (iv : CerbMem.IntegerValue)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (ctl : Ctl) (σ : Mem) :
     CerberusRound M
       (pureRedex a (Pexpr [] () (PEctor Cspecified [Pexpr [] () (PEval (Vobject (OVinteger iv)))])),
         ev0 :: evs, ctl, σ)
       (Expr a (Epure (Pexpr [] () (PEval (Vloaded (LVspecified (OVinteger iv)))))),
         ev0 :: evs, ctl.upd a, σ) :=
-  engine_step_matchU
+  engine_step_matchU (hfuel := by omega)
     (Frag.pure_op rfl (PePure.of_isPePure rfl)
       (by rw [show peDepth (Pexpr ([] : List annot) ()
-          (PEctor Cspecified [Pexpr [] () (PEval (Vobject (OVinteger iv)))])) = 2 from rfl,
-        show lemDefaultFuel = 999999 + 1 from rfl]; omega))
-    (by rw [show esize (pureRedex a (Pexpr [] ()
-        (PEctor Cspecified [Pexpr [] () (PEval (Vobject (OVinteger iv)))]))) = 1 from rfl,
-      show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+          (PEctor Cspecified [Pexpr [] () (PEval (Vobject (OVinteger iv)))])) = 2 from rfl]; omega))
     (Step.pure_eval rfl (by rw [evalPexpr_ctor1, evalPexpr_val]; rfl))
 
 /-- LETW-PURE AT A FLAT TUPLE BINDER (core_reduction.lem:389–396): the
     round binds the tuple's components through `update_env` at the tuple
     pattern (`update_env_aux`'s `Ctuple` arm, Core_aux.lean:861). -/
-theorem wseq_tuple_pure_round {M : MachineCtx} (a pa a1 b1 : List annot)
+theorem wseq_tuple_pure_round (hfuel : 2 ≤ LemFuel.fuel) {M : MachineCtx} (a pa a1 b1 : List annot)
     (ls : List TupleLeaf) (vs : List value)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (ctl : Ctl) (σ : Mem) :
     CerberusRound M
@@ -326,14 +317,11 @@ theorem wseq_tuple_pure_round {M : MachineCtx} (a pa a1 b1 : List annot)
         (ofValA (.pure [] [] Vunit))), ev0 :: evs, ctl, σ)
       (ofValA (.pure [] [] Vunit), update_env (tuplePat pa ls) (Vtuple vs) (ev0 :: evs),
         ctl.upd a, σ) :=
-  engine_step_matchU (Frag.wseq_tuple (frag_ofValA _) (frag_ofValA _))
-    (by rw [show esize (Expr a (Ewseq (tuplePat pa ls) (ofValA (SpikeValA.pure a1 b1 (Vtuple vs)))
-        (ofValA (SpikeValA.pure [] [] Vunit)))) = 2 from rfl,
-      show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+  engine_step_matchU (hfuel := by omega) (Frag.wseq_tuple (frag_ofValA _) (frag_ofValA _))
     Step.wseq_tuple_pure
 
 /-- LETS-PURE AT A FLAT TUPLE BINDER (core_reduction.lem:407–415). -/
-theorem sseq_tuple_pure_round {M : MachineCtx} (a pa a1 b1 : List annot)
+theorem sseq_tuple_pure_round (hfuel : 2 ≤ LemFuel.fuel) {M : MachineCtx} (a pa a1 b1 : List annot)
     (ls : List TupleLeaf) (vs : List value)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (ctl : Ctl) (σ : Mem) :
     CerberusRound M
@@ -341,15 +329,12 @@ theorem sseq_tuple_pure_round {M : MachineCtx} (a pa a1 b1 : List annot)
         (ofValA (.pure [] [] Vunit))), ev0 :: evs, ctl, σ)
       (ofValA (.pure [] [] Vunit), update_env (tuplePat pa ls) (Vtuple vs) (ev0 :: evs),
         ctl.upd a, σ) :=
-  engine_step_matchU (Frag.sseq_tuple (frag_ofValA _) (frag_ofValA _))
-    (by rw [show esize (Expr a (Esseq (tuplePat pa ls) (ofValA (SpikeValA.pure a1 b1 (Vtuple vs)))
-        (ofValA (SpikeValA.pure [] [] Vunit)))) = 2 from rfl,
-      show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+  engine_step_matchU (hfuel := by omega) (Frag.sseq_tuple (frag_ofValA _) (frag_ofValA _))
     Step.sseq_tuple_pure
 
 /-- LETW-PURE AT THE PLAIN-SYMBOL BINDER — the corpus's `let weak a = pure(x)
     in load(…)` (core_reduction.lem:389–396). -/
-theorem wseq_sym_pure_round {M : MachineCtx} (a pa a1 b1 : List annot) (x : sym)
+theorem wseq_sym_pure_round (hfuel : 2 ≤ LemFuel.fuel) {M : MachineCtx} (a pa a1 b1 : List annot) (x : sym)
     (bty : core_base_type) (v : value)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (ctl : Ctl) (σ : Mem) :
     CerberusRound M
@@ -357,10 +342,7 @@ theorem wseq_sym_pure_round {M : MachineCtx} (a pa a1 b1 : List annot) (x : sym)
         (ofValA (.pure [] [] Vunit))), ev0 :: evs, ctl, σ)
       (ofValA (.pure [] [] Vunit), update_env (symPat pa x bty) v (ev0 :: evs),
         ctl.upd a, σ) :=
-  engine_step_matchU (Frag.wseq_sym (frag_ofValA _) (frag_ofValA _))
-    (by rw [show esize (Expr a (Ewseq (symPat pa x bty) (ofValA (SpikeValA.pure a1 b1 v))
-        (ofValA (SpikeValA.pure [] [] Vunit)))) = 2 from rfl,
-      show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+  engine_step_matchU (hfuel := by omega) (Frag.wseq_sym (frag_ofValA _) (frag_ofValA _))
     Step.wseq_sym_pure
 
 /-! ## E3: the emitted integer arithmetic's rounds (`engine_step_matchU`
@@ -376,7 +358,7 @@ is the standard-library call `conv_loaded_int`). -/
     `PEcase` arm), `mk_conv_int` (core_eval.lem:61, the `PEconv_int` arm
     :819–826) and `mk_call_catch_exceptional_condition` (:99–105, the arm
     :839–853) — rewrites the redex to `pure(Specified(n1 + n2))`. -/
-theorem cAdd_pure_round {M : MachineCtx} (a b a' b' : sym) (loc : CerbLocation.Loc) {n1 n2 : Int}
+theorem cAdd_pure_round (hfuel : 8 ≤ LemFuel.fuel) {M : MachineCtx} (a b a' b' : sym) (loc : CerbLocation.Loc) {n1 n2 : Int}
     (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (ctl : Ctl) (σ : Mem)
     (hv1 : evalPexpr M.tagDefs M.extern M.file (ev0 :: evs) (stdSym a) = some (lint n1))
     (hv2 : evalPexpr M.tagDefs M.extern M.file (ev0 :: evs) (stdSym b) = some (lint n2))
@@ -388,11 +370,9 @@ theorem cAdd_pure_round {M : MachineCtx} (a b a' b' : sym) (loc : CerbLocation.L
     CerberusRound M
       (pureRedex [] (cAddPe a b a' b' loc), ev0 :: evs, ctl, σ)
       (Expr [] (Epure (Pexpr [] () (PEval (lint (n1 + n2))))), ev0 :: evs, ctl.upd [], σ) :=
-  engine_step_matchU
+  engine_step_matchU (hfuel := by omega)
     (Frag.pure_op rfl (PePure.of_isPePure rfl)
-      (by rw [peDepth_cAddPe, show lemDefaultFuel = 999999 + 1 from rfl]; omega))
-    (by rw [show esize (pureRedex [] (cAddPe a b a' b' loc)) = 1 from rfl,
-      show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+      (by rw [peDepth_cAddPe]; omega))
     (Step.pure_eval rfl (evalPexpr_cAdd hv1 hv2 hsel h1 h1' h2 h2' hs hs'))
 
 /-- THE STORE ACTION_EVAL ROUND AT A STANDARD-LIBRARY CALL: `store('signed
@@ -401,7 +381,7 @@ theorem cAdd_pure_round {M : MachineCtx} (a b a' b' : sym) (loc : CerbLocation.L
     engine's `call_function` on the file's stdlib (core_eval.lem:120–163)
     unfolds `conv_loaded_int → conv_int → is_representable_integer` and
     the round rewrites the operands to the values `p` and `Specified(n)`. -/
-theorem store_conv_loaded_int_round {M : MachineCtx} (hstd : StdE3 M.file)
+theorem store_conv_loaded_int_round (hfuel : 26 ≤ LemFuel.fuel) {M : MachineCtx} (hstd : StdE3 M.file)
     (a : List annot) (loc : CerbLocation.Loc) (ann : core_run_annotation) (mo : memory_order)
     (x y : sym) {pv : CerbMem.PointerValue} {n : Int}
     (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (ctl : Ctl) (σ : Mem)
@@ -412,14 +392,11 @@ theorem store_conv_loaded_int_round {M : MachineCtx} (hstd : StdE3 M.file)
       (storeOpRedex a loc ann sintTy (stdSym x)
         (Pexpr [] () (PEcall (Sym convLoadedIntSym) [sintTyPe, stdSym y])) mo, ev0 :: evs, ctl, σ)
       (storeExpr a loc ann sintTy pv (lint n) mo, ev0 :: evs, ctl.upd a, σ) :=
-  engine_step_matchU
+  engine_step_matchU (hfuel := by omega)
     (Frag.store_op rfl (PePure.of_isPePure rfl) (PePure.of_isPePure rfl)
-      (by rw [show peDepth (stdSym x) = 1 from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+      (by rw [show peDepth (stdSym x) = 1 from rfl]; omega)
       (by rw [show peDepth (Pexpr [] () (PEcall (Sym convLoadedIntSym) [sintTyPe, stdSym y])) = 26
-          from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega))
-    (by rw [show esize (storeOpRedex a loc ann sintTy (stdSym x)
-        (Pexpr [] () (PEcall (Sym convLoadedIntSym) [sintTyPe, stdSym y])) mo) = 1 from rfl,
-      show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+          from rfl]; omega))
     (Step.store_eval rfl hx
       (evalPexpr_convLoadedInt_spec [] hstd (by rw [sintTyPe, evalPexpr_val]) hy h1 h2))
 
@@ -436,23 +413,21 @@ COMPLETION round (every component a value: the annotated tuple). -/
     location updated from the component's annotations (`ctl.upd a1`; the
     frame's own annotations `a` are not consulted — `apply_ctx`'s `Cunseq`
     arm re-wraps them unchanged). -/
-theorem unseq_focus_round {M : MachineCtx} (a a1 a2 b2 : List annot) (x : sym) (v w : value)
+theorem unseq_focus_round (hfuel : 2 ≤ LemFuel.fuel) {M : MachineCtx} (a a1 a2 b2 : List annot) (x : sym) (v w : value)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (ctl : Ctl) (σ : Mem)
     (hx : evalPexpr M.tagDefs M.extern M.file (ev0 :: evs) (stdSym x) = some v) :
     CerberusRound M
       (Expr a (Eunseq [pureRedex a1 (stdSym x), ofValA (.pure a2 b2 w)]), ev0 :: evs, ctl, σ)
       (Expr a (Eunseq [Expr a1 (Epure (Pexpr [] () (PEval v))), ofValA (.pure a2 b2 w)]),
         ev0 :: evs, ctl.upd a1, σ) :=
-  engine_step_matchU
+  engine_step_matchU (hfuel := by omega)
     (Frag.unseq (by simp) rfl (fun e he => by
       simp only [List.mem_cons, List.not_mem_nil, or_false] at he
       rcases he with rfl | rfl
       · exact Frag.pure_op rfl (PePure.of_isPePure rfl)
-          (by rw [show peDepth (stdSym x) = 1 from rfl, show lemDefaultFuel = 999999 + 1 from rfl]; omega)
+          (by rw [show peDepth (stdSym x) = 1 from rfl]; omega)
       · exact frag_ofValA _))
-    (by simp only [esize_unseq, esizeList_cons, esizeList_nil, pureRedex, esize_pure, ofValA,
-        show lemDefaultFuel = 999999 + 1 from rfl]; omega)
-    (@Step.unseq_ctx M a [] _ _ [ofValA (.pure a2 b2 w)] _ _ _ _ _ _ rfl rfl rfl rfl rfl
+    (@Step.unseq_ctx _ M a [] _ _ [ofValA (.pure a2 b2 w)] _ _ _ _ _ _ rfl rfl rfl rfl rfl
       (Step.pure_eval rfl hx))
 
 /-- THE COMPLETION ROUND: `unseq(v_1, {A}v_2)` at two values, the second
@@ -461,7 +436,7 @@ theorem unseq_focus_round {M : MachineCtx} (a a1 a2 b2 : List annot) (x : sym) (
     node completes into the annotated tuple `{A}(v_1, v_2)` — the
     successor is `Eannot A (pure((v_1, v_2)))` with the location updated
     from the node's annotations. -/
-theorem unseq_vals_round {M : MachineCtx} (a a1 b1 a2 a2' b2 : List annot)
+theorem unseq_vals_round (hfuel : 2 ≤ LemFuel.fuel) {M : MachineCtx} (a a1 b1 a2 a2' b2 : List annot)
     (fp : CerbMem.Footprint) (v1 v2 : value)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (ctl : Ctl) (σ : Mem) :
     CerberusRound M
@@ -469,18 +444,16 @@ theorem unseq_vals_round {M : MachineCtx} (a a1 b1 a2 a2' b2 : List annot)
         ev0 :: evs, ctl, σ)
       (Expr a (Eannot [DA_pos [] fp] (Expr [] (Epure (Pexpr [] () (PEval (Vtuple [v1, v2])))))),
         ev0 :: evs, ctl.upd a, σ) :=
-  engine_step_matchU
+  engine_step_matchU (hfuel := by omega)
     (Frag.unseq (by simp) rfl (fun e he => by
       simp only [List.mem_cons, List.not_mem_nil, or_false] at he
       rcases he with rfl | rfl <;> exact frag_ofValA _))
-    (by simp only [esize_unseq, esizeList_cons, esizeList_nil, ofValA, esize_pure, esize_annot,
-        show lemDefaultFuel = 999999 + 1 from rfl]; omega)
-    (@Step.unseq_vals M a [.pure a1 b1 v1, .annot a2 a2' b2 [DA_pos [] fp] v2] _ _ _ _ _ rfl)
+    (@Step.unseq_vals _ M a [.pure a1 b1 v1, .annot a2 a2' b2 [DA_pos [] fp] v2] _ _ _ _ _ rfl)
 
 /-! ## E5: negative-action, excluded-store and case-evaluation rounds -/
 
 /-- The negative-action round draws both supplies and rewrites the bound. -/
-theorem neg_bound_round {M : MachineCtx} (an a : List annot) (loc : CerbLocation.Loc)
+theorem neg_bound_round (hfuel : 2 ≤ LemFuel.fuel) {M : MachineCtx} (an a : List annot) (loc : CerbLocation.Loc)
     (ann : core_run_annotation) (ty : ctype) (pv : CerbMem.PointerValue) (cv : value)
     (mo : memory_order) (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (ctl : Ctl) (σ : Mem) :
     let act := Action loc ann (Store0 false (Pexpr [] () (PEval (Vctype ty)))
@@ -489,10 +462,10 @@ theorem neg_bound_round {M : MachineCtx} (an a : List annot) (loc : CerbLocation
       (Expr an (Ebound (negRewrite ctl.sup.excl (fresh_given_int ctl.sup.sym) CTX act)),
         ev0 :: evs, (ctl.upd a).draw, σ) := by
   dsimp only
-  exact engine_step_matchU (.bound .neg_store) (Nat.le_of_ble_eq_true rfl) (.neg_bound rfl rfl)
+  exact engine_step_matchU (hfuel := by omega) (.bound (.neg_store (by omega))) (.neg_bound rfl rfl)
 
 /-- Discharging the excluded store retains its negative dynamic annotation. -/
-theorem excluded_store_round {M : MachineCtx} (a : List annot) (n : Nat) (loc : CerbLocation.Loc)
+theorem excluded_store_round (hfuel : 2 ≤ LemFuel.fuel) {M : MachineCtx} (a : List annot) (n : Nat) (loc : CerbLocation.Loc)
     (ann : core_run_annotation) (ty : ctype) (pv : CerbMem.PointerValue) (cv : value)
     (mo : memory_order) (mv : CerbMem.MemValue) (fp : CerbMem.Footprint)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (ctl : Ctl) (σ σ' : Mem)
@@ -501,23 +474,23 @@ theorem excluded_store_round {M : MachineCtx} (a : List annot) (n : Nat) (loc : 
     CerberusRound M (excludedStoreRedex a n loc ann false ty pv cv mo, ev0 :: evs, ctl, σ)
       (Expr [] (Eannot [DA_neg n [] fp] (Expr [] (Epure (Pexpr [] () (PEval Vunit))))),
         ev0 :: evs, ctl.upd a, σ') :=
-  engine_step_matchU .excluded_store (Nat.le_of_ble_eq_true rfl)
+  engine_step_matchU (hfuel := by omega) .excluded_store
     (.excluded_store rfl rfl rfl hmv hmem)
 
 /-- The excluded store evaluates a symbolic pointer before discharge. -/
-theorem excluded_store_eval_round {M : MachineCtx} (a : List annot) (n : Nat) (loc : CerbLocation.Loc)
+theorem excluded_store_eval_round (hfuel : 2 ≤ LemFuel.fuel) {M : MachineCtx} (a : List annot) (n : Nat) (loc : CerbLocation.Loc)
     (ann : core_run_annotation) (ty : ctype) (x : sym) (pv : CerbMem.PointerValue) (cv : value)
     (mo : memory_order) (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (ctl : Ctl) (σ : Mem)
     (hx : evalPexpr M.tagDefs M.extern M.file (ev0 :: evs) (stdSym x) = some (Vobject (OVpointer pv))) :
     CerberusRound M
       (excludedStoreOpRedex a n loc ann ty (stdSym x) (Pexpr [] () (PEval cv)) mo, ev0 :: evs, ctl, σ)
       (excludedStoreRedex a n loc ann false ty pv cv mo, ev0 :: evs, ctl.upd a, σ) :=
-  engine_step_matchU (.excluded_store_op rfl (.sym [] x) (.val [] cv)
-      (Nat.le_of_ble_eq_true rfl) (Nat.le_of_ble_eq_true rfl))
-    (Nat.le_of_ble_eq_true rfl) (.excluded_store_eval rfl hx (evalPexpr_val ..))
+  engine_step_matchU (hfuel := by omega) (.excluded_store_op rfl (.sym [] x) (.val [] cv)
+      (peDepth_sym_le _ _ (by omega)) (peDepth_val_le _ _ (by omega)))
+    (.excluded_store_eval rfl hx (evalPexpr_val ..))
 
 /-- A non-value case scrutinee is evaluated in its own engine round. -/
-theorem case_eval_round {M : MachineCtx} (a : List annot) (x : sym) (v r : value)
+theorem case_eval_round (hfuel : 2 ≤ LemFuel.fuel) {M : MachineCtx} (a : List annot) (x : sym) (v r : value)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (ctl : Ctl) (σ : Mem)
     (hx : evalPexpr M.tagDefs M.extern M.file (ev0 :: evs) (stdSym x) = some v) :
     let pats : List (pattern × CoreExpr) :=
@@ -525,8 +498,8 @@ theorem case_eval_round {M : MachineCtx} (a : List annot) (x : sym) (v r : value
     CerberusRound M (Expr a (Ecase (stdSym x) pats), ev0 :: evs, ctl, σ)
       (Expr a (Ecase (Pexpr [] () (PEval v)) pats), ev0 :: evs, ctl.upd a, σ) := by
   dsimp only
-  refine engine_step_matchU (.case_op rfl (.sym [] x) (Nat.le_of_ble_eq_true rfl) ?_ ?_ ?_)
-    (Nat.le_of_ble_eq_true rfl) (.case_eval rfl hx)
+  refine engine_step_matchU (hfuel := by omega) (.case_op rfl (.sym [] x) (peDepth_sym_le _ _ (by omega)) ?_ ?_ case_hbsz_of_branches)
+    (.case_eval rfl hx)
   · intro q hq
     obtain rfl := List.mem_singleton.mp hq
     exact .val_pure _
@@ -537,9 +510,5 @@ theorem case_eval_round {M : MachineCtx} (a : List annot) (x : sym) (v r : value
     rw [hs] at hsel
     cases hsel
     exact .val_pure _
-  · apply case_hbsz_of_branches
-    intro q hq
-    obtain rfl := List.mem_singleton.mp hq
-    exact Nat.le_of_ble_eq_true rfl
 
 end CerberusHeapLang

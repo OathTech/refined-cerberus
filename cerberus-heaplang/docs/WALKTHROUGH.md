@@ -1,5 +1,12 @@
 # A walkthrough: this is the theorem, this is how to read it
 
+**M2 re-pin checkpoint [AGENT 2026-09-06].** The integrated source passes
+the full gate at the new quantified-fuel pin. Fuel prose, old pin/line
+references and quoted signatures in this document still need reconciliation.
+Use the [current contract and validation record](../../docs/2026-09-06_repin-t4-malloclist-and-full-gate.md)
+and [claim matrix](CLAIMS.md) for the repaired contracts.
+This documentation task remains open under the active charter.
+
 For a reader who knows separation logic and roughly what Iris is, and
 has never heard of Cerberus. Seven sections: the claim and one exhibit
 (§1); the readout predicates (§2); the logic, rules quoted verbatim

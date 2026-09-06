@@ -1,40 +1,20 @@
 /-
-CerberusHeapLang.EnvLaws — lawfulness of the engine's environment
-maps: the lookup-after-add law the loop exhibits' invariants stand
-on.
+CerberusHeapLang.EnvLaws — lookup-after-add for the engine's environment,
+procedure and label maps.
 
-The gap this closes: the engine's env frames are LemLib `Fmap`s
-(Std.TreeMap-backed), and lookup-after-add on an ARBITRARY frame
-needs comparator lawfulness for the symbol order, which the engine
-does not ship as an instance. (Without it, exhibits must pin
-concrete frame SHAPES, which does not scale past one binding per
-frame.) The contents:
+The engine uses LemLib's Pmap representation. The symbol comparator is
+proved equal to the lexicographic order on (digest, number), transported
+to Pmap.CmpLaws. Comparator equality deliberately ignores descriptions;
+it does not imply Lean equality of symbols.
 
-1. `Std.TransCmp symOrd` — LAWFULNESS OF THE SYMBOL ORDER. The
-   engine's env-map comparator (`mapKeyCompare` at `sym` =
-   `setElemCompare` = `ordCompare` over the Symbol Eq0/Ord0
-   instances, Symbol.lean:219-244) is proved EQUAL to the
-   lexicographic composite of the CORE String order and the Nat
-   order on the symbol's (digest, number) key — `digest_compare`
-   (CerberusFresh.lean:43) is `if x < y then -1 else if x == y
-   then 0 else 1` on the digest strings, and core ships
-   `TransOrd String` (Init.Data.Ord.String). The instance transports
-   along that equation. NOTE the order is NOT `LawfulEqCmp`:
-   comparator-EQ symbols may differ in their symbol_description —
-   exactly the bucket subtlety LemLib's Fmap representation records.
-2. `SymFrame` — the reachable-frame predicate: empty, or built over
-   the captured symbol comparator (what every engine `update_env`
-   chain from an entry frame produces). Closed under `envAdd`.
-3. `envAdd_lookup` — THE LAW: lookup after add on any `SymFrame` is
-   a one-comparison case split (`Std.TreeMap.getElem?_insert` under
-   the TransCmp instance). Frame-shape pins disappear from loop
-   invariants: an invariant carries `SymFrame f` plus the lookups it
-   needs.
-4. The binding-pattern computations (`update_env_aux_sym`,
-   `update_env_aux_spec`) and the singleton-map facts — shared by
-   every exhibit.
+SymMap carries the captured comparator and Pmap's binary-search ordering
+invariant through Fmap.WF. Empty maps satisfy it and insertion preserves
+it. The public lookup law is a single comparison; clients carry this
+invariant without specifying a concrete tree shape. Binding-pattern
+computations use the engine's measured traversal, with no ambient fuel.
 -/
 import CerberusHeapLang.Step
+import LemLibPmapLaws
 
 set_option autoImplicit false
 
@@ -45,32 +25,13 @@ open Lem_Basic_classes Lem_Map
 /-! ## Singleton-map facts (concrete-structure reductions — no
 comparator lawfulness needed) -/
 
-/-- `get?` after insert-into-empty, characterized for ANY key: the
-    tree is one node, so lookup is a single comparison. -/
-theorem treeMap_get?_insert_empty {α β : Type} (cmp : α → α → Ordering)
-    (k : α) (v : β) (l : α) :
-    (((Std.TreeMap.empty (cmp := cmp)).insert k v).get? l) =
-      (if cmp l k = .eq then some v else none) := by
-  cases hc : cmp l k <;>
-    simp [Std.TreeMap.get?, Std.TreeMap.insert, Std.TreeMap.empty,
-      Std.DTreeMap.Internal.Impl.insert,
-      Std.DTreeMap.Const.get?, Std.DTreeMap.insert, Std.DTreeMap.empty,
-      Std.DTreeMap.Internal.Impl.Const.get?,
-      Std.DTreeMap.Internal.Impl.empty,
-      EmptyCollection.emptyCollection, Std.TreeMap.instEmptyCollection,
-      Std.DTreeMap.instEmptyCollection, hc]
-
 /-- Lookup in a one-entry `Fmap` built by `fmapAddBy` on empty. -/
 theorem fmapLookupBy_addBy_empty {β : Type}
     (cmpL cmpL' : sym → sym → LemOrdering) (k : sym) (v : β) (l : sym) :
     fmapLookupBy cmpL' l (fmapAddBy cmpL k v fmapEmpty) =
-      (if lemCmpToOrd cmpL l k = .eq then some v else none) := by
-  unfold fmapAddBy fmapEmpty fmapLookupBy
-  dsimp only
-  rw [treeMap_get?_insert_empty]
-  by_cases hc : lemCmpToOrd cmpL l k = .eq
-  · rw [if_pos hc, if_pos hc]
-  · rw [if_neg hc, if_neg hc]
+      (if cmpL l k = .EQ then some v else none) := by
+  cases hc : cmpL l k <;>
+    simp [fmapAddBy, fmapEmpty, fmapLookupBy, Pmap.add, Pmap.find?, hc]
 
 /-! ## The comparators -/
 
@@ -83,30 +44,21 @@ def symCmpL : sym → sym → LemOrdering :=
     instance). -/
 def symCmpK : sym → sym → LemOrdering := @mapKeyCompare sym _
 
-/-- A map add at the symbol key comparator, at ANY value type β — the
-    engine's `fmapAddBy … mapKeyCompare` shape (calls arc C4, the C3
-    range audit's H-2: the law below is stated once here, β-generic). The
-    env frame's `envAdd` is the `value` instance; a file's procedure map
-    (`prodFileWith`, ProdEntry.lean) and a label map are others. MEASURED
-    (LemLib.lean:497–517): the `BEq` instance enters `fmapAddBy` only in
-    the `.mk` arm's bucket filter, never the lookup, which reads the
-    bucket HEAD `(n, k, v) :: kept`; the add comparator enters only the
-    `.empty` arm, as the CAPTURED tree comparator `lemCmpToOrd cmp` — so
-    the lookup law needs the captured comparator to be `symOrd` (`SymMap`)
-    and nothing about the add's `BEq`. -/
+/-- The engine's map insertion at the symbol comparator. -/
 abbrev symAdd {β : Type} (k : sym) (v : β) (m : Fmap sym β) : Fmap sym β :=
-  @fmapAddBy sym β instBEqOfMapKeyType symCmpK k v m
+  fmapAddBy symCmpK k v m
 
-/-- The head-frame add in the ENGINE's exact elaboration
-    (update_env_aux's comparator AND its MapKeyType-derived BEq —
-    the derived structural `BEq sym` is a DIFFERENT instance and
-    must not leak in). The `value` instance of `symAdd`. -/
+/-- The head-frame insertion used by `update_env_aux`. -/
 abbrev envAdd (x : sym) (v : value) (m : Fmap sym value) : Fmap sym value :=
-  @fmapAddBy sym value instBEqOfMapKeyType symCmpK x v m
+  symAdd x v m
 
-/-- The symbol order in `Ordering` form — the comparator every env
-    frame's tree is captured at. -/
-abbrev symOrd : sym → sym → Ordering := lemCmpToOrd symCmpK
+/-- The engine's symbol comparison in Lean's `Ordering` spelling.
+    This conversion is only a proof interface; maps retain `symCmpK`. -/
+abbrev symOrd (x y : sym) : Ordering :=
+  match symCmpK x y with
+  | .LT => .lt
+  | .EQ => .eq
+  | .GT => .gt
 
 /-! ## Lawfulness of the symbol order -/
 
@@ -214,8 +166,7 @@ theorem symOrd_eq_compareOn :
   funext s1 s2
   obtain ⟨d1, n1, sd1⟩ := s1
   obtain ⟨d2, n2, sd2⟩ := s2
-  show lemCmpToOrd symCmpK _ _ = _
-  unfold lemCmpToOrd
+  unfold symOrd
   rw [symCmpK_eq, symbolEquality_eq]
   simp only [compareLex, compareOn, symKey]
   by_cases hlt : d1 < d2
@@ -261,86 +212,86 @@ theorem symOrd_eq_compareOn :
     · rw [digest_compare_gt hlt heq, string_compare_gt hlt heq]
       rfl
 
-/-- THE SEAM, CLOSED: the symbol order is a lawful (oriented,
-    transitive) comparison — Std's map laws apply to the env
-    frames. -/
+/-- The engine's symbol comparison is oriented and transitive. -/
 instance : Std.TransCmp symOrd := by
   rw [symOrd_eq_compareOn]
   infer_instance
 
-/-! ## The reachable-frame predicate and THE LOOKUP LAW -/
+/-- Translate the established order into the Pmap law interface. -/
+theorem symCmpK_laws : Pmap.CmpLaws symCmpK := by
+  letI : Ord sym := ⟨symOrd⟩
+  letI : Std.TransOrd sym := inferInstanceAs (Std.TransCmp symOrd)
+  have hc : symCmpK = (defaultCompare : sym → sym → LemOrdering) := by
+    funext x y
+    change symCmpK x y = (match symOrd x y with
+      | .lt => .LT | .eq => .EQ | .gt => .GT)
+    unfold symOrd
+    cases symCmpK x y <;> rfl
+  rw [hc]
+  exact Pmap.cmpLaws_of_transOrd
 
-/-- Maps reachable by `symAdd` chains at any value type: empty, or a
-    tree captured at the symbol comparator (calls arc C4; the `value`
-    instance is `SymFrame`). -/
-def SymMap {β : Type} (m : Fmap sym β) : Prop :=
-  m = Fmap.empty ∨
-  ∃ (bk : Std.TreeMap sym (List (Nat × sym × β)) symOrd)
-    (bs : Std.TreeMap Nat (sym × β)) (n : Nat),
-    m = Fmap.mk symOrd bk bs n
+/-- The two comparator spellings agree on comparator equality. -/
+theorem symOrd_eq_iff (x y : sym) : symOrd x y = .eq ↔ symCmpK x y = .EQ := by
+  unfold symOrd
+  cases symCmpK x y <;> simp
 
-theorem symMap_empty {β : Type} : SymMap (fmapEmpty : Fmap sym β) := .inl rfl
+/-! ## Reachable maps and lookup after insertion -/
+
+/-- The captured symbol comparator and the Pmap ordering invariant.
+    This holds for all maps constructed by symbol insertion from empty. -/
+def SymMap {β : Type} (m : Fmap sym β) : Prop := Fmap.WF symCmpK m
+
+theorem symMap_empty {β : Type} : SymMap (fmapEmpty : Fmap sym β) :=
+  Fmap.WF_empty symCmpK
 
 theorem SymMap.add {β : Type} {m : Fmap sym β} (h : SymMap m)
-    (k : sym) (v : β) : SymMap (symAdd k v m) := by
-  rcases h with rfl | ⟨bk, bs, n, rfl⟩
-  · exact .inr ⟨_, _, _, rfl⟩
-  · exact .inr ⟨_, _, _, rfl⟩
+    (k : sym) (v : β) : SymMap (symAdd k v m) :=
+  Fmap.WF_fmapAddBy symCmpK_laws k v m h
 
-/-- THE LOOKUP LAW, β-generic: lookup after add on any reachable map is
-    a single comparator case split (the Std.TreeMap insert law under
-    `Std.TransCmp symOrd`). The lookup's own comparator argument is
-    irrelevant (the representation searches with the CAPTURED
-    comparator). -/
+/-- Comparator-equal keys have identical tree lookups, even when their
+    Lean values differ. No tree invariant is required for this fact. -/
+theorem pmap_find?_congr_key {α β : Type} {cmp : α → α → LemOrdering}
+    (h : Pmap.CmpLaws cmp) {a b : α} (hab : cmp a b = .EQ) (m : Pmap α β) :
+    Pmap.find? cmp a m = Pmap.find? cmp b m := by
+  induction m with
+  | Empty => rfl
+  | Node l k v r height ihl ihr =>
+    simp only [Pmap.find?, h.eq_congr a b k hab]
+    cases cmp b k <;> first | assumption | rfl
+
+/-- Lookup after insertion on any reachable map. The lookup's comparator
+    argument is ignored by the engine in favor of the captured one. -/
 theorem symAdd_lookup {β : Type} {m : Fmap sym β} (h : SymMap m)
     (cmp' : sym → sym → LemOrdering) (l k : sym) (v : β) :
     fmapLookupBy cmp' l (symAdd k v m) =
       (if symOrd l k = .eq then some v else fmapLookupBy cmp' l m) := by
-  rcases h with rfl | ⟨bk, bs, n, rfl⟩
-  · rw [show fmapLookupBy cmp' l (Fmap.empty : Fmap sym β) = none from rfl]
-    exact fmapLookupBy_addBy_empty symCmpK cmp' k v l
-  · dsimp only [symAdd]
-    unfold fmapAddBy fmapLookupBy
-    dsimp only
-    rw [Std.TreeMap.get?_eq_getElem?, Std.TreeMap.get?_eq_getElem?,
-      Std.TreeMap.getElem?_insert]
-    have hswap : (symOrd k l = .eq) ↔ (symOrd l k = .eq) := by
-      rw [Std.OrientedCmp.eq_swap (cmp := symOrd) (a := k) (b := l)]
-      cases symOrd l k <;> simp [Ordering.swap]
-    by_cases hc : symOrd l k = .eq
-    · rw [if_pos (hswap.mpr hc), if_pos hc]
-    · rw [if_neg (fun h => hc (hswap.mp h)), if_neg hc]
-      rfl
+  by_cases hc : symOrd l k = .eq
+  · rw [if_pos hc]
+    have heq := (symOrd_eq_iff l k).mp hc
+    cases m with
+    | empty =>
+      change fmapLookupBy cmp' l (fmapAddBy symCmpK k v fmapEmpty) = some v
+      rw [fmapLookupBy_addBy_empty, if_pos heq]
+    | mk c m =>
+      obtain ⟨rfl, hm⟩ := h
+      change Pmap.find? symCmpK l (Pmap.add symCmpK k v m) = some v
+      rw [pmap_find?_congr_key symCmpK_laws heq]
+      exact Pmap.find?_add_same symCmpK_laws k v m hm
+  · rw [if_neg hc]
+    exact Fmap.fmapLookupBy_fmapAddBy_other symCmpK_laws cmp' l k v m h
+      (fun heq => hc ((symOrd_eq_iff l k).mpr heq))
 
-/-- The engine collector's label-map insertion uses its own BEq instance.
-    Like environment insertion, it retains the captured symbol order. -/
+/-- Label insertion uses the same comparator as environment insertion. -/
 theorem SymMap.addLabel {β : Type} {m : Fmap sym β} (h : SymMap m)
-    (k : sym) (v : β) : SymMap (fmapAddBy symCmpL k v m) := by
-  rcases h with rfl | ⟨bk, bs, n, rfl⟩
-  · exact .inr ⟨_, _, _, rfl⟩
-  · exact .inr ⟨_, _, _, rfl⟩
+    (k : sym) (v : β) : SymMap (fmapAddBy symCmpL k v m) :=
+  h.add k v
 
-/-- Lookup after the collector's label-map insertion. The bucket head
-    determines lookup even though this insertion's BEq differs from the
-    environment-update spelling used by `symAdd`. -/
+/-- Lookup after the collector's label-map insertion. -/
 theorem labelAdd_lookup {β : Type} {m : Fmap sym β} (h : SymMap m)
     (cmp' : sym → sym → LemOrdering) (l k : sym) (v : β) :
     fmapLookupBy cmp' l (fmapAddBy symCmpL k v m) =
-      (if symOrd l k = .eq then some v else fmapLookupBy cmp' l m) := by
-  rcases h with rfl | ⟨bk, bs, n, rfl⟩
-  · rw [show fmapLookupBy cmp' l (Fmap.empty : Fmap sym β) = none from rfl]
-    exact fmapLookupBy_addBy_empty symCmpL cmp' k v l
-  · unfold fmapAddBy fmapLookupBy
-    dsimp only
-    rw [Std.TreeMap.get?_eq_getElem?, Std.TreeMap.get?_eq_getElem?,
-      Std.TreeMap.getElem?_insert]
-    have hswap : (symOrd k l = .eq) ↔ (symOrd l k = .eq) := by
-      rw [Std.OrientedCmp.eq_swap (cmp := symOrd) (a := k) (b := l)]
-      cases symOrd l k <;> simp [Ordering.swap]
-    by_cases hc : symOrd l k = .eq
-    · rw [if_pos (hswap.mpr hc), if_pos hc]
-    · rw [if_neg (fun h => hc (hswap.mp h)), if_neg hc]
-      rfl
+      (if symOrd l k = .eq then some v else fmapLookupBy cmp' l m) :=
+  symAdd_lookup h cmp' l k v
 
 /-- The two-entry instance (a file's `main`-plus-one procedure map, a
     two-label map): the smoke's former local `csAdd_lookup_two`, here
@@ -410,12 +361,7 @@ computed at the authored pattern shapes) -/
     value's constructor exposed). Moved from LoopExhibit (S3). -/
 theorem update_env_aux_sym (x : sym) (b : core_base_type) (v : value)
     (m : Fmap sym value) :
-    update_env_aux (a := sym) (mk_sym_pat x b) v m = envAdd x v m := by
-  show update_env_aux_lemFuel lemDefaultFuel _ _ _ = _
-  rw [show lemDefaultFuel = 999999 + 1 from rfl]
-  unfold update_env_aux_lemFuel
-  dsimp only [mk_sym_pat, mk_sym_pat_]
-  rfl
+    update_env_aux (a := sym) (mk_sym_pat x b) v m = envAdd x v m := rfl
 
 /-- `update_env_aux` at the SPECIFIED-binder pattern binds the
     payload OBJECT value (Core_aux.lean:861, the `CaseCtor
@@ -423,13 +369,7 @@ theorem update_env_aux_sym (x : sym) (b : core_base_type) (v : value)
 theorem update_env_aux_spec (pa pb : List annot) (x : sym)
     (bty : core_base_type) (ov : object_value) (m : Fmap sym value) :
     update_env_aux (a := sym) (specPat pa pb x bty)
-        (Vloaded (LVspecified ov)) m = envAdd x (Vobject ov) m := by
-  show update_env_aux_lemFuel lemDefaultFuel _ _ _ = _
-  rw [show lemDefaultFuel = 999998 + 1 + 1 from rfl]
-  unfold update_env_aux_lemFuel
-  dsimp only [specPat]
-  unfold update_env_aux_lemFuel
-  rfl
+        (Vloaded (LVspecified ov)) m = envAdd x (Vobject ov) m := rfl
 
 /-- The whole-stack form at the Specified pattern. -/
 theorem update_env_spec (pa pb : List annot) (x : sym)
@@ -455,8 +395,6 @@ theorem update_env_tuple2_mixed (x y : sym) (tx ty : core_base_type) (vx vy : va
     update_env (tuplePat [] [([], some x, tx), ([], some y, ty)]) (Vtuple [vx, vy]) (f :: rest) =
       envAdd x vx (envAdd y vy f) :: rest := by
   rw [update_env_cons]
-  show update_env_aux_lemFuel lemDefaultFuel _ _ _ :: rest = _
-  rw [show lemDefaultFuel = 999999 + 1 from rfl]
   rfl
 
 /-- E5 (slice 2): `update_env` at the negative-action rewrite's binder
@@ -471,8 +409,6 @@ theorem update_env_tuple_wild_sym (s : sym) (v : value) (u : value)
         (ev0 :: evs) =
       envAdd s v ev0 :: evs := by
   rw [update_env_cons]
-  show update_env_aux_lemFuel lemDefaultFuel _ _ _ :: evs = _
-  rw [show lemDefaultFuel = 999999 + 1 from rfl]
   rfl
 
 /-! ## Head-frame lookups through `lookup_env` -/

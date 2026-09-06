@@ -1,102 +1,53 @@
 /-
-CerberusHeapLang.ProdEntry — the COLD START and the production-entry
-theorem: statements against the shipped pipeline, from the shipped
-initial state.
+CerberusHeapLang.ProdEntry — production setup and closed execution equations.
 
-The pipeline under judgment is the SHIPPED one (Main.lean:857-885):
+The conclusions use the shipped `CerbND.runND (_root_.drive …)` from
+`(initial_driver_state sup file fs).1`. One caller-provided `[LemFuel]`
+parameter is retained through ND binds, memory operations, the outer driver,
+the per-thread loop, finalization and result enumeration. Each generated
+wrapper starts its worker at that ambient budget; it is not a cumulative
+counter shared between calls. No fixed default fuel is installed here.
 
-  CerbND.runND (Driver.drive tagDefs false file args)
-               (initial_driver_state sup file fs).1
+The files in this module have a parameterless main, no globals and empty
+extern/tag/implementation maps. They may contain other procedures and an
+arbitrary Core standard-library map. These constructed files are not yet
+identified with the full emitted pipeline file; that connection remains
+KOI A7 and a demo-charter requirement.
 
-with `initial_driver_state` (Driver.lean:446) the PRODUCTION state
-constructor — nothing hand-built enters the quantifiers: memory starts
-at `CerbMem.initialMemState` (= the empty MemState), the thread pool
-empty (`initial_core_state`, Core_run_aux.lean:393), and the run state
-at `initial_core_run_state` (Core_run_aux.lean:406), which seeds
-`sym_supply` from the entry's `sup` argument (`initial_driver_state :
-Nat → file → fs_state → driver_state × Nat`, the `.1` projection
-being the state and `.2` the advanced supply). Every theorem below
-quantifies over the supply `sup` — the shipped `Main` seeds one
-concrete stream, the theorems hold for every value, because the
-fragment never reads `sym_supply`. Every theorem here has axiom set
-exactly the classical trio (Audit.lean).
+For ambient fuel at least two, setup spawns thread 0, looks up main,
+allocates and zeroes errno through the actual memory engine, and parks
+main's body. `ProdMemory` proves the complete resulting memory `prodMem₀`,
+its well-formedness and the unallocated-byte freshness used by `LaunchCoh`.
+The setup lemmas compose those equations with the shipped driver prefix.
 
-The setup prefix `Driver.drive` runs before `driver2`
-(Driver.lean:500-513): spawn thread 0 (`driver_globals` /
-`spawn_thread`, Core_run.lean:104 — tid 0 from the run state's
-tid_supply), evaluate globals (none in a synthetic one-procedure
-file), look up `main` in `funs`, skip argc/argv materialization
-(main has no parameters), allocate-and-zero `errno` with the REAL
-`allocateObject`/`storeM` on the cold memory, and park main's body as
-thread 0's arena. The concrete cold-start facts (`errno_alloc_eq`
-etc.) pin that prefix (`drive_after_setup`); `prodMem₀` is the memory
-state at fragment start — derived through engine functions only — and
-`prodMem₀_launchCoh` is the launch premise `LaunchCoh` at it, for any
-plan that fits its cursor.
+The total equations consume `DriverDoneAt` or `DriverDoneCtl` for that
+same file and fuel instance and require `k + 2 ≤ LemFuel.fuel`. They prove
+exactly one active outcome with the stated value and memory postcondition,
+no blocking, and empty stdout/stderr. Registration, live-control and symbol
+supply obligations remain in the delivery premise; this module does not
+assert that arbitrary programs ignore the initial supply. A total equation
+makes no claim at budgets below its premise.
 
-THE THEOREM (`prod_run_eqJ`): the production pipeline on a synthetic
-one-procedure file (`prodFile e`) is EXACTLY ONE Active execution
-whose value and final memory satisfy the postcondition, given the
-driver-delivery fact `DriverDoneAt` that the total judgment supplies
-(`wpt_driver_done_alloc`, ProdLoop.lean) and the registration tie
-`LabeledAt`. Scope: single-threaded, fragment-only, total correctness
-at a certified step count — plus the in-budget bound `k + 2 ≤
-CerbFuel.driverFuel` (the drive cone's budget, 10^8, since the
-cerberus-lean fuel arc; the bound is stated against the name the
-semantics exports, `CerbFuel.driverFuel`, as the change manifest
-directs). Below the bound the shipped driver's value is the kernel-
-transparent kill `CerbND.fuelExhaustedKill`; the TOTAL statements here
-simply do not speak there. The consumers are `exhibitA_prod`
-(ProdExhibit.lean) and the three `*_production` loop theorems
-(ProdLoopExhibit.lean).
+The partial equations hold at every ambient budget, given a `DriverSafeCtl`
+proof whenever that budget is at least two. At zero, `runND` exhausts
+before setup and preserves the initial state. At one, setup initializes
+errno, then `liftMem` writes back that memory and exhausts before main is
+parked. At budgets at least two, the safety premise classifies the actual
+per-thread loop at the same ambient budget. In every case there is exactly
+one outcome: the designated fuel-exhaustion kill at its actual state, or
+an active result satisfying the postcondition and the same output flags.
+No termination claim follows from the partial equation.
 
-THE PARTIAL THEOREM (`prod_run_safe_procs`, the fuel-lane restatement
-2026-09-03): the production pipeline on the synthetic N-procedure file,
-run through the semantics' fuel-parametric mirror `CerbND.drive_lemFuel
-fuel` AT EVERY `fuel` — the shipped `drive` is its instance at
-`CerbFuel.driverFuel`, `CerbND.drive_wrapper_defeq`, `rfl` — is EXACTLY
-ONE execution, and that execution is either the fuel-exhaustion kill
-(`nd_status.Killed dst' CerbND.fuelExhaustedKill`) or an Active one whose
-value and final memory satisfy the postcondition, given the driver-safety
-fact `DriverSafeCtl` the partial adequacy supplies (`engine_adequacy`,
-Adequacy.lean) and the whole-file registration tie. No in-budget bound:
-a partial statement about every run. MEASURED (the F1 record §3): the
-`fuel` parameter bounds the OUTER `driver2` rounds only —
-`new_drive_core_threads` (Driver.lean:355) calls the per-thread loop
-through its wrapper `drive_nonmemory_steps_aux2 = _lemFuel 10^8` — so
-at every `fuel ≥ 1` the statement is the one about the shipped `drive`,
-and at `fuel = 0` the setup runs and `driver2_lemFuel 0` kills
-(`CerbND.driver2_lemFuel_zero`).
-
-THE REGISTRATION TIE for loops: `fib_labeledAt_production` /
-`loop_labeledAt_production` derive `LabeledAt` at the PRODUCTION
-initial run state from the shipped `collect_labeled_continuations_NEW`
-— the loop exhibits' label maps are exactly what the production entry
-computes, nothing hand-built. The production `runND` equations for the
-loop RUNS themselves are the `*_production` theorems of
-ProdLoopExhibit.lean, through `wpt_driver_done_alloc` → `prod_run_eqJ`.
-(The former `counter_loop_certified_registration` — the counter loop over
-the package loop `driveU` at that derived tie — was deleted with the loop
-in the fuel-lane restatement, 2026-09-03: its content, the counter loop
-at the shipped registration, is what the partial lane states at the
-production context by construction.)
-
-On `create`: an UNCONDITIONAL `wp_create` from cell ownership alone is
-unprovable — `allocateObject` can kill ("out of memory",
-CerbMem.lean:1479) from configurations no cell footprint constrains.
-The allocation budget supplies the missing authority (K2.5): the
-create rules take `allocBudget (allocCost ty align)` (Heap.lean), the
-allocation-aware launchers grant a budget from real memory
-(`launchResources` under `LaunchCoh` — this module proves the concrete
-cold-start instance `prodMem₀_launchCoh`), and every allocating
-production exhibit is a whole-program logic proof whose creates cross
-the public `wpt_create` (`exhibitA_prod`, `counter_loop_certified_production`,
-`list_reverse_certified_production`).
+This closes the production setup composition without requiring a generic
+classification of arbitrary fragment-start executions at ambient one.
+Authored and emitted clients must separately supply their public logic
+proofs and the corresponding safety/delivery premises.
 -/
 import CerberusHeapLang.DriverCollapse
 import CerberusHeapLang.Examples.Layout
 import CerberusHeapLang.FibExhibit
 import CerberusHeapLang.ProdLoop
+import CerberusHeapLang.ProdMemory
 
 set_option autoImplicit false
 
@@ -140,173 +91,45 @@ theorem prodFile_funs_lookup (e : CoreExpr) :
     fmapLookupBy (fun (s1 s2 : sym) => ordCompare s1 s2) mainSym
       (prodFile e).funs = some (mainDecl e) := rfl
 
-/-! ## The cold-start memory: errno allocation on initialMemState
+/-- Registration on the single-procedure file reduces to the engine's
+    save collector for that procedure body. -/
+theorem collect_labeled_prodFile (e : CoreExpr) :
+    collect_labeled_continuations_NEW (prodFile e) =
+      fmapAddBy (fun (s1 s2 : sym) => ordCompare s1 s2) mainSym
+        (collect_saves e) fmapEmpty := rfl
 
-Driver.drive allocates and zeroes `errno` (Driver.lean:512, the
-`liftMem` block) before parking main's arena. On the cold state this
-is the FIRST allocation: id 0 at the top-of-memory cursor
-(0xFFFFFFFFFFF8 = 281474976710648 for a 4-byte int at alignment 4 —
-the recon §2.5 address). -/
+/-! Save-collector equations used by production registration proofs.
+Each equation exposes one constructor so clients can retain sharing
+instead of reducing an entire file/collector/union tree at once. -/
 
-def errnoAddr : Int := 281474976710648
+theorem collect_saves_aux_pure (n : Nat) (st : collect_saves_state core_run_annotation)
+    (a : List annot) (pe : generic_pexpr Unit sym) :
+    collect_saves_aux_lemFuel (n + 1) st (Expr a (Epure pe)) = st := rfl
 
-def errnoPtr : CerbMem.PointerValue := cellPtr 0 errnoAddr
+theorem collect_saves_aux_call (n : Nat) (st : collect_saves_state core_run_annotation)
+    (a : List annot) (ra : core_run_annotation) (f : sym)
+    (pes : List (generic_pexpr Unit sym)) :
+    collect_saves_aux_lemFuel (n + 1) st (callRedex a ra f pes) = st := rfl
 
-/-- The zero value the driver stores into errno. -/
-def zeroMval : CerbMem.MemValue :=
-  CerbMem.integerValueMval (Signed Int_) (CerbMem.integerIval 0)
+theorem collect_saves_aux_if (n : Nat) (st : collect_saves_state core_run_annotation)
+    (a : List annot) (g : generic_pexpr Unit sym) (e1 e2 : CoreExpr) :
+    collect_saves_aux_lemFuel (n + 1) st (Expr a (Eif g e1 e2)) =
+      collect_saves_aux_lemFuel n (collect_saves_aux_lemFuel n st e1) e2 := rfl
 
-/-- errno's allocation, exactly as allocateObject builds it. -/
-def errnoAllocRec : CerbMem.Allocation :=
-  { base := errnoAddr, size := 4, ty := some signed_int,
-    isReadonly := CerbMem.readonlyStatusForAlloc (PrefOther "errno") none,
-    prefix_ := PrefOther "errno" }
+theorem collect_saves_aux_sseq (n : Nat) (st : collect_saves_state core_run_annotation)
+    (a : List annot) (pat : pattern) (e1 e2 : CoreExpr) :
+    collect_saves_aux_lemFuel (n + 1) st (Expr a (Esseq pat e1 e2)) =
+      union_saves st (union_saves
+        { collect_saves_aux_lemFuel n empty_saves e1 with
+          tmp_acc := fmapMap (fun p => match p with
+            | (syms, e) => (syms, Expr a (Esseq pat e e2)))
+            (collect_saves_aux_lemFuel n empty_saves e1).tmp_acc }
+        (collect_saves_aux_lemFuel n empty_saves e2)) := rfl
 
-/-- The engine's own errno allocation on the cold state. -/
-def errnoSeeded : Option (CerbMem.PointerValue × Mem) :=
-  applyMemM (CerbMem.allocateObject fmapEmpty 0 (PrefOther "errno")
-    (CerbMem.alignofIval fmapEmpty signed_int) signed_int none none)
-    CerbMem.initialMemState
-
-/-- The state after the errno allocation. -/
-def σE1 : Mem :=
-  match errnoSeeded with
-  | some (_, σ) => σ
-  | none => {}
-
-theorem errnoSeeded_eq : errnoSeeded = some (errnoPtr, σE1) := rfl
-
-theorem errno_alloc_eq :
-    applyMemM (CerbMem.allocateObject fmapEmpty 0 (PrefOther "errno")
-      (CerbMem.alignofIval fmapEmpty signed_int) signed_int none none)
-      CerbMem.initialMemState = some (errnoPtr, σE1) := errnoSeeded_eq
-
-theorem σE1_allocations :
-    σE1.allocations = (({} : Mem).allocations.insert 0 errnoAllocRec) := rfl
-
-theorem errno_alloc_get : σE1.allocations.get? 0 = some errnoAllocRec := by
-  rw [σE1_allocations]
-  simp
-
-theorem errno_bytes_len (a : Int) :
-    (CerbMem.readBytesFrom σE1 a 4).length = 4 := by
-  unfold CerbMem.readBytesFrom
-  simp
-
-/-- errno's ghost-shaped cell in σE1 (only used to drive
-    storeM_success — errno is never a fragment cell). -/
-abbrev errnoCell : SpikeCell :=
-  ⟨errnoAddr, signed_int, CerbMem.readBytesFrom σE1 errnoAddr 4⟩
-
-theorem errnoCellCoh : CellCoh fmapEmpty σE1 0 errnoCell :=
-  ⟨rfl, ⟨errnoAllocRec, errno_alloc_get, rfl, rfl, rfl, rfl⟩, rfl,
-   by rw [show CerbMem.sizeofCtype fmapEmpty errnoCell.ty = 4 from rfl]; exact errno_bytes_len errnoAddr,
-   by rw [show CerbMem.sizeofCtype fmapEmpty errnoCell.ty = 4 from rfl],
-   fun _ _ => rfl⟩
-
-theorem zero_storable {tds : CerbTags.TagDefsMap} : StorableAt tds signed_int zeroMval :=
-  ⟨rfl, fun _ => rfl, fun _ => rfl, fun _ => rfl, fun _ _ _ => rfl⟩
-
-/-- The memory state at fragment start: errno allocated and zeroed by
-    the engine's own operations — the production cold-start memory. -/
-def prodMem₀ : Mem :=
-  CerbMem.writeBytesTo σE1 errnoAddr (CerbMem.memValueToBytes fmapEmpty [] zeroMval).2
-
-theorem errno_store_eq :
-    applyMemM (CerbMem.storeM fmapEmpty (CerbLocation.other "errno init") signed_int
-      false errnoPtr zeroMval) σE1 =
-      some (.FP .W errnoAddr (CerbMem.sizeofCtype fmapEmpty signed_int), prodMem₀) :=
-  storeM_success fmapEmpty σE1 0 errnoCell zeroMval _ errnoCellCoh zero_storable
-
-/-! ## Launch coherence at the production cold start (the CONCRETE
-instance; the generic theorem is `LaunchCoh.cohG` in Adequacy.lean,
-which encodes neither the errno address nor any demo's future
-allocations) -/
-
-theorem prodMem₀_nextAllocId : prodMem₀.nextAllocId = 1 := rfl
-
-theorem prodMem₀_lastAddress : prodMem₀.lastAddress = errnoAddr := rfl
-
-theorem prodMem₀_allocations :
-    prodMem₀.allocations =
-      (({} : Mem).allocations.insert 0 errnoAllocRec) := rfl
-
-theorem prodMem₀_deadAllocations : prodMem₀.deadAllocations = [] := rfl
-
-theorem prodMem₀_dynamicAddrs : prodMem₀.dynamicAddrs = [] := rfl
-
-/-- THE COLD-START INVARIANT (K0, acceptance goal 3): the production
-    initial memory is globally well formed. errno (id 0, below
-    `nextAllocId = 1`) is the ONLY allocation, at the cursor
-    (`lastAddress = errnoAddr = errnoAllocRec.base`), of size 4;
-    nothing is dead; no dynamic address; the cursor is below 2^64. -/
-theorem prodMem₀_memWF : MemWF prodMem₀ := by
-  have hget : ∀ id : Int, prodMem₀.allocations.get? id =
-      if (0 : Int) = id then some errnoAllocRec
-      else ({} : Mem).allocations.get? id := by
-    intro id
-    rw [prodMem₀_allocations]
-    simp [Std.TreeMap.get?_eq_getElem?, Std.TreeMap.getElem?_insert]
-  have hempty : ∀ id : Int, ({} : Mem).allocations.get? id = none := fun _ => rfl
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
-  · intro id al hg
-    rw [hget] at hg
-    split at hg
-    · next h0 =>
-      rw [← h0, prodMem₀_nextAllocId]
-      decide
-    · rw [hempty] at hg
-      cases hg
-  · intro id hc
-    rw [prodMem₀_deadAllocations] at hc
-    cases hc
-  · intro id al hg
-    rw [prodMem₀_deadAllocations]
-    rfl
-  · intro i j ai aj hne hgi hgj
-    rw [hget] at hgi hgj
-    split at hgi
-    · next hi =>
-      split at hgj
-      · next hj => exact absurd (hi.symm.trans hj) hne
-      · rw [hempty] at hgj
-        cases hgj
-    · rw [hempty] at hgi
-      cases hgi
-  · intro id al hg
-    rw [hget] at hg
-    split at hg
-    · obtain rfl := Option.some.inj hg
-      rw [prodMem₀_lastAddress]
-      exact Int.le_refl _
-    · rw [hempty] at hg
-      cases hg
-  · intro id al hg
-    rw [hget] at hg
-    split at hg
-    · obtain rfl := Option.some.inj hg
-      decide
-    · rw [hempty] at hg
-      cases hg
-  · rw [prodMem₀_lastAddress]
-    decide
-  · rw [prodMem₀_lastAddress]
-    decide
-  · intro a ha
-    rw [prodMem₀_dynamicAddrs] at ha
-    cases ha
-  · intro a ha
-    rw [prodMem₀_dynamicAddrs] at ha
-    cases ha
-
-/-- Launch coherence at the production cold start: the invariant
-    (`prodMem₀_memWF`) plus any budget within the actual cursor's
-    headroom (`errnoAddr − 1`) launches the empty footprint
-    allocation-aware (K2.5; formerly a plan fitting the cursor). -/
-theorem prodMem₀_launchCoh (B : Nat)
-    (hB : B ≤ headroom prodMem₀.lastAddress) :
-    LaunchCoh fmapEmpty prodMem₀ (∅ : SpikeHeapF SpikeCell) B :=
-  LaunchCoh.empty fmapEmpty prodMem₀ B prodMem₀_memWF hB
+/-! The cold-start memory equations and launch coherence are proved in
+`ProdMemory`: actual errno allocation and zeroing, complete metadata and
+byte-map state, global memory well-formedness, and unallocated-byte
+freshness below the cursor. This module composes them with the driver. -/
 
 /-! ## The thread at fragment start (Driver.lean:512, the parked-main
 thread literal) -/
@@ -348,41 +171,42 @@ def prodEntryState (sup : Nat) (e : CoreExpr) (fs : CerbFS.FsState) : driver_sta
 initial state to the driver2 entry, computed through the engine's own
 setup functions (spawn_thread, the main lookup, the errno block). -/
 
-theorem drive_after_setup (sup : Nat) (e : CoreExpr) (fs : CerbFS.FsState)
+theorem drive_after_setup [LF : LemFuel] (hfuel : 2 ≤ LemFuel.fuel)
+    (sup : Nat) (e : CoreExpr) (fs : CerbFS.FsState)
     (args : List String) (dstD : driver_state)
-    (hdrv2 : runOne (driver2_lemFuel CerbFuel.driverFuel fmapEmpty false)
+    (hdrv2 : runOne (driver2_lemFuel LemFuel.fuel fmapEmpty false)
         (prodEntryState sup e fs) = (NDactive (), dstD)) :
     runOne (_root_.drive fmapEmpty false (prodFile e) args)
         ((initial_driver_state sup (prodFile e) fs).1) =
       (NDactive (finalize fmapEmpty "drive (without concur)" dstD), dstD) := by
+  rcases LF with ⟨fuel⟩
+  change 2 ≤ fuel at hfuel
+  obtain ⟨n, rfl⟩ : ∃ n, fuel = n + 2 := ⟨fuel - 2, by omega⟩
+  letI : LemFuel := ⟨n + 2⟩
+  have hpos : 0 < LemFuel.fuel := by change 0 < n + 2; omega
+  have htwo : 2 ≤ LemFuel.fuel := by change 2 ≤ n + 2; omega
   conv => lhs; unfold _root_.drive
   -- driver_globals: spawn thread 0, no globals
-  refine (runOne_bind_active (z := (0 : Nat))
+  refine (runOne_bind_active (hfuel := hpos) (z := (0 : Nat))
     (s' := prodPostGlobals sup e fs) (by rfl)).trans ?_
   -- main lookup on the synthetic file
-  refine (runOne_bind_active (z := prodPostGlobals sup e fs) (by rfl)).trans ?_
-  refine (runOne_bind_active (z := mainSym) (by rfl)).trans ?_
-  refine (runOne_bind_active
+  refine (runOne_bind_active (hfuel := hpos) (z := prodPostGlobals sup e fs) (by rfl)).trans ?_
+  refine (runOne_bind_active (hfuel := hpos) (z := mainSym) (by rfl)).trans ?_
+  refine (runOne_bind_active (hfuel := hpos)
     (z := (CerbLocation.unknown, ([] : List (sym × core_base_type)), e))
     (by rfl)).trans ?_
-  refine (runOne_bind_active (z := e) (by rfl)).trans ?_
+  refine (runOne_bind_active (hfuel := hpos) (z := e) (by rfl)).trans ?_
   -- the errno allocation block (real allocateObject/storeM on the
   -- cold memory)
-  refine (runOne_bind_active (z := errnoPtr)
+  refine (runOne_bind_active (hfuel := hpos) (z := errnoPtr)
     (s' := { prodPostGlobals sup e fs with layout_state := prodMem₀ })
-    (runOne_liftMem_active ?_)).trans ?_
-  · refine (runOne_bind_active (z := errnoPtr) (s' := σE1)
-      (runOne_of_applyMemM errno_alloc_eq)).trans ?_
-    refine (runOne_bind_active
-      (z := CerbMem.Footprint.FP .W errnoAddr (CerbMem.sizeofCtype fmapEmpty signed_int))
-      (s' := prodMem₀) (runOne_of_applyMemM errno_store_eq)).trans ?_
-    rfl
+    (runOne_liftMem_active (hfuel := htwo) (errno_init_eq hpos))).trans ?_
   -- park main's arena, run driver2, finalize
-  refine (runOne_bind_active (z := ()) (s' := dstD) ?_).trans ?_
-  · refine (runOne_bind_active (z := ()) (s' := prodEntryState sup e fs)
+  refine (runOne_bind_active (hfuel := hpos) (z := ()) (s' := dstD) ?_).trans ?_
+  · refine (runOne_bind_active (hfuel := hpos) (z := ()) (s' := prodEntryState sup e fs)
       (by rfl)).trans ?_
     exact hdrv2
-  · refine (runOne_bind_active (z := dstD) (by rfl)).trans ?_
+  · refine (runOne_bind_active (hfuel := hpos) (z := dstD) (by rfl)).trans ?_
     rfl
 
 /-! ## THE PRODUCTION RUN EQUATION FOR REGISTERED-LOOP PROGRAMS
@@ -399,13 +223,13 @@ theorem composing `drive_after_setup` + a `DriverDoneAt` delivery fact
     Total-lane composition: `hdd` comes from `wpt_driver_done`, so no
     termination hypothesis remains — only the in-budget bound on the
     certified step count (fuel honesty, D19). -/
-theorem prod_run_eqJ (sup : Nat) (e : CoreExpr) {Q : LabelMap}
+theorem prod_run_eqJ [LF : LemFuel] (sup : Nat) (e : CoreExpr) {Q : LabelMap}
     (hQe : LabeledAt ((initial_core_run_state sup
       (collect_labeled_continuations_NEW (prodFile e))).1) mainSym Q)
     (ψ : value → Mem → Prop) (k : Nat)
     (hdd : DriverDoneAt mainSym Q (prodFile e) (prodThread e) e [fmapEmpty]
       (CerbLocation.other "Driver.drive") ⟨sup, 0⟩ prodMem₀ ψ k)
-    (hfl : k + 2 ≤ CerbFuel.driverFuel)
+    (hfl : k + 2 ≤ LemFuel.fuel)
     (fs : CerbFS.FsState) (args : List String) :
     ∃ (dres : driver_result) (dst' : driver_state),
       CerbND.runND (_root_.drive fmapEmpty false (prodFile e) args)
@@ -416,14 +240,15 @@ theorem prod_run_eqJ (sup : Nat) (e : CoreExpr) {Q : LabelMap}
       dres.dres_stdout = "" ∧
       dres.dres_stderr = "" := by
   obtain ⟨v, σfin, ρfin, lcfin, afin, bfin, rs', tr, ctr, hψ, hloop⟩ :=
-    hdd (prodEntryState sup e fs) fmapEmpty CerbFuel.driverFuel rfl rfl rfl rfl hQe ⟨rfl, rfl⟩ hfl
-  have hdrv2 := driver2_done 99999999 fmapEmpty (prodEntryState sup e fs) _
+    hdd (prodEntryState sup e fs) fmapEmpty LemFuel.fuel rfl rfl rfl rfl hQe ⟨rfl, rfl⟩ hfl
+  have hdrv2 := driver2_done (hfuel := by omega) (LemFuel.fuel - 1) fmapEmpty (prodEntryState sup e fs) _
     (prodThread e)
     { prodThread e with arena := ofValA (.pure afin bfin v), env := ρfin, current_loc := lcfin }
     v rfl hloop rfl
-  have hrun := drive_after_setup sup e fs args _ hdrv2
-  refine ⟨_, _, runND_active hrun, ?_, rfl, rfl, rfl⟩
-  rw [finalize_done fmapEmpty _ _
+  rw [show Nat.succ (LemFuel.fuel - 1) = LemFuel.fuel by omega] at hdrv2
+  have hrun := drive_after_setup (hfuel := by omega) sup e fs args _ hdrv2
+  refine ⟨_, _, runND_active (hfuel := by omega) hrun, ?_, rfl, rfl, rfl⟩
+  rw [finalize_done (hfuel := by omega) fmapEmpty _ _
     { { prodThread e with arena := ofValA (.pure afin bfin v), env := ρfin, current_loc := lcfin }
         with stack0 := Stack_empty, arena := mk_value_e v } v rfl rfl]
   exact hψ
@@ -630,102 +455,116 @@ def prodEntryStateWith (procs : List (sym × List (sym × core_base_type) × Cor
                        io := initial_io_state },
       layout_state := prodMem₀ }
 
-/-- The setup collapse on the N-procedure file at EVERY `driver2` fuel,
-    ACTIVE arm (`drive_after_setup`'s twin at any fuel): the same prefix,
-    the `main` lookup by `symAdd_lookup`. `drive_after_setup_with` below is
-    its instance at `fuel := CerbFuel.driverFuel` (`drive = drive_lemFuel
-    CerbFuel.driverFuel`, `CerbND.drive_wrapper_defeq`). -/
-theorem drive_after_setup_with_lemFuel (fuel : Nat)
+/-- Setup on the N-procedure file with ambient fuel at least two.
+    The active driver result uses the same instance and budget as `drive`. -/
+theorem drive_after_setup_with [LF : LemFuel] (hfuel : 2 ≤ LemFuel.fuel)
     (procs : List (sym × List (sym × core_base_type) × CoreExpr))
     (sup : Nat) (e : CoreExpr) (fs : CerbFS.FsState)
     (args : List String) (dstD : driver_state)
-    (hdrv2 : runOne (driver2_lemFuel fuel fmapEmpty false)
-        (prodEntryStateWith procs sup e fs) = (NDactive (), dstD)) :
-    runOne (CerbND.drive_lemFuel fuel fmapEmpty false (prodFileWith procs e) args)
-        ((initial_driver_state sup (prodFileWith procs e) fs).1) =
-      (NDactive (finalize fmapEmpty "drive (without concur)" dstD), dstD) := by
-  conv => lhs; unfold CerbND.drive_lemFuel
-  refine (runOne_bind_active (z := (0 : Nat))
-    (s' := prodPostGlobalsWith procs sup e fs) (by rfl)).trans ?_
-  refine (runOne_bind_active (z := prodPostGlobalsWith procs sup e fs) (by rfl)).trans ?_
-  refine (runOne_bind_active (z := mainSym) (by rfl)).trans ?_
-  have hlook : fmapLookupBy (fun (s1 : sym) (s2 : sym) => Lem_Basic_classes.ordCompare s1 s2)
-      mainSym (prodPostGlobalsWith procs sup e fs).core_file.funs = some (mainDecl e) := by
-    show fmapLookupBy _ mainSym (symAdd mainSym (mainDecl e) (procDecls procs)) = _
-    rw [symAdd_lookup (procDecls_symMap procs), if_pos (by decide +kernel)]
-  rw [hlook]
-  refine (runOne_bind_active
-    (z := (CerbLocation.unknown, ([] : List (sym × core_base_type)), e)) (by rfl)).trans ?_
-  refine (runOne_bind_active (z := e) (by rfl)).trans ?_
-  refine (runOne_bind_active (z := errnoPtr)
-    (s' := { prodPostGlobalsWith procs sup e fs with layout_state := prodMem₀ })
-    (runOne_liftMem_active ?_)).trans ?_
-  · refine (runOne_bind_active (z := errnoPtr) (s' := σE1)
-      (runOne_of_applyMemM errno_alloc_eq)).trans ?_
-    refine (runOne_bind_active
-      (z := CerbMem.Footprint.FP .W errnoAddr (CerbMem.sizeofCtype fmapEmpty signed_int))
-      (s' := prodMem₀) (runOne_of_applyMemM errno_store_eq)).trans ?_
-    rfl
-  refine (runOne_bind_active (z := ()) (s' := dstD) ?_).trans ?_
-  · refine (runOne_bind_active (z := ()) (s' := prodEntryStateWith procs sup e fs)
-      (by rfl)).trans ?_
-    exact hdrv2
-  · refine (runOne_bind_active (z := dstD) (by rfl)).trans ?_
-    rfl
-
-/-- The setup collapse on the N-procedure file at EVERY `driver2` fuel,
-    KILLED arm: the same prefix, and `driver2`'s kill propagates through
-    the ND bind (`runOne_bind_killed`) — the pipeline's value is the
-    kill at `driver2`'s state. -/
-theorem drive_after_setup_with_killed (fuel : Nat)
-    (procs : List (sym × List (sym × core_base_type) × CoreExpr))
-    (sup : Nat) (e : CoreExpr) (fs : CerbFS.FsState)
-    (args : List String) (dstK : driver_state) (r : kill_reason driver_error)
-    (hdrv2 : runOne (driver2_lemFuel fuel fmapEmpty false)
-        (prodEntryStateWith procs sup e fs) = (NDkilled r, dstK)) :
-    runOne (CerbND.drive_lemFuel fuel fmapEmpty false (prodFileWith procs e) args)
-        ((initial_driver_state sup (prodFileWith procs e) fs).1) = (NDkilled r, dstK) := by
-  conv => lhs; unfold CerbND.drive_lemFuel
-  refine (runOne_bind_active (z := (0 : Nat))
-    (s' := prodPostGlobalsWith procs sup e fs) (by rfl)).trans ?_
-  refine (runOne_bind_active (z := prodPostGlobalsWith procs sup e fs) (by rfl)).trans ?_
-  refine (runOne_bind_active (z := mainSym) (by rfl)).trans ?_
-  have hlook : fmapLookupBy (fun (s1 : sym) (s2 : sym) => Lem_Basic_classes.ordCompare s1 s2)
-      mainSym (prodPostGlobalsWith procs sup e fs).core_file.funs = some (mainDecl e) := by
-    show fmapLookupBy _ mainSym (symAdd mainSym (mainDecl e) (procDecls procs)) = _
-    rw [symAdd_lookup (procDecls_symMap procs), if_pos (by decide +kernel)]
-  rw [hlook]
-  refine (runOne_bind_active
-    (z := (CerbLocation.unknown, ([] : List (sym × core_base_type)), e)) (by rfl)).trans ?_
-  refine (runOne_bind_active (z := e) (by rfl)).trans ?_
-  refine (runOne_bind_active (z := errnoPtr)
-    (s' := { prodPostGlobalsWith procs sup e fs with layout_state := prodMem₀ })
-    (runOne_liftMem_active ?_)).trans ?_
-  · refine (runOne_bind_active (z := errnoPtr) (s' := σE1)
-      (runOne_of_applyMemM errno_alloc_eq)).trans ?_
-    refine (runOne_bind_active
-      (z := CerbMem.Footprint.FP .W errnoAddr (CerbMem.sizeofCtype fmapEmpty signed_int))
-      (s' := prodMem₀) (runOne_of_applyMemM errno_store_eq)).trans ?_
-    rfl
-  refine runOne_bind_killed ?_
-  refine (runOne_bind_active (z := ()) (s' := prodEntryStateWith procs sup e fs)
-    (by rfl)).trans ?_
-  exact hdrv2
-
-/-- The setup collapse on the N-procedure file at the shipped `drive`
-    (`drive_after_setup`'s twin; calls arc C4): the instance of
-    `drive_after_setup_with_lemFuel` at `CerbFuel.driverFuel` — `drive`
-    unfolds to `CerbND.drive_lemFuel CerbFuel.driverFuel`
-    (`CerbND.drive_wrapper_defeq`, `rfl`). -/
-theorem drive_after_setup_with (procs : List (sym × List (sym × core_base_type) × CoreExpr))
-    (sup : Nat) (e : CoreExpr) (fs : CerbFS.FsState)
-    (args : List String) (dstD : driver_state)
-    (hdrv2 : runOne (driver2_lemFuel CerbFuel.driverFuel fmapEmpty false)
+    (hdrv2 : runOne (driver2_lemFuel LemFuel.fuel fmapEmpty false)
         (prodEntryStateWith procs sup e fs) = (NDactive (), dstD)) :
     runOne (_root_.drive fmapEmpty false (prodFileWith procs e) args)
         ((initial_driver_state sup (prodFileWith procs e) fs).1) =
-      (NDactive (finalize fmapEmpty "drive (without concur)" dstD), dstD) :=
-  drive_after_setup_with_lemFuel CerbFuel.driverFuel procs sup e fs args dstD hdrv2
+      (NDactive (finalize fmapEmpty "drive (without concur)" dstD), dstD) := by
+  rcases LF with ⟨fuel⟩
+  change 2 ≤ fuel at hfuel
+  obtain ⟨n, rfl⟩ : ∃ n, fuel = n + 2 := ⟨fuel - 2, by omega⟩
+  letI : LemFuel := ⟨n + 2⟩
+  have hpos : 0 < LemFuel.fuel := by change 0 < n + 2; omega
+  have htwo : 2 ≤ LemFuel.fuel := by change 2 ≤ n + 2; omega
+  conv => lhs; unfold _root_.drive
+  refine (runOne_bind_active (hfuel := hpos) (z := (0 : Nat))
+    (s' := prodPostGlobalsWith procs sup e fs) (by rfl)).trans ?_
+  refine (runOne_bind_active (hfuel := hpos) (z := prodPostGlobalsWith procs sup e fs) (by rfl)).trans ?_
+  refine (runOne_bind_active (hfuel := hpos) (z := mainSym) (by rfl)).trans ?_
+  have hlook : fmapLookupBy (fun (s1 : sym) (s2 : sym) => Lem_Basic_classes.ordCompare s1 s2)
+      mainSym (prodPostGlobalsWith procs sup e fs).core_file.funs = some (mainDecl e) := by
+    show fmapLookupBy _ mainSym (symAdd mainSym (mainDecl e) (procDecls procs)) = _
+    rw [symAdd_lookup (procDecls_symMap procs), if_pos (by decide +kernel)]
+  rw [hlook]
+  refine (runOne_bind_active (hfuel := hpos)
+    (z := (CerbLocation.unknown, ([] : List (sym × core_base_type)), e)) (by rfl)).trans ?_
+  refine (runOne_bind_active (hfuel := hpos) (z := e) (by rfl)).trans ?_
+  refine (runOne_bind_active (hfuel := hpos) (z := errnoPtr)
+    (s' := { prodPostGlobalsWith procs sup e fs with layout_state := prodMem₀ })
+    (runOne_liftMem_active (hfuel := htwo) (errno_init_eq hpos))).trans ?_
+  refine (runOne_bind_active (hfuel := hpos) (z := ()) (s' := dstD) ?_).trans ?_
+  · refine (runOne_bind_active (hfuel := hpos) (z := ()) (s' := prodEntryStateWith procs sup e fs)
+      (by rfl)).trans ?_
+    exact hdrv2
+  · refine (runOne_bind_active (hfuel := hpos) (z := dstD) (by rfl)).trans ?_
+    rfl
+
+/-- With ambient fuel one, setup initializes errno and then memory lifting
+    exhausts before the driver's main thread is parked. -/
+theorem drive_after_setup_with_one [LF : LemFuel] (hone : LemFuel.fuel = 1)
+    (procs : List (sym × List (sym × core_base_type) × CoreExpr))
+    (sup : Nat) (e : CoreExpr) (fs : CerbFS.FsState)
+    (args : List String) :
+    runOne (_root_.drive fmapEmpty false (prodFileWith procs e) args)
+        ((initial_driver_state sup (prodFileWith procs e) fs).1) =
+      (NDkilled CerbND.fuelExhaustedKill,
+        { prodPostGlobalsWith procs sup e fs with layout_state := prodMem₀ }) := by
+  rcases LF with ⟨fuel⟩
+  change fuel = 1 at hone
+  subst fuel
+  letI : LemFuel := ⟨1⟩
+  conv => lhs; unfold _root_.drive
+  refine (runOne_bind_active (hfuel := by decide) (z := (0 : Nat))
+    (s' := prodPostGlobalsWith procs sup e fs) (by rfl)).trans ?_
+  refine (runOne_bind_active (hfuel := by decide) (z := prodPostGlobalsWith procs sup e fs) (by rfl)).trans ?_
+  refine (runOne_bind_active (hfuel := by decide) (z := mainSym) (by rfl)).trans ?_
+  have hlook : fmapLookupBy (fun (s1 : sym) (s2 : sym) => Lem_Basic_classes.ordCompare s1 s2)
+      mainSym (prodPostGlobalsWith procs sup e fs).core_file.funs = some (mainDecl e) := by
+    show fmapLookupBy _ mainSym (symAdd mainSym (mainDecl e) (procDecls procs)) = _
+    rw [symAdd_lookup (procDecls_symMap procs), if_pos (by decide +kernel)]
+  rw [hlook]
+  refine (runOne_bind_active (hfuel := by decide)
+    (z := (CerbLocation.unknown, ([] : List (sym × core_base_type)), e)) (by rfl)).trans ?_
+  refine (runOne_bind_active (hfuel := by decide) (z := e) (by rfl)).trans ?_
+  refine runOne_bind_killed (hfuel := by decide) ?_
+  rw [runOne_liftMem_one rfl]
+  exact congrArg (fun mem : Mem =>
+    (NDkilled CerbND.fuelExhaustedKill,
+      { prodPostGlobalsWith procs sup e fs with layout_state := mem }))
+    (congrArg Prod.snd (errno_init_eq (by decide)))
+
+/-- Setup on the N-procedure file with ambient fuel at least two.
+    A kill from the driver propagates with its actual state. -/
+theorem drive_after_setup_with_killed [LF : LemFuel] (hfuel : 2 ≤ LemFuel.fuel)
+    (procs : List (sym × List (sym × core_base_type) × CoreExpr))
+    (sup : Nat) (e : CoreExpr) (fs : CerbFS.FsState)
+    (args : List String) (dstK : driver_state) (r : kill_reason driver_error)
+    (hdrv2 : runOne (driver2_lemFuel LemFuel.fuel fmapEmpty false)
+        (prodEntryStateWith procs sup e fs) = (NDkilled r, dstK)) :
+    runOne (_root_.drive fmapEmpty false (prodFileWith procs e) args)
+        ((initial_driver_state sup (prodFileWith procs e) fs).1) = (NDkilled r, dstK) := by
+  rcases LF with ⟨fuel⟩
+  change 2 ≤ fuel at hfuel
+  obtain ⟨n, rfl⟩ : ∃ n, fuel = n + 2 := ⟨fuel - 2, by omega⟩
+  letI : LemFuel := ⟨n + 2⟩
+  have hpos : 0 < LemFuel.fuel := by change 0 < n + 2; omega
+  have htwo : 2 ≤ LemFuel.fuel := by change 2 ≤ n + 2; omega
+  conv => lhs; unfold _root_.drive
+  refine (runOne_bind_active (hfuel := hpos) (z := (0 : Nat))
+    (s' := prodPostGlobalsWith procs sup e fs) (by rfl)).trans ?_
+  refine (runOne_bind_active (hfuel := hpos) (z := prodPostGlobalsWith procs sup e fs) (by rfl)).trans ?_
+  refine (runOne_bind_active (hfuel := hpos) (z := mainSym) (by rfl)).trans ?_
+  have hlook : fmapLookupBy (fun (s1 : sym) (s2 : sym) => Lem_Basic_classes.ordCompare s1 s2)
+      mainSym (prodPostGlobalsWith procs sup e fs).core_file.funs = some (mainDecl e) := by
+    show fmapLookupBy _ mainSym (symAdd mainSym (mainDecl e) (procDecls procs)) = _
+    rw [symAdd_lookup (procDecls_symMap procs), if_pos (by decide +kernel)]
+  rw [hlook]
+  refine (runOne_bind_active (hfuel := hpos)
+    (z := (CerbLocation.unknown, ([] : List (sym × core_base_type)), e)) (by rfl)).trans ?_
+  refine (runOne_bind_active (hfuel := hpos) (z := e) (by rfl)).trans ?_
+  refine (runOne_bind_active (hfuel := hpos) (z := errnoPtr)
+    (s' := { prodPostGlobalsWith procs sup e fs with layout_state := prodMem₀ })
+    (runOne_liftMem_active (hfuel := htwo) (errno_init_eq hpos))).trans ?_
+  refine runOne_bind_killed (hfuel := hpos) ?_
+  refine (runOne_bind_active (hfuel := hpos) (z := ()) (s' := prodEntryStateWith procs sup e fs)
+    (by rfl)).trans ?_
+  exact hdrv2
 
 /-- THE PRODUCTION RUN EQUATION FOR N-PROCEDURE PROGRAMS (calls arc C4;
     `prod_run_eqJ`'s twin): the production pipeline on the synthetic file
@@ -734,15 +573,15 @@ theorem drive_after_setup_with (procs : List (sym × List (sym × core_base_type
     production initial run state (`hlab`, derived by computation in the
     exhibit) and the live-control delivery fact from the cold start at
     the entry control `prodCtl` (`hdd`, from `wpt_driver_done_procs`), plus
-    the in-budget bound `k + 2 ≤ CerbFuel.driverFuel`. -/
-theorem prod_run_eqJ_procs (sup : Nat)
+    the in-budget bound `k + 2 ≤ LemFuel.fuel`. -/
+theorem prod_run_eqJ_procs [LF : LemFuel] (sup : Nat)
     (procs : List (sym × List (sym × core_base_type) × CoreExpr)) (e : CoreExpr)
     (hlab : LabeledProcs (prodCtx (prodFileWith procs e) (prodRS procs sup e))
       (prodRS procs sup e).labeled)
     (ψ : value → Mem → Prop) (k : Nat)
     (hdd : DriverDoneCtl (prodCtx (prodFileWith procs e) (prodRS procs sup e)) (prodThread e) e
       [fmapEmpty] (prodCtl sup) prodMem₀ ψ k)
-    (hfl : k + 2 ≤ CerbFuel.driverFuel)
+    (hfl : k + 2 ≤ LemFuel.fuel)
     (fs : CerbFS.FsState) (args : List String) :
     ∃ (dres : driver_result) (dst' : driver_state),
       CerbND.runND (_root_.drive fmapEmpty false (prodFileWith procs e) args)
@@ -753,50 +592,36 @@ theorem prod_run_eqJ_procs (sup : Nat)
       dres.dres_stdout = "" ∧
       dres.dres_stderr = "" := by
   obtain ⟨v, σfin, ρfin, pfin, ℓfin, lcfin, spfin, afin, bfin, rs', tr, ctr, hψ, hloop⟩ :=
-    hdd (prodEntryStateWith procs sup e fs) fmapEmpty CerbFuel.driverFuel rfl rfl rfl rfl hlab ⟨rfl, rfl⟩ hfl
-  have hdrv2 := driver2_done 99999999 fmapEmpty (prodEntryStateWith procs sup e fs) _
+    hdd (prodEntryStateWith procs sup e fs) fmapEmpty LemFuel.fuel rfl rfl rfl rfl hlab ⟨rfl, rfl⟩ hfl
+  have hdrv2 := driver2_done (hfuel := by omega) (LemFuel.fuel - 1) fmapEmpty (prodEntryStateWith procs sup e fs) _
     (prodThread e)
     (ctlThread (prodThread e) (ofValA (.pure afin bfin v)) ρfin ⟨[], pfin, ℓfin, lcfin, spfin⟩)
     v rfl hloop rfl
-  have hrun := drive_after_setup_with procs sup e fs args _ hdrv2
-  refine ⟨_, _, runND_active hrun, ?_, rfl, rfl, rfl⟩
-  rw [finalize_done fmapEmpty _ _
+  rw [show Nat.succ (LemFuel.fuel - 1) = LemFuel.fuel by omega] at hdrv2
+  have hrun := drive_after_setup_with (hfuel := by omega) procs sup e fs args _ hdrv2
+  refine ⟨_, _, runND_active (hfuel := by omega) hrun, ?_, rfl, rfl, rfl⟩
+  rw [finalize_done (hfuel := by omega) fmapEmpty _ _
     { ctlThread (prodThread e) (ofValA (.pure afin bfin v)) ρfin ⟨[], pfin, ℓfin, lcfin, spfin⟩ with
         stack0 := Stack_empty, arena := mk_value_e v } v rfl rfl]
   exact hψ
 
-/-! ## THE PARTIAL PIPELINE (the fuel-lane restatement, 2026-09-03): the
-setup collapse at every `driver2` fuel, in both arms, and the closed
-partial-correctness equation over `CerbND.drive_lemFuel fuel`. -/
+/-! ## Closed partial correctness at every ambient budget -/
 
-/-- THE PRODUCTION PARTIAL-CORRECTNESS EQUATION FOR N-PROCEDURE PROGRAMS
-    (the fuel-lane restatement's closed form; `prod_run_eqJ_procs`'s
-    partial twin): the production pipeline on the synthetic file
-    `prodFileWith procs e`, run through `CerbND.drive_lemFuel fuel` at
-    EVERY `fuel` (the shipped `drive` is the instance at
-    `CerbFuel.driverFuel`, `CerbND.drive_wrapper_defeq`), is EXACTLY ONE
-    execution, and it is either the fuel-exhaustion kill
-    `CerbND.fuelExhaustedKill` at the final state or an Active execution
-    whose value and final memory satisfy ψ — given the whole-file
-    registration tie at the production initial run state (`hlab`, derived
-    by computation in the exhibit) and the driver-safety fact from the
-    cold start at the entry control `prodCtl` (`hsafe`, from
-    `engine_adequacy`). No in-budget bound, no termination claim: the
-    exhaustion arm is exactly what the shipped driver does when the
-    certified run does not fit `CerbFuel.driverFuel = 10^8` iterations
-    (or, at `fuel = 0`, when `driver2` has no round). Every other
-    outcome — a kill of any other reason, an ILLTYPED refusal, a second
-    execution — is excluded. -/
-theorem prod_run_safe_procs (sup : Nat)
+/-- Closed partial correctness for the N-procedure file at every ambient
+    budget. The safety premise is needed only at budgets at least two;
+    at zero and one the actual setup/runner equations give exhaustion.
+    Exactly one outcome is returned: the designated fuel-exhaustion kill,
+    or an active result satisfying ψ with no blocking or output. -/
+theorem prod_run_safe_procs [LF : LemFuel] (sup : Nat)
     (procs : List (sym × List (sym × core_base_type) × CoreExpr)) (e : CoreExpr)
     (hlab : LabeledProcs (prodCtx (prodFileWith procs e) (prodRS procs sup e))
       (prodRS procs sup e).labeled)
     (ψ : value → Mem → Prop)
-    (hsafe : DriverSafeCtl (prodCtx (prodFileWith procs e) (prodRS procs sup e)) (prodThread e) e
+    (hsafe : 2 ≤ LemFuel.fuel → DriverSafeCtl (prodCtx (prodFileWith procs e) (prodRS procs sup e)) (prodThread e) e
       [fmapEmpty] (prodCtl sup) prodMem₀ ψ)
-    (fs : CerbFS.FsState) (args : List String) (fuel : Nat) :
+    (fs : CerbFS.FsState) (args : List String) :
     ∃ (st : nd_status driver_result driver_error driver_state) (dst' : driver_state),
-      CerbND.runND (CerbND.drive_lemFuel fuel fmapEmpty false (prodFileWith procs e) args)
+      CerbND.runND (_root_.drive fmapEmpty false (prodFileWith procs e) args)
           ((initial_driver_state sup (prodFileWith procs e) fs).1) =
         [(st, ([] : List String), dst')] ∧
       (st = nd_status.Killed dst' CerbND.fuelExhaustedKill ∨
@@ -805,35 +630,34 @@ theorem prod_run_safe_procs (sup : Nat)
          dres.dres_blocked = false ∧
          dres.dres_stdout = "" ∧
          dres.dres_stderr = "") := by
-  cases fuel with
-  | zero =>
-    -- no `driver2` round: the setup runs at its fixed budgets, then the kill
-    have hdrv2 : runOne (driver2_lemFuel 0 fmapEmpty false) (prodEntryStateWith procs sup e fs) =
-        (NDkilled CerbND.fuelExhaustedKill, prodEntryStateWith procs sup e fs) := by
-      rw [CerbND.driver2_lemFuel_zero]
-      rfl
-    refine ⟨_, _, runND_killed (drive_after_setup_with_killed 0 procs sup e fs args _ _ hdrv2),
-      Or.inl rfl⟩
-  | succ fl =>
-    rcases hsafe (prodEntryStateWith procs sup e fs) fmapEmpty CerbFuel.driverFuel rfl rfl rfl rfl
-        hlab (CtlTied.entry hlab (prodFileWith_lookup_main procs e) _ _ _) ⟨rfl, rfl⟩ with
-      ⟨dstK, hloop⟩ | ⟨v, σfin, ρfin, pfin, ℓfin, lcfin, spfin, afin, bfin, rs', tr, ctr, hψ, hloop⟩
-    · -- the shipped loop EXHAUSTS its budget: `driver2` kills, the pipeline kills
-      have hdrv2 := driver2_killed fl fmapEmpty (prodEntryStateWith procs sup e fs) dstK
-        (prodThread e) _ rfl hloop
-      refine ⟨_, _, runND_killed (drive_after_setup_with_killed _ procs sup e fs args _ _ hdrv2),
-        Or.inl rfl⟩
-    · -- the shipped loop DELIVERS: the total pipeline's route
-      have hdrv2 := driver2_done fl fmapEmpty (prodEntryStateWith procs sup e fs) _
-        (prodThread e)
-        (ctlThread (prodThread e) (ofValA (.pure afin bfin v)) ρfin ⟨[], pfin, ℓfin, lcfin, spfin⟩)
-        v rfl hloop rfl
-      have hrun := drive_after_setup_with_lemFuel _ procs sup e fs args _ hdrv2
-      refine ⟨_, _, runND_active hrun, Or.inr ⟨_, rfl, ?_, rfl, rfl, rfl⟩⟩
-      rw [finalize_done fmapEmpty _ _
-        { ctlThread (prodThread e) (ofValA (.pure afin bfin v)) ρfin ⟨[], pfin, ℓfin, lcfin, spfin⟩
-            with stack0 := Stack_empty, arena := mk_value_e v } v rfl rfl]
-      exact hψ
+  by_cases hzero : LemFuel.fuel = 0
+  · refine ⟨_, (initial_driver_state sup (prodFileWith procs e) fs).1, ?_, Or.inl rfl⟩
+    unfold CerbND.runND
+    rw [hzero]
+    rfl
+  by_cases hone : LemFuel.fuel = 1
+  · exact ⟨_, _, runND_killed (by omega)
+      (drive_after_setup_with_one hone procs sup e fs args), Or.inl rfl⟩
+  have hfuel : 2 ≤ LemFuel.fuel := by omega
+  rcases hsafe hfuel (prodEntryStateWith procs sup e fs) fmapEmpty LemFuel.fuel rfl rfl rfl rfl
+      hlab (CtlTied.entry hlab (prodFileWith_lookup_main procs e) _ _ _) ⟨rfl, rfl⟩ with
+    ⟨dstK, hloop⟩ | ⟨v, σfin, ρfin, pfin, ℓfin, lcfin, spfin, afin, bfin, rs', tr, ctr, hψ, hloop⟩
+  · have hdrv2 := driver2_killed (by omega) (LemFuel.fuel - 1) fmapEmpty
+      (prodEntryStateWith procs sup e fs) dstK (prodThread e) _ rfl hloop
+    rw [show Nat.succ (LemFuel.fuel - 1) = LemFuel.fuel by omega] at hdrv2
+    exact ⟨_, _, runND_killed (by omega)
+      (drive_after_setup_with_killed hfuel procs sup e fs args _ _ hdrv2), Or.inl rfl⟩
+  · have hdrv2 := driver2_done (by omega) (LemFuel.fuel - 1) fmapEmpty
+      (prodEntryStateWith procs sup e fs) _ (prodThread e)
+      (ctlThread (prodThread e) (ofValA (.pure afin bfin v)) ρfin ⟨[], pfin, ℓfin, lcfin, spfin⟩)
+      v rfl hloop rfl
+    rw [show Nat.succ (LemFuel.fuel - 1) = LemFuel.fuel by omega] at hdrv2
+    have hrun := drive_after_setup_with hfuel procs sup e fs args _ hdrv2
+    refine ⟨_, _, runND_active (by omega) hrun, Or.inr ⟨_, rfl, ?_, rfl, rfl, rfl⟩⟩
+    rw [finalize_done (by omega) fmapEmpty _ _
+      { ctlThread (prodThread e) (ofValA (.pure afin bfin v)) ρfin ⟨[], pfin, ℓfin, lcfin, spfin⟩
+          with stack0 := Stack_empty, arena := mk_value_e v } v rfl rfl]
+    exact hψ
 
 /-! ## E3 — THE FILE OBJECT WITH A STANDARD LIBRARY (docs/2026-09-05_e3-notes.md §3)
 
@@ -910,94 +734,119 @@ def prodEntryStateLib (lib : generic_fun_map Unit core_run_annotation)
                        io := initial_io_state },
       layout_state := prodMem₀ }
 
-/-- The setup collapse on the library-carrying file at EVERY `driver2`
-    fuel, ACTIVE arm (`drive_after_setup_with_lemFuel` at `prodFileLib`). -/
-theorem drive_after_setup_lib_lemFuel (fuel : Nat) (lib : generic_fun_map Unit core_run_annotation)
+/-- Setup on the library-carrying file with ambient fuel at least two.
+    The active driver result uses the same instance and budget as `drive`. -/
+theorem drive_after_setup_lib [LF : LemFuel] (hfuel : 2 ≤ LemFuel.fuel)
+    (lib : generic_fun_map Unit core_run_annotation)
     (procs : List (sym × List (sym × core_base_type) × CoreExpr))
     (sup : Nat) (e : CoreExpr) (fs : CerbFS.FsState)
     (args : List String) (dstD : driver_state)
-    (hdrv2 : runOne (driver2_lemFuel fuel fmapEmpty false)
-        (prodEntryStateLib lib procs sup e fs) = (NDactive (), dstD)) :
-    runOne (CerbND.drive_lemFuel fuel fmapEmpty false (prodFileLib lib procs e) args)
-        ((initial_driver_state sup (prodFileLib lib procs e) fs).1) =
-      (NDactive (finalize fmapEmpty "drive (without concur)" dstD), dstD) := by
-  conv => lhs; unfold CerbND.drive_lemFuel
-  refine (runOne_bind_active (z := (0 : Nat))
-    (s' := prodPostGlobalsLib lib procs sup e fs) (by rfl)).trans ?_
-  refine (runOne_bind_active (z := prodPostGlobalsLib lib procs sup e fs) (by rfl)).trans ?_
-  refine (runOne_bind_active (z := mainSym) (by rfl)).trans ?_
-  have hlook : fmapLookupBy (fun (s1 : sym) (s2 : sym) => Lem_Basic_classes.ordCompare s1 s2)
-      mainSym (prodPostGlobalsLib lib procs sup e fs).core_file.funs = some (mainDecl e) := by
-    show fmapLookupBy _ mainSym (symAdd mainSym (mainDecl e) (procDecls procs)) = _
-    rw [symAdd_lookup (procDecls_symMap procs), if_pos (by decide +kernel)]
-  rw [hlook]
-  refine (runOne_bind_active
-    (z := (CerbLocation.unknown, ([] : List (sym × core_base_type)), e)) (by rfl)).trans ?_
-  refine (runOne_bind_active (z := e) (by rfl)).trans ?_
-  refine (runOne_bind_active (z := errnoPtr)
-    (s' := { prodPostGlobalsLib lib procs sup e fs with layout_state := prodMem₀ })
-    (runOne_liftMem_active ?_)).trans ?_
-  · refine (runOne_bind_active (z := errnoPtr) (s' := σE1)
-      (runOne_of_applyMemM errno_alloc_eq)).trans ?_
-    refine (runOne_bind_active
-      (z := CerbMem.Footprint.FP .W errnoAddr (CerbMem.sizeofCtype fmapEmpty signed_int))
-      (s' := prodMem₀) (runOne_of_applyMemM errno_store_eq)).trans ?_
-    rfl
-  refine (runOne_bind_active (z := ()) (s' := dstD) ?_).trans ?_
-  · refine (runOne_bind_active (z := ()) (s' := prodEntryStateLib lib procs sup e fs)
-      (by rfl)).trans ?_
-    exact hdrv2
-  · refine (runOne_bind_active (z := dstD) (by rfl)).trans ?_
-    rfl
-
-/-- … KILLED arm. -/
-theorem drive_after_setup_lib_killed (fuel : Nat) (lib : generic_fun_map Unit core_run_annotation)
-    (procs : List (sym × List (sym × core_base_type) × CoreExpr))
-    (sup : Nat) (e : CoreExpr) (fs : CerbFS.FsState)
-    (args : List String) (dstK : driver_state) (r : kill_reason driver_error)
-    (hdrv2 : runOne (driver2_lemFuel fuel fmapEmpty false)
-        (prodEntryStateLib lib procs sup e fs) = (NDkilled r, dstK)) :
-    runOne (CerbND.drive_lemFuel fuel fmapEmpty false (prodFileLib lib procs e) args)
-        ((initial_driver_state sup (prodFileLib lib procs e) fs).1) = (NDkilled r, dstK) := by
-  conv => lhs; unfold CerbND.drive_lemFuel
-  refine (runOne_bind_active (z := (0 : Nat))
-    (s' := prodPostGlobalsLib lib procs sup e fs) (by rfl)).trans ?_
-  refine (runOne_bind_active (z := prodPostGlobalsLib lib procs sup e fs) (by rfl)).trans ?_
-  refine (runOne_bind_active (z := mainSym) (by rfl)).trans ?_
-  have hlook : fmapLookupBy (fun (s1 : sym) (s2 : sym) => Lem_Basic_classes.ordCompare s1 s2)
-      mainSym (prodPostGlobalsLib lib procs sup e fs).core_file.funs = some (mainDecl e) := by
-    show fmapLookupBy _ mainSym (symAdd mainSym (mainDecl e) (procDecls procs)) = _
-    rw [symAdd_lookup (procDecls_symMap procs), if_pos (by decide +kernel)]
-  rw [hlook]
-  refine (runOne_bind_active
-    (z := (CerbLocation.unknown, ([] : List (sym × core_base_type)), e)) (by rfl)).trans ?_
-  refine (runOne_bind_active (z := e) (by rfl)).trans ?_
-  refine (runOne_bind_active (z := errnoPtr)
-    (s' := { prodPostGlobalsLib lib procs sup e fs with layout_state := prodMem₀ })
-    (runOne_liftMem_active ?_)).trans ?_
-  · refine (runOne_bind_active (z := errnoPtr) (s' := σE1)
-      (runOne_of_applyMemM errno_alloc_eq)).trans ?_
-    refine (runOne_bind_active
-      (z := CerbMem.Footprint.FP .W errnoAddr (CerbMem.sizeofCtype fmapEmpty signed_int))
-      (s' := prodMem₀) (runOne_of_applyMemM errno_store_eq)).trans ?_
-    rfl
-  refine runOne_bind_killed ?_
-  refine (runOne_bind_active (z := ()) (s' := prodEntryStateLib lib procs sup e fs)
-    (by rfl)).trans ?_
-  exact hdrv2
-
-/-- The setup collapse at the shipped `drive` (`drive = drive_lemFuel
-    CerbFuel.driverFuel`, `CerbND.drive_wrapper_defeq`). -/
-theorem drive_after_setup_lib (lib : generic_fun_map Unit core_run_annotation)
-    (procs : List (sym × List (sym × core_base_type) × CoreExpr))
-    (sup : Nat) (e : CoreExpr) (fs : CerbFS.FsState)
-    (args : List String) (dstD : driver_state)
-    (hdrv2 : runOne (driver2_lemFuel CerbFuel.driverFuel fmapEmpty false)
+    (hdrv2 : runOne (driver2_lemFuel LemFuel.fuel fmapEmpty false)
         (prodEntryStateLib lib procs sup e fs) = (NDactive (), dstD)) :
     runOne (_root_.drive fmapEmpty false (prodFileLib lib procs e) args)
         ((initial_driver_state sup (prodFileLib lib procs e) fs).1) =
-      (NDactive (finalize fmapEmpty "drive (without concur)" dstD), dstD) :=
-  drive_after_setup_lib_lemFuel CerbFuel.driverFuel lib procs sup e fs args dstD hdrv2
+      (NDactive (finalize fmapEmpty "drive (without concur)" dstD), dstD) := by
+  rcases LF with ⟨fuel⟩
+  change 2 ≤ fuel at hfuel
+  obtain ⟨n, rfl⟩ : ∃ n, fuel = n + 2 := ⟨fuel - 2, by omega⟩
+  letI : LemFuel := ⟨n + 2⟩
+  have hpos : 0 < LemFuel.fuel := by change 0 < n + 2; omega
+  have htwo : 2 ≤ LemFuel.fuel := by change 2 ≤ n + 2; omega
+  conv => lhs; unfold _root_.drive
+  refine (runOne_bind_active (hfuel := hpos) (z := (0 : Nat))
+    (s' := prodPostGlobalsLib lib procs sup e fs) (by rfl)).trans ?_
+  refine (runOne_bind_active (hfuel := hpos) (z := prodPostGlobalsLib lib procs sup e fs) (by rfl)).trans ?_
+  refine (runOne_bind_active (hfuel := hpos) (z := mainSym) (by rfl)).trans ?_
+  have hlook : fmapLookupBy (fun (s1 : sym) (s2 : sym) => Lem_Basic_classes.ordCompare s1 s2)
+      mainSym (prodPostGlobalsLib lib procs sup e fs).core_file.funs = some (mainDecl e) := by
+    show fmapLookupBy _ mainSym (symAdd mainSym (mainDecl e) (procDecls procs)) = _
+    rw [symAdd_lookup (procDecls_symMap procs), if_pos (by decide +kernel)]
+  rw [hlook]
+  refine (runOne_bind_active (hfuel := hpos)
+    (z := (CerbLocation.unknown, ([] : List (sym × core_base_type)), e)) (by rfl)).trans ?_
+  refine (runOne_bind_active (hfuel := hpos) (z := e) (by rfl)).trans ?_
+  refine (runOne_bind_active (hfuel := hpos) (z := errnoPtr)
+    (s' := { prodPostGlobalsLib lib procs sup e fs with layout_state := prodMem₀ })
+    (runOne_liftMem_active (hfuel := htwo) (errno_init_eq hpos))).trans ?_
+  refine (runOne_bind_active (hfuel := hpos) (z := ()) (s' := dstD) ?_).trans ?_
+  · refine (runOne_bind_active (hfuel := hpos) (z := ()) (s' := prodEntryStateLib lib procs sup e fs)
+      (by rfl)).trans ?_
+    exact hdrv2
+  · refine (runOne_bind_active (hfuel := hpos) (z := dstD) (by rfl)).trans ?_
+    rfl
+
+/-- With ambient fuel one, setup initializes errno and then memory lifting
+    exhausts before the driver's main thread is parked. -/
+theorem drive_after_setup_lib_one [LF : LemFuel] (hone : LemFuel.fuel = 1)
+    (lib : generic_fun_map Unit core_run_annotation)
+    (procs : List (sym × List (sym × core_base_type) × CoreExpr))
+    (sup : Nat) (e : CoreExpr) (fs : CerbFS.FsState)
+    (args : List String) :
+    runOne (_root_.drive fmapEmpty false (prodFileLib lib procs e) args)
+        ((initial_driver_state sup (prodFileLib lib procs e) fs).1) =
+      (NDkilled CerbND.fuelExhaustedKill,
+        { prodPostGlobalsLib lib procs sup e fs with layout_state := prodMem₀ }) := by
+  rcases LF with ⟨fuel⟩
+  change fuel = 1 at hone
+  subst fuel
+  letI : LemFuel := ⟨1⟩
+  conv => lhs; unfold _root_.drive
+  refine (runOne_bind_active (hfuel := by decide) (z := (0 : Nat))
+    (s' := prodPostGlobalsLib lib procs sup e fs) (by rfl)).trans ?_
+  refine (runOne_bind_active (hfuel := by decide) (z := prodPostGlobalsLib lib procs sup e fs) (by rfl)).trans ?_
+  refine (runOne_bind_active (hfuel := by decide) (z := mainSym) (by rfl)).trans ?_
+  have hlook : fmapLookupBy (fun (s1 : sym) (s2 : sym) => Lem_Basic_classes.ordCompare s1 s2)
+      mainSym (prodPostGlobalsLib lib procs sup e fs).core_file.funs = some (mainDecl e) := by
+    show fmapLookupBy _ mainSym (symAdd mainSym (mainDecl e) (procDecls procs)) = _
+    rw [symAdd_lookup (procDecls_symMap procs), if_pos (by decide +kernel)]
+  rw [hlook]
+  refine (runOne_bind_active (hfuel := by decide)
+    (z := (CerbLocation.unknown, ([] : List (sym × core_base_type)), e)) (by rfl)).trans ?_
+  refine (runOne_bind_active (hfuel := by decide) (z := e) (by rfl)).trans ?_
+  refine runOne_bind_killed (hfuel := by decide) ?_
+  rw [runOne_liftMem_one rfl]
+  exact congrArg (fun mem : Mem =>
+    (NDkilled CerbND.fuelExhaustedKill,
+      { prodPostGlobalsLib lib procs sup e fs with layout_state := mem }))
+    (congrArg Prod.snd (errno_init_eq (by decide)))
+
+/-- Setup on the library-carrying file with ambient fuel at least two.
+    A kill from the driver propagates with its actual state. -/
+theorem drive_after_setup_lib_killed [LF : LemFuel] (hfuel : 2 ≤ LemFuel.fuel)
+    (lib : generic_fun_map Unit core_run_annotation)
+    (procs : List (sym × List (sym × core_base_type) × CoreExpr))
+    (sup : Nat) (e : CoreExpr) (fs : CerbFS.FsState)
+    (args : List String) (dstK : driver_state) (r : kill_reason driver_error)
+    (hdrv2 : runOne (driver2_lemFuel LemFuel.fuel fmapEmpty false)
+        (prodEntryStateLib lib procs sup e fs) = (NDkilled r, dstK)) :
+    runOne (_root_.drive fmapEmpty false (prodFileLib lib procs e) args)
+        ((initial_driver_state sup (prodFileLib lib procs e) fs).1) = (NDkilled r, dstK) := by
+  rcases LF with ⟨fuel⟩
+  change 2 ≤ fuel at hfuel
+  obtain ⟨n, rfl⟩ : ∃ n, fuel = n + 2 := ⟨fuel - 2, by omega⟩
+  letI : LemFuel := ⟨n + 2⟩
+  have hpos : 0 < LemFuel.fuel := by change 0 < n + 2; omega
+  have htwo : 2 ≤ LemFuel.fuel := by change 2 ≤ n + 2; omega
+  conv => lhs; unfold _root_.drive
+  refine (runOne_bind_active (hfuel := hpos) (z := (0 : Nat))
+    (s' := prodPostGlobalsLib lib procs sup e fs) (by rfl)).trans ?_
+  refine (runOne_bind_active (hfuel := hpos) (z := prodPostGlobalsLib lib procs sup e fs) (by rfl)).trans ?_
+  refine (runOne_bind_active (hfuel := hpos) (z := mainSym) (by rfl)).trans ?_
+  have hlook : fmapLookupBy (fun (s1 : sym) (s2 : sym) => Lem_Basic_classes.ordCompare s1 s2)
+      mainSym (prodPostGlobalsLib lib procs sup e fs).core_file.funs = some (mainDecl e) := by
+    show fmapLookupBy _ mainSym (symAdd mainSym (mainDecl e) (procDecls procs)) = _
+    rw [symAdd_lookup (procDecls_symMap procs), if_pos (by decide +kernel)]
+  rw [hlook]
+  refine (runOne_bind_active (hfuel := hpos)
+    (z := (CerbLocation.unknown, ([] : List (sym × core_base_type)), e)) (by rfl)).trans ?_
+  refine (runOne_bind_active (hfuel := hpos) (z := e) (by rfl)).trans ?_
+  refine (runOne_bind_active (hfuel := hpos) (z := errnoPtr)
+    (s' := { prodPostGlobalsLib lib procs sup e fs with layout_state := prodMem₀ })
+    (runOne_liftMem_active (hfuel := htwo) (errno_init_eq hpos))).trans ?_
+  refine runOne_bind_killed (hfuel := hpos) ?_
+  refine (runOne_bind_active (hfuel := hpos) (z := ()) (s' := prodEntryStateLib lib procs sup e fs)
+    (by rfl)).trans ?_
+  exact hdrv2
 
 /-- THE PRODUCTION RUN EQUATION FOR N-PROCEDURE PROGRAMS OVER A LIBRARY-
     CARRYING FILE (`prod_run_eqJ_procs` at `prodFileLib`; E3): the shipped
@@ -1006,14 +855,14 @@ theorem drive_after_setup_lib (lib : generic_fun_map Unit core_run_annotation)
     `hlab`, the live-control delivery fact `hdd` at the production context
     OF THAT FILE (the mirror evaluator reads its `stdlib`), and the in-budget
     bound. -/
-theorem prod_run_eqJ_lib (sup : Nat) (lib : generic_fun_map Unit core_run_annotation)
+theorem prod_run_eqJ_lib [LF : LemFuel] (sup : Nat) (lib : generic_fun_map Unit core_run_annotation)
     (procs : List (sym × List (sym × core_base_type) × CoreExpr)) (e : CoreExpr)
     (hlab : LabeledProcs (prodCtx (prodFileLib lib procs e) (prodRSLib lib procs sup e))
       (prodRSLib lib procs sup e).labeled)
     (ψ : value → Mem → Prop) (k : Nat)
     (hdd : DriverDoneCtl (prodCtx (prodFileLib lib procs e) (prodRSLib lib procs sup e)) (prodThread e) e
       [fmapEmpty] (prodCtl sup) prodMem₀ ψ k)
-    (hfl : k + 2 ≤ CerbFuel.driverFuel)
+    (hfl : k + 2 ≤ LemFuel.fuel)
     (fs : CerbFS.FsState) (args : List String) :
     ∃ (dres : driver_result) (dst' : driver_state),
       CerbND.runND (_root_.drive fmapEmpty false (prodFileLib lib procs e) args)
@@ -1024,14 +873,15 @@ theorem prod_run_eqJ_lib (sup : Nat) (lib : generic_fun_map Unit core_run_annota
       dres.dres_stdout = "" ∧
       dres.dres_stderr = "" := by
   obtain ⟨v, σfin, ρfin, pfin, ℓfin, lcfin, spfin, afin, bfin, rs', tr, ctr, hψ, hloop⟩ :=
-    hdd (prodEntryStateLib lib procs sup e fs) fmapEmpty CerbFuel.driverFuel rfl rfl rfl rfl hlab ⟨rfl, rfl⟩ hfl
-  have hdrv2 := driver2_done 99999999 fmapEmpty (prodEntryStateLib lib procs sup e fs) _
+    hdd (prodEntryStateLib lib procs sup e fs) fmapEmpty LemFuel.fuel rfl rfl rfl rfl hlab ⟨rfl, rfl⟩ hfl
+  have hdrv2 := driver2_done (hfuel := by omega) (LemFuel.fuel - 1) fmapEmpty (prodEntryStateLib lib procs sup e fs) _
     (prodThread e)
     (ctlThread (prodThread e) (ofValA (.pure afin bfin v)) ρfin ⟨[], pfin, ℓfin, lcfin, spfin⟩)
     v rfl hloop rfl
-  have hrun := drive_after_setup_lib lib procs sup e fs args _ hdrv2
-  refine ⟨_, _, runND_active hrun, ?_, rfl, rfl, rfl⟩
-  rw [finalize_done fmapEmpty _ _
+  rw [show Nat.succ (LemFuel.fuel - 1) = LemFuel.fuel by omega] at hdrv2
+  have hrun := drive_after_setup_lib (hfuel := by omega) lib procs sup e fs args _ hdrv2
+  refine ⟨_, _, runND_active (hfuel := by omega) hrun, ?_, rfl, rfl, rfl⟩
+  rw [finalize_done (hfuel := by omega) fmapEmpty _ _
     { ctlThread (prodThread e) (ofValA (.pure afin bfin v)) ρfin ⟨[], pfin, ℓfin, lcfin, spfin⟩ with
         stack0 := Stack_empty, arena := mk_value_e v } v rfl rfl]
   exact hψ
@@ -1039,13 +889,13 @@ theorem prod_run_eqJ_lib (sup : Nat) (lib : generic_fun_map Unit core_run_annota
 /-- The one-procedure lane over a library-carrying file
     (`prod_run_eqJ` at `prodFileLib lib []`): the delivery fact
     `DriverDoneAt` is tied to THAT file. -/
-theorem prod_run_eqJ_lib1 (sup : Nat) (lib : generic_fun_map Unit core_run_annotation)
+theorem prod_run_eqJ_lib1 [LF : LemFuel] (sup : Nat) (lib : generic_fun_map Unit core_run_annotation)
     (e : CoreExpr) {Q : LabelMap}
     (hQe : LabeledAt (prodRSLib lib [] sup e) mainSym Q)
     (ψ : value → Mem → Prop) (k : Nat)
     (hdd : DriverDoneAt mainSym Q (prodFileLib lib [] e) (prodThread e) e [fmapEmpty]
       (CerbLocation.other "Driver.drive") ⟨sup, 0⟩ prodMem₀ ψ k)
-    (hfl : k + 2 ≤ CerbFuel.driverFuel)
+    (hfl : k + 2 ≤ LemFuel.fuel)
     (fs : CerbFS.FsState) (args : List String) :
     ∃ (dres : driver_result) (dst' : driver_state),
       CerbND.runND (_root_.drive fmapEmpty false (prodFileLib lib [] e) args)
@@ -1056,32 +906,35 @@ theorem prod_run_eqJ_lib1 (sup : Nat) (lib : generic_fun_map Unit core_run_annot
       dres.dres_stdout = "" ∧
       dres.dres_stderr = "" := by
   obtain ⟨v, σfin, ρfin, lcfin, afin, bfin, rs', tr, ctr, hψ, hloop⟩ :=
-    hdd (prodEntryStateLib lib [] sup e fs) fmapEmpty CerbFuel.driverFuel rfl rfl rfl rfl hQe ⟨rfl, rfl⟩ hfl
-  have hdrv2 := driver2_done 99999999 fmapEmpty (prodEntryStateLib lib [] sup e fs) _
+    hdd (prodEntryStateLib lib [] sup e fs) fmapEmpty LemFuel.fuel rfl rfl rfl rfl hQe ⟨rfl, rfl⟩ hfl
+  have hdrv2 := driver2_done (hfuel := by omega) (LemFuel.fuel - 1) fmapEmpty (prodEntryStateLib lib [] sup e fs) _
     (prodThread e)
     { prodThread e with arena := ofValA (.pure afin bfin v), env := ρfin, current_loc := lcfin }
     v rfl hloop rfl
-  have hrun := drive_after_setup_lib lib [] sup e fs args _ hdrv2
-  refine ⟨_, _, runND_active hrun, ?_, rfl, rfl, rfl⟩
-  rw [finalize_done fmapEmpty _ _
+  rw [show Nat.succ (LemFuel.fuel - 1) = LemFuel.fuel by omega] at hdrv2
+  have hrun := drive_after_setup_lib (hfuel := by omega) lib [] sup e fs args _ hdrv2
+  refine ⟨_, _, runND_active (hfuel := by omega) hrun, ?_, rfl, rfl, rfl⟩
+  rw [finalize_done (hfuel := by omega) fmapEmpty _ _
     { { prodThread e with arena := ofValA (.pure afin bfin v), env := ρfin, current_loc := lcfin } with
         stack0 := Stack_empty, arena := mk_value_e v } v rfl rfl]
   exact hψ
 
-/-- THE PRODUCTION PARTIAL-CORRECTNESS EQUATION OVER A LIBRARY-CARRYING FILE
-    (`prod_run_safe_procs` at `prodFileLib`; the same two arms). -/
-theorem prod_run_safe_lib (sup : Nat) (lib : generic_fun_map Unit core_run_annotation)
+/-- Closed partial correctness for a library-carrying file at every
+    ambient budget, with the same setup and outcome classification as
+    `prod_run_safe_procs`. The library must not shadow main's procedure
+    lookup, and safety concerns this file with this library. -/
+theorem prod_run_safe_lib [LF : LemFuel] (sup : Nat) (lib : generic_fun_map Unit core_run_annotation)
     (hmain : fmapLookupBy (fun (s1 : sym) (s2 : sym) => Lem_Basic_classes.ordCompare s1 s2)
       mainSym lib = none)
     (procs : List (sym × List (sym × core_base_type) × CoreExpr)) (e : CoreExpr)
     (hlab : LabeledProcs (prodCtx (prodFileLib lib procs e) (prodRSLib lib procs sup e))
       (prodRSLib lib procs sup e).labeled)
     (ψ : value → Mem → Prop)
-    (hsafe : DriverSafeCtl (prodCtx (prodFileLib lib procs e) (prodRSLib lib procs sup e)) (prodThread e) e
+    (hsafe : 2 ≤ LemFuel.fuel → DriverSafeCtl (prodCtx (prodFileLib lib procs e) (prodRSLib lib procs sup e)) (prodThread e) e
       [fmapEmpty] (prodCtl sup) prodMem₀ ψ)
-    (fs : CerbFS.FsState) (args : List String) (fuel : Nat) :
+    (fs : CerbFS.FsState) (args : List String) :
     ∃ (st : nd_status driver_result driver_error driver_state) (dst' : driver_state),
-      CerbND.runND (CerbND.drive_lemFuel fuel fmapEmpty false (prodFileLib lib procs e) args)
+      CerbND.runND (_root_.drive fmapEmpty false (prodFileLib lib procs e) args)
           ((initial_driver_state sup (prodFileLib lib procs e) fs).1) =
         [(st, ([] : List String), dst')] ∧
       (st = nd_status.Killed dst' CerbND.fuelExhaustedKill ∨
@@ -1090,31 +943,33 @@ theorem prod_run_safe_lib (sup : Nat) (lib : generic_fun_map Unit core_run_annot
          dres.dres_blocked = false ∧
          dres.dres_stdout = "" ∧
          dres.dres_stderr = "") := by
-  cases fuel with
-  | zero =>
-    have hdrv2 : runOne (driver2_lemFuel 0 fmapEmpty false) (prodEntryStateLib lib procs sup e fs) =
-        (NDkilled CerbND.fuelExhaustedKill, prodEntryStateLib lib procs sup e fs) := by
-      rw [CerbND.driver2_lemFuel_zero]
-      rfl
-    refine ⟨_, _, runND_killed (drive_after_setup_lib_killed 0 lib procs sup e fs args _ _ hdrv2),
-      Or.inl rfl⟩
-  | succ fl =>
-    rcases hsafe (prodEntryStateLib lib procs sup e fs) fmapEmpty CerbFuel.driverFuel rfl rfl rfl rfl
-        hlab (CtlTied.entry hlab (prodFileLib_lookup_main lib hmain procs e) _ _ _) ⟨rfl, rfl⟩ with
-      ⟨dstK, hloop⟩ | ⟨v, σfin, ρfin, pfin, ℓfin, lcfin, spfin, afin, bfin, rs', tr, ctr, hψ, hloop⟩
-    · have hdrv2 := driver2_killed fl fmapEmpty (prodEntryStateLib lib procs sup e fs) dstK
-        (prodThread e) _ rfl hloop
-      refine ⟨_, _, runND_killed (drive_after_setup_lib_killed _ lib procs sup e fs args _ _ hdrv2),
-        Or.inl rfl⟩
-    · have hdrv2 := driver2_done fl fmapEmpty (prodEntryStateLib lib procs sup e fs) _
-        (prodThread e)
-        (ctlThread (prodThread e) (ofValA (.pure afin bfin v)) ρfin ⟨[], pfin, ℓfin, lcfin, spfin⟩)
-        v rfl hloop rfl
-      have hrun := drive_after_setup_lib_lemFuel _ lib procs sup e fs args _ hdrv2
-      refine ⟨_, _, runND_active hrun, Or.inr ⟨_, rfl, ?_, rfl, rfl, rfl⟩⟩
-      rw [finalize_done fmapEmpty _ _
-        { ctlThread (prodThread e) (ofValA (.pure afin bfin v)) ρfin ⟨[], pfin, ℓfin, lcfin, spfin⟩
-            with stack0 := Stack_empty, arena := mk_value_e v } v rfl rfl]
-      exact hψ
+  by_cases hzero : LemFuel.fuel = 0
+  · refine ⟨_, (initial_driver_state sup (prodFileLib lib procs e) fs).1, ?_, Or.inl rfl⟩
+    unfold CerbND.runND
+    rw [hzero]
+    rfl
+  by_cases hone : LemFuel.fuel = 1
+  · exact ⟨_, _, runND_killed (by omega)
+      (drive_after_setup_lib_one hone lib procs sup e fs args), Or.inl rfl⟩
+  have hfuel : 2 ≤ LemFuel.fuel := by omega
+  rcases hsafe hfuel (prodEntryStateLib lib procs sup e fs) fmapEmpty LemFuel.fuel rfl rfl rfl rfl
+      hlab (CtlTied.entry hlab (prodFileLib_lookup_main lib hmain procs e) _ _ _) ⟨rfl, rfl⟩ with
+    ⟨dstK, hloop⟩ | ⟨v, σfin, ρfin, pfin, ℓfin, lcfin, spfin, afin, bfin, rs', tr, ctr, hψ, hloop⟩
+  · have hdrv2 := driver2_killed (by omega) (LemFuel.fuel - 1) fmapEmpty
+      (prodEntryStateLib lib procs sup e fs) dstK (prodThread e) _ rfl hloop
+    rw [show Nat.succ (LemFuel.fuel - 1) = LemFuel.fuel by omega] at hdrv2
+    exact ⟨_, _, runND_killed (by omega)
+      (drive_after_setup_lib_killed hfuel lib procs sup e fs args _ _ hdrv2), Or.inl rfl⟩
+  · have hdrv2 := driver2_done (by omega) (LemFuel.fuel - 1) fmapEmpty
+      (prodEntryStateLib lib procs sup e fs) _ (prodThread e)
+      (ctlThread (prodThread e) (ofValA (.pure afin bfin v)) ρfin ⟨[], pfin, ℓfin, lcfin, spfin⟩)
+      v rfl hloop rfl
+    rw [show Nat.succ (LemFuel.fuel - 1) = LemFuel.fuel by omega] at hdrv2
+    have hrun := drive_after_setup_lib hfuel lib procs sup e fs args _ hdrv2
+    refine ⟨_, _, runND_active (by omega) hrun, Or.inr ⟨_, rfl, ?_, rfl, rfl, rfl⟩⟩
+    rw [finalize_done (by omega) fmapEmpty _ _
+      { ctlThread (prodThread e) (ofValA (.pure afin bfin v)) ρfin ⟨[], pfin, ℓfin, lcfin, spfin⟩
+          with stack0 := Stack_empty, arena := mk_value_e v } v rfl rfl]
+    exact hψ
 
 end CerberusHeapLang

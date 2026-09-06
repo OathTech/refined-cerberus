@@ -54,6 +54,12 @@ has no storability lemma yet (`StorableAt` at `integerValueMval (Signed
 Int_) (integerIval n)` is `rfl` at a literal only; docs/2026-09-05_e3-notes.md
 §7) — every other step of the derivation is stated at the family.
 
+The production equation requires `30 ≤ LemFuel.fuel`: cost 28 plus two
+shipped driver iterations, at the same caller instance. The declared
+fragment needs operand depth at most 26, including library unfolding.
+This authored E3 regression uses a three-function library fragment; it is not the raw emitted t1
+acceptance certificate or the full-file connection required by A7.
+
 A CLIENT of the logic: it reasons through the public rules only.
 -/
 import CerberusHeapLang.Examples.Layout
@@ -138,11 +144,14 @@ def progCE3 (n : Int) : CoreExpr :=
       (Expr [] (Epure (psymC rSymC))))))))))))))))))))))
 
 /-- The evaluator-fuel bound at an authored operand (its depth is tiny). -/
-theorem depLeC {pe : generic_pexpr Unit sym} (h : peDepth pe ≤ 40) :
-    peDepth pe ≤ lemDefaultFuel := by
-  rw [show lemDefaultFuel = 999999 + 1 from rfl]; omega
+theorem depLeC [LemFuel] (hfuel : 26 ≤ LemFuel.fuel)
+    {pe : generic_pexpr Unit sym} (h : peDepth pe ≤ 26) :
+    peDepth pe ≤ LemFuel.fuel := Nat.le_trans h hfuel
 
 theorem peDepth_lintPe (n : Int) : peDepth (lintPe n) = 2 := rfl
+
+/-- Two depth-one arguments plus the loaded conversion's library budget. -/
+theorem peDepth_convLoadedIntC (a : sym) : peDepth (convLoadedIntC a) = 26 := rfl
 
 /-- The label body's registration: `save ret … in pure(r)` registers
     `ret ↦ ([(r, loaded integer)], pure(r))`. -/
@@ -165,51 +174,51 @@ theorem retQ_inv {l : sym} {params : List (sym × core_base_type)} {cont : CoreE
 
 /-! ## Cone membership (the whole family) -/
 
-theorem progCE3_frag (n : Int) : Frag (progCE3 n) :=
+theorem progCE3_frag [LemFuel] (hfuel : 26 ≤ LemFuel.fuel) (n : Int) : Frag (progCE3 n) :=
   .sseq_sym
     (.create_op rfl (.ctorTy [] Civalignof rfl [] intTy) (.val [] (Vctype intTy))
-      (depLeC (by decide)) (peDepth_val_le _ _))
+      (depLeC (by omega) (by decide)) (peDepth_val_le _ _ (by omega)))
     (.sseq_sym
-      (.bound (.pure_op rfl (PePure.of_isPePure rfl) (depLeC (by rw [peDepth_lintPe]; decide))))
+      (.bound (.pure_op rfl (PePure.of_isPePure rfl) (depLeC (by omega) (by rw [peDepth_lintPe]; decide))))
       (.sseq
-        (.store_op rfl (.sym [] xSymC) (PePure.of_isPePure rfl) (depLeC (by decide)) (depLeC (by decide)))
+        (.store_op rfl (.sym [] xSymC) (PePure.of_isPePure rfl) (depLeC (by omega) (by decide)) (depLeC (by omega) (by decide)))
         (.sseq_sym
           (.bound (.wseq_sym
-            (.pure_op rfl (.sym [] xSymC) (depLeC (by decide)))
-            (.load_op rfl (.sym [] pSymC) (depLeC (by decide)))))
+            (.pure_op rfl (.sym [] xSymC) (depLeC (by omega) (by decide)))
+            (.load_op rfl (.sym [] pSymC) (depLeC (by omega) (by decide)))))
           (.sseq_sym
             (.bound (.wseq_tuple
-              (.pure_op rfl (PePure.of_isPePure rfl) (depLeC (by decide)))
-              (.pure_op rfl (PePure.of_isPePure rfl) (depLeC (by decide)))))
+              (.pure_op rfl (PePure.of_isPePure rfl) (depLeC (by omega) (by decide)))
+              (.pure_op rfl (PePure.of_isPePure rfl) (depLeC (by omega) (by decide)))))
             (.sseq
-              (.kill_op rfl (.sym [] xSymC) (depLeC (by decide)))
+              (.kill_op rfl (.sym [] xSymC) (depLeC (by omega) (by decide)))
               (.sseq
                 (.run (fun pe h => by rcases List.mem_singleton.mp h with rfl; exact PePure.of_isPePure rfl)
-                  (fun pe h => by rcases List.mem_singleton.mp h with rfl; exact depLeC (by decide)))
+                  (fun pe h => by rcases List.mem_singleton.mp h with rfl; exact depLeC (by omega) (by decide)))
                 (.sseq
-                  (.kill_op rfl (.sym [] xSymC) (depLeC (by decide)))
+                  (.kill_op rfl (.sym [] xSymC) (depLeC (by omega) (by decide)))
                   (.sseq (.val_pure Vunit)
                     (.save (fun pe h => by rcases List.mem_singleton.mp h with rfl; exact PePure.of_isPePure rfl)
-                      (fun pe h => by rcases List.mem_singleton.mp h with rfl; exact depLeC (by decide))
-                      (.pure_op rfl (.sym [] rSymC) (depLeC (by decide))))))))))))
+                      (fun pe h => by rcases List.mem_singleton.mp h with rfl; exact depLeC (by omega) (by decide))
+                      (.pure_op rfl (.sym [] rSymC) (depLeC (by omega) (by decide))))))))))))
 
 /-! ## The evaluator at the program's operands -/
 
-theorem lintPe_eval {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym}
+theorem lintPe_eval [LemFuel] {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym}
     {file : generic_file Unit core_run_annotation} (ρ : EnvStack) (n : Int) :
     evalPexpr tds ext file ρ (lintPe n) = some (lint n) := by
   rw [lintPe, evalPexpr_ctor1, ointPe, evalPexpr_val]
   rfl
 
 /-- The ctype operand of every conversion. -/
-theorem sintTyPeC_eval {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym}
+theorem sintTyPeC_eval [LemFuel] {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym}
     {file : generic_file Unit core_run_annotation} (ρ : EnvStack) :
     evalPexpr tds ext file ρ (Pexpr [] () (PEval (Vctype sintTy))) = some (Vctype sintTy) := by
   rw [evalPexpr_val]
 
 /-- `conv_loaded_int('signed int', a)` at a bound in-range `Specified(n)`:
     the identity (the E3 evaluator lemma at the program's operand shape). -/
-theorem convLoadedIntC_eval {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym}
+theorem convLoadedIntC_eval [LemFuel] {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym}
     {file : generic_file Unit core_run_annotation} (hstd : StdE3 file) {ρ : EnvStack}
     {a : sym} {n : Int} (hv : evalPexpr tds ext file ρ (psymC a) = some (lint n))
     (h1 : -2147483648 ≤ n) (h2 : n ≤ 2147483647) :
@@ -217,7 +226,7 @@ theorem convLoadedIntC_eval {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym}
   evalPexpr_convLoadedInt_spec [] hstd (sintTyPeC_eval ρ) hv h1 h2
 
 /-- The symbol operand at a frame whose lookup is known. -/
-theorem symC_eval {M : MachineCtx} (hex : ∀ x, resolveExtern M.extern x = x)
+theorem symC_eval [LemFuel] {M : MachineCtx} (hex : ∀ x, resolveExtern M.extern x = x)
     {x : sym} {f : Fmap sym value} {v : value} (evs : List (Fmap sym value))
     (hl : fmapLookupBy symCmpK x f = some v) :
     evalPexpr M.tagDefs M.extern M.file (f :: evs) (psymC x) = some v := by
@@ -239,7 +248,7 @@ def threeMval : CerbMem.MemValue :=
 abbrev threeBytes (tds : CerbTags.TagDefsMap) : List CerbMem.AbsByte :=
   (CerbMem.memValueToBytes tds [] threeMval).2
 
-theorem three_encodes :
+theorem three_encodes [LemFuel] :
     memValueFromValue fmapEmpty (Ctype [] (unatomic_ intTy)) (lint 3) = some threeMval := rfl
 
 theorem three_storable (tds : CerbTags.TagDefsMap) : StorableAt tds intTy threeMval :=
@@ -348,7 +357,7 @@ def ψCE3s (GF : BundledGFunctors) [SpikeGS .hasLC GF] : SpikeVal → EnvStack �
 
 /-- The partial block specification of `ret`: its body `pure(r)` delivers
     the bound value. -/
-theorem progCE3_blockSpecs [SpikeGS .hasLC GF]
+theorem progCE3_blockSpecs [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} (hex : ∀ x, resolveExtern M.extern x = x)
     (hQ : M.labelsAt p = retQ) :
     ⊢ blockSpecs (GF := GF) M p (cLs GF) emptyProcSpec (ψCE3s GF) := by
@@ -367,7 +376,7 @@ theorem progCE3_blockSpecs [SpikeGS .hasLC GF]
 
 /-- THE WHOLE PROGRAM at `n = 3`, PARTIAL judgment (the same derivation
     as `progCE3_wpt` without the budget arithmetic; the `+` by `wps_c_add`). -/
-theorem progCE3_wps [SpikeGS .hasLC GF]
+theorem progCE3_wps [LemFuel] (hfuel : 0 < LemFuel.fuel) [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} (hstd : StdE3 M.file)
     (hex : ∀ x, resolveExtern M.extern x = x) (hQ : M.labelsAt p = retQ)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (hf : SymFrame ev0) :
@@ -381,7 +390,7 @@ theorem progCE3_wps [SpikeGS .hasLC GF]
     (ev0 :: evs) (align := CerbMem.alignofIval M.tagDefs intTy) (ty := intTy) rfl
     (alignofIntPe_eval _ _) (evalPexpr_val _ _ _ _ _)
   rw [alignofIval_intTy]
-  iapply wps_create _ _ empty_annotation .Prov_none 4 intTy (PrefSource (ecLoc 1 15 1 54) [xSymC])
+  iapply wps_create (hfuel := hfuel) (halign := by decide) (haddr := rfl) _ _ empty_annotation .Prov_none 4 intTy (PrefSource (ecLoc 1 15 1 54) [xSymC])
     (ev0 :: evs) intTy_size_pos intTy_nonatomic (fun a => intTy_decIndep a _)
   isplitl [Hcap]
   · iexact Hcap
@@ -393,7 +402,7 @@ theorem progCE3_wps [SpikeGS .hasLC GF]
   rw [update_env_sym xSymC ptrC]
   -- a1 := bound(pure(Specified(3)))
   iapply wps_seq_sym
-  iapply wps_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
+  iapply wps_bound _ _ _ rfl
   iapply wps_pure _ _ rfl (lintPe_eval _ 3)
   simp only [SpikeVal.val]
   iexists (lint 3)
@@ -416,7 +425,7 @@ theorem progCE3_wps [SpikeGS .hasLC GF]
   simp only [SpikeVal.mergeInto]
   -- a2 := bound(let weak p = pure(x) in load(int, p))
   iapply wps_seq_sym
-  iapply wps_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
+  iapply wps_bound _ _ _ rfl
   iapply wps_wseq_sym
   iapply wps_pure _ _ rfl (symC_eval hex evs (frA1C_lookup_x hf px))
   iexists (Vobject (OVpointer px))
@@ -446,7 +455,7 @@ theorem progCE3_wps [SpikeGS .hasLC GF]
   rw [update_env_sym a2SymC lintC]
   -- a3 := bound(let weak (b1, b2) = pure((a2, Specified(1))) in pure(x + y))
   iapply wps_seq_sym
-  iapply wps_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
+  iapply wps_bound _ _ _ rfl
   iapply wps_wseq_tuple
   iapply wps_pure _ _ rfl
     (by rw [evalPexpr_ctor2, symC_eval hex evs (frA2C_lookup_a2 hf px), lintPe_eval _ 1]; rfl)
@@ -499,7 +508,7 @@ full expression of its own — e.g. `return (int)x;` — a node the exhibit's
 program does not contain; these two lemmas are the structurally-forcing
 consumers at a frame binding `a ↦ Specified(n)`). -/
 
-theorem convLoadedInt_pure_wps [SpikeGS .hasLC GF]
+theorem convLoadedInt_pure_wps [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} {Ls : LabelSpec GF} {Θ : ProcSpec GF}
     {Ψ : SpikeVal → EnvStack → IProp GF} (hstd : StdE3 M.file)
     (hex : ∀ x, resolveExtern M.extern x = x) {a : sym} {n : Int}
@@ -510,7 +519,7 @@ theorem convLoadedInt_pure_wps [SpikeGS .hasLC GF]
       wps M p Ls Θ Ψ (Expr [] (Epure (convLoadedIntC a))) (f :: evs) :=
   wps_conv_loaded_int _ _ _ hstd (sintTyPeC_eval _) (symC_eval hex evs hl) h1 h2
 
-theorem convLoadedInt_pure_wpt [SpikeGS .hasLC GF]
+theorem convLoadedInt_pure_wpt [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
     {Ψ : SpikeVal → EnvStack → IProp GF} (hstd : StdE3 M.file)
     (hex : ∀ x, resolveExtern M.extern x = x) {a : sym} {n : Int} {k : Nat} (hk : 2 ≤ k)
@@ -531,7 +540,7 @@ def cLsT (GF : BundledGFunctors) [SpikeGS .hasLC GF] : LabelSpecT GF := fun l m 
 /-- The post: the delivered value is `Specified(4)`. -/
 def ψCE3 : value → Mem → Prop := fun v _ => v = lint 4
 
-theorem cLsT_readout [SpikeGS .hasLC GF] :
+theorem cLsT_readout [LemFuel] [SpikeGS .hasLC GF] :
     ∀ w ρ', iprop(⌜w = SpikeVal.pure (lint 4)⌝) ⊢ readoutPost (GF := GF) ψCE3 w ρ' := by
   intro w ρ'
   iintro %hw
@@ -543,7 +552,7 @@ theorem cLsT_readout [SpikeGS .hasLC GF] :
 
 /-- THE BLOCK SPECIFICATION of `ret`: its body `pure(r)` delivers the
     bound value within budget 2. -/
-theorem progCE3_blockSpecsT [SpikeGS .hasLC GF]
+theorem progCE3_blockSpecsT [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} (hex : ∀ x, resolveExtern M.extern x = x)
     (hQ : M.labelsAt p = retQ) :
     ⊢ blockSpecsT (GF := GF) M p (cLsT GF) emptyProcSpecT (readoutPost ψCE3) := by
@@ -563,7 +572,7 @@ theorem progCE3_blockSpecsT [SpikeGS .hasLC GF]
 
 /-- THE WHOLE PROGRAM at `n = 3`, total judgment, budget 28: from the
     allocation budget of one `int` cell to the readout `Specified(4)`. -/
-theorem progCE3_wpt [SpikeGS .hasLC GF]
+theorem progCE3_wpt [LemFuel] (hfuel : 0 < LemFuel.fuel) [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} (hstd : StdE3 M.file)
     (hex : ∀ x, resolveExtern M.extern x = x) (hQ : M.labelsAt p = retQ)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (hf : SymFrame ev0) :
@@ -578,7 +587,7 @@ theorem progCE3_wpt [SpikeGS .hasLC GF]
     (ev0 :: evs) (align := CerbMem.alignofIval M.tagDefs intTy) (ty := intTy) rfl
     (alignofIntPe_eval _ _) (evalPexpr_val _ _ _ _ _)
   rw [alignofIval_intTy]
-  iapply wpt_create _ _ empty_annotation .Prov_none 4 intTy (PrefSource (ecLoc 1 15 1 54) [xSymC])
+  iapply wpt_create (hfuel := hfuel) (halign := by decide) (haddr := rfl) _ _ empty_annotation .Prov_none 4 intTy (PrefSource (ecLoc 1 15 1 54) [xSymC])
     (ev0 :: evs) (Nat.le_refl 2) intTy_size_pos intTy_nonatomic (fun a => intTy_decIndep a _)
   isplitl [Hcap]
   · iexact Hcap
@@ -591,7 +600,7 @@ theorem progCE3_wpt [SpikeGS .hasLC GF]
   -- a1 := bound(pure(Specified(3)))
   iapply wpt_seq_sym _ _ _ _ _ _ _ _ 3 22
   rw [show (3 : Nat) = 2 + 1 from rfl]
-  iapply wpt_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
+  iapply wpt_bound _ _ _ rfl
   iapply wpt_pure _ _ (Nat.le_refl 2) rfl (lintPe_eval _ 3)
   simp only [SpikeVal.val]
   iexists (lint 3)
@@ -616,7 +625,7 @@ theorem progCE3_wpt [SpikeGS .hasLC GF]
   -- a2 := bound(let weak p = pure(x) in load(int, p))
   iapply wpt_seq_sym _ _ _ _ _ _ _ _ 7 11
   rw [show (7 : Nat) = 6 + 1 from rfl]
-  iapply wpt_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
+  iapply wpt_bound _ _ _ rfl
   iapply wpt_wseq_sym _ _ _ _ _ _ _ _ 2 4
   iapply wpt_pure _ _ (Nat.le_refl 2) rfl (symC_eval hex evs (frA1C_lookup_x hf px))
   iexists (Vobject (OVpointer px))
@@ -648,7 +657,7 @@ theorem progCE3_wpt [SpikeGS .hasLC GF]
   -- a3 := bound(let weak (b1, b2) = pure((a2, Specified(1))) in pure(x + y))
   iapply wpt_seq_sym _ _ _ _ _ _ _ _ 5 6
   rw [show (5 : Nat) = 4 + 1 from rfl]
-  iapply wpt_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
+  iapply wpt_bound _ _ _ rfl
   iapply wpt_wseq_tuple _ _ _ _ _ _ _ 2 2
   iapply wpt_pure _ _ (Nat.le_refl 2) rfl
     (by rw [evalPexpr_ctor2, symC_eval hex evs (frA2C_lookup_a2 hf px), lintPe_eval _ 1]; rfl)
@@ -728,7 +737,7 @@ theorem stdlibE3_no_main :
     (`exhibitB_prod_e2`) but for the file (it carries the transcribed
     std.core fragment `stdlibE3`), the program and the value; the chain is
     `progCE3_wpt → wpt_driver_done_alloc → prod_run_eqJ_lib1`. -/
-theorem exhibitC_prod_e3 (sup : Nat) (fs : CerbFS.FsState) (args : List String) :
+theorem exhibitC_prod_e3 [LemFuel] (hfuel : 30 ≤ LemFuel.fuel) (sup : Nat) (fs : CerbFS.FsState) (args : List String) :
     ∃ (dres : driver_result) (dst' : driver_state),
       CerbND.runND (_root_.drive fmapEmpty false (prodFileLib stdlibE3 [] (progCE3 3)) args)
           ((initial_driver_state sup (prodFileLib stdlibE3 [] (progCE3 3)) fs).1) =
@@ -741,21 +750,16 @@ theorem exhibitC_prod_e3 (sup : Nat) (fs : CerbFS.FsState) (args : List String) 
   have hlbl := prodCtx_labels (f := prodFileLib stdlibE3 [] (progCE3 3)) hQe
   obtain ⟨dres, dst', heq, hψ, hbl, hout, herr⟩ :=
     prod_run_eqJ_lib1 sup stdlibE3 (progCE3 3) hQe ψCE3 28
-      (wpt_driver_done_alloc (GF := SpikeGF) (ctl := prodCtl sup)
+      (wpt_driver_done_alloc (hfuel := by omega) (GF := SpikeGF) (ctl := prodCtl sup)
         (M₀ := prodCtx (prodFileLib stdlibE3 [] (progCE3 3)) (prodRSLib stdlibE3 [] sup (progCE3 3)))
         rfl rfl hlbl rfl rfl rfl rfl (Nat.le_refl _)
         (fun l params cont hl => by
           rw [hlbl] at hl
           obtain ⟨-, rfl⟩ := retQ_inv hl
-          exact .pure_op rfl (.sym [] rSymC) (depLeC (by decide)))
-        (fun l params cont hl => by
-          rw [hlbl] at hl
-          obtain ⟨-, rfl⟩ := retQ_inv hl
-          exact Nat.le_of_ble_eq_true rfl)
+          exact .pure_op rfl (.sym [] rSymC) (depLeC (by omega) (by decide)))
         (cLsT SpikeGF)
         (progCE3 3) fmapEmpty [] prodMem₀ (∅ : SpikeHeapF SpikeCell)
-        (allocCost fmapEmpty intTy 4) (progCE3_frag 3)
-        (by rw [show lemDefaultFuel = 999999 + 1 from rfl]; decide)
+        (allocCost fmapEmpty intTy 4) (progCE3_frag (by omega) 3)
         (prodMem₀_launchCoh _ prod_one_int_budget_fits)
         ψCE3 28
         (by
@@ -763,9 +767,9 @@ theorem exhibitC_prod_e3 (sup : Nat) (fs : CerbFS.FsState) (args : List String) 
           iintro ⟨-, Hcap⟩
           isplitr [Hcap]
           · iapply progCE3_blockSpecsT (resolveExtern_id_of_empty (prodCtx_extern _ _)) hlbl
-          · iapply progCE3_wpt (M := prodCtx (prodFileLib stdlibE3 [] (progCE3 3)) (prodRSLib stdlibE3 [] sup (progCE3 3))) rfl (resolveExtern_id_of_empty (prodCtx_extern _ _)) hlbl fmapEmpty []
+          · iapply progCE3_wpt (hfuel := by omega) (M := prodCtx (prodFileLib stdlibE3 [] (progCE3 3)) (prodRSLib stdlibE3 [] sup (progCE3 3))) rfl (resolveExtern_id_of_empty (prodCtx_extern _ _)) hlbl fmapEmpty []
               symFrame_empty $$ Hcap))
-      (by rw [show CerbFuel.driverFuel = 99999999 + 1 from rfl]; omega)
+      (by omega)
       fs args
   exact ⟨dres, dst', heq, hψ, hbl, hout, herr⟩
 
