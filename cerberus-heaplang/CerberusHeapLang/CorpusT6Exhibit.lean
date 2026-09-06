@@ -115,15 +115,6 @@ theorem wpt_t6AssignStmt [SpikeGS .hasLC GF]
   isplit
   · ipureintro; rfl
   rw [update_env_tuple2_mixed]
-  have hfa : SymFrame (t6frAssign n m v pr f) := (hf.add _ _).add _ _
-  have hlp : evalPexpr M.tagDefs M.extern M.file (t6frAssign n m v pr f :: rest)
-      (psym (t6a n)) = some (Vobject (OVpointer pr)) :=
-    t1sym_eval hex rest (by rw [envAdd_lookup (hf.add _ _), if_pos (symOrd_self _)])
-  have hlv : evalPexpr M.tagDefs M.extern M.file (t6frAssign n m v pr f :: rest)
-      (convLoadedInt (t6a m)) = some (lint v) :=
-    t1ConvLoadedInt_eval hstd (t1sym_eval hex rest (by
-      rw [envAdd_lookup (hf.add _ _), if_neg (show symOrd (t6a m) (t6a n) ≠ .eq from symOrd_ne_eq_of_num_ne hnm),
-        envAdd_lookup hf, if_pos (symOrd_self _)])) hv1 hv2
   rw [show (Expr [] (Eannot [] (Expr [] (Ewseq (Pattern [] (CaseBase (none, BTy_unit)))
       (Expr [Astd "§6.5.16.1#2, store"] (Eaction (Paction polarity.Neg0
         (Action (t6RegP start (start + 6) (start + 2)) empty_annotation
@@ -132,12 +123,9 @@ theorem wpt_t6AssignStmt [SpikeGS .hasLC GF]
     negAssignBody [] [] [Astd "§6.5.16.1#2, store"] [] [] [] BTy_unit
       (t6RegP start (start + 6) (start + 2)) empty_annotation intTy
       (psym (t6a n)) (convLoadedInt (t6a m)) (convLoadedInt (t6a m)) NA from rfl]
-  iapply wpt_neg_bound [Astd "§6.5#2"] [] [] [Astd "§6.5.16.1#2, store"] [] [] [] BTy_unit
-    (t6RegP start (start + 6) (start + 2)) empty_annotation intTy
-    (psym (t6a n)) (convLoadedInt (t6a m)) (convLoadedInt (t6a m)) NA
-    (t6frAssign n m v pr f) rest hfa
-    (t5IntMval v) bs (Nat.le_refl 16) hex rfl hlp hlv rfl hlv
-    (t5Int_encodes _ v) (t5Int_storable _ v)
+  iapply wpt_emittedIntStore hstd hex (t6RegP start (start + 6) (start + 2)) (t6a n) (t6a m) [] v
+    (show symOrd (t6a m) (t6a n) ≠ .eq from symOrd_ne_eq_of_num_ne hnm)
+    hv1 hv2 f rest hf pr bs
   isplitl [Hpt]
   · iexact Hpt
   iintro %s %hs Hpt

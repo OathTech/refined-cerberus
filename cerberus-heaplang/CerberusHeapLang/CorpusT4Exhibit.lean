@@ -3,7 +3,9 @@ The emitted t4_while execution proof, in progress. The controlling
 expression and both addition RHSs have public total proofs, including
 short-circuit evaluation, nested truth conversions and the two-load race
 check. Four continuations are checked against the engine collector, with
-fragment and potential obligations. The assignments, total loop derivation
+fragment and potential obligations. Both assignments and the complete
+body through its back edge have public total proofs, conditional on the
+next label precondition. The decreasing loop invariant, exit/return proof
 and production result remain to be completed.
 -/
 import CerberusHeapLang.CorpusT5Exhibit
@@ -699,5 +701,287 @@ theorem wpt_t4AddI1 [SpikeGS .hasLC GF]
   isplit
   · ipureintro; exact ⟨rfl, rfl, hf.add _ _⟩
   iapply HΨ $$ Hi
+
+/-- Fresh symbols generated above the source-variable numbers preserve
+    the two source-pointer bindings, regardless of their descriptions. -/
+theorem t4SourceFrame.fresh {pi ps : CerbMem.PointerValue} {f : Fmap sym value}
+    (k : Nat) (v : value) (hk : 510 ≤ k) (h : t4SourceFrame pi ps f) :
+    t4SourceFrame pi ps (envAdd (fresh_given_int k) v f) := by
+  have hi : symOrd t4iSym (fresh_given_int k) ≠ .eq := symOrd_ne_eq_of_num_ne (by omega)
+  have hs : symOrd t4sSym (fresh_given_int k) ≠ .eq := symOrd_ne_eq_of_num_ne (by omega)
+  exact ⟨h.1.add _ _, by rw [envAdd_lookup h.1, if_neg hi]; exact h.2.1,
+    by rw [envAdd_lookup h.1, if_neg hs]; exact h.2.2⟩
+
+/-- An emitted integer assignment with an annotated, effectful RHS.
+    Evaluate its pointer operand in the RHS's resulting frame, bind the
+    tuple, perform the negative store, and discard the statement value. -/
+theorem wpt_t4Assign [SpikeGS .hasLC GF]
+    {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
+    {Ψ : SpikeVal → EnvStack → IProp GF}
+    (hstd : StdE3 M.file) (hex : ∀ x, resolveExtern M.extern x = x)
+    (x : sym) (start n m : Nat) (v : Int) (hnm : m ≠ n)
+    (hv1 : -2147483648 ≤ v) (hv2 : v ≤ 2147483647)
+    (rhs : CoreExpr) (hnf : negFree rhs = true) (hpot : pot rhs + 6 ≤ lemDefaultFuel)
+    (f : Fmap sym value) (rest : List (Fmap sym value)) (k : Nat)
+    (pv : CerbMem.PointerValue) (bs : List CerbMem.AbsByte) :
+    wpt M p Ls Θ k (fun w ρ' => iprop(∃ (f' : Fmap sym value) (ds : List dyn_annotation),
+      ⌜w = .annot ds (lint v) ∧ ρ' = f' :: rest ∧ SymFrame f' ∧
+        fmapLookupBy symCmpK x f' = some (Vobject (OVpointer pv))⌝ ∗
+      pointsToCell M.tagDefs pv (.own 1) intTy bs ∗
+      (∀ (s : sym), ⌜∃ k, s = fresh_given_int k ∧ M.runState.sym_supply ≤ k⌝ -∗
+        pointsToCell M.tagDefs pv (.own 1) intTy (emittedIntBytes M.tagDefs v) -∗
+        Ψ (.pure Vunit) (envAdd s (lint v) (t5frAssign n m v pv f') :: rest)))) rhs (f :: rest) ⊢
+      wpt M p Ls Θ (k + 22) Ψ (CorpusE0.t4Assign x start n m rhs) (f :: rest) := by
+  iintro H
+  unfold CorpusE0.t4Assign
+  rw [show k + 22 = (k + 21) + 1 by omega]
+  iapply wpt_seq _ _ _ _ _ _ _ (k + 21) 1
+  unfold CorpusE0.bnd
+  rw [show (Pattern [] (CaseCtor Ctuple
+    [Pattern [] (CaseBase (some (t5a n), ptrTy)), Pattern [] (CaseBase (some (t5a m), CorpusE0.lint))]) : pattern) =
+    tuplePat [] [([], some (t5a n), ptrTy), ([], some (t5a m), CorpusE0.lint)] from rfl,
+    show k + 21 = (k + 5) + 16 by omega]
+  iapply wpt_bound_wseq_tuple _ _ _ _ _ _ _ _ (k + 5) 16
+    (by simpa only [negFree, negFreeList, Bool.true_and, Bool.and_true] using hnf)
+    (by change 2 + (1 + 2 + (1 + pot rhs + 0)) ≤ lemDefaultFuel; omega)
+  iapply wpt_unseq_pure_left _ _ (psym x) rhs (f :: rest) k rfl
+  iapply wpt_mono ?_ k rhs (f :: rest) $$ H
+  intro w ρ'
+  iintro ⟨%f', %ds, %hw, Hpt, HΨ⟩
+  obtain ⟨rfl, rfl, hf', hl⟩ := hw
+  iexists (Vobject (OVpointer pv))
+  isplit
+  · ipureintro; exact t1sym_eval hex rest hl
+  simp only [SpikeVal.mergeInto, SpikeVal.merge, SpikeVal.val, List.append_nil]
+  iexists [Vobject (OVpointer pv), lint v], ds
+  isplit
+  · ipureintro; rfl
+  rw [update_env_tuple2_mixed]
+  rw [show (Expr [] (Eannot ds (Expr [] (Ewseq wc
+      (Expr [Astd "§6.5.16.1#2, store"] (Eaction (Paction polarity.Neg0
+        (Action (CorpusE0.t4RegP start (start + 9) (start + 2)) empty_annotation
+          (Store0 false CorpusE0.intCty (psym (t5a n)) (CorpusE0.convLoadedInt (t5a m)) NA)))))
+      (t5Pure (CorpusE0.convLoadedInt (t5a m)))))) : CoreExpr) =
+    negAssignBody [] [] [Astd "§6.5.16.1#2, store"] [] [] ds BTy_unit
+      (CorpusE0.t4RegP start (start + 9) (start + 2)) empty_annotation intTy
+      (psym (t5a n)) (CorpusE0.convLoadedInt (t5a m)) (CorpusE0.convLoadedInt (t5a m)) NA from rfl]
+  iapply wpt_emittedIntStore hstd hex (CorpusE0.t4RegP start (start + 9) (start + 2))
+    (t5a n) (t5a m) ds v (t4a_ne hnm) hv1 hv2 f' rest hf' pv bs
+  isplitl [Hpt]
+  · iexact Hpt
+  iintro %s %hs Hpt
+  unfold t5Unit t5Pure
+  rw [← ofValA_pure [] [] Vunit]
+  iapply wpt_ofValA (.pure [] [] Vunit) _ (Nat.le_refl 1)
+  simp only [SpikeValA.erase_pure]
+  iapply HΨ $$ %s %hs Hpt
+
+/-- The emitted `s = s + i`, preserving i's cell and both source pointers. -/
+theorem wpt_t4AssignS [SpikeGS .hasLC GF]
+    {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
+    {Ψ : SpikeVal → EnvStack → IProp GF}
+    (hstd : StdE3 M.file) (hex : ∀ x, resolveExtern M.extern x = x)
+    (hsup : 600 ≤ M.runState.sym_supply)
+    (i s : Int) (hi : -2147483648 ≤ i) (hi' : i ≤ 2147483647)
+    (hs : -2147483648 ≤ s) (hs' : s ≤ 2147483647)
+    (hsum : -2147483648 ≤ s + i) (hsum' : s + i ≤ 2147483647)
+    (f : Fmap sym value) (rest : List (Fmap sym value))
+    (pi ps : CerbMem.PointerValue) (bi bs : List CerbMem.AbsByte)
+    (hf : t4SourceFrame pi ps f)
+    (hloadI : loadedVal M.tagDefs pi intTy bi = lint i)
+    (htrapI : cellLoadTrap M.tagDefs ⟨addrOf pi, intTy, bi⟩ = false)
+    (hloadS : loadedVal M.tagDefs ps intTy bs = lint s)
+    (htrapS : cellLoadTrap M.tagDefs ⟨addrOf ps, intTy, bs⟩ = false) :
+    iprop(pointsToCell M.tagDefs (GF := GF) pi (.own 1) intTy bi ∗
+      pointsToCell M.tagDefs ps (.own 1) intTy bs ∗
+      (∀ f', ⌜t4SourceFrame pi ps f'⌝ -∗
+        pointsToCell M.tagDefs pi (.own 1) intTy bi -∗
+        pointsToCell M.tagDefs ps (.own 1) intTy (emittedIntBytes M.tagDefs (s + i)) -∗
+        Ψ (.pure Vunit) (f' :: rest))) ⊢
+      wpt M p Ls Θ 40 Ψ (CorpusE0.t4Assign t4sSym 64 555 563 CorpusE0.t4AddSI) (f :: rest) := by
+  iintro ⟨Hi, Hs, HΨ⟩
+  iapply wpt_t4Assign hstd hex t4sSym 64 555 563 (s + i) (by decide +kernel) hsum hsum'
+    CorpusE0.t4AddSI rfl (Nat.le_of_ble_eq_true rfl) f rest 18 ps bs
+  iapply wpt_t4AddSI hex i s hi hi' hs hs' hsum hsum' f rest pi ps bi bs hf hloadI htrapI hloadS htrapS
+  isplitl [Hi]
+  · iexact Hi
+  isplitl [Hs]
+  · iexact Hs
+  iintro Hi Hs
+  have hfa : t4SourceFrame pi ps (t4frAddSI pi ps i s f) := by
+    unfold t4frAddSI t4frAdd
+    t4_source
+  iexists (t4frAddSI pi ps i s f), _
+  isplit
+  · ipureintro; exact ⟨rfl, rfl, hfa.1, hfa.2.2⟩
+  isplitl [Hs]
+  · iexact Hs
+  iintro %z %hz Hs
+  obtain ⟨k, rfl, hk⟩ := hz
+  have hfinal : t4SourceFrame pi ps (envAdd (fresh_given_int k) (lint (s + i))
+      (t5frAssign 555 563 (s + i) ps (t4frAddSI pi ps i s f))) := by
+    apply t4SourceFrame.fresh k _ (by omega)
+    unfold t5frAssign
+    t4_source
+  iapply HΨ $$ %_ %hfinal Hi Hs
+
+/-- The emitted `i = i + 1`, preserving s's cell and both source pointers. -/
+theorem wpt_t4AssignI [SpikeGS .hasLC GF]
+    {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
+    {Ψ : SpikeVal → EnvStack → IProp GF}
+    (hstd : StdE3 M.file) (hex : ∀ x, resolveExtern M.extern x = x)
+    (hsup : 600 ≤ M.runState.sym_supply)
+    (i : Int) (hi : -2147483648 ≤ i) (hi' : i + 1 ≤ 2147483647)
+    (f : Fmap sym value) (rest : List (Fmap sym value))
+    (pi ps : CerbMem.PointerValue) (bi bs : List CerbMem.AbsByte)
+    (hf : t4SourceFrame pi ps f)
+    (hloadI : loadedVal M.tagDefs pi intTy bi = lint i)
+    (htrapI : cellLoadTrap M.tagDefs ⟨addrOf pi, intTy, bi⟩ = false) :
+    iprop(pointsToCell M.tagDefs (GF := GF) pi (.own 1) intTy bi ∗
+      pointsToCell M.tagDefs ps (.own 1) intTy bs ∗
+      (∀ f', ⌜t4SourceFrame pi ps f'⌝ -∗
+        pointsToCell M.tagDefs pi (.own 1) intTy (emittedIntBytes M.tagDefs (i + 1)) -∗
+        pointsToCell M.tagDefs ps (.own 1) intTy bs -∗
+        Ψ (.pure Vunit) (f' :: rest))) ⊢
+      wpt M p Ls Θ 36 Ψ (CorpusE0.t4Assign t4iSym 75 564 571 CorpusE0.t4AddI1) (f :: rest) := by
+  iintro ⟨Hi, Hs, HΨ⟩
+  iapply wpt_t4Assign hstd hex t4iSym 75 564 571 (i + 1) (by decide +kernel) (by omega) hi'
+    CorpusE0.t4AddI1 rfl (Nat.le_of_ble_eq_true rfl) f rest 14 pi bi
+  iapply wpt_t4AddI1 hex i hi hi' f rest hf.1 pi bi hf.2.1 hloadI htrapI
+  isplitl [Hi]
+  · iexact Hi
+  iintro Hi
+  have hfa : t4SourceFrame pi ps (t4frAddI1 pi i f) := by
+    unfold t4frAddI1 t4frAdd
+    t4_source
+  iexists (t4frAddI1 pi i f), _
+  isplit
+  · ipureintro; exact ⟨rfl, rfl, hfa.1, hfa.2.1⟩
+  isplitl [Hi]
+  · iexact Hi
+  iintro %z %hz Hi
+  obtain ⟨k, rfl, hk⟩ := hz
+  have hfinal : t4SourceFrame pi ps (envAdd (fresh_given_int k) (lint (i + 1))
+      (t5frAssign 564 571 (i + 1) pi (t4frAddI1 pi i f))) := by
+    apply t4SourceFrame.fresh k _ (by omega)
+    unfold t5frAssign
+    t4_source
+  iapply HΨ $$ %_ %hfinal Hi Hs
+
+/-- Both pointer parameters are rebound by each loop save and run. -/
+abbrev t4frPtrs (pi ps : CerbMem.PointerValue) (f : Fmap sym value) :=
+  envAdd t4sSym (Vobject (OVpointer ps)) (envAdd t4iSym (Vobject (OVpointer pi)) f)
+
+theorem t4SourceFrame.params (pi ps : CerbMem.PointerValue) (f : Fmap sym value) (hf : SymFrame f) :
+    t4SourceFrame pi ps (t4frPtrs pi ps f) := by
+  refine ⟨(hf.add _ _).add _ _, ?_, ?_⟩
+  · rw [envAdd_lookup (hf.add _ _), if_neg (by decide +kernel), envAdd_lookup hf,
+      if_pos (symOrd_self _)]
+  · rw [envAdd_lookup (hf.add _ _), if_pos (symOrd_self _)]
+
+theorem t4PtrParams_bindArgs (pi ps : CerbMem.PointerValue)
+    (f : Fmap sym value) (rest : List (Fmap sym value)) :
+    bindArgs t4PtrParams [Vobject (OVpointer pi), Vobject (OVpointer ps)] (f :: rest) =
+      t4frPtrs pi ps f :: rest := by
+  change update_env (mk_sym_pat t4sSym ptrTy) (Vobject (OVpointer ps))
+    (update_env (mk_sym_pat t4iSym ptrTy) (Vobject (OVpointer pi)) (f :: rest)) = _
+  rw [update_env_cons, update_env_aux_sym, update_env_cons, update_env_aux_sym]
+
+theorem t4PtrInits_bindSaveParams (pi ps : CerbMem.PointerValue)
+    (f : Fmap sym value) (rest : List (Fmap sym value)) :
+    bindSaveParams CorpusE0.t4PtrInits [Vobject (OVpointer pi), Vobject (OVpointer ps)] (f :: rest) =
+      t4frPtrs pi ps f :: rest := by
+  change update_env (mk_sym_pat t4sSym ptrTy) (Vobject (OVpointer ps))
+    (update_env (mk_sym_pat t4iSym ptrTy) (Vobject (OVpointer pi)) (f :: rest)) = _
+  rw [update_env_cons, update_env_aux_sym, update_env_cons, update_env_aux_sym]
+
+theorem t4PtrArgs_eval {M : MachineCtx} (hex : ∀ x, resolveExtern M.extern x = x)
+    (pi ps : CerbMem.PointerValue) (f : Fmap sym value) (rest : List (Fmap sym value))
+    (hf : t4SourceFrame pi ps f) :
+    evalPexprs M.tagDefs M.extern M.file (f :: rest) [psym t4iSym, psym t4sSym] =
+      some [Vobject (OVpointer pi), Vobject (OVpointer ps)] := by
+  rw [evalPexprs_cons, t1sym_eval hex rest hf.2.1,
+    evalPexprs_cons, t1sym_eval hex rest hf.2.2, evalPexprs_nil]
+  rfl
+
+/-- Entry at any of t4's pointer-parameter saves, retaining the actual
+    rebinding and the two-step initializer cost. -/
+theorem wpt_t4Save [SpikeGS .hasLC GF]
+    {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
+    {Ψ : SpikeVal → EnvStack → IProp GF}
+    (hex : ∀ x, resolveExtern M.extern x = x)
+    (l : sym) (body : CoreExpr) (k : Nat)
+    (pi ps : CerbMem.PointerValue) (f : Fmap sym value) (rest : List (Fmap sym value))
+    (hf : t4SourceFrame pi ps f) :
+    wpt M p Ls Θ k Ψ body (t4frPtrs pi ps f :: rest) ⊢
+      wpt M p Ls Θ (k + 2) Ψ (CorpusE0.t4Save l body) (f :: rest) := by
+  unfold CorpusE0.t4Save
+  rw [show (2 : Nat) = saveEntryCost CorpusE0.t4PtrInits from rfl]
+  iintro H
+  iapply wpt_save _ _ _ _ f rest (t4PtrArgs_eval hex pi ps f rest hf)
+  rw [t4PtrInits_bindSaveParams]
+  iexact H
+
+/-- One whole emitted loop body, including both assignments, the continue
+    save and the jump to the registered while continuation. The caller
+    supplies its next label precondition at budget m; the body costs 82+m. -/
+theorem wpt_t4Body [SpikeGS .hasLC GF]
+    {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
+    {Ψ : SpikeVal → EnvStack → IProp GF}
+    (hstd : StdE3 M.file) (hex : ∀ x, resolveExtern M.extern x = x)
+    (hQ : M.labelsAt p = t4Q) (hsup : 600 ≤ M.runState.sym_supply)
+    (i s : Int) (hi : -2147483648 ≤ i) (hi' : i + 1 ≤ 2147483647)
+    (hs : -2147483648 ≤ s) (hs' : s ≤ 2147483647)
+    (hsum : -2147483648 ≤ s + i) (hsum' : s + i ≤ 2147483647)
+    (f : Fmap sym value) (rest : List (Fmap sym value))
+    (pi ps : CerbMem.PointerValue) (bi bs : List CerbMem.AbsByte)
+    (hf : t4SourceFrame pi ps f)
+    (hloadI : loadedVal M.tagDefs pi intTy bi = lint i)
+    (htrapI : cellLoadTrap M.tagDefs ⟨addrOf pi, intTy, bi⟩ = false)
+    (hloadS : loadedVal M.tagDefs ps intTy bs = lint s)
+    (htrapS : cellLoadTrap M.tagDefs ⟨addrOf ps, intTy, bs⟩ = false) (m : Nat) :
+    iprop(pointsToCell M.tagDefs (GF := GF) pi (.own 1) intTy bi ∗
+      pointsToCell M.tagDefs ps (.own 1) intTy bs ∗
+      (∀ f', ⌜t4SourceFrame pi ps f'⌝ -∗
+        pointsToCell M.tagDefs pi (.own 1) intTy (emittedIntBytes M.tagDefs (i + 1)) -∗
+        pointsToCell M.tagDefs ps (.own 1) intTy (emittedIntBytes M.tagDefs (s + i)) -∗
+        Ls t4WhileSym m [Vobject (OVpointer pi), Vobject (OVpointer ps)] (f' :: rest))) ⊢
+      wpt M p Ls Θ (82 + m) Ψ CorpusE0.t4Body (f :: rest) := by
+  iintro ⟨Hi, Hs, Hnext⟩
+  unfold CorpusE0.t4Body seqE wc
+  rw [show 82 + m = 81 + (1 + m) by omega]
+  iapply wpt_seq _ _ _ _ _ _ _ 81 (1 + m)
+  iapply wpt_seq _ _ _ _ _ _ _ 77 4
+  iapply wpt_seq _ _ _ _ _ _ _ 40 37
+  iapply wpt_t4AssignS hstd hex hsup i s hi (by omega) hs hs' hsum hsum'
+    f rest pi ps bi bs hf hloadI htrapI hloadS htrapS
+  isplitl [Hi]
+  · iexact Hi
+  isplitl [Hs]
+  · iexact Hs
+  iintro %f1 %hf1 Hi Hs
+  iapply wpt_seq _ _ _ _ _ _ _ 36 1
+  iapply wpt_t4AssignI hstd hex hsup i hi hi' f1 rest pi ps bi _ hf1 hloadI htrapI
+  isplitl [Hi]
+  · iexact Hi
+  isplitl [Hs]
+  · iexact Hs
+  iintro %f2 %hf2 Hi Hs
+  unfold t5Unit t5Pure
+  rw [← ofValA_pure [] [] Vunit]
+  iapply wpt_ofValA (.pure [] [] Vunit) _ (Nat.le_refl 1)
+  simp only [SpikeValA.erase_pure, SpikeVal.mergeInto]
+  iapply wpt_seq _ _ _ _ _ _ _ 3 1
+  iapply wpt_t4Save hex t4ContinueSym _ 1 pi ps f2 rest hf2
+  rw [← ofValA_pure [Aloc (t4Reg 39 87), Astmt] [] Vunit]
+  iapply wpt_ofValA (.pure [Aloc (t4Reg 39 87), Astmt] [] Vunit) _ (Nat.le_refl 1)
+  simp only [SpikeValA.erase_pure, SpikeVal.mergeInto]
+  iapply wpt_ofValA (.pure [] [] Vunit) _ (Nat.le_refl 1)
+  simp only [SpikeValA.erase_pure]
+  have hfinal := t4SourceFrame.params pi ps f2 hf2.1
+  iapply wpt_run [] empty_annotation t4WhileSym [psym t4iSym, psym t4sSym]
+    (t4frPtrs pi ps f2) rest m (by rw [hQ]; exact t4Q_while)
+    (t4PtrArgs_eval hex pi ps _ rest hfinal) (Nat.le_refl (1 + m))
+  iapply Hnext $$ %_ %hfinal Hi Hs
 
 end CerberusHeapLang

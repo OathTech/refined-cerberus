@@ -5209,4 +5209,51 @@ theorem wpt_load_footprint {Ψ : SpikeVal → EnvStack → IProp GF}
   subst hw
   iapply HΨ $$ Hpt
 
+/-- An unsequenced pair with a pure left operand. The right operand runs
+    first and may change the environment; the pure operand is evaluated
+    in that resulting environment. Its empty footprint cannot race. -/
+theorem wpt_unseq_pure_left {Ψ : SpikeVal → EnvStack → IProp GF}
+    (a ap : List annot) (pe : generic_pexpr Unit sym) (e : CoreExpr)
+    (ρ : EnvStack) (k : Nat) (hnv : valueFromPexpr pe = none) :
+    wpt M p Ls Θ k (fun w ρ' => iprop(∃ v,
+      ⌜evalPexpr M.tagDefs M.extern M.file ρ' pe = some v⌝ ∗
+      Ψ (w.mergeInto (.annot [] (Vtuple [v, w.val]))) ρ')) e ρ ⊢
+      wpt M p Ls Θ (k + 5) Ψ (Expr a (Eunseq [Expr ap (Epure pe), e])) ρ := by
+  iintro H
+  rw [show ([Expr ap (Epure pe), e] : List CoreExpr) = [Expr ap (Epure pe)] ++ e :: [] from rfl]
+  iapply wpt_unseq_focus a [_] e [] ρ rfl rfl k 5
+  iapply wpt_mono ?_ k e ρ $$ H
+  intro w ρ'
+  iintro ⟨%v, %hv, HΨ⟩ %wa %hwa
+  rw [show ([Expr ap (Epure pe)] ++ ofValA wa :: [] : List CoreExpr) =
+    [] ++ Expr ap (Epure pe) :: [ofValA wa] from rfl]
+  iapply wpt_unseq_focus a [] _ [_] ρ'
+    (by rw [valsOnly_cons, isValE_ofValA, valsOnly_nil])
+    (by simp only [List.nil_append, ccallFreeList, ccallFree_ofValA]) 2 3
+  iapply wpt_pure pe ρ' (Nat.le_refl 2) hnv hv
+  iintro %wb %hwb
+  cases wb with
+  | annot _ _ _ _ _ => cases hwb
+  | pure ba bb bv =>
+  have hbv : bv = v := SpikeVal.pure.inj hwb
+  subst bv
+  cases wa with
+  | pure aa ab av =>
+    cases hwa
+    rw [show ([] ++ ofValA (.pure ba bb v) :: [ofValA (.pure aa ab av)] : List CoreExpr) =
+      [SpikeValA.pure ba bb v, .pure aa ab av].map ofValA from rfl]
+    iapply wpt_unseq_vals a _ ρ' (fps := []) (cvals := [v, av]) (Nat.le_refl 3) rfl
+    simp only [SpikeValA.erase_pure, SpikeVal.mergeInto, SpikeVal.val]
+    iexact HΨ
+  | annot aa ab ac ds av =>
+    cases hwa
+    rw [show ([] ++ ofValA (.pure ba bb v) :: [ofValA (.annot aa ab ac ds av)] : List CoreExpr) =
+      [SpikeValA.pure ba bb v, .annot aa ab ac ds av].map ofValA from rfl]
+    iapply wpt_unseq_vals a _ ρ' (fps := ds) (cvals := [v, av]) (Nat.le_refl 3)
+      (by simp only [collectUnseq, do_race_nil_right, Bool.false_eq_true, ↓reduceIte,
+        combine_dyn_annotations, List.append_nil, List.reverse_cons, List.reverse_nil,
+        List.nil_append, List.cons_append])
+    simp only [SpikeValA.erase_annot, SpikeVal.val, SpikeVal.mergeInto, SpikeVal.merge, List.append_nil]
+    iexact HΨ
+
 end CerberusHeapLang

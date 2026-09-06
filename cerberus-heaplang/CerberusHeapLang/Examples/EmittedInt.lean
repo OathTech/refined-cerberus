@@ -71,4 +71,52 @@ theorem wpt_emittedIntLoad [SpikeGS .hasLC GF]
   iintro Hpt
   iapply HΨ $$ Hpt
 
+/-- The memory value and byte image written by an emitted signed-int assignment. -/
+def emittedIntMval (n : Int) : CerbMem.MemValue :=
+  CerbMem.integerValueMval (.Signed .Int_) (CerbMem.integerIval n)
+
+abbrev emittedIntBytes (tds : CerbTags.TagDefsMap) (n : Int) : List CerbMem.AbsByte :=
+  (CerbMem.memValueToBytes tds [] (emittedIntMval n)).2
+
+theorem emittedInt_encodes (tds : CerbTags.TagDefsMap) (n : Int) :
+    memValueFromValue tds (Ctype [] (unatomic_ intTy)) (lint n) = some (emittedIntMval n) := rfl
+
+theorem emittedInt_storable (tds : CerbTags.TagDefsMap) (n : Int) :
+    StorableAt tds intTy (emittedIntMval n) :=
+  ⟨rfl, fun _ => rfl, fun _ => rfl, fun _ => rfl, fun _ _ _ => rfl⟩
+
+/-- The common integer-store protocol after an emitted assignment's
+    mixed tuple binder. It preserves the RHS annotations until the
+    enclosing bound removes them and exposes the fresh return binding. -/
+theorem wpt_emittedIntStore [SpikeGS .hasLC GF]
+    {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
+    {Ψ : SpikeVal → EnvStack → IProp GF}
+    (hstd : StdE3 M.file) (hex : ∀ x, resolveExtern M.extern x = x)
+    (loc : CerbLocation.Loc) (n m : sym) (ds : List dyn_annotation) (v : Int)
+    (hnm : symOrd m n ≠ .eq) (hv1 : -2147483648 ≤ v) (hv2 : v ≤ 2147483647)
+    (f : Fmap sym value) (rest : List (Fmap sym value)) (hf : SymFrame f)
+    (pv : CerbMem.PointerValue) (bs : List CerbMem.AbsByte) :
+    iprop(pointsToCell M.tagDefs (GF := GF) pv (.own 1) intTy bs ∗
+      (∀ (s : sym), ⌜∃ k, s = fresh_given_int k ∧ M.runState.sym_supply ≤ k⌝ -∗
+        pointsToCell M.tagDefs pv (.own 1) intTy (emittedIntBytes M.tagDefs v) -∗
+        Ψ (.pure (lint v)) (envAdd s (lint v)
+          (envAdd n (Vobject (OVpointer pv)) (envAdd m (lint v) f)) :: rest))) ⊢
+      wpt M p Ls Θ 16 Ψ
+        (Expr [Astd "§6.5#2"] (Ebound
+          (negAssignBody [] [] [Astd "§6.5.16.1#2, store"] [] [] ds BTy_unit
+            loc empty_annotation intTy (psym n) (CorpusE0.convLoadedInt m) (CorpusE0.convLoadedInt m) NA)))
+        (envAdd n (Vobject (OVpointer pv)) (envAdd m (lint v) f) :: rest) := by
+  have hlp := t1sym_eval hex rest (by
+    rw [envAdd_lookup (hf.add m (lint v)), if_pos (symOrd_self n)] :
+      fmapLookupBy symCmpK n (envAdd n (Vobject (OVpointer pv)) (envAdd m (lint v) f)) =
+        some (Vobject (OVpointer pv)))
+  have hlv := t1ConvLoadedInt_eval hstd (t1sym_eval hex rest (by
+    rw [envAdd_lookup (hf.add m (lint v)), if_neg hnm, envAdd_lookup hf, if_pos (symOrd_self m)] :
+      fmapLookupBy symCmpK m (envAdd n (Vobject (OVpointer pv)) (envAdd m (lint v) f)) = some (lint v))) hv1 hv2
+  exact wpt_neg_bound [Astd "§6.5#2"] [] [] [Astd "§6.5.16.1#2, store"] [] [] ds BTy_unit
+    loc empty_annotation intTy (psym n) (CorpusE0.convLoadedInt m) (CorpusE0.convLoadedInt m) NA
+    (envAdd n (Vobject (OVpointer pv)) (envAdd m (lint v) f)) rest ((hf.add _ _).add _ _)
+    (emittedIntMval v) bs (Nat.le_refl 16) hex rfl hlp hlv rfl hlv
+    (emittedInt_encodes _ v) (emittedInt_storable _ v)
+
 end CerberusHeapLang

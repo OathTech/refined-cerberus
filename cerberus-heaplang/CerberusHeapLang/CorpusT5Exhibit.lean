@@ -205,17 +205,17 @@ theorem wpt_t5Cond [SpikeGS .hasLC GF]
   simp only [SpikeVal.merge]
   iapply HΨ $$ Hpt
 
-def t5IntMval (n : Int) : CerbMem.MemValue :=
-  CerbMem.integerValueMval (.Signed .Int_) (CerbMem.integerIval n)
-abbrev t5IntBytes (tds : CerbTags.TagDefsMap) (n : Int) : List CerbMem.AbsByte :=
-  (CerbMem.memValueToBytes tds [] (t5IntMval n)).2
+/-- Historical t5 names retained for existing statements; the shared
+    memory-value construction lives in Examples.EmittedInt. -/
+abbrev t5IntMval := emittedIntMval
+abbrev t5IntBytes := emittedIntBytes
 
 theorem t5Int_encodes (tds : CerbTags.TagDefsMap) (n : Int) :
-    memValueFromValue tds (Ctype [] (unatomic_ intTy)) (lint n) = some (t5IntMval n) := rfl
+    memValueFromValue tds (Ctype [] (unatomic_ intTy)) (lint n) = some (t5IntMval n) :=
+  emittedInt_encodes tds n
 
 theorem t5Int_storable (tds : CerbTags.TagDefsMap) (n : Int) : StorableAt tds intTy (t5IntMval n) :=
-  ⟨rfl, fun _ => rfl, fun _ => rfl, fun _ => rfl, fun _ _ _ => rfl⟩
-
+  emittedInt_storable tds n
 
 abbrev t5frAssign (n m : Nat) (v : Int) (pr : CerbMem.PointerValue) (f : Fmap sym value) :=
   envAdd (t5a n) (Vobject (OVpointer pr)) (envAdd (t5a m) (lint v) f)
@@ -250,15 +250,6 @@ theorem wpt_t5AssignBlock [SpikeGS .hasLC GF]
   isplit
   · ipureintro; rfl
   rw [update_env_tuple2_mixed]
-  have hfa : SymFrame (t5frAssign n m v pr f) := (hf.add _ _).add _ _
-  have hlp : evalPexpr M.tagDefs M.extern M.file (t5frAssign n m v pr f :: rest)
-      (psym (t5a n)) = some (Vobject (OVpointer pr)) :=
-    t1sym_eval hex rest (by rw [envAdd_lookup (hf.add _ _), if_pos (symOrd_self _)])
-  have hlv : evalPexpr M.tagDefs M.extern M.file (t5frAssign n m v pr f :: rest)
-      (convLoadedInt (t5a m)) = some (lint v) :=
-    t1ConvLoadedInt_eval hstd (t1sym_eval hex rest (by
-      rw [envAdd_lookup (hf.add _ _), if_neg (show symOrd (t5a m) (t5a n) ≠ .eq from symOrd_ne_eq_of_num_ne hnm),
-        envAdd_lookup hf, if_pos (symOrd_self _)])) hv1 hv2
   rw [show (Expr [] (Eannot [] (Expr [] (Ewseq (Pattern [] (CaseBase (none, BTy_unit)))
       (Expr [Astd "§6.5.16.1#2, store"] (Eaction (Paction polarity.Neg0
         (Action (t5RegP start (start + 5) (start + 2)) empty_annotation
@@ -267,12 +258,9 @@ theorem wpt_t5AssignBlock [SpikeGS .hasLC GF]
     negAssignBody [] [] [Astd "§6.5.16.1#2, store"] [] [] [] BTy_unit
       (t5RegP start (start + 5) (start + 2)) empty_annotation intTy
       (psym (t5a n)) (convLoadedInt (t5a m)) (convLoadedInt (t5a m)) NA from rfl]
-  iapply wpt_neg_bound [Astd "§6.5#2"] [] [] [Astd "§6.5.16.1#2, store"] [] [] [] BTy_unit
-    (t5RegP start (start + 5) (start + 2)) empty_annotation intTy
-    (psym (t5a n)) (convLoadedInt (t5a m)) (convLoadedInt (t5a m)) NA
-    (t5frAssign n m v pr f) rest hfa
-    (t5IntMval v) bs (Nat.le_refl 16) hex rfl hlp hlv rfl hlv
-    (t5Int_encodes _ v) (t5Int_storable _ v)
+  iapply wpt_emittedIntStore hstd hex (t5RegP start (start + 5) (start + 2)) (t5a n) (t5a m) [] v
+    (show symOrd (t5a m) (t5a n) ≠ .eq from symOrd_ne_eq_of_num_ne hnm)
+    hv1 hv2 f rest hf pr bs
   isplitl [Hpt]
   · iexact Hpt
   iintro %s %hs Hpt
