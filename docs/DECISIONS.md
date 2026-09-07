@@ -3461,3 +3461,96 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   becomes PARK, NOT REVERT ([USER]): work in progress is committed to
   `codex/park-D<n>` from the current head, the working branch reset to its
   last green commit, never discarded.
+- **2026-09-07 [USER] STAGE-2 CHARTER MERGED** (verbatim): "Go ahead with the
+  merge" — main fast-forwarded 6b6d9a8 → 1e1f584 (branch `codex-charter-2`,
+  three docs-only commits: the stage-2 charter, the read-only stage-1 record
+  copy, the DECISIONS entry). The stage-2 Codex worktree `codex-stage2`
+  (branch `codex/demo-residuals-2`) sits at that head; the launch text was
+  handed over after a checklist confirmed every path and anchor it names.
+- **2026-09-07 [AGENT] CODEX D5 LANDING — merge candidate `2da2dd5`**
+  (branch `codex/demo-residuals`, range 1e1f584..2da2dd5, 7 commits; Lean
+  content = `cdaf189`'s, the landing commit is docs-only). CONTENT: D6's
+  two evidence commits (implementation reverted; no Lean/script residue —
+  audit check A); D5 (`Examples/PartialClients.lean`: the whole `t5Main`
+  at the partial judgment `wps`, a whole-cell load client; public
+  `t5_wps`, `t5_blockSpecs`, `loadBind_wps`, trio-exact, pinned; the seven
+  RULE-PARTIAL-UNDEMONSTRATED rows → RULE with this module as partial
+  consumer — the audit verified each face lies in the proof-term cone of a
+  PINNED theorem, and no `wpt_*` rule in any partial cone); the adaptation
+  to the L2 pin by the orchestrator's worker (`[LemFuel]` on 19
+  declarations, none vacuous — audit check D scanned all 98 constants;
+  `(hfuel : 0 < LemFuel.fuel)` on `t5_wps`, consumed by `wps_create`'s own
+  premise at Wps.lean:4207, the same floor and placement as `t5_wpt`;
+  retired `pot`-ceiling arguments dropped; manifest regenerated; census vs
+  `l2b`: ADDED 7 / CHANGED 0 / REMOVED 0, all in the new module).
+  [AGENT] adjudications of the worker's flagged choices: per-declaration
+  `[LemFuel]` (not a section `variable`) ACCEPTED — it is what keeps the
+  H-1 vacuous-binder class out; `hfuel` on `t5_wps` ACCEPTED as
+  pin-forced, not a design choice (no client discharges `wps_create`
+  without it; mirrors `t5_wpt` byte for byte). Recorded as the [AGENT]
+  choice it was (audit check I): Codex's `hfresh` shape on `t5_wps` — the
+  non-collision premise stated abstractly, `∀ k, sym_supply ≤ k → symOrd …
+  (fresh_given_int k) ≠ .eq`, in place of `t5_wpt`'s `600 ≤ sup` — is
+  strictly more general (implied by the numeral floor; not vacuous per B6)
+  and is the numeral-free form B19/B20 prefer; relative to main the
+  statement is ADDED, not CHANGED, so the charter's D5 "ADDED only" holds
+  and no [USER] ruling was needed. RANGE AUDIT (fresh reviewer,
+  `cerberus-heaplang/docs/2026-09-07_audit-codex-d5-landing.md`): PASS
+  WITH FIXES, A−; F-1 Medium (record accuracy), F-2 Low (front docs at
+  merge), F-3..F-6 Low hygiene; both required fixes and all four
+  recommendations applied in the landing commit. ERRATUM to the entry
+  committed at `1e1f584` ("two conflicts: TSV union; manifest
+  regenerated"): the manifest conflict at the first rebase was resolved by
+  TAKING MAIN'S FILE, not by regeneration (the module did not compile at
+  the new pin before the adaptation, so regeneration was impossible
+  there); the landed D5 commits `62685e1`/`56e9d39` therefore carry a
+  manifest with 7 undemonstrated rows against a generator input with 0
+  and are NOT green as committed, although their messages (carried from
+  the original base, where the stage-1 gate ran at `42e2205`) say "FULL
+  gate green"; `dc1bf00` regenerated it. Verified twice, independently
+  (the auditor; the orchestrator: `grep -c RULE-PARTIAL-UNDEMONSTRATED`
+  on the committed manifest = 8 at `1e1f584`, `62685e1`, `56e9d39`,
+  `df5dc90`; = 1 at `77c237d`, `dc1bf00`, `cdaf189`, the summary line).
+  Record: the "Orchestrator landing notes" section of
+  `cerberus-heaplang/docs/2026-09-07_codex-residuals-notes.md` (erratum,
+  the cited→landed hash map, snapshot pruning, the stage-1 copy). [AGENT]
+  F-3 disposition: `codex-D6-post.txt` and `codex-D5-pre.txt` deleted
+  (byte-identical to `l1-signatures-post.txt`), `codex-D6-pre.txt`
+  deleted (stale-cache artifact, describes no real tree), `codex-D5-post.txt`
+  KEPT (the D5 census stays reproducible). Front docs: ARCHITECTURE §7 and
+  the pin derivation (904 = 901 + 3), README census (47 RULE / 0
+  undemonstrated / twenty-six consumer modules) and quoted gate line, KOI
+  C19 (the seven faces discharged), B20 (four clients), C17 (F-4 twins),
+  §E (expected tail 904 / 484 jobs / 30 modules; `GATE-EXIT=0` is the
+  caller's echo, not a script line — audit N-1). Orchestrator FULL gate,
+  run twice (at `cdaf189` 06:01:53–06:02:10 UTC and at `2da2dd5`
+  06:28:47–06:29:04 UTC; identical Lean trees, identical tails; the
+  `2da2dd5` run quoted, 40G cap, wrapper `EXIT=0`, 33 package warnings =
+  KOI C5 baseline, 0 `UNCAPPED`; the 30 per-module `ok:   <module> — 0
+  internals mentions` lines elided):
+  ```
+  == gate 1: banned proof-method grep (native_decide / bv_decide / ofReduce*) ==
+  ok: no banned proof-method references
+  == gate 1b: fuel-numeral grep (scripts/fuel_numeral_check.sh; a numeral outside a *_shipped corollary is red) ==
+  ok: no fuel numeral (100000000/1000000/999999) outside a *_shipped corollary and no retired fuel constant (61 files scanned, comments stripped)
+  == gate 2: capped build, cerberus-heaplang (elaborates its axiom audit) ==
+  info: CerberusHeapLang/Audit.lean:1121:0: CerberusHeapLang export pins: 904 trio-exact, 6 axiom-free-exact
+  info: CerberusHeapLang/Audit.lean:1121:0: CerberusHeapLang axiom sweep: every theorem bounded by the trio (6532 swept, internal details included — count informational, environment-dependent)
+  info: CerberusHeapLang/Audit.lean:1121:0: CerberusHeapLang banned-axiom sweep: sorryAx/ofReduceBool/ofReduceNat absent from all cones (9763 constants of every kind swept, internal details included — count informational, environment-dependent)
+  Build completed successfully (484 jobs).
+  ok: cerberus-heaplang build green
+  == speedbump: rule-use and classification manifest (regenerate; red on a red row or drift) ==
+  ok: capability manifest regenerated, no drift
+  == speedbump: corpus skeleton (hand-transcribed emitted Core vs docs/corpus-e0; scripts/corpus_skeleton.lean) ==
+  ok: corpus skeleton — every transcription matches its emitted text, every plant mismatches
+  == speedbump: import direction (semantics → heap → rules → adequacy → clients) ==
+  ok: import direction — 19 core modules, none imports an exhibit/example/production module
+  == speedbump: client boundary (positive clients mention no logic internals; scripts/boundary_check.sh) ==
+  BOUNDARY: 30 modules checked, 0 internals mention(s) in total, exit=0
+  ok: client boundary — no unallowlisted internals mention
+  ALL GATES GREEN
+  ```
+  Merge candidate pending [USER] sign-off. On this merge: D5 is landed;
+  stage 2 (D6 redo, D7, D1–D4) runs in `codex-stage2` and rebases onto
+  this main before each of its gates; the stage-1 copy on main is deleted
+  when stage 2 closes.
