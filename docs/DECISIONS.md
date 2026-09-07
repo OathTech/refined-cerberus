@@ -3850,3 +3850,39 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   (the two documents, the review, the KOI/ARCHITECTURE/README erratum, this
   entry); pending [USER] sign-off — and the plan itself pending
   ratification (its §7).
+- **2026-09-07 [AGENT] ADDENDUM — the PRIMARY RE-PRIME GATE, VERBATIM** (the
+  master-plan review's revision-2 check R4: the previous entry asserted this
+  gate with fragments). Primary checkout at main `777ca0f`, after re-priming
+  `.cerberus-ws` and `cerberus-heaplang/.lake` from `worktrees/codex-refinement`;
+  `CERB_MEM_MAX=40G scripts/test_unit.sh`, wrapper `EXIT=0`, 33 warnings, 0
+  `UNCAPPED`, 0 modules rebuilt; the thirty per-module `ok:   <module> — 0
+  internals mentions` lines elided:
+  ```
+  == gate 1: banned proof-method grep (native_decide / bv_decide / ofReduce*) ==
+  ok: no banned proof-method references
+  == gate 1b: fuel-numeral grep (scripts/fuel_numeral_check.sh; a numeral outside a *_shipped corollary is red) ==
+  ok: no fuel numeral (100000000/1000000/999999) outside a *_shipped corollary and no retired fuel constant (61 files scanned, comments stripped)
+  == gate 2: capped build, cerberus-heaplang (elaborates its axiom audit) ==
+  info: CerberusHeapLang/Audit.lean:1123:0: CerberusHeapLang export pins: 906 trio-exact, 6 axiom-free-exact
+  info: CerberusHeapLang/Audit.lean:1123:0: CerberusHeapLang axiom sweep: every theorem bounded by the trio (6479 swept, internal details included — count informational, environment-dependent)
+  info: CerberusHeapLang/Audit.lean:1123:0: CerberusHeapLang banned-axiom sweep: sorryAx/ofReduceBool/ofReduceNat absent from all cones (9679 constants of every kind swept, internal details included — count informational, environment-dependent)
+  Build completed successfully (484 jobs).
+  ok: cerberus-heaplang build green
+  == speedbump: rule-use and classification manifest (regenerate; red on a red row or drift) ==
+  ok: capability manifest regenerated, no drift
+  == speedbump: corpus skeleton (hand-transcribed emitted Core vs docs/corpus-e0; scripts/corpus_skeleton.lean) ==
+  ok: corpus skeleton — every transcription matches its emitted text, every plant mismatches
+  == speedbump: import direction (semantics → heap → rules → adequacy → clients) ==
+  ok: import direction — 19 core modules, none imports an exhibit/example/production module
+  == speedbump: client boundary (positive clients mention no logic internals; scripts/boundary_check.sh) ==
+  BOUNDARY: 30 modules checked, 0 internals mention(s) in total, exit=0
+  ok: client boundary — no unallowlisted internals mention
+  ALL GATES GREEN
+  ```
+  Revision-2 review verdict: CREDIBLE WITH FIXES (minor residues), B → B+
+  with R1–R5 fixed — applied in this commit: ARCHITECTURE §3's file list now
+  ten (CerbFloat 2), KOI A5's disposition cell corrected, `frontendSupply`
+  described as the captured literal it is (`36`) and folded into V1-4a's
+  scope, the comparator-closure reason for quoting `cmp` stated, five
+  landings not four, the monotonicity gloss marked as ours. The reviewer's
+  revision-2 section is committed in its report.

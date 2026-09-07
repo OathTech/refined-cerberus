@@ -603,10 +603,10 @@ uses sorry` (README "The trust story"; `docs/2026-09-03_repin-fuel-notes.md`).
 
 **The `panic!` arms.** The pinned tree does contain `panic!` arms: 119
 code occurrences of `panic!` across the 37 hand-written seams of
-`handwritten_copy.manifest`, in nine files — `CerbMem.lean` 60,
+`handwritten_copy.manifest`, in ten files — `CerbMem.lean` 60,
 `CerbFS.lean` 36, `CerbDecode.lean` 7, `CerberusImpl.lean` 4,
-`CerbUtils.lean` 4, `CerbLocation.lean` 2, `Main.lean` 2, `CerbTags.lean` 1,
-`CoreParser.lean` 1 (e.g. `sizeofCtype` at `Void`, generated
+`CerbUtils.lean` 4, `CerbFloat.lean` 2, `CerbLocation.lean` 2, `Main.lean` 2,
+`CerbTags.lean` 1, `CoreParser.lean` 1 (e.g. `sizeofCtype` at `Void`, generated
 `CerbMem.lean:443`; `CerbTags.lean:34`; `CoreParser.lean:2413`) — and none
 in lem-generated code (count DERIVED at pin `89f7e6885` by ONE method:
 block and line comments stripped, string literals kept — the stripper of

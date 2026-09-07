@@ -567,3 +567,117 @@ ruling whose recorded disposition says the opposite, inherits a false
 reassurance about the concurrency branch is a vacuous measurement. With the
 seventeen fixes applied it is a B: an honest state-of-the-union with a
 defensible interim plan.
+
+## Revision 2 verification (2026-09-07)
+
+Fresh pass [AGENT, same reviewer, read-only] over branch `docs/master-plan` @
+`1595c3e` (= `a446672` + one commit touching `ARCHITECTURE.md`, `README.md`,
+both plan documents, `docs/DECISIONS.md` (+65), `docs/KNOWN-OPEN-ITEMS.md`,
+and adding this report — `git show HEAD:docs/2026-09-07_review-demo-master-plan.md
+| md5sum` = the working file's `984b8d69b087195f5fceaec48f4c9c28`, i.e. my
+earlier sections were committed unchanged). Nothing was committed or modified
+by me except this appended section; the one command run outside this
+worktree was the read-only `scripts/setup-cerberus-dep.sh --check` in the
+primary checkout (its `--check` path only runs `check_lem_sync.sh --check-lean`
+and `cmp`; the priming/`--record-lean` writes are behind `check_only == 0`).
+
+### Revised verdict: CREDIBLE WITH FIXES (minor residues) — grade B
+
+All seventeen fixes and every Part B recommendation are applied in
+substance; the plan now states its own provenance correctly, presents the
+boundary decision as a proposal against the recorded disposition, and the
+companion's concurrency paragraph is a true measurement. Five residues, all
+textual, two of them on shop-window surfaces: (R1) ARCHITECTURE §3 now
+contradicts itself ("119 … in nine files — [nine files summing to 117] …
+CORRECTED … to 119 in TEN seams"); (R2) KOI A5's disposition cell still says
+"(117)"; (R3) the plan calls G2's `frontendSupply` "program-derived" twice —
+it is `def frontendSupply : Nat := 36` (a captured literal checked by the
+round-trip), exactly the shape G1.1 criticises; (R4) the DECISIONS entry
+claims a FULL gate at the landing but quotes fragments, not the verdict tail
+(the record-gate-tails rule); (R5) two small imprecisions ("four landings on
+2026-09-07" — five; a register gloss presented as the provider's words).
+B+ once R1–R4 are fixed.
+
+### (A) The seventeen fixes and Part B — applied / partial / missing
+
+| fix | status | revised text (where it differs) and whether it matters |
+|---|---|---|
+| 1 provenance sentence; register the DoD | APPLIED | PLAN 17–20: "§0's definition of done and the request in §8 are the operator's words in the working session of 2026-09-07, registered in `docs/DECISIONS.md` in the commit that carries this revision (review fix 1); every other quoted ruling is verbatim from `docs/DECISIONS.md` with its date." DECISIONS: new entry `2026-09-07 [USER] THE MASTER PLAN, AND THE DEFINITION OF DONE FOR THE DEMO` (verbatim, the working session). Correct form |
+| 2 R5 framing | APPLIED | PLAN §0 39–47 quotes R5 verbatim (matches DECISIONS 3002–3004), then "The RECORDED DISPOSITION of that ruling (DECISIONS, the same entry) is: 'the v1 tag waits for E6 proper (L5)'. The alternative 'v1a …' was the orchestrator's bracketed recommendation in the landing charter §1 R5, not a ruling. **This plan recommends changing the recorded disposition — §7.1 — and until that decision the definition of done includes E6.**" §4.1 title "PROPOSED boundary 'v1a'; recorded disposition: v1 waits for E6". §7.1 rewritten as "Ratify or reject". Exactly as asked |
+| 3 REG concurrency | APPLIED | REG §1 last bullet: "`lean_frontend/generated/` is UNTRACKED in cerberus-lean … against the merge-base `31eba718e` the branch changes the `.lem` SOURCES … `driver.lem \| 708`, `core_run.lem \| 50`, `core_reduction.lem \| 141`, `core_run_aux.lem \| 211`, plus `cmm_csem.lem \| 45`, `cmm_op.lem \| 5`, `mini_pipeline.lem \| 2` (7 files, 966 insertions, 196 deletions; DERIVED). **Its merge is a FORCED re-pin for us, with a scout first** (R-9). (Revision 1 said the opposite on a vacuous measurement — review F1.)" Numbers match my measurement exactly |
+| 4 panic 119/ten | PARTIAL | PLAN §1.4, G3.1; REG R-2, F-3; KOI A5 body; README: all 119/ten ✓. ARCHITECTURE §3 line 604 "119" and 614–616 "CORRECTED 2026-09-07 to 119 in TEN seams: `CerbFloat.lean:183` and `:307` are code arms the D-3 stripper missed" ✓ — but lines 606–609 still read "in nine files — `CerbMem.lean` 60, `CerbFS.lean` 36, `CerbDecode.lean` 7, `CerberusImpl.lean` 4, `CerbUtils.lean` 4, `CerbLocation.lean` 2, `Main.lean` 2, `CerbTags.lean` 1, `CoreParser.lean` 1" (sums to 117; no `CerbFloat.lean`); KOI A5's last cell still reads "Arm count re-measured at the re-pin (117); re-check `MemWF.killM`." Both matter: ARCHITECTURE is the reviewer-facing surface and now contradicts itself within one paragraph |
+| 5 `600` = 18 sites | APPLIED | G1.1 "18 statement sites (15 `hsup : 600 ≤ …` premises — T4 10, T5 2, T6 3 — + 3 …)"; §2 park-D3 row "at `1e1f584` (14 = …); at `777ca0f` it is 15 + 3 (T4 has 10: `t4_wps_of_wpt` carries the premise)"; V1-4a "the 18 sites" |
+| 6 G3 = 12 | APPLIED | §2 "14e7dc3..6c8e7e3, 12 commits: … changes `Step`/`wps`/`wpt`/`Soundness`/`DriverCollapse`" (matches the inclusive diff) |
+| 7 option (b) sense; quoter as trusted component | APPLIED | §0 row (4) "V1-1 closes it in the [USER 2026-09-04 Q3] OPTION (b) sense …; option (a) … remains the named target"; G4.1 as asked; V1-1 acceptance "each `t*_certified_production` drives the data term of the pipeline's file"; §1.6 "the trust base gains two components … the quoter `scripts/derive_file_to_expr.lean` and the loader `scripts/emitted_frontend.lean` … checks, not proofs; they need a named place in ARCHITECTURE §3 and a mover" |
+| 8 G1.5 = 24 | APPLIED | "24 NO-RULE + 7 OUT-OF-SCOPE variants (31 of 78) are stated absences"; §1.1 adds "31 of 78 classified variants (40 %) have no rule" |
+| 9 cross-references | APPLIED | §1.2 "§7.2 below"; V1-5 "(§7.2; note §6 (a)–(e))", `wpu_certified_killed`; §1.2/§7.2 name branch `design/kill-adequacy` @ e87a97c; §2 "(five decisions, its §6)" |
+| 10 REG monotonicity attribution | APPLIED (one gloss) | REG §1 pure-failure bullet: "That design's §4 is also where the provider states that fuel MONOTONICITY … is 'not statable for `drive`' while eight fuel rows exhaust into opaque sentinels — its shape must be fixed with the operator first." The quoted words are the design's (§4 rows 2–3); "its shape must be fixed with the operator first" is the register's own reading of the design being PARKED pending §8's operator decisions — not the provider's sentence. Low: mark it as [AGENT] reading |
+| 11 R-10 | APPLIED | R-10 quotes the S1 response line 16, the mainline charter I3 and the branch S5 record §4 verbatim (all three verified) |
+| 12 worktree row | APPLIED | §2 names both files with mtimes 00:05 / 00:07 "AND uncommitted edits `README.md \| 8 +`, `docs/DECISIONS.md \| 55 +` — a pending edit to the append-only register"; §7.5 |
+| 13 §7.7 counts | APPLIED | §7.6 "25 fully-merged non-main branches (R7 counted eighteen on 2026-09-07 morning) and 4 worktrees … (`codex-charter-2`, `codex-refinement`, `demo-fuel-t1`, `land-repin`)" — matches my recount (40 refs, 26 ancestors incl. main) |
+| 14 line counts, snapshots, date, paths | APPLIED | §1.1 "84 343 lines in 60 modules (79 560 at the top level + 4 783 under `Examples/`)", ListRevExhibit 1 985 inserted; §1.7 "63 `.txt` evidence files (54 signature snapshots, 9 axiom/census dumps)"; §0/§6 "[USER 2026-09-02] one change at a time"; `cerberus-heaplang/scripts/…` for the four scripts, `scripts/semantics-pin.env` at the root |
+| 15 REG added files | APPLIED | REG §1 bullet 1 lists `FailureMain.lean`, `FailureReach.lean`, `discarded_failures.lem`, `failure_main.ml`, nine `reach/*.c`, `tests/provider-smoke/ProviderSmoke.lean` — the measured set |
+| 16 the hour claim | APPLIED | §4 "the refinement slice's two theorems fell within a seven-minute snapshot span, under an hour from activation to record" — "under an hour" is now supportable from main's own timestamps (launch-incident entry `6df8982` 20:05 → T2 record `a994676` 20:36) |
+| 17 §7.5 B18 | APPLIED | §7 "Not open (corrected from revision 1): E5 §S2.5's supply normalisation was ACCEPTED as an inert limitation by R3 on 2026-09-07 (KOI B18)." |
+| B1 (1) | APPLIED | criterion row: "MET for statements and loops; procedures MET at value-indexed specifications only (no logical variables, G1.2); statement-level artefacts … (G1.1, G1.9)"; G1.2 raised to "V (the review would grade it toward D for 'complete')" with §7.4 proposing Lane C option (i) for Phase I; the conjunction/existential line (§1.2, V1-6); the derived `while` rule (G1.7 → V1-4c); the two adequacy routes as G2.4 + a named question for the fresh ARCHITECTURE review; the fuel floors as G1.9 + §7.8 |
+| B1 (2) | APPLIED | "MET as a layer (the judgments are the same construction as iris-lean's `wp`, collapsing into it); 'extensible' UNTESTED until the extraction"; §1.2 cites `wps_sound` 4752 / `wpt_sound` 4520 / `wp_strong_adequacy_gen` (all verified in my first pass) |
+| B1 (3) | APPLIED | "MET (measured: none of the 13 production statements mentions `Step`, `Frag`, `CerberusRound` or a `Driver*` device)"; §1.4 adds "After V1-1 the referent's FILE becomes a data term plus an executable check" |
+| B1 (4) | APPLIED | option (b) sense; G4.3 "'The pipeline' is TWO things in this repository …"; R-4 asks the provider "(i) are the OCaml printer's Core and the Lean frontend's `file` promised structurally equal … and which is 'the pipeline' of record" |
+| B2 (i)–(x) | APPLIED, (iv) partial | (i) G1.9 ✓; (ii) G1.4 "the empty extern map (38 sites) … answered by G2's `runtimeExtern` route at V1-1" — note `runtimeExtern` on `a41292d` is `Examples/EmittedT1.lean:86 def runtimeExtern : Fmap sym sym := symAdd mainSym mainSym fmapEmpty`, a hand-authored singleton proved equal to the file's actual extern map for t1 (`restoredFile_extern`) — fine for t1, say so; (iii) §1.6 ✓; (iv) §2/G4.1 say "comparators quantified under three finite `Bool` checks" but never say WHY a `file` cannot be quoted whole (its `Fmap`s carry comparator closures) — a referee will ask; one sentence missing; (v) §1.1/G1.5 "31 of 78 (40 %)" ✓; (vi) §1.4 "ONE thread", §5, V1-6 ✓; (viii) §1.4 "the covered programs avoid every arm by the RULES' premises … not by a census", G3.1 "(that census is about `failwith`, not `panic!`)" ✓; (ix) §7 ✓; (x) §1.1 row + §7.7 ✓ |
+| B3 boundary framing | APPLIED | §4 "Phase I (proposed tag 'v1a') … Phase II … INCLUDING E6, which the recorded disposition places before the v1 tag. If the operator keeps the recorded disposition, 'finished' = Phase I + V2-4/V2-5 …"; the sentence "V1 = the definition of done for the CALL-FREE emitted-Core demo" is gone |
+| B4 sizes / sign-offs | APPLIED | V1-5 "its OWN structural rules for every construct on the overflow path … \| M–L, own stop-and-report"; estimate "V1-5 1–3 (design first; M–L) … About two weeks to the 'v1a' tag"; §4 "each Codex slice costs the operator a charter review, a launch, a range audit and a merge sign-off — about ten sign-offs across Phase I" |
+| B5 companion additions | APPLIED | F-6 globals/`to_pure` ("their fuel-parameter C2 follow-up" — verified: `TODO.md:43` sits under `## Fuel-parameter arc — C2 follow-ups`; `scripts/fuel_forms_pending.txt` has 2 `to_pure` rows); F-3 pointer↔integer casts, `loc = alloc_id × addr`, `intptr.v`/`tagged_ptr.v`, "which model (concrete vs PNVI-ae)"; F-5 the `Impl` call row becoming LIVE after V1-1; F-4 the kill location; R-4 the two-pipelines question; R-3/R-11 reduced to one line each; the donor file list quoted matches `deps/refinedc/theories/` |
+
+### (B) The new claims of revision 2
+
+| new claim | measurement | verdict |
+|---|---|---|
+| DECISIONS: the [USER] definition-of-done ruling and the three requests, "verbatim, the working session" | I have no access to the session; internal consistency only: the plan's §0 quote is the entry's text with ", as you say" elided by the ellipsis ("The done state, as you say is that our logic (1) …"); §8's request quote is the entry's second sentence group with honest ellipses ("Yes, can you collect all this into a single 'master plan' doc. You can spend significant effort making sure we have a register …"); REG §6's quote and the "send a fable-class agent …" quote match the entry character for character | ✓ consistent (unverifiable against the source) |
+| DECISIONS: the entry's account of what changed, (i)–(vi) | (i) registration ✓; (ii) R5 disposition ✓; (iii) "rewrites `driver.lem` (708 lines) and three sibling `.lem` sources" — `driver.lem \| 708` and `core_run`/`core_reduction`/`core_run_aux` in `frontend/model/` ✓ (plus `cmm_csem`, `cmm_op`, `mini_pipeline` outside that directory); (iv)–(vi) ✓ against the revised text | ✓ |
+| DECISIONS: `2026-09-07 [USER] TWO MERGES` "main 6df8982 → 7698a71 … → 777ca0f" | `git log --oneline 6df8982..777ca0f` = 7 commits: the four Codex T1/T2 commits, `ed82837`, `7698a71` (= `codex/total-refines-partial`), `777ca0f` (= `hygiene/agents-md`) | ✓ |
+| ERRATUM 119 in ten seams, "two independent verifications … the orchestrator's independent string-aware lexer" | My stripper re-run on the PRIMARY checkout's `.cerberus-ws` (a second workspace, manifest seams only): `CerbMem.lean 60, CerbFS.lean 36, CerbDecode.lean 7, CerberusImpl.lean 4, CerbUtils.lean 4, CerbFloat.lean 2, CerbLocation.lean 2, Main.lean 2, CerbTags.lean 1, CoreParser.lean 1 \| TOTAL 119 \| seams with arms 10` — identical to the coordinator's per-file list. The orchestrator's lexer itself is not in the tree; its result is recorded, not its code | ✓ (KOI A5 body; residues R1/R2 above) |
+| KOI §E / PLAN §1.6 / DECISIONS: the primary's `.cerberus-ws` had drifted to `f95ef8d9c` with a `.lake` from 2026-09-02; `--check` reported it (exit 1); re-primed from `worktrees/codex-refinement`; re-verified | Current state, measured in the primary: `git -C .cerberus-ws rev-parse HEAD` → `89f7e688530c6910884518811d645e4e892e4507`; manifest entries 37; `scripts/setup-cerberus-dep.sh --check` (verbatim): `== setup-cerberus-dep: A ok: workspace at pinned commit` / `== setup-cerberus-dep: B ok: primed (89f7e688530c6910884518811d645e4e892e4507 2026-09-07T02:06:21Z)` / `check_lem_sync: lean OK (src 977326511c…, gen 11c6b37a5d…)` / `== setup-cerberus-dep: B ok: Lean lem-sync stamp verified in the workspace` / `== setup-cerberus-dep: C ok: 37 hand-written seams byte-identical to the pin` / `== setup-cerberus-dep: DONE …`; `CHECK-EXIT=0`. The `.primed-from` stamp `2026-09-07T02:06:21Z` is byte-identical to `worktrees/codex-refinement/.cerberus-ws/.primed-from`, consistent with a wholesale copy from that worktree; `cerberus-heaplang/.lake` in the primary is dated `2026-09-07 21:21:47` (a build at the landing). The historical drift (`f95ef8d9c`, the `.lake` date, the exit-1 transcript) cannot be re-observed; `.cerberus-ws/lean_frontend/.lake` now shows `2026-08-20` (`cp -a` preserves mtimes) | ✓ current state; historical claim unverifiable, plausible |
+| DECISIONS: "FULL gate `EXIT=0`, `export pins: 906 trio-exact`, 0 modules rebuilt, `ALL GATES GREEN`" at this landing | Only fragments are quoted; no verbatim verdict tail for this gate appears in DECISIONS or in any record of the commit (the rule "gate tails verbatim in `DECISIONS.md`" is the plan's own §6). The `.lake` mtime supports that a build ran | ≈ record gap (R4) |
+| PLAN §1.1 unpushed row: local `main` 107 ahead of `origin/main` (`04059dc`) | `git rev-list --count 04059dc..main` → 107; `origin/main` is an ancestor | ✓ |
+| PLAN §2 G2 row: data term `Examples/EmittedT1Data.lean` (42 841 lines), quoter `derive_file_to_expr.lean`, loader `emitted_frontend.lean`, round-trip, "the statement drives `restoredFile cmp` under quantified comparators and three finite `Bool` checks, at a program-derived `frontendSupply`" | data term / quoter / loader / comparators / checks ✓ (`a41292d:EmittedT1Exhibit.lean:605–617`). `frontendSupply`: `a41292d:Examples/EmittedT1Data.lean:7 def frontendSupply : Nat := 36` — a LITERAL captured from the frontend run and compared by the round-trip's supply check, not derived from the program term | ✗ "program-derived" (R3) |
+| PLAN G1.1: "G2's `frontendSupply` shows the program-derived form" | same measurement | ✗ (R3) — it shows the captured-literal form, the very shape G1.1 objects to |
+| PLAN G1.9: fuel floors `50/917/90/80` | `t1_certified_production (hfuel : 50 ≤ …)`, `t4 … 917`, `t5 … 90`, `t6 … 80` (first pass) | ✓ |
+| PLAN §4: "four landings on 2026-09-07 alone" | main's log for 2026-09-07 shows five landings (L1 01:50, L2 04:01, D5 06:28, stage-2 19:34, refinement 21:21) plus the AGENTS.md merge | ≈ undercount; harmless |
+| PLAN §1.2 "`wpt_driver_aux`" as the production lane's own induction | `ProdLoop.lean:191 theorem wpt_driver_aux` | ✓ |
+| PLAN §1.5 t8 row: "the dialect design §C.8 says arrays are 'not an E slice'" | `2026-09-04_emitted-core-dialect-design.md:882 ### C.8 — Not an E slice: tagDefs (t7) and arrays (t8)` | ✓ |
+| REG §1 corrected concurrency paragraph; R-4/R-9/R-10 rewrites | numbers and quotations verified (A above) | ✓ |
+| REG §1: "(Tier A, 11 rows in `scripts/LADDER.md`)"; "(both MATCH at 90 s)" | LADDER Tier A rows 1–11; csmith record line 46 "At `TIMEOUT_SECS=90` both MATCH the oracle" | ✓ |
+| REG F-6 (globals, `to_pure`) and F-5 (`Impl` call row) | `TODO.md:43` under C2 follow-ups; `fuel_forms_pending.txt` 2 `to_pure` rows; FUEL.md §4 `to_pure` (D) row; manifest OUT-OF-SCOPE row `Frag.call \| Eproc _ (Impl _) _` | ✓ |
+| REG §1 "our 117 `panic!` figure 'is its own dated census, not a count certified by this audit'" | risk-map §6 bullet 1, verbatim | ✓ |
+
+### (C) Worse than revision 1?
+
+Nothing lost its measurement, and no correction over-shot except one: (R3)
+`frontendSupply` is presented twice as the exemplar of the program-derived
+supply bound while it is a captured numeral (`:= 36`) — the plan adopted the
+reviewer's vocabulary without checking the definition. New inconsistencies
+introduced by the half-applied erratum: (R1) ARCHITECTURE §3's paragraph now
+asserts 119 and lists nine files summing to 117 in the same sentence; (R2)
+KOI A5 body says 119/ten while its disposition cell says "(117)". New record
+gap: (R4) the landing's FULL gate is asserted in DECISIONS without its
+verbatim verdict lines. Minor: (R5) "four landings" (five); REG §1's "its
+shape must be fixed with the operator first" is the register's gloss on a
+PARKED design, presented inside the provider's statement.
+
+Exact fixes for revision 3: ARCHITECTURE.md:606–609 → "in ten files —
+`CerbMem.lean` 60, `CerbFS.lean` 36, `CerbDecode.lean` 7, `CerberusImpl.lean`
+4, `CerbUtils.lean` 4, `CerbFloat.lean` 2, `CerbLocation.lean` 2, `Main.lean`
+2, `CerbTags.lean` 1, `CoreParser.lean` 1"; KOI A5 last cell "(117)" →
+"(119, erratum 2026-09-07)"; PLAN §2 G2 row "at a program-derived
+`frontendSupply`" → "at the captured supply `frontendSupply := 36`
+(`Examples/EmittedT1Data.lean:7`), equal to the frontend's by the round-trip
+check"; G1.1 "G2's `frontendSupply` shows the program-derived form" → "G2's
+`frontendSupply` is a captured numeral, the same class — V1-1 should state
+it as a derived bound or exempt it with G1.9"; DECISIONS: quote the landing
+gate's verdict lines verbatim or state that no gate was run for a docs-only
+landing; §4 "four landings" → "five"; REG §1 mark the operator clause as
+[AGENT].
+
+Revised grade: **B** (B+ with R1–R4 fixed). The document is now an honest
+state-of-the-union with its provenance in order; what remains is copy-editing
+on two shop-window surfaces and one record-integrity habit.

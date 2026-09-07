@@ -50,7 +50,7 @@ is from its committed records and `git`, labelled DERIVED where a tally.
   makes it live. That design's §4 is also where the provider states that
   fuel MONOTONICITY ("done at n ⇒ done at every m ≥ n", their lem TODO 13) is
   "not statable for `drive`" while eight fuel rows exhaust into opaque
-  sentinels — its shape must be fixed with the operator first.
+  sentinels — that its shape must be fixed with the operator first is this register's reading of their row, not their words.
 - **A Codex charter for fuel-measure cost** (branch `arc/fuel-measure-cost`,
   not mainline): measure and remove the fuel arc's execution cost (build/CPU),
   which touches our build times only.

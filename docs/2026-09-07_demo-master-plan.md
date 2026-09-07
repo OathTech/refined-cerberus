@@ -237,7 +237,7 @@ review's sweep found every unmerged branch present here.
 
 | branch @ head | what is there | salvage target | disposition |
 |---|---|---|---|
-| `parked/demo-expansion-2026-09-07` = `demo-repin` @ a41292d (65 beyond main) | the other agent's expansion, assessed as G1–G6 in `docs/2026-09-07_landability-demo-repin.md`: G1 re-pin (17 commits; LANDED as L2); **G2 the actual t1 file** (3aac95d..5bfe992, 10 commits: the pinned Lean frontend's in-memory `file` for t1 quoted into a 42 841-line data term `Examples/EmittedT1Data.lean` by `scripts/derive_file_to_expr.lean`, loaded by `scripts/emitted_frontend.lean`, with an executable round-trip check; the statement drives `restoredFile cmp` under quantified comparators and three finite `Bool` checks, at a program-derived `frontendSupply` — [USER 2026-09-04 Q3] option (b) mechanised); **G3 E6/E7 scheduler scaffolding** (14e7dc3..6c8e7e3, 12 commits: kernel-sound over shipped engine functions; no acceptance program; changes `Step`/`wps`/`wpt`/`Soundness`/`DriverCollapse`); **G4 `seq_rmw`** (567c578..19292c0, 4: engine arms mirrored, rules at cost 8, PROVISIONAL); G5 a failing WIP patch (rejected); G6 records | G2 → V1-1; G4 → V1-2; G3 → the REFERENCE for V2-4 | keep parked (record); never merge as is |
+| `parked/demo-expansion-2026-09-07` = `demo-repin` @ a41292d (65 beyond main) | the other agent's expansion, assessed as G1–G6 in `docs/2026-09-07_landability-demo-repin.md`: G1 re-pin (17 commits; LANDED as L2); **G2 the actual t1 file** (3aac95d..5bfe992, 10 commits: the pinned Lean frontend's in-memory `file` for t1 quoted into a 42 841-line data term `Examples/EmittedT1Data.lean` by `scripts/derive_file_to_expr.lean`, loaded by `scripts/emitted_frontend.lean`, with an executable round-trip check; the statement drives `restoredFile cmp` under quantified comparators and three finite `Bool` checks (the comparator CLOSURES are functions and cannot be quoted, which is why `EmittedFile.Data` omits them and the statement quantifies `cmp`), at `frontendSupply` — a CAPTURED literal (`def frontendSupply : Nat := 36`, checked by the round-trip, the same shape G1.1 criticises, not a derivation) — [USER 2026-09-04 Q3] option (b) mechanised); **G3 E6/E7 scheduler scaffolding** (14e7dc3..6c8e7e3, 12 commits: kernel-sound over shipped engine functions; no acceptance program; changes `Step`/`wps`/`wpt`/`Soundness`/`DriverCollapse`); **G4 `seq_rmw`** (567c578..19292c0, 4: engine arms mirrored, rules at cost 8, PROVISIONAL); G5 a failing WIP patch (rejected); G6 records | G2 → V1-1; G4 → V1-2; G3 → the REFERENCE for V2-4 | keep parked (record); never merge as is |
 | `dialect-e5` @ cb46e4c (21) | the other agent's E5 completion (t4/t5/t6), landed re-cut as L1 | — | keep as record |
 | `codex/park-D1` @ 55b54b5 | stage-2 D1 investigation: the total judgment has no kill face (the finding behind the kill-adequacy design) | V1-5 | keep as record |
 | `codex/park-D2` @ 09f9b90 | D2 investigation: `wps_c_add`'s int-range premises; the implementation path via `emittedInt_storable`/`intToBytes_*` | V1-4b | keep |
@@ -264,7 +264,7 @@ Severity: **D** would be called disqualifying for "good and complete";
 
 | # | gap | sev | closes at |
 |---|---|---|---|
-| G1.1 | the numeral `600` as the symbol-supply floor in 18 statement sites (15 `hsup : 600 ≤ …` premises — T4 10, T5 2, T6 3 — + 3 `600 ≤ sup →` in Shipped.lean) — a magic value in root-of-trust statements, against [USER 2026-09-03] no-magic-values; the rules expose the engine's symbol-generation scheme at the client interface (B19, B20). G2's `frontendSupply` shows the program-derived form | V | V1-4a |
+| G1.1 | the numeral `600` as the symbol-supply floor in 18 statement sites (15 `hsup : 600 ≤ …` premises — T4 10, T5 2, T6 3 — + 3 `600 ≤ sup →` in Shipped.lean) — a magic value in root-of-trust statements, against [USER 2026-09-03] no-magic-values; the rules expose the engine's symbol-generation scheme at the client interface (B19, B20). G2's `frontendSupply` is a captured literal (`36`) checked by a round-trip, not a derivation — V1-4a must cover it too | V | V1-4a |
 | G1.2 | **no logical-variable index on `ProcSpec`** (Wps.lean:130: pre and post share only the argument values; `reverse(p)` with `list p xs`/`list ret (rev xs)` is not statable — Lane C §1.4). For a Reynolds/O'Hearn logic WITH procedures this is the classical Hoare-logic ingredient, not a "fancy feature" | V (the review would grade it toward D for "complete") | V2-2 as recorded; this plan RECOMMENDS pulling Lane C option (i) into V1 (§7.4) |
 | G1.3 | negative results are measurements (B16): no must-reach-UB judgment | V | V1-5 |
 | G1.4 | the empty tag-definitions premise on every adequacy export (B4; 37 sites) and the empty extern map (38 sites): no structs, no externs | V for "complete", N for the covered fragment | V2-3 (D8); the extern premise is answered by G2's `runtimeExtern` route at V1-1 |
@@ -313,8 +313,8 @@ slice (fresh-reviewer range audit + merge ask each); X = a Codex slice under
 a charter written to the discipline that produced the refinement slice
 (statements verified derivable, fence-closure table, hostile pre-launch
 review, launch only after the worktree is verified). Sizes are estimates
-against measured velocity (the landing charter §4; four landings on
-2026-09-07 alone; the refinement slice's two theorems fell within a
+against measured velocity (the landing charter §4; five landings on
+2026-09-07 alone — L1, L2, D5, stage 2, the refinement; the refinement slice's two theorems fell within a
 seven-minute snapshot span, under an hour from activation to record).
 
 Constraint while any Codex slice runs: main receives docs-only landings (a
