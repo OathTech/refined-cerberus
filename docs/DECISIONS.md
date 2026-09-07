@@ -2978,3 +2978,19 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   discipline); the committed failing patch REJECT. Nothing merged or deleted
   by this entry; landing order and the operator's owed rulings in the
   assessment §4.
+- **2026-09-07 [USER] "put together a plan to land all this? This will be chartered work,
+  but it'll be somewhat incremental - you'll build a set of new branches which
+  pull out the good bits and land. I'm happy to sequence these however seems
+  convenient"** → `docs/2026-09-07_landing-charter.md` (DRAFT for ratification):
+  L0 the assessment docs → L1 E5 complete (from `dialect-e5`) → L2 the
+  re-pin to 89f7e68 (from `demo-repin` G1, code only, one record, the
+  syntactic fragment restored unless ruled otherwise, the exhaustion
+  paragraph, the unplanned memory-contract class, the census) → L3 the
+  actual emitted file in t1 (G2 + gate speedbump + BEq + A7 wording) → L4
+  `seq_rmw` re-cut (G4 without G3) → L5 E6 proper (the parked G3 as
+  reference) → L6 v1 tag + fresh ARCHITECTURE review + coupling-library
+  extraction. Seven rulings owed (R1 the pin, R2 fragment vs fuel, R3 the
+  §S2.5 normalisation, R4 the t1 referent wording, R5 E6/E7 park and v1
+  timing, R6 the park override recorded verbatim, R7 housekeeping), each
+  with the orchestrator's recommendation. Each slice its own branch,
+  census, fresh-reviewer range audit and merge ask.
