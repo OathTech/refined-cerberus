@@ -39,9 +39,10 @@ the orchestrator's landings (L2 the re-pin, L3 the actual file, L4
    FULL gate once (`CERB_MEM_MAX=40G scripts/test_unit.sh`) so the build
    cache is current — a snapshot taken against stale artifacts is not a
    baseline (stage 1's D6 was lost to exactly this). Then, before each
-   deliverable, take a signature snapshot
-   (`scripts/signature_snapshot.lean` → `cerberus-heaplang/docs/<date>_codex-D<n>-pre.txt`);
-   after it, the post snapshot. The diff must be EXACTLY the deliverable's
+   deliverable, take a signature snapshot — from `cerberus-heaplang/`:
+   `CERB_MEM_MAX=40G ../scripts/capped ~/.elan/bin/lake env lean scripts/signature_snapshot.lean > docs/2026-09-07_codex-D<n>-pre.txt`
+   (the script is `cerberus-heaplang/scripts/signature_snapshot.lean`); after
+   it, the post snapshot to `…-post.txt`; compare with `diff -u`. The diff must be EXACTLY the deliverable's
    "allowed changes" list — nothing else may change text. Anything else
    changed = the deliverable failed; revert and report.
 3. **Fence.** Each deliverable lists the files you may edit. Any other
@@ -139,7 +140,10 @@ statement (before/after named), ADDED lemmas. FENCE: `Heap.lean`,
 ### D3 — the program-derived symbol bound (KOI B19)
 GOAL (fixed 2026-09-07): a computable `symBound : Core file → Nat` (one plus
 the largest source symbol number occurring in the file; `symBound_spec`
-proved) and the SIX `hsup` premises rewritten: `(hsup : 600 ≤ sup)` →
+proved) and EVERY `hsup : 600 ≤ …` premise in the three exhibits rewritten
+(at activation: CorpusT5Exhibit 2, CorpusT6Exhibit 3, CorpusT4Exhibit 9 —
+list each in the record; the six named below are the public faces, the
+rest are the private helpers feeding them): `(hsup : 600 ≤ sup)` →
 `(hsup : symBound (prodFileLib stdlibE3 [] <tMain>) ≤ sup)` at
 CorpusT5Exhibit.lean:550, CorpusT6Exhibit.lean:756, CorpusT4Exhibit.lean (the
 production statement), and `(hsup : 600 ≤ M.runState.sym_supply)` → `(hsup :
