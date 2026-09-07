@@ -3439,3 +3439,25 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   ```
   On this merge: the Codex charter's stage-2 activation line (D7 first,
   then D1–D4, with the fixed statements) is written into the charter on main.
+- **2026-09-07 [USER] CODEX STAGE 1 RESULT AND STAGE 2** (verbatim): "The codex subagent
+  finished with D5 done, D6 blocked"; "work on landing the codex work. When we
+  relaunch the codex agent, let's brief it to park not revert in case of
+  errors. Also, are we ready to run codex against the longer work package?"
+  [AGENT] findings: D6 was BLOCKED by a stale-cache snapshot (the orchestrator
+  primed the Codex worktree from the primary checkout's `.lake`, several
+  slices old; the pre-snapshot listed 1 949 declarations, the post-build
+  4 950) — the implementation WORKED (all rows equal, every plant incl. the
+  dead-literal red) and was reverted per the charter's rule, not retained;
+  D5 DONE as chartered (`Examples/PartialClients.lean`: the whole t5 program
+  at the partial judgment + a whole-cell load client; the seven undemonstrated
+  partial rows → 0; three theorems trio-exact; 893 → 896 pins; orchestrator
+  FULL gate green at 42e2205). Landing: the Codex branch rebased onto the L2
+  main (two conflicts: TSV union; manifest regenerated) and a worker adapts
+  D5 to the fuel binder; range audit; merge ask. Charter amended (this
+  commit): stage 2 UNLOCKED at main 6b6d9a8 in a NEW worktree
+  `codex-stage2` primed from the freshly gated L2 cache; D6 first (redo), D7
+  alone, then D1–D4 with their statements FIXED against the post-L2 tree;
+  rule 2 gains "run the FULL gate once before the first pre-snapshot"; rule 7
+  becomes PARK, NOT REVERT ([USER]): work in progress is committed to
+  `codex/park-D<n>` from the current head, the working branch reset to its
+  last green commit, never discarded.
