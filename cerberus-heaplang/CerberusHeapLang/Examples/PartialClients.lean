@@ -19,13 +19,13 @@ open CorpusE0 (t5a t5rSym t5Load t5Gt t5Cond t5Bool t5GtPats t5CondPats t5BoolPa
 
 variable {GF : BundledGFunctors}
 
-private theorem alignofIntPe_eval {tds : CerbTags.TagDefsMap} (ext : Fmap sym sym)
+private theorem alignofIntPe_eval [LemFuel] {tds : CerbTags.TagDefsMap} (ext : Fmap sym sym)
     {file : generic_file Unit core_run_annotation} (ρ : EnvStack) :
     evalPexpr tds ext file ρ (Pexpr [] () (PEctor Civalignof [intCty])) =
       some (Vobject (OVinteger (CerbMem.alignofIval tds intTy))) := by
   simp only [intCty, evalPexpr_tyctor, evalTyCtor_alignof, isTyCtor]
 
-private theorem alignofIval_intTy {tds : CerbTags.TagDefsMap} :
+private theorem alignofIval_intTy [LemFuel] {tds : CerbTags.TagDefsMap} :
     CerbMem.alignofIval tds intTy = .IV .Prov_none 4 := rfl
 
 private theorem intTy_size_pos {tds : CerbTags.TagDefsMap} :
@@ -40,19 +40,19 @@ private theorem intTy_decIndep {tds : CerbTags.TagDefsMap} (a : Int)
 
 private def unspecMval : CerbMem.MemValue := CerbMem.unspecifiedMval intTy
 
-private theorem unspec_encodes {tds : CerbTags.TagDefsMap} :
+private theorem unspec_encodes [LemFuel] {tds : CerbTags.TagDefsMap} :
     memValueFromValue tds (Ctype [] (unatomic_ intTy)) (Vloaded (LVunspecified intTy)) =
       some unspecMval := rfl
 
 private theorem unspec_storable (tds : CerbTags.TagDefsMap) : StorableAt tds intTy unspecMval :=
   ⟨rfl, fun _ => rfl, fun _ => rfl, fun _ => rfl, fun _ _ _ => rfl⟩
 
-private theorem unspecIntPe_eval {tds : CerbTags.TagDefsMap} (ext : Fmap sym sym)
+private theorem unspecIntPe_eval [LemFuel] {tds : CerbTags.TagDefsMap} (ext : Fmap sym sym)
     {file : generic_file Unit core_run_annotation} (ρ : EnvStack) :
     evalPexpr tds ext file ρ t5Unspec = some (Vloaded (LVunspecified intTy)) := by
   simp only [t5Unspec, intCty, evalPexpr_tyctor, evalTyCtor_unspecified, isTyCtor]
 
-private theorem wps_unseq_pure_right [SpikeGS .hasLC GF]
+private theorem wps_unseq_pure_right [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} {Ls : LabelSpec GF} {Θ : ProcSpec GF}
     {Ψ : SpikeVal → EnvStack → IProp GF}
     (a ap : List annot) (e : CoreExpr) (pe : generic_pexpr Unit sym)
@@ -97,7 +97,7 @@ private theorem wps_unseq_pure_right [SpikeGS .hasLC GF]
     simp only [SpikeValA.erase_annot, SpikeVal.val, SpikeVal.mergeInto, SpikeVal.merge, List.append_nil]
     iexact HΨ
 
-private theorem wps_emittedIntStore [SpikeGS .hasLC GF]
+private theorem wps_emittedIntStore [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} {Ls : LabelSpec GF} {Θ : ProcSpec GF}
     {Ψ : SpikeVal → EnvStack → IProp GF}
     (hstd : StdE3 M.file) (hex : ∀ x, resolveExtern M.extern x = x)
@@ -126,7 +126,7 @@ private theorem wps_emittedIntStore [SpikeGS .hasLC GF]
     loc empty_annotation intTy (psym n) (CorpusE0.convLoadedInt m) (CorpusE0.convLoadedInt m) NA
     (envAdd n (Vobject (OVpointer pv)) (envAdd m (lint v) f)) rest ((hf.add _ _).add _ _)
     (emittedIntMval v) bs hex rfl hlp hlv rfl hlv
-    (emittedInt_encodes _ v) (emittedInt_storable _ v)
+    (emittedInt_encodes _ v) (emittedInt_storable _ v hv1 hv2)
 
 
 
@@ -146,7 +146,7 @@ private def t5BoolBranch : generic_pexpr Unit sym :=
 private theorem t5Bool_select : select_case subst_sym_expr (lint 0) t5BoolPats =
     some (t5Pure t5BoolBranch) := rfl
 
-private theorem t5BoolBranch_eval {M : MachineCtx} (ρ : EnvStack) :
+private theorem t5BoolBranch_eval [LemFuel] {M : MachineCtx} (ρ : EnvStack) :
     evalPexpr M.tagDefs M.extern M.file ρ t5BoolBranch = some Vtrue := by
   rw [t5BoolBranch, evalPexpr_if,
     if_pos (show (isPePure (Pexpr [] () (PEval Vtrue)) &&
@@ -157,7 +157,7 @@ private theorem t5BoolBranch_eval {M : MachineCtx} (ρ : EnvStack) :
   simp only [Option.bind_some]
   rw [evalPexpr_val]
 
-private theorem t5CondPe_eval {M : MachineCtx} (hstd : StdE3 M.file) {ρ : EnvStack}
+private theorem t5CondPe_eval [LemFuel] {M : MachineCtx} (hstd : StdE3 M.file) {ρ : EnvStack}
     (hv : evalPexpr M.tagDefs M.extern M.file ρ (t5Tuple 512 513) =
       some (Vtuple [lint 1, lint 0])) :
     evalPexpr M.tagDefs M.extern M.file ρ
@@ -170,7 +170,7 @@ private theorem t5CondPe_eval {M : MachineCtx} (hstd : StdE3 M.file) {ρ : EnvSt
 
 /-- A whole integer load with the emitted temporary binder, using the
     public whole-cell rule and preserving the caller's postcondition. -/
-private theorem wps_t5Load [SpikeGS .hasLC GF]
+private theorem wps_t5Load [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} {Ls : LabelSpec GF} {Θ : ProcSpec GF}
     {Ψ : SpikeVal → EnvStack → IProp GF}
     (hex : ∀ x, resolveExtern M.extern x = x)
@@ -210,7 +210,7 @@ private abbrev t5frGt (px : CerbMem.PointerValue) (f : Fmap sym value) :=
 
 /-- The emitted comparison reads x=3 and returns Specified(1), retaining
     the load footprint until the surrounding full-expression bound. -/
-private theorem wps_t5Gt [SpikeGS .hasLC GF]
+private theorem wps_t5Gt [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} {Ls : LabelSpec GF} {Θ : ProcSpec GF}
     {Ψ : SpikeVal → EnvStack → IProp GF}
     (hstd : StdE3 M.file) (hex : ∀ x, resolveExtern M.extern x = x)
@@ -252,7 +252,7 @@ private theorem wps_t5Gt [SpikeGS .hasLC GF]
 private abbrev t5frCond (px : CerbMem.PointerValue) (f : Fmap sym value) :=
   envAdd (t5a 512) (lint 1) (envAdd (t5a 513) (lint 0) (t5frGt px f))
 
-private theorem wps_t5Cond [SpikeGS .hasLC GF]
+private theorem wps_t5Cond [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} {Ls : LabelSpec GF} {Θ : ProcSpec GF}
     {Ψ : SpikeVal → EnvStack → IProp GF}
     (hstd : StdE3 M.file) (hex : ∀ x, resolveExtern M.extern x = x)
@@ -265,7 +265,7 @@ private theorem wps_t5Cond [SpikeGS .hasLC GF]
       wps M p Ls Θ Ψ t5Cond (f :: rest) := by
   iintro ⟨Hpt, HΨ⟩
   unfold t5Cond bnd
-  iapply wps_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
+  iapply wps_bound _ _ _ rfl
   rw [show t5TuplePat 512 513 =
     tuplePat [] [([], some (t5a 512), CorpusE0.lint), ([], some (t5a 513), CorpusE0.lint)] from rfl]
   iapply wps_wseq_tuple_annot _ _ _ _ _ _ _
@@ -290,7 +290,7 @@ private theorem wps_t5Cond [SpikeGS .hasLC GF]
   simp only [SpikeVal.merge]
   iapply HΨ $$ Hpt
 
-private theorem wps_t5AssignBlock [SpikeGS .hasLC GF]
+private theorem wps_t5AssignBlock [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} {Ls : LabelSpec GF} {Θ : ProcSpec GF}
     {Ψ : SpikeVal → EnvStack → IProp GF}
     (hstd : StdE3 M.file) (hex : ∀ x, resolveExtern M.extern x = x)
@@ -312,7 +312,7 @@ private theorem wps_t5AssignBlock [SpikeGS .hasLC GF]
   rw [show (Pattern [] (CaseCtor Ctuple
     [Pattern [] (CaseBase (some (t5a n), ptrTy)), Pattern [] (CaseBase (some (t5a m), CorpusE0.lint))]) : pattern) =
     tuplePat [] [([], some (t5a n), ptrTy), ([], some (t5a m), CorpusE0.lint)] from rfl]
-  iapply wps_bound_wseq_tuple _ _ _ _ _ _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
+  iapply wps_bound_wseq_tuple _ _ _ _ _ _ _ _ rfl
   iapply wps_unseq_pure_right _ _ _ (specInt v) _ (lint v) rfl rfl (specInt_eval _ v)
   iapply wps_pure (psym t5rSym) _ rfl (t1sym_eval hex rest hr)
   simp only [SpikeVal.mergeInto, SpikeVal.val]
@@ -343,7 +343,7 @@ private theorem wps_t5AssignBlock [SpikeGS .hasLC GF]
   iapply HΨ $$ %s %hs Hpt
 
 
-private theorem wps_t5Bool [SpikeGS .hasLC GF]
+private theorem wps_t5Bool [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} {Ls : LabelSpec GF} {Θ : ProcSpec GF}
     {Ψ : SpikeVal → EnvStack → IProp GF} (ρ : EnvStack)
     (hv : evalPexpr M.tagDefs M.extern M.file ρ (psym (t5a 510)) = some (lint 0)) :
@@ -389,7 +389,7 @@ def t5Ls (GF : BundledGFunctors) [SpikeGS .hasLC GF] : LabelSpec GF := fun l vs 
 /-- The post: the delivered value is `Specified(1)`. -/
 def ψT5 : value → Mem → Prop := fun v _ => v = lint 1
 
-private theorem t5Ls_readout [SpikeGS .hasLC GF] :
+private theorem t5Ls_readout [LemFuel] [SpikeGS .hasLC GF] :
     ∀ w ρ', iprop(⌜w = SpikeVal.pure (lint 1)⌝) ⊢ readoutPost (GF := GF) ψT5 w ρ' := by
   intro w ρ'
   iintro %hw
@@ -399,7 +399,7 @@ private theorem t5Ls_readout [SpikeGS .hasLC GF] :
   subst hw
   rfl
 
-theorem t5_blockSpecs [SpikeGS .hasLC GF]
+theorem t5_blockSpecs [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} (hex : ∀ x, resolveExtern M.extern x = x)
     (hQ : M.labelsAt p = t5RetQ) :
     ⊢ blockSpecs (GF := GF) M p (t5Ls GF) emptyProcSpec (readoutPost ψT5) := by
@@ -429,7 +429,7 @@ local macro "t5_lookup" : tactic => `(tactic|
 private theorem t5Kill_eq (x : sym) : CorpusE0.t5Kill x =
     killOpRedex [] (t5Reg 0 84) empty_annotation (Static0 intTy) (psym x) := rfl
 
-private theorem wps_t5Return [SpikeGS .hasLC GF]
+private theorem wps_t5Return [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} {Ψ : SpikeVal → EnvStack → IProp GF}
     (hstd : StdE3 M.file) (hex : ∀ x, resolveExtern M.extern x = x)
     (hQ : M.labelsAt p = t5RetQ)
@@ -445,7 +445,7 @@ private theorem wps_t5Return [SpikeGS .hasLC GF]
   rw [show (Pattern [] (CaseBase (some (t5a 528), CorpusE0.lint)) : pattern) =
     symPat [] (t5a 528) CorpusE0.lint from rfl]
   iapply wps_seq_sym _ _ _ _ _ _ _ _
-  iapply wps_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
+  iapply wps_bound _ _ _ rfl
   iapply wps_t5Load hex t5rSym 527 80 81 f rest hf pr (emittedIntBytes M.tagDefs 1) (lint 1) hr rfl rfl
   isplitl [Hr]
   · iexact Hr
@@ -479,7 +479,7 @@ private theorem wps_t5Return [SpikeGS .hasLC GF]
 private abbrev t5frIf (px pr : CerbMem.PointerValue) (f : Fmap sym value) :=
   t5frAssign 523 524 1 pr (envAdd (t5a 509) Vtrue (envAdd (t5a 510) (lint 0) (t5frCond px f)))
 
-private theorem wps_t5If [SpikeGS .hasLC GF]
+private theorem wps_t5If [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} {Ls : LabelSpec GF} {Θ : ProcSpec GF}
     {Ψ : SpikeVal → EnvStack → IProp GF}
     (hstd : StdE3 M.file) (hex : ∀ x, resolveExtern M.extern x = x)
@@ -530,8 +530,10 @@ private theorem t5Store_eq (a : List annot) (loc : CerbLocation.Loc) (pe2 pe3 : 
 
 /-- Partial correctness of the complete emitted t5 program. The freshness
     premise protects the two source bindings used after the assignment;
-    it carries no numeric supply or execution bound. -/
-theorem t5_wps [SpikeGS .hasLC GF]
+    it carries no numeric supply or execution bound. `hfuel` is the public
+    allocation rule's own premise at the L2 pin (`wps_create`: positive
+    memory-bind fuel), not a bound introduced by this proof. -/
+theorem t5_wps [LemFuel] (hfuel : 0 < LemFuel.fuel) [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} (hstd : StdE3 M.file)
     (hex : ∀ x, resolveExtern M.extern x = x) (hQ : M.labelsAt p = t5RetQ)
     (hfresh : ∀ k, M.runState.sym_supply ≤ k →
@@ -551,7 +553,7 @@ theorem t5_wps [SpikeGS .hasLC GF]
     (align := CerbMem.alignofIval M.tagDefs intTy) (ty := intTy) rfl
     (alignofIntPe_eval _ _) (evalPexpr_val _ _ _ _ _)
   rw [alignofIval_intTy]
-  iapply wps_create _ _ empty_annotation .Prov_none 4 intTy (PrefSource (t5Reg 15 84) [CorpusE0.xSym])
+  iapply wps_create (hfuel := hfuel) (halign := by decide) (haddr := rfl) _ _ empty_annotation .Prov_none 4 intTy (PrefSource (t5Reg 15 84) [CorpusE0.xSym])
     _ intTy_size_pos intTy_nonatomic (fun a => intTy_decIndep a _)
   isplitl [HcapX]
   · iexact HcapX
@@ -567,7 +569,7 @@ theorem t5_wps [SpikeGS .hasLC GF]
     (align := CerbMem.alignofIval M.tagDefs intTy) (ty := intTy) rfl
     (alignofIntPe_eval _ _) (evalPexpr_val _ _ _ _ _)
   rw [alignofIval_intTy]
-  iapply wps_create _ _ empty_annotation .Prov_none 4 intTy (PrefSource (t5Reg 15 84) [t5rSym])
+  iapply wps_create (hfuel := hfuel) (halign := by decide) (haddr := rfl) _ _ empty_annotation .Prov_none 4 intTy (PrefSource (t5Reg 15 84) [t5rSym])
     _ intTy_size_pos intTy_nonatomic (fun a => intTy_decIndep a _)
   isplitl [HcapR]
   · iexact HcapR
@@ -579,7 +581,7 @@ theorem t5_wps [SpikeGS .hasLC GF]
   rw [show (Pattern [] (CaseBase (some (t5a 508), CorpusE0.lint)) : pattern) =
     symPat [] (t5a 508) CorpusE0.lint from rfl]
   iapply wps_seq_sym _ _ _ _ _ _ _ _
-  iapply wps_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
+  iapply wps_bound _ _ _ rfl
   iapply wps_pure (specInt 3) _ rfl (specInt_eval _ 3)
   simp only [SpikeVal.val]
   iexists (lint 3)
@@ -591,7 +593,7 @@ theorem t5_wps [SpikeGS .hasLC GF]
     rfl (pv := px) (cv := lint 3) (t1sym_eval hex rest (by t5_lookup))
     (t1ConvLoadedInt_eval hstd (t1sym_eval hex rest (by t5_lookup)) (by decide) (by decide))
   iapply wps_store _ _ _ intTy px (lint 3) NA (emittedIntMval 3) _ _
-    (emittedInt_encodes _ 3) (emittedInt_storable _ 3)
+    (emittedInt_encodes _ 3) (emittedInt_storable _ 3 (by decide) (by decide))
   isplitl [Hx]
   · iexact Hx
   iintro %fpX Hx
@@ -631,7 +633,7 @@ def loadBind (loc : CerbLocation.Loc) (ann : core_run_annotation) (x : sym)
   Expr [] (Esseq (symPat [] x CorpusE0.lint) (loadExpr [] loc ann intTy pv NA)
     (Expr [] (Epure (psym x))))
 
-theorem loadBind_wps [SpikeGS .hasLC GF]
+theorem loadBind_wps [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} {Ls : LabelSpec GF} {Θ : ProcSpec GF}
     (hex : ∀ x, resolveExtern M.extern x = x)
     (loc : CerbLocation.Loc) (ann : core_run_annotation) (x : sym)
@@ -663,9 +665,5 @@ theorem loadBind_wps [SpikeGS .hasLC GF]
   isplit
   · ipureintro; simp
   · iexact Hpt
-
-#print axioms t5_wps
-#print axioms t5_blockSpecs
-#print axioms loadBind_wps
 
 end CerberusHeapLang.PartialClients
