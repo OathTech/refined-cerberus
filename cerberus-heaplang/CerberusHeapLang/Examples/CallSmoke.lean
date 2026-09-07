@@ -164,7 +164,7 @@ theorem csCtx_lookupLabel (ra : core_run_annotation) (bty ybty : core_base_type)
 
 omit [LemFuel] in
 theorem csIncPe_pure : PePure csIncPe := PePure.of_isPePure rfl
-
+omit [LemFuel] in
 theorem csFBody_frag (bty ybty : core_base_type) : Frag (csFBody bty ybty) :=
   .save (fun pe hpe => by
       simp only [saveParamPexprs, List.map_cons, List.map_nil, List.mem_cons,
@@ -172,16 +172,16 @@ theorem csFBody_frag (bty ybty : core_base_type) : Frag (csFBody bty ybty) :=
       subst hpe
       exact csIncPe_pure)
     .pure_sym
-
+omit [LemFuel] in
 theorem csMainBody_frag (ra : core_run_annotation) : Frag (csMainBody ra) :=
   .call (fun pe hpe => by
       simp only [List.mem_cons, List.not_mem_nil, or_false] at hpe
       subst hpe
       exact .val _ _)
-
+omit [LemFuel] in
 /-- THE PROCEDURE WELL-FORMEDNESS PREMISE of the partial lane at a
-    two-procedure file: both bodies in the certified fragment, with
-    sufficient operand fuel; both label fibers empty. -/
+    two-procedure file: both bodies in the certified fragment (their
+    operand depth is `csCtx_procsDepth`, R2); both label fibers empty. -/
 theorem csCtx_fragProcs (ra : core_run_annotation) (bty ybty : core_base_type) :
     (csCtx ra bty ybty).FragProcs where
   body f params body hf := by
@@ -193,7 +193,7 @@ theorem csCtx_fragProcs (ra : core_run_annotation) (bty ybty : core_base_type) :
     cases hl
 
 /-- The two bodies' evaluator depth (R2): within two passes. -/
-theorem csCtx_procsDepth [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) (ra : core_run_annotation) (bty ybty : core_base_type) :
+theorem csCtx_procsDepth (hfuel : 2 ≤ LemFuel.fuel) (ra : core_run_annotation) (bty ybty : core_base_type) :
     (csCtx ra bty ybty).ProcsDepth LemFuel.fuel where
   body f params body hf := by
     rcases csFile_lookup_inv ra bty ybty hf with ⟨-, rfl⟩ | ⟨-, rfl⟩ <;>

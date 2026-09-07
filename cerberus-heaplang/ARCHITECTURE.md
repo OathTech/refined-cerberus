@@ -4,7 +4,7 @@ What this package is, what it proves, what it trusts, and how to read
 one of its theorems. Every claim is about the tree at this revision and
 carries a `file:line` cite into `CerberusHeapLang/*.lean`, the pinned
 semantics workspace `../.cerberus-ws/lean_frontend/` (cerberus-lean
-`f95ef8d9c`, `../scripts/semantics-pin.env`), or a script. The
+`89f7e6885`, `../scripts/semantics-pin.env`), or a script. The
 [README](README.md) carries the exhibits table and the build recipe, and
 gives each limitation its discharge or mover; §6 here lists the
 limitations with their register numbers (the two overlap by design).
@@ -63,8 +63,9 @@ are cited with their `[USER date]`/`[AGENT date]` tag and live in
 - *the trio* — the three classical axioms `propext`, `Classical.choice`,
   `Quot.sound`; *trio-exact* means an axiom set equal to it (§3).
 - *pinned* / *unpinned* — a theorem is pinned when `Audit.lean` lists it
-  in `trioExports` and the build asserts its axiom set is exactly the
-  trio; every other theorem is unpinned (§3).
+  in `trioExports` (the build asserts its axiom set is exactly the trio)
+  or in `axiomFreeExports` (exactly empty; six names since the L2
+  re-pin); every other theorem is unpinned (§3).
 - *the sweep* — `Audit.lean`'s check that every theorem of every package
   module has an axiom set within the trio (§3).
 - *a tie* — a hypothesis of `DriverSafeCtl`/`DriverDoneCtl` fixing a
@@ -524,8 +525,8 @@ table rather than counted here.
 | `counter_loop_certified_production` | `ProdLoopExhibit.lean:676` | `hn`, `hfuel : 6 * n.toNat + 8 ≤ LemFuel.fuel` |
 | `list_reverse_certified_production` | `ProdLoopExhibit.lean:1456` | `hfuel : 56 ≤ LemFuel.fuel` |
 | `dispose_list_certified_production` | `DisposeExhibit.lean:1475` | `hfuel : 53 ≤ LemFuel.fuel` |
-| `region_loop_certified_production` | `RegionLoopExhibit.lean:612` | `hcost : 0 < regionCost al sz`, `hn`, `hB : n.toNat * regionCost al sz ≤ headroom prodMem₀.lastAddress`, `hfuel : 7 * n.toNat + 5 ≤ LemFuel.fuel` |
-| `malloc_list_certified_production` | `MallocListExhibit.lean:1672` | `hn`, `hB : n.toNat * (15 + max al.toNat 1) ≤ 281474976710647`, `hfuel : 25 * n.toNat + 9 ≤ LemFuel.fuel` |
+| `region_loop_certified_production` | `RegionLoopExhibit.lean:612` | `halign : 0 < al`, `hsize : 0 ≤ sz` (the re-pinned allocator's domain — the statement is NARROWED at the L2 re-pin, forced by the pin's unclamped `allocator`; KOI B21), `hcost : 0 < regionCost al sz`, `hn`, `hB : n.toNat * regionCost al sz ≤ headroom prodMem₀.lastAddress`, `hfuel : 7 * n.toNat + 5 ≤ LemFuel.fuel` |
+| `malloc_list_certified_production` | `MallocListExhibit.lean:1672` | `halign : 0 < al` (NARROWED at the L2 re-pin, as above; KOI B21), `hn`, `hB : n.toNat * (15 + max al.toNat 1) ≤ 281474976710647`, `hfuel : 25 * n.toNat + 9 ≤ LemFuel.fuel` |
 | `fib_rec_certified_production` | `FibRecExhibit.lean:858` | `hn`, `hfuel : fibRounds n.toNat + 4 ≤ LemFuel.fuel` |
 | `even_odd_certified_production` | `EvenOddExhibit.lean:711` | `hn`, `hfuel : 3 * n.toNat + 6 ≤ LemFuel.fuel` |
 | `t1_certified_production` | `CorpusT1Exhibit.lean:806` | `hfuel : 50 ≤ LemFuel.fuel` (the file is `prodFileLib stdlibE3 [] t1Main`, above) |
@@ -582,29 +583,37 @@ theorem: `MemWF.loadM` (`:1862`), `MemWF.storeM` (either locking mode,
 `:265`). (ii) iris-lean, as DEFINITIONS: the WP, the BI connectives and
 the ghost theory appear only inside kernel-checked proof terms and
 contribute no axiom; the closed statements' texts are Iris-free. (iii)
-The pinned cerberus-lean semantics (`f95ef8d9c`) as the semantics of
-Core: a policy decision, sampled by differential validation against the
-OCaml oracle, not proved (README "What you are asked to take on faith").
-It is the pin `89f7e6885` (the 2026-09-05 mainline; the re-pin and its
-statement census are `docs/2026-09-07_l2-repin-notes.md`, KOI A6). The pinned tree
+The pinned cerberus-lean semantics (`89f7e6885`, the 2026-09-05 mainline;
+`../scripts/semantics-pin.env`) as the semantics of Core: a policy
+decision, sampled by differential validation against the OCaml oracle,
+not proved (README "What you are asked to take on faith"). The re-pin
+from `f95ef8d9c` and its statement census are
+`docs/2026-09-07_l2-repin-notes.md` (KOI A6). The pinned tree
 declares no `axiom` and contains no `sorry`: `grep -rn '(sorry'` over the
 primed `generated/*.lean` is empty and the build log has no `declaration
 uses sorry` (README "The trust story"; `docs/2026-09-03_repin-fuel-notes.md`).
 
-**The `panic!` arms.** The pinned tree does contain `panic!` arms: 127
-non-comment lines across the twelve hand-written `lean_frontend/*.lean`
-seams, 61 of them in `CerbMem.lean` (measured at pin `89f7e6885`; e.g.
-`sizeofCtype` at `Void`, generated `CerbMem.lean:443`), none in
-lem-generated code (counts DERIVED, `grep -c 'panic!'` less comment
-lines; the `generated/` directory holds byte-identical copies of the
-hand-written seams named in `handwritten_copy.manifest`, which is why a
-seam file is cited as generated `CerbMem.lean`). Fifty-four of them mirror an OCaml `assert false`/`failwith` arm,
-where the OCaml run aborts; seven are Lean-side guards with no OCaml
-abort behind them (the five `CerbFS.lean` refusals at the file-system
-model's boundary, `CerbFS.lean:47`; `CerbTags.lean:34`;
-`CoreParser.lean:2097`). The kernel reads `panic!` as the return type's
+**The `panic!` arms.** The pinned tree does contain `panic!` arms: 117
+code occurrences of `panic!` across the 37 hand-written seams of
+`handwritten_copy.manifest`, in nine files — `CerbMem.lean` 60,
+`CerbFS.lean` 36, `CerbDecode.lean` 7, `CerberusImpl.lean` 4,
+`CerbUtils.lean` 4, `CerbLocation.lean` 2, `Main.lean` 2, `CerbTags.lean` 1,
+`CoreParser.lean` 1 (e.g. `sizeofCtype` at `Void`, generated
+`CerbMem.lean:443`; `CerbTags.lean:34`; `CoreParser.lean:2413`) — and none
+in lem-generated code (count DERIVED at pin `89f7e6885` by ONE method:
+block and line comments stripped, string literals kept — the stripper of
+`scripts/fuel_numeral_check.sh` — over the 37 manifest seams; the L2 range
+audit's D-3. `CerbFloat.lean` and `CerbND.lean` mention `panic!` in
+comments only. The `generated/` directory holds byte-identical copies of
+the hand-written seams named in `handwritten_copy.manifest`, which is why
+a seam file is cited as generated `CerbMem.lean`). At the previous pin
+`f95ef8d9c` the 61 arms split into 54 mirrors of an OCaml `assert false`/
+`failwith` arm, where the OCaml run aborts, and 7 Lean-side guards with
+no OCaml abort behind them (the `CerbFS.lean` refusals at the file-system
+model's boundary, `CerbTags.lean`, `CoreParser.lean`); that split has not
+been re-derived at this pin. The kernel reads `panic!` as the return type's
 `Inhabited` default (`= default` by `rfl`, generated
-`CerbMem.lean:1127`–`:1132`). A theorem about `drive` is therefore about
+`CerbMem.lean:1261`–`:1262`). A theorem about `drive` is therefore about
 the Lean definition, which on a state reaching such an arm continues
 where the OCaml faults. The rules' premises keep proved programs away
 from them (`create_atomic`'s `hsz : 0 < sizeofCtype …`, `Rules.lean:1135`;
@@ -618,10 +627,23 @@ has no equation for them and a theorem holds at every value they take.
 
 **What the build checks** (`Audit.lean`, the last import of the library
 root, elaborated by every `lake build`). Every pinned export exists, is
-a theorem, and has axiom set EXACTLY the trio. The L1 landing head
-has 901 exact pins (gate line `export pins: 901 trio-exact`; the L1 head's
-893 plus the thirteen `*_shipped` corollaries and the two depth-stability
-lemmas `peDepth_subst`/`evalDepth_subst`, L2): the t4
+a theorem, and has axiom set EXACTLY its declared set: the trio for the
+901 names in `trioExports`, the EMPTY set for the 6 names in
+`axiomFreeExports` (gate line `export pins: 901 trio-exact, 6
+axiom-free-exact`). The L2 re-pin head's 901 derive from the L1 head's
+893 (its gate line `export pins: 893 trio-exact`; the class
+`axiomFreeExports` did not exist at L1) as 893 − 4 REMOVED
+(`drive_after_setup_lib_lemFuel`, `drive_after_setup_with_lemFuel` — the
+pin has no `_lemFuel` drive — and the depth witnesses `t4Q_pot`,
+`t6Q_pot`) − 6 MOVED to the new `axiomFreeExports` (the four context-field
+projections `procCtxF_runState_labeled`, `procCtxF_sym_supply`,
+`procCtx_runState_labeled`, `procCtx_sym_supply` and the production
+equations `prodThread_eq_ctlThread`, `prodCtx_extern`, whose cones are
+empty at the pin) + 18 ADDED (the thirteen `*_shipped` corollaries, the
+two depth-stability lemmas `peDepth_subst`/`evalDepth_subst`,
+`drive_after_setup_lib_one`, `drive_after_setup_with_one`,
+`errno_init_eq`) = 901 — DERIVED from `Audit.lean` at `46c28dc` against
+this head (the L2 range audit's R-1). The L1 head's 893: the t4
 checkpoint's 896 — E4's 652, E5 slice 1's 60, the second slice/t5's 67,
 t6's 39 and t4's 78 (derived breakdown; individual measurements in the E5
 records, latest `docs/2026-09-06_e5-t4-loop.md`) — less the two alias
@@ -629,7 +651,7 @@ theorems deleted and the dependency's generated `.eq_def` unpinned at the
 landing (`docs/2026-09-07_l1-landing-notes.md` §6).
 Every theorem of every `CerberusHeapLang.*` module, internal details
 included, is bounded by the trio. `sorryAx`/`ofReduceBool`/`ofReduceNat`
-reach no constant of any kind. Precision: "exactly the trio" is the pinned exports' property;
+reach no constant of any kind. Precision: "exactly the trio" is the trio-pinned exports' property (the six `axiomFreeExports` pins are exactly empty);
 every other theorem's cone is bounded by the trio, by the sweep. The
 public-named lemmas with SUB-trio cones are therefore unpinned, as
 `Audit.lean`'s comments record them (among them `fibRounds_closed`,
@@ -878,10 +900,12 @@ them read.
 - **One module classification** (`scripts/module_classes.tsv`, pure data,
   reprinted at the head of the manifest; ten classes, the vocabulary in
   its header, `engine-mirror-test` reserved with no member). The
-  manifest's consumer set is `positive-client` ∪ `declared-smoke` (22
-  modules: the twenty program exhibits — `EmittedAExhibit`,
-  `EmittedBExhibit`, `EmittedCExhibit` and `CorpusT1Exhibit` among them —
-  `Examples.CallSmoke`, `Examples.ReadinessSmoke`). The production wrappers and the negative
+  manifest's consumer set is `positive-client` ∪ `declared-smoke` (25
+  modules: the twenty-three program exhibits — `EmittedAExhibit`,
+  `EmittedBExhibit`, `EmittedCExhibit`, `CorpusT1Exhibit`,
+  `CorpusT4Exhibit`, `CorpusT5Exhibit` and `CorpusT6Exhibit` among them —
+  `Examples.CallSmoke`, `Examples.ReadinessSmoke`; the manifest's tail
+  line, `docs/CAPABILITY_MANIFEST.md:182`). The production wrappers and the negative
   test are not consumers. Fail-hard behaviour (TSV header lines 8–11):
   the two Lean instruments fail on a package module absent from the
   list; all three instruments fail on a classified module absent from

@@ -41,6 +41,15 @@ any more (`CerbND.drive_lemFuel` and `drive_wrapper_defeq` of pin
 `f95ef8d9c` are gone): a statement about `drive` at `[LemFuel]` IS the
 statement about the shipped driver at that budget.
 
+One qualification to "the same instance reaches every fuelled function":
+every `nd_bind` starts at the ambient budget, but when its left operand
+FORKS (`NDnd`) the bind of each branch continues at `lemFuel − 1`
+(`nd_bind_lemFuel`'s `Nat.succ` arm, generated `Nondeterminism.lean:212`;
+`runOne_bind_nd`, `Round.lean:6827`: "each branch carries the continuation
+at the caller's fuel minus one"), so the binds under a fork run one unit
+below the ambient and nested forks compound — the source of the floor of
+four in §3.
+
 ## 2. The budgets, and what each one is
 
 | Quantity | Where it lives | What it bounds |
@@ -61,8 +70,16 @@ statement about the shipped driver at that budget.
   drain pass's exhaustion (`loop_step_done_exhaust`, `:3019`); PROGRAM-DONE
   needs two (`loop_step_done`, `:436`). The classification of every
   fragment round (`frag_round_complete`, `cerberusRound_classify`,
-  `Round.lean:7874`/`:7917`) needs four — a different theorem domain from
-  adequacy, which consumes the round, not the classification.
+  `Round.lean:7874`/`:7917`) needs four, because its FORK refusal is
+  proved by `memop_fork` (`Round.lean:6961`, `hfuel : 4 ≤ LemFuel.fuel`):
+  the `PtrEq` memop's forked memory answer is carried through three
+  further `nd_bind`s (the boolean-to-value continuation, the thread
+  install, the advance — `runOne_bind_nd` at `:6987`/`:6990`/`:7001`)
+  after one active bind (the debug print, `:6985`), and every bind under
+  the fork continues at `lemFuel − 1` (§1) — so 4 = the memop round's
+  ND-fork depth 3 + 1 (the proof peels `LemFuel.fuel = n + 4`, `:6970`).
+  A different theorem domain from adequacy, which consumes the round, not
+  the classification.
 - **`hdep : evalDepth e ≤ LemFuel.fuel`** on the program, `hQd` on every
   registered label body, `hPd : M.ProcsDepth LemFuel.fuel` on every declared
   procedure body (`Adequacy.lean:728`): the pass budget of the pure
@@ -124,8 +141,8 @@ are marked (D).
 | `memValueFromValue` | `Core_aux.lean:108` (measure `ctype.lemSize`, `Core_aux_lemMeasureProofs.lean:14`) | (A) MEASURED | — | the value-to-bytes conversion of a store; its `Struct`/`Struct` arm (`:106`) calls the (D) `are_compatible0`, which no fragment store reaches (integer and pointer cells only) |
 | `get_ctx`, `subst_sym_pexpr`, `subst_sym_expr`, `update_env_aux` | `Core_reduction.lean:387`, `Core_aux.lean:517`, `:531`, `:903` | (A) MEASURED | — | the redex search, substitution and environment update; no `esize`/`pot` ceiling exists any more |
 | `CerbMem.sizeofCtype` and the five layout rows | `CerbMem.lean`; cerberus-lean `scripts/fuel_hypotheses.txt` | (A) MEASURED under the reviewed hypothesis `CerbTagsWf.Acyclic` | — | consumed through the fuel-free wrapper; the package states no `Acyclic` hypothesis (at `fmapEmpty` there is nothing to be cyclic) |
-| `hack` | `Driver.lean:438`–`:440` | (D) | `fuelExhausted Vunit` (opaque) | ON THE PATH: `finalize` (`:469`) evaluates the final arena through it. Excluded by `0 < LemFuel.fuel`: a value arena is one pass (`hack_value`, `DriverCollapse.lean:660`) |
-| `to_pure` | `Core_aux.lean:600`–`:602` | (D) | `fuelExhausted none` (opaque) | ON THE PATH: `finalize` (`Driver.lean:469`) reads the arena's pure expression through it. Excluded by `0 < LemFuel.fuel` (`finalize_done`, `DriverCollapse.lean:677`) |
+| `hack` | `Driver.lean:438`–`:440` | (D) | `fuelExhausted Vunit` (opaque) | ON THE PATH: `finalize` (`:469`) evaluates the final arena through it — its ONLY caller in the generated tree (`grep` over the pinned `generated/`, L2 audit fixes). Excluded by `0 < LemFuel.fuel`: a value arena is one pass (`hack_value`, `DriverCollapse.lean:660`) |
+| `to_pure` | `Core_aux.lean:600`–`:602` | (D) | `fuelExhausted none` (opaque) | ON THE PATH: `finalize` (`Driver.lean:469`) reads the arena's pure expression through it. Excluded by `0 < LemFuel.fuel` (`finalize_done`, `DriverCollapse.lean:677`). A SECOND `drive`-path site: `driver_globals` (`Driver.lean:518`–`:527`) reads each global definition's arena through it (`:526`, inside the `nd_mapM_` over `glob_defs`) before `main` runs — (C) for THIS package only because every certified file has `globs := []` (`prodFile`, `ProdEntry.lean:82`; `prodFileWith`/`prodFileLib` inherit it, `:370`/`:680`), so the map is over the empty list; a file with a global definition would reach this row before `main`, under no exclusion lemma of this package. Its third caller is the elaboration-time rewriter (`Core_rewrite.lean:233`–`:271`), which the driver does not call |
 | `to_pures` | `Core_aux.lean:605` | (D) | `fuelExhausted none` | (C) for the fragment: callers are the elaboration-time rewriter (`Core_rewrite.lean:255`) and `core_thread_step2` (`Core_run.lean:424`), which the shipped driver does not call |
 | `many`, `many1` | `Monadic_parsing.lean:138`, `:143` | (D) | `fuelExhausted (ParserM (fun _ => []))` | (C) for the fragment: the printf format parser `format0` (`Formatted.lean:391`) under `print_eval_conv_aux` (`Driver.lean:274`), a `printf` builtin — no `Frag` construct |
 | `are_compatible_aux`, `_params_aux0`, `_params0` | `Ctype_aux.lean:112`–`:114` | (D) | `fuelExhausted false` | (C) for the fragment: struct/union compatibility (`are_compatible0`, `Ctype_aux.lean:128`) from `memValueFromValue`'s `Struct`/`Struct` arm; the fragment's memory values are integers and pointers |
@@ -137,7 +154,7 @@ statements exclude by `hfuel`. (ii) The one ambient worker that could
 exhaust INSIDE a round — the pure evaluator's pass loop — is (B) and is
 in any case kept away from exhaustion by the depth hypotheses. (iii) The
 two (D) rows on the path, `hack` and `to_pure`, are evaluated exactly
-once, at PROGRAM-DONE, on a VALUE arena, where one unit of fuel suffices;
+once (at `globs = []`), at PROGRAM-DONE, on a VALUE arena, where one unit of fuel suffices;
 `0 < LemFuel.fuel` follows from `hfuel`. So on the proved path no
 opaque-default exhaustion arm is evaluated, and the closed partial forms
 are unconditional theorems at every ambient budget. (iv) Outside the

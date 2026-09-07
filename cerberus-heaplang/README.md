@@ -125,20 +125,23 @@ manifest](docs/CAPABILITY_MANIFEST.md) lists one row per engine-SUCCESS
 VARIANT of each `Frag` constructor (ar5-manifest, 2026-09-04; ARCHITECTURE
 §7 "The instruments around the claims"), each classified RULE (a partial
 and a total rule, both in the proof-term cone of a consumer module — the
-eighteen modules classified `positive-client`/`declared-smoke` in
+twenty-five modules classified `positive-client`/`declared-smoke` in
 `scripts/module_classes.tsv`, listed per row), RULE-TOTAL-UNDEMONSTRATED
 (the total rule proved but consumed by no client — none since the
 hygiene slice H1b of 2026-09-04 gave `wpt_load`, `wpt_case_value` and
-`wpt_wseq` their consumers), NO-RULE (admitted by the fragment and the
+`wpt_wseq` their consumers), RULE-PARTIAL-UNDEMONSTRATED (the partial
+rule proved but consumed by no client while its total twin is — E5's
+seven), NO-RULE (admitted by the fragment and the
 engine, no rule, with the deciding record — the locking store, the static
 kill of a region, `free(NULL)`, the zero-cost `alloc`, the union-member
 pointer, the read-only-cell load at the statement level, the zero-size/
 atomic/non-inert `create` types, the colliding `free`, the function-vs-
 concrete `PtrEq`, the four binders at an ANNOTATED head value — mirrored
 since E1/E2, no binder rule) or OUT-OF-SCOPE (excluded by the
-fragment/mirror boundary): 28 constructors, 58 rows, 35 RULE, 0
-RULE-TOTAL-UNDEMONSTRATED, 19 NO-RULE, 4 OUT-OF-SCOPE at this writing
-(dialect arc E2, 2026-09-05). Green means exactly what the
+fragment/mirror boundary): 35 constructors, 78 rows, 40 RULE, 0
+RULE-TOTAL-UNDEMONSTRATED, 7 RULE-PARTIAL-UNDEMONSTRATED, 24 NO-RULE,
+7 OUT-OF-SCOPE at this writing (the L2 re-pin, 2026-09-07; the manifest's
+own tail line, `docs/CAPABILITY_MANIFEST.md:182`). Green means exactly what the
 manifest header says — every constructor classified, every named theorem a
 theorem, every RULE consumed in both judgments — and NOT that the variant
 table is exhaustive over the engine's success shapes or that a NO-RULE
@@ -734,10 +737,15 @@ domain at the pin) and the re-pinned allocator's domain conditions
   `Core.instBEqCore_base_type.beq`. The fuel and well-formedness
   premises below are how the statements stay away from
   `fuelExhaustedWith` and `failwithI`. The hand-written seams also carry
-  `panic!` arms (119 at pin `89f7e6885`, 60 of them in `CerbMem.lean` and
-  36 in `CerbFS.lean` — DERIVED: a comment-stripped count of `panic!` over
-  the files of `handwritten_copy.manifest`; mirrors of OCaml
-  `assert false`/`failwith`), which the kernel reads as the return
+  `panic!` arms (117 at pin `89f7e6885`, in nine of the 37 seams of
+  `handwritten_copy.manifest`: 60 in `CerbMem.lean`, 36 in `CerbFS.lean`,
+  7 in `CerbDecode.lean`, 4 each in `CerberusImpl.lean`/`CerbUtils.lean`,
+  2 each in `CerbLocation.lean`/`Main.lean`, 1 each in `CerbTags.lean`/
+  `CoreParser.lean` — DERIVED by one method: code occurrences of `panic!`
+  with block and line comments stripped and string literals kept, the
+  stripper of `scripts/fuel_numeral_check.sh`; the L2 range audit's D-3;
+  mostly mirrors of OCaml `assert false`/`failwith`, the per-arm
+  mirror/guard split last derived at pin `f95ef8d9c`), which the kernel reads as the return
   type's `Inhabited` default, not as an abort. The rules' premises keep
   proved programs away from them; no theorem states that an export's
   run reaches none (ARCHITECTURE §3; KOI A5).
@@ -784,7 +792,7 @@ theorems:
 
 | Divergence / limitation | Discharge / mover | Home |
 |---|---|---|
-| Fuel is the ambient parameter `LemFuel` (`.lake/packages/LemLib/lean-lib/LemLib.lean:66`) — the caller-supplied budget every fuelled engine function reads at the pin: `drive`, `driver2`, `drive_nonmemory_steps_aux2`, `nd_bind`, `runND` and the pure evaluator are all `[LemFuel]` at the SAME instance (generated `Driver.lean:390`, `:399`, `:427`; `Nondeterminism.lean:214`; `CerbND.lean:163`; `Core_eval.lean:162`); no default is installed. The exports carry it as hypotheses: `hfuel : 2 ≤ LemFuel.fuel` on every shipped-loop statement (a round's ND `bind` and its memory lift each cost a unit: `loop_step_frag`, DriverCollapse.lean:2877), `evalDepth e ≤ LemFuel.fuel` with its label/procedure twins (the pure evaluator's pass count, `eval_pexpr_aux2 [LemFuel]`, `Core_eval.lean:162`, whose exhaustion is the absorbing `Result (Error fuelExhaustedLoc fuelExhaustedMsg)`, `:163`–`:164`), and `k + 2 ≤ LemFuel.fuel` on the total closed statements; the shipped default's instances are the `*_shipped` corollaries (Shipped.lean). Exhaustion of every driver-family worker is the kernel-transparent kill `CerbND.fuelExhaustedKill` (`CerbND.lean:98`), the partial lane's admitted outcome at every ambient fuel and loop counter. What remains fail-open in the engine: the eight rows of cerberus-lean's `scripts/fuel_forms_pending.txt` — `are_compatible_aux`/`_params_aux0`/`_params0`, `hack`, `to_pure`, `to_pures`, `many`, `many1` — whose exhaustion value is LemLib's opaque `fuelExhausted` sentinel (`LemLib.lean:217`). On the fragment's proved path only `hack` (generated `Driver.lean:438`, the value read-back of `finalize`, `:469`) is reached, and it is excluded by `0 < LemFuel.fuel` (`hack_value`, DriverCollapse.lean:660; `finalize_done`, `:677`); the compatibility trio is reached only from struct/union values, `many`/`many1` only from the printf format parser (`Formatted.lean:393`), `to_pure`/`to_pures` only from the Core rewriter (`Core_rewrite.lean`), which the driver does not call — none from a `Frag` program's run | the eight (D) rows are cerberus-lean's (KNOWN-OPEN-ITEMS A1); `get_ctx`, `subst_sym_expr`, `step_eval_pexpr` are MEASURED (fuel-free) at the pin, so no `pot`/`esize` ceiling exists any more | `Fragment.lean` header, `Shipped.lean`, `Adequacy.lean`; `docs/FUEL.md`; `docs/2026-09-07_l2-repin-notes.md` |
+| Fuel is the ambient parameter `LemFuel` (`.lake/packages/LemLib/lean-lib/LemLib.lean:66`) — the caller-supplied budget every fuelled engine function reads at the pin: `drive`, `driver2`, `drive_nonmemory_steps_aux2`, `nd_bind`, `runND` and the pure evaluator are all `[LemFuel]` at the SAME instance (generated `Driver.lean:390`, `:399`, `:427`; `Nondeterminism.lean:214`; `CerbND.lean:163`; `Core_eval.lean:162`); no default is installed. The exports carry it as hypotheses: `hfuel : 2 ≤ LemFuel.fuel` on every shipped-loop statement (a round's ND `bind` and its memory lift each cost a unit: `loop_step_frag`, DriverCollapse.lean:2877), `evalDepth e ≤ LemFuel.fuel` with its label/procedure twins (the pure evaluator's pass count, `eval_pexpr_aux2 [LemFuel]`, `Core_eval.lean:162`, whose exhaustion is the absorbing `Result (Error fuelExhaustedLoc fuelExhaustedMsg)`, `:163`–`:164`), and `k + 2 ≤ LemFuel.fuel` on the total closed statements; the shipped default's instances are the `*_shipped` corollaries (Shipped.lean). Exhaustion of every driver-family worker is the kernel-transparent kill `CerbND.fuelExhaustedKill` (`CerbND.lean:98`), the partial lane's admitted outcome at every ambient fuel and loop counter. What remains fail-open in the engine: the eight rows of cerberus-lean's `scripts/fuel_forms_pending.txt` — `are_compatible_aux`/`_params_aux0`/`_params0`, `hack`, `to_pure`, `to_pures`, `many`, `many1` — whose exhaustion value is LemLib's opaque `fuelExhausted` sentinel (`LemLib.lean:217`). On the fragment's proved path two of them are reached, each once, at PROGRAM-DONE in `finalize` (generated `Driver.lean:469`): `to_pure` (the arena read-back, `Core_aux.lean:600`) and `hack` (the value read-back, `Driver.lean:438`), both on a VALUE arena where one unit suffices, so both are excluded by `0 < LemFuel.fuel` (`finalize_done`, DriverCollapse.lean:677; `hack_value`, `:660`); `to_pure` is also called per global definition by `driver_globals` (`Driver.lean:526`) — over the empty `globs` of every file this package builds (`ProdEntry.lean:82`) — and by the Core rewriter (`Core_rewrite.lean:233`–`:271`), which the driver does not call; the compatibility trio is reached only from struct/union values, `many`/`many1` only from the printf format parser (`Formatted.lean:393`), `to_pures` only from the rewriter (`Core_rewrite.lean:255`) and `core_thread_step2` (`Core_run.lean:424`), which the driver does not call — none of these six from a `Frag` program's run (`docs/FUEL.md` §4) | the eight (D) rows are cerberus-lean's (KNOWN-OPEN-ITEMS A1); `get_ctx`, `subst_sym_expr`, `step_eval_pexpr` are MEASURED (fuel-free) at the pin, so no `pot`/`esize` ceiling exists any more | `Fragment.lean` header, `Shipped.lean`, `Adequacy.lean`; `docs/FUEL.md`; `docs/2026-09-07_l2-repin-notes.md` |
 | Emitted-Core coverage includes t1, t4, t5 and t6: whole-term fragment witnesses, public total proofs and shipped-driver theorems. t4 adds a decreasing while invariant, both assignments, the short-circuit exit, two-read race check and fresh-symbol preservation. Ccall-free expression-case operands, bare and annotated strong symbol binding, and annotated-tuple weak binding are ruled. C calls, scheduler forks and the remaining E6/E7 cases are pending; the full emitted-file/library connection and E5 review remain open. | Remaining dialect work and the architecture review (`../docs/2026-09-04_emitted-core-dialect-design.md`, `docs/2026-09-06_e5-t4-loop.md`) | Scope above; claim matrix C14–C17; generated capability manifest |
 | Synthetic Core entry: authored Core wrapped by `prodFile`, not C through the frontend; the loop programs' label maps are nevertheless computed by the shipped registration (`*_labeledAt_production`, `LabeledAt`) | a C-frontend entry | `ProdEntry.lean` |
 | The judgments are indexed by the current PROCEDURE `p : Option sym`, not the full control, and their step clauses quantify over the call stack and execution location `(κ, ℓ)` (calls arc C3) — forcing fact: RETURN does not restore `exec_loc` (PCALL pushes `push_exec_loc`, RETURN writes `current_proc_opt`/`env`/`stack0`/`arena` only), so the caller's continuation after a return runs at a control differing from the call-time one in `execLoc`; the pre-C3 judgment at `ctl` is the instance `p := ctl.proc, κ := ctl.κ, ℓ := ctl.execLoc` at the empty table | by design (every C1/C2 rule was control-general, the C1 range audit) | `Wps.lean`, `Wpt.lean`; docs/2026-09-03_c3-notes.md |

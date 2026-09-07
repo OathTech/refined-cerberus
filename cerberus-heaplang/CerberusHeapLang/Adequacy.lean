@@ -732,7 +732,7 @@ structure MachineCtx.ProcsDepth (M : MachineCtx) (n : Nat) : Prop where
       evalDepth cont ≤ n
 
 /-- The bridge to the proof-device form. -/
-theorem MachineCtx.FragProcs.toFuel [LemFuel] {M : MachineCtx} (hP : M.FragProcs)
+theorem MachineCtx.FragProcs.toFuel {M : MachineCtx} (hP : M.FragProcs)
     (hd : M.ProcsDepth LemFuel.fuel) : M.FragProcsFuel :=
   ⟨fun f params body h => (hP.body f params body h).toFuel (hd.body f params body h),
    fun f params body h l params' cont hl =>
@@ -752,19 +752,19 @@ theorem spikeCtx_fragProcs_fuel : spikeCtx.FragProcsFuel :=
 theorem procCtx_fragProcs_fuel (rs : core_run_state) : (procCtx rs).FragProcsFuel :=
   ⟨fun f _ _ h => (by rw [lookupProc_spikeFile] at h; cases h),
    fun f _ _ h => (by rw [lookupProc_spikeFile] at h; cases h)⟩
-
+omit [LemFuel] in
 theorem spikeCtx_fragProcs : spikeCtx.FragProcs :=
   ⟨fun f _ _ h => (by rw [lookupProc_spikeFile] at h; cases h),
    fun f _ _ h => (by rw [lookupProc_spikeFile] at h; cases h)⟩
-
+omit [LemFuel] in
 theorem procCtx_fragProcs (rs : core_run_state) : (procCtx rs).FragProcs :=
   ⟨fun f _ _ h => (by rw [lookupProc_spikeFile] at h; cases h),
    fun f _ _ h => (by rw [lookupProc_spikeFile] at h; cases h)⟩
-
+omit [LemFuel] in
 theorem spikeCtx_procsDepth (n : Nat) : spikeCtx.ProcsDepth n :=
   ⟨fun f _ _ h => (by rw [lookupProc_spikeFile] at h; cases h),
    fun f _ _ h => (by rw [lookupProc_spikeFile] at h; cases h)⟩
-
+omit [LemFuel] in
 theorem procCtx_procsDepth (rs : core_run_state) (n : Nat) : (procCtx rs).ProcsDepth n :=
   ⟨fun f _ _ h => (by rw [lookupProc_spikeFile] at h; cases h),
    fun f _ _ h => (by rw [lookupProc_spikeFile] at h; cases h)⟩
@@ -847,7 +847,7 @@ theorem Decomp.fragFuel_plug_call {e : CoreExpr} {ctx : context} {an : List _roo
     (v : value) :
     FragFuel (apply_ctx ctx (ofValA (.pure a [] v))) :=
   hd.fragFuel_plug_call' rfl hf a v
-
+omit [LemFuel] in
 /-- The syntactic form (R2): the device's plug lemma at the term's own depth. -/
 theorem Decomp.frag_plug_call {e : CoreExpr} {ctx : context} {an : List _root_.annot}
     {ra : core_run_annotation} {f : sym} {pes : List (generic_pexpr Unit sym)}
@@ -1399,11 +1399,11 @@ theorem spikeCtx_labels_none (l : sym)
 theorem spikeCtx_labels_frag_fuel (l : sym) (params : List (sym × core_base_type))
     (cont : CoreExpr) (hl : lookupLabel (spikeCtx.labelsAt spikeCtl.proc) l = some (params, cont)) :
     FragFuel cont := (spikeCtx_labels_none l hl).elim
-
+omit [LemFuel] in
 theorem spikeCtx_labels_frag (l : sym) (params : List (sym × core_base_type))
     (cont : CoreExpr) (hl : lookupLabel (spikeCtx.labelsAt spikeCtl.proc) l = some (params, cont)) :
     Frag cont := (spikeCtx_labels_none l hl).elim
-
+omit [LemFuel] in
 theorem spikeCtx_labels_depth (bound : Nat) (l : sym) (params : List (sym × core_base_type))
     (cont : CoreExpr) (hl : lookupLabel (spikeCtx.labelsAt spikeCtl.proc) l = some (params, cont)) :
     evalDepth cont ≤ bound := (spikeCtx_labels_none l hl).elim
