@@ -3298,3 +3298,72 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   boxes, rebase before each gate. Statement shapes "fixed at activation" are
   filled in by the orchestrator against the post-L2 tree. E6/E7 excluded
   (designed with the operator first). Activates on L2's merge.
+- **2026-09-07 [AGENT] L2 LANDED ON `land/repin-89f7e68` (b899d73; six commits on main f1f2573)
+  — THE RE-PIN to cerberus-lean 89f7e688530c6910884518811d645e4e892e4507 (R1), LemLib
+  f6542f8, pulled from `demo-repin`'s code commit ce4d7de per the landing
+  charter §2 L2.** Record `cerberus-heaplang/docs/2026-09-07_l2-repin-notes.md`;
+  snapshot `docs/2026-09-07_l2-signatures-post.txt`; `cerberus-heaplang/docs/FUEL.md`
+  rewritten to what was measured. Conflicts (8 at the cherry-pick, 7 at the
+  rebase onto 46c28dc) resolved as briefed (record §2). **R2 honoured**: `Frag`
+  is SYNTACTIC (35 constructors); the re-pin's fuel-relative inductive
+  survives only as the unpinned proof device `FragFuel` bridged by
+  `fragFuel_iff`; 23 exports restated over `Frag e` + a depth hypothesis;
+  `2 ≤ LemFuel.fuel` stays an explicit hypothesis. [AGENT] DEVIATION,
+  measured: the hypothesis is `evalDepth e ≤ LemFuel.fuel`, not the design's
+  `pot e ≤ LemFuel.fuel` — `pot` bounded `esize` for the former `get_ctx`
+  ceiling (now MEASURED at the pin) and never bounded the evaluator; the
+  design note's premise was false; orchestrator concurs. SHIPPED COROLLARIES:
+  thirteen `*_shipped` at `letI : LemFuel := ⟨100000000⟩`, side conditions by
+  `omega` over the closed forms, never `decide`; NEW GATE 1b
+  `scripts/fuel_numeral_check.sh` reds a fuel numeral outside a `*_shipped`
+  (5 plants). EXHAUSTION (the fuel review §2): every fuelled function on the
+  fragment's path classified — (A) `get_ctx`, the substitutions,
+  `update_env_aux`, `step_eval_pexpr`, the CerbMem layout; (B) absorbing:
+  `driver2`, the inner loop, `nd_bind`, `runND`, the evaluators (excluded
+  below the depth by hypothesis); (D) on the path only `hack`/`to_pure` in
+  `finalize`, excluded by `0 < LemFuel.fuel`; the rest (D) → (C) for the
+  fragment — so the closed partial forms are theorems at EVERY ambient
+  budget: KOI A2 CLOSED; A1 closed for our exports (residual = cerberus-lean's
+  8-row register); A4 closed (upstream `LemLibPmapLaws`); A6 = 89f7e68.
+  UNPLANNED THIRD CLASS (KOI B21): Z1 `killM_killed_inv` 3 → 7 rows; Z2 47
+  statements with new premises (`0 < alignN`, `0 ≤ sizeN`, `get_with_address a
+  = none`, `0 < LemFuel.fuel`), `allocateRegion_success`'s shape, 24 statements
+  with signed byte ranges; `region_loop`/`malloc_list` production statements
+  gained `0 < al`. Census (derived, classifier `scripts/signature_census.py`):
+  4950 → 5212; ADDED 283 / REMOVED 21 (all explained) / CHANGED 1483 = 1340
+  binder-only + 82 premise-text + 61 shape (by cause: Z1 6, Z2 47+24, LemLib
+  map 6, wrappers 7, R2 22, printing 25, fuel-token 3, benign 3). Pins 893 →
+  901 trio-exact + 6 axiom-free-exact. Oracle cross-checks (sibling binary
+  built ~3 h before the pin commit, docs-only commits between — caveat):
+  t1 4, t4 10, t5 1, t6 20, and t2/t3/t10 agree. `cite_check` 301 cites, 106
+  → 233 exact. Not taken: the other agent's 13 red-frontier docs, 17
+  progress records, `docs/evidence/*`. KOI text fixed here by the
+  orchestrator: A5 (the dead-static-kill arm IS the `panic!` at this pin),
+  B7 ("proved" → "MEASURED at the engine's fuel"). Orchestrator FULL gate at
+  b899d73 (40G cap; `setup-cerberus-dep.sh --check`: 37 seams byte-identical
+  at 89f7e68), verbatim (per-module boundary lines elided; record):
+  ```
+  == gate 1: banned proof-method grep (native_decide / bv_decide / ofReduce*) ==
+  ok: no banned proof-method references
+  == gate 1b: fuel-numeral grep (scripts/fuel_numeral_check.sh; a numeral outside a *_shipped corollary is red) ==
+  ok: no fuel numeral (100000000/1000000/999999) outside a *_shipped corollary and no retired fuel constant (60 files scanned, comments stripped)
+  == gate 2: capped build, cerberus-heaplang (elaborates its axiom audit) ==
+  info: CerberusHeapLang/Audit.lean:1116:0: CerberusHeapLang export pins: 901 trio-exact, 6 axiom-free-exact
+  info: CerberusHeapLang/Audit.lean:1116:0: CerberusHeapLang axiom sweep: every theorem bounded by the trio (6450 swept, internal details included — count informational, environment-dependent)
+  info: CerberusHeapLang/Audit.lean:1116:0: CerberusHeapLang banned-axiom sweep: sorryAx/ofReduceBool/ofReduceNat absent from all cones (9664 constants of every kind swept, internal details included — count informational, environment-dependent)
+  Build completed successfully (483 jobs).
+  ok: cerberus-heaplang build green
+  == speedbump: rule-use and classification manifest (regenerate; red on a red row or drift) ==
+  ok: capability manifest regenerated, no drift
+  == speedbump: corpus skeleton (hand-transcribed emitted Core vs docs/corpus-e0; scripts/corpus_skeleton.lean) ==
+  ok: corpus skeleton — every transcription matches its emitted text, every plant mismatches
+  == speedbump: import direction (semantics → heap → rules → adequacy → clients) ==
+  ok: import direction — 19 core modules, none imports an exhibit/example/production module
+  == speedbump: client boundary (positive clients mention no logic internals; scripts/boundary_check.sh) ==
+  BOUNDARY: 29 modules checked, 0 internals mention(s) in total, exit=0
+  ok: client boundary — no unallowlisted internals mention
+  ALL GATES GREEN
+  GATE-EXIT=0
+  ```
+  Range audit f1f2573..HEAD dispatched next on a fixed detached copy; merge
+  ask follows; on the merge: the Codex charter's stage-2 activation line.
