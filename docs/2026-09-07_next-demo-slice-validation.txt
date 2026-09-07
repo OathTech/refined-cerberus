@@ -1,0 +1,160 @@
+Master-plan next-slice review: validation evidence
+Recorded UTC: 2026-09-07T23:39:45.165391+00:00
+Reviewed main: 7040406eda19c58df6862edc588969639d8b0520
+Isolated reference source: 5bfe99288faafd74356ddc804f2b4c92026bca8d
+Semantics: 89f7e688530c6910884518811d645e4e892e4507
+
+All commands below ran inside refined-cerberus worktrees. The reference
+checkpoint is unchanged. This is not a build of G2 rebased onto main.
+
+1. Workspace verification and full gate
+
+In worktrees/review-g2-source:
+  scripts/setup-cerberus-dep.sh --check
+  CERB_MEM_MAX=40G TMPDIR="$PWD/.tmp" scripts/test_unit.sh
+
+Both commands exited 0. Verification reported 37 hand-written seams
+byte-identical to the pin and a passing Lean lem-sync check.
+Selected gate output, copied verbatim (non-contiguous):
+
+info: CerberusHeapLang/Audit.lean:1101:0: CerberusHeapLang export pins: 902 trio-exact, 6 axiom-free-exact
+info: CerberusHeapLang/Audit.lean:1101:0: CerberusHeapLang axiom sweep: every theorem bounded by the trio (6682 swept, internal details included — count informational, environment-dependent)
+info: CerberusHeapLang/Audit.lean:1101:0: CerberusHeapLang banned-axiom sweep: sorryAx/ofReduceBool/ofReduceNat absent from all cones (10028 constants of every kind swept, internal details included — count informational, environment-dependent)
+ok: cerberus-heaplang build green
+ok: capability manifest regenerated, no drift
+ok: corpus skeleton — every transcription matches its emitted text, every plant mismatches
+
+Last six gate lines, copied verbatim:
+
+ok:   Examples.CorpusE5 — 0 internals mentions
+ok:   Examples.EmittedInt — 0 internals mentions
+ok:   CorpusT4Exhibit — 0 internals mentions
+BOUNDARY: 32 modules checked, 0 internals mention(s) in total, exit=0
+ok: client boundary — no unallowlisted internals mention
+ALL GATES GREEN
+
+Process result: exit_code=0.
+The build explicitly rebuilt EmittedStdCore, Examples.EmittedT1,
+and EmittedT1Exhibit; other dependency logs may be cache replays.
+
+2. Fresh Cabs generation
+
+In worktrees/review-g2-source:
+  TMPDIR="$PWD/.tmp" /home/dev/projects/cerberus-lean-proj/scripts/ce \
+    /home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/default/backend/driver/main.exe \
+    --runtime=/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default \
+    --nolibc --cabs-json docs/corpus-e0/t1.c > FRESH_CABS
+  cmp docs/corpus-a7/t1.cabs.json FRESH_CABS
+
+FRESH_CABS was a file under review-next-demo-slice/.review-evidence.
+Generation and cmp exited 0. Both SHA-256 values:
+e89a6a7bbff9cc30a9203010ff8c01beb5b496a0c9fad2ac8c1a6cd416b69134
+The sibling executable/runtime were read-only inputs; no build there ran.
+
+3. Actual-file inspection and retained-data comparison
+
+In worktrees/review-g2-source, with all outputs inside the review worktrees:
+  CERB_MEM_MAX=40G TMPDIR="$PWD/.tmp" scripts/inspect-emitted-file.sh \
+    FRESH_CABS REPORT 50 \
+    cerberus-heaplang/CerberusHeapLang/Examples/EmittedT1Data.lean \
+    CerberusHeapLang.CorpusA7.T1 --check-data
+
+Process result: exit_code=0.
+Verbatim positive comparison line:
+emitted-file data round-trip: exact quotation and supply match
+
+Selected fields from REPORT (JSON rendering, not stdout):
+{
+  "after_driver_initialization_supply": 37,
+  "ambient_fuel": 50,
+  "data_export": {
+    "comparators": "retained by captureComparators; not serialized or assumed canonical",
+    "namespace": "CerberusHeapLang.CorpusA7.T1",
+    "quotation_and_supply_match": true,
+    "sha256": "b3f9e6be1ad7b5ac894bb20541a1af2367d37d7b4d34b48026dfe48ec9999e45"
+  },
+  "file": {
+    "calling_convention": "normal",
+    "extern_entries": 11,
+    "funinfo_entries": 11,
+    "funs_entries": 11,
+    "globs_entries": 0,
+    "impl_entries": 6,
+    "loop_attributes_entries": 0,
+    "main": {
+      "digest": "e9d70f29c8f28a957ee4fa9581bfd8e1",
+      "number": 19,
+      "printed_name": "main"
+    },
+    "stdlib_entries": 110,
+    "tagDefs_entries": 0,
+    "visible_objects_env_entries": 0
+  },
+  "frontend_supply": 36,
+  "integer_library": {
+    "captured_comparator_paths_match": true,
+    "reference_namespace": "CerberusHeapLang.CorpusA7.T1",
+    "stdlib_quotation_match": true
+  },
+  "label_collection": {
+    "captured_union_comparisons_match": true
+  },
+  "main_lookup": {
+    "captured_comparator_path_match": true
+  },
+  "outcomes": [
+    {
+      "blocked": false,
+      "status": "active",
+      "stderr": "",
+      "stdout": "",
+      "trace": [],
+      "value": "Specified(4)"
+    }
+  ]
+}
+
+4. Negative retained-data test
+
+Created a scratch copy of EmittedT1Data.lean, renamed data to originalData,
+and defined data := { originalData with main := none } in the same namespace.
+Re-ran command (3) with that scratch file and a fresh report destination.
+The Lean file elaborated; the subsequent comparison failed as intended.
+
+Verbatim failure line (temporary path is provenance, not a durable artifact):
+/home/dev/projects/cerberus-lean-proj/refined-cerberus/worktrees/review-g2-source/.tmp/emitted-inspection.8LJ6hR/verify.lean:5:0: error: emitted-file data/supply comparison failed
+
+Inspector exit=1. No output report was installed at the requested destination.
+This tests the existing comparator's main-field sensitivity. An independent
+Data equality implementation and full-gate integration remain future work.
+
+5. Non-mutating port check against current main
+
+In worktrees/review-next-demo-slice at 7040406:
+  git diff 520654f 5bfe992 -- cerberus-heaplang/CerberusHeapLang.lean \
+    cerberus-heaplang/CerberusHeapLang > PATCH
+  git apply --check PATCH
+
+Exit=1. Verbatim diagnostics:
+error: patch failed: cerberus-heaplang/CerberusHeapLang/API.lean:78
+error: cerberus-heaplang/CerberusHeapLang/API.lean: patch does not apply
+error: patch failed: cerberus-heaplang/CerberusHeapLang/Audit.lean:242
+error: cerberus-heaplang/CerberusHeapLang/Audit.lean: patch does not apply
+error: patch failed: cerberus-heaplang/CerberusHeapLang/DriverCollapse.lean:1718
+error: cerberus-heaplang/CerberusHeapLang/DriverCollapse.lean: patch does not apply
+error: patch failed: cerberus-heaplang/CerberusHeapLang/ProdLoop.lean:2
+error: cerberus-heaplang/CerberusHeapLang/ProdLoop.lean: patch does not apply
+
+The check did not apply any changes. It measures textual conflicts only.
+
+6. Independent-source scope checks
+
+  git diff 520654f 5bfe992 -- cerberus-heaplang/CerberusHeapLang/Step.lean \
+    cerberus-heaplang/CerberusHeapLang/Wps.lean \
+    cerberus-heaplang/CerberusHeapLang/Wpt.lean \
+    cerberus-heaplang/CerberusHeapLang/Soundness.lean \
+    cerberus-heaplang/CerberusHeapLang/Heap.lean \
+    cerberus-heaplang/CerberusHeapLang/Rules.lean
+
+Output: empty. G2 itself changes none of these source files. This does not
+prove that its port onto current main will need no further adaptation.
