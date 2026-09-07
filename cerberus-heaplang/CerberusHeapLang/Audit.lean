@@ -254,6 +254,7 @@ import CerberusHeapLang.Examples.CorpusE5
 import CerberusHeapLang.Examples.ReadinessSmoke
 import CerberusHeapLang.Examples.MirrorCoverage
 import CerberusHeapLang.Examples.CallSmoke
+import CerberusHeapLang.Examples.PartialClients
 import CerberusHeapLang.Round
 
 namespace CerberusHeapLang.Audit
@@ -268,6 +269,10 @@ def allowedAxioms : List Name :=
     the README's exhibits table and trust diagram, and WALKTHROUGH §6,
     name these). -/
 def trioExports : List Name := [
+  -- D5 partial clients: all three measured trio-exact.
+  ``CerberusHeapLang.PartialClients.t5_wps,
+  ``CerberusHeapLang.PartialClients.t5_blockSpecs,
+  ``CerberusHeapLang.PartialClients.loadBind_wps,
   -- the two exhibit shapes at the statement stratum (QA-2: the raw-WP
   -- twins `exhibit`/`exhibitC_triple` retired), the engine-facing spine
   ``CerberusHeapLang.wps_exhibit_store_frame, ``CerberusHeapLang.wps_exhibit_seq_stores,

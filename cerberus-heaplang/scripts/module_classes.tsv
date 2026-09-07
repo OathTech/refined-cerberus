@@ -83,3 +83,4 @@ CerberusHeapLang.OverflowExhibit	negative-test	-	the UB036 kill of x + 1 at INT_
 CerberusHeapLang.Examples.EmittedInt	example-support	-	Shared public-rule derivations for emitted integer expressions; location and symbol parameters preserve each client AST
 CerberusHeapLang.CorpusT4Exhibit	positive-client	-	t4_while emitted main, four registered labels, public total loop proof and shipped-driver result; explicit fresh-symbol floor and library-fragment boundary
 CerberusHeapLang.Shipped	production-wrapper	-	the thirteen production exports instantiated at the shipped default fuel ⟨100000000⟩ (the *_shipped corollaries; the only home of the fuel numeral)
+CerberusHeapLang.Examples.PartialClients	positive-client	-	D5 partial proof of emitted t5 main and an annotated load/bind client retaining the exact read footprint

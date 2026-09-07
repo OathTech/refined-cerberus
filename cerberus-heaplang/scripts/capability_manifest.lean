@@ -156,8 +156,7 @@ def variants : List Variant := [
     also := [N "wps_load_plain", N "wpt_load_plain", N "load_atomic"] },
   { ctor := `CerberusHeapLang.Frag.load,
     shape := "`Load0` at a whole cell, retaining its exact READ footprint for unsequenced race checks",
-    cls := .rulePartialUndemonstrated (N "wps_load_footprint") (N "wpt_load_footprint")
-      "t4's two-load addition consumes the total face; the partial face joins the E5 API/coverage disposition (docs/2026-09-06_e5-t4-addition.md)",
+    cls := .rule (N "wps_load_footprint") (N "wpt_load_footprint"),
     also := [N "load_atomic", N "do_race_loadFootprint"] },
   { ctor := `CerberusHeapLang.Frag.load,
     shape := "`Load0` at a typed SUB-RANGE of an object (`pointsToView`)",
@@ -298,8 +297,7 @@ def variants : List Variant := [
     cls := .rule (N "wps_seq_sym") (N "wpt_seq_sym") },
   { ctor := `CerberusHeapLang.Frag.sseq_sym,
     shape := "`lets x = e1 in e2` whose head delivers an ANNOTATED value `{A}v` (the engine's LETS-ANNOT at the symbol binder: `x ↦ v`, `{A}` re-wrapped around `e2`)",
-    cls := .rulePartialUndemonstrated (N "wps_seq_sym_annot") (N "wpt_seq_sym_annot")
-      "t4's short-circuit condition consumes the total face; the partial face joins the E5 API/coverage disposition (docs/2026-09-06_e5-t4-condition.md)" },
+    cls := .rule (N "wps_seq_sym_annot") (N "wpt_seq_sym_annot") },
   -- E2: the tuple binders and the weak symbol binder
   { ctor := `CerberusHeapLang.Frag.sseq_tuple,
     shape := "`let strong (a, b, …) = e1 in e2` at any fragment head delivering a BARE tuple value (LETS-PURE at the flat tuple binder; `update_env`'s `Ctuple` arm zips leaves against components)",
@@ -336,30 +334,25 @@ def variants : List Variant := [
   -- E5: the negative-action protocol, the excluded store, the case EVAL round, nd
   { ctor := `CerberusHeapLang.Frag.neg_store,
     shape := "`neg(store(ty, p, v))` at canonical operands under a `bound` with no strong sequence between (`break_at_bound_and_sseq` = `BOUND_NO_SSEQ`): the engine's NEGATIVE-ACTION round draws an exclusion id and a fresh symbol from the run state and rewrites `bound(ctxA[neg(act)])` into `bound(let weak (_, s) = unseq(Eexcluded n act, ctxA'[pure(Unit)]) in pure(s))` (core_reduction.lem:1290–1338)",
-    cls := .rulePartialUndemonstrated (N "wps_neg_round") (N "wpt_neg_round")
-      "t5 consumes the total rules; a partial corpus derivation remains (docs/2026-09-05_e5-resume.md)",
+    cls := .rule (N "wps_neg_round") (N "wpt_neg_round"),
     also := [N "wps_neg_bound", N "wpt_neg_bound", N "wps_bound_wseq_tuple", N "wpt_bound_wseq_tuple"] },
   { ctor := `CerberusHeapLang.Frag.neg_store_op,
     shape := "`neg(store(ty, p, v))` at `PePure` operands not all values — the same round (the rewrite fires before any operand evaluates; the operands evaluate inside the excluded node)",
-    cls := .rulePartialUndemonstrated (N "wps_neg_round") (N "wpt_neg_round")
-      "t5 consumes the total rules; a partial corpus derivation remains (docs/2026-09-05_e5-resume.md)",
+    cls := .rule (N "wps_neg_round") (N "wpt_neg_round"),
     also := [N "wps_neg_bound", N "wpt_neg_bound"] },
   { ctor := `CerberusHeapLang.Frag.neg_store,
     shape := "`neg(store(ty, p, v))` (canonical or `PePure` operands — `Frag.neg_store`/`neg_store_op` admit the redex at ANY context) under a `bound` WITH a strong sequence between (`break_at_bound_and_sseq` = `BOUND_WITH_SSEQ`): an engine SUCCESS round — the action is re-polarised in place when the inner context is empty, or the node is rewritten into an `sseq`-tuple binder otherwise (core_reduction.lem:1319–1338)",
     cls := .outOfScope s!"the mirror has no step there — the characterised residual `OpenRound.neg_sseq` (Round.lean; the mirror is stuck, fail-closed; the corpus's assignment statements sit under `let weak` frames only, so no certified run reaches it). Mover: two `Step` rules (`neg_sseq_repol`, `neg_sseq_rewrite`) and a `Frag.sseq_tuple` at the nested pattern the second produces (docs/2026-09-05_fragment-closure-e5-notes.md); found unlisted by the E5 full-range audit C-1 (docs/2026-09-07_audit-e5-full-range.md); {recE5}" },
   { ctor := `CerberusHeapLang.Frag.excluded_store,
     shape := "`Eexcluded n (store(ty, p, v))` at canonical operands — `process_action (Just n)` (core_reduction.lem:1345–1346, :694–711): the same `StoreRequest2` as the positive store, its continuation the NEGATIVE dynamic annotation `{DA_neg n [] fp}pure(Unit)`",
-    cls := .rulePartialUndemonstrated (N "wps_excluded_store") (N "wpt_excluded_store")
-      "t5 consumes the total rules; a partial corpus derivation remains (docs/2026-09-05_e5-resume.md)",
+    cls := .rule (N "wps_excluded_store") (N "wpt_excluded_store"),
     also := [N "excluded_store_atomic"] },
   { ctor := `CerberusHeapLang.Frag.excluded_store_op,
     shape := "`Eexcluded n (store(ty, p, v))` at `PePure` operands not all values (the ACTION_EVAL round under `Eexcluded n`; the node is rebuilt at the evaluated operands, core_reduction.lem:721–727)",
-    cls := .rulePartialUndemonstrated (N "wps_excluded_store_eval") (N "wpt_excluded_store_eval")
-      "t5 consumes the total rules; a partial corpus derivation remains (docs/2026-09-05_e5-resume.md)" },
+    cls := .rule (N "wps_excluded_store_eval") (N "wpt_excluded_store_eval") },
   { ctor := `CerberusHeapLang.Frag.case_op,
     shape := "`case pe of …` at a `PePure` NON-value scrutinee (one_step0's `Ecase` EVAL round: the scrutinee evaluates, the node is rebuilt at the value; the corpus's `case (a_512, a_513) of` tuple scrutinee)",
-    cls := .rulePartialUndemonstrated (N "wps_case_eval") (N "wpt_case_eval")
-      "t5 consumes the total rules; a partial corpus derivation remains (docs/2026-09-05_e5-resume.md)" },
+    cls := .rule (N "wps_case_eval") (N "wpt_case_eval") },
   { ctor := `CerberusHeapLang.Frag.nd,
     shape := "`nd(e_1, …, e_n)` with at least two alternatives — one_step0's `End es => ND es` (core_reduction.lem:447–449) becomes the scheduler FORK `Step_nd2` (:1473–1474; `advance_step`'s `ND.pick`, driver.lem:1039–1046)",
     cls := .outOfScope s!"the mirror has NO rule for a fork (fail-closed: the choice is the driver's, and `CerbND.runND` explores every alternative — `ShippedRefusal.fork` via `complete_nd`/`nd_fork`, `pick` on a list of two or more); the corpus reaches `nd` only in the `Unspecified` arm of an `if` condition's case, which no certified run takes; {recE5}" },
