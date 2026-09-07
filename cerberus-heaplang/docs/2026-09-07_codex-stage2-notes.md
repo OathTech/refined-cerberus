@@ -258,3 +258,74 @@ Time from pre-snapshot through recording: approximately
 13.5 minutes
 (06:04:11–06:17:43 UTC).
 No individual build or proof pass approached one hour.
+
+## D1 — BLOCKED: driver-kill adequacy interface
+
+BLOCKED: the fixed `hwp` requires a kill-capable total/prefix judgment that
+the existing Wpt interface does not provide; implementing that design is
+outside D1's fence; parked at codex/park-D1
+`55b54b531fd1dfe4bc88844fa3004cb1081e74c6`.
+
+Investigation parked without inventing a new judgment or theorem statement.
+The fixed requirement asks for `wpt_driver_done_alloc`'s premise list with
+`hwp` delivering a KILL classification. `Wpt.lean:151–206` defines the
+current total judgment: its terminal clause is a `SpikeVal` postcondition;
+its nonterminal step clause requires `PrimStep.Reducible` and continues
+through every mirrored step. There is no kill clause (`evalClass` and
+`EvalFail` do not occur in Wpt). A pure classifier equality is a theorem
+about operand evaluation, not a derivation of this judgment on a prefix
+ending at a killing redex.
+
+`ProdLoop.lean:444–458` consumes that judgment with `readoutPost ψ`, where
+`ψ : value → Mem → Prop`. Its existing result `DriverDoneAt` at
+`ProdLoop.lean:63–87` requires an `NDactive` PROGRAM-DONE outcome. Substituting
+a classifier equality into the readout cannot change that result into an
+`NDkilled` outcome. In addition, the generic launch premises describe an
+arbitrary `e₀`, memory, environment and context; they do not tie a cold-start
+file `f`, supply `sup`, filesystem and arguments to those inputs.
+
+The existing useful downstream components are present:
+`overflow_driver2_killed` / `overflow_driver2_killed_frame` prove the UB036
+kill from `progCE3_atAdd`; `drive_after_setup_lib_killed` in ProdEntry
+already propagates a driver kill through setup. They do not provide the
+missing prefix judgment. Completing the requested generic lemma therefore
+requires a specified kill-capable total/prefix interface and its adequacy,
+or a changed premise list/goal allowing a direct engine-prefix proof.
+That is a design choice outside this fixed D1 goal; editing Wpt is outside
+D1's fence. No vacuous theorem, new assumption, trace-as-premise, renamed
+judgment or replacement statement was introduced. No Lean source was edited.
+
+
+After parking, switched to `codex/demo-residuals-2` and reset it to its last
+green commit `9defae7`; the investigation and pre-snapshot remain committed
+on the park branch. `git rebase main` reported the branch up to date,
+without conflicts. The restored FULL gate is green with unchanged
+901 trio-exact / 6 axiom-free-exact pins and 33 package warnings.
+
+Both D1 snapshots used the charter's capped command. Their diff is EMPTY
+(exit 0): ADDED 0, REMOVED 0, CHANGED 0. Both SHA-256 hashes:
+`0cb8fd9f6d05c813b2b296fa31c751566c96f9e74e8a1ce93ba3478417608df8`. This establishes that parking
+preserved the working branch's public surface; it does not establish D1.
+
+D1 restored FULL gate tail, verbatim:
+
+```text
+ok:   CorpusT6Exhibit — 0 internals mentions
+ok:   Examples.CallSmoke — 0 internals mentions
+ok:   Examples.ReadinessSmoke — 0 internals mentions
+ok:   Examples.Layout — 0 internals mentions
+ok:   Examples.CorpusE0 — 0 internals mentions
+ok:   Examples.CorpusE5 — 0 internals mentions
+ok:   Examples.EmittedInt — 0 internals mentions
+ok:   CorpusT4Exhibit — 0 internals mentions
+BOUNDARY: 29 modules checked, 0 internals mention(s) in total, exit=0
+ok: client boundary — no unallowlisted internals mention
+ALL GATES GREEN
+GATE-EXIT=0
+```
+
+Time spent: approximately 4.0 minutes since
+D7's record commit, including the investigation, snapshots, parking and
+restored gate (recorded 06:21:58 UTC). No proof campaign or single
+build approached one hour. D1 remains BLOCKED; no whole-run overflow
+theorem is claimed.
