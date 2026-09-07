@@ -3367,3 +3367,75 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   ```
   Range audit f1f2573..HEAD dispatched next on a fixed detached copy; merge
   ask follows; on the merge: the Codex charter's stage-2 activation line.
+- **2026-09-07 [AGENT] L2 RANGE AUDIT f1f2573..d8ebad9: PASS WITH FIXES REQUIRED, A− —
+  FIXES LANDED (d2ded73 report; 317dd29 fixes; b469f70 notes); L2 MERGE CANDIDATE
+  = this commit, PENDING THE OPERATOR'S SIGN-OFF.** Report
+  `cerberus-heaplang/docs/2026-09-07_audit-l2-range.md`. No T-/C- finding: pin,
+  workspace and six generated files cmp-identical to the sibling; the census
+  283/21/1483 reproduced by an independent classifier; the thirteen
+  production statements word-diffed, every change forced by the pin; no
+  pinned statement mentions the `FragFuel` device; the exhaustion table
+  re-derived from the generated tree row for row; executable probe:
+  `evalDepth` t1/t4/t5/t6 = 26/29/28/26 and the shipped evaluator succeeds at
+  exactly the computed depth, exhaustion payload = `fuelExhaustedKill`'s;
+  oracle t1 4 / t4 10 / t5 1 / t6 20 / t2 3 / t3 4 / t10 1 with the binary
+  caveat verified (zero OCaml-source change between the binary and the pin);
+  901 + 6 pins by independent sweep. ERRATA TO THE L2 LANDING ENTRY ABOVE
+  (R-1, R-2, D-2): the pin accounting is 893 − 4 REMOVED
+  (`drive_after_setup_{lib,with}_lemFuel`, `t4Q_pot`, `t6Q_pot`) − 6 MOVED to
+  the NEW `axiomFreeExports` class (the four `procCtx*` projections,
+  `prodThread_eq_ctlThread`, `prodCtx_extern`; the class did not exist at L1)
+  + 18 ADDED (13 `*_shipped`, `peDepth_subst`, `evalDepth_subst`,
+  `drive_after_setup_{lib,with}_one`, `errno_init_eq`) = 901; "23 exports
+  restated" → 21 (20 pinned; `wpt_driver_done_alloc` restated but unpinned, as
+  it always was); the NARROWED production statements are
+  `region_loop_certified_production` (+`halign : 0 < al`, +`hsize : 0 ≤ sz`)
+  and `malloc_list_certified_production` (+`halign : 0 < al`), forced by the
+  pin's unclamped `allocator` (`CerbMem.lean:2089–2103`) — disclosed on
+  ARCHITECTURE §2.5 and KOI B21. Other fixes: D-1 README's false "`to_pure`
+  never from a Frag run" (`finalize` reads the arena through it,
+  Driver.lean:469); D-3 the `panic!` count stated four ways → ONE measurement,
+  one method: 117 comment-stripped code arms in the 37 seams (CerbMem 60,
+  CerbFS 36, CerbDecode 7, CerberusImpl 4, CerbUtils 4, CerbLocation 2, Main 2,
+  CerbTags 1, CoreParser 1; none lem-generated) on ARCHITECTURE/README/KOI A5;
+  D-4 KOI B7 quotes `esize_subst` as it is (unconditional at HEAD); D-5
+  README "Scope" counts → 35/78/24/7; D-6 FUEL.md: `to_pure`'s second
+  `drive`-path site in `driver_globals` (class (C) only because `globs := []`;
+  the audit's "`hack` too" was FALSE — `hack`'s only caller is `finalize`)
+  and the REASON for the `4 ≤ LemFuel.fuel` floor (`memop_fork` = 3 forked
+  binds + 1 active; `NDnd` re-binds at `lemFuel − 1`, Nondeterminism.lean:212);
+  H-1 TWELVE vacuous `[LemFuel]` binders removed (the audit saw eleven; one
+  hidden behind a cascade) — statements of `spikeCtx_fragProcs`,
+  `Decomp.frag_plug_call`, `csCtx_fragProcs` (pinned) and nine others lose a
+  vacuous binder (a strengthening; snapshot `l2b` vs `l2` = exactly those 12);
+  package warnings 44 → 33 (KOI C5 re-baselined); H-2 gate 1b tightened
+  (`10^8`, `100_000_000`, a numeral after a comment-like string, a numeral in
+  a non-declaration command after a `*_shipped` — 8 red plants / 3 green);
+  also fixed: ARCHITECTURE still named the old pin; consumer-module count →
+  25. Orchestrator FULL gate at b469f70 (40G cap; Lean content = 317dd29),
+  verbatim (per-module boundary lines elided; record §12.10):
+  ```
+  == gate 1: banned proof-method grep (native_decide / bv_decide / ofReduce*) ==
+  ok: no banned proof-method references
+  == gate 1b: fuel-numeral grep (scripts/fuel_numeral_check.sh; a numeral outside a *_shipped corollary is red) ==
+  ok: no fuel numeral (100000000/1000000/999999) outside a *_shipped corollary and no retired fuel constant (60 files scanned, comments stripped)
+  == gate 2: capped build, cerberus-heaplang (elaborates its axiom audit) ==
+  info: CerberusHeapLang/Audit.lean:1116:0: CerberusHeapLang export pins: 901 trio-exact, 6 axiom-free-exact
+  info: CerberusHeapLang/Audit.lean:1116:0: CerberusHeapLang axiom sweep: every theorem bounded by the trio (6450 swept, internal details included — count informational, environment-dependent)
+  info: CerberusHeapLang/Audit.lean:1116:0: CerberusHeapLang banned-axiom sweep: sorryAx/ofReduceBool/ofReduceNat absent from all cones (9664 constants of every kind swept, internal details included — count informational, environment-dependent)
+  Build completed successfully (483 jobs).
+  ok: cerberus-heaplang build green
+  == speedbump: rule-use and classification manifest (regenerate; red on a red row or drift) ==
+  ok: capability manifest regenerated, no drift
+  == speedbump: corpus skeleton (hand-transcribed emitted Core vs docs/corpus-e0; scripts/corpus_skeleton.lean) ==
+  ok: corpus skeleton — every transcription matches its emitted text, every plant mismatches
+  == speedbump: import direction (semantics → heap → rules → adequacy → clients) ==
+  ok: import direction — 19 core modules, none imports an exhibit/example/production module
+  == speedbump: client boundary (positive clients mention no logic internals; scripts/boundary_check.sh) ==
+  BOUNDARY: 29 modules checked, 0 internals mention(s) in total, exit=0
+  ok: client boundary — no unallowlisted internals mention
+  ALL GATES GREEN
+  GATE-EXIT=0
+  ```
+  On this merge: the Codex charter's stage-2 activation line (D7 first,
+  then D1–D4, with the fixed statements) is written into the charter on main.
