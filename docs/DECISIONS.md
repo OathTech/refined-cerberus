@@ -3554,3 +3554,92 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   stage 2 (D6 redo, D7, D1–D4) runs in `codex-stage2` and rebases onto
   this main before each of its gates; the stage-1 copy on main is deleted
   when stage 2 closes.
+- **2026-09-07 [AGENT] CODEX STAGE 2 LANDING — merge candidate: branch
+  `land/codex-stage2` (its head = this entry's commit; Lean tree `48e162d`),
+  which CONTAINS the D5 landing `e4b0f95`: two merges, in order, each on its
+  own [USER] yes — first main 1e1f584 → e4b0f95 (D5), then → this head.**
+  CONTENT (range 1e1f584..bf4554d rebased onto e4b0f95, patch byte-identical,
+  zero conflicts): D6 DONE — `scripts/corpus_skeleton.lean` compares the whole
+  lexical token stream of every transcribed program and std.core function
+  against the emitted text (token counts 121/271/299/591 → 312/652/726/1504);
+  the dead-literal plant is red on all four rows; blind spots = exactly the
+  annotation kinds `pp_core.ml` never prints (KOI C20). D7 DONE — the
+  head-form scaffold's 51 sites (2/12/37; the charter's "42" was stale) →
+  one private lemma + `step_ctx_head`; `step_ctx_excluded_store_eval_ws'`
+  moved Round → DriverCollapse with an IDENTICAL statement; the clone
+  families share one definition each; census pre 5212 → post 5217 = exactly
+  the five tactic parser defs ADDED, REMOVED 0, CHANGED 0 (public AND private
+  statements, 713 theorems over the seven modules); no heartbeat option
+  anywhere (the package has none); pins unchanged. D1–D4 BLOCKED by the Codex
+  agent, parked (`codex/park-D1..D4` = 55b54b5, 09f9b90, 450c87e, 2ad35c7 —
+  each one commit holding a snapshot + record text, no Lean); the working
+  branch restored to green each time. ERRATA to the stage-2 activation entry
+  (`1e1f584`): all four blocks are CHARTER DEFECTS of the orchestrator, not
+  work failures — D1's fixed statement needs a kill clause the total
+  judgment does not have (a design item for the operator); D2's fixed
+  statement contradicts the source (`wps_c_add`'s range IS the int ABI
+  numerals — the numeral ban covers fuel/supply bounds, not ABI constants a
+  rule carries); D3's fence omits the gate scripts AND `Shipped.lean:306/323/340`
+  (audit F3), and its negative sub-goal needs D1's interface; D4's fence
+  omits `Audit.lean` (pins) and `EnvLaws.lean` (the "beside `SymFrame`"
+  placement); the D2–D4 line cites had drifted 6–7 lines at activation
+  (audit N3). The residuals charter is CLOSED with these recorded in its §9;
+  stage 3 (D8/D9) is not activated. RANGE AUDIT (fresh reviewer,
+  `cerberus-heaplang/docs/2026-09-07_audit-codex-stage2-range.md`): PASS, A−,
+  no fix required; F1 (record "676" → 713, orchestrator re-measured 713),
+  F2 (11 of 12 snapshots byte-duplicates → deleted, `codex-D7-post.txt`
+  kept), F3 (above), F4 (the Codex record carries no provenance tags → the
+  landing notes tag its four blocks and two corrections as agent-called),
+  N1 (→ KOI C20 + the record's disclosure), N2 (→ C17: 51 → 0 and the
+  residue), N4 (`GATE-EXIT=0` is the caller's echo). The D5 audit's F-6 is
+  also spent here: the stage-1 read-only copy is deleted and the charter
+  repointed. The audit measured `capped` under the agent's environment
+  (`CERB_PROJ`, `GIT_CONFIG_GLOBAL=/dev/null`, `TMPDIR`): `memory.max =
+  42949672960` — the cap held. Orchestrator gates, 40G cap, wrapper `EXIT=0`,
+  0 `UNCAPPED`, 33 warnings each: (i) `bf4554d` alone, 19:04:08–19:04:24 UTC:
+  `info: CerberusHeapLang/Audit.lean:1116:0: CerberusHeapLang export pins: 901 trio-exact, 6 axiom-free-exact`,
+  `Build completed successfully (483 jobs).`, `BOUNDARY: 29 modules checked, 0 internals mention(s) in total, exit=0`,
+  `ALL GATES GREEN`; (ii) the integration head `48e162d` (D5 + stage 2),
+  19:07:25–19:08:55 UTC, 56 modules recompiled (D7 edits `Soundness`/
+  `DriverCollapse`, which `Substitution`/`Fragment`/`Potential` import — the
+  whole rules layer rebuilt; `Heap` replayed), tail identical to (iii);
+  (iii) the landing commit `b1848e9` (docs-only over 48e162d), 19:34:15–19:34:33
+  UTC, quoted (the 30 per-module `ok:   <module> — 0 internals mentions`
+  lines elided):
+  ```
+  == gate 1: banned proof-method grep (native_decide / bv_decide / ofReduce*) ==
+  ok: no banned proof-method references
+  == gate 1b: fuel-numeral grep (scripts/fuel_numeral_check.sh; a numeral outside a *_shipped corollary is red) ==
+  ok: no fuel numeral (100000000/1000000/999999) outside a *_shipped corollary and no retired fuel constant (61 files scanned, comments stripped)
+  == gate 2: capped build, cerberus-heaplang (elaborates its axiom audit) ==
+  info: CerberusHeapLang/Audit.lean:1121:0: CerberusHeapLang export pins: 904 trio-exact, 6 axiom-free-exact
+  info: CerberusHeapLang/Audit.lean:1121:0: CerberusHeapLang axiom sweep: every theorem bounded by the trio (6476 swept, internal details included — count informational, environment-dependent)
+  info: CerberusHeapLang/Audit.lean:1121:0: CerberusHeapLang banned-axiom sweep: sorryAx/ofReduceBool/ofReduceNat absent from all cones (9675 constants of every kind swept, internal details included — count informational, environment-dependent)
+  Build completed successfully (484 jobs).
+  ok: cerberus-heaplang build green
+  == speedbump: rule-use and classification manifest (regenerate; red on a red row or drift) ==
+  ok: capability manifest regenerated, no drift
+  == speedbump: corpus skeleton (hand-transcribed emitted Core vs docs/corpus-e0; scripts/corpus_skeleton.lean) ==
+  ok: corpus skeleton — every transcription matches its emitted text, every plant mismatches
+  == speedbump: import direction (semantics → heap → rules → adequacy → clients) ==
+  ok: import direction — 19 core modules, none imports an exhibit/example/production module
+  == speedbump: client boundary (positive clients mention no logic internals; scripts/boundary_check.sh) ==
+  BOUNDARY: 30 modules checked, 0 internals mention(s) in total, exit=0
+  ok: client boundary — no unallowlisted internals mention
+  ALL GATES GREEN
+  ```
+  NEXT CODEX SLICE (the operator's ask, verbatim: "propose the next codex
+  subagent slice of work … very cleanly structured with a clear success
+  criterion … mathematically ambitious but cleanly scoped … review your
+  codex plan doc carefully with a subagent … Then give me a *short* bit of
+  prompt text which I will set as a GOAL"): a DRAFT charter
+  `docs/2026-09-07_codex-charter-total-refines-partial.md` — the metatheorem
+  `wps_of_wpt` (the total judgment at any budget, empty procedure table,
+  entails the partial judgment at the ∃-forgotten label specification) and
+  its instance `t4_wps_of_wpt`; statements fixed against the source with a
+  clause-by-clause derivability record and a fence-closure table; under
+  independent review before the operator sees it; committed only after that
+  review. [AGENT] why not the symbol floor (D3/D4 corrected): the semantics
+  has no symbol-collection function, so `symBound` would be a hand-written
+  traversal of the full Core AST discharged by kernel evaluation — a grind
+  smell, not mathematics.
