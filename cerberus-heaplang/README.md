@@ -738,7 +738,7 @@ domain at the pin) and the re-pinned allocator's domain conditions
   `Core.instBEqCore_base_type.beq`. The fuel and well-formedness
   premises below are how the statements stay away from
   `fuelExhaustedWith` and `failwithI`. The hand-written seams also carry
-  `panic!` arms (117 at pin `89f7e6885`, in nine of the 37 seams of
+  `panic!` arms (119 at pin `89f7e6885`, in ten of the 37 seams of
   `handwritten_copy.manifest`: 60 in `CerbMem.lean`, 36 in `CerbFS.lean`,
   7 in `CerbDecode.lean`, 4 each in `CerberusImpl.lean`/`CerbUtils.lean`,
   2 each in `CerbLocation.lean`/`Main.lean`, 1 each in `CerbTags.lean`/

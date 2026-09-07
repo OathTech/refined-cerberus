@@ -601,7 +601,7 @@ declares no `axiom` and contains no `sorry`: `grep -rn '(sorry'` over the
 primed `generated/*.lean` is empty and the build log has no `declaration
 uses sorry` (README "The trust story"; `docs/2026-09-03_repin-fuel-notes.md`).
 
-**The `panic!` arms.** The pinned tree does contain `panic!` arms: 117
+**The `panic!` arms.** The pinned tree does contain `panic!` arms: 119
 code occurrences of `panic!` across the 37 hand-written seams of
 `handwritten_copy.manifest`, in nine files — `CerbMem.lean` 60,
 `CerbFS.lean` 36, `CerbDecode.lean` 7, `CerberusImpl.lean` 4,
@@ -611,8 +611,10 @@ code occurrences of `panic!` across the 37 hand-written seams of
 in lem-generated code (count DERIVED at pin `89f7e6885` by ONE method:
 block and line comments stripped, string literals kept — the stripper of
 `scripts/fuel_numeral_check.sh` — over the 37 manifest seams; the L2 range
-audit's D-3. `CerbFloat.lean` and `CerbND.lean` mention `panic!` in
-comments only. The `generated/` directory holds byte-identical copies of
+audit's D-3 — CORRECTED 2026-09-07 to 119 in TEN seams: `CerbFloat.lean:183`
+and `:307` are code arms the D-3 stripper missed (two independent
+string-aware counts agree; KOI A5 erratum). `CerbND.lean` mentions `panic!`
+in a comment only. The `generated/` directory holds byte-identical copies of
 the hand-written seams named in `handwritten_copy.manifest`, which is why
 a seam file is cited as generated `CerbMem.lean`). At the previous pin
 `f95ef8d9c` the 61 arms split into 54 mirrors of an OCaml `assert false`/

@@ -3785,3 +3785,68 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   hostile pre-launch review, launch text only after the agent's worktree is
   verified) produced a slice with zero blocks and zero fixes required — the
   first of the four Codex runs to do so.
+- **2026-09-07 [USER] TWO MERGES** (verbatim): "Go ahead and merge both" —
+  main 6df8982 → 7698a71 (the Codex refinement slice, branch
+  `codex/total-refines-partial`, ff-only) and then → 777ca0f (`AGENTS.md`
+  symlink alias of CLAUDE.md, branch `hygiene/agents-md`, rebased onto the
+  new main with a byte-identical patch, ff-only).
+- **2026-09-07 [USER] THE MASTER PLAN, AND THE DEFINITION OF DONE FOR THE DEMO**
+  (verbatim, the working session): "What's left on the slate for our
+  Reynolds/O'Hearn logic? Do we have the 'master plan' for getting it
+  finished?" — then: "Yes, can you collect all this into a single 'master
+  plan' doc. You can spend significant effort making sure we have a register
+  of everything we have at hand, and pointers to the partial solutions that
+  are on branches. Generally a 'state of the union' doc which says exactly
+  what needs to be done to get to finished on the demo logic. The done state,
+  as you say is that our logic (1) is recognisably Reynolds/O'Hearn
+  reasoning, i.e a separation logic (2) it is built on a real, faithful iris
+  layer which can be extended later to build refined-cerberus (3) the iris
+  layer is built on cerberus-lean, and (4) the programs that are proved are
+  genuine outputs of the Cerberus-pipeline, i.e not synthetic core programs.
+  And that a reasonable PL expert reviewer would view the logic as good and
+  complete" — then: "Can you also write a companion document which says
+  exactly what we still need from cerberus-lean (including what we expect to
+  need semantically for refined-cerberus). You can take a look at what has
+  landed on main in the other repo" — then: "When you finish, send a
+  fable-class agent to audit and critique the plan, make sure all factual
+  claims are correct and the plan is credible". [AGENT]: the two documents
+  `docs/2026-09-07_demo-master-plan.md` and
+  `docs/2026-09-07_cerberus-lean-requests-register.md`, revision 2 after the
+  review `docs/2026-09-07_review-demo-master-plan.md` (fresh, hostile,
+  Fable-class: CREDIBLE WITH FIXES, C+ → B with the fixes; every one of its
+  seventeen fixes and its Part B recommendations applied). What the review
+  changed: (i) revision 1 quoted this definition of done as if from the
+  register — it is registered HERE, now; (ii) revision 1 attributed a
+  "v1a / call-free" boundary to R5 — R5's recorded disposition is "the v1 tag
+  waits for E6 proper (L5)"; the plan now RECOMMENDS an interim "v1a" tag as
+  its decision §7.1 and keeps E6 in the definition of done until the operator
+  rules; (iii) the companion's claim that `feature/concurrency` does not
+  touch the mirrored driver files rested on a vacuous diff (the generated
+  Lean is untracked in cerberus-lean) — the branch rewrites `driver.lem`
+  (708 lines) and three sibling `.lem` sources; its merge is a FORCED re-pin
+  with a scout; (iv) procedures without logical variables (Lane C §1.4) are
+  now graded as the plan's largest criterion-1 gap and proposed for Phase I
+  (§7.4); (v) V1-1 is stated in the [USER 2026-09-04 Q3] option (b) sense (a
+  machine-quoted data term of the pipeline's file plus an executable
+  round-trip; option (a) remains the named target) with the quoter/loader
+  named as new trusted components; (vi) globals/initialisers, the `Impl`
+  call row, the provenance model of record and the kill location added to
+  the RefinedC-layer needs. ERRATUM (two independent verifications, per the
+  errata rule): KOI A5 / ARCHITECTURE §3 / README said 117 `panic!` arms in
+  nine seams at the pin; the review's string-aware count and the
+  orchestrator's independent string-aware lexer both give 119 in TEN seams —
+  `CerbFloat.lean:183` and `:307` are code arms the L2 audit D-3 stripper
+  missed; corrected in all three documents. ENVIRONMENT FINDING at this
+  landing: the PRIMARY checkout's `.cerberus-ws` had DRIFTED to `f95ef8d9c`
+  (the pre-L2 pin; `setup-cerberus-dep.sh --check` → `A DRIFT … pin is
+  89f7e688…`, exit 1 — fail-closed, good) with a `.lake` dated 2026-09-02,
+  while KOI §E called it primed — the same stale-cache trap as the D6
+  incident; re-primed from the gated `codex-refinement` worktree and
+  re-verified (`C ok: 37 hand-written seams byte-identical to the pin`; FULL
+  gate `EXIT=0`, `export pins: 906 trio-exact`, 0 modules rebuilt, `ALL GATES
+  GREEN`); KOI §E amended with the finding and the rule. Also recorded: local
+  `main` is 107 commits ahead of `origin/main` (pushes are operator-gated).
+  Merge candidate: branch `docs/master-plan` at this commit, docs-only
+  (the two documents, the review, the KOI/ARCHITECTURE/README erratum, this
+  entry); pending [USER] sign-off — and the plan itself pending
+  ratification (its §7).
