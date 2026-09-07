@@ -1460,4 +1460,16 @@ theorem t4_certified_production [LemFuel] (hfuel : 917 ≤ LemFuel.fuel)
       hfuel
       fs args
   exact ⟨dres, dst', heq, hψ, hbl, hout, herr⟩
+
+/-- The while-loop corpus program at the partial judgment, from its total
+    certificate: the same premises, the variant index forgotten, and no
+    budget in the conclusion. -/
+theorem t4_wps_of_wpt [LemFuel] (hfuel : 0 < LemFuel.fuel) [SpikeGS .hasLC GF]
+    {M : MachineCtx} {p : Option sym} (hstd : StdE3 M.file)
+    (hex : ∀ x, resolveExtern M.extern x = x) (hQ : M.labelsAt p = t4Q) (hsup : 600 ≤ M.runState.sym_supply)
+    (f : Fmap sym value) (rest : List (Fmap sym value)) (hf : SymFrame f) :
+    iprop(allocBudget (GF := GF) (allocCost M.tagDefs intTy 4 + allocCost M.tagDefs intTy 4)) ⊢
+      wps M p (LabelSpecT.forget (t4LsT GF M.tagDefs)) emptyProcSpec (readoutPost ψT4) t4Main (f :: rest) :=
+  (t4_wpt hfuel hstd hex hQ hsup f rest hf).trans (wps_of_wpt _ _ _ _)
+
 end CerberusHeapLang

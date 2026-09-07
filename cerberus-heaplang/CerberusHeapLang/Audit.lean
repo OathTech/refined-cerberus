@@ -1081,6 +1081,7 @@ def trioExports : List Name := [
   ``CerberusHeapLang.t4_blockSpecsT,
   ``CerberusHeapLang.wpt_t4WhileEntry,
   ``CerberusHeapLang.t4_wpt,
+  ``CerberusHeapLang.t4_wps_of_wpt,
   ``CerberusHeapLang.t4_certified_production,
   -- L2 re-pin (2026-09-07, cerberus-heaplang/docs/2026-09-07_l2-repin-notes.md):
   -- the thirteen shipped-constant corollaries (Shipped.lean) and the two
