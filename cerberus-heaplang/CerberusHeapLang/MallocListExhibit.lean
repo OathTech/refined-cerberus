@@ -764,57 +764,26 @@ variable (loc : CerbLocation.Loc) (ann ra : core_run_annotation)
     (a `Frag` head) then two `store_op`s at `PePure` operands and a `run`;
     the free phase is the `PtrEq` memop head, the `if`, a `load_op`, a
     `kill_op` (dynamic kind) and a `run`. -/
-theorem mlBody_frag [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) : Frag (mlBody loc ann ra mo al pref qbty bbty nbty ubty) := by
+theorem mlBody_frag : Frag (mlBody loc ann ra mo al pref qbty bbty nbty ubty) := by
   have hb : Frag (memopRedex [] PtrEq
       [Pexpr [] () (PEsym mlPSym), Pexpr [] () (PEval nullVal)]) :=
     .memop_op rfl (.sym _ _) (.val _ _)
-      (by rw [show peDepth (Pexpr ([] : List annot) () (PEsym mlPSym)) = 1
-          from rfl]; omega)
-      (by rw [show peDepth (Pexpr ([] : List annot) () (PEval nullVal)) = 1
-          from rfl]; omega)
   refine .if_ (PePure.of_isPePure rfl)
-    (by rw [show peDepth mlGuardPe = 2 from rfl]; omega)
     (.sseq_sym .alloc
       (.sseq
-        (.store_op rfl (.sym [] mlQSym) (.sym [] mlISym)
-          (by rw [show peDepth (Pexpr ([] : List annot) () (PEsym mlQSym)) = 1
-              from rfl]; omega)
-          (by rw [show peDepth (Pexpr ([] : List annot) () (PEsym mlISym)) = 1
-              from rfl]; omega))
+        (.store_op rfl (.sym [] mlQSym) (.sym [] mlISym))
         (.sseq
-          (.store_op rfl (.arrayShift [] longTy (.sym _ _) (.val _ _)) (.sym [] mlPSym)
-            (by rw [show peDepth (lrShiftPe mlQSym) = 2 from rfl]; omega)
-            (by rw [show peDepth (Pexpr ([] : List annot) () (PEsym mlPSym)) = 1
-                from rfl]; omega))
-          (.run (PePure.all_of_isPePure rfl) (by
-            intro pe hpe
-            simp only [List.mem_cons, List.not_mem_nil, or_false] at hpe
-            rcases hpe with rfl | rfl
-            · rw [show peDepth mlDecPe = 2 from rfl]
-              omega
-            · rw [show peDepth (Pexpr ([] : List annot) () (PEsym mlQSym)) = 1 from rfl]
-              omega)))))
+          (.store_op rfl (.arrayShift [] longTy (.sym _ _) (.val _ _)) (.sym [] mlPSym))
+          (.run (PePure.all_of_isPePure rfl)))))
     (.sseq_sym hb
-      (.if_ (PePure.of_isPePure rfl) (by
-          rw [show peDepth (Pexpr ([] : List annot) () (PEsym mlBSym)) = 1
-            from rfl]
-          omega)
+      (.if_ (PePure.of_isPePure rfl)
         (.val_pure Vunit)
         (.sseq_spec
           (.load_op rfl
-            (.arrayShift [] longTy (.sym _ _) (.val _ _))
-            (by rw [show peDepth (lrShiftPe mlPSym) = 2 from rfl]; omega))
+            (.arrayShift [] longTy (.sym _ _) (.val _ _)))
           (.sseq
-            (.kill_op rfl (.sym [] mlPSym)
-              (by rw [show peDepth (Pexpr ([] : List annot) () (PEsym mlPSym)) = 1
-                  from rfl]; omega))
-            (.run (PePure.all_of_isPePure rfl) (by
-              intro pe hpe
-              simp only [List.mem_cons, List.not_mem_nil, or_false] at hpe
-              rcases hpe with rfl | rfl
-              · exact peDepth_val_le (hfuel := by omega) _ _
-              · rw [show peDepth (Pexpr ([] : List annot) () (PEsym mlNSym)) = 1 from rfl]
-                omega))))))
+            (.kill_op rfl (.sym [] mlPSym))
+            (.run (PePure.all_of_isPePure rfl))))))
 
 theorem mlBody_pot : pot (mlBody loc ann ra mo al pref qbty bbty nbty ubty) = 25 := rfl
 
@@ -1739,12 +1708,18 @@ theorem malloc_list_certified_production [LemFuel] (halign : 0 < al) (sup : Nat)
           rw [procCtxF_labels hQprod] at hl
           obtain ⟨-, rfl⟩ := mlQ_inv loc0 empty_annotation ra mo al pref ibty pbty qbty bbty
             nbty ubty hl
-          exact mlBody_frag (hfuel := by omega) loc0 empty_annotation ra mo al pref qbty bbty nbty ubty)
+          exact mlBody_frag loc0 empty_annotation ra mo al pref qbty bbty nbty ubty)
+        (fun l params cont hl => by
+          rw [procCtxF_labels hQprod] at hl
+          obtain ⟨-, rfl⟩ := mlQ_inv loc0 empty_annotation ra mo al pref ibty pbty qbty bbty
+            nbty ubty hl
+          exact (Nat.le_trans (show evalDepth _ ≤ 2 from Nat.le_of_ble_eq_true rfl) (by omega)))
         (mlLsT al n)
         (mlProg loc0 empty_annotation ra mo al pref sbty ibty pbty qbty bbty nbty ubty n)
         fmapEmpty [] prodMem₀ (∅ : SpikeHeapF SpikeCell) (n.toNat * regionCost al 16)
-        (.save (saveParams_pure_of_vals rfl) (fun pe hp => by rw [mlParams_depth ibty pbty n pe hp]; omega)
-          (mlBody_frag (hfuel := by omega) loc0 empty_annotation ra mo al pref qbty bbty nbty ubty))
+        (.save (saveParams_pure_of_vals rfl)
+          (mlBody_frag loc0 empty_annotation ra mo al pref qbty bbty nbty ubty))
+        (Nat.le_trans (show evalDepth _ ≤ 2 from Nat.le_of_ble_eq_true rfl) (by omega))
         (prodMem₀_launchCoh _ (ml_budget_bridge al n hB))
         (ψML n)
         (mlCost n.toNat 0 + 1)

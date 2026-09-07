@@ -319,26 +319,20 @@ theorem frSum_depth :
 /-- `fib`'s body is in the fragment: the guard, the base case's PURE, the
     two calls bound at the plain-symbol binder (`Frag.call` head), the `save`
     and its PURE exit. -/
-theorem frBody_frag [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) :
+theorem frBody_frag :
     Frag (frBody ra xbty ybty sbty zbty) :=
   .if_ (PePure.of_isPePure rfl)
-    (by rw [show peDepth frGuard = 2 from rfl]; exact hfuel)
-    (.pure_sym (by omega))
-    (.sseq_sym (.call frDec1_pure (fun pe hp => by rw [frDec1_depth pe hp]; exact hfuel))
-      (.sseq_sym (.call frDec2_pure (fun pe hp => by rw [frDec2_depth pe hp]; exact hfuel))
-        (.save (frSum_pure zbty) (fun pe hp => by rw [frSum_depth zbty pe hp]; exact hfuel)
-          (.pure_sym (by omega)))))
+    .pure_sym
+    (.sseq_sym (.call frDec1_pure)
+      (.sseq_sym (.call frDec2_pure)
+        (.save (frSum_pure zbty)
+          .pure_sym)))
 
-theorem frMain_frag [LemFuel] (hfuel : 0 < LemFuel.fuel) : Frag (frMain ra n) :=
+theorem frMain_frag : Frag (frMain ra n) :=
   .call (fun pe hpe => by
       simp only [List.mem_cons, List.not_mem_nil, or_false] at hpe
       subst hpe
       exact .val _ _)
-    (fun pe hpe => by
-      simp only [List.mem_cons, List.not_mem_nil, or_false] at hpe
-      subst hpe
-      rw [show peDepth (Pexpr [] () (PEval (ivVal n))) = 1 from rfl]
-      omega)
 
 theorem frBody_pot : pot (frBody ra xbty ybty sbty zbty) = 12 := rfl
 theorem frMain_pot : pot (frMain ra n) = 2 := rfl
@@ -346,16 +340,30 @@ theorem frMain_pot : pot (frMain ra n) = 2 := rfl
 /-- THE PROCEDURE WELL-FORMEDNESS PREMISE at the production context: both
     bodies in the cone at the caller's ambient fuel of at least two; `fib`'s one label body
     (`pure(z)`) too; `main`'s fiber empty. -/
-theorem frCtx_fragProcs [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) (sup : Nat) : (frCtx ra n nbty xbty ybty sbty zbty sup).FragProcs where
+theorem frCtx_fragProcs (sup : Nat) : (frCtx ra n nbty xbty ybty sbty zbty sup).FragProcs where
   body g params body hg := by
     rcases frFile_lookup_inv ra n nbty xbty ybty sbty zbty hg with ⟨-, -, rfl⟩ | ⟨-, -, rfl⟩
-    · exact frMain_frag (hfuel := by omega) ra n
-    · exact frBody_frag (hfuel := hfuel) ra xbty ybty sbty zbty
+    · exact frMain_frag ra n
+    · exact frBody_frag ra xbty ybty sbty zbty
   labels g params body _ l params' cont hl := by
     rcases frCtx_labels_cases ra n nbty xbty ybty sbty zbty sup g with h | h
     · rw [h] at hl
       obtain ⟨-, rfl⟩ := frQ_lookup_inv zbty hl
-      exact .pure_sym (by omega)
+      exact .pure_sym
+    · rw [h, show lookupLabel fmapEmpty l = none from rfl] at hl
+      cases hl
+
+/-- The procedure bodies' and label bodies' evaluator depth (R2): within two passes. -/
+theorem frCtx_procsDepth [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) (sup : Nat) :
+    (frCtx ra n nbty xbty ybty sbty zbty sup).ProcsDepth LemFuel.fuel where
+  body g params body hg := by
+    rcases frFile_lookup_inv ra n nbty xbty ybty sbty zbty hg with ⟨-, -, rfl⟩ | ⟨-, -, rfl⟩ <;>
+      exact Nat.le_trans (Nat.le_of_ble_eq_true rfl) hfuel
+  labels g params body _ l params' cont hl := by
+    rcases frCtx_labels_cases ra n nbty xbty ybty sbty zbty sup g with h | h
+    · rw [h] at hl
+      obtain ⟨-, rfl⟩ := frQ_lookup_inv zbty hl
+      exact Nat.le_trans (Nat.le_of_ble_eq_true rfl) hfuel
     · rw [h, show lookupLabel fmapEmpty l = none from rfl] at hl
       cases hl
 
@@ -825,9 +833,13 @@ theorem fib_rec_certified [LemFuel] (hn : 0 ≤ n) (fs : CerbFS.FsState) (args :
         rw [show (prodCtl sup).proc = some mainSym from rfl, frCtx_labels_main,
           show lookupLabel fmapEmpty l = none from rfl] at hl
         cases hl)
-      (frCtx_fragProcs (hfuel := by omega) ra n nbty xbty ybty sbty zbty sup)
+      (fun l params cont hl => by
+        rw [show (prodCtl sup).proc = some mainSym from rfl, frCtx_labels_main,
+          show lookupLabel fmapEmpty l = none from rfl] at hl
+        cases hl)
+      (frCtx_fragProcs ra n nbty xbty ybty sbty zbty sup) (frCtx_procsDepth (hfuel := hfuel) ra n nbty xbty ybty sbty zbty sup)
       (frMain ra n) fmapEmpty [] prodMem₀ (∅ : SpikeHeapF SpikeCell)
-      (frMain_frag (hfuel := by omega) ra n)
+      (frMain_frag ra n) (Nat.le_trans (Nat.le_of_ble_eq_true rfl) hfuel)
       (coh_empty prodMem₀)
       (fun v _ => v = ivVal (fibSpec n.toNat))
       ?_ (th₀ := prodThread (frMain ra n))
@@ -862,12 +874,12 @@ theorem fib_rec_certified_production [LemFuel] (hn : 0 ≤ n)
     (fun v _ => v = ivVal (fibSpec n.toNat)) (fibRounds n.toNat + 2)
     (wpt_driver_done_procs (hfuel := by omega) (GF := SpikeGF)
       (M₀ := frCtx ra n nbty xbty ybty sbty zbty sup) rfl rfl
-      (frCtx_fragProcs (hfuel := by omega) ra n nbty xbty ybty sbty zbty sup)
+      (frCtx_fragProcs ra n nbty xbty ybty sbty zbty sup) (frCtx_procsDepth (hfuel := by omega) ra n nbty xbty ybty sbty zbty sup)
       (th₀ := prodThread (frMain ra n))
       (frFile_lookup_main ra n nbty xbty ybty sbty zbty) (prodCtl sup).execLoc (prodCtl sup).curLoc (prodCtl sup).sup
       (Nat.le_refl _) frSpecT frLsT
       (frMain ra n) fmapEmpty [] prodMem₀ (∅ : SpikeHeapF SpikeCell) 0
-      (frMain_frag (hfuel := by omega) ra n)
+      (frMain_frag ra n) (Nat.le_trans (show evalDepth _ ≤ 1 from Nat.le_of_ble_eq_true rfl) (by omega))
       (prodMem₀_launchCoh 0 (Nat.zero_le _))
       (fun v _ => v = ivVal (fibSpec n.toNat)) (fibRounds n.toNat + 2)
       (by

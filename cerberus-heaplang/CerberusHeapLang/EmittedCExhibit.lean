@@ -143,11 +143,6 @@ def progCE3 (n : Int) : CoreExpr :=
     (Esave (retSymC, lintC) [(rSymC, ((lintC, none), lintPe 0))]
       (Expr [] (Epure (psymC rSymC))))))))))))))))))))))
 
-/-- The evaluator-fuel bound at an authored operand (its depth is tiny). -/
-theorem depLeC [LemFuel] (hfuel : 26 ≤ LemFuel.fuel)
-    {pe : generic_pexpr Unit sym} (h : peDepth pe ≤ 26) :
-    peDepth pe ≤ LemFuel.fuel := Nat.le_trans h hfuel
-
 theorem peDepth_lintPe (n : Int) : peDepth (lintPe n) = 2 := rfl
 
 /-- Two depth-one arguments plus the loaded conversion's library budget. -/
@@ -174,33 +169,30 @@ theorem retQ_inv {l : sym} {params : List (sym × core_base_type)} {cont : CoreE
 
 /-! ## Cone membership (the whole family) -/
 
-theorem progCE3_frag [LemFuel] (hfuel : 26 ≤ LemFuel.fuel) (n : Int) : Frag (progCE3 n) :=
+theorem progCE3_frag (n : Int) : Frag (progCE3 n) :=
   .sseq_sym
-    (.create_op rfl (.ctorTy [] Civalignof rfl [] intTy) (.val [] (Vctype intTy))
-      (depLeC (by omega) (by decide)) (peDepth_val_le _ _ (by omega)))
+    (.create_op rfl (.ctorTy [] Civalignof rfl [] intTy) (.val [] (Vctype intTy)))
     (.sseq_sym
-      (.bound (.pure_op rfl (PePure.of_isPePure rfl) (depLeC (by omega) (by rw [peDepth_lintPe]; decide))))
+      (.bound (.pure_op rfl (PePure.of_isPePure rfl)))
       (.sseq
-        (.store_op rfl (.sym [] xSymC) (PePure.of_isPePure rfl) (depLeC (by omega) (by decide)) (depLeC (by omega) (by decide)))
+        (.store_op rfl (.sym [] xSymC) (PePure.of_isPePure rfl))
         (.sseq_sym
           (.bound (.wseq_sym
-            (.pure_op rfl (.sym [] xSymC) (depLeC (by omega) (by decide)))
-            (.load_op rfl (.sym [] pSymC) (depLeC (by omega) (by decide)))))
+            (.pure_op rfl (.sym [] xSymC))
+            (.load_op rfl (.sym [] pSymC))))
           (.sseq_sym
             (.bound (.wseq_tuple
-              (.pure_op rfl (PePure.of_isPePure rfl) (depLeC (by omega) (by decide)))
-              (.pure_op rfl (PePure.of_isPePure rfl) (depLeC (by omega) (by decide)))))
+              (.pure_op rfl (PePure.of_isPePure rfl))
+              (.pure_op rfl (PePure.of_isPePure rfl))))
             (.sseq
-              (.kill_op rfl (.sym [] xSymC) (depLeC (by omega) (by decide)))
+              (.kill_op rfl (.sym [] xSymC))
               (.sseq
-                (.run (fun pe h => by rcases List.mem_singleton.mp h with rfl; exact PePure.of_isPePure rfl)
-                  (fun pe h => by rcases List.mem_singleton.mp h with rfl; exact depLeC (by omega) (by decide)))
+                (.run (fun pe h => by rcases List.mem_singleton.mp h with rfl; exact PePure.of_isPePure rfl))
                 (.sseq
-                  (.kill_op rfl (.sym [] xSymC) (depLeC (by omega) (by decide)))
+                  (.kill_op rfl (.sym [] xSymC))
                   (.sseq (.val_pure Vunit)
                     (.save (fun pe h => by rcases List.mem_singleton.mp h with rfl; exact PePure.of_isPePure rfl)
-                      (fun pe h => by rcases List.mem_singleton.mp h with rfl; exact depLeC (by omega) (by decide))
-                      (.pure_op rfl (.sym [] rSymC) (depLeC (by omega) (by decide))))))))))))
+                      (.pure_op rfl (.sym [] rSymC)))))))))))
 
 /-! ## The evaluator at the program's operands -/
 
@@ -756,10 +748,14 @@ theorem exhibitC_prod_e3 [LemFuel] (hfuel : 30 ≤ LemFuel.fuel) (sup : Nat) (fs
         (fun l params cont hl => by
           rw [hlbl] at hl
           obtain ⟨-, rfl⟩ := retQ_inv hl
-          exact .pure_op rfl (.sym [] rSymC) (depLeC (by omega) (by decide)))
+          exact .pure_op rfl (.sym [] rSymC))
+        (fun l params cont hl => by
+          rw [hlbl] at hl
+          obtain ⟨-, rfl⟩ := retQ_inv hl
+          exact (Nat.le_trans (show evalDepth _ ≤ 1 from Nat.le_of_ble_eq_true rfl) (by omega)))
         (cLsT SpikeGF)
         (progCE3 3) fmapEmpty [] prodMem₀ (∅ : SpikeHeapF SpikeCell)
-        (allocCost fmapEmpty intTy 4) (progCE3_frag (by omega) 3)
+        (allocCost fmapEmpty intTy 4) (progCE3_frag 3) (Nat.le_trans (show evalDepth _ ≤ 26 from Nat.le_of_ble_eq_true rfl) (by omega))
         (prodMem₀_launchCoh _ prod_one_int_budget_fits)
         ψCE3 28
         (by

@@ -1170,40 +1170,21 @@ variable (loc : CerbLocation.Loc) (ann ra : core_run_annotation)
   (mo : memory_order) (pbty cbty bbty nbty ubty : core_base_type)
 
 /-- The label body is in the certified cone. -/
-theorem lrBody_fragJ [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) :
+theorem lrBody_fragJ :
     Frag (lrBody loc ann ra mo bbty nbty ubty) := by
   have hb : Frag (memopRedex [] PtrEq
       [Pexpr [] () (PEsym lrCurSym), Pexpr [] () (PEval nullVal)]) :=
     .memop_op rfl (.sym _ _) (.val _ _)
-      (by rw [show peDepth (Pexpr ([] : List annot) () (PEsym lrCurSym)) = 1
-          from rfl]; omega)
-      (by rw [show peDepth (Pexpr ([] : List annot) () (PEval nullVal)) = 1
-          from rfl]; omega)
   refine .sseq_sym hb
-    (.if_ (PePure.of_isPePure rfl) (by
-        rw [show peDepth (Pexpr ([] : List annot) () (PEsym lrBSym)) = 1
-          from rfl]
-        omega)
-      (.pure_sym (by omega))
+    (.if_ (PePure.of_isPePure rfl)
+      .pure_sym
       (.sseq_spec
         (.load_op rfl
-          (.arrayShift [] longTy (.sym _ _) (.val _ _))
-          (by rw [show peDepth (lrShiftPe lrCurSym) = 2 from rfl]; omega))
+          (.arrayShift [] longTy (.sym _ _) (.val _ _)))
         (.sseq
           (.store_op rfl
-            (.arrayShift [] longTy (.sym _ _) (.val _ _)) (.sym _ _)
-            (by rw [show peDepth (lrShiftPe lrCurSym) = 2 from rfl]; omega)
-            (by rw [show peDepth (Pexpr ([] : List annot) ()
-                (PEsym lrPrevSym)) = 1 from rfl]; omega))
-          (.run (PePure.all_of_isPePure rfl) (by
-            intro pe hpe
-            simp only [List.mem_cons, List.not_mem_nil, or_false] at hpe
-            rcases hpe with rfl | rfl <;>
-              (first
-                | (rw [show peDepth (Pexpr ([] : List annot) ()
-                    (PEsym lrCurSym)) = 1 from rfl]; omega)
-                | (rw [show peDepth (Pexpr ([] : List annot) ()
-                    (PEsym lrNSym)) = 1 from rfl]; omega)))))))
+            (.arrayShift [] longTy (.sym _ _) (.val _ _)) (.sym _ _))
+          (.run (PePure.all_of_isPePure rfl)))))
 
 /-! ## Seeding: a pure chain description of the initial cell map
 (IDENTITY-INDEXED since Phase 4: the map's keys ARE the chain's
@@ -1493,10 +1474,15 @@ theorem list_reverse_certified [LemFuel] (hfuel : 2 ≤ LemFuel.fuel)
     (fun l params cont hl => by
       rw [hlbl] at hl
       obtain ⟨-, rfl⟩ := lrQ_inv loc ann ra mo pbty cbty bbty nbty ubty hl
-      exact lrBody_fragJ (hfuel := hfuel) loc ann ra mo bbty nbty ubty)
-    (procCtx_fragProcs _)
+      exact lrBody_fragJ loc ann ra mo bbty nbty ubty)
+    (fun l params cont hl => by
+      rw [hlbl] at hl
+      obtain ⟨-, rfl⟩ := lrQ_inv loc ann ra mo pbty cbty bbty nbty ubty hl
+      exact (Nat.le_trans (Nat.le_of_ble_eq_true rfl) hfuel))
+    (procCtx_fragProcs _) (procCtx_procsDepth _ _)
     prog fmapEmpty [] σ₀ (Iris.Std.PartialMap.union m₀ R)
-    (.save (saveParams_pure_of_vals rfl) (fun pe hp => by rw [saveParams_depth_of_vals rfl pe hp]; omega) (lrBody_fragJ (hfuel := hfuel) loc ann ra mo bbty nbty ubty))
+    (.save (saveParams_pure_of_vals rfl) (lrBody_fragJ loc ann ra mo bbty nbty ubty))
+    (Nat.le_trans (Nat.le_of_ble_eq_true rfl) hfuel)
     hcoh
     (fun v σ' => ∃ Q : CellMap, (∃ p' : CerbMem.PointerValue,
         v = ptrVal p' ∧ SeedChain Q p' ns.reverse) ∧ Q ##ₘ R ∧

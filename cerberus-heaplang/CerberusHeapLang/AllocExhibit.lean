@@ -178,10 +178,9 @@ def createKillProg (al : Int) (pref : prefix0) : CoreExpr :=
 
 /-- Cone membership: `create` is a `Frag` head; the kill is the static
     kill at a symbol operand. -/
-theorem createKillProg_frag [LemFuel] (hfuel : 0 < LemFuel.fuel) (al : Int) (pref : prefix0) : Frag (createKillProg al pref) :=
+theorem createKillProg_frag (al : Int) (pref : prefix0) : Frag (createKillProg al pref) :=
   .sseq_sym .create
-    (.kill_op rfl (.sym [] pKSym)
-      (by rw [show peDepth (Pexpr ([] : List annot) () (PEsym pKSym)) = 1 from rfl]; omega))
+    (.kill_op rfl (.sym [] pKSym))
 
 /-- The head frame after `p` is bound looks `p` up. -/
 theorem createKill_lookup_p {f : Fmap sym value} (hf : SymFrame f)
@@ -255,10 +254,9 @@ def allocFreeProg (al n : Int) (pref : prefix0) : CoreExpr :=
 
 /-- Cone membership: `alloc` is a `Frag` head; the free is the kill at a
     symbol operand (any kind since K3). -/
-theorem allocFreeProg_frag [LemFuel] (hfuel : 0 < LemFuel.fuel) (al n : Int) (pref : prefix0) : Frag (allocFreeProg al n pref) :=
+theorem allocFreeProg_frag (al n : Int) (pref : prefix0) : Frag (allocFreeProg al n pref) :=
   .sseq_sym .alloc
-    (.kill_op rfl (.sym [] pFSym)
-      (by rw [show peDepth (Pexpr ([] : List annot) () (PEsym pFSym)) = 1 from rfl]; omega))
+    (.kill_op rfl (.sym [] pFSym))
 
 /-- The head frame after `p` is bound looks `p` up. -/
 theorem allocFree_lookup_p {f : Fmap sym value} (hf : SymFrame f)

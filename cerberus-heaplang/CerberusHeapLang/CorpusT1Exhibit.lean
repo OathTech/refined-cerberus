@@ -822,10 +822,14 @@ theorem t1_certified_production [LemFuel] (hfuel : 50 ≤ LemFuel.fuel) (sup : N
         (fun l params cont hl => by
           rw [hlbl] at hl
           obtain ⟨-, rfl⟩ := t1RetQ_inv hl
-          exact .pure_op rfl (.sym [] a518) (CorpusE0.depLe (by omega) (by decide)))
+          exact .pure_op rfl (.sym [] a518))
+        (fun l params cont hl => by
+          rw [hlbl] at hl
+          obtain ⟨-, rfl⟩ := t1RetQ_inv hl
+          exact (Nat.le_trans (show evalDepth _ ≤ 1 from Nat.le_of_ble_eq_true rfl) (by omega)))
         (t1LsT SpikeGF)
         t1Main fmapEmpty [] prodMem₀ (∅ : SpikeHeapF SpikeCell)
-        (allocCost fmapEmpty intTy 4 + allocCost fmapEmpty intTy 4) (t1Main_frag (by omega))
+        (allocCost fmapEmpty intTy 4 + allocCost fmapEmpty intTy 4) t1Main_frag (Nat.le_trans (show evalDepth _ ≤ 40 from Nat.le_of_ble_eq_true rfl) (by omega))
         (prodMem₀_launchCoh _ prod_two_int_budget_fits)
         ψT1 48
         (by

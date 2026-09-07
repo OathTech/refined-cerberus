@@ -527,32 +527,24 @@ def trProg (loc : CerbLocation.Loc) (ann : core_run_annotation)
 /-- Cone membership: sym-binder over a value, two Specified-binder
     loads, two wildcard stores, PEsym exit — all through the one
     unified cone. ZERO new constructors. -/
-theorem trProg_frag [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) (loc : CerbLocation.Loc) (ann : core_run_annotation)
+theorem trProg_frag (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (mo : memory_order) (xbty ybty bbty ubty : core_base_type)
     (px : CerbMem.PointerValue) :
     Frag (trProg loc ann mo xbty ybty bbty ubty px) := by
   refine .sseq_sym (.val_pure _)
     (.sseq_spec
       (.load_op rfl
-        (.arrayShift [] longTy (.sym _ _) (.val _ _))
-        (by rw [show peDepth (trShift1 trXSym) = 2 from rfl]; omega))
+        (.arrayShift [] longTy (.sym _ _) (.val _ _)))
       (.sseq_spec
         (.load_op rfl
-          (.arrayShift [] longTy (.sym _ _) (.val _ _))
-          (by rw [show peDepth (trShift2 trYSym) = 2 from rfl]; omega))
+          (.arrayShift [] longTy (.sym _ _) (.val _ _)))
         (.sseq
           (.store_op rfl
-            (.arrayShift [] longTy (.sym _ _) (.val _ _)) (.sym _ _)
-            (by rw [show peDepth (trShift1 trXSym) = 2 from rfl]; omega)
-            (by rw [show peDepth (Pexpr ([] : List annot) ()
-                (PEsym trBSym)) = 1 from rfl]; omega))
+            (.arrayShift [] longTy (.sym _ _) (.val _ _)) (.sym _ _))
           (.sseq
             (.store_op rfl
-              (.arrayShift [] longTy (.sym _ _) (.val _ _)) (.sym _ _)
-              (by rw [show peDepth (trShift2 trYSym) = 2 from rfl]; omega)
-              (by rw [show peDepth (Pexpr ([] : List annot) ()
-                  (PEsym trXSym)) = 1 from rfl]; omega))
-            (.pure_sym (by omega))))))
+              (.arrayShift [] longTy (.sym _ _) (.val _ _)) (.sym _ _))
+            .pure_sym))))
 
 /-! ## Frames and lookups -/
 
@@ -1174,9 +1166,9 @@ theorem tree_rotate_certified [LemFuel] (hfuel : 2 ≤ LemFuel.fuel)
         Sat fmapEmpty σ' (union Q R)) := by
   intro prog
   refine (engine_adequacy (hfuel := hfuel) (GF := SpikeGF) (M := spikeCtx) rfl rfl (ctl := spikeCtl) rfl
-    spikeCtx_labels_frag spikeCtx_fragProcs
+    spikeCtx_labels_frag (spikeCtx_labels_depth _) spikeCtx_fragProcs (spikeCtx_procsDepth _)
     prog fmapEmpty [] σ₀ (union m₀ R)
-    (trProg_frag (hfuel := hfuel) loc ann mo xbty ybty bbty ubty px)
+    (trProg_frag loc ann mo xbty ybty bbty ubty px) (Nat.le_trans (Nat.le_of_ble_eq_true rfl) hfuel)
     hcoh
     (fun v σ' => ∃ Q : CellMap, (∃ p' : CerbMem.PointerValue,
         v = ptrVal p' ∧

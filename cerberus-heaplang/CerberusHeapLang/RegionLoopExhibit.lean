@@ -256,20 +256,12 @@ variable (loc : CerbLocation.Loc) (ann ra : core_run_annotation)
 /-- The label body is in the certified cone: `alloc` is a `Frag` head
     (the bound region pointer), the free is `Frag.kill_op` at the symbol
     (dynamic kind), the guard and the jump argument are `PePure` binops. -/
-theorem rlBody_frag [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) : Frag (rlBody loc ann ra al sz pref pbty ubty) :=
+theorem rlBody_frag : Frag (rlBody loc ann ra al sz pref pbty ubty) :=
   .if_ (PePure.of_isPePure rfl)
-    (by rw [show peDepth rlGuardPe = 2 from rfl]; omega)
     (.sseq_sym .alloc
       (.sseq
-        (.kill_op rfl (.sym [] rlPSym)
-          (by rw [show peDepth (Pexpr ([] : List annot) () (PEsym rlPSym)) = 1
-              from rfl]; omega))
-        (.run (PePure.all_of_isPePure rfl) (by
-          intro pe hpe
-          simp only [List.mem_cons, List.not_mem_nil, or_false] at hpe
-          subst hpe
-          rw [show peDepth rlDecPe = 2 from rfl]
-          omega))))
+        (.kill_op rfl (.sym [] rlPSym))
+        (.run (PePure.all_of_isPePure rfl))))
     (frag_ofVal (.pure Vunit))
 
 theorem rlBody_pot : pot (rlBody loc ann ra al sz pref pbty ubty) = 10 := rfl
@@ -648,12 +640,17 @@ theorem region_loop_certified_production [LemFuel] (sup : Nat)
         (fun l params cont hl => by
           rw [procCtxF_labels hQprod] at hl
           obtain ⟨-, rfl⟩ := rlQ_inv loc0 empty_annotation ra al sz pref ibty pbty ubty hl
-          exact rlBody_frag (hfuel := by omega) loc0 empty_annotation ra al sz pref pbty ubty)
+          exact rlBody_frag loc0 empty_annotation ra al sz pref pbty ubty)
+        (fun l params cont hl => by
+          rw [procCtxF_labels hQprod] at hl
+          obtain ⟨-, rfl⟩ := rlQ_inv loc0 empty_annotation ra al sz pref ibty pbty ubty hl
+          exact (Nat.le_trans (show evalDepth _ ≤ 2 from Nat.le_of_ble_eq_true rfl) (by omega)))
         (rlLsT al sz)
         (rlProg loc0 empty_annotation ra al sz pref sbty ibty pbty ubty n) fmapEmpty []
         prodMem₀ (∅ : SpikeHeapF SpikeCell) (n.toNat * regionCost al sz)
-        (.save (saveParams_pure_of_vals rfl) (fun pe hp => by rw [saveParams_depth_of_vals rfl pe hp]; omega)
-          (rlBody_frag (hfuel := by omega) loc0 empty_annotation ra al sz pref pbty ubty))
+        (.save (saveParams_pure_of_vals rfl)
+          (rlBody_frag loc0 empty_annotation ra al sz pref pbty ubty))
+        (Nat.le_trans (show evalDepth _ ≤ 2 from Nat.le_of_ble_eq_true rfl) (by omega))
         (prodMem₀_launchCoh _ hB)
         (fun v _ => v = Vunit)
         (rlCost n.toNat + 1)

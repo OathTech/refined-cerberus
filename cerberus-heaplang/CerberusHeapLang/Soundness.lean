@@ -9294,8 +9294,8 @@ rule; E1 mirrors it (`Step.sseq_sym_annot`, certified by
 `step_ctx_beta_sym_annot`), so the head grammar is the fragment itself
 and `BareHead` is retired. -/
 
-inductive Frag [LemFuel] : CoreExpr → Prop where
-  | val_pure {a b : List _root_.annot} (v : value) : Frag (Expr a (Epure (Pexpr b () (PEval v))))
+inductive FragFuel [LemFuel] : CoreExpr → Prop where
+  | val_pure {a b : List _root_.annot} (v : value) : FragFuel (Expr a (Epure (Pexpr b () (PEval v))))
   /-- Store at canonical evaluated operands, at EITHER locking mode:
       `lk` is unconstrained, so the fragment ADMITS the locking store
       `Store0 true …`, whose engine success flips the allocation's
@@ -9308,13 +9308,13 @@ inductive Frag [LemFuel] : CoreExpr → Prop where
       (K2) involve no store, so `lk` does not arise there. -/
   | store {an : List _root_.annot} {loc : CerbLocation.Loc} {ann : core_run_annotation} {lk : Bool}
       {ty : ctype} {pv : CerbMem.PointerValue} {cv : value} {mo : memory_order} :
-      Frag (storeRedex an loc ann lk ty pv cv mo)
+      FragFuel (storeRedex an loc ann lk ty pv cv mo)
   | load {an : List _root_.annot} {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
       {pv : CerbMem.PointerValue} {mo : memory_order} :
-      Frag (loadRedex an loc ann ty pv mo)
+      FragFuel (loadRedex an loc ann ty pv mo)
   | create {an : List _root_.annot} {loc : CerbLocation.Loc} {ann : core_run_annotation}
       {align : CerbMem.IntegerValue} {ty : ctype} {pref : prefix0} :
-      Frag (createRedex an loc ann align ty pref)
+      FragFuel (createRedex an loc ann align ty pref)
   /-- E1: `create` at operands in the covered grammar `PePure` that are
       not all values (the emitted `create(Ivalignof(ty), ty)`), within
       the evaluator's fuel — the ACTION_EVAL form (step_action's Create
@@ -9325,7 +9325,7 @@ inductive Frag [LemFuel] : CoreExpr → Prop where
       (hp1 : PePure pe1) (hp2 : PePure pe2)
       (hd1 : peDepth pe1 ≤ LemFuel.fuel)
       (hd2 : peDepth pe2 ≤ LemFuel.fuel) :
-      Frag (createOpRedex an loc ann pe1 pe2 pref)
+      FragFuel (createOpRedex an loc ann pe1 pe2 pref)
   /-- THE KILL at the canonical evaluated pointer operand, EITHER KIND
       (kill/free arc K2 static, K3 dynamic): `kill(static ty, p)` — C's
       end of automatic storage — and `free(p)` (`Kill Dynamic0`, the
@@ -9345,14 +9345,14 @@ inductive Frag [LemFuel] : CoreExpr → Prop where
       K3 (README "Scope, exactly"). -/
   | kill {an : List _root_.annot} {loc : CerbLocation.Loc} {ann : core_run_annotation} {kind : kill_kind}
       {pv : CerbMem.PointerValue} :
-      Frag (killRedex an loc ann kind pv)
+      FragFuel (killRedex an loc ann kind pv)
   /-- The kill of either kind at an operand in the covered grammar
       `PePure`, within the evaluator's fuel (the ACTION_EVAL form). -/
   | kill_op {an : List _root_.annot} {loc : CerbLocation.Loc} {ann : core_run_annotation} {kind : kill_kind}
       {pe : generic_pexpr Unit sym}
       (hnv : valueFromPexpr pe = none) (hp : PePure pe)
       (hdp : peDepth pe ≤ LemFuel.fuel) :
-      Frag (killOpRedex an loc ann kind pe)
+      FragFuel (killOpRedex an loc ann kind pe)
   /-- DYNAMIC ALLOCATION at canonical evaluated INTEGER operands
       (kill/free arc K3): `alloc(al, n)` — Core's `Alloc0`, C's `malloc`
       (the region is untyped, dynamic and records the raw signed size).
@@ -9360,7 +9360,7 @@ inductive Frag [LemFuel] : CoreExpr → Prop where
       nonnegative size; membership alone does not establish that domain. -/
   | alloc {an : List _root_.annot} {loc : CerbLocation.Loc} {ann : core_run_annotation}
       {align size : CerbMem.IntegerValue} {pref : prefix0} :
-      Frag (allocRedex an loc ann align size pref)
+      FragFuel (allocRedex an loc ann align size pref)
   /-- Dynamic allocation at operands in the covered grammar `PePure`
       that are not all values, within the evaluator's fuel (the
       ACTION_EVAL form; mixed shapes included, as `store_op`). -/
@@ -9370,17 +9370,17 @@ inductive Frag [LemFuel] : CoreExpr → Prop where
       (hp1 : PePure pe1) (hp2 : PePure pe2)
       (hd1 : peDepth pe1 ≤ LemFuel.fuel)
       (hd2 : peDepth pe2 ≤ LemFuel.fuel) :
-      Frag (allocOpRedex an loc ann pe1 pe2 pref)
+      FragFuel (allocOpRedex an loc ann pe1 pe2 pref)
   | sseq {an pa : List _root_.annot} {bty : core_base_type} {e1 e2 : CoreExpr} :
-      Frag e1 → Frag e2 →
-      Frag (Expr an (Esseq (Pattern pa (CaseBase (none, bty))) e1 e2))
+      FragFuel e1 → FragFuel e2 →
+      FragFuel (Expr an (Esseq (Pattern pa (CaseBase (none, bty))) e1 e2))
   | annot {an : List _root_.annot} {ds : List dyn_annotation} {b : CoreExpr} :
-      Frag b → Frag (Expr an (Eannot ds b))
+      FragFuel b → FragFuel (Expr an (Eannot ds b))
   /-- E1: `bound(e)` — the emitted wrapper around every full-expression
       statement (`Ebound`; get_ctx's Ebound arm / `Cbound` frame,
       REMOVE-BOUND at a value, core_reduction.lem:563–568, 1214–1226). -/
   | bound {an : List _root_.annot} {b : CoreExpr} :
-      Frag b → Frag (Expr an (Ebound b))
+      FragFuel b → FragFuel (Expr an (Ebound b))
   /-- Esave at ANY initializers within the evaluator's fuel (the
       engine's TAU arm at value initializers, its EVAL arm otherwise —
       `Step.save`/`Step.save_eval`). `hd` is the same static
@@ -9393,7 +9393,7 @@ inductive Frag [LemFuel] : CoreExpr → Prop where
       {body : CoreExpr}
       (hp : ∀ pe ∈ saveParamPexprs ps, PePure pe)
       (hd : ∀ pe ∈ saveParamPexprs ps, peDepth pe ≤ LemFuel.fuel) :
-      Frag body → Frag (saveRedex an sb ps body)
+      FragFuel body → FragFuel (saveRedex an sb ps body)
   /-- Eif at a guard in the covered operand grammar `PePure`, within the
       evaluator's fuel (fragment closure, 2026-09-02: the operand grammar
       of every evaluating constructor is `PePure` — the mirror evaluator's
@@ -9401,98 +9401,98 @@ inductive Frag [LemFuel] : CoreExpr → Prop where
       classified in the engine, `complete_if`). -/
   | if_ {an : List _root_.annot} {g : generic_pexpr Unit sym} {e2 e3 : CoreExpr}
       (hpg : PePure g) (hdg : peDepth g ≤ LemFuel.fuel) :
-      Frag e2 → Frag e3 → Frag (ifRedex an g e2 e3)
+      FragFuel e2 → FragFuel e3 → FragFuel (ifRedex an g e2 e3)
   /-- Erun at arguments in `PePure`, within the evaluator's fuel. -/
   | run {an : List _root_.annot} {ra : core_run_annotation} {l : sym}
       {pes : List (generic_pexpr Unit sym)}
       (hpes : ∀ pe ∈ pes, PePure pe)
       (hdep : ∀ pe ∈ pes, peDepth pe ≤ LemFuel.fuel) :
-      Frag (runRedex an ra l pes)
+      FragFuel (runRedex an ra l pes)
   | sseq_spec {an pa pb : List _root_.annot} {x : sym} {bty : core_base_type}
       {e1 e2 : CoreExpr} :
-      Frag e1 → Frag e2 →
-      Frag (Expr an (Esseq (specPat pa pb x bty) e1 e2))
+      FragFuel e1 → FragFuel e2 →
+      FragFuel (Expr an (Esseq (specPat pa pb x bty) e1 e2))
   /-- E2: `pure(e)` at ANY operand in the covered grammar `PePure` that
       is not a value, within the evaluator's fuel (one_step0's Epure EVAL
       arm; `Step.pure_eval`). Subsumes E1's plain-symbol row
-      (`Frag.pure_sym`, now a theorem). -/
+      (`FragFuel.pure_sym`, now a theorem). -/
   | pure_op {an : List _root_.annot} {pe : generic_pexpr Unit sym}
       (hnv : valueFromPexpr pe = none) (hp : PePure pe)
       (hd : peDepth pe ≤ LemFuel.fuel) :
-      Frag (pureRedex an pe)
+      FragFuel (pureRedex an pe)
   /-- E2: strong sequencing at a flat TUPLE binder, any fragment head
       (`Step.sseq_tuple_*`; a non-tuple head is the binding PANIC,
       `complete_beta_tuple`). -/
   | sseq_tuple {an pa : List _root_.annot} {ls : List TupleLeaf} {e1 e2 : CoreExpr} :
-      Frag e1 → Frag e2 →
-      Frag (Expr an (Esseq (tuplePat pa ls) e1 e2))
+      FragFuel e1 → FragFuel e2 →
+      FragFuel (Expr an (Esseq (tuplePat pa ls) e1 e2))
   /-- E2: weak sequencing at a flat tuple binder — the corpus's `let weak
       (a, b) = …` (`Step.wseq_tuple_*`). -/
   | wseq_tuple {an pa : List _root_.annot} {ls : List TupleLeaf} {e1 e2 : CoreExpr} :
-      Frag e1 → Frag e2 →
-      Frag (Expr an (Ewseq (tuplePat pa ls) e1 e2))
+      FragFuel e1 → FragFuel e2 →
+      FragFuel (Expr an (Ewseq (tuplePat pa ls) e1 e2))
   /-- E2: weak sequencing at the plain-symbol binder — the corpus's `let
       weak p = pure(y) in load(…)` (`Step.wseq_sym_*`). -/
   | wseq_sym {an pa : List _root_.annot} {x : sym} {bty : core_base_type} {e1 e2 : CoreExpr} :
-      Frag e1 → Frag e2 →
-      Frag (Expr an (Ewseq (symPat pa x bty) e1 e2))
+      FragFuel e1 → FragFuel e2 →
+      FragFuel (Expr an (Ewseq (symPat pa x bty) e1 e2))
   | load_op {an : List _root_.annot} {loc : CerbLocation.Loc} {ann : core_run_annotation}
       {ty : ctype} {pe2 : generic_pexpr Unit sym} {mo : memory_order}
       (hnv2 : valueFromPexpr pe2 = none) (hp2 : PePure pe2)
       (hd2 : peDepth pe2 ≤ LemFuel.fuel) :
-      Frag (loadOpRedex an loc ann ty pe2 mo)
+      FragFuel (loadOpRedex an loc ann ty pe2 mo)
   /-- Strong sequencing at the plain-symbol binder, ANY fragment head
       (E1: both LETS betas at this binder are mirrored —
       `Step.sseq_sym_pure`, `Step.sseq_sym_annot`). -/
   | sseq_sym {an pa : List _root_.annot} {x : sym} {bty : core_base_type}
       {e1 e2 : CoreExpr} :
-      Frag e1 → Frag e2 →
-      Frag (Expr an (Esseq (symPat pa x bty) e1 e2))
+      FragFuel e1 → FragFuel e2 →
+      FragFuel (Expr an (Esseq (symPat pa x bty) e1 e2))
   | memop_vals {an : List _root_.annot} (v1 v2 : value) :
-      Frag (memopPtrEqVals an v1 v2)
+      FragFuel (memopPtrEqVals an v1 v2)
   | memop_op {an : List _root_.annot} {pe1 pe2 : generic_pexpr Unit sym}
       (hnv : valueFromPexprs [pe1, pe2] = none)
       (hp1 : PePure pe1) (hp2 : PePure pe2)
       (hd1 : peDepth pe1 ≤ LemFuel.fuel)
       (hd2 : peDepth pe2 ≤ LemFuel.fuel) :
-      Frag (memopRedex an PtrEq [pe1, pe2])
+      FragFuel (memopRedex an PtrEq [pe1, pe2])
   | store_op {an : List _root_.annot} {loc : CerbLocation.Loc} {ann : core_run_annotation}
       {ty : ctype} {pe2 pe3 : generic_pexpr Unit sym} {mo : memory_order}
       (hnv : valueFromPexprs [pe2, pe3] = none)
       (hp2 : PePure pe2) (hp3 : PePure pe3)
       (hd2 : peDepth pe2 ≤ LemFuel.fuel)
       (hd3 : peDepth pe3 ≤ LemFuel.fuel) :
-      Frag (storeOpRedex an loc ann ty pe2 pe3 mo)
+      FragFuel (storeOpRedex an loc ann ty pe2 pe3 mo)
   /-- Value-scrutinee Ecase, retaining all branches and the selected
       branch's fragment membership. The size premise is supplied by
       case_hbsz_of_branches without an ambient-fuel condition; it remains
       explicit here for the downstream size-accounting interface. -/
   | case_value {an b : List _root_.annot} {cval : value}
       {pats : List (pattern × CoreExpr)}
-      (hall : ∀ q ∈ pats, Frag q.2)
-      (hbr : ∀ e', select_case subst_sym_expr cval pats = some e' → Frag e')
+      (hall : ∀ q ∈ pats, FragFuel q.2)
+      (hbr : ∀ e', select_case subst_sym_expr cval pats = some e' → FragFuel e')
       (hbsz : ∀ e', select_case subst_sym_expr cval pats = some e' →
         esize e' ≤ esize (caseRedex an (Pexpr b () (PEval cval)) pats)) :
-      Frag (caseRedex an (Pexpr b () (PEval cval)) pats)
+      FragFuel (caseRedex an (Pexpr b () (PEval cval)) pats)
   /-- Weak sequencing at the wildcard pattern (the `sseq` clone). -/
   | wseq {an pa : List _root_.annot} {bty : core_base_type} {e1 e2 : CoreExpr} :
-      Frag e1 → Frag e2 →
-      Frag (Expr an (Ewseq (Pattern pa (CaseBase (none, bty))) e1 e2))
+      FragFuel e1 → FragFuel e2 →
+      FragFuel (Expr an (Ewseq (Pattern pa (CaseBase (none, bty))) e1 e2))
   /-- THE PROCEDURE CALL (calls arc C2): `Eproc` at a Core identifier,
       arguments in the covered grammar `PePure` within the evaluator's
       fuel (the engine evaluates ALL of them by `full_eval_pexpr'` in the
       PCALL round, Core_reduction.lean:484 col 18133). Any `f`: the
       unknown procedure and the arity mismatch are the engine's two
       `Illformed_program` KILLS, classified in Round.lean (`complete_call`),
-      not narrowed here. The callee's BODY is not a `Frag` premise — `Frag`
+      not narrowed here. The callee's BODY is not a `FragFuel` premise — `FragFuel`
       is a predicate on the expression, the body lives in the FILE — so
       adequacy through a call carries `MachineCtx.FragProcs` (Adequacy.lean:
-      every procedure the file declares has a `Frag` body within the
-      potential bound and `Frag` label bodies), the twin of `hQf`/`hQpot`. -/
+      every procedure the file declares has a `FragFuel` body within the
+      potential bound and `FragFuel` label bodies), the twin of `hQf`/`hQpot`. -/
   | call {an : List _root_.annot} {ra : core_run_annotation} {f : sym} {pes : List (generic_pexpr Unit sym)}
       (hpes : ∀ pe ∈ pes, PePure pe)
       (hdep : ∀ pe ∈ pes, peDepth pe ≤ LemFuel.fuel) :
-      Frag (callRedex an ra f pes)
+      FragFuel (callRedex an ra f pes)
   /-- E4: `unseq(e_1, …, e_n)` at fragment components, at least one,
       every component `ccallFree` (no `Eccall`, no expression-level
       `case` — the sibling condition that keeps `is_unseq_with_ccall`
@@ -9504,7 +9504,7 @@ inductive Frag [LemFuel] : CoreExpr → Prop where
       annotations is the engine's UB035 kill (`complete_unseq_vals`). -/
   | unseq {an : List _root_.annot} {es : List CoreExpr}
       (hne : es ≠ []) (hcc : ccallFreeList es = true) :
-      (∀ e ∈ es, Frag e) → Frag (Expr an (Eunseq es))
+      (∀ e ∈ es, FragFuel e) → FragFuel (Expr an (Eunseq es))
   /-- E5: the emitted NEGATIVE store `neg(store(ty, p, v))` at operands in
       the covered grammar not all values (every assignment statement,
       E0 §B.9: `let weak _: unit = neg(store(ty, p, conv_loaded_int(ty, v)))`).
@@ -9518,14 +9518,14 @@ inductive Frag [LemFuel] : CoreExpr → Prop where
       (hp2 : PePure pe2) (hp3 : PePure pe3)
       (hd2 : peDepth pe2 ≤ LemFuel.fuel)
       (hd3 : peDepth pe3 ≤ LemFuel.fuel) :
-      Frag (negStoreRedex an loc ann false ty pe2 pe3 mo)
+      FragFuel (negStoreRedex an loc ann false ty pe2 pe3 mo)
   /-- The negative store at canonical evaluated operands. Its rewrite
       introduces a symbol-read expression, which needs one evaluator pass
       to keep the execution within this fuel-adequate fragment. -/
   | neg_store {an : List _root_.annot} {loc : CerbLocation.Loc} {ann : core_run_annotation}
       {lk : Bool} {ty : ctype} {pv : CerbMem.PointerValue} {cv : value} {mo : memory_order}
       (hfuel : 0 < LemFuel.fuel) :
-      Frag (negActRedex an (Action loc ann
+      FragFuel (negActRedex an (Action loc ann
         (Store0 lk (Pexpr [] () (PEval (Vctype ty)))
                    (Pexpr [] () (PEval (Vobject (OVpointer pv))))
                    (Pexpr [] () (PEval cv)) mo)))
@@ -9535,7 +9535,7 @@ inductive Frag [LemFuel] : CoreExpr → Prop where
   | excluded_store {an : List _root_.annot} {n : Nat} {loc : CerbLocation.Loc}
       {ann : core_run_annotation} {lk : Bool} {ty : ctype} {pv : CerbMem.PointerValue}
       {cv : value} {mo : memory_order} :
-      Frag (excludedStoreRedex an n loc ann lk ty pv cv mo)
+      FragFuel (excludedStoreRedex an n loc ann lk ty pv cv mo)
   /-- E5: the excluded store at operands in `PePure` not all values (the
       ACTION_EVAL form under `process_action (Just n)`; `Step.excluded_store_eval`). -/
   | excluded_store_op {an : List _root_.annot} {n : Nat} {loc : CerbLocation.Loc}
@@ -9545,67 +9545,67 @@ inductive Frag [LemFuel] : CoreExpr → Prop where
       (hp2 : PePure pe2) (hp3 : PePure pe3)
       (hd2 : peDepth pe2 ≤ LemFuel.fuel)
       (hd3 : peDepth pe3 ≤ LemFuel.fuel) :
-      Frag (excludedStoreOpRedex an n loc ann ty pe2 pe3 mo)
+      FragFuel (excludedStoreOpRedex an n loc ann ty pe2 pe3 mo)
   /-- E5: expression-level `case` at a covered NON-value scrutinee (the
       corpus's `case a_510 of …`, `case (a_518, a_519) of …`): the EVAL
       "Ecase" round (`Step.case_eval`, core_reduction.lem:323–339) delivers
       the value-scrutinee node, so the branch premises are carried for
-      EVERY value the scrutinee may take (`hbr`/`hbsz`, `Frag.case_value`'s
-      pair quantified over `cval`; `Frag.case_op_hbsz` derives `hbsz` from
+      EVERY value the scrutinee may take (`hbr`/`hbsz`, `FragFuel.case_value`'s
+      pair quantified over `cval`; `FragFuel.case_op_hbsz` derives `hbsz` from
       the branches' sizes) and every branch body is in the fragment
       (`hall`, as at `case_value`). -/
   | case_op {an : List _root_.annot} {pe : generic_pexpr Unit sym}
       {pats : List (pattern × CoreExpr)}
       (hnv : valueFromPexpr pe = none) (hp : PePure pe) (hd : peDepth pe ≤ LemFuel.fuel)
-      (hall : ∀ q ∈ pats, Frag q.2)
-      (hbr : ∀ cval e', select_case subst_sym_expr cval pats = some e' → Frag e')
+      (hall : ∀ q ∈ pats, FragFuel q.2)
+      (hbr : ∀ cval e', select_case subst_sym_expr cval pats = some e' → FragFuel e')
       (hbsz : ∀ cval e', select_case subst_sym_expr cval pats = some e' →
         esize e' ≤ esize (caseRedex an pe pats)) :
-      Frag (caseRedex an pe pats)
+      FragFuel (caseRedex an pe pats)
   /-- E5: `nd(e_1, …, e_n)` at fragment alternatives, at least two — the
       elaborator's `Unspecified` alternative of every condition
       (`nd(pure(True), pure(False))`, translation.lem:3823/:3858). The
       engine's round is the scheduler FORK (`Step_nd2` → `ND.pick`),
       classified `ShippedRefusal.fork` (`complete_nd`); no rule. -/
   | nd {an : List _root_.annot} {es : List CoreExpr}
-      (h2 : 2 ≤ es.length) (hall : ∀ e ∈ es, Frag e) : Frag (ndRedex an es)
+      (h2 : 2 ≤ es.length) (hall : ∀ e ∈ es, FragFuel e) : FragFuel (ndRedex an es)
 
-theorem frag_ofValA [LemFuel] (w : SpikeValA) : Frag (ofValA w) := by
+theorem fragFuel_ofValA [LemFuel] (w : SpikeValA) : FragFuel (ofValA w) := by
   cases w with
   | pure a b v => exact .val_pure v
   | annot a a2 b ds v => exact .annot (.val_pure v)
 
-theorem frag_ofVal [LemFuel] (w : SpikeVal) : Frag (ofVal w) := frag_ofValA w.canon
+theorem fragFuel_ofVal [LemFuel] (w : SpikeVal) : FragFuel (ofVal w) := fragFuel_ofValA w.canon
 
-/-- E1's plain-symbol pure row, as an instance of `Frag.pure_op`. -/
-theorem Frag.pure_sym [LemFuel] {an pb : List _root_.annot} {x : sym}
+/-- E1's plain-symbol pure row, as an instance of `FragFuel.pure_op`. -/
+theorem FragFuel.pure_sym [LemFuel] {an pb : List _root_.annot} {x : sym}
     (hfuel : 0 < LemFuel.fuel) :
-    Frag (pureRedex an (Pexpr pb () (PEsym x))) :=
+    FragFuel (pureRedex an (Pexpr pb () (PEsym x))) :=
   .pure_op rfl (.sym pb x) (peDepth_sym_le pb x hfuel)
 
 /-- Inversion at a strong-sequencing node, ANY pattern: both operands are
     in the cone (the pattern-indexed rows share this shape; stated
     pattern-generically because `cases` cannot decide the tuple binder's
     `List.map leafPat` equation). -/
-theorem Frag.sseq_inv_any [LemFuel] {an : List _root_.annot} {pat : pattern} {e1 e2 : CoreExpr}
-    (hf : Frag (Expr an (Esseq pat e1 e2))) : Frag e1 ∧ Frag e2 := by
+theorem FragFuel.sseq_inv_any [LemFuel] {an : List _root_.annot} {pat : pattern} {e1 e2 : CoreExpr}
+    (hf : FragFuel (Expr an (Esseq pat e1 e2))) : FragFuel e1 ∧ FragFuel e2 := by
   cases hf <;> exact ⟨‹_›, ‹_›⟩
 
 /-- Inversion at a weak-sequencing node, any pattern. -/
-theorem Frag.wseq_inv_any [LemFuel] {an : List _root_.annot} {pat : pattern} {e1 e2 : CoreExpr}
-    (hf : Frag (Expr an (Ewseq pat e1 e2))) : Frag e1 ∧ Frag e2 := by
+theorem FragFuel.wseq_inv_any [LemFuel] {an : List _root_.annot} {pat : pattern} {e1 e2 : CoreExpr}
+    (hf : FragFuel (Expr an (Ewseq pat e1 e2))) : FragFuel e1 ∧ FragFuel e2 := by
   cases hf <;> exact ⟨‹_›, ‹_›⟩
 
-theorem Frag.annot_inv [LemFuel] {an : List _root_.annot} {ds : List dyn_annotation} {b : CoreExpr}
-    (hf : Frag (Expr an (Eannot ds b))) : Frag b := by
+theorem FragFuel.annot_inv [LemFuel] {an : List _root_.annot} {ds : List dyn_annotation} {b : CoreExpr}
+    (hf : FragFuel (Expr an (Eannot ds b))) : FragFuel b := by
   cases hf; assumption
 
-theorem Frag.bound_inv [LemFuel] {an : List _root_.annot} {b : CoreExpr}
-    (hf : Frag (Expr an (Ebound b))) : Frag b := by
+theorem FragFuel.bound_inv [LemFuel] {an : List _root_.annot} {b : CoreExpr}
+    (hf : FragFuel (Expr an (Ebound b))) : FragFuel b := by
   cases hf; assumption
 
-theorem Frag.unseq_inv [LemFuel] {an : List _root_.annot} {es : List CoreExpr}
-    (hf : Frag (Expr an (Eunseq es))) : es ≠ [] ∧ ccallFreeList es = true ∧ ∀ e ∈ es, Frag e := by
+theorem FragFuel.unseq_inv [LemFuel] {an : List _root_.annot} {es : List CoreExpr}
+    (hf : FragFuel (Expr an (Eunseq es))) : es ≠ [] ∧ ccallFreeList es = true ∧ ∀ e ∈ es, FragFuel e := by
   cases hf; exact ⟨‹_›, ‹_›, ‹_›⟩
 
 /-- E5: every fragment term is ccall-free — the fragment has no `Eccall`
@@ -9630,7 +9630,7 @@ theorem ccallFreeList_of_all {es : List CoreExpr}
     rw [ccallFreeList_cons, Bool.and_eq_true]
     exact ⟨h e (List.mem_cons_self ..), ih (fun r hr => h r (List.mem_cons_of_mem _ hr))⟩
 
-theorem Frag.ccallFree [LemFuel] {e : CoreExpr} (hf : Frag e) : ccallFree e = true := by
+theorem FragFuel.ccallFree [LemFuel] {e : CoreExpr} (hf : FragFuel e) : ccallFree e = true := by
   induction hf with
   | val_pure v => rfl
   | store => rfl
@@ -9673,9 +9673,9 @@ theorem Frag.ccallFree [LemFuel] {e : CoreExpr} (hf : Frag e) : ccallFree e = tr
     negative-action rewrite's `ctxA'`, core_reduction.lem:939–958: only the
     `Cannot` frames' dynamic-annotation exclusion lists change, which no
     fragment row reads) — yields a fragment term. -/
-theorem Frag.replug [LemFuel] {e : CoreExpr} {ctx : context} {r : CoreExpr}
-    (hd : Decomp e ctx r) (hf : Frag e) (n : Nat) {z : CoreExpr} (hz : Frag z) :
-    Frag (apply_ctx (add_exclusion n ctx) z) := by
+theorem FragFuel.replug [LemFuel] {e : CoreExpr} {ctx : context} {r : CoreExpr}
+    (hd : Decomp e ctx r) (hf : FragFuel e) (n : Nat) {z : CoreExpr} (hz : FragFuel z) :
+    FragFuel (apply_ctx (add_exclusion n ctx) z) := by
   induction hd with
   | root _ => exact hz
   | sseq _ ih =>
@@ -9703,7 +9703,7 @@ theorem Frag.replug [LemFuel] {e : CoreExpr} {ctx : context} {r : CoreExpr}
     exact .wseq_sym (ih hf1) hf2
   | @unseq an es1 e0 es2 ctx' r' hv2 hcc hd ih =>
     obtain ⟨-, -, hall⟩ := hf.unseq_inv
-    have hf0 : Frag e0 := hall e0 (List.mem_append_right _ (List.mem_cons_self ..))
+    have hf0 : FragFuel e0 := hall e0 (List.mem_append_right _ (List.mem_cons_self ..))
     have hz' := ih hf0
     refine .unseq (by simp) ?_ ?_
     · rw [ccallFreeList_append, Bool.and_eq_true] at hcc
@@ -9767,10 +9767,10 @@ theorem annotRooted_true {b : CoreExpr} (h : annotRooted b = true) :
   rcases b with ⟨a', b_⟩
   cases b_ <;> first | exact ⟨_, _, _, rfl⟩ | (simp [annotRooted] at h)
 
-/-- Every non-value Frag configuration decomposes (extended
+/-- Every non-value FragFuel configuration decomposes (extended
     roots). -/
-theorem Frag.decomp [LemFuel] {e : CoreExpr} (hf : Frag e) (hnv : toVal e = none) :
-    ∃ ctx r, Decomp e ctx r ∧ Frag r := by
+theorem FragFuel.decomp [LemFuel] {e : CoreExpr} (hf : FragFuel e) (hnv : toVal e = none) :
+    ∃ ctx r, Decomp e ctx r ∧ FragFuel r := by
   induction hf with
   | val_pure v => simp [toVal] at hnv
   | store => exact ⟨_, _, Decomp.root (.store), .store⟩
@@ -9790,9 +9790,9 @@ theorem Frag.decomp [LemFuel] {e : CoreExpr} (hf : Frag e) (hnv : toVal e = none
     | some w =>
       obtain ⟨wa, -, rfl⟩ := ofValA_of_toVal hv1
       cases wa with
-      | pure a1 b1 v => exact ⟨_, _, Decomp.root (.beta_pure), .sseq (frag_ofValA _) hf2⟩
+      | pure a1 b1 v => exact ⟨_, _, Decomp.root (.beta_pure), .sseq (fragFuel_ofValA _) hf2⟩
       | annot a1 a2 b1 ds v =>
-        exact ⟨_, _, Decomp.root (.beta_annot), .sseq (frag_ofValA _) hf2⟩
+        exact ⟨_, _, Decomp.root (.beta_annot), .sseq (fragFuel_ofValA _) hf2⟩
     | none =>
       obtain ⟨ctx, r, hd, hfr⟩ := ih1 hv1
       exact ⟨_, _, Decomp.sseq hd, hfr⟩
@@ -9801,9 +9801,9 @@ theorem Frag.decomp [LemFuel] {e : CoreExpr} (hf : Frag e) (hnv : toVal e = none
     | some w =>
       obtain ⟨wa, -, rfl⟩ := ofValA_of_toVal hv1
       cases wa with
-      | pure a1 b1 v => exact ⟨_, _, Decomp.root (.wbeta_pure), .wseq (frag_ofValA _) hf2⟩
+      | pure a1 b1 v => exact ⟨_, _, Decomp.root (.wbeta_pure), .wseq (fragFuel_ofValA _) hf2⟩
       | annot a1 a2 b1 ds v =>
-        exact ⟨_, _, Decomp.root (.wbeta_annot), .wseq (frag_ofValA _) hf2⟩
+        exact ⟨_, _, Decomp.root (.wbeta_annot), .wseq (fragFuel_ofValA _) hf2⟩
     | none =>
       obtain ⟨ctx, r, hd, hfr⟩ := ih1 hv1
       exact ⟨_, _, Decomp.wseq hd, hfr⟩
@@ -9827,8 +9827,8 @@ theorem Frag.decomp [LemFuel] {e : CoreExpr} (hf : Frag e) (hnv : toVal e = none
     | some w =>
       obtain ⟨wa, -, rfl⟩ := ofValA_of_toVal hvb
       cases wa with
-      | pure a1 b1 v => exact ⟨_, _, Decomp.root (.bound_pure), .bound (frag_ofValA _)⟩
-      | annot a1 a2 b1 ds v => exact ⟨_, _, Decomp.root (.bound_annot), .bound (frag_ofValA _)⟩
+      | pure a1 b1 v => exact ⟨_, _, Decomp.root (.bound_pure), .bound (fragFuel_ofValA _)⟩
+      | annot a1 a2 b1 ds v => exact ⟨_, _, Decomp.root (.bound_annot), .bound (fragFuel_ofValA _)⟩
     | none =>
       obtain ⟨ctx, r, hd, hfr⟩ := ihb hvb
       exact ⟨_, _, Decomp.bound hd, hfr⟩
@@ -9840,7 +9840,7 @@ theorem Frag.decomp [LemFuel] {e : CoreExpr} (hf : Frag e) (hnv : toVal e = none
     cases hv1 : toVal e1 with
     | some w =>
       obtain ⟨wa, -, rfl⟩ := ofValA_of_toVal hv1
-      exact ⟨_, _, Decomp.root .beta_spec, .sseq_spec (frag_ofValA wa) hf2⟩
+      exact ⟨_, _, Decomp.root .beta_spec, .sseq_spec (fragFuel_ofValA wa) hf2⟩
     | none =>
       obtain ⟨ctx, r, hd, hfr⟩ := ih1 hv1
       exact ⟨_, _, Decomp.sseq_spec hd, hfr⟩
@@ -9853,7 +9853,7 @@ theorem Frag.decomp [LemFuel] {e : CoreExpr} (hf : Frag e) (hnv : toVal e = none
     cases hv1 : toVal e1 with
     | some w =>
       obtain ⟨wa, -, rfl⟩ := ofValA_of_toVal hv1
-      exact ⟨_, _, Decomp.root .beta_sym, .sseq_sym (frag_ofValA wa) hf2⟩
+      exact ⟨_, _, Decomp.root .beta_sym, .sseq_sym (fragFuel_ofValA wa) hf2⟩
     | none =>
       obtain ⟨ctx, r, hd, hfr⟩ := ih1 hv1
       exact ⟨_, _, Decomp.sseq_sym hd, hfr⟩
@@ -9861,7 +9861,7 @@ theorem Frag.decomp [LemFuel] {e : CoreExpr} (hf : Frag e) (hnv : toVal e = none
     cases hv1 : toVal e1 with
     | some w =>
       obtain ⟨wa, -, rfl⟩ := ofValA_of_toVal hv1
-      exact ⟨_, _, Decomp.root .beta_tuple, .sseq_tuple (frag_ofValA wa) hf2⟩
+      exact ⟨_, _, Decomp.root .beta_tuple, .sseq_tuple (fragFuel_ofValA wa) hf2⟩
     | none =>
       obtain ⟨ctx, r, hd, hfr⟩ := ih1 hv1
       exact ⟨_, _, Decomp.sseq_tuple hd, hfr⟩
@@ -9869,7 +9869,7 @@ theorem Frag.decomp [LemFuel] {e : CoreExpr} (hf : Frag e) (hnv : toVal e = none
     cases hv1 : toVal e1 with
     | some w =>
       obtain ⟨wa, -, rfl⟩ := ofValA_of_toVal hv1
-      exact ⟨_, _, Decomp.root .wbeta_tuple, .wseq_tuple (frag_ofValA wa) hf2⟩
+      exact ⟨_, _, Decomp.root .wbeta_tuple, .wseq_tuple (fragFuel_ofValA wa) hf2⟩
     | none =>
       obtain ⟨ctx, r, hd, hfr⟩ := ih1 hv1
       exact ⟨_, _, Decomp.wseq_tuple hd, hfr⟩
@@ -9877,7 +9877,7 @@ theorem Frag.decomp [LemFuel] {e : CoreExpr} (hf : Frag e) (hnv : toVal e = none
     cases hv1 : toVal e1 with
     | some w =>
       obtain ⟨wa, -, rfl⟩ := ofValA_of_toVal hv1
-      exact ⟨_, _, Decomp.root .wbeta_sym, .wseq_sym (frag_ofValA wa) hf2⟩
+      exact ⟨_, _, Decomp.root .wbeta_sym, .wseq_sym (fragFuel_ofValA wa) hf2⟩
     | none =>
       obtain ⟨ctx, r, hd, hfr⟩ := ih1 hv1
       exact ⟨_, _, Decomp.wseq_sym hd, hfr⟩
@@ -9915,16 +9915,16 @@ theorem Frag.decomp [LemFuel] {e : CoreExpr} (hf : Frag e) (hnv : toVal e = none
 
 /-- E5: the negative action a fragment term's `negRedex?` locates is a
     fragment root under the returned (decomposition) context. -/
-theorem Frag.of_negRedex [LemFuel] {b : CoreExpr} {ctxA : context} {a : List _root_.annot} {act : CoreAction}
-    (hf : Frag b) (hn : negRedex? b = some (ctxA, a, act)) :
-    Decomp b ctxA (negActRedex a act) ∧ Frag (negActRedex a act) := by
+theorem FragFuel.of_negRedex [LemFuel] {b : CoreExpr} {ctxA : context} {a : List _root_.annot} {act : CoreAction}
+    (hf : FragFuel b) (hn : negRedex? b = some (ctxA, a, act)) :
+    Decomp b ctxA (negActRedex a act) ∧ FragFuel (negActRedex a act) := by
   obtain ⟨ctx, r, hd, hfr⟩ := hf.decomp (toVal_none_of_negRedex?_some hn)
   obtain ⟨rfl, rfl⟩ := hd.negRedex?_inv hn
   exact ⟨hd, hfr⟩
 
 /-- E5: the excluded performance node of a fragment negative action. -/
-theorem Frag.excluded_of_neg [LemFuel] {an : List _root_.annot} {act : CoreAction}
-    (hf : Frag (negActRedex an act)) (n : Nat) : Frag (Expr [] (Eexcluded n act)) := by
+theorem FragFuel.excluded_of_neg [LemFuel] {an : List _root_.annot} {act : CoreAction}
+    (hf : FragFuel (negActRedex an act)) (n : Nat) : FragFuel (Expr [] (Eexcluded n act)) := by
   cases hf with
   | neg_store_op hnv hp2 hp3 hd2 hd3 => exact .excluded_store_op hnv hp2 hp3 hd2 hd3
   | neg_store _ => exact .excluded_store
@@ -9932,20 +9932,20 @@ theorem Frag.excluded_of_neg [LemFuel] {an : List _root_.annot} {act : CoreActio
 /-- E5: THE REWRITE IS IN THE FRAGMENT — `negRewrite` at a fragment `b`
     whose negative action `negRedex?` locates: the tuple binder, the
     two-component `unseq` (the excluded action; the context re-plugged with
-    `pure(Unit)`, `Frag.replug`), the symbol read. -/
-theorem Frag.negRewrite_frag [LemFuel] {b : CoreExpr} {ctxA : context} {a : List _root_.annot}
-    {act : CoreAction} (hf : Frag b) (hn : negRedex? b = some (ctxA, a, act)) (n : Nat) (s0 : sym) :
-    Frag (negRewrite n s0 ctxA act) := by
+    `pure(Unit)`, `FragFuel.replug`), the symbol read. -/
+theorem FragFuel.negRewrite_frag [LemFuel] {b : CoreExpr} {ctxA : context} {a : List _root_.annot}
+    {act : CoreAction} (hf : FragFuel b) (hn : negRedex? b = some (ctxA, a, act)) (n : Nat) (s0 : sym) :
+    FragFuel (negRewrite n s0 ctxA act) := by
   obtain ⟨hd, hfr⟩ := hf.of_negRedex hn
   have hfuel : 0 < LemFuel.fuel := by
     cases hfr with
     | neg_store hfuel => exact hfuel
     | neg_store_op _ _ _ hd2 _ => exact Nat.lt_of_lt_of_le (peDepth_pos _) hd2
-  have hplug : Frag (apply_ctx (add_exclusion n ctxA) (Expr [] (Epure (Pexpr [] () (PEval Vunit))))) :=
-    Frag.replug hd hf n (.val_pure _)
+  have hplug : FragFuel (apply_ctx (add_exclusion n ctxA) (Expr [] (Epure (Pexpr [] () (PEval Vunit))))) :=
+    FragFuel.replug hd hf n (.val_pure _)
   rw [negRewrite_eq]
-  refine Frag.wseq_tuple (ls := [([], none, BTy_unit), ([], some s0, BTy_unit)]) ?_ (Frag.pure_sym hfuel)
-  refine Frag.unseq (by simp) ?_ ?_
+  refine FragFuel.wseq_tuple (ls := [([], none, BTy_unit), ([], some s0, BTy_unit)]) ?_ (FragFuel.pure_sym hfuel)
+  refine FragFuel.unseq (by simp) ?_ ?_
   · rw [ccallFreeList_cons, ccallFreeList_cons, ccallFreeList_nil, Bool.and_true, Bool.and_eq_true]
     exact ⟨rfl, hplug.ccallFree⟩
   · intro x hx
@@ -9983,13 +9983,13 @@ discharge-device readings consume the device. -/
     the step produces (`Ctl.upd` at every leaf); the premise `hκ`
     (the call stack is kept) excludes the CALL and RETURN rounds,
     whose successors leave the expression's own cone. -/
-theorem Frag.step [LemFuel] {M : MachineCtx} {ctl : Ctl}
+theorem FragFuel.step [LemFuel] {M : MachineCtx} {ctl : Ctl}
     (hQf : ∀ l params cont, lookupLabel (M.labelsAt ctl.proc) l = some (params, cont) →
-      Frag cont)
+      FragFuel cont)
     {e : CoreExpr} {ρ : EnvStack} {σ : Mem}
     {e' : CoreExpr} {ρ' : EnvStack} {ctl' : Ctl} {σ' : Mem}
-    (hf : Frag e) (hs : Step M (e, ρ, ctl, σ) (e', ρ', ctl', σ'))
-    (hκ : ctl'.κ = ctl.κ) : Frag e' := by
+    (hf : FragFuel e) (hs : Step M (e, ρ, ctl, σ) (e', ρ', ctl', σ'))
+    (hκ : ctl'.κ = ctl.κ) : FragFuel e' := by
   induction hf generalizing e' ρ' ctl' σ' with
   | call hpes hdep => exact (Step.call_ne_same_κ (callRedex?_callRedex _ _ _ _) hs hκ).elim
   | val_pure v => exact (Step.pure_val_elim hs hκ).elim
@@ -10373,7 +10373,7 @@ theorem Frag.step [LemFuel] {M : MachineCtx} {ctl : Ctl}
       exact hQf l params cont hl
     · exact (hcall.ne_same_κ hκ).elim
 
-/-! `Frag.esize_step_bound` (the additive step-growth bound) was DELETED
+/-! `FragFuel.esize_step_bound` (the additive step-growth bound) was DELETED
     in E1: consumerless since the potential lane (Potential.lean) took
     over the fuel accounting. -/
 

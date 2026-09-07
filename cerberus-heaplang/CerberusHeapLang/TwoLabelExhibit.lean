@@ -779,26 +779,18 @@ variable (loc : CerbLocation.Loc) (ann ra : core_run_annotation) (mo : memory_or
   (bty xbty ybty sbty₂ : core_base_type) (c : CerbMem.PointerValue) (n₂ : Int)
 
 /-- The second loop's body is in the certified cone. -/
-theorem tlBody2_frag [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) : Frag (tlBody2 loc ann ra mo bty c) := by
-  refine .if_ (PePure.of_isPePure rfl) (by change 2 ≤ LemFuel.fuel; exact hfuel)
-    (.sseq (.store) (.run (PePure.all_of_isPePure rfl) ?_))
+theorem tlBody2_frag : Frag (tlBody2 loc ann ra mo bty c) := by
+  exact .if_ (PePure.of_isPePure rfl)
+    (.sseq (.store) (.run (PePure.all_of_isPePure rfl)))
     (.val_pure Vunit)
-  intro pe hpe
-  simp at hpe
-  subst hpe
-  exact (hfuel : peDepth tlDec2 ≤ LemFuel.fuel)
 
 /-- The first loop's body is in the cone: the second loop's `save` is its
     exit branch (`Frag.save` at value initializers). -/
-theorem tlBody1_frag [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) : Frag (tlBody1 loc ann ra mo bty ybty sbty₂ c n₂) := by
-  refine .if_ (PePure.of_isPePure rfl) (by change 2 ≤ LemFuel.fuel; exact hfuel)
-    (.sseq (.store) (.run (PePure.all_of_isPePure rfl) ?_))
-    (.save (saveParams_pure_of_vals rfl) (fun pe hp => by rw [saveParams_depth_of_vals rfl pe hp]; omega)
-      (tlBody2_frag (hfuel := hfuel) loc ann ra mo bty c))
-  intro pe hpe
-  simp at hpe
-  subst hpe
-  exact (hfuel : peDepth tlDec1 ≤ LemFuel.fuel)
+theorem tlBody1_frag : Frag (tlBody1 loc ann ra mo bty ybty sbty₂ c n₂) := by
+  exact .if_ (PePure.of_isPePure rfl)
+    (.sseq (.store) (.run (PePure.all_of_isPePure rfl)))
+    (.save (saveParams_pure_of_vals rfl)
+      (tlBody2_frag loc ann ra mo bty c))
 
 theorem tlBody2_esize : esize (tlBody2 loc ann ra mo bty c) = 3 := rfl
 theorem tlBody1_esize : esize (tlBody1 loc ann ra mo bty ybty sbty₂ c n₂) = 5 := rfl
@@ -832,12 +824,18 @@ theorem two_label_certified [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) (sbty₁ : co
     (fun l params cont hl => by
       rw [hlbl] at hl
       rcases tlQ_inv loc ann ra mo bty xbty ybty sbty₂ _ n₂ hl with ⟨-, -, rfl⟩ | ⟨-, -, rfl⟩
-      · exact tlBody2_frag (hfuel := hfuel) loc ann ra mo bty _
-      · exact tlBody1_frag (hfuel := hfuel) loc ann ra mo bty ybty sbty₂ _ n₂)
-    (procCtx_fragProcs _)
+      · exact tlBody2_frag loc ann ra mo bty _
+      · exact tlBody1_frag loc ann ra mo bty ybty sbty₂ _ n₂)
+    (fun l params cont hl => by
+      rw [hlbl] at hl
+      rcases tlQ_inv loc ann ra mo bty xbty ybty sbty₂ _ n₂ hl with ⟨-, -, rfl⟩ | ⟨-, -, rfl⟩
+      · exact (Nat.le_trans (Nat.le_of_ble_eq_true rfl) hfuel)
+      · exact (Nat.le_trans (Nat.le_of_ble_eq_true rfl) hfuel))
+    (procCtx_fragProcs _) (procCtx_procsDepth _ _)
     prog fmapEmpty [] σ₀ _
-    (.save (saveParams_pure_of_vals rfl) (fun pe hp => by rw [saveParams_depth_of_vals rfl pe hp]; omega)
-      (tlBody1_frag (hfuel := hfuel) loc ann ra mo bty ybty sbty₂ _ n₂))
+    (.save (saveParams_pure_of_vals rfl)
+      (tlBody1_frag loc ann ra mo bty ybty sbty₂ _ n₂))
+    (Nat.le_trans (Nat.le_of_ble_eq_true rfl) hfuel)
     hcoh
     (fun v σ' => v = Vunit ∧ ∃ i a, cellPtr idx addr = cellPtr i a ∧
       CellCoh fmapEmpty σ' i ⟨a, intTy, tlFinal n₁ n₂ bs0⟩)

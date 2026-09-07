@@ -85,6 +85,7 @@ initialiser's `Specified(…)`, MUST make the check fail; a plant that
 passes fails the script.
 -/
 import CerberusHeapLang.Soundness
+import CerberusHeapLang.Fragment
 import CerberusHeapLang.StdCore
 import CerberusHeapLang.Examples.Layout
 
@@ -1112,30 +1113,26 @@ theorem t1Main_eq_with : t1Main = t1MainWith (Expr [] (Eunseq [t1LoadX, t1Spec1]
 
 /-! ## E2: membership witnesses for t1's sub-terms -/
 
-/-- A sufficient ambient pass budget for the small operands below. -/
-theorem depLe [LemFuel] (hfuel : 9 ≤ LemFuel.fuel) {pe : generic_pexpr Unit sym} (h : peDepth pe ≤ 9) :
-    peDepth pe ≤ LemFuel.fuel := Nat.le_trans h hfuel
-
 theorem specInt_pePure (n : Int) : PePure (specInt n) :=
   PePure.ctor _ _ rfl fun pe h => by
     rcases List.mem_singleton.mp h with rfl; exact PePure.val _ _
 
-theorem t1LoadX_frag [LemFuel] (hfuel : 9 ≤ LemFuel.fuel) : Frag t1LoadX :=
-  Frag.wseq_sym (Frag.pure_op rfl (PePure.sym _ _) (depLe (by omega) (by decide)))
-    (Frag.load_op rfl (PePure.sym _ _) (depLe (by omega) (by decide)))
+theorem t1LoadX_frag : Frag t1LoadX :=
+  Frag.wseq_sym (Frag.pure_op rfl (PePure.sym _ _))
+    (Frag.load_op rfl (PePure.sym _ _))
 
-theorem t1LoadY_frag [LemFuel] (hfuel : 9 ≤ LemFuel.fuel) : Frag t1LoadY :=
-  Frag.wseq_sym (Frag.pure_op rfl (PePure.sym _ _) (depLe (by omega) (by decide)))
-    (Frag.load_op rfl (PePure.sym _ _) (depLe (by omega) (by decide)))
+theorem t1LoadY_frag : Frag t1LoadY :=
+  Frag.wseq_sym (Frag.pure_op rfl (PePure.sym _ _))
+    (Frag.load_op rfl (PePure.sym _ _))
 
-theorem t1Spec3_frag [LemFuel] (hfuel : 9 ≤ LemFuel.fuel) : Frag t1Spec3 :=
-  Frag.bound (Frag.pure_op rfl (specInt_pePure 3) (depLe (by omega) (by decide)))
+theorem t1Spec3_frag : Frag t1Spec3 :=
+  Frag.bound (Frag.pure_op rfl (specInt_pePure 3))
 
-theorem t1Spec1_frag [LemFuel] (hfuel : 9 ≤ LemFuel.fuel) : Frag t1Spec1 :=
-  Frag.pure_op rfl (specInt_pePure 1) (depLe (by omega) (by decide))
+theorem t1Spec1_frag : Frag t1Spec1 :=
+  Frag.pure_op rfl (specInt_pePure 1)
 
-theorem t1KillX_frag [LemFuel] (hfuel : 9 ≤ LemFuel.fuel) : Frag (killInt xSym) :=
-  Frag.kill_op rfl (PePure.sym _ _) (depLe (by omega) (by decide))
+theorem t1KillX_frag : Frag (killInt xSym) :=
+  Frag.kill_op rfl (PePure.sym _ _)
 
 /-- E3: `conv_loaded_int('signed int', a_508)` — a `PEcall` at covered
     arguments — is IN the covered operand grammar (E2 decided it OUT; the
@@ -1149,47 +1146,35 @@ theorem t1_case_covered : isPePure t1CasePe = true := by decide
 
 /-! ## E3: t1 is in the cone EXCEPT the `unseq` node (acceptance (i)) -/
 
-/-- A sufficient ambient pass budget for E3's larger operands.
-    `conv_loaded_int(…)` carries the callee's static inlining budget,
-    `stdBudget`; forty is a certified upper bound, not a minimal budget. -/
-theorem depLe40 [LemFuel] (hfuel : 40 ≤ LemFuel.fuel) {pe : generic_pexpr Unit sym} (h : peDepth pe ≤ 40) :
-    peDepth pe ≤ LemFuel.fuel := Nat.le_trans h hfuel
-
 /-- EVERY node of t1's `main` other than the `unseq` is in the cone: with
     any fragment `u` in the `unseq`'s position, `main` is a `Frag`. The
     `conv_loaded_int` calls (store operands, `run` argument), the
     `catch_exceptional_condition_add(__conv_int__ …)` case and the return
     protocol are E3's admissions; the rest E1/E2's. -/
-theorem t1MainWith_frag [LemFuel] (hfuel : 40 ≤ LemFuel.fuel) (u : CoreExpr) (hu : Frag u) : Frag (t1MainWith u) :=
+theorem t1MainWith_frag (u : CoreExpr) (hu : Frag u) : Frag (t1MainWith u) :=
   .sseq_sym
-    (.create_op rfl (.ctorTy [] Civalignof rfl [] intTy) (.val [] (Vctype intTy))
-      (depLe (by omega) (by decide)) (peDepth_val_le _ _ (by omega)))
+    (.create_op rfl (.ctorTy [] Civalignof rfl [] intTy) (.val [] (Vctype intTy)))
     (.sseq_sym
-      (.create_op rfl (.ctorTy [] Civalignof rfl [] intTy) (.val [] (Vctype intTy))
-        (depLe (by omega) (by decide)) (peDepth_val_le _ _ (by omega)))
-      (.sseq_sym (t1Spec3_frag (by omega))
+      (.create_op rfl (.ctorTy [] Civalignof rfl [] intTy) (.val [] (Vctype intTy)))
+      (.sseq_sym t1Spec3_frag
         (.sseq
-          (.store_op rfl (.sym [] xSym) (PePure.of_isPePure rfl) (depLe (by omega) (by decide))
-            (depLe40 (by omega) (by decide)))
+          (.store_op rfl (.sym [] xSym) (PePure.of_isPePure rfl))
           (.sseq_sym
             (.bound (Frag.wseq_tuple (pa := []) (ls := [([], some a510, lint), ([], some a511, lint)])
-              hu (.pure_op rfl (PePure.of_isPePure rfl) (depLe40 (by omega) (by decide)))))
+              hu (.pure_op rfl (PePure.of_isPePure rfl))))
             (.sseq
-              (.store_op rfl (.sym [] ySym) (PePure.of_isPePure rfl) (depLe (by omega) (by decide))
-                (depLe40 (by omega) (by decide)))
-              (.sseq_sym (.bound (t1LoadY_frag (by omega)))
-                (.sseq (t1KillX_frag (by omega))
-                  (.sseq (.kill_op rfl (.sym [] ySym) (depLe (by omega) (by decide)))
+              (.store_op rfl (.sym [] ySym) (PePure.of_isPePure rfl))
+              (.sseq_sym (.bound t1LoadY_frag)
+                (.sseq t1KillX_frag
+                  (.sseq (.kill_op rfl (.sym [] ySym))
                     (.sseq
-                      (.run (fun pe h => by rcases List.mem_singleton.mp h with rfl; exact PePure.of_isPePure rfl)
-                        (fun pe h => by rcases List.mem_singleton.mp h with rfl; exact depLe40 (by omega) (by decide)))
-                      (.sseq (t1KillX_frag (by omega))
-                        (.sseq (.kill_op rfl (.sym [] ySym) (depLe (by omega) (by decide)))
+                      (.run (fun pe h => by rcases List.mem_singleton.mp h with rfl; exact PePure.of_isPePure rfl))
+                      (.sseq t1KillX_frag
+                        (.sseq (.kill_op rfl (.sym [] ySym))
                           (.sseq (.val_pure Vunit)
                             (.save
                               (fun pe h => by rcases List.mem_singleton.mp h with rfl; exact PePure.of_isPePure rfl)
-                              (fun pe h => by rcases List.mem_singleton.mp h with rfl; exact depLe (by omega) (by decide))
-                              (.pure_op rfl (.sym [] a518) (depLe (by omega) (by decide))))))))))))))))
+                              (.pure_op rfl (.sym [] a518)))))))))))))))
 
 /-- E4 — THE FLIP OF E3's `t1_unseq_not_frag`: the `unseq` node IS in the
     cone. Its components are the E2 fragments `t1LoadX` (the read of `x`)
@@ -1198,21 +1183,21 @@ theorem t1MainWith_frag [LemFuel] (hfuel : 40 ≤ LemFuel.fuel) (u : CoreExpr) (
     t1Spec1]))` by `nomatch` — true then because no constructor covered
     `Eunseq`; E4's `Frag.unseq` makes it false, so the E3 theorem is
     RETIRED (recorded, docs/2026-09-05_e4-notes.md §3). -/
-theorem t1_unseq_frag [LemFuel] (hfuel : 9 ≤ LemFuel.fuel) : Frag (Expr [] (Eunseq [t1LoadX, t1Spec1])) :=
+theorem t1_unseq_frag : Frag (Expr [] (Eunseq [t1LoadX, t1Spec1])) :=
   Frag.unseq (by simp) rfl fun e he => by
     rcases List.mem_cons.mp he with rfl | he
-    · exact (t1LoadX_frag (by omega))
+    · exact t1LoadX_frag
     · rcases List.mem_singleton.mp he with rfl
-      exact (t1Spec1_frag (by omega))
+      exact t1Spec1_frag
 
 /-- E4 ACCEPTANCE (i) — THE MILESTONE'S FIRST HALF: t1's `main`, transcribed
     verbatim from docs/corpus-e0/t1.core, IS a `Frag` (kernel-decided:
     every node of the emitted program is in the cone — E1's annotations,
     `bound` and `Ivalignof`, E2's loaded values and binders, E3's
     `conv_loaded_int`/`catch_exceptional_condition_add`, E4's `unseq`). -/
-theorem t1Main_frag [LemFuel] (hfuel : 40 ≤ LemFuel.fuel) : Frag t1Main := by
+theorem t1Main_frag : Frag t1Main := by
   rw [t1Main_eq_with]
-  exact t1MainWith_frag (by omega) _ (t1_unseq_frag (by omega))
+  exact t1MainWith_frag _ t1_unseq_frag
 
 mutual
 /-- THE SYNTACTIC COVERAGE WALK (an instrument, not a theorem about

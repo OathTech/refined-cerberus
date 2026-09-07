@@ -63,12 +63,12 @@ theorem caseProg_select (v : value) :
 
 /-- Membership retains the original symbol-read branch and discharges
     selected-branch closure by the substitution equation. -/
-theorem caseProg_frag [LemFuel] (hfuel : 0 < LemFuel.fuel) (v : value) : Frag (caseProg v) := by
+theorem caseProg_frag (v : value) : Frag (caseProg v) := by
   refine .case_value (fun q hq => ?_) (fun e' hsel => ?_) (fun e' hsel => ?_)
   · -- E5: every alternative's body is in the cone (`pure(x)`, a symbol read)
     rw [List.mem_singleton] at hq
     subst hq
-    exact .pure_op rfl (.sym [] caseXSym) (peDepth_sym_le [] caseXSym hfuel)
+    exact .pure_op rfl (.sym [] caseXSym)
   · rw [caseProg_select] at hsel
     obtain rfl : ofVal (.pure v) = e' := Option.some.inj hsel
     exact frag_ofVal _
@@ -159,8 +159,9 @@ theorem case_certified [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) {GF : BundledGFunc
       (fun v' _ => v' = v) := by
   refine engine_adequacy (hfuel := hfuel) (GF := GF) (M := spikeCtx) rfl rfl (ctl := spikeCtl) rfl
     (fun l params cont hl => (spikeCtx_labels_none l hl).elim)
-    spikeCtx_fragProcs
-    (caseProg v) fmapEmpty [] σ₀ ∅ (caseProg_frag (by omega) v)
+    (fun l params cont hl => (spikeCtx_labels_none l hl).elim)
+    spikeCtx_fragProcs (spikeCtx_procsDepth _)
+    (caseProg v) fmapEmpty [] σ₀ ∅ (caseProg_frag v) (Nat.le_trans (Nat.le_of_ble_eq_true rfl) hfuel)
     (Coh.mk
       (fun _ c hget => absurd (hget.symm.trans
         (Iris.Std.LawfulPartialMap.get?_empty (M := SpikeHeapF) _))

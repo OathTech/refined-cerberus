@@ -139,8 +139,8 @@ theorem PePure.subst {pe : generic_pexpr Unit _root_.sym} (hp : PePure pe)
 
 /-- A covered pure operand is a fragment expression whether it is already
     a value or still needs the evaluator. -/
-theorem Frag.of_pePure [LemFuel] {pe : generic_pexpr Unit sym} (an : List _root_.annot)
-    (hp : PePure pe) (hf : peDepth pe ≤ LemFuel.fuel) : Frag (Expr an (Epure pe)) := by
+theorem FragFuel.of_pePure [LemFuel] {pe : generic_pexpr Unit sym} (an : List _root_.annot)
+    (hp : PePure pe) (hf : peDepth pe ≤ LemFuel.fuel) : FragFuel (Expr an (Epure pe)) := by
   cases hv : valueFromPexpr pe with
   | none => exact .pure_op hv hp hf
   | some v =>
@@ -166,9 +166,9 @@ theorem substFold_pure (binds : List (sym × value)) (an : List _root_.annot)
     exact ⟨subst_sym_pexpr x v p, by rw [substFold_cons, he, subst_sym_expr_pure],
       hs, hsd.trans hd⟩
 
-theorem Frag.substFold_pure [LemFuel] (binds : List (sym × value)) (an : List _root_.annot)
+theorem FragFuel.substFold_pure [LemFuel] (binds : List (sym × value)) (an : List _root_.annot)
     (pe : generic_pexpr Unit sym) (hp : PePure pe) (hf : peDepth pe ≤ LemFuel.fuel) :
-    Frag (substFold (Expr an (Epure pe)) binds) := by
+    FragFuel (substFold (Expr an (Epure pe)) binds) := by
   obtain ⟨p, he, hp', hd⟩ := CerberusHeapLang.substFold_pure binds an pe hp
   rw [he]
   exact .of_pePure an hp' (by rw [hd]; exact hf)

@@ -82,16 +82,11 @@ def progAProd : CoreExpr :=
         (Pexpr [] () (PEsym pASym)) NA))))
 
 /-- Cone membership. -/
-theorem progAProd_frag [LemFuel] (hfuel : 0 < LemFuel.fuel) : Frag progAProd :=
+theorem progAProd_frag : Frag progAProd :=
   .sseq_sym .create
     (.sseq
-      (.store_op rfl (.sym [] pASym) (.val [] sevenVal)
-        (by rw [show peDepth (Pexpr ([] : List annot) ()
-            (PEsym pASym)) = 1 from rfl]; omega)
-        (peDepth_val_le _ _ hfuel))
-      (.load_op rfl (.sym [] pASym)
-        (by rw [show peDepth (Pexpr ([] : List annot) ()
-            (PEsym pASym)) = 1 from rfl]; omega)))
+      (.store_op rfl (.sym [] pASym) (.val [] sevenVal))
+      (.load_op rfl (.sym [] pASym)))
 
 /-! ## The mixed operand shapes of `store` (QA-1/H-1) — at the rules
 
@@ -286,9 +281,10 @@ theorem exhibitA_prod [LemFuel] (hfuel : 12 ≤ LemFuel.fuel) (sup : Nat) (fs : 
           (collect_labeled_continuations_NEW (prodFile progAProd))).1))
         rfl rfl (prodCtx_labels hQe) rfl rfl rfl rfl (Nat.le_refl _)
         (fun l params cont hl => (hnolabel l params cont hl).elim)
+        (fun l params cont hl => (hnolabel l params cont hl).elim)
         (fun _ _ _ _ => iprop(False))
         progAProd fmapEmpty [] prodMem₀ (∅ : SpikeHeapF SpikeCell)
-        (allocCost fmapEmpty intTy 4) (progAProd_frag (by omega))
+        (allocCost fmapEmpty intTy 4) progAProd_frag (Nat.le_trans (show evalDepth _ ≤ 1 from Nat.le_of_ble_eq_true rfl) (by omega))
         (prodMem₀_launchCoh _ prod_one_int_budget_fits)
         (ψA fmapEmpty) 10
         (by

@@ -17,13 +17,13 @@ ticked — `labeled` untouched — the trace extended, the step counter
 moved). `CerberusRound.loop_step` is the loop-level reading of the same
 fact: `runOne (drive_nonmemory_steps_aux2_lemFuel (fl+1) …) dst =
 runOne (drive_nonmemory_steps_aux2_lemFuel fl …) dst'` — the shape
-`loop_step_frag` (DriverCollapse.lean) ships at the production profile —
+`loop_step_frag_fuel` (DriverCollapse.lean) ships at the production profile —
 proved there INDEPENDENTLY, by its own per-redex case analysis, not
 derived from this round (see "WHAT CONSUMES WHAT" below).
 
 FUEL. Every engine-dependent statement retains the caller's
 `[LemFuel]`. Structural traversals supply their own measures; operand
-pass bounds remain in `Frag`. Advancing a given mirror step requires
+pass bounds remain in `FragFuel`. Advancing a given mirror step requires
 at least two ambient units, while the full classification requires four
 as a sufficient bound for lifted memory forks. The plain scheduler
 choice needs two. Each `nd_bind` starts its own ambient worker; the
@@ -60,11 +60,11 @@ pairs. `dischargeStep`/`outcomesU` (Soundness.lean) remain as PROOF
 DEVICES of this module's classification (the discharge-device readings
 below) — and appear in no export's statement here (since the fuel-lane
 restatement of 2026-09-03 no adequacy lane consumes them: both lanes run
-on `loop_step_frag`; the `outcomesU` step-match `outcomesU_of_step` was
+on `loop_step_frag_fuel`; the `outcomesU` step-match `outcomesU_of_step` was
 deleted 2026-09-04, consumerless — KNOWN-OPEN-ITEMS C3).
 
-WHAT IS PROVED — the classification (`cerberusRound_classify`): for
-every `Frag` configuration at ambient fuel at least four and a sequentially well-formed
+WHAT IS PROVED — the classification (`cerberusRound_classify_fuel`): for
+every `FragFuel` configuration at ambient fuel at least four and a sequentially well-formed
 context with a cons-shaped environment stack, EXACTLY ONE of
 
 - `value_done`   — a bare value; the engine's step list is PROGRAM-DONE
@@ -86,12 +86,12 @@ context with a cons-shaped environment stack, EXACTLY ONE of
 - `open_`        — the mirror is STUCK at a non-value configuration of
                    the RESIDUAL (`OpenRound`, including negative actions across strong sequences; below).
 
-MIRROR COMPLETENESS (`frag_round_complete`, the second half of this
-module): at every non-value `Frag` configuration, with at least four
+MIRROR COMPLETENESS (`frag_round_complete_fuel`, the second half of this
+module): at every non-value `FragFuel` configuration, with at least four
 ambient fuel units, the mirror steps, or
 the shipped round is a `ShippedRefusal`, or the configuration is in the
 residual `OpenRound` — one lemma per redex root (`complete_store` …
-`complete_memop_vals`), dispatched by `Frag.decomp`, the redex's step
+`complete_memop_vals`), dispatched by `FragFuel.decomp`, the redex's step
 lifted through the context by `Decomp.lift_step`. The refusal
 vocabulary (`ShippedRefusal`) is stated in the same discipline as the
 round: ILLTYPED (`[Step_error2 msg]`), ILLTYPED AT DISTANCE ONE (a
@@ -144,7 +144,7 @@ the KILL bridge. The other arm is `run_surplus` (a jump with more arguments than
 parameters whose zipped arguments evaluate and whose surplus does not —
 label-map-dependent). Both arms record that the mirror is stuck and the
 engine step's shape; neither is a refusal, and neither is removable by
-a syntactic narrowing of `Frag`. `cerberusRound_refused_store`/`_load`/
+a syntactic narrowing of `FragFuel`. `cerberusRound_refused_store`/`_load`/
 `_create`/`_case` are the root-redex refusal instances kept from
 commit 1 of the mirror-completeness slice (DECISIONS.md, "MIRROR
 COMPLETENESS — GO"); `cerberusRound_refused_kill` (kill/free arc K2)
@@ -157,16 +157,16 @@ semantics is referenced or bridged, and none is needed for the root of
 trust, which is the engine (`step_ctx` and the shipped driver).
 
 WHAT CONSUMES WHAT (2026-09-03 audit, N-1). `CerberusRound`,
-`engine_step_matchU`, `step_iff_cerberusRound`, `cerberusRound_classify`
-and `frag_round_complete` are the reference relation and the
+`engine_step_matchU_fuel`, `step_iff_cerberusRound_fuel`, `cerberusRound_classify_fuel`
+and `frag_round_complete_fuel` are the reference relation and the
 certification/completeness statements OVER it; they are consumed by NO
 adequacy export. Both adequacy lanes — the partial fuel induction
 (`drive_safe_aux`, Adequacy.lean) and the total budget inductions
-(`wpt_driver_aux`/`wpt_driver_cps`, ProdLoop.lean, consumed by the
+(`wpt_driver_aux`/`wpt_driver_cps_fuel`, ProdLoop.lean, consumed by the
 production collapse `prod_run_eqJ`/`prod_run_eqJ_procs`) — consume the
-shipped round `loop_step_frag`/`loop_step_frag'` (DriverCollapse.lean),
+shipped round `loop_step_frag_fuel`/`loop_step_frag_fuel'` (DriverCollapse.lean),
 proved independently of this module. Deriving
-`loop_step_frag` from `CerberusRound.loop_step` via a context-transport
+`loop_step_frag_fuel` from `CerberusRound.loop_step` via a context-transport
 lemma would retire that duplication; today they stand side by side.
 -/
 import CerberusHeapLang.Heap
@@ -389,13 +389,13 @@ inductive ShippedRefusal (M : MachineCtx) (c : Config) : Prop where
 
 /-- THE RESIDUAL — the configuration classes the mirror does not step at
     and this package does not classify as a refusal (fragment closure,
-    2026-09-02; gaps (a), (b), (d) are closed — `Frag.sseq_sym`'s
+    2026-09-02; gaps (a), (b), (d) are closed — `FragFuel.sseq_sym`'s
     `BareHead` premise, `ShippedRefusal.error_next`,
     `ShippedRefusal.panic_noproc` — and gap (c) is closed up to what
     follows). Both arms record that the mirror IS stuck, name the engine
     step's shape, and carry a mirror-side witness that names the class;
     every instance is environment-, file- or label-map-dependent, so no
-    syntactic narrowing of `Frag` removes it. Neither arm carries an
+    syntactic narrowing of `FragFuel` removes it. Neither arm carries an
     engine claim beyond the step's shape: the whole-operand outcome in
     `eval_uncovered` and the successor in `run_surplus` are NOT
     characterized here (2026-09-03 audit, M-1). -/
@@ -463,7 +463,7 @@ inductive OpenRound (M : MachineCtx) (c : Config) : Prop where
       the two `BOUND_WITH_SSEQ` arms are NOT mirrored — the mirror is stuck
       (fail-closed), the engine's round is not characterised here. The
       mover: two `Step` rules (`neg_sseq_repol`, `neg_sseq_rewrite`) and an
-      `Frag.sseq_tuple` at the nested pattern the second produces. -/
+      `FragFuel.sseq_tuple` at the nested pattern the second produces. -/
   | neg_sseq (ctx ctxB ctxA ctxC : context) (a : List _root_.annot) (act : CoreAction)
       (sseq_pat : pattern) (sseq_e2 : CoreExpr) :
       (∀ c'', ¬ Step M c c'') →
@@ -1154,7 +1154,7 @@ theorem MachineCtx.thread_inj {M : MachineCtx} {e e' : CoreExpr} {ρ ρ' : EnvSt
 
 /-- THE LOOP-LEVEL READING of a shipped round: one iteration of
     `drive_nonmemory_steps_aux2` at any fuel `fl` and accumulator
-    continues at the successor state — the `loop_step_frag` shape,
+    continues at the successor state — the `loop_step_frag_fuel` shape,
     at the context's own tagDefs and thread id. -/
 theorem CerberusRound.loop_step (hfuel : 0 < LemFuel.fuel) {M : MachineCtx} {c c' : Config}
     (h : CerberusRound M c c') {dst : driver_state} (hemb : M.Embeds dst c)
@@ -1207,25 +1207,11 @@ theorem Step.CallOf.not_val {M : MachineCtx} {w : SpikeValA} {fr : context → c
 
 /-! ## THE CERTIFICATION: mirror step ⇒ shipped round -/
 
-/-- THE UNIFIED STEP-MATCH OVER THE SHIPPED DRIVER: wherever the mirror
-    steps at a `Frag` configuration with a cons-shaped environment and
-    at least two ambient fuel units, the shipped driver's round at every embedding
-    state is exactly that step — one case per redex root, each
-    discharged by the engine equation of the redex (`step_ctx_*`,
-    Soundness.lean / DriverCollapse.lean) and the matching
-    `advance_step` arm. Stated at the context's OWN tagDefs and extern
-    map (the driver functions take the reader argument; `loop_step_frag`,
-    DriverCollapse.lean, has this theorem's shape at the production
-    profile `fmapEmpty` — proved there independently, not derived from
-    this theorem; the module header, "WHAT CONSUMES WHAT"). E1: the
-    successor thread is the mirror's at the successor control — the
-    general arm's location write is `Ctl.upd` (`locUpdTh_thread`); the
-    run-state supplies track the successor control (the `Embeds` ties
-    are carried to the successor control's `sup`). -/
-theorem engine_step_matchU (hfuel : 2 ≤ LemFuel.fuel) {M : MachineCtx}
+/-- The proof-device form of `engine_step_matchU` (over `FragFuel`); the export is `engine_step_matchU` (R2, Fragment.lean). -/
+theorem engine_step_matchU_fuel (hfuel : 2 ≤ LemFuel.fuel) {M : MachineCtx}
     {e e' : CoreExpr} {ev0 : Fmap sym value} {evs : List (Fmap sym value)}
     {ρ' : EnvStack} {ctl ctl' : Ctl} {σ σ' : Mem}
-    (hf : Frag e) (hs : Step M (e, ev0 :: evs, ctl, σ) (e', ρ', ctl', σ')) :
+    (hf : FragFuel e) (hs : Step M (e, ev0 :: evs, ctl, σ) (e', ρ', ctl', σ')) :
     CerberusRound M (e, ev0 :: evs, ctl, σ) (e', ρ', ctl', σ') := by
   intro dst hemb
   obtain ⟨hth, hlay, hfile, hext, hlabd, hsym, hexc⟩ := hemb
@@ -2059,23 +2045,42 @@ theorem engine_step_matchU (hfuel : 2 ≤ LemFuel.fuel) {M : MachineCtx}
       rfl
 
 
-/-- MATCH-GIVEN-STEP as a relation inclusion (`engine_step_matchU`
+
+/-- THE UNIFIED STEP-MATCH OVER THE SHIPPED DRIVER: wherever the mirror
+    steps at a `FragFuel` configuration with a cons-shaped environment and
+    at least two ambient fuel units, the shipped driver's round at every embedding
+    state is exactly that step — one case per redex root, each
+    discharged by the engine equation of the redex (`step_ctx_*`,
+    Soundness.lean / DriverCollapse.lean) and the matching
+    `advance_step` arm. Stated at the context's OWN tagDefs and extern
+    map (the driver functions take the reader argument; `loop_step_frag_fuel`,
+    DriverCollapse.lean, has this theorem's shape at the production
+    profile `fmapEmpty` — proved there independently, not derived from
+    this theorem; the module header, "WHAT CONSUMES WHAT"). E1: the
+    successor thread is the mirror's at the successor control — the
+    general arm's location write is `Ctl.upd` (`locUpdTh_thread`); the
+    run-state supplies track the successor control (the `Embeds` ties
+    are carried to the successor control's `sup`). -/
+theorem engine_step_matchU (hfuel : 2 ≤ LemFuel.fuel) {M : MachineCtx} {e e' : CoreExpr}
+    {ev0 : Fmap sym value} {evs : List (Fmap sym value)} {ρ' : EnvStack} {ctl ctl' : Ctl}
+    {σ σ' : Mem} (hf : Frag e) (hdep : evalDepth e ≤ LemFuel.fuel)
+    (hs : Step M (e, ev0 :: evs, ctl, σ) (e', ρ', ctl', σ')) :
+    CerberusRound M (e, ev0 :: evs, ctl, σ) (e', ρ', ctl', σ') :=
+  engine_step_matchU_fuel (hfuel := hfuel) (M := M) (e := e) (e' := e') (ev0 := ev0) (evs := evs) (ρ' := ρ') (ctl := ctl) (ctl' := ctl') (σ := σ) (σ' := σ') (hf := hf.toFuel hdep) (hs := hs)
+
+/-- MATCH-GIVEN-STEP as a relation inclusion (`engine_step_matchU_fuel`
     re-read at a configuration successor). -/
 theorem Step.toCerberusRound (hfuel : 2 ≤ LemFuel.fuel) {M : MachineCtx} {e : CoreExpr}
     {ev0 : Fmap sym value} {evs : List (Fmap sym value)} {ctl : Ctl} {σ : Mem} {c' : Config}
-    (hf : Frag e) (hs : Step M (e, ev0 :: evs, ctl, σ) c') :
+    (hf : FragFuel e) (hs : Step M (e, ev0 :: evs, ctl, σ) c') :
     CerberusRound M (e, ev0 :: evs, ctl, σ) c' := by
   obtain ⟨e', ρ', ctl', σ'⟩ := c'
-  exact engine_step_matchU (hfuel := by omega) hf hs
+  exact engine_step_matchU_fuel (hfuel := by omega) hf hs
 
-/-- THE TWO-SIDED ARM, GIVEN A MIRROR STEP: wherever the mirror steps
-    at all, `Step` and the shipped round coincide (both directions), for
-    every successor. The hypothesis `hstep` is load-bearing: at an
-    annotated value the shipped round is the REMOVE-ANNOT tau while the
-    mirror does not step (the value protocol) — see the classification. -/
-theorem step_iff_cerberusRound (hfuel : 2 ≤ LemFuel.fuel) {M : MachineCtx} {e : CoreExpr}
+/-- The proof-device form of `step_iff_cerberusRound` (over `FragFuel`); the export is `step_iff_cerberusRound` (R2, Fragment.lean). -/
+theorem step_iff_cerberusRound_fuel (hfuel : 2 ≤ LemFuel.fuel) {M : MachineCtx} {e : CoreExpr}
     {ev0 : Fmap sym value} {evs : List (Fmap sym value)} {ctl : Ctl} {σ : Mem}
-    (hf : Frag e) (hstep : ∃ c', Step M (e, ev0 :: evs, ctl, σ) c') (c' : Config) :
+    (hf : FragFuel e) (hstep : ∃ c', Step M (e, ev0 :: evs, ctl, σ) c') (c' : Config) :
     Step M (e, ev0 :: evs, ctl, σ) c' ↔ CerberusRound M (e, ev0 :: evs, ctl, σ) c' := by
   constructor
   · exact Step.toCerberusRound (hfuel := by omega) hf
@@ -2113,6 +2118,19 @@ theorem step_iff_cerberusRound (hfuel : 2 ≤ LemFuel.fuel) {M : MachineCtx} {e 
     obtain rfl : sy₀ = sy := hsym₀.symm.trans hsym
     obtain rfl : ex₀ = ex := hexc₀.symm.trans hexc
     exact hs₀
+
+
+/-- THE TWO-SIDED ARM, GIVEN A MIRROR STEP: wherever the mirror steps
+    at all, `Step` and the shipped round coincide (both directions), for
+    every successor. The hypothesis `hstep` is load-bearing: at an
+    annotated value the shipped round is the REMOVE-ANNOT tau while the
+    mirror does not step (the value protocol) — see the classification. -/
+theorem step_iff_cerberusRound (hfuel : 2 ≤ LemFuel.fuel) {M : MachineCtx} {e : CoreExpr}
+    {ev0 : Fmap sym value} {evs : List (Fmap sym value)} {ctl : Ctl} {σ : Mem} (hf : Frag e)
+    (hdep : evalDepth e ≤ LemFuel.fuel) (hstep : ∃ c', Step M (e, ev0 :: evs, ctl, σ) c')
+    (c' : Config) :
+    Step M (e, ev0 :: evs, ctl, σ) c' ↔ CerberusRound M (e, ev0 :: evs, ctl, σ) c' :=
+  step_iff_cerberusRound_fuel (hfuel := hfuel) (M := M) (e := e) (ev0 := ev0) (evs := evs) (ctl := ctl) (σ := σ) (hf := hf.toFuel hdep) (hstep := hstep) (c' := c')
 
 /-! ## The exhaustive per-configuration classification -/
 
@@ -2473,7 +2491,7 @@ theorem EngineMatchU.refusal_of_stuck {M : MachineCtx} {e : CoreExpr} {ρ : EnvS
 
 /-! ## MIRROR COMPLETENESS, PER CONSTRUCTOR (commit 2 of the slice)
 
-For every redex root the decomposition `Frag.decomp` can deliver, a
+For every redex root the decomposition `FragFuel.decomp` can deliver, a
 lemma `complete_<redex>` classifies the configuration: the mirror
 steps, or the shipped round is a `ShippedRefusal`, or the shape is a
 registered `OpenRound` gap. Lifting a redex step to the whole
@@ -3384,7 +3402,7 @@ theorem complete_create (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M
 /-- KILL: the kernel verdict at the request's own location — active
     (the mirror step, including the static-dead panic default under A5)
     or one of the seven reasons in `killM_killed_inv`. Stated at any
-    `kind`; `Frag.kill` retains the static restriction. -/
+    `kind`; `FragFuel.kill` retains the static restriction. -/
 theorem complete_kill (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {kind : kill_kind}
     {pv : CerbMem.PointerValue}
@@ -7295,7 +7313,7 @@ theorem complete_call (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M :
     — RETURN at a bare value (`Step.ret`; the engine's arm has no failure
     channel but the empty-env panic, excluded by the cons-shaped env),
     REMOVE-ANNOT at an annotated one (`Step.ret_annot`). At the empty
-    stack a value is the terminal (`cerberusRound_classify`'s value arms). -/
+    stack a value is the terminal (`cerberusRound_classify_fuel`'s value arms). -/
 theorem complete_ret {M : MachineCtx} (w : SpikeValA) (ev0 : Fmap sym value)
     (evs : List (Fmap sym value)) (pc : Option sym × context)
     (κ : List (Option sym × context)) (q : Option sym) (ℓ : exec_location)
@@ -7689,17 +7707,10 @@ theorem complete_nd (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : M
 
 /-! ### THE ASSEMBLED COMPLETENESS THEOREM -/
 
-/-- MIRROR COMPLETENESS ON THE FRAGMENT: at every non-value `Frag`
-    configuration with a cons-shaped environment and at least four
-    ambient fuel units,
-    the mirror steps, or the shipped round is a classified refusal
-    (`ShippedRefusal`: ILLTYPED / KILL / FORK / PANIC), or the
-    configuration is one of the registered gaps (`OpenRound`). One
-    lemma per redex root of the fragment (`complete_*`), dispatched by
-    the decomposition `Frag.decomp`. -/
-theorem frag_round_complete (hfuel : 4 ≤ LemFuel.fuel) {M : MachineCtx}
+/-- The proof-device form of `frag_round_complete` (over `FragFuel`); the export is `frag_round_complete` (R2, Fragment.lean). -/
+theorem frag_round_complete_fuel (hfuel : 4 ≤ LemFuel.fuel) {M : MachineCtx}
     {e : CoreExpr} {ev0 : Fmap sym value} {evs : List (Fmap sym value)} {ctl : Ctl} {σ : Mem}
-    (hf : Frag e) (hnv : toVal e = none) :
+    (hf : FragFuel e) (hnv : toVal e = none) :
     RoundComplete M (e, ev0 :: evs, ctl, σ) := by
   obtain ⟨ctx, r, hd, hfr⟩ := hf.decomp hnv
   have hrj := hd.redex
@@ -7829,15 +7840,25 @@ theorem frag_round_complete (hfuel : 4 ≤ LemFuel.fuel) {M : MachineCtx}
       | nd h2 _ => exact h2
     exact complete_nd (hfuel := by omega) hd h2 _ _ _
 
-/-- THE CLASSIFICATION THEOREM (the exhaustive sum form): every
-    well-sized `Frag` configuration at a sequentially well-formed
-    context with a cons-shaped env stack falls into exactly one
-    `RoundClass` arm; the `step` arm is two-sided given its mirror
-    step; the `refused` arm carries the shipped driver's refusal
-    (`frag_round_complete`); the `open_` arm names a registered gap. -/
-theorem cerberusRound_classify (hfuel : 4 ≤ LemFuel.fuel) {M : MachineCtx} (hwf : M.SeqWF) {ctl : Ctl} (hκ : ctl.κ = [])
+
+/-- MIRROR COMPLETENESS ON THE FRAGMENT: at every non-value `FragFuel`
+    configuration with a cons-shaped environment and at least four
+    ambient fuel units,
+    the mirror steps, or the shipped round is a classified refusal
+    (`ShippedRefusal`: ILLTYPED / KILL / FORK / PANIC), or the
+    configuration is one of the registered gaps (`OpenRound`). One
+    lemma per redex root of the fragment (`complete_*`), dispatched by
+    the decomposition `FragFuel.decomp`. -/
+theorem frag_round_complete (hfuel : 4 ≤ LemFuel.fuel) {M : MachineCtx} {e : CoreExpr}
+    {ev0 : Fmap sym value} {evs : List (Fmap sym value)} {ctl : Ctl} {σ : Mem} (hf : Frag e)
+    (hdep : evalDepth e ≤ LemFuel.fuel) (hnv : toVal e = none) :
+    RoundComplete M (e, ev0 :: evs, ctl, σ) :=
+  frag_round_complete_fuel (hfuel := hfuel) (M := M) (e := e) (ev0 := ev0) (evs := evs) (ctl := ctl) (σ := σ) (hf := hf.toFuel hdep) (hnv := hnv)
+
+/-- The proof-device form of `cerberusRound_classify` (over `FragFuel`); the export is `cerberusRound_classify` (R2, Fragment.lean). -/
+theorem cerberusRound_classify_fuel (hfuel : 4 ≤ LemFuel.fuel) {M : MachineCtx} (hwf : M.SeqWF) {ctl : Ctl} (hκ : ctl.κ = [])
     {e : CoreExpr} {ev0 : Fmap sym value} {evs : List (Fmap sym value)} {σ : Mem}
-    (hf : Frag e) :
+    (hf : FragFuel e) :
     RoundClass M (e, ev0 :: evs, ctl, σ) := by
   cases hv : toVal e with
   | some w =>
@@ -7856,12 +7877,25 @@ theorem cerberusRound_classify (hfuel : 4 ≤ LemFuel.fuel) {M : MachineCtx} (hw
   | none =>
     by_cases hstep : ∃ c', Step M (e, ev0 :: evs, ctl, σ) c'
     · obtain ⟨c', hs⟩ := hstep
-      exact .step c' hs (step_iff_cerberusRound (hfuel := by omega) hf ⟨c', hs⟩)
-    · rcases frag_round_complete (hfuel := by omega) (M := M) (ev0 := ev0) (evs := evs) (σ := σ) hf hv with
+      exact .step c' hs (step_iff_cerberusRound_fuel (hfuel := by omega) hf ⟨c', hs⟩)
+    · rcases frag_round_complete_fuel (hfuel := by omega) (M := M) (ev0 := ev0) (evs := evs) (σ := σ) hf hv with
           ⟨c', hs⟩ | hr | ho
       · exact absurd ⟨c', hs⟩ hstep
       · exact .refused hv (fun c' hs => hstep ⟨c', hs⟩) hr
       · exact .open_ hv (fun c' hs => hstep ⟨c', hs⟩) ho
+
+
+/-- THE CLASSIFICATION THEOREM (the exhaustive sum form): every
+    well-sized `FragFuel` configuration at a sequentially well-formed
+    context with a cons-shaped env stack falls into exactly one
+    `RoundClass` arm; the `step` arm is two-sided given its mirror
+    step; the `refused` arm carries the shipped driver's refusal
+    (`frag_round_complete_fuel`); the `open_` arm names a registered gap. -/
+theorem cerberusRound_classify (hfuel : 4 ≤ LemFuel.fuel) {M : MachineCtx} (hwf : M.SeqWF)
+    {ctl : Ctl} (hκ : ctl.κ = []) {e : CoreExpr} {ev0 : Fmap sym value}
+    {evs : List (Fmap sym value)} {σ : Mem} (hf : Frag e) (hdep : evalDepth e ≤ LemFuel.fuel) :
+    RoundClass M (e, ev0 :: evs, ctl, σ) :=
+  cerberusRound_classify_fuel (hfuel := hfuel) (M := M) (hwf := hwf) (ctl := ctl) (hκ := hκ) (e := e) (ev0 := ev0) (evs := evs) (σ := σ) (hf := hf.toFuel hdep)
 
 /-! ## E3: the killed EVAL-kind round (the negative exhibit's driver round) -/
 

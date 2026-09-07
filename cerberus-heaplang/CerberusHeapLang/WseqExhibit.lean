@@ -43,7 +43,7 @@ def wseqProg (v1 v2 : value) : CoreExpr :=
     (ofVal (.pure v1)) (ofVal (.pure v2)))
 
 /-- Cone membership through the generic constructors alone. -/
-theorem wseqProg_frag [LemFuel] (v1 v2 : value) : Frag (wseqProg v1 v2) :=
+theorem wseqProg_frag (v1 v2 : value) : Frag (wseqProg v1 v2) :=
   .wseq (frag_ofVal (.pure v1)) (frag_ofVal (.pure v2))
 
 /-! ## The WP lane -/
@@ -126,8 +126,9 @@ theorem wseq_certified [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) {GF : BundledGFunc
       (fun v' _ => v' = v2) := by
   refine engine_adequacy (hfuel := hfuel) (GF := GF) (M := spikeCtx) rfl rfl (ctl := spikeCtl) rfl
     (fun l params cont hl => (spikeCtx_labels_none l hl).elim)
-    spikeCtx_fragProcs
-    (wseqProg v1 v2) fmapEmpty [] σ₀ ∅ (wseqProg_frag v1 v2)
+    (fun l params cont hl => (spikeCtx_labels_none l hl).elim)
+    spikeCtx_fragProcs (spikeCtx_procsDepth _)
+    (wseqProg v1 v2) fmapEmpty [] σ₀ ∅ (wseqProg_frag v1 v2) (Nat.le_trans (Nat.le_of_ble_eq_true rfl) hfuel)
     (Coh.mk
       (fun _ c hget => absurd (hget.symm.trans
         (Iris.Std.LawfulPartialMap.get?_empty (M := SpikeHeapF) _))

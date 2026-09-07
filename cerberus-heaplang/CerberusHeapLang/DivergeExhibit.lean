@@ -103,8 +103,8 @@ theorem dg_self_step [LemFuel] (ra : core_run_annotation) (ev0 : Fmap sym value)
 
 /-- The registered body is in the fragment (a jump redex with no
     arguments). -/
-theorem dgBody_frag [LemFuel] (ra : core_run_annotation) : Frag (dgBody ra) :=
-  Frag.run (fun _ h => nomatch h) (fun _ h => nomatch h)
+theorem dgBody_frag (ra : core_run_annotation) : Frag (dgBody ra) :=
+  Frag.run (fun _ h => nomatch h)
 
 /-- The label map registers exactly the self-jump body. -/
 theorem dgQ_inv (ra : core_run_annotation) {l : sym}
@@ -143,6 +143,7 @@ theorem dg_loop_exhausts [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) (ra : core_run_a
     obtain ⟨rs', tr, ctr, hlbl, hsup', hrun⟩ :=
       loop_step_frag_same (hfuel := hfuel) (th₀ := procThread dgProcSym (dgBody ra) [fmapEmpty])
         rfl rfl (procCtx_labels (dgRS_labeledAt ra)) rfl rfl fl acc hth hext hfile hQd hsup (dgBody_frag ra)
+        (Nat.le_trans (Nat.le_of_ble_eq_true rfl) hfuel)
         (dg_self_step ra fmapEmpty [] dst.layout_state) rfl
     rw [hrun]
     exact dg_loop_exhausts hfuel ra fl _ acc
@@ -193,7 +194,11 @@ theorem diverge_total_unprovable [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) {GF : Bu
         rw [hlbl] at hl
         obtain ⟨-, rfl⟩ := dgQ_inv ra hl
         exact dgBody_frag ra)
-      Ls (dgBody ra) fmapEmpty [] σ₀ m₀ (dgBody_frag ra)
+      (fun l params cont hl => by
+        rw [hlbl] at hl
+        obtain ⟨-, rfl⟩ := dgQ_inv ra hl
+        exact (Nat.le_trans (Nat.le_of_ble_eq_true rfl) hfuel))
+      Ls (dgBody ra) fmapEmpty [] σ₀ m₀ (dgBody_frag ra) (Nat.le_trans (Nat.le_of_ble_eq_true rfl) hfuel)
       hcoh (fun _ _ => True) k
       (by
         intro inst

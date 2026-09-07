@@ -408,15 +408,11 @@ variable (loc : CerbLocation.Loc) (ann ra : core_run_annotation)
   (c : CerbMem.PointerValue)
 
 /-- The body is in the certified extended cone. -/
-theorem loopBody_fragJ [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) :
+theorem loopBody_fragJ :
     Frag (loopBody loc ann ra mo bty c) := by
-  refine .if_ (PePure.of_isPePure rfl) (by change 2 ≤ LemFuel.fuel; exact hfuel)
-    (.sseq (.store) (.run (PePure.all_of_isPePure rfl) ?_))
+  exact .if_ (PePure.of_isPePure rfl)
+    (.sseq (.store) (.run (PePure.all_of_isPePure rfl)))
     (.val_pure Vunit)
-  intro pe hpe
-  simp at hpe
-  subst hpe
-  exact (hfuel : peDepth decPe ≤ LemFuel.fuel)
 
 /-- THE EXHIBIT: driving the REAL engine ({step_ctx → sequential
     discharge} at the proc-carrying thread, the label map tied
@@ -449,10 +445,15 @@ theorem counter_loop_certified [LemFuel] (hfuel : 2 ≤ LemFuel.fuel)
     (fun l params cont hl => by
       rw [hlbl] at hl
       obtain ⟨-, rfl⟩ := loopQ_inv loc ann ra mo bty xbty _ hl
-      exact loopBody_fragJ (hfuel := hfuel) loc ann ra mo bty _)
-    (procCtx_fragProcs _)
+      exact loopBody_fragJ loc ann ra mo bty _)
+    (fun l params cont hl => by
+      rw [hlbl] at hl
+      obtain ⟨-, rfl⟩ := loopQ_inv loc ann ra mo bty xbty _ hl
+      exact (Nat.le_trans (Nat.le_of_ble_eq_true rfl) hfuel))
+    (procCtx_fragProcs _) (procCtx_procsDepth _ _)
     prog fmapEmpty [] σ₀ _
-    (.save (saveParams_pure_of_vals rfl) (fun pe hp => by rw [saveParams_depth_of_vals rfl pe hp]; omega) (loopBody_fragJ (hfuel := hfuel) loc ann ra mo bty _))
+    (.save (saveParams_pure_of_vals rfl) (loopBody_fragJ loc ann ra mo bty _))
+    (Nat.le_trans (Nat.le_of_ble_eq_true rfl) hfuel)
     hcoh
     (fun v σ' => v = Vunit ∧ ∃ bs',
       ((n = 0 ∧ bs' = bs0) ∨ (0 < n ∧ bs' = (sevenBytes fmapEmpty))) ∧
@@ -502,10 +503,15 @@ theorem counter_loop_certified_irrelevant_binding [LemFuel] (hfuel : 2 ≤ LemFu
     (fun l params cont hl => by
       rw [hlbl] at hl
       obtain ⟨-, rfl⟩ := loopQ_inv loc ann ra mo bty xbty _ hl
-      exact loopBody_fragJ (hfuel := hfuel) loc ann ra mo bty _)
-    (procCtx_fragProcs _)
+      exact loopBody_fragJ loc ann ra mo bty _)
+    (fun l params cont hl => by
+      rw [hlbl] at hl
+      obtain ⟨-, rfl⟩ := loopQ_inv loc ann ra mo bty xbty _ hl
+      exact (Nat.le_trans (Nat.le_of_ble_eq_true rfl) hfuel))
+    (procCtx_fragProcs _) (procCtx_procsDepth _ _)
     prog (envAdd ySym junk fmapEmpty) [] σ₀ _
-    (.save (saveParams_pure_of_vals rfl) (fun pe hp => by rw [saveParams_depth_of_vals rfl pe hp]; omega) (loopBody_fragJ (hfuel := hfuel) loc ann ra mo bty _))
+    (.save (saveParams_pure_of_vals rfl) (loopBody_fragJ loc ann ra mo bty _))
+    (Nat.le_trans (Nat.le_of_ble_eq_true rfl) hfuel)
     hcoh
     (fun v σ' => v = Vunit ∧ ∃ bs',
       ((n = 0 ∧ bs' = bs0) ∨ (0 < n ∧ bs' = (sevenBytes fmapEmpty))) ∧

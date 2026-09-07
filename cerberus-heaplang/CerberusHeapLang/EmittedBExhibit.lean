@@ -162,32 +162,25 @@ def progBE2 : CoreExpr :=
       (Expr [] (Epure (psymB ySymB)))
       (loadOpRedex [] (ebLoc 7 20 7 30) empty_annotation intTy (psymB pSymB) NA))))))))))))))))
 
-/-- The evaluator-fuel bound at an authored operand (its depth is tiny). -/
-theorem depLeB [LemFuel] (hfuel : 9 ≤ LemFuel.fuel) {pe : generic_pexpr Unit sym} (h : peDepth pe ≤ 9) :
-    peDepth pe ≤ LemFuel.fuel := Nat.le_trans h hfuel
-
 /-- Cone membership. -/
-theorem progBE2_frag [LemFuel] (hfuel : 9 ≤ LemFuel.fuel) : Frag progBE2 :=
+theorem progBE2_frag : Frag progBE2 :=
   .sseq_sym
-    (.create_op rfl (.ctorTy [] Civalignof rfl [] intTy) (.val [] (Vctype intTy))
-      (depLeB hfuel (by decide)) (peDepth_val_le _ _ (by omega)))
+    (.create_op rfl (.ctorTy [] Civalignof rfl [] intTy) (.val [] (Vctype intTy)))
     (.sseq
-      (.bound (.store_op rfl (.sym [] ySymB) (.ctorTy [] Cunspecified rfl [] intTy)
-        (depLeB hfuel (by decide)) (depLeB hfuel (by decide))))
+      (.bound (.store_op rfl (.sym [] ySymB) (.ctorTy [] Cunspecified rfl [] intTy)))
       (.sseq_sym
-        (.bound (.pure_op rfl (PePure.of_isPePure rfl) (depLeB hfuel (by decide))))
+        (.bound (.pure_op rfl (PePure.of_isPePure rfl)))
         (.sseq_sym
           (.bound (.wseq_tuple
-            (.pure_op rfl (PePure.of_isPePure rfl) (depLeB hfuel (by decide)))
-            (.pure_op rfl (PePure.of_isPePure rfl) (depLeB hfuel (by decide)))))
+            (.pure_op rfl (PePure.of_isPePure rfl))
+            (.pure_op rfl (PePure.of_isPePure rfl))))
           (.sseq
-            (.bound (.store_op rfl (.sym [] ySymB) (.sym [] a2SymB)
-              (depLeB hfuel (by decide)) (depLeB hfuel (by decide))))
+            (.bound (.store_op rfl (.sym [] ySymB) (.sym [] a2SymB)))
             (.sseq_tuple
-              (.pure_op rfl (PePure.of_isPePure rfl) (depLeB hfuel (by decide)))
+              (.pure_op rfl (PePure.of_isPePure rfl))
               (.bound (.wseq_sym
-                (.pure_op rfl (.sym [] ySymB) (depLeB hfuel (by decide)))
-                (.load_op rfl (.sym [] pSymB) (depLeB hfuel (by decide))))))))))
+                (.pure_op rfl (.sym [] ySymB))
+                (.load_op rfl (.sym [] pSymB)))))))))
 
 /-! ## The evaluator at the program's operands -/
 
@@ -692,9 +685,10 @@ theorem exhibitB_prod_e2 [LemFuel] (hfuel : 32 ≤ LemFuel.fuel) (sup : Nat) (fs
           (collect_labeled_continuations_NEW (prodFile progBE2))).1))
         rfl rfl (prodCtx_labels hQe) rfl rfl rfl rfl (Nat.le_refl _)
         (fun l params cont hl => (hnolabel l params cont hl).elim)
+        (fun l params cont hl => (hnolabel l params cont hl).elim)
         (fun _ _ _ _ => iprop(False))
         progBE2 fmapEmpty [] prodMem₀ (∅ : SpikeHeapF SpikeCell)
-        (allocCost fmapEmpty intTy 4) (progBE2_frag (by omega))
+        (allocCost fmapEmpty intTy 4) progBE2_frag (Nat.le_trans (show evalDepth _ ≤ 9 from Nat.le_of_ble_eq_true rfl) (by omega))
         (prodMem₀_launchCoh _ prod_one_int_budget_fits)
         (ψB fmapEmpty) 30
         (by

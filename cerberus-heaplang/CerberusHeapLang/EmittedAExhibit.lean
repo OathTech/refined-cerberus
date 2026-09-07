@@ -111,17 +111,12 @@ def progAE1 : CoreExpr :=
 
 /-- Cone membership: the plain-symbol binder at a `create_op` head, then
     the wildcard binder over two `bound` frames. -/
-theorem progAE1_frag [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) : Frag progAE1 :=
+theorem progAE1_frag : Frag progAE1 :=
   .sseq_sym
-    (.create_op rfl (.ctorTy [] Civalignof rfl [] intTy) (.val [] (Vctype intTy))
-      (by rw [show peDepth alignofIntPe = 2 from rfl]; omega)
-      (peDepth_val_le _ _ (by omega)))
+    (.create_op rfl (.ctorTy [] Civalignof rfl [] intTy) (.val [] (Vctype intTy)))
     (.sseq
-      (.bound (.store_op rfl (.sym [] pASym) (.val [] sevenVal)
-        (by rw [show peDepth (Pexpr ([] : List annot) () (PEsym pASym)) = 1 from rfl]; omega)
-        (peDepth_val_le _ _ (by omega))))
-      (.bound (.load_op rfl (.sym [] pASym)
-        (by rw [show peDepth (Pexpr ([] : List annot) () (PEsym pASym)) = 1 from rfl]; omega))))
+      (.bound (.store_op rfl (.sym [] pASym) (.val [] sevenVal)))
+      (.bound (.load_op rfl (.sym [] pASym))))
 
 /-- The alignment operand evaluates to the evaluator's own alignment
     constant (`evalPexpr_tyctor`, `evalTyCtor_alignof`), which for `int`
@@ -317,9 +312,10 @@ theorem exhibitA_prod_e1 [LemFuel] (hfuel : 15 ≤ LemFuel.fuel) (sup : Nat) (fs
           (collect_labeled_continuations_NEW (prodFile progAE1))).1))
         rfl rfl (prodCtx_labels hQe) rfl rfl rfl rfl (Nat.le_refl _)
         (fun l params cont hl => (hnolabel l params cont hl).elim)
+        (fun l params cont hl => (hnolabel l params cont hl).elim)
         (fun _ _ _ _ => iprop(False))
         progAE1 fmapEmpty [] prodMem₀ (∅ : SpikeHeapF SpikeCell)
-        (allocCost fmapEmpty intTy 4) (progAE1_frag (by omega))
+        (allocCost fmapEmpty intTy 4) progAE1_frag (Nat.le_trans (show evalDepth _ ≤ 2 from Nat.le_of_ble_eq_true rfl) (by omega))
         (prodMem₀_launchCoh _ prod_one_int_budget_fits)
         (ψA fmapEmpty) 13
         (by

@@ -165,40 +165,39 @@ theorem csCtx_lookupLabel (ra : core_run_annotation) (bty ybty : core_base_type)
 omit [LemFuel] in
 theorem csIncPe_pure : PePure csIncPe := PePure.of_isPePure rfl
 
-theorem csFBody_frag (hfuel : 2 ≤ LemFuel.fuel) (bty ybty : core_base_type) : Frag (csFBody bty ybty) :=
+theorem csFBody_frag (bty ybty : core_base_type) : Frag (csFBody bty ybty) :=
   .save (fun pe hpe => by
       simp only [saveParamPexprs, List.map_cons, List.map_nil, List.mem_cons,
         List.not_mem_nil, or_false] at hpe
       subst hpe
       exact csIncPe_pure)
-    (fun pe hpe => by
-      simp only [saveParamPexprs, List.map_cons, List.map_nil, List.mem_cons,
-        List.not_mem_nil, or_false] at hpe
-      subst hpe
-      rw [show peDepth csIncPe = 2 from rfl]
-      omega)
-    (.pure_sym (by omega))
+    .pure_sym
 
-theorem csMainBody_frag (hfuel : 0 < LemFuel.fuel) (ra : core_run_annotation) : Frag (csMainBody ra) :=
+theorem csMainBody_frag (ra : core_run_annotation) : Frag (csMainBody ra) :=
   .call (fun pe hpe => by
       simp only [List.mem_cons, List.not_mem_nil, or_false] at hpe
       subst hpe
       exact .val _ _)
-    (fun pe hpe => by
-      simp only [List.mem_cons, List.not_mem_nil, or_false] at hpe
-      subst hpe
-      rw [show peDepth (Pexpr [] () (PEval (csInt 3))) = 1 from rfl]
-      omega)
 
 /-- THE PROCEDURE WELL-FORMEDNESS PREMISE of the partial lane at a
     two-procedure file: both bodies in the certified fragment, with
     sufficient operand fuel; both label fibers empty. -/
-theorem csCtx_fragProcs (hfuel : 2 ≤ LemFuel.fuel) (ra : core_run_annotation) (bty ybty : core_base_type) :
+theorem csCtx_fragProcs (ra : core_run_annotation) (bty ybty : core_base_type) :
     (csCtx ra bty ybty).FragProcs where
   body f params body hf := by
     rcases csFile_lookup_inv ra bty ybty hf with ⟨-, rfl⟩ | ⟨-, rfl⟩
-    · exact csMainBody_frag (hfuel := by omega) ra
-    · exact csFBody_frag (hfuel := by omega) bty ybty
+    · exact csMainBody_frag ra
+    · exact csFBody_frag bty ybty
+  labels f params body _ l params' cont hl := by
+    rw [csCtx_lookupLabel] at hl
+    cases hl
+
+/-- The two bodies' evaluator depth (R2): within two passes. -/
+theorem csCtx_procsDepth [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) (ra : core_run_annotation) (bty ybty : core_base_type) :
+    (csCtx ra bty ybty).ProcsDepth LemFuel.fuel where
+  body f params body hf := by
+    rcases csFile_lookup_inv ra bty ybty hf with ⟨-, rfl⟩ | ⟨-, rfl⟩ <;>
+      exact Nat.le_trans (Nat.le_of_ble_eq_true rfl) hfuel
   labels f params body _ l params' cont hl := by
     rw [csCtx_lookupLabel] at hl
     cases hl
@@ -356,9 +355,10 @@ theorem call_smoke_engine (hfuel : 2 ≤ LemFuel.fuel) (σ₀ : Mem) :
   refine engine_adequacy (hfuel := by omega) (GF := SpikeGF) (M := csCtx ra bty ybty) rfl rfl
     (ctl := ⟨[], some csMain, default, default, default⟩) rfl
     (fun l params cont hl => by rw [csCtx_lookupLabel] at hl; cases hl)
-    (csCtx_fragProcs (hfuel := by omega) ra bty ybty)
+    (fun l params cont hl => by rw [csCtx_lookupLabel] at hl; cases hl)
+    (csCtx_fragProcs ra bty ybty) (csCtx_procsDepth (hfuel := by omega) ra bty ybty)
     (csMainBody ra) fmapEmpty [] σ₀ (∅ : SpikeHeapF SpikeCell)
-    (csMainBody_frag (hfuel := by omega) ra)
+    (csMainBody_frag ra) (Nat.le_trans (show evalDepth _ ≤ 1 from Nat.le_of_ble_eq_true rfl) (by omega))
     (csCoh_empty σ₀)
     (fun v _ => v = csInt 4)
     ?_ (th₀ := (csCtx ra bty ybty).thread (csMainBody ra) [fmapEmpty] ⟨[], some csMain, default, default, default⟩)

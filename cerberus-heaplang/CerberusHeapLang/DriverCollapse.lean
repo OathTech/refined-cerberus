@@ -28,7 +28,7 @@ driver's OWN round functions.
   Step_done2 arm (Driver.lean:377, `prepare_exit`). The iteration
   lemmas (`loop_step_tau`/`loop_step_action`/`loop_step_done`, and the
   with-runstate/memop rounds) prove this by unfolding the driver's own
-  round functions; `loop_step_frag` is the ONE production round at any
+  round functions; `loop_step_frag_fuel` is the ONE production round at any
   fragment configuration where the mirror `Step` steps
   (single-threaded, parent-less, stack-empty — the fields the fragment
   reads), and `wpt_driver_aux` (ProdLoop.lean) iterates it.
@@ -44,7 +44,7 @@ driver's OWN round functions.
   spends one layer of its own fresh `nd_bind_lemFuel` budget, never
   accumulating). `runND` (CerbND.lean:89-138) on a one-layer active
   tree is the singleton execution (`runND_active`). Branch-freeness
-  per construct is `engine_step_matchU`'s singleton step list; these
+  per construct is `engine_step_matchU_fuel`'s singleton step list; these
   lemmas lift it through the ndM structure.
 
 - READOUT: `finalize` (Driver.lean:423) on the PROGRAM-DONE state:
@@ -91,6 +91,7 @@ partial lanes must discharge their respective budget and outcome
 obligations when they compose these helpers.
 -/
 import CerberusHeapLang.Soundness
+import CerberusHeapLang.Fragment
 import Driver
 import CerbND
 
@@ -235,7 +236,8 @@ theorem runOne_of_applyMemM {α : Type} {m : CerbMem.memM α} {σ σ' : Mem} {z 
 /-- liftCore_run (Driver.lean:245-248) of a returned request: the run
     state comes back VERBATIM (the fragment's request monads are
     stExceptUndef_return — D14's core_run_state row). -/
-theorem runOne_liftCore_run_return (hfuel : 0 < LemFuel.fuel) {a : Type} (z : a) (dst : driver_state) :
+theorem runOne_liftCore_run_return (hfuel : 0 < LemFuel.fuel) {a : Type} (z : a)
+    (dst : driver_state) :
     runOne (liftCore_run (stExceptUndef_return z)) dst = (NDactive z, dst) := by
   refine (runOne_bind_active (hfuel := by omega) (z := dst) rfl).trans ?_
   refine (runOne_bind_active (hfuel := by omega) (z := ())
@@ -1715,7 +1717,7 @@ theorem step_ctx_case_eval_ws {an : List _root_.annot} {e : CoreExpr} {ctx : con
 /-! ## THE DRIVER STEP-MATCH (Phase 5): wherever the mirror steps at a
 cone configuration, the production driver's per-thread round advances
 the singleton thread to EXACTLY the mirror's successor — the
-driver-level analog of `engine_step_matchU`, one case per redex root,
+driver-level analog of `engine_step_matchU_fuel`, one case per redex root,
 each discharged by the raw singleton lemma + the matching round
 equation above. The mirror step is taken at ANY context `M₀` agreeing
 with the driver's on the three projections `Step` reads (tagDefs,
@@ -1730,7 +1732,8 @@ E1: the driver thread's `current_loc` is TIED to the control's `curLoc`
 the general arm's location write (`locUpdTh`, Core_reduction.lean:484)
 is the mirror's `Ctl.upd` (`locUpdTh_ctl`). The control-preserving
 rounds are those keeping the call stack (`hκ`). -/
-theorem loop_step_frag_same' (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCtx} {ctl ctl' : Ctl}
+/-- The proof-device form of `loop_step_frag_same'` (over `FragFuel`); the export is `loop_step_frag_same'` (R2, Fragment.lean). -/
+theorem loop_step_frag_same_fuel' (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCtx} {ctl ctl' : Ctl}
     (htd : M₀.tagDefs = fmapEmpty) (hex : M₀.extern = fmapEmpty)
     {th₀ : thread_state} (hcl : th₀.current_loc = ctl.curLoc)
     (fl : Nat) (acc : Fmap thread_id (List core_step2))
@@ -1744,7 +1747,7 @@ theorem loop_step_frag_same' (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCtx} {c
         LabeledAt dst.core_run_state0 p (M₀.labelsAt ctl.proc))
     (hsup : dst.core_run_state0.sym_supply = ctl.sup.sym ∧
       dst.core_run_state0.excluded_supply = ctl.sup.excl)
-    (hf : Frag e)
+    (hf : FragFuel e)
     (hs : Step M₀ (e, ev0 :: evs, ctl, dst.layout_state) (e', ρ', ctl', σ'))
     (hκ : ctl'.κ = ctl.κ) :
     ∃ (rs' : core_run_state) (tr : List trace_event) (ctr : Nat),
@@ -2587,11 +2590,29 @@ theorem loop_step_frag_same' (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCtx} {c
       rcases dst with ⟨cf, ce, cs, crs, ls, cc, fs, tr0, sa, bl, ctr0⟩
       rfl
 
-/-- The control-preserving round at a KNOWN current procedure (the calls
-    arc C2 statement): `loop_step_frag_same'` with the jump tie supplied
-    by the thread's `current_proc_opt` and the run-state tie `hQd` at the
-    context's derived label map `hlb`. -/
-theorem loop_step_frag_same (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCtx} {ctl ctl' : Ctl}
+
+/-- Public form over the syntactic fragment (R2 [USER 2026-09-07]). -/
+theorem loop_step_frag_same' (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCtx} {ctl ctl' : Ctl} (htd : M₀.tagDefs = fmapEmpty) (hex : M₀.extern = fmapEmpty) {th₀ : thread_state} (hcl : th₀.current_loc = ctl.curLoc) (fl : Nat) (acc : Fmap thread_id (List core_step2)) {dst : driver_state} {e e' : CoreExpr} {ev0 : Fmap sym value} {evs : List (Fmap sym value)} {ρ' : EnvStack} {σ' : Mem} (hth : dst.core_state0.thread_states =
+      [(0, (none, { th₀ with arena := e, env := ev0 :: evs }))]) (hext : dst.core_extern = fmapEmpty) (hfile : dst.core_file = M₀.file) (hjmp : ∀ l params cont, lookupLabel (M₀.labelsAt ctl.proc) l = some (params, cont) →
+      ∃ p, th₀.current_proc_opt = some p ∧
+        LabeledAt dst.core_run_state0 p (M₀.labelsAt ctl.proc)) (hsup : dst.core_run_state0.sym_supply = ctl.sup.sym ∧
+      dst.core_run_state0.excluded_supply = ctl.sup.excl) (hf : Frag e) (hdep : evalDepth e ≤ LemFuel.fuel) (hs : Step M₀ (e, ev0 :: evs, ctl, dst.layout_state) (e', ρ', ctl', σ')) (hκ : ctl'.κ = ctl.κ) :
+    ∃ (rs' : core_run_state) (tr : List trace_event) (ctr : Nat),
+      rs'.labeled = dst.core_run_state0.labeled ∧
+      (rs'.sym_supply = ctl'.sup.sym ∧ rs'.excluded_supply = ctl'.sup.excl) ∧
+      runOne (drive_nonmemory_steps_aux2_lemFuel (Nat.succ fl)
+          fmapEmpty acc [0]) dst =
+        runOne (drive_nonmemory_steps_aux2_lemFuel fl fmapEmpty acc [0])
+          { dst with
+              core_state0 := update_thread_state 0
+                { th₀ with arena := e', env := ρ', current_loc := ctl'.curLoc } dst.core_state0,
+              layout_state := σ',
+              core_run_state0 := rs', trace := tr,
+              dr_step_counter := ctr } :=
+  loop_step_frag_same_fuel' (hfuel := hfuel) (M₀ := M₀) (ctl := ctl) (ctl' := ctl') (htd := htd) (hex := hex) (th₀ := th₀) (hcl := hcl) (fl := fl) (acc := acc) (dst := dst) (e := e) (e' := e') (ev0 := ev0) (evs := evs) (ρ' := ρ') (σ' := σ') (hth := hth) (hext := hext) (hfile := hfile) (hjmp := hjmp) (hsup := hsup) (hf := hf.toFuel hdep) (hs := hs) (hκ := hκ)
+
+/-- The proof-device form of `loop_step_frag_same` (over `FragFuel`); the export is `loop_step_frag_same` (R2, Fragment.lean). -/
+theorem loop_step_frag_same_fuel (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCtx} {ctl ctl' : Ctl}
     (htd : M₀.tagDefs = fmapEmpty) (hex : M₀.extern = fmapEmpty)
     {Q : LabelMap} (hlb : M₀.labelsAt ctl.proc = Q)
     {p : sym} {th₀ : thread_state} (hproc : th₀.current_proc_opt = some p)
@@ -2605,7 +2626,7 @@ theorem loop_step_frag_same (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCtx} {ct
     (hQd : LabeledAt dst.core_run_state0 p Q)
     (hsup : dst.core_run_state0.sym_supply = ctl.sup.sym ∧
       dst.core_run_state0.excluded_supply = ctl.sup.excl)
-    (hf : Frag e)
+    (hf : FragFuel e)
     (hs : Step M₀ (e, ev0 :: evs, ctl, dst.layout_state) (e', ρ', ctl', σ'))
     (hκ : ctl'.κ = ctl.κ) :
     ∃ (rs' : core_run_state) (tr : List trace_event) (ctr : Nat),
@@ -2620,25 +2641,33 @@ theorem loop_step_frag_same (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCtx} {ct
               layout_state := σ',
               core_run_state0 := rs', trace := tr,
               dr_step_counter := ctr } :=
-  loop_step_frag_same' (hfuel := by omega) htd hex hcl fl acc hth hext hfile
+  loop_step_frag_same_fuel' (hfuel := by omega) htd hex hcl fl acc hth hext hfile
     (fun _ _ _ _ => ⟨p, hproc, by rw [hlb]; exact hQd⟩) hsup hf hs hκ
 
-/-- THE DRIVER STEP-MATCH AT THE LIVE CONTROL (calls arc C2 — the C1
-    range audit's M-1 obligation: the mirror's control TIED to the
-    driver thread's control fields). The driver thread is `th₀` with the
-    live `(e, ρ)` installed and its FOUR control fields equal to the
-    mirror's `ctl` (`hstack`/`hproc`/`hel`/`hcl` — E1 added the current
-    location, what the general arm writes and the PCALL arm pushes onto
-    `exec_loc`); the file is the context's (`hfile`; what `call_proc`
-    reads). Wherever the mirror steps at a cone configuration —
-    control-preserving, CALL or RETURN — the production driver's
-    per-thread round advances the singleton thread to EXACTLY the
-    mirror's successor, the four control fields written to the successor
-    control's. Proof: the control-preserving rounds are
-    `loop_step_frag_same'`; the CALL round is `step_ctx_call_ws` +
-    `loop_step_withrs_eval` (run state verbatim); the RETURN round is
-    `step_ctx_ret` + `loop_step_tau_tsk` (trace existential). -/
-theorem loop_step_frag' (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCtx} {ctl ctl' : Ctl}
+
+/-- The control-preserving round at a KNOWN current procedure (the calls
+    arc C2 statement): `loop_step_frag_same_fuel'` with the jump tie supplied
+    by the thread's `current_proc_opt` and the run-state tie `hQd` at the
+    context's derived label map `hlb`. -/
+theorem loop_step_frag_same (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCtx} {ctl ctl' : Ctl} (htd : M₀.tagDefs = fmapEmpty) (hex : M₀.extern = fmapEmpty) {Q : LabelMap} (hlb : M₀.labelsAt ctl.proc = Q) {p : sym} {th₀ : thread_state} (hproc : th₀.current_proc_opt = some p) (hcl : th₀.current_loc = ctl.curLoc) (fl : Nat) (acc : Fmap thread_id (List core_step2)) {dst : driver_state} {e e' : CoreExpr} {ev0 : Fmap sym value} {evs : List (Fmap sym value)} {ρ' : EnvStack} {σ' : Mem} (hth : dst.core_state0.thread_states =
+      [(0, (none, { th₀ with arena := e, env := ev0 :: evs }))]) (hext : dst.core_extern = fmapEmpty) (hfile : dst.core_file = M₀.file) (hQd : LabeledAt dst.core_run_state0 p Q) (hsup : dst.core_run_state0.sym_supply = ctl.sup.sym ∧
+      dst.core_run_state0.excluded_supply = ctl.sup.excl) (hf : Frag e) (hdep : evalDepth e ≤ LemFuel.fuel) (hs : Step M₀ (e, ev0 :: evs, ctl, dst.layout_state) (e', ρ', ctl', σ')) (hκ : ctl'.κ = ctl.κ) :
+    ∃ (rs' : core_run_state) (tr : List trace_event) (ctr : Nat),
+      rs'.labeled = dst.core_run_state0.labeled ∧
+      (rs'.sym_supply = ctl'.sup.sym ∧ rs'.excluded_supply = ctl'.sup.excl) ∧
+      runOne (drive_nonmemory_steps_aux2_lemFuel (Nat.succ fl)
+          fmapEmpty acc [0]) dst =
+        runOne (drive_nonmemory_steps_aux2_lemFuel fl fmapEmpty acc [0])
+          { dst with
+              core_state0 := update_thread_state 0
+                { th₀ with arena := e', env := ρ', current_loc := ctl'.curLoc } dst.core_state0,
+              layout_state := σ',
+              core_run_state0 := rs', trace := tr,
+              dr_step_counter := ctr } :=
+  loop_step_frag_same_fuel (hfuel := hfuel) (M₀ := M₀) (ctl := ctl) (ctl' := ctl') (htd := htd) (hex := hex) (Q := Q) (hlb := hlb) (p := p) (th₀ := th₀) (hproc := hproc) (hcl := hcl) (fl := fl) (acc := acc) (dst := dst) (e := e) (e' := e') (ev0 := ev0) (evs := evs) (ρ' := ρ') (σ' := σ') (hth := hth) (hext := hext) (hfile := hfile) (hQd := hQd) (hsup := hsup) (hf := hf.toFuel hdep) (hs := hs) (hκ := hκ)
+
+/-- The proof-device form of `loop_step_frag'` (over `FragFuel`); the export is `loop_step_frag'` (R2, Fragment.lean). -/
+theorem loop_step_frag_fuel' (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCtx} {ctl ctl' : Ctl}
     (htd : M₀.tagDefs = fmapEmpty) (hex : M₀.extern = fmapEmpty)
     {th₀ : thread_state}
     (hstack : th₀.stack0 = ctl.toStack) (hproc : th₀.current_proc_opt = ctl.proc)
@@ -2654,7 +2683,7 @@ theorem loop_step_frag' (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCtx} {ctl ct
         LabeledAt dst.core_run_state0 p (M₀.labelsAt ctl.proc))
     (hsup : dst.core_run_state0.sym_supply = ctl.sup.sym ∧
       dst.core_run_state0.excluded_supply = ctl.sup.excl)
-    (hf : Frag e)
+    (hf : FragFuel e)
     (hs : Step M₀ (e, ev0 :: evs, ctl, dst.layout_state) (e', ρ', ctl', σ')) :
     ∃ (rs' : core_run_state) (tr : List trace_event) (ctr : Nat),
       rs'.labeled = dst.core_run_state0.labeled ∧
@@ -2680,12 +2709,12 @@ theorem loop_step_frag' (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCtx} {ctl ct
   · -- control-preserving: the successor's control fields are th₀'s own,
     -- the location the updated control's
     obtain ⟨rs', tr, ctr, hlab, hsup', hrun⟩ :=
-      loop_step_frag_same' (hfuel := by omega) htd hex hcl fl acc hth hext hfile hjmp hsup hf hs rfl
+      loop_step_frag_same_fuel' (hfuel := by omega) htd hex hcl fl acc hth hext hfile hjmp hsup hf hs rfl
     refine ⟨rs', tr, ctr, hlab, hsup', ?_⟩
     rw [hrun, Ctl.toStack_upd, Ctl.upd_proc, Ctl.upd_execLoc, ← hstack, ← hproc, ← hel]
   · -- E5: the supply draw — the same thread shape, the run state's supplies advanced
     obtain ⟨rs', tr, ctr, hlab, hsup', hrun⟩ :=
-      loop_step_frag_same' (hfuel := by omega) htd hex hcl fl acc hth hext hfile hjmp hsup hf hs rfl
+      loop_step_frag_same_fuel' (hfuel := by omega) htd hex hcl fl acc hth hext hfile hjmp hsup hf hs rfl
     refine ⟨rs', tr, ctr, hlab, hsup', ?_⟩
     rw [hrun, Ctl.toStack_draw, Ctl.draw_proc, Ctl.draw_execLoc, Ctl.toStack_upd, Ctl.upd_proc,
       Ctl.upd_execLoc, ← hstack, ← hproc, ← hel]
@@ -2740,10 +2769,49 @@ theorem loop_step_frag' (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCtx} {ctl ct
     rcases dst with ⟨cf, ce, cs, crs, ls, cc, fs, tr0, sa, bl, ctr0⟩
     rfl
 
-/-- The live-control round at a KNOWN, TIED current procedure (the calls
-    arc C2 statement; pinned): `loop_step_frag'` with the jump tie
-    supplied by `hp`/`hproc`/`hlb`/`hQd`. -/
-theorem loop_step_frag (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCtx} {ctl ctl' : Ctl}
+
+/-- THE DRIVER STEP-MATCH AT THE LIVE CONTROL (calls arc C2 — the C1
+    range audit's M-1 obligation: the mirror's control TIED to the
+    driver thread's control fields). The driver thread is `th₀` with the
+    live `(e, ρ)` installed and its FOUR control fields equal to the
+    mirror's `ctl` (`hstack`/`hproc`/`hel`/`hcl` — E1 added the current
+    location, what the general arm writes and the PCALL arm pushes onto
+    `exec_loc`); the file is the context's (`hfile`; what `call_proc`
+    reads). Wherever the mirror steps at a cone configuration —
+    control-preserving, CALL or RETURN — the production driver's
+    per-thread round advances the singleton thread to EXACTLY the
+    mirror's successor, the four control fields written to the successor
+    control's. Proof: the control-preserving rounds are
+    `loop_step_frag_same_fuel'`; the CALL round is `step_ctx_call_ws` +
+    `loop_step_withrs_eval` (run state verbatim); the RETURN round is
+    `step_ctx_ret` + `loop_step_tau_tsk` (trace existential). -/
+theorem loop_step_frag' (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCtx} {ctl ctl' : Ctl} (htd : M₀.tagDefs = fmapEmpty) (hex : M₀.extern = fmapEmpty) {th₀ : thread_state} (hstack : th₀.stack0 = ctl.toStack) (hproc : th₀.current_proc_opt = ctl.proc) (hel : th₀.exec_loc = ctl.execLoc) (hcl : th₀.current_loc = ctl.curLoc) (fl : Nat) (acc : Fmap thread_id (List core_step2)) {dst : driver_state} {e e' : CoreExpr} {ev0 : Fmap sym value} {evs : List (Fmap sym value)} {ρ' : EnvStack} {σ' : Mem} (hth : dst.core_state0.thread_states =
+      [(0, (none, { th₀ with arena := e, env := ev0 :: evs }))]) (hext : dst.core_extern = fmapEmpty) (hfile : dst.core_file = M₀.file) (hjmp : ∀ l params cont, lookupLabel (M₀.labelsAt ctl.proc) l = some (params, cont) →
+      ∃ p, th₀.current_proc_opt = some p ∧
+        LabeledAt dst.core_run_state0 p (M₀.labelsAt ctl.proc)) (hsup : dst.core_run_state0.sym_supply = ctl.sup.sym ∧
+      dst.core_run_state0.excluded_supply = ctl.sup.excl) (hf : Frag e) (hdep : evalDepth e ≤ LemFuel.fuel) (hs : Step M₀ (e, ev0 :: evs, ctl, dst.layout_state) (e', ρ', ctl', σ')) :
+    ∃ (rs' : core_run_state) (tr : List trace_event) (ctr : Nat),
+      rs'.labeled = dst.core_run_state0.labeled ∧
+      (rs'.sym_supply = ctl'.sup.sym ∧ rs'.excluded_supply = ctl'.sup.excl) ∧
+      runOne (drive_nonmemory_steps_aux2_lemFuel (Nat.succ fl)
+          fmapEmpty acc [0]) dst =
+        runOne (drive_nonmemory_steps_aux2_lemFuel fl fmapEmpty acc [0])
+          { dst with
+              core_state0 := update_thread_state 0
+                { th₀ with
+                  arena := e'
+                  env := ρ'
+                  stack0 := ctl'.toStack
+                  current_proc_opt := ctl'.proc
+                  exec_loc := ctl'.execLoc
+                  current_loc := ctl'.curLoc } dst.core_state0,
+              layout_state := σ',
+              core_run_state0 := rs', trace := tr,
+              dr_step_counter := ctr } :=
+  loop_step_frag_fuel' (hfuel := hfuel) (M₀ := M₀) (ctl := ctl) (ctl' := ctl') (htd := htd) (hex := hex) (th₀ := th₀) (hstack := hstack) (hproc := hproc) (hel := hel) (hcl := hcl) (fl := fl) (acc := acc) (dst := dst) (e := e) (e' := e') (ev0 := ev0) (evs := evs) (ρ' := ρ') (σ' := σ') (hth := hth) (hext := hext) (hfile := hfile) (hjmp := hjmp) (hsup := hsup) (hf := hf.toFuel hdep) (hs := hs)
+
+/-- The proof-device form of `loop_step_frag` (over `FragFuel`); the export is `loop_step_frag` (R2, Fragment.lean). -/
+theorem loop_step_frag_fuel (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCtx} {ctl ctl' : Ctl}
     (htd : M₀.tagDefs = fmapEmpty) (hex : M₀.extern = fmapEmpty)
     {Q : LabelMap} (hlb : M₀.labelsAt ctl.proc = Q)
     {p : sym} (hp : ctl.proc = some p) {th₀ : thread_state}
@@ -2758,7 +2826,7 @@ theorem loop_step_frag (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCtx} {ctl ctl
     (hQd : LabeledAt dst.core_run_state0 p Q)
     (hsup : dst.core_run_state0.sym_supply = ctl.sup.sym ∧
       dst.core_run_state0.excluded_supply = ctl.sup.excl)
-    (hf : Frag e)
+    (hf : FragFuel e)
     (hs : Step M₀ (e, ev0 :: evs, ctl, dst.layout_state) (e', ρ', ctl', σ')) :
     ∃ (rs' : core_run_state) (tr : List trace_event) (ctr : Nat),
       rs'.labeled = dst.core_run_state0.labeled ∧
@@ -2778,8 +2846,35 @@ theorem loop_step_frag (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCtx} {ctl ctl
               layout_state := σ',
               core_run_state0 := rs', trace := tr,
               dr_step_counter := ctr } :=
-  loop_step_frag' (hfuel := by omega) htd hex hstack hproc hel hcl fl acc hth hext hfile
+  loop_step_frag_fuel' (hfuel := by omega) htd hex hstack hproc hel hcl fl acc hth hext hfile
     (fun _ _ _ _ => ⟨p, by rw [hproc, hp], by rw [hlb]; exact hQd⟩) hsup hf hs
+
+
+/-- The live-control round at a KNOWN, TIED current procedure (the calls
+    arc C2 statement; pinned): `loop_step_frag_fuel'` with the jump tie
+    supplied by `hp`/`hproc`/`hlb`/`hQd`. -/
+theorem loop_step_frag (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCtx} {ctl ctl' : Ctl} (htd : M₀.tagDefs = fmapEmpty) (hex : M₀.extern = fmapEmpty) {Q : LabelMap} (hlb : M₀.labelsAt ctl.proc = Q) {p : sym} (hp : ctl.proc = some p) {th₀ : thread_state} (hstack : th₀.stack0 = ctl.toStack) (hproc : th₀.current_proc_opt = ctl.proc) (hel : th₀.exec_loc = ctl.execLoc) (hcl : th₀.current_loc = ctl.curLoc) (fl : Nat) (acc : Fmap thread_id (List core_step2)) {dst : driver_state} {e e' : CoreExpr} {ev0 : Fmap sym value} {evs : List (Fmap sym value)} {ρ' : EnvStack} {σ' : Mem} (hth : dst.core_state0.thread_states =
+      [(0, (none, { th₀ with arena := e, env := ev0 :: evs }))]) (hext : dst.core_extern = fmapEmpty) (hfile : dst.core_file = M₀.file) (hQd : LabeledAt dst.core_run_state0 p Q) (hsup : dst.core_run_state0.sym_supply = ctl.sup.sym ∧
+      dst.core_run_state0.excluded_supply = ctl.sup.excl) (hf : Frag e) (hdep : evalDepth e ≤ LemFuel.fuel) (hs : Step M₀ (e, ev0 :: evs, ctl, dst.layout_state) (e', ρ', ctl', σ')) :
+    ∃ (rs' : core_run_state) (tr : List trace_event) (ctr : Nat),
+      rs'.labeled = dst.core_run_state0.labeled ∧
+      (rs'.sym_supply = ctl'.sup.sym ∧ rs'.excluded_supply = ctl'.sup.excl) ∧
+      runOne (drive_nonmemory_steps_aux2_lemFuel (Nat.succ fl)
+          fmapEmpty acc [0]) dst =
+        runOne (drive_nonmemory_steps_aux2_lemFuel fl fmapEmpty acc [0])
+          { dst with
+              core_state0 := update_thread_state 0
+                { th₀ with
+                  arena := e'
+                  env := ρ'
+                  stack0 := ctl'.toStack
+                  current_proc_opt := ctl'.proc
+                  exec_loc := ctl'.execLoc
+                  current_loc := ctl'.curLoc } dst.core_state0,
+              layout_state := σ',
+              core_run_state0 := rs', trace := tr,
+              dr_step_counter := ctr } :=
+  loop_step_frag_fuel (hfuel := hfuel) (M₀ := M₀) (ctl := ctl) (ctl' := ctl') (htd := htd) (hex := hex) (Q := Q) (hlb := hlb) (p := p) (hp := hp) (th₀ := th₀) (hstack := hstack) (hproc := hproc) (hel := hel) (hcl := hcl) (fl := fl) (acc := acc) (dst := dst) (e := e) (e' := e') (ev0 := ev0) (evs := evs) (ρ' := ρ') (σ' := σ') (hth := hth) (hext := hext) (hfile := hfile) (hQd := hQd) (hsup := hsup) (hf := hf.toFuel hdep) (hs := hs)
 
 /-! ## The live-control vocabulary of BOTH driver lanes (moved here from
 ProdLoop.lean in the fuel-lane restatement, 2026-09-03: the partial lane
@@ -2791,7 +2886,7 @@ registration ties as the total lane in ProdLoop.lean). -/
     (`stack0 := ctl.toStack`, `current_proc_opt := ctl.proc`, `exec_loc
     := ctl.execLoc` — PCALL/RETURN — and, E1, `current_loc := ctl.curLoc`
     — the general arm's location write); only `errno` is `th₀`'s.
-    `loop_step_frag`'s successor record IS this shape. -/
+    `loop_step_frag_fuel`'s successor record IS this shape. -/
 def ctlThread (th₀ : thread_state) (e : CoreExpr) (ρ : EnvStack) (ctl : Ctl) : thread_state :=
   { th₀ with
     arena := e
@@ -2832,7 +2927,7 @@ theorem LabeledProcs.of_fibers {M₀ : MachineCtx} (hex : M₀.extern = fmapEmpt
     procedures ALREADY ON the control): the run state's `labeled` map has,
     at the current procedure and at every procedure saved on the call
     stack, exactly the context's derived fiber — what the jump round reads
-    (`loop_step_frag'`'s `hjmp`). Vacuous at a control with no current
+    (`loop_step_frag_fuel'`'s `hjmp`). Vacuous at a control with no current
     procedure and an empty stack (`CtlTied.noproc` — the straight-line
     profile, where the derived map is empty and no jump can fire); at a
     declared entry procedure it follows from the whole-file tie

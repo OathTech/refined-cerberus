@@ -620,34 +620,19 @@ variable (loc : CerbLocation.Loc) (ann ra : core_run_annotation)
 
 /-- The label body is in the certified cone: the kill is `Frag.kill_op`
     at the bound symbol (either kind since K3; here `Static0 nodeTy`). -/
-theorem dlBody_fragJ [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) : Frag (dlBody loc ann ra mo bbty nbty ubty) := by
+theorem dlBody_fragJ : Frag (dlBody loc ann ra mo bbty nbty ubty) := by
   have hb : Frag (memopRedex [] PtrEq
       [Pexpr [] () (PEsym dlCurSym), Pexpr [] () (PEval nullVal)]) :=
     .memop_op rfl (.sym _ _) (.val _ _)
-      (by rw [show peDepth (Pexpr ([] : List annot) () (PEsym dlCurSym)) = 1
-          from rfl]; omega)
-      (by rw [show peDepth (Pexpr ([] : List annot) () (PEval nullVal)) = 1
-          from rfl]; omega)
   refine .sseq_sym hb
-    (.if_ (PePure.of_isPePure rfl) (by
-        rw [show peDepth (Pexpr ([] : List annot) () (PEsym dlBSym)) = 1
-          from rfl]
-        omega)
+    (.if_ (PePure.of_isPePure rfl)
       (.val_pure Vunit)
       (.sseq_spec
         (.load_op rfl
-          (.arrayShift [] longTy (.sym _ _) (.val _ _))
-          (by rw [show peDepth (lrShiftPe dlCurSym) = 2 from rfl]; omega))
+          (.arrayShift [] longTy (.sym _ _) (.val _ _)))
         (.sseq
-          (.kill_op rfl (.sym [] dlCurSym)
-            (by rw [show peDepth (Pexpr ([] : List annot) () (PEsym dlCurSym)) = 1
-                from rfl]; omega))
-          (.run (PePure.all_of_isPePure rfl) (by
-            intro pe hpe
-            simp only [List.mem_cons, List.not_mem_nil, or_false] at hpe
-            subst hpe
-            rw [show peDepth (Pexpr ([] : List annot) () (PEsym dlNSym)) = 1 from rfl]
-            omega)))))
+          (.kill_op rfl (.sym [] dlCurSym))
+          (.run (PePure.all_of_isPePure rfl)))))
 
 theorem dlBody_pot : pot (dlBody loc ann ra mo bbty nbty ubty) = 13 := rfl
 
@@ -1396,12 +1381,12 @@ end DlProdIris
 
 /-! ### Registration, cone membership, potentials -/
 
-theorem dlProdProg_frag [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) (ra : core_run_annotation) (mo : memory_order)
+theorem dlProdProg_frag (ra : core_run_annotation) (mo : memory_order)
     (bty sbty cbty bbty nbty ubty : core_base_type) :
     Frag (dlProdProg ra mo bty sbty cbty bbty nbty ubty) :=
-  lrProdPrefix_frag (hfuel := hfuel) ra mo bty
-    (.save (PePure.all_of_isPePure rfl) (fun pe hp => by rw [dlProdParams_depth cbty pe hp]; omega)
-      (dlBody_fragJ (hfuel := by omega) loc0 empty_annotation ra mo bbty nbty ubty))
+  lrProdPrefix_frag ra mo bty
+    (.save (PePure.all_of_isPePure rfl)
+      (dlBody_fragJ loc0 empty_annotation ra mo bbty nbty ubty))
 
 theorem dlProdProg_pot (ra : core_run_annotation) (mo : memory_order)
     (bty sbty cbty bbty nbty ubty : core_base_type) :
@@ -1522,12 +1507,16 @@ theorem dispose_list_certified_production [LemFuel] (hfuel : 53 ≤ LemFuel.fuel
         (fun l params cont hl => by
           rw [procCtxF_labels hQprod] at hl
           obtain ⟨-, rfl⟩ := dlQ_inv loc0 empty_annotation ra mo cbty bbty nbty ubty hl
-          exact dlBody_fragJ (hfuel := by omega) loc0 empty_annotation ra mo bbty nbty ubty)
+          exact dlBody_fragJ loc0 empty_annotation ra mo bbty nbty ubty)
+        (fun l params cont hl => by
+          rw [procCtxF_labels hQprod] at hl
+          obtain ⟨-, rfl⟩ := dlQ_inv loc0 empty_annotation ra mo cbty bbty nbty ubty hl
+          exact (Nat.le_trans (show evalDepth _ ≤ 2 from Nat.le_of_ble_eq_true rfl) (by omega)))
         dlProdLsT
         (dlProdProg ra mo bty sbty cbty bbty nbty ubty) fmapEmpty []
         prodMem₀ (∅ : SpikeHeapF SpikeCell)
         (allocCost fmapEmpty nodeTy 8 + allocCost fmapEmpty nodeTy 8)
-        (dlProdProg_frag (hfuel := by omega) ra mo bty sbty cbty bbty nbty ubty)
+        (dlProdProg_frag ra mo bty sbty cbty bbty nbty ubty) (Nat.le_trans (show evalDepth _ ≤ 2 from Nat.le_of_ble_eq_true rfl) (by omega))
         (prodMem₀_launchCoh _ lr_two_node_budget_fits)
         ψD
         (2 + (2 + ((3 + 1) + ((3 + 1) + ((3 + 1) + ((3 + 1) +

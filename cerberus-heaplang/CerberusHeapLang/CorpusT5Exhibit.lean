@@ -566,10 +566,14 @@ theorem t5_certified_production [LemFuel] (hfuel : 90 ≤ LemFuel.fuel)
         (fun l params cont hl => by
           rw [hlbl] at hl
           obtain ⟨-, rfl⟩ := t5RetQ_inv hl
-          exact .pure_op rfl (.sym [] (t5a 529)) (CorpusE0.depLe (by omega) (by decide)))
+          exact .pure_op rfl (.sym [] (t5a 529)))
+        (fun l params cont hl => by
+          rw [hlbl] at hl
+          obtain ⟨-, rfl⟩ := t5RetQ_inv hl
+          exact (Nat.le_trans (show evalDepth _ ≤ 1 from Nat.le_of_ble_eq_true rfl) (by omega)))
         (t5LsT SpikeGF)
         CorpusE0.t5Main fmapEmpty [] prodMem₀ (∅ : SpikeHeapF SpikeCell)
-        (allocCost fmapEmpty intTy 4 + allocCost fmapEmpty intTy 4) (CorpusE0.t5Main_frag (by omega))
+        (allocCost fmapEmpty intTy 4 + allocCost fmapEmpty intTy 4) CorpusE0.t5Main_frag (Nat.le_trans (show evalDepth _ ≤ 40 from Nat.le_of_ble_eq_true rfl) (by omega))
         (prodMem₀_launchCoh _ prod_two_int_budget_fits)
         ψT5 88
         (by

@@ -697,32 +697,40 @@ theorem t6_wpt [LemFuel] (hfuel : 0 < LemFuel.fuel) [SpikeGS .hasLC GF]
   · iexact Hx
   iexact Hr
 
-theorem t6DefaultTail_frag [LemFuel] (hfuel : 40 ≤ LemFuel.fuel) : Frag t6DefaultTail :=
-  .sseq (CorpusE0.t6Save_frag (hfuel := by omega) _ _ _ (CorpusE0.t6AssignStmt_frag (hfuel := by omega) _ _ _ _))
-    (.sseq (CorpusE0.t6Run_frag (hfuel := by omega) _ _) (.val_pure _))
+theorem t6DefaultTail_frag : Frag t6DefaultTail :=
+  .sseq (CorpusE0.t6Save_frag _ _ _ (CorpusE0.t6AssignStmt_frag _ _ _ _))
+    (.sseq (CorpusE0.t6Run_frag _ _) (.val_pure _))
 
-theorem t6Case2Tail_frag [LemFuel] (hfuel : 40 ≤ LemFuel.fuel) : Frag t6Case2Tail :=
-  .sseq (CorpusE0.t6Save_frag (hfuel := by omega) _ _ _ (CorpusE0.t6AssignStmt_frag (hfuel := by omega) _ _ _ _))
-    (.sseq (CorpusE0.t6Run_frag (hfuel := by omega) _ _) (t6DefaultTail_frag (hfuel := by omega)))
+theorem t6Case2Tail_frag : Frag t6Case2Tail :=
+  .sseq (CorpusE0.t6Save_frag _ _ _ (CorpusE0.t6AssignStmt_frag _ _ _ _))
+    (.sseq (CorpusE0.t6Run_frag _ _) (t6DefaultTail_frag))
 
-theorem t6CaseContext_frag [LemFuel] (hfuel : 40 ≤ LemFuel.fuel) (body : CoreExpr) (hb : Frag body) : Frag (t6CaseContext body) :=
+theorem t6CaseContext_frag (body : CoreExpr) (hb : Frag body) : Frag (t6CaseContext body) :=
   .sseq (.sseq hb (.val_pure _))
-    (.sseq (CorpusE0.t6Save_frag (hfuel := by omega) _ _ _ (.val_pure _))
-      (.sseq (.val_pure _) (CorpusE0.t6Return_frag (hfuel := by omega))))
+    (.sseq (CorpusE0.t6Save_frag _ _ _ (.val_pure _))
+      (.sseq (.val_pure _) CorpusE0.t6Return_frag))
 
-theorem t6Q_frag [LemFuel] (hfuel : 40 ≤ LemFuel.fuel) {l : sym} {params : List (sym × core_base_type)} {cont : CoreExpr}
+/-- The evaluator depth of every registered t6 continuation is within 40 (R2). -/
+theorem t6Q_depth [LemFuel] {l : sym} {params : List (sym × core_base_type)} {cont : CoreExpr}
+    (h : lookupLabel t6Q l = some (params, cont)) (hfuel : 40 ≤ LemFuel.fuel) :
+    evalDepth cont ≤ LemFuel.fuel := by
+  have hc := t6Q_cont h
+  simp only [List.mem_cons, List.not_mem_nil, or_false] at hc
+  rcases hc with rfl | rfl | rfl | rfl | rfl <;> exact Nat.le_trans (Nat.le_of_ble_eq_true rfl) hfuel
+
+theorem t6Q_frag {l : sym} {params : List (sym × core_base_type)} {cont : CoreExpr}
     (h : lookupLabel t6Q l = some (params, cont)) : Frag cont := by
   have hc := t6Q_cont h
   simp only [List.mem_cons, List.not_mem_nil, or_false] at hc
   rcases hc with rfl | rfl | rfl | rfl | rfl
-  · exact t6CaseContext_frag (hfuel := by omega) _ (.sseq (CorpusE0.t6AssignStmt_frag (hfuel := by omega) _ _ _ _)
-      (.sseq (CorpusE0.t6Run_frag (hfuel := by omega) _ _) (t6Case2Tail_frag (hfuel := by omega))))
-  · exact t6CaseContext_frag (hfuel := by omega) _ (.sseq (CorpusE0.t6AssignStmt_frag (hfuel := by omega) _ _ _ _)
-      (.sseq (CorpusE0.t6Run_frag (hfuel := by omega) _ _) (t6DefaultTail_frag (hfuel := by omega))))
-  · exact t6CaseContext_frag (hfuel := by omega) _ (.sseq (CorpusE0.t6AssignStmt_frag (hfuel := by omega) _ _ _ _)
-      (.sseq (CorpusE0.t6Run_frag (hfuel := by omega) _ _) (.val_pure _)))
-  · exact .sseq (.val_pure _) (.sseq (.val_pure _) (CorpusE0.t6Return_frag (hfuel := by omega)))
-  · exact Frag.of_pePure _ (.sym _ _) (peDepth_sym_le (hfuel := by omega) _ _)
+  · exact t6CaseContext_frag _ (.sseq (CorpusE0.t6AssignStmt_frag _ _ _ _)
+      (.sseq (CorpusE0.t6Run_frag _ _) (t6Case2Tail_frag)))
+  · exact t6CaseContext_frag _ (.sseq (CorpusE0.t6AssignStmt_frag _ _ _ _)
+      (.sseq (CorpusE0.t6Run_frag _ _) (t6DefaultTail_frag)))
+  · exact t6CaseContext_frag _ (.sseq (CorpusE0.t6AssignStmt_frag _ _ _ _)
+      (.sseq (CorpusE0.t6Run_frag _ _) (.val_pure _)))
+  · exact .sseq (.val_pure _) (.sseq (.val_pure _) CorpusE0.t6Return_frag)
+  · exact Frag.of_pePure _ (.sym _ _)
 
 theorem collect_new_t6Main :
     collect_labeled_continuations_NEW (prodFileLib stdlibE3 [] t6Main) =
@@ -762,10 +770,11 @@ theorem t6_certified_production [LemFuel] (hfuel : 80 ≤ LemFuel.fuel)
       (wpt_driver_done_alloc (hfuel := by omega) (GF := SpikeGF) (ctl := prodCtl sup)
         (M₀ := prodCtx (prodFileLib stdlibE3 [] t6Main) (prodRSLib stdlibE3 [] sup t6Main))
         rfl rfl hlbl rfl rfl rfl rfl (Nat.le_refl _)
-        (fun l params cont hl => t6Q_frag (hfuel := by omega) (by rw [← hlbl]; exact hl))
+        (fun l params cont hl => t6Q_frag (by rw [← hlbl]; exact hl))
+        (fun l params cont hl => t6Q_depth (by rw [← hlbl]; exact hl) (by omega))
         (t6LsT SpikeGF fmapEmpty)
         t6Main fmapEmpty [] prodMem₀ (∅ : SpikeHeapF SpikeCell)
-        (allocCost fmapEmpty intTy 4 + allocCost fmapEmpty intTy 4) (CorpusE0.t6Main_frag (by omega))
+        (allocCost fmapEmpty intTy 4 + allocCost fmapEmpty intTy 4) CorpusE0.t6Main_frag (Nat.le_trans (show evalDepth _ ≤ 40 from Nat.le_of_ble_eq_true rfl) (by omega))
         (prodMem₀_launchCoh _ prod_two_int_budget_fits)
         ψT6 78
         (by

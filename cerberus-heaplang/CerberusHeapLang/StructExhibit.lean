@@ -94,7 +94,7 @@ def progS (loc : CerbLocation.Loc) (ann : core_run_annotation)
       sixVal mo')
 
 /-- Cone membership: two canonical stores under strong sequencing. -/
-theorem progS_frag [LemFuel] (loc : CerbLocation.Loc) (ann : core_run_annotation)
+theorem progS_frag (loc : CerbLocation.Loc) (ann : core_run_annotation)
     (mo mo' : memory_order) (bty : core_base_type) (id a : Int) :
     Frag (progS loc ann mo mo' bty id a) :=
   Frag.sseq (.store) (.store)
@@ -241,10 +241,10 @@ theorem struct_update_certified [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) {GF : Bun
     rw [structTy_size] at h
     exact h
   refine (engine_adequacy (hfuel := hfuel) (GF := GF) (M := spikeCtx) rfl rfl (ctl := spikeCtl) rfl
-    spikeCtx_labels_frag spikeCtx_fragProcs
+    spikeCtx_labels_frag (spikeCtx_labels_depth _) spikeCtx_fragProcs (spikeCtx_procsDepth _)
     (progS loc ann mo mo' bty id a) fmapEmpty [] σ₀
     (Iris.Std.PartialMap.singleton id (SpikeCell.mk a structTy bs))
-    (progS_frag loc ann mo mo' bty id a)
+    (progS_frag loc ann mo mo' bty id a) (Nat.le_trans (Nat.le_of_ble_eq_true rfl) hfuel)
     hcoh
     (fun _ σ' => CellCoh fmapEmpty σ' id ⟨a, structTy,
       spliceBytes fieldY (sixBytes fmapEmpty) (spliceBytes fieldX (fiveBytes fmapEmpty) bs)⟩)
@@ -658,18 +658,14 @@ def progCreateInit (loc : CerbLocation.Loc) (ann : core_run_annotation)
         (Pexpr [] () (PEsym structVSym)) mo))))
 
 /-- Cone membership. -/
-theorem progCreateInit_frag [LemFuel] (hfuel : 0 < LemFuel.fuel) (loc : CerbLocation.Loc)
+theorem progCreateInit_frag (loc : CerbLocation.Loc)
     (ann : core_run_annotation) (aprov : CerbMem.Provenance)
     (alignN : Int) (pref : prefix0) (mo : memory_order)
     (pbty vbty : core_base_type) :
     Frag (progCreateInit loc ann aprov alignN pref mo pbty vbty) :=
   .sseq_sym .create
     (.sseq_sym (.val_pure fiveVal)
-      (.store_op rfl (.sym [] structPSym) (.sym [] structVSym)
-        (by rw [show peDepth (Pexpr ([] : List annot) ()
-            (PEsym structPSym)) = 1 from rfl]; omega)
-        (by rw [show peDepth (Pexpr ([] : List annot) ()
-            (PEsym structVSym)) = 1 from rfl]; omega)))
+      (.store_op rfl (.sym [] structPSym) (.sym [] structVSym)))
 
 section CreateIris
 
@@ -814,8 +810,8 @@ theorem struct_create_store_adequacy [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) {GF 
   -- the allocating projection at the spike profile: footprint ∅, budget
   -- `allocCost structTy 8`, the Iris post = `struct_create_store_wps`'s post
   refine project_triple_pure_alloc (hfuel := hfuel) (GF := GF) (M := spikeCtx) rfl rfl (ctl := spikeCtl) rfl
-    spikeCtx_labels_frag spikeCtx_fragProcs
-    (progCreateInit_frag (hfuel := by omega) loc ann .Prov_none 8 pref mo pbty vbty)
+    spikeCtx_labels_frag (spikeCtx_labels_depth _) spikeCtx_fragProcs (spikeCtx_procsDepth _)
+    (progCreateInit_frag loc ann .Prov_none 8 pref mo pbty vbty) (Nat.le_trans (Nat.le_of_ble_eq_true rfl) hfuel)
     fmapEmpty [] (∅ : CellMap) (allocCost fmapEmpty structTy 8)
     (fun w => iprop(∃ p : CerbMem.PointerValue,
       ⌜w.sv.val = Vunit⌝ ∗

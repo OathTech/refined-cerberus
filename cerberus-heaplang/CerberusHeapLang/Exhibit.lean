@@ -186,9 +186,9 @@ abbrev progA : CoreExpr :=
 /-- Exhibit (b): the operator's frame program, `store(x,7)`. -/
 abbrev progB : CoreExpr := storeExpr [] loc0 empty_annotation intTy xPtr sevenVal NA
 
-theorem fragA [LemFuel] : Frag progA := Frag.sseq (.store) (.load)
+theorem fragA : Frag progA := Frag.sseq (.store) (.load)
 
-theorem fragB [LemFuel] : Frag progB := Frag.store
+theorem fragB : Frag progB := Frag.store
 
 /-- The engine's decode of 7's byte image is 7 again (recon §2.8:
     exact round-trip for `integerIval`-written values). -/
@@ -332,8 +332,8 @@ seeded engine state -/
     rest verbatim. -/
 theorem exhibitA_semantic [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) {GF : BundledGFunctors} [SpikeGpreS GF] :
     SemTriple spikeCtx spikeCtl spikeEnv progA mA (fun v Q => v = sevenVal ∧ Q = mA7) :=
-  semantic_triple_sound (hfuel := hfuel) (GF := GF) rfl rfl (ctl := spikeCtl) rfl spikeCtx_labels_frag spikeCtx_fragProcs
-    fragA
+  semantic_triple_sound (hfuel := hfuel) (GF := GF) rfl rfl (ctl := spikeCtl) rfl spikeCtx_labels_frag (spikeCtx_labels_depth _) spikeCtx_fragProcs (spikeCtx_procsDepth _)
+    fragA (Nat.le_trans (Nat.le_of_ble_eq_true rfl) hfuel)
     fmapEmpty [] provenA
 
 /-- EXHIBIT (b), the operator's FRAME EXHIBIT at the semantic level:
@@ -344,8 +344,8 @@ theorem exhibitB_semantic [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) {GF : BundledGF
     SemTriple spikeCtx spikeCtl spikeEnv progB (Iris.Std.PartialMap.union mA mF)
       (fun v Q => ∃ Q₀, (v = Vunit ∧ Q₀ = mA7) ∧ Q₀ ##ₘ mF ∧
         Q = Iris.Std.PartialMap.union Q₀ mF) :=
-  semantic_frame (hfuel := hfuel) (GF := GF) rfl rfl (ctl := spikeCtl) rfl spikeCtx_labels_frag spikeCtx_fragProcs
-    fragB
+  semantic_frame (hfuel := hfuel) (GF := GF) rfl rfl (ctl := spikeCtl) rfl spikeCtx_labels_frag (spikeCtx_labels_depth _) spikeCtx_fragProcs (spikeCtx_procsDepth _)
+    fragB (Nat.le_trans (Nat.le_of_ble_eq_true rfl) hfuel)
     fmapEmpty [] mF mA_disj_mF provenB
 
 /-- Exhibit (a) at the seeded engine instance (rest := ∅): from any
@@ -562,7 +562,7 @@ abbrev progC : CoreExpr :=
   sseqExpr [] BTy_unit (storeExpr [] loc0 empty_annotation intTy xPtr fiveVal NA)
     (storeExpr [] loc0 empty_annotation intTy yPtr sixVal NA)
 
-theorem fragC [LemFuel] : Frag progC := Frag.sseq (.store) (.store)
+theorem fragC : Frag progC := Frag.sseq (.store) (.store)
 
 /-- The two cells after the two stores. -/
 abbrev cellX5 : SpikeCell := ⟨xAddr, intTy, (fiveBytes fmapEmpty)⟩
@@ -667,8 +667,8 @@ theorem provenC [LemFuel] {GF : BundledGFunctors} [SpikeGpreS GF] :
     y to 6's bytes) with R verbatim: the two stores do not conflict. -/
 theorem exhibitC_semantic [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) {GF : BundledGFunctors} [SpikeGpreS GF] :
     SemTriple spikeCtx spikeCtl spikeEnv progC mB (fun _ Q => Q = mC) :=
-  semantic_triple_sound (hfuel := hfuel) (GF := GF) rfl rfl (ctl := spikeCtl) rfl spikeCtx_labels_frag spikeCtx_fragProcs
-    fragC
+  semantic_triple_sound (hfuel := hfuel) (GF := GF) rfl rfl (ctl := spikeCtl) rfl spikeCtx_labels_frag (spikeCtx_labels_depth _) spikeCtx_fragProcs (spikeCtx_procsDepth _)
+    fragC (Nat.le_trans (Nat.le_of_ble_eq_true rfl) hfuel)
     fmapEmpty [] provenC
 
 /-- Exhibit (c) at the seeded engine instance (rest := ∅): after the

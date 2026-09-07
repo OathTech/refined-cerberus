@@ -609,23 +609,12 @@ theorem arr_wp_readout [LemFuel] (sbty : core_base_type) :
 
 omit hQ hsz hdec in
 /-- The label bodies are in the certified cone. -/
-theorem arrBody_fragJ [LemFuel] (hfuel : 2 ≤ LemFuel.fuel)
+theorem arrBody_fragJ
     (n : Int) : Frag (arrBody loc ann ra mo xbty n) := by
-  refine .if_ (PePure.of_isPePure rfl) (by
-      rw [show peDepth (arrGuard n) = 2 from rfl]
-      exact hfuel)
-    (.sseq_spec (.load_op rfl (.sym _ _) (by
-        rw [show peDepth (Pexpr ([] : List annot) () (PEsym arrPSym)) = 1 from rfl]
-        omega))
-      (.run (PePure.all_of_isPePure rfl) ?_))
-    (.pure_sym (by omega))
-  intro pe hpe
-  simp only [List.mem_cons, List.not_mem_nil, or_false] at hpe
-  rcases hpe with rfl | rfl | rfl <;>
-    first
-      | (rw [show peDepth arrIncPe = 2 from rfl]; exact hfuel)
-      | (rw [show peDepth arrAccXPe = 2 from rfl]; exact hfuel)
-      | (rw [show peDepth arrShiftPe = 2 from rfl]; exact hfuel)
+  exact .if_ (PePure.of_isPePure rfl)
+    (.sseq_spec (.load_op rfl (.sym _ _))
+      (.run (PePure.all_of_isPePure rfl)))
+    .pure_sym
 
 end ArrIris
 
@@ -675,10 +664,16 @@ theorem array_sum_certified [LemFuel] (hfuel : 2 ≤ LemFuel.fuel)
       rw [hlbl] at hl
       obtain ⟨-, rfl⟩ := arrQ_inv loc ann ra mo ibty accbty pbty xbty
         vs.length hl
-      exact arrBody_fragJ (hfuel := hfuel) loc ann ra mo xbty vs.length)
-    (procCtx_fragProcs _)
+      exact arrBody_fragJ loc ann ra mo xbty vs.length)
+    (fun l params cont hl => by
+      rw [hlbl] at hl
+      obtain ⟨-, rfl⟩ := arrQ_inv loc ann ra mo ibty accbty pbty xbty
+        vs.length hl
+      exact (Nat.le_trans (Nat.le_of_ble_eq_true rfl) hfuel))
+    (procCtx_fragProcs _) (procCtx_procsDepth _ _)
     prog fmapEmpty [] σ₀ _
-    (.save (saveParams_pure_of_vals rfl) (fun pe hp => by rw [saveParams_depth_of_vals rfl pe hp]; omega) (arrBody_fragJ (hfuel := hfuel) loc ann ra mo xbty vs.length))
+    (.save (saveParams_pure_of_vals rfl) (arrBody_fragJ loc ann ra mo xbty vs.length))
+    (Nat.le_trans (Nat.le_of_ble_eq_true rfl) hfuel)
     hcoh
     (fun v σ' => v = ivVal vs.sum ∧ CellCoh fmapEmpty σ' id ⟨a, aty, bs⟩)
     ?_ (th₀ := procThread arrProcSym prog [fmapEmpty])

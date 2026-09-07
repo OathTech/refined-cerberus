@@ -229,7 +229,7 @@ theorem esizeAlts_le_potAlts_of {pats : List (pattern × CoreExpr)}
 
 mutual
 /-- E5: `esize ≤ pot` for EVERY term (the fragment-free form of
-    `Frag.esize_le_pot`, the size invariant of `wps_bound`/`wpt_bound`'s
+    `FragFuel.esize_le_pot`, the size invariant of `wps_bound`/`wpt_bound`'s
     static premises): every leaf costs at least 1 (`pot_pos`), every
     compound node's `pot` dominates its `esize` arm-wise (max ≤ sum). -/
 theorem esize_le_pot : ∀ e : CoreExpr, esize e ≤ pot e
@@ -299,7 +299,7 @@ theorem esizeAlts_le_potAlts : ∀ pats : List (pattern × CoreExpr), esizeAlts 
       exact Nat.max_le.mpr ⟨Nat.le_trans h1 (Nat.le_add_right _ _), Nat.le_trans h2 (Nat.le_add_left _ _)⟩
 end
 
-theorem Frag.esize_le_pot [LemFuel] {e : CoreExpr} (hf : Frag e) : esize e ≤ pot e := by
+theorem FragFuel.esize_le_pot [LemFuel] {e : CoreExpr} (hf : FragFuel e) : esize e ≤ pot e := by
   induction hf with
   | call hpes hdep => simp [esize, pot, callRedex]
   | val_pure v => simp [esize, pot]
@@ -560,9 +560,9 @@ theorem pot_negRewrite_le (n : Nat) (s0 : sym) (ctxA : context) (act : CoreActio
     bound is required. E1:
     stated at a kept call stack (`hκ` — the control-preserving rounds;
     CALL and RETURN leave the expression's own cone). -/
-theorem Frag.pot_step_bound [LemFuel] {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
+theorem FragFuel.pot_step_bound [LemFuel] {M : MachineCtx} {e : CoreExpr} {ρ : EnvStack}
     {ctl ctl' : Ctl} {σ : Mem} {e' : CoreExpr} {ρ' : EnvStack} {σ' : Mem}
-    (hf : Frag e)
+    (hf : FragFuel e)
     (hs : Step M (e, ρ, ctl, σ) (e', ρ', ctl', σ')) (hκ : ctl'.κ = ctl.κ) :
     pot e' ≤ pot e ∨
     ∃ l pes params cont, jumpRedex? e = some (l, pes) ∧

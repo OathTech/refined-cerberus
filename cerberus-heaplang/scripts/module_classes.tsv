@@ -31,7 +31,8 @@ CerberusHeapLang.EnvLaws	core	-	symbol-map laws
 CerberusHeapLang.Rules	core	-	atomic specifications and the raw-WP lifting
 CerberusHeapLang.Wps	core	-	the partial judgment and its rules
 CerberusHeapLang.Wpt	core	-	the total judgment and its rules
-CerberusHeapLang.Soundness	core	-	Frag, Decomp, the step match
+CerberusHeapLang.Soundness	core	-	the proof device FragFuel (the fuel-relative fragment), Decomp, the step match
+CerberusHeapLang.Fragment	core	-	the syntactic fragment Frag (fuel-free, R2), its evaluator depth evalDepth, and the bridge to the proof device FragFuel (Soundness)
 CerberusHeapLang.Substitution	core	-	covered pure-expression substitution and branch fragment preservation
 CerberusHeapLang.EvalClass	core	-	the evaluator outcome classification
 CerberusHeapLang.Potential	core	-	the static fuel bound

@@ -410,17 +410,8 @@ theorem fib_wp_readout [LemFuel] (hn : 0 ≤ n) (sbty : core_base_type) :
 
 omit hQ in
 /-- The label bodies are in the certified cone. -/
-theorem fibBody_fragJ [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) : Frag (fibBody ra n) := by
-  refine .if_ (PePure.of_isPePure rfl) (by
-    change 2 ≤ LemFuel.fuel
-    exact hfuel) (.run (PePure.all_of_isPePure rfl) ?_) (.pure_sym (by omega))
-  intro pe hpe
-  simp only [List.mem_cons, List.not_mem_nil, or_false] at hpe
-  rcases hpe with rfl | rfl | rfl <;>
-    first
-      | (rw [show peDepth fibIncPe = 2 from rfl]; exact hfuel)
-      | (rw [show peDepth fibBPe = 1 from rfl]; omega)
-      | (rw [show peDepth fibABPe = 2 from rfl]; exact hfuel)
+theorem fibBody_fragJ : Frag (fibBody ra n) := by
+  exact .if_ (PePure.of_isPePure rfl) (.run (PePure.all_of_isPePure rfl)) .pure_sym
 
 omit p rs hQ in
 /-- The empty seeded footprint is coherent with ANY memory. -/
@@ -465,10 +456,15 @@ theorem fib_certified [LemFuel] (hfuel : 2 ≤ LemFuel.fuel)
     (fun l params cont hl => by
       rw [hlbl] at hl
       obtain ⟨-, rfl⟩ := fibQ_inv ra n ibty abty bbty hl
-      exact fibBody_fragJ (hfuel := hfuel) ra n)
-    (procCtx_fragProcs _)
+      exact fibBody_fragJ ra n)
+    (fun l params cont hl => by
+      rw [hlbl] at hl
+      obtain ⟨-, rfl⟩ := fibQ_inv ra n ibty abty bbty hl
+      exact (Nat.le_trans (Nat.le_of_ble_eq_true rfl) hfuel))
+    (procCtx_fragProcs _) (procCtx_procsDepth _ _)
     prog fmapEmpty [] σ₀ (∅ : SpikeHeapF SpikeCell)
-    (.save (saveParams_pure_of_vals rfl) (fun pe hp => by rw [saveParams_depth_of_vals rfl pe hp]; omega) (fibBody_fragJ (hfuel := hfuel) ra n))
+    (.save (saveParams_pure_of_vals rfl) (fibBody_fragJ ra n))
+    (Nat.le_trans (Nat.le_of_ble_eq_true rfl) hfuel)
     (coh_empty σ₀)
     (fun v _ => v = ivVal (fibSpec n.toNat))
     ?_ (th₀ := procThread fibProcSym prog [fmapEmpty])

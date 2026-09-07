@@ -238,26 +238,19 @@ theorem eoDec_depth : ∀ pe ∈ [eoDec], peDepth pe = 2 := fun pe hpe => by
   subst hpe
   rfl
 
-theorem eoEvenBody_frag [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) : Frag (eoEvenBody ra) :=
+theorem eoEvenBody_frag : Frag (eoEvenBody ra) :=
   .if_ (PePure.of_isPePure rfl)
-    (by rw [show peDepth eoGuard = 2 from rfl]; exact hfuel)
-    (.val_pure _) (.call eoDec_pure (fun pe hp => by rw [eoDec_depth pe hp]; exact hfuel))
+    (.val_pure _) (.call eoDec_pure)
 
-theorem eoOddBody_frag [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) : Frag (eoOddBody ra) :=
+theorem eoOddBody_frag : Frag (eoOddBody ra) :=
   .if_ (PePure.of_isPePure rfl)
-    (by rw [show peDepth eoGuard = 2 from rfl]; exact hfuel)
-    (.val_pure _) (.call eoDec_pure (fun pe hp => by rw [eoDec_depth pe hp]; exact hfuel))
+    (.val_pure _) (.call eoDec_pure)
 
-theorem eoMain_frag [LemFuel] (hfuel : 0 < LemFuel.fuel) : Frag (eoMain ra n) :=
+theorem eoMain_frag : Frag (eoMain ra n) :=
   .call (fun pe hpe => by
       simp only [List.mem_cons, List.not_mem_nil, or_false] at hpe
       subst hpe
       exact .val _ _)
-    (fun pe hpe => by
-      simp only [List.mem_cons, List.not_mem_nil, or_false] at hpe
-      subst hpe
-      rw [show peDepth (Pexpr [] () (PEval (ivVal n))) = 1 from rfl]
-      omega)
 
 theorem eoEvenBody_pot : pot (eoEvenBody ra) = 4 := rfl
 theorem eoOddBody_pot : pot (eoOddBody ra) = 4 := rfl
@@ -265,12 +258,22 @@ theorem eoMain_pot : pot (eoMain ra n) = 2 := rfl
 
 /-- THE PROCEDURE WELL-FORMEDNESS PREMISE at the production context: the
     three bodies in the cone with ambient fuel at least two; every fiber empty. -/
-theorem eoCtx_fragProcs [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) (sup : Nat) : (eoCtx ra n nbty sup).FragProcs where
+theorem eoCtx_fragProcs (sup : Nat) : (eoCtx ra n nbty sup).FragProcs where
   body g params body hg := by
     rcases eoFile_lookup_inv ra n nbty hg with ⟨-, -, rfl⟩ | ⟨-, -, rfl⟩ | ⟨-, -, -, rfl⟩
-    · exact eoMain_frag (hfuel := by omega) ra n
-    · exact eoOddBody_frag (hfuel := hfuel) ra
-    · exact eoEvenBody_frag (hfuel := hfuel) ra
+    · exact eoMain_frag ra n
+    · exact eoOddBody_frag ra
+    · exact eoEvenBody_frag ra
+  labels g params body _ l params' cont hl := by
+    rw [eoCtx_labels, show lookupLabel fmapEmpty l = none from rfl] at hl
+    cases hl
+
+/-- The procedure bodies' evaluator depth (R2): every body is within two passes. -/
+theorem eoCtx_procsDepth [LemFuel] (hfuel : 2 ≤ LemFuel.fuel) (sup : Nat) :
+    (eoCtx ra n nbty sup).ProcsDepth LemFuel.fuel where
+  body g params body hg := by
+    rcases eoFile_lookup_inv ra n nbty hg with ⟨-, -, rfl⟩ | ⟨-, -, rfl⟩ | ⟨-, -, -, rfl⟩ <;>
+      exact Nat.le_trans (Nat.le_of_ble_eq_true rfl) hfuel
   labels g params body _ l params' cont hl := by
     rw [eoCtx_labels, show lookupLabel fmapEmpty l = none from rfl] at hl
     cases hl
@@ -679,9 +682,13 @@ theorem even_odd_certified [LemFuel] (hn : 0 ≤ n) (fs : CerbFS.FsState) (args 
         rw [show (prodCtl sup).proc = some mainSym from rfl, eoCtx_labels,
           show lookupLabel fmapEmpty l = none from rfl] at hl
         cases hl)
-      (eoCtx_fragProcs (hfuel := by omega) ra n nbty sup)
+      (fun l params cont hl => by
+        rw [show (prodCtl sup).proc = some mainSym from rfl, eoCtx_labels,
+          show lookupLabel fmapEmpty l = none from rfl] at hl
+        cases hl)
+      (eoCtx_fragProcs ra n nbty sup) (eoCtx_procsDepth (hfuel := hfuel) ra n nbty sup)
       (eoMain ra n) fmapEmpty [] prodMem₀ (∅ : SpikeHeapF SpikeCell)
-      (eoMain_frag (hfuel := by omega) ra n)
+      (eoMain_frag ra n) (Nat.le_trans (Nat.le_of_ble_eq_true rfl) hfuel)
       (coh_empty prodMem₀)
       (fun v _ => v = ivVal (1 - n % 2))
       ?_ (th₀ := prodThread (eoMain ra n))
@@ -717,12 +724,12 @@ theorem even_odd_certified_production [LemFuel] (hn : 0 ≤ n)
     (eoCtx_labeledProcs ra n nbty sup)
     (fun v _ => v = ivVal (1 - n % 2)) (3 * n.toNat + 4)
     (wpt_driver_done_procs (hfuel := by omega) (GF := SpikeGF) (M₀ := eoCtx ra n nbty sup) rfl rfl
-      (eoCtx_fragProcs (hfuel := by omega) ra n nbty sup)
+      (eoCtx_fragProcs ra n nbty sup) (eoCtx_procsDepth (hfuel := by omega) ra n nbty sup)
       (th₀ := prodThread (eoMain ra n))
       (eoFile_lookup_main ra n nbty) (prodCtl sup).execLoc (prodCtl sup).curLoc (prodCtl sup).sup
       (Nat.le_refl _) eoSpecT eoLsT
       (eoMain ra n) fmapEmpty [] prodMem₀ (∅ : SpikeHeapF SpikeCell) 0
-      (eoMain_frag (hfuel := by omega) ra n)
+      (eoMain_frag ra n) (Nat.le_trans (show evalDepth _ ≤ 1 from Nat.le_of_ble_eq_true rfl) (by omega))
       (prodMem₀_launchCoh 0 (Nat.zero_le _))
       (fun v _ => v = ivVal (1 - n % 2)) (3 * n.toNat + 4)
       (by

@@ -508,25 +508,31 @@ theorem t4Q_cont {l : sym} {params : List (sym × core_base_type)} {cont : CoreE
         · cases h; simp
         · cases h
 
-theorem t4LoopContext_frag [LemFuel] (hfuel : 40 ≤ LemFuel.fuel) (body : CoreExpr) (hb : Frag body) : Frag (t4LoopContext body) :=
-  .sseq (.sseq hb (.sseq (CorpusE0.t4Save_frag (hfuel := by omega) _ _ (.val_pure _)) (.val_pure _))) (CorpusE0.t4Return_frag (hfuel := by omega))
+theorem t4LoopContext_frag (body : CoreExpr) (hb : Frag body) : Frag (t4LoopContext body) :=
+  .sseq (.sseq hb (.sseq (CorpusE0.t4Save_frag _ _ (.val_pure _)) (.val_pure _))) CorpusE0.t4Return_frag
 
-theorem t4Q_frag [LemFuel] (hfuel : 40 ≤ LemFuel.fuel) {l : sym} {params : List (sym × core_base_type)} {cont : CoreExpr}
+/-- The evaluator depth of every registered t4 continuation is within 40 (R2:
+    the depth hypothesis of the adequacy theorems, per label body). -/
+theorem t4Q_depth [LemFuel] {l : sym} {params : List (sym × core_base_type)} {cont : CoreExpr}
+    (h : lookupLabel t4Q l = some (params, cont)) (hfuel : 40 ≤ LemFuel.fuel) :
+    evalDepth cont ≤ LemFuel.fuel := by
+  have hc := t4Q_cont h
+  simp only [List.mem_cons, List.not_mem_nil, or_false] at hc
+  rcases hc with rfl | rfl | rfl | rfl <;> exact Nat.le_trans (Nat.le_of_ble_eq_true rfl) hfuel
+
+theorem t4Q_frag {l : sym} {params : List (sym × core_base_type)} {cont : CoreExpr}
     (h : lookupLabel t4Q l = some (params, cont)) : Frag cont := by
   have hc := t4Q_cont h
   simp only [List.mem_cons, List.not_mem_nil, or_false] at hc
   rcases hc with rfl | rfl | rfl | rfl
-  · refine t4LoopContext_frag (hfuel := by omega) _ (.sseq (.sseq (.val_pure _) (.val_pure _)) (.run ?_ ?_))
-    · intro pe hpe
-      simp only [List.mem_cons, List.not_mem_nil, or_false] at hpe
-      rcases hpe with rfl | rfl <;> exact .sym _ _
-    · intro pe hpe
-      simp only [List.mem_cons, List.not_mem_nil, or_false] at hpe
-      rcases hpe with rfl | rfl <;> exact peDepth_sym_le (hfuel := by omega) _ _
-  · exact t4LoopContext_frag (hfuel := by omega) _ (.sseq_sym (CorpusE0.t4Cond_frag (hfuel := by omega)) (.sseq_sym (CorpusE0.t4Bool_frag (hfuel := by omega))
-      (.if_ (.sym _ _) (peDepth_sym_le (hfuel := by omega) _ _) (CorpusE0.t4Body_frag (hfuel := by omega)) (.val_pure _))))
-  · exact .sseq (.sseq (.val_pure _) (.val_pure _)) (CorpusE0.t4Return_frag (hfuel := by omega))
-  · exact Frag.of_pePure _ (.sym _ _) (peDepth_sym_le (hfuel := by omega) _ _)
+  · refine t4LoopContext_frag _ (.sseq (.sseq (.val_pure _) (.val_pure _)) (.run ?_))
+    intro pe hpe
+    simp only [List.mem_cons, List.not_mem_nil, or_false] at hpe
+    rcases hpe with rfl | rfl <;> exact .sym _ _
+  · exact t4LoopContext_frag _ (.sseq_sym CorpusE0.t4Cond_frag (.sseq_sym CorpusE0.t4Bool_frag
+      (.if_ (.sym _ _) CorpusE0.t4Body_frag (.val_pure _))))
+  · exact .sseq (.sseq (.val_pure _) (.val_pure _)) CorpusE0.t4Return_frag
+  · exact Frag.of_pePure _ (.sym _ _)
 
 theorem collect_new_t4Main :
     collect_labeled_continuations_NEW (prodFileLib stdlibE3 [] t4Main) =
@@ -1441,10 +1447,11 @@ theorem t4_certified_production [LemFuel] (hfuel : 917 ≤ LemFuel.fuel)
       (wpt_driver_done_alloc (hfuel := by omega) (GF := SpikeGF) (ctl := prodCtl sup)
         (M₀ := prodCtx (prodFileLib stdlibE3 [] t4Main) (prodRSLib stdlibE3 [] sup t4Main))
         rfl rfl hlbl rfl rfl rfl rfl (Nat.le_refl _)
-        (fun l params cont hl => t4Q_frag (hfuel := by omega) (by rw [← hlbl]; exact hl))
+        (fun l params cont hl => t4Q_frag (by rw [← hlbl]; exact hl))
+        (fun l params cont hl => t4Q_depth (by rw [← hlbl]; exact hl) (by omega))
         (t4LsT SpikeGF fmapEmpty)
         t4Main fmapEmpty [] prodMem₀ (∅ : SpikeHeapF SpikeCell)
-        (allocCost fmapEmpty intTy 4 + allocCost fmapEmpty intTy 4) (CorpusE0.t4Main_frag (by omega))
+        (allocCost fmapEmpty intTy 4 + allocCost fmapEmpty intTy 4) CorpusE0.t4Main_frag (Nat.le_trans (show evalDepth _ ≤ 40 from Nat.le_of_ble_eq_true rfl) (by omega))
         (prodMem₀_launchCoh _ prod_two_int_budget_fits)
         ψT4 915
         (by
