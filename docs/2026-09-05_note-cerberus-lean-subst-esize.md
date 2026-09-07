@@ -24,3 +24,18 @@ duplication is known before either side proves it. No action requested.
 Erratum (2026-09-05, E2 range audit R-3): the first version of this note
 said "We will prove it in our tree"; that was not true of any plan — the
 statement above is the truth.
+
+Erratum (2026-09-07, E5 full-range audit R-2): proved locally at E5 after
+all — `esize_subst : esize e ≤ lemDefaultFuel → esize (subst_sym_expr x v e)
+= esize e` (`cerberus-heaplang/CerberusHeapLang/Soundness.lean:1224`, from
+the fuel induction `esize_subst_lemFuel`, `:1137`; the fold form
+`esize_subst_fold`, `:1240`; the twins `ccallFree_subst` `:1350`,
+`negFree_subst` `:1675`, and `pot_subst` `Potential.lean:514`), at the
+engine's fuel bound — the only form that exists, since the engine's
+substitution is the fuelled `subst_sym_expr_lemFuel` (LemLib's opaque
+`fuelExhausted` at fuel 0). The `hbsz` premise this note describes is now
+DERIVABLE (`case_hbsz_of_branches`, `:1385`) and is kept as a premise by
+choice. So the duplication this note warned of now exists on our side:
+should cerberus-lean or lem-lean ship a structural-size lemma for the
+generated substitution functions, ours is the one to drop. Still no action
+requested.

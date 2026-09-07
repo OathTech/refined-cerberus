@@ -614,7 +614,10 @@ theorem t6Main_pot : pot t6Main ≤ lemDefaultFuel := Nat.le_of_ble_eq_true rfl
     `600 ≤ sup` is a SUFFICIENT floor (it keeps the fresh symbol the negative
     assignment draws away from every source binding), not a necessary one:
     the compiled composite delivers the same result at `sup = 0` (measured,
-    docs/2026-09-07_l1-landing-notes.md). -/
+    docs/2026-09-07_l1-landing-notes.md) — and not vacuous: at `sup = 509`
+    (x's symbol number) the composite is KILLED, an `Undef0` kill after
+    LemLib's `can_advance: Step_error2 ==> Kill` panic (measured; the E5
+    full-range audit's D-2, re-run at the fixes). -/
 theorem t6_certified_production (sup : Nat) (hsup : 600 ≤ sup)
     (fs : CerbFS.FsState) (args : List String) :
     ∃ (dres : driver_result) (dst' : driver_state),

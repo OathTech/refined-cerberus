@@ -1425,7 +1425,10 @@ theorem t4_wpt [SpikeGS .hasLC GF]
     `600 ≤ sup` is a SUFFICIENT floor (it keeps the fresh symbols the negative
     assignments draw away from every source binding), not a necessary one:
     the compiled composite delivers the same result at `sup = 0` (measured,
-    docs/2026-09-07_l1-landing-notes.md). -/
+    docs/2026-09-07_l1-landing-notes.md) — and not vacuous: at `sup = 508`
+    (i's symbol number) the composite is KILLED, an `Undef0` kill after
+    LemLib's `can_advance: Step_error2 ==> Load` panic (measured; the E5
+    full-range audit's D-2, re-run at the fixes). -/
 theorem t4_certified_production (sup : Nat) (hsup : 600 ≤ sup)
     (fs : CerbFS.FsState) (args : List String) :
     ∃ (dres : driver_result) (dst' : driver_state),

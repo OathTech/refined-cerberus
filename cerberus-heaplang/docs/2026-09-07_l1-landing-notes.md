@@ -273,6 +273,16 @@ PROGRAM-DONE within `k + 2` inner-loop iterations): t5 88 → 90 vs 69 =
 deliver the theorems' readouts at `sup = 0` (one run each; no theorem —
 the auditor's §12 caveat stands).
 
+Erratum (2026-09-07, E5 full-range audit D-2): "sufficient, not necessary"
+is literally right but under-reads the floor — it is NOT vacuous. At a
+`sup` from which the run's fresh-symbol draws reach a source symbol's
+number the composite is KILLED (`killed:Undef0`, after LemLib
+`can_advance: Step_error2 ==> Kill`/`Load` panics): t5 at 505/506 (x/r), t6
+at 509/510 (x/r; it still delivers at 505/506), t4 at 505/506/508/509
+(i = 508, s = 509) — measured at the fixes (the "E5 full-range audit fixes"
+section below, verbatim). The half-sentence is added on README, KOI B6,
+ARCHITECTURE and the three production docstrings.
+
 **`docs/KNOWN-OPEN-ITEMS.md`** (line numbers at the landing head):
 
 - lines 3–11 — the STATE LINE (was: "main has E1–E4; branch `dialect-e5`

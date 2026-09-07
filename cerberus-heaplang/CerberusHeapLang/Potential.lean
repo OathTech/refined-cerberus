@@ -11,7 +11,7 @@ growth bound `Frag.esize_step_bound` (≤ +1 per step) would couple a
 drive statement's fuel premise to the run length. This module installs
 the classical remedy: a potential/ranking function on terms — value
 leaves 1, redex leaves 2 (a leaf's rewrite into its annotated value is
-prepaid), the NEGATIVE action leaf 9 (E5: its rewrite at the enclosing
+prepaid), the NEGATIVE action leaf 10 (E5: its rewrite at the enclosing
 `bound` adds a binder, a two-component `unseq`, the excluded action and a
 symbol read around the re-plugged `pure(Unit)`), compounds ADDITIVE (E5:
 the sum of the children plus one — the classical size; E4's `max` form
@@ -43,7 +43,7 @@ namespace CerberusHeapLang
 
 mutual
 /-- The step-monotone size potential (header note): like `esize`,
-    but value leaves cost 1, the negative action 9 (E5), all other
+    but value leaves cost 1, the negative action 10 (E5), all other
     leaves 2 (a redex leaf's rewrite into an annotated value is prepaid),
     compounds are additive (E5), and a case node prices its branches at
     their summed potential plus two (the selected branch is a branch with
@@ -173,11 +173,11 @@ theorem potList_append_cons_le {e e' : CoreExpr} (es1 es2 : List CoreExpr) (h : 
 @[simp] theorem pot_nd {a : List annot} {es : List CoreExpr} :
     pot (Expr a (End es)) = 1 + potList es := rfl
 
-/-- E5: the NEGATIVE action's potential — 9, what the negative-action
-    rewrite costs above the re-plugged `pure(Unit)`: `bound(ctxA[neg])`
-    against `bound(let weak (_, s) = unseq(Eexcluded n act, ctxA'[pure(Unit)])
-    in pure(s))` — the binder 1, the `unseq` 1 + (1 + 2) + 1, the tail
-    `pure(s)` 2, the plug 1 (`Frag.pot_step_bound`, `pot_apply_ctx_plug`). -/
+/-- E5: the NEGATIVE action's potential — 10, exactly what the rewrite costs
+    above the re-plugged `pure(Unit)`: `bound(ctxA[neg])` against `bound(let
+    weak (_, s) = unseq(Eexcluded n act, ctxA'[pure(Unit)]) in pure(s))` — the
+    binder 1, the `unseq` node 2, the excluded component 1 + 2, the plugged
+    component 1 + its `pure(Unit)` 1, the tail `pure(s)` 2 (`pot_negRewrite_le`). -/
 @[simp] theorem pot_neg {a : List annot} {act : CoreAction} :
     pot (Expr a (Eaction (Paction polarity.Neg0 act))) = 10 := rfl
 
@@ -551,7 +551,7 @@ theorem pot_apply_ctx_excl (n : Nat) (ctx : context) (z : CoreExpr) :
   | Cbound a c ih => simp only [add_exclusion, apply_ctx, pot_bound, ih]
 
 /-- THE REWRITE DOES NOT INCREASE THE POTENTIAL: `bound(ctxA[neg act])` at
-    the leaf weight 9 pays for `bound(negRewrite …)`. -/
+    the leaf weight 10 pays for `bound(negRewrite …)` exactly (equal potentials). -/
 theorem pot_negRewrite_le (n : Nat) (s0 : sym) (ctxA : context) (act : CoreAction) :
     pot (negRewrite n s0 ctxA act) ≤ pot (apply_ctx ctxA (negActRedex [] act)) := by
   rw [negRewrite_eq]

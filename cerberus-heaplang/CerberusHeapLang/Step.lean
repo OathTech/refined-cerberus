@@ -641,8 +641,8 @@ def negFree : CoreExpr → Bool
 def negFreeList : List CoreExpr → Bool
   | [] => true
   | e :: es => negFree e && negFreeList es
-/-- E5: `has_ccall`'s `Ecase` arm — `List.any (fun (_, e) => has_ccall e)`
-    over EVERY alternative (core_reduction.lem:466–469). -/
+/-- E5: `negFree` over EVERY alternative of an `Ecase` — the twin of
+    `ccallFreeAlts` (`has_ccall`'s `Ecase` arm, core_reduction.lem:466–469). -/
 def negFreeAlts : List (pattern × CoreExpr) → Bool
   | [] => true
   | (_, e) :: rest => negFree e && negFreeAlts rest

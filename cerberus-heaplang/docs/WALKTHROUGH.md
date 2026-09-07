@@ -66,17 +66,21 @@ def DriverSafeCtl (M₀ : MachineCtx) (th₀ : thread_state) (e : CoreExpr) (ρ 
     dst.core_file = M₀.file →
     LabeledProcs M₀ dst.core_run_state0.labeled →
     CtlTied M₀ dst.core_run_state0.labeled ctl →
+    dst.core_run_state0.sym_supply = ctl.sup.sym ∧
+      dst.core_run_state0.excluded_supply = ctl.sup.excl →
     (∃ dst' : driver_state,
       runOne (drive_nonmemory_steps_aux2_lemFuel fl fmapEmpty acc [0]) dst =
         (NDkilled CerbND.fuelExhaustedKill, dst')) ∨
     ∃ (v : value) (σfin : Mem) (ρfin : EnvStack) (pfin : Option sym) (ℓfin : exec_location)
+      (lcfin : CerbLocation.Loc) (spfin : RunSup) (afin bfin : List _root_.annot)
       (rs' : core_run_state) (tr : List trace_event) (ctr : Nat),
       ψ v σfin ∧
       runOne (drive_nonmemory_steps_aux2_lemFuel fl fmapEmpty acc [0]) dst =
         (NDactive (fmapAddBy defaultCompare 0 [Step_done2 v] acc),
          { dst with
             core_state0 := { dst.core_state0 with thread_states :=
-              [(0, (none, ctlThread th₀ (ofVal (.pure v)) ρfin ⟨[], pfin, ℓfin⟩))] },
+              [(0, (none, ctlThread th₀ (ofValA (.pure afin bfin v)) ρfin
+                ⟨[], pfin, ℓfin, lcfin, spfin⟩))] },
             layout_state := σfin,
             core_run_state0 := rs', trace := tr, dr_step_counter := ctr })
 ```
@@ -90,7 +94,11 @@ holding `(e, ρ)` at the control `ctl` — call stack, procedure, execution
 location and, since E1, the source location `curLoc` and the run-state
 supplies — over the immutables of some `th₀` (its `errno`) — at layout
 state `σ`, with the
-context's file and the two registration ties (§1.3). The conclusion, at
+context's file, the two registration ties (§1.3) and, since E5, the SUPPLY
+TIE: `dst`'s run-state supplies (`sym_supply`, `excluded_supply`) equal the
+control's `ctl.sup` — the seeded exports speak only of such driver states
+(`⟨0, 0⟩` at `procCtl`); the production statements discharge it by `rfl` at
+`prodCtl sup`. The conclusion, at
 EVERY fuel `fl`: the loop either EXHAUSTS — its value is the kill
 `CerbND.fuelExhaustedKill`, the cerberus-lean fuel arc's out-of-fuel arm
 (kernel-transparent: `CerbND.drive_nonmemory_steps_aux2_lemFuel_zero` is
@@ -336,13 +344,16 @@ closed partial statement is the one about the shipped `drive`, and the
 **The two lanes, both on the shipped driver.** Every exported execution
 theorem reaches the shipped engine; every public logical rule has a
 kernel-checked adequacy path through the package mirror to the engine.
-The ten production statements (`exhibitA_prod`,
+The thirteen production statements (`exhibitA_prod`,
 `fib_certified_production`, `counter_loop_certified_production`,
 `list_reverse_certified_production`,
 `dispose_list_certified_production`,
 `region_loop_certified_production`,
 `malloc_list_certified_production`, `fib_rec_certified_production`,
-`even_odd_certified_production`, `t1_certified_production`) are
+`even_odd_certified_production`, `t1_certified_production` and, since
+E5, `t4_certified_production`, `t5_certified_production`,
+`t6_certified_production` — the last three with the supply floor
+`600 ≤ sup`, README "Registered divergences and limitations") are
 THE ROOT-OF-TRUST exports — the closed shipped-driver statements: the
 genuine Cerberus driver, and nothing package-defined in the statement but
 the authored program, its `prodFile`/`prodFileWith` wrapper, the pure
@@ -360,9 +371,9 @@ ENGINE vocabulary for `malloc_list_certified_production` (`hB : n.toNat *
 through which they are proved, are generic collapse machinery, not
 closed statements: their delivery premises `DriverDoneAt`/`DriverDoneCtl`
 resp. the driver-safety fact `DriverSafeCtl` and their registration ties
-`LabeledAt`/`LabeledProcs` are package-defined, discharged by each
-client. The partial closed statement `fib_rec_certified` — every `n ≥ 0`,
-no budget bound, at every `drive_lemFuel` fuel — sits beside the ten, as does
+`LabeledAt`/`LabeledProcs` (and, since E5, the supply tie) are
+package-defined, discharged by each client. The partial closed statement `fib_rec_certified` — every `n ≥ 0`,
+no budget bound, at every `drive_lemFuel` fuel — sits beside the thirteen, as does
 `even_odd_certified` (EvenOddExhibit.lean, mutual recursion; H1b 2026-09-04).
 The generic partial exports — `MemTriple`, `MemTriple_alloc`,
 `SemTriple`, `project_triple`, `project_triple_pure`,

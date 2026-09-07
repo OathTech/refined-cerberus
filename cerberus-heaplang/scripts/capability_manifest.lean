@@ -344,6 +344,9 @@ def variants : List Variant := [
     cls := .rulePartialUndemonstrated (N "wps_neg_round") (N "wpt_neg_round")
       "t5 consumes the total rules; a partial corpus derivation remains (docs/2026-09-05_e5-resume.md)",
     also := [N "wps_neg_bound", N "wpt_neg_bound"] },
+  { ctor := `CerberusHeapLang.Frag.neg_store,
+    shape := "`neg(store(ty, p, v))` (canonical or `PePure` operands — `Frag.neg_store`/`neg_store_op` admit the redex at ANY context) under a `bound` WITH a strong sequence between (`break_at_bound_and_sseq` = `BOUND_WITH_SSEQ`): an engine SUCCESS round — the action is re-polarised in place when the inner context is empty, or the node is rewritten into an `sseq`-tuple binder otherwise (core_reduction.lem:1319–1338)",
+    cls := .outOfScope s!"the mirror has no step there — the characterised residual `OpenRound.neg_sseq` (Round.lean; the mirror is stuck, fail-closed; the corpus's assignment statements sit under `let weak` frames only, so no certified run reaches it). Mover: two `Step` rules (`neg_sseq_repol`, `neg_sseq_rewrite`) and a `Frag.sseq_tuple` at the nested pattern the second produces (docs/2026-09-05_fragment-closure-e5-notes.md); found unlisted by the E5 full-range audit C-1 (docs/2026-09-07_audit-e5-full-range.md); {recE5}" },
   { ctor := `CerberusHeapLang.Frag.excluded_store,
     shape := "`Eexcluded n (store(ty, p, v))` at canonical operands — `process_action (Just n)` (core_reduction.lem:1345–1346, :694–711): the same `StoreRequest2` as the positive store, its continuation the NEGATIVE dynamic annotation `{DA_neg n [] fp}pure(Unit)`",
     cls := .rulePartialUndemonstrated (N "wps_excluded_store") (N "wpt_excluded_store")

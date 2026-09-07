@@ -544,7 +544,10 @@ theorem t5Main_pot : pot CorpusE0.t5Main ≤ lemDefaultFuel := by
     source symbol number, so the fresh symbol the assignment protocol draws
     cannot collide with a source binding — the fact t5_wpt exposes), not a
     necessary one: the compiled composite delivers the same result at
-    `sup = 0` (measured, docs/2026-09-07_l1-landing-notes.md). -/
+    `sup = 0` (measured, docs/2026-09-07_l1-landing-notes.md) — and not
+    vacuous: at `sup = 505` (x's symbol number) the composite is KILLED, an
+    `Undef0` kill after LemLib's `can_advance: Step_error2 ==> Kill` panic
+    (measured; the E5 full-range audit's D-2, re-run at the fixes). -/
 theorem t5_certified_production (sup : Nat) (hsup : 600 ≤ sup) (fs : CerbFS.FsState) (args : List String) :
     ∃ (dres : driver_result) (dst' : driver_state),
       CerbND.runND (_root_.drive fmapEmpty false (prodFileLib stdlibE3 [] CorpusE0.t5Main) args)
