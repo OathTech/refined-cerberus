@@ -119,8 +119,10 @@ or a ruled disposition. Provenance tags as in `docs/DECISIONS.md`.
   `.opamroot/` (a sandbox opam root, ~150 MB). Both are ignored as of
   this commit; the RefinedC layer lives on branch `refinedc/dev`.
 - Gates: `scripts/test_unit.sh` (FULL) / `--fast`; every Lean build
-  through `scripts/capped`. Expected FULL tail at the E4 candidate: 652 pins trio-exact, manifest
-  (70 rows) no drift, the corpus-skeleton speedbump `ok` (fails loudly), import
-  direction ok (17 core modules), `BOUNDARY: 24 modules checked, 0 internals
-  mention(s) in total, exit=0`, `ALL GATES GREEN`, `GATE-EXIT=0` (DECISIONS
-  2026-09-05 E4 entry, verbatim).
+  through `scripts/capped`. Expected FULL tail at the L2 candidate `cc4fe8f`: `export pins: 901
+  trio-exact, 6 axiom-free-exact`, `Build completed successfully (483 jobs)`,
+  the capability manifest regenerated with no drift (78 rows / 7
+  OUT-OF-SCOPE), the corpus-skeleton speedbump `ok` (fails loudly), import
+  direction ok (19 core modules), `BOUNDARY: 29 modules checked, 0 internals
+  mention(s) in total, exit=0`, `ALL GATES GREEN`, `GATE-EXIT=0` (verbatim
+  in `cerberus-heaplang/docs/2026-09-07_l2-repin-notes.md` §11).
