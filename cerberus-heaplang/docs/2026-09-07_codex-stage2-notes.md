@@ -395,3 +395,87 @@ Time spent: approximately 3.6 minutes since
 D1's record commit, including investigation, snapshots, parking and the
 restored gate (recorded 06:25:32 UTC). No build or proof pass approached
 one hour. D2 remains BLOCKED.
+
+
+## D3 — BLOCKED: required gate change outside the fence
+
+The fixed acceptance requires gate 1b to reject `600` outside a
+`*_shipped` corollary and requires a plant demonstrating that rejection.
+`test_unit.sh:41–45` delegates gate 1b to
+`scripts/fuel_numeral_check.sh`. That script's `NUMERALS` at line 37
+matches the existing fuel spellings only; it does not match `600`.
+Neither script is in D3's fence. The fence permits one module for
+`symBound`, the three corpus exhibits, Audit pins and this record.
+Consequently the mandatory gate extension cannot be completed within the
+fence. Moving a gate implementation into an exhibit or Audit pin list
+would not be an authorized substitute. No source implementation was begun
+once this acceptance blocker was established; this park preserves the
+investigation and the fresh pre-snapshot.
+
+Read-only execution of the existing gate while all 14 premises are still
+present confirms the missing check (this is not the requested successful
+plant test):
+
+```text
+ok: no fuel numeral (100000000/1000000/999999) outside a *_shipped corollary and no retired fuel constant (60 files scanned, comments stripped)
+GATE1B-EXIT=0
+```
+
+Complete `hsup : 600 ≤ …` census at this head (2 + 3 + 9 = 14):
+
+| File | Line | Declaration | Bound target |
+| --- | ---: | --- | --- |
+| CorpusT5Exhibit.lean | 426 | t5_wpt | M.runState.sym_supply |
+| CorpusT5Exhibit.lean | 543 | t5_certified_production | sup |
+| CorpusT6Exhibit.lean | 423 | wpt_t6Case2 | M.runState.sym_supply |
+| CorpusT6Exhibit.lean | 473 | t6_blockSpecsT | M.runState.sym_supply |
+| CorpusT6Exhibit.lean | 749 | t6_certified_production | sup |
+| CorpusT4Exhibit.lean | 778 | wpt_t4AssignS | M.runState.sym_supply |
+| CorpusT4Exhibit.lean | 827 | wpt_t4AssignI | M.runState.sym_supply |
+| CorpusT4Exhibit.lean | 926 | wpt_t4Body | M.runState.sym_supply |
+| CorpusT4Exhibit.lean | 1154 | wpt_t4LoopStep | M.runState.sym_supply |
+| CorpusT4Exhibit.lean | 1199 | wpt_t4WhileCont | M.runState.sym_supply |
+| CorpusT4Exhibit.lean | 1254 | t4_blockSpecsT | M.runState.sym_supply |
+| CorpusT4Exhibit.lean | 1292 | wpt_t4WhileEntry | M.runState.sym_supply |
+| CorpusT4Exhibit.lean | 1315 | t4_wpt | M.runState.sym_supply |
+| CorpusT4Exhibit.lean | 1426 | t4_certified_production | sup |
+
+No `symBound`, specification lemma or negative pipeline theorem is
+claimed. The blocker concerns completion under the file fence; it is not
+a claim that program-derived symbol bounds are unprovable.
+
+BLOCKED: D3 requires changing gate 1b, but its implementation scripts are
+outside the explicit D3 file fence; parked at codex/park-D3
+`450c87eddab3a2d97fb08ac52bf92f13cdf3bddb`.
+
+After parking, returned the working branch to `539c83f`. `git rebase main`
+reported it up to date, without conflicts.
+
+The restored FULL gate is green with unchanged 901 trio-exact /
+6 axiom-free-exact pins and 33 package warnings. Both capped D3
+snapshots are byte-identical: diff EMPTY, exit 0; ADDED 0, REMOVED 0,
+CHANGED 0. Both SHA-256 hashes:
+`0cb8fd9f6d05c813b2b296fa31c751566c96f9e74e8a1ce93ba3478417608df8`.
+This verifies preservation of the working branch, not completion of D3.
+
+D3 restored FULL gate tail, verbatim:
+
+```text
+ok:   CorpusT6Exhibit — 0 internals mentions
+ok:   Examples.CallSmoke — 0 internals mentions
+ok:   Examples.ReadinessSmoke — 0 internals mentions
+ok:   Examples.Layout — 0 internals mentions
+ok:   Examples.CorpusE0 — 0 internals mentions
+ok:   Examples.CorpusE5 — 0 internals mentions
+ok:   Examples.EmittedInt — 0 internals mentions
+ok:   CorpusT4Exhibit — 0 internals mentions
+BOUNDARY: 29 modules checked, 0 internals mention(s) in total, exit=0
+ok: client boundary — no unallowlisted internals mention
+ALL GATES GREEN
+GATE-EXIT=0
+```
+
+Time spent: approximately 5.5 minutes since
+D2's record, including investigation, census, snapshots, parking and the
+restored gate (recorded 06:31:04 UTC). No build or proof pass
+approached one hour. D3 remains BLOCKED.
