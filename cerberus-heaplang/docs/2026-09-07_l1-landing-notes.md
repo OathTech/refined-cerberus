@@ -544,3 +544,255 @@ Ephemeral scratch (`worktrees/land-e5/.l1-scratch/`: `census.py`,
 `probe.lean`, `libmd5.so`/`libcf.so`, the pre-hygiene snapshot, the build
 and gate logs) — deleted at the end of this slice; the recipes are the
 auditor's Appendix A, reproduced by the commands stated inline above.
+
+## 10. E5 full-range audit fixes (2026-09-07; the fixes worker — [AGENT] throughout, the user was offline)
+
+Source: `docs/2026-09-07_audit-e5-full-range.md` (this package's docs; the
+auditor's report committed VERBATIM at 017054d, `cmp`-identical to the
+detached copy). R-1 (the DECISIONS register) was fixed by the orchestrator
+at db46800 and is not touched here. The fixes are commit 6edb0f5; this
+section is the third commit (docs-only). Worktree `worktrees/land-e5`,
+branch `land/e5-complete`, pin `f95ef8d9c` unchanged, Lean 4.32.2; every
+lake/lean invocation under `scripts/capped` with `CERB_MEM_MAX=40G`
+(another heavy build was running). No pass approached the tripwire (the
+one rebuild: `1:15.11 total`).
+
+### 10.1 Disposition table
+
+| id | done | where | verified against |
+|---|---|---|---|
+| C-1 (MEDIUM) | DONE | `scripts/capability_manifest.lean`: a second `Frag.neg_store` row, OUT-OF-SCOPE, for `BOUND_WITH_SSEQ` (the mover from the closure record); `docs/CAPABILITY_MANIFEST.md` regenerated — the diff is exactly the row and the tail line (77 → 78 rows, 6 → 7 OUT-OF-SCOPE); ARCHITECTURE §2.2 ("three arms" + a `neg_sseq` sentence), §6 ("Seven OUT-OF-SCOPE variants", listing `nd` and the WITH_SSEQ action; "three arms" naming `neg_sseq`); KOI B7 | `Round.lean:383`–`:453` (`OpenRound`; `neg_sseq` at `:448`), `docs/2026-09-05_fragment-closure-e5-notes.md` row 3 (the mover), the gate's manifest speedbump (no drift) |
+| R-2 (MEDIUM) | DONE | KOI B7 rewritten to the truth; `../docs/2026-09-05_note-cerberus-lean-subst-esize.md` dated erratum appended | `Soundness.lean:1224` `esize_subst` (from `esize_subst_lemFuel` `:1137`), `:1240` `esize_subst_fold`, `:1350` `ccallFree_subst`, `:1675` `negFree_subst`, `:1385` `case_hbsz_of_branches`; `Potential.lean:514` `pot_subst`; the `hbsz` premises at `Soundness.lean:9552` (`case_value`) and `:9637` (`case_op`) |
+| D-1 (MEDIUM) | DONE | ARCHITECTURE: §1 "35 constructors (`:9369`–`:9645`; dialect arc E5)" + the six E5 kinds; §3 "893 exact pins" with the 896 − 2 aliases − 1 `.eq_def` derivation; the glossary's *a tie*, §2.4 (both lanes, `DriverDoneAt`'s `sp`) and §4's export reading state the SUPPLY TIE; the E5 prose in the present tense with the range `901ef50..the L1 head`; WALKTHROUGH §1.1's `DriverSafeCtl` re-printed VERBATIM from `Adequacy.lean:945` (the supply tie, `lcfin`/`spfin`/`afin bfin`, `ofValA`), the prose after it and §1.3 name the supply tie; KOI C19's range | `awk` over `inductive Frag` = 35 arms; the gate line `export pins: 893 trio-exact`; `Adequacy.lean:954`–`:955`, `ProdLoop.lean:493`, `:60`/`:69` |
+| D-2 (NOTE) | DONE | README :228–233 and the exhibits-table row; KOI B6; ARCHITECTURE's E5 prose; the three production docstrings (t5 `sup = 505`, t6 `sup = 509`, t4 `sup = 508`); this record's §5 erratum | the re-measurement, §10.2 |
+| D-3 (NOTE) | DONE | `scripts/cite_check.sh --fix` (3 DECL cites rewritten) then a hand-check of the ENTIRE non-EXACT queue | §10.4 |
+| H-1 (NOTE) | DONE | `Potential.lean` :14, :46, :176–180, :553–554 (the negative leaf is 10; the breakdown now sums to 10; `pot_negRewrite_le` "exactly (equal potentials)"); `Step.lean:644` `negFreeAlts`'s docstring; KOI C17 lists the E5 duplication additions (not refactored) | `pot_neg : … = 10` (`Potential.lean:181`); `pot_negRewrite_le`'s arithmetic (LHS = 9 + pot(ctxA[pure(Unit)]) = RHS by `pot_apply_ctx_plug`); every C17 name located by grep (`Decomp.lift_neg'` Round.lean:2526, `get_ctx_rebuild_excluded` :2934, `step_ctx_excluded_store_eval_ws'` :4216, …) |
+| H-2 (NOTE) | REGISTERED | KOI B19 (new) | audit H-2; landability audit R-7; DECISIONS 2026-09-03 no-magic-values |
+| H-3 (NOTE) | REGISTERED | KOI B20 (new) | audit H-3; `e5-notes.md` §S2.4 |
+| R-1 (HIGH) | orchestrator's, db46800 | — | §10.3 |
+
+### 10.2 D-2 re-measurement (verbatim)
+
+Recipe = the landability audit's Appendix A.1 (`libmd5.so` from the
+workspace's `native/md5.c`, `libcf.so` from its
+`.lake/build/ir/CerberusFresh.c.o.export`; `lake env lean
+--load-dynlib=… probe_d2.lean` under `capped`, 40G; 2.2 s wall). The
+`composite` function is the appendix's with ONE extra match arm,
+`.Undef0 → "killed:Undef0"` (the auditor's arm order folded
+undefined-behaviour kills into `killed:other`). Every `#eval` line and
+every `PANIC` line of the run, in order (the backtrace lines elided):
+
+```
+"t5 sup=0: active; ==lint 1: true; ==lint 20: false; ==lint 10: false; blocked=false; stdout=''; stderr=''"
+PANIC at _private.LemLib.0.failwithIImpl LemLib:171:2: can_advance: Step_error2 ==> Kill
+PANIC at _private.LemLib.0.failwithIImpl LemLib:171:2: Driver.process_core_step2: WRONG STEP ==> Step_error2[Kill]
+"t5 sup=505: killed:Undef0"
+PANIC at _private.LemLib.0.failwithIImpl LemLib:171:2: can_advance: Step_error2 ==> Load
+PANIC at _private.LemLib.0.failwithIImpl LemLib:171:2: Driver.process_core_step2: WRONG STEP ==> Step_error2[Load]
+"t5 sup=506: killed:Undef0"
+"t5 sup=600: active; ==lint 1: true; ==lint 20: false; ==lint 10: false; blocked=false; stdout=''; stderr=''"
+"t6 sup=0: active; ==lint 1: false; ==lint 20: true; ==lint 10: false; blocked=false; stdout=''; stderr=''"
+"t6 sup=505: active; ==lint 1: false; ==lint 20: true; ==lint 10: false; blocked=false; stdout=''; stderr=''"
+"t6 sup=506: active; ==lint 1: false; ==lint 20: true; ==lint 10: false; blocked=false; stdout=''; stderr=''"
+"t6 sup=600: active; ==lint 1: false; ==lint 20: true; ==lint 10: false; blocked=false; stdout=''; stderr=''"
+"t4 sup=0: active; ==lint 1: false; ==lint 20: false; ==lint 10: true; blocked=false; stdout=''; stderr=''"
+PANIC at _private.LemLib.0.failwithIImpl LemLib:171:2: can_advance: Step_error2 ==> Load
+PANIC at _private.LemLib.0.failwithIImpl LemLib:171:2: Driver.process_core_step2: WRONG STEP ==> Step_error2[Load]
+"t4 sup=505: killed:Undef0"
+PANIC at _private.LemLib.0.failwithIImpl LemLib:171:2: can_advance: Step_error2 ==> Load
+PANIC at _private.LemLib.0.failwithIImpl LemLib:171:2: can_advance: Step_error2 ==> Load
+PANIC at _private.LemLib.0.failwithIImpl LemLib:171:2: Driver.process_core_step2: WRONG STEP ==> Step_error2[Load]
+"t4 sup=506: killed:Undef0"
+"t4 sup=600: active; ==lint 1: false; ==lint 20: false; ==lint 10: true; blocked=false; stdout=''; stderr=''"
+PANIC at _private.LemLib.0.failwithIImpl LemLib:171:2: can_advance: Step_error2 ==> Kill
+PANIC at _private.LemLib.0.failwithIImpl LemLib:171:2: Driver.process_core_step2: WRONG STEP ==> Step_error2[Kill]
+"t6 sup=509: killed:Undef0"
+PANIC at _private.LemLib.0.failwithIImpl LemLib:171:2: can_advance: Step_error2 ==> Load
+PANIC at _private.LemLib.0.failwithIImpl LemLib:171:2: Driver.process_core_step2: WRONG STEP ==> Step_error2[Load]
+"t6 sup=510: killed:Undef0"
+PANIC at _private.LemLib.0.failwithIImpl LemLib:171:2: can_advance: Step_error2 ==> Load
+PANIC at _private.LemLib.0.failwithIImpl LemLib:171:2: can_advance: Step_error2 ==> Load
+PANIC at _private.LemLib.0.failwithIImpl LemLib:171:2: Driver.process_core_step2: WRONG STEP ==> Step_error2[Load]
+"t4 sup=508: killed:Undef0"
+PANIC at _private.LemLib.0.failwithIImpl LemLib:171:2: can_advance: Step_error2 ==> Load
+PANIC at _private.LemLib.0.failwithIImpl LemLib:171:2: Driver.process_core_step2: WRONG STEP ==> Step_error2[Load]
+"t4 sup=509: killed:Undef0"
+```
+
+Reading: t5 is KILLED at 505/506 (x = 505, r = 506); t6 DELIVERS at
+505/506 and is KILLED at its own 509/510 (x, r); t4 is KILLED at
+505/506/508/509 (i = 508, s = 509 — from 505 its loop's draws cross them);
+`sup = 0` and `sup = 600` deliver for all three. Every verdict agrees with
+the audit's §4.5; the kill kind is refined from `killed:other` to
+`killed:Undef0`, reached after the same LemLib `can_advance: Step_error2
+==> Kill`/`Load` panics (a `failwithI` on the driver's `can_advance` path
+reached by an ordinary ILLTYPED report — noted on KOI B6 for A5's class).
+
+### 10.3 The provenance grep
+
+`git grep -c -e 'already authorized' -e '\[USER, paraphrase\]' -- .
+':!docs/DECISIONS.md'` at 017054d (identical at 6edb0f5: no fix touches
+these strings) is NOT 0:
+
+```
+cerberus-heaplang/docs/2026-09-07_audit-e5-full-range.md:6
+cerberus-heaplang/docs/2026-09-07_l1-landing-notes.md:2
+docs/2026-09-07_branch-landability-assessment.md:2
+docs/2026-09-07_landability-dialect-e5-extension.md:6
+docs/2026-09-07_landing-charter.md:2
+```
+
+Every one of the 18 lines (read with `git grep -n`) is a QUOTATION of the
+defective strings by a record describing the R-1a/R-1b defect: the landing
+charter's fix list, the two landability audits' findings, the full-range
+audit's R-1, and this record's own §3 (its grep description). None is a
+live provenance tag or a permission grant. [AGENT]: left as they are — they
+are the record of the defect. `docs/DECISIONS.md` itself: 2 lines
+(`:3172`, `:3218`), both quotations inside the orchestrator's L1 entry and
+the db46800 erratum. A note for the record: §3 above says "0 hits after";
+that was the tree the L1 worker grepped before writing §3 — the grep now
+finds §3's own description of it.
+
+### 10.4 `cite_check.sh` (D-3)
+
+Verbatim summary lines, in order. After the content edits, report mode:
+`cite-check: ARCHITECTURE.md — 288 cites; EXACT 185; DECL 54 (fixed 0; ranges among them counted in RANGE); USE 19; HAND 21; PIN 9; NOFILE 0; RANGE 28 (never rewritten)`.
+`--fix`: `cite-check: ARCHITECTURE.md — 288 cites; EXACT 185; DECL 54 (fixed 3; ranges among them counted in RANGE); USE 19; HAND 21; PIN 9; NOFILE 0; RANGE 28 (never rewritten)`.
+Report after `--fix`: `cite-check: ARCHITECTURE.md — 288 cites; EXACT 188; DECL 51 (fixed 0; ranges among them counted in RANGE); USE 19; HAND 21; PIN 9; NOFILE 0; RANGE 28 (never rewritten)`.
+After the hand-check (final, the committed file):
+`cite-check: ARCHITECTURE.md — 288 cites; EXACT 226; DECL 20 (fixed 0; ranges among them counted in RANGE); USE 12; HAND 21; PIN 9; NOFILE 0; RANGE 28 (never rewritten)`.
+
+The hand-check read ALL 100 non-EXACT lines of the post-`--fix` queue
+against the sources (declaration heads located by grep): 62 cite tokens
+rewritten by hand (DERIVED, counted from the edit script) — the audit's six
+sampled stale cites among them (:44 `spikeCtx`/`spikeCtl` → `:6302`/`:6278`,
+:105 the `Frag` header → `:9286`–`:9367`, :288 `loop_step` → `:1097`, :420
+`MemTriple_alloc` → `:1733`, :696 `engine_adequacy` → `:1342`–`:1354`, :713
+`Frag.esize_le_pot` → `:308`) — plus the cites inside the content edits
+(`OpenRound` `:371` → `:383`, the in-block `-- Round.lean:1111` → `:1163`,
+`complete_store`…`complete_ret` `:2719`–`:6484` → `:3202`–`:7301`, `hbsz`
+`:8252` → `:9552`/`:9637`, the trio `Audit.lean:213`–`:214` (import lines
+at HEAD) → `allowedAxioms` `:250`–`:251`). The remaining 32 DECL/USE lines
+are attribution noise on cites measured correct (the script credits a
+neighbouring identifier — e.g. `Step.lean:6302` is `spikeCtx`, credited to
+`spikeCtl`); the 21 HAND lines were checked and are correct; the 9 PIN
+lines are not judged by design. Well under the hour.
+
+### 10.5 The FULL gate — verbatim verdict lines at 6edb0f5
+
+`CERB_MEM_MAX=40G scripts/test_unit.sh` from the worktree root on the tree
+committed as 6edb0f5 (the trio-cite edit to ARCHITECTURE.md landed in
+parallel with the gate's start — docs-only, read by no gate), Lean 4.32.2,
+pin `f95ef8d9c`, exit 0, `14.05s user 1.27s system 102% cpu 14.974 total`:
+gate 2 REPLAYED the capped build made after the docstring edits (472 jobs,
+`1:15.11 total`, Step.lean onward recompiled; `Build completed successfully
+(472 jobs)`). Every line matching
+`^==|^ok:|^info: CerberusHeapLang|^ALL GATES|^GATE-EXIT|^Build completed|^BOUNDARY|^ALLOWLISTED|^FAIL`,
+unmodified and complete (`GATE-EXIT=0` appended by my wrapper):
+
+```
+== gate 1: banned proof-method grep (native_decide / bv_decide / ofReduce*) ==
+ok: no banned proof-method references
+== gate 2: capped build, cerberus-heaplang (elaborates its axiom audit) ==
+info: CerberusHeapLang/Audit.lean:1066:0: CerberusHeapLang export pins: 893 trio-exact
+info: CerberusHeapLang/Audit.lean:1066:0: CerberusHeapLang axiom sweep: every theorem bounded by the trio (6051 swept, internal details included — count informational, environment-dependent)
+info: CerberusHeapLang/Audit.lean:1066:0: CerberusHeapLang banned-axiom sweep: sorryAx/ofReduceBool/ofReduceNat absent from all cones (9141 constants of every kind swept, internal details included — count informational, environment-dependent)
+Build completed successfully (472 jobs).
+ok: cerberus-heaplang build green
+== speedbump: rule-use and classification manifest (regenerate; red on a red row or drift) ==
+ok: capability manifest regenerated, no drift
+== speedbump: corpus skeleton (hand-transcribed emitted Core vs docs/corpus-e0; scripts/corpus_skeleton.lean) ==
+ok: corpus skeleton — every transcription matches its emitted text, every plant mismatches
+== speedbump: import direction (semantics → heap → rules → adequacy → clients) ==
+ok: import direction — 18 core modules, none imports an exhibit/example/production module
+== speedbump: client boundary (positive clients mention no logic internals; scripts/boundary_check.sh) ==
+ok:   Exhibit — 0 internals mentions
+ok:   LoopExhibit — 0 internals mentions
+ok:   FibExhibit — 0 internals mentions
+ok:   ArrayExhibit — 0 internals mentions
+ok:   ListRevExhibit — 0 internals mentions
+ok:   TreeRotExhibit — 0 internals mentions
+ok:   CaseExhibit — 0 internals mentions
+ok:   WseqExhibit — 0 internals mentions
+ok:   StructExhibit — 0 internals mentions
+ok:   AllocExhibit — 0 internals mentions
+ok:   DisposeExhibit — 0 internals mentions
+ok:   RegionLoopExhibit — 0 internals mentions
+ok:   MallocListExhibit — 0 internals mentions
+ok:   FibRecExhibit — 0 internals mentions
+ok:   TwoLabelExhibit — 0 internals mentions
+ok:   EvenOddExhibit — 0 internals mentions
+ok:   EmittedAExhibit — 0 internals mentions
+ok:   EmittedBExhibit — 0 internals mentions
+ok:   EmittedCExhibit — 0 internals mentions
+ok:   CorpusT1Exhibit — 0 internals mentions
+ok:   CorpusT5Exhibit — 0 internals mentions
+ok:   CorpusT6Exhibit — 0 internals mentions
+ok:   Examples.CallSmoke — 0 internals mentions
+ok:   Examples.ReadinessSmoke — 0 internals mentions
+ok:   Examples.Layout — 0 internals mentions
+ok:   Examples.CorpusE0 — 0 internals mentions
+ok:   Examples.CorpusE5 — 0 internals mentions
+ok:   Examples.EmittedInt — 0 internals mentions
+ok:   CorpusT4Exhibit — 0 internals mentions
+BOUNDARY: 29 modules checked, 0 internals mention(s) in total, exit=0
+ok: client boundary — no unallowlisted internals mention
+ALL GATES GREEN
+GATE-EXIT=0
+```
+
+Manifest tail (regenerated in the gate, no drift; the committed file):
+`MANIFEST: 35 constructors, 78 variant rows (40 RULE, 0 RULE-TOTAL-UNDEMONSTRATED, 7 RULE-PARTIAL-UNDEMONSTRATED, 0 PARTIAL-ONLY, 24 NO-RULE, 7 OUT-OF-SCOPE), 0 red, 25 consumer modules`.
+Warnings in the gate log: 572 raw, 48 from `CerberusHeapLang/*` — the
+baseline (DERIVED by `grep -c`).
+
+### 10.6 KOI lines changed / added
+
+B6 (appended: the floor is not vacuous, with the measurement and the
+`can_advance`-panic mechanism), B7 (rewritten: three arms; `esize_subst`
+and its twins proved at the engine's fuel; `hbsz` derivable by
+`case_hbsz_of_branches`, kept by choice), B19 (NEW: the numeral `600` vs
+the no-magic-values ruling, H-2), B20 (NEW: `wps/wpt_neg_bound` expose
+`fresh_given_int`, H-3), C17 (appended: the E5 duplication additions),
+C19 (disposition cell: the full E5 range audit done, `901ef50..HEAD`).
+
+### 10.7 For the orchestrator — the DECISIONS L1 entry
+
+The register is the orchestrator's; the replacement text for the L1
+entry's "sufficient, not necessary" wording:
+
+> The premise `600 ≤ sup` is a SUFFICIENT floor, not a necessary one (the
+> compiled composite delivers the same values at `sup = 0`) — and not a
+> vacuous one: at a `sup` from which the run's fresh-symbol draws reach a
+> source symbol's number (t5 at 505/506, t6 at 509/510, t4 at
+> 505/506/508/509) the composite is KILLED (`killed:Undef0` after LemLib
+> `can_advance: Step_error2 ==> Kill`/`Load` panics; measured at the L1
+> landing and re-measured at the E5 full-range audit fixes, 6edb0f5).
+
+### 10.8 Deviations and [AGENT] decisions
+
+1. The brief's "WALKTHROUGH :126–150 future tense; :147 range" are
+   ARCHITECTURE line numbers (the audit's D-1.5); fixed in ARCHITECTURE.
+   WALKTHROUGH's own stale items were the `DriverSafeCtl` print (D-1.4)
+   and — found on the same page — "The ten production statements" →
+   thirteen, with t4/t5/t6 named (the same defect class, one sentence).
+2. ARCHITECTURE §6's "Five OUT-OF-SCOPE variants" was stale before C-1
+   (the manifest had six; `nd` was unlisted): now "Seven", listing both.
+3. `docs/CLAIMS.md` C15–C17 ("a sufficient floor, not a necessary one")
+   left untouched — true as written; the generator's span check makes
+   prose edits there a separate care point. ARCHITECTURE received the
+   D-2 half-sentence although the brief named README/KOI B6/docstrings
+   only (the sentence sat inside the E5 prose being rewritten).
+4. C-1 classified OUT-OF-SCOPE, not NO-RULE: the manifest's convention is
+   NO-RULE = mirrored but no rule, OUT-OF-SCOPE = no mirror step (the
+   `run_surplus`/`eval_uncovered` rows' class); the closure record's row
+   says "— (stuck, fail-closed)".
+5. The probe reports the kill kind (`killed:Undef0`) the auditor's arm
+   order hid; every verdict agrees.
+6. Nothing in the brief was left undone.
+
+Ephemeral scratch `worktrees/land-e5/.audit-fix-scratch/` (`libmd5.so`,
+`libcf.so`, `probe_d2.lean`, `probe_d2.out`, `build1.log`, `manifest.new`,
+`cite_*.tsv`, `gate.log`, `gate.tail`) — deleted at the end of this slice;
+the probe is the appendix's recipe with the arm and the sixteen `#eval`
+lines shown in §10.2.
