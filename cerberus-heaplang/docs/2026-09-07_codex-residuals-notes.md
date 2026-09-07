@@ -122,3 +122,104 @@ PLANT-EXIT=1
 Time spent from the fresh pre-snapshot through recording: approximately
 14.3 minutes (03:32:44–03:47:00 UTC), plus the initial
 required document reads. No single build or proof pass approached one hour.
+
+
+## D5 — DONE: partial-face clients
+
+Implementation commit: `77c237dc959690ee8539d5a38be2eeb987f039ab`.
+Added `CerberusHeapLang/Examples/PartialClients.lean` as a `positive-client`
+module. `PartialClients.t5_wps` proves the complete `CorpusE0.t5Main` with
+the partial judgment; `PartialClients.t5_blockSpecs` verifies its return
+label, whose readout is `Specified(1)`. The proof uses the public partial
+rules directly. Its freshness hypothesis requires that every symbol drawn
+at or above the initial supply differs from the two source bindings used
+after assignment; no numeral is introduced as a supply or execution bound.
+The original total proof and every existing statement are untouched.
+
+`PartialClients.loadBind_wps` proves a whole-cell load followed by a strong
+symbol binder and a return of that symbol. Its postcondition retains the
+same points-to ownership, the exact read footprint, and the updated
+binding. This forces the annotated-head face `wps_seq_sym_annot` and the
+exact-footprint face `wps_load_footprint`. The t5 proof also consumes the
+footprint face, the two `wps_neg_round` rows, `wps_excluded_store`,
+`wps_excluded_store_eval`, and `wps_case_eval` through its private proof
+composition helpers. The new module contains 34 private helper declarations
+(evaluator, environment, and partial-rule composition facts), all included
+in the in-build axiom sweep. It imports only `API` and example support.
+
+Added its row in `scripts/module_classes.tsv`. Changed exactly the seven
+`.rulePartialUndemonstrated` data rows in `scripts/capability_manifest.lean`
+to `.rule`, removing the mover argument required only by the former class.
+No row's shape, rule names, or `also` list changed. Regenerated
+`docs/CAPABILITY_MANIFEST.md` using the gate's command, from the package:
+`../scripts/capped "$HOME/.elan/bin/lake" env lean scripts/capability_manifest.lean`.
+All seven rows name `Examples.PartialClients` as their partial consumer;
+the generator's proof-dependency traversal verifies that consumption.
+
+```text
+MANIFEST: 35 constructors, 78 variant rows (47 RULE, 0 RULE-TOTAL-UNDEMONSTRATED, 0 RULE-PARTIAL-UNDEMONSTRATED, 0 PARTIAL-ONLY, 24 NO-RULE, 7 OUT-OF-SCOPE), 0 red, 26 consumer modules
+```
+
+Added only the three theorem pins and the import needed to resolve them
+in `Audit.lean`. Each new public theorem was measured with `#print axioms`
+(the commands remain in the new module). Exact output:
+
+```text
+'CerberusHeapLang.PartialClients.t5_wps' depends on axioms: [propext, Classical.choice, Quot.sound]
+'CerberusHeapLang.PartialClients.t5_blockSpecs' depends on axioms: [propext, Classical.choice, Quot.sound]
+'CerberusHeapLang.PartialClients.loadBind_wps' depends on axioms: [propext, Classical.choice, Quot.sound]
+```
+
+Frozen surface: the capped pre-snapshot matched D6's rebuilt post-snapshot
+byte for byte. After the final full gate, ran the same capped
+`scripts/signature_snapshot.lean` command as D6, writing
+`docs/2026-09-07_codex-D5-pre.txt` and `docs/2026-09-07_codex-D5-post.txt`.
+The environment settings and cap were the same as recorded for D6.
+Derived census: pre 4,950 declarations; post 4,957; ADDED 7; REMOVED 0;
+CHANGED 0; UNCHANGED 4,950. The entire diff is the following additions,
+exactly within D5's ADDED-only allowance:
+
+- `CerberusHeapLang.PartialClients.loadBind`
+- `CerberusHeapLang.PartialClients.loadBind_wps`
+- `CerberusHeapLang.PartialClients.t5Ls`
+- `CerberusHeapLang.PartialClients.t5RetQ`
+- `CerberusHeapLang.PartialClients.t5_blockSpecs`
+- `CerberusHeapLang.PartialClients.t5_wps`
+- `CerberusHeapLang.PartialClients.ψT5`
+
+SHA-256 pre: `1b7d097dc6956c8b258d6e953d5a2ef37687db660d8c80d1790e1b22820113d9`.
+SHA-256 post: `cbe88d812d2f760ddbdbad037355771c38e7e975ad6838ad1bf35e9859ec40b5`.
+The generator data changes are separately within D5's explicit allowance;
+they do not contribute package declarations to this snapshot.
+
+Validation: capped elaboration of the new module and package build both
+passed. `git rebase main` immediately before the final gate reported the
+branch up to date, with no conflicts. Final command from the worktree root:
+`CERB_MEM_MAX=40G scripts/test_unit.sh`. Expected pins: 893 + 3 = 896;
+measured: 896 trio-exact. Package linter warnings: 48 before, 48 after,
+using D6's counting method; the new module has zero linter warnings.
+The full gate regenerated the manifest with no drift, reported 30 boundary
+modules with zero internal mentions, and passed its banned-method and
+whole-package axiom sweeps. `git diff --check` was clean.
+
+Final FULL gate tail, verbatim:
+
+```text
+ok:   Examples.CallSmoke — 0 internals mentions
+ok:   Examples.ReadinessSmoke — 0 internals mentions
+ok:   Examples.Layout — 0 internals mentions
+ok:   Examples.CorpusE0 — 0 internals mentions
+ok:   Examples.CorpusE5 — 0 internals mentions
+ok:   Examples.EmittedInt — 0 internals mentions
+ok:   CorpusT4Exhibit — 0 internals mentions
+ok:   Examples.PartialClients — 0 internals mentions
+BOUNDARY: 30 modules checked, 0 internals mention(s) in total, exit=0
+ok: client boundary — no unallowlisted internals mention
+ALL GATES GREEN
+GATE-EXIT=0
+```
+
+Time spent from the fresh pre-snapshot through recording: approximately
+9.3 minutes (03:48:18–03:57:39 UTC).
+No single build or proof pass approached one hour. Stage 1 ends here:
+D6 is BLOCKED and reverted; D5 is DONE. No later deliverable was started.
