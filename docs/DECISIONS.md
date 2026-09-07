@@ -3707,3 +3707,81 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   Rule adopted: the launch text is handed over ONLY after the agent's own
   worktree contains every file it names, verified there; never in the same
   message as a merge ask.
+- **2026-09-07 [USER] CHARTER MERGE** (verbatim): "Go ahead with the
+  kill-adequacy design. & merge approved" — main 2e18821 → 6df8982 (branch
+  `codex-charter-3`: the total-refines-partial charter, its review, the
+  launch-incident entry). ff-only. The agent's worktree branch was already on
+  that commit, so its rebases were no-ops.
+- **2026-09-07 [AGENT] CODEX REFINEMENT LANDING — merge candidate: branch
+  `codex/total-refines-partial` at this entry's commit (Lean tree `a994676`;
+  the landing commits above it are docs-only).** RESULT: T1 and T2 DONE, no
+  park, four commits (`a0b728c` T1, `d5b410f` record, `a9cbd77` T2, `a994676`
+  record). CONTENT: `LabelSpecT.forget` and `wps_of_wpt` appended to Wpt.lean
+  (:5252/:5257) — the total judgment at any budget and the empty procedure
+  table entails the partial judgment at the ∃-forgotten label specification,
+  by strong induction on the budget, clause by clause as the charter's §4
+  table prescribed (value: the cost conjunct dropped; jump: the variant
+  witnessed; call: ex falso through `wpt_empty_call_false`; step: the
+  `List Empty` observations eliminated, the later introduced, the credit
+  dropped, the induction hypothesis applied); `t4_wps_of_wpt` appended to
+  CorpusT4Exhibit.lean (:1467), the while-loop program's partial judgment as
+  a corollary of `t4_wpt` (entailment transitivity; the budget inferred);
+  two pin lines. Statements character-identical to the charter; both
+  theorems trio-exact; no rule lemma in either cone (manifest byte-identical
+  across the slice); census baseline 5224 → 5226 → 5227 = ADDED 2 / 1,
+  REMOVED 0, CHANGED 0 (orchestrator and auditor recomputed). The agent's
+  record tags its choices `[AGENT]`, quotes its outputs, and labels its own
+  shell echoes (`GATE-EXIT`, `WALL-SECONDS`) as such. RANGE AUDIT (fresh
+  reviewer, `cerberus-heaplang/docs/2026-09-07_audit-codex-refinement-range.md`):
+  PASS, A, no fix required; six Info items, all the orchestrator's — N1
+  front-doc gate line (904/1121 → 906/1123, done here), N2 charter §1 said
+  `capped` always prints an env line (it prints nothing when `CERB_PROJ` and
+  `GIT_CONFIG_GLOBAL` are set — erratum written into the charter here), N3
+  the four `codex/park-D*` branches are stage 2's, N4 the agent's gitignored
+  logs (byte-identical to the record's quotes; deleted at this landing), N5
+  the theorems on no shop-window surface (done here: README "The logic",
+  ARCHITECTURE "The two judgments", CLAIMS C18; `t4_wps_of_wpt` documented
+  as a corollary), N6 the `.bash_logout` login-shell note had no in-repo
+  effect. KOI: §E re-anchored at 906; C21 registered (the general-table
+  refinement: `ProcSpecT.forget` with `∃ m` pre / `∀ m` post is provable by
+  the same induction, but recovering the empty-table corollary needs a
+  table-equality or Θ-monotonicity lemma that does not exist; the three
+  synthetic C3 clients are its consumers). LANDING GATE EPISODES, recorded as
+  they happened: the first landing gate went RED at the manifest speedbump —
+  two spans of the new CLAIMS row were declaration-shaped but named no
+  constant (`ProcSpecT.forget`, a name that does not exist; `Audit.lean`, a
+  file) — reworded; the second reported DRIFT — the manifest's footer counts
+  the claim rows (17 → 18) — regenerated with the gate's own command in the
+  same commit; both were the orchestrator's landing text, not the slice.
+  ORCHESTRATOR GATES, 40G cap, wrapper `EXIT=0`, 0 `UNCAPPED`, 33 warnings,
+  0 modules rebuilt (the agent's cache was current): (i) `a994676` 20:59:44–
+  21:00:07 UTC, tail identical to (ii) except the manifest footer; (ii) the
+  landing commit `ed82837` 21:23:51–21:24:08 UTC, quoted (the 30 per-module
+  `ok:   <module> — 0 internals mentions` lines elided):
+  ```
+  == gate 1: banned proof-method grep (native_decide / bv_decide / ofReduce*) ==
+  ok: no banned proof-method references
+  == gate 1b: fuel-numeral grep (scripts/fuel_numeral_check.sh; a numeral outside a *_shipped corollary is red) ==
+  ok: no fuel numeral (100000000/1000000/999999) outside a *_shipped corollary and no retired fuel constant (61 files scanned, comments stripped)
+  == gate 2: capped build, cerberus-heaplang (elaborates its axiom audit) ==
+  info: CerberusHeapLang/Audit.lean:1123:0: CerberusHeapLang export pins: 906 trio-exact, 6 axiom-free-exact
+  info: CerberusHeapLang/Audit.lean:1123:0: CerberusHeapLang axiom sweep: every theorem bounded by the trio (6479 swept, internal details included — count informational, environment-dependent)
+  info: CerberusHeapLang/Audit.lean:1123:0: CerberusHeapLang banned-axiom sweep: sorryAx/ofReduceBool/ofReduceNat absent from all cones (9679 constants of every kind swept, internal details included — count informational, environment-dependent)
+  Build completed successfully (484 jobs).
+  ok: cerberus-heaplang build green
+  == speedbump: rule-use and classification manifest (regenerate; red on a red row or drift) ==
+  ok: capability manifest regenerated, no drift
+  == speedbump: corpus skeleton (hand-transcribed emitted Core vs docs/corpus-e0; scripts/corpus_skeleton.lean) ==
+  ok: corpus skeleton — every transcription matches its emitted text, every plant mismatches
+  == speedbump: import direction (semantics → heap → rules → adequacy → clients) ==
+  ok: import direction — 19 core modules, none imports an exhibit/example/production module
+  == speedbump: client boundary (positive clients mention no logic internals; scripts/boundary_check.sh) ==
+  BOUNDARY: 30 modules checked, 0 internals mention(s) in total, exit=0
+  ok: client boundary — no unallowlisted internals mention
+  ALL GATES GREEN
+  ```
+  Merge candidate pending [USER] sign-off. The charter discipline adopted
+  for this slice (fixed statements verified derivable, fence-closure table,
+  hostile pre-launch review, launch text only after the agent's worktree is
+  verified) produced a slice with zero blocks and zero fixes required — the
+  first of the four Codex runs to do so.
