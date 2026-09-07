@@ -35,6 +35,15 @@ if grep -rnE 'native_decide|bv_decide|ofReduceBool|ofReduceNat' \
 else
   echo "ok: no banned proof-method references"
 fi
+# L2 (2026-09-07): the fuel numeral belongs to the shipped corollaries only —
+# `100000000`/`1000000`/`999999` and the retired constants are red anywhere
+# else in the package (comments stripped). Plant-tested: `--selftest`.
+echo "== gate 1b: fuel-numeral grep (scripts/fuel_numeral_check.sh; a numeral outside a *_shipped corollary is red) =="
+if scripts/fuel_numeral_check.sh; then
+  :
+else
+  echo "FAIL: fuel numeral / retired fuel constant outside a *_shipped corollary (above)" >&2; fail=1
+fi
 
 echo "== gate 2: capped build, cerberus-heaplang (elaborates its axiom audit) =="
 if (cd cerberus-heaplang && ../scripts/capped "$HOME/.elan/bin/lake" build); then

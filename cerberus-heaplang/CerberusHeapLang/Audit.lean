@@ -60,11 +60,23 @@ lower bound on that initial supply. The nine
 former boundary exports sit in `trioExports` like everything else.
 Re-pinned 2026-09-03 to cerberus-lean `f95ef8d9c317fa6b50cf6691216a8c37b1d3eabf`
 (the fuel arc: the drive cone's fuel exhaustion is the kernel-transparent
-kill `CerbND.fuelExhaustedKill`, its budget the citable
-`CerbFuel.driverFuel = 10^8`; record:
+kill `CerbND.fuelExhaustedKill`, its budget then the citable constant
+`CerbFuel.driverFuel` (10^8); record:
 cerberus-heaplang/docs/2026-09-03_repin-fuel-notes.md): no name moved, the
 pin list below: 296 after K5.1 (the re-pin itself moved no pin), and the production statements' side
 conditions read `k + 2 ≤ CerbFuel.driverFuel`.
+
+L2 RE-PIN (2026-09-07, cerberus-lean `89f7e688530c6910884518811d645e4e892e4507`,
+LemLib `f6542f8`; record cerberus-heaplang/docs/2026-09-07_l2-repin-notes.md):
+the fuel constants are GONE from the port — every fuel'd engine function takes
+the quantified ambient `[LemFuel]`, and so does every export here; the
+production statements' side conditions read `k + 2 ≤ LemFuel.fuel`, and the
+binary's default is instantiated ONLY in the `*_shipped` corollaries
+(Shipped.lean; gate 1's `scripts/fuel_numeral_check.sh` reds any other fuel
+numeral). R2 [USER 2026-09-07]: the fragment `Frag` is syntactic again
+(Fragment.lean); the re-pin's fuel-relative fragment is the proof device
+`FragFuel` (Soundness.lean) and appears in no pinned statement — the
+`*_fuel` internals are unpinned proof devices under the exhaustive sweep.
 
 CALLS ARC C1 (2026-09-03, cerberus-heaplang/docs/2026-09-03_c1-notes.md):
 the configuration grew — `Config := CoreExpr × EnvStack × Ctl × Mem`,
@@ -236,6 +248,7 @@ import CerberusHeapLang.CorpusT5Exhibit
 import CerberusHeapLang.CorpusT6Exhibit
 import CerberusHeapLang.CorpusT4Exhibit
 import CerberusHeapLang.OverflowExhibit
+import CerberusHeapLang.Shipped
 import CerberusHeapLang.Examples.CorpusE0
 import CerberusHeapLang.Examples.CorpusE5
 import CerberusHeapLang.Examples.ReadinessSmoke
@@ -1062,7 +1075,25 @@ def trioExports : List Name := [
   ``CerberusHeapLang.t4_blockSpecsT,
   ``CerberusHeapLang.wpt_t4WhileEntry,
   ``CerberusHeapLang.t4_wpt,
-  ``CerberusHeapLang.t4_certified_production]
+  ``CerberusHeapLang.t4_certified_production,
+  -- L2 re-pin (2026-09-07, cerberus-heaplang/docs/2026-09-07_l2-repin-notes.md):
+  -- the thirteen shipped-constant corollaries (Shipped.lean) and the two
+  -- substitution-depth facts of the syntactic fragment (Fragment.lean).
+  ``CerberusHeapLang.exhibitA_prod_shipped,
+  ``CerberusHeapLang.fib_certified_production_shipped,
+  ``CerberusHeapLang.counter_loop_certified_production_shipped,
+  ``CerberusHeapLang.list_reverse_certified_production_shipped,
+  ``CerberusHeapLang.dispose_list_certified_production_shipped,
+  ``CerberusHeapLang.region_loop_certified_production_shipped,
+  ``CerberusHeapLang.malloc_list_certified_production_shipped,
+  ``CerberusHeapLang.fib_rec_certified_production_shipped,
+  ``CerberusHeapLang.even_odd_certified_production_shipped,
+  ``CerberusHeapLang.t1_certified_production_shipped,
+  ``CerberusHeapLang.t4_certified_production_shipped,
+  ``CerberusHeapLang.t5_certified_production_shipped,
+  ``CerberusHeapLang.t6_certified_production_shipped,
+  ``CerberusHeapLang.peDepth_subst,
+  ``CerberusHeapLang.evalDepth_subst]
 
 /-- M2 re-pin [AGENT 2026-09-06]: these six previously trio-exact
     exports now have empty cones. The context projections are unchanged

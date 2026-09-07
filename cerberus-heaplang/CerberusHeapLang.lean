@@ -50,4 +50,5 @@ import CerberusHeapLang.CorpusT5Exhibit
 import CerberusHeapLang.CorpusT6Exhibit
 import CerberusHeapLang.CorpusT4Exhibit
 import CerberusHeapLang.OverflowExhibit
+import CerberusHeapLang.Shipped
 import CerberusHeapLang.Audit
