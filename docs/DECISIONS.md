@@ -3643,3 +3643,52 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   has no symbol-collection function, so `symBound` would be a hand-written
   traversal of the full Core AST discharged by kernel evaluation — a grind
   smell, not mathematics.
+- **2026-09-07 [USER] TWO MERGES** (verbatim): "Go ahead with the merge" —
+  main 1e1f584 → e4b0f95 (the Codex D5 landing, branch `codex/demo-residuals`);
+  then "Go ahead with the second as well" — main e4b0f95 → 2e18821 (the Codex
+  stage-2 landing, branch `land/codex-stage2`). Both ff-only. [USER] on the
+  cerberus-lean team's fuel-monotonicity work: it does not change the next
+  slice ([AGENT]: the refinement theorem is fuel-agnostic — both judgments
+  take the same `[LemFuel]` instance and the proof never compares fuels; the
+  demo's exports are already fuel-quantified above a floor); it is an INPUT
+  to the parked D1 (kill adequacy must separate a UB kill, which persists at
+  larger fuel, from fuel exhaustion, which does not) — D1's design waits for it.
+- **2026-09-07 [AGENT] CODEX CHARTER: TOTAL REFINES PARTIAL — merge candidate
+  (this commit, docs-only)**. `docs/2026-09-07_codex-charter-total-refines-partial.md`:
+  T1 `LabelSpecT.forget` + `wps_of_wpt` (`wpt M p Ls emptyProcSpecT k Ψ e ρ ⊢
+  wps M p (LabelSpecT.forget Ls) emptyProcSpec Ψ e ρ`, appended to Wpt.lean),
+  T2 `t4_wps_of_wpt` (the while-loop program's partial judgment from `t4_wpt`);
+  statements FIXED against the source; §4 a clause-by-clause derivability
+  record; §5 a fence-closure table per acceptance criterion; rule 5 statement
+  discipline (park, never reshape); rule 11 out-of-tree checks. The operator's
+  ask (verbatim): "mathematically ambitious but cleanly scoped … review your
+  codex plan doc carefully with a subagent, it should be correct, and robust
+  against minor errors. Then give me a *short* bit of prompt text which I
+  will set as a GOAL". REVIEW (fresh, hostile subagent,
+  `docs/2026-09-07_review-codex-charter-total-refines-partial.md`): ACCEPT
+  WITH FIXES, B+ — both statements ELABORATED in scratch (T1's `#check` matches
+  the acceptance text; T2's premises character-identical to `t4_wpt`), all
+  five clauses re-derived from `wpt.pre`/`wps.pre` with no hidden asymmetry
+  (masks agree; `▷`/`£ 1` only on the partial side; `obs : List Empty` forces
+  `[]`; CALL ex falso via `wpt_empty_call_false`), both fences closed (T1
+  cannot drift the manifest — Wpt is `core`; T2 can only drift, never red;
+  the boundary pattern matches none of T2's names; census excludes private
+  declarations). Its nine required fixes applied: T2's `#check` form quoted
+  as measured + rule 5 widened (F1); scratch location + command (F2);
+  environment facts from stage 2 (F3); `trioExports` = Audit.lean:271–1101,
+  add each name once (F4); §6 corrected — three synthetic C3 clients carry
+  non-empty tables, the empty-table choice covers the EMITTED corpus (F5); §0
+  admits the two pin lines (F6); `local macro` rationale (F7); warning-count
+  method (F8); baseline snapshot's commit (F9); range cites (F10). [AGENT]
+  why this theorem: the corrected symbol floor (D3/D4) would need a
+  hand-written traversal of the full Core AST discharged by kernel evaluation
+  (no symbol-collection function exists in the semantics) — a grind smell;
+  the general-Θ refinement and the kill adequacy need design with the
+  operator first. Worktree `worktrees/codex-refinement` (branch
+  `codex/total-refines-partial`) is cut from main 2e18821 and primed from the
+  D5 worktree's freshly gated cache (NOT the primary checkout's): verified by
+  a FULL gate there — 0 modules rebuilt, `export pins: 904 trio-exact, 6
+  axiom-free-exact`, `Build completed successfully (484 jobs)`, `BOUNDARY: 30
+  modules checked, 0 internals mention(s) in total, exit=0`, `ALL GATES GREEN`,
+  33 warnings, 0 `UNCAPPED`. On this merge the worktree branch is reset to
+  main and the operator launches the agent with §0 as its GOAL.
