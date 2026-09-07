@@ -3281,3 +3281,20 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   ```
   L2 (the re-pin) is in progress on a branch off 093b02b and rebases over
   this candidate.
+- **2026-09-07 [USER] "For the remaining technical work, I want to use codex within a very
+  tightly scoped worktree … you write a very tight charter for what should be
+  delivered. The codex agent is good at meeting goals, but bad at drift /
+  focus unless the goal is very clear"; "Could we roll them into one
+  charter? I agree about waiting until L2 lands."** → `docs/2026-09-07_codex-charter-demo-residuals.md`
+  (DRAFT): one charter, one worktree, one deliverable at a time in a fixed
+  order — D1 driver-kill adequacy (B16), D2 symbolic-int storability (B15),
+  D3 program-derived symbol bound (B19), D4 the fresh-symbol abstraction
+  (B20), D5 the partial-face clients, D6 the whole-text transcription check,
+  D7 the head-form scaffold + E5 duplications (C17, alone), then LOCKED until
+  L4 merges: D8 lift the empty tag-definitions premise (B4, t7), D9 the
+  coupling-library extraction (Lane C item 6). Rules: frozen surface by
+  snapshot with an explicit allowed-changes list per deliverable, file
+  fence, forbidden list, capped FULL gate, one record, stop rules with time
+  boxes, rebase before each gate. Statement shapes "fixed at activation" are
+  filled in by the orchestrator against the post-L2 tree. E6/E7 excluded
+  (designed with the operator first). Activates on L2's merge.
