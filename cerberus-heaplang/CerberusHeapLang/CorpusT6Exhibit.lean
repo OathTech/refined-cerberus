@@ -11,7 +11,10 @@ The five registered continuations are checked against collect_saves.
 The label specifications admit the reachable case-2, break and return
 entries; whole-term and label-body membership also cover the other cases.
 -/
-import CerberusHeapLang.CorpusT5Exhibit
+import CerberusHeapLang.Examples.EmittedInt
+import CerberusHeapLang.Examples.CorpusE5
+import CerberusHeapLang.ProdEntry
+import CerberusHeapLang.EmittedAExhibit
 
 set_option autoImplicit false
 namespace CerberusHeapLang
@@ -97,7 +100,7 @@ theorem wpt_t6AssignStmt [SpikeGS .hasLC GF]
     (hr : fmapLookupBy symCmpK t6rSym f = some (Vobject (OVpointer pr))) :
     iprop(pointsToCell M.tagDefs (GF := GF) pr (.own 1) intTy bs ∗
       (∀ (s : sym), ⌜∃ k, s = fresh_given_int k ∧ M.runState.sym_supply ≤ k⌝ -∗
-        pointsToCell M.tagDefs pr (.own 1) intTy (t5IntBytes M.tagDefs v) -∗
+        pointsToCell M.tagDefs pr (.own 1) intTy (emittedIntBytes M.tagDefs v) -∗
         Ψ (.pure Vunit) (envAdd s (lint v) (t6frAssign n m v pr f) :: rest))) ⊢
       wpt M p Ls Θ 24 Ψ (t6AssignStmt start n m v) (f :: rest) := by
   iintro ⟨Hpt, HΨ⟩
@@ -179,8 +182,8 @@ def t6Cells (GF : BundledGFunctors) [SpikeGS .hasLC GF]
     (tds : CerbTags.TagDefsMap) (n : Int) (vs : List value) (ρ : EnvStack) : IProp GF :=
   iprop(∃ (px pr : CerbMem.PointerValue) (f : Fmap sym value) (rest : List (Fmap sym value)),
     ⌜vs = [Vobject (OVpointer px), Vobject (OVpointer pr)] ∧ ρ = f :: rest ∧ SymFrame f⌝ ∗
-    pointsToCell tds px (.own 1) intTy (t5IntBytes tds 2) ∗
-    pointsToCell tds pr (.own 1) intTy (t5IntBytes tds n))
+    pointsToCell tds px (.own 1) intTy (emittedIntBytes tds 2) ∗
+    pointsToCell tds pr (.own 1) intTy (emittedIntBytes tds n))
 
 def t6LsT (GF : BundledGFunctors) [SpikeGS .hasLC GF]
     (tds : CerbTags.TagDefsMap) : LabelSpecT GF := fun l m vs ρ =>
@@ -221,8 +224,8 @@ theorem wpt_t6Return [SpikeGS .hasLC GF]
     (px pr : CerbMem.PointerValue)
     (hx : fmapLookupBy symCmpK t6xSym f = some (Vobject (OVpointer px)))
     (hr : fmapLookupBy symCmpK t6rSym f = some (Vobject (OVpointer pr))) :
-    iprop(pointsToCell M.tagDefs (GF := GF) px (.own 1) intTy (t5IntBytes M.tagDefs 2) ∗
-      pointsToCell M.tagDefs pr (.own 1) intTy (t5IntBytes M.tagDefs 20)) ⊢
+    iprop(pointsToCell M.tagDefs (GF := GF) px (.own 1) intTy (emittedIntBytes M.tagDefs 2) ∗
+      pointsToCell M.tagDefs pr (.own 1) intTy (emittedIntBytes M.tagDefs 20)) ⊢
       wpt M p (t6LsT GF M.tagDefs) emptyProcSpecT 16 Ψ t6Return (f :: rest) := by
   iintro ⟨Hx, Hr⟩
   simp only [t6Return, letS, seqE, wc, bnd, t6Kill_eq]
@@ -231,7 +234,7 @@ theorem wpt_t6Return [SpikeGS .hasLC GF]
   iapply wpt_seq_sym _ _ _ _ _ _ _ _ 7 9
   rw [show (7 : Nat) = 6 + 1 from rfl]
   iapply wpt_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
-  iapply wpt_t6Load hex t6rSym 529 131 132 f rest hf pr (t5IntBytes M.tagDefs 20) (lint 20) hr rfl rfl
+  iapply wpt_t6Load hex t6rSym 529 131 132 f rest hf pr (emittedIntBytes M.tagDefs 20) (lint 20) hr rfl rfl
   isplitl [Hr]
   · iexact Hr
   iintro %fp Hr
@@ -243,14 +246,14 @@ theorem wpt_t6Return [SpikeGS .hasLC GF]
   iapply wpt_seq _ _ _ _ _ _ _ 3 6
   rw [show (3 : Nat) = 2 + 1 from rfl]
   iapply wpt_kill_eval _ _ _ _ _ _ rfl (pv := px) (t1sym_eval hex rest (by t6_lookup))
-  iapply wpt_kill_emp _ _ _ (Static0 intTy) px intTy (t5IntBytes M.tagDefs 2) _ (Nat.le_refl 2) rfl
+  iapply wpt_kill_emp _ _ _ (Static0 intTy) px intTy (emittedIntBytes M.tagDefs 2) _ (Nat.le_refl 2) rfl
   isplitl [Hx]
   · iexact Hx
   simp only [SpikeVal.mergeInto]
   iapply wpt_seq _ _ _ _ _ _ _ 3 3
   rw [show (3 : Nat) = 2 + 1 from rfl]
   iapply wpt_kill_eval _ _ _ _ _ _ rfl (pv := pr) (t1sym_eval hex rest (by t6_lookup))
-  iapply wpt_kill_emp _ _ _ (Static0 intTy) pr intTy (t5IntBytes M.tagDefs 20) _ (Nat.le_refl 2) rfl
+  iapply wpt_kill_emp _ _ _ (Static0 intTy) pr intTy (emittedIntBytes M.tagDefs 20) _ (Nat.le_refl 2) rfl
   isplitl [Hr]
   · iexact Hr
   simp only [SpikeVal.mergeInto]
@@ -272,8 +275,8 @@ theorem wpt_t6Break [SpikeGS .hasLC GF]
     (px pr : CerbMem.PointerValue)
     (hx : fmapLookupBy symCmpK t6xSym f = some (Vobject (OVpointer px)))
     (hr : fmapLookupBy symCmpK t6rSym f = some (Vobject (OVpointer pr))) :
-    iprop(pointsToCell M.tagDefs (GF := GF) px (.own 1) intTy (t5IntBytes M.tagDefs 2) ∗
-      pointsToCell M.tagDefs pr (.own 1) intTy (t5IntBytes M.tagDefs 20)) ⊢
+    iprop(pointsToCell M.tagDefs (GF := GF) px (.own 1) intTy (emittedIntBytes M.tagDefs 2) ∗
+      pointsToCell M.tagDefs pr (.own 1) intTy (emittedIntBytes M.tagDefs 20)) ⊢
       wpt M p (t6LsT GF M.tagDefs) emptyProcSpecT 18 Ψ t6BreakCont (f :: rest) := by
   iintro H
   unfold t6BreakCont seqE wc
@@ -296,8 +299,8 @@ theorem wpt_t6Case2 [SpikeGS .hasLC GF]
     (px pr : CerbMem.PointerValue)
     (hx : fmapLookupBy symCmpK t6xSym f = some (Vobject (OVpointer px)))
     (hr : fmapLookupBy symCmpK t6rSym f = some (Vobject (OVpointer pr))) :
-    iprop(pointsToCell M.tagDefs (GF := GF) px (.own 1) intTy (t5IntBytes M.tagDefs 2) ∗
-      pointsToCell M.tagDefs pr (.own 1) intTy (t5IntBytes M.tagDefs 0)) ⊢
+    iprop(pointsToCell M.tagDefs (GF := GF) px (.own 1) intTy (emittedIntBytes M.tagDefs 2) ∗
+      pointsToCell M.tagDefs pr (.own 1) intTy (emittedIntBytes M.tagDefs 0)) ⊢
       wpt M p (t6LsT GF M.tagDefs) emptyProcSpecT 43 Ψ t6Case2Cont (f :: rest) := by
   iintro ⟨Hx, Hr⟩
   unfold t6Case2Cont t6CaseContext seqE wc
@@ -398,8 +401,8 @@ theorem wpt_t6Switch [SpikeGS .hasLC GF]
     (px pr : CerbMem.PointerValue)
     (hx : fmapLookupBy symCmpK t6xSym f = some (Vobject (OVpointer px)))
     (hr : fmapLookupBy symCmpK t6rSym f = some (Vobject (OVpointer pr))) :
-    iprop(pointsToCell M.tagDefs (GF := GF) px (.own 1) intTy (t5IntBytes M.tagDefs 2) ∗
-      pointsToCell M.tagDefs pr (.own 1) intTy (t5IntBytes M.tagDefs 0)) ⊢
+    iprop(pointsToCell M.tagDefs (GF := GF) px (.own 1) intTy (emittedIntBytes M.tagDefs 2) ∗
+      pointsToCell M.tagDefs pr (.own 1) intTy (emittedIntBytes M.tagDefs 0)) ⊢
       wpt M p (t6LsT GF M.tagDefs) emptyProcSpecT 58 Ψ CorpusE0.t6Switch (f :: rest) := by
   iintro ⟨Hx, Hr⟩
   unfold CorpusE0.t6Switch letS bnd
@@ -408,7 +411,7 @@ theorem wpt_t6Switch [SpikeGS .hasLC GF]
   iapply wpt_seq_sym _ _ _ _ _ _ _ _ 7 51
   rw [show (7 : Nat) = 6 + 1 from rfl]
   iapply wpt_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
-  iapply wpt_t6Load hex t6xSym 516 47 48 f rest hf px (t5IntBytes M.tagDefs 2) (lint 2) hx rfl rfl
+  iapply wpt_t6Load hex t6xSym 516 47 48 f rest hf px (emittedIntBytes M.tagDefs 2) (lint 2) hx rfl rfl
   isplitl [Hx]
   · iexact Hx
   iintro %fp Hx
@@ -526,8 +529,8 @@ theorem t6_wpt [SpikeGS .hasLC GF]
   iapply wpt_store_eval _ _ _ intTy (psym t6xSym) (convLoadedInt (t6a 514)) NA _
     rfl (pv := px) (cv := lint 2) (t1sym_eval hex rest (by t6_lookup))
     (t1ConvLoadedInt_eval hstd (t1sym_eval hex rest (by t6_lookup)) (by decide) (by decide))
-  iapply wpt_store _ _ _ intTy px (lint 2) NA (t5IntMval 2) _ _ (Nat.le_refl 3)
-    (t5Int_encodes _ 2) (t5Int_storable _ 2)
+  iapply wpt_store _ _ _ intTy px (lint 2) NA (emittedIntMval 2) _ _ (Nat.le_refl 3)
+    (emittedInt_encodes _ 2) (emittedInt_storable _ 2)
   isplitl [Hx]
   · iexact Hx
   iintro %fpX Hx
@@ -547,8 +550,8 @@ theorem t6_wpt [SpikeGS .hasLC GF]
   iapply wpt_store_eval _ _ _ intTy (psym t6rSym) (convLoadedInt (t6a 515)) NA _
     rfl (pv := pr) (cv := lint 0) (t1sym_eval hex rest (by t6_lookup))
     (t1ConvLoadedInt_eval hstd (t1sym_eval hex rest (by t6_lookup)) (by decide) (by decide))
-  iapply wpt_store _ _ _ intTy pr (lint 0) NA (t5IntMval 0) _ _ (Nat.le_refl 3)
-    (t5Int_encodes _ 0) (t5Int_storable _ 0)
+  iapply wpt_store _ _ _ intTy pr (lint 0) NA (emittedIntMval 0) _ _ (Nat.le_refl 3)
+    (emittedInt_encodes _ 0) (emittedInt_storable _ 0)
   isplitl [Hr]
   · iexact Hr
   iintro %fpR Hr
@@ -607,8 +610,11 @@ theorem t6Main_labeledAt (sup : Nat) :
 theorem t6Main_pot : pot t6Main ≤ lemDefaultFuel := Nat.le_of_ble_eq_true rfl
 
 /-- The shipped driver returns Specified(20) on the transcribed switch
-    and the current checked three-function std.core fragment. The initial
-    supply bound protects source bindings during the negative assignment. -/
+    and the current checked three-function std.core fragment. The premise
+    `600 ≤ sup` is a SUFFICIENT floor (it keeps the fresh symbol the negative
+    assignment draws away from every source binding), not a necessary one:
+    the compiled composite delivers the same result at `sup = 0` (measured,
+    docs/2026-09-07_l1-landing-notes.md). -/
 theorem t6_certified_production (sup : Nat) (hsup : 600 ≤ sup)
     (fs : CerbFS.FsState) (args : List String) :
     ∃ (dres : driver_result) (dst' : driver_state),

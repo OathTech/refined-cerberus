@@ -7,7 +7,11 @@ has budget 915 and returns Specified(10). The production theorem requires
 initial symbol supply at least 600 and uses the checked three-function
 std.core fragment; the full emitted-file connection remains KOI A7.
 -/
-import CerberusHeapLang.CorpusT5Exhibit
+import CerberusHeapLang.Examples.EmittedInt
+import CerberusHeapLang.Examples.CorpusE5
+import CerberusHeapLang.ProdEntry
+import CerberusHeapLang.EmittedAExhibit
+import CerberusHeapLang.EmittedBExhibit
 
 set_option autoImplicit false
 namespace CerberusHeapLang
@@ -1417,8 +1421,11 @@ theorem t4_wpt [SpikeGS .hasLC GF]
   iexact Hs
 
 /-- The shipped driver returns Specified(10) on the transcribed while loop
-    and the current checked three-function std.core fragment. The initial
-    supply bound protects source bindings during the negative assignment. -/
+    and the current checked three-function std.core fragment. The premise
+    `600 ≤ sup` is a SUFFICIENT floor (it keeps the fresh symbols the negative
+    assignments draw away from every source binding), not a necessary one:
+    the compiled composite delivers the same result at `sup = 0` (measured,
+    docs/2026-09-07_l1-landing-notes.md). -/
 theorem t4_certified_production (sup : Nat) (hsup : 600 ≤ sup)
     (fs : CerbFS.FsState) (args : List String) :
     ∃ (dres : driver_result) (dst' : driver_state),

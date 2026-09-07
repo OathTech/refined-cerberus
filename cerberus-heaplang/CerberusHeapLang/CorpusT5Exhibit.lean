@@ -14,6 +14,10 @@ Every syntactic branch has a Frag witness in Examples/CorpusE5.lean.
 -/
 import CerberusHeapLang.Examples.EmittedInt
 import CerberusHeapLang.Examples.CorpusE5
+import CerberusHeapLang.ProdEntry
+import CerberusHeapLang.EmittedAExhibit
+import CerberusHeapLang.EmittedBExhibit
+import CerberusHeapLang.EmittedCExhibit
 
 set_option autoImplicit false
 namespace CerberusHeapLang
@@ -25,31 +29,9 @@ open CorpusE0 (t5a t5rSym t5Load t5Gt t5Cond t5Bool t5GtPats t5CondPats t5BoolPa
 
 variable {GF : BundledGFunctors}
 
-/-- The specified branch after substituting its two integer payloads. -/
-def t5CmpBranch (op : binop) (x y : Int) : generic_pexpr Unit sym :=
-  Pexpr [] () (PEif
-    (Pexpr [] () (PEop op
-      (Pexpr [] () (PEcall (Sym convIntSym) [intCty, ointPe x]))
-      (Pexpr [] () (PEcall (Sym convIntSym) [intCty, ointPe y]))))
-    (specInt 1) (specInt 0))
-
-theorem t5CmpBranch_eval {M : MachineCtx} (hstd : StdE3 M.file) (ρ : EnvStack)
-    (op : binop) (x y : Int) (b : Bool)
-    (hx1 : -2147483648 ≤ x) (hx2 : x ≤ 2147483647)
-    (hy1 : -2147483648 ≤ y) (hy2 : y ≤ 2147483647)
-    (hop : evalBinop op (oint x) (oint y) = some (if b then Vtrue else Vfalse)) :
-    evalPexpr M.tagDefs M.extern M.file ρ (t5CmpBranch op x y) =
-      some (lint (if b then 1 else 0)) := by
-  unfold t5CmpBranch
-  rw [evalPexpr_if, if_pos (show (isPePure (specInt 1) && isPePure (specInt 0)) = true from rfl), evalPexpr_op,
-    evalPexpr_convInt_call_int [] hstd (by rw [intCty, evalPexpr_val]; rfl)
-      (by rw [ointPe, evalPexpr_val]) hx1 hx2,
-    evalPexpr_convInt_call_int [] hstd (by rw [intCty, evalPexpr_val]; rfl)
-      (by rw [ointPe, evalPexpr_val]) hy1 hy2]
-  simp only [Option.bind_eq_bind, Option.bind_some]
-  rw [hop]
-  cases b <;> simp only [Bool.false_eq_true, ↓reduceIte, Option.bind_some] <;>
-    exact specInt_eval ρ _
+-- `t5CmpBranch`/`t5CmpBranch_eval`, `t5Tuple_eval` and `t5frAssign` — shared
+-- with CorpusT4Exhibit — live in Examples/EmittedInt.lean since the L1
+-- landing (2026-09-07): a client must not import a client.
 
 theorem t5Gt_select :
     select_case subst_sym_expr (Vtuple [lint 3, lint 2]) t5GtPats =
@@ -77,13 +59,6 @@ theorem t5BoolBranch_eval {M : MachineCtx} (ρ : EnvStack) :
   rw [show evalBinop OpEq (oint 0) (oint 1) = some Vfalse from rfl]
   simp only [Option.bind_some]
   rw [evalPexpr_val]
-
-theorem t5Tuple_eval {M : MachineCtx} {ρ : EnvStack} (n m : Nat) (v w : value)
-    (hn : evalPexpr M.tagDefs M.extern M.file ρ (psym (t5a n)) = some v)
-    (hm : evalPexpr M.tagDefs M.extern M.file ρ (psym (t5a m)) = some w) :
-    evalPexpr M.tagDefs M.extern M.file ρ (t5Tuple n m) = some (Vtuple [v, w]) := by
-  rw [t5Tuple, evalPexpr_ctor2, hn, hm]
-  rfl
 
 theorem t5CondPe_eval {M : MachineCtx} (hstd : StdE3 M.file) {ρ : EnvStack}
     (hv : evalPexpr M.tagDefs M.extern M.file ρ (t5Tuple 512 513) =
@@ -205,21 +180,6 @@ theorem wpt_t5Cond [SpikeGS .hasLC GF]
   simp only [SpikeVal.merge]
   iapply HΨ $$ Hpt
 
-/-- Historical t5 names retained for existing statements; the shared
-    memory-value construction lives in Examples.EmittedInt. -/
-abbrev t5IntMval := emittedIntMval
-abbrev t5IntBytes := emittedIntBytes
-
-theorem t5Int_encodes (tds : CerbTags.TagDefsMap) (n : Int) :
-    memValueFromValue tds (Ctype [] (unatomic_ intTy)) (lint n) = some (t5IntMval n) :=
-  emittedInt_encodes tds n
-
-theorem t5Int_storable (tds : CerbTags.TagDefsMap) (n : Int) : StorableAt tds intTy (t5IntMval n) :=
-  emittedInt_storable tds n
-
-abbrev t5frAssign (n m : Nat) (v : Int) (pr : CerbMem.PointerValue) (f : Fmap sym value) :=
-  envAdd (t5a n) (Vobject (OVpointer pr)) (envAdd (t5a m) (lint v) f)
-
 theorem wpt_t5AssignBlock [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
     {Ψ : SpikeVal → EnvStack → IProp GF}
@@ -231,7 +191,7 @@ theorem wpt_t5AssignBlock [SpikeGS .hasLC GF]
     (hr : fmapLookupBy symCmpK t5rSym f = some (Vobject (OVpointer pr))) :
     iprop(pointsToCell M.tagDefs (GF := GF) pr (.own 1) intTy bs ∗
       (∀ (s : sym), ⌜∃ k, s = fresh_given_int k ∧ M.runState.sym_supply ≤ k⌝ -∗
-        pointsToCell M.tagDefs pr (.own 1) intTy (t5IntBytes M.tagDefs v) -∗
+        pointsToCell M.tagDefs pr (.own 1) intTy (emittedIntBytes M.tagDefs v) -∗
         Ψ (.pure Vunit) (envAdd s (lint v) (t5frAssign n m v pr f) :: rest))) ⊢
       wpt M p Ls Θ 25 Ψ (CorpusE0.t5AssignBlock start n m v) (f :: rest) := by
   iintro ⟨Hpt, HΨ⟩
@@ -370,7 +330,7 @@ theorem wpt_t5Return [SpikeGS .hasLC GF]
     (hx : fmapLookupBy symCmpK CorpusE0.xSym f = some (Vobject (OVpointer px)))
     (hr : fmapLookupBy symCmpK t5rSym f = some (Vobject (OVpointer pr))) :
     iprop(pointsToCell M.tagDefs (GF := GF) px (.own 1) intTy (threeBytes M.tagDefs) ∗
-      pointsToCell M.tagDefs pr (.own 1) intTy (t5IntBytes M.tagDefs 1)) ⊢
+      pointsToCell M.tagDefs pr (.own 1) intTy (emittedIntBytes M.tagDefs 1)) ⊢
       wpt M p (t5LsT GF) emptyProcSpecT 16 Ψ CorpusE0.t5Return (f :: rest) := by
   iintro ⟨Hx, Hr⟩
   simp only [CorpusE0.t5Return, letS, seqE, wc, bnd, t5Kill_eq]
@@ -379,7 +339,7 @@ theorem wpt_t5Return [SpikeGS .hasLC GF]
   iapply wpt_seq_sym _ _ _ _ _ _ _ _ 7 9
   rw [show (7 : Nat) = 6 + 1 from rfl]
   iapply wpt_bound _ _ _ rfl (Nat.le_of_ble_eq_true rfl)
-  iapply wpt_t5Load hex t5rSym 527 80 81 f rest hf pr (t5IntBytes M.tagDefs 1) (lint 1) hr rfl rfl
+  iapply wpt_t5Load hex t5rSym 527 80 81 f rest hf pr (emittedIntBytes M.tagDefs 1) (lint 1) hr rfl rfl
   isplitl [Hr]
   · iexact Hr
   iintro %fp Hr
@@ -398,7 +358,7 @@ theorem wpt_t5Return [SpikeGS .hasLC GF]
   iapply wpt_seq _ _ _ _ _ _ _ 3 3
   rw [show (3 : Nat) = 2 + 1 from rfl]
   iapply wpt_kill_eval _ _ _ _ _ _ rfl (pv := pr) (t1sym_eval hex rest (by t5_lookup))
-  iapply wpt_kill_emp _ _ _ (Static0 intTy) pr intTy (t5IntBytes M.tagDefs 1) _ (Nat.le_refl 2) rfl
+  iapply wpt_kill_emp _ _ _ (Static0 intTy) pr intTy (emittedIntBytes M.tagDefs 1) _ (Nat.le_refl 2) rfl
   isplitl [Hr]
   · iexact Hr
   simp only [SpikeVal.mergeInto]
@@ -426,7 +386,7 @@ theorem wpt_t5If [SpikeGS .hasLC GF]
       pointsToCell M.tagDefs pr (.own 1) intTy bs ∗
       (∀ (s : sym), ⌜∃ k, s = fresh_given_int k ∧ M.runState.sym_supply ≤ k⌝ -∗
         pointsToCell M.tagDefs px (.own 1) intTy (threeBytes M.tagDefs) -∗
-        pointsToCell M.tagDefs pr (.own 1) intTy (t5IntBytes M.tagDefs 1) -∗
+        pointsToCell M.tagDefs pr (.own 1) intTy (emittedIntBytes M.tagDefs 1) -∗
         Ψ (.pure Vunit) (envAdd s (lint 1) (t5frIf px pr f) :: rest))) ⊢
       wpt M p Ls Θ 55 Ψ CorpusE0.t5IfStmt (f :: rest) := by
   iintro ⟨Hx, Hr, HΨ⟩
@@ -580,8 +540,11 @@ theorem t5Main_pot : pot CorpusE0.t5Main ≤ lemDefaultFuel := by
 
 /-- The shipped driver on the one-procedure file wrapping the transcribed
     t5 main and the checked three-function std.core fragment returns
-    Specified(1). The initial fresh-symbol supply must exceed the source
-    symbols, as exposed by t5_wpt. -/
+    Specified(1). The premise `600 ≤ sup` is a SUFFICIENT floor (above every
+    source symbol number, so the fresh symbol the assignment protocol draws
+    cannot collide with a source binding — the fact t5_wpt exposes), not a
+    necessary one: the compiled composite delivers the same result at
+    `sup = 0` (measured, docs/2026-09-07_l1-landing-notes.md). -/
 theorem t5_certified_production (sup : Nat) (hsup : 600 ≤ sup) (fs : CerbFS.FsState) (args : List String) :
     ∃ (dres : driver_result) (dst' : driver_state),
       CerbND.runND (_root_.drive fmapEmpty false (prodFileLib stdlibE3 [] CorpusE0.t5Main) args)

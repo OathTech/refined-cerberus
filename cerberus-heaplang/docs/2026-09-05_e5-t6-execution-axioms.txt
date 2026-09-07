@@ -1,4 +1,3 @@
-cerberus-lean-proj env: switch=/home/dev/projects/cerberus-lean-proj/cerberus-lean/_opam, git redirects active
 'CerberusHeapLang.wpt_t6Load' depends on axioms: [propext, Classical.choice, Quot.sound]
 'CerberusHeapLang.t6Q_case1' depends on axioms: [propext, Classical.choice, Quot.sound]
 'CerberusHeapLang.t6Q_case2' depends on axioms: [propext, Classical.choice, Quot.sound]

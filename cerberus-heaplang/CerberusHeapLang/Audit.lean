@@ -908,8 +908,7 @@ def trioExports : List Name := [
   ``CerberusHeapLang.symOrd_self, ``CerberusHeapLang.t5BoolBranch_eval,
   ``CerberusHeapLang.t5Bool_select, ``CerberusHeapLang.t5CmpBranch_eval,
   ``CerberusHeapLang.t5CondPe_eval, ``CerberusHeapLang.t5Cond_select,
-  ``CerberusHeapLang.t5Gt_select, ``CerberusHeapLang.t5Int_encodes,
-  ``CerberusHeapLang.t5Int_storable, ``CerberusHeapLang.t5LsT_readout,
+  ``CerberusHeapLang.t5Gt_select, ``CerberusHeapLang.t5LsT_readout,
   ``CerberusHeapLang.t5Main_labeledAt, ``CerberusHeapLang.t5RetQ_bindArgs,
   ``CerberusHeapLang.t5RetQ_inv, ``CerberusHeapLang.t5RetQ_lookup,
   ``CerberusHeapLang.t5Tuple_eval, ``CerberusHeapLang.t5_blockSpecsT,
@@ -926,7 +925,13 @@ def trioExports : List Name := [
   ``CerberusHeapLang.wpt_t5Cond, ``CerberusHeapLang.wpt_t5Gt,
   ``CerberusHeapLang.wpt_t5If, ``CerberusHeapLang.wpt_t5Load,
   ``CerberusHeapLang.wpt_t5Return, ``CerberusHeapLang.wpt_unseq_pure_right,
-  ``subst_sym_pexpr_lemFuel.eq_def,
+  -- L1 landing (2026-09-07, the E5 extension audit §7): the aliases
+  -- `t5Int_encodes`/`t5Int_storable` (restatements of `emittedInt_encodes`/
+  -- `emittedInt_storable`, which stay pinned below) are DELETED, and the
+  -- dependency's GENERATED equation lemma ``subst_sym_pexpr_lemFuel.eq_def``
+  -- (realised in Substitution.lean by `unfold`; not a package export) is no
+  -- longer pinned — the exhaustive sweep bounds it like every other internal.
+  -- 896 → 893 pins.
   -- E5 t6 whole-term membership checkpoint: all eleven measured trio-exact.
   ``CerberusHeapLang.CorpusE0.t6Load_frag,
   ``CerberusHeapLang.CorpusE0.t6AssignStmt_frag,

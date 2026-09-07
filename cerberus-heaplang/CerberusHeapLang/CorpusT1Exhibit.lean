@@ -34,6 +34,7 @@ record): `Defined {value: "Specified(4)", stdout: "", stderr: "", blocked:
 A CLIENT of the logic: it reasons through the public rules only.
 -/
 import CerberusHeapLang.Examples.CorpusE0
+import CerberusHeapLang.Examples.EmittedInt
 import CerberusHeapLang.ProdEntry
 import CerberusHeapLang.IntRules
 import CerberusHeapLang.AllocExhibit
@@ -57,47 +58,21 @@ variable {GF : BundledGFunctors}
 /-- t1's `+` node IS the E3 rule's shape at t1's symbols and location. -/
 theorem t1CasePe_eq : t1CasePe = cAddPe a510 a511 a512 a513 (t1Reg 36 41) := rfl
 
-theorem specInt_eval {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym}
-    {file : generic_file Unit core_run_annotation} (ρ : EnvStack) (n : Int) :
-    evalPexpr tds ext file ρ (specInt n) = some (lint n) := by
-  rw [specInt, evalPexpr_ctor1, evalPexpr_val]
-  rfl
-
-/-- `conv_loaded_int('signed int', a)` at a bound in-range `Specified(n)` (the
-    E3 evaluator lemma at t1's operand spelling — `intCty` is `sintTy`'s
-    literal). -/
-theorem t1ConvLoadedInt_eval {tds : CerbTags.TagDefsMap} {ext : Fmap sym sym}
-    {file : generic_file Unit core_run_annotation} (hstd : StdE3 file) {ρ : EnvStack}
-    {a : sym} {n : Int} (hv : evalPexpr tds ext file ρ (psym a) = some (lint n))
-    (h1 : -2147483648 ≤ n) (h2 : n ≤ 2147483647) :
-    evalPexpr tds ext file ρ (convLoadedInt a) = some (lint n) :=
-  evalPexpr_convLoadedInt_spec [] hstd (by rw [intCty, evalPexpr_val]; rfl) hv h1 h2
+-- `specInt_eval`, `t1ConvLoadedInt_eval`, `t1sym_eval`, `createInt_eq`,
+-- `act_store_eq` and `act_load_eq` — the evaluator/redex lemmas every
+-- emitted-corpus client shares — live in Examples/EmittedInt.lean since the
+-- L1 landing (2026-09-07): example support must not import a client.
 
 /-- The selected branch of t1's `+` at `(Specified(3), Specified(1))`. -/
 theorem t1_cAdd_select_31 :
     select_case subst_sym_pexpr (Vtuple [lint 3, lint 1]) (cAddPats a512 a513 (t1Reg 36 41)) =
       some (cAddBranch 3 1) := rfl
 
-/-- The symbol operand at a frame whose lookup is known (the `symC_eval` of
-    EmittedCExhibit.lean at t1's spelling `psym`). -/
-theorem t1sym_eval {M : MachineCtx} (hex : ∀ x, resolveExtern M.extern x = x)
-    {x : sym} {f : Fmap sym value} {v : value} (evs : List (Fmap sym value))
-    (hl : fmapLookupBy symCmpK x f = some v) :
-    evalPexpr M.tagDefs M.extern M.file (f :: evs) (psym x) = some v := by
-  rw [CorpusE0.psym, evalPexpr_sym_of_resolve _ _ _ (hex _)]
-  exact lookup_env_head hl evs
-
 /-! ## The transcription's action nodes in the rules' redex spellings (`rfl`) -/
 
-theorem createInt_eq (loc : CerbLocation.Loc) (x : sym) :
-    createInt loc x = createOpRedex [] loc empty_annotation
-      (Pexpr [] () (PEctor Civalignof [intCty])) intCty (PrefSource loc [x]) := rfl
+-- (`createInt_eq`, `act_store_eq`, `act_load_eq`: Examples/EmittedInt.lean)
 theorem killInt_eq (x : sym) :
     killInt x = killOpRedex [] (t1Reg 0 54) empty_annotation (Static0 intTy) (psym x) := rfl
-theorem act_store_eq (loc : CerbLocation.Loc) (pe2 pe3 : generic_pexpr Unit sym) :
-    act loc (Store0 false intCty pe2 pe3 NA) = storeOpRedex [] loc empty_annotation intTy pe2 pe3 NA := rfl
-theorem act_load_eq (loc : CerbLocation.Loc) (pe2 : generic_pexpr Unit sym) :
-    act loc (Load0 intCty pe2 NA) = loadOpRedex [] loc empty_annotation intTy pe2 NA := rfl
 
 /-! ## The value 4 at the cell (the `three*` lemmas of EmittedCExhibit at 4) -/
 
@@ -124,12 +99,8 @@ theorem t1_four_fromMemValue : (valueFromMemValue t1FourMval).2 = lint 4 := rfl
 
 theorem t1_four_loadTrap : loadTrapV intTy t1FourMval = false := rfl
 
-/-- The two `int` cells' summed budget fits the production cold-start
-    cursor's headroom (closed arithmetic). -/
-theorem prod_two_int_budget_fits :
-    allocCost fmapEmpty intTy 4 + allocCost fmapEmpty intTy 4 ≤ headroom prodMem₀.lastAddress := by
-  rw [prodMem₀_lastAddress]
-  decide
+-- (`prod_two_int_budget_fits`, the two `int` cells' summed cold-start budget,
+-- shared by every emitted client: Examples/EmittedInt.lean)
 
 /-! ## The environment frames of the run and their lookups
 

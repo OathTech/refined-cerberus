@@ -132,15 +132,19 @@ unsequenced node: `unseq` (E4). Two facts a reader must know first:
   rule) are mirrored and classified. E5's next checkpoint proves the
   negative-assignment and excluded-store rules at both strata, and uses
   their total faces to certify t5_ifelse at budget 88, returning
-  Specified(1) through the shipped driver (`CorpusT5Exhibit`). Its initial
-  symbol supply is explicitly at least 600. The same protocol now
+  Specified(1) through the shipped driver (`CorpusT5Exhibit`). Its premise
+  `600 ≤ sup` is a sufficient floor, not a necessary one (the composite
+  delivers the same result at `sup = 0`, measured at the L1 landing,
+  `docs/2026-09-07_l1-landing-notes.md`). The same protocol now
   certifies t6_switch at budget 78, returning Specified(20), through
   its five engine-registered label continuations (`CorpusT6Exhibit`).
   t4_while is now certified at budget 915, returning Specified(10),
   through a decreasing while-label invariant and the emitted exit/return
   path (`CorpusT4Exhibit`; `docs/2026-09-06_e5-t4-loop.md`). All three
-  use the supply floor of 600 and the library fragment described in §2.5.
-  E5's full range audit remains pending. The `bound` rules
+  carry the sufficient floor `600 ≤ sup` and the library fragment described
+  in §2.5. E5 landed as L1 of `docs/2026-09-07_landing-charter.md` (record
+  `docs/2026-09-07_l1-landing-notes.md`); its full range audit
+  (8eeaf92..the L1 head) is owed at the L1 merge boundary. The `bound` rules
   `wps_bound`/`wpt_bound` now REQUIRE a negative-free body within the fuel
   (`negFree`, `pot`), the congruence being unsound otherwise
   (`docs/2026-09-05_e5-notes.md` §3).
@@ -169,7 +173,9 @@ engine's memory state. The two hand-written records:
   `runState.sym_supply` as the lower bound on fresh symbols. The live
   supplies are `Ctl.sup`). Seeded `procCtx` normalizes both supplies to
   zero; production contexts retain the explicit initial supply. This
-  seeded-profile definition change remains an E5 range-audit item.
+  seeded-profile normalisation is ACCEPTED as an inert limitation ([USER
+  2026-09-07], the landing charter's R3; KNOWN-OPEN-ITEMS B18 — lift when a
+  seeded exhibit needs a non-zero supply).
 
 In the mirror `Step M` (`:3841`), `Step.call` (`:4443`) pushes
 `(ctl.proc, ctx)`, the context computed by the syntactic search
@@ -478,10 +484,10 @@ table rather than counted here.
 | `malloc_list_certified_production` | `MallocListExhibit.lean:1658` | `hn`, `hB : n.toNat * (15 + max al.toNat 1) ≤ 281474976710647`, `hfuel : 25 * n.toNat + 9 ≤ CerbFuel.driverFuel` |
 | `fib_rec_certified_production` | `FibRecExhibit.lean:852` | `hn`, `hfuel : fibRounds n.toNat + 4 ≤ CerbFuel.driverFuel` |
 | `even_odd_certified_production` | `EvenOddExhibit.lean:710` | `hn`, `hfuel : 3 * n.toNat + 6 ≤ CerbFuel.driverFuel` |
-| `t1_certified_production` | `CorpusT1Exhibit.lean:832` | none (the file is `prodFileLib stdlibE3 [] t1Main`, above) |
-| `t5_certified_production` | `CorpusT5Exhibit.lean` | initial symbol supply at least 600; same library-fragment file boundary as t1 |
-| `t6_certified_production` | `CorpusT6Exhibit.lean` | initial symbol supply at least 600; same library-fragment file boundary as t1 |
-| `t4_certified_production` | `CorpusT4Exhibit.lean` | initial symbol supply at least 600; same library-fragment file boundary as t1 |
+| `t1_certified_production` | `CorpusT1Exhibit.lean:803` | none (the file is `prodFileLib stdlibE3 [] t1Main`, above) |
+| `t5_certified_production` | `CorpusT5Exhibit.lean:548` | `hsup : 600 ≤ sup` — a sufficient floor, not necessary (the composite delivers the same value at `sup = 0`, measured); same library-fragment file boundary as t1 |
+| `t6_certified_production` | `CorpusT6Exhibit.lean:618` | `hsup : 600 ≤ sup` (sufficient, not necessary, as above); same library-fragment file boundary as t1 |
+| `t4_certified_production` | `CorpusT4Exhibit.lean:1429` | `hsup : 600 ≤ sup` (sufficient, not necessary, as above); same library-fragment file boundary as t1 |
 
 Package definitions in these statements, exactly — beyond the authored
 program and its wrapper (`prodFile`/`prodFileWith`/`prodFileLib`), read
