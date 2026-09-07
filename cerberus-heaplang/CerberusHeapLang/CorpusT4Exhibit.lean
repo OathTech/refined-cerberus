@@ -196,12 +196,6 @@ abbrev t4frLeft (pi : CerbMem.PointerValue) (v : Int) (f : Fmap sym value) :=
 abbrev t4frRight (ps : CerbMem.PointerValue) (v : Int) (f : Fmap sym value) :=
   t4frTruth 543 544 (decide (v < 7)) (t4frLt 548 549 550 ps v 7 f)
 
-local macro "t4_frame" : tactic => `(tactic| repeat first | assumption | apply SymFrame.add)
-local macro "t4_lookup" : tactic => `(tactic|
-  (repeat first
-    | rw [envAdd_lookup (by t4_frame), if_pos (by decide +kernel)]
-    | rw [envAdd_lookup (by t4_frame), if_neg (by decide +kernel)]) <;> assumption)
-
 theorem wpt_t4Left [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
     {Ψ : SpikeVal → EnvStack → IProp GF}
@@ -229,10 +223,10 @@ theorem wpt_t4Left [LemFuel] [SpikeGS .hasLC GF]
   iintro %fp Hpt
   iexists t4frLt 534 535 536 pi v 5 f, rest, [DA_pos [] fp]
   isplit
-  · ipureintro; exact ⟨rfl, rfl, by t4_frame⟩
+  · ipureintro; exact ⟨rfl, rfl, by emitted_frame⟩
   iexists t4frTruth 529 530 (decide (v < 5)) (t4frLt 534 535 536 pi v 5 f), rest, [DA_pos [] fp]
   isplit
-  · ipureintro; exact ⟨rfl, rfl, by t4_frame⟩
+  · ipureintro; exact ⟨rfl, rfl, by emitted_frame⟩
   simp only [Bool.not_not, Bool.false_eq_true, ↓reduceIte, t4frLeft, t4frTruth]
   iapply HΨ $$ %fp Hpt
 
@@ -261,7 +255,7 @@ theorem wpt_t4Right [LemFuel] [SpikeGS .hasLC GF]
   iintro %fp Hpt
   iexists t4frLt 548 549 550 ps v 7 f, rest, [DA_pos [] fp]
   isplit
-  · ipureintro; exact ⟨rfl, rfl, by t4_frame⟩
+  · ipureintro; exact ⟨rfl, rfl, by emitted_frame⟩
   simp only [↓reduceIte, t4frRight, t4frTruth]
   iapply HΨ $$ %fp Hpt
 
@@ -319,7 +313,7 @@ theorem wpt_t4And [LemFuel] [SpikeGS .hasLC GF]
   iapply wpt_annot
   rw [show (30 : Nat) = 29 + 1 from rfl]
   iapply wpt_case_eval _ _ _ _ rfl
-    (t1sym_eval hex rest (by rw [envAdd_lookup (by t4_frame), if_pos (symOrd_self _)]))
+    (t1sym_eval hex rest (by rw [envAdd_lookup (by emitted_frame), if_pos (symOrd_self _)]))
   rw [show (29 : Nat) = 28 + 1 from rfl]
   iapply wpt_case_value _ _ _ _ rfl (by rw [CorpusE0.t4And_select]; rfl)
   unfold CorpusE0.t4AndSpecified
@@ -346,7 +340,7 @@ theorem wpt_t4And [LemFuel] [SpikeGS .hasLC GF]
     iapply wpt_annot
     unfold t5Pure
     iapply wpt_pure _ _ (Nat.le_refl 2) rfl
-      (t1ConvLoadedInt_eval hstd (t1sym_eval hex rest (by rw [envAdd_lookup (by t4_frame), if_pos (symOrd_self _)]))
+      (t1ConvLoadedInt_eval hstd (t1sym_eval hex rest (by rw [envAdd_lookup (by emitted_frame), if_pos (symOrd_self _)]))
         (by cases decide (s < 7) <;> decide) (by cases decide (s < 7) <;> decide))
     simp only [SpikeVal.merge]
     iapply HΨ $$ %_ %_ %(by t4_source) Hi Hs
@@ -366,7 +360,7 @@ theorem wpt_t4And [LemFuel] [SpikeGS .hasLC GF]
     rw [update_env_sym]
     unfold t5Pure
     iapply wpt_pure _ _ (Nat.le_refl 2) rfl
-      (t1ConvLoadedInt_eval hstd (t1sym_eval hex rest (by rw [envAdd_lookup (by t4_frame), if_pos (symOrd_self _)]))
+      (t1ConvLoadedInt_eval hstd (t1sym_eval hex rest (by rw [envAdd_lookup (by emitted_frame), if_pos (symOrd_self _)]))
         (by decide) (by decide))
     simp only [SpikeVal.merge, t4Bit, Bool.false_eq_true, ↓reduceIte]
     iapply HΨ $$ %_ %_ %(by t4_source) Hi Hs
@@ -540,8 +534,7 @@ theorem collect_new_t4Main :
 
 theorem t4Main_labeledAt (sup : Nat) :
     LabeledAt (prodRSLib stdlibE3 [] sup t4Main) mainSym t4Q := by
-  unfold LabeledAt
-  rw [prodRSLib_labeled, collect_new_t4Main, fmapLookupBy_addBy_empty, if_pos (by decide +kernel)]
+  labeled_main rw [prodRSLib_labeled, collect_new_t4Main]
 
 abbrev t4frAdd (n m : Nat) (v1 v2 : Int) (f : Fmap sym value) :=
   envAdd (t5a n) (lint v1) (envAdd (t5a m) (lint v2) f)
@@ -665,7 +658,7 @@ theorem wpt_t4AddSI [LemFuel] [SpikeGS .hasLC GF]
       List.reverse_cons, List.reverse_nil, List.nil_append, List.singleton_append])
   iexists (envAdd (t5a 561) (Vobject (OVpointer ps)) (envAdd (t5a 562) (Vobject (OVpointer pi)) f)), _
   isplit
-  · ipureintro; exact ⟨rfl, rfl, by t4_frame⟩
+  · ipureintro; exact ⟨rfl, rfl, by emitted_frame⟩
   iapply HΨ $$ Hi Hs
 
 abbrev t4frAddI1 (pi : CerbMem.PointerValue) (i : Int) (f : Fmap sym value) :=
@@ -1078,14 +1071,14 @@ theorem wpt_t4Return [LemFuel] [SpikeGS .hasLC GF]
   rw [update_env_sym]
   iapply wpt_seq _ _ _ _ _ _ _ 3 6
   rw [show (3 : Nat) = 2 + 1 from rfl]
-  iapply wpt_kill_eval _ _ _ _ _ _ rfl (pv := pi) (t1sym_eval hex rest (by t4_lookup))
+  iapply wpt_kill_eval _ _ _ _ _ _ rfl (pv := pi) (t1sym_eval hex rest (by emitted_lookup))
   iapply wpt_kill_emp _ _ _ (Static0 intTy) pi intTy (emittedIntBytes M.tagDefs 5) _ (Nat.le_refl 2) rfl
   isplitl [Hi]
   · iexact Hi
   simp only [SpikeVal.mergeInto]
   iapply wpt_seq _ _ _ _ _ _ _ 3 3
   rw [show (3 : Nat) = 2 + 1 from rfl]
-  iapply wpt_kill_eval _ _ _ _ _ _ rfl (pv := ps) (t1sym_eval hex rest (by t4_lookup))
+  iapply wpt_kill_eval _ _ _ _ _ _ rfl (pv := ps) (t1sym_eval hex rest (by emitted_lookup))
   iapply wpt_kill_emp _ _ _ (Static0 intTy) ps intTy (emittedIntBytes M.tagDefs 10) _ (Nat.le_refl 2) rfl
   isplitl [Hs]
   · iexact Hs
@@ -1093,12 +1086,12 @@ theorem wpt_t4Return [LemFuel] [SpikeGS .hasLC GF]
   iapply wpt_seq _ _ _ _ _ _ _ 3 0
   iapply wpt_run [] empty_annotation t4RetSym [CorpusE0.convLoadedInt (t5a 573)] _ _ 2
     (by rw [hQ]; exact t4Q_ret)
-    (by rw [evalPexprs_cons, t1ConvLoadedInt_eval hstd (t1sym_eval hex rest (by t4_lookup))
+    (by rw [evalPexprs_cons, t1ConvLoadedInt_eval hstd (t1sym_eval hex rest (by emitted_lookup))
       (by decide) (by decide), evalPexprs_nil]; rfl) (Nat.le_refl 3)
   dsimp only [t4LsT]
   ileft
   ipureintro
-  exact ⟨rfl, rfl, rfl, _, _, rfl, by t4_frame⟩
+  exact ⟨rfl, rfl, rfl, _, _, rfl, by emitted_frame⟩
 
 /-- The loop test selects the actual body or final unit on the invariant,
     with 77 units before the selected branch. -/
@@ -1271,7 +1264,7 @@ theorem t4_blockSpecsT [LemFuel] [SpikeGS .hasLC GF]
     obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Option.some.inj hl)
     rw [t4RetParams_bindArgs]
     unfold t4RetCont t5Pure
-    iapply wpt_pure (psym (t5a 574)) _ (Nat.le_refl 2) rfl (t1sym_eval hex rest (by t4_lookup))
+    iapply wpt_pure (psym (t5a 574)) _ (Nat.le_refl 2) rfl (t1sym_eval hex rest (by emitted_lookup))
     iintro %σ' %ns %κs %nt -
     iapply fupd_mask_intro_discard Std.LawfulSet.empty_subset
     ipureintro
@@ -1375,8 +1368,8 @@ theorem t4_wpt [LemFuel] (hfuel : 0 < LemFuel.fuel) [SpikeGS .hasLC GF]
   iapply wpt_seq _ _ _ _ _ _ _ 4 902
   rw [show (4 : Nat) = 3 + 1 from rfl]
   iapply wpt_store_eval _ _ _ intTy (psym t4iSym) (CorpusE0.convLoadedInt (t5a 513)) NA _
-    rfl (pv := pi) (cv := lint 0) (t1sym_eval hex rest (by t4_lookup))
-    (t1ConvLoadedInt_eval hstd (t1sym_eval hex rest (by t4_lookup)) (by decide) (by decide))
+    rfl (pv := pi) (cv := lint 0) (t1sym_eval hex rest (by emitted_lookup))
+    (t1ConvLoadedInt_eval hstd (t1sym_eval hex rest (by emitted_lookup)) (by decide) (by decide))
   iapply wpt_store _ _ _ intTy pi (lint 0) NA (emittedIntMval 0) _ _ (Nat.le_refl 3)
     (emittedInt_encodes _ 0) (emittedInt_storable _ 0 (by decide) (by decide))
   isplitl [Hi]
@@ -1396,8 +1389,8 @@ theorem t4_wpt [LemFuel] (hfuel : 0 < LemFuel.fuel) [SpikeGS .hasLC GF]
   iapply wpt_seq _ _ _ _ _ _ _ 4 895
   rw [show (4 : Nat) = 3 + 1 from rfl]
   iapply wpt_store_eval _ _ _ intTy (psym t4sSym) (CorpusE0.convLoadedInt (t5a 514)) NA _
-    rfl (pv := ps) (cv := lint 0) (t1sym_eval hex rest (by t4_lookup))
-    (t1ConvLoadedInt_eval hstd (t1sym_eval hex rest (by t4_lookup)) (by decide) (by decide))
+    rfl (pv := ps) (cv := lint 0) (t1sym_eval hex rest (by emitted_lookup))
+    (t1ConvLoadedInt_eval hstd (t1sym_eval hex rest (by emitted_lookup)) (by decide) (by decide))
   iapply wpt_store _ _ _ intTy ps (lint 0) NA (emittedIntMval 0) _ _ (Nat.le_refl 3)
     (emittedInt_encodes _ 0) (emittedInt_storable _ 0 (by decide) (by decide))
   isplitl [Hs]

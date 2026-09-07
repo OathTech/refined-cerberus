@@ -194,8 +194,8 @@ theorem symK_eval [LemFuel] {tds : CerbTags.TagDefsMap} {file : generic_file Uni
     {x : sym} {f : Fmap sym value} {v : value} (evs : List (Fmap sym value))
     (hl : fmapLookupBy symCmpK x f = some v) :
     evalPexpr tds fmapEmpty file (f :: evs) (stdSym x) = some v := by
-  rw [stdSym, evalPexpr_sym_of_resolve _ _ _ (resolveExtern_id_of_empty rfl _)]
-  exact lookup_env_head hl evs
+  exact symC_eval (M := { spikeCtx with tagDefs := tds, file := file })
+    (resolveExtern_id_of_empty rfl) evs hl
 
 /-- THE NEGATIVE EXHIBIT AT THE CONCRETE FRAME: the genuine driver, at
     every positive outer counter and ambient fuel at least eight, from

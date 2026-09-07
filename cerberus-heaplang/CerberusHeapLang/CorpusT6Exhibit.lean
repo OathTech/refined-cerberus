@@ -339,12 +339,6 @@ theorem t6PtrParams_bindArgs (px pr : CerbMem.PointerValue)
     (update_env (mk_sym_pat t6xSym ptrTy) (Vobject (OVpointer px)) (f :: rest)) = _
   rw [update_env_cons, update_env_aux_sym, update_env_cons, update_env_aux_sym]
 
-local macro "t6_frame" : tactic => `(tactic| repeat first | assumption | apply SymFrame.add)
-local macro "t6_lookup" : tactic => `(tactic|
-  (repeat first
-    | rw [envAdd_lookup (by t6_frame), if_pos (by decide +kernel)]
-    | rw [envAdd_lookup (by t6_frame), if_neg (by decide +kernel)]) <;> assumption)
-
 theorem t6Kill_eq (x : sym) : CorpusE0.t6Kill x =
     killOpRedex [] (t6Reg 0 135) empty_annotation (Static0 intTy) (psym x) := rfl
 
@@ -377,14 +371,14 @@ theorem wpt_t6Return [LemFuel] [SpikeGS .hasLC GF]
   rw [update_env_sym]
   iapply wpt_seq _ _ _ _ _ _ _ 3 6
   rw [show (3 : Nat) = 2 + 1 from rfl]
-  iapply wpt_kill_eval _ _ _ _ _ _ rfl (pv := px) (t1sym_eval hex rest (by t6_lookup))
+  iapply wpt_kill_eval _ _ _ _ _ _ rfl (pv := px) (t1sym_eval hex rest (by emitted_lookup))
   iapply wpt_kill_emp _ _ _ (Static0 intTy) px intTy (emittedIntBytes M.tagDefs 2) _ (Nat.le_refl 2) rfl
   isplitl [Hx]
   · iexact Hx
   simp only [SpikeVal.mergeInto]
   iapply wpt_seq _ _ _ _ _ _ _ 3 3
   rw [show (3 : Nat) = 2 + 1 from rfl]
-  iapply wpt_kill_eval _ _ _ _ _ _ rfl (pv := pr) (t1sym_eval hex rest (by t6_lookup))
+  iapply wpt_kill_eval _ _ _ _ _ _ rfl (pv := pr) (t1sym_eval hex rest (by emitted_lookup))
   iapply wpt_kill_emp _ _ _ (Static0 intTy) pr intTy (emittedIntBytes M.tagDefs 20) _ (Nat.le_refl 2) rfl
   isplitl [Hr]
   · iexact Hr
@@ -392,12 +386,12 @@ theorem wpt_t6Return [LemFuel] [SpikeGS .hasLC GF]
   iapply wpt_seq _ _ _ _ _ _ _ 3 0
   iapply wpt_run [] empty_annotation t6RetSym [convLoadedInt (t6a 530)] _ _ 2
     (by rw [hQ]; exact t6Q_ret)
-    (by rw [evalPexprs_cons, t1ConvLoadedInt_eval hstd (t1sym_eval hex rest (by t6_lookup))
+    (by rw [evalPexprs_cons, t1ConvLoadedInt_eval hstd (t1sym_eval hex rest (by emitted_lookup))
       (by decide) (by decide), evalPexprs_nil]; rfl) (Nat.le_refl 3)
   dsimp only [t6LsT]
   ileft
   ipureintro
-  exact ⟨rfl, rfl, rfl, _, _, rfl, by t6_frame⟩
+  exact ⟨rfl, rfl, rfl, _, _, rfl, by emitted_frame⟩
 
 theorem wpt_t6Break [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} {Ψ : SpikeVal → EnvStack → IProp GF}
@@ -456,9 +450,9 @@ theorem wpt_t6Case2 [LemFuel] [SpikeGS .hasLC GF]
     [psym t6xSym, psym t6rSym] _ rest 18
     (by rw [hQ]; exact t6Q_break)
     (by rw [evalPexprs_cons, t1sym_eval hex rest (by
-        rw [envAdd_lookup (by t6_frame), if_neg hxs]; t6_lookup),
+        rw [envAdd_lookup (by emitted_frame), if_neg hxs]; emitted_lookup),
       evalPexprs_cons, t1sym_eval hex rest (by
-        rw [envAdd_lookup (by t6_frame), if_neg hrs]; t6_lookup), evalPexprs_nil]; rfl)
+        rw [envAdd_lookup (by emitted_frame), if_neg hrs]; emitted_lookup), evalPexprs_nil]; rfl)
     (Nat.le_refl 19)
   dsimp only [t6LsT]
   iright
@@ -468,7 +462,7 @@ theorem wpt_t6Case2 [LemFuel] [SpikeGS .hasLC GF]
   dsimp only [t6Cells]
   iexists px, pr, _, rest
   isplit
-  · ipureintro; exact ⟨rfl, rfl, by t6_frame⟩
+  · ipureintro; exact ⟨rfl, rfl, by emitted_frame⟩
   isplitl [Hx]
   · iexact Hx
   iexact Hr
@@ -490,7 +484,7 @@ theorem t6_blockSpecsT [LemFuel] [SpikeGS .hasLC GF]
     rw [t6RetParams_bindArgs]
     unfold t6RetCont t5Pure
     iapply wpt_pure (psym (t6a 531)) _ (Nat.le_refl 2) rfl
-      (t1sym_eval hex _ (by t6_lookup))
+      (t1sym_eval hex _ (by emitted_lookup))
     iintro %σ' %ns %κs %nt -
     iapply fupd_mask_intro_discard Std.LawfulSet.empty_subset
     ipureintro
@@ -506,7 +500,7 @@ theorem t6_blockSpecsT [LemFuel] [SpikeGS .hasLC GF]
       obtain ⟨rfl, rfl⟩ := List.cons.inj hρ
       rw [t6PtrParams_bindArgs]
       iapply wpt_t6Break hstd hex hQ
-        (envAdd t6rSym (Vobject (OVpointer pr)) (envAdd t6xSym (Vobject (OVpointer px)) f)) rest (by t6_frame) px pr (by t6_lookup) (by t6_lookup)
+        (envAdd t6rSym (Vobject (OVpointer pr)) (envAdd t6xSym (Vobject (OVpointer px)) f)) rest (by emitted_frame) px pr (by emitted_lookup) (by emitted_lookup)
       isplitl [Hx]
       · iexact Hx
       iexact Hr
@@ -520,7 +514,7 @@ theorem t6_blockSpecsT [LemFuel] [SpikeGS .hasLC GF]
       obtain ⟨rfl, rfl⟩ := List.cons.inj hρ
       rw [t6PtrParams_bindArgs]
       iapply wpt_t6Case2 hstd hex hQ hsup
-        (envAdd t6rSym (Vobject (OVpointer pr)) (envAdd t6xSym (Vobject (OVpointer px)) f)) rest (by t6_frame) px pr (by t6_lookup) (by t6_lookup)
+        (envAdd t6rSym (Vobject (OVpointer pr)) (envAdd t6xSym (Vobject (OVpointer px)) f)) rest (by emitted_frame) px pr (by emitted_lookup) (by emitted_lookup)
       isplitl [Hx]
       · iexact Hx
       iexact Hr
@@ -552,7 +546,7 @@ theorem wpt_t6Switch [LemFuel] [SpikeGS .hasLC GF]
   isplit
   · ipureintro; rfl
   rw [update_env_sym, show (51 : Nat) = 50 + 1 from rfl]
-  iapply wpt_case_eval _ _ _ _ rfl (t1sym_eval hex rest (by t6_lookup))
+  iapply wpt_case_eval _ _ _ _ rfl (t1sym_eval hex rest (by emitted_lookup))
   rw [show (50 : Nat) = 49 + 1 from rfl]
   iapply wpt_case_value _ _ _ _ rfl (CorpusE0.t6Switch_select (lint 2))
   unfold t6SpecifiedBranch letS
@@ -572,7 +566,7 @@ theorem wpt_t6Switch [LemFuel] [SpikeGS .hasLC GF]
   iapply wpt_seq _ _ _ _ _ _ _ 2 45
   rw [show (2 : Nat) = 1 + 1 from rfl]
   iapply wpt_if_false _ _ _ _ _ (by
-    rw [evalPexpr_op, t1sym_eval hex rest (by t6_lookup), evalPexpr_val]; rfl)
+    rw [evalPexpr_op, t1sym_eval hex rest (by emitted_lookup), evalPexpr_val]; rfl)
   unfold t5Unit t5Pure
   rw [← ofValA_pure [] [] Vunit]
   iapply wpt_ofValA (.pure [] [] Vunit) _ (Nat.le_refl 1)
@@ -580,12 +574,12 @@ theorem wpt_t6Switch [LemFuel] [SpikeGS .hasLC GF]
   iapply wpt_seq _ _ _ _ _ _ _ 45 0
   rw [show (45 : Nat) = 44 + 1 from rfl]
   iapply wpt_if_true _ _ _ _ _ (by
-    rw [evalPexpr_op, t1sym_eval hex rest (by t6_lookup), evalPexpr_val]; rfl)
+    rw [evalPexpr_op, t1sym_eval hex rest (by emitted_lookup), evalPexpr_val]; rfl)
   unfold t6Run
   iapply wpt_run [] empty_annotation t6Case2Sym [psym t6xSym, psym t6rSym] _ rest 43
     (by rw [hQ]; exact t6Q_case2)
-    (by rw [evalPexprs_cons, t1sym_eval hex rest (by t6_lookup),
-      evalPexprs_cons, t1sym_eval hex rest (by t6_lookup), evalPexprs_nil]; rfl)
+    (by rw [evalPexprs_cons, t1sym_eval hex rest (by emitted_lookup),
+      evalPexprs_cons, t1sym_eval hex rest (by emitted_lookup), evalPexprs_nil]; rfl)
     (Nat.le_refl 44)
   dsimp only [t6LsT]
   iright
@@ -595,7 +589,7 @@ theorem wpt_t6Switch [LemFuel] [SpikeGS .hasLC GF]
   dsimp only [t6Cells]
   iexists px, pr, _, rest
   isplit
-  · ipureintro; exact ⟨rfl, rfl, by t6_frame⟩
+  · ipureintro; exact ⟨rfl, rfl, by emitted_frame⟩
   isplitl [Hx]
   · iexact Hx
   iexact Hr
@@ -659,8 +653,8 @@ theorem t6_wpt [LemFuel] (hfuel : 0 < LemFuel.fuel) [SpikeGS .hasLC GF]
   iapply wpt_seq _ _ _ _ _ _ _ 4 65
   rw [show (4 : Nat) = 3 + 1 from rfl]
   iapply wpt_store_eval _ _ _ intTy (psym t6xSym) (convLoadedInt (t6a 514)) NA _
-    rfl (pv := px) (cv := lint 2) (t1sym_eval hex rest (by t6_lookup))
-    (t1ConvLoadedInt_eval hstd (t1sym_eval hex rest (by t6_lookup)) (by decide) (by decide))
+    rfl (pv := px) (cv := lint 2) (t1sym_eval hex rest (by emitted_lookup))
+    (t1ConvLoadedInt_eval hstd (t1sym_eval hex rest (by emitted_lookup)) (by decide) (by decide))
   iapply wpt_store _ _ _ intTy px (lint 2) NA (emittedIntMval 2) _ _ (Nat.le_refl 3)
     (emittedInt_encodes _ 2) (emittedInt_storable _ 2 (by decide) (by decide))
   isplitl [Hx]
@@ -680,8 +674,8 @@ theorem t6_wpt [LemFuel] (hfuel : 0 < LemFuel.fuel) [SpikeGS .hasLC GF]
   iapply wpt_seq _ _ _ _ _ _ _ 4 58
   rw [show (4 : Nat) = 3 + 1 from rfl]
   iapply wpt_store_eval _ _ _ intTy (psym t6rSym) (convLoadedInt (t6a 515)) NA _
-    rfl (pv := pr) (cv := lint 0) (t1sym_eval hex rest (by t6_lookup))
-    (t1ConvLoadedInt_eval hstd (t1sym_eval hex rest (by t6_lookup)) (by decide) (by decide))
+    rfl (pv := pr) (cv := lint 0) (t1sym_eval hex rest (by emitted_lookup))
+    (t1ConvLoadedInt_eval hstd (t1sym_eval hex rest (by emitted_lookup)) (by decide) (by decide))
   iapply wpt_store _ _ _ intTy pr (lint 0) NA (emittedIntMval 0) _ _ (Nat.le_refl 3)
     (emittedInt_encodes _ 0) (emittedInt_storable _ 0 (by decide) (by decide))
   isplitl [Hr]
@@ -692,7 +686,7 @@ theorem t6_wpt [LemFuel] (hfuel : 0 < LemFuel.fuel) [SpikeGS .hasLC GF]
   iapply wpt_t6Switch hstd hex hQ
     (envAdd (t6a 515) (lint 0) (envAdd (t6a 514) (lint 2)
       (envAdd t6rSym (Vobject (OVpointer pr)) (envAdd t6xSym (Vobject (OVpointer px)) f))))
-    rest (by t6_frame) px pr (by t6_lookup) (by t6_lookup)
+    rest (by emitted_frame) px pr (by emitted_lookup) (by emitted_lookup)
   isplitl [Hx]
   · iexact Hx
   iexact Hr
@@ -738,8 +732,7 @@ theorem collect_new_t6Main :
 
 theorem t6Main_labeledAt (sup : Nat) :
     LabeledAt (prodRSLib stdlibE3 [] sup t6Main) mainSym t6Q := by
-  unfold LabeledAt
-  rw [prodRSLib_labeled, collect_new_t6Main, fmapLookupBy_addBy_empty, if_pos (by decide +kernel)]
+  labeled_main rw [prodRSLib_labeled, collect_new_t6Main]
 
 /-- The shipped driver returns Specified(20) on the transcribed switch
     and the current checked three-function std.core fragment. The premise

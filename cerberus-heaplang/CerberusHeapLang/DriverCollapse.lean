@@ -1007,28 +1007,17 @@ theorem step_ctx_if_true_ws {an : List _root_.annot} {e : CoreExpr} {ctx : conte
         Result (Defined { locUpdTh an th with arena := apply_ctx ctx e2 }, rs) := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, ifRedex an g e2 e3) :: rest := by
     rw [harena]; exact hd.get_ctx_default
-  have key : ∃ (s : String) (m : core_runM thread_state),
-      (step_ctx tds σ file ext tid (parent, th)).head? =
-        some (Step_with_runstate2 (RSK_tau s TSK_Misc) m) ∧
-      ∀ rs, m rs =
-        Result (Defined { locUpdTh an th with arena := apply_ctx ctx e2 }, rs) := by
-    unfold step_ctx
-    dsimp only
-    rw [hget]
-    simp only [List.map_cons, List.head?_cons]
-    unfold ifRedex
-    cases ctx <;>
-      (dsimp only [one_step0]
-       rw [show is_irreducible (Expr an (Eif g e2 e3)) = false
-         from rfl]
-       refine ⟨_, _, rfl, fun rs => ?_⟩
-       rw [full_eval_bridge hg hdg σ]
-       dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
-         return1, except_return]
-       try rfl)
-  obtain ⟨s, m, hh, hrest⟩ := key
-  obtain ⟨post, hpost⟩ := cons_of_head? hh
-  exact ⟨s, m, post, hpost, hrest⟩
+  step_ctx_head hget
+  unfold ifRedex
+  cases ctx <;>
+    (dsimp only [one_step0]
+     rw [show is_irreducible (Expr an (Eif g e2 e3)) = false
+       from rfl]
+     refine ⟨_, _, _, rfl, fun rs => ?_⟩
+     rw [full_eval_bridge hg hdg σ]
+     dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+       return1, except_return]
+     try rfl)
 
 /-- Eif (FALSE), raw — symmetric. -/
 theorem step_ctx_if_false_ws {an : List _root_.annot} {e : CoreExpr} {ctx : context}
@@ -1047,28 +1036,17 @@ theorem step_ctx_if_false_ws {an : List _root_.annot} {e : CoreExpr} {ctx : cont
         Result (Defined { locUpdTh an th with arena := apply_ctx ctx e3 }, rs) := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, ifRedex an g e2 e3) :: rest := by
     rw [harena]; exact hd.get_ctx_default
-  have key : ∃ (s : String) (m : core_runM thread_state),
-      (step_ctx tds σ file ext tid (parent, th)).head? =
-        some (Step_with_runstate2 (RSK_tau s TSK_Misc) m) ∧
-      ∀ rs, m rs =
-        Result (Defined { locUpdTh an th with arena := apply_ctx ctx e3 }, rs) := by
-    unfold step_ctx
-    dsimp only
-    rw [hget]
-    simp only [List.map_cons, List.head?_cons]
-    unfold ifRedex
-    cases ctx <;>
-      (dsimp only [one_step0]
-       rw [show is_irreducible (Expr an (Eif g e2 e3)) = false
-         from rfl]
-       refine ⟨_, _, rfl, fun rs => ?_⟩
-       rw [full_eval_bridge hg hdg σ]
-       dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
-         return1, except_return]
-       try rfl)
-  obtain ⟨s, m, hh, hrest⟩ := key
-  obtain ⟨post, hpost⟩ := cons_of_head? hh
-  exact ⟨s, m, post, hpost, hrest⟩
+  step_ctx_head hget
+  unfold ifRedex
+  cases ctx <;>
+    (dsimp only [one_step0]
+     rw [show is_irreducible (Expr an (Eif g e2 e3)) = false
+       from rfl]
+     refine ⟨_, _, _, rfl, fun rs => ?_⟩
+     rw [full_eval_bridge hg hdg σ]
+     dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+       return1, except_return]
+     try rfl)
 
 /-- E2: PURE at ANY covered non-value operand, raw: one `RSK_eval` step
     big-step-evaluating the operand (one_step0's Epure EVAL arm), run
@@ -1135,55 +1113,43 @@ theorem step_ctx_run_ws {an : List _root_.annot} {e : CoreExpr} {ctx : context}
           env := (bindArgs params vs th.env), arena := cont }, rs) := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, runRedex an ra l pes) :: rest := by
     rw [harena]; exact hd.get_ctx_default
-  have key : ∃ (s : String) (m : core_runM thread_state),
-      (step_ctx tds σ file ext tid (parent, th)).head? =
-        some (Step_with_runstate2 (RSK_eval s) m) ∧
-      ∀ rs, LabeledAt rs (resolveExtern ext p) Q →
-        m rs = Result (Defined { locUpdTh an th with
-          env := (bindArgs params vs th.env), arena := cont }, rs) := by
-    have hl' : (fmapLookupBy (fun (sym1 : sym) (sym2 : sym) =>
-        Lem_Basic_classes.ordCompare sym1 sym2) l Q) = some (params, cont) := hl
-    unfold step_ctx
-    dsimp only
-    rw [hget]
-    simp only [List.map_cons, List.head?_cons]
-    unfold runRedex
-    cases ctx <;> (loc_split an) <;>
-      (try dsimp only
-       rw [hproc]
-       refine ⟨_, _, rfl, fun rs hQ => ?_⟩
-       replace hQ : (fmapLookupBy (fun (sym1 : sym) (sym2 : sym) =>
-         Lem_Basic_classes.ordCompare sym1 sym2) (resolveExtern ext p)
-         rs.labeled) = some Q := hQ
-       rw [stExceptUndef_bind_apply, runSE_read_apply]
+  have hl' : (fmapLookupBy (fun (sym1 : sym) (sym2 : sym) =>
+      Lem_Basic_classes.ordCompare sym1 sym2) l Q) = some (params, cont) := hl
+  step_ctx_head hget
+  unfold runRedex
+  cases ctx <;> (loc_split an) <;>
+    (try dsimp only
+     rw [hproc]
+     refine ⟨_, _, _, rfl, fun rs hQ => ?_⟩
+     replace hQ : (fmapLookupBy (fun (sym1 : sym) (sym2 : sym) =>
+       Lem_Basic_classes.ordCompare sym1 sym2) (resolveExtern ext p)
+       rs.labeled) = some Q := hQ
+     rw [stExceptUndef_bind_apply, runSE_read_apply]
+     dsimp only []
+     cases hres : fmapLookupBy (fun (sym1 : sym) (sym2 : sym) =>
+         Lem_Basic_classes.ordCompare sym1 sym2) p ext with
+     | none =>
+       rw [show resolveExtern ext p = p by
+         unfold resolveExtern; rw [hres]] at hQ
        dsimp only []
-       cases hres : fmapLookupBy (fun (sym1 : sym) (sym2 : sym) =>
-           Lem_Basic_classes.ordCompare sym1 sym2) p ext with
-       | none =>
-         rw [show resolveExtern ext p = p by
-           unfold resolveExtern; rw [hres]] at hQ
-         dsimp only []
-         rw [hQ, bind0_some, hl']
-         dsimp only []
-         rw [stExceptUndef_bind_apply, LemLibTheorems.lemListZip_eq,
-           foldM_args_bridge _ (fun _ _ _ _ _ => rfl) params pes vs th.env rs
-             hvs hdep]
-         dsimp only []
-         rw [stExceptUndef_return_apply]
-       | some y =>
-         rw [show resolveExtern ext p = y by
-           unfold resolveExtern; rw [hres]] at hQ
-         dsimp only []
-         rw [hQ, bind0_some, hl']
-         dsimp only []
-         rw [stExceptUndef_bind_apply, LemLibTheorems.lemListZip_eq,
-           foldM_args_bridge _ (fun _ _ _ _ _ => rfl) params pes vs th.env rs
-             hvs hdep]
-         dsimp only []
-         rw [stExceptUndef_return_apply])
-  obtain ⟨s, m, hh, hrest⟩ := key
-  obtain ⟨post, hpost⟩ := cons_of_head? hh
-  exact ⟨s, m, post, hpost, hrest⟩
+       rw [hQ, bind0_some, hl']
+       dsimp only []
+       rw [stExceptUndef_bind_apply, LemLibTheorems.lemListZip_eq,
+         foldM_args_bridge _ (fun _ _ _ _ _ => rfl) params pes vs th.env rs
+           hvs hdep]
+       dsimp only []
+       rw [stExceptUndef_return_apply]
+     | some y =>
+       rw [show resolveExtern ext p = y by
+         unfold resolveExtern; rw [hres]] at hQ
+       dsimp only []
+       rw [hQ, bind0_some, hl']
+       dsimp only []
+       rw [stExceptUndef_bind_apply, LemLibTheorems.lemListZip_eq,
+         foldM_args_bridge _ (fun _ _ _ _ _ => rfl) params pes vs th.env rs
+           hvs hdep]
+       dsimp only []
+       rw [stExceptUndef_return_apply])
 
 /-- Load ACTION_EVAL, raw: one `RSK_eval` step rebuilding the
     canonical load redex, run state verbatim. -/
@@ -1208,29 +1174,18 @@ theorem step_ctx_load_eval_ws {an : List _root_.annot} {e : CoreExpr} {ctx : con
   have hfuel : 0 < LemFuel.fuel := Nat.lt_of_lt_of_le (peDepth_pos pe2) hd2
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, loadOpRedex an loc ann ty pe2 mo) :: rest := by
     rw [harena]; exact hd.get_ctx_default
-  have key : ∃ (s : String) (m : core_runM thread_state),
-      (step_ctx tds σ file ext tid (parent, th)).head? =
-        some (Step_with_runstate2 (RSK_eval s) m) ∧
-      ∀ rs, m rs = Result (Defined { locUpdTh an th with
-        arena := apply_ctx ctx (loadRedex an loc ann ty pv mo) }, rs) := by
-    unfold step_ctx
-    dsimp only
-    rw [hget]
-    simp only [List.map_cons, List.head?_cons]
-    unfold loadOpRedex
-    cases ctx <;>
-      (dsimp only [step_action]
-       rw [act_valueFromPexpr_none hp2 hnv2]
-       dsimp only [act_valueFromPexpr, valueFromPexpr]
-       refine ⟨_, _, rfl, fun rs => ?_⟩
-       rw [full_eval_bridge (v := Vctype ty) (evalPexpr_val _ _ _ _ _) (peDepth_val_le _ _ hfuel) σ,
-         full_eval_bridge hv2 hd2 σ]
-       dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
-         return1, except_return]
-       rfl)
-  obtain ⟨s, m, hh, hrest⟩ := key
-  obtain ⟨post, hpost⟩ := cons_of_head? hh
-  exact ⟨s, m, post, hpost, hrest⟩
+  step_ctx_head hget
+  unfold loadOpRedex
+  cases ctx <;>
+    (dsimp only [step_action]
+     rw [act_valueFromPexpr_none hp2 hnv2]
+     dsimp only [act_valueFromPexpr, valueFromPexpr]
+     refine ⟨_, _, _, rfl, fun rs => ?_⟩
+     rw [full_eval_bridge (v := Vctype ty) (evalPexpr_val _ _ _ _ _) (peDepth_val_le _ _ hfuel) σ,
+       full_eval_bridge hv2 hd2 σ]
+     dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+       return1, except_return]
+     rfl)
 
 /-- Kill ACTION_EVAL, raw (kill/free arc K2): one `RSK_eval` step
     rebuilding the canonical kill redex, run state verbatim. -/
@@ -1253,28 +1208,17 @@ theorem step_ctx_kill_eval_ws {an : List _root_.annot} {e : CoreExpr} {ctx : con
         arena := apply_ctx ctx (killRedex an loc ann kind pv) }, rs) := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, killOpRedex an loc ann kind pe) :: rest := by
     rw [harena]; exact hd.get_ctx_default
-  have key : ∃ (s : String) (m : core_runM thread_state),
-      (step_ctx tds σ file ext tid (parent, th)).head? =
-        some (Step_with_runstate2 (RSK_eval s) m) ∧
-      ∀ rs, m rs = Result (Defined { locUpdTh an th with
-        arena := apply_ctx ctx (killRedex an loc ann kind pv) }, rs) := by
-    unfold step_ctx
-    dsimp only
-    rw [hget]
-    simp only [List.map_cons, List.head?_cons]
-    unfold killOpRedex
-    cases ctx <;>
-      (dsimp only [step_action]
-       rw [act_valueFromPexpr_none hp hnv]
-       dsimp only [act_valueFromPexpr, valueFromPexpr]
-       refine ⟨_, _, rfl, fun rs => ?_⟩
-       rw [full_eval_bridge hv hdp σ]
-       dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
-         return1, except_return]
-       rfl)
-  obtain ⟨s, m, hh, hrest⟩ := key
-  obtain ⟨post, hpost⟩ := cons_of_head? hh
-  exact ⟨s, m, post, hpost, hrest⟩
+  step_ctx_head hget
+  unfold killOpRedex
+  cases ctx <;>
+    (dsimp only [step_action]
+     rw [act_valueFromPexpr_none hp hnv]
+     dsimp only [act_valueFromPexpr, valueFromPexpr]
+     refine ⟨_, _, _, rfl, fun rs => ?_⟩
+     rw [full_eval_bridge hv hdp σ]
+     dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+       return1, except_return]
+     rfl)
 
 /-- Store ACTION_EVAL, raw: one `RSK_eval` step rebuilding the
     canonical store redex, run state verbatim. -/
@@ -1303,37 +1247,25 @@ theorem step_ctx_store_eval_ws {an : List _root_.annot} {e : CoreExpr} {ctx : co
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena =
       (ctx, storeOpRedex an loc ann ty pe2 pe3 mo) :: rest := by
     rw [harena]; exact hd.get_ctx_default
-  have key : ∃ (s : String) (m : core_runM thread_state),
-      (step_ctx tds σ file ext tid (parent, th)).head? =
-        some (Step_with_runstate2 (RSK_eval s) m) ∧
-      ∀ rs, m rs = Result (Defined { locUpdTh an th with
-        arena := apply_ctx ctx (storeRedex an loc ann false ty pv cv mo) },
-        rs) := by
-    unfold step_ctx
-    dsimp only
-    rw [hget]
-    simp only [List.map_cons, List.head?_cons]
-    unfold storeOpRedex
-    rw [valueFromPexprs_pair] at hnv
-    rcases act_valueFromPexpr_cases hp2 with ⟨hn2, ha2⟩ | ⟨a2, v2', rfl⟩ <;>
-    cases hp3
-    all_goals try (rw [valueFromPexpr_val, valueFromPexpr_val] at hnv; cases hnv)
-    all_goals try (obtain rfl := Option.some.inj ((evalPexpr_val _ _ _ _ _).symm.trans hv2))
-    all_goals
-      cases ctx <;>
-        (dsimp only [step_action]
-         try rw [ha2]
-         dsimp only [act_valueFromPexpr, valueFromPexpr]
-         refine ⟨_, _, rfl, fun rs => ?_⟩
-         rw [full_eval_bridge (v := Vctype ty) (evalPexpr_val _ _ _ _ _) (peDepth_val_le _ _ hfuel) σ,
-           full_eval_bridge hv2 hd2 σ,
-           full_eval_bridge hv3 hd3 σ]
-         dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
-           return1, except_return]
-         rfl)
-  obtain ⟨s, m, hh, hrest⟩ := key
-  obtain ⟨post, hpost⟩ := cons_of_head? hh
-  exact ⟨s, m, post, hpost, hrest⟩
+  step_ctx_head hget
+  unfold storeOpRedex
+  rw [valueFromPexprs_pair] at hnv
+  rcases act_valueFromPexpr_cases hp2 with ⟨hn2, ha2⟩ | ⟨a2, v2', rfl⟩ <;>
+  cases hp3
+  all_goals try (rw [valueFromPexpr_val, valueFromPexpr_val] at hnv; cases hnv)
+  all_goals try (obtain rfl := Option.some.inj ((evalPexpr_val _ _ _ _ _).symm.trans hv2))
+  all_goals
+    cases ctx <;>
+      (dsimp only [step_action]
+       try rw [ha2]
+       dsimp only [act_valueFromPexpr, valueFromPexpr]
+       refine ⟨_, _, _, rfl, fun rs => ?_⟩
+       rw [full_eval_bridge (v := Vctype ty) (evalPexpr_val _ _ _ _ _) (peDepth_val_le _ _ hfuel) σ,
+         full_eval_bridge hv2 hd2 σ,
+         full_eval_bridge hv3 hd3 σ]
+       dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+         return1, except_return]
+       rfl)
 
 /-- Alloc ACTION_EVAL, raw (kill/free arc K3): one `RSK_eval` step
     rebuilding the canonical alloc redex, run state verbatim. -/
@@ -1359,36 +1291,25 @@ theorem step_ctx_alloc_eval_ws {an : List _root_.annot} {e : CoreExpr} {ctx : co
         arena := apply_ctx ctx (allocRedex an loc ann align size pref) }, rs) := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, allocOpRedex an loc ann pe1 pe2 pref) :: rest := by
     rw [harena]; exact hd.get_ctx_default
-  have key : ∃ (s : String) (m : core_runM thread_state),
-      (step_ctx tds σ file ext tid (parent, th)).head? =
-        some (Step_with_runstate2 (RSK_eval s) m) ∧
-      ∀ rs, m rs = Result (Defined { locUpdTh an th with
-        arena := apply_ctx ctx (allocRedex an loc ann align size pref) }, rs) := by
-    unfold step_ctx
-    dsimp only
-    rw [hget]
-    simp only [List.map_cons, List.head?_cons]
-    unfold allocOpRedex
-    rw [valueFromPexprs_pair] at hnv
-    rcases act_valueFromPexpr_cases hp1 with ⟨hn1, ha1⟩ | ⟨a1, v1', rfl⟩ <;>
-    rcases act_valueFromPexpr_cases hp2 with ⟨hn2, ha2⟩ | ⟨a2, v2', rfl⟩
-    all_goals try (rw [valueFromPexpr_val, valueFromPexpr_val] at hnv; cases hnv)
-    all_goals try (obtain rfl := Option.some.inj ((evalPexpr_val _ _ _ _ _).symm.trans hv1))
-    all_goals try (obtain rfl := Option.some.inj ((evalPexpr_val _ _ _ _ _).symm.trans hv2))
-    all_goals
-      cases ctx <;>
-        (dsimp only [step_action]
-         try rw [ha1]
-         try rw [ha2]
-         try dsimp only [act_valueFromPexpr, valueFromPexpr]
-         refine ⟨_, _, rfl, fun rs => ?_⟩
-         rw [full_eval_bridge hv1 hd1 σ, full_eval_bridge hv2 hd2 σ]
-         dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
-           return1, except_return]
-         rfl)
-  obtain ⟨s, m, hh, hrest⟩ := key
-  obtain ⟨post, hpost⟩ := cons_of_head? hh
-  exact ⟨s, m, post, hpost, hrest⟩
+  step_ctx_head hget
+  unfold allocOpRedex
+  rw [valueFromPexprs_pair] at hnv
+  rcases act_valueFromPexpr_cases hp1 with ⟨hn1, ha1⟩ | ⟨a1, v1', rfl⟩ <;>
+  rcases act_valueFromPexpr_cases hp2 with ⟨hn2, ha2⟩ | ⟨a2, v2', rfl⟩
+  all_goals try (rw [valueFromPexpr_val, valueFromPexpr_val] at hnv; cases hnv)
+  all_goals try (obtain rfl := Option.some.inj ((evalPexpr_val _ _ _ _ _).symm.trans hv1))
+  all_goals try (obtain rfl := Option.some.inj ((evalPexpr_val _ _ _ _ _).symm.trans hv2))
+  all_goals
+    cases ctx <;>
+      (dsimp only [step_action]
+       try rw [ha1]
+       try rw [ha2]
+       try dsimp only [act_valueFromPexpr, valueFromPexpr]
+       refine ⟨_, _, _, rfl, fun rs => ?_⟩
+       rw [full_eval_bridge hv1 hd1 σ, full_eval_bridge hv2 hd2 σ]
+       dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+         return1, except_return]
+       rfl)
 
 /-- E1: Create ACTION_EVAL, raw: one `RSK_eval` step rebuilding the
     canonical create redex (the emitted `create(Ivalignof(ty), ty)`
@@ -1415,36 +1336,25 @@ theorem step_ctx_create_eval_ws {an : List _root_.annot} {e : CoreExpr} {ctx : c
         arena := apply_ctx ctx (createRedex an loc ann align ty pref) }, rs) := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, createOpRedex an loc ann pe1 pe2 pref) :: rest := by
     rw [harena]; exact hd.get_ctx_default
-  have key : ∃ (s : String) (m : core_runM thread_state),
-      (step_ctx tds σ file ext tid (parent, th)).head? =
-        some (Step_with_runstate2 (RSK_eval s) m) ∧
-      ∀ rs, m rs = Result (Defined { locUpdTh an th with
-        arena := apply_ctx ctx (createRedex an loc ann align ty pref) }, rs) := by
-    unfold step_ctx
-    dsimp only
-    rw [hget]
-    simp only [List.map_cons, List.head?_cons]
-    unfold createOpRedex
-    rw [valueFromPexprs_pair] at hnv
-    rcases act_valueFromPexpr_cases hp1 with ⟨hn1, ha1⟩ | ⟨a1, v1', rfl⟩ <;>
-    rcases act_valueFromPexpr_cases hp2 with ⟨hn2, ha2⟩ | ⟨a2, v2', rfl⟩
-    all_goals try (rw [valueFromPexpr_val, valueFromPexpr_val] at hnv; cases hnv)
-    all_goals try (obtain rfl := Option.some.inj ((evalPexpr_val _ _ _ _ _).symm.trans hv1))
-    all_goals try (obtain rfl := Option.some.inj ((evalPexpr_val _ _ _ _ _).symm.trans hv2))
-    all_goals
-      cases ctx <;>
-        (dsimp only [step_action]
-         try rw [ha1]
-         try rw [ha2]
-         try dsimp only [act_valueFromPexpr, valueFromPexpr]
-         refine ⟨_, _, rfl, fun rs => ?_⟩
-         rw [full_eval_bridge hv1 hd1 σ, full_eval_bridge hv2 hd2 σ]
-         dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
-           return1, except_return]
-         rfl)
-  obtain ⟨s, m, hh, hrest⟩ := key
-  obtain ⟨post, hpost⟩ := cons_of_head? hh
-  exact ⟨s, m, post, hpost, hrest⟩
+  step_ctx_head hget
+  unfold createOpRedex
+  rw [valueFromPexprs_pair] at hnv
+  rcases act_valueFromPexpr_cases hp1 with ⟨hn1, ha1⟩ | ⟨a1, v1', rfl⟩ <;>
+  rcases act_valueFromPexpr_cases hp2 with ⟨hn2, ha2⟩ | ⟨a2, v2', rfl⟩
+  all_goals try (rw [valueFromPexpr_val, valueFromPexpr_val] at hnv; cases hnv)
+  all_goals try (obtain rfl := Option.some.inj ((evalPexpr_val _ _ _ _ _).symm.trans hv1))
+  all_goals try (obtain rfl := Option.some.inj ((evalPexpr_val _ _ _ _ _).symm.trans hv2))
+  all_goals
+    cases ctx <;>
+      (dsimp only [step_action]
+       try rw [ha1]
+       try rw [ha2]
+       try dsimp only [act_valueFromPexpr, valueFromPexpr]
+       refine ⟨_, _, _, rfl, fun rs => ?_⟩
+       rw [full_eval_bridge hv1 hd1 σ, full_eval_bridge hv2 hd2 σ]
+       dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+         return1, except_return]
+       rfl)
 
 /-- Esave PARAMETER EVALUATION, raw: one `RSK_eval` step rebuilding the
     Esave node with its evaluated initializers, run state verbatim
@@ -1470,44 +1380,32 @@ theorem step_ctx_save_eval_ws {an : List _root_.annot} {e : CoreExpr} {ctx : con
         rs) := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, saveRedex an sb ps body) :: rest := by
     rw [harena]; exact hd.get_ctx_default
-  have key : ∃ (s : String) (m : core_runM thread_state),
-      (step_ctx tds σ file ext tid (parent, th)).head? =
-        some (Step_with_runstate2 (RSK_eval s) m) ∧
-      ∀ rs, m rs = Result (Defined { locUpdTh an th with
-        arena := apply_ctx ctx (saveRedex an sb (saveParamsWithValues ps cvals) body) },
-        rs) := by
-    have hnv' : valueFromPexprs
-        (List.map (fun p => match p with | (_, (_, z)) => z) ps) = none := by
-      rw [show (List.map (fun (p : sym × ((core_base_type ×
-          Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym))
-          => match p with | (_, (_, z)) => z) ps) = saveParamPexprs ps from rfl]
-      exact hnv
-    unfold step_ctx
-    dsimp only
-    rw [hget]
-    simp only [List.map_cons, List.head?_cons]
-    unfold saveRedex
-    cases ctx <;>
-      (dsimp only [one_step0]
-       rw [show is_irreducible (Expr an (Esave sb ps body)) = false from rfl]
-       rw [hnv']
-       simp only [Bool.false_eq_true, if_false]
-       refine ⟨_, _, rfl, fun rs => ?_⟩
-       rw [stExceptUndef_bind_apply, stExceptUndef_bind_apply,
-         mapM_save_bridge (tds := tds) (σ := σ) (file := file)
-           (fun pe => stExceptUndef_bind
-             (E.eval_pexpr20 (a := core_run_state) tds th ext σ file pe)
-             (fun x => match x with
-               | Sum.inl pe' => stExceptUndef_return pe'
-               | Sum.inr cval => stExceptUndef_return (mk_value_pe cval)))
-           (fun _ _ => rfl) _ ?_ ps hv hdep rs] <;>
-         first
-           | (intro p rs'
-              rfl)
-           | (loc_split an <;> rfl))
-  obtain ⟨s, m, hh, hrest⟩ := key
-  obtain ⟨post, hpost⟩ := cons_of_head? hh
-  exact ⟨s, m, post, hpost, hrest⟩
+  have hnv' : valueFromPexprs
+      (List.map (fun p => match p with | (_, (_, z)) => z) ps) = none := by
+    rw [show (List.map (fun (p : sym × ((core_base_type ×
+        Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym))
+        => match p with | (_, (_, z)) => z) ps) = saveParamPexprs ps from rfl]
+    exact hnv
+  step_ctx_head hget
+  unfold saveRedex
+  cases ctx <;>
+    (dsimp only [one_step0]
+     rw [show is_irreducible (Expr an (Esave sb ps body)) = false from rfl]
+     rw [hnv']
+     simp only [Bool.false_eq_true, if_false]
+     refine ⟨_, _, _, rfl, fun rs => ?_⟩
+     rw [stExceptUndef_bind_apply, stExceptUndef_bind_apply,
+       mapM_save_bridge (tds := tds) (σ := σ) (file := file)
+         (fun pe => stExceptUndef_bind
+           (E.eval_pexpr20 (a := core_run_state) tds th ext σ file pe)
+           (fun x => match x with
+             | Sum.inl pe' => stExceptUndef_return pe'
+             | Sum.inr cval => stExceptUndef_return (mk_value_pe cval)))
+         (fun _ _ => rfl) _ ?_ ps hv hdep rs] <;>
+       first
+         | (intro p rs'
+            rfl)
+         | (loc_split an <;> rfl))
 
 /-- Memop-operand EVAL, raw: one `RSK_eval` step rebuilding the
     value-operand memop redex, run state verbatim. -/
@@ -1531,34 +1429,22 @@ theorem step_ctx_memop_eval_ws {an : List _root_.annot} {e : CoreExpr} {ctx : co
           [Pexpr [] () (PEval v1), Pexpr [] () (PEval v2)])) }, rs) := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, memopRedex an mop [pe1, pe2]) :: rest := by
     rw [harena]; exact hd.get_ctx_default
-  have key : ∃ (s : String) (m : core_runM thread_state),
-      (step_ctx tds σ file ext tid (parent, th)).head? =
-        some (Step_with_runstate2 (RSK_eval s) m) ∧
-      ∀ rs, m rs = Result (Defined { locUpdTh an th with
-        arena := apply_ctx ctx (Expr an (Ememop mop
-          [Pexpr [] () (PEval v1), Pexpr [] () (PEval v2)])) }, rs) := by
-    unfold step_ctx
-    dsimp only
-    rw [hget]
-    simp only [List.map_cons, List.head?_cons]
-    unfold memopRedex
-    cases ctx <;>
-      (dsimp only [one_step0]
-       rw [show is_irreducible (Expr an (Ememop mop [pe1, pe2]))
-         = false from rfl]
-       rw [hnv]
-       simp only [Bool.false_eq_true, if_false]
-       refine ⟨_, _, rfl, fun rs => ?_⟩
-       rw [stExceptUndef_bind_apply, stExceptUndef_bind_apply,
-         mapM_eval1_bridge (tds := tds) (σ := σ) (file := file)
-           _ ?_ hv1 hd1 hv2 hd2 rs] <;>
-         first
-           | (intro pe rs'
-              rfl)
-           | (loc_split an <;> rfl))
-  obtain ⟨s, m, hh, hrest⟩ := key
-  obtain ⟨post, hpost⟩ := cons_of_head? hh
-  exact ⟨s, m, post, hpost, hrest⟩
+  step_ctx_head hget
+  unfold memopRedex
+  cases ctx <;>
+    (dsimp only [one_step0]
+     rw [show is_irreducible (Expr an (Ememop mop [pe1, pe2]))
+       = false from rfl]
+     rw [hnv]
+     simp only [Bool.false_eq_true, if_false]
+     refine ⟨_, _, _, rfl, fun rs => ?_⟩
+     rw [stExceptUndef_bind_apply, stExceptUndef_bind_apply,
+       mapM_eval1_bridge (tds := tds) (σ := σ) (file := file)
+         _ ?_ hv1 hd1 hv2 hd2 rs] <;>
+       first
+         | (intro pe rs'
+            rfl)
+         | (loc_split an <;> rfl))
 
 section LoopIterationE5
 
@@ -1614,6 +1500,54 @@ theorem loop_step_withrs_tau_rs (hfuel : 0 < LemFuel.fuel) {dst : driver_state} 
 
 end LoopIterationE5
 
+/-- Shared excluded-store dispatch, before the operand outcome is used. -/
+macro "excluded_store_eval " hget:term ", " ctx:term ", " hnv:term ", " hp2:term ", " hp3:term
+    " => " finish:tacticSeq : tactic => `(tactic|
+  (step_ctx_head $hget
+   unfold excludedStoreOpRedex
+   cases ($ctx) <;>
+     (dsimp only
+      rw [step_action_store_eval (.inr (act_none_of_pair $hp2 $hp3 $hnv)) (PePure.not_constrained $hp3)]
+      ($finish))))
+
+/-- E5: the excluded store's ACTION_EVAL round at any evaluated operand
+    values (the positive store's `step_ctx_store_eval_ws'` under the
+    `Eexcluded n` wrapper; `process_action`'s ACTION_EVAL arm rebuilds
+    `Expr e_annots (Eexcluded n act')`). -/
+theorem step_ctx_excluded_store_eval_ws' (hfuel : 0 < LemFuel.fuel) {an : List _root_.annot}
+    {e : CoreExpr} {ctx : context}
+    {n : Nat} {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
+    {pe2 pe3 : generic_pexpr Unit sym} {mo : memory_order}
+    {v : value} {cv : value}
+    (hd : Decomp e ctx (excludedStoreOpRedex an n loc ann ty pe2 pe3 mo))
+    (hnv : valueFromPexprs [pe2, pe3] = none)
+    (hp2 : PePure pe2) (hp3 : PePure pe3)
+    (hd2 : peDepth pe2 ≤ LemFuel.fuel)
+    (hd3 : peDepth pe3 ≤ LemFuel.fuel)
+    (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
+    (file : generic_file Unit core_run_annotation) (ext : Fmap sym sym)
+    (tid : Nat) (parent : Option Nat) (th : thread_state)
+    (harena : th.arena = e)
+    (hv2 : evalPexpr tds ext file th.env pe2 = some v)
+    (hv3 : evalPexpr tds ext file th.env pe3 = some cv) :
+    ∃ (s : String) (m : core_runM thread_state) (post : List core_step2),
+      step_ctx tds σ file ext tid (parent, th) =
+        Step_with_runstate2 (RSK_eval s) m :: post ∧
+      ∀ rs, m rs = Result (Defined { locUpdTh an th with
+        arena := apply_ctx ctx (Expr an (Eexcluded n (Action loc ann
+          (Store0 false (Pexpr [] () (PEval (Vctype ty))) (Pexpr [] () (PEval v))
+            (Pexpr [] () (PEval cv)) mo)))) }, rs) := by
+  obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, excludedStoreOpRedex an n loc ann ty pe2 pe3 mo) :: rest := by
+    rw [harena]; exact hd.get_ctx_default
+  excluded_store_eval hget, ctx, hnv, hp2, hp3 =>
+    refine ⟨_, _, _, rfl, fun rs => ?_⟩
+    rw [full_eval_bridge (v := Vctype ty) (evalPexpr_val _ _ _ _ _) (peDepth_val_le (hfuel := by omega) _ _) σ,
+      full_eval_bridge hv2 hd2 σ, full_eval_bridge hv3 hd3 σ]
+    dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
+      return1, except_return]
+    rfl
+
+
 /-- E5: the excluded store's ACTION_EVAL round, raw: one `RSK_eval` step
     rebuilding the canonical excluded-store redex, run state verbatim
     (`step_ctx_store_eval_ws` under the `Eexcluded n` wrapper). -/
@@ -1638,41 +1572,9 @@ theorem step_ctx_excluded_store_eval_ws {an : List _root_.annot} {e : CoreExpr} 
       ∀ rs, m rs = Result (Defined { locUpdTh an th with
         arena := apply_ctx ctx (excludedStoreRedex an n loc ann false ty pv cv mo) },
         rs) := by
-  have hfuel : 0 < LemFuel.fuel := Nat.lt_of_lt_of_le (peDepth_pos pe2) hd2
-  obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena =
-      (ctx, excludedStoreOpRedex an n loc ann ty pe2 pe3 mo) :: rest := by
-    rw [harena]; exact hd.get_ctx_default
-  have key : ∃ (s : String) (m : core_runM thread_state),
-      (step_ctx tds σ file ext tid (parent, th)).head? =
-        some (Step_with_runstate2 (RSK_eval s) m) ∧
-      ∀ rs, m rs = Result (Defined { locUpdTh an th with
-        arena := apply_ctx ctx (excludedStoreRedex an n loc ann false ty pv cv mo) },
-        rs) := by
-    unfold step_ctx
-    dsimp only
-    rw [hget]
-    simp only [List.map_cons, List.head?_cons]
-    unfold excludedStoreOpRedex
-    rw [valueFromPexprs_pair] at hnv
-    rcases act_valueFromPexpr_cases hp2 with ⟨hn2, ha2⟩ | ⟨a2, v2', rfl⟩ <;>
-    cases hp3
-    all_goals try (rw [valueFromPexpr_val, valueFromPexpr_val] at hnv; cases hnv)
-    all_goals try (obtain rfl := Option.some.inj ((evalPexpr_val _ _ _ _ _).symm.trans hv2))
-    all_goals
-      cases ctx <;>
-        (dsimp only [step_action]
-         try rw [ha2]
-         dsimp only [act_valueFromPexpr, valueFromPexpr]
-         refine ⟨_, _, rfl, fun rs => ?_⟩
-         rw [full_eval_bridge (v := Vctype ty) (evalPexpr_val _ _ _ _ _) (peDepth_val_le _ _ hfuel) σ,
-           full_eval_bridge hv2 hd2 σ,
-           full_eval_bridge hv3 hd3 σ]
-         dsimp only [stExceptUndef_bind, stExceptUndef_return, stExpect_return,
-           return1, except_return]
-         rfl)
-  obtain ⟨s, m, hh, hrest⟩ := key
-  obtain ⟨post, hpost⟩ := cons_of_head? hh
-  exact ⟨s, m, post, hpost, hrest⟩
+  exact step_ctx_excluded_store_eval_ws'
+    (Nat.lt_of_lt_of_le (peDepth_pos pe2) hd2) hd hnv hp2 hp3 hd2 hd3
+    tds σ file ext tid parent th harena hv2 hv3
 
 /-- E5: the `Ecase` EVAL round at a covered non-value scrutinee, raw: one
     `RSK_eval` step (one_step0's `Ecase` `none` arm, core_reduction.lem:
@@ -1695,29 +1597,18 @@ theorem step_ctx_case_eval_ws {an : List _root_.annot} {e : CoreExpr} {ctx : con
         arena := apply_ctx ctx (caseRedex an (Pexpr [] () (PEval cval)) pats) }, rs) := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, caseRedex an pe pats) :: rest := by
     rw [harena]; exact hd.get_ctx_default
-  have key : ∃ (s : String) (m : core_runM thread_state),
-      (step_ctx tds σ file ext tid (parent, th)).head? =
-        some (Step_with_runstate2 (RSK_eval s) m) ∧
-      ∀ rs, m rs = Result (Defined { locUpdTh an th with
-        arena := apply_ctx ctx (caseRedex an (Pexpr [] () (PEval cval)) pats) }, rs) := by
-    unfold step_ctx
-    dsimp only
-    rw [hget]
-    simp only [List.map_cons, List.head?_cons]
-    unfold caseRedex
-    rcases pe with ⟨b, u, p⟩
-    cases u
-    cases p <;> (try (rw [valueFromPexpr_val] at hnv; cases hnv)) <;> (try (cases hp)) <;>
-    (cases ctx <;>
-      (dsimp only [one_step0, is_irreducible, valueFromPexpr]
-       simp only [Bool.false_eq_true, if_false]
-       refine ⟨_, _, rfl, fun rs => ?_⟩
-       rw [stExceptUndef_bind_apply, stExceptUndef_bind_apply,
-         eval1_bridge_gen (tds := tds) (file := file) hv hdp σ _ rs]
-       first | rfl | (loc_split an <;> rfl)))
-  obtain ⟨s, m, hh, hrest⟩ := key
-  obtain ⟨post, hpost⟩ := cons_of_head? hh
-  exact ⟨s, m, post, hpost, hrest⟩
+  step_ctx_head hget
+  unfold caseRedex
+  rcases pe with ⟨b, u, p⟩
+  cases u
+  cases p <;> (try (rw [valueFromPexpr_val] at hnv; cases hnv)) <;> (try (cases hp)) <;>
+  (cases ctx <;>
+    (dsimp only [one_step0, is_irreducible, valueFromPexpr]
+     simp only [Bool.false_eq_true, if_false]
+     refine ⟨_, _, _, rfl, fun rs => ?_⟩
+     rw [stExceptUndef_bind_apply, stExceptUndef_bind_apply,
+       eval1_bridge_gen (tds := tds) (file := file) hv hdp σ _ rs]
+     first | rfl | (loc_split an <;> rfl)))
 
 /-! ## THE DRIVER STEP-MATCH (Phase 5): wherever the mirror steps at a
 cone configuration, the production driver's per-thread round advances

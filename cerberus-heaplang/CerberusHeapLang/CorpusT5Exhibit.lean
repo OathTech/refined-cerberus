@@ -312,12 +312,6 @@ theorem t5_blockSpecsT [LemFuel] [SpikeGS .hasLC GF]
 
 -- These local tactics only apply the public frame laws. Concrete symbol
 -- comparisons are decided by the kernel; fresh symbols need explicit facts.
-local macro "t5_frame" : tactic => `(tactic| repeat first | assumption | apply SymFrame.add)
-local macro "t5_lookup" : tactic => `(tactic|
-  (repeat first
-    | rw [envAdd_lookup (by t5_frame), if_pos (by decide +kernel)]
-    | rw [envAdd_lookup (by t5_frame), if_neg (by decide +kernel)]) <;> assumption)
-
 theorem t5Kill_eq (x : sym) : CorpusE0.t5Kill x =
     killOpRedex [] (t5Reg 0 84) empty_annotation (Static0 intTy) (psym x) := rfl
 
@@ -350,14 +344,14 @@ theorem wpt_t5Return [LemFuel] [SpikeGS .hasLC GF]
   rw [update_env_sym]
   iapply wpt_seq _ _ _ _ _ _ _ 3 6
   rw [show (3 : Nat) = 2 + 1 from rfl]
-  iapply wpt_kill_eval _ _ _ _ _ _ rfl (pv := px) (t1sym_eval hex rest (by t5_lookup))
+  iapply wpt_kill_eval _ _ _ _ _ _ rfl (pv := px) (t1sym_eval hex rest (by emitted_lookup))
   iapply wpt_kill_emp _ _ _ (Static0 intTy) px intTy (threeBytes M.tagDefs) _ (Nat.le_refl 2) rfl
   isplitl [Hx]
   · iexact Hx
   simp only [SpikeVal.mergeInto]
   iapply wpt_seq _ _ _ _ _ _ _ 3 3
   rw [show (3 : Nat) = 2 + 1 from rfl]
-  iapply wpt_kill_eval _ _ _ _ _ _ rfl (pv := pr) (t1sym_eval hex rest (by t5_lookup))
+  iapply wpt_kill_eval _ _ _ _ _ _ rfl (pv := pr) (t1sym_eval hex rest (by emitted_lookup))
   iapply wpt_kill_emp _ _ _ (Static0 intTy) pr intTy (emittedIntBytes M.tagDefs 1) _ (Nat.le_refl 2) rfl
   isplitl [Hr]
   · iexact Hr
@@ -365,11 +359,11 @@ theorem wpt_t5Return [LemFuel] [SpikeGS .hasLC GF]
   iapply wpt_seq _ _ _ _ _ _ _ 3 0
   iapply wpt_run [] empty_annotation CorpusE0.retSym [convLoadedInt (t5a 528)] _ _ 2
     (by rw [hQ]; exact t5RetQ_lookup)
-    (by rw [evalPexprs_cons, t1ConvLoadedInt_eval hstd (t1sym_eval hex rest (by t5_lookup))
+    (by rw [evalPexprs_cons, t1ConvLoadedInt_eval hstd (t1sym_eval hex rest (by emitted_lookup))
       (by decide) (by decide), evalPexprs_nil]; rfl) (Nat.le_refl 3)
   dsimp only [t5LsT]
   ipureintro
-  exact ⟨by decide +kernel, rfl, rfl, _, _, rfl, by t5_frame⟩
+  exact ⟨by decide +kernel, rfl, rfl, _, _, rfl, by emitted_frame⟩
 
 abbrev t5frIf (px pr : CerbMem.PointerValue) (f : Fmap sym value) :=
   t5frAssign 523 524 1 pr (envAdd (t5a 509) Vtrue (envAdd (t5a 510) (lint 0) (t5frCond px f)))
@@ -405,14 +399,14 @@ theorem wpt_t5If [LemFuel] [SpikeGS .hasLC GF]
   rw [show (Pattern [] (CaseBase (some (t5a 509), BTy_boolean)) : pattern) =
     symPat [] (t5a 509) BTy_boolean from rfl]
   iapply wpt_seq_sym _ _ _ _ _ _ _ _ 4 26
-  iapply wpt_t5Bool _ (t1sym_eval hex rest (by t5_lookup))
+  iapply wpt_t5Bool _ (t1sym_eval hex rest (by emitted_lookup))
   iexists Vtrue
   isplit
   · ipureintro; rfl
   rw [update_env_sym, show (26 : Nat) = 25 + 1 from rfl]
-  iapply wpt_if_true _ _ _ _ _ (t1sym_eval hex rest (by t5_lookup))
+  iapply wpt_if_true _ _ _ _ _ (t1sym_eval hex rest (by emitted_lookup))
   iapply wpt_t5AssignBlock hstd hex 48 523 524 1 (by decide) (by decide) (by decide)
-    _ rest (by t5_frame) pr bs (by t5_lookup)
+    _ rest (by emitted_frame) pr bs (by emitted_lookup)
   isplitl [Hr]
   · iexact Hr
   iintro %s %hs Hr
@@ -485,8 +479,8 @@ theorem t5_wpt [LemFuel] (hfuel : 0 < LemFuel.fuel) [SpikeGS .hasLC GF]
   iapply wpt_seq _ _ _ _ _ _ _ 4 75
   rw [show (4 : Nat) = 3 + 1 from rfl]
   iapply wpt_store_eval _ _ _ intTy (psym CorpusE0.xSym) (convLoadedInt (t5a 508)) NA _
-    rfl (pv := px) (cv := lint 3) (t1sym_eval hex rest (by t5_lookup))
-    (t1ConvLoadedInt_eval hstd (t1sym_eval hex rest (by t5_lookup)) (by decide) (by decide))
+    rfl (pv := px) (cv := lint 3) (t1sym_eval hex rest (by emitted_lookup))
+    (t1ConvLoadedInt_eval hstd (t1sym_eval hex rest (by emitted_lookup)) (by decide) (by decide))
   iapply wpt_store _ _ _ intTy px (lint 3) NA threeMval _ _ (Nat.le_refl 3)
     three_encodes (three_storable _)
   isplitl [Hx]
@@ -496,7 +490,7 @@ theorem t5_wpt [LemFuel] (hfuel : 0 < LemFuel.fuel) [SpikeGS .hasLC GF]
   iapply wpt_seq _ _ _ _ _ _ _ 4 71
   rw [show (4 : Nat) = 3 + 1 from rfl]
   iapply wpt_store_eval _ _ _ intTy (psym t5rSym) t5Unspec NA _ rfl
-    (pv := pr) (cv := Vloaded (LVunspecified intTy)) (t1sym_eval hex rest (by t5_lookup))
+    (pv := pr) (cv := Vloaded (LVunspecified intTy)) (t1sym_eval hex rest (by emitted_lookup))
     (unspecIntPe_eval _ _)
   iapply wpt_store _ _ _ intTy pr (Vloaded (LVunspecified intTy)) NA unspecMval _ _
     (Nat.le_refl 3) unspec_encodes (unspec_storable _)
@@ -505,7 +499,7 @@ theorem t5_wpt [LemFuel] (hfuel : 0 < LemFuel.fuel) [SpikeGS .hasLC GF]
   iintro %fpR Hr
   simp only [SpikeVal.mergeInto]
   iapply wpt_seq _ _ _ _ _ _ _ 55 16
-  iapply wpt_t5If hstd hex _ rest (by t5_frame) px pr _ (by t5_lookup) (by t5_lookup)
+  iapply wpt_t5If hstd hex _ rest (by emitted_frame) px pr _ (by emitted_lookup) (by emitted_lookup)
   isplitl [Hx]
   · iexact Hx
   isplitl [Hr]
@@ -517,9 +511,9 @@ theorem t5_wpt [LemFuel] (hfuel : 0 < LemFuel.fuel) [SpikeGS .hasLC GF]
   have hrs : symOrd t5rSym (fresh_given_int k) ≠ .eq :=
     symOrd_ne_eq_of_num_ne (show 506 ≠ k by omega)
   simp only [SpikeVal.mergeInto]
-  iapply wpt_t5Return hstd hex hQ _ rest (by t5_frame) px pr
-    (by rw [envAdd_lookup (by t5_frame), if_neg hxs]; t5_lookup)
-    (by rw [envAdd_lookup (by t5_frame), if_neg hrs]; t5_lookup)
+  iapply wpt_t5Return hstd hex hQ _ rest (by emitted_frame) px pr
+    (by rw [envAdd_lookup (by emitted_frame), if_neg hxs]; emitted_lookup)
+    (by rw [envAdd_lookup (by emitted_frame), if_neg hrs]; emitted_lookup)
   isplitl [Hx]
   · iexact Hx
   iexact Hr
@@ -530,8 +524,7 @@ theorem collect_new_t5Main :
 
 theorem t5Main_labeledAt (sup : Nat) :
     LabeledAt (prodRSLib stdlibE3 [] sup CorpusE0.t5Main) mainSym t5RetQ := by
-  unfold LabeledAt
-  rw [prodRSLib_labeled, collect_new_t5Main, fmapLookupBy_addBy_empty, if_pos (by decide +kernel)]
+  labeled_main rw [prodRSLib_labeled, collect_new_t5Main]
 
 /-- The shipped driver on the one-procedure file wrapping the transcribed
     t5 main and the checked three-function std.core fragment returns

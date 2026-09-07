@@ -3311,6 +3311,21 @@ theorem cons_of_head? {α : Type} {l : List α} {s : α} (h : l.head? = some s) 
     obtain rfl : a = s := Option.some.inj h
     exact ⟨l, rfl⟩
 
+/-- Internal map-to-cons rule: the suffix is preserved without introducing
+    an intermediate head? proposition and extracting the same suffix again. -/
+private theorem map_cons_of_eq {α β : Type} (F : α → β) {xs : List α}
+    {x : α} {rest : List α} (h : xs = x :: rest) :
+    xs.map F = F x :: rest.map F := by
+  rw [h, List.map_cons]
+
+/-- Expose only the outer map of the generated step_ctx before using the
+    shared head rule. Quotations retain the private lemma across imports. -/
+macro "step_ctx_head " h:term : tactic => `(tactic|
+  (unfold step_ctx
+   dsimp only
+   rw [map_cons_of_eq _ $h]
+   generalize List.map _ _ = post))
+
 /-- E4: the engine's step list is `get_ctx` mapped (Core_reduction.lean:484):
     its length is the decomposition list's. -/
 theorem step_ctx_length [LemFuel] (tds : Fmap sym (CerbLocation.Loc × tag_definition)) (σ : Mem)
@@ -3876,27 +3891,14 @@ theorem step_ctx_neg [LemFuel] {a : List _root_.annot} {e : CoreExpr} {ctx : con
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena =
       (ctx, negActRedex a (Action loc ann (Store0 lk pe1 pe2 pe3 mo))) :: rest := by
     rw [harena]; exact hd.get_ctx_default
-  have key : ∃ (s : String) (m : core_runM thread_state),
-      (step_ctx tds σ file ext tid (parent, th)).head? =
-        some (Step_with_runstate2 (RSK_tau s TSK_Misc) m) ∧
-      ∀ rs, m rs = Result (Defined { locUpdTh a th with
-        arena := apply_ctx ctxB (negRewrite rs.excluded_supply
-          (fresh_given_int rs.sym_supply) ctxA (Action loc ann (Store0 lk pe1 pe2 pe3 mo))) },
-        { rs with excluded_supply := rs.excluded_supply + 1, sym_supply := rs.sym_supply + 1 }) := by
-    unfold step_ctx
-    dsimp only
-    rw [hget]
-    simp only [List.map_cons, List.head?_cons]
-    unfold negActRedex
-    cases ctx <;>
-      (dsimp only
-       rw [hbr]
-       refine ⟨_, _, rfl, fun rs => ?_⟩
-       rcases rs with ⟨tsup, asup, esup, ssup, lab⟩
-       first | rfl | (loc_split a <;> rfl))
-  obtain ⟨s, m, hh, hm⟩ := key
-  obtain ⟨post, hpost⟩ := cons_of_head? hh
-  exact ⟨s, m, post, hpost, hm⟩
+  step_ctx_head hget
+  unfold negActRedex
+  cases ctx <;>
+    (dsimp only
+     rw [hbr]
+     refine ⟨_, _, _, rfl, fun rs => ?_⟩
+     rcases rs with ⟨tsup, asup, esup, ssup, lab⟩
+     first | rfl | (loc_split a <;> rfl))
 
 /-- E5: the EXCLUDED store at canonical evaluated operands — `step_action`'s
     Store0 arm at `is_excluded = Just n` under step_ctx's `Eexcluded n act =>
@@ -9187,30 +9189,16 @@ theorem step_ctx_pure_op_raw [LemFuel] {an : List _root_.annot} {e : CoreExpr} {
         rs := by
   obtain ⟨rest, hget⟩ : ∃ rest, get_ctx th.arena = (ctx, pureRedex an pe) :: rest := by
     rw [harena]; exact hd.get_ctx_default
-  have key : ∃ (s : String) (m : core_runM thread_state),
-      (step_ctx tds σ file ext tid (parent, th)).head? =
-        some (Step_with_runstate2 (RSK_eval s) m) ∧
-      ∀ rs, m rs = stExceptUndef_bind
-        (stExceptUndef_bind (full_eval_pexpr tds th ext σ file pe)
-          (fun cval => stExceptUndef_return (Expr an (Epure (mk_value_pe cval)))))
-        (fun expr' => stExceptUndef_return { locUpdTh an th with arena := apply_ctx ctx expr' })
-        rs := by
-    rcases pe with ⟨b, u, p⟩
-    cases u
-    cases p <;> (try (rw [valueFromPexpr_val] at hnv; cases hnv)) <;>
-    (unfold step_ctx
-     dsimp only
-     rw [hget]
-     simp only [List.map_cons, List.head?_cons]
-     unfold pureRedex
-     cases ctx <;>
-       (dsimp only [one_step0, is_irreducible, valueFromPexpr]
-        simp only [Bool.false_eq_true, if_false]
-        refine ⟨_, _, rfl, fun rs => ?_⟩
-        first | rfl | (loc_split an <;> rfl)))
-  obtain ⟨s, m, hh, hm⟩ := key
-  obtain ⟨post, hpost⟩ := cons_of_head? hh
-  exact ⟨s, m, post, hpost, hm⟩
+  rcases pe with ⟨b, u, p⟩
+  cases u
+  cases p <;> (try (rw [valueFromPexpr_val] at hnv; cases hnv)) <;>
+  (step_ctx_head hget
+   unfold pureRedex
+   cases ctx <;>
+     (dsimp only [one_step0, is_irreducible, valueFromPexpr]
+      simp only [Bool.false_eq_true, if_false]
+      refine ⟨_, _, _, rfl, fun rs => ?_⟩
+      first | rfl | (loc_split an <;> rfl)))
 
 /-! ### The fragment `Frag` and the step-match
 
@@ -10535,5 +10523,17 @@ theorem engine_complete_caseU [LemFuel] {an : List _root_.annot} (M : MachineCtx
       obtain ⟨e'', hsel', -⟩ := hstep.case_value_inv (valueFromPexpr_val _ _)
       rw [hsel] at hsel'
       cases hsel'
+
+/-- Shared public-law tactics for the emitted clients. -/
+macro "emitted_frame" : tactic => `(tactic| repeat first | assumption | apply SymFrame.add)
+macro "emitted_lookup" : tactic => `(tactic|
+  (repeat first
+    | rw [envAdd_lookup (by emitted_frame), if_pos (by decide +kernel)]
+    | rw [envAdd_lookup (by emitted_frame), if_neg (by decide +kernel)]) <;> assumption)
+
+macro "labeled_main " prepare:tacticSeq : tactic => `(tactic|
+  (unfold LabeledAt
+   ($prepare)
+   rw [fmapLookupBy_addBy_empty, if_pos (by decide +kernel)]))
 
 end CerberusHeapLang
