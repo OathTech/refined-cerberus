@@ -329,3 +329,69 @@ D7's record commit, including the investigation, snapshots, parking and
 restored gate (recorded 06:21:58 UTC). No proof campaign or single
 build approached one hour. D1 remains BLOCKED; no whole-run overflow
 theorem is claimed.
+
+## D2 — BLOCKED: inconsistent fixed range premise
+
+BLOCKED: the fixed goal requires a numeral-free range copied verbatim from
+a rule whose range has numeric bounds; changing that spelling requires a
+statement choice outside the charter; parked at codex/park-D2
+`09f9b9018a53f54e32931e1d1230d83a26c75fea`.
+
+The requested fixed statement says `hrange` is the range premise for
+`n + 1` spelled EXACTLY as `wps_c_add` in IntRules, with “no numeral”.
+The actual `wps_c_add` at `IntRules.lean:586–598` has two numeric sum
+premises, verbatim:
+
+```lean
+    (hs : -2147483648 ≤ n1 + n2) (hs' : n1 + n2 ≤ 2147483647) :
+```
+
+Its total twin has the same two premises. There is no numeral-free range
+predicate in this rule to copy. Substituting `n` and `1` leaves these
+numeric bounds; using engine min/max expressions instead changes the
+required verbatim spelling; combining both inequalities or retaining only
+the upper one (using `hn` for the lower bound) chooses a statement the
+charter has not fixed. IntRules is outside D2's fence and may not be
+changed to manufacture the requested spelling.
+
+The implementation path after a corrected statement is visible: Heap
+already has `intToBytes_eq` / `intToBytes_length` and unsigned fold lemmas
+(Heap.lean:778–825), while `three_storable` / `three_reconstruct` in
+EmittedCExhibit are literal-3 proofs and the total proof's frame/label
+helpers are also specialized to 3/4. No claim is made that symbolic
+storability is impossible. The blocker is the contradictory acceptance
+statement: the charter calls it fixed and disallows choosing a new shape.
+No Lean source was edited and no theorem was fabricated. The park stores
+this investigation and D2's fresh pre-snapshot.
+
+After parking, returned the working branch to `51efef2`. `git rebase main`
+reported it up to date, without conflicts. The restored FULL gate is green
+with unchanged 901 trio-exact / 6 axiom-free-exact pins and 33 package
+warnings. No public theorem was added or changed.
+
+Both capped D2 snapshots are byte-identical: diff EMPTY, exit 0,
+ADDED 0, REMOVED 0, CHANGED 0. Both SHA-256 hashes:
+`0cb8fd9f6d05c813b2b296fa31c751566c96f9e74e8a1ce93ba3478417608df8`. This is restoration evidence,
+not a claim that D2 was implemented.
+
+D2 restored FULL gate tail, verbatim:
+
+```text
+ok:   CorpusT6Exhibit — 0 internals mentions
+ok:   Examples.CallSmoke — 0 internals mentions
+ok:   Examples.ReadinessSmoke — 0 internals mentions
+ok:   Examples.Layout — 0 internals mentions
+ok:   Examples.CorpusE0 — 0 internals mentions
+ok:   Examples.CorpusE5 — 0 internals mentions
+ok:   Examples.EmittedInt — 0 internals mentions
+ok:   CorpusT4Exhibit — 0 internals mentions
+BOUNDARY: 29 modules checked, 0 internals mention(s) in total, exit=0
+ok: client boundary — no unallowlisted internals mention
+ALL GATES GREEN
+GATE-EXIT=0
+```
+
+Time spent: approximately 3.6 minutes since
+D1's record commit, including investigation, snapshots, parking and the
+restored gate (recorded 06:25:32 UTC). No build or proof pass approached
+one hour. D2 remains BLOCKED.
