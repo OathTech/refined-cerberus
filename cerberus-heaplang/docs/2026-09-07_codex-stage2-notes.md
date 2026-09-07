@@ -136,3 +136,125 @@ Time from the pre-snapshot through recording: approximately 7.3
 minutes (pre-snapshot 05:56:02
 UTC; recorded 06:03:18 UTC), plus required initial reads and the
 baseline gate. No individual build or proof pass approached one hour.
+
+## D7 — DONE: head-form scaffold and E5 duplications
+
+Implementation commit: `ad27dd3`.
+
+The source census at this checkout found 51 head-form scaffold sites:
+2 in Soundness, 12 in DriverCollapse, and 37 in Round (the charter's
+42-site count is stale). They now use the single private theorem
+`map_cons_of_eq`, through `step_ctx_head`. It exposes the generated
+`step_ctx` map, applies the get_ctx cons equation, and abstracts the
+untouched mapped suffix before redex case splits. The old intermediate
+`key` / `head?` / `cons_of_head?` scaffolds are gone from these sites.
+The existing public `cons_of_head?` theorem is retained unchanged.
+
+`step_ctx_excluded_store_eval_ws'` moved, with IDENTICAL name and statement,
+from Round to DriverCollapse. The pointer-specific
+`step_ctx_excluded_store_eval_ws` delegates to it. The shared
+`excluded_store_eval` tactic carries the dispatch for the general success,
+shape and two failure faces. The nine repeated recursive-context arms of
+`Decomp.lift_neg'` use one `neg_context` macro; the distinct root and bound
+cases remain structural cases of the induction.
+
+The three local frame/lookup macro pairs were replaced by the shared
+`emitted_frame` / `emitted_lookup` definitions. The three E5
+`t4Main_labeledAt` / `t5Main_labeledAt` / `t6Main_labeledAt` proof bodies use
+`labeled_main`. `symK_eval` delegates to `symC_eval` at an empty-extern
+context. At entry, `depLe*` was already absent, and each of the three pinned
+`wpt_t*Load` rules already delegated to `wpt_emittedIntLoad`; these existing
+shared proofs were retained. The public `t*Kill_eq` rules were already
+single `rfl` wrappers for their distinct source locations; their statements
+and bodies are retained (the transcription definitions are outside D7's
+fence). No public wrapper was deleted, renamed or restated.
+
+No new public theorem was introduced: the new map lemma is PRIVATE and
+covered by the package axiom sweep. No pin edit was made. The five new
+snapshot entries are the parser definitions of the shared tactics;
+`neg_context` and its parser are local/private. Frozen-surface census:
+pre 5212, post 5217, ADDED 5, REMOVED 0,
+CHANGED 0. Every existing entry is byte-identical. The complete diff is
+exactly the shared-definition additions permitted by D7:
+
+```diff
+--- docs/2026-09-07_codex-D7-pre.txt	2026-09-07 06:04:11.727073809 +0000
++++ docs/2026-09-07_codex-D7-post.txt	2026-09-07 06:16:52.627622108 +0000
+@@ -45346,12 +45346,24 @@
+ def CerberusHeapLang.t6frAssign :
+ Nat → Nat → Int → CerbMem.PointerValue → Fmap sym value → Fmap sym value
+ ----
++def CerberusHeapLang.tacticEmitted_frame :
++ParserDescr
++----
++def CerberusHeapLang.tacticEmitted_lookup :
++ParserDescr
++----
++def CerberusHeapLang.tacticLabeled_main_ :
++ParserDescr
++----
+ def CerberusHeapLang.tacticLoc_split_ :
+ ParserDescr
+ ----
+ def CerberusHeapLang.tacticLoc_split_at__ :
+ ParserDescr
+ ----
++def CerberusHeapLang.tacticStep_ctx_head_ :
++ParserDescr
++----
+ theorem CerberusHeapLang.take_sum_succ :
+ ∀ (vs : List Int) (i : Nat) (h : i < vs.length),
+   (List.take (i + 1) vs).sum = (List.take i vs).sum + vs[i]
+@@ -51658,6 +51670,9 @@
+ ∀ {params : List (sym × core_base_type)} {pes : List (generic_pexpr Unit sym)}
+   {pe : generic_pexpr Unit sym}, pe ∈ CerberusHeapLang.zipArgs params pes → pe ∈ pes
+ ----
++def CerberusHeapLang.«tacticExcluded_store_eval_,_,_,_,_=>_» :
++ParserDescr
++----
+ def CerberusHeapLang.«term_↦c[_]_;_» :
+ TrailingParserDescr
+ ----
+```
+
+Snapshot commands are the D6 commands with `D7` substituted, using the
+same capped environment. SHA-256 pre:
+`045e9e6133034636b9b3ac595a9494e7aad35573757338ea7c57a8abd805e390`;
+post: `0cb8fd9f6d05c813b2b296fa31c751566c96f9e74e8a1ce93ba3478417608df8`.
+
+The initial direct-cons proof exposed the generated map's suffix to
+simplification and hit the existing heartbeat limit in Soundness.
+Abstracting that suffix fixed the proof without changing any limit;
+Soundness then built in 42 seconds (later rebuild 24 seconds).
+Two subsequent macro-quotation type errors were corrected. The round-layer
+build passed (Round 22 seconds). All builds were capped, and no red build
+was committed on the working branch. Before the final FULL gate,
+`git -c rebase.autoStash=true rebase main` reported the working branch
+up to date, without conflicts. The final FULL gate reports the expected
+unchanged `901 trio-exact, 6 axiom-free-exact` pins, and 33 package warnings
+(33 before). The changed modules introduce no warnings.
+`git diff --check` is clean. An independent source-text comparison also
+found all 676 public theorem statements in the seven edited modules
+unchanged; the compiled snapshot above is the acceptance evidence.
+
+D7 final FULL gate tail, verbatim:
+
+```text
+ok:   CorpusT6Exhibit — 0 internals mentions
+ok:   Examples.CallSmoke — 0 internals mentions
+ok:   Examples.ReadinessSmoke — 0 internals mentions
+ok:   Examples.Layout — 0 internals mentions
+ok:   Examples.CorpusE0 — 0 internals mentions
+ok:   Examples.CorpusE5 — 0 internals mentions
+ok:   Examples.EmittedInt — 0 internals mentions
+ok:   CorpusT4Exhibit — 0 internals mentions
+BOUNDARY: 29 modules checked, 0 internals mention(s) in total, exit=0
+ok: client boundary — no unallowlisted internals mention
+ALL GATES GREEN
+GATE-EXIT=0
+```
+
+Time from pre-snapshot through recording: approximately
+13.5 minutes
+(06:04:11–06:17:43 UTC).
+No individual build or proof pass approached one hour.
