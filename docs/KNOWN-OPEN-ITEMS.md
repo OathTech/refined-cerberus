@@ -1,13 +1,14 @@
 # Known open items — the register auditors read FIRST
 
-State: main has E1–E4; branch `dialect-e5` is resumed with user authorization.
-The t5 and t6 checkpoints have whole-term fragment witnesses, total derivations
-and shipped-driver theorems. t4 has whole-term membership and a public total
-condition proof, both assignments and the complete body through its back
-edge; the decreasing loop invariant and exit/return proof are next
-(`cerberus-heaplang/docs/2026-09-06_e5-t4-body.md`). E5 acceptance
-remains open (t4 execution, range review and the
-listed debts). Current execution goal: docs/2026-09-05_demo-completion-charter.md.
+State: candidate `land/e5-complete` head (2026-09-07, the L1 landing of the
+emitted-Core dialect arc's E5 — t5, t6 and t4 certified through the shipped
+driver at the pin `f95ef8d9c`; re-cut from the other agent's `dialect-e5` per
+`docs/2026-09-07_landing-charter.md` §2 L1, its process documents and
+DECISIONS entries staying on `parked/demo-expansion-2026-09-07`; landing
+record `cerberus-heaplang/docs/2026-09-07_l1-landing-notes.md`). Before it,
+main = E1–E4 with all four range audits' fixes (the t1 milestone), after the
+calls arc, the fuel-lane restatement F1, the external-audit response AR5, the
+H1 hygiene/coverage slices and the ARCHITECTURE rewrite.
 Maintained by the orchestrator; every entry
 points at the record that owns it. PURPOSE: an auditor should not
 re-cite an item listed here as a new finding. Cite it ONLY if (a) the

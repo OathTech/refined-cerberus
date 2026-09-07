@@ -13,9 +13,11 @@ its [README](cerberus-heaplang/README.md) and
 The package's dated records (slice notes, independent audits, external
 reviews) are under `cerberus-heaplang/docs/`.
 
-The adopted near-term stop-state and execution plan are in the
-[demo completion charter](docs/2026-09-05_demo-completion-charter.md)
-(active under the user's explicit goal).
+The landing plan for the agent-built branches is
+[`docs/2026-09-07_landing-charter.md`](docs/2026-09-07_landing-charter.md)
+(the E5 completion landed as its L1). The other agent's demo-completion
+charter (2026-09-05) is a process document that stays on the parked branch
+`parked/demo-expansion-2026-09-07`; it is not on main.
 
 What is here besides the package: `docs/DECISIONS.md` (the append-only
 register of rulings, with [USER]/[AGENT] provenance), `docs/AUDIT-BRIEF.md`
