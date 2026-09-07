@@ -2958,3 +2958,23 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   The E1–E4 stack is complete and audited slice by slice (four range
   audits: A−, A−, A−, A−; no T-/C- finding in any). The pending f9c3c2e
   ask is SUPERSEDED by the ask on this commit.
+- **2026-09-07 [USER] "I had another agent work on some additional features … find all
+  branches, figure out what's on each of them, and make an assessment of what
+  could be landed (perhaps with some work). The agent-built branches are
+  messy and a bit off target so treat them skeptically"** → survey + two
+  skeptical range audits, recorded in `docs/2026-09-07_branch-landability-assessment.md`
+  (with the auditors' reports `docs/2026-09-07_landability-dialect-e5-extension.md`,
+  `docs/2026-09-07_landability-demo-repin.md`). Facts: the other agent
+  worked PAST the orchestrator's committed E5 park record on `dialect-e5`
+  (the operator has since said the agent was authorised — override noted);
+  both agent-built heads pass the orchestrator's FULL gate (cb46e4c: 896
+  pins; a41292d: 958 + 7 axiom-free-exact, at the NEW pin 89f7e68 with 37
+  seams byte-identical). Verdicts: E5 completion (t5/t6/t4) LANDABLE with
+  provenance/census/record work; the re-pin LANDABLE WITH WORK as one
+  forced slice (fragment-fuel deviation, exhaustion paragraph, unplanned
+  memory-contract class, census); the actual-file t1 statement LANDABLE
+  WITH WORK (option (b) mechanised, not (a)); seq_rmw LANDABLE after re-cut;
+  E6/E7 scheduler work PARK (sound referent, unfinished, spec drift, pin
+  discipline); the committed failing patch REJECT. Nothing merged or deleted
+  by this entry; landing order and the operator's owed rulings in the
+  assessment §4.
