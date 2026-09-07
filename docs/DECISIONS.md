@@ -3692,3 +3692,18 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   modules checked, 0 internals mention(s) in total, exit=0`, `ALL GATES GREEN`,
   33 warnings, 0 `UNCAPPED`. On this merge the worktree branch is reset to
   main and the operator launches the agent with §0 as its GOAL.
+- **2026-09-07 [AGENT] LAUNCH INCIDENT (the third Codex set-up error; no
+  damage).** The orchestrator handed the operator the launch text (worktree +
+  charter path + §0 GOAL) in the same message as the merge ask for the charter
+  commit; the operator launched ("Great, launched") before that merge, so the
+  agent's worktree `codex-refinement` (cut from main 2e18821) did not contain
+  the charter its GOAL named. Detected on the operator's next message; the
+  worktree was clean with no agent activity; its branch
+  `codex/total-refines-partial` was fast-forwarded onto the charter commit
+  `1c5eac1` (no mainline touched; docs-only delta, cache still current); the
+  operator paused the agent. Root cause: the path/anchor checklist (lesson 2)
+  ran on the charter branch in a sibling worktree, not in the agent's
+  worktree; and launch text was issued while a prerequisite merge was pending.
+  Rule adopted: the launch text is handed over ONLY after the agent's own
+  worktree contains every file it names, verified there; never in the same
+  message as a merge ask.
