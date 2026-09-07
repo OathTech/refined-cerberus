@@ -3282,7 +3282,8 @@ theorem update_env_aux_tuple_mismatch (pa : List _root_.annot) (ls : List TupleL
 
 /-- STORE: ILLTYPED when the value does not encode at the lvalue type;
     otherwise `storeM`'s verdict — active (the mirror step) or killed. -/
-theorem complete_store (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_store (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx}
+    {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {lk : Bool}
     {ty : ctype} {pv : CerbMem.PointerValue} {cv : value} {mo : memory_order}
     (hd : Decomp e ctx (storeRedex an loc ann lk ty pv cv mo))
@@ -3331,7 +3332,8 @@ theorem complete_store (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M 
       exact ⟨_, _, _, hsteps, rfl, advance_action_killed (hfuel := by omega) (ars_store_killed (hfuel := by omega) hk)⟩
 
 /-- LOAD: `loadM`'s verdict — active (the mirror step) or killed. -/
-theorem complete_load (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_load (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx}
+    {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
     {pv : CerbMem.PointerValue} {mo : memory_order}
     (hd : Decomp e ctx (loadRedex an loc ann ty pv mo))
@@ -3368,7 +3370,8 @@ theorem complete_load (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M :
 /-- CREATE: `allocateObject`'s kernel verdict — active (the mirror
     step) or killed, including the requested-address panic default.
     The kernel/runtime distinction is the module header's KOI A5. -/
-theorem complete_create (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_create (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx}
+    {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation}
     {align : CerbMem.IntegerValue} {ty : ctype} {pref : prefix0}
     (hd : Decomp e ctx (createRedex an loc ann align ty pref))
@@ -3403,7 +3406,8 @@ theorem complete_create (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M
     (the mirror step, including the static-dead panic default under A5)
     or one of the seven reasons in `killM_killed_inv`. Stated at any
     `kind`; `FragFuel.kill` retains the static restriction. -/
-theorem complete_kill (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_kill (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx}
+    {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {kind : kill_kind}
     {pv : CerbMem.PointerValue}
     (hd : Decomp e ctx (killRedex an loc ann kind pv))
@@ -3440,7 +3444,8 @@ theorem complete_kill (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M :
 /-- ALLOC: at positive ambient fuel the kernel verdict is active
     (the mirror step) or the allocator's out-of-memory kill. The
     zero-alignment panic is covered only by its kernel default (A5). -/
-theorem complete_alloc (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_alloc (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx}
+    {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation}
     {align size : CerbMem.IntegerValue} {pref : prefix0}
     (hd : Decomp e ctx (allocRedex an loc ann align size pref))
@@ -4278,7 +4283,8 @@ theorem step_ctx_store_eval_ws' (hfuel : 0 < LemFuel.fuel) {an : List _root_.ann
     values (the positive store's `step_ctx_store_eval_ws'` under the
     `Eexcluded n` wrapper; `process_action`'s ACTION_EVAL arm rebuilds
     `Expr e_annots (Eexcluded n act')`). -/
-theorem step_ctx_excluded_store_eval_ws' (hfuel : 0 < LemFuel.fuel) {an : List _root_.annot} {e : CoreExpr} {ctx : context}
+theorem step_ctx_excluded_store_eval_ws' (hfuel : 0 < LemFuel.fuel) {an : List _root_.annot}
+    {e : CoreExpr} {ctx : context}
     {n : Nat} {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
     {pe2 pe3 : generic_pexpr Unit sym} {mo : memory_order}
     {v : value} {cv : value}
@@ -4361,7 +4367,8 @@ theorem step_ctx_excluded_store_eval_shape {an : List _root_.annot} {e : CoreExp
   exact ⟨s, m, post, hpost⟩
 
 /-- E5: the excluded store's ACTION_EVAL whose POINTER operand the engine rejects. -/
-theorem step_ctx_excluded_store_eval_fail2 (hfuel : 0 < LemFuel.fuel) {an : List _root_.annot} {e : CoreExpr} {ctx : context}
+theorem step_ctx_excluded_store_eval_fail2 (hfuel : 0 < LemFuel.fuel) {an : List _root_.annot}
+    {e : CoreExpr} {ctx : context}
     {n : Nat} {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
     {pe2 pe3 : generic_pexpr Unit sym} {mo : memory_order} {fl : EvalFail}
     (hd : Decomp e ctx (excludedStoreOpRedex an n loc ann ty pe2 pe3 mo))
@@ -4404,7 +4411,8 @@ theorem step_ctx_excluded_store_eval_fail2 (hfuel : 0 < LemFuel.fuel) {an : List
 
 /-- E5: the excluded store's ACTION_EVAL whose pointer operand evaluates and
     whose VALUE operand the engine rejects. -/
-theorem step_ctx_excluded_store_eval_fail3 (hfuel : 0 < LemFuel.fuel) {an : List _root_.annot} {e : CoreExpr} {ctx : context}
+theorem step_ctx_excluded_store_eval_fail3 (hfuel : 0 < LemFuel.fuel) {an : List _root_.annot}
+    {e : CoreExpr} {ctx : context}
     {n : Nat} {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
     {pe2 pe3 : generic_pexpr Unit sym} {mo : memory_order} {v : value}
     {fl : EvalFail}
@@ -6024,7 +6032,8 @@ theorem complete_run (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : 
     KILL `Other (DErr_core_run err)`; an initializer the classifier leaves
     uncovered (an accepted-but-unmirrored leaf; the whole initializer's
     outcome not characterized) is the residual `eval_uncovered`. -/
-theorem complete_save (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_save (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx}
+    {e : CoreExpr} {ctx : context}
     {sb : sym × core_base_type}
     {ps : List (sym × ((core_base_type ×
       Option (ctype × pass_by_value_or_pointer)) × generic_pexpr Unit sym))}
@@ -6089,7 +6098,8 @@ theorem complete_save (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M :
     operand evaluates; a KILL (raise — `Other (DErr_core_run err)` — or
     undef — `Undef0 loc ubs`) where the classifier fails it; the residual
     `eval_uncovered` where the classifier leaves it uncovered. -/
-theorem complete_pure_op (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_pure_op (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx}
+    {e : CoreExpr} {ctx : context}
     {pe : generic_pexpr Unit sym}
     (hd : Decomp e ctx (pureRedex an pe))
     (hnv : valueFromPexpr pe = none) (hp : PePure pe) (hdp : peDepth pe ≤ LemFuel.fuel)
@@ -6142,7 +6152,8 @@ theorem complete_pure_op (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {
         (by rw [hd.operandsOf_eq]; exact List.mem_singleton.mpr rfl) hp hu hshape))
 
 /-- The plain-symbol instance (E1's statement). -/
-theorem complete_pure_sym (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_pure_sym (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx}
+    {e : CoreExpr} {ctx : context}
     {pb : List _root_.annot} {x : sym}
     (hd : Decomp e ctx (pureRedex an (Pexpr pb () (PEsym x))))
     (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
@@ -6157,7 +6168,8 @@ theorem complete_pure_sym (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} 
     an operand the classifier leaves uncovered (an accepted-but-unmirrored
     leaf; the whole operand's outcome not characterized) is the residual
     `eval_uncovered`. -/
-theorem complete_load_op (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_load_op (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx}
+    {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
     {pe2 : generic_pexpr Unit sym} {mo : memory_order}
     (hd : Decomp e ctx (loadOpRedex an loc ann ty pe2 mo))
@@ -6244,7 +6256,8 @@ theorem complete_load_op (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {
     the classifier rejects is the KILL `Other (DErr_core_run err)`; an
     operand the classifier leaves uncovered is the residual
     `eval_uncovered`. Stated at any `kind`. -/
-theorem complete_kill_op (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_kill_op (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx}
+    {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {kind : kill_kind}
     {pe : generic_pexpr Unit sym}
     (hd : Decomp e ctx (killOpRedex an loc ann kind pe))
@@ -6332,7 +6345,8 @@ theorem complete_kill_op (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {
     before size, the engine's order) the classifier rejects is the KILL
     `Other (DErr_core_run err)`; the first operand the classifier leaves
     uncovered is the residual `eval_uncovered`. -/
-theorem complete_alloc_op (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_alloc_op (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx}
+    {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation}
     {pe1 pe2 : generic_pexpr Unit sym} {pref : prefix0}
     (hd : Decomp e ctx (allocOpRedex an loc ann pe1 pe2 pref))
@@ -6448,7 +6462,8 @@ theorem complete_alloc_op (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} 
     before size, the engine's order) the classifier rejects is the KILL
     `Other (DErr_core_run err)`; the first operand the classifier leaves
     uncovered is the residual `eval_uncovered`. -/
-theorem complete_create_op (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_create_op (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx}
+    {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation}
     {pe1 pe2 : generic_pexpr Unit sym} {pref : prefix0}
     (hd : Decomp e ctx (createOpRedex an loc ann pe1 pe2 pref))
@@ -6563,7 +6578,8 @@ theorem complete_create_op (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot}
     operand the classifier leaves uncovered (an accepted-but-unmirrored
     leaf; the whole operand's outcome not characterized) is the residual
     `eval_uncovered`. -/
-theorem complete_memop_op (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_memop_op (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx}
+    {e : CoreExpr} {ctx : context}
     {mop : memop} {pe1 pe2 : generic_pexpr Unit sym}
     (hd : Decomp e ctx (memopRedex an mop [pe1, pe2]))
     (hnv : valueFromPexprs [pe1, pe2] = none)
@@ -6659,7 +6675,8 @@ theorem complete_memop_op (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} 
     `Other (DErr_core_run err)`; the first operand the classifier leaves
     uncovered (an accepted-but-unmirrored leaf; the whole operand's
     outcome not characterized) is the residual `eval_uncovered`. -/
-theorem complete_store_op (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_store_op (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx}
+    {e : CoreExpr} {ctx : context}
     {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
     {pe2 pe3 : generic_pexpr Unit sym} {mo : memory_order}
     (hd : Decomp e ctx (storeOpRedex an loc ann ty pe2 pe3 mo))
@@ -7041,7 +7058,8 @@ theorem perform_memop_ptreq_panic (tds : Fmap sym (CerbLocation.Loc × tag_defin
     deterministic `eqPtrval` are the mirror step; the
     differing-provenance fork is FORK; non-pointer operands are the
     driver's memop PANIC. -/
-theorem complete_memop_vals (hfuel : 4 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_memop_vals (hfuel : 4 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx}
+    {e : CoreExpr} {ctx : context}
     {v1 v2 : value}
     (hd : Decomp e ctx (memopPtrEqVals an v1 v2))
     (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
@@ -7222,7 +7240,8 @@ theorem step_ctx_call_kill_args {an : List _root_.annot} {e : CoreExpr} {ctx : c
     — or the argument residual `eval_uncovered`. The engine evaluates the
     arguments BEFORE `call_proc`, so an argument kill takes precedence
     over an unknown procedure; the classification follows that order. -/
-theorem complete_call (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_call (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx}
+    {e : CoreExpr} {ctx : context}
     {ra : core_run_annotation} {f : sym} {pes : List (generic_pexpr Unit sym)}
     (hd : Decomp e ctx (callRedex an ra f pes))
     (hpes : ∀ pe ∈ pes, PePure pe)
@@ -7330,7 +7349,8 @@ theorem complete_ret {M : MachineCtx} (w : SpikeValA) (ev0 : Fmap sym value)
     they do (`do_race`, core_reduction.lem:215–242; the with-runstate EVAL
     step's undef at the location-updated thread's `current_loc`,
     :1480–1484, killed by `advance_step`'s `liftCore_run` protocol). -/
-theorem complete_unseq_vals (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_unseq_vals (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx}
+    {e : CoreExpr} {ctx : context}
     {ws : List SpikeValA}
     (hd : Decomp e ctx (Expr an (Eunseq (ws.map ofValA))))
     (ρ : EnvStack) (ctl : Ctl) (σ : Mem) :
@@ -7434,7 +7454,8 @@ theorem complete_excluded_store (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.a
     an evaluable value; ILLTYPED AT DISTANCE ONE at a non-pointer pointer
     operand; the first rejected operand the KILL; the first uncovered
     operand the residual `eval_uncovered`. -/
-theorem complete_excluded_store_op (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_excluded_store_op (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot}
+    {M : MachineCtx} {e : CoreExpr} {ctx : context}
     {n : Nat} {loc : CerbLocation.Loc} {ann : core_run_annotation} {ty : ctype}
     {pe2 pe3 : generic_pexpr Unit sym} {mo : memory_order}
     (hd : Decomp e ctx (excludedStoreOpRedex an n loc ann ty pe2 pe3 mo))
@@ -7548,7 +7569,8 @@ theorem complete_excluded_store_op (hfuel : 2 ≤ LemFuel.fuel) {an : List _root
     a KILL where the classifier fails it; the residual `eval_uncovered`
     where the classifier leaves it uncovered (the scrutinee is
     `operandsOf`'s `Ecase` operand). -/
-theorem complete_case_op (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx} {e : CoreExpr} {ctx : context}
+theorem complete_case_op (hfuel : 2 ≤ LemFuel.fuel) {an : List _root_.annot} {M : MachineCtx}
+    {e : CoreExpr} {ctx : context}
     {pe : generic_pexpr Unit sym} {pats : List (pattern × CoreExpr)}
     (hd : Decomp e ctx (caseRedex an pe pats))
     (hnv : valueFromPexpr pe = none) (hp : PePure pe) (hdp : peDepth pe ≤ LemFuel.fuel)
@@ -7856,7 +7878,8 @@ theorem frag_round_complete (hfuel : 4 ≤ LemFuel.fuel) {M : MachineCtx} {e : C
   frag_round_complete_fuel (hfuel := hfuel) (M := M) (e := e) (ev0 := ev0) (evs := evs) (ctl := ctl) (σ := σ) (hf := hf.toFuel hdep) (hnv := hnv)
 
 /-- The proof-device form of `cerberusRound_classify` (over `FragFuel`); the export is `cerberusRound_classify` (R2, Fragment.lean). -/
-theorem cerberusRound_classify_fuel (hfuel : 4 ≤ LemFuel.fuel) {M : MachineCtx} (hwf : M.SeqWF) {ctl : Ctl} (hκ : ctl.κ = [])
+theorem cerberusRound_classify_fuel (hfuel : 4 ≤ LemFuel.fuel) {M : MachineCtx} (hwf : M.SeqWF)
+    {ctl : Ctl} (hκ : ctl.κ = [])
     {e : CoreExpr} {ev0 : Fmap sym value} {evs : List (Fmap sym value)} {σ : Mem}
     (hf : FragFuel e) :
     RoundClass M (e, ev0 :: evs, ctl, σ) := by
@@ -7906,7 +7929,8 @@ theorem cerberusRound_classify (hfuel : 4 ≤ LemFuel.fuel) {M : MachineCtx} (hw
     `fl0.reason` (`advance_withrs_failed_eval`) and the loop's bind
     propagates the kill (Driver.lean `drive_nonmemory_steps_aux2`). The
     final driver state is existential (driver bookkeeping). -/
-theorem loop_step_withrs_eval_killed (hfuel : 0 < LemFuel.fuel) (fl : Nat) (tds : Fmap sym (CerbLocation.Loc × tag_definition))
+theorem loop_step_withrs_eval_killed (hfuel : 0 < LemFuel.fuel) (fl : Nat)
+    (tds : Fmap sym (CerbLocation.Loc × tag_definition))
     (acc : Fmap thread_id (List core_step2)) {dst : driver_state} {th : thread_state}
     {s : String} {m : core_runM thread_state} {fl0 : EvalFail}
     (hth : dst.core_state0.thread_states = [(0, (none, th))])

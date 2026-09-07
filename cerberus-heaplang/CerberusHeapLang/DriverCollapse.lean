@@ -520,7 +520,9 @@ equations are deliberately unproved-as-unneeded. -/
     `memReturn none` (CerbMem.lean:2064 — trace-only), the trace gets
     its ME_store event, the thread its continuation. No
     dr_step_counter tick on the action path (Driver.lean:273). -/
-theorem ars_store_active (hfuel : 2 ≤ LemFuel.fuel) {tds : Fmap sym (CerbLocation.Loc × tag_definition)} {loc loc₀ : CerbLocation.Loc} {mo : memory_order}
+theorem ars_store_active (hfuel : 2 ≤ LemFuel.fuel)
+    {tds : Fmap sym (CerbLocation.Loc × tag_definition)} {loc loc₀ : CerbLocation.Loc}
+    {mo : memory_order}
     {ty : ctype} {lk : Bool} {pv : CerbMem.PointerValue} {mv : CerbMem.MemValue}
     {k : Nat → CerbMem.Footprint → thread_state} {tid aid : Nat}
     {dst : driver_state} {fp : CerbMem.Footprint} {σ' : Mem}
@@ -543,7 +545,9 @@ theorem ars_store_active (hfuel : 2 ≤ LemFuel.fuel) {tds : Fmap sym (CerbLocat
   rfl
 
 /-- LoadRequest2 discharge, active. -/
-theorem ars_load_active (hfuel : 2 ≤ LemFuel.fuel) {tds : Fmap sym (CerbLocation.Loc × tag_definition)} {loc loc₀ : CerbLocation.Loc} {mo : memory_order}
+theorem ars_load_active (hfuel : 2 ≤ LemFuel.fuel)
+    {tds : Fmap sym (CerbLocation.Loc × tag_definition)} {loc loc₀ : CerbLocation.Loc}
+    {mo : memory_order}
     {ty : ctype} {pv : CerbMem.PointerValue}
     {k : Nat → CerbMem.Footprint → CerbMem.MemValue → thread_state}
     {tid aid : Nat} {dst : driver_state} {fp : CerbMem.Footprint}
@@ -571,7 +575,8 @@ theorem ars_load_active (hfuel : 2 ≤ LemFuel.fuel) {tds : Fmap sym (CerbLocati
 /-- CreateRequest2 discharge, active. allocateObject discards the
     thread id (CerbMem.lean:1470), so the hypothesis is stated at 0
     and bridges to the driver's `tid1` definitionally. -/
-theorem ars_create_active (hfuel : 2 ≤ LemFuel.fuel) {tds : Fmap sym (CerbLocation.Loc × tag_definition)} {loc : CerbLocation.Loc} {pref : prefix0}
+theorem ars_create_active (hfuel : 2 ≤ LemFuel.fuel)
+    {tds : Fmap sym (CerbLocation.Loc × tag_definition)} {loc : CerbLocation.Loc} {pref : prefix0}
     {align : CerbMem.IntegerValue} {ty : ctype} {reqAddr : Option Int}
     {initOpt : Option CerbMem.MemValue}
     {k : Nat → CerbMem.PointerValue → thread_state}
@@ -2592,7 +2597,11 @@ theorem loop_step_frag_same_fuel' (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCt
 
 
 /-- Public form over the syntactic fragment (R2 [USER 2026-09-07]). -/
-theorem loop_step_frag_same' (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCtx} {ctl ctl' : Ctl} (htd : M₀.tagDefs = fmapEmpty) (hex : M₀.extern = fmapEmpty) {th₀ : thread_state} (hcl : th₀.current_loc = ctl.curLoc) (fl : Nat) (acc : Fmap thread_id (List core_step2)) {dst : driver_state} {e e' : CoreExpr} {ev0 : Fmap sym value} {evs : List (Fmap sym value)} {ρ' : EnvStack} {σ' : Mem} (hth : dst.core_state0.thread_states =
+theorem loop_step_frag_same' (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCtx} {ctl ctl' : Ctl}
+    (htd : M₀.tagDefs = fmapEmpty) (hex : M₀.extern = fmapEmpty) {th₀ : thread_state}
+    (hcl : th₀.current_loc = ctl.curLoc) (fl : Nat) (acc : Fmap thread_id (List core_step2))
+    {dst : driver_state} {e e' : CoreExpr} {ev0 : Fmap sym value} {evs : List (Fmap sym value)}
+    {ρ' : EnvStack} {σ' : Mem} (hth : dst.core_state0.thread_states =
       [(0, (none, { th₀ with arena := e, env := ev0 :: evs }))]) (hext : dst.core_extern = fmapEmpty) (hfile : dst.core_file = M₀.file) (hjmp : ∀ l params cont, lookupLabel (M₀.labelsAt ctl.proc) l = some (params, cont) →
       ∃ p, th₀.current_proc_opt = some p ∧
         LabeledAt dst.core_run_state0 p (M₀.labelsAt ctl.proc)) (hsup : dst.core_run_state0.sym_supply = ctl.sup.sym ∧
@@ -2649,7 +2658,13 @@ theorem loop_step_frag_same_fuel (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCtx
     arc C2 statement): `loop_step_frag_same_fuel'` with the jump tie supplied
     by the thread's `current_proc_opt` and the run-state tie `hQd` at the
     context's derived label map `hlb`. -/
-theorem loop_step_frag_same (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCtx} {ctl ctl' : Ctl} (htd : M₀.tagDefs = fmapEmpty) (hex : M₀.extern = fmapEmpty) {Q : LabelMap} (hlb : M₀.labelsAt ctl.proc = Q) {p : sym} {th₀ : thread_state} (hproc : th₀.current_proc_opt = some p) (hcl : th₀.current_loc = ctl.curLoc) (fl : Nat) (acc : Fmap thread_id (List core_step2)) {dst : driver_state} {e e' : CoreExpr} {ev0 : Fmap sym value} {evs : List (Fmap sym value)} {ρ' : EnvStack} {σ' : Mem} (hth : dst.core_state0.thread_states =
+theorem loop_step_frag_same (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCtx} {ctl ctl' : Ctl}
+    (htd : M₀.tagDefs = fmapEmpty) (hex : M₀.extern = fmapEmpty) {Q : LabelMap}
+    (hlb : M₀.labelsAt ctl.proc = Q) {p : sym} {th₀ : thread_state}
+    (hproc : th₀.current_proc_opt = some p) (hcl : th₀.current_loc = ctl.curLoc) (fl : Nat)
+    (acc : Fmap thread_id (List core_step2)) {dst : driver_state} {e e' : CoreExpr}
+    {ev0 : Fmap sym value} {evs : List (Fmap sym value)} {ρ' : EnvStack} {σ' : Mem}
+    (hth : dst.core_state0.thread_states =
       [(0, (none, { th₀ with arena := e, env := ev0 :: evs }))]) (hext : dst.core_extern = fmapEmpty) (hfile : dst.core_file = M₀.file) (hQd : LabeledAt dst.core_run_state0 p Q) (hsup : dst.core_run_state0.sym_supply = ctl.sup.sym ∧
       dst.core_run_state0.excluded_supply = ctl.sup.excl) (hf : Frag e) (hdep : evalDepth e ≤ LemFuel.fuel) (hs : Step M₀ (e, ev0 :: evs, ctl, dst.layout_state) (e', ρ', ctl', σ')) (hκ : ctl'.κ = ctl.κ) :
     ∃ (rs' : core_run_state) (tr : List trace_event) (ctr : Nat),
@@ -2785,7 +2800,13 @@ theorem loop_step_frag_fuel' (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCtx} {c
     `loop_step_frag_same_fuel'`; the CALL round is `step_ctx_call_ws` +
     `loop_step_withrs_eval` (run state verbatim); the RETURN round is
     `step_ctx_ret` + `loop_step_tau_tsk` (trace existential). -/
-theorem loop_step_frag' (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCtx} {ctl ctl' : Ctl} (htd : M₀.tagDefs = fmapEmpty) (hex : M₀.extern = fmapEmpty) {th₀ : thread_state} (hstack : th₀.stack0 = ctl.toStack) (hproc : th₀.current_proc_opt = ctl.proc) (hel : th₀.exec_loc = ctl.execLoc) (hcl : th₀.current_loc = ctl.curLoc) (fl : Nat) (acc : Fmap thread_id (List core_step2)) {dst : driver_state} {e e' : CoreExpr} {ev0 : Fmap sym value} {evs : List (Fmap sym value)} {ρ' : EnvStack} {σ' : Mem} (hth : dst.core_state0.thread_states =
+theorem loop_step_frag' (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCtx} {ctl ctl' : Ctl}
+    (htd : M₀.tagDefs = fmapEmpty) (hex : M₀.extern = fmapEmpty) {th₀ : thread_state}
+    (hstack : th₀.stack0 = ctl.toStack) (hproc : th₀.current_proc_opt = ctl.proc)
+    (hel : th₀.exec_loc = ctl.execLoc) (hcl : th₀.current_loc = ctl.curLoc) (fl : Nat)
+    (acc : Fmap thread_id (List core_step2)) {dst : driver_state} {e e' : CoreExpr}
+    {ev0 : Fmap sym value} {evs : List (Fmap sym value)} {ρ' : EnvStack} {σ' : Mem}
+    (hth : dst.core_state0.thread_states =
       [(0, (none, { th₀ with arena := e, env := ev0 :: evs }))]) (hext : dst.core_extern = fmapEmpty) (hfile : dst.core_file = M₀.file) (hjmp : ∀ l params cont, lookupLabel (M₀.labelsAt ctl.proc) l = some (params, cont) →
       ∃ p, th₀.current_proc_opt = some p ∧
         LabeledAt dst.core_run_state0 p (M₀.labelsAt ctl.proc)) (hsup : dst.core_run_state0.sym_supply = ctl.sup.sym ∧
@@ -2853,7 +2874,14 @@ theorem loop_step_frag_fuel (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCtx} {ct
 /-- The live-control round at a KNOWN, TIED current procedure (the calls
     arc C2 statement; pinned): `loop_step_frag_fuel'` with the jump tie
     supplied by `hp`/`hproc`/`hlb`/`hQd`. -/
-theorem loop_step_frag (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCtx} {ctl ctl' : Ctl} (htd : M₀.tagDefs = fmapEmpty) (hex : M₀.extern = fmapEmpty) {Q : LabelMap} (hlb : M₀.labelsAt ctl.proc = Q) {p : sym} (hp : ctl.proc = some p) {th₀ : thread_state} (hstack : th₀.stack0 = ctl.toStack) (hproc : th₀.current_proc_opt = ctl.proc) (hel : th₀.exec_loc = ctl.execLoc) (hcl : th₀.current_loc = ctl.curLoc) (fl : Nat) (acc : Fmap thread_id (List core_step2)) {dst : driver_state} {e e' : CoreExpr} {ev0 : Fmap sym value} {evs : List (Fmap sym value)} {ρ' : EnvStack} {σ' : Mem} (hth : dst.core_state0.thread_states =
+theorem loop_step_frag (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCtx} {ctl ctl' : Ctl}
+    (htd : M₀.tagDefs = fmapEmpty) (hex : M₀.extern = fmapEmpty) {Q : LabelMap}
+    (hlb : M₀.labelsAt ctl.proc = Q) {p : sym} (hp : ctl.proc = some p) {th₀ : thread_state}
+    (hstack : th₀.stack0 = ctl.toStack) (hproc : th₀.current_proc_opt = ctl.proc)
+    (hel : th₀.exec_loc = ctl.execLoc) (hcl : th₀.current_loc = ctl.curLoc) (fl : Nat)
+    (acc : Fmap thread_id (List core_step2)) {dst : driver_state} {e e' : CoreExpr}
+    {ev0 : Fmap sym value} {evs : List (Fmap sym value)} {ρ' : EnvStack} {σ' : Mem}
+    (hth : dst.core_state0.thread_states =
       [(0, (none, { th₀ with arena := e, env := ev0 :: evs }))]) (hext : dst.core_extern = fmapEmpty) (hfile : dst.core_file = M₀.file) (hQd : LabeledAt dst.core_run_state0 p Q) (hsup : dst.core_run_state0.sym_supply = ctl.sup.sym ∧
       dst.core_run_state0.excluded_supply = ctl.sup.excl) (hf : Frag e) (hdep : evalDepth e ≤ LemFuel.fuel) (hs : Step M₀ (e, ev0 :: evs, ctl, dst.layout_state) (e', ρ', ctl', σ')) :
     ∃ (rs' : core_run_state) (tr : List trace_event) (ctr : Nat),

@@ -370,7 +370,13 @@ theorem wpt_driver_done_fuel (hfuel : 2 ≤ LemFuel.fuel) {GF : BundledGFunctors
 
 
 /-- Public form over the syntactic fragment (R2 [USER 2026-09-07]). -/
-theorem wpt_driver_done (hfuel : 2 ≤ LemFuel.fuel) {GF : BundledGFunctors} [SpikeGpreS GF] {M₀ : MachineCtx} {ctl : Ctl} (htd : M₀.tagDefs = fmapEmpty) (hex : M₀.extern = fmapEmpty) {Q : LabelMap} (hlb : M₀.labelsAt ctl.proc = Q) {p : sym} (hp : ctl.proc = some p) {th₀ : thread_state} (hstack : th₀.stack0 = ctl.toStack) (hproc : th₀.current_proc_opt = ctl.proc) (hκ : ctl.κ = []) (hsb : M₀.runState.sym_supply ≤ ctl.sup.sym) (hQf : ∀ l params cont, lookupLabel (M₀.labelsAt ctl.proc) l = some (params, cont) →
+theorem wpt_driver_done (hfuel : 2 ≤ LemFuel.fuel) {GF : BundledGFunctors} [SpikeGpreS GF]
+    {M₀ : MachineCtx} {ctl : Ctl} (htd : M₀.tagDefs = fmapEmpty) (hex : M₀.extern = fmapEmpty)
+    {Q : LabelMap} (hlb : M₀.labelsAt ctl.proc = Q) {p : sym} (hp : ctl.proc = some p)
+    {th₀ : thread_state} (hstack : th₀.stack0 = ctl.toStack)
+    (hproc : th₀.current_proc_opt = ctl.proc) (hκ : ctl.κ = [])
+    (hsb : M₀.runState.sym_supply ≤ ctl.sup.sym)
+    (hQf : ∀ l params cont, lookupLabel (M₀.labelsAt ctl.proc) l = some (params, cont) →
       Frag cont) (hQd : ∀ l params cont, lookupLabel (M₀.labelsAt ctl.proc) l = some (params, cont) →
       evalDepth cont ≤ LemFuel.fuel) (Ls : ∀ [SpikeGS .hasLC GF], LabelSpecT GF) (e₀ : CoreExpr) (ev00 : Fmap sym value) (evs0 : List (Fmap sym value)) (σ₀ : Mem) (m₀ : SpikeHeapF SpikeCell) (hfrag : Frag e₀) (hdep : evalDepth e₀ ≤ LemFuel.fuel) (hcoh : Coh M₀.tagDefs σ₀ m₀) (ψ : value → Mem → Prop) (k : Nat) (hwp : ∀ [SpikeGS .hasLC GF],
       iprop(([∗map] i ↦ c ∈ m₀, cellOwn M₀.tagDefs (hlc := .hasLC) (GF := GF) i
@@ -435,7 +441,13 @@ theorem wpt_driver_done_alloc_fuel (hfuel : 2 ≤ LemFuel.fuel) {GF : BundledGFu
     example-specific `driverDone_step` create prefixes (charter P2:
     "no arrow may be supplied by an example-specific engine
     trace"). -/
-theorem wpt_driver_done_alloc (hfuel : 2 ≤ LemFuel.fuel) {GF : BundledGFunctors} [SpikeGpreS GF] {M₀ : MachineCtx} {ctl : Ctl} (htd : M₀.tagDefs = fmapEmpty) (hex : M₀.extern = fmapEmpty) {Q : LabelMap} (hlb : M₀.labelsAt ctl.proc = Q) {p : sym} (hp : ctl.proc = some p) {th₀ : thread_state} (hstack : th₀.stack0 = ctl.toStack) (hproc : th₀.current_proc_opt = ctl.proc) (hκ : ctl.κ = []) (hsb : M₀.runState.sym_supply ≤ ctl.sup.sym) (hQf : ∀ l params cont, lookupLabel (M₀.labelsAt ctl.proc) l = some (params, cont) →
+theorem wpt_driver_done_alloc (hfuel : 2 ≤ LemFuel.fuel) {GF : BundledGFunctors} [SpikeGpreS GF]
+    {M₀ : MachineCtx} {ctl : Ctl} (htd : M₀.tagDefs = fmapEmpty) (hex : M₀.extern = fmapEmpty)
+    {Q : LabelMap} (hlb : M₀.labelsAt ctl.proc = Q) {p : sym} (hp : ctl.proc = some p)
+    {th₀ : thread_state} (hstack : th₀.stack0 = ctl.toStack)
+    (hproc : th₀.current_proc_opt = ctl.proc) (hκ : ctl.κ = [])
+    (hsb : M₀.runState.sym_supply ≤ ctl.sup.sym)
+    (hQf : ∀ l params cont, lookupLabel (M₀.labelsAt ctl.proc) l = some (params, cont) →
       Frag cont) (hQd : ∀ l params cont, lookupLabel (M₀.labelsAt ctl.proc) l = some (params, cont) →
       evalDepth cont ≤ LemFuel.fuel) (Ls : ∀ [SpikeGS .hasLC GF], LabelSpecT GF) (e₀ : CoreExpr) (ev00 : Fmap sym value) (evs0 : List (Fmap sym value)) (σ₀ : Mem) (m₀ : SpikeHeapF SpikeCell) (B : Nat) (hfrag : Frag e₀) (hdep : evalDepth e₀ ≤ LemFuel.fuel) (hl : LaunchCoh M₀.tagDefs σ₀ m₀ B) (ψ : value → Mem → Prop) (k : Nat) (hwp : ∀ [SpikeGS .hasLC GF],
       iprop(([∗map] i ↦ c ∈ m₀, cellOwn M₀.tagDefs (hlc := .hasLC) (GF := GF) i
@@ -532,7 +544,8 @@ theorem DriverDoneCtl.mono {M₀ : MachineCtx} {th₀ : thread_state} {e : CoreE
 
 /-- Value delivery at the EMPTY call stack, bare form: PROGRAM-DONE
     recorded and drained (`driverDone_value` at a live control). -/
-theorem driverDoneCtl_value (hfuel : 0 < LemFuel.fuel) (M₀ : MachineCtx) (th₀ : thread_state) {a b : List annot} (v : value)
+theorem driverDoneCtl_value (hfuel : 0 < LemFuel.fuel) (M₀ : MachineCtx) (th₀ : thread_state)
+    {a b : List annot} (v : value)
     (ρ : EnvStack) (p : Option sym) (ℓ : exec_location) (lc : CerbLocation.Loc) (sp : RunSup)
     (σ : Mem) (ψ : value → Mem → Prop) (hψ : ψ v σ) (k : Nat) :
     DriverDoneCtl M₀ th₀ (ofValA (.pure a b v)) ρ ⟨[], p, ℓ, lc, sp⟩ σ ψ k := by
@@ -948,7 +961,17 @@ theorem wpt_driver_done_procs_fuel (hfuel : 2 ≤ LemFuel.fuel) {GF : BundledGFu
     entry procedure `p`. `wpt_driver_cps_fuel` at the empty stack with the
     PROGRAM-DONE continuation (`driverDoneCtl_value`/`_annot`, budget
     `kc = 0`). -/
-theorem wpt_driver_done_procs (hfuel : 2 ≤ LemFuel.fuel) {GF : BundledGFunctors} [SpikeGpreS GF] {M₀ : MachineCtx} (htd : M₀.tagDefs = fmapEmpty) (hex : M₀.extern = fmapEmpty) (hPf : M₀.FragProcs) (hPd : M₀.ProcsDepth LemFuel.fuel) {th₀ : thread_state} {p : sym} {params : List (sym × core_base_type)} {body : CoreExpr} (hq : lookupProc M₀.file M₀.extern p = some (params, body)) (ℓ : exec_location) (lc : CerbLocation.Loc) (sp : RunSup) (hsb : M₀.runState.sym_supply ≤ sp.sym) (Θ : ∀ [SpikeGS .hasLC GF], ProcSpecT GF) (Ls : ∀ [SpikeGS .hasLC GF], LabelSpecT GF) (e₀ : CoreExpr) (ev00 : Fmap sym value) (evs0 : List (Fmap sym value)) (σ₀ : Mem) (m₀ : SpikeHeapF SpikeCell) (B : Nat) (hfrag : Frag e₀) (hdep : evalDepth e₀ ≤ LemFuel.fuel) (hl : LaunchCoh M₀.tagDefs σ₀ m₀ B) (ψ : value → Mem → Prop) (k : Nat) (hwp : ∀ [SpikeGS .hasLC GF],
+theorem wpt_driver_done_procs (hfuel : 2 ≤ LemFuel.fuel) {GF : BundledGFunctors} [SpikeGpreS GF]
+    {M₀ : MachineCtx} (htd : M₀.tagDefs = fmapEmpty) (hex : M₀.extern = fmapEmpty)
+    (hPf : M₀.FragProcs) (hPd : M₀.ProcsDepth LemFuel.fuel) {th₀ : thread_state} {p : sym}
+    {params : List (sym × core_base_type)} {body : CoreExpr}
+    (hq : lookupProc M₀.file M₀.extern p = some (params, body)) (ℓ : exec_location)
+    (lc : CerbLocation.Loc) (sp : RunSup) (hsb : M₀.runState.sym_supply ≤ sp.sym)
+    (Θ : ∀ [SpikeGS .hasLC GF], ProcSpecT GF) (Ls : ∀ [SpikeGS .hasLC GF], LabelSpecT GF)
+    (e₀ : CoreExpr) (ev00 : Fmap sym value) (evs0 : List (Fmap sym value)) (σ₀ : Mem)
+    (m₀ : SpikeHeapF SpikeCell) (B : Nat) (hfrag : Frag e₀) (hdep : evalDepth e₀ ≤ LemFuel.fuel)
+    (hl : LaunchCoh M₀.tagDefs σ₀ m₀ B) (ψ : value → Mem → Prop) (k : Nat)
+    (hwp : ∀ [SpikeGS .hasLC GF],
       iprop(([∗map] i ↦ c ∈ m₀, cellOwn M₀.tagDefs (hlc := .hasLC) (GF := GF) i
           (.own 1) c) ∗ allocBudget B) ⊢
         iprop(procSpecsT M₀ Θ ∗ blockSpecsT M₀ (some p) Ls Θ (readoutPost ψ) ∗
