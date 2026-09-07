@@ -29,8 +29,10 @@ the package changes except, conditionally, the regenerated capability manifest
   sourcing the container's `env.sh` outside the worktree),
   `TMPDIR=<worktree>/cerberus-heaplang/.lake` (`test_unit.sh` uses `mktemp
   "${TMPDIR:-/tmp}/…"`; `/tmp` files are not readable across shells here),
-  `CERB_MEM_MAX=40G`. `capped` prints one env line and must never print an
-  uncapped warning.
+  `CERB_MEM_MAX=40G`. `capped` prints its env line only when it sources the
+  container env — with both variables set it prints nothing (erratum
+  2026-09-07 at the landing, from the range audit's N2: the earlier text here
+  said it always prints one) — and must never print an uncapped warning.
 - worktree: `worktrees/codex-refinement`, branch `codex/total-refines-partial`,
   cut from that main and primed (`.lake`, `.cerberus-ws`) from a FRESHLY GATED
   cache of the same Lean tree.

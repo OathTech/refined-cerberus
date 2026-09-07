@@ -931,7 +931,13 @@ them the small axioms, each proved once as an atomic step specification
 at the raw WP are iris-lean's own `wp_frame_r`/`wp_mono`; there is no
 raw-WP sequencing rule — at a populated label map it is false (a jump
 discards the sequencing context), which is why the label-context
-judgments exist. The rule set, one line per family with every theorem
+judgments exist. The total judgment refines the partial one: `wps_of_wpt`
+(Wpt.lean) turns a total derivation at any budget and the empty procedure
+table into a partial derivation at the label specification with its variant
+index forgotten (`LabelSpecT.forget`, the `∃ m` erasure); `t4_wps_of_wpt`
+(CorpusT4Exhibit.lean) is the while-loop program's partial judgment as a
+corollary of its total certificate (the Codex refinement slice,
+2026-09-07). The rule set, one line per family with every theorem
 named, is the public/internal table in `API.lean`'s header, maintained
 once; the walkthrough §3 quotes the small axioms, frame, create, one
 loop rule and the total judgment verbatim. The families: the five
@@ -1034,9 +1040,9 @@ lacks them, so they vary with the semantics workspace's build state at
 the same pin (measured 2249/3536 vs 2210/3474, `docs/2026-09-02_audit-response-4-notes.md`):
 
 ```
-info: CerberusHeapLang/Audit.lean:1121:0: CerberusHeapLang export pins: 904 trio-exact, 6 axiom-free-exact
-info: CerberusHeapLang/Audit.lean:1121:0: CerberusHeapLang axiom sweep: every theorem bounded by the trio (N swept, internal details included — count informational, environment-dependent)
-info: CerberusHeapLang/Audit.lean:1121:0: CerberusHeapLang banned-axiom sweep: sorryAx/ofReduceBool/ofReduceNat absent from all cones (M constants of every kind swept, internal details included — count informational, environment-dependent)
+info: CerberusHeapLang/Audit.lean:1123:0: CerberusHeapLang export pins: 906 trio-exact, 6 axiom-free-exact
+info: CerberusHeapLang/Audit.lean:1123:0: CerberusHeapLang axiom sweep: every theorem bounded by the trio (N swept, internal details included — count informational, environment-dependent)
+info: CerberusHeapLang/Audit.lean:1123:0: CerberusHeapLang banned-axiom sweep: sorryAx/ofReduceBool/ofReduceNat absent from all cones (M constants of every kind swept, internal details included — count informational, environment-dependent)
 Build completed successfully (… jobs).
 ```
 

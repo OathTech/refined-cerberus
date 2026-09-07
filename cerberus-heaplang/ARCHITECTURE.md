@@ -222,7 +222,15 @@ every return meeting the postcondition a step later. Step.
 well-founded recursion on a step budget `k`. A jump must decrease the
 budget, `⌜1 + m ≤ k⌝` (`:167`). A call splits it, `1 + m + k' ≤ k`
 (`:172`): the call round, the callee including its return, the
-continuation. Both judgments are stated at the top invariant mask `⊤`
+continuation. The total judgment REFINES the partial one: `wps_of_wpt`
+(`Wpt.lean:5257`) — a total derivation at any budget and the empty
+procedure table entails the partial judgment at the ∃-forgotten label
+specification (`LabelSpecT.forget`, `:5252`), by strong induction on the
+budget, clause by clause (the total side is the stronger one in every
+clause: no later, no credit, extra pure bounds); `t4_wps_of_wpt`
+(`CorpusT4Exhibit.lean:1467`) is its instance on the while-loop corpus
+program — a corollary of `t4_wpt`, not a new derivation. The general
+procedure table is KOI C21. Both judgments are stated at the top invariant mask `⊤`
 (19 code sites in `Wps.lean`, 26 in `Wpt.lean`, docstring mentions
 excluded; DERIVED by grep). The raw-WP layer of
 `Rules.lean` is mask-generic — `AtomicStep` (`:220`), `wp_of_atomic`
