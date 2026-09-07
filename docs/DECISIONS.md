@@ -3016,3 +3016,501 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   this") — recorded as such, no violation; R7 the fully-merged branches are
   kept for now. [USER]: "this all seems reasonable" on the charter as a
   whole. L1 starts on the L0 merge.
+- **2026-09-07 [AGENT] RE-APPENDED FROM THE PARKED BRANCH — two orchestrator entries of
+  2026-09-05 that were written on `dialect-e5` and never reached main (the branch was
+  parked; L1 restores DECISIONS to main's file, so they are re-appended here
+  VERBATIM, in their original order, dated as written):**
+- **2026-09-05 [USER] E1–E4 MERGED (main 8eeaf92); E5–E7 APPROVED** (verbatim): "yes to
+  the merge"; on the alternative of switching directly to the RefinedC
+  layer — "we'd have to solve many of the same problems but on a more
+  realistic target logic?" — [AGENT] assessment: E5–E7 are the referent's
+  dialect, not demo features (every C assignment is the negative-action
+  protocol, every C call is `Eccall`); the mirror/fragment layer is what
+  the RefinedC copy inherits, so the work is done once either way; the
+  simple logic is the better debugging environment for the two
+  adequacy-shape changes (E6's scheduler lift, E7's outcome-list forms);
+  cost 1–2 days at measured velocity vs weeks for the layer's start; the
+  coupling library extracted AFTER E7 carries emitted-Core coverage from
+  birth with the demo as its regression suite. [USER]: "Agree, Let's do
+  E5-E7." Sequence: E5 → E6 (own stop-and-report if the scheduler induction
+  resists) → E7 → the v1 tag → the fresh ARCHITECTURE review → the
+  coupling-library extraction → the RefinedC layer. The reader's
+  characterisation, agreed: the demo verifies the elaborator's Core for
+  the programs it certifies, through a mechanically checked transcription
+  (blind spots named: `save`-initialiser leaves; the transcribed stdlib
+  checked against the pinned source), with the E1–E3 synthetics as
+  scaffolding; the elaborator-in-the-statement form remains the named
+  target.
+- **2026-09-05 [AGENT] E5 PARKED ON `dialect-e5` (f63f22d; six commits on main 8eeaf92) —
+  A COMMITTED PARK RECORD: THE SLICE HAS ENDED; working past it needs the
+  operator's approval.** Trigger: [USER] "I'm considering handing off to a
+  different agent, so it'd be good to move to park this if it's not near
+  convergence"; the slice-2 worker's honest estimate on request: NOT near
+  (< 2 h) — medium, 4–8 h of compile-iterate to a certified call-free
+  corpus program; parked per instruction at a coherent green commit.
+  **Slice 1 (aec1c75, f508ef4, b36ebf2)** — record `cerberus-heaplang/docs/
+  2026-09-05_e5-notes.md` §1–§11, closure successor `docs/2026-09-05_fragment-closure-e5-notes.md`,
+  snapshot `docs/2026-09-05_e5-signatures-post.txt`: the negative-action
+  protocol behind every assignment MIRRORED and classified (`Step.neg_bound`
+  with the exclusion id and fresh symbol drawn from `Ctl.sup`, the
+  excluded-store steps; new arms `ShippedRefusal.panic_step` (a `neg` with
+  no enclosing `bound` — the engine's opaque panic step), `OpenRound.neg_sseq`
+  (residual), `ShippedRefusal.fork` for `nd`); `case` at a non-value
+  scrutinee (`Frag.case_op`); the run-state supplies as WRITERS on
+  `Ctl.sup` with the tie carried through `loop_step_frag*`, `DriverSafeCtl`/
+  `DriverDoneCtl`/`DriverDoneAt`, `prodCtl sup` (= the production initial
+  supplies, by `⟨rfl, rfl⟩`) — every production statement's text changed by
+  that argument (listed §2/§8). SOUNDNESS CATCH before landing (§3): the
+  E4-era `wps_bound`/`wpt_bound` would have been UNSOUND at the E5 fragment
+  (the `bound` frame performs the neg round) → premise `negFree b = true ∧
+  pot b ≤ lemDefaultFuel` (`Step.negFree_preserved`, `pot` made additive,
+  `Step.pot_le`); discharged by `rfl` at every call site; nothing merged
+  was ever unsound (the fragment only grows here). Census (derived) 4362 →
+  4584: ADDED 224 / REMOVED 2 / CHANGED 82 (26 supplies-forced, 2 bound
+  rules, 54 other, all listed). Pins 652 → 712 trio-exact. Warnings 60 → 48.
+  Orchestrator FULL gate at the slice-1 head b36ebf2 (64G cap), verbatim
+  (per-module boundary lines elided):
+  ```
+  == gate 1: banned proof-method grep (native_decide / bv_decide / ofReduce*) ==
+  ok: no banned proof-method references
+  == gate 2: capped build, cerberus-heaplang (elaborates its axiom audit) ==
+  info: CerberusHeapLang/Audit.lean:889:0: CerberusHeapLang export pins: 712 trio-exact
+  info: CerberusHeapLang/Audit.lean:889:0: CerberusHeapLang axiom sweep: every theorem bounded by the trio (5471 swept, internal details included — count informational, environment-dependent)
+  info: CerberusHeapLang/Audit.lean:889:0: CerberusHeapLang banned-axiom sweep: sorryAx/ofReduceBool/ofReduceNat absent from all cones (8344 constants of every kind swept, internal details included — count informational, environment-dependent)
+  Build completed successfully (466 jobs).
+  ok: cerberus-heaplang build green
+  == speedbump: rule-use and classification manifest (regenerate; red on a red row or drift) ==
+  ok: capability manifest regenerated, no drift
+  == speedbump: corpus skeleton (hand-transcribed emitted Core vs docs/corpus-e0; scripts/corpus_skeleton.lean) ==
+  ok: corpus skeleton — every transcription matches its emitted text, every plant mismatches
+  == speedbump: import direction (semantics → heap → rules → adequacy → clients) ==
+  ok: import direction — 17 core modules, none imports an exhibit/example/production module
+  == speedbump: client boundary (positive clients mention no logic internals; scripts/boundary_check.sh) ==
+  BOUNDARY: 24 modules checked, 0 internals mention(s) in total, exit=0
+  ok: client boundary — no unallowlisted internals mention
+  ALL GATES GREEN
+  GATE-EXIT=0
+  ```
+  **Slice 2 (09a89c7 + the PARK record f63f22d)** — `e5-notes.md` §S2.1–S2.9:
+  DONE: the WP-level SUPPLY FLOOR `⌜M.runState.sym_supply ≤ sp.sym⌝ -∗` in
+  `wps.pre`/`wpt.pre` (JUDGMENT TEXT CHANGE, threaded through both
+  collapses, the six `*_sound*` faces (`hsb`), `wpt_driver_*`; `eo/fr_wp_readout`
+  gain `hsb`); rule faces at both strata `wps/wpt_case_eval`,
+  `wps/wpt_excluded_store(_eval)`, `wps/wpt_neg_round`, `wps/wpt_bound_wseq_tuple`,
+  and `wps/wpt_neg_bound` — THE ASSIGNMENT PROTOCOL AS ONE DERIVED RULE
+  (premises: the points-to and operand facts; the client sees only the
+  fresh binder `s = fresh_given_int k` with `M.runState.sym_supply ≤ k`;
+  `wpt` at budget `16 ≤ k`); the exclusion protocol's race verdict lemmas;
+  `negFree` admits `Eexcluded`. [AGENT] DESIGN POINT OPEN TO VETO (§S2.5):
+  the seeded profiles `procCtx`/`procCtxF` NORMALISE the run state's
+  supplies to the entry control's `⟨0,0⟩` (instead of a `rs.sym_supply = 0`
+  premise on ~20 exports or a new `MachineCtx` field); `procCtx_runState`/
+  `procCtxF_runState` retired for `_runState_labeled`/`_sym_supply`. Oracle
+  (§S2.6, primary binary at 9a7f7ad31, NOT the pin): t5 → `Specified(1)`,
+  t6 → `Specified(20)`, t4 → `Specified(10)`. REMAINING (§S2.7, resume plan
+  §S2.9): pins for the new theorems (measured trio-exact while drafting,
+  UNPINNED at the park — the exhaustive-pins convention is therefore
+  temporarily unmet); five stale NO-RULE manifest rows; MirrorCoverage
+  witnesses; the skeleton extension for scrutinee positions + plant; t5/t6/
+  t4 verbatim transcriptions, `Frag` proofs (the `case_op` `hbr` machinery,
+  `match_pattern` characterisations — `zip` truncation noted), `wpt`
+  derivations, `*_certified_production` with `hsup : 600 ≤ sup`; brief items
+  2–4 (`seq_rmw`, `PtrValidForDeref`, `Elet` — not needed by the E1–E5
+  acceptance set, not started); API.lean's stale `Frag.pot_le_two` cell; the
+  census snapshot; `cite_check` last. No range audit has run on E5 (audits
+  run at slice end; the slice is parked, not ended by acceptance) — the
+  resumer's FIRST action after completing slice 2 is the range audit
+  8eeaf92..HEAD. Orchestrator FULL gate at the park head f63f22d (64G cap;
+  Lean content = 09a89c7), verbatim:
+  ```
+  == gate 1: banned proof-method grep (native_decide / bv_decide / ofReduce*) ==
+  ok: no banned proof-method references
+  == gate 2: capped build, cerberus-heaplang (elaborates its axiom audit) ==
+  info: CerberusHeapLang/Audit.lean:889:0: CerberusHeapLang export pins: 712 trio-exact
+  info: CerberusHeapLang/Audit.lean:889:0: CerberusHeapLang axiom sweep: every theorem bounded by the trio (5538 swept, internal details included — count informational, environment-dependent)
+  info: CerberusHeapLang/Audit.lean:889:0: CerberusHeapLang banned-axiom sweep: sorryAx/ofReduceBool/ofReduceNat absent from all cones (8420 constants of every kind swept, internal details included — count informational, environment-dependent)
+  Build completed successfully (466 jobs).
+  ok: cerberus-heaplang build green
+  == speedbump: rule-use and classification manifest (regenerate; red on a red row or drift) ==
+  ok: capability manifest regenerated, no drift
+  == speedbump: corpus skeleton (hand-transcribed emitted Core vs docs/corpus-e0; scripts/corpus_skeleton.lean) ==
+  ok: corpus skeleton — every transcription matches its emitted text, every plant mismatches
+  == speedbump: import direction (semantics → heap → rules → adequacy → clients) ==
+  ok: import direction — 17 core modules, none imports an exhibit/example/production module
+  == speedbump: client boundary (positive clients mention no logic internals; scripts/boundary_check.sh) ==
+  BOUNDARY: 24 modules checked, 0 internals mention(s) in total, exit=0
+  ok: client boundary — no unallowlisted internals mention
+  ALL GATES GREEN
+  GATE-EXIT=0
+  ```
+  Handoff state: main 8eeaf92 (E1–E4 merged, four audits, all rulings and
+  errata recorded); `dialect-e5` parked at f63f22d (gated, unaudited);
+  `repin-scout2` parked (07ceb44); worktrees `dialect-e1` (on `dialect-e5`)
+  and `repin-scout2` primed; container `.tmp/orch` and `.tmp/e5-scratch` are
+  ephemeral (the gate tails are in this register). Upstream waits: the next
+  cerberus-lean pin, the fuel half, the lem-lean requests, the concurrency
+  S1 answer. Operator decisions outstanding: the Lane C note's nine
+  questions; the §S2.5 design point.
+
+
+## 2026-09-05 — Resume E5 and establish the demo acceptance target
+
+[USER] "Yes, please work on E5 & beyond - our intended near-term stop-state
+is that our 'demo' Reynolds/O'Hearn logic is (1) good, clean, well-defined
+in every way, a good demo exemplar, and (2) it works on real emitted core
+produced by cerberus."
+
+This resumes the `dialect-e5` park. [AGENT] The working acceptance
+interpretation and checkpoint evidence are recorded in
+`cerberus-heaplang/docs/2026-09-05_e5-resume.md`: emitted-program logic
+proofs through genuine semantics, precise fragment/assumption/fuel/file
+boundaries, public-rule examples and final coverage/architecture review.
+The first resumed checkpoint extends the skeleton instrument, transcribes
+t5 and proves whole-term fragment membership. It does not certify t5's
+execution yet. Existing per-merge and per-push sign-offs remain required.
+
+
+## 2026-09-05 — E5 t5 execution checkpoint
+
+[AGENT, within the resumed user scope] The emitted t5_ifelse main now has
+a complete fragment witness, a public-rule total derivation at budget 88,
+and a theorem over the shipped driver returning exactly one Active
+Specified(1), unblocked with empty stdout/stderr. The initial symbol
+supply assumption is explicit (`600 ≤ sup`); the file is still the
+one-procedure wrapper with the checked three-function std.core fragment,
+not the full frontend file (KOI A7). Details, axiom measurement, census,
+and FULL-gate evidence: `cerberus-heaplang/docs/2026-09-05_e5-resume.md`.
+
+The corpus consumes the total E5 rule faces, as contemplated by the prior
+park's §S2.5. The proved partial faces remain undemonstrated. The manifest
+now represents this honestly with RULE-PARTIAL-UNDEMONSTRATED, symmetric
+to its existing opposite case: both rules must exist, the total rule
+must have a consumer, and the partial rule must have none until the row
+is reclassified. No partial program proof is claimed by this choice.
+
+This closes the t5 checkpoint, not E5 or the demo acceptance target.
+t6/t4, E5's range review (including seeded supply normalization and
+remaining documentation citations), the refreshed dependency/fuel scout,
+E6/E7 and final hygiene/architecture work remain. Main and dependency
+pins are unchanged; no merge or push is part of this checkpoint.
+
+
+## 2026-09-05 — Draft a charter for long-cycle demo completion
+
+[USER] "Great, I agree. Is it reasonable to run long-cycle on this set
+of goals? One way to do this is write them up in a charter doc, and then
+I can set an explicit 'goal' command which you can execute against"
+
+[AGENT] Drafted `docs/2026-09-05_demo-completion-charter.md` for that
+explicit adoption. It consolidates the already authorized two-part demo
+goal, E5–E7 and the dependency/fuel update, the emitted-file/library
+connection, exemplar cleanup and final review. It preserves the accepted
+corpus minus t7 and the user-permitted checked transcription boundary;
+it does not require a C frontend correctness theorem. The current
+three-function wrapper plus skeleton check does not satisfy the proposed
+file-integration criterion.
+
+The proposed endpoint is a reviewed, fully validated, merge-ready
+candidate with an acceptance report. Routine checkpoints continue the
+work; required reviews, per-merge and per-push sign-offs retain their
+existing process. No goal has been activated by drafting this document,
+and no dependency pin or proof source changes in this docs-only slice.
+
+
+## 2026-09-05 — User adopts the demo completion charter as an active goal
+
+[USER] "Complete the work described in
+docs/2026-09-05_demo-completion-charter.md in full. Push through to a
+reviewed, fully validated, merge-ready candidate. Work autonomously within
+its scope, maintain progress records and completion evidence. respect the
+existing review, merge and push approval boundaries."
+
+[USER, paraphrase] Standing permission to request an early exit if a
+technical assumption proves false, a strategic question cannot be resolved
+within the project's long-term objectives, or another unexpected situation
+arises. Ordinarily the agent should resolve strategic choices itself.
+This permission does not turn an unfinished goal into a completed one.
+
+[AGENT] Charter status is ACTIVE. Revalidated clean `dialect-e5` at
+`4970bc1`, with the t5 proof checkpoint at `1d04dd7`; the goal service
+confirms the full objective is active without a token budget. Next work:
+t6's emitted switch transcription, whole-term fragment witness and public
+logic proof, followed by t4 and the remaining charter milestones.
+
+
+## 2026-09-05 — t6 complete-term membership checkpoint
+
+[AGENT, active charter] t6's emitted switch is transcribed in full and has
+a fragment witness for every branch and every matched payload. Its 299
+skeleton tokens and all applicable mutation plants pass. Eleven new
+theorems are measured and pinned at the classical trio; the fast gate
+passes with 790 exact pins and the exhaustive sweeps. Record and exact
+evidence: `cerberus-heaplang/docs/2026-09-05_e5-t6-notes.md`.
+
+This intermediate checkpoint does not certify t6's execution. Continue
+with its registered continuations and public total proof, then t4 and
+the remaining charter. No park, merge, push or pin change occurs here.
+
+
+## 2026-09-05 — t6 shipped-driver checkpoint, full gate green
+
+[AGENT, active charter] `t6_wpt` proves the complete emitted switch at
+budget 78 through public rules; `t6_certified_production` establishes
+exactly one Active Specified(20), unblocked with empty output streams,
+at initial supply at least 600. All five registered continuations are
+checked against the engine collector and have fragment/potential proofs.
+The file is still the three-function std.core wrapper (KOI A7 open).
+
+Thirty execution-slice theorems were individually measured: 28 trio-exact
+pins, one propext-only, one axiom-free. The FULL gate passes with 818
+exact pins, exhaustive sweeps, 24 consumers, 16 claim rows, unchanged
+76-variant classification and zero boundary violations. Record, exact
+output and next action: `cerberus-heaplang/docs/2026-09-05_e5-t6-notes.md`.
+
+The collector's label insertion has a different BEq spelling from env
+insertion; two EnvLaws lemmas handle it directly. No core judgment,
+semantics pin or adequacy statement changes in this slice. Shared t5/t6
+proof scaffolding remains an explicit cleanup item for the final demo.
+Continue the active goal with t4; E5 acceptance, its independent range
+review and all later charter milestones remain open. No merge or push.
+
+
+## 2026-09-05 — t4 whole-term membership checkpoint
+
+[AGENT, active charter] t4's raw while-body transcription retains its
+nested truth conversions, both short-circuit branches, negative stores,
+four labels and dead cleanup. Its 591-token skeleton and all applicable
+plants pass; the sequence grouping was separately inspected against the
+pinned frontend source. Seventeen new fragment/selection theorems were
+measured and pinned at the classical trio. The fast gate passes with 835
+exact pins and the exhaustive sweeps. Evidence and the explicit remaining
+transcription boundary: `cerberus-heaplang/docs/2026-09-05_e5-t4-notes.md`.
+
+This is membership progress, not an execution certificate. Continue with
+the public total loop derivation and production result, factoring shared
+load/assignment helpers as needed. The anticipated result 10 remains a
+source calculation until proved. E5 review, the file connection and all
+later charter milestones remain open. Main and pins are unchanged; no
+park, merge or push occurs.
+
+
+## 2026-09-05 — Shared emitted load proof and t4 label-registration checkpoint
+
+[AGENT, active charter] Factored t4/t5/t6's common integer-load AST and
+public total derivation into `emittedIntLoad` and
+`Examples/EmittedInt.lean`, retaining the existing t5/t6 theorem statements
+and budgets. `CorpusT4Exhibit.lean` now checks all four continuations
+against the engine collector and proves their fragment/potential bounds
+and the current library-fragment file's registration equation. It does
+not yet prove the complete loop or its production result.
+
+The fifteen new theorem cones were individually measured; fourteen have
+exact classical-trio pins and one is propext-only. The FULL gate passes
+with 849 pins, 25 consumers, unchanged coverage classifications and no
+boundary violations. Evidence and the next concrete proof obligations:
+`cerberus-heaplang/docs/2026-09-05_e5-t4-notes.md`. The assignment helper
+factoring and broader exemplar cleanup remain open. Continue the active
+goal; no park, merge, push or pin change occurs.
+
+
+## 2026-09-06 — t4 controlling-expression proof and annotated strong binding
+
+[AGENT, active charter] t4's complete raw controlling expression now has
+a public total proof for in-range contents of its two owned integer
+cells: the conjunction costs at most 63, the final truth conversion and
+bound cost at most 72, and Boolean decoding costs 4. The proof retains
+both short-circuit paths and the dynamic annotations until the emitted
+bound. Added the partial and total annotated strong-symbol-binding rules;
+the existing engine step, fragment and adequacy spine already cover this
+case. The total face has a t4 client; the partial face is explicitly
+undemonstrated pending E5's API/coverage disposition.
+
+All fifteen new theorem cones are measured and pinned at the classical
+trio. The FULL gate passes with 864 pins, unchanged 76 variants (now six
+RULE-PARTIAL-UNDEMONSTRATED and 24 NO-RULE), 17 claim rows, 25 consumers,
+and zero boundary violations. Updated affected API/coverage claims.
+Evidence: `cerberus-heaplang/docs/2026-09-06_e5-t4-condition.md`.
+
+This completes the controlling-expression component, not t4's full loop
+or production result. Continue with the effectful assignments, their
+shared protocol and the decreasing total budget. The E5 range review,
+full-file/library criterion and later charter milestones remain open.
+Main and pins are unchanged; this is not a park, merge or push.
+
+
+## 2026-09-06 — t4 additions and exact read footprints
+
+[AGENT, active charter] Proved both emitted t4 assignment RHSs through
+public total rules: s+i at budget 18 and i+1 at budget 14, with explicit
+operand/sum bounds and owned-cell read hypotheses. The two-load proof
+follows the actual unsequenced operand order and checks read/read race
+freedom while retaining both annotations. A shared addition-tail proof
+uses the existing C addition rule.
+
+The atomic whole-cell load proof now exposes its already-proved exact
+read footprint. Added partial/total footprint-preserving load faces and
+a shared emitted-load derivation; existing public load statements and
+budgets are preserved. No engine, mirror, fragment, memory invariant or
+adequacy definition changed. The new partial face has no partial client
+and is explicitly recorded as RULE-PARTIAL-UNDEMONSTRATED, pending the
+charter's useful-client or reviewed API/coverage disposition.
+
+Seven new theorem cones were individually measured and pinned at the
+classical trio; changed load theorem cones were also checked. The FULL
+gate passes with 871 exact pins, 77 variants (seven partial-undemonstrated,
+zero red), 17 claim rows and no boundary violations. Corrected the Rules
+citations displaced by this change and one clearly attributed older
+reference. Evidence: `cerberus-heaplang/docs/2026-09-06_e5-t4-addition.md`.
+
+Continue with the assignments' shared negative-store protocol, then the
+loop invariant, decreasing budget and t4 production theorem. E5 range
+review, the actual full-file/library connection and later charter
+milestones remain open. Main and pins are unchanged; no park, merge or
+push occurs.
+
+
+## 2026-09-06 — t4 assignments and body through the back edge
+
+[AGENT, active charter] t4's two assignments now have public total proofs
+at budgets 40 and 36. The complete body, including the continue save and
+the run to the registered while continuation, costs 82 plus the next
+label budget. Its continuation must establish that next label precondition;
+this is not yet the decreasing invariant or a complete loop theorem.
+The proofs retain RHS annotations through the emitted negative-store
+protocol and preserve the source pointers across fixed and fresh symbols,
+with the existing supply floor of 600 explicit.
+
+Factored the integer memory-value construction and negative-store proof
+into Examples/EmittedInt, used by t4/t5/t6. Existing t5/t6 statements,
+budgets and transcriptions are unchanged. Added the derived pure-left
+unsequenced rule, evaluating its pointer operand in the RHS's resulting
+frame. No engine, mirror, fragment, memory invariant or adequacy
+definition changed. The seven partial-undemonstrated rule rows still
+require the charter's useful-client or reviewed API/coverage disposition.
+
+Fourteen new theorem cones were measured and pinned at the classical
+trio; changed t5/t6 theorem cones were also measured. The FULL gate passes
+with 885 exact pins, unchanged coverage classifications, 17 claim rows
+and no boundary violations. The existing t1/t5/t6 production proofs are
+revalidated. Evidence and the next loop obligations:
+`cerberus-heaplang/docs/2026-09-06_e5-t4-body.md`.
+
+Continue with the decreasing while-label invariant, byte-image readouts,
+false-condition/cleanup/return path and t4 production result. E5 range
+review, the full-file/library criterion and later charter milestones
+remain open. Main and dependency pins are unchanged; no park, merge or
+push occurs.
+
+
+## 2026-09-06 — t4 complete loop and shipped-driver checkpoint
+
+[AGENT, active charter] `t4_wpt` proves the full emitted while program
+through public total rules at budget 915. Its invariant owns i = n and
+s = sum(0..n−1), n ≤ 5; the label budget decreases by 159 at the back
+edge and reserves 98 for exit/return. The proof retains short-circuiting,
+both assignments, all four registered continuations and the dead cleanup.
+`t4_certified_production` proves exactly one Active Specified(10),
+unblocked with empty output streams, at initial supply at least 600.
+Its file remains the three-function library fragment with empty
+implementation map; the charter's actual full-file criterion A7 is open.
+
+Seventeen new theorem cones were individually measured: eleven have exact
+classical-trio pins, four use propext/Quot.sound, and two are axiom-free.
+The FULL gate passes with 896 exact pins, exhaustive sweeps, unchanged
+coverage classifications and no boundary violations. The manifest's 17
+claim rows and the existing t1/t5/t6 proofs are revalidated. Record and
+verbatim evidence: `cerberus-heaplang/docs/2026-09-06_e5-t4-loop.md`.
+No engine, mirror, fragment, memory-invariant or adequacy definition changes.
+
+E5's t5/t6/t4 execution milestones are now complete on the current file
+boundary. Full E5 range review, seeded-supply review and the seven
+partial-face API/coverage dispositions remain open, so charter M1 is not
+yet accepted complete. Prepare the concrete review brief, then continue
+the dependency/fuel scout and later charter work. Main and dependency
+pins are unchanged. This is progress, not a park, merge, push or full-goal
+completion.
+
+
+## 2026-09-06 — E5 full range review prepared, dispatch pending
+
+[AGENT] Prepared `docs/2026-09-06_e5-range-review-brief.md` for candidate
+`f60cdcf` over the full `8eeaf92..f60cdcf` E5 range. Proposed scope is one
+fresh independent reviewer covering engine agreement, both judgments,
+supply normalization, all three emitted clients, shared helpers, public
+claims and the partial-face API/coverage disposition. The brief proposes
+retaining proved partial faces with explicit undemonstrated coverage;
+that proposal is not ratified and no gap is marked closed by preparing it.
+
+The candidate's full validation is recorded in the t4 completion note.
+No review is dispatched by this documentation step. Existing scope/scale
+approval applies before dispatch; no merge or push is requested. Continue
+independent dependency/fuel scouting while a review decision is pending.
+
+
+## 2026-09-06 — Dependency/fuel preflight while E5 review is pending
+
+[AGENT] Read the current upstream contracts against clean semantics
+`89f7e6885` and LemLib `f6542f8`. Pmap laws and quantified fuel have landed;
+layout sufficiency now carries explicit tag-acyclicity hypotheses, and
+configuration readers unfold to defaults. The old scout's breakage count
+and forecast are not current. `docs/2026-09-06_dependency-fuel-preflight.md`
+records the measured heads, contract changes and next isolated build.
+
+This is read-only source assessment, not a compatibility build or a pin
+change. E5 review dispatch is still pending user approval. The active
+charter continues; no merge, push or full-goal completion is claimed.
+- **2026-09-07 [AGENT] L1 LANDED ON `land/e5-complete` (0e161f4; 23 commits on main 901ef50)
+  — E5 COMPLETE, pulled from `dialect-e5` per the landing charter §2.** Record
+  `cerberus-heaplang/docs/2026-09-07_l1-landing-notes.md`; snapshot
+  `docs/2026-09-07_l1-signatures-post.txt`. TAKEN: all 20 content commits of
+  `dialect-e5` (aec1c75..cb46e4c), rebased with messages preserved (source →
+  landed table in the record §1) — the E5 slice 1 (the negative-action
+  protocol, supplies as writers), slice 2 (the supply floor, the rule faces,
+  `wps/wpt_neg_bound`), and the other agent's completion: t5, t6 and t4
+  transcribed VERBATIM from the elaborator's Core and certified through the
+  shipped driver (oracle re-run: `Specified(1)`/exit 1, `Specified(20)`/exit
+  20, `Specified(10)`/exit 10). NOT TAKEN (they stay on
+  `parked/demo-expansion-2026-09-07`): the other agent's DECISIONS delta
+  (main's file restored exactly; the branch's DECISIONS diff vs main = 0
+  lines), the charter/review-brief/dependency-preflight process docs.
+  KEPT with an [AGENT] landing note: `e5-resume.md` (the only record of the
+  t5 checkpoint's code; its unverifiable quotation replaced by R6's verbatim
+  text). Provenance greps after: "already authorized" 0, "[USER, paraphrase]"
+  0. R6 [USER 2026-09-07]: "yes, I approved this" — the work past the E5
+  park record was the operator's; no violation. Census (derived): slice-1
+  post → head 368 / 2 / 18 (auditor's 372/2/18 reproduced at the
+  pre-hygiene tree; −4 = deleted `t5Int*` aliases); `load_atomic` the only
+  pre-existing statement text change (strengthened: the footprint is now
+  `loadFootprint M.tagDefs pv ty`); headline statements SAME. KOI: state
+  line; B6 slack rows re-measured (t5 88 vs 69 → 21; t6 78 vs 67 → 13; t4
+  915 vs 593 → 324; `600 ≤ sup` SUFFICIENT not necessary — the composites
+  deliver at `sup = 0`); B18 NEW (R3, the seeded-supply normalisation as an
+  inert limitation with its mover); C19 rewritten. Hygiene: `EmittedInt` no
+  longer imports a client; T4/T6 no longer import T5; aliases deleted; one
+  generated `.eq_def` unpinned; pins 896 → 893; warnings 48. Orchestrator
+  FULL gate at 0e161f4 (64G cap; Lean content = d29f2b5), verbatim
+  (per-module boundary lines elided; record §8):
+  ```
+  == gate 1: banned proof-method grep (native_decide / bv_decide / ofReduce*) ==
+  ok: no banned proof-method references
+  == gate 2: capped build, cerberus-heaplang (elaborates its axiom audit) ==
+  info: CerberusHeapLang/Audit.lean:1066:0: CerberusHeapLang export pins: 893 trio-exact
+  info: CerberusHeapLang/Audit.lean:1066:0: CerberusHeapLang axiom sweep: every theorem bounded by the trio (6051 swept, internal details included — count informational, environment-dependent)
+  info: CerberusHeapLang/Audit.lean:1066:0: CerberusHeapLang banned-axiom sweep: sorryAx/ofReduceBool/ofReduceNat absent from all cones (9141 constants of every kind swept, internal details included — count informational, environment-dependent)
+  Build completed successfully (472 jobs).
+  ok: cerberus-heaplang build green
+  == speedbump: rule-use and classification manifest (regenerate; red on a red row or drift) ==
+  ok: capability manifest regenerated, no drift
+  == speedbump: corpus skeleton (hand-transcribed emitted Core vs docs/corpus-e0; scripts/corpus_skeleton.lean) ==
+  ok: corpus skeleton — every transcription matches its emitted text, every plant mismatches
+  == speedbump: import direction (semantics → heap → rules → adequacy → clients) ==
+  ok: import direction — 18 core modules, none imports an exhibit/example/production module
+  == speedbump: client boundary (positive clients mention no logic internals; scripts/boundary_check.sh) ==
+  BOUNDARY: 29 modules checked, 0 internals mention(s) in total, exit=0
+  ok: client boundary — no unallowlisted internals mention
+  ALL GATES GREEN
+  GATE-EXIT=0
+  ```
+  Range audit 901ef50..HEAD — THE FULL E5 AUDIT the park owed (slice 1 +
+  slice 2 + the completion + L1's fixes) — dispatched next on a fixed
+  detached copy; merge ask follows; L2 (the re-pin) starts on L1's merge.
