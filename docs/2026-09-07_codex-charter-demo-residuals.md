@@ -26,7 +26,8 @@ the orchestrator's landings (L2 the re-pin, L3 the actual file, L4
   stale-cache snapshot, not by the deliverable; the implementation was not
   retained), then D7 (alone — the round layer), then D1, D2, D3, D4. Stage
   1's D5 is being landed separately by the orchestrator; do not touch
-  `Examples/PartialClients.lean`.
+  `Examples/PartialClients.lean`. Stage 1's record is in this worktree as
+  `cerberus-heaplang/docs/2026-09-07_codex-stage1-notes.md` (read-only copy).
 - **Stage 3 — unlocks when L4 has merged** (line to be written): D8, D9.
 
 ## 1. The rules (read before every deliverable; they are the charter)
@@ -59,8 +60,11 @@ the orchestrator's landings (L2 the re-pin, L3 the actual file, L4
    `ALL GATES GREEN` / `GATE-EXIT=0`, the pin count is the expected one, and
    the package linter warning count has not increased. Quote the tail
    verbatim in the record.
-6. **Record.** One file, `cerberus-heaplang/docs/<date>_codex-residuals-notes.md`,
-   one section per deliverable: what changed (names), the snapshot diff
+6. **Record.** Stage 2 writes its OWN file,
+   `cerberus-heaplang/docs/2026-09-07_codex-stage2-notes.md` (stage 1's record is
+   present READ-ONLY as `cerberus-heaplang/docs/2026-09-07_codex-stage1-notes.md`,
+   a copy of the D5 branch's record at the time of activation — do not edit
+   it); one section per deliverable: what changed (names), the snapshot diff
    classified against the allowed list, the gate tail verbatim, the time
    spent. No other docs are written or edited unless a deliverable's fence
    names one (then only the named lines).
