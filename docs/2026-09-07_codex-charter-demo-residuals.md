@@ -26,9 +26,14 @@ the orchestrator's landings (L2 the re-pin, L3 the actual file, L4
   stale-cache snapshot, not by the deliverable; the implementation was not
   retained), then D7 (alone — the round layer), then D1, D2, D3, D4. Stage
   1's D5 is being landed separately by the orchestrator; do not touch
-  `Examples/PartialClients.lean`. Stage 1's record is in this worktree as
-  `cerberus-heaplang/docs/2026-09-07_codex-stage1-notes.md` (read-only copy).
-- **Stage 3 — unlocks when L4 has merged** (line to be written): D8, D9.
+  `Examples/PartialClients.lean`. Stage 1's record: `cerberus-heaplang/docs/2026-09-07_codex-residuals-notes.md`
+  (the read-only copy `…codex-stage1-notes.md` served stage 2 and was deleted
+  at the stage-2 landing).
+- **Stage 3 — NOT ACTIVATED; this charter is CLOSED** (2026-09-07). Stage 2's
+  result: D6 DONE, D7 DONE, D1–D4 BLOCKED — every block traced to a defect of
+  THIS charter (§9). D8/D9 remain LOCKED and are not re-chartered here. The
+  next Codex slice has its own charter:
+  `docs/2026-09-07_codex-charter-total-refines-partial.md`.
 
 ## 1. The rules (read before every deliverable; they are the charter)
 
@@ -62,10 +67,9 @@ the orchestrator's landings (L2 the re-pin, L3 the actual file, L4
    the package linter warning count has not increased. Quote the tail
    verbatim in the record.
 6. **Record.** Stage 2 writes its OWN file,
-   `cerberus-heaplang/docs/2026-09-07_codex-stage2-notes.md` (stage 1's record is
-   present READ-ONLY as `cerberus-heaplang/docs/2026-09-07_codex-stage1-notes.md`,
-   a copy of the D5 branch's record at the time of activation — do not edit
-   it); one section per deliverable: what changed (names), the snapshot diff
+   `cerberus-heaplang/docs/2026-09-07_codex-stage2-notes.md` (stage 1's record:
+   `cerberus-heaplang/docs/2026-09-07_codex-residuals-notes.md`); one section per
+   deliverable: what changed (names), the snapshot diff
    classified against the allowed list, the gate tail verbatim, the time
    spent. No other docs are written or edited unless a deliverable's fence
    names one (then only the named lines).
@@ -248,3 +252,36 @@ stage's activation so the agent never chooses a statement shape (stage 1's
 D5/D6 need none: D5's targets are the manifest's seven
 RULE-PARTIAL-UNDEMONSTRATED rows as printed in `docs/CAPABILITY_MANIFEST.md`;
 D6's target is the script's own plant).
+
+## 9. Stage-2 landing note (orchestrator, 2026-09-07) — the charter's own defects
+
+[AGENT 2026-09-07] Stage 2 ran in `worktrees/codex-stage2`
+(`codex/demo-residuals-2`, 1e1f584..bf4554d; record
+`cerberus-heaplang/docs/2026-09-07_codex-stage2-notes.md`; fresh-reviewer range
+audit `cerberus-heaplang/docs/2026-09-07_audit-codex-stage2-range.md`: PASS, A−).
+D6 and D7 are DONE. D1–D4 were BLOCKED by the Codex agent — correctly under
+this charter as written; the audit confirmed each block's facts at HEAD — and
+each block is a defect of this charter, not of the work:
+
+| deliverable | the charter defect | class | park |
+|---|---|---|---|
+| D1 | the fixed statement asks the total judgment's `hwp` to deliver a KILL classification, but `wpt` (Wpt.lean:152–206) has no kill clause (`evalClass`/`EvalFail`/`Killed`: 0 occurrences) and `wpt_driver_done_alloc` concludes an `NDactive` outcome | statement not derivable from the interface as it stands — a design item (a kill-capable prefix judgment), for the operator | `codex/park-D1` 55b54b5 |
+| D2 | "the range premise … spelled EXACTLY as `wps_c_add`'s … — no numeral", but `wps_c_add` (IntRules.lean:596) has `(hs : -2147483648 ≤ n1 + n2) (hs' : n1 + n2 ≤ 2147483647)`: the two requirements contradict | statement contradicts the source; the numeral ban is for fuel/supply bounds, not ABI constants a rule already carries | `codex/park-D2` 09f9b90 |
+| D3 | ACCEPTANCE requires gate 1b to red on `600` and a plant, but `scripts/fuel_numeral_check.sh` / `scripts/test_unit.sh` are outside the fence; ALSO (audit F3) `Shipped.lean:306/323/340` pass `hsup : 600 ≤ sup` to the production theorems, so the rewrite forces a `Shipped.lean` edit outside the fence; ALSO the "ONE negative theorem … the pipeline's outcome is a kill" needs D1's missing kill interface | fence not closed (two files); a sub-goal depending on a blocked deliverable | `codex/park-D3` 450c87e |
+| D4 | new public lemmas must be pinned (rule 4) but `Audit.lean` is not in D4's fence; "beside `SymFrame`" points to `EnvLaws.lean:309`, also outside the fence | fence not closed (two files) | `codex/park-D4` 2ad35c7 |
+
+Also stale at activation (audit N3): the D2/D3/D4 line cites drifted 6–7
+lines (e.g. `CorpusT5Exhibit.lean:550` → `:543`); the record's own cites
+were exact. D7's GOAL over-promised relative to its own ACCEPTANCE (audit
+N2): `t*Kill_eq`, `t*Load` and `t6frAssign` are frozen/out of fence and remain;
+the 42-site count was 51 at activation (2/12/37).
+
+Consequence: D2, D3, D4 are re-activatable only under corrected statements
+and closed fences (D2: the two int-range premises copied verbatim; D3: fence
++ `scripts/fuel_numeral_check.sh`, `scripts/test_unit.sh`, `Shipped.lean`,
+negative theorem dropped; D4: fence + `Audit.lean`, `EnvLaws.lean`); D1 is
+an operator design item first. None is re-chartered here. The discipline
+adopted for every later charter (recorded in the successor charter's §5):
+a fence-closure table per acceptance criterion, and a statement-vs-source
+derivability record, both verified by an independent reviewer before the
+operator sees the charter.

@@ -561,3 +561,45 @@ D3's record, including investigation, snapshots, parking and the restored
 gate (recorded 06:34:18 UTC). No build or proof pass approached
 one hour. D4 remains BLOCKED. The six authorized deliverables have now
 been processed in order; work stops here, with D8/D9 untouched.
+
+## Orchestrator landing notes (2026-09-07; not Codex)
+
+[AGENT 2026-09-07] Written at the landing of this branch, after the
+fresh-reviewer range audit `docs/2026-09-07_audit-codex-stage2-range.md`
+(1e1f584..bf4554d: PASS, A−; no fix required; four Low findings, four notes —
+dispositions below). The orchestrator's FULL gate ran at `bf4554d` and again
+at the integration head (this branch rebased onto the D5 landing, Lean tree
+`48e162d`); both tails are in the landing DECISIONS entry.
+
+**Provenance (audit F4).** This record was written by the Codex agent, which
+tags nothing. The following are AGENT-called decisions of that agent, under
+the charter: the four BLOCKED calls (D1–D4), the "charter's 42-site count is
+stale" correction (measured true: 2/12/37 = 51), and the D6 scope statement
+on unprinted metadata. No [USER] ruling is involved anywhere in this record.
+
+**Erratum (audit F1).** §D7 says "all 676 public theorem statements in the
+seven edited modules unchanged". The count is not reproducible; the column-0,
+non-private `theorem` count over the seven modules is 713 at both `1e1f584`
+and `bf4554d` (the auditor's measurement, re-measured by the orchestrator:
+713). The substantive claim — no statement changed — holds for all 713
+(header-block diff: CHANGED 0, private declarations included).
+
+**Snapshot pruning (audit F2).** Twelve snapshot files were committed; they
+fall into two byte-identical classes (SHA-256 `045e9e61…`: `D6-pre`, `D6-post`,
+`D7-pre`, all equal to the pre-existing `2026-09-07_l2b-signatures-post.txt`;
+`0cb8fd9f…`: `D7-post`, `D1/D2/D3/D4-pre`, `D1/D2/D3/D4-post`). Eleven are
+deleted at this landing; `2026-09-07_codex-D7-post.txt` is kept (the only new
+content). The hashes quoted in the sections above remain the evidence.
+
+**Disclosure completed (audit N1).** The D6 renderer accepts without printing
+exactly the annotation kinds `pp_core.ml` does not print at debug level ≤ 3
+(`Aexpr`, `Astmt`, `Auid`, `Alabel`, `Acerb`, `Ainlined_label`, `Aattrs`,
+`Avalue`; and `Erun`'s annotation) — `Aexpr` (35) and `Astmt` (54) occur in
+the transcriptions; every printed form the renderer does not know raises an
+error. The check is not fail-open (verdict = token-list equality, both
+directions); its blind spots are the printer's. `Examples/CorpusE0.lean`'s
+module header still describes the retired opaque-leaf skeleton (KOI C20).
+
+**`GATE-EXIT=0` (audit N4).** In every quoted tail that line is the agent's
+own `echo "GATE-EXIT=$?"`; `scripts/test_unit.sh` ends with `ALL GATES GREEN`
+and `exit 0`. The tails are otherwise verbatim.
