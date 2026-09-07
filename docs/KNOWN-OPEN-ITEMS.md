@@ -1,14 +1,21 @@
 # Known open items — the register auditors read FIRST
 
-State: candidate `land/e5-complete` head (2026-09-07, the L1 landing of the
-emitted-Core dialect arc's E5 — t5, t6 and t4 certified through the shipped
-driver at the pin `f95ef8d9c`; re-cut from the other agent's `dialect-e5` per
-`docs/2026-09-07_landing-charter.md` §2 L1, its process documents and
-DECISIONS entries staying on `parked/demo-expansion-2026-09-07`; landing
-record `cerberus-heaplang/docs/2026-09-07_l1-landing-notes.md`). Before it,
-main = E1–E4 with all four range audits' fixes (the t1 milestone), after the
-calls arc, the fuel-lane restatement F1, the external-audit response AR5, the
-H1 hygiene/coverage slices and the ARCHITECTURE rewrite.
+State: candidate `land/repin-89f7e68` head (2026-09-07, the L2 landing of
+the re-pin to cerberus-lean `89f7e6885` / LemLib `f6542f8` ([USER
+2026-09-07] R1): fuel a quantified `[LemFuel]` parameter with the fragment
+kept SYNTACTIC (R2 — `Frag` fuel-free, `evalDepth e ≤ LemFuel.fuel` a
+hypothesis), the thirteen shipped-constant corollaries `*_shipped`, the
+`killM` and allocator contract changes absorbed; re-cut from the other
+agent's `demo-repin` code commit ce4d7de per
+`docs/2026-09-07_landing-charter.md` §2 L2, its process documents staying
+on `parked/demo-expansion-2026-09-07`; landing record
+`cerberus-heaplang/docs/2026-09-07_l2-repin-notes.md`). Before it, main =
+L1 (E5 — t5, t6, t4 certified at the pin `f95ef8d9c`, with the full E5
+range audit's fixes; `cerberus-heaplang/docs/2026-09-07_l1-landing-notes.md`),
+and before that E1–E4 with all four range audits' fixes (the t1
+milestone), after the calls arc, the fuel-lane restatement F1, the
+external-audit response AR5, the H1 hygiene/coverage slices and the
+ARCHITECTURE rewrite.
 Maintained by the orchestrator; every entry
 points at the record that owns it. PURPOSE: an auditor should not
 re-cite an item listed here as a new finding. Cite it ONLY if (a) the
@@ -21,12 +28,12 @@ or a ruled disposition. Provenance tags as in `docs/DECISIONS.md`.
 
 | # | Item | Where recorded | Disposition |
 |---|---|---|---|
-| A1 | **Fuel constants baked into the port**: two constants (`CerbFuel.driverFuel = 10^8`, LemLib `lemDefaultFuel = 10^6`), ≥ 6 fuelled recursions sealed behind fixed wrappers (scheduler loop `driver2`, single-thread loop `drive_nonmemory_steps_aux2`, exit `hack`, a printer, ND `bind`). Our exports inherit it: `… ≤ lemDefaultFuel` / `≤ CerbFuel.driverFuel` hypotheses at ~60 sites; the nine production statements' `hfuel` bounds are shipped-constant instances. | DECISIONS 2026-09-03 "FUEL IS A DEFECT…"; `docs/2026-09-03_request-lem-lean-pmap-laws-and-fuel-scheme.md` §3 | [USER] ruled a cerberus-lean/lem-lean defect; fix asked of the cerberus-lean team (all magic values → quantifiable positions). Consumer restatement slice follows the fix. |
-| A2 | **Closed partial forms quantify the OUTER (scheduler) fuel only** (`prod_run_safe_procs`, `fib_rec_certified` closed form, over `CerbND.drive_lemFuel fuel`): the seam threads fuel to `driver2` alone; for the sequential fragment the scheduler runs one round, so the quantifier is true but does no work. The run-length content is the thread-level `DriverSafeCtl` (∀ inner fuel). | DECISIONS same entry (the two-loop reading, [USER] verbatim); F1 audit §2 "no reword required — disclosed"; ARCHITECTURE/README/API.lean state the scope | Interim by ruling until A1 lands. NOT a soundness item. |
+| A1 | **Fuel is a quantified parameter at the pin `89f7e6885`** (the cerberus-lean fuel-parameter arc C1–C4): every fuelled engine function reads the ambient `[LemFuel]` (LemLib `f6542f8`); `lemDefaultFuel`, `CerbFuel.driverFuel` and the mirror `CerbND.drive_lemFuel` are gone; our exports carry `2 ≤ LemFuel.fuel`, `evalDepth … ≤ LemFuel.fuel` (R2) and `k + 2 ≤ LemFuel.fuel` as HYPOTHESES, and the shipped constant `100000000` appears only in the thirteen `*_shipped` corollaries (`Shipped.lean`; gate 1b `scripts/fuel_numeral_check.sh`). RESIDUAL, upstream: eight fail-open (D) exhaustion rows in cerberus-lean `scripts/fuel_forms_pending.txt` (`are_compatible_aux` ×3, `hack`, `to_pure`, `to_pures`, `many`, `many1`) — `hack`/`to_pure` are on our proved path once, at PROGRAM-DONE (`finalize`), excluded by `0 < LemFuel.fuel` (`hack_value`, `finalize_done`); the other six are unreachable for the fragment (struct/union values, `printf`, the rewriter). | `cerberus-heaplang/docs/FUEL.md` §4; `cerberus-heaplang/docs/2026-09-07_l2-repin-notes.md`; DECISIONS 2026-09-03 "FUEL IS A DEFECT…" | CLOSED for this package's exports (L2, [AGENT 2026-09-07]); the (D) register is cerberus-lean's (the fuel arc's operator decisions D-C2-2..4). |
+| A2 | **Closed partial forms quantify the ambient fuel of BOTH loops** since the pin: `new_drive_core_threads` runs the per-thread loop at the ambient instance (generated `Driver.lean:399`, `:390`), so the `[LemFuel]` of `prod_run_safe_procs`/`fib_rec_certified`/`even_odd_certified` bounds the run; the pin-`f95ef8d9c` caveat (outer `driver2` only, the wrapper at the fixed budget) is retired. The per-thread counter `fl` of `DriverSafeCtl` is still quantified separately. | `cerberus-heaplang/docs/FUEL.md` §3; L2 record | CLOSED (L2, [AGENT 2026-09-07]). |
 | A3 | **`dynamic_addrs` upstream defect** (free after zero-size malloc sharing a base): Core-level claim confirmed on both oracles and Lean; NOT reproducible from C; Lean is a faithful mirror; ISO-fix register R4 DEFERRED upstream. Our K3 `free` precondition (metadata `dynamic` flag) implies the engine's check; the colliding program is outside the logic. | DECISIONS 2026-09-03 "CERBERUS-LEAN MOVED…"; `docs/2026-09-03_upstream-note-dynamic-addrs.md`; cerberus-lean `lean_frontend/docs/2026-09-03_dynamic-addrs-investigation.md` | CLOSED for us, no change. Our note's C-flavoured consequence was in error (recorded). |
-| A4 | **LemLib `Pmap`**: no lookup-after-insert law shipped (our `SymMap`/`symAdd_lookup*` must be re-proved at the re-pin); `Pmap.join` is well-founded recursion, so closed engine maps do not reduce (17 declarations stall at cerberus-lean `de2fbf1`). | `docs/2026-09-03_repin-scout-2.md` (record copied to main from branch `repin-scout2`) §4 (a), (a′), §8; request note above §1–2 | Requested from lem-lean; local interim law allowed. Re-pin slice pending the next cerberus-lean pin. |
+| A4 | **LemLib `Pmap`**: the lookup-after-insert laws ship upstream (`LemLibPmapLaws`, LemLib `f6542f8`); the local interim law and its consumers are gone at the re-pin, and the closed engine maps that stalled at `de2fbf1` (17 declarations) build at the pin. Statement-text effect: the canonical `symAdd` order of computed registration maps changed (`collect_new_eo`, `t4Q_eq`, `t6Q_eq`, `fmapLookupBy_addBy_empty`; census class "LemLib-map"). | `docs/2026-09-03_repin-scout-2.md` §4; L2 record (census) | CLOSED at the re-pin (L2, [AGENT 2026-09-07]). |
 | A5 | **`panic!` arms in the hand-written semantics** (61 code arms at the pin, 40 in `CerbMem.lean`; mirrors of OCaml `assert false`/`failwith`, read by the kernel as the return type's `Inhabited` default — the Lean run continues where the OCaml aborts; disclosed in ARCHITECTURE §3). At the PIN `f95ef8d9c`, `killM`'s dead-static-kill arm is a kill; on the cerberus-lean MAINLINE it is a `panic!` (the next pin brings it). No theorem states that an export's run reaches no such arm; the rules' premises keep proved programs away from them. cerberus-lean's typed-failure-outcomes pass removes the `Inhabited` semantics. | ARCHITECTURE §3 "The `panic!` arms"; scout §8 (γ); cerberus-lean Z1 manifest §2 | Re-check `MemWF.killM` and the arm count at the re-pin. |
-| A6 | **Re-pin drift**: main's pin is cerberus-lean `f95ef8d9c`; mainline is ≥ 34 commits ahead (`de2fbf1`), with the LemLib representation change (A4), `killM` re-mirroring (one exported text change: `killM_killed_inv`), fold/zip non-reduction (13 declarations). Everything else on the manifests measured zero for this package. | scout record §4–§6 (plan, 2.5–4 worker-days) | Re-pin waits for the NEXT cerberus-lean pin ([USER]: "it'll likely have moved again"). |
+| A6 | **Re-pin LANDED**: main's pin is cerberus-lean `89f7e688530c6910884518811d645e4e892e4507` ([USER 2026-09-07] R1), LemLib `f6542f8e6860d12d4655e6648bc4c45dabd1d798`. Three change classes, all absorbed: the fuel parameter (A1/A2, R2), the `killM` re-mirroring (Z1: `killM_killed_inv` now seven kill rows), the allocator/memory contract (Z2: signed sizes, the requested-address fail-stop, `PrefMalloc`, retained bytes, `lastUsed`, `UnallocatedBytes`; new rule premises — B21). Census pre/post: `cerberus-heaplang/docs/2026-09-07_l1-signatures-post.txt` → `…_l2-signatures-post.txt`. | `cerberus-heaplang/docs/2026-09-07_l2-repin-notes.md` | CLOSED (L2). The next re-pin is a new scout. |
 | A7 | **The certified file is a transcribed THREE-function std.core fragment with `impl0 = ∅`** (`prodFileLib stdlibE3`): true of that file; on the pipeline's full file an out-of-range `conv_loaded_int` WRAPS through the impl function where ours KILLS (measured, E3 audit D-6). The pipeline's whole `core_file` as the statement's object is the named target (design §C.9 option (a)), not done. | E3 audit D-6; E3 record; design note §C.9 | Grow `stdlibE3` per slice; the option-(a) form when the elaborator can sit in the statement. |
 
 ## B. Statement-shape and coverage limitations, disclosed by design
@@ -53,6 +60,7 @@ or a ruled disposition. Provenance tags as in `docs/DECISIONS.md`.
 | B17 | `is_unsigned` mirrored at a leaf only — the engine rebuilds the node at core_eval.lem:1086 (an upstream-tray candidate, not filed); `PElet` withdrawn from `PePure` (pull/strip non-commutation); `-`/`*`/`/`/`%`/shifts/`wrapI` mirrored but NO-RULE. | E3 record §5 | Rules as the corpus needs them; file the tray note. |
 | B19 | **The numeral `600` in the three root-of-trust statements** (`t{4,5,6}_certified_production`'s `hsup : 600 ≤ sup`, and the `600 ≤ M.runState.sym_supply` premises of their `wpt` derivations) stands for "above every source symbol number of this program" (the transcriptions' maxima: 529 / 531 / 574). Under [USER 2026-09-03] "no magic values" (bounds not forced by OCaml or ISO are quantified parameters, never numerals) the principled statement is a program-derived bound — `symBound tMain ≤ sup`, `symBound` computed from the transcription by `rfl` — the landability audit's optional R-7, re-cited as the ruling's class by the E5 full-range audit H-2. Sound as is: the theorems hold with the numeral (B6 records that the floor is neither necessary nor vacuous). | E5 full-range audit H-2 (`cerberus-heaplang/docs/2026-09-07_audit-e5-full-range.md`); `docs/2026-09-07_landability-dialect-e5-extension.md` R-7; DECISIONS 2026-09-03 no-magic-values ruling | A statement change on three exports — a slice of its own; registered [AGENT 2026-09-07] at the audit fixes, not scheduled. |
 | B20 | **`wps_neg_bound`/`wpt_neg_bound` expose the engine's symbol-generation scheme at the client interface**: the fresh binder is delivered as `∀ s, ⌜∃ k, s = fresh_given_int k ∧ M.runState.sym_supply ≤ k⌝ -∗ …`, and the clients discharge non-collision by `symOrd_ne_eq_of_num_ne` on symbol NUMBERS. An abstract `FreshAbove s floor` with one collision lemma would keep the rule Reynolds/O'Hearn-clean. Sound as is; API shape only. | E5 full-range audit H-3; `cerberus-heaplang/docs/2026-09-05_e5-notes.md` §S2.4 | A rule-face restatement (three clients touched); registered [AGENT 2026-09-07] at the audit fixes, not scheduled. |
+| B21 | **The allocation rules carry the pin's allocator preconditions** (Z2): `wps_create`/`wpt_create` require `0 < alignN` and `get_with_address a = none` (a `create` with a requested address is the engine's fail-stop arm at the pin; no rule), `wps_alloc`/`wpt_alloc` and `allocateRegion_success` require `0 < alignN` and `0 ≤ sizeN` (signed sizes; a negative-size `alloc` has no rule); `allocateRegion` records `PrefMalloc` regardless of the caller's prefix and sets `lastUsed := some id`; `emittedInt_storable`/`longMval_storable` carry the value range (`intToBytes signed …`). All are disclosed premises (fail-closed), listed in the L2 record's memory-contract section. | `cerberus-heaplang/docs/2026-09-07_l2-repin-notes.md` (memory-contract class); cerberus-lean `lean_frontend/docs/2026-09-04_zero-discrepancy-Z2-change-manifest.md` | By design; a requested-address `create` rule is unrequested. |
 
 ## C. Hygiene queue (no trust or correctness content)
 
@@ -101,11 +109,11 @@ or a ruled disposition. Provenance tags as in `docs/DECISIONS.md`.
 
 ## E. Tree and environment notes (for anyone running the gates)
 
-- Primary checkout `.cerberus-ws` is primed at the PIN (`f95ef8d9c`);
-  `scripts/setup-cerberus-dep.sh --check` is the verification. The
-  worktree `worktrees/repin-scout2` holds a `.cerberus-ws` primed at
-  `de2fbf1` and a `.lake` dep cone at LemLib `3c88f0d` — for the re-pin
-  worker; NOT main's state.
+- Primary checkout `.cerberus-ws` is primed at the PIN (`89f7e6885`,
+  `scripts/semantics-pin.env`); `scripts/setup-cerberus-dep.sh --check` is
+  the verification (37 seams). The scout worktree `worktrees/repin-scout2`
+  (`.cerberus-ws` at `de2fbf1`, LemLib `3c88f0d`) is superseded by the pin;
+  the L2 landing worktree is `worktrees/land-repin`.
 - Untracked, unrelated to the demo, left from the RefinedC exploration
   era: `.refinedc-ws/` (a Rocq/RefinedC workspace, ~3.7 GB) and
   `.opamroot/` (a sandbox opam root, ~150 MB). Both are ignored as of

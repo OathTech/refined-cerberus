@@ -237,7 +237,7 @@ def variants : List Variant := [
     cls := .rule (N "wps_annot") (N "wpt_annot"),
     also := [N "wps_annot_reindex", N "wpt_annot_reindex"] },
   { ctor := `CerberusHeapLang.Frag.save,
-    shape := "`save l(params := inits) in body` at `PePure` initializers within fuel — the TAU arm (value initializers) and the EVAL arm (an evaluating round first); one rule covers both",
+    shape := "`save l(params := inits) in body` at `PePure` initializers (their depth bounded by the export's `evalDepth` hypothesis) — the TAU arm (value initializers) and the EVAL arm (an evaluating round first); one rule covers both",
     cls := .rule (N "wps_save") (N "wpt_save"),
     also := [N "wps_save_vals", N "wpt_save_vals", N "wps_save_eval", N "wpt_save_eval"] },
   { ctor := `CerberusHeapLang.Frag.if_,
@@ -365,7 +365,7 @@ def variants : List Variant := [
     cls := .outOfScope s!"the mirror has NO rule for a fork (fail-closed: the choice is the driver's, and `CerbND.runND` explores every alternative — `ShippedRefusal.fork` via `complete_nd`/`nd_fork`, `pick` on a list of two or more); the corpus reaches `nd` only in the `Unspecified` arm of an `if` condition's case, which no certified run takes; {recE5}" },
   -- E1: the bound frame
   { ctor := `CerberusHeapLang.Frag.bound,
-    shape := "`bound(e)` — reduction under the `Cbound` frame, then REMOVE-BOUND at the delivered value of either shape (the dynamic annotations of an annotated value are DROPPED); E5: the rule faces are stated for a NEGATIVE-FREE body (`negFree e = true`); M2 removes the obsolete structural fuel ceiling — the `bound` frame itself performs the negative-action round, so a body reaching one is `Frag.neg_store`'s row",
+    shape := "`bound(e)` — reduction under the `Cbound` frame, then REMOVE-BOUND at the delivered value of either shape (the dynamic annotations of an annotated value are DROPPED); E5: the rule faces are stated for a NEGATIVE-FREE body (`negFree e = true`); the re-pin (L2) removed the structural fuel ceiling (`get_ctx` is MEASURED at the pin) — the `bound` frame itself performs the negative-action round, so a body reaching one is `Frag.neg_store`'s row",
     cls := .rule (N "wps_bound") (N "wpt_bound"),
     also := [N "wpt_jump_frame_bound"] },
   -- E1: create at ctor-constant operands

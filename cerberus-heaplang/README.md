@@ -1,18 +1,12 @@
 # cerberus-heaplang
 
-**M2 re-pin checkpoint [AGENT 2026-09-06].** The integrated source passes
-the full gate at the new quantified-fuel pin. Fuel prose, old pin/line
-references and quoted signatures in this document still need reconciliation.
-Use the [current contract and validation record](../docs/2026-09-06_repin-t4-malloclist-and-full-gate.md)
-and [claim matrix](docs/CLAIMS.md) for the repaired contracts.
-This documentation task remains open under the active charter.
-
 A classical separation logic — Reynolds/O'Hearn: points-to and ∗,
 small axioms, the frame rule, sequencing, consequence, conditionals,
 loops with invariants — over the Cerberus Core semantics, built on
 iris-lean. Every exported execution theorem reaches the shipped engine
 — the closed statements through its pipeline, the generic ones through
-its driver's own per-thread loop at every fuel; every public logical
+its driver's own per-thread loop at every ambient fuel of at least
+two and every loop counter; every public logical
 rule has a kernel-checked adequacy path through the package mirror to
 the engine.
 
@@ -26,8 +20,9 @@ program logic over a fragment of Core, proves every rule against that
 engine, and exports closed-program theorems whose statements are
 Iris-free. Its root-of-trust exports are the closed statements about
 the shipped cerberus-lean driver — total (`exhibitA_prod`,
-`*_production`) and partial (`fib_rec_certified`, at every fuel of the
-fuel-parametric pipeline); its generic partial-correctness exports are
+`*_production`, at an explicit in-budget bound on the ambient fuel
+`LemFuel`) and partial (`fib_rec_certified`, at every ambient fuel of
+the shipped pipeline); its generic partial-correctness exports are
 stated over the shipped driver's own per-thread loop ("The claim"
 below). **New reader? Start with the
 [walkthrough](docs/WALKTHROUGH.md).** The normative architecture
@@ -54,7 +49,8 @@ away from that binder, is retired: the LETS-ANNOT beta is mirrored), a
 tuple binder's head delivering a tuple (any other value is the engine's
 binding panic, classified) — weak sequencing `Ewseq` at the wildcard and
 (E2) at the plain-symbol and flat-tuple binders, `Esave` at `PePure`
-initializers within the evaluator's fuel, `Eif` at a `PePure` guard, the
+initializers (their evaluator depth bounded by the export's `evalDepth`
+hypothesis), `Eif` at a `PePure` guard, the
 context-discarding jump `Erun` at `PePure` arguments, value-scrutinee
 `Ecase` (the non-value scrutinee's EVAL round is mirrored since E2,
 `Step.case_eval`, not admitted by `Frag`), the PURE round `pure(e)` at
@@ -123,8 +119,8 @@ restriction, stated. (`Frag.store` admits EITHER locking mode — `lk` is uncons
 while every store rule is at `Store0 false`: the locking store, whose
 engine success flips the allocation's `isReadonly`, has no rule, so no
 derivation traverses one; noted by the K1 range audit.) The per-construct authority is the
-inductive `Frag` (Soundness.lean), the premise of every adequacy
-theorem; the generated [rule-use and classification
+inductive `Frag` (Fragment.lean; syntactic, no fuel field — R2 [USER
+2026-09-07]), the premise of every adequacy theorem; the generated [rule-use and classification
 manifest](docs/CAPABILITY_MANIFEST.md) lists one row per engine-SUCCESS
 VARIANT of each `Frag` constructor (ar5-manifest, 2026-09-04; ARCHITECTURE
 §7 "The instruments around the claims"), each classified RULE (a partial
@@ -149,33 +145,44 @@ table is exhaustive over the engine's success shapes or that a NO-RULE
 shape is covered; the former "0 red = every constructor has a covering
 rule" reading is withdrawn.
 
-**Pure operands are in the covered grammar and carry their own static
-fuel bound.** The engine's pure-expression evaluator is fuelled at the
-same budget as its redex search (`step_eval_pexpr`/`pull_constrained`
-draw from `lemDefaultFuel`), so every `Frag` constructor that evaluates
-a pure operand — `if_` (the guard), `run` (the jump arguments), `save`
-(the initializers), `load_op`/`memop_op`/`store_op`/`kill_op`/`alloc_op`
-(the operands the engine evaluates before dispatching the action) — carries the static
-premise `peDepth pe ≤ lemDefaultFuel` per operand, where `peDepth`
-(Soundness.lean) is the operand's syntactic depth (1 at a value or a
-symbol, `1 + max` at `PEop`/`PEarray_shift`), AND restricts its
-operands to the sub-grammar `PePure` the mirror evaluator covers exactly
-(values, symbols, the eight mirrored binops — `PePure.op` carries `hop :
-isMirroredOp op = true` — and `PEarray_shift`). Verbatim, the premises
-of `Frag.store_op`: `(hp2 : PePure pe2) (hp3 : PePure pe3) (hd2 : peDepth
-pe2 ≤ lemDefaultFuel) (hd3 : peDepth pe3 ≤ lemDefaultFuel)`; of
-`Frag.if_`: `(hpg : PePure g) (hdg : peDepth g ≤ lemDefaultFuel)`; of
-`Frag.run`: `(hpes : ∀ pe ∈ pes, PePure pe) (hdep : ∀ pe ∈ pes, peDepth
-pe ≤ lemDefaultFuel)`; of `Frag.save`: `(hp : ∀ pe ∈ saveParamPexprs ps,
-PePure pe) (hd : ∀ pe ∈ saveParamPexprs ps, peDepth pe ≤ lemDefaultFuel)`.
-Like the `pot` bounds below, both are `rfl` for every authored program
-(`peDepth_sym_le`, `peDepth_val_le`, `PePure.of_isPePure rfl`) and never
-mention the run length; unlike them they live inside `Frag`, so they
-appear on no exhibit as a separate hypothesis. The declared grammar is
-the mirror's exact domain by the fragment-closure ruling ([USER
-2026-09-02]: the fragment is exactly what the mirror covers), which is
-what lets mirror completeness classify every operand the mirror does
-not evaluate (below).
+**Pure operands are in the covered grammar; their evaluator budget is a
+hypothesis, not a field.** The engine's pure-expression evaluator is the
+one fuelled recursion the fragment's execution path still reaches at the
+pin: the pass loop `eval_pexpr_aux2 [LemFuel]` (generated
+`Core_eval.lean:162`; one pass per level of the operand, around the
+MEASURED single pass `step_eval_pexpr`, `:150`), called by
+`full_eval_pexpr [LemFuel]` (`Core_reduction.lean:100`). Every `Frag`
+constructor that evaluates a pure operand — `if_` (the guard), `run` (the
+jump arguments), `save` (the initializers), `load_op`/`memop_op`/
+`store_op`/`kill_op`/`alloc_op` (the operands the engine evaluates before
+dispatching the action) — restricts its operands to the sub-grammar
+`PePure` the mirror evaluator covers exactly (values, symbols, the eight
+mirrored binops — `PePure.op` carries `hop : isMirroredOp op = true` —
+`PEarray_shift`, and the E1–E3 additions) and carries NO fuel: `Frag`
+(Fragment.lean:491) is syntactic (R2 [USER 2026-09-07]). Verbatim, the
+premises of `Frag.store_op`: `(hnv : valueFromPexprs [pe2, pe3] = none)
+(hp2 : PePure pe2) (hp3 : PePure pe3)`; of `Frag.if_`: `(hpg : PePure g)`;
+of `Frag.run`: `(hpes : ∀ pe ∈ pes, PePure pe)`; of `Frag.save`: `(hp : ∀
+pe ∈ saveParamPexprs ps, PePure pe)`. The budget enters as the syntactic
+MEASURE `evalDepth e` (Fragment.lean:86) — the largest `peDepth`
+(Step.lean:2571: 1 at a value or a symbol, `1 + max` at
+`PEop`/`PEarray_shift`) of any pure operand the run may evaluate — and
+every adequacy export carries `hdep : evalDepth e ≤ LemFuel.fuel` as a
+HYPOTHESIS, with `hQd` (the same bound per registered label body) and
+`hPd : M.ProcsDepth LemFuel.fuel` (per declared procedure body,
+Adequacy.lean:728), beside the ambient premise `hfuel : 2 ≤ LemFuel.fuel`
+the shipped round needs. All are decided by `decide`/`omega` for authored
+and transcribed programs (the depth of every corpus program is at most 40)
+and never mention the run length. Inside the proofs the fuel-relative
+device `FragFuel [LemFuel]` (Soundness.lean:9297) carries the per-operand
+bound as a field; `Frag.toFuel` (Fragment.lean:753) and `fragFuel_iff`
+(`:950`) bridge the two, and `FragFuel` appears in no export. The former
+potential premises `pot e ≤ lemDefaultFuel` are gone: the engine's redex
+search `get_ctx` is MEASURED at the pin (fuel-free,
+`Core_reduction.lean:387`). The declared grammar is the mirror's exact
+domain by the fragment-closure ruling ([USER 2026-09-02]: the fragment is
+exactly what the mirror covers), which is what lets mirror completeness
+classify every operand the mirror does not evaluate (below).
 
 **Every node of a fragment program carries its static annotation list,
 and the source location is live state (dialect arc E1, 2026-09-04).**
@@ -324,10 +331,13 @@ stack `κ`, the current procedure `proc` and the execution location
 `execLoc`; every adequacy export is launched at an entry control with an
 EMPTY call stack (`ctl.κ = []`), and the partial adequacy exports carry
 the procedure well-formedness premise `MachineCtx.FragProcs` (every
-declared procedure body in `Frag` within the potential bound, with `Frag`
-label bodies — vacuous at both frozen profiles, `spikeCtx_fragProcs`/
-`procCtx_fragProcs`; discharged at the two-procedure files,
-`csCtx_fragProcs`/`frCtx_fragProcs`), since their proofs follow the
+declared procedure body in `Frag`, its label bodies too) with its depth
+twin `MachineCtx.ProcsDepth LemFuel.fuel` (their `evalDepth` within the
+ambient budget) — vacuous at both frozen profiles, `spikeCtx_fragProcs`/
+`procCtx_fragProcs` and `spikeCtx_procsDepth`/`procCtx_procsDepth`;
+discharged at the multi-procedure files, `csCtx_fragProcs`/
+`frCtx_fragProcs`, `frCtx_procsDepth`/`eoCtx_procsDepth`), since their
+proofs follow the
 engine through a call and back; `MachineCtx.SeqWF` (startup thread) is a
 premise of the round classification `cerberusRound_classify` only —
 `⟨rfl⟩` at either frozen profile);
@@ -376,11 +386,24 @@ by `prodFile` (the synthetic one-procedure file) or, for recursive fib,
 `prodFileLib stdlibE3` (`main` plus the three-function std.core
 fragment, KOI A7); no package-defined
 driver, discharge or scheduler appears in their statements, and they
-carry no termination hypothesis — only the explicit in-budget bounds
-`hfuel` where the step count depends on an input (recursive fib's is
-`fibRounds n.toNat + 4 ≤ CerbFuel.driverFuel`, `fibRounds` the package's
-round count of an activation — `fibRounds n + 9 = 12 · fib (n + 1)`, so
-`n ≤ 33` is in the shipped budget), and, where the
+carry no termination hypothesis — only the explicit in-budget bound
+`hfuel : N ≤ LemFuel.fuel` on the ambient fuel `LemFuel` (the
+caller-supplied budget every fuelled engine function reads at the pin,
+`.lake/packages/LemLib/lean-lib/LemLib.lean:66`; no default is
+installed), `N` the certified round count plus two — a literal for the
+input-free programs (`12` for `exhibitA_prod`, `56` list reversal, `53`
+dispose, `50` t1, `917` t4, `90` t5, `80` t6), a function of the input
+otherwise (iterative fib `2 * n.toNat + 6`, the counter `6 * n.toNat + 8`,
+the region loop `7 * n.toNat + 5`, the malloc'd list `25 * n.toNat + 9`,
+recursive fib `fibRounds n.toNat + 4`, `fibRounds` the package's round
+count of an activation — `fibRounds n + 9 = 12 · fib (n + 1)`). The
+shipped default's instances are the thirteen `*_shipped` corollaries of
+`Shipped.lean`, each stated at `letI : LemFuel := ⟨100000000⟩` (the
+numeral's only home in the package: gate 1b), where the input bound
+becomes a closed form — fib `n.toNat ≤ 49999997`, counter `≤ 16666665`,
+region loop `≤ 14285713`, malloc'd list `≤ 3999999`, even/odd
+`≤ 33333331`, recursive fib `≤ 33` (`fibRounds_mono`/`fibRounds_33`) —
+discharged by `omega`. And, where the
 program allocates from a size-dependent budget, the BUDGET side
 condition that the budget fits the cold-start memory:
 `region_loop_certified_production`'s `hB : n.toNat * regionCost al sz ≤
@@ -392,7 +415,7 @@ node `16 + max(al, 1) − 1` bytes of cursor descent, `281474976710647`
 the cold-start cursor's headroom; bridge `ml_budget_bridge`); and, since
 2026-09-04 (H1b), `even_odd_certified_production` (EvenOddExhibit.lean:
 MUTUAL RECURSION, `even`/`odd` calling each other on the synthetic
-THREE-procedure file, `hfuel : 3 * n.toNat + 6 ≤ CerbFuel.driverFuel`). These
+THREE-procedure file, `hfuel : 3 * n.toNat + 6 ≤ LemFuel.fuel`). These
 thirteen are THE root-of-trust exports of this package — the closed
 shipped-driver statements. They are reached through `prod_run_eqJ` or,
 through calls, `prod_run_eqJ_procs`, or, on the library-carrying file,
@@ -412,12 +435,15 @@ partial-correctness export — `MemTriple`, `MemTriple_alloc`,
 (`SemTriple_iff_Mem`, `MemTriple_alloc_of_MemTriple`), and every exhibit
 whose "Execution" column below reads "the shipped loop" — is stated over
 the SHIPPED driver's own per-thread loop
-`drive_nonmemory_steps_aux2_lemFuel` (Driver.lean:346; the shipped
-`drive_nonmemory_steps_aux2` is its instance at `CerbFuel.driverFuel`), AT
-EVERY FUEL, from any driver state holding the configuration
-(`DriverSafeCtl`, Adequacy.lean): the loop either EXHAUSTS — its value is
-the kernel-transparent kill `CerbND.fuelExhaustedKill`, the cerberus-lean
-fuel arc's out-of-fuel arm (pin `f95ef8d9c`) — or returns PROGRAM-DONE
+`drive_nonmemory_steps_aux2_lemFuel` (generated `Driver.lean:385`; the
+shipped `drive_nonmemory_steps_aux2 [LemFuel]` is its instance at the
+ambient `LemFuel.fuel`, `:390`), at EVERY loop counter `fl` and every
+ambient fuel of at least two, from any driver state holding the
+configuration (`DriverSafeCtl`, Adequacy.lean:936): the loop either
+EXHAUSTS — its value is the kernel-transparent kill
+`CerbND.fuelExhaustedKill` (`CerbND.lean:98`), the out-of-fuel arm of
+every driver-family worker since the cerberus-lean fuel arc — or returns
+PROGRAM-DONE
 for a value satisfying the postcondition; it never kills for any other
 reason and never derails. The CLOSED partial form over the pipeline is
 `prod_run_safe_procs` (ProdEntry.lean) with `fib_rec_certified` its
@@ -442,16 +468,18 @@ The partial-correctness realization of the target shape is the triple
 | `s` | `σ : Mem` = the engine's `CerbMem.MemState`, arbitrary outside the footprint |
 | `s \|= P` | `Sat M.tagDefs σ (P ∪ R)` — `Sat` is `Coh` (Heap.lean) by `abbrev`: every footprint cell live, writable, in bounds, exactly those bytes, pairwise disjoint; `R` is the arbitrary rest, returned to the post (the frame is part of the definition) |
 | `prog` | `(e, ρ)` at a machine context `M` and a live control `ctl`, held by a driver state `dst` whose singleton thread is `ctlThread th₀ e ρ ctl` (the driver's own `thread_state` at that control) at layout state `σ`, with the context's file and the registration ties (`LabeledProcs`, `CtlTied`) |
-| `core_exec(prog, s) ~~> term` | `runOne (drive_nonmemory_steps_aux2_lemFuel fl fmapEmpty acc [0]) dst` — the SHIPPED driver's per-thread loop with `fl` iterations available, for every `fl`, every accumulator `acc` and every such `dst`; the triple carries no fuel premise |
+| `core_exec(prog, s) ~~> term` | `runOne (drive_nonmemory_steps_aux2_lemFuel fl fmapEmpty acc [0]) dst` — the SHIPPED driver's per-thread loop with `fl` iterations available, for every `fl`, every accumulator `acc` and every such `dst`, at every ambient `[LemFuel]` with `2 ≤ LemFuel.fuel`; the triple carries no premise on the counter `fl` |
 | `term = some(s')` | the loop returns `NDactive` with the PROGRAM-DONE singleton step map `fmapAddBy defaultCompare 0 [Step_done2 v] acc` at a final state whose layout is `σ'`; the only other admitted outcome is `NDkilled CerbND.fuelExhaustedKill` (fuel exhaustion) — no other kill (no undefined behaviour, no error kill), no refusal, no off-protocol step: partial correctness |
 | `s' \|= Q` | `ψ R v σ'` for a pure `ψ : CellMap → value → Mem → Prop` |
 
 `project_triple_pure`: at empty tag definitions and extern (the
 production driver's `drive fmapEmpty false …`), an empty-stack entry
 control (`ctl.κ = []`), `Frag e`, `Frag` membership of every registered
-label body and of every declared procedure body (`FragProcs`), and the
-static fuel bounds `pot e ≤ lemDefaultFuel` and `pot cont ≤
-lemDefaultFuel` per registered body (Potential.lean; `rfl` for authored
+label body and of every declared procedure body (`FragProcs`), the
+ambient budget `2 ≤ LemFuel.fuel`, and the evaluator-depth bounds
+`evalDepth e ≤ LemFuel.fuel`, the same per registered label body (`hQd`)
+and `M.ProcsDepth LemFuel.fuel` for the declared procedure bodies
+(Fragment.lean; decided by `decide`/`omega` for authored and transcribed
 programs), an Iris triple whose precondition is footprint ownership
 `[∗map] i ↦ c ∈ P, cellOwn … i (.own 1) c` and whose framed Iris post
 pure-entails `ψ R w.val σ'` under the coupling invariant projects to
@@ -492,25 +520,24 @@ shipped composite `CerbND.runND (drive fmapEmpty false file args)
 through `wpt_driver_done_alloc` (ProdLoop.lean) and `prod_run_eqJ`
 (ProdEntry.lean); the statements quantify over the file-system state,
 argv and the entry's symbol supply `sup`. They are total statements
-(an equation on the singleton execution) because a sufficient fuel is
-known. The PARTIAL closed form is `prod_run_safe_procs` (ProdEntry.lean;
-the fuel-lane restatement, 2026-09-03): at EVERY `fuel`, `CerbND.runND
-(CerbND.drive_lemFuel fuel fmapEmpty false (prodFileWith procs e) args)
-(initial_driver_state sup (prodFileWith procs e) fs).1` is exactly one
-execution, and it is either the fuel-exhaustion kill `nd_status.Killed
-dst' CerbND.fuelExhaustedKill` or `nd_status.Active dres` with the
-postcondition; the shipped `drive` is the instance at `fuel :=
-CerbFuel.driverFuel` (`CerbND.drive_wrapper_defeq`, `rfl`) —
-`drive_lemFuel` is the semantics' own fuel-parametric mirror of `drive`,
-produced upstream for exactly this statement. Its client is
-`fib_rec_certified`: recursive fib for EVERY `n ≥ 0`, no budget bound —
-the exhaustion arm is what the shipped driver does when the run does not
-fit its `10^8` iterations. Measured at the pin (`docs/2026-09-03_f1-notes.md`
-§3): `drive_lemFuel`'s `fuel` bounds only the outer `driver2` rounds
-(`new_drive_core_threads`, Driver.lean:355, calls the per-thread loop
-through its wrapper at the fixed budget), so at every `fuel ≥ 1` the
-statement is the one about the shipped `drive`; the "at every fuel of
-the loop" content is the generic `DriverSafeCtl`. The seeded exhibits
+(an equation on the singleton execution) because a sufficient ambient
+fuel is a premise (`k + 2 ≤ LemFuel.fuel` in `prod_run_eqJ_procs`,
+ProdEntry.lean:577). The PARTIAL closed form is `prod_run_safe_procs`
+(ProdEntry.lean:615): at EVERY ambient `[LemFuel]`, `CerbND.runND (drive
+fmapEmpty false (prodFileWith procs e) args) (initial_driver_state sup
+(prodFileWith procs e) fs).1` — the shipped `drive` itself, `[LemFuel]`
+at the pin — is exactly one execution, and it is either the
+fuel-exhaustion kill `nd_status.Killed dst' CerbND.fuelExhaustedKill` or
+`nd_status.Active dres` with the postcondition (its `DriverSafeCtl`
+premise is needed only under `2 ≤ LemFuel.fuel`; below two the setup
+itself exhausts). Its clients are `fib_rec_certified` and
+`even_odd_certified`: recursion for EVERY `n ≥ 0`, no budget bound — the
+exhaustion arm is what the shipped driver does when the run does not fit
+the caller's budget. The same ambient instance is the budget of BOTH
+driver loops (`new_drive_core_threads` calls the per-thread loop at the
+ambient instance, generated `Driver.lean:399`; the former fuel-parametric
+mirror `CerbND.drive_lemFuel`, whose fuel reached the scheduler only, no
+longer exists), so the quantifier bounds the run length. The seeded exhibits
 (pre-seeded cells, which the cold start never contains) have no closed
 form; their statements are the loop-level facts.
 
@@ -519,8 +546,9 @@ form; their statements are the loop-level facts.
 Every theorem below is pinned in `Audit.lean` with axioms exactly
 `propext`, `Classical.choice`, `Quot.sound`. "Execution" names the
 execution function in the statement: "the shipped loop" — the shipped
-driver's per-thread loop at every fuel from any driver state holding the
-configuration (`DriverSafeCtl`, "The claim") — at `spikeCtx` (the
+driver's per-thread loop at every loop counter and every ambient fuel of
+at least two, from any driver state holding the configuration
+(`DriverSafeCtl`, "The claim") — at `spikeCtx` (the
 straight-line context, entry control `spikeCtl`) or at `procCtx rs` (the
 context carrying a run state with registered labels, entry control
 `procCtl p` — in procedure `p`), or the shipped pipeline (`runND ∘ drive
@@ -528,7 +556,7 @@ context carrying a run state with registered labels, entry control
 root-of-trust exports. The last column lists EVERY hypothesis of the theorem
 by name, section variables included; it is read off the
 machine-printed statement of every constant in
-`docs/2026-09-03_f1-signatures-post.txt` (`scripts/signature_snapshot.lean`),
+`docs/2026-09-07_l2-signatures-post.txt` (`scripts/signature_snapshot.lean`),
 where section variables appear as leading binders. No statement
 carries a premise on the action locations: the engine attaches
 `requestLoc th loc` (the redex's own location, or the thread's
@@ -541,43 +569,47 @@ no location hypothesis. `hcoh` is the seeded-footprint premise
 = x` (on `struct_create_store_wps`) says the program's symbols are not
 extern-redirected: the engine resolves every `PEsym` through the file's
 extern map with identity fallback (`resolveExtern`, Step.lean), so at
-`fmapEmpty` the premise is `rfl` (`resolveExtern_id_of_empty`). No
-shipped-loop statement carries a fuel hypothesis (the fuel is quantified
-inside `DriverSafeCtl`).
+`fmapEmpty` the premise is `rfl` (`resolveExtern_id_of_empty`). Every
+shipped-loop statement is `[LemFuel]`-parametric with the ambient premise
+`hfuel : 2 ≤ LemFuel.fuel`; the loop COUNTER `fl` is quantified inside
+`DriverSafeCtl` and is a hypothesis of no statement. The Iris-level rows
+("— (Iris)") that allocate carry `0 < LemFuel.fuel` (the allocation rules'
+domain at the pin) and the re-pinned allocator's domain conditions
+`0 < al` (positive alignment) / `0 ≤ sz` (non-negative size).
 
 | Theorem (file) | Says | Execution | Hypotheses, exhaustively |
 |---|---|---|---|
-| `exhibitA_semantic`, `exhibitA_engine` (Exhibit.lean) | store 7 then load: never kills otherwise; delivers `Specified(7)` (the shipped-pipeline run of the self-contained twin is `exhibitA_prod`) | the shipped loop at `spikeCtx` | `_semantic`: `{GF} [SpikeGpreS GF]` (the memory and the thread immutables are quantified by `SemTriple`); `_engine`: none — memory fixed to the constant `σ₀`, the thread `spikeThread progA` |
-| `exhibitB_semantic`, `exhibitB_engine` (Exhibit.lean) | the frame: `⦃x ↦ - ∗ y ↦ a⦄ store(x,7) ⦃x ↦ 7 ∗ y ↦ a⦄` over engine configurations, `y` and all unnamed rest verbatim | the shipped loop at `spikeCtx` | `_semantic`: `{GF} [SpikeGpreS GF]`; `_engine`: none |
+| `exhibitA_semantic`, `exhibitA_engine` (Exhibit.lean) | store 7 then load: never kills otherwise; delivers `Specified(7)` (the shipped-pipeline run of the self-contained twin is `exhibitA_prod`) | the shipped loop at `spikeCtx` | `_semantic`: `[LemFuel]`, `hfuel : 2 ≤ LemFuel.fuel`, `{GF} [SpikeGpreS GF]` (the memory and the thread immutables are quantified by `SemTriple`); `_engine`: `[LemFuel]`, `hfuel : 2 ≤ LemFuel.fuel` — memory fixed to the constant `σ₀`, the thread `spikeThread progA` |
+| `exhibitB_semantic`, `exhibitB_engine` (Exhibit.lean) | the frame: `⦃x ↦ - ∗ y ↦ a⦄ store(x,7) ⦃x ↦ 7 ∗ y ↦ a⦄` over engine configurations, `y` and all unnamed rest verbatim | the shipped loop at `spikeCtx` | `_semantic`: `[LemFuel]`, `hfuel : 2 ≤ LemFuel.fuel`, `{GF} [SpikeGpreS GF]`; `_engine`: `[LemFuel]`, `hfuel : 2 ≤ LemFuel.fuel` |
 | `exhibitC_semantic`, `exhibitC_engine` (Exhibit.lean) | sequenced stores to disjoint cells both land | the shipped loop at `spikeCtx` | as B |
-| `counter_loop_certified`, `counter_loop_certified_irrelevant_binding` (LoopExhibit.lean) | the first loop: save/guard/store/back edge; the seeded cell's final bytes are data-dependent; run from an entry frame with an unrelated binding | the shipped loop at `procCtx …` | `loc ann ra mo bty xbty sbty idx addr bs0 n`, `0 ≤ n`, `σ₀`, `hcoh` (the seeded cell); `_irrelevant_binding` adds `junk : value` |
-| `fib_certified` (FibExhibit.lean) | iterative fib delivers `fib n` at every fuel (the total equation is `fib_certified_production`) | the shipped loop at `procCtx …` | `ra ibty abty bbty sbty n`, `0 ≤ n`, `σ₀` |
-| `array_sum_certified` (ArrayExhibit.lean) | array walk with pointer arithmetic delivers `vs.sum`, array preserved | the shipped loop at `procCtx …` | `loc ann ra mo ibty accbty pbty xbty sbty vs id a aty bs`, `hsz : vs.length * 4 ≤ sizeofCtype fmapEmpty aty`, `ety`, `hdec` (each element's 4-byte range reconstructs, by the engine's `reconstructValue` at any side tables, to `MVinteger ety vs[i]`), `σ₀`, `hcoh` |
-| `struct_update_certified` (StructExhibit.lean) | two-field struct update at the engine | the shipped loop at `spikeCtx` | `{GF} [SpikeGpreS GF]`, `loc ann mo mo' bty id a bs`, `σ₀`, `hcoh` |
-| `struct_wps_views`, `cell_read_shared_wps`, `struct_x_read_persist_wps`, `struct_create_store_wps` (StructExhibit.lean) | the view/fraction/persistence laws as clients; allocate-then-initialize from `allocBudget` alone (Iris-level triples) | — (Iris) | all: `{hlc GF} [SpikeGS hlc GF] {M Ls} loc ann`; `_views`: `mo mo' bty id a b0 b1 b2 b3`, the three field lengths, `ev0 evs`; `cell_read_shared`: `pv mo bs bs' ρ`, `htrap`; `_x_read_persist`: `mo id a q dqb ρ`; `_create_store`: `aprov alignN pref mo pbty vbty ev0 evs`, `SymFrame ev0`, `∀ x, resolveExtern M.extern x = x` |
-| `struct_create_store_adequacy`, `struct_create_store_adequacy_prodMem₀` (StructExhibit.lean) | allocate-then-initialize as `MemTriple_alloc spikeCtx spikeCtl spikeEnv prog ∅ (allocCost fmapEmpty structTy 8) ψ` (the budget form since K2.5), an instance of `project_triple_pure_alloc`; `_prodMem₀` fixes the memory to the production cold start | the shipped loop at `spikeCtx` | `{GF} [SpikeGpreS GF]`, `loc ann pref mo pbty vbty` |
-| `alloc_two_creates_wps`, `alloc_create_wpt` (AllocExhibit.lean) | the allocation rules' local consumers (the engine runs of `create` from the cold start are `exhibitA_prod` and the production loop statements) | — (Iris) | `_wps`: `{hlc GF} [SpikeGS hlc GF] {M Ls} al₁ al₂ pref₁ pref₂ bty ev0 evs`; `_wpt`: `{hlc GF} [SpikeGS hlc GF] {M Ls} al pref ρ` |
-| `alloc_free_wps` (AllocExhibit.lean; kill/free arc K3) | allocate a REGION then FREE it: `lets p = alloc(al, n) in free(p)` through the public `wps_alloc`/`wps_kill_eval`/`wps_free` delivers the unit value, the persistent dead region `deadRegion` of some id/base and the spent budget `regionCost al n` (the engine runs of alloc/free from the cold start are `region_loop_certified_production` and `malloc_list_certified_production`) | — (Iris) | `{hlc GF} [SpikeGS hlc GF] {M Ls} hex al n pref hcost ev0 evs hf` |
-| `alloc_create_kill_wps` (AllocExhibit.lean; kill/free arc K2) | allocate then DISPOSE: `lets p = create(al, int) in kill(static int, p)` through the public `wps_create`/`wps_kill_eval`/`wps_kill` delivers the unit value, the persistent dead cell `deadObj` of some id/base and the spent capacity (the engine run of create/kill from the cold start is `dispose_list_certified_production`) | — (Iris) | `{hlc GF} [SpikeGS hlc GF] {M Ls} hex al pref ev0 evs hf` |
-| `dl_wps`, `dl_wps_emp`, `dl_wpt`, `dl_wps_frame`, `dl_wpt_frame` (DisposeExhibit.lean; kill/free arc K4) | DISPOSE A LIST — the classical `{list p} dispose(p) {emp}`: the authored loop walks a chain of CREATED nodes (ListRevExhibit's `isList`) and `kill(static node, ·)`s each through the public `wps_kill`/`wpt_kill` at the node cell; `dl_wps`/`dl_wpt` deliver unit and `deadNodes ns` (every node's persistent dead cell), `dl_wps_emp` is the textbook post, the total budget is the DERIVED `12 * ns.length + 6`; the engine statement is `dispose_list_certified_production` below | — (Iris) | `{hlc GF} [SpikeGS hlc GF] loc ann ra mo cbty bbty nbty ubty ns p rs hQ sbty head`, `_frame` adds `RF` |
-| `rl_wps`, `rl_wpt` (RegionLoopExhibit.lean; kill/free arc K4) | N REGIONS FROM ONE LINEAR BUDGET: `save rl(i := n) in if i > 0 then lets p = alloc(al, sz) in lets _ = free(p) in run rl(i − 1) else unit` — the budget `allocBudget (n.toNat * regionCost al sz)` is the LOOP INVARIANT, split per iteration by `allocBudget_split`, spent by the public `wps_alloc`/`wpt_alloc`, each region returned by `wps_free_emp`/`wpt_free_emp`; post `emp`; total budget the DERIVED `7 * n.toNat + 3`; the engine statement is `region_loop_certified_production` below. (The malloc'd LINKED list is the next row — MallocListExhibit.lean, K5, through the region access rules.) | — (Iris) | `{hlc GF} [SpikeGS hlc GF] loc ann ra al sz pref ibty pbty ubty hcost p rs hQ sbty n`, `_wpt` adds `hn : 0 ≤ n` |
-| `ml_wps`, `ml_wpt` (MallocListExhibit.lean; kill/free arc K5) | THE MALLOC'D LINKED LIST: `save ml(i := n, p := NULL) in if i > 0 then lets q = alloc(al, 16) in lets _ = store(long, q, i) in lets _ = store(node*, array_shift(q, long, 1), p) in run ml(i − 1, q) else lets b = memop(PtrEq, [p, NULL]) in if b then unit else lets Specified(nx) = load(node*, array_shift(p, long, 1)) in lets _ = free(p) in run ml(0, nx)` — ONE label, two phases: `i > 0` allocates a 16-byte REGION node from the split budget, writes the counter (offset 0, `long` — stored but NOT tracked by `isRegionList`: the walk never reads it, and its signed-long decode round trip is not in this tree) and the link (offset 8, `node*`) THROUGH THE REGION (`wps_store_regionOwn_at`, K5) and conses it onto `isRegionList`; `i = 0` walks the list reading each next field through the region (`wps_load_regionOwn_at`) and `free`s each node (`wps_free`, its `deadRegion` kept). Invariant `allocBudget (i · regionCost al 16) ∗ isRegionList p ids ∗ deadRegions done`, `i + |ids| + |done| = n`, `(ids ++ done).Nodup`; post `unit ∗ ∃ ids, |ids| = n.toNat ∧ ids.Nodup ∗ deadRegions ids` — `n.toNat` DISTINCT dead ids (K5.1, the K5 range audit's finding: `deadRegion` is persistent, so without `Nodup` the post would say only that SOME region is dead; distinctness comes from the public `regionOwn_ne`/`regionOwn_deadRegion_ne` at each `alloc` and is carried through the invariant); total budget the DERIVED `25 · n.toNat + 7`; the engine statement is `malloc_list_certified_production` below | — (Iris) | `{hlc GF} [SpikeGS hlc GF] loc ann ra mo al pref ibty pbty qbty bbty nbty ubty n p rs hQ sbty`, `hn : 0 ≤ n` |
-| `list_reverse_certified`, `list_reverse_demo` (ListRevExhibit.lean) | in-place reversal of a seeded chain next to an arbitrary disjoint frame — same allocation ids in reversed order, footprint equality on the maps, frame verbatim, at every fuel (the total equation on the shipped pipeline is `list_reverse_certified_production`); the demo fixes a 3-node chain | the shipped loop at `procCtx …` | `loc ann ra mo pbty cbty bbty nbty ubty sbty`, `ns head m₀`, `hseed : SeedChain m₀ head ns`, `R`, `hR : m₀ ##ₘ R`, `σ₀`, `hcoh : Sat fmapEmpty σ₀ (m₀ ∪ R)`; `_demo` replaces `ns head m₀ hseed` by the 3-node constants |
+| `counter_loop_certified`, `counter_loop_certified_irrelevant_binding` (LoopExhibit.lean) | the first loop: save/guard/store/back edge; the seeded cell's final bytes are data-dependent; run from an entry frame with an unrelated binding | the shipped loop at `procCtx …` | `loc ann ra mo bty xbty`, `[LemFuel]`, `hfuel : 2 ≤ LemFuel.fuel`, `sbty idx addr bs0 n`, `0 ≤ n`, `σ₀`, `hcoh` (the seeded cell); `_irrelevant_binding` adds `junk : value` |
+| `fib_certified` (FibExhibit.lean) | iterative fib delivers `fib n` at every loop counter (the total equation is `fib_certified_production`) | the shipped loop at `procCtx …` | `ra ibty abty bbty`, `[LemFuel]`, `hfuel : 2 ≤ LemFuel.fuel`, `sbty n`, `0 ≤ n`, `σ₀` |
+| `array_sum_certified` (ArrayExhibit.lean) | array walk with pointer arithmetic delivers `vs.sum`, array preserved | the shipped loop at `procCtx …` | `loc ann ra mo ibty accbty pbty xbty`, `[LemFuel]`, `hfuel : 2 ≤ LemFuel.fuel`, `sbty vs id a aty bs`, `hsz : vs.length * 4 ≤ sizeofCtype fmapEmpty aty`, `ety`, `hdec` (each element's 4-byte range reconstructs, by the engine's `reconstructValue` at any side tables, to `MVinteger ety vs[i]`), `σ₀`, `hcoh` |
+| `struct_update_certified` (StructExhibit.lean) | two-field struct update at the engine | the shipped loop at `spikeCtx` | `[LemFuel]`, `hfuel : 2 ≤ LemFuel.fuel`, `{GF} [SpikeGpreS GF]`, `loc ann mo mo' bty id a bs`, `σ₀`, `hcoh` |
+| `struct_wps_views`, `cell_read_shared_wps`, `struct_x_read_persist_wps`, `struct_create_store_wps` (StructExhibit.lean) | the view/fraction/persistence laws as clients; allocate-then-initialize from `allocBudget` alone (Iris-level triples) | — (Iris) | all: `{hlc GF} [SpikeGS hlc GF] {M p Ls Θ} [LemFuel] loc ann`; `_views`: `mo mo' bty id a b0 b1 b2 b3`, the three field lengths, `ev0 evs`; `cell_read_shared`: `pv mo bs bs' ρ`, `htrap`; `_x_read_persist`: `mo id a q dqb ρ`; `_create_store`: `0 < LemFuel.fuel`, `aprov alignN`, `0 < alignN`, `pref mo pbty vbty ev0 evs`, `SymFrame ev0`, `∀ x, resolveExtern M.extern x = x` |
+| `struct_create_store_adequacy`, `struct_create_store_adequacy_prodMem₀` (StructExhibit.lean) | allocate-then-initialize as `MemTriple_alloc spikeCtx spikeCtl spikeEnv prog ∅ (allocCost fmapEmpty structTy 8) ψ` (the budget form since K2.5), an instance of `project_triple_pure_alloc`; `_prodMem₀` fixes the memory to the production cold start | the shipped loop at `spikeCtx` | `[LemFuel]`, `hfuel : 2 ≤ LemFuel.fuel`, `{GF} [SpikeGpreS GF]`, `loc ann pref mo pbty vbty` |
+| `alloc_two_creates_wps`, `alloc_create_wpt` (AllocExhibit.lean) | the allocation rules' local consumers (the engine runs of `create` from the cold start are `exhibitA_prod` and the production loop statements) | — (Iris) | `_wps`: `{hlc GF} [SpikeGS hlc GF] [LemFuel]`, `0 < LemFuel.fuel`, `{M p Ls Θ} al₁ al₂`, `0 < al₁`, `0 < al₂`, `pref₁ pref₂ bty ev0 evs`; `_wpt`: `{hlc GF} [SpikeGS hlc GF] [LemFuel]`, `0 < LemFuel.fuel`, `{M p Ls Θ} al`, `0 < al`, `pref ρ` |
+| `alloc_free_wps` (AllocExhibit.lean; kill/free arc K3) | allocate a REGION then FREE it: `lets p = alloc(al, n) in free(p)` through the public `wps_alloc`/`wps_kill_eval`/`wps_free` delivers the unit value, the persistent dead region `deadRegion` of some id/base and the spent budget `regionCost al n` (the engine runs of alloc/free from the cold start are `region_loop_certified_production` and `malloc_list_certified_production`) | — (Iris) | `{hlc GF} [SpikeGS hlc GF] [LemFuel]`, `0 < LemFuel.fuel`, `{M p Ls Θ} hex al n`, `0 < al`, `0 ≤ n`, `pref hcost ev0 evs hf` |
+| `alloc_create_kill_wps` (AllocExhibit.lean; kill/free arc K2) | allocate then DISPOSE: `lets p = create(al, int) in kill(static int, p)` through the public `wps_create`/`wps_kill_eval`/`wps_kill` delivers the unit value, the persistent dead cell `deadObj` of some id/base and the spent capacity (the engine run of create/kill from the cold start is `dispose_list_certified_production`) | — (Iris) | `{hlc GF} [SpikeGS hlc GF] [LemFuel]`, `0 < LemFuel.fuel`, `{M p Ls Θ} hex al`, `0 < al`, `pref ev0 evs hf` |
+| `dl_wps`, `dl_wps_emp`, `dl_wpt`, `dl_wps_frame`, `dl_wpt_frame` (DisposeExhibit.lean; kill/free arc K4) | DISPOSE A LIST — the classical `{list p} dispose(p) {emp}`: the authored loop walks a chain of CREATED nodes (ListRevExhibit's `isList`) and `kill(static node, ·)`s each through the public `wps_kill`/`wpt_kill` at the node cell; `dl_wps`/`dl_wpt` deliver unit and `deadNodes ns` (every node's persistent dead cell), `dl_wps_emp` is the textbook post, the total budget is the DERIVED `12 * ns.length + 6`; the engine statement is `dispose_list_certified_production` below | — (Iris) | `{hlc GF} [SpikeGS hlc GF] loc ann ra mo cbty bbty nbty ubty ns p {F} rs hQ [LemFuel] sbty head`, `_frame` adds `RF` |
+| `rl_wps`, `rl_wpt` (RegionLoopExhibit.lean; kill/free arc K4) | N REGIONS FROM ONE LINEAR BUDGET: `save rl(i := n) in if i > 0 then lets p = alloc(al, sz) in lets _ = free(p) in run rl(i − 1) else unit` — the budget `allocBudget (n.toNat * regionCost al sz)` is the LOOP INVARIANT, split per iteration by `allocBudget_split`, spent by the public `wps_alloc`/`wpt_alloc`, each region returned by `wps_free_emp`/`wpt_free_emp`; post `emp`; total budget the DERIVED `7 * n.toNat + 3`; the engine statement is `region_loop_certified_production` below. (The malloc'd LINKED list is the next row — MallocListExhibit.lean, K5, through the region access rules.) | — (Iris) | `{hlc GF} [SpikeGS hlc GF] loc ann ra al sz pref ibty pbty ubty hcost p {F} rs hQ [LemFuel]`, `0 < LemFuel.fuel`, `0 < al`, `0 ≤ sz`, `sbty n`, `_wpt` adds `hn : 0 ≤ n` |
+| `ml_wps`, `ml_wpt` (MallocListExhibit.lean; kill/free arc K5) | THE MALLOC'D LINKED LIST: `save ml(i := n, p := NULL) in if i > 0 then lets q = alloc(al, 16) in lets _ = store(long, q, i) in lets _ = store(node*, array_shift(q, long, 1), p) in run ml(i − 1, q) else lets b = memop(PtrEq, [p, NULL]) in if b then unit else lets Specified(nx) = load(node*, array_shift(p, long, 1)) in lets _ = free(p) in run ml(0, nx)` — ONE label, two phases: `i > 0` allocates a 16-byte REGION node from the split budget, writes the counter (offset 0, `long` — stored but NOT tracked by `isRegionList`: the walk never reads it, and its signed-long decode round trip is not in this tree) and the link (offset 8, `node*`) THROUGH THE REGION (`wps_store_regionOwn_at`, K5) and conses it onto `isRegionList`; `i = 0` walks the list reading each next field through the region (`wps_load_regionOwn_at`) and `free`s each node (`wps_free`, its `deadRegion` kept). Invariant `allocBudget (i · regionCost al 16) ∗ isRegionList p ids ∗ deadRegions done`, `i + |ids| + |done| = n`, `(ids ++ done).Nodup`; post `unit ∗ ∃ ids, |ids| = n.toNat ∧ ids.Nodup ∗ deadRegions ids` — `n.toNat` DISTINCT dead ids (K5.1, the K5 range audit's finding: `deadRegion` is persistent, so without `Nodup` the post would say only that SOME region is dead; distinctness comes from the public `regionOwn_ne`/`regionOwn_deadRegion_ne` at each `alloc` and is carried through the invariant); total budget the DERIVED `25 · n.toNat + 7`; the engine statement is `malloc_list_certified_production` below | — (Iris) | `{hlc GF} [SpikeGS hlc GF] loc ann ra mo al pref ibty pbty qbty bbty nbty ubty n p {F} rs hQ [LemFuel]`, `0 < LemFuel.fuel`, `0 < al`, `n.toNat ≤ 9223372036854775807` (the `long` counter's range), `sbty`, `hn : 0 ≤ n` |
+| `list_reverse_certified`, `list_reverse_demo` (ListRevExhibit.lean) | in-place reversal of a seeded chain next to an arbitrary disjoint frame — same allocation ids in reversed order, footprint equality on the maps, frame verbatim, at every loop counter (the total equation on the shipped pipeline is `list_reverse_certified_production`); the demo fixes a 3-node chain | the shipped loop at `procCtx …` | `loc ann ra mo pbty cbty bbty nbty ubty`, `[LemFuel]`, `hfuel : 2 ≤ LemFuel.fuel`, `sbty`, `ns head m₀`, `hseed : SeedChain m₀ head ns`, `R`, `hR : m₀ ##ₘ R`, `σ₀`, `hcoh : Sat fmapEmpty σ₀ (m₀ ∪ R)`; `_demo` replaces `ns head m₀ hseed` by the 3-node constants |
 | `tree_rotate_certified` (TreeRotExhibit.lean) | binary-tree right rotation at the same statement shape, at ambient fuel at least two and every explicit loop counter (the former total equation over the package loop was deleted in the fuel-lane restatement; a shipped-pipeline total form needs a self-contained tree-building program — an open item) | the shipped loop at `spikeCtx` | `[LemFuel]`, `hfuel : 2 ≤ LemFuel.fuel`, `loc ann mo xbty ybty bbty ubty`, `idx idy vx vy ta tb tc px m₀`, `hseed : SeedTree m₀ px (.node idx vx (.node idy vy ta tb) tc)`, `R`, `hR`, `σ₀`, `hcoh` |
-| `case_certified`, `wseq_certified` (CaseExhibit.lean, WseqExhibit.lean) | the `Ecase`/`Ewseq` consumers | the shipped loop at `spikeCtx` | `{GF} [SpikeGpreS GF]`, `v` resp. `v1 v2`, `σ₀` |
-| `diverge_total_unprovable`, `dg_loop_exhausts` (DivergeExhibit.lean) | the negative test: a total derivation for the self-jump loop is `False` — proved against the engine fact `dg_loop_exhausts`: from any driver state holding the self-jump thread with its label tie, the SHIPPED loop exhausts at every fuel | `dg_loop_exhausts`: the shipped loop at `procCtx …`; `diverge_total_unprovable`: — | `diverge_total_unprovable`: `{GF} [SpikeGpreS GF]`, `ra σ₀ m₀`, `hcoh : Coh fmapEmpty σ₀ m₀`, and the statement's own quantifiers `Ls Ψ k` and the derivation from `m₀`'s cell ownership; `dg_loop_exhausts`: `ra`, and the statement's own `fl dst acc` with the thread/extern/`LabeledAt` ties |
-| `exhibitA_prod` (ProdExhibit.lean) | the production run of `lets p = create(4,int) in lets _ = store(int, p, 7) in load(int, p)` is the singleton `Active` execution delivering 7, the final memory holding 7's image at the program's own cell | shipped pipeline — ROOT OF TRUST | `sup fs args` |
-| `fib_certified_production`, `counter_loop_certified_production`, `list_reverse_certified_production` (ProdLoopExhibit.lean) | the loop programs on the shipped pipeline; counter and reversal bind their engine-created cells and enter their loops through `save` with live initializers | shipped pipeline — ROOT OF TRUST | fib: `sup ra n sbty ibty abty bbty`, `0 ≤ n`, `2 * n.toNat + 6 ≤ CerbFuel.driverFuel`, `fs args`; counter: `sup ra mo bty xbty cbty sbty n`, `0 ≤ n`, `6 * n.toNat + 8 ≤ CerbFuel.driverFuel`, `fs args`; reversal: `sup ra mo bty sbty pbty cbty bbty nbty ubty fs args` |
-| `dispose_list_certified_production` (DisposeExhibit.lean), `region_loop_certified_production` (RegionLoopExhibit.lean) | kill/free arc K4 on the shipped pipeline: BUILD two nodes with `create`s (the list-reverse production's prefix, restated generically in its continuation as `lrProdPrefix_wpt`) then DISPOSE the list — EXACTLY ONE Active execution delivering `Vunit` whose final memory has two DISTINCT allocation ids in `deadAllocations` with their records erased (the proof witnesses them as the two created nodes; the statement names no node); `n` `alloc`/`free` pairs from one budget — EXACTLY ONE Active execution delivering `Vunit` (no readout of the final table: the regions are freed through the `_emp` faces, which drop the dead knowledge) | shipped pipeline — ROOT OF TRUST | dispose: `sup ra mo bty sbty cbty bbty nbty ubty fs args`; region loop: `sup ra al sz pref sbty ibty pbty ubty`, `hcost : 0 < regionCost al sz`, `n`, `hn : 0 ≤ n`, `hB : n.toNat * regionCost al sz ≤ headroom prodMem₀.lastAddress`, `hfuel : 7 * n.toNat + 5 ≤ CerbFuel.driverFuel`, `fs args` |
-| `fib_rec_certified`, `fr_wp_readout` (FibRecExhibit.lean; calls arc C4, restated in the fuel-lane restatement) | RECURSIVE FIB, PARTIAL FORM ON THE SHIPPED PIPELINE: for EVERY `n ≥ 0` — no budget bound — and every `fuel`, `runND (CerbND.drive_lemFuel fuel fmapEmpty false (prodFileWith …) args) (initial_driver_state sup … fs).1` is EXACTLY ONE execution, either the fuel-exhaustion kill `CerbND.fuelExhaustedKill` or Active delivering `fib n` (the shipped `drive` is the instance at `fuel := CerbFuel.driverFuel`); `fr_wp_readout` is the collapse WITH the table into the raw WP | shipped pipeline at every `drive_lemFuel` fuel — ROOT OF TRUST (partial) | `sup ra n nbty xbty ybty sbty zbty`, `hn : 0 ≤ n`, `fs args fuel` |
-| `fib_rec_certified_production` (FibRecExhibit.lean; calls arc C4) | RECURSIVE FIB ON THE SHIPPED PIPELINE — the first multi-procedure production statement: cold on the synthetic two-procedure file `prodFileWith [(fib, [(n, nbty)], body)] (fib(n))`, EXACTLY ONE Active execution delivering `fib n`; every PCALL and RETURN round is the driver's own; the label map (fib's `save r`) computed by the shipped registration on both procedures; termination from the total judgment at `fibRounds n + 2`, the in-budget bound `fibRounds n + 4 ≤ 10^8` (`n ≤ 33`) | shipped pipeline — ROOT OF TRUST | `sup ra n nbty xbty ybty sbty zbty`, `hn : 0 ≤ n`, `hfuel : fibRounds n.toNat + 4 ≤ CerbFuel.driverFuel`, `fs args` |
-| `caseProg_wpt`, `wseqProg_wpt` (CaseExhibit.lean, WseqExhibit.lean; H1b 2026-09-04) | the `Ecase`/`Ewseq` consumers at the TOTAL judgment, budget 2 each, postcondition the engine readout `readoutPost` — the consumers of `wpt_case_value`/`wpt_wseq` (no shipped-loop total form: KNOWN-OPEN-ITEMS B1's class) | — (Iris) | `{hlc GF} [SpikeGS hlc GF] M p Ls Θ`, `v ρ` resp. `v1 v2 ev0 evs` |
-| `two_label_certified`, `tl_wps`, `tl_wp_readout`, `tl_wpt`, `tl_wpt_readout` (TwoLabelExhibit.lean; H1b 2026-09-04) | TWO `save` LABELS in one procedure body: `save l1 (x := n₁) in if x > 0 then store(c, 5); run l1(x−1) else save l2 (y := n₂) in if y > 0 then store(c, 6); run l2(y−1) else unit` — the two-entry label map (`symAdd_lookup_two`), a LABEL-DEPENDENT specification (`tlLs`/`tlLsT`: a Lean `if` on the comparator verdict), both back edges by `blockSpecs_intro`; the final cell image is decided by both loops' data (6's image if `0 < n₂`, else 5's if `0 < n₁`, else the entry bytes); `_certified`: never kills otherwise, never derails, delivers `Vunit` with that image at every fuel; `tl_wpt`: total at budget `5 * n₁.toNat + 5 * n₂.toNat + 5` | `_certified`: the shipped loop at `procCtx …`; the rest — (Iris) | `_certified`: `loc ann ra mo bty xbty ybty sbty₂ sbty₁ idx addr bs0 n₁ n₂`, `hn₁ : 0 ≤ n₁`, `hn₂ : 0 ≤ n₂`, `σ₀`, `hcoh` (the seeded cell); `tl_wps`/`tl_wp_readout`/`tl_wpt`/`tl_wpt_readout`: `{hlc GF} [SpikeGS hlc GF] loc ann ra mo bty xbty ybty sbty₂ c n₁ n₂ bs0 p rs hQ hn₁ hn₂ sbty₁ f hf rest` |
-| `even_odd_certified` (EvenOddExhibit.lean; H1b 2026-09-04) | MUTUAL RECURSION, PARTIAL FORM ON THE SHIPPED PIPELINE: `even`/`odd` calling each other under the SYMBOL-DEPENDENT table `eoSpec` (Hoare's rule for recursive procedures verifies each body once assuming the table for BOTH); for EVERY `n ≥ 0` and every `fuel`, `runND (drive_lemFuel fuel …)` cold on the synthetic THREE-procedure file is EXACTLY ONE execution, the exhaustion kill or Active delivering `1 - n % 2` (1 iff even) | shipped pipeline at every `drive_lemFuel` fuel — ROOT OF TRUST (partial) | `sup ra n nbty`, `hn : 0 ≤ n`, `fs args fuel` |
-| `even_odd_certified_production` (EvenOddExhibit.lean; H1b 2026-09-04) | MUTUAL RECURSION ON THE SHIPPED PIPELINE — the NINTH closed statement, the first over a THREE-procedure file: EXACTLY ONE Active execution delivering `1 - n % 2`; every PCALL/RETURN round is the driver's own, alternating between the two procedures; termination from the total judgment at `3 * n + 4` | shipped pipeline — ROOT OF TRUST | `sup ra n nbty`, `hn : 0 ≤ n`, `hfuel : 3 * n.toNat + 6 ≤ CerbFuel.driverFuel`, `fs args` |
-| `t1_certified_production` (CorpusT1Exhibit.lean; dialect arc E4 2026-09-05) | THE MILESTONE — `docs/corpus-e0/t1.c`'s `main` (`int main(void) { int x = 3; int y = x + 1; return y; }`), transcribed VERBATIM from the oracle's emitted Core (`CorpusE0.t1Main`: two `create`s, `bound`s, the `unseq` of a `load` and `pure(Specified(1))` under the annotated-tuple weak binder, the emitted `+` through `conv_loaded_int`/`__conv_int__`/`catch_exceptional_condition_add`, the `kill`s, `run ret_507(…)`, the `save` label), on the shipped pipeline over the E3 library-carrying file `prodFileLib stdlibE3 [] t1Main`: EXACTLY ONE Active execution delivering `Specified(4)` — the oracle's `--exec` result — the TENTH closed statement; the derivation `t1_wps`/`t1_wpt` (budget 48) is through the public rules only (`wps_unseq_focus`/`wps_unseq_vals`, `wps_wseq_tuple_annot`, `wps_c_add`, `wps_conv_loaded_int`, …) | shipped pipeline — ROOT OF TRUST | `sup fs args` |
-| `t4_certified_production`, `t5_certified_production`, `t6_certified_production` (CorpusT4Exhibit.lean, CorpusT5Exhibit.lean, CorpusT6Exhibit.lean; E5) | The transcribed emitted while, conditional and switch through public total proofs at budgets 915, 88 and 78; exactly one Active result Specified(10), Specified(1) and Specified(20), respectively, unblocked with empty output streams. All retain whole-term fragment witnesses. Each uses the checked three-function std.core fragment with an empty implementation map (KOI A7). | shipped pipeline — ROOT OF TRUST | `sup fs args`, `600 ≤ sup` (a sufficient floor, not necessary: the composite delivers the same values at `sup = 0`; and not vacuous: at a `sup` from which the run's fresh-symbol draws reach a source symbol's number — 505 for t5, 509 for t6, 508 for t4 — the composite is KILLED; both measured: L1 landing, E5 full-range audit D-2) |
-| `malloc_list_certified_production` (MallocListExhibit.lean; kill/free arc K5) | THE MALLOC'D LINKED LIST on the shipped pipeline: EXACTLY ONE Active execution delivering `Vunit` whose final memory has `n.toNat` DISTINCT allocation ids (`ids.Nodup`, K5.1) in `deadAllocations` with their records erased (the proof witnesses them as the freed nodes; the statement names no node) — every `alloc` through the public `wpt_alloc`, every field write through `wpt_store_regionOwn_at`, every next-field read through `wpt_load_regionOwn_at`, every `free` through `wpt_free` | shipped pipeline — ROOT OF TRUST | `sup ra mo al pref sbty ibty pbty qbty bbty nbty ubty`, `n`, `hn : 0 ≤ n`, `hB : n.toNat * (15 + max al.toNat 1) ≤ 281474976710647` (the budget fits the cold start, in ENGINE vocabulary), `hfuel : 25 * n.toNat + 9 ≤ CerbFuel.driverFuel`, `fs args` |
+| `case_certified`, `wseq_certified` (CaseExhibit.lean, WseqExhibit.lean) | the `Ecase`/`Ewseq` consumers | the shipped loop at `spikeCtx` | `[LemFuel]`, `hfuel : 2 ≤ LemFuel.fuel`, `{GF} [SpikeGpreS GF]`, `v` resp. `v1 v2`, `σ₀` |
+| `diverge_total_unprovable`, `dg_loop_exhausts` (DivergeExhibit.lean) | the negative test: a total derivation for the self-jump loop is `False` — proved against the engine fact `dg_loop_exhausts`: from any driver state holding the self-jump thread with its label tie, the SHIPPED loop exhausts at every loop counter | `dg_loop_exhausts`: the shipped loop at `procCtx …`; `diverge_total_unprovable`: — | `diverge_total_unprovable`: `[LemFuel]`, `hfuel : 2 ≤ LemFuel.fuel`, `{GF} [SpikeGpreS GF]`, `ra σ₀ m₀`, `hcoh : Coh fmapEmpty σ₀ m₀`, and the statement's own quantifiers `Ls Ψ k` and the derivation from `m₀`'s cell ownership; `dg_loop_exhausts`: `[LemFuel]`, `hfuel : 2 ≤ LemFuel.fuel`, `ra`, and the statement's own `fl dst acc` with the thread/extern/`LabeledAt` ties |
+| `exhibitA_prod` (ProdExhibit.lean) | the production run of `lets p = create(4,int) in lets _ = store(int, p, 7) in load(int, p)` is the singleton `Active` execution delivering 7, the final memory holding 7's image at the program's own cell | shipped pipeline — ROOT OF TRUST | `[LemFuel]`, `hfuel : 12 ≤ LemFuel.fuel`, `sup fs args` |
+| `fib_certified_production`, `counter_loop_certified_production`, `list_reverse_certified_production` (ProdLoopExhibit.lean) | the loop programs on the shipped pipeline; counter and reversal bind their engine-created cells and enter their loops through `save` with live initializers | shipped pipeline — ROOT OF TRUST | fib: `[LemFuel] sup ra n sbty ibty abty bbty`, `0 ≤ n`, `hfuel : 2 * n.toNat + 6 ≤ LemFuel.fuel`, `fs args`; counter: `[LemFuel] sup ra mo bty xbty cbty sbty n`, `0 ≤ n`, `hfuel : 6 * n.toNat + 8 ≤ LemFuel.fuel`, `fs args`; reversal: `[LemFuel]`, `hfuel : 56 ≤ LemFuel.fuel`, `sup ra mo bty sbty pbty cbty bbty nbty ubty fs args` |
+| `dispose_list_certified_production` (DisposeExhibit.lean), `region_loop_certified_production` (RegionLoopExhibit.lean) | kill/free arc K4 on the shipped pipeline: BUILD two nodes with `create`s (the list-reverse production's prefix, restated generically in its continuation as `lrProdPrefix_wpt`) then DISPOSE the list — EXACTLY ONE Active execution delivering `Vunit` whose final memory has two DISTINCT allocation ids in `deadAllocations` with their records erased (the proof witnesses them as the two created nodes; the statement names no node); `n` `alloc`/`free` pairs from one budget — EXACTLY ONE Active execution delivering `Vunit` (no readout of the final table: the regions are freed through the `_emp` faces, which drop the dead knowledge) | shipped pipeline — ROOT OF TRUST | dispose: `[LemFuel]`, `hfuel : 53 ≤ LemFuel.fuel`, `sup ra mo bty sbty cbty bbty nbty ubty fs args`; region loop: `ra al sz pref sbty ibty pbty ubty [LemFuel] sup`, `0 < al`, `0 ≤ sz` (the re-pinned allocator's domain: positive alignment, non-negative size), `hcost : 0 < regionCost al sz`, `n`, `hn : 0 ≤ n`, `hB : n.toNat * regionCost al sz ≤ headroom prodMem₀.lastAddress`, `hfuel : 7 * n.toNat + 5 ≤ LemFuel.fuel`, `fs args` |
+| `fib_rec_certified`, `fr_wp_readout` (FibRecExhibit.lean; calls arc C4, restated in the fuel-lane restatement) | RECURSIVE FIB, PARTIAL FORM ON THE SHIPPED PIPELINE: for EVERY `n ≥ 0` — no budget bound — and every ambient `[LemFuel]`, `runND (drive fmapEmpty false (prodFileWith …) args) (initial_driver_state sup … fs).1` — the shipped `drive` itself — is EXACTLY ONE execution, either the fuel-exhaustion kill `CerbND.fuelExhaustedKill` or Active delivering `fib n`; `fr_wp_readout` is the collapse WITH the table into the raw WP | shipped pipeline at every ambient `[LemFuel]` — ROOT OF TRUST (partial) | `sup ra n nbty xbty ybty sbty zbty [LemFuel]`, `hn : 0 ≤ n`, `fs args` (`fr_wp_readout` adds `[LemFuel]` to its Iris-level binders) |
+| `fib_rec_certified_production` (FibRecExhibit.lean; calls arc C4) | RECURSIVE FIB ON THE SHIPPED PIPELINE — the first multi-procedure production statement: cold on the synthetic two-procedure file `prodFileWith [(fib, [(n, nbty)], body)] (fib(n))`, EXACTLY ONE Active execution delivering `fib n`; every PCALL and RETURN round is the driver's own; the label map (fib's `save r`) computed by the shipped registration on both procedures; termination from the total judgment at `fibRounds n + 2`, the in-budget bound `fibRounds n + 4 ≤ LemFuel.fuel` (`n ≤ 33` at the shipped default: `fib_rec_certified_production_shipped`) | shipped pipeline — ROOT OF TRUST | `sup ra n nbty xbty ybty sbty zbty [LemFuel]`, `hn : 0 ≤ n`, `hfuel : fibRounds n.toNat + 4 ≤ LemFuel.fuel`, `fs args` |
+| `caseProg_wpt`, `wseqProg_wpt` (CaseExhibit.lean, WseqExhibit.lean; H1b 2026-09-04) | the `Ecase`/`Ewseq` consumers at the TOTAL judgment, budget 2 each, postcondition the engine readout `readoutPost` — the consumers of `wpt_case_value`/`wpt_wseq` (no shipped-loop total form: KNOWN-OPEN-ITEMS B1's class) | — (Iris) | `{hlc GF} [SpikeGS hlc GF] [LemFuel] M p Ls Θ`, `v ρ` resp. `v1 v2 ev0 evs` |
+| `two_label_certified`, `tl_wps`, `tl_wp_readout`, `tl_wpt`, `tl_wpt_readout` (TwoLabelExhibit.lean; H1b 2026-09-04) | TWO `save` LABELS in one procedure body: `save l1 (x := n₁) in if x > 0 then store(c, 5); run l1(x−1) else save l2 (y := n₂) in if y > 0 then store(c, 6); run l2(y−1) else unit` — the two-entry label map (`symAdd_lookup_two`), a LABEL-DEPENDENT specification (`tlLs`/`tlLsT`: a Lean `if` on the comparator verdict), both back edges by `blockSpecs_intro`; the final cell image is decided by both loops' data (6's image if `0 < n₂`, else 5's if `0 < n₁`, else the entry bytes); `_certified`: never kills otherwise, never derails, delivers `Vunit` with that image at every loop counter; `tl_wpt`: total at budget `5 * n₁.toNat + 5 * n₂.toNat + 5` | `_certified`: the shipped loop at `procCtx …`; the rest — (Iris) | `_certified`: `loc ann ra mo bty xbty ybty sbty₂`, `[LemFuel]`, `hfuel : 2 ≤ LemFuel.fuel`, `sbty₁ idx addr bs0 n₁ n₂`, `hn₁ : 0 ≤ n₁`, `hn₂ : 0 ≤ n₂`, `σ₀`, `hcoh` (the seeded cell); `tl_wps`/`tl_wp_readout`/`tl_wpt`/`tl_wpt_readout`: `{hlc GF} [SpikeGS hlc GF] loc ann ra mo bty xbty ybty sbty₂ c n₁ n₂ bs0 p rs hQ [LemFuel] hn₁ hn₂ sbty₁ f hf rest` |
+| `even_odd_certified` (EvenOddExhibit.lean; H1b 2026-09-04) | MUTUAL RECURSION, PARTIAL FORM ON THE SHIPPED PIPELINE: `even`/`odd` calling each other under the SYMBOL-DEPENDENT table `eoSpec` (Hoare's rule for recursive procedures verifies each body once assuming the table for BOTH); for EVERY `n ≥ 0` and every ambient `[LemFuel]`, `runND (drive …)` cold on the synthetic THREE-procedure file is EXACTLY ONE execution, the exhaustion kill or Active delivering `1 - n % 2` (1 iff even) | shipped pipeline at every ambient `[LemFuel]` — ROOT OF TRUST (partial) | `sup ra n nbty [LemFuel]`, `hn : 0 ≤ n`, `fs args` |
+| `even_odd_certified_production` (EvenOddExhibit.lean; H1b 2026-09-04) | MUTUAL RECURSION ON THE SHIPPED PIPELINE — the NINTH closed statement, the first over a THREE-procedure file: EXACTLY ONE Active execution delivering `1 - n % 2`; every PCALL/RETURN round is the driver's own, alternating between the two procedures; termination from the total judgment at `3 * n + 4` | shipped pipeline — ROOT OF TRUST | `sup ra n nbty [LemFuel]`, `hn : 0 ≤ n`, `hfuel : 3 * n.toNat + 6 ≤ LemFuel.fuel`, `fs args` |
+| `t1_certified_production` (CorpusT1Exhibit.lean; dialect arc E4 2026-09-05) | THE MILESTONE — `docs/corpus-e0/t1.c`'s `main` (`int main(void) { int x = 3; int y = x + 1; return y; }`), transcribed VERBATIM from the oracle's emitted Core (`CorpusE0.t1Main`: two `create`s, `bound`s, the `unseq` of a `load` and `pure(Specified(1))` under the annotated-tuple weak binder, the emitted `+` through `conv_loaded_int`/`__conv_int__`/`catch_exceptional_condition_add`, the `kill`s, `run ret_507(…)`, the `save` label), on the shipped pipeline over the E3 library-carrying file `prodFileLib stdlibE3 [] t1Main`: EXACTLY ONE Active execution delivering `Specified(4)` — the oracle's `--exec` result — the TENTH closed statement; the derivation `t1_wps`/`t1_wpt` (budget 48) is through the public rules only (`wps_unseq_focus`/`wps_unseq_vals`, `wps_wseq_tuple_annot`, `wps_c_add`, `wps_conv_loaded_int`, …) | shipped pipeline — ROOT OF TRUST | `[LemFuel]`, `hfuel : 50 ≤ LemFuel.fuel`, `sup fs args` |
+| `t4_certified_production`, `t5_certified_production`, `t6_certified_production` (CorpusT4Exhibit.lean, CorpusT5Exhibit.lean, CorpusT6Exhibit.lean; E5) | The transcribed emitted while, conditional and switch through public total proofs at budgets 915, 88 and 78; exactly one Active result Specified(10), Specified(1) and Specified(20), respectively, unblocked with empty output streams. All retain whole-term fragment witnesses. Each uses the checked three-function std.core fragment with an empty implementation map (KOI A7). | shipped pipeline — ROOT OF TRUST | `[LemFuel]`, `hfuel : 917 ≤ LemFuel.fuel` (t4) / `90 ≤ LemFuel.fuel` (t5) / `80 ≤ LemFuel.fuel` (t6) — the certified budget plus two — `sup fs args`, `600 ≤ sup` (a sufficient floor, not necessary: the composite delivers the same values at `sup = 0`; and not vacuous: at a `sup` from which the run's fresh-symbol draws reach a source symbol's number — 505 for t5, 509 for t6, 508 for t4 — the composite is KILLED; both measured: L1 landing, E5 full-range audit D-2) |
+| `malloc_list_certified_production` (MallocListExhibit.lean; kill/free arc K5) | THE MALLOC'D LINKED LIST on the shipped pipeline: EXACTLY ONE Active execution delivering `Vunit` whose final memory has `n.toNat` DISTINCT allocation ids (`ids.Nodup`, K5.1) in `deadAllocations` with their records erased (the proof witnesses them as the freed nodes; the statement names no node) — every `alloc` through the public `wpt_alloc`, every field write through `wpt_store_regionOwn_at`, every next-field read through `wpt_load_regionOwn_at`, every `free` through `wpt_free` | shipped pipeline — ROOT OF TRUST | `ra mo al pref sbty ibty pbty qbty bbty nbty ubty [LemFuel]`, `0 < al` (the re-pinned allocator's positive-alignment domain), `sup`, `n`, `hn : 0 ≤ n`, `hB : n.toNat * (15 + max al.toNat 1) ≤ 281474976710647` (the budget fits the cold start, in ENGINE vocabulary), `hfuel : 25 * n.toNat + 9 ≤ LemFuel.fuel`, `fs args` |
 
 ## The trust story
 
@@ -590,13 +622,14 @@ inside `DriverSafeCtl`).
    `prod_run_safe_procs`) it is the shipped `CerbND.runND (drive
    fmapEmpty false file args) (initial_driver_state sup file fs).1` — the
    genuine Cerberus driver — total statements at a certified step count,
-   and, at every fuel of the semantics' fuel-parametric mirror
-   `CerbND.drive_lemFuel` (pinned to `drive` by `rfl`), the partial
-   statement "exhaustion or the postcondition". THE GENERIC FORMS: in the
+   and, at every ambient `[LemFuel]`, the partial statement "exhaustion
+   or the postcondition". THE GENERIC FORMS: in the
    loop statements (`MemTriple`, `MemTriple_alloc`, `SemTriple`, every
    `*_certified`, `*_engine`) it is the shipped driver's own per-thread
-   loop `drive_nonmemory_steps_aux2_lemFuel` (Driver.lean:346) at every
-   fuel, from any driver state holding the configuration
+   loop `drive_nonmemory_steps_aux2_lemFuel` (generated `Driver.lean:385`;
+   the shipped `drive_nonmemory_steps_aux2 [LemFuel]` is its instance at
+   the ambient `LemFuel.fuel`, `:390`) at every loop counter and every
+   ambient fuel of at least two, from any driver state holding the configuration
    (`DriverSafeCtl`, Adequacy.lean). Both lanes iterate the same shipped
    round `loop_step_frag` (DriverCollapse.lean; since C2 stated at the
    LIVE control — the mirror's `ctl` is the driver thread's
@@ -604,19 +637,24 @@ inside `DriverSafeCtl`).
    included) at the mirror step the logic supplies: the total lane by
    induction on the budget (`wpt_driver_aux`, `wpt_driver_cps` →
    `prod_run_eqJ`, `prod_run_eqJ_procs`), the partial lane by induction on
-   the fuel (`drive_safe_aux` → `engine_adequacy` → `prod_run_safe_procs`).
+   the loop counter (`drive_safe_aux` → `engine_adequacy` → `prod_run_safe_procs`).
    No package-defined driver, discharge or scheduler appears in any
    export's statement (the fuel-lane restatement, 2026-09-03: the former
-   package loop `driveU` around the engine's `step_ctx` is deleted; until
-   the cerberus-lean fuel arc — pin `f95ef8d9c`, the shipped driver's
-   fuel exhaustion the kernel-TRANSPARENT kill `CerbND.fuelExhaustedKill`,
-   `CerbND.driver2_lemFuel_zero` and its ND-typed siblings all `rfl`, the
-   drive cone's budget the citable `CerbFuel.driverFuel = 10^8` — the
-   out-of-fuel arm was LemLib's kernel-opaque `fuelExhaustedWith`, about
-   which nothing is provable, the semantics-side limitation the request
+   package loop `driveU` around the engine's `step_ctx` is deleted; the
+   cerberus-lean fuel arc made every driver-family worker's exhaustion the
+   kernel-TRANSPARENT kill `CerbND.fuelExhaustedKill` —
+   `driver2_lemFuel_zero`, `drive_nonmemory_steps_aux2_lemFuel_zero`,
+   `nd_bind_lemFuel_zero`, all `rfl` (generated `Driver.lean:428`, `:391`,
+   `Nondeterminism.lean:215`) — where the out-of-fuel arm had been
+   LemLib's kernel-opaque `fuelExhaustedWith`, about which nothing is
+   provable, the semantics-side limitation the request
    `../docs/2026-09-02_request-cerberus-lean-fuel-exhaustion-outcome.md`
-   asked the cerberus-lean team to lift; no package-side workaround
-   driver was ever built).
+   asked the cerberus-lean team to lift; the fuel-parameter arc (pin
+   `89f7e6885`, 2026-09-07 here) then made the budget itself the
+   caller-supplied ambient class `LemFuel`
+   (`.lake/packages/LemLib/lean-lib/LemLib.lean:66`), the fixed constants
+   `lemDefaultFuel`/`CerbFuel.driverFuel` gone (`LemLib.lean:63`, generated
+   `CerbFuel.lean:22`); no package-side workaround driver was ever built).
    What the mirror-to-engine connection establishes, in the words of
    the 2026-09-02 audit: "a sound Iris program logic for the package's
    restricted relational mirror, with a verified forward connection
@@ -696,12 +734,17 @@ inside `DriverSafeCtl`).
   `Core.instBEqCore_base_type.beq`. The fuel and well-formedness
   premises below are how the statements stay away from
   `fuelExhaustedWith` and `failwithI`. The hand-written seams also carry
-  `panic!` arms (61 at this pin, 40 in `CerbMem.lean`; mirrors of OCaml
+  `panic!` arms (119 at pin `89f7e6885`, 60 of them in `CerbMem.lean` and
+  36 in `CerbFS.lean` — DERIVED: a comment-stripped count of `panic!` over
+  the files of `handwritten_copy.manifest`; mirrors of OCaml
   `assert false`/`failwith`), which the kernel reads as the return
   type's `Inhabited` default, not as an abort. The rules' premises keep
   proved programs away from them; no theorem states that an export's
   run reaches none (ARCHITECTURE §3; KOI A5).
-- *Admissions in the pinned semantics tree: none (measured 2026-09-03).*
+- *Admissions in the pinned semantics tree: none (measured 2026-09-03;
+  re-measured at pin `89f7e6885`, 2026-09-07: `grep -rn sorry` over the
+  primed `generated/` finds comment text only, the build log has no
+  `declaration uses sorry`).*
   Until the 2026-09-03 re-pin the pinned tree carried one generated
   admission — two `(sorry : String)` terms in the debug-log branch of
   `auxAddToRfLoad` in the generated concurrency model (`Cmm_op.lean`),
@@ -741,12 +784,12 @@ theorems:
 
 | Divergence / limitation | Discharge / mover | Home |
 |---|---|---|
-| Fuel: the engine's `get_ctx` is fuel-bounded (`lemDefaultFuel = 10^6`) with an opaque exhaustion leaf, so the projection theorems carry the static premises `pot e ≤ lemDefaultFuel` and `pot cont ≤ lemDefaultFuel` per registered body (never a bound on the run length); total production statements carry `k + 2 ≤ CerbFuel.driverFuel` (the shipped driver's budget, 10^8 since the fuel arc) for the certified step count; the shipped driver's OWN fuel arm is the kernel-transparent kill `CerbND.fuelExhaustedKill` (pin `f95ef8d9c`), which the partial lane states as the admitted outcome beside delivery — at every fuel of the loop (`DriverSafeCtl`) and, in the closed form, of `CerbND.drive_lemFuel` (`prod_run_safe_procs`); measured: that outer fuel bounds `driver2`'s rounds only, the loop's budget being the fixed `10^8` inside the wrapper | a fuel-irrelevance theorem for `get_ctx`; a second upstream mirror fuelling the loop as well (recorded as available in `../docs/2026-09-02_review-of-cerberus-lean-fuel-arc-design.md` §7) if a loop-fuel-parametric CLOSED statement is ever wanted | `Soundness.lean` header ("FUEL HONESTY"), `Potential.lean`, `Adequacy.lean`; `../docs/2026-09-02_request-cerberus-lean-fuel-exhaustion-outcome.md`, `docs/2026-09-03_f1-notes.md` |
+| Fuel is the ambient parameter `LemFuel` (`.lake/packages/LemLib/lean-lib/LemLib.lean:66`) — the caller-supplied budget every fuelled engine function reads at the pin: `drive`, `driver2`, `drive_nonmemory_steps_aux2`, `nd_bind`, `runND` and the pure evaluator are all `[LemFuel]` at the SAME instance (generated `Driver.lean:390`, `:399`, `:427`; `Nondeterminism.lean:214`; `CerbND.lean:163`; `Core_eval.lean:162`); no default is installed. The exports carry it as hypotheses: `hfuel : 2 ≤ LemFuel.fuel` on every shipped-loop statement (a round's ND `bind` and its memory lift each cost a unit: `loop_step_frag`, DriverCollapse.lean:2877), `evalDepth e ≤ LemFuel.fuel` with its label/procedure twins (the pure evaluator's pass count, `eval_pexpr_aux2 [LemFuel]`, `Core_eval.lean:162`, whose exhaustion is the absorbing `Result (Error fuelExhaustedLoc fuelExhaustedMsg)`, `:163`–`:164`), and `k + 2 ≤ LemFuel.fuel` on the total closed statements; the shipped default's instances are the `*_shipped` corollaries (Shipped.lean). Exhaustion of every driver-family worker is the kernel-transparent kill `CerbND.fuelExhaustedKill` (`CerbND.lean:98`), the partial lane's admitted outcome at every ambient fuel and loop counter. What remains fail-open in the engine: the eight rows of cerberus-lean's `scripts/fuel_forms_pending.txt` — `are_compatible_aux`/`_params_aux0`/`_params0`, `hack`, `to_pure`, `to_pures`, `many`, `many1` — whose exhaustion value is LemLib's opaque `fuelExhausted` sentinel (`LemLib.lean:217`). On the fragment's proved path only `hack` (generated `Driver.lean:438`, the value read-back of `finalize`, `:469`) is reached, and it is excluded by `0 < LemFuel.fuel` (`hack_value`, DriverCollapse.lean:660; `finalize_done`, `:677`); the compatibility trio is reached only from struct/union values, `many`/`many1` only from the printf format parser (`Formatted.lean:393`), `to_pure`/`to_pures` only from the Core rewriter (`Core_rewrite.lean`), which the driver does not call — none from a `Frag` program's run | the eight (D) rows are cerberus-lean's (KNOWN-OPEN-ITEMS A1); `get_ctx`, `subst_sym_expr`, `step_eval_pexpr` are MEASURED (fuel-free) at the pin, so no `pot`/`esize` ceiling exists any more | `Fragment.lean` header, `Shipped.lean`, `Adequacy.lean`; `docs/FUEL.md`; `docs/2026-09-07_l2-repin-notes.md` |
 | Emitted-Core coverage includes t1, t4, t5 and t6: whole-term fragment witnesses, public total proofs and shipped-driver theorems. t4 adds a decreasing while invariant, both assignments, the short-circuit exit, two-read race check and fresh-symbol preservation. Ccall-free expression-case operands, bare and annotated strong symbol binding, and annotated-tuple weak binding are ruled. C calls, scheduler forks and the remaining E6/E7 cases are pending; the full emitted-file/library connection and E5 review remain open. | Remaining dialect work and the architecture review (`../docs/2026-09-04_emitted-core-dialect-design.md`, `docs/2026-09-06_e5-t4-loop.md`) | Scope above; claim matrix C14–C17; generated capability manifest |
 | Synthetic Core entry: authored Core wrapped by `prodFile`, not C through the frontend; the loop programs' label maps are nevertheless computed by the shipped registration (`*_labeledAt_production`, `LabeledAt`) | a C-frontend entry | `ProdEntry.lean` |
 | The judgments are indexed by the current PROCEDURE `p : Option sym`, not the full control, and their step clauses quantify over the call stack and execution location `(κ, ℓ)` (calls arc C3) — forcing fact: RETURN does not restore `exec_loc` (PCALL pushes `push_exec_loc`, RETURN writes `current_proc_opt`/`env`/`stack0`/`arena` only), so the caller's continuation after a return runs at a control differing from the call-time one in `execLoc`; the pre-C3 judgment at `ctl` is the instance `p := ctl.proc, κ := ctl.κ, ℓ := ctl.execLoc` at the empty table | by design (every C1/C2 rule was control-general, the C1 range audit) | `Wps.lean`, `Wpt.lean`; docs/2026-09-03_c3-notes.md |
 | The single-procedure driver lane (`wpt_driver_aux`/`_done(_alloc)`) is stated at the EMPTY table `emptyProcSpecT`, where the call clause is unsatisfiable (`wpt_empty_call_false`); the total lane THROUGH CALLS is the CPS lane `wpt_driver_cps`/`wpt_driver_done_procs` over the live-control delivery fact `DriverDoneCtl` (calls arc C4), consumed by `prod_run_eqJ_procs` — so the thirteen production statements are reached by two routes: eleven at the empty table (seven authored examples and four emitted corpus programs), and recursive fib and even/odd through calls; the partial lane is at the live control throughout (`DriverSafeCtl`, `engine_adequacy`) | the single-procedure driver lane stays as the earlier statements' route (its restatement over the general lane was declined at C4: the file tie is not available at its context profile, `procCtx`); the former total `driveU` lane was deleted in the fuel-lane restatement | `ProdLoop.lean`, `ProdEntry.lean` |
-| The partial adequacy exports carry `MachineCtx.FragProcs` (every declared procedure body in `Frag` within the potential bound, its label bodies too — the twin of the label-cone premises): their NotStuck oracle is the raw Iris WP, which does not exclude a call, so the fuel induction follows the engine through calls and returns (`drive_safe_aux`, the control invariant `ControlOk`, the env-depth invariant `Step.env_depth`, the ties `LabeledProcs`/`CtlTied`); vacuous at both profiles, discharged at the two-procedure files (`csCtx_fragProcs`, `frCtx_fragProcs`) | stays: the premise is the fragment membership of the FILE's bodies, which the specification table does not carry (a spec'd body may still be outside `Frag`) | `Adequacy.lean` |
+| The partial adequacy exports carry `MachineCtx.FragProcs` (every declared procedure body in `Frag`, its label bodies too — the twin of the label-cone premises) with its depth twin `MachineCtx.ProcsDepth LemFuel.fuel` (their `evalDepth` within the ambient budget): their NotStuck oracle is the raw Iris WP, which does not exclude a call, so the loop-counter induction follows the engine through calls and returns (`drive_safe_aux`, the control invariant `ControlOk`, the env-depth invariant `Step.env_depth`, the ties `LabeledProcs`/`CtlTied`); vacuous at both profiles (`spikeCtx_fragProcs`/`procCtx_fragProcs`, `spikeCtx_procsDepth`/`procCtx_procsDepth`), discharged at the multi-procedure files (`csCtx_fragProcs`, `frCtx_fragProcs`; `frCtx_procsDepth`, `eoCtx_procsDepth`) | stays: the premise is the fragment membership of the FILE's bodies, which the specification table does not carry (a spec'd body may still be outside `Frag`) | `Adequacy.lean` |
 | The straight-line exhibits' engine statements are at the profile `spikeCtx`/`spikeCtl` (the default file, NO current procedure); the shipped driver parks `main` at `current_proc_opt := some main_sym` (Driver.lean:530), so that thread state occurs in no pipeline run — the loop-level fact `DriverSafeCtl` admits it because the shipped round needs the current procedure's registration tie only at a jump (`loop_step_frag'`, `CtlTied.noproc`); the seeded exhibits (pre-seeded cells) likewise have no cold-start form | re-contexting the straight-line exhibits at the production context (the same hygiene slice as migrating the seven earlier production proofs to `prodCtx`, `docs/2026-09-03_c4-notes.md` §9); self-contained (building) twins for the seeded programs | `Adequacy.lean` header, `docs/2026-09-03_f1-notes.md` |
 | Well-formedness by shape: `MachineCtx.SeqWF` (startup thread), the empty-stack entry control (`ctl.κ = []`, the PROGRAM-DONE selector) and cons-shaped environment stacks — the engine's panic channels excluded by shape, never absorbed; the RETURN's empty-env panic is excluded the same way (a frame is on the env stack whenever the call stack is non-empty). Action locations carry no premise: the certification equations state the request at the engine's own `requestLoc th loc`, and `storeM_loc_irrel`/`loadM_loc_irrel` (the memory operations use the location only in the kill payload) transport the mirror's premise to it | by design | `Step.lean`, `Soundness.lean` |
 | The tag-definition environment is an explicit parameter of the heap predicates (`pointsToCell tds …`, `M.tagDefs`); the demos state footprints at `fmapEmpty` | by design: a program-wide constant of the language instance | `Heap.lean` header |
@@ -758,25 +801,27 @@ theorems:
 | Allocation capacity is the ∗-SPLITTABLE BUDGET `allocBudget n` (K2.5): `allocBudget (a + b) ⊣⊢ allocBudget a ∗ allocBudget b`, one `create` of `ty` at alignment `al` spends `allocCost = sizeof ty + max(al, 1) − 1` — the engine's worst-case cursor descent, so the bound is CONSERVATIVE by up to `align − 1` bytes per allocation (an ordered plan could fit where the summed costs do not; the exact descent depends on the cursor's residue modulo the alignment, i.e. on the request order). RefinedC has no capacity resource at all (Caesium never refuses an allocation) | the exact order-dependent descent is not expressible order-free; the slack is the price of the classical additive shape and is irrelevant at realistic cursors (the cold-start headroom is `2^48 − 9`) | `Heap.lean` ("The allocation budget"); walkthrough §4; `docs/2026-09-03_k2.5-notes.md` |
 | Read-only allocations ARE describable (K1): `MetaCell.readonly` is coupled to `Allocation.isReadonly`; `readonlyCell tds pv dq ty bs` is the read-only points-to, with `load_atomic_readonly` (loads) and NO store rule — the engine kills a store to a read-only allocation with `MerrWriteOnReadOnly kind` (`storeM_readonly_kills`, CerbMem.lean:1724-1725), stated as a fact, not absorbed. Honest qualification: no rule of this fragment MINTS a `readonlyCell` — `create` is `allocateObject … none none` (writable, :1490-1492) and the launch footprint pins `.IsWritable` | a `create_readonly`/string-literal rule (spec addition) when those constructs join the fragment | `Heap.lean` (section "The K1 bundles"), `Rules.lean` (`load_atomic_readonly`) |
 | Typed access THROUGH A REGION POINTER is type-blind in the engine (K5): at an untyped allocation `loadM`/`storeM` check the dead list, the record, bounds against the record's SIZE and writability; `isAtomicMemberAccess` is `false` at `alloc.ty = none` (CerbMem.lean:1619); no effective-type or alignment check exists. So the region access rules `regionLoadAt_atomic`/`regionStoreAt_atomic` are stated at ANY accessed type at ANY in-bounds offset over the TYPED REGION VIEW (the object view with `regionCell` for `objCell`), proved through the same seams `loadM_live`/`storeM_live` as the object rules, and a region is carved into typed fields by `typedRegionView_split`/`_join` — `malloc`'d memory as C has it | forcing fact about Cerberus (the concrete memory model tracks no effective types); RefinedC's `ty_own` at a `malloc`'d block is likewise layout-free | Heap.lean "The typed region view"; Rules.lean "THE REGION ACCESS RULES"; MallocListExhibit.lean |
-| The `Frag.case_value` premise `hbsz` (the selected branch's `esize` is bounded by the case node's) is carried, not proved. The equation whose proof would discharge it is `esize (subst_sym_expr x v e) = esize e` (with its mutual twin for `esizeAlts`): `esize` inspects only expression constructors and `subst_sym_expr` substitutes only into pure expressions. The obstacle: the engine's `subst_sym_expr` is `subst_sym_expr_lemFuel lemDefaultFuel`, a fuel-indexed recursion over the whole generated Core AST, so the proof is a fuel-indexed induction over that mutual recursion (`generic_expr`/`generic_pexpr`/patterns) — measured, not attempted. `rfl` for authored programs | that induction | `Soundness.lean` (`Frag.case_value`), `CaseExhibit.lean` header |
+| The `Frag.case_value` premise `hbsz` (the selected branch's `esize` is bounded by the case node's) is carried, not proved — by choice, since E5: at the pin the engine's `subst_sym_expr` is MEASURED (fuel-free, generated `Core_aux.lean:531`) and the substitution size equation `esize_subst` IS proved (Soundness.lean:1228, with `esize_subst_fold`, `:1244`), so `hbsz` is DERIVABLE from the branches' sizes by `case_hbsz_of_branches` (Soundness.lean:1387); the client discharges it per program — `rfl` for authored programs, `case_hbsz_of_branches` for the emitted ones | keep-as-premise is the standing form (KNOWN-OPEN-ITEMS B7) | `Fragment.lean` (`Frag.case_value`), `Soundness.lean`, `CaseExhibit.lean` header |
 | The canonical-annotation value protocol: the mirror's values are the canonical nodes `mk_value_e`/`mk_value_pe` produce (the node's outer annotation list kept, the inner list empty — `SpikeValA` carries both, E1); the pure and annotation rules are stated at those shapes; annotation-generic forms of a VALUE are false | by design | `Step.lean` header |
 
 **One reference relation.** The mirror's only reference is the shipped
 round `CerberusRound M` (Round.lean): one iteration of the shipped
 driver's thread loop — the engine's step list, `can_advance`,
 `advance_step` — stated in the driver's own vocabulary at every
-embedding driver state, with no fuel dependency. No other relational
+embedding driver state, at the ambient `[LemFuel]`, with no dependency on
+the loop counter. No other relational
 semantics is referenced or bridged, and none is needed for the root of
 trust, which is the engine.
 
 ## The trust diagram
 
 Every theorem named on an arrow has axiom set exactly `propext`,
-`Classical.choice`, `Quot.sound` (`Audit.lean`: 373 export pins at the
-time of writing; every theorem of every module bounded). "Frag" = the fragment `Frag` at a
-`SeqWF` context, an empty-stack control, with a cons-shaped environment; "labels" = every
-registered label body in `Frag` with its own static bound
-(`hQf`/`hQpot`). Arrows point the way meaning flows: a proof at the
+`Classical.choice`, `Quot.sound` (`Audit.lean`: 901 export pins
+trio-exact and 6 axiom-free-exact at the L2 re-pin, 2026-09-07; every
+theorem of every module bounded). "Frag" = the fragment `Frag` at a
+`SeqWF` context, an empty-stack control, with a cons-shaped environment,
+its `evalDepth` within the ambient budget; "labels" = every registered
+label body in `Frag` with the same depth bound (`hQf`/`hQd`). Arrows point the way meaning flows: a proof at the
 source becomes a fact at the target.
 
 ```text
@@ -824,7 +869,7 @@ source becomes a fact at the target.
     launchResources under LaunchCoh mints    adequacy in the cone; wpt_sound is the Iris collapse)
     the cursor and grants allocBudget B)
         ▼                                        ▼
-   fuel induction AGAINST THE ENGINE        driver-delivery facts   DriverDoneAt / DriverDoneCtl
+   fl induction   AGAINST THE ENGINE        driver-delivery facts   DriverDoneAt / DriverDoneCtl
    (Adequacy.lean: drive_safe_aux — one       (wpt_driver_done(_alloc), wpt_driver_done_procs):
     shipped round loop_step_frag' per unit;    the shipped per-thread loop returns PROGRAM-DONE
     NotStuck supplies the mirror step)         within k + 2 iterations
@@ -843,10 +888,10 @@ source becomes a fact at the target.
    generic driver collapse   (DriverCollapse.lean: loop_step_frag(') — proved from the driver's
      OWN round functions; driver2_done / driver2_killed; finalize_done; runND_active / runND_killed;
      ProdEntry.lean: prod_run_eqJ / prod_run_eqJ_procs ⇒ runND (drive …)
-       (initial_driver_state sup …).1 = [(Active dres, [], dst')]              [k + 2 ≤ CerbFuel.driverFuel]
-     prod_run_safe_procs ⇒ ∀ fuel, runND (drive_lemFuel fuel …) (initial_driver_state sup …).1
+       (initial_driver_state sup …).1 = [(Active dres, [], dst')]              [k + 2 ≤ LemFuel.fuel]
+     prod_run_safe_procs ⇒ ∀ [LemFuel], runND (drive …) (initial_driver_state sup …).1
        = [(st, [], dst')] ∧ (st = Killed dst' fuelExhaustedKill ∨ st = Active dres ∧ post)
-       — drive = drive_lemFuel CerbFuel.driverFuel by rfl)          [labels / LabeledProcs]
+       — the shipped drive itself, [LemFuel] at the pin)             [labels / LabeledProcs]
         ▼
    whole-program production statements — THE ROOT-OF-TRUST EXPORTS
      (exhibitA_prod, fib_certified_production,
@@ -855,8 +900,11 @@ source becomes a fact at the target.
      dispose_list_certified_production,
      region_loop_certified_production,
      malloc_list_certified_production,
-     fib_rec_certified_production)                              [∀ sup fs args]
-   and the partial closed statement fib_rec_certified            [∀ sup fs args fuel]
+     fib_rec_certified_production, even_odd_certified_production,
+     t1/t4/t5/t6_certified_production)      [∀ [LemFuel] sup fs args; hfuel : N ≤ LemFuel.fuel]
+     and their shipped-default instances *_shipped (Shipped.lean)  [letI : LemFuel := ⟨100000000⟩]
+   and the partial closed statements fib_rec_certified,
+     even_odd_certified                                          [∀ [LemFuel] sup fs args]
 ```
 
 What the diagram does not contain: a C frontend; a termination claim in
@@ -977,18 +1025,22 @@ lacks them, so they vary with the semantics workspace's build state at
 the same pin (measured 2249/3536 vs 2210/3474, `docs/2026-09-02_audit-response-4-notes.md`):
 
 ```
-info: CerberusHeapLang/Audit.lean:567:0: CerberusHeapLang export pins: 373 trio-exact
-info: CerberusHeapLang/Audit.lean:567:0: CerberusHeapLang axiom sweep: every theorem bounded by the trio (N swept, internal details included — count informational, environment-dependent)
-info: CerberusHeapLang/Audit.lean:567:0: CerberusHeapLang banned-axiom sweep: sorryAx/ofReduceBool/ofReduceNat absent from all cones (M constants of every kind swept, internal details included — count informational, environment-dependent)
+info: CerberusHeapLang/Audit.lean:1116:0: CerberusHeapLang export pins: 901 trio-exact, 6 axiom-free-exact
+info: CerberusHeapLang/Audit.lean:1116:0: CerberusHeapLang axiom sweep: every theorem bounded by the trio (N swept, internal details included — count informational, environment-dependent)
+info: CerberusHeapLang/Audit.lean:1116:0: CerberusHeapLang banned-axiom sweep: sorryAx/ofReduceBool/ofReduceNat absent from all cones (M constants of every kind swept, internal details included — count informational, environment-dependent)
 Build completed successfully (… jobs).
 ```
 
-(pin count and `Audit.lean` line as at the time of writing, 2026-09-03;
-the pin list grows with the exports)
+(pin count and `Audit.lean` line as at the L2 re-pin, 2026-09-07; the
+pin list grows with the exports; "axiom-free-exact" is the class of pins
+whose cone is exactly empty)
 
-The trust base is this build with its in-build sweep and a grep for
+The trust base is this build with its in-build sweep, a grep for
 banned proof methods (`native_decide`/`bv_decide`/`ofReduce*`) over the
-tree — the two checks `scripts/test_unit.sh --fast` runs. The full `scripts/test_unit.sh`
+tree, and the fuel-numeral grep (gate 1b, `scripts/fuel_numeral_check.sh`:
+the shipped fuel constant and the retired fuel names are red anywhere
+outside a `*_shipped` corollary, comments stripped; plant-tested by its
+`--selftest`) — the three checks `scripts/test_unit.sh --fast` runs. The full `scripts/test_unit.sh`
 adds three speedbumps: the rule-use and classification manifest is
 regenerated and diffed, the import direction semantics → heap → rules →
 adequacy → clients is checked (the protected set is the class `core` of
@@ -1012,6 +1064,8 @@ import CerberusHeapLang
 #print axioms CerberusHeapLang.dispose_list_certified_production
 #print axioms CerberusHeapLang.region_loop_certified_production
 #print axioms CerberusHeapLang.malloc_list_certified_production
+#print axioms CerberusHeapLang.t4_certified_production
+#print axioms CerberusHeapLang.fib_certified_production_shipped
 EOF
 ```
 
@@ -1033,25 +1087,33 @@ In import order, one line each:
 | `Rules.lean` | the atomic step specifications and their lifting to the raw WP; `wp_store`, `wp_load`; the readout combinator | `AtomicStep`, `store_atomic`, `wp_of_atomic`, `wp_store`, `stateInterp_readout` |
 | `Wps.lean` | the partial label-context judgment as a guarded fixpoint; its rule set; statement-level framing; the Löb collapse into the raw WP | `wps`, `wps_seq`, `wps_create`, `blockSpecs_intro`, `wps_frame_labels`, `wps_sound` |
 | `Wpt.lean` | the total judgment by recursion on the budget; variant-indexed label preconditions with the mandatory back-edge decrease; collapse into Iris `TotalWeakestPre` | `wpt`, `wpt_run`, `wpt_create`, `blockSpecsT_intro`, `wpt_frame_labels`, `wpt_sound` |
-| `Soundness.lean` | the boundary module: the per-construct engine equations of `Step` against `step_ctx` (`step_ctx_*`), the fragment `Frag`, the decomposition `Decomp`; the discharge device `dischargeStep`/`outcomesU` and its per-action computations `stepDischarge_*` (Round.lean's classification devices) | `Frag`, `Decomp.step_factor`, `step_ctx_store` |
+| `Soundness.lean` | the boundary module: the per-construct engine equations of `Step` against `step_ctx` (`step_ctx_*`), the fuel-relative proof-device fragment `FragFuel` (the public `Frag` is Fragment.lean's), the decomposition `Decomp`; the discharge device `dischargeStep`/`outcomesU` and its per-action computations `stepDischarge_*` (Round.lean's classification devices) | `FragFuel`, `Decomp.step_factor`, `step_ctx_store` |
 | `EvalClass.lean` | the engine's pure-evaluator outcome on the covered grammar, classified (`evalClass`: value / kill / uncovered) and its KILL bridge level by level — the failure twin of the success bridge | `evalClass`, `evalClass_val_iff`, `step_eval_bridge_kill`, `full_eval_bridge_kill`, `evalClassList` |
 | `Round.lean` | the shipped engine round (one iteration of the driver's thread loop, in the driver's own vocabulary), the certification `engine_step_matchU`, mirror completeness per redex root and its assembly, the exhaustive classification, the shipped refusal vocabulary and the residual — the reference relation the certification and completeness are stated over, consumed by no adequacy export (both adequacy lanes consume the shipped round `loop_step_frag`) | `CerberusRound`, `engine_step_matchU`, `frag_round_complete`, `complete_*`, `cerberusRound_classify`, `ShippedRefusal`, `OpenRound` |
-| `Potential.lean` | the step-monotone size potential `pot` — the static fuel bound | `pot`, `Frag.esize_le_pot`, `Frag.pot_step_bound` |
-| `Adequacy.lean` | Iris adequacy with the ghost state constructed; the allocation-aware launch; the partial lane over the shipped driver's per-thread loop — the driver-safety fact `DriverSafeCtl`, the fuel induction, `engine_adequacy(_alloc)`; the triples; the projections and the pure-consequence lemmas | `project_triple_pure`, `MemTriple`, `project_triple_pure_alloc`, `MemTriple_alloc`, `engine_adequacy`, `DriverSafeCtl` |
+| `Potential.lean` | the additive size potential `pot` — the former static fuel bound against the retired `get_ctx` ceiling; no export carries it since the re-pin (a size library: it bounds `esize` and is stable under the engine's substitution) | `pot`, `FragFuel.esize_le_pot`, `FragFuel.pot_step_bound` |
+| `Fragment.lean` | the SYNTACTIC fragment `Frag` (35 constructors, no fuel field — R2), the evaluator-depth measure `evalDepth` and its stability under the engine's substitution, the bridge to the proof device `FragFuel` (both directions; they coincide at any positive ambient fuel) | `Frag`, `evalDepth`, `Frag.toFuel`, `fragFuel_iff`, `evalDepth_subst` |
+| `Adequacy.lean` | Iris adequacy with the ghost state constructed; the allocation-aware launch; the partial lane over the shipped driver's per-thread loop — the driver-safety fact `DriverSafeCtl`, the loop-counter induction `drive_safe_aux`, `engine_adequacy(_alloc)`; the triples; the projections and the pure-consequence lemmas | `project_triple_pure`, `MemTriple`, `project_triple_pure_alloc`, `MemTriple_alloc`, `engine_adequacy`, `DriverSafeCtl` |
 | `TotalAdequacy.lean` | the total lane's readout vocabulary (`readoutPost` and its plumbing); the total adequacy theorems are ProdLoop's driver lane | `readoutPost` |
 | `API.lean` | the public surface as one import; the public/internal table | the header table |
 | `Examples/Layout.lean`, `Examples/ReadinessSmoke.lean` | example support (`intTy`, byte images); the two-field object predicate and its rules from the API alone | `twoField`, `twoField_create` |
 | `Examples/MirrorCoverage.lean` | mirror-level coverage witnesses proved directly against `Step` (the mixed `store` operand shapes) — a semantic regression module, NOT a client; the only other direct `Step` use outside the semantics layer is the negative test `DivergeExhibit.lean` (its header states the exception) | `store_sym_lit_step`, `store_lit_sym_step` |
-| `Exhibit.lean`, `LoopExhibit.lean`, `FibExhibit.lean`, `DivergeExhibit.lean`, `ArrayExhibit.lean`, `StructExhibit.lean`, `AllocExhibit.lean`, `ListRevExhibit.lean`, `TreeRotExhibit.lean`, `CaseExhibit.lean`, `WseqExhibit.lean`, `DisposeExhibit.lean`, `RegionLoopExhibit.lean`, `MallocListExhibit.lean`, `FibRecExhibit.lean`, `TwoLabelExhibit.lean`, `EvenOddExhibit.lean` | the exhibits (table above); the K4/K5 modules are the kill/free arc's exhibits (dispose-a-list over created nodes; n regions from one budget; THE MALLOC'D LINKED LIST — regions written, linked, read and freed through the K5 region access rules); `FibRecExhibit.lean` is the calls arc's: RECURSIVE FIB under the specification table, on the shipped pipeline in both lanes (`fib_rec_certified` partial at every fuel, `fib_rec_certified_production` total); `TwoLabelExhibit.lean` (two `save` labels, H1b) and `EvenOddExhibit.lean` (mutual recursion on the shipped pipeline in both lanes, H1b) close the two coverage items the calls arc left open | — |
+| `Exhibit.lean`, `LoopExhibit.lean`, `FibExhibit.lean`, `DivergeExhibit.lean`, `ArrayExhibit.lean`, `StructExhibit.lean`, `AllocExhibit.lean`, `ListRevExhibit.lean`, `TreeRotExhibit.lean`, `CaseExhibit.lean`, `WseqExhibit.lean`, `DisposeExhibit.lean`, `RegionLoopExhibit.lean`, `MallocListExhibit.lean`, `FibRecExhibit.lean`, `TwoLabelExhibit.lean`, `EvenOddExhibit.lean` | the exhibits (table above); the K4/K5 modules are the kill/free arc's exhibits (dispose-a-list over created nodes; n regions from one budget; THE MALLOC'D LINKED LIST — regions written, linked, read and freed through the K5 region access rules); `FibRecExhibit.lean` is the calls arc's: RECURSIVE FIB under the specification table, on the shipped pipeline in both lanes (`fib_rec_certified` partial at every ambient `[LemFuel]`, `fib_rec_certified_production` total); `TwoLabelExhibit.lean` (two `save` labels, H1b) and `EvenOddExhibit.lean` (mutual recursion on the shipped pipeline in both lanes, H1b) close the two coverage items the calls arc left open | — |
 | `DriverCollapse.lean` | the production scheduler/ND/readout collapsed onto one mirror step, proved from the driver's own round functions: the shipped round at a live control (with the jump-only tie form `loop_step_frag'`), the exhaustion rounds, the killed and active `driver2` rounds, the singleton `runND`; the live-control vocabulary both lanes share (`ctlThread`, `LabeledProcs`, `CtlTied`) | `loop_step_frag`, `loop_step_frag'`, `driver2_done`, `driver2_killed`, `finalize_done`, `runND_killed` |
 | `ProdLoop.lean` | the total judgment drives the production driver's per-thread loop — at one procedure (`DriverDoneAt`) and, since calls arc C4, THROUGH CALLS at a live control (`DriverDoneCtl`, the CPS induction `wpt_driver_cps`, every PCALL/RETURN round `loop_step_frag`, the whole-file tie `LabeledProcs`) | `wpt_driver_done`, `wpt_driver_done_alloc`, `wpt_driver_cps`, `wpt_driver_done_procs` |
-| `ProdEntry.lean` | the cold start from the shipped `initial_driver_state`; the pipeline theorems for the one-procedure file `prodFile` and the N-procedure file `prodFileWith` (the entry control `prodCtl`, the production context `prodCtx`) — total (`prod_run_eqJ(_procs)`) and partial at every `drive_lemFuel` fuel (`prod_run_safe_procs`, both arms of the setup collapse); the registration ties | `prod_run_eqJ`, `prod_run_eqJ_procs`, `prod_run_safe_procs`, `fib_labeledAt_production` |
+| `ProdEntry.lean` | the cold start from the shipped `initial_driver_state`; the pipeline theorems for the one-procedure file `prodFile` and the N-procedure file `prodFileWith` (the entry control `prodCtl`, the production context `prodCtx`) — total (`prod_run_eqJ(_procs)`, under `k + 2 ≤ LemFuel.fuel`) and partial at every ambient `[LemFuel]` (`prod_run_safe_procs`, both arms of the setup collapse); the registration ties | `prod_run_eqJ`, `prod_run_eqJ_procs`, `prod_run_safe_procs`, `fib_labeledAt_production` |
 | `ProdExhibit.lean`, `ProdLoopExhibit.lean` | the production statements (table above) | `exhibitA_prod`, `*_production` |
+| `Shipped.lean` | the thirteen closed statements instantiated at the shipped CLI default `letI : LemFuel := ⟨100000000⟩` — the corollaries `*_shipped`, their side conditions closed by `omega` (the recursive fib's through `fibRounds_mono`/`fibRounds_33`); the numeral's only home in the package | `t1_certified_production_shipped`, `fib_rec_certified_production_shipped`, `fibRounds_33`, `fibRounds_mono` |
 | `Audit.lean` | the in-build axiom check: exact export pins, the exhaustive bound, the banned-axiom sweep — internal details included, the whole package | the sweeps |
 
 ## Records
 
-History, provenance and process live in dated files, not here.
+History, provenance and process live in dated files, not here. The
+latest is the L2 re-pin record `docs/2026-09-07_l2-repin-notes.md`
+(2026-09-07: the semantics pin moved to cerberus-lean `89f7e6885`/LemLib
+`f6542f8` — fuel quantified as `LemFuel`, the fragment kept syntactic
+(R2), the `*_shipped` corollaries, the re-pinned allocator contracts, the
+census), landed on the L1 landing of E5
+(`docs/2026-09-07_l1-landing-notes.md`).
 Rulings: `../docs/DECISIONS.md` (append-only, `[USER]`/`[AGENT]`
 tagged). The kill/free arc (K0–K5.1, 2026-09-03) has its own record,
 `docs/2026-09-03_kill-free-arc-record.md` (one paragraph per slice with

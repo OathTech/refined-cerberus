@@ -1,0 +1,2073 @@
+== REMOVED (21)
+CerberusHeapLang.CorpusE0.depLe
+CerberusHeapLang.CorpusE0.depLe40
+CerberusHeapLang.Decomp.frag_plug_call'
+CerberusHeapLang.Frag.esize_le_pot
+CerberusHeapLang.Frag.pot_step_bound
+CerberusHeapLang.Frag.step
+CerberusHeapLang.MachineCtx.FragProcs.potBound
+CerberusHeapLang.depLeB
+CerberusHeapLang.depLeC
+CerberusHeapLang.drive_after_setup_lib_lemFuel
+CerberusHeapLang.drive_after_setup_with_lemFuel
+CerberusHeapLang.instLanguageCoreRtMemEmptyCoreRVal
+CerberusHeapLang.t1Main_pot
+CerberusHeapLang.t4Main_pot
+CerberusHeapLang.t4Q_pot
+CerberusHeapLang.t5Main_pot
+CerberusHeapLang.t6Main_pot
+CerberusHeapLang.t6Q_pot
+CerberusHeapLang.treeMap_get?_insert_empty
+subst_sym_pexpr_lemFuel.eq_def
+update_env_aux_lemFuel.eq_def
+== ADDED (283)
+CerberusHeapLang.Audit.axiomFreeExports
+CerberusHeapLang.CohG.lastUsed
+CerberusHeapLang.CohG.unallocated
+CerberusHeapLang.Decomp.fragFuel_plug_call
+CerberusHeapLang.Decomp.fragFuel_plug_call'
+CerberusHeapLang.Decomp.get_ctx_rebuild_action_default
+CerberusHeapLang.Decomp.get_ctx_rebuild_excluded_default
+CerberusHeapLang.DriverSafeCtl.zero
+CerberusHeapLang.Frag.toFuel
+CerberusHeapLang.FragFuel
+CerberusHeapLang.FragFuel.alloc
+CerberusHeapLang.FragFuel.alloc_op
+CerberusHeapLang.FragFuel.annot
+CerberusHeapLang.FragFuel.annot_inv
+CerberusHeapLang.FragFuel.below
+CerberusHeapLang.FragFuel.below.alloc
+CerberusHeapLang.FragFuel.below.alloc_op
+CerberusHeapLang.FragFuel.below.annot
+CerberusHeapLang.FragFuel.below.bound
+CerberusHeapLang.FragFuel.below.call
+CerberusHeapLang.FragFuel.below.case_op
+CerberusHeapLang.FragFuel.below.case_value
+CerberusHeapLang.FragFuel.below.casesOn
+CerberusHeapLang.FragFuel.below.create
+CerberusHeapLang.FragFuel.below.create_op
+CerberusHeapLang.FragFuel.below.excluded_store
+CerberusHeapLang.FragFuel.below.excluded_store_op
+CerberusHeapLang.FragFuel.below.if_
+CerberusHeapLang.FragFuel.below.kill
+CerberusHeapLang.FragFuel.below.kill_op
+CerberusHeapLang.FragFuel.below.load
+CerberusHeapLang.FragFuel.below.load_op
+CerberusHeapLang.FragFuel.below.memop_op
+CerberusHeapLang.FragFuel.below.memop_vals
+CerberusHeapLang.FragFuel.below.nd
+CerberusHeapLang.FragFuel.below.neg_store
+CerberusHeapLang.FragFuel.below.neg_store_op
+CerberusHeapLang.FragFuel.below.pure_op
+CerberusHeapLang.FragFuel.below.rec
+CerberusHeapLang.FragFuel.below.run
+CerberusHeapLang.FragFuel.below.save
+CerberusHeapLang.FragFuel.below.sseq
+CerberusHeapLang.FragFuel.below.sseq_spec
+CerberusHeapLang.FragFuel.below.sseq_sym
+CerberusHeapLang.FragFuel.below.sseq_tuple
+CerberusHeapLang.FragFuel.below.store
+CerberusHeapLang.FragFuel.below.store_op
+CerberusHeapLang.FragFuel.below.unseq
+CerberusHeapLang.FragFuel.below.val_pure
+CerberusHeapLang.FragFuel.below.wseq
+CerberusHeapLang.FragFuel.below.wseq_sym
+CerberusHeapLang.FragFuel.below.wseq_tuple
+CerberusHeapLang.FragFuel.bound
+CerberusHeapLang.FragFuel.bound_inv
+CerberusHeapLang.FragFuel.brecOn
+CerberusHeapLang.FragFuel.call
+CerberusHeapLang.FragFuel.case_op
+CerberusHeapLang.FragFuel.case_value
+CerberusHeapLang.FragFuel.casesOn
+CerberusHeapLang.FragFuel.ccallFree
+CerberusHeapLang.FragFuel.create
+CerberusHeapLang.FragFuel.create_op
+CerberusHeapLang.FragFuel.decomp
+CerberusHeapLang.FragFuel.esize_le_pot
+CerberusHeapLang.FragFuel.evalDepth_le
+CerberusHeapLang.FragFuel.excluded_of_neg
+CerberusHeapLang.FragFuel.excluded_store
+CerberusHeapLang.FragFuel.excluded_store_op
+CerberusHeapLang.FragFuel.if_
+CerberusHeapLang.FragFuel.kill
+CerberusHeapLang.FragFuel.kill_op
+CerberusHeapLang.FragFuel.load
+CerberusHeapLang.FragFuel.load_op
+CerberusHeapLang.FragFuel.memop_op
+CerberusHeapLang.FragFuel.memop_vals
+CerberusHeapLang.FragFuel.nd
+CerberusHeapLang.FragFuel.negRewrite_frag
+CerberusHeapLang.FragFuel.neg_store
+CerberusHeapLang.FragFuel.neg_store_op
+CerberusHeapLang.FragFuel.of_negRedex
+CerberusHeapLang.FragFuel.of_pePure
+CerberusHeapLang.FragFuel.pot_step_bound
+CerberusHeapLang.FragFuel.pure_op
+CerberusHeapLang.FragFuel.pure_sym
+CerberusHeapLang.FragFuel.rec
+CerberusHeapLang.FragFuel.recOn
+CerberusHeapLang.FragFuel.replug
+CerberusHeapLang.FragFuel.run
+CerberusHeapLang.FragFuel.save
+CerberusHeapLang.FragFuel.sseq
+CerberusHeapLang.FragFuel.sseq_inv_any
+CerberusHeapLang.FragFuel.sseq_spec
+CerberusHeapLang.FragFuel.sseq_sym
+CerberusHeapLang.FragFuel.sseq_tuple
+CerberusHeapLang.FragFuel.step
+CerberusHeapLang.FragFuel.store
+CerberusHeapLang.FragFuel.store_op
+CerberusHeapLang.FragFuel.substFold_pure
+CerberusHeapLang.FragFuel.toFrag
+CerberusHeapLang.FragFuel.unseq
+CerberusHeapLang.FragFuel.unseq_inv
+CerberusHeapLang.FragFuel.val_pure
+CerberusHeapLang.FragFuel.wseq
+CerberusHeapLang.FragFuel.wseq_inv_any
+CerberusHeapLang.FragFuel.wseq_sym
+CerberusHeapLang.FragFuel.wseq_tuple
+CerberusHeapLang.LaunchCoh.unallocated
+CerberusHeapLang.MachineCtx.FragProcs.toFuel
+CerberusHeapLang.MachineCtx.FragProcsFuel
+CerberusHeapLang.MachineCtx.FragProcsFuel.body
+CerberusHeapLang.MachineCtx.FragProcsFuel.casesOn
+CerberusHeapLang.MachineCtx.FragProcsFuel.labels
+CerberusHeapLang.MachineCtx.FragProcsFuel.mk
+CerberusHeapLang.MachineCtx.FragProcsFuel.rec
+CerberusHeapLang.MachineCtx.FragProcsFuel.recOn
+CerberusHeapLang.MachineCtx.ProcsDepth
+CerberusHeapLang.MachineCtx.ProcsDepth.body
+CerberusHeapLang.MachineCtx.ProcsDepth.casesOn
+CerberusHeapLang.MachineCtx.ProcsDepth.labels
+CerberusHeapLang.MachineCtx.ProcsDepth.mk
+CerberusHeapLang.MachineCtx.ProcsDepth.rec
+CerberusHeapLang.MachineCtx.ProcsDepth.recOn
+CerberusHeapLang.MemWF.default
+CerberusHeapLang.UnallocatedBytes
+CerberusHeapLang.actDepth
+CerberusHeapLang.actDepth_subst
+CerberusHeapLang.allocator_killed_inv
+CerberusHeapLang.allocator_layer
+CerberusHeapLang.allocator_success
+CerberusHeapLang.applyMemM_bind_active
+CerberusHeapLang.applyMemM_bind_zero
+CerberusHeapLang.cerberusRound_classify_fuel
+CerberusHeapLang.col_ctrProdSave
+CerberusHeapLang.col_map_empty
+CerberusHeapLang.col_mlProg
+CerberusHeapLang.col_union_empty_single
+CerberusHeapLang.collect_labeled_prodFile
+CerberusHeapLang.collect_saves_aux_call
+CerberusHeapLang.collect_saves_aux_if
+CerberusHeapLang.collect_saves_aux_pure
+CerberusHeapLang.collect_saves_aux_sseq
+CerberusHeapLang.counterProdProg_size
+CerberusHeapLang.counter_loop_certified_production_shipped
+CerberusHeapLang.csCtx_procsDepth
+CerberusHeapLang.decIndep_array_integer
+CerberusHeapLang.dispose_list_certified_production_shipped
+CerberusHeapLang.dlProdProg_size
+CerberusHeapLang.drive_after_setup_lib_one
+CerberusHeapLang.drive_after_setup_with_one
+CerberusHeapLang.driverDoneCtl_step_fuel
+CerberusHeapLang.engine_adequacy_alloc_fuel
+CerberusHeapLang.engine_adequacy_fuel
+CerberusHeapLang.engine_step_matchU_fuel
+CerberusHeapLang.eoCtx_procsDepth
+CerberusHeapLang.errnoSeeded_zero
+CerberusHeapLang.errno_init_eq
+CerberusHeapLang.esizeAlts_le_lemSize
+CerberusHeapLang.esizeList_le_lemSize
+CerberusHeapLang.esize_le_lemSize
+CerberusHeapLang.evalDepth
+CerberusHeapLang.evalDepthAlts
+CerberusHeapLang.evalDepthAlts_cons
+CerberusHeapLang.evalDepthAlts_le_of_forall
+CerberusHeapLang.evalDepthAlts_map_subst_aux
+CerberusHeapLang.evalDepthAlts_nil
+CerberusHeapLang.evalDepthList
+CerberusHeapLang.evalDepthList_cons
+CerberusHeapLang.evalDepthList_le_of_forall
+CerberusHeapLang.evalDepthList_map_aux
+CerberusHeapLang.evalDepthList_nil
+CerberusHeapLang.evalDepth_action
+CerberusHeapLang.evalDepth_annot
+CerberusHeapLang.evalDepth_bound
+CerberusHeapLang.evalDepth_case
+CerberusHeapLang.evalDepth_ccall
+CerberusHeapLang.evalDepth_excluded
+CerberusHeapLang.evalDepth_if
+CerberusHeapLang.evalDepth_le_evalDepthAlts_of_mem
+CerberusHeapLang.evalDepth_le_evalDepthList_of_mem
+CerberusHeapLang.evalDepth_let
+CerberusHeapLang.evalDepth_memop
+CerberusHeapLang.evalDepth_nd
+CerberusHeapLang.evalDepth_par
+CerberusHeapLang.evalDepth_proc
+CerberusHeapLang.evalDepth_pure
+CerberusHeapLang.evalDepth_run
+CerberusHeapLang.evalDepth_save
+CerberusHeapLang.evalDepth_sseq
+CerberusHeapLang.evalDepth_subst
+CerberusHeapLang.evalDepth_subst_fold
+CerberusHeapLang.evalDepth_subst_lemFuel
+CerberusHeapLang.evalDepth_unseq
+CerberusHeapLang.evalDepth_wait
+CerberusHeapLang.evalDepth_wseq
+CerberusHeapLang.even_odd_certified_production_shipped
+CerberusHeapLang.exhibitA_prod_shipped
+CerberusHeapLang.fibPair
+CerberusHeapLang.fibPair.eq_def
+CerberusHeapLang.fibPair_spec
+CerberusHeapLang.fibRounds_33
+CerberusHeapLang.fibRounds_le_succ
+CerberusHeapLang.fibRounds_mono
+CerberusHeapLang.fibSpec_34
+CerberusHeapLang.fib_certified_production_shipped
+CerberusHeapLang.fib_rec_certified_production_shipped
+CerberusHeapLang.frCtx_procsDepth
+CerberusHeapLang.fragFuel_iff
+CerberusHeapLang.fragFuel_ofVal
+CerberusHeapLang.fragFuel_ofValA
+CerberusHeapLang.frag_round_complete_fuel
+CerberusHeapLang.freshBase_eq_allocator
+CerberusHeapLang.fuel_pos_of_mem_bind_active
+CerberusHeapLang.instLanguageCoreRtMemEmptyCoreRValOfLemFuel
+CerberusHeapLang.intToBytes_eq
+CerberusHeapLang.list_reverse_certified_production_shipped
+CerberusHeapLang.loop_step_frag_fuel
+CerberusHeapLang.loop_step_frag_fuel'
+CerberusHeapLang.loop_step_frag_same_fuel
+CerberusHeapLang.loop_step_frag_same_fuel'
+CerberusHeapLang.lrProdProg_size
+CerberusHeapLang.malloc_list_certified_production_shipped
+CerberusHeapLang.mlProg_size
+CerberusHeapLang.ml_counter_bound
+CerberusHeapLang.peDepth_convLoadedIntC
+CerberusHeapLang.peDepth_ite_subst
+CerberusHeapLang.peDepth_le_pesDepth_of_mem
+CerberusHeapLang.peDepth_subst
+CerberusHeapLang.peDepth_subst_lemFuel
+CerberusHeapLang.pesDepth
+CerberusHeapLang.pesDepth_cons
+CerberusHeapLang.pesDepth_le_of_forall
+CerberusHeapLang.pesDepth_map_subst
+CerberusHeapLang.pesDepth_nil
+CerberusHeapLang.pesDepth_saveParams_map
+CerberusHeapLang.pmap_find?_congr_key
+CerberusHeapLang.procCtx_fragProcs_fuel
+CerberusHeapLang.procCtx_procsDepth
+CerberusHeapLang.prodMem₀_unallocated
+CerberusHeapLang.project_triple_alloc_fuel
+CerberusHeapLang.project_triple_fuel
+CerberusHeapLang.project_triple_pure_alloc_fuel
+CerberusHeapLang.project_triple_pure_fuel
+CerberusHeapLang.pull_bridge_default
+CerberusHeapLang.region_loop_certified_production_shipped
+CerberusHeapLang.runOne_bind_zero
+CerberusHeapLang.runOne_liftMem_one
+CerberusHeapLang.runOne_liftMem_zero
+CerberusHeapLang.runOne_mem_bind_zero
+CerberusHeapLang.seededAfterX
+CerberusHeapLang.seeded_eq
+CerberusHeapLang.seeded_zero
+CerberusHeapLang.semantic_frame_fuel
+CerberusHeapLang.semantic_triple_sound_fuel
+CerberusHeapLang.sizeofCtype_array_integer
+CerberusHeapLang.spikeCtx_fragProcs_fuel
+CerberusHeapLang.spikeCtx_labels_depth
+CerberusHeapLang.spikeCtx_labels_frag_fuel
+CerberusHeapLang.spikeCtx_procsDepth
+CerberusHeapLang.stepClass_bridge_fail_measured
+CerberusHeapLang.step_eval_bridge_default
+CerberusHeapLang.step_iff_cerberusRound_fuel
+CerberusHeapLang.symCmpK_laws
+CerberusHeapLang.symOrd_eq_iff
+CerberusHeapLang.t1_certified_production_shipped
+CerberusHeapLang.t4Q_depth
+CerberusHeapLang.t4_certified_production_shipped
+CerberusHeapLang.t5_certified_production_shipped
+CerberusHeapLang.t6AfterSwitch_collect
+CerberusHeapLang.t6Case2Tail_collect
+CerberusHeapLang.t6Cases_collect
+CerberusHeapLang.t6DefaultTail_collect
+CerberusHeapLang.t6Dispatch_collect
+CerberusHeapLang.t6Main_size
+CerberusHeapLang.t6Q_depth
+CerberusHeapLang.t6Switch_collect
+CerberusHeapLang.t6_certified_production_shipped
+CerberusHeapLang.wpt_driver_cps_fuel
+CerberusHeapLang.wpt_driver_done_alloc_fuel
+CerberusHeapLang.wpt_driver_done_fuel
+CerberusHeapLang.wpt_driver_done_procs_fuel
+ctype.lemSize.eq_def
+ctype_.lemSize.eq_def
+hack_lemFuel.eq_def
+== CHANGED/kind (0)
+== CHANGED/shape (61)
+CerberusHeapLang.CohG.alloc	Z2-alloc
+    PRE : CerberusHeapLang.CohG (CerbMem.writeBytesTo { nextAllocId := σ.nextAllocId + 1, nextIota := σ.nextIota, lastAddress := CerberusHeapLang.freshBase σ.lastAddress alignN sizeN.toNat, allocations := σ.allocations.insert σ.nextAllocId { base := CerberusHeapLang.freshBase σ.lastAddress alignN sizeN.toNat,
+    POST: CerberusHeapLang.CohG { nextAllocId := σ.nextAllocId + 1, nextIota := σ.nextIota, lastAddress := CerberusHeapLang.freshBase σ.lastAddress alignN n, allocations := σ.allocations.insert σ.nextAllocId { base := CerberusHeapLang.freshBase σ.lastAddress alignN n, size := ↑n, prefix_ := PrefMalloc }, iota
+CerberusHeapLang.CohG.create	Z2-alloc
+    PRE : CerberusHeapLang.CohG (CerbMem.writeBytesTo { nextAllocId := σ.nextAllocId + 1, nextIota := σ.nextIota, lastAddress := CerberusHeapLang.freshBase σ.lastAddress alignN (CerbMem.sizeofCtype tds ty), allocations := σ.allocations.insert σ.nextAllocId { base := CerberusHeapLang.freshBase σ.lastAddress al
+    POST: CerberusHeapLang.CohG (CerbMem.writeBytesTo { nextAllocId := σ.nextAllocId + 1, nextIota := σ.nextIota, lastAddress := CerberusHeapLang.freshBase σ.lastAddress alignN (CerbMem.sizeofCtype tds ty), allocations := σ.allocations.insert σ.nextAllocId { base := CerberusHeapLang.freshBase σ.lastAddress al
+CerberusHeapLang.CohG.kill	Z2-alloc
+    PRE : CerberusHeapLang.CohG { nextAllocId := σ.nextAllocId, nextIota := σ.nextIota, lastAddress := σ.lastAddress, allocations := σ.allocations.erase id, iotaMap := σ.iotaMap, funptrmap := σ.funptrmap, varargs := σ.varargs, nextVarargsId := σ.nextVarargsId, bytemap := σ.bytemap, lastUsedUnionMembers := σ.l
+    POST: CerberusHeapLang.CohG { nextAllocId := σ.nextAllocId, nextIota := σ.nextIota, lastAddress := σ.lastAddress, allocations := σ.allocations.erase id, iotaMap := σ.iotaMap, funptrmap := σ.funptrmap, varargs := σ.varargs, nextVarargsId := σ.nextVarargsId, bytemap := σ.bytemap, lastUsedUnionMembers := σ.l
+CerberusHeapLang.MachineCtx.FragProcs.labels	R2-fragment
+    PRE : CerberusHeapLang.Frag cont ∧ CerberusHeapLang.pot cont ≤ lemDefaultFuel ----
+    POST: CerberusHeapLang.Frag cont ----
+CerberusHeapLang.MemWF.kill	Z2-alloc
+    PRE : CerberusHeapLang.MemWF { nextAllocId := σ.nextAllocId, nextIota := σ.nextIota, lastAddress := σ.lastAddress, allocations := σ.allocations.erase id, iotaMap := σ.iotaMap, funptrmap := σ.funptrmap, varargs := σ.varargs, nextVarargsId := σ.nextVarargsId, bytemap := σ.bytemap, lastUsedUnionMembers := σ.
+    POST: CerberusHeapLang.MemWF { nextAllocId := σ.nextAllocId, nextIota := σ.nextIota, lastAddress := σ.lastAddress, allocations := σ.allocations.erase id, iotaMap := σ.iotaMap, funptrmap := σ.funptrmap, varargs := σ.varargs, nextVarargsId := σ.nextVarargsId, bytemap := σ.bytemap, lastUsedUnionMembers := σ.
+CerberusHeapLang.MetaCoh.kill_other	Z2-alloc
+    PRE : CerberusHeapLang.MetaCoh { nextAllocId := σ.nextAllocId, nextIota := σ.nextIota, lastAddress := σ.lastAddress, allocations := σ.allocations.erase id, iotaMap := σ.iotaMap, funptrmap := σ.funptrmap, varargs := σ.varargs, nextVarargsId := σ.nextVarargsId, bytemap := σ.bytemap, lastUsedUnionMembers := 
+    POST: CerberusHeapLang.MetaCoh { nextAllocId := σ.nextAllocId, nextIota := σ.nextIota, lastAddress := σ.lastAddress, allocations := σ.allocations.erase id, iotaMap := σ.iotaMap, funptrmap := σ.funptrmap, varargs := σ.varargs, nextVarargsId := σ.nextVarargsId, bytemap := σ.bytemap, lastUsedUnionMembers := 
+CerberusHeapLang.Step.create_inv	Z2-alloc
+    PRE : ∃ pv σ', CerberusHeapLang.applyMemM (CerbMem.allocateObject M.tagDefs 0 pref align ty none none) σ = some (pv, σ') ∧ out = (generic_expr.Expr [] (Epure (Pexpr [] () (PEval (Vobject (OVpointer pv))))), ρ, ctl.upd a, σ') ----
+    POST: ∃ pv σ', CerberusHeapLang.applyMemM (CerbMem.allocateObject M.tagDefs 0 pref align ty (get_with_address a) none) σ = some (pv, σ') ∧ out = (generic_expr.Expr [] (Epure (Pexpr [] () (PEval (Vobject (OVpointer pv))))), ρ, ctl.upd a, σ') ----
+CerberusHeapLang.Step.rec	printing-elision
+    PRE : motive a a_1 t ----
+    POST: ⋯ ----
+CerberusHeapLang.allocateObject_arg_irrel	Z2-alloc
+    PRE : CerbMem.allocateObject tds tid pref align ty r init = CerbMem.allocateObject tds tid' pref align ty r' init ----
+    POST: CerbMem.allocateObject tds tid pref align ty r init = CerbMem.allocateObject tds tid' pref align ty r init ----
+CerberusHeapLang.allocateObject_success	Z2-alloc
+    PRE : CerberusHeapLang.applyMemM (CerbMem.allocateObject tds 0 pref (CerbMem.IntegerValue.IV aprov alignN) ty none none) σ = some (CerberusHeapLang.cellPtr σ.nextAllocId (CerberusHeapLang.freshBase σ.lastAddress alignN (CerbMem.sizeofCtype tds ty)), CerbMem.writeBytesTo { nextAllocId := σ.nextAllocId + 1,
+    POST: CerberusHeapLang.applyMemM (CerbMem.allocateObject tds 0 pref (CerbMem.IntegerValue.IV aprov alignN) ty none none) σ = some (CerberusHeapLang.cellPtr σ.nextAllocId (CerberusHeapLang.freshBase σ.lastAddress alignN (CerbMem.sizeofCtype tds ty)), CerbMem.writeBytesTo { nextAllocId := σ.nextAllocId + 1,
+CerberusHeapLang.allocateRegion_killed_inv	Z1-kill
+    PRE : σ' = σ ∧ r = Other (MerrOther "out of memory") ----
+    POST: σ' = σ ∧ r = Other (MerrOther "Concrete.allocator: failed (out of memory)") ----
+CerberusHeapLang.allocateRegion_success	Z2-alloc
+    PRE : CerberusHeapLang.applyMemM (CerbMem.allocateRegion 0 pref (CerbMem.IntegerValue.IV aprov alignN) (CerbMem.IntegerValue.IV sprov sizeN)) σ = some (CerberusHeapLang.cellPtr σ.nextAllocId (CerberusHeapLang.freshBase σ.lastAddress alignN sizeN.toNat), CerbMem.writeBytesTo { nextAllocId := σ.nextAllocId 
+    POST: CerberusHeapLang.applyMemM (CerbMem.allocateRegion 0 pref (CerbMem.IntegerValue.IV aprov alignN) (CerbMem.IntegerValue.IV sprov sizeN)) σ = some (CerberusHeapLang.cellPtr σ.nextAllocId (CerberusHeapLang.freshBase σ.lastAddress alignN sizeN.toNat), { nextAllocId := σ.nextAllocId + 1, nextIota := σ.ne
+CerberusHeapLang.collect_new_eo	LemLib-map
+    PRE : collect_labeled_continuations_NEW (CerberusHeapLang.eoFile ra n nbty) = CerberusHeapLang.symAdd CerberusHeapLang.eoEvenSym fmapEmpty (CerberusHeapLang.symAdd CerberusHeapLang.eoOddSym fmapEmpty (CerberusHeapLang.symAdd CerberusHeapLang.mainSym fmapEmpty fmapEmpty)) ----
+    POST: collect_labeled_continuations_NEW (CerberusHeapLang.eoFile ra n nbty) = CerberusHeapLang.symAdd CerberusHeapLang.eoOddSym fmapEmpty (CerberusHeapLang.symAdd CerberusHeapLang.eoEvenSym fmapEmpty (CerberusHeapLang.symAdd CerberusHeapLang.mainSym fmapEmpty fmapEmpty)) ----
+CerberusHeapLang.ctrParams_depth	R2-fragment
+    PRE : CerberusHeapLang.peDepth pe ≤ lemDefaultFuel ----
+    POST: CerberusHeapLang.peDepth pe = 1 ----
+CerberusHeapLang.dlProdParams_depth	R2-fragment
+    PRE : CerberusHeapLang.peDepth pe ≤ lemDefaultFuel ----
+    POST: CerberusHeapLang.peDepth pe = 1 ----
+CerberusHeapLang.drive_after_setup_lib_killed	Z1-kill
+    PRE : CerberusHeapLang.runOne (CerbND.drive_lemFuel fuel fmapEmpty false (CerberusHeapLang.prodFileLib lib procs e) args) (initial_driver_state sup (CerberusHeapLang.prodFileLib lib procs e) fs).fst = (NDkilled r, dstK) ----
+    POST: CerberusHeapLang.runOne (drive fmapEmpty false (CerberusHeapLang.prodFileLib lib procs e) args) (initial_driver_state sup (CerberusHeapLang.prodFileLib lib procs e) fs).fst = (NDkilled r, dstK) ----
+CerberusHeapLang.drive_after_setup_with_killed	Z1-kill
+    PRE : CerberusHeapLang.runOne (CerbND.drive_lemFuel fuel fmapEmpty false (CerberusHeapLang.prodFileWith procs e) args) (initial_driver_state sup (CerberusHeapLang.prodFileWith procs e) fs).fst = (NDkilled r, dstK) ----
+    POST: CerberusHeapLang.runOne (drive fmapEmpty false (CerberusHeapLang.prodFileWith procs e) args) (initial_driver_state sup (CerberusHeapLang.prodFileWith procs e) fs).fst = (NDkilled r, dstK) ----
+CerberusHeapLang.eoDec_depth	R2-fragment
+    PRE : CerberusHeapLang.peDepth pe ≤ lemDefaultFuel ----
+    POST: CerberusHeapLang.peDepth pe = 2 ----
+CerberusHeapLang.esize_ofValA_le	R2-fragment
+    PRE : CerberusHeapLang.esize (CerberusHeapLang.ofValA w) ≤ lemDefaultFuel ----
+    POST: CerberusHeapLang.esize (CerberusHeapLang.ofValA w) ≤ 3 ----
+CerberusHeapLang.esize_ofVal_le	R2-fragment
+    PRE : CerberusHeapLang.esize (CerberusHeapLang.ofVal w) ≤ lemDefaultFuel ----
+    POST: CerberusHeapLang.esize (CerberusHeapLang.ofVal w) ≤ 3 ----
+CerberusHeapLang.even_odd_certified	engine-wrapper
+    PRE : ∃ st dst', CerbND.runND (CerbND.drive_lemFuel fuel fmapEmpty false (CerberusHeapLang.prodFileWith (CerberusHeapLang.eoProcs ra nbty) (CerberusHeapLang.eoMain ra n)) args) (initial_driver_state sup (CerberusHeapLang.prodFileWith (CerberusHeapLang.eoProcs ra nbty) (CerberusHeapLang.eoMain ra n)) fs).f
+    POST: ∃ st dst', CerbND.runND (drive fmapEmpty false (CerberusHeapLang.prodFileWith (CerberusHeapLang.eoProcs ra nbty) (CerberusHeapLang.eoMain ra n)) args) (initial_driver_state sup (CerberusHeapLang.prodFileWith (CerberusHeapLang.eoProcs ra nbty) (CerberusHeapLang.eoMain ra n)) fs).fst = [(st, [], dst')
+CerberusHeapLang.fib_rec_certified	engine-wrapper
+    PRE : ∃ st dst', CerbND.runND (CerbND.drive_lemFuel fuel fmapEmpty false (CerberusHeapLang.prodFileWith (CerberusHeapLang.frProcs ra nbty xbty ybty sbty zbty) (CerberusHeapLang.frMain ra n)) args) (initial_driver_state sup (CerberusHeapLang.prodFileWith (CerberusHeapLang.frProcs ra nbty xbty ybty sbty zbt
+    POST: ∃ st dst', CerbND.runND (drive fmapEmpty false (CerberusHeapLang.prodFileWith (CerberusHeapLang.frProcs ra nbty xbty ybty sbty zbty) (CerberusHeapLang.frMain ra n)) args) (initial_driver_state sup (CerberusHeapLang.prodFileWith (CerberusHeapLang.frProcs ra nbty xbty ybty sbty zbty) (CerberusHeapLang
+CerberusHeapLang.fmapLookupBy_addBy_empty	LemLib-map
+    PRE : fmapLookupBy cmpL' l (fmapAddBy cmpL k v fmapEmpty) = if lemCmpToOrd cmpL l k = Ordering.eq then some v else none ----
+    POST: fmapLookupBy cmpL' l (fmapAddBy cmpL k v fmapEmpty) = if cmpL l k = LemOrdering.EQ then some v else none ----
+CerberusHeapLang.frDec1_depth	R2-fragment
+    PRE : CerberusHeapLang.peDepth pe ≤ lemDefaultFuel ----
+    POST: CerberusHeapLang.peDepth pe = 2 ----
+CerberusHeapLang.frDec2_depth	R2-fragment
+    PRE : CerberusHeapLang.peDepth pe ≤ lemDefaultFuel ----
+    POST: CerberusHeapLang.peDepth pe = 2 ----
+CerberusHeapLang.frSum_depth	R2-fragment
+    PRE : CerberusHeapLang.peDepth pe ≤ lemDefaultFuel ----
+    POST: CerberusHeapLang.peDepth pe = 2 ----
+CerberusHeapLang.intToBytes_length	Z2-mem-repr
+    PRE : (CerbMem.intToBytes n sz).length = sz ----
+    POST: (CerbMem.intToBytes signed n sz).length = sz ----
+CerberusHeapLang.intToBytes_nonneg	Z2-mem-repr
+    PRE : CerbMem.intToBytes n sz = List.map (fun i => some ((n >>> (i * 8)).toNat % 256).toUInt8) (List.range sz) ----
+    POST: CerbMem.intToBytes false n sz = List.map (fun i => some ((n >>> (i * 8)).toNat % 256).toUInt8) (List.range sz) ----
+CerberusHeapLang.killM_killed_inv	Z1-kill
+    PRE : σ' = σ ∧ (r = Undef0 loc [UB179a_non_matching_allocation_free] ∨ r = Undef0 loc [UB179b_dead_allocation_free] ∨ r = Other (MerrUndefinedFree Free_out_of_bound)) ----
+    POST: σ' = σ ∧ (r = Undef0 loc [UB179a_non_matching_allocation_free] ∨ r = Undef0 loc [UB179b_dead_allocation_free] ∨ r = Undef0 loc [UB009_outside_lifetime] ∨ r = Other (MerrUndefinedFree Free_out_of_bound) ∨ r = Other (MerrOther "attempted to kill with a function pointer") ∨ r = Other (MerrOther "attemp
+CerberusHeapLang.killM_success	Z1-kill
+    PRE : CerberusHeapLang.applyMemM (CerbMem.killM loc false (CerberusHeapLang.cellPtr id mc.addr)) σ = some ((), { nextAllocId := σ.nextAllocId, nextIota := σ.nextIota, lastAddress := σ.lastAddress, allocations := σ.allocations.erase id, iotaMap := σ.iotaMap, funptrmap := σ.funptrmap, varargs := σ.varargs, 
+    POST: CerberusHeapLang.applyMemM (CerbMem.killM loc false (CerberusHeapLang.cellPtr id mc.addr)) σ = some ((), { nextAllocId := σ.nextAllocId, nextIota := σ.nextIota, lastAddress := σ.lastAddress, allocations := σ.allocations.erase id, iotaMap := σ.iotaMap, funptrmap := σ.funptrmap, varargs := σ.varargs, 
+CerberusHeapLang.killM_success_dynamic	Z1-kill
+    PRE : CerberusHeapLang.applyMemM (CerbMem.killM loc true (CerberusHeapLang.cellPtr id mc.addr)) σ = some ((), { nextAllocId := σ.nextAllocId, nextIota := σ.nextIota, lastAddress := σ.lastAddress, allocations := σ.allocations.erase id, iotaMap := σ.iotaMap, funptrmap := σ.funptrmap, varargs := σ.varargs, n
+    POST: CerberusHeapLang.applyMemM (CerbMem.killM loc true (CerberusHeapLang.cellPtr id mc.addr)) σ = some ((), { nextAllocId := σ.nextAllocId, nextIota := σ.nextIota, lastAddress := σ.lastAddress, allocations := σ.allocations.erase id, iotaMap := σ.iotaMap, funptrmap := σ.funptrmap, varargs := σ.varargs, n
+CerberusHeapLang.loadM_at	Z2-alloc
+    PRE : CerberusHeapLang.applyMemM (CerbMem.loadM tds loc vty (CerberusHeapLang.cellPtr id (a + ↑off))) σ = some ((CerbMem.Footprint.FP CerbMem.FootprintAccess.R (a + ↑off) ↑(CerbMem.sizeofCtype tds vty), mv), σ) ----
+    POST: CerberusHeapLang.applyMemM (CerbMem.loadM tds loc vty (CerberusHeapLang.cellPtr id (a + ↑off))) σ = some ((CerbMem.Footprint.FP CerbMem.FootprintAccess.R (a + ↑off) ↑(CerbMem.sizeofCtype tds vty), mv), { nextAllocId := σ.nextAllocId, nextIota := σ.nextIota, lastAddress := σ.lastAddress, allocations 
+CerberusHeapLang.loadM_live	Z2-alloc
+    PRE : CerberusHeapLang.applyMemM (CerbMem.loadM tds loc vty (CerberusHeapLang.cellPtr id (mc.addr + ↑off))) σ = some ((CerbMem.Footprint.FP CerbMem.FootprintAccess.R (mc.addr + ↑off) ↑(CerbMem.sizeofCtype tds vty), mv), σ) ----
+    POST: CerberusHeapLang.applyMemM (CerbMem.loadM tds loc vty (CerberusHeapLang.cellPtr id (mc.addr + ↑off))) σ = some ((CerbMem.Footprint.FP CerbMem.FootprintAccess.R (mc.addr + ↑off) ↑(CerbMem.sizeofCtype tds vty), mv), { nextAllocId := σ.nextAllocId, nextIota := σ.nextIota, lastAddress := σ.lastAddress, 
+CerberusHeapLang.loadM_success	Z2-alloc
+    PRE : CerberusHeapLang.applyMemM (CerbMem.loadM tds loc c.ty (CerberusHeapLang.cellPtr id c.addr)) σ = some ((CerbMem.Footprint.FP CerbMem.FootprintAccess.R c.addr ↑(CerbMem.sizeofCtype tds c.ty), CerberusHeapLang.decodeCell tds c), σ) ----
+    POST: CerberusHeapLang.applyMemM (CerbMem.loadM tds loc c.ty (CerberusHeapLang.cellPtr id c.addr)) σ = some ((CerbMem.Footprint.FP CerbMem.FootprintAccess.R c.addr ↑(CerbMem.sizeofCtype tds c.ty), CerberusHeapLang.decodeCell tds c), { nextAllocId := σ.nextAllocId, nextIota := σ.nextIota, lastAddress := σ.
+CerberusHeapLang.lrProdParams_depth	R2-fragment
+    PRE : CerberusHeapLang.peDepth pe ≤ lemDefaultFuel ----
+    POST: CerberusHeapLang.peDepth pe = 1 ----
+CerberusHeapLang.mlParams_depth	R2-fragment
+    PRE : CerberusHeapLang.peDepth pe ≤ lemDefaultFuel ----
+    POST: CerberusHeapLang.peDepth pe = 1 ----
+CerberusHeapLang.peDepth_sym_le	fuel-token-only
+CerberusHeapLang.peDepth_val_le	fuel-token-only
+CerberusHeapLang.prod_run_safe_lib	engine-wrapper
+    PRE : ∃ st dst', CerbND.runND (CerbND.drive_lemFuel fuel fmapEmpty false (CerberusHeapLang.prodFileLib lib procs e) args) (initial_driver_state sup (CerberusHeapLang.prodFileLib lib procs e) fs).fst = [(st, [], dst')] ∧ (st = Killed dst' CerbND.fuelExhaustedKill ∨ ∃ dres, st = Active dres ∧ ψ dres.dres_co
+    POST: ∃ st dst', CerbND.runND (drive fmapEmpty false (CerberusHeapLang.prodFileLib lib procs e) args) (initial_driver_state sup (CerberusHeapLang.prodFileLib lib procs e) fs).fst = [(st, [], dst')] ∧ (st = Killed dst' CerbND.fuelExhaustedKill ∨ ∃ dres, st = Active dres ∧ ψ dres.dres_core_value dst'.layout
+CerberusHeapLang.prod_run_safe_procs	engine-wrapper
+    PRE : ∃ st dst', CerbND.runND (CerbND.drive_lemFuel fuel fmapEmpty false (CerberusHeapLang.prodFileWith procs e) args) (initial_driver_state sup (CerberusHeapLang.prodFileWith procs e) fs).fst = [(st, [], dst')] ∧ (st = Killed dst' CerbND.fuelExhaustedKill ∨ ∃ dres, st = Active dres ∧ ψ dres.dres_core_val
+    POST: ∃ st dst', CerbND.runND (drive fmapEmpty false (CerberusHeapLang.prodFileWith procs e) args) (initial_driver_state sup (CerberusHeapLang.prodFileWith procs e) fs).fst = [(st, [], dst')] ∧ (st = Killed dst' CerbND.fuelExhaustedKill ∨ ∃ dres, st = Active dres ∧ ψ dres.dres_core_value dst'.layout_state
+CerberusHeapLang.ptrImg_cell	Z2-mem-repr
+    PRE : CerberusHeapLang.ptrImg (CerberusHeapLang.cellPtr id a) = List.map (fun x => match x with | (v, i) => { prov := CerbMem.Provenance.Prov_some id, copyOffset := some ↑i, value := v }) ((CerbMem.intToBytes a 8).zip (List.range (CerbMem.intToBytes a 8).length)) ----
+    POST: CerberusHeapLang.ptrImg (CerberusHeapLang.cellPtr id a) = List.map (fun x => match x with | (v, i) => { prov := CerbMem.Provenance.Prov_some id, copyOffset := some ↑i, value := v }) ((CerbMem.intToBytes false a 8).zip (List.range (CerbMem.intToBytes false a 8).length)) ----
+CerberusHeapLang.rlParams_depth	R2-fragment
+    PRE : CerberusHeapLang.peDepth pe ≤ lemDefaultFuel ----
+    POST: CerberusHeapLang.peDepth pe = 1 ----
+CerberusHeapLang.runOne_bind_nd	R2-fragment
+    PRE : ∃ p, p ∈ bs ∧ p'.snd = nd_bind_lemFuel 99999999 p.snd f ----
+    POST: ∃ p, p ∈ bs ∧ p'.snd = nd_bind_lemFuel (LemFuel.fuel - 1) p.snd f ----
+CerberusHeapLang.saveParamsWithValues_depth	fuel-token-only
+CerberusHeapLang.saveParams_depth_of_vals	R2-fragment
+    PRE : CerberusHeapLang.peDepth pe ≤ lemDefaultFuel ----
+    POST: CerberusHeapLang.peDepth pe = 1 ----
+CerberusHeapLang.spikeCtx_labels_pot	R2-fragment
+    PRE : CerberusHeapLang.pot cont ≤ lemDefaultFuel ----
+    POST: CerberusHeapLang.pot cont ≤ bound ----
+CerberusHeapLang.storeM_at	Z2-alloc
+    PRE : CerberusHeapLang.applyMemM (CerbMem.storeM tds loc vty false (CerberusHeapLang.cellPtr id (a + ↑off)) mv) σ = some (CerbMem.Footprint.FP CerbMem.FootprintAccess.W (a + ↑off) ↑(CerbMem.sizeofCtype tds vty), CerbMem.writeBytesTo σ (a + ↑off) (CerbMem.memValueToBytes tds [] mv).snd) ----
+    POST: CerberusHeapLang.applyMemM (CerbMem.storeM tds loc vty false (CerberusHeapLang.cellPtr id (a + ↑off)) mv) σ = some (CerbMem.Footprint.FP CerbMem.FootprintAccess.W (a + ↑off) ↑(CerbMem.sizeofCtype tds vty), CerbMem.writeBytesTo { nextAllocId := σ.nextAllocId, nextIota := σ.nextIota, lastAddress := σ.
+CerberusHeapLang.storeM_live	Z2-alloc
+    PRE : CerberusHeapLang.applyMemM (CerbMem.storeM tds loc vty false (CerberusHeapLang.cellPtr id (mc.addr + ↑off)) mv) σ = some (CerbMem.Footprint.FP CerbMem.FootprintAccess.W (mc.addr + ↑off) ↑(CerbMem.sizeofCtype tds vty), CerbMem.writeBytesTo σ (mc.addr + ↑off) (CerbMem.memValueToBytes tds [] mv).snd) -
+    POST: CerberusHeapLang.applyMemM (CerbMem.storeM tds loc vty false (CerberusHeapLang.cellPtr id (mc.addr + ↑off)) mv) σ = some (CerbMem.Footprint.FP CerbMem.FootprintAccess.W (mc.addr + ↑off) ↑(CerbMem.sizeofCtype tds vty), CerbMem.writeBytesTo { nextAllocId := σ.nextAllocId, nextIota := σ.nextIota, lastA
+CerberusHeapLang.storeM_success	Z2-alloc
+    PRE : CerberusHeapLang.applyMemM (CerbMem.storeM tds loc c.ty false (CerberusHeapLang.cellPtr id c.addr) mv) σ = some (CerbMem.Footprint.FP CerbMem.FootprintAccess.W c.addr ↑(CerbMem.sizeofCtype tds c.ty), CerbMem.writeBytesTo σ c.addr (CerbMem.memValueToBytes tds [] mv).snd) ----
+    POST: CerberusHeapLang.applyMemM (CerbMem.storeM tds loc c.ty false (CerberusHeapLang.cellPtr id c.addr) mv) σ = some (CerbMem.Footprint.FP CerbMem.FootprintAccess.W c.addr ↑(CerbMem.sizeofCtype tds c.ty), CerbMem.writeBytesTo { nextAllocId := σ.nextAllocId, nextIota := σ.nextIota, lastAddress := σ.lastAd
+CerberusHeapLang.struct_wp_readout	UNEXPLAINED
+    PRE : CerberusHeapLang.cellOwn CerberusHeapLang.spikeCtx.tagDefs id (Iris.DFrac.own 1) { addr := a, ty := CerberusHeapLang.structTy, bytes := bs } ⊢ WP { e := CerberusHeapLang.progS loc ann mo mo' bty id a, ρ := CerberusHeapLang.spikeEnv, ctl := CerberusHeapLang.spikeCtl, M := CerberusHeapLang.spikeCtx } 
+    POST: CerberusHeapLang.cellOwn CerberusHeapLang.spikeCtx.tagDefs id (Iris.DFrac.own 1) { addr := a, ty := CerberusHeapLang.structTy, bytes := bs } ⊢ WP { e := CerberusHeapLang.progS loc ann mo mo' bty id a, ρ := CerberusHeapLang.spikeEnv, ctl := CerberusHeapLang.spikeCtl, M := CerberusHeapLang.spikeCtx } 
+CerberusHeapLang.t4Q_eq	LemLib-map
+    PRE : CerberusHeapLang.t4Q = fmapAddBy CerberusHeapLang.symCmpL CerberusHeapLang.CorpusE0.t4BreakSym (CerberusHeapLang.t4PtrParams, CerberusHeapLang.t4BreakCont) (fmapAddBy CerberusHeapLang.symCmpL CerberusHeapLang.CorpusE0.t4ContinueSym (CerberusHeapLang.t4PtrParams, CerberusHeapLang.t4ContinueCont) (fma
+    POST: CerberusHeapLang.t4Q = fmapAddBy CerberusHeapLang.symCmpL CerberusHeapLang.CorpusE0.t4ContinueSym (CerberusHeapLang.t4PtrParams, CerberusHeapLang.t4ContinueCont) (fmapAddBy CerberusHeapLang.symCmpL CerberusHeapLang.CorpusE0.t4WhileSym (CerberusHeapLang.t4PtrParams, CerberusHeapLang.t4WhileCont) (fma
+CerberusHeapLang.t4Q_lookup	LemLib-map
+    PRE : CerberusHeapLang.lookupLabel CerberusHeapLang.t4Q l = if CerberusHeapLang.symOrd l CerberusHeapLang.CorpusE0.t4BreakSym = Ordering.eq then some (CerberusHeapLang.t4PtrParams, CerberusHeapLang.t4BreakCont) else if CerberusHeapLang.symOrd l CerberusHeapLang.CorpusE0.t4ContinueSym = Ordering.eq then so
+    POST: CerberusHeapLang.lookupLabel CerberusHeapLang.t4Q l = if CerberusHeapLang.symOrd l CerberusHeapLang.CorpusE0.t4ContinueSym = Ordering.eq then some (CerberusHeapLang.t4PtrParams, CerberusHeapLang.t4ContinueCont) else if CerberusHeapLang.symOrd l CerberusHeapLang.CorpusE0.t4WhileSym = Ordering.eq then
+CerberusHeapLang.t6Q_eq	LemLib-map
+    PRE : CerberusHeapLang.t6Q = fmapAddBy CerberusHeapLang.symCmpL CerberusHeapLang.CorpusE0.t6Case1Sym (CerberusHeapLang.t6PtrParams, CerberusHeapLang.t6Case1Cont) (fmapAddBy CerberusHeapLang.symCmpL CerberusHeapLang.CorpusE0.t6Case2Sym (CerberusHeapLang.t6PtrParams, CerberusHeapLang.t6Case2Cont) (fmapAddBy
+    POST: CerberusHeapLang.t6Q = fmapAddBy CerberusHeapLang.symCmpL CerberusHeapLang.CorpusE0.t6Case1Sym (CerberusHeapLang.t6PtrParams, CerberusHeapLang.t6Case1Cont) (fmapAddBy CerberusHeapLang.symCmpL CerberusHeapLang.CorpusE0.t6RetSym (CerberusHeapLang.t6RetParams, CerberusHeapLang.t6RetCont) (fmapAddBy Cer
+CerberusHeapLang.t6Q_lookup	LemLib-map
+    PRE : CerberusHeapLang.lookupLabel CerberusHeapLang.t6Q l = if CerberusHeapLang.symOrd l CerberusHeapLang.CorpusE0.t6Case1Sym = Ordering.eq then some (CerberusHeapLang.t6PtrParams, CerberusHeapLang.t6Case1Cont) else if CerberusHeapLang.symOrd l CerberusHeapLang.CorpusE0.t6Case2Sym = Ordering.eq then some 
+    POST: CerberusHeapLang.lookupLabel CerberusHeapLang.t6Q l = if CerberusHeapLang.symOrd l CerberusHeapLang.CorpusE0.t6Case1Sym = Ordering.eq then some (CerberusHeapLang.t6PtrParams, CerberusHeapLang.t6Case1Cont) else if CerberusHeapLang.symOrd l CerberusHeapLang.CorpusE0.t6RetSym = Ordering.eq then some (C
+CerberusHeapLang.trProg_pot	R2-fragment
+    PRE : CerberusHeapLang.pot (CerberusHeapLang.trProg loc ann mo xbty ybty bbty ubty px) ≤ lemDefaultFuel ----
+    POST: CerberusHeapLang.pot (CerberusHeapLang.trProg loc ann mo xbty ybty bbty ubty px) = 16 ----
+CerberusHeapLang.wps_bound_aux	R2-fragment
+    PRE : ⌜CerberusHeapLang.negFree b = true ∧ CerberusHeapLang.pot b ≤ lemDefaultFuel⌝ ∗ CerberusHeapLang.wps M p Ls Θ (fun w ρ' => Ψ (CerberusHeapLang.SpikeVal.pure w.val) ρ') b ρ ⊢ CerberusHeapLang.wps M p Ls Θ Ψ (generic_expr.Expr a (Ebound b)) ρ ----
+    POST: ⌜CerberusHeapLang.negFree b = true⌝ ∗ CerberusHeapLang.wps M p Ls Θ (fun w ρ' => Ψ (CerberusHeapLang.SpikeVal.pure w.val) ρ') b ρ ⊢ CerberusHeapLang.wps M p Ls Θ Ψ (generic_expr.Expr a (Ebound b)) ρ ----
+CerberusHeapLang.wps_bound_wseq_tuple_aux	R2-fragment
+    PRE : ⌜CerberusHeapLang.negFree e1 = true ∧ CerberusHeapLang.pot e1 ≤ lemDefaultFuel⌝ ∗ CerberusHeapLang.wps M p Ls Θ (fun w ρ' => iprop(∃ vs ds, ⌜w = CerberusHeapLang.SpikeVal.annot ds (Vtuple vs)⌝ ∗ CerberusHeapLang.wps M p Ls Θ Ψ (generic_expr.Expr an (Ebound (generic_expr.Expr [] (Eannot ds e2)))) (up
+    POST: ⌜CerberusHeapLang.negFree e1 = true⌝ ∗ CerberusHeapLang.wps M p Ls Θ (fun w ρ' => iprop(∃ vs ds, ⌜w = CerberusHeapLang.SpikeVal.annot ds (Vtuple vs)⌝ ∗ CerberusHeapLang.wps M p Ls Θ Ψ (generic_expr.Expr an (Ebound (generic_expr.Expr [] (Eannot ds e2)))) (update_env (CerberusHeapLang.tuplePat pa ls) 
+CerberusHeapLang.wpt_driver_cps	printing-elision
+    PRE : Iris.stateInterp σ ns [] nt ∗ CerberusHeapLang.procSpecsT M₀ Θ ∗ CerberusHeapLang.blockSpecsT M₀ (some p) Ls Θ Ψ ∗ CerberusHeapLang.wpt M₀ (some p) Ls Θ k Ψ e (ev0 :: evs) ⊢ (∀ w ρ' ℓ' lc' sp' σ' ns' k', ⌜CerberusHeapLang.SameTail (ev0 :: evs) ρ'⌝ -∗ ⌜M₀.runState.sym_supply ≤ sp'.sym⌝ -∗ ⌜CerberusHe
+    POST: Iris.stateInterp σ ns [] nt ∗ CerberusHeapLang.procSpecsT M₀ Θ ∗ CerberusHeapLang.blockSpecsT M₀ (some p) Ls Θ Ψ ∗ CerberusHeapLang.wpt M₀ (some p) Ls Θ k Ψ e (ev0 :: evs) ⊢ (∀ w ρ' ℓ' lc' sp' σ' ns' k', ⌜CerberusHeapLang.SameTail (ev0 :: evs) ρ'⌝ -∗ ⌜M₀.runState.sym_supply ≤ sp'.sym⌝ -∗ ⌜CerberusHe
+eval_pexpr_aux2_lemFuel.eq_def	engine-wrapper
+    PRE : eval_pexpr_aux2_lemFuel lemFuel _lemReader_tagDefs loc1 current_call_loc_opt core_extern1 env1 mem_st_opt file1 pe = match lemFuel with | 0 => fuelExhausted (Result (Undef CerbLocation.Loc.unknown [])) | lemFuel.succ => match have pulled := pull_constrained 0 pe; pulled with | pulled_pe@h:(Pexpr a P
+    POST: eval_pexpr_aux2_lemFuel lemFuel _lemReader_tagDefs loc1 current_call_loc_opt core_extern1 env1 mem_st_opt file1 pe = match lemFuel with | 0 => Result (Error CerbFuel.fuelExhaustedLoc CerbFuel.fuelExhaustedMsg) | lemFuel.succ => match have pulled := pull_constrained 0 pe; pulled with | pulled_pe@h:(P
+one_step_unseq_aux_lemFuel.eq_def	engine-wrapper
+    PRE : one_step_unseq_aux_lemFuel lemFuel p = match (motive := Nat → List (generic_expr b a sym) → Option (List dyn_annotation × List value)) lemFuel with | 0 => fuelExhausted fun x => none | lemFuel.succ => match (motive := List dyn_annotation × List value → List (generic_expr b a sym) → Option (List dyn_
+    POST: one_step_unseq_aux_lemFuel lemFuel p lemTail = match lemFuel with | 0 => fuelExhausted (fun x => none) lemTail | lemFuel.succ => match p with | (fps_acc, cvals_acc) => match lemTail with | [] => some (fps_acc, cvals_acc.reverse) | generic_expr.Expr a_1 (Epure (Pexpr a_2 a_3 (PEval cval))) :: xs => o
+select_case.eq_def	engine-wrapper
+    PRE : select_case subst_sym cval x = match x with | [] => none | (pat, pe) :: pat_pes' => match match_pattern pat cval with | none => select_case subst_sym cval pat_pes' | some sym_cvals => some (List.foldr (fun p acc => match p, acc with | (sym1, cval'), acc => subst_sym sym1 cval' acc) pe sym_cvals) ---
+    POST: select_case subst_sym cval x = match x with | [] => none | (pat, pe) :: pat_pes' => match match_pattern pat cval with | none => select_case subst_sym cval pat_pes' | some sym_cvals => some (lemListFoldr (fun p acc => match p, acc with | (sym1, cval'), acc => subst_sym sym1 cval' acc) pe sym_cvals) -
+== CHANGED/premise-text (82)
+CerberusHeapLang.CohG.casesOn	printing-elision
+    PRE : (metas : ∀ (id : Int) (mc : CerberusHeapLang.MetaCell), Iris.Std.get? mm id = some mc → CerberusHeapLang.MetaCoh σ id mc) → (metas_disj : ∀ (i j : Int) (mci mcj : CerberusHeapLang.MetaCell), i ≠ j → Iris.Std.get? mm i = some mci → Iris.Std.get? mm j = some mcj → CerberusHeapLang.metaDisjoint mci mcj
+    POST: (metas : ∀ (id : Int) (mc : CerberusHeapLang.MetaCell), Iris.Std.get? mm id = some mc → CerberusHeapLang.MetaCoh σ id mc) → (metas_disj : ∀ (i j : Int) (mci mcj : CerberusHeapLang.MetaCell), i ≠ j → Iris.Std.get? mm i = some mci → Iris.Std.get? mm j = some mcj → CerberusHeapLang.metaDisjoint mci mcj
+CerberusHeapLang.CohG.mk	Z2-alloc
+    PRE : 
+    POST: Iris.Std.get? mk 0 ≠ none → CerberusHeapLang.UnallocatedBytes σ
+CerberusHeapLang.CohG.rec	printing-elision
+    PRE : (metas : ∀ (id : Int) (mc : CerberusHeapLang.MetaCell), Iris.Std.get? mm id = some mc → CerberusHeapLang.MetaCoh σ id mc) → (metas_disj : ∀ (i j : Int) (mci mcj : CerberusHeapLang.MetaCell), i ≠ j → Iris.Std.get? mm i = some mci → Iris.Std.get? mm j = some mcj → CerberusHeapLang.metaDisjoint mci mcj
+    POST: (metas : ∀ (id : Int) (mc : CerberusHeapLang.MetaCell), Iris.Std.get? mm id = some mc → CerberusHeapLang.MetaCoh σ id mc) → (metas_disj : ∀ (i j : Int) (mci mcj : CerberusHeapLang.MetaCell), i ≠ j → Iris.Std.get? mm i = some mci → Iris.Std.get? mm j = some mcj → CerberusHeapLang.metaDisjoint mci mcj
+CerberusHeapLang.CohG.recOn	printing-elision
+    PRE : (metas : ∀ (id : Int) (mc : CerberusHeapLang.MetaCell), Iris.Std.get? mm id = some mc → CerberusHeapLang.MetaCoh σ id mc) → (metas_disj : ∀ (i j : Int) (mci mcj : CerberusHeapLang.MetaCell), i ≠ j → Iris.Std.get? mm i = some mci → Iris.Std.get? mm j = some mcj → CerberusHeapLang.metaDisjoint mci mcj
+    POST: (metas : ∀ (id : Int) (mc : CerberusHeapLang.MetaCell), Iris.Std.get? mm id = some mc → CerberusHeapLang.MetaCoh σ id mc) → (metas_disj : ∀ (i j : Int) (mci mcj : CerberusHeapLang.MetaCell), i ≠ j → Iris.Std.get? mm i = some mci → Iris.Std.get? mm j = some mcj → CerberusHeapLang.metaDisjoint mci mcj
+CerberusHeapLang.Frag.below.case_op	printing-elision
+    PRE : hbr : ∀ (cval : value) (e' : expr core_run_annotation), select_case subst_sym_expr cval pats = some e' → CerberusHeapLang.Frag e' | ∀ (cval : value) (e' : expr core_run_annotation) (a : select_case subst_sym_expr cval pats = some e'), CerberusHeapLang.Frag.below ⋯ | ∀ (cval : value) (e' : expr core_
+    POST: hbr : ∀ (cval : value) (e' : generic_expr core_run_annotation Unit sym), select_case subst_sym_expr cval pats = some e' → CerberusHeapLang.Frag e' | ∀ (cval : value) (e' : generic_expr core_run_annotation Unit sym) (a : select_case subst_sym_expr cval pats = some e'), CerberusHeapLang.Frag.below ⋯ |
+CerberusHeapLang.Frag.below.case_value	printing-elision
+    PRE : hbr : ∀ (e' : expr core_run_annotation), select_case subst_sym_expr cval pats = some e' → CerberusHeapLang.Frag e' | ∀ (e' : expr core_run_annotation) (a : select_case subst_sym_expr cval pats = some e'), CerberusHeapLang.Frag.below ⋯ | ∀ (e' : expr core_run_annotation) (a : select_case subst_sym_ex
+    POST: hbr : ∀ (e' : generic_expr core_run_annotation Unit sym), select_case subst_sym_expr cval pats = some e' → CerberusHeapLang.Frag e' | ∀ (e' : generic_expr core_run_annotation Unit sym) (a : select_case subst_sym_expr cval pats = some e'), CerberusHeapLang.Frag.below ⋯ | ∀ (e' : generic_expr core_run
+CerberusHeapLang.Frag.below.casesOn	printing-elision
+    PRE : 
+    POST: ∀ {an : List _root_.annot} {g : generic_pexpr Unit sym} {e2 e3 : CerberusHeapLang.CoreExpr} (hpg : CerberusHeapLang.PePure g) (a : CerberusHeapLang.Frag e2) (a_1 : CerberusHeapLang.Frag e3) (ih : CerberusHeapLang.Frag.below a) (a_ih : motive e2 a) (ih_1 : CerberusHeapLang.Frag.below a_1) (a_ih_1 : m
+CerberusHeapLang.Frag.below.rec	printing-elision
+    PRE : 
+    POST: ∀ {an : List _root_.annot} {g : generic_pexpr Unit sym} {e2 e3 : CerberusHeapLang.CoreExpr} (hpg : CerberusHeapLang.PePure g) (a : CerberusHeapLang.Frag e2) (a_1 : CerberusHeapLang.Frag e3) (ih : CerberusHeapLang.Frag.below a) (a_ih : motive e2 a) (ih_1 : CerberusHeapLang.Frag.below a_1) (a_ih_1 : m
+CerberusHeapLang.Frag.case_op	printing-abbrev
+    PRE : ∀ (cval : value) (e' : expr core_run_annotation), select_case subst_sym_expr cval pats = some e' → CerberusHeapLang.Frag e'
+    POST: ∀ (cval : value) (e' : generic_expr core_run_annotation Unit sym), select_case subst_sym_expr cval pats = some e' → CerberusHeapLang.Frag e'
+CerberusHeapLang.Frag.case_value	printing-abbrev
+    PRE : ∀ (e' : expr core_run_annotation), select_case subst_sym_expr cval pats = some e' → CerberusHeapLang.Frag e'
+    POST: ∀ (e' : generic_expr core_run_annotation Unit sym), select_case subst_sym_expr cval pats = some e' → CerberusHeapLang.Frag e'
+CerberusHeapLang.Frag.casesOn	printing-elision
+    PRE : 
+    POST: ∀ {an : List _root_.annot} {g : generic_pexpr Unit sym} {e2 e3 : CerberusHeapLang.CoreExpr} (hpg : CerberusHeapLang.PePure g) (a : CerberusHeapLang.Frag e2) (a_1 : CerberusHeapLang.Frag e3), motive (CerberusHeapLang.ifRedex an g e2 e3) ⋯ | ∀ {an : List _root_.annot} {loc : CerbLocation.Loc} {ann : c
+CerberusHeapLang.Frag.rec	printing-elision
+    PRE : 
+    POST: ∀ {an : List _root_.annot} {g : generic_pexpr Unit sym} {e2 e3 : CerberusHeapLang.CoreExpr} (hpg : CerberusHeapLang.PePure g) (a : CerberusHeapLang.Frag e2) (a_1 : CerberusHeapLang.Frag e3), motive e2 a → motive e3 a_1 → motive (CerberusHeapLang.ifRedex an g e2 e3) ⋯ | ∀ {an : List _root_.annot} {lo
+CerberusHeapLang.Frag.recOn	printing-elision
+    PRE : 
+    POST: ∀ {an : List _root_.annot} {g : generic_pexpr Unit sym} {e2 e3 : CerberusHeapLang.CoreExpr} (hpg : CerberusHeapLang.PePure g) (a : CerberusHeapLang.Frag e2) (a_1 : CerberusHeapLang.Frag e3), motive e2 a → motive e3 a_1 → motive (CerberusHeapLang.ifRedex an g e2 e3) ⋯ | ∀ {an : List _root_.annot} {lo
+CerberusHeapLang.LaunchCoh.casesOn	printing-elision
+    PRE : (coh : CerberusHeapLang.Coh tds σ m) → (wf : CerberusHeapLang.MemWF σ) → (budget : B ≤ CerberusHeapLang.headroom σ.lastAddress) → motive ⋯
+    POST: (coh : CerberusHeapLang.Coh tds σ m) → (wf : CerberusHeapLang.MemWF σ) → (budget : B ≤ CerberusHeapLang.headroom σ.lastAddress) → (unallocated : CerberusHeapLang.UnallocatedBytes σ) → motive ⋯
+CerberusHeapLang.LaunchCoh.empty	Z2-alloc
+    PRE : 
+    POST: CerberusHeapLang.UnallocatedBytes σ
+CerberusHeapLang.LaunchCoh.mk	Z2-alloc
+    PRE : 
+    POST: CerberusHeapLang.UnallocatedBytes σ
+CerberusHeapLang.LaunchCoh.rec	printing-elision
+    PRE : (coh : CerberusHeapLang.Coh tds σ m) → (wf : CerberusHeapLang.MemWF σ) → (budget : B ≤ CerberusHeapLang.headroom σ.lastAddress) → motive ⋯
+    POST: (coh : CerberusHeapLang.Coh tds σ m) → (wf : CerberusHeapLang.MemWF σ) → (budget : B ≤ CerberusHeapLang.headroom σ.lastAddress) → (unallocated : CerberusHeapLang.UnallocatedBytes σ) → motive ⋯
+CerberusHeapLang.LaunchCoh.recOn	printing-elision
+    PRE : (coh : CerberusHeapLang.Coh tds σ m) → (wf : CerberusHeapLang.MemWF σ) → (budget : B ≤ CerberusHeapLang.headroom σ.lastAddress) → motive ⋯
+    POST: (coh : CerberusHeapLang.Coh tds σ m) → (wf : CerberusHeapLang.MemWF σ) → (budget : B ≤ CerberusHeapLang.headroom σ.lastAddress) → (unallocated : CerberusHeapLang.UnallocatedBytes σ) → motive ⋯
+CerberusHeapLang.MachineCtx.FragProcs.casesOn	printing-elision
+    PRE : 
+    POST: (body : ∀ (f : sym) (params : List (sym × core_base_type)) (body : CerberusHeapLang.CoreExpr), CerberusHeapLang.lookupProc M.file M.extern f = some (params, body) → CerberusHeapLang.Frag body) → (labels : ∀ (f : sym) (params : List (sym × core_base_type)) (body : CerberusHeapLang.CoreExpr), Cerberus
+CerberusHeapLang.MachineCtx.FragProcs.mk	R2-fragment
+    PRE : 
+    POST: ∀ (f : sym) (params : List (sym × core_base_type)) (body : CerberusHeapLang.CoreExpr), CerberusHeapLang.lookupProc M.file M.extern f = some (params, body) → ∀ (l : sym) (params' : List (sym × core_base_type)) (cont : CerberusHeapLang.CoreExpr), CerberusHeapLang.lookupLabel (M.labelsAt (some f)) l = 
+CerberusHeapLang.MachineCtx.FragProcs.rec	printing-elision
+    PRE : 
+    POST: (body : ∀ (f : sym) (params : List (sym × core_base_type)) (body : CerberusHeapLang.CoreExpr), CerberusHeapLang.lookupProc M.file M.extern f = some (params, body) → CerberusHeapLang.Frag body) → (labels : ∀ (f : sym) (params : List (sym × core_base_type)) (body : CerberusHeapLang.CoreExpr), Cerberus
+CerberusHeapLang.MachineCtx.FragProcs.recOn	printing-elision
+    PRE : 
+    POST: (body : ∀ (f : sym) (params : List (sym × core_base_type)) (body : CerberusHeapLang.CoreExpr), CerberusHeapLang.lookupProc M.file M.extern f = some (params, body) → CerberusHeapLang.Frag body) → (labels : ∀ (f : sym) (params : List (sym × core_base_type)) (body : CerberusHeapLang.CoreExpr), Cerberus
+CerberusHeapLang.MemWF.allocateObject	Z2-alloc
+    PRE : CerberusHeapLang.applyMemM (CerbMem.allocateObject tds tid pref align ty reqAddr initOpt) σ = some (pv, σ' | align : CerbMem.IntegerValue | reqAddr : Option Int
+    POST: 0 < alignN | CerberusHeapLang.applyMemM (CerbMem.allocateObject tds tid pref (CerbMem.IntegerValue.IV aprov alignN) ty none initOpt) σ = some (pv, σ' | CerberusHeapLang.freshBase σ.lastAddress alignN (CerbMem.sizeofCtype tds ty) ≠ 0 | alignN : Int | aprov : CerbMem.Provenance
+CerberusHeapLang.MemWF.allocateRegion	Z2-alloc
+    PRE : CerberusHeapLang.applyMemM (CerbMem.allocateRegion tid pref align size) σ = some (pv, σ' | align : CerbMem.IntegerValue | size : CerbMem.IntegerValue
+    POST: 0 < alignN | 0 ≤ sizeN | CerberusHeapLang.applyMemM (CerbMem.allocateRegion tid pref (CerbMem.IntegerValue.IV aprov alignN) (CerbMem.IntegerValue.IV sprov sizeN)) σ = some (pv, σ' | CerberusHeapLang.freshBase σ.lastAddress alignN sizeN.toNat ≠ 0 | alignN : Int | aprov : CerbMem.Provenance | sizeN : 
+CerberusHeapLang.ReadinessSmoke.twoField_create	Z2-alloc
+    PRE : 
+    POST: 0 < alignN
+CerberusHeapLang.Step.below.casesOn	printing-elision
+    PRE : ∀ {a : List annot} {loc : CerbLocation.Loc} {ann : core_run_annotation} {lk : Bool}, ⋯ | ∀ {a : List annot} {loc : CerbLocation.Loc} {ann : core_run_annotation} {pe1 pe2 : generic_pexpr Unit sym} {align : CerbMem.IntegerValue} {ty : ctype} {pref : prefix0} {pv : CerbMem.PointerValue} {ρ : CerberusHe
+    POST: ∀ {a : List annot} {loc : CerbLocation.Loc} {ann : core_run_annotation} {pe1 pe2 : generic_pexpr Unit sym} {align : CerbMem.IntegerValue} {ty : ctype} {pref : prefix0} {pv : CerbMem.PointerValue} {ρ : CerberusHeapLang.EnvStack} {ctl : CerberusHeapLang.Ctl} {σ σ' : CerberusHeapLang.Mem} (h1 : valueFr
+CerberusHeapLang.Step.below.create	Z2-alloc
+    PRE : hmem : CerberusHeapLang.applyMemM (CerbMem.allocateObject M.tagDefs 0 pref align ty none none) σ = some (pv, σ')
+    POST: hmem : CerberusHeapLang.applyMemM (CerbMem.allocateObject M.tagDefs 0 pref align ty (get_with_address a) none) σ = some (pv, σ')
+CerberusHeapLang.Step.below.rec	printing-elision
+    PRE : ∀ {a : List annot} {loc : CerbLocation.Loc} {ann : core_run_annotation} {kind : kill_kind}, ⋯ | ∀ {a : List annot} {loc : CerbLocation.Loc} {ann : core_run_annotation} {lk : Bool} {ty : ctype} {pe2 pe3 : generic_pexpr Unit sym} {pv : CerbMem.PointerValue}, ⋯ | ∀ {a : List annot} {loc : CerbLocation.
+    POST: ∀ {a : List annot} {loc : CerbLocation.Loc} {ann : core_run_annotation} {lk : Bool} {ty : ctype} {pe2 pe3 : generic_pexpr Unit sym}, ⋯ | ∀ {a : List annot} {loc : CerbLocation.Loc} {ann : core_run_annotation} {pe1 pe2 : generic_pexpr Unit sym} {align : CerbMem.IntegerValue} {ty : ctype} {pref : pref
+CerberusHeapLang.Step.casesOn	printing-elision
+    PRE : ∀ {a : List annot} {loc : CerbLocation.Loc} {ann : core_run_annotation} {lk : Bool} {ty : ctype} {pe2 pe3 : generic_pexpr Unit sym}, ⋯ | ∀ {a : List annot} {loc : CerbLocation.Loc} {ann : core_run_annotation} {pe1 pe2 : generic_pexpr Unit sym} {align : CerbMem.IntegerValue} {ty : ctype} {pref : pref
+    POST: ∀ {a : List annot} {loc : CerbLocation.Loc} {ann : core_run_annotation} {lk : Bool} {ty : ctype}, ⋯ | ∀ {a : List annot} {loc : CerbLocation.Loc} {ann : core_run_annotation} {pe1 pe2 : generic_pexpr Unit sym} {align : CerbMem.IntegerValue} {ty : ctype} {pref : prefix0} {pv : CerbMem.PointerValue} {ρ
+CerberusHeapLang.Step.create	Z2-alloc
+    PRE : CerberusHeapLang.applyMemM (CerbMem.allocateObject M.tagDefs 0 pref align ty none none) σ = some (pv, σ'
+    POST: CerberusHeapLang.applyMemM (CerbMem.allocateObject M.tagDefs 0 pref align ty (get_with_address a) none) σ = some (pv, σ'
+CerberusHeapLang.Step.create_canonical	Z2-alloc
+    PRE : CerberusHeapLang.applyMemM (CerbMem.allocateObject M.tagDefs 0 pref align ty none none) σ = some (pv, σ'
+    POST: CerberusHeapLang.applyMemM (CerbMem.allocateObject M.tagDefs 0 pref align ty (get_with_address a) none) σ = some (pv, σ'
+CerberusHeapLang.Step.recOn	printing-elision
+    PRE : ∀ {a : List annot} {loc : CerbLocation.Loc} {ann : core_run_annotation} {lk : Bool} {ty : ctype} {pe2 pe3 : generic_pexpr Unit sym}, ⋯ | ∀ {a : List annot} {loc : CerbLocation.Loc} {ann : core_run_annotation} {pe1 pe2 : generic_pexpr Unit sym} {align : CerbMem.IntegerValue} {ty : ctype} {pref : pref
+    POST: ∀ {a : List annot} {loc : CerbLocation.Loc} {ann : core_run_annotation} {lk : Bool} {ty : ctype}, ⋯ | ∀ {a : List annot} {loc : CerbLocation.Loc} {ann : core_run_annotation} {pe1 pe2 : generic_pexpr Unit sym} {align : CerbMem.IntegerValue} {ty : ctype} {pref : prefix0} {pv : CerbMem.PointerValue} {ρ
+CerberusHeapLang.Step.toCerberusRound	R2-fragment
+    PRE : CerberusHeapLang.Frag e
+    POST: 
+CerberusHeapLang.alloc_atomic	Z2-alloc
+    PRE : 
+    POST: 0 < alignN | 0 ≤ sizeN
+CerberusHeapLang.alloc_create_kill_wps	Z2-alloc
+    PRE : 
+    POST: 0 < al
+CerberusHeapLang.alloc_create_wpt	Z2-alloc
+    PRE : 
+    POST: 0 < al
+CerberusHeapLang.alloc_free_wps	Z2-alloc
+    PRE : 
+    POST: 0 < al | 0 ≤ n
+CerberusHeapLang.alloc_two_creates_wps	Z2-alloc
+    PRE : 
+    POST: 0 < al₁ | 0 < al₂
+CerberusHeapLang.bytesToInt_of_all_some	Z2-mem-repr
+    PRE : 
+    POST: bs ≠ [ | bs.length ≤ 16
+CerberusHeapLang.case_hbsz_of_branches	printing-abbrev
+    PRE : e' : expr core_run_annotation
+    POST: e' : generic_expr core_run_annotation Unit sym
+CerberusHeapLang.create_atomic	Z2-alloc
+    PRE : 
+    POST: 0 < alignN | get_with_address a = none
+CerberusHeapLang.driverDone_step	R2-fragment
+    PRE : CerberusHeapLang.Frag e
+    POST: 
+CerberusHeapLang.emittedInt_storable	Z2-mem-repr
+    PRE : 
+    POST: -2147483648 ≤ n | n ≤ 2147483647
+CerberusHeapLang.longMval_img_length	Z2-mem-repr
+    PRE : 
+    POST: -9223372036854775808 ≤ v | v ≤ 9223372036854775807
+CerberusHeapLang.longMval_storable	Z2-mem-repr
+    PRE : 
+    POST: -9223372036854775808 ≤ v | v ≤ 9223372036854775807
+CerberusHeapLang.lrBuilt1_len	Z2-mem-repr
+    PRE : 
+    POST: 0 ≤ a₂ | a₂ < 2 ^ 64
+CerberusHeapLang.lrBuilt1_valDec	Z2-mem-repr
+    PRE : 
+    POST: 0 ≤ a₂ | a₂ < 2 ^ 64
+CerberusHeapLang.malloc_list_certified_production	Z2-alloc
+    PRE : 
+    POST: 0 < al
+CerberusHeapLang.mlBuilt_inner_len	Z2-mem-repr
+    PRE : 
+    POST: -9223372036854775808 ≤ i | i ≤ 9223372036854775807
+CerberusHeapLang.mlBuilt_len	Z2-mem-repr
+    PRE : 
+    POST: -9223372036854775808 ≤ i | i ≤ 9223372036854775807
+CerberusHeapLang.mlBuilt_nextDec	Z2-mem-repr
+    PRE : 
+    POST: -9223372036854775808 ≤ i | i ≤ 9223372036854775807
+CerberusHeapLang.ml_blockSpecs	Z2-mem-repr
+    PRE : 
+    POST: 0 < al | n.toNat ≤ 9223372036854775807
+CerberusHeapLang.ml_blockSpecsT	Z2-mem-repr
+    PRE : 
+    POST: 0 < al | n.toNat ≤ 9223372036854775807
+CerberusHeapLang.ml_blockSpecsT_readout	Z2-mem-repr
+    PRE : 
+    POST: 0 < al | n.toNat ≤ 9223372036854775807
+CerberusHeapLang.ml_body_wps	Z2-mem-repr
+    PRE : 
+    POST: 0 < al | n.toNat ≤ 9223372036854775807
+CerberusHeapLang.ml_body_wpt	Z2-mem-repr
+    PRE : 
+    POST: 0 < al | n.toNat ≤ 9223372036854775807
+CerberusHeapLang.ml_wps	Z2-mem-repr
+    PRE : 
+    POST: 0 < al | n.toNat ≤ 9223372036854775807
+CerberusHeapLang.ml_wpt	Z2-mem-repr
+    PRE : 
+    POST: 0 < al | n.toNat ≤ 9223372036854775807
+CerberusHeapLang.ml_wpt_readout	Z2-mem-repr
+    PRE : 
+    POST: 0 < al | n.toNat ≤ 9223372036854775807
+CerberusHeapLang.ptrImg_cell_explicit	Z2-mem-repr
+    PRE : 
+    POST: a < 2 ^ 64
+CerberusHeapLang.ptrImg_cell_length	Z2-mem-repr
+    PRE : 
+    POST: 0 ≤ a | a < 2 ^ 64
+CerberusHeapLang.region_loop_certified_production	Z2-alloc
+    PRE : 
+    POST: 0 < al | 0 ≤ sz
+CerberusHeapLang.rl_blockSpecs	Z2-alloc
+    PRE : 
+    POST: 0 < al | 0 ≤ sz
+CerberusHeapLang.rl_blockSpecsT	Z2-alloc
+    PRE : 
+    POST: 0 < al | 0 ≤ sz
+CerberusHeapLang.rl_blockSpecsT_readout	Z2-alloc
+    PRE : 
+    POST: 0 < al | 0 ≤ sz
+CerberusHeapLang.rl_body_wps	Z2-alloc
+    PRE : 
+    POST: 0 < al | 0 ≤ sz
+CerberusHeapLang.rl_body_wpt	Z2-alloc
+    PRE : 
+    POST: 0 < al | 0 ≤ sz
+CerberusHeapLang.rl_wps	Z2-alloc
+    PRE : 
+    POST: 0 < al | 0 ≤ sz
+CerberusHeapLang.rl_wpt	Z2-alloc
+    PRE : 
+    POST: 0 < al | 0 ≤ sz
+CerberusHeapLang.rl_wpt_readout	Z2-alloc
+    PRE : 
+    POST: 0 < al | 0 ≤ sz
+CerberusHeapLang.splitBytesProv_ptrImg_cell_fst	Z2-mem-repr
+    PRE : 
+    POST: a < 2 ^ 64
+CerberusHeapLang.stExpect_mapM_cons	UNEXPLAINED
+    PRE : f : a → s → exceptM (b × s) msg | s : Type
+    POST: f : a → st → exceptM (b × st) msg | st : Type
+CerberusHeapLang.struct_create_store_wps	Z2-alloc
+    PRE : 
+    POST: 0 < alignN
+CerberusHeapLang.trPtrImg_cell_length	Z2-mem-repr
+    PRE : 
+    POST: 0 ≤ a | a < 2 ^ 64
+CerberusHeapLang.tree_rotate_certified	UNEXPLAINED
+    PRE : sbty : core_base_type
+    POST: 
+CerberusHeapLang.wps_alloc	Z2-alloc
+    PRE : 
+    POST: 0 < alignN | 0 ≤ sizeN
+CerberusHeapLang.wps_create	Z2-alloc
+    PRE : 
+    POST: 0 < alignN | get_with_address a = none
+CerberusHeapLang.wps_create_of_plan	Z2-alloc
+    PRE : 
+    POST: 0 < req.align | get_with_address a = none
+CerberusHeapLang.wpt_alloc	Z2-alloc
+    PRE : 
+    POST: 0 < alignN | 0 ≤ sizeN
+CerberusHeapLang.wpt_create	Z2-alloc
+    PRE : 
+    POST: 0 < alignN | get_with_address a = none
+CerberusHeapLang.wpt_create_of_plan	Z2-alloc
+    PRE : 
+    POST: 0 < req.align | get_with_address a = none
+CerberusHeapLang.wpt_driver_aux	R2-fragment
+    PRE : CerberusHeapLang.Frag e | ∀ (l : sym) (params : List (sym × core_base_type)) (cont : CerberusHeapLang.CoreExpr), CerberusHeapLang.lookupLabel (M₀.labelsAt ctl.proc) l = some (params, cont) → CerberusHeapLang.Frag cont
+    POST: 
+== CHANGED/binder-only (1340)
+CerberusHeapLang.AtomicStep
+CerberusHeapLang.CerberusRound
+CerberusHeapLang.CerberusRound.loop_step
+CerberusHeapLang.CerberusRound.runND
+CerberusHeapLang.ControlOk
+CerberusHeapLang.CorpusE0.t4AndSpecified_frag
+CerberusHeapLang.CorpusE0.t6SpecifiedBranch_frag
+CerberusHeapLang.Decomp.frag_plug_call
+CerberusHeapLang.Decomp.get_ctx_default
+CerberusHeapLang.Decomp.lift_neg
+CerberusHeapLang.Decomp.lift_neg'
+CerberusHeapLang.Decomp.lift_step
+CerberusHeapLang.Decomp.step_factor
+CerberusHeapLang.Decomp.unseq_ccall_false
+CerberusHeapLang.DriverDoneAt
+CerberusHeapLang.DriverDoneCtl
+CerberusHeapLang.DriverDoneCtl.mono
+CerberusHeapLang.DriverSafeCtl
+CerberusHeapLang.DriverSafeCtl.mono
+CerberusHeapLang.EngineMatchU
+CerberusHeapLang.EngineMatchU.casesOn
+CerberusHeapLang.EngineMatchU.done
+CerberusHeapLang.EngineMatchU.rec
+CerberusHeapLang.EngineMatchU.recOn
+CerberusHeapLang.EngineMatchU.refusal_of_stuck
+CerberusHeapLang.EngineMatchU.refused
+CerberusHeapLang.EngineMatchU.removeAnnot
+CerberusHeapLang.EngineMatchU.step
+CerberusHeapLang.Frag.alloc_op
+CerberusHeapLang.Frag.below.alloc_op
+CerberusHeapLang.Frag.below.call
+CerberusHeapLang.Frag.below.create_op
+CerberusHeapLang.Frag.below.excluded_store_op
+CerberusHeapLang.Frag.below.if_
+CerberusHeapLang.Frag.below.kill_op
+CerberusHeapLang.Frag.below.load_op
+CerberusHeapLang.Frag.below.memop_op
+CerberusHeapLang.Frag.below.neg_store_op
+CerberusHeapLang.Frag.below.pure_op
+CerberusHeapLang.Frag.below.run
+CerberusHeapLang.Frag.below.save
+CerberusHeapLang.Frag.below.store_op
+CerberusHeapLang.Frag.call
+CerberusHeapLang.Frag.create_op
+CerberusHeapLang.Frag.excluded_store_op
+CerberusHeapLang.Frag.if_
+CerberusHeapLang.Frag.kill_op
+CerberusHeapLang.Frag.load_op
+CerberusHeapLang.Frag.memop_op
+CerberusHeapLang.Frag.neg_store_op
+CerberusHeapLang.Frag.of_pePure
+CerberusHeapLang.Frag.pure_op
+CerberusHeapLang.Frag.run
+CerberusHeapLang.Frag.save
+CerberusHeapLang.Frag.store_op
+CerberusHeapLang.Frag.substFold_pure
+CerberusHeapLang.MemTriple
+CerberusHeapLang.MemTriple_alloc
+CerberusHeapLang.MemTriple_alloc_of_MemTriple
+CerberusHeapLang.MemWF.loadM
+CerberusHeapLang.MemWF.storeM
+CerberusHeapLang.OpenRound
+CerberusHeapLang.OpenRound.casesOn
+CerberusHeapLang.OpenRound.eval_uncovered
+CerberusHeapLang.OpenRound.neg_sseq
+CerberusHeapLang.OpenRound.rec
+CerberusHeapLang.OpenRound.recOn
+CerberusHeapLang.OpenRound.run_surplus
+CerberusHeapLang.PassJoint
+CerberusHeapLang.PePure.subst
+CerberusHeapLang.ProvenTriple
+CerberusHeapLang.Reach
+CerberusHeapLang.Reach.toPool
+CerberusHeapLang.ReadinessSmoke.fieldYPtr
+CerberusHeapLang.ReadinessSmoke.fieldYPtr_cellPtr
+CerberusHeapLang.ReadinessSmoke.twoField_load_x
+CerberusHeapLang.ReadinessSmoke.twoField_load_y
+CerberusHeapLang.ReadinessSmoke.twoField_store_x
+CerberusHeapLang.ReadinessSmoke.twoField_store_y
+CerberusHeapLang.RoundClass
+CerberusHeapLang.RoundClass.casesOn
+CerberusHeapLang.RoundClass.open_
+CerberusHeapLang.RoundClass.rec
+CerberusHeapLang.RoundClass.recOn
+CerberusHeapLang.RoundClass.refused
+CerberusHeapLang.RoundClass.step
+CerberusHeapLang.RoundClass.value_annot
+CerberusHeapLang.RoundClass.value_done
+CerberusHeapLang.RoundClass.value_not_step
+CerberusHeapLang.RoundComplete
+CerberusHeapLang.SemTriple
+CerberusHeapLang.SemTriple_iff_Mem
+CerberusHeapLang.ShippedRefusal
+CerberusHeapLang.ShippedRefusal.casesOn
+CerberusHeapLang.ShippedRefusal.error
+CerberusHeapLang.ShippedRefusal.error_next
+CerberusHeapLang.ShippedRefusal.fork
+CerberusHeapLang.ShippedRefusal.killed
+CerberusHeapLang.ShippedRefusal.panic
+CerberusHeapLang.ShippedRefusal.panic_env
+CerberusHeapLang.ShippedRefusal.panic_memop
+CerberusHeapLang.ShippedRefusal.panic_noproc
+CerberusHeapLang.ShippedRefusal.panic_step
+CerberusHeapLang.ShippedRefusal.rec
+CerberusHeapLang.ShippedRefusal.recOn
+CerberusHeapLang.Step
+CerberusHeapLang.Step.CallOf
+CerberusHeapLang.Step.CallOf.callRedex?_some
+CerberusHeapLang.Step.CallOf.ne_same_κ
+CerberusHeapLang.Step.CallOf.ne_upd
+CerberusHeapLang.Step.CallOf.not_val
+CerberusHeapLang.Step.alloc
+CerberusHeapLang.Step.alloc_canonical
+CerberusHeapLang.Step.alloc_eval
+CerberusHeapLang.Step.alloc_inv
+CerberusHeapLang.Step.alloc_op_inv
+CerberusHeapLang.Step.annot_ctx
+CerberusHeapLang.Step.annot_inv
+CerberusHeapLang.Step.annot_merge
+CerberusHeapLang.Step.annot_val_inv
+CerberusHeapLang.Step.below
+CerberusHeapLang.Step.below.alloc
+CerberusHeapLang.Step.below.alloc_eval
+CerberusHeapLang.Step.below.annot_ctx
+CerberusHeapLang.Step.below.annot_merge
+CerberusHeapLang.Step.below.bound_annot
+CerberusHeapLang.Step.below.bound_ctx
+CerberusHeapLang.Step.below.bound_pure
+CerberusHeapLang.Step.below.call
+CerberusHeapLang.Step.below.case_eval
+CerberusHeapLang.Step.below.case_value
+CerberusHeapLang.Step.below.create_eval
+CerberusHeapLang.Step.below.excluded_store
+CerberusHeapLang.Step.below.excluded_store_eval
+CerberusHeapLang.Step.below.if_false
+CerberusHeapLang.Step.below.if_true
+CerberusHeapLang.Step.below.kill
+CerberusHeapLang.Step.below.kill_eval
+CerberusHeapLang.Step.below.load
+CerberusHeapLang.Step.below.load_eval
+CerberusHeapLang.Step.below.memop_eval
+CerberusHeapLang.Step.below.memop_ptreq
+CerberusHeapLang.Step.below.neg_bound
+CerberusHeapLang.Step.below.pure_eval
+CerberusHeapLang.Step.below.ret
+CerberusHeapLang.Step.below.ret_annot
+CerberusHeapLang.Step.below.run
+CerberusHeapLang.Step.below.save
+CerberusHeapLang.Step.below.save_eval
+CerberusHeapLang.Step.below.sseq_annot
+CerberusHeapLang.Step.below.sseq_ctx
+CerberusHeapLang.Step.below.sseq_pure
+CerberusHeapLang.Step.below.sseq_spec_annot
+CerberusHeapLang.Step.below.sseq_spec_pure
+CerberusHeapLang.Step.below.sseq_sym_annot
+CerberusHeapLang.Step.below.sseq_sym_pure
+CerberusHeapLang.Step.below.sseq_tuple_annot
+CerberusHeapLang.Step.below.sseq_tuple_pure
+CerberusHeapLang.Step.below.store
+CerberusHeapLang.Step.below.store_eval
+CerberusHeapLang.Step.below.unseq_ctx
+CerberusHeapLang.Step.below.unseq_vals
+CerberusHeapLang.Step.below.wseq_annot
+CerberusHeapLang.Step.below.wseq_ctx
+CerberusHeapLang.Step.below.wseq_pure
+CerberusHeapLang.Step.below.wseq_sym_annot
+CerberusHeapLang.Step.below.wseq_sym_pure
+CerberusHeapLang.Step.below.wseq_tuple_annot
+CerberusHeapLang.Step.below.wseq_tuple_pure
+CerberusHeapLang.Step.bound_annot
+CerberusHeapLang.Step.bound_ctx
+CerberusHeapLang.Step.bound_inv
+CerberusHeapLang.Step.bound_pure
+CerberusHeapLang.Step.brecOn
+CerberusHeapLang.Step.call
+CerberusHeapLang.Step.callOf_of_call_annot
+CerberusHeapLang.Step.callOf_of_call_bound
+CerberusHeapLang.Step.callOf_of_call_sseq
+CerberusHeapLang.Step.callOf_of_call_unseq
+CerberusHeapLang.Step.callOf_of_call_wseq
+CerberusHeapLang.Step.call_inv
+CerberusHeapLang.Step.call_inv'
+CerberusHeapLang.Step.call_ne_same_κ
+CerberusHeapLang.Step.call_ne_upd
+CerberusHeapLang.Step.call_of_callRedex
+CerberusHeapLang.Step.case_eval
+CerberusHeapLang.Step.case_inv
+CerberusHeapLang.Step.case_op_inv
+CerberusHeapLang.Step.case_value
+CerberusHeapLang.Step.case_value_inv
+CerberusHeapLang.Step.ccallFree_preserved
+CerberusHeapLang.Step.create_eval
+CerberusHeapLang.Step.create_op_inv
+CerberusHeapLang.Step.ctl_cases
+CerberusHeapLang.Step.ctl_eq
+CerberusHeapLang.Step.ctl_eq'
+CerberusHeapLang.Step.ctl_frame_of_κ
+CerberusHeapLang.Step.ctl_upd
+CerberusHeapLang.Step.ctl_upd_of_κ
+CerberusHeapLang.Step.env_cons
+CerberusHeapLang.Step.env_cons'
+CerberusHeapLang.Step.env_depth
+CerberusHeapLang.Step.excluded_store
+CerberusHeapLang.Step.excluded_store_canonical
+CerberusHeapLang.Step.excluded_store_eval
+CerberusHeapLang.Step.excluded_store_inv
+CerberusHeapLang.Step.excluded_store_op_inv
+CerberusHeapLang.Step.if_false
+CerberusHeapLang.Step.if_inv
+CerberusHeapLang.Step.if_true
+CerberusHeapLang.Step.jump_inv
+CerberusHeapLang.Step.kill
+CerberusHeapLang.Step.kill_canonical
+CerberusHeapLang.Step.kill_eval
+CerberusHeapLang.Step.kill_inv
+CerberusHeapLang.Step.kill_op_inv
+CerberusHeapLang.Step.load
+CerberusHeapLang.Step.load_canonical
+CerberusHeapLang.Step.load_eval
+CerberusHeapLang.Step.load_inv
+CerberusHeapLang.Step.load_op_inv
+CerberusHeapLang.Step.memop_eval
+CerberusHeapLang.Step.memop_op_inv
+CerberusHeapLang.Step.memop_ptreq
+CerberusHeapLang.Step.memop_ptreq_inv
+CerberusHeapLang.Step.memop_vals_inv
+CerberusHeapLang.Step.nd_root_elim
+CerberusHeapLang.Step.negFree_preserved
+CerberusHeapLang.Step.neg_bound
+CerberusHeapLang.Step.neg_root_elim
+CerberusHeapLang.Step.pot_le
+CerberusHeapLang.Step.pure_eval
+CerberusHeapLang.Step.pure_inv
+CerberusHeapLang.Step.pure_val_elim
+CerberusHeapLang.Step.ret
+CerberusHeapLang.Step.ret_annot
+CerberusHeapLang.Step.ret_annot_inv
+CerberusHeapLang.Step.ret_inv
+CerberusHeapLang.Step.retag
+CerberusHeapLang.Step.run
+CerberusHeapLang.Step.run_of_jumpRedex
+CerberusHeapLang.Step.sameTail
+CerberusHeapLang.Step.save
+CerberusHeapLang.Step.save_eval
+CerberusHeapLang.Step.save_inv
+CerberusHeapLang.Step.save_op_inv
+CerberusHeapLang.Step.save_vals_inv
+CerberusHeapLang.Step.sseq_annot
+CerberusHeapLang.Step.sseq_ctx
+CerberusHeapLang.Step.sseq_inv
+CerberusHeapLang.Step.sseq_pure
+CerberusHeapLang.Step.sseq_spec_annot
+CerberusHeapLang.Step.sseq_spec_pure
+CerberusHeapLang.Step.sseq_sym_annot
+CerberusHeapLang.Step.sseq_sym_pure
+CerberusHeapLang.Step.sseq_tuple_annot
+CerberusHeapLang.Step.sseq_tuple_pure
+CerberusHeapLang.Step.store
+CerberusHeapLang.Step.store_canonical
+CerberusHeapLang.Step.store_eval
+CerberusHeapLang.Step.store_inv
+CerberusHeapLang.Step.store_op_inv
+CerberusHeapLang.Step.sup_sym_le
+CerberusHeapLang.Step.toValA_none
+CerberusHeapLang.Step.toValRt_none
+CerberusHeapLang.Step.toVal_none
+CerberusHeapLang.Step.unseq_ctx
+CerberusHeapLang.Step.unseq_inv
+CerberusHeapLang.Step.unseq_vals
+CerberusHeapLang.Step.val_elim
+CerberusHeapLang.Step.wseq_annot
+CerberusHeapLang.Step.wseq_ctx
+CerberusHeapLang.Step.wseq_inv
+CerberusHeapLang.Step.wseq_pure
+CerberusHeapLang.Step.wseq_sym_annot
+CerberusHeapLang.Step.wseq_sym_pure
+CerberusHeapLang.Step.wseq_tuple_annot
+CerberusHeapLang.Step.wseq_tuple_pure
+CerberusHeapLang.advance_action
+CerberusHeapLang.advance_action_killed
+CerberusHeapLang.advance_memop
+CerberusHeapLang.advance_tau
+CerberusHeapLang.advance_tau_tsk
+CerberusHeapLang.advance_tau_tsk0
+CerberusHeapLang.advance_withrs_eval
+CerberusHeapLang.advance_withrs_failed_eval
+CerberusHeapLang.advance_withrs_failed_tau
+CerberusHeapLang.advance_withrs_killed_eval
+CerberusHeapLang.advance_withrs_killed_tau
+CerberusHeapLang.advance_withrs_tau
+CerberusHeapLang.advance_withrs_tau_rs
+CerberusHeapLang.alignofIntPe_eval
+CerberusHeapLang.alignofIval_intTy
+CerberusHeapLang.alloc_lit_sym_step
+CerberusHeapLang.allocateObject_layer
+CerberusHeapLang.allocateRegion_arg_irrel
+CerberusHeapLang.allocateRegion_layer
+CerberusHeapLang.arr_args_eval
+CerberusHeapLang.arr_blockSpecs
+CerberusHeapLang.arr_body_wps
+CerberusHeapLang.arr_exit_eval
+CerberusHeapLang.arr_guard_eval
+CerberusHeapLang.arr_p_eval
+CerberusHeapLang.arr_wp_readout
+CerberusHeapLang.arr_wps
+CerberusHeapLang.arrayShift_cellPtr
+CerberusHeapLang.arrayShift_cellPtr_long
+CerberusHeapLang.arrayShift_cellPtr_long_two
+CerberusHeapLang.array_sum_certified
+CerberusHeapLang.ars_alloc_active
+CerberusHeapLang.ars_alloc_killed
+CerberusHeapLang.ars_create_active
+CerberusHeapLang.ars_create_killed
+CerberusHeapLang.ars_kill_active
+CerberusHeapLang.ars_kill_killed
+CerberusHeapLang.ars_load_active
+CerberusHeapLang.ars_load_killed
+CerberusHeapLang.ars_memop_active
+CerberusHeapLang.ars_store_active
+CerberusHeapLang.ars_store_killed
+CerberusHeapLang.aux2_bridge
+CerberusHeapLang.aux2_bridge_fail
+CerberusHeapLang.aux2_bridge_kill
+CerberusHeapLang.blockSpecs
+CerberusHeapLang.blockSpecsT
+CerberusHeapLang.blockSpecsT_frame
+CerberusHeapLang.blockSpecsT_intro
+CerberusHeapLang.blockSpecsT_mono
+CerberusHeapLang.blockSpecs_frame
+CerberusHeapLang.blockSpecs_intro
+CerberusHeapLang.blockSpecs_mono
+CerberusHeapLang.bound_annot_round
+CerberusHeapLang.bound_pure_round
+CerberusHeapLang.cAdd_pure_round
+CerberusHeapLang.cLsT_readout
+CerberusHeapLang.call_smoke_engine
+CerberusHeapLang.casePe_eval
+CerberusHeapLang.caseProg_wps
+CerberusHeapLang.caseProg_wpt
+CerberusHeapLang.case_blockSpecs
+CerberusHeapLang.case_certified
+CerberusHeapLang.case_eval_round
+CerberusHeapLang.case_wp_readout
+CerberusHeapLang.ccallFreeList_has_ccall
+CerberusHeapLang.ccallFree_subst
+CerberusHeapLang.ccallFree_subst_fold
+CerberusHeapLang.cellOwn_readout
+CerberusHeapLang.cellPtr_arrayShift
+CerberusHeapLang.cell_read_shared_wps
+CerberusHeapLang.cells_readout
+CerberusHeapLang.cerberusRound_classify
+CerberusHeapLang.cerberusRound_refused_alloc
+CerberusHeapLang.cerberusRound_refused_case
+CerberusHeapLang.cerberusRound_refused_create
+CerberusHeapLang.cerberusRound_refused_kill
+CerberusHeapLang.cerberusRound_refused_load
+CerberusHeapLang.cerberusRound_refused_store
+CerberusHeapLang.classIter
+CerberusHeapLang.classIter.eq_def
+CerberusHeapLang.classIter_bridge
+CerberusHeapLang.classIter_ne_val
+CerberusHeapLang.complete_alloc
+CerberusHeapLang.complete_alloc_op
+CerberusHeapLang.complete_beta_annot
+CerberusHeapLang.complete_beta_pure
+CerberusHeapLang.complete_beta_spec
+CerberusHeapLang.complete_beta_sym
+CerberusHeapLang.complete_beta_tuple
+CerberusHeapLang.complete_bound_annot
+CerberusHeapLang.complete_bound_pure
+CerberusHeapLang.complete_call
+CerberusHeapLang.complete_case
+CerberusHeapLang.complete_case_op
+CerberusHeapLang.complete_create
+CerberusHeapLang.complete_create_op
+CerberusHeapLang.complete_excluded_store
+CerberusHeapLang.complete_excluded_store_op
+CerberusHeapLang.complete_if
+CerberusHeapLang.complete_kill
+CerberusHeapLang.complete_kill_op
+CerberusHeapLang.complete_load
+CerberusHeapLang.complete_load_op
+CerberusHeapLang.complete_memop_op
+CerberusHeapLang.complete_memop_vals
+CerberusHeapLang.complete_merge
+CerberusHeapLang.complete_nd
+CerberusHeapLang.complete_neg_act
+CerberusHeapLang.complete_pure_op
+CerberusHeapLang.complete_pure_sym
+CerberusHeapLang.complete_ret
+CerberusHeapLang.complete_run
+CerberusHeapLang.complete_run_noproc
+CerberusHeapLang.complete_save
+CerberusHeapLang.complete_store
+CerberusHeapLang.complete_store_op
+CerberusHeapLang.complete_unseq_vals
+CerberusHeapLang.complete_wbeta_annot
+CerberusHeapLang.complete_wbeta_pure
+CerberusHeapLang.complete_wbeta_sym
+CerberusHeapLang.complete_wbeta_tuple
+CerberusHeapLang.convLoadedIntC_eval
+CerberusHeapLang.convLoadedInt_pure_wps
+CerberusHeapLang.convLoadedInt_pure_wpt
+CerberusHeapLang.counter_loop_certified
+CerberusHeapLang.counter_loop_certified_irrelevant_binding
+CerberusHeapLang.counter_loop_certified_production
+CerberusHeapLang.create_alignof_round
+CerberusHeapLang.csCtx_fragProcs
+CerberusHeapLang.csCtx_procSpecs
+CerberusHeapLang.csCtx_procSpecsT
+CerberusHeapLang.csFBody_frag
+CerberusHeapLang.csF_body_wps
+CerberusHeapLang.csF_body_wpt
+CerberusHeapLang.csIncPe_eval
+CerberusHeapLang.csMainBody_frag
+CerberusHeapLang.csMain_wps
+CerberusHeapLang.csMain_wpt
+CerberusHeapLang.cs_blockSpecs
+CerberusHeapLang.cs_blockSpecsT
+CerberusHeapLang.cs_twp_readout
+CerberusHeapLang.cs_wp_readout
+CerberusHeapLang.ctrProd_wpt
+CerberusHeapLang.ctr_backedge_args_eval
+CerberusHeapLang.ctr_blockSpecsT
+CerberusHeapLang.ctr_body_wpt
+CerberusHeapLang.ctr_guard_eval
+CerberusHeapLang.ctr_save_params_eval
+CerberusHeapLang.ctr_store_ptr_eval
+CerberusHeapLang.deadObj_readout
+CerberusHeapLang.deadRegion_readout
+CerberusHeapLang.dec_eval
+CerberusHeapLang.dg_loop_exhausts
+CerberusHeapLang.dg_post_to_readout
+CerberusHeapLang.dg_self_step
+CerberusHeapLang.dischargeStep
+CerberusHeapLang.dischargeStep_alloc_active
+CerberusHeapLang.dischargeStep_alloc_refusal
+CerberusHeapLang.dischargeStep_create_active
+CerberusHeapLang.dischargeStep_create_refusal
+CerberusHeapLang.dischargeStep_kill_active
+CerberusHeapLang.dischargeStep_kill_refusal
+CerberusHeapLang.dischargeStep_load_active
+CerberusHeapLang.dischargeStep_load_refusal
+CerberusHeapLang.dischargeStep_memop_active
+CerberusHeapLang.dischargeStep_store_active
+CerberusHeapLang.dischargeStep_store_refusal
+CerberusHeapLang.dispose_list_certified_production
+CerberusHeapLang.diverge_total_unprovable
+CerberusHeapLang.dlPost_readout
+CerberusHeapLang.dlProd_blockSpecsT
+CerberusHeapLang.dlProd_readout
+CerberusHeapLang.dlProd_wpt
+CerberusHeapLang.dl_args_eval
+CerberusHeapLang.dl_blockSpecs
+CerberusHeapLang.dl_blockSpecsT
+CerberusHeapLang.dl_blockSpecsT_frame
+CerberusHeapLang.dl_blockSpecs_frame
+CerberusHeapLang.dl_body_wps
+CerberusHeapLang.dl_body_wpt
+CerberusHeapLang.dl_body_wpt_frame
+CerberusHeapLang.dl_cur_eval
+CerberusHeapLang.dl_guard_eval
+CerberusHeapLang.dl_kill_operand_eval
+CerberusHeapLang.dl_shift_eval_B
+CerberusHeapLang.dl_wps
+CerberusHeapLang.dl_wps_emp
+CerberusHeapLang.dl_wps_frame
+CerberusHeapLang.dl_wpt
+CerberusHeapLang.dl_wpt_frame
+CerberusHeapLang.drive_after_setup
+CerberusHeapLang.drive_after_setup_lib
+CerberusHeapLang.drive_after_setup_with
+CerberusHeapLang.driver2_done
+CerberusHeapLang.driver2_killed
+CerberusHeapLang.driverDoneCtl_annot
+CerberusHeapLang.driverDoneCtl_step
+CerberusHeapLang.driverDoneCtl_value
+CerberusHeapLang.driverDone_annot
+CerberusHeapLang.driverDone_value
+CerberusHeapLang.emittedInt_encodes
+CerberusHeapLang.engineStepsU
+CerberusHeapLang.engine_adequacy
+CerberusHeapLang.engine_adequacy_alloc
+CerberusHeapLang.engine_complete_caseU
+CerberusHeapLang.engine_complete_createU
+CerberusHeapLang.engine_complete_loadU
+CerberusHeapLang.engine_complete_storeU
+CerberusHeapLang.engine_step_matchU
+CerberusHeapLang.eoCtx_procSpecs
+CerberusHeapLang.eoCtx_procSpecsT
+CerberusHeapLang.eoDec_eval
+CerberusHeapLang.eoEvenBody_wps
+CerberusHeapLang.eoEvenBody_wpt
+CerberusHeapLang.eoGuard_eval
+CerberusHeapLang.eoMain_wps
+CerberusHeapLang.eoMain_wpt
+CerberusHeapLang.eoN_eval
+CerberusHeapLang.eoOddBody_wps
+CerberusHeapLang.eoOddBody_wpt
+CerberusHeapLang.eoPost_to_readout
+CerberusHeapLang.eo_blockSpecs
+CerberusHeapLang.eo_blockSpecsT
+CerberusHeapLang.eo_wp_readout
+CerberusHeapLang.errnoSeeded
+CerberusHeapLang.errnoSeeded_eq
+CerberusHeapLang.errno_alloc_eq
+CerberusHeapLang.errno_store_eq
+CerberusHeapLang.esize_subst
+CerberusHeapLang.esize_subst_fold
+CerberusHeapLang.eval1_bridge
+CerberusHeapLang.eval1_bridge_fail
+CerberusHeapLang.eval1_bridge_gen
+CerberusHeapLang.eval1_bridge_kill
+CerberusHeapLang.evalArrayShift
+CerberusHeapLang.evalArrayShift_long_one
+CerberusHeapLang.evalArrayShift_long_two
+CerberusHeapLang.evalArrayShift_ptr_one
+CerberusHeapLang.evalClass
+CerberusHeapLang.evalClassFold
+CerberusHeapLang.evalClassFold_cons
+CerberusHeapLang.evalClassFold_of_none
+CerberusHeapLang.evalClassFold_uncovered
+CerberusHeapLang.evalClassFold_vals_iff
+CerberusHeapLang.evalClassList
+CerberusHeapLang.evalClassList_cons
+CerberusHeapLang.evalClassList_of_none
+CerberusHeapLang.evalClassList_uncovered
+CerberusHeapLang.evalClassList_vals_iff
+CerberusHeapLang.evalClass_cAdd_overflow
+CerberusHeapLang.evalClass_of_none
+CerberusHeapLang.evalClass_val_iff
+CerberusHeapLang.evalCtor
+CerberusHeapLang.evalCtor_ivmax_int
+CerberusHeapLang.evalCtor_ivmin_int
+CerberusHeapLang.evalCtor_mirrored
+CerberusHeapLang.evalCtor_spec
+CerberusHeapLang.evalCtor_tuple
+CerberusHeapLang.evalCtor_tyCtor
+CerberusHeapLang.evalPexpr
+CerberusHeapLang.evalPexpr.eq_def
+CerberusHeapLang.evalPexprList
+CerberusHeapLang.evalPexprList.eq_def
+CerberusHeapLang.evalPexprList_cons
+CerberusHeapLang.evalPexprList_nil
+CerberusHeapLang.evalPexprList_some_iff
+CerberusHeapLang.evalPexpr_array_shift
+CerberusHeapLang.evalPexpr_cAdd
+CerberusHeapLang.evalPexpr_cAddBranch
+CerberusHeapLang.evalPexpr_cAdd_overflow
+CerberusHeapLang.evalPexpr_call
+CerberusHeapLang.evalPexpr_case
+CerberusHeapLang.evalPexpr_catch
+CerberusHeapLang.evalPexpr_catch_add_int
+CerberusHeapLang.evalPexpr_convIntInst
+CerberusHeapLang.evalPexpr_convInt_call_int
+CerberusHeapLang.evalPexpr_convLoadedInt_spec
+CerberusHeapLang.evalPexpr_convLoadedInt_unspec
+CerberusHeapLang.evalPexpr_conv_int
+CerberusHeapLang.evalPexpr_conv_int_int
+CerberusHeapLang.evalPexpr_ctor
+CerberusHeapLang.evalPexpr_ctor1
+CerberusHeapLang.evalPexpr_ctor2
+CerberusHeapLang.evalPexpr_if
+CerberusHeapLang.evalPexpr_isReprInst
+CerberusHeapLang.evalPexpr_isRepr_int
+CerberusHeapLang.evalPexpr_is_unsigned
+CerberusHeapLang.evalPexpr_none_of_fail
+CerberusHeapLang.evalPexpr_none_of_kill
+CerberusHeapLang.evalPexpr_none_of_uncovered
+CerberusHeapLang.evalPexpr_not
+CerberusHeapLang.evalPexpr_of_valueFromPexpr
+CerberusHeapLang.evalPexpr_op
+CerberusHeapLang.evalPexpr_peStrip
+CerberusHeapLang.evalPexpr_reannot0
+CerberusHeapLang.evalPexpr_shape
+CerberusHeapLang.evalPexpr_step
+CerberusHeapLang.evalPexpr_sym
+CerberusHeapLang.evalPexpr_sym_empty
+CerberusHeapLang.evalPexpr_sym_of_resolve
+CerberusHeapLang.evalPexpr_tyctor
+CerberusHeapLang.evalPexpr_undef
+CerberusHeapLang.evalPexpr_val
+CerberusHeapLang.evalPexpr_valPe
+CerberusHeapLang.evalPexpr_wrapI
+CerberusHeapLang.evalPexprs
+CerberusHeapLang.evalPexprs_cons
+CerberusHeapLang.evalPexprs_cons_val
+CerberusHeapLang.evalPexprs_length
+CerberusHeapLang.evalPexprs_nil
+CerberusHeapLang.evalPexprs_of_valueFromPexprs
+CerberusHeapLang.evalPexprs_single_val
+CerberusHeapLang.evalTyCtor
+CerberusHeapLang.evalTyCtor_alignof
+CerberusHeapLang.evalTyCtor_isSome
+CerberusHeapLang.evalTyCtor_sizeof
+CerberusHeapLang.evalTyCtor_unspecified
+CerberusHeapLang.even_odd_certified_production
+CerberusHeapLang.excluded_store_atomic
+CerberusHeapLang.excluded_store_eval_round
+CerberusHeapLang.excluded_store_round
+CerberusHeapLang.exhibitA_engine
+CerberusHeapLang.exhibitA_prod
+CerberusHeapLang.exhibitA_prod_e1
+CerberusHeapLang.exhibitA_semantic
+CerberusHeapLang.exhibitB_engine
+CerberusHeapLang.exhibitB_prod_e2
+CerberusHeapLang.exhibitB_semantic
+CerberusHeapLang.exhibitC_engine
+CerberusHeapLang.exhibitC_prod_e3
+CerberusHeapLang.exhibitC_semantic
+CerberusHeapLang.fibPost_to_readout
+CerberusHeapLang.fib_args_eval
+CerberusHeapLang.fib_blockSpecs
+CerberusHeapLang.fib_blockSpecsT
+CerberusHeapLang.fib_body_wps
+CerberusHeapLang.fib_body_wpt
+CerberusHeapLang.fib_certified
+CerberusHeapLang.fib_certified_production
+CerberusHeapLang.fib_exit_eval
+CerberusHeapLang.fib_guard_eval
+CerberusHeapLang.fib_rec_certified_production
+CerberusHeapLang.fib_wp_readout
+CerberusHeapLang.fib_wps
+CerberusHeapLang.fib_wpt
+CerberusHeapLang.finalize_done
+CerberusHeapLang.five_encodes
+CerberusHeapLang.foldM_args_bridge
+CerberusHeapLang.foldM_args_fail
+CerberusHeapLang.foldM_args_kill
+CerberusHeapLang.four_encodes
+CerberusHeapLang.frBody_wps
+CerberusHeapLang.frBody_wpt
+CerberusHeapLang.frCtx_procSpecs
+CerberusHeapLang.frCtx_procSpecsT
+CerberusHeapLang.frDec1_eval
+CerberusHeapLang.frDec2_eval
+CerberusHeapLang.frGuard_eval
+CerberusHeapLang.frMain_wps
+CerberusHeapLang.frMain_wpt
+CerberusHeapLang.frN_eval
+CerberusHeapLang.frPost_to_readout
+CerberusHeapLang.frSum_eval
+CerberusHeapLang.frZ_eval
+CerberusHeapLang.fr_blockSpecs
+CerberusHeapLang.fr_blockSpecsT
+CerberusHeapLang.fr_wp_readout
+CerberusHeapLang.frag_round_complete
+CerberusHeapLang.free_atomic
+CerberusHeapLang.full_eval_bridge
+CerberusHeapLang.full_eval_bridge_fail
+CerberusHeapLang.full_eval_bridge_kill
+CerberusHeapLang.full_eval_bridge_undef
+CerberusHeapLang.fupd_wps
+CerberusHeapLang.fupd_wpt_nonval
+CerberusHeapLang.guard_eval
+CerberusHeapLang.hack_value
+CerberusHeapLang.instIrisGS
+CerberusHeapLang.isAtomicMemberAccess_false
+CerberusHeapLang.isAtomicMemberAccess_false'
+CerberusHeapLang.isAtomicMemberAccess_false_opt
+CerberusHeapLang.joint_ctor
+CerberusHeapLang.kill_atomic
+CerberusHeapLang.kill_sym_step
+CerberusHeapLang.language_toVal_eq
+CerberusHeapLang.lintPe_eval
+CerberusHeapLang.list_reverse_certified
+CerberusHeapLang.list_reverse_certified_production
+CerberusHeapLang.list_reverse_demo
+CerberusHeapLang.loadAt_atomic
+CerberusHeapLang.loadM_layer
+CerberusHeapLang.loadM_loc_irrel
+CerberusHeapLang.load_atomic
+CerberusHeapLang.load_atomic_readonly
+CerberusHeapLang.longMval_encodes
+CerberusHeapLang.loop_blockSpecs
+CerberusHeapLang.loop_body_wps
+CerberusHeapLang.loop_readout_val
+CerberusHeapLang.loop_step_action
+CerberusHeapLang.loop_step_done
+CerberusHeapLang.loop_step_done_exhaust
+CerberusHeapLang.loop_step_frag
+CerberusHeapLang.loop_step_frag'
+CerberusHeapLang.loop_step_frag_same
+CerberusHeapLang.loop_step_frag_same'
+CerberusHeapLang.loop_step_memop
+CerberusHeapLang.loop_step_of_advance
+CerberusHeapLang.loop_step_of_advance0
+CerberusHeapLang.loop_step_tau
+CerberusHeapLang.loop_step_tau_tsk
+CerberusHeapLang.loop_step_withrs_eval
+CerberusHeapLang.loop_step_withrs_eval_killed
+CerberusHeapLang.loop_step_withrs_tau
+CerberusHeapLang.loop_step_withrs_tau_rs
+CerberusHeapLang.loop_wp_readout
+CerberusHeapLang.loop_wps
+CerberusHeapLang.loop_zero_exhausts
+CerberusHeapLang.lrPFrame_save_params
+CerberusHeapLang.lrPFrame_save_params_dl
+CerberusHeapLang.lrPFrame_shift_n1
+CerberusHeapLang.lrPFrame_shift_n2
+CerberusHeapLang.lrPost_readout
+CerberusHeapLang.lrProdPrefix_wpt
+CerberusHeapLang.lrProd_blockSpecsT
+CerberusHeapLang.lrProd_wpt
+CerberusHeapLang.lr_args_eval
+CerberusHeapLang.lr_blockSpecs
+CerberusHeapLang.lr_blockSpecsT
+CerberusHeapLang.lr_blockSpecsT_frame
+CerberusHeapLang.lr_blockSpecs_frame
+CerberusHeapLang.lr_body_wps
+CerberusHeapLang.lr_body_wpt
+CerberusHeapLang.lr_body_wpt_frame
+CerberusHeapLang.lr_cur_eval
+CerberusHeapLang.lr_exit_eval
+CerberusHeapLang.lr_guard_eval
+CerberusHeapLang.lr_shift_eval_B
+CerberusHeapLang.lr_shift_eval_N
+CerberusHeapLang.lr_store_value_eval
+CerberusHeapLang.lr_wp_readout
+CerberusHeapLang.lr_wps
+CerberusHeapLang.lr_wps_frame
+CerberusHeapLang.lr_wpt
+CerberusHeapLang.lr_wpt_frame
+CerberusHeapLang.mapM_eval1_bridge
+CerberusHeapLang.mapM_eval1_fail
+CerberusHeapLang.mapM_eval1_kill
+CerberusHeapLang.mapM_full_eval_bridge
+CerberusHeapLang.mapM_full_eval_fail
+CerberusHeapLang.mapM_full_eval_kill
+CerberusHeapLang.mapM_save_bridge
+CerberusHeapLang.mapM_save_fail
+CerberusHeapLang.mapM_save_kill
+CerberusHeapLang.memop_fork
+CerberusHeapLang.mlPost_readout
+CerberusHeapLang.ml_args_build_eval
+CerberusHeapLang.ml_args_free_eval
+CerberusHeapLang.ml_b_eval
+CerberusHeapLang.ml_guard_eval
+CerberusHeapLang.ml_i_eval_Q
+CerberusHeapLang.ml_p_eval
+CerberusHeapLang.ml_p_eval_N
+CerberusHeapLang.ml_p_eval_Q
+CerberusHeapLang.ml_q_eval
+CerberusHeapLang.ml_shift_p_eval_B
+CerberusHeapLang.ml_shift_q_eval
+CerberusHeapLang.nd_fork
+CerberusHeapLang.negFree_subst
+CerberusHeapLang.negFree_subst_fold
+CerberusHeapLang.neg_bound_round
+CerberusHeapLang.node_ptr_encodes
+CerberusHeapLang.outcomesU
+CerberusHeapLang.overflow_driver2_killed
+CerberusHeapLang.overflow_driver2_killed_frame
+CerberusHeapLang.overflow_evalClass
+CerberusHeapLang.overflow_step_ctx
+CerberusHeapLang.pairAll_eval_values
+CerberusHeapLang.pairAll_exists_steps
+CerberusHeapLang.pairAll_step_values
+CerberusHeapLang.perform_memop_ptreq_panic
+CerberusHeapLang.pot_subst
+CerberusHeapLang.pot_subst_fold
+CerberusHeapLang.primStep_eq
+CerberusHeapLang.procCtx_fragProcs
+CerberusHeapLang.procSpecs
+CerberusHeapLang.procSpecsT
+CerberusHeapLang.procSpecsT_empty
+CerberusHeapLang.procSpecsT_intro
+CerberusHeapLang.procSpecs_empty
+CerberusHeapLang.procSpecs_intro
+CerberusHeapLang.process_done
+CerberusHeapLang.prod_run_eqJ
+CerberusHeapLang.prod_run_eqJ_lib
+CerberusHeapLang.prod_run_eqJ_lib1
+CerberusHeapLang.prod_run_eqJ_procs
+CerberusHeapLang.progAE1_wps
+CerberusHeapLang.progAE1_wpt
+CerberusHeapLang.progAProd_wpt
+CerberusHeapLang.progA_wpt
+CerberusHeapLang.progBE2_wps
+CerberusHeapLang.progBE2_wpt
+CerberusHeapLang.progCE3_blockSpecs
+CerberusHeapLang.progCE3_blockSpecsT
+CerberusHeapLang.progCE3_wps
+CerberusHeapLang.progCE3_wpt
+CerberusHeapLang.project_triple
+CerberusHeapLang.project_triple_alloc
+CerberusHeapLang.project_triple_pure
+CerberusHeapLang.project_triple_pure_alloc
+CerberusHeapLang.provenA
+CerberusHeapLang.provenB
+CerberusHeapLang.provenC
+CerberusHeapLang.pure_specified_round
+CerberusHeapLang.readoutPost
+CerberusHeapLang.readoutPost_annot_absorb
+CerberusHeapLang.readoutPost_mergeInto_annot
+CerberusHeapLang.readoutPost_mono
+CerberusHeapLang.regionLoadAt_atomic
+CerberusHeapLang.regionStoreAt_atomic
+CerberusHeapLang.rlPost_readout
+CerberusHeapLang.rl_args_eval
+CerberusHeapLang.rl_guard_eval
+CerberusHeapLang.rl_p_eval
+CerberusHeapLang.runND_active
+CerberusHeapLang.runND_killed
+CerberusHeapLang.runOne_bind_active
+CerberusHeapLang.runOne_bind_killed
+CerberusHeapLang.runOne_liftCore_run_aid
+CerberusHeapLang.runOne_liftCore_run_exception
+CerberusHeapLang.runOne_liftCore_run_fail
+CerberusHeapLang.runOne_liftCore_run_of_eq
+CerberusHeapLang.runOne_liftCore_run_return
+CerberusHeapLang.runOne_liftMem_active
+CerberusHeapLang.runOne_liftMem_killed
+CerberusHeapLang.seeded
+CerberusHeapLang.semantic_frame
+CerberusHeapLang.semantic_triple_sound
+CerberusHeapLang.seven_encodes
+CerberusHeapLang.shiftOut
+CerberusHeapLang.shipped_done
+CerberusHeapLang.shipped_remove_annot
+CerberusHeapLang.sintTyPeC_eval
+CerberusHeapLang.six_encodes
+CerberusHeapLang.smoke_call_round
+CerberusHeapLang.smoke_ret_round
+CerberusHeapLang.specIntPe_eval
+CerberusHeapLang.specInt_eval
+CerberusHeapLang.specSumBranch_eval
+CerberusHeapLang.spikeCtx_fragProcs
+CerberusHeapLang.spikeCtx_labels_frag
+CerberusHeapLang.spike_blockSpecs
+CerberusHeapLang.spike_step_adequacy
+CerberusHeapLang.spike_step_adequacy_alloc
+CerberusHeapLang.spike_wp_wand
+CerberusHeapLang.sseq_sym_annot_round
+CerberusHeapLang.sseq_tuple_pure_round
+CerberusHeapLang.stExceptUndef_mapM_class_fail
+CerberusHeapLang.stExpect_mapM_class
+CerberusHeapLang.stateInterp_readout
+CerberusHeapLang.stepClass
+CerberusHeapLang.stepClass_bridge_fail
+CerberusHeapLang.stepDischarge_alloc_eval
+CerberusHeapLang.stepDischarge_create_eval
+CerberusHeapLang.stepDischarge_if_false
+CerberusHeapLang.stepDischarge_if_true
+CerberusHeapLang.stepDischarge_kill_eval
+CerberusHeapLang.stepDischarge_load_eval
+CerberusHeapLang.stepDischarge_memop_eval
+CerberusHeapLang.stepDischarge_pure_sym
+CerberusHeapLang.stepDischarge_run
+CerberusHeapLang.stepDischarge_save_eval
+CerberusHeapLang.stepDischarge_store_eval
+CerberusHeapLang.stepFail
+CerberusHeapLang.stepFail.eq_def
+CerberusHeapLang.stepFailList
+CerberusHeapLang.stepFailList.eq_def
+CerberusHeapLang.stepFailList_cons
+CerberusHeapLang.stepFailList_nil
+CerberusHeapLang.stepFail_array_shift
+CerberusHeapLang.stepFail_bridge
+CerberusHeapLang.stepFail_cAddBranch_overflow
+CerberusHeapLang.stepFail_call
+CerberusHeapLang.stepFail_case
+CerberusHeapLang.stepFail_catch
+CerberusHeapLang.stepFail_conv_int
+CerberusHeapLang.stepFail_ctor
+CerberusHeapLang.stepFail_if
+CerberusHeapLang.stepFail_is_unsigned
+CerberusHeapLang.stepFail_not
+CerberusHeapLang.stepFail_op
+CerberusHeapLang.stepFail_sym
+CerberusHeapLang.stepFail_undef
+CerberusHeapLang.stepFail_val
+CerberusHeapLang.stepFail_wrapI
+CerberusHeapLang.stepPexpr
+CerberusHeapLang.stepPexprRaw
+CerberusHeapLang.stepPexprRaw.eq_def
+CerberusHeapLang.stepPexprRaw_annot0
+CerberusHeapLang.stepPexprRaw_cAdd
+CerberusHeapLang.stepPexprRaw_cAddBranch_overflow
+CerberusHeapLang.stepPexprRaw_eval_joint
+CerberusHeapLang.stepPexprRaw_peStrip
+CerberusHeapLang.stepPexprRaw_valPe_of_value
+CerberusHeapLang.stepPexpr_of_PePure
+CerberusHeapLang.stepPexpr_peStrip
+CerberusHeapLang.stepPexpr_shape
+CerberusHeapLang.stepPexpr_valPe
+CerberusHeapLang.stepPexprsRaw
+CerberusHeapLang.stepPexprsRaw.eq_def
+CerberusHeapLang.stepPexprsRaw_cons
+CerberusHeapLang.stepPexprsRaw_nil
+CerberusHeapLang.stepPexprsRaw_some_iff
+CerberusHeapLang.step_action_alloc_eval
+CerberusHeapLang.step_action_create_eval
+CerberusHeapLang.step_action_kill_eval
+CerberusHeapLang.step_action_load_eval
+CerberusHeapLang.step_action_store_eval
+CerberusHeapLang.step_ctx_alloc
+CerberusHeapLang.step_ctx_alloc_eval_fail1
+CerberusHeapLang.step_ctx_alloc_eval_fail2
+CerberusHeapLang.step_ctx_alloc_eval_kill1
+CerberusHeapLang.step_ctx_alloc_eval_kill2
+CerberusHeapLang.step_ctx_alloc_eval_shape
+CerberusHeapLang.step_ctx_alloc_eval_ws
+CerberusHeapLang.step_ctx_alloc_eval_ws'
+CerberusHeapLang.step_ctx_alloc_illtyped'
+CerberusHeapLang.step_ctx_beta_annot
+CerberusHeapLang.step_ctx_beta_pure
+CerberusHeapLang.step_ctx_beta_spec_annot
+CerberusHeapLang.step_ctx_beta_spec_annot'
+CerberusHeapLang.step_ctx_beta_spec_pure
+CerberusHeapLang.step_ctx_beta_spec_pure'
+CerberusHeapLang.step_ctx_beta_sym_annot
+CerberusHeapLang.step_ctx_beta_sym_pure
+CerberusHeapLang.step_ctx_bound_annot
+CerberusHeapLang.step_ctx_bound_pure
+CerberusHeapLang.step_ctx_call_arity
+CerberusHeapLang.step_ctx_call_fail_args
+CerberusHeapLang.step_ctx_call_kill_args
+CerberusHeapLang.step_ctx_call_shape
+CerberusHeapLang.step_ctx_call_unknown
+CerberusHeapLang.step_ctx_call_ws
+CerberusHeapLang.step_ctx_case_eval_fail
+CerberusHeapLang.step_ctx_case_eval_shape
+CerberusHeapLang.step_ctx_case_eval_ws
+CerberusHeapLang.step_ctx_case_illtyped
+CerberusHeapLang.step_ctx_case_value
+CerberusHeapLang.step_ctx_create
+CerberusHeapLang.step_ctx_create_eval_fail1
+CerberusHeapLang.step_ctx_create_eval_fail2
+CerberusHeapLang.step_ctx_create_eval_kill1
+CerberusHeapLang.step_ctx_create_eval_kill2
+CerberusHeapLang.step_ctx_create_eval_shape
+CerberusHeapLang.step_ctx_create_eval_ws
+CerberusHeapLang.step_ctx_create_eval_ws'
+CerberusHeapLang.step_ctx_create_illtyped'
+CerberusHeapLang.step_ctx_done
+CerberusHeapLang.step_ctx_excluded_store
+CerberusHeapLang.step_ctx_excluded_store_eval_fail2
+CerberusHeapLang.step_ctx_excluded_store_eval_fail3
+CerberusHeapLang.step_ctx_excluded_store_eval_shape
+CerberusHeapLang.step_ctx_excluded_store_eval_ws
+CerberusHeapLang.step_ctx_excluded_store_eval_ws'
+CerberusHeapLang.step_ctx_excluded_store_illtyped
+CerberusHeapLang.step_ctx_excluded_store_illtyped'
+CerberusHeapLang.step_ctx_if_fail
+CerberusHeapLang.step_ctx_if_false_ws
+CerberusHeapLang.step_ctx_if_kill
+CerberusHeapLang.step_ctx_if_panic
+CerberusHeapLang.step_ctx_if_shape
+CerberusHeapLang.step_ctx_if_true_ws
+CerberusHeapLang.step_ctx_kill
+CerberusHeapLang.step_ctx_kill_eval_fail
+CerberusHeapLang.step_ctx_kill_eval_kill
+CerberusHeapLang.step_ctx_kill_eval_shape
+CerberusHeapLang.step_ctx_kill_eval_ws
+CerberusHeapLang.step_ctx_kill_eval_ws'
+CerberusHeapLang.step_ctx_kill_illtyped'
+CerberusHeapLang.step_ctx_length
+CerberusHeapLang.step_ctx_load
+CerberusHeapLang.step_ctx_load_eval_fail
+CerberusHeapLang.step_ctx_load_eval_kill
+CerberusHeapLang.step_ctx_load_eval_shape
+CerberusHeapLang.step_ctx_load_eval_ws
+CerberusHeapLang.step_ctx_load_eval_ws'
+CerberusHeapLang.step_ctx_load_illtyped'
+CerberusHeapLang.step_ctx_memop
+CerberusHeapLang.step_ctx_memop_eval_fail
+CerberusHeapLang.step_ctx_memop_eval_kill
+CerberusHeapLang.step_ctx_memop_eval_shape
+CerberusHeapLang.step_ctx_memop_eval_ws
+CerberusHeapLang.step_ctx_merge
+CerberusHeapLang.step_ctx_nd
+CerberusHeapLang.step_ctx_neg
+CerberusHeapLang.step_ctx_neg_nobound
+CerberusHeapLang.step_ctx_pure_op_fail
+CerberusHeapLang.step_ctx_pure_op_raw
+CerberusHeapLang.step_ctx_pure_op_shape
+CerberusHeapLang.step_ctx_pure_op_ws
+CerberusHeapLang.step_ctx_pure_sym_fail
+CerberusHeapLang.step_ctx_pure_sym_kill
+CerberusHeapLang.step_ctx_pure_sym_shape
+CerberusHeapLang.step_ctx_pure_sym_ws
+CerberusHeapLang.step_ctx_remove_annot
+CerberusHeapLang.step_ctx_ret
+CerberusHeapLang.step_ctx_run_fail
+CerberusHeapLang.step_ctx_run_kill
+CerberusHeapLang.step_ctx_run_noproc
+CerberusHeapLang.step_ctx_run_shape
+CerberusHeapLang.step_ctx_run_unresolved
+CerberusHeapLang.step_ctx_run_ws
+CerberusHeapLang.step_ctx_save
+CerberusHeapLang.step_ctx_save_eval_fail
+CerberusHeapLang.step_ctx_save_eval_kill
+CerberusHeapLang.step_ctx_save_eval_shape
+CerberusHeapLang.step_ctx_save_eval_ws
+CerberusHeapLang.step_ctx_singleton_of_root
+CerberusHeapLang.step_ctx_sseq_val_annot
+CerberusHeapLang.step_ctx_sseq_val_pure
+CerberusHeapLang.step_ctx_store
+CerberusHeapLang.step_ctx_store_eval_fail2
+CerberusHeapLang.step_ctx_store_eval_fail3
+CerberusHeapLang.step_ctx_store_eval_kill2
+CerberusHeapLang.step_ctx_store_eval_kill3
+CerberusHeapLang.step_ctx_store_eval_shape
+CerberusHeapLang.step_ctx_store_eval_ws
+CerberusHeapLang.step_ctx_store_eval_ws'
+CerberusHeapLang.step_ctx_store_illtyped
+CerberusHeapLang.step_ctx_store_illtyped'
+CerberusHeapLang.step_ctx_unseq_race
+CerberusHeapLang.step_ctx_unseq_vals
+CerberusHeapLang.step_ctx_wseq_annot
+CerberusHeapLang.step_ctx_wseq_pure
+CerberusHeapLang.step_ctx_wseq_val_annot
+CerberusHeapLang.step_ctx_wseq_val_pure
+CerberusHeapLang.step_eval_bridge
+CerberusHeapLang.step_eval_bridge_kill
+CerberusHeapLang.step_eval_bridge_undef
+CerberusHeapLang.step_iff_cerberusRound
+CerberusHeapLang.storeAt_atomic
+CerberusHeapLang.storeM_layer
+CerberusHeapLang.storeM_loc_irrel
+CerberusHeapLang.storeM_readonly_kills
+CerberusHeapLang.storeM_readonly_none
+CerberusHeapLang.store_atomic
+CerberusHeapLang.store_conv_loaded_int_round
+CerberusHeapLang.store_lit_sym_step
+CerberusHeapLang.store_located_step
+CerberusHeapLang.store_sym_lit_step
+CerberusHeapLang.struct_blockSpecs
+CerberusHeapLang.struct_create_store_adequacy
+CerberusHeapLang.struct_create_store_adequacy_prodMem₀
+CerberusHeapLang.struct_update_certified
+CerberusHeapLang.struct_wps
+CerberusHeapLang.struct_wps_views
+CerberusHeapLang.struct_wps_views_cell
+CerberusHeapLang.struct_x_read_frac_wps
+CerberusHeapLang.struct_x_read_persist_wps
+CerberusHeapLang.struct_x_read_shared_wps
+CerberusHeapLang.substFold_pure
+CerberusHeapLang.symB_eval
+CerberusHeapLang.symC_eval
+CerberusHeapLang.symK_eval
+CerberusHeapLang.t1ConvLoadedInt_eval
+CerberusHeapLang.t1LsT_readout
+CerberusHeapLang.t1_blockSpecs
+CerberusHeapLang.t1_blockSpecsT
+CerberusHeapLang.t1_certified_production
+CerberusHeapLang.t1_four_encodes
+CerberusHeapLang.t1_wps
+CerberusHeapLang.t1_wpt
+CerberusHeapLang.t1sym_eval
+CerberusHeapLang.t4BoolBranch_eval
+CerberusHeapLang.t4PtrArgs_eval
+CerberusHeapLang.t4TruthBranch_eval
+CerberusHeapLang.t4_blockSpecsT
+CerberusHeapLang.t4_certified_production
+CerberusHeapLang.t4_wpt
+CerberusHeapLang.t5BoolBranch_eval
+CerberusHeapLang.t5CmpBranch_eval
+CerberusHeapLang.t5CondPe_eval
+CerberusHeapLang.t5LsT_readout
+CerberusHeapLang.t5Tuple_eval
+CerberusHeapLang.t5_blockSpecsT
+CerberusHeapLang.t5_certified_production
+CerberusHeapLang.t5_wpt
+CerberusHeapLang.t6_blockSpecsT
+CerberusHeapLang.t6_certified_production
+CerberusHeapLang.t6_wpt
+CerberusHeapLang.three_encodes
+CerberusHeapLang.tlPost_to_readout
+CerberusHeapLang.tl_blockSpecs
+CerberusHeapLang.tl_blockSpecsT
+CerberusHeapLang.tl_body1_wps
+CerberusHeapLang.tl_body1_wpt
+CerberusHeapLang.tl_body2_wps
+CerberusHeapLang.tl_body2_wpt
+CerberusHeapLang.tl_dec1_eval
+CerberusHeapLang.tl_dec2_eval
+CerberusHeapLang.tl_guard1_eval
+CerberusHeapLang.tl_guard2_eval
+CerberusHeapLang.tl_readout_val
+CerberusHeapLang.tl_wp_readout
+CerberusHeapLang.tl_wps
+CerberusHeapLang.tl_wpt
+CerberusHeapLang.tl_wpt_readout
+CerberusHeapLang.trPost_readout
+CerberusHeapLang.tr_b_eval_F3
+CerberusHeapLang.tr_blockSpecs
+CerberusHeapLang.tr_shift1_eval_F1
+CerberusHeapLang.tr_shift1_eval_F3
+CerberusHeapLang.tr_shift2_eval_F2
+CerberusHeapLang.tr_shift2_eval_F3
+CerberusHeapLang.tr_wp_readout
+CerberusHeapLang.tr_x_eval_F3
+CerberusHeapLang.tr_y_eval_F3
+CerberusHeapLang.tree_ptr_encodes
+CerberusHeapLang.tree_rotate_wps
+CerberusHeapLang.tree_rotate_wpt
+CerberusHeapLang.tree_rotate_wpt_frame
+CerberusHeapLang.tuple_eval
+CerberusHeapLang.two_label_certified
+CerberusHeapLang.twp_ret
+CerberusHeapLang.twp_ret_annot
+CerberusHeapLang.unseq_focus_round
+CerberusHeapLang.unseq_vals_round
+CerberusHeapLang.unspecIntPe_eval
+CerberusHeapLang.unspec_encodes
+CerberusHeapLang.wp_load
+CerberusHeapLang.wp_of_atomic
+CerberusHeapLang.wp_ret
+CerberusHeapLang.wp_ret_annot
+CerberusHeapLang.wp_store
+CerberusHeapLang.wps
+CerberusHeapLang.wps.pre
+CerberusHeapLang.wps.pre.contractive
+CerberusHeapLang.wps_alloc_eval
+CerberusHeapLang.wps_alloc_lit_sym
+CerberusHeapLang.wps_annot
+CerberusHeapLang.wps_annot_reindex
+CerberusHeapLang.wps_arr_elem_load
+CerberusHeapLang.wps_bound
+CerberusHeapLang.wps_bound_wseq_tuple
+CerberusHeapLang.wps_c_add
+CerberusHeapLang.wps_call
+CerberusHeapLang.wps_call_root
+CerberusHeapLang.wps_case_eval
+CerberusHeapLang.wps_case_value
+CerberusHeapLang.wps_conv_loaded_int
+CerberusHeapLang.wps_create_eval
+CerberusHeapLang.wps_empty_call_false
+CerberusHeapLang.wps_excluded_store
+CerberusHeapLang.wps_excluded_store_eval
+CerberusHeapLang.wps_exhibit_seq_stores
+CerberusHeapLang.wps_exhibit_store_frame
+CerberusHeapLang.wps_frame
+CerberusHeapLang.wps_frame_labels
+CerberusHeapLang.wps_free
+CerberusHeapLang.wps_free_emp
+CerberusHeapLang.wps_fupd
+CerberusHeapLang.wps_if
+CerberusHeapLang.wps_if_false
+CerberusHeapLang.wps_if_true
+CerberusHeapLang.wps_kill
+CerberusHeapLang.wps_kill_emp
+CerberusHeapLang.wps_kill_eval
+CerberusHeapLang.wps_load
+CerberusHeapLang.wps_load_at
+CerberusHeapLang.wps_load_cell_at
+CerberusHeapLang.wps_load_eval
+CerberusHeapLang.wps_load_footprint
+CerberusHeapLang.wps_load_node_field
+CerberusHeapLang.wps_load_plain
+CerberusHeapLang.wps_load_regionOwn_at
+CerberusHeapLang.wps_load_region_at
+CerberusHeapLang.wps_load_tree_field
+CerberusHeapLang.wps_memop_eval
+CerberusHeapLang.wps_memop_ptreq
+CerberusHeapLang.wps_mono_Ls
+CerberusHeapLang.wps_neg_bound
+CerberusHeapLang.wps_neg_round
+CerberusHeapLang.wps_ofVal
+CerberusHeapLang.wps_ofValA
+CerberusHeapLang.wps_of_atomic
+CerberusHeapLang.wps_pure
+CerberusHeapLang.wps_run
+CerberusHeapLang.wps_save
+CerberusHeapLang.wps_save_eval
+CerberusHeapLang.wps_save_vals
+CerberusHeapLang.wps_seq
+CerberusHeapLang.wps_seq_spec
+CerberusHeapLang.wps_seq_sym
+CerberusHeapLang.wps_seq_sym_annot
+CerberusHeapLang.wps_seq_tuple
+CerberusHeapLang.wps_sound
+CerberusHeapLang.wps_sound_cps
+CerberusHeapLang.wps_sound_empty
+CerberusHeapLang.wps_sound_frame
+CerberusHeapLang.wps_sound_frame_empty
+CerberusHeapLang.wps_store
+CerberusHeapLang.wps_store_at
+CerberusHeapLang.wps_store_cell_at
+CerberusHeapLang.wps_store_eval
+CerberusHeapLang.wps_store_node_field
+CerberusHeapLang.wps_store_plain
+CerberusHeapLang.wps_store_regionOwn_at
+CerberusHeapLang.wps_store_region_at
+CerberusHeapLang.wps_store_sym_lit
+CerberusHeapLang.wps_store_tree_field
+CerberusHeapLang.wps_struct_x_store
+CerberusHeapLang.wps_struct_y_store
+CerberusHeapLang.wps_unfold
+CerberusHeapLang.wps_unseq_focus
+CerberusHeapLang.wps_unseq_vals
+CerberusHeapLang.wps_value_inv
+CerberusHeapLang.wps_wand
+CerberusHeapLang.wps_wseq
+CerberusHeapLang.wps_wseq_sym
+CerberusHeapLang.wps_wseq_tuple
+CerberusHeapLang.wps_wseq_tuple_annot
+CerberusHeapLang.wpt
+CerberusHeapLang.wpt.eq_def
+CerberusHeapLang.wpt.pre
+CerberusHeapLang.wpt_alloc_eval
+CerberusHeapLang.wpt_alloc_lit_sym
+CerberusHeapLang.wpt_annot
+CerberusHeapLang.wpt_annot_reindex
+CerberusHeapLang.wpt_bound
+CerberusHeapLang.wpt_bound_wseq_tuple
+CerberusHeapLang.wpt_c_add
+CerberusHeapLang.wpt_call
+CerberusHeapLang.wpt_call_eq
+CerberusHeapLang.wpt_call_root
+CerberusHeapLang.wpt_case_eval
+CerberusHeapLang.wpt_case_value
+CerberusHeapLang.wpt_conv_loaded_int
+CerberusHeapLang.wpt_create_eval
+CerberusHeapLang.wpt_det_step
+CerberusHeapLang.wpt_driver_done
+CerberusHeapLang.wpt_driver_done_alloc
+CerberusHeapLang.wpt_driver_done_procs
+CerberusHeapLang.wpt_emittedIntLoad
+CerberusHeapLang.wpt_emittedIntLoad_footprint
+CerberusHeapLang.wpt_emittedIntStore
+CerberusHeapLang.wpt_empty_call_false
+CerberusHeapLang.wpt_excluded_store
+CerberusHeapLang.wpt_excluded_store_eval
+CerberusHeapLang.wpt_frame
+CerberusHeapLang.wpt_frame_labels
+CerberusHeapLang.wpt_free
+CerberusHeapLang.wpt_free_emp
+CerberusHeapLang.wpt_fupd
+CerberusHeapLang.wpt_if
+CerberusHeapLang.wpt_if_false
+CerberusHeapLang.wpt_if_true
+CerberusHeapLang.wpt_jump_eq
+CerberusHeapLang.wpt_jump_frame_bound
+CerberusHeapLang.wpt_jump_frame_sseq
+CerberusHeapLang.wpt_jump_frame_unseq
+CerberusHeapLang.wpt_jump_frame_wseq
+CerberusHeapLang.wpt_kill
+CerberusHeapLang.wpt_kill_emp
+CerberusHeapLang.wpt_kill_eval
+CerberusHeapLang.wpt_load
+CerberusHeapLang.wpt_load_at
+CerberusHeapLang.wpt_load_cell_at
+CerberusHeapLang.wpt_load_eval
+CerberusHeapLang.wpt_load_footprint
+CerberusHeapLang.wpt_load_node_field
+CerberusHeapLang.wpt_load_plain
+CerberusHeapLang.wpt_load_regionOwn_at
+CerberusHeapLang.wpt_load_region_at
+CerberusHeapLang.wpt_load_tree_field
+CerberusHeapLang.wpt_memop_eval
+CerberusHeapLang.wpt_memop_ptreq
+CerberusHeapLang.wpt_mono
+CerberusHeapLang.wpt_mono_Ls
+CerberusHeapLang.wpt_mono_k
+CerberusHeapLang.wpt_neg_bound
+CerberusHeapLang.wpt_neg_round
+CerberusHeapLang.wpt_ofVal
+CerberusHeapLang.wpt_ofValA
+CerberusHeapLang.wpt_of_atomic
+CerberusHeapLang.wpt_pure
+CerberusHeapLang.wpt_run
+CerberusHeapLang.wpt_save
+CerberusHeapLang.wpt_save_eval
+CerberusHeapLang.wpt_save_vals
+CerberusHeapLang.wpt_seq
+CerberusHeapLang.wpt_seq_spec
+CerberusHeapLang.wpt_seq_sym
+CerberusHeapLang.wpt_seq_sym_annot
+CerberusHeapLang.wpt_seq_tuple
+CerberusHeapLang.wpt_sound
+CerberusHeapLang.wpt_sound_cps
+CerberusHeapLang.wpt_sound_empty
+CerberusHeapLang.wpt_step_eq
+CerberusHeapLang.wpt_store
+CerberusHeapLang.wpt_store_at
+CerberusHeapLang.wpt_store_cell_at
+CerberusHeapLang.wpt_store_eval
+CerberusHeapLang.wpt_store_lit_sym
+CerberusHeapLang.wpt_store_node_field
+CerberusHeapLang.wpt_store_plain
+CerberusHeapLang.wpt_store_regionOwn_at
+CerberusHeapLang.wpt_store_region_at
+CerberusHeapLang.wpt_store_tree_field
+CerberusHeapLang.wpt_t4Add
+CerberusHeapLang.wpt_t4AddI1
+CerberusHeapLang.wpt_t4AddSI
+CerberusHeapLang.wpt_t4And
+CerberusHeapLang.wpt_t4Assign
+CerberusHeapLang.wpt_t4AssignI
+CerberusHeapLang.wpt_t4AssignS
+CerberusHeapLang.wpt_t4Body
+CerberusHeapLang.wpt_t4Bool
+CerberusHeapLang.wpt_t4Cond
+CerberusHeapLang.wpt_t4Left
+CerberusHeapLang.wpt_t4Load
+CerberusHeapLang.wpt_t4LoopStep
+CerberusHeapLang.wpt_t4LoopTest
+CerberusHeapLang.wpt_t4Lt
+CerberusHeapLang.wpt_t4Return
+CerberusHeapLang.wpt_t4Right
+CerberusHeapLang.wpt_t4Save
+CerberusHeapLang.wpt_t4Truth
+CerberusHeapLang.wpt_t4WhileCont
+CerberusHeapLang.wpt_t4WhileEntry
+CerberusHeapLang.wpt_t5AssignBlock
+CerberusHeapLang.wpt_t5Bool
+CerberusHeapLang.wpt_t5Cond
+CerberusHeapLang.wpt_t5Gt
+CerberusHeapLang.wpt_t5If
+CerberusHeapLang.wpt_t5Load
+CerberusHeapLang.wpt_t5Return
+CerberusHeapLang.wpt_t6AssignStmt
+CerberusHeapLang.wpt_t6Break
+CerberusHeapLang.wpt_t6Case2
+CerberusHeapLang.wpt_t6Load
+CerberusHeapLang.wpt_t6Return
+CerberusHeapLang.wpt_t6Switch
+CerberusHeapLang.wpt_unfold
+CerberusHeapLang.wpt_unseq_focus
+CerberusHeapLang.wpt_unseq_pure_left
+CerberusHeapLang.wpt_unseq_pure_right
+CerberusHeapLang.wpt_unseq_vals
+CerberusHeapLang.wpt_val_eq
+CerberusHeapLang.wpt_wseq
+CerberusHeapLang.wpt_wseq_sym
+CerberusHeapLang.wpt_wseq_tuple
+CerberusHeapLang.wpt_wseq_tuple_annot
+CerberusHeapLang.wpt_zero_step_eq
+CerberusHeapLang.wseqProg_wps
+CerberusHeapLang.wseqProg_wpt
+CerberusHeapLang.wseq_blockSpecs
+CerberusHeapLang.wseq_certified
+CerberusHeapLang.wseq_sym_pure_round
+CerberusHeapLang.wseq_tuple_pure_round
+CerberusHeapLang.wseq_wp_readout
+drive_nonmemory_steps_aux2_lemFuel.eq_def
+driver2_lemFuel.eq_def
