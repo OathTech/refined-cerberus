@@ -628,9 +628,12 @@ has no equation for them and a theorem holds at every value they take.
 **What the build checks** (`Audit.lean`, the last import of the library
 root, elaborated by every `lake build`). Every pinned export exists, is
 a theorem, and has axiom set EXACTLY its declared set: the trio for the
-901 names in `trioExports`, the EMPTY set for the 6 names in
-`axiomFreeExports` (gate line `export pins: 901 trio-exact, 6
-axiom-free-exact`). The L2 re-pin head's 901 derive from the L1 head's
+904 names in `trioExports`, the EMPTY set for the 6 names in
+`axiomFreeExports` (gate line `export pins: 904 trio-exact, 6
+axiom-free-exact`). The Codex D5 landing's 904 = the L2 re-pin head's
+901 + 3 ADDED (`PartialClients.t5_wps`, `t5_blockSpecs`, `loadBind_wps`;
+nothing removed or changed — census in the branch record). The L2
+re-pin head's 901 derive from the L1 head's
 893 (its gate line `export pins: 893 trio-exact`; the class
 `axiomFreeExports` did not exist at L1) as 893 − 4 REMOVED
 (`drive_after_setup_lib_lemFuel`, `drive_after_setup_with_lemFuel` — the
@@ -886,11 +889,13 @@ them read.
   Each row distinguishes rules consumed at both strata, a proved rule
   with one stratum still undemonstrated, partial-only support, no rule,
   or an out-of-scope shape. The generated report's tail is the current
-  census. E5's seven new rule rows are RULE-PARTIAL-UNDEMONSTRATED:
-  t5 and t4 consume the total faces; no partial corpus derivation consumes
-  their twins yet. These include the exact whole-cell read-footprint
-  face used by t4's unsequenced addition. The report checks both facts
-  and requires a row update when the missing consumer appears.
+  census. Since the Codex D5 landing (2026-09-07) no row is
+  RULE-PARTIAL-UNDEMONSTRATED: E5's seven rule rows have their partial
+  faces consumed by `Examples/PartialClients.lean` (the whole t5 program at
+  the partial judgment, and a whole-cell load client for the exact
+  read-footprint face t4's unsequenced addition uses); the generator's
+  proof-dependency traversal verifies each consumption, and a row must be
+  re-classified when a consumer disappears.
   What green establishes is stated exactly by the generated, gate-diffed
   header (`docs/CAPABILITY_MANIFEST.md:8`–`:31`, "WHAT GREEN ESTABLISHES,
   EXACTLY"). Not established:

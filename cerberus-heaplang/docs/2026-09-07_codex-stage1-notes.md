@@ -1,3 +1,10 @@
+> **Read-only copy** (made 2026-09-07 by the orchestrator for the stage-2
+> Codex agent): the stage-1 record `docs/2026-09-07_codex-residuals-notes.md`
+> as of commit `df5dc90`, before the L2-pin adaptation appended its section.
+> The live record supersedes this file (its "Orchestrator landing notes"
+> section explains the relation); this copy is deleted when stage 2 closes
+> and the stage-2 charter text is repointed in the same commit. Do not edit.
+
 # Codex residuals record — 2026-09-07
 
 ## D6 — BLOCKED: whole-text transcription check

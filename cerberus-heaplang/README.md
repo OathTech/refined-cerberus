@@ -125,23 +125,24 @@ manifest](docs/CAPABILITY_MANIFEST.md) lists one row per engine-SUCCESS
 VARIANT of each `Frag` constructor (ar5-manifest, 2026-09-04; ARCHITECTURE
 §7 "The instruments around the claims"), each classified RULE (a partial
 and a total rule, both in the proof-term cone of a consumer module — the
-twenty-five modules classified `positive-client`/`declared-smoke` in
+twenty-six modules classified `positive-client`/`declared-smoke` in
 `scripts/module_classes.tsv`, listed per row), RULE-TOTAL-UNDEMONSTRATED
 (the total rule proved but consumed by no client — none since the
 hygiene slice H1b of 2026-09-04 gave `wpt_load`, `wpt_case_value` and
 `wpt_wseq` their consumers), RULE-PARTIAL-UNDEMONSTRATED (the partial
-rule proved but consumed by no client while its total twin is — E5's
-seven), NO-RULE (admitted by the fragment and the
+rule proved but consumed by no client while its total twin is — none
+since the Codex D5 landing of 2026-09-07 gave E5's seven their partial
+consumer, `Examples/PartialClients`), NO-RULE (admitted by the fragment and the
 engine, no rule, with the deciding record — the locking store, the static
 kill of a region, `free(NULL)`, the zero-cost `alloc`, the union-member
 pointer, the read-only-cell load at the statement level, the zero-size/
 atomic/non-inert `create` types, the colliding `free`, the function-vs-
 concrete `PtrEq`, the four binders at an ANNOTATED head value — mirrored
 since E1/E2, no binder rule) or OUT-OF-SCOPE (excluded by the
-fragment/mirror boundary): 35 constructors, 78 rows, 40 RULE, 0
-RULE-TOTAL-UNDEMONSTRATED, 7 RULE-PARTIAL-UNDEMONSTRATED, 24 NO-RULE,
-7 OUT-OF-SCOPE at this writing (the L2 re-pin, 2026-09-07; the manifest's
-own tail line, `docs/CAPABILITY_MANIFEST.md:182`). Green means exactly what the
+fragment/mirror boundary): 35 constructors, 78 rows, 47 RULE, 0
+RULE-TOTAL-UNDEMONSTRATED, 0 RULE-PARTIAL-UNDEMONSTRATED, 24 NO-RULE,
+7 OUT-OF-SCOPE at this writing (the Codex D5 landing, 2026-09-07; the manifest's
+own tail line, `docs/CAPABILITY_MANIFEST.md:183`). Green means exactly what the
 manifest header says — every constructor classified, every named theorem a
 theorem, every RULE consumed in both judgments — and NOT that the variant
 table is exhaustive over the engine's success shapes or that a NO-RULE
@@ -1033,9 +1034,9 @@ lacks them, so they vary with the semantics workspace's build state at
 the same pin (measured 2249/3536 vs 2210/3474, `docs/2026-09-02_audit-response-4-notes.md`):
 
 ```
-info: CerberusHeapLang/Audit.lean:1116:0: CerberusHeapLang export pins: 901 trio-exact, 6 axiom-free-exact
-info: CerberusHeapLang/Audit.lean:1116:0: CerberusHeapLang axiom sweep: every theorem bounded by the trio (N swept, internal details included — count informational, environment-dependent)
-info: CerberusHeapLang/Audit.lean:1116:0: CerberusHeapLang banned-axiom sweep: sorryAx/ofReduceBool/ofReduceNat absent from all cones (M constants of every kind swept, internal details included — count informational, environment-dependent)
+info: CerberusHeapLang/Audit.lean:1121:0: CerberusHeapLang export pins: 904 trio-exact, 6 axiom-free-exact
+info: CerberusHeapLang/Audit.lean:1121:0: CerberusHeapLang axiom sweep: every theorem bounded by the trio (N swept, internal details included — count informational, environment-dependent)
+info: CerberusHeapLang/Audit.lean:1121:0: CerberusHeapLang banned-axiom sweep: sorryAx/ofReduceBool/ofReduceNat absent from all cones (M constants of every kind swept, internal details included — count informational, environment-dependent)
 Build completed successfully (… jobs).
 ```
 

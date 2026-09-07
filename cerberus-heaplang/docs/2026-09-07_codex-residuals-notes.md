@@ -608,3 +608,78 @@ cerberus-heaplang/lake-manifest.json scripts` = 0 lines; the tree object of
 at both commits. Not re-gated, per the instruction (the gated content is
 byte-identical). This record's commit is the amended second commit of the
 slice; the working tree is clean.
+
+## Orchestrator landing notes (2026-09-07; not Codex, not the adaptation worker)
+
+[AGENT 2026-09-07] Written at the landing of this branch onto main, after
+the fresh-reviewer range audit `docs/2026-09-07_audit-codex-d5-landing.md`
+(1e1f584..cdaf189: PASS WITH FIXES, A−). The Lean content is unchanged by
+this landing commit; the orchestrator's FULL gate at `cdaf189` is quoted in
+the landing DECISIONS entry.
+
+### Erratum — the manifest hunk dropped at the first rebase (audit F-1)
+
+Codex's original D5 commit `77c237d` carried the regenerated
+`docs/CAPABILITY_MANIFEST.md` (47 RULE, 0 undemonstrated). When the
+orchestrator rebased the four Codex commits onto the L2 main `6b6d9a8`, the
+manifest conflict was resolved by taking MAIN's file (7
+RULE-PARTIAL-UNDEMONSTRATED rows), NOT by regeneration — the module did not
+compile at the new pin before the adaptation, so regeneration was impossible
+there. Consequently the landed D5 commits `62685e1` (implementation) and
+`56e9d39` (record) carry a manifest with 7 undemonstrated rows while their
+generator input already classifies those rows RULE and lists
+`Examples.PartialClients`: at those two commits the build itself fails (the
+module needed its `[LemFuel]` binders) and the manifest speedbump would
+report drift, although their messages — carried over from the original base
+— say "FULL gate green" (true of `77c237d`/`42e2205`, where the orchestrator's
+stage-1 gate ran). The adaptation commit `dc1bf00` regenerated the manifest;
+`cdaf189` has 0 undemonstrated rows. Measured twice, independently: the
+auditor (report §F-1) and the orchestrator —
+`git show <c>:cerberus-heaplang/docs/CAPABILITY_MANIFEST.md | grep -c RULE-PARTIAL-UNDEMONSTRATED`
+= 8 at `1e1f584`, `62685e1`, `56e9d39`, `df5dc90`; = 1 at `77c237d`,
+`dc1bf00`, `cdaf189` (the 1 is the summary line's `0
+RULE-PARTIAL-UNDEMONSTRATED`). The DECISIONS entry committed at `1e1f584`
+("two conflicts: TSV union; manifest regenerated") is WRONG on the second
+conflict; its erratum is in the landing DECISIONS entry. The D5 section
+above ("Regenerated `docs/CAPABILITY_MANIFEST.md` …") is true of `77c237d`;
+the adaptation section ("the D5 commit `98335e2` carries no manifest
+change") is true of the rebased commit; this note reconciles them.
+
+### Hash map (audit F-5) — commits this record cites → the landed history
+
+| cited | what | landed as | same patch? |
+|---|---|---|---|
+| `f1f2573` | the charter-DRAFT commit the stage-1 worktree was cut from (pre-L2 main) | on main (ancestor of `1e1f584`) | — |
+| `cec16f5` | D6 evidence commit (implementation reverted) | `0cc46ae` | yes |
+| `7b2fb55` | D6 record | `0b979bc` | yes |
+| `77c237d` | D5 implementation, WITH the regenerated manifest | `98335e2` (first rebase; manifest hunk dropped) → `62685e1` | NO (the erratum above) |
+| `42e2205` | D5 record; the orchestrator's stage-1 FULL gate ran here | `df5dc90` → `56e9d39` | yes |
+| `7bdf408` | the adaptation, gated by the worker and by the orchestrator | `dc1bf00` | yes (tree object of `CerberusHeapLang/` = `497f5139…` at both) |
+| `361adf3` | the adaptation record | `c622be5` → amended `cdaf189` | — |
+
+DERIVED: patch identity with `index` lines stripped (the auditor for
+`cec16f5`, `98335e2`, `df5dc90`, `7bdf408`; the orchestrator for `7b2fb55`
+→ `0b979bc`, md5 `8b77bd561aed` at both), the subject map from the branch
+reflog.
+
+### Snapshot pruning (audit F-3)
+
+`2026-09-07_codex-D6-post.txt` and `2026-09-07_codex-D5-pre.txt` were
+byte-identical to the pre-existing `2026-09-07_l1-signatures-post.txt`
+(SHA-256 `1b7d097d…`, the auditor's measurement) and are deleted at this
+landing: read the l1 file wherever the D6 and D5 sections above cite them.
+`2026-09-07_codex-D6-pre.txt` was taken against a stale primed cache (1 949
+declarations from a several-slices-old `.lake`) and describes no real tree
+state; deleted — the D6 section's numbers stand as the record of what
+blocked D6. `2026-09-07_codex-D5-post.txt` (the 896-pin state at the retired
+pin) is KEPT so the D5 census (pre = the l1 file, post = D5-post) stays
+reproducible; `2026-09-07_codex-D5b-post.txt` is the live post-snapshot at
+the L2 pin.
+
+### The stage-1 copy on main (audit F-6)
+
+`docs/2026-09-07_codex-stage1-notes.md` is a read-only copy of this record
+at `df5dc90` (its first 225 lines), made so the stage-2 Codex agent could
+read stage 1's result from a worktree cut from main; it now carries a header
+saying so. This file supersedes it; the copy is deleted when stage 2 closes,
+with the stage-2 charter text repointed in the same commit.
