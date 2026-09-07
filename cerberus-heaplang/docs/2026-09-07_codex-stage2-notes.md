@@ -479,3 +479,85 @@ Time spent: approximately 5.5 minutes since
 D2's record, including investigation, census, snapshots, parking and the
 restored gate (recorded 06:31:04 UTC). No build or proof pass
 approached one hour. D3 remains BLOCKED.
+
+
+## D4 — BLOCKED: required placement and pins outside the fence
+
+The requested definition and rule replacement are understood. The current
+pure continuation premise is identical in both rules:
+
+```lean
+⌜∃ k, s = fresh_given_int k ∧ M.runState.sym_supply ≤ k⌝
+```
+
+It occurs at `Wps.lean:5295` / `Wpt.lean:4876`, inside
+`wps_neg_bound` / `wpt_neg_bound`. The requested abstraction packages this
+existential with the conjunction reversed; no unrelated statement change
+would be needed to perform that replacement.
+
+However, D4 requires `FreshAbove.intro` and `FreshAbove.ne_of_lt` as
+new public lemmas, and charter §1 rule 4 requires every new public theorem
+to be measured trio-exact and pinned in `Audit.lean`. D4's explicit fence
+omits Audit: it permits Rules, Wps, Wpt, E5 exhibit proof bodies and the
+record. The pin lists are actual closed lists (`trioExports` at
+`Audit.lean:270`, with the existing two rules pinned at lines 939/942),
+checked by the exact-pin loop at lines 1116–1131; the separate exhaustive
+sweep does not automatically pin newly added exports. Therefore adding the
+mandatory public lemmas cannot meet the mandatory pin requirement within
+this fence. Making the lemmas private, leaving them unpinned, modifying the
+pin list through another module or treating a bounded sweep as an exact
+pin would not meet the charter.
+
+There is also a placement mismatch: the goal says FreshAbove lives beside
+SymFrame, but `SymFrame` is defined in `EnvLaws.lean:309`, which is outside
+D4's fence. Placing FreshAbove in Rules would require an interpretation of
+“beside” as a different module; it would still not resolve the pin fence.
+
+The existing direct total-rule application is in
+`Examples/EmittedInt.lean:227`; its continuation statement at line 211
+and the corpus wrapper statements (T4 line 726, T5 lines 193/381, T6 line
+241) still expose the old existential. The charter freezes those client
+statements, so any eventual implementation must preserve them while
+adapting their proof bodies. This is not claimed as an additional blocker.
+No PartialClients file was changed. No Lean source, theorem, pin or public
+statement was changed; the park preserves the investigation and the fresh
+pre-snapshot. No claim is made that the freshness lemmas are unprovable.
+
+BLOCKED: D4's mandatory new public theorem pins require Audit, and its
+requested placement beside SymFrame points to EnvLaws; both files are
+outside D4's fence; parked at codex/park-D4
+`2ad35c790c6051d9364dd7a3888a847609c5ef44`.
+
+After parking, returned the working branch to `c5d60d9`. `git rebase main`
+reported it up to date, without conflicts.
+
+The restored FULL gate is green with unchanged 901 trio-exact /
+6 axiom-free-exact pins and 33 package warnings. Both capped D4
+snapshots are byte-identical: diff EMPTY, exit 0; ADDED 0, REMOVED 0,
+CHANGED 0. Both SHA-256 hashes:
+`0cb8fd9f6d05c813b2b296fa31c751566c96f9e74e8a1ce93ba3478417608df8`.
+This verifies preservation of the working branch, not completion of D4.
+No new public theorem was added, so there is no new axiom output or pin.
+
+D4 restored FULL gate tail, verbatim:
+
+```text
+ok:   CorpusT6Exhibit — 0 internals mentions
+ok:   Examples.CallSmoke — 0 internals mentions
+ok:   Examples.ReadinessSmoke — 0 internals mentions
+ok:   Examples.Layout — 0 internals mentions
+ok:   Examples.CorpusE0 — 0 internals mentions
+ok:   Examples.CorpusE5 — 0 internals mentions
+ok:   Examples.EmittedInt — 0 internals mentions
+ok:   CorpusT4Exhibit — 0 internals mentions
+BOUNDARY: 29 modules checked, 0 internals mention(s) in total, exit=0
+ok: client boundary — no unallowlisted internals mention
+ALL GATES GREEN
+GATE-EXIT=0
+```
+
+Time spent: approximately 3.2 minutes since
+D3's record, including investigation, snapshots, parking and the restored
+gate (recorded 06:34:18 UTC). No build or proof pass approached
+one hour. D4 remains BLOCKED. The six authorized deliverables have now
+been processed in order; work stops here, with D8/D9 untouched.
