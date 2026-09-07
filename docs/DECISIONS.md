@@ -3223,3 +3223,61 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   stand verbatim; the grep is 0/0 again (verified below by the fixer's
   gate). Lesson recorded: an extraction whose output size does not match
   its claimed content is a red flag; the auditor caught what I should have.
+- **2026-09-07 [AGENT] THE FULL E5 RANGE AUDIT 901ef50..093b02b: PASS WITH FIXES REQUIRED,
+  A− ON THE LOGIC — FIXES LANDED (017054d report; 6edb0f5 fixes; df91b41 notes);
+  L1 MERGE CANDIDATE = this commit, PENDING THE OPERATOR'S SIGN-OFF.** Report
+  `cerberus-heaplang/docs/2026-09-07_audit-e5-full-range.md`. No T- finding:
+  the negative-action protocol mirror-exact by kernel-checked engine
+  equations; 893/893 pins trio-exact by an independent `collectAxioms`
+  sweep; t5/t6/t4 reproduce against the oracle, the compiled composite and
+  the corpus leaf for leaf. R-1 (HIGH, the orchestrator's own error) fixed in
+  db46800 with its erratum above. C-1: the residual arm `OpenRound.neg_sseq`
+  had no manifest row → OUT-OF-SCOPE row (77 → 78 rows, 7 OUT-OF-SCOPE),
+  "three residual arms" on ARCHITECTURE/KOI B7. R-2: KOI B7 was stale —
+  `esize_subst`/`negFree_subst`/`ccallFree_subst`/`pot_subst` ARE proved at
+  the engine's fuel in E5 (Soundness.lean:1224/1350/1675, Potential.lean:514)
+  and `hbsz` is derivable (`case_hbsz_of_branches`) — row rewritten, the
+  upstream subst-esize note gets a dated erratum (proved locally after all).
+  D-1: ARCHITECTURE counts (35 constructors; 893 pins with the derivation),
+  the supply-tie premise in the glossary/§2.4/§4, WALKTHROUGH's `DriverSafeCtl`
+  re-printed verbatim (two arcs stale), ranges `901ef50..HEAD`. D-2 —
+  ERRATUM to the L1 landing entry above: the premise `600 ≤ sup` is a
+  SUFFICIENT floor, not a necessary one (the compiled composite delivers the
+  same values at `sup = 0`) — and NOT a vacuous one: at a `sup` from which the
+  run's fresh-symbol draws reach a source symbol's number (t5 at 505/506, t6
+  at 509/510, t4 at 505/506/508/509) the composite is KILLED
+  (`killed:Undef0` after LemLib `can_advance: Step_error2 ==> Kill`/`Load`
+  panics; measured by the auditor, re-measured at 6edb0f5, verbatim in the L1
+  record §10). Stated on README, KOI B6, the three docstrings. H-1
+  docstrings fixed; H-2 (the numeral 600 vs the no-magic-values ruling — a
+  program-derived `symBound ≤ sup` is the principled form) → KOI B19; H-3
+  (`wps/wpt_neg_bound` expose `fresh_given_int k` to clients — an abstract
+  `FreshAbove` would be cleaner) → KOI B20; C17 gains E5's duplications.
+  D-3 cite check: 288 cites, EXACT 179 → 226, every queue line hand-checked.
+  Provenance grep outside DECISIONS: every remaining hit is a record quoting
+  the defective strings as the object of the finding; no live tag.
+  Orchestrator FULL gate at df91b41 (40G cap; Lean content = 6edb0f5),
+  verbatim (per-module boundary lines elided; record §10.5):
+  ```
+  == gate 1: banned proof-method grep (native_decide / bv_decide / ofReduce*) ==
+  ok: no banned proof-method references
+  == gate 2: capped build, cerberus-heaplang (elaborates its axiom audit) ==
+  info: CerberusHeapLang/Audit.lean:1066:0: CerberusHeapLang export pins: 893 trio-exact
+  info: CerberusHeapLang/Audit.lean:1066:0: CerberusHeapLang axiom sweep: every theorem bounded by the trio (6051 swept, internal details included — count informational, environment-dependent)
+  info: CerberusHeapLang/Audit.lean:1066:0: CerberusHeapLang banned-axiom sweep: sorryAx/ofReduceBool/ofReduceNat absent from all cones (9141 constants of every kind swept, internal details included — count informational, environment-dependent)
+  Build completed successfully (472 jobs).
+  ok: cerberus-heaplang build green
+  == speedbump: rule-use and classification manifest (regenerate; red on a red row or drift) ==
+  ok: capability manifest regenerated, no drift
+  == speedbump: corpus skeleton (hand-transcribed emitted Core vs docs/corpus-e0; scripts/corpus_skeleton.lean) ==
+  ok: corpus skeleton — every transcription matches its emitted text, every plant mismatches
+  == speedbump: import direction (semantics → heap → rules → adequacy → clients) ==
+  ok: import direction — 18 core modules, none imports an exhibit/example/production module
+  == speedbump: client boundary (positive clients mention no logic internals; scripts/boundary_check.sh) ==
+  BOUNDARY: 29 modules checked, 0 internals mention(s) in total, exit=0
+  ok: client boundary — no unallowlisted internals mention
+  ALL GATES GREEN
+  GATE-EXIT=0
+  ```
+  L2 (the re-pin) is in progress on a branch off 093b02b and rebases over
+  this candidate.
