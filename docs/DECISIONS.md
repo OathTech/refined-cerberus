@@ -2994,3 +2994,25 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   timing, R6 the park override recorded verbatim, R7 housekeeping), each
   with the orchestrator's recommendation. Each slice its own branch,
   census, fresh-reviewer range audit and merge ask.
+- **2026-09-07 [USER] THE LANDING CHARTER'S RULINGS** (verbatim): "R1 yes, go ahead -
+  this is a good time to repin, R2 - agree, we should match refinedC here.
+  R3 - okay so this is a limitation we will have to lift later, but here is
+  inert? Sure that's fine. R4 - okay so this is better than what we
+  proposed? All good, let's do this. R6 - yes, I approved this, you can mark
+  it as such. R7 - low priority, we can keep them for now. R5, E6 and E7 -
+  okay so this stays as residual until we've finished the scheduler
+  completely? Yes, this is fine to leave until later." Dispositions: R1 the
+  demo's pin becomes cerberus-lean 89f7e688530c6910884518811d645e4e892e4507
+  (L2); R2 the fragment stays SYNTACTIC — `pot e ≤ LemFuel.fuel` as a
+  hypothesis on adequacy theorems, restored in L2 ("match refinedC": a
+  fuel-free fragment for the layer's copy); R3 the E5 §S2.5 seeded-supply
+  normalisation ACCEPTED as an inert limitation to be lifted later → a KOI
+  row with that mover; R4 the t1 referent = the pipeline's whole emitted
+  file machine-quoted and round-trip-checked (option (b) mechanised),
+  option (a) remains the named target (KOI A7 restored); R5 E6/E7 PARKED as
+  a residual until the scheduler work is finished completely — the v1 tag
+  waits for E6 proper (L5); R6 the other agent's work past the E5 park
+  record on `dialect-e5` was APPROVED by the operator ("yes, I approved
+  this") — recorded as such, no violation; R7 the fully-merged branches are
+  kept for now. [USER]: "this all seems reasonable" on the charter as a
+  whole. L1 starts on the L0 merge.
