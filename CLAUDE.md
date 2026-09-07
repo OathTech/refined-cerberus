@@ -25,7 +25,8 @@ serves that goal. That work — its Lake package, the donor toolchain,
 the design notes — lives on the branch `refinedc/dev` until it is
 presentable; nothing of it is on `main`.
 
-This file is WORKING PRACTICES ONLY. Design rulings live in
+This file is WORKING PRACTICES ONLY (`AGENTS.md` is a symlink to it, so
+agents that look for that name read the same file). Design rulings live in
 `docs/DECISIONS.md` (append-only register, [USER]/[AGENT]
 provenance) — never here. Founding rationale:
 `docs/2026-08-29_rules-of-engagement.md`.
