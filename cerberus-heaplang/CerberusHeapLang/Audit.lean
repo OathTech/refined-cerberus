@@ -1064,6 +1064,7 @@ def trioExports : List Name := [
   ``CerberusHeapLang.wpt_t4Save,
   ``CerberusHeapLang.wpt_t4Body,
   ``CerberusHeapLang.wpt_unseq_pure_left,
+  ``CerberusHeapLang.wps_of_wpt,
   ``CerberusHeapLang.emittedInt_encodes,
   ``CerberusHeapLang.emittedInt_storable,
   ``CerberusHeapLang.wpt_emittedIntStore,

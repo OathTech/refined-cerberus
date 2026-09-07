@@ -5247,4 +5247,72 @@ theorem wpt_unseq_pure_left {Ψ : SpikeVal → EnvStack → IProp GF}
     simp only [SpikeValA.erase_annot, SpikeVal.val, SpikeVal.mergeInto, SpikeVal.merge, List.append_nil]
     iexact HΨ
 
+/-- Erase a label specification's variant index: the label precondition
+    holds when it holds at some variant. -/
+def LabelSpecT.forget (Ls : LabelSpecT GF) : LabelSpec GF :=
+  fun l vs ρ => iprop(∃ (m : Nat), Ls l m vs ρ)
+
+/-- A total statement judgment at any budget and the empty procedure table
+    entails the partial judgment with the variant index forgotten. -/
+theorem wps_of_wpt (k : Nat) (Ψ : SpikeVal → EnvStack → IProp GF) (e : CoreExpr)
+    (ρ : EnvStack) :
+    wpt M p Ls emptyProcSpecT k Ψ e ρ ⊢ wps M p (LabelSpecT.forget Ls) emptyProcSpec Ψ e ρ := by
+  induction k using Nat.strongRecOn generalizing e ρ with
+  | ind k IH =>
+  rw [wps_unfold.to_eq]
+  cases htv : toVal e with
+  | some w =>
+    rw [wpt_val_eq k htv]
+    simp only [wps.pre, htv]
+    iintro ⟨-, H⟩
+    iexact H
+  | none =>
+    cases hjr : jumpRedex? e with
+    | some lp =>
+      obtain ⟨l, pes⟩ := lp
+      rw [wpt_jump_eq k htv hjr]
+      simp only [wps.pre, htv, hjr, LabelSpecT.forget]
+      iintro H
+      imod H with ⟨%params, %cont, %vs, %ev0, %evs, %m, %hρ, %hl, %hv, -, HL⟩
+      imodintro
+      iexists params, cont, vs, ev0, evs
+      isplit
+      · ipureintro; exact hρ
+      isplit
+      · ipureintro; exact hl
+      isplit
+      · ipureintro; exact hv
+      iexists m
+      iexact HL
+    | none =>
+    cases hcr : callRedex? e with
+    | some q =>
+      obtain ⟨ctx, f, pes⟩ := q
+      simp only [wps.pre, htv, hjr, hcr]
+      iintro H
+      ihave HF := wpt_empty_call_false htv hjr hcr $$ H
+      imod HF with %hF
+      exact hF.elim
+    | none =>
+      cases k with
+      | zero =>
+        rw [wpt_zero_step_eq htv hjr hcr]
+        iintro %hF
+        exact hF.elim
+      | succ m =>
+        rw [wpt_step_eq m htv hjr hcr]
+        simp only [wps.pre, htv, hjr, hcr]
+        iintro H %κ %ℓ %lc %sp %σ₁ %ns %obs %obs' %nt %hsb Hσ
+        cases obs with
+        | cons o _ => exact o.elim
+        | nil =>
+        simp only [List.nil_append]
+        imod H $$ %κ %ℓ %lc %sp %σ₁ %ns %obs' %nt %hsb Hσ with ⟨$, H⟩
+        imodintro
+        inext
+        iintro %r %σ₂ %eₜ %Hstep -
+        imod H $$ %r %σ₂ %eₜ %Hstep with ⟨$, H⟩
+        imodintro
+        iapply IH m (Nat.lt_succ_self m) (r.e) (r.ρ) $$ H
+
 end CerberusHeapLang
