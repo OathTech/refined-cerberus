@@ -158,7 +158,7 @@ def convInt (an : List annot) (s : sym) : generic_pexpr Unit sym :=
     [tyPe (EmittedStdCore.sintTyAnn []), psym s])
 def intTuple (n m : Nat) : generic_pexpr Unit sym :=
   Pexpr [] () (PEctor Ctuple [psym (tmp n), psym (tmp m)])
-def tuplePat (n m : Nat) : pattern :=
+def intTuplePat (n m : Nat) : pattern :=
   Pattern [] (CaseCtor Ctuple [Pattern [] (CaseBase (some (tmp n), intBty)),
     Pattern [] (CaseBase (some (tmp m), intBty))])
 def specPat (n : Nat) : pattern := Pattern [] (CaseCtor Cspecified
@@ -181,7 +181,7 @@ def ltPats (l : CerbLocation.Loc) (p q : Nat) : List (pattern × CoreExpr) :=
    (anyTuplePat, pureE (unspecified l))]
 def lt (ty : ctype) (x : sym) (t n m p q start : Nat) (k : Int) : CoreExpr :=
   Expr (exprAnn (locP start (start + 5) (start + 2)) ++ [Astd "§6.5.8"])
-    (Ewseq (tuplePat n m)
+    (Ewseq (intTuplePat n m)
       (Expr [] (Eunseq [load ty x t start (start + 1),
         literal (exprAnn (loc (start + 4) (start + 5))) k]))
       (Expr [] (Ecase (intTuple n m) (ltPats (locP start (start + 5) (start + 2)) p q))))
@@ -197,7 +197,7 @@ def truthPats (l : CerbLocation.Loc) (p q : Nat) (negate : Bool) :
   [(specTuplePat p q, Pexpr [Astd "§6.5.9#3"] () (PEif test (specInt 1) (specInt 0))),
    (anyTuplePat, unspecified l)]
 def truth (l : CerbLocation.Loc) (n m p q : Nat) (negate : Bool) (e : CoreExpr) : CoreExpr :=
-  Expr (exprAnn l) (Ewseq (tuplePat n m)
+  Expr (exprAnn l) (Ewseq (intTuplePat n m)
     (Expr [] (Eunseq [e, literal (exprAnn l) 0]))
     (pureE (Pexpr [] () (PEcase (intTuple n m) (truthPats l p q negate)))))
 def left : CoreExpr :=
@@ -238,7 +238,7 @@ def addPats (l : CerbLocation.Loc) (p q : Nat) : List (pattern × generic_pexpr 
   [(specTuplePat p q, addBranch (psym (tmp p)) (psym (tmp q))),
    (anyTuplePat, Pexpr [Astd "§6.5#5"] () (PEundef l UB036_exceptional_condition))]
 def addE (l : CerbLocation.Loc) (n m p q : Nat) (e1 e2 : CoreExpr) : CoreExpr :=
-  Expr (exprAnn l ++ [Astd "§6.5.6"]) (Ewseq (tuplePat n m)
+  Expr (exprAnn l ++ [Astd "§6.5.6"]) (Ewseq (intTuplePat n m)
     (Expr [] (Eunseq [e1, e2]))
     (pureE (Pexpr [] () (PEcase (intTuple n m) (addPats l p q)))))
 def addSI : CoreExpr := addE (locP 69 74 71) 73 74 75 76
@@ -315,5 +315,215 @@ def mainTerm : CoreExpr :=
           (seqE returnStmt cleanup)))))) returnSave
 
 theorem mainBody_shape : mainBody = mainTerm := rfl
+
+theorem load_frag (ty : ctype) (x : sym) (n c1 c2 : Nat) : Frag (load ty x n c1 c2) :=
+  .wseq_sym (Frag.of_pePure _ (.sym _ _))
+    (.load_op rfl (.sym [] _))
+
+theorem lt_frag (ty : ctype) (x : sym) (t n m p q start : Nat) (k : Int) :
+    Frag (lt ty x t n m p q start k) := by
+  refine .wseq_tuple (ls := [([], some (tmp n), intBty), ([], some (tmp m), intBty)]) ?_ ?_
+  · refine .unseq (by simp) rfl ?_
+    intro e he
+    simp only [List.mem_cons, List.not_mem_nil, or_false] at he
+    rcases he with rfl | rfl
+    · exact (load_frag) _ _ _ _ _
+    · exact .val_pure _
+  · refine .case_op rfl (PePure.of_isPePure rfl) ?_ ?_ ?_
+    · intro br hbr
+      simp only [ltPats, List.mem_cons, List.not_mem_nil, or_false] at hbr
+      rcases hbr with rfl | rfl <;>
+        exact Frag.of_pePure _ (PePure.of_isPePure rfl)
+    · intro v e' hsel
+      obtain ⟨pat, br, binds, hmem, _, rfl⟩ := select_case_some hsel
+      simp only [ltPats, List.mem_cons, List.not_mem_nil, or_false, Prod.mk.injEq] at hmem
+      rcases hmem with ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ <;>
+        exact Frag.substFold_pure binds _ _ (PePure.of_isPePure rfl)
+    · exact case_hbsz_of_branches
+
+theorem truth_frag (loc : CerbLocation.Loc) (n m p q : Nat) (negate : Bool)
+    (e : CoreExpr) (he : Frag e) (hc : ccallFree e = true) :
+    Frag (truth loc n m p q negate e) := by
+  refine .wseq_tuple (ls := [([], some (tmp n), intBty), ([], some (tmp m), intBty)]) ?_ ?_
+  · refine .unseq (by simp) ?_ ?_
+    · change (ccallFree e && (true && true)) = true
+      rw [hc]
+      rfl
+    · intro e' he'
+      simp only [List.mem_cons, List.not_mem_nil, or_false] at he'
+      rcases he' with rfl | rfl
+      · exact he
+      · exact .val_pure _
+  · cases negate <;> exact Frag.of_pePure _ (PePure.of_isPePure rfl)
+
+theorem left_frag : Frag left :=
+  (truth_frag) _ _ _ _ _ _ _ (truth_frag _ _ _ _ _ _ _ (lt_frag _ _ _ _ _ _ _ _ _) rfl) rfl
+
+theorem right_frag : Frag right :=
+  (truth_frag) _ _ _ _ _ _ _ (lt_frag _ _ _ _ _ _ _ _ _) rfl
+
+theorem andSpecified_frag (pe : generic_pexpr Unit sym) (hp : PePure pe) :
+    Frag (andSpecified pe) := by
+  refine .if_ (.op _ _ rfl hp (.val _ _)) ?_ ?_
+  · exact .sseq_sym (.val_pure _)
+      (Frag.of_pePure _ (PePure.of_isPePure rfl))
+  · exact .sseq_sym (right_frag)
+      (Frag.of_pePure _ (PePure.of_isPePure rfl))
+
+theorem and_select (v : value) :
+    select_case subst_sym_expr v andPats =
+      match v with
+      | Vloaded (LVspecified o) => some (andSpecified (Pexpr [] () (PEval (Vobject o))))
+      | Vloaded (LVunspecified _) => some (pureE (Pexpr [] ()
+          (PEundef (locP 47 61 53) (UB_CERB004_unspecified UB_unspec_conditional))))
+      | _ => none := by
+  cases v <;> try rfl
+  rename_i lv
+  cases lv <;> rfl
+
+theorem andE_frag : Frag andE := by
+  refine .sseq_sym (left_frag) (.case_op rfl (.sym _ _) ?_ ?_ ?_)
+  · intro br hbr
+    simp only [andPats, List.mem_cons, List.not_mem_nil, or_false] at hbr
+    rcases hbr with rfl | rfl
+    · exact andSpecified_frag _ (.sym _ _)
+    · exact Frag.of_pePure _ (PePure.of_isPePure rfl)
+  · intro v e' hsel
+    rw [and_select] at hsel
+    cases v <;> try cases hsel
+    rename_i lv
+    cases lv with
+    | LVspecified o =>
+      cases hsel
+      exact andSpecified_frag _ (.val _ _)
+    | LVunspecified ty =>
+      cases hsel
+      exact Frag.of_pePure _ (PePure.of_isPePure rfl)
+  · exact case_hbsz_of_branches
+
+theorem cond_frag : Frag cond :=
+  .bound (truth_frag _ _ _ _ _ _ _ (andE_frag) rfl)
+
+theorem boolE_frag : Frag boolE := by
+  refine .case_op rfl (.sym _ _) ?_ ?_ ?_
+  · intro q hq
+    simp only [boolPats, List.mem_cons, List.not_mem_nil, or_false] at hq
+    rcases hq with rfl | rfl
+    · exact Frag.of_pePure _ (PePure.of_isPePure rfl)
+    · refine .nd (by decide) ?_
+      intro e he
+      simp only [List.mem_cons, List.not_mem_nil, or_false] at he
+      rcases he with rfl | rfl <;> exact .val_pure _
+  · intro v e' hsel
+    obtain ⟨pat, br, binds, hmem, _, rfl⟩ := select_case_some hsel
+    simp only [boolPats, List.mem_cons, List.not_mem_nil, or_false, Prod.mk.injEq] at hmem
+    rcases hmem with ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩
+    · exact Frag.substFold_pure binds _ _ (PePure.of_isPePure rfl)
+    · have he (bs : List (sym × value)) : substFold (Expr [] (End [pureE (Pexpr [] () (PEval Vtrue)),
+          pureE (Pexpr [] () (PEval Vfalse))])) bs =
+          Expr [] (End [pureE (Pexpr [] () (PEval Vtrue)),
+            pureE (Pexpr [] () (PEval Vfalse))]) := by
+        induction bs with
+        | nil => rfl
+        | cons pair rest ih =>
+          rcases pair with ⟨s, v⟩
+          rw [substFold_cons, ih]
+          rfl
+      rw [he binds]
+      refine .nd (by decide) ?_
+      intro e he
+      simp only [List.mem_cons, List.not_mem_nil, or_false] at he
+      rcases he with rfl | rfl <;> exact .val_pure _
+  · exact case_hbsz_of_branches
+
+theorem addE_frag (loc : CerbLocation.Loc) (n m p q : Nat) (e1 e2 : CoreExpr)
+    (h1 : Frag e1) (h2 : Frag e2) (hc1 : ccallFree e1 = true) (hc2 : ccallFree e2 = true) :
+    Frag (addE loc n m p q e1 e2) := by
+  refine .wseq_tuple (ls := [([], some (tmp n), intBty), ([], some (tmp m), intBty)]) ?_ ?_
+  · refine .unseq (by simp) ?_ ?_
+    · change (ccallFree e1 && (ccallFree e2 && true)) = true
+      rw [hc1, hc2]
+      rfl
+    · intro e he
+      simp only [List.mem_cons, List.not_mem_nil, or_false] at he
+      rcases he with rfl | rfl
+      · exact h1
+      · exact h2
+  · exact Frag.of_pePure _ (PePure.of_isPePure rfl)
+
+theorem assign_frag (ty : ctype) (x : sym) (start n m : Nat) (rhs : CoreExpr)
+    (hr : Frag rhs) (hc : ccallFree rhs = true) : Frag (assign ty x start n m rhs) := by
+  refine .sseq (.bound (.wseq_tuple
+    (ls := [([], some (tmp n), ptrBty), ([], some (tmp m), intBty)]) ?_ ?_)) (.val_pure _)
+  · refine .unseq (by simp) ?_ ?_
+    · change (true && (ccallFree rhs && true)) = true
+      rw [hc]
+      rfl
+    · intro e he
+      simp only [List.mem_cons, List.not_mem_nil, or_false] at he
+      rcases he with rfl | rfl
+      · exact Frag.of_pePure _ (.sym _ _)
+      · exact hr
+  · exact .wseq
+      (.neg_store_op rfl (PePure.of_isPePure rfl) (PePure.of_isPePure rfl))
+      (Frag.of_pePure _ (PePure.of_isPePure rfl))
+
+theorem save_frag (la : label_annot) (l : sym) (body : CoreExpr) (hb : Frag body) : Frag (save la l body) := by
+  refine .save ?_ hb
+  · intro pe hpe
+    change pe ∈ [psym iSym, psym sSym] at hpe
+    simp only [List.mem_cons, List.not_mem_nil, or_false] at hpe
+    rcases hpe with rfl | rfl <;> exact .sym _ _
+
+theorem body_frag : Frag body := by
+  refine .sseq (.sseq (.sseq ?_ (.sseq ?_ (.val_pure _)))
+    (.sseq (save_frag _ _ _ (.val_pure _)) (.val_pure _))) ?_
+  · exact (assign_frag) _ _ _ _ _ _
+      (addE_frag _ _ _ _ _ _ _ (load_frag _ _ _ _ _) (load_frag _ _ _ _ _) rfl rfl) rfl
+  · exact (assign_frag) _ _ _ _ _ _
+      (addE_frag _ _ _ _ _ _ _ (load_frag _ _ _ _ _)
+        (.val_pure _) rfl rfl) rfl
+  · refine .run ?_
+    · intro pe hpe
+      simp only [List.mem_cons, List.not_mem_nil, or_false] at hpe
+      rcases hpe with rfl | rfl <;> exact .sym _ _
+
+theorem whileE_frag : Frag whileE :=
+  (save_frag) _ _ _ (.sseq_sym (cond_frag) (.sseq_sym (boolE_frag)
+    (.if_ (.sym _ _) (body_frag) (.val_pure _))))
+
+
+theorem returnStmt_frag : Frag returnStmt := by
+  refine .sseq_sym (.bound (load_frag _ _ _ _ _))
+    (.sseq (.kill_op rfl (.sym _ _)) (.sseq (.kill_op rfl (.sym _ _)) (.run ?_)))
+  intro pe hpe
+  obtain rfl := List.mem_singleton.mp hpe
+  exact PePure.of_isPePure rfl
+
+theorem cleanup_frag : Frag cleanup :=
+  .sseq (.kill_op rfl (.sym _ _)) (.sseq (.kill_op rfl (.sym _ _)) (.val_pure _))
+theorem afterWhile_frag : Frag afterWhile :=
+  .sseq (save_frag _ _ _ (.val_pure _)) (.val_pure _)
+theorem returnSave_frag : Frag returnSave := by
+  refine .save ?_ (Frag.of_pePure _ (.sym _ _))
+  intro pe hpe
+  obtain rfl := List.mem_singleton.mp hpe
+  exact CorpusE0.specInt_pePure 0
+
+theorem mainBody_frag : Frag mainBody := by
+  rw [mainBody_shape]
+  refine .sseq ?_ returnSave_frag
+  refine .sseq_sym (.create_op rfl (PePure.of_isPePure rfl) (PePure.of_isPePure rfl)) ?_
+  refine .sseq_sym (.create_op rfl (PePure.of_isPePure rfl) (PePure.of_isPePure rfl)) ?_
+  refine .sseq (.sseq_sym (.bound (.val_pure _))
+    (.store_op rfl (.sym _ _) (PePure.of_isPePure rfl))) ?_
+  exact .sseq (.sseq_sym (.bound (.val_pure _))
+    (.store_op rfl (.sym _ _) (PePure.of_isPePure rfl)))
+    (.sseq (.sseq whileE_frag afterWhile_frag) (.sseq returnStmt_frag cleanup_frag))
+
+/-- A syntactic membership witness and a separate sufficient operand depth. -/
+theorem mainBody_evalDepth : evalDepth mainBody ≤ 40 := by
+  rw [mainBody_shape]
+  decide +kernel
 
 end CerberusHeapLang.CorpusA7.T4
