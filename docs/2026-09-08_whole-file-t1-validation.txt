@@ -1,0 +1,57 @@
+Final parent claim-point run after a39efb0 plus regenerated manifest, 2026-09-08.
+Command: CERB_MEM_MAX=40G TMPDIR="$PWD/.tmp" scripts/test_unit.sh
+Observed exit status: 0.
+Verbatim selected log lines (build replay warnings and routine per-module reports omitted):
+
+== gate 1: banned proof-method grep (native_decide / bv_decide / ofReduce*) ==
+ok: no banned proof-method references
+== gate 1b: fuel-numeral grep (scripts/fuel_numeral_check.sh; a numeral outside a *_shipped corollary is red) ==
+ok: no fuel numeral (100000000/1000000/999999) outside a *_shipped corollary and no retired fuel constant (67 files scanned, comments stripped)
+== gate 2: capped build, cerberus-heaplang (elaborates its axiom audit) ==
+info: CerberusHeapLang/Audit.lean:1152:0: CerberusHeapLang export pins: 918 trio-exact, 7 propext-exact, 7 axiom-free-exact
+info: CerberusHeapLang/Audit.lean:1152:0: CerberusHeapLang axiom sweep: every theorem bounded by the trio (6816 swept, internal details included — count informational, environment-dependent)
+info: CerberusHeapLang/Audit.lean:1152:0: CerberusHeapLang banned-axiom sweep: sorryAx/ofReduceBool/ofReduceNat absent from all cones (10261 constants of every kind swept, internal details included — count informational, environment-dependent)
+Build completed successfully (490 jobs).
+ok: cerberus-heaplang build green
+ok: capability manifest regenerated, no drift
+ok: corpus skeleton — every transcription matches its emitted text, every plant mismatches
+ok: whole-file t1 — fresh Cabs matches retained fixture
+Build completed successfully (419 jobs).
+ok: structural comparison — t1 reflexivity
+ok: structural comparison — changed main
+ok: structural comparison — existing nested equality ignores annotation
+ok: structural comparison — nested annotation retained through all parents
+ok: structural comparison — map height retained
+ok: structural comparison — absent and comparator-bearing empty maps differ
+ok: structural comparison — float signed zero retained
+ok: structural comparison — float NaN reflexivity
+ok: structural comparison — float mantissa bit retained
+emitted-file data round-trip: independent structural data, quotation and supply match
+ok: emitted-file comparison — all three captured-comparator checks pass on the compared instance
+ok: emitted-file negative check — main := none rejected by structural and quotation comparisons
+ok: emitted-file negative check — frontendSupply + 1 rejected by supply comparison
+ok: whole-file t1 — metadata, all three comparator checks and singleton return 4 checked
+ok: whole-file t1 — independent structural data, quotation, supply and negative checks passed
+ok: complete-file t1 comparison and negative checks
+ok: import direction — 19 core modules, none imports an exhibit/example/production module
+BOUNDARY: 34 modules checked, 0 internals mention(s) in total, exit=0
+ALL GATES GREEN
+
+DERIVED: 66 package warning lines, 33 distinct lines; the distinct set is
+identical to the 33-line baseline. Repetition comes from the inspector
+build replay. Zero UNCAPPED occurrences.
+
+Verbatim manifest verdicts:
+MANIFEST: 35 constructors, 78 variant rows (47 RULE, 0 RULE-TOTAL-UNDEMONSTRATED, 0 RULE-PARTIAL-UNDEMONSTRATED, 0 PARTIAL-ONLY, 24 NO-RULE, 7 OUT-OF-SCOPE), 0 red, 27 consumer modules
+CLAIMS: 19 claim rows, 204 declaration names checked in the theorem cell, 362 declaration-shaped spans checked across every cell (43 vocabulary words, 2 retired names); plants (deleted name in a prose cell; retired name without its marker) red as expected
+
+Final parent citation-speedbump summaries (verbatim):
+cite-check: /home/dev/projects/cerberus-lean-proj/refined-cerberus/worktrees/demo-whole-file-t1/README.md — 0 cites; EXACT 0; DECL 0 (fixed 0; ranges among them counted in RANGE); USE 0; HAND 0; PIN 0; NOFILE 0; RANGE 0 (never rewritten)
+cite-check: /home/dev/projects/cerberus-lean-proj/refined-cerberus/worktrees/demo-whole-file-t1/cerberus-heaplang/ARCHITECTURE.md — 315 cites; EXACT 246; DECL 20 (fixed 0; ranges among them counted in RANGE); USE 13; HAND 23; PIN 13; NOFILE 0; RANGE 18 (never rewritten)
+cite-check: /home/dev/projects/cerberus-lean-proj/refined-cerberus/worktrees/demo-whole-file-t1/cerberus-heaplang/README.md — 44 cites; EXACT 31; DECL 0 (fixed 0; ranges among them counted in RANGE); USE 1; HAND 1; PIN 11; NOFILE 0; RANGE 2 (never rewritten)
+cite-check: /home/dev/projects/cerberus-lean-proj/refined-cerberus/worktrees/demo-whole-file-t1/cerberus-heaplang/docs/CLAIMS.md — 0 cites; EXACT 0; DECL 0 (fixed 0; ranges among them counted in RANGE); USE 0; HAND 0; PIN 0; NOFILE 0; RANGE 0 (never rewritten)
+cite-check: /home/dev/projects/cerberus-lean-proj/refined-cerberus/worktrees/demo-whole-file-t1/cerberus-heaplang/docs/FUEL.md — 90 cites; EXACT 55; DECL 9 (fixed 0; ranges among them counted in RANGE); USE 2; HAND 3; PIN 21; NOFILE 0; RANGE 6 (never rewritten)
+cite-check: /home/dev/projects/cerberus-lean-proj/refined-cerberus/worktrees/demo-whole-file-t1/cerberus-heaplang/docs/WALKTHROUGH.md — 3 cites; EXACT 1; DECL 1 (fixed 0; ranges among them counted in RANGE); USE 0; HAND 0; PIN 1; NOFILE 0; RANGE 0 (never rewritten)
+cite-check: /home/dev/projects/cerberus-lean-proj/refined-cerberus/worktrees/demo-whole-file-t1/docs/2026-09-07_cerberus-lean-requests-register.md — 0 cites; EXACT 0; DECL 0 (fixed 0; ranges among them counted in RANGE); USE 0; HAND 0; PIN 0; NOFILE 0; RANGE 0 (never rewritten)
+cite-check: /home/dev/projects/cerberus-lean-proj/refined-cerberus/worktrees/demo-whole-file-t1/docs/2026-09-07_demo-master-plan.md — 0 cites; EXACT 0; DECL 0 (fixed 0; ranges among them counted in RANGE); USE 0; HAND 0; PIN 0; NOFILE 0; RANGE 0 (never rewritten)
+cite-check: /home/dev/projects/cerberus-lean-proj/refined-cerberus/worktrees/demo-whole-file-t1/docs/KNOWN-OPEN-ITEMS.md — 11 cites; EXACT 5; DECL 2 (fixed 0; ranges among them counted in RANGE); USE 0; HAND 0; PIN 4; NOFILE 0; RANGE 1 (never rewritten)

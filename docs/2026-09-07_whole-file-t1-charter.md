@@ -1,7 +1,8 @@
 # Reusable whole-file adequacy, with t1 acceptance
 
-Status: ACTIVE under the user's 2026-09-07 authorization to execute the
-reviewed proposal autonomously on a feature worktree. No merge or push is
+Status: COMPLETE on the feature branch, 2026-09-08, under the user's
+2026-09-07 authorization to execute the reviewed proposal autonomously
+on a feature worktree. No merge or push is
 authorized. The user explicitly requires sign-off before merging to main.
 This charter makes the accepted scope concrete; its pre-launch review is
 recorded beside it. Standing review brief: [AUDIT-BRIEF.md](AUDIT-BRIEF.md).
@@ -173,3 +174,17 @@ ALL GATES GREEN
 The baseline signature snapshot is
 `cerberus-heaplang/docs/2026-09-08_whole-file-baseline.txt`, taken after
 that gate. Source implementation starts after this disposition.
+
+
+## Completion (2026-09-08)
+
+All required results are implemented and committed on `demo-whole-file-t1`.
+The [implementation record](2026-09-08_whole-file-t1-implementation.md)
+contains adoption details, reusable versus captured-library interfaces,
+parent verification, the strict unchanged-existing-signature census, and
+remaining frontend/corpus limits. The [fresh full-range review](2026-09-08_review-whole-file-t1-range.md)
+is PASS; its final confirmation at `a39efb0` closes all three documentation
+Notes. The parent regenerated the manifest and passed the full capped gate
+after those corrections; [verbatim validation](2026-09-08_whole-file-t1-validation.txt).
+Main remains `7040406`, unmerged. A merge or push still needs the user's
+explicit sign-off; completing this charter grants neither.

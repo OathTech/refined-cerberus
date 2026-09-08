@@ -1,6 +1,6 @@
 # Whole-file t1 implementation record
 
-Status: IN PROGRESS on `demo-whole-file-t1`; no merge or push authorized.
+Status: COMPLETE on `demo-whole-file-t1`, 2026-09-08; no merge or push authorized.
 Charter: [whole-file t1](2026-09-07_whole-file-t1-charter.md).
 Baseline main `7040406`; proposal `969281f`; charter/baseline `5bcbdd1`.
 
@@ -145,3 +145,44 @@ uses representable integers, so it needs no new Impl procedure rule.
 A7 is partial: option (b) for t1 is the claim; other corpus files and the
 elaborator-in-statement target remain open. Full gate and fresh range-review
 verdicts follow at completion.
+
+
+The full claim gate passed at `c9215cc`, then passed again after the
+review-note/citation corrections at `a39efb0` and manifest regeneration.
+Both runs were capped at 40G. Final verbatim verdict excerpts are retained
+in [validation](2026-09-08_whole-file-t1-validation.txt); full ignored logs
+are `.lake/whole-file-evidence/{full-gate,final-gate}.log`. The gate reports
+918 trio-exact, 7 propext-exact and 7 axiom-free-exact pins, with no banned
+axiom in any package constant's cone. The regenerated manifest has 19 claim
+rows, 204 theorem-cell names and 362 all-cell spans, 27 consumer modules and
+zero red rows; import direction and all 34 boundary-checked modules pass.
+The 33 distinct package warning lines are identical to baseline (66 lines
+printed because the inspector's dependency build replays the same warnings).
+No invocation reported UNCAPPED.
+
+The [fresh range review](2026-09-08_review-whole-file-t1-range.md) at
+`7040406..c9215cc` is PASS, with no substantive logical or coverage gap.
+Its three Notes concern exact-category prose, stale manifest counts and
+the scope of old empty-extern routes. All three are corrected by `a39efb0`:
+three exact pin categories are explicit, current counts come from the
+manifest, and the old-route premise account points to the new extern route.
+The additional C11 audit-category reference is checked by the regenerated
+manifest and the final full gate. No Lean source changed after the strict
+signature snapshot.
+
+Citation speedbumps were run on all nine edited claim documents, followed
+by targeted reference repairs against current source and a parent rerun.
+All missing-file flags in the edited README/FUEL account were abbreviated
+LemLib paths, now resolved through the package path. Remaining nonexact
+references are historical/preexisting drift (KOI C18) or explicit ranges;
+the changed DriverDoneCtl hypothesis-range endpoints were checked by hand.
+No broad citation rewrite or new gate was introduced.
+
+
+The fresh reviewer's final confirmation (`9219800`, report-only) re-reads
+the corrected ARCHITECTURE and CLAIMS and checks the remaining reference
+repairs at `a39efb0`: **PASS, all N1–N3 resolved, no substantive issue**.
+The final parent manifest/gate results above discharge the validation left
+to the parent in that report. The charter is complete. The primary checkout
+is clean on main `7040406`; all work is committed in the feature worktree.
+No merge or push was performed, and neither is authorized by this handoff.

@@ -3925,3 +3925,16 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   subsets of the existing trio (including new propext-only representation
   proofs), without new boundary axioms. The final gate/range review and
   signature classification are recorded in the implementation record.
+
+- **2026-09-08 [AGENT] WHOLE-FILE T1 SLICE COMPLETE ON FEATURE BRANCH.**
+  Fresh full-range review of `7040406..c9215cc`: PASS, with three prose
+  Notes; corrections at `a39efb0` independently confirmed PASS by
+  `9219800` (review record `docs/2026-09-08_review-whole-file-t1-range.md`).
+  The parent regenerated the manifest after the corrected audit-category
+  claim and re-ran the full capped gate: `ALL GATES GREEN`, exit 0.
+  Exact pins: 918 trio, 7 propext-only, 7 axiom-free; strict signature
+  comparison: 342 added, zero existing changes or removals. Final evidence:
+  `docs/2026-09-08_whole-file-t1-validation.txt`. The active charter is
+  complete; option (b) is delivered for t1 only, with the recorded limits.
+  The primary checkout remains clean at main `7040406`. This is a branch
+  handoff, not a merge or push authorization; user sign-off is still needed.
