@@ -98,8 +98,8 @@ four in §3.
   (fib), `6 * n.toNat + 8` (counter), `56` (list reversal), `53` (dispose),
   `7 * n.toNat + 5` (region loop), `25 * n.toNat + 9` (malloc'd list),
   `fibRounds n.toNat + 4` (recursive fib), `3 * n.toNat + 6` (even/odd),
-  `50` (both whole-file t1 and its retained wrapper regression), `917`
-  (t4), `90` (t5), `80` (t6). The generic pipeline theorems
+  `50` (t1), `917` (t4), `90` (t5), `80` (t6), for both complete-file
+  certificates and their retained wrapper regressions. The generic pipeline theorems
   `prod_run_eqJ_procs` and `prod_run_eqJ_file` use `k + 2 ≤ LemFuel.fuel`
   (`ProdEntry.lean`).
 - **No hypothesis** on the closed PARTIAL forms `prod_run_safe_procs`
@@ -119,25 +119,36 @@ four in §3.
   `≤ 33` (recursive fib, through `fibRounds_33`/`fibRounds_mono`),
   `≤ 33333331` (even/odd). Never `decide` on the numeral.
 
-**Whole-file t1 separates capture fuel from execution fuel.**
-`CorpusA7.T1.certified_production` (`EmittedT1Exhibit.lean`) quantifies
-every execution instance with `50 ≤ LemFuel.fuel` for the fixed captured
-file, under its three comparator-check hypotheses. Its body proof has
-budget 48; the public `wpt_driver_done_alloc_extern` takes syntactic
-`Frag` and separate `evalDepth` bounds for the body and registered labels.
-`CorpusA7.T1.certified_production_shipped` instantiates the execution
-fuel only. The old `t1_certified_production_shipped` keeps its synthetic
-wrapper contract.
+**The complete-file corpus separates capture fuel from execution fuel.**
+The four `CorpusA7.T1`/`T5`/`T6`/`T4` production theorems quantify every
+execution instance above their sufficient bounds, under the original
+three comparator-check hypotheses:
 
-The frontend runs separately at the documented fixed capture fuel 50;
-the theorem does not quantify arbitrary frontend runs. The input supply
-36 is captured data, checked against the fresh frontend result, not a
-derived universal supply bound. The transfer theorem
-`CorpusA7.T1.certified_production_of_capture_eq` keeps supply equality,
-capture equality and the original comparator checks as explicit premises.
-Executable comparisons do not discharge those premises in the kernel.
-Capture commands and validation status are in the
-[implementation record](../../docs/2026-09-08_whole-file-t1-implementation.md).
+| Program | Fixed frontend capture/comparison fuel | Captured supply | Total proof budget | All execution fuel at least |
+|---|---:|---:|---:|---:|
+| t1 | 50 | 36 | 48 | 50 |
+| t5_ifelse | 1000 | 47 | 88 | 90 |
+| t6_switch | 1000 | 51 | 78 | 80 |
+| t4_while | 1000 | 92 | 915 | 917 |
+
+The public `wpt_driver_done_alloc_extern` takes syntactic `Frag` and
+separate `evalDepth` bounds for the body and registered labels. Each
+`certified_production_shipped` instantiates execution fuel only. The
+four old `t*_certified_production_shipped` retain their wrapper contracts.
+The budgets are justified by rule composition, including explicit
+weakening where literal operands need fewer rounds; they are not claimed
+to be minimum fuel. T4 uses a decreasing loop budget at its invariant.
+
+The frontend runs separately at the fixed capture settings above; these
+theorems do not quantify arbitrary frontend runs. Each supply is captured
+data checked against the fresh frontend result. The diagnostic field
+`after_driver_initialization_supply` is the initializer's returned next
+supply, one higher; the initial run-state supply is the captured value.
+The `_of_capture_eq` twins retain supply equality, complete capture
+equality and original comparator checks as explicit premises. Executable
+comparisons do not discharge them in the kernel. Capture commands and
+verification/review status are in the
+[implementation record](../../docs/2026-09-08_whole-file-corpus-implementation.md).
 
 ## 4. Exhaustion on the fragment's execution path — the classification
 
@@ -189,8 +200,8 @@ export here.
 
 - No tightness: every `N` above is a sufficient bound (KNOWN-OPEN-ITEMS
   B6 for the slack that is disclosed).
-- No frontend-fuel adequacy theorem: the whole-file t1 execution theorem
-  is about the captured file, produced at one documented capture fuel.
+- No frontend-fuel adequacy theorem: the complete-file execution theorems
+  concern fixed captured files, each produced at its documented capture fuel.
 - No ambient-one theorem for a live start: `DriverSafeCtl` at
   `LemFuel.fuel = 1` from an arbitrary live configuration is not stated;
   the closed forms classify fuel 0 and 1 through the setup collapse before

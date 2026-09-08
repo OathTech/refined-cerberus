@@ -118,8 +118,8 @@ under extern comparison equality, and the unsequenced rule for a literal
 right operand. These helpers use public rules and retain source annotations
 and exact read footprints; the assignment face keeps signed-range premises.
 The complete-file consumers include `CorpusA7.T1.certified_production`
-and `CorpusA7.T5.certified_production` / `CorpusA7.T6.certified_production`
-in their `EmittedT*Exhibit` modules.
+and `CorpusA7.T5.certified_production` / `CorpusA7.T6.certified_production` /
+`CorpusA7.T4.certified_production` in their `EmittedT*Exhibit` modules.
 Their `_of_capture_eq` twins retain the original data/supply equality and
 comparator checks. These support/production modules are imported separately
 from this core API.

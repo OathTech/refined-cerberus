@@ -1170,13 +1170,33 @@ def trioExports : List Name := [
   ``CerberusHeapLang.CorpusA7.T6.certified_production,
   ``CerberusHeapLang.CorpusA7.T6.certified_production_of_capture_eq,
   ``CerberusHeapLang.CorpusA7.T6.certified_production_shipped,
-  -- Whole-file t4 body/continuation checkpoint; total loop proof follows.
+  -- Whole-file t4: exact collector, two-read arithmetic, invariant and driver.
   ``CerberusHeapLang.CorpusA7.T4.mainBody_shape,
   ``CerberusHeapLang.CorpusA7.T4.mainBody_frag,
   ``CerberusHeapLang.CorpusA7.T4.mainBody_evalDepth,
   ``CerberusHeapLang.CorpusA7.T4.Q_eq,
   ``CerberusHeapLang.CorpusA7.T4.Q_frag,
-  ``CerberusHeapLang.CorpusA7.T4.Q_depth]
+  ``CerberusHeapLang.CorpusA7.T4.Q_depth,
+  ``CerberusHeapLang.CorpusA7.T4.wpt_load,
+  ``CerberusHeapLang.CorpusA7.T4.wpt_andE,
+  ``CerberusHeapLang.CorpusA7.T4.wpt_addE,
+  ``CerberusHeapLang.CorpusA7.T4.wpt_addSI,
+  ``CerberusHeapLang.CorpusA7.T4.wpt_addI1,
+  ``CerberusHeapLang.CorpusA7.T4.wpt_assign,
+  ``CerberusHeapLang.CorpusA7.T4.wpt_assignS,
+  ``CerberusHeapLang.CorpusA7.T4.wpt_assignI,
+  ``CerberusHeapLang.CorpusA7.T4.wpt_body,
+  ``CerberusHeapLang.CorpusA7.T4.wpt_returnStmt,
+  ``CerberusHeapLang.CorpusA7.T4.wpt_loopTest,
+  ``CerberusHeapLang.CorpusA7.T4.wpt_loopStep,
+  ``CerberusHeapLang.CorpusA7.T4.wpt_whileCont,
+  ``CerberusHeapLang.CorpusA7.T4.blockSpecsT_main,
+  ``CerberusHeapLang.CorpusA7.T4.wpt_whileEntry,
+  ``CerberusHeapLang.CorpusA7.T4.wpt_main,
+  ``CerberusHeapLang.CorpusA7.T4.mainBody_driver_done,
+  ``CerberusHeapLang.CorpusA7.T4.certified_production,
+  ``CerberusHeapLang.CorpusA7.T4.certified_production_of_capture_eq,
+  ``CerberusHeapLang.CorpusA7.T4.certified_production_shipped]
 
 /-- Whole-file representation proofs use propositional extensionality through
 `simp` and induction, without choice or quotient soundness. Preserve that

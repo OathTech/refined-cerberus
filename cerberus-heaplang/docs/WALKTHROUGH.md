@@ -390,7 +390,7 @@ ENGINE vocabulary for `malloc_list_certified_production` (`hB : n.toNat *
 (15 + max al.toNat 1) ≤ 281474976710647`, with `hfuel : 25 * n.toNat + 9
 ≤ LemFuel.fuel`) — never a driver, discharge or scheduler.
 
-**Reading the whole-file t1 theorem.** The advertised t1 certificate is
+**Reading a complete-file theorem.** The t1 instance is
 `CorpusA7.T1.certified_production` in `EmittedT1Exhibit.lean`.
 For `F := CorpusA7.T1.restoredFile cmp` its execution equation is
 
@@ -413,6 +413,21 @@ the shipped default. The older `t1_certified_production` and its shipped
 instance remain synthetic-file wrapper regressions with unchanged
 contracts.
 
+The same theorem shape covers the conditional, switch and while:
+
+| Complete-file certificate | Return | Captured supply | Every execution fuel at least |
+|---|---:|---:|---:|
+| `CorpusA7.T5.certified_production` | 1 | 47 | 90 |
+| `CorpusA7.T6.certified_production` | 20 | 51 | 80 |
+| `CorpusA7.T4.certified_production` | 10 | 92 | 917 |
+
+Each quantifies arbitrary filesystem state and arguments, retains its
+three original comparator checks, and has the same transfer and shipped
+twins. Their total budgets 88/78/915 are sufficient bounds, with
+one/five/four actual saved continuations. The while proof tracks the
+index and accumulated sum with a decreasing budget. The old
+`t{4,5,6}_certified_production` forms remain wrapper regressions.
+
 The file is complete: `EmittedFile.Data` retains all eleven fields,
 including the linked std.core and gcc implementation maps, exact
 optional map trees, locations and annotations. Eight comparator
@@ -432,7 +447,11 @@ parameterless main, retaining the actual runtime extern map. The old
 empty-extern/library-file results specialize these interfaces. This
 capture/map/driver machinery is independent of t1; `EmittedStdCore`
 is the separate adapter for the captured library, reusable under the
-same library-data/lookup premises.
+same library-data/lookup premises. `EmittedIntSupport` provides common
+annotated loads at arbitrary fractions, signed-int assignment at evaluated
+operands, symbol evaluation through extern key comparison, and sequencing
+with a literal right operand. Actual t5/t6/t4 consume these rules; t1
+also uses the common integer and symbol facts.
 
 The connection from C is executable: a fresh-process, one-TU/no-libc
 loader runs the pinned Lean frontend on OCaml Cabs, links and converts
@@ -440,11 +459,12 @@ the file, and compares data, quotation, supply and comparator checks.
 The structural comparison preserves tree shape/heights and annotations
 rather than using ordinary Fmap or annotation-insensitive ctype equality.
 It does not discharge the transfer hypotheses in the kernel or prove
-equality with OCaml's printed Core. This is option (b) for t1; the
-elaborator-in-the-theorem option (a) and other corpus files remain open.
+equality with OCaml's printed Core. This supplies option (b) for t1/t5/t6/t4; the
+elaborator-in-the-theorem option (a) remains open. The six other corpus
+programs need the separately scheduled semantic/rule work.
 ARCHITECTURE §3 explains the loader/quoter boundary and the kernel
 `mkAuxLemma` device used for the concrete label collector. The
-[implementation record](../../docs/2026-09-08_whole-file-t1-implementation.md)
+[implementation record](../../docs/2026-09-08_whole-file-corpus-implementation.md)
 owns commands and verification/review status.
 
 `prod_run_eqJ`/`prod_run_eqJ_procs` and the partial `prod_run_safe_procs`,
@@ -453,7 +473,7 @@ closed statements: their delivery premises `DriverDoneAt`/`DriverDoneCtl`
 resp. the driver-safety fact `DriverSafeCtl` and their registration ties
 `LabeledAt`/`LabeledProcs` (and, since E5, the supply tie) are
 package-defined, discharged by each client. The partial closed statement `fib_rec_certified` — every `n ≥ 0`,
-no budget bound, at every ambient `[LemFuel]` — sits beside the thirteen, as does
+no budget bound, at every ambient `[LemFuel]` — sits beside these total statements, as does
 `even_odd_certified` (EvenOddExhibit.lean, mutual recursion; H1b 2026-09-04).
 The generic partial exports — `MemTriple`, `MemTriple_alloc`,
 `SemTriple`, `project_triple`, `project_triple_pure`,

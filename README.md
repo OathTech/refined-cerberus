@@ -13,15 +13,17 @@ its [README](cerberus-heaplang/README.md) and
 The package's dated records (slice notes, independent audits, external
 reviews) are under `cerberus-heaplang/docs/`.
 
-The t1 certificate now runs a captured complete file from the pinned Lean
-frontend, including its linked standard library and implementation map:
-`CorpusA7.T1.certified_production` returns 4 through the genuine driver.
-The reusable capture, map-check and startup machinery is independent of
-t1. The C connection uses OCaml Cabs and an executable comparison; it is
-not a kernel proof of frontend correctness. The older synthetic-file t1
-certificate remains a wrapper regression. See the
-[implementation record](docs/2026-09-08_whole-file-t1-implementation.md)
-for the comparison boundary and validation status.
+The four supported C programs now have complete-file certificates:
+`CorpusA7.T1`, `T5`, `T6` and `T4` each provide
+`certified_production`, returning 4, 1, 20 and 10 respectively through
+the genuine driver. Their files retain the pinned Lean frontend's linked
+standard library and implementation map. Shared capture, map checking,
+startup, annotated integer loads and assignments support this route.
+The C connection uses OCaml Cabs and an executable comparison; frontend
+correctness is not proved in the kernel. The older synthetic-file
+certificates retain their contracts as wrapper regressions. See the
+[implementation record](docs/2026-09-08_whole-file-corpus-implementation.md)
+for the comparison boundary and validation/review status.
 
 The landing plan for the agent-built branches is
 [`docs/2026-09-07_landing-charter.md`](docs/2026-09-07_landing-charter.md)
@@ -65,10 +67,10 @@ scripts/test_unit.sh                      # the gates (banned-methods grep; the 
 The full gate additionally requires the existing OCaml driver
 `../cerberus-lean/_build/default/backend/driver/main.exe` and runtime
 `../cerberus-lean/_build/install/default`, resolved beside the primary
-checkout even when running in a worktree. The whole-file t1 speedbump fails
+checkout even when running in a worktree. The whole-file corpus speedbump fails
 if either is absent; `scripts/test_unit.sh --fast` is unaffected. This
 external build is not pinned by `semantics-pin.env`: its hash/version are
-reported on each run, and fresh Cabs must match the retained fixture.
+reported on each run, and fresh Cabs must match each retained fixture.
 [Producer identity and reproduction notes](docs/corpus-a7/README.md).
 
 Toolchain: Lean 4.32.2 (elan). Dependencies (batteries, Qq, iris-lean) are

@@ -1,7 +1,7 @@
 # Whole-file certificates for the supported C corpus
 
-Status: ACTIVE; full baseline verification and independent pre-launch
-review PASS with Notes. [AGENT 2026-09-08]. This charter makes the user's autonomous
+Status: IMPLEMENTED; full baseline/final verification passed. Fresh final
+independent review is pending; pre-launch review was PASS with Notes. [AGENT 2026-09-08]. This charter makes the user's autonomous
 execution request concrete; it does not authorize a merge or push.
 
 ## Authorization and baseline

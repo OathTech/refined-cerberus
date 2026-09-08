@@ -39,10 +39,37 @@ whole one-TU/no-libc file. Its frontend/quoter/structural comparison is an
 executable boundary, not a kernel frontend theorem or equality with OCaml's
 printed Core. The implementation record
 `docs/2026-09-08_whole-file-t1-implementation.md` owns verification and
-review status. V1-1b (t4/t5/t6), option (a), and the scheduler/call work
-remain open. The baseline inventory and counts below remain measurements
+review status. At that checkpoint, V1-1b (t4/t5/t6), option (a), and the
+scheduler/call work remained open; the cohort update below supersedes the
+V1-1b status. The baseline inventory and counts below remain measurements
 at `777ca0f`; this update does not assert the whole V1-1 row complete or
 authorize a merge.
+
+**2026-09-08 progress update — V1-1b, complete-file corpus.**
+The `demo-whole-file-corpus` feature branches from main `4bc0a98` under
+`docs/2026-09-08_whole-file-corpus-charter.md`. It supplies the same
+complete-file route for t5_ifelse, t6_switch and t4_while, with actual
+one/five/four continuation maps, public total budgets 88/78/915,
+captured supplies 47/51/92, and execution bounds 90/80/917. Each has
+arbitrary filesystem/arguments, the original comparator checks, a
+capture-transfer twin and a shipped corollary. The generic derived
+load/assignment/literal-operand support has multiple actual consumers;
+the narrowly generalized assignment extern premise preserves the old
+statement as a specialization. T4 carries its decreasing loop invariant.
+
+This completes V1-1's four-program migration at option (b), subject to
+the candidate's external review. The loader/quoter/comparison boundary
+and option (a) stay explicit. The four old wrappers remain regressions
+with unchanged signatures. DERIVED current census: 17 shipped corollaries
+(13 existing plus four complete-file forms), four of ten C programs
+certified, and all 18 old `600` code sites still present. V1-4a therefore
+still owns the old statement/cost restatement; this additive migration
+does not close it. V1-2 seq_rmw, the broader derived-while/rule-quality
+work, package extraction and the scheduler/call arc remain separate.
+Verification, signature comparison and fresh adversarial review are owned
+by `docs/2026-09-08_whole-file-corpus-implementation.md`. Stop at a
+reviewed candidate for external review; no merge or push is authorized.
+The baseline inventories below remain historical unless explicitly updated.
 
 ## 0. The definition of done ([USER 2026-09-07], verbatim)
 
@@ -306,10 +333,12 @@ Severity: **D** would be called disqualifying for "good and complete";
 | G1.8 | duplication and consumerless declarations (C17, C14) | N | V1-4c |
 | G1.9 | **numeral fuel floors** in every root-of-trust statement (`hfuel : 50/917/90/80 ≤ LemFuel.fuel`): principled (FUEL.md §3: the certified round count plus two) but hand-derived numerals in statements — the same class as `600` under the no-magic-values ruling (why is `917` not a named cost by `rfl`?) | V | V1-4a's scope, or an explicit exemption recorded in FUEL.md (§7.8) |
 
-Next-revision note from the t1 landing review (F6): this slice retains the
-old wrappers, so the 18 `600` sites above do not change. Recount the live
-sites and reconsider V1-4a's scope when V1-1b migrates t4/t5/t6; an additive
-whole-file certificate alone does not remove the old wrapper premises.
+V1-1b disposition of the t1 landing review's F6: the live census is still
+18 `600` code sites (15 named hsup premises, including the partial
+corollary, plus three shipped premises). All remain in the retained
+wrappers. The new equations use captured supplies and local source-cell
+non-collision facts. V1-4a still owns old-API and named-cost work; this
+additive migration does not remove those premises or settle that scope.
 
 ### 3.2 Criterion 2 — the iris layer
 
@@ -365,7 +394,7 @@ Phase I.
 
 | item | what | owner | size | depends on | acceptance |
 |---|---|---|---|---|---|
-| **V1-1 the actual emitted file** (G4.1, A7; landing charter L3) | from G2 on the parked branch: the pipeline's whole file for t1 as a machine-quoted data term (`EmittedT1Data.lean`) produced by `scripts/derive_file_to_expr.lean`/`emitted_frontend.lean`, the round-trip check as a gate speedbump (plant it), an independent `BEq` beside `toExpr`, the `mkAuxLemma` kernel-certificate device named in ARCHITECTURE §3 with the quoter/loader as trusted components with a mover; `impl0` = the pinned gcc map, the std.core as linked (110 stdlib + 6 impl entries), the extern map as `runtimeExtern`; the retained wrapper `CorpusT1Exhibit` decided (keep beside the actual-file form or retire — E0 Q7); the referent stated (G4.3); then the same for t4, t5, t6 (V1-1b — G2 did t1 only); A7 rewritten | O | M (t1) + M (t4–t6) | companion R-4 answered | each `t*_certified_production` drives the data term of the pipeline's file; the check red on a perturbed term; range audit |
+| **V1-1 the actual emitted file** (G4.1, A7; landing charter L3) | IMPLEMENTED at option (b), external review pending: complete quoted t1/t5/t6/t4 files from the pinned Lean frontend on OCaml Cabs, retaining 110 stdlib and 6 impl entries, exact annotations/maps and actual runtime externs. Generic capture/comparator/driver machinery and shared annotated integer support; exact body/continuation proofs and total certificates. Original wrappers kept as regressions. Independent structural/quotation/supply comparisons and targeted perturbations run for all four. The loader/quoter boundary and kernel collector certificate are documented in ARCHITECTURE §3; option (a) remains open. | O | M (t1) + M (t4–t6) | R-4 settled for this bounded route; general frontend guarantees remain open | The four CorpusA7 production certificates drive their complete data terms, with original comparator checks and capture-transfer twins; full verification and range review in the cohort record above. |
 | **V1-2 `seq_rmw`** (G4.4; L4) | re-cut G4 without G3: engine arms mirrored, the mirror rule, the public rules, the `negFree → boundFree` premise change with its census; an emitted `i++` certified | O | M | V1-1 (file form) | a corpus or elaborator-transcribed `i++` program certified; PROVISIONAL dropped only if final |
 | **V1-3 docs for V1-1/2** | ARCHITECTURE §3/§7, README, CLAIMS (C6's "two residuals" → three), KOI A7 | O | S | V1-2 | cite check clean |
 | **V1-4 logic-quality Codex slices** (serialised, docs-only main while each runs): **4a symbol floor** (G1.1: the corrected D3+D4 — `FreshAbove`, a program-derived bound, the 18 sites, gate 1b extended to `600`; fences incl. `Audit.lean`, `EnvLaws.lean`, `Shipped.lean`, the gate scripts; G1.9's fuel floors in scope or exempted per §7.8); **4b symbolic int** (G1.6: corrected D2 — the two int-range premises copied verbatim from `wps_c_add`); **4c hygiene** (G1.8: C17/C14 dedupe; C5 warnings; G1.7's derived `while` rule over t4's idiom) | X | 4a M, 4b S, 4c S–M | V1-2 landed (so their baselines are final) | per charter; each a range audit |

@@ -226,9 +226,9 @@ well-founded recursion on a step budget `k`. A jump must decrease the
 budget, `⌜1 + m ≤ k⌝` (`:167`). A call splits it, `1 + m + k' ≤ k`
 (`:172`): the call round, the callee including its return, the
 continuation. The total judgment REFINES the partial one: `wps_of_wpt`
-(`Wpt.lean:5257`) — a total derivation at any budget and the empty
+(`Wpt.lean:5285`) — a total derivation at any budget and the empty
 procedure table entails the partial judgment at the ∃-forgotten label
-specification (`LabelSpecT.forget`, `:5252`), by strong induction on the
+specification (`LabelSpecT.forget`, `:5280`), by strong induction on the
 budget, clause by clause (the total side is the stronger one in every
 clause: no later, no credit, extra pure bounds); `t4_wps_of_wpt`
 (`CorpusT4Exhibit.lean:1467`) is its instance on the while-loop corpus
@@ -457,7 +457,7 @@ procedures). The single-procedure lane uses `DriverDoneAt` (`:89`),
 `wpt_driver_aux` (`:353`), `wpt_driver_done` (`:437`) and
 `wpt_driver_done_alloc` (`:534`), at the empty procedure table.
 `DriverDoneAt` takes the supplies as its parameter `sp` since E5.
-Its extern-capable extension supplies the whole-file t1 result (§2.5).
+Its extern-capable extension supplies the four complete-file results (§2.5).
 
 **The projection** (`Adequacy.lean`). `project_triple_pure` (`:1747`)
 takes an Iris triple to the Iris-free `MemTriple M ctl ρ e P ψ`
@@ -507,6 +507,26 @@ The partial and procedure-call routes keep their previous restrictions.
 
 ### 2.5 The closed shipped-driver statements
 
+The four supported C programs use the complete-file route, each with
+arbitrary filesystem state and arguments, three checks on its original
+comparators, a capture-transfer twin and a shipped-fuel corollary:
+
+| Namespace / program | Return | Captured supply | Public total budget | Sufficient execution fuel | Saved continuations |
+|---|---:|---:|---:|---:|---:|
+| `CorpusA7.T1` / t1 | 4 | 36 | 48 | 50 | 1 |
+| `CorpusA7.T5` / t5_ifelse | 1 | 47 | 88 | 90 | 1 |
+| `CorpusA7.T6` / t6_switch | 20 | 51 | 78 | 80 | 5 |
+| `CorpusA7.T4` / t4_while | 10 | 92 | 915 | 917 | 4 |
+
+Each namespace exports `certified_production` and
+`certified_production_of_capture_eq` from its `EmittedT*Exhibit` module,
+plus `certified_production_shipped` from `Shipped`. These are sufficient
+composition bounds, not measured minimum fuel. The t5/t6/t4 body proofs
+protect their two live source pointers using `22 < M.runState.sym_supply`;
+the exported equations use the exact captured supplies. T4's while
+invariant tracks the index and accumulated sum with a decreasing budget.
+The following t1 instance explains the common theorem shape.
+
 **The advertised t1 certificate is `CorpusA7.T1.certified_production`**
 (`EmittedT1Exhibit.lean:623`). It runs
 `CerbND.runND (drive F.tagDefs false F args) (initial_driver_state 36 F fs).1`
@@ -530,17 +550,35 @@ The executable C/frontend connection is option (b), described in §3;
 these hypotheses are not silently discharged by that comparison.
 
 The generic `EmittedFile`/`EmittedMapChecks` and driver machinery is
-independent of t1. `EmittedStdCore` is a separate captured-library
+independent of the selected program. `EmittedStdCore` is a separate captured-library
 adapter: its declarations come from t1's captured stdlib, and another
 file can reuse them under the same library-data/lookup premises
 (`hasIntLibrary_of_stdlib_data_eq`, `EmittedStdCore.lean:108`). This
-does not prove arbitrary-library correctness. t1's representable-int
-proofs avoid `convElse2`'s out-of-range pure implementation call; no
+does not prove arbitrary-library correctness. All four programs reuse this
+contract. Their representable-int proofs avoid `convElse2`'s out-of-range pure implementation call; no
 implementation-procedure rule is added. Its runtime extern map is the
 singleton self-binding (`CorpusA7.T1.runtimeExtern`, `Examples/EmittedT1.lean:86`),
 proved equal to `create_extern_symmap F` by
 `CorpusA7.T1.restoredFile_extern` (`:88`), distinct from the retained file extern
 table.
+
+`EmittedIntSupport` supplies common public-rule derivations: annotated
+whole-cell loads at arbitrary fractions with the exact read footprint,
+signed-int assignments at evaluated operands, symbol evaluation through
+extern comparison equality, and unsequenced expressions with a literal
+right operand. Actual t5/t6/t4 consume the load and assignment interfaces;
+t1 consumes the common annotated integer and symbol facts. These generic
+rules do not assume a particular fixture or standard-library file.
+The separate `EmittedStdCore` adapter discharges callee-evaluation
+premises for the captured library. `wpt_neg_bound_compare` generalizes
+the derived assignment's extern premise to key-comparison equality;
+`wpt_neg_bound` retains its original statement as a specialization.
+Arithmetic also reuses existing generic faces:
+`evalPexpr_conv_int_int` and `evalPexpr_catch_add_int` (`IntRules.lean`)
+accept evaluated operands and signed-range bounds with arbitrary
+annotations/file/environment. Actual t1 and t4 both consume them.
+These prove intrinsic integer conversion/catch arithmetic; captured
+standard-library calls use the separate lookup contract above.
 
 The retained synthetic-wrapper statements below have the execution function
 `CerbND.runND (_root_.drive fmapEmpty false F args) ((initial_driver_state sup F fs).1)`,
@@ -552,9 +590,9 @@ round count plus two (the table). The shipped binary's default
 `--fuel 100000000` appears only in the `*_shipped` corollaries
 (`Shipped.lean`), each the statement at
 `letI : LemFuel := ⟨100000000⟩` with the side condition closed by `omega`
-(`docs/FUEL.md` §3). The whole-file instance is
-`CorpusA7.T1.certified_production_shipped`; the old
-`t1_certified_production_shipped` keeps its wrapper contract.
+(`docs/FUEL.md` §3). The four whole-file instances are the corresponding
+`CorpusA7.T1`/`T5`/`T6`/`T4` `certified_production_shipped` theorems;
+all four old `t*_certified_production_shipped` keep their wrapper contracts.
 The original E4 `t1_certified_production` is retained as a wrapper
 regression over an emitted body:
 `../docs/corpus-e0/t1.c`'s `main` as the Cerberus C front end emits it,
@@ -569,10 +607,12 @@ pipeline's `--nolibc` file only on programs that reach those three
 functions and no `Impl` constant. The consequence, measured (E3 audit
 D-6): `conv_loaded_int('signed int', Specified(INT_MAX+1))` classifies
 `.kill` on this file where the pipeline's file WRAPS through the impl
-function (KOI A7: this remains the wrapper boundary; the whole-file t1
-certificate above supplies option (b), while option (a) remains open).
+function (KOI A7: this remains the wrapper boundary; the four complete-file
+certificates above supply option (b), while option (a) remains open).
 The historical count thirteen comprises
-the nine pre-dialect statements, t1, t4, t5 and t6; the dialect arc's three closed
+the nine pre-dialect statements and four corpus wrappers. The four new
+complete-file forms bring the current shipped-corollary count to seventeen.
+The dialect arc's three closed
 statements over its synthetic exhibits — `exhibitA_prod_e1`
 (`EmittedAExhibit.lean:289`), `exhibitB_prod_e2` (`EmittedBExhibit.lean:662`),
 `exhibitC_prod_e3` (`EmittedCExhibit.lean:731`) — have the same execution
@@ -591,10 +631,13 @@ table rather than counted here.
 | `fib_rec_certified_production` | `FibRecExhibit.lean:858` | `hn`, `hfuel : fibRounds n.toNat + 4 ≤ LemFuel.fuel` |
 | `even_odd_certified_production` | `EvenOddExhibit.lean:711` | `hn`, `hfuel : 3 * n.toNat + 6 ≤ LemFuel.fuel` |
 | `CorpusA7.T1.certified_production` | `EmittedT1Exhibit.lean:623` | `hfuel : 50 ≤ LemFuel.fuel`; three comparator checks as above; captured supply 36; complete restored file |
+| `CorpusA7.T5.certified_production` | `EmittedT5Exhibit.lean` | `hfuel : 90 ≤ LemFuel.fuel`; three original comparator checks; captured supply 47; complete restored file |
+| `CorpusA7.T6.certified_production` | `EmittedT6Exhibit.lean` | `hfuel : 80 ≤ LemFuel.fuel`; three original comparator checks; captured supply 51; complete restored file |
+| `CorpusA7.T4.certified_production` | `EmittedT4Exhibit.lean` | `hfuel : 917 ≤ LemFuel.fuel`; three original comparator checks; captured supply 92; complete restored file |
 | `t1_certified_production` (wrapper regression) | `CorpusT1Exhibit.lean:806` | `hfuel : 50 ≤ LemFuel.fuel` (the file is `prodFileLib stdlibE3 [] t1Main`, above) |
-| `t5_certified_production` | `CorpusT5Exhibit.lean:549` | `hfuel : 90 ≤ LemFuel.fuel`, `hsup : 600 ≤ sup` — a sufficient floor, not necessary (the composite delivers the same value at `sup = 0`, measured); same library-fragment file boundary as the retained t1 wrapper |
-| `t6_certified_production` | `CorpusT6Exhibit.lean:755` | `hfuel : 80 ≤ LemFuel.fuel`, `hsup : 600 ≤ sup` (sufficient, not necessary, as above); same library-fragment file boundary as the retained t1 wrapper |
-| `t4_certified_production` | `CorpusT4Exhibit.lean:1432` | `hfuel : 917 ≤ LemFuel.fuel`, `hsup : 600 ≤ sup` (sufficient, not necessary, as above); same library-fragment file boundary as the retained t1 wrapper |
+| `t5_certified_production` (wrapper regression) | `CorpusT5Exhibit.lean:542` | `hfuel : 90 ≤ LemFuel.fuel`, `hsup : 600 ≤ sup` — a sufficient floor, not necessary (the composite delivers the same value at `sup = 0`, measured); same library-fragment file boundary as the retained t1 wrapper |
+| `t6_certified_production` (wrapper regression) | `CorpusT6Exhibit.lean:748` | `hfuel : 80 ≤ LemFuel.fuel`, `hsup : 600 ≤ sup` (sufficient, not necessary, as above); same library-fragment file boundary as the retained t1 wrapper |
+| `t4_certified_production` (wrapper regression) | `CorpusT4Exhibit.lean:1425` | `hfuel : 917 ≤ LemFuel.fuel`, `hsup : 600 ≤ sup` (sufficient, not necessary, as above); same library-fragment file boundary as the retained t1 wrapper |
 
 Package definitions in these statements — beyond the program and its
 file representation (`prodFile`/`prodFileWith`/`prodFileLib` or the
@@ -612,6 +655,9 @@ complete restored data term):
 | `fib_rec_certified_production` | `ivVal`, `fibSpec` | `fibRounds` (`FibRecExhibit.lean:465`: `fibRounds 0 = fibRounds 1 = 3`, `fibRounds (n+2) = fibRounds (n+1) + fibRounds n + 9`; closed form `fibRounds n + 9 = 12 · fibSpec (n+1)`, `:468`) |
 | `even_odd_certified_production` | `ivVal` | — |
 | `CorpusA7.T1.certified_production` | `lint`, `CorpusA7.T1.restoredFile`, `CorpusA7.T1.frontendSupply` | `EmittedStdCore.intLibraryCheck`, `CorpusA7.T1.mainLookupCheck`, `CorpusA7.T1.labelUnionCheck` |
+| `CorpusA7.T5.certified_production` | `lint`, `CorpusA7.T5.restoredFile`, `CorpusA7.T5.frontendSupply` | `EmittedStdCore.intLibraryCheck`, `CorpusA7.T5.mainLookupCheck`, `CorpusA7.T5.labelUnionCheck` |
+| `CorpusA7.T6.certified_production` | `lint`, `CorpusA7.T6.restoredFile`, `CorpusA7.T6.frontendSupply` | `EmittedStdCore.intLibraryCheck`, `CorpusA7.T6.mainLookupCheck`, `CorpusA7.T6.labelUnionCheck` |
+| `CorpusA7.T4.certified_production` | `lint`, `CorpusA7.T4.restoredFile`, `CorpusA7.T4.frontendSupply` | `EmittedStdCore.intLibraryCheck`, `CorpusA7.T4.mainLookupCheck`, `CorpusA7.T4.labelUnionCheck` |
 | `t1_certified_production` | `lint` (`IntRules.lean:69`: the loaded `Specified` integer value); `stdlibE3` (`StdCore.lean:153`) and `t1Main` (`Examples/CorpusE0.lean:1063`) inside the file object | — |
 | `t5_certified_production` | `lint`, `stdlibE3` and `CorpusE0.t5Main` inside the file object | — |
 | `t6_certified_production` | `lint`, `stdlibE3` and `CorpusE0.t6Main` inside the file object | — |
@@ -656,7 +702,7 @@ declares no `axiom` and contains no `sorry`: `grep -rn '(sorry'` over the
 primed `generated/*.lean` is empty and the build log has no `declaration
 uses sorry` (README "The trust story"; `docs/2026-09-03_repin-fuel-notes.md`).
 
-**The frontend artifact boundary (whole-file t1, option (b)).** The file
+**The frontend artifact boundary (complete-file corpus, option (b)).** The file
 producer is the pinned Lean frontend consuming OCaml Cabs, followed by
 linking and conversion. The tool's loading context follows the fresh
 process, one-TU/no-libc path of pinned `Main.lean:874–1045`, including
@@ -678,9 +724,15 @@ checks, not a proof of the IO frontend, quoter or arbitrary-file equality.
 Interpreting the artifact as the C producer's output relies on that
 tooling and its recorded comparison. The kernel reconstruction theorem
 only reconstructs a file from its captured data and original comparators.
-The mover is option (a), a proved frontend connection in the theorem;
-other corpus files remain V1-1b. Commands, checks and review status are
-recorded in `../docs/2026-09-08_whole-file-t1-implementation.md`.
+The mover is option (a), a proved frontend connection in the theorem.
+V1-1's option-(b) migration covers t1/t5/t6/t4; the six unsupported
+corpus programs need the separately scheduled semantic/rule work.
+`scripts/check-emitted-corpus.sh` checks fresh Cabs, complete data, supply,
+the original comparator paths, expected outcomes and the existing targeted
+negative cases for all four files. Capture/comparison fuel is fixed at 50
+for t1 and 1000 for the others, separate from the execution bounds in §2.5.
+Commands, checks and review status are recorded in
+`../docs/2026-09-08_whole-file-corpus-implementation.md`.
 
 `CorpusA7.T1.reference_main_labels` (`Examples/EmittedT1.lean:61`) uses
 `Lean.Meta.mkAuxLemma` to submit a small reflexivity proof of the concrete
@@ -782,7 +834,7 @@ over its 184 new theorems: 60 trio-exact, 124 sub-trio, listed unpinned
 in `Audit.lean`'s E5 paragraph — the `negRedex?`/`negFree`/`pot`/`esize`
 `rfl`/`simp` facts and the `*.eq_def` equation lemmas).
 `regionCost_eq`, `runND_killed` and, since the E2 audit fixes,
-`unspec_paddingByte` have no axioms (`:494`, `:664`, `:789`). Kernel-only proof methods: no `native_decide`, `bv_decide`
+`unspec_paddingByte` have no axioms (`:518`, `:688`, `:813`). Kernel-only proof methods: no `native_decide`, `bv_decide`
 or `ofReduce*` anywhere (gate 1, `../scripts/test_unit.sh:28`).
 
 **The declared boundary is empty** ("There is no declared boundary
@@ -827,7 +879,7 @@ delivers the value `fib n`, not blocked, with empty stdout and stderr.
 The one premise beyond `n ≥ 0` is `hfuel`: the certified round count
 `2n + 6` fits the AMBIENT budget `LemFuel.fuel` — the statement holds at
 every instance of `LemFuel`, and the shipped binary's default is its
-corollary `fib_certified_production_shipped` (`Shipped.lean:98`:
+corollary `fib_certified_production_shipped` (`Shipped.lean:102`:
 `letI : LemFuel := ⟨100000000⟩` in the statement, side condition
 `n.toNat ≤ 49999997`, closed by `omega`). No hypothesis about termination, memory
 well-formedness or the driver's internals appears: the cold-start
@@ -1012,17 +1064,17 @@ them read.
   its header, `engine-mirror-test` reserved with no member). The
   manifest's consumer set is `positive-client` ∪ `declared-smoke`,
   including the authored exhibits, emitted-body regressions,
-  `EmittedT1Exhibit`, `Examples.PartialClients` and the declared smoke
+  `EmittedT1Exhibit`, `EmittedT4Exhibit`, `EmittedT5Exhibit`, `EmittedT6Exhibit`, `Examples.PartialClients` and the declared smoke
   clients. The current classification and consumer census are generated
   in `docs/CAPABILITY_MANIFEST.md`. The production wrappers and the negative
   test are not consumers. Fail-hard behaviour (TSV header lines 8–11):
   the two Lean instruments fail on a package module absent from the
   list; all three instruments fail on a classified module absent from
   the build or a class outside the vocabulary.
-- **The import-direction check** (`test_unit.sh:85`): no module of class
+- **The import-direction check** (`test_unit.sh:92`): no module of class
   `core` imports an exhibit, example or production module.
 - **The client-boundary check** (`../scripts/boundary_check.sh`,
-  `test_unit.sh:102`). After stripping comments, a `positive-client`/
+  `test_unit.sh:115`). After stripping comments, a `positive-client`/
   `declared-smoke`/`example-support` module must not mention a logic
   internal. The internals: the coupling invariant and state
   interpretation (`CohG`, …); the judgment unfoldings (`wps.pre`, …);
