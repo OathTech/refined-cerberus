@@ -525,7 +525,7 @@ def CtlTied (M₀ : MachineCtx) (lab : Fmap sym LabelMap) (ctl : Ctl) : Prop :=
 configuration: the arena, the env and the FOUR control fields the rounds
 write — `stack0`, `current_proc_opt`, `exec_loc` (the engine's
 PCALL/RETURN arms) and, since E1, `current_loc := ctl.curLoc` (the general
-arm's location write) — over `th₀`'s `errno` only (`DriverCollapse.lean:2379`). `LabeledProcs` ties
+arm's location write) — over `th₀`'s `errno` only (`ctlThread`, `DriverCollapse.lean:2929`). `LabeledProcs` ties
 the driver's run state to the context at every DECLARED procedure (what
 `call_proc` reads), `CtlTied` at the current procedure and every
 procedure saved on the call stack (what the jump reads,

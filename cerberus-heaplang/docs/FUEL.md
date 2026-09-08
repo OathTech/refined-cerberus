@@ -15,10 +15,10 @@ is a silent fail-open.
 
 ## 1. The parameter
 
-Fuel is the ambient type class `LemFuel` (LemLib, `lean-lib/LemLib.lean:66`),
+Fuel is the ambient type class `LemFuel` (LemLib, `.lake/packages/LemLib/lean-lib/LemLib.lean:66`),
 an instance-implicit `[LemFuel]` binder on every fuelled engine function;
 `LemFuel.fuel : Nat` is the budget. Nothing installs an instance: not
-LemLib (`lemDefaultFuel` is gone — `LemLib.lean:63`, HISTORY), not the
+LemLib (`lemDefaultFuel` is gone — `.lake/packages/LemLib/lean-lib/LemLib.lean:63`, HISTORY), not the
 semantics (`CerbFuel.driverFuel` is gone — generated `CerbFuel.lean:22`),
 not this package. The shipped binary's default `--fuel 100000000`
 (cerberus-lean `Main.lean`) is the ONLY numeral of the arc ([USER
@@ -55,7 +55,7 @@ four in §3.
 | Quantity | Where it lives | What it bounds |
 |---|---|---|
 | `LemFuel.fuel` (ambient) | the caller's instance | every fuelled worker's starting counter in the run: scheduler rounds, per-thread rounds, ND layering, pure-evaluator passes, the finalizer |
-| the explicit loop counter `fl` | `drive_nonmemory_steps_aux2_lemFuel fl` in `DriverSafeCtl` (`Adequacy.lean:936`) and `DriverDoneCtl` (`ProdLoop.lean:515`) | iterations of one per-thread worker; the generic shipped-loop theorems quantify it independently of the ambient budget (the production instance starts it at `LemFuel.fuel`, `Driver.lean:390`) |
+| the explicit loop counter `fl` | `drive_nonmemory_steps_aux2_lemFuel fl` in `DriverSafeCtl` (`Adequacy.lean:936`) and `DriverDoneCtl` (`ProdLoop.lean:631`) | iterations of one per-thread worker; the generic shipped-loop theorems quantify it independently of the ambient budget (the production instance starts it at `LemFuel.fuel`, `Driver.lean:390`) |
 | the total cost `k` | the total judgment `wpt … k` | the number of shipped rounds a public total proof certifies; delivery uses `k + 2` iterations (the PROGRAM-DONE recording and the drain pass) |
 | `peDepth pe` / `evalDepth e` | `Step.lean:2571` / `Fragment.lean:86` | the pure evaluator's passes on one operand / the largest such depth over the operands an expression can evaluate (a value or a symbol read costs one pass, `PEop`/`PEarray_shift` one more than the deepest child) |
 | `allocBudget B` | `Heap.lean` | allocation capacity from the cold-start cursor — unrelated to fuel |
@@ -64,10 +64,10 @@ four in §3.
 
 - **`hfuel : 2 ≤ LemFuel.fuel`** on every shipped-loop statement: the
   shipped round is one `nd_bind` layer around the thread step and one
-  around the value delivery (`loop_step_frag`, `DriverCollapse.lean:2877`;
-  `loop_step_frag'`, `:2803`). At fuel 0 the loop is the exhaustion kill
-  (`loop_zero_exhausts`, `:3010`); at fuel 1 a delivered value is the
-  drain pass's exhaustion (`loop_step_done_exhaust`, `:3019`); PROGRAM-DONE
+  around the value delivery (`loop_step_frag`, `DriverCollapse.lean:2888`;
+  `loop_step_frag'`, `:2814`). At fuel 0 the loop is the exhaustion kill
+  (`loop_zero_exhausts`, `:3021`); at fuel 1 a delivered value is the
+  drain pass's exhaustion (`loop_step_done_exhaust`, `:3030`); PROGRAM-DONE
   needs two (`loop_step_done`, `:436`). The classification of every
   fragment round (`frag_round_complete`, `cerberusRound_classify`,
   `Round.lean:7874`/`:7917`) needs four, because its FORK refusal is
@@ -103,7 +103,7 @@ four in §3.
   `prod_run_eqJ_procs` and `prod_run_eqJ_file` use `k + 2 ≤ LemFuel.fuel`
   (`ProdEntry.lean`).
 - **No hypothesis** on the closed PARTIAL forms `prod_run_safe_procs`
-  (`ProdEntry.lean:615`), `fib_rec_certified`, `even_odd_certified`: at
+  (`ProdEntry.lean:621`), `fib_rec_certified`, `even_odd_certified`: at
   every ambient `[LemFuel]`, `CerbND.runND (drive fmapEmpty false F args)
   (initial_driver_state sup F fs).1` is exactly one outcome — the kill
   `CerbND.fuelExhaustedKill` or the postcondition. Their `DriverSafeCtl`
@@ -111,7 +111,7 @@ four in §3.
   itself exhausts. Since the ambient instance is the budget of both loops
   (§1), this quantifier bounds the run; the "outer scheduler only" caveat of
   pin `f95ef8d9c` (KNOWN-OPEN-ITEMS A2) is retired.
-- **The shipped instances.** `X_shipped` (`Shipped.lean:79`–`:337`) is `X`
+- **The shipped instances.** `X_shipped` (`Shipped.lean`) is `X`
   at `letI : LemFuel := ⟨100000000⟩`, in the statement; the side condition
   is closed by `show _ ≤ 100000000; omega`, and for the six parametric
   programs becomes a bound on the parameter: `n.toNat ≤ 49999997` (fib),
@@ -154,7 +154,7 @@ are marked (D).
 | Function | Cite (generated) | Class | Exhaustion value | On the proved path |
 |---|---|---|---|---|
 | `driver2` | `Driver.lean:422`–`:429` | (B) | `NDkilled fuelExhaustedKill` | the scheduler's one round; its kill is the admitted outcome of the closed partial forms (`driver2_killed`, `DriverCollapse.lean`) |
-| `drive_nonmemory_steps_aux2` | `Driver.lean:385`–`:392` | (B) | `NDkilled fuelExhaustedKill` | every round; `DriverSafeCtl` admits the kill at every counter (`loop_zero_exhausts`, `:3010`) |
+| `drive_nonmemory_steps_aux2` | `Driver.lean:385`–`:392` | (B) | `NDkilled fuelExhaustedKill` | every round; `DriverSafeCtl` admits the kill at every counter (`loop_zero_exhausts`, `DriverCollapse.lean:3021`) |
 | `nd_bind` | `Nondeterminism.lean:214`–`:216` | (B) | `NDkilled fuelExhaustedKill` | every ND layer; hence `2 ≤ LemFuel.fuel` (§3) |
 | `runND` / `runNDFuel` | `CerbND.lean:163` / `:117` | (B) | `[(Killed st0 fuelExhaustedKill, [], st0)]` | the outcome enumeration; the singleton equation's kill arm |
 | `eval_pexpr_aux2` | `Core_eval.lean:162`–`:164` | (B) | `Result (Error fuelExhaustedLoc fuelExhaustedMsg)` — absorbing in `exceptM`, lifted by the driver to the same kill | the pure evaluator's pass loop; EXCLUDED on the proved path by `evalDepth e ≤ LemFuel.fuel` (the bridge `step_eval_bridge`/`aux2_bridge`, `Soundness.lean:6541`/`:7148`) |
@@ -164,7 +164,7 @@ are marked (D).
 | `get_ctx`, `subst_sym_pexpr`, `subst_sym_expr`, `update_env_aux` | `Core_reduction.lean:387`, `Core_aux.lean:517`, `:531`, `:903` | (A) MEASURED | — | the redex search, substitution and environment update; no `esize`/`pot` ceiling exists any more |
 | `CerbMem.sizeofCtype` and the five layout rows | `CerbMem.lean`; cerberus-lean `scripts/fuel_hypotheses.txt` | (A) MEASURED under the reviewed hypothesis `CerbTagsWf.Acyclic` | — | consumed through the fuel-free wrapper; the package states no `Acyclic` hypothesis (at `fmapEmpty` there is nothing to be cyclic) |
 | `hack` | `Driver.lean:438`–`:440` | (D) | `fuelExhausted Vunit` (opaque) | ON THE PATH: `finalize` (`:469`) evaluates the final arena through it — its ONLY caller in the generated tree (`grep` over the pinned `generated/`, L2 audit fixes). Excluded by `0 < LemFuel.fuel`: a value arena is one pass (`hack_value`, `DriverCollapse.lean:660`) |
-| `to_pure` | `Core_aux.lean:600`–`:602` | (D) | `fuelExhausted none` (opaque) | ON THE PATH: `finalize` (`Driver.lean:469`) reads the arena's pure expression through it. Excluded by `0 < LemFuel.fuel` (`finalize_done`, `DriverCollapse.lean:677`). A SECOND `drive`-path site: `driver_globals` (`Driver.lean:518`–`:527`) reads each global definition's arena through it (`:526`, inside the `nd_mapM_` over `glob_defs`) before `main` runs — (C) for THIS package only because every certified file has `globs := []` (`prodFile`, `ProdEntry.lean:82`; `prodFileWith`/`prodFileLib` inherit it, `:370`/`:680`), so the map is over the empty list; a file with a global definition would reach this row before `main`, under no exclusion lemma of this package. Its third caller is the elaboration-time rewriter (`Core_rewrite.lean:233`–`:271`), which the driver does not call |
+| `to_pure` | `Core_aux.lean:600`–`:602` | (D) | `fuelExhausted none` (opaque) | ON THE PATH: `finalize` (`Driver.lean:469`) reads the arena's pure expression through it. Excluded by `0 < LemFuel.fuel` (`finalize_done`, `DriverCollapse.lean:677`). A SECOND `drive`-path site: `driver_globals` (`Driver.lean:518`–`:527`) reads each global definition's arena through it (`:526`, inside the `nd_mapM_` over `glob_defs`) before `main` runs — (C) for THIS package only because every certified file has `globs := []` (`prodFile`, `ProdEntry.lean:82`; `prodFileWith`/`prodFileLib` inherit it, `:376`/`:686`), so the map is over the empty list; a file with a global definition would reach this row before `main`, under no exclusion lemma of this package. Its third caller is the elaboration-time rewriter (`Core_rewrite.lean:233`–`:271`), which the driver does not call |
 | `to_pures` | `Core_aux.lean:605` | (D) | `fuelExhausted none` | (C) for the fragment: callers are the elaboration-time rewriter (`Core_rewrite.lean:255`) and `core_thread_step2` (`Core_run.lean:424`), which the shipped driver does not call |
 | `many`, `many1` | `Monadic_parsing.lean:138`, `:143` | (D) | `fuelExhausted (ParserM (fun _ => []))` | (C) for the fragment: the printf format parser `format0` (`Formatted.lean:391`) under `print_eval_conv_aux` (`Driver.lean:274`), a `printf` builtin — no `Frag` construct |
 | `are_compatible_aux`, `_params_aux0`, `_params0` | `Ctype_aux.lean:112`–`:114` | (D) | `fuelExhausted false` | (C) for the fragment: struct/union compatibility (`are_compatible0`, `Ctype_aux.lean:128`) from `memValueFromValue`'s `Struct`/`Struct` arm; the fragment's memory values are integers and pointers |

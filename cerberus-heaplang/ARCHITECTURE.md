@@ -53,7 +53,7 @@ are cited with their `[USER date]`/`[AGENT date]` tag and live in
   stated at: `spikeCtx`/`spikeCtl` (no current procedure, the default
   file; `Step.lean:6310`, `:6286`), `procCtx rs`/`procCtl p` (a run state
   with registered labels, in procedure `p`; `:6322`, `:6291`), or the
-  production profile `prodCtx`/`prodCtl` (`ProdEntry.lean:583`, `:393`).
+  production profile `prodCtx`/`prodCtl` (`ProdEntry.lean:414`, `:399`).
 - *seeded* — an exhibit whose initial memory holds pre-existing cells
   (premise `hcoh : Coh …`); the cold start never does, so it has no
   shipped-pipeline form.
@@ -72,13 +72,14 @@ are cited with their `[USER date]`/`[AGENT date]` tag and live in
   module has an axiom set within the trio (§3).
 - *a tie* — a hypothesis of `DriverSafeCtl`/`DriverDoneCtl` fixing a
   field of the driver state from the configuration (`Adequacy.lean:939`–
-  `:946`; `ProdLoop.lean:518`–`:523`). The ties: the thread, the memory,
+  `:946`; `ProdLoop.lean:634`–`:639`). The ties: the thread, the memory,
   the extern table, the file, the registration predicate `LabeledProcs`,
   in the partial fact only the control's `CtlTied`, and — since E5 — the
   SUPPLY TIE: the driver state's `sym_supply`/`excluded_supply` equal the
   entry control's `ctl.sup` (`Adequacy.lean:945`–`:946`;
-  `ProdLoop.lean:523`; the one-procedure face `DriverDoneAt` takes the
-  supplies as its parameter `sp`, `ProdLoop.lean:63`, tie at `:74`). The
+  `ProdLoop.lean:639`; the one-procedure face `DriverDoneAt`
+  (`ProdLoop.lean:89`) specializes `DriverDoneAtExtern` (`:63`), whose
+  supplies are its parameter `sp`, tied at `:74`). The
   thread tie carries the live source location since E1 (`ctlThread`);
   inside a round the supplies are tied to the control by
   `MachineCtx.Embeds` (Round.lean). Consequently the seeded exports speak
@@ -384,8 +385,9 @@ superset of the engine-accepted shapes (KOI B7).
 
 Two engine-round bridges exist by design (KOI B12). `engine_step_matchU`
 certifies the mirror; the adequacy lanes consume the production-profile
-round `loop_step_frag`/`loop_step_frag'` (`DriverCollapse.lean:2877`/
-`:2803`), proved independently per redex (`Round.lean:144`–`:156`). No
+round `loop_step_frag` (`DriverCollapse.lean:2888`) and its jump-tie
+form `loop_step_frag'` (`:2814`), proved independently per redex
+(`Round.lean:144`–`:156`). No
 adequacy export consumes `CerberusRound`, `engine_step_matchU`,
 `cerberusRound_classify` or `frag_round_complete`. The hand-written
 discharge `dischargeStep`/`outcomesU` (Soundness.lean) is a proof device
@@ -420,8 +422,8 @@ state constructed. `engine_adequacy` (`:1374`; `_alloc` `:1466`) turns it
 into the engine fact `DriverSafeCtl M th₀ e ρ ctl σ ψ` (`:936`, read in
 §4: exhaustion or PROGRAM-DONE with the readout, at EVERY fuel, no other
 outcome). Its ties are `LabeledProcs` for the callees
-(`DriverCollapse.lean:2936`), `CtlTied` for the procedures already on
-the control (`:2964`) and, since E5, the supply tie (the driver state's
+(`DriverCollapse.lean:2947`), `CtlTied` for the procedures already on
+the control (`:2975`) and, since E5, the supply tie (the driver state's
 run-state supplies equal `ctl.sup`; discharged by `rfl` at every profile,
 whose entry control carries the state's supplies). The mirror suffices because `NotStuck` supplies a
 mirror step at every reachable configuration and `loop_step_frag'` makes
@@ -431,31 +433,31 @@ Its premises `MachineCtx.FragProcs` (`Adequacy.lean:719`: every declared
 procedure body in `Frag`) and `MachineCtx.ProcsDepth LemFuel.fuel`
 (`:728`: each within the evaluator budget) let it follow the engine into
 a callee and back. Counter 0 is the exhaustion kill (`loop_zero_exhausts`,
-`DriverCollapse.lean:3010`). Counter 1 at a delivered value is the
+`DriverCollapse.lean:3021`). Counter 1 at a delivered value is the
 exhaustion of the drain iteration, the loop's last pass over the
-emptied thread list (`loop_step_done_exhaust`, `:3019`); counter ≥ 2 there
+emptied thread list (`loop_step_done_exhaust`, `:3030`); counter ≥ 2 there
 is PROGRAM-DONE (`loop_step_done`, `:436`).
 
-**The total lane** (`ProdLoop.lean`). `wpt_driver_cps` (`:875`) is the
+**The total lane** (`ProdLoop.lean`). `wpt_driver_cps` (`:991`) is the
 budget induction in continuation-passing form over the ambient control,
 the driver-level twin of `wpt_sound_cps`. It concludes the pure delivery
-fact `DriverDoneCtl M₀ th₀ e ρ ctl σ ψ k` (`:515`). That fact: from any
+fact `DriverDoneCtl M₀ th₀ e ρ ctl σ ψ k` (`:631`). That fact: from any
 driver state holding the configuration at `ctlThread th₀ e ρ ctl`, with
 the file tie, the whole-file registration tie and (E5) the supply tie,
 the loop returns PROGRAM-DONE for a value satisfying `ψ` within `k + 2` iterations. The
 call case applies the hypothesis to the callee at the pushed control
 with the continuation budget added; every round is `loop_step_frag`
-(`driverDoneCtl_step`, `:660`). The launcher is `wpt_driver_done_procs`
-(`:964`; a populated table, the entry control `⟨[], some p, ℓ, lc, sp⟩`
+(`driverDoneCtl_step`, `:776`). The launcher is `wpt_driver_done_procs`
+(`:1080`; a populated table, the entry control `⟨[], some p, ℓ, lc, sp⟩`
 of a declared procedure).
 It is the route of `fib_rec_certified_production` (`main` calls `fib`,
 which calls itself twice) and `even_odd_certified_production`
 (`even`/`odd` call each other under a symbol-dependent table; three
-procedures). The single-procedure lane `DriverDoneAt`/
-`wpt_driver_aux`/`wpt_driver_done(_alloc)` (`:63`/`:191`/`:373`/`:444`;
-`DriverDoneAt` takes the supplies as its parameter `sp` since E5), at
-the empty table, is the route of the eleven one-procedure statements
-(seven authored examples and the four emitted corpus programs in §2.5).
+procedures). The single-procedure lane uses `DriverDoneAt` (`:89`),
+`wpt_driver_aux` (`:353`), `wpt_driver_done` (`:437`) and
+`wpt_driver_done_alloc` (`:534`), at the empty procedure table.
+`DriverDoneAt` takes the supplies as its parameter `sp` since E5.
+Its extern-capable extension supplies the whole-file t1 result (§2.5).
 
 **The projection** (`Adequacy.lean`). `project_triple_pure` (`:1747`)
 takes an Iris triple to the Iris-free `MemTriple M ctl ρ e P ψ`
@@ -475,13 +477,13 @@ none of the internals (§5, the boundary check).
 
 **The closed forms over the shipped pipeline** (`ProdEntry.lean`). The
 authored program is wrapped as a synthetic file — one procedure by
-`prodFile` (`:76`), `main` plus declared procedures by `prodFileWith`
-(`:370`; `prodFile e = prodFileWith [] e` is `rfl`, `:375`). The total
-pipeline theorem `prod_run_eqJ_procs` (`:577`; one-procedure form
-`prod_run_eqJ`, `:226`) turns a `DriverDoneCtl` at the production
+`prodFile` (`:82`), `main` plus declared procedures by `prodFileWith`
+(`:376`; `prodFile_eq_with`, `:381`, is `rfl`). The total
+pipeline theorem `prod_run_eqJ_procs` (`:583`; one-procedure form
+`prod_run_eqJ`, `:232`) turns a `DriverDoneCtl` at the production
 profile into the shipped composite's result. Its bound:
 `k + 2 ≤ LemFuel.fuel`. The partial pipeline theorem
-`prod_run_safe_procs` (`:615`) turns a `DriverSafeCtl` there (required
+`prod_run_safe_procs` (`:621`) turns a `DriverSafeCtl` there (required
 only under `2 ≤ LemFuel.fuel`) into a fact at every ambient `[LemFuel]`
 about
 `CerbND.runND (drive fmapEmpty false (prodFileWith procs e) args) (initial_driver_state …).1`
@@ -535,8 +537,9 @@ file can reuse them under the same library-data/lookup premises
 does not prove arbitrary-library correctness. t1's representable-int
 proofs avoid `convElse2`'s out-of-range pure implementation call; no
 implementation-procedure rule is added. Its runtime extern map is the
-singleton self-binding proved equal to `create_extern_symmap F`
-(`Examples/EmittedT1.lean:86`), distinct from the retained file extern
+singleton self-binding (`CorpusA7.T1.runtimeExtern`, `Examples/EmittedT1.lean:86`),
+proved equal to `create_extern_symmap F` by
+`CorpusA7.T1.restoredFile_extern` (`:88`), distinct from the retained file extern
 table.
 
 The retained synthetic-wrapper statements below have the execution function
@@ -557,7 +560,7 @@ regression over an emitted body:
 `../docs/corpus-e0/t1.c`'s `main` as the Cerberus C front end emits it,
 transcribed verbatim (`Examples/CorpusE0.lean:1062`, tied to
 `../docs/corpus-e0/t1.annot.core` by the corpus skeleton speedbump, §5). Its
-file object is `prodFileLib stdlibE3 [] t1Main` (`ProdEntry.lean:680`): a
+file object is `prodFileLib stdlibE3 [] t1Main` (`ProdEntry.lean:686`): a
 SYNTHETIC file whose `stdlib` is the transcribed THREE-function std.core
 fragment `stdlibE3` (`StdCore.lean:153`: `is_representable_integer`,
 `conv_int`, `conv_loaded_int`, checked constructor for constructor against
@@ -752,10 +755,13 @@ theorems deleted and the dependency's generated `.eq_def` unpinned at the
 landing (`docs/2026-09-07_l1-landing-notes.md` §6).
 Every theorem of every `CerberusHeapLang.*` module, internal details
 included, is bounded by the trio. `sorryAx`/`ofReduceBool`/`ofReduceNat`
-reach no constant of any kind. Precision: "exactly the trio" is the trio-pinned exports' property (the six `axiomFreeExports` pins are exactly empty);
-every other theorem's cone is bounded by the trio, by the sweep. The
-public-named lemmas with SUB-trio cones are therefore unpinned, as
-`Audit.lean`'s comments record them (among them `fibRounds_closed`,
+reach no constant of any kind. Precision: "exactly the trio" is the
+trio-pinned exports' property; `propextExports` pins exactly `propext`,
+and `axiomFreeExports` pins exactly the empty set. Every theorem's cone
+is bounded by the trio, by the sweep. Smaller cones do not imply that
+a theorem is unpinned: the representation/map interfaces use these
+smaller exact pin categories. Some public-named lemmas with SUB-trio
+cones remain unpinned, as `Audit.lean`'s comments record them (among them `fibRounds_closed`,
 `regionCost_pos` and the `freshBase_*` bounds with `[propext,
 Quot.sound]`; the four `∈`/`contains` bridge lemmas `mem_contains_int`,
 `contains_cons_int`, `contains_cons_ne_int`, `int_beq_eq_true`;
@@ -871,15 +877,16 @@ cell at `(idx, addr)` with bytes `bs0` (`Coh`, `Heap.lean:389`; `CellCoh`,
 per-thread loop and not the composite. The thread-level fact is the
 meaning of the triple (below), and its ∀ `fl` is real run-length content.
 
-**The premises every generic adequacy theorem carries** (`engine_adequacy`,
+**The premises of the existing partial and through-calls adequacy routes** (`engine_adequacy`,
 `Adequacy.lean:1374`; `project_triple_pure`, `:1747`; `wpt_driver_cps`,
-`ProdLoop.lean:875`; `wpt_driver_done_procs`, `:964`), and what each
+`ProdLoop.lean:991`; `wpt_driver_done_procs`, `:1080`), and what each
 means:
 
-- `htd : M.tagDefs = fmapEmpty`, `hex : M.extern = fmapEmpty` — no
-  struct/union tag definitions and no extern indirection in any proved
-  configuration; this matches the production driver's
-  `drive fmapEmpty false …` (KOI B4).
+- `htd : M.tagDefs = fmapEmpty`, `hex : M.extern = fmapEmpty` — empty
+  tag definitions and no extern indirection in these routes (KOI B4).
+  The separate `wpt_driver_done_alloc_extern` route keeps empty tags
+  while retaining the actual runtime extern map; it supplies the
+  complete-file t1 theorem (§2.5).
 - `hκ : ctl.κ = []` — the entry control has an empty call stack (the
   value arm selects PROGRAM-DONE over RETURN, `shipped_done`,
   `Round.lean:2168`).
@@ -890,7 +897,7 @@ means:
 - `hfuel : 2 ≤ LemFuel.fuel` — THE AMBIENT BUDGET IS AT LEAST TWO. Fuel
   is the caller's `[LemFuel]` instance, read by every fuelled engine
   function of the run (`docs/FUEL.md` §1); the shipped round is two ND
-  layers (`loop_step_frag`, `DriverCollapse.lean:2877`), so below two the
+  layers (`loop_step_frag`, `DriverCollapse.lean:2888`), so below two the
   loop is the exhaustion kill and nothing is stepped.
 - `hdep : evalDepth e ≤ LemFuel.fuel`, `hQd`, `hPd : M.ProcsDepth LemFuel.fuel`
   — THE EVALUATOR-DEPTH PREMISE. `evalDepth` (`Fragment.lean:86`) is the
@@ -1003,12 +1010,11 @@ them read.
 - **One module classification** (`scripts/module_classes.tsv`, pure data,
   reprinted at the head of the manifest; ten classes, the vocabulary in
   its header, `engine-mirror-test` reserved with no member). The
-  manifest's consumer set is `positive-client` ∪ `declared-smoke` (25
-  modules: the twenty-three program exhibits — `EmittedAExhibit`,
-  `EmittedBExhibit`, `EmittedCExhibit`, `CorpusT1Exhibit`,
-  `CorpusT4Exhibit`, `CorpusT5Exhibit` and `CorpusT6Exhibit` among them —
-  `Examples.CallSmoke`, `Examples.ReadinessSmoke`; the manifest's tail
-  line, `docs/CAPABILITY_MANIFEST.md:182`). The production wrappers and the negative
+  manifest's consumer set is `positive-client` ∪ `declared-smoke`,
+  including the authored exhibits, emitted-body regressions,
+  `EmittedT1Exhibit`, `Examples.PartialClients` and the declared smoke
+  clients. The current classification and consumer census are generated
+  in `docs/CAPABILITY_MANIFEST.md`. The production wrappers and the negative
   test are not consumers. Fail-hard behaviour (TSV header lines 8–11):
   the two Lean instruments fail on a package module absent from the
   list; all three instruments fail on a classified module absent from
@@ -1034,9 +1040,9 @@ them read.
   exclusions (KOI pointers), freshness check. The generator checks that
   every declaration a claim row names exists and that every
   declaration-shaped backticked span of every cell is a constant, a listed
-  vocabulary word or a RETIRED name carrying its `(retired …)` marker (14
-  rows, 133 names in the theorem cell, 290 spans across every cell; planted
-  both ways).
+  vocabulary word or a RETIRED name carrying its `(retired …)` marker.
+  The current claim/name/span counts are reported by the manifest run;
+  the check does not establish the truth of the prose cells.
 - **The parametric inventory** (`scripts/parametric_inventory.lean`) is
   ON DEMAND, not in the gate — [AGENT 2026-09-04] (DECISIONS "AR5-MANIFEST
   LANDED and COMBINED"): the boundary check is its cheap gate twin, and a proof-term
@@ -1123,7 +1129,7 @@ Each item points at its register entry; none is hidden in a proof.
   parks `main` in (it parks it at `current_proc_opt := some main_sym`,
   generated `Driver.lean:530`). This is admitted because the round needs
   the current procedure only at a jump (`loop_step_frag'`'s `hjmp`,
-  `DriverCollapse.lean:2810`; `CtlTied.noproc`, `:2973`) (KOI B2). Six
+  `DriverCollapse.lean:2821`; `CtlTied.noproc`, `:2984`) (KOI B2). Six
   any-memory total equations have no twins, and tree rotation has no
   shipped-pipeline statement (KOI B1). The round-count bounds of
   `fib_rec_certified_production`, `even_odd_certified_production` and
