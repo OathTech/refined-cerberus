@@ -234,9 +234,8 @@ theorem list_reverse_certified_production (sup : Nat) (ra : core_run_annotation)
 
 No section variables. `CerbND.runND (_root_.drive …) (initial_driver_state
 sup file fs).1` is exactly the composite the cerberus-lean executable
-runs — this is a ROOT-OF-TRUST export, one of the ten closed
-shipped-driver statements (the README's table; `t1_certified_production`
-is the tenth, §7): the genuine driver, no package-defined loop
+runs — this is a ROOT-OF-TRUST export, one of the closed
+shipped-driver statements (the README's table): the genuine driver, no package-defined loop
 in the statement (the authored program enters wrapped by `prodFile`,
 the synthetic one-procedure file). The theorem quantifies over nothing but the file-system state,
 argv and the entry's symbol supply `sup` (the fragment never reads it):
@@ -367,7 +366,7 @@ workers whose exhaustion is an opaque sentinel — is
 **The two lanes, both on the shipped driver.** Every exported execution
 theorem reaches the shipped engine; every public logical rule has a
 kernel-checked adequacy path through the package mirror to the engine.
-The thirteen production statements (`exhibitA_prod`,
+The retained production statements (`exhibitA_prod`,
 `fib_certified_production`, `counter_loop_certified_production`,
 `list_reverse_certified_production`,
 `dispose_list_certified_production`,
@@ -390,6 +389,64 @@ LemFuel.fuel`; a finding of the K4 range audit, disclosed) and in
 ENGINE vocabulary for `malloc_list_certified_production` (`hB : n.toNat *
 (15 + max al.toNat 1) ≤ 281474976710647`, with `hfuel : 25 * n.toNat + 9
 ≤ LemFuel.fuel`) — never a driver, discharge or scheduler.
+
+**Reading the whole-file t1 theorem.** The advertised t1 certificate is
+`CorpusA7.T1.certified_production` in `EmittedT1Exhibit.lean`.
+For `F := CorpusA7.T1.restoredFile cmp` its execution equation is
+
+```lean
+CerbND.runND (drive F.tagDefs false F args)
+  (initial_driver_state CorpusA7.T1.frontendSupply F fs).1 =
+    [(nd_status.Active dres, ([] : List String), dst')]
+```
+
+The result satisfies `dres.dres_core_value = lint 4`,
+`dres.dres_blocked = false`, and empty stdout/stderr. The theorem
+quantifies the comparator record, filesystem state and arguments, with
+execution fuel at least 50 and three explicit premises: the captured
+stdlib's integer-callee lookup paths, the main lookup path, and the
+stdlib/function-map union comparisons used by label collection. These
+checks do not assert global comparator equality. Frontend supply 36 is
+a captured literal; the total derivation's sufficient budget is 48.
+`CorpusA7.T1.certified_production_shipped` fixes the execution fuel to
+the shipped default. The older `t1_certified_production` and its shipped
+instance remain synthetic-file wrapper regressions with unchanged
+contracts.
+
+The file is complete: `EmittedFile.Data` retains all eleven fields,
+including the linked std.core and gcc implementation maps, exact
+optional map trees, locations and annotations. Eight comparator
+functions are kept separately. The kernel theorem
+`EmittedFile.restore_capture` reconstructs any original file using
+its captured comparators. The t1 transfer theorem
+`CorpusA7.T1.certified_production_of_capture_eq` assumes the original
+file's capture equals the retained data, its supply equals 36, and its
+comparators pass the three checks; its conclusion runs that original
+file through the genuine driver.
+
+`wpt_driver_done_alloc_extern` supplies the generic delivery fact from
+the public total judgment, with syntactic `Frag` and separate
+`evalDepth` premises. `prod_run_eqJ_file` composes it with startup and
+finalization for a file with empty globals/tag definitions and a
+parameterless main, retaining the actual runtime extern map. The old
+empty-extern/library-file results specialize these interfaces. This
+capture/map/driver machinery is independent of t1; `EmittedStdCore`
+is the separate adapter for the captured library, reusable under the
+same library-data/lookup premises.
+
+The connection from C is executable: a fresh-process, one-TU/no-libc
+loader runs the pinned Lean frontend on OCaml Cabs, links and converts
+the file, and compares data, quotation, supply and comparator checks.
+The structural comparison preserves tree shape/heights and annotations
+rather than using ordinary Fmap or annotation-insensitive ctype equality.
+It does not discharge the transfer hypotheses in the kernel or prove
+equality with OCaml's printed Core. This is option (b) for t1; the
+elaborator-in-the-theorem option (a) and other corpus files remain open.
+ARCHITECTURE §3 explains the loader/quoter boundary and the kernel
+`mkAuxLemma` device used for the concrete label collector. The
+[implementation record](../../docs/2026-09-08_whole-file-t1-implementation.md)
+owns commands and verification/review status.
+
 `prod_run_eqJ`/`prod_run_eqJ_procs` and the partial `prod_run_safe_procs`,
 through which they are proved, are generic collapse machinery, not
 closed statements: their delivery premises `DriverDoneAt`/`DriverDoneCtl`
@@ -1895,7 +1952,9 @@ the `#print axioms` recipe are in the README, "How to build and verify".
   HEAD form (§5), and reaches THE MILESTONE: t1's `main` transcribed
   verbatim is in `Frag` (`CorpusE0.t1Main_frag`) and certified end to end
   (`t1_certified_production`, CorpusT1Exhibit — the tenth closed
-  shipped-driver statement; `docs/2026-09-05_e4-notes.md`). What keeps
+  shipped-driver statement at E4, now the retained wrapper regression;
+  `docs/2026-09-05_e4-notes.md`). Whole-file t1's certificate and
+  executable frontend connection are described above. What keeps
   the rest of the corpus out: negative actions (E5), `Eccall` (E6) — the
   dialect arc's remaining slices
   (`../docs/2026-09-04_emitted-core-dialect-design.md`; README, "Scope,
@@ -1926,9 +1985,11 @@ the `#print axioms` recipe are in the README, "How to build and verify".
   from `drive` still exhaust to an opaque sentinel rather than the kill;
   the proofs never evaluate those arms on the fragment's path
   ([`FUEL.md`](FUEL.md)).
-- **A C frontend.** Programs enter as authored Core in a synthetic file
-  (`prodFile`: one procedure; `prodFileWith`: `main` plus declared
-  procedures).
+- **A proved C frontend.** Whole-file t1 uses the explicit executable
+  capture/comparison boundary above. Other corpus certificates still
+  use transcribed bodies in synthetic files; authored examples use
+  `prodFile` or `prodFileWith`. No theorem proves frontend correctness
+  or equality between the Lean frontend file and OCaml's printed Core.
 - **The residual of mirror completeness** (`OpenRound`, §5;
   `2026-09-02_fragment-closure-notes.md`,
   `2026-09-05_fragment-closure-e2-notes.md`): an operand the classifier

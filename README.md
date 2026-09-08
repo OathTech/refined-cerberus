@@ -13,6 +13,16 @@ its [README](cerberus-heaplang/README.md) and
 The package's dated records (slice notes, independent audits, external
 reviews) are under `cerberus-heaplang/docs/`.
 
+The t1 certificate now runs a captured complete file from the pinned Lean
+frontend, including its linked standard library and implementation map:
+`CorpusA7.T1.certified_production` returns 4 through the genuine driver.
+The reusable capture, map-check and startup machinery is independent of
+t1. The C connection uses OCaml Cabs and an executable comparison; it is
+not a kernel proof of frontend correctness. The older synthetic-file t1
+certificate remains a wrapper regression. See the
+[implementation record](docs/2026-09-08_whole-file-t1-implementation.md)
+for the comparison boundary and validation status.
+
 The landing plan for the agent-built branches is
 [`docs/2026-09-07_landing-charter.md`](docs/2026-09-07_landing-charter.md)
 (the E5 completion landed as its L1). The other agent's demo-completion
@@ -49,7 +59,7 @@ uses the latter; `scripts/capped` loads it when present).
 ```bash
 scripts/setup-cerberus-dep.sh            # once: the pinned cerberus-lean workspace (see scripts/semantics-pin.env)
 cd cerberus-heaplang && ../scripts/capped ~/.elan/bin/lake build   # capped; elaborates the in-build axiom audit
-scripts/test_unit.sh                      # the gates (banned-methods grep; the capped build) + two speedbump reports
+scripts/test_unit.sh                      # the gates (banned-methods grep; the capped build) + speedbump reports
 ```
 
 Toolchain: Lean 4.32.2 (elan). Dependencies (batteries, Qq, iris-lean) are

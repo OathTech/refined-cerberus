@@ -20,6 +20,30 @@ the operator's words in the working session of 2026-09-07, registered in
 every other quoted ruling is verbatim from `docs/DECISIONS.md` with its date.
 Every count is measured at `777ca0f` and labelled DERIVED where it is a tally.
 
+**2026-09-08 progress update — V1-1a, whole-file t1.** The authorized
+`demo-whole-file-t1` slice re-cuts G2 onto main `7040406`; its contract is
+`docs/2026-09-07_whole-file-t1-charter.md`. The feature implements generic
+file capture/reconstruction, comparator-check correctness and startup with
+the actual runtime extern map, consumed by
+`CorpusA7.T1.certified_production`. The theorem runs the retained complete
+file at captured supply 36 and every execution fuel at least 50, under
+three explicit comparator checks; its capture-transfer theorem keeps
+data/supply equality as premises. The old synthetic t1 theorem and shipped
+corollary remain wrapper regressions. `EmittedStdCore` reuses this captured
+library's declarations under lookup/data premises; the generic capture,
+map and driver machinery does not depend on t1.
+
+R-4's referent is settled for this slice: the pinned Lean frontend consumes
+OCaml Cabs, links std.core and the gcc implementation, and converts the
+whole one-TU/no-libc file. Its frontend/quoter/structural comparison is an
+executable boundary, not a kernel frontend theorem or equality with OCaml's
+printed Core. The implementation record
+`docs/2026-09-08_whole-file-t1-implementation.md` owns verification and
+review status. V1-1b (t4/t5/t6), option (a), and the scheduler/call work
+remain open. The baseline inventory and counts below remain measurements
+at `777ca0f`; this update does not assert the whole V1-1 row complete or
+authorize a merge.
+
 ## 0. The definition of done ([USER 2026-09-07], verbatim)
 
 "The done state … is that our logic (1) is recognisably Reynolds/O'Hearn

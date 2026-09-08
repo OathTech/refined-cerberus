@@ -26,7 +26,8 @@ are cited with their `[USER date]`/`[AGENT date]` tag and live in
   ambient-fuel instance of the worker `drive_nonmemory_steps_aux2_lemFuel`,
   `:385`),
   the scheduler `driver2`, and the composite
-  `CerbND.runND (drive fmapEmpty false file args) (initial_driver_state sup file fs).1`.
+  `CerbND.runND (drive file.tagDefs false file args) (initial_driver_state sup file fs).1`
+  (the current closed certificates have empty tag definitions).
 - *`Frag`* — the fragment of Core this package covers, a SYNTACTIC
   predicate on Core expressions (`Fragment.lean:491`; R2 [USER 2026-09-07]).
 - *`evalDepth`* — the pure evaluator's pass budget an expression needs
@@ -58,14 +59,15 @@ are cited with their `[USER date]`/`[AGENT date]` tag and live in
   shipped-pipeline form.
 - *a closed shipped-driver statement* (*production statement*) — a
   theorem whose execution function is the shipped composite applied to
-  an authored program wrapped as a synthetic file, with a pure
+  a program file, either a synthetic wrapper or the captured complete
+  frontend file for t1 (§2.5), with a pure
   conclusion about the delivered `driver_result`: *the root of trust*.
 - *the trio* — the three classical axioms `propext`, `Classical.choice`,
   `Quot.sound`; *trio-exact* means an axiom set equal to it (§3).
 - *pinned* / *unpinned* — a theorem is pinned when `Audit.lean` lists it
   in `trioExports` (the build asserts its axiom set is exactly the trio)
-  or in `axiomFreeExports` (exactly empty; six names since the L2
-  re-pin); every other theorem is unpinned (§3).
+  or in `propextExports` (exactly `propext`) or `axiomFreeExports`
+  (exactly empty); every other theorem is unpinned (§3).
 - *the sweep* — `Audit.lean`'s check that every theorem of every package
   module has an axiom set within the trio (§3).
 - *a tie* — a hypothesis of `DriverSafeCtl`/`DriverDoneCtl` fixing a
@@ -490,21 +492,68 @@ prefix exhausts by its own equations. Because the ambient instance is the
 budget of both loops (`Driver.lean:399`), this quantifier bounds the run
 (KOI A2, closed).
 
-### 2.5 The thirteen closed shipped-driver statements
+The complete-file total route is `prod_run_eqJ_file`
+(`ProdEntry.lean:950`). It quantifies the file, main body, supply,
+postcondition and budget; requires empty globals/tag definitions and a
+parameterless main; and retains the file and its actual
+`create_extern_symmap F`. Its delivery premise is `DriverDoneAtExtern`
+(`ProdLoop.lean:63`), supplied by `wpt_driver_done_alloc_extern`
+(`ProdLoop.lean:551`) from the public total judgment, syntactic `Frag`
+and explicit `evalDepth` bounds. The old empty-extern launcher and
+library startup/one-procedure theorem specialize these interfaces.
+The partial and procedure-call routes keep their previous restrictions.
 
-Each has the execution function
+### 2.5 The closed shipped-driver statements
+
+**The advertised t1 certificate is `CorpusA7.T1.certified_production`**
+(`EmittedT1Exhibit.lean:623`). It runs
+`CerbND.runND (drive F.tagDefs false F args) (initial_driver_state 36 F fs).1`
+for `F = CorpusA7.T1.restoredFile cmp`, at every ambient execution fuel
+at least 50. The conclusion is exactly one active outcome delivering
+`lint 4`, unblocked, with empty trace, stdout and stderr. Its hypotheses
+are `EmittedStdCore.intLibraryCheck cmp.stdlib = true`,
+`CorpusA7.T1.mainLookupCheck cmp.funs = true`, and
+`CorpusA7.T1.labelUnionCheck cmp = true`. Supply 36 is captured data;
+50 is the sufficient execution bound from the body's total budget 48.
+
+The retained file has all eleven fields, including the whole linked
+standard library and gcc implementation map, optional map trees with
+their heights, and source annotations. Eight top-level comparator
+functions remain separate parameters. `EmittedFile.restore_capture`
+(`EmittedFile.lean:94`) reconstructs any original file using its own
+comparators. `CorpusA7.T1.certified_production_of_capture_eq`
+(`EmittedT1Exhibit.lean:647`) states transfer to an original file under
+explicit capture equality, supply equality and its comparator checks.
+The executable C/frontend connection is option (b), described in §3;
+these hypotheses are not silently discharged by that comparison.
+
+The generic `EmittedFile`/`EmittedMapChecks` and driver machinery is
+independent of t1. `EmittedStdCore` is a separate captured-library
+adapter: its declarations come from t1's captured stdlib, and another
+file can reuse them under the same library-data/lookup premises
+(`hasIntLibrary_of_stdlib_data_eq`, `EmittedStdCore.lean:108`). This
+does not prove arbitrary-library correctness. t1's representable-int
+proofs avoid `convElse2`'s out-of-range pure implementation call; no
+implementation-procedure rule is added. Its runtime extern map is the
+singleton self-binding proved equal to `create_extern_symmap F`
+(`Examples/EmittedT1.lean:86`), distinct from the retained file extern
+table.
+
+The retained synthetic-wrapper statements below have the execution function
 `CerbND.runND (_root_.drive fmapEmpty false F args) ((initial_driver_state sup F fs).1)`,
 `F` the wrapped program, and concludes `= [(nd_status.Active dres, [], dst')]`
 with a pure readout on `dres`/`dst'`. None carries a termination
 hypothesis. Every one is `[LemFuel]` and carries the in-budget bound
 `hfuel : N ≤ LemFuel.fuel` against the AMBIENT budget, `N` its certified
 round count plus two (the table). The shipped binary's default
-`--fuel 100000000` appears only in the thirteen `*_shipped` corollaries
-(`Shipped.lean:79`–`:337`), each the statement at
+`--fuel 100000000` appears only in the `*_shipped` corollaries
+(`Shipped.lean`), each the statement at
 `letI : LemFuel := ⟨100000000⟩` with the side condition closed by `omega`
-(`docs/FUEL.md` §3). All thirteen are pinned trio-exact (§3), as are the
-corollaries. The tenth,
-`t1_certified_production` (E4), is the first over an EMITTED program:
+(`docs/FUEL.md` §3). The whole-file instance is
+`CorpusA7.T1.certified_production_shipped`; the old
+`t1_certified_production_shipped` keeps its wrapper contract.
+The original E4 `t1_certified_production` is retained as a wrapper
+regression over an emitted body:
 `../docs/corpus-e0/t1.c`'s `main` as the Cerberus C front end emits it,
 transcribed verbatim (`Examples/CorpusE0.lean:1062`, tied to
 `../docs/corpus-e0/t1.annot.core` by the corpus skeleton speedbump, §5). Its
@@ -517,8 +566,9 @@ pipeline's `--nolibc` file only on programs that reach those three
 functions and no `Impl` constant. The consequence, measured (E3 audit
 D-6): `conv_loaded_int('signed int', Specified(INT_MAX+1))` classifies
 `.kill` on this file where the pipeline's file WRAPS through the impl
-function (KOI A7; the whole `core_file` as the statement's object is the
-named target, not done). The count thirteen follows the README and CLAIMS:
+function (KOI A7: this remains the wrapper boundary; the whole-file t1
+certificate above supplies option (b), while option (a) remains open).
+The historical count thirteen comprises
 the nine pre-dialect statements, t1, t4, t5 and t6; the dialect arc's three closed
 statements over its synthetic exhibits — `exhibitA_prod_e1`
 (`EmittedAExhibit.lean:289`), `exhibitB_prod_e2` (`EmittedBExhibit.lean:662`),
@@ -537,14 +587,15 @@ table rather than counted here.
 | `malloc_list_certified_production` | `MallocListExhibit.lean:1672` | `halign : 0 < al` (NARROWED at the L2 re-pin, as above; KOI B21), `hn`, `hB : n.toNat * (15 + max al.toNat 1) ≤ 281474976710647`, `hfuel : 25 * n.toNat + 9 ≤ LemFuel.fuel` |
 | `fib_rec_certified_production` | `FibRecExhibit.lean:858` | `hn`, `hfuel : fibRounds n.toNat + 4 ≤ LemFuel.fuel` |
 | `even_odd_certified_production` | `EvenOddExhibit.lean:711` | `hn`, `hfuel : 3 * n.toNat + 6 ≤ LemFuel.fuel` |
-| `t1_certified_production` | `CorpusT1Exhibit.lean:806` | `hfuel : 50 ≤ LemFuel.fuel` (the file is `prodFileLib stdlibE3 [] t1Main`, above) |
-| `t5_certified_production` | `CorpusT5Exhibit.lean:549` | `hfuel : 90 ≤ LemFuel.fuel`, `hsup : 600 ≤ sup` — a sufficient floor, not necessary (the composite delivers the same value at `sup = 0`, measured); same library-fragment file boundary as t1 |
-| `t6_certified_production` | `CorpusT6Exhibit.lean:755` | `hfuel : 80 ≤ LemFuel.fuel`, `hsup : 600 ≤ sup` (sufficient, not necessary, as above); same library-fragment file boundary as t1 |
-| `t4_certified_production` | `CorpusT4Exhibit.lean:1432` | `hfuel : 917 ≤ LemFuel.fuel`, `hsup : 600 ≤ sup` (sufficient, not necessary, as above); same library-fragment file boundary as t1 |
+| `CorpusA7.T1.certified_production` | `EmittedT1Exhibit.lean:623` | `hfuel : 50 ≤ LemFuel.fuel`; three comparator checks as above; captured supply 36; complete restored file |
+| `t1_certified_production` (wrapper regression) | `CorpusT1Exhibit.lean:806` | `hfuel : 50 ≤ LemFuel.fuel` (the file is `prodFileLib stdlibE3 [] t1Main`, above) |
+| `t5_certified_production` | `CorpusT5Exhibit.lean:549` | `hfuel : 90 ≤ LemFuel.fuel`, `hsup : 600 ≤ sup` — a sufficient floor, not necessary (the composite delivers the same value at `sup = 0`, measured); same library-fragment file boundary as the retained t1 wrapper |
+| `t6_certified_production` | `CorpusT6Exhibit.lean:755` | `hfuel : 80 ≤ LemFuel.fuel`, `hsup : 600 ≤ sup` (sufficient, not necessary, as above); same library-fragment file boundary as the retained t1 wrapper |
+| `t4_certified_production` | `CorpusT4Exhibit.lean:1432` | `hfuel : 917 ≤ LemFuel.fuel`, `hsup : 600 ≤ sup` (sufficient, not necessary, as above); same library-fragment file boundary as the retained t1 wrapper |
 
-Package definitions in these statements, exactly — beyond the authored
-program and its wrapper (`prodFile`/`prodFileWith`/`prodFileLib`), read
-off the thirteen statement texts:
+Package definitions in these statements — beyond the program and its
+file representation (`prodFile`/`prodFileWith`/`prodFileLib` or the
+complete restored data term):
 
 | Statement | In the conclusion | In a premise |
 |---|---|---|
@@ -557,6 +608,7 @@ off the thirteen statement texts:
 | `malloc_list_certified_production` | engine fields only | none — the budget premise is in engine vocabulary, bridged inside the proof (`ml_budget_bridge`, `MallocListExhibit.lean:1632`) |
 | `fib_rec_certified_production` | `ivVal`, `fibSpec` | `fibRounds` (`FibRecExhibit.lean:465`: `fibRounds 0 = fibRounds 1 = 3`, `fibRounds (n+2) = fibRounds (n+1) + fibRounds n + 9`; closed form `fibRounds n + 9 = 12 · fibSpec (n+1)`, `:468`) |
 | `even_odd_certified_production` | `ivVal` | — |
+| `CorpusA7.T1.certified_production` | `lint`, `CorpusA7.T1.restoredFile`, `CorpusA7.T1.frontendSupply` | `EmittedStdCore.intLibraryCheck`, `CorpusA7.T1.mainLookupCheck`, `CorpusA7.T1.labelUnionCheck` |
 | `t1_certified_production` | `lint` (`IntRules.lean:69`: the loaded `Specified` integer value); `stdlibE3` (`StdCore.lean:153`) and `t1Main` (`Examples/CorpusE0.lean:1063`) inside the file object | — |
 | `t5_certified_production` | `lint`, `stdlibE3` and `CorpusE0.t5Main` inside the file object | — |
 | `t6_certified_production` | `lint`, `stdlibE3` and `CorpusE0.t6Main` inside the file object | — |
@@ -601,6 +653,39 @@ declares no `axiom` and contains no `sorry`: `grep -rn '(sorry'` over the
 primed `generated/*.lean` is empty and the build log has no `declaration
 uses sorry` (README "The trust story"; `docs/2026-09-03_repin-fuel-notes.md`).
 
+**The frontend artifact boundary (whole-file t1, option (b)).** The file
+producer is the pinned Lean frontend consuming OCaml Cabs, followed by
+linking and conversion. The tool's loading context follows the fresh
+process, one-TU/no-libc path of pinned `Main.lean:874–1045`, including
+std.core and the gcc implementation. No theorem identifies that file
+with OCaml's printed Core. `scripts/emitted_frontend.lean` and
+`scripts/derive_file_to_expr.lean` load and quote the retained data;
+the independent structural comparison checks data alongside quotation
+and supply comparison. All of this tooling is outside the kernel proof
+of execution. The inspector wrapper currently requires a main, this
+captured standard-library data, and successful execution at the supplied
+fuel; it is not an arbitrary-library execution tool. The underlying
+capture, quotation and structural comparison operate on complete Data.
+
+The comparison retains tree shape/heights, annotations, locations and
+metadata. It cannot use ordinary Fmap binding-list equality or the
+provider's annotation-insensitive ctype equality; Float leaves, when
+present, use the quoter's bit representation. These are executable
+checks, not a proof of the IO frontend, quoter or arbitrary-file equality.
+Interpreting the artifact as the C producer's output relies on that
+tooling and its recorded comparison. The kernel reconstruction theorem
+only reconstructs a file from its captured data and original comparators.
+The mover is option (a), a proved frontend connection in the theorem;
+other corpus files remain V1-1b. Commands, checks and review status are
+recorded in `../docs/2026-09-08_whole-file-t1-implementation.md`.
+
+`CorpusA7.T1.reference_main_labels` (`Examples/EmittedT1.lean:61`) uses
+`Lean.Meta.mkAuxLemma` to submit a small reflexivity proof of the concrete
+label-collection equality synchronously to the kernel. It avoids repeated
+elaborator expansion of intermediate map trees. The auxiliary theorem is
+checked under ordinary limits and included in the axiom sweep; the device
+does not introduce native reduction or a new axiom.
+
 **The `panic!` arms.** The pinned tree does contain `panic!` arms: 119
 code occurrences of `panic!` across the 37 hand-written seams of
 `handwritten_copy.manifest`, in ten files — `CerbMem.lean` 60,
@@ -637,10 +722,13 @@ has no equation for them and a theorem holds at every value they take.
 
 **What the build checks** (`Audit.lean`, the last import of the library
 root, elaborated by every `lake build`). Every pinned export exists, is
-a theorem, and has axiom set EXACTLY its declared set: the trio for the
-904 names in `trioExports`, the EMPTY set for the 6 names in
-`axiomFreeExports` (gate line `export pins: 904 trio-exact, 6
-axiom-free-exact`). The Codex D5 landing's 904 = the L2 re-pin head's
+a theorem, and has axiom set EXACTLY its declared set: the trio for
+`trioExports`, `propext` alone for `propextExports`, and the empty set
+for `axiomFreeExports`. Representation and map-check proofs retain their
+actual smaller cones. The current totals are reported by the build and
+recorded at the implementation claim point; no trio dependency is added
+to inflate an axiom-free proof's cone. Historical counts: the Codex D5
+landing's 904 = the L2 re-pin head's
 901 + 3 ADDED (`PartialClients.t5_wps`, `t5_blockSpecs`, `loadBind_wps`;
 nothing removed or changed — census in the branch record). The L2
 re-pin head's 901 derive from the L1 head's
@@ -971,8 +1059,9 @@ Each item points at its register entry; none is hidden in a proof.
   list, a branch the depth guard rejects) — the characterized residual
   `OpenRound.eval_uncovered` (§2.2); a `PEcall` at an `Impl` name
   (`<Integer.conv_nonrepresentable_signed_integer>`, reached by `conv_int`
-  at a non-representable value — every file this package builds has an
-  empty `impl` map, so the call is the engine's KILL; E3); `PtrEq` at two
+  at a non-representable value — the E3 wrappers have an empty `impl`
+  map, so the call there is the engine's KILL; the whole-file t1 retains
+  the gcc map but its range premises avoid this branch); `PtrEq` at two
   concrete pointers of differing provenance (the engine forks); the `Impl`
   procedure call `Eproc _ (Impl _) _`; (E5) `nd` — the scheduler fork,
   `ShippedRefusal.fork`; and (E5) a negative action under a `bound` WITH a
@@ -1011,8 +1100,10 @@ Each item points at its register entry; none is hidden in a proof.
   `MerrUndefinedFree Free_dead_allocation` kill, `:2203`); the kill rules'
   premise — a LIVE cell — keeps proved programs away from it
   (`kill_atomic`, `MemWF.kill`).
-- **Empty tag definitions and extern** in every proved configuration
-  (§4; KOI B4).
+- **Empty tag definitions** in the closed startup routes. The partial
+  and procedure-call routes still require empty extern (§4; KOI B4).
+  The whole-file single-procedure total route retains the actual runtime
+  extern map; t1 consumes its singleton self-binding (§2.5).
 - **The mirror-completeness residual.** `OpenRound`'s three arms
   (`eval_uncovered`, `run_surplus`, E5's `neg_sseq`) are characterised,
   not closed (§2.2; movers at `Round.lean:402`–`:467` and in

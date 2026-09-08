@@ -23,7 +23,7 @@ semantics (`CerbFuel.driverFuel` is gone — generated `CerbFuel.lean:22`),
 not this package. The shipped binary's default `--fuel 100000000`
 (cerberus-lean `Main.lean`) is the ONLY numeral of the arc ([USER
 2026-09-03], "no magic values"); in this package it appears only in the
-thirteen `*_shipped` corollaries (`CerberusHeapLang/Shipped.lean`), and
+`*_shipped` corollaries (`CerberusHeapLang/Shipped.lean`), and
 the gate `scripts/fuel_numeral_check.sh` (gate 1b of
 `../../scripts/test_unit.sh`) reds it anywhere else.
 
@@ -98,8 +98,10 @@ four in §3.
   (fib), `6 * n.toNat + 8` (counter), `56` (list reversal), `53` (dispose),
   `7 * n.toNat + 5` (region loop), `25 * n.toNat + 9` (malloc'd list),
   `fibRounds n.toNat + 4` (recursive fib), `3 * n.toNat + 6` (even/odd),
-  `50` (t1), `917` (t4), `90` (t5), `80` (t6). The generic pipeline theorem
-  is `prod_run_eqJ_procs` at `k + 2 ≤ LemFuel.fuel` (`ProdEntry.lean:577`).
+  `50` (both whole-file t1 and its retained wrapper regression), `917`
+  (t4), `90` (t5), `80` (t6). The generic pipeline theorems
+  `prod_run_eqJ_procs` and `prod_run_eqJ_file` use `k + 2 ≤ LemFuel.fuel`
+  (`ProdEntry.lean`).
 - **No hypothesis** on the closed PARTIAL forms `prod_run_safe_procs`
   (`ProdEntry.lean:615`), `fib_rec_certified`, `even_odd_certified`: at
   every ambient `[LemFuel]`, `CerbND.runND (drive fmapEmpty false F args)
@@ -116,6 +118,26 @@ four in §3.
   `≤ 16666665` (counter), `≤ 14285713` (region), `≤ 3999999` (malloc),
   `≤ 33` (recursive fib, through `fibRounds_33`/`fibRounds_mono`),
   `≤ 33333331` (even/odd). Never `decide` on the numeral.
+
+**Whole-file t1 separates capture fuel from execution fuel.**
+`CorpusA7.T1.certified_production` (`EmittedT1Exhibit.lean`) quantifies
+every execution instance with `50 ≤ LemFuel.fuel` for the fixed captured
+file, under its three comparator-check hypotheses. Its body proof has
+budget 48; the public `wpt_driver_done_alloc_extern` takes syntactic
+`Frag` and separate `evalDepth` bounds for the body and registered labels.
+`CorpusA7.T1.certified_production_shipped` instantiates the execution
+fuel only. The old `t1_certified_production_shipped` keeps its synthetic
+wrapper contract.
+
+The frontend runs separately at the documented fixed capture fuel 50;
+the theorem does not quantify arbitrary frontend runs. The input supply
+36 is captured data, checked against the fresh frontend result, not a
+derived universal supply bound. The transfer theorem
+`CorpusA7.T1.certified_production_of_capture_eq` keeps supply equality,
+capture equality and the original comparator checks as explicit premises.
+Executable comparisons do not discharge those premises in the kernel.
+Capture commands and validation status are in the
+[implementation record](../../docs/2026-09-08_whole-file-t1-implementation.md).
 
 ## 4. Exhaustion on the fragment's execution path — the classification
 
@@ -167,6 +189,8 @@ export here.
 
 - No tightness: every `N` above is a sufficient bound (KNOWN-OPEN-ITEMS
   B6 for the slack that is disclosed).
+- No frontend-fuel adequacy theorem: the whole-file t1 execution theorem
+  is about the captured file, produced at one documented capture fuel.
 - No ambient-one theorem for a live start: `DriverSafeCtl` at
   `LemFuel.fuel = 1` from an arbitrary live configuration is not stated;
   the closed forms classify fuel 0 and 1 through the setup collapse before
