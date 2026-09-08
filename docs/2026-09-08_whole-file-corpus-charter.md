@@ -1,7 +1,7 @@
 # Whole-file certificates for the supported C corpus
 
-Status: AUTHORIZED scope; pre-launch review and baseline verification
-pending. [AGENT 2026-09-08]. This charter makes the user's autonomous
+Status: ACTIVE; full baseline verification and independent pre-launch
+review PASS with Notes. [AGENT 2026-09-08]. This charter makes the user's autonomous
 execution request concrete; it does not authorize a merge or push.
 
 ## Authorization and baseline
@@ -39,7 +39,8 @@ before use. Full baseline gate and signature snapshot precede proof edits.
    public total derivations, including t4's invariant and decreasing budget.
 4. Direct genuine-driver certificates for the complete files at their
    captured frontend supplies (scout:47/51/92), every ambient fuel above
-   justified sufficient bounds, with singleton Active returns1/20/10,
+   justified sufficient bounds, arbitrary filesystem state and arguments,
+   with singleton Active returns1/20/10,
    unblocked and empty trace/stdout/stderr. Capture-transfer theorems retain
    data/supply equality and the original comparator checks explicitly;
    shipped corollaries advertise these new certificates. Preserve every
@@ -118,3 +119,13 @@ proof device only after its equality to the captured body is established.
 - Final state: clean, reviewed, green feature branch covering all required
   programs, with evidence and unresolved external boundaries explicit.
   Pause for the user's external review; never merge autonomously.
+
+## Pre-launch review disposition
+
+The fresh [review](2026-09-08_review-whole-file-corpus-charter.md), adopted
+from `bf88f83`, is PASS with Notes and no launch blocker. N1 is explicit in
+required result4: arbitrary filesystem and arguments, including transfer
+twins. N2/N3 remain acceptance distinctions: generic evaluated-operand rules
+versus captured-library contracts; fixed frontend capture versus all-fuel
+execution. Baseline full gate is green and the 5,569-declaration snapshot
+is byte-identical to t1's final surface. Source implementation may start.
