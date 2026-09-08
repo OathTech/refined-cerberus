@@ -422,4 +422,51 @@ theorem lookup_env_head {x : sym} {f : Fmap sym value} {v : value}
   rw [show (fmapLookupBy (@mapKeyCompare sym _) x f) =
     fmapLookupBy symCmpK x f from rfl, h]
 
+/-! ## Comparator-equal symbols through external-name resolution -/
+
+private theorem symFind_eq_of_compare {β : Type} {x y : sym}
+    (hxy : symCmpK x y = .EQ) (m : Pmap sym β) :
+    Pmap.find? symCmpK x m = Pmap.find? symCmpK y m := by
+  induction m with
+  | Empty => rfl
+  | Node left key v right height ihl ihr =>
+    simp only [Pmap.find?]
+    rw [symCmpK_laws.eq_congr x y key hxy]
+    cases symCmpK y key <;> first | assumption | rfl
+
+/-- Comparator-equal keys have the same lookup in a symbol map. Descriptive
+symbol metadata need not be equal; the captured comparator must be the
+engine's symbol comparator, as recorded by `SymMap`. -/
+theorem symMap_lookup_eq_of_compare {β : Type} {m : Fmap sym β} (hm : SymMap m)
+    {x y : sym} (hxy : symCmpK x y = .EQ) (cmp : sym → sym → LemOrdering) :
+    fmapLookupBy cmp x m = fmapLookupBy cmp y m := by
+  cases m with
+  | empty => rfl
+  | mk c tree =>
+    obtain ⟨rfl, -⟩ := hm
+    exact symFind_eq_of_compare hxy tree
+
+/-- A known head-frame lookup survives an external resolution to a
+comparator-equal symbol. This is weaker than constructor identity. -/
+theorem evalPexpr_sym_of_compare [LemFuel] (tds : CerbTags.TagDefsMap)
+    {ext : Fmap sym sym} {file : file core_run_annotation}
+    {f : Fmap sym value} (hf : SymFrame f) (rest : EnvStack) (a : List annot)
+    {x : sym} {v : value} (hx : symCmpK (resolveExtern ext x) x = .EQ)
+    (hv : fmapLookupBy symCmpK x f = some v) :
+    evalPexpr tds ext file (f :: rest) (Pexpr a () (PEsym x)) = some v := by
+  rw [evalPexpr_sym]
+  exact lookup_env_head ((symMap_lookup_eq_of_compare hf hx symCmpK).trans hv) rest
+
+/-- A singleton self-binding preserves symbol comparator equality even
+for a key carrying different descriptive metadata. -/
+theorem resolveExtern_self_compare (s x : sym) :
+    symCmpK (resolveExtern (symAdd s s fmapEmpty) x) x = .EQ := by
+  unfold resolveExtern
+  rw [symAdd_lookup symMap_empty]
+  by_cases h : symOrd x s = .eq
+  · rw [if_pos h]
+    exact symCmpK_laws.eq_symm ((symOrd_eq_iff x s).mp h)
+  · rw [if_neg h]
+    exact symCmpK_laws.refl x
+
 end CerberusHeapLang

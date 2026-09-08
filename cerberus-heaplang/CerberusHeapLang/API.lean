@@ -104,6 +104,17 @@ docs/2026-09-03_f1-notes.md).
 
 ## Not imported here at all
 
+The complete-file production layer additionally provides `EmittedFile`
+(capture/reconstruction), `EmittedMapChecks` (finite comparator checks),
+`wpt_driver_done_alloc_extern` (the public syntactic-fragment launcher with
+an actual extern map), and `prod_run_eqJ_file` (startup and closed execution
+for a supplied file with empty globals/tags and parameterless main).
+The existing empty-map launchers specialize that machinery. `EmittedStdCore`
+is a separate adapter for the captured integer library; its lookup contract
+is reusable when another file supplies the same library data. The whole-file
+t1 consumer is `CorpusA7.T1.certified_production` in `EmittedT1Exhibit`.
+
+
 `ProdLoop` (the total driver lane, incl. the lane through calls:
 `DriverDoneAt`, `DriverDoneCtl`, `wpt_driver_aux`, `wpt_driver_done(_alloc)`,
 `wpt_driver_cps`, `wpt_driver_done_procs`), `ProdEntry` (`prodFile`,

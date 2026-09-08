@@ -1629,18 +1629,18 @@ the general arm's location write (`locUpdTh`, Core_reduction.lean:484)
 is the mirror's `Ctl.upd` (`locUpdTh_ctl`). The control-preserving
 rounds are those keeping the call stack (`hκ`). -/
 /-- The proof-device form of `loop_step_frag_same'` (over `FragFuel`); the export is `loop_step_frag_same'` (R2, Fragment.lean). -/
-theorem loop_step_frag_same_fuel' (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCtx} {ctl ctl' : Ctl}
-    (htd : M₀.tagDefs = fmapEmpty) (hex : M₀.extern = fmapEmpty)
+theorem loop_step_frag_same_extern_fuel' (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCtx} {ctl ctl' : Ctl}
+    (htd : M₀.tagDefs = fmapEmpty)
     {th₀ : thread_state} (hcl : th₀.current_loc = ctl.curLoc)
     (fl : Nat) (acc : Fmap thread_id (List core_step2))
     {dst : driver_state} {e e' : CoreExpr} {ev0 : Fmap sym value}
     {evs : List (Fmap sym value)} {ρ' : EnvStack} {σ' : Mem}
     (hth : dst.core_state0.thread_states =
       [(0, (none, { th₀ with arena := e, env := ev0 :: evs }))])
-    (hext : dst.core_extern = fmapEmpty) (hfile : dst.core_file = M₀.file)
+    (hext : dst.core_extern = M₀.extern) (hfile : dst.core_file = M₀.file)
     (hjmp : ∀ l params cont, lookupLabel (M₀.labelsAt ctl.proc) l = some (params, cont) →
       ∃ p, th₀.current_proc_opt = some p ∧
-        LabeledAt dst.core_run_state0 p (M₀.labelsAt ctl.proc))
+        LabeledAt dst.core_run_state0 (resolveExtern M₀.extern p) (M₀.labelsAt ctl.proc))
     (hsup : dst.core_run_state0.sym_supply = ctl.sup.sym ∧
       dst.core_run_state0.excluded_supply = ctl.sup.excl)
     (hf : FragFuel e)
@@ -1715,7 +1715,7 @@ theorem loop_step_frag_same_fuel' (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCt
       obtain ⟨pv, cv, hv2, hv3, hout⟩ := hr.excluded_store_op_inv hnvE
       obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
       subst h1 h2 h3 h4
-      rw [htd, hex] at hv2 hv3
+      rw [htd] at hv2 hv3
       obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_excluded_store_eval_ws hd hnvE hp2 hp3 hd2 hd3
         fmapEmpty dst.layout_state dst.core_file dst.core_extern 0 none
         { th₀ with arena := e, env := ev0 :: evs } rfl
@@ -1785,7 +1785,7 @@ theorem loop_step_frag_same_fuel' (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCt
       obtain ⟨al, ty, hv1, hv2, hout⟩ := hr.create_op_inv hnvC
       obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
       subst h1 h2 h3 h4
-      rw [htd, hex] at hv1 hv2
+      rw [htd] at hv1 hv2
       obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_create_eval_ws hd hnvC hp1 hp2 hd1 hd2
         fmapEmpty dst.layout_state dst.core_file dst.core_extern 0 none
         { th₀ with arena := e, env := ev0 :: evs } rfl
@@ -1822,7 +1822,7 @@ theorem loop_step_frag_same_fuel' (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCt
       obtain ⟨pv, hv, hout⟩ := hr.kill_op_inv hnvK
       obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
       subst h1 h2 h3 h4
-      rw [htd, hex] at hv
+      rw [htd] at hv
       obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_kill_eval_ws hd hnvK hpK hdK
         fmapEmpty dst.layout_state dst.core_file dst.core_extern 0 none
         { th₀ with arena := e, env := ev0 :: evs } rfl
@@ -1858,7 +1858,7 @@ theorem loop_step_frag_same_fuel' (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCt
       obtain ⟨al, sz, hv1, hv2, hout⟩ := hr.alloc_op_inv hnvA
       obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
       subst h1 h2 h3 h4
-      rw [htd, hex] at hv1 hv2
+      rw [htd] at hv1 hv2
       obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_alloc_eval_ws hd hnvA hp1 hp2 hd1 hd2
         fmapEmpty dst.layout_state dst.core_file dst.core_extern 0 none
         { th₀ with arena := e, env := ev0 :: evs } rfl
@@ -2026,7 +2026,7 @@ theorem loop_step_frag_same_fuel' (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCt
         exact loop_step_tau (hfuel := by omega) fl fmapEmpty acc hth hsteps
       · obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        rw [htd, hex] at hvals
+        rw [htd] at hvals
         obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_save_eval_ws hd hnvS hdep
           fmapEmpty dst.layout_state dst.core_file dst.core_extern 0 none
           { th₀ with arena := e, env := ev0 :: evs } rfl
@@ -2042,7 +2042,7 @@ theorem loop_step_frag_same_fuel' (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCt
       rcases hr.if_inv with ⟨hg, hout⟩ | ⟨hg, hout⟩
       · obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        rw [htd, hex] at hg
+        rw [htd] at hg
         obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_if_true_ws hd hdg
           fmapEmpty dst.layout_state dst.core_file dst.core_extern 0 none
           { th₀ with arena := e, env := ev0 :: evs } rfl
@@ -2053,7 +2053,7 @@ theorem loop_step_frag_same_fuel' (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCt
           (hm dst.core_run_state0)
       · obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        rw [htd, hex] at hg
+        rw [htd] at hg
         obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_if_false_ws hd hdg
           fmapEmpty dst.layout_state dst.core_file dst.core_extern 0 none
           { th₀ with arena := e, env := ev0 :: evs } rfl
@@ -2079,7 +2079,7 @@ theorem loop_step_frag_same_fuel' (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCt
         · rw [hv] at hnvc; cases hnvc
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        rw [htd, hex] at hv
+        rw [htd] at hv
         obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_case_eval_ws hd hnvc hp hdp
           fmapEmpty dst.layout_state dst.core_file dst.core_extern 0 none
           { th₀ with arena := e, env := ev0 :: evs } rfl
@@ -2098,7 +2098,7 @@ theorem loop_step_frag_same_fuel' (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCt
       obtain ⟨v, -, hv, hout⟩ := hr.pure_inv hnv2
       obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
       subst h1 h2 h3 h4
-      rw [htd, hex] at hv
+      rw [htd] at hv
       obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_pure_op_ws hd hnv2 hdp
         fmapEmpty dst.layout_state dst.core_file dst.core_extern 0 none
         { th₀ with arena := e, env := ev0 :: evs } rfl
@@ -2118,7 +2118,7 @@ theorem loop_step_frag_same_fuel' (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCt
       obtain ⟨pv, hv2, hout⟩ := hr.load_op_inv hnv2
       obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
       subst h1 h2 h3 h4
-      rw [htd, hex] at hv2
+      rw [htd] at hv2
       obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_load_eval_ws hd hnv2 hp2 hd2
         fmapEmpty dst.layout_state dst.core_file dst.core_extern 0 none
         { th₀ with arena := e, env := ev0 :: evs } rfl
@@ -2186,7 +2186,7 @@ theorem loop_step_frag_same_fuel' (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCt
         obtain ⟨v1, v2, hv1', hv2', hout⟩ := hr.memop_op_inv hnvF
         obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
         subst h1 h2 h3 h4
-        rw [htd, hex] at hv1' hv2'
+        rw [htd] at hv1' hv2'
         obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_memop_eval_ws hd hnvF
           hpd1 hpd2 fmapEmpty dst.layout_state dst.core_file
           dst.core_extern 0 none
@@ -2209,7 +2209,7 @@ theorem loop_step_frag_same_fuel' (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCt
       obtain ⟨pv, cv, hv2, hv3, hout⟩ := hr.store_op_inv hnvR
       obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
       subst h1 h2 h3 h4
-      rw [htd, hex] at hv2 hv3
+      rw [htd] at hv2 hv3
       obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_store_eval_ws hd hnvR
         hp2 hp3 hpd2 hpd3 fmapEmpty dst.layout_state dst.core_file
         dst.core_extern 0 none
@@ -2447,7 +2447,7 @@ theorem loop_step_frag_same_fuel' (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCt
       cases hfr with
       | run _ hdep => exact hdep
     obtain ⟨p, hproc, hQd⟩ := hjmp l params cont hl
-    rw [htd, hex] at hvs
+    rw [htd] at hvs
     obtain ⟨h1, h2, h3, h4⟩ := Config.mk_inj hout
     subst h1 h2 h3 h4
     obtain ⟨s, m, post, hsteps, hm⟩ := step_ctx_run_ws hd hl hdep
@@ -2458,7 +2458,7 @@ theorem loop_step_frag_same_fuel' (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCt
     refine ⟨dst.core_run_state0, dst.trace, dst.dr_step_counter + 1, rfl, hsup, ?_⟩
     exact loop_step_withrs_eval (hfuel := by omega) fl fmapEmpty acc hth hsteps
       (hm dst.core_run_state0
-        (by rw [hext, resolveExtern_empty]; exact hQd))
+        (by rw [hext]; exact hQd))
   · obtain ⟨-, -, h3, -⟩ := Config.mk_inj hcout
     rw [h3] at hκ
     exact absurd hκ (by simp)
@@ -2486,6 +2486,44 @@ theorem loop_step_frag_same_fuel' (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCt
       rcases dst with ⟨cf, ce, cs, crs, ls, cc, fs, tr0, sa, bl, ctr0⟩
       rfl
 
+/-- Empty-extern specialization, preserving the previous proof-device contract. -/
+theorem loop_step_frag_same_fuel' (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCtx} {ctl ctl' : Ctl}
+    (htd : M₀.tagDefs = fmapEmpty) (hex : M₀.extern = fmapEmpty)
+    {th₀ : thread_state} (hcl : th₀.current_loc = ctl.curLoc)
+    (fl : Nat) (acc : Fmap thread_id (List core_step2))
+    {dst : driver_state} {e e' : CoreExpr} {ev0 : Fmap sym value}
+    {evs : List (Fmap sym value)} {ρ' : EnvStack} {σ' : Mem}
+    (hth : dst.core_state0.thread_states =
+      [(0, (none, { th₀ with arena := e, env := ev0 :: evs }))])
+    (hext : dst.core_extern = fmapEmpty) (hfile : dst.core_file = M₀.file)
+    (hjmp : ∀ l params cont, lookupLabel (M₀.labelsAt ctl.proc) l = some (params, cont) →
+      ∃ p, th₀.current_proc_opt = some p ∧
+        LabeledAt dst.core_run_state0 p (M₀.labelsAt ctl.proc))
+    (hsup : dst.core_run_state0.sym_supply = ctl.sup.sym ∧
+      dst.core_run_state0.excluded_supply = ctl.sup.excl)
+    (hf : FragFuel e)
+    (hs : Step M₀ (e, ev0 :: evs, ctl, dst.layout_state) (e', ρ', ctl', σ'))
+    (hκ : ctl'.κ = ctl.κ) :
+    ∃ (rs' : core_run_state) (tr : List trace_event) (ctr : Nat),
+      rs'.labeled = dst.core_run_state0.labeled ∧
+      (rs'.sym_supply = ctl'.sup.sym ∧ rs'.excluded_supply = ctl'.sup.excl) ∧
+      runOne (drive_nonmemory_steps_aux2_lemFuel (Nat.succ fl)
+          fmapEmpty acc [0]) dst =
+        runOne (drive_nonmemory_steps_aux2_lemFuel fl fmapEmpty acc [0])
+          { dst with
+              core_state0 := update_thread_state 0
+                { th₀ with arena := e', env := ρ', current_loc := ctl'.curLoc } dst.core_state0,
+              layout_state := σ',
+              core_run_state0 := rs', trace := tr,
+              dr_step_counter := ctr } := by
+  apply loop_step_frag_same_extern_fuel' hfuel htd hcl fl acc hth
+    (hext.trans hex.symm) hfile ?_ hsup hf hs hκ
+  intro l params cont hl
+  obtain ⟨p, hp, hQ⟩ := hjmp l params cont hl
+  refine ⟨p, hp, ?_⟩
+  rw [hex, resolveExtern_empty]
+  exact hQ
+
 
 /-- Public form over the syntactic fragment (R2 [USER 2026-09-07]). -/
 theorem loop_step_frag_same' (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCtx} {ctl ctl' : Ctl}
@@ -2510,6 +2548,30 @@ theorem loop_step_frag_same' (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCtx} {c
               core_run_state0 := rs', trace := tr,
               dr_step_counter := ctr } :=
   loop_step_frag_same_fuel' (hfuel := hfuel) (M₀ := M₀) (ctl := ctl) (ctl' := ctl') (htd := htd) (hex := hex) (th₀ := th₀) (hcl := hcl) (fl := fl) (acc := acc) (dst := dst) (e := e) (e' := e') (ev0 := ev0) (evs := evs) (ρ' := ρ') (σ' := σ') (hth := hth) (hext := hext) (hfile := hfile) (hjmp := hjmp) (hsup := hsup) (hf := hf.toFuel hdep) (hs := hs) (hκ := hκ)
+
+/-- Control-preserving round with the actual extern map and syntactic fragment. -/
+theorem loop_step_frag_same_extern' (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCtx} {ctl ctl' : Ctl}
+    (htd : M₀.tagDefs = fmapEmpty) {th₀ : thread_state}
+    (hcl : th₀.current_loc = ctl.curLoc) (fl : Nat) (acc : Fmap thread_id (List core_step2))
+    {dst : driver_state} {e e' : CoreExpr} {ev0 : Fmap sym value} {evs : List (Fmap sym value)}
+    {ρ' : EnvStack} {σ' : Mem} (hth : dst.core_state0.thread_states =
+      [(0, (none, { th₀ with arena := e, env := ev0 :: evs }))]) (hext : dst.core_extern = M₀.extern) (hfile : dst.core_file = M₀.file) (hjmp : ∀ l params cont, lookupLabel (M₀.labelsAt ctl.proc) l = some (params, cont) →
+      ∃ p, th₀.current_proc_opt = some p ∧
+        LabeledAt dst.core_run_state0 (resolveExtern M₀.extern p) (M₀.labelsAt ctl.proc)) (hsup : dst.core_run_state0.sym_supply = ctl.sup.sym ∧
+      dst.core_run_state0.excluded_supply = ctl.sup.excl) (hf : Frag e) (hdep : evalDepth e ≤ LemFuel.fuel) (hs : Step M₀ (e, ev0 :: evs, ctl, dst.layout_state) (e', ρ', ctl', σ')) (hκ : ctl'.κ = ctl.κ) :
+    ∃ (rs' : core_run_state) (tr : List trace_event) (ctr : Nat),
+      rs'.labeled = dst.core_run_state0.labeled ∧
+      (rs'.sym_supply = ctl'.sup.sym ∧ rs'.excluded_supply = ctl'.sup.excl) ∧
+      runOne (drive_nonmemory_steps_aux2_lemFuel (Nat.succ fl)
+          fmapEmpty acc [0]) dst =
+        runOne (drive_nonmemory_steps_aux2_lemFuel fl fmapEmpty acc [0])
+          { dst with
+              core_state0 := update_thread_state 0
+                { th₀ with arena := e', env := ρ', current_loc := ctl'.curLoc } dst.core_state0,
+              layout_state := σ',
+              core_run_state0 := rs', trace := tr,
+              dr_step_counter := ctr } :=
+  loop_step_frag_same_extern_fuel' (hfuel := hfuel) (M₀ := M₀) (ctl := ctl) (ctl' := ctl') (htd := htd) (th₀ := th₀) (hcl := hcl) (fl := fl) (acc := acc) (dst := dst) (e := e) (e' := e') (ev0 := ev0) (evs := evs) (ρ' := ρ') (σ' := σ') (hth := hth) (hext := hext) (hfile := hfile) (hjmp := hjmp) (hsup := hsup) (hf := hf.toFuel hdep) (hs := hs) (hκ := hκ)
 
 /-- The proof-device form of `loop_step_frag_same` (over `FragFuel`); the export is `loop_step_frag_same` (R2, Fragment.lean). -/
 theorem loop_step_frag_same_fuel (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCtx} {ctl ctl' : Ctl}
@@ -2544,6 +2606,39 @@ theorem loop_step_frag_same_fuel (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCtx
   loop_step_frag_same_fuel' (hfuel := by omega) htd hex hcl fl acc hth hext hfile
     (fun _ _ _ _ => ⟨p, hproc, by rw [hlb]; exact hQd⟩) hsup hf hs hκ
 
+/-- Actual-extern round at a known current procedure; internal fuel form. -/
+theorem loop_step_frag_same_extern_fuel (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCtx} {ctl ctl' : Ctl}
+    (htd : M₀.tagDefs = fmapEmpty)
+    {Q : LabelMap} (hlb : M₀.labelsAt ctl.proc = Q)
+    {p : sym} {th₀ : thread_state} (hproc : th₀.current_proc_opt = some p)
+    (hcl : th₀.current_loc = ctl.curLoc)
+    (fl : Nat) (acc : Fmap thread_id (List core_step2))
+    {dst : driver_state} {e e' : CoreExpr} {ev0 : Fmap sym value}
+    {evs : List (Fmap sym value)} {ρ' : EnvStack} {σ' : Mem}
+    (hth : dst.core_state0.thread_states =
+      [(0, (none, { th₀ with arena := e, env := ev0 :: evs }))])
+    (hext : dst.core_extern = M₀.extern) (hfile : dst.core_file = M₀.file)
+    (hQd : LabeledAt dst.core_run_state0 (resolveExtern M₀.extern p) Q)
+    (hsup : dst.core_run_state0.sym_supply = ctl.sup.sym ∧
+      dst.core_run_state0.excluded_supply = ctl.sup.excl)
+    (hf : FragFuel e)
+    (hs : Step M₀ (e, ev0 :: evs, ctl, dst.layout_state) (e', ρ', ctl', σ'))
+    (hκ : ctl'.κ = ctl.κ) :
+    ∃ (rs' : core_run_state) (tr : List trace_event) (ctr : Nat),
+      rs'.labeled = dst.core_run_state0.labeled ∧
+      (rs'.sym_supply = ctl'.sup.sym ∧ rs'.excluded_supply = ctl'.sup.excl) ∧
+      runOne (drive_nonmemory_steps_aux2_lemFuel (Nat.succ fl)
+          fmapEmpty acc [0]) dst =
+        runOne (drive_nonmemory_steps_aux2_lemFuel fl fmapEmpty acc [0])
+          { dst with
+              core_state0 := update_thread_state 0
+                { th₀ with arena := e', env := ρ', current_loc := ctl'.curLoc } dst.core_state0,
+              layout_state := σ',
+              core_run_state0 := rs', trace := tr,
+              dr_step_counter := ctr } :=
+  loop_step_frag_same_extern_fuel' (hfuel := by omega) htd hcl fl acc hth hext hfile
+    (fun _ _ _ _ => ⟨p, hproc, by rw [hlb]; exact hQd⟩) hsup hf hs hκ
+
 
 /-- The control-preserving round at a KNOWN current procedure (the calls
     arc C2 statement): `loop_step_frag_same_fuel'` with the jump tie supplied
@@ -2571,6 +2666,30 @@ theorem loop_step_frag_same (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCtx} {ct
               core_run_state0 := rs', trace := tr,
               dr_step_counter := ctr } :=
   loop_step_frag_same_fuel (hfuel := hfuel) (M₀ := M₀) (ctl := ctl) (ctl' := ctl') (htd := htd) (hex := hex) (Q := Q) (hlb := hlb) (p := p) (th₀ := th₀) (hproc := hproc) (hcl := hcl) (fl := fl) (acc := acc) (dst := dst) (e := e) (e' := e') (ev0 := ev0) (evs := evs) (ρ' := ρ') (σ' := σ') (hth := hth) (hext := hext) (hfile := hfile) (hQd := hQd) (hsup := hsup) (hf := hf.toFuel hdep) (hs := hs) (hκ := hκ)
+
+/-- Actual-extern round at a known procedure, with explicit evaluator depth. -/
+theorem loop_step_frag_same_extern (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCtx} {ctl ctl' : Ctl}
+    (htd : M₀.tagDefs = fmapEmpty) {Q : LabelMap}
+    (hlb : M₀.labelsAt ctl.proc = Q) {p : sym} {th₀ : thread_state}
+    (hproc : th₀.current_proc_opt = some p) (hcl : th₀.current_loc = ctl.curLoc) (fl : Nat)
+    (acc : Fmap thread_id (List core_step2)) {dst : driver_state} {e e' : CoreExpr}
+    {ev0 : Fmap sym value} {evs : List (Fmap sym value)} {ρ' : EnvStack} {σ' : Mem}
+    (hth : dst.core_state0.thread_states =
+      [(0, (none, { th₀ with arena := e, env := ev0 :: evs }))]) (hext : dst.core_extern = M₀.extern) (hfile : dst.core_file = M₀.file) (hQd : LabeledAt dst.core_run_state0 (resolveExtern M₀.extern p) Q) (hsup : dst.core_run_state0.sym_supply = ctl.sup.sym ∧
+      dst.core_run_state0.excluded_supply = ctl.sup.excl) (hf : Frag e) (hdep : evalDepth e ≤ LemFuel.fuel) (hs : Step M₀ (e, ev0 :: evs, ctl, dst.layout_state) (e', ρ', ctl', σ')) (hκ : ctl'.κ = ctl.κ) :
+    ∃ (rs' : core_run_state) (tr : List trace_event) (ctr : Nat),
+      rs'.labeled = dst.core_run_state0.labeled ∧
+      (rs'.sym_supply = ctl'.sup.sym ∧ rs'.excluded_supply = ctl'.sup.excl) ∧
+      runOne (drive_nonmemory_steps_aux2_lemFuel (Nat.succ fl)
+          fmapEmpty acc [0]) dst =
+        runOne (drive_nonmemory_steps_aux2_lemFuel fl fmapEmpty acc [0])
+          { dst with
+              core_state0 := update_thread_state 0
+                { th₀ with arena := e', env := ρ', current_loc := ctl'.curLoc } dst.core_state0,
+              layout_state := σ',
+              core_run_state0 := rs', trace := tr,
+              dr_step_counter := ctr } :=
+  loop_step_frag_same_extern_fuel (hfuel := hfuel) (M₀ := M₀) (ctl := ctl) (ctl' := ctl') (htd := htd) (Q := Q) (hlb := hlb) (p := p) (th₀ := th₀) (hproc := hproc) (hcl := hcl) (fl := fl) (acc := acc) (dst := dst) (e := e) (e' := e') (ev0 := ev0) (evs := evs) (ρ' := ρ') (σ' := σ') (hth := hth) (hext := hext) (hfile := hfile) (hQd := hQd) (hsup := hsup) (hf := hf.toFuel hdep) (hs := hs) (hκ := hκ)
 
 /-- The proof-device form of `loop_step_frag'` (over `FragFuel`); the export is `loop_step_frag'` (R2, Fragment.lean). -/
 theorem loop_step_frag_fuel' (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCtx} {ctl ctl' : Ctl}

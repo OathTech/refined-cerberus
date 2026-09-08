@@ -24,6 +24,9 @@ import CerberusHeapLang.Exhibit
 import CerberusHeapLang.DriverCollapse
 import CerberusHeapLang.ProdLoop
 import CerberusHeapLang.ProdEntry
+import CerberusHeapLang.EmittedFile
+import CerberusHeapLang.EmittedMapChecks
+import CerberusHeapLang.EmittedStdCore
 import CerberusHeapLang.ProdExhibit
 import CerberusHeapLang.ProdLoopExhibit
 import CerberusHeapLang.LoopExhibit
@@ -46,6 +49,7 @@ import CerberusHeapLang.EmittedAExhibit
 import CerberusHeapLang.EmittedBExhibit
 import CerberusHeapLang.EmittedCExhibit
 import CerberusHeapLang.CorpusT1Exhibit
+import CerberusHeapLang.EmittedT1Exhibit
 import CerberusHeapLang.CorpusT5Exhibit
 import CerberusHeapLang.CorpusT6Exhibit
 import CerberusHeapLang.CorpusT4Exhibit

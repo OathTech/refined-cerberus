@@ -8,11 +8,16 @@ the per-thread loop, finalization and result enumeration. Each generated
 wrapper starts its worker at that ambient budget; it is not a cumulative
 counter shared between calls. No fixed default fuel is installed here.
 
-The files in this module have a parameterless main, no globals and empty
-extern/tag/implementation maps. They may contain other procedures and an
-arbitrary Core standard-library map. These constructed files are not yet
-identified with the full emitted pipeline file; that connection remains
-KOI A7 and a demo-charter requirement.
+`prod_run_eqJ_file` accepts a complete file with a proved parameterless
+main lookup, no globals and empty tag definitions. It retains the actual
+library, implementation and external maps, including the external-name map
+constructed by startup. The delivery premise must refer to that same file
+and map. Actual emitted t1 uses this lane in `EmittedT1Exhibit`.
+
+The earlier constructed-file APIs remain available for regressions. Their
+extern/tag/implementation maps are empty; they may contain other procedures
+and an arbitrary Core standard-library map. The partial and call lanes
+retain those restrictions. A7 remains open for the rest of the corpus.
 
 For ambient fuel at least two, setup spawns thread 0, looks up main,
 allocates and zeroes errno through the actual memory engine, and parks
@@ -20,8 +25,9 @@ main's body. `ProdMemory` proves the complete resulting memory `prodMem₀`,
 its well-formedness and the unallocated-byte freshness used by `LaunchCoh`.
 The setup lemmas compose those equations with the shipped driver prefix.
 
-The total equations consume `DriverDoneAt` or `DriverDoneCtl` for that
-same file and fuel instance and require `k + 2 ≤ LemFuel.fuel`. They prove
+The total equations consume `DriverDoneAtExtern`, its empty-map
+specialization `DriverDoneAt`, or `DriverDoneCtl` for that same file and
+fuel instance and require `k + 2 ≤ LemFuel.fuel`. They prove
 exactly one active outcome with the stated value and memory postcondition,
 no blocking, and empty stdout/stderr. Registration, live-control and symbol
 supply obligations remain in the delivery premise; this module does not
@@ -734,6 +740,80 @@ def prodEntryStateLib (lib : generic_fun_map Unit core_run_annotation)
                        io := initial_io_state },
       layout_state := prodMem₀ }
 
+/-- The actual initial run state, with the complete file's collected labels. -/
+def fileRunState (F : file core_run_annotation) (sup : Nat) : core_run_state :=
+  (initial_core_run_state sup (collect_labeled_continuations_NEW F)).1
+
+/-- The state after spawning thread zero when the file has no globals. -/
+def filePostGlobals (F : file core_run_annotation) (sup : Nat)
+    (fs : CerbFS.FsState) : driver_state :=
+  { (initial_driver_state sup F fs).1 with
+      core_state0 := { thread_states := [(0, (none, globalsThread))], io := initial_io_state },
+      core_run_state0 := { fileRunState F sup with tid_supply := 1 } }
+
+/-- The thread parked by the shipped parameterless-main startup path. -/
+def fileEntryThread (p : sym) (e : CoreExpr) : thread_state :=
+  { arena := e, stack0 := Stack_empty, errno := errnoPtr,
+    current_loc := CerbLocation.other "Driver.drive",
+    exec_loc := ELoc_normal [(p, CerbLocation.other "Driver.drive")],
+    env := [fmapEmpty], current_proc_opt := some p }
+
+/-- Driver entry retains all actual file fields and its runtime external map. -/
+def fileEntryState (F : file core_run_annotation) (p : sym) (e : CoreExpr)
+    (sup : Nat) (fs : CerbFS.FsState) : driver_state :=
+  { filePostGlobals F sup fs with
+      core_state0 := { thread_states := [(0, (none, fileEntryThread p e))], io := initial_io_state },
+      layout_state := prodMem₀ }
+
+/-- The shipped startup prefix for any complete file with no globals and
+an identified parameterless main. The reader is empty here; the closed
+file theorem below ties it to the file's actual tag definitions. -/
+theorem drive_after_setup_file [LF : LemFuel] (hfuel : 2 ≤ LemFuel.fuel)
+    (F : file core_run_annotation) (hglobs : F.globs = [])
+    (p : sym) (hmain : F.main = some p)
+    (loc : CerbLocation.Loc) (marker : Option Nat) (bty : core_base_type) (e : CoreExpr)
+    (hlookup : fmapLookupBy symCmpL p F.funs = some (Proc loc marker bty [] e))
+    (sup : Nat) (fs : CerbFS.FsState) (args : List String) (dstD : driver_state)
+    (hdrv2 : runOne (driver2_lemFuel LemFuel.fuel fmapEmpty false)
+        (fileEntryState F p e sup fs) = (NDactive (), dstD)) :
+    runOne (_root_.drive fmapEmpty false F args) ((initial_driver_state sup F fs).1) =
+      (NDactive (finalize fmapEmpty "drive (without concur)" dstD), dstD) := by
+  rcases LF with ⟨fuel⟩
+  change 2 ≤ fuel at hfuel
+  obtain ⟨n, rfl⟩ : ∃ n, fuel = n + 2 := ⟨fuel - 2, by omega⟩
+  letI : LemFuel := ⟨n + 2⟩
+  have hpos : 0 < LemFuel.fuel := by change 0 < n + 2; omega
+  have htwo : 2 ≤ LemFuel.fuel := by change 2 ≤ n + 2; omega
+  conv => lhs; unfold _root_.drive
+  refine (runOne_bind_active (hfuel := hpos) (z := (0 : Nat))
+    (s' := filePostGlobals F sup fs) (by
+      unfold driver_globals
+      refine (runOne_bind_active (hfuel := hpos) (z := (0 : Nat))
+        (s' := filePostGlobals F sup fs) (by rfl)).trans ?_
+      refine (runOne_bind_active (hfuel := hpos)
+        (z := ([] : List (sym × generic_globs core_run_annotation Unit))) (by
+          change (NDactive F.globs, filePostGlobals F sup fs) = (NDactive [], filePostGlobals F sup fs)
+          rw [hglobs])).trans ?_
+      rfl)).trans ?_
+  refine (runOne_bind_active (hfuel := hpos) (z := filePostGlobals F sup fs) (by rfl)).trans ?_
+  rw [show (filePostGlobals F sup fs).core_file.main = some p from hmain]
+  refine (runOne_bind_active (hfuel := hpos) (z := p) (by rfl)).trans ?_
+  change fmapLookupBy (fun (s1 : sym) (s2 : sym) => ordCompare s1 s2)
+    p F.funs = some (Proc loc marker bty [] e) at hlookup
+  rw [show (filePostGlobals F sup fs).core_file.funs = F.funs from rfl, hlookup]
+  refine (runOne_bind_active (hfuel := hpos)
+    (z := (loc, ([] : List (sym × core_base_type)), e)) (by rfl)).trans ?_
+  refine (runOne_bind_active (hfuel := hpos) (z := e) (by rfl)).trans ?_
+  refine (runOne_bind_active (hfuel := hpos) (z := errnoPtr)
+    (s' := { filePostGlobals F sup fs with layout_state := prodMem₀ })
+    (runOne_liftMem_active (hfuel := htwo) (errno_init_eq hpos))).trans ?_
+  refine (runOne_bind_active (hfuel := hpos) (z := ()) (s' := dstD) ?_).trans ?_
+  · refine (runOne_bind_active (hfuel := hpos) (z := ()) (s' := fileEntryState F p e sup fs)
+      (by rfl)).trans ?_
+    exact hdrv2
+  · refine (runOne_bind_active (hfuel := hpos) (z := dstD) (by rfl)).trans ?_
+    rfl
+
 /-- Setup on the library-carrying file with ambient fuel at least two.
     The active driver result uses the same instance and budget as `drive`. -/
 theorem drive_after_setup_lib [LF : LemFuel] (hfuel : 2 ≤ LemFuel.fuel)
@@ -746,34 +826,11 @@ theorem drive_after_setup_lib [LF : LemFuel] (hfuel : 2 ≤ LemFuel.fuel)
     runOne (_root_.drive fmapEmpty false (prodFileLib lib procs e) args)
         ((initial_driver_state sup (prodFileLib lib procs e) fs).1) =
       (NDactive (finalize fmapEmpty "drive (without concur)" dstD), dstD) := by
-  rcases LF with ⟨fuel⟩
-  change 2 ≤ fuel at hfuel
-  obtain ⟨n, rfl⟩ : ∃ n, fuel = n + 2 := ⟨fuel - 2, by omega⟩
-  letI : LemFuel := ⟨n + 2⟩
-  have hpos : 0 < LemFuel.fuel := by change 0 < n + 2; omega
-  have htwo : 2 ≤ LemFuel.fuel := by change 2 ≤ n + 2; omega
-  conv => lhs; unfold _root_.drive
-  refine (runOne_bind_active (hfuel := hpos) (z := (0 : Nat))
-    (s' := prodPostGlobalsLib lib procs sup e fs) (by rfl)).trans ?_
-  refine (runOne_bind_active (hfuel := hpos) (z := prodPostGlobalsLib lib procs sup e fs) (by rfl)).trans ?_
-  refine (runOne_bind_active (hfuel := hpos) (z := mainSym) (by rfl)).trans ?_
-  have hlook : fmapLookupBy (fun (s1 : sym) (s2 : sym) => Lem_Basic_classes.ordCompare s1 s2)
-      mainSym (prodPostGlobalsLib lib procs sup e fs).core_file.funs = some (mainDecl e) := by
-    show fmapLookupBy _ mainSym (symAdd mainSym (mainDecl e) (procDecls procs)) = _
-    rw [symAdd_lookup (procDecls_symMap procs), if_pos (by decide +kernel)]
-  rw [hlook]
-  refine (runOne_bind_active (hfuel := hpos)
-    (z := (CerbLocation.unknown, ([] : List (sym × core_base_type)), e)) (by rfl)).trans ?_
-  refine (runOne_bind_active (hfuel := hpos) (z := e) (by rfl)).trans ?_
-  refine (runOne_bind_active (hfuel := hpos) (z := errnoPtr)
-    (s' := { prodPostGlobalsLib lib procs sup e fs with layout_state := prodMem₀ })
-    (runOne_liftMem_active (hfuel := htwo) (errno_init_eq hpos))).trans ?_
-  refine (runOne_bind_active (hfuel := hpos) (z := ()) (s' := dstD) ?_).trans ?_
-  · refine (runOne_bind_active (hfuel := hpos) (z := ()) (s' := prodEntryStateLib lib procs sup e fs)
-      (by rfl)).trans ?_
-    exact hdrv2
-  · refine (runOne_bind_active (hfuel := hpos) (z := dstD) (by rfl)).trans ?_
-    rfl
+  apply drive_after_setup_file hfuel (prodFileLib lib procs e) rfl mainSym rfl
+    CerbLocation.unknown none BTy_unit e _ sup fs args dstD hdrv2
+  show fmapLookupBy _ mainSym (symAdd mainSym (mainDecl e) (procDecls procs)) = _
+  rw [symAdd_lookup (procDecls_symMap procs), if_pos (by decide +kernel)]
+  rfl
 
 /-- With ambient fuel one, setup initializes errno and then memory lifting
     exhausts before the driver's main thread is parked. -/
@@ -886,6 +943,42 @@ theorem prod_run_eqJ_lib [LF : LemFuel] (sup : Nat) (lib : generic_fun_map Unit 
         stack0 := Stack_empty, arena := mk_value_e v } v rfl rfl]
   exact hψ
 
+/-- Closed total execution of a complete no-globals file with a
+parameterless main. The actual file's tag reader, runtime external map and
+registered main labels are retained. The delivery premise is supplied by
+the public total logic through the shared launcher. -/
+theorem prod_run_eqJ_file [LF : LemFuel]
+    (F : file core_run_annotation) (htd : F.tagDefs = fmapEmpty) (hglobs : F.globs = [])
+    (p : sym) (hmain : F.main = some p)
+    (loc : CerbLocation.Loc) (marker : Option Nat) (bty : core_base_type) (e : CoreExpr)
+    (hlookup : fmapLookupBy symCmpL p F.funs = some (Proc loc marker bty [] e))
+    (sup : Nat) {Q : LabelMap}
+    (hQe : LabeledAt (fileRunState F sup) (resolveExtern (create_extern_symmap F) p) Q)
+    (ψ : value → Mem → Prop) (k : Nat)
+    (hdd : DriverDoneAtExtern (create_extern_symmap F) p Q F (fileEntryThread p e)
+      e [fmapEmpty] (CerbLocation.other "Driver.drive") ⟨sup, 0⟩ prodMem₀ ψ k)
+    (hfl : k + 2 ≤ LemFuel.fuel) (fs : CerbFS.FsState) (args : List String) :
+    ∃ (dres : driver_result) (dst' : driver_state),
+      CerbND.runND (_root_.drive F.tagDefs false F args) ((initial_driver_state sup F fs).1) =
+        [(nd_status.Active dres, ([] : List String), dst')] ∧
+      ψ dres.dres_core_value dst'.layout_state ∧
+      dres.dres_blocked = false ∧ dres.dres_stdout = "" ∧ dres.dres_stderr = "" := by
+  rw [htd]
+  obtain ⟨v, σfin, ρfin, lcfin, afin, bfin, rs', tr, ctr, hψ, hloop⟩ :=
+    hdd (fileEntryState F p e sup fs) fmapEmpty LemFuel.fuel rfl rfl rfl rfl hQe ⟨rfl, rfl⟩ hfl
+  have hdrv2 := driver2_done (hfuel := by omega) (LemFuel.fuel - 1) fmapEmpty
+    (fileEntryState F p e sup fs) _ (fileEntryThread p e)
+    { fileEntryThread p e with arena := ofValA (.pure afin bfin v), env := ρfin, current_loc := lcfin }
+    v rfl hloop rfl
+  rw [show Nat.succ (LemFuel.fuel - 1) = LemFuel.fuel by omega] at hdrv2
+  have hrun := drive_after_setup_file (hfuel := by omega) F hglobs p hmain loc marker bty e
+    hlookup sup fs args _ hdrv2
+  refine ⟨_, _, runND_active (hfuel := by omega) hrun, ?_, rfl, rfl, rfl⟩
+  rw [finalize_done (hfuel := by omega) fmapEmpty _ _
+    { { fileEntryThread p e with arena := ofValA (.pure afin bfin v), env := ρfin, current_loc := lcfin }
+      with stack0 := Stack_empty, arena := mk_value_e v } v rfl rfl]
+  exact hψ
+
 /-- The one-procedure lane over a library-carrying file
     (`prod_run_eqJ` at `prodFileLib lib []`): the delivery fact
     `DriverDoneAt` is tied to THAT file. -/
@@ -905,19 +998,11 @@ theorem prod_run_eqJ_lib1 [LF : LemFuel] (sup : Nat) (lib : generic_fun_map Unit
       dres.dres_blocked = false ∧
       dres.dres_stdout = "" ∧
       dres.dres_stderr = "" := by
-  obtain ⟨v, σfin, ρfin, lcfin, afin, bfin, rs', tr, ctr, hψ, hloop⟩ :=
-    hdd (prodEntryStateLib lib [] sup e fs) fmapEmpty LemFuel.fuel rfl rfl rfl rfl hQe ⟨rfl, rfl⟩ hfl
-  have hdrv2 := driver2_done (hfuel := by omega) (LemFuel.fuel - 1) fmapEmpty (prodEntryStateLib lib [] sup e fs) _
-    (prodThread e)
-    { prodThread e with arena := ofValA (.pure afin bfin v), env := ρfin, current_loc := lcfin }
-    v rfl hloop rfl
-  rw [show Nat.succ (LemFuel.fuel - 1) = LemFuel.fuel by omega] at hdrv2
-  have hrun := drive_after_setup_lib (hfuel := by omega) lib [] sup e fs args _ hdrv2
-  refine ⟨_, _, runND_active (hfuel := by omega) hrun, ?_, rfl, rfl, rfl⟩
-  rw [finalize_done (hfuel := by omega) fmapEmpty _ _
-    { { prodThread e with arena := ofValA (.pure afin bfin v), env := ρfin, current_loc := lcfin } with
-        stack0 := Stack_empty, arena := mk_value_e v } v rfl rfl]
-  exact hψ
+  apply prod_run_eqJ_file (prodFileLib lib [] e) rfl rfl mainSym rfl
+    CerbLocation.unknown none BTy_unit e _ sup hQe ψ k hdd hfl fs args
+  show fmapLookupBy _ mainSym (symAdd mainSym (mainDecl e) (procDecls [])) = _
+  rw [symAdd_lookup (procDecls_symMap []), if_pos (by decide +kernel)]
+  rfl
 
 /-- Closed partial correctness for a library-carrying file at every
     ambient budget, with the same setup and outcome classification as

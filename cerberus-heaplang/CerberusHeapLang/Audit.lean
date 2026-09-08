@@ -244,6 +244,7 @@ import CerberusHeapLang.EmittedAExhibit
 import CerberusHeapLang.EmittedBExhibit
 import CerberusHeapLang.EmittedCExhibit
 import CerberusHeapLang.CorpusT1Exhibit
+import CerberusHeapLang.EmittedT1Exhibit
 import CerberusHeapLang.CorpusT5Exhibit
 import CerberusHeapLang.CorpusT6Exhibit
 import CerberusHeapLang.CorpusT4Exhibit
@@ -269,6 +270,19 @@ def allowedAxioms : List Name :=
     the README's exhibits table and trust diagram, and WALKTHROUGH §6,
     name these). -/
 def trioExports : List Name := [
+  -- Whole-file t1: public syntactic-fragment bridges and complete production.
+  ``CerberusHeapLang.CorpusA7.T1.mainBody_frag,
+  ``CerberusHeapLang.CorpusA7.T1.returnSpec_valid,
+  ``CerberusHeapLang.CorpusA7.T1.mainBody_wpt,
+  ``CerberusHeapLang.loop_step_frag_same_extern',
+  ``CerberusHeapLang.loop_step_frag_same_extern,
+  ``CerberusHeapLang.wpt_driver_done_alloc_extern,
+  ``CerberusHeapLang.CorpusA7.T1.mainBody_driver_done,
+  ``CerberusHeapLang.drive_after_setup_file,
+  ``CerberusHeapLang.prod_run_eqJ_file,
+  ``CerberusHeapLang.CorpusA7.T1.certified_production,
+  ``CerberusHeapLang.CorpusA7.T1.certified_production_of_capture_eq,
+
   -- D5 partial clients: all three measured trio-exact.
   ``CerberusHeapLang.PartialClients.t5_wps,
   ``CerberusHeapLang.PartialClients.t5_blockSpecs,
