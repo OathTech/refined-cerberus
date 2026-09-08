@@ -1,0 +1,82 @@
+{
+  "after_driver_initialization_supply": 52,
+  "ambient_fuel": 1000,
+  "body_beq_retained_t1": false,
+  "data_export": {
+    "captured_comparator_checks_match": true,
+    "comparators": "retained by captureComparators; not serialized or assumed canonical",
+    "namespace": "CerberusHeapLang.ExpansionT6",
+    "negative_checks": {},
+    "quotation_and_supply_match": true,
+    "sha256": "a0161ef30b8a24e232f92959aca793f450e056477f77d99fea9541f92d23d31e",
+    "structural_data_match": true
+  },
+  "file": {
+    "calling_convention": "normal",
+    "extern_entries": 11,
+    "funinfo_entries": 11,
+    "funs_entries": 11,
+    "globs_entries": 0,
+    "impl_entries": 6,
+    "loop_attributes_entries": 0,
+    "main": {
+      "digest": "11f5f582407b88b6cb3785da1444b20c",
+      "number": 19,
+      "printed_name": "main"
+    },
+    "stdlib_entries": 110,
+    "tagDefs_entries": 0,
+    "visible_objects_env_entries": 0
+  },
+  "format": "cerberus-demo-file-inspection-v1",
+  "frontend_supply": 51,
+  "integer_library": {
+    "captured_comparator_paths_match": true,
+    "reference_namespace": "CerberusHeapLang.CorpusA7.T1",
+    "stdlib_quotation_match": true
+  },
+  "label_collection": {
+    "captured_union_comparisons_match": true
+  },
+  "main_lookup": {
+    "captured_comparator_path_match": true
+  },
+  "outcomes": [
+    {
+      "blocked": false,
+      "status": "active",
+      "stderr": "",
+      "stdout": "",
+      "trace": [],
+      "value": "Specified(20)"
+    }
+  ],
+  "provenance": {
+    "cabs_sha256": "022e59276e520a87d7febf0508383e3e19e4d44fc44aaab9b13562c5965bb83d",
+    "lean_version": "leanprover/lean4:v4.32.2",
+    "runtime_path": "../.cerberus-ws/runtime/libcore",
+    "semantics_commit": "89f7e688530c6910884518811d645e4e892e4507",
+    "sources_sha256": {
+      ".cerberus-ws/lean_frontend/.lake/build/ir/CerberusFresh.c": "0125a101f6d98cbe6a2c2af724f546f9107f482e74316644ed800518b502d408",
+      ".cerberus-ws/lean_frontend/CerberusFresh.lean": "4ada084cc409ab01967a68cf4144d4809e5513a98ac58639e64238b155c2b38a",
+      ".cerberus-ws/lean_frontend/Main.lean": "313fa340997c097661258a85812abc80d33c9fe554b36765dfde2bdb86d3fa33",
+      ".cerberus-ws/lean_frontend/native/md5.c": "3743615aa8ba58e74819504d9a066fc902c808024c16e15ca4504a821d4824c0",
+      ".cerberus-ws/runtime/libcore/impls/gcc_4.9.0_x86_64-apple-darwin10.8.0.impl": "c6e4bcab711860904ff0d27bc90392540a70cbb59c7c9f546164896482b3f813",
+      ".cerberus-ws/runtime/libcore/std.core": "ea62fd0ade7a84ade72dbbf22169aa6e819a1a08c5297509ad38fec130a5d060",
+      "cerberus-heaplang/CerberusHeapLang/EmittedFile.lean": "14e38aceb852183b07be261934ee9b28b62bc12cda00c3efa3295458098fc97a",
+      "cerberus-heaplang/CerberusHeapLang/EmittedMapChecks.lean": "3c688652dc66caeb8a842a2bbe69a129f98429b395a851235f1f5eebb9134b59",
+      "cerberus-heaplang/CerberusHeapLang/EmittedStdCore.lean": "ef90d9647763617143286e0cc8c38a56aedbd82306507220ef232a5244e42f4e",
+      "cerberus-heaplang/CerberusHeapLang/Examples/EmittedT1Data.lean": "b3f9e6be1ad7b5ac894bb20541a1af2367d37d7b4d34b48026dfe48ec9999e45",
+      "cerberus-heaplang/scripts/derive_file_beq.lean": "5c6f88cba7eb6ea6cc2ea70f1582343c2b68567a63255fbdd40246a9512d237d",
+      "cerberus-heaplang/scripts/derive_file_to_expr.lean": "fb52c9789e90741b675dc217b3f7c04313d20ca9de5268922079fe723195c943",
+      "cerberus-heaplang/scripts/emitted_frontend.lean": "0585b1e77eb23a363b583980ad29e7476aa990f9fc6bd7c2c7bc3168ce79a531",
+      "cerberus-heaplang/scripts/inspect_emitted_file.lean": "2f089b13bb023afb40404e1021dc0bfa4a9f026c582a2d5c5563e2a0421579e7",
+      "scripts/inspect-emitted-file.sh": "372170fbd7b1ce4b38244621b30401bbd9c1d0bc15d04efbf38f0e47db4f6862"
+    }
+  },
+  "scope": "metadata and executable observations; not full serialization or an equality certificate",
+  "source_digest": "11f5f582407b88b6cb3785da1444b20c",
+  "uncovered_body_kinds": [
+    "case"
+  ]
+}

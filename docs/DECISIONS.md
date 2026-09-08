@@ -3961,3 +3961,16 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   worktrees were clean and removed normally; their refs remain as
   superseded records in master plan §2. This closing commit is docs-only,
   made in the feature worktree for fast-forwarding to main; no push.
+
+- **2026-09-08 [USER] WHOLE-FILE CORPUS EXECUTION AUTHORIZED**, verbatim:
+  "Go ahead and put together a charter for this work, and set it as a goal.
+  As before, work independently with no human interaction unless needed for
+  decision-making. Work on a worktree, branching off main. Make sure to
+  follow the practices established in this repo. At the end, run a review
+  using an adversarially-briefed subagent. Once you have a reviewed merge
+  candidate covering all the work, pause for external review"
+  [AGENT] Scope: full V1-1b t5/t6/t4 migration and common emitted integer
+  support, as substantiated in the adopted scout proposal. Charter:
+  `docs/2026-09-08_whole-file-corpus-charter.md`; branch/worktree
+  `demo-whole-file-corpus` from main `4bc0a98`. Goal created. No merge,
+  push or tag authorized; the completed candidate waits for external review.
