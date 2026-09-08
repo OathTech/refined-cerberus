@@ -1123,7 +1123,8 @@ def trioExports : List Name := [
   ``CerberusHeapLang.EmittedIntSupport.wpt_intAssign,
   ``CerberusHeapLang.EmittedIntSupport.symbol_eval,
   ``CerberusHeapLang.EmittedIntSupport.int_storable,
-  ``CerberusHeapLang.EmittedIntSupport.update_sym]
+  ``CerberusHeapLang.EmittedIntSupport.update_sym,
+  ``CerberusHeapLang.EmittedIntSupport.wpt_unseq_value_right]
 
 /-- Whole-file representation proofs use propositional extensionality through
 `simp` and induction, without choice or quotient soundness. Preserve that

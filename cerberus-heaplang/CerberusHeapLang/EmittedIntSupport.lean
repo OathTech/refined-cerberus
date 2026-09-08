@@ -13,7 +13,7 @@ open EmittedStdCore (sintTyAnn HasIntLibrary)
 
 variable {GF : BundledGFunctors}
 
-def symPe (a : List annot) (x : sym) : generic_pexpr Unit sym :=
+abbrev symPe (a : List annot) (x : sym) : generic_pexpr Unit sym :=
   Pexpr a () (PEsym x)
 
 theorem update_sym (a : List annot) (x : sym) (bty : core_base_type)
@@ -136,5 +136,43 @@ theorem wpt_intAssign [LemFuel] [SpikeGS .hasLC GF]
   wpt_neg_bound_compare an a0 a1 a2 a3 pa ds bty loc ann (sintTyAnn ta) pp vp ret mo
     f rest hf (emittedIntMval n) bs (Nat.le_refl 16) hex hnv hpp hvp hnvr hret
     (int_encodes M.tagDefs ta n) (int_storable M.tagDefs ta n hlo hhi)
+
+/-- A right operand already in value form needs no evaluation round.
+The exact source annotations are retained; only the left computation and
+the three-unit unseq completion are charged. -/
+theorem wpt_unseq_value_right [LemFuel] [SpikeGS .hasLC GF]
+    {M : MachineCtx} {p : Option sym} {Ls : LabelSpecT GF} {Θ : ProcSpecT GF}
+    {Ψ : SpikeVal → EnvStack → IProp GF}
+    (a ap aq : List annot) (e : CoreExpr) (v : value) (ρ : EnvStack) (k : Nat) :
+    wpt M p Ls Θ k (fun w ρ' => Ψ (w.mergeInto (.annot [] (Vtuple [w.val, v]))) ρ') e ρ ⊢
+      wpt M p Ls Θ (k + 3) Ψ
+        (Expr a (Eunseq [e, Expr ap (Epure (Pexpr aq () (PEval v)))])) ρ := by
+  iintro H
+  rw [show ([e, Expr ap (Epure (Pexpr aq () (PEval v)))] : List CoreExpr) =
+    [] ++ e :: [ofValA (.pure ap aq v)] from rfl]
+  iapply wpt_unseq_focus a [] e [ofValA (.pure ap aq v)] ρ
+    (by rw [valsOnly_cons, isValE_ofValA, valsOnly_nil])
+    (by simp only [List.nil_append, ccallFreeList, ccallFree_ofValA]) k 3
+  iapply wpt_mono (Ψ₁ := fun w ρ' => Ψ (w.mergeInto (.annot [] (Vtuple [w.val, v]))) ρ') ?_ k e ρ $$ H
+  intro w ρ'
+  iintro HΨ %wb %hwb
+  cases wb with
+  | pure ba bb bv =>
+    cases hwb
+    rw [show ([] ++ ofValA (.pure ba bb bv) :: [ofValA (.pure ap aq v)] : List CoreExpr) =
+      [SpikeValA.pure ba bb bv, .pure ap aq v].map ofValA from rfl]
+    iapply wpt_unseq_vals a _ ρ' (fps := []) (cvals := [bv, v]) (Nat.le_refl 3) rfl
+    simp only [SpikeValA.erase_pure, SpikeVal.mergeInto, SpikeVal.val]
+    iexact HΨ
+  | annot ba bb bc ds bv =>
+    cases hwb
+    rw [show ([] ++ ofValA (.annot ba bb bc ds bv) :: [ofValA (.pure ap aq v)] : List CoreExpr) =
+      [SpikeValA.annot ba bb bc ds bv, .pure ap aq v].map ofValA from rfl]
+    iapply wpt_unseq_vals a _ ρ' (fps := ds) (cvals := [bv, v]) (Nat.le_refl 3)
+      (by simp only [collectUnseq, do_race_nil_right, Bool.false_eq_true, ↓reduceIte,
+        combine_dyn_annotations, List.append_nil, List.reverse_cons, List.reverse_nil,
+        List.nil_append, List.cons_append])
+    simp only [SpikeValA.erase_annot, SpikeVal.val, SpikeVal.mergeInto, SpikeVal.merge, List.append_nil]
+    iexact HΨ
 
 end CerberusHeapLang.EmittedIntSupport

@@ -70,3 +70,27 @@ Its caches were moved aside, correct caches restored from verified main,
 the pinned workspace rechecked, and all successful builds above ran from
 the package directory at4.32.2. No wrong-toolchain result is counted as
 evidence; no source pin or sibling repository changed.
+
+## Literal operands and exact body checkpoints
+
+The actual frontend uses literal `PEval` operands where the earlier wrappers
+used constructed values. `EmittedIntSupport.wpt_unseq_value_right` exposes
+the derived unsequenced rule for a right operand already in value form,
+retaining annotations and merged footprints. It charges the left proof
+budget plus three completion units. `symPe` is an abbreviation to match
+existing symbol syntax transparently. Its public type is unchanged.
+
+Parent independently built the adopted t5 and t6 data/body shape modules
+(`665a0f5`, `a9c6ba0`) alongside this helper. The subsequent fast gate
+passed; selected verbatim output (`value-right-fast-gate.log`):
+
+```text
+info: CerberusHeapLang/Audit.lean:1161:0: CerberusHeapLang export pins: 925 trio-exact, 7 propext-exact, 7 axiom-free-exact
+info: CerberusHeapLang/Audit.lean:1161:0: CerberusHeapLang axiom sweep: every theorem bounded by the trio (6830 swept, internal details included — count informational, environment-dependent)
+info: CerberusHeapLang/Audit.lean:1161:0: CerberusHeapLang banned-axiom sweep: sorryAx/ofReduceBool/ofReduceNat absent from all cones (10277 constants of every kind swept, internal details included — count informational, environment-dependent)
+FAST-GATE GREEN (gates 1-2 only — not a claim-point result; say fast-gate in the commit)
+```
+
+The t5/t6 modules are not yet root imports at this checkpoint; their
+separate targeted builds, not this sweep, verify those data/body facts.
+Program total proofs remain in progress.
