@@ -3950,3 +3950,14 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   `docs/2026-09-08_whole-file-t1-landing.md`. The full capped feature gate
   passed with the fixes; no Lean source or pin changed. This authorization
   supersedes the earlier pending merge ask; it does not authorize a push.
+
+- **2026-09-08 [AGENT] WHOLE-FILE T1 LANDED AND PRIMARY VERIFIED.** Main
+  fast-forwarded `7040406..4b7e590` on the explicit authorization above.
+  The primary full capped gate then passed, exit 0, with 918 trio-exact,
+  7 propext-exact and 7 axiom-free-exact pins, no banned axioms, all
+  speedbumps green and 33 distinct demo warnings (the baseline). Verbatim
+  excerpts and F1–F7 dispositions are in
+  `docs/2026-09-08_whole-file-t1-landing.md`. The three finished worker
+  worktrees were clean and removed normally; their refs remain as
+  superseded records in master plan §2. This closing commit is docs-only,
+  made in the feature worktree for fast-forwarding to main; no push.

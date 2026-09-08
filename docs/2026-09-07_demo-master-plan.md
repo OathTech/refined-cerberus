@@ -281,7 +281,7 @@ review's sweep found every unmerged branch present here.
 `cd03831`, and `worker-whole-file-range-review` at `9219800` are
 **superseded records**. Their intended content was cherry-picked or adopted
 on `demo-whole-file-t1`; the comparator branch's older base is not a merge
-candidate. Their clean worker worktrees are removed after the authorized
+candidate. Their clean worker worktrees were removed after the authorized
 landing; the branch refs retain provenance.
 
 Filed requests to the semantics side and their state: the companion

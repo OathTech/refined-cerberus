@@ -1,7 +1,7 @@
 # Whole-file t1 — landing fixes and verification
 
-Status: landing fixes verified on `demo-whole-file-t1`; primary landing
-verification is recorded below when complete. [AGENT 2026-09-08].
+Status: LANDED on main by fast-forward; full primary gate passed.
+[AGENT 2026-09-08].
 
 The independent [landing review](2026-09-08_review-whole-file-t1-landing.md)
 of `7040406..d49cd3b` returned PASS WITH FIXES (A−), with one required
@@ -113,3 +113,44 @@ preexisting: the package README's manifest/semantics region citations,
 KOI B18's two old Step line numbers, pinned-source ranges, and a historical
 CLAUDE line-101 reference in the append-only decisions register. No
 automatic historical rewrite was made.
+
+## Primary landing and cleanup
+
+The primary checkout was clean on main `7040406`. The authorized
+`git merge --ff-only demo-whole-file-t1` advanced it to `4b7e590`, including
+the unmodified external review and the fixes above. No push was made.
+
+The same full-gate command then ran from the primary checkout, logging to
+its root `.lake/whole-file-landing-evidence/main-gate.log`; exit 0. Selected
+verbatim output:
+
+```text
+info: CerberusHeapLang/Audit.lean:1152:0: CerberusHeapLang export pins: 918 trio-exact, 7 propext-exact, 7 axiom-free-exact
+info: CerberusHeapLang/Audit.lean:1152:0: CerberusHeapLang axiom sweep: every theorem bounded by the trio (6816 swept, internal details included — count informational, environment-dependent)
+info: CerberusHeapLang/Audit.lean:1152:0: CerberusHeapLang banned-axiom sweep: sorryAx/ofReduceBool/ofReduceNat absent from all cones (10261 constants of every kind swept, internal details included — count informational, environment-dependent)
+ok: capability manifest regenerated, no drift
+ok: corpus skeleton — every transcription matches its emitted text, every plant mismatches
+whole-file t1: OCaml oracle SHA-256: 7d1778bba8defb85233c4be211ab9cbe4b32dae13cf4afc9de79fae3c9302cd4
+whole-file t1: OCaml oracle version: git-cn-pin-720-g9a7f7ad31
+ok: whole-file t1 — fresh Cabs matches retained fixture
+ok: emitted-file comparison — all three captured-comparator checks pass on the compared instance
+ok: emitted-file negative check — main := none rejected by structural and quotation comparisons
+ok: emitted-file negative check — frontendSupply + 1 rejected by supply comparison
+ok: whole-file t1 — metadata, all three comparator checks and singleton return 4 checked
+ok: whole-file t1 — independent structural data, quotation, supply and negative checks passed
+ok: import direction — 19 core modules, none imports an exhibit/example/production module
+BOUNDARY: 34 modules checked, 0 internals mention(s) in total, exit=0
+ALL GATES GREEN
+```
+
+DERIVED: 63 demo module build lines, 66 demo warning occurrences / 33
+distinct (the baseline), zero `UNCAPPED`. Including dependency diagnostics:
+1,115 warning occurrences / 658 distinct. No tracked changes resulted from
+the primary gate. The closing record commit changes only documentation;
+the source and gate scripts are identical to the verified `4b7e590`.
+
+After independently checking each worker's `git status --porcelain` was
+empty and the review agents had finished, normal `git worktree remove`
+succeeded for all three F3 worktrees. No force was used. Their three
+branch refs remain at the registered heads. The separate next-slice scout
+worktree and all unrelated worktrees were retained.
