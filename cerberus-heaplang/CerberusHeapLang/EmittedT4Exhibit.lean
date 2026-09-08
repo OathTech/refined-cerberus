@@ -1416,6 +1416,9 @@ theorem blockSpecsT_main [LemFuel] [SpikeGS .hasLC GF]
     · iexact Hi
     iexact Hs
 
+abbrev loopTail (body : CoreExpr) : CoreExpr :=
+  seqE (Expr [Aloc (loc 40 88), Astmt] (Esseq wc body afterWhile)) (seqE returnStmt cleanup)
+
 /-- Entry executes the emitted while save before its first continuing
     iteration; the registered continuation handles subsequent iterations. -/
 theorem wpt_whileEntry [LemFuel] [SpikeGS .hasLC GF]
@@ -1426,10 +1429,9 @@ theorem wpt_whileEntry [LemFuel] [SpikeGS .hasLC GF]
     (pi ps : CerbMem.PointerValue) (hf : SourceFrame pi ps f) :
     iprop(pointsToCell M.tagDefs (GF := GF) pi (.own 1) iTy (emittedIntBytes M.tagDefs 0) ∗
       pointsToCell M.tagDefs ps (.own 1) sTy (emittedIntBytes M.tagDefs 0)) ⊢
-      wpt M p (LsT GF M.tagDefs) emptyProcSpecT 895 Ψ (loopContext whileE) (f :: rest) := by
+      wpt M p (LsT GF M.tagDefs) emptyProcSpecT 895 Ψ (loopTail whileE) (f :: rest) := by
   iintro ⟨Hi, Hs⟩
-  unfold loopContext seqE wc whileE
-  iapply wpt_seq _ _ _ _ _ _ _ 895 0
+  unfold loopTail seqE wc whileE
   iapply wpt_seq _ _ _ _ _ _ _ 895 0
   iapply wpt_seq _ _ _ _ _ _ _ 895 0
   iapply wpt_saveEntry hex (.LAloop 24) whileSym _ 893 pi ps f rest hf
@@ -1440,6 +1442,267 @@ theorem wpt_whileEntry [LemFuel] [SpikeGS .hasLC GF]
   · iexact Hi
   rw [show (sum 0 : Int) = 0 from rfl]
   iexact Hs
+
+
+theorem store_eq (a : List annot) (atLoc : CerbLocation.Loc) (ty : ctype)
+    (pe2 pe3 : generic_pexpr Unit sym) :
+    (Expr a (Eaction (Paction polarity.Pos (Action atLoc empty_annotation
+      (Store0 false (tyPe ty) pe2 pe3 NA)))) : CoreExpr) =
+      storeOpRedex a atLoc empty_annotation ty pe2 pe3 NA := rfl
+
+theorem createI_eq : createI = createOpRedex [] (locR 16 100 22 23) empty_annotation
+    (Pexpr [] () (PEctor Civalignof [tyPe iTy])) (tyPe iTy)
+    (PrefSource (loc 22 23) [mainSym, iSym]) := rfl
+theorem createS_eq : createS = createOpRedex [] (locR 16 100 33 34) empty_annotation
+    (Pexpr [] () (PEctor Civalignof [tyPe sTy])) (tyPe sTy)
+    (PrefSource (loc 33 34) [mainSym, sSym]) := rfl
+
+/-- Two annotated allocations and initializations cost at most20;
+entry and the decreasing loop-label proof cost at most895. -/
+theorem wpt_main [LemFuel] (hfuel : 0 < LemFuel.fuel) [SpikeGS .hasLC GF]
+    {M : MachineCtx} {p : Option sym} (hstd : HasIntLibrary M.file)
+    (hex : ∀ x, symCmpK (resolveExtern M.extern x) x = .EQ)
+    (hQ : M.labelsAt p = Q) (hsup : 22 < M.runState.sym_supply)
+    (f : Fmap sym value) (rest : EnvStack) (hf : SymFrame f) :
+    iprop(allocBudget (GF := GF) (allocCost M.tagDefs iTy 4 + allocCost M.tagDefs sTy 4)) ⊢
+      wpt M p (LsT GF M.tagDefs) emptyProcSpecT 915 (readoutPost resultPost) mainBody (f :: rest) := by
+  iintro Hcap
+  icases (allocBudget_split _ _).1 $$ Hcap with ⟨HcapI, HcapS⟩
+  rw [mainBody_shape]
+  unfold mainTerm seqE wc
+  iapply wpt_seq _ _ _ _ _ _ _ 915 0
+  simp only [initializeI, initializeS, letS, bnd, createI_eq, createS_eq, act, store_eq]
+  rw [show (Pattern [] (CaseBase (some iSym, ptrBty)) : pattern) = symPat [] iSym ptrBty from rfl]
+  iapply wpt_seq_sym _ _ _ _ _ _ _ _ 3 912
+  rw [show (3 : Nat) = 2 + 1 from rfl]
+  iapply wpt_create_eval _ _ empty_annotation (Pexpr [] () (PEctor Civalignof [tyPe iTy])) (tyPe iTy)
+    (PrefSource (loc 22 23) [mainSym, iSym]) _
+    (align := CerbMem.alignofIval M.tagDefs iTy) (ty := iTy) rfl
+    (by rw [evalPexpr_ctor1]; unfold tyPe; rw [evalPexpr_val]; rfl) (evalPexpr_val _ _ _ _ _)
+  rw [show CerbMem.alignofIval M.tagDefs iTy = .IV .Prov_none 4 from rfl]
+  iapply wpt_create (hfuel := hfuel) (halign := by decide) (haddr := rfl) _ _ empty_annotation .Prov_none 4 iTy
+    (PrefSource (loc 22 23) [mainSym, iSym]) _ (Nat.le_refl 2)
+    (int_size_pos [Aloc (loc 18 21)]) (int_nonatomic [Aloc (loc 18 21)])
+    (fun a => int_decIndep [Aloc (loc 18 21)] a _)
+  isplitl [HcapI]
+  · iexact HcapI
+  iintro %pi ⟨Hi, -⟩
+  iexists (Vobject (OVpointer pi))
+  isplit
+  · ipureintro; rfl
+  rw [update_env_sym]
+  rw [show (Pattern [] (CaseBase (some sSym, ptrBty)) : pattern) = symPat [] sSym ptrBty from rfl]
+  iapply wpt_seq_sym _ _ _ _ _ _ _ _ 3 909
+  rw [show (3 : Nat) = 2 + 1 from rfl]
+  iapply wpt_create_eval _ _ empty_annotation (Pexpr [] () (PEctor Civalignof [tyPe sTy])) (tyPe sTy)
+    (PrefSource (loc 33 34) [mainSym, sSym]) _
+    (align := CerbMem.alignofIval M.tagDefs sTy) (ty := sTy) rfl
+    (by rw [evalPexpr_ctor1]; unfold tyPe; rw [evalPexpr_val]; rfl) (evalPexpr_val _ _ _ _ _)
+  rw [show CerbMem.alignofIval M.tagDefs sTy = .IV .Prov_none 4 from rfl]
+  iapply wpt_create (hfuel := hfuel) (halign := by decide) (haddr := rfl) _ _ empty_annotation .Prov_none 4 sTy
+    (PrefSource (loc 33 34) [mainSym, sSym]) _ (Nat.le_refl 2)
+    (int_size_pos [Aloc (loc 29 32)]) (int_nonatomic [Aloc (loc 29 32)])
+    (fun a => int_decIndep [Aloc (loc 29 32)] a _)
+  isplitl [HcapS]
+  · iexact HcapS
+  iintro %ps ⟨Hs, -⟩
+  iexists (Vobject (OVpointer ps))
+  isplit
+  · ipureintro; rfl
+  rw [update_env_sym]
+  iapply wpt_seq _ _ _ _ _ _ _ 7 902
+  rw [show (Pattern [] (CaseBase (some (tmp 30), intBty)) : pattern) = symPat [] (tmp 30) intBty from rfl]
+  iapply wpt_seq_sym _ _ _ _ _ _ _ _ 3 4
+  rw [show (3 : Nat) = 2 + 1 from rfl]
+  iapply wpt_bound _ _ _ rfl
+  rw [show literal (exprAnn (loc 26 27)) 0 =
+    ofValA (.pure (exprAnn (loc 26 27)) [] (lint 0)) from rfl]
+  iapply wpt_ofValA (.pure (exprAnn (loc 26 27)) [] (lint 0)) _ (by decide)
+  simp only [SpikeVal.val]
+  iexists (lint 0)
+  isplit
+  · ipureintro; rfl
+  rw [update_env_sym]
+  rw [show (4 : Nat) = 3 + 1 from rfl]
+  iapply wpt_store_eval _ _ _ iTy (psym iSym) (convLoaded [] iTy (tmp 30)) NA _
+    rfl (pv := pi) (cv := lint 0)
+    (psym_eval hex (by emitted_frame) rest (by emitted_lookup))
+    (convLoaded_eval hstd (psym_eval hex (by emitted_frame) rest
+      (by emitted_lookup)) (by decide) (by decide))
+  iapply wpt_store _ _ _ iTy pi (lint 0) NA (emittedIntMval 0) _ _ (Nat.le_refl 3)
+    (int_encodes _ [Aloc (loc 18 21)] 0) (int_storable _ [Aloc (loc 18 21)] 0 (by decide) (by decide))
+  isplitl [Hi]
+  · iexact Hi
+  iintro %fpI Hi
+  simp only [SpikeVal.mergeInto]
+  iapply wpt_seq _ _ _ _ _ _ _ 7 895
+  rw [show (Pattern [] (CaseBase (some (tmp 31), intBty)) : pattern) = symPat [] (tmp 31) intBty from rfl]
+  iapply wpt_seq_sym _ _ _ _ _ _ _ _ 3 4
+  rw [show (3 : Nat) = 2 + 1 from rfl]
+  iapply wpt_bound _ _ _ rfl
+  rw [show literal (exprAnn (loc 37 38)) 0 =
+    ofValA (.pure (exprAnn (loc 37 38)) [] (lint 0)) from rfl]
+  iapply wpt_ofValA (.pure (exprAnn (loc 37 38)) [] (lint 0)) _ (by decide)
+  simp only [SpikeVal.val]
+  iexists (lint 0)
+  isplit
+  · ipureintro; rfl
+  rw [update_env_sym]
+  rw [show (4 : Nat) = 3 + 1 from rfl]
+  iapply wpt_store_eval _ _ _ sTy (psym sSym) (convLoaded [] sTy (tmp 31)) NA _
+    rfl (pv := ps) (cv := lint 0)
+    (psym_eval hex (by emitted_frame) rest (by emitted_lookup))
+    (convLoaded_eval hstd (psym_eval hex (by emitted_frame) rest
+      (by emitted_lookup)) (by decide) (by decide))
+  iapply wpt_store _ _ _ sTy ps (lint 0) NA (emittedIntMval 0) _ _ (Nat.le_refl 3)
+    (int_encodes _ [Aloc (loc 29 32)] 0) (int_storable _ [Aloc (loc 29 32)] 0 (by decide) (by decide))
+  isplitl [Hs]
+  · iexact Hs
+  iintro %fpS Hs
+  simp only [SpikeVal.mergeInto]
+  have hsrc : SourceFrame pi ps
+      (envAdd (tmp 31) (lint 0) (envAdd (tmp 30) (lint 0)
+        (envAdd sSym (Vobject (OVpointer ps)) (envAdd iSym (Vobject (OVpointer pi)) f)))) := by
+    apply SourceFrame.add _ _ (by decide +kernel)
+    apply SourceFrame.add _ _ (by decide +kernel)
+    exact SourceFrame.params pi ps f hf
+  have hw := fun Ψ => wpt_whileEntry (GF := GF) (Ψ := Ψ) hstd hex hQ hsup _ rest pi ps hsrc
+  simp only [loopTail, seqE, wc] at hw
+  iapply hw _
+  isplitl [Hi]
+  · iexact Hi
+  iexact Hs
+
+theorem stdlib_data_eq : data.stdlib = CorpusA7.T1.data.stdlib := rfl
+
+theorem hasIntLibrary_restore (cmp : EmittedFile.Comparators)
+    (h : EmittedStdCore.intLibraryCheck cmp.stdlib = true) :
+    EmittedStdCore.HasIntLibrary (restoredFile cmp) :=
+  EmittedStdCore.hasIntLibrary_of_stdlib _ cmp.stdlib (by rw [← stdlib_data_eq]; rfl) h
+
+def entryRunState (cmp : EmittedFile.Comparators) (sup : Nat) : core_run_state :=
+  (initial_core_run_state sup (collect_labeled_continuations_NEW (restoredFile cmp))).1
+
+theorem entryRunState_main (cmp : EmittedFile.Comparators) (sup : Nat)
+    (h : labelUnionCheck cmp = true) :
+    fmapLookupBy symCmpL mainSym (entryRunState cmp sup).labeled = some Q := by
+  change fmapLookupBy symCmpL mainSym
+    (collect_labeled_continuations_NEW (restoredFile cmp)) = some Q
+  exact main_labels_of_check cmp h
+
+def entryCtx (cmp : EmittedFile.Comparators) (sup : Nat) : MachineCtx :=
+  { tagDefs := (restoredFile cmp).tagDefs, file := restoredFile cmp,
+    extern := runtimeExtern, tid := 0, parent := none, errno := errnoPtr,
+    runState := entryRunState cmp sup }
+
+def entryCtl (sup : Nat) : Ctl :=
+  ⟨[], some mainSym, ELoc_normal [(mainSym, CerbLocation.other "Driver.drive")],
+    CerbLocation.other "Driver.drive", ⟨sup, 0⟩⟩
+
+def entryThread : thread_state :=
+  { arena := mainBody, stack0 := Stack_empty, errno := errnoPtr,
+    current_loc := CerbLocation.other "Driver.drive",
+    exec_loc := ELoc_normal [(mainSym, CerbLocation.other "Driver.drive")],
+    env := [fmapEmpty], current_proc_opt := some mainSym }
+
+theorem entryCtx_labels (cmp : EmittedFile.Comparators) (sup : Nat)
+    (hQ : fmapLookupBy symCmpL mainSym (entryRunState cmp sup).labeled = some Q) :
+    (entryCtx cmp sup).labelsAt (entryCtl sup).proc = Q := by
+  change (match fmapLookupBy symCmpL (resolveExtern runtimeExtern mainSym)
+      (entryRunState cmp sup).labeled with
+    | some Q => Q
+    | none => fmapEmpty) = Q
+  rw [runtimeExtern_main, hQ]
+
+theorem entry_budget_fits :
+    allocCost fmapEmpty iTy 4 + allocCost fmapEmpty sTy 4 ≤
+      headroom prodMem₀.lastAddress := by
+  exact prod_two_int_budget_fits
+
+/-- The actual main's per-thread driver delivery. The checked library paths
+and collector union establish the file premises, including registration;
+the environment map is the one produced by actual startup. -/
+theorem mainBody_driver_done [LemFuel] (hfuel : 40 ≤ LemFuel.fuel)
+    (cmp : EmittedFile.Comparators) (sup : Nat) (hsup : 22 < sup)
+    (hstd : EmittedStdCore.intLibraryCheck cmp.stdlib = true)
+    (hlabels : labelUnionCheck cmp = true) :
+    DriverDoneAtExtern runtimeExtern mainSym Q (restoredFile cmp) entryThread
+      mainBody [fmapEmpty] (CerbLocation.other "Driver.drive") ⟨sup, 0⟩
+      prodMem₀ resultPost 915 := by
+  have hlbl := entryCtx_labels cmp sup (entryRunState_main cmp sup hlabels)
+  exact wpt_driver_done_alloc_extern (hfuel := by omega) (GF := SpikeGF)
+    (M₀ := entryCtx cmp sup) (ctl := entryCtl sup) (th₀ := entryThread)
+    (p := mainSym) (Q := Q) rfl hlbl rfl rfl rfl rfl (Nat.le_refl _)
+    (fun l params cont hl => by
+      rw [hlbl] at hl
+      exact Q_frag hl)
+    (fun l params cont hl => by
+      rw [hlbl] at hl
+      exact Q_depth hfuel hl)
+    (LsT SpikeGF fmapEmpty) mainBody fmapEmpty [] prodMem₀ (∅ : SpikeHeapF SpikeCell)
+    (allocCost fmapEmpty iTy 4 + allocCost fmapEmpty sTy 4) mainBody_frag (Nat.le_trans mainBody_evalDepth hfuel)
+    (prodMem₀_launchCoh _ entry_budget_fits) resultPost 915
+    (by
+      intro inst
+      rw [show (entryCtl sup).proc = some mainSym from rfl]
+      iintro ⟨-, Hcap⟩
+      isplitr [Hcap]
+      · have hb := blockSpecsT_main (GF := SpikeGF) (M := entryCtx cmp sup)
+          (p := some mainSym) (hasIntLibrary_restore cmp hstd) runtimeExtern_compare hlbl
+          (by change 22 < sup; exact hsup)
+        rw [show (entryCtx cmp sup).tagDefs = fmapEmpty from rfl] at hb
+        iapply hb
+      · have hw := wpt_main (GF := SpikeGF) (M := entryCtx cmp sup)
+          (p := some mainSym) (hfuel := by omega)
+          (hasIntLibrary_restore cmp hstd) runtimeExtern_compare hlbl
+          (by change 22 < sup; exact hsup) fmapEmpty [] symFrame_empty
+        rw [show (entryCtx cmp sup).tagDefs = fmapEmpty from rfl] at hw
+        iapply hw $$ Hcap)
+
+/-- Complete-file execution at the actual frontend supply. The checked
+file/library premises feed the public body proof and derived registration;
+startup, errno initialization, driver delivery and finalization are composed
+over the shipped semantics. -/
+theorem certified_production [LemFuel] (hfuel : 917 ≤ LemFuel.fuel)
+    (cmp : EmittedFile.Comparators)
+    (hstd : EmittedStdCore.intLibraryCheck cmp.stdlib = true)
+    (hmain : mainLookupCheck cmp.funs = true)
+    (hlabels : labelUnionCheck cmp = true)
+    (fs : CerbFS.FsState) (args : List String) :
+    ∃ (dres : driver_result) (dst' : driver_state),
+      CerbND.runND (_root_.drive (restoredFile cmp).tagDefs false (restoredFile cmp) args)
+          ((initial_driver_state frontendSupply (restoredFile cmp) fs).1) =
+        [(nd_status.Active dres, ([] : List String), dst')] ∧
+      dres.dres_core_value = lint 10 ∧
+      dres.dres_blocked = false ∧ dres.dres_stdout = "" ∧ dres.dres_stderr = "" := by
+  refine prod_run_eqJ_file (restoredFile cmp) (restoredFile_tagDefs cmp)
+    (restoredFile_globs cmp) mainSym (restoredFile_main cmp)
+    (locR 1 100 5 9) (some 20) intBty mainBody (restoredFile_mainLookup cmp hmain)
+    frontendSupply (Q := Q) ?_ resultPost 915 ?_ (by omega) fs args
+  · rw [restoredFile_extern, runtimeExtern_main]
+    exact entryRunState_main cmp frontendSupply hlabels
+  · rw [restoredFile_extern]
+    exact mainBody_driver_done (hfuel := by omega) cmp frontendSupply (by decide) hstd hlabels
+
+/-- Transfer the production equation to the original file and supply when
+the retained data and the original comparator checks agree. The executable
+frontend comparison tests this connection; it does not discharge these Lean
+equality premises or prove correctness of the IO frontend. -/
+theorem certified_production_of_capture_eq [LemFuel] (hfuel : 917 ≤ LemFuel.fuel)
+    (fallback : EmittedFile.Comparators) (F : file core_run_annotation) (sup : Nat)
+    (hdata : EmittedFile.captureData F = data) (hsup : sup = frontendSupply)
+    (hstd : EmittedStdCore.intLibraryCheck (EmittedFile.captureComparators fallback F).stdlib = true)
+    (hmain : mainLookupCheck (EmittedFile.captureComparators fallback F).funs = true)
+    (hlabels : labelUnionCheck (EmittedFile.captureComparators fallback F) = true)
+    (fs : CerbFS.FsState) (args : List String) :
+    ∃ (dres : driver_result) (dst' : driver_state),
+      CerbND.runND (_root_.drive F.tagDefs false F args) ((initial_driver_state sup F fs).1) =
+        [(nd_status.Active dres, ([] : List String), dst')] ∧
+      dres.dres_core_value = lint 10 ∧
+      dres.dres_blocked = false ∧ dres.dres_stdout = "" ∧ dres.dres_stderr = "" := by
+  subst sup
+  rw [← EmittedFile.restore_eq_of_data_eq fallback F data hdata]
+  exact certified_production hfuel (EmittedFile.captureComparators fallback F) hstd hmain hlabels fs args
 
 
 end CerberusHeapLang.CorpusA7.T4

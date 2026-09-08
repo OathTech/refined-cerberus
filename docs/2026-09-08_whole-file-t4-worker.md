@@ -1,6 +1,7 @@
 # Actual-file t4 worker record
 
-Status: IN PROGRESS, [AGENT 2026-09-08]. Scope and working practices are
+Status: IMPLEMENTED; parent integration and final review pending,
+[AGENT 2026-09-08]. Scope and working practices are
 `docs/2026-09-08_whole-file-corpus-charter.md` and `AGENTS.md`.
 Worker owns only the new T4 data, shape, exhibit modules and this record.
 No source in a sibling repository is modified. Heavy builds are serialized
@@ -83,3 +84,58 @@ thin `psym_eval` spelling bridge, transparent annotated-type abbreviations,
 and explicit local SymFrame projections. No judgment, mirror, semantics,
 rule limit or external premise change was needed. Allocation/initialization
 of the full main and the genuine-driver wrapper remain pending.
+
+
+The final implementation completes the full main allocation/initialization
+and the genuine driver and capture-transfer wrappers. The public
+`wpt_main` consumes allocation headroom and has total budget915;
+`certified_production` and `certified_production_of_capture_eq` quantify
+`[LemFuel]` with a sufficient lower bound917. These are upper bounds from
+the compositional total proof, not a tight step-count claim. The production
+statement starts at captured supply92 and covers arbitrary filesystem and
+argument inputs, singleton active return10, no block, empty trace/stdout/
+stderr. The original-file transfer retains full capture-data equality,
+supply equality and original library/main/label comparator checks. It does
+not assert correctness of the IO frontend or replace these premises with
+its executable comparison.
+
+The loop proof keeps the exact source types, allocation prefixes, save
+passing modes, all four registered continuation contexts and syntactic
+coverage of the complete body. Only the while and return labels require
+reachable total specifications for this source program; the continue and
+break continuation bodies are still independently covered by `Q_frag` and
+`Q_depth`. Heap ownership, decreasing iteration budget and signed integer
+range facts supply the loop's total correctness. Generic typed load,
+assignment and value-right unsequenced machinery come from
+`EmittedIntSupport`; source-specific comparison/truth and arithmetic
+adapters retain the actual emitted annotations and library calls.
+
+Final targeted check, caller observed exit0 and no new T4 warnings:
+
+```
+CERB_MEM_MAX=40G ../scripts/capped "$HOME/.elan/bin/lake" build CerberusHeapLang.EmittedT4Exhibit
+✔ [455/455] Built CerberusHeapLang.EmittedT4Exhibit (20s)
+Build completed successfully (455 jobs).
+```
+
+A separate capped `lake env lean` probe printed the exact axiom set
+`[propext, Classical.choice, Quot.sound]` for each of `mainBody_shape`,
+`mainBody_frag`, `Q_eq`, `Q_depth`, `blockSpecsT_main`, `wpt_main`,
+`certified_production` and `certified_production_of_capture_eq`; exit0.
+The parent owns permanent Audit/API/classification integration, a fresh
+complete-file comparison and independent final gate/review. The worker
+did not modify any shared integration surface, sibling repo, semantic
+judgment or frozen evaluator, and added no admitted proof or limit raise.
+
+Intermediate fast gate also passed, caller observed exit0:
+
+```
+CERB_MEM_MAX=40G scripts/test_unit.sh --fast
+CerberusHeapLang export pins: 925 trio-exact, 7 propext-exact, 7 axiom-free-exact
+Build completed successfully (491 jobs).
+FAST-GATE GREEN (gates 1-2 only — not a claim-point result; say fast-gate in the commit)
+```
+
+These pins cover the branch's existing root imports; the new T4 module was
+checked by the separate targeted build and axiom probe above. The parent
+will add permanent exact pins and run the independently integrated gate.
