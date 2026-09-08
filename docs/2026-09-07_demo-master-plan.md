@@ -57,8 +57,8 @@ load/assignment/literal-operand support has multiple actual consumers;
 the narrowly generalized assignment extern premise preserves the old
 statement as a specialization. T4 carries its decreasing loop invariant.
 
-This completes V1-1's four-program migration at option (b), subject to
-the candidate's external review. The loader/quoter/comparison boundary
+This completes V1-1's four-program migration at option (b).
+The loader/quoter/comparison boundary
 and option (a) stay explicit. The four old wrappers remain regressions
 with unchanged signatures. DERIVED current census: 17 shipped corollaries
 (13 existing plus four complete-file forms), four of ten C programs
@@ -69,11 +69,13 @@ work, package extraction and the scheduler/call arc remain separate.
 Full verification and exact signature comparison passed; the fresh
 [adversarial review](2026-09-08_review-whole-file-corpus.md) returned PASS
 after one prose correction. Evidence and disposition are in
-`docs/2026-09-08_whole-file-corpus-implementation.md`. This is a reviewed
-candidate whose external landing review returned PASS (A−), with no
-required proof fix. The user authorized landing after addressing findings;
-the [landing record](2026-09-08_whole-file-corpus-landing.md) owns that
-verification and status. No push is authorized.
+`docs/2026-09-08_whole-file-corpus-implementation.md`. The external landing
+review returned PASS (A−), with no required proof fix. On explicit user
+authorization, main fast-forwarded from `4bc0a98` to `2f6f2ab`; the full
+primary gate passed. The [landing record](2026-09-08_whole-file-corpus-landing.md)
+records review dispositions, verification and completed worktree cleanup.
+The closing docs commit preserves the verified implementation. No push
+was made or authorized.
 The baseline inventories below remain historical unless explicitly updated.
 
 ## 0. The definition of done ([USER 2026-09-07], verbatim)
@@ -318,10 +320,10 @@ landing; the branch refs retain provenance.
 
 2026-09-08 whole-file corpus landing disposition: the seven further refs
 below are **superseded records**, alongside the three t1 worker refs above.
-Their content was adopted into the completed whole-file slices. Preserve
-the refs for provenance; their clean, completed worktrees are scheduled
-for normal removal after the corpus landing. No unrelated worktree is
-included. The landing record reports the completed cleanup.
+Their content was adopted into the completed whole-file slices. The refs
+are retained for provenance; all seven clean, completed worktrees were
+removed normally after the corpus landing. No unrelated worktree was
+removed. The landing record reports the checks and completed cleanup.
 
 | branch | recorded head | disposition |
 |---|---|---|
@@ -428,7 +430,7 @@ Phase I.
 
 | item | what | owner | size | depends on | acceptance |
 |---|---|---|---|---|---|
-| **V1-1 the actual emitted file** (G4.1, A7; landing charter L3) | IMPLEMENTED at option (b), external review PASS and landing authorized: complete quoted t1/t5/t6/t4 files from the pinned Lean frontend on OCaml Cabs, retaining 110 stdlib and 6 impl entries, exact annotations/maps and actual runtime externs. Generic capture/comparator/driver machinery and shared annotated integer support; exact body/continuation proofs and total certificates. Original wrappers kept as regressions. Independent structural/quotation/supply comparisons and targeted perturbations run for all four. The loader/quoter boundary and kernel collector certificate are documented in ARCHITECTURE §3; option (a) remains open. | O | M (t1) + M (t4–t6) | R-4 settled for this bounded route; general frontend guarantees remain open | The four CorpusA7 production certificates drive their complete data terms, with original comparator checks and capture-transfer twins; full verification and range review in the cohort record above. |
+| **V1-1 the actual emitted file** (G4.1, A7; landing charter L3) | LANDED at option (b), external review PASS and full primary gate green: complete quoted t1/t5/t6/t4 files from the pinned Lean frontend on OCaml Cabs, retaining 110 stdlib and 6 impl entries, exact annotations/maps and actual runtime externs. Generic capture/comparator/driver machinery and shared annotated integer support; exact body/continuation proofs and total certificates. Original wrappers kept as regressions. Independent structural/quotation/supply comparisons and targeted perturbations run for all four. The loader/quoter boundary and kernel collector certificate are documented in ARCHITECTURE §3; option (a) remains open. | O | M (t1) + M (t4–t6) | R-4 settled for this bounded route; general frontend guarantees remain open | The four CorpusA7 production certificates drive their complete data terms, with original comparator checks and capture-transfer twins; full verification and range review in the cohort record above. |
 | **V1-2 `seq_rmw`** (G4.4; L4) | re-cut G4 without G3: engine arms mirrored, the mirror rule, the public rules, the `negFree → boundFree` premise change with its census; an emitted `i++` certified | O | M | V1-1 (file form) | a corpus or elaborator-transcribed `i++` program certified; PROVISIONAL dropped only if final |
 | **V1-3 docs for V1-1/2** | ARCHITECTURE §3/§7, README, CLAIMS (C6's "two residuals" → three), KOI A7 | O | S | V1-2 | cite check clean |
 | **V1-4 logic-quality Codex slices** (serialised, docs-only main while each runs): **4a symbol floor** (G1.1: the corrected D3+D4 — `FreshAbove`, program-derived bounds, all 18 old + 14 new supply-premise sites; spell T6's bound through `frontendSupply` and T5/T4's through source-symbol numbers; gate 1b extended to `600`; fences incl. `Audit.lean`, `EnvLaws.lean`, `Shipped.lean`, the gate scripts; G1.9's fuel floors in scope or exempted per §7.8); **4b symbolic int** (G1.6: corrected D2 — the two int-range premises copied verbatim from `wps_c_add`); **4c hygiene** (G1.8: C17/C14 dedupe; C5 warnings; G1.7's derived `while` rule over t4's idiom) | X | 4a M, 4b S, 4c S–M | V1-2 landed (so their baselines are final) | per charter; each a range audit |

@@ -1,9 +1,9 @@
 # Whole-file certificates for the supported C corpus
 
-Status: COMPLETE ON FEATURE BRANCH; internal and external reviews passed.
-The user has now authorized landing after review follow-ups; the
-[landing record](2026-09-08_whole-file-corpus-landing.md) owns verification
-and landing status. [AGENT 2026-09-08]. No push is authorized.
+Status: COMPLETE AND LANDED ON MAIN; internal/external reviews and full
+feature/primary gates passed. The authorized landing and review follow-ups
+are recorded in the [landing record](2026-09-08_whole-file-corpus-landing.md).
+[AGENT 2026-09-08]. No push was made or authorized.
 
 ## Authorization and baseline
 

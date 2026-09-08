@@ -4013,3 +4013,23 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   needed. Disposition and full feature/primary gate evidence belong in
   `docs/2026-09-08_whole-file-corpus-landing.md`. This per-merge authorization
   supersedes the earlier external-review pause; no push is authorized.
+
+- **2026-09-08 [AGENT] WHOLE-FILE CORPUS LANDED AND PRIMARY VERIFIED.**
+  Main fast-forwarded `4bc0a98..2f6f2ab` on the explicit authorization
+  above. Both feature and primary full capped gates passed, exit0:
+  `ALL GATES GREEN`. Exact pins remain 991 trio, 7 propext-only,
+  7 axiom-free; the banned-axiom sweep is clear, all four complete-file
+  comparisons and targeted negatives passed, and the warning baseline
+  remains 33 distinct demo lines (165 replay occurrences, DERIVED).
+  The landing changes only documentation, preserving the independently
+  reviewed source/API and 512-added / 0-removed / 0-changed signature census.
+  All seven newly superseded worker/reviewer/scout/t1 worktrees were
+  independently checked clean and removed normally, without force; their
+  refs remain at the heads registered in master-plan §2. The older three
+  t1 worker worktrees were already absent. Unrelated worktrees were retained.
+  Useful excerpts and F1–F5 dispositions are committed in
+  `docs/2026-09-08_whole-file-corpus-landing.md`. F1/F2's numeral-floor
+  cleanup remains explicitly owned by V1-4a; F4's optional repeated-log
+  cleanup is deferred. This closing commit is docs-only, authored in the
+  feature worktree for fast-forwarding to main. No provider/pin change,
+  push or tag occurred.
