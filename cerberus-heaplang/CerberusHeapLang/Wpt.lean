@@ -4857,14 +4857,14 @@ theorem wpt_bound_wseq_tuple {Ψ : SpikeVal → EnvStack → IProp GF} (an a pa 
     wildcard binder over `pure(Unit)` and `pure(per)` (4), the excluded store's
     EVAL and request (4), the unseq completion (3)) and the tail `{A}pure(s)`
     (3): SIXTEEN units. -/
-theorem wpt_neg_bound {Ψ : SpikeVal → EnvStack → IProp GF}
+theorem wpt_neg_bound_compare {Ψ : SpikeVal → EnvStack → IProp GF}
     (an a0 a1 a2 a3 pa : List annot) (ds : List dyn_annotation) (bty : core_base_type)
     (loc : CerbLocation.Loc) (ann : core_run_annotation) (ty : ctype)
     (pe2 pe3 per : generic_pexpr Unit sym) (mo : memory_order)
     (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (hf : SymFrame ev0)
     {pv : CerbMem.PointerValue} {cv vr : value} (mv : CerbMem.MemValue) (bs : List CerbMem.AbsByte)
     {k : Nat} (hk : 16 ≤ k)
-    (hex : ∀ x, resolveExtern M.extern x = x)
+    (hex : ∀ x, symCmpK (resolveExtern M.extern x) x = .EQ)
     (hnv : valueFromPexprs [pe2, pe3] = none)
     (hv2 : evalPexpr M.tagDefs M.extern M.file (ev0 :: evs) pe2 = some (Vobject (OVpointer pv)))
     (hv3 : evalPexpr M.tagDefs M.extern M.file (ev0 :: evs) pe3 = some cv)
@@ -4957,10 +4957,38 @@ theorem wpt_neg_bound {Ψ : SpikeVal → EnvStack → IProp GF}
   rw [update_env_tuple_wild_sym]
   iapply wpt_annot (k := 2)
   iapply wpt_pure (Pexpr [] () (PEsym (fresh_given_int k'))) _ (Nat.le_refl 2) rfl (by
-    rw [evalPexpr_sym_of_resolve _ _ _ (hex _)]
-    exact lookup_env_head (by rw [envAdd_lookup hf symCmpK, if_pos (symOrd_self _)]) evs)
+    exact evalPexpr_sym_of_compare M.tagDefs (hf.add _ _) evs [] (hex _)
+      (by rw [envAdd_lookup hf symCmpK, if_pos (symOrd_self _)]))
   simp only [SpikeVal.merge, SpikeVal.val]
   iapply HΨ $$ %(fresh_given_int k') %⟨k', rfl, hk'⟩ Hpt'
+
+/-- The original constructor-identity assignment rule specializes the
+comparison-based rule, preserving its public contract. -/
+theorem wpt_neg_bound {Ψ : SpikeVal → EnvStack → IProp GF}
+    (an a0 a1 a2 a3 pa : List annot) (ds : List dyn_annotation) (bty : core_base_type)
+    (loc : CerbLocation.Loc) (ann : core_run_annotation) (ty : ctype)
+    (pe2 pe3 per : generic_pexpr Unit sym) (mo : memory_order)
+    (ev0 : Fmap sym value) (evs : List (Fmap sym value)) (hf : SymFrame ev0)
+    {pv : CerbMem.PointerValue} {cv vr : value} (mv : CerbMem.MemValue) (bs : List CerbMem.AbsByte)
+    {k : Nat} (hk : 16 ≤ k)
+    (hex : ∀ x, resolveExtern M.extern x = x)
+    (hnv : valueFromPexprs [pe2, pe3] = none)
+    (hv2 : evalPexpr M.tagDefs M.extern M.file (ev0 :: evs) pe2 = some (Vobject (OVpointer pv)))
+    (hv3 : evalPexpr M.tagDefs M.extern M.file (ev0 :: evs) pe3 = some cv)
+    (hnvr : valueFromPexpr per = none)
+    (hvr : evalPexpr M.tagDefs M.extern M.file (ev0 :: evs) per = some vr)
+    (hmv : memValueFromValue M.tagDefs (Ctype [] (unatomic_ ty)) cv = some mv)
+    (hst : StorableAt M.tagDefs ty mv) :
+    iprop(pointsToCell M.tagDefs (GF := GF) pv (.own 1) ty bs ∗
+      (∀ (s : sym), ⌜∃ k, s = fresh_given_int k ∧ M.runState.sym_supply ≤ k⌝ -∗
+        pointsToCell M.tagDefs pv (.own 1) ty (CerbMem.memValueToBytes M.tagDefs [] mv).2 -∗
+        Ψ (SpikeVal.pure vr) (envAdd s vr ev0 :: evs))) ⊢
+      wpt M p Ls Θ k Ψ (Expr an (Ebound (negAssignBody a0 a1 a2 a3 pa ds bty loc ann ty pe2 pe3 per mo)))
+        (ev0 :: evs) := by
+  apply wpt_neg_bound_compare an a0 a1 a2 a3 pa ds bty loc ann ty pe2 pe3 per mo
+    ev0 evs hf mv bs hk (fun x => ?_) hnv hv2 hv3 hnvr hvr hmv hst
+  rw [hex]
+  exact symCmpK_laws.refl _
 
 /-- An unsequenced pair whose right operand is pure. The driver's
     right-first order evaluates that operand without changing the frame.

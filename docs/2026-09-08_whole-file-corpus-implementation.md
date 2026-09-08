@@ -38,3 +38,35 @@ The proposal and t5 scout were adopted from the separate scout branch
 `2f180e8`; fresh t4/t6 JSON reports are preserved under
 `docs/evidence/2026-09-08_whole-file-expansion/`. They establish executable
 feasibility, not the new theorems. Pre-launch review precedes source work.
+
+## Shared support checkpoint
+
+Pre-launch review `bf88f83` (adopted as `8299988`) is PASS with Notes;
+the charter clarification at `f6045fd` records arbitrary fs/arguments.
+The comparison-based `wpt_neg_bound_compare` replaces the sole strong
+extern-identity use with a checked frame lookup. The old theorem is a
+specialization with its signature preserved. `EmittedIntSupport` adds a
+typed, fully annotated binder/load rule at arbitrary fraction and exact
+footprint; a signed-int assignment face with evaluated operands; annotated
+integer memory facts and symbol evaluation. Existing t1 now consumes the
+common symbol/type facts with unchanged theorem statements.
+
+Targeted module builds passed; six public interfaces were measured to
+have the exact classical trio and added to Audit. The subsequent full
+library fast gate passed. Selected verbatim output:
+
+```text
+info: CerberusHeapLang/Audit.lean:1160:0: CerberusHeapLang export pins: 924 trio-exact, 7 propext-exact, 7 axiom-free-exact
+info: CerberusHeapLang/Audit.lean:1160:0: CerberusHeapLang axiom sweep: every theorem bounded by the trio (6829 swept, internal details included — count informational, environment-dependent)
+info: CerberusHeapLang/Audit.lean:1160:0: CerberusHeapLang banned-axiom sweep: sorryAx/ofReduceBool/ofReduceNat absent from all cones (10276 constants of every kind swept, internal details included — count informational, environment-dependent)
+FAST-GATE GREEN (gates 1-2 only — not a claim-point result; say fast-gate in the commit)
+```
+
+Logs: `shared-fast-gate.log`, `shared-axioms.log`, `int-support.log`,
+`wpt-compare-4.32.2.log` in the root evidence directory. A first targeted
+invocation incorrectly ran Lake from the repo root with `--dir`, selecting
+the machine's4.33 toolchain; it failed in dependencies and was interrupted.
+Its caches were moved aside, correct caches restored from verified main,
+the pinned workspace rechecked, and all successful builds above ran from
+the package directory at4.32.2. No wrong-toolchain result is counted as
+evidence; no source pin or sibling repository changed.

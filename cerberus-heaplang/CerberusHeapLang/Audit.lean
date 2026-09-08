@@ -245,6 +245,7 @@ import CerberusHeapLang.EmittedBExhibit
 import CerberusHeapLang.EmittedCExhibit
 import CerberusHeapLang.CorpusT1Exhibit
 import CerberusHeapLang.EmittedT1Exhibit
+import CerberusHeapLang.EmittedIntSupport
 import CerberusHeapLang.CorpusT5Exhibit
 import CerberusHeapLang.CorpusT6Exhibit
 import CerberusHeapLang.CorpusT4Exhibit
@@ -1115,7 +1116,14 @@ def trioExports : List Name := [
   ``CerberusHeapLang.t5_certified_production_shipped,
   ``CerberusHeapLang.t6_certified_production_shipped,
   ``CerberusHeapLang.peDepth_subst,
-  ``CerberusHeapLang.evalDepth_subst]
+  ``CerberusHeapLang.evalDepth_subst,
+  -- Whole-file corpus: generic actual-extern and annotated integer support.
+  ``CerberusHeapLang.wpt_neg_bound_compare,
+  ``CerberusHeapLang.EmittedIntSupport.wpt_boundLoad,
+  ``CerberusHeapLang.EmittedIntSupport.wpt_intAssign,
+  ``CerberusHeapLang.EmittedIntSupport.symbol_eval,
+  ``CerberusHeapLang.EmittedIntSupport.int_storable,
+  ``CerberusHeapLang.EmittedIntSupport.update_sym]
 
 /-- Whole-file representation proofs use propositional extensionality through
 `simp` and induction, without choice or quotient soundness. Preserve that

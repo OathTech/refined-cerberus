@@ -27,6 +27,7 @@ import CerberusHeapLang.ProdEntry
 import CerberusHeapLang.EmittedFile
 import CerberusHeapLang.EmittedMapChecks
 import CerberusHeapLang.EmittedStdCore
+import CerberusHeapLang.EmittedIntSupport
 import CerberusHeapLang.ProdExhibit
 import CerberusHeapLang.ProdLoopExhibit
 import CerberusHeapLang.LoopExhibit

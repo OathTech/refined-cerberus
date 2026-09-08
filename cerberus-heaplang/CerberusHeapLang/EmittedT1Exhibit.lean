@@ -1,7 +1,7 @@
 /- Public-rule proof and complete-file production execution for actual t1.
    File quotation, supply and comparator checks remain the explicit boundary. -/
 import CerberusHeapLang.Examples.EmittedT1
-import CerberusHeapLang.Examples.EmittedInt
+import CerberusHeapLang.EmittedIntSupport
 import CerberusHeapLang.ProdEntry
 
 set_option autoImplicit false
@@ -163,7 +163,7 @@ theorem symbol_eval [LemFuel] {M : MachineCtx}
     {x : sym} {f : Fmap sym value} {v : value} (hf : SymFrame f)
     (rest : EnvStack) (hl : fmapLookupBy symCmpK x f = some v) :
     evalPexpr M.tagDefs M.extern M.file (f :: rest) (psym x) = some v :=
-  evalPexpr_sym_of_compare M.tagDefs hf rest [] (hex x) hl
+  EmittedIntSupport.symbol_eval hex hf rest [] hl
 
 theorem returnSpec_valid [LemFuel] [SpikeGS .hasLC GF]
     {M : MachineCtx} {p : Option sym} (hex : ∀ x, symCmpK (resolveExtern M.extern x) x = .EQ)
@@ -198,14 +198,14 @@ private theorem three_fromMemValue : (valueFromMemValue threeMval).2 = lint 3 :=
 private theorem t1_four_fromMemValue : (valueFromMemValue t1FourMval).2 = lint 4 := rfl
 
 theorem int_size (ta : List annot) {tds : CerbTags.TagDefsMap} :
-    CerbMem.sizeofCtype tds (sintTyAnn ta) = 4 := rfl
+    CerbMem.sizeofCtype tds (sintTyAnn ta) = 4 := EmittedIntSupport.int_size ta
 theorem int_align [LemFuel] (ta : List annot) {tds : CerbTags.TagDefsMap} :
-    CerbMem.alignofIval tds (sintTyAnn ta) = .IV .Prov_none 4 := rfl
-theorem int_nonatomic (ta : List annot) : atomicTy (sintTyAnn ta) = false := rfl
+    CerbMem.alignofIval tds (sintTyAnn ta) = .IV .Prov_none 4 := EmittedIntSupport.int_align ta
+theorem int_nonatomic (ta : List annot) : atomicTy (sintTyAnn ta) = false := EmittedIntSupport.int_nonatomic ta
 theorem int_size_pos (ta : List annot) {tds : CerbTags.TagDefsMap} :
-    0 < CerbMem.sizeofCtype tds (sintTyAnn ta) := by rw [int_size]; decide
+    0 < CerbMem.sizeofCtype tds (sintTyAnn ta) := EmittedIntSupport.int_size_pos ta
 theorem int_decIndep (ta : List annot) {tds : CerbTags.TagDefsMap}
-    (a : Int) (bs : List CerbMem.AbsByte) : decIndep tds a (sintTyAnn ta) bs := fun _ _ => rfl
+    (a : Int) (bs : List CerbMem.AbsByte) : decIndep tds a (sintTyAnn ta) bs := EmittedIntSupport.int_decIndep ta a bs
 
 theorem int_three_storable (tds : CerbTags.TagDefsMap) (ta : List annot) :
     StorableAt tds (sintTyAnn ta) threeMval :=

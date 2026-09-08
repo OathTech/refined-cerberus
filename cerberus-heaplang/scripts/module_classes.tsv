@@ -90,3 +90,4 @@ CerberusHeapLang.EmittedStdCore	example-support	-	actual emitted integer-library
 CerberusHeapLang.Examples.EmittedT1Data	example-support	-	complete generated t1 file data; checked against the pinned frontend with original comparators retained separately
 CerberusHeapLang.Examples.EmittedT1	example-support	-	actual t1 main projected from the complete file data, exact readable shape and whole-body fragment membership
 CerberusHeapLang.EmittedT1Exhibit	positive-client	-	actual t1 total public proof and complete-file production at frontend supply 36 and ambient fuel at least 50, under explicit data and comparator checks
+CerberusHeapLang.EmittedIntSupport	example-support	-	typed annotated load and assignment rules with actual extern key comparison; shared emitted integer memory facts
