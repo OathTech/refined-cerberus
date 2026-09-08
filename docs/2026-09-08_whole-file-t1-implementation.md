@@ -69,3 +69,79 @@ Build completed successfully (490 jobs).
 ok: cerberus-heaplang build green
 FAST-GATE GREEN (gates 1-2 only — not a claim-point result; say fast-gate in the commit)
 ```
+
+The parent independently ran `CERB_MEM_MAX=40G scripts/check-emitted-t1.sh`
+after integration; exit 0. Verbatim result lines:
+
+```text
+emitted-file data round-trip: independent structural data, quotation and supply match
+ok: emitted-file comparison — all three captured-comparator checks pass on the compared instance
+ok: emitted-file negative check — main := none rejected by structural and quotation comparisons
+ok: emitted-file negative check — frontendSupply + 1 rejected by supply comparison
+ok: whole-file t1 — metadata, all three comparator checks and singleton return 4 checked
+ok: whole-file t1 — independent structural data, quotation, supply and negative checks passed
+```
+
+All nine structural regressions also passed: reflexivity, changed main,
+the provider equality's ignored nested annotation, that annotation retained
+through its enclosing constructors, map height, absent versus present-empty
+map, Float signed zero, NaN reflexivity, and adjacent finite mantissa bits.
+The comparator uses observed `Float.toBits`; this runtime canonicalizes the
+NaN payloads produced by `Float.ofBits`, so no payload-retention claim is made.
+
+A separate reuse experiment generated fresh Cabs for
+`docs/corpus-e0/t5_ifelse.c` with the same read-only OCaml driver and ran:
+
+```sh
+CERB_MEM_MAX=40G scripts/inspect-emitted-file.sh \
+  .lake/whole-file-evidence/reuse/t5.cabs.json \
+  .lake/whole-file-evidence/reuse/t5.json 1000 \
+  .lake/whole-file-evidence/reuse/T5Data.lean CerberusHeapLang.CaptureReuseT5
+```
+
+Exit 0: generated data elaborated and passed independent structural,
+quotation, supply, and same-instance comparator checks. The diagnostic
+report observed frontend supply 47, startup supply 48, and the singleton
+Active `Specified(1)` with empty trace/output, unblocked. This exercises
+reuse of the tool with a different program and namespace. It adds no t5
+whole-file theorem; generated scratch remains ignored.
+
+## Signature and scope comparison
+
+The capped `scripts/signature_snapshot.lean` ran against the green
+baseline and final proof source. Snapshots are
+`cerberus-heaplang/docs/2026-09-08_whole-file-{baseline,final}.txt`; detailed
+name census: `2026-09-08_whole-file-signature-census.txt` beside them.
+
+DERIVED: 5,227 baseline declarations, 5,569 final; **342 added, zero removed,
+zero changed**. Besides the repository census, a strict comparison of every
+existing complete printed block (without binder or whitespace normalization)
+also finds zero changed blocks. Thus the original wrapper, old launchers,
+public fragment boundaries and other program contracts are preserved.
+The snapshot excludes internal-detail names; the axiom sweep includes them.
+
+The additions split by namespace/role (DERIVED, names in the census):
+
+| role | additions |
+|---|---:|
+| generic capture and finite-map machinery | 83 |
+| generic extern/driver support | 20 |
+| captured-library adapter | 77 |
+| t1 data, body, proof and shipped consumer | 159 |
+| exact-axiom audit category | 1 |
+| dependency equation lemmas realized in the package | 2 |
+
+The last two are `Pmap.mergeGo.eq_def` and `Pmap.split.eq_def`; no provider
+file changed. The frozen files (`Step`, `Wps`, `Wpt`, `Soundness`, `Heap`,
+`Rules`, `Fragment`), dependency pins and other program proofs have no diff
+from main `7040406`. Only the old corpus table's explanatory comment changes.
+
+## Phase C — claims and independent review
+
+Claim documents adopted from worker `2f3f677` as `e904b9c`, including the
+R-4 bounded producer disposition and the F-5 distinction between the pure
+Impl fallback and the manifest's procedure call. The full-file certificate
+uses representable integers, so it needs no new Impl procedure rule.
+A7 is partial: option (b) for t1 is the claim; other corpus files and the
+elaborator-in-statement target remain open. Full gate and fresh range-review
+verdicts follow at completion.

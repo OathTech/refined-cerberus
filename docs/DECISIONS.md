@@ -3886,3 +3886,42 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   scope, the comparator-closure reason for quoting `cmp` stated, five
   landings not four, the monotonicity gloss marked as ours. The reviewer's
   revision-2 section is committed in its report.
+
+- **2026-09-08 [USER] WHOLE-FILE T1 EXECUTION AUTHORIZED**, working session:
+  "Great, can you set this up as a goal and execute on it in a worktree.
+  Make sure to follow the working practices from the repo docs. While
+  working on the feature branch, you do not need to check in with the user,
+  but do not merge to the main branch without user signoff."
+  [AGENT] Active charter: `docs/2026-09-07_whole-file-t1-charter.md`, under
+  the accepted generic-machinery proposal `969281f`. Branch
+  `demo-whole-file-t1`, based on main `7040406` through the proposal and
+  charter commits. No merge or push authorized. The bounded R-4 disposition
+  is the pinned Lean frontend consuming fresh OCaml Cabs, one TU/no libc;
+  the t1 whole-file identity connection uses option (b), executable comparison.
+  The elaborator in the theorem (option (a)), other corpus files, and general
+  frontend/provider correctness guarantees remain open. This does not
+  ratify the master plan's other pending operator decisions.
+- **2026-09-08 [AGENT] WHOLE-FILE T1 PROOF AND COMPARISON**, implementation
+  record `docs/2026-09-08_whole-file-t1-implementation.md`. Generic capture/
+  reconstruction retains every file field and map representation, with
+  comparator functions separate; finite-operation checks transfer those
+  actual comparators. The driver lane now retains the actual extern map,
+  with current syntactic `Frag` and separate `evalDepth` public interfaces;
+  existing empty-extern contracts specialize it. `EmittedStdCore` remains
+  captured-library-specific support, not a fixture-independent rule layer.
+  `CorpusA7.T1.certified_production` proves the complete captured t1 file
+  returns the sole Active `lint 4`, unblocked and with empty output, at
+  the recorded frontend supply 36 and every execution fuel at least 50,
+  under the three original-comparator checks. `_of_capture_eq` states the
+  original-file transfer premises. The additive `_shipped` corollary leaves
+  the original wrapper export intact as a labelled regression. No provider
+  edits or re-pin; no scheduler/call/dialect extension.
+  The parent independently re-ran the complete-file speedbump successfully:
+  fresh Cabs, structural constructor comparison independent of quotation,
+  supply, three comparator checks on the compared frontend instance, and
+  the intended main/supply negative results. Tool-only equality instances
+  retain nested annotations, tree heights and observed Float bits; they are
+  absent from the logic library. The kernel audit asserts actual exact
+  subsets of the existing trio (including new propext-only representation
+  proofs), without new boundary axioms. The final gate/range review and
+  signature classification are recorded in the implementation record.
