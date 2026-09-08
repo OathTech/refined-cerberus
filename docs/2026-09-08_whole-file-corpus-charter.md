@@ -1,9 +1,9 @@
 # Whole-file certificates for the supported C corpus
 
-Status: COMPLETE ON FEATURE BRANCH; full baseline/final verification and
-fresh adversarial final review passed. Paused for external review.
-[AGENT 2026-09-08]. This charter makes the user's autonomous execution
-request concrete; it does not authorize a merge or push.
+Status: COMPLETE ON FEATURE BRANCH; internal and external reviews passed.
+The user has now authorized landing after review follow-ups; the
+[landing record](2026-09-08_whole-file-corpus-landing.md) owns verification
+and landing status. [AGENT 2026-09-08]. No push is authorized.
 
 ## Authorization and baseline
 
@@ -131,7 +131,7 @@ versus captured-library contracts; fixed frontend capture versus all-fuel
 execution. Baseline full gate is green and the 5,569-declaration snapshot
 is byte-identical to t1's final surface. Source implementation may start.
 
-## Completion and external-review handoff
+## Initial completion and external-review handoff
 
 All six required results are delivered. The implementation record retains
 the full verification evidence and exact signature census: 512 additions,

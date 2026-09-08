@@ -70,7 +70,10 @@ Full verification and exact signature comparison passed; the fresh
 [adversarial review](2026-09-08_review-whole-file-corpus.md) returned PASS
 after one prose correction. Evidence and disposition are in
 `docs/2026-09-08_whole-file-corpus-implementation.md`. This is a reviewed
-candidate paused for external review; no merge or push is authorized.
+candidate whose external landing review returned PASS (A−), with no
+required proof fix. The user authorized landing after addressing findings;
+the [landing record](2026-09-08_whole-file-corpus-landing.md) owns that
+verification and status. No push is authorized.
 The baseline inventories below remain historical unless explicitly updated.
 
 ## 0. The definition of done ([USER 2026-09-07], verbatim)
@@ -313,6 +316,23 @@ on `demo-whole-file-t1`; the comparator branch's older base is not a merge
 candidate. Their clean worker worktrees were removed after the authorized
 landing; the branch refs retain provenance.
 
+2026-09-08 whole-file corpus landing disposition: the seven further refs
+below are **superseded records**, alongside the three t1 worker refs above.
+Their content was adopted into the completed whole-file slices. Preserve
+the refs for provenance; their clean, completed worktrees are scheduled
+for normal removal after the corpus landing. No unrelated worktree is
+included. The landing record reports the completed cleanup.
+
+| branch | recorded head | disposition |
+|---|---|---|
+| `worker-whole-corpus-charter` | `bf88f83` | pre-launch review adopted |
+| `worker-whole-corpus-t4` | `2584247` | complete T4 proof adopted |
+| `worker-whole-corpus-t5` | `5f2c045` | complete T5 proof adopted |
+| `worker-whole-corpus-t6` | `eaf2e15` | complete T6 proof adopted |
+| `review-whole-file-corpus` | `33c5577` | final adversarial review adopted |
+| `scout-next-whole-file-slice` | `2f180e8` | scout and proposal adopted |
+| `demo-whole-file-t1` | `4bc0a98` | landed t1 slice, already an ancestor of main |
+
 Filed requests to the semantics side and their state: the companion
 register §3.
 
@@ -325,7 +345,7 @@ Severity: **D** would be called disqualifying for "good and complete";
 
 | # | gap | sev | closes at |
 |---|---|---|---|
-| G1.1 | the numeral `600` as the symbol-supply floor in 18 statement sites (15 `hsup : 600 ≤ …` premises — T4 10, T5 2, T6 3 — + 3 `600 ≤ sup →` in Shipped.lean) — a magic value in root-of-trust statements, against [USER 2026-09-03] no-magic-values; the rules expose the engine's symbol-generation scheme at the client interface (B19, B20). G2's `frontendSupply` is a captured literal (`36`) checked by a round-trip, not a derivation — V1-4a must cover it too | V | V1-4a |
+| G1.1 | the numeral `600` as the symbol-supply floor in 18 statement sites (15 `hsup : 600 ≤ …` premises — T4 10, T5 2, T6 3 — + 3 `600 ≤ sup →` in Shipped.lean) — a magic value in root-of-trust statements, against [USER 2026-09-03] no-magic-values; the rules expose the engine's symbol-generation scheme at the client interface (B19, B20). G2's `frontendSupply` is captured data checked by a round-trip, not a derivation. Post-cohort update: fourteen further pinned helper premises use `22 < …` / `51 ≤ …`; the current class is 18 + 14 = 32 sites, detailed below. V1-4a covers these and the captured-supply spelling | V | V1-4a |
 | G1.2 | **no logical-variable index on `ProcSpec`** (Wps.lean:130: pre and post share only the argument values; `reverse(p)` with `list p xs`/`list ret (rev xs)` is not statable — Lane C §1.4). For a Reynolds/O'Hearn logic WITH procedures this is the classical Hoare-logic ingredient, not a "fancy feature" | V (the review would grade it toward D for "complete") | V2-2 as recorded; this plan RECOMMENDS pulling Lane C option (i) into V1 (§7.4) |
 | G1.3 | negative results are measurements (B16): no must-reach-UB judgment | V | V1-5 |
 | G1.4 | the empty tag-definitions premise on every adequacy export (B4; 37 sites) and the empty extern map (38 sites): no structs, no externs | V for "complete", N for the covered fragment | V2-3 (D8); the extern premise is answered by G2's `runtimeExtern` route at V1-1 |
@@ -333,14 +353,26 @@ Severity: **D** would be called disqualifying for "good and complete";
 | G1.6 | symbolic-int storability proved at the literal 3 only (B15) | N | V1-4b |
 | G1.7 | loops are label loops (`save`/`run`), not `while` — Core IS label-based; the reviewer-facing answer is a DERIVED `while` rule stated once over the emitted `while` idiom (t4's shape), not prose alone | N → V after the derived rule | V1-4c (the rule) + V1-6 (the prose) |
 | G1.8 | duplication and consumerless declarations (C17, C14) | N | V1-4c |
-| G1.9 | **numeral fuel floors** in every root-of-trust statement (`hfuel : 50/917/90/80 ≤ LemFuel.fuel`): principled (FUEL.md §3: the certified round count plus two) but hand-derived numerals in statements — the same class as `600` under the no-magic-values ruling (why is `917` not a named cost by `rfl`?) | V | V1-4a's scope, or an explicit exemption recorded in FUEL.md (§7.8) |
+| G1.9 | **numeral fuel floors** in every root-of-trust statement (`hfuel : 50/917/90/80 ≤ LemFuel.fuel`): principled (FUEL.md §3: the certified round count plus two) but hand-derived numerals in statements — the same class as `600` under the no-magic-values ruling (why is `917` not a named cost by `rfl`?). The new complete-file exports retain the same 50/90/80/917 sufficient-cost class; include them in the named-cost restatement | V | V1-4a's scope, or an explicit exemption recorded in FUEL.md (§7.8) |
 
 V1-1b disposition of the t1 landing review's F6: the live census is still
 18 `600` code sites (15 named hsup premises, including the partial
 corollary, plus three shipped premises). All remain in the retained
 wrappers. The new equations use captured supplies and local source-cell
-non-collision facts. V1-4a still owns old-API and named-cost work; this
-additive migration does not remove those premises or settle that scope.
+non-collision facts. The corpus landing review's F1/F2 adds fourteen new
+pinned premise sites to G1.1's class: T5 two and T4 nine use `22 < …`,
+the maximum number of their two live source-pointer symbols; T6 three use
+`51 ≤ …`, duplicating its captured `frontendSupply`. DERIVED total:
+18 old + 14 new = 32 numeral supply-floor premise sites. The complete-file
+root-of-trust equations discharge these helper premises at the captured
+supplies and introduce no new floor premise themselves. V1-4a must include
+all fourteen, preferring source-symbol-derived bounds for T5/T4 and
+`frontendSupply ≤ …` for T6. Its G1.9 cost work also includes the new
+complete-file exports' sufficient fuel bounds 50/90/80/917; no exemption is
+inferred from this landing. Gate 1b currently checks selected fuel numerals,
+not these supply floors. The [landing record](2026-09-08_whole-file-corpus-landing.md)
+retains the source census and disposition. This additive migration does
+not remove the old premises or close V1-4a.
 
 ### 3.2 Criterion 2 — the iris layer
 
@@ -396,10 +428,10 @@ Phase I.
 
 | item | what | owner | size | depends on | acceptance |
 |---|---|---|---|---|---|
-| **V1-1 the actual emitted file** (G4.1, A7; landing charter L3) | IMPLEMENTED at option (b), external review pending: complete quoted t1/t5/t6/t4 files from the pinned Lean frontend on OCaml Cabs, retaining 110 stdlib and 6 impl entries, exact annotations/maps and actual runtime externs. Generic capture/comparator/driver machinery and shared annotated integer support; exact body/continuation proofs and total certificates. Original wrappers kept as regressions. Independent structural/quotation/supply comparisons and targeted perturbations run for all four. The loader/quoter boundary and kernel collector certificate are documented in ARCHITECTURE §3; option (a) remains open. | O | M (t1) + M (t4–t6) | R-4 settled for this bounded route; general frontend guarantees remain open | The four CorpusA7 production certificates drive their complete data terms, with original comparator checks and capture-transfer twins; full verification and range review in the cohort record above. |
+| **V1-1 the actual emitted file** (G4.1, A7; landing charter L3) | IMPLEMENTED at option (b), external review PASS and landing authorized: complete quoted t1/t5/t6/t4 files from the pinned Lean frontend on OCaml Cabs, retaining 110 stdlib and 6 impl entries, exact annotations/maps and actual runtime externs. Generic capture/comparator/driver machinery and shared annotated integer support; exact body/continuation proofs and total certificates. Original wrappers kept as regressions. Independent structural/quotation/supply comparisons and targeted perturbations run for all four. The loader/quoter boundary and kernel collector certificate are documented in ARCHITECTURE §3; option (a) remains open. | O | M (t1) + M (t4–t6) | R-4 settled for this bounded route; general frontend guarantees remain open | The four CorpusA7 production certificates drive their complete data terms, with original comparator checks and capture-transfer twins; full verification and range review in the cohort record above. |
 | **V1-2 `seq_rmw`** (G4.4; L4) | re-cut G4 without G3: engine arms mirrored, the mirror rule, the public rules, the `negFree → boundFree` premise change with its census; an emitted `i++` certified | O | M | V1-1 (file form) | a corpus or elaborator-transcribed `i++` program certified; PROVISIONAL dropped only if final |
 | **V1-3 docs for V1-1/2** | ARCHITECTURE §3/§7, README, CLAIMS (C6's "two residuals" → three), KOI A7 | O | S | V1-2 | cite check clean |
-| **V1-4 logic-quality Codex slices** (serialised, docs-only main while each runs): **4a symbol floor** (G1.1: the corrected D3+D4 — `FreshAbove`, a program-derived bound, the 18 sites, gate 1b extended to `600`; fences incl. `Audit.lean`, `EnvLaws.lean`, `Shipped.lean`, the gate scripts; G1.9's fuel floors in scope or exempted per §7.8); **4b symbolic int** (G1.6: corrected D2 — the two int-range premises copied verbatim from `wps_c_add`); **4c hygiene** (G1.8: C17/C14 dedupe; C5 warnings; G1.7's derived `while` rule over t4's idiom) | X | 4a M, 4b S, 4c S–M | V1-2 landed (so their baselines are final) | per charter; each a range audit |
+| **V1-4 logic-quality Codex slices** (serialised, docs-only main while each runs): **4a symbol floor** (G1.1: the corrected D3+D4 — `FreshAbove`, program-derived bounds, all 18 old + 14 new supply-premise sites; spell T6's bound through `frontendSupply` and T5/T4's through source-symbol numbers; gate 1b extended to `600`; fences incl. `Audit.lean`, `EnvLaws.lean`, `Shipped.lean`, the gate scripts; G1.9's fuel floors in scope or exempted per §7.8); **4b symbolic int** (G1.6: corrected D2 — the two int-range premises copied verbatim from `wps_c_add`); **4c hygiene** (G1.8: C17/C14 dedupe; C5 warnings; G1.7's derived `while` rule over t4's idiom) | X | 4a M, 4b S, 4c S–M | V1-2 landed (so their baselines are final) | per charter; each a range audit |
 | **V1-5 kill adequacy** (G1.3, B16) | per the design note's decisions (§7.2; note §6 (a)–(e)): option A — the must-reach-UB judgment `wpu` with a pure-evaluation kill terminal, its OWN structural rules for every construct on the overflow path (the E3 integer faces, `bound`, `unseq`, the binders), `DriverKilledAt`, `wpu_driver_killed_alloc`, `wpu_certified_killed` replacing the measurement | X (after the design is fixed with the operator) | M–L, own stop-and-report | operator decisions; V1-4a (the floor appears in the statements) | the whole-run kill is a theorem over the pipeline at every fuel above the floor |
 | **V1-6 the exit review and the tag** | (i) `cite_check.sh` into the gate (§7.3); (ii) the docs pass: G1.7's answer with the derived rule, the conjunction/existential line in the rule table, the 40 % no-rule figure stated, the sequential-one-thread property stated on every surface, the boundary of the tag stated as "emitted Core, call-free" if §7.1 is adopted, `refinedc/dev` wording, the synthetic exhibits' role, CLAIMS C6; (iii) a FRESH full ARCHITECTURE review (new reviewer) with G2.4 (the two adequacy routes) as a named question; (iv) **the PL-expert review**: a fresh reviewer briefed with §0's four criteria and this document, asked what a competent separation-logic referee would find missing or wrong — PASS = no D-severity finding; (v) the tag | O | M | V1-1 … V1-5 | the review report committed; the tag |
 

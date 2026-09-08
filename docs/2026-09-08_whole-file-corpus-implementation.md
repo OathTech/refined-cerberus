@@ -1,10 +1,12 @@
 # Whole-file corpus implementation record
 
-Status: REVIEWED MERGE CANDIDATE on `demo-whole-file-corpus`, main baseline
-`4bc0a98`. Full verification and fresh adversarial final review passed;
-paused for external review.
+Status: internal and external reviews passed for `demo-whole-file-corpus`,
+main baseline `4bc0a98`. The user authorized landing; the subsequent
+[landing record](2026-09-08_whole-file-corpus-landing.md) owns the review
+follow-ups, feature/primary checks and landing status.
 Charter: [whole-file corpus](2026-09-08_whole-file-corpus-charter.md).
-No merge or push authorized. All `.lake/whole-file-corpus-evidence/` paths
+The initial handoff below preceded that merge authorization; no push is
+authorized. All `.lake/whole-file-corpus-evidence/` paths
 are relative to this feature worktree root; ignored logs are ephemeral.
 This committed record and snapshots retain the useful evidence.
 

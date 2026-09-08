@@ -3998,3 +3998,18 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   Execution stops with this reviewed candidate for external review.
   Main remains clean at `4bc0a98`; no provider/pin changes, merge, push or
   tag. The earlier t1 landing authorization does not authorize this merge.
+
+- **2026-09-08 [USER] WHOLE-FILE CORPUS LANDING AUTHORIZED**, verbatim:
+  "Review landed in docs, can you address any findings, and land it on main"
+  [AGENT] The supplied independent external landing review of
+  `4bc0a98..00db603` is PASS, A−, with no required pre-merge fix.
+  `docs/2026-09-08_review-whole-file-corpus-landing.md` is adopted unchanged.
+  F1/F2's fourteen new numeral supply-premise sites are now explicitly
+  assigned to master-plan G1.1/V1-4a and KOI B19, with preferred captured-
+  supply/source-symbol-derived bounds; G1.9 retains the new execution
+  bounds in named-cost work. F3's ten refs are registered as superseded,
+  with clean completed worktrees to be removed after landing. F4's optional
+  repeated-log cleanup is deferred; no proof, API or runner change is
+  needed. Disposition and full feature/primary gate evidence belong in
+  `docs/2026-09-08_whole-file-corpus-landing.md`. This per-merge authorization
+  supersedes the earlier external-review pause; no push is authorized.
