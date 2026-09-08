@@ -1,8 +1,9 @@
 # Whole-file certificates for the supported C corpus
 
-Status: IMPLEMENTED; full baseline/final verification passed. Fresh final
-independent review is pending; pre-launch review was PASS with Notes. [AGENT 2026-09-08]. This charter makes the user's autonomous
-execution request concrete; it does not authorize a merge or push.
+Status: COMPLETE ON FEATURE BRANCH; full baseline/final verification and
+fresh adversarial final review passed. Paused for external review.
+[AGENT 2026-09-08]. This charter makes the user's autonomous execution
+request concrete; it does not authorize a merge or push.
 
 ## Authorization and baseline
 
@@ -129,3 +130,24 @@ twins. N2/N3 remain acceptance distinctions: generic evaluated-operand rules
 versus captured-library contracts; fixed frontend capture versus all-fuel
 execution. Baseline full gate is green and the 5,569-declaration snapshot
 is byte-identical to t1's final surface. Source implementation may start.
+
+## Completion and external-review handoff
+
+All six required results are delivered. The implementation record retains
+the full verification evidence and exact signature census: 512 additions,
+zero existing changes or removals. T1/T5/T6/T4 now have complete-file,
+capture-transfer and shipped certificates; generic support has multiple
+actual consumers. The frozen semantics and dependency pins are unchanged.
+
+The fresh [final adversarial review](2026-09-08_review-whole-file-corpus.md)
+returned PASS with one documentation Note, N1. Correction `208194d`
+distinguishes T5/T4's source-pointer bound from T6's sufficient label/driver
+bound; the reviewer confirmed it without requiring a theorem change.
+The reviewer independently passed the full gate, fresh audit, exact
+signature comparison and fresh elaboration of the shared support and all
+six new body/exhibit modules.
+
+The complete, reviewed candidate remains on `demo-whole-file-corpus`.
+Main stays at `4bc0a98`. Execution stops here for external review, with
+option (a), the six unsupported C programs and the remaining master-plan
+work explicitly open. No merge, push or tag is authorized or performed.

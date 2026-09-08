@@ -1,7 +1,8 @@
 # Whole-file corpus implementation record
 
-Status: IMPLEMENTED and fully verified on `demo-whole-file-corpus`, main
-baseline `4bc0a98`; fresh final independent review pending.
+Status: REVIEWED MERGE CANDIDATE on `demo-whole-file-corpus`, main baseline
+`4bc0a98`. Full verification and fresh adversarial final review passed;
+paused for external review.
 Charter: [whole-file corpus](2026-09-08_whole-file-corpus-charter.md).
 No merge or push authorized. All `.lake/whole-file-corpus-evidence/` paths
 are relative to this feature worktree root; ignored logs are ephemeral.
@@ -236,7 +237,32 @@ CLAIMS, master plan, requests register and the root/fixture READMEs
 contain no parsed file:line cites. The README manifest-tail citation was checked directly at line199;
 the heuristic attributes it to an earlier PtrEq identifier.
 
-The whole V1-1 option-(b) implementation is now a green candidate. A
-fresh adversarial full-range review remains required before pausing for
-external review. No review verdict or merge authorization is inferred
-from the successful build.
+## Final adversarial review and handoff
+
+A fresh independent reviewer was briefed with AUDIT-BRIEF, the known-open
+register and this charter, and reviewed the entire change from main
+`4bc0a98`, including the actual driver conclusions, loop proof, generic
+support, capture/comparator boundary, old APIs and published claims.
+Its [committed report](2026-09-08_review-whole-file-corpus.md) is PASS.
+
+The reviewer independently ran the full capped gate and freshly elaborated
+Audit, EmittedIntSupport and all six new body/exhibit modules. All passed.
+Its fresh signature snapshot was byte-identical to the committed final
+snapshot; its independent census reproduced 5,569 → 6,081, with 512 added,
+zero removed and zero changed. These repeat the parent verification above;
+the review report retains the independent command evidence.
+
+The sole finding, Note N1, was a prose discrepancy: T6's sufficient
+freshness premise is `51 ≤` in its label/driver proofs, whereas T5/T4
+use `22 <` for their two live source pointers. T6's `mainBody_wpt`
+has no separate supply premise. Correction `208194d` updates ARCHITECTURE
+and this record; the reviewer confirmed it. No theorem changed.
+The follow-up architecture citation check remained at 315 cites with
+zero NOFILE entries and the same disclosed heuristic/manual queues.
+
+The completed candidate closes the charter's V1-1 option-(b) cohort and
+pauses for external review. Main remains clean at `4bc0a98`; frozen files
+and pins have no diff, and the full-range whitespace check is clean.
+No merge, push or tag occurred. The final handoff changes only status and
+review records; source and executable checks remain those independently
+verified by the parent and reviewer.

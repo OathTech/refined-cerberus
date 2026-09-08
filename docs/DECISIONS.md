@@ -3974,3 +3974,27 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   `docs/2026-09-08_whole-file-corpus-charter.md`; branch/worktree
   `demo-whole-file-corpus` from main `4bc0a98`. Goal created. No merge,
   push or tag authorized; the completed candidate waits for external review.
+
+- **2026-09-08 [AGENT] WHOLE-FILE CORPUS COMPLETE ON FEATURE BRANCH.**
+  The charter's V1-1b cohort is implemented on `demo-whole-file-corpus`:
+  complete-file, capture-transfer and shipped certificates for t5_ifelse,
+  t6_switch and t4_while, retaining t1 and every previous public signature.
+  Shared annotated integer support has multiple actual consumers; the
+  comparison-based assignment rule preserves its original specialization.
+  All four exports refer to the genuine driver, with arbitrary filesystem
+  state and arguments, exact captured supplies, original comparator checks
+  and justified sufficient execution budgets. V1-1 is complete at option
+  (b) for the four supported programs; option (a), the six unsupported
+  programs and the other master-plan work remain open.
+  Parent and fresh adversarial reviewer independently passed the full
+  capped gate. Exact audit pins: 991 trio, 7 propext-only, 7 axiom-free;
+  strict signature census: 512 additions, zero changes or removals.
+  The reviewer also freshly elaborated the shared support, all six new
+  body/exhibit modules and Audit, and reproduced the exact final snapshot.
+  Review `docs/2026-09-08_review-whole-file-corpus.md`: PASS; sole Note N1
+  corrects the prose description of T6's sufficient freshness premise,
+  confirmed after `208194d`, with no theorem change. Evidence/disposition:
+  `docs/2026-09-08_whole-file-corpus-implementation.md`.
+  Execution stops with this reviewed candidate for external review.
+  Main remains clean at `4bc0a98`; no provider/pin changes, merge, push or
+  tag. The earlier t1 landing authorization does not authorize this merge.

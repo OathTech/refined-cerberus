@@ -66,9 +66,11 @@ certified, and all 18 old `600` code sites still present. V1-4a therefore
 still owns the old statement/cost restatement; this additive migration
 does not close it. V1-2 seq_rmw, the broader derived-while/rule-quality
 work, package extraction and the scheduler/call arc remain separate.
-Verification, signature comparison and fresh adversarial review are owned
-by `docs/2026-09-08_whole-file-corpus-implementation.md`. Stop at a
-reviewed candidate for external review; no merge or push is authorized.
+Full verification and exact signature comparison passed; the fresh
+[adversarial review](2026-09-08_review-whole-file-corpus.md) returned PASS
+after one prose correction. Evidence and disposition are in
+`docs/2026-09-08_whole-file-corpus-implementation.md`. This is a reviewed
+candidate paused for external review; no merge or push is authorized.
 The baseline inventories below remain historical unless explicitly updated.
 
 ## 0. The definition of done ([USER 2026-09-07], verbatim)
