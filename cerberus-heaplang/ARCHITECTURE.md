@@ -521,9 +521,12 @@ comparators, a capture-transfer twin and a shipped-fuel corollary:
 Each namespace exports `certified_production` and
 `certified_production_of_capture_eq` from its `EmittedT*Exhibit` module,
 plus `certified_production_shipped` from `Shipped`. These are sufficient
-composition bounds, not measured minimum fuel. The t5/t6/t4 body proofs
-protect their two live source pointers using `22 < M.runState.sym_supply`;
-the exported equations use the exact captured supplies. T4's while
+composition bounds, not measured minimum fuel. The t5/t4 body proofs
+protect their two live source pointers using `22 < M.runState.sym_supply`.
+T6's label contracts and driver proof use the sufficient bound
+`51 ≤ M.runState.sym_supply`; its `mainBody_wpt` jumps into the label
+contract without a separate supply premise. Each exported equation uses
+the exact captured supply. T4's while
 invariant tracks the index and accumulated sum with a decreasing budget.
 The following t1 instance explains the common theorem shape.
 

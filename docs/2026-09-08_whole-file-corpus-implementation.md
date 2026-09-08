@@ -154,9 +154,12 @@ built the complete T4 module (14 seconds) and all final integration.
 The total budgets are 48/88/78/915 for t1/t5/t6/t4, with the driver
 margin giving 50/90/80/917. Exact captured supplies are 36/47/51/92.
 Every new production/capture twin quantifies filesystem and arguments.
-Each new body protects only the two live source pointers using
-`22 < M.runState.sym_supply`; the exported equation discharges it at the
-captured supply. Actual annotations, cell types, save contexts and cleanup
+The T5/T4 body proofs protect their two live source pointers using
+`22 < M.runState.sym_supply`. T6's label contracts and driver proof use
+the sufficient bound `51 ≤ M.runState.sym_supply`; its `mainBody_wpt`
+jumps into the label contract without a separate supply premise. Each
+exported equation discharges its bound at the exact captured supply.
+Actual annotations, cell types, save contexts and cleanup
 are retained. T4's invariant and decreasing budget are in its public proof.
 
 Shared arithmetic required no new evaluator: the actual T1 and T4
