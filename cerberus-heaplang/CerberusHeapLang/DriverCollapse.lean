@@ -1617,7 +1617,7 @@ driver-level analog of `engine_step_matchU_fuel`, one case per redex root,
 each discharged by the raw singleton lemma + the matching round
 equation above. The mirror step is taken at ANY context `M₀` agreeing
 with the driver's on the three projections `Step` reads (tagDefs,
-extern — both empty on the production path — and the label map,
+extern — empty tags, actual runtime extern — and the label map,
 tied to the DRIVER'S CURRENT run state by `hQd`); the returned run
 state either is untouched (taus, with-runstate verbatim, memop) or
 gets its aid ticked (actions) — `labeled` is preserved either way,
@@ -1628,7 +1628,8 @@ E1: the driver thread's `current_loc` is TIED to the control's `curLoc`
 the general arm's location write (`locUpdTh`, Core_reduction.lean:484)
 is the mirror's `Ctl.upd` (`locUpdTh_ctl`). The control-preserving
 rounds are those keeping the call stack (`hκ`). -/
-/-- The proof-device form of `loop_step_frag_same'` (over `FragFuel`); the export is `loop_step_frag_same'` (R2, Fragment.lean). -/
+/-- The internal `FragFuel` form of `loop_step_frag_same_extern'`; the
+public interface separates syntactic membership from evaluator depth. -/
 theorem loop_step_frag_same_extern_fuel' (hfuel : 2 ≤ LemFuel.fuel) {M₀ : MachineCtx} {ctl ctl' : Ctl}
     (htd : M₀.tagDefs = fmapEmpty)
     {th₀ : thread_state} (hcl : th₀.current_loc = ctl.curLoc)

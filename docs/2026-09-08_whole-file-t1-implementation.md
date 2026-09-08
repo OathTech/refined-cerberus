@@ -24,10 +24,10 @@ Validation, 2026-09-08, from this worktree (all Lean commands capped):
 CERB_MEM_MAX=40G TMPDIR="$PWD/.tmp" scripts/test_unit.sh --fast
 ```
 
-Verbatim final lines (ignored log `.lake/whole-file-evidence/phase-a-fast.log`):
+Verbatim verdict excerpts (ignored log `.lake/whole-file-evidence/phase-a-fast.log`):
 
 ```text
-CerberusHeapLang export pins: 917 trio-exact, 6 axiom-free-exact
+info: CerberusHeapLang/Audit.lean:1137:0: CerberusHeapLang export pins: 917 trio-exact, 6 axiom-free-exact
 Build completed successfully (490 jobs).
 ok: cerberus-heaplang build green
 FAST-GATE GREEN (gates 1-2 only — not a claim-point result; say fast-gate in the commit)
@@ -35,3 +35,37 @@ FAST-GATE GREEN (gates 1-2 only — not a claim-point result; say fast-gate in t
 
 This is an intermediate build result. Full frontend checks, additional
 representation-proof pins, claim surfaces, and fresh range review follow.
+
+## Phase B — integration and verification plan
+
+Comparator worker commits `7c36b18` and `cd45c3f` supply the independent
+constructor comparison and the capture/inspection speedbump. The former was
+cherry-picked as `4920268`; the latter's two scripts were extracted because
+its branch already contained the old G2 wrapper. The unchanged G2
+loader/quoter/inspector and retained Cabs were adopted explicitly from
+`5bfe992`. Parent verification follows below; worker success is not the
+claim-point result.
+
+The shipped interface is an additive
+`CorpusA7.T1.certified_production_shipped`. The actual existing name is
+`t1_certified_production_shipped` (the charter abbreviated it as
+`t1_shipped`); its old wrapper contract is preserved and labelled regression,
+so no replacement alias or changed existing statement is needed.
+The corpus table is a text/transcription regression table, not a certificate
+name table: its shape and entries stay intact, with its t1 role clarified.
+
+The representation audit now asserts seven exact `[propext]` cones and the
+axiom-free fold transfer, as measured by `#print axioms`. These are subsets
+of the existing trust bound, not new boundary axioms. The new execution
+corollary is pinned separately. The exhaustive and banned-axiom sweeps
+remain unchanged.
+
+Parent integrated fast gate, 2026-09-08, exited 0. Verbatim verdict excerpts
+from `.lake/whole-file-evidence/phase-b-fast.log`:
+
+```text
+info: CerberusHeapLang/Audit.lean:1152:0: CerberusHeapLang export pins: 918 trio-exact, 7 propext-exact, 7 axiom-free-exact
+Build completed successfully (490 jobs).
+ok: cerberus-heaplang build green
+FAST-GATE GREEN (gates 1-2 only — not a claim-point result; say fast-gate in the commit)
+```

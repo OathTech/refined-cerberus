@@ -1673,6 +1673,10 @@ structure Row where
   proc : String
   term : CoreExpr
 
+/-- Retained text/transcription regression table. For t1 the advertised
+complete-file certificate is now `CorpusA7.T1.certified_production`
+(EmittedT1Exhibit); this row still checks the older wrapper transcription.
+The complete-file comparison is `scripts/check-emitted-t1.sh`. -/
 def corpusTable : List Row :=
   [⟨"t1.annot.core", "main", t1Main⟩, ⟨"t5_ifelse.annot.core", "main", t5Main⟩,
    ⟨"t6_switch.annot.core", "main", t6Main⟩, ⟨"t4_while.annot.core", "main", t4Main⟩]

@@ -53,8 +53,8 @@ open Lem_Basic_classes Lem_Maybe Lem_List
     state whose singleton thread holds `(e, ρ)` over `th₀`'s
     immutables at layout state `σ` and current location `lc` (E1: the
     location is LIVE — the general arm's `current_loc` write, mirrored
-    by `Ctl.upd`), with empty extern and the run-state `labeled` tie at
-    the current procedure, the loop returns the PROGRAM-DONE singleton
+    by `Ctl.upd`), with the supplied extern map and the run-state
+    `labeled` tie at the resolved current procedure, the loop returns the PROGRAM-DONE singleton
     step map for a value satisfying ψ with the final memory, the final
     driver state pinned (run state / trace / counter, final env and
     location, the value node's annotations existential — the driver's
@@ -555,14 +555,23 @@ theorem wpt_driver_done_alloc_extern (hfuel : 2 ≤ LemFuel.fuel) {GF : BundledG
     (hproc : th₀.current_proc_opt = ctl.proc) (hκ : ctl.κ = [])
     (hsb : M₀.runState.sym_supply ≤ ctl.sup.sym)
     (hQf : ∀ l params cont, lookupLabel (M₀.labelsAt ctl.proc) l = some (params, cont) →
-      Frag cont) (hQd : ∀ l params cont, lookupLabel (M₀.labelsAt ctl.proc) l = some (params, cont) →
-      evalDepth cont ≤ LemFuel.fuel) (Ls : ∀ [SpikeGS .hasLC GF], LabelSpecT GF) (e₀ : CoreExpr) (ev00 : Fmap sym value) (evs0 : List (Fmap sym value)) (σ₀ : Mem) (m₀ : SpikeHeapF SpikeCell) (B : Nat) (hfrag : Frag e₀) (hdep : evalDepth e₀ ≤ LemFuel.fuel) (hl : LaunchCoh M₀.tagDefs σ₀ m₀ B) (ψ : value → Mem → Prop) (k : Nat) (hwp : ∀ [SpikeGS .hasLC GF],
+      Frag cont)
+    (hQd : ∀ l params cont, lookupLabel (M₀.labelsAt ctl.proc) l = some (params, cont) →
+      evalDepth cont ≤ LemFuel.fuel)
+    (Ls : ∀ [SpikeGS .hasLC GF], LabelSpecT GF)
+    (e₀ : CoreExpr) (ev00 : Fmap sym value) (evs0 : List (Fmap sym value))
+    (σ₀ : Mem) (m₀ : SpikeHeapF SpikeCell) (B : Nat)
+    (hfrag : Frag e₀) (hdep : evalDepth e₀ ≤ LemFuel.fuel)
+    (hl : LaunchCoh M₀.tagDefs σ₀ m₀ B) (ψ : value → Mem → Prop) (k : Nat)
+    (hwp : ∀ [SpikeGS .hasLC GF],
       iprop(([∗map] i ↦ c ∈ m₀, cellOwn M₀.tagDefs (hlc := .hasLC) (GF := GF) i
           (.own 1) c) ∗ allocBudget B) ⊢
         iprop(blockSpecsT M₀ ctl.proc Ls emptyProcSpecT (readoutPost ψ) ∗
           wpt M₀ ctl.proc Ls emptyProcSpecT k (readoutPost ψ) e₀ (ev00 :: evs0))) :
     DriverDoneAtExtern M₀.extern p Q M₀.file th₀ e₀ (ev00 :: evs0) ctl.curLoc ctl.sup σ₀ ψ k :=
-  wpt_driver_done_alloc_extern_fuel (hfuel := hfuel) (GF := GF) (M₀ := M₀) (ctl := ctl) (htd := htd) (Q := Q) (hlb := hlb) (p := p) (hp := hp) (th₀ := th₀) (hstack := hstack) (hproc := hproc) (hκ := hκ) (hsb := hsb) (hQf := fun l params cont hl => (hQf l params cont hl).toFuel (hQd l params cont hl)) (Ls := Ls) (e₀ := e₀) (ev00 := ev00) (evs0 := evs0) (σ₀ := σ₀) (m₀ := m₀) (B := B) (hfrag := hfrag.toFuel hdep) (hl := hl) (ψ := ψ) (k := k) (hwp := hwp)
+  wpt_driver_done_alloc_extern_fuel hfuel htd hlb hp hstack hproc hκ hsb
+    (fun l params cont hl => (hQf l params cont hl).toFuel (hQd l params cont hl))
+    Ls e₀ ev00 evs0 σ₀ m₀ B (hfrag.toFuel hdep) hl ψ k hwp
 
 /-! ## THE TOTAL DRIVER LANE THROUGH CALLS (calls arc C4)
 

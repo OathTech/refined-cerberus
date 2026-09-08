@@ -1,0 +1,2473 @@
+{
+  "tag": "TUnit",
+  "decls": [
+    {
+      "tag": "EDecl_decl",
+      "decl": {
+        "tag": "Declaration_base",
+        "attrs": {
+          "tag": "Attrs",
+          "attrs": [
+            {
+              "tag": "Attribute",
+              "ns": {
+                "loc": {
+                  "tag": "Loc_region",
+                  "begin": {
+                    "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                    "line": 2,
+                    "col": 4
+                  },
+                  "end": {
+                    "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                    "line": 2,
+                    "col": 8
+                  },
+                  "cursor": "NoCursor"
+                },
+                "name": "cerb"
+              },
+              "id": {
+                "loc": {
+                  "tag": "Loc_region",
+                  "begin": {
+                    "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                    "line": 2,
+                    "col": 10
+                  },
+                  "end": {
+                    "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                    "line": 2,
+                    "col": 16
+                  },
+                  "cursor": "NoCursor"
+                },
+                "name": "hidden"
+              },
+              "args": []
+            }
+          ]
+        },
+        "specifiers": {
+          "tag": "Specifiers",
+          "storage_classes": [],
+          "type_specifiers": [
+            {
+              "tag": "TSpec",
+              "loc": {
+                "tag": "Loc_region",
+                "begin": {
+                  "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                  "line": 2,
+                  "col": 20
+                },
+                "end": {
+                  "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                  "line": 2,
+                  "col": 23
+                },
+                "cursor": "NoCursor"
+              },
+              "spec": "TSpec_int"
+            }
+          ],
+          "type_qualifiers": [],
+          "function_specifiers": [],
+          "alignment_specifiers": []
+        },
+        "init_declarators": [
+          {
+            "tag": "InitDecl",
+            "loc": {
+              "tag": "Loc_region",
+              "begin": {
+                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                "line": 2,
+                "col": 24
+              },
+              "end": {
+                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                "line": 2,
+                "col": 45
+              },
+              "cursor": "NoCursor"
+            },
+            "declarator": {
+              "tag": "Declarator",
+              "pointer": null,
+              "direct": {
+                "tag": "DDecl_function",
+                "direct": {
+                  "tag": "DDecl_identifier",
+                  "attrs": { "tag": "Attrs", "attrs": [] },
+                  "id": {
+                    "loc": {
+                      "tag": "Loc_region",
+                      "begin": {
+                        "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                        "line": 2,
+                        "col": 24
+                      },
+                      "end": {
+                        "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                        "line": 2,
+                        "col": 37
+                      },
+                      "cursor": "NoCursor"
+                    },
+                    "name": "__builtin_ffs"
+                  }
+                },
+                "params": {
+                  "tag": "Params",
+                  "params": [
+                    {
+                      "tag": "PDeclaration_decl",
+                      "specifiers": {
+                        "tag": "Specifiers",
+                        "storage_classes": [],
+                        "type_specifiers": [
+                          {
+                            "tag": "TSpec",
+                            "loc": {
+                              "tag": "Loc_region",
+                              "begin": {
+                                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                                "line": 2,
+                                "col": 39
+                              },
+                              "end": {
+                                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                                "line": 2,
+                                "col": 42
+                              },
+                              "cursor": "NoCursor"
+                            },
+                            "spec": "TSpec_int"
+                          }
+                        ],
+                        "type_qualifiers": [],
+                        "function_specifiers": [],
+                        "alignment_specifiers": []
+                      },
+                      "declarator": {
+                        "tag": "Declarator",
+                        "pointer": null,
+                        "direct": {
+                          "tag": "DDecl_identifier",
+                          "attrs": { "tag": "Attrs", "attrs": [] },
+                          "id": {
+                            "loc": {
+                              "tag": "Loc_region",
+                              "begin": {
+                                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                                "line": 2,
+                                "col": 43
+                              },
+                              "end": {
+                                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                                "line": 2,
+                                "col": 44
+                              },
+                              "cursor": "NoCursor"
+                            },
+                            "name": "x"
+                          }
+                        }
+                      }
+                    }
+                  ],
+                  "is_variadic": false
+                }
+              }
+            },
+            "initializer": null
+          }
+        ]
+      }
+    },
+    {
+      "tag": "EDecl_decl",
+      "decl": {
+        "tag": "Declaration_base",
+        "attrs": {
+          "tag": "Attrs",
+          "attrs": [
+            {
+              "tag": "Attribute",
+              "ns": {
+                "loc": {
+                  "tag": "Loc_region",
+                  "begin": {
+                    "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                    "line": 3,
+                    "col": 4
+                  },
+                  "end": {
+                    "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                    "line": 3,
+                    "col": 8
+                  },
+                  "cursor": "NoCursor"
+                },
+                "name": "cerb"
+              },
+              "id": {
+                "loc": {
+                  "tag": "Loc_region",
+                  "begin": {
+                    "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                    "line": 3,
+                    "col": 10
+                  },
+                  "end": {
+                    "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                    "line": 3,
+                    "col": 16
+                  },
+                  "cursor": "NoCursor"
+                },
+                "name": "hidden"
+              },
+              "args": []
+            }
+          ]
+        },
+        "specifiers": {
+          "tag": "Specifiers",
+          "storage_classes": [],
+          "type_specifiers": [
+            {
+              "tag": "TSpec",
+              "loc": {
+                "tag": "Loc_region",
+                "begin": {
+                  "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                  "line": 3,
+                  "col": 20
+                },
+                "end": {
+                  "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                  "line": 3,
+                  "col": 23
+                },
+                "cursor": "NoCursor"
+              },
+              "spec": "TSpec_int"
+            }
+          ],
+          "type_qualifiers": [],
+          "function_specifiers": [],
+          "alignment_specifiers": []
+        },
+        "init_declarators": [
+          {
+            "tag": "InitDecl",
+            "loc": {
+              "tag": "Loc_region",
+              "begin": {
+                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                "line": 3,
+                "col": 24
+              },
+              "end": {
+                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                "line": 3,
+                "col": 47
+              },
+              "cursor": "NoCursor"
+            },
+            "declarator": {
+              "tag": "Declarator",
+              "pointer": null,
+              "direct": {
+                "tag": "DDecl_function",
+                "direct": {
+                  "tag": "DDecl_identifier",
+                  "attrs": { "tag": "Attrs", "attrs": [] },
+                  "id": {
+                    "loc": {
+                      "tag": "Loc_region",
+                      "begin": {
+                        "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                        "line": 3,
+                        "col": 24
+                      },
+                      "end": {
+                        "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                        "line": 3,
+                        "col": 38
+                      },
+                      "cursor": "NoCursor"
+                    },
+                    "name": "__builtin_ffsl"
+                  }
+                },
+                "params": {
+                  "tag": "Params",
+                  "params": [
+                    {
+                      "tag": "PDeclaration_decl",
+                      "specifiers": {
+                        "tag": "Specifiers",
+                        "storage_classes": [],
+                        "type_specifiers": [
+                          {
+                            "tag": "TSpec",
+                            "loc": {
+                              "tag": "Loc_region",
+                              "begin": {
+                                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                                "line": 3,
+                                "col": 40
+                              },
+                              "end": {
+                                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                                "line": 3,
+                                "col": 44
+                              },
+                              "cursor": "NoCursor"
+                            },
+                            "spec": "TSpec_long"
+                          }
+                        ],
+                        "type_qualifiers": [],
+                        "function_specifiers": [],
+                        "alignment_specifiers": []
+                      },
+                      "declarator": {
+                        "tag": "Declarator",
+                        "pointer": null,
+                        "direct": {
+                          "tag": "DDecl_identifier",
+                          "attrs": { "tag": "Attrs", "attrs": [] },
+                          "id": {
+                            "loc": {
+                              "tag": "Loc_region",
+                              "begin": {
+                                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                                "line": 3,
+                                "col": 45
+                              },
+                              "end": {
+                                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                                "line": 3,
+                                "col": 46
+                              },
+                              "cursor": "NoCursor"
+                            },
+                            "name": "x"
+                          }
+                        }
+                      }
+                    }
+                  ],
+                  "is_variadic": false
+                }
+              }
+            },
+            "initializer": null
+          }
+        ]
+      }
+    },
+    {
+      "tag": "EDecl_decl",
+      "decl": {
+        "tag": "Declaration_base",
+        "attrs": {
+          "tag": "Attrs",
+          "attrs": [
+            {
+              "tag": "Attribute",
+              "ns": {
+                "loc": {
+                  "tag": "Loc_region",
+                  "begin": {
+                    "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                    "line": 4,
+                    "col": 4
+                  },
+                  "end": {
+                    "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                    "line": 4,
+                    "col": 8
+                  },
+                  "cursor": "NoCursor"
+                },
+                "name": "cerb"
+              },
+              "id": {
+                "loc": {
+                  "tag": "Loc_region",
+                  "begin": {
+                    "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                    "line": 4,
+                    "col": 10
+                  },
+                  "end": {
+                    "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                    "line": 4,
+                    "col": 16
+                  },
+                  "cursor": "NoCursor"
+                },
+                "name": "hidden"
+              },
+              "args": []
+            }
+          ]
+        },
+        "specifiers": {
+          "tag": "Specifiers",
+          "storage_classes": [],
+          "type_specifiers": [
+            {
+              "tag": "TSpec",
+              "loc": {
+                "tag": "Loc_region",
+                "begin": {
+                  "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                  "line": 4,
+                  "col": 20
+                },
+                "end": {
+                  "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                  "line": 4,
+                  "col": 23
+                },
+                "cursor": "NoCursor"
+              },
+              "spec": "TSpec_int"
+            }
+          ],
+          "type_qualifiers": [],
+          "function_specifiers": [],
+          "alignment_specifiers": []
+        },
+        "init_declarators": [
+          {
+            "tag": "InitDecl",
+            "loc": {
+              "tag": "Loc_region",
+              "begin": {
+                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                "line": 4,
+                "col": 24
+              },
+              "end": {
+                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                "line": 4,
+                "col": 53
+              },
+              "cursor": "NoCursor"
+            },
+            "declarator": {
+              "tag": "Declarator",
+              "pointer": null,
+              "direct": {
+                "tag": "DDecl_function",
+                "direct": {
+                  "tag": "DDecl_identifier",
+                  "attrs": { "tag": "Attrs", "attrs": [] },
+                  "id": {
+                    "loc": {
+                      "tag": "Loc_region",
+                      "begin": {
+                        "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                        "line": 4,
+                        "col": 24
+                      },
+                      "end": {
+                        "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                        "line": 4,
+                        "col": 39
+                      },
+                      "cursor": "NoCursor"
+                    },
+                    "name": "__builtin_ffsll"
+                  }
+                },
+                "params": {
+                  "tag": "Params",
+                  "params": [
+                    {
+                      "tag": "PDeclaration_decl",
+                      "specifiers": {
+                        "tag": "Specifiers",
+                        "storage_classes": [],
+                        "type_specifiers": [
+                          {
+                            "tag": "TSpec",
+                            "loc": {
+                              "tag": "Loc_region",
+                              "begin": {
+                                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                                "line": 4,
+                                "col": 41
+                              },
+                              "end": {
+                                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                                "line": 4,
+                                "col": 45
+                              },
+                              "cursor": "NoCursor"
+                            },
+                            "spec": "TSpec_long"
+                          },
+                          {
+                            "tag": "TSpec",
+                            "loc": {
+                              "tag": "Loc_region",
+                              "begin": {
+                                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                                "line": 4,
+                                "col": 46
+                              },
+                              "end": {
+                                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                                "line": 4,
+                                "col": 50
+                              },
+                              "cursor": "NoCursor"
+                            },
+                            "spec": "TSpec_long"
+                          }
+                        ],
+                        "type_qualifiers": [],
+                        "function_specifiers": [],
+                        "alignment_specifiers": []
+                      },
+                      "declarator": {
+                        "tag": "Declarator",
+                        "pointer": null,
+                        "direct": {
+                          "tag": "DDecl_identifier",
+                          "attrs": { "tag": "Attrs", "attrs": [] },
+                          "id": {
+                            "loc": {
+                              "tag": "Loc_region",
+                              "begin": {
+                                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                                "line": 4,
+                                "col": 51
+                              },
+                              "end": {
+                                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                                "line": 4,
+                                "col": 52
+                              },
+                              "cursor": "NoCursor"
+                            },
+                            "name": "x"
+                          }
+                        }
+                      }
+                    }
+                  ],
+                  "is_variadic": false
+                }
+              }
+            },
+            "initializer": null
+          }
+        ]
+      }
+    },
+    {
+      "tag": "EDecl_decl",
+      "decl": {
+        "tag": "Declaration_base",
+        "attrs": {
+          "tag": "Attrs",
+          "attrs": [
+            {
+              "tag": "Attribute",
+              "ns": {
+                "loc": {
+                  "tag": "Loc_region",
+                  "begin": {
+                    "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                    "line": 5,
+                    "col": 4
+                  },
+                  "end": {
+                    "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                    "line": 5,
+                    "col": 8
+                  },
+                  "cursor": "NoCursor"
+                },
+                "name": "cerb"
+              },
+              "id": {
+                "loc": {
+                  "tag": "Loc_region",
+                  "begin": {
+                    "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                    "line": 5,
+                    "col": 10
+                  },
+                  "end": {
+                    "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                    "line": 5,
+                    "col": 16
+                  },
+                  "cursor": "NoCursor"
+                },
+                "name": "hidden"
+              },
+              "args": []
+            }
+          ]
+        },
+        "specifiers": {
+          "tag": "Specifiers",
+          "storage_classes": [],
+          "type_specifiers": [
+            {
+              "tag": "TSpec",
+              "loc": {
+                "tag": "Loc_region",
+                "begin": {
+                  "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                  "line": 5,
+                  "col": 20
+                },
+                "end": {
+                  "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                  "line": 5,
+                  "col": 23
+                },
+                "cursor": "NoCursor"
+              },
+              "spec": "TSpec_int"
+            }
+          ],
+          "type_qualifiers": [],
+          "function_specifiers": [],
+          "alignment_specifiers": []
+        },
+        "init_declarators": [
+          {
+            "tag": "InitDecl",
+            "loc": {
+              "tag": "Loc_region",
+              "begin": {
+                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                "line": 5,
+                "col": 24
+              },
+              "end": {
+                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                "line": 5,
+                "col": 54
+              },
+              "cursor": "NoCursor"
+            },
+            "declarator": {
+              "tag": "Declarator",
+              "pointer": null,
+              "direct": {
+                "tag": "DDecl_function",
+                "direct": {
+                  "tag": "DDecl_identifier",
+                  "attrs": { "tag": "Attrs", "attrs": [] },
+                  "id": {
+                    "loc": {
+                      "tag": "Loc_region",
+                      "begin": {
+                        "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                        "line": 5,
+                        "col": 24
+                      },
+                      "end": {
+                        "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                        "line": 5,
+                        "col": 37
+                      },
+                      "cursor": "NoCursor"
+                    },
+                    "name": "__builtin_ctz"
+                  }
+                },
+                "params": {
+                  "tag": "Params",
+                  "params": [
+                    {
+                      "tag": "PDeclaration_decl",
+                      "specifiers": {
+                        "tag": "Specifiers",
+                        "storage_classes": [],
+                        "type_specifiers": [
+                          {
+                            "tag": "TSpec",
+                            "loc": {
+                              "tag": "Loc_region",
+                              "begin": {
+                                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                                "line": 5,
+                                "col": 39
+                              },
+                              "end": {
+                                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                                "line": 5,
+                                "col": 47
+                              },
+                              "cursor": "NoCursor"
+                            },
+                            "spec": "TSpec_unsigned"
+                          },
+                          {
+                            "tag": "TSpec",
+                            "loc": {
+                              "tag": "Loc_region",
+                              "begin": {
+                                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                                "line": 5,
+                                "col": 48
+                              },
+                              "end": {
+                                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                                "line": 5,
+                                "col": 51
+                              },
+                              "cursor": "NoCursor"
+                            },
+                            "spec": "TSpec_int"
+                          }
+                        ],
+                        "type_qualifiers": [],
+                        "function_specifiers": [],
+                        "alignment_specifiers": []
+                      },
+                      "declarator": {
+                        "tag": "Declarator",
+                        "pointer": null,
+                        "direct": {
+                          "tag": "DDecl_identifier",
+                          "attrs": { "tag": "Attrs", "attrs": [] },
+                          "id": {
+                            "loc": {
+                              "tag": "Loc_region",
+                              "begin": {
+                                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                                "line": 5,
+                                "col": 52
+                              },
+                              "end": {
+                                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                                "line": 5,
+                                "col": 53
+                              },
+                              "cursor": "NoCursor"
+                            },
+                            "name": "x"
+                          }
+                        }
+                      }
+                    }
+                  ],
+                  "is_variadic": false
+                }
+              }
+            },
+            "initializer": null
+          }
+        ]
+      }
+    },
+    {
+      "tag": "EDecl_decl",
+      "decl": {
+        "tag": "Declaration_base",
+        "attrs": {
+          "tag": "Attrs",
+          "attrs": [
+            {
+              "tag": "Attribute",
+              "ns": {
+                "loc": {
+                  "tag": "Loc_region",
+                  "begin": {
+                    "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                    "line": 6,
+                    "col": 4
+                  },
+                  "end": {
+                    "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                    "line": 6,
+                    "col": 8
+                  },
+                  "cursor": "NoCursor"
+                },
+                "name": "cerb"
+              },
+              "id": {
+                "loc": {
+                  "tag": "Loc_region",
+                  "begin": {
+                    "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                    "line": 6,
+                    "col": 10
+                  },
+                  "end": {
+                    "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                    "line": 6,
+                    "col": 16
+                  },
+                  "cursor": "NoCursor"
+                },
+                "name": "hidden"
+              },
+              "args": []
+            }
+          ]
+        },
+        "specifiers": {
+          "tag": "Specifiers",
+          "storage_classes": [],
+          "type_specifiers": [
+            {
+              "tag": "TSpec",
+              "loc": {
+                "tag": "Loc_region",
+                "begin": {
+                  "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                  "line": 6,
+                  "col": 20
+                },
+                "end": {
+                  "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                  "line": 6,
+                  "col": 23
+                },
+                "cursor": "NoCursor"
+              },
+              "spec": "TSpec_int"
+            }
+          ],
+          "type_qualifiers": [],
+          "function_specifiers": [],
+          "alignment_specifiers": []
+        },
+        "init_declarators": [
+          {
+            "tag": "InitDecl",
+            "loc": {
+              "tag": "Loc_region",
+              "begin": {
+                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                "line": 6,
+                "col": 24
+              },
+              "end": {
+                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                "line": 6,
+                "col": 56
+              },
+              "cursor": "NoCursor"
+            },
+            "declarator": {
+              "tag": "Declarator",
+              "pointer": null,
+              "direct": {
+                "tag": "DDecl_function",
+                "direct": {
+                  "tag": "DDecl_identifier",
+                  "attrs": { "tag": "Attrs", "attrs": [] },
+                  "id": {
+                    "loc": {
+                      "tag": "Loc_region",
+                      "begin": {
+                        "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                        "line": 6,
+                        "col": 24
+                      },
+                      "end": {
+                        "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                        "line": 6,
+                        "col": 38
+                      },
+                      "cursor": "NoCursor"
+                    },
+                    "name": "__builtin_ctzl"
+                  }
+                },
+                "params": {
+                  "tag": "Params",
+                  "params": [
+                    {
+                      "tag": "PDeclaration_decl",
+                      "specifiers": {
+                        "tag": "Specifiers",
+                        "storage_classes": [],
+                        "type_specifiers": [
+                          {
+                            "tag": "TSpec",
+                            "loc": {
+                              "tag": "Loc_region",
+                              "begin": {
+                                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                                "line": 6,
+                                "col": 40
+                              },
+                              "end": {
+                                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                                "line": 6,
+                                "col": 48
+                              },
+                              "cursor": "NoCursor"
+                            },
+                            "spec": "TSpec_unsigned"
+                          },
+                          {
+                            "tag": "TSpec",
+                            "loc": {
+                              "tag": "Loc_region",
+                              "begin": {
+                                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                                "line": 6,
+                                "col": 49
+                              },
+                              "end": {
+                                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                                "line": 6,
+                                "col": 53
+                              },
+                              "cursor": "NoCursor"
+                            },
+                            "spec": "TSpec_long"
+                          }
+                        ],
+                        "type_qualifiers": [],
+                        "function_specifiers": [],
+                        "alignment_specifiers": []
+                      },
+                      "declarator": {
+                        "tag": "Declarator",
+                        "pointer": null,
+                        "direct": {
+                          "tag": "DDecl_identifier",
+                          "attrs": { "tag": "Attrs", "attrs": [] },
+                          "id": {
+                            "loc": {
+                              "tag": "Loc_region",
+                              "begin": {
+                                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                                "line": 6,
+                                "col": 54
+                              },
+                              "end": {
+                                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                                "line": 6,
+                                "col": 55
+                              },
+                              "cursor": "NoCursor"
+                            },
+                            "name": "x"
+                          }
+                        }
+                      }
+                    }
+                  ],
+                  "is_variadic": false
+                }
+              }
+            },
+            "initializer": null
+          }
+        ]
+      }
+    },
+    {
+      "tag": "EDecl_decl",
+      "decl": {
+        "tag": "Declaration_base",
+        "attrs": {
+          "tag": "Attrs",
+          "attrs": [
+            {
+              "tag": "Attribute",
+              "ns": {
+                "loc": {
+                  "tag": "Loc_region",
+                  "begin": {
+                    "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                    "line": 7,
+                    "col": 4
+                  },
+                  "end": {
+                    "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                    "line": 7,
+                    "col": 8
+                  },
+                  "cursor": "NoCursor"
+                },
+                "name": "cerb"
+              },
+              "id": {
+                "loc": {
+                  "tag": "Loc_region",
+                  "begin": {
+                    "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                    "line": 7,
+                    "col": 10
+                  },
+                  "end": {
+                    "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                    "line": 7,
+                    "col": 16
+                  },
+                  "cursor": "NoCursor"
+                },
+                "name": "hidden"
+              },
+              "args": []
+            }
+          ]
+        },
+        "specifiers": {
+          "tag": "Specifiers",
+          "storage_classes": [],
+          "type_specifiers": [
+            {
+              "tag": "TSpec",
+              "loc": {
+                "tag": "Loc_region",
+                "begin": {
+                  "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                  "line": 7,
+                  "col": 20
+                },
+                "end": {
+                  "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                  "line": 7,
+                  "col": 23
+                },
+                "cursor": "NoCursor"
+              },
+              "spec": "TSpec_int"
+            }
+          ],
+          "type_qualifiers": [],
+          "function_specifiers": [],
+          "alignment_specifiers": []
+        },
+        "init_declarators": [
+          {
+            "tag": "InitDecl",
+            "loc": {
+              "tag": "Loc_region",
+              "begin": {
+                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                "line": 7,
+                "col": 24
+              },
+              "end": {
+                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                "line": 7,
+                "col": 62
+              },
+              "cursor": "NoCursor"
+            },
+            "declarator": {
+              "tag": "Declarator",
+              "pointer": null,
+              "direct": {
+                "tag": "DDecl_function",
+                "direct": {
+                  "tag": "DDecl_identifier",
+                  "attrs": { "tag": "Attrs", "attrs": [] },
+                  "id": {
+                    "loc": {
+                      "tag": "Loc_region",
+                      "begin": {
+                        "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                        "line": 7,
+                        "col": 24
+                      },
+                      "end": {
+                        "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                        "line": 7,
+                        "col": 39
+                      },
+                      "cursor": "NoCursor"
+                    },
+                    "name": "__builtin_ctzll"
+                  }
+                },
+                "params": {
+                  "tag": "Params",
+                  "params": [
+                    {
+                      "tag": "PDeclaration_decl",
+                      "specifiers": {
+                        "tag": "Specifiers",
+                        "storage_classes": [],
+                        "type_specifiers": [
+                          {
+                            "tag": "TSpec",
+                            "loc": {
+                              "tag": "Loc_region",
+                              "begin": {
+                                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                                "line": 7,
+                                "col": 41
+                              },
+                              "end": {
+                                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                                "line": 7,
+                                "col": 49
+                              },
+                              "cursor": "NoCursor"
+                            },
+                            "spec": "TSpec_unsigned"
+                          },
+                          {
+                            "tag": "TSpec",
+                            "loc": {
+                              "tag": "Loc_region",
+                              "begin": {
+                                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                                "line": 7,
+                                "col": 50
+                              },
+                              "end": {
+                                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                                "line": 7,
+                                "col": 54
+                              },
+                              "cursor": "NoCursor"
+                            },
+                            "spec": "TSpec_long"
+                          },
+                          {
+                            "tag": "TSpec",
+                            "loc": {
+                              "tag": "Loc_region",
+                              "begin": {
+                                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                                "line": 7,
+                                "col": 55
+                              },
+                              "end": {
+                                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                                "line": 7,
+                                "col": 59
+                              },
+                              "cursor": "NoCursor"
+                            },
+                            "spec": "TSpec_long"
+                          }
+                        ],
+                        "type_qualifiers": [],
+                        "function_specifiers": [],
+                        "alignment_specifiers": []
+                      },
+                      "declarator": {
+                        "tag": "Declarator",
+                        "pointer": null,
+                        "direct": {
+                          "tag": "DDecl_identifier",
+                          "attrs": { "tag": "Attrs", "attrs": [] },
+                          "id": {
+                            "loc": {
+                              "tag": "Loc_region",
+                              "begin": {
+                                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                                "line": 7,
+                                "col": 60
+                              },
+                              "end": {
+                                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                                "line": 7,
+                                "col": 61
+                              },
+                              "cursor": "NoCursor"
+                            },
+                            "name": "x"
+                          }
+                        }
+                      }
+                    }
+                  ],
+                  "is_variadic": false
+                }
+              }
+            },
+            "initializer": null
+          }
+        ]
+      }
+    },
+    {
+      "tag": "EDecl_decl",
+      "decl": {
+        "tag": "Declaration_base",
+        "attrs": {
+          "tag": "Attrs",
+          "attrs": [
+            {
+              "tag": "Attribute",
+              "ns": {
+                "loc": {
+                  "tag": "Loc_region",
+                  "begin": {
+                    "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                    "line": 8,
+                    "col": 4
+                  },
+                  "end": {
+                    "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                    "line": 8,
+                    "col": 8
+                  },
+                  "cursor": "NoCursor"
+                },
+                "name": "cerb"
+              },
+              "id": {
+                "loc": {
+                  "tag": "Loc_region",
+                  "begin": {
+                    "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                    "line": 8,
+                    "col": 10
+                  },
+                  "end": {
+                    "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                    "line": 8,
+                    "col": 16
+                  },
+                  "cursor": "NoCursor"
+                },
+                "name": "hidden"
+              },
+              "args": []
+            }
+          ]
+        },
+        "specifiers": {
+          "tag": "Specifiers",
+          "storage_classes": [],
+          "type_specifiers": [
+            {
+              "tag": "TSpec",
+              "loc": {
+                "tag": "Loc_region",
+                "begin": {
+                  "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                  "line": 8,
+                  "col": 20
+                },
+                "end": {
+                  "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                  "line": 8,
+                  "col": 37
+                },
+                "cursor": "NoCursor"
+              },
+              "spec": {
+                "tag": "TSpec_name",
+                "id": {
+                  "loc": {
+                    "tag": "Loc_point",
+                    "pos": {
+                      "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                      "line": 8,
+                      "col": 20
+                    }
+                  },
+                  "name": "__cerbty_uint16_t"
+                }
+              }
+            }
+          ],
+          "type_qualifiers": [],
+          "function_specifiers": [],
+          "alignment_specifiers": []
+        },
+        "init_declarators": [
+          {
+            "tag": "InitDecl",
+            "loc": {
+              "tag": "Loc_region",
+              "begin": {
+                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                "line": 8,
+                "col": 38
+              },
+              "end": {
+                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                "line": 8,
+                "col": 77
+              },
+              "cursor": "NoCursor"
+            },
+            "declarator": {
+              "tag": "Declarator",
+              "pointer": null,
+              "direct": {
+                "tag": "DDecl_function",
+                "direct": {
+                  "tag": "DDecl_identifier",
+                  "attrs": { "tag": "Attrs", "attrs": [] },
+                  "id": {
+                    "loc": {
+                      "tag": "Loc_region",
+                      "begin": {
+                        "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                        "line": 8,
+                        "col": 38
+                      },
+                      "end": {
+                        "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                        "line": 8,
+                        "col": 55
+                      },
+                      "cursor": "NoCursor"
+                    },
+                    "name": "__builtin_bswap16"
+                  }
+                },
+                "params": {
+                  "tag": "Params",
+                  "params": [
+                    {
+                      "tag": "PDeclaration_decl",
+                      "specifiers": {
+                        "tag": "Specifiers",
+                        "storage_classes": [],
+                        "type_specifiers": [
+                          {
+                            "tag": "TSpec",
+                            "loc": {
+                              "tag": "Loc_region",
+                              "begin": {
+                                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                                "line": 8,
+                                "col": 57
+                              },
+                              "end": {
+                                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                                "line": 8,
+                                "col": 74
+                              },
+                              "cursor": "NoCursor"
+                            },
+                            "spec": {
+                              "tag": "TSpec_name",
+                              "id": {
+                                "loc": {
+                                  "tag": "Loc_point",
+                                  "pos": {
+                                    "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                                    "line": 8,
+                                    "col": 57
+                                  }
+                                },
+                                "name": "__cerbty_uint16_t"
+                              }
+                            }
+                          }
+                        ],
+                        "type_qualifiers": [],
+                        "function_specifiers": [],
+                        "alignment_specifiers": []
+                      },
+                      "declarator": {
+                        "tag": "Declarator",
+                        "pointer": null,
+                        "direct": {
+                          "tag": "DDecl_identifier",
+                          "attrs": { "tag": "Attrs", "attrs": [] },
+                          "id": {
+                            "loc": {
+                              "tag": "Loc_region",
+                              "begin": {
+                                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                                "line": 8,
+                                "col": 75
+                              },
+                              "end": {
+                                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                                "line": 8,
+                                "col": 76
+                              },
+                              "cursor": "NoCursor"
+                            },
+                            "name": "x"
+                          }
+                        }
+                      }
+                    }
+                  ],
+                  "is_variadic": false
+                }
+              }
+            },
+            "initializer": null
+          }
+        ]
+      }
+    },
+    {
+      "tag": "EDecl_decl",
+      "decl": {
+        "tag": "Declaration_base",
+        "attrs": {
+          "tag": "Attrs",
+          "attrs": [
+            {
+              "tag": "Attribute",
+              "ns": {
+                "loc": {
+                  "tag": "Loc_region",
+                  "begin": {
+                    "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                    "line": 9,
+                    "col": 4
+                  },
+                  "end": {
+                    "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                    "line": 9,
+                    "col": 8
+                  },
+                  "cursor": "NoCursor"
+                },
+                "name": "cerb"
+              },
+              "id": {
+                "loc": {
+                  "tag": "Loc_region",
+                  "begin": {
+                    "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                    "line": 9,
+                    "col": 10
+                  },
+                  "end": {
+                    "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                    "line": 9,
+                    "col": 16
+                  },
+                  "cursor": "NoCursor"
+                },
+                "name": "hidden"
+              },
+              "args": []
+            }
+          ]
+        },
+        "specifiers": {
+          "tag": "Specifiers",
+          "storage_classes": [],
+          "type_specifiers": [
+            {
+              "tag": "TSpec",
+              "loc": {
+                "tag": "Loc_region",
+                "begin": {
+                  "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                  "line": 9,
+                  "col": 20
+                },
+                "end": {
+                  "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                  "line": 9,
+                  "col": 37
+                },
+                "cursor": "NoCursor"
+              },
+              "spec": {
+                "tag": "TSpec_name",
+                "id": {
+                  "loc": {
+                    "tag": "Loc_point",
+                    "pos": {
+                      "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                      "line": 9,
+                      "col": 20
+                    }
+                  },
+                  "name": "__cerbty_uint32_t"
+                }
+              }
+            }
+          ],
+          "type_qualifiers": [],
+          "function_specifiers": [],
+          "alignment_specifiers": []
+        },
+        "init_declarators": [
+          {
+            "tag": "InitDecl",
+            "loc": {
+              "tag": "Loc_region",
+              "begin": {
+                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                "line": 9,
+                "col": 38
+              },
+              "end": {
+                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                "line": 9,
+                "col": 77
+              },
+              "cursor": "NoCursor"
+            },
+            "declarator": {
+              "tag": "Declarator",
+              "pointer": null,
+              "direct": {
+                "tag": "DDecl_function",
+                "direct": {
+                  "tag": "DDecl_identifier",
+                  "attrs": { "tag": "Attrs", "attrs": [] },
+                  "id": {
+                    "loc": {
+                      "tag": "Loc_region",
+                      "begin": {
+                        "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                        "line": 9,
+                        "col": 38
+                      },
+                      "end": {
+                        "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                        "line": 9,
+                        "col": 55
+                      },
+                      "cursor": "NoCursor"
+                    },
+                    "name": "__builtin_bswap32"
+                  }
+                },
+                "params": {
+                  "tag": "Params",
+                  "params": [
+                    {
+                      "tag": "PDeclaration_decl",
+                      "specifiers": {
+                        "tag": "Specifiers",
+                        "storage_classes": [],
+                        "type_specifiers": [
+                          {
+                            "tag": "TSpec",
+                            "loc": {
+                              "tag": "Loc_region",
+                              "begin": {
+                                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                                "line": 9,
+                                "col": 57
+                              },
+                              "end": {
+                                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                                "line": 9,
+                                "col": 74
+                              },
+                              "cursor": "NoCursor"
+                            },
+                            "spec": {
+                              "tag": "TSpec_name",
+                              "id": {
+                                "loc": {
+                                  "tag": "Loc_point",
+                                  "pos": {
+                                    "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                                    "line": 9,
+                                    "col": 57
+                                  }
+                                },
+                                "name": "__cerbty_uint32_t"
+                              }
+                            }
+                          }
+                        ],
+                        "type_qualifiers": [],
+                        "function_specifiers": [],
+                        "alignment_specifiers": []
+                      },
+                      "declarator": {
+                        "tag": "Declarator",
+                        "pointer": null,
+                        "direct": {
+                          "tag": "DDecl_identifier",
+                          "attrs": { "tag": "Attrs", "attrs": [] },
+                          "id": {
+                            "loc": {
+                              "tag": "Loc_region",
+                              "begin": {
+                                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                                "line": 9,
+                                "col": 75
+                              },
+                              "end": {
+                                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                                "line": 9,
+                                "col": 76
+                              },
+                              "cursor": "NoCursor"
+                            },
+                            "name": "x"
+                          }
+                        }
+                      }
+                    }
+                  ],
+                  "is_variadic": false
+                }
+              }
+            },
+            "initializer": null
+          }
+        ]
+      }
+    },
+    {
+      "tag": "EDecl_decl",
+      "decl": {
+        "tag": "Declaration_base",
+        "attrs": {
+          "tag": "Attrs",
+          "attrs": [
+            {
+              "tag": "Attribute",
+              "ns": {
+                "loc": {
+                  "tag": "Loc_region",
+                  "begin": {
+                    "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                    "line": 10,
+                    "col": 4
+                  },
+                  "end": {
+                    "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                    "line": 10,
+                    "col": 8
+                  },
+                  "cursor": "NoCursor"
+                },
+                "name": "cerb"
+              },
+              "id": {
+                "loc": {
+                  "tag": "Loc_region",
+                  "begin": {
+                    "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                    "line": 10,
+                    "col": 10
+                  },
+                  "end": {
+                    "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                    "line": 10,
+                    "col": 16
+                  },
+                  "cursor": "NoCursor"
+                },
+                "name": "hidden"
+              },
+              "args": []
+            }
+          ]
+        },
+        "specifiers": {
+          "tag": "Specifiers",
+          "storage_classes": [],
+          "type_specifiers": [
+            {
+              "tag": "TSpec",
+              "loc": {
+                "tag": "Loc_region",
+                "begin": {
+                  "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                  "line": 10,
+                  "col": 20
+                },
+                "end": {
+                  "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                  "line": 10,
+                  "col": 37
+                },
+                "cursor": "NoCursor"
+              },
+              "spec": {
+                "tag": "TSpec_name",
+                "id": {
+                  "loc": {
+                    "tag": "Loc_point",
+                    "pos": {
+                      "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                      "line": 10,
+                      "col": 20
+                    }
+                  },
+                  "name": "__cerbty_uint64_t"
+                }
+              }
+            }
+          ],
+          "type_qualifiers": [],
+          "function_specifiers": [],
+          "alignment_specifiers": []
+        },
+        "init_declarators": [
+          {
+            "tag": "InitDecl",
+            "loc": {
+              "tag": "Loc_region",
+              "begin": {
+                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                "line": 10,
+                "col": 38
+              },
+              "end": {
+                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                "line": 10,
+                "col": 77
+              },
+              "cursor": "NoCursor"
+            },
+            "declarator": {
+              "tag": "Declarator",
+              "pointer": null,
+              "direct": {
+                "tag": "DDecl_function",
+                "direct": {
+                  "tag": "DDecl_identifier",
+                  "attrs": { "tag": "Attrs", "attrs": [] },
+                  "id": {
+                    "loc": {
+                      "tag": "Loc_region",
+                      "begin": {
+                        "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                        "line": 10,
+                        "col": 38
+                      },
+                      "end": {
+                        "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                        "line": 10,
+                        "col": 55
+                      },
+                      "cursor": "NoCursor"
+                    },
+                    "name": "__builtin_bswap64"
+                  }
+                },
+                "params": {
+                  "tag": "Params",
+                  "params": [
+                    {
+                      "tag": "PDeclaration_decl",
+                      "specifiers": {
+                        "tag": "Specifiers",
+                        "storage_classes": [],
+                        "type_specifiers": [
+                          {
+                            "tag": "TSpec",
+                            "loc": {
+                              "tag": "Loc_region",
+                              "begin": {
+                                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                                "line": 10,
+                                "col": 57
+                              },
+                              "end": {
+                                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                                "line": 10,
+                                "col": 74
+                              },
+                              "cursor": "NoCursor"
+                            },
+                            "spec": {
+                              "tag": "TSpec_name",
+                              "id": {
+                                "loc": {
+                                  "tag": "Loc_point",
+                                  "pos": {
+                                    "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                                    "line": 10,
+                                    "col": 57
+                                  }
+                                },
+                                "name": "__cerbty_uint64_t"
+                              }
+                            }
+                          }
+                        ],
+                        "type_qualifiers": [],
+                        "function_specifiers": [],
+                        "alignment_specifiers": []
+                      },
+                      "declarator": {
+                        "tag": "Declarator",
+                        "pointer": null,
+                        "direct": {
+                          "tag": "DDecl_identifier",
+                          "attrs": { "tag": "Attrs", "attrs": [] },
+                          "id": {
+                            "loc": {
+                              "tag": "Loc_region",
+                              "begin": {
+                                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                                "line": 10,
+                                "col": 75
+                              },
+                              "end": {
+                                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                                "line": 10,
+                                "col": 76
+                              },
+                              "cursor": "NoCursor"
+                            },
+                            "name": "x"
+                          }
+                        }
+                      }
+                    }
+                  ],
+                  "is_variadic": false
+                }
+              }
+            },
+            "initializer": null
+          }
+        ]
+      }
+    },
+    {
+      "tag": "EDecl_decl",
+      "decl": {
+        "tag": "Declaration_base",
+        "attrs": {
+          "tag": "Attrs",
+          "attrs": [
+            {
+              "tag": "Attribute",
+              "ns": {
+                "loc": {
+                  "tag": "Loc_region",
+                  "begin": {
+                    "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                    "line": 11,
+                    "col": 4
+                  },
+                  "end": {
+                    "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                    "line": 11,
+                    "col": 8
+                  },
+                  "cursor": "NoCursor"
+                },
+                "name": "cerb"
+              },
+              "id": {
+                "loc": {
+                  "tag": "Loc_region",
+                  "begin": {
+                    "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                    "line": 11,
+                    "col": 10
+                  },
+                  "end": {
+                    "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                    "line": 11,
+                    "col": 16
+                  },
+                  "cursor": "NoCursor"
+                },
+                "name": "hidden"
+              },
+              "args": []
+            }
+          ]
+        },
+        "specifiers": {
+          "tag": "Specifiers",
+          "storage_classes": [],
+          "type_specifiers": [
+            {
+              "tag": "TSpec",
+              "loc": {
+                "tag": "Loc_region",
+                "begin": {
+                  "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                  "line": 11,
+                  "col": 20
+                },
+                "end": {
+                  "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                  "line": 11,
+                  "col": 24
+                },
+                "cursor": "NoCursor"
+              },
+              "spec": "TSpec_void"
+            }
+          ],
+          "type_qualifiers": [],
+          "function_specifiers": [],
+          "alignment_specifiers": []
+        },
+        "init_declarators": [
+          {
+            "tag": "InitDecl",
+            "loc": {
+              "tag": "Loc_region",
+              "begin": {
+                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                "line": 11,
+                "col": 25
+              },
+              "end": {
+                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                "line": 11,
+                "col": 52
+              },
+              "cursor": "NoCursor"
+            },
+            "declarator": {
+              "tag": "Declarator",
+              "pointer": null,
+              "direct": {
+                "tag": "DDecl_function",
+                "direct": {
+                  "tag": "DDecl_identifier",
+                  "attrs": { "tag": "Attrs", "attrs": [] },
+                  "id": {
+                    "loc": {
+                      "tag": "Loc_region",
+                      "begin": {
+                        "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                        "line": 11,
+                        "col": 25
+                      },
+                      "end": {
+                        "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                        "line": 11,
+                        "col": 46
+                      },
+                      "cursor": "NoCursor"
+                    },
+                    "name": "__builtin_unreachable"
+                  }
+                },
+                "params": {
+                  "tag": "Params",
+                  "params": [
+                    {
+                      "tag": "PDeclaration_abs_decl",
+                      "specifiers": {
+                        "tag": "Specifiers",
+                        "storage_classes": [],
+                        "type_specifiers": [
+                          {
+                            "tag": "TSpec",
+                            "loc": {
+                              "tag": "Loc_region",
+                              "begin": {
+                                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                                "line": 11,
+                                "col": 47
+                              },
+                              "end": {
+                                "file": "/home/dev/projects/cerberus-lean-proj/cerberus-lean/_build/install/default/lib/cerberus-lib/runtime/libc/include/builtins.h",
+                                "line": 11,
+                                "col": 51
+                              },
+                              "cursor": "NoCursor"
+                            },
+                            "spec": "TSpec_void"
+                          }
+                        ],
+                        "type_qualifiers": [],
+                        "function_specifiers": [],
+                        "alignment_specifiers": []
+                      },
+                      "abstract_declarator": null
+                    }
+                  ],
+                  "is_variadic": false
+                }
+              }
+            },
+            "initializer": null
+          }
+        ]
+      }
+    },
+    {
+      "tag": "EDecl_func",
+      "def": {
+        "tag": "FunDef",
+        "loc": {
+          "tag": "Loc_region",
+          "begin": { "file": "docs/corpus-e0/t1.c", "line": 1, "col": 1 },
+          "end": { "file": "docs/corpus-e0/t1.c", "line": 1, "col": 55 },
+          "cursor": "NoCursor"
+        },
+        "attrs": { "tag": "Attrs", "attrs": [] },
+        "specifiers": {
+          "tag": "Specifiers",
+          "storage_classes": [],
+          "type_specifiers": [
+            {
+              "tag": "TSpec",
+              "loc": {
+                "tag": "Loc_region",
+                "begin": {
+                  "file": "docs/corpus-e0/t1.c",
+                  "line": 1,
+                  "col": 1
+                },
+                "end": { "file": "docs/corpus-e0/t1.c", "line": 1, "col": 4 },
+                "cursor": "NoCursor"
+              },
+              "spec": "TSpec_int"
+            }
+          ],
+          "type_qualifiers": [],
+          "function_specifiers": [],
+          "alignment_specifiers": []
+        },
+        "declarator": {
+          "tag": "Declarator",
+          "pointer": null,
+          "direct": {
+            "tag": "DDecl_function",
+            "direct": {
+              "tag": "DDecl_identifier",
+              "attrs": { "tag": "Attrs", "attrs": [] },
+              "id": {
+                "loc": {
+                  "tag": "Loc_region",
+                  "begin": {
+                    "file": "docs/corpus-e0/t1.c",
+                    "line": 1,
+                    "col": 5
+                  },
+                  "end": {
+                    "file": "docs/corpus-e0/t1.c",
+                    "line": 1,
+                    "col": 9
+                  },
+                  "cursor": "NoCursor"
+                },
+                "name": "main"
+              }
+            },
+            "params": {
+              "tag": "Params",
+              "params": [
+                {
+                  "tag": "PDeclaration_abs_decl",
+                  "specifiers": {
+                    "tag": "Specifiers",
+                    "storage_classes": [],
+                    "type_specifiers": [
+                      {
+                        "tag": "TSpec",
+                        "loc": {
+                          "tag": "Loc_region",
+                          "begin": {
+                            "file": "docs/corpus-e0/t1.c",
+                            "line": 1,
+                            "col": 10
+                          },
+                          "end": {
+                            "file": "docs/corpus-e0/t1.c",
+                            "line": 1,
+                            "col": 14
+                          },
+                          "cursor": "NoCursor"
+                        },
+                        "spec": "TSpec_void"
+                      }
+                    ],
+                    "type_qualifiers": [],
+                    "function_specifiers": [],
+                    "alignment_specifiers": []
+                  },
+                  "abstract_declarator": null
+                }
+              ],
+              "is_variadic": false
+            }
+          }
+        },
+        "body": {
+          "tag": "CabsStatement",
+          "loc": {
+            "tag": "Loc_region",
+            "begin": { "file": "docs/corpus-e0/t1.c", "line": 1, "col": 16 },
+            "end": { "file": "docs/corpus-e0/t1.c", "line": 1, "col": 55 },
+            "cursor": "NoCursor"
+          },
+          "attrs": { "tag": "Attrs", "attrs": [] },
+          "stmt": {
+            "tag": "CabsSblock",
+            "stmts": [
+              {
+                "tag": "CabsStatement",
+                "loc": {
+                  "tag": "Loc_region",
+                  "begin": {
+                    "file": "docs/corpus-e0/t1.c",
+                    "line": 1,
+                    "col": 18
+                  },
+                  "end": {
+                    "file": "docs/corpus-e0/t1.c",
+                    "line": 1,
+                    "col": 28
+                  },
+                  "cursor": "NoCursor"
+                },
+                "attrs": { "tag": "Attrs", "attrs": [] },
+                "stmt": {
+                  "tag": "CabsSdecl",
+                  "decl": {
+                    "tag": "Declaration_base",
+                    "attrs": { "tag": "Attrs", "attrs": [] },
+                    "specifiers": {
+                      "tag": "Specifiers",
+                      "storage_classes": [],
+                      "type_specifiers": [
+                        {
+                          "tag": "TSpec",
+                          "loc": {
+                            "tag": "Loc_region",
+                            "begin": {
+                              "file": "docs/corpus-e0/t1.c",
+                              "line": 1,
+                              "col": 18
+                            },
+                            "end": {
+                              "file": "docs/corpus-e0/t1.c",
+                              "line": 1,
+                              "col": 21
+                            },
+                            "cursor": "NoCursor"
+                          },
+                          "spec": "TSpec_int"
+                        }
+                      ],
+                      "type_qualifiers": [],
+                      "function_specifiers": [],
+                      "alignment_specifiers": []
+                    },
+                    "init_declarators": [
+                      {
+                        "tag": "InitDecl",
+                        "loc": {
+                          "tag": "Loc_region",
+                          "begin": {
+                            "file": "docs/corpus-e0/t1.c",
+                            "line": 1,
+                            "col": 22
+                          },
+                          "end": {
+                            "file": "docs/corpus-e0/t1.c",
+                            "line": 1,
+                            "col": 27
+                          },
+                          "cursor": "NoCursor"
+                        },
+                        "declarator": {
+                          "tag": "Declarator",
+                          "pointer": null,
+                          "direct": {
+                            "tag": "DDecl_identifier",
+                            "attrs": { "tag": "Attrs", "attrs": [] },
+                            "id": {
+                              "loc": {
+                                "tag": "Loc_region",
+                                "begin": {
+                                  "file": "docs/corpus-e0/t1.c",
+                                  "line": 1,
+                                  "col": 22
+                                },
+                                "end": {
+                                  "file": "docs/corpus-e0/t1.c",
+                                  "line": 1,
+                                  "col": 23
+                                },
+                                "cursor": "NoCursor"
+                              },
+                              "name": "x"
+                            }
+                          }
+                        },
+                        "initializer": {
+                          "tag": "Init_expr",
+                          "expr": {
+                            "tag": "CabsExpression",
+                            "loc": {
+                              "tag": "Loc_region",
+                              "begin": {
+                                "file": "docs/corpus-e0/t1.c",
+                                "line": 1,
+                                "col": 26
+                              },
+                              "end": {
+                                "file": "docs/corpus-e0/t1.c",
+                                "line": 1,
+                                "col": 27
+                              },
+                              "cursor": "NoCursor"
+                            },
+                            "expr": {
+                              "tag": "CabsEconst",
+                              "val": {
+                                "tag": "CabsInteger_const",
+                                "val": [ "3", null ]
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "tag": "CabsStatement",
+                "loc": {
+                  "tag": "Loc_region",
+                  "begin": {
+                    "file": "docs/corpus-e0/t1.c",
+                    "line": 1,
+                    "col": 29
+                  },
+                  "end": {
+                    "file": "docs/corpus-e0/t1.c",
+                    "line": 1,
+                    "col": 43
+                  },
+                  "cursor": "NoCursor"
+                },
+                "attrs": { "tag": "Attrs", "attrs": [] },
+                "stmt": {
+                  "tag": "CabsSdecl",
+                  "decl": {
+                    "tag": "Declaration_base",
+                    "attrs": { "tag": "Attrs", "attrs": [] },
+                    "specifiers": {
+                      "tag": "Specifiers",
+                      "storage_classes": [],
+                      "type_specifiers": [
+                        {
+                          "tag": "TSpec",
+                          "loc": {
+                            "tag": "Loc_region",
+                            "begin": {
+                              "file": "docs/corpus-e0/t1.c",
+                              "line": 1,
+                              "col": 29
+                            },
+                            "end": {
+                              "file": "docs/corpus-e0/t1.c",
+                              "line": 1,
+                              "col": 32
+                            },
+                            "cursor": "NoCursor"
+                          },
+                          "spec": "TSpec_int"
+                        }
+                      ],
+                      "type_qualifiers": [],
+                      "function_specifiers": [],
+                      "alignment_specifiers": []
+                    },
+                    "init_declarators": [
+                      {
+                        "tag": "InitDecl",
+                        "loc": {
+                          "tag": "Loc_region",
+                          "begin": {
+                            "file": "docs/corpus-e0/t1.c",
+                            "line": 1,
+                            "col": 33
+                          },
+                          "end": {
+                            "file": "docs/corpus-e0/t1.c",
+                            "line": 1,
+                            "col": 42
+                          },
+                          "cursor": "NoCursor"
+                        },
+                        "declarator": {
+                          "tag": "Declarator",
+                          "pointer": null,
+                          "direct": {
+                            "tag": "DDecl_identifier",
+                            "attrs": { "tag": "Attrs", "attrs": [] },
+                            "id": {
+                              "loc": {
+                                "tag": "Loc_region",
+                                "begin": {
+                                  "file": "docs/corpus-e0/t1.c",
+                                  "line": 1,
+                                  "col": 33
+                                },
+                                "end": {
+                                  "file": "docs/corpus-e0/t1.c",
+                                  "line": 1,
+                                  "col": 34
+                                },
+                                "cursor": "NoCursor"
+                              },
+                              "name": "y"
+                            }
+                          }
+                        },
+                        "initializer": {
+                          "tag": "Init_expr",
+                          "expr": {
+                            "tag": "CabsExpression",
+                            "loc": {
+                              "tag": "Loc_region",
+                              "begin": {
+                                "file": "docs/corpus-e0/t1.c",
+                                "line": 1,
+                                "col": 37
+                              },
+                              "end": {
+                                "file": "docs/corpus-e0/t1.c",
+                                "line": 1,
+                                "col": 42
+                              },
+                              "cursor": {
+                                "tag": "PointCursor",
+                                "pos": {
+                                  "file": "docs/corpus-e0/t1.c",
+                                  "line": 1,
+                                  "col": 39
+                                }
+                              }
+                            },
+                            "expr": {
+                              "tag": "CabsEbinary",
+                              "op": "CabsAdd",
+                              "lhs": {
+                                "tag": "CabsExpression",
+                                "loc": {
+                                  "tag": "Loc_region",
+                                  "begin": {
+                                    "file": "docs/corpus-e0/t1.c",
+                                    "line": 1,
+                                    "col": 37
+                                  },
+                                  "end": {
+                                    "file": "docs/corpus-e0/t1.c",
+                                    "line": 1,
+                                    "col": 38
+                                  },
+                                  "cursor": "NoCursor"
+                                },
+                                "expr": {
+                                  "tag": "CabsEident",
+                                  "id": {
+                                    "loc": {
+                                      "tag": "Loc_point",
+                                      "pos": {
+                                        "file": "docs/corpus-e0/t1.c",
+                                        "line": 1,
+                                        "col": 37
+                                      }
+                                    },
+                                    "name": "x"
+                                  }
+                                }
+                              },
+                              "rhs": {
+                                "tag": "CabsExpression",
+                                "loc": {
+                                  "tag": "Loc_region",
+                                  "begin": {
+                                    "file": "docs/corpus-e0/t1.c",
+                                    "line": 1,
+                                    "col": 41
+                                  },
+                                  "end": {
+                                    "file": "docs/corpus-e0/t1.c",
+                                    "line": 1,
+                                    "col": 42
+                                  },
+                                  "cursor": "NoCursor"
+                                },
+                                "expr": {
+                                  "tag": "CabsEconst",
+                                  "val": {
+                                    "tag": "CabsInteger_const",
+                                    "val": [ "1", null ]
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "tag": "CabsStatement",
+                "loc": {
+                  "tag": "Loc_region",
+                  "begin": {
+                    "file": "docs/corpus-e0/t1.c",
+                    "line": 1,
+                    "col": 44
+                  },
+                  "end": {
+                    "file": "docs/corpus-e0/t1.c",
+                    "line": 1,
+                    "col": 53
+                  },
+                  "cursor": "NoCursor"
+                },
+                "attrs": { "tag": "Attrs", "attrs": [] },
+                "stmt": {
+                  "tag": "CabsSreturn",
+                  "expr": {
+                    "tag": "CabsExpression",
+                    "loc": {
+                      "tag": "Loc_region",
+                      "begin": {
+                        "file": "docs/corpus-e0/t1.c",
+                        "line": 1,
+                        "col": 51
+                      },
+                      "end": {
+                        "file": "docs/corpus-e0/t1.c",
+                        "line": 1,
+                        "col": 52
+                      },
+                      "cursor": "NoCursor"
+                    },
+                    "expr": {
+                      "tag": "CabsEident",
+                      "id": {
+                        "loc": {
+                          "tag": "Loc_point",
+                          "pos": {
+                            "file": "docs/corpus-e0/t1.c",
+                            "line": 1,
+                            "col": 51
+                          }
+                        },
+                        "name": "y"
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "digest": "e9d70f29c8f28a957ee4fa9581bfd8e1"
+}

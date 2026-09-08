@@ -32,6 +32,7 @@ import CerberusHeapLang.DisposeExhibit
 import CerberusHeapLang.FibRecExhibit
 import CerberusHeapLang.EvenOddExhibit
 import CerberusHeapLang.CorpusT1Exhibit
+import CerberusHeapLang.EmittedT1Exhibit
 import CerberusHeapLang.CorpusT4Exhibit
 import CerberusHeapLang.CorpusT5Exhibit
 import CerberusHeapLang.CorpusT6Exhibit
@@ -73,7 +74,7 @@ theorem fibRounds_mono {m n : Nat} (h : m ≤ n) : fibRounds m ≤ fibRounds n :
   | refl => exact Nat.le_refl _
   | step _ ih => exact Nat.le_trans ih (fibRounds_le_succ _)
 
-/-! ## The thirteen closed statements at the shipped default -/
+/-! ## Closed statements at the shipped default -/
 
 /-- Exhibit A on the shipped pipeline at the binary's default fuel (`--fuel 100000000`). -/
 theorem exhibitA_prod_shipped :
@@ -284,7 +285,8 @@ theorem even_odd_certified_production_shipped :
   intro sup ra n nbty hn hn' fs args
   exact even_odd_certified_production sup ra n nbty hn (by show _ ≤ 100000000; omega) fs args
 
-/-- t1 (the emitted corpus program) at the shipped default fuel: `Specified(4)`. -/
+/-- Retained t1 wrapper regression at the shipped default fuel. The advertised
+    complete-file corollary is `CorpusA7.T1.certified_production_shipped`. -/
 theorem t1_certified_production_shipped :
     letI : LemFuel := ⟨100000000⟩
     ∀ (sup : Nat) (fs : CerbFS.FsState) (args : List String),
@@ -298,6 +300,28 @@ theorem t1_certified_production_shipped :
   letI : LemFuel := ⟨100000000⟩
   intro sup fs args
   exact t1_certified_production (by show _ ≤ 100000000; omega) sup fs args
+
+/-- The complete captured t1 file at the shipped execution fuel, frontend
+    supply 36 and the original comparator checks. The C/frontend connection
+    remains the explicitly documented executable comparison boundary. -/
+theorem CorpusA7.T1.certified_production_shipped :
+    letI : LemFuel := ⟨100000000⟩
+    ∀ (cmp : EmittedFile.Comparators),
+      EmittedStdCore.intLibraryCheck cmp.stdlib = true →
+      CorpusA7.T1.mainLookupCheck cmp.funs = true →
+      CorpusA7.T1.labelUnionCheck cmp = true →
+      ∀ (fs : CerbFS.FsState) (args : List String),
+        ∃ (dres : driver_result) (dst' : driver_state),
+          CerbND.runND (drive (CorpusA7.T1.restoredFile cmp).tagDefs false
+              (CorpusA7.T1.restoredFile cmp) args)
+            ((initial_driver_state CorpusA7.T1.frontendSupply
+              (CorpusA7.T1.restoredFile cmp) fs).1) = [(Active dres, [], dst')] ∧
+          dres.dres_core_value = lint 4 ∧ dres.dres_blocked = false ∧
+          dres.dres_stdout = "" ∧ dres.dres_stderr = "" := by
+  letI : LemFuel := ⟨100000000⟩
+  intro cmp hstd hmain hlabels fs args
+  exact CorpusA7.T1.certified_production (by show _ ≤ 100000000; omega)
+    cmp hstd hmain hlabels fs args
 
 /-- t4_while at the shipped default fuel: `Specified(10)`. -/
 theorem t4_certified_production_shipped :

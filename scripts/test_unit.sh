@@ -82,6 +82,13 @@ if [[ $fast -eq 0 ]]; then
       "hit a blind spot, or a plant matched — a vacuous instrument)" >&2; fail=1
   fi
 
+  echo "== speedbump: complete emitted t1 file (fresh Cabs, data/supply, original comparator checks) =="
+  if scripts/check-emitted-t1.sh; then
+    echo "ok: complete-file t1 comparison and negative checks"
+  else
+    echo "FAIL (speedbump): complete-file t1 comparison (above)" >&2; fail=1
+  fi
+
   echo "== speedbump: import direction (semantics → heap → rules → adequacy → clients) =="
   # No core module may import an exhibit, example-support or production module.
   # The core set is the class `core` of the one module classification (a

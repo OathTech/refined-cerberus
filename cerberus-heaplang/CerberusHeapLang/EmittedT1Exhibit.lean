@@ -643,7 +643,8 @@ theorem certified_production [LemFuel] (hfuel : 50 ≤ LemFuel.fuel)
 
 /-- Transfer the production equation to the original file and supply when
 the retained data and the original comparator checks agree. The executable
-frontend comparison establishes this boundary separately from the proof. -/
+frontend comparison tests this connection; it does not discharge these Lean
+equality premises or prove correctness of the IO frontend. -/
 theorem certified_production_of_capture_eq [LemFuel] (hfuel : 50 ≤ LemFuel.fuel)
     (fallback : EmittedFile.Comparators) (F : file core_run_annotation) (sup : Nat)
     (hdata : EmittedFile.captureData F = data) (hsup : sup = frontendSupply)

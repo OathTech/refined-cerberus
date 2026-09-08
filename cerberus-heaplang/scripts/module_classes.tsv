@@ -66,7 +66,7 @@ CerberusHeapLang.EvenOddExhibit	positive-client	-	mutual recursion (even/odd) th
 CerberusHeapLang.EmittedAExhibit	positive-client	-	exhibit A in the emitted-Core shape (E1: annotations, bound, Ivalignof) at both strata and the production entry
 CerberusHeapLang.EmittedBExhibit	positive-client	-	exhibit B in the emitted-Core shape (E2: loaded values, the Unspecified store, pure case at a tuple, the tuple and weak-symbol binders) at both strata and the production entry
 CerberusHeapLang.EmittedCExhibit	positive-client	-	x + 1 in the emitted-Core shape (E3: conv_loaded_int, __conv_int__, catch_exceptional_condition_add; t1 minus the unseq) at both strata and the production entry over the library-carrying file
-CerberusHeapLang.CorpusT1Exhibit	positive-client	-	THE MILESTONE (E4): docs/corpus-e0/t1.c's main transcribed VERBATIM (CorpusE0.t1Main — unseq, the annotated tuple binder, conv_loaded_int, the emitted +) at both strata and the production entry over the library-carrying file
+CerberusHeapLang.CorpusT1Exhibit	positive-client	-	retained E4 wrapper regression: t1 main hand-transcribed (CorpusE0.t1Main — unseq, the annotated tuple binder, conv_loaded_int, the emitted +) at both strata and the production entry over the library-carrying file
 CerberusHeapLang.CorpusT5Exhibit	positive-client	-	t5_ifelse emitted main, public total rules and the shipped driver; explicit fresh-symbol floor
 CerberusHeapLang.CorpusT6Exhibit	positive-client	-	t6_switch emitted main, five registered labels, public total proof and shipped-driver result; explicit fresh-symbol floor
 CerberusHeapLang.Examples.CallSmoke	declared-smoke	-	the C3 call/procedure smoke (kept as a consumer beside FibRecExhibit)
@@ -82,7 +82,7 @@ CerberusHeapLang.DivergeExhibit	negative-test	-	the total lane's unprovability r
 CerberusHeapLang.OverflowExhibit	negative-test	-	the UB036 kill of x + 1 at INT_MAX over the genuine driver's round (E3)
 CerberusHeapLang.Examples.EmittedInt	example-support	-	Shared public-rule derivations for emitted integer expressions; location and symbol parameters preserve each client AST
 CerberusHeapLang.CorpusT4Exhibit	positive-client	-	t4_while emitted main, four registered labels, public total loop proof and shipped-driver result; explicit fresh-symbol floor and library-fragment boundary
-CerberusHeapLang.Shipped	production-wrapper	-	the thirteen production exports instantiated at the shipped default fuel ⟨100000000⟩ (the *_shipped corollaries; the only home of the fuel numeral)
+CerberusHeapLang.Shipped	production-wrapper	-	production exports and the retained t1 wrapper regression instantiated at the shipped default fuel ⟨100000000⟩ (the *_shipped corollaries; the only home of the fuel numeral)
 CerberusHeapLang.Examples.PartialClients	positive-client	-	D5 partial proof of emitted t5 main and an annotated load/bind client retaining the exact read footprint
 CerberusHeapLang.EmittedFile	production-core	-	full-file data projection and exact reconstruction with the original map comparators
 CerberusHeapLang.EmittedMapChecks	production-core	-	finite comparator checks proving equality of shipped map operations and their binding folds for emitted label collection

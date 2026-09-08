@@ -6,9 +6,9 @@ build + this sweep + the banned-methods grep; everything else is a
 speedbump).
 
 Three checks, in order:
-1. EXACT PINS over the public exports (`trioExports`, `axiomFreeExports`):
+1. EXACT PINS over the public exports (`trioExports`, `propextExports`, `axiomFreeExports`):
    each export must exist, be a theorem, and its transitive axiom set
-   must EQUAL its declared set (the classical trio or empty). Growth OR
+   must EQUAL its declared set (the classical trio, propext alone, or empty). Growth OR
    shrinkage is a build failure until the list is re-baselined in the
    same commit with the reason.
 2. THE EXHAUSTIVE SWEEP: every theorem of every `CerberusHeapLang.*`
@@ -42,7 +42,7 @@ from a later cerberus-lean commit, the 62-constant delta being
 (cerberus-heaplang/docs/2026-09-02_audit-response-4-notes.md). The
 verdicts are the check; the numbers are a census of the run.
 
-THE TRUST BASE IS THE CLASSICAL TRIO, EXACTLY, OVER EVERY EXPORT.
+THE CLASSICAL TRIO BOUNDS EVERY EXPORT; THE PINS ASSERT ITS EXACT SUBSET.
 There is no declared boundary axiom. The former temporal boundary
 (`runEffectful`, the lem runtime's effect-erasure axiom, which entered
 the production-entry theorems through their statements — the shipped
@@ -270,6 +270,7 @@ def allowedAxioms : List Name :=
     the README's exhibits table and trust diagram, and WALKTHROUGH §6,
     name these). -/
 def trioExports : List Name := [
+  ``CerberusHeapLang.CorpusA7.T1.certified_production_shipped,
   -- Whole-file t1: public syntactic-fragment bridges and complete production.
   ``CerberusHeapLang.CorpusA7.T1.mainBody_frag,
   ``CerberusHeapLang.CorpusA7.T1.returnSpec_valid,
@@ -1116,6 +1117,19 @@ def trioExports : List Name := [
   ``CerberusHeapLang.peDepth_subst,
   ``CerberusHeapLang.evalDepth_subst]
 
+/-- Whole-file representation proofs use propositional extensionality through
+`simp` and induction, without choice or quotient soundness. Preserve that
+measured subset instead of manufacturing full-trio dependencies. -/
+def propextExports : List Name := [
+  ``CerberusHeapLang.EmittedFile.restore_capture,
+  ``CerberusHeapLang.EmittedFile.captureData_restore,
+  ``CerberusHeapLang.EmittedFile.restore_eq_of_data_eq,
+  ``CerberusHeapLang.EmittedFile.restoreMap_lookup_of_check,
+  ``CerberusHeapLang.EmittedMapChecks.add_eq_of_check,
+  ``CerberusHeapLang.EmittedMapChecks.union_eq_of_check,
+  ``CerberusHeapLang.EmittedMapChecks.mapData_union_of_check
+]
+
 /-- M2 re-pin [AGENT 2026-09-06]: these six previously trio-exact
     exports now have empty cones. The context projections are unchanged
     reflexivity proofs; the production context/thread equations also
@@ -1123,6 +1137,7 @@ def trioExports : List Name := [
     and exact-cone assertions rather than manufacturing dependencies.
     The exhaustive trio bound and all-constant banned sweep are unchanged. -/
 def axiomFreeExports : List Name := [
+  ``CerberusHeapLang.EmittedMapChecks.fold_eq_of_mapData_eq,
   ``CerberusHeapLang.procCtxF_runState_labeled,
   ``CerberusHeapLang.procCtxF_sym_supply,
   ``CerberusHeapLang.procCtx_runState_labeled,
@@ -1147,9 +1162,10 @@ def sortedNames (ns : Array Name) : Array String :=
       throwError "CerberusHeapLang export pin FAILED: {n} depends on axioms {axs}, \
         expected EXACTLY {exp}"
   for n in trioExports do pin allowedAxioms n
+  for n in propextExports do pin [``propext] n
   for n in axiomFreeExports do pin [] n
   logInfo s!"CerberusHeapLang export pins: {trioExports.length} trio-exact, \
-    {axiomFreeExports.length} axiom-free-exact"
+    {propextExports.length} propext-exact, {axiomFreeExports.length} axiom-free-exact"
   -- 2. THE EXHAUSTIVE SWEEP (theorems, bounded by the trio, every module).
   let mods := env.header.moduleNames
   let isOurs : Array Bool := mods.map (fun m => m.getRoot == `CerberusHeapLang)
