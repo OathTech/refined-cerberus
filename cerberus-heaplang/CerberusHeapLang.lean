@@ -51,6 +51,9 @@ import CerberusHeapLang.EmittedBExhibit
 import CerberusHeapLang.EmittedCExhibit
 import CerberusHeapLang.CorpusT1Exhibit
 import CerberusHeapLang.EmittedT1Exhibit
+import CerberusHeapLang.EmittedT5Exhibit
+import CerberusHeapLang.EmittedT6Exhibit
+import CerberusHeapLang.EmittedT4Exhibit
 import CerberusHeapLang.CorpusT5Exhibit
 import CerberusHeapLang.CorpusT6Exhibit
 import CerberusHeapLang.CorpusT4Exhibit

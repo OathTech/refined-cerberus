@@ -82,12 +82,21 @@ CerberusHeapLang.DivergeExhibit	negative-test	-	the total lane's unprovability r
 CerberusHeapLang.OverflowExhibit	negative-test	-	the UB036 kill of x + 1 at INT_MAX over the genuine driver's round (E3)
 CerberusHeapLang.Examples.EmittedInt	example-support	-	Shared public-rule derivations for emitted integer expressions; location and symbol parameters preserve each client AST
 CerberusHeapLang.CorpusT4Exhibit	positive-client	-	t4_while emitted main, four registered labels, public total loop proof and shipped-driver result; explicit fresh-symbol floor and library-fragment boundary
-CerberusHeapLang.Shipped	production-wrapper	-	production exports and the retained t1 wrapper regression instantiated at the shipped default fuel ⟨100000000⟩ (the *_shipped corollaries; the only home of the fuel numeral)
+CerberusHeapLang.Shipped	production-wrapper	-	production exports and retained corpus wrapper regressions instantiated at the shipped default fuel ⟨100000000⟩ (the *_shipped corollaries; the only home of the fuel numeral)
 CerberusHeapLang.Examples.PartialClients	positive-client	-	D5 partial proof of emitted t5 main and an annotated load/bind client retaining the exact read footprint
 CerberusHeapLang.EmittedFile	production-core	-	full-file data projection and exact reconstruction with the original map comparators
 CerberusHeapLang.EmittedMapChecks	production-core	-	finite comparator checks proving equality of shipped map operations and their binding folds for emitted label collection
-CerberusHeapLang.EmittedStdCore	example-support	-	actual emitted integer-library lookup contract and conversion rules used by the complete-file t1 production proof
+CerberusHeapLang.EmittedStdCore	example-support	-	actual emitted integer-library lookup contract and conversion rules used by the complete-file corpus proofs
 CerberusHeapLang.Examples.EmittedT1Data	example-support	-	complete generated t1 file data; checked against the pinned frontend with original comparators retained separately
 CerberusHeapLang.Examples.EmittedT1	example-support	-	actual t1 main projected from the complete file data, exact readable shape and whole-body fragment membership
 CerberusHeapLang.EmittedT1Exhibit	positive-client	-	actual t1 total public proof and complete-file production at frontend supply 36 and ambient fuel at least 50, under explicit data and comparator checks
-CerberusHeapLang.EmittedIntSupport	example-support	-	typed annotated load and assignment rules with actual extern key comparison; shared emitted integer memory facts
+CerberusHeapLang.EmittedIntSupport	example-support	-	typed annotated load and assignment rules with actual extern key comparison; literal-right sequencing and shared emitted integer memory facts
+CerberusHeapLang.Examples.EmittedT5Data	example-support	-	complete captured t5 file data with original comparators retained separately
+CerberusHeapLang.Examples.EmittedT5	example-support	-	actual t5 main projected from complete data, exact readable shape and collector lookup support
+CerberusHeapLang.Examples.EmittedT6Data	example-support	-	complete captured t6 file data with original comparators retained separately
+CerberusHeapLang.Examples.EmittedT6	example-support	-	actual t6 main projected from complete data, exact readable shape and collector lookup support
+CerberusHeapLang.Examples.EmittedT4Data	example-support	-	complete captured t4 file data with original comparators retained separately
+CerberusHeapLang.Examples.EmittedT4	example-support	-	actual t4 main projected from complete data, exact readable shape and collector lookup support
+CerberusHeapLang.EmittedT5Exhibit	positive-client	-	complete-file t5 public total proof and driver certificate at captured supply47, every fuel at least90
+CerberusHeapLang.EmittedT6Exhibit	positive-client	-	complete-file t6 five-continuation public total proof and driver certificate at captured supply51, every fuel at least80
+CerberusHeapLang.EmittedT4Exhibit	positive-client	-	actual t4 emitted program continuations and public total-rule derivations

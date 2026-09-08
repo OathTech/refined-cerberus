@@ -245,6 +245,9 @@ import CerberusHeapLang.EmittedBExhibit
 import CerberusHeapLang.EmittedCExhibit
 import CerberusHeapLang.CorpusT1Exhibit
 import CerberusHeapLang.EmittedT1Exhibit
+import CerberusHeapLang.EmittedT5Exhibit
+import CerberusHeapLang.EmittedT6Exhibit
+import CerberusHeapLang.EmittedT4Exhibit
 import CerberusHeapLang.EmittedIntSupport
 import CerberusHeapLang.CorpusT5Exhibit
 import CerberusHeapLang.CorpusT6Exhibit
@@ -1124,7 +1127,56 @@ def trioExports : List Name := [
   ``CerberusHeapLang.EmittedIntSupport.symbol_eval,
   ``CerberusHeapLang.EmittedIntSupport.int_storable,
   ``CerberusHeapLang.EmittedIntSupport.update_sym,
-  ``CerberusHeapLang.EmittedIntSupport.wpt_unseq_value_right]
+  ``CerberusHeapLang.EmittedIntSupport.wpt_unseq_value_right,
+  -- Whole-file t5: actual body/collector, public derivation and genuine driver.
+  ``CerberusHeapLang.CorpusA7.T5.mainBody_shape,
+  ``CerberusHeapLang.CorpusA7.T5.mainBody_frag,
+  ``CerberusHeapLang.CorpusA7.T5.mainBody_evalDepth,
+  ``CerberusHeapLang.CorpusA7.T5.reference_main_labels,
+  ``CerberusHeapLang.CorpusA7.T5.mainBody_saves,
+  ``CerberusHeapLang.CorpusA7.T5.returnQ_lookup,
+  ``CerberusHeapLang.CorpusA7.T5.returnQ_inv,
+  ``CerberusHeapLang.CorpusA7.T5.returnSpec_valid,
+  ``CerberusHeapLang.CorpusA7.T5.wpt_t5Load,
+  ``CerberusHeapLang.CorpusA7.T5.wpt_t5Gt,
+  ``CerberusHeapLang.CorpusA7.T5.wpt_t5Cond,
+  ``CerberusHeapLang.CorpusA7.T5.wpt_t5AssignBlock,
+  ``CerberusHeapLang.CorpusA7.T5.wpt_t5Return,
+  ``CerberusHeapLang.CorpusA7.T5.wpt_t5If,
+  ``CerberusHeapLang.CorpusA7.T5.mainBody_wpt,
+  ``CerberusHeapLang.CorpusA7.T5.mainBody_driver_done,
+  ``CerberusHeapLang.CorpusA7.T5.certified_production,
+  ``CerberusHeapLang.CorpusA7.T5.certified_production_of_capture_eq,
+  ``CerberusHeapLang.CorpusA7.T5.certified_production_shipped,
+  -- Whole-file t6: exact continuation map and complete execution.
+  ``CerberusHeapLang.CorpusA7.T6.mainBody_shape,
+  ``CerberusHeapLang.CorpusA7.T6.mainBody_frag,
+  ``CerberusHeapLang.CorpusA7.T6.mainBody_evalDepth,
+  ``CerberusHeapLang.CorpusA7.T6.reference_main_labels,
+  ``CerberusHeapLang.CorpusA7.T6.Q_eq,
+  ``CerberusHeapLang.CorpusA7.T6.Q_lookup,
+  ``CerberusHeapLang.CorpusA7.T6.Q_cont,
+  ``CerberusHeapLang.CorpusA7.T6.Q_frag,
+  ``CerberusHeapLang.CorpusA7.T6.Q_depth,
+  ``CerberusHeapLang.CorpusA7.T6.wpt_load,
+  ``CerberusHeapLang.CorpusA7.T6.wpt_assignStmt,
+  ``CerberusHeapLang.CorpusA7.T6.wpt_returnStmt,
+  ``CerberusHeapLang.CorpusA7.T6.wpt_break,
+  ``CerberusHeapLang.CorpusA7.T6.wpt_case2,
+  ``CerberusHeapLang.CorpusA7.T6.blockSpecs_valid,
+  ``CerberusHeapLang.CorpusA7.T6.wpt_switch,
+  ``CerberusHeapLang.CorpusA7.T6.mainBody_wpt,
+  ``CerberusHeapLang.CorpusA7.T6.mainBody_driver_done,
+  ``CerberusHeapLang.CorpusA7.T6.certified_production,
+  ``CerberusHeapLang.CorpusA7.T6.certified_production_of_capture_eq,
+  ``CerberusHeapLang.CorpusA7.T6.certified_production_shipped,
+  -- Whole-file t4 body/continuation checkpoint; total loop proof follows.
+  ``CerberusHeapLang.CorpusA7.T4.mainBody_shape,
+  ``CerberusHeapLang.CorpusA7.T4.mainBody_frag,
+  ``CerberusHeapLang.CorpusA7.T4.mainBody_evalDepth,
+  ``CerberusHeapLang.CorpusA7.T4.Q_eq,
+  ``CerberusHeapLang.CorpusA7.T4.Q_frag,
+  ``CerberusHeapLang.CorpusA7.T4.Q_depth]
 
 /-- Whole-file representation proofs use propositional extensionality through
 `simp` and induction, without choice or quotient soundness. Preserve that

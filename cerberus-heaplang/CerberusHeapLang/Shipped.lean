@@ -33,6 +33,8 @@ import CerberusHeapLang.FibRecExhibit
 import CerberusHeapLang.EvenOddExhibit
 import CerberusHeapLang.CorpusT1Exhibit
 import CerberusHeapLang.EmittedT1Exhibit
+import CerberusHeapLang.EmittedT5Exhibit
+import CerberusHeapLang.EmittedT6Exhibit
 import CerberusHeapLang.CorpusT4Exhibit
 import CerberusHeapLang.CorpusT5Exhibit
 import CerberusHeapLang.CorpusT6Exhibit
@@ -323,7 +325,51 @@ theorem CorpusA7.T1.certified_production_shipped :
   exact CorpusA7.T1.certified_production (by show _ ≤ 100000000; omega)
     cmp hstd hmain hlabels fs args
 
-/-- t4_while at the shipped default fuel: `Specified(10)`. -/
+/-- The complete captured t5 file at the shipped execution fuel, frontend
+    supply 47 and the original comparator checks. The C/frontend connection
+    remains the explicitly documented executable comparison boundary. -/
+theorem CorpusA7.T5.certified_production_shipped :
+    letI : LemFuel := ⟨100000000⟩
+    ∀ (cmp : EmittedFile.Comparators),
+      EmittedStdCore.intLibraryCheck cmp.stdlib = true →
+      CorpusA7.T5.mainLookupCheck cmp.funs = true →
+      CorpusA7.T5.labelUnionCheck cmp = true →
+      ∀ (fs : CerbFS.FsState) (args : List String),
+        ∃ (dres : driver_result) (dst' : driver_state),
+          CerbND.runND (drive (CorpusA7.T5.restoredFile cmp).tagDefs false
+              (CorpusA7.T5.restoredFile cmp) args)
+            ((initial_driver_state CorpusA7.T5.frontendSupply
+              (CorpusA7.T5.restoredFile cmp) fs).1) = [(Active dres, [], dst')] ∧
+          dres.dres_core_value = lint 1 ∧ dres.dres_blocked = false ∧
+          dres.dres_stdout = "" ∧ dres.dres_stderr = "" := by
+  letI : LemFuel := ⟨100000000⟩
+  intro cmp hstd hmain hlabels fs args
+  exact CorpusA7.T5.certified_production (by show _ ≤ 100000000; omega)
+    cmp hstd hmain hlabels fs args
+
+/-- The complete captured t6 file at the shipped execution fuel, frontend
+    supply 51 and the original comparator checks. The C/frontend connection
+    remains the explicitly documented executable comparison boundary. -/
+theorem CorpusA7.T6.certified_production_shipped :
+    letI : LemFuel := ⟨100000000⟩
+    ∀ (cmp : EmittedFile.Comparators),
+      EmittedStdCore.intLibraryCheck cmp.stdlib = true →
+      CorpusA7.T6.mainLookupCheck cmp.funs = true →
+      CorpusA7.T6.labelUnionCheck cmp = true →
+      ∀ (fs : CerbFS.FsState) (args : List String),
+        ∃ (dres : driver_result) (dst' : driver_state),
+          CerbND.runND (drive (CorpusA7.T6.restoredFile cmp).tagDefs false
+              (CorpusA7.T6.restoredFile cmp) args)
+            ((initial_driver_state CorpusA7.T6.frontendSupply
+              (CorpusA7.T6.restoredFile cmp) fs).1) = [(Active dres, [], dst')] ∧
+          dres.dres_core_value = lint 20 ∧ dres.dres_blocked = false ∧
+          dres.dres_stdout = "" ∧ dres.dres_stderr = "" := by
+  letI : LemFuel := ⟨100000000⟩
+  intro cmp hstd hmain hlabels fs args
+  exact CorpusA7.T6.certified_production (by show _ ≤ 100000000; omega)
+    cmp hstd hmain hlabels fs args
+
+/-- Retained t4_while wrapper regression at the shipped default fuel: `Specified(10)`. -/
 theorem t4_certified_production_shipped :
     letI : LemFuel := ⟨100000000⟩
     ∀ (sup : Nat),
@@ -340,7 +386,8 @@ theorem t4_certified_production_shipped :
   intro sup hsup fs args
   exact t4_certified_production (by show _ ≤ 100000000; omega) sup hsup fs args
 
-/-- t5_ifelse at the shipped default fuel: `Specified(1)`. -/
+/-- Retained t5_ifelse wrapper regression; the complete-file corollary is
+    `CorpusA7.T5.certified_production_shipped`. -/
 theorem t5_certified_production_shipped :
     letI : LemFuel := ⟨100000000⟩
     ∀ (sup : Nat),
@@ -357,7 +404,8 @@ theorem t5_certified_production_shipped :
   intro sup hsup fs args
   exact t5_certified_production (by show _ ≤ 100000000; omega) sup hsup fs args
 
-/-- t6_switch at the shipped default fuel: `Specified(20)`. -/
+/-- Retained t6_switch wrapper regression; the complete-file corollary is
+    `CorpusA7.T6.certified_production_shipped`. -/
 theorem t6_certified_production_shipped :
     letI : LemFuel := ⟨100000000⟩
     ∀ (sup : Nat),

@@ -94,3 +94,53 @@ FAST-GATE GREEN (gates 1-2 only — not a claim-point result; say fast-gate in t
 The t5/t6 modules are not yet root imports at this checkpoint; their
 separate targeted builds, not this sweep, verify those data/body facts.
 Program total proofs remain in progress.
+
+## t5/t6 integration and four-file comparison checkpoint
+
+Green worker commits adopted: t5 `5f2c045` as `73200a4`; t6 `eaf2e15`
+as `864937a`. T4's exact body/continuation and public comparison checkpoint
+`b30ac7d` is adopted as `312d6e2`; its loop proof remains in progress.
+Parent independently built T4's checkpoint, then the integrated library
+with t5/t6 shipped corollaries, exact audit pins and all new module classes.
+The fast gate passed (`t5-t6-integration-fast.log`); selected verbatim output:
+
+```text
+✔ [495/500] Built CerberusHeapLang.EmittedT6Exhibit (8.4s)
+✔ [496/500] Built CerberusHeapLang.EmittedT5Exhibit (11s)
+info: CerberusHeapLang/Audit.lean:1213:0: CerberusHeapLang export pins: 971 trio-exact, 7 propext-exact, 7 axiom-free-exact
+info: CerberusHeapLang/Audit.lean:1213:0: CerberusHeapLang axiom sweep: every theorem bounded by the trio (7195 swept, internal details included — count informational, environment-dependent)
+info: CerberusHeapLang/Audit.lean:1213:0: CerberusHeapLang banned-axiom sweep: sorryAx/ofReduceBool/ofReduceNat absent from all cones (10907 constants of every kind swept, internal details included — count informational, environment-dependent)
+FAST-GATE GREEN (gates 1-2 only — not a claim-point result; say fast-gate in the commit)
+```
+
+The consolidated `scripts/check-emitted-corpus.sh` completed successfully
+for t1/t5/t6/t4, independently of the new total proofs. It regenerates
+Cabs from each exact relative C source path; checks retained data by the
+independent structural comparator and quotation; checks original comparator
+paths on the same frontend instance; checks exact supplies and intended
+main/supply perturbations. Selected verbatim output (`corpus-comparison.log`):
+
+```text
+ok: whole-file t1 — metadata, all three comparator checks and singleton return 4 checked
+ok: whole-file t1 — independent structural data, quotation, supply and negative checks passed
+ok: whole-file t5 — metadata, all three comparator checks and singleton return 1 checked
+ok: whole-file t5 — independent structural data, quotation, supply and negative checks passed
+ok: whole-file t6 — metadata, all three comparator checks and singleton return 20 checked
+ok: whole-file t6 — independent structural data, quotation, supply and negative checks passed
+ok: whole-file t4 — metadata, all three comparator checks and singleton return 10 checked
+ok: whole-file t4 — independent structural data, quotation, supply and negative checks passed
+```
+
+The observed producer hash/version match the fixture README. The full gate
+now calls the cohort runner; the original t1-only command is a compatibility
+wrapper. `--fast` still excludes these executable comparisons. The existing
+main/supply and structural-comparator selftests are reused without adding
+a new certification mechanism. T6's worker also read the runner independently
+and found no substantive issue; it suggested the adopted wording "captured
+Core producer" to avoid implying frontend certification.
+
+The client-boundary report passed all44 modules with zero internal mentions.
+The capability manifest was deliberately regenerated, including the new
+derived sequencing/assignment names. This is an intermediate fast-gate plus
+selected speedbump checkpoint; the full final gate, signature census, final
+doc claims and fresh adversarial review remain required for the candidate.
