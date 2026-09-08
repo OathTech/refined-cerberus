@@ -61,3 +61,25 @@ proof and driver certificates are still pending. The expected freshness
 premise is `22 < M.runState.sym_supply`: only the live source pointers21/22
 are preserved by the assignment postconditions, not stale temporary
 bindings; the final file still starts at its exact captured supply92.
+
+Third green checkpoint proves the combined short-circuit guard, both
+arithmetic right-hand sides with their exact actual read footprints, both
+negative assignments through the shared typed rule, pointer-save rebinding,
+and the full loop body. The invariant owns i=n and s=sum(0..n-1), n≤5;
+`loopBudget n = 159*(5-n)+98` decreases on each continuing iteration.
+`blockSpecsT_main` proves the reachable while and return entries; all four
+registered continuations remain covered by the syntactic membership proof.
+The final case performs both annotated cell kills and jumps to the actual
+return continuation. The only supply hypothesis is22<, for live i/s.
+
+```
+CERB_MEM_MAX=40G ../scripts/capped "$HOME/.elan/bin/lake" build CerberusHeapLang.EmittedT4Exhibit
+✔ [455/455] Built CerberusHeapLang.EmittedT4Exhibit (13s)
+Build completed successfully (455 jobs).
+```
+
+Caller observed exit0, no new worker warnings. Routine feedback fixed a
+thin `psym_eval` spelling bridge, transparent annotated-type abbreviations,
+and explicit local SymFrame projections. No judgment, mirror, semantics,
+rule limit or external premise change was needed. Allocation/initialization
+of the full main and the genuine-driver wrapper remain pending.

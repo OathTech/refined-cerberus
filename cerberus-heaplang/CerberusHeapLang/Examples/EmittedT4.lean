@@ -141,9 +141,9 @@ theorem mainLookup_of_capture_eq (fallback : EmittedFile.Comparators)
   rw [← EmittedFile.restore_eq_of_data_eq fallback f data hd]
   exact restoredFile_mainLookup _ hc
 
-def iTy : ctype := EmittedStdCore.sintTyAnn [Aloc (loc 18 21)]
-def sTy : ctype := EmittedStdCore.sintTyAnn [Aloc (loc 29 32)]
-def retTy : ctype := EmittedStdCore.sintTyAnn [Aloc (loc 1 4)]
+abbrev iTy : ctype := EmittedStdCore.sintTyAnn [Aloc (loc 18 21)]
+abbrev sTy : ctype := EmittedStdCore.sintTyAnn [Aloc (loc 29 32)]
+abbrev retTy : ctype := EmittedStdCore.sintTyAnn [Aloc (loc 1 4)]
 def tyPe (ty : ctype) : generic_pexpr Unit sym := Pexpr [] () (PEval (Vctype ty))
 def intValueAnnot : annot := Avalue (Ainteger (.Signed .Int_))
 def exprAnn (l : CerbLocation.Loc) : List annot := [Aloc l, Aexpr, intValueAnnot]
