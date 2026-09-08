@@ -201,3 +201,46 @@ proof, other corpus migrations, procedure/scheduler work and frozen-core
 limitations remain explicitly outside this slice. This review authorizes
 no merge or push. Final documentation corrections and claim-point status
 belong in the implementation record.
+
+## Final documentation confirmation at a39efb0
+
+[AGENT, 2026-09-08] Re-read the corrected ARCHITECTURE and CLAIMS in
+full at `a39efb0d347e46ad2246a3f91b21755d2915856d`, read corrected FUEL,
+and reviewed the complete correction diff and affected passages of the
+package README, WALKTHROUGH and KNOWN-OPEN-ITEMS. Compared the correction
+range `c9215cc..a39efb0`: it changes those six documents and incorporates
+this report; implementation source, tools, proof statements and pins are
+unchanged.
+
+**Final verdict: PASS. All three Notes are resolved.**
+
+- **N1 resolved:** ARCHITECTURE `:758–764` distinguishes the three exact
+  pin categories and allows public lemmas to have pinned smaller cones.
+  CLAIMS `:28` and C11 (`:51`) include `propext` alone and explicitly
+  name `Audit.propextExports`, matching `Audit.lean:1123`, `:1139` and
+  the exact checks at `:1164–1166`.
+- **N2 resolved:** ARCHITECTURE `:1010–1017` names the current consumer
+  families, including `EmittedT1Exhibit` and `Examples.PartialClients`,
+  and points to the generated census. Its claim/name/span account
+  (`:1037–1045`) likewise defers to the manifest run. The stale duplicated
+  counts are removed without adding a new checking instrument.
+- **N3 resolved:** ARCHITECTURE `:880–889` limits the empty-extern
+  account to the existing partial and through-calls routes, and points
+  to the actual-extern allocation route for complete-file t1.
+
+The citation repairs now point to the intended declarations and fields,
+including `prodCtx` (`ProdEntry.lean:414`), the production total/partial
+theorems (`:583`, `:621`), `DriverDoneCtl` (`ProdLoop.lean:631`), and
+`ctlThread` (`DriverCollapse.lean:2929`). The repaired source locations
+do not broaden their claims. In the complete normative architecture,
+the reusable machinery's startup restrictions, the captured-library
+adapter's t1-data dependency, and the executable option-(b) frontend
+boundary remain explicit; no new misleading whole-file scope was found.
+
+No substantive issue remains from this review. Adding the existing
+`Audit.propextExports` declaration to C11 also changes the generated
+claim-name census; the parent is regenerating that artifact and owns the
+final full gate. The earlier green gate recorded above is evidence for
+the unchanged implementation at `c9215cc`, not a claim that this reviewer
+ran the final documentation gate. No builds, source edits, merge or push
+were performed by this reviewer.
