@@ -4,6 +4,15 @@ Status: COMPLETE on `demo-whole-file-t1`, 2026-09-08; no merge or push authorize
 Charter: [whole-file t1](2026-09-07_whole-file-t1-charter.md).
 Baseline main `7040406`; proposal `969281f`; charter/baseline `5bcbdd1`.
 
+Evidence-path convention: every `.lake/whole-file-evidence/…` path in this
+record is relative to the **feature worktree root**, not its
+`cerberus-heaplang/` package directory. Ignored logs and generated reuse
+scratch are ephemeral; the committed
+[validation excerpts](2026-09-08_whole-file-t1-validation.txt) are the durable
+record. Landing-review fixes and merge authorization are recorded separately
+in [the landing record](2026-09-08_whole-file-t1-landing.md); authorization
+statements below describe the initial feature handoff.
+
 ## Phase A — proof port
 
 Re-cut G2 `520654f..5bfe992` onto current main. No G3 scheduler work,

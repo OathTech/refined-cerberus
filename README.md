@@ -58,9 +58,18 @@ uses the latter; `scripts/capped` loads it when present).
 
 ```bash
 scripts/setup-cerberus-dep.sh            # once: the pinned cerberus-lean workspace (see scripts/semantics-pin.env)
-cd cerberus-heaplang && ../scripts/capped ~/.elan/bin/lake build   # capped; elaborates the in-build axiom audit
+(cd cerberus-heaplang && ../scripts/capped ~/.elan/bin/lake build) # capped; elaborates the in-build axiom audit
 scripts/test_unit.sh                      # the gates (banned-methods grep; the capped build) + speedbump reports
 ```
+
+The full gate additionally requires the existing OCaml driver
+`../cerberus-lean/_build/default/backend/driver/main.exe` and runtime
+`../cerberus-lean/_build/install/default`, resolved beside the primary
+checkout even when running in a worktree. The whole-file t1 speedbump fails
+if either is absent; `scripts/test_unit.sh --fast` is unaffected. This
+external build is not pinned by `semantics-pin.env`: its hash/version are
+reported on each run, and fresh Cabs must match the retained fixture.
+[Producer identity and reproduction notes](docs/corpus-a7/README.md).
 
 Toolchain: Lean 4.32.2 (elan). Dependencies (batteries, Qq, iris-lean) are
 git-pinned in `cerberus-heaplang/lakefile.toml`; the semantics enters as a

@@ -3938,3 +3938,15 @@ the founding slate: `2026-08-29_rules-of-engagement.md`.
   complete; option (b) is delivered for t1 only, with the recorded limits.
   The primary checkout remains clean at main `7040406`. This is a branch
   handoff, not a merge or push authorization; user sign-off is still needed.
+
+- **2026-09-08 [USER] WHOLE-FILE T1 FIXES AND LANDING AUTHORIZED**, working
+  session, verbatim: "The review landed on your worktree. Can you make the
+  identified fixes, then land on main?" [AGENT] The independent landing
+  review (`docs/2026-09-08_review-whole-file-t1-landing.md`) returned PASS
+  WITH FIXES, A−. Required F1 is fixed: the speedbump reports the external
+  OCaml binary's hash/version and paths; the fixture README records its
+  measured identity, and both READMEs/KOI disclose the full-gate prerequisite.
+  F3–F5 hygiene recommendations and the F6 planning note are addressed in
+  `docs/2026-09-08_whole-file-t1-landing.md`. The full capped feature gate
+  passed with the fixes; no Lean source or pin changed. This authorization
+  supersedes the earlier pending merge ask; it does not authorize a push.

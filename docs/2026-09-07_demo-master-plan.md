@@ -276,6 +276,14 @@ review's sweep found every unmerged branch present here.
 | `docs/master-plan` | this document and the companion | — | the merge candidate |
 | worktree `demo-fuel-t1` (branch merged) — UNCOMMITTED, another agent's | `docs/2026-09-05_demo-completion-charter.md` (titled "Demo completion master plan", mtime 2026-09-07 00:05), `docs/2026-09-07_fuel-adequacy-t1-charter.md` (00:07), AND uncommitted edits `README.md | 8 +`, `docs/DECISIONS.md | 55 +` — a pending edit to the append-only register | none: they plan work that L2/E4 landed | the other agent's to commit as record or discard; NOT adopted here; §7.6 |
 
+2026-09-08 whole-file t1 worker disposition: the local branches
+`worker-whole-file-compare` at `cd45c3f`, `worker-whole-file-docs` at
+`cd03831`, and `worker-whole-file-range-review` at `9219800` are
+**superseded records**. Their intended content was cherry-picked or adopted
+on `demo-whole-file-t1`; the comparator branch's older base is not a merge
+candidate. Their clean worker worktrees are removed after the authorized
+landing; the branch refs retain provenance.
+
 Filed requests to the semantics side and their state: the companion
 register §3.
 
@@ -297,6 +305,11 @@ Severity: **D** would be called disqualifying for "good and complete";
 | G1.7 | loops are label loops (`save`/`run`), not `while` — Core IS label-based; the reviewer-facing answer is a DERIVED `while` rule stated once over the emitted `while` idiom (t4's shape), not prose alone | N → V after the derived rule | V1-4c (the rule) + V1-6 (the prose) |
 | G1.8 | duplication and consumerless declarations (C17, C14) | N | V1-4c |
 | G1.9 | **numeral fuel floors** in every root-of-trust statement (`hfuel : 50/917/90/80 ≤ LemFuel.fuel`): principled (FUEL.md §3: the certified round count plus two) but hand-derived numerals in statements — the same class as `600` under the no-magic-values ruling (why is `917` not a named cost by `rfl`?) | V | V1-4a's scope, or an explicit exemption recorded in FUEL.md (§7.8) |
+
+Next-revision note from the t1 landing review (F6): this slice retains the
+old wrappers, so the 18 `600` sites above do not change. Recount the live
+sites and reconsider V1-4a's scope when V1-1b migrates t4/t5/t6; an additive
+whole-file certificate alone does not remove the old wrapper premises.
 
 ### 3.2 Criterion 2 — the iris layer
 

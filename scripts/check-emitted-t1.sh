@@ -23,6 +23,16 @@ trap 'rm -rf -- "$check_tmp"' EXIT
 export TMPDIR="$check_tmp"
 cd "$check_root"
 
+# Report the external build actually used. Its hash is provenance, not a
+# new pin: the fresh-Cabs byte comparison below detects relevant drift.
+check_oracle_sha="$(sha256sum "$check_oracle")"
+check_oracle_sha="${check_oracle_sha%% *}"
+printf 'whole-file t1: OCaml oracle SHA-256: %s\n' "$check_oracle_sha"
+printf 'whole-file t1: OCaml oracle binary: %s\n' "$check_oracle"
+printf 'whole-file t1: OCaml oracle runtime: %s\n' "$check_runtime"
+check_oracle_version="$(scripts/capped "$check_oracle" --version)"
+printf 'whole-file t1: OCaml oracle version: %s\n' "$check_oracle_version"
+
 # Preserve the relative path: it is retained in Cabs source locations.
 scripts/capped "$check_oracle" --runtime="$check_runtime" \
   --nolibc --cabs-json docs/corpus-e0/t1.c > "$check_tmp/t1.cabs.json"

@@ -1067,8 +1067,9 @@ cd cerberus-heaplang
 
 A green build is the verification run: it elaborates every proof
 through the Lean kernel and then `Audit.lean` (the last import of the
-library root), which (1) pins the exact axiom set of every public
-export to `propext`, `Classical.choice`, `Quot.sound`, (2) bounds every
+library root), which (1) pins each named export to its exact declared subset of
+`propext`, `Classical.choice`, `Quot.sound` (the trio, `propext` alone,
+or the empty set), (2) bounds every
 theorem of every module by those three — internal details (private
 names, proof and match auxiliaries, equation lemmas) included — and
 (3) checks every constant of every kind, internal details included,
@@ -1102,13 +1103,25 @@ tree, and the fuel-numeral grep (gate 1b, `scripts/fuel_numeral_check.sh`:
 the shipped fuel constant and the retired fuel names are red anywhere
 outside a `*_shipped` corollary, comments stripped; plant-tested by its
 `--selftest`) — the three checks `scripts/test_unit.sh --fast` runs. The full `scripts/test_unit.sh`
-adds three speedbumps: the rule-use and classification manifest is
+adds speedbumps: the corpus transcription skeleton and complete-file t1
+comparisons are checked, the rule-use and classification manifest is
 regenerated and diffed, the import direction semantics → heap → rules →
 adequacy → clients is checked (the protected set is the class `core` of
 `scripts/module_classes.tsv`), and the client boundary is checked
 (`scripts/boundary_check.sh`). The claim matrix `docs/CLAIMS.md` names, for
 every headline claim, its theorems, kind, exhibits, supported variants and
-known exclusions; the manifest generator checks its names exist. Ask the kernel yourself (from `cerberus-heaplang/`):
+known exclusions; the manifest generator checks its names exist.
+
+The full gate's t1 comparison also needs the existing sibling OCaml build
+`cerberus-lean/_build/default/backend/driver/main.exe` and runtime
+`cerberus-lean/_build/install/default` beside the primary refined-cerberus
+checkout. Missing either makes that step fail; `--fast` is unaffected.
+This external build is unpinned: the check prints its binary hash/version,
+then compares fresh Cabs bytes with the retained fixture. See the
+[producer record](../docs/corpus-a7/README.md) for the measured identity;
+it is separate from the pinned Lean semantics workspace.
+
+Ask the kernel yourself (from `cerberus-heaplang/`):
 
 ```bash
 ../scripts/capped ~/.elan/bin/lake env lean --stdin <<'EOF'
